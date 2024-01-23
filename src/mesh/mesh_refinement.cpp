@@ -11,6 +11,7 @@
 
 #include <cstdint>   // int32_t
 #include <iostream>
+#include <cmath>     // abs
 #include <algorithm> // sort
 #include <utility>   // pair
 
@@ -22,6 +23,8 @@
 
 #include "hydro/hydro.hpp"
 #include "mhd/mhd.hpp"
+#include "radiation/radiation.hpp"
+#include "z4c/z4c.hpp"
 #include "prolongation.hpp"
 #include "restriction.hpp"
 
@@ -73,6 +76,10 @@ MeshRefinement::MeshRefinement(Mesh *pm, ParameterInput *pin) :
       dd_threshold_ = pin->GetReal("mesh_refinement", "dvel_max");
       check_cons_ = true;
     }
+    if (pin->DoesParameterExist("mesh_refinement", "chi_min")) {
+      chi_threshold_ = pin->GetReal("mesh_refinement", "chi_min");
+      check_cons_ = true;
+    }
   }
 
   if (pm->adaptive) {  // allocate arrays for AMR
@@ -115,19 +122,33 @@ MeshRefinement::~MeshRefinement() {
 //! \fn void MeshRefinement::AdaptiveMeshRefinement()
 //! \brief Simple driver function for adaptive mesh refinement
 
-void MeshRefinement::AdaptiveMeshRefinement(Driver *pdrive, ParameterInput *pin) {
+void MeshRefinement::AdaptiveMeshRefinement(Driver *pdriver, ParameterInput *pin) {
   // first check refinement criteria
-  MeshBlockPack* pmbp = pmy_mesh->pmb_pack;
-  CheckForRefinement(pmbp);
+  CheckForRefinement(pmy_mesh->pmb_pack);
 
   // then update mesh tree if MeshBlock anywhere (on any rank) is flagged for refinement
   int nnew = 0, ndel = 0;
   UpdateMeshBlockTree(nnew, ndel);
 
-  // Refine/derefine mesh and eveolved data, set boundary conditions on new mesh
+  // Refine/derefine mesh and evolved data, set boundary conditions/timestep on new mesh
   if (nnew != 0 || ndel != 0) { // at least one (de)refinement flagged
     RedistAndRefineMeshBlocks(pin, nnew, ndel);
-    pdrive->InitBoundaryValuesAndPrimitives(pmy_mesh);
+    pdriver->InitBoundaryValuesAndPrimitives(pmy_mesh);
+
+    MeshBlockPack* pmbp = pmy_mesh->pmb_pack;
+    if (pmbp->phydro != nullptr) {
+      (void) pmbp->phydro->NewTimeStep(pdriver, pdriver->nexp_stages);
+    }
+    if (pmbp->pmhd != nullptr) {
+      (void) pmbp->pmhd->NewTimeStep(pdriver, pdriver->nexp_stages);
+    }
+    if (pmbp->prad != nullptr) {
+      (void) pmbp->prad->NewTimeStep(pdriver, pdriver->nexp_stages);
+    }
+    if (pmbp->pz4c != nullptr) {
+      (void) pmbp->pz4c->NewTimeStep(pdriver, pdriver->nexp_stages);
+    }
+
     nmb_created += nnew;
     nmb_deleted += ndel;
   }
@@ -149,18 +170,19 @@ void MeshRefinement::AdaptiveMeshRefinement(Driver *pdrive, ParameterInput *pin)
 //! pointer in the problem generator.
 
 void MeshRefinement::CheckForRefinement(MeshBlockPack* pmbp) {
-  // increment cycle counter for each MB
-  for (int m=0; m<(pmy_mesh->nmb_total); ++m) {
-    ncyc_since_ref(m) += 1;
-  }
-  if ((pmbp->pmesh->ncycle)%(ncyc_check_amr) != 0) {return;}  // not cycle to check
-
-  // zero refine_flag in host space and sync with device
+  // reallocate and zero refine_flag in host space and sync with device
+  Kokkos::realloc(refine_flag, pmy_mesh->nmb_total);
   for (int m=0; m<(pmy_mesh->nmb_total); ++m) {
     refine_flag.h_view(m) = 0;
   }
   refine_flag.template modify<HostMemSpace>();
   refine_flag.template sync<DevExeSpace>();
+
+  // increment cycle counter for each MB
+  for (int m=0; m<(pmy_mesh->nmb_total); ++m) {
+    ncyc_since_ref(m) += 1;
+  }
+  if ((pmbp->pmesh->ncycle)%(ncyc_check_amr) != 0) {return;}  // not cycle to check
 
   // capture variables for kernels
   auto &multi_d = pmy_mesh->multi_d;
@@ -177,6 +199,7 @@ void MeshRefinement::CheckForRefinement(MeshBlockPack* pmbp) {
   auto &dens_thresh  = d_threshold_;
   auto &ddens_thresh = dd_threshold_;
   auto &dpres_thresh = dp_threshold_;
+  auto &chi_thresh = chi_threshold_;
   int nmb = pmbp->nmb_thispack;
   int mbs = pmy_mesh->gids_eachrank[global_variable::my_rank];
   if (((pmbp->phydro != nullptr) || (pmbp->pmhd != nullptr)) && check_cons_) {
@@ -242,6 +265,28 @@ void MeshRefinement::CheckForRefinement(MeshBlockPack* pmbp) {
         if (team_dpmax < 0.25*dpres_thresh) {refine_flag_.d_view(m+mbs) = -1;}
       }
     });
+  } else if (pmbp->pz4c != nullptr) {
+    auto &u0 = pmbp->pz4c->u0;
+    int I_Z4C_CHI = pmbp->pz4c->I_Z4C_CHI;
+    par_for_outer("ConsRefineCond",DevExeSpace(), 0, 0, 0, (nmb-1),
+    KOKKOS_LAMBDA(TeamMember_t tmember, const int m) {
+      // chi threshold
+      if (chi_thresh!= 0.0) {
+        Real team_dmin;
+        Kokkos::parallel_reduce(Kokkos::TeamThreadRange(tmember, nkji),
+        [=](const int idx, Real& dmin) {
+          int k = (idx)/nji;
+          int j = (idx - k*nji)/nx1;
+          int i = (idx - k*nji - j*nx1) + is;
+          j += js;
+          k += ks;
+          dmin = fmin(u0(m,I_Z4C_CHI,k,j,i), dmin);
+        },Kokkos::Min<Real>(team_dmin));
+
+        if (team_dmin < chi_thresh) {refine_flag_.d_view(m+mbs) = 1;}
+        if (team_dmin > 1.25*chi_thresh) {refine_flag_.d_view(m+mbs) = -1;}
+      }
+    });
   }
 
   // Check (on device) user-defined refinement condition(s), if any
@@ -267,7 +312,7 @@ void MeshRefinement::CheckForRefinement(MeshBlockPack* pmbp) {
     if (ncyc_since_ref(m+mbs) < refinement_interval) {refine_flag.h_view(m+mbs) = 0;}
   }
 #if MPI_PARALLEL_ENABLED
-  // Pass refine_glag between all ranks
+  // Pass refine_flag between all ranks
     MPI_Allgatherv(MPI_IN_PLACE, pmy_mesh->nmb_eachrank[global_variable::my_rank],
                    MPI_INT, refine_flag.h_view.data(), pmy_mesh->nmb_eachrank,
                    pmy_mesh->gids_eachrank, MPI_INT, MPI_COMM_WORLD);
@@ -408,7 +453,8 @@ void MeshRefinement::UpdateMeshBlockTree(int &nnew, int &ndel) {
   }
 
   // Now the lists of the blocks to be refined and derefined are completed
-  // Start tree manipulation
+  // Start tree manipulation.  Note all ranks manipulate entire tree, so each rank has
+  // a complete and updated copy of the entire tree.
   // Step 1. perform refinement
   for (int n=0; n<tnref; n++) {
     MeshBlockTree *bt = pmy_mesh->ptree->FindMeshBlock(llref[n]);
@@ -422,11 +468,7 @@ void MeshRefinement::UpdateMeshBlockTree(int &nnew, int &ndel) {
   for (int n=0; n<ctnd; n++) {
     MeshBlockTree *bt = pmy_mesh->ptree->FindMeshBlock(cllderef[n]);
     bt->Derefine(ndel);
-    refine_flag.h_view(bt->GetGID()) = -nleaf; // flag root node of derefinements
   }
-  // sync host view with device
-  refine_flag.template modify<HostMemSpace>();
-  refine_flag.template sync<DevExeSpace>();
 
   if (tnderef >= nleaf) {
     delete [] cllderef;
@@ -510,7 +552,8 @@ void MeshRefinement::RedistAndRefineMeshBlocks(ParameterInput *pin, int nnew, in
   }
 
   // UpdateMeshBlockTree function can refine/de-refine MBs to ensure resolution jump is
-  // no more than 2x at boundaries.  Reset refine_flag for these MBs.
+  // no more than 2x at boundaries, even if refine flag not set in these MBs.  So loop
+  // over entire list of MBs on all ranks, reset refine_flag
   for (int oldm=0; oldm<old_nmb; oldm++) {
     int newm = oldtonew[oldm];
     LogicalLocation &old_lloc = pmy_mesh->lloc_eachmb[oldm];
@@ -519,9 +562,11 @@ void MeshRefinement::RedistAndRefineMeshBlocks(ParameterInput *pin, int nnew, in
       refine_flag.h_view(oldm) = -nleaf;
     } else if (old_lloc.level < new_lloc.level) {   // old MB was refined
       refine_flag.h_view(oldm) = 1;
+    } else {
+      refine_flag.h_view(oldm) = 0;
     }
   }
-  // sync host view with device
+  //  All ranks have copy of refine_flag over all MBs. So just sync host view with device
   refine_flag.template modify<HostMemSpace>();
   refine_flag.template sync<DevExeSpace>();
 
@@ -540,6 +585,7 @@ void MeshRefinement::RedistAndRefineMeshBlocks(ParameterInput *pin, int nnew, in
   // array in target MB.
   hydro::Hydro* phydro = pm->pmb_pack->phydro;
   mhd::MHD* pmhd = pm->pmb_pack->pmhd;
+  z4c::Z4c* pz4c = pm->pmb_pack->pz4c;
   // derefine (if needed)
   if (ndel > 0) {
     if (phydro != nullptr) {
@@ -548,6 +594,9 @@ void MeshRefinement::RedistAndRefineMeshBlocks(ParameterInput *pin, int nnew, in
     if (pmhd != nullptr) {
       DerefineCCSameRank(pmhd->u0, pmhd->coarse_u0);
       DerefineFCSameRank(pmhd->b0, pmhd->coarse_b0);
+    }
+    if (pz4c != nullptr) {
+      DerefineCCSameRank(pz4c->u0, pz4c->coarse_u0);
     }
   }
 
@@ -561,7 +610,9 @@ void MeshRefinement::RedistAndRefineMeshBlocks(ParameterInput *pin, int nnew, in
     CopyCC(pmhd->u0);
     CopyFC(pmhd->b0);
   }
-
+  if (pz4c != nullptr) {
+    CopyCC(pz4c->u0);
+  }
   // Step 7.
   // Copy evolved physics variables for MBs flagged for refinement from source fine array
   // to target coarse array, when both are on same rank.
@@ -573,13 +624,16 @@ void MeshRefinement::RedistAndRefineMeshBlocks(ParameterInput *pin, int nnew, in
       CopyForRefinementCC(pmhd->u0, pmhd->coarse_u0);
       CopyForRefinementFC(pmhd->b0, pmhd->coarse_b0);
     }
+    if (pz4c != nullptr) {
+      CopyForRefinementCC(pz4c->u0, pz4c->coarse_u0);
+    }
   }
 
   // Step 8.
   // Wait for all MPI load balancing communications to finish.  Unpack data.
 #if MPI_PARALLEL_ENABLED
-  if (nmb_recv > 0) {RecvAndUnpackAMR();}
   if (nmb_send > 0) {ClearSendAMR();}
+  if (nmb_recv > 0) {ClearRecvAndUnpackAMR();}
 #endif
 
   // copy newtoold array to DualView so that it can be accessed in kernel
@@ -602,6 +656,9 @@ void MeshRefinement::RedistAndRefineMeshBlocks(ParameterInput *pin, int nnew, in
       RefineCC(new_to_old, pmhd->u0, pmhd->coarse_u0);
       RefineFC(new_to_old, pmhd->b0, pmhd->coarse_b0);
     }
+    if (pz4c != nullptr) {
+      RefineCC(new_to_old, pz4c->u0, pz4c->coarse_u0);
+    }
   }
 
   // Update new number of cycles since refinement
@@ -616,8 +673,6 @@ void MeshRefinement::RedistAndRefineMeshBlocks(ParameterInput *pin, int nnew, in
   }
   Kokkos::realloc(ncyc_since_ref, new_nmb_total);
   Kokkos::deep_copy(ncyc_since_ref, new_ncyc_since_ref);
-  // reallocate refine_flag, will be zeroed out at start of CheckForRefinement
-  Kokkos::realloc(refine_flag, new_nmb_total);
 
   // Step 10.
   // Update data in Mesh/MeshBlockPack/MeshBlock classes with new grid properties

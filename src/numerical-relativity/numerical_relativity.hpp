@@ -67,6 +67,8 @@ enum TaskName {
   Z4c_ADMC,
   Z4c_ClearS,
   Z4c_ClearR,
+  Z4c_Weyl,
+  Z4c_Wave,
   Z4c_NTASKS
 };
 

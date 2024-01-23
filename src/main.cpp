@@ -275,6 +275,7 @@ int main(int argc, char *argv[]) {
   // Note these steps must occur after Mesh (including MeshBlocks and MeshBlockPack)
   // is fully constructed.
 
+  ChangeRunDir(run_dir);
   pmesh->pmb_pack->AddCoordinates(pinput);
   pmesh->pmb_pack->AddPhysics(pinput);
   if (!res_flag) {
@@ -291,7 +292,6 @@ int main(int argc, char *argv[]) {
   // in Driver.Initialize(). Add wall clock timer to Driver if necessary.
 
   Driver* pdriver = new Driver(pinput, pmesh, wtlim, &timer);
-  ChangeRunDir(run_dir);
   Outputs* pout = new Outputs(pinput, pmesh);
 
   //--- Step 7. --------------------------------------------------------------------------

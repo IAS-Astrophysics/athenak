@@ -50,6 +50,7 @@ TaskStatus BoundaryValuesCC::PackAndSendCC(DvceArray5D<Real> &a, DvceArray5D<Rea
   auto &sbuf = send_buf;
   auto &rbuf = recv_buf;
   auto &is_z4c = is_z4c_;
+  auto &multilevel = pmy_pack->pmesh->multilevel;
 
   // Outer loop over (# of MeshBlocks)*(# of buffers)*(# of variables)
   int nmnv = nmb*nnghbr*nvar;
@@ -156,7 +157,7 @@ TaskStatus BoundaryValuesCC::PackAndSendCC(DvceArray5D<Real> &a, DvceArray5D<Rea
       int il, iu, jl, ju, kl, ku;
       // If neighbor is at same level and data is for Z4c module, append data from coarse
       // array for higher-order prolongation
-      if ((nghbr.d_view(m,n).lev == mblev.d_view(m)) && (is_z4c)) {
+      if ((nghbr.d_view(m,n).lev == mblev.d_view(m)) && (is_z4c) && (multilevel)) {
         il = sbuf[n].isame_z4c.bis;
         iu = sbuf[n].isame_z4c.bie;
         jl = sbuf[n].isame_z4c.bjs;
@@ -208,9 +209,9 @@ TaskStatus BoundaryValuesCC::PackAndSendCC(DvceArray5D<Real> &a, DvceArray5D<Rea
 #if MPI_PARALLEL_ENABLED
   // Send boundary buffer to neighboring MeshBlocks using MPI
   Kokkos::fence();
+  auto &is_z4c = is_z4c_;
   int my_rank = global_variable::my_rank;
   auto &nghbr = pmy_pack->pmb->nghbr;
-  auto &is_z4c = is_z4c_;
   bool no_errors=true;
   for (int m=0; m<nmb; ++m) {
     for (int n=0; n<nnghbr; ++n) {
@@ -267,6 +268,7 @@ TaskStatus BoundaryValuesCC::RecvAndUnpackCC(DvceArray5D<Real> &a,
   auto &nghbr = pmy_pack->pmb->nghbr;
   auto &rbuf = recv_buf;
   auto &is_z4c = is_z4c_;
+  auto &multilevel = pmy_pack->pmesh->multilevel;
 #if MPI_PARALLEL_ENABLED
   //----- STEP 1: check that recv boundary buffer communications have all completed
 
@@ -378,7 +380,7 @@ TaskStatus BoundaryValuesCC::RecvAndUnpackCC(DvceArray5D<Real> &a,
       int il, iu, jl, ju, kl, ku;
       // If neighbor is at same level and data is for Z4c module, unpack data from coarse
       // array for higher-order prolongation
-      if ((nghbr.d_view(m,n).lev == mblev.d_view(m)) && (is_z4c)) {
+      if ((nghbr.d_view(m,n).lev == mblev.d_view(m)) && (is_z4c) && (multilevel)) {
         il = rbuf[n].isame_z4c.bis;
         iu = rbuf[n].isame_z4c.bie;
         jl = rbuf[n].isame_z4c.bjs;

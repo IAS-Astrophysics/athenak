@@ -45,12 +45,12 @@ void Z4c::AssembleZ4cTasks(TaskList &start, TaskList &run, TaskList &end) {
   id.copyu = run.AddTask(&Z4c::CopyU, this, none); // id.ptrack);
 
   switch (indcs.ng) {
-      case 2: id.crhs  = run.AddTask(&Z4c::CalcRHS<2>, this, id.copyu);
-              break;
-      case 3: id.crhs  = run.AddTask(&Z4c::CalcRHS<3>, this, id.copyu);
-              break;
-      case 4: id.crhs  = run.AddTask(&Z4c::CalcRHS<4>, this, id.copyu);
-              break;
+    case 2: id.crhs  = run.AddTask(&Z4c::CalcRHS<2>, this, id.copyu);
+            break;
+    case 3: id.crhs  = run.AddTask(&Z4c::CalcRHS<3>, this, id.copyu);
+            break;
+    case 4: id.crhs  = run.AddTask(&Z4c::CalcRHS<4>, this, id.copyu);
+            break;
   }
   id.sombc = run.AddTask(&Z4c::Z4cBoundaryRHS, this, id.crhs);
   id.expl  = run.AddTask(&Z4c::ExpRKUpdate, this, id.sombc);
@@ -60,15 +60,15 @@ void Z4c::AssembleZ4cTasks(TaskList &start, TaskList &run, TaskList &end) {
   id.bcs   = run.AddTask(&Z4c::ApplyPhysicalBCs, this, id.recvu);
   id.prol  = run.AddTask(&Z4c::Prolongate, this, id.bcs);
   id.algc  = run.AddTask(&Z4c::EnforceAlgConstr, this, id.prol);
-  id.z4tad = run.AddTask(&Z4c::Z4cToADM_, this, id.algc);
-  id.admc  = run.AddTask(&Z4c::ADMConstraints_, this, id.z4tad);
-  id.newdt = run.AddTask(&Z4c::NewTimeStep, this, id.admc);
+  id.newdt = run.AddTask(&Z4c::NewTimeStep, this, id.algc);
   // end task list
   id.csend = end.AddTask(&Z4c::ClearSend, this, none);
   id.crecv = end.AddTask(&Z4c::ClearRecv, this, id.csend);
-
-  // if (pmy_pack->pmesh->ncycle%64 == 0) {
-    // place holder for horizon finder
+  // if (pmy_pack->pmesh->ncycle!=0 && pmy_pack->pmesh->ncycle%2 == 0) {
+  id.z4tad = end.AddTask(&Z4c::Z4cToADM_, this, id.crecv);
+  id.admc  = end.AddTask(&Z4c::ADMConstraints_, this, id.z4tad);
+  id.weyl_scalar  = end.AddTask(&Z4c::CalcWeylScalar_, this, id.admc);
+  id.waveform  = end.AddTask(&Z4c::CalcWaveForm_, this, id.weyl_scalar);
   // }
   return;
 }
@@ -146,22 +146,31 @@ void Z4c::QueueZ4cTasks() {
   dep.push_back(Z4c_AlgC);
   opt.push_back(MHD_Flux);
   opt.push_back(MHD_ExplRK);
-  pnr->QueueTask(&Z4c::Z4cToADM_, this, Z4c_Z4c2ADM, "Z4c_Z4c2ADM", Task_Run, dep, opt);
-  opt.clear();
-  dep.clear();
-
-  dep.push_back(Z4c_Z4c2ADM);
-  pnr->QueueTask(&Z4c::ADMConstraints_, this, Z4c_ADMC, "Z4c_ADMC", Task_Run, dep, none);
-  dep.clear();
-
-  dep.push_back(Z4c_ADMC);
-  pnr->QueueTask(&Z4c::NewTimeStep, this, Z4c_Newdt, "Z4c_Newdt", Task_Run, dep, none);
+  pnr->QueueTask(&Z4c::NewTimeStep, this, Z4c_Newdt, "Z4c_Newdt", Task_Run, dep, opt);
   dep.clear();
 
   // End task list
   pnr->QueueTask(&Z4c::ClearSend, this, Z4c_ClearS, "Z4c_ClearS", Task_End, none, none);
+
   dep.push_back(Z4c_ClearS);
   pnr->QueueTask(&Z4c::ClearRecv, this, Z4c_ClearR, "Z4c_ClearR", Task_End, none, none);
+  dep.clear();
+
+  dep.push_back(Z4c_ClearR);
+  pnr->QueueTask(&Z4c::Z4cToADM_, this, Z4c_Z4c2ADM, "Z4c_Z4c2ADM", Task_End, dep, none);
+  dep.clear();
+
+  dep.push_back(Z4c_Z4c2ADM);
+  pnr->QueueTask(&Z4c::ADMConstraints_, this, Z4c_ADMC, "Z4c_ADMC", Task_End, dep, none);
+  dep.clear();
+
+  dep.push_back(Z4c_ADMC);
+  pnr->QueueTask(&Z4c::CalcWeylScalar_, this, Z4c_Weyl, "Z4c_Weyl", Task_End, dep, none);
+  dep.clear();
+
+  dep.push_back(Z4c_Weyl);
+  pnr->QueueTask(&Z4c::CalcWaveForm_, this, Z4c_Wave, "Z4c_Wave", Task_End, dep, none);
+  dep.clear();
 }
 
 //----------------------------------------------------------------------------------------
@@ -172,12 +181,6 @@ void Z4c::QueueZ4cTasks() {
 TaskStatus Z4c::InitRecv(Driver *pdrive, int stage) {
   TaskStatus tstat = pbval_u->InitRecv(nz4c);
   if (tstat != TaskStatus::complete) return tstat;
-
-  // with SMR/AMR post receives for fluxes of U
-  // do not post receives for fluxes when stage < 0 (i.e. ICs)
-  if (pmy_pack->pmesh->multilevel && (stage >= 0)) {
-    tstat = pbval_u->InitFluxRecv(nz4c);
-  }
   return tstat;
 }
 
@@ -188,12 +191,6 @@ TaskStatus Z4c::InitRecv(Driver *pdrive, int stage) {
 TaskStatus Z4c::ClearRecv(Driver *pdrive, int stage) {
   TaskStatus tstat = pbval_u->ClearRecv();
   if (tstat != TaskStatus::complete) return tstat;
-
-  // with SMR/AMR check receives of restricted fluxes of U complete
-  // do not check flux receives when stage < 0 (i.e. ICs)
-  if (pmy_pack->pmesh->multilevel && (stage >= 0)) {
-    tstat = pbval_u->ClearFluxRecv();
-  }
   return tstat;
 }
 
@@ -204,12 +201,6 @@ TaskStatus Z4c::ClearRecv(Driver *pdrive, int stage) {
 TaskStatus Z4c::ClearSend(Driver *pdrive, int stage) {
   TaskStatus tstat = pbval_u->ClearSend();
   if (tstat != TaskStatus::complete) return tstat;
-
-  // with SMR/AMR check sends of restricted fluxes of U complete
-  // do not check flux send for ICs (stage < 0)
-  if (pmy_pack->pmesh->multilevel && (stage >= 0)) {
-    tstat = pbval_u->ClearFluxSend();
-  }
   return tstat;
 }
 
@@ -309,6 +300,34 @@ TaskStatus Z4c::ADMConstraints_(Driver *pdrive, int stage) {
   return TaskStatus::complete;
 }
 
+//----------------------------------------------------------------------------------------
+//! \fn  void Z4c::CalcWeylScalar_
+//! \brief
+
+TaskStatus Z4c::CalcWeylScalar_(Driver *pdrive, int stage) {
+  auto &indcs = pmy_pack->pmesh->mb_indcs;
+  if (stage == pdrive->nexp_stages) {
+    switch (indcs.ng) {
+      case 2: Z4cWeyl<2>(pmy_pack);
+              break;
+      case 3: Z4cWeyl<3>(pmy_pack);
+              break;
+      case 4: Z4cWeyl<4>(pmy_pack);
+              break;
+    }
+  }
+  return TaskStatus::complete;
+}
+//----------------------------------------------------------------------------------------
+//! \fn  void Z4c::CalcWaveForm_
+//! \brief
+
+TaskStatus Z4c::CalcWaveForm_(Driver *pdrive, int stage) {
+  if (stage == pdrive->nexp_stages) {
+    WaveExtr(pmy_pack);
+  }
+  return TaskStatus::complete;
+}
 //----------------------------------------------------------------------------------------
 //! \fn  void Z4c::RestrictU
 //! \brief
