@@ -6,7 +6,6 @@
 //! \file radiation_femn_limiter_filter.cpp
 //! \brief implementation of limiters and filters for FEM_N and FP_N
 
-#include <cmath>
 #include "athena.hpp"
 #include "mesh/mesh.hpp"
 #include "driver/driver.hpp"
@@ -85,7 +84,7 @@ TaskStatus RadiationFEMN::ApplyLimiterFEM(Driver *pdriver, int stage) {
   int &ks = indcs.ks, &ke = indcs.ke;
   auto &num_points_ = pmy_pack->pradfemn->num_points;
   auto &num_energy_bins_ = pmy_pack->pradfemn->num_energy_bins;
-  auto &num_species_ = pmy_pack->pradfemn->num_species;
+  //auto &num_species_ = pmy_pack->pradfemn->num_species;
   int nouter1 = pmy_pack->pradfemn->num_species * pmy_pack->pradfemn->num_energy_bins - 1;
   int nmb1 = pmy_pack->nmb_thispack - 1;
 
@@ -106,7 +105,8 @@ TaskStatus RadiationFEMN::ApplyLimiterFEM(Driver *pdriver, int stage) {
 
                   Real denominator = 0.;
                   Kokkos::parallel_reduce(Kokkos::ThreadVectorRange(member, 0, num_points_), [=](const int A, Real &partial_sum_angle) {
-                    partial_sum_angle += fmax(0, f0_(m, outervar * num_energy_bins_ + A, k, j, i)) * (Q_matrix_(0, A) * L_mu_muhat_(m, 0, 0, k, j, i)
+                    Real tmp = f0_(m, outervar * num_energy_bins_ + A, k, j, i);
+                    partial_sum_angle += fmax(0, tmp) * (Q_matrix_(0, A) * L_mu_muhat_(m, 0, 0, k, j, i)
                         + Q_matrix_(1, A) * L_mu_muhat_(m, 0, 1, k, j, i) + Q_matrix_(2, A) * L_mu_muhat_(m, 0, 2, k, j, i) + Q_matrix_(3, A) * L_mu_muhat_(m, 0, 3, k, j, i));
                   }, denominator);
                   member.team_barrier();
@@ -114,7 +114,8 @@ TaskStatus RadiationFEMN::ApplyLimiterFEM(Driver *pdriver, int stage) {
                   Real correction_factor = (numerator > 0 && denominator != 0) ? (numerator / denominator) : 0.0;
 
                   par_for_inner(member, 0, num_points_ - 1, [&](const int A) {
-                    f0_(m, outervar * num_energy_bins_ + A, k, j, i) = correction_factor * fmax(f0_(m, outervar * num_energy_bins_ + A, k, j, i),0.);
+                    Real tmp = f0_(m, outervar * num_energy_bins_ + A, k, j, i);
+                    f0_(m, outervar * num_energy_bins_ + A, k, j, i) = correction_factor * fmax(tmp, 0.);
                   });
                   member.team_barrier();
 

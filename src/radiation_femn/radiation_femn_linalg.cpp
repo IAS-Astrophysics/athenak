@@ -70,7 +70,7 @@ void LUDecomposition(DvceArray2D<Real> square_matrix, DvceArray2D<Real> lu_matri
 void LUSolve(const DvceArray2D<Real> lu_matrix, const DvceArray1D<int> pivot_indices, const DvceArray1D<Real> b_array, DvceArray1D<Real> x_array) {
 
   int num_rows = b_array.extent(0);
-  int index;
+  //int index;
   double swap_value;
   //double temp_value;
 

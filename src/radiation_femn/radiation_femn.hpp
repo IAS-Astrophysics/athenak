@@ -216,6 +216,11 @@ Real Sgn(Real x) {
 }
 
 KOKKOS_INLINE_FUNCTION
+Real fmax(Real x, Real y) {
+  return (x > y) ? x : y;
+}
+
+KOKKOS_INLINE_FUNCTION
 RadiationFEMNPhaseIndices IndicesComponent(int n, int num_points, int num_energy_bins = 1, int num_species = 1) {
   RadiationFEMNPhaseIndices idcs = {.combinedidx = n,
       .nuidx = int(n / (num_energy_bins * num_points)),

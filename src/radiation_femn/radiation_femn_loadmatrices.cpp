@@ -59,7 +59,7 @@ void RadiationFEMN::LoadFEMNMatrices() {
   auto &sy_ = stiffness_matrix_y;
   auto &sz_ = stiffness_matrix_z;
   auto &fmatrix_ = F_matrix;
-  auto &gmatrix_ = G_matrix;
+  //auto &gmatrix_ = G_matrix;
   auto &e_source_ = e_source;
   auto &Q_matrix_ = Q_matrix;
 
@@ -156,7 +156,7 @@ void RadiationFEMN::LoadFPNMatrices() {
   auto &e_source_ = e_source;
 
   // populate angular grid with (l,m) values
-  auto &lm_grid_ = angular_grid;
+  //auto &lm_grid_ = angular_grid;
   HostArray2D<Real> temp_angular_grid;
   Kokkos::realloc(temp_angular_grid, num_points, 2);
   for (int l = 0; l <= lmax; l++) {

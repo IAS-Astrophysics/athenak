@@ -18,7 +18,7 @@ TaskStatus RadiationFEMN::TetradOrthogonalize(Driver *pdriver, int stage) {
   int &js = indcs.js, &je = indcs.je;
   int &ks = indcs.ks, &ke = indcs.ke;
   int nmb1 = pmy_pack->nmb_thispack - 1;
-  auto &mbsize = pmy_pack->pmb->mb_size;
+  //auto &mbsize = pmy_pack->pmb->mb_size;
 
   auto L_mu_muhat0_ = pmy_pack->pradfemn->L_mu_muhat0;
   auto u_mu_ = pmy_pack->pradfemn->u_mu;
