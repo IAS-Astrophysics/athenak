@@ -31,9 +31,9 @@ namespace radiationfemn {
 
     TaskStatus RadiationFEMN::NewTimeStep(Driver *pdriver, int stage) {
         auto &indcs = pmy_pack->pmesh->mb_indcs;
-        int &is = indcs.is, &nx1 = indcs.nx1;
-        int &js = indcs.js, &nx2 = indcs.nx2;
-        int &ks = indcs.ks, &nx3 = indcs.nx3;
+        //int &is = indcs.is, &nx1 = indcs.nx1;
+        //int &js = indcs.js, &nx2 = indcs.nx2;
+        //int &ks = indcs.ks, &nx3 = indcs.nx3;
 
         Real dt1 = std::numeric_limits<float>::max();
         Real dt2 = std::numeric_limits<float>::max();

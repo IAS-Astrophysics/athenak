@@ -67,9 +67,9 @@ void ProblemGenerator::RadiationFEMNShadowtest(ParameterInput *pin, const bool r
     exit(EXIT_FAILURE);
   }
 
-  auto &eta_ = pmbp->pradfemn->eta;
+  //auto &eta_ = pmbp->pradfemn->eta;
   auto &kappa_a_ = pmbp->pradfemn->kappa_a;
-  auto &kappa_s_ = pmbp->pradfemn->kappa_s;
+  //auto &kappa_s_ = pmbp->pradfemn->kappa_s;
   auto Ven = (1. / 3.) * (pow(pmbp->pradfemn->energy_grid(1), 3) - pow(pmbp->pradfemn->energy_grid(0), 3));
 
   par_for("pgen_linetest_radiation_femn", DevExeSpace(), 0, (pmbp->nmb_thispack - 1), ks, ke, js, je, is, ie,

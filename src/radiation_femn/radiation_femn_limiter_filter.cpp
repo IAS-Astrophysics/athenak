@@ -6,7 +6,7 @@
 //! \file radiation_femn_limiter_filter.cpp
 //! \brief implementation of limiters and filters for FEM_N and FP_N
 
-#include <math.h>
+#include <cmath>
 #include "athena.hpp"
 #include "mesh/mesh.hpp"
 #include "driver/driver.hpp"

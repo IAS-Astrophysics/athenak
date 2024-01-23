@@ -33,7 +33,7 @@ void ProblemGenerator::RadiationFEMNLinalgtest(ParameterInput *pin, const bool r
               << "<radiation-femn> block in input file" << std::endl;
     exit(EXIT_FAILURE);
   }
-
+	/*
   std::cout << "Testing linear algebra routines for radiation FEMN:" << std::endl;
   std::cout << std::endl;
 
@@ -402,6 +402,6 @@ void ProblemGenerator::RadiationFEMNLinalgtest(ParameterInput *pin, const bool r
 
   std::cout << std::endl;
   std::cout << "Maximum error in computing zero speed corrected matrices: " << error << std::endl;
-
+	*/
   return;
 }

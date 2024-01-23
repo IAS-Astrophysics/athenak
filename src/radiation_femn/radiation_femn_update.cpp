@@ -22,7 +22,7 @@ TaskStatus RadiationFEMN::ExpRKUpdate(Driver *pdriver, int stage) {
   int &is = indcs.is, &ie = indcs.ie;
   int &js = indcs.js, &je = indcs.je;
   int &ks = indcs.ks, &ke = indcs.ke;
-  int npts1 = num_points_total - 1;
+  //int npts1 = num_points_total - 1;
   int nmb1 = pmy_pack->nmb_thispack - 1;
   auto &mbsize = pmy_pack->pmb->mb_size;
 
@@ -33,9 +33,9 @@ TaskStatus RadiationFEMN::ExpRKUpdate(Driver *pdriver, int stage) {
   Real &gam1 = pdriver->gam1[stage - 1];
   Real beta_dt = (pdriver->beta[stage - 1]) * (pmy_pack->pmesh->dt);
 
-  int ncells1 = indcs.nx1 + 2 * (indcs.ng);
-  int ncells2 = (indcs.nx2 > 1) ? (indcs.nx2 + 2 * (indcs.ng)) : 1;
-  int ncells3 = (indcs.nx3 > 1) ? (indcs.nx3 + 2 * (indcs.ng)) : 1;
+  //int ncells1 = indcs.nx1 + 2 * (indcs.ng);
+  //int ncells2 = (indcs.nx2 > 1) ? (indcs.nx2 + 2 * (indcs.ng)) : 1;
+  //int ncells3 = (indcs.nx3 > 1) ? (indcs.nx3 + 2 * (indcs.ng)) : 1;
 
   int &num_points_ = pmy_pack->pradfemn->num_points;
   int &num_energy_bins_ = pmy_pack->pradfemn->num_energy_bins;
@@ -49,16 +49,16 @@ TaskStatus RadiationFEMN::ExpRKUpdate(Driver *pdriver, int stage) {
   auto &flx2 = pmy_pack->pradfemn->iflx.x2f;
   auto &flx3 = pmy_pack->pradfemn->iflx.x3f;
   auto &L_mu_muhat0_ = pmy_pack->pradfemn->L_mu_muhat0;
-  auto &L_mu_muhat1_ = pmy_pack->pradfemn->L_mu_muhat1;
-  auto &u_mu_ = pmy_pack->pradfemn->u_mu;
+  //auto &L_mu_muhat1_ = pmy_pack->pradfemn->L_mu_muhat1;
+  //auto &u_mu_ = pmy_pack->pradfemn->u_mu;
   auto &sqrt_det_g_ = pmy_pack->pradfemn->sqrt_det_g;
   auto &eta_ = pmy_pack->pradfemn->eta;
   auto &e_source_ = pmy_pack->pradfemn->e_source;
   auto &kappa_s_ = pmy_pack->pradfemn->kappa_s;
   auto &kappa_a_ = pmy_pack->pradfemn->kappa_a;
-  auto &F_matrix_ = pmy_pack->pradfemn->F_matrix;
-  auto &G_matrix_ = pmy_pack->pradfemn->G_matrix;
-  auto &energy_par_ = pmy_pack->pradfemn->energy_par;
+  //auto &F_matrix_ = pmy_pack->pradfemn->F_matrix;
+  //auto &G_matrix_ = pmy_pack->pradfemn->G_matrix;
+  //auto &energy_par_ = pmy_pack->pradfemn->energy_par;
   auto &P_matrix_ = pmy_pack->pradfemn->P_matrix;
   auto &S_source_ = pmy_pack->pradfemn->S_source;
 

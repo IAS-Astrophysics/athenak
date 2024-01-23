@@ -24,7 +24,7 @@ TaskStatus RadiationFEMN::CalculateFluxes(Driver *pdriver, int stage) {
   int num_points_ = pmy_pack->pradfemn->num_points;
   int num_energy_bins_ = pmy_pack->pradfemn->num_energy_bins;
   int num_species_ = pmy_pack->pradfemn->num_species;
-  int npts1 = pmy_pack->pradfemn->num_points_total - 1;
+  int nnuenpts1 = num_species_ * num_energy_bins_ - 1;
   int nmb1 = pmy_pack->nmb_thispack - 1;
 
   bool &m1_flag_ = pmy_pack->pradfemn->m1_flag;
@@ -44,7 +44,7 @@ TaskStatus RadiationFEMN::CalculateFluxes(Driver *pdriver, int stage) {
   int scr_level = 0;
   int scr_size = ScrArray1D<Real>::shmem_size(num_points) * 6;
   auto &flx1 = iflx.x1f;
-  par_for_outer("radiation_femn_flux_x", DevExeSpace(), scr_size, scr_level, 0, nmb1, 0, num_species_ * num_energy_bins_ - 1, ks, ke, js, je, is, int(ie / 2) + 1,
+  par_for_outer("radiation_femn_flux_x", DevExeSpace(), scr_size, scr_level, 0, nmb1, 0, nnuenpts1, ks, ke, js, je, is, int(ie / 2) + 1,
                 KOKKOS_LAMBDA(TeamMember_t member, const int m, const int nuen, const int k, const int j, const int i) {
 
                   auto kk = k;
@@ -108,7 +108,7 @@ TaskStatus RadiationFEMN::CalculateFluxes(Driver *pdriver, int stage) {
 
   auto &flx2 = iflx.x2f;
   if (multi_d) {
-    par_for_outer("radiation_femn_flux_y", DevExeSpace(), scr_size, scr_level, 0, nmb1, 0, num_species_ * num_energy_bins_ - 1, ks, ke, js, int(je / 2) + 1, is, ie,
+    par_for_outer("radiation_femn_flux_y", DevExeSpace(), scr_size, scr_level, 0, nmb1, 0, nnuenpts1, ks, ke, js, int(je / 2) + 1, is, ie,
                   KOKKOS_LAMBDA(TeamMember_t member, const int m, const int nuen, const int k, const int j, const int i) {
 
                     auto kk = k;
@@ -177,7 +177,7 @@ TaskStatus RadiationFEMN::CalculateFluxes(Driver *pdriver, int stage) {
 
   auto &flx3 = iflx.x3f;
   if (three_d) {
-    par_for_outer("radiation_femn_flux_z", DevExeSpace(), scr_size, scr_level, 0, nmb1, 0, num_species_ * num_energy_bins_ - 1, ks, int(ke / 2) + 1, js, je, is, ie,
+    par_for_outer("radiation_femn_flux_z", DevExeSpace(), scr_size, scr_level, 0, nmb1, 0, nnuenpts1, ks, int(ke / 2) + 1, js, je, is, ie,
                   KOKKOS_LAMBDA(TeamMember_t member, const int m, const int nuen, const int k, const int j, const int i) {
 
                     auto kk = 2 * k - 2;

@@ -72,7 +72,7 @@ void LUSolve(const DvceArray2D<Real> lu_matrix, const DvceArray1D<int> pivot_ind
   int num_rows = b_array.extent(0);
   int index;
   double swap_value;
-  double temp_value;
+  //double temp_value;
 
   Kokkos::realloc(x_array, num_rows);
   Kokkos::deep_copy(x_array, b_array);
