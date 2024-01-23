@@ -51,8 +51,9 @@ TaskStatus RadiationFEMN::CalculateFluxes(Driver *pdriver, int stage) {
                   auto jj = j;
                   auto ii = 2 * i - 2;
 
-                  int enidx = 0;
-                  int nuidx = 0;
+                  RadiationFEMNPhaseIndices nuenidx = NuEnIndicesComponent(nuen, num_species_, num_energy_bins_);
+                  int enidx = nuenidx.enidx;
+                  int nuidx = nuenidx.nuidx;
 
                   Real Ven = (1. / 3.) * (pow(energy_grid_(enidx + 1), 3) - pow(energy_grid_(enidx), 3));
                   Real sqrt_det_g_L = 1.5 * sqrt_det_g_(m, kk, jj, ii) - 0.5 * sqrt_det_g_(m, kk, jj, ii + 1);
@@ -114,8 +115,9 @@ TaskStatus RadiationFEMN::CalculateFluxes(Driver *pdriver, int stage) {
                     auto jj = 2 * j - 2;
                     auto ii = i;
 
-                    int enidx = 0;
-                    int nuidx = 0;
+                    RadiationFEMNPhaseIndices nuenidx = NuEnIndicesComponent(nuen, num_species_, num_energy_bins_);
+                    int enidx = nuenidx.enidx;
+                    int nuidx = nuenidx.nuidx;
 
                     Real Ven = (1. / 3.) * (pow(energy_grid_(enidx + 1), 3) - pow(energy_grid_(enidx), 3));
 
@@ -182,8 +184,9 @@ TaskStatus RadiationFEMN::CalculateFluxes(Driver *pdriver, int stage) {
                     auto jj = j;
                     auto ii = i;
 
-                    int enidx = 0;
-                    int nuidx = 0;
+                    RadiationFEMNPhaseIndices nuenidx = NuEnIndicesComponent(nuen, num_species_, num_energy_bins_);
+                    int enidx = nuenidx.enidx;
+                    int nuidx = nuenidx.nuidx;
 
                     Real Ven = (1. / 3.) * (pow(energy_grid_(enidx + 1), 3) - pow(energy_grid_(enidx), 3));
 
