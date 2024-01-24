@@ -5,9 +5,12 @@
 // Copyright(C) 2020 James M. Stone <jmstone@ias.edu> and the Athena code team
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
-//! \file bvals_cc.hpp
-//! \brief defines classes for handling boundary values for all types of variables.
-//! Currently methods for cell-centered and face-centered fields implemented.
+//! \file bvals.hpp
+//! \brief defines classes for handling boundary values for both particles as well as all
+//! types of Mesh variables. For Mesh variables, methods for cell-centered and
+//! face-centered fields are currently implemented, based on derived classes from the
+//! generic MeshBoundaryValue class.  A separate ParticlesBoundaryValues class is
+//! implemented for partciles.
 
 // identifiers for all 6 faces of a MeshBlock
 enum BoundaryFace {undef=-1, inner_x1, outer_x1, inner_x2, outer_x2, inner_x3, outer_x3};
@@ -23,6 +26,10 @@ enum class BoundaryFlag {undef=-1,block, reflect, inflow, outflow, diode, user, 
 #include "mesh/mesh.hpp"
 #include "coordinates/coordinates.hpp"
 #include "tasklist/task_list.hpp"
+#include "particles/particles.hpp"
+
+// Forward declarations
+class MeshBlockPack;
 
 //----------------------------------------------------------------------------------------
 //! \fn int CreateBvals_MPI_Tag(int lid, int bufid)
@@ -38,29 +45,29 @@ static int CreateBvals_MPI_Tag(int lid, int bufid) {
 //! \struct BufferIndcs
 //! \brief indices for range of cells packed/unpacked into boundary buffers
 
-struct BufferIndcs {
+struct MeshBufferIndcs {
   int bis,bie,bjs,bje,bks,bke;  // start/end buffer ("b") indices in each dir
-  BufferIndcs() :
+  MeshBufferIndcs() :
     bis(0), bie(0), bjs(0), bje(0), bks(0), bke(0) {}
 };
 
 //----------------------------------------------------------------------------------------
-//! \struct BoundaryBuffer
+//! \struct MeshBoundaryBuffer
 //! \brief container for index ranges, storage, and flags for boundary buffers
 
-struct BoundaryBuffer {
+struct MeshBoundaryBuffer {
   // fixed-length-3 arrays used to store indices of each buffer for cell-centered vars, or
   // each component of a face-centered vector field ([0,1,2] --> [x1f, x2f, x3f]). For
   // cell-centered variables only first [0] component of index arrays are needed.
-  BufferIndcs isame[3];  // indices for pack/unpack when dest/src at same level
-  BufferIndcs icoar[3];  // indices for pack/unpack when dest/src at coarser level
-  BufferIndcs ifine[3];  // indices for pack/unpack when dest/src at finer level
-  BufferIndcs iprol[3];  // indices for prolongation (only used for receives)
-  BufferIndcs iflux_same[3];  // indices for pack/unpack for flux correction
-  BufferIndcs iflux_coar[3];  // indices for pack/unpack for flux correction
+  MeshBufferIndcs isame[3];  // indices for pack/unpack when dest/src at same level
+  MeshBufferIndcs icoar[3];  // indices for pack/unpack when dest/src at coarser level
+  MeshBufferIndcs ifine[3];  // indices for pack/unpack when dest/src at finer level
+  MeshBufferIndcs iprol[3];  // indices for prolongation (only used for receives)
+  MeshBufferIndcs iflux_same[3];  // indices for pack/unpack for flux correction
+  MeshBufferIndcs iflux_coar[3];  // indices for pack/unpack for flux correction
   // With Z4c higher-order prolongation/rstriction, must also send coarse data between
   // MeshBlocks at the same level, which requires an additional indices array
-  BufferIndcs isame_z4c;  // indices for pack/unpack with z4c when dest/src at same level
+  MeshBufferIndcs isame_z4c;  // indices for pack/unpack with z4c when dst/src at same lvl
 
   // Maximum number of data elements (bie-bis+1) across 3 components of above
   int isame_ndat, isame_z4c_ndat, icoar_ndat, ifine_ndat, iflxs_ndat, iflxc_ndat;
@@ -94,18 +101,18 @@ struct BoundaryBuffer {
 class MeshBlockPack;
 
 //----------------------------------------------------------------------------------------
-//! \class BoundaryValues
-//  \brief Abstract base class for boundary values for different kinds of variables
+//! \class MeshBoundaryValues
+//  \brief Abstract base class for boundary values for different kinds of Mesh variables
 
-class BoundaryValues {
+class MeshBoundaryValues {
  public:
-  BoundaryValues(MeshBlockPack *ppack, ParameterInput *pin, bool z4c);
-  ~BoundaryValues();
+  MeshBoundaryValues(MeshBlockPack *ppack, ParameterInput *pin, bool z4c);
+  ~MeshBoundaryValues();
 
   // data for all 56 buffers in most general 3D case. Not all elements used in most cases.
-  // However each BoundaryBuffer is lightweight, so the convenience of fixed array
+  // However each MeshBoundaryBuffer is lightweight, so the convenience of fixed array
   // sizes and index values for array elements outweighs cost of extra memory.
-  BoundaryBuffer send_buf[56], recv_buf[56];
+  MeshBoundaryBuffer send_buf[56], recv_buf[56];
 
   // constant inflow states at each face, initialized in problem generator
   DualArray2D<Real> u_in, b_in, i_in;
@@ -116,8 +123,8 @@ class BoundaryValues {
 #endif
 
   //functions
-  virtual void InitSendIndices(BoundaryBuffer &buf, int x, int y, int z, int a, int b)=0;
-  virtual void InitRecvIndices(BoundaryBuffer &buf, int x, int y, int z, int a, int b)=0;
+  virtual void InitSendIndices(MeshBoundaryBuffer &buf, int x, int y, int z, int a, int b)=0;
+  virtual void InitRecvIndices(MeshBoundaryBuffer &buf, int x, int y, int z, int a, int b)=0;
   void InitializeBuffers(const int nvar);
 
   TaskStatus InitRecv(const int nvar);
@@ -133,6 +140,8 @@ class BoundaryValues {
   static void RadiationBCs(MeshBlockPack *pp,DualArray2D<Real> iin,DvceArray5D<Real> i0);
 
  protected:
+  // must use pointer to MBPack and not parent physics module since parent can be one of
+  // many types (Hydro, MHD, Radiation, Z4c, etc.)
   MeshBlockPack* pmy_pack;
   bool is_z4c_;   // flag to denote if this BoundaryValues is for Z4c module
 };
@@ -141,13 +150,13 @@ class BoundaryValues {
 //! \class BoundaryValuesCC
 //  \brief boundary values for cell-centered variables
 
-class BoundaryValuesCC : public BoundaryValues {
+class BoundaryValuesCC : public MeshBoundaryValues {
  public:
   BoundaryValuesCC(MeshBlockPack *ppack, ParameterInput *pin, bool z4c);
 
   //functions
-  void InitSendIndices(BoundaryBuffer &buf, int o1, int o2,int o3,int f1,int f2) override;
-  void InitRecvIndices(BoundaryBuffer &buf, int o1, int o2,int o3,int f1,int f2) override;
+  void InitSendIndices(MeshBoundaryBuffer &buf, int o1, int o2,int o3,int f1,int f2) override;
+  void InitRecvIndices(MeshBoundaryBuffer &buf, int o1, int o2,int o3,int f1,int f2) override;
   TaskStatus InitFluxRecv(const int nvar) override;
 
   TaskStatus PackAndSendCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca);
@@ -169,13 +178,13 @@ class BoundaryValuesCC : public BoundaryValues {
 //! \class BoundaryValuesFC
 //  \brief boundary values for face-centered vector fields
 
-class BoundaryValuesFC : public BoundaryValues {
+class BoundaryValuesFC : public MeshBoundaryValues {
  public:
   BoundaryValuesFC(MeshBlockPack *ppack, ParameterInput *pin);
 
   //functions
-  void InitSendIndices(BoundaryBuffer &buf, int o1, int o2,int o3,int f1,int f2) override;
-  void InitRecvIndices(BoundaryBuffer &buf, int o1, int o2,int o3,int f1,int f2) override;
+  void InitSendIndices(MeshBoundaryBuffer &buf, int o1, int o2,int o3,int f1,int f2) override;
+  void InitRecvIndices(MeshBoundaryBuffer &buf, int o1, int o2,int o3,int f1,int f2) override;
   TaskStatus InitFluxRecv(const int nvar) override;
 
   TaskStatus PackAndSendFC(DvceFaceFld4D<Real> &b, DvceFaceFld4D<Real> &cb);
@@ -190,5 +199,39 @@ class BoundaryValuesFC : public BoundaryValues {
   void ZeroFluxesAtBoundaryWithFiner(DvceEdgeFld4D<Real> &flx, DvceArray2D<int> &nflx);
   void AverageBoundaryFluxes(DvceEdgeFld4D<Real> &flx, DvceArray2D<int> &nflx);
 };
+
+//----------------------------------------------------------------------------------------
+//! \class ParticlesBoundaryValues
+//  \brief Defines boundary values class for particles
+
+namespace particles {
+class ParticlesBoundaryValues {
+ public:
+  ParticlesBoundaryValues(particles::Particles *ppart, ParameterInput *pin);
+  ~ParticlesBoundaryValues();
+
+#if MPI_PARALLEL_ENABLED
+  // unique MPI communicators for particles
+  MPI_Comm part_comm;
+#endif
+
+  //functions
+  TaskStatus PackAndSendParticles();
+
+/**
+  virtual TaskStatus InitFluxRecv(const int nvar)=0;
+  TaskStatus InitRecv(const int nvar);
+  TaskStatus ClearRecv();
+  TaskStatus ClearSend();
+  TaskStatus ClearFluxRecv();
+  TaskStatus ClearFluxSend();
+**/
+
+  // BCs associated with various physics modules
+
+ protected:
+  particles::Particles* pmy_part;
+};
+}
 
 #endif // BVALS_BVALS_HPP_

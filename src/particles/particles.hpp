@@ -32,6 +32,7 @@ namespace particles {
 //! \class Particles
 
 class Particles {
+  friend class ParticlesBoundaryValues;
  public:
   Particles(MeshBlockPack *ppack, ParameterInput *pin);
   ~Particles();
