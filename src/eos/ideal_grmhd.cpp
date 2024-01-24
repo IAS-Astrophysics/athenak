@@ -272,7 +272,7 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
       // flag the cell if c2p succeeds or fails
       c2p_flag_(m,k,j,i) = !c2p_failure;
       pfloor_flag_(m,k,j,i) = false;
-      if (efloor_used) pfloor_flag_(m,k,j,i) = true;
+      // if (efloor_used) pfloor_flag_(m,k,j,i) = true;
 
       // apply velocity ceiling if necessary
       Real tmp = glower[1][1]*SQR(w.vx)
@@ -438,11 +438,11 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
           prim(m,IVZ,k,j,i) = w.vz;
           prim(m,IEN,k,j,i) = w.e;
         } else if (pfloor_flag_(m,k,j,i)) { // if pfloor is reached
-          prim(m,IEN,k,j,i) = w.e/w.d * prim(m,IDN,k,j,i);
-          w.d = prim(m,IDN,k,j,i);
-          w.vx = prim(m,IVX,k,j,i);
-          w.vy = prim(m,IVY,k,j,i);
-          w.vz = prim(m,IVZ,k,j,i);
+          // prim(m,IDN,k,j,i) = w.d;
+          // prim(m,IVX,k,j,i) = w.vx;
+          // prim(m,IVY,k,j,i) = w.vy;
+          // prim(m,IVZ,k,j,i) = w.vz;
+          // prim(m,IEN,k,j,i) = w.e;
         }
 
         // Extract components of metric

@@ -124,7 +124,7 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
     if (pmy_pack->pcoord->is_general_relativistic) {
       entropy_fix = pin->GetBoolean("mhd","entropy_fix");
       entropy_fix_turnoff = pin->GetOrAddBoolean("mhd","entropy_fix_turnoff",false);
-      sigma_cold_cut = pin->GetOrAddReal("mhd","sigma_cold_cut",1.0e4);
+      sigma_cold_cut = pin->GetOrAddReal("mhd","sigma_cold_cut",1.0e3);
     } else {
       std::cout <<"### FATAL ERROR in "<< __FILE__ <<" at line "<< __LINE__ << std::endl
                 <<"<mhd> entropy fix only works in general relativity"<< std::endl;
