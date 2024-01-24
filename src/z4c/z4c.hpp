@@ -185,6 +185,8 @@ class Z4c {
     bool use_z4c;
     // Apply the Sommerfeld condition for user BCs.
     bool user_Sbc;
+    // Boundary extrapolation order
+    int extrap_order;
   };
   Options opt;
   Real diss;              // Dissipation parameter
