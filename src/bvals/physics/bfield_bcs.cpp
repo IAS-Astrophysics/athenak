@@ -13,11 +13,11 @@
 #include "mesh/mesh.hpp"
 
 //----------------------------------------------------------------------------------------
-// \!fn void BoundaryValues::BFieldBCs()
-// \brief Apply physical boundary conditions for all field variables at faces of MB which
-//  are at the edge of the computational domain
+//! \!fn void BoundaryValues::BFieldBCs()
+//! \brief Apply physical boundary conditions for all field variables at faces of MB which
+//! are at the edge of the computational domain
 
-void BoundaryValues::BFieldBCs(MeshBlockPack *ppack, DualArray2D<Real> b_in,
+void MeshBoundaryValues::BFieldBCs(MeshBlockPack *ppack, DualArray2D<Real> b_in,
                                DvceFaceFld4D<Real> b0) {
   // loop over all MeshBlocks in this MeshBlockPack
   auto &pm = ppack->pmesh;

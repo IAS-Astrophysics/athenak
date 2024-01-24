@@ -13,12 +13,12 @@
 #include "mesh/mesh.hpp"
 
 //----------------------------------------------------------------------------------------
-// \!fn void BoundaryValues::HydroBCs()
-// \brief Apply physical boundary conditions for all Hydro variables at faces of MB which
-//  are at the edge of the computational domain
+//! \!fn void BoundaryValues::HydroBCs()
+//! \brief Apply physical boundary conditions for all Hydro variables at faces of MB which
+//! are at the edge of the computational domain
 
-void BoundaryValues::HydroBCs(MeshBlockPack *ppack, DualArray2D<Real> u_in,
-                              DvceArray5D<Real> u0) {
+void MeshBoundaryValues::HydroBCs(MeshBlockPack *ppack, DualArray2D<Real> u_in,
+                                  DvceArray5D<Real> u0) {
   // loop over all MeshBlocks in this MeshBlockPack
   auto &pm = ppack->pmesh;
   auto &indcs = ppack->pmesh->mb_indcs;

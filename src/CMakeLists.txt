@@ -18,6 +18,8 @@ add_executable(
         bvals/buffs_fc.cpp
         bvals/bvals_cc.cpp
         bvals/bvals_fc.cpp
+        bvals/bvals_part.cpp
+        bvals/bvals_tasks.cpp
         bvals/flux_correct_cc.cpp
         bvals/flux_correct_fc.cpp
         bvals/prolongation.cpp

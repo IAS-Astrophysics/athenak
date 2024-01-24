@@ -5,7 +5,7 @@
 //========================================================================================
 //! \file bvals_cc.cpp
 //! \brief functions to pack/send and recv/unpack boundary values for cell-centered (CC)
-//! variables.
+//! Mesh variables.
 //! Prolongation of CC variables  occurs in ProlongateCC() function called from task list
 
 #include <cstdlib>
@@ -22,7 +22,7 @@
 // BValCC constructor:
 
 BoundaryValuesCC::BoundaryValuesCC(MeshBlockPack *pp, ParameterInput *pin, bool z4c) :
-  BoundaryValues(pp, pin, z4c) {
+  MeshBoundaryValues(pp, pin, z4c) {
 }
 
 //----------------------------------------------------------------------------------------

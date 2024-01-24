@@ -22,6 +22,13 @@ namespace particles {
 
 Particles::Particles(MeshBlockPack *ppack, ParameterInput *pin) :
     pmy_pack(ppack) {
+  // check this is at least a 2D problem
+  if (pmy_pack->pmesh->one_d) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+              << "Particle module only works in 2D/3D" <<std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+
   // read number of particles per cell, and calculate number of particles this pack
   Real ppc = pin->GetOrAddReal("particles","ppc",1.0);
 
@@ -33,8 +40,6 @@ Particles::Particles(MeshBlockPack *ppack, ParameterInput *pin) :
   nparticles_thispack = static_cast<int>(r_npart);
   nparticles_total = nparticles_thispack;
 
-std::cout << "npart="<<nparticles_thispack<<std::endl;
-
   // select pusher algorithm
   std::string ppush = pin->GetString("particles","pusher");
   if (ppush.compare("drift") == 0) {
@@ -45,14 +50,14 @@ std::cout << "npart="<<nparticles_thispack<<std::endl;
     std::exit(EXIT_FAILURE);
   }
 
-  int ndim=1;
-  if (pmy_pack->pmesh->multi_d) {ndim++;}
+  // set dimensions of particle arrays
+  int ndim=2;
   if (pmy_pack->pmesh->three_d) {ndim++;}
   Kokkos::realloc(prtcl_pos, nparticles_thispack, ndim);
   Kokkos::realloc(prtcl_vel, nparticles_thispack, ndim);
   Kokkos::realloc(prtcl_gid, nparticles_thispack);
 
-  // allocate boundary buffers for conserved (cell-centered) variables
+  // allocate boundary object
 
 }
 
