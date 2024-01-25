@@ -171,6 +171,8 @@ Z4c::Z4c(MeshBlockPack *ppack, ParameterInput *pin) :
   }
   Kokkos::realloc(psi_out,nrad,77,2);
   mkdir("waveforms",0775);
+  waveform_dt = pin->GetOrAddReal("z4c", "waveform_dt", 1);
+  last_output_time = 0;
 }
 
 //----------------------------------------------------------------------------------------

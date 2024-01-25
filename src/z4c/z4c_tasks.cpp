@@ -64,12 +64,9 @@ void Z4c::AssembleZ4cTasks(TaskList &start, TaskList &run, TaskList &end) {
   // end task list
   id.csend = end.AddTask(&Z4c::ClearSend, this, none);
   id.crecv = end.AddTask(&Z4c::ClearRecv, this, id.csend);
-  // if (pmy_pack->pmesh->ncycle!=0 && pmy_pack->pmesh->ncycle%2 == 0) {
   id.z4tad = end.AddTask(&Z4c::Z4cToADM_, this, id.crecv);
   id.admc  = end.AddTask(&Z4c::ADMConstraints_, this, id.z4tad);
   id.weyl_scalar  = end.AddTask(&Z4c::CalcWeylScalar_, this, id.admc);
-  id.waveform  = end.AddTask(&Z4c::CalcWaveForm_, this, id.weyl_scalar);
-  // }
   return;
 }
 
@@ -305,29 +302,26 @@ TaskStatus Z4c::ADMConstraints_(Driver *pdrive, int stage) {
 //! \brief
 
 TaskStatus Z4c::CalcWeylScalar_(Driver *pdrive, int stage) {
-  auto &indcs = pmy_pack->pmesh->mb_indcs;
-  if (stage == pdrive->nexp_stages) {
-    switch (indcs.ng) {
-      case 2: Z4cWeyl<2>(pmy_pack);
-              break;
-      case 3: Z4cWeyl<3>(pmy_pack);
-              break;
-      case 4: Z4cWeyl<4>(pmy_pack);
-              break;
+  float time_32 = static_cast<float>(pmy_pack->pmesh->time);
+  float next_32 = static_cast<float>(last_output_time+waveform_dt);
+  if ((time_32 >= next_32) || (time_32 == 0)) {
+    auto &indcs = pmy_pack->pmesh->mb_indcs;
+    if (stage == pdrive->nexp_stages) {
+      switch (indcs.ng) {
+        case 2: Z4cWeyl<2>(pmy_pack);
+                break;
+        case 3: Z4cWeyl<3>(pmy_pack);
+                break;
+        case 4: Z4cWeyl<4>(pmy_pack);
+                break;
+      }
+      WaveExtr(pmy_pack);
+      last_output_time = time_32;
     }
   }
   return TaskStatus::complete;
 }
-//----------------------------------------------------------------------------------------
-//! \fn  void Z4c::CalcWaveForm_
-//! \brief
 
-TaskStatus Z4c::CalcWaveForm_(Driver *pdrive, int stage) {
-  if (stage == pdrive->nexp_stages) {
-    WaveExtr(pmy_pack);
-  }
-  return TaskStatus::complete;
-}
 //----------------------------------------------------------------------------------------
 //! \fn  void Z4c::RestrictU
 //! \brief
