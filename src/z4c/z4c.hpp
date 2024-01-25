@@ -197,6 +197,8 @@ class Z4c {
   std::vector<std::unique_ptr<SphericalGrid>> spherical_grids;
   // array storing waveform at each radii
   HostArray3D<Real> psi_out;
+  Real waveform_dt;
+  Real last_output_time;
 
   // functions
   void AssembleZ4cTasks(TaskList &start, TaskList &run, TaskList &end);
