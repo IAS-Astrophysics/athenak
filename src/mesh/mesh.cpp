@@ -25,6 +25,7 @@
 #include "diffusion/resistivity.hpp"
 #include "diffusion/conduction.hpp"
 #include "radiation/radiation.hpp"
+#include "particles/particles.hpp"
 #include "srcterms/srcterms.hpp"
 #include "outputs/io_wrapper.hpp"
 
@@ -44,7 +45,8 @@ Mesh::Mesh(ParameterInput *pin) :
   three_d(false),
   multi_d(false),
   strictly_periodic(true),
-  nmb_packs_thisrank(1) {
+  nmb_packs_thisrank(1),
+  npart_total(0) {
   // Set physical size and number of cells in mesh (root level)
   mesh_size.x1min = pin->GetReal("mesh", "x1min");
   mesh_size.x1max = pin->GetReal("mesh", "x1max");
@@ -577,6 +579,10 @@ void Mesh::NewTimeStep(const Real tlim) {
   // Radiation timestep
   if (pmb_pack->prad != nullptr) {
     dt = std::min(dt, (cfl_no)*(pmb_pack->prad->dtnew) );
+  }
+  // Particles timestep
+  if (pmb_pack->ppart != nullptr) {
+    dt = std::min(dt, (pmb_pack->ppart->dtnew) );
   }
 
 #if MPI_PARALLEL_ENABLED

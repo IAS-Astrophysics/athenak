@@ -58,5 +58,11 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   pmy_mesh_->pmb_pack->ppart->prtcl_gid.template modify<HostMemSpace>();
   pmy_mesh_->pmb_pack->ppart->prtcl_gid.template sync<DevExeSpace>();
 
+  // set timestep (which will remain constant for entire run)
+  // Assumes uniform mesh (no SMR or AMR)
+  Real &dtnew_ = pmy_mesh_->pmb_pack->ppart->dtnew;
+  dtnew_ = std::min(size.dx1, size.dx2);
+  dtnew_ = std::min(dtnew_, size.dx3);
+
   return;
 }
