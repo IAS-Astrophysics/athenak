@@ -164,10 +164,6 @@ void Z4c::QueueZ4cTasks() {
   dep.push_back(Z4c_ADMC);
   pnr->QueueTask(&Z4c::CalcWeylScalar_, this, Z4c_Weyl, "Z4c_Weyl", Task_End, dep, none);
   dep.clear();
-
-  dep.push_back(Z4c_Weyl);
-  pnr->QueueTask(&Z4c::CalcWaveForm_, this, Z4c_Wave, "Z4c_Wave", Task_End, dep, none);
-  dep.clear();
 }
 
 //----------------------------------------------------------------------------------------
