@@ -78,6 +78,9 @@ TaskStatus RadiationFEMN::ExpRKUpdate(Driver *pdriver, int stage) {
                   par_for_inner(member, 0, num_points_ - 1, [&](const int idx) {
                     int nuenangidx = IndicesUnited(nu, en, idx, num_species_, num_energy_bins_, num_points_);
 
+                    int element_nmbr = int(i / 2);
+                    int cell_nmbr = i % 2;
+                    //Real divf_s = ((1.5) * iflx.x1f(m, nuenangidx, k, j, i) - flxavg.x1f(m, nuenangidx, k, j, element_nmbr) - (0.5) * iflx.x1f) / (2. * mbsize.d_view(m).dx1 * Ven);
                     Real divf_s = flx1(m, nuenangidx, k, j, i) / (2. * mbsize.d_view(m).dx1 * Ven);
 
                     if (multi_d) {

@@ -35,6 +35,7 @@ RadiationFEMN::RadiationFEMN(MeshBlockPack *ppack, ParameterInput *pin) :
     coarse_f0("ci0", 1, 1, 1, 1, 1),
     f1("f1", 1, 1, 1, 1, 1),
     iflx("iflx", 1, 1, 1, 1, 1),
+    flxavg("flxavg", 1, 1, 1, 1, 1),
     ftemp("ftemp", 1, 1, 1, 1, 1),
     energy_grid("energy_grid", 1),
     angular_grid("angular_grid", 1, 1),
@@ -200,6 +201,9 @@ RadiationFEMN::RadiationFEMN(MeshBlockPack *ppack, ParameterInput *pin) :
   int ncells1 = indcs.nx1 + 2 * (indcs.ng);
   int ncells2 = (indcs.nx2 > 1) ? (indcs.nx2 + 2 * (indcs.ng)) : 1;
   int ncells3 = (indcs.nx3 > 1) ? (indcs.nx3 + 2 * (indcs.ng)) : 1;
+  int nflxcells1 = int((indcs.nx1 + 2 * (indcs.ng)) / 2);
+  int nflxcells2 = (indcs.nx2 > 1) ? int((indcs.nx2 + 2 * (indcs.ng)) / 2) : 1;
+  int nflxcells3 = (indcs.nx3 > 1) ? int((indcs.nx3 + 2 * (indcs.ng)) / 2) : 1;
 
   // tetrad and fluid quantities
   Kokkos::realloc(g_dd, nmb, 4, 4, ncells3, ncells2, ncells1);        // 4-metric from GR
@@ -211,13 +215,20 @@ RadiationFEMN::RadiationFEMN(MeshBlockPack *ppack, ParameterInput *pin) :
   // Hardcode metric fluid quantities @TODO: change this later
   this->InitializeMetricFluid();
 
-  // state vector and fluxes
+  // state vector
   Kokkos::realloc(f0, nmb, num_points_total, ncells3, ncells2, ncells1);        // distribution function
   Kokkos::realloc(f1, nmb, num_points_total, ncells3, ncells2, ncells1);        // distribution function
-  Kokkos::realloc(iflx.x1f, nmb, num_points_total, ncells3, ncells2, ncells1);  // spatial flux (x)
-  Kokkos::realloc(iflx.x2f, nmb, num_points_total, ncells3, ncells2, ncells1);  // spatial flux (y)
-  Kokkos::realloc(iflx.x3f, nmb, num_points_total, ncells3, ncells2, ncells1);  // spatial flux (z)
   Kokkos::realloc(ftemp, nmb, num_points_total, ncells3, ncells2, ncells1);     // distribution function (temp storage)
+
+  // spatial flux at DG element faces
+  Kokkos::realloc(iflx.x1f, nmb, num_points_total, ncells3, ncells2, nflxcells1);
+  Kokkos::realloc(iflx.x2f, nmb, num_points_total, ncells3, nflxcells2, ncells1);
+  Kokkos::realloc(iflx.x3f, nmb, num_points_total, nflxcells3, ncells2, ncells1);
+
+  // average flux inside DG element
+  Kokkos::realloc(flxavg.x1f, nmb, num_points_total, ncells3, ncells2, nflxcells1);
+  Kokkos::realloc(flxavg.x2f, nmb, num_points_total, ncells3, nflxcells2, ncells1);
+  Kokkos::realloc(flxavg.x3f, nmb, num_points_total, nflxcells3, ncells2, ncells1);
 
   // reallocate allocate memory for evolved variables on coarse mesh
   if (ppack->pmesh->multilevel) {
