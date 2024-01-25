@@ -23,7 +23,8 @@ enum class ParticlesPusher {drift, leap_frog, lagrangian_tracer, lagrangian_mc};
 //  \brief container to hold TaskIDs of all particles tasks
 
 struct ParticlesTaskIDs {
-  TaskID crecv;
+  TaskID push;
+  TaskID newgid;
 };
 
 namespace particles {
@@ -40,22 +41,24 @@ class Particles {
   // data
   ParticlesPusher pusher;
 
-  int nparticles_total;            // total number of particles all ranks
   int nparticles_thispack;         // number of particles in this pack
   DualArray1D<int>  prtcl_gid;     // GID of MeshBlock containing each par
   DvceArray2D<Real> prtcl_pos;     // positions
   DvceArray2D<Real> prtcl_vel;     // velocities
   DvceArray2D<Real> prtcl_rprop;   // real number properties each particle
   DvceArray2D<int>  prtcl_iprop;   // integer properties each particle
+  Real dtnew;
 
   // Boundary communication buffers and functions for particles
-//  ParticlesBoundaryValues *pbval;
+  ParticlesBoundaryValues *pbval_part;
 
   // container to hold names of TaskIDs
   ParticlesTaskIDs id;
 
   // functions...
+  void AssembleTasks(std::map<std::string, std::shared_ptr<TaskList>> tl);
   TaskStatus Push(Driver *pdriver, int stage);
+  TaskStatus NewGID(Driver *pdriver, int stage);
 
  private:
   MeshBlockPack* pmy_pack;  // ptr to MeshBlockPack containing this Particles

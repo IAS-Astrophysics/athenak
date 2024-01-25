@@ -58,6 +58,7 @@ Driver::Driver(ParameterInput *pin, Mesh *pmesh, Real wtlim, Kokkos::Timer* ptim
   nlim(-1),
   ndiag(1),
   nmb_updated_(0),
+  npart_updated_(0),
   lb_efficiency_(0),
   pwall_clock_(ptimer),
   wall_time(wtlim),
@@ -332,7 +333,7 @@ void Driver::Initialize(Mesh *pmesh, ParameterInput *pin, Outputs *pout, bool re
 
 void Driver::Execute(Mesh *pmesh, ParameterInput *pin, Outputs *pout) {
   if (global_variable::my_rank == 0) {
-    std::cout << "\nSetup complete, executing task list...\n" << std::endl;
+    std::cout << "\nSetup complete, executing task list(s)...\n" << std::endl;
   }
 
   if (time_evolution == TimeEvolution::tstatic) {
@@ -365,6 +366,7 @@ void Driver::Execute(Mesh *pmesh, ParameterInput *pin, Outputs *pout) {
       pmesh->time = pmesh->time + pmesh->dt;
       pmesh->ncycle++;
       nmb_updated_ += pmesh->nmb_total;
+      npart_updated_ += pmesh->npart_total;
       // load balancing efficiency
       if (global_variable::nranks > 1) {
         int minnmb = std::numeric_limits<int>::max();
@@ -461,10 +463,12 @@ void Driver::Finalize(Mesh *pmesh, ParameterInput *pin, Outputs *pout) {
       std::uint64_t zonecycles = nmb_updated_ *
                                  static_cast<uint64_t>(pmesh->NumberOfMeshBlockCells());
       float zcps = static_cast<float>(zonecycles) / exe_time;
+      float pups = static_cast<float>(npart_updated_) / exe_time;
 
       std::cout << std::endl << "MeshBlock-cycles = " << nmb_updated_ << std::endl;
       std::cout << "cpu time used  = " << exe_time << std::endl;
       std::cout << "zone-cycles/cpu_second = " << zcps << std::endl;
+      std::cout << "particle-updates/cpu_second = " << pups << std::endl;
     }
   }
   return;

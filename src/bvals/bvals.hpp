@@ -26,10 +26,13 @@ enum class BoundaryFlag {undef=-1,block, reflect, inflow, outflow, diode, user, 
 #include "mesh/mesh.hpp"
 #include "coordinates/coordinates.hpp"
 #include "tasklist/task_list.hpp"
-#include "particles/particles.hpp"
+//#include "particles/particles.hpp"
 
 // Forward declarations
 class MeshBlockPack;
+namespace particles {
+class Particles;
+}
 
 //----------------------------------------------------------------------------------------
 //! \fn int CreateBvals_MPI_Tag(int lid, int bufid)
@@ -216,7 +219,7 @@ class ParticlesBoundaryValues {
 #endif
 
   //functions
-  TaskStatus PackAndSendParticles();
+  TaskStatus SetNewGID();
 
 /**
   virtual TaskStatus InitFluxRecv(const int nvar)=0;

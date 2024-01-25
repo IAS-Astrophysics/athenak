@@ -33,10 +33,10 @@ void FlagForSendOrUpdateGID(NeighborBlock &nghbr, int myrank, int &mp) {
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn void ParticlesBoundaryValues::PackAndSendParticles()
+//! \fn void ParticlesBoundaryValues::SetNewGID()
 //! \brief
 
-TaskStatus ParticlesBoundaryValues::PackAndSendParticles() {
+TaskStatus ParticlesBoundaryValues::SetNewGID() {
   // create local references for variables in kernel
   auto ppos = pmy_part->prtcl_pos;
   auto pgid = pmy_part->prtcl_gid;
@@ -59,29 +59,29 @@ TaskStatus ParticlesBoundaryValues::PackAndSendParticles() {
           FlagForSendOrUpdateGID(nghbr.d_view(mp,48), myrank, mp);
         } else if (x3 > mbsize.d_view(mp).x3max) {
           // corner
-          FlagForSendOrUpdateGID(nghbr.d_view(mp,49), myrank, mp);
+          FlagForSendOrUpdateGID(nghbr.d_view(mp,52), myrank, mp);
         } else {
-          // x3x1 edge
-          FlagForSendOrUpdateGID(nghbr.d_view(mp,32), myrank, mp);
+          // x1x2 edge
+          FlagForSendOrUpdateGID(nghbr.d_view(mp,16), myrank, mp);
         }
       } else if (x2 > mbsize.d_view(mp).x2max) {
         if (x3 < mbsize.d_view(mp).x3min) {
           // corner
-          FlagForSendOrUpdateGID(nghbr.d_view(mp,52), myrank, mp);
+          FlagForSendOrUpdateGID(nghbr.d_view(mp,50), myrank, mp);
         } else if (x3 > mbsize.d_view(mp).x3max) {
           // corner
-          FlagForSendOrUpdateGID(nghbr.d_view(mp,53), myrank, mp);
+          FlagForSendOrUpdateGID(nghbr.d_view(mp,54), myrank, mp);
         } else {
-          // x3x1 edge
-          FlagForSendOrUpdateGID(nghbr.d_view(mp,36), myrank, mp);
-        }
-      } else {
-        if (x2 < mbsize.d_view(mp).x3min) {
-          // x1x2 edge
-          FlagForSendOrUpdateGID(nghbr.d_view(mp,16), myrank, mp);
-        } else if (x3 > mbsize.d_view(mp).x3max) {
           // x1x2 edge
           FlagForSendOrUpdateGID(nghbr.d_view(mp,20), myrank, mp);
+        }
+      } else {
+        if (x3 < mbsize.d_view(mp).x3min) {
+          // x3x1 edge
+          FlagForSendOrUpdateGID(nghbr.d_view(mp,32), myrank, mp);
+        } else if (x3 > mbsize.d_view(mp).x3max) {
+          // x3x1 edge
+          FlagForSendOrUpdateGID(nghbr.d_view(mp,36), myrank, mp);
         } else {
           // x1 face
           FlagForSendOrUpdateGID(nghbr.d_view(mp,0), myrank, mp);
@@ -92,32 +92,32 @@ TaskStatus ParticlesBoundaryValues::PackAndSendParticles() {
       if (x2 < mbsize.d_view(mp).x2min) {
         if (x3 < mbsize.d_view(mp).x3min) {
           // corner
-          FlagForSendOrUpdateGID(nghbr.d_view(mp,50), myrank, mp);
+          FlagForSendOrUpdateGID(nghbr.d_view(mp,49), myrank, mp);
         } else if (x3 > mbsize.d_view(mp).x3max) {
           // corner
-          FlagForSendOrUpdateGID(nghbr.d_view(mp,51), myrank, mp);
+          FlagForSendOrUpdateGID(nghbr.d_view(mp,53), myrank, mp);
         } else {
-          // x3x1 edge
-          FlagForSendOrUpdateGID(nghbr.d_view(mp,34), myrank, mp);
+          // x1x2 edge
+          FlagForSendOrUpdateGID(nghbr.d_view(mp,18), myrank, mp);
         }
       } else if (x2 > mbsize.d_view(mp).x2max) {
         if (x3 < mbsize.d_view(mp).x3min) {
           // corner
-          FlagForSendOrUpdateGID(nghbr.d_view(mp,54), myrank, mp);
+          FlagForSendOrUpdateGID(nghbr.d_view(mp,51), myrank, mp);
         } else if (x3 > mbsize.d_view(mp).x3max) {
           // corner
           FlagForSendOrUpdateGID(nghbr.d_view(mp,55), myrank, mp);
         } else {
-          // x3x1 edge
-          FlagForSendOrUpdateGID(nghbr.d_view(mp,38), myrank, mp);
-        }
-      } else {
-        if (x2 < mbsize.d_view(mp).x3min) {
-          // x1x2 edge
-          FlagForSendOrUpdateGID(nghbr.d_view(mp,18), myrank, mp);
-        } else if (x3 > mbsize.d_view(mp).x3max) {
           // x1x2 edge
           FlagForSendOrUpdateGID(nghbr.d_view(mp,22), myrank, mp);
+        }
+      } else {
+        if (x3 < mbsize.d_view(mp).x3min) {
+          // x3x1 edge
+          FlagForSendOrUpdateGID(nghbr.d_view(mp,34), myrank, mp);
+        } else if (x3 > mbsize.d_view(mp).x3max) {
+          // x3x1 edge
+          FlagForSendOrUpdateGID(nghbr.d_view(mp,38), myrank, mp);
         } else {
           // x1 face
           FlagForSendOrUpdateGID(nghbr.d_view(mp,4), myrank, mp);
@@ -163,6 +163,16 @@ TaskStatus ParticlesBoundaryValues::PackAndSendParticles() {
       ppos(p,IPX) += (meshsize.x1max - meshsize.x1min);
     } else if (x1 > meshsize.x1max) {
       ppos(p,IPX) -= (meshsize.x1max - meshsize.x1min);
+    }
+    if (x2 < meshsize.x2min) {
+      ppos(p,IPY) += (meshsize.x2max - meshsize.x2min);
+    } else if (x2 > meshsize.x2max) {
+      ppos(p,IPY) -= (meshsize.x2max - meshsize.x2min);
+    }
+    if (x3 < meshsize.x3min) {
+      ppos(p,IPZ) += (meshsize.x3max - meshsize.x3min);
+    } else if (x3 > meshsize.x3max) {
+      ppos(p,IPZ) -= (meshsize.x3max - meshsize.x3min);
     }
   });
 

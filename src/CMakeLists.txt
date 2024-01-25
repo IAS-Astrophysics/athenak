@@ -91,6 +91,7 @@ add_executable(
 
         particles/particles.cpp
         particles/particles_pushers.cpp
+        particles/particles_tasks.cpp
 
         pgen/pgen.cpp
         pgen/tests/advection.cpp
