@@ -35,10 +35,16 @@
 #error lorene_bns.cpp requires LORENE
 #endif
 
+// Prototype for user-defined history function
+void BNSHistory(HistoryData *pdata, Mesh *pm);
+
 //----------------------------------------------------------------------------------------
 //! \fn ProblemGenerator::UserProblem_()
 //! \brief Problem Generator for BNS with LORENE
 void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
+
+  user_hist_func = &BNSHistory;
+
   if (restart) return;
 
   MeshBlockPack *pmbp = pmy_mesh_->pmb_pack;
@@ -295,4 +301,58 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   }
 
   return;
+}
+
+void BNSHistory(HistoryData *pdata, Mesh *pm) {
+  // Select the number of outputs and create labels for them.
+  int &nmhd = pm->pmb_pack->pmhd->nmhd;
+  pdata->nhist = 2;
+  pdata->label[0] = "rho-max";
+  pdata->label[1] = "alpha-min";
+
+  // Capture class variables for kernel
+  auto &w0_ = pm->pmb_pack->pmhd->w0;
+  auto &adm = pm->pmb_pack->padm->adm;
+
+  // Loop over all MeshBlocks in this pack
+  auto &indcs = pm->pmb_pack->pmesh->mb_indcs;
+  int is = indcs.is; int nx1 = indcs.nx1;
+  int js = indcs.js; int nx2 = indcs.nx2;
+  int ks = indcs.ks; int nx3 = indcs.nx3;
+  const int nmkji = (pm->pmb_pack->nmb_thispack)*nx3*nx2*nx1;
+  const int nkji = nx3*nx2*nx1;
+  const int nji = nx2*nx1;
+  Real rho_max = std::numeric_limits<Real>::max();
+  Real alpha_min = -rho_max;
+  Kokkos::parallel_reduce("TOVHistSums",Kokkos::RangePolicy<>(DevExeSpace(), 0, nmkji),
+  KOKKOS_LAMBDA(const int &idx, Real &mb_max, Real &mb_alp_min) {
+    // coompute n,k,j,i indices of thread
+    int m = (idx)/nkji;
+    int k = (idx - m*nkji)/nji;
+    int j = (idx - m*nkji - k*nji)/nx1;
+    int i = (idx - m*nkji - k*nji - j*nx1) + is;
+    k += ks;
+    j += js;
+
+    mb_max = fmax(mb_max, w0_(m,IDN,k,j,i));
+    mb_alp_min = fmin(mb_alp_min, adm.alpha(m, k, j, i));
+  }, Kokkos::Max<Real>(rho_max), Kokkos::Min<Real>(alpha_min));
+
+  // Currently AthenaK only supports MPI_SUM operations between ranks, but we need MPI_MAX
+  // and MPI_MIN operations instead. This is a cheap hack to make it work as intended.
+#if MPI_PARALLEL_ENABLED
+  if (global_variable::my_rank == 0) {
+    MPI_Reduce(MPI_IN_PLACE, &rho_max, 1, MPI_ATHENA_REAL, MPI_MAX, 0, MPI_COMM_WORLD);
+    MPI_Reduce(MPI_IN_PLACE, &alpha_min, 1, MPI_ATHENA_REAL, MPI_MIN, 0, MPI_COMM_WORLD);
+  } else {
+    MPI_Reduce(&rho_max, &rho_max, 1, MPI_ATHENA_REAL, MPI_MAX, 0, MPI_COMM_WORLD);
+    MPI_Reduce(&alpha_min, &alpha_min, 1, MPI_ATHENA_REAL, MPI_MAX, 0, MPI_COMM_WORLD);
+    rho_max = 0.;
+    alpha_min = 0.;
+  }
+#endif
+
+  // store data in hdata array
+  pdata->hdata[0] = rho_max;
+  pdata->hdata[1] = alpha_min;
 }
