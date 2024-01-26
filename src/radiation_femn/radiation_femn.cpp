@@ -201,9 +201,9 @@ RadiationFEMN::RadiationFEMN(MeshBlockPack *ppack, ParameterInput *pin) :
   int ncells1 = indcs.nx1 + 2 * (indcs.ng);
   int ncells2 = (indcs.nx2 > 1) ? (indcs.nx2 + 2 * (indcs.ng)) : 1;
   int ncells3 = (indcs.nx3 > 1) ? (indcs.nx3 + 2 * (indcs.ng)) : 1;
-  int nflxcells1 = int((indcs.nx1 + 2 * (indcs.ng)) / 2);
-  int nflxcells2 = (indcs.nx2 > 1) ? int((indcs.nx2 + 2 * (indcs.ng)) / 2) : 1;
-  int nflxcells3 = (indcs.nx3 > 1) ? int((indcs.nx3 + 2 * (indcs.ng)) / 2) : 1;
+  int nflxcells1 = int(indcs.nx1 / 2) + 1;
+  int nflxcells2 = (indcs.nx2 > 1) ? int(indcs.nx2 / 2) + 1: 1;
+  int nflxcells3 = (indcs.nx3 > 1) ? int(indcs.nx3 / 2) + 1: 1;
 
   // tetrad and fluid quantities
   Kokkos::realloc(g_dd, nmb, 4, 4, ncells3, ncells2, ncells1);        // 4-metric from GR
