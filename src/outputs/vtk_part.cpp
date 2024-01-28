@@ -127,16 +127,16 @@ void ParticleVTKOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
 
     // Loop over particles, load positions into data[]
     for (int p=0; p<(3*nout_part); (p+=3)) {
-      data[p] = outpart_pos(p,0);
+      data[p] = static_cast<float>(outpart_pos(p,0));
       if (pm->multi_d) {
-        data[p+1] = outpart_pos(p,1);
+        data[p+1] = static_cast<float>(outpart_pos(p,1));
       } else {
-        data[p+1] = pm->mesh_size.x2min;
+        data[p+1] = static_cast<float>(pm->mesh_size.x2min);
       }
       if (pm->three_d) {
-        data[p+2] = outpart_pos(p,2);
+        data[p+2] = static_cast<float>(outpart_pos(p,2));
       } else {
-        data[p+2] = pm->mesh_size.x3min;
+        data[p+2] = static_cast<float>(pm->mesh_size.x3min);
       }
     }
     // swap data for this variable into big endian order
@@ -156,7 +156,7 @@ void ParticleVTKOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
 
     // Loop over particles, load gid into data[]
     for (int p=0; p<nout_part; ++p) {
-      data[p] = outpart_gid(p);
+      data[p] = static_cast<float>(outpart_gid(p));
     }
     // swap data for this variable into big endian order
     if (!big_end) {
