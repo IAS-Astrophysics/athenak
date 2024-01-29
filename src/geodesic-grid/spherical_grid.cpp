@@ -213,6 +213,13 @@ void SphericalGrid::SetInterpolationWeights() {
 //! \brief interpolate Cartesian data to surface of sphere
 
 void SphericalGrid::InterpolateToSphere(int nvars, DvceArray5D<Real> &val) {
+  // reinitialize interpolation indices and weights if AMR
+  if (pmy_pack->pmesh->adaptive) {
+    SetInterpolationIndices();
+    SetInterpolationWeights();
+  }
+
+  // capturing variables for kernel
   auto &indcs = pmy_pack->pmesh->mb_indcs;
   int &is = indcs.is; int &js = indcs.js; int &ks = indcs.ks;
   int &ng = indcs.ng;

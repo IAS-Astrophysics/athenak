@@ -9,9 +9,15 @@
 #include <algorithm>
 #include <cmath>
 #include <sstream>
+#include <iomanip>
+#include <iostream>   // endl
+#include <limits>     // numeric_limits::max()
+#include <memory>
+#include <string>     // c_str(), string
+#include <vector>
 
-#include "parameter_input.hpp"
 #include "athena.hpp"
+#include "parameter_input.hpp"
 #include "globals.hpp"
 #include "mesh/mesh.hpp"
 #include "z4c/z4c.hpp"
@@ -68,6 +74,10 @@ void ADMOnePuncture(MeshBlockPack *pmbp, ParameterInput *pin) {
   int ksg = ks-indcs.ng; int keg = ke+indcs.ng;
   int nmb = pmbp->nmb_thispack;
   Real ADM_mass = pin->GetOrAddReal("problem", "punc_ADM_mass", 1.);
+  Real center_x1 = pin->GetOrAddReal("problem", "punc_center_x1", 0.);
+  Real center_x2 = pin->GetOrAddReal("problem", "punc_center_x2", 0.);
+  Real center_x3 = pin->GetOrAddReal("problem", "punc_center_x3", 0.);
+
   adm::ADM::ADM_vars &adm = pmbp->padm->adm;
 
   par_for("pgen one puncture",
@@ -87,6 +97,10 @@ void ADMOnePuncture(MeshBlockPack *pmbp, ParameterInput *pin) {
     Real &x3max = size.d_view(m).x3max;
     int nx3 = indcs.nx3;
     Real x3v = CellCenterX(k-ks, nx3, x3min, x3max);
+
+    x1v -= center_x1;
+    x2v -= center_x2;
+    x3v -= center_x3;
 
     Real r = std::sqrt(std::pow(x3v,2) + std::pow(x2v,2) + std::pow(x1v,2));
 

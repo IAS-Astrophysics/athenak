@@ -208,9 +208,9 @@ TaskStatus BoundaryValuesCC::PackAndSendCC(DvceArray5D<Real> &a, DvceArray5D<Rea
 #if MPI_PARALLEL_ENABLED
   // Send boundary buffer to neighboring MeshBlocks using MPI
   Kokkos::fence();
+  auto &is_z4c = is_z4c_;
   int my_rank = global_variable::my_rank;
   auto &nghbr = pmy_pack->pmb->nghbr;
-  auto &is_z4c = is_z4c_;
   bool no_errors=true;
   for (int m=0; m<nmb; ++m) {
     for (int n=0; n<nnghbr; ++n) {
