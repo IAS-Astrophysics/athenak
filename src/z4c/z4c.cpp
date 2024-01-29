@@ -6,9 +6,12 @@
 //! \file z4c.cpp
 //! \brief implementation of Z4c class constructor and assorted other functions
 
+#include <sys/stat.h>  // mkdir
 #include <iostream>
 #include <string>
 #include <algorithm>
+#include <memory>    // make_unique, unique_ptr
+#include <vector>    // vector
 #include <Kokkos_Core.hpp>
 
 #include "athena.hpp"
@@ -55,7 +58,9 @@ Z4c::Z4c(MeshBlockPack *ppack, ParameterInput *pin) :
   u0("u0 z4c",1,1,1,1,1),
   coarse_u0("coarse u0 z4c",1,1,1,1,1),
   u1("u1 z4c",1,1,1,1,1),
-  u_rhs("u_rhs z4c",1,1,1,1,1) {
+  u_rhs("u_rhs z4c",1,1,1,1,1),
+  u_weyl("u_weyl",1,1,1,1,1),
+  psi_out("psi_out",1,1,1) {
   // (1) read time-evolution option [already error checked in driver constructor]
   // Then initialize memory and algorithms for reconstruction and Riemann solvers
   std::string evolution_t = pin->GetString("time","evolution");
@@ -74,6 +79,7 @@ Z4c::Z4c(MeshBlockPack *ppack, ParameterInput *pin) :
   Kokkos::realloc(u0,    nmb, (nz4c), ncells3, ncells2, ncells1);
   Kokkos::realloc(u1,    nmb, (nz4c), ncells3, ncells2, ncells1);
   Kokkos::realloc(u_rhs, nmb, (nz4c), ncells3, ncells2, ncells1);
+  Kokkos::realloc(u_weyl,    nmb, (2), ncells3, ncells2, ncells1);
 
   con.C.InitWithShallowSlice(u_con, I_CON_C);
   con.H.InitWithShallowSlice(u_con, I_CON_H);
@@ -103,6 +109,9 @@ Z4c::Z4c(MeshBlockPack *ppack, ParameterInput *pin) :
   rhs.vGam_u.InitWithShallowSlice (u_rhs, I_Z4C_GAMX, I_Z4C_GAMZ);
   rhs.g_dd.InitWithShallowSlice  (u_rhs, I_Z4C_GXX, I_Z4C_GZZ);
   rhs.vA_dd.InitWithShallowSlice  (u_rhs, I_Z4C_AXX, I_Z4C_AZZ);
+
+  weyl.rpsi4.InitWithShallowSlice (u_weyl, 0);
+  weyl.ipsi4.InitWithShallowSlice (u_weyl, 1);
 
   opt.chi_psi_power = pin->GetOrAddReal("z4c", "chi_psi_power", -4.0);
   opt.chi_div_floor = pin->GetOrAddReal("z4c", "chi_div_floor", -1000.0);
@@ -141,6 +150,20 @@ Z4c::Z4c(MeshBlockPack *ppack, ParameterInput *pin) :
   pbval_u = new BoundaryValuesCC(ppack, pin, true);
   pbval_u->InitializeBuffers((nz4c));
   Kokkos::Profiling::popRegion();
+
+  // wave extraction spheres
+  // TODO(@hzhu): Read radii from input file
+  auto &grids = spherical_grids;
+  int nrad = pin->GetOrAddReal("z4c", "nrad_wave_extraction", 1);
+  int nlev = pin->GetOrAddReal("z4c", "extraction_nlev", 10);
+  for (int i=1; i<=nrad; i++) {
+    Real rad = pin->GetOrAddReal("z4c", "extraction_radius_"+std::to_string(i), 10);
+    grids.push_back(std::make_unique<SphericalGrid>(ppack, nlev, rad));
+  }
+  Kokkos::realloc(psi_out,nrad,77,2);
+  mkdir("waveforms",0775);
+  waveform_dt = pin->GetOrAddReal("z4c", "waveform_dt", 1);
+  last_output_time = 0;
 }
 
 //----------------------------------------------------------------------------------------

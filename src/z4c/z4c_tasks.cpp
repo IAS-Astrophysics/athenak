@@ -44,12 +44,12 @@ void Z4c::AssembleZ4cTasks(TaskList &start, TaskList &run, TaskList &end) {
   id.copyu = run.AddTask(&Z4c::CopyU, this, none); // id.ptrack);
 
   switch (indcs.ng) {
-      case 2: id.crhs  = run.AddTask(&Z4c::CalcRHS<2>, this, id.copyu);
-              break;
-      case 3: id.crhs  = run.AddTask(&Z4c::CalcRHS<3>, this, id.copyu);
-              break;
-      case 4: id.crhs  = run.AddTask(&Z4c::CalcRHS<4>, this, id.copyu);
-              break;
+    case 2: id.crhs  = run.AddTask(&Z4c::CalcRHS<2>, this, id.copyu);
+            break;
+    case 3: id.crhs  = run.AddTask(&Z4c::CalcRHS<3>, this, id.copyu);
+            break;
+    case 4: id.crhs  = run.AddTask(&Z4c::CalcRHS<4>, this, id.copyu);
+            break;
   }
   id.sombc = run.AddTask(&Z4c::Z4cBoundaryRHS, this, id.crhs);
   id.expl  = run.AddTask(&Z4c::ExpRKUpdate, this, id.sombc);
@@ -59,16 +59,13 @@ void Z4c::AssembleZ4cTasks(TaskList &start, TaskList &run, TaskList &end) {
   id.bcs   = run.AddTask(&Z4c::ApplyPhysicalBCs, this, id.recvu);
   id.prol  = run.AddTask(&Z4c::Prolongate, this, id.bcs);
   id.algc  = run.AddTask(&Z4c::EnforceAlgConstr, this, id.prol);
-  id.z4tad = run.AddTask(&Z4c::Z4cToADM_, this, id.algc);
-  id.admc  = run.AddTask(&Z4c::ADMConstraints_, this, id.z4tad);
-  id.newdt = run.AddTask(&Z4c::NewTimeStep, this, id.admc);
+  id.newdt = run.AddTask(&Z4c::NewTimeStep, this, id.algc);
   // end task list
   id.csend = end.AddTask(&Z4c::ClearSend, this, none);
   id.crecv = end.AddTask(&Z4c::ClearRecv, this, id.csend);
-
-  // if (pmy_pack->pmesh->ncycle%64 == 0) {
-    // place holder for horizon finder
-  // }
+  id.z4tad = end.AddTask(&Z4c::Z4cToADM_, this, id.crecv);
+  id.admc  = end.AddTask(&Z4c::ADMConstraints_, this, id.z4tad);
+  id.weyl_scalar  = end.AddTask(&Z4c::CalcWeylScalar_, this, id.admc);
   return;
 }
 
@@ -80,12 +77,6 @@ void Z4c::AssembleZ4cTasks(TaskList &start, TaskList &run, TaskList &end) {
 TaskStatus Z4c::InitRecv(Driver *pdrive, int stage) {
   TaskStatus tstat = pbval_u->InitRecv(nz4c);
   if (tstat != TaskStatus::complete) return tstat;
-
-  // with SMR/AMR post receives for fluxes of U
-  // do not post receives for fluxes when stage < 0 (i.e. ICs)
-  if (pmy_pack->pmesh->multilevel && (stage >= 0)) {
-    tstat = pbval_u->InitFluxRecv(nz4c);
-  }
   return tstat;
 }
 
@@ -96,12 +87,6 @@ TaskStatus Z4c::InitRecv(Driver *pdrive, int stage) {
 TaskStatus Z4c::ClearRecv(Driver *pdrive, int stage) {
   TaskStatus tstat = pbval_u->ClearRecv();
   if (tstat != TaskStatus::complete) return tstat;
-
-  // with SMR/AMR check receives of restricted fluxes of U complete
-  // do not check flux receives when stage < 0 (i.e. ICs)
-  if (pmy_pack->pmesh->multilevel && (stage >= 0)) {
-    tstat = pbval_u->ClearFluxRecv();
-  }
   return tstat;
 }
 
@@ -112,12 +97,6 @@ TaskStatus Z4c::ClearRecv(Driver *pdrive, int stage) {
 TaskStatus Z4c::ClearSend(Driver *pdrive, int stage) {
   TaskStatus tstat = pbval_u->ClearSend();
   if (tstat != TaskStatus::complete) return tstat;
-
-  // with SMR/AMR check sends of restricted fluxes of U complete
-  // do not check flux send for ICs (stage < 0)
-  if (pmy_pack->pmesh->multilevel && (stage >= 0)) {
-    tstat = pbval_u->ClearFluxSend();
-  }
   return tstat;
 }
 
@@ -212,6 +191,31 @@ TaskStatus Z4c::ADMConstraints_(Driver *pdrive, int stage) {
               break;
       case 4: ADMConstraints<4>(pmy_pack);
               break;
+    }
+  }
+  return TaskStatus::complete;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn  void Z4c::CalcWeylScalar_
+//! \brief
+
+TaskStatus Z4c::CalcWeylScalar_(Driver *pdrive, int stage) {
+  float time_32 = static_cast<float>(pmy_pack->pmesh->time);
+  float next_32 = static_cast<float>(last_output_time+waveform_dt);
+  if ((time_32 >= next_32) || (time_32 == 0)) {
+    auto &indcs = pmy_pack->pmesh->mb_indcs;
+    if (stage == pdrive->nexp_stages) {
+      switch (indcs.ng) {
+        case 2: Z4cWeyl<2>(pmy_pack);
+                break;
+        case 3: Z4cWeyl<3>(pmy_pack);
+                break;
+        case 4: Z4cWeyl<4>(pmy_pack);
+                break;
+      }
+      WaveExtr(pmy_pack);
+      last_output_time = time_32;
     }
   }
   return TaskStatus::complete;
