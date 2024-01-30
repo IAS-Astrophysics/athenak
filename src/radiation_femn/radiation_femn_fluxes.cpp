@@ -57,7 +57,6 @@ TaskStatus RadiationFEMN::CalculateFluxes(Driver *pdriver, int stage) {
                   int enidx = nuenidx.enidx;
                   int nuidx = nuenidx.nuidx;
 
-                  Real Ven = (1. / 3.) * (pow(energy_grid_(enidx + 1), 3) - pow(energy_grid_(enidx), 3));
                   Real sqrt_det_g_R = -0.5 * sqrt_det_g_(m, kk, jj, ii) + 1.5 * sqrt_det_g_(m, kk, jj, ii + 1);
 
                   // load scratch arrays using closure
@@ -78,11 +77,11 @@ TaskStatus RadiationFEMN::CalculateFluxes(Driver *pdriver, int stage) {
                       int muhat = int(muhatA / num_points_);
                       int A = muhatA - muhat * num_points_;
 
-                      Favg += (0.5) * Ven * (P_matrix_(muhat, B, A) * sqrt_det_g_(m, kk, jj, ii) * L_mu_muhat0_(m, 1, muhat, kk, jj, ii) * f0_scratch(A)
+                      Favg += (0.5) * (P_matrix_(muhat, B, A) * sqrt_det_g_(m, kk, jj, ii) * L_mu_muhat0_(m, 1, muhat, kk, jj, ii) * f0_scratch(A)
                           + P_matrix_(muhat, B, A) * sqrt_det_g_(m, kk, jj, ii + 1) * L_mu_muhat0_(m, 1, muhat, kk, jj, ii + 1) * f0_scratch_p1(A));
 
                       Real L_mu_muhat0_R = -0.5 * L_mu_muhat0_(m, 1, muhat, kk, jj, ii) + 1.5 * L_mu_muhat0_(m, 1, muhat, kk, jj, ii + 1);
-                      Fplus += (0.5) * Ven * (sqrt_det_g_R * L_mu_muhat0_R) * (P_matrix_(muhat, B, A) *
+                      Fplus += (0.5) * (sqrt_det_g_R * L_mu_muhat0_R) * (P_matrix_(muhat, B, A) *
                           ((1.5) * f0_scratch_p2(A) - (0.5) * f0_scratch_p3(A) + (1.5) * f0_scratch_p1(A) - (0.5) * f0_scratch(A))
                           - Sgn(L_mu_muhat0_R) * Pmod_matrix_(muhat, B, A) *
                               ((1.5) * f0_scratch_p1(A) - (0.5) * f0_scratch(A) - (1.5) * f0_scratch_p2(A) + (0.5) * f0_scratch_p3(A)));
@@ -113,8 +112,6 @@ TaskStatus RadiationFEMN::CalculateFluxes(Driver *pdriver, int stage) {
                     int enidx = nuenidx.enidx;
                     int nuidx = nuenidx.nuidx;
 
-                    Real Ven = (1. / 3.) * (pow(energy_grid_(enidx + 1), 3) - pow(energy_grid_(enidx), 3));
-
                     // compute quantities at the left and right boundaries
                     Real sqrt_det_g_R = -0.5 * sqrt_det_g_(m, kk, jj, ii) + 1.5 * sqrt_det_g_(m, kk, jj + 1, ii);
 
@@ -136,11 +133,11 @@ TaskStatus RadiationFEMN::CalculateFluxes(Driver *pdriver, int stage) {
                         int muhat = int(muhatA / num_points_);
                         int A = muhatA - muhat * num_points_;
 
-                        Favg += (0.5) * Ven * (P_matrix_(muhat, B, A) * sqrt_det_g_(m, kk, jj, ii) * L_mu_muhat0_(m, 2, muhat, kk, jj, ii) * f0_scratch(A)
+                        Favg += (0.5) * (P_matrix_(muhat, B, A) * sqrt_det_g_(m, kk, jj, ii) * L_mu_muhat0_(m, 2, muhat, kk, jj, ii) * f0_scratch(A)
                             + P_matrix_(muhat, B, A) * sqrt_det_g_(m, kk, jj + 1, ii) * L_mu_muhat0_(m, 2, muhat, kk, jj + 1, ii) * f0_scratch_p1(A));
 
                         Real L_mu_muhat0_R = -0.5 * L_mu_muhat0_(m, 2, muhat, kk, jj, ii) + 1.5 * L_mu_muhat0_(m, 2, muhat, kk, jj + 1, ii);
-                        Fplus += (0.5) * Ven * (sqrt_det_g_R * L_mu_muhat0_R) * (P_matrix_(muhat, B, A) *
+                        Fplus += (0.5) * (sqrt_det_g_R * L_mu_muhat0_R) * (P_matrix_(muhat, B, A) *
                             ((1.5) * f0_scratch_p2(A) - (0.5) * f0_scratch_p3(A) + (1.5) * f0_scratch_p1(A) - (0.5) * f0_scratch(A))
                             - Sgn(L_mu_muhat0_R) * Pmod_matrix_(muhat, B, A) *
                                 ((1.5) * f0_scratch_p1(A) - (0.5) * f0_scratch(A) - (1.5) * f0_scratch_p2(A) + (0.5) * f0_scratch_p3(A)));
@@ -173,8 +170,6 @@ TaskStatus RadiationFEMN::CalculateFluxes(Driver *pdriver, int stage) {
                     int enidx = nuenidx.enidx;
                     int nuidx = nuenidx.nuidx;
 
-                    Real Ven = (1. / 3.) * (pow(energy_grid_(enidx + 1), 3) - pow(energy_grid_(enidx), 3));
-
                     // compute quantities at the left and right boundaries
                     Real sqrt_det_g_R = -0.5 * sqrt_det_g_(m, kk, jj, ii) + 1.5 * sqrt_det_g_(m, kk + 1, jj, ii);
 
@@ -196,11 +191,11 @@ TaskStatus RadiationFEMN::CalculateFluxes(Driver *pdriver, int stage) {
                         int muhat = int(muhatA / num_points_);
                         int A = muhatA - muhat * num_points_;
 
-                        Favg += (0.5) * Ven * (P_matrix_(muhat, B, A) * sqrt_det_g_(m, kk, jj, ii) * L_mu_muhat0_(m, 3, muhat, kk, jj, ii) * f0_scratch(A)
+                        Favg += (0.5) * (P_matrix_(muhat, B, A) * sqrt_det_g_(m, kk, jj, ii) * L_mu_muhat0_(m, 3, muhat, kk, jj, ii) * f0_scratch(A)
                             + P_matrix_(muhat, B, A) * sqrt_det_g_(m, kk + 1, jj, ii) * L_mu_muhat0_(m, 3, muhat, kk + 1, jj, ii) * f0_scratch_p1(A));
 
                         Real L_mu_muhat0_R = -0.5 * L_mu_muhat0_(m, 3, muhat, kk, jj, ii) + 1.5 * L_mu_muhat0_(m, 3, muhat, kk + 1, jj, ii);
-                        Fplus += (0.5) * Ven * (sqrt_det_g_R * L_mu_muhat0_R) * (P_matrix_(muhat, B, A) *
+                        Fplus += (0.5) * (sqrt_det_g_R * L_mu_muhat0_R) * (P_matrix_(muhat, B, A) *
                             ((1.5) * f0_scratch_p2(A) - (0.5) * f0_scratch_p3(A) + (1.5) * f0_scratch_p1(A) - (0.5) * f0_scratch(A))
                             - Sgn(L_mu_muhat0_R) * Pmod_matrix_(muhat, B, A) *
                                 ((1.5) * f0_scratch_p1(A) - (0.5) * f0_scratch(A) - (1.5) * f0_scratch_p2(A) + (0.5) * f0_scratch_p3(A)));

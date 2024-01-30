@@ -81,17 +81,17 @@ TaskStatus RadiationFEMN::ExpRKUpdate(Driver *pdriver, int stage) {
                     int x_elem_nmbr = int(i / 2);
                     int x_cell_nmbr = i % 2;
                     Real divf_s = (x_cell_nmbr == 0) ? ((1.5) * iflx.x1f(m, nuenangidx, k, j, x_elem_nmbr - 1) - flxavg.x1f(m, nuenangidx, k, j, x_elem_nmbr)
-                        - (0.5) * iflx.x1f(m, nuenangidx, k, j, x_elem_nmbr)) / (2. * mbsize.d_view(m).dx1 * Ven) :
+                        - (0.5) * iflx.x1f(m, nuenangidx, k, j, x_elem_nmbr)) / (2. * mbsize.d_view(m).dx1) :
                                   ((0.5) * iflx.x1f(m, nuenangidx, k, j, x_elem_nmbr - 1) + flxavg.x1f(m, nuenangidx, k, j, x_elem_nmbr)
-                                      - (1.5) * iflx.x1f(m, nuenangidx, k, j, x_elem_nmbr)) / (2. * mbsize.d_view(m).dx1 * Ven);
+                                      - (1.5) * iflx.x1f(m, nuenangidx, k, j, x_elem_nmbr)) / (2. * mbsize.d_view(m).dx1);
 
                     if (multi_d) {
                       int y_elem_nmbr = int(j / 2);
                       int y_cell_nmbr = j % 2;
                       Real divf_s_y = (y_cell_nmbr == 0) ? ((1.5) * iflx.x2f(m, nuenangidx, k, y_elem_nmbr - 1, i) - flxavg.x2f(m, nuenangidx, k, y_elem_nmbr, i)
-                          - (0.5) * iflx.x2f(m, nuenangidx, k, y_elem_nmbr, i)) / (2. * mbsize.d_view(m).dx2 * Ven) :
+                          - (0.5) * iflx.x2f(m, nuenangidx, k, y_elem_nmbr, i)) / (2. * mbsize.d_view(m).dx2) :
                                       ((0.5) * iflx.x2f(m, nuenangidx, k, y_elem_nmbr - 1, i) + flxavg.x2f(m, nuenangidx, k, y_elem_nmbr, i)
-                                          - (1.5) * iflx.x2f(m, nuenangidx, k, y_elem_nmbr, i)) / (2. * mbsize.d_view(m).dx2 * Ven);
+                                          - (1.5) * iflx.x2f(m, nuenangidx, k, y_elem_nmbr, i)) / (2. * mbsize.d_view(m).dx2);
                       divf_s += divf_s_y;
                     }
 
@@ -99,9 +99,9 @@ TaskStatus RadiationFEMN::ExpRKUpdate(Driver *pdriver, int stage) {
                       int z_elem_nmbr = int(k / 2);
                       int z_cell_nmbr = k % 2;
                       Real divf_s_z = (z_cell_nmbr == 0) ? ((1.5) * iflx.x3f(m, nuenangidx, z_elem_nmbr - 1, j, i) - flxavg.x3f(m, nuenangidx, z_elem_nmbr, j, i)
-                          - (0.5) * iflx.x3f(m, nuenangidx, z_elem_nmbr, j, i)) / (2. * mbsize.d_view(m).dx3 * Ven) :
+                          - (0.5) * iflx.x3f(m, nuenangidx, z_elem_nmbr, j, i)) / (2. * mbsize.d_view(m).dx3) :
                                       ((0.5) * iflx.x3f(m, nuenangidx, z_elem_nmbr - 1, j, i) + flxavg.x3f(m, nuenangidx, z_elem_nmbr, j, i)
-                                          - (1.5) * iflx.x3f(m, nuenangidx, z_elem_nmbr, j, i)) / (2. * mbsize.d_view(m).dx3 * Ven);
+                                          - (1.5) * iflx.x3f(m, nuenangidx, z_elem_nmbr, j, i)) / (2. * mbsize.d_view(m).dx3);
 
                       divf_s += divf_s_z;
                     }
