@@ -52,10 +52,13 @@ void ProblemGenerator::RadiationFEMNGridtest(ParameterInput *pin, const bool res
   fout << "quadrature_num_points = " << pmbp->pradfemn->scheme_num_points << std::endl;
   fout << "quadrature_name = " << pmbp->pradfemn->scheme_name << std::endl;
 
+  HostArray2D<Real> angular_grid_host;
+  Kokkos::realloc(angular_grid_host, pmbp->pradfemn->num_points, 2);
+  Kokkos::deep_copy(angular_grid_host, pmbp->pradfemn->angular_grid);
   std::ofstream fout2(pathdir + filenamepart + "_grid_coordinates" + ".txt");
   fout2 << "phi theta" << std::endl;
   for (size_t i = 0; i < pmbp->pradfemn->num_points; i++) {
-    fout2 << pmbp->pradfemn->angular_grid(i, 0) << " " << pmbp->pradfemn->angular_grid(i, 1) << std::endl;
+    fout2 << angular_grid_host(i, 0) << " " << angular_grid_host(i, 1) << std::endl;
   }
 
   std::ofstream fout7(pathdir + filenamepart + "_quadrature_info" + ".txt");
@@ -65,12 +68,19 @@ void ProblemGenerator::RadiationFEMNGridtest(ParameterInput *pin, const bool res
   }
 
   // [2] save mass matrix, mass matrix inverse
+  HostArray2D<Real> mass_matrix_host;
+  HostArray2D<Real> mass_matrix_inv_host;
+  Kokkos::realloc(mass_matrix_host, pmbp->pradfemn->num_points, pmbp->pradfemn->num_points);
+  Kokkos::realloc(mass_matrix_inv_host, pmbp->pradfemn->num_points, pmbp->pradfemn->num_points);
+  Kokkos::deep_copy(mass_matrix_host, pmbp->pradfemn->mass_matrix);
+  Kokkos::deep_copy(mass_matrix_inv_host, pmbp->pradfemn->mass_matrix_inv);
+
   double sum = 0.;
   std::ofstream fout3(pathdir + filenamepart + "_mass_matrix" + ".txt");
   for (int i = 0; i < pmbp->pradfemn->num_points; i++) {
     for (int j = 0; j < pmbp->pradfemn->num_points; j++) {
-      fout3 << pmbp->pradfemn->mass_matrix(i, j) << " ";
-      sum += pmbp->pradfemn->mass_matrix(i, j);
+      fout3 << mass_matrix_host(i, j) << " ";
+      sum += mass_matrix_host(i, j);
     }
     fout3 << std::endl;
   }
@@ -79,17 +89,28 @@ void ProblemGenerator::RadiationFEMNGridtest(ParameterInput *pin, const bool res
   std::ofstream fout3i(pathdir + filenamepart + "_mass_matrix_inv" + ".txt");
   for (int i = 0; i < pmbp->pradfemn->num_points; i++) {
     for (int j = 0; j < pmbp->pradfemn->num_points; j++) {
-      fout3i << pmbp->pradfemn->mass_matrix_inv(i, j) << " ";
-      sum += pmbp->pradfemn->mass_matrix(i, j);
+      fout3i << mass_matrix_inv_host(i, j) << " ";
+      sum += mass_matrix_inv_host(i, j);
     }
     fout3i << std::endl;
   }
 
+
   // [3] save stiffness matrices (no multiplication by inv of mass matrix)
+  HostArray2D<Real> stiffness_matrix_x_host;
+  HostArray2D<Real> stiffness_matrix_y_host;
+  HostArray2D<Real> stiffness_matrix_z_host;
+  Kokkos::realloc(stiffness_matrix_x_host, pmbp->pradfemn->num_points, pmbp->pradfemn->num_points);
+  Kokkos::realloc(stiffness_matrix_y_host, pmbp->pradfemn->num_points, pmbp->pradfemn->num_points);
+  Kokkos::realloc(stiffness_matrix_z_host, pmbp->pradfemn->num_points, pmbp->pradfemn->num_points);
+  Kokkos::deep_copy(stiffness_matrix_x_host, pmbp->pradfemn->stiffness_matrix_x);
+  Kokkos::deep_copy(stiffness_matrix_y_host, pmbp->pradfemn->stiffness_matrix_y);
+  Kokkos::deep_copy(stiffness_matrix_z_host, pmbp->pradfemn->stiffness_matrix_z);
+
   std::ofstream fout4(pathdir + filenamepart + "_stiffness_x" + ".txt");
   for (int i = 0; i < pmbp->pradfemn->num_points; i++) {
     for (int j = 0; j < pmbp->pradfemn->num_points; j++) {
-      fout4 << pmbp->pradfemn->stiffness_matrix_x(i, j) << " ";
+      fout4 << stiffness_matrix_x_host(i, j) << " ";
     }
     fout4 << std::endl;
   }
@@ -97,7 +118,7 @@ void ProblemGenerator::RadiationFEMNGridtest(ParameterInput *pin, const bool res
   std::ofstream fout5(pathdir + filenamepart + "_stiffness_y" + ".txt");
   for (int i = 0; i < pmbp->pradfemn->num_points; i++) {
     for (int j = 0; j < pmbp->pradfemn->num_points; j++) {
-      fout5 << pmbp->pradfemn->stiffness_matrix_y(i, j) << " ";
+      fout5 << stiffness_matrix_y_host(i, j) << " ";
     }
     fout5 << std::endl;
   }
@@ -105,16 +126,19 @@ void ProblemGenerator::RadiationFEMNGridtest(ParameterInput *pin, const bool res
   std::ofstream fout6(pathdir + filenamepart + "_stiffness_z" + ".txt");
   for (int i = 0; i < pmbp->pradfemn->num_points; i++) {
     for (int j = 0; j < pmbp->pradfemn->num_points; j++) {
-      fout6 << pmbp->pradfemn->stiffness_matrix_z(i, j) << " ";
+      fout6 << stiffness_matrix_z_host(i, j) << " ";
     }
     fout6 << std::endl;
   }
 
   // [4] save P matrices (after multiplying by inv of mass matrix)
+  HostArray3D<Real> P_matrix_host;
+  Kokkos::realloc(P_matrix_host, 4, pmbp->pradfemn->num_points, pmbp->pradfemn->num_points);
+  Kokkos::deep_copy(P_matrix_host, pmbp->pradfemn->P_matrix);
   std::ofstream fout9(pathdir + filenamepart + "_P_matrix_0" + ".txt");
   for (int i = 0; i < pmbp->pradfemn->num_points; i++) {
     for (int j = 0; j < pmbp->pradfemn->num_points; j++) {
-      fout9 << pmbp->pradfemn->P_matrix(0, i, j) << " ";
+      fout9 << P_matrix_host(0, i, j) << " ";
     }
     fout9 << std::endl;
   }
@@ -122,7 +146,7 @@ void ProblemGenerator::RadiationFEMNGridtest(ParameterInput *pin, const bool res
   std::ofstream fout10(pathdir + filenamepart + "_P_matrix_1" + ".txt");
   for (int i = 0; i < pmbp->pradfemn->num_points; i++) {
     for (int j = 0; j < pmbp->pradfemn->num_points; j++) {
-      fout10 << pmbp->pradfemn->P_matrix(1, i, j) << " ";
+      fout10 << P_matrix_host(1, i, j) << " ";
     }
     fout10 << std::endl;
   }
@@ -130,7 +154,7 @@ void ProblemGenerator::RadiationFEMNGridtest(ParameterInput *pin, const bool res
   std::ofstream fout11(pathdir + filenamepart + "_P_matrix_2" + ".txt");
   for (int i = 0; i < pmbp->pradfemn->num_points; i++) {
     for (int j = 0; j < pmbp->pradfemn->num_points; j++) {
-      fout11 << pmbp->pradfemn->P_matrix(2, i, j) << " ";
+      fout11 << P_matrix_host(2, i, j) << " ";
     }
     fout11 << std::endl;
   }
@@ -138,22 +162,28 @@ void ProblemGenerator::RadiationFEMNGridtest(ParameterInput *pin, const bool res
   std::ofstream fout12(pathdir + filenamepart + "_P_matrix_3" + ".txt");
   for (int i = 0; i < pmbp->pradfemn->num_points; i++) {
     for (int j = 0; j < pmbp->pradfemn->num_points; j++) {
-      fout12 << pmbp->pradfemn->P_matrix(3, i, j) << " ";
+      fout12 << P_matrix_host(3, i, j) << " ";
     }
     fout12 << std::endl;
   }
 
   // save e-matrix
+  HostArray1D<Real> e_source_host;
+  Kokkos::realloc(e_source_host, pmbp->pradfemn->num_points);
+  Kokkos::deep_copy(e_source_host, pmbp->pradfemn->e_source);
   std::ofstream fout13(pathdir + filenamepart + "_e_matrix" + ".txt");
   for (int i = 0; i < pmbp->pradfemn->num_points; i++) {
-    fout13 << pmbp->pradfemn->e_source(i) << std::endl;
+    fout13 << e_source_host(i) << std::endl;
   }
 
   // save S-matrix
+  HostArray2D<Real> S_source_host;
+  Kokkos::realloc(S_source_host, pmbp->pradfemn->num_points, pmbp->pradfemn->num_points);
+  Kokkos::deep_copy(S_source_host, pmbp->pradfemn->S_source);
   std::ofstream fout14(pathdir + filenamepart + "_s_matrix.txt");
   for (int i = 0; i < pmbp->pradfemn->num_points; i++) {
     for (int j = 0; j < pmbp->pradfemn->num_points; j++) {
-      fout14 << pmbp->pradfemn->S_source(i, j) << " ";
+      fout14 << S_source_host(i, j) << " ";
     }
     fout14 << std::endl;
   }
