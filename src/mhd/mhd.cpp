@@ -51,7 +51,7 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
     bcctest("bcctest",1,1,1,1,1),
     fofc("fofc",1,1,1,1),
     c2p_flag("c2p_flag",1,1,1,1),
-    pfloor_flag("pfloor_flag",1,1,1,1),
+    smooth_flag("smooth_flag",1,1,1,1),
     w0_old("w0_old",1,1,1,1,1) {
   // Total number of MeshBlocks on this rank to be used in array dimensioning
   int nmb = std::max((ppack->nmb_thispack), (ppack->pmesh->nmb_maxperrank));
@@ -125,6 +125,7 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
       entropy_fix = pin->GetBoolean("mhd","entropy_fix");
       entropy_fix_turnoff = pin->GetOrAddBoolean("mhd","entropy_fix_turnoff",false);
       sigma_cold_cut = pin->GetOrAddReal("mhd","sigma_cold_cut",1.0e3);
+      r_tfix_cut = pin->GetOrAddReal("mhd","r_tfix_cut",2.0);
     } else {
       std::cout <<"### FATAL ERROR in "<< __FILE__ <<" at line "<< __LINE__ << std::endl
                 <<"<mhd> entropy fix only works in general relativity"<< std::endl;
@@ -162,8 +163,8 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
     // allocate array of c2p flags
     Kokkos::realloc(c2p_flag, nmb, ncells3, ncells2, ncells1);
     Kokkos::deep_copy(c2p_flag, true);
-    Kokkos::realloc(pfloor_flag, nmb, ncells3, ncells2, ncells1);
-    Kokkos::deep_copy(pfloor_flag, false);
+    Kokkos::realloc(smooth_flag, nmb, ncells3, ncells2, ncells1);
+    Kokkos::deep_copy(smooth_flag, false);
   }
 
   // allocate memory for conserved variables on coarse mesh

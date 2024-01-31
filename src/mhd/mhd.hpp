@@ -112,12 +112,13 @@ class MHD {
   // following used for gas-radiation coupling
   DvceArray4D<bool> c2p_flag; // flag for each cell to indicate if c2p succeeds
   DvceArray5D<Real> w0_old;   // save old primitive variables for rad source calculation
-  DvceArray4D<bool> pfloor_flag; // flag for each cell to indicate if pfloor is reached
+  DvceArray4D<bool> smooth_flag; // flag for each cell to indicate if smooth is needed
 
   // flags and variables for ad hoc fixes
   bool entropy_fix = false;
   bool entropy_fix_turnoff = false;
   Real sigma_cold_cut;
+  Real r_tfix_cut;
   bool c2p_test = false;
   bool is_radiation_enabled = false;
   bool cellavg_fix_turn_on;

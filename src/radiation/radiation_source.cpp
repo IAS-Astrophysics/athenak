@@ -176,7 +176,7 @@ TaskStatus Radiation::AddRadiationSourceTerm(Driver *pdriver, int stage) {
     Real &wvz = update_vel_in_rad_source_ ? w0_(m,IVZ,k,j,i) : w_noupdate_(m,IVZ,k,j,i);
     Real wen = w0_(m,IEN,k,j,i);
 
-    // apply cell-averaged profile
+    // apply cell-averaged profile to compute the radiation source terms
     if (cellavg_rad_source_ && !rad_mask_(m,k,j,i)) {
       Real sigma_cold = 0.0;
       if (is_mhd_enabled_) {
