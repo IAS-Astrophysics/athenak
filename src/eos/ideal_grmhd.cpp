@@ -275,9 +275,9 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
       c2p_flag_(m,k,j,i) = !c2p_failure;
       smooth_flag_(m,k,j,i) = false;
       // try different strategy here to smooth the checkerboarding issue
-      // if ((sigma_cold > sigma_cold_cut_) && (efloor_used)) {
-      //   smooth_flag_(m,k,j,i) = true;
-      // }
+      if ((sigma_cold > sigma_cold_cut_) && (efloor_used || dfloor_used)) {
+        smooth_flag_(m,k,j,i) = true;
+      }
 
       // apply velocity ceiling if necessary
       Real tmp = glower[1][1]*SQR(w.vx)
