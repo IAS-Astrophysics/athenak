@@ -59,8 +59,8 @@ TaskStatus Radiation::AddRadiationSourceTerm(Driver *pdriver, int stage) {
   bool &compton_second_order_correction_ = compton_second_order_correction;
   bool &compton_use_artificial_mask_ = compton_use_artificial_mask;
   bool &temperature_fix_turn_on_ = temperature_fix_turn_on;
+  auto &cellavg_rad_source_ = cellavg_rad_source;
   auto &tgas_radsource_ = tgas_radsource; // for saving final gas temperature
-  bool cellavg_rad_source_ = false;
   Real sigma_cold_cut_ = (is_mhd_enabled_) ? pmy_pack->pmhd->sigma_cold_cut : 1.e3;
 
   // Extract coordinate/excision data
@@ -176,6 +176,7 @@ TaskStatus Radiation::AddRadiationSourceTerm(Driver *pdriver, int stage) {
     Real &wvz = update_vel_in_rad_source_ ? w0_(m,IVZ,k,j,i) : w_noupdate_(m,IVZ,k,j,i);
     Real wen = w0_(m,IEN,k,j,i);
 
+    Real tgas_src;
     // apply cell-averaged profile to compute the radiation source terms
     if (cellavg_rad_source_ && !rad_mask_(m,k,j,i)) {
       Real sigma_cold = 0.0;
@@ -243,15 +244,14 @@ TaskStatus Radiation::AddRadiationSourceTerm(Driver *pdriver, int stage) {
           wdn_avg = wdn_avg/n_count;
           wen_avg = wen_avg/n_count;
         }
-        // assign cell-averaged density and pressure for source term calculation
-        wdn = wdn_avg;
-        wen = wen_avg;
+        // assign cell-averaged quantity for source term calculation
+        tgas_src = gm1*wen_avg/wdn_avg;
       } // endif (sigma_cold > sigma_cold_cut_)
     } // endif (cellavg_rad_source_ && !rad_mask_(m,k,j,i))
 
     // derived quantities
     Real pgas = gm1*wen;
-    Real tgas = pgas/wdn;
+    Real tgas = (cellavg_rad_source_) ? tgas_src : pgas/wdn;
     Real q = glower[1][1]*wvx*wvx + 2.0*glower[1][2]*wvx*wvy + 2.0*glower[1][3]*wvx*wvz
            + glower[2][2]*wvy*wvy + 2.0*glower[2][3]*wvy*wvz
            + glower[3][3]*wvz*wvz;
