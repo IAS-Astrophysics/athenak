@@ -176,7 +176,6 @@ TaskStatus Radiation::AddRadiationSourceTerm(Driver *pdriver, int stage) {
     Real &wvz = update_vel_in_rad_source_ ? w0_(m,IVZ,k,j,i) : w_noupdate_(m,IVZ,k,j,i);
     Real wen = w0_(m,IEN,k,j,i);
 
-    Real tgas_src;
     // apply cell-averaged profile to compute the radiation source terms
     if (cellavg_rad_source_ && !rad_mask_(m,k,j,i)) {
       Real sigma_cold = 0.0;
@@ -245,13 +244,14 @@ TaskStatus Radiation::AddRadiationSourceTerm(Driver *pdriver, int stage) {
           wen_avg = wen_avg/n_count;
         }
         // assign cell-averaged quantity for source term calculation
-        tgas_src = gm1*wen_avg/wdn_avg;
+        wdn = wdn_avg;
+        wen = wen_avg;
       } // endif (sigma_cold > sigma_cold_cut_)
     } // endif (cellavg_rad_source_ && !rad_mask_(m,k,j,i))
 
     // derived quantities
     Real pgas = gm1*wen;
-    Real tgas = (cellavg_rad_source_) ? tgas_src : pgas/wdn;
+    Real tgas = pgas/wdn;
     Real q = glower[1][1]*wvx*wvx + 2.0*glower[1][2]*wvx*wvy + 2.0*glower[1][3]*wvx*wvz
            + glower[2][2]*wvy*wvy + 2.0*glower[2][3]*wvy*wvz
            + glower[3][3]*wvz*wvz;
