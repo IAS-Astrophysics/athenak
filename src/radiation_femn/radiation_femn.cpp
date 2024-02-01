@@ -4,7 +4,7 @@
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
 //! \file radiation_femn.cpp
-//  \brief implementation of the radiation FEM_N class constructor and other functions
+//  \brief implementation of the radiation FEM class constructor and other functions
 
 #include <string>
 #include <cmath>
@@ -20,8 +20,6 @@
 
 namespace radiationfemn {
 
-//----------------------------------------------------------------------------------------------
-// class constructor, initialize parameters and data structures
 RadiationFEMN::RadiationFEMN(MeshBlockPack *ppack, ParameterInput *pin) :
     pmy_pack(ppack),
     g_dd("spatial_metric", 1, 1, 1, 1, 1, 1),
@@ -46,8 +44,10 @@ RadiationFEMN::RadiationFEMN(MeshBlockPack *ppack, ParameterInput *pin) :
     stiffness_matrix_z("sz", 1, 1),
     P_matrix("PmuAB", 1, 1, 1),
     Pmod_matrix("PmodmuAB", 1, 1, 1),
-    G_matrix("GnumuiAB", 1, 1, 1, 1, 1),
-    F_matrix("FnumuiAB", 1, 1, 1, 1, 1),
+    G_mat_host("Gmatrixhost", 1, 1, 1, 1, 1),
+    G_matrix("GnumuihatAB", 1, 1, 1, 1, 1),
+    F_mat_host("Fmatrixhost", 1, 1, 1, 1, 1),
+    F_matrix("FnumuihatAB", 1, 1, 1, 1, 1),
     Q_matrix("QmuhatA", 1, 1),
     beam_source_1_vals("beam_source_1_vals", 1),
     beam_source_2_vals("beam_source_2_vals", 1),
@@ -59,64 +59,17 @@ RadiationFEMN::RadiationFEMN(MeshBlockPack *ppack, ParameterInput *pin) :
     kappa_a("kappa_a", 1, 1, 1, 1),
     kappa_s("kappa_s", 1, 1, 1, 1) {
 
-  // -----------------------------------------------------------------------------------
-  // set essential parameters from par file and allocate memory to energy, angular grids
-
+  // set up params [defaults: mass lumping => on, DG limiter => minmod2, FPN switch => off, num energy bins => 1, num neutrino species => 1, m1_flag => off,
+  // source terms => off, beams => off]
   mass_lumping = pin->GetOrAddInteger("radiation-femn", "mass_lumping", 1) == 1;
-
-  limiter_dg = pin->GetOrAddString("radiation-femn", "limiter_dg", "minmod2");      // limiter for DG (default:sawtooth-free minmod2)
-  fpn = pin->GetOrAddInteger("radiation-femn", "fpn", 0) == 1;                      // fpn switch (0: use FEM_N, 1: use FP_N) (default: 0)
-
-  num_energy_bins = pin->GetOrAddInteger("radiation-femn", "num_energy_bins", 1);   // number of energy bins (default: 1)
-  energy_max = pin->GetOrAddReal("radiation-femn", "energy_max", 1);                // maximum value of energy (default: 1)
-
-  num_species = pin->GetOrAddInteger("radiation-femn", "num_species", 1);       // number of neutrino species (default: 1)
-
-  // set up energy grid
-  HostArray1D<Real> temp_array;
-  Kokkos::realloc(energy_grid, num_energy_bins + 1);
-  Kokkos::realloc(temp_array, num_energy_bins + 1);
-  for (int i = 0; i < num_energy_bins + 1; i++) {
-    temp_array(i) = i * energy_max / Real(num_energy_bins);
-  }
-  Kokkos::deep_copy(energy_grid, temp_array);
-
-  if (!fpn) {   // parameters for FEM_N
-    lmax = -42;                                                                     // maximum value of l in spherical harmonics expansion (redundant: set to -42)
-    refinement_level = pin->GetOrAddInteger("radiation-femn", "num_refinement", 0); // refinement level for geodesic grid (default: 0)
-
-    // compute number of points, edges and triangles from refinement level (Note: num_ref can change but never refinement_level)
-    num_ref = refinement_level;
-    num_points = 12 * pow(4, refinement_level);
-    if (refinement_level != 0) {
-      for (int i = 0; i < refinement_level; i++) {
-        num_points -= 6 * pow(4, i);
-      }
-    }
-    num_edges = 3 * (num_points - 2);
-    num_triangles = 2 * (num_points - 2);
-
-    basis = pin->GetOrAddInteger("radiation-femn", "basis", 1);                     // choice of FEM_N basis (default: 1, that is overlapping tent)
-    filter_sigma_eff = -42;                                                         // redundant: set to -42
-    limiter_fem = pin->GetOrAddString("radiation-femn", "limiter_fem", "clp");      // limiter for angle (default: clipping limiter)
-  } else {  // parameters for FP_N
-    lmax = pin->GetOrAddInteger("radiation-femn", "lmax", 3);                       // maximum value of l in spherical harmonic expansion (default: FP3)
-    refinement_level = -42;                                                         // redundant: set to -42
-    num_ref = refinement_level;                                                     // redundant: set to -42
-    num_points = (lmax + 1) * (lmax + 1);                                           // total number of (l,m) modes
-    num_edges = -42;                                                                // redundant: set to -42
-    num_triangles = -42;                                                            // redundant: set to -42
-    basis = -42;                                                                    // redundant: set to -42
-    filter_sigma_eff = pin->GetOrAddInteger("radiation-femn", "filter_opacity", 0); // filter opacity for FP_N (default: no filter)
-    limiter_fem = "-42";                                                            // redundant: set to -42
-  }
-
-  num_points_total = num_species * num_energy_bins * num_points;
-
+  limiter_dg = pin->GetOrAddString("radiation-femn", "limiter_dg", "minmod2");
+  fpn = pin->GetOrAddInteger("radiation-femn", "fpn", 0) == 1;
+  num_energy_bins = pin->GetOrAddInteger("radiation-femn", "num_energy_bins", 1);
+  energy_max = pin->GetOrAddReal("radiation-femn", "energy_max", 1);
+  num_species = pin->GetOrAddInteger("radiation-femn", "num_species", 1);
   m1_flag = pin->GetOrAddBoolean("radiation-femn", "m1", false);
-  rad_source = pin->GetOrAddBoolean("radiation-femn", "source_terms", false);           // switch for sources (default: false)
-
-  beam_source = pin->GetOrAddBoolean("radiation-femn", "beam_sources", false);     // switch for beam sources (default: false)
+  rad_source = pin->GetOrAddBoolean("radiation-femn", "source_terms", false);
+  beam_source = pin->GetOrAddBoolean("radiation-femn", "beam_sources", false);
   num_beams = pin->GetOrAddInteger("radiation-femn", "num_beam_sources", 0);
   beam_source_1_y1 = pin->GetOrAddReal("radiation-femn", "beam_source_1_y1", -42.);
   beam_source_1_y2 = pin->GetOrAddReal("radiation-femn", "beam_source_1_y2", -42.);
@@ -127,6 +80,59 @@ RadiationFEMN::RadiationFEMN(MeshBlockPack *ppack, ParameterInput *pin) :
   beam_source_2_phi = pin->GetOrAddReal("radiation-femn", "beam_source_2_phi", -42.);
   beam_source_2_theta = pin->GetOrAddReal("radiation-femn", "beam_source_2_theta", -42.);
 
+  // set up energy ang angular grids (redundant values => -42)
+
+  HostArray1D<Real> temp_array;
+  Kokkos::realloc(energy_grid, num_energy_bins + 1);
+  Kokkos::realloc(temp_array, num_energy_bins + 1);
+  for (int i = 0; i < num_energy_bins + 1; i++) {
+    temp_array(i) = i * energy_max / Real(num_energy_bins);
+  }
+  Kokkos::deep_copy(energy_grid, temp_array);
+
+  if(m1_flag) {
+    fpn = true;
+  }
+  if (!fpn) {
+    // FEM case [default: limiter => 'clp']. Note: Always choose basis = 1 for all multi-energy runs!
+    lmax = -42;
+    refinement_level = pin->GetOrAddInteger("radiation-femn", "num_refinement", 0);
+
+    num_ref = refinement_level;
+    num_points = 12 * pow(4, refinement_level);
+    if (refinement_level != 0) {
+      for (int i = 0; i < refinement_level; i++) {
+        num_points -= 6 * pow(4, i);
+      }
+    }
+    num_edges = 3 * (num_points - 2);
+    num_triangles = 2 * (num_points - 2);
+
+    basis = pin->GetOrAddInteger("radiation-femn", "basis", 1);
+    filter_sigma_eff = -42;
+    limiter_fem = pin->GetOrAddString("radiation-femn", "limiter_fem", "clp");
+
+  } else {
+    // FPN/M1 case [default: filtering => off]
+    lmax = pin->GetOrAddInteger("radiation-femn", "lmax", 3);
+    if (m1_flag) {
+      lmax = 2;
+      std::cout << "Running with M1! lmax = 2" << std::endl;
+    }
+    refinement_level = -42;
+    num_ref = refinement_level;
+    num_points = (lmax + 1) * (lmax + 1);
+    num_edges = -42;
+    num_triangles = -42;
+    basis = -42;
+    filter_sigma_eff = pin->GetOrAddInteger("radiation-femn", "filter_opacity", 0);
+    limiter_fem = "-42";
+
+  }
+
+  num_points_total = num_species * num_energy_bins * num_points;
+
+  // set up FEM/FPN/M1 matrices (without mass lumping, inversion)
   Kokkos::realloc(mass_matrix, num_points, num_points);
   Kokkos::realloc(mass_matrix_inv, num_points, num_points);
   Kokkos::realloc(stiffness_matrix_x, num_points, num_points);
@@ -134,7 +140,9 @@ RadiationFEMN::RadiationFEMN(MeshBlockPack *ppack, ParameterInput *pin) :
   Kokkos::realloc(stiffness_matrix_z, num_points, num_points);
   Kokkos::realloc(P_matrix, 4, num_points, num_points);
   Kokkos::realloc(Pmod_matrix, 4, num_points, num_points);
+  Kokkos::realloc(G_mat_host, 4, 4, 3, num_points, num_points);
   Kokkos::realloc(G_matrix, 4, 4, 3, num_points, num_points);
+  Kokkos::realloc(F_mat_host, 4, 4, 3, num_points, num_points);
   Kokkos::realloc(F_matrix, 4, 4, 3, num_points, num_points);
   Kokkos::realloc(Q_matrix, 4, num_points);
   Kokkos::realloc(e_source, num_points);
@@ -142,35 +150,33 @@ RadiationFEMN::RadiationFEMN(MeshBlockPack *ppack, ParameterInput *pin) :
   Kokkos::realloc(S_source, num_points, num_points);
   Kokkos::realloc(angular_grid, num_points, 2);
 
-  if (!fpn) {   // populate arrays for FEM_N
+  if (!fpn) {
+    // FEM case [default: quadrature => xiao_gimbutas (453)]
     Kokkos::realloc(angular_grid_cartesian, num_points, 3);
     Kokkos::realloc(triangle_information, num_triangles, 3);
-    scheme_num_points = pin->GetOrAddInteger("radiation-femn", "quad_scheme_num_points", 453);  // number of points in numerical integration scheme (default: 453)
-    scheme_name = pin->GetOrAddString("radiation-femn", "quad_scheme_name", "xiao_gimbutas");   // type of quadrature (xioa_gimbutas: default or vioreanu_rokhlin)
+    scheme_num_points = pin->GetOrAddInteger("radiation-femn", "quad_scheme_num_points", 453);
+    scheme_name = pin->GetOrAddString("radiation-femn", "quad_scheme_name", "xiao_gimbutas");
 
-    // quadrature check from par file
     if (!(scheme_name == "xiao_gimbutas" || scheme_name == "vioreanu_rokhlin")) {
       std::cout << "Quadrature scheme cannot be " + scheme_name + " for FEM_N" << std::endl;
       std::cout << "Use xiao_gimbutas or vioreanu_rokhlin instead!" << std::endl;
       exit(EXIT_FAILURE);
     }
+    radiationfemn::LoadQuadrature(scheme_name, scheme_num_points, scheme_weights, scheme_points);
+    this->LoadFEMNMatrices();
 
-    radiationfemn::LoadQuadrature(scheme_name, scheme_num_points, scheme_weights, scheme_points); // populate quadrature from disk
-    this->LoadFEMNMatrices(); // populate all matrices with FEM_N data
+  } else {
+    // FPN case [default: quadrature => lebedev (2702)]
+    scheme_num_points = pin->GetOrAddInteger("radiation-femn", "quad_scheme_num_points", 2702);
+    scheme_name = pin->GetOrAddString("radiation-femn", "quad_scheme_name", "lebedev");
 
-  } else {    // populate arrays for FP_N
-    scheme_num_points = pin->GetOrAddInteger("radiation-femn", "quad_scheme_num_points", 2702);   // number of points in numerical integration scheme (default: 2702)
-    scheme_name = pin->GetOrAddString("radiation-femn", "quad_scheme_name", "lebedev");           // type of quadrature (lebedev: default)
-
-    // quadrature check from par file
     if (!(scheme_name == "lebedev" || scheme_name == "gauss_legendre")) {
       std::cout << "Quadrature scheme cannot be " + scheme_name + " for FP_N" << std::endl;
       std::cout << "Use lebedev or gauss_legendre instead!" << std::endl;
       exit(EXIT_FAILURE);
     }
-
-    radiationfemn::LoadQuadrature(scheme_name, scheme_num_points, scheme_weights, scheme_points); // populate quadrature from disk
-    this->LoadFPNMatrices();                                                                      // populate all matrices with FP_N data
+    radiationfemn::LoadQuadrature(scheme_name, scheme_num_points, scheme_weights, scheme_points);
+    this->LoadFPNMatrices();
   }
 
   // compute lumped mass matrix
@@ -181,14 +187,7 @@ RadiationFEMN::RadiationFEMN(MeshBlockPack *ppack, ParameterInput *pin) :
 
   this->ComputeMassInverse();
 
-  if (m1_flag) {
-    if (lmax != 2) {
-      std::cout << " To run M1 you must have FP_N on with lmax = 2!" << std::endl;
-      exit(EXIT_FAILURE);
-    }
-  }
-
-  // compute P, Pmod matrices, source matrices
+  // compute mass-stiffness and matrices
   this->ComputePMatrices();
   this->ComputeSourceMatrices();
 

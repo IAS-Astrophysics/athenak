@@ -110,7 +110,7 @@ void ProblemGenerator::RadiationFEMNGridtestFPN(ParameterInput *pin, const bool 
   std::ofstream fout7(pathdir + filenamepart + "_F_matrix_" +std::to_string(nu)+"_"+std::to_string(mu)+"_"+std::to_string(ihat)+ ".txt");
   for (int i = 0; i < pmbp->pradfemn->num_points; i++) {
     for (int j = 0; j < pmbp->pradfemn->num_points; j++) {
-      fout7 << pmbp->pradfemn->F_matrix(nu, mu, ihat, i, j) << " ";
+      fout7 << pmbp->pradfemn->F_mat_host(nu, mu, ihat, i, j) << " ";
     }
     fout7 << std::endl;
   }
@@ -119,7 +119,7 @@ void ProblemGenerator::RadiationFEMNGridtestFPN(ParameterInput *pin, const bool 
   std::ofstream fout7b(pathdir + filenamepart + "_G_matrix_" +std::to_string(nu)+"_"+std::to_string(mu)+"_"+std::to_string(ihat)+ ".txt");
   for (int i = 0; i < pmbp->pradfemn->num_points; i++) {
     for (int j = 0; j < pmbp->pradfemn->num_points; j++) {
-      fout7b << pmbp->pradfemn->G_matrix(nu, mu, ihat, i, j) << " ";
+      fout7b << pmbp->pradfemn->G_mat_host(nu, mu, ihat, i, j) << " ";
     }
     fout7b << std::endl;
   }

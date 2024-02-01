@@ -53,10 +53,12 @@ void RadiationFEMN::ComputePMatrices() {
   DvceArray2D<Real> temp_array;
   HostArray2D<Real> temp_array_host;
   HostArray2D<Real> temp_array_corrected;
+  HostArray5D<Real> temp_array_5d;
 
   Kokkos::realloc(temp_array, num_points, num_points);
   Kokkos::realloc(temp_array_host, num_points, num_points);
   Kokkos::realloc(temp_array_corrected, num_points, num_points);
+  Kokkos::realloc(temp_array_5d, 4, 4, 3, num_points, num_points);
 
   // M^-1 M
   radiationfemn::MatMatMultiply(mass_matrix_inv, mass_matrix, temp_array);
@@ -97,6 +99,37 @@ void RadiationFEMN::ComputePMatrices() {
   radiationfemn::ZeroSpeedCorrection(temp_array_host, temp_array_corrected, 1. / sqrt(3.));
   auto Pmod_matrix_3 = Kokkos::subview(Pmod_matrix, 3, Kokkos::ALL, Kokkos::ALL);
   Kokkos::deep_copy(Pmod_matrix_3, temp_array_corrected);
+
+  // compute the G & F matrices
+  HostArray2D<Real> mass_matrix_inv_host;
+  Kokkos::realloc(mass_matrix_inv_host, num_points, num_points);
+  Kokkos::deep_copy(mass_matrix_inv_host, mass_matrix_inv);
+
+  for (int nu = 0; nu < 4; nu++) {
+    for (int mu = 0; mu < 4; mu++) {
+      for (int i = 0; i < 3; i++) {
+        auto gm_host = Kokkos::subview(G_mat_host, nu, mu, i, Kokkos::ALL, Kokkos::ALL);
+        auto gm_temp = Kokkos::subview(temp_array_5d, nu, mu, i, Kokkos::ALL, Kokkos::ALL);
+        radiationfemn::MatMultiplyHost(mass_matrix_inv_host, gm_host, temp_array_host);
+
+        Kokkos::deep_copy(gm_temp, temp_array_host);
+      }
+    }
+  }
+  Kokkos::deep_copy(G_matrix, temp_array_5d);
+
+  for (int nu = 0; nu < 4; nu++) {
+    for (int mu = 0; mu < 4; mu++) {
+      for (int i = 0; i < 3; i++) {
+        auto fm_host = Kokkos::subview(F_mat_host, nu, mu, i, Kokkos::ALL, Kokkos::ALL);
+        auto fm_temp = Kokkos::subview(temp_array_5d, nu, mu, i, Kokkos::ALL, Kokkos::ALL);
+        radiationfemn::MatMultiplyHost(mass_matrix_inv_host, fm_host, temp_array_host);
+
+        Kokkos::deep_copy(fm_temp, temp_array_host);
+      }
+    }
+  }
+  Kokkos::deep_copy(F_matrix, temp_array_5d);
 
 }
 
