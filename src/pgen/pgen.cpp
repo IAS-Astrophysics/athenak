@@ -79,9 +79,7 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm) :
     RadiationFEMNLinetest(pin, false);
   }  else if (pgen_fun_name.compare("rad_femn_gridtest") == 0) {
     RadiationFEMNGridtest(pin, false);
-  } else if (pgen_fun_name.compare("rad_femn_gridtest_fpn") == 0) {
-    RadiationFEMNGridtestFPN(pin, false);
-  } else if (pgen_fun_name.compare("rad_femn_linalgtest") == 0) {
+  }  else if (pgen_fun_name.compare("rad_femn_linalgtest") == 0) {
     RadiationFEMNLinalgtest(pin, false);
   } else if (pgen_fun_name.compare("rad_femn_latticetest") == 0) {
     RadiationFEMNLatticetest(pin, false);

@@ -68,7 +68,6 @@ class ProblemGenerator {
   void Z4cLinearWave(ParameterInput *pin, const bool restart);
   void RadiationFEMNLinetest(ParameterInput *pin, const bool restart);
   void RadiationFEMNGridtest(ParameterInput *pin, const bool restart);
-  void RadiationFEMNGridtestFPN(ParameterInput *pin, const bool restart);
   void RadiationFEMNLinalgtest(ParameterInput *pin, const bool restart);
   void RadiationFEMNLatticetest(ParameterInput *pin, const bool restart);
   void RadiationFEMNCylindertest(ParameterInput *pin, const bool restart);

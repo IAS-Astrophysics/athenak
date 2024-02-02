@@ -167,7 +167,7 @@ void ProblemGenerator::RadiationFEMNGridtest(ParameterInput *pin, const bool res
     fout12 << std::endl;
   }
 
-  // save e-matrix
+  // [5] save e-matrix
   HostArray1D<Real> e_source_host;
   Kokkos::realloc(e_source_host, pmbp->pradfemn->num_points);
   Kokkos::deep_copy(e_source_host, pmbp->pradfemn->e_source);
@@ -176,7 +176,7 @@ void ProblemGenerator::RadiationFEMNGridtest(ParameterInput *pin, const bool res
     fout13 << e_source_host(i) << std::endl;
   }
 
-  // save S-matrix
+  // [6] save S-matrix
   HostArray2D<Real> S_source_host;
   Kokkos::realloc(S_source_host, pmbp->pradfemn->num_points, pmbp->pradfemn->num_points);
   Kokkos::deep_copy(S_source_host, pmbp->pradfemn->S_source);
@@ -186,6 +186,78 @@ void ProblemGenerator::RadiationFEMNGridtest(ParameterInput *pin, const bool res
       fout14 << S_source_host(i, j) << " ";
     }
     fout14 << std::endl;
+  }
+
+  // [7] Save G_matrix, no multiplication by M^-1
+  std::ofstream fout15(pathdir + filenamepart + "_G_matrix_nominv" + ".txt");
+  for (int nu = 0; nu < 4; nu++) {
+    for (int mu = 0; mu < 4; mu++) {
+      for (int i = 0; i < 3; i++) {
+        fout15 << "#" << nu << " " << mu << " " << i + 1 << std::endl;
+        for (int row = 0; row < pmbp->pradfemn->num_points; row++) {
+          for (int col = 0; col < pmbp->pradfemn->num_points; col++) {
+            fout15 << pmbp->pradfemn->G_mat_host(nu, mu, i, row, col) << " ";
+          }
+          fout15 << std::endl;
+        }
+        fout15 << std::endl;
+      }
+    }
+  }
+
+  // [8] Save F_matrix, no multiplication by M^-1
+  std::ofstream fout16(pathdir + filenamepart + "_F_matrix_nominv" + ".txt");
+  for (int nu = 0; nu < 4; nu++) {
+    for (int mu = 0; mu < 4; mu++) {
+      for (int i = 0; i < 3; i++) {
+        fout16 << "#" << nu << " " << mu << " " << i + 1 << std::endl;
+        for (int row = 0; row < pmbp->pradfemn->num_points; row++) {
+          for (int col = 0; col < pmbp->pradfemn->num_points; col++) {
+            fout16 << pmbp->pradfemn->F_mat_host(nu, mu, i, row, col) << " ";
+          }
+          fout16 << std::endl;
+        }
+        fout16 << std::endl;
+      }
+    }
+  }
+
+  // [9] Save G_matrix
+  HostArray5D<Real> temp_array_5d;
+  Kokkos::realloc(temp_array_5d, 4, 4, 3, pmbp->pradfemn->num_points, pmbp->pradfemn->num_points);
+  Kokkos::deep_copy(temp_array_5d, pmbp->pradfemn->G_matrix);
+  std::ofstream fout17(pathdir + filenamepart + "_G_matrix" + ".txt");
+  for (int nu = 0; nu < 4; nu++) {
+    for (int mu = 0; mu < 4; mu++) {
+      for (int i = 0; i < 3; i++) {
+        fout17 << "#" << nu << " " << mu << " " << i + 1 << std::endl;
+        for (int row = 0; row < pmbp->pradfemn->num_points; row++) {
+          for (int col = 0; col < pmbp->pradfemn->num_points; col++) {
+            fout17 << temp_array_5d(nu, mu, i, row, col) << " ";
+          }
+          fout17 << std::endl;
+        }
+        fout17 << std::endl;
+      }
+    }
+  }
+
+  // [9] Save F_matrix
+  Kokkos::deep_copy(temp_array_5d, pmbp->pradfemn->F_matrix);
+  std::ofstream fout18(pathdir + filenamepart + "_F_matrix" + ".txt");
+  for (int nu = 0; nu < 4; nu++) {
+    for (int mu = 0; mu < 4; mu++) {
+      for (int i = 0; i < 3; i++) {
+        fout18 << "#" << nu << " " << mu << " " << i + 1 << std::endl;
+        for (int row = 0; row < pmbp->pradfemn->num_points; row++) {
+          for (int col = 0; col < pmbp->pradfemn->num_points; col++) {
+            fout18 << temp_array_5d(nu, mu, i, row, col) << " ";
+          }
+          fout18 << std::endl;
+        }
+        fout18 << std::endl;
+      }
+    }
   }
 
   return;

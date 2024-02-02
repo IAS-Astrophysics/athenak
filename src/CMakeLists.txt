@@ -108,7 +108,6 @@ add_executable(
         pgen/tests/rad_linear_wave.cpp
         pgen/tests/z4c_linear_wave.cpp
         pgen/tests/rad_femn_gridtest.cpp
-        pgen/tests/radiation_femn_gridtest_fpn.cpp
         pgen/tests/rad_femn_linetest.cpp
 		pgen/tests/rad_femn_linalgtest.cpp
 		pgen/tests/rad_femn_latticetest.cpp
