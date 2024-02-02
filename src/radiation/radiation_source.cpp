@@ -653,7 +653,7 @@ TaskStatus Radiation::AddRadiationSourceTerm(Driver *pdriver, int stage) {
 
           // try the ad hoc fix for the regime of high tgas + high radiation pressure
           if (tgas*inv_t_electron_ > 1) {
-            Real part1 = suma1/inv_t_electron_ * (arad_*SQR(SQR(tradnew));
+            Real part1 = suma1/inv_t_electron_ * (arad_*SQR(SQR(tradnew)));
             Real part2 = wdn/gm1/inv_t_electron_;
             Real frac = part1/(part1+part2);
             tgasnew = frac*tradnew + (1-frac)*tgas;
