@@ -1,11 +1,10 @@
 //========================================================================================
-// GR radiation code for AthenaK with FEM_N & FP_N
-// Copyright (C) 2023 Maitraya Bhattacharyya <mbb6217@psu.edu> and David Radice <dur566@psu.edu>
-// AthenaXX copyright(C) James M. Stone <jmstone@ias.edu> and the Athena code team
+// AthenaXXX astrophysical plasma code
+// Copyright(C) 2020 James M. Stone <jmstone@ias.edu> and the Athena code team
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
 //! \file radiation_femn_loadmatrices.cpp
-//  \brief generate and load matrices for the angular grid
+//  \brief generate matrices for the angular grid
 
 #include <iostream>
 
@@ -59,7 +58,7 @@ void RadiationFEMN::LoadFEMNMatrices() {
   auto &sy_ = stiffness_matrix_y;
   auto &sz_ = stiffness_matrix_z;
   auto &fmatrix_ = F_mat_host;
-  //auto &gmatrix_ = G_mat_host;
+  auto &gmatrix_ = G_mat_host;
   auto &e_source_ = e_source;
   auto &Q_matrix_ = Q_matrix;
 
@@ -109,6 +108,25 @@ void RadiationFEMN::LoadFEMNMatrices() {
 
           fmatrix_(nu, mu, 2, i, j) = radiationfemn::IntegrateMatrixFEMN(i, j, basis, x, y, z, scheme_weights, scheme_points, triangles, 5, nu, mu, 3);
           fmatrix_(mu, nu, 2, i, j) = fmatrix_(nu, mu, 2, i, j);
+        }
+      }
+    }
+  }
+
+  // compute the G matrices
+  std::cout << "Computing the G matrices (FEM) ... " << std::endl;
+  for (int i = 0; i < num_points; i++) {
+    for (int j = 0; j < num_points; j++) {
+      for (int nu = 0; nu < 4; nu++) {
+        for (int mu = nu; mu < 4; mu++) {
+          gmatrix_(nu, mu, 0, i, j) = radiationfemn::IntegrateMatrixFEMN(i, j, basis, x, y, z, scheme_weights, scheme_points, triangles, 4, nu, mu, 1);
+          gmatrix_(mu, nu, 0, i, j) = gmatrix_(nu, mu, 0, i, j);
+
+          gmatrix_(nu, mu, 1, i, j) = radiationfemn::IntegrateMatrixFEMN(i, j, basis, x, y, z, scheme_weights, scheme_points, triangles, 4, nu, mu, 2);
+          gmatrix_(mu, nu, 1, i, j) = gmatrix_(nu, mu, 1, i, j);
+
+          gmatrix_(nu, mu, 2, i, j) = radiationfemn::IntegrateMatrixFEMN(i, j, basis, x, y, z, scheme_weights, scheme_points, triangles, 4, nu, mu, 3);
+          gmatrix_(mu, nu, 2, i, j) = gmatrix_(nu, mu, 2, i, j);
         }
       }
     }

@@ -220,6 +220,18 @@ inline Real dFEMBasis3Type1dxi2(Real xi1, Real xi2, Real xi3) {
   return 1.;
 }
 
+inline Real dFEMBasis1Type1dxi3(Real xi1, Real xi2, Real xi3) {
+  return 1.;
+}
+
+inline Real dFEMBasis2Type1dxi3(Real xi1, Real xi2, Real xi3) {
+  return 1.;
+}
+
+inline Real dFEMBasis3Type1dxi3(Real xi1, Real xi2, Real xi3) {
+  return 2.;
+}
+
 /* Derivative of 'overlapping tent' basis functions with respect to barycentric coordinates
  *
  * Note: basis_choice is set to 1. Do not use any other number
@@ -233,15 +245,20 @@ Real dFEMBasisdxi(Real xi1, Real xi2, Real xi3, int basis_index, int xi_index) {
     return dFEMBasis2Type1dxi1(xi1, xi2, xi3);
   } else if (basis_index == 3 && xi_index == 1) {
     return dFEMBasis3Type1dxi1(xi1, xi2, xi3);
-  }
-  if (basis_index == 1 && xi_index == 2) {
+  } else if (basis_index == 1 && xi_index == 2) {
     return dFEMBasis1Type1dxi2(xi1, xi2, xi3);
   } else if (basis_index == 2 && xi_index == 2) {
     return dFEMBasis2Type1dxi2(xi1, xi2, xi3);
   } else if (basis_index == 3 && xi_index == 2) {
     return dFEMBasis3Type1dxi2(xi1, xi2, xi3);
+  } else if (basis_index == 1 && xi_index == 3) {
+    return dFEMBasis1Type1dxi3(xi1, xi2, xi3);
+  } else if (basis_index == 2 && xi_index == 3) {
+    return dFEMBasis2Type1dxi3(xi1, xi2, xi3);
+  } else if (basis_index == 3 && xi_index == 3) {
+    return dFEMBasis3Type1dxi3(xi1, xi2, xi3);
   } else {
-    // std::cout << "Incorrect basis_choice of basis function in radiation-femn block!" << std::endl;
+    //std::cout << basis_index << " " << xi_index << "Incorrect basis_choice of basis function in radiation-femn block!" << std::endl;
     exit(EXIT_FAILURE);
   }
 }

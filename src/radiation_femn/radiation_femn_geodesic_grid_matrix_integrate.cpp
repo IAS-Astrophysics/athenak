@@ -83,7 +83,7 @@ Real IntegrateMatrixSphericalTriangle(int a, int b, int basis, int t1, int t2, i
           FEMBasisABasisB(a, b, t1, t2, t3, scheme_points(i, 0), scheme_points(i, 1), scheme_points(i, 2), basis) * scheme_weights(i);
     }
   } else if (matrixnumber == 4) {
-    for (size_t i = 0; i < scheme_points.size(); i++) {
+    for (size_t i = 0; i < scheme_weights.size(); i++) {
       result += MomentumUnitEnergy(nu, x1, y1, z1, x2, y2, z2, x3, y3, z3, scheme_points(i, 0), scheme_points(i, 1), scheme_points(i, 2))
           * MomentumUnitEnergy(mu, x1, y1, z1, x2, y2, z2, x3, y3, z3, scheme_points(i, 0), scheme_points(i, 1), scheme_points(i, 2))
           * sqrt(CalculateDeterminantJacobian(x1, y1, z1, x2, y2, z2, x3, y3, z3, scheme_points(i, 0), scheme_points(i, 1), scheme_points(i, 2)))
