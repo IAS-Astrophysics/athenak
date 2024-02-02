@@ -244,8 +244,8 @@ TaskStatus Radiation::AddRadiationSourceTerm(Driver *pdriver, int stage) {
           wen_avg = wen_avg/n_count;
         }
         // assign cell-averaged quantity for source term calculation
-        wdn = wdn_avg;
-        wen = wen_avg;
+        // wdn = wdn_avg;
+        // wen = wen_avg;
       } // endif (sigma_cold > sigma_cold_cut_)
     } // endif (cellavg_rad_source_ && !rad_mask_(m,k,j,i))
 
@@ -650,6 +650,14 @@ TaskStatus Radiation::AddRadiationSourceTerm(Driver *pdriver, int stage) {
           m_new[1] += (n_1*i0_(m,n,k,j,i)/n_0*solid_angles_.d_view(n));
           m_new[2] += (n_2*i0_(m,n,k,j,i)/n_0*solid_angles_.d_view(n));
           m_new[3] += (n_3*i0_(m,n,k,j,i)/n_0*solid_angles_.d_view(n));
+
+          // try the ad hoc fix for the regime of high tgas + high radiation pressure
+          if (tgas*inv_t_electron_ > 1) {
+            Real part1 = suma1/inv_t_electron_ * (arad_*SQR(SQR(tradnew));
+            Real part2 = rho/gm1/inv_t_electron_;
+            Real frac = part1/(part1+part2);
+            tgasnew = frac*tradnew + (1-frac)*tgas;
+          }
 
           // handle excision (see notes above)
           if (excise) {
