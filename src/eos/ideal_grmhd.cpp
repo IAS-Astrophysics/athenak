@@ -276,8 +276,9 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
       smooth_flag_(m,k,j,i) = false;
       // try different strategy here to smooth the checkerboarding issue
       // if ((sigma_cold > sigma_cold_cut_) && (efloor_used || dfloor_used)) {
-      //   smooth_flag_(m,k,j,i) = true;
-      // }
+      if (sigma_cold > sigma_cold_cut_) {
+        smooth_flag_(m,k,j,i) = true;
+      }
 
       // apply velocity ceiling if necessary
       Real tmp = glower[1][1]*SQR(w.vx)
@@ -387,6 +388,41 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
         int jp1 = (j+1 > ju) ? ju : j+1;
         int im1 = (i-1 < il) ? il : i-1;
         int ip1 = (i+1 > iu) ? iu : i+1;
+
+        // try to identify checkboard region
+        if ( ((prim(m,IEN,k,j,i) > prim(m,IEN,kp1,j,i)) &&
+              (prim(m,IEN,k,j,i) > prim(m,IEN,km1,j,i)) &&
+              (prim(m,IEN,k,j,i) > prim(m,IEN,k,jp1,i)) &&
+              (prim(m,IEN,k,j,i) > prim(m,IEN,k,jm1,i)) &&
+              (prim(m,IEN,k,j,i) > prim(m,IEN,k,j,ip1)) &&
+              (prim(m,IEN,k,j,i) > prim(m,IEN,k,j,im1)) &&
+          (prim(m,IEN,k,j,i) > prim(m,IEN,km1,jm1,im1)) &&
+          (prim(m,IEN,k,j,i) > prim(m,IEN,km1,jm1,ip1)) &&
+          (prim(m,IEN,k,j,i) > prim(m,IEN,km1,jp1,im1)) &&
+          (prim(m,IEN,k,j,i) > prim(m,IEN,km1,jp1,ip1)) &&
+          (prim(m,IEN,k,j,i) > prim(m,IEN,kp1,jm1,im1)) &&
+          (prim(m,IEN,k,j,i) > prim(m,IEN,kp1,jm1,ip1)) &&
+          (prim(m,IEN,k,j,i) > prim(m,IEN,kp1,jp1,im1)) &&
+          (prim(m,IEN,k,j,i) > prim(m,IEN,kp1,jp1,ip1))) ||
+             ((prim(m,IEN,k,j,i) < prim(m,IEN,kp1,j,i)) &&
+              (prim(m,IEN,k,j,i) < prim(m,IEN,km1,j,i)) &&
+              (prim(m,IEN,k,j,i) < prim(m,IEN,k,jp1,i)) &&
+              (prim(m,IEN,k,j,i) < prim(m,IEN,k,jm1,i)) &&
+              (prim(m,IEN,k,j,i) < prim(m,IEN,k,j,ip1)) &&
+              (prim(m,IEN,k,j,i) < prim(m,IEN,k,j,im1)) &&
+          (prim(m,IEN,k,j,i) < prim(m,IEN,km1,jm1,im1)) &&
+          (prim(m,IEN,k,j,i) < prim(m,IEN,km1,jm1,ip1)) &&
+          (prim(m,IEN,k,j,i) < prim(m,IEN,km1,jp1,im1)) &&
+          (prim(m,IEN,k,j,i) < prim(m,IEN,km1,jp1,ip1)) &&
+          (prim(m,IEN,k,j,i) < prim(m,IEN,kp1,jm1,im1)) &&
+          (prim(m,IEN,k,j,i) < prim(m,IEN,kp1,jm1,ip1)) &&
+          (prim(m,IEN,k,j,i) < prim(m,IEN,kp1,jp1,im1)) &&
+          (prim(m,IEN,k,j,i) < prim(m,IEN,kp1,jp1,ip1))) )
+        {
+          smooth_flag_(m,k,j,i) = true;
+        } else {
+          smooth_flag_(m,k,j,i) = false;
+        }
 
         // initialize primitive fallback
         MHDPrim1D w;
