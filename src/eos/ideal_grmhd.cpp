@@ -277,7 +277,8 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
       smooth_flag_(m,k,j,i) = false;
       // try different strategy here to smooth the checkerboarding issue
       // if ((sigma_cold > sigma_cold_cut_) && (efloor_used || dfloor_used)) {
-      if ((sigma_cold > sigma_cold_cut_) && (rv > r_tfix_cut_)) {
+      if (sigma_cold > sigma_cold_cut_) {
+        // if ((sigma_cold > sigma_cold_cut_) && (rv > r_tfix_cut_)) {
         smooth_flag_(m,k,j,i) = true;
       }
 
@@ -392,7 +393,7 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
 
         // try to identify checkboard region
         Real diff_large = 1.e4;
-        Real diff_small = 1.e3;
+        Real diff_small = 1.e1;
 
         Real diff_u = fabs(prim(m,IEN,kp1,j,i)/prim(m,IEN,k,j,i) - 1);
         Real diff_d = fabs(prim(m,IEN,km1,j,i)/prim(m,IEN,k,j,i) - 1);
