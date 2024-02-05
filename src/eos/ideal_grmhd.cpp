@@ -126,6 +126,8 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
     Real &x3max = size.d_view(m).x3max;
     Real x3v = CellCenterX(k-ks, indcs.nx3, x3min, x3max);
 
+    Real rv = sqrt(SQR(x1v)+SQR(x2v)+SQR(x3v));
+
     Real glower[4][4], gupper[4][4];
     ComputeMetricAndInverse(x1v, x2v, x3v, flat, spin, glower, gupper);
 
@@ -222,7 +224,6 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
 
       // apply temperature fix
       if (is_radiation_enabled_ && temperature_fix) {
-        Real rv = sqrt(SQR(x1v)+SQR(x2v)+SQR(x3v));
         if ((sigma_cold > sigma_cold_cut_) && (rv < r_tfix_cut_)) { // different criterion can be used here
           Real log10_sfloor_local = log10(eos.sfloor1) + (log10(w.d)-log10(eos.rho1)) * (log10(eos.sfloor2)-log10(eos.sfloor1))/(log10(eos.rho2)-log10(eos.rho1));
           Real sfloor_local = pow(10.0, log10_sfloor_local);
@@ -276,7 +277,7 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
       smooth_flag_(m,k,j,i) = false;
       // try different strategy here to smooth the checkerboarding issue
       // if ((sigma_cold > sigma_cold_cut_) && (efloor_used || dfloor_used)) {
-      if (sigma_cold > sigma_cold_cut_) {
+      if ((sigma_cold > sigma_cold_cut_) && (rv > r_tfix_cut_)) {
         smooth_flag_(m,k,j,i) = true;
       }
 
@@ -390,35 +391,97 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
         int ip1 = (i+1 > iu) ? iu : i+1;
 
         // try to identify checkboard region
-        if ( ((prim(m,IEN,k,j,i) > prim(m,IEN,kp1,j,i)) &&
-              (prim(m,IEN,k,j,i) > prim(m,IEN,km1,j,i)) &&
-              (prim(m,IEN,k,j,i) > prim(m,IEN,k,jp1,i)) &&
-              (prim(m,IEN,k,j,i) > prim(m,IEN,k,jm1,i)) &&
-              (prim(m,IEN,k,j,i) > prim(m,IEN,k,j,ip1)) &&
-              (prim(m,IEN,k,j,i) > prim(m,IEN,k,j,im1)) &&
-          (prim(m,IEN,k,j,i) > prim(m,IEN,km1,jm1,im1)) &&
-          (prim(m,IEN,k,j,i) > prim(m,IEN,km1,jm1,ip1)) &&
-          (prim(m,IEN,k,j,i) > prim(m,IEN,km1,jp1,im1)) &&
-          (prim(m,IEN,k,j,i) > prim(m,IEN,km1,jp1,ip1)) &&
-          (prim(m,IEN,k,j,i) > prim(m,IEN,kp1,jm1,im1)) &&
-          (prim(m,IEN,k,j,i) > prim(m,IEN,kp1,jm1,ip1)) &&
-          (prim(m,IEN,k,j,i) > prim(m,IEN,kp1,jp1,im1)) &&
-          (prim(m,IEN,k,j,i) > prim(m,IEN,kp1,jp1,ip1))) ||
-             ((prim(m,IEN,k,j,i) < prim(m,IEN,kp1,j,i)) &&
-              (prim(m,IEN,k,j,i) < prim(m,IEN,km1,j,i)) &&
-              (prim(m,IEN,k,j,i) < prim(m,IEN,k,jp1,i)) &&
-              (prim(m,IEN,k,j,i) < prim(m,IEN,k,jm1,i)) &&
-              (prim(m,IEN,k,j,i) < prim(m,IEN,k,j,ip1)) &&
-              (prim(m,IEN,k,j,i) < prim(m,IEN,k,j,im1)) &&
-          (prim(m,IEN,k,j,i) < prim(m,IEN,km1,jm1,im1)) &&
-          (prim(m,IEN,k,j,i) < prim(m,IEN,km1,jm1,ip1)) &&
-          (prim(m,IEN,k,j,i) < prim(m,IEN,km1,jp1,im1)) &&
-          (prim(m,IEN,k,j,i) < prim(m,IEN,km1,jp1,ip1)) &&
-          (prim(m,IEN,k,j,i) < prim(m,IEN,kp1,jm1,im1)) &&
-          (prim(m,IEN,k,j,i) < prim(m,IEN,kp1,jm1,ip1)) &&
-          (prim(m,IEN,k,j,i) < prim(m,IEN,kp1,jp1,im1)) &&
-          (prim(m,IEN,k,j,i) < prim(m,IEN,kp1,jp1,ip1))) )
-        {
+        Real diff_large = 1.e4;
+        Real diff_small = 1.e3;
+
+        diff_u = fabs(prim(m,IEN,kp1,j,i)/prim(m,IEN,k,j,i) - 1);
+        diff_d = fabs(prim(m,IEN,km1,j,i)/prim(m,IEN,k,j,i) - 1);
+        diff_r = fabs(prim(m,IEN,k,jp1,i)/prim(m,IEN,k,j,i) - 1);
+        diff_l = fabs(prim(m,IEN,k,jm1,i)/prim(m,IEN,k,j,i) - 1);
+        diff_f = fabs(prim(m,IEN,k,j,ip1)/prim(m,IEN,k,j,i) - 1);
+        diff_b = fabs(prim(m,IEN,k,j,im1)/prim(m,IEN,k,j,i) - 1);
+
+        diff_ur = fabs(prim(m,IEN,kp1,jp1,i)/prim(m,IEN,k,j,i) - 1);
+        diff_ul = fabs(prim(m,IEN,kp1,jm1,i)/prim(m,IEN,k,j,i) - 1);
+        diff_uf = fabs(prim(m,IEN,kp1,j,ip1)/prim(m,IEN,k,j,i) - 1);
+        diff_ub = fabs(prim(m,IEN,kp1,j,im1)/prim(m,IEN,k,j,i) - 1);
+        diff_dr = fabs(prim(m,IEN,km1,jp1,i)/prim(m,IEN,k,j,i) - 1);
+        diff_dl = fabs(prim(m,IEN,km1,jm1,i)/prim(m,IEN,k,j,i) - 1);
+        diff_df = fabs(prim(m,IEN,km1,j,ip1)/prim(m,IEN,k,j,i) - 1);
+        diff_db = fabs(prim(m,IEN,km1,j,im1)/prim(m,IEN,k,j,i) - 1);
+        diff_rf = fabs(prim(m,IEN,k,jp1,ip1)/prim(m,IEN,k,j,i) - 1);
+        diff_rb = fabs(prim(m,IEN,k,jp1,im1)/prim(m,IEN,k,j,i) - 1);
+        diff_lf = fabs(prim(m,IEN,k,jm1,ip1)/prim(m,IEN,k,j,i) - 1);
+        diff_lb = fabs(prim(m,IEN,k,jm1,im1)/prim(m,IEN,k,j,i) - 1);
+
+        diff_urf = fabs(prim(m,IEN,kp1,jp1,ip1)/prim(m,IEN,k,j,i) - 1);
+        diff_urb = fabs(prim(m,IEN,kp1,jp1,im1)/prim(m,IEN,k,j,i) - 1);
+        diff_ulf = fabs(prim(m,IEN,kp1,jm1,ip1)/prim(m,IEN,k,j,i) - 1);
+        diff_ulb = fabs(prim(m,IEN,kp1,jm1,im1)/prim(m,IEN,k,j,i) - 1);
+        diff_dlb = fabs(prim(m,IEN,km1,jm1,im1)/prim(m,IEN,k,j,i) - 1);
+        diff_dlf = fabs(prim(m,IEN,km1,jm1,ip1)/prim(m,IEN,k,j,i) - 1);
+        diff_drb = fabs(prim(m,IEN,km1,jp1,im1)/prim(m,IEN,k,j,i) - 1);
+        diff_drf = fabs(prim(m,IEN,km1,jp1,ip1)/prim(m,IEN,k,j,i) - 1);
+
+        bool is_checkboard1 = (diff_u > diff_large);
+        is_checkboard1 = is_checkboard1 && (diff_d > diff_large);
+        is_checkboard1 = is_checkboard1 && (diff_r > diff_large);
+        is_checkboard1 = is_checkboard1 && (diff_l > diff_large);
+        is_checkboard1 = is_checkboard1 && (diff_f > diff_large);
+        is_checkboard1 = is_checkboard1 && (diff_b > diff_large);
+
+        is_checkboard1 = is_checkboard1 && (diff_urf > diff_large);
+        is_checkboard1 = is_checkboard1 && (diff_urb > diff_large);
+        is_checkboard1 = is_checkboard1 && (diff_ulf > diff_large);
+        is_checkboard1 = is_checkboard1 && (diff_ulb > diff_large);
+        is_checkboard1 = is_checkboard1 && (diff_dlb > diff_large);
+        is_checkboard1 = is_checkboard1 && (diff_dlf > diff_large);
+        is_checkboard1 = is_checkboard1 && (diff_drb > diff_large);
+        is_checkboard1 = is_checkboard1 && (diff_drf > diff_large);
+
+        is_checkboard1 = is_checkboard1 && (diff_ur < diff_small);
+        is_checkboard1 = is_checkboard1 && (diff_ul < diff_small);
+        is_checkboard1 = is_checkboard1 && (diff_uf < diff_small);
+        is_checkboard1 = is_checkboard1 && (diff_ub < diff_small);
+        is_checkboard1 = is_checkboard1 && (diff_dr < diff_small);
+        is_checkboard1 = is_checkboard1 && (diff_dl < diff_small);
+        is_checkboard1 = is_checkboard1 && (diff_df < diff_small);
+        is_checkboard1 = is_checkboard1 && (diff_db < diff_small);
+        is_checkboard1 = is_checkboard1 && (diff_rf < diff_small);
+        is_checkboard1 = is_checkboard1 && (diff_rb < diff_small);
+        is_checkboard1 = is_checkboard1 && (diff_lf < diff_small);
+        is_checkboard1 = is_checkboard1 && (diff_lb < diff_small);
+
+        bool is_checkboard2 = (diff_u < diff_small);
+        is_checkboard2 = is_checkboard2 && (diff_d < diff_small);
+        is_checkboard2 = is_checkboard2 && (diff_r < diff_small);
+        is_checkboard2 = is_checkboard2 && (diff_l < diff_small);
+        is_checkboard2 = is_checkboard2 && (diff_f < diff_small);
+        is_checkboard2 = is_checkboard2 && (diff_b < diff_small);
+
+        is_checkboard2 = is_checkboard2 && (diff_urf < diff_small);
+        is_checkboard2 = is_checkboard2 && (diff_urb < diff_small);
+        is_checkboard2 = is_checkboard2 && (diff_ulf < diff_small);
+        is_checkboard2 = is_checkboard2 && (diff_ulb < diff_small);
+        is_checkboard2 = is_checkboard2 && (diff_dlb < diff_small);
+        is_checkboard2 = is_checkboard2 && (diff_dlf < diff_small);
+        is_checkboard2 = is_checkboard2 && (diff_drb < diff_small);
+        is_checkboard2 = is_checkboard2 && (diff_drf < diff_small);
+
+        is_checkboard2 = is_checkboard2 && (diff_ur > diff_large);
+        is_checkboard2 = is_checkboard2 && (diff_ul > diff_large);
+        is_checkboard2 = is_checkboard2 && (diff_uf > diff_large);
+        is_checkboard2 = is_checkboard2 && (diff_ub > diff_large);
+        is_checkboard2 = is_checkboard2 && (diff_dr > diff_large);
+        is_checkboard2 = is_checkboard2 && (diff_dl > diff_large);
+        is_checkboard2 = is_checkboard2 && (diff_df > diff_large);
+        is_checkboard2 = is_checkboard2 && (diff_db > diff_large);
+        is_checkboard2 = is_checkboard2 && (diff_rf > diff_large);
+        is_checkboard2 = is_checkboard2 && (diff_rb > diff_large);
+        is_checkboard2 = is_checkboard2 && (diff_lf > diff_large);
+        is_checkboard2 = is_checkboard2 && (diff_lb > diff_large);
+
+        if (is_checkboard1 || is_checkboard2) {
           smooth_flag_(m,k,j,i) = true;
         } else {
           smooth_flag_(m,k,j,i) = false;
