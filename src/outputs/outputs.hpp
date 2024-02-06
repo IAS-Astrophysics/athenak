@@ -62,20 +62,20 @@ static const char *var_choice[NOUTPUT_CHOICES] = {
   "z4c_betax", "z4c_betay", "z4c_betaz", // 97-118
   "z4c", // 119
 
-  "weyl_rpsi4", "weyl_ipsi4",
-  "weyl",
+  "weyl_rpsi4", "weyl_ipsi4", // 120 - 121
+  "weyl", // 122
 
   "con_C",
   "con_H",
   "con_M",
   "con_Z",
-  "con_Mx", "con_My", "con_Mz", // 120-126
-  "con", // 127
+  "con_Mx", "con_My", "con_Mz", // 123-129
+  "con", // 130
 
   "tmunu_Sxx", "tmunu_Sxy", "tmunu_Sxz", "tmunu_Syy", "tmunu_Syz", "tmunu_Szz",
   "tmunu_E",
-  "tmunu_Sx", "tmunu_Sy", "tmunu_Sz", // 128-137
-  "tmunu" // 138
+  "tmunu_Sx", "tmunu_Sy", "tmunu_Sz", // 131-140
+  "tmunu" // 141
 };
 
 // forward declarations

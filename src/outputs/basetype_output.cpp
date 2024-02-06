@@ -127,18 +127,18 @@ BaseTypeOutput::BaseTypeOutput(OutputParameters opar, Mesh *pm) :
        << std::endl << "Input file is likely missing corresponding block" << std::endl;
     exit(EXIT_FAILURE);
   }
-  if ((ivar>=128) && (ivar <=138) && (pm->pmb_pack->ptmunu == nullptr)) {
-    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
-       << "Output of Tmunu variable requested in <output> block '"
-       << out_params.block_name << "' but no Tmunu object has been constructed."
-       << std::endl << "Input file is likely missing a <adm> block" << std::endl;
-    exit(EXIT_FAILURE);
-  }
-  if ((ivar>=139) && (ivar<142) && (pm->pmb_pack->pz4c == nullptr)) {
+  if ((ivar>=128) && (ivar<131) && (pm->pmb_pack->pz4c == nullptr)) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
        << "Output of weyl variable requested in <output> block '"
        << out_params.block_name << "' but weyl object not constructed."
        << std::endl << "Input file is likely missing corresponding block" << std::endl;
+    exit(EXIT_FAILURE);
+  }
+  if ((ivar>=131) && (ivar <=141) && (pm->pmb_pack->ptmunu == nullptr)) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+       << "Output of Tmunu variable requested in <output> block '"
+       << out_params.block_name << "' but no Tmunu object has been constructed."
+       << std::endl << "Input file is likely missing a <adm> block" << std::endl;
     exit(EXIT_FAILURE);
   }
 
