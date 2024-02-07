@@ -111,7 +111,13 @@ add_executable(
         pgen/tests/rad_femn_linetest.cpp
 		pgen/tests/rad_femn_linalgtest.cpp
 		pgen/tests/rad_femn_latticetest.cpp
-	
+		pgen/tests/rad_femn_cylindertest.cpp
+		pgen/tests/rad_femn_spheretest.cpp
+		pgen/tests/rad_femn_searchlighttest.cpp
+		pgen/tests/rad_femn_shadowtest.cpp
+		pgen/tests/radiation_femn_dopplertest.cpp
+		pgen/tests/radiation_femn_diffusiontest.cpp
+
         radiation/radiation.cpp
         radiation/radiation_fluxes.cpp
         radiation/radiation_newdt.cpp
@@ -147,11 +153,7 @@ add_executable(
 		radiation_femn/radiation_femn_compute_final_matrices.cpp
         radiation_femn/radiation_femn_tetrad.cpp
         radiation_femn/radiation_femn_beams.cpp
-		radiation_femn/radiation_femn_initialize.cpp
-		pgen/tests/rad_femn_cylindertest.cpp
-		pgen/tests/rad_femn_spheretest.cpp
-		pgen/tests/rad_femn_searchlighttest.cpp
-		pgen/tests/rad_femn_shadowtest.cpp)
+		radiation_femn/radiation_femn_initialize.cpp)
 
 # custom problem generator to be included in compile
 # specify on command line using '-D PROBLEM=file' where 'file' is name of file in

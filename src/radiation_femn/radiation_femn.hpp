@@ -74,6 +74,8 @@ class RadiationFEMN {
   int num_triangles;              // number of unique triangular elements
   int basis;                      // choice of basis functions on the geodesic grid (1: tent - FEM_N)
   bool mass_lumping;              // flag for mass lumping
+  bool moving_medium;
+  bool gravity;
   bool m1_flag;                   // flag for M1
   std::string limiter_dg;         // choice of limiter for DG, set to "minmod2" by default
   std::string limiter_fem;        // choice of limiter for FEM, set to "clp" by default (FEM_N)
