@@ -29,11 +29,9 @@ void RadiationFEMN::InitializeMetricFluid() {
   DvceArray5D<Real> u_mu_host;
 
   Kokkos::realloc(g_dd_host, nmb, 4, 4, ncells3, ncells2, ncells1);        // 4-metric from GR
-  Kokkos::realloc(sqrt_det_g_host, nmb, ncells3, ncells2, ncells1);        // sqrt(-det(4-metric))
   Kokkos::realloc(u_mu_host, nmb, 4, ncells3, ncells2, ncells1);
 
   Kokkos::deep_copy(g_dd_host, 0.);
-  Kokkos::deep_copy(sqrt_det_g_host, 1.);
   Kokkos::deep_copy(u_mu_host, 0.);
 
   par_for("radiation_femn_dummy_initialize_1", DevExeSpace(), 0, nmb1, ks, ke, js, je, is, ie,
@@ -47,7 +45,6 @@ void RadiationFEMN::InitializeMetricFluid() {
 
   Kokkos::deep_copy(g_dd, g_dd_host);
   Kokkos::deep_copy(u_mu, u_mu_host);
-  Kokkos::deep_copy(sqrt_det_g, sqrt_det_g_host);
   
 }
 }

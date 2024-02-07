@@ -14,6 +14,7 @@
 #include "driver/driver.hpp"
 #include "radiation_femn/radiation_femn.hpp"
 #include "radiation_femn/radiation_femn_matinv.hpp"
+#include "adm/adm.hpp"
 
 namespace radiationfemn {
 
@@ -51,7 +52,6 @@ TaskStatus RadiationFEMN::ExpRKUpdate(Driver *pdriver, int stage) {
   auto &L_mu_muhat0_ = pmy_pack->pradfemn->L_mu_muhat0;
   //auto &L_mu_muhat1_ = pmy_pack->pradfemn->L_mu_muhat1;
   //auto &u_mu_ = pmy_pack->pradfemn->u_mu;
-  auto &sqrt_det_g_ = pmy_pack->pradfemn->sqrt_det_g;
   auto &eta_ = pmy_pack->pradfemn->eta;
   auto &e_source_ = pmy_pack->pradfemn->e_source;
   auto &kappa_s_ = pmy_pack->pradfemn->kappa_s;
@@ -61,6 +61,7 @@ TaskStatus RadiationFEMN::ExpRKUpdate(Driver *pdriver, int stage) {
   //auto &energy_par_ = pmy_pack->pradfemn->energy_par;
   auto &P_matrix_ = pmy_pack->pradfemn->P_matrix;
   auto &S_source_ = pmy_pack->pradfemn->S_source;
+  adm::ADM::ADM_vars &adm = pmy_pack->padm->adm;
 
   size_t scr_size = ScrArray2D<Real>::shmem_size(num_points_, num_points_) * 5 + ScrArray1D<Real>::shmem_size(num_points_) * 5
       + ScrArray1D<int>::shmem_size(num_points_ - 1) * 1 + +ScrArray1D<Real>::shmem_size(4 * 4 * 4) * 2;
@@ -71,6 +72,10 @@ TaskStatus RadiationFEMN::ExpRKUpdate(Driver *pdriver, int stage) {
                   int nu = int(nuen / num_energy_bins_);
                   int en = nuen - nu * num_energy_bins_;
 
+                  Real sqrt_det_g_i = adm.alpha(m, k, j, i) * sqrt(adm::SpatialDet(adm.g_dd(m, 0, 0, k, j, i), adm.g_dd(m, 0, 1, k, j, i),
+                                                                                       adm.g_dd(m, 0, 2, k, j, i), adm.g_dd(m, 1, 1, k, j, i),
+                                                                                       adm.g_dd(m, 1, 2, k, j, i), adm.g_dd(m, 2, 2, k, j, i)));
+
                   // derivative terms
                   ScrArray1D<Real> g_rhs_scratch = ScrArray1D<Real>(member.team_scratch(scr_level), num_points_);
                   auto Ven = (1. / 3.) * (pow(energy_grid_(en + 1), 3) - pow(energy_grid_(en), 3));
@@ -78,18 +83,18 @@ TaskStatus RadiationFEMN::ExpRKUpdate(Driver *pdriver, int stage) {
                   par_for_inner(member, 0, num_points_ - 1, [&](const int idx) {
                     int nuenangidx = IndicesUnited(nu, en, idx, num_species_, num_energy_bins_, num_points_);
 
-                    Real divf_s = flx1(m, nuenangidx, k, j, i) / (2. * mbsize.d_view(m).dx1 * Ven);
+                    Real divf_s = flx1(m, nuenangidx, k, j, i) / (2. * mbsize.d_view(m).dx1);
 
                     if (multi_d) {
-                      divf_s += flx2(m, nuenangidx, k, j, i) / (2. * mbsize.d_view(m).dx2 * Ven);
+                      divf_s += flx2(m, nuenangidx, k, j, i) / (2. * mbsize.d_view(m).dx2);
                     }
 
                     if (three_d) {
-                      divf_s += flx3(m, nuenangidx, k, j, i) / (2. * mbsize.d_view(m).dx3 * Ven);
+                      divf_s += flx3(m, nuenangidx, k, j, i) / (2. * mbsize.d_view(m).dx3);
                     }
 
                     g_rhs_scratch(idx) = gam0 * f0_(m, nuenangidx, k, j, i) + gam1 * f1_(m, nuenangidx, k, j, i) - beta_dt * divf_s
-                        + sqrt_det_g_(m, k, j, i) * beta_dt * eta_(m, k, j, i) * e_source_(idx) / Ven;
+                        + sqrt_det_g_i * beta_dt * eta_(m, k, j, i) * e_source_(idx) / Ven;
 
                   });
                   member.team_barrier();
@@ -104,11 +109,11 @@ TaskStatus RadiationFEMN::ExpRKUpdate(Driver *pdriver, int stage) {
                   par_for_inner(member, 0, num_points_ * num_points_ - 1, [&](const int idx) {
                     int row = int(idx / num_points_);
                     int col = idx - row * num_points_;
-                    Q_matrix(row, col) = sqrt_det_g_(m, k, j, i) * (L_mu_muhat0_(m, 0, 0, k, j, i) * P_matrix_(0, row, col)
+                    Q_matrix(row, col) = sqrt_det_g_i * (L_mu_muhat0_(m, 0, 0, k, j, i) * P_matrix_(0, row, col)
                         + L_mu_muhat0_(m, 0, 1, k, j, i) * P_matrix_(1, row, col) + L_mu_muhat0_(m, 0, 2, k, j, i) * P_matrix_(2, row, col)
                         + L_mu_muhat0_(m, 0, 3, k, j, i) * P_matrix_(3, row, col))
-                        + sqrt_det_g_(m, k, j, i) * beta_dt * (kappa_s_(m, k, j, i) + kappa_a_(m, k, j, i)) * (row == col) / Ven
-                        - sqrt_det_g_(m, k, j, i) * beta_dt * (1. / (4. * M_PI)) * kappa_s_(m, k, j, i) * S_source_(row, col) / Ven;
+                        + sqrt_det_g_i * beta_dt * (kappa_s_(m, k, j, i) + kappa_a_(m, k, j, i)) * (row == col) / Ven
+                        - sqrt_det_g_i * beta_dt * (1. / (4. * M_PI)) * kappa_s_(m, k, j, i) * S_source_(row, col) / Ven;
                     lu_matrix(row, col) = Q_matrix(row, col);
                   });
                   member.team_barrier();
