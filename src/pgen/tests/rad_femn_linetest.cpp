@@ -74,6 +74,7 @@ void ProblemGenerator::RadiationFEMNLinetest(ParameterInput *pin, const bool res
                 adm.g_dd(m, a, b, k, j, i) = (a == b ? 1. : 0.);
               }
 
+            adm.alpha(m, k, j, i) = 1.;
             adm.psi4(m, k, j, i) = 1.;
 
           });
