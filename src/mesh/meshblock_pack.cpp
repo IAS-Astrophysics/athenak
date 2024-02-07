@@ -188,10 +188,18 @@ void MeshBlockPack::AddPhysics(ParameterInput *pin) {
     punit = nullptr;
   }
 
-  // (7) RADIATION FEM_N
+  // (7) RADIATION FEM_N and adm
   // Create radiation FEM_N physics module.  Create tasklist.
   if (pin->DoesBlockExist("radiation-femn")) {
+    if (pin->DoesBlockExist("adm")) {
+      padm = new adm::ADM(this, pin);
+    } else {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+        << "radiation-femn cannot work without adm. Please add <adm>." << std::endl;
+      std::exit(EXIT_FAILURE);
+    }
     pradfemn = new radiationfemn::RadiationFEMN(this, pin);
+
     nphysics++;
     pradfemn->AssembleRadiationFEMNTasks(start_tl, run_tl, end_tl);
   } else {

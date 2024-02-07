@@ -17,6 +17,7 @@
 #include "radiation_femn/radiation_femn.hpp"
 #include "radiation_femn/radiation_femn_linalg.hpp"
 #include "radiation_femn/radiation_femn_geodesic_grid_matrices.hpp"
+#include "adm/adm.hpp"
 
 namespace radiationfemn {
 
@@ -90,7 +91,7 @@ RadiationFEMN::RadiationFEMN(MeshBlockPack *ppack, ParameterInput *pin) :
   }
   Kokkos::deep_copy(energy_grid, temp_array);
 
-  if(m1_flag) {
+  if (m1_flag) {
     fpn = true;
   }
   if (!fpn) {
@@ -209,6 +210,8 @@ RadiationFEMN::RadiationFEMN(MeshBlockPack *ppack, ParameterInput *pin) :
 
   // Hardcode metric fluid quantities @TODO: change this later
   this->InitializeMetricFluid();
+
+  std::string metric = pin->GetOrAddString("adm", "spacetime", "minkowski");
 
   // state vector and fluxes
   Kokkos::realloc(f0, nmb, num_points_total, ncells3, ncells2, ncells1);        // distribution function
