@@ -76,8 +76,13 @@ void MHD::EntropyReset() {
     u0_(m,entropyIdx,k,j,i) = gm1*wen / pow(wdn,gm1) * u0;
 
     if (customize_fofc_) {
-      u0_(m,entropyIdx,k,j,i) = fofc_(m,k,j,i);
-      w0_(m,entropyIdx,k,j,i) = fofc_(m,k,j,i);
+      if (fofc_(m,k,j,i)) {
+        u0_(m,entropyIdx,k,j,i) = 1;
+        w0_(m,entropyIdx,k,j,i) = 1;
+      } else {
+        u0_(m,entropyIdx,k,j,i) = -1;
+        w0_(m,entropyIdx,k,j,i) = -1;
+      }
     }
 
     // what to do with coarse_u0 ???
