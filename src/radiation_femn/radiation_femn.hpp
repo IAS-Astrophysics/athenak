@@ -144,9 +144,8 @@ class RadiationFEMN {
   DvceArray6D<Real> L_mu_muhat0;   // tetrad quantities
   DvceArray6D<Real> L_mu_muhat1;   // tetrad quantities at intermediate step
 
-  // information from other projects (metric and fluid velocity in lab frame)
-  DvceArray6D<Real> g_dd;         // placeholder for spatial metric
-  DvceArray5D<Real> u_mu;         // placeholder for fluid velocity in lab frame
+  // fluid velocity
+  DvceArray5D<Real> u_mu;
 
   // ---------------------------------------------------------------------------
   // arrays for source terms

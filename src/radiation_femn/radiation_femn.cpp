@@ -23,7 +23,6 @@ namespace radiationfemn {
 
 RadiationFEMN::RadiationFEMN(MeshBlockPack *ppack, ParameterInput *pin) :
     pmy_pack(ppack),
-    g_dd("spatial_metric", 1, 1, 1, 1, 1, 1),
     u_mu("fluid_vel_lab", 1, 1, 1, 1, 1),
     L_mu_muhat0("L^mu_muhat0", 1, 1, 1, 1, 1, 1),
     L_mu_muhat1("L^mu_muhat1", 1, 1, 1, 1, 1, 1),
@@ -201,7 +200,6 @@ RadiationFEMN::RadiationFEMN(MeshBlockPack *ppack, ParameterInput *pin) :
   int ncells3 = (indcs.nx3 > 1) ? (indcs.nx3 + 2 * (indcs.ng)) : 1;
 
   // tetrad and fluid quantities
-  Kokkos::realloc(g_dd, nmb, 4, 4, ncells3, ncells2, ncells1);        // 4-metric from GR
   Kokkos::realloc(u_mu, nmb, 4, ncells3, ncells2, ncells1);           // u^mu: fluid velocity in lab frame
   Kokkos::realloc(L_mu_muhat0, nmb, 4, 4, ncells3, ncells2, ncells1); // tetrad L^mu_muhat
   Kokkos::realloc(L_mu_muhat1, nmb, 4, 4, ncells3, ncells2, ncells1); // tetrad L^mu_muhat
