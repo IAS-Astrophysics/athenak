@@ -282,7 +282,7 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
       //   // if ((sigma_cold > sigma_cold_cut_) && (rv > r_tfix_cut_)) {
       //   smooth_flag_(m,k,j,i) = true;
       // }
-      if (customize_fofc_ && (sigma_cold > sigma_cold_cut_)) fofc_(m,k,j,i) = true;
+      // if (customize_fofc_ && (sigma_cold > sigma_cold_cut_)) fofc_(m,k,j,i) = true;
 
       // apply velocity ceiling if necessary
       Real tmp = glower[1][1]*SQR(w.vx)
@@ -394,7 +394,8 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
         int ip1 = (i+1 > iu) ? iu : i+1;
 
         // try to identify checkboard region
-        if (smooth_flag_(m,k,j,i)) {
+        if (customize_fofc_) {
+        // if (smooth_flag_(m,k,j,i)) {
           Real diff_large = 1.e4;
           Real diff_small = 1.e1;
 
@@ -486,9 +487,11 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
           is_checkboard2 = is_checkboard2 && (diff_lb > diff_large);
 
           if (is_checkboard1 || is_checkboard2) {
-            smooth_flag_(m,k,j,i) = true;
+            // smooth_flag_(m,k,j,i) = true;
+            fofc_(m,k,j,i) = true;
           } else {
-            smooth_flag_(m,k,j,i) = false;
+            // smooth_flag_(m,k,j,i) = false;
+            fofc_(m,k,j,i) = false; 
           }
         }
 
