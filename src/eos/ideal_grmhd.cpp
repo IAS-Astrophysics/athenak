@@ -49,6 +49,7 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
   int &nscal = pmy_pack->pmhd->nscalars;
   int &nmb = pmy_pack->nmb_thispack;
   auto &fofc_ = pmy_pack->pmhd->fofc;
+  auto &customize_fofc_ = pmy_pack->pmhd->customize_fofc;
   auto eos = eos_data;
   Real gm1 = eos_data.gamma - 1.0;
 
@@ -281,6 +282,7 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
       //   // if ((sigma_cold > sigma_cold_cut_) && (rv > r_tfix_cut_)) {
       //   smooth_flag_(m,k,j,i) = true;
       // }
+      if (customize_fofc_ && (sigma_cold > sigma_cold_cut_)) fofc_(m,k,j,i) = true;
 
       // apply velocity ceiling if necessary
       Real tmp = glower[1][1]*SQR(w.vx)

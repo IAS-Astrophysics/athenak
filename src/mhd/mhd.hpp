@@ -108,6 +108,7 @@ class MHD {
   // following used for FOFC algorithm
   DvceArray4D<bool> fofc;  // flag for each cell to indicate if FOFC is needed
   bool use_fofc = false;   // flag to enable FOFC
+  bool customize_fofc = false;   // flag to enable FOFC
 
   // following used for gas-radiation coupling
   DvceArray4D<bool> c2p_flag; // flag for each cell to indicate if c2p succeeds

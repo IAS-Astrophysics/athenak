@@ -192,6 +192,7 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
   if (evolution_t.compare("stationary") != 0) {
     // determine if FOFC is enabled
     use_fofc = pin->GetOrAddBoolean("mhd","fofc",false);
+    customize_fofc = pin->GetOrAddBoolean("mhd","customize_fofc",false);
 
     // select reconstruction method (default PLM)
     std::string xorder = pin->GetOrAddString("mhd","reconstruct","plm");

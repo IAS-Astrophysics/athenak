@@ -37,6 +37,9 @@ void MHD::EntropyReset() {
   int entropyIdx = nmhd+nscalars-1;
   Real gm1 = peos->eos_data.gamma-1;
 
+  auto &customize_fofc_ = customize_fofc;
+  auto &fofc_ = fofc;
+
   par_for("entropy_reset",DevExeSpace(),0,nmb1,ks,ke,js,je,is,ie,
   KOKKOS_LAMBDA(int m, int k, int j, int i) {
     // coordinates
@@ -71,6 +74,8 @@ void MHD::EntropyReset() {
 
     // assign total entropy to the first scalar
     u0_(m,entropyIdx,k,j,i) = gm1*wen / pow(wdn,gm1) * u0;
+
+    if (customize_fofc_) u0_(m,entropyIdx,k,j,i) = fofc_(m,entropyIdx,k,j,i);
 
     // what to do with coarse_u0 ???
   });
