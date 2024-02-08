@@ -98,7 +98,7 @@ TaskStatus RadiationFEMN::ExpRKUpdate(Driver *pdriver, int stage) {
 
                   });
                   member.team_barrier();
-
+                  /*
                   ScrArray2D<Real> Q_matrix = ScrArray2D<Real>(member.team_scratch(scr_level), num_points_, num_points_);
                   ScrArray2D<Real> Qinv_matrix = ScrArray2D<Real>(member.team_scratch(scr_level), num_points_, num_points_);
                   ScrArray2D<Real> lu_matrix = ScrArray2D<Real>(member.team_scratch(scr_level), num_points_, num_points_);
@@ -119,18 +119,18 @@ TaskStatus RadiationFEMN::ExpRKUpdate(Driver *pdriver, int stage) {
                   member.team_barrier();
 
                   radiationfemn::LUInv<ScrArray2D<Real>, ScrArray1D<Real>, ScrArray1D<int>>(member, Q_matrix, Qinv_matrix, lu_matrix, x_array, b_array, pivots);
-                  member.team_barrier();
+                  member.team_barrier(); */
 
                   Kokkos::parallel_for(Kokkos::TeamThreadRange(member, 0, num_points_), [&](const int idx) {
-
+                    /*
                     Real final_result = 0.;
                     Kokkos::parallel_reduce(Kokkos::ThreadVectorRange(member, 0, num_points_), [&](const int A, Real &partial_sum) {
                       partial_sum += Qinv_matrix(idx, A) * (g_rhs_scratch(A) + 0);
                     }, final_result);
-                    member.team_barrier();
+                    member.team_barrier(); */
 
                     auto unifiedidx = IndicesUnited(nu, en, idx, num_species_, num_energy_bins_, num_points_);
-                    f0_(m, unifiedidx, k, j, i) = final_result;
+                    f0_(m, unifiedidx, k, j, i) = g_rhs_scratch(idx);
                   });
                   member.team_barrier();
                 });
