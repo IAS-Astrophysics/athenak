@@ -294,8 +294,7 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
           smooth_flag_(m,k,j,i) = true;
         }
       }
-
-      // if (customize_fofc_ && (sigma_cold > sigma_cold_cut_)) fofc_(m,k,j,i) = true;
+      if (customize_fofc_ && (sigma_cold > sigma_cold_cut_)) fofc_(m,k,j,i) = true;
 
       // apply velocity ceiling if necessary
       Real tmp = glower[1][1]*SQR(w.vx)
@@ -362,7 +361,9 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
 
       // convert scalars (if any)
       for (int n=nmhd; n<(nmhd+nscal); ++n) {
-        prim(m,n,k,j,i) = cons(m,n,k,j,i)/u.d;
+        if (!customize_fofc_) {
+          prim(m,n,k,j,i) = cons(m,n,k,j,i)/u.d;
+        }
       }
     }
   }, Kokkos::Sum<int>(nfloord_), Kokkos::Sum<int>(nfloore_), Kokkos::Sum<int>(nceilv_),

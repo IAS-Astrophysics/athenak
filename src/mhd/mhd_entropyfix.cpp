@@ -73,7 +73,7 @@ void MHD::EntropyReset() {
     Real u0 = gamma/alpha;
 
     // assign total entropy to the first scalar
-    u0_(m,entropyIdx,k,j,i) = gm1*wen / pow(wdn,gm1) * u0;
+    // u0_(m,entropyIdx,k,j,i) = gm1*wen / pow(wdn,gm1) * u0;
 
     if (customize_fofc_) {
       if (fofc_(m,k,j,i)) {
