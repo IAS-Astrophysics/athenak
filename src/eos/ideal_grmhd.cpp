@@ -383,7 +383,7 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
   }
 
   // fallback for the failure of variable inversion that uses the average of the valid primitives in adjacent cells
-  if (cellavg_fix_turn_on_) {
+  if ((cellavg_fix_turn_on_) && !(only_testfloors)) {
     par_for("adjacent_cellavg_fix", DevExeSpace(), 0, (nmb-1), kl, ku, jl, ju, il, iu,
     KOKKOS_LAMBDA(int m, int k, int j, int i) {
       // Check if the cell is in excised region
@@ -391,11 +391,6 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
       if (use_excise) {
         if (excision_floor_(m,k,j,i)) {
           excised = true;
-        }
-        if (only_testfloors) {
-          if (excision_flux_(m,k,j,i)) {
-            excised = true;
-          }
         }
       }
 
@@ -515,7 +510,7 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
         MHDPrim1D w;
         w.d = 0.0; w.vx = 0.0; w.vy = 0.0; w.vz = 0.0; w.e = 0.0;
         // Load cell-centered fields
-        if ((only_testfloors) || (c2p_test_)) {
+        if (c2p_test_) {
           // use input CC fields if only testing floors with FOFC
           w.bx = bcc(m,IBX,k,j,i);
           w.by = bcc(m,IBY,k,j,i);
