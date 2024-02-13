@@ -114,6 +114,9 @@ class PrimitiveSolverHydro {
     Real vmax = sqrt(1.0 - 1.0/(Wmax*Wmax));
     ps.GetEOSMutable().SetMaxVelocity(vmax);
 
+    // Set maximum B^2/D
+    ps.GetEOSMutable().SetMaximumMagnetization(pin->GetOrAddReal(block, "max_bsq", 1e6));
+
     for (int n = 0; n < ps.GetEOS().GetNSpecies(); n++) {
       std::stringstream spec_name;
       spec_name << "s" << (n + 1) << "_atmosphere";
