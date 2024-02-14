@@ -294,8 +294,8 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
       //     smooth_flag_(m,k,j,i) = true;
       //   }
       // }
-      // if (customize_fofc_ && (sigma_cold > sigma_cold_cut_)) fofc_(m,k,j,i) = true;
-      if (customize_fofc_) fofc_(m,k,j,i) = true;
+      if (customize_fofc_ && (sigma_cold > sigma_cold_cut_)) fofc_(m,k,j,i) = true;
+      // if (customize_fofc_) fofc_(m,k,j,i) = true;
 
 
       // apply velocity ceiling if necessary
