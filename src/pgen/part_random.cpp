@@ -37,7 +37,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   auto ppos = pmy_mesh_->pmb_pack->ppart->prtcl_pos;
   auto pvel = pmy_mesh_->pmb_pack->ppart->prtcl_vel;
   auto pgid = pmy_mesh_->pmb_pack->ppart->prtcl_gid;
-  auto &npart = pmy_mesh_->pmb_pack->ppart->nparticles_thispack;
+  auto &npart = pmy_mesh_->pmb_pack->ppart->nprtcl_thispack;
 
   // initialize particles
   Kokkos::Random_XorShift64_Pool<> rand_pool64(pmbp->gids);

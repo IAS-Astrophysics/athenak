@@ -45,12 +45,13 @@ void ParticleVTKOutput::LoadOutputData(Mesh *pm) {
   if (pm->multi_d) {ndim++;}
   if (pm->three_d) {ndim++;}
   particles::Particles *pp = pm->pmb_pack->ppart;
-  nout_part = pp->nparticles_thispack;
+  nout_part = pp->nprtcl_thispack;
   Kokkos::realloc(outpart_pos, nout_part, ndim);
   Kokkos::realloc(outpart_gid, nout_part);
 
   // Create mirror view on device of host view of output particle positions
-  auto d_outpart_pos = Kokkos::create_mirror_view(Kokkos::DefaultHostExecutionSpace(), outpart_pos);
+  auto d_outpart_pos = Kokkos::create_mirror_view(Kokkos::DefaultHostExecutionSpace(),
+                                                  outpart_pos);
   // Copy particle positions into device mirror
   Kokkos::deep_copy(d_outpart_pos, pp->prtcl_pos);
   // Copy particle positions from device mirror to host output array
@@ -126,17 +127,17 @@ void ParticleVTKOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
     std::fprintf(pfile,"%s",pts_msg.str().c_str());
 
     // Loop over particles, load positions into data[]
-    for (int p=0; p<(3*nout_part); (p+=3)) {
-      data[p] = static_cast<float>(outpart_pos(p,0));
+    for (int p=0; p<nout_part; ++p) {
+      data[3*p] = static_cast<float>(outpart_pos(p,0));
       if (pm->multi_d) {
-        data[p+1] = static_cast<float>(outpart_pos(p,1));
+        data[(3*p)+1] = static_cast<float>(outpart_pos(p,1));
       } else {
-        data[p+1] = static_cast<float>(pm->mesh_size.x2min);
+        data[(3*p)+1] = static_cast<float>(pm->mesh_size.x2min);
       }
       if (pm->three_d) {
-        data[p+2] = static_cast<float>(outpart_pos(p,2));
+        data[(3*p)+2] = static_cast<float>(outpart_pos(p,2));
       } else {
-        data[p+2] = static_cast<float>(pm->mesh_size.x3min);
+        data[(3*p)+2] = static_cast<float>(pm->mesh_size.x3min);
       }
     }
     // swap data for this variable into big endian order
