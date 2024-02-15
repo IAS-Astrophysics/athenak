@@ -596,3 +596,23 @@ void Mesh::NewTimeStep(const Real tlim) {
 
   return;
 }
+
+//----------------------------------------------------------------------------------------
+// \fn Mesh::AddCoordinatesAndPhysics
+
+void Mesh::AddCoordinatesAndPhysics(ParameterInput *pinput) {
+  // cycle over MeshBlockPacks on this rank and add Coordinates and Physics
+  for (int n=0; n<nmb_packs_thisrank; ++n) {
+    pmb_pack->AddCoordinates(pinput);
+    pmb_pack->AddPhysics(pinput);
+  }
+
+#if MPI_PARALLEL_ENABLED
+  nprtcl_eachrank = new int[global_variable::nranks];
+  // Share number of particles on each rank with all ranks
+  MPI_gatherv(MPI_IN_PLACE, &nprtcl_total, 1, MPI_ATHENA_INT, MPI_SUM, MPI_COMM_WORLD);
+
+  // Sum total number of particles across all ranks
+  MPI_Allreduce(MPI_IN_PLACE, &nprtcl_total, 1, MPI_ATHENA_INT, MPI_SUM, MPI_COMM_WORLD);
+#endif
+}
