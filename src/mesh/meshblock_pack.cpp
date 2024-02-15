@@ -87,7 +87,7 @@ void MeshBlockPack::AddPhysics(ParameterInput *pin) {
   int nphysics = 0;
   TaskID none(0);
 
-  // (1) Units
+  // (1) Units.  Create first so that they can be used in other physics constructors
   // Default units are simply code units
   if (pin->DoesBlockExist("units")) {
     punit = new units::Units(pin);
@@ -193,14 +193,6 @@ void MeshBlockPack::AddPhysics(ParameterInput *pin) {
     nphysics++;
   } else {
     ppart = nullptr;
-  }
-
-  // Units
-  // Default units are cgs units
-  if (pin->DoesBlockExist("units")) {
-    punit = new units::Units(pin);
-  } else {
-    punit = nullptr;
   }
 
   // Check that at least ONE is requested and initialized.

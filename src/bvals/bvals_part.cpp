@@ -188,8 +188,6 @@ TaskStatus ParticlesBoundaryValues::SetNewGID() {
     } else if (x3 > meshsize.x3max) {
       ppos(p,IPZ) -= (meshsize.x3max - meshsize.x3min);
     }
-/*
-*/
   });
 
 #if MPI_PARALLEL_ENABLED
