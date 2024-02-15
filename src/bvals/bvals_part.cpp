@@ -50,6 +50,7 @@ void UpdateGID(int &mp, NeighborBlock &nghbr, int myrank, DvceArray1D<int> &coun
 
 TaskStatus ParticlesBoundaryValues::SetNewGID() {
   // create local references for variables in kernel
+  auto gids = pmy_part->pmy_pack->gids;
   auto &ppos = pmy_part->prtcl_pos;
   auto &pgid = pmy_part->prtcl_gid;
   int npart = pmy_part->nprtcl_thispack;
@@ -60,113 +61,113 @@ TaskStatus ParticlesBoundaryValues::SetNewGID() {
   DvceArray1D<int> counter("SendCounter",1);
 
   par_for("part_update",DevExeSpace(),0,npart, KOKKOS_LAMBDA(const int p) {
-    int oldgid = pgid.d_view(p);  // prevent updated GID being used to index array
+    int m = pgid(p) - gids;
     Real x1 = ppos(p,IPX);
     Real x2 = ppos(p,IPY);
     Real x3 = ppos(p,IPZ);
 
-    if (x1 < mbsize.d_view(oldgid).x1min) {
-      if (x2 < mbsize.d_view(oldgid).x2min) {
-        if (x3 < mbsize.d_view(oldgid).x3min) {
+    if (x1 < mbsize.d_view(m).x1min) {
+      if (x2 < mbsize.d_view(m).x2min) {
+        if (x3 < mbsize.d_view(m).x3min) {
           // corner
-          UpdateGID(pgid.d_view(p), nghbr.d_view(oldgid,48), myrank);
-        } else if (x3 > mbsize.d_view(oldgid).x3max) {
+          UpdateGID(pgid(p), nghbr.d_view(m,48), myrank);
+        } else if (x3 > mbsize.d_view(m).x3max) {
           // corner
-          UpdateGID(pgid.d_view(p), nghbr.d_view(oldgid,52), myrank);
+          UpdateGID(pgid(p), nghbr.d_view(m,52), myrank);
         } else {
           // x1x2 edge
-          UpdateGID(pgid.d_view(p), nghbr.d_view(oldgid,16), myrank);
+          UpdateGID(pgid(p), nghbr.d_view(m,16), myrank);
         }
-      } else if (x2 > mbsize.d_view(oldgid).x2max) {
-        if (x3 < mbsize.d_view(oldgid).x3min) {
+      } else if (x2 > mbsize.d_view(m).x2max) {
+        if (x3 < mbsize.d_view(m).x3min) {
           // corner
-          UpdateGID(pgid.d_view(p), nghbr.d_view(oldgid,50), myrank);
-        } else if (x3 > mbsize.d_view(oldgid).x3max) {
+          UpdateGID(pgid(p), nghbr.d_view(m,50), myrank);
+        } else if (x3 > mbsize.d_view(m).x3max) {
           // corner
-          UpdateGID(pgid.d_view(p), nghbr.d_view(oldgid,54), myrank);
+          UpdateGID(pgid(p), nghbr.d_view(m,54), myrank);
         } else {
           // x1x2 edge
-          UpdateGID(pgid.d_view(p), nghbr.d_view(oldgid,20), myrank);
+          UpdateGID(pgid(p), nghbr.d_view(m,20), myrank);
         }
       } else {
-        if (x3 < mbsize.d_view(oldgid).x3min) {
+        if (x3 < mbsize.d_view(m).x3min) {
           // x3x1 edge
-          UpdateGID(pgid.d_view(p), nghbr.d_view(oldgid,32), myrank);
-        } else if (x3 > mbsize.d_view(oldgid).x3max) {
+          UpdateGID(pgid(p), nghbr.d_view(m,32), myrank);
+        } else if (x3 > mbsize.d_view(m).x3max) {
           // x3x1 edge
-          UpdateGID(pgid.d_view(p), nghbr.d_view(oldgid,36), myrank);
+          UpdateGID(pgid(p), nghbr.d_view(m,36), myrank);
         } else {
           // x1 face
-          UpdateGID(pgid.d_view(p), nghbr.d_view(oldgid,0), myrank);
+          UpdateGID(pgid(p), nghbr.d_view(m,0), myrank);
         }
       }
 
-    } else if (x1 > mbsize.d_view(oldgid).x1max) {
-      if (x2 < mbsize.d_view(oldgid).x2min) {
-        if (x3 < mbsize.d_view(oldgid).x3min) {
+    } else if (x1 > mbsize.d_view(m).x1max) {
+      if (x2 < mbsize.d_view(m).x2min) {
+        if (x3 < mbsize.d_view(m).x3min) {
           // corner
-          UpdateGID(pgid.d_view(p), nghbr.d_view(oldgid,49), myrank);
-        } else if (x3 > mbsize.d_view(oldgid).x3max) {
+          UpdateGID(pgid(p), nghbr.d_view(m,49), myrank);
+        } else if (x3 > mbsize.d_view(m).x3max) {
           // corner
-          UpdateGID(pgid.d_view(p), nghbr.d_view(oldgid,53), myrank);
+          UpdateGID(pgid(p), nghbr.d_view(m,53), myrank);
         } else {
           // x1x2 edge
-          UpdateGID(pgid.d_view(p), nghbr.d_view(oldgid,18), myrank);
+          UpdateGID(pgid(p), nghbr.d_view(m,18), myrank);
         }
-      } else if (x2 > mbsize.d_view(oldgid).x2max) {
-        if (x3 < mbsize.d_view(oldgid).x3min) {
+      } else if (x2 > mbsize.d_view(m).x2max) {
+        if (x3 < mbsize.d_view(m).x3min) {
           // corner
-          UpdateGID(pgid.d_view(p), nghbr.d_view(oldgid,51), myrank);
-        } else if (x3 > mbsize.d_view(oldgid).x3max) {
+          UpdateGID(pgid(p), nghbr.d_view(m,51), myrank);
+        } else if (x3 > mbsize.d_view(m).x3max) {
           // corner
-          UpdateGID(pgid.d_view(p), nghbr.d_view(oldgid,55), myrank);
+          UpdateGID(pgid(p), nghbr.d_view(m,55), myrank);
         } else {
           // x1x2 edge
-          UpdateGID(pgid.d_view(p), nghbr.d_view(oldgid,22), myrank);
+          UpdateGID(pgid(p), nghbr.d_view(m,22), myrank);
         }
       } else {
-        if (x3 < mbsize.d_view(oldgid).x3min) {
+        if (x3 < mbsize.d_view(m).x3min) {
           // x3x1 edge
-          UpdateGID(pgid.d_view(p), nghbr.d_view(oldgid,34), myrank);
-        } else if (x3 > mbsize.d_view(oldgid).x3max) {
+          UpdateGID(pgid(p), nghbr.d_view(m,34), myrank);
+        } else if (x3 > mbsize.d_view(m).x3max) {
           // x3x1 edge
-          UpdateGID(pgid.d_view(p), nghbr.d_view(oldgid,38), myrank);
+          UpdateGID(pgid(p), nghbr.d_view(m,38), myrank);
         } else {
           // x1 face
-          UpdateGID(pgid.d_view(p), nghbr.d_view(oldgid,4), myrank);
+          UpdateGID(pgid(p), nghbr.d_view(m,4), myrank);
         }
       }
 
     } else {
-      if (x2 < mbsize.d_view(oldgid).x2min) {
-        if (x3 < mbsize.d_view(oldgid).x3min) {
+      if (x2 < mbsize.d_view(m).x2min) {
+        if (x3 < mbsize.d_view(m).x3min) {
           // x2x3 edge
-          UpdateGID(pgid.d_view(p), nghbr.d_view(oldgid,40), myrank);
-        } else if (x3 > mbsize.d_view(oldgid).x3max) {
+          UpdateGID(pgid(p), nghbr.d_view(m,40), myrank);
+        } else if (x3 > mbsize.d_view(m).x3max) {
           // x2x3 edge
-          UpdateGID(pgid.d_view(p), nghbr.d_view(oldgid,44), myrank);
+          UpdateGID(pgid(p), nghbr.d_view(m,44), myrank);
         } else {
           // x2 face
-          UpdateGID(pgid.d_view(p), nghbr.d_view(oldgid,8), myrank);
+          UpdateGID(pgid(p), nghbr.d_view(m,8), myrank);
         }
-      } else if (x2 > mbsize.d_view(oldgid).x2max) {
-        if (x3 < mbsize.d_view(oldgid).x3min) {
+      } else if (x2 > mbsize.d_view(m).x2max) {
+        if (x3 < mbsize.d_view(m).x3min) {
           // x2x3 edge
-          UpdateGID(pgid.d_view(p), nghbr.d_view(oldgid,42), myrank);
-        } else if (x3 > mbsize.d_view(oldgid).x3max) {
+          UpdateGID(pgid(p), nghbr.d_view(m,42), myrank);
+        } else if (x3 > mbsize.d_view(m).x3max) {
           // x2x3 edge
-          UpdateGID(pgid.d_view(p), nghbr.d_view(oldgid,46), myrank);
+          UpdateGID(pgid(p), nghbr.d_view(m,46), myrank);
         } else {
           // x2 face
-          UpdateGID(pgid.d_view(p), nghbr.d_view(oldgid,12), myrank);
+          UpdateGID(pgid(p), nghbr.d_view(m,12), myrank);
         }
       } else {
-        if (x2 < mbsize.d_view(oldgid).x3min) {
+        if (x2 < mbsize.d_view(m).x2min) {
           // x3 face
-          UpdateGID(pgid.d_view(p), nghbr.d_view(oldgid,24), myrank);
-        } else if (x3 > mbsize.d_view(oldgid).x3max) {
+          UpdateGID(pgid(p), nghbr.d_view(m,24), myrank);
+        } else if (x3 > mbsize.d_view(m).x3max) {
           // x3 face
-          UpdateGID(pgid.d_view(p), nghbr.d_view(oldgid,28), myrank);
+          UpdateGID(pgid(p), nghbr.d_view(m,28), myrank);
         }
       }
     }
@@ -190,22 +191,6 @@ TaskStatus ParticlesBoundaryValues::SetNewGID() {
 /*
 */
   });
-
-/***/
-for (int p=0; p<npart; ++p) {
-    Real x1 = ppos(p,IPX);
-    Real x2 = ppos(p,IPY);
-    Real x3 = ppos(p,IPZ);
-    if ((x1 < meshsize.x1min) || (x1 > meshsize.x1max)) {
-std::cout <<"p="<<p<<"  x="<<ppos(p,IPX) << std::endl;
-    }
-    if ((x2 < meshsize.x2min) || (x2 > meshsize.x2max)) {
-std::cout <<"p="<<p<<"  y="<<ppos(p,IPY) << std::endl;
-    }
-    if ((x3 < meshsize.x3min) || (x3 > meshsize.x3max)) {
-std::cout <<"p="<<p<<"  z="<<ppos(p,IPZ) << std::endl;
-    }
-}
 
 #if MPI_PARALLEL_ENABLED
   // TODO (@jmstone)

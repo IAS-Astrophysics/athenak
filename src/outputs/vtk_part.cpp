@@ -57,8 +57,13 @@ void ParticleVTKOutput::LoadOutputData(Mesh *pm) {
   // Copy particle positions from device mirror to host output array
   Kokkos::deep_copy(outpart_pos, d_outpart_pos);
 
+  // Create mirror view on device of host view of output particle GIDs
+  auto d_outpart_gid = Kokkos::create_mirror_view(Kokkos::DefaultHostExecutionSpace(),
+                                                  outpart_gid);
+  // Copy particle positions into device mirror
+  Kokkos::deep_copy(d_outpart_gid, pp->prtcl_gid);
   // Copy particles gids from h_view to host output array
-  Kokkos::deep_copy(outpart_gid, pp->prtcl_gid.h_view);
+  Kokkos::deep_copy(outpart_gid, d_outpart_gid);
 }
 
 //----------------------------------------------------------------------------------------

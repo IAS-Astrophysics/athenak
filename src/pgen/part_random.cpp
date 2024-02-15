@@ -33,36 +33,43 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   }
 
   // capture variables for the kernel
-  auto &size = pmy_mesh_->mesh_size;
-  auto ppos = pmy_mesh_->pmb_pack->ppart->prtcl_pos;
-  auto pvel = pmy_mesh_->pmb_pack->ppart->prtcl_vel;
-  auto pgid = pmy_mesh_->pmb_pack->ppart->prtcl_gid;
+  auto &mbsize = pmy_mesh_->pmb_pack->pmb->mb_size;
+  auto &ppos = pmy_mesh_->pmb_pack->ppart->prtcl_pos;
+  auto &pvel = pmy_mesh_->pmb_pack->ppart->prtcl_vel;
+  auto &pgid = pmy_mesh_->pmb_pack->ppart->prtcl_gid;
   auto &npart = pmy_mesh_->pmb_pack->ppart->nprtcl_thispack;
+  auto gids = pmy_mesh_->pmb_pack->gids;
+  auto gide = pmy_mesh_->pmb_pack->gide;
 
   // initialize particles
   Kokkos::Random_XorShift64_Pool<> rand_pool64(pmbp->gids);
   par_for("part_update",DevExeSpace(),0,npart,
   KOKKOS_LAMBDA(const int p) {
     auto rand_gen = rand_pool64.get_state();  // get random number state this thread
-    ppos(p,IPX) = size.x1min + rand_gen.frand()*(size.x1max - size.x1min);
-    ppos(p,IPY) = size.x2min + rand_gen.frand()*(size.x2max - size.x2min);
-    ppos(p,IPZ) = size.x3min + rand_gen.frand()*(size.x3max - size.x3min);
+    // choose parent MeshBlock randomly
+    int m = static_cast<int>(rand_gen.frand()*(gide - gids + 1.0));
+    pgid(p) = gids + m;
+
+    ppos(p,IPX) = mbsize.d_view(m).x1min +
+                  rand_gen.frand()*(mbsize.d_view(m).x1max - mbsize.d_view(m).x1min);
+    ppos(p,IPY) = mbsize.d_view(m).x2min +
+                  rand_gen.frand()*(mbsize.d_view(m).x2max - mbsize.d_view(m).x2min);
+    ppos(p,IPZ) = mbsize.d_view(m).x3min +
+                  rand_gen.frand()*(mbsize.d_view(m).x3max - mbsize.d_view(m).x3min);
 
     pvel(p,IPX) = 2.0*(rand_gen.frand() - 0.5);
     pvel(p,IPY) = 2.0*(rand_gen.frand() - 0.5);
     pvel(p,IPZ) = 2.0*(rand_gen.frand() - 0.5);
 
-    pgid.d_view(p) = 0;
     rand_pool64.free_state(rand_gen);  // free state for use by other threads
   });
-  pmy_mesh_->pmb_pack->ppart->prtcl_gid.template modify<HostMemSpace>();
-  pmy_mesh_->pmb_pack->ppart->prtcl_gid.template sync<DevExeSpace>();
 
-  // set timestep (which will remain constant for entire run)
+  // set timestep (which will remain constant for entire run
   // Assumes uniform mesh (no SMR or AMR)
+  // Assumes velocities normalized to one, so dt=min(dx)
   Real &dtnew_ = pmy_mesh_->pmb_pack->ppart->dtnew;
-  dtnew_ = std::min(size.dx1, size.dx2);
-  dtnew_ = std::min(dtnew_, size.dx3);
+  dtnew_ = std::min(mbsize.h_view(0).dx1, mbsize.h_view(0).dx2);
+  dtnew_ = std::min(dtnew_, mbsize.h_view(0).dx3);
 
   return;
 }

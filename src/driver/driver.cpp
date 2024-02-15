@@ -366,7 +366,7 @@ void Driver::Execute(Mesh *pmesh, ParameterInput *pin, Outputs *pout) {
       pmesh->time = pmesh->time + pmesh->dt;
       pmesh->ncycle++;
       nmb_updated_ += pmesh->nmb_total;
-      npart_updated_ += pmesh->npart_total;
+      npart_updated_ += pmesh->nprtcl_total;
       // load balancing efficiency
       if (global_variable::nranks > 1) {
         int minnmb = std::numeric_limits<int>::max();
