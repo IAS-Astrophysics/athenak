@@ -121,6 +121,9 @@ class Mesh {
   int root_level; // logical level of root (physical) grid (e.g. Fig. 3 of method paper)
   int max_level;  // logical level of maximum refinement grid in Mesh
 
+  int nprtcl_thisrank;     // number of particles this rank
+  int nprtcl_total;        // total number of particles across all ranks
+
   // following 3x arrays allocated with length [nmb_total] in BuildTreeFromXXXX()
   float *cost_eachmb;            // cost of each MeshBlock
   int *rank_eachmb;              // rank of each MeshBlock
@@ -129,6 +132,8 @@ class Mesh {
   // following 2x arrays allocated with length [nranks] in BuildTreeFromXXXX()
   int *gids_eachrank;      // starting global ID of MeshBlocks in each rank
   int *nmb_eachrank;       // number of MeshBlocks on each rank
+  // following 1x arrays allocated with length [nranks] in AddPhysics()
+  int *nprtcl_eachrank;    // number of particles on each rank
 
   Real time, dt, cfl_no;
   int ncycle;

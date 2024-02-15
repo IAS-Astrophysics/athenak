@@ -37,8 +37,9 @@ Particles::Particles(MeshBlockPack *ppack, ParameterInput *pin) :
   int ncells = indcs.nx1*indcs.nx2*indcs.nx3;
   Real r_npart = ppc*static_cast<Real>((pmy_pack->nmb_thispack)*ncells);
   // then cast to integer
-  nparticles_thispack = static_cast<int>(r_npart);
-  pmy_pack->pmesh->npart_total = nparticles_thispack;
+  nprtcl_thispack = static_cast<int>(r_npart);
+  pmy_pack->pmesh->nprtcl_thisrank = nprtcl_thispack;
+  pmy_pack->pmesh->nprtcl_total = nprtcl_thispack;
 
   // select pusher algorithm
   std::string ppush = pin->GetString("particles","pusher");
@@ -53,9 +54,9 @@ Particles::Particles(MeshBlockPack *ppack, ParameterInput *pin) :
   // set dimensions of particle arrays
   int ndim=2;
   if (pmy_pack->pmesh->three_d) {ndim++;}
-  Kokkos::realloc(prtcl_pos, nparticles_thispack, ndim);
-  Kokkos::realloc(prtcl_vel, nparticles_thispack, ndim);
-  Kokkos::realloc(prtcl_gid, nparticles_thispack);
+  Kokkos::realloc(prtcl_pos, nprtcl_thispack, ndim);
+  Kokkos::realloc(prtcl_vel, nprtcl_thispack, ndim);
+  Kokkos::realloc(prtcl_gid, nprtcl_thispack);
 
   // allocate boundary object
   pbval_part = new ParticlesBoundaryValues(this, pin);
