@@ -144,9 +144,6 @@ class Mesh {
   std::unique_ptr<ProblemGenerator> pgen;  // class containing functions to set ICs
   MeshRefinement *pmr=nullptr;             // mesh refinement data/functions (if needed)
 
-  // total number of particles across all ranks
-  int npart_total;
-
   // functions
   void BuildTreeFromScratch(ParameterInput *pin);
   void BuildTreeFromRestart(ParameterInput *pin, IOWrapper &resfile);

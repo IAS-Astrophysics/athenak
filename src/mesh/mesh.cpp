@@ -46,7 +46,8 @@ Mesh::Mesh(ParameterInput *pin) :
   multi_d(false),
   strictly_periodic(true),
   nmb_packs_thisrank(1),
-  npart_total(0) {
+  nprtcl_thisrank(0),
+  nprtcl_total(0) {
   // Set physical size and number of cells in mesh (root level)
   mesh_size.x1min = pin->GetReal("mesh", "x1min");
   mesh_size.x1max = pin->GetReal("mesh", "x1max");

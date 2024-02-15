@@ -40,7 +40,7 @@ class Particles {
 
   // data
   int nprtcl_thispack;             // number of particles this MeshBlockPack
-  DualArray1D<int>  prtcl_gid;     // GID of MeshBlock containing each par
+  DvceArray1D<int>  prtcl_gid;     // GID of MeshBlock containing each par
   DvceArray2D<Real> prtcl_pos;     // positions
   DvceArray2D<Real> prtcl_vel;     // velocities
   DvceArray2D<Real> prtcl_rprop;   // real number properties each particle
