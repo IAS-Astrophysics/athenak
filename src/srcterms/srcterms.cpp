@@ -12,6 +12,7 @@
 #include "srcterms.hpp"
 
 #include <iostream>
+#include <string> // string
 
 #include "athena.hpp"
 #include "coordinates/cartesian_ks.hpp"

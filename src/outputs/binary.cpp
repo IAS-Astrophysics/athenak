@@ -17,6 +17,7 @@
 #include <sstream>
 #include <string>
 #include <vector>
+#include <algorithm> // min
 
 #include "athena.hpp"
 #include "globals.hpp"

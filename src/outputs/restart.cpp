@@ -15,6 +15,7 @@
 #include <iostream>
 #include <sstream>
 #include <string>
+#include <utility> // make_pair
 
 #include "athena.hpp"
 #include "coordinates/cell_locations.hpp"

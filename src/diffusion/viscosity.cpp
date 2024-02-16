@@ -11,6 +11,7 @@
 #include <algorithm>
 #include <limits>
 #include <iostream>
+#include <string> // string
 
 // Athena++ headers
 #include "athena.hpp"

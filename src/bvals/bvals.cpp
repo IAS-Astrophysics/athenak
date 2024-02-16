@@ -10,6 +10,7 @@
 #include <cstdlib>
 #include <iostream>
 #include <utility>
+#include <algorithm> // max
 
 #include "athena.hpp"
 #include "globals.hpp"
