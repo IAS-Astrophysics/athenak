@@ -31,6 +31,7 @@
 
 // C++ headers
 #include <cmath>
+#include <iostream> // cout
 
 // Athena++ headers
 #include "athena.hpp"

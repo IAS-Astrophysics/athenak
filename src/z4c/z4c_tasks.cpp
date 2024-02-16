@@ -8,6 +8,7 @@
 //  stagestart_tl, stagerun_tl, stageend_tl, operatorsplit_tl (currently not used)
 
 #include <iostream>
+#include <cstdio>
 
 #include "athena.hpp"
 #include "globals.hpp"
@@ -16,6 +17,7 @@
 #include "mesh/mesh.hpp"
 #include "bvals/bvals.hpp"
 #include "z4c/z4c.hpp"
+#include "z4c/z4c_puncture_tracker.hpp"
 
 namespace z4c {
 //----------------------------------------------------------------------------------------
@@ -66,6 +68,7 @@ void Z4c::AssembleZ4cTasks(TaskList &start, TaskList &run, TaskList &end) {
   id.z4tad = end.AddTask(&Z4c::Z4cToADM_, this, id.crecv);
   id.admc  = end.AddTask(&Z4c::ADMConstraints_, this, id.z4tad);
   id.weyl_scalar  = end.AddTask(&Z4c::CalcWeylScalar_, this, id.admc);
+  id.ptrck = end.AddTask(&Z4c::PunctureTracker, this, id.admc);
   return;
 }
 
@@ -259,6 +262,17 @@ TaskStatus Z4c::ApplyPhysicalBCs(Driver *pdrive, int stage) {
     // user BCs
     if (pmy_pack->pmesh->pgen->user_bcs) {
       (pmy_pack->pmesh->pgen->user_bcs_func)(pmy_pack->pmesh);
+    }
+  }
+  return TaskStatus::complete;
+}
+
+TaskStatus Z4c::PunctureTracker(Driver *pdrive, int stage) {
+  if (stage == pdrive->nexp_stages) {
+    for (auto ptracker : pmy_pack->pz4c_ptracker) {
+      ptracker->InterpolateShift(pmy_pack);
+      ptracker->EvolveTracker();
+      ptracker->WriteTracker();
     }
   }
   return TaskStatus::complete;

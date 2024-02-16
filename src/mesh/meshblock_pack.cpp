@@ -17,6 +17,7 @@
 #include "mhd/mhd.hpp"
 #include "adm/adm.hpp"
 #include "z4c/z4c.hpp"
+#include "z4c/z4c_puncture_tracker.hpp"
 #include "ion-neutral/ion_neutral.hpp"
 #include "diffusion/viscosity.hpp"
 #include "diffusion/resistivity.hpp"
@@ -43,10 +44,16 @@ MeshBlockPack::~MeshBlockPack() {
   if (phydro != nullptr) {delete phydro;}
   if (pmhd   != nullptr) {delete pmhd;}
   if (padm   != nullptr) {delete padm;}
-  if (pz4c   != nullptr) {delete pz4c;}
   if (prad   != nullptr) {delete prad;}
   if (pturb  != nullptr) {delete pturb;}
   if (punit  != nullptr) {delete punit;}
+  if (pz4c   != nullptr) {
+    delete pz4c;
+    for (auto ptracker : pz4c_ptracker) {
+      delete ptracker;
+    }
+    pz4c_ptracker.resize(0);
+  }
   // must be last, since it calls ~BoundaryValues() which (MPI) uses pmy_pack->pmb->nnghbr
   delete pmb;
 }
@@ -167,6 +174,15 @@ void MeshBlockPack::AddPhysics(ParameterInput *pin) {
     pz4c = new z4c::Z4c(this, pin);
     pz4c->AssembleZ4cTasks(start_tl, run_tl, end_tl);
     padm = new adm::ADM(this, pin);
+    // init puncture tracker
+    int npunct = pin->GetOrAddInteger("z4c", "npunct", 0);
+    if (npunct > 0) {
+      pz4c_ptracker.reserve(npunct);
+      for (int n = 0; n < npunct; ++n) {
+        pz4c_ptracker.push_back(new z4c::PunctureTracker(pmesh, pin, n));
+      }
+    }
+
     nphysics++;
   } else {
     pz4c = nullptr;

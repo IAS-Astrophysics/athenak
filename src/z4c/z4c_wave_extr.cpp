@@ -15,6 +15,8 @@
 #include <iomanip>
 #include <iostream>
 #include <fstream>
+#include <algorithm>
+#include <string>
 
 #ifdef MPI_PARALLEL
 #include <mpi.h>

@@ -10,6 +10,7 @@
 
 #include <limits>
 #include <iostream>
+#include <algorithm> // min
 
 #include "athena.hpp"
 #include "mesh/mesh.hpp"

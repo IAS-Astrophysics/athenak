@@ -9,6 +9,7 @@
 //  \brief defines MeshBlockPack class, a container for MeshBlocks
 
 #include <memory>
+#include <vector> // vector<>
 
 #include "parameter_input.hpp"
 #include "coordinates/coordinates.hpp"
@@ -20,6 +21,7 @@ class MeshBlock;
 namespace hydro {class Hydro;}
 namespace mhd {class MHD;}
 namespace z4c {class Z4c;}
+namespace z4c {class PunctureTracker;}
 namespace adm {class ADM;}
 namespace ion_neutral {class IonNeutral;}
 namespace radiation {class Radiation;}
@@ -56,6 +58,7 @@ class MeshBlockPack {
   mhd::MHD *pmhd=nullptr;
   adm::ADM *padm=nullptr;
   z4c::Z4c *pz4c=nullptr;
+  std::vector<z4c::PunctureTracker *> pz4c_ptracker;
   ion_neutral::IonNeutral *pionn=nullptr;
   radiation::Radiation *prad=nullptr;
   TurbulenceDriver *pturb=nullptr;

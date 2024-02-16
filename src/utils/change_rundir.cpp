@@ -9,6 +9,7 @@
 #include <sys/stat.h>  // mkdir()
 #include <unistd.h>    // chdir()
 #include <iostream>
+#include <string> // string
 
 #include "athena.hpp"
 

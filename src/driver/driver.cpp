@@ -10,6 +10,7 @@
 #include <iomanip>    // std::setprecision()
 #include <limits>
 #include <algorithm>
+#include <string> // string
 
 #include "athena.hpp"
 #include "globals.hpp"

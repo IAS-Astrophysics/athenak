@@ -12,6 +12,7 @@
 #include <algorithm>
 #include <limits>
 #include <string>
+#include <iostream> // cout
 
 // Athena++ headers
 #include "athena.hpp"

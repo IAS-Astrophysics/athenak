@@ -28,6 +28,7 @@
 #include <iostream>
 #include <string>
 #include <memory>
+#include <cstdio> // sscanf
 
 // Athena headers
 #include "athena.hpp"

@@ -9,6 +9,9 @@
 #include <iostream>
 #include <sstream>
 #include <string>   // std::string, to_string()
+#include <cstdio> // snprintf
+#include <algorithm> // min_element
+#include <utility> // pair<>
 
 #include "athena.hpp"
 #include "parameter_input.hpp"

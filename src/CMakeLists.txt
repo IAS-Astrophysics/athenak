@@ -74,16 +74,18 @@ add_executable(
         mhd/mhd_tasks.cpp
         mhd/mhd_update.cpp
 
-	z4c/z4c.cpp
-	z4c/z4c_adm.cpp
-	z4c/z4c_calcrhs.cpp
-	z4c/z4c_newdt.cpp
+        z4c/z4c.cpp
+        z4c/z4c_adm.cpp
+        z4c/z4c_calcrhs.cpp
+        z4c/z4c_newdt.cpp
         z4c/z4c_tasks.cpp
         z4c/z4c_update.cpp
         z4c/z4c_gauge.cpp
         z4c/z4c_Sbc.cpp
         z4c/z4c_calculate_weyl_scalars.cpp
         z4c/z4c_wave_extr.cpp
+        z4c/z4c_puncture_tracker.cpp
+        z4c/z4c_amr.cpp
 
 	outputs/io_wrapper.cpp
         outputs/outputs.cpp
@@ -125,6 +127,7 @@ add_executable(
         units/units.cpp
         utils/change_rundir.cpp
         utils/show_config.cpp
+        utils/lagrange_interpolator.cpp
 )
 
 # custom problem generator to be included in compile

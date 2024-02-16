@@ -21,6 +21,7 @@
 #include <iostream>
 #include <sstream>
 #include <string>
+#include <limits> // numeric_limits<>
 
 #include "athena.hpp"
 #include "coordinates/cell_locations.hpp"

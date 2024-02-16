@@ -10,6 +10,8 @@
 #include <cinttypes>
 #include <iostream>
 #include <limits>
+#include <cstdio> // fclose
+#include <string> // string
 
 #include "athena.hpp"
 #include "globals.hpp"
