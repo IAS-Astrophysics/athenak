@@ -36,9 +36,9 @@ class ResetFloor : public ErrorPolicyInterface {
                                              int n_species) const {
     if (n < n_atm*n_threshold) {
       n = n_atm;
-      /*v[0] = 0.0;
+      v[0] = 0.0;
       v[1] = 0.0;
-      v[2] = 0.0;*/
+      v[2] = 0.0;
       T = T_atm;
       for (int i = 0; i < n_species; i++) {
         Y[i] = Y_atm[i];

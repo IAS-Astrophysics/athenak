@@ -482,7 +482,7 @@ class PrimitiveSolverHydro {
   }
 
   // Get the transformed magnetosonic speeds at a point in a given direction.
-  KOKKOS_INLINE_FUNCTION
+  /*KOKKOS_INLINE_FUNCTION
   void GetGRFastMagnetosonicSpeeds(Real& lambda_p, Real& lambda_m,
                                    Real prim[NPRIM], Real bsq, Real g3d[NSPMETRIC],
                                    Real beta_u[3], Real alpha, Real gii,
@@ -525,9 +525,9 @@ class PrimitiveSolverHydro {
 
     lambda_p = alpha*(vu*(1.0 - cmsq) + sdis)/iWsq_ad - beta_u[index];
     lambda_m = alpha*(vu*(1.0 - cmsq) - sdis)/iWsq_ad - beta_u[index];
-  }
+  }*/
 
-  /*KOKKOS_INLINE_FUNCTION
+  KOKKOS_INLINE_FUNCTION
   void GetGRFastMagnetosonicSpeeds(Real& lambda_p, Real& lambda_m,
                                    Real prim[NPRIM], Real bsq, Real g3d[NSPMETRIC],
                                    Real beta_u[3], Real alpha, Real gii,
@@ -557,14 +557,14 @@ class PrimitiveSolverHydro {
     // Set fast magnetosonic speed in appropriate coordinates
     Real a = u0*u0 - (g00 + u0*u0)*cmsq;
     Real b = -2.0 * (u0 * u1 - (g01 + u0 * u1) *cmsq);
-    Real c = u1*u1 - (gii + u1*u1)*cmsq;
+    Real c = u1*u1 - (g11 + u1*u1)*cmsq;
     Real a1 = b / a;
     Real a0 = c / a;
     Real s = fmax(a1*a1 - 4.0 * a0, 0.0);
     s = sqrt(s);
     lambda_p = (a1 >= 0.0) ? -2.0 * a0 / (a1 + s) : (-a1 + s) / 2.0;
     lambda_m = (a1 >= 0.0) ? (-a1 - s) / 2.0 : -2.0 * a0 / (a1 - s);
-  }*/
+  }
 
   // A function for converting PrimitiveSolver errors to strings
   KOKKOS_INLINE_FUNCTION
