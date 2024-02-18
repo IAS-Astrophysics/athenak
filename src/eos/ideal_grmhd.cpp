@@ -289,7 +289,7 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
         Real a2 = SQR(bh_a);
         Real r_hor = 1.0 + sqrt(1.0 - a2);
         Real rr2 = SQR(x1v) + SQR(x2v) + SQR(x3v);
-        Real ss = np.sqrt(SQR(x1v) + SQR(x2v) - SQR(bh_a));
+        Real ss = sqrt(SQR(x1v) + SQR(x2v) - SQR(bh_a));
         Real r = sqrt(0.5 * (rr2 - a2 + sqrt(SQR(rr2 - a2) + 4.0*a2*SQR(x3v))));
         // if (r < r_hor + del_r) {
         if ((ss < r_hor + del_r) && (fabs(x3v) < r_hor + del_r)) {
