@@ -643,29 +643,83 @@ inline Real dxiIdpJ(int i, int j, Real x1, Real y1, Real z1, Real x2, Real y2, R
   return 1 / result;
 }
 
+// Derivative of FEM basis with respect to cartesian coordinates on the unit sphere
+inline Real dFEMBasisdxI(Real x1, Real y1, Real z1, Real x2, Real y2, Real z2, Real x3, Real y3, Real z3, Real xi1, Real xi2, Real xi3, int basis_index_a, int idx) {
+
+  Real result = 0.;
+  switch (idx) {
+    case 1:
+      result =
+          dFEMBasisdxi(xi1, xi2, xi3, basis_index_a, 1) * (y3 * z2 - y2 * z3) / (x3 * y2 * z1 - x2 * y3 * z1 - x3 * y1 * z2 + x1 * y3 * z2 + x2 * y1 * z3 - x1 * y2 * z3)
+              + dFEMBasisdxi(xi1, xi2, xi3, basis_index_a, 2) * (y3 * z1 - y1 * z3)
+                  / (-(x3 * y2 * z1) + x2 * y3 * z1 + x3 * y1 * z2 - x1 * y3 * z2 - x2 * y1 * z3 + x1 * y2 * z3)
+              + dFEMBasisdxi(xi1, xi2, xi3, basis_index_a, 3) * (y2 * z1 - y1 * z2)
+                  / (x3 * y2 * z1 - x2 * y3 * z1 - x3 * y1 * z2 + x1 * y3 * z2 + x2 * y1 * z3 - x1 * y2 * z3);
+      break;
+    case 2:
+      result =
+          dFEMBasisdxi(xi1, xi2, xi3, basis_index_a, 1) * (x3 * z2 - x2 * z3)
+              / (-(x3 * y2 * z1) + x2 * y3 * z1 + x3 * y1 * z2 - x1 * y3 * z2 - x2 * y1 * z3 + x1 * y2 * z3)
+              + dFEMBasisdxi(xi1, xi2, xi3, basis_index_a, 2) * (x3 * z1 - x1 * z3)
+                  / (x3 * y2 * z1 - x2 * y3 * z1 - x3 * y1 * z2 + x1 * y3 * z2 + x2 * y1 * z3 - x1 * y2 * z3)
+              + dFEMBasisdxi(xi1, xi2, xi3, basis_index_a, 3) * (x2 * z1 - x1 * z2)
+                  / (-(x3 * y2 * z1) + x2 * y3 * z1 + x3 * y1 * z2 - x1 * y3 * z2 - x2 * y1 * z3 + x1 * y2 * z3);
+      break;
+    case 3:
+      result =
+          dFEMBasisdxi(xi1, xi2, xi3, basis_index_a, 1) * (x3 * y2 - x2 * y3) / (x3 * y2 * z1 - x2 * y3 * z1 - x3 * y1 * z2 + x1 * y3 * z2 + x2 * y1 * z3 - x1 * y2 * z3)
+              + dFEMBasisdxi(xi1, xi2, xi3, basis_index_a, 2) * (x3 * y1 - x1 * y3)
+                  / (-(x3 * y2 * z1) + x2 * y3 * z1 + x3 * y1 * z2 - x1 * y3 * z2 - x2 * y1 * z3 + x1 * y2 * z3)
+              + dFEMBasisdxi(xi1, xi2, xi3, basis_index_a, 3) * (x2 * y1 - x1 * y2)
+                  / (x3 * y2 * z1 - x2 * y3 * z1 - x3 * y1 * z2 + x1 * y3 * z2 + x2 * y1 * z3 - x1 * y2 * z3);
+      break;
+  }
+  return result;
+}
+
+inline Real Rmatrix(Real x1, Real y1, Real z1, Real x2, Real y2, Real z2, Real x3, Real y3, Real z3, Real xi1, Real xi2, Real xi3, int i, int ihat) {
+
+  Real xval, yval, zval;
+  BarycentricToCartesian(x1, y1, z1, x2, y2, z2, x3, y3, z3, xi1, xi2, xi3, xval, yval, zval);
+
+  Real rval = sqrt(xval * xval + yval * yval + zval * zval);
+  Real thetaval = acos(zval / rval);
+  Real phival = atan2(yval, xval);
+
+  Real result = 0.;
+  if (i == 1 && ihat == 1) {
+    result = 1. - sin(thetaval) * sin(thetaval) * cos(thetaval) * cos(thetaval);
+  } else if (i == 1 && ihat == 2) {
+    result = -sin(thetaval) * sin(thetaval) * sin(phival) * cos(phival);
+  } else if (i == 1 && ihat == 3) {
+    result = -sin(thetaval);
+  } else if (i == 2 && ihat == 1) {
+    result = -sin(thetaval) * sin(thetaval) * sin(phival) * cos(phival);
+  } else if (i == 2 && ihat == 2) {
+    result = 1. - sin(thetaval) * sin(thetaval) * sin(phival) * sin(phival);
+  } else if (i == 2 && ihat == 3) {
+    result = -sin(thetaval) * cos(thetaval) * sin(phival);
+  } else if (i == 3 && ihat == 1) {
+    result = -sin(thetaval) * cos(thetaval) * cos(phival);
+  } else if (i == 3 && ihat == 2) {
+    result = -sin(thetaval) * cos(thetaval) * sin(phival);
+  } else if (i == 3 && ihat == 3) {
+    result = sin(thetaval) * sin(thetaval);
+  } else {
+    result = -42.;
+  }
+
+  return result;
+}
+
 Real dFEMBasisdp(int ihat, int a, int t1, int t2, int t3, Real x1, Real y1, Real z1, Real x2, Real y2, Real z2, Real x3, Real y3, Real z3,
                  Real xi1, Real xi2, Real xi3, int basis_choice) {
 
   int basis_index_a = (a == t1) * 1 + (a == t2) * 2 + (a == t3) * 3;
 
-  Real result = 0;
-  if (ihat == 1) {
-    result = dFEMBasisdxi(xi1, xi2, xi3, basis_index_a, 1) * dxiIdpJ(1, ihat, x1, y1, z1, x2, y2, z2, x3, y3, z3, xi1, xi2, xi3)
-        + dFEMBasisdxi(xi1, xi2, xi3, basis_index_a, 2) * dxiIdpJ(2, ihat, x1, y1, z1, x2, y2, z2, x3, y3, z3, xi1, xi2, xi3)
-        + dFEMBasisdxi(xi1, xi2, xi3, basis_index_a, 3) * dxiIdpJ(3, ihat, x1, y1, z1, x2, y2, z2, x3, y3, z3, xi1, xi2, xi3);
-  } else if (ihat == 2) {
-    result = dFEMBasisdxi(xi1, xi2, xi3, basis_index_a, 1) * dxiIdpJ(1, ihat, x1, y1, z1, x2, y2, z2, x3, y3, z3, xi1, xi2, xi3)
-        + dFEMBasisdxi(xi1, xi2, xi3, basis_index_a, 2) * dxiIdpJ(2, ihat, x1, y1, z1, x2, y2, z2, x3, y3, z3, xi1, xi2, xi3)
-        + dFEMBasisdxi(xi1, xi2, xi3, basis_index_a, 3) * dxiIdpJ(3, ihat, x1, y1, z1, x2, y2, z2, x3, y3, z3, xi1, xi2, xi3);
-  } else if (ihat == 3) {
-    result = dFEMBasisdxi(xi1, xi2, xi3, basis_index_a, 1) * dxiIdpJ(1, ihat, x1, y1, z1, x2, y2, z2, x3, y3, z3, xi1, xi2, xi3)
-        + dFEMBasisdxi(xi1, xi2, xi3, basis_index_a, 2) * dxiIdpJ(2, ihat, x1, y1, z1, x2, y2, z2, x3, y3, z3, xi1, xi2, xi3)
-        + dFEMBasisdxi(xi1, xi2, xi3, basis_index_a, 3) * dxiIdpJ(3, ihat, x1, y1, z1, x2, y2, z2, x3, y3, z3, xi1, xi2, xi3);
-  } else {
-    //std::cout << "Incorrect choice of index ihat!" << std::endl;
-    exit(EXIT_FAILURE);
-  }
-
+  Real result = dFEMBasisdxI(x1, y1, z1, x2, y2, z2, x3, y3, z3, xi1, xi2, xi3, basis_index_a, 1) * Rmatrix(x1, y1, z1, x2, y2, z2, x3, y3, z3, xi1, xi2, xi3, 1, ihat)
+      + dFEMBasisdxI(x1, y1, z1, x2, y2, z2, x3, y3, z3, xi1, xi2, xi3, basis_index_a, 2) * Rmatrix(x1, y1, z1, x2, y2, z2, x3, y3, z3, xi1, xi2, xi3, 1, ihat)
+      + dFEMBasisdxI(x1, y1, z1, x2, y2, z2, x3, y3, z3, xi1, xi2, xi3, basis_index_a, 3) * Rmatrix(x1, y1, z1, x2, y2, z2, x3, y3, z3, xi1, xi2, xi3, 1, ihat);
   return result;
 }
 } // namespace radiationfemn
