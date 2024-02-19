@@ -61,7 +61,7 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
   DvceArray4D<Real> tgas_radsource_;
   if (is_radiation_enabled_) tgas_radsource_ = pmy_pack->prad->tgas_radsource;
   bool &cellavg_fix_turn_on_ = pmy_pack->pmhd->cellavg_fix_turn_on;
-  bool is_horsmooth_ = true; 
+  bool is_horsmooth_ = true;
 
   // flags and variables for entropy fix
   auto &entropy_fix_ = pmy_pack->pmhd->entropy_fix;
@@ -285,7 +285,7 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
       // }
 
       if (is_horsmooth_) {
-        Real del_r = 0.2;
+        Real del_r = 0.3;
         Real bh_a = 0.9375;
         Real a2 = SQR(bh_a);
         Real r_hor = 1.0 + sqrt(1.0 - a2);
