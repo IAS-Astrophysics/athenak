@@ -25,7 +25,7 @@ enum class ParticlesPusher {drift, leap_frog, lagrangian_tracer, lagrangian_mc};
 struct ParticlesTaskIDs {
   TaskID push;
   TaskID newgid;
-  TaskID sendcnt;
+  TaskID count;
 };
 
 namespace particles {
