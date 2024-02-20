@@ -210,7 +210,7 @@ void MeshVTKOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
         }
         if (!big_end) {
           for (int i=0; i<(nx1*nx2*nx3); ++i) {
-            swap_function::Swap4Bytes(&data[i]);
+            Swap4Bytes(&data[i]);
           }
         }
         // create new datatype representing this block in grid of MBs, and set file view

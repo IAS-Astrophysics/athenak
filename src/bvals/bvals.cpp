@@ -215,10 +215,25 @@ void MeshBoundaryValues::InitializeBuffers(const int nvar) {
 //----------------------------------------------------------------------------------------
 // ParticlesBoundaryValues constructor:
 
-particles::ParticlesBoundaryValues::ParticlesBoundaryValues(particles::Particles *pp, ParameterInput *pin) :
+particles::ParticlesBoundaryValues::ParticlesBoundaryValues(
+  particles::Particles *pp, ParameterInput *pin) :
+    prtcl_sendlist("send_list",1),
     pmy_part(pp) {
 #if MPI_PARALLEL_ENABLED
+  // Guess that no more than 10% of particles will be communicated
+  int npart = pmy_part->nprtcl_thispack;
+  Kokkos::realloc(prtcl_sendlist, static_cast<int>(0.1*npart));
+
+  //resize vectors over number of ranks
+  ncounts_eachrank.resize(global_variable::nranks);
+
   // create unique communicator for particles
-  MPI_Comm_dup(MPI_COMM_WORLD, &part_comm);
+  MPI_Comm_dup(MPI_COMM_WORLD, &mpi_comm_part);
 #endif
+}
+
+//----------------------------------------------------------------------------------------
+// destructor
+
+particles::ParticlesBoundaryValues::~ParticlesBoundaryValues() {
 }
