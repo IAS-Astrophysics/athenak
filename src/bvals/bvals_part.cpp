@@ -21,7 +21,9 @@
 
 //----------------------------------------------------------------------------------------
 //! \fn void ParticlesBoundaryValues::UpdateGID()
-//! \brief
+//! \brief Updates GID of particles that cross boundary of their parent MeshBlock.  If
+//! the new GID is on a different rank, then store (1) index of particle in prtcl array,
+//! (2) destination GID, and (3) destination rank in prtcl_sendlist DvceArray.
 
 namespace particles {
 
@@ -187,20 +189,20 @@ TaskStatus ParticlesBoundaryValues::SetNewPrtclGID() {
       ppos(p,IPZ) -= (meshsize.x3max - meshsize.x3min);
     }
   });
-  npart_send = counter;
+  nprtcl_send = counter;
 
   return TaskStatus::complete;
 }
 
 
 //----------------------------------------------------------------------------------------
-//! \fn void ParticlesBoundaryValues::SendCounts()
+//! \fn void ParticlesBoundaryValues::CountSendsAndRecvs()
 //! \brief
 
-TaskStatus ParticlesBoundaryValues::SendPrtclCounts() {
+TaskStatus ParticlesBoundaryValues::CountSendsAndRecvs() {
 #if MPI_PARALLEL_ENABLED
   // Get copy of send list on host
-  auto sendlist = Kokkos::subview(prtcl_sendlist, std::make_pair(0,npart_send));
+  auto sendlist = Kokkos::subview(prtcl_sendlist, std::make_pair(0,nprtcl_send));
   auto sendlist_h = Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace(), sendlist);
 
   // Sort send list on host by new_rank.
@@ -208,95 +210,96 @@ TaskStatus ParticlesBoundaryValues::SendPrtclCounts() {
   std::sort(KE::begin(sendlist_h), KE::end(sendlist_h), SortByRank);
 
 /***/
-for (int n=0; n<npart_send; ++n) {
+for (int n=0; n<nprtcl_send; ++n) {
 std::cout << "rank="<<global_variable::my_rank<<"  (n,indx,rank,gid)=" << n<<"  "<<sendlist_h(n).prtcl_indx<<"  "<<sendlist_h(n).dest_rank<<"  "<<sendlist_h(n).dest_gid << std::endl;
 }
 /****/
 
-  // load STL::vector with <sendrank, recvrank,nprtcl_tosend> tuples.
-  // Length is nranks_tosendto.  Use vector since initially length is unknown
-  counts_thisrank.clear();
-  if (npart_send > 0) {
+  // load STL::vector with <sendrank, recvrank, nprtcl_tosend> tuples for particles sends
+  // from this rank. Length will be nsends; initially this length is unknown
+  sends_thisrank.clear();
+  if (nprtcl_send > 0) {
     int &myrank = global_variable::my_rank;
     int rank = sendlist_h(0).dest_rank;
     int nprtcl = 1;
 
-    for (int n=1; n<npart_send; ++n) {
+    for (int n=1; n<nprtcl_send; ++n) {
       if (sendlist_h(n).dest_rank == rank) {
         ++nprtcl;
       } else {
-        counts_thisrank.emplace_back(std::make_tuple(myrank,rank,nprtcl));
+        sends_thisrank.emplace_back(std::make_tuple(myrank,rank,nprtcl));
         rank = sendlist_h(n).dest_rank;
         nprtcl = 1;
       }
     }
-    counts_thisrank.emplace_back(std::make_tuple(myrank,rank,nprtcl));
+    sends_thisrank.emplace_back(std::make_tuple(myrank,rank,nprtcl));
   }
-  ncounts = counts_thisrank.size();
+  nsends = sends_thisrank.size();
 
 /***/
 {
 int ierr = MPI_Barrier(MPI_COMM_WORLD);
-for (int n=0; n<ncounts; ++n) {
-std::cout << "n="<<n<< "  (sendrank,destrank,npart)=" << std::get<0>(counts_thisrank[n])<<"  "<<std::get<1>(counts_thisrank[n]) << "  "<<std::get<2>(counts_thisrank[n]) << std::endl;
+for (int n=0; n<nsends; ++n) {
+std::cout << "n="<<n<< "  (sendrank,destrank,npart)=" << std::get<0>(sends_thisrank[n])<<"  "<<std::get<1>(sends_thisrank[n]) << "  "<<std::get<2>(sends_thisrank[n]) << std::endl;
 }
 }
 /****/
 
-  // Share number of ranks to send to with all ranks
-  ncounts_eachrank[global_variable::my_rank] = ncounts;
-  MPI_Allgather(&ncounts, 1, MPI_INT, ncounts_eachrank.data(), 1, MPI_INT, mpi_comm_part);
+  // Share number of ranks to send to amongst all ranks
+  nsends_eachrank[global_variable::my_rank] = nsends;
+  MPI_Allgather(&nsends, 1, MPI_INT, nsends_eachrank.data(), 1, MPI_INT, mpi_comm_part);
 
 /***/
 {
 int ierr = MPI_Barrier(MPI_COMM_WORLD);
 if (global_variable::my_rank == 0) {
 for (int n=0; n<global_variable::nranks; ++n) {
-std::cout << "n="<<n<<"  counts_eachrank="<<ncounts_eachrank[n]<< std::endl;
+std::cout << "n="<<n<<"  sends_eachrank="<<nsends_eachrank[n]<< std::endl;
 }
 }
 }
 /****/
 
-
-  // Create vector of starting indices of <dest_rank,nprtcl_tosend> pairs over all ranks
-  std::vector<int> ncounts_displ;
-  ncounts_displ.resize(global_variable::nranks);
-  ncounts_displ[0] = 0;
+  // Now share <sendrank, recvrank, nprtcl_tosend> tuples amongst all ranks
+  // First create vector of starting indices of tuples in full vector
+  std::vector<int> nsends_displ;
+  nsends_displ.resize(global_variable::nranks);
+  nsends_displ[0] = 0;
   for (int n=1; n<(global_variable::nranks); ++n) {
-    ncounts_displ[n] = ncounts_displ[n-1] + ncounts_eachrank[n-1];
+    nsends_displ[n] = nsends_displ[n-1] + nsends_eachrank[n-1];
   }
-  int ncounts_allranks = ncounts_displ[global_variable::nranks - 1] +
-                         ncounts_eachrank[global_variable::nranks - 1];
-  counts_allranks.resize(ncounts_allranks);
+  int nsends_allranks = nsends_displ[global_variable::nranks - 1] +
+                        nsends_eachrank[global_variable::nranks - 1];
 /***/
 {
 int ierr = MPI_Barrier(MPI_COMM_WORLD);
 if (global_variable::my_rank == 0) {
 for (int n=0; n<global_variable::nranks; ++n) {
-std::cout << "n="<<n<<"  ncounts_displ="<<ncounts_displ[n]<< std::endl;
+std::cout << "n="<<n<<"  nsends_displ="<<nsends_displ[n]<< std::endl;
 }
-std::cout << "ncounts_allranks = " << ncounts_allranks << std::endl;
+std::cout << "nsends_allranks = " << nsends_allranks << std::endl;
 }
 }
 /****/
 
-  for (int n=0; n<ncounts_eachrank[global_variable::my_rank]; ++n) {
-    counts_allranks[n + ncounts_displ[global_variable::my_rank]] = counts_thisrank[n];
+  // Load tuples on this rank into full vector
+  sends_allranks.resize(nsends_allranks);
+  for (int n=0; n<nsends_eachrank[global_variable::my_rank]; ++n) {
+    sends_allranks[n + nsends_displ[global_variable::my_rank]] = sends_thisrank[n];
   }
 
-
+  // Share tuples using MPI derived data type for tuple of 3*int
   MPI_Datatype mpi_ituple;
   MPI_Type_contiguous(3, MPI_INT, &mpi_ituple);
-  MPI_Allgatherv(MPI_IN_PLACE, ncounts_eachrank[global_variable::my_rank],
-                   mpi_ituple, counts_allranks.data(), ncounts_eachrank.data(),
-                   ncounts_displ.data(), mpi_ituple, mpi_comm_part);
+  MPI_Allgatherv(MPI_IN_PLACE, nsends_eachrank[global_variable::my_rank],
+                   mpi_ituple, sends_allranks.data(), nsends_eachrank.data(),
+                   nsends_displ.data(), mpi_ituple, mpi_comm_part);
 /***/
 {
 int ierr = MPI_Barrier(MPI_COMM_WORLD);
 if (global_variable::my_rank == 0) {
-for (int n=0; n<ncounts_allranks; ++n) {
-std::cout << "n="<<n<< "  (sendrank,destrank,npart)=" << std::get<0>(counts_allranks[n])<<"  "<<std::get<1>(counts_allranks[n]) << "  "<<std::get<2>(counts_allranks[n]) << std::endl;
+for (int n=0; n<nsends_allranks; ++n) {
+std::cout << "n="<<n<< "  (sendrank,destrank,npart)=" << std::get<0>(sends_allranks[n])<<"  "<<std::get<1>(sends_allranks[n]) << "  "<<std::get<2>(sends_allranks[n]) << std::endl;
 }
 }
 }
@@ -306,7 +309,6 @@ std::cout << "n="<<n<< "  (sendrank,destrank,npart)=" << std::get<0>(counts_allr
   return TaskStatus::complete;
 }
 
-/*
 //----------------------------------------------------------------------------------------
 //! \fn void ParticlesBoundaryValues::InitPrtclRecv()
 //! \brief
@@ -314,35 +316,57 @@ std::cout << "n="<<n<< "  (sendrank,destrank,npart)=" << std::get<0>(counts_allr
 TaskStatus ParticlesBoundaryValues::InitPrtclRecv() {
 #if MPI_PARALLEL_ENABLED
 
-  // Figure out how many ranks will send to this rank
-  // load STL::vector with <origin_rank,nprtcl_recv> tuples. Length is nranks_recvfrom
-  ranks_recvfrom.clear();
-  if (npart_recv > 0) {
-    int rank = sendlist_h(0).dest_rank;
-    int nprtcl = 1;
+  // load STL::vector with <sendrank,recvrank,nprtcl_recv> tuples for particle receives
+  // on this rank. Length will be nrecvs, initially this length is unknown
+  recvs_thisrank.clear();
 
-    for (int n=0; n<npart_send; ++n) {
-      if (sendlist_h(n).dest_rank == rank) {
-        ++nprtcl;
-      } else {
-        ranks_tosendto.emplace_back(std::make_pair(rank,nprtcl));
-        rank = sendlist_h(0).dest_rank;
-        nprtcl = 1;
-      }
+  int nsends_allranks = sends_allranks.size();
+  for (int n=0; n<nsends_allranks; ++n) {
+    if (std::get<1>(sends_allranks[n]) == global_variable::my_rank) {
+      recvs_thisrank.emplace_back(sends_allranks[n]);
     }
   }
-  nranks_tosendto = ranks_tosendto.size();
+  nrecvs = recvs_thisrank.size();
 
-  // Figure out how many partciles will be received from each rank that sends
-  //
+  // Figure out how many particles will be received from all ranks
+  nprtcl_recv=0;
+  for (int n=0; n<nrecvs; ++n) {
+    nprtcl_recv += std::get<2>(recvs_thisrank[n]);
+  }
+
   // Allocate receive buffer
-  Kokkos::realloc(part_recvbuff, nprtcl_recv);
+  Kokkos::realloc(prtcl_recvbuf, nprtcl_recv);
 
   // Post non-blocking receives
+  bool no_errors=true;
+  int data_start=0;
+  recv_req.clear();
+  for (int n=0; n<nrecvs; ++n) { recv_req.emplace_back(MPI_REQUEST_NULL); }
 
+  for (int n=0; n<nrecvs; ++n) {
+    // calculate amount of data to be passed, get pointer to variables
+    int data_size = std::get<2>(recvs_thisrank[n])*sizeof(ParticleData);
+    int data_end = data_start + std::get<2>(recvs_thisrank[n]);
+    auto recv_ptr = Kokkos::subview(prtcl_recvbuf, std::make_pair(data_start, data_end));
+    int drank = std::get<0>(recvs_thisrank[n]);
+
+    // Post non-blocking receive
+    int ierr = MPI_Irecv(recv_ptr.data(), data_size, MPI_BYTE, drank, MPI_ANY_TAG,
+                         mpi_comm_part, &(recv_req[n]));
+    if (ierr != MPI_SUCCESS) {no_errors=false;}
+  }
+
+  // Quit if MPI error detected
+  if (!(no_errors)) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+              << std::endl << "MPI error in posting non-blocking receives" << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
 #endif
+  return TaskStatus::complete;
 }
 
+/*
 //----------------------------------------------------------------------------------------
 //! \fn void ParticlesBoundaryValues::PackAndSendParticles()
 //! \brief
@@ -358,6 +382,7 @@ TaskStatus ParticlesBoundaryValues::PackAndSendParticles() {
   // Post sends using address of send buffer with appropriate offset and nelements
 
 #endif
+  return TaskStatus::complete;
 }
 
 //----------------------------------------------------------------------------------------
@@ -368,9 +393,9 @@ TaskStatus ParticlesBoundaryValues::RecvAndUnpackParticles() {
 #if MPI_PARALLEL_ENABLED
 
   // TODO (@jmstone)
-  // if (npart_recv > npart_send)
+  // if (npart_recv > nprtcl_send)
   //    increase size of particle arrays
-  // else if (npart_recv < npart_send)
+  // else if (npart_recv < nprtcl_send)
   //    trim size of particle arrays
   // else do nothing
   //
@@ -381,6 +406,7 @@ TaskStatus ParticlesBoundaryValues::RecvAndUnpackParticles() {
   //
   // Update nparticles_thisrank.  Update cost array (use npart_thismb[nmb]?)
 #endif
+  return TaskStatus::complete;
 }
 
 //----------------------------------------------------------------------------------------
@@ -396,6 +422,7 @@ TaskStatus ParticlesBoundaryValues::ClearSend() {
   // deallocate any vectors created (nranks_sendto, etc.)
 
 #endif
+  return TaskStatus::complete;
 }
 
 //----------------------------------------------------------------------------------------
@@ -411,6 +438,7 @@ TaskStatus ParticlesBoundaryValues::ClearRecv() {
   // deallocate any vectors created (nranks_recvfrom, etc.)
 
 #endif
+  return TaskStatus::complete;
 }
 
 */

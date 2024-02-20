@@ -225,7 +225,7 @@ particles::ParticlesBoundaryValues::ParticlesBoundaryValues(
   Kokkos::realloc(prtcl_sendlist, static_cast<int>(0.1*npart));
 
   //resize vectors over number of ranks
-  ncounts_eachrank.resize(global_variable::nranks);
+  nsends_eachrank.resize(global_variable::nranks);
 
   // create unique communicator for particles
   MPI_Comm_dup(MPI_COMM_WORLD, &mpi_comm_part);

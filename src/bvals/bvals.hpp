@@ -243,26 +243,30 @@ class ParticlesBoundaryValues {
   ParticlesBoundaryValues(particles::Particles *ppart, ParameterInput *pin);
   ~ParticlesBoundaryValues();
 
-  int npart_send, npart_recv;
+  int nprtcl_send, nprtcl_recv;
   DvceArray1D<ParticleSendData> prtcl_sendlist;
 
   // Data needed to count number of messages and particles to send between ranks
-  int ncounts; // number of MPI sends to neighboring ranks on this rank
-  std::vector<int> ncounts_eachrank;                    //length nranks
-  std::vector<std::tuple<int,int,int>> counts_thisrank; //length ncounts
-  std::vector<std::tuple<int,int,int>> counts_allranks; //length ncounts summed over ranks
+  int nsends; // number of MPI sends to neighboring ranks on this rank
+  int nrecvs; // number of MPI recvs from neighboring ranks on this rank
+  std::vector<int> nsends_eachrank;                    //length nranks
+  std::vector<std::tuple<int,int,int>> sends_thisrank; //length nsends
+  std::vector<std::tuple<int,int,int>> recvs_thisrank; //length nrecvs
+  std::vector<std::tuple<int,int,int>> sends_allranks; //length ncounts summed over ranks
+
+  DvceArray1D<ParticleData> prtcl_sendbuf, prtcl_recvbuf;
 
 #if MPI_PARALLEL_ENABLED
-  // unique MPI communicators for particles
-  MPI_Comm mpi_comm_part;
+  std::vector<MPI_Request> recv_req, send_req;  // vectors of requests
+  MPI_Comm mpi_comm_part;                       // unique MPI communicators for particles
 #endif
 
   //functions
   TaskStatus SetNewPrtclGID();
-  TaskStatus SendPrtclCounts();
+  TaskStatus CountSendsAndRecvs();
+  TaskStatus InitPrtclRecv();
 
 /**
-  TaskStatus InitPrtclRecv(const int nvar);
   TaskStatus PackAndSendPrtcl();
   TaskStatus RecvAndUnpackPrtcl();
   TaskStatus ClearPrtclRecv();

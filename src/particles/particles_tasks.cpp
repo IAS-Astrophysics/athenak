@@ -26,9 +26,9 @@ void Particles::AssembleTasks(std::map<std::string, std::shared_ptr<TaskList>> t
   TaskID none(0);
 
   // particle integration done in "before_timeintegrator" task list
-  id.push    = tl["before_timeintegrator"]->AddTask(&Particles::Push, this, none);
-  id.newgid  = tl["before_timeintegrator"]->AddTask(&Particles::NewGID, this, id.push);
-  id.sendcnt = tl["before_timeintegrator"]->AddTask(&Particles::SendCnt, this, id.push);
+  id.push   = tl["before_timeintegrator"]->AddTask(&Particles::Push, this, none);
+  id.newgid = tl["before_timeintegrator"]->AddTask(&Particles::NewGID, this, id.push);
+  id.count  = tl["before_timeintegrator"]->AddTask(&Particles::SendCnt, this, id.newgid);
 
   return;
 }
@@ -49,7 +49,7 @@ TaskStatus Particles::NewGID(Driver *pdrive, int stage) {
 //! MPI between all ranks
 
 TaskStatus Particles::SendCnt(Driver *pdrive, int stage) {
-  TaskStatus tstat = pbval_part->SendPrtclCounts();
+  TaskStatus tstat = pbval_part->CountSendsAndRecvs();
   return tstat;
 }
 } // namespace particles
