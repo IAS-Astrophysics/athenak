@@ -290,10 +290,11 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
         Real a2 = SQR(bh_a);
         Real r_hor = 1.0 + sqrt(1.0 - a2);
         Real rr2 = SQR(x1v) + SQR(x2v) + SQR(x3v);
-        Real ss = sqrt(SQR(x1v) + SQR(x2v) - SQR(bh_a));
+        // Real ss = sqrt(SQR(x1v) + SQR(x2v) - SQR(bh_a));
+        Real ss = sqrt(SQR(x1v) + SQR(x2v));
         Real r = sqrt(0.5 * (rr2 - a2 + sqrt(SQR(rr2 - a2) + 4.0*a2*SQR(x3v))));
         // if (r < r_hor + del_r) {
-        if ((ss < r_hor + del_r) && (fabs(x3v) < r_hor + del_r)) {
+        if ((ss < 1.75) && (fabs(x3v) < r_hor + del_r)) {
           smooth_flag_(m,k,j,i) = true;
         }
       }
@@ -598,6 +599,20 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
       } // endif (!c2p_flag_(m,k,j,i) && !(excised))
     }); // end_par_for 'adjacent_cellavg_fix'
   } // endif (cellavg_fix_turn_on_)
+
+  // par_for("transitioned_excised_region", DevExeSpace(), 0, (nmb-1), kl, ku, jl, ju, il, iu,
+  // KOKKOS_LAMBDA(int m, int k, int j, int i) {
+  //   // Check if the cell is in excised region
+  //   bool excised = false;
+  //   if (use_excise) {
+  //     if (excision_floor_(m,k,j,i)) {
+  //       excised = true;
+  //     }
+  //     excision_flux_
+  //     excision_flux_(m,k,j,i)
+  //   }
+  // }); // end_par_for 'transitioned_excised_region'
+
 
   return;
 }
