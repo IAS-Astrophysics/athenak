@@ -410,10 +410,10 @@ TaskStatus ParticlesBoundaryValues::RecvAndUnpackParticles() {
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn void ParticlesBoundaryValues::ClearSend()
+//! \fn void ParticlesBoundaryValues::ClearPrtclSend()
 //! \brief
 
-TaskStatus ParticlesBoundaryValues::ClearSend() {
+TaskStatus ParticlesBoundaryValues::ClearPrtclSend() {
 #if MPI_PARALLEL_ENABLED
 
   // TODO (@jmstone)
@@ -425,22 +425,27 @@ TaskStatus ParticlesBoundaryValues::ClearSend() {
   return TaskStatus::complete;
 }
 
+*/
 //----------------------------------------------------------------------------------------
-//! \fn void ParticlesBoundaryValues::ClearRecv()
+//! \fn void ParticlesBoundaryValues::ClearPrtclRecv()
 //! \brief
 
-TaskStatus ParticlesBoundaryValues::ClearRecv() {
+TaskStatus ParticlesBoundaryValues::ClearPrtclRecv() {
 #if MPI_PARALLEL_ENABLED
-
-  // TODO (@jmstone)
-  // clear MPI receive calls
-  //
-  // deallocate any vectors created (nranks_recvfrom, etc.)
-
+  bool no_errors=true;
+  // wait for all non-blocking receives to finish before continuing
+  for (int n=0; n<nrecvs; ++n) {
+    int ierr = MPI_Wait(&(recv_req[n]), MPI_STATUS_IGNORE);
+    if (ierr != MPI_SUCCESS) {no_errors=false;}
+  }
+  // Quit if MPI error detected
+  if (!(no_errors)) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+       << std::endl << "MPI error in clearing receives" << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
 #endif
   return TaskStatus::complete;
 }
-
-*/
 
 } // end namaspace particles

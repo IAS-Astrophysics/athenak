@@ -267,11 +267,11 @@ class ParticlesBoundaryValues {
   TaskStatus SetNewPrtclGID();
   TaskStatus CountSendsAndRecvs();
   TaskStatus InitPrtclRecv();
+  TaskStatus ClearPrtclRecv();
 
 /**
   TaskStatus PackAndSendPrtcl();
   TaskStatus RecvAndUnpackPrtcl();
-  TaskStatus ClearPrtclRecv();
   TaskStatus ClearPrtclSend();
 **/
 
