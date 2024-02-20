@@ -228,7 +228,7 @@ struct {
 //! \brief data (pos, vel, etc) communicated by MPI
 
 struct ParticleData {
-  int gid;
+  int dest_gid;
   Real x,y,z;
   Real vx,vy,vz;
 };
@@ -244,7 +244,8 @@ class ParticlesBoundaryValues {
   ~ParticlesBoundaryValues();
 
   int nprtcl_send, nprtcl_recv;
-  DvceArray1D<ParticleSendData> prtcl_sendlist;
+  DvceArray1D<ParticleSendData> sendlist_buf;
+  DualArray1D<ParticleSendData> sendlist;
 
   // Data needed to count number of messages and particles to send between ranks
   int nsends; // number of MPI sends to neighboring ranks on this rank
@@ -266,11 +267,11 @@ class ParticlesBoundaryValues {
   TaskStatus CountSendsAndRecvs();
   TaskStatus InitPrtclRecv();
   TaskStatus ClearPrtclRecv();
+  TaskStatus PackAndSendPrtcls();
+  TaskStatus ClearPrtclSend();
 
 /**
-  TaskStatus PackAndSendPrtcl();
   TaskStatus RecvAndUnpackPrtcl();
-  TaskStatus ClearPrtclSend();
 **/
 
   // BCs associated with various physics modules

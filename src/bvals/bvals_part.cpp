@@ -22,21 +22,21 @@
 //----------------------------------------------------------------------------------------
 //! \fn void ParticlesBoundaryValues::UpdateGID()
 //! \brief Updates GID of particles that cross boundary of their parent MeshBlock.  If
-//! the new GID is on a different rank, then store (1) index of particle in prtcl array,
-//! (2) destination GID, and (3) destination rank in prtcl_sendlist DvceArray.
+//! the new GID is on a different rank, then store in sendlist_buf DvceArray: (1) index of
+//! particle in prtcl array, (2) destination GID, and (3) destination rank.
 
 namespace particles {
 
 KOKKOS_INLINE_FUNCTION
 void UpdateGID(int &newgid, NeighborBlock nghbr, int myrank, int *pcounter,
-               DvceArray1D<ParticleSendData> prtcl_sendlist, int p) {
+               DvceArray1D<ParticleSendData> sendlist_b, int p) {
   newgid = nghbr.gid;
 #if MPI_PARALLEL_ENABLED
   if (nghbr.rank != myrank) {
     int index = Kokkos::atomic_fetch_add(pcounter,1);
-    prtcl_sendlist(index).prtcl_indx = p;
-    prtcl_sendlist(index).dest_gid   = nghbr.gid;
-    prtcl_sendlist(index).dest_rank  = nghbr.rank;
+    sendlist_b(index).prtcl_indx = p;
+    sendlist_b(index).dest_gid   = nghbr.gid;
+    sendlist_b(index).dest_rank  = nghbr.rank;
   }
 #endif
   return;
@@ -56,7 +56,7 @@ TaskStatus ParticlesBoundaryValues::SetNewPrtclGID() {
   auto meshsize = pmy_part->pmy_pack->pmesh->mesh_size;
   auto myrank = global_variable::my_rank;
   auto nghbr = pmy_part->pmy_pack->pmb->nghbr;
-  auto &psendl = prtcl_sendlist;
+  auto &psendl = sendlist_buf;
   int counter=0;
   int *pcounter = &counter;
 
@@ -202,16 +202,23 @@ TaskStatus ParticlesBoundaryValues::SetNewPrtclGID() {
 TaskStatus ParticlesBoundaryValues::CountSendsAndRecvs() {
 #if MPI_PARALLEL_ENABLED
   // Get copy of send list on host
-  auto sendlist = Kokkos::subview(prtcl_sendlist, std::make_pair(0,nprtcl_send));
-  auto sendlist_h = Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace(), sendlist);
+  auto sendlist_d = Kokkos::subview(sendlist_buf, std::make_pair(0,nprtcl_send));
+  Kokkos::realloc(sendlist, nprtcl_send);
+  Kokkos::deep_copy(sendlist.d_view, sendlist_d);
+  // sync sendlist device array with host
+  sendlist.template modify<DevExeSpace>();
+  sendlist.template sync<HostMemSpace>();
 
-  // Sort send list on host by new_rank.
+  // Sort sendlist on host by destrank.
   namespace KE = Kokkos::Experimental;
-  std::sort(KE::begin(sendlist_h), KE::end(sendlist_h), SortByRank);
+  std::sort(KE::begin(sendlist.h_view), KE::end(sendlist.h_view), SortByRank);
+  // sync sendlist host array with device.  This results in sorted array on device
+  sendlist.template modify<HostMemSpace>();
+  sendlist.template sync<DevExeSpace>();
 
 /***/
 for (int n=0; n<nprtcl_send; ++n) {
-std::cout << "rank="<<global_variable::my_rank<<"  (n,indx,rank,gid)=" << n<<"  "<<sendlist_h(n).prtcl_indx<<"  "<<sendlist_h(n).dest_rank<<"  "<<sendlist_h(n).dest_gid << std::endl;
+std::cout << "rank="<<global_variable::my_rank<<"  (n,indx,rank,gid)=" << n<<"  "<<sendlist.h_view(n).prtcl_indx<<"  "<<sendlist.h_view(n).dest_rank<<"  "<<sendlist.h_view(n).dest_gid << std::endl;
 }
 /****/
 
@@ -220,15 +227,15 @@ std::cout << "rank="<<global_variable::my_rank<<"  (n,indx,rank,gid)=" << n<<"  
   sends_thisrank.clear();
   if (nprtcl_send > 0) {
     int &myrank = global_variable::my_rank;
-    int rank = sendlist_h(0).dest_rank;
+    int rank = sendlist.h_view(0).dest_rank;
     int nprtcl = 1;
 
     for (int n=1; n<nprtcl_send; ++n) {
-      if (sendlist_h(n).dest_rank == rank) {
+      if (sendlist.h_view(n).dest_rank == rank) {
         ++nprtcl;
       } else {
         sends_thisrank.emplace_back(std::make_tuple(myrank,rank,nprtcl));
-        rank = sendlist_h(n).dest_rank;
+        rank = sendlist.h_view(n).dest_rank;
         nprtcl = 1;
       }
     }
@@ -366,25 +373,69 @@ TaskStatus ParticlesBoundaryValues::InitPrtclRecv() {
   return TaskStatus::complete;
 }
 
-/*
 //----------------------------------------------------------------------------------------
-//! \fn void ParticlesBoundaryValues::PackAndSendParticles()
+//! \fn void ParticlesBoundaryValues::PackAndSendPrtcls()
 //! \brief
 
-TaskStatus ParticlesBoundaryValues::PackAndSendParticles() {
+TaskStatus ParticlesBoundaryValues::PackAndSendPrtcls() {
 #if MPI_PARALLEL_ENABLED
+  // Figure out how many particles will be sent from this ranks
+  nprtcl_send=0;
+  for (int n=0; n<nsends; ++n) {
+    nprtcl_send += std::get<2>(sends_thisrank[n]);
+  }
 
-  // Figure out how many particles will be sent total
-  // Allocate send buffer
-  //
-  // Use DualArray of tuples to load particles into send buffer ordered by dest_rank
-  //
-  // Post sends using address of send buffer with appropriate offset and nelements
+  bool no_errors=true;
+  if (nprtcl_send > 0) {
+    // Allocate send buffer
+    Kokkos::realloc(prtcl_sendbuf, nprtcl_send);
 
+    // sendlist on device is already sorted by destrank in CountSendAndRecvs()
+    // Use sendlist on device to load particles into send buffer ordered by dest_rank
+    auto &ppos = pmy_part->prtcl_pos;
+    auto &pvel = pmy_part->prtcl_vel;
+    par_for("part_update",DevExeSpace(),0,nprtcl_send, KOKKOS_LAMBDA(const int n) {
+      prtcl_sendbuf(n).dest_gid = sendlist.d_view(n).dest_gid;
+      int p = sendlist.d_view(n).prtcl_indx;
+      prtcl_sendbuf(n).x = ppos(p,IPX);
+      prtcl_sendbuf(n).y = ppos(p,IPY);
+      prtcl_sendbuf(n).z = ppos(p,IPZ);
+      prtcl_sendbuf(n).vx = pvel(p,IVX);
+      prtcl_sendbuf(n).vy = pvel(p,IVY);
+      prtcl_sendbuf(n).vz = pvel(p,IVZ);
+    });
+
+    // Post non-blocking sends
+    Kokkos::fence();
+    int data_start=0;
+    send_req.clear();
+    for (int n=0; n<nsends; ++n) { send_req.emplace_back(MPI_REQUEST_NULL); }
+
+    for (int n=0; n<nsends; ++n) {
+      // calculate amount of data to be passed, get pointer to variables
+      int data_size = std::get<2>(sends_thisrank[n])*sizeof(ParticleData);
+      int data_end = data_start + std::get<2>(sends_thisrank[n]);
+      auto send_ptr = Kokkos::subview(prtcl_sendbuf, std::make_pair(data_start,data_end));
+      int drank = std::get<1>(sends_thisrank[n]);
+
+      // Post non-blocking sends
+      int ierr = MPI_Isend(send_ptr.data(), data_size, MPI_BYTE, drank, MPI_ANY_TAG,
+                           mpi_comm_part, &(send_req[n]));
+      if (ierr != MPI_SUCCESS) {no_errors=false;}
+    }
+  }
+
+  // Quit if MPI error detected
+  if (!(no_errors)) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+              << std::endl << "MPI error in posting non-blocking receives" << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
 #endif
   return TaskStatus::complete;
 }
 
+/*
 //----------------------------------------------------------------------------------------
 //! \fn void ParticlesBoundaryValues::RecvAndUnpackParticles()
 //! \brief
@@ -408,6 +459,7 @@ TaskStatus ParticlesBoundaryValues::RecvAndUnpackParticles() {
 #endif
   return TaskStatus::complete;
 }
+*/
 
 //----------------------------------------------------------------------------------------
 //! \fn void ParticlesBoundaryValues::ClearPrtclSend()
@@ -415,17 +467,22 @@ TaskStatus ParticlesBoundaryValues::RecvAndUnpackParticles() {
 
 TaskStatus ParticlesBoundaryValues::ClearPrtclSend() {
 #if MPI_PARALLEL_ENABLED
-
-  // TODO (@jmstone)
-  // clear MPI send calls
-  //
-  // deallocate any vectors created (nranks_sendto, etc.)
-
+  bool no_errors=true;
+  // wait for all non-blocking sends for vars to finish before continuing
+  for (int n=0; n<nsends; ++n) {
+    int ierr = MPI_Wait(&(send_req[n]), MPI_STATUS_IGNORE);
+    if (ierr != MPI_SUCCESS) {no_errors=false;}
+  }
+  // Quit if MPI error detected
+  if (!(no_errors)) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+       << std::endl << "MPI error in clearing sends" << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
 #endif
   return TaskStatus::complete;
 }
 
-*/
 //----------------------------------------------------------------------------------------
 //! \fn void ParticlesBoundaryValues::ClearPrtclRecv()
 //! \brief
