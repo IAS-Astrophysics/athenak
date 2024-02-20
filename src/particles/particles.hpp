@@ -25,6 +25,7 @@ enum class ParticlesPusher {drift, leap_frog, lagrangian_tracer, lagrangian_mc};
 struct ParticlesTaskIDs {
   TaskID push;
   TaskID newgid;
+  TaskID sendcnt;
 };
 
 namespace particles {
@@ -59,6 +60,7 @@ class Particles {
   void AssembleTasks(std::map<std::string, std::shared_ptr<TaskList>> tl);
   TaskStatus Push(Driver *pdriver, int stage);
   TaskStatus NewGID(Driver *pdriver, int stage);
+  TaskStatus SendCnt(Driver *pdriver, int stage);
 
  private:
   MeshBlockPack* pmy_pack;  // ptr to MeshBlockPack containing this Particles

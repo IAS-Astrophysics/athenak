@@ -610,9 +610,9 @@ void Mesh::AddCoordinatesAndPhysics(ParameterInput *pinput) {
 #if MPI_PARALLEL_ENABLED
   nprtcl_eachrank = new int[global_variable::nranks];
   // Share number of particles on each rank with all ranks
-  MPI_gatherv(MPI_IN_PLACE, &nprtcl_total, 1, MPI_ATHENA_INT, MPI_SUM, MPI_COMM_WORLD);
+  MPI_Allgather(&nprtcl_thisrank,1,MPI_INT,nprtcl_eachrank,1,MPI_INT,MPI_COMM_WORLD);
 
   // Sum total number of particles across all ranks
-  MPI_Allreduce(MPI_IN_PLACE, &nprtcl_total, 1, MPI_ATHENA_INT, MPI_SUM, MPI_COMM_WORLD);
+  MPI_Allreduce(MPI_IN_PLACE, &nprtcl_total, 1, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
 #endif
 }

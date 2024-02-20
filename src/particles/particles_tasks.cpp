@@ -26,8 +26,9 @@ void Particles::AssembleTasks(std::map<std::string, std::shared_ptr<TaskList>> t
   TaskID none(0);
 
   // particle integration done in "before_timeintegrator" task list
-  id.push   = tl["before_timeintegrator"]->AddTask(&Particles::Push, this, none);
-  id.newgid = tl["before_timeintegrator"]->AddTask(&Particles::NewGID, this, id.push);
+  id.push    = tl["before_timeintegrator"]->AddTask(&Particles::Push, this, none);
+  id.newgid  = tl["before_timeintegrator"]->AddTask(&Particles::NewGID, this, id.push);
+  id.sendcnt = tl["before_timeintegrator"]->AddTask(&Particles::SendCnt, this, id.push);
 
   return;
 }
@@ -38,7 +39,17 @@ void Particles::AssembleTasks(std::map<std::string, std::shared_ptr<TaskList>> t
 //! MeshBlocks.
 
 TaskStatus Particles::NewGID(Driver *pdrive, int stage) {
-  TaskStatus tstat = pbval_part->SetNewGID();
+  TaskStatus tstat = pbval_part->SetNewPrtclGID();
+  return tstat;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn TaskList Particles::SendCnt
+//! \brief Wrapper task list function to set share number of partciles communicated with
+//! MPI between all ranks
+
+TaskStatus Particles::SendCnt(Driver *pdrive, int stage) {
+  TaskStatus tstat = pbval_part->SendPrtclCounts();
   return tstat;
 }
 } // namespace particles

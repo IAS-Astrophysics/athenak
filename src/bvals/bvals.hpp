@@ -206,6 +206,36 @@ class BoundaryValuesFC : public MeshBoundaryValues {
 };
 
 //----------------------------------------------------------------------------------------
+//! \struct ParticleSendData
+//! \brief data associated with MPI communication of particles (dest, number, etc.)
+
+struct ParticleSendData {
+  int prtcl_indx;   // index in particle array
+  int dest_gid ;    // GID of target MeshBlock
+  int dest_rank ;   // rank of target MeshBlock
+};
+
+// Custom operators to sort ParticleSendData array by dest_rank or prtcl_indx
+struct {
+  bool operator()(ParticleSendData a, ParticleSendData b)
+    const { return a.dest_rank < b.dest_rank; }
+} SortByRank;
+struct {
+  bool operator()(ParticleSendData a, ParticleSendData b)
+    const { return a.prtcl_indx < b.prtcl_indx; }
+} SortByIndex;
+
+//----------------------------------------------------------------------------------------
+//! \struct ParticleData
+//! \brief data (pos, vel, etc) communicated by MPI
+
+struct ParticleData {
+  int gid;
+  Real x,y,z;
+  Real vx,vy,vz;
+};
+
+//----------------------------------------------------------------------------------------
 //! \class ParticlesBoundaryValues
 //  \brief Defines boundary values class for particles
 
@@ -215,21 +245,30 @@ class ParticlesBoundaryValues {
   ParticlesBoundaryValues(particles::Particles *ppart, ParameterInput *pin);
   ~ParticlesBoundaryValues();
 
+  int npart_send, npart_recv;
+  DvceArray1D<ParticleSendData> prtcl_sendlist;
+
+  // Data needed to count number of messages and particles to send between ranks
+  int ncounts; // number of MPI sends to neighboring ranks on this rank
+  std::vector<int> ncounts_eachrank;                    //length nranks
+  std::vector<std::tuple<int,int,int>> counts_thisrank; //length ncounts
+  std::vector<std::tuple<int,int,int>> counts_allranks; //length ncounts summed over ranks
+
 #if MPI_PARALLEL_ENABLED
   // unique MPI communicators for particles
-  MPI_Comm part_comm;
+  MPI_Comm mpi_comm_part;
 #endif
 
   //functions
-  TaskStatus SetNewGID();
+  TaskStatus SetNewPrtclGID();
+  TaskStatus SendPrtclCounts();
 
 /**
-  virtual TaskStatus InitFluxRecv(const int nvar)=0;
-  TaskStatus InitRecv(const int nvar);
-  TaskStatus ClearRecv();
-  TaskStatus ClearSend();
-  TaskStatus ClearFluxRecv();
-  TaskStatus ClearFluxSend();
+  TaskStatus InitPrtclRecv(const int nvar);
+  TaskStatus PackAndSendPrtcl();
+  TaskStatus RecvAndUnpackPrtcl();
+  TaskStatus ClearPrtclRecv();
+  TaskStatus ClearPrtclSend();
 **/
 
   // BCs associated with various physics modules
