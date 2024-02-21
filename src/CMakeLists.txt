@@ -71,6 +71,7 @@ add_executable(
         mhd/mhd_fluxes.cpp
         mhd/mhd_fofc.cpp
         mhd/mhd_entropyfix.cpp
+        mhd/mhd_dissipation.cpp
         mhd/mhd_newdt.cpp
         mhd/mhd_tasks.cpp
         mhd/mhd_update.cpp
