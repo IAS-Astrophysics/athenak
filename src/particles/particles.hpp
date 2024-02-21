@@ -41,11 +41,12 @@ class Particles {
 
   // data
   int nprtcl_thispack;             // number of particles this MeshBlockPack
-  DvceArray1D<int>  prtcl_gid;     // GID of MeshBlock containing each par
-  DvceArray2D<Real> prtcl_pos;     // positions
-  DvceArray2D<Real> prtcl_vel;     // velocities
-  DvceArray2D<Real> prtcl_rprop;   // real number properties each particle
-  DvceArray2D<int>  prtcl_iprop;   // integer properties each particle
+  int nrdata, nidata;
+//  DvceArray1D<int>  prtcl_gid;     // GID of MeshBlock containing each par
+//  DvceArray2D<Real> prtcl_pos;     // positions
+//  DvceArray2D<Real> prtcl_vel;     // velocities
+  DvceArray2D<Real> prtcl_rdata;   // real number properties each particle (x,v,etc.)
+  DvceArray2D<int>  prtcl_idata;   // integer properties each particle (gid, tag, etc.)
   Real dtnew;
 
   ParticlesPusher pusher;
