@@ -46,7 +46,7 @@ void MHD::AddKODissipation() {
   bool &multi_d = pmy_pack->pmesh->multi_d;
   bool &three_d = pmy_pack->pmesh->three_d;
 
-  auto &use_ko_dissipation_ = use_ko_dissipation;
+  // auto &use_ko_dissipation_ = use_ko_dissipation;
   auto &sigma_ko_ = sigma_ko;
   auto &ko_dissipation_ = ko_dissipation;
 
