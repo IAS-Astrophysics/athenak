@@ -31,7 +31,9 @@ void MHD::AddKODissipation() {
   int ng = indcs.ng;
   int nmb1 = pmy_pack->nmb_thispack - 1;
   auto &size = pmy_pack->pmb->mb_size;
-  
+  auto &coord = pmy_pack->pcoord->coord_data;
+  auto &flat = coord.is_minkowski;
+  auto &spin = coord.bh_spin;
   auto &u0_ = u0;
   auto &w0_ = w0;
   auto &bcc0_ = bcc0;
