@@ -55,13 +55,15 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
 
   // flags and variables for ad hoc fixes
   auto &c2p_flag_ = pmy_pack->pmhd->c2p_flag;
-  auto &smooth_flag_ = pmy_pack->pmhd->smooth_flag;
+  // auto &smooth_flag_ = pmy_pack->pmhd->smooth_flag;
   auto &w0_old_ = pmy_pack->pmhd->w0_old;
   auto &is_radiation_enabled_ = pmy_pack->pmhd->is_radiation_enabled;
   DvceArray4D<Real> tgas_radsource_;
   if (is_radiation_enabled_) tgas_radsource_ = pmy_pack->prad->tgas_radsource;
   bool &cellavg_fix_turn_on_ = pmy_pack->pmhd->cellavg_fix_turn_on;
-  bool is_horsmooth_ = false;
+  // bool is_horsmooth_ = false;
+  auto &use_ko_dissipation_ = pmy_pack->pmhd->use_ko_dissipation;
+  auto &ko_dissipation_ = pmy_pack->pmhd->ko_dissipation;
 
   // flags and variables for entropy fix
   auto &entropy_fix_ = pmy_pack->pmhd->entropy_fix;
@@ -158,7 +160,8 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
 
     if (excised) {
       c2p_flag_(m,k,j,i) = true;
-      smooth_flag_(m,k,j,i) = false;
+      // smooth_flag_(m,k,j,i) = false;
+      if (use_ko_dissipation_) ko_dissipation_(m,k,j,i) = false;
     }
 
     if (!(excised)) {
@@ -276,7 +279,8 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
 
       // flag the cell if c2p succeeds or fails
       c2p_flag_(m,k,j,i) = !c2p_failure;
-      smooth_flag_(m,k,j,i) = false;
+      // smooth_flag_(m,k,j,i) = false;
+
       // try different strategy here to smooth the checkerboarding issue
       // if ((sigma_cold > sigma_cold_cut_) && (efloor_used || dfloor_used)) {
       // if (sigma_cold > sigma_cold_cut_) {
@@ -284,23 +288,22 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
       //   smooth_flag_(m,k,j,i) = true;
       // }
 
-      if (is_horsmooth_) {
-        Real del_r = 0.3;
-        Real bh_a = 0.9375;
-        Real a2 = SQR(bh_a);
-        Real r_hor = 1.0 + sqrt(1.0 - a2);
-        Real rr2 = SQR(x1v) + SQR(x2v) + SQR(x3v);
-        // Real ss = sqrt(SQR(x1v) + SQR(x2v) - SQR(bh_a));
-        Real ss = sqrt(SQR(x1v) + SQR(x2v));
-        Real r = sqrt(0.5 * (rr2 - a2 + sqrt(SQR(rr2 - a2) + 4.0*a2*SQR(x3v))));
-        // if (r < r_hor + del_r) {
-        if ((ss < 1.75) && (fabs(x3v) < r_hor + del_r)) {
-          smooth_flag_(m,k,j,i) = true;
-        }
-      }
+      // if (is_horsmooth_) {
+      //   Real del_r = 0.3;
+      //   Real bh_a = 0.9375;
+      //   Real a2 = SQR(bh_a);
+      //   Real r_hor = 1.0 + sqrt(1.0 - a2);
+      //   Real rr2 = SQR(x1v) + SQR(x2v) + SQR(x3v);
+      //   Real r = sqrt(0.5 * (rr2 - a2 + sqrt(SQR(rr2 - a2) + 4.0*a2*SQR(x3v))));
+      //   if (r < r_hor + del_r) {
+      //     smooth_flag_(m,k,j,i) = true;
+      //   }
+      // }
       if (customize_fofc_ && (sigma_cold > sigma_cold_cut_)) fofc_(m,k,j,i) = true;
       // if (customize_fofc_) fofc_(m,k,j,i) = true;
 
+      if (use_ko_dissipation_ && (sigma_cold > sigma_cold_cut_)) ko_dissipation_(m,k,j,i) = true;
+      else ko_dissipation_(m,k,j,i) = false;
 
       // apply velocity ceiling if necessary
       Real tmp = glower[1][1]*SQR(w.vx)
@@ -399,7 +402,8 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
       }
 
       // Assign fallback state if inversion fails
-      if ((!c2p_flag_(m,k,j,i) || smooth_flag_(m,k,j,i)) && !(excised)) {
+      // if ((!c2p_flag_(m,k,j,i) || smooth_flag_(m,k,j,i)) && !(excised)) {
+      if (!(c2p_flag_(m,k,j,i)) && !(excised)) {
         // Set indices around the problematic cell
         int km1 = (k-1 < kl) ? kl : k-1;
         int kp1 = (k+1 > ku) ? ku : k+1;
@@ -564,13 +568,14 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
           prim(m,IVY,k,j,i) = w.vy;
           prim(m,IVZ,k,j,i) = w.vz;
           prim(m,IEN,k,j,i) = w.e;
-        } else if (smooth_flag_(m,k,j,i)) { // if extra smooth is needed
-          prim(m,IDN,k,j,i) = w.d;
-          prim(m,IVX,k,j,i) = w.vx;
-          prim(m,IVY,k,j,i) = w.vy;
-          prim(m,IVZ,k,j,i) = w.vz;
-          prim(m,IEN,k,j,i) = w.e;
         }
+        // } else if (smooth_flag_(m,k,j,i)) { // if extra smooth is needed
+        //   prim(m,IDN,k,j,i) = w.d;
+        //   prim(m,IVX,k,j,i) = w.vx;
+        //   prim(m,IVY,k,j,i) = w.vy;
+        //   prim(m,IVZ,k,j,i) = w.vz;
+        //   prim(m,IEN,k,j,i) = w.e;
+        // }
 
         // Extract components of metric
         Real &x1min = size.d_view(m).x1min;

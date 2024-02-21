@@ -51,7 +51,8 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
     bcctest("bcctest",1,1,1,1,1),
     fofc("fofc",1,1,1,1),
     c2p_flag("c2p_flag",1,1,1,1),
-    smooth_flag("smooth_flag",1,1,1,1),
+    // smooth_flag("smooth_flag",1,1,1,1),
+    ko_dissipation("ko_dissipation",1,1,1,1),
     w0_old("w0_old",1,1,1,1,1) {
   // Total number of MeshBlocks on this rank to be used in array dimensioning
   int nmb = std::max((ppack->nmb_thispack), (ppack->pmesh->nmb_maxperrank));
@@ -120,6 +121,8 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
   cellavg_fix_turn_on = pin->GetOrAddBoolean("mhd","cellavg_fix_turn_on",true);
   c2p_test = pin->GetOrAddBoolean("mhd","c2p_test",false);
   is_radiation_enabled = pin->DoesBlockExist("radiation");
+  use_ko_dissipation = pin->GetOrAddBoolean("mhd","use_ko_dissipation",false);
+  sigma_ko = pin->GetOrAddReal("mhd","sigma_ko",0.01);
   if (pin->DoesParameterExist("mhd","entropy_fix")) {
     if (pmy_pack->pcoord->is_general_relativistic) {
       entropy_fix = pin->GetBoolean("mhd","entropy_fix");
@@ -163,8 +166,14 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
     // allocate array of c2p flags
     Kokkos::realloc(c2p_flag, nmb, ncells3, ncells2, ncells1);
     Kokkos::deep_copy(c2p_flag, true);
-    Kokkos::realloc(smooth_flag, nmb, ncells3, ncells2, ncells1);
-    Kokkos::deep_copy(smooth_flag, false);
+    // Kokkos::realloc(smooth_flag, nmb, ncells3, ncells2, ncells1);
+    // Kokkos::deep_copy(smooth_flag, false);
+
+    // allocate array of ko flags
+    if (use_ko_dissipation) {
+      Kokkos::realloc(ko_dissipation, nmb, ncells3, ncells2, ncells1);
+      Kokkos::deep_copy(ko_dissipation, false);
+    }
   }
 
   // allocate memory for conserved variables on coarse mesh

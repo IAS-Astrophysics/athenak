@@ -113,7 +113,12 @@ class MHD {
   // following used for gas-radiation coupling
   DvceArray4D<bool> c2p_flag; // flag for each cell to indicate if c2p succeeds
   DvceArray5D<Real> w0_old;   // save old primitive variables for rad source calculation
-  DvceArray4D<bool> smooth_flag; // flag for each cell to indicate if smooth is needed
+  // DvceArray4D<bool> smooth_flag; // flag for each cell to indicate if smooth is needed
+
+  // variable and flag for Kreiss-Oliger dissipation
+  bool use_ko_dissipation = false;
+  Real sigma_ko; 
+  DvceArray4D<bool> ko_dissipation;
 
   // flags and variables for ad hoc fixes
   bool entropy_fix = false;
@@ -164,6 +169,9 @@ class MHD {
 
   // reset entropy for entropy fix
   void EntropyReset();
+
+  // add KO dissipation
+  void AddKODissipation();
 
  private:
   MeshBlockPack* pmy_pack;   // ptr to MeshBlockPack containing this MHD
