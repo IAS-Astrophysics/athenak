@@ -82,7 +82,7 @@ TaskStatus MHD::ExpRKUpdate(Driver *pdriver, int stage) {
     });
 
     // Add Kreiss-Oliger Dissipation (by LZ)
-    Real sigma_ko = 0.1;
+    Real sigma_ko = 0.03;
     par_for_inner(member, is, ie, [&](const int i) {
       Real d1u = u0_(m,n,k,j,i+3) - 6*u0_(m,n,k,j,i+2) + 15*u0_(m,n,k,j,i+1) - 20*u0_(m,n,k,j,i) + 15*u0_(m,n,k,j,i-1) - 6*u0_(m,n,k,j,i-2) + u0_(m,n,k,j,i-3);
       Real d2u = u0_(m,n,k,j+3,i) - 6*u0_(m,n,k,j+2,i) + 15*u0_(m,n,k,j+1,i) - 20*u0_(m,n,k,j,i) + 15*u0_(m,n,k,j-1,i) - 6*u0_(m,n,k,j-2,i) + u0_(m,n,k,j-3,i);
