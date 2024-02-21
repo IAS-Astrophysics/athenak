@@ -46,24 +46,20 @@ void ParticleVTKOutput::LoadOutputData(Mesh *pm) {
   if (pm->three_d) {ndim++;}
   particles::Particles *pp = pm->pmb_pack->ppart;
   nout_part = pp->nprtcl_thispack;
-  Kokkos::realloc(outpart_pos, nout_part, ndim);
-  Kokkos::realloc(outpart_gid, nout_part);
+  Kokkos::realloc(outpart_rdata, pp->nrdata, nout_part);
+  Kokkos::realloc(outpart_idata, pp->nidata, nout_part);
 
-  // Create mirror view on device of host view of output particle positions
-  auto d_outpart_pos = Kokkos::create_mirror_view(Kokkos::DefaultHostExecutionSpace(),
-                                                  outpart_pos);
-  // Copy particle positions into device mirror
-  Kokkos::deep_copy(d_outpart_pos, pp->prtcl_pos);
+  // Create mirror view on device of host view of output particle real/int data
+  auto d_outpart_rdata = Kokkos::create_mirror_view(Kokkos::DefaultHostExecutionSpace(),
+                                                    outpart_rdata);
+  auto d_outpart_idata = Kokkos::create_mirror_view(Kokkos::DefaultHostExecutionSpace(),
+                                                    outpart_idata);
+  // Copy particle positions into device mirrors
+  Kokkos::deep_copy(d_outpart_rdata, pp->prtcl_rdata);
+  Kokkos::deep_copy(d_outpart_idata, pp->prtcl_idata);
   // Copy particle positions from device mirror to host output array
-  Kokkos::deep_copy(outpart_pos, d_outpart_pos);
-
-  // Create mirror view on device of host view of output particle GIDs
-  auto d_outpart_gid = Kokkos::create_mirror_view(Kokkos::DefaultHostExecutionSpace(),
-                                                  outpart_gid);
-  // Copy particle positions into device mirror
-  Kokkos::deep_copy(d_outpart_gid, pp->prtcl_gid);
-  // Copy particles gids from h_view to host output array
-  Kokkos::deep_copy(outpart_gid, d_outpart_gid);
+  Kokkos::deep_copy(outpart_rdata, d_outpart_rdata);
+  Kokkos::deep_copy(outpart_idata, d_outpart_idata);
 }
 
 //----------------------------------------------------------------------------------------
@@ -133,14 +129,14 @@ void ParticleVTKOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
 
     // Loop over particles, load positions into data[]
     for (int p=0; p<nout_part; ++p) {
-      data[3*p] = static_cast<float>(outpart_pos(p,0));
+      data[3*p] = static_cast<float>(outpart_rdata(IPX,p));
       if (pm->multi_d) {
-        data[(3*p)+1] = static_cast<float>(outpart_pos(p,1));
+        data[(3*p)+1] = static_cast<float>(outpart_rdata(IPY,p));
       } else {
         data[(3*p)+1] = static_cast<float>(pm->mesh_size.x2min);
       }
       if (pm->three_d) {
-        data[(3*p)+2] = static_cast<float>(outpart_pos(p,2));
+        data[(3*p)+2] = static_cast<float>(outpart_rdata(IPZ,p));
       } else {
         data[(3*p)+2] = static_cast<float>(pm->mesh_size.x3min);
       }
@@ -162,7 +158,7 @@ void ParticleVTKOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
 
     // Loop over particles, load gid into data[]
     for (int p=0; p<nout_part; ++p) {
-      data[p] = static_cast<float>(outpart_gid(p));
+      data[p] = static_cast<float>(outpart_idata(PGID,p));
     }
     // swap data for this variable into big endian order
     if (!big_end) {

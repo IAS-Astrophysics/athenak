@@ -29,14 +29,14 @@ namespace particles {
 
 KOKKOS_INLINE_FUNCTION
 void UpdateGID(int &newgid, NeighborBlock nghbr, int myrank, int *pcounter,
-               DvceArray1D<ParticleSendData> sendlist_b, int p) {
+               DualArray1D<ParticleSendData> slist, int p) {
   newgid = nghbr.gid;
 #if MPI_PARALLEL_ENABLED
   if (nghbr.rank != myrank) {
     int index = Kokkos::atomic_fetch_add(pcounter,1);
-    sendlist_b(index).prtcl_indx = p;
-    sendlist_b(index).dest_gid   = nghbr.gid;
-    sendlist_b(index).dest_rank  = nghbr.rank;
+    slist.d_view(index).prtcl_indx = p;
+    slist.d_view(index).dest_gid   = nghbr.gid;
+    slist.d_view(index).dest_rank  = nghbr.rank;
   }
 #endif
   return;
@@ -49,56 +49,57 @@ void UpdateGID(int &newgid, NeighborBlock nghbr, int myrank, int *pcounter,
 TaskStatus ParticlesBoundaryValues::SetNewPrtclGID() {
   // create local references for variables in kernel
   auto gids = pmy_part->pmy_pack->gids;
-  auto &ppos = pmy_part->prtcl_pos;
-  auto &pgid = pmy_part->prtcl_gid;
+  auto &pr = pmy_part->prtcl_rdata;
+  auto &pi = pmy_part->prtcl_idata;
   int npart = pmy_part->nprtcl_thispack;
   auto mbsize = pmy_part->pmy_pack->pmb->mb_size;
   auto meshsize = pmy_part->pmy_pack->pmesh->mesh_size;
   auto myrank = global_variable::my_rank;
   auto nghbr = pmy_part->pmy_pack->pmb->nghbr;
-  auto &psendl = sendlist_buf;
+  auto &psendl = sendlist;
   int counter=0;
   int *pcounter = &counter;
 
+  Kokkos::realloc(sendlist, static_cast<int>(0.1*npart));
   par_for("part_update",DevExeSpace(),0,npart, KOKKOS_LAMBDA(const int p) {
-    int m = pgid(p) - gids;
-    Real x1 = ppos(p,IPX);
-    Real x2 = ppos(p,IPY);
-    Real x3 = ppos(p,IPZ);
+    int m = pi(PGID,p) - gids;
+    Real x1 = pr(IPX,p);
+    Real x2 = pr(IPY,p);
+    Real x3 = pr(IPZ,p);
 
     if (x1 < mbsize.d_view(m).x1min) {
       if (x2 < mbsize.d_view(m).x2min) {
         if (x3 < mbsize.d_view(m).x3min) {
           // corner
-          UpdateGID(pgid(p), nghbr.d_view(m,48), myrank, pcounter, psendl, p);
+          UpdateGID(pi(PGID,p), nghbr.d_view(m,48), myrank, pcounter, psendl, p);
         } else if (x3 > mbsize.d_view(m).x3max) {
           // corner
-          UpdateGID(pgid(p), nghbr.d_view(m,52), myrank, pcounter, psendl, p);
+          UpdateGID(pi(PGID,p), nghbr.d_view(m,52), myrank, pcounter, psendl, p);
         } else {
           // x1x2 edge
-          UpdateGID(pgid(p), nghbr.d_view(m,16), myrank, pcounter, psendl, p);
+          UpdateGID(pi(PGID,p), nghbr.d_view(m,16), myrank, pcounter, psendl, p);
         }
       } else if (x2 > mbsize.d_view(m).x2max) {
         if (x3 < mbsize.d_view(m).x3min) {
           // corner
-          UpdateGID(pgid(p), nghbr.d_view(m,50), myrank, pcounter, psendl, p);
+          UpdateGID(pi(PGID,p), nghbr.d_view(m,50), myrank, pcounter, psendl, p);
         } else if (x3 > mbsize.d_view(m).x3max) {
           // corner
-          UpdateGID(pgid(p), nghbr.d_view(m,54), myrank, pcounter, psendl, p);
+          UpdateGID(pi(PGID,p), nghbr.d_view(m,54), myrank, pcounter, psendl, p);
         } else {
           // x1x2 edge
-          UpdateGID(pgid(p), nghbr.d_view(m,20), myrank, pcounter, psendl, p);
+          UpdateGID(pi(PGID,p), nghbr.d_view(m,20), myrank, pcounter, psendl, p);
         }
       } else {
         if (x3 < mbsize.d_view(m).x3min) {
           // x3x1 edge
-          UpdateGID(pgid(p), nghbr.d_view(m,32), myrank, pcounter, psendl, p);
+          UpdateGID(pi(PGID,p), nghbr.d_view(m,32), myrank, pcounter, psendl, p);
         } else if (x3 > mbsize.d_view(m).x3max) {
           // x3x1 edge
-          UpdateGID(pgid(p), nghbr.d_view(m,36), myrank, pcounter, psendl, p);
+          UpdateGID(pi(PGID,p), nghbr.d_view(m,36), myrank, pcounter, psendl, p);
         } else {
           // x1 face
-          UpdateGID(pgid(p), nghbr.d_view(m,0), myrank, pcounter, psendl, p);
+          UpdateGID(pi(PGID,p), nghbr.d_view(m,0), myrank, pcounter, psendl, p);
         }
       }
 
@@ -106,35 +107,35 @@ TaskStatus ParticlesBoundaryValues::SetNewPrtclGID() {
       if (x2 < mbsize.d_view(m).x2min) {
         if (x3 < mbsize.d_view(m).x3min) {
           // corner
-          UpdateGID(pgid(p), nghbr.d_view(m,49), myrank, pcounter, psendl, p);
+          UpdateGID(pi(PGID,p), nghbr.d_view(m,49), myrank, pcounter, psendl, p);
         } else if (x3 > mbsize.d_view(m).x3max) {
           // corner
-          UpdateGID(pgid(p), nghbr.d_view(m,53), myrank, pcounter, psendl, p);
+          UpdateGID(pi(PGID,p), nghbr.d_view(m,53), myrank, pcounter, psendl, p);
         } else {
           // x1x2 edge
-          UpdateGID(pgid(p), nghbr.d_view(m,18), myrank, pcounter, psendl, p);
+          UpdateGID(pi(PGID,p), nghbr.d_view(m,18), myrank, pcounter, psendl, p);
         }
       } else if (x2 > mbsize.d_view(m).x2max) {
         if (x3 < mbsize.d_view(m).x3min) {
           // corner
-          UpdateGID(pgid(p), nghbr.d_view(m,51), myrank, pcounter, psendl, p);
+          UpdateGID(pi(PGID,p), nghbr.d_view(m,51), myrank, pcounter, psendl, p);
         } else if (x3 > mbsize.d_view(m).x3max) {
           // corner
-          UpdateGID(pgid(p), nghbr.d_view(m,55), myrank, pcounter, psendl, p);
+          UpdateGID(pi(PGID,p), nghbr.d_view(m,55), myrank, pcounter, psendl, p);
         } else {
           // x1x2 edge
-          UpdateGID(pgid(p), nghbr.d_view(m,22), myrank, pcounter, psendl, p);
+          UpdateGID(pi(PGID,p), nghbr.d_view(m,22), myrank, pcounter, psendl, p);
         }
       } else {
         if (x3 < mbsize.d_view(m).x3min) {
           // x3x1 edge
-          UpdateGID(pgid(p), nghbr.d_view(m,34), myrank, pcounter, psendl, p);
+          UpdateGID(pi(PGID,p), nghbr.d_view(m,34), myrank, pcounter, psendl, p);
         } else if (x3 > mbsize.d_view(m).x3max) {
           // x3x1 edge
-          UpdateGID(pgid(p), nghbr.d_view(m,38), myrank, pcounter, psendl, p);
+          UpdateGID(pi(PGID,p), nghbr.d_view(m,38), myrank, pcounter, psendl, p);
         } else {
           // x1 face
-          UpdateGID(pgid(p), nghbr.d_view(m,4), myrank, pcounter, psendl, p);
+          UpdateGID(pi(PGID,p), nghbr.d_view(m,4), myrank, pcounter, psendl, p);
         }
       }
 
@@ -142,54 +143,58 @@ TaskStatus ParticlesBoundaryValues::SetNewPrtclGID() {
       if (x2 < mbsize.d_view(m).x2min) {
         if (x3 < mbsize.d_view(m).x3min) {
           // x2x3 edge
-          UpdateGID(pgid(p), nghbr.d_view(m,40), myrank, pcounter, psendl, p);
+          UpdateGID(pi(PGID,p), nghbr.d_view(m,40), myrank, pcounter, psendl, p);
         } else if (x3 > mbsize.d_view(m).x3max) {
           // x2x3 edge
-          UpdateGID(pgid(p), nghbr.d_view(m,44), myrank, pcounter, psendl, p);
+          UpdateGID(pi(PGID,p), nghbr.d_view(m,44), myrank, pcounter, psendl, p);
         } else {
           // x2 face
-          UpdateGID(pgid(p), nghbr.d_view(m,8), myrank, pcounter, psendl, p);
+          UpdateGID(pi(PGID,p), nghbr.d_view(m,8), myrank, pcounter, psendl, p);
         }
       } else if (x2 > mbsize.d_view(m).x2max) {
         if (x3 < mbsize.d_view(m).x3min) {
           // x2x3 edge
-          UpdateGID(pgid(p), nghbr.d_view(m,42), myrank, pcounter, psendl, p);
+          UpdateGID(pi(PGID,p), nghbr.d_view(m,42), myrank, pcounter, psendl, p);
         } else if (x3 > mbsize.d_view(m).x3max) {
           // x2x3 edge
-          UpdateGID(pgid(p), nghbr.d_view(m,46), myrank, pcounter, psendl, p);
+          UpdateGID(pi(PGID,p), nghbr.d_view(m,46), myrank, pcounter, psendl, p);
         } else {
           // x2 face
-          UpdateGID(pgid(p), nghbr.d_view(m,12), myrank, pcounter, psendl, p);
+          UpdateGID(pi(PGID,p), nghbr.d_view(m,12), myrank, pcounter, psendl, p);
         }
       } else {
         if (x2 < mbsize.d_view(m).x2min) {
           // x3 face
-          UpdateGID(pgid(p), nghbr.d_view(m,24), myrank, pcounter, psendl, p);
+          UpdateGID(pi(PGID,p), nghbr.d_view(m,24), myrank, pcounter, psendl, p);
         } else if (x3 > mbsize.d_view(m).x3max) {
           // x3 face
-          UpdateGID(pgid(p), nghbr.d_view(m,28), myrank, pcounter, psendl, p);
+          UpdateGID(pi(PGID,p), nghbr.d_view(m,28), myrank, pcounter, psendl, p);
         }
       }
     }
 
     // reset x,y,z positions if particle crosses Mesh boundary using periodic BCs
     if (x1 < meshsize.x1min) {
-      ppos(p,IPX) += (meshsize.x1max - meshsize.x1min);
+      pr(IPX,p) += (meshsize.x1max - meshsize.x1min);
     } else if (x1 > meshsize.x1max) {
-      ppos(p,IPX) -= (meshsize.x1max - meshsize.x1min);
+      pr(IPX,p) -= (meshsize.x1max - meshsize.x1min);
     }
     if (x2 < meshsize.x2min) {
-      ppos(p,IPY) += (meshsize.x2max - meshsize.x2min);
+      pr(IPY,p) += (meshsize.x2max - meshsize.x2min);
     } else if (x2 > meshsize.x2max) {
-      ppos(p,IPY) -= (meshsize.x2max - meshsize.x2min);
+      pr(IPY,p) -= (meshsize.x2max - meshsize.x2min);
     }
     if (x3 < meshsize.x3min) {
-      ppos(p,IPZ) += (meshsize.x3max - meshsize.x3min);
+      pr(IPZ,p) += (meshsize.x3max - meshsize.x3min);
     } else if (x3 > meshsize.x3max) {
-      ppos(p,IPZ) -= (meshsize.x3max - meshsize.x3min);
+      pr(IPZ,p) -= (meshsize.x3max - meshsize.x3min);
     }
   });
   nprtcl_send = counter;
+  Kokkos::resize(sendlist, nprtcl_send);
+  // sync sendlist device array with host
+  sendlist.template modify<DevExeSpace>();
+  sendlist.template sync<HostMemSpace>();
 
   return TaskStatus::complete;
 }
@@ -201,14 +206,6 @@ TaskStatus ParticlesBoundaryValues::SetNewPrtclGID() {
 
 TaskStatus ParticlesBoundaryValues::CountSendsAndRecvs() {
 #if MPI_PARALLEL_ENABLED
-  // Get copy of send list on host
-  auto sendlist_d = Kokkos::subview(sendlist_buf, std::make_pair(0,nprtcl_send));
-  Kokkos::realloc(sendlist, nprtcl_send);
-  Kokkos::deep_copy(sendlist.d_view, sendlist_d);
-  // sync sendlist device array with host
-  sendlist.template modify<DevExeSpace>();
-  sendlist.template sync<HostMemSpace>();
-
   // Sort sendlist on host by destrank.
   namespace KE = Kokkos::Experimental;
   std::sort(KE::begin(sendlist.h_view), KE::end(sendlist.h_view), SortByRank);
@@ -392,17 +389,16 @@ TaskStatus ParticlesBoundaryValues::PackAndSendPrtcls() {
 
     // sendlist on device is already sorted by destrank in CountSendAndRecvs()
     // Use sendlist on device to load particles into send buffer ordered by dest_rank
-    auto &ppos = pmy_part->prtcl_pos;
-    auto &pvel = pmy_part->prtcl_vel;
-    par_for("part_update",DevExeSpace(),0,nprtcl_send, KOKKOS_LAMBDA(const int n) {
+    auto &pr = pmy_part->prtcl_rdata;
+    par_for("ppack",DevExeSpace(),0,nprtcl_send, KOKKOS_LAMBDA(const int n) {
       prtcl_sendbuf(n).dest_gid = sendlist.d_view(n).dest_gid;
       int p = sendlist.d_view(n).prtcl_indx;
-      prtcl_sendbuf(n).x = ppos(p,IPX);
-      prtcl_sendbuf(n).y = ppos(p,IPY);
-      prtcl_sendbuf(n).z = ppos(p,IPZ);
-      prtcl_sendbuf(n).vx = pvel(p,IVX);
-      prtcl_sendbuf(n).vy = pvel(p,IVY);
-      prtcl_sendbuf(n).vz = pvel(p,IVZ);
+      prtcl_sendbuf(n).x  = pr(IPX,p);
+      prtcl_sendbuf(n).y  = pr(IPY,p);
+      prtcl_sendbuf(n).z  = pr(IPZ,p);
+      prtcl_sendbuf(n).vx = pr(IPVX,p);
+      prtcl_sendbuf(n).vy = pr(IPVY,p);
+      prtcl_sendbuf(n).vz = pr(IPVZ,p);
     });
 
     // Post non-blocking sends
@@ -435,31 +431,101 @@ TaskStatus ParticlesBoundaryValues::PackAndSendPrtcls() {
   return TaskStatus::complete;
 }
 
-/*
 //----------------------------------------------------------------------------------------
-//! \fn void ParticlesBoundaryValues::RecvAndUnpackParticles()
+//! \fn void ParticlesBoundaryValues::RecvAndUnpackPrtcls()
 //! \brief
 
-TaskStatus ParticlesBoundaryValues::RecvAndUnpackParticles() {
+TaskStatus ParticlesBoundaryValues::RecvAndUnpackPrtcls() {
 #if MPI_PARALLEL_ENABLED
+  // Sort sendlist on host by index in particle array
+  namespace KE = Kokkos::Experimental;
+  std::sort(KE::begin(sendlist.h_view), KE::end(sendlist.h_view), SortByIndex);
+  // sync sendlist host array with device.  This results in sorted array on device
+  sendlist.template modify<HostMemSpace>();
+  sendlist.template sync<DevExeSpace>();
 
-  // TODO (@jmstone)
-  // if (npart_recv > nprtcl_send)
-  //    increase size of particle arrays
-  // else if (npart_recv < nprtcl_send)
-  //    trim size of particle arrays
-  // else do nothing
-  //
-  // blocking wait until all receives finish
-  //
-  // Sort DualArray by particle index
-  // Use DualArray of tuples to load particles into particle array at blank index spots
-  //
+  // increase size of particle arrays if needed
+  if (nprtcl_recv > nprtcl_send) {
+    int new_npart = pmy_part->nprtcl_thispack + (nprtcl_recv - nprtcl_send);
+    Kokkos::resize(pmy_part->prtcl_idata, pmy_part->nidata, new_npart);
+    Kokkos::resize(pmy_part->prtcl_rdata, pmy_part->nrdata, new_npart);
+  }
+
+  // check that particle communications have all completed
+  bool bflag = false;
+  bool no_errors=true;
+  for (int n=0; n<nrecvs; ++n) {
+    int test;
+    int ierr = MPI_Test(&(recv_req[n]), &test, MPI_STATUS_IGNORE);
+    if (ierr != MPI_SUCCESS) {no_errors=false;}
+    if (!(static_cast<bool>(test))) {
+      bflag = true;
+    }
+  }
+  // Quit if MPI error detected
+  if (!(no_errors)) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+              << std::endl << "MPI error in testing non-blocking receives"
+              << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+  // exit if particle communications have not completed
+  if (bflag) {return TaskStatus::incomplete;}
+
+  // unpack particles into positions of sent particles
+  if (nprtcl_recv > 0) {
+    auto &pr = pmy_part->prtcl_rdata;
+    auto &pi = pmy_part->prtcl_idata;
+    int npart = pmy_part->nprtcl_thispack;
+    par_for("punpack",DevExeSpace(),0,nprtcl_recv, KOKKOS_LAMBDA(const int n) {
+      int p;
+      if (n < nprtcl_send) {
+        p = sendlist.d_view(n).prtcl_indx; // place particles in holes created by sends
+      } else {
+        p = npart + (n - nprtcl_send);     // place particle at end of arrays
+      }
+      pi(PGID,p) = prtcl_recvbuf(n).dest_gid;
+      pr(IPX, p) = prtcl_recvbuf(n).x;
+      pr(IPY, p) = prtcl_recvbuf(n).y;
+      pr(IPZ, p) = prtcl_recvbuf(n).z;
+      pr(IPVX,p) = prtcl_sendbuf(n).vx;
+      pr(IPVY,p) = prtcl_sendbuf(n).vy;
+      pr(IPVZ,p) = prtcl_sendbuf(n).vz;
+    });
+
+    // At this point have filled npart_recv holes in particle arrays from sends
+    // If (nprtcl_recv < nprtcl_send), have to move particles from end of arrays to fill
+    // remaining holes
+    int nremain = nprtcl_send - nprtcl_recv;
+    if (nremain > 0) {
+      int nend_pdata = npart-1;
+      int nend_sendl = nprtcl_send-1;
+      for (int n=0; n<nremain; ++n) {
+        if (nend_pdata > sendlist.h_view(nend_sendl).prtcl_indx) {
+          // copy particle from end into hole
+          auto rdest = Kokkos::subview(pmy_part->prtcl_rdata, Kokkos::ALL, nend_sendl);
+          auto rsrc  = Kokkos::subview(pmy_part->prtcl_rdata, Kokkos::ALL, nend_pdata);
+          Kokkos::deep_copy(rdest, rsrc);
+          auto idest = Kokkos::subview(pmy_part->prtcl_idata, Kokkos::ALL, nend_sendl);
+          auto isrc  = Kokkos::subview(pmy_part->prtcl_idata, Kokkos::ALL, nend_pdata);
+          Kokkos::deep_copy(idest, isrc);
+
+          // update indices
+          nend_pdata--;
+          nend_sendl--;
+        } else {
+          // if indices equal, hole is at end of array, so skip
+          nend_pdata--;
+          nend_sendl--;
+        }
+      }
+    }
+  }
+
   // Update nparticles_thisrank.  Update cost array (use npart_thismb[nmb]?)
 #endif
   return TaskStatus::complete;
 }
-*/
 
 //----------------------------------------------------------------------------------------
 //! \fn void ParticlesBoundaryValues::ClearPrtclSend()

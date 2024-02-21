@@ -34,9 +34,8 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
 
   // capture variables for the kernel
   auto &mbsize = pmy_mesh_->pmb_pack->pmb->mb_size;
-  auto &ppos = pmy_mesh_->pmb_pack->ppart->prtcl_pos;
-  auto &pvel = pmy_mesh_->pmb_pack->ppart->prtcl_vel;
-  auto &pgid = pmy_mesh_->pmb_pack->ppart->prtcl_gid;
+  auto &pr = pmy_mesh_->pmb_pack->ppart->prtcl_rdata;
+  auto &pi = pmy_mesh_->pmb_pack->ppart->prtcl_idata;
   auto &npart = pmy_mesh_->pmb_pack->ppart->nprtcl_thispack;
   auto gids = pmy_mesh_->pmb_pack->gids;
   auto gide = pmy_mesh_->pmb_pack->gide;
@@ -48,18 +47,18 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     auto rand_gen = rand_pool64.get_state();  // get random number state this thread
     // choose parent MeshBlock randomly
     int m = static_cast<int>(rand_gen.frand()*(gide - gids + 1.0));
-    pgid(p) = gids + m;
+    pi(PGID,p) = gids + m;
 
-    ppos(p,IPX) = mbsize.d_view(m).x1min +
-                  rand_gen.frand()*(mbsize.d_view(m).x1max - mbsize.d_view(m).x1min);
-    ppos(p,IPY) = mbsize.d_view(m).x2min +
-                  rand_gen.frand()*(mbsize.d_view(m).x2max - mbsize.d_view(m).x2min);
-    ppos(p,IPZ) = mbsize.d_view(m).x3min +
-                  rand_gen.frand()*(mbsize.d_view(m).x3max - mbsize.d_view(m).x3min);
+    Real rand = rand_gen.frand();
+    pr(IPX,p) = (1. - rand)*mbsize.d_view(m).x1min + rand*mbsize.d_view(m).x1max;
+    rand = rand_gen.frand();
+    pr(IPY,p) = (1. - rand)*mbsize.d_view(m).x2min + rand*mbsize.d_view(m).x2max;
+    rand = rand_gen.frand();
+    pr(IPZ,p) = (1. - rand)*mbsize.d_view(m).x3min + rand*mbsize.d_view(m).x3max;
 
-    pvel(p,IPX) = 2.0*(rand_gen.frand() - 0.5);
-    pvel(p,IPY) = 2.0*(rand_gen.frand() - 0.5);
-    pvel(p,IPZ) = 2.0*(rand_gen.frand() - 0.5);
+    pr(IPVX,p) = 2.0*(rand_gen.frand() - 0.5);
+    pr(IPVY,p) = 2.0*(rand_gen.frand() - 0.5);
+    pr(IPVZ,p) = 2.0*(rand_gen.frand() - 0.5);
 
     rand_pool64.free_state(rand_gen);  // free state for use by other threads
   });

@@ -24,9 +24,8 @@ TaskStatus Particles::Push(Driver *pdriver, int stage) {
   bool &multi_d = pmy_pack->pmesh->multi_d;
   bool &three_d = pmy_pack->pmesh->three_d;
   auto &mbsize = pmy_pack->pmb->mb_size;
-  auto &pgid = prtcl_gid;
-  auto &ppos = prtcl_pos;
-  auto &pvel = prtcl_vel;
+  auto &pi = prtcl_idata;
+  auto &pr = prtcl_rdata;
   auto dt_ = (pmy_pack->pmesh->dt);
   auto gids = pmy_pack->gids;
 
@@ -35,18 +34,18 @@ TaskStatus Particles::Push(Driver *pdriver, int stage) {
 
       par_for("part_update",DevExeSpace(),0,nprtcl_thispack,
       KOKKOS_LAMBDA(const int p) {
-        int m = pgid(p) - gids;
-        int ip = (ppos(p,IPX) - mbsize.d_view(m).x1min)/mbsize.d_view(m).dx1 + is;
-        ppos(p,IPX) += 0.5*dt_*pvel(p,IPX);
+        int m = pi(PGID,p) - gids;
+        int ip = (pr(IPX,p) - mbsize.d_view(m).x1min)/mbsize.d_view(m).dx1 + is;
+        pr(IPX,p) += 0.5*dt_*pr(IPVX,p);
 
         if (multi_d) {
-          int jp = (ppos(p,IPY) - mbsize.d_view(m).x2min)/mbsize.d_view(m).dx2 + js;
-          ppos(p,IPY) += 0.5*dt_*pvel(p,IPY);
+          int jp = (pr(IPY,p) - mbsize.d_view(m).x2min)/mbsize.d_view(m).dx2 + js;
+          pr(IPY,p) += 0.5*dt_*pr(IPVY,p);
         }
 
         if (three_d) {
-          int kp = (ppos(p,IPZ) - mbsize.d_view(m).x3min)/mbsize.d_view(m).dx3 + ks;
-          ppos(p,IPZ) += 0.5*dt_*pvel(p,IPZ);
+          int kp = (pr(IPZ,p) - mbsize.d_view(m).x3min)/mbsize.d_view(m).dx3 + ks;
+          pr(IPZ,p) += 0.5*dt_*pr(IPVZ,p);
         }
       });
 

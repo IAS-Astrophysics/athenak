@@ -256,8 +256,8 @@ class ParticleVTKOutput : public BaseTypeOutput {
   void WriteOutputFile(Mesh *pm, ParameterInput *pin) override;
  protected:
   int nout_part;
-  HostArray2D<Real> outpart_pos;
-  HostArray1D<int>  outpart_gid;
+  HostArray2D<Real> outpart_rdata;
+  HostArray2D<int>  outpart_idata;
 };
 
 //----------------------------------------------------------------------------------------

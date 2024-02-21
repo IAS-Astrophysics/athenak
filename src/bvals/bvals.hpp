@@ -244,7 +244,6 @@ class ParticlesBoundaryValues {
   ~ParticlesBoundaryValues();
 
   int nprtcl_send, nprtcl_recv;
-  DvceArray1D<ParticleSendData> sendlist_buf;
   DualArray1D<ParticleSendData> sendlist;
 
   // Data needed to count number of messages and particles to send between ranks
@@ -269,12 +268,7 @@ class ParticlesBoundaryValues {
   TaskStatus ClearPrtclRecv();
   TaskStatus PackAndSendPrtcls();
   TaskStatus ClearPrtclSend();
-
-/**
-  TaskStatus RecvAndUnpackPrtcl();
-**/
-
-  // BCs associated with various physics modules
+  TaskStatus RecvAndUnpackPrtcls();
 
  protected:
   particles::Particles* pmy_part;

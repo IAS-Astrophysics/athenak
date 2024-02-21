@@ -51,12 +51,18 @@ Particles::Particles(MeshBlockPack *ppack, ParameterInput *pin) :
     std::exit(EXIT_FAILURE);
   }
 
-  // set dimensions of particle arrays
-  int ndim=2;
-  if (pmy_pack->pmesh->three_d) {ndim++;}
-  Kokkos::realloc(prtcl_pos, nprtcl_thispack, ndim);
-  Kokkos::realloc(prtcl_vel, nprtcl_thispack, ndim);
-  Kokkos::realloc(prtcl_gid, nprtcl_thispack);
+  // set dimensions of particle arrays. Note particles only work in 2D/3D
+  if (pmy_pack->pmesh->one_d) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+              << "Particles only work in 2D/3D, but 1D problem initialized" <<std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+  int ndim=4;
+  if (pmy_pack->pmesh->three_d) {ndim+=2;}
+  nrdata = ndim;
+  nidata = 1;
+  Kokkos::realloc(prtcl_rdata, nrdata, nprtcl_thispack);
+  Kokkos::realloc(prtcl_idata, nidata, nprtcl_thispack);
 
   // allocate boundary object
   pbval_part = new ParticlesBoundaryValues(this, pin);
