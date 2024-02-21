@@ -63,12 +63,12 @@ void MHD::AddKODissipation() {
       Real wen_0 = w0_old_(m,IEN,k,j,i);
 
       // gas density and internal energy in adjacent cells
-      Real wdn_ip1, wdn_im1, wdn_ip2, wdn_im2, wdn_ip3, wdn_im3, wdn_ip4, wdn_im4;
-      Real wdn_jp1, wdn_jm1, wdn_jp2, wdn_jm2, wdn_jp3, wdn_jm3, wdn_jp4, wdn_jm4;
-      Real wdn_kp1, wdn_km1, wdn_kp2, wdn_km2, wdn_kp3, wdn_km3, wdn_kp4, wdn_km4;
-      Real wen_ip1, wen_im1, wen_ip2, wen_im2, wen_ip3, wen_im3, wen_ip4, wen_im4;
-      Real wen_jp1, wen_jm1, wen_jp2, wen_jm2, wen_jp3, wen_jm3, wen_jp4, wen_jm4;
-      Real wen_kp1, wen_km1, wen_kp2, wen_km2, wen_kp3, wen_km3, wen_kp4, wen_km4;
+      Real wdn_ip1, wdn_im1, wdn_ip2, wdn_im2, wdn_ip3, wdn_im3; //, wdn_ip4, wdn_im4;
+      Real wdn_jp1, wdn_jm1, wdn_jp2, wdn_jm2, wdn_jp3, wdn_jm3; //, wdn_jp4, wdn_jm4;
+      Real wdn_kp1, wdn_km1, wdn_kp2, wdn_km2, wdn_kp3, wdn_km3; //, wdn_kp4, wdn_km4;
+      Real wen_ip1, wen_im1, wen_ip2, wen_im2, wen_ip3, wen_im3; //, wen_ip4, wen_im4;
+      Real wen_jp1, wen_jm1, wen_jp2, wen_jm2, wen_jp3, wen_jm3; //, wen_jp4, wen_jm4;
+      Real wen_kp1, wen_km1, wen_kp2, wen_km2, wen_kp3, wen_km3; //, wen_kp4, wen_km4;
 
       if (use_excise) {
         wdn_ip1 = excision_floor_(m,k,j,i+1) ? wdn_0 : w0_old_(m,IDN,k,j,i+1);
@@ -182,43 +182,43 @@ void MHD::AddKODissipation() {
         }
       } // endif (ng >= 3)
 
-      if (ng >= 4) {
-        if (use_excise) {
-          wdn_ip4 = excision_floor_(m,k,j,i+4) ? wdn_0 : w0_old_(m,IDN,k,j,i+4);
-          wdn_im4 = excision_floor_(m,k,j,i-4) ? wdn_0 : w0_old_(m,IDN,k,j,i-4);
-          wen_ip4 = excision_floor_(m,k,j,i+4) ? wen_0 : w0_old_(m,IEN,k,j,i+4);
-          wen_im4 = excision_floor_(m,k,j,i-4) ? wen_0 : w0_old_(m,IEN,k,j,i-4);
-          if (multi_d) {
-            wdn_jp4 = excision_floor_(m,k,j+4,i) ? wdn_0 : w0_old_(m,IDN,k,j+4,i);
-            wdn_jm4 = excision_floor_(m,k,j-4,i) ? wdn_0 : w0_old_(m,IDN,k,j-4,i);
-            wen_jp4 = excision_floor_(m,k,j+4,i) ? wen_0 : w0_old_(m,IEN,k,j+4,i);
-            wen_jm4 = excision_floor_(m,k,j-4,i) ? wen_0 : w0_old_(m,IEN,k,j-4,i);
-          }
-          if (three_d) {
-            wdn_kp4 = excision_floor_(m,k+4,j,i) ? wdn_0 : w0_old_(m,IDN,k+4,j,i);
-            wdn_km4 = excision_floor_(m,k-4,j,i) ? wdn_0 : w0_old_(m,IDN,k-4,j,i);
-            wen_kp4 = excision_floor_(m,k+4,j,i) ? wen_0 : w0_old_(m,IEN,k+4,j,i);
-            wen_km4 = excision_floor_(m,k-4,j,i) ? wen_0 : w0_old_(m,IEN,k-4,j,i);
-          }
-        } else {
-          wdn_ip4 = w0_old_(m,IDN,k,j,i+4);
-          wdn_im4 = w0_old_(m,IDN,k,j,i-4);
-          wen_ip4 = w0_old_(m,IEN,k,j,i+4);
-          wen_im4 = w0_old_(m,IEN,k,j,i-4);
-          if (multi_d) {
-            wdn_jp4 = w0_old_(m,IDN,k,j+4,i);
-            wdn_jm4 = w0_old_(m,IDN,k,j-4,i);
-            wen_jp4 = w0_old_(m,IEN,k,j+4,i);
-            wen_jm4 = w0_old_(m,IEN,k,j-4,i);
-          }
-          if (three_d) {
-            wdn_kp4 = w0_old_(m,IDN,k+4,j,i);
-            wdn_km4 = w0_old_(m,IDN,k-4,j,i);
-            wen_kp4 = w0_old_(m,IEN,k+4,j,i);
-            wen_km4 = w0_old_(m,IEN,k-4,j,i);
-          }
-        }
-      } // endif (ng >= 4)
+      // if (ng >= 4) {
+      //   if (use_excise) {
+      //     wdn_ip4 = excision_floor_(m,k,j,i+4) ? wdn_0 : w0_old_(m,IDN,k,j,i+4);
+      //     wdn_im4 = excision_floor_(m,k,j,i-4) ? wdn_0 : w0_old_(m,IDN,k,j,i-4);
+      //     wen_ip4 = excision_floor_(m,k,j,i+4) ? wen_0 : w0_old_(m,IEN,k,j,i+4);
+      //     wen_im4 = excision_floor_(m,k,j,i-4) ? wen_0 : w0_old_(m,IEN,k,j,i-4);
+      //     if (multi_d) {
+      //       wdn_jp4 = excision_floor_(m,k,j+4,i) ? wdn_0 : w0_old_(m,IDN,k,j+4,i);
+      //       wdn_jm4 = excision_floor_(m,k,j-4,i) ? wdn_0 : w0_old_(m,IDN,k,j-4,i);
+      //       wen_jp4 = excision_floor_(m,k,j+4,i) ? wen_0 : w0_old_(m,IEN,k,j+4,i);
+      //       wen_jm4 = excision_floor_(m,k,j-4,i) ? wen_0 : w0_old_(m,IEN,k,j-4,i);
+      //     }
+      //     if (three_d) {
+      //       wdn_kp4 = excision_floor_(m,k+4,j,i) ? wdn_0 : w0_old_(m,IDN,k+4,j,i);
+      //       wdn_km4 = excision_floor_(m,k-4,j,i) ? wdn_0 : w0_old_(m,IDN,k-4,j,i);
+      //       wen_kp4 = excision_floor_(m,k+4,j,i) ? wen_0 : w0_old_(m,IEN,k+4,j,i);
+      //       wen_km4 = excision_floor_(m,k-4,j,i) ? wen_0 : w0_old_(m,IEN,k-4,j,i);
+      //     }
+      //   } else {
+      //     wdn_ip4 = w0_old_(m,IDN,k,j,i+4);
+      //     wdn_im4 = w0_old_(m,IDN,k,j,i-4);
+      //     wen_ip4 = w0_old_(m,IEN,k,j,i+4);
+      //     wen_im4 = w0_old_(m,IEN,k,j,i-4);
+      //     if (multi_d) {
+      //       wdn_jp4 = w0_old_(m,IDN,k,j+4,i);
+      //       wdn_jm4 = w0_old_(m,IDN,k,j-4,i);
+      //       wen_jp4 = w0_old_(m,IEN,k,j+4,i);
+      //       wen_jm4 = w0_old_(m,IEN,k,j-4,i);
+      //     }
+      //     if (three_d) {
+      //       wdn_kp4 = w0_old_(m,IDN,k+4,j,i);
+      //       wdn_km4 = w0_old_(m,IDN,k-4,j,i);
+      //       wen_kp4 = w0_old_(m,IEN,k+4,j,i);
+      //       wen_km4 = w0_old_(m,IEN,k-4,j,i);
+      //     }
+      //   }
+      // } // endif (ng >= 4)
 
       // compute dissipation terms
       Real coeff, del_wdnx, del_wdny, del_wdnz, del_wenx, del_weny, del_wenz;
