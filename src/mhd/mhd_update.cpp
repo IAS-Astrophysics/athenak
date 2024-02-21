@@ -80,6 +80,19 @@ TaskStatus MHD::ExpRKUpdate(Driver *pdriver, int stage) {
     par_for_inner(member, is, ie, [&](const int i) {
       u0_(m,n,k,j,i) = gam0*u0_(m,n,k,j,i) + gam1*u1_(m,n,k,j,i) - beta_dt*divf(i);
     });
+
+    // Add Kreiss-Oliger Dissipation (by LZ)
+    Real sigma_ko = 0.03;
+    par_for_inner(member, is, ie, [&](const int i) {
+      Real d1u = u0_(m,n,k,j,i+3) - 6*u0_(m,n,k,j,i+2) + 15*u0_(m,n,k,j,i+1) - 20*u0_(m,n,k,j,i) + 15*u0_(m,n,k,j,i-1) - 6*u0_(m,n,k,j,i-2) + u0_(m,n,k,j,i-3);
+      Real d2u = u0_(m,n,k,j+3,i) - 6*u0_(m,n,k,j+2,i) + 15*u0_(m,n,k,j+1,i) - 20*u0_(m,n,k,j,i) + 15*u0_(m,n,k,j-1,i) - 6*u0_(m,n,k,j-2,i) + u0_(m,n,k,j-3,i);
+      Real d3u = u0_(m,n,k+3,j,i) - 6*u0_(m,n,k+2,j,i) + 15*u0_(m,n,k+1,j,i) - 20*u0_(m,n,k,j,i) + 15*u0_(m,n,k-1,j,i) - 6*u0_(m,n,k-2,j,i) + u0_(m,n,k-3,j,i);
+      u0_(m,n,k,j,i) += sigma_ko/64 * d1u/mbsize.d_view(m).dx1;
+      u0_(m,n,k,j,i) += sigma_ko/64 * d2u/mbsize.d_view(m).dx2;
+      u0_(m,n,k,j,i) += sigma_ko/64 * d3u/mbsize.d_view(m).dx3;
+    });
+
+
   });
 
   // Add physical source terms.
