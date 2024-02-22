@@ -70,6 +70,11 @@ void BoundaryValues::HydroBCs(MeshBlockPack *ppack, DualArray2D<Real> u_in,
             }
           }
           break;
+        case BoundaryFlag::vacuum:
+          for (int i=0; i<ng; ++i) {
+            u0(m,n,k,j,is-i-1) = 0.0;
+          }
+          break;
         default:
           break;
       }
@@ -102,6 +107,11 @@ void BoundaryValues::HydroBCs(MeshBlockPack *ppack, DualArray2D<Real> u_in,
             } else {
               u0(m,n  ,k,j,ie+i+1) = u0(m,n,k,j,ie);
             }
+          }
+          break;
+        case BoundaryFlag::vacuum:
+          for (int i=0; i<ng; ++i) {
+            u0(m,n,k,j,ie+i+1) = 0.0;
           }
           break;
         default:
@@ -147,6 +157,12 @@ void BoundaryValues::HydroBCs(MeshBlockPack *ppack, DualArray2D<Real> u_in,
               u0(m,n,k,js-j-1,i) = u0(m,n,k,js,i);
             }
           }
+          break;
+        case BoundaryFlag::vacuum:
+          for (int j=0; j<ng; ++j) {
+            u0(m,n,k,js-j-1,i) = 0.0;
+          }
+          break;
         default:
           break;
       }
@@ -180,6 +196,12 @@ void BoundaryValues::HydroBCs(MeshBlockPack *ppack, DualArray2D<Real> u_in,
               u0(m,n,k,je+j+1,i) = u0(m,n,k,je,i);
             }
           }
+          break;
+        case BoundaryFlag::vacuum:
+          for (int j=0; j<ng; ++j) {
+            u0(m,n,k,je+j+1,i) = 0.0;
+          }
+          break;
         default:
           break;
       }
@@ -223,6 +245,11 @@ void BoundaryValues::HydroBCs(MeshBlockPack *ppack, DualArray2D<Real> u_in,
           }
         }
         break;
+      case BoundaryFlag::vacuum:
+        for (int k=0; k<ng; ++k) {
+          u0(m,n,ks-k-1,j,i) = 0.0;
+        }
+        break;
       default:
         break;
     }
@@ -255,6 +282,11 @@ void BoundaryValues::HydroBCs(MeshBlockPack *ppack, DualArray2D<Real> u_in,
           } else {
             u0(m,n,ke+k+1,j,i) = u0(m,n,ke,j,i);
           }
+        }
+        break;
+      case BoundaryFlag::vacuum:
+        for (int k=0; k<ng; ++k) {
+          u0(m,n,ke+k+1,j,i) = 0.0;
         }
         break;
       default:

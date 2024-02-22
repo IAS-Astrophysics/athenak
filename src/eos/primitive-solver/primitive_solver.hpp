@@ -594,8 +594,9 @@ Error PrimitiveSolver<EOSPolicy, ErrorPolicy>::PrimToCon(Real prim[NPRIM],
   Real Wvsq = Contract(Wv_u, Wv_d);
   Real Wsq = 1.0 + Wvsq;
   Real W = sqrt(Wsq);
+  Real iW = 1.0/W;
   // Get the 3-velocity.
-  Real v_d[3] = {Wv_d[0]/W, Wv_d[1]/W, Wv_d[2]/W};
+  Real v_d[3] = {Wv_d[0]*iW, Wv_d[1]*iW, Wv_d[2]*iW};
 
   // For the magnetic field contribution, we need to find
   // B_i, B^2, and B^i*v_i.
@@ -626,7 +627,7 @@ Error PrimitiveSolver<EOSPolicy, ErrorPolicy>::PrimToCon(Real prim[NPRIM],
   Sx = (HWsqpb*v_d[0] - Bv*B_d[0]);
   Sy = (HWsqpb*v_d[1] - Bv*B_d[1]);
   Sz = (HWsqpb*v_d[2] - Bv*B_d[2]);
-  tau = (HWsqpb - p - 0.5*(Bv*Bv + Bsq/Wsq)) - D;
+  tau = (HWsqpb - p - 0.5*(Bv*Bv + Bsq*(iW*iW))) - D;
 
   return Error::SUCCESS;
 }

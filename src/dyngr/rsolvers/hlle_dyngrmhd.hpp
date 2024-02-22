@@ -221,20 +221,20 @@ void HLLE_DYNGR(TeamMember_t const &member,
     Real qa = lambda_r*lambda_l/alpha;
     Real qb = 1.0/(lambda_r - lambda_l);
     Real f_hll[NCONS], bf_hll[NMAG];
-    f_hll[CDN] = (lambda_r*fl[CDN] - lambda_l*fr[CDN] +
+    f_hll[CDN] = ((lambda_r*fl[CDN] - lambda_l*fr[CDN]) +
                   qa*(cons_r[CDN] - cons_l[CDN])) * qb;
-    f_hll[CSX] = (lambda_r*fl[CSX] - lambda_l*fr[CSX] +
+    f_hll[CSX] = ((lambda_r*fl[CSX] - lambda_l*fr[CSX]) +
                   qa*(cons_r[CSX] - cons_l[CSX])) * qb;
-    f_hll[CSY] = (lambda_r*fl[CSY] - lambda_l*fr[CSY] +
+    f_hll[CSY] = ((lambda_r*fl[CSY] - lambda_l*fr[CSY]) +
                   qa*(cons_r[CSY] - cons_l[CSY])) * qb;
-    f_hll[CSZ] = (lambda_r*fl[CSZ] - lambda_l*fr[CSZ] +
+    f_hll[CSZ] = ((lambda_r*fl[CSZ] - lambda_l*fr[CSZ]) +
                   qa*(cons_r[CSZ] - cons_l[CSZ])) * qb;
-    f_hll[CTA] = (lambda_r*fl[CTA] - lambda_l*fr[CTA] +
+    f_hll[CTA] = ((lambda_r*fl[CTA] - lambda_l*fr[CTA]) +
                   qa*(cons_r[CTA] - cons_l[CTA])) * qb;
     bf_hll[ibx] = 0.0;
-    bf_hll[iby] = (lambda_r*bfl[iby] - lambda_l*bfr[iby] +
+    bf_hll[iby] = ((lambda_r*bfl[iby] - lambda_l*bfr[iby]) +
                    qa*(Bu_r[iby] - Bu_l[iby])) * qb;
-    bf_hll[ibz] = (lambda_r*bfl[ibz] - lambda_l*bfr[ibz] +
+    bf_hll[ibz] = ((lambda_r*bfl[ibz] - lambda_l*bfr[ibz]) +
                    qa*(Bu_r[ibz] - Bu_l[ibz])) * qb;
 
     Real *f_interface, *bf_interface;
