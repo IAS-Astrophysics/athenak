@@ -53,6 +53,7 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
     c2p_flag("c2p_flag",1,1,1,1),
     // smooth_flag("smooth_flag",1,1,1,1),
     ko_dissipation("ko_dissipation",1,1,1,1),
+    w_kokernel("w_kokernel",1,1,1,1),
     w0_old("w0_old",1,1,1,1,1) {
   // Total number of MeshBlocks on this rank to be used in array dimensioning
   int nmb = std::max((ppack->nmb_thispack), (ppack->pmesh->nmb_maxperrank));
@@ -173,6 +174,8 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
     if (use_ko_dissipation) {
       Kokkos::realloc(ko_dissipation, nmb, ncells3, ncells2, ncells1);
       Kokkos::deep_copy(ko_dissipation, false);
+      Kokkos::realloc(w_kokernel, (nmhd+nscalars), 1+2*4, 1+2*4, 1+2*4);
+      Kokkos::deep_copy(w_kokernel, 0.);
     }
   }
 

@@ -117,8 +117,9 @@ class MHD {
 
   // variable and flag for Kreiss-Oliger dissipation
   bool use_ko_dissipation = false;
-  Real sigma_ko; 
+  Real sigma_ko;
   DvceArray4D<bool> ko_dissipation;
+  DvceArray4D<bool> w_kokernel;
 
   // flags and variables for ad hoc fixes
   bool entropy_fix = false;

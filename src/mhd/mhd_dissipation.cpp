@@ -49,214 +49,99 @@ void MHD::AddKODissipation() {
   // auto &use_ko_dissipation_ = use_ko_dissipation;
   auto &sigma_ko_ = sigma_ko;
   auto &ko_dissipation_ = ko_dissipation;
+  auto &w_ko = w_kokernel;
 
   par_for("add_ko_dissipation",DevExeSpace(),0,nmb1,ks,ke,js,je,is,ie,
   KOKKOS_LAMBDA(int m, int k, int j, int i) {
     if (ko_dissipation_(m,k,j,i)) { // ko_dissipation_ flag can only be true in non-excised region
-      // gas density and internal energy at center
+      // primitive for being dissipated
       Real &wdn = w0_(m,IDN,k,j,i);
       Real &wvx = w0_(m,IVX,k,j,i);
       Real &wvy = w0_(m,IVY,k,j,i);
       Real &wvz = w0_(m,IVZ,k,j,i);
       Real &wen = w0_(m,IEN,k,j,i);
-      Real wdn_0 = w0_old_(m,IDN,k,j,i);
-      Real wen_0 = w0_old_(m,IEN,k,j,i);
+      Real tgas = wdn/wen;
 
-      // gas density and internal energy in adjacent cells
-      Real wdn_ip1, wdn_im1, wdn_ip2, wdn_im2, wdn_ip3, wdn_im3; //, wdn_ip4, wdn_im4;
-      Real wdn_jp1, wdn_jm1, wdn_jp2, wdn_jm2, wdn_jp3, wdn_jm3; //, wdn_jp4, wdn_jm4;
-      Real wdn_kp1, wdn_km1, wdn_kp2, wdn_km2, wdn_kp3, wdn_km3; //, wdn_kp4, wdn_km4;
-      Real wen_ip1, wen_im1, wen_ip2, wen_im2, wen_ip3, wen_im3; //, wen_ip4, wen_im4;
-      Real wen_jp1, wen_jm1, wen_jp2, wen_jm2, wen_jp3, wen_jm3; //, wen_jp4, wen_jm4;
-      Real wen_kp1, wen_km1, wen_kp2, wen_km2, wen_kp3, wen_km3; //, wen_kp4, wen_km4;
-
-      if (use_excise) {
-        wdn_ip1 = excision_floor_(m,k,j,i+1) ? wdn_0 : w0_old_(m,IDN,k,j,i+1);
-        wdn_im1 = excision_floor_(m,k,j,i-1) ? wdn_0 : w0_old_(m,IDN,k,j,i-1);
-        wen_ip1 = excision_floor_(m,k,j,i+1) ? wen_0 : w0_old_(m,IEN,k,j,i+1);
-        wen_im1 = excision_floor_(m,k,j,i-1) ? wen_0 : w0_old_(m,IEN,k,j,i-1);
-        if (multi_d) {
-          wdn_jp1 = excision_floor_(m,k,j+1,i) ? wdn_0 : w0_old_(m,IDN,k,j+1,i);
-          wdn_jm1 = excision_floor_(m,k,j-1,i) ? wdn_0 : w0_old_(m,IDN,k,j-1,i);
-          wen_jp1 = excision_floor_(m,k,j+1,i) ? wen_0 : w0_old_(m,IEN,k,j+1,i);
-          wen_jm1 = excision_floor_(m,k,j-1,i) ? wen_0 : w0_old_(m,IEN,k,j-1,i);
-        }
-        if (three_d) {
-          wdn_kp1 = excision_floor_(m,k+1,j,i) ? wdn_0 : w0_old_(m,IDN,k+1,j,i);
-          wdn_km1 = excision_floor_(m,k-1,j,i) ? wdn_0 : w0_old_(m,IDN,k-1,j,i);
-          wen_kp1 = excision_floor_(m,k+1,j,i) ? wen_0 : w0_old_(m,IEN,k+1,j,i);
-          wen_km1 = excision_floor_(m,k-1,j,i) ? wen_0 : w0_old_(m,IEN,k-1,j,i);
-        }
-      } else {
-        wdn_ip1 = w0_old_(m,IDN,k,j,i+1);
-        wdn_im1 = w0_old_(m,IDN,k,j,i-1);
-        wen_ip1 = w0_old_(m,IEN,k,j,i+1);
-        wen_im1 = w0_old_(m,IEN,k,j,i-1);
-        if (multi_d) {
-          wdn_jp1 = w0_old_(m,IDN,k,j+1,i);
-          wdn_jm1 = w0_old_(m,IDN,k,j-1,i);
-          wen_jp1 = w0_old_(m,IEN,k,j+1,i);
-          wen_jm1 = w0_old_(m,IEN,k,j-1,i);
-        }
-        if (three_d) {
-          wdn_kp1 = w0_old_(m,IDN,k+1,j,i);
-          wdn_km1 = w0_old_(m,IDN,k-1,j,i);
-          wen_kp1 = w0_old_(m,IEN,k+1,j,i);
-          wen_km1 = w0_old_(m,IEN,k-1,j,i);
-        }
-      }
-
-      if (ng >= 2) {
-        if (use_excise) {
-          wdn_ip2 = excision_floor_(m,k,j,i+2) ? wdn_0 : w0_old_(m,IDN,k,j,i+2);
-          wdn_im2 = excision_floor_(m,k,j,i-2) ? wdn_0 : w0_old_(m,IDN,k,j,i-2);
-          wen_ip2 = excision_floor_(m,k,j,i+2) ? wen_0 : w0_old_(m,IEN,k,j,i+2);
-          wen_im2 = excision_floor_(m,k,j,i-2) ? wen_0 : w0_old_(m,IEN,k,j,i-2);
-          if (multi_d) {
-            wdn_jp2 = excision_floor_(m,k,j+2,i) ? wdn_0 : w0_old_(m,IDN,k,j+2,i);
-            wdn_jm2 = excision_floor_(m,k,j-2,i) ? wdn_0 : w0_old_(m,IDN,k,j-2,i);
-            wen_jp2 = excision_floor_(m,k,j+2,i) ? wen_0 : w0_old_(m,IEN,k,j+2,i);
-            wen_jm2 = excision_floor_(m,k,j-2,i) ? wen_0 : w0_old_(m,IEN,k,j-2,i);
-          }
-          if (three_d) {
-            wdn_kp2 = excision_floor_(m,k+2,j,i) ? wdn_0 : w0_old_(m,IDN,k+2,j,i);
-            wdn_km2 = excision_floor_(m,k-2,j,i) ? wdn_0 : w0_old_(m,IDN,k-2,j,i);
-            wen_kp2 = excision_floor_(m,k+2,j,i) ? wen_0 : w0_old_(m,IEN,k+2,j,i);
-            wen_km2 = excision_floor_(m,k-2,j,i) ? wen_0 : w0_old_(m,IEN,k-2,j,i);
-          }
-        } else {
-          wdn_ip2 = w0_old_(m,IDN,k,j,i+2);
-          wdn_im2 = w0_old_(m,IDN,k,j,i-2);
-          wen_ip2 = w0_old_(m,IEN,k,j,i+2);
-          wen_im2 = w0_old_(m,IEN,k,j,i-2);
-          if (multi_d) {
-            wdn_jp2 = w0_old_(m,IDN,k,j+2,i);
-            wdn_jm2 = w0_old_(m,IDN,k,j-2,i);
-            wen_jp2 = w0_old_(m,IEN,k,j+2,i);
-            wen_jm2 = w0_old_(m,IEN,k,j-2,i);
-          }
-          if (three_d) {
-            wdn_kp2 = w0_old_(m,IDN,k+2,j,i);
-            wdn_km2 = w0_old_(m,IDN,k-2,j,i);
-            wen_kp2 = w0_old_(m,IEN,k+2,j,i);
-            wen_km2 = w0_old_(m,IEN,k-2,j,i);
-          }
-        }
-      } // endif (ng >= 2)
-
-      if (ng >= 3) {
-        if (use_excise) {
-          wdn_ip3 = excision_floor_(m,k,j,i+3) ? wdn_0 : w0_old_(m,IDN,k,j,i+3);
-          wdn_im3 = excision_floor_(m,k,j,i-3) ? wdn_0 : w0_old_(m,IDN,k,j,i-3);
-          wen_ip3 = excision_floor_(m,k,j,i+3) ? wen_0 : w0_old_(m,IEN,k,j,i+3);
-          wen_im3 = excision_floor_(m,k,j,i-3) ? wen_0 : w0_old_(m,IEN,k,j,i-3);
-          if (multi_d) {
-            wdn_jp3 = excision_floor_(m,k,j+3,i) ? wdn_0 : w0_old_(m,IDN,k,j+3,i);
-            wdn_jm3 = excision_floor_(m,k,j-3,i) ? wdn_0 : w0_old_(m,IDN,k,j-3,i);
-            wen_jp3 = excision_floor_(m,k,j+3,i) ? wen_0 : w0_old_(m,IEN,k,j+3,i);
-            wen_jm3 = excision_floor_(m,k,j-3,i) ? wen_0 : w0_old_(m,IEN,k,j-3,i);
-          }
-          if (three_d) {
-            wdn_kp3 = excision_floor_(m,k+3,j,i) ? wdn_0 : w0_old_(m,IDN,k+3,j,i);
-            wdn_km3 = excision_floor_(m,k-3,j,i) ? wdn_0 : w0_old_(m,IDN,k-3,j,i);
-            wen_kp3 = excision_floor_(m,k+3,j,i) ? wen_0 : w0_old_(m,IEN,k+3,j,i);
-            wen_km3 = excision_floor_(m,k-3,j,i) ? wen_0 : w0_old_(m,IEN,k-3,j,i);
-          }
-        } else {
-          wdn_ip3 = w0_old_(m,IDN,k,j,i+3);
-          wdn_im3 = w0_old_(m,IDN,k,j,i-3);
-          wen_ip3 = w0_old_(m,IEN,k,j,i+3);
-          wen_im3 = w0_old_(m,IEN,k,j,i-3);
-          if (multi_d) {
-            wdn_jp3 = w0_old_(m,IDN,k,j+3,i);
-            wdn_jm3 = w0_old_(m,IDN,k,j-3,i);
-            wen_jp3 = w0_old_(m,IEN,k,j+3,i);
-            wen_jm3 = w0_old_(m,IEN,k,j-3,i);
-          }
-          if (three_d) {
-            wdn_kp3 = w0_old_(m,IDN,k+3,j,i);
-            wdn_km3 = w0_old_(m,IDN,k-3,j,i);
-            wen_kp3 = w0_old_(m,IEN,k+3,j,i);
-            wen_km3 = w0_old_(m,IEN,k-3,j,i);
-          }
-        }
-      } // endif (ng >= 3)
-
-      // if (ng >= 4) {
-      //   if (use_excise) {
-      //     wdn_ip4 = excision_floor_(m,k,j,i+4) ? wdn_0 : w0_old_(m,IDN,k,j,i+4);
-      //     wdn_im4 = excision_floor_(m,k,j,i-4) ? wdn_0 : w0_old_(m,IDN,k,j,i-4);
-      //     wen_ip4 = excision_floor_(m,k,j,i+4) ? wen_0 : w0_old_(m,IEN,k,j,i+4);
-      //     wen_im4 = excision_floor_(m,k,j,i-4) ? wen_0 : w0_old_(m,IEN,k,j,i-4);
-      //     if (multi_d) {
-      //       wdn_jp4 = excision_floor_(m,k,j+4,i) ? wdn_0 : w0_old_(m,IDN,k,j+4,i);
-      //       wdn_jm4 = excision_floor_(m,k,j-4,i) ? wdn_0 : w0_old_(m,IDN,k,j-4,i);
-      //       wen_jp4 = excision_floor_(m,k,j+4,i) ? wen_0 : w0_old_(m,IEN,k,j+4,i);
-      //       wen_jm4 = excision_floor_(m,k,j-4,i) ? wen_0 : w0_old_(m,IEN,k,j-4,i);
-      //     }
-      //     if (three_d) {
-      //       wdn_kp4 = excision_floor_(m,k+4,j,i) ? wdn_0 : w0_old_(m,IDN,k+4,j,i);
-      //       wdn_km4 = excision_floor_(m,k-4,j,i) ? wdn_0 : w0_old_(m,IDN,k-4,j,i);
-      //       wen_kp4 = excision_floor_(m,k+4,j,i) ? wen_0 : w0_old_(m,IEN,k+4,j,i);
-      //       wen_km4 = excision_floor_(m,k-4,j,i) ? wen_0 : w0_old_(m,IEN,k-4,j,i);
-      //     }
-      //   } else {
-      //     wdn_ip4 = w0_old_(m,IDN,k,j,i+4);
-      //     wdn_im4 = w0_old_(m,IDN,k,j,i-4);
-      //     wen_ip4 = w0_old_(m,IEN,k,j,i+4);
-      //     wen_im4 = w0_old_(m,IEN,k,j,i-4);
-      //     if (multi_d) {
-      //       wdn_jp4 = w0_old_(m,IDN,k,j+4,i);
-      //       wdn_jm4 = w0_old_(m,IDN,k,j-4,i);
-      //       wen_jp4 = w0_old_(m,IEN,k,j+4,i);
-      //       wen_jm4 = w0_old_(m,IEN,k,j-4,i);
-      //     }
-      //     if (three_d) {
-      //       wdn_kp4 = w0_old_(m,IDN,k+4,j,i);
-      //       wdn_km4 = w0_old_(m,IDN,k-4,j,i);
-      //       wen_kp4 = w0_old_(m,IEN,k+4,j,i);
-      //       wen_km4 = w0_old_(m,IEN,k-4,j,i);
-      //     }
-      //   }
-      // } // endif (ng >= 4)
+      // primitives at center and in adjacent cells
+      int ic=4; int jc=4; int kc=4;
+      int num_i = ng;
+      int num_j = multi_d ? ng : 0;
+      int num_k = three_d ? ng : 0;
+      Kokkos::deep_copy(w_ko, 0.);
+      for (int k_add=-num_k; k_add <= num_k; ++k_add) {
+        for (int j_add=-num_j; j_add <= num_j; ++j_add) {
+          for (int i_add=-num_i; i_add <= num_i; ++i_add) {
+            w_ko(IDN,kc+k_add,jc+j_add,ic+i_add) = w0_old_(m,IDN,k+k_add,j+j_add,i+i_add);
+            w_ko(IVX,kc+k_add,jc+j_add,ic+i_add) = w0_old_(m,IVX,k+k_add,j+j_add,i+i_add);
+            w_ko(IVY,kc+k_add,jc+j_add,ic+i_add) = w0_old_(m,IVY,k+k_add,j+j_add,i+i_add);
+            w_ko(IVZ,kc+k_add,jc+j_add,ic+i_add) = w0_old_(m,IVZ,k+k_add,j+j_add,i+i_add);
+            w_ko(IEN,kc+k_add,jc+j_add,ic+i_add) = w0_old_(m,IEN,k+k_add,j+j_add,i+i_add);
+            if (use_excise) {
+              if (excision_floor_(m,k+k_add,j+j_add,i+i_add)) {
+                w_ko(IDN,kc+k_add,jc+j_add,ic+i_add) = w0_old_(m,IDN,k,j,i);
+                w_ko(IVX,kc+k_add,jc+j_add,ic+i_add) = w0_old_(m,IVX,k,j,i);
+                w_ko(IVY,kc+k_add,jc+j_add,ic+i_add) = w0_old_(m,IVY,k,j,i);
+                w_ko(IVZ,kc+k_add,jc+j_add,ic+i_add) = w0_old_(m,IVZ,k,j,i);
+                w_ko(IEN,kc+k_add,jc+j_add,ic+i_add) = w0_old_(m,IEN,k,j,i);
+              }
+            } // endif use_excise
+          } // endfor i_add
+        } // endfor j_add
+      } // endfor k_add
 
       // compute dissipation terms
-      Real coeff, del_wdnx, del_wdny, del_wdnz, del_wenx, del_weny, del_wenz;
-      // if (ng == 3) {
-      Real c3 = 1.0; Real c2 = -6.0; Real c1 = 15.0; Real c0 = -20.0;
-      del_wdnx = c3*wdn_ip3 + c2*wdn_ip2 + c1*wdn_ip1 + c0*wdn_0 + c1*wdn_im1 + c2*wdn_im2 + c3*wdn_im3;
-      del_wenx = c3*wen_ip3 + c2*wen_ip2 + c1*wen_ip1 + c0*wen_0 + c1*wen_im1 + c2*wen_im2 + c3*wen_im3;
-      if (multi_d) {
-        del_wdny = c3*wdn_jp3 + c2*wdn_jp2 + c1*wdn_jp1 + c0*wdn_0 + c1*wdn_jm1 + c2*wdn_jm2 + c3*wdn_jm3;
-        del_weny = c3*wen_jp3 + c2*wen_jp2 + c1*wen_jp1 + c0*wen_0 + c1*wen_jm1 + c2*wen_jm2 + c3*wen_jm3;
-      }
-      if (three_d) {
-        del_wdnz = c3*wdn_kp3 + c2*wdn_kp2 + c1*wdn_kp1 + c0*wdn_0 + c1*wdn_km1 + c2*wdn_km2 + c3*wdn_km3;
-        del_wenz = c3*wen_kp3 + c2*wen_kp2 + c1*wen_kp1 + c0*wen_0 + c1*wen_km1 + c2*wen_km2 + c3*wen_km3;
-      }
-      coeff = sigma_ko_/64;
-      // }
+      Real del_wdn[3], del_wvx[3], , del_wvy[3], del_wvz[3], del_wen[3], del_tgas[3];
+      Real coeff0 = sigma_ko_/64.0;
+      Real coeffs[4];
+      coeffs[3] = 1.0; coeffs[2] = -6.0; coeffs[1] = 15.0; coeffs[0] = -20.0;
+      int n_max = 1;
+      if (multi_d) n_max = 2;
+      if (three_d) n_max = 3;
+      for (int n=0; n < n_max; ++n) {
+        del_wdn[n]  = coeffs[0]*w_ko(IDN,kc,jc,ic);
+        del_wvx[n]  = coeffs[0]*w_ko(IVX,kc,jc,ic);
+        del_wvy[n]  = coeffs[0]*w_ko(IVY,kc,jc,ic);
+        del_wvz[n]  = coeffs[0]*w_ko(IVZ,kc,jc,ic);
+        del_wen[n]  = coeffs[0]*w_ko(IEN,kc,jc,ic);
+        del_tgas[n] = coeffs[0]*w_ko(IEN,kc,jc,ic)/w_ko(IDN,kc,jc,ic);
+        for (int l=1; l<=3; ++l) {
+          int kl = (n==2) kc-l:kc; int kr = (n==2) kc+l:kc;
+          int jl = (n==1) jc-l:jc; int jr = (n==1) jc+l:jc;
+          int il = (n==0) ic-l:ic; int ir = (n==0) ic+l:ic;
+          del_wdn[n]  += coeffs[l] * (w_ko(IDN,kr,jr,ir) + w_ko(IDN,kl,jl,il));
+          del_wvx[n]  += coeffs[l] * (w_ko(IVX,kr,jr,ir) + w_ko(IVX,kl,jl,il));
+          del_wvy[n]  += coeffs[l] * (w_ko(IVY,kr,jr,ir) + w_ko(IVY,kl,jl,il));
+          del_wvz[n]  += coeffs[l] * (w_ko(IVZ,kr,jr,ir) + w_ko(IVZ,kl,jl,il));
+          del_wen[n]  += coeffs[l] * (w_ko(IEN,kr,jr,ir) + w_ko(IEN,kl,jl,il));
+          del_tgas[n] += coeffs[l] * (w_ko(IEN,kr,jr,ir)/w_ko(IDN,kr,jr,ir) + w_ko(IEN,kl,jl,il)/w_ko(IDN,kl,jl,il));
+        } // endfor l
+      } // endfor n
 
       // add dissipation terms
-      wdn += coeff * del_wdnx/size.d_view(m).dx1;
-      wen += coeff * del_wenx/size.d_view(m).dx1;
+      wdn  += coeff0 * del_wdn[0]/size.d_view(m).dx1;
+      wvx  += coeff0 * del_wvx[0]/size.d_view(m).dx1;
+      wvy  += coeff0 * del_wvy[0]/size.d_view(m).dx1;
+      wvz  += coeff0 * del_wvz[0]/size.d_view(m).dx1;
+      wen  += coeff0 * del_wen[0]/size.d_view(m).dx1;
+      tgas += coeff0 * del_tgas[0]/size.d_view(m).dx1;
+
       if (multi_d) {
-        wdn += coeff * del_wdny/size.d_view(m).dx2;
-        wen += coeff * del_weny/size.d_view(m).dx2;
-      }
-      if (three_d) {
-        wdn += coeff * del_wdnz/size.d_view(m).dx3;
-        wen += coeff * del_wenz/size.d_view(m).dx3;
+        wdn  += coeff0 * del_wdn[1]/size.d_view(m).dx2;
+        wvx  += coeff0 * del_wvx[1]/size.d_view(m).dx2;
+        wvy  += coeff0 * del_wvy[1]/size.d_view(m).dx2;
+        wvz  += coeff0 * del_wvz[1]/size.d_view(m).dx2;
+        wen  += coeff0 * del_wen[1]/size.d_view(m).dx2;
+        tgas += coeff0 * del_tgas[1]/size.d_view(m).dx2;
       }
 
-      // check floors
-      wdn = fmax(wdn, eos.dfloor);
-      Real lg_sfloor_local = log10(eos.sfloor1) + (log10(wdn)-log10(eos.rho1)) * (log10(eos.sfloor2)-log10(eos.sfloor1))/(log10(eos.rho2)-log10(eos.rho1));
-      Real sfloor_local = pow(10.0, lg_sfloor_local);
-      Real sfloor = fmax(eos.sfloor, sfloor_local);
-      Real pfloor = fmax(eos.pfloor, sfloor*pow(wdn, eos.gamma));
-      Real efloor = pfloor/gm1;
-      wen = fmax(wen, efloor);
+      if (three_d) {
+        wdn  += coeff0 * del_wdn[2]/size.d_view(m).dx3;
+        wvx  += coeff0 * del_wvx[2]/size.d_view(m).dx3;
+        wvy  += coeff0 * del_wvy[2]/size.d_view(m).dx3;
+        wvz  += coeff0 * del_wvz[2]/size.d_view(m).dx3;
+        wen  += coeff0 * del_wen[2]/size.d_view(m).dx3;
+        tgas += coeff0 * del_tgas[2]/size.d_view(m).dx3;
+      }
 
       // extract components of metric
       Real &x1min = size.d_view(m).x1min;
@@ -273,6 +158,29 @@ void MHD::AddKODissipation() {
 
       Real glower[4][4], gupper[4][4];
       ComputeMetricAndInverse(x1v, x2v, x3v, flat, spin, glower, gupper);
+
+      // apply density and pressure floors
+      wdn = fmax(wdn, eos.dfloor);
+      Real lg_sfloor_local = log10(eos.sfloor1) + (log10(wdn)-log10(eos.rho1)) * (log10(eos.sfloor2)-log10(eos.sfloor1))/(log10(eos.rho2)-log10(eos.rho1));
+      Real sfloor_local = pow(10.0, lg_sfloor_local);
+      Real sfloor = fmax(eos.sfloor, sfloor_local);
+      Real pfloor = fmax(eos.pfloor, sfloor*pow(wdn, eos.gamma));
+      Real efloor = pfloor/gm1;
+      wen = fmax(wen, efloor);
+
+      // apply velocity ceiling if necessary
+      Real tmp = glower[1][1]*SQR(wvx)
+               + glower[2][2]*SQR(wvy)
+               + glower[3][3]*SQR(wvz)
+               + 2.0*glower[1][2]*wvx*wvy + 2.0*glower[1][3]*wvx*wvz
+               + 2.0*glower[2][3]*wvy*wvz;
+      Real lor = sqrt(1.0+tmp);
+      if (lor > eos.gamma_max) {
+        Real factor = sqrt((SQR(eos.gamma_max)-1.0)/(SQR(lor)-1.0));
+        wvx *= factor;
+        wvy *= factor;
+        wvz *= factor;
+      }
 
       // Reset conserved variables
       MHDPrim1D w_in;
