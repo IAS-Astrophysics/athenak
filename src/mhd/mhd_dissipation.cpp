@@ -67,7 +67,6 @@ void MHD::AddKODissipation() {
       int num_i = ng;
       int num_j = multi_d ? ng : 0;
       int num_k = three_d ? ng : 0;
-      Kokkos::deep_copy(w_ko, 0.);
       for (int k_add=-num_k; k_add <= num_k; ++k_add) {
         for (int j_add=-num_j; j_add <= num_j; ++j_add) {
           for (int i_add=-num_i; i_add <= num_i; ++i_add) {
