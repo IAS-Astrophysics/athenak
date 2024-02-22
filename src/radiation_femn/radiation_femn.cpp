@@ -24,8 +24,6 @@ namespace radiationfemn {
 RadiationFEMN::RadiationFEMN(MeshBlockPack *ppack, ParameterInput *pin) :
     pmy_pack(ppack),
     u_mu("fluid_vel_lab", 1, 1, 1, 1, 1),
-    L_mu_muhat0("L^mu_muhat0", 1, 1, 1, 1, 1, 1),
-    L_mu_muhat1("L^mu_muhat1", 1, 1, 1, 1, 1, 1),
     scheme_points("scheme_points", 1, 1),
     scheme_weights("scheme_weights", 1),
     f0("f0", 1, 1, 1, 1, 1),
@@ -38,6 +36,7 @@ RadiationFEMN::RadiationFEMN(MeshBlockPack *ppack, ParameterInput *pin) :
     angular_grid_cartesian("angular_grid_cartesian", 1, 1),
     triangle_information("triangle_information", 1, 1),
     mass_matrix("mm", 1, 1),
+    L_mu_muhat0_data("L_mu_muhat0_data", 1, 1, 1, 1, 1),
     stiffness_matrix_x("sx", 1, 1),
     stiffness_matrix_y("sy", 1, 1),
     stiffness_matrix_z("sz", 1, 1),
@@ -201,8 +200,8 @@ RadiationFEMN::RadiationFEMN(MeshBlockPack *ppack, ParameterInput *pin) :
 
   // tetrad and fluid quantities
   Kokkos::realloc(u_mu, nmb, 4, ncells3, ncells2, ncells1);           // u^mu: fluid velocity in lab frame
-  Kokkos::realloc(L_mu_muhat0, nmb, 4, 4, ncells3, ncells2, ncells1); // tetrad L^mu_muhat
-  Kokkos::realloc(L_mu_muhat1, nmb, 4, 4, ncells3, ncells2, ncells1); // tetrad L^mu_muhat
+  Kokkos::realloc(L_mu_muhat0_data, nmb, 1, ncells3, ncells2, ncells1); // tetrad L^mu_muhat
+  L_mu_muhat0.InitWithShallowSlice(L_mu_muhat0_data, 0, 15);
 
   // Hardcode metric fluid quantities @TODO: change this later
   this->InitializeMetricFluid();

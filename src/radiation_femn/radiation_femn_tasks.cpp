@@ -113,7 +113,6 @@ TaskStatus RadiationFEMN::InitRecv(Driver *pdrive, int stage) {
 TaskStatus RadiationFEMN::CopyCons(Driver *pdrive, int stage) {
   if (stage == 1) {
     Kokkos::deep_copy(DevExeSpace(), f1, f0);
-    Kokkos::deep_copy(DevExeSpace(), L_mu_muhat1, L_mu_muhat0);
   }
   return TaskStatus::complete;
 }

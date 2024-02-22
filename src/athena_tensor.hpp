@@ -518,4 +518,171 @@ AthenaScratchTensor<T, sym, ndim, 4>::AthenaScratchTensor() {
   }
 }
 
+// Athena Scratch Tensors which can work on ndim = 4
+template<typename T, TensorSymm sym, int ndim, int rank>
+class AthenaScratchTensor4d;
+
+//----------------------------------------------------------------------------------------
+// rank 3 AthenaScratchTensor
+// This is a 0D AthenaScratchTensor
+template<typename T, TensorSymm sym, int ndim>
+class AthenaScratchTensor4d<T, sym, ndim, 3> {
+ public:
+  KOKKOS_INLINE_FUNCTION
+  AthenaScratchTensor4d();
+  // the default destructor/copy operators are sufficient
+  ~AthenaScratchTensor4d() = default;
+  AthenaScratchTensor4d(AthenaScratchTensor4d<T, sym, ndim, 3> const &) = default;
+  AthenaScratchTensor4d<T, sym, ndim, 3> & operator=
+  (AthenaScratchTensor4d<T, sym, ndim, 3> const &) = default;
+  KOKKOS_INLINE_FUNCTION
+  int idxmap(int const a, int const b, int const c) const {
+    return idxmap_[a][b][c];
+  }
+  KOKKOS_INLINE_FUNCTION
+  Real operator()(int const a, int const b, int const c) const {
+    return data_[idxmap_[a][b][c]];
+  }
+  KOKKOS_INLINE_FUNCTION
+  Real & operator()(int const a, int const b, int const c) {
+    return data_[idxmap_[a][b][c]];
+  }
+  KOKKOS_INLINE_FUNCTION
+  void ZeroClear() {
+    for (int i = 0; i < ndim*ndim*ndim; ++i) {
+      data_[i] = 0.0;
+    }
+  }
+
+ private:
+  Real data_[64];
+  int idxmap_[4][4][4];
+  int ndof_;
+};
+
+//----------------------------------------------------------------------------------------
+// Implementation details
+template<typename T, TensorSymm sym, int ndim>
+KOKKOS_INLINE_FUNCTION
+AthenaScratchTensor4d<T, sym, ndim, 3>::AthenaScratchTensor4d() {
+  switch(sym) {
+    case TensorSymm::NONE:
+      ndof_ = 0;
+      for(int a = 0; a < ndim; ++a)
+      for(int b = 0; b < ndim; ++b)
+      for(int c = 0; c < ndim; ++c) {
+        idxmap_[a][b][c] = ndof_++;
+      }
+      break;
+    case TensorSymm::SYM2:
+      ndof_ = 0;
+      for(int a = 0; a < ndim; ++a)
+      for(int b = 0; b < ndim; ++b)
+      for(int c = b; c < ndim; ++c) {
+        idxmap_[a][b][c] = ndof_++;
+        idxmap_[a][c][b] = idxmap_[a][b][c];
+      }
+      break;
+    case TensorSymm::ISYM2:
+      ndof_ = 0;
+      for(int a = 0; a < ndim; ++a)
+      for(int b = a; b < ndim; ++b)
+      for(int c = 0; c < ndim; ++c) {
+        idxmap_[a][b][c] = ndof_++;
+        idxmap_[b][a][c] = idxmap_[a][b][c];
+      }
+      break;
+  }
+}
+
+// this is the abstract base class
+// This now works only for spatially 3D data
+template<typename T, TensorSymm sym, int ndim, int rank>
+class AthenaTensor4d;
+
+//----------------------------------------------------------------------------------------
+// rank 1 AthenaTensor: 4D vector and co-vector fields
+// This is a 4D AthenaTensor
+template<typename T, TensorSymm sym, int ndim>
+class AthenaTensor4d<T, sym, ndim, 1> {
+ public:
+  // the default constructor/destructor/copy operators are sufficient
+  AthenaTensor4d() = default;
+  ~AthenaTensor4d() = default;
+  AthenaTensor4d(AthenaTensor4d<T, sym, ndim, 1> const &) = default;
+  AthenaTensor4d<T, sym, ndim, 1> & operator=
+  (AthenaTensor4d<T, sym, ndim, 1> const &) = default;
+  // operators to access the data
+  KOKKOS_INLINE_FUNCTION
+  decltype(auto) operator() (int const m, int const a,
+                             int const k, int const j, int const i) const {
+    return data_(m,a,k,j,i);
+  }
+  //KOKKOS_INLINE_FUNCTION
+  void InitWithShallowSlice(DvceArray5D<Real> src, const int indx1, const int indx2) {
+    data_ = Kokkos::subview(src, Kokkos::ALL, std::make_pair(indx1, indx2+1),
+                                 Kokkos::ALL, Kokkos::ALL, Kokkos::ALL);
+  }
+ private:
+  sub_DvceArray5D_1D data_;
+};
+
+//----------------------------------------------------------------------------------------
+// rank 2 AthenaTensor, e.g., the metric or the extrinsic curvature
+template<typename T, TensorSymm sym, int ndim>
+class AthenaTensor4d<T, sym, ndim, 2> {
+ public:
+  AthenaTensor4d();
+  // the default destructor/copy operators are sufficient
+  ~AthenaTensor4d() = default;
+  AthenaTensor4d(AthenaTensor4d<T, sym, ndim, 2> const &) = default;
+  AthenaTensor4d<T, sym, ndim, 2> & operator=
+  (AthenaTensor4d<T, sym, ndim, 2> const &) = default;
+
+  int idxmap(int const a, int const b) const {
+    return idxmap_[a][b];
+  }
+  // operators to access the data
+  KOKKOS_INLINE_FUNCTION
+  decltype(auto) operator() (int const m, int const a, int const b,
+                             int const k, int const j, int const i) const {
+    return data_(m,idxmap_[a][b],k,j,i);
+  }
+  //KOKKOS_INLINE_FUNCTION
+  void InitWithShallowSlice(DvceArray5D<Real> src, const int indx1, const int indx2) {
+    data_ = Kokkos::subview(src, Kokkos::ALL, std::make_pair(indx1, indx2+1),
+                                 Kokkos::ALL, Kokkos::ALL, Kokkos::ALL);
+  }
+
+ private:
+  sub_DvceArray5D_2D data_;
+  int idxmap_[ndim][ndim];
+  int ndof_;
+};
+
+//----------------------------------------------------------------------------------------
+// Implementation details
+// They are all duplicated to account for dim 0
+template<typename T, TensorSymm sym, int ndim>
+AthenaTensor4d<T, sym, ndim, 2>::AthenaTensor4d() {
+  switch(sym) {
+    case TensorSymm::NONE:
+      ndof_ = 0;
+      for(int a = 0; a < ndim; ++a)
+      for(int b = 0; b < ndim; ++b) {
+        idxmap_[a][b] = ndof_++;
+      }
+      break;
+    case TensorSymm::SYM2:
+    case TensorSymm::ISYM2:
+      ndof_ = 0;
+      for(int a = 0; a < ndim; ++a)
+      for(int b = a; b < ndim; ++b) {
+        idxmap_[a][b] = ndof_++;
+        idxmap_[b][a] = idxmap_[a][b];
+      }
+      break;
+  }
+}
+
 #endif // ATHENA_TENSOR_HPP_

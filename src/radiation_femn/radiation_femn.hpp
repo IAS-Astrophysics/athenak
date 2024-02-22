@@ -141,8 +141,8 @@ class RadiationFEMN {
   DvceArray5D<Real> ftemp;
 
   // Arrays for holding tetrad quantities
-  DvceArray6D<Real> L_mu_muhat0;   // tetrad quantities
-  DvceArray6D<Real> L_mu_muhat1;   // tetrad quantities at intermediate step
+  DvceArray5D<Real> L_mu_muhat0_data;   // tetrad quantities
+  AthenaTensor4d<Real, TensorSymm::NONE, 4, 2> L_mu_muhat0;
 
   // fluid velocity
   DvceArray5D<Real> u_mu;

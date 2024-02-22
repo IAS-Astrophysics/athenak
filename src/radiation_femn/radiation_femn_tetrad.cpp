@@ -25,8 +25,6 @@ TaskStatus RadiationFEMN::TetradOrthogonalize(Driver *pdriver, int stage) {
   auto u_mu_ = pmy_pack->pradfemn->u_mu;
   adm::ADM::ADM_vars &adm = pmy_pack->padm->adm;
 
-  Kokkos::deep_copy(L_mu_muhat0_, 0.);
-
   // L^mu_0 = u^mu
   par_for("radiation_femn_tetrad_compute_L_mu_0", DevExeSpace(), 0, nmb1, 0, 3, ks, ke, js, je, is, ie,
           KOKKOS_LAMBDA(int m, int mu, int k, int j, int i) {
