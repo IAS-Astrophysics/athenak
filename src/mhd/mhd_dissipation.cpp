@@ -158,15 +158,14 @@ void MHD::AddKODissipation() {
       Real glower[4][4], gupper[4][4];
       ComputeMetricAndInverse(x1v, x2v, x3v, flat, spin, glower, gupper);
 
-      // apply density and pressure floors
-      wdn = fmax(wdn, eos.dfloor);
+      // check density and pressure
+      if (wdn < eos.dfloor) wdn = w0_old_(m,IDN,k,j,i);
       Real lg_sfloor_local = log10(eos.sfloor1) + (log10(wdn)-log10(eos.rho1)) * (log10(eos.sfloor2)-log10(eos.sfloor1))/(log10(eos.rho2)-log10(eos.rho1));
       Real sfloor_local = pow(10.0, lg_sfloor_local);
       Real sfloor = fmax(eos.sfloor, sfloor_local);
       Real pfloor = fmax(eos.pfloor, sfloor*pow(wdn, eos.gamma));
       Real efloor = pfloor/gm1;
-      if (wen < efloor) wen = wdn*tgas;
-      wen = fmax(wen, efloor);
+      if (wen < efloor) wen = w0_old_(m,IEN,k,j,i);
 
       // apply velocity ceiling if necessary
       Real tmp = glower[1][1]*SQR(wvx)
@@ -176,10 +175,13 @@ void MHD::AddKODissipation() {
                + 2.0*glower[2][3]*wvy*wvz;
       Real lor = sqrt(1.0+tmp);
       if (lor > eos.gamma_max) {
-        Real factor = sqrt((SQR(eos.gamma_max)-1.0)/(SQR(lor)-1.0));
-        wvx *= factor;
-        wvy *= factor;
-        wvz *= factor;
+        // Real factor = sqrt((SQR(eos.gamma_max)-1.0)/(SQR(lor)-1.0));
+        // wvx *= factor;
+        // wvy *= factor;
+        // wvz *= factor;
+        wvx = w0_old_(m,IVX,k,j,i);
+        wvy = w0_old_(m,IVY,k,j,i);
+        wvz = w0_old_(m,IVZ,k,j,i);
       }
 
       // Reset conserved variables
