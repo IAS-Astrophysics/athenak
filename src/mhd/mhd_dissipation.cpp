@@ -90,7 +90,7 @@ void MHD::AddKODissipation() {
       } // endfor k_add
 
       // compute dissipation terms
-      Real del_wdn[3], del_wvx[3], , del_wvy[3], del_wvz[3], del_wen[3], del_tgas[3];
+      Real del_wdn[3], del_wvx[3], del_wvy[3], del_wvz[3], del_wen[3], del_tgas[3];
       Real coeff0 = sigma_ko_/64.0;
       Real coeffs[4];
       coeffs[3] = 1.0; coeffs[2] = -6.0; coeffs[1] = 15.0; coeffs[0] = -20.0;
@@ -105,9 +105,9 @@ void MHD::AddKODissipation() {
         del_wen[n]  = coeffs[0]*w_ko(IEN,kc,jc,ic);
         del_tgas[n] = coeffs[0]*w_ko(IEN,kc,jc,ic)/w_ko(IDN,kc,jc,ic);
         for (int l=1; l<=3; ++l) {
-          int kl = (n==2) kc-l:kc; int kr = (n==2) kc+l:kc;
-          int jl = (n==1) jc-l:jc; int jr = (n==1) jc+l:jc;
-          int il = (n==0) ic-l:ic; int ir = (n==0) ic+l:ic;
+          int kl = (n==2) ? kc-l : kc; int kr = (n==2) ? kc+l : kc;
+          int jl = (n==1) ? jc-l : jc; int jr = (n==1) ? jc+l : jc;
+          int il = (n==0) ? ic-l : ic; int ir = (n==0) ? ic+l : ic;
           del_wdn[n]  += coeffs[l] * (w_ko(IDN,kr,jr,ir) + w_ko(IDN,kl,jl,il));
           del_wvx[n]  += coeffs[l] * (w_ko(IVX,kr,jr,ir) + w_ko(IVX,kl,jl,il));
           del_wvy[n]  += coeffs[l] * (w_ko(IVY,kr,jr,ir) + w_ko(IVY,kl,jl,il));
@@ -166,6 +166,7 @@ void MHD::AddKODissipation() {
       Real sfloor = fmax(eos.sfloor, sfloor_local);
       Real pfloor = fmax(eos.pfloor, sfloor*pow(wdn, eos.gamma));
       Real efloor = pfloor/gm1;
+      if (wen < efloor) wen = wdn*tgas;
       wen = fmax(wen, efloor);
 
       // apply velocity ceiling if necessary
