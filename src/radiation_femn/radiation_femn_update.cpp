@@ -229,18 +229,18 @@ TaskStatus RadiationFEMN::ExpRKUpdate(Driver *pdriver, int stage) {
                               + g_dd[a_idx + 4 * 2] * L_mu_muhat0_(m, 2, a, k, j, i) + g_dd[a_idx + 4 * 3] * L_mu_muhat0_(m, 3, a, k, j, i));
 
                           Gamma_fluid_udd(a, b, c) +=
-                              L_ahat_aidx * (L_mu_muhat0_(m, 1, c, k, j, i) - (u_mu_(m, 1, k, j, 1) / u_mu_(m, 0, k, j, 1)) * L_mu_muhat0_(m, 0, c, k, j, i))
+                              L_ahat_aidx * (L_mu_muhat0_(m, 1, c, k, j, i) - (u_mu_(m, 1, k, j, i) / u_mu_(m, 0, k, j, i)) * L_mu_muhat0_(m, 0, c, k, j, i))
                                   * Dx<NGHOST>(0, idx, L_mu_muhat0_, m, a_idx, c, k, j, i);
 
                           if (multi_d) {
                             Gamma_fluid_udd(a, b, c) +=
-                                L_ahat_aidx * (L_mu_muhat0_(m, 2, c, k, j, i) - (u_mu_(m, 2, k, j, 1) / u_mu_(m, 0, k, j, 1)) * L_mu_muhat0_(m, 0, c, k, j, i))
+                                L_ahat_aidx * (L_mu_muhat0_(m, 2, c, k, j, i) - (u_mu_(m, 2, k, j, i) / u_mu_(m, 0, k, j, i)) * L_mu_muhat0_(m, 0, c, k, j, i))
                                     * Dx<NGHOST>(1, idx, L_mu_muhat0_, m, a_idx, c, k, j, i);
                           }
 
                           if (three_d) {
                             Gamma_fluid_udd(a, b, c) +=
-                                L_ahat_aidx * (L_mu_muhat0_(m, 3, c, k, j, i) - (u_mu_(m, 3, k, j, 1) / u_mu_(m, 0, k, j, 1)) * L_mu_muhat0_(m, 0, c, k, j, i))
+                                L_ahat_aidx * (L_mu_muhat0_(m, 3, c, k, j, i) - (u_mu_(m, 3, k, j, i) / u_mu_(m, 0, k, j, i)) * L_mu_muhat0_(m, 0, c, k, j, i))
                                     * Dx<NGHOST>(2, idx, L_mu_muhat0_, m, a_idx, c, k, j, i);
                           }
                         }
