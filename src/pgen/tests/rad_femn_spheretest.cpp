@@ -19,6 +19,7 @@
 #include "mesh/mesh.hpp"
 #include "pgen/pgen.hpp"
 #include "radiation_femn/radiation_femn.hpp"
+#include "adm/adm.hpp"
 
 void ProblemGenerator::RadiationFEMNSpheretest(ParameterInput *pin, const bool restart) {
   if (restart) return;
@@ -48,6 +49,15 @@ void ProblemGenerator::RadiationFEMNSpheretest(ParameterInput *pin, const bool r
   int &je = indcs.je;
   int &ks = indcs.ks;
   int &ke = indcs.ke;
+
+  int isg = is - indcs.ng;
+  int ieg = ie + indcs.ng;
+  int jsg = (indcs.nx2 > 1) ? js - indcs.ng : js;
+  int jeg = (indcs.nx2 > 1) ? je + indcs.ng : je;
+  int ksg = (indcs.nx3 > 1) ? ks - indcs.ng : ks;
+  int keg = (indcs.nx3 > 1) ? ke + indcs.ng : ke;
+  int nmb = pmbp->nmb_thispack;
+  adm::ADM::ADM_vars &adm = pmbp->padm->adm;
 
   if (pmbp->pradfemn->num_energy_bins != 1) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
@@ -125,6 +135,20 @@ void ProblemGenerator::RadiationFEMNSpheretest(ParameterInput *pin, const bool r
               kappa_a_(m, k, j, i) = fraction_inside_sphere * 10.0;
               eta_(m, k, j, i) = fraction_inside_sphere * 10.0;
             }
+          });
+
+  // set metric to minkowski
+  par_for("pgen_linetest_minkowski_initialize", DevExeSpace(), 0, nmb - 1, ksg, keg, jsg, jeg, isg, ieg,
+          KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
+
+            for (int a = 0; a < 3; ++a)
+              for (int b = a; b < 3; ++b) {
+                adm.g_dd(m, a, b, k, j, i) = (a == b ? 1. : 0.);
+              }
+
+            adm.alpha(m, k, j, i) = 1.;
+            adm.psi4(m, k, j, i) = 1.;
+
           });
 
   return;
