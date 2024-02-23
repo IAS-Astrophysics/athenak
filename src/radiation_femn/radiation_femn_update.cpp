@@ -53,7 +53,7 @@ TaskStatus RadiationFEMN::ExpRKUpdate(Driver *pdriver, int stage) {
   auto &flx2 = pmy_pack->pradfemn->iflx.x2f;
   auto &flx3 = pmy_pack->pradfemn->iflx.x3f;
   auto &L_mu_muhat0_ = pmy_pack->pradfemn->L_mu_muhat0;
-  //auto &u_mu_ = pmy_pack->pradfemn->u_mu;
+  auto &u_mu_ = pmy_pack->pradfemn->u_mu;
   auto &eta_ = pmy_pack->pradfemn->eta;
   auto &e_source_ = pmy_pack->pradfemn->e_source;
   auto &kappa_s_ = pmy_pack->pradfemn->kappa_s;
@@ -194,7 +194,7 @@ TaskStatus RadiationFEMN::ExpRKUpdate(Driver *pdriver, int stage) {
                       for (int c = 0; c < 4; ++c) {
                         Gamma_udd(a, b, c) = 0.0;
                         for (int d = 0; d < 4; ++d) {
-                          Gamma_udd(a, b, c) += 0.5 * g_uu[4 * a + d] * ((dg4_ddd(b, d, c)) + (dg4_ddd(c, b, d)) - (dg4_ddd(d, b, c)));
+                          Gamma_udd(a, b, c) += 0.5 * g_uu[a + 4 * d] * ((dg4_ddd(b, d, c)) + (dg4_ddd(c, b, d)) - (dg4_ddd(d, b, c)));
                         }
                       }
                     }
@@ -207,17 +207,30 @@ TaskStatus RadiationFEMN::ExpRKUpdate(Driver *pdriver, int stage) {
                       for (int c = 0; c < 4; ++c) {
                         Gamma_fluid_udd(a, b, c) = 0.0;
                         for (int d = 0; d < 64; ++d) {
-                          int b_idx = int(d / (4 * 4));
-                          int c_idx = int((d - 4 * b_idx) / 4);
-                          int a_idx = d - b_idx * 4 - c_idx * 4;
+                          int a_idx = int(d / (4 * 4));
+                          int b_idx = int((d - 4 * a_idx) / 4);
+                          int c_idx = d - b_idx * 4 - a_idx * 4;
 
-                          Real L_muhat_mu = 1.;
+                          Real l_sign = (a == 0) ? -1. : +1.;
+                          Real L_ahat_aidx = l_sign * (g_dd[a_idx + 4 * 0] * L_mu_muhat0_(m, 0, a, k, j, i) + g_dd[a_idx + 4 * 1] * L_mu_muhat0_(m, 1, a, k, j, i)
+                              + g_dd[a_idx + 4 * 2] * L_mu_muhat0_(m, 2, a, k, j, i) + g_dd[a_idx + 4 * 3] * L_mu_muhat0_(m, 3, a, k, j, i));
                           Gamma_fluid_udd(a, b, c) +=
-                              L_mu_muhat0_(m, b_idx, b, k, j, 1) * L_mu_muhat0_(m, c_idx, c, k, j, 1) * L_muhat_mu * Gamma_udd(a_idx, b_idx, c_idx);
+                              L_mu_muhat0_(m, b_idx, b, k, j, i) * L_mu_muhat0_(m, c_idx, c, k, j, i) * L_ahat_aidx * Gamma_udd(a_idx, b_idx, c_idx);
                         }
 
-                        for (int d = 0; d < 16; ++d) {
-                          Gamma_fluid_udd(a, b, c) += 0;
+                        for (int a_idx = 0; a_idx < 4; ++a_idx) {
+
+                          Real l_sign = (a == 0) ? -1. : +1.;
+                          Real L_ahat_aidx = l_sign * (g_dd[a_idx + 4 * 0] * L_mu_muhat0_(m, 0, a, k, j, i) + g_dd[a_idx + 4 * 1] * L_mu_muhat0_(m, 1, a, k, j, i)
+                              + g_dd[a_idx + 4 * 2] * L_mu_muhat0_(m, 2, a, k, j, i) + g_dd[a_idx + 4 * 3] * L_mu_muhat0_(m, 3, a, k, j, i));
+
+                          Gamma_fluid_udd(a, b, c) += L_ahat_aidx * (
+                              (L_mu_muhat0_(m, 1, c, k, j, i) - (u_mu_(m, 1, k, j, 1) / u_mu_(m, 0, k, j, 1)) * L_mu_muhat0_(m, 0, c, k, j, i))
+                                  * Dx<NGHOST>(0, idx, L_mu_muhat0_, m, a_idx, c, k, j, i)
+                                  + (L_mu_muhat0_(m, 2, c, k, j, i) - (u_mu_(m, 2, k, j, 1) / u_mu_(m, 0, k, j, 1)) * L_mu_muhat0_(m, 0, c, k, j, i))
+                                      * Dx<NGHOST>(1, idx, L_mu_muhat0_, m, a_idx, c, k, j, i)
+                                  + (L_mu_muhat0_(m, 3, c, k, j, i) - (u_mu_(m, 3, k, j, 1) / u_mu_(m, 0, k, j, 1)) * L_mu_muhat0_(m, 0, c, k, j, i))
+                                      * Dx<NGHOST>(2, idx, L_mu_muhat0_, m, a_idx, c, k, j, i));
                         }
                       }
                     }
@@ -308,10 +321,9 @@ TaskStatus RadiationFEMN::ExpRKUpdate(Driver *pdriver, int stage) {
                         Real theta_n = (theta_nm12 > theta_np12) ? theta_nm12 : theta_np12;
                         Real theta_np1 = (theta_np12 > theta_np32) ? theta_np12 : theta_np32;
 
-                        part_sum_idx += G_Gamma_AB(A, idx) * f0_(m, en * num_points_ + A, k, j, i);
-                        //-
-                        //    (energy_grid(en + 1) * energy_grid(en + 1) * energy_grid(en + 1) * (F_Gamma_AB(A, idx) * f_term1_np1 - theta_np1 * K * f_term2_np1 / 2.)
-                        //        - energy_grid(en) * energy_grid(en) * energy_grid(en) * (F_Gamma_AB(A, idx) * f_term1_n - theta_n * K * f_term2_n / 2.));
+                        part_sum_idx +=
+                            (energy_grid(en + 1) * energy_grid(en + 1) * energy_grid(en + 1) * (F_Gamma_AB(A, idx) * f_term1_np1 - theta_np1 * K * f_term2_np1 / 2.)
+                                - energy_grid(en) * energy_grid(en) * energy_grid(en) * (F_Gamma_AB(A, idx) * f_term1_n - theta_n * K * f_term2_n / 2.));
                       }
                       energy_terms(idx) = part_sum_idx;
                     });
