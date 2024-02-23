@@ -206,30 +206,42 @@ class BoundaryValuesFC : public MeshBoundaryValues {
 };
 
 //----------------------------------------------------------------------------------------
-//! \struct ParticleSendData
-//! \brief data associated with MPI communication of particles (dest, number, etc.)
+//! \struct ParticleLocationData
+//! \brief data describing location of data for particles communicated with MPI
 
-struct ParticleSendData {
+struct ParticleLocationData {
   int prtcl_indx;   // index in particle array
   int dest_gid ;    // GID of target MeshBlock
   int dest_rank ;   // rank of target MeshBlock
 };
 
-// Custom operators to sort ParticleSendData array by dest_rank or prtcl_indx
+// Custom operators to sort ParticleLocationData array by dest_rank or prtcl_indx
 struct {
-  bool operator()(ParticleSendData a, ParticleSendData b)
+  bool operator()(ParticleLocationData a, ParticleLocationData b)
     const { return a.dest_rank < b.dest_rank; }
 } SortByRank;
 struct {
-  bool operator()(ParticleSendData a, ParticleSendData b)
+  bool operator()(ParticleLocationData a, ParticleLocationData b)
     const { return a.prtcl_indx < b.prtcl_indx; }
 } SortByIndex;
 
 //----------------------------------------------------------------------------------------
-//! \struct ParticleData
-//! \brief data (pos, vel, etc) communicated by MPI
+//! \struct ParticleMessageData
+//! \brief Data describing MPI messages containing particles
 
-struct ParticleData {
+struct ParticleMessageData {
+  int sendrank;  // rank of sender
+  int recvrank;  // rank of receiver
+  int nprtcls;   // number of particles in message
+  ParticleMessageData(int a, int b, int c) :
+    sendrank(a), recvrank(b), nprtcls(c) {}
+};
+
+//----------------------------------------------------------------------------------------
+//! \struct ParticlePhysicalData
+//! \brief data (pos, vel, gid) communicated by MPI
+
+struct ParticlePhysicalData {
   int dest_gid;
   Real x,y,z;
   Real vx,vy,vz;
@@ -246,17 +258,17 @@ class ParticlesBoundaryValues {
   ~ParticlesBoundaryValues();
 
   int nprtcl_send, nprtcl_recv;
-  DualArray1D<ParticleSendData> sendlist;
+  DualArray1D<ParticleLocationData> sendlist;
 
   // Data needed to count number of messages and particles to send between ranks
   int nsends; // number of MPI sends to neighboring ranks on this rank
   int nrecvs; // number of MPI recvs from neighboring ranks on this rank
-  std::vector<int> nsends_eachrank;                    //length nranks
-  std::vector<std::tuple<int,int,int>> sends_thisrank; //length nsends
-  std::vector<std::tuple<int,int,int>> recvs_thisrank; //length nrecvs
-  std::vector<std::tuple<int,int,int>> sends_allranks; //length ncounts summed over ranks
+  std::vector<int> nsends_eachrank;                // length nranks
+  std::vector<ParticleMessageData> sends_thisrank; // length nsends
+  std::vector<ParticleMessageData> recvs_thisrank; // length nrecvs
+  std::vector<ParticleMessageData> sends_allranks; // length ncounts summed over ranks
 
-  DvceArray1D<ParticleData> prtcl_sendbuf, prtcl_recvbuf;
+  DvceArray1D<ParticlePhysicalData> prtcl_sendbuf, prtcl_recvbuf;
 
 #if MPI_PARALLEL_ENABLED
   std::vector<MPI_Request> recv_req, send_req;  // vectors of requests

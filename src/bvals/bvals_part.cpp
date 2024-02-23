@@ -29,7 +29,7 @@ namespace particles {
 
 KOKKOS_INLINE_FUNCTION
 void UpdateGID(int &newgid, NeighborBlock nghbr, int myrank, int *pcounter,
-               DualArray1D<ParticleSendData> slist, int p) {
+               DualArray1D<ParticleLocationData> slist, int p) {
   newgid = nghbr.gid;
 #if MPI_PARALLEL_ENABLED
   if (nghbr.rank != myrank) {
@@ -61,7 +61,7 @@ TaskStatus ParticlesBoundaryValues::SetNewPrtclGID() {
   int *pcounter = &counter;
 
   Kokkos::realloc(sendlist, static_cast<int>(0.1*npart));
-  par_for("part_update",DevExeSpace(),0,npart, KOKKOS_LAMBDA(const int p) {
+  par_for("part_update",DevExeSpace(),0,(npart-1), KOKKOS_LAMBDA(const int p) {
     int m = pi(PGID,p) - gids;
     Real x1 = pr(IPX,p);
     Real x2 = pr(IPY,p);
@@ -206,6 +206,11 @@ TaskStatus ParticlesBoundaryValues::SetNewPrtclGID() {
 
 TaskStatus ParticlesBoundaryValues::CountSendsAndRecvs() {
 #if MPI_PARALLEL_ENABLED
+
+/***
+std::cout << "rank="<<global_variable::my_rank<<"  nprtcl_send=" << nprtcl_send<<"   sendlist.size="<<sendlist.h_view.size()<<std::endl;
+***/
+
   // Sort sendlist on host by destrank.
   namespace KE = Kokkos::Experimental;
   std::sort(KE::begin(sendlist.h_view), KE::end(sendlist.h_view), SortByRank);
@@ -213,13 +218,13 @@ TaskStatus ParticlesBoundaryValues::CountSendsAndRecvs() {
   sendlist.template modify<HostMemSpace>();
   sendlist.template sync<DevExeSpace>();
 
-/***/
+/***
 for (int n=0; n<nprtcl_send; ++n) {
 std::cout << "rank="<<global_variable::my_rank<<"  (n,indx,rank,gid)=" << n<<"  "<<sendlist.h_view(n).prtcl_indx<<"  "<<sendlist.h_view(n).dest_rank<<"  "<<sendlist.h_view(n).dest_gid << std::endl;
 }
-/****/
+****/
 
-  // load STL::vector with <sendrank, recvrank, nprtcl_tosend> tuples for particles sends
+  // load STL::vector of ParticleMessageData with <sendrank, recvrank, nprtcls> for sends
   // from this rank. Length will be nsends; initially this length is unknown
   sends_thisrank.clear();
   if (nprtcl_send > 0) {
@@ -231,41 +236,39 @@ std::cout << "rank="<<global_variable::my_rank<<"  (n,indx,rank,gid)=" << n<<"  
       if (sendlist.h_view(n).dest_rank == rank) {
         ++nprtcl;
       } else {
-        sends_thisrank.emplace_back(std::make_tuple(myrank,rank,nprtcl));
+        sends_thisrank.emplace_back(ParticleMessageData(myrank,rank,nprtcl));
         rank = sendlist.h_view(n).dest_rank;
         nprtcl = 1;
       }
     }
-    sends_thisrank.emplace_back(std::make_tuple(myrank,rank,nprtcl));
+    sends_thisrank.emplace_back(ParticleMessageData(myrank,rank,nprtcl));
   }
   nsends = sends_thisrank.size();
 
-/***/
+/***
 {
 int ierr = MPI_Barrier(MPI_COMM_WORLD);
 for (int n=0; n<nsends; ++n) {
 std::cout << "n="<<n<< "  (sendrank,destrank,npart)=" << std::get<0>(sends_thisrank[n])<<"  "<<std::get<1>(sends_thisrank[n]) << "  "<<std::get<2>(sends_thisrank[n]) << std::endl;
 }
 }
-/****/
+****/
 
   // Share number of ranks to send to amongst all ranks
   nsends_eachrank[global_variable::my_rank] = nsends;
   MPI_Allgather(&nsends, 1, MPI_INT, nsends_eachrank.data(), 1, MPI_INT, mpi_comm_part);
 
-/***/
+/***
 {
 int ierr = MPI_Barrier(MPI_COMM_WORLD);
-if (global_variable::my_rank == 0) {
 for (int n=0; n<global_variable::nranks; ++n) {
-std::cout << "n="<<n<<"  sends_eachrank="<<nsends_eachrank[n]<< std::endl;
+std::cout << "rank="<<global_variable::my_rank<<"  n="<<n<<"  sends_eachrank="<<nsends_eachrank[n]<< std::endl;
 }
 }
-}
-/****/
+****/
 
-  // Now share <sendrank, recvrank, nprtcl_tosend> tuples amongst all ranks
-  // First create vector of starting indices of tuples in full vector
+  // Now share ParticleMessageData amongst all ranks
+  // First create vector of starting indices in full vector
   std::vector<int> nsends_displ;
   nsends_displ.resize(global_variable::nranks);
   nsends_displ[0] = 0;
@@ -274,7 +277,7 @@ std::cout << "n="<<n<<"  sends_eachrank="<<nsends_eachrank[n]<< std::endl;
   }
   int nsends_allranks = nsends_displ[global_variable::nranks - 1] +
                         nsends_eachrank[global_variable::nranks - 1];
-/***/
+/***
 {
 int ierr = MPI_Barrier(MPI_COMM_WORLD);
 if (global_variable::my_rank == 0) {
@@ -284,10 +287,10 @@ std::cout << "n="<<n<<"  nsends_displ="<<nsends_displ[n]<< std::endl;
 std::cout << "nsends_allranks = " << nsends_allranks << std::endl;
 }
 }
-/****/
+****/
 
-  // Load tuples on this rank into full vector
-  sends_allranks.resize(nsends_allranks);
+  // Load ParticleMessageData on this rank into full vector
+  sends_allranks.resize(nsends_allranks, ParticleMessageData(0,0,0));
   for (int n=0; n<nsends_eachrank[global_variable::my_rank]; ++n) {
     sends_allranks[n + nsends_displ[global_variable::my_rank]] = sends_thisrank[n];
   }
@@ -298,16 +301,16 @@ std::cout << "nsends_allranks = " << nsends_allranks << std::endl;
   MPI_Allgatherv(MPI_IN_PLACE, nsends_eachrank[global_variable::my_rank],
                    mpi_ituple, sends_allranks.data(), nsends_eachrank.data(),
                    nsends_displ.data(), mpi_ituple, mpi_comm_part);
-/***/
+/***
 {
 int ierr = MPI_Barrier(MPI_COMM_WORLD);
 if (global_variable::my_rank == 0) {
 for (int n=0; n<nsends_allranks; ++n) {
-std::cout << "n="<<n<< "  (sendrank,destrank,npart)=" << std::get<0>(sends_allranks[n])<<"  "<<std::get<1>(sends_allranks[n]) << "  "<<std::get<2>(sends_allranks[n]) << std::endl;
+std::cout << "n="<<n<< "  (sendrank,destrank,npart)=" << sends_allranks[n].sendrank<<"  "<<sends_allranks[n].recvrank << "  "<<sends_allranks[n].nprtcls << std::endl;
 }
 }
 }
-/****/
+****/
 
 #endif
   return TaskStatus::complete;
@@ -320,22 +323,32 @@ std::cout << "n="<<n<< "  (sendrank,destrank,npart)=" << std::get<0>(sends_allra
 TaskStatus ParticlesBoundaryValues::InitPrtclRecv() {
 #if MPI_PARALLEL_ENABLED
 
-  // load STL::vector with <sendrank,recvrank,nprtcl_recv> tuples for particle receives
-  // on this rank. Length will be nrecvs, initially this length is unknown
+  // load STL::vector of ParticleMessageData with <sendrank,recvrank,nprtcl_recv> for
+  // receives // on this rank. Length will be nrecvs, initially this length is unknown
   recvs_thisrank.clear();
 
   int nsends_allranks = sends_allranks.size();
   for (int n=0; n<nsends_allranks; ++n) {
-    if (std::get<1>(sends_allranks[n]) == global_variable::my_rank) {
+    if (sends_allranks[n].recvrank == global_variable::my_rank) {
       recvs_thisrank.emplace_back(sends_allranks[n]);
     }
   }
   nrecvs = recvs_thisrank.size();
 
+/***
+{
+int ierr = MPI_Barrier(MPI_COMM_WORLD);
+std::cout << "****Receives this rank=" <<nrecvs<< std::endl;
+for (int n=0; n<nrecvs; ++n) {
+std::cout << "n="<<n<< "  (sendrank,destrank,npart)=" << recvs_thisrank[n].sendrank<<"  "<<recvs_thisrank[n].recvrank << "  "<<recvs_thisrank[n].nprtcls << std::endl;
+}
+}
+****/
+
   // Figure out how many particles will be received from all ranks
   nprtcl_recv=0;
   for (int n=0; n<nrecvs; ++n) {
-    nprtcl_recv += std::get<2>(recvs_thisrank[n]);
+    nprtcl_recv += recvs_thisrank[n].nprtcls;
   }
 
   // Allocate receive buffer
@@ -349,16 +362,25 @@ TaskStatus ParticlesBoundaryValues::InitPrtclRecv() {
 
   for (int n=0; n<nrecvs; ++n) {
     // calculate amount of data to be passed, get pointer to variables
-    int data_size = std::get<2>(recvs_thisrank[n])*sizeof(ParticleData);
-    int data_end = data_start + std::get<2>(recvs_thisrank[n]);
+    int data_size = (recvs_thisrank[n].nprtcls)*sizeof(ParticlePhysicalData);
+    int data_end = data_start + recvs_thisrank[n].nprtcls - 1;
     auto recv_ptr = Kokkos::subview(prtcl_recvbuf, std::make_pair(data_start, data_end));
-    int drank = std::get<0>(recvs_thisrank[n]);
+    int drank = recvs_thisrank[n].sendrank;
+    int tag = recvs_thisrank[n].sendrank; // use sending rank as tag
 
     // Post non-blocking receive
-    int ierr = MPI_Irecv(recv_ptr.data(), data_size, MPI_BYTE, drank, MPI_ANY_TAG,
+    int ierr = MPI_Irecv(recv_ptr.data(), data_size, MPI_BYTE, drank, tag,
                          mpi_comm_part, &(recv_req[n]));
     if (ierr != MPI_SUCCESS) {no_errors=false;}
+    data_start += recvs_thisrank[n].nprtcls;
   }
+/***
+{
+int ierr = MPI_Barrier(MPI_COMM_WORLD);
+std::cout << "****Posted Receives this rank=" <<nrecvs<< std::endl;
+}
+****/
+
 
   // Quit if MPI error detected
   if (!(no_errors)) {
@@ -379,7 +401,7 @@ TaskStatus ParticlesBoundaryValues::PackAndSendPrtcls() {
   // Figure out how many particles will be sent from this ranks
   nprtcl_send=0;
   for (int n=0; n<nsends; ++n) {
-    nprtcl_send += std::get<2>(sends_thisrank[n]);
+    nprtcl_send += sends_thisrank[n].nprtcls;
   }
 
   bool no_errors=true;
@@ -390,9 +412,10 @@ TaskStatus ParticlesBoundaryValues::PackAndSendPrtcls() {
     // sendlist on device is already sorted by destrank in CountSendAndRecvs()
     // Use sendlist on device to load particles into send buffer ordered by dest_rank
     auto &pr = pmy_part->prtcl_rdata;
-    par_for("ppack",DevExeSpace(),0,nprtcl_send, KOKKOS_LAMBDA(const int n) {
+    par_for("ppack",DevExeSpace(),0,(nprtcl_send-1), KOKKOS_LAMBDA(const int n) {
       prtcl_sendbuf(n).dest_gid = sendlist.d_view(n).dest_gid;
       int p = sendlist.d_view(n).prtcl_indx;
+//std::cout<<"rank="<<global_variable::my_rank<<"  nsend="<<n<<"  p="<<p<<std::endl;
       prtcl_sendbuf(n).x  = pr(IPX,p);
       prtcl_sendbuf(n).y  = pr(IPY,p);
       prtcl_sendbuf(n).z  = pr(IPZ,p);
@@ -409,15 +432,17 @@ TaskStatus ParticlesBoundaryValues::PackAndSendPrtcls() {
 
     for (int n=0; n<nsends; ++n) {
       // calculate amount of data to be passed, get pointer to variables
-      int data_size = std::get<2>(sends_thisrank[n])*sizeof(ParticleData);
-      int data_end = data_start + std::get<2>(sends_thisrank[n]);
+      int data_size = (sends_thisrank[n].nprtcls)*sizeof(ParticlePhysicalData);
+      int data_end = data_start + sends_thisrank[n].nprtcls - 1;
       auto send_ptr = Kokkos::subview(prtcl_sendbuf, std::make_pair(data_start,data_end));
-      int drank = std::get<1>(sends_thisrank[n]);
+      int drank = sends_thisrank[n].recvrank;
+      int tag = global_variable::my_rank;  // use sending rank as tag
 
       // Post non-blocking sends
-      int ierr = MPI_Isend(send_ptr.data(), data_size, MPI_BYTE, drank, MPI_ANY_TAG,
+      int ierr = MPI_Isend(send_ptr.data(), data_size, MPI_BYTE, drank, tag,
                            mpi_comm_part, &(send_req[n]));
       if (ierr != MPI_SUCCESS) {no_errors=false;}
+      data_start += sends_thisrank[n].nprtcls;
     }
   }
 
@@ -443,10 +468,16 @@ TaskStatus ParticlesBoundaryValues::RecvAndUnpackPrtcls() {
   // sync sendlist host array with device.  This results in sorted array on device
   sendlist.template modify<HostMemSpace>();
   sendlist.template sync<DevExeSpace>();
+/***
+for (int n=0; n<nprtcl_send; ++n) {
+std::cout << "rank="<<global_variable::my_rank<<"  (n,indx,rank,gid)=" << n<<"  "<<sendlist.h_view(n).prtcl_indx<<"  "<<sendlist.h_view(n).dest_rank<<"  "<<sendlist.h_view(n).dest_gid << std::endl;
+}
+****/
+
 
   // increase size of particle arrays if needed
+  int new_npart = pmy_part->nprtcl_thispack + (nprtcl_recv - nprtcl_send);
   if (nprtcl_recv > nprtcl_send) {
-    int new_npart = pmy_part->nprtcl_thispack + (nprtcl_recv - nprtcl_send);
     Kokkos::resize(pmy_part->prtcl_idata, pmy_part->nidata, new_npart);
     Kokkos::resize(pmy_part->prtcl_rdata, pmy_part->nrdata, new_npart);
   }
@@ -477,7 +508,7 @@ TaskStatus ParticlesBoundaryValues::RecvAndUnpackPrtcls() {
     auto &pr = pmy_part->prtcl_rdata;
     auto &pi = pmy_part->prtcl_idata;
     int npart = pmy_part->nprtcl_thispack;
-    par_for("punpack",DevExeSpace(),0,nprtcl_recv, KOKKOS_LAMBDA(const int n) {
+    par_for("punpack",DevExeSpace(),0,(nprtcl_recv-1), KOKKOS_LAMBDA(const int n) {
       int p;
       if (n < nprtcl_send) {
         p = sendlist.d_view(n).prtcl_indx; // place particles in holes created by sends
@@ -498,31 +529,51 @@ TaskStatus ParticlesBoundaryValues::RecvAndUnpackPrtcls() {
     // remaining holes
     int nremain = nprtcl_send - nprtcl_recv;
     if (nremain > 0) {
-      int nend_pdata = npart-1;
-      int nend_sendl = nprtcl_send-1;
+      int nend_pdata = npart;
+      int nend_sendl = nprtcl_send;
       for (int n=0; n<nremain; ++n) {
-        if (nend_pdata > sendlist.h_view(nend_sendl).prtcl_indx) {
+        nend_pdata--;
+        nend_sendl--;
+        int nhole = sendlist.h_view(nend_sendl).prtcl_indx;
+        if (nend_pdata > nhole) {
           // copy particle from end into hole
-          auto rdest = Kokkos::subview(pmy_part->prtcl_rdata, Kokkos::ALL, nend_sendl);
+          auto rdest = Kokkos::subview(pmy_part->prtcl_rdata, Kokkos::ALL, nhole);
           auto rsrc  = Kokkos::subview(pmy_part->prtcl_rdata, Kokkos::ALL, nend_pdata);
           Kokkos::deep_copy(rdest, rsrc);
-          auto idest = Kokkos::subview(pmy_part->prtcl_idata, Kokkos::ALL, nend_sendl);
+          auto idest = Kokkos::subview(pmy_part->prtcl_idata, Kokkos::ALL, nhole);
           auto isrc  = Kokkos::subview(pmy_part->prtcl_idata, Kokkos::ALL, nend_pdata);
           Kokkos::deep_copy(idest, isrc);
-
-          // update indices
-          nend_pdata--;
-          nend_sendl--;
-        } else {
-          // if indices equal, hole is at end of array, so skip
-          nend_pdata--;
-          nend_sendl--;
         }
+//std::cout << "rank="<<global_variable::my_rank<<" nend_pdata="<<nend_pdata<<"  nend_sendl="<<nend_sendl<< std::endl;
       }
+      // shrink size of particle data arrays
+      Kokkos::resize(pmy_part->prtcl_idata, pmy_part->nidata, new_npart);
+      Kokkos::resize(pmy_part->prtcl_rdata, pmy_part->nrdata, new_npart);
+//std::cout << "rank="<<global_variable::my_rank<<" new_npart="<<new_npart<<"  prtcl_rdata.size="<<pmy_part->prtcl_idata.size()<< std::endl;
     }
   }
 
+/***/
+for (int p=0; p<new_npart; ++p) {
+if((pmy_part->prtcl_idata(PGID,p) < pmy_part->pmy_pack->gids) ||
+   (pmy_part->prtcl_idata(PGID,p) > pmy_part->pmy_pack->gide)) {
+std::cout<<"rank="<<global_variable::my_rank<<"  p="<<p<<"  gid="<<pmy_part->prtcl_idata(PGID,p)<<std::endl;
+}}
+/***/
+
+
+/***
+{
+int ierr = MPI_Barrier(MPI_COMM_WORLD);
+std::cout << "rank="<<global_variable::my_rank<<" old_npart="<<pmy_part->nprtcl_thispack<<"  new_npart="<<new_npart<< std::endl;
+}
+****/
+
   // Update nparticles_thisrank.  Update cost array (use npart_thismb[nmb]?)
+  pmy_part->nprtcl_thispack = new_npart;
+  pmy_part->pmy_pack->pmesh->nprtcl_thisrank = new_npart;
+  MPI_Allgather(&new_npart,1,MPI_INT,(pmy_part->pmy_pack->pmesh->nprtcl_eachrank),1,
+                MPI_INT,MPI_COMM_WORLD);
 #endif
   return TaskStatus::complete;
 }
@@ -545,7 +596,9 @@ TaskStatus ParticlesBoundaryValues::ClearPrtclSend() {
        << std::endl << "MPI error in clearing sends" << std::endl;
     std::exit(EXIT_FAILURE);
   }
+  send_req.clear();
 #endif
+  nsends=0;
   return TaskStatus::complete;
 }
 
@@ -567,7 +620,9 @@ TaskStatus ParticlesBoundaryValues::ClearPrtclRecv() {
        << std::endl << "MPI error in clearing receives" << std::endl;
     std::exit(EXIT_FAILURE);
   }
+  recv_req.clear();
 #endif
+  nrecvs=0;
   return TaskStatus::complete;
 }
 

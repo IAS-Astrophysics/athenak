@@ -26,6 +26,11 @@ struct ParticlesTaskIDs {
   TaskID push;
   TaskID newgid;
   TaskID count;
+  TaskID irecv;
+  TaskID sendp;
+  TaskID recvp;
+  TaskID csend;
+  TaskID crecv;
 };
 
 namespace particles {
@@ -62,6 +67,11 @@ class Particles {
   TaskStatus Push(Driver *pdriver, int stage);
   TaskStatus NewGID(Driver *pdriver, int stage);
   TaskStatus SendCnt(Driver *pdriver, int stage);
+  TaskStatus InitRecv(Driver *pdriver, int stage);
+  TaskStatus SendP(Driver *pdriver, int stage);
+  TaskStatus RecvP(Driver *pdriver, int stage);
+  TaskStatus ClearSend(Driver *pdriver, int stage);
+  TaskStatus ClearRecv(Driver *pdriver, int stage);
 
  private:
   MeshBlockPack* pmy_pack;  // ptr to MeshBlockPack containing this Particles
