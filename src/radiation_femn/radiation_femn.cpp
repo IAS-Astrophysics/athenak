@@ -200,7 +200,7 @@ RadiationFEMN::RadiationFEMN(MeshBlockPack *ppack, ParameterInput *pin) :
 
   // tetrad and fluid quantities
   Kokkos::realloc(u_mu, nmb, 4, ncells3, ncells2, ncells1);           // u^mu: fluid velocity in lab frame
-  Kokkos::realloc(L_mu_muhat0_data, nmb, 1, ncells3, ncells2, ncells1); // tetrad L^mu_muhat
+  Kokkos::realloc(L_mu_muhat0_data, nmb, 16, ncells3, ncells2, ncells1); // tetrad L^mu_muhat
   L_mu_muhat0.InitWithShallowSlice(L_mu_muhat0_data, 0, 15);
 
   // Hardcode metric fluid quantities @TODO: change this later

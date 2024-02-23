@@ -117,9 +117,9 @@ TaskStatus RadiationFEMN::ExpRKUpdate(Driver *pdriver, int stage) {
                   // lapse derivatives (\p_mu alpha)
                   Real dtalpha_d = 0.;    // time derivatives, get from z4c
                   AthenaScratchTensor<Real, TensorSymm::NONE, 3, 1> dalpha_d; // spatial derivatives
-                  for (int a = 0; a < 3; ++a) {
-                    dalpha_d(a) = Dx<NGHOST>(a, idx, adm.alpha, m, k, j, i);
-                  }
+                  dalpha_d(0) = Dx<NGHOST>(0, idx, adm.alpha, m, k, j, i);
+                  dalpha_d(1) = (multi_d) ? Dx<NGHOST>(1, idx, adm.alpha, m, k, j, i) : 0.;
+                  dalpha_d(2) = (three_d) ? Dx<NGHOST>(2, idx, adm.alpha, m, k, j, i) : 0.;
 
                   // shift derivatives (\p_mu beta^i)
                   Real dtbetax_du = 0.; // time derivatives, get from z4c
@@ -127,9 +127,9 @@ TaskStatus RadiationFEMN::ExpRKUpdate(Driver *pdriver, int stage) {
                   Real dtbetaz_du = 0.;
                   AthenaScratchTensor<Real, TensorSymm::NONE, 3, 2> dbeta_du; // spatial derivatives
                   for (int a = 0; a < 3; ++a) {
-                    for (int b = 0; b < 3; ++b) {
-                      dbeta_du(b, a) = Dx<NGHOST>(b, idx, adm.beta_u, m, a, k, j, i);
-                    }
+                    dbeta_du(0, a) = Dx<NGHOST>(0, idx, adm.beta_u, m, a, k, j, i);
+                    dbeta_du(1, a) = (multi_d) ? Dx<NGHOST>(1, idx, adm.beta_u, m, a, k, j, i) : 0.;
+                    dbeta_du(1, a) = (three_d) ? Dx<NGHOST>(1, idx, adm.beta_u, m, a, k, j, i) : 0.;
                   }
 
                   // covariant shift (beta_i)
@@ -146,9 +146,11 @@ TaskStatus RadiationFEMN::ExpRKUpdate(Driver *pdriver, int stage) {
                   for (int a = 0; a < 3; ++a) {
                     for (int b = a; b < 3; ++b) {
                       dtg_dd(a, b) = 0.; // time derivatives, get from z4c
-                      for (int c = 0; c < 3; ++c) {
-                        dg_ddd(c, a, b) = Dx<NGHOST>(c, idx, adm.g_dd, m, a, b, k, j, i); // spatial derivatives
-                      }
+
+                      dg_ddd(0, a, b) = Dx<NGHOST>(0, idx, adm.g_dd, m, a, b, k, j, i); // spatial derivatives
+                      dg_ddd(1, a, b) = (multi_d) ? Dx<NGHOST>(1, idx, adm.g_dd, m, a, b, k, j, i) : 0.;
+                      dg_ddd(2, a, b) = (three_d) ? Dx<NGHOST>(2, idx, adm.g_dd, m, a, b, k, j, i) : 0.;
+
                     }
                   }
 
@@ -171,9 +173,11 @@ TaskStatus RadiationFEMN::ExpRKUpdate(Driver *pdriver, int stage) {
                   // derivatives of the 4-metric: spatial derivatives
                   for (int a = 1; a < 4; ++a) {
                     for (int b = 1; b < 4; ++b) {
-                      for (int c = 1; c < 4; ++c) {
-                        dg4_ddd(a, b, c) = Dx<NGHOST>(c - 1, idx, adm.g_dd, m, a - 1, b - 1, k, j, i);
-                      }
+
+                      dg4_ddd(1, a, b) = Dx<NGHOST>(0, idx, adm.g_dd, m, a - 1, b - 1, k, j, i);
+                      dg4_ddd(2, a, b) = (multi_d) ? Dx<NGHOST>(1, idx, adm.g_dd, m, a - 1, b - 1, k, j, i) : 0.;
+                      dg4_ddd(3, a, b) = (three_d) ? Dx<NGHOST>(2, idx, adm.g_dd, m, a - 1, b - 1, k, j, i) : 0.;
+
                       dg4_ddd(a, 0, b) = adm.g_dd(m, 0, 0, k, j, i) * dbeta_du(a - 1, 0) + adm.g_dd(m, 0, 1, k, j, i) * dbeta_du(a - 1, 1)
                           + adm.g_dd(m, 0, 2, k, j, i) * dbeta_du(a - 1, 2) + dg_ddd(a - 1, 0, b - 1) * adm.beta_u(m, 0, k, j, i)
                           + dg_ddd(a - 1, 1, b - 1) * adm.beta_u(m, 1, k, j, i) + dg_ddd(a - 1, 2, b - 1) * adm.beta_u(m, 2, k, j, i);
@@ -208,8 +212,8 @@ TaskStatus RadiationFEMN::ExpRKUpdate(Driver *pdriver, int stage) {
                         Gamma_fluid_udd(a, b, c) = 0.0;
                         for (int d = 0; d < 64; ++d) {
                           int a_idx = int(d / (4 * 4));
-                          int b_idx = int((d - 4 * a_idx) / 4);
-                          int c_idx = d - b_idx * 4 - a_idx * 4;
+                          int b_idx = int((d - 4 * 4 * a_idx) / 4);
+                          int c_idx = d - a_idx * 4 * 4 - b_idx * 4;
 
                           Real l_sign = (a == 0) ? -1. : +1.;
                           Real L_ahat_aidx = l_sign * (g_dd[a_idx + 4 * 0] * L_mu_muhat0_(m, 0, a, k, j, i) + g_dd[a_idx + 4 * 1] * L_mu_muhat0_(m, 1, a, k, j, i)
@@ -224,13 +228,21 @@ TaskStatus RadiationFEMN::ExpRKUpdate(Driver *pdriver, int stage) {
                           Real L_ahat_aidx = l_sign * (g_dd[a_idx + 4 * 0] * L_mu_muhat0_(m, 0, a, k, j, i) + g_dd[a_idx + 4 * 1] * L_mu_muhat0_(m, 1, a, k, j, i)
                               + g_dd[a_idx + 4 * 2] * L_mu_muhat0_(m, 2, a, k, j, i) + g_dd[a_idx + 4 * 3] * L_mu_muhat0_(m, 3, a, k, j, i));
 
-                          Gamma_fluid_udd(a, b, c) += L_ahat_aidx * (
-                              (L_mu_muhat0_(m, 1, c, k, j, i) - (u_mu_(m, 1, k, j, 1) / u_mu_(m, 0, k, j, 1)) * L_mu_muhat0_(m, 0, c, k, j, i))
-                                  * Dx<NGHOST>(0, idx, L_mu_muhat0_, m, a_idx, c, k, j, i)
-                                  + (L_mu_muhat0_(m, 2, c, k, j, i) - (u_mu_(m, 2, k, j, 1) / u_mu_(m, 0, k, j, 1)) * L_mu_muhat0_(m, 0, c, k, j, i))
-                                      * Dx<NGHOST>(1, idx, L_mu_muhat0_, m, a_idx, c, k, j, i)
-                                  + (L_mu_muhat0_(m, 3, c, k, j, i) - (u_mu_(m, 3, k, j, 1) / u_mu_(m, 0, k, j, 1)) * L_mu_muhat0_(m, 0, c, k, j, i))
-                                      * Dx<NGHOST>(2, idx, L_mu_muhat0_, m, a_idx, c, k, j, i));
+                          Gamma_fluid_udd(a, b, c) +=
+                              L_ahat_aidx * (L_mu_muhat0_(m, 1, c, k, j, i) - (u_mu_(m, 1, k, j, 1) / u_mu_(m, 0, k, j, 1)) * L_mu_muhat0_(m, 0, c, k, j, i))
+                                  * Dx<NGHOST>(0, idx, L_mu_muhat0_, m, a_idx, c, k, j, i);
+
+                          if (multi_d) {
+                            Gamma_fluid_udd(a, b, c) +=
+                                L_ahat_aidx * (L_mu_muhat0_(m, 2, c, k, j, i) - (u_mu_(m, 2, k, j, 1) / u_mu_(m, 0, k, j, 1)) * L_mu_muhat0_(m, 0, c, k, j, i))
+                                    * Dx<NGHOST>(1, idx, L_mu_muhat0_, m, a_idx, c, k, j, i);
+                          }
+
+                          if (three_d) {
+                            Gamma_fluid_udd(a, b, c) +=
+                                L_ahat_aidx * (L_mu_muhat0_(m, 3, c, k, j, i) - (u_mu_(m, 3, k, j, 1) / u_mu_(m, 0, k, j, 1)) * L_mu_muhat0_(m, 0, c, k, j, i))
+                                    * Dx<NGHOST>(2, idx, L_mu_muhat0_, m, a_idx, c, k, j, i);
+                          }
                         }
                       }
                     }
