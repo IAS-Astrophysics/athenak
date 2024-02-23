@@ -34,107 +34,107 @@
 // Creates vector of output variable data
 
 BaseTypeOutput::BaseTypeOutput(OutputParameters opar, Mesh *pm) :
-    derived_var("derived-var",1,1,1,1,1),
-    outarray("cc_outvar",1,1,1,1,1),
-    outfield("fc_outvar",1,1,1,1),
+    derived_var("derived-var", 1, 1, 1, 1, 1),
+    outarray("cc_outvar", 1, 1, 1, 1, 1),
+    outfield("fc_outvar", 1, 1, 1, 1),
     out_params(opar) {
   // exit for history, restart, or event log files
   if (out_params.file_type.compare("hst") == 0 ||
       out_params.file_type.compare("rst") == 0 ||
-      out_params.file_type.compare("log") == 0) {return;}
+      out_params.file_type.compare("log") == 0) { return; }
 
   // initialize vector containing number of output MBs per rank
   noutmbs.assign(global_variable::nranks, 0);
 
   // check for valid choice of variables
   int ivar = -1;
-  for (int i=0; i<(NOUTPUT_CHOICES); ++i) {
-    if (out_params.variable.compare(var_choice[i]) == 0) {ivar = i;}
+  for (int i = 0; i < (NOUTPUT_CHOICES); ++i) {
+    if (out_params.variable.compare(var_choice[i]) == 0) { ivar = i; }
   }
   if (ivar < 0) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
-       << "Variable '" << out_params.variable << "' in block '" << out_params.block_name
-       << "' in input file is not a valid choice" << std::endl;
+              << "Variable '" << out_params.variable << "' in block '" << out_params.block_name
+              << "' in input file is not a valid choice" << std::endl;
     std::exit(EXIT_FAILURE);
   }
 
   // check that appropriate physics is defined for requested output variable
   // TODO(@user): Index limits of variable choices below may change if more choices added
-  if ((ivar<16) && (pm->pmb_pack->phydro == nullptr)) {
+  if ((ivar < 16) && (pm->pmb_pack->phydro == nullptr)) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
-       << "Output of Hydro variable requested in <output> block '"
-       << out_params.block_name << "' but no Hydro object has been constructed."
-       << std::endl << "Input file is likely missing a <hydro> block" << std::endl;
+              << "Output of Hydro variable requested in <output> block '"
+              << out_params.block_name << "' but no Hydro object has been constructed."
+              << std::endl << "Input file is likely missing a <hydro> block" << std::endl;
     exit(EXIT_FAILURE);
   }
-  if ((ivar>=16) && (ivar<41) && (pm->pmb_pack->pmhd == nullptr)) {
+  if ((ivar >= 16) && (ivar < 41) && (pm->pmb_pack->pmhd == nullptr)) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
-       << "Output of MHD variable requested in <output> block '"
-       << out_params.block_name << "' but no MHD object has been constructed."
-       << std::endl << "Input file is likely missing a <mhd> block" << std::endl;
+              << "Output of MHD variable requested in <output> block '"
+              << out_params.block_name << "' but no MHD object has been constructed."
+              << std::endl << "Input file is likely missing a <mhd> block" << std::endl;
     exit(EXIT_FAILURE);
   }
-  if ((ivar==41) && (pm->pmb_pack->pturb == nullptr)) {
+  if ((ivar == 41) && (pm->pmb_pack->pturb == nullptr)) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
-       << "Output of Force variable requested in <output> block '"
-       << out_params.block_name << "' but no Force object has been constructed."
-       << std::endl << "Input file is likely missing a <forcing> block" << std::endl;
+              << "Output of Force variable requested in <output> block '"
+              << out_params.block_name << "' but no Force object has been constructed."
+              << std::endl << "Input file is likely missing a <forcing> block" << std::endl;
     exit(EXIT_FAILURE);
   }
-  if (ivar==42 && (pm->pmb_pack->prad == nullptr)) {
+  if (ivar == 42 && (pm->pmb_pack->prad == nullptr)) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
-       << "Output of Radiation moments requested in <output> block '"
-       << out_params.block_name << "' but no Radiation object has been constructed."
-       << std::endl << "Input file is likely missing a <radiation> block" << std::endl;
+              << "Output of Radiation moments requested in <output> block '"
+              << out_params.block_name << "' but no Radiation object has been constructed."
+              << std::endl << "Input file is likely missing a <radiation> block" << std::endl;
     exit(EXIT_FAILURE);
   }
-  if ((ivar==43 || ivar==44) &&
+  if ((ivar == 43 || ivar == 44) &&
       ((pm->pmb_pack->prad == nullptr) ||
-       (pm->pmb_pack->phydro == nullptr && pm->pmb_pack->pmhd == nullptr))) {
+          (pm->pmb_pack->phydro == nullptr && pm->pmb_pack->pmhd == nullptr))) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
-       << "Output of Fluid Frame Radiation moments requested in <output> block '"
-       << out_params.block_name << "' but either Radiation object has not been "
-       << " constructed, or corresponding Hydro or MHD object missing" << std::endl;
+              << "Output of Fluid Frame Radiation moments requested in <output> block '"
+              << out_params.block_name << "' but either Radiation object has not been "
+              << " constructed, or corresponding Hydro or MHD object missing" << std::endl;
     exit(EXIT_FAILURE);
   }
-  if ((ivar>=45) && (ivar<59) &&
+  if ((ivar >= 45) && (ivar < 59) &&
       (pm->pmb_pack->prad == nullptr || pm->pmb_pack->phydro == nullptr)) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
-       << "Output of Radiation Hydro variables requested in <output> block '"
-       << out_params.block_name << "' but Radiation and/or Hydro object not constructed."
-       << std::endl << "Input file is likely missing corresponding block" << std::endl;
+              << "Output of Radiation Hydro variables requested in <output> block '"
+              << out_params.block_name << "' but Radiation and/or Hydro object not constructed."
+              << std::endl << "Input file is likely missing corresponding block" << std::endl;
     exit(EXIT_FAILURE);
   }
-  if ((ivar>=59) && (ivar<79) &&
+  if ((ivar >= 59) && (ivar < 79) &&
       (pm->pmb_pack->prad == nullptr || pm->pmb_pack->pmhd == nullptr)) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
-       << "Output of Radiation MHD variables requested in <output> block '"
-       << out_params.block_name << "' but Radiation and/or MHD object not constructed."
-       << std::endl << "Input file is likely missing corresponding block" << std::endl;
+              << "Output of Radiation MHD variables requested in <output> block '"
+              << out_params.block_name << "' but Radiation and/or MHD object not constructed."
+              << std::endl << "Input file is likely missing corresponding block" << std::endl;
     exit(EXIT_FAILURE);
   }
-  if ((ivar>=79) && (ivar<97) && (pm->pmb_pack->padm == nullptr)) {
+  if ((ivar >= 79) && (ivar < 97) && (pm->pmb_pack->padm == nullptr)) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
-       << "Output of ADM variable requested in <output> block '"
-       << out_params.block_name << "' but ADM object not constructed."
-       << std::endl << "Input file is likely missing corresponding block" << std::endl;
+              << "Output of ADM variable requested in <output> block '"
+              << out_params.block_name << "' but ADM object not constructed."
+              << std::endl << "Input file is likely missing corresponding block" << std::endl;
     exit(EXIT_FAILURE);
   }
-  if ((ivar>=97) && (ivar<139) && (pm->pmb_pack->pz4c == nullptr)) {
+  if ((ivar >= 97) && (ivar < 139) && (pm->pmb_pack->pz4c == nullptr)) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
-       << "Output of Z4c variable requested in <output> block '"
-       << out_params.block_name << "' but Z4c object not constructed."
-       << std::endl << "Input file is likely missing corresponding block" << std::endl;
+              << "Output of Z4c variable requested in <output> block '"
+              << out_params.block_name << "' but Z4c object not constructed."
+              << std::endl << "Input file is likely missing corresponding block" << std::endl;
     exit(EXIT_FAILURE);
   }
 
-    if ((ivar >=139) && (ivar < 141) && (pm->pmb_pack->pradfemn == nullptr)) {
-        std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
-                  << "Output of Radiation FEMN variable requested in <output> block '"
-                  << out_params.block_name << "' but no Force object has been constructed."
-                  << std::endl << "Input file is likely missing a <forcing> block" << std::endl;
-        exit(EXIT_FAILURE);
-    }
+  if ((ivar >= 139) && (ivar < 141) && (pm->pmb_pack->pradfemn == nullptr)) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+              << "Output of Radiation FEMN variable requested in <output> block '"
+              << out_params.block_name << "' but no Force object has been constructed."
+              << std::endl << "Input file is likely missing a <forcing> block" << std::endl;
+    exit(EXIT_FAILURE);
+  }
   // Now load STL vector of output variables
   outvars.clear();
 
@@ -143,7 +143,7 @@ BaseTypeOutput::BaseTypeOutput(OutputParameters opar, Mesh *pm) :
       out_params.variable.compare("hydro_u") == 0 ||
       out_params.variable.compare("rad_hydro_u_d") == 0 ||
       out_params.variable.compare("rad_hydro_u") == 0) {
-    outvars.emplace_back("dens",0,&(pm->pmb_pack->phydro->u0));
+    outvars.emplace_back("dens", 0, &(pm->pmb_pack->phydro->u0));
   }
 
   // hydro (rest-frame) density
@@ -151,7 +151,7 @@ BaseTypeOutput::BaseTypeOutput(OutputParameters opar, Mesh *pm) :
       out_params.variable.compare("hydro_w") == 0 ||
       out_params.variable.compare("rad_hydro_w_d") == 0 ||
       out_params.variable.compare("rad_hydro_w") == 0) {
-    outvars.emplace_back("dens",0,&(pm->pmb_pack->phydro->w0));
+    outvars.emplace_back("dens", 0, &(pm->pmb_pack->phydro->w0));
   }
 
   // hydro components of momentum
@@ -159,19 +159,19 @@ BaseTypeOutput::BaseTypeOutput(OutputParameters opar, Mesh *pm) :
       out_params.variable.compare("hydro_u") == 0 ||
       out_params.variable.compare("rad_hydro_u_m1") == 0 ||
       out_params.variable.compare("rad_hydro_u") == 0) {
-    outvars.emplace_back("mom1",1,&(pm->pmb_pack->phydro->u0));
+    outvars.emplace_back("mom1", 1, &(pm->pmb_pack->phydro->u0));
   }
   if (out_params.variable.compare("hydro_u_m2") == 0 ||
       out_params.variable.compare("hydro_u") == 0 ||
       out_params.variable.compare("rad_hydro_u_m2") == 0 ||
       out_params.variable.compare("rad_hydro_u") == 0) {
-    outvars.emplace_back("mom2",2,&(pm->pmb_pack->phydro->u0));
+    outvars.emplace_back("mom2", 2, &(pm->pmb_pack->phydro->u0));
   }
   if (out_params.variable.compare("hydro_u_m3") == 0 ||
       out_params.variable.compare("hydro_u") == 0 ||
       out_params.variable.compare("rad_hydro_u_m3") == 0 ||
       out_params.variable.compare("rad_hydro_u") == 0) {
-    outvars.emplace_back("mom3",3,&(pm->pmb_pack->phydro->u0));
+    outvars.emplace_back("mom3", 3, &(pm->pmb_pack->phydro->u0));
   }
 
   // hydro components of velocity
@@ -179,19 +179,19 @@ BaseTypeOutput::BaseTypeOutput(OutputParameters opar, Mesh *pm) :
       out_params.variable.compare("hydro_w") == 0 ||
       out_params.variable.compare("rad_hydro_w_vx") == 0 ||
       out_params.variable.compare("rad_hydro_w") == 0) {
-    outvars.emplace_back("velx",1,&(pm->pmb_pack->phydro->w0));
+    outvars.emplace_back("velx", 1, &(pm->pmb_pack->phydro->w0));
   }
   if (out_params.variable.compare("hydro_w_vy") == 0 ||
       out_params.variable.compare("hydro_w") == 0 ||
       out_params.variable.compare("rad_hydro_w_vy") == 0 ||
       out_params.variable.compare("rad_hydro_w") == 0) {
-    outvars.emplace_back("vely",2,&(pm->pmb_pack->phydro->w0));
+    outvars.emplace_back("vely", 2, &(pm->pmb_pack->phydro->w0));
   }
   if (out_params.variable.compare("hydro_w_vz") == 0 ||
       out_params.variable.compare("hydro_w") == 0 ||
       out_params.variable.compare("rad_hydro_w_vz") == 0 ||
       out_params.variable.compare("rad_hydro_w") == 0) {
-    outvars.emplace_back("velz",3,&(pm->pmb_pack->phydro->w0));
+    outvars.emplace_back("velz", 3, &(pm->pmb_pack->phydro->w0));
   }
 
   // hydro total energy
@@ -200,7 +200,7 @@ BaseTypeOutput::BaseTypeOutput(OutputParameters opar, Mesh *pm) :
       out_params.variable.compare("rad_hydro_u_e") == 0 ||
       out_params.variable.compare("rad_hydro_u") == 0) {
     if (pm->pmb_pack->phydro->peos->eos_data.is_ideal) {
-      outvars.emplace_back("ener",4,&(pm->pmb_pack->phydro->u0));
+      outvars.emplace_back("ener", 4, &(pm->pmb_pack->phydro->u0));
     }
   }
 
@@ -210,7 +210,7 @@ BaseTypeOutput::BaseTypeOutput(OutputParameters opar, Mesh *pm) :
       out_params.variable.compare("rad_hydro_w_e") == 0 ||
       out_params.variable.compare("rad_hydro_w") == 0) {
     if (pm->pmb_pack->phydro->peos->eos_data.is_ideal) {
-      outvars.emplace_back("eint",4,&(pm->pmb_pack->phydro->w0));
+      outvars.emplace_back("eint", 4, &(pm->pmb_pack->phydro->w0));
     }
   }
 
@@ -221,13 +221,13 @@ BaseTypeOutput::BaseTypeOutput(OutputParameters opar, Mesh *pm) :
       out_params.variable.compare("rad_hydro_u") == 0) {
     int nhyd = pm->pmb_pack->phydro->nhydro;
     int nvars = nhyd + pm->pmb_pack->phydro->nscalars;
-    for (int n=nhyd; n<nvars; ++n) {
+    for (int n = nhyd; n < nvars; ++n) {
       char number[3];
-      std::snprintf(number,sizeof(number),"%02d",(n - nhyd));
+      std::snprintf(number, sizeof(number), "%02d", (n - nhyd));
       std::string vname;
       vname.assign("r_");
       vname.append(number);
-      outvars.emplace_back(vname,n,&(pm->pmb_pack->phydro->u0));
+      outvars.emplace_back(vname, n, &(pm->pmb_pack->phydro->u0));
     }
   }
 
@@ -238,13 +238,13 @@ BaseTypeOutput::BaseTypeOutput(OutputParameters opar, Mesh *pm) :
       out_params.variable.compare("rad_hydro_w") == 0) {
     int nhyd = pm->pmb_pack->phydro->nhydro;
     int nvars = nhyd + pm->pmb_pack->phydro->nscalars;
-    for (int n=nhyd; n<nvars; ++n) {
+    for (int n = nhyd; n < nvars; ++n) {
       char number[3];
-      std::snprintf(number,sizeof(number),"%02d",(n - nhyd));
+      std::snprintf(number, sizeof(number), "%02d", (n - nhyd));
       std::string vname;
       vname.assign("s_");
       vname.append(number);
-      outvars.emplace_back(vname,n,&(pm->pmb_pack->phydro->w0));
+      outvars.emplace_back(vname, n, &(pm->pmb_pack->phydro->w0));
     }
   }
 
@@ -255,7 +255,7 @@ BaseTypeOutput::BaseTypeOutput(OutputParameters opar, Mesh *pm) :
       out_params.variable.compare("rad_mhd_u_d") == 0 ||
       out_params.variable.compare("rad_mhd_u") == 0 ||
       out_params.variable.compare("rad_mhd_u_bcc") == 0) {
-    outvars.emplace_back("dens",0,&(pm->pmb_pack->pmhd->u0));
+    outvars.emplace_back("dens", 0, &(pm->pmb_pack->pmhd->u0));
   }
 
   // mhd (rest-frame) density
@@ -265,7 +265,7 @@ BaseTypeOutput::BaseTypeOutput(OutputParameters opar, Mesh *pm) :
       out_params.variable.compare("rad_mhd_w_d") == 0 ||
       out_params.variable.compare("rad_mhd_w") == 0 ||
       out_params.variable.compare("rad_mhd_w_bcc") == 0) {
-    outvars.emplace_back("dens",0,&(pm->pmb_pack->pmhd->w0));
+    outvars.emplace_back("dens", 0, &(pm->pmb_pack->pmhd->w0));
   }
 
   // mhd components of momentum
@@ -275,7 +275,7 @@ BaseTypeOutput::BaseTypeOutput(OutputParameters opar, Mesh *pm) :
       out_params.variable.compare("rad_mhd_u_m1") == 0 ||
       out_params.variable.compare("rad_mhd_u") == 0 ||
       out_params.variable.compare("rad_mhd_u_bcc") == 0) {
-    outvars.emplace_back("mom1",1,&(pm->pmb_pack->pmhd->u0));
+    outvars.emplace_back("mom1", 1, &(pm->pmb_pack->pmhd->u0));
   }
   if (out_params.variable.compare("mhd_u_m2") == 0 ||
       out_params.variable.compare("mhd_u") == 0 ||
@@ -283,7 +283,7 @@ BaseTypeOutput::BaseTypeOutput(OutputParameters opar, Mesh *pm) :
       out_params.variable.compare("rad_mhd_u_m2") == 0 ||
       out_params.variable.compare("rad_mhd_u") == 0 ||
       out_params.variable.compare("rad_mhd_u_bcc") == 0) {
-    outvars.emplace_back("mom2",2,&(pm->pmb_pack->pmhd->u0));
+    outvars.emplace_back("mom2", 2, &(pm->pmb_pack->pmhd->u0));
   }
   if (out_params.variable.compare("mhd_u_m3") == 0 ||
       out_params.variable.compare("mhd_u") == 0 ||
@@ -291,7 +291,7 @@ BaseTypeOutput::BaseTypeOutput(OutputParameters opar, Mesh *pm) :
       out_params.variable.compare("rad_mhd_u_m3") == 0 ||
       out_params.variable.compare("rad_mhd_u") == 0 ||
       out_params.variable.compare("rad_mhd_u_bcc") == 0) {
-    outvars.emplace_back("mom3",3,&(pm->pmb_pack->pmhd->u0));
+    outvars.emplace_back("mom3", 3, &(pm->pmb_pack->pmhd->u0));
   }
 
   // mhd components of velocity
@@ -301,7 +301,7 @@ BaseTypeOutput::BaseTypeOutput(OutputParameters opar, Mesh *pm) :
       out_params.variable.compare("rad_mhd_w_vx") == 0 ||
       out_params.variable.compare("rad_mhd_w") == 0 ||
       out_params.variable.compare("rad_mhd_w_bcc") == 0) {
-    outvars.emplace_back("velx",1,&(pm->pmb_pack->pmhd->w0));
+    outvars.emplace_back("velx", 1, &(pm->pmb_pack->pmhd->w0));
   }
   if (out_params.variable.compare("mhd_w_vy") == 0 ||
       out_params.variable.compare("mhd_w") == 0 ||
@@ -309,7 +309,7 @@ BaseTypeOutput::BaseTypeOutput(OutputParameters opar, Mesh *pm) :
       out_params.variable.compare("rad_mhd_w_vy") == 0 ||
       out_params.variable.compare("rad_mhd_w") == 0 ||
       out_params.variable.compare("rad_mhd_w_bcc") == 0) {
-    outvars.emplace_back("vely",2,&(pm->pmb_pack->pmhd->w0));
+    outvars.emplace_back("vely", 2, &(pm->pmb_pack->pmhd->w0));
   }
   if (out_params.variable.compare("mhd_w_vz") == 0 ||
       out_params.variable.compare("mhd_w") == 0 ||
@@ -317,7 +317,7 @@ BaseTypeOutput::BaseTypeOutput(OutputParameters opar, Mesh *pm) :
       out_params.variable.compare("rad_mhd_w_vz") == 0 ||
       out_params.variable.compare("rad_mhd_w") == 0 ||
       out_params.variable.compare("rad_mhd_w_bcc") == 0) {
-    outvars.emplace_back("velz",3,&(pm->pmb_pack->pmhd->w0));
+    outvars.emplace_back("velz", 3, &(pm->pmb_pack->pmhd->w0));
   }
 
   // mhd total energy
@@ -328,7 +328,7 @@ BaseTypeOutput::BaseTypeOutput(OutputParameters opar, Mesh *pm) :
       out_params.variable.compare("rad_mhd_u") == 0 ||
       out_params.variable.compare("rad_mhd_u_bcc") == 0) {
     if (pm->pmb_pack->pmhd->peos->eos_data.is_ideal) {
-      outvars.emplace_back("ener",4,&(pm->pmb_pack->pmhd->u0));
+      outvars.emplace_back("ener", 4, &(pm->pmb_pack->pmhd->u0));
     }
   }
 
@@ -340,7 +340,7 @@ BaseTypeOutput::BaseTypeOutput(OutputParameters opar, Mesh *pm) :
       out_params.variable.compare("rad_mhd_w") == 0 ||
       out_params.variable.compare("rad_mhd_w_bcc") == 0) {
     if (pm->pmb_pack->pmhd->peos->eos_data.is_ideal) {
-      outvars.emplace_back("eint",4,&(pm->pmb_pack->pmhd->w0));
+      outvars.emplace_back("eint", 4, &(pm->pmb_pack->pmhd->w0));
     }
   }
 
@@ -353,13 +353,13 @@ BaseTypeOutput::BaseTypeOutput(OutputParameters opar, Mesh *pm) :
       out_params.variable.compare("rad_mhd_u_bcc") == 0) {
     int nmhd = pm->pmb_pack->pmhd->nmhd;
     int nvars = nmhd + pm->pmb_pack->pmhd->nscalars;
-    for (int n=nmhd; n<nvars; ++n) {
+    for (int n = nmhd; n < nvars; ++n) {
       char number[3];
-      std::snprintf(number,sizeof(number),"%02d",(n - nmhd));
+      std::snprintf(number, sizeof(number), "%02d", (n - nmhd));
       std::string vname;
       vname.assign("r_");
       vname.append(number);
-      outvars.emplace_back(vname,n,&(pm->pmb_pack->pmhd->u0));
+      outvars.emplace_back(vname, n, &(pm->pmb_pack->pmhd->u0));
     }
   }
 
@@ -372,13 +372,13 @@ BaseTypeOutput::BaseTypeOutput(OutputParameters opar, Mesh *pm) :
       out_params.variable.compare("rad_mhd_w_bcc") == 0) {
     int nmhd = pm->pmb_pack->pmhd->nmhd;
     int nvars = nmhd + pm->pmb_pack->pmhd->nscalars;
-    for (int n=nmhd; n<nvars; ++n) {
+    for (int n = nmhd; n < nvars; ++n) {
       char number[3];
-      std::snprintf(number,sizeof(number),"%02d",(n - nmhd));
+      std::snprintf(number, sizeof(number), "%02d", (n - nmhd));
       std::string vname;
       vname.assign("s_");
       vname.append(number);
-      outvars.emplace_back(vname,n,&(pm->pmb_pack->pmhd->w0));
+      outvars.emplace_back(vname, n, &(pm->pmb_pack->pmhd->w0));
     }
   }
 
@@ -391,7 +391,7 @@ BaseTypeOutput::BaseTypeOutput(OutputParameters opar, Mesh *pm) :
       out_params.variable.compare("rad_mhd_bcc") == 0 ||
       out_params.variable.compare("rad_mhd_u_bcc") == 0 ||
       out_params.variable.compare("rad_mhd_w_bcc") == 0) {
-    outvars.emplace_back("bcc1",0,&(pm->pmb_pack->pmhd->bcc0));
+    outvars.emplace_back("bcc1", 0, &(pm->pmb_pack->pmhd->bcc0));
   }
   if (out_params.variable.compare("mhd_bcc2") == 0 ||
       out_params.variable.compare("mhd_bcc") == 0 ||
@@ -401,7 +401,7 @@ BaseTypeOutput::BaseTypeOutput(OutputParameters opar, Mesh *pm) :
       out_params.variable.compare("rad_mhd_bcc") == 0 ||
       out_params.variable.compare("rad_mhd_u_bcc") == 0 ||
       out_params.variable.compare("rad_mhd_w_bcc") == 0) {
-    outvars.emplace_back("bcc2",1,&(pm->pmb_pack->pmhd->bcc0));
+    outvars.emplace_back("bcc2", 1, &(pm->pmb_pack->pmhd->bcc0));
   }
   if (out_params.variable.compare("mhd_bcc3") == 0 ||
       out_params.variable.compare("mhd_bcc") == 0 ||
@@ -411,46 +411,46 @@ BaseTypeOutput::BaseTypeOutput(OutputParameters opar, Mesh *pm) :
       out_params.variable.compare("rad_mhd_bcc") == 0 ||
       out_params.variable.compare("rad_mhd_u_bcc") == 0 ||
       out_params.variable.compare("rad_mhd_w_bcc") == 0) {
-    outvars.emplace_back("bcc3",2,&(pm->pmb_pack->pmhd->bcc0));
+    outvars.emplace_back("bcc3", 2, &(pm->pmb_pack->pmhd->bcc0));
   }
 
   // hydro/mhd z-component of vorticity (useful in 2D)
   if (out_params.variable.compare("hydro_wz") == 0 ||
       out_params.variable.compare("mhd_wz") == 0) {
     out_params.contains_derived = true;
-    outvars.emplace_back("vorz",0,&(derived_var));
+    outvars.emplace_back("vorz", 0, &(derived_var));
   }
 
   // hydro/mhd magnitude of vorticity (useful in 3D)
   if (out_params.variable.compare("hydro_w2") == 0 ||
       out_params.variable.compare("mhd_w2") == 0) {
     out_params.contains_derived = true;
-    outvars.emplace_back("vor2",0,&(derived_var));
+    outvars.emplace_back("vor2", 0, &(derived_var));
   }
 
   // mhd z-component of current density (useful in 2D)
   if (out_params.variable.compare("mhd_jz") == 0) {
     out_params.contains_derived = true;
-    outvars.emplace_back("jz",0,&(derived_var));
+    outvars.emplace_back("jz", 0, &(derived_var));
   }
 
   // mhd magnitude of current density (useful in 3D)
   if (out_params.variable.compare("mhd_j2") == 0) {
     out_params.contains_derived = true;
-    outvars.emplace_back("j2",0,&(derived_var));
+    outvars.emplace_back("j2", 0, &(derived_var));
   }
 
   // mhd divergence of B
   if (out_params.variable.compare("mhd_divb") == 0) {
     out_params.contains_derived = true;
-    outvars.emplace_back("divb",0,&(derived_var));
+    outvars.emplace_back("divb", 0, &(derived_var));
   }
 
   // turbulent forcing
   if (out_params.variable.compare("turb_force") == 0) {
-    outvars.emplace_back("force1",0,&(pm->pmb_pack->pturb->force));
-    outvars.emplace_back("force2",1,&(pm->pmb_pack->pturb->force));
-    outvars.emplace_back("force3",2,&(pm->pmb_pack->pturb->force));
+    outvars.emplace_back("force1", 0, &(pm->pmb_pack->pturb->force));
+    outvars.emplace_back("force2", 1, &(pm->pmb_pack->pturb->force));
+    outvars.emplace_back("force3", 2, &(pm->pmb_pack->pturb->force));
   }
 
   // ADM variables, excluding gauge
@@ -476,7 +476,7 @@ BaseTypeOutput::BaseTypeOutput(OutputParameters opar, Mesh *pm) :
     if (out_params.variable.compare("con") == 0 ||
         out_params.variable.compare(z4c::Z4c::Constraint_names[v]) == 0) {
       outvars.emplace_back(z4c::Z4c::Constraint_names[v], v,
-      &(pm->pmb_pack->pz4c->u_con));
+                           &(pm->pmb_pack->pz4c->u_con));
     }
   }
 
@@ -501,16 +501,16 @@ BaseTypeOutput::BaseTypeOutput(OutputParameters opar, Mesh *pm) :
       out_params.variable.compare(0, 9, "rad_hydro") == 0 ||
       out_params.variable.compare(0, 7, "rad_mhd") == 0) {
     out_params.contains_derived = true;
-    outvars.emplace_back("r00",0,&(derived_var));
-    outvars.emplace_back("r01",1,&(derived_var));
-    outvars.emplace_back("r02",2,&(derived_var));
-    outvars.emplace_back("r03",3,&(derived_var));
-    outvars.emplace_back("r11",4,&(derived_var));
-    outvars.emplace_back("r12",5,&(derived_var));
-    outvars.emplace_back("r13",6,&(derived_var));
-    outvars.emplace_back("r22",7,&(derived_var));
-    outvars.emplace_back("r23",8,&(derived_var));
-    outvars.emplace_back("r33",9,&(derived_var));
+    outvars.emplace_back("r00", 0, &(derived_var));
+    outvars.emplace_back("r01", 1, &(derived_var));
+    outvars.emplace_back("r02", 2, &(derived_var));
+    outvars.emplace_back("r03", 3, &(derived_var));
+    outvars.emplace_back("r11", 4, &(derived_var));
+    outvars.emplace_back("r12", 5, &(derived_var));
+    outvars.emplace_back("r13", 6, &(derived_var));
+    outvars.emplace_back("r22", 7, &(derived_var));
+    outvars.emplace_back("r23", 8, &(derived_var));
+    outvars.emplace_back("r33", 9, &(derived_var));
   }
 
   // radiation moments in fluid frame
@@ -521,37 +521,39 @@ BaseTypeOutput::BaseTypeOutput(OutputParameters opar, Mesh *pm) :
     bool needs_fluid_only = (out_params.variable.compare("rad_fluid") == 0);
     int moments_offset = !(needs_fluid_only) ? 10 : 0;
     out_params.contains_derived = true;
-    outvars.emplace_back("r00_ff",moments_offset+0,&(derived_var));
-    outvars.emplace_back("r01_ff",moments_offset+1,&(derived_var));
-    outvars.emplace_back("r02_ff",moments_offset+2,&(derived_var));
-    outvars.emplace_back("r03_ff",moments_offset+3,&(derived_var));
-    outvars.emplace_back("r11_ff",moments_offset+4,&(derived_var));
-    outvars.emplace_back("r12_ff",moments_offset+5,&(derived_var));
-    outvars.emplace_back("r13_ff",moments_offset+6,&(derived_var));
-    outvars.emplace_back("r22_ff",moments_offset+7,&(derived_var));
-    outvars.emplace_back("r23_ff",moments_offset+8,&(derived_var));
-    outvars.emplace_back("r33_ff",moments_offset+9,&(derived_var));
+    outvars.emplace_back("r00_ff", moments_offset + 0, &(derived_var));
+    outvars.emplace_back("r01_ff", moments_offset + 1, &(derived_var));
+    outvars.emplace_back("r02_ff", moments_offset + 2, &(derived_var));
+    outvars.emplace_back("r03_ff", moments_offset + 3, &(derived_var));
+    outvars.emplace_back("r11_ff", moments_offset + 4, &(derived_var));
+    outvars.emplace_back("r12_ff", moments_offset + 5, &(derived_var));
+    outvars.emplace_back("r13_ff", moments_offset + 6, &(derived_var));
+    outvars.emplace_back("r22_ff", moments_offset + 7, &(derived_var));
+    outvars.emplace_back("r23_ff", moments_offset + 8, &(derived_var));
+    outvars.emplace_back("r33_ff", moments_offset + 9, &(derived_var));
   }
 
-    // radiation femn evolved variables
-    if (out_params.variable.compare("rad_femn_F") == 0) {
-        for(int i = 0; i < pm->pmb_pack->pradfemn->num_points; i++) {
-            outvars.emplace_back("F"+std::to_string(i),i,&(pm->pmb_pack->pradfemn->f0));
-        }
+  // radiation femn evolved variables
+  if (out_params.variable.compare("rad_femn_F") == 0) {
+    for (int i = 0; i < pm->pmb_pack->pradfemn->num_points; i++) {
+      outvars.emplace_back("F" + std::to_string(i), i, &(pm->pmb_pack->pradfemn->f0));
     }
+  }
 
-    // radiation femn tetrad
-    if (out_params.variable.compare("rad_femn_tetrad") == 0) {
-      for(int i = 0; i < pm->pmb_pack->pradfemn->num_points; i++) {
-          // @TODO: add output for tetrad quantities. Currently only supports 5D arrays but tetrad arrays are 6D!
-          //outvars.emplace_back("I"+std::to_string(i),i,0,&(pm->pmb_pack->pradfemn->L_mu_muhat0()));
-        }
+  // radiation femn tetrad
+  if (out_params.variable.compare("rad_femn_tetrad") == 0) {
+    for (int v = 0; v < 16; ++v) {
+        int muval = int(v/4);
+        int muhatval = v - muval * 4;
+        outvars.emplace_back("L_mu_muhat" + std::to_string(muval) + "_" + std::to_string(muhatval), v, &(pm->pmb_pack->padm->u_adm));
     }
+  }
 
-    if (out_params.variable.compare("rad_femn_E") == 0) {
-        out_params.contains_derived = true;
-        outvars.emplace_back("E",0,&(derived_var));
-    }
+  // radiation femn energy density
+  if (out_params.variable.compare("rad_femn_E") == 0) {
+    out_params.contains_derived = true;
+    outvars.emplace_back("E", 0, &(derived_var));
+  }
 
   // initialize vector containing number of output MBs per rank
   noutmbs.assign(global_variable::nranks, 0);
@@ -574,30 +576,36 @@ void BaseTypeOutput::LoadOutputData(Mesh *pm) {
   // loop over all MeshBlocks
   // set size & starting indices of output arrays, adjusted accordingly if gz included
   auto &indcs = pm->pmb_pack->pmesh->mb_indcs;
-  auto &size  = pm->pmb_pack->pmb->mb_size;
-  for (int m=0; m<(pm->pmb_pack->nmb_thispack); ++m) {
+  auto &size = pm->pmb_pack->pmb->mb_size;
+  for (int m = 0; m < (pm->pmb_pack->nmb_thispack); ++m) {
     // skip if MeshBlock ID is specified and not equal to this ID
     if (out_params.gid >= 0 && m != out_params.gid) { continue; }
 
-    int ois,oie,ojs,oje,oks,oke;
+    int ois, oie, ojs, oje, oks, oke;
 
     if (out_params.include_gzs) {
-      int nout1 = indcs.nx1 + 2*(indcs.ng);
-      int nout2 = (indcs.nx2 > 1)? (indcs.nx2 + 2*(indcs.ng)) : 1;
-      int nout3 = (indcs.nx3 > 1)? (indcs.nx3 + 2*(indcs.ng)) : 1;
-      ois = 0; oie = nout1-1;
-      ojs = 0; oje = nout2-1;
-      oks = 0; oke = nout3-1;
+      int nout1 = indcs.nx1 + 2 * (indcs.ng);
+      int nout2 = (indcs.nx2 > 1) ? (indcs.nx2 + 2 * (indcs.ng)) : 1;
+      int nout3 = (indcs.nx3 > 1) ? (indcs.nx3 + 2 * (indcs.ng)) : 1;
+      ois = 0;
+      oie = nout1 - 1;
+      ojs = 0;
+      oje = nout2 - 1;
+      oks = 0;
+      oke = nout3 - 1;
     } else {
-      ois = indcs.is; oie = indcs.ie;
-      ojs = indcs.js; oje = indcs.je;
-      oks = indcs.ks; oke = indcs.ke;
+      ois = indcs.is;
+      oie = indcs.ie;
+      ojs = indcs.js;
+      oje = indcs.je;
+      oks = indcs.ks;
+      oke = indcs.ke;
     }
 
     // check for slicing in each dimension, adjust start/end indices accordingly
     if (out_params.slice1) {
       // skip this MB if slice is out of range
-      if (out_params.slice_x1 <  size.h_view(m).x1min ||
+      if (out_params.slice_x1 < size.h_view(m).x1min ||
           out_params.slice_x1 >= size.h_view(m).x1max) { continue; }
       // set index of slice
       ois = CellCenterIndex(out_params.slice_x1, indcs.nx1,
@@ -608,7 +616,7 @@ void BaseTypeOutput::LoadOutputData(Mesh *pm) {
 
     if (out_params.slice2) {
       // skip this MB if slice is out of range
-      if (out_params.slice_x2 <  size.h_view(m).x2min ||
+      if (out_params.slice_x2 < size.h_view(m).x2min ||
           out_params.slice_x2 >= size.h_view(m).x2max) { continue; }
       // set index of slice
       ojs = CellCenterIndex(out_params.slice_x2, indcs.nx2,
@@ -619,7 +627,7 @@ void BaseTypeOutput::LoadOutputData(Mesh *pm) {
 
     if (out_params.slice3) {
       // skip this MB if slice is out of range
-      if (out_params.slice_x3 <  size.h_view(m).x3min ||
+      if (out_params.slice_x3 < size.h_view(m).x3min ||
           out_params.slice_x3 >= size.h_view(m).x3max) { continue; }
       // set index of slice
       oks = CellCenterIndex(out_params.slice_x3, indcs.nx3,
@@ -637,7 +645,7 @@ void BaseTypeOutput::LoadOutputData(Mesh *pm) {
     Real x3max = size.h_view(m).x3max;
 
     int id = pm->pmb_pack->pmb->mb_gid.h_view(m);
-    outmbs.emplace_back(id,ois,oie,ojs,oje,oks,oke,x1min,x1max,x2min,x2max,x3min,x3max);
+    outmbs.emplace_back(id, ois, oie, ojs, oje, oks, oke, x1min, x1max, x2min, x2max, x3min, x3max);
   }
 
   std::fill(noutmbs.begin(), noutmbs.end(), 0);
@@ -668,29 +676,29 @@ void BaseTypeOutput::LoadOutputData(Mesh *pm) {
   }
 
   // Now copy data to host (outarray) over all variables and MeshBlocks
-  for (int n=0; n<nout_vars; ++n) {
-    for (int m=0; m<nout_mbs; ++m) {
+  for (int n = 0; n < nout_vars; ++n) {
+    for (int m = 0; m < nout_mbs; ++m) {
       int mbi = pm->FindMeshBlockIndex(outmbs[m].mb_gid);
-      std::pair<int,int> irange = std::make_pair(outmbs[m].ois, outmbs[m].oie+1);
-      std::pair<int,int> jrange = std::make_pair(outmbs[m].ojs, outmbs[m].oje+1);
-      std::pair<int,int> krange = std::make_pair(outmbs[m].oks, outmbs[m].oke+1);
+      std::pair<int, int> irange = std::make_pair(outmbs[m].ois, outmbs[m].oie + 1);
+      std::pair<int, int> jrange = std::make_pair(outmbs[m].ojs, outmbs[m].oje + 1);
+      std::pair<int, int> krange = std::make_pair(outmbs[m].oks, outmbs[m].oke + 1);
       int nout1 = (outmbs[0].oie - outmbs[0].ois + 1);
       int nout2 = (outmbs[0].oje - outmbs[0].ojs + 1);
       int nout3 = (outmbs[0].oke - outmbs[0].oks + 1);
 
       // copy output variable to new device View
-      DvceArray3D<Real> d_output_var("d_out_var",nout3,nout2,nout1);
+      DvceArray3D<Real> d_output_var("d_out_var", nout3, nout2, nout1);
       auto d_slice = Kokkos::subview(*(outvars[n].data_ptr), mbi, outvars[n].data_index,
-                                     krange,jrange,irange);
-      Kokkos::deep_copy(d_output_var,d_slice);
+                                     krange, jrange, irange);
+      Kokkos::deep_copy(d_output_var, d_slice);
 
       // copy new device View to host mirror View
       DvceArray3D<Real>::HostMirror h_output_var = Kokkos::create_mirror(d_output_var);
-      Kokkos::deep_copy(h_output_var,d_output_var);
+      Kokkos::deep_copy(h_output_var, d_output_var);
 
       // copy host mirror to 5D host View containing all output variables
-      auto h_slice = Kokkos::subview(outarray,n,m,Kokkos::ALL,Kokkos::ALL,Kokkos::ALL);
-      Kokkos::deep_copy(h_slice,h_output_var);
+      auto h_slice = Kokkos::subview(outarray, n, m, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL);
+      Kokkos::deep_copy(h_slice, h_output_var);
     }
   }
 }
