@@ -132,7 +132,7 @@ class Mesh {
   // following 2x arrays allocated with length [nranks] in BuildTreeFromXXXX()
   int *gids_eachrank;      // starting global ID of MeshBlocks in each rank
   int *nmb_eachrank;       // number of MeshBlocks on each rank
-  // following 1x arrays allocated with length [nranks] in AddPhysics()
+  // following 1x arrays allocated with length [nranks] in AddCoordinatesAndPhysics()
   int *nprtcl_eachrank;    // number of particles on each rank
 
   Real time, dt, cfl_no;

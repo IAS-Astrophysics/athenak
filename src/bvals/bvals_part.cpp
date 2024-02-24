@@ -574,6 +574,13 @@ std::cout << "rank="<<global_variable::my_rank<<" old_npart="<<pmy_part->nprtcl_
   pmy_part->pmy_pack->pmesh->nprtcl_thisrank = new_npart;
   MPI_Allgather(&new_npart,1,MPI_INT,(pmy_part->pmy_pack->pmesh->nprtcl_eachrank),1,
                 MPI_INT,MPI_COMM_WORLD);
+
+/****
+if(global_variable::my_rank==0) {
+for (int n=0; n<global_variable::nranks; ++n) {
+std::cout<<"npart_eachrank="<<pmy_part->pmy_pack->pmesh->nprtcl_eachrank[n]<<std::endl;
+}}
+****/
 #endif
   return TaskStatus::complete;
 }

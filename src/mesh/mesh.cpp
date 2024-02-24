@@ -607,8 +607,8 @@ void Mesh::AddCoordinatesAndPhysics(ParameterInput *pinput) {
     pmb_pack->AddPhysics(pinput);
   }
 
-#if MPI_PARALLEL_ENABLED
   nprtcl_eachrank = new int[global_variable::nranks];
+#if MPI_PARALLEL_ENABLED
   // Share number of particles on each rank with all ranks
   MPI_Allgather(&nprtcl_thisrank,1,MPI_INT,nprtcl_eachrank,1,MPI_INT,MPI_COMM_WORLD);
 
