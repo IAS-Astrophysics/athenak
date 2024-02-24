@@ -117,7 +117,7 @@ void MHD::AddKODissipation() {
       } // endfor n
 
       // add dissipation terms
-      // wdn  += coeff0 * del_wdn[0]/size.d_view(m).dx1;
+      wdn  += coeff0 * del_wdn[0]/size.d_view(m).dx1;
       // wvx  += coeff0 * del_wvx[0]/size.d_view(m).dx1;
       // wvy  += coeff0 * del_wvy[0]/size.d_view(m).dx1;
       // wvz  += coeff0 * del_wvz[0]/size.d_view(m).dx1;
@@ -125,7 +125,7 @@ void MHD::AddKODissipation() {
       tgas += coeff0 * del_tgas[0]/size.d_view(m).dx1;
 
       if (multi_d) {
-        // wdn  += coeff0 * del_wdn[1]/size.d_view(m).dx2;
+        wdn  += coeff0 * del_wdn[1]/size.d_view(m).dx2;
         // wvx  += coeff0 * del_wvx[1]/size.d_view(m).dx2;
         // wvy  += coeff0 * del_wvy[1]/size.d_view(m).dx2;
         // wvz  += coeff0 * del_wvz[1]/size.d_view(m).dx2;
@@ -134,7 +134,7 @@ void MHD::AddKODissipation() {
       }
 
       if (three_d) {
-        // wdn  += coeff0 * del_wdn[2]/size.d_view(m).dx3;
+        wdn  += coeff0 * del_wdn[2]/size.d_view(m).dx3;
         // wvx  += coeff0 * del_wvx[2]/size.d_view(m).dx3;
         // wvy  += coeff0 * del_wvy[2]/size.d_view(m).dx3;
         // wvz  += coeff0 * del_wvz[2]/size.d_view(m).dx3;
