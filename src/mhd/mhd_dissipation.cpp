@@ -117,28 +117,28 @@ void MHD::AddKODissipation() {
       } // endfor n
 
       // add dissipation terms
-      wdn  += coeff0 * del_wdn[0]/size.d_view(m).dx1;
-      wvx  += coeff0 * del_wvx[0]/size.d_view(m).dx1;
-      wvy  += coeff0 * del_wvy[0]/size.d_view(m).dx1;
-      wvz  += coeff0 * del_wvz[0]/size.d_view(m).dx1;
-      wen  += coeff0 * del_wen[0]/size.d_view(m).dx1;
+      // wdn  += coeff0 * del_wdn[0]/size.d_view(m).dx1;
+      // wvx  += coeff0 * del_wvx[0]/size.d_view(m).dx1;
+      // wvy  += coeff0 * del_wvy[0]/size.d_view(m).dx1;
+      // wvz  += coeff0 * del_wvz[0]/size.d_view(m).dx1;
+      // wen  += coeff0 * del_wen[0]/size.d_view(m).dx1;
       tgas += coeff0 * del_tgas[0]/size.d_view(m).dx1;
 
       if (multi_d) {
-        wdn  += coeff0 * del_wdn[1]/size.d_view(m).dx2;
-        wvx  += coeff0 * del_wvx[1]/size.d_view(m).dx2;
-        wvy  += coeff0 * del_wvy[1]/size.d_view(m).dx2;
-        wvz  += coeff0 * del_wvz[1]/size.d_view(m).dx2;
-        wen  += coeff0 * del_wen[1]/size.d_view(m).dx2;
+        // wdn  += coeff0 * del_wdn[1]/size.d_view(m).dx2;
+        // wvx  += coeff0 * del_wvx[1]/size.d_view(m).dx2;
+        // wvy  += coeff0 * del_wvy[1]/size.d_view(m).dx2;
+        // wvz  += coeff0 * del_wvz[1]/size.d_view(m).dx2;
+        // wen  += coeff0 * del_wen[1]/size.d_view(m).dx2;
         tgas += coeff0 * del_tgas[1]/size.d_view(m).dx2;
       }
 
       if (three_d) {
-        wdn  += coeff0 * del_wdn[2]/size.d_view(m).dx3;
-        wvx  += coeff0 * del_wvx[2]/size.d_view(m).dx3;
-        wvy  += coeff0 * del_wvy[2]/size.d_view(m).dx3;
-        wvz  += coeff0 * del_wvz[2]/size.d_view(m).dx3;
-        wen  += coeff0 * del_wen[2]/size.d_view(m).dx3;
+        // wdn  += coeff0 * del_wdn[2]/size.d_view(m).dx3;
+        // wvx  += coeff0 * del_wvx[2]/size.d_view(m).dx3;
+        // wvy  += coeff0 * del_wvy[2]/size.d_view(m).dx3;
+        // wvz  += coeff0 * del_wvz[2]/size.d_view(m).dx3;
+        // wen  += coeff0 * del_wen[2]/size.d_view(m).dx3;
         tgas += coeff0 * del_tgas[2]/size.d_view(m).dx3;
       }
 
@@ -159,30 +159,31 @@ void MHD::AddKODissipation() {
       ComputeMetricAndInverse(x1v, x2v, x3v, flat, spin, glower, gupper);
 
       // check density and pressure
-      if (wdn < eos.dfloor) wdn = w0_old_(m,IDN,k,j,i);
+      // if (wdn < eos.dfloor) wdn = w0_old_(m,IDN,k,j,i);
       Real lg_sfloor_local = log10(eos.sfloor1) + (log10(wdn)-log10(eos.rho1)) * (log10(eos.sfloor2)-log10(eos.sfloor1))/(log10(eos.rho2)-log10(eos.rho1));
       Real sfloor_local = pow(10.0, lg_sfloor_local);
       Real sfloor = fmax(eos.sfloor, sfloor_local);
       Real pfloor = fmax(eos.pfloor, sfloor*pow(wdn, eos.gamma));
       Real efloor = pfloor/gm1;
+      wen = wdn*tgas;
       if (wen < efloor) wen = w0_old_(m,IEN,k,j,i);
 
       // apply velocity ceiling if necessary
-      Real tmp = glower[1][1]*SQR(wvx)
-               + glower[2][2]*SQR(wvy)
-               + glower[3][3]*SQR(wvz)
-               + 2.0*glower[1][2]*wvx*wvy + 2.0*glower[1][3]*wvx*wvz
-               + 2.0*glower[2][3]*wvy*wvz;
-      Real lor = sqrt(1.0+tmp);
-      if (lor > eos.gamma_max) {
-        // Real factor = sqrt((SQR(eos.gamma_max)-1.0)/(SQR(lor)-1.0));
-        // wvx *= factor;
-        // wvy *= factor;
-        // wvz *= factor;
-        wvx = w0_old_(m,IVX,k,j,i);
-        wvy = w0_old_(m,IVY,k,j,i);
-        wvz = w0_old_(m,IVZ,k,j,i);
-      }
+      // Real tmp = glower[1][1]*SQR(wvx)
+      //          + glower[2][2]*SQR(wvy)
+      //          + glower[3][3]*SQR(wvz)
+      //          + 2.0*glower[1][2]*wvx*wvy + 2.0*glower[1][3]*wvx*wvz
+      //          + 2.0*glower[2][3]*wvy*wvz;
+      // Real lor = sqrt(1.0+tmp);
+      // if (lor > eos.gamma_max) {
+      //   // Real factor = sqrt((SQR(eos.gamma_max)-1.0)/(SQR(lor)-1.0));
+      //   // wvx *= factor;
+      //   // wvy *= factor;
+      //   // wvz *= factor;
+      //   wvx = w0_old_(m,IVX,k,j,i);
+      //   wvy = w0_old_(m,IVY,k,j,i);
+      //   wvz = w0_old_(m,IVZ,k,j,i);
+      // }
 
       // Reset conserved variables
       MHDPrim1D w_in;
