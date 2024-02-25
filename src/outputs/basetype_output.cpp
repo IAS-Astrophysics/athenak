@@ -126,6 +126,13 @@ BaseTypeOutput::BaseTypeOutput(OutputParameters opar, Mesh *pm) :
        << std::endl << "Input file is likely missing corresponding block" << std::endl;
     exit(EXIT_FAILURE);
   }
+  if ((ivar>=139) && (ivar<141) && (pm->pmb_pack->ppart == nullptr)) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+       << "Output of particles requested in <output> block '"
+       << out_params.block_name << "' but particle object not constructed."
+       << std::endl << "Input file is likely missing corresponding block" << std::endl;
+    exit(EXIT_FAILURE);
+  }
 
   // Now load STL vector of output variables
   outvars.clear();
@@ -523,6 +530,12 @@ BaseTypeOutput::BaseTypeOutput(OutputParameters opar, Mesh *pm) :
     outvars.emplace_back("r22_ff",moments_offset+7,&(derived_var));
     outvars.emplace_back("r23_ff",moments_offset+8,&(derived_var));
     outvars.emplace_back("r33_ff",moments_offset+9,&(derived_var));
+  }
+
+  // particle density binned to mesh
+  if (out_params.variable.compare("prtcl_d") == 0) {
+    out_params.contains_derived = true;
+    outvars.emplace_back("pdens",0,&(derived_var));
   }
 
   // initialize vector containing number of output MBs per rank

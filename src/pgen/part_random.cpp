@@ -42,7 +42,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
 
   // initialize particles
   Kokkos::Random_XorShift64_Pool<> rand_pool64(pmbp->gids);
-  par_for("part_update",DevExeSpace(),0,npart,
+  par_for("part_update",DevExeSpace(),0,(npart-1),
   KOKKOS_LAMBDA(const int p) {
     auto rand_gen = rand_pool64.get_state();  // get random number state this thread
     // choose parent MeshBlock randomly

@@ -111,7 +111,7 @@ void ParticleVTKOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
         << "DATASET UNSTRUCTURED_GRID" << std::endl;
 
     if (global_variable::my_rank == 0) {
-      partfile.Write_any_type(msg.str().c_str(),(sizeof(char)*msg.str().size()),"byte");
+      partfile.Write_any_type(msg.str().c_str(),msg.str().size(),"byte");
     }
     header_offset += msg.str().size();
   }
