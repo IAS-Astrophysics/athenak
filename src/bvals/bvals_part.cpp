@@ -163,7 +163,7 @@ TaskStatus ParticlesBoundaryValues::SetNewPrtclGID() {
           UpdateGID(pi(PGID,p), nghbr.d_view(m,12), myrank, pcounter, psendl, p);
         }
       } else {
-        if (x2 < mbsize.d_view(m).x2min) {
+        if (x3 < mbsize.d_view(m).x3min) {
           // x3 face
           UpdateGID(pi(PGID,p), nghbr.d_view(m,24), myrank, pcounter, psendl, p);
         } else if (x3 > mbsize.d_view(m).x3max) {
