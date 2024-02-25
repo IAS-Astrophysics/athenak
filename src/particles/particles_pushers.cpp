@@ -32,7 +32,7 @@ TaskStatus Particles::Push(Driver *pdriver, int stage) {
   switch (pusher) {
     case ParticlesPusher::drift:
 
-      par_for("part_update",DevExeSpace(),0,nprtcl_thispack,
+      par_for("part_update",DevExeSpace(),0,(nprtcl_thispack-1),
       KOKKOS_LAMBDA(const int p) {
         int m = pi(PGID,p) - gids;
         int ip = (pr(IPX,p) - mbsize.d_view(m).x1min)/mbsize.d_view(m).dx1 + is;
