@@ -152,15 +152,23 @@ void ParticleVTKOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
     rank_offset[n] = rank_offset[n-1] + pm->nprtcl_eachrank[n-1];
     npout_min = std::min(npout_min, pm->nprtcl_eachrank[n]);
   }
+
+/****
 if(global_variable::my_rank==0) {
 for (int n=0; n<global_variable::nranks; ++n) {
 std::cout<<"rank_offset="<<rank_offset[n]<<std::endl;
 }}
+****/
+
   {
     std::size_t datasize = sizeof(float);
     std::size_t myoffset=header_offset + 3*rank_offset[global_variable::my_rank]*datasize;
     // Write particle positions collectively for minimum number of particles across ranks
+
+/****
 std::cout<<"myoffset="<<static_cast<int>(myoffset)<<"mpoutmin="<<npout_min<<std::endl;
+****/
+
     if (partfile.Write_any_type_at_all(&(data[0]),3*npout_min,myoffset,"float")
           != 3*npout_min) {
       std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
@@ -171,7 +179,11 @@ std::cout<<"myoffset="<<static_cast<int>(myoffset)<<"mpoutmin="<<npout_min<<std:
     // Write particle positions individually for remaining particles on each rank
     myoffset += datasize*3*npout_min;
     int nremain = pm->nprtcl_thisrank - npout_min;
+
+/****
 std::cout<<"myoffset="<<static_cast<int>(myoffset)<<"nremain="<<nremain<<std::endl;
+****/
+
     if (nremain > 0) {
       if (partfile.Write_any_type_at(&(data[3*npout_min]),3*nremain,myoffset,"float")
             != 3*nremain) {
