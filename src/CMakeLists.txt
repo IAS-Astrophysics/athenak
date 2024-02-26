@@ -25,6 +25,7 @@ add_executable(
         bvals/physics/hydro_bcs.cpp
         bvals/physics/bfield_bcs.cpp
         bvals/physics/radiation_bcs.cpp
+        bvals/physics/z4c_bcs.cpp
 
         coordinates/coordinates.cpp
         coordinates/excision.cpp

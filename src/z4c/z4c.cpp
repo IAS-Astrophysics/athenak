@@ -134,6 +134,9 @@ Z4c::Z4c(MeshBlockPack *ppack, ParameterInput *pin) :
 
   opt.shift_eta = pin->GetOrAddReal("z4c", "shift_eta", 2.0);
 
+  opt.extrap_order = max(2,min(indcs.ng,min(4,
+      pin->GetOrAddInteger("z4c", "extrap_order", 2))));
+
   diss = opt.diss*pow(2., -2.*indcs.ng)*(indcs.ng % 2 == 0 ? -1. : 1.);
   }
 
