@@ -119,7 +119,7 @@ class MHD {
   bool use_ko_dissipation = false;
   Real sigma_ko;
   DvceArray4D<bool> ko_dissipation;
-  DvceArray4D<bool> w_kokernel;
+  DvceArray4D<Real> w_kokernel;
 
   // flags and variables for ad hoc fixes
   bool entropy_fix = false;

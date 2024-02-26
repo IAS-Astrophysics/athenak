@@ -88,6 +88,7 @@ void MHD::AddKODissipation() {
         } // endfor j_add
       } // endfor k_add
 
+
       // compute dissipation terms
       Real del_wdn[3], del_wvx[3], del_wvy[3], del_wvz[3], del_wen[3], del_tgas[3];
       Real coeff0 = sigma_ko_/64.0;
