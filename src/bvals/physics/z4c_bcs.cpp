@@ -49,7 +49,7 @@ Real Extrapolate<3>(DvceArray5D<Real> u, const int m, const int n,
   Real f0 = u(m,n,k,j,i);
   Real f1 = u(m,n,k+offz,j+offy,i+offx);
   Real f2 = u(m,n,k+2*offz,j+2*offy,i+2*offx);
-  return 0.5*(f0 * (1 + delta) * (2 + delta) + 
+  return 0.5*(f0 * (1 + delta) * (2 + delta) +
               delta*(f2 + delta*f2 - 2*f1*(2 + delta)));
 }
 
@@ -78,7 +78,7 @@ void BoundaryValues::Z4cBCs(MeshBlockPack *ppack, DualArray2D<Real> u_in,
   auto &pm = ppack->pmesh;
   auto &indcs = ppack->pmesh->mb_indcs;
   int &ng = indcs.ng;
-  
+
   int n1 = indcs.nx1 + 2*ng;
   int n2 = (indcs.nx2 > 1)? (indcs.nx2 + 2*ng) : 1;
   int n3 = (indcs.nx3 > 1)? (indcs.nx3 + 2*ng) : 1;
@@ -147,7 +147,7 @@ void BCHelper(MeshBlockPack *ppack, DualArray2D<Real> u_in, DvceArray5D<Real> u0
       switch (mb_bcs.d_view(m,BoundaryFace::inner_x1)) {
         case BoundaryFlag::reflect:
           for (int i=0; i<ng; ++i) {
-            if (n==z4c::Z4c::I_Z4C_GXY || n==z4c::Z4c::I_Z4C_GXZ || 
+            if (n==z4c::Z4c::I_Z4C_GXY || n==z4c::Z4c::I_Z4C_GXZ ||
                 n==z4c::Z4c::I_Z4C_AXY || n==z4c::Z4c::I_Z4C_AXZ ||
                 n==z4c::Z4c::I_Z4C_GAMX || n==z4c::Z4c::I_Z4C_BETAX) {
               u0(m,n,k,j,is-i-1) = -u0(m,n,k,j,is+i);
@@ -176,7 +176,7 @@ void BCHelper(MeshBlockPack *ppack, DualArray2D<Real> u_in, DvceArray5D<Real> u0
       switch (mb_bcs.d_view(m,BoundaryFace::outer_x1)) {
         case BoundaryFlag::reflect:
           for (int i=0; i<ng; ++i) {
-            if (n==z4c::Z4c::I_Z4C_GXY || n==z4c::Z4c::I_Z4C_GXZ || 
+            if (n==z4c::Z4c::I_Z4C_GXY || n==z4c::Z4c::I_Z4C_GXZ ||
                 n==z4c::Z4c::I_Z4C_AXY || n==z4c::Z4c::I_Z4C_AXZ ||
                 n==z4c::Z4c::I_Z4C_GAMX || n==z4c::Z4c::I_Z4C_BETAX) {
               u0(m,n,k,j,ie+i+1) = -u0(m,n,k,j,ie-i);
@@ -213,7 +213,7 @@ void BCHelper(MeshBlockPack *ppack, DualArray2D<Real> u_in, DvceArray5D<Real> u0
       switch (mb_bcs.d_view(m,BoundaryFace::inner_x2)) {
         case BoundaryFlag::reflect:
           for (int j=0; j<ng; ++j) {
-            if (n==z4c::Z4c::I_Z4C_GXY || n==z4c::Z4c::I_Z4C_GYZ || 
+            if (n==z4c::Z4c::I_Z4C_GXY || n==z4c::Z4c::I_Z4C_GYZ ||
                 n==z4c::Z4c::I_Z4C_AXY || n==z4c::Z4c::I_Z4C_AYZ ||
                 n==z4c::Z4c::I_Z4C_GAMY || n==z4c::Z4c::I_Z4C_BETAY) {
               u0(m,n,k,js-j-1,i) = -u0(m,n,k,js+j,i);
@@ -242,7 +242,7 @@ void BCHelper(MeshBlockPack *ppack, DualArray2D<Real> u_in, DvceArray5D<Real> u0
       switch (mb_bcs.d_view(m,BoundaryFace::outer_x2)) {
         case BoundaryFlag::reflect:
           for (int j=0; j<ng; ++j) {
-            if (n==z4c::Z4c::I_Z4C_GXY || n==z4c::Z4c::I_Z4C_GYZ || 
+            if (n==z4c::Z4c::I_Z4C_GXY || n==z4c::Z4c::I_Z4C_GYZ ||
                 n==z4c::Z4c::I_Z4C_AXY || n==z4c::Z4c::I_Z4C_AYZ ||
                 n==z4c::Z4c::I_Z4C_GAMY || n==z4c::Z4c::I_Z4C_BETAY) {
               u0(m,n,k,je+j+1,i) = -u0(m,n,k,je-j,i);
@@ -278,7 +278,7 @@ void BCHelper(MeshBlockPack *ppack, DualArray2D<Real> u_in, DvceArray5D<Real> u0
     switch (mb_bcs.d_view(m,BoundaryFace::inner_x3)) {
       case BoundaryFlag::reflect:
         for (int k=0; k<ng; ++k) {
-          if (n==z4c::Z4c::I_Z4C_GXZ || n==z4c::Z4c::I_Z4C_GYZ || 
+          if (n==z4c::Z4c::I_Z4C_GXZ || n==z4c::Z4c::I_Z4C_GYZ ||
               n==z4c::Z4c::I_Z4C_AXZ || n==z4c::Z4c::I_Z4C_AYZ ||
               n==z4c::Z4c::I_Z4C_GAMZ || n==z4c::Z4c::I_Z4C_BETAZ) {
             u0(m,n,ks-k-1,j,i) = -u0(m,n,ks+k,j,i);
@@ -307,7 +307,7 @@ void BCHelper(MeshBlockPack *ppack, DualArray2D<Real> u_in, DvceArray5D<Real> u0
     switch (mb_bcs.d_view(m,BoundaryFace::outer_x3)) {
       case BoundaryFlag::reflect:
         for (int k=0; k<ng; ++k) {
-          if (n==z4c::Z4c::I_Z4C_GXZ || n==z4c::Z4c::I_Z4C_GYZ || 
+          if (n==z4c::Z4c::I_Z4C_GXZ || n==z4c::Z4c::I_Z4C_GYZ ||
               n==z4c::Z4c::I_Z4C_AXZ || n==z4c::Z4c::I_Z4C_AYZ ||
               n==z4c::Z4c::I_Z4C_GAMZ || n==z4c::Z4c::I_Z4C_BETAZ) {
             u0(m,n,ke+k+1,j,i) = -u0(m,n,ke-k,j,i);
