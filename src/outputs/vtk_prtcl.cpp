@@ -3,7 +3,7 @@
 // Copyright(C) 2020 James M. Stone <jmstone@ias.edu> and the Athena code team
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
-//! \file vtk_part.cpp
+//! \file vtk_prtcl.cpp
 //! \brief writes particle data in (legacy) vtk format.
 //! Data is written in UNSTRUCTURED_GRID geometry, in BINARY format, and in FLOAT type
 //! Data over multiple MeehBlocks and MPI ranks is written to a single file using MPI-IO.
@@ -29,8 +29,8 @@
 // ctor: also calls BaseTypeOutput base class constructor
 // Checks compatibility options for VTK outputs
 
-ParticleVTKOutput::ParticleVTKOutput(OutputParameters op, Mesh *pm) :
-  BaseTypeOutput(op, pm) {
+ParticleVTKOutput::ParticleVTKOutput(ParameterInput *pin, Mesh *pm, OutputParameters op) :
+  BaseTypeOutput(pin, pm, op) {
   // create new directory for this output. Comments in binary.cpp constructor explain why
   mkdir("pvtk",0775);
 }

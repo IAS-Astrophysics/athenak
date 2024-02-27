@@ -60,7 +60,7 @@ Particles::Particles(MeshBlockPack *ppack, ParameterInput *pin) :
   int ndim=4;
   if (pmy_pack->pmesh->three_d) {ndim+=2;}
   nrdata = ndim;
-  nidata = 1;
+  nidata = 2;
   Kokkos::realloc(prtcl_rdata, nrdata, nprtcl_thispack);
   Kokkos::realloc(prtcl_idata, nidata, nprtcl_thispack);
 

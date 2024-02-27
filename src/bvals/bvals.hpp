@@ -237,7 +237,7 @@ struct ParticleMessageData {
 
 //----------------------------------------------------------------------------------------
 //! \struct ParticlePhysicalData
-//! \brief data (pos, vel, gid) communicated by MPI
+//! \brief data (gid, tag, pos, vel) for particles, communicated by MPI
 
 struct ParticlePhysicalData {
   int dest_gid;

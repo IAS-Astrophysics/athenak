@@ -32,8 +32,8 @@
 //----------------------------------------------------------------------------------------
 // ctor: also calls BaseTypeOutput base class constructor
 
-RestartOutput::RestartOutput(OutputParameters op, Mesh *pm) :
-  BaseTypeOutput(op, pm) {
+RestartOutput::RestartOutput(ParameterInput *pin, Mesh *pm, OutputParameters op) :
+  BaseTypeOutput(pin, pm, op) {
   // create directories for outputs. Comments in binary.cpp constructor explain why
   mkdir("rst",0775);
 }

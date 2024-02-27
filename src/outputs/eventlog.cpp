@@ -23,7 +23,8 @@
 //----------------------------------------------------------------------------------------
 // ctor: also calls BaseTypeOutput base class constructor
 
-EventLogOutput::EventLogOutput(OutputParameters op, Mesh *pm) : BaseTypeOutput(op, pm) {
+EventLogOutput::EventLogOutput(ParameterInput *pin, Mesh *pm, OutputParameters op) :
+  BaseTypeOutput(pin, pm, op) {
   header_written = false;
 }
 

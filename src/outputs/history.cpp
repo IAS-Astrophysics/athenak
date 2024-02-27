@@ -26,7 +26,8 @@
 //----------------------------------------------------------------------------------------
 // ctor: also calls BaseTypeOutput base class constructor
 
-HistoryOutput::HistoryOutput(OutputParameters op, Mesh *pm) : BaseTypeOutput(op, pm) {
+HistoryOutput::HistoryOutput(ParameterInput *pin, Mesh *pm, OutputParameters op) :
+  BaseTypeOutput(pin, pm, op) {
   // cycle through physics modules and add HistoryData struct for each
   hist_data.clear();
 
