@@ -152,12 +152,22 @@ struct HistoryData {
 };
 
 //----------------------------------------------------------------------------------------
+//! \struct TrackedParticleData
+//! \brief data (tag, pos, vel) output for tracked particles
+
+struct TrackedParticleData {
+  int tag;
+  Real x,y,z;
+  Real vx,vy,vz;
+};
+
+//----------------------------------------------------------------------------------------
 // \brief abstract base class for different output types (modes/formats); node in
 //        std::list of BaseTypeOutput created & stored in the Outputs class
 
 class BaseTypeOutput {
  public:
-  BaseTypeOutput(OutputParameters oparams, Mesh *pm);
+  BaseTypeOutput(ParameterInput *pin, Mesh *pm, OutputParameters oparams);
   virtual ~BaseTypeOutput() = default;
   // copy constructor and assignment operator
   BaseTypeOutput(const BaseTypeOutput& copy_other) = default;
@@ -215,7 +225,7 @@ class BaseTypeOutput {
 
 class FormattedTableOutput : public BaseTypeOutput {
  public:
-  FormattedTableOutput(OutputParameters oparams, Mesh *pm);
+  FormattedTableOutput(ParameterInput *pin, Mesh *pm, OutputParameters oparams);
   void WriteOutputFile(Mesh *pm, ParameterInput *pin) override;
 };
 
@@ -225,7 +235,7 @@ class FormattedTableOutput : public BaseTypeOutput {
 
 class HistoryOutput : public BaseTypeOutput {
  public:
-  HistoryOutput(OutputParameters oparams, Mesh *pm);
+  HistoryOutput(ParameterInput *pin, Mesh *pm, OutputParameters oparams);
 
   // vector of length [# of physics modules] containing hdata arrays
   std::vector<HistoryData> hist_data;
@@ -243,7 +253,7 @@ class HistoryOutput : public BaseTypeOutput {
 
 class MeshVTKOutput : public BaseTypeOutput {
  public:
-  MeshVTKOutput(OutputParameters oparams, Mesh *pm);
+  MeshVTKOutput(ParameterInput *pin, Mesh *pm, OutputParameters oparams);
   void WriteOutputFile(Mesh *pm, ParameterInput *pin) override;
 };
 
@@ -253,7 +263,7 @@ class MeshVTKOutput : public BaseTypeOutput {
 
 class ParticleVTKOutput : public BaseTypeOutput {
  public:
-  ParticleVTKOutput(OutputParameters oparams, Mesh *pm);
+  ParticleVTKOutput(ParameterInput *pin, Mesh *pm, OutputParameters oparams);
   void LoadOutputData(Mesh *pm) override;
   void WriteOutputFile(Mesh *pm, ParameterInput *pin) override;
  protected:
@@ -269,7 +279,7 @@ class ParticleVTKOutput : public BaseTypeOutput {
 
 class MeshBinaryOutput : public BaseTypeOutput {
  public:
-  MeshBinaryOutput(OutputParameters oparams, Mesh *pm);
+  MeshBinaryOutput(ParameterInput *pin, Mesh *pm, OutputParameters oparams);
   void WriteOutputFile(Mesh *pm, ParameterInput *pin) override;
 };
 
@@ -279,7 +289,7 @@ class MeshBinaryOutput : public BaseTypeOutput {
 
 class RestartOutput : public BaseTypeOutput {
  public:
-  RestartOutput(OutputParameters oparams, Mesh *pm);
+  RestartOutput(ParameterInput *pin, Mesh *pm, OutputParameters oparams);
   void LoadOutputData(Mesh *pm) override;
   void WriteOutputFile(Mesh *pm, ParameterInput *pin) override;
 };
@@ -290,7 +300,7 @@ class RestartOutput : public BaseTypeOutput {
 
 class EventLogOutput : public BaseTypeOutput {
  public:
-  EventLogOutput(OutputParameters oparams, Mesh *pm);
+  EventLogOutput(ParameterInput *pin, Mesh *pm, OutputParameters oparams);
 
   // various flags to denote output status
   bool header_written=false;
@@ -298,6 +308,23 @@ class EventLogOutput : public BaseTypeOutput {
 
   void LoadOutputData(Mesh *pm) override;
   void WriteOutputFile(Mesh *pm, ParameterInput *pin) override;
+};
+
+//----------------------------------------------------------------------------------------
+//! \class TrackedParticleOutput
+//  \brief derived BaseTypeOutput class for tracked particle data in binary format
+
+class TrackedParticleOutput : public BaseTypeOutput {
+ public:
+  TrackedParticleOutput(ParameterInput *pin, Mesh *pm, OutputParameters oparams);
+  void LoadOutputData(Mesh *pm) override;
+  void WriteOutputFile(Mesh *pm, ParameterInput *pin) override;
+ protected:
+  int ntrack;           // total number of tracked particles across all ranks
+  int ntrack_thisrank;  // number of tracked particles this rank (guess)
+  int npout;            // number of tracked particles to be written this rank
+  std::vector<int> npout_eachrank;
+  HostArray1D<TrackedParticleData> outpart;
 };
 
 //----------------------------------------------------------------------------------------

@@ -27,8 +27,9 @@
 //----------------------------------------------------------------------------------------
 // ctor: also calls BaseTypeOutput base class constructor
 
-FormattedTableOutput::FormattedTableOutput(OutputParameters op, Mesh *pm) :
-  BaseTypeOutput(op, pm) {
+FormattedTableOutput::FormattedTableOutput(ParameterInput *pin, Mesh *pm,
+                                           OutputParameters op) :
+  BaseTypeOutput(pin, pm, op) {
   // check that 1D slice specified, otherwise issue warning and quit
   if (pm->multi_d) {
     if (!(out_params.slice1) && !(out_params.slice2)) {

@@ -34,8 +34,8 @@
 // ctor: also calls BaseTypeOutput base class constructor
 // Checks compatibility options for VTK outputs
 
-MeshVTKOutput::MeshVTKOutput(OutputParameters op, Mesh *pm) :
-  BaseTypeOutput(op, pm) {
+MeshVTKOutput::MeshVTKOutput(ParameterInput *pin, Mesh *pm, OutputParameters op) :
+  BaseTypeOutput(pin, pm, op) {
   // create new directory for this output. Comments in binary.cpp constructor explain why
   mkdir("vtk",0775);
 }

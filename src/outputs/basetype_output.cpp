@@ -35,7 +35,7 @@
 // BaseTypeOutput base class constructor
 // Creates vector of output variable data
 
-BaseTypeOutput::BaseTypeOutput(OutputParameters opar, Mesh *pm) :
+BaseTypeOutput::BaseTypeOutput(ParameterInput *pin, Mesh *pm, OutputParameters opar) :
     derived_var("derived-var",1,1,1,1,1),
     outarray("cc_outvar",1,1,1,1,1),
     outfield("fc_outvar",1,1,1,1),
