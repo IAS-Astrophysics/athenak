@@ -67,7 +67,7 @@ void TrackedParticleOutput::LoadOutputData(Mesh *pm) {
   // share number of tracked particles to be output across all ranks
   npout_eachrank[global_variable::my_rank] = npout;
 #if MPI_PARALLEL_ENABLED
-  MPI_Allgather(&npout, 1, MPI_INT, npout_eachrank.data(), 1, MPI_INT, mpi_comm_part);
+  MPI_Allgather(&npout, 1, MPI_INT, npout_eachrank.data(), 1, MPI_INT, MPI_COMM_WORLD);
 #endif
   tracked_prtcl.resize(npout);
   // sync tracked particle device array with host
