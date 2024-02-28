@@ -41,14 +41,30 @@ Particles::Particles(MeshBlockPack *ppack, ParameterInput *pin) :
   pmy_pack->pmesh->nprtcl_thisrank += nprtcl_thispack;
   pmy_pack->pmesh->nprtcl_total += nprtcl_thispack;
 
+  // select particle type
+  {
+    std::string ptype = pin->GetString("particles","particle_type");
+    if (ptype.compare("cosmic_ray") == 0) {
+      particle_type = ParticleType::cosmic_ray;
+    } else {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                << std::endl << "Particle type = '" << ptype << "' not recognized"
+                << std::endl;
+      std::exit(EXIT_FAILURE);
+    }
+  }
+
   // select pusher algorithm
-  std::string ppush = pin->GetString("particles","pusher");
-  if (ppush.compare("drift") == 0) {
-    pusher = ParticlesPusher::drift;
-  } else {
-    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
-              << "Particle pusher must be specified in <particles> block" <<std::endl;
-    std::exit(EXIT_FAILURE);
+  {
+    std::string ppush = pin->GetString("particles","pusher");
+    if (ppush.compare("drift") == 0) {
+      pusher = ParticlesPusher::drift;
+    } else {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                << std::endl << "Particle pusher must be specified in <particles> block"
+                <<std::endl;
+      std::exit(EXIT_FAILURE);
+    }
   }
 
   // set dimensions of particle arrays. Note particles only work in 2D/3D
@@ -57,10 +73,18 @@ Particles::Particles(MeshBlockPack *ppack, ParameterInput *pin) :
               << "Particles only work in 2D/3D, but 1D problem initialized" <<std::endl;
     std::exit(EXIT_FAILURE);
   }
-  int ndim=4;
-  if (pmy_pack->pmesh->three_d) {ndim+=2;}
-  nrdata = ndim;
-  nidata = 2;
+  switch (particle_type) {
+    case ParticleType::cosmic_ray:
+      {
+        int ndim=4;
+        if (pmy_pack->pmesh->three_d) {ndim+=2;}
+        nrdata = ndim;
+        nidata = 2;
+        break;
+      }
+    default:
+      break;
+  }
   Kokkos::realloc(prtcl_rdata, nrdata, nprtcl_thispack);
   Kokkos::realloc(prtcl_idata, nidata, nprtcl_thispack);
 
