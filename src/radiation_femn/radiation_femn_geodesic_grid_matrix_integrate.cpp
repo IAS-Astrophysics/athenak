@@ -7,12 +7,11 @@
 //  \brief implementation of the radiation FEM_N matrices for the GR radiation code
 //         Functions in this file:
 //         (a) IntegrateMatrixSphericalTriangle: integrate a given function over a spherical triangle
-//         (b) CalculateDeterminantJacobian: Calculate determinant of Jacobian needed for mapping to/from angles to barycentric
-//         (c) IntegrateMatrixFEMN: Find the integrals over all angles for a given function
+//         (b) IntegrateMatrixFEMN: Find integrals of a given function over unit sphere (FEM)
+//         (c) IntegrateMatrixFPN: Find integrals of a given function over unit sphere (FP_N)
+//         (d) CalculateDeterminantJacobian: Calculate determinant of Jacobian needed for mapping to/from angles to barycentric
 
-#include <cassert>
 #include <complex>
-#include "athena.hpp"
 #include "radiation_femn/radiation_femn_geodesic_grid_matrices.hpp"
 
 namespace radiationfemn {
@@ -36,9 +35,9 @@ namespace radiationfemn {
  * ------
  * a: basis vector index (psi_a) [row index]
  * b: basis vector index (psi_b) [column index]
- * t1: cartesian coordinate of triangle vertex [x1,y1,z1]
- * t2: cartesian coordinate of triangle vertex [x2,y2,z2]
- * t3: cartesian coordinate of triangle vertex [x3,y3,z3]
+ * t1: index of triangle vertex [x1,y1,z1]
+ * t2: index of triangle vertex [x2,y2,z2]
+ * t3: index of triangle vertex [x3,y3,z3]
  * x: array of cartesian coordinate inside spherical triangle (x)
  * y: array of cartesian coordinate inside spherical triangle (y)
  * z: array of cartesian coordinate inside spherical triangle (z)
@@ -72,79 +71,87 @@ inline Real IntegrateMatrixSphericalTriangle(int a, int b, int basis, int t1, in
 
     case 0:
       for (size_t i = 0; i < scheme_weights.size(); i++) {
-        result += sqrt(CalculateDeterminantJacobian(x1, y1, z1, x2, y2, z2, x3, y3, z3, scheme_points(i, 0), scheme_points(i, 1), scheme_points(i, 2)))
-            * FEMBasisABasisB(a, b, t1, t2, t3, scheme_points(i, 0), scheme_points(i, 1), scheme_points(i, 2), basis) * scheme_weights(i);
+        result +=
+            sqrt(CalculateDeterminantJacobian(x1, y1, z1, x2, y2, z2, x3, y3, z3, scheme_points(i, 0), scheme_points(i, 1), scheme_points(i, 2))) * scheme_weights(i)
+                * FEMBasisABasisB(a, b, t1, t2, t3, scheme_points(i, 0), scheme_points(i, 1), scheme_points(i, 2), basis);
       }
       break;
     case 1:
       for (size_t i = 0; i < scheme_weights.size(); i++) {
-        result += CosPhiSinTheta(x1, y1, z1, x2, y2, z2, x3, y3, z3, scheme_points(i, 0), scheme_points(i, 1), scheme_points(i, 2))
-            * sqrt(CalculateDeterminantJacobian(x1, y1, z1, x2, y2, z2, x3, y3, z3, scheme_points(i, 0), scheme_points(i, 1), scheme_points(i, 2))) *
-            FEMBasisABasisB(a, b, t1, t2, t3, scheme_points(i, 0), scheme_points(i, 1), scheme_points(i, 2), basis) * scheme_weights(i);
+        result +=
+            sqrt(CalculateDeterminantJacobian(x1, y1, z1, x2, y2, z2, x3, y3, z3, scheme_points(i, 0), scheme_points(i, 1), scheme_points(i, 2))) * scheme_weights(i)
+                * CosPhiSinTheta(x1, y1, z1, x2, y2, z2, x3, y3, z3, scheme_points(i, 0), scheme_points(i, 1), scheme_points(i, 2))
+                * FEMBasisABasisB(a, b, t1, t2, t3, scheme_points(i, 0), scheme_points(i, 1), scheme_points(i, 2), basis);
       }
       break;
     case 2:
       for (size_t i = 0; i < scheme_weights.size(); i++) {
-        result += SinPhiSinTheta(x1, y1, z1, x2, y2, z2, x3, y3, z3, scheme_points(i, 0), scheme_points(i, 1), scheme_points(i, 2))
-            * sqrt(CalculateDeterminantJacobian(x1, y1, z1, x2, y2, z2, x3, y3, z3, scheme_points(i, 0), scheme_points(i, 1), scheme_points(i, 2))) *
-            FEMBasisABasisB(a, b, t1, t2, t3, scheme_points(i, 0), scheme_points(i, 1), scheme_points(i, 2), basis) * scheme_weights(i);
+        result +=
+            sqrt(CalculateDeterminantJacobian(x1, y1, z1, x2, y2, z2, x3, y3, z3, scheme_points(i, 0), scheme_points(i, 1), scheme_points(i, 2))) * scheme_weights(i)
+                * SinPhiSinTheta(x1, y1, z1, x2, y2, z2, x3, y3, z3, scheme_points(i, 0), scheme_points(i, 1), scheme_points(i, 2))
+                * FEMBasisABasisB(a, b, t1, t2, t3, scheme_points(i, 0), scheme_points(i, 1), scheme_points(i, 2), basis);
       }
       break;
     case 3:
       for (size_t i = 0; i < scheme_weights.size(); i++) {
-        result += CosTheta(x1, y1, z1, x2, y2, z2, x3, y3, z3, scheme_points(i, 0), scheme_points(i, 1), scheme_points(i, 2))
-            * sqrt(CalculateDeterminantJacobian(x1, y1, z1, x2, y2, z2, x3, y3, z3, scheme_points(i, 0), scheme_points(i, 1), scheme_points(i, 2))) *
-            FEMBasisABasisB(a, b, t1, t2, t3, scheme_points(i, 0), scheme_points(i, 1), scheme_points(i, 2), basis) * scheme_weights(i);
+        result +=
+            sqrt(CalculateDeterminantJacobian(x1, y1, z1, x2, y2, z2, x3, y3, z3, scheme_points(i, 0), scheme_points(i, 1), scheme_points(i, 2))) * scheme_weights(i)
+                * CosTheta(x1, y1, z1, x2, y2, z2, x3, y3, z3, scheme_points(i, 0), scheme_points(i, 1), scheme_points(i, 2))
+                * FEMBasisABasisB(a, b, t1, t2, t3, scheme_points(i, 0), scheme_points(i, 1), scheme_points(i, 2), basis);
       }
       break;
     case 4:
       for (size_t i = 0; i < scheme_weights.size(); i++) {
-        result += MomentumUnitEnergy(nu, x1, y1, z1, x2, y2, z2, x3, y3, z3, scheme_points(i, 0), scheme_points(i, 1), scheme_points(i, 2))
-            * MomentumUnitEnergy(mu, x1, y1, z1, x2, y2, z2, x3, y3, z3, scheme_points(i, 0), scheme_points(i, 1), scheme_points(i, 2))
-            * sqrt(CalculateDeterminantJacobian(x1, y1, z1, x2, y2, z2, x3, y3, z3, scheme_points(i, 0), scheme_points(i, 1), scheme_points(i, 2)))
-            * FEMBasisA(a, t1, t2, t3, scheme_points(i, 0), scheme_points(i, 1), scheme_points(i, 2), basis)
-            * dFEMBasisdp(ihat, b, t1, t2, t3, x1, y1, z1, x2, y2, z2, x3, y3, z3, scheme_points(i, 0), scheme_points(i, 1), scheme_points(i, 2), basis)
-            * scheme_weights(i);
+        result +=
+            sqrt(CalculateDeterminantJacobian(x1, y1, z1, x2, y2, z2, x3, y3, z3, scheme_points(i, 0), scheme_points(i, 1), scheme_points(i, 2))) * scheme_weights(i)
+                * MomentumUnitEnergy(nu, x1, y1, z1, x2, y2, z2, x3, y3, z3, scheme_points(i, 0), scheme_points(i, 1), scheme_points(i, 2))
+                * MomentumUnitEnergy(mu, x1, y1, z1, x2, y2, z2, x3, y3, z3, scheme_points(i, 0), scheme_points(i, 1), scheme_points(i, 2))
+                * FEMBasisA(a, t1, t2, t3, scheme_points(i, 0), scheme_points(i, 1), scheme_points(i, 2), basis)
+                * dFEMBasisdp(ihat, b, t1, t2, t3, x1, y1, z1, x2, y2, z2, x3, y3, z3, scheme_points(i, 0), scheme_points(i, 1), scheme_points(i, 2), basis);
       }
       break;
     case 5:
       for (size_t i = 0; i < scheme_weights.size(); i++) {
-        result += MomentumUnitEnergy(nu, x1, y1, z1, x2, y2, z2, x3, y3, z3, scheme_points(i, 0), scheme_points(i, 1), scheme_points(i, 2))
-            * MomentumUnitEnergy(mu, x1, y1, z1, x2, y2, z2, x3, y3, z3, scheme_points(i, 0), scheme_points(i, 1), scheme_points(i, 2))
-            * sqrt(CalculateDeterminantJacobian(x1, y1, z1, x2, y2, z2, x3, y3, z3, scheme_points(i, 0), scheme_points(i, 1), scheme_points(i, 2)))
-            * FEMBasisABasisB(a, b, t1, t2, t3, scheme_points(i, 0), scheme_points(i, 1), scheme_points(i, 2), basis) *
-            MomentumUnitEnergy(ihat, x1, y1, z1, x2, y2, z2, x3, y3, z3, scheme_points(i, 0), scheme_points(i, 1), scheme_points(i, 2)) * scheme_weights(i);
+        result +=
+            sqrt(CalculateDeterminantJacobian(x1, y1, z1, x2, y2, z2, x3, y3, z3, scheme_points(i, 0), scheme_points(i, 1), scheme_points(i, 2))) * scheme_weights(i)
+                * MomentumUnitEnergy(nu, x1, y1, z1, x2, y2, z2, x3, y3, z3, scheme_points(i, 0), scheme_points(i, 1), scheme_points(i, 2))
+                * MomentumUnitEnergy(mu, x1, y1, z1, x2, y2, z2, x3, y3, z3, scheme_points(i, 0), scheme_points(i, 1), scheme_points(i, 2))
+                * FEMBasisABasisB(a, b, t1, t2, t3, scheme_points(i, 0), scheme_points(i, 1), scheme_points(i, 2), basis)
+                * MomentumUnitEnergy(ihat, x1, y1, z1, x2, y2, z2, x3, y3, z3, scheme_points(i, 0), scheme_points(i, 1), scheme_points(i, 2));
       }
       break;
     case 6:
       for (size_t i = 0; i < scheme_weights.size(); i++) {
-        result += sqrt(CalculateDeterminantJacobian(x1, y1, z1, x2, y2, z2, x3, y3, z3, scheme_points(i, 0), scheme_points(i, 1), scheme_points(i, 2)))
-            * FEMBasisA(a, t1, t2, t3, scheme_points(i, 0), scheme_points(i, 1), scheme_points(i, 2), basis) * scheme_weights(i);
+        result +=
+            sqrt(CalculateDeterminantJacobian(x1, y1, z1, x2, y2, z2, x3, y3, z3, scheme_points(i, 0), scheme_points(i, 1), scheme_points(i, 2))) * scheme_weights(i)
+                * FEMBasisA(a, t1, t2, t3, scheme_points(i, 0), scheme_points(i, 1), scheme_points(i, 2), basis);
       }
       break;
     case 7:
       for (size_t i = 0; i < scheme_weights.size(); i++) {
-        result += CosPhiSinTheta(x1, y1, z1, x2, y2, z2, x3, y3, z3, scheme_points(i, 0), scheme_points(i, 1), scheme_points(i, 2))
-            * sqrt(CalculateDeterminantJacobian(x1, y1, z1, x2, y2, z2, x3, y3, z3, scheme_points(i, 0), scheme_points(i, 1), scheme_points(i, 2))) *
-            FEMBasisA(a, t1, t2, t3, scheme_points(i, 0), scheme_points(i, 1), scheme_points(i, 2), basis) * scheme_weights(i);
+        result +=
+            sqrt(CalculateDeterminantJacobian(x1, y1, z1, x2, y2, z2, x3, y3, z3, scheme_points(i, 0), scheme_points(i, 1), scheme_points(i, 2))) * scheme_weights(i)
+                * CosPhiSinTheta(x1, y1, z1, x2, y2, z2, x3, y3, z3, scheme_points(i, 0), scheme_points(i, 1), scheme_points(i, 2))
+                * FEMBasisA(a, t1, t2, t3, scheme_points(i, 0), scheme_points(i, 1), scheme_points(i, 2), basis);
       }
       break;
     case 8:
       for (size_t i = 0; i < scheme_weights.size(); i++) {
-        result += SinPhiSinTheta(x1, y1, z1, x2, y2, z2, x3, y3, z3, scheme_points(i, 0), scheme_points(i, 1), scheme_points(i, 2))
-            * sqrt(CalculateDeterminantJacobian(x1, y1, z1, x2, y2, z2, x3, y3, z3, scheme_points(i, 0), scheme_points(i, 1), scheme_points(i, 2))) *
-            FEMBasisA(a, t1, t2, t3, scheme_points(i, 0), scheme_points(i, 1), scheme_points(i, 2), basis) * scheme_weights(i);
+        result +=
+            sqrt(CalculateDeterminantJacobian(x1, y1, z1, x2, y2, z2, x3, y3, z3, scheme_points(i, 0), scheme_points(i, 1), scheme_points(i, 2))) * scheme_weights(i)
+                * SinPhiSinTheta(x1, y1, z1, x2, y2, z2, x3, y3, z3, scheme_points(i, 0), scheme_points(i, 1), scheme_points(i, 2))
+                * FEMBasisA(a, t1, t2, t3, scheme_points(i, 0), scheme_points(i, 1), scheme_points(i, 2), basis);
       }
       break;
     case 9:
       for (size_t i = 0; i < scheme_weights.size(); i++) {
-        result += CosTheta(x1, y1, z1, x2, y2, z2, x3, y3, z3, scheme_points(i, 0), scheme_points(i, 1), scheme_points(i, 2))
-            * sqrt(CalculateDeterminantJacobian(x1, y1, z1, x2, y2, z2, x3, y3, z3, scheme_points(i, 0), scheme_points(i, 1), scheme_points(i, 2))) *
-            FEMBasisA(a, t1, t2, t3, scheme_points(i, 0), scheme_points(i, 1), scheme_points(i, 2), basis) * scheme_weights(i);
+        result +=
+            sqrt(CalculateDeterminantJacobian(x1, y1, z1, x2, y2, z2, x3, y3, z3, scheme_points(i, 0), scheme_points(i, 1), scheme_points(i, 2))) * scheme_weights(i)
+                * CosTheta(x1, y1, z1, x2, y2, z2, x3, y3, z3, scheme_points(i, 0), scheme_points(i, 1), scheme_points(i, 2))
+                * FEMBasisA(a, t1, t2, t3, scheme_points(i, 0), scheme_points(i, 1), scheme_points(i, 2), basis);
       }
       break;
-    default:
-      result = -42.;
+    default:result = -42.;
   }
 
   result = 0.5 * result;
@@ -185,59 +192,64 @@ Real IntegrateMatrixFPN(int la, int ma, int lb, int mb, const HostArray1D<Real> 
 
     case 0:
       for (size_t i = 0; i < scheme_weights.size(); i++) {
-        result += 4. * M_PI * FPNBasis(la, ma, scheme_points(i, 0), scheme_points(i, 1))
-            * FPNBasis(lb, mb, scheme_points(i, 0), scheme_points(i, 1)) * scheme_weights(i);
+        result += 4. * M_PI * scheme_weights(i)
+            * FPNBasis(la, ma, scheme_points(i, 0), scheme_points(i, 1))
+            * FPNBasis(lb, mb, scheme_points(i, 0), scheme_points(i, 1));
       }
       break;
     case 1:
       for (size_t i = 0; i < scheme_weights.size(); i++) {
-        result += 4. * M_PI * cos(scheme_points(i, 0)) * sin(scheme_points(i, 1))
+        result += 4. * M_PI * scheme_weights(i)
+            * cos(scheme_points(i, 0)) * sin(scheme_points(i, 1))
             * FPNBasis(la, ma, scheme_points(i, 0), scheme_points(i, 1))
-            * FPNBasis(lb, mb, scheme_points(i, 0), scheme_points(i, 1)) * scheme_weights(i);
+            * FPNBasis(lb, mb, scheme_points(i, 0), scheme_points(i, 1));
       }
       break;
     case 2:
       for (size_t i = 0; i < scheme_weights.size(); i++) {
-        result += 4. * M_PI * sin(scheme_points(i, 0)) * sin(scheme_points(i, 1))
+        result += 4. * M_PI * scheme_weights(i)
+            * sin(scheme_points(i, 0)) * sin(scheme_points(i, 1))
             * FPNBasis(la, ma, scheme_points(i, 0), scheme_points(i, 1))
-            * FPNBasis(lb, mb, scheme_points(i, 0), scheme_points(i, 1)) * scheme_weights(i);
+            * FPNBasis(lb, mb, scheme_points(i, 0), scheme_points(i, 1));
       }
       break;
     case 3:
       for (size_t i = 0; i < scheme_weights.size(); i++) {
-        result += 4. * M_PI * cos(scheme_points(i, 1))
+        result += 4. * M_PI * scheme_weights(i)
+            * cos(scheme_points(i, 1))
             * FPNBasis(la, ma, scheme_points(i, 0), scheme_points(i, 1))
-            * FPNBasis(lb, mb, scheme_points(i, 0), scheme_points(i, 1)) * scheme_weights(i);
+            * FPNBasis(lb, mb, scheme_points(i, 0), scheme_points(i, 1));
       }
       break;
     case 4:
       for (size_t i = 0; i < scheme_weights.size(); i++) {
         if (!(fabs(scheme_points(i, 0) - 0.) < 1e-14 || fabs(scheme_points(i, 0) - M_PI) < 1e-14)) { // basis derivatives vanish at 0 and pi
-          result += 4. * M_PI * MomentumUnitEnergy(nu, scheme_points(i, 0), scheme_points(i, 1)) *
-              MomentumUnitEnergy(mu, scheme_points(i, 0), scheme_points(i, 1))
+          result += 4. * M_PI * scheme_weights(i)
+              * MomentumUnitEnergy(nu, scheme_points(i, 0), scheme_points(i, 1))
+              * MomentumUnitEnergy(mu, scheme_points(i, 0), scheme_points(i, 1))
               * FPNBasis(la, ma, scheme_points(i, 0), scheme_points(i, 1))
               * (PtildehatJac(scheme_points(i, 0), scheme_points(i, 1), 1, ihat) * dFPNBasisdOmega(lb, mb, scheme_points(i, 0), scheme_points(i, 1), 1)
-                  + PtildehatJac(scheme_points(i, 0), scheme_points(i, 1), 2, ihat) * dFPNBasisdOmega(lb, mb, scheme_points(i, 0), scheme_points(i, 1), 2))
-              * scheme_weights(i);
+                  + PtildehatJac(scheme_points(i, 0), scheme_points(i, 1), 2, ihat) * dFPNBasisdOmega(lb, mb, scheme_points(i, 0), scheme_points(i, 1), 2));
         }
       }
       break;
     case 5:
       for (size_t i = 0; i < scheme_weights.size(); i++) {
-        result += 4. * M_PI * MomentumUnitEnergy(nu, scheme_points(i, 0), scheme_points(i, 1)) *
-            MomentumUnitEnergy(mu, scheme_points(i, 0), scheme_points(i, 1))
+        result += 4. * M_PI * scheme_weights(i)
+            * MomentumUnitEnergy(nu, scheme_points(i, 0), scheme_points(i, 1))
+            * MomentumUnitEnergy(mu, scheme_points(i, 0), scheme_points(i, 1))
             * FPNBasis(la, ma, scheme_points(i, 0), scheme_points(i, 1))
             * FPNBasis(lb, mb, scheme_points(i, 0), scheme_points(i, 1))
-            * MomentumUnitEnergy(ihat, scheme_points(i, 0), scheme_points(i, 1)) * scheme_weights(i);
+            * MomentumUnitEnergy(ihat, scheme_points(i, 0), scheme_points(i, 1));
       }
       break;
     case 6:
       for (size_t i = 0; i < scheme_weights.size(); i++) {
-        result += 4. * M_PI * FPNBasis(la, ma, scheme_points(i, 0), scheme_points(i, 1)) * scheme_weights(i);
+        result += 4. * M_PI * scheme_weights(i)
+            * FPNBasis(la, ma, scheme_points(i, 0), scheme_points(i, 1));
       }
       break;
-    default:
-      result = -42.;
+    default:result = -42.;
 
   }
 
