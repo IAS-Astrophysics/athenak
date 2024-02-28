@@ -182,6 +182,8 @@ class Z4c {
     Real shift_hh;
     Real shift_advect;
     Real shift_eta;
+    // Boundary extrapolation order
+    int extrap_order;
   };
   Options opt;
   Real diss;              // Dissipation parameter
