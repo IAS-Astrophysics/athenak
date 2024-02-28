@@ -70,36 +70,38 @@ void BarycentricToCartesian(Real x1,
                             Real &zval);
 
 // Type 1: 'Overlapping tent' (Default FEM_N choice)
-Real FEMBasis1Type1(Real xi1, Real xi2, Real xi3);
-Real FEMBasis2Type1(Real xi1, Real xi2, Real xi3);
-Real FEMBasis3Type1(Real xi1, Real xi2, Real xi3);
+Real fem_overtent_index1(Real xi1, Real xi2, Real xi3);
+Real fem_overtent_index2(Real xi1, Real xi2, Real xi3);
+Real fem_overtent_index3(Real xi1, Real xi2, Real xi3);
 
 // Type 2: 'Non-overlapping tent'
-Real FEMBasis1Type2(Real xi1, Real xi2, Real xi3);
-Real FEMBasis2Type2(Real xi1, Real xi2, Real xi3);
-Real FEMBasis3Type2(Real xi1, Real xi2, Real xi3);
+Real fem_smalltent_index1(Real xi1, Real xi2, Real xi3);
+Real fem_smalltent_index2(Real xi1, Real xi2, Real xi3);
+Real fem_smalltent_index3(Real xi1, Real xi2, Real xi3);
 
 // Type 3: 'Overlapping honeycomb'
-Real FEMBasis1Type3(Real xi1, Real xi2, Real xi3);
-Real FEMBasis2Type3(Real xi1, Real xi2, Real xi3);
-Real FEMBasis3Type3(Real xi1, Real xi2, Real xi3);
+Real fem_overhoney_index1(Real xi1, Real xi2, Real xi3);
+Real fem_overhoney_index2(Real xi1, Real xi2, Real xi3);
+Real fem_overhoney_index3(Real xi1, Real xi2, Real xi3);
 
 // Type 4: 'Non-overlapping honeycomb' (S_N choice)
-Real FEMBasis1Type4(Real xi1, Real xi2, Real xi3);
-Real FEMBasis2Type4(Real xi1, Real xi2, Real xi3);
-Real FEMBasis3Type4(Real xi1, Real xi2, Real xi3);
+Real fem_smallhoney_index1(Real xi1, Real xi2, Real xi3);
+Real fem_smallhoney_index2(Real xi1, Real xi2, Real xi3);
+Real fem_smallhoney_index3(Real xi1, Real xi2, Real xi3);
 
 // FEM basis, pick from type
-Real FEMBasis(Real xi1, Real xi2, Real xi3, int basis_index, int basis_choice);
+Real fem_basis(Real xi1, Real xi2, Real xi3, int basis_index, int basis_choice);
 
 // FPN basis
-Real FPNBasis(int l, int m, Real phi, Real theta);
-Real dFPNBasisdOmega(int l, int m, Real phi, Real theta, int var_index);
+Real fpn_basis_lm(int l, int m, Real phi, Real theta);
+Real dfpn_dtheta(int l, int m, Real phi, Real theta);
+Real dfpn_dphi(int l, int m, Real phi, Real theta);
+Real dfpn_dOmega(int l, int m, Real phi, Real theta, int var_index);
 Real PtildehatJac(Real phi, Real theta, int tilde_index, int hat_index);
 
 // some other useful functions
-Real FEMBasisABasisB(int a, int b, int t1, int t2, int t3, Real xi1, Real xi2, Real xi3, int basis_choice);
-Real FEMBasisA(int a, int t1, int t2, int t3, Real xi1, Real xi2, Real xi3, int basis_choice);
+Real fem_basis_ab(int a, int b, int t1, int t2, int t3, Real xi1, Real xi2, Real xi3, int basis_choice);
+Real fem_basis_a(int a, int t1, int t2, int t3, Real xi1, Real xi2, Real xi3, int basis_choice);
 Real dFEMBasisdxi(Real xi1, Real xi2, Real xi3, int basis_index, int basis_choice, int xi_index);
 Real dFEMBasisdphi(Real x1, Real y1, Real z1, Real x2, Real y2, Real z2, Real x3, Real y3, Real z3, Real xi1, Real xi2, Real xi3, int basis_index);
 Real dFEMBasisdtheta(Real x1, Real y1, Real z1, Real x2, Real y2, Real z2, Real x3, Real y3, Real z3, Real xi1, Real xi2, Real xi3, int basis_index);

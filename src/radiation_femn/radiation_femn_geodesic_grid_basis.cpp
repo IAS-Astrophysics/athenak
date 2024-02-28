@@ -1,11 +1,10 @@
 //========================================================================================
-// Radiation FEM_N code for Athena
-// Copyright (C) 2023 Maitraya Bhattacharyya <mbb6217@psu.edu> and David Radice <dur566@psu.edu>
-// AthenaXX copyright(C) James M. Stone <jmstone@ias.edu> and the Athena code team
+// AthenaXXX astrophysical plasma code
+// Copyright(C) 2020 James M. Stone <jmstone@ias.edu> and the Athena code team
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
 //! \file radiation_femn_basis.cpp
-//  \brief implementation of the radiation FEM_N basis functions and helper functions
+//  \brief implementation of the radiation FEM/FPN basis functions and helpers
 
 #include <iostream>
 #include <gsl/gsl_sf_legendre.h>
@@ -34,7 +33,7 @@ inline void BarycentricToCartesian(Real x1, Real y1, Real z1, Real x2, Real y2, 
 
 /* Given index numbers of two vertices, finds if they share an edge and if so, return triangle info
  *
- * If a = b, this return all triangles which share the vertex
+ * If a = b, this return all triangles that share the vertex
  *
  * Inputs:
  * a, b: index number of vertices
@@ -78,221 +77,94 @@ void FindTriangles(int a, int b, const HostArray2D<int> &triangles, HostArray2D<
   }
 }
 
-/* FEM basis functions: 'overlapping tent'
- *
- * Basis is given in barycentric coordinates
- */
 
-// Overlapping tent basis 1
-inline Real FEMBasis1Type1(Real xi1, Real xi2, Real xi3) {
+/* FEM basis functions (in barycentric coordinates)
+ *
+ * basis_choice: 1 => overlapping tent, 2 => small tent, 3 => overlapping honeycomb, 4 => small honeycomb
+ * basis_index: 1 => basis peaked at xi1 = 1, 2 => basis peaked at xi2 = 1, 3 => basis peaked at xi3 = 1
+ */
+using fem_basis_type = Real (*)(Real, Real, Real);
+const fem_basis_type fem_basis_fn[3][4] = {{fem_overtent_index1, fem_smalltent_index1, fem_overhoney_index1, fem_smallhoney_index1},
+                                           {fem_overtent_index2, fem_smalltent_index2, fem_overhoney_index2, fem_smallhoney_index2},
+                                           {fem_overtent_index3, fem_smalltent_index3, fem_overhoney_index3, fem_smallhoney_index3}};
+inline Real fem_basis(Real xi1, Real xi2, Real xi3, int basis_index, int basis_choice) {
+  return fem_basis_fn[basis_index - 1][basis_choice - 1](xi1, xi2, xi3);
+}
+
+// Overlapping tent basis
+inline Real fem_overtent_index1(Real xi1, Real xi2, Real xi3) {
   return 2. * xi1 + xi2 + xi3 - 1.;
 }
-
-// Overlapping tent basis 2
-inline Real FEMBasis2Type1(Real xi1, Real xi2, Real xi3) {
+inline Real fem_overtent_index2(Real xi1, Real xi2, Real xi3) {
   return xi1 + 2. * xi2 + xi3 - 1.;
 }
-
-// Overlapping tent basis 1
-inline Real FEMBasis3Type1(Real xi1, Real xi2, Real xi3) {
+inline Real fem_overtent_index3(Real xi1, Real xi2, Real xi3) {
   return xi1 + xi2 + 2. * xi3 - 1.;
 }
 
-/* FEM basis functions: 'small tent'
- *
- * Basis is given in barycentric coordinates
- */
-
-// Small tent basis 1
-inline Real FEMBasis1Type2(Real xi1, Real xi2, Real xi3) {
+// Small tent basis
+inline Real fem_smalltent_index1(Real xi1, Real xi2, Real xi3) {
   return (xi1 >= 0.5) * (xi1 - xi2 - xi3);
 }
-
-// Small tent basis 2
-inline Real FEMBasis2Type2(Real xi1, Real xi2, Real xi3) {
+inline Real fem_smalltent_index2(Real xi1, Real xi2, Real xi3) {
   return (xi2 >= 0.5) * (xi2 - xi3 - xi1);
 }
-
-// Small tent basis 3
-inline Real FEMBasis3Type2(Real xi1, Real xi2, Real xi3) {
+inline Real fem_smalltent_index3(Real xi1, Real xi2, Real xi3) {
   return (xi3 >= 0.5) * (xi3 - xi1 - xi2);
 }
 
-/* FEM basis functions: 'overlapping honeycomb'
- *
- * Basis is given in barycentric coordinates
- */
-
-// Overlapping honeycomb basis 1
-inline Real FEMBasis1Type3(Real xi1, Real xi2, Real xi3) {
+// Overlapping honeycomb
+inline Real fem_overhoney_index1(Real xi1, Real xi2, Real xi3) {
+  return 1.;
+}
+inline Real fem_overhoney_index2(Real xi1, Real xi2, Real xi3) {
+  return 1.;
+}
+inline Real fem_overhoney_index3(Real xi1, Real xi2, Real xi3) {
   return 1.;
 }
 
-// Overlapping honeycomb basis 2
-inline Real FEMBasis2Type3(Real xi1, Real xi2, Real xi3) {
-  return 1.;
-}
-
-// Overlapping honeycomb basis 3
-inline Real FEMBasis3Type3(Real xi1, Real xi2, Real xi3) {
-  return 1.;
-}
-
-/* FEM basis functions: 'non-overlapping honeycomb'
- *
- * Basis is given in barycentric coordinates
- */
-
-// Non-overlapping honeycomb basis 1
-inline Real FEMBasis1Type4(Real xi1, Real xi2, Real xi3) {
+// Small honeycomb
+inline Real fem_smallhoney_index1(Real xi1, Real xi2, Real xi3) {
   return (xi1 >= xi2) * (xi1 > xi3) * 1.;
 }
-
-// Non-overlapping honeycomb basis 2
-inline Real FEMBasis2Type4(Real xi1, Real xi2, Real xi3) {
+inline Real fem_smallhoney_index2(Real xi1, Real xi2, Real xi3) {
   return (xi2 >= xi3) * (xi2 > xi1) * 1.;
 }
-
-// Non-overlapping honeycomb basis 3
-inline Real FEMBasis3Type4(Real xi1, Real xi2, Real xi3) {
+inline Real fem_smallhoney_index3(Real xi1, Real xi2, Real xi3) {
   return (xi3 >= xi1) * (xi3 > xi2) * 1.;
 }
 
-/* Main FEM basis function in barycentric coordinates: allows choice of basis number and basis type
- *
- * choice: [1] overlapping tent [2] small tent [3] overlapping honeycomb [4] small honeycomb
- * basis_index: [1]: basis peaked at xi1 = 1 [2], basis peaked at xi2 = 1 [3] basis peaked at xi3 = 1
- */
-inline Real FEMBasis(Real xi1, Real xi2, Real xi3, int basis_index, int basis_choice) {
-  if (basis_index == 1 && basis_choice == 1) {
-    return FEMBasis1Type1(xi1, xi2, xi3);
-  } else if (basis_index == 1 && basis_choice == 2) {
-    return FEMBasis1Type2(xi1, xi2, xi3);
-  } else if (basis_index == 1 && basis_choice == 3) {
-    return FEMBasis1Type3(xi1, xi2, xi3);
-  } else if (basis_index == 1 && basis_choice == 4) {
-    return FEMBasis1Type4(xi1, xi2, xi3);
-  } else if (basis_index == 2 && basis_choice == 1) {
-    return FEMBasis2Type1(xi1, xi2, xi3);
-  } else if (basis_index == 2 && basis_choice == 2) {
-    return FEMBasis2Type2(xi1, xi2, xi3);
-  } else if (basis_index == 2 && basis_choice == 3) {
-    return FEMBasis2Type3(xi1, xi2, xi3);
-  } else if (basis_index == 2 && basis_choice == 4) {
-    return FEMBasis2Type4(xi1, xi2, xi3);
-  } else if (basis_index == 3 && basis_choice == 1) {
-    return FEMBasis3Type1(xi1, xi2, xi3);
-  } else if (basis_index == 3 && basis_choice == 2) {
-    return FEMBasis3Type2(xi1, xi2, xi3);
-  } else if (basis_index == 3 && basis_choice == 3) {
-    return FEMBasis3Type3(xi1, xi2, xi3);
-  } else if (basis_index == 3 && basis_choice == 4) {
-    return FEMBasis3Type4(xi1, xi2, xi3);
-  } else {
-    // std::cout << "Incorrect basis_choice of basis function in radiation-femn block!" << std::endl;
-    exit(EXIT_FAILURE);
-  }
-}
-
-// ---------------------------------------------------------------------------------------
-// Partial derivatives of 'overlapping tent' basis with respect to Barycentric coordinates
-inline Real dFEMBasis1Type1dxi1(Real xi1, Real xi2, Real xi3) {
-  return 2.;
-}
-
-inline Real dFEMBasis2Type1dxi1(Real xi1, Real xi2, Real xi3) {
-  return 1.;
-}
-
-inline Real dFEMBasis3Type1dxi1(Real xi1, Real xi2, Real xi3) {
-  return 1.;
-}
-
-inline Real dFEMBasis1Type1dxi2(Real xi1, Real xi2, Real xi3) {
-  return 1.;
-}
-
-inline Real dFEMBasis2Type1dxi2(Real xi1, Real xi2, Real xi3) {
-  return 2.;
-}
-
-inline Real dFEMBasis3Type1dxi2(Real xi1, Real xi2, Real xi3) {
-  return 1.;
-}
-
-inline Real dFEMBasis1Type1dxi3(Real xi1, Real xi2, Real xi3) {
-  return 1.;
-}
-
-inline Real dFEMBasis2Type1dxi3(Real xi1, Real xi2, Real xi3) {
-  return 1.;
-}
-
-inline Real dFEMBasis3Type1dxi3(Real xi1, Real xi2, Real xi3) {
-  return 2.;
-}
-
-/* Derivative of 'overlapping tent' basis functions with respect to barycentric coordinates
- *
- * Note: basis_choice is set to 1. Do not use any other number
- *
- * (xi1, xi2, xi3) is the point at which the derivative is taken
- */
-Real dFEMBasisdxi(Real xi1, Real xi2, Real xi3, int basis_index, int xi_index) {
-  if (basis_index == 1 && xi_index == 1) {
-    return dFEMBasis1Type1dxi1(xi1, xi2, xi3);
-  } else if (basis_index == 2 && xi_index == 1) {
-    return dFEMBasis2Type1dxi1(xi1, xi2, xi3);
-  } else if (basis_index == 3 && xi_index == 1) {
-    return dFEMBasis3Type1dxi1(xi1, xi2, xi3);
-  } else if (basis_index == 1 && xi_index == 2) {
-    return dFEMBasis1Type1dxi2(xi1, xi2, xi3);
-  } else if (basis_index == 2 && xi_index == 2) {
-    return dFEMBasis2Type1dxi2(xi1, xi2, xi3);
-  } else if (basis_index == 3 && xi_index == 2) {
-    return dFEMBasis3Type1dxi2(xi1, xi2, xi3);
-  } else if (basis_index == 1 && xi_index == 3) {
-    return dFEMBasis1Type1dxi3(xi1, xi2, xi3);
-  } else if (basis_index == 2 && xi_index == 3) {
-    return dFEMBasis2Type1dxi3(xi1, xi2, xi3);
-  } else if (basis_index == 3 && xi_index == 3) {
-    return dFEMBasis3Type1dxi3(xi1, xi2, xi3);
-  } else {
-    //std::cout << basis_index << " " << xi_index << "Incorrect basis_choice of basis function in radiation-femn block!" << std::endl;
-    exit(EXIT_FAILURE);
-  }
-}
-
-// ------------------------------------------------------------
-// Product of two FEM basis given their index and triangle info
-//KOKKOS_INLINE_FUNCTION
-Real FEMBasisABasisB(int a, int b, int t1, int t2, int t3, Real xi1, Real xi2, Real xi3, int basis_choice) {
-
+// product of two FEM basis functions: psi_a psi_b
+Real fem_basis_ab(int a, int b, int t1, int t2, int t3, Real xi1, Real xi2, Real xi3, int basis_choice) {
   int basis_index_a = (a == t1) * 1 + (a == t2) * 2 + (a == t3) * 3;
   int basis_index_b = (b == t1) * 1 + (b == t2) * 2 + (b == t3) * 3;
-
-  auto FEMBasisA = FEMBasis(xi1, xi2, xi3, basis_index_a, basis_choice);
-  auto FEMBasisB = FEMBasis(xi1, xi2, xi3, basis_index_b, basis_choice);
-
-  return FEMBasisA * FEMBasisB;
+  return fem_basis(xi1, xi2, xi3, basis_index_a, basis_choice) * fem_basis(xi1, xi2, xi3, basis_index_b, basis_choice);
 }
 
-Real FEMBasisA(int a, int t1, int t2, int t3, Real xi1, Real xi2, Real xi3, int basis_choice) {
-
+// a fem basis function: psi_a
+Real fem_basis_a(int a, int t1, int t2, int t3, Real xi1, Real xi2, Real xi3, int basis_choice) {
   int basis_index_a = (a == t1) * 1 + (a == t2) * 2 + (a == t3) * 3;
-
-  auto FEMBasisA = FEMBasis(xi1, xi2, xi3, basis_index_a, basis_choice);
-
-  return FEMBasisA;
+  return fem_basis(xi1, xi2, xi3, basis_index_a, basis_choice);
 }
 
-/* FPN basis function: real spherical harmonics
+/* Derivative of FEM basis wrt barycentric coordinates: dpsi/dxi
  *
- * gsl_sf_legendre_sphPlm computes sqrt((2l+1)/(4 pi)) sqrt((l-m)!/(l+m)!) P_m^l(x)
- *
- * Calculated for (l,m) at point (phi, theta) on the sphere
+ * basis_index: 1 => basis peaked at xi1 = 1, 2 => basis peaked at xi2 = 1, 3 => basis peaked at xi3 = 1
+ * xi_index: 1 => xi1, 2 => xi2, 3 => xi3
  */
-Real FPNBasis(int l, int m, Real phi, Real theta) {
+const double fem_basis_derivative[3][3] = {{2., 1., 1.},
+                                           {1., 2., 1.},
+                                           {1., 1., 2.}};
+Real dfem_dxi(Real xi1, Real xi2, Real xi3, int basis_index, int xi_index) {
+  return fem_basis_derivative[basis_index - 1][xi_index - 1];
+}
+
+/* FPN basis: real spherical harmonics
+ *
+ * Note: gsl_sf_legendre_sphPlm computes sqrt((2l+1)/(4 pi)) sqrt((l-m)!/(l+m)!) P_m^l(x)
+ */
+Real fpn_basis_lm(int l, int m, Real phi, Real theta) {
   Real result = 0.;
   if (m > 0) {
     result = sqrt(2.) * cos(m * phi) * gsl_sf_legendre_sphPlm(l, m, cos(theta));
@@ -305,23 +177,15 @@ Real FPNBasis(int l, int m, Real phi, Real theta) {
   return result;
 }
 
-/* Phi derivative of FPN basis function
- *
- * dYlm/dphi = - m Yl-m
- *
- * Calculated for (l,m) at point (phi, theta) on the sphere
- */
-inline Real dFPNBasisdphi(int l, int m, Real phi, Real theta) {
-  return -m * FPNBasis(l, -m, phi, theta);
+// FPN basis derivatives: dYlm/dphi = - m Yl-m
+inline Real dfpn_dphi(int l, int m, Real phi, Real theta) {
+  return -m * fpn_basis_lm(l, -m, phi, theta);
 }
 
-/* Theta derivative of FPN basis function
- *
- * Use (1-x^2) dP^m_l/dx = (m-l-1) P^m_l+1 + (l+1)xP^m_l
- *
- * Calculated for (l,m) at point (phi, theta) on the sphere
+/* FPN basis derivatives: dYlm/dtheta
+ * Note: Uses (1-x^2) dP^m_l/dx = (m-l-1) P^m_l+1 + (l+1)xP^m_l
  */
-inline Real dFPNBasisdtheta(int l, int m, Real phi, Real theta) {
+inline Real dfpn_dtheta(int l, int m, Real phi, Real theta) {
   Real result = 0.;
 
   Real der_legendre =
@@ -340,17 +204,12 @@ inline Real dFPNBasisdtheta(int l, int m, Real phi, Real theta) {
 
 /* Derivative of FPN basis wrt angle
  *
- * Omega = ([1] phi, [2] theta)
+ * var_index: 1 => phi, 2 => theta)
  */
-Real dFPNBasisdOmega(int l, int m, Real phi, Real theta, int var_index) {
-  if (var_index == 1) {
-    return dFPNBasisdphi(l, m, phi, theta);
-  } else if (var_index == 2) {
-    return dFPNBasisdtheta(l, m, phi, theta);
-  } else {
-    // std::cout << "Incorrect choice of variable index in radiation-femn block!" << std::endl;
-    exit(EXIT_FAILURE);
-  }
+using dfpn_dOmega_fn = Real (*)(int, int, Real, Real);
+const dfpn_dOmega_fn dfpn_domega_fns[2] = {dfpn_dphi, dfpn_dtheta};
+Real dfpn_dOmega(int l, int m, Real phi, Real theta, int var_index) {
+  return dfpn_domega_fns[var_index - 1](l, m, phi, theta);
 }
 
 /* Jacobian P^Omega_ihat (energy = 1)
@@ -548,8 +407,9 @@ Real pXi1pTheta(Real x1, Real y1, Real z1, Real x2, Real y2, Real z2, Real x3, R
   return (-2 * pow(pow(x1 * xi1 + x2 * xi2 + x3 * xi3, 2) + pow(xi1 * y1 + xi2 * y2 + xi3 * y3, 2) + pow(xi1 * z1 + xi2 * z2 + xi3 * z3, 2), 1.5) *
       sqrt(1 - pow(xi1 * z1 + xi2 * z2 + xi3 * z3, 2)
           / (pow(x1 * xi1 + x2 * xi2 + x3 * xi3, 2) + pow(xi1 * y1 + xi2 * y2 + xi3 * y3, 2) + pow(xi1 * z1 + xi2 * z2 + xi3 * z3, 2)))) /
-      (-2 * (xi1 * z1 + xi2 * z2 + xi3 * z3) * (x1 * (x1 * xi1 + x2 * xi2 + x3 * xi3) + y1 * (xi1 * y1 + xi2 * y2 + xi3 * y3) + z1 * (xi1 * z1 + xi2 * z2 + xi3 * z3)) +
-          2 * z1 * (pow(x1 * xi1 + x2 * xi2 + x3 * xi3, 2) + pow(xi1 * y1 + xi2 * y2 + xi3 * y3, 2) + pow(xi1 * z1 + xi2 * z2 + xi3 * z3, 2)));
+      (-2 * (xi1 * z1 + xi2 * z2 + xi3 * z3) * (x1 * (x1 * xi1 + x2 * xi2 + x3 * xi3) + y1 * (xi1 * y1 + xi2 * y2 + xi3 * y3) + z1 * (xi1 * z1 + xi2 * z2 + xi3 * z3))
+          +
+              2 * z1 * (pow(x1 * xi1 + x2 * xi2 + x3 * xi3, 2) + pow(xi1 * y1 + xi2 * y2 + xi3 * y3, 2) + pow(xi1 * z1 + xi2 * z2 + xi3 * z3, 2)));
 }
 
 // ------------------------------------------------------------------------
@@ -558,8 +418,9 @@ Real pXi2pTheta(Real x1, Real y1, Real z1, Real x2, Real y2, Real z2, Real x3, R
   return (-2 * pow(pow(x1 * xi1 + x2 * xi2 + x3 * xi3, 2) + pow(xi1 * y1 + xi2 * y2 + xi3 * y3, 2) + pow(xi1 * z1 + xi2 * z2 + xi3 * z3, 2), 1.5) *
       sqrt(1 - pow(xi1 * z1 + xi2 * z2 + xi3 * z3, 2)
           / (pow(x1 * xi1 + x2 * xi2 + x3 * xi3, 2) + pow(xi1 * y1 + xi2 * y2 + xi3 * y3, 2) + pow(xi1 * z1 + xi2 * z2 + xi3 * z3, 2)))) /
-      (-2 * (xi1 * z1 + xi2 * z2 + xi3 * z3) * (x2 * (x1 * xi1 + x2 * xi2 + x3 * xi3) + y2 * (xi1 * y1 + xi2 * y2 + xi3 * y3) + z2 * (xi1 * z1 + xi2 * z2 + xi3 * z3)) +
-          2 * z2 * (pow(x1 * xi1 + x2 * xi2 + x3 * xi3, 2) + pow(xi1 * y1 + xi2 * y2 + xi3 * y3, 2) + pow(xi1 * z1 + xi2 * z2 + xi3 * z3, 2)));
+      (-2 * (xi1 * z1 + xi2 * z2 + xi3 * z3) * (x2 * (x1 * xi1 + x2 * xi2 + x3 * xi3) + y2 * (xi1 * y1 + xi2 * y2 + xi3 * y3) + z2 * (xi1 * z1 + xi2 * z2 + xi3 * z3))
+          +
+              2 * z2 * (pow(x1 * xi1 + x2 * xi2 + x3 * xi3, 2) + pow(xi1 * y1 + xi2 * y2 + xi3 * y3, 2) + pow(xi1 * z1 + xi2 * z2 + xi3 * z3, 2)));
 }
 
 // ------------------------------------------------------------------------
@@ -568,20 +429,21 @@ Real pXi3pTheta(Real x1, Real y1, Real z1, Real x2, Real y2, Real z2, Real x3, R
   return (-2 * pow(pow(x1 * xi1 + x2 * xi2 + x3 * xi3, 2) + pow(xi1 * y1 + xi2 * y2 + xi3 * y3, 2) + pow(xi1 * z1 + xi2 * z2 + xi3 * z3, 2), 1.5) *
       sqrt(1 - pow(xi1 * z1 + xi2 * z2 + xi3 * z3, 2)
           / (pow(x1 * xi1 + x2 * xi2 + x3 * xi3, 2) + pow(xi1 * y1 + xi2 * y2 + xi3 * y3, 2) + pow(xi1 * z1 + xi2 * z2 + xi3 * z3, 2)))) /
-      (-2 * (xi1 * z1 + xi2 * z2 + xi3 * z3) * (x3 * (x1 * xi1 + x2 * xi2 + x3 * xi3) + y3 * (xi1 * y1 + xi2 * y2 + xi3 * y3) + z3 * (xi1 * z1 + xi2 * z2 + xi3 * z3)) +
-          2 * z3 * (pow(x1 * xi1 + x2 * xi2 + x3 * xi3, 2) + pow(xi1 * y1 + xi2 * y2 + xi3 * y3, 2) + pow(xi1 * z1 + xi2 * z2 + xi3 * z3, 2)));
+      (-2 * (xi1 * z1 + xi2 * z2 + xi3 * z3) * (x3 * (x1 * xi1 + x2 * xi2 + x3 * xi3) + y3 * (xi1 * y1 + xi2 * y2 + xi3 * y3) + z3 * (xi1 * z1 + xi2 * z2 + xi3 * z3))
+          +
+              2 * z3 * (pow(x1 * xi1 + x2 * xi2 + x3 * xi3, 2) + pow(xi1 * y1 + xi2 * y2 + xi3 * y3, 2) + pow(xi1 * z1 + xi2 * z2 + xi3 * z3, 2)));
 }
 
 inline Real dFEMBasisdphi(Real x1, Real y1, Real z1, Real x2, Real y2, Real z2, Real x3, Real y3, Real z3, Real xi1, Real xi2, Real xi3, int basis_index) {
-  return dFEMBasisdxi(xi1, xi2, xi3, basis_index, 1) * pXi1pPhi(x1, y1, z1, x2, y2, z2, x3, y3, z3, xi1, xi2, xi3)
-      + dFEMBasisdxi(xi1, xi2, xi3, basis_index, 2) * pXi2pPhi(x1, y1, z1, x2, y2, z2, x3, y3, z3, xi1, xi2, xi3)
-      + dFEMBasisdxi(xi1, xi2, xi3, basis_index, 3) * pXi3pPhi(x1, y1, z1, x2, y2, z2, x3, y3, z3, xi1, xi2, xi3);
+  return dfem_dxi(xi1, xi2, xi3, basis_index, 1) * pXi1pPhi(x1, y1, z1, x2, y2, z2, x3, y3, z3, xi1, xi2, xi3)
+      + dfem_dxi(xi1, xi2, xi3, basis_index, 2) * pXi2pPhi(x1, y1, z1, x2, y2, z2, x3, y3, z3, xi1, xi2, xi3)
+      + dfem_dxi(xi1, xi2, xi3, basis_index, 3) * pXi3pPhi(x1, y1, z1, x2, y2, z2, x3, y3, z3, xi1, xi2, xi3);
 }
 
 inline Real dFEMBasisdtheta(Real x1, Real y1, Real z1, Real x2, Real y2, Real z2, Real x3, Real y3, Real z3, Real xi1, Real xi2, Real xi3, int basis_index) {
-  return dFEMBasisdxi(xi1, xi2, xi3, basis_index, 1) * pXi1pTheta(x1, y1, z1, x2, y2, z2, x3, y3, z3, xi1, xi2, xi3)
-      + dFEMBasisdxi(xi1, xi2, xi3, basis_index, 2) * pXi2pTheta(x1, y1, z1, x2, y2, z2, x3, y3, z3, xi1, xi2, xi3)
-      + dFEMBasisdxi(xi1, xi2, xi3, basis_index, 3) * pXi3pTheta(x1, y1, z1, x2, y2, z2, x3, y3, z3, xi1, xi2, xi3);
+  return dfem_dxi(xi1, xi2, xi3, basis_index, 1) * pXi1pTheta(x1, y1, z1, x2, y2, z2, x3, y3, z3, xi1, xi2, xi3)
+      + dfem_dxi(xi1, xi2, xi3, basis_index, 2) * pXi2pTheta(x1, y1, z1, x2, y2, z2, x3, y3, z3, xi1, xi2, xi3)
+      + dfem_dxi(xi1, xi2, xi3, basis_index, 3) * pXi3pTheta(x1, y1, z1, x2, y2, z2, x3, y3, z3, xi1, xi2, xi3);
 }
 
 inline Real dJacxIxiJ(int i, int j, Real x1, Real y1, Real z1, Real x2, Real y2, Real z2, Real x3, Real y3, Real z3) {
@@ -650,27 +512,29 @@ inline Real dFEMBasisdxI(Real x1, Real y1, Real z1, Real x2, Real y2, Real z2, R
   switch (idx) {
     case 1:
       result =
-          dFEMBasisdxi(xi1, xi2, xi3, basis_index_a, 1) * (y3 * z2 - y2 * z3) / (x3 * y2 * z1 - x2 * y3 * z1 - x3 * y1 * z2 + x1 * y3 * z2 + x2 * y1 * z3 - x1 * y2 * z3)
-              + dFEMBasisdxi(xi1, xi2, xi3, basis_index_a, 2) * (y3 * z1 - y1 * z3)
+          dfem_dxi(xi1, xi2, xi3, basis_index_a, 1) * (y3 * z2 - y2 * z3)
+              / (x3 * y2 * z1 - x2 * y3 * z1 - x3 * y1 * z2 + x1 * y3 * z2 + x2 * y1 * z3 - x1 * y2 * z3)
+              + dfem_dxi(xi1, xi2, xi3, basis_index_a, 2) * (y3 * z1 - y1 * z3)
                   / (-(x3 * y2 * z1) + x2 * y3 * z1 + x3 * y1 * z2 - x1 * y3 * z2 - x2 * y1 * z3 + x1 * y2 * z3)
-              + dFEMBasisdxi(xi1, xi2, xi3, basis_index_a, 3) * (y2 * z1 - y1 * z2)
+              + dfem_dxi(xi1, xi2, xi3, basis_index_a, 3) * (y2 * z1 - y1 * z2)
                   / (x3 * y2 * z1 - x2 * y3 * z1 - x3 * y1 * z2 + x1 * y3 * z2 + x2 * y1 * z3 - x1 * y2 * z3);
       break;
     case 2:
       result =
-          dFEMBasisdxi(xi1, xi2, xi3, basis_index_a, 1) * (x3 * z2 - x2 * z3)
+          dfem_dxi(xi1, xi2, xi3, basis_index_a, 1) * (x3 * z2 - x2 * z3)
               / (-(x3 * y2 * z1) + x2 * y3 * z1 + x3 * y1 * z2 - x1 * y3 * z2 - x2 * y1 * z3 + x1 * y2 * z3)
-              + dFEMBasisdxi(xi1, xi2, xi3, basis_index_a, 2) * (x3 * z1 - x1 * z3)
+              + dfem_dxi(xi1, xi2, xi3, basis_index_a, 2) * (x3 * z1 - x1 * z3)
                   / (x3 * y2 * z1 - x2 * y3 * z1 - x3 * y1 * z2 + x1 * y3 * z2 + x2 * y1 * z3 - x1 * y2 * z3)
-              + dFEMBasisdxi(xi1, xi2, xi3, basis_index_a, 3) * (x2 * z1 - x1 * z2)
+              + dfem_dxi(xi1, xi2, xi3, basis_index_a, 3) * (x2 * z1 - x1 * z2)
                   / (-(x3 * y2 * z1) + x2 * y3 * z1 + x3 * y1 * z2 - x1 * y3 * z2 - x2 * y1 * z3 + x1 * y2 * z3);
       break;
     case 3:
       result =
-          dFEMBasisdxi(xi1, xi2, xi3, basis_index_a, 1) * (x3 * y2 - x2 * y3) / (x3 * y2 * z1 - x2 * y3 * z1 - x3 * y1 * z2 + x1 * y3 * z2 + x2 * y1 * z3 - x1 * y2 * z3)
-              + dFEMBasisdxi(xi1, xi2, xi3, basis_index_a, 2) * (x3 * y1 - x1 * y3)
+          dfem_dxi(xi1, xi2, xi3, basis_index_a, 1) * (x3 * y2 - x2 * y3)
+              / (x3 * y2 * z1 - x2 * y3 * z1 - x3 * y1 * z2 + x1 * y3 * z2 + x2 * y1 * z3 - x1 * y2 * z3)
+              + dfem_dxi(xi1, xi2, xi3, basis_index_a, 2) * (x3 * y1 - x1 * y3)
                   / (-(x3 * y2 * z1) + x2 * y3 * z1 + x3 * y1 * z2 - x1 * y3 * z2 - x2 * y1 * z3 + x1 * y2 * z3)
-              + dFEMBasisdxi(xi1, xi2, xi3, basis_index_a, 3) * (x2 * y1 - x1 * y2)
+              + dfem_dxi(xi1, xi2, xi3, basis_index_a, 3) * (x2 * y1 - x1 * y2)
                   / (x3 * y2 * z1 - x2 * y3 * z1 - x3 * y1 * z2 + x1 * y3 * z2 + x2 * y1 * z3 - x1 * y2 * z3);
       break;
   }
@@ -717,7 +581,8 @@ Real dFEMBasisdp(int ihat, int a, int t1, int t2, int t3, Real x1, Real y1, Real
 
   int basis_index_a = (a == t1) * 1 + (a == t2) * 2 + (a == t3) * 3;
 
-  Real result = dFEMBasisdxI(x1, y1, z1, x2, y2, z2, x3, y3, z3, xi1, xi2, xi3, basis_index_a, 1) * Rmatrix(x1, y1, z1, x2, y2, z2, x3, y3, z3, xi1, xi2, xi3, 1, ihat)
+  Real
+      result = dFEMBasisdxI(x1, y1, z1, x2, y2, z2, x3, y3, z3, xi1, xi2, xi3, basis_index_a, 1) * Rmatrix(x1, y1, z1, x2, y2, z2, x3, y3, z3, xi1, xi2, xi3, 1, ihat)
       + dFEMBasisdxI(x1, y1, z1, x2, y2, z2, x3, y3, z3, xi1, xi2, xi3, basis_index_a, 2) * Rmatrix(x1, y1, z1, x2, y2, z2, x3, y3, z3, xi1, xi2, xi3, 1, ihat)
       + dFEMBasisdxI(x1, y1, z1, x2, y2, z2, x3, y3, z3, xi1, xi2, xi3, basis_index_a, 3) * Rmatrix(x1, y1, z1, x2, y2, z2, x3, y3, z3, xi1, xi2, xi3, 1, ihat);
   return result;

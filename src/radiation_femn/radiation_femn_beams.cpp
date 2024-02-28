@@ -81,12 +81,12 @@ void RadiationFEMN::InitializeBeamsSourcesFPN() {
 
   std::cout << "Initializing beam sources for FPN" << std::endl;
   for (int i = 0; i < num_points_; i++) {
-    beam_source_1_vals_(i) = FPNBasis(angular_grid(i, 0), angular_grid(i, 1), beam_source_1_phi, beam_source_1_theta);
+    beam_source_1_vals_(i) = fpn_basis_lm(angular_grid(i, 0), angular_grid(i, 1), beam_source_1_phi, beam_source_1_theta);
   }
 
   if (num_beams_ > 1) {
     for (int i = 0; i < num_points_; i++) {
-      beam_source_2_vals_(i) = FPNBasis(angular_grid(i, 0), angular_grid(i, 1), beam_source_2_phi, beam_source_2_theta);
+      beam_source_2_vals_(i) = fpn_basis_lm(angular_grid(i, 0), angular_grid(i, 1), beam_source_2_phi, beam_source_2_theta);
     }
   }
 }
