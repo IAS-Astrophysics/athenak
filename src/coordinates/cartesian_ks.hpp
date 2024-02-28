@@ -21,6 +21,8 @@
 //! \fn void ComputeMetricAndInverse
 //! \brief computes 10 covariant and contravariant components of metric in
 //!  Cartesian Kerr-Schild coordinates
+//!  Expression for the metric is taken from https://arxiv.org/abs/0706.0622.
+//! With this expression glower[0][0] is the lapse function and glower[0][i] the components of the shift vector in ADM formalism.
 
 KOKKOS_INLINE_FUNCTION
 void ComputeMetricAndInverse(Real x, Real y, Real z, bool minkowski, Real a,
