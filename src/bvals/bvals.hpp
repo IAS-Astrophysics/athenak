@@ -238,16 +238,6 @@ struct ParticleMessageData {
 };
 
 //----------------------------------------------------------------------------------------
-//! \struct ParticlePhysicalData
-//! \brief data (gid, tag, pos, vel) for particles, communicated by MPI
-
-struct ParticlePhysicalData {
-  int dest_gid;
-  Real x,y,z;
-  Real vx,vy,vz;
-};
-
-//----------------------------------------------------------------------------------------
 //! \class ParticlesBoundaryValues
 //  \brief Defines boundary values class for particles
 
@@ -268,10 +258,11 @@ class ParticlesBoundaryValues {
   std::vector<ParticleMessageData> recvs_thisrank; // length nrecvs
   std::vector<ParticleMessageData> sends_allranks; // length ncounts summed over ranks
 
-  DvceArray1D<ParticlePhysicalData> prtcl_sendbuf, prtcl_recvbuf;
-
 #if MPI_PARALLEL_ENABLED
-  std::vector<MPI_Request> recv_req, send_req;  // vectors of requests
+  DvceArray1D<Real> prtcl_rsendbuf, prtcl_rrecvbuf;
+  DvceArray1D<int>  prtcl_isendbuf, prtcl_irecvbuf;
+  std::vector<MPI_Request> rrecv_req, rsend_req;  // vectors of requests for Reals
+  std::vector<MPI_Request> irecv_req, isend_req;  // vectors of requests for ints
   MPI_Comm mpi_comm_part;                       // unique MPI communicators for particles
 #endif
 
