@@ -80,7 +80,7 @@ inline Real IntegrateMatrixSphericalTriangle(int a, int b, int basis, int t1, in
       for (size_t i = 0; i < scheme_weights.size(); i++) {
         result +=
             sqrt(CalculateDeterminantJacobian(x1, y1, z1, x2, y2, z2, x3, y3, z3, scheme_points(i, 0), scheme_points(i, 1), scheme_points(i, 2))) * scheme_weights(i)
-                * CosPhiSinTheta(x1, y1, z1, x2, y2, z2, x3, y3, z3, scheme_points(i, 0), scheme_points(i, 1), scheme_points(i, 2))
+                * cos_phi_sin_theta(x1, y1, z1, x2, y2, z2, x3, y3, z3, scheme_points(i, 0), scheme_points(i, 1), scheme_points(i, 2))
                 * fem_basis_ab(a, b, t1, t2, t3, scheme_points(i, 0), scheme_points(i, 1), scheme_points(i, 2), basis);
       }
       break;
@@ -88,7 +88,7 @@ inline Real IntegrateMatrixSphericalTriangle(int a, int b, int basis, int t1, in
       for (size_t i = 0; i < scheme_weights.size(); i++) {
         result +=
             sqrt(CalculateDeterminantJacobian(x1, y1, z1, x2, y2, z2, x3, y3, z3, scheme_points(i, 0), scheme_points(i, 1), scheme_points(i, 2))) * scheme_weights(i)
-                * SinPhiSinTheta(x1, y1, z1, x2, y2, z2, x3, y3, z3, scheme_points(i, 0), scheme_points(i, 1), scheme_points(i, 2))
+                * sin_phi_sin_theta(x1, y1, z1, x2, y2, z2, x3, y3, z3, scheme_points(i, 0), scheme_points(i, 1), scheme_points(i, 2))
                 * fem_basis_ab(a, b, t1, t2, t3, scheme_points(i, 0), scheme_points(i, 1), scheme_points(i, 2), basis);
       }
       break;
@@ -96,7 +96,7 @@ inline Real IntegrateMatrixSphericalTriangle(int a, int b, int basis, int t1, in
       for (size_t i = 0; i < scheme_weights.size(); i++) {
         result +=
             sqrt(CalculateDeterminantJacobian(x1, y1, z1, x2, y2, z2, x3, y3, z3, scheme_points(i, 0), scheme_points(i, 1), scheme_points(i, 2))) * scheme_weights(i)
-                * CosTheta(x1, y1, z1, x2, y2, z2, x3, y3, z3, scheme_points(i, 0), scheme_points(i, 1), scheme_points(i, 2))
+                * cos_theta(x1, y1, z1, x2, y2, z2, x3, y3, z3, scheme_points(i, 0), scheme_points(i, 1), scheme_points(i, 2))
                 * fem_basis_ab(a, b, t1, t2, t3, scheme_points(i, 0), scheme_points(i, 1), scheme_points(i, 2), basis);
       }
       break;
@@ -104,8 +104,8 @@ inline Real IntegrateMatrixSphericalTriangle(int a, int b, int basis, int t1, in
       for (size_t i = 0; i < scheme_weights.size(); i++) {
         result +=
             sqrt(CalculateDeterminantJacobian(x1, y1, z1, x2, y2, z2, x3, y3, z3, scheme_points(i, 0), scheme_points(i, 1), scheme_points(i, 2))) * scheme_weights(i)
-                * MomentumUnitEnergy(nu, x1, y1, z1, x2, y2, z2, x3, y3, z3, scheme_points(i, 0), scheme_points(i, 1), scheme_points(i, 2))
-                * MomentumUnitEnergy(mu, x1, y1, z1, x2, y2, z2, x3, y3, z3, scheme_points(i, 0), scheme_points(i, 1), scheme_points(i, 2))
+                * mom(nu, x1, y1, z1, x2, y2, z2, x3, y3, z3, scheme_points(i, 0), scheme_points(i, 1), scheme_points(i, 2))
+                * mom(mu, x1, y1, z1, x2, y2, z2, x3, y3, z3, scheme_points(i, 0), scheme_points(i, 1), scheme_points(i, 2))
                 * fem_basis_a(a, t1, t2, t3, scheme_points(i, 0), scheme_points(i, 1), scheme_points(i, 2), basis)
                 * dFEMBasisdp(ihat, b, t1, t2, t3, x1, y1, z1, x2, y2, z2, x3, y3, z3, scheme_points(i, 0), scheme_points(i, 1), scheme_points(i, 2), basis);
       }
@@ -114,10 +114,10 @@ inline Real IntegrateMatrixSphericalTriangle(int a, int b, int basis, int t1, in
       for (size_t i = 0; i < scheme_weights.size(); i++) {
         result +=
             sqrt(CalculateDeterminantJacobian(x1, y1, z1, x2, y2, z2, x3, y3, z3, scheme_points(i, 0), scheme_points(i, 1), scheme_points(i, 2))) * scheme_weights(i)
-                * MomentumUnitEnergy(nu, x1, y1, z1, x2, y2, z2, x3, y3, z3, scheme_points(i, 0), scheme_points(i, 1), scheme_points(i, 2))
-                * MomentumUnitEnergy(mu, x1, y1, z1, x2, y2, z2, x3, y3, z3, scheme_points(i, 0), scheme_points(i, 1), scheme_points(i, 2))
+                * mom(nu, x1, y1, z1, x2, y2, z2, x3, y3, z3, scheme_points(i, 0), scheme_points(i, 1), scheme_points(i, 2))
+                * mom(mu, x1, y1, z1, x2, y2, z2, x3, y3, z3, scheme_points(i, 0), scheme_points(i, 1), scheme_points(i, 2))
                 * fem_basis_ab(a, b, t1, t2, t3, scheme_points(i, 0), scheme_points(i, 1), scheme_points(i, 2), basis)
-                * MomentumUnitEnergy(ihat, x1, y1, z1, x2, y2, z2, x3, y3, z3, scheme_points(i, 0), scheme_points(i, 1), scheme_points(i, 2));
+                * mom(ihat, x1, y1, z1, x2, y2, z2, x3, y3, z3, scheme_points(i, 0), scheme_points(i, 1), scheme_points(i, 2));
       }
       break;
     case 6:
@@ -131,7 +131,7 @@ inline Real IntegrateMatrixSphericalTriangle(int a, int b, int basis, int t1, in
       for (size_t i = 0; i < scheme_weights.size(); i++) {
         result +=
             sqrt(CalculateDeterminantJacobian(x1, y1, z1, x2, y2, z2, x3, y3, z3, scheme_points(i, 0), scheme_points(i, 1), scheme_points(i, 2))) * scheme_weights(i)
-                * CosPhiSinTheta(x1, y1, z1, x2, y2, z2, x3, y3, z3, scheme_points(i, 0), scheme_points(i, 1), scheme_points(i, 2))
+                * cos_phi_sin_theta(x1, y1, z1, x2, y2, z2, x3, y3, z3, scheme_points(i, 0), scheme_points(i, 1), scheme_points(i, 2))
                 * fem_basis_a(a, t1, t2, t3, scheme_points(i, 0), scheme_points(i, 1), scheme_points(i, 2), basis);
       }
       break;
@@ -139,7 +139,7 @@ inline Real IntegrateMatrixSphericalTriangle(int a, int b, int basis, int t1, in
       for (size_t i = 0; i < scheme_weights.size(); i++) {
         result +=
             sqrt(CalculateDeterminantJacobian(x1, y1, z1, x2, y2, z2, x3, y3, z3, scheme_points(i, 0), scheme_points(i, 1), scheme_points(i, 2))) * scheme_weights(i)
-                * SinPhiSinTheta(x1, y1, z1, x2, y2, z2, x3, y3, z3, scheme_points(i, 0), scheme_points(i, 1), scheme_points(i, 2))
+                * sin_phi_sin_theta(x1, y1, z1, x2, y2, z2, x3, y3, z3, scheme_points(i, 0), scheme_points(i, 1), scheme_points(i, 2))
                 * fem_basis_a(a, t1, t2, t3, scheme_points(i, 0), scheme_points(i, 1), scheme_points(i, 2), basis);
       }
       break;
@@ -147,7 +147,7 @@ inline Real IntegrateMatrixSphericalTriangle(int a, int b, int basis, int t1, in
       for (size_t i = 0; i < scheme_weights.size(); i++) {
         result +=
             sqrt(CalculateDeterminantJacobian(x1, y1, z1, x2, y2, z2, x3, y3, z3, scheme_points(i, 0), scheme_points(i, 1), scheme_points(i, 2))) * scheme_weights(i)
-                * CosTheta(x1, y1, z1, x2, y2, z2, x3, y3, z3, scheme_points(i, 0), scheme_points(i, 1), scheme_points(i, 2))
+                * cos_theta(x1, y1, z1, x2, y2, z2, x3, y3, z3, scheme_points(i, 0), scheme_points(i, 1), scheme_points(i, 2))
                 * fem_basis_a(a, t1, t2, t3, scheme_points(i, 0), scheme_points(i, 1), scheme_points(i, 2), basis);
       }
       break;
@@ -225,22 +225,22 @@ Real IntegrateMatrixFPN(int la, int ma, int lb, int mb, const HostArray1D<Real> 
       for (size_t i = 0; i < scheme_weights.size(); i++) {
         if (!(fabs(scheme_points(i, 0) - 0.) < 1e-14 || fabs(scheme_points(i, 0) - M_PI) < 1e-14)) { // basis derivatives vanish at 0 and pi
           result += 4. * M_PI * scheme_weights(i)
-              * MomentumUnitEnergy(nu, scheme_points(i, 0), scheme_points(i, 1))
-              * MomentumUnitEnergy(mu, scheme_points(i, 0), scheme_points(i, 1))
+              * mom(nu, scheme_points(i, 0), scheme_points(i, 1))
+              * mom(mu, scheme_points(i, 0), scheme_points(i, 1))
               * fpn_basis_lm(la, ma, scheme_points(i, 0), scheme_points(i, 1))
-              * (PtildehatJac(scheme_points(i, 0), scheme_points(i, 1), 1, ihat) * dfpn_dOmega(lb, mb, scheme_points(i, 0), scheme_points(i, 1), 1)
-                  + PtildehatJac(scheme_points(i, 0), scheme_points(i, 1), 2, ihat) * dfpn_dOmega(lb, mb, scheme_points(i, 0), scheme_points(i, 1), 2));
+              * (inv_jac_itilde_ihat(scheme_points(i, 0), scheme_points(i, 1), 1, ihat) * dfpn_dOmega(lb, mb, scheme_points(i, 0), scheme_points(i, 1), 1)
+                  + inv_jac_itilde_ihat(scheme_points(i, 0), scheme_points(i, 1), 2, ihat) * dfpn_dOmega(lb, mb, scheme_points(i, 0), scheme_points(i, 1), 2));
         }
       }
       break;
     case 5:
       for (size_t i = 0; i < scheme_weights.size(); i++) {
         result += 4. * M_PI * scheme_weights(i)
-            * MomentumUnitEnergy(nu, scheme_points(i, 0), scheme_points(i, 1))
-            * MomentumUnitEnergy(mu, scheme_points(i, 0), scheme_points(i, 1))
+            * mom(nu, scheme_points(i, 0), scheme_points(i, 1))
+            * mom(mu, scheme_points(i, 0), scheme_points(i, 1))
             * fpn_basis_lm(la, ma, scheme_points(i, 0), scheme_points(i, 1))
             * fpn_basis_lm(lb, mb, scheme_points(i, 0), scheme_points(i, 1))
-            * MomentumUnitEnergy(ihat, scheme_points(i, 0), scheme_points(i, 1));
+            * mom(ihat, scheme_points(i, 0), scheme_points(i, 1));
       }
       break;
     case 6:

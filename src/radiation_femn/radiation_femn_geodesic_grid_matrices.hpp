@@ -97,27 +97,19 @@ Real fpn_basis_lm(int l, int m, Real phi, Real theta);
 Real dfpn_dtheta(int l, int m, Real phi, Real theta);
 Real dfpn_dphi(int l, int m, Real phi, Real theta);
 Real dfpn_dOmega(int l, int m, Real phi, Real theta, int var_index);
-Real PtildehatJac(Real phi, Real theta, int tilde_index, int hat_index);
+Real inv_jac_itilde_ihat(Real phi, Real theta, int tilde_index, int hat_index);
 
 // some other useful functions
 Real fem_basis_ab(int a, int b, int t1, int t2, int t3, Real xi1, Real xi2, Real xi3, int basis_choice);
 Real fem_basis_a(int a, int t1, int t2, int t3, Real xi1, Real xi2, Real xi3, int basis_choice);
-Real dFEMBasisdxi(Real xi1, Real xi2, Real xi3, int basis_index, int basis_choice, int xi_index);
-Real dFEMBasisdphi(Real x1, Real y1, Real z1, Real x2, Real y2, Real z2, Real x3, Real y3, Real z3, Real xi1, Real xi2, Real xi3, int basis_index);
-Real dFEMBasisdtheta(Real x1, Real y1, Real z1, Real x2, Real y2, Real z2, Real x3, Real y3, Real z3, Real xi1, Real xi2, Real xi3, int basis_index);
 Real dFEMBasisdp(int ihat, int a, int t1, int t2, int t3, Real x1, Real y1, Real z1, Real x2, Real y2, Real z2, Real x3, Real y3, Real z3,
                  Real xi1, Real xi2, Real xi3, int basis_choice);
 
-Real CosPhiSinTheta(Real x1, Real y1, Real z1, Real x2, Real y2, Real z2, Real x3, Real y3, Real z3, Real xi1, Real xi2, Real xi3);
-Real SinPhiSinTheta(Real x1, Real y1, Real z1, Real x2, Real y2, Real z2, Real x3, Real y3, Real z3, Real xi1, Real xi2, Real xi3);
-Real CosTheta(Real x1, Real y1, Real z1, Real x2, Real y2, Real z2, Real x3, Real y3, Real z3, Real xi1, Real xi2, Real xi3);
-Real SinPhiCosecTheta(Real x1, Real y1, Real z1, Real x2, Real y2, Real z2, Real x3, Real y3, Real z3, Real xi1, Real xi2, Real xi3);
-Real CosPhiCosTheta(Real x1, Real y1, Real z1, Real x2, Real y2, Real z2, Real x3, Real y3, Real z3, Real xi1, Real xi2, Real xi3);
-Real CosPhiCosecTheta(Real x1, Real y1, Real z1, Real x2, Real y2, Real z2, Real x3, Real y3, Real z3, Real xi1, Real xi2, Real xi3);
-Real SinPhiCosTheta(Real x1, Real y1, Real z1, Real x2, Real y2, Real z2, Real x3, Real y3, Real z3, Real xi1, Real xi2, Real xi3);
-Real SinTheta(Real x1, Real y1, Real z1, Real x2, Real y2, Real z2, Real x3, Real y3, Real z3, Real xi1, Real xi2, Real xi3);
-Real MomentumUnitEnergy(int mu, Real x1, Real y1, Real z1, Real x2, Real y2, Real z2, Real x3, Real y3, Real z3, Real xi1, Real xi2, Real xi3);
-Real MomentumUnitEnergy(int mu, Real phi, Real theta);
+Real cos_phi_sin_theta(Real x1, Real y1, Real z1, Real x2, Real y2, Real z2, Real x3, Real y3, Real z3, Real xi1, Real xi2, Real xi3);
+Real sin_phi_sin_theta(Real x1, Real y1, Real z1, Real x2, Real y2, Real z2, Real x3, Real y3, Real z3, Real xi1, Real xi2, Real xi3);
+Real cos_theta(Real x1, Real y1, Real z1, Real x2, Real y2, Real z2, Real x3, Real y3, Real z3, Real xi1, Real xi2, Real xi3);
+Real mom(int mu, Real x1, Real y1, Real z1, Real x2, Real y2, Real z2, Real x3, Real y3, Real z3, Real xi1, Real xi2, Real xi3);
+Real mom(int mu, Real phi, Real theta);
 // Find triangles which share an edge
 void FindTriangles(int a, int b, const HostArray2D<int> &triangles, HostArray2D<int> &edge_triangles, bool &is_edge);
 

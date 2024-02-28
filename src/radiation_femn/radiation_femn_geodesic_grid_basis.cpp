@@ -212,33 +212,18 @@ Real dfpn_dOmega(int l, int m, Real phi, Real theta, int var_index) {
   return dfpn_domega_fns[var_index - 1](l, m, phi, theta);
 }
 
-/* Jacobian P^Omega_ihat (energy = 1)
- *
- * Omega = (phi, theta), ihat = (x, y, z)
- */
-Real PtildehatJac(Real phi, Real theta, int tilde_index, int hat_index) {
-  if (tilde_index == 1 && hat_index == 1) {
-    return -sin(phi) / sin(theta);
-  } else if (tilde_index == 1 && hat_index == 2) {
-    return cos(phi) / sin(theta);
-  } else if (tilde_index == 1 && hat_index == 3) {
-    return 0.;
-  } else if (tilde_index == 2 && hat_index == 1) {
-    return cos(phi) * cos(theta);
-  } else if (tilde_index == 2 && hat_index == 2) {
-    return sin(phi) * cos(theta);
-  } else if (tilde_index == 2 && hat_index == 3) {
-    return -sin(theta);
-  } else {
-    // std::cout << "Incorrect choice of index in radiation-femn block!" << std::endl;
-    exit(EXIT_FAILURE);
-  }
+// Inverse Jacobian P^itilde_ihat [e = 1, itilde = (phi, theta), ihat = (x,y,z)]
+using inv_jac_fn = double (*)(double, double);
+const inv_jac_fn inv_jac_fns[2][3] = {{[](double phi, double theta) { return -sin(phi) / sin(theta); }, [](double phi, double theta) { return cos(phi) / sin(theta); },
+                                       [](double phi, double theta) { return 0.0; }},
+                                      {[](double phi, double theta) { return cos(phi) * cos(theta); }, [](double phi, double theta) { return sin(phi) * cos(theta); },
+                                       [](double phi, double theta) { return -sin(theta); }}};
+Real inv_jac_itilde_ihat(Real phi, Real theta, int tilde_index, int hat_index) {
+  return inv_jac_fns[tilde_index - 1][hat_index - 1](phi, theta);
 }
 
-// -------------------------------------------------------------------------
-// Cos Phi Sin Theta
-//KOKKOS_INLINE_FUNCTION
-Real CosPhiSinTheta(Real x1, Real y1, Real z1, Real x2, Real y2, Real z2, Real x3, Real y3, Real z3, Real xi1, Real xi2, Real xi3) {
+// cos(phi) sin(theta)
+Real cos_phi_sin_theta(Real x1, Real y1, Real z1, Real x2, Real y2, Real z2, Real x3, Real y3, Real z3, Real xi1, Real xi2, Real xi3) {
   Real xval, yval, zval;
   BarycentricToCartesian(x1, y1, z1, x2, y2, z2, x3, y3, z3, xi1, xi2, xi3, xval, yval, zval);
 
@@ -249,10 +234,8 @@ Real CosPhiSinTheta(Real x1, Real y1, Real z1, Real x2, Real y2, Real z2, Real x
   return cos(phival) * sin(thetaval);
 }
 
-// ------------------------------------------------------------------------
-// Sin Phi Sin Theta
-//KOKKOS_INLINE_FUNCTION
-Real SinPhiSinTheta(Real x1, Real y1, Real z1, Real x2, Real y2, Real z2, Real x3, Real y3, Real z3, Real xi1, Real xi2, Real xi3) {
+// sin(phi) sin(theta)
+Real sin_phi_sin_theta(Real x1, Real y1, Real z1, Real x2, Real y2, Real z2, Real x3, Real y3, Real z3, Real xi1, Real xi2, Real xi3) {
   Real xval, yval, zval;
   BarycentricToCartesian(x1, y1, z1, x2, y2, z2, x3, y3, z3, xi1, xi2, xi3, xval, yval, zval);
 
@@ -263,10 +246,8 @@ Real SinPhiSinTheta(Real x1, Real y1, Real z1, Real x2, Real y2, Real z2, Real x
   return sin(phival) * sin(thetaval);
 }
 
-// ------------------------------------------------------------------------
-// Cos Theta
-//KOKKOS_INLINE_FUNCTION
-Real CosTheta(Real x1, Real y1, Real z1, Real x2, Real y2, Real z2, Real x3, Real y3, Real z3, Real xi1, Real xi2, Real xi3) {
+// cos(theta)
+Real cos_theta(Real x1, Real y1, Real z1, Real x2, Real y2, Real z2, Real x3, Real y3, Real z3, Real xi1, Real xi2, Real xi3) {
   Real xval, yval, zval;
   BarycentricToCartesian(x1, y1, z1, x2, y2, z2, x3, y3, z3, xi1, xi2, xi3, xval, yval, zval);
 
@@ -276,87 +257,17 @@ Real CosTheta(Real x1, Real y1, Real z1, Real x2, Real y2, Real z2, Real x3, Rea
   return cos(thetaval);
 }
 
-// -------------------------------------------------------------------------
-// sin Phi Cosec Theta
-//KOKKOS_INLINE_FUNCTION
-Real SinPhiCosecTheta(Real x1, Real y1, Real z1, Real x2, Real y2, Real z2, Real x3, Real y3, Real z3, Real xi1, Real xi2, Real xi3) {
-  Real xval, yval, zval;
-  BarycentricToCartesian(x1, y1, z1, x2, y2, z2, x3, y3, z3, xi1, xi2, xi3, xval, yval, zval);
-
-  Real rval = sqrt(xval * xval + yval * yval + zval * zval);
-  Real thetaval = acos(zval / rval);
-  Real phival = atan2(yval, xval);
-
-  return sin(phival) / sin(thetaval);
-}
-
-// -------------------------------------------------------------------------
-// Cos Phi Cos Theta
-//KOKKOS_INLINE_FUNCTION
-Real CosPhiCosTheta(Real x1, Real y1, Real z1, Real x2, Real y2, Real z2, Real x3, Real y3, Real z3, Real xi1, Real xi2, Real xi3) {
-  Real xval, yval, zval;
-  BarycentricToCartesian(x1, y1, z1, x2, y2, z2, x3, y3, z3, xi1, xi2, xi3, xval, yval, zval);
-
-  Real rval = sqrt(xval * xval + yval * yval + zval * zval);
-  Real thetaval = acos(zval / rval);
-  Real phival = atan2(yval, xval);
-
-  return cos(phival) * cos(thetaval);
-}
-
-// ------------------------------------------------------------------------
-// Cos Phi Cosec Theta
-//KOKKOS_INLINE_FUNCTION
-Real CosPhiCosecTheta(Real x1, Real y1, Real z1, Real x2, Real y2, Real z2, Real x3, Real y3, Real z3, Real xi1, Real xi2, Real xi3) {
-  Real xval, yval, zval;
-  BarycentricToCartesian(x1, y1, z1, x2, y2, z2, x3, y3, z3, xi1, xi2, xi3, xval, yval, zval);
-
-  Real rval = sqrt(xval * xval + yval * yval + zval * zval);
-  Real thetaval = acos(zval / rval);
-  Real phival = atan2(yval, xval);
-
-  return cos(phival) / sin(thetaval);
-}
-
-// ------------------------------------------------------------------------
-// Sin Phi Cos Theta
-//KOKKOS_INLINE_FUNCTION
-Real SinPhiCosTheta(Real x1, Real y1, Real z1, Real x2, Real y2, Real z2, Real x3, Real y3, Real z3, Real xi1, Real xi2, Real xi3) {
-  Real xval, yval, zval;
-  BarycentricToCartesian(x1, y1, z1, x2, y2, z2, x3, y3, z3, xi1, xi2, xi3, xval, yval, zval);
-
-  Real rval = sqrt(xval * xval + yval * yval + zval * zval);
-  Real thetaval = acos(zval / rval);
-  Real phival = atan2(yval, xval);
-
-  return sin(phival) * cos(thetaval);
-}
-
-// ------------------------------------------------------------------------
-// Sin Theta
-//KOKKOS_INLINE_FUNCTION
-Real SinTheta(Real x1, Real y1, Real z1, Real x2, Real y2, Real z2, Real x3, Real y3, Real z3, Real xi1, Real xi2, Real xi3) {
-  Real xval, yval, zval;
-  BarycentricToCartesian(x1, y1, z1, x2, y2, z2, x3, y3, z3, xi1, xi2, xi3, xval, yval, zval);
-
-  Real rval = sqrt(xval * xval + yval * yval + zval * zval);
-  Real thetaval = acos(zval / rval);
-
-  return sin(thetaval);
-}
-
-// ------------------------------------------------------------
-// Momentum contra-vector divided by energy (in comoving frame)
-Real MomentumUnitEnergy(int mu, Real x1, Real y1, Real z1, Real x2, Real y2, Real z2, Real x3, Real y3, Real z3, Real xi1, Real xi2, Real xi3) {
+// p^mu/e FEM
+Real mom(int mu, Real x1, Real y1, Real z1, Real x2, Real y2, Real z2, Real x3, Real y3, Real z3, Real xi1, Real xi2, Real xi3) {
   Real result = 0.;
   if (mu == 0) {
     result = 1.;
   } else if (mu == 1) {
-    result = CosPhiSinTheta(x1, y1, z1, x2, y2, z2, x3, y3, z3, xi1, xi2, xi3);
+    result = cos_phi_sin_theta(x1, y1, z1, x2, y2, z2, x3, y3, z3, xi1, xi2, xi3);
   } else if (mu == 2) {
-    result = SinPhiSinTheta(x1, y1, z1, x2, y2, z2, x3, y3, z3, xi1, xi2, xi3);
+    result = sin_phi_sin_theta(x1, y1, z1, x2, y2, z2, x3, y3, z3, xi1, xi2, xi3);
   } else if (mu == 3) {
-    result = CosTheta(x1, y1, z1, x2, y2, z2, x3, y3, z3, xi1, xi2, xi3);
+    result = cos_theta(x1, y1, z1, x2, y2, z2, x3, y3, z3, xi1, xi2, xi3);
   } else {
     // std::cout << "Incorrect choice of index for p^mu/e!" << std::endl;
     exit(EXIT_FAILURE);
@@ -365,7 +276,8 @@ Real MomentumUnitEnergy(int mu, Real x1, Real y1, Real z1, Real x2, Real y2, Rea
   return result;
 }
 
-Real MomentumUnitEnergy(int mu, Real phi, Real theta) {
+// p^mu/e FPN
+Real mom(int mu, Real phi, Real theta) {
   Real result = 0.;
   if (mu == 0) {
     result = 1.;
@@ -381,69 +293,6 @@ Real MomentumUnitEnergy(int mu, Real phi, Real theta) {
   }
 
   return result;
-}
-
-// ------------------------------------------------------------------------
-// partial xi1 / partial phi
-Real pXi1pPhi(Real x1, Real y1, Real z1, Real x2, Real y2, Real z2, Real x3, Real y3, Real z3, Real xi1, Real xi2, Real xi3) {
-  return (pow(x1 * xi1 + x2 * xi2 + x3 * xi3, 2) + pow(xi1 * y1 + xi2 * y2 + xi3 * y3, 2)) / (x2 * xi2 * y1 + x3 * xi3 * y1 - x1 * (xi2 * y2 + xi3 * y3));
-}
-
-// ------------------------------------------------------------------------
-// partial xi2 / partial phi
-Real pXi2pPhi(Real x1, Real y1, Real z1, Real x2, Real y2, Real z2, Real x3, Real y3, Real z3, Real xi1, Real xi2, Real xi3) {
-  return (pow(x1 * xi1 + x2 * xi2 + x3 * xi3, 2) + pow(xi1 * y1 + xi2 * y2 + xi3 * y3, 2)) / ((x1 * xi1 + x3 * xi3) * y2 - x2 * (xi1 * y1 + xi3 * y3));
-}
-
-// ------------------------------------------------------------------------
-// partial xi3 / partial phi
-Real pXi3pPhi(Real x1, Real y1, Real z1, Real x2, Real y2, Real z2, Real x3, Real y3, Real z3, Real xi1, Real xi2, Real xi3) {
-  return (pow(x1 * xi1 + x2 * xi2 + x3 * xi3, 2) + pow(xi1 * y1 + xi2 * y2 + xi3 * y3, 2)) / (-(x3 * (xi1 * y1 + xi2 * y2)) + (x1 * xi1 + x2 * xi2) * y3);
-}
-
-// ------------------------------------------------------------------------
-// partial xi1 / partial theta
-Real pXi1pTheta(Real x1, Real y1, Real z1, Real x2, Real y2, Real z2, Real x3, Real y3, Real z3, Real xi1, Real xi2, Real xi3) {
-  return (-2 * pow(pow(x1 * xi1 + x2 * xi2 + x3 * xi3, 2) + pow(xi1 * y1 + xi2 * y2 + xi3 * y3, 2) + pow(xi1 * z1 + xi2 * z2 + xi3 * z3, 2), 1.5) *
-      sqrt(1 - pow(xi1 * z1 + xi2 * z2 + xi3 * z3, 2)
-          / (pow(x1 * xi1 + x2 * xi2 + x3 * xi3, 2) + pow(xi1 * y1 + xi2 * y2 + xi3 * y3, 2) + pow(xi1 * z1 + xi2 * z2 + xi3 * z3, 2)))) /
-      (-2 * (xi1 * z1 + xi2 * z2 + xi3 * z3) * (x1 * (x1 * xi1 + x2 * xi2 + x3 * xi3) + y1 * (xi1 * y1 + xi2 * y2 + xi3 * y3) + z1 * (xi1 * z1 + xi2 * z2 + xi3 * z3))
-          +
-              2 * z1 * (pow(x1 * xi1 + x2 * xi2 + x3 * xi3, 2) + pow(xi1 * y1 + xi2 * y2 + xi3 * y3, 2) + pow(xi1 * z1 + xi2 * z2 + xi3 * z3, 2)));
-}
-
-// ------------------------------------------------------------------------
-// partial xi2 / partial theta
-Real pXi2pTheta(Real x1, Real y1, Real z1, Real x2, Real y2, Real z2, Real x3, Real y3, Real z3, Real xi1, Real xi2, Real xi3) {
-  return (-2 * pow(pow(x1 * xi1 + x2 * xi2 + x3 * xi3, 2) + pow(xi1 * y1 + xi2 * y2 + xi3 * y3, 2) + pow(xi1 * z1 + xi2 * z2 + xi3 * z3, 2), 1.5) *
-      sqrt(1 - pow(xi1 * z1 + xi2 * z2 + xi3 * z3, 2)
-          / (pow(x1 * xi1 + x2 * xi2 + x3 * xi3, 2) + pow(xi1 * y1 + xi2 * y2 + xi3 * y3, 2) + pow(xi1 * z1 + xi2 * z2 + xi3 * z3, 2)))) /
-      (-2 * (xi1 * z1 + xi2 * z2 + xi3 * z3) * (x2 * (x1 * xi1 + x2 * xi2 + x3 * xi3) + y2 * (xi1 * y1 + xi2 * y2 + xi3 * y3) + z2 * (xi1 * z1 + xi2 * z2 + xi3 * z3))
-          +
-              2 * z2 * (pow(x1 * xi1 + x2 * xi2 + x3 * xi3, 2) + pow(xi1 * y1 + xi2 * y2 + xi3 * y3, 2) + pow(xi1 * z1 + xi2 * z2 + xi3 * z3, 2)));
-}
-
-// ------------------------------------------------------------------------
-// partial xi3 / partial theta
-Real pXi3pTheta(Real x1, Real y1, Real z1, Real x2, Real y2, Real z2, Real x3, Real y3, Real z3, Real xi1, Real xi2, Real xi3) {
-  return (-2 * pow(pow(x1 * xi1 + x2 * xi2 + x3 * xi3, 2) + pow(xi1 * y1 + xi2 * y2 + xi3 * y3, 2) + pow(xi1 * z1 + xi2 * z2 + xi3 * z3, 2), 1.5) *
-      sqrt(1 - pow(xi1 * z1 + xi2 * z2 + xi3 * z3, 2)
-          / (pow(x1 * xi1 + x2 * xi2 + x3 * xi3, 2) + pow(xi1 * y1 + xi2 * y2 + xi3 * y3, 2) + pow(xi1 * z1 + xi2 * z2 + xi3 * z3, 2)))) /
-      (-2 * (xi1 * z1 + xi2 * z2 + xi3 * z3) * (x3 * (x1 * xi1 + x2 * xi2 + x3 * xi3) + y3 * (xi1 * y1 + xi2 * y2 + xi3 * y3) + z3 * (xi1 * z1 + xi2 * z2 + xi3 * z3))
-          +
-              2 * z3 * (pow(x1 * xi1 + x2 * xi2 + x3 * xi3, 2) + pow(xi1 * y1 + xi2 * y2 + xi3 * y3, 2) + pow(xi1 * z1 + xi2 * z2 + xi3 * z3, 2)));
-}
-
-inline Real dFEMBasisdphi(Real x1, Real y1, Real z1, Real x2, Real y2, Real z2, Real x3, Real y3, Real z3, Real xi1, Real xi2, Real xi3, int basis_index) {
-  return dfem_dxi(xi1, xi2, xi3, basis_index, 1) * pXi1pPhi(x1, y1, z1, x2, y2, z2, x3, y3, z3, xi1, xi2, xi3)
-      + dfem_dxi(xi1, xi2, xi3, basis_index, 2) * pXi2pPhi(x1, y1, z1, x2, y2, z2, x3, y3, z3, xi1, xi2, xi3)
-      + dfem_dxi(xi1, xi2, xi3, basis_index, 3) * pXi3pPhi(x1, y1, z1, x2, y2, z2, x3, y3, z3, xi1, xi2, xi3);
-}
-
-inline Real dFEMBasisdtheta(Real x1, Real y1, Real z1, Real x2, Real y2, Real z2, Real x3, Real y3, Real z3, Real xi1, Real xi2, Real xi3, int basis_index) {
-  return dfem_dxi(xi1, xi2, xi3, basis_index, 1) * pXi1pTheta(x1, y1, z1, x2, y2, z2, x3, y3, z3, xi1, xi2, xi3)
-      + dfem_dxi(xi1, xi2, xi3, basis_index, 2) * pXi2pTheta(x1, y1, z1, x2, y2, z2, x3, y3, z3, xi1, xi2, xi3)
-      + dfem_dxi(xi1, xi2, xi3, basis_index, 3) * pXi3pTheta(x1, y1, z1, x2, y2, z2, x3, y3, z3, xi1, xi2, xi3);
 }
 
 inline Real dJacxIxiJ(int i, int j, Real x1, Real y1, Real z1, Real x2, Real y2, Real z2, Real x3, Real y3, Real z3) {
@@ -470,39 +319,6 @@ inline Real dJacxIxiJ(int i, int j, Real x1, Real y1, Real z1, Real x2, Real y2,
   }
 
   return result;
-}
-
-inline Real dpIdxJ(int i, int j, Real x1, Real y1, Real z1, Real x2, Real y2, Real z2, Real x3, Real y3, Real z3, Real xi1, Real xi2, Real xi3) {
-
-  Real x = xi1 * x1 + xi2 * x2 + xi3 * x3;
-  Real y = xi1 * y1 + xi2 * y2 + xi3 * y3;
-  Real z = xi1 * z1 + xi2 * z2 + xi3 * z3;
-
-  Real result;
-  if (i == 1 && j == 1) {
-    result = (pow(y, 2) + pow(z, 2)) / pow(pow(x, 2) + pow(y, 2) + pow(z, 2), 1.5);
-  } else if ((i == 1 && j == 2) || (i == 2 && j == 1)) {
-    result = -((x * y) / pow(pow(x, 2) + pow(y, 2) + pow(z, 2), 1.5));
-  } else if ((i == 1 && j == 3) || (i == 3 && j == 1)) {
-    result = -((x * z) / pow(pow(x, 2) + pow(y, 2) + pow(z, 2), 1.5));
-  } else if (i == 2 && j == 2) {
-    result = (pow(x, 2) + pow(z, 2)) / pow(pow(x, 2) + pow(y, 2) + pow(z, 2), 1.5);
-  } else if ((i == 2 && j == 3) || (i == 3 && j == 2)) {
-    result = -((y * z) / pow(pow(x, 2) + pow(y, 2) + pow(z, 2), 1.5));
-  } else {
-    result = (pow(x, 2) + pow(y, 2)) / pow(pow(x, 2) + pow(y, 2) + pow(z, 2), 1.5);
-  }
-
-  return result;
-}
-
-inline Real dxiIdpJ(int i, int j, Real x1, Real y1, Real z1, Real x2, Real y2, Real z2, Real x3, Real y3, Real z3, Real xi1, Real xi2, Real xi3) {
-
-  Real result = dJacxIxiJ(i, 1, x1, y1, z1, x2, y2, z2, x3, y3, z3) * dpIdxJ(1, j, x1, y1, z1, x2, y2, z2, x3, y3, z3, xi1, xi2, xi3)
-      + dJacxIxiJ(i, 2, x1, y1, z1, x2, y2, z2, x3, y3, z3) * dpIdxJ(2, j, x1, y1, z1, x2, y2, z2, x3, y3, z3, xi1, xi2, xi3)
-      + dJacxIxiJ(i, 3, x1, y1, z1, x2, y2, z2, x3, y3, z3) * dpIdxJ(3, j, x1, y1, z1, x2, y2, z2, x3, y3, z3, xi1, xi2, xi3);
-
-  return 1 / result;
 }
 
 // Derivative of FEM basis with respect to cartesian coordinates on the unit sphere
