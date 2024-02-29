@@ -421,6 +421,9 @@ class PrimitiveSolverHydro {
                  "    Sy  = %g\n"
                  "    Sz  = %g\n"
                  "    tau = %g\n"
+                 "    Bx  = %g\n"
+                 "    By  = %g\n"
+                 "    Bz  = %g\n"
                  "  Metric vars: \n"
                  "    detg = %g\n"
                  "    g_dd = {%g, %g, %g, %g, %g, %g}\n"
@@ -431,7 +434,7 @@ class PrimitiveSolverHydro {
                  ErrorToString(result.error),
                  m, k, j, i,
                  cons_pt_old[CDN], cons_pt_old[CSX], cons_pt_old[CSY], cons_pt_old[CSZ],
-                 cons_pt_old[CTA], detg,
+                 cons_pt_old[CTA], b3u[IBX], b3u[IBY], b3u[IBZ], detg,
                  g3d[S11], g3d[S12], g3d[S13], g3d[S22], g3d[S23], g3d[S33],
                  adm.alpha(m, k, j, i),
                  adm.beta_u(m, 0, k, j, i),
