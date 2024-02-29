@@ -605,12 +605,19 @@ void Mesh::AddCoordinatesAndPhysics(ParameterInput *pinput) {
     pmb_pack->AddPhysics(pinput);
   }
 
+  // Once physics is added (including particles), now set num particles on all ranks
   nprtcl_eachrank = new int[global_variable::nranks];
 #if MPI_PARALLEL_ENABLED
   // Share number of particles on each rank with all ranks
   MPI_Allgather(&nprtcl_thisrank,1,MPI_INT,nprtcl_eachrank,1,MPI_INT,MPI_COMM_WORLD);
-
-  // Sum total number of particles across all ranks
-  MPI_Allreduce(MPI_IN_PLACE, &nprtcl_total, 1, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
 #endif
+  nprtcl_total = 0;
+  for (int n=0; n<global_variable::nranks; ++n) {
+    nprtcl_total += nprtcl_eachrank[n];
+  }
+
+  // Assign particle IDs
+  if (pmb_pack->ppart != nullptr) {
+    pmb_pack->ppart->CreateParticleTags(pinput);
+  }
 }

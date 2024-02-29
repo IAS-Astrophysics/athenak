@@ -67,6 +67,7 @@ class Particles {
   ParticlesTaskIDs id;
 
   // functions...
+  void CreateParticleTags(ParameterInput *pin);
   void AssembleTasks(std::map<std::string, std::shared_ptr<TaskList>> tl);
   TaskStatus Push(Driver *pdriver, int stage);
   TaskStatus NewGID(Driver *pdriver, int stage);
