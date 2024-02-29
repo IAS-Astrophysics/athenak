@@ -11,6 +11,7 @@
 #include <algorithm>
 
 #include "athena.hpp"
+#include "globals.hpp"
 #include "parameter_input.hpp"
 #include "mesh/mesh.hpp"
 #include "bvals/bvals.hpp"
@@ -97,6 +98,46 @@ Particles::Particles(MeshBlockPack *ppack, ParameterInput *pin) :
 // destructor
 
 Particles::~Particles() {
+}
+
+//----------------------------------------------------------------------------------------
+// CreatePaticleTags()
+// Assigns tags to particles (unique integer).  Note that tracked particles are always
+// those with tag numbers less than ntrack.
+
+void Particles::CreateParticleTags(ParameterInput *pin) {
+  std::string assign = pin->GetOrAddString("particles","assign_tag","index_order");
+
+  // tags are assigned sequentially within this rank, starting at 0 with rank=0
+  if (assign.compare("index_order") == 0) {
+    int tagstart = 0;
+    for (int n=1; n<global_variable::my_rank; ++n) {
+      tagstart += pmy_pack->pmesh->nprtcl_eachrank[n-1];
+    }
+
+    auto &pi = prtcl_idata;
+    par_for("ptags",DevExeSpace(),0,(nprtcl_thispack-1),
+    KOKKOS_LAMBDA(const int p) {
+      pi(PTAG,p) = tagstart + p;
+    });
+
+  // tags are assigned sequentially across ranks
+  } else if (assign.compare("rank_order") == 0) {
+    int myrank = global_variable::my_rank;
+    int nranks = global_variable::nranks;
+    auto &pi = prtcl_idata;
+    par_for("ptags",DevExeSpace(),0,(nprtcl_thispack-1),
+    KOKKOS_LAMBDA(const int p) {
+      pi(PTAG,p) = myrank + nranks*p;
+    });
+
+  // tag algorithm not recognized, so quit with error
+  } else {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+              << "Particle tag assinment type = '" << assign << "' not recognized"
+              << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
 }
 
 } // namespace particles

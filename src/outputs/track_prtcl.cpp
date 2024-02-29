@@ -32,7 +32,7 @@ TrackedParticleOutput::TrackedParticleOutput(ParameterInput *pin, Mesh *pm,
   mkdir("trk",0775);
   // allocate arrays
   npout_eachrank.resize(global_variable::nranks);
-  ntrack = pin->GetInteger(op.block_name,"number_tracked_prtcls");
+  ntrack = pin->GetInteger(op.block_name,"nparticles");
   // TODO (@user) improve guess below?
   ntrack_thisrank = ntrack;
 }
@@ -93,21 +93,28 @@ void TrackedParticleOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
   fname.append(out_params.file_basename);
   fname.append(".trk");
 
-  IOWrapper partfile;
-  std::size_t header_offset=0;
-  partfile.Open(fname.c_str(), IOWrapper::FileMode::write);
-
-  // Every rank creates string with header text to compute offset; only root writes it
-  {
+  // Root process opens/creates file and appends string
+  if (global_variable::my_rank == 0) {
     std::stringstream msg;
-    msg << "# AthenaK tracked particle data at time= " << pm->time
+    msg << std::endl << "# AthenaK tracked particle data at time= " << pm->time
         << "  nranks= " << global_variable::nranks
-        << "  cycle=" << pm->ncycle << std::endl;
-    if (global_variable::my_rank == 0) {
-      partfile.Write_any_type(msg.str().c_str(),msg.str().size(),"byte");
+        << "  cycle=" << pm->ncycle
+        << "  ntracked_prtcls=" << ntrack << std::endl;
+    FILE *pfile;
+    if ((pfile = std::fopen(fname.c_str(),"a")) == nullptr) {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+        << std::endl << "Output file '" << fname << "' could not be opened" <<std::endl;
+      exit(EXIT_FAILURE);
     }
-    header_offset += msg.str().size();
+    std::fprintf(pfile,"%s \n",msg.str().c_str());
+    std::fclose(pfile);
   }
+
+  // Now all ranks open file and append data
+  IOWrapper partfile;
+  partfile.Open(fname.c_str(), IOWrapper::FileMode::append);
+  std::size_t header_offset = partfile.GetPosition();
+//  std::size_t header_offset = 0;
 
   // allocate 1D vector of floats used to convert and output particle data
   float *data = new float[6*npout];
