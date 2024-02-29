@@ -18,6 +18,9 @@
 // constants that enumerate ParticlesPusher options
 enum class ParticlesPusher {drift, leap_frog, lagrangian_tracer, lagrangian_mc};
 
+// constants that enumerate ParticleTypes
+enum class ParticleType {cosmic_ray};
+
 //----------------------------------------------------------------------------------------
 //! \struct ParticlesTaskIDs
 //  \brief container to hold TaskIDs of all particles tasks
@@ -45,6 +48,7 @@ class Particles {
   ~Particles();
 
   // data
+  ParticleType particle_type;
   int nprtcl_thispack;             // number of particles this MeshBlockPack
   int nrdata, nidata;
 //  DvceArray1D<int>  prtcl_gid;     // GID of MeshBlock containing each par
@@ -63,6 +67,7 @@ class Particles {
   ParticlesTaskIDs id;
 
   // functions...
+  void CreateParticleTags(ParameterInput *pin);
   void AssembleTasks(std::map<std::string, std::shared_ptr<TaskList>> tl);
   TaskStatus Push(Driver *pdriver, int stage);
   TaskStatus NewGID(Driver *pdriver, int stage);

@@ -88,9 +88,11 @@ Outputs::Outputs(ParameterInput *pin, Mesh *pm) {
       opar.file_type = pin->GetString(opar.block_name,"file_type");
 
       // set output variable and optional file id (default is output variable name)
+      // but only for those output types that use them
       if (opar.file_type.compare("hst") != 0 &&
           opar.file_type.compare("rst") != 0 &&
-          opar.file_type.compare("log") != 0) {
+          opar.file_type.compare("log") != 0 &&
+          opar.file_type.compare("trk") != 0) {
         opar.variable = pin->GetString(opar.block_name, "variable");
         opar.file_id = pin->GetOrAddString(opar.block_name,"id",opar.variable);
       }
@@ -178,29 +180,32 @@ Outputs::Outputs(ParameterInput *pin, Mesh *pm) {
       // NEW_OUTPUT_TYPES: Add block to construct new types here
       BaseTypeOutput *pnode;
       if (opar.file_type.compare("tab") == 0) {
-        pnode = new FormattedTableOutput(opar,pm);
+        pnode = new FormattedTableOutput(pin,pm,opar);
         pout_list.insert(pout_list.begin(),pnode);
       } else if (opar.file_type.compare("hst") == 0) {
-        pnode = new HistoryOutput(opar,pm);
+        pnode = new HistoryOutput(pin,pm,opar);
         pout_list.insert(pout_list.begin(),pnode);
         num_hst++;
       } else if (opar.file_type.compare("log") == 0) {
-        pnode = new EventLogOutput(opar,pm);
+        pnode = new EventLogOutput(pin,pm,opar);
         pout_list.insert(pout_list.begin(),pnode);
         num_log++;
       } else if (opar.file_type.compare("vtk") == 0) {
-        pnode = new MeshVTKOutput(opar,pm);
+        pnode = new MeshVTKOutput(pin,pm,opar);
         pout_list.insert(pout_list.begin(),pnode);
       } else if (opar.file_type.compare("pvtk") == 0) {
-        pnode = new ParticleVTKOutput(opar,pm);
+        pnode = new ParticleVTKOutput(pin,pm,opar);
+        pout_list.insert(pout_list.begin(),pnode);
+      } else if (opar.file_type.compare("trk") == 0) {
+        pnode = new TrackedParticleOutput(pin,pm,opar);
         pout_list.insert(pout_list.begin(),pnode);
       } else if (opar.file_type.compare("bin") == 0) {
-        pnode = new MeshBinaryOutput(opar,pm);
+        pnode = new MeshBinaryOutput(pin,pm,opar);
         pout_list.insert(pout_list.begin(),pnode);
       } else if (opar.file_type.compare("rst") == 0) {
       // Add restarts to the tail end of BaseTypeOutput list, so file counters for other
       // output types are up-to-date in restart file
-        pnode = new RestartOutput(opar,pm);
+        pnode = new RestartOutput(pin,pm,opar);
         pout_list.push_back(pnode);
         num_rst++;
       } else {

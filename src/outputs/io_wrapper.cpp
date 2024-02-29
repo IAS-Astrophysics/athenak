@@ -72,6 +72,31 @@ int IOWrapper::Open(const char* fname, FileMode rw) {
       std::exit(EXIT_FAILURE);
     }
 #endif
+
+  // open file for append
+  } else if (rw == FileMode::append) {
+#if MPI_PARALLEL_ENABLED
+    int errcode = MPI_File_open(comm_, fname, MPI_MODE_WRONLY + MPI_MODE_APPEND,
+                                MPI_INFO_NULL, &fh_);
+    if (errcode != MPI_SUCCESS) {
+      char msg[MPI_MAX_ERROR_STRING];
+      int resultlen;
+      MPI_Error_string(errcode, msg, &resultlen);
+      printf("%.*s\n", resultlen, msg);
+      MPI_Abort(MPI_COMM_WORLD, 1);
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                << std::endl << "Input file '" << fname << "' could not be appended"
+                << std::endl;
+      std::exit(EXIT_FAILURE);
+    }
+#else
+    if ((fh_ = std::fopen(fname,"a")) == nullptr) {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                << std::endl << "Output file '" << fname << "' could not be opened"
+                << std::endl;
+      std::exit(EXIT_FAILURE);
+    }
+#endif
   } else {
     return false;
   }

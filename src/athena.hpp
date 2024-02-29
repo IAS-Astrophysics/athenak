@@ -51,7 +51,7 @@ enum VariableIndex {IDN=0, IM1=1, IVX=1, IM2=2, IVY=2, IM3=3, IVZ=3, IEN=4, ITM=
 // array indices for components of magnetic field
 enum BFieldIndex {IBX=0, IBY=1, IBZ=2};
 // array indices for particle arrays
-enum ParticlesIndex {PGID=0, IPX=0, IPVX=1, IPY=2, IPVY=3, IPZ=4, IPVZ=5};
+enum ParticlesIndex {PGID=0, PTAG=1, IPX=0, IPVX=1, IPY=2, IPVY=3, IPZ=4, IPVZ=5};
 
 // integer constants to specify spatial reconstruction methods
 enum ReconstructionMethod {dc, plm, ppm4, ppmx, wenoz};

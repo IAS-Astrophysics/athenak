@@ -352,28 +352,82 @@ std::cout << "n="<<n<< "  (sendrank,destrank,npart)=" << recvs_thisrank[n].sendr
   }
 
   // Allocate receive buffer
-  Kokkos::realloc(prtcl_recvbuf, nprtcl_recv);
+  Kokkos::realloc(prtcl_rrecvbuf, (pmy_part->nrdata)*nprtcl_recv);
+  Kokkos::realloc(prtcl_irecvbuf, (pmy_part->nidata)*nprtcl_recv);
 
   // Post non-blocking receives
   bool no_errors=true;
-  int data_start=0;
-  recv_req.clear();
-  for (int n=0; n<nrecvs; ++n) { recv_req.emplace_back(MPI_REQUEST_NULL); }
+  rrecv_req.clear();
+  irecv_req.clear();
+  for (int n=0; n<nrecvs; ++n) {
+    rrecv_req.emplace_back(MPI_REQUEST_NULL);
+    irecv_req.emplace_back(MPI_REQUEST_NULL);
+  }
 
+/*
+  // create a new MPI Datatype to send ParticlePhysicalData structure
+  // contains: {int, Real, Real, Real, Real, Real, Real}
+  int length[] = {1, 1, 1, 1, 1, 1, 1};
+  MPI_Aint displ[] = {
+      offsetof(struct ParticlePhysicalData, dest_gid),
+      offsetof(struct ParticlePhysicalData, x),
+      offsetof(struct ParticlePhysicalData, y),
+      offsetof(struct ParticlePhysicalData, z),
+      offsetof(struct ParticlePhysicalData, vx),
+      offsetof(struct ParticlePhysicalData, vy),
+      offsetof(struct ParticlePhysicalData, vz)
+  };
+  MPI_Datatype dtype[] = {
+      MPI_INT,
+      MPI_ATHENA_REAL,
+      MPI_ATHENA_REAL,
+      MPI_ATHENA_REAL,
+      MPI_ATHENA_REAL,
+      MPI_ATHENA_REAL,
+      MPI_ATHENA_REAL
+  };
+
+  MPI_Datatype mpi_pdata_s, mpi_pdata_t;
+  MPI_Type_create_struct(7, length, displ, dtype, &mpi_pdata_s);
+  MPI_Type_create_resized(mpi_pdata_s, 0, sizeof(ParticlePhysicalData), &mpi_pdata_t);
+  MPI_Type_commit(&mpi_pdata_t);
+*/
+
+  // Init receives for Reals
+  int data_start=0;
   for (int n=0; n<nrecvs; ++n) {
     // calculate amount of data to be passed, get pointer to variables
-    int data_size = (recvs_thisrank[n].nprtcls)*sizeof(ParticlePhysicalData);
-    int data_end = data_start + recvs_thisrank[n].nprtcls - 1;
-    auto recv_ptr = Kokkos::subview(prtcl_recvbuf, std::make_pair(data_start, data_end));
+    int data_size = (pmy_part->nrdata)*(recvs_thisrank[n].nprtcls);
+//    int data_end = data_start + data_size;
+    int data_end = data_start + (pmy_part->nrdata)*(recvs_thisrank[n].nprtcls - 1);
+    auto recv_ptr = Kokkos::subview(prtcl_rrecvbuf, std::make_pair(data_start, data_end));
     int drank = recvs_thisrank[n].sendrank;
-    int tag = recvs_thisrank[n].sendrank; // use sending rank as tag
+    int tag = 0; // 0 for Reals, 1 for ints
 
     // Post non-blocking receive
-    int ierr = MPI_Irecv(recv_ptr.data(), data_size, MPI_BYTE, drank, tag,
-                         mpi_comm_part, &(recv_req[n]));
+    int ierr = MPI_Irecv(recv_ptr.data(), data_size, MPI_ATHENA_REAL, drank, tag,
+                         mpi_comm_part, &(rrecv_req[n]));
     if (ierr != MPI_SUCCESS) {no_errors=false;}
-    data_start += recvs_thisrank[n].nprtcls;
+    data_start += data_size;
   }
+  // Init receives for ints
+  data_start=0;
+  for (int n=0; n<nrecvs; ++n) {
+    // calculate amount of data to be passed, get pointer to variables
+    int data_size = (pmy_part->nidata)*(recvs_thisrank[n].nprtcls);
+//    int data_end = data_start + data_size;
+    int data_end = data_start + (pmy_part->nidata)*(recvs_thisrank[n].nprtcls - 1);
+    auto recv_ptr = Kokkos::subview(prtcl_irecvbuf, std::make_pair(data_start, data_end));
+    int drank = recvs_thisrank[n].sendrank;
+    int tag = 1; // 0 for Reals, 1 for ints
+
+    // Post non-blocking receive
+    int ierr = MPI_Irecv(recv_ptr.data(), data_size, MPI_INT, drank, tag,
+                         mpi_comm_part, &(irecv_req[n]));
+    if (ierr != MPI_SUCCESS) {no_errors=false;}
+    data_start += data_size;
+  }
+
 /***
 {
 int ierr = MPI_Barrier(MPI_COMM_WORLD);
@@ -407,42 +461,102 @@ TaskStatus ParticlesBoundaryValues::PackAndSendPrtcls() {
   bool no_errors=true;
   if (nprtcl_send > 0) {
     // Allocate send buffer
-    Kokkos::realloc(prtcl_sendbuf, nprtcl_send);
+    Kokkos::realloc(prtcl_rsendbuf, (pmy_part->nrdata)*nprtcl_send);
+    Kokkos::realloc(prtcl_isendbuf, (pmy_part->nidata)*nprtcl_send);
 
     // sendlist on device is already sorted by destrank in CountSendAndRecvs()
     // Use sendlist on device to load particles into send buffer ordered by dest_rank
+    int nrdata = pmy_part->nrdata;
+    int nidata = pmy_part->nidata;
     auto &pr = pmy_part->prtcl_rdata;
+    auto &pi = pmy_part->prtcl_idata;
+    auto &rsendbuf = prtcl_rsendbuf;
+    auto &isendbuf = prtcl_isendbuf;
     par_for("ppack",DevExeSpace(),0,(nprtcl_send-1), KOKKOS_LAMBDA(const int n) {
-      prtcl_sendbuf(n).dest_gid = sendlist.d_view(n).dest_gid;
       int p = sendlist.d_view(n).prtcl_indx;
-//std::cout<<"rank="<<global_variable::my_rank<<"  nsend="<<n<<"  p="<<p<<std::endl;
-      prtcl_sendbuf(n).x  = pr(IPX,p);
-      prtcl_sendbuf(n).y  = pr(IPY,p);
-      prtcl_sendbuf(n).z  = pr(IPZ,p);
-      prtcl_sendbuf(n).vx = pr(IPVX,p);
-      prtcl_sendbuf(n).vy = pr(IPVY,p);
-      prtcl_sendbuf(n).vz = pr(IPVZ,p);
+      for (int i=0; i<nidata; ++i) {
+        isendbuf(nidata*n + i) = pi(i,p);
+      }
+      for (int i=0; i<nrdata; ++i) {
+        rsendbuf(nrdata*n + i) = pr(i,p);
+      }
+/***/
+if (pr(IPX,p) == 0.0) {
+std::cout<<"***IN PACKSEND rank="<<global_variable::my_rank<<"  p="<<p<<"  x1="<<pr(IPX,p)<<std::endl;
+}
+/***/
     });
 
     // Post non-blocking sends
     Kokkos::fence();
-    int data_start=0;
-    send_req.clear();
-    for (int n=0; n<nsends; ++n) { send_req.emplace_back(MPI_REQUEST_NULL); }
+    rsend_req.clear();
+    isend_req.clear();
+    for (int n=0; n<nsends; ++n) {
+      rsend_req.emplace_back(MPI_REQUEST_NULL);
+      isend_req.emplace_back(MPI_REQUEST_NULL);
+    }
 
+/*
+    // create a new MPI Datatype to send ParticlePhysicalData structure
+    // contains: {int, Real, Real, Real, Real, Real, Real}
+    int length[] = {1, 1, 1, 1, 1, 1, 1};
+    MPI_Aint displ[] = {
+        offsetof(struct ParticlePhysicalData, dest_gid),
+        offsetof(struct ParticlePhysicalData, x),
+        offsetof(struct ParticlePhysicalData, y),
+        offsetof(struct ParticlePhysicalData, z),
+        offsetof(struct ParticlePhysicalData, vx),
+        offsetof(struct ParticlePhysicalData, vy),
+        offsetof(struct ParticlePhysicalData, vz)
+    };
+    MPI_Datatype dtype[] = {
+        MPI_INT,
+        MPI_ATHENA_REAL,
+        MPI_ATHENA_REAL,
+        MPI_ATHENA_REAL,
+        MPI_ATHENA_REAL,
+        MPI_ATHENA_REAL,
+        MPI_ATHENA_REAL
+    };
+    MPI_Datatype mpi_pdata_s, mpi_pdata_t;
+    MPI_Type_create_struct(7, length, displ, dtype, &mpi_pdata_s);
+    MPI_Type_create_resized(mpi_pdata_s, 0, sizeof(ParticlePhysicalData), &mpi_pdata_t);
+    MPI_Type_commit(&mpi_pdata_t);
+*/
+
+    // Send Reals
+    int data_start=0;
     for (int n=0; n<nsends; ++n) {
       // calculate amount of data to be passed, get pointer to variables
-      int data_size = (sends_thisrank[n].nprtcls)*sizeof(ParticlePhysicalData);
-      int data_end = data_start + sends_thisrank[n].nprtcls - 1;
-      auto send_ptr = Kokkos::subview(prtcl_sendbuf, std::make_pair(data_start,data_end));
+      int data_size = nrdata*(sends_thisrank[n].nprtcls);
+//      int data_end = data_start + data_size;
+      int data_end = data_start + nrdata*(sends_thisrank[n].nprtcls - 1);
+      auto send_ptr = Kokkos::subview(prtcl_rsendbuf,std::make_pair(data_start,data_end));
       int drank = sends_thisrank[n].recvrank;
-      int tag = global_variable::my_rank;  // use sending rank as tag
+      int tag = 0; // 0 for Reals, 1 for ints
 
       // Post non-blocking sends
-      int ierr = MPI_Isend(send_ptr.data(), data_size, MPI_BYTE, drank, tag,
-                           mpi_comm_part, &(send_req[n]));
+      int ierr = MPI_Isend(send_ptr.data(), data_size, MPI_ATHENA_REAL, drank, tag,
+                           mpi_comm_part, &(rsend_req[n]));
       if (ierr != MPI_SUCCESS) {no_errors=false;}
-      data_start += sends_thisrank[n].nprtcls;
+      data_start += data_size;
+    }
+    // Send ints
+    data_start=0;
+    for (int n=0; n<nsends; ++n) {
+      // calculate amount of data to be passed, get pointer to variables
+      int data_size = nidata*(sends_thisrank[n].nprtcls);
+//      int data_end = data_start + data_size;
+      int data_end = data_start + nidata*(sends_thisrank[n].nprtcls - 1);
+      auto send_ptr = Kokkos::subview(prtcl_isendbuf,std::make_pair(data_start,data_end));
+      int drank = sends_thisrank[n].recvrank;
+      int tag = 1; // 0 for Reals, 1 for ints
+
+      // Post non-blocking sends
+      int ierr = MPI_Isend(send_ptr.data(), data_size, MPI_INT, drank, tag,
+                           mpi_comm_part, &(isend_req[n]));
+      if (ierr != MPI_SUCCESS) {no_errors=false;}
+      data_start += data_size;
     }
   }
 
@@ -474,6 +588,27 @@ std::cout << "rank="<<global_variable::my_rank<<"  (n,indx,rank,gid)=" << n<<"  
 }
 ****/
 
+/***/
+bool before=false;
+{
+auto &pr = pmy_part->prtcl_rdata;
+for (int p=0; p<pmy_part->nprtcl_thispack; ++p) {
+Real x1 = pr(IPX,p);
+Real x2 = pr(IPY,p);
+Real x3 = pr(IPZ,p);
+Real v1 = pr(IPVX,p);
+Real v2 = pr(IPVY,p);
+Real v3 = pr(IPVZ,p);
+if((fabs(x1)>1.0) || (fabs(x2)>1.0) || (fabs(x3)>1.0)) {
+std::cout<<"****BEFORE RECV**** rank="<<global_variable::my_rank<<"  p="<<p<<"  x1="<<x1<<"  x2="<<x2<<"  x3="<<x3<<std::endl;
+before=true;
+}
+if((fabs(v1)>1.0) || (fabs(v2)>1.0) || (fabs(v3)>1.0)) {
+std::cout<<"****BEFORE RECV**** rank="<<global_variable::my_rank<<"  p="<<p<<"  v1="<<v1<<"  v2="<<v2<<"  v3="<<v3<<std::endl;
+before=true;
+}
+}}
+/***/
 
   // increase size of particle arrays if needed
   int new_npart = pmy_part->nprtcl_thispack + (nprtcl_recv - nprtcl_send);
@@ -487,7 +622,12 @@ std::cout << "rank="<<global_variable::my_rank<<"  (n,indx,rank,gid)=" << n<<"  
   bool no_errors=true;
   for (int n=0; n<nrecvs; ++n) {
     int test;
-    int ierr = MPI_Test(&(recv_req[n]), &test, MPI_STATUS_IGNORE);
+    int ierr = MPI_Test(&(rrecv_req[n]), &test, MPI_STATUS_IGNORE);
+    if (ierr != MPI_SUCCESS) {no_errors=false;}
+    if (!(static_cast<bool>(test))) {
+      bflag = true;
+    }
+    ierr = MPI_Test(&(irecv_req[n]), &test, MPI_STATUS_IGNORE);
     if (ierr != MPI_SUCCESS) {no_errors=false;}
     if (!(static_cast<bool>(test))) {
       bflag = true;
@@ -505,8 +645,12 @@ std::cout << "rank="<<global_variable::my_rank<<"  (n,indx,rank,gid)=" << n<<"  
 
   // unpack particles into positions of sent particles
   if (nprtcl_recv > 0) {
+    int nrdata = pmy_part->nrdata;
+    int nidata = pmy_part->nidata;
     auto &pr = pmy_part->prtcl_rdata;
     auto &pi = pmy_part->prtcl_idata;
+    auto &rrecvbuf = prtcl_rrecvbuf;
+    auto &irecvbuf = prtcl_irecvbuf;
     int npart = pmy_part->nprtcl_thispack;
     par_for("punpack",DevExeSpace(),0,(nprtcl_recv-1), KOKKOS_LAMBDA(const int n) {
       int p;
@@ -515,49 +659,93 @@ std::cout << "rank="<<global_variable::my_rank<<"  (n,indx,rank,gid)=" << n<<"  
       } else {
         p = npart + (n - nprtcl_send);     // place particle at end of arrays
       }
-      pi(PGID,p) = prtcl_recvbuf(n).dest_gid;
-      pr(IPX, p) = prtcl_recvbuf(n).x;
-      pr(IPY, p) = prtcl_recvbuf(n).y;
-      pr(IPZ, p) = prtcl_recvbuf(n).z;
-      pr(IPVX,p) = prtcl_sendbuf(n).vx;
-      pr(IPVY,p) = prtcl_sendbuf(n).vy;
-      pr(IPVZ,p) = prtcl_sendbuf(n).vz;
+      for (int i=0; i<nidata; ++i) {
+        pi(i,p) = irecvbuf(nidata*n + i);
+      }
+      for (int i=0; i<nrdata; ++i) {
+        pr(i,p) = rrecvbuf(nrdata*n + i);
+      }
+/***/
+if (pr(IPX,p) == 0.0) {
+std::cout<<"***IN RECVUNPACk rank="<<global_variable::my_rank<<"  p="<<p<<"  x1="<<pr(IPX,p)<<"  n="<<n<<"  recvbuf="<<rrecvbuf(nrdata*n)<<std::endl;
+}
+/***/
     });
+
+/***/
+{
+auto &pr = pmy_part->prtcl_rdata;
+for (int p=0; p<new_npart; ++p) {
+Real x1 = pr(IPX,p);
+Real x2 = pr(IPY,p);
+Real x3 = pr(IPZ,p);
+Real v1 = pr(IPVX,p);
+Real v2 = pr(IPVY,p);
+Real v3 = pr(IPVZ,p);
+if (!before){
+if((fabs(x1)>1.0) || (fabs(x2)>1.0) || (fabs(x3)>1.0)) {
+std::cout<<"****DURING**** rank="<<global_variable::my_rank<<"  p="<<p<<"  x1="<<x1<<"  x2="<<x2<<"  x3="<<x3<<std::endl;
+}
+if((fabs(v1)>1.0) || (fabs(v2)>1.0) || (fabs(v3)>1.0)) {
+std::cout<<"****DURING**** rank="<<global_variable::my_rank<<"  p="<<p<<"  v1="<<v1<<"  v2="<<v2<<"  v3="<<v3<<std::endl;
+}
+}
+}}
+/***/
 
     // At this point have filled npart_recv holes in particle arrays from sends
     // If (nprtcl_recv < nprtcl_send), have to move particles from end of arrays to fill
     // remaining holes
     int nremain = nprtcl_send - nprtcl_recv;
     if (nremain > 0) {
-      int nend_pdata = npart;
-      int nend_sendl = nprtcl_send;
-      for (int n=0; n<nremain; ++n) {
-        nend_pdata--;
-        nend_sendl--;
-        int nhole = sendlist.h_view(nend_sendl).prtcl_indx;
-        if (nend_pdata > nhole) {
+      int i_last_hole = nprtcl_send-1;
+      int i_next_hole = nprtcl_recv;
+      for (int n=1; n<=nremain; ++n) {
+        int nend = npart-n;
+        if (nend > sendlist.h_view(i_last_hole).prtcl_indx) {
           // copy particle from end into hole
-          auto rdest = Kokkos::subview(pmy_part->prtcl_rdata, Kokkos::ALL, nhole);
-          auto rsrc  = Kokkos::subview(pmy_part->prtcl_rdata, Kokkos::ALL, nend_pdata);
+          int next_hole = sendlist.h_view(i_next_hole).prtcl_indx;
+          auto rdest = Kokkos::subview(pmy_part->prtcl_rdata, Kokkos::ALL, next_hole);
+          auto rsrc  = Kokkos::subview(pmy_part->prtcl_rdata, Kokkos::ALL, nend);
           Kokkos::deep_copy(rdest, rsrc);
-          auto idest = Kokkos::subview(pmy_part->prtcl_idata, Kokkos::ALL, nhole);
-          auto isrc  = Kokkos::subview(pmy_part->prtcl_idata, Kokkos::ALL, nend_pdata);
+          auto idest = Kokkos::subview(pmy_part->prtcl_idata, Kokkos::ALL, next_hole);
+          auto isrc  = Kokkos::subview(pmy_part->prtcl_idata, Kokkos::ALL, nend);
           Kokkos::deep_copy(idest, isrc);
+          i_next_hole += 1;
+        } else {
+          // this index contains a hole, so do nothing except find new index of last hole
+          i_last_hole -= 1;
         }
-//std::cout << "rank="<<global_variable::my_rank<<" nend_pdata="<<nend_pdata<<"  nend_sendl="<<nend_sendl<< std::endl;
       }
+
       // shrink size of particle data arrays
       Kokkos::resize(pmy_part->prtcl_idata, pmy_part->nidata, new_npart);
       Kokkos::resize(pmy_part->prtcl_rdata, pmy_part->nrdata, new_npart);
-//std::cout << "rank="<<global_variable::my_rank<<" new_npart="<<new_npart<<"  prtcl_rdata.size="<<pmy_part->prtcl_idata.size()<< std::endl;
     }
   }
 
 /***/
+{
+auto &pr = pmy_part->prtcl_rdata;
 for (int p=0; p<new_npart; ++p) {
 if((pmy_part->prtcl_idata(PGID,p) < pmy_part->pmy_pack->gids) ||
    (pmy_part->prtcl_idata(PGID,p) > pmy_part->pmy_pack->gide)) {
 std::cout<<"rank="<<global_variable::my_rank<<"  p="<<p<<"  gid="<<pmy_part->prtcl_idata(PGID,p)<<std::endl;
+}
+Real x1 = pr(IPX,p);
+Real x2 = pr(IPY,p);
+Real x3 = pr(IPZ,p);
+Real v1 = pr(IPVX,p);
+Real v2 = pr(IPVY,p);
+Real v3 = pr(IPVZ,p);
+if(!before){
+if((fabs(x1)>1.0) || (fabs(x2)>1.0) || (fabs(x3)>1.0)) {
+std::cout<<"****AFTER**** rank="<<global_variable::my_rank<<"  p="<<p<<"  x1="<<x1<<"  x2="<<x2<<"  x3="<<x3<<std::endl;
+}
+if((fabs(v1)>1.0) || (fabs(v2)>1.0) || (fabs(v3)>1.0)) {
+std::cout<<"****AFTER**** rank="<<global_variable::my_rank<<"  p="<<p<<"  v1="<<v1<<"  v2="<<v2<<"  v3="<<v3<<std::endl;
+}
+}
 }}
 /***/
 
@@ -594,7 +782,9 @@ TaskStatus ParticlesBoundaryValues::ClearPrtclSend() {
   bool no_errors=true;
   // wait for all non-blocking sends for vars to finish before continuing
   for (int n=0; n<nsends; ++n) {
-    int ierr = MPI_Wait(&(send_req[n]), MPI_STATUS_IGNORE);
+    int ierr = MPI_Wait(&(rsend_req[n]), MPI_STATUS_IGNORE);
+    if (ierr != MPI_SUCCESS) {no_errors=false;}
+    ierr = MPI_Wait(&(isend_req[n]), MPI_STATUS_IGNORE);
     if (ierr != MPI_SUCCESS) {no_errors=false;}
   }
   // Quit if MPI error detected
@@ -603,7 +793,8 @@ TaskStatus ParticlesBoundaryValues::ClearPrtclSend() {
        << std::endl << "MPI error in clearing sends" << std::endl;
     std::exit(EXIT_FAILURE);
   }
-  send_req.clear();
+  rsend_req.clear();
+  isend_req.clear();
 #endif
   nsends=0;
   return TaskStatus::complete;
@@ -618,7 +809,9 @@ TaskStatus ParticlesBoundaryValues::ClearPrtclRecv() {
   bool no_errors=true;
   // wait for all non-blocking receives to finish before continuing
   for (int n=0; n<nrecvs; ++n) {
-    int ierr = MPI_Wait(&(recv_req[n]), MPI_STATUS_IGNORE);
+    int ierr = MPI_Wait(&(rrecv_req[n]), MPI_STATUS_IGNORE);
+    if (ierr != MPI_SUCCESS) {no_errors=false;}
+    ierr = MPI_Wait(&(irecv_req[n]), MPI_STATUS_IGNORE);
     if (ierr != MPI_SUCCESS) {no_errors=false;}
   }
   // Quit if MPI error detected
@@ -627,7 +820,8 @@ TaskStatus ParticlesBoundaryValues::ClearPrtclRecv() {
        << std::endl << "MPI error in clearing receives" << std::endl;
     std::exit(EXIT_FAILURE);
   }
-  recv_req.clear();
+  rrecv_req.clear();
+  irecv_req.clear();
 #endif
   nrecvs=0;
   return TaskStatus::complete;

@@ -218,6 +218,12 @@ void MeshBoundaryValues::InitializeBuffers(const int nvar) {
 particles::ParticlesBoundaryValues::ParticlesBoundaryValues(
   particles::Particles *pp, ParameterInput *pin) :
     sendlist("sendlist",1),
+#if MPI_PARALLEL_ENABLED
+    prtcl_rsendbuf("rsend",1),
+    prtcl_rrecvbuf("rrecv",1),
+    prtcl_isendbuf("isend",1),
+    prtcl_irecvbuf("irecv",1),
+#endif
     pmy_part(pp) {
 #if MPI_PARALLEL_ENABLED
   // Guess that no more than 10% of particles will be communicated to set size of buffer

@@ -32,7 +32,7 @@
 // BaseTypeOutput base class constructor
 // Creates vector of output variable data
 
-BaseTypeOutput::BaseTypeOutput(OutputParameters opar, Mesh *pm) :
+BaseTypeOutput::BaseTypeOutput(ParameterInput *pin, Mesh *pm, OutputParameters opar) :
     derived_var("derived-var",1,1,1,1,1),
     outarray("cc_outvar",1,1,1,1,1),
     outfield("fc_outvar",1,1,1,1),
@@ -40,7 +40,8 @@ BaseTypeOutput::BaseTypeOutput(OutputParameters opar, Mesh *pm) :
   // exit for history, restart, or event log files
   if (out_params.file_type.compare("hst") == 0 ||
       out_params.file_type.compare("rst") == 0 ||
-      out_params.file_type.compare("log") == 0) {return;}
+      out_params.file_type.compare("log") == 0 ||
+      out_params.file_type.compare("trk") == 0) {return;}
 
   // initialize vector containing number of output MBs per rank
   noutmbs.assign(global_variable::nranks, 0);
