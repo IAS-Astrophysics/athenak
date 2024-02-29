@@ -416,21 +416,21 @@ class PrimitiveSolverHydro {
           printf("An error occurred during the primitive solve: %s\n"
                  "  Location: (%d, %d, %d, %d)\n"
                  "  Conserved vars: \n"
-                 "    D   = %g\n"
-                 "    Sx  = %g\n"
-                 "    Sy  = %g\n"
-                 "    Sz  = %g\n"
-                 "    tau = %g\n"
-                 "    Bx  = %g\n"
-                 "    By  = %g\n"
-                 "    Bz  = %g\n"
+                 "    D   = %.17g\n"
+                 "    Sx  = %.17g\n"
+                 "    Sy  = %.17g\n"
+                 "    Sz  = %.17g\n"
+                 "    tau = %.17g\n"
+                 "    Bx  = %.17g\n"
+                 "    By  = %.17g\n"
+                 "    Bz  = %.17g\n"
                  "  Metric vars: \n"
-                 "    detg = %g\n"
-                 "    g_dd = {%g, %g, %g, %g, %g, %g}\n"
-                 "    alp  = %g\n"
-                 "    beta = {%g, %g, %g}\n"
-                 "    psi4 = %g\n"
-                 "    K_dd = {%g, %g, %g, %g, %g, %g}\n",
+                 "    detg = %.17g\n"
+                 "    g_dd = {%.17g, %.17g, %.17g, %.17g, %.17g, %.17g}\n"
+                 "    alp  = %.17g\n"
+                 "    beta = {%.17g, %.17g, %.17g}\n"
+                 "    psi4 = %.17g\n"
+                 "    K_dd = {%.17g, %.17g, %.17g, %.17g, %.17g, %.17g}\n",
                  ErrorToString(result.error),
                  m, k, j, i,
                  cons_pt_old[CDN], cons_pt_old[CSX], cons_pt_old[CSY], cons_pt_old[CSZ],
@@ -512,15 +512,15 @@ class PrimitiveSolverHydro {
     Real dis = (cmsq*iWsq)*(gii*iWsq_ad - vu*vu*(1.0 - cmsq));
     if (dis < 0.) {
       printf("There's a problem with the magnetosonic speed!\n"
-             "  dis = %g\n"
-             "  gii = %g\n"
-             "  csq = %g\n"
-             "  vsq = %g\n"
-             "  usq = %g\n"
-             "  rho = %g\n"
-             "  vu  = %g\n"
-             "  T   = %g\n"
-             "  bsq = %g\n",
+             "  dis = %.17g\n"
+             "  gii = %.17g\n"
+             "  csq = %.17g\n"
+             "  vsq = %.17g\n"
+             "  usq = %.17g\n"
+             "  rho = %.17g\n"
+             "  vu  = %.17g\n"
+             "  T   = %.17g\n"
+             "  bsq = %.17g\n",
              dis, gii, csq, vsq, usq, prim[PRH], prim[PTM], vu, bsq);
       //exit(EXIT_FAILURE);
     }
@@ -631,12 +631,12 @@ class PrimitiveSolverHydro {
   KOKKOS_INLINE_FUNCTION
   void DumpPrimitiveVars(const Real prim_pt[NPRIM]) const {
     printf("Primitive vars: \n"
-           "  rho = %g\n"
-           "  ux  = %g\n"
-           "  uy  = %g\n"
-           "  uz  = %g\n"
-           "  P   = %g\n"
-           "  T   = %g\n",
+           "  rho = %.17g\n"
+           "  ux  = %.17g\n"
+           "  uy  = %.17g\n"
+           "  uz  = %.17g\n"
+           "  P   = %.17g\n"
+           "  T   = %.17g\n",
            prim_pt[PRH], prim_pt[PVX], prim_pt[PVY],
            prim_pt[PVZ], prim_pt[PPR], prim_pt[PTM]);
   }
