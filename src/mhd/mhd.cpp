@@ -120,6 +120,7 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
 
   // Ad hoc fixes
   cellavg_fix_turn_on = pin->GetOrAddBoolean("mhd","cellavg_fix_turn_on",true);
+  turn_on_sao_operation = pin->GetOrAddBoolean("mhd","turn_on_sao_operation",false);
   c2p_test = pin->GetOrAddBoolean("mhd","c2p_test",false);
   is_radiation_enabled = pin->DoesBlockExist("radiation");
   use_ko_dissipation = pin->GetOrAddBoolean("mhd","use_ko_dissipation",false);

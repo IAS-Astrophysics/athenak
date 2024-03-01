@@ -129,6 +129,7 @@ class MHD {
   bool c2p_test = false;
   bool is_radiation_enabled = false;
   bool cellavg_fix_turn_on;
+  bool turn_on_sao_operation = false; 
 
   // container to hold names of TaskIDs
   MHDTaskIDs id;

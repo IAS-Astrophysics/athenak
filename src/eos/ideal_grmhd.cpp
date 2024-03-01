@@ -61,9 +61,11 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
   DvceArray4D<Real> tgas_radsource_;
   if (is_radiation_enabled_) tgas_radsource_ = pmy_pack->prad->tgas_radsource;
   bool &cellavg_fix_turn_on_ = pmy_pack->pmhd->cellavg_fix_turn_on;
+  bool &turn_on_sao_operation_ = pmy_pack->pmhd->turn_on_sao_operation;
   // bool is_horsmooth_ = false;
   auto &use_ko_dissipation_ = pmy_pack->pmhd->use_ko_dissipation;
   auto &ko_dissipation_ = pmy_pack->pmhd->ko_dissipation;
+
 
   // flags and variables for entropy fix
   auto &entropy_fix_ = pmy_pack->pmhd->entropy_fix;
@@ -152,13 +154,16 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
         w.e = pexcise_/gm1;
         excised = true;
 
-        Real del_r = 0.3;
-        Real bh_a = 0.9375;
-        Real a2 = SQR(bh_a);
-        Real r_hor = 1.0 + sqrt(1.0 - a2);
-        Real rr2 = SQR(x1v) + SQR(x2v) + SQR(x3v);
-        Real r = sqrt(0.5 * (rr2 - a2 + sqrt(SQR(rr2 - a2) + 4.0*a2*SQR(x3v))));
-        if (r > 0.5*r_hor) excised_outer = true;
+        if (turn_on_sao_operation_) {
+          Real del_r = 0.3;
+          Real bh_a = 0.9375;
+          Real a2 = SQR(bh_a);
+          Real r_hor = 1.0 + sqrt(1.0 - a2);
+          Real rr2 = SQR(x1v) + SQR(x2v) + SQR(x3v);
+          Real r = sqrt(0.5 * (rr2 - a2 + sqrt(SQR(rr2 - a2) + 4.0*a2*SQR(x3v))));
+          if (r > 0.5*r_hor) excised_outer = true;
+        }
+
       }
       if (only_testfloors) {
         if (excision_flux_(m,k,j,i)) {
@@ -331,7 +336,7 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
       }
 
       // modify the outer excised region
-      if (excised_outer) {
+      if (excised_outer && turn_on_sao_operation_) {
         w.d = dexcise_;
         w.e = pexcise_/gm1;
       }
