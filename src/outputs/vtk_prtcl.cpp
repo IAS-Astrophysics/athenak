@@ -153,22 +153,11 @@ void ParticleVTKOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
     npout_min = std::min(npout_min, pm->nprtcl_eachrank[n]);
   }
 
-/****
-if(global_variable::my_rank==0) {
-for (int n=0; n<global_variable::nranks; ++n) {
-std::cout<<"rank_offset="<<rank_offset[n]<<std::endl;
-}}
-****/
-
+  // Write particle positions
   {
     std::size_t datasize = sizeof(float);
     std::size_t myoffset=header_offset + 3*rank_offset[global_variable::my_rank]*datasize;
-    // Write particle positions collectively for minimum number of particles across ranks
-
-/****
-std::cout<<"myoffset="<<static_cast<int>(myoffset)<<"mpoutmin="<<npout_min<<std::endl;
-****/
-
+    // collective writes for minimum number of particles across ranks
     if (partfile.Write_any_type_at_all(&(data[0]),3*npout_min,myoffset,"float")
           != 3*npout_min) {
       std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
@@ -176,14 +165,9 @@ std::cout<<"myoffset="<<static_cast<int>(myoffset)<<"mpoutmin="<<npout_min<<std:
           << "vtk file is broken." << std::endl;
       exit(EXIT_FAILURE);
     }
-    // Write particle positions individually for remaining particles on each rank
+    // individual writes for remaining particles on each rank
     myoffset += datasize*3*npout_min;
     int nremain = pm->nprtcl_thisrank - npout_min;
-
-/****
-std::cout<<"myoffset="<<static_cast<int>(myoffset)<<"nremain="<<nremain<<std::endl;
-****/
-
     if (nremain > 0) {
       if (partfile.Write_any_type_at(&(data[3*npout_min]),3*nremain,myoffset,"float")
             != 3*nremain) {
@@ -196,31 +180,35 @@ std::cout<<"myoffset="<<static_cast<int>(myoffset)<<"nremain="<<nremain<<std::en
     header_offset += 3*pm->nprtcl_total*datasize;
   }
 
-  // Write Part 6: Write gid of points
-  {
+  // Write Part 6: scalar particle data
+  // Write gid of points
+  for (int n=0; n<(pm->pmb_pack->ppart->nidata); ++n) {
     std::stringstream msg;
-    msg << std::endl << "POINT_DATA " << npout_total << std::endl
-        << "SCALARS gid float 1 " << "LOOKUP_TABLE default" << std::endl;
+    if (n == static_cast<int>(PGID)) {
+      msg << std::endl << std::endl << "POINT_DATA " << npout_total << std::endl
+          << "SCALARS gid float" << std::endl << "LOOKUP_TABLE default" << std::endl;
+    } else if (n == static_cast<int>(PTAG)) {
+      msg << std::endl << std::endl << "POINT_DATA " << npout_total << std::endl
+          << "SCALARS ptag float" << std::endl << "LOOKUP_TABLE default" << std::endl;
+    }
     if (global_variable::my_rank == 0) {
       partfile.Write_any_type_at(msg.str().c_str(),msg.str().size(),header_offset,"byte");
     }
     header_offset += msg.str().size();
-  }
 
-  // Loop over particles, load gid into data[]
-  for (int p=0; p<npout_thisrank; ++p) {
-    data[p] = static_cast<float>(outpart_idata(PGID,p));
-  }
-  // swap data for this variable into big endian order
-  if (!big_end) {
-    for (int i=0; i<npout_thisrank; ++i) { Swap4Bytes(&data[i]); }
-  }
+    // Loop over particles, load gid into data[]
+    for (int p=0; p<npout_thisrank; ++p) {
+      data[p] = static_cast<float>(outpart_idata(n,p));
+    }
+    // swap data for this variable into big endian order
+    if (!big_end) {
+      for (int i=0; i<npout_thisrank; ++i) { Swap4Bytes(&data[i]); }
+    }
 
-  // calculate local data offset
-  {
+    // calculate local data offset and write gid
     std::size_t datasize = sizeof(float);
     std::size_t myoffset=header_offset + rank_offset[global_variable::my_rank]*datasize;
-    // Write particle positions collectively for minimum number of particles across ranks
+    // collective writes for minimum number of particles across ranks
     if (partfile.Write_any_type_at_all(&(data[0]),npout_min,myoffset,"float")
           != npout_min) {
       std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
@@ -228,7 +216,7 @@ std::cout<<"myoffset="<<static_cast<int>(myoffset)<<"nremain="<<nremain<<std::en
           << "vtk file is broken." << std::endl;
       exit(EXIT_FAILURE);
     }
-    // Write particle positions individually for remaining particles on each rank
+    // individual writes for remaining particles on each rank
     myoffset += datasize*npout_min;
     int nremain = pm->nprtcl_thisrank - npout_min;
     if (nremain > 0) {
