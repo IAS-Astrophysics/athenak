@@ -141,6 +141,7 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
     int iter_used=0;
 
     // Only execute cons2prim if outside excised region
+    bool excised_outer = false;
     bool excised = false;
     if (use_excise) {
       if (excision_floor_(m,k,j,i)) {
@@ -150,6 +151,14 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
         w.vz = 0.0;
         w.e = pexcise_/gm1;
         excised = true;
+
+        Real del_r = 0.3;
+        Real bh_a = 0.9375;
+        Real a2 = SQR(bh_a);
+        Real r_hor = 1.0 + sqrt(1.0 - a2);
+        Real rr2 = SQR(x1v) + SQR(x2v) + SQR(x3v);
+        Real r = sqrt(0.5 * (rr2 - a2 + sqrt(SQR(rr2 - a2) + 4.0*a2*SQR(x3v))));
+        if (r > 0.5*r_hor) excised_outer = true;
       }
       if (only_testfloors) {
         if (excision_flux_(m,k,j,i)) {
@@ -164,7 +173,8 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
       if (use_ko_dissipation_) ko_dissipation_(m,k,j,i) = false;
     }
 
-    if (!(excised)) {
+    // if (!(excised)) {
+    if (!(excised) || excised_outer) {
       // calculate SR conserved quantities
       MHDCons1D u_sr;
       Real s2, b2, rpar;
@@ -319,7 +329,13 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
         w.vy *= factor;
         w.vz *= factor;
       }
-    }
+
+      // modify the outer excised region
+      if (excised_outer) {
+        w.d = dexcise_;
+        w.e = pexcise_/gm1;
+      }
+    } // endif nonexcised region
 
     // set FOFC flag and quit loop if this function called only to check floors
     if (only_testfloors) {

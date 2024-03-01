@@ -55,7 +55,7 @@ fofc        = true      # Enable first order flux correction
 <problem>
 di_amb      = 1.0e-4    # ambient density
 pi_amb      = 3.0e-5    # ambient pressure
-bamb        = 0.1       # ambient B-field
+b_amb       = 1.0       # ambient B-field
 prat        = 33333.333 # Pressure ratio initially
 drat        = 100.      # density ratio initially
 inner_radius  = 0.8     # Radius of the inner sphere

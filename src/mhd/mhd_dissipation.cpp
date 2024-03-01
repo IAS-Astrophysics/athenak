@@ -199,6 +199,7 @@ void MHD::AddKODissipation() {
 
       HydCons1D u_out;
       SingleP2C_IdealGRMHD(glower, gupper, w_in, eos.gamma, u_out);
+      // SingleP2C_IdealSRMHD(w_in, eos.gamma, u_out);
       u0_(m,IDN,k,j,i) = u_out.d;
       u0_(m,IM1,k,j,i) = u_out.mx;
       u0_(m,IM2,k,j,i) = u_out.my;
