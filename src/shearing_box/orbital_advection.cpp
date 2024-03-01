@@ -121,9 +121,10 @@ void ShearingBox::OrbitalAdvectionCC(Driver *pdriver, int stage) {
         }
       }
     } // end of loop over j
+  // Update CC variables with orbital advection fluxes
+
   });
 
-  // Update CC variables with orbital advection fluxes
 
   return;
 }
