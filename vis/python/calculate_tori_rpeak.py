@@ -10,7 +10,7 @@ calculate_tori_rpeak.py <fm or c> <spin> <r_in> <r_out> <--n>
 
 This covers both the Fishbone-Moncrief (FM: 1976 ApJ 207 962) and Chakrabarti
 (C: 1985 ApJ 288 1) tori. The latter is generally thinner for the same inputs,
-assuming n is not set. Otherwise, you can specify n to control the thickness, 
+assuming n is not set. Otherwise, you can specify n to control the thickness,
 which will also shift the location of the pressure maximum.
 Formulas also reference Abramowicz, Jaroszynski, & Sikora (AJS: 1978 AA 63 21)
 and Penna, Kulkarni, & Narayan (PKN: 2013 AA 559 A116).
@@ -143,6 +143,7 @@ def c_cn(spin, r_in, r_peak, n_input):
         n = n_input
     return c, n
 
+
 # Chakrabarti ll (C 2.5)
 def c_l(spin, r, theta, c, n):
     variable_l_min = 1.0
@@ -181,7 +182,8 @@ if __name__ == '__main__':
     parser.add_argument('spin', type=float, help='dimensionless spin')
     parser.add_argument('r_in', type=float, help='inner edge in gravitational radii')
     parser.add_argument('r_out', type=float, help='outer edge in gravitational radii')
-    parser.add_argument('--n', type=float, help='slope of angular momentum scaling (optional)',
+    parser.add_argument('--n', type=float, help='slope of angular momentum scaling',
                         default=0.0)
     args = parser.parse_args()
     main(**vars(args))
+    
