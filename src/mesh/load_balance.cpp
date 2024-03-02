@@ -127,7 +127,7 @@ void MeshRefinement::InitRecvAMR(int nleaf) {
   if (nmb_recv == 0) return;  // nothing to do
 
   // allocate array of recv buffers
-  Kokkos::realloc(recv_buf, nmb_recv);
+  Kokkos::realloc(recvbuf, nmb_recv);
   recv_req = new MPI_Request[nmb_recv];
   for (int n=0; n<nmb_recv; ++n) {
     recv_req[n] = MPI_REQUEST_NULL;
@@ -182,47 +182,47 @@ void MeshRefinement::InitRecvAMR(int nleaf) {
           int ox1 = ((lloc.lx1 & 1) == 1);
           int ox2 = ((lloc.lx2 & 1) == 1);
           int ox3 = ((lloc.lx3 & 1) == 1);
-          recv_buf.h_view(rb_idx).bis = cis + ox1*cnx1;
-          recv_buf.h_view(rb_idx).bie = cie + ox1*cnx1;
-          recv_buf.h_view(rb_idx).bjs = cjs + ox2*cnx2;
-          recv_buf.h_view(rb_idx).bje = cje + ox2*cnx2;
-          recv_buf.h_view(rb_idx).bks = cks + ox3*cnx3;
-          recv_buf.h_view(rb_idx).bke = cke + ox3*cnx3;
-          recv_buf.h_view(rb_idx).cntcc = cnx1*cnx2*cnx3;
-          recv_buf.h_view(rb_idx).cntfc = 3*cnx1*cnx2*cnx3 + cnx2*cnx3 +
+          recvbuf.h_view(rb_idx).bis = cis + ox1*cnx1;
+          recvbuf.h_view(rb_idx).bie = cie + ox1*cnx1;
+          recvbuf.h_view(rb_idx).bjs = cjs + ox2*cnx2;
+          recvbuf.h_view(rb_idx).bje = cje + ox2*cnx2;
+          recvbuf.h_view(rb_idx).bks = cks + ox3*cnx3;
+          recvbuf.h_view(rb_idx).bke = cke + ox3*cnx3;
+          recvbuf.h_view(rb_idx).cntcc = cnx1*cnx2*cnx3;
+          recvbuf.h_view(rb_idx).cntfc = 3*cnx1*cnx2*cnx3 + cnx2*cnx3 +
                                           cnx1*cnx3 + cnx1*cnx2;
-          recv_buf.h_view(rb_idx).cnt   = ncc_tosend*(recv_buf.h_view(rb_idx).cntcc) +
-                                          nfc_tosend*(recv_buf.h_view(rb_idx).cntfc);
-          recv_buf.h_view(rb_idx).lid   = newm - nmbs;
-          recv_buf.h_view(rb_idx).use_coarse = false;
+          recvbuf.h_view(rb_idx).cnt   = ncc_tosend*(recvbuf.h_view(rb_idx).cntcc) +
+                                         nfc_tosend*(recvbuf.h_view(rb_idx).cntfc);
+          recvbuf.h_view(rb_idx).lid   = newm - nmbs;
+          recvbuf.h_view(rb_idx).use_coarse = false;
           if (rb_idx > 0) {
-            recv_buf.h_view(rb_idx).offset = recv_buf.h_view((rb_idx-1)).offset +
-                                             recv_buf.h_view((rb_idx-1)).cnt;
+            recvbuf.h_view(rb_idx).offset = recvbuf.h_view((rb_idx-1)).offset +
+                                             recvbuf.h_view((rb_idx-1)).cnt;
           } else {
-            recv_buf.h_view(rb_idx).offset = 0;
+            recvbuf.h_view(rb_idx).offset = 0;
           }
           rb_idx++;
         }
       }
     } else if (old_lloc.level == new_lloc.level) {   // old MB at same level
       if (pmy_mesh->rank_eachmb[oldm] != global_variable::my_rank) {
-        recv_buf.h_view(rb_idx).bis = is;
-        recv_buf.h_view(rb_idx).bie = ie;
-        recv_buf.h_view(rb_idx).bjs = js;
-        recv_buf.h_view(rb_idx).bje = je;
-        recv_buf.h_view(rb_idx).bks = ks;
-        recv_buf.h_view(rb_idx).bke = ke;
-        recv_buf.h_view(rb_idx).cntcc = nx1*nx2*nx3;
-        recv_buf.h_view(rb_idx).cntfc = 3*nx1*nx2*nx3 + nx2*nx3 + nx1*nx3 + nx1*nx2;
-        recv_buf.h_view(rb_idx).cnt = ncc_tosend*(recv_buf.h_view(rb_idx).cntcc) +
-                                      nfc_tosend*(recv_buf.h_view(rb_idx).cntfc);
-        recv_buf.h_view(rb_idx).lid = newm - nmbs;
-        recv_buf.h_view(rb_idx).use_coarse = false;
+        recvbuf.h_view(rb_idx).bis = is;
+        recvbuf.h_view(rb_idx).bie = ie;
+        recvbuf.h_view(rb_idx).bjs = js;
+        recvbuf.h_view(rb_idx).bje = je;
+        recvbuf.h_view(rb_idx).bks = ks;
+        recvbuf.h_view(rb_idx).bke = ke;
+        recvbuf.h_view(rb_idx).cntcc = nx1*nx2*nx3;
+        recvbuf.h_view(rb_idx).cntfc = 3*nx1*nx2*nx3 + nx2*nx3 + nx1*nx3 + nx1*nx2;
+        recvbuf.h_view(rb_idx).cnt = ncc_tosend*(recvbuf.h_view(rb_idx).cntcc) +
+                                     nfc_tosend*(recvbuf.h_view(rb_idx).cntfc);
+        recvbuf.h_view(rb_idx).lid = newm - nmbs;
+        recvbuf.h_view(rb_idx).use_coarse = false;
         if (rb_idx > 0) {
-          recv_buf.h_view(rb_idx).offset = recv_buf.h_view((rb_idx-1)).offset +
-                                           recv_buf.h_view((rb_idx-1)).cnt;
+          recvbuf.h_view(rb_idx).offset = recvbuf.h_view((rb_idx-1)).offset +
+                                          recvbuf.h_view((rb_idx-1)).cnt;
         } else {
-          recv_buf.h_view(rb_idx).offset = 0;
+          recvbuf.h_view(rb_idx).offset = 0;
         }
         rb_idx++;
       }
@@ -230,34 +230,34 @@ void MeshRefinement::InitRecvAMR(int nleaf) {
       // recv whenever refined MB changes rank, or if any leaf on different rank than root
       if ((new_rank_eachmb[oldtonew[oldm]] != global_variable::my_rank) ||
           (pmy_mesh->rank_eachmb[oldm] != global_variable::my_rank)) {
-        recv_buf.h_view(rb_idx).bis = il; // note il:iu etc. includes ghost zones
-        recv_buf.h_view(rb_idx).bie = iu;
-        recv_buf.h_view(rb_idx).bjs = jl;
-        recv_buf.h_view(rb_idx).bje = ju;
-        recv_buf.h_view(rb_idx).bks = kl;
-        recv_buf.h_view(rb_idx).bke = ku;
-        recv_buf.h_view(rb_idx).cntcc = (iu-il+1)*(ju-jl+1)*(ku-kl+1);
-        recv_buf.h_view(rb_idx).cntfc = (iu-il+2)*(ju-jl+1)*(ku-kl+1) +
+        recvbuf.h_view(rb_idx).bis = il; // note il:iu etc. includes ghost zones
+        recvbuf.h_view(rb_idx).bie = iu;
+        recvbuf.h_view(rb_idx).bjs = jl;
+        recvbuf.h_view(rb_idx).bje = ju;
+        recvbuf.h_view(rb_idx).bks = kl;
+        recvbuf.h_view(rb_idx).bke = ku;
+        recvbuf.h_view(rb_idx).cntcc = (iu-il+1)*(ju-jl+1)*(ku-kl+1);
+        recvbuf.h_view(rb_idx).cntfc = (iu-il+2)*(ju-jl+1)*(ku-kl+1) +
              (iu-il+1)*(ju-jl+2)*(ku-kl+1) + (iu-il+1)*(ju-jl+1)*(ku-kl+2);
-        recv_buf.h_view(rb_idx).cnt = ncc_tosend*(recv_buf.h_view(rb_idx).cntcc) +
-                                      nfc_tosend*(recv_buf.h_view(rb_idx).cntfc);
-        recv_buf.h_view(rb_idx).lid = newm - nmbs;
-        recv_buf.h_view(rb_idx).use_coarse = true;
+        recvbuf.h_view(rb_idx).cnt = ncc_tosend*(recvbuf.h_view(rb_idx).cntcc) +
+                                     nfc_tosend*(recvbuf.h_view(rb_idx).cntfc);
+        recvbuf.h_view(rb_idx).lid = newm - nmbs;
+        recvbuf.h_view(rb_idx).use_coarse = true;
         if (rb_idx > 0) {
-          recv_buf.h_view(rb_idx).offset = recv_buf.h_view((rb_idx-1)).offset +
-                                           recv_buf.h_view((rb_idx-1)).cnt;
+          recvbuf.h_view(rb_idx).offset = recvbuf.h_view((rb_idx-1)).offset +
+                                          recvbuf.h_view((rb_idx-1)).cnt;
         } else {
-          recv_buf.h_view(rb_idx).offset = 0;
+          recvbuf.h_view(rb_idx).offset = 0;
         }
         rb_idx++;
       }
     }
   }
   // Sync dual array, reallocate receive data array
-  recv_buf.template modify<HostMemSpace>();
-  recv_buf.template sync<DevExeSpace>();
+  recvbuf.template modify<HostMemSpace>();
+  recvbuf.template sync<DevExeSpace>();
   {
-    int ndata = recv_buf.h_view((nmb_recv-1)).offset + recv_buf.h_view((nmb_recv-1)).cnt;
+    int ndata = recvbuf.h_view((nmb_recv-1)).offset + recvbuf.h_view((nmb_recv-1)).cnt;
     Kokkos::realloc(recv_data, ndata);
   }
 
@@ -279,13 +279,13 @@ void MeshRefinement::InitRecvAMR(int nleaf) {
           int ox1 = ((lloc.lx1 & 1) == 1);
           int ox2 = ((lloc.lx2 & 1) == 1);
           int ox3 = ((lloc.lx3 & 1) == 1);
-          int vs = recv_buf.h_view(rb_idx).offset;
-          int ve = vs + recv_buf.h_view(rb_idx).cnt + 1;
+          int vs = recvbuf.h_view(rb_idx).offset;
+          int ve = vs + recvbuf.h_view(rb_idx).cnt + 1;
           auto pdata = Kokkos::subview(recv_data, std::make_pair(vs,ve));
           // create tag using local ID of *receiving* MeshBlock, post receive
           int tag = CreateAMR_MPI_Tag(newm-nmbs, ox1, ox2, ox3);
           // post non-blocking receive
-          int ierr = MPI_Irecv(pdata.data(), recv_buf.h_view(rb_idx).cnt,
+          int ierr = MPI_Irecv(pdata.data(), recvbuf.h_view(rb_idx).cnt,
                      MPI_ATHENA_REAL, pmy_mesh->rank_eachmb[oldm+l], tag, amr_comm,
                      &(recv_req[rb_idx]));
           if (ierr != MPI_SUCCESS) {no_errors=false;}
@@ -294,13 +294,13 @@ void MeshRefinement::InitRecvAMR(int nleaf) {
       }
     } else if (old_lloc.level == new_lloc.level) {   // old MB at same level
       if (pmy_mesh->rank_eachmb[oldm] != global_variable::my_rank) {
-        int vs = recv_buf.h_view(rb_idx).offset;
-        int ve = vs + recv_buf.h_view(rb_idx).cnt + 1;
+        int vs = recvbuf.h_view(rb_idx).offset;
+        int ve = vs + recvbuf.h_view(rb_idx).cnt + 1;
         auto pdata = Kokkos::subview(recv_data, std::make_pair(vs,ve));
         // create tag using local ID of *receiving* MeshBlock, post receive
         int tag = CreateAMR_MPI_Tag(newm-nmbs, 0, 0, 0);
         // post non-blocking receive
-        int ierr = MPI_Irecv(pdata.data(), recv_buf.h_view(rb_idx).cnt, MPI_ATHENA_REAL,
+        int ierr = MPI_Irecv(pdata.data(), recvbuf.h_view(rb_idx).cnt, MPI_ATHENA_REAL,
                    pmy_mesh->rank_eachmb[oldm], tag, amr_comm,
                    &(recv_req[rb_idx]));
         if (ierr != MPI_SUCCESS) {no_errors=false;}
@@ -310,13 +310,13 @@ void MeshRefinement::InitRecvAMR(int nleaf) {
       // recv whenever refined MB changes rank, or if any leaf on different rank than root
       if ((new_rank_eachmb[oldtonew[oldm]] != global_variable::my_rank) ||
           (pmy_mesh->rank_eachmb[oldm] != global_variable::my_rank)) {
-        int vs = recv_buf.h_view(rb_idx).offset;
-        int ve = vs + recv_buf.h_view(rb_idx).cnt + 1;
+        int vs = recvbuf.h_view(rb_idx).offset;
+        int ve = vs + recvbuf.h_view(rb_idx).cnt + 1;
         auto pdata = Kokkos::subview(recv_data, std::make_pair(vs,ve));
         // create tag using local ID of *receiving* MeshBlock, post receive
         int tag = CreateAMR_MPI_Tag(newm-nmbs, 0, 0, 0);
         // post non-blocking receive
-        int ierr = MPI_Irecv(pdata.data(), recv_buf.h_view(rb_idx).cnt, MPI_ATHENA_REAL,
+        int ierr = MPI_Irecv(pdata.data(), recvbuf.h_view(rb_idx).cnt, MPI_ATHENA_REAL,
                    pmy_mesh->rank_eachmb[oldm], tag, amr_comm,
                    &(recv_req[rb_idx]));
         if (ierr != MPI_SUCCESS) {no_errors=false;}
@@ -377,7 +377,7 @@ void MeshRefinement::PackAndSendAMR(int nleaf) {
   if (nmb_send == 0) return;  // nothing to do
 
   // allocate array of send buffers
-  Kokkos::realloc(send_buf, nmb_send);
+  Kokkos::realloc(sendbuf, nmb_send);
   send_req = new MPI_Request[nmb_send];
   for (int n=0; n<nmb_send; ++n) {
     send_req[n] = MPI_REQUEST_NULL;
@@ -432,24 +432,24 @@ void MeshRefinement::PackAndSendAMR(int nleaf) {
           int ox1 = ((lloc.lx1 & 1) == 1);
           int ox2 = ((lloc.lx2 & 1) == 1);
           int ox3 = ((lloc.lx3 & 1) == 1);
-          send_buf.h_view(sb_idx).bis = il + ox1*cnx1;  // il:iu etc. includes ghost zones
-          send_buf.h_view(sb_idx).bie = iu + ox1*cnx1;
-          send_buf.h_view(sb_idx).bjs = jl + ox2*cnx2;
-          send_buf.h_view(sb_idx).bje = ju + ox2*cnx2;
-          send_buf.h_view(sb_idx).bks = kl + ox3*cnx3;
-          send_buf.h_view(sb_idx).bke = ku + ox3*cnx3;
-          send_buf.h_view(sb_idx).cntcc = (iu-il+1)*(ju-jl+1)*(ku-kl+1);
-          send_buf.h_view(sb_idx).cntfc = (iu-il+2)*(ju-jl+1)*(ku-kl+1) +
+          sendbuf.h_view(sb_idx).bis = il + ox1*cnx1;  // il:iu etc. includes ghost zones
+          sendbuf.h_view(sb_idx).bie = iu + ox1*cnx1;
+          sendbuf.h_view(sb_idx).bjs = jl + ox2*cnx2;
+          sendbuf.h_view(sb_idx).bje = ju + ox2*cnx2;
+          sendbuf.h_view(sb_idx).bks = kl + ox3*cnx3;
+          sendbuf.h_view(sb_idx).bke = ku + ox3*cnx3;
+          sendbuf.h_view(sb_idx).cntcc = (iu-il+1)*(ju-jl+1)*(ku-kl+1);
+          sendbuf.h_view(sb_idx).cntfc = (iu-il+2)*(ju-jl+1)*(ku-kl+1) +
                (iu-il+1)*(ju-jl+2)*(ku-kl+1) + (iu-il+1)*(ju-jl+1)*(ku-kl+2);
-          send_buf.h_view(sb_idx).cnt   = ncc_tosend*(send_buf.h_view(sb_idx).cntcc) +
-                                          nfc_tosend*(send_buf.h_view(sb_idx).cntfc);
-          send_buf.h_view(sb_idx).lid   = oldm - ombs;
-          send_buf.h_view(sb_idx).use_coarse = false;
+          sendbuf.h_view(sb_idx).cnt   = ncc_tosend*(sendbuf.h_view(sb_idx).cntcc) +
+                                         nfc_tosend*(sendbuf.h_view(sb_idx).cntfc);
+          sendbuf.h_view(sb_idx).lid   = oldm - ombs;
+          sendbuf.h_view(sb_idx).use_coarse = false;
           if (sb_idx > 0) {
-            send_buf.h_view(sb_idx).offset = send_buf.h_view((sb_idx-1)).offset +
-                                             send_buf.h_view((sb_idx-1)).cnt;
+            sendbuf.h_view(sb_idx).offset = sendbuf.h_view((sb_idx-1)).offset +
+                                            sendbuf.h_view((sb_idx-1)).cnt;
           } else {
-            send_buf.h_view(sb_idx).offset = 0;
+            sendbuf.h_view(sb_idx).offset = 0;
           }
           sb_idx++;
         }
@@ -457,23 +457,23 @@ void MeshRefinement::PackAndSendAMR(int nleaf) {
     } else {   // same level or de-refinement
       if (old_lloc.level == new_lloc.level) { // old MB on same level
         if (new_rank_eachmb[newm] != global_variable::my_rank) {
-          send_buf.h_view(sb_idx).bis = is;
-          send_buf.h_view(sb_idx).bie = ie;
-          send_buf.h_view(sb_idx).bjs = js;
-          send_buf.h_view(sb_idx).bje = je;
-          send_buf.h_view(sb_idx).bks = ks;
-          send_buf.h_view(sb_idx).bke = ke;
-          send_buf.h_view(sb_idx).cntcc = nx1*nx2*nx3;
-          send_buf.h_view(sb_idx).cntfc = 3*nx1*nx2*nx3 + nx2*nx3 + nx1*nx3 + nx1*nx2;
-          send_buf.h_view(sb_idx).cnt = ncc_tosend*(send_buf.h_view(sb_idx).cntcc) +
-                                        nfc_tosend*(send_buf.h_view(sb_idx).cntfc);
-          send_buf.h_view(sb_idx).lid = oldm - ombs;
-          send_buf.h_view(sb_idx).use_coarse = false;
+          sendbuf.h_view(sb_idx).bis = is;
+          sendbuf.h_view(sb_idx).bie = ie;
+          sendbuf.h_view(sb_idx).bjs = js;
+          sendbuf.h_view(sb_idx).bje = je;
+          sendbuf.h_view(sb_idx).bks = ks;
+          sendbuf.h_view(sb_idx).bke = ke;
+          sendbuf.h_view(sb_idx).cntcc = nx1*nx2*nx3;
+          sendbuf.h_view(sb_idx).cntfc = 3*nx1*nx2*nx3 + nx2*nx3 + nx1*nx3 + nx1*nx2;
+          sendbuf.h_view(sb_idx).cnt = ncc_tosend*(sendbuf.h_view(sb_idx).cntcc) +
+                                       nfc_tosend*(sendbuf.h_view(sb_idx).cntfc);
+          sendbuf.h_view(sb_idx).lid = oldm - ombs;
+          sendbuf.h_view(sb_idx).use_coarse = false;
           if (sb_idx > 0) {
-            send_buf.h_view(sb_idx).offset = send_buf.h_view((sb_idx-1)).offset +
-                                             send_buf.h_view((sb_idx-1)).cnt;
+            sendbuf.h_view(sb_idx).offset = sendbuf.h_view((sb_idx-1)).offset +
+                                            sendbuf.h_view((sb_idx-1)).cnt;
           } else {
-            send_buf.h_view(sb_idx).offset = 0;
+            sendbuf.h_view(sb_idx).offset = 0;
           }
           sb_idx++;
         }
@@ -481,24 +481,24 @@ void MeshRefinement::PackAndSendAMR(int nleaf) {
         // send whenever root MB changes rank, or if any leaf on different rank than root
         if ((pmy_mesh->rank_eachmb[newtoold[newm]] != global_variable::my_rank) ||
             (new_rank_eachmb[newm] != global_variable::my_rank)) {
-          send_buf.h_view(sb_idx).bis = cis;
-          send_buf.h_view(sb_idx).bie = cie;
-          send_buf.h_view(sb_idx).bjs = cjs;
-          send_buf.h_view(sb_idx).bje = cje;
-          send_buf.h_view(sb_idx).bks = cks;
-          send_buf.h_view(sb_idx).bke = cke;
-          send_buf.h_view(sb_idx).cntcc = cnx1*cnx2*cnx3;
-          send_buf.h_view(sb_idx).cntfc = 3*cnx1*cnx2*cnx3 + cnx2*cnx3 + cnx1*cnx3
+          sendbuf.h_view(sb_idx).bis = cis;
+          sendbuf.h_view(sb_idx).bie = cie;
+          sendbuf.h_view(sb_idx).bjs = cjs;
+          sendbuf.h_view(sb_idx).bje = cje;
+          sendbuf.h_view(sb_idx).bks = cks;
+          sendbuf.h_view(sb_idx).bke = cke;
+          sendbuf.h_view(sb_idx).cntcc = cnx1*cnx2*cnx3;
+          sendbuf.h_view(sb_idx).cntfc = 3*cnx1*cnx2*cnx3 + cnx2*cnx3 + cnx1*cnx3
                                           + cnx1*cnx2;
-          send_buf.h_view(sb_idx).use_coarse = true;
-          send_buf.h_view(sb_idx).cnt = ncc_tosend*(send_buf.h_view(sb_idx).cntcc) +
-                                        nfc_tosend*(send_buf.h_view(sb_idx).cntfc);
-          send_buf.h_view(sb_idx).lid = oldm - ombs;
+          sendbuf.h_view(sb_idx).use_coarse = true;
+          sendbuf.h_view(sb_idx).cnt = ncc_tosend*(sendbuf.h_view(sb_idx).cntcc) +
+                                       nfc_tosend*(sendbuf.h_view(sb_idx).cntfc);
+          sendbuf.h_view(sb_idx).lid = oldm - ombs;
           if (sb_idx > 0) {
-            send_buf.h_view(sb_idx).offset = send_buf.h_view((sb_idx-1)).offset +
-                                             send_buf.h_view((sb_idx-1)).cnt;
+            sendbuf.h_view(sb_idx).offset = sendbuf.h_view((sb_idx-1)).offset +
+                                            sendbuf.h_view((sb_idx-1)).cnt;
           } else {
-            send_buf.h_view(sb_idx).offset = 0;
+            sendbuf.h_view(sb_idx).offset = 0;
           }
           sb_idx++;
         }
@@ -506,10 +506,10 @@ void MeshRefinement::PackAndSendAMR(int nleaf) {
     }
   }
   // Sync dual array, reallocate send data array
-  send_buf.template modify<HostMemSpace>();
-  send_buf.template sync<DevExeSpace>();
+  sendbuf.template modify<HostMemSpace>();
+  sendbuf.template sync<DevExeSpace>();
   {
-    int ndata = send_buf.h_view((nmb_send-1)).offset + send_buf.h_view((nmb_send-1)).cnt;
+    int ndata = sendbuf.h_view((nmb_send-1)).offset + sendbuf.h_view((nmb_send-1)).cnt;
     Kokkos::realloc(send_data, ndata);
   }
 
@@ -550,14 +550,14 @@ void MeshRefinement::PackAndSendAMR(int nleaf) {
         // send if refined MB changes rank, or if any leaf on different rank than root
         if ((new_rank_eachmb[newm] != global_variable::my_rank) ||
             (new_rank_eachmb[newm + l] != global_variable::my_rank)) {
-          int vs = send_buf.h_view(sb_idx).offset;
-          int ve = vs + send_buf.h_view(sb_idx).cnt + 1;
+          int vs = sendbuf.h_view(sb_idx).offset;
+          int ve = vs + sendbuf.h_view(sb_idx).cnt + 1;
           auto pdata = Kokkos::subview(send_data, std::make_pair(vs,ve));
           // create tag using local ID of *receiving* MeshBlock
           int lid = (newm + l) - new_gids_eachrank[new_rank_eachmb[newm+l]];
           int tag = CreateAMR_MPI_Tag(lid, 0, 0, 0);
           // post non-blocking send
-          int ierr = MPI_Isend(pdata.data(), send_buf.h_view(sb_idx).cnt, MPI_ATHENA_REAL,
+          int ierr = MPI_Isend(pdata.data(), sendbuf.h_view(sb_idx).cnt, MPI_ATHENA_REAL,
                      new_rank_eachmb[newm+l], tag, amr_comm,
                      &(send_req[sb_idx]));
           if (ierr != MPI_SUCCESS) {no_errors=false;}
@@ -567,14 +567,14 @@ void MeshRefinement::PackAndSendAMR(int nleaf) {
     } else {   // same level or de-refinement
       if (old_lloc.level == new_lloc.level) {   // old MB at same level
         if (new_rank_eachmb[newm] != global_variable::my_rank) {
-          int vs = send_buf.h_view(sb_idx).offset;
-          int ve = vs + send_buf.h_view(sb_idx).cnt + 1;
+          int vs = sendbuf.h_view(sb_idx).offset;
+          int ve = vs + sendbuf.h_view(sb_idx).cnt + 1;
           auto pdata = Kokkos::subview(send_data, std::make_pair(vs,ve));
           // create tag using local ID of *receiving* MeshBlock
           int lid = newm - new_gids_eachrank[new_rank_eachmb[newm]];
           int tag = CreateAMR_MPI_Tag(lid, 0, 0, 0);
           // post non-blocking send
-          int ierr = MPI_Isend(pdata.data(), send_buf.h_view(sb_idx).cnt, MPI_ATHENA_REAL,
+          int ierr = MPI_Isend(pdata.data(), sendbuf.h_view(sb_idx).cnt, MPI_ATHENA_REAL,
                      new_rank_eachmb[newm], tag, amr_comm,
                      &(send_req[sb_idx]));
           if (ierr != MPI_SUCCESS) {no_errors=false;}
@@ -584,8 +584,8 @@ void MeshRefinement::PackAndSendAMR(int nleaf) {
         // send whenever root MB changes rank, or if any leaf on different rank than root
         if ((pmy_mesh->rank_eachmb[newtoold[newm]] != global_variable::my_rank) ||
             (new_rank_eachmb[newm] != global_variable::my_rank)) {
-          int vs = send_buf.h_view(sb_idx).offset;
-          int ve = vs + send_buf.h_view(sb_idx).cnt + 1;
+          int vs = sendbuf.h_view(sb_idx).offset;
+          int ve = vs + sendbuf.h_view(sb_idx).cnt + 1;
           auto pdata = Kokkos::subview(send_data, std::make_pair(vs,ve));
           // create tag using local ID of *receiving* MeshBlock
           int ox1 = ((old_lloc.lx1 & 1) == 1);
@@ -594,7 +594,7 @@ void MeshRefinement::PackAndSendAMR(int nleaf) {
           int lid = newm - new_gids_eachrank[new_rank_eachmb[newm]];
           int tag = CreateAMR_MPI_Tag(lid, ox1, ox2, ox3);
           // post non-blocking send
-          int ierr = MPI_Isend(pdata.data(), send_buf.h_view(sb_idx).cnt, MPI_ATHENA_REAL,
+          int ierr = MPI_Isend(pdata.data(), sendbuf.h_view(sb_idx).cnt, MPI_ATHENA_REAL,
                      new_rank_eachmb[newm], tag, amr_comm,
                      &(send_req[sb_idx]));
           if (ierr != MPI_SUCCESS) {no_errors=false;}
@@ -624,7 +624,7 @@ void MeshRefinement::PackAndSendAMR(int nleaf) {
 void MeshRefinement::PackAMRBuffersCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca,
                                       int ncc, int nfc) {
 #if MPI_PARALLEL_ENABLED
-  auto &sbuf = send_buf;
+  auto &sbuf = sendbuf;
   auto &sdata = send_data;
   // Outer loop over (# of MeshBlocks sent)*(# of variables)
   int nvar = a.extent_int(1);  // TODO(@user): 2nd index from L of in array must be NVAR
@@ -673,7 +673,7 @@ void MeshRefinement::PackAMRBuffersCC(DvceArray5D<Real> &a, DvceArray5D<Real> &c
 void MeshRefinement::PackAMRBuffersFC(DvceFaceFld4D<Real> &b, DvceFaceFld4D<Real> &cb,
                                       int ncc, int nfc) {
 #if MPI_PARALLEL_ENABLED
-  auto &sbuf = send_buf;
+  auto &sbuf = sendbuf;
   auto &sdata = send_data;
   // Outer loop over (# of MeshBlocks sent)*(3 compnts of field)
   int nn = 3*nmb_send;
@@ -833,7 +833,7 @@ void MeshRefinement::ClearRecvAndUnpackAMR() {
 void MeshRefinement::UnpackAMRBuffersCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca,
                                         int ncc, int nfc) {
 #if MPI_PARALLEL_ENABLED
-  auto &rbuf = recv_buf;
+  auto &rbuf = recvbuf;
   auto &rdata = recv_data;
   // Outer loop over (# of MeshBlocks recv)*(# of variables)
   int nvar = a.extent_int(1);  // TODO(@user): 2nd index from L of in array must be NVAR
@@ -883,7 +883,7 @@ void MeshRefinement::UnpackAMRBuffersCC(DvceArray5D<Real> &a, DvceArray5D<Real> 
 void MeshRefinement::UnpackAMRBuffersFC(DvceFaceFld4D<Real> &b, DvceFaceFld4D<Real> &cb,
                                         int ncc, int nfc) {
 #if MPI_PARALLEL_ENABLED
-  auto &rbuf = recv_buf;
+  auto &rbuf = recvbuf;
   auto &rdata = recv_data;
   // Outer loop over (# of MeshBlocks recv)*(3 compnts of field)
   int nnv = 3*nmb_recv;

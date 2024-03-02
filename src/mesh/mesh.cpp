@@ -33,10 +33,13 @@
 #endif
 
 //----------------------------------------------------------------------------------------
-// Mesh constructor: initializes some mesh variables at start of calculation using
-// parameters in input file.  Most objects in Mesh are constructed in the BuildTree()
-// function, so that they can store a pointer to the Mesh which can be reliably referenced
-// only after the Mesh constructor has finished
+//! Mesh constructor:
+//! initializes some mesh variables using parameters in input file.
+//! The MeshBlockPack, MeshRefinement, and ShearingBox objects are constructed in
+//! BuildTreeFromScratch() or BuildTreeFromRestart()
+//! The MeshBlockTree and ProblemGenerator objects are constructed in main().
+//! This is so that they can store a pointer to the Mesh which can be reliably referenced
+//! only after the Mesh constructor has finished.
 
 Mesh::Mesh(ParameterInput *pin) :
   one_d(false),

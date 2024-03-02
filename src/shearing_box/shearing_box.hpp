@@ -37,7 +37,7 @@ namespace shearing_box {
 
 class ShearingBox {
  public:
-  ShearingBox(MeshBlockPack *ppack, ParameterInput *pin);
+  ShearingBox(Mesh *pm, ParameterInput *pin);
   ~ShearingBox();
 
   // data
@@ -50,7 +50,7 @@ class ShearingBox {
   // functions...
 
  private:
-  MeshBlockPack* pmy_pack;  // ptr to MeshBlockPack containing this ShearingBox
+  Mesh *pmy_mesh;
 };
 
 } // namespace shearing_box

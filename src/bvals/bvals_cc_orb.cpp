@@ -5,7 +5,9 @@
 //========================================================================================
 //! \file bvals_cc_orb.cpp
 //! \brief functions to pack/send and recv/unpack boundary values for cell-centered (CC)
-//! variables in the orbital advection step used with the shearing box.
+//! variables in the orbital advection step used with the shearing box. Data is shifted
+//! by the appropriate offset during the recv/unpack step, so these functions both
+//! communicate the data and perform the shift.
 
 #include <cstdlib>
 #include <iostream>
@@ -15,6 +17,7 @@
 #include "globals.hpp"
 #include "parameter_input.hpp"
 #include "mesh/mesh.hpp"
+#include "shearing_box/remap_fluxes.hpp"
 #include "bvals.hpp"
 
 //----------------------------------------------------------------------------------------
@@ -36,8 +39,13 @@ TaskStatus BoundaryValuesCC::PackAndSendCC_Orb(DvceArray5D<Real> &a) {
   auto &nghbr = pmy_pack->pmb->nghbr;
   auto &mbgid = pmy_pack->pmb->mb_gid;
   auto &mblev = pmy_pack->pmb->mb_lev;
-  auto &sbuf = send_buf_orb;
-  auto &rbuf = recv_buf_orb;
+  auto &sbuf = sendbuf_orb;
+  auto &rbuf = recvbuf_orb;
+
+  auto &indcs = pmy_mesh->pmesh->mb_indcs;
+  auto &is = indcs.is, &ie = indcs.ie;
+  auto &js = indcs.js, &je = indcs.je;
+  auto &ks = indcs.ks, &ke = indcs.ke;
 
   // Outer loop over (# of MeshBlocks)*(# of buffers)*(# of variables)
   int nmnv = 2*nmb*nvar;  // only consider 2 neighbors (x2-faces)
@@ -46,55 +54,46 @@ TaskStatus BoundaryValuesCC::PackAndSendCC_Orb(DvceArray5D<Real> &a) {
     const int m = (tmember.league_rank())/(2*nvar);
     const int i = (tmember.league_rank() - m*(2*nvar))/nvar;
     const int v = (tmember.league_rank() - m*(2*nvar) - n*nvar);
-    int n;
-    if (i==0) {n=8;} else {n=12;}  // select indices of two x2-face buffers
+
+    // indices of sending and receiving x2-face buffers
+    int n, dn;
+    if (i==0) {n=8; dn=1;} else {n=12; dn=0;}
 
     // only load buffers when neighbor exists
     if (nghbr.d_view(m,n).gid >= 0) {
       // neighbor must always be at same level, so use same indices to pack buffer
       // Note j-range of indices extended by shear
-      int il = sbuf[n].isame[0].bis;
-      int iu = sbuf[n].isame[0].bie;
-      int jl = sbuf[n].isame[0].bjs;
+      int il = is;
+      int iu = ie;
+      int jl = js;
       int ju = sbuf[n].isame[0].bje;
-      int kl = sbuf[n].isame[0].bks;
-      int ku = sbuf[n].isame[0].bke;
+      int kl = ks;
+      int ku = ke;
       int ni = iu - il + 1;
       int nj = ju - jl + 1;
       int nk = ku - kl + 1;
-      int nkj  = nk*nj;
+      int nji = nj*ni;
+      int nkji = nk*nj*ni;
 
-      // indices of recv'ing (destination) MB and buffer: MB IDs are stored sequentially
+      // index of recv'ing (destination) MB: MB IDs are stored sequentially
       // in MeshBlockPacks, so array index equals (target_id - first_id)
       int dm = nghbr.d_view(m,n).gid - mbgid.d_view(0);
-      int dn = nghbr.d_view(m,n).dest;
 
-      // Middle loop over k,j
-      Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember, nkj), [&](const int idx) {
-        int k = idx / nj;
-        int j = (idx - k * nj) + jl;
+      // Middle loop over k,j,i
+      Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember, nkji), [&](const int idx) {
+        int k = (idx)/nji;
+        int j = (idx - k*nji)/ni;
+        int i = (idx - k*nji - j*ni) + il;
         k += kl;
+        j += jl;
 
-        // Inner (vector) loop over i
         // copy directly into recv buffer if MeshBlocks on same rank
-
         if (nghbr.d_view(m,n).rank == my_rank) {
-          // neighbor always at same level, so load data from u0
-          Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember,il,iu+1),
-          [&](const int i) {
-            rbuf[dn].vars(dm, (i-il + ni*(j-jl + nj*(k-kl + nk*v))) ) = a(m,v,k,j,i);
-          });
-          tmember.team_barrier();
+          rbuf[dn].vars(dm, (i-il + ni*(j-jl + nj*(k-kl + nk*v))) ) = a(m,v,k,j,i);
 
         // else copy into send buffer for MPI communication below
-
         } else {
-          // neighbor always at same level, so load data from u0
-          Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember,il,iu+1),
-          [&](const int i) {
-            sbuf[n].vars(m, (i-il + ni*(j-jl + nj*(k-kl + nk*v))) ) = a(m,v,k,j,i);
-          });
-          tmember.team_barrier();
+          sbuf[i].vars(m, (i-il + ni*(j-jl + nj*(k-kl + nk*v))) ) = a(m,v,k,j,i);
         }
       });
     } // end if-neighbor-exists block
@@ -122,7 +121,7 @@ TaskStatus BoundaryValuesCC::PackAndSendCC_Orb(DvceArray5D<Real> &a) {
           auto send_ptr = Kokkos::subview(send_buf[n].vars, m, Kokkos::ALL);
 
           int ierr = MPI_Isend(send_ptr.data(), data_size, MPI_ATHENA_REAL, drank, tag,
-                               vars_comm, &(send_buf[n].vars_req_orb[m]));
+                               comm_orb, &(send_buf[n].vars_req_orb[m]));
           if (ierr != MPI_SUCCESS) {no_errors=false;}
         }
       }
@@ -139,17 +138,17 @@ TaskStatus BoundaryValuesCC::PackAndSendCC_Orb(DvceArray5D<Real> &a) {
 }
 
 //----------------------------------------------------------------------------------------
-// \!fn void RecvBuffers()
-// \brief Unpack boundary buffers
+// \!fn void RecvAndUnpackCC_Orb()
+// \brief Receive and unpack boundary buffers for CC variables
+//! Remaps cell-centered variables in input array u0 using orbital advection during unpack
 
-TaskStatus BoundaryValuesCC::RecvAndUnpackCC(DvceArray5D<Real> &a,
-  DvceArray5D<Real> &ca) {
+TaskStatus BoundaryValuesCC::RecvAndUnpackCC_Orb(DvceArray5D<Real> &a,
+                                                 ReconstructionMethod rcon){
   // create local references for variables in kernel
   int nmb = pmy_pack->nmb_thispack;
   int nnghbr = pmy_pack->pmb->nnghbr;
   auto &nghbr = pmy_pack->pmb->nghbr;
   auto &rbuf = recv_buf;
-  auto &is_z4c = is_z4c_;
 #if MPI_PARALLEL_ENABLED
   //----- STEP 1: check that recv boundary buffer communications have all completed
 
@@ -182,114 +181,76 @@ TaskStatus BoundaryValuesCC::RecvAndUnpackCC(DvceArray5D<Real> &a,
 
   //----- STEP 2: buffers have all completed, so unpack
 
-  int nvar = a.extent_int(1);  // TODO(@user): 2nd index from L of in array must be NVAR
-  auto &mblev = pmy_pack->pmb->mb_lev;
+  int nvar = u0.extent_int(1);  // TODO(@user): 2nd index from L of in array must be NVAR
 
-  // Outer loop over (# of MeshBlocks)*(# of buffers)*(# of variables)
-  Kokkos::TeamPolicy<> policy(DevExeSpace(), (nmb*nnghbr*nvar), Kokkos::AUTO);
-  Kokkos::parallel_for("RecvBuff", policy, KOKKOS_LAMBDA(TeamMember_t tmember) {
-    const int m = (tmember.league_rank())/(nnghbr*nvar);
-    const int n = (tmember.league_rank() - m*(nnghbr*nvar))/nvar;
-    const int v = (tmember.league_rank() - m*(nnghbr*nvar) - n*nvar);
+  RegionIndcs &indcs = pmy_mesh->mb_indcs;
+  int is = indcs.is, ie = indcs.ie;
+  int js = indcs.js, je = indcs.je;
+  int ks = indcs.ks, ke = indcs.ke;
+  int ncells2 = indcs.nx2 + 2*(indcs.ng);
 
-    // only unpack buffers when neighbor exists
-    if (nghbr.d_view(m,n).gid >= 0) {
-      int il, iu, jl, ju, kl, ku;
-      // if neighbor is at coarser level, use coar indices to unpack buffer
-      if (nghbr.d_view(m,n).lev < mblev.d_view(m)) {
-        il = rbuf[n].icoar[0].bis;
-        iu = rbuf[n].icoar[0].bie;
-        jl = rbuf[n].icoar[0].bjs;
-        ju = rbuf[n].icoar[0].bje;
-        kl = rbuf[n].icoar[0].bks;
-        ku = rbuf[n].icoar[0].bke;
-      // if neighbor is at same level, use same indices to unpack buffer
-      } else if (nghbr.d_view(m,n).lev == mblev.d_view(m)) {
-        il = rbuf[n].isame[0].bis;
-        iu = rbuf[n].isame[0].bie;
-        jl = rbuf[n].isame[0].bjs;
-        ju = rbuf[n].isame[0].bje;
-        kl = rbuf[n].isame[0].bks;
-        ku = rbuf[n].isame[0].bke;
-      // if neighbor is at finer level, use fine indices to unpack buffer
+  auto &mb_size = pmy_mesh->pmb_pack->pmb->mb_size;
+  auto &mesh_size = pmy_mesh->mesh_size;
+  Real &time = pmy_mesh->time;
+  Real qom = qshear*omega0;
+  Real ly = (mesh_size.x2max - mesh_size.x2min);
+
+  int scr_lvl=0;
+  size_t scr_size = ScrArray1D<Real>::shmem_size(ncells2) * 2;
+  par_for_outer("oadv",DevExeSpace(),scr_size,scr_lvl,0,(nmb-1),0,(nvar-1),ks,ke,is,ie,
+  KOKKOS_LAMBDA(TeamMember_t member, const int m, const int n, const int k, const int i) {
+    ScrArray1D<Real> u0_(member.team_scratch(scr_level), ncells2);
+    ScrArray1D<Real> flx(member.team_scratch(scr_level), ncells2);
+
+    Real &x1min = mb_size.d_view(m).x1min;
+    Real &x1max = mb_size.d_view(m).x1max;
+    int nx1 = indcs.nx1;
+    Real x1v = CellCenterX(i-is, nx1, x1min, x1max);
+
+    Real yshear = -qom*x1v*time;
+    Real deltay = fmod(yshear, ly);
+    int joffset = static_cast<int>(deltay/(mb_size.d_view(m).dx2));
+
+    // Load scratch array.  Index with shift:  jj = j + jshift
+    par_for_inner(member, 0, (ncells2-1), [&](const int jj) {
+      if (jj < (js + joffset)) {
+        // Load scratch arrays from L boundary buffer with offset
+        u0_(jj) = recv_buf_orb(n,k,jj,i);
+      } else if (jj < (je + joffset)) {
+        // Load from array itself with offset
+        u0_(jj) = u0(m,n,k,(jj+joffset),i);
       } else {
-        il = rbuf[n].ifine[0].bis;
-        iu = rbuf[n].ifine[0].bie;
-        jl = rbuf[n].ifine[0].bjs;
-        ju = rbuf[n].ifine[0].bje;
-        kl = rbuf[n].ifine[0].bks;
-        ku = rbuf[n].ifine[0].bke;
+        // Load scratch arrays from R boundary buffer with offset
+        u0_(jj) = recv_buf_orb(n,k,(jj-(je+1)),i);
       }
-      int ni = iu - il + 1;
-      int nj = ju - jl + 1;
-      int nk = ku - kl + 1;
-      int nkj  = nk*nj;
+    });
 
-      // Middle loop over k,j
-      Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember, nkj), [&](const int idx) {
-        int k = idx / nj;
-        int j = (idx - k * nj) + jl;
-        k += kl;
 
-        // if neighbor is at same or finer level, load data directly into u0
-        if (nghbr.d_view(m,n).lev >= mblev.d_view(m)) {
-          Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember,il,iu+1),
-          [&](const int i) {
-            a(m,v,k,j,i) = rbuf[n].vars(m, (i-il + ni*(j-jl + nj*(k-kl + nk*v))) );
-          });
-          tmember.team_barrier();
+    // Compute x2-fluxes from fractional offset, including in ghost zones
+    Real epsi = fmod(deltay,(mb_size.d_view(m).dx2))/(mb_size.d_view(m).dx2);
+    switch (rcon) {
+      case ReconstructionMethod::dc:
+        DonorCellOrbAdvFlx(member, js, je+1, epsi, u0_, flx);
+        break;
+      case ReconstructionMethod::plm:
+        PiecewiseLinearOrbAdvFlx(member, js, je+1, epsi, u0_, flx);
+        break;
+//      case ReconstructionMethod::ppm4:
+//      case ReconstructionMethod::ppmx:
+//          PiecewiseParabolicOrbAdvFlx(member,eos_,extrema,true,m,k,j,il,iu, w0_, wl_jp1, wr);
+//        break;
+      default:
+        break;
+    }
+    member.team_barrier();
 
-        // if neighbor is at coarser level, load data into coarse_u0
-        } else {
-          Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember,il,iu+1),
-          [&](const int i) {
-            ca(m,v,k,j,i) = rbuf[n].vars(m, (i-il + ni*(j-jl + nj*(k-kl + nk*v))) );
-          });
-          tmember.team_barrier();
-        }
-      });
-    }  // end if-neighbor-exists block
-  });  // end par_for_outer
+    // Update CC variables (including ghost zones) with orbital advection fluxes
+    par_for_inner(member, js, je, [&](const int j) {
+      u0(m,n,k,j,i) = u0_(j) + (flx(j+1) - flx(j));
+    });
+  });
 
-  // Outer loop over (# of MeshBlocks)*(# of buffers)*(# of variables)
-  Kokkos::parallel_for("RecvBuff", policy, KOKKOS_LAMBDA(TeamMember_t tmember) {
-    const int m = (tmember.league_rank())/(nnghbr*nvar);
-    const int n = (tmember.league_rank() - m*(nnghbr*nvar))/nvar;
-    const int v = (tmember.league_rank() - m*(nnghbr*nvar) - n*nvar);
-    // only unpack buffers when neighbor exists
-    if (nghbr.d_view(m,n).gid >= 0) {
-      int il, iu, jl, ju, kl, ku;
-      // If neighbor is at same level and data is for Z4c module, unpack data from coarse
-      // array for higher-order prolongation
-      if ((nghbr.d_view(m,n).lev == mblev.d_view(m)) && (is_z4c)) {
-        il = rbuf[n].isame_z4c.bis;
-        iu = rbuf[n].isame_z4c.bie;
-        jl = rbuf[n].isame_z4c.bjs;
-        ju = rbuf[n].isame_z4c.bje;
-        kl = rbuf[n].isame_z4c.bks;
-        ku = rbuf[n].isame_z4c.bke;
-        int ni = iu - il + 1;
-        int nj = ju - jl + 1;
-        int nk = ku - kl + 1;
-        int nkj  = nk*nj;
-        int ndat = nvar*rbuf[n].isame_ndat; // size of same level data packed in buff
-
-        // Middle loop over k,j
-        Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember, nkj), [&](const int idx) {
-          int k = idx / nj;
-          int j = (idx - k * nj) + jl;
-          k += kl;
-
-          // load data into coarse_u0
-          Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember,il,iu+1),
-          [&](const int i) {
-            ca(m,v,k,j,i) = rbuf[n].vars(m,ndat + (i-il + ni*(j-jl + nj*(k-kl + nk*v))) );
-          });
-          tmember.team_barrier();
-        });
-      }
-    }  // end if-neighbor-exists block
-  });  // end par_for_outer
-
+  return;
+}
   return TaskStatus::complete;
 }

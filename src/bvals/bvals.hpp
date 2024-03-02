@@ -69,8 +69,8 @@ struct BoundaryBuffer {
   DvceArray2D<Real> vars, flux;
 
 #if MPI_PARALLEL_ENABLED
-  // Using STL vector causes problems with some GPU compilers, even those these vectors
-  // are only ever accessed on host, so just use plain C array
+  // vectors of length (number of MBs) to hold MPI requests
+  // Using STL vector causes problems with some GPU compilers, so just use plain C array
   MPI_Request *vars_req, *flux_req;
 #endif
 
@@ -90,6 +90,21 @@ struct BoundaryBuffer {
   }
 };
 
+//----------------------------------------------------------------------------------------
+//! \struct ShearingBoxBuffer
+//! \brief container for storage for boundary buffers with the shearing box
+//! Basically a much simplified version of the BoundaryBuffer struct.
+
+struct ShearingBoxBuffer {
+  // 5D Views that store buffer data on device
+  DvceArray5D<Real> vars;
+#if MPI_PARALLEL_ENABLED
+  // vectors of length (number of MBs) to hold MPI requests
+  // Using STL vector causes problems with some GPU compilers, so just use plain C array
+  MPI_Request *vars_req;
+#endif
+};
+
 // Forward declarations
 class MeshBlockPack;
 
@@ -107,12 +122,15 @@ class BoundaryValues {
   // sizes and index values for array elements outweighs cost of extra memory.
   BoundaryBuffer send_buf[56], recv_buf[56];
 
+  // data buffers for orbital advection. Only two x2-faces communicate
+  ShearingBoxBuffer sendbuf_orb[2], recvbuf_orb[2];
+
   // constant inflow states at each face, initialized in problem generator
   DualArray2D<Real> u_in, b_in, i_in;
 
 #if MPI_PARALLEL_ENABLED
-  // unique MPI communicators for variables and fluxes
-  MPI_Comm vars_comm, flux_comm;
+  // unique MPI communicators for each case (variables/fluxes/orbital-advection)
+  MPI_Comm comm_vars, comm_flux, comm_orb;
 #endif
 
   //functions
@@ -147,13 +165,22 @@ class BoundaryValuesCC : public BoundaryValues {
  public:
   BoundaryValuesCC(MeshBlockPack *ppack, ParameterInput *pin, bool z4c);
 
-  //functions
+  // functions
   void InitSendIndices(BoundaryBuffer &buf, int o1, int o2,int o3,int f1,int f2) override;
   void InitRecvIndices(BoundaryBuffer &buf, int o1, int o2,int o3,int f1,int f2) override;
   TaskStatus InitFluxRecv(const int nvar) override;
 
+  // functions to communicate CC data
   TaskStatus PackAndSendCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca);
   TaskStatus RecvAndUnpackCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca);
+  // functions to communicate fluxes of CC data
+  TaskStatus PackAndSendFluxCC(DvceFaceFld5D<Real> &flx);
+  TaskStatus RecvAndUnpackFluxCC(DvceFaceFld5D<Real> &flx);
+  // functions to communicate CC data with orbital advection
+  TaskStatus PackAndSendCC_Orb(DvceArray5D<Real> &a);
+  TaskStatus RecvAndUnpackCC_Orb(DvceArray5D<Real> &a, ReconstructionMethod rcon);
+
+  // functions to prolongate conserved and primitive CC variables
   void FillCoarseInBndryCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca);
   void ProlongateCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca);
   void ConsToPrimCoarseBndry(const DvceArray5D<Real> &cons, DvceArray5D<Real> &prim);
@@ -162,9 +189,6 @@ class BoundaryValuesCC : public BoundaryValues {
                              DvceArray5D<Real> &prim);
   void PrimToConsFineBndry(const DvceArray5D<Real> &prim, const DvceFaceFld4D<Real> &b,
                            DvceArray5D<Real> &cons);
-
-  TaskStatus PackAndSendFluxCC(DvceFaceFld5D<Real> &flx);
-  TaskStatus RecvAndUnpackFluxCC(DvceFaceFld5D<Real> &flx);
 };
 
 //----------------------------------------------------------------------------------------

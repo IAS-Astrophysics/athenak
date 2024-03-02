@@ -87,7 +87,7 @@ class MeshRefinement {
 #if MPI_PARALLEL_ENABLED
   int nmb_send, nmb_recv;
   MPI_Comm amr_comm;                         // unique communicator for AMR
-  DualArray1D<AMRBuffer> send_buf, recv_buf; // send/recv buffers
+  DualArray1D<AMRBuffer> sendbuf, recvbuf; // send/recv buffers
   MPI_Request *send_req, *recv_req;
   DvceArray1D<Real> send_data, recv_data;    // send/recv device data
 #endif

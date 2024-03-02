@@ -3,128 +3,93 @@
 // Copyright(C) 2020 James M. Stone <jmstone@ias.edu> and the Athena code team
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
-//! \file orbital advection.cpp
+//! \file orbital_advection.cpp
 //! \brief Functions to update cell-centered and face-centered quantities via orbital
-//! advection
+//! advection.
 
 #include <iostream>
 
 #include "athena.hpp"
 #include "mesh/mesh.hpp"
-#include "coordinates/coordinates.hpp"
-#include "hydro.hpp"
-#include "eos/eos.hpp"
-#include "reconstruct/dc.hpp"
-#include "reconstruct/plm.hpp"
-#include "reconstruct/ppm.hpp"
-#include "reconstruct/wenoz.hpp"
+#include "orbital_advection.hpp"
+#include "coordinates/cell_locations.hpp"
 
 namespace shearing_box {
 //----------------------------------------------------------------------------------------
-//! \fn void ShearingBox::CalculateFluxes
-//! \brief Calls reconstruction and Riemann solver functions to compute hydro fluxes
-//! Note this function is templated over RS for better performance on GPUs.
+//! \fn void ShearingBox::OrbitalAdvectionCC
+//! \brief Remaps cell-centered variables in input array u0 using orbital advection
 
-void ShearingBox::OrbitalAdvectionCC(Driver *pdriver, int stage) {
-  RegionIndcs &indcs_ = pmy_pack->pmesh->mb_indcs;
-  int is = indcs_.is, ie = indcs_.ie;
-  int js = indcs_.js, je = indcs_.je;
-  int ks = indcs_.ks, ke = indcs_.ke;
-  int ncells1 = indcs_.nx1 + 2*(indcs_.ng);
+void ShearingBox::OrbitalAdvectionCC(DvceArray5D<Real> u0, ReconstructionMethod rcon) {
+  int nmb = pmy_mesh->pmb_pack->nmb_thispack;
+  int nvar = u0.extent_int(1);  // TODO(@user): 2nd index from L of in array must be NVAR
 
-  int &nhyd_  = nhydro;
-  int nvars = nhydro + nscalars;
-  int nmb1 = pmy_pack->nmb_thispack - 1;
-  const auto recon_method_ = recon_method;
-  bool extrema = false;
-  if (recon_method == ReconstructionMethod::ppmx) {
-    extrema = true;
-  }
+  RegionIndcs &indcs = pmy_mesh->mb_indcs;
+  int is = indcs.is, ie = indcs.ie;
+  int js = indcs.js, je = indcs.je;
+  int ks = indcs.ks, ke = indcs.ke;
+  int ncells2 = indcs.nx2 + 2*(indcs.ng);
 
-  auto &eos_ = peos->eos_data;
-  auto &size_ = pmy_pack->pmb->mb_size;
-  auto &coord_ = pmy_pack->pcoord->coord_data;
-  auto &w0_ = w0;
+  auto &mb_size = pmy_mesh->pmb_pack->pmb->mb_size;
+  auto &mesh_size = pmy_mesh->mesh_size;
+  Real &time = pmy_mesh->time;
+  Real qom = qshear*omega0;
+  Real ly = (mesh_size.x2max - mesh_size.x2min);
 
-  //--------------------------------------------------------------------------------------
-  // j-direction
 
-  scr_size = ScrArray2D<Real>::shmem_size(nvars, ncells1) * 3;
-  auto &flx2_ = uflx.x2f;
+  int scr_level=0;
+  size_t scr_size = ScrArray1D<Real>::shmem_size(ncells2) * 2;
+  par_for_outer("orb_adv",DevExeSpace(),scr_size,scr_level,0,(nmb-1),0,(nvar-1), ks, ke, is, ie,
+  KOKKOS_LAMBDA(TeamMember_t member, const int m, const int n, const int k, const int i) {
+    ScrArray1D<Real> u0_(member.team_scratch(scr_level), ncells2);
+    ScrArray1D<Real> flx(member.team_scratch(scr_level), ncells2);
 
-  // set the loop limits for 1D/2D/3D problems
-  il = is, iu = ie, jl = js-1, ju = je+1, kl = ks, ku = ke;
-  if (use_fofc) {
-    jl = js-2, ju = je+2;
-    if (pmy_pack->pmesh->two_d) {
-      il = is-1, iu = ie+1, kl = ks, ku = ke;
-    } else {
-      il = is-1, iu = ie+1, kl = ks-1, ku = ke+1;
+    Real &x1min = mb_size.d_view(m).x1min;
+    Real &x1max = mb_size.d_view(m).x1max;
+    int nx1 = indcs.nx1;
+    Real x1v = CellCenterX(i-is, nx1, x1min, x1max);
+
+    Real yshear = -qom*x1v*time;
+    Real deltay = fmod(yshear, ly);
+    int joffset = static_cast<int>(deltay/(mb_size.d_view(m).dx2));
+
+    // Load scratch array.  Index with shift:  jj = j + jshift
+    par_for_inner(member, 0, (ncells2-1), [&](const int jj) {
+      if (jj < (js + joffset)) {
+        // Load scratch arrays from L boundary buffer with offset
+        u0_(jj) = recv_buf_orb(n,k,jj,i);
+      } else if (jj < (je + joffset)) {
+        // Load from array itself with offset
+        u0_(jj) = u0(m,n,k,(jj+joffset),i);
+      } else {
+        // Load scratch arrays from R boundary buffer with offset
+        u0_(jj) = recv_buf_orb(n,k,(jj-(je+1)),i);
+      }
+    });
+
+
+    // Compute x2-fluxes from fractional offset, including in ghost zones
+    Real epsi = fmod(deltay,(mb_size.d_view(m).dx2))/(mb_size.d_view(m).dx2);
+    switch (rcon) {
+      case ReconstructionMethod::dc:
+        DonorCellOrbAdvFlx(member, js, je+1, epsi, u0_, flx);
+        break;
+      case ReconstructionMethod::plm:
+        PiecewiseLinearOrbAdvFlx(member, js, je+1, epsi, u0_, flx);
+        break;
+//      case ReconstructionMethod::ppm4:
+//      case ReconstructionMethod::ppmx:
+//          PiecewiseParabolicOrbAdvFlx(member,eos_,extrema,true,m,k,j,il,iu, w0_, wl_jp1, wr);
+//        break;
+      default:
+        break;
     }
-  }
+    member.team_barrier();
 
-  par_for_outer("hflux_x2",DevExeSpace(), scr_size, scr_level, 0, nmb1, kl, ku,
-  KOKKOS_LAMBDA(TeamMember_t member, const int m, const int k) {
-    ScrArray2D<Real> scr1(member.team_scratch(scr_level), nvars, ncells1);
-    ScrArray2D<Real> scr2(member.team_scratch(scr_level), nvars, ncells1);
-    ScrArray2D<Real> scr3(member.team_scratch(scr_level), nvars, ncells1);
-
-    for (int j=jl; j<=ju; ++j) {
-      // Permute scratch arrays.
-      auto wl     = scr1;
-      auto wl_jp1 = scr2;
-      auto wr     = scr3;
-      if ((j%2) == 0) {
-        wl     = scr2;
-        wl_jp1 = scr1;
-      }
-
-      // Compute x2-fluxes from fractional offset
-      switch (recon_method_) {
-        case ReconstructionMethod::dc:
-          DonorCellOrbAdvFlx(member, m, k, j, il, iu, w0_, wl_jp1, wr);
-          break;
-        case ReconstructionMethod::plm:
-          PiecewiseLinearOrbAdvFlx(member, m, k, j, il, iu, w0_, wl_jp1, wr);
-          break;
-        case ReconstructionMethod::ppm4:
-        case ReconstructionMethod::ppmx:
-          PiecewiseParabolicOrbAdvFlx(member,eos_,extrema,true,m,k,j,il,iu, w0_, wl_jp1, wr);
-          break;
-        default:
-          break;
-      }
-      member.team_barrier();
-
-      // compute fluxes over [js,je+1].  RS returns flux in input wr array
-      if (j>jl) {
-        // NOTE(@pdmullen): Capture variables prior to if constexpr.
-        auto eos = eos_;
-        auto indcs = indcs_;
-        auto size = size_;
-        auto coord = coord_;
-        auto flx2 = flx2_;
-        Advect(member, eos, indcs, size, coord, m, k, j, il, iu, IVY, wl, wr, flx2);
-        member.team_barrier();
-      }
-
-      // calculate fluxes of scalars (if any)
-      if (nvars > nhyd_) {
-        for (int n=nhyd_; n<nvars; ++n) {
-          par_for_inner(member, is, ie, [&](const int i) {
-            if (flx2_(m,IDN,k,j,i) >= 0.0) {
-              flx2_(m,n,k,j,i) = flx2_(m,IDN,k,j,i)*wl(n,i);
-            } else {
-              flx2_(m,n,k,j,i) = flx2_(m,IDN,k,j,i)*wr(n,i);
-            }
-          });
-        }
-      }
-    } // end of loop over j
-  // Update CC variables with orbital advection fluxes
-
+    // Update CC variables (including ghost zones) with orbital advection fluxes
+    par_for_inner(member, js, je, [&](const int j) {
+      u0(m,n,k,j,i) = u0_(j) + (flx(j+1) - flx(j));
+    });
   });
-
 
   return;
 }

@@ -47,8 +47,8 @@ TaskStatus BoundaryValuesCC::PackAndSendCC(DvceArray5D<Real> &a, DvceArray5D<Rea
   auto &nghbr = pmy_pack->pmb->nghbr;
   auto &mbgid = pmy_pack->pmb->mb_gid;
   auto &mblev = pmy_pack->pmb->mb_lev;
-  auto &sbuf = send_buf;
-  auto &rbuf = recv_buf;
+  auto &sbuf = sendbuf;
+  auto &rbuf = recvbuf;
   auto &is_z4c = is_z4c_;
 
   // Outer loop over (# of MeshBlocks)*(# of buffers)*(# of variables)
@@ -226,20 +226,20 @@ TaskStatus BoundaryValuesCC::PackAndSendCC(DvceArray5D<Real> &a, DvceArray5D<Rea
           // get ptr to send buffer when neighbor is at coarser/same/fine level
           int data_size = nvar;
           if ( nghbr.h_view(m,n).lev < pmy_pack->pmb->mb_lev.h_view(m) ) {
-            data_size *= send_buf[n].icoar_ndat;
+            data_size *= sendbuf[n].icoar_ndat;
           } else if ( nghbr.h_view(m,n).lev == pmy_pack->pmb->mb_lev.h_view(m) ) {
             if (is_z4c) {
-              data_size *= send_buf[n].isame_z4c_ndat;
+              data_size *= sendbuf[n].isame_z4c_ndat;
             } else {
-              data_size *= send_buf[n].isame_ndat;
+              data_size *= sendbuf[n].isame_ndat;
             }
           } else {
-            data_size *= send_buf[n].ifine_ndat;
+            data_size *= sendbuf[n].ifine_ndat;
           }
-          auto send_ptr = Kokkos::subview(send_buf[n].vars, m, Kokkos::ALL);
+          auto send_ptr = Kokkos::subview(sendbuf[n].vars, m, Kokkos::ALL);
 
           int ierr = MPI_Isend(send_ptr.data(), data_size, MPI_ATHENA_REAL, drank, tag,
-                               vars_comm, &(send_buf[n].vars_req[m]));
+                               comm_vars, &(sendbuf[n].vars_req[m]));
           if (ierr != MPI_SUCCESS) {no_errors=false;}
         }
       }
@@ -265,7 +265,7 @@ TaskStatus BoundaryValuesCC::RecvAndUnpackCC(DvceArray5D<Real> &a,
   int nmb = pmy_pack->nmb_thispack;
   int nnghbr = pmy_pack->pmb->nnghbr;
   auto &nghbr = pmy_pack->pmb->nghbr;
-  auto &rbuf = recv_buf;
+  auto &rbuf = recvbuf;
   auto &is_z4c = is_z4c_;
 #if MPI_PARALLEL_ENABLED
   //----- STEP 1: check that recv boundary buffer communications have all completed

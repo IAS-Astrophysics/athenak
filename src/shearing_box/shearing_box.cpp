@@ -24,18 +24,18 @@ namespace shearing_box {
 //----------------------------------------------------------------------------------------
 // constructor, initializes data structures and parameters
 
-ShearingBox::ShearingBox(MeshBlockPack *ppack, ParameterInput *pin) :
+ShearingBox::ShearingBox(Mesh *pm, ParameterInput *pin) :
     qshear(0.0),
     omega0(0.0),
     jshift(1),
-    pmy_pack(ppack) {
+    pmy_mesh(pm) {
   // read shear parameters
   qshear = pin->GetReal("shearing_box","qshear");
   omega0 = pin->GetReal("shearing_box","omega0");
 
   // estimate maximum integer shift in x2-direction for orbital advection
-  Real xmin = fabs(ppack->pmesh->mesh_size.x1min);
-  Real xmax = fabs(ppack->pmesh->mesh_size.x1max);
+  Real xmin = fabs(pm->mesh_size.x1min);
+  Real xmax = fabs(pm->mesh_size.x1max);
   jshift = static_cast<int>((ppack->pmesh->cfl_no)*std::max(xmin,xmax)) + 2;
 }
 
