@@ -6,6 +6,9 @@
 //! \file particles_tasks.cpp
 //! \brief functions that control Particles tasks stored in tasklists in MeshBlockPack
 
+#include <map>
+#include <memory>
+#include <string>
 #include <iostream>
 
 #include "athena.hpp"

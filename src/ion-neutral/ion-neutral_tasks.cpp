@@ -6,6 +6,9 @@
 //! \file ion-neutral_tasks.cpp
 //  \brief
 
+#include <map>
+#include <memory>
+#include <string>
 #include <iostream>
 
 #include "athena.hpp"

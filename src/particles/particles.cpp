@@ -89,7 +89,6 @@ Particles::Particles(MeshBlockPack *ppack, ParameterInput *pin) :
 
   // allocate boundary object
   pbval_part = new ParticlesBoundaryValues(this, pin);
-
 }
 
 //----------------------------------------------------------------------------------------

@@ -8,6 +8,8 @@
 
 #include <cstdlib>
 #include <iostream>
+#include <utility>
+#include <memory>
 
 #include "athena.hpp"
 #include "parameter_input.hpp"

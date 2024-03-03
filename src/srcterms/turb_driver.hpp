@@ -9,6 +9,7 @@
 //  \brief defines turbulence driver class, which implements data and functions for
 //  randomly forced turbulence which evolves via an Ornstein-Uhlenbeck stochastic process
 
+#include <memory>
 
 #include "athena.hpp"
 #include "mesh/mesh.hpp"

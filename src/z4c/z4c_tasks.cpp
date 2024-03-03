@@ -6,6 +6,9 @@
 //! \file z4c_tasks.cpp
 //! \brief functions that control z4c tasks in the appropriate task list
 
+#include <map>
+#include <memory>
+#include <string>
 #include <iostream>
 #include <cstdio>
 

@@ -9,6 +9,7 @@
 #include <algorithm>
 #include <iostream>
 #include <limits>
+#include <memory>
 
 #include "athena.hpp"
 #include "parameter_input.hpp"

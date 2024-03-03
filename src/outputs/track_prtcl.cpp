@@ -7,6 +7,7 @@
 //! \brief writes data for tracked particles in unformatted binary
 
 #include <sys/stat.h>  // mkdir
+#include <vector>
 
 #include <algorithm>
 #include <cstdio>      // fwrite(), fclose(), fopen(), fnprintf(), snprintf()
@@ -33,7 +34,7 @@ TrackedParticleOutput::TrackedParticleOutput(ParameterInput *pin, Mesh *pm,
   // allocate arrays
   npout_eachrank.resize(global_variable::nranks);
   ntrack = pin->GetInteger(op.block_name,"nparticles");
-  // TODO (@user) improve guess below?
+  // TODO(@user) improve guess below?
   ntrack_thisrank = ntrack;
 }
 

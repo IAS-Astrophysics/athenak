@@ -8,6 +8,10 @@
 //! \file radiation.hpp
 //  \brief definitions for Radiation class
 
+#include <map>
+#include <memory>
+#include <string>
+
 #include "athena.hpp"
 #include "parameter_input.hpp"
 #include "tasklist/task_list.hpp"

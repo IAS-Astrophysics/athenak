@@ -8,6 +8,10 @@
 //! \file mhd.hpp
 //  \brief definitions for MHD class
 
+#include <map>
+#include <memory>
+#include <string>
+
 #include "athena.hpp"
 #include "parameter_input.hpp"
 #include "tasklist/task_list.hpp"

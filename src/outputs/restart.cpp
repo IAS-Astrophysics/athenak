@@ -335,7 +335,7 @@ void RestartOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
         // get ptr to x1-face field
         auto x1fptr = Kokkos::subview(outfield.x1f,m,Kokkos::ALL,Kokkos::ALL,Kokkos::ALL);
         int fldcnt = x1fptr.size();
-        if (resfile.Write_any_type_at_all(x1fptr.data(),fldcnt,myoffset,"Real") != fldcnt) {
+        if (resfile.Write_any_type_at_all(x1fptr.data(),fldcnt,myoffset,"Real")!=fldcnt) {
           std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                     << std::endl << "b0.x1f data not written correctly to rst file, "
                     << "restart file is broken." << std::endl;
@@ -346,7 +346,7 @@ void RestartOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
         // get ptr to x2-face field
         auto x2fptr = Kokkos::subview(outfield.x2f,m,Kokkos::ALL,Kokkos::ALL,Kokkos::ALL);
         fldcnt = x2fptr.size();
-        if (resfile.Write_any_type_at_all(x2fptr.data(),fldcnt,myoffset,"Real") != fldcnt) {
+        if (resfile.Write_any_type_at_all(x2fptr.data(),fldcnt,myoffset,"Real")!=fldcnt) {
           std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                     << std::endl << "b0.x2f data not written correctly to rst file, "
                     << "restart file is broken." << std::endl;
@@ -357,7 +357,7 @@ void RestartOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
         // get ptr to x3-face field
         auto x3fptr = Kokkos::subview(outfield.x3f,m,Kokkos::ALL,Kokkos::ALL,Kokkos::ALL);
         fldcnt = x3fptr.size();
-        if (resfile.Write_any_type_at_all(x3fptr.data(),fldcnt,myoffset,"Real") != fldcnt) {
+        if (resfile.Write_any_type_at_all(x3fptr.data(),fldcnt,myoffset,"Real")!=fldcnt) {
           std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                     << std::endl << "b0.x3f data not written correctly to rst file, "
                     << "restart file is broken." << std::endl;
@@ -419,7 +419,7 @@ void RestartOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
         auto mbptr = Kokkos::subview(outarray_rad, m, Kokkos::ALL, Kokkos::ALL,
                                      Kokkos::ALL, Kokkos::ALL);
         int mbcnt = mbptr.size();
-        if (resfile.Write_any_type_at_all(mbptr.data(), mbcnt, myoffset,"Real") != mbcnt) {
+        if (resfile.Write_any_type_at_all(mbptr.data(),mbcnt,myoffset,"Real") != mbcnt) {
           std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
           << std::endl << "cell-centered rad data not written correctly to rst file, "
           << "restart file is broken." << std::endl;
@@ -433,7 +433,7 @@ void RestartOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
         auto mbptr = Kokkos::subview(outarray_rad, m, Kokkos::ALL, Kokkos::ALL,
                                      Kokkos::ALL, Kokkos::ALL);
         int mbcnt = mbptr.size();
-        if (resfile.Write_any_type_at(mbptr.data(), mbcnt, myoffset,"Real") != mbcnt) {
+        if (resfile.Write_any_type_at(mbptr.data(),mbcnt,myoffset,"Real") != mbcnt) {
           std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
           << std::endl << "cell-centered rad data not written correctly to rst file, "
           << "restart file is broken." << std::endl;
@@ -454,7 +454,7 @@ void RestartOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
         auto mbptr = Kokkos::subview(outarray_force, m, Kokkos::ALL, Kokkos::ALL,
                                      Kokkos::ALL, Kokkos::ALL);
         int mbcnt = mbptr.size();
-        if (resfile.Write_any_type_at_all(mbptr.data(), mbcnt, myoffset,"Real") != mbcnt) {
+        if (resfile.Write_any_type_at_all(mbptr.data(),mbcnt,myoffset,"Real") != mbcnt) {
           std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
           << std::endl << "cell-centered turb data not written correctly to rst file, "
           << "restart file is broken." << std::endl;
@@ -489,7 +489,7 @@ void RestartOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
         auto mbptr = Kokkos::subview(outarray_z4c, m, Kokkos::ALL, Kokkos::ALL,
                                      Kokkos::ALL, Kokkos::ALL);
         int mbcnt = mbptr.size();
-        if (resfile.Write_any_type_at_all(mbptr.data(), mbcnt, myoffset,"Real") != mbcnt) {
+        if (resfile.Write_any_type_at_all(mbptr.data(),mbcnt,myoffset,"Real") != mbcnt) {
           std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
           << std::endl << "cell-centered z4c data not written correctly to rst file, "
           << "restart file is broken." << std::endl;
@@ -522,7 +522,7 @@ void RestartOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
         auto mbptr = Kokkos::subview(outarray_adm, m, Kokkos::ALL, Kokkos::ALL,
                                      Kokkos::ALL, Kokkos::ALL);
         int mbcnt = mbptr.size();
-        if (resfile.Write_any_type_at_all(mbptr.data(), mbcnt, myoffset,"Real") != mbcnt) {
+        if (resfile.Write_any_type_at_all(mbptr.data(),mbcnt,myoffset,"Real") != mbcnt) {
           std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
           << std::endl << "cell-centered adm data not written correctly to rst file, "
           << "restart file is broken." << std::endl;

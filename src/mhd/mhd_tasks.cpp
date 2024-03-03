@@ -6,6 +6,9 @@
 //! \file mhd_tasks.cpp
 //! \brief functions that control MHD tasks in the appropriate task lists
 
+#include <map>
+#include <memory>
+#include <string>
 #include <iostream>
 
 #include "athena.hpp"

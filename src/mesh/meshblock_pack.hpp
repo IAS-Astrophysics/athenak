@@ -8,8 +8,10 @@
 //! \file meshblock_pack.hpp
 //  \brief defines MeshBlockPack class, a container for MeshBlocks
 
+#include <map>
 #include <memory>
-#include <vector> // vector<>
+#include <string>
+#include <vector>
 
 #include "parameter_input.hpp"
 #include "coordinates/coordinates.hpp"
