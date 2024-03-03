@@ -60,8 +60,8 @@ void Z4c::AssembleZ4cTasks(std::map<std::string, std::shared_ptr<TaskList>> tl) 
   id.crecv = tl["after_stagen_tl"]->AddTask(&Z4c::ClearRecv, this, id.csend);
   id.z4tad = tl["after_stagen_tl"]->AddTask(&Z4c::Z4cToADM_, this, id.crecv);
   id.admc  = tl["after_stagen_tl"]->AddTask(&Z4c::ADMConstraints_, this, id.z4tad);
-  id.weyl_scalar  = end.AddTask(&Z4c::CalcWeylScalar_, this, id.admc);
-  id.ptrck = end.AddTask(&Z4c::PunctureTracker, this, id.admc);
+  id.weyl_scalar  = tl["after_stagen_tl"]->AddTask(&Z4c::CalcWeylScalar_, this, id.admc);
+  id.ptrck = tl["after_stagen_tl"]->AddTask(&Z4c::PunctureTracker, this, id.admc);
   return;
 }
 

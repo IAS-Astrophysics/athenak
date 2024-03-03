@@ -70,11 +70,11 @@ Real Extrapolate<4>(DvceArray5D<Real> u, const int m, const int n,
 }
 
 //----------------------------------------------------------------------------------------
-// \!fn void BoundaryValues::Z4cBCs()
+// \!fn void MeshBoundaryValues::Z4cBCs()
 // \brief Apply physical boundary conditions for all Z4c variables at faces of MB which
 //  are at the edge of the computational domain
-void BoundaryValues::Z4cBCs(MeshBlockPack *ppack, DualArray2D<Real> u_in,
-                            DvceArray5D<Real> u0, DvceArray5D<Real> coarse_u0) {
+void MeshBoundaryValues::Z4cBCs(MeshBlockPack *ppack, DualArray2D<Real> u_in,
+                                DvceArray5D<Real> u0, DvceArray5D<Real> coarse_u0) {
   auto &pm = ppack->pmesh;
   auto &indcs = ppack->pmesh->mb_indcs;
   int &ng = indcs.ng;
