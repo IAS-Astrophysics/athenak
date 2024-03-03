@@ -670,6 +670,7 @@ TaskStatus Radiation::AddRadiationSourceTerm(Driver *pdriver, int stage) {
           // }
 
           // record radiation internal energy change
+          w0_(m,entropyIdx,k,j,i) = tgasnew; // temporarily for sanity check, REMOVE LATER!!!
           if (turn_on_sao_radsrc_) {
             Real tgas_update = tgasnew;
             delta_erad_f += -wdn*(tgasnew-tgas)/gm1;

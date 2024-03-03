@@ -391,9 +391,9 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
 
       // convert scalars (if any)
       for (int n=nmhd; n<(nmhd+nscal); ++n) {
-        if (!customize_fofc_ && !use_ko_dissipation_) {
-          prim(m,n,k,j,i) = cons(m,n,k,j,i)/u.d;
-        }
+        // if (!customize_fofc_ && !use_ko_dissipation_) {
+        //   prim(m,n,k,j,i) = cons(m,n,k,j,i)/u.d;
+        // }
       }
     }
   }, Kokkos::Sum<int>(nfloord_), Kokkos::Sum<int>(nfloore_), Kokkos::Sum<int>(nceilv_),
