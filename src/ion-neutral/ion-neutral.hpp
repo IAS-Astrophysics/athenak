@@ -73,7 +73,7 @@ class IonNeutral {
   IonNeutralTaskIDs id;
 
   // functions
-  void AssembleIonNeutralTasks(TaskList &start, TaskList &run, TaskList &end);
+  void AssembleIonNeutralTasks(std::map<std::string, std::shared_ptr<TaskList>> tl);
   TaskStatus FirstTwoImpRK(Driver* pdrive, int stage);
   TaskStatus ImpRKUpdate(Driver* pdrive, int stage);
 

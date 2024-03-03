@@ -16,7 +16,7 @@
 #include "mesh/mesh.hpp"
 #include "hydro/hydro.hpp"
 #include "mhd/mhd.hpp"
-#include "ion-neutral/ion_neutral.hpp"
+#include "ion-neutral/ion-neutral.hpp"
 #include "driver/driver.hpp"
 #include "utils/random.hpp"
 #include "eos/eos.hpp"
