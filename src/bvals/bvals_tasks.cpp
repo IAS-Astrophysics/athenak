@@ -43,21 +43,21 @@ TaskStatus MeshBoundaryValues::InitRecv(const int nvars) {
           // calculate amount of data to be passed, get pointer to variables
           int data_size = nvars;
           if ( nghbr.h_view(m,n).lev < pmy_pack->pmb->mb_lev.h_view(m) ) {
-            data_size *= recv_buf[n].icoar_ndat;
+            data_size *= recvbuf[n].icoar_ndat;
           } else if ( nghbr.h_view(m,n).lev == pmy_pack->pmb->mb_lev.h_view(m) ) {
             if (is_z4c_) {
-              data_size *= recv_buf[n].isame_z4c_ndat;
+              data_size *= recvbuf[n].isame_z4c_ndat;
             } else {
-              data_size *= recv_buf[n].isame_ndat;
+              data_size *= recvbuf[n].isame_ndat;
             }
           } else {
-            data_size *= recv_buf[n].ifine_ndat;
+            data_size *= recvbuf[n].ifine_ndat;
           }
-          auto recv_ptr = Kokkos::subview(recv_buf[n].vars, m, Kokkos::ALL);
+          auto recv_ptr = Kokkos::subview(recvbuf[n].vars, m, Kokkos::ALL);
 
           // Post non-blocking receive for this buffer on this MeshBlock
           int ierr = MPI_Irecv(recv_ptr.data(), data_size, MPI_ATHENA_REAL, drank, tag,
-                               vars_comm, &(recv_buf[n].vars_req[m]));
+                               comm_vars, &(recvbuf[n].vars_req[m]));
           if (ierr != MPI_SUCCESS) {no_errors=false;}
         }
       }
@@ -90,7 +90,7 @@ TaskStatus MeshBoundaryValues::ClearRecv() {
     for (int n=0; n<nnghbr; ++n) {
       if ( (nghbr.h_view(m,n).gid >= 0) &&
            (nghbr.h_view(m,n).rank != global_variable::my_rank) ) {
-        int ierr = MPI_Wait(&(recv_buf[n].vars_req[m]), MPI_STATUS_IGNORE);
+        int ierr = MPI_Wait(&(recvbuf[n].vars_req[m]), MPI_STATUS_IGNORE);
         if (ierr != MPI_SUCCESS) {no_errors=false;}
       }
     }
@@ -122,7 +122,7 @@ TaskStatus MeshBoundaryValues::ClearSend() {
     for (int n=0; n<nnghbr; ++n) {
       if ( (nghbr.h_view(m,n).gid >= 0) &&
            (nghbr.h_view(m,n).rank != global_variable::my_rank) ) {
-        int ierr = MPI_Wait(&(send_buf[n].vars_req[m]), MPI_STATUS_IGNORE);
+        int ierr = MPI_Wait(&(sendbuf[n].vars_req[m]), MPI_STATUS_IGNORE);
         if (ierr != MPI_SUCCESS) {no_errors=false;}
       }
     }
@@ -154,8 +154,8 @@ TaskStatus MeshBoundaryValues::ClearFluxRecv() {
     for (int n=0; n<nnghbr; ++n) {
       if ( (nghbr.h_view(m,n).gid >= 0) &&
            (nghbr.h_view(m,n).rank != global_variable::my_rank) &&
-           (recv_buf[n].flux_req[m] != MPI_REQUEST_NULL) ) {
-        int ierr = MPI_Wait(&(recv_buf[n].flux_req[m]), MPI_STATUS_IGNORE);
+           (recvbuf[n].flux_req[m] != MPI_REQUEST_NULL) ) {
+        int ierr = MPI_Wait(&(recvbuf[n].flux_req[m]), MPI_STATUS_IGNORE);
         if (ierr != MPI_SUCCESS) {no_errors=false;}
       }
     }
@@ -183,8 +183,8 @@ TaskStatus MeshBoundaryValues::ClearFluxSend() {
     for (int n=0; n<nnghbr; ++n) {
       if ( (nghbr.h_view(m,n).gid >= 0) &&
            (nghbr.h_view(m,n).rank != global_variable::my_rank) &&
-           (send_buf[n].flux_req[m] != MPI_REQUEST_NULL) ) {
-        int ierr = MPI_Wait(&(send_buf[n].flux_req[m]), MPI_STATUS_IGNORE);
+           (sendbuf[n].flux_req[m] != MPI_REQUEST_NULL) ) {
+        int ierr = MPI_Wait(&(sendbuf[n].flux_req[m]), MPI_STATUS_IGNORE);
         if (ierr != MPI_SUCCESS) {no_errors=false;}
       }
     }

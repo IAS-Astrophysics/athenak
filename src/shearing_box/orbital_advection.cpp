@@ -111,8 +111,6 @@ TaskStatus ShearingBox::PackAndSendCC_Orb(DvceArray5D<Real> &a) {
 #if MPI_PARALLEL_ENABLED
   // Send boundary buffer to neighboring MeshBlocks using MPI
   Kokkos::fence();
-  int my_rank = global_variable::my_rank;
-  auto &nghbr = pmy_pack->pmb->nghbr;
   bool no_errors=true;
   for (int m=0; m<nmb; ++m) {
     for (int n=8; n<=12; n+=4) {
@@ -126,11 +124,12 @@ TaskStatus ShearingBox::PackAndSendCC_Orb(DvceArray5D<Real> &a) {
           int tag = CreateBvals_MPI_Tag(lid, dn);
 
           // get ptr to send buffer when neighbor is at coarser/same/fine level
-          int data_size = nvar*send_buf[n].isame_ndat;
-          auto send_ptr = Kokkos::subview(send_buf[n].vars, m, Kokkos::ALL);
+          auto send_ptr = Kokkos::subview(sbuf[n].vars, m, Kokkos::ALL, Kokkos::ALL,
+                                          Kokkos::ALL, Kokkos::ALL);
+          int data_size = send_ptr.size();
 
           int ierr = MPI_Isend(send_ptr.data(), data_size, MPI_ATHENA_REAL, drank, tag,
-                               comm_orb, &(send_buf[n].vars_req_orb[m]));
+                               comm_orb, &(sbuf[n].vars_req[m]));
           if (ierr != MPI_SUCCESS) {no_errors=false;}
         }
       }

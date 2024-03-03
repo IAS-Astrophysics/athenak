@@ -63,6 +63,11 @@ class ShearingBox {
   // data buffers for orbital advection. Only two x2-faces communicate
   ShearingBoxBuffer sendbuf_orb[2], recvbuf_orb[2];
 
+#if MPI_PARALLEL_ENABLED
+  // unique MPI communicators for orbital advection and shearing box
+  MPI_Comm comm_orb;
+#endif
+
   // functions...
   // functions to communicate CC data with orbital advection
   TaskStatus PackAndSendCC_Orb(DvceArray5D<Real> &a);

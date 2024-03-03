@@ -115,7 +115,7 @@ class MeshBoundaryValues {
   // data for all 56 buffers in most general 3D case. Not all elements used in most cases.
   // However each MeshBoundaryBuffer is lightweight, so the convenience of fixed array
   // sizes and index values for array elements outweighs cost of extra memory.
-  MeshBoundaryBuffer send_buf[56], recv_buf[56];
+  MeshBoundaryBuffer sendbuf[56], recvbuf[56];
 
   // constant inflow states at each face, initialized in problem generator
   DualArray2D<Real> u_in, b_in, i_in;

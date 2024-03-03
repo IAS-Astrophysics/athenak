@@ -83,10 +83,6 @@ MeshBoundaryValues::~MeshBoundaryValues() {
     delete [] recvbuf[n].vars_req;
     delete [] recvbuf[n].flux_req;
   }
-  for (int n=0; n<2; ++n) {
-    delete [] sendbuf_orb[n].vars_req;
-    delete [] recvbuf_orb[n].vars_req;
-  }
 #endif
 }
 
