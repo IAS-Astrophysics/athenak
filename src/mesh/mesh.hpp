@@ -84,7 +84,6 @@ class Mesh;
 #include "meshblock_pack.hpp"
 #include "meshblock_tree.hpp"
 #include "mesh_refinement.hpp"
-#include "shearing_box/shearing_box.hpp"
 
 //----------------------------------------------------------------------------------------
 //! \class Mesh
@@ -138,7 +137,6 @@ class Mesh {
   MeshBlockPack* pmb_pack;                // container for MeshBlocks on this rank
   std::unique_ptr<ProblemGenerator> pgen; // class containing functions to set ICs
   MeshRefinement *pmr=nullptr;            // mesh refinement data/functions (if needed)
-  shearing_box::ShearingBox *psb=nullptr; // shearing box data/functions (if needed)
 
   // functions
   void BuildTreeFromScratch(ParameterInput *pin);

@@ -40,7 +40,7 @@ void BoundaryValuesCC::ConsToPrimCoarseBndry(const DvceArray5D<Real> &cons,
 
   auto &nghbr = pmy_pack->pmb->nghbr;
   auto &mblev = pmy_pack->pmb->mb_lev;
-  auto &rbuf = recv_buf;
+  auto &rbuf = recvbuf;
   auto &indcs  = pmy_pack->pmesh->mb_indcs;
   const bool multi_d = pmy_pack->pmesh->multi_d;
   const bool three_d = pmy_pack->pmesh->three_d;
@@ -195,7 +195,7 @@ void BoundaryValuesCC::PrimToConsFineBndry(const DvceArray5D<Real> &prim,
 
   auto &nghbr = pmy_pack->pmb->nghbr;
   auto &mblev = pmy_pack->pmb->mb_lev;
-  auto &rbuf = recv_buf;
+  auto &rbuf = recvbuf;
   auto &indcs  = pmy_pack->pmesh->mb_indcs;
   const bool multi_d = pmy_pack->pmesh->multi_d;
   const bool three_d = pmy_pack->pmesh->three_d;
@@ -308,7 +308,7 @@ void BoundaryValuesCC::ConsToPrimCoarseBndry(const DvceArray5D<Real> &cons,
 
   auto &nghbr = pmy_pack->pmb->nghbr;
   auto &mblev = pmy_pack->pmb->mb_lev;
-  auto &rbuf = recv_buf;
+  auto &rbuf = recvbuf;
   auto &indcs  = pmy_pack->pmesh->mb_indcs;
   const bool multi_d = pmy_pack->pmesh->multi_d;
   const bool three_d = pmy_pack->pmesh->three_d;
@@ -470,7 +470,7 @@ void BoundaryValuesCC::PrimToConsFineBndry(const DvceArray5D<Real> &prim,
 
   auto &nghbr = pmy_pack->pmb->nghbr;
   auto &mblev = pmy_pack->pmb->mb_lev;
-  auto &rbuf = recv_buf;
+  auto &rbuf = recvbuf;
   auto &indcs  = pmy_pack->pmesh->mb_indcs;
   const bool multi_d = pmy_pack->pmesh->multi_d;
   const bool three_d = pmy_pack->pmesh->three_d;

@@ -36,7 +36,7 @@ void BoundaryValuesCC::FillCoarseInBndryCC(DvceArray5D<Real> &a, DvceArray5D<Rea
   int nmnv = nmb*nnghbr*nvar;
   auto &nghbr = pmy_pack->pmb->nghbr;
   auto &mblev = pmy_pack->pmb->mb_lev;
-  auto &rbuf = recv_buf;
+  auto &rbuf = recvbuf;
   auto &indcs  = pmy_pack->pmesh->mb_indcs;
   const bool multi_d = pmy_pack->pmesh->multi_d;
   const bool three_d = pmy_pack->pmesh->three_d;
@@ -142,7 +142,7 @@ void BoundaryValuesCC::ProlongateCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca)
   int nmnv = nmb*nnghbr*nvar;
   auto &nghbr = pmy_pack->pmb->nghbr;
   auto &mblev = pmy_pack->pmb->mb_lev;
-  auto &rbuf = recv_buf;
+  auto &rbuf = recvbuf;
   auto &indcs  = pmy_pack->pmesh->mb_indcs;
   const bool multi_d = pmy_pack->pmesh->multi_d;
   const bool three_d = pmy_pack->pmesh->three_d;
@@ -231,7 +231,7 @@ void BoundaryValuesFC::FillCoarseInBndryFC(DvceFaceFld4D<Real> &b,
 
   if (multi_d) {
     int nmnv = 3*nmb*nnghbr;
-    auto &rbuf = recv_buf;
+    auto &rbuf = recvbuf;
     auto &cis = indcs.cis;
     auto &cjs = indcs.cjs;
     auto &cks = indcs.cks;
@@ -327,7 +327,7 @@ void BoundaryValuesFC::ProlongateFC(DvceFaceFld4D<Real> &b, DvceFaceFld4D<Real> 
 
   // Outer loop over (# of MeshBlocks)*(# of buffers)*(three field components)
   {int nmnv = 3*nmb*nnghbr;
-  auto &rbuf = recv_buf;
+  auto &rbuf = recvbuf;
   Kokkos::TeamPolicy<> policy(DevExeSpace(), nmnv, Kokkos::AUTO);
   Kokkos::parallel_for("ProFC-2d-shared", policy, KOKKOS_LAMBDA(TeamMember_t tmember) {
     const int m = (tmember.league_rank())/(3*nnghbr);
@@ -382,7 +382,7 @@ void BoundaryValuesFC::ProlongateFC(DvceFaceFld4D<Real> &b, DvceFaceFld4D<Real> 
   // Outer loop over (# of MeshBlocks)*(# of buffers)
   {int nmn = nmb*nnghbr;
   bool &one_d = pmy_pack->pmesh->one_d;
-  auto &rbuf = recv_buf;
+  auto &rbuf = recvbuf;
   Kokkos::TeamPolicy<> policy(DevExeSpace(), nmn, Kokkos::AUTO);
   Kokkos::parallel_for("ProFC-2d-int", policy, KOKKOS_LAMBDA(TeamMember_t tmember) {
     const int m = (tmember.league_rank())/(nnghbr);

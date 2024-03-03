@@ -62,25 +62,10 @@ BoundaryValues::BoundaryValues(MeshBlockPack *pp, ParameterInput *pin, bool z4c)
     recvbuf[n].iflxc_ndat = 0;
   }
 
-  // For shearing box, communication is only with x2-face neighbors
-  // initialize vectors of MPI request in 2 elements of fixed length arrays
-#if MPI_PARALLEL_ENABLED
-  for (int n=0; n<2; ++n) {
-    int nmb = std::max((pmy_pack->nmb_thispack), (pmy_pack->pmesh->nmb_maxperrank));
-    sendbuf_orb[n].vars_req = new MPI_Request[nmb];
-    recvbuf_orb[n].vars_req = new MPI_Request[nmb];
-    for (int m=0; m<nmb; ++m) {
-      sendbuf_orb[n].vars_req[m] = MPI_REQUEST_NULL;
-      recvbuf_orb[n].vars_req[m] = MPI_REQUEST_NULL;
-    }
-  }
-#endif
-
 #if MPI_PARALLEL_ENABLED
   // create unique communicators for variables and fluxes in this BoundaryValues object
   MPI_Comm_dup(MPI_COMM_WORLD, &comm_vars);
   MPI_Comm_dup(MPI_COMM_WORLD, &comm_flux);
-  MPI_Comm_dup(MPI_COMM_WORLD, &comm_orb);
 #endif
 }
 

@@ -90,21 +90,6 @@ struct BoundaryBuffer {
   }
 };
 
-//----------------------------------------------------------------------------------------
-//! \struct ShearingBoxBuffer
-//! \brief container for storage for boundary buffers with the shearing box
-//! Basically a much simplified version of the BoundaryBuffer struct.
-
-struct ShearingBoxBuffer {
-  // 5D Views that store buffer data on device
-  DvceArray5D<Real> vars;
-#if MPI_PARALLEL_ENABLED
-  // vectors of length (number of MBs) to hold MPI requests
-  // Using STL vector causes problems with some GPU compilers, so just use plain C array
-  MPI_Request *vars_req;
-#endif
-};
-
 // Forward declarations
 class MeshBlockPack;
 
@@ -120,17 +105,14 @@ class BoundaryValues {
   // data for all 56 buffers in most general 3D case. Not all elements used in most cases.
   // However each BoundaryBuffer is lightweight, so the convenience of fixed array
   // sizes and index values for array elements outweighs cost of extra memory.
-  BoundaryBuffer send_buf[56], recv_buf[56];
-
-  // data buffers for orbital advection. Only two x2-faces communicate
-  ShearingBoxBuffer sendbuf_orb[2], recvbuf_orb[2];
+  BoundaryBuffer sendbuf[56], recvbuf[56];
 
   // constant inflow states at each face, initialized in problem generator
   DualArray2D<Real> u_in, b_in, i_in;
 
 #if MPI_PARALLEL_ENABLED
-  // unique MPI communicators for each case (variables/fluxes/orbital-advection)
-  MPI_Comm comm_vars, comm_flux, comm_orb;
+  // unique MPI communicators for each case (variables/fluxes)
+  MPI_Comm comm_vars, comm_flux;
 #endif
 
   //functions
@@ -176,9 +158,6 @@ class BoundaryValuesCC : public BoundaryValues {
   // functions to communicate fluxes of CC data
   TaskStatus PackAndSendFluxCC(DvceFaceFld5D<Real> &flx);
   TaskStatus RecvAndUnpackFluxCC(DvceFaceFld5D<Real> &flx);
-  // functions to communicate CC data with orbital advection
-  TaskStatus PackAndSendCC_Orb(DvceArray5D<Real> &a);
-  TaskStatus RecvAndUnpackCC_Orb(DvceArray5D<Real> &a, ReconstructionMethod rcon);
 
   // functions to prolongate conserved and primitive CC variables
   void FillCoarseInBndryCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca);

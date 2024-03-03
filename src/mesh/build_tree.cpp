@@ -299,11 +299,6 @@ void Mesh::BuildTreeFromScratch(ParameterInput *pin) {
     pmr = new MeshRefinement(this, pin);
   }
 
-  // Create new ShearingBox object if <shearing_box> block exists in input file
-  if (pin->DoesBlockExist("shearing_box")) {
-    psb = new shearing_box::ShearingBox(this, pin);
-  }
-
   // set initial time/cycle parameters, output diagnostics
   time = pin->GetOrAddReal("time", "start_time", 0.0);
   dt   = std::numeric_limits<float>::max();
@@ -486,11 +481,6 @@ void Mesh::BuildTreeFromRestart(ParameterInput *pin, IOWrapper &resfile) {
   // Create new MeshRefinement object with either SMR or AMR (SMR needs Restrict fns)
   if (multilevel) {
     pmr = new MeshRefinement(this, pin);
-  }
-
-  // Create new ShearingBox object if <shearing_box> block exists in input file
-  if (pin->DoesBlockExist("shearing_box")) {
-    psb = new shearing_box::ShearingBox(this, pin);
   }
 
   // set remaining parameters, output diagnostics

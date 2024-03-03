@@ -17,7 +17,6 @@ add_executable(
         bvals/buffs_cc.cpp
         bvals/buffs_fc.cpp
         bvals/bvals_cc.cpp
-        bvals/bvals_cc_orb.cpp
         bvals/bvals_fc.cpp
         bvals/flux_correct_cc.cpp
         bvals/flux_correct_fc.cpp
@@ -76,6 +75,7 @@ add_executable(
         mhd/mhd_tasks.cpp
         mhd/mhd_update.cpp
 
+        shearing_box/orbital_advection.cpp
         shearing_box/shearing_box.cpp
 
         z4c/z4c.cpp
