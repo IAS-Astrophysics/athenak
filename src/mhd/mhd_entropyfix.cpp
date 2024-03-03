@@ -88,15 +88,15 @@ void MHD::EntropyReset() {
     //   }
     // }
 
-    if (use_ko_dissipation_) {
-      if (ko_dissipation_(m,k,j,i)) {
-        u0_(m,entropyIdx,k,j,i) = 1;
-        w0_(m,entropyIdx,k,j,i) = 1;
-      } else {
-        u0_(m,entropyIdx,k,j,i) = -1;
-        w0_(m,entropyIdx,k,j,i) = -1;
-      }
-    }
+    // if (use_ko_dissipation_) {
+    //   if (ko_dissipation_(m,k,j,i)) {
+    //     u0_(m,entropyIdx,k,j,i) = 1;
+    //     w0_(m,entropyIdx,k,j,i) = 1;
+    //   } else {
+    //     u0_(m,entropyIdx,k,j,i) = -1;
+    //     w0_(m,entropyIdx,k,j,i) = -1;
+    //   }
+    // }
 
     // what to do with coarse_u0 ???
   });

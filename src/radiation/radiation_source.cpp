@@ -62,7 +62,7 @@ TaskStatus Radiation::AddRadiationSourceTerm(Driver *pdriver, int stage) {
   auto &cellavg_rad_source_ = cellavg_rad_source;
   auto &tgas_radsource_ = tgas_radsource; // for saving final gas temperature
   Real sigma_cold_cut_ = (is_mhd_enabled_) ? pmy_pack->pmhd->sigma_cold_cut : 1.e3;
-  bool &turn_on_sao_radsrc_ = true;
+  bool turn_on_sao_radsrc_ = true;
 
   // Extract coordinate/excision data
   auto &coord = pmy_pack->pcoord->coord_data;
@@ -99,7 +99,7 @@ TaskStatus Radiation::AddRadiationSourceTerm(Driver *pdriver, int stage) {
   } else if (is_mhd_enabled_) {
     gm1 = pmy_pack->pmhd->peos->eos_data.gamma - 1.0;
     v_sq_max = 1. - 1./SQR(pmy_pack->pmhd->peos->eos_data.gamma_max);
-    pfloor = pmy_pack->pmhd->peos->eos_data.pfloor; 
+    pfloor = pmy_pack->pmhd->peos->eos_data.pfloor;
   }
 
   // Extract flag and index for entropy fix
@@ -662,12 +662,12 @@ TaskStatus Radiation::AddRadiationSourceTerm(Driver *pdriver, int stage) {
           m_new[3] += (n_3*i0_(m,n,k,j,i)/n_0*solid_angles_.d_view(n));
 
           // try the ad hoc fix for the regime of high tgas + high radiation pressure
-          if (tgas*inv_t_electron_ > 1) {
-            Real part1 = suma1/inv_t_electron_ * (arad_*SQR(SQR(tradnew)));
-            Real part2 = wdn/gm1/inv_t_electron_;
-            Real frac = part1/(part1+part2);
-            tgasnew = frac*tradnew + (1-frac)*tgas;
-          }
+          // if (tgas*inv_t_electron_ > 1) {
+          //   Real part1 = suma1/inv_t_electron_ * (arad_*SQR(SQR(tradnew)));
+          //   Real part2 = wdn/gm1/inv_t_electron_;
+          //   Real frac = part1/(part1+part2);
+          //   tgasnew = frac*tradnew + (1-frac)*tgas;
+          // }
 
           // record radiation internal energy change
           if (turn_on_sao_radsrc_) {
