@@ -8,6 +8,8 @@
 
 #include <cstdlib>
 #include <iostream>
+#include <utility>
+#include <memory>
 
 #include "athena.hpp"
 #include "parameter_input.hpp"
@@ -15,14 +17,15 @@
 #include "driver/driver.hpp"
 #include "hydro/hydro.hpp"
 #include "mhd/mhd.hpp"
+#include "ion-neutral/ion-neutral.hpp"
 #include "adm/adm.hpp"
 #include "z4c/z4c.hpp"
 #include "z4c/z4c_puncture_tracker.hpp"
-#include "ion-neutral/ion_neutral.hpp"
 #include "diffusion/viscosity.hpp"
 #include "diffusion/resistivity.hpp"
 #include "radiation/radiation.hpp"
 #include "srcterms/turb_driver.hpp"
+#include "particles/particles.hpp"
 #include "units/units.hpp"
 #include "meshblock_pack.hpp"
 
@@ -34,6 +37,12 @@ MeshBlockPack::MeshBlockPack(Mesh *pm, int igids, int igide) :
   gids(igids),
   gide(igide),
   nmb_thispack(igide - igids + 1) {
+  // create map for task lists
+  tl_map.insert(std::make_pair("before_timeintegrator",std::make_shared<TaskList>()));
+  tl_map.insert(std::make_pair("after_timeintegrator",std::make_shared<TaskList>()));
+  tl_map.insert(std::make_pair("before_stagen",std::make_shared<TaskList>()));
+  tl_map.insert(std::make_pair("stagen",std::make_shared<TaskList>()));
+  tl_map.insert(std::make_pair("after_stagen",std::make_shared<TaskList>()));
 }
 
 //----------------------------------------------------------------------------------------
@@ -54,6 +63,7 @@ MeshBlockPack::~MeshBlockPack() {
     }
     pz4c_ptracker.resize(0);
   }
+  if (ppart  != nullptr) {delete ppart;}
   // must be last, since it calls ~BoundaryValues() which (MPI) uses pmy_pack->pmb->nnghbr
   delete pmb;
 }
@@ -86,7 +96,7 @@ void MeshBlockPack::AddPhysics(ParameterInput *pin) {
   int nphysics = 0;
   TaskID none(0);
 
-  // (1) Units
+  // (1) Units.  Create first so that they can be used in other physics constructors
   // Default units are simply code units
   if (pin->DoesBlockExist("units")) {
     punit = new units::Units(pin);
@@ -101,7 +111,7 @@ void MeshBlockPack::AddPhysics(ParameterInput *pin) {
     phydro = new hydro::Hydro(this, pin);
     nphysics++;
     if (!(pin->DoesBlockExist("mhd")) && !(pin->DoesBlockExist("radiation"))) {
-      phydro->AssembleHydroTasks(start_tl, run_tl, end_tl);
+      phydro->AssembleHydroTasks(tl_map);
     }
   } else {
     phydro = nullptr;
@@ -113,7 +123,7 @@ void MeshBlockPack::AddPhysics(ParameterInput *pin) {
     pmhd = new mhd::MHD(this, pin);
     nphysics++;
     if (!(pin->DoesBlockExist("hydro")) && !(pin->DoesBlockExist("radiation"))) {
-      pmhd->AssembleMHDTasks(start_tl, run_tl, end_tl);
+      pmhd->AssembleMHDTasks(tl_map);
     }
   } else {
     pmhd = nullptr;
@@ -125,7 +135,7 @@ void MeshBlockPack::AddPhysics(ParameterInput *pin) {
   if (pin->DoesBlockExist("ion-neutral")) {
     pionn = new ion_neutral::IonNeutral(this, pin);   // construct new MHD object
     if (pin->DoesBlockExist("hydro") && pin->DoesBlockExist("mhd")) {
-      pionn->AssembleIonNeutralTasks(start_tl, run_tl, end_tl);
+      pionn->AssembleIonNeutralTasks(tl_map);
       nphysics++;
     } else {
       std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
@@ -149,7 +159,7 @@ void MeshBlockPack::AddPhysics(ParameterInput *pin) {
   if (pin->DoesBlockExist("radiation")) {
     prad = new radiation::Radiation(this, pin);
     nphysics++;
-    prad->AssembleRadiationTasks(start_tl, run_tl, end_tl);
+    prad->AssembleRadTasks(tl_map);
   } else {
     prad = nullptr;
   }
@@ -162,8 +172,8 @@ void MeshBlockPack::AddPhysics(ParameterInput *pin) {
   // task lists respectively.
   if (pin->DoesBlockExist("turb_driving")) {
     pturb = new TurbulenceDriver(this, pin);
-    pturb->IncludeInitializeModesTask(operator_split_tl, none);
-    pturb->IncludeAddForcingTask(run_tl, none);
+    pturb->IncludeInitializeModesTask(tl_map["before_timeintegrator"], none);
+    pturb->IncludeAddForcingTask(tl_map["stagen"], none);
   } else {
     pturb = nullptr;
   }
@@ -172,7 +182,7 @@ void MeshBlockPack::AddPhysics(ParameterInput *pin) {
   // Create Z4c and ADM physics module.
   if (pin->DoesBlockExist("z4c")) {
     pz4c = new z4c::Z4c(this, pin);
-    pz4c->AssembleZ4cTasks(start_tl, run_tl, end_tl);
+    pz4c->AssembleZ4cTasks(tl_map);
     padm = new adm::ADM(this, pin);
     // init puncture tracker
     int npunct = pin->GetOrAddInteger("z4c", "npunct", 0);
@@ -193,12 +203,14 @@ void MeshBlockPack::AddPhysics(ParameterInput *pin) {
     }
   }
 
-  // Units
-  // Default units are cgs units
-  if (pin->DoesBlockExist("units")) {
-    punit = new units::Units(pin);
+  // (8) PARTICLES
+  // Create particles module.  Create tasklist.
+  if (pin->DoesBlockExist("particles")) {
+    ppart = new particles::Particles(this, pin);
+    ppart->AssembleTasks(tl_map);
+    nphysics++;
   } else {
-    punit = nullptr;
+    ppart = nullptr;
   }
 
   // Check that at least ONE is requested and initialized.

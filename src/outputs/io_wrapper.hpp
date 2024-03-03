@@ -8,6 +8,7 @@
 //! \file io_wrapper.hpp
 //  \brief defines a set of small wrapper functions for MPI versus serial outputs.
 
+#include <string>
 #include <cstdio>
 #include "athena.hpp"
 
@@ -30,7 +31,7 @@ class IOWrapper {
 #endif
   ~IOWrapper() {}
   // nested type definition of strongly typed/scoped enum in class definition
-  enum class FileMode {read, write};
+  enum class FileMode {read, write, append};
 
   // wrapper functions for basic I/O tasks
   int Open(const char* fname, FileMode rw);
@@ -39,17 +40,14 @@ class IOWrapper {
                             IOWrapperSizeT offset);
   std::size_t Read_bytes_at_all(void *buf, IOWrapperSizeT size, IOWrapperSizeT count,
                                 IOWrapperSizeT offset);
-  std::size_t Write_bytes(const void *buf, IOWrapperSizeT size, IOWrapperSizeT count);
-  std::size_t Write_bytes_at(const void *buf, IOWrapperSizeT size, IOWrapperSizeT count,
-                             IOWrapperSizeT offset);
-  std::size_t Write_bytes_at_all(const void *buf,IOWrapperSizeT size,IOWrapperSizeT count,
-                                 IOWrapperSizeT offset);
+  std::size_t Write_any_type(const void *buf, IOWrapperSizeT count, std::string type);
+  std::size_t Write_any_type_at(const void *buf, IOWrapperSizeT count,
+                                IOWrapperSizeT offset, std::string type);
+  std::size_t Write_any_type_at_all(const void *buf, IOWrapperSizeT count,
+                                    IOWrapperSizeT offset, std::string type);
   std::size_t Read_Reals(void *buf, IOWrapperSizeT count);
   std::size_t Read_Reals_at(void *buf, IOWrapperSizeT count, IOWrapperSizeT offset);
   std::size_t Read_Reals_at_all(void *buf, IOWrapperSizeT count, IOWrapperSizeT offset);
-  std::size_t Write_Reals(const void *buf, IOWrapperSizeT count);
-  std::size_t Write_Reals_at(const void *buf, IOWrapperSizeT cnt, IOWrapperSizeT off);
-  std::size_t Write_Reals_at_all(const void *buf, IOWrapperSizeT cnt, IOWrapperSizeT off);
   int Close();
   int Seek(IOWrapperSizeT offset);
   IOWrapperSizeT GetPosition();

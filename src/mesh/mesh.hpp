@@ -121,6 +121,9 @@ class Mesh {
   int root_level; // logical level of root (physical) grid (e.g. Fig. 3 of method paper)
   int max_level;  // logical level of maximum refinement grid in Mesh
 
+  int nprtcl_thisrank;     // number of particles this rank
+  int nprtcl_total;        // total number of particles across all ranks
+
   // following 3x arrays allocated with length [nmb_total] in BuildTreeFromXXXX()
   float *cost_eachmb;            // cost of each MeshBlock
   int *rank_eachmb;              // rank of each MeshBlock
@@ -129,11 +132,14 @@ class Mesh {
   // following 2x arrays allocated with length [nranks] in BuildTreeFromXXXX()
   int *gids_eachrank;      // starting global ID of MeshBlocks in each rank
   int *nmb_eachrank;       // number of MeshBlocks on each rank
+  // following 1x arrays allocated with length [nranks] in AddCoordinatesAndPhysics()
+  int *nprtcl_eachrank;    // number of particles on each rank
 
   Real time, dt, cfl_no;
   int ncycle;
   EventCounters ecounter;
 
+  int nmb_packs_thisrank;                  // number of MBPacks on this rank
   MeshBlockPack* pmb_pack;                 // container for MeshBlocks on this rank
   std::unique_ptr<ProblemGenerator> pgen;  // class containing functions to set ICs
   MeshRefinement *pmr=nullptr;             // mesh refinement data/functions (if needed)
@@ -144,6 +150,7 @@ class Mesh {
   void PrintMeshDiagnostics();
   void WriteMeshStructure();
   void NewTimeStep(const Real tlim);
+  void AddCoordinatesAndPhysics(ParameterInput *pinput);
   BoundaryFlag GetBoundaryFlag(const std::string& input_string);
   std::string GetBoundaryString(BoundaryFlag input_flag);
 

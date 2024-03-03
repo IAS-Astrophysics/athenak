@@ -276,9 +276,7 @@ int main(int argc, char *argv[]) {
   // Note these steps must occur after Mesh (including MeshBlocks and MeshBlockPack)
   // is fully constructed.
 
-  ChangeRunDir(run_dir);
-  pmesh->pmb_pack->AddCoordinates(pinput);
-  pmesh->pmb_pack->AddPhysics(pinput);
+  pmesh->AddCoordinatesAndPhysics(pinput);
   if (!res_flag) {
     // set ICs using ProblemGenerator constructor for new runs
     pmesh->pgen = std::make_unique<ProblemGenerator>(pinput, pmesh);

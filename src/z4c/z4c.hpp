@@ -7,8 +7,11 @@
 //========================================================================================
 //! \file z4c.hpp
 //! \brief definitions for Z4c class
+
+#include <map>
 #include <memory>    // make_unique, unique_ptr
-#include <vector>    // vector
+#include <string>
+#include <vector>
 #include "athena.hpp"
 #include "utils/finite_diff.hpp"
 #include "parameter_input.hpp"
@@ -204,7 +207,7 @@ class Z4c {
   Real last_output_time;
 
   // functions
-  void AssembleZ4cTasks(TaskList &start, TaskList &run, TaskList &end);
+  void AssembleZ4cTasks(std::map<std::string, std::shared_ptr<TaskList>> tl);
   TaskStatus InitRecv(Driver *d, int stage);
   TaskStatus ClearRecv(Driver *d, int stage);
   TaskStatus ClearSend(Driver *d, int stage);

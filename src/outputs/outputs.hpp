@@ -19,7 +19,7 @@
     #error NHISTORY > NREDUCTION in outputs.hpp
 #endif
 
-#define NOUTPUT_CHOICES 142
+#define NOUTPUT_CHOICES 144
 // choices for output variables used in <ouput> blocks in input file
 // TO ADD MORE CHOICES:
 //   - add more strings to array below, change NOUTPUT_CHOICES above appropriately
@@ -75,6 +75,8 @@ static const char *var_choice[NOUTPUT_CHOICES] = {
   "mat_Sx", "mat_Sy", "mat_Sz",
   "mat_Sxx", "mat_Sxy", "mat_Sxz", "mat_Syy", "mat_Syz", "mat_Szz",
   "mat",
+
+  "prtcl_all", "prtcl_d"
 };
 
 // forward declarations
@@ -83,24 +85,25 @@ class ParameterInput;
 
 //----------------------------------------------------------------------------------------
 //! \struct OutputParameters
-//  \brief  container for parameters read from <output> block in the input file
+//  \brief container for parameters read from <output> block in the input file by the
+//  Outputs constructor.
 
 struct OutputParameters {
   int block_number;
   std::string block_name;
-  std::string file_basename;
-  std::string file_id;
-  std::string file_type;
-  std::string variable;
-  std::string data_format;
   Real last_time, dt;
-  int dcycle;  // enables outputs every 'dcycle'
+  int dcycle;                 // enables outputs every 'dcycle'
   int file_number;
-  int gid;
+  std::string file_basename;
+  std::string file_type;
+  std::string file_id;
+  std::string variable;
   bool include_gzs;
+  int gid;
   bool slice1, slice2, slice3;
   Real slice_x1, slice_x2, slice_x3;
   bool user_hist_only;
+  std::string data_format;
   bool contains_derived=false;
 };
 
@@ -149,12 +152,22 @@ struct HistoryData {
 };
 
 //----------------------------------------------------------------------------------------
+//! \struct TrackedParticleData
+//! \brief data (tag, pos, vel) output for tracked particles
+
+struct TrackedParticleData {
+  int tag;
+  Real x,y,z;
+  Real vx,vy,vz;
+};
+
+//----------------------------------------------------------------------------------------
 // \brief abstract base class for different output types (modes/formats); node in
 //        std::list of BaseTypeOutput created & stored in the Outputs class
 
 class BaseTypeOutput {
  public:
-  BaseTypeOutput(OutputParameters oparams, Mesh *pm);
+  BaseTypeOutput(ParameterInput *pin, Mesh *pm, OutputParameters oparams);
   virtual ~BaseTypeOutput() = default;
   // copy constructor and assignment operator
   BaseTypeOutput(const BaseTypeOutput& copy_other) = default;
@@ -173,6 +186,19 @@ class BaseTypeOutput {
   // virtual functions may be over-ridden in derived classes
   virtual void LoadOutputData(Mesh *pm);
   virtual void WriteOutputFile(Mesh *pm, ParameterInput *pin) = 0;
+
+  // Functions to detect big endian machine, and to byte-swap 32-bit words.  The vtk
+  // legacy format requires data to be stored as big-endian.
+  int IsBigEndian() {
+    std::int32_t n = 1;
+    char *ep = reinterpret_cast<char *>(&n);
+    return (*ep == 0); // Returns 1 (true) on a big endian machine
+  }
+  inline void Swap4Bytes(void *vdat) {
+    char tmp, *dat = static_cast<char *>(vdat);
+    tmp = dat[0];  dat[0] = dat[3];  dat[3] = tmp;
+    tmp = dat[1];  dat[1] = dat[2];  dat[2] = tmp;
+  }
 
  protected:
   // CC output data on host with dims (n,m,k,j,i) except
@@ -199,7 +225,7 @@ class BaseTypeOutput {
 
 class FormattedTableOutput : public BaseTypeOutput {
  public:
-  FormattedTableOutput(OutputParameters oparams, Mesh *pm);
+  FormattedTableOutput(ParameterInput *pin, Mesh *pm, OutputParameters oparams);
   void WriteOutputFile(Mesh *pm, ParameterInput *pin) override;
 };
 
@@ -209,7 +235,7 @@ class FormattedTableOutput : public BaseTypeOutput {
 
 class HistoryOutput : public BaseTypeOutput {
  public:
-  HistoryOutput(OutputParameters oparams, Mesh *pm);
+  HistoryOutput(ParameterInput *pin, Mesh *pm, OutputParameters oparams);
 
   // vector of length [# of physics modules] containing hdata arrays
   std::vector<HistoryData> hist_data;
@@ -222,22 +248,38 @@ class HistoryOutput : public BaseTypeOutput {
 };
 
 //----------------------------------------------------------------------------------------
-//! \class VTKOutput
-//  \brief derived BaseTypeOutput class for vtk binary data (VTK legacy format)
+//! \class MeshVTKOutput
+//  \brief derived BaseTypeOutput class for mesh data in VTK (legacy) format
 
-class VTKOutput : public BaseTypeOutput {
+class MeshVTKOutput : public BaseTypeOutput {
  public:
-  VTKOutput(OutputParameters oparams, Mesh *pm);
+  MeshVTKOutput(ParameterInput *pin, Mesh *pm, OutputParameters oparams);
   void WriteOutputFile(Mesh *pm, ParameterInput *pin) override;
 };
 
 //----------------------------------------------------------------------------------------
-//! \class BinaryOutput
-//  \brief derived BaseTypeOutput class for binary grid data (nbf format in pegasus++)
+//! \class ParticleVTKOutput
+//  \brief derived BaseTypeOutput class for particle data in VTK (legacy) format
 
-class BinaryOutput : public BaseTypeOutput {
+class ParticleVTKOutput : public BaseTypeOutput {
  public:
-  BinaryOutput(OutputParameters oparams, Mesh *pm);
+  ParticleVTKOutput(ParameterInput *pin, Mesh *pm, OutputParameters oparams);
+  void LoadOutputData(Mesh *pm) override;
+  void WriteOutputFile(Mesh *pm, ParameterInput *pin) override;
+ protected:
+  int npout_thisrank;
+  int npout_total;
+  HostArray2D<Real> outpart_rdata;
+  HostArray2D<int>  outpart_idata;
+};
+
+//----------------------------------------------------------------------------------------
+//! \class MeshBinaryOutput
+//  \brief derived BaseTypeOutput class for binary mesh data (nbf format in pegasus++)
+
+class MeshBinaryOutput : public BaseTypeOutput {
+ public:
+  MeshBinaryOutput(ParameterInput *pin, Mesh *pm, OutputParameters oparams);
   void WriteOutputFile(Mesh *pm, ParameterInput *pin) override;
 };
 
@@ -247,7 +289,7 @@ class BinaryOutput : public BaseTypeOutput {
 
 class RestartOutput : public BaseTypeOutput {
  public:
-  RestartOutput(OutputParameters oparams, Mesh *pm);
+  RestartOutput(ParameterInput *pin, Mesh *pm, OutputParameters oparams);
   void LoadOutputData(Mesh *pm) override;
   void WriteOutputFile(Mesh *pm, ParameterInput *pin) override;
 };
@@ -258,7 +300,7 @@ class RestartOutput : public BaseTypeOutput {
 
 class EventLogOutput : public BaseTypeOutput {
  public:
-  EventLogOutput(OutputParameters oparams, Mesh *pm);
+  EventLogOutput(ParameterInput *pin, Mesh *pm, OutputParameters oparams);
 
   // various flags to denote output status
   bool header_written=false;
@@ -266,6 +308,24 @@ class EventLogOutput : public BaseTypeOutput {
 
   void LoadOutputData(Mesh *pm) override;
   void WriteOutputFile(Mesh *pm, ParameterInput *pin) override;
+};
+
+//----------------------------------------------------------------------------------------
+//! \class TrackedParticleOutput
+//  \brief derived BaseTypeOutput class for tracked particle data in binary format
+
+class TrackedParticleOutput : public BaseTypeOutput {
+ public:
+  TrackedParticleOutput(ParameterInput *pin, Mesh *pm, OutputParameters oparams);
+  void LoadOutputData(Mesh *pm) override;
+  void WriteOutputFile(Mesh *pm, ParameterInput *pin) override;
+ protected:
+  int ntrack;           // total number of tracked particles across all ranks
+  int ntrack_thisrank;  // number of tracked particles this rank (guess)
+  int npout;            // number of tracked particles to be written this rank
+  bool header_written;
+  std::vector<int> npout_eachrank;
+  HostArray1D<TrackedParticleData> outpart;
 };
 
 //----------------------------------------------------------------------------------------

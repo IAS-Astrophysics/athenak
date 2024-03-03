@@ -9,6 +9,7 @@
 //  \brief defines turbulence driver class, which implements data and functions for
 //  randomly forced turbulence which evolves via an Ornstein-Uhlenbeck stochastic process
 
+#include <memory>
 
 #include "athena.hpp"
 #include "mesh/mesh.hpp"
@@ -40,8 +41,8 @@ class TurbulenceDriver {
   int driving_type;
 
   // functions
-  void IncludeInitializeModesTask(TaskList &tl, TaskID start);
-  void IncludeAddForcingTask(TaskList &tl, TaskID start);
+  void IncludeInitializeModesTask(std::shared_ptr<TaskList> tl, TaskID start);
+  void IncludeAddForcingTask(std::shared_ptr<TaskList> tl, TaskID start);
   TaskStatus InitializeModes(Driver *pdrive, int stage);
   TaskStatus AddForcing(Driver *pdrive, int stage);
   void Initialize();
