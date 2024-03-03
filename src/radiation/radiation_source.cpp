@@ -95,11 +95,11 @@ TaskStatus Radiation::AddRadiationSourceTerm(Driver *pdriver, int stage) {
   if (is_hydro_enabled_) {
     gm1 = pmy_pack->phydro->peos->eos_data.gamma - 1.0;
     v_sq_max = 1. - 1./SQR(pmy_pack->phydro->peos->eos_data.gamma_max);
-    pfloor = pmy_pack->phydro->peos->eos_data.pfloor
+    pfloor = pmy_pack->phydro->peos->eos_data.pfloor;
   } else if (is_mhd_enabled_) {
     gm1 = pmy_pack->pmhd->peos->eos_data.gamma - 1.0;
     v_sq_max = 1. - 1./SQR(pmy_pack->pmhd->peos->eos_data.gamma_max);
-    pfloor = pmy_pack->pmhd->peos->eos_data.pfloor
+    pfloor = pmy_pack->pmhd->peos->eos_data.pfloor; 
   }
 
   // Extract flag and index for entropy fix
