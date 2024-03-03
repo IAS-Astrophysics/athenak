@@ -62,6 +62,7 @@ TaskStatus Radiation::AddRadiationSourceTerm(Driver *pdriver, int stage) {
   auto &cellavg_rad_source_ = cellavg_rad_source;
   auto &tgas_radsource_ = tgas_radsource; // for saving final gas temperature
   Real sigma_cold_cut_ = (is_mhd_enabled_) ? pmy_pack->pmhd->sigma_cold_cut : 1.e3;
+  bool &turn_on_sao_radsrc_ = true;
 
   // Extract coordinate/excision data
   auto &coord = pmy_pack->pcoord->coord_data;
@@ -89,14 +90,16 @@ TaskStatus Radiation::AddRadiationSourceTerm(Driver *pdriver, int stage) {
   }
 
   // Extract adiabatic index and velocity ceiling
-  Real gm1;
+  Real gm1, pfloor;
   Real v_sq_max = 1. - 1.e-12;
   if (is_hydro_enabled_) {
     gm1 = pmy_pack->phydro->peos->eos_data.gamma - 1.0;
     v_sq_max = 1. - 1./SQR(pmy_pack->phydro->peos->eos_data.gamma_max);
+    pfloor = pmy_pack->phydro->peos->eos_data.pfloor
   } else if (is_mhd_enabled_) {
     gm1 = pmy_pack->pmhd->peos->eos_data.gamma - 1.0;
     v_sq_max = 1. - 1./SQR(pmy_pack->pmhd->peos->eos_data.gamma_max);
+    pfloor = pmy_pack->pmhd->peos->eos_data.pfloor
   }
 
   // Extract flag and index for entropy fix
@@ -257,6 +260,9 @@ TaskStatus Radiation::AddRadiationSourceTerm(Driver *pdriver, int stage) {
            + glower[3][3]*wvz*wvz;
     Real gamma = sqrt(1.0 + q);
     Real u0 = gamma/alpha;
+
+    // radiation internal energy change
+    Real delta_erad_f = 0.0;
 
     // set opacities
     Real sigma_a, sigma_s, sigma_p;
@@ -538,7 +544,11 @@ TaskStatus Radiation::AddRadiationSourceTerm(Driver *pdriver, int stage) {
         Real src = gm1 * (u0*src0+u1*src1+u2*src2+u3*src3) / std::pow(rho, gm1);
         u0_(m,entropyIdx,k,j,i) += src;
       } // endif entropy_fix_
-    } // endif badcell
+
+    } // endif !badcell
+
+    // record radiation internal energy change
+    if (turn_on_sao_radsrc_) delta_erad_f = -wdn*(tgasnew-tgas)/gm1;
 
     // compton scattering
     if (is_compton_enabled_) {
@@ -658,6 +668,30 @@ TaskStatus Radiation::AddRadiationSourceTerm(Driver *pdriver, int stage) {
             Real frac = part1/(part1+part2);
             tgasnew = frac*tradnew + (1-frac)*tgas;
           }
+
+          // record radiation internal energy change
+          if (turn_on_sao_radsrc_) {
+            Real tgas_update = tgasnew;
+            delta_erad_f += -wdn*(tgasnew-tgas)/gm1;
+            Real erad_f_new = arad_*SQR(SQR(tradnew));
+            if (erad_f_new == 0) {
+              tgas_update = sqrt(sqrt(u_tet[0]*delta_erad_f/(arad_*dtcsigp)));
+            } else { // erad_f_new > 0
+              Real chi_ratio = sigma_p/sigma_s;
+              Real coeff4 = 0.25*chi_ratio*arad_/(inv_t_electron_*erad_f_new);
+              Real coeff0 = -(tradnew + 0.25*chi_ratio/inv_t_electron_);
+              coeff0 += -0.25*u_tet[0]/dtcsigs * delta_erad_f/erad_f_new / inv_t_electron_;
+              if (fabs(coeff4) > 1.0e-20) {
+                bool flag = FourthPolyRoot(coeff4, coeff0, tgas_update);
+                if (!(flag) || !(isfinite(tgas_update))) tgas_update = tgasnew;
+              } else {
+                tgas_update = -coeff0;
+              }
+            } // endelse
+            if (wdn*tgas_update < pfloor) tgas_update = tgasnew;
+            // assign the tgas update
+            tgasnew = tgas_update;
+          } // endif turn_on_sao_radsrc_
 
           // handle excision (see notes above)
           if (excise) {
