@@ -18,11 +18,8 @@
 #include "ion-neutral/ion-neutral.hpp"
 #include "adm/adm.hpp"
 #include "z4c/z4c.hpp"
-<<<<<<< HEAD
 #include "z4c/z4c_puncture_tracker.hpp"
 #include "ion-neutral/ion_neutral.hpp"
-=======
->>>>>>> 7f1b8a9a (Added simple particle problem generator that initializes)
 #include "diffusion/viscosity.hpp"
 #include "diffusion/resistivity.hpp"
 #include "radiation/radiation.hpp"
