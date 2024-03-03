@@ -17,6 +17,7 @@
 #include "diffusion/viscosity.hpp"
 #include "diffusion/conduction.hpp"
 #include "srcterms/srcterms.hpp"
+#include "shearing_box/shearing_box.hpp"
 #include "bvals/bvals.hpp"
 #include "hydro/hydro.hpp"
 
@@ -26,6 +27,7 @@ namespace hydro {
 
 Hydro::Hydro(MeshBlockPack *ppack, ParameterInput *pin) :
     pmy_pack(ppack),
+    shearing_box(false),
     u0("cons",1,1,1,1,1),
     w0("prim",1,1,1,1,1),
     coarse_u0("ccons",1,1,1,1,1),
@@ -70,14 +72,14 @@ Hydro::Hydro(MeshBlockPack *ppack, ParameterInput *pin) :
   // (2) Initialize scalars, diffusion, source terms
   nscalars = pin->GetOrAddInteger("hydro","nscalars",0);
 
-  // Viscosity (only constructed if needed)
+  // Viscosity (if requested in input file)
   if (pin->DoesParameterExist("hydro","viscosity")) {
     pvisc = new Viscosity("hydro", ppack, pin);
   } else {
     pvisc = nullptr;
   }
 
-  // Thermal conduction (only constructed if needed)
+  // Thermal conduction (if requested in input file)
   if (pin->DoesParameterExist("hydro","conductivity") ||
       pin->DoesParameterExist("hydro","tdep_conductivity")) {
     pcond = new Conduction("hydro", ppack, pin);
@@ -87,6 +89,15 @@ Hydro::Hydro(MeshBlockPack *ppack, ParameterInput *pin) :
 
   // Source terms (constructor parses input file to initialize only srcterms needed)
   psrc = new SourceTerms("hydro", ppack, pin);
+
+  // Shearing box (if requested in input file)
+  if (pin->DoesBlockExist("shearing_box")) {
+    psb = new ShearingBox(ppack, pin, (nhydro+nscalars));
+    shearing_box = true;
+  } else {
+    psb = nullptr;
+    shearing_box = false;
+  }
 
   // (3) read time-evolution option [already error checked in driver constructor]
   // Then initialize memory and algorithms for reconstruction and Riemann solvers

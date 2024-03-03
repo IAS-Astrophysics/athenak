@@ -21,6 +21,7 @@
 #include "diffusion/viscosity.hpp"
 #include "diffusion/conduction.hpp"
 #include "bvals/bvals.hpp"
+#include "shearing_box/shearing_box.hpp"
 #include "hydro/hydro.hpp"
 
 namespace hydro {
@@ -53,7 +54,9 @@ void Hydro::AssembleHydroTasks(std::map<std::string, std::shared_ptr<TaskList>> 
   id.sendf = tl["stagen"]->AddTask(&Hydro::SendFlux, this, id.flux);
   id.recvf = tl["stagen"]->AddTask(&Hydro::RecvFlux, this, id.sendf);
   id.expl  = tl["stagen"]->AddTask(&Hydro::ExpRKUpdate, this, id.recvf);
-  id.restu = tl["stagen"]->AddTask(&Hydro::RestrictU, this, id.expl);
+  id.sndoa = tl["stagen"]->AddTask(&Hydro::SendOA, this, id.expl);
+  id.rcvoa = tl["stagen"]->AddTask(&Hydro::RecvOA, this, id.sndoa);
+  id.restu = tl["stagen"]->AddTask(&Hydro::RestrictU, this, id.rcvoa);
   id.sendu = tl["stagen"]->AddTask(&Hydro::SendU, this, id.restu);
   id.recvu = tl["stagen"]->AddTask(&Hydro::RecvU, this, id.sendu);
   id.bcs   = tl["stagen"]->AddTask(&Hydro::ApplyPhysicalBCs, this, id.recvu);
@@ -191,6 +194,32 @@ TaskStatus Hydro::RecvFlux(Driver *pdrive, int stage) {
   if (pmy_pack->pmesh->multilevel) {
     tstat = pbval_u->RecvAndUnpackFluxCC(uflx);
   }
+  return tstat;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn TaskList Hydro::SendOA
+//! \brief Wrapper task list function to send data for orbital advection
+
+TaskStatus Hydro::SendOA(Driver *pdrive, int stage) {
+  // only execute when shearing box defined and last stage
+  if (!(shearing_box) || stage != (pdrive->nexp_stages)) {
+    return TaskStatus::complete;
+  }
+  TaskStatus tstat = psb->PackAndSendCC_Orb(u0);
+  return tstat;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn TaskList Hydro::RecvOA
+//! \brief Wrapper task list function to receive and unpack data for orbital advection
+
+TaskStatus Hydro::RecvOA(Driver *pdrive, int stage) {
+  // only execute when shearing box defined and last stage
+  if (!(shearing_box) || stage != (pdrive->nexp_stages)) {
+    return TaskStatus::complete;
+  }
+  TaskStatus tstat = psb->RecvAndUnpackCC_Orb(u0, recon_method);
   return tstat;
 }
 

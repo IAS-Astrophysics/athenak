@@ -23,6 +23,7 @@ class Coordinates;
 class Viscosity;
 class Conduction;
 class SourceTerms;
+class ShearingBox;
 class Driver;
 
 // constants that enumerate Hydro Riemann Solver options
@@ -41,6 +42,8 @@ struct HydroTaskIDs {
   TaskID sendf;
   TaskID recvf;
   TaskID expl;
+  TaskID sndoa;
+  TaskID rcvoa;
   TaskID restu;
   TaskID sendu;
   TaskID recvu;
@@ -66,6 +69,7 @@ class Hydro {
   ReconstructionMethod recon_method;
   Hydro_RSolver rsolver_method;
   EquationOfState *peos;  // chosen EOS
+  bool shearing_box;
 
   int nhydro;             // number of hydro variables (5/4 for ideal/isothermal EOS)
   int nscalars;           // number of passive scalars
@@ -82,6 +86,7 @@ class Hydro {
   Viscosity *pvisc = nullptr;
   Conduction *pcond = nullptr;
   SourceTerms *psrc = nullptr;
+  ShearingBox *psb = nullptr;
 
   // following only used for time-evolving flow
   DvceArray5D<Real> u1;       // conserved variables at intermediate step
@@ -105,6 +110,8 @@ class Hydro {
   TaskStatus SendFlux(Driver *d, int stage);
   TaskStatus RecvFlux(Driver *d, int stage);
   TaskStatus ExpRKUpdate(Driver *d, int stage);
+  TaskStatus SendOA(Driver *d, int stage);
+  TaskStatus RecvOA(Driver *d, int stage);
   TaskStatus RestrictU(Driver *d, int stage);
   TaskStatus SendU(Driver *d, int stage);
   TaskStatus RecvU(Driver *d, int stage);
