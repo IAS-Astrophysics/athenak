@@ -25,6 +25,7 @@
 #include "diffusion/resistivity.hpp"
 #include "diffusion/conduction.hpp"
 #include "radiation/radiation.hpp"
+#include "particles/particles.hpp"
 #include "srcterms/srcterms.hpp"
 #include "outputs/io_wrapper.hpp"
 
@@ -46,7 +47,10 @@ Mesh::Mesh(ParameterInput *pin) :
   two_d(false),
   three_d(false),
   multi_d(false),
-  strictly_periodic(true) {
+  strictly_periodic(true),
+  nmb_packs_thisrank(1),
+  nprtcl_thisrank(0),
+  nprtcl_total(0) {
   // Set physical size and number of cells in mesh (root level)
   mesh_size.x1min = pin->GetReal("mesh", "x1min");
   mesh_size.x1max = pin->GetReal("mesh", "x1max");
@@ -580,6 +584,10 @@ void Mesh::NewTimeStep(const Real tlim) {
   if (pmb_pack->prad != nullptr) {
     dt = std::min(dt, (cfl_no)*(pmb_pack->prad->dtnew) );
   }
+  // Particles timestep
+  if (pmb_pack->ppart != nullptr) {
+    dt = std::min(dt, (pmb_pack->ppart->dtnew) );
+  }
 
 #if MPI_PARALLEL_ENABLED
   // get minimum dt over all MPI ranks
@@ -590,4 +598,36 @@ void Mesh::NewTimeStep(const Real tlim) {
   if ( (time < tlim) && ((time + dt) > tlim) ) {dt = tlim - time;}
 
   return;
+}
+
+//----------------------------------------------------------------------------------------
+// \fn Mesh::AddCoordinatesAndPhysics
+
+void Mesh::AddCoordinatesAndPhysics(ParameterInput *pinput) {
+  // cycle over MeshBlockPacks on this rank and add Coordinates and Physics
+  for (int n=0; n<nmb_packs_thisrank; ++n) {
+    pmb_pack->AddCoordinates(pinput);
+    pmb_pack->AddPhysics(pinput);
+  }
+
+  // Determine total number of particles across all ranks
+  particles::Particles *ppart = pmb_pack->ppart;
+  if (ppart != nullptr) {
+    for (int n=0; n<nmb_packs_thisrank; ++n) {
+      nprtcl_thisrank += pmb_pack->ppart->nprtcl_thispack;
+    }
+    nprtcl_eachrank = new int[global_variable::nranks];
+    nprtcl_eachrank[global_variable::my_rank] = nprtcl_thisrank;
+#if MPI_PARALLEL_ENABLED
+    // Share number of particles on each rank with all ranks
+    MPI_Allgather(&nprtcl_thisrank,1,MPI_INT,nprtcl_eachrank,1,MPI_INT,MPI_COMM_WORLD);
+#endif
+    for (int n=0; n<global_variable::nranks; ++n) {
+      nprtcl_total += nprtcl_eachrank[n];
+    }
+    // Assign particle IDs
+    if (pmb_pack->ppart != nullptr) {
+      pmb_pack->ppart->CreateParticleTags(pinput);
+    }
+  }
 }

@@ -5,7 +5,7 @@
 //========================================================================================
 //! \file bvals_fc.cpp
 //! \brief functions to pack/send and recv/unpack boundary values for face-centered (FC)
-//! variables.
+//! Mesh variables.
 //! Prolongation of FC variables  occurs in ProlongateFC() function called from task list
 
 #include <cstdlib>
@@ -23,12 +23,12 @@
 // BValFC constructor:
 
 BoundaryValuesFC::BoundaryValuesFC(MeshBlockPack *pp, ParameterInput *pin) :
-  BoundaryValues(pp, pin, false) {
+  MeshBoundaryValues(pp, pin, false) {
 }
 
 //----------------------------------------------------------------------------------------
 //! \!fn void BoundaryValuesFC::PackAndSendFC()
-//! \brief Pack face-centered variables into boundary buffers and send to neighbors.
+//! \brief Pack face-centered Mesh variables into boundary buffers and send to neighbors.
 //!
 //! As for cell-centered data, this routine packs ALL the buffers on ALL the faces, edges,
 //! and corners simultaneously for all three components of face-fields on ALL the

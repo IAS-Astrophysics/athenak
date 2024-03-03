@@ -4,9 +4,11 @@
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
 //! \file hydro_tasks.cpp
-//! \brief functions that control Hydro tasks in the four task lists stored in the
-//! MeshBlockPack: start_tl, run_tl, end_tl, operator_split_tl
+//! \brief functions that control Hydro tasks stored in tasklists in MeshBlockPack
 
+#include <map>
+#include <memory>
+#include <string>
 #include <iostream>
 
 #include "athena.hpp"
@@ -24,45 +26,46 @@
 namespace hydro {
 //----------------------------------------------------------------------------------------
 //! \fn  void Hydro::AssembleHydroTasks
-//! \brief Adds hydro tasks to stage start/run/end task lists used by time integrators
-//! Called by MeshBlockPack::AddPhysics() function directly after Hydro constructor
+//! \brief Adds hydro tasks to appropriate task lists used by time integrators.
+//! Called by MeshBlockPack::AddPhysics() function directly after Hydro constructor.
 //! Many of the functions in the task list are implemented in this file because they are
 //! simple, or they are wrappers that call one or more other functions.
 //!
-//! start_tl tasks are those that must be cmpleted over all MeshBlocks before EACH
-//! stage can be run (such as posting MPI receives, setting BoundaryCommStatus flags, etc)
+//! "before_stagen" tasks are those that must be cmpleted over all MeshBlocks before
+//! EACH stage can be run (such as posting MPI receives, setting BoundaryCommStatus flags,
+//! etc)
 //!
-//! run_tl tasks are those performed in EACH stage
+//! "stagen" tasks are those performed in EACH stage
 //!
-//! end_tl tasks are those that can only be cmpleted after all the stage run tasks are
-//! finished over all MeshBlocks for EACH stage, such as clearing all MPI non-blocking
-//! sends, etc.
+//! "after_stagen" tasks are those that can only be cmpleted after all the "stagen"
+//! tasks are finished over all MeshBlocks for EACH stage, such as clearing all MPI
+//! non-blocking sends, etc.
 
-void Hydro::AssembleHydroTasks(TaskList &start, TaskList &run, TaskList &end) {
+void Hydro::AssembleHydroTasks(std::map<std::string, std::shared_ptr<TaskList>> tl) {
   TaskID none(0);
 
-  // assemble start task list
-  id.irecv = start.AddTask(&Hydro::InitRecv, this, none);
+  // assemble "before_stagen" task list
+  id.irecv = tl["before_stagen"]->AddTask(&Hydro::InitRecv, this, none);
 
-  // assemble run task list
-  id.copyu = run.AddTask(&Hydro::CopyCons, this, none);
-  id.flux  = run.AddTask(&Hydro::Fluxes,this,id.copyu);
-  id.sendf = run.AddTask(&Hydro::SendFlux, this, id.flux);
-  id.recvf = run.AddTask(&Hydro::RecvFlux, this, id.sendf);
-  id.expl  = run.AddTask(&Hydro::ExpRKUpdate, this, id.recvf);
-  id.restu = run.AddTask(&Hydro::RestrictU, this, id.expl);
-  id.sendu = run.AddTask(&Hydro::SendU, this, id.restu);
-  id.recvu = run.AddTask(&Hydro::RecvU, this, id.sendu);
-  id.bcs   = run.AddTask(&Hydro::ApplyPhysicalBCs, this, id.recvu);
-  id.prol  = run.AddTask(&Hydro::Prolongate, this, id.bcs);
-  id.c2p   = run.AddTask(&Hydro::ConToPrim, this, id.prol);
-  id.newdt = run.AddTask(&Hydro::NewTimeStep, this, id.c2p);
+  // assemble "stagen" task list
+  id.copyu = tl["stagen"]->AddTask(&Hydro::CopyCons, this, none);
+  id.flux  = tl["stagen"]->AddTask(&Hydro::Fluxes,this,id.copyu);
+  id.sendf = tl["stagen"]->AddTask(&Hydro::SendFlux, this, id.flux);
+  id.recvf = tl["stagen"]->AddTask(&Hydro::RecvFlux, this, id.sendf);
+  id.expl  = tl["stagen"]->AddTask(&Hydro::ExpRKUpdate, this, id.recvf);
+  id.restu = tl["stagen"]->AddTask(&Hydro::RestrictU, this, id.expl);
+  id.sendu = tl["stagen"]->AddTask(&Hydro::SendU, this, id.restu);
+  id.recvu = tl["stagen"]->AddTask(&Hydro::RecvU, this, id.sendu);
+  id.bcs   = tl["stagen"]->AddTask(&Hydro::ApplyPhysicalBCs, this, id.recvu);
+  id.prol  = tl["stagen"]->AddTask(&Hydro::Prolongate, this, id.bcs);
+  id.c2p   = tl["stagen"]->AddTask(&Hydro::ConToPrim, this, id.prol);
+  id.newdt = tl["stagen"]->AddTask(&Hydro::NewTimeStep, this, id.c2p);
 
-  // assemble end task list
-  id.csend = end.AddTask(&Hydro::ClearSend, this, none);
+  // assemble "after_stagen" task list
+  id.csend = tl["after_stagen"]->AddTask(&Hydro::ClearSend, this, none);
   // although RecvFlux/U functions check that all recvs complete, add ClearRecv to
   // task list anyways to catch potential bugs in MPI communication logic
-  id.crecv = end.AddTask(&Hydro::ClearRecv, this, id.csend);
+  id.crecv = tl["after_stagen"]->AddTask(&Hydro::ClearRecv, this, id.csend);
 
   return;
 }
@@ -274,8 +277,7 @@ TaskStatus Hydro::ConToPrim(Driver *pdrive, int stage) {
 
 //----------------------------------------------------------------------------------------
 //! \fn TaskList Hydro::ClearSend
-//! \brief Wrapper task list function that checks all MPI sends have completed.  Called
-//! in end_tl, when all steps in run_tl over all MeshBlocks have completed.
+//! \brief Wrapper task list function that checks all MPI sends have completed.
 
 TaskStatus Hydro::ClearSend(Driver *pdrive, int stage) {
   // check sends of U complete

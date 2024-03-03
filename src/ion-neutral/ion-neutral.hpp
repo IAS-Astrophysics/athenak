@@ -8,6 +8,10 @@
 //! \file ion-neutral.hpp
 //  \brief definitions for IonNeutral class
 
+#include <map>
+#include <memory>
+#include <string>
+
 #include "athena.hpp"
 #include "parameter_input.hpp"
 #include "tasklist/task_list.hpp"
@@ -73,7 +77,7 @@ class IonNeutral {
   IonNeutralTaskIDs id;
 
   // functions
-  void AssembleIonNeutralTasks(TaskList &start, TaskList &run, TaskList &end);
+  void AssembleIonNeutralTasks(std::map<std::string, std::shared_ptr<TaskList>> tl);
   TaskStatus FirstTwoImpRK(Driver* pdrive, int stage);
   TaskStatus ImpRKUpdate(Driver* pdrive, int stage);
 

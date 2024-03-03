@@ -50,6 +50,8 @@ using Real = double;
 enum VariableIndex {IDN=0, IM1=1, IVX=1, IM2=2, IVY=2, IM3=3, IVZ=3, IEN=4, ITM=4};
 // array indices for components of magnetic field
 enum BFieldIndex {IBX=0, IBY=1, IBZ=2};
+// array indices for particle arrays
+enum ParticlesIndex {PGID=0, PTAG=1, IPX=0, IPVX=1, IPY=2, IPVY=3, IPZ=4, IPVZ=5};
 
 // integer constants to specify spatial reconstruction methods
 enum ReconstructionMethod {dc, plm, ppm4, ppmx, wenoz};
@@ -203,6 +205,20 @@ struct DvceEdgeFld4D {
 // 1D-range, and thread teams for use with inner vector threads. Experiments in K-Athena
 // and Parthenon indicate that 1D-range policy is generally faster than multidimensional
 // MD-range policy, so the latter is not used.
+//------------------------------
+// 1D loop using Kokkos 1D Range
+template <typename Function>
+inline void par_for(const std::string &name, DevExeSpace exec_space,
+                    const int &il, const int &iu, const Function &function) {
+  // compute total number of elements and call Kokkos::parallel_for()
+  const int ni = iu - il + 1;
+  Kokkos::parallel_for(name, Kokkos::RangePolicy<>(exec_space, 0, ni),
+  KOKKOS_LAMBDA(const int &idx) {
+    // compute i indices of thread and call function
+    int i = (idx) + il;
+    function(i);
+  });
+}
 
 //------------------------------
 // 2D loop using Kokkos 1D Range

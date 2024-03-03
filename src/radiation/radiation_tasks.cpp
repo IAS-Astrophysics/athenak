@@ -4,9 +4,11 @@
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
 //! \file radiation_tasks.cpp
-//! \brief functions that control Radiation tasks in the four task lists stored in the
-//! MeshBlockPack: start_tl, run_tl, end_tl, operator_split_tl (currently not used)
+//! \brief functions that control Radiation tasks stored in tasklists in MeshBlockPack
 
+#include <map>
+#include <memory>
+#include <string>
 #include <iostream>
 
 #include "athena.hpp"
@@ -24,116 +26,123 @@
 namespace radiation {
 //----------------------------------------------------------------------------------------
 //! \fn  void Radiation::AssembleRadiationTasks
-//! \brief Adds radiation tasks to stage start/run/end task lists used by time integrators
+//! \brief Adds radiation tasks to appropriate task lists used by time integrators.
 //! Called by MeshBlockPack::AddPhysics() function directly after Radiation constructor
-//! Many of the functions in the task list are implemented in this file because they are
-//! simple, or they are wrappers that call one or more other functions.
 
-void Radiation::AssembleRadiationTasks(TaskList &start, TaskList &run, TaskList &end) {
+void Radiation::AssembleRadTasks(std::map<std::string, std::shared_ptr<TaskList>> tl) {
   TaskID none(0);
   hydro::Hydro *phyd = pmy_pack->phydro;
   mhd::MHD *pmhd = pmy_pack->pmhd;
 
   // construct task list depending on enabled physics modules and radiation parameters
   if (pmhd != nullptr && !(fixed_fluid)) {  // radiation magnetohydrodynamics
-    // assemble start task list
-    id.rad_irecv = start.AddTask(&Radiation::InitRecv, this, none);
-    id.mhd_irecv = start.AddTask(&mhd::MHD::InitRecv, pmhd, none);
+    // assemble "before_stagen" task list
+    id.rad_irecv = tl["before_stagen"]->AddTask(&Radiation::InitRecv, this, none);
+    id.mhd_irecv = tl["before_stagen"]->AddTask(&mhd::MHD::InitRecv, pmhd, none);
 
-    // assemble run task list
-    id.copycons  = run.AddTask(&Radiation::CopyCons, this, none);
-    id.rad_flux  = run.AddTask(&Radiation::CalculateFluxes, this, id.copycons);
-    id.rad_sendf = run.AddTask(&Radiation::SendFlux, this, id.rad_flux);
-    id.rad_recvf = run.AddTask(&Radiation::RecvFlux, this, id.rad_sendf);
-    id.rad_expl  = run.AddTask(&Radiation::ExpRKUpdate, this, id.rad_recvf);
-    id.mhd_flux  = run.AddTask(&mhd::MHD::Fluxes, pmhd, id.rad_expl);
-    id.mhd_sendf = run.AddTask(&mhd::MHD::SendFlux, pmhd, id.mhd_flux);
-    id.mhd_recvf = run.AddTask(&mhd::MHD::RecvFlux, pmhd, id.mhd_sendf);
-    id.mhd_expl  = run.AddTask(&mhd::MHD::ExpRKUpdate, pmhd, id.mhd_recvf);
-    id.mhd_efld  = run.AddTask(&mhd::MHD::CornerE, pmhd, id.mhd_expl);
-    id.mhd_sende = run.AddTask(&mhd::MHD::SendE, pmhd, id.mhd_efld);
-    id.mhd_recve = run.AddTask(&mhd::MHD::RecvE, pmhd, id.mhd_sende);
-    id.mhd_ct    = run.AddTask(&mhd::MHD::CT, pmhd, id.mhd_recve);
-    id.rad_src   = run.AddTask(&Radiation::AddRadiationSourceTerm, this, id.mhd_ct);
-    id.rad_resti = run.AddTask(&Radiation::RestrictI, this, id.rad_src);
-    id.rad_sendi = run.AddTask(&Radiation::SendI, this, id.rad_resti);
-    id.rad_recvi = run.AddTask(&Radiation::RecvI, this, id.rad_sendi);
-    id.mhd_restu = run.AddTask(&mhd::MHD::RestrictU, pmhd, id.rad_recvi);
-    id.mhd_sendu = run.AddTask(&mhd::MHD::SendU, pmhd, id.mhd_restu);
-    id.mhd_recvu = run.AddTask(&mhd::MHD::RecvU, pmhd, id.mhd_sendu);
-    id.mhd_restb = run.AddTask(&mhd::MHD::RestrictB, pmhd, id.mhd_recvu);
-    id.mhd_sendb = run.AddTask(&mhd::MHD::SendB, pmhd, id.mhd_restb);
-    id.mhd_recvb = run.AddTask(&mhd::MHD::RecvB, pmhd, id.mhd_sendb);
-    id.bcs       = run.AddTask(&Radiation::ApplyPhysicalBCs, this, id.mhd_recvb);
-    id.rad_prol  = run.AddTask(&Radiation::Prolongate, this, id.bcs);
-    id.mhd_prol  = run.AddTask(&mhd::MHD::Prolongate, pmhd, id.rad_prol);
-    id.mhd_c2p   = run.AddTask(&mhd::MHD::ConToPrim, pmhd, id.mhd_prol);
+    // assemble "stagen" task list
+    id.copyu     = tl["stagen"]->AddTask(&Radiation::CopyCons, this, none);
+    id.rad_flux  = tl["stagen"]->AddTask(&Radiation::CalculateFluxes, this, id.copyu);
+    id.rad_sendf = tl["stagen"]->AddTask(&Radiation::SendFlux, this, id.rad_flux);
+    id.rad_recvf = tl["stagen"]->AddTask(&Radiation::RecvFlux, this, id.rad_sendf);
+    id.rad_expl  = tl["stagen"]->AddTask(&Radiation::ExpRKUpdate, this, id.rad_recvf);
+    id.mhd_flux  = tl["stagen"]->AddTask(&mhd::MHD::Fluxes, pmhd, id.rad_expl);
+    id.mhd_sendf = tl["stagen"]->AddTask(&mhd::MHD::SendFlux, pmhd, id.mhd_flux);
+    id.mhd_recvf = tl["stagen"]->AddTask(&mhd::MHD::RecvFlux, pmhd, id.mhd_sendf);
+    id.mhd_expl  = tl["stagen"]->AddTask(&mhd::MHD::ExpRKUpdate, pmhd, id.mhd_recvf);
+    id.mhd_efld  = tl["stagen"]->AddTask(&mhd::MHD::CornerE, pmhd, id.mhd_expl);
+    id.mhd_sende = tl["stagen"]->AddTask(&mhd::MHD::SendE, pmhd, id.mhd_efld);
+    id.mhd_recve = tl["stagen"]->AddTask(&mhd::MHD::RecvE, pmhd, id.mhd_sende);
+    id.mhd_ct    = tl["stagen"]->AddTask(&mhd::MHD::CT, pmhd, id.mhd_recve);
+    id.rad_src   = tl["stagen"]->AddTask(
+                                    &Radiation::AddRadiationSourceTerm,this,id.mhd_ct);
+    id.rad_resti = tl["stagen"]->AddTask(&Radiation::RestrictI, this, id.rad_src);
+    id.rad_sendi = tl["stagen"]->AddTask(&Radiation::SendI, this, id.rad_resti);
+    id.rad_recvi = tl["stagen"]->AddTask(&Radiation::RecvI, this, id.rad_sendi);
+    id.mhd_restu = tl["stagen"]->AddTask(&mhd::MHD::RestrictU, pmhd, id.rad_recvi);
+    id.mhd_sendu = tl["stagen"]->AddTask(&mhd::MHD::SendU, pmhd, id.mhd_restu);
+    id.mhd_recvu = tl["stagen"]->AddTask(&mhd::MHD::RecvU, pmhd, id.mhd_sendu);
+    id.mhd_restb = tl["stagen"]->AddTask(&mhd::MHD::RestrictB, pmhd, id.mhd_recvu);
+    id.mhd_sendb = tl["stagen"]->AddTask(&mhd::MHD::SendB, pmhd, id.mhd_restb);
+    id.mhd_recvb = tl["stagen"]->AddTask(&mhd::MHD::RecvB, pmhd, id.mhd_sendb);
+    id.bcs       = tl["stagen"]->AddTask(
+                                    &Radiation::ApplyPhysicalBCs, this, id.mhd_recvb);
+    id.rad_prol  = tl["stagen"]->AddTask(&Radiation::Prolongate, this, id.bcs);
+    id.mhd_prol  = tl["stagen"]->AddTask(&mhd::MHD::Prolongate, pmhd, id.rad_prol);
+    id.mhd_c2p   = tl["stagen"]->AddTask(&mhd::MHD::ConToPrim, pmhd, id.mhd_prol);
 
-    // assemble end task list
-    id.rad_csend = end.AddTask(&Radiation::ClearSend, this, none);
-    id.mhd_csend = end.AddTask(&mhd::MHD::ClearSend, pmhd, none);
+    // assemble "after_stagen" task list
+    id.rad_csend = tl["after_stagen"]->AddTask(&Radiation::ClearSend, this, none);
+    id.mhd_csend = tl["after_stagen"]->AddTask(&mhd::MHD::ClearSend, pmhd, none);
     // although RecvFlux/U/E/B functions check that all recvs complete, add ClearRecv to
     // task list anyways to catch potential bugs in MPI communication logic
-    id.rad_crecv = end.AddTask(&Radiation::ClearRecv, this, id.rad_csend);
-    id.mhd_crecv = end.AddTask(&mhd::MHD::ClearRecv, pmhd, id.mhd_csend);
+    id.rad_crecv = tl["after_stagen"]->AddTask(&Radiation::ClearRecv, this, id.rad_csend);
+    id.mhd_crecv = tl["after_stagen"]->AddTask(
+                                          &mhd::MHD::ClearRecv, pmhd, id.mhd_csend);
 
   } else if (phyd != nullptr && !(fixed_fluid)) {  // radiation hydrodynamics
-    // assemble start task list
-    id.rad_irecv = start.AddTask(&Radiation::InitRecv, this, none);
-    id.hyd_irecv = start.AddTask(&hydro::Hydro::InitRecv, phyd, none);
+    // assemble "before_stagen" task list
+    id.rad_irecv = tl["before_stagen"]->AddTask(&Radiation::InitRecv, this, none);
+    id.hyd_irecv = tl["before_stagen"]->AddTask(&hydro::Hydro::InitRecv, phyd, none);
 
-    // assemble run task list
-    id.copycons = run.AddTask(&Radiation::CopyCons, this, none);
-    id.rad_flux  = run.AddTask(&Radiation::CalculateFluxes, this, id.copycons);
-    id.rad_sendf = run.AddTask(&Radiation::SendFlux, this, id.rad_flux);
-    id.rad_recvf = run.AddTask(&Radiation::RecvFlux, this, id.rad_sendf);
-    id.rad_expl  = run.AddTask(&Radiation::ExpRKUpdate, this, id.rad_recvf);
-    id.hyd_flux  = run.AddTask(&hydro::Hydro::Fluxes, phyd, id.rad_expl);
-    id.hyd_sendf = run.AddTask(&hydro::Hydro::SendFlux, phyd, id.hyd_flux);
-    id.hyd_recvf = run.AddTask(&hydro::Hydro::RecvFlux, phyd, id.hyd_sendf);
-    id.hyd_expl  = run.AddTask(&hydro::Hydro::ExpRKUpdate, phyd, id.hyd_recvf);
-    id.rad_src   = run.AddTask(&Radiation::AddRadiationSourceTerm, this, id.hyd_expl);
-    id.rad_resti = run.AddTask(&Radiation::RestrictI, this, id.rad_src);
-    id.rad_sendi = run.AddTask(&Radiation::SendI, this, id.rad_resti);
-    id.rad_recvi = run.AddTask(&Radiation::RecvI, this, id.rad_sendi);
-    id.hyd_restu = run.AddTask(&hydro::Hydro::RestrictU, phyd, id.rad_recvi);
-    id.hyd_sendu = run.AddTask(&hydro::Hydro::SendU, phyd, id.hyd_restu);
-    id.hyd_recvu = run.AddTask(&hydro::Hydro::RecvU, phyd, id.hyd_sendu);
-    id.bcs       = run.AddTask(&Radiation::ApplyPhysicalBCs, this, id.hyd_recvu);
-    id.rad_prol  = run.AddTask(&Radiation::Prolongate, this, id.bcs);
-    id.hyd_prol  = run.AddTask(&hydro::Hydro::Prolongate, phyd, id.rad_prol);
-    id.hyd_c2p   = run.AddTask(&hydro::Hydro::ConToPrim, phyd, id.hyd_prol);
+    // assemble "stagen" task list
+    id.copyu     = tl["stagen"]->AddTask(&Radiation::CopyCons, this, none);
+    id.rad_flux  = tl["stagen"]->AddTask(&Radiation::CalculateFluxes, this, id.copyu);
+    id.rad_sendf = tl["stagen"]->AddTask(&Radiation::SendFlux, this, id.rad_flux);
+    id.rad_recvf = tl["stagen"]->AddTask(&Radiation::RecvFlux, this, id.rad_sendf);
+    id.rad_expl  = tl["stagen"]->AddTask(&Radiation::ExpRKUpdate, this, id.rad_recvf);
+    id.hyd_flux  = tl["stagen"]->AddTask(&hydro::Hydro::Fluxes, phyd, id.rad_expl);
+    id.hyd_sendf = tl["stagen"]->AddTask(&hydro::Hydro::SendFlux, phyd, id.hyd_flux);
+    id.hyd_recvf = tl["stagen"]->AddTask(&hydro::Hydro::RecvFlux, phyd, id.hyd_sendf);
+    id.hyd_expl  = tl["stagen"]->AddTask(&hydro::Hydro::ExpRKUpdate,phyd,id.hyd_recvf);
+    id.rad_src   = tl["stagen"]->AddTask(
+                                    &Radiation::AddRadiationSourceTerm,this,id.hyd_expl);
+    id.rad_resti = tl["stagen"]->AddTask(&Radiation::RestrictI, this, id.rad_src);
+    id.rad_sendi = tl["stagen"]->AddTask(&Radiation::SendI, this, id.rad_resti);
+    id.rad_recvi = tl["stagen"]->AddTask(&Radiation::RecvI, this, id.rad_sendi);
+    id.hyd_restu = tl["stagen"]->AddTask(&hydro::Hydro::RestrictU, phyd, id.rad_recvi);
+    id.hyd_sendu = tl["stagen"]->AddTask(&hydro::Hydro::SendU, phyd, id.hyd_restu);
+    id.hyd_recvu = tl["stagen"]->AddTask(&hydro::Hydro::RecvU, phyd, id.hyd_sendu);
+    id.bcs       = tl["stagen"]->AddTask(
+                                    &Radiation::ApplyPhysicalBCs, this, id.hyd_recvu);
+    id.rad_prol  = tl["stagen"]->AddTask(&Radiation::Prolongate, this, id.bcs);
+    id.hyd_prol  = tl["stagen"]->AddTask(&hydro::Hydro::Prolongate, phyd, id.rad_prol);
+    id.hyd_c2p   = tl["stagen"]->AddTask(&hydro::Hydro::ConToPrim, phyd, id.hyd_prol);
 
+    // assemble "after_stagen" task list
     // assemble end task list
-    id.rad_csend = end.AddTask(&Radiation::ClearSend, this, none);
-    id.hyd_csend = end.AddTask(&hydro::Hydro::ClearSend, phyd, none);
+    id.rad_csend = tl["after_stagen"]->AddTask(&Radiation::ClearSend, this, none);
+    id.hyd_csend = tl["after_stagen"]->AddTask(&hydro::Hydro::ClearSend, phyd, none);
     // although RecvFlux/U/E/B functions check that all recvs complete, add ClearRecv to
     // task list anyways to catch potential bugs in MPI communication logic
-    id.rad_crecv = end.AddTask(&Radiation::ClearRecv, this, id.rad_csend);
-    id.hyd_crecv = end.AddTask(&hydro::Hydro::ClearRecv, phyd, id.hyd_csend);
+    id.rad_crecv = tl["after_stagen"]->AddTask(&Radiation::ClearRecv, this, id.rad_csend);
+    id.hyd_crecv = tl["after_stagen"]->AddTask(
+                                       &hydro::Hydro::ClearRecv, phyd, id.hyd_csend);
 
   } else {  // radiation transport
-    // assemble start task list
-    id.rad_irecv = start.AddTask(&Radiation::InitRecv, this, none);
+    // assemble "before_stagen" task list
+    id.rad_irecv = tl["before_stagen"]->AddTask(&Radiation::InitRecv, this, none);
 
-    // assemble run task list
-    id.copycons = run.AddTask(&Radiation::CopyCons, this, none);
-    id.rad_flux  = run.AddTask(&Radiation::CalculateFluxes, this, id.copycons);
-    id.rad_sendf = run.AddTask(&Radiation::SendFlux, this, id.rad_flux);
-    id.rad_recvf = run.AddTask(&Radiation::RecvFlux, this, id.rad_sendf);
-    id.rad_expl  = run.AddTask(&Radiation::ExpRKUpdate, this, id.rad_recvf);
-    id.rad_src   = run.AddTask(&Radiation::AddRadiationSourceTerm, this, id.rad_expl);
-    id.rad_resti = run.AddTask(&Radiation::RestrictI, this, id.rad_src);
-    id.rad_sendi = run.AddTask(&Radiation::SendI, this, id.rad_resti);
-    id.rad_recvi = run.AddTask(&Radiation::RecvI, this, id.rad_sendi);
-    id.bcs       = run.AddTask(&Radiation::ApplyPhysicalBCs, this, id.rad_recvi);
-    id.rad_prol  = run.AddTask(&Radiation::Prolongate, this, id.bcs);
+    // assemble "stagen" task list
+    id.copyu     = tl["stagen"]->AddTask(&Radiation::CopyCons, this, none);
+    id.rad_flux  = tl["stagen"]->AddTask(&Radiation::CalculateFluxes, this, id.copyu);
+    id.rad_sendf = tl["stagen"]->AddTask(&Radiation::SendFlux, this, id.rad_flux);
+    id.rad_recvf = tl["stagen"]->AddTask(&Radiation::RecvFlux, this, id.rad_sendf);
+    id.rad_expl  = tl["stagen"]->AddTask(&Radiation::ExpRKUpdate, this, id.rad_recvf);
+    id.rad_src   = tl["stagen"]->AddTask(
+                                    &Radiation::AddRadiationSourceTerm,this,id.rad_expl);
+    id.rad_resti = tl["stagen"]->AddTask(&Radiation::RestrictI, this, id.rad_src);
+    id.rad_sendi = tl["stagen"]->AddTask(&Radiation::SendI, this, id.rad_resti);
+    id.rad_recvi = tl["stagen"]->AddTask(&Radiation::RecvI, this, id.rad_sendi);
+    id.bcs       = tl["stagen"]->AddTask(
+                                    &Radiation::ApplyPhysicalBCs, this, id.rad_recvi);
+    id.rad_prol  = tl["stagen"]->AddTask(&Radiation::Prolongate, this, id.bcs);
 
-    // assemble end task list
-    id.rad_csend = end.AddTask(&Radiation::ClearSend, this, none);
+    // assemble "after_stagen" task list
+    id.rad_csend = tl["after_stagen"]->AddTask(&Radiation::ClearSend, this, none);
     // although RecvFlux/U/E/B functions check that all recvs complete, add ClearRecv to
     // task list anyways to catch potential bugs in MPI communication logic
-    id.rad_crecv = end.AddTask(&Radiation::ClearRecv, this, id.rad_csend);
+    id.rad_crecv = tl["after_stagen"]->AddTask(&Radiation::ClearRecv, this, id.rad_csend);
   }
 
   return;
@@ -288,8 +297,7 @@ TaskStatus Radiation::Prolongate(Driver *pdrive, int stage) {
 
 //----------------------------------------------------------------------------------------
 //! \fn TaskStatus Radiation::ClearSend
-//! \brief Wrapper task list function that checks all MPI sends have completed.  Called
-//! in end_tl, when all steps in run_tl over all MeshBlocks have completed.
+//! \brief Wrapper task list function that checks all MPI sends have completed.
 
 TaskStatus Radiation::ClearSend(Driver *pdrive, int stage) {
   // check sends of I complete

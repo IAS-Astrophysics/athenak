@@ -35,7 +35,7 @@
 // BaseTypeOutput base class constructor
 // Creates vector of output variable data
 
-BaseTypeOutput::BaseTypeOutput(OutputParameters opar, Mesh *pm) :
+BaseTypeOutput::BaseTypeOutput(ParameterInput *pin, Mesh *pm, OutputParameters opar) :
     derived_var("derived-var",1,1,1,1,1),
     outarray("cc_outvar",1,1,1,1,1),
     outfield("fc_outvar",1,1,1,1),
@@ -43,7 +43,8 @@ BaseTypeOutput::BaseTypeOutput(OutputParameters opar, Mesh *pm) :
   // exit for history, restart, or event log files
   if (out_params.file_type.compare("hst") == 0 ||
       out_params.file_type.compare("rst") == 0 ||
-      out_params.file_type.compare("log") == 0) {return;}
+      out_params.file_type.compare("log") == 0 ||
+      out_params.file_type.compare("trk") == 0) {return;}
 
   // initialize vector containing number of output MBs per rank
   noutmbs.assign(global_variable::nranks, 0);
@@ -133,6 +134,13 @@ BaseTypeOutput::BaseTypeOutput(OutputParameters opar, Mesh *pm) :
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
        << "Output of weyl variable requested in <output> block '"
        << out_params.block_name << "' but weyl object not constructed."
+       << std::endl << "Input file is likely missing corresponding block" << std::endl;
+    exit(EXIT_FAILURE);
+  }
+  if ((ivar>=142) && (ivar<144) && (pm->pmb_pack->ppart == nullptr)) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+       << "Output of particles requested in <output> block '"
+       << out_params.block_name << "' but particle object not constructed."
        << std::endl << "Input file is likely missing corresponding block" << std::endl;
     exit(EXIT_FAILURE);
   }
@@ -539,6 +547,12 @@ BaseTypeOutput::BaseTypeOutput(OutputParameters opar, Mesh *pm) :
     outvars.emplace_back("r22_ff",moments_offset+7,&(derived_var));
     outvars.emplace_back("r23_ff",moments_offset+8,&(derived_var));
     outvars.emplace_back("r33_ff",moments_offset+9,&(derived_var));
+  }
+
+  // particle density binned to mesh
+  if (out_params.variable.compare("prtcl_d") == 0) {
+    out_params.contains_derived = true;
+    outvars.emplace_back("pdens",0,&(derived_var));
   }
 
   // initialize vector containing number of output MBs per rank
