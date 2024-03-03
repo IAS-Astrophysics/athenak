@@ -62,7 +62,7 @@ TaskStatus Radiation::AddRadiationSourceTerm(Driver *pdriver, int stage) {
   auto &cellavg_rad_source_ = cellavg_rad_source;
   auto &tgas_radsource_ = tgas_radsource; // for saving final gas temperature
   Real sigma_cold_cut_ = (is_mhd_enabled_) ? pmy_pack->pmhd->sigma_cold_cut : 1.e3;
-  bool turn_on_sao_radsrc_ = true;
+  bool turn_on_sao_radsrc_ = false;
 
   // Extract coordinate/excision data
   auto &coord = pmy_pack->pcoord->coord_data;
@@ -670,7 +670,7 @@ TaskStatus Radiation::AddRadiationSourceTerm(Driver *pdriver, int stage) {
           // }
 
           // record radiation internal energy change
-          w0_(m,entropyIdx,k,j,i) = tgasnew; // temporarily for sanity check, REMOVE LATER!!!
+          // w0_(m,entropyIdx,k,j,i) = tgasnew; // temporarily for sanity check, REMOVE LATER!!!
           if (turn_on_sao_radsrc_) {
             Real tgas_update = tgasnew;
             delta_erad_f += -wdn*(tgasnew-tgas)/gm1;

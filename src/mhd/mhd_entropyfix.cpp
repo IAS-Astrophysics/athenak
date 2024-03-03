@@ -76,27 +76,27 @@ void MHD::EntropyReset() {
     Real u0 = gamma/alpha;
 
     // assign total entropy to the first scalar
-    // u0_(m,entropyIdx,k,j,i) = gm1*wen / pow(wdn,gm1) * u0;
+    u0_(m,entropyIdx,k,j,i) = gm1*wen / pow(wdn,gm1) * u0;
 
-    // if (customize_fofc_) {
-    //   if (fofc_(m,k,j,i)) {
-    //     u0_(m,entropyIdx,k,j,i) = 1;
-    //     w0_(m,entropyIdx,k,j,i) = 1;
-    //   } else {
-    //     u0_(m,entropyIdx,k,j,i) = -1;
-    //     w0_(m,entropyIdx,k,j,i) = -1;
-    //   }
-    // }
+    if (customize_fofc_) {
+      if (fofc_(m,k,j,i)) {
+        u0_(m,entropyIdx,k,j,i) = 1;
+        w0_(m,entropyIdx,k,j,i) = 1;
+      } else {
+        u0_(m,entropyIdx,k,j,i) = -1;
+        w0_(m,entropyIdx,k,j,i) = -1;
+      }
+    }
 
-    // if (use_ko_dissipation_) {
-    //   if (ko_dissipation_(m,k,j,i)) {
-    //     u0_(m,entropyIdx,k,j,i) = 1;
-    //     w0_(m,entropyIdx,k,j,i) = 1;
-    //   } else {
-    //     u0_(m,entropyIdx,k,j,i) = -1;
-    //     w0_(m,entropyIdx,k,j,i) = -1;
-    //   }
-    // }
+    if (use_ko_dissipation_) {
+      if (ko_dissipation_(m,k,j,i)) {
+        u0_(m,entropyIdx,k,j,i) = 1;
+        w0_(m,entropyIdx,k,j,i) = 1;
+      } else {
+        u0_(m,entropyIdx,k,j,i) = -1;
+        w0_(m,entropyIdx,k,j,i) = -1;
+      }
+    }
 
     // what to do with coarse_u0 ???
   });
