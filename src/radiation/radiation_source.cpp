@@ -673,27 +673,27 @@ TaskStatus Radiation::AddRadiationSourceTerm(Driver *pdriver, int stage) {
           // w0_(m,entropyIdx,k,j,i) = tgasnew; // temporarily for sanity check, REMOVE LATER!!!
           if (turn_on_sao_radsrc_) {
             Real tgas_update = tgasnew;
-            if (wdn < 1e-5) { // only modify it for low-density region
-              delta_erad_f += -wdn*(tgasnew-tgas)/gm1;
-              Real erad_f_new = arad_*SQR(SQR(tradnew));
-              if (erad_f_new == 0) {
-                tgas_update = sqrt(sqrt(u_tet[0]*delta_erad_f/(arad_*dtcsigp)));
-              } else { // erad_f_new > 0
-                Real chi_ratio = sigma_p/sigma_s;
-                Real coeff4 = 0.25*chi_ratio*arad_/(inv_t_electron_*erad_f_new);
-                Real coeff0 = -(tradnew + 0.25*chi_ratio/inv_t_electron_);
-                coeff0 += -0.25*u_tet[0]/dtcsigs * delta_erad_f/erad_f_new / inv_t_electron_;
-                if (fabs(coeff4) > 1.0e-20) {
-                  bool flag = FourthPolyRoot(coeff4, coeff0, tgas_update);
-                  if (!(flag) || !(isfinite(tgas_update))) tgas_update = tgasnew;
-                } else {
-                  tgas_update = -coeff0;
-                }
-              } // endelse
-              if (wdn*tgas_update < pfloor) tgas_update = tgasnew;
-              // assign the tgas update
-              tgasnew = tgas_update;
-            }
+            // if (wdn < 1e-5) { // only modify it for low-density region
+            delta_erad_f += -wdn*(tgasnew-tgas)/gm1;
+            Real erad_f_new = arad_*SQR(SQR(tradnew));
+            if (erad_f_new == 0) {
+              tgas_update = sqrt(sqrt(u_tet[0]*delta_erad_f/(arad_*(dtcsigp+dtcsiga))));
+            } else { // erad_f_new > 0
+              Real chi_ratio = (sigma_a+sigma_p)/sigma_s;
+              Real coeff4 = 0.25*chi_ratio*arad_/(inv_t_electron_*erad_f_new);
+              Real coeff0 = -(tradnew + 0.25*chi_ratio/inv_t_electron_);
+              coeff0 += -0.25*u_tet[0]/dtcsigs * delta_erad_f/erad_f_new / inv_t_electron_;
+              if (fabs(coeff4) > 1.0e-20) {
+                bool flag = FourthPolyRoot(coeff4, coeff0, tgas_update);
+                if (!(flag) || !(isfinite(tgas_update))) tgas_update = tgasnew;
+              } else {
+                tgas_update = -coeff0;
+              }
+            } // endelse
+            if (wdn*tgas_update < pfloor) tgas_update = tgasnew;
+            // assign the tgas update
+            tgasnew = tgas_update;
+            // } // endif (wdn < 1e-5)
           } // endif turn_on_sao_radsrc_
 
           // handle excision (see notes above)
