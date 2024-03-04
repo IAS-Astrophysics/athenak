@@ -4,7 +4,7 @@
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
 //! \file radiation_femn_basis.cpp
-//  \brief implementation of the radiation FEM/FPN basis functions and helpers
+//  \brief implements radiation FEM/FPN basis functions and helpers functions
 
 #include <iostream>
 #include <gsl/gsl_sf_legendre.h>
@@ -102,83 +102,24 @@ namespace radiationfemn
     }
 
     // Overlapping tent basis
-    inline Real fem_overtent_index1(Real xi1, Real xi2, Real xi3)
-    {
-        return 2. * xi1 + xi2 + xi3 - 1.;
-    }
-
-    inline Real fem_overtent_index2(Real xi1, Real xi2, Real xi3)
-    {
-        return xi1 + 2. * xi2 + xi3 - 1.;
-    }
-
-    inline Real fem_overtent_index3(Real xi1, Real xi2, Real xi3)
-    {
-        return xi1 + xi2 + 2. * xi3 - 1.;
-    }
+    inline Real fem_overtent_index1(Real xi1, Real xi2, Real xi3) { return 2. * xi1 + xi2 + xi3 - 1.; }
+    inline Real fem_overtent_index2(Real xi1, Real xi2, Real xi3) { return xi1 + 2. * xi2 + xi3 - 1.; }
+    inline Real fem_overtent_index3(Real xi1, Real xi2, Real xi3) { return xi1 + xi2 + 2. * xi3 - 1.; }
 
     // Small tent basis
-    inline Real fem_smalltent_index1(Real xi1, Real xi2, Real xi3)
-    {
-        return (xi1 >= 0.5) * (xi1 - xi2 - xi3);
-    }
-
-    inline Real fem_smalltent_index2(Real xi1, Real xi2, Real xi3)
-    {
-        return (xi2 >= 0.5) * (xi2 - xi3 - xi1);
-    }
-
-    inline Real fem_smalltent_index3(Real xi1, Real xi2, Real xi3)
-    {
-        return (xi3 >= 0.5) * (xi3 - xi1 - xi2);
-    }
+    inline Real fem_smalltent_index1(Real xi1, Real xi2, Real xi3) { return (xi1 >= 0.5) * (xi1 - xi2 - xi3); }
+    inline Real fem_smalltent_index2(Real xi1, Real xi2, Real xi3) { return (xi2 >= 0.5) * (xi2 - xi3 - xi1); }
+    inline Real fem_smalltent_index3(Real xi1, Real xi2, Real xi3) { return (xi3 >= 0.5) * (xi3 - xi1 - xi2); }
 
     // Overlapping honeycomb
-    inline Real fem_overhoney_index1(Real xi1, Real xi2, Real xi3)
-    {
-        return 1.;
-    }
-
-    inline Real fem_overhoney_index2(Real xi1, Real xi2, Real xi3)
-    {
-        return 1.;
-    }
-
-    inline Real fem_overhoney_index3(Real xi1, Real xi2, Real xi3)
-    {
-        return 1.;
-    }
+    inline Real fem_overhoney_index1(Real xi1, Real xi2, Real xi3) { return 1.; }
+    inline Real fem_overhoney_index2(Real xi1, Real xi2, Real xi3) { return 1.; }
+    inline Real fem_overhoney_index3(Real xi1, Real xi2, Real xi3) { return 1.; }
 
     // Small honeycomb
-    inline Real fem_smallhoney_index1(Real xi1, Real xi2, Real xi3)
-    {
-        return (xi1 >= xi2) * (xi1 > xi3) * 1.;
-    }
-
-    inline Real fem_smallhoney_index2(Real xi1, Real xi2, Real xi3)
-    {
-        return (xi2 >= xi3) * (xi2 > xi1) * 1.;
-    }
-
-    inline Real fem_smallhoney_index3(Real xi1, Real xi2, Real xi3)
-    {
-        return (xi3 >= xi1) * (xi3 > xi2) * 1.;
-    }
-
-    // product of two FEM basis functions: psi_a psi_b
-    Real fem_basis_ab(int a, int b, int t1, int t2, int t3, Real xi1, Real xi2, Real xi3, int basis_choice)
-    {
-        int basis_index_a = (a == t1) * 1 + (a == t2) * 2 + (a == t3) * 3;
-        int basis_index_b = (b == t1) * 1 + (b == t2) * 2 + (b == t3) * 3;
-        return fem_basis(xi1, xi2, xi3, basis_index_a, basis_choice) * fem_basis(xi1, xi2, xi3, basis_index_b, basis_choice);
-    }
-
-    // a fem basis function: psi_a
-    Real fem_basis_a(int a, int t1, int t2, int t3, Real xi1, Real xi2, Real xi3, int basis_choice)
-    {
-        int basis_index_a = (a == t1) * 1 + (a == t2) * 2 + (a == t3) * 3;
-        return fem_basis(xi1, xi2, xi3, basis_index_a, basis_choice);
-    }
+    inline Real fem_smallhoney_index1(Real xi1, Real xi2, Real xi3) { return (xi1 >= xi2) * (xi1 > xi3) * 1.; }
+    inline Real fem_smallhoney_index2(Real xi1, Real xi2, Real xi3) { return (xi2 >= xi3) * (xi2 > xi1) * 1.; }
+    inline Real fem_smallhoney_index3(Real xi1, Real xi2, Real xi3) { return (xi3 >= xi1) * (xi3 > xi2) * 1.; }
 
     /* Derivative of FEM basis wrt barycentric coordinates: dpsi/dxi
      *
@@ -194,6 +135,21 @@ namespace radiationfemn
     Real dfem_dxi(Real xi1, Real xi2, Real xi3, int basis_index, int xi_index)
     {
         return fem_basis_derivative[basis_index - 1][xi_index - 1];
+    }
+
+    // product of two FEM basis functions: psi_a psi_b
+    Real fem_basis_ab(int a, int b, int t1, int t2, int t3, Real xi1, Real xi2, Real xi3, int basis_choice)
+    {
+        int basis_index_a = (a == t1) * 1 + (a == t2) * 2 + (a == t3) * 3;
+        int basis_index_b = (b == t1) * 1 + (b == t2) * 2 + (b == t3) * 3;
+        return fem_basis(xi1, xi2, xi3, basis_index_a, basis_choice) * fem_basis(xi1, xi2, xi3, basis_index_b, basis_choice);
+    }
+
+    // a fem basis function: psi_a
+    Real fem_basis_a(int a, int t1, int t2, int t3, Real xi1, Real xi2, Real xi3, int basis_choice)
+    {
+        int basis_index_a = (a == t1) * 1 + (a == t2) * 2 + (a == t3) * 3;
+        return fem_basis(xi1, xi2, xi3, basis_index_a, basis_choice);
     }
 
     /* FPN basis: real spherical harmonics
@@ -215,17 +171,29 @@ namespace radiationfemn
         {
             result = sqrt(2.) * sin(abs(m) * phi) * gsl_sf_legendre_sphPlm(l, abs(m), cos(theta));
         }
-
         return result;
     }
 
-    // FPN basis derivatives: dYlm/dphi = - m Yl-m
+    /* Derivative of FPN basis wrt angle
+     *
+     * var_index: 1 => phi, 2 => theta)
+     */
+    using dfpn_dOmega_fn = Real (*)(int, int, Real, Real);
+    const dfpn_dOmega_fn dfpn_domega_fns[2] = {dfpn_dphi, dfpn_dtheta};
+
+    Real dfpn_dOmega(int l, int m, Real phi, Real theta, int var_index)
+    {
+        return dfpn_domega_fns[var_index - 1](l, m, phi, theta);
+    }
+
+    // dYlm/dphi = - m Yl-m
     inline Real dfpn_dphi(int l, int m, Real phi, Real theta)
     {
         return -m * fpn_basis_lm(l, -m, phi, theta);
     }
 
-    /* FPN basis derivatives: dYlm/dtheta
+    /* dYlm/dtheta
+     *
      * Note: Uses (1-x^2) dP^m_l/dx = (m-l-1) P^m_l+1 + (l+1)xP^m_l
      */
     inline Real dfpn_dtheta(int l, int m, Real phi, Real theta)
@@ -249,18 +217,6 @@ namespace radiationfemn
             result = sqrt(2.) * sin(abs(m) * phi) * der_legendre;
         }
         return result;
-    }
-
-    /* Derivative of FPN basis wrt angle
-     *
-     * var_index: 1 => phi, 2 => theta)
-     */
-    using dfpn_dOmega_fn = Real (*)(int, int, Real, Real);
-    const dfpn_dOmega_fn dfpn_domega_fns[2] = {dfpn_dphi, dfpn_dtheta};
-
-    Real dfpn_dOmega(int l, int m, Real phi, Real theta, int var_index)
-    {
-        return dfpn_domega_fns[var_index - 1](l, m, phi, theta);
     }
 
     // Inverse Jacobian P^itilde_ihat [e = 1, itilde = (phi, theta), ihat = (x,y,z)]
