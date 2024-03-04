@@ -333,7 +333,17 @@ namespace radiationfemn
         return mom_fpn_fns[mu](phi, theta);
     }
 
-    // Derivative of FEM basis with respect to cartesian coordinates on the unit sphere
+
+    /* Derivative of FEM basis with respect to cartesian coordinates on the unit sphere
+     *
+     * dpsi/dx^ihat = dpsi/dxi^i dxi^i/dx^ihat
+     *
+     * where dxi^i/dx^ihat is the inverse of the matrix:
+     *
+     * dx^ihat/dxi^i = [x1 x2 x3]
+     *                 [y1 y2 y3]
+     *                 [z1 z2 z3]
+     */
     using dfem_dxihat_fn = Real (*)(Real, Real, Real, Real, Real, Real, Real, Real, Real, Real, Real, Real, int);
     const dfem_dxihat_fn dfem_dxihat_fns[3] = {
         [](Real x1, Real y1, Real z1, Real x2, Real y2, Real z2, Real x3, Real y3, Real z3, Real xi1, Real xi2, Real xi3, int basis_index_a)
