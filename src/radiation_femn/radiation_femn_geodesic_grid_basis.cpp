@@ -8,6 +8,8 @@
 
 #include <iostream>
 #include <gsl/gsl_sf_legendre.h>
+#include <gsl/gsl_sf.h>
+
 #include "athena.hpp"
 #include "radiation_femn/radiation_femn_geodesic_grid_matrices.hpp"
 
@@ -137,7 +139,12 @@ namespace radiationfemn
         return fem_basis_derivative[basis_index - 1][xi_index - 1];
     }
 
-    // product of two FEM basis functions: psi_a psi_b
+    /* Product of two FEM basis functions evaluated in a triangular element: psi_a psi_b
+     *
+     * a, b: vertex index over which basis is peaked
+     * t1, t2, t3: vertex indices of the triangular element being considered
+     * basis_choice: type of basis function (1 => overlapping tent, 2 => small tent, 3 => overlapping honeycomb, 4 => small honeycomb)
+     */
     Real fem_basis_ab(int a, int b, int t1, int t2, int t3, Real xi1, Real xi2, Real xi3, int basis_choice)
     {
         int basis_index_a = (a == t1) * 1 + (a == t2) * 2 + (a == t3) * 3;
@@ -145,7 +152,12 @@ namespace radiationfemn
         return fem_basis(xi1, xi2, xi3, basis_index_a, basis_choice) * fem_basis(xi1, xi2, xi3, basis_index_b, basis_choice);
     }
 
-    // a fem basis function: psi_a
+    /* A FEM basis function evaluated in a triangular element: psi_a
+     *
+     * a: vertex index over which basis is peaked
+     * t1, t2, t3: vertex indices of the triangular element being considered
+     * basis_choice: type of basis function (1 => overlapping tent, 2 => small tent, 3 => overlapping honeycomb, 4 => small honeycomb)
+     */
     Real fem_basis_a(int a, int t1, int t2, int t3, Real xi1, Real xi2, Real xi3, int basis_choice)
     {
         int basis_index_a = (a == t1) * 1 + (a == t2) * 2 + (a == t3) * 3;
@@ -155,6 +167,12 @@ namespace radiationfemn
     /* FPN basis: real spherical harmonics
      *
      * Note: gsl_sf_legendre_sphPlm computes sqrt((2l+1)/(4 pi)) sqrt((l-m)!/(l+m)!) P_m^l(x)
+     *
+     * Computes:
+     *
+     * Ylm = sqrt((2l+1)/(2 pi)) sqrt((l-m)!/(l+m)!) cos (m phi) P_m^l(cos theta), m > 0
+     *     = sqrt((2l+1)/(4 pi)) P_m^l(cos theta), m = 0
+     *     = sqrt((2l+1)/(2 pi)) sqrt((l-|m|)!/(l+|m|)!) sin (|m| phi) P_|m|^l(cos theta), m < 0
      */
     Real fpn_basis_lm(int l, int m, Real phi, Real theta)
     {
@@ -195,14 +213,20 @@ namespace radiationfemn
     /* dYlm/dtheta
      *
      * Note: Uses (1-x^2) dP^m_l/dx = (m-l-1) P^m_l+1 + (l+1)xP^m_l
+     *       When x = -1, 1, dP^m_l/dx = 0
+     *       When m = -k < 0, dP^-k_l/dx = (-1)^k (l-k)!/(l+k)! dP^k_l/dx
      */
     inline Real dfpn_dtheta(int l, int m, Real phi, Real theta)
     {
         Real result = 0.;
+        const Real x = cos(theta);
 
-        Real der_legendre =
-            -sin(theta) * ((m - l - 1.) * gsl_sf_legendre_sphPlm(l + 1, abs(m), cos(theta)) + (l + 1) * cos(theta) * gsl_sf_legendre_sphPlm(l, abs(m), cos(theta)))
-            / (1. - cos(theta) * cos(theta));
+        if (abs(x - 1.) < 1e-14)
+        {
+            return 0.;
+        }
+
+        Real der_legendre = -sin(theta) * ((m - l - 1.) * gsl_sf_legendre_sphPlm(l + 1, abs(m), x) + (l + 1) * x * gsl_sf_legendre_sphPlm(l, abs(m), x)) / (1. - x * x);
 
         if (m > 0)
         {
@@ -214,7 +238,7 @@ namespace radiationfemn
         }
         else
         {
-            result = sqrt(2.) * sin(abs(m) * phi) * der_legendre;
+            result = pow(-1, -m) * (gsl_sf_fact(l + m) / gsl_sf_fact(l - m)) * sqrt(2.) * sin(abs(m) * phi) * der_legendre;
         }
         return result;
     }
