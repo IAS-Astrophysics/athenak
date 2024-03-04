@@ -107,7 +107,7 @@ inline Real IntegrateMatrixSphericalTriangle(int a, int b, int basis, int t1, in
                 * mom(nu, x1, y1, z1, x2, y2, z2, x3, y3, z3, scheme_points(i, 0), scheme_points(i, 1), scheme_points(i, 2))
                 * mom(mu, x1, y1, z1, x2, y2, z2, x3, y3, z3, scheme_points(i, 0), scheme_points(i, 1), scheme_points(i, 2))
                 * fem_basis_a(a, t1, t2, t3, scheme_points(i, 0), scheme_points(i, 1), scheme_points(i, 2), basis)
-                * dFEMBasisdp(ihat, b, t1, t2, t3, x1, y1, z1, x2, y2, z2, x3, y3, z3, scheme_points(i, 0), scheme_points(i, 1), scheme_points(i, 2), basis);
+                * dfem_dpihat(ihat, b, t1, t2, t3, x1, y1, z1, x2, y2, z2, x3, y3, z3, scheme_points(i, 0), scheme_points(i, 1), scheme_points(i, 2), basis);
       }
       break;
     case 5:

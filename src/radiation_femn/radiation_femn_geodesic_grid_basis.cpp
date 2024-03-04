@@ -370,11 +370,17 @@ namespace radiationfemn
         return dfem_dxihat_fns[idx - 1](x1, y1, z1, x2, y2, z2, x3, y3, z3, xi1, xi2, xi3, basis_index_a);
     }
 
+    /* Computes R^jhat_ihat = delta^jhat_ihat - n^jhat n_ihat where n^ihat is the normal to the unit sphere
+     *
+     * R = [1-cos^2(phi)*sin^2(theta)           -cos(phi)*sin^2(theta)*sin(phi) -cos(theta)*cos(phi)*sin(theta)]
+     *     [-cos(phi)*sin^2(theta)*sin(phi)     1-sin^2(theta)*sin^2(phi)       -cos(theta)*sin(theta)*sin(phi)]
+     *     [-cos(theta)*cos(phi)*sin(theta)     -cos(theta)*sin(theta)*sin(phi)  sin^2(theta)]
+     */
     const fpn_phitheta_fn matrix_jac_r[3][3] = {
         {
-            [](Real phival, Real thetaval) { return 1. - sin(thetaval) * sin(thetaval) * cos(thetaval) * cos(thetaval); },
+            [](Real phival, Real thetaval) { return 1. - sin(thetaval) * sin(thetaval) * cos(phival) * cos(phival); },
             [](Real phival, Real thetaval) { return -sin(thetaval) * sin(thetaval) * sin(phival) * cos(phival); },
-            [](Real phival, Real thetaval) { return -sin(thetaval); }
+            [](Real phival, Real thetaval) { return -sin(thetaval) * cos(thetaval) * cos(phival); }
         },
         {
             [](Real phival, Real thetaval) { return -sin(thetaval) * sin(thetaval) * sin(phival) * cos(phival); },
@@ -389,7 +395,7 @@ namespace radiationfemn
 
     };
 
-    inline Real Rmatrix(Real x1, Real y1, Real z1, Real x2, Real y2, Real z2, Real x3, Real y3, Real z3, Real xi1, Real xi2, Real xi3, int i, int ihat)
+    inline Real matrix_r(Real x1, Real y1, Real z1, Real x2, Real y2, Real z2, Real x3, Real y3, Real z3, Real xi1, Real xi2, Real xi3, int i, int ihat)
     {
         Real xval, yval, zval;
         BarycentricToCartesian(x1, y1, z1, x2, y2, z2, x3, y3, z3, xi1, xi2, xi3, xval, yval, zval);
@@ -401,15 +407,21 @@ namespace radiationfemn
         return matrix_jac_r[i - 1][ihat - 1](phival, thetaval);
     }
 
-    Real dFEMBasisdp(int ihat, int a, int t1, int t2, int t3, Real x1, Real y1, Real z1, Real x2, Real y2, Real z2, Real x3, Real y3, Real z3,
+    /* Derivative of the FEM basis functions with respect to cartesian momentum in co-moving frame
+     *
+     * dpsi/dp^ihat = R^jhat_ihat dpsi/dx^jhat
+     *
+     * where R^jhat_ihat = delta^jhat_ihat - n^jhat n_ihat (n^ihat is the normal to the unit sphere)
+     *
+     * Note: basis_choice is redundant for now, only works for overlapping tent!
+     */
+    Real dfem_dpihat(int ihat, int a, int t1, int t2, int t3, Real x1, Real y1, Real z1, Real x2, Real y2, Real z2, Real x3, Real y3, Real z3,
                      Real xi1, Real xi2, Real xi3, int basis_choice)
     {
         int basis_index_a = (a == t1) * 1 + (a == t2) * 2 + (a == t3) * 3;
 
-        Real
-            result = dfem_dxihat(x1, y1, z1, x2, y2, z2, x3, y3, z3, xi1, xi2, xi3, basis_index_a, 1) * Rmatrix(x1, y1, z1, x2, y2, z2, x3, y3, z3, xi1, xi2, xi3, 1, ihat)
-                + dfem_dxihat(x1, y1, z1, x2, y2, z2, x3, y3, z3, xi1, xi2, xi3, basis_index_a, 2) * Rmatrix(x1, y1, z1, x2, y2, z2, x3, y3, z3, xi1, xi2, xi3, 1, ihat)
-                + dfem_dxihat(x1, y1, z1, x2, y2, z2, x3, y3, z3, xi1, xi2, xi3, basis_index_a, 3) * Rmatrix(x1, y1, z1, x2, y2, z2, x3, y3, z3, xi1, xi2, xi3, 1, ihat);
-        return result;
+        return dfem_dxihat(x1, y1, z1, x2, y2, z2, x3, y3, z3, xi1, xi2, xi3, basis_index_a, 1) * matrix_r(x1, y1, z1, x2, y2, z2, x3, y3, z3, xi1, xi2, xi3, 1, ihat)
+            + dfem_dxihat(x1, y1, z1, x2, y2, z2, x3, y3, z3, xi1, xi2, xi3, basis_index_a, 2) * matrix_r(x1, y1, z1, x2, y2, z2, x3, y3, z3, xi1, xi2, xi3, 2, ihat)
+            + dfem_dxihat(x1, y1, z1, x2, y2, z2, x3, y3, z3, xi1, xi2, xi3, basis_index_a, 3) * matrix_r(x1, y1, z1, x2, y2, z2, x3, y3, z3, xi1, xi2, xi3, 3, ihat);
     }
 } // namespace radiationfemn
