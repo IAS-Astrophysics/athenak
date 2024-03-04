@@ -54,16 +54,15 @@ Particles::Particles(MeshBlockPack *ppack, ParameterInput *pin) :
   }
 
   // select pusher algorithm
-  {
-    std::string ppush = pin->GetString("particles","pusher");
-    if (ppush.compare("drift") == 0) {
-      pusher = ParticlesPusher::drift;
-    } else {
-      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-                << std::endl << "Particle pusher must be specified in <particles> block"
-                <<std::endl;
-      std::exit(EXIT_FAILURE);
-    }
+  std::string ppush = pin->GetString("particles","pusher");
+  if (ppush.compare("drift") == 0) {
+    pusher = ParticlesPusher::drift;
+  } else if (ppush.compare("boris") == 0) {
+    pusher = ParticlesPusher::boris;
+  } else {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+              << "Particle pusher must be specified in <particles> block" <<std::endl;
+    std::exit(EXIT_FAILURE);
   }
 
   // set dimensions of particle arrays. Note particles only work in 2D/3D
@@ -75,7 +74,7 @@ Particles::Particles(MeshBlockPack *ppack, ParameterInput *pin) :
   switch (particle_type) {
     case ParticleType::cosmic_ray:
       {
-        int ndim=4;
+        int ndim=6;
         if (pmy_pack->pmesh->three_d) {ndim+=2;}
         nrdata = ndim;
         nidata = 2;

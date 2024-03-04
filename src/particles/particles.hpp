@@ -12,11 +12,15 @@
 #include "parameter_input.hpp"
 #include "tasklist/task_list.hpp"
 #include "bvals/bvals.hpp"
+#include "mhd/mhd.hpp"
+#include "eos/eos.hpp"
 
 // forward declarations
+class MHD;
+class EquationOfState;
 
 // constants that enumerate ParticlesPusher options
-enum class ParticlesPusher {drift, leap_frog, lagrangian_tracer, lagrangian_mc};
+enum class ParticlesPusher {drift, leap_frog, lagrangian_tracer, lagrangian_mc, boris};
 
 // constants that enumerate ParticleTypes
 enum class ParticleType {cosmic_ray};
@@ -78,6 +82,7 @@ class Particles {
   TaskStatus ClearSend(Driver *pdriver, int stage);
   TaskStatus ClearRecv(Driver *pdriver, int stage);
 
+  void BorisStep( const Real dt, DvceArray2D<Real> &pr, const DvceArray2D<int> &pi, const bool multi_d, const bool three_d );
  private:
   MeshBlockPack* pmy_pack;  // ptr to MeshBlockPack containing this Particles
 };
