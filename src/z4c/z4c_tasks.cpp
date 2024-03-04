@@ -46,22 +46,22 @@ void Z4c::AssembleZ4cTasks(std::map<std::string, std::shared_ptr<TaskList>> tl) 
       case 4: id.crhs  = tl["stagen"]->AddTask(&Z4c::CalcRHS<4>, this, id.copyu);
               break;
   }
-  id.sombc = tl["stagen_tl"]->AddTask(&Z4c::Z4cBoundaryRHS, this, id.crhs);
-  id.expl  = tl["stagen_tl"]->AddTask(&Z4c::ExpRKUpdate, this, id.sombc);
-  id.restu = tl["stagen_tl"]->AddTask(&Z4c::RestrictU, this, id.expl);
-  id.sendu = tl["stagen_tl"]->AddTask(&Z4c::SendU, this, id.restu);
-  id.recvu = tl["stagen_tl"]->AddTask(&Z4c::RecvU, this, id.sendu);
-  id.bcs   = tl["stagen_tl"]->AddTask(&Z4c::ApplyPhysicalBCs, this, id.recvu);
-  id.prol  = tl["stagen_tl"]->AddTask(&Z4c::Prolongate, this, id.bcs);
-  id.algc  = tl["stagen_tl"]->AddTask(&Z4c::EnforceAlgConstr, this, id.prol);
-  id.newdt = tl["stagen_tl"]->AddTask(&Z4c::NewTimeStep, this, id.algc);
-  // "after_stagen_tl" task list
-  id.csend = tl["after_stagen_tl"]->AddTask(&Z4c::ClearSend, this, none);
-  id.crecv = tl["after_stagen_tl"]->AddTask(&Z4c::ClearRecv, this, id.csend);
-  id.z4tad = tl["after_stagen_tl"]->AddTask(&Z4c::Z4cToADM_, this, id.crecv);
-  id.admc  = tl["after_stagen_tl"]->AddTask(&Z4c::ADMConstraints_, this, id.z4tad);
-  id.weyl_scalar  = tl["after_stagen_tl"]->AddTask(&Z4c::CalcWeylScalar_, this, id.admc);
-  id.ptrck = tl["after_stagen_tl"]->AddTask(&Z4c::PunctureTracker, this, id.admc);
+  id.sombc = tl["stagen"]->AddTask(&Z4c::Z4cBoundaryRHS, this, id.crhs);
+  id.expl  = tl["stagen"]->AddTask(&Z4c::ExpRKUpdate, this, id.sombc);
+  id.restu = tl["stagen"]->AddTask(&Z4c::RestrictU, this, id.expl);
+  id.sendu = tl["stagen"]->AddTask(&Z4c::SendU, this, id.restu);
+  id.recvu = tl["stagen"]->AddTask(&Z4c::RecvU, this, id.sendu);
+  id.bcs   = tl["stagen"]->AddTask(&Z4c::ApplyPhysicalBCs, this, id.recvu);
+  id.prol  = tl["stagen"]->AddTask(&Z4c::Prolongate, this, id.bcs);
+  id.algc  = tl["stagen"]->AddTask(&Z4c::EnforceAlgConstr, this, id.prol);
+  id.newdt = tl["stagen"]->AddTask(&Z4c::NewTimeStep, this, id.algc);
+  // "after_stagen" task list
+  id.csend = tl["after_stagen"]->AddTask(&Z4c::ClearSend, this, none);
+  id.crecv = tl["after_stagen"]->AddTask(&Z4c::ClearRecv, this, id.csend);
+  id.z4tad = tl["after_stagen"]->AddTask(&Z4c::Z4cToADM_, this, id.crecv);
+  id.admc  = tl["after_stagen"]->AddTask(&Z4c::ADMConstraints_, this, id.z4tad);
+  id.weyl_scalar  = tl["after_stagen"]->AddTask(&Z4c::CalcWeylScalar_, this, id.admc);
+  id.ptrck = tl["after_stagen"]->AddTask(&Z4c::PunctureTracker, this, id.admc);
   return;
 }
 
