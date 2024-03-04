@@ -44,15 +44,19 @@ std::cout << "maxjshift=" << maxjshift<<std::endl;
   for (int n=0; n<2; ++n) {
     int nmb = std::max((ppack->nmb_thispack), (ppack->pmesh->nmb_maxperrank));
     sendbuf_orb[n].vars_req = new MPI_Request[nmb];
+    sendbuf_orb[n].flds_req = new MPI_Request[nmb];
     recvbuf_orb[n].vars_req = new MPI_Request[nmb];
+    recvbuf_orb[n].flds_req = new MPI_Request[nmb];
     for (int m=0; m<nmb; ++m) {
       sendbuf_orb[n].vars_req[m] = MPI_REQUEST_NULL;
+      sendbuf_orb[n].flds_req[m] = MPI_REQUEST_NULL;
       recvbuf_orb[n].vars_req[m] = MPI_REQUEST_NULL;
+      recvbuf_orb[n].flds_req[m] = MPI_REQUEST_NULL;
     }
   }
 
   // create unique communicators for orbital advection
-  MPI_Comm_dup(MPI_COMM_WORLD, &comm_orb);
+  MPI_Comm_dup(MPI_COMM_WORLD, &comm_sbox);
 #endif
 
   // Allocate send/recv buffers for orbital advection
@@ -61,9 +65,15 @@ std::cout << "maxjshift=" << maxjshift<<std::endl;
   int ncells3 = indcs.nx3;
   int ncells2 = indcs.ng + maxjshift;
   int ncells1 = indcs.nx1;
+  // cell-centered data
   for (int n=0; n<2; ++n) {
     Kokkos::realloc(sendbuf_orb[n].vars,nmb,nvar,ncells3,ncells2,ncells1);
     Kokkos::realloc(recvbuf_orb[n].vars,nmb,nvar,ncells3,ncells2,ncells1);
+  }
+  // face-centered data
+  for (int n=0; n<2; ++n) {
+    Kokkos::realloc(sendbuf_orb[n].flds,nmb,2,ncells3+1,ncells2,ncells1+1);
+    Kokkos::realloc(recvbuf_orb[n].flds,nmb,2,ncells3+1,ncells2,ncells1+1);
   }
 }
 

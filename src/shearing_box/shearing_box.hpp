@@ -36,12 +36,12 @@ struct ShearingBoxTaskIDs {
 //! Basically a much simplified version of the BoundaryBuffer struct.
 
 struct ShearingBoxBuffer {
-  // 2D Views that store buffer data on device
-  DvceArray5D<Real> vars;
+  // 5D Views that store buffer data on device
+  DvceArray5D<Real> vars, flds;
 #if MPI_PARALLEL_ENABLED
   // vectors of length (number of MBs) to hold MPI requests
   // Using STL vector causes problems with some GPU compilers, so just use plain C array
-  MPI_Request *vars_req;
+  MPI_Request *vars_req, *flds_req;
 #endif
 };
 
@@ -72,6 +72,9 @@ class ShearingBox {
   // functions to communicate CC data with orbital advection
   TaskStatus PackAndSendCC_Orb(DvceArray5D<Real> &a);
   TaskStatus RecvAndUnpackCC_Orb(DvceArray5D<Real> &a, ReconstructionMethod rcon);
+  // functions to communicate FC data with orbital advection
+  TaskStatus PackAndSendFC_Orb(DvceFaceFld4D<Real> &b);
+  TaskStatus RecvAndUnpackFC_Orb(DvceFaceFld4D<Real> &b0, ReconstructionMethod rcon);
 
  private:
   MeshBlockPack *pmy_pack;

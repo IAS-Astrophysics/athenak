@@ -20,11 +20,11 @@ void DonorCellOrbAdvFlx(TeamMember_t const &member, const int jl, const int ju,
                         ScrArray1D<Real> &ust) {
   if (eps > 0.0) {
     par_for_inner(member, jl, ju, [&](const int j) {
-      ust(j) = u(j-1);
+      ust(j) = eps*u(j-1);
     });
   } else {
     par_for_inner(member, jl, ju, [&](const int j) {
-      ust(j) = u(j);
+      ust(j) = eps*u(j);
     });
   }
   return;
@@ -50,11 +50,11 @@ void PcwsLinearOrbAdvFlx(TeamMember_t const &member, const int jl, const int ju,
   // compute upwind state (U_star)
   if (eps > 0.0) {
     par_for_inner(member, jl, ju, [&](const int j) {
-      ust(j) = (u(j-1) + 0.5*(1.0 - eps)*q1(j-1));
+      ust(j) = eps*(u(j-1) + 0.5*(1.0 - eps)*q1(j-1));
     });
   } else {
     par_for_inner(member, jl, ju, [&](const int j) {
-      ust(j) = (u(j) - 0.5*(1.0 + eps)*q1(j));
+      ust(j) = eps*(u(j) - 0.5*(1.0 + eps)*q1(j));
     });
   }
   return;
