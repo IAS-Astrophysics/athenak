@@ -36,6 +36,7 @@ ShearingBox::ShearingBox(MeshBlockPack *ppack, ParameterInput *pin, int nvar) :
   Real xmin = fabs(ppack->pmesh->mesh_size.x1min);
   Real xmax = fabs(ppack->pmesh->mesh_size.x1max);
   maxjshift = static_cast<int>((ppack->pmesh->cfl_no)*std::max(xmin,xmax)) + 1;
+std::cout << "maxjshift=" << maxjshift<<std::endl;
 
 #if MPI_PARALLEL_ENABLED
   // For shearing box, communication is only with x2-face neighbors

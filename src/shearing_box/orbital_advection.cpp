@@ -69,11 +69,11 @@ TaskStatus ShearingBox::PackAndSendCC_Orb(DvceArray5D<Real> &a) {
       int iu = ie;
       int jl, ju;
       if (n==0) {
-        int jl = js;
-        int ju = js + ng + maxjshift;;
+        jl = js;
+        ju = js + (ng + maxjshift - 1);;
       } else {
-        int jl = je - ng - maxjshift;
-        int ju = je;
+        jl = je - (ng + maxjshift - 1);
+        ju = je;
       }
       int kl = ks;
       int ku = ke;
@@ -200,49 +200,49 @@ TaskStatus ShearingBox::RecvAndUnpackCC_Orb(DvceArray5D<Real> &u0,
 
   auto &mb_size = pmy_pack->pmb->mb_size;
   auto &mesh_size = pmy_pack->pmesh->mesh_size;
-  Real &time = pmy_pack->pmesh->time;
+  Real &dt = pmy_pack->pmesh->dt;
   Real qom = qshear*omega0;
   Real ly = (mesh_size.x2max - mesh_size.x2min);
 
   int scr_lvl=0;
-  size_t scr_size = ScrArray1D<Real>::shmem_size(ncells2) * 2;
+  size_t scr_size = ScrArray1D<Real>::shmem_size(ncells2) * 3;
   par_for_outer("oadv",DevExeSpace(),scr_size,scr_lvl,0,(nmb-1),0,(nvar-1),ks,ke,is,ie,
   KOKKOS_LAMBDA(TeamMember_t member, const int m, const int n, const int k, const int i) {
-    ScrArray1D<Real> u0_(member.team_scratch(scr_lvl), ncells2);
-    ScrArray1D<Real> flx(member.team_scratch(scr_lvl), ncells2);
+    ScrArray1D<Real> u0_(member.team_scratch(scr_lvl), ncells2); // 1D slice of data
+    ScrArray1D<Real> ust(member.team_scratch(scr_lvl), ncells2); // "U_star" at faces
+    ScrArray1D<Real> q1_(member.team_scratch(scr_lvl), ncells2); // scratch array
 
     Real &x1min = mb_size.d_view(m).x1min;
     Real &x1max = mb_size.d_view(m).x1max;
     int nx1 = indcs.nx1;
     Real x1v = CellCenterX(i-is, nx1, x1min, x1max);
 
-    Real yshear = -qom*x1v*time;
-    Real deltay = fmod(yshear, ly);
-    int joffset = static_cast<int>(deltay/(mb_size.d_view(m).dx2));
+    Real yshear = -qom*x1v*dt;
+    int joffset = static_cast<int>(yshear/(mb_size.d_view(m).dx2));
 
     // Load scratch array.  Index with shift:  jj = j + jshift
     par_for_inner(member, 0, (ncells2-1), [&](const int jj) {
-      if (jj < (js + joffset)) {
+      if ((jj-joffset) < js) {
         // Load scratch arrays from L boundary buffer with offset
-        u0_(jj) = rbuf[0].vars(m,n,k-ks,jj,i-is);
-      } else if (jj < (je + joffset)) {
+        u0_(jj) = rbuf[0].vars(m,n,k-ks,((jj-joffset)+maxjshift),i-is);
+      } else if ((jj-joffset) < (je+1)) {
         // Load from array itself with offset
-        u0_(jj) = u0(m,n,k,(jj+joffset),i);
+        u0_(jj) = u0(m,n,k,(jj-joffset),i);
       } else {
         // Load scratch arrays from R boundary buffer with offset
-        u0_(jj) = rbuf[1].vars(m,n,k-ks,(jj-(je+1)),i-is);
+        u0_(jj) = rbuf[1].vars(m,n,k-ks,((jj-joffset)-(je+1)),i-is);
       }
     });
-
+    member.team_barrier();
 
     // Compute x2-fluxes from fractional offset, including in ghost zones
-    Real epsi = fmod(deltay,(mb_size.d_view(m).dx2))/(mb_size.d_view(m).dx2);
+    Real epsi = fmod(yshear,(mb_size.d_view(m).dx2))/(mb_size.d_view(m).dx2);
     switch (rcon) {
       case ReconstructionMethod::dc:
-        DonorCellOrbAdvFlx(member, js, je+1, epsi, u0_, flx);
+        DonorCellOrbAdvFlx(member, js, je+1, epsi, u0_, q1_, ust);
         break;
       case ReconstructionMethod::plm:
-        PiecewiseLinearOrbAdvFlx(member, js, je+1, epsi, u0_, flx);
+        PcwsLinearOrbAdvFlx(member, js, je+1, epsi, u0_, q1_, ust);
         break;
 //      case ReconstructionMethod::ppm4:
 //      case ReconstructionMethod::ppmx:
@@ -255,7 +255,7 @@ TaskStatus ShearingBox::RecvAndUnpackCC_Orb(DvceArray5D<Real> &u0,
 
     // Update CC variables (including ghost zones) with orbital advection fluxes
     par_for_inner(member, js, je, [&](const int j) {
-      u0(m,n,k,j,i) = u0_(j) + (flx(j+1) - flx(j));
+      u0(m,n,k,j,i) = u0_(j) - epsi*(ust(j+1) - ust(j));
     });
   });
 

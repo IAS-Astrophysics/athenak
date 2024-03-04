@@ -16,14 +16,15 @@
 
 KOKKOS_INLINE_FUNCTION
 void DonorCellOrbAdvFlx(TeamMember_t const &member, const int jl, const int ju,
-                      const Real eps, const ScrArray1D<Real> &u, ScrArray1D<Real> &flx) {
+                        const Real eps, const ScrArray1D<Real> &u, ScrArray1D<Real> &q1,
+                        ScrArray1D<Real> &ust) {
   if (eps > 0.0) {
     par_for_inner(member, jl, ju, [&](const int j) {
-      flx(j+1) = eps*u(j);
+      ust(j) = u(j-1);
     });
   } else {
     par_for_inner(member, jl, ju, [&](const int j) {
-      flx(j  ) = eps*u(j);
+      ust(j) = u(j);
     });
   }
   return;
@@ -33,23 +34,29 @@ void DonorCellOrbAdvFlx(TeamMember_t const &member, const int jl, const int ju,
 //! \fn PiecewiseLinearOrbAdvFlx()
 
 KOKKOS_INLINE_FUNCTION
-void PiecewiseLinearOrbAdvFlx(TeamMember_t const &member, const int jl, const int ju,
-                      const Real eps, const ScrArray1D<Real> &u, ScrArray1D<Real> &flx) {
-  par_for_inner(member, jl, ju, [&](const int j) {
-    // compute L/R slopes
+void PcwsLinearOrbAdvFlx(TeamMember_t const &member, const int jl, const int ju,
+                         const Real eps, const ScrArray1D<Real> &u, ScrArray1D<Real> &q1,
+                         ScrArray1D<Real> &ust) {
+
+  // compute limited slopes
+  par_for_inner(member, jl-1, ju, [&](const int j) {
     Real dql = u(j  ) - u(j-1);
     Real dqr = u(j+1) - u(j  );
     // Apply limiter
     Real dq2 = dql*dqr;
-    Real du  = dq2/(dql + dqr);
-    if (dq2 <= 0.0) du = 0.0;
-
-    if (eps > 0.0) {
-      flx(j+1) = eps*(u(j) + 0.5*(1.0 - eps)*du);
-    } else {
-      flx(j  ) = eps*(u(j) - 0.5*(1.0 + eps)*du);
-    }
+    q1(j) = 0.0;
+    if (dq2 > 0.0) q1(j) = dq2/(dql + dqr);
   });
+  // compute upwind state (U_star)
+  if (eps > 0.0) {
+    par_for_inner(member, jl, ju, [&](const int j) {
+      ust(j) = (u(j-1) + 0.5*(1.0 - eps)*q1(j-1));
+    });
+  } else {
+    par_for_inner(member, jl, ju, [&](const int j) {
+      ust(j) = (u(j) - 0.5*(1.0 + eps)*q1(j));
+    });
+  }
   return;
 }
 
