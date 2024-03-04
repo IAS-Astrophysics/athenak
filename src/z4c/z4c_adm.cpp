@@ -324,7 +324,8 @@ void Z4c::ADMConstraints(MeshBlockPack *pmbp) {
     for(int c = 0; c < 3; ++c)
     for(int a = 0; a < 3; ++a)
     for(int b = a; b < 3; ++b) {
-      Gamma_ddd_z4c(c,a,b) = 0.5*(dg_ddd_z4c(a,b,c) + dg_ddd_z4c(b,a,c) - dg_ddd_z4c(c,a,b));
+      Gamma_ddd_z4c(c,a,b) = 0.5*(dg_ddd_z4c(a,b,c)
+                          + dg_ddd_z4c(b,a,c) - dg_ddd_z4c(c,a,b));
       Gamma_udd_z4c(c,a,b) = 0.0;
     }
 
