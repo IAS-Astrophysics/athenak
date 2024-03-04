@@ -243,15 +243,21 @@ namespace radiationfemn
         return result;
     }
 
-    // Inverse Jacobian P^itilde_ihat [e = 1, itilde = (phi, theta), ihat = (x,y,z)]
+    /* Inverse Jacobian P^itilde_ihat [e = 1, itilde = (phi, theta), ihat = (x,y,z)]
+     *
+     * P^itilde_ihat = [-cosec(theta)*sin(phi)  cosec(theta)*cos(phi)   0]
+     *                 [cos(theta)*cos(phi)     cos(theta)*sin(phi)     -sin(theta)]
+     */
     using inv_jac_fn = Real (*)(Real, Real);
     const inv_jac_fn inv_jac_fns[2][3] = {
         {
-            [](Real phi, Real theta) { return -sin(phi) / sin(theta); }, [](Real phi, Real theta) { return cos(phi) / sin(theta); },
+            [](Real phi, Real theta) { return -sin(phi) / sin(theta); },
+            [](Real phi, Real theta) { return cos(phi) / sin(theta); },
             [](Real phi, Real theta) { return 0.0; }
         },
         {
-            [](Real phi, Real theta) { return cos(phi) * cos(theta); }, [](Real phi, Real theta) { return sin(phi) * cos(theta); },
+            [](Real phi, Real theta) { return cos(phi) * cos(theta); },
+            [](Real phi, Real theta) { return sin(phi) * cos(theta); },
             [](Real phi, Real theta) { return -sin(theta); }
         }
     };
@@ -261,7 +267,7 @@ namespace radiationfemn
         return inv_jac_fns[tilde_index - 1][hat_index - 1](phi, theta);
     }
 
-    // cos(phi) sin(theta)
+    // x-component of momentum (e = 1): cos(phi) sin(theta)
     Real cos_phi_sin_theta(Real x1, Real y1, Real z1, Real x2, Real y2, Real z2, Real x3, Real y3, Real z3, Real xi1, Real xi2, Real xi3)
     {
         Real xval, yval, zval;
@@ -274,7 +280,7 @@ namespace radiationfemn
         return cos(phival) * sin(thetaval);
     }
 
-    // sin(phi) sin(theta)
+    // y-component of momentum (e = 1): sin(phi) sin(theta)
     Real sin_phi_sin_theta(Real x1, Real y1, Real z1, Real x2, Real y2, Real z2, Real x3, Real y3, Real z3, Real xi1, Real xi2, Real xi3)
     {
         Real xval, yval, zval;
@@ -287,7 +293,7 @@ namespace radiationfemn
         return sin(phival) * sin(thetaval);
     }
 
-    // cos(theta)
+    // z-component of momentum (e = 1): cos(theta)
     Real cos_theta(Real x1, Real y1, Real z1, Real x2, Real y2, Real z2, Real x3, Real y3, Real z3, Real xi1, Real xi2, Real xi3)
     {
         Real xval, yval, zval;
@@ -299,7 +305,7 @@ namespace radiationfemn
         return cos(thetaval);
     }
 
-    // p^mu/e FEM
+    // Momentum p^mu (e = 1) for FEM
     using mom_fem_fn = Real (*)(Real, Real, Real, Real, Real, Real, Real, Real, Real, Real, Real, Real);
     const mom_fem_fn mom_fem_fns[4] = {
         [](Real x1, Real y1, Real z1, Real x2, Real y2, Real z2, Real x3, Real y3, Real z3, Real xi1, Real xi2, Real xi3) { return 1.; },
@@ -313,10 +319,12 @@ namespace radiationfemn
         return mom_fem_fns[mu](x1, y1, z1, x2, y2, z2, x3, y3, z3, xi1, xi2, xi3);
     }
 
-    // p^mu/e FPN
+    // Momentum p^mu (e = 1) for FPN
     using fpn_phitheta_fn = Real (*)(Real, Real);
     const fpn_phitheta_fn mom_fpn_fns[4] = {
-        [](Real phi, Real theta) { return 1.; }, [](Real phi, Real theta) { return cos(phi) * sin(theta); }, [](Real phi, Real theta) { return sin(phi) * sin(theta); },
+        [](Real phi, Real theta) { return 1.; },
+        [](Real phi, Real theta) { return cos(phi) * sin(theta); },
+        [](Real phi, Real theta) { return sin(phi) * sin(theta); },
         [](Real phi, Real theta) { return cos(theta); }
     };
 
