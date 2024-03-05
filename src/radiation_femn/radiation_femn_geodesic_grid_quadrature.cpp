@@ -1,14 +1,14 @@
 //========================================================================================
-// Radiation FEM_N code for Athenasu.edu>
-// AthenaXX copyright(C) James M. Stone <jmstone@ias.edu> and t
-//// Copyright (C) 2023 Maitraya Bhattacharyya <mbb6217@psu.edu> and David Radice <dur566@p
-////=================================================================he Athena code team
-// Licensed under the 3-clause BSD License (the "LICENSE")=======================
-//! \file radiation_femn_quadrature.cpp
+// AthenaXXX astrophysical plasma code
+// Copyright(C) 2020 James M. Stone <jmstone@ias.edu> and the Athena code team
+// Licensed under the 3-clause BSD License (the "LICENSE")
+//========================================================================================
+//! \file radiation_femn_geodesic_grid_quadrature.cpp
 //  \brief contains T2 quadrature weights. DO NOT EDIT.
 
 #include <fstream>
 #include <string>
+
 #include "radiation_femn/radiation_femn_geodesic_grid.hpp"
 
 namespace radiationfemn {
