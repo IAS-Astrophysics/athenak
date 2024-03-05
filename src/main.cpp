@@ -290,6 +290,7 @@ int main(int argc, char *argv[]) {
   // Construct Driver and Outputs. Actual outputs (including initial conditions) are made
   // in Driver.Initialize(). Add wall clock timer to Driver if necessary.
 
+  ChangeRunDir(run_dir);
   Driver* pdriver = new Driver(pinput, pmesh, wtlim, &timer);
   Outputs* pout = new Outputs(pinput, pmesh);
 
