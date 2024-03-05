@@ -293,7 +293,7 @@ TaskStatus ShearingBox::PackAndSendFC_Orb(DvceFaceFld4D<Real> &b) {
   auto &ng = indcs.ng;
 
   // Outer loop over (# of MeshBlocks)*(# of buffers)*(# of variables)
-  int nmnv = nmb*2;  // only consider 2 neighbors (x2-faces)
+  int nmnv = nmb*2;  // only consider 2 neighbors (x2-faces) and only 2 vars
   Kokkos::TeamPolicy<> policy(DevExeSpace(), nmnv, Kokkos::AUTO);
   Kokkos::parallel_for("oa-packB", policy, KOKKOS_LAMBDA(TeamMember_t tmember) {
     const int m = tmember.league_rank()/2;
@@ -443,6 +443,9 @@ TaskStatus ShearingBox::RecvAndUnpackFC_Orb(DvceFaceFld4D<Real> &b0,
   auto &ks = indcs.ks, &ke = indcs.ke;
   auto &ng = indcs.ng;
   int ncells2 = indcs.nx2 + 2*(indcs.ng);
+  int jfs = ng + maxjshift;
+  int jfe = jfs + indcs.nx2 - 1;
+  int nfx = indcs.nx2 + 2*(ng + maxjshift);
 
   auto &mbsize = pmy_pack->pmb->mb_size;
   auto &mesh_size = pmy_pack->pmesh->mesh_size;
@@ -450,16 +453,15 @@ TaskStatus ShearingBox::RecvAndUnpackFC_Orb(DvceFaceFld4D<Real> &b0,
   Real qom = qshear*omega0;
   Real ly = (mesh_size.x2max - mesh_size.x2min);
 
-std::cout<<"starting remap"<<std::endl;
   int scr_lvl=0;
-  size_t scr_size = ScrArray1D<Real>::shmem_size(ncells2) * 3;
+  size_t scr_size = ScrArray1D<Real>::shmem_size(nfx) * 3;
   auto emfx = pmy_pack->pmhd->efld.x1e;
   auto emfz = pmy_pack->pmhd->efld.x3e;
   par_for_outer("oa-unB",DevExeSpace(),scr_size,scr_lvl,0,(nmb-1),0,1,ks,ke+1,is,ie+1,
   KOKKOS_LAMBDA(TeamMember_t member, const int m, const int v, const int k, const int i) {
-    ScrArray1D<Real> b0_(member.team_scratch(scr_lvl), ncells2); // 1D slice of data
-    ScrArray1D<Real> flx(member.team_scratch(scr_lvl), ncells2); // "flux" at faces
-    ScrArray1D<Real> q1_(member.team_scratch(scr_lvl), ncells2); // scratch array
+    ScrArray1D<Real> b0_(member.team_scratch(scr_lvl), nfx); // 1D slice of data
+    ScrArray1D<Real> flx(member.team_scratch(scr_lvl), nfx); // "flux" at faces
+    ScrArray1D<Real> q1_(member.team_scratch(scr_lvl), nfx); // scratch array
 
     Real &x1min = mbsize.d_view(m).x1min;
     Real &x1max = mbsize.d_view(m).x1max;
@@ -468,41 +470,41 @@ std::cout<<"starting remap"<<std::endl;
     Real x1;
     if (v==0) {
       // B3 located at x1-cell centers
-      Real x1 = CellCenterX(i-is, nx1, x1min, x1max);
+      x1 = CellCenterX(i-is, nx1, x1min, x1max);
     } else if (v==1) {
       // B1 located at x1-cell faces
-      Real x1 = LeftEdgeX(i-is, nx1, x1min, x1max);
+      x1 = LeftEdgeX(i-is, nx1, x1min, x1max);
     }
     Real yshear = -qom*x1*dt;
     int joffset = static_cast<int>(yshear/(mbsize.d_view(m).dx2));
 
-    // Load scratch array.  Index with shift:  jj = j + jshift
-    par_for_inner(member, 0, (ncells2-1), [&](const int jj) {
-      if ((jj-joffset) < js) {
-        // Load scratch arrays from L boundary buffer with offset
-        b0_(jj) = rbuf[0].flds(m,v,k-ks,((jj-joffset)+maxjshift),i-is);
-      } else if ((jj-joffset) < (je+1)) {
-        // Load from array itself with offset
+    // Load scratch array with no shift
+    par_for_inner(member, 0, (nfx-1), [&](const int jf) {
+      if (jf < jfs) {
+        // Load from L boundary buffer
+        b0_(jf) = rbuf[0].flds(m,v,k-ks,jf,i-is);
+      } else if (jf <= jfe) {
+        // Load from array itself (addressed with j=jf-jfs+js)
         if (v==0) {
-          b0_(jj) = b0.x3f(m,k,(jj-joffset),i);
+          b0_(jf) = b0.x3f(m,k,(jf-jfs+js),i);
         } else if (v==1) {
-          b0_(jj) = b0.x1f(m,k,(jj-joffset),i);
+          b0_(jf) = b0.x1f(m,k,(jf-jfs+js),i);
         }
       } else {
-        // Load scratch arrays from R boundary buffer with offset
-        b0_(jj) = rbuf[1].flds(m,v,k-ks,((jj-joffset)-(je+1)),i-is);
+        // Load scratch arrays from R boundary buffer
+        b0_(jf) = rbuf[1].flds(m,v,k-ks,(jf-(jfe+1)),i-is);
       }
     });
     member.team_barrier();
 
-    // Compute x2-fluxes from fractional offset
+    // Compute x2-fluxes at shifted cell faces
     Real epsi = fmod(yshear,(mbsize.d_view(m).dx2))/(mbsize.d_view(m).dx2);
     switch (rcon) {
       case ReconstructionMethod::dc:
-        DonorCellOrbAdvFlx(member, js, je+1, epsi, b0_, q1_, flx);
+        DonorCellOrbAdvFlx(member, (jfs-joffset), (jfe+1-joffset), epsi, b0_, q1_, flx);
         break;
       case ReconstructionMethod::plm:
-        PcwsLinearOrbAdvFlx(member, js, je+1, epsi, b0_, q1_, flx);
+        PcwsLinearOrbAdvFlx(member, (jfs-joffset), (jfe+1-joffset), epsi, b0_, q1_, flx);
         break;
 //      case ReconstructionMethod::ppm4:
 //      case ReconstructionMethod::ppmx:
@@ -513,31 +515,31 @@ std::cout<<"starting remap"<<std::endl;
     }
     member.team_barrier();
 
-std::cout<<"summing Bz"<<std::endl;
     // Compute emfx = -VyBz, which is at cell-center in x1-direction
     if (v==0) {
       par_for_inner(member, js, je+1, [&](const int j) {
-        emfx(m,k,j,i) = -flx(j);
+        int jf = j-js + jfs;
+        emfx(m,k,j,i) = -flx(jf-joffset);
         // Sum integer offsets into effective EMFs
         for (int jj=1; jj<=joffset; jj++) {
-          emfx(m,k,j,i) -= b0_(j-jj);
+          emfx(m,k,j,i) -= b0_(jf-jj);
         }
         for (int jj=(joffset+1); jj<=0; jj++) {
-          emfx(m,k,j,i) += b0_(j-jj);
+          emfx(m,k,j,i) += b0_(jf-jj);
         }
       });
 
-std::cout<<"summing Bx"<<std::endl;
     // Compute emfz =  VyBx, which is at cell-face in x1-direction
     } else if (v==1) {
-      par_for_inner(member, js, je, [&](const int j) {
-        emfz(m,k,j,i) = flx(j);
+      par_for_inner(member, js, je+1, [&](const int j) {
+        int jf = j-js + jfs;
+        emfz(m,k,j,i) = flx(jf-joffset);
         // Sum integer offsets into effective EMFs
         for (int jj=1; jj<=joffset; jj++) {
-          emfz(m,k,j,i) += b0_(j-jj);
+          emfz(m,k,j,i) += b0_(jf-jj);
         }
         for (int jj=(joffset+1); jj<=0; jj++) {
-          emfz(m,k,j,i) -= b0_(j-jj);
+          emfz(m,k,j,i) -= b0_(jf-jj);
         }
       });
     }
