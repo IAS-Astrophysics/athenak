@@ -288,6 +288,9 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
             c2p_failure = c2p_failure_in_fix;
             iter_used_in_fix = iter_used;
           }
+
+          // Real pgas_alt = (s_tot/u_sr.d) * pow(w.d, eos.gamma);
+
         } // endif (c2p_failure || (sigma_cold > sigma_cold_cut_))
       } // endif entropy_fix_
 
@@ -313,7 +316,17 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
       //     smooth_flag_(m,k,j,i) = true;
       //   }
       // }
-      if (customize_fofc_ && (sigma_cold > sigma_cold_cut_)) fofc_(m,k,j,i) = true;
+      if (customize_fofc_ && (sigma_cold > sigma_cold_cut_)) {
+        Real del_r = 1.0;
+        Real bh_a = 0.9375;
+        Real a2 = SQR(bh_a);
+        Real r_hor = 1.0 + sqrt(1.0 - a2);
+        Real rr2 = SQR(x1v) + SQR(x2v) + SQR(x3v);
+        Real r = sqrt(0.5 * (rr2 - a2 + sqrt(SQR(rr2 - a2) + 4.0*a2*SQR(x3v))));
+        if (r > r_hor + del_r) {
+          fofc_(m,k,j,i) = true;
+        }
+      }
       // if (customize_fofc_) fofc_(m,k,j,i) = true;
 
       if (use_ko_dissipation_ && (sigma_cold > sigma_cold_cut_)) ko_dissipation_(m,k,j,i) = true;
@@ -390,9 +403,9 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
 
       // convert scalars (if any)
       for (int n=nmhd; n<(nmhd+nscal); ++n) {
-        if (!customize_fofc_ && !use_ko_dissipation_) {
-          prim(m,n,k,j,i) = cons(m,n,k,j,i)/u.d;
-        }
+        // if (!customize_fofc_ && !use_ko_dissipation_) {
+        prim(m,n,k,j,i) = cons(m,n,k,j,i)/u.d;
+        // }
       }
     }
   }, Kokkos::Sum<int>(nfloord_), Kokkos::Sum<int>(nfloore_), Kokkos::Sum<int>(nceilv_),
