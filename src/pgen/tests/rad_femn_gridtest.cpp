@@ -13,7 +13,7 @@
 #include <cmath>        // exp
 #include <algorithm>    // max
 #include <iomanip>
-#include "radiation_femn/radiation_femn_geodesic_grid_matrices.hpp"
+#include "radiation_femn/radiation_femn_geodesic_grid.hpp"
 
 // AthenaK headers
 #include "athena.hpp"
@@ -21,7 +21,7 @@
 #include "mesh/mesh.hpp"
 #include "pgen/pgen.hpp"
 #include "radiation_femn/radiation_femn.hpp"
-#include "radiation_femn/radiation_femn_geodesic_grid_matrices.hpp"
+#include "radiation_femn/radiation_femn_geodesic_grid.hpp"
 
 void ProblemGenerator::RadiationFEMNGridtest(ParameterInput *pin, const bool restart) {
   if (restart) return;

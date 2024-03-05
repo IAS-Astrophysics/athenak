@@ -16,7 +16,7 @@
 #include "units/units.hpp"
 #include "radiation_femn/radiation_femn.hpp"
 #include "radiation_femn/radiation_femn_linalg.hpp"
-#include "radiation_femn/radiation_femn_geodesic_grid_matrices.hpp"
+#include "radiation_femn/radiation_femn_geodesic_grid.hpp"
 #include "adm/adm.hpp"
 
 namespace radiationfemn {

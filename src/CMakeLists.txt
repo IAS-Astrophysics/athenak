@@ -144,11 +144,11 @@ add_executable(
         radiation_femn/radiation_femn_source.cpp
         radiation_femn/radiation_femn_newdt.cpp
         radiation_femn/radiation_femn_linalg.cpp
-        radiation_femn/radiation_femn_geodesic_grid.cpp
+		radiation_femn/radiation_femn_geodesic_grid_gridgen.cpp
         radiation_femn/radiation_femn_geodesic_grid_basis.cpp
-        radiation_femn/radiation_femn_geodesic_grid_matrix_integrate.cpp
+		radiation_femn/radiation_femn_geodesic_grid_integrate.cpp
         radiation_femn/radiation_femn_geodesic_grid_quadrature.cpp
-        radiation_femn/radiation_femn_geodesic_grid_matrices.hpp
+        radiation_femn/radiation_femn_geodesic_grid.hpp
         radiation_femn/radiation_femn_loadmatrices.cpp
 		radiation_femn/radiation_femn_compute_final_matrices.cpp
         radiation_femn/radiation_femn_tetrad.cpp

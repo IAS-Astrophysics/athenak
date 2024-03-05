@@ -9,7 +9,7 @@
 
 #include <fstream>
 #include <string>
-#include "radiation_femn/radiation_femn_geodesic_grid_matrices.hpp"
+#include "radiation_femn/radiation_femn_geodesic_grid.hpp"
 
 namespace radiationfemn {
 

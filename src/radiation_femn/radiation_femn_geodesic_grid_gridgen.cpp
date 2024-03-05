@@ -1,10 +1,9 @@
 //========================================================================================
-// GR radiation code for AthenaK with FEM_N & FP_N
-// Copyright (C) 2023 Maitraya Bhattacharyya <mbb6217@psu.edu> and David Radice <dur566@psu.edu>
-// AthenaXX copyright(C) James M. Stone <jmstone@ias.edu> and the Athena code team
+// AthenaXXX astrophysical plasma code
+// Copyright(C) 2020 James M. Stone <jmstone@ias.edu> and the Athena code team
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
-//! \file radiation_femn_geodesicgrid.cpp
+//! \file radiation_femn_geodesic_grid_gridgen.cpp
 //  \brief implementation of functions for generating the geodesic grid
 //         Functions in this file are:
 //         (a) CartesianToSpherical:     convert from cartesian to spherical coordinates
@@ -13,7 +12,7 @@
 //         (d) GeodesicGridRefine:       refine the geodesic grid by one level
 
 #include "athena.hpp"
-#include "radiation_femn/radiation_femn_geodesic_grid_matrices.hpp"
+#include "radiation_femn/radiation_femn_geodesic_grid.hpp"
 #include "radiation_femn.hpp"
 
 namespace radiationfemn {

@@ -3,7 +3,7 @@
 // Copyright(C) 2020 James M. Stone <jmstone@ias.edu> and the Athena code team
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
-//! \file radiation_femn_matrices.cpp
+//! \file radiation_femn_geodesic_grid_integrate.cpp
 //  \brief implementation of the radiation FEM_N matrices for the GR radiation code
 //         Functions in this file:
 //         (a) IntegrateMatrixSphericalTriangle: integrate a given function over a spherical triangle
@@ -12,7 +12,7 @@
 //         (d) CalculateDeterminantJacobian: Calculate determinant of Jacobian needed for mapping to/from angles to barycentric
 
 #include <complex>
-#include "radiation_femn/radiation_femn_geodesic_grid_matrices.hpp"
+#include "radiation_femn/radiation_femn_geodesic_grid.hpp"
 
 namespace radiationfemn {
 
