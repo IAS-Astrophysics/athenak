@@ -49,20 +49,20 @@ void Hydro::AssembleHydroTasks(std::map<std::string, std::shared_ptr<TaskList>> 
   id.irecv = tl["before_stagen"]->AddTask(&Hydro::InitRecv, this, none);
 
   // assemble "stagen" task list
-  id.copyu = tl["stagen"]->AddTask(&Hydro::CopyCons, this, none);
-  id.flux  = tl["stagen"]->AddTask(&Hydro::Fluxes,this,id.copyu);
-  id.sendf = tl["stagen"]->AddTask(&Hydro::SendFlux, this, id.flux);
-  id.recvf = tl["stagen"]->AddTask(&Hydro::RecvFlux, this, id.sendf);
-  id.expl  = tl["stagen"]->AddTask(&Hydro::ExpRKUpdate, this, id.recvf);
-  id.sndoa = tl["stagen"]->AddTask(&Hydro::SendOA, this, id.expl);
-  id.rcvoa = tl["stagen"]->AddTask(&Hydro::RecvOA, this, id.sndoa);
-  id.restu = tl["stagen"]->AddTask(&Hydro::RestrictU, this, id.rcvoa);
-  id.sendu = tl["stagen"]->AddTask(&Hydro::SendU, this, id.restu);
-  id.recvu = tl["stagen"]->AddTask(&Hydro::RecvU, this, id.sendu);
-  id.bcs   = tl["stagen"]->AddTask(&Hydro::ApplyPhysicalBCs, this, id.recvu);
-  id.prol  = tl["stagen"]->AddTask(&Hydro::Prolongate, this, id.bcs);
-  id.c2p   = tl["stagen"]->AddTask(&Hydro::ConToPrim, this, id.prol);
-  id.newdt = tl["stagen"]->AddTask(&Hydro::NewTimeStep, this, id.c2p);
+  id.copyu   = tl["stagen"]->AddTask(&Hydro::CopyCons, this, none);
+  id.flux    = tl["stagen"]->AddTask(&Hydro::Fluxes,this,id.copyu);
+  id.sendf   = tl["stagen"]->AddTask(&Hydro::SendFlux, this, id.flux);
+  id.recvf   = tl["stagen"]->AddTask(&Hydro::RecvFlux, this, id.sendf);
+  id.expl    = tl["stagen"]->AddTask(&Hydro::ExpRKUpdate, this, id.recvf);
+  id.sndu_oa = tl["stagen"]->AddTask(&Hydro::SendU_OA, this, id.expl);
+  id.rcvu_oa = tl["stagen"]->AddTask(&Hydro::RecvU_OA, this, id.sndu_oa);
+  id.restu   = tl["stagen"]->AddTask(&Hydro::RestrictU, this, id.rcvu_oa);
+  id.sendu   = tl["stagen"]->AddTask(&Hydro::SendU, this, id.restu);
+  id.recvu   = tl["stagen"]->AddTask(&Hydro::RecvU, this, id.sendu);
+  id.bcs     = tl["stagen"]->AddTask(&Hydro::ApplyPhysicalBCs, this, id.recvu);
+  id.prol    = tl["stagen"]->AddTask(&Hydro::Prolongate, this, id.bcs);
+  id.c2p     = tl["stagen"]->AddTask(&Hydro::ConToPrim, this, id.prol);
+  id.newdt   = tl["stagen"]->AddTask(&Hydro::NewTimeStep, this, id.c2p);
 
   // assemble "after_stagen" task list
   id.csend = tl["after_stagen"]->AddTask(&Hydro::ClearSend, this, none);
@@ -198,10 +198,10 @@ TaskStatus Hydro::RecvFlux(Driver *pdrive, int stage) {
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn TaskList Hydro::SendOA
+//! \fn TaskList Hydro::SendU_OA
 //! \brief Wrapper task list function to send data for orbital advection
 
-TaskStatus Hydro::SendOA(Driver *pdrive, int stage) {
+TaskStatus Hydro::SendU_OA(Driver *pdrive, int stage) {
   // only execute when shearing box defined and last stage
   if (!(shearing_box) || stage != (pdrive->nexp_stages)) {
     return TaskStatus::complete;
@@ -211,10 +211,10 @@ TaskStatus Hydro::SendOA(Driver *pdrive, int stage) {
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn TaskList Hydro::RecvOA
+//! \fn TaskList Hydro::RecvU_OA
 //! \brief Wrapper task list function to receive and unpack data for orbital advection
 
-TaskStatus Hydro::RecvOA(Driver *pdrive, int stage) {
+TaskStatus Hydro::RecvU_OA(Driver *pdrive, int stage) {
   // only execute when shearing box defined and last stage
   if (!(shearing_box) || stage != (pdrive->nexp_stages)) {
     return TaskStatus::complete;

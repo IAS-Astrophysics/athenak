@@ -24,6 +24,7 @@ class Viscosity;
 class Resistivity;
 class Conduction;
 class SourceTerms;
+class ShearingBox;
 class Driver;
 
 // function ptr for user-defined MHD boundary functions enrolled in problem generator
@@ -47,6 +48,8 @@ struct MHDTaskIDs {
   TaskID sendf;
   TaskID recvf;
   TaskID expl;
+  TaskID sndu_oa;
+  TaskID rcvu_oa;
   TaskID restu;
   TaskID sendu;
   TaskID recvu;
@@ -54,6 +57,8 @@ struct MHDTaskIDs {
   TaskID sende;
   TaskID recve;
   TaskID ct;
+  TaskID sndb_oa;
+  TaskID rcvb_oa;
   TaskID restb;
   TaskID sendb;
   TaskID recvb;
@@ -79,6 +84,7 @@ class MHD {
   ReconstructionMethod recon_method;
   MHD_RSolver rsolver_method;
   EquationOfState *peos;   // chosen EOS
+  bool shearing_box;
 
   int nmhd;                // number of mhd variables (5/4 for ideal/isothermal EOS)
   int nscalars;            // number of passive scalars
@@ -101,6 +107,7 @@ class MHD {
   Resistivity *presist = nullptr;
   Conduction *pcond = nullptr;
   SourceTerms *psrc = nullptr;
+  ShearingBox *psb = nullptr;
 
   // following only used for time-evolving flow
   DvceArray5D<Real> u1;       // conserved variables, second register
@@ -126,6 +133,8 @@ class MHD {
   TaskStatus SendFlux(Driver *d, int stage);
   TaskStatus RecvFlux(Driver *d, int stage);
   TaskStatus ExpRKUpdate(Driver *d, int stage);
+  TaskStatus SendU_OA(Driver *d, int stage);
+  TaskStatus RecvU_OA(Driver *d, int stage);
   TaskStatus RestrictU(Driver *d, int stage);
   TaskStatus SendU(Driver *d, int stage);
   TaskStatus RecvU(Driver *d, int stage);
@@ -133,6 +142,8 @@ class MHD {
   TaskStatus SendE(Driver *d, int stage);
   TaskStatus RecvE(Driver *d, int stage);
   TaskStatus CT(Driver *d, int stage);
+  TaskStatus SendB_OA(Driver *d, int stage);
+  TaskStatus RecvB_OA(Driver *d, int stage);
   TaskStatus RestrictB(Driver *d, int stage);
   TaskStatus SendB(Driver *d, int stage);
   TaskStatus RecvB(Driver *d, int stage);

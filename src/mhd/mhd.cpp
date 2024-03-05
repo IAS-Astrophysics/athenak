@@ -18,6 +18,7 @@
 #include "diffusion/resistivity.hpp"
 #include "diffusion/conduction.hpp"
 #include "srcterms/srcterms.hpp"
+#include "shearing_box/shearing_box.hpp"
 #include "bvals/bvals.hpp"
 #include "mhd/mhd.hpp"
 
@@ -27,6 +28,7 @@ namespace mhd {
 
 MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
     pmy_pack(ppack),
+    shearing_box(false),
     u0("cons",1,1,1,1,1),
     w0("prim",1,1,1,1,1),
     b0("B_fc",1,1,1,1),
@@ -112,6 +114,15 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
 
   // Source terms (constructor parses input file to initialize only srcterms needed)
   psrc = new SourceTerms("mhd", ppack, pin);
+
+  // Shearing box (if requested in input file)
+  if (pin->DoesBlockExist("shearing_box")) {
+    psb = new ShearingBox(ppack, pin, (nmhd+nscalars));
+    shearing_box = true;
+  } else {
+    psb = nullptr;
+    shearing_box = false;
+  }
 
   // (3) read time-evolution option [already error checked in driver constructor]
   // Then initialize memory and algorithms for reconstruction and Riemann solvers

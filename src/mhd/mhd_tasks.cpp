@@ -22,6 +22,7 @@
 #include "diffusion/resistivity.hpp"
 #include "diffusion/conduction.hpp"
 #include "bvals/bvals.hpp"
+#include "shearing_box/shearing_box.hpp"
 #include "mhd/mhd.hpp"
 
 namespace mhd {
@@ -37,25 +38,29 @@ void MHD::AssembleMHDTasks(std::map<std::string, std::shared_ptr<TaskList>> tl) 
   id.irecv = tl["before_stagen"]->AddTask(&MHD::InitRecv, this, none);
 
   // assemble "stagen" task list
-  id.copyu = tl["stagen"]->AddTask(&MHD::CopyCons, this, none);
-  id.flux  = tl["stagen"]->AddTask(&MHD::Fluxes, this, id.copyu);
-  id.sendf = tl["stagen"]->AddTask(&MHD::SendFlux, this, id.flux);
-  id.recvf = tl["stagen"]->AddTask(&MHD::RecvFlux, this, id.sendf);
-  id.expl  = tl["stagen"]->AddTask(&MHD::ExpRKUpdate, this, id.recvf);
-  id.restu = tl["stagen"]->AddTask(&MHD::RestrictU, this, id.expl);
-  id.sendu = tl["stagen"]->AddTask(&MHD::SendU, this, id.restu);
-  id.recvu = tl["stagen"]->AddTask(&MHD::RecvU, this, id.sendu);
-  id.efld  = tl["stagen"]->AddTask(&MHD::CornerE, this, id.recvu);
-  id.sende = tl["stagen"]->AddTask(&MHD::SendE, this, id.efld);
-  id.recve = tl["stagen"]->AddTask(&MHD::RecvE, this, id.sende);
-  id.ct    = tl["stagen"]->AddTask(&MHD::CT, this, id.recve);
-  id.restb = tl["stagen"]->AddTask(&MHD::RestrictB, this, id.ct);
-  id.sendb = tl["stagen"]->AddTask(&MHD::SendB, this, id.restb);
-  id.recvb = tl["stagen"]->AddTask(&MHD::RecvB, this, id.sendb);
-  id.bcs   = tl["stagen"]->AddTask(&MHD::ApplyPhysicalBCs, this, id.recvb);
-  id.prol  = tl["stagen"]->AddTask(&MHD::Prolongate, this, id.bcs);
-  id.c2p   = tl["stagen"]->AddTask(&MHD::ConToPrim, this, id.prol);
-  id.newdt = tl["stagen"]->AddTask(&MHD::NewTimeStep, this, id.c2p);
+  id.copyu   = tl["stagen"]->AddTask(&MHD::CopyCons, this, none);
+  id.flux    = tl["stagen"]->AddTask(&MHD::Fluxes, this, id.copyu);
+  id.sendf   = tl["stagen"]->AddTask(&MHD::SendFlux, this, id.flux);
+  id.recvf   = tl["stagen"]->AddTask(&MHD::RecvFlux, this, id.sendf);
+  id.expl    = tl["stagen"]->AddTask(&MHD::ExpRKUpdate, this, id.recvf);
+  id.sndu_oa = tl["stagen"]->AddTask(&MHD::SendU_OA, this, id.expl);
+  id.rcvu_oa = tl["stagen"]->AddTask(&MHD::RecvU_OA, this, id.sndu_oa);
+  id.restu   = tl["stagen"]->AddTask(&MHD::RestrictU, this, id.rcvu_oa);
+  id.sendu   = tl["stagen"]->AddTask(&MHD::SendU, this, id.restu);
+  id.recvu   = tl["stagen"]->AddTask(&MHD::RecvU, this, id.sendu);
+  id.efld    = tl["stagen"]->AddTask(&MHD::CornerE, this, id.recvu);
+  id.sende   = tl["stagen"]->AddTask(&MHD::SendE, this, id.efld);
+  id.recve   = tl["stagen"]->AddTask(&MHD::RecvE, this, id.sende);
+  id.ct      = tl["stagen"]->AddTask(&MHD::CT, this, id.recve);
+  id.sndb_oa = tl["stagen"]->AddTask(&MHD::SendB_OA, this, id.ct);
+  id.rcvb_oa = tl["stagen"]->AddTask(&MHD::RecvB_OA, this, id.sndb_oa);
+  id.restb   = tl["stagen"]->AddTask(&MHD::RestrictB, this, id.rcvb_oa);
+  id.sendb   = tl["stagen"]->AddTask(&MHD::SendB, this, id.restb);
+  id.recvb   = tl["stagen"]->AddTask(&MHD::RecvB, this, id.sendb);
+  id.bcs     = tl["stagen"]->AddTask(&MHD::ApplyPhysicalBCs, this, id.recvb);
+  id.prol    = tl["stagen"]->AddTask(&MHD::Prolongate, this, id.bcs);
+  id.c2p     = tl["stagen"]->AddTask(&MHD::ConToPrim, this, id.prol);
+  id.newdt   = tl["stagen"]->AddTask(&MHD::NewTimeStep, this, id.c2p);
 
   // assemble "after_stagen" task list
   id.csend = tl["after_stagen"]->AddTask(&MHD::ClearSend, this, none);
@@ -189,6 +194,32 @@ TaskStatus MHD::RecvFlux(Driver *pdrive, int stage) {
 }
 
 //----------------------------------------------------------------------------------------
+//! \fn TaskList MHD::SendU_OA
+//! \brief Wrapper task list function to send data for orbital advection
+
+TaskStatus MHD::SendU_OA(Driver *pdrive, int stage) {
+  // only execute when shearing box defined and last stage
+  if (!(shearing_box) || stage != (pdrive->nexp_stages)) {
+    return TaskStatus::complete;
+  }
+  TaskStatus tstat = psb->PackAndSendCC_Orb(u0);
+  return tstat;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn TaskList MHD::RecvU_OA
+//! \brief Wrapper task list function to receive and unpack data for orbital advection
+
+TaskStatus MHD::RecvU_OA(Driver *pdrive, int stage) {
+  // only execute when shearing box defined and last stage
+  if (!(shearing_box) || stage != (pdrive->nexp_stages)) {
+    return TaskStatus::complete;
+  }
+  TaskStatus tstat = psb->RecvAndUnpackCC_Orb(u0, recon_method);
+  return tstat;
+}
+
+//----------------------------------------------------------------------------------------
 //! \fn TaskStatus MHD::RestrictU
 //! \brief Wrapper task list function to restrict conserved vars
 
@@ -241,6 +272,33 @@ TaskStatus MHD::RecvE(Driver *pdrive, int stage) {
   tstat = pbval_b->RecvAndUnpackFluxFC(efld);
   return tstat;
 }
+
+//----------------------------------------------------------------------------------------
+//! \fn TaskList MHD::SendB_OA
+//! \brief Wrapper task list function to send data for orbital advection
+
+TaskStatus MHD::SendB_OA(Driver *pdrive, int stage) {
+  // only execute when shearing box defined and last stage
+  if (!(shearing_box) || stage != (pdrive->nexp_stages)) {
+    return TaskStatus::complete;
+  }
+  TaskStatus tstat = psb->PackAndSendFC_Orb(b0);
+  return tstat;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn TaskList MHD::RecvB_OA
+//! \brief Wrapper task list function to receive and unpack data for orbital advection
+
+TaskStatus MHD::RecvB_OA(Driver *pdrive, int stage) {
+  // only execute when shearing box defined and last stage
+  if (!(shearing_box) || stage != (pdrive->nexp_stages)) {
+    return TaskStatus::complete;
+  }
+  TaskStatus tstat = psb->RecvAndUnpackFC_Orb(b0, recon_method);
+  return tstat;
+}
+
 
 //----------------------------------------------------------------------------------------
 //! \fn TaskStatus MHD::SendB

@@ -42,8 +42,8 @@ struct HydroTaskIDs {
   TaskID sendf;
   TaskID recvf;
   TaskID expl;
-  TaskID sndoa;
-  TaskID rcvoa;
+  TaskID sndu_oa;
+  TaskID rcvu_oa;
   TaskID restu;
   TaskID sendu;
   TaskID recvu;
@@ -110,8 +110,8 @@ class Hydro {
   TaskStatus SendFlux(Driver *d, int stage);
   TaskStatus RecvFlux(Driver *d, int stage);
   TaskStatus ExpRKUpdate(Driver *d, int stage);
-  TaskStatus SendOA(Driver *d, int stage);
-  TaskStatus RecvOA(Driver *d, int stage);
+  TaskStatus SendU_OA(Driver *d, int stage);
+  TaskStatus RecvU_OA(Driver *d, int stage);
   TaskStatus RestrictU(Driver *d, int stage);
   TaskStatus SendU(Driver *d, int stage);
   TaskStatus RecvU(Driver *d, int stage);
