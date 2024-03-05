@@ -198,6 +198,10 @@ TaskStatus ShearingBox::RecvAndUnpackCC_Orb(DvceArray5D<Real> &u0,
   auto &ks = indcs.ks, &ke = indcs.ke;
   auto &ng = indcs.ng;
   int ncells2 = indcs.nx2 + 2*(indcs.ng);
+  int jfs = ng + maxjshift;
+  int jfe = jfs + indcs.nx2 - 1;
+  int nfx = indcs.nx2 + 2*(ng + maxjshift);
+
 
   auto &mbsize = pmy_pack->pmb->mb_size;
   auto &mesh_size = pmy_pack->pmesh->mesh_size;
@@ -206,12 +210,12 @@ TaskStatus ShearingBox::RecvAndUnpackCC_Orb(DvceArray5D<Real> &u0,
   Real ly = (mesh_size.x2max - mesh_size.x2min);
 
   int scr_lvl=0;
-  size_t scr_size = ScrArray1D<Real>::shmem_size(ncells2) * 3;
+  size_t scr_size = ScrArray1D<Real>::shmem_size(nfx) * 3;
   par_for_outer("oa-unpk",DevExeSpace(),scr_size,scr_lvl,0,(nmb-1),0,(nvar-1),ks,ke,is,ie,
   KOKKOS_LAMBDA(TeamMember_t member, const int m, const int n, const int k, const int i) {
-    ScrArray1D<Real> u0_(member.team_scratch(scr_lvl), ncells2); // 1D slice of data
-    ScrArray1D<Real> flx(member.team_scratch(scr_lvl), ncells2); // "U_star" at faces
-    ScrArray1D<Real> q1_(member.team_scratch(scr_lvl), ncells2); // scratch array
+    ScrArray1D<Real> u0_(member.team_scratch(scr_lvl), nfx); // 1D slice of data
+    ScrArray1D<Real> flx(member.team_scratch(scr_lvl), nfx); // "flux" at faces
+    ScrArray1D<Real> q1_(member.team_scratch(scr_lvl), nfx); // scratch array
 
     Real &x1min = mbsize.d_view(m).x1min;
     Real &x1max = mbsize.d_view(m).x1max;
@@ -221,29 +225,29 @@ TaskStatus ShearingBox::RecvAndUnpackCC_Orb(DvceArray5D<Real> &u0,
     Real yshear = -qom*x1v*dt;
     int joffset = static_cast<int>(yshear/(mbsize.d_view(m).dx2));
 
-    // Load scratch array with integer shift such that j -> jj - joffset
-    par_for_inner(member, 0, (ncells2-1), [&](const int jj) {
-      if ((jj-joffset) < js) {
-        // Load from L boundary buffer with offset
-        u0_(jj) = rbuf[0].vars(m,n,k-ks,((jj-joffset)+maxjshift),i-is);
-      } else if ((jj-joffset) < (je+1)) {
-        // Load from conserved variables themselves with offset
-        u0_(jj) = u0(m,n,k,(jj-joffset),i);
+    // Load scratch array with no shift
+    par_for_inner(member, 0, (nfx-1), [&](const int jf) {
+      if (jf < jfs) {
+        // Load from L boundary buffer
+        u0_(jf) = rbuf[0].vars(m,n,k-ks,jf,i-is);
+      } else if (jf <= jfe) {
+        // Load from conserved variables themselves (addressed with j=jf-jfs+js)
+        u0_(jf) = u0(m,n,k,jf-jfs+js,i);
       } else {
-        // Load from R boundary buffer with offset
-        u0_(jj) = rbuf[1].vars(m,n,k-ks,((jj-joffset)-(je+1)),i-is);
+        // Load from R boundary buffer
+        u0_(jf) = rbuf[1].vars(m,n,k-ks,jf-(jfe+1),i-is);
       }
     });
     member.team_barrier();
 
-    // Compute "fluxes" of shifted array (u0_) for remap by remainder
+    // Compute "fluxes" at shifted cell faces
     Real epsi = fmod(yshear,(mbsize.d_view(m).dx2))/(mbsize.d_view(m).dx2);
     switch (rcon) {
       case ReconstructionMethod::dc:
-        DonorCellOrbAdvFlx(member, js, je+1, epsi, u0_, q1_, flx);
+        DonorCellOrbAdvFlx(member, (jfs-joffset), (jfe+1-joffset), epsi, u0_, q1_, flx);
         break;
       case ReconstructionMethod::plm:
-        PcwsLinearOrbAdvFlx(member, js, je+1, epsi, u0_, q1_, flx);
+        PcwsLinearOrbAdvFlx(member, (jfs-joffset), (jfe+1-joffset), epsi, u0_, q1_, flx);
         break;
 //      case ReconstructionMethod::ppm4:
 //      case ReconstructionMethod::ppmx:
@@ -257,7 +261,8 @@ TaskStatus ShearingBox::RecvAndUnpackCC_Orb(DvceArray5D<Real> &u0,
     // Update CC variables with both integer shift (from u0_) and a conservative remap
     // for the remaining fraction of a cell using upwind "fluxes"
     par_for_inner(member, js, je, [&](const int j) {
-      u0(m,n,k,j,i) = u0_(j) - (flx(j+1) - flx(j));
+      int jf = j-js + jfs;
+      u0(m,n,k,j,i) = u0_(jf-joffset) - (flx(jf+1-joffset) - flx(jf-joffset));
     });
   });
 
@@ -453,7 +458,7 @@ std::cout<<"starting remap"<<std::endl;
   par_for_outer("oa-unB",DevExeSpace(),scr_size,scr_lvl,0,(nmb-1),0,1,ks,ke+1,is,ie+1,
   KOKKOS_LAMBDA(TeamMember_t member, const int m, const int v, const int k, const int i) {
     ScrArray1D<Real> b0_(member.team_scratch(scr_lvl), ncells2); // 1D slice of data
-    ScrArray1D<Real> flx(member.team_scratch(scr_lvl), ncells2); // "U_star" at faces
+    ScrArray1D<Real> flx(member.team_scratch(scr_lvl), ncells2); // "flux" at faces
     ScrArray1D<Real> q1_(member.team_scratch(scr_lvl), ncells2); // scratch array
 
     Real &x1min = mbsize.d_view(m).x1min;
