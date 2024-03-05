@@ -177,13 +177,13 @@ void MHD::AddKODissipation() {
                + 2.0*glower[2][3]*wvy*wvz;
       Real lor = sqrt(1.0+tmp);
       if (lor > eos.gamma_max) {
-        // Real factor = sqrt((SQR(eos.gamma_max)-1.0)/(SQR(lor)-1.0));
-        // wvx *= factor;
-        // wvy *= factor;
-        // wvz *= factor;
-        wvx = w0_old_(m,IVX,k,j,i);
-        wvy = w0_old_(m,IVY,k,j,i);
-        wvz = w0_old_(m,IVZ,k,j,i);
+        Real factor = sqrt((SQR(eos.gamma_max)-1.0)/(SQR(lor)-1.0));
+        wvx *= factor;
+        wvy *= factor;
+        wvz *= factor;
+        // wvx = w0_old_(m,IVX,k,j,i);
+        // wvy = w0_old_(m,IVY,k,j,i);
+        // wvz = w0_old_(m,IVZ,k,j,i);
       }
 
       // Reset conserved variables
