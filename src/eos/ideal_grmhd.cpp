@@ -214,14 +214,14 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
         Real dfloor_max = fac*eos.dfloor;
         Real pfloor_min = eos.pfloor;
         Real pfloor_max = fac*eos.pfloor;
-        Real lg_dfloor = np.log10(dfloor_min);
-        Real lg_pfloor = np.log10(pfloor_min);
+        Real lg_dfloor = log10(dfloor_min);
+        Real lg_pfloor = log10(pfloor_min);
         if (r > rmax)  {
-          lg_dfloor = np.log10(dfloor_min);
-          lg_pfloor = np.log10(pfloor_min);
+          lg_dfloor = log10(dfloor_min);
+          lg_pfloor = log10(pfloor_min);
         } else if (r > rmin) {
-          lg_dfloor = (np.log10(dfloor_max)-np.log10(dfloor_min))/(rmax-rmin) * (r-rmin) + np.log10(dfloor_min);
-          lg_pfloor = (np.log10(pfloor_max)-np.log10(pfloor_min))/(rmax-rmin) * (r-rmin) + np.log10(pfloor_min);
+          lg_dfloor = (log10(dfloor_max)-log10(dfloor_min))/(rmax-rmin) * (r-rmin) + log10(dfloor_min);
+          lg_pfloor = (log10(pfloor_max)-log10(pfloor_min))/(rmax-rmin) * (r-rmin) + log10(pfloor_min);
         }
         eos_local.dfloor = pow(10., lg_dfloor);
         eos_local.pfloor = pow(10., lg_pfloor);
