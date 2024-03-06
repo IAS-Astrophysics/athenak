@@ -178,6 +178,22 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
       if (use_ko_dissipation_) ko_dissipation_(m,k,j,i) = false;
     }
 
+    EOS_Data eos_local;
+    eos_local.gamma = eos.gamma;
+    eos_local.iso_cs = eos.iso_cs;
+    eos_local.is_ideal = eos.is_ideal;
+    eos_local.use_e = eos.use_e;
+    eos_local.use_t = eos.use_t;
+    eos_local.dfloor = eos.dfloor;
+    eos_local.pfloor = eos.pfloor;
+    eos_local.tfloor = eos.tfloor;
+    eos_local.sfloor = eos.sfloor;
+    eos_local.sfloor1 = eos.sfloor1;
+    eos_local.sfloor2 = eos.sfloor2;
+    eos_local.rho1 = eos.rho1;
+    eos_local.rho2 = eos.rho2;
+    eos_local.gamma_max = eos.gamma_max;
+
     // if (!(excised)) {
     if (!(excised) || excised_outer) {
       // calculate SR conserved quantities
@@ -185,21 +201,6 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
       Real s2, b2, rpar;
       TransformToSRMHD(u,glower,gupper,s2,b2,rpar,u_sr);
 
-      EOS_Data eos_local;
-      eos_local.gamma = eos.gamma;
-      eos_local.iso_cs = eos.iso_cs;
-      eos_local.is_ideal = eos.is_ideal;
-      eos_local.use_e = eos.use_e;
-      eos_local.use_t = eos.use_t;
-      eos_local.dfloor = eos.dfloor;
-      eos_local.pfloor = eos.pfloor;
-      eos_local.tfloor = eos.tfloor;
-      eos_local.sfloor = eos.sfloor;
-      eos_local.sfloor1 = eos.sfloor1;
-      eos_local.sfloor2 = eos.sfloor2;
-      eos_local.rho1 = eos.rho1;
-      eos_local.rho2 = eos.rho2;
-      eos_local.gamma_max = eos.gamma_max;
       if (turn_on_sao_operation_) {
         Real bh_a = 0.9375;
         Real a2 = SQR(bh_a);
