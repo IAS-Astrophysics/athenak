@@ -361,7 +361,11 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
       //   }
       // }
       if (customize_fofc_ && (sigma_cold > sigma_cold_cut_)) {
-        fofc_(m,k,j,i) = true;
+        // fofc_(m,k,j,i) = true;
+        if ((x1v > -8.0) && (x1v < 8.0) && (x2v > -8.0) && (x2v < 8.0) && (x3v > -8.0) && (x3v < 8.0)) {
+          fofc_(m,k,j,i) = true;
+        }
+
         // Real del_r = 1.0;
         // Real bh_a = 0.9375;
         // Real a2 = SQR(bh_a);
