@@ -199,6 +199,12 @@ Outputs::Outputs(ParameterInput *pin, Mesh *pm) {
       } else if (opar.file_type.compare("trk") == 0) {
         pnode = new TrackedParticleOutput(pin,pm,opar);
         pout_list.insert(pout_list.begin(),pnode);
+      } else if (opar.file_type.compare("cbin") == 0) {
+        opar.coarsen_factor = pin->GetInteger(opar.block_name,"coarsen_factor");
+        opar.compute_moments = pin->GetOrAddBoolean(opar.block_name,
+          "compute_moments", false);
+        pnode = new CoarsenedBinaryOutput(pin,pm,opar);
+        pout_list.insert(pout_list.begin(),pnode);
       } else if (opar.file_type.compare("bin") == 0) {
         pnode = new MeshBinaryOutput(pin,pm,opar);
         pout_list.insert(pout_list.begin(),pnode);

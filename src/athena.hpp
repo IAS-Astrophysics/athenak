@@ -472,3 +472,4 @@ struct reduction_identity< array_sum::GlobalSum > {
 }
 
 #endif // ATHENA_HPP_
+

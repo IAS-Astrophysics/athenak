@@ -79,6 +79,7 @@ static const char *var_choice[NOUTPUT_CHOICES] = {
   "prtcl_all", "prtcl_d"
 };
 
+
 // forward declarations
 class Mesh;
 class ParameterInput;
@@ -105,6 +106,12 @@ struct OutputParameters {
   bool user_hist_only;
   std::string data_format;
   bool contains_derived=false;
+  // DBF parameters for coarsened binary:
+  // cannot be less than 2 and must be a power of 2 and
+  // cannot be greater than shortest meshblock dimension
+  int coarsen_factor;
+  bool compute_moments; // if true then will compute
+  // <q>, <q^2>, <q^3>, <q^4> for each variable q
 };
 
 //----------------------------------------------------------------------------------------
@@ -219,6 +226,7 @@ class BaseTypeOutput {
   std::vector<OutputVariableInfo> outvars;
 };
 
+
 //----------------------------------------------------------------------------------------
 //! \class FormattedTableOutput
 //  \brief derived BaseTypeOutput class for formatted table (tabular) data
@@ -244,6 +252,21 @@ class HistoryOutput : public BaseTypeOutput {
   void LoadHydroHistoryData(HistoryData *pdata, Mesh *pm);
   void LoadMHDHistoryData(HistoryData *pdata, Mesh *pm);
   void LoadZ4cHistoryData(HistoryData *pdata, Mesh *pm);
+  void WriteOutputFile(Mesh *pm, ParameterInput *pin) override;
+};
+
+//----------------------------------------------------------------------------------------
+//! \class CoarsenedBinaryOutput
+//  \brief derived BaseTypeOutput class for coarsened binary grid data
+
+class CoarsenedBinaryOutput : public BaseTypeOutput {
+ public:
+  CoarsenedBinaryOutput(ParameterInput *pin, Mesh *pm, OutputParameters oparams);
+
+  // void CoarsenVariable(const DvceArray3D<Real>& full_data,
+  //                            DvceArray3D<Real>& coarsen_data,
+  //                            const int coarsen_factor);
+  void LoadOutputData(Mesh *pm) override;
   void WriteOutputFile(Mesh *pm, ParameterInput *pin) override;
 };
 
@@ -276,7 +299,6 @@ class ParticleVTKOutput : public BaseTypeOutput {
 //----------------------------------------------------------------------------------------
 //! \class MeshBinaryOutput
 //  \brief derived BaseTypeOutput class for binary mesh data (nbf format in pegasus++)
-
 class MeshBinaryOutput : public BaseTypeOutput {
  public:
   MeshBinaryOutput(ParameterInput *pin, Mesh *pm, OutputParameters oparams);

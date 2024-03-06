@@ -87,6 +87,7 @@ add_executable(
         outputs/formatted_table.cpp
         outputs/history.cpp
         outputs/restart.cpp
+        outputs/coarsened_binary.cpp
         outputs/track_prtcl.cpp
         outputs/vtk_mesh.cpp
         outputs/vtk_prtcl.cpp
