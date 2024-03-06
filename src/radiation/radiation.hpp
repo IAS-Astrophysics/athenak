@@ -95,6 +95,7 @@ class Radiation {
   bool compton_use_artificial_mask;     // adopt an artificial mask function for Compton term
   bool temperature_fix_turn_on;         // adopt temperature fix after radiation source term
   bool cellavg_rad_source;              // adopt cellavg for radiation source term
+  Real floor_planck;                    // floor for planck mean coefficient
 
   // Radiation source term parameters
   bool rad_source;          // flag to enable/disable radiation source term

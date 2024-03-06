@@ -79,6 +79,7 @@ Radiation::Radiation(MeshBlockPack *ppack, ParameterInput *pin) :
   compton_use_artificial_mask = pin->GetOrAddBoolean("radiation","compton_use_artificial_mask",false);
   temperature_fix_turn_on = pin->GetOrAddBoolean("radiation","temperature_fix_turn_on",false);
   cellavg_rad_source = pin->GetOrAddBoolean("radiation","cellavg_rad_source",false);
+  floor_planck = pin->GetOrAddBoolean("radiation","floor_planck",0.0);
   if (!is_mhd_enabled) update_vel_in_rad_source=true; // non-updated velocity is only saved for MHD
 
   // Enable radiation source term (radiation+(M)HD) by default if hydro or mhd enabled
