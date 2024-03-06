@@ -24,7 +24,7 @@
 #include "outputs.hpp"
 
 //----------------------------------------------------------------------------------------
-// ctor: also calls BaseTypeOutput base class constructor
+// Constructor: also calls BaseTypeOutput base class constructor
 
 HistoryOutput::HistoryOutput(ParameterInput *pin, Mesh *pm, OutputParameters op) :
   BaseTypeOutput(pin, pm, op) {
@@ -95,7 +95,7 @@ void HistoryOutput::LoadHydroHistoryData(HistoryData *pdata, Mesh *pm) {
   pdata->label[nhydro_+1] = "2-KE";
   pdata->label[nhydro_+2] = "3-KE";
 
-  // capture class variabels for kernel
+  // capture class variables for kernel
   auto &u0_ = pm->pmb_pack->phydro->u0;
   auto &size = pm->pmb_pack->pmb->mb_size;
   int &nhist_ = pdata->nhist;
