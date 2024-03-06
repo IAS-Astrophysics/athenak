@@ -43,7 +43,6 @@ void OpacityFunction(// density and density scale
     sigma_s = dens*k_s*density_scale*length_scale;
   }
 
-  sigma_p = fmax(sigma_p, floor_planck-sigma_a);
   return;
 }
 

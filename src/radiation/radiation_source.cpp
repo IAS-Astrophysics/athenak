@@ -71,6 +71,7 @@ TaskStatus Radiation::AddRadiationSourceTerm(Driver *pdriver, int stage) {
   bool &excise = pmy_pack->pcoord->coord_data.bh_excise;
   auto &rad_mask_ = pmy_pack->pcoord->excision_floor;
   Real &n_0_floor_ = n_0_floor;
+  Real &floor_planck_ = floor_planck;
 
   // Extract radiation constant and units
   Real &arad_ = arad;
@@ -272,6 +273,7 @@ TaskStatus Radiation::AddRadiationSourceTerm(Driver *pdriver, int stage) {
                     power_opacity_, rosseland_coef_, planck_minus_rosseland_coef_,
                     kappa_a_, kappa_s_, kappa_p_,
                     sigma_a, sigma_s, sigma_p);
+    sigma_p = fmax(sigma_p, floor_planck_-sigma_a);
     Real dtcsiga = dt_*sigma_a;
     Real dtcsigs = dt_*sigma_s;
     Real dtcsigp = dt_*sigma_p;
