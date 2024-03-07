@@ -516,7 +516,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
       Real dx2 = size.d_view(m).dx2;
       Real dx3 = size.d_view(m).dx3;
 
-      a1(m,k,j,i) = A1(trs, x1v, x2f, x3f);
+      a1(m,k,j,i) = A1(trs, x1v, x2f, x3f); 
       a2(m,k,j,i) = A2(trs, x1f, x2v, x3f);
       a3(m,k,j,i) = A3(trs, x1f, x2f, x3v);
       b1(m,k,j,i) = B1(trs, x1v, x2f, x3f);
@@ -555,7 +555,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
         Real xl = x1v + 0.25*dx1;
         Real xr = x1v - 0.25*dx1;
         a1(m,k,j,i) = 0.5*(A1(trs, xl,x2f,x3f) + A1(trs, xr,x2f,x3f));
-	b1(m,k,j,i) = 0.5*(B1(trs, xl,x2f,x3f) + B1(trs, xr,x2f,x3f));
+	      b1(m,k,j,i) = 0.5*(B1(trs, xl,x2f,x3f) + B1(trs, xr,x2f,x3f));
       }
 
       // Correct A2 at x1-faces, x3-faces, and x1x3-edges
@@ -630,36 +630,36 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
       Real dx3 = size.d_view(m).dx3;
 
       b0.x1f(m,k,j,i) = trs.pol_frac*
-                         ((a3(m,k,j+1,i) - a3(m,k,j,i))/dx2 -
-                         (a2(m,k+1,j,i) - a2(m,k,j,i))/dx3)
-      			 + (1.0-trs.pol_frac)*b1(m,k,j,i);
+                          ((a3(m,k,j+1,i) - a3(m,k,j,i))/dx2 -
+                           (a2(m,k+1,j,i) - a2(m,k,j,i))/dx3)
+      			              + (1.0-trs.pol_frac)*b1(m,k,j,i);
       b0.x2f(m,k,j,i) = trs.pol_frac*
-                         ((a1(m,k+1,j,i) - a1(m,k,j,i))/dx3 -
-                         (a3(m,k,j,i+1) - a3(m,k,j,i))/dx1)
-			 + (1.0-trs.pol_frac)*b2(m,k,j,i);
+                          ((a1(m,k+1,j,i) - a1(m,k,j,i))/dx3 -
+                           (a3(m,k,j,i+1) - a3(m,k,j,i))/dx1)
+			                    + (1.0-trs.pol_frac)*b2(m,k,j,i);
       b0.x3f(m,k,j,i) = trs.pol_frac*
-                         ((a2(m,k,j,i+1) - a2(m,k,j,i))/dx1 -
-                         (a1(m,k,j+1,i) - a1(m,k,j,i))/dx2)
-			 + (1.0-trs.pol_frac)*b3(m,k,j,i);
+                          ((a2(m,k,j,i+1) - a2(m,k,j,i))/dx1 -
+                           (a1(m,k,j+1,i) - a1(m,k,j,i))/dx2)
+			                    + (1.0-trs.pol_frac)*b3(m,k,j,i);
 
       // Include extra face-component at edge of block in each direction
       if (i==ie) {
         b0.x1f(m,k,j,i+1) = trs.pol_frac*
-		             ((a3(m,k,j+1,i+1) - a3(m,k,j,i+1))/dx2 -
+		                        ((a3(m,k,j+1,i+1) - a3(m,k,j,i+1))/dx2 -
                              (a2(m,k+1,j,i+1) - a2(m,k,j,i+1))/dx3)
-			     + (1.0-trs.pol_frac)*b1(m,k,j,i+1);
+			                      + (1.0-trs.pol_frac)*b1(m,k,j,i+1);
       }
       if (j==je) {
         b0.x2f(m,k,j+1,i) = trs.pol_frac*
-		             ((a1(m,k+1,j+1,i) - a1(m,k,j+1,i))/dx3 -
+		                        ((a1(m,k+1,j+1,i) - a1(m,k,j+1,i))/dx3 -
                              (a3(m,k,j+1,i+1) - a3(m,k,j+1,i))/dx1)
-			     + (1.0-trs.pol_frac)*b2(m,k,j+1,i);;
+			                      + (1.0-trs.pol_frac)*b2(m,k,j+1,i);
       }
       if (k==ke) {
         b0.x3f(m,k+1,j,i) = trs.pol_frac*
-		             ((a2(m,k+1,j,i+1) - a2(m,k+1,j,i))/dx1 -
+		                        ((a2(m,k+1,j,i+1) - a2(m,k+1,j,i))/dx1 -
                              (a1(m,k+1,j+1,i) - a1(m,k+1,j,i))/dx2)
-			     + (1.0-trs.pol_frac)*b3(m,k+1,j,i);;
+			                      + (1.0-trs.pol_frac)*b3(m,k+1,j,i);
       }
     });
 
