@@ -4,8 +4,7 @@
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
 //! \file srcterms.cpp
-//  Implements various (physics) source terms to be added to the Hydro or MHD
-//  equations. Currently [constant_acceleration, shearing_box] are implemented.
+//  Implements various (physics) source terms to be added to the Hydro or MHD eqns.
 //  Source terms objects are stored in the respective fluid class, so that
 //  Hydro/MHD can have different source terms
 
@@ -49,49 +48,21 @@ SourceTerms::SourceTerms(std::string block, MeshBlockPack *pp, ParameterInput *p
     }
   }
 
-  // (2) shearing box (hydro and MHD)
-  shearing_box = pin->GetOrAddBoolean("problem", "shearing_box", false);
-  shearing_box_r_phi = pin->GetOrAddBoolean("problem", "shearing_box_r_phi", false);
-  if (pmy_pack->pmesh->mesh_bcs[BoundaryFace::inner_x1] == BoundaryFlag::shear_periodic) {
-    if (!shearing_box) {
-      std::cout << "### FATAL ERROR in "<< __FILE__ <<" at line " << __LINE__ << std::endl
-                << "shear_periodic boundaries require shearing_box" << std::endl;
-      std::exit(EXIT_FAILURE);
-    }
-  }
-
-  if (!shearing_box && shearing_box_r_phi) {
-    std::cout << "### FATAL ERROR in "<< __FILE__ <<" at line " << __LINE__ << std::endl
-              << "shearing_box must be true when shearing_box_r_phi = true " << std::endl;
-    std::exit(EXIT_FAILURE);
-  }
-
-  if (shearing_box) {
-    if (pmy_pack->pmesh->three_d && !shearing_box_r_phi) {
-      std::cout << "### WARNING! in " << __FILE__ << " at line " << __LINE__ << std::endl
-                << "shearing_box_r_phi parameter changes true in 3D" << std::endl;
-      shearing_box_r_phi = true;
-    }
-    source_terms_enabled = true;
-    qshear = pin->GetReal("problem", "qshear");
-    omega0 = pin->GetReal("problem", "omega0");
-  }
-
-  // (3) Optically thin (ISM) cooling
+  // (2) Optically thin (ISM) cooling
   ism_cooling = pin->GetOrAddBoolean(block, "ism_cooling", false);
   if (ism_cooling) {
     source_terms_enabled = true;
     hrate = pin->GetReal(block, "hrate");
   }
 
-  // (4) beam source (radiation)
+  // (3) beam source (radiation)
   beam = pin->GetOrAddBoolean(block, "beam_source", false);
   if (beam) {
     source_terms_enabled = true;
     dii_dt = pin->GetReal(block, "dii_dt");
   }
 
-  // (5) cooling (relativistic)
+  // (4) cooling (relativistic)
   rel_cooling = pin->GetOrAddBoolean(block, "rel_cooling", false);
   if (rel_cooling) {
     source_terms_enabled = true;
@@ -111,8 +82,8 @@ SourceTerms::~SourceTerms() {
 // Add constant acceleration
 // NOTE source terms must all be computed using primitive (w0) and NOT conserved (u0) vars
 
-void SourceTerms::AddConstantAccel(DvceArray5D<Real> &u0, const DvceArray5D<Real> &w0,
-                                   const Real bdt) {
+void SourceTerms::ConstantAccel(DvceArray5D<Real> &u0, const DvceArray5D<Real> &w0,
+                                const Real bdt) {
   auto &indcs = pmy_pack->pmesh->mb_indcs;
   int is = indcs.is, ie = indcs.ie;
   int js = indcs.js, je = indcs.je;
@@ -133,162 +104,12 @@ void SourceTerms::AddConstantAccel(DvceArray5D<Real> &u0, const DvceArray5D<Real
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn
-// Add Shearing box source terms in the momentum and energy equations for Hydro.
-// NOTE source terms must all be computed using primitive (w0) and NOT conserved (u0) vars
-
-void SourceTerms::AddShearingBox(DvceArray5D<Real> &u0, const DvceArray5D<Real> &w0,
-                                 const Real bdt) {
-  auto &indcs = pmy_pack->pmesh->mb_indcs;
-  int is = indcs.is, ie = indcs.ie;
-  int js = indcs.js, je = indcs.je;
-  int ks = indcs.ks, ke = indcs.ke;
-  int nmb1 = pmy_pack->nmb_thispack - 1;
-
-  if (shearing_box_r_phi) {
-    Real coef1 = 2.0*bdt*omega0;
-    Real coef2 = (2.0-qshear)*bdt*omega0;
-    Real qo = qshear*omega0;
-    par_for("sbox", DevExeSpace(), 0, nmb1, ks, ke, js, je, is, ie,
-    KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
-      Real &den = w0(m,IDN,k,j,i);
-      Real mom1 = den*w0(m,IVX,k,j,i);
-      Real mom2 = den*w0(m,IVY,k,j,i);
-      u0(m,IM1,k,j,i) += coef1*mom2;
-      u0(m,IM2,k,j,i) -= coef2*mom1;
-      if ((u0.extent_int(1) - 1) == IEN) {
-        // For more accuracy, better to use flux values
-        u0(m,IEN,k,j,i) += bdt*mom1*mom2/den*qo;
-      }
-    });
-  } else {
-    Real coef1 = 2.0*bdt*omega0;
-    Real coef3 = (2.0-qshear)*bdt*omega0;
-    Real qo = qshear*omega0;
-    par_for("sbox", DevExeSpace(), 0, nmb1, ks, ke, js, je, is, ie,
-    KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
-      Real &den = w0(m,IDN,k,j,i);
-      Real mom1 = den*w0(m,IVX,k,j,i);
-      Real mom3 = den*w0(m,IVZ,k,j,i);
-      u0(m,IM1,k,j,i) += coef1*mom3;
-      u0(m,IM3,k,j,i) -= coef3*mom1;
-      if ((u0.extent_int(1) - 1) == IEN) {
-        // For more accuracy, better to use flux values
-        u0(m,IEN,k,j,i) += bdt*mom1*mom3/den*qo;
-      }
-    });
-  }
-
-  return;
-}
-
-//----------------------------------------------------------------------------------------
-//! \fn
-// Add Shearing box source terms in the momentum and energy equations for Hydro.
-// NOTE source terms must all be computed using primitive (w0) and NOT conserved (u0) vars
-
-void SourceTerms::AddShearingBox(DvceArray5D<Real> &u0, const DvceArray5D<Real> &w0,
-                                 const DvceArray5D<Real> &bcc0, const Real bdt) {
-  auto &indcs = pmy_pack->pmesh->mb_indcs;
-  int is = indcs.is, ie = indcs.ie;
-  int js = indcs.js, je = indcs.je;
-  int ks = indcs.ks, ke = indcs.ke;
-  int nmb1 = pmy_pack->nmb_thispack - 1;
-
-  if (shearing_box_r_phi) {
-    Real coef1 = 2.0*bdt*omega0;
-    Real coef2 = (2.0-qshear)*bdt*omega0;
-    Real qo = qshear*omega0;
-    par_for("sbox", DevExeSpace(), 0, nmb1, ks, ke, js, je, is, ie,
-    KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
-      Real &den = w0(m,IDN,k,j,i);
-      Real mom1 = den*w0(m,IVX,k,j,i);
-      Real mom2 = den*w0(m,IVY,k,j,i);
-      u0(m,IM1,k,j,i) += coef1*mom2;
-      u0(m,IM2,k,j,i) -= coef2*mom1;
-      if ((u0.extent_int(1) - 1) == IEN) {
-        // For more accuracy, better to use flux values
-        u0(m,IEN,k,j,i) += bdt*(mom1*mom2/den-bcc0(m,IBX,k,j,i)*bcc0(m,IBY,k,j,i))*qo;
-      }
-    });
-  } else {
-    Real coef1 = 2.0*bdt*omega0;
-    Real coef3 = (2.0-qshear)*bdt*omega0;
-    Real qo = qshear*omega0;
-    par_for("sbox", DevExeSpace(), 0, nmb1, ks, ke, js, je, is, ie,
-    KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
-      Real &den = w0(m,IDN,k,j,i);
-      Real mom1 = den*w0(m,IVX,k,j,i);
-      Real mom3 = den*w0(m,IVZ,k,j,i);
-      u0(m,IM1,k,j,i) += coef1*mom3;
-      u0(m,IM3,k,j,i) -= coef3*mom1;
-      if ((u0.extent_int(1) - 1) == IEN) {
-        // For more accuracy, better to use flux values
-        u0(m,IEN,k,j,i) += bdt*(mom1*mom3/den-bcc0(m,IBX,k,j,i)*bcc0(m,IBZ,k,j,i))*qo;
-      }
-    });
-  }
-
-  return;
-}
-
-//----------------------------------------------------------------------------------------
-//! \fn SourceTerms::AddSBoxEField
-//  \brief Add electric field in rotating frame E = - (v_{K} x B) where v_{K} is
-//  background orbital velocity v_{K} = - q \Omega x in the toriodal (\phi or y) direction
-//  See SG eqs. [49-52] (eqs for orbital advection), and [60]
-
-void SourceTerms::AddSBoxEField(const DvceFaceFld4D<Real> &b0,
-                                DvceEdgeFld4D<Real> &efld) {
-  auto &indcs = pmy_pack->pmesh->mb_indcs;
-  auto &size = pmy_pack->pmb->mb_size;
-  int is = indcs.is, ie = indcs.ie;
-  int js = indcs.js, je = indcs.je;
-  int ks = indcs.ks, ke = indcs.ke;
-  Real qomega = qshear*omega0;
-
-  int nmb1 = pmy_pack->nmb_thispack - 1;
-  size_t scr_size = 0;
-  int scr_level = 0;
-
-  //---- 2-D problem:
-  // electric field E = - (v_{K} x B), where v_{K} is in the z-direction.  Thus
-  // E_{x} = -(v x B)_{x} = -(vy*bz - vz*by) = +v_{K}by --> E1 = -(q\Omega x)b2
-  // E_{y} = -(v x B)_{y} =  (vx*bz - vz*bx) = -v_{K}bx --> E2 = +(q\Omega x)b1
-  if (pmy_pack->pmesh->two_d) {
-    auto e1 = efld.x1e;
-    auto e2 = efld.x2e;
-    auto b1 = b0.x1f;
-    auto b2 = b0.x2f;
-    par_for_outer("acc0", DevExeSpace(), scr_size, scr_level, 0, nmb1, js, je+1,
-    KOKKOS_LAMBDA(TeamMember_t member, const int m, const int j) {
-      par_for_inner(member, is, ie+1, [&](const int i) {
-        Real &x1min = size.d_view(m).x1min;
-        Real &x1max = size.d_view(m).x1max;
-        int nx1 = indcs.nx1;
-        Real x1v = CellCenterX(i-is, nx1, x1min, x1max);
-
-        e1(m,ks,  j,i) -= qomega*x1v*b2(m,ks,j,i);
-        e1(m,ke+1,j,i) -= qomega*x1v*b2(m,ks,j,i);
-
-        Real x1f = LeftEdgeX(i-is, nx1, x1min, x1max);
-        e2(m,ks  ,j,i) += qomega*x1f*b1(m,ks,j,i);
-        e2(m,ke+1,j,i) += qomega*x1f*b1(m,ks,j,i);
-      });
-    });
-  }
-  // TODO(@user): add 3D shearing box
-
-  return;
-}
-
-//----------------------------------------------------------------------------------------
-//! \fn void SourceTerms::AddISMCooling()
+//! \fn void SourceTerms::ISMCooling()
 //! \brief Add explict ISM cooling and heating source terms in the energy equations.
 // NOTE source terms must all be computed using primitive (w0) and NOT conserved (u0) vars
 
-void SourceTerms::AddISMCooling(DvceArray5D<Real> &u0, const DvceArray5D<Real> &w0,
-                                const EOS_Data &eos_data, const Real bdt) {
+void SourceTerms::ISMCooling(DvceArray5D<Real> &u0, const DvceArray5D<Real> &w0,
+                             const EOS_Data &eos_data, const Real bdt) {
   auto &indcs = pmy_pack->pmesh->mb_indcs;
   int is = indcs.is, ie = indcs.ie;
   int js = indcs.js, je = indcs.je;
@@ -326,15 +147,14 @@ void SourceTerms::AddISMCooling(DvceArray5D<Real> &u0, const DvceArray5D<Real> &
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn void SourceTerms::AddRelCooling()
+//! \fn void SourceTerms::RelCooling()
 //! \brief Add explict relativistic cooling in the energy and momentum
 //! equations.
 // NOTE source terms must all be computed using primitive (w0) and NOT conserved
 // (u0) vars
 
-void SourceTerms::AddRelCooling(DvceArray5D<Real> &u0,
-                                const DvceArray5D<Real> &w0,
-                                const EOS_Data &eos_data, const Real bdt) {
+void SourceTerms::RelCooling(DvceArray5D<Real> &u0, const DvceArray5D<Real> &w0,
+                             const EOS_Data &eos_data, const Real bdt) {
   auto &indcs = pmy_pack->pmesh->mb_indcs;
   int is = indcs.is, ie = indcs.ie;
   int js = indcs.js, je = indcs.je;
@@ -373,10 +193,10 @@ void SourceTerms::AddRelCooling(DvceArray5D<Real> &u0,
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn SourceTerms::AddBeamSource()
+//! \fn SourceTerms::BeamSource()
 // \brief Add beam of radiation
 
-void SourceTerms::AddBeamSource(DvceArray5D<Real> &i0, const Real bdt) {
+void SourceTerms::BeamSource(DvceArray5D<Real> &i0, const Real bdt) {
   auto &indcs = pmy_pack->pmesh->mb_indcs;
   int is = indcs.is, ie = indcs.ie;
   int js = indcs.js, je = indcs.je;

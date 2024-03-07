@@ -89,13 +89,18 @@ Mesh::Mesh(ParameterInput *pin) :
     strictly_periodic = false;
   }
 
-  // Check if x1 boundaries are shear_periodic.
+  // Error checks if one of x1 boundaries set to shear_periodic.
   if (mesh_bcs[BoundaryFace::inner_x1] == BoundaryFlag::shear_periodic
       && mesh_bcs[BoundaryFace::outer_x1] == BoundaryFlag::shear_periodic) {
     if (one_d) {
       std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-                << std::endl << "Shear Periodic Boundaries require 2D or 3D."
-                << std::endl;
+                << std::endl << "Shear Periodic Boundaries require 2D or 3D." <<std::endl;
+      std::exit(EXIT_FAILURE);
+    }
+    if (!(pin->DoesBlockExist("shearing_box"))) {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                << std::endl << "Shear Periodic Boundaries set but no <shearing_box>"
+                << " block in input file" <<std::endl;
       std::exit(EXIT_FAILURE);
     }
   } else if ((mesh_bcs[BoundaryFace::inner_x1] == BoundaryFlag::shear_periodic

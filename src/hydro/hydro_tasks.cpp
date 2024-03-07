@@ -20,6 +20,7 @@
 #include "eos/eos.hpp"
 #include "diffusion/viscosity.hpp"
 #include "diffusion/conduction.hpp"
+#include "srcterms/srcterms.hpp"
 #include "bvals/bvals.hpp"
 #include "shearing_box/shearing_box.hpp"
 #include "hydro/hydro.hpp"
@@ -38,9 +39,12 @@ namespace hydro {
 //!
 //! "stagen" tasks are those performed in EACH stage
 //!
-//! "after_stagen" tasks are those that can only be cmpleted after all the "stagen"
+//! "after_stagen" tasks are those that can only be completed after all the "stagen"
 //! tasks are finished over all MeshBlocks for EACH stage, such as clearing all MPI
 //! non-blocking sends, etc.
+//!
+//! In addition there are "before_timeintegrator" and "after_timeintegrator" task lists
+//! in the tl map, which are generally used for operator split tasks.
 
 void Hydro::AssembleHydroTasks(std::map<std::string, std::shared_ptr<TaskList>> tl) {
   TaskID none(0);
@@ -54,7 +58,8 @@ void Hydro::AssembleHydroTasks(std::map<std::string, std::shared_ptr<TaskList>> 
   id.sendf   = tl["stagen"]->AddTask(&Hydro::SendFlux, this, id.flux);
   id.recvf   = tl["stagen"]->AddTask(&Hydro::RecvFlux, this, id.sendf);
   id.expl    = tl["stagen"]->AddTask(&Hydro::ExpRKUpdate, this, id.recvf);
-  id.sndu_oa = tl["stagen"]->AddTask(&Hydro::SendU_OA, this, id.expl);
+  id.srctrms = tl["stagen"]->AddTask(&Hydro::HydroSrcTerms, this, id.expl);
+  id.sndu_oa = tl["stagen"]->AddTask(&Hydro::SendU_OA, this, id.srctrms);
   id.rcvu_oa = tl["stagen"]->AddTask(&Hydro::RecvU_OA, this, id.sndu_oa);
   id.restu   = tl["stagen"]->AddTask(&Hydro::RestrictU, this, id.rcvu_oa);
   id.sendu   = tl["stagen"]->AddTask(&Hydro::SendU, this, id.restu);
@@ -198,15 +203,50 @@ TaskStatus Hydro::RecvFlux(Driver *pdrive, int stage) {
 }
 
 //----------------------------------------------------------------------------------------
+//! \fn TaskList Hydro::HydroSrcTerms
+//! \brief Wrapper task list function to apply source terms to conservative vars
+//! Note source terms must be computed using only primitives (w0), as the conserved
+//! variables (u0) have already been partially updated when this fn called.
+
+TaskStatus Hydro::HydroSrcTerms(Driver *pdrive, int stage) {
+  Real beta_dt = (pdrive->beta[stage-1])*(pmy_pack->pmesh->dt);
+
+  // Add source terms for various physics
+  if (psrc->source_terms_enabled) {
+    if (psrc->const_accel) psrc->ConstantAccel(u0, w0, beta_dt);
+    if (psrc->ism_cooling) psrc->ISMCooling(u0, w0, peos->eos_data, beta_dt);
+    if (psrc->rel_cooling) psrc->RelCooling(u0, w0, peos->eos_data, beta_dt);
+  }
+
+  // Add coordinate source terms in GR.  Again, must be computed with only primitives.
+  if (pmy_pack->pcoord->is_general_relativistic) {
+    pmy_pack->pcoord->CoordSrcTerms(w0, peos->eos_data, beta_dt, u0);
+  }
+
+  // Add user source terms
+  if (pmy_pack->pmesh->pgen->user_srcs) {
+    (pmy_pack->pmesh->pgen->user_srcs_func)(pmy_pack->pmesh, beta_dt);
+  }
+
+  // Add shearing box source terms
+  if (shearing_box) {
+    psb->SrcTerms(u0, w0, beta_dt);
+  }
+
+  return TaskStatus::complete;
+}
+
+//----------------------------------------------------------------------------------------
 //! \fn TaskList Hydro::SendU_OA
 //! \brief Wrapper task list function to send data for orbital advection
 
 TaskStatus Hydro::SendU_OA(Driver *pdrive, int stage) {
-  // only execute when shearing box defined and last stage
-  if (!(shearing_box) || stage != (pdrive->nexp_stages)) {
-    return TaskStatus::complete;
+  TaskStatus tstat = TaskStatus::complete;
+  // only execute when (shearing box defined) AND (last stage) AND (3D OR 2d_r_phi)
+  if ((shearing_box) && (stage == (pdrive->nexp_stages)) &&
+      (pmy_pack->pmesh->three_d || psb->shearing_box_r_phi)) {
+    tstat = psb->PackAndSendCC_Orb(u0);
   }
-  TaskStatus tstat = psb->PackAndSendCC_Orb(u0);
   return tstat;
 }
 
@@ -215,11 +255,12 @@ TaskStatus Hydro::SendU_OA(Driver *pdrive, int stage) {
 //! \brief Wrapper task list function to receive and unpack data for orbital advection
 
 TaskStatus Hydro::RecvU_OA(Driver *pdrive, int stage) {
-  // only execute when shearing box defined and last stage
-  if (!(shearing_box) || stage != (pdrive->nexp_stages)) {
-    return TaskStatus::complete;
+  TaskStatus tstat = TaskStatus::complete;
+  // only execute when (shearing box defined) AND (last stage) AND (3D OR 2d_r_phi)
+  if ((shearing_box) && (stage == (pdrive->nexp_stages)) &&
+      (pmy_pack->pmesh->three_d || psb->shearing_box_r_phi)) {
+    tstat = psb->RecvAndUnpackCC_Orb(u0, recon_method);
   }
-  TaskStatus tstat = psb->RecvAndUnpackCC_Orb(u0, recon_method);
   return tstat;
 }
 

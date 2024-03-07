@@ -54,8 +54,10 @@ class ShearingBox {
   ~ShearingBox();
 
   // data
-  Real qshear, omega0;     // shearing box parameters
-  int maxjshift;              // integer offset for orbital advection
+  Real qshear, omega0;      // shearing box parameters
+  int maxjshift;            // maximum integer shift of any cell in orbital advection
+  // ***following is not yet implemented***
+  bool shearing_box_r_phi;  // indicates calculation in 2D (r-\phi) plane
 
   // container to hold names of TaskIDs
   ShearingBoxTaskIDs id;
@@ -68,7 +70,12 @@ class ShearingBox {
   MPI_Comm comm_orb;
 #endif
 
-  // functions...
+  // functions to add source terms
+  void SrcTerms(DvceArray5D<Real> &u0, const DvceArray5D<Real> &w0, const Real bdt);
+  void SrcTerms(DvceArray5D<Real> &u0, const DvceArray5D<Real> &w0,
+                const DvceArray5D<Real> &bcc0, const Real bdt);
+  void EFieldSrcTerms(const DvceFaceFld4D<Real> &b0, DvceEdgeFld4D<Real> &efld);
+
   // functions to communicate CC data with orbital advection
   TaskStatus PackAndSendCC_Orb(DvceArray5D<Real> &a);
   TaskStatus RecvAndUnpackCC_Orb(DvceArray5D<Real> &a, ReconstructionMethod rcon);

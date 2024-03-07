@@ -57,22 +57,13 @@ class SourceTerms {
   // beam source
   Real dii_dt;
 
-  // shearing box
-  bool shearing_box;       // flag to indicate calculations in shearing box
-  bool shearing_box_r_phi; // flag to indicate shearing box is r-phi 2D or 3D
-  Real qshear, omega0;     // shearing box parameters
-
   // functions
-  void AddConstantAccel(DvceArray5D<Real> &u0,const DvceArray5D<Real> &w0,const Real dt);
-  void AddShearingBox(DvceArray5D<Real> &u0,const DvceArray5D<Real> &w0,const Real dt);
-  void AddShearingBox(DvceArray5D<Real> &u0, const DvceArray5D<Real> &w0,
-                      const DvceArray5D<Real> &bcc, const Real dt);
-  void AddSBoxEField(const DvceFaceFld4D<Real> &b0, DvceEdgeFld4D<Real> &efld);
-  void AddISMCooling(DvceArray5D<Real> &u0, const DvceArray5D<Real> &w0,
-                     const EOS_Data &eos, const Real dt);
-  void AddRelCooling(DvceArray5D<Real> &u0, const DvceArray5D<Real> &w0,
-                     const EOS_Data &eos, const Real dt);
-  void AddBeamSource(DvceArray5D<Real> &i0, const Real dt);
+  void ConstantAccel(DvceArray5D<Real> &u0,const DvceArray5D<Real> &w0,const Real dt);
+  void ISMCooling(DvceArray5D<Real> &u0, const DvceArray5D<Real> &w0, const EOS_Data &eos,
+                  const Real dt);
+  void RelCooling(DvceArray5D<Real> &u0, const DvceArray5D<Real> &w0, const EOS_Data &eos,
+                  const Real dt);
+  void BeamSource(DvceArray5D<Real> &i0, const Real dt);
   void NewTimeStep(const DvceArray5D<Real> &w0, const EOS_Data &eos);
 
  private:
