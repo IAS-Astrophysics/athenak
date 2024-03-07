@@ -91,15 +91,17 @@ TaskStatus Radiation::AddRadiationSourceTerm(Driver *pdriver, int stage) {
   }
 
   // Extract adiabatic index and velocity ceiling
-  Real gm1, pfloor;
+  Real gm1, dfloor, pfloor;
   Real v_sq_max = 1. - 1.e-12;
   if (is_hydro_enabled_) {
     gm1 = pmy_pack->phydro->peos->eos_data.gamma - 1.0;
     v_sq_max = 1. - 1./SQR(pmy_pack->phydro->peos->eos_data.gamma_max);
+    dfloor = pmy_pack->phydro->peos->eos_data.dfloor;
     pfloor = pmy_pack->phydro->peos->eos_data.pfloor;
   } else if (is_mhd_enabled_) {
     gm1 = pmy_pack->pmhd->peos->eos_data.gamma - 1.0;
     v_sq_max = 1. - 1./SQR(pmy_pack->pmhd->peos->eos_data.gamma_max);
+    dfloor = pmy_pack->pmhd->peos->eos_data.dfloor;
     pfloor = pmy_pack->pmhd->peos->eos_data.pfloor;
   }
 
@@ -267,13 +269,13 @@ TaskStatus Radiation::AddRadiationSourceTerm(Driver *pdriver, int stage) {
 
     // set opacities
     Real sigma_a, sigma_s, sigma_p;
-    OpacityFunction(wdn, density_scale_,
+    OpacityFunction(wdn-dfloor, density_scale_,
                     tgas, temperature_scale_,
                     length_scale_, gm1, mean_mol_weight_,
                     power_opacity_, rosseland_coef_, planck_minus_rosseland_coef_,
                     kappa_a_, kappa_s_, kappa_p_,
                     sigma_a, sigma_s, sigma_p);
-    sigma_p = fmax(sigma_p, floor_planck_-sigma_a);
+    // sigma_p = fmax(sigma_p, floor_planck_-sigma_a);
     Real dtcsiga = dt_*sigma_a;
     Real dtcsigs = dt_*sigma_s;
     Real dtcsigp = dt_*sigma_p;

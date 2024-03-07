@@ -178,21 +178,21 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
       if (use_ko_dissipation_) ko_dissipation_(m,k,j,i) = false;
     }
 
-    EOS_Data eos_local;
-    eos_local.gamma = eos.gamma;
-    eos_local.iso_cs = eos.iso_cs;
-    eos_local.is_ideal = eos.is_ideal;
-    eos_local.use_e = eos.use_e;
-    eos_local.use_t = eos.use_t;
-    eos_local.dfloor = eos.dfloor;
-    eos_local.pfloor = eos.pfloor;
-    eos_local.tfloor = eos.tfloor;
-    eos_local.sfloor = eos.sfloor;
-    eos_local.sfloor1 = eos.sfloor1;
-    eos_local.sfloor2 = eos.sfloor2;
-    eos_local.rho1 = eos.rho1;
-    eos_local.rho2 = eos.rho2;
-    eos_local.gamma_max = eos.gamma_max;
+    // EOS_Data eos_local;
+    // eos_local.gamma = eos.gamma;
+    // eos_local.iso_cs = eos.iso_cs;
+    // eos_local.is_ideal = eos.is_ideal;
+    // eos_local.use_e = eos.use_e;
+    // eos_local.use_t = eos.use_t;
+    // eos_local.dfloor = eos.dfloor;
+    // eos_local.pfloor = eos.pfloor;
+    // eos_local.tfloor = eos.tfloor;
+    // eos_local.sfloor = eos.sfloor;
+    // eos_local.sfloor1 = eos.sfloor1;
+    // eos_local.sfloor2 = eos.sfloor2;
+    // eos_local.rho1 = eos.rho1;
+    // eos_local.rho2 = eos.rho2;
+    // eos_local.gamma_max = eos.gamma_max;
 
     // if (!(excised)) {
     if (!(excised) || excised_outer) {
@@ -201,36 +201,36 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
       Real s2, b2, rpar;
       TransformToSRMHD(u,glower,gupper,s2,b2,rpar,u_sr);
 
-      if (turn_on_sao_operation_) {
-        Real bh_a = 0.9375;
-        Real a2 = SQR(bh_a);
-        Real r_hor = 1.0 + sqrt(1.0 - a2);
-        Real rr2 = SQR(x1v) + SQR(x2v) + SQR(x3v);
-        Real r = sqrt(0.5 * (rr2 - a2 + sqrt(SQR(rr2 - a2) + 4.0*a2*SQR(x3v))));
-
-        Real fac = 100;
-        Real rmin = 1.;
-        Real rmax = 128.;
-        Real dfloor_min = eos.dfloor;
-        Real dfloor_max = fac*eos.dfloor;
-        Real pfloor_min = eos.pfloor;
-        Real pfloor_max = fac*eos.pfloor;
-        Real lg_dfloor = log10(dfloor_min);
-        Real lg_pfloor = log10(pfloor_min);
-        if (r > rmax)  {
-          lg_dfloor = log10(dfloor_min);
-          lg_pfloor = log10(pfloor_min);
-        } else if (r > rmin) {
-          lg_dfloor = (log10(dfloor_max)-log10(dfloor_min))/(rmax-rmin) * (r-rmin) + log10(dfloor_min);
-          lg_pfloor = (log10(pfloor_max)-log10(pfloor_min))/(rmax-rmin) * (r-rmin) + log10(pfloor_min);
-        }
-        eos_local.dfloor = pow(10., lg_dfloor);
-        eos_local.pfloor = pow(10., lg_pfloor);
-      }
+      // if (turn_on_sao_operation_) {
+      //   Real bh_a = 0.9375;
+      //   Real a2 = SQR(bh_a);
+      //   Real r_hor = 1.0 + sqrt(1.0 - a2);
+      //   Real rr2 = SQR(x1v) + SQR(x2v) + SQR(x3v);
+      //   Real r = sqrt(0.5 * (rr2 - a2 + sqrt(SQR(rr2 - a2) + 4.0*a2*SQR(x3v))));
+      //
+      //   Real fac = 100;
+      //   Real rmin = 1.;
+      //   Real rmax = 128.;
+      //   Real dfloor_min = eos.dfloor;
+      //   Real dfloor_max = fac*eos.dfloor;
+      //   Real pfloor_min = eos.pfloor;
+      //   Real pfloor_max = fac*eos.pfloor;
+      //   Real lg_dfloor = log10(dfloor_min);
+      //   Real lg_pfloor = log10(pfloor_min);
+      //   if (r > rmax)  {
+      //     lg_dfloor = log10(dfloor_min);
+      //     lg_pfloor = log10(pfloor_min);
+      //   } else if (r > rmin) {
+      //     lg_dfloor = (log10(dfloor_max)-log10(dfloor_min))/(rmax-rmin) * (r-rmin) + log10(dfloor_min);
+      //     lg_pfloor = (log10(pfloor_max)-log10(pfloor_min))/(rmax-rmin) * (r-rmin) + log10(pfloor_min);
+      //   }
+      //   eos_local.dfloor = pow(10., lg_dfloor);
+      //   eos_local.pfloor = pow(10., lg_pfloor);
+      // }
 
       // call c2p function
       // (inline function in ideal_c2p_mhd.hpp file)
-      SingleC2P_IdealSRMHD(u_sr, eos_local, s2, b2, rpar, w,
+      SingleC2P_IdealSRMHD(u_sr, eos, s2, b2, rpar, w,
                            dfloor_used, efloor_used, c2p_failure, iter_used);
 
       HydPrim1D w_old;
@@ -441,7 +441,7 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
         w_in.bz = u.bz;
 
         HydCons1D u_out;
-        SingleP2C_IdealGRMHD(glower, gupper, w_in, eos_local.gamma, u_out);
+        SingleP2C_IdealGRMHD(glower, gupper, w_in, eos.gamma, u_out);
         cons(m,IDN,k,j,i) = u_out.d;
         cons(m,IM1,k,j,i) = u_out.mx;
         cons(m,IM2,k,j,i) = u_out.my;
