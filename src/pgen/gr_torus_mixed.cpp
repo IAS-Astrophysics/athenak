@@ -499,18 +499,21 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
       int nx1 = indcs.nx1;
       Real x1v = CellCenterX(i-is, nx1, x1min, x1max);
       Real x1f   = LeftEdgeX(i  -is, nx1, x1min, x1max);
+      Real x1vm1 = CellCenterX(i+1, nx1, x1min, x1max);
 
       Real &x2min = size.d_view(m).x2min;
       Real &x2max = size.d_view(m).x2max;
       int nx2 = indcs.nx2;
       Real x2v = CellCenterX(j-js, nx2, x2min, x2max);
       Real x2f   = LeftEdgeX(j  -js, nx2, x2min, x2max);
+      Real x2vm1 = CellCenterX(j+1, nx2, x2min, x2max);
 
       Real &x3min = size.d_view(m).x3min;
       Real &x3max = size.d_view(m).x3max;
       int nx3 = indcs.nx3;
       Real x3v = CellCenterX(k-ks, nx3, x3min, x3max);
       Real x3f   = LeftEdgeX(k  -ks, nx3, x3min, x3max);
+      Real x3vm1 = CellCenterX(k+1, nx3, x3min, x3max);
 
       Real dx1 = size.d_view(m).dx1;
       Real dx2 = size.d_view(m).dx2;
@@ -519,9 +522,10 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
       a1(m,k,j,i) = A1(trs, x1v, x2f, x3f); 
       a2(m,k,j,i) = A2(trs, x1f, x2v, x3f);
       a3(m,k,j,i) = A3(trs, x1f, x2f, x3v);
-      b1(m,k,j,i) = B1(trs, x1v, x2f, x3f);
-      b2(m,k,j,i) = B2(trs, x1f, x2v, x3f);
-      b3(m,k,j,i) = B3(trs, x1f, x2f, x3v);
+
+      b1(m,k,j,i) = 0.5*(B1(trs, x1v, x2v, x3v)+B1(trs, x1vm1, x2v, x3v));
+      b2(m,k,j,i) = 0.5*(B2(trs, x1v, x2v, x3v)+B2(trs, x1v, x2vm1, x3v));
+      b3(m,k,j,i) = 0.5*(B3(trs, x1v, x2v, x3v)+B3(trs, x1v, x2v, x3vm1));
 
       // When neighboring MeshBock is at finer level, compute vector potential as sum of
       // values at fine grid resolution.  This guarantees flux on shared fine/coarse
