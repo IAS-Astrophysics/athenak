@@ -332,8 +332,13 @@ class PrimitiveSolverHydro {
       k += kl;
 
       // Add in a short circuit where FOFC is guaranteed.
-      if (floors_only && (fofc_(m, k, j, i) || excision_flux_(m, k, j, i))) {
+      if (floors_only && fofc_(m, k, j, i)) {
         return;
+      }
+      if (floors_only && excise) {
+        if (excision_flux_(m,k,j,i)) {
+          return;
+        }
       }
 
       // Extract the metric
