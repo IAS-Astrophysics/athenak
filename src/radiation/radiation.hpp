@@ -96,6 +96,8 @@ class Radiation {
   bool temperature_fix_turn_on;         // adopt temperature fix after radiation source term
   bool cellavg_rad_source;              // adopt cellavg for radiation source term
   Real floor_planck;                    // floor for planck mean coefficient
+  bool correct_radsrc_opacity; 
+  Real dfloor_opacity;
 
   // Radiation source term parameters
   bool rad_source;          // flag to enable/disable radiation source term
