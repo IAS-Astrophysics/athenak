@@ -101,13 +101,13 @@ void Particles::BorisStep( const Real dt, DvceArray2D<Real> &pr, const DvceArray
 		}
 	}
 	g_Lor = sqrt(1.0 + g_Lor);
-        std::cout << "g_Lor " << p << " " << g_Lor << std::endl;
+        //std::cout << "g_Lor " << p << " " << g_Lor << std::endl;
 
 	x1 = pr(IPX,p) + dt/(2.0*g_Lor)*up[0];
         if (multi_d) { x2 = pr(IPY,p) + dt/(2.0*g_Lor)*up[1]; }
         if (three_d) { x3 = pr(IPZ,p) + dt/(2.0*g_Lor)*up[2]; }
 
-        std::cout << "x123 " << global_variable::my_rank << " " << pi(PTAG,p) << " " << x1 << " " << x2 << " " << x3 << std::endl;
+        //std::cout << "x123 " << global_variable::my_rank << " " << pi(PTAG,p) << " " << x1 << " " << x2 << " " << x3 << std::endl;
 	Real uE[3]; //Evolution of the velocity due to the electric field (first half). Index 1... stands for dimension (0 is time).
 	Real uB[3]; //Evolution of the velocity due to the magnetic field. Index 1... stands for dimension (0 is time).
 
