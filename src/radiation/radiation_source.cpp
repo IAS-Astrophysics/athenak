@@ -277,9 +277,20 @@ TaskStatus Radiation::AddRadiationSourceTerm(Driver *pdriver, int stage) {
     // set opacities
     Real sigma_a, sigma_s, sigma_p;
     Real wdn_opacity = fmax(wdn-dfloor, dfloor_opacity_);
+    // if (correct_radsrc_opacity_ && (sigma_cold > sigma_cold_cut_)) {
+    //   wdn_opacity = dfloor_opacity_;
+    // }
+
     if (correct_radsrc_opacity_ && (sigma_cold > sigma_cold_cut_)) {
-      wdn_opacity = dfloor_opacity_;
+      Real dfloor_op = dfloor_opacity_;
+      Real fac_trunc = 100.0;
+      Real wid_trunc = 0.2;
+      Real del_reduce = log10(dfloor) - log10(dfloor_op);
+      Real fac_inv = 1.0 + exp( -1./wid_trunc * ( log10(wdn) - (log10(dfloor) + 0.5*log10(fac_trunc)) ) );
+      Real lg_rho_op = log10(wdn) - (1.-1./fac_inv) * del_reduce;
+      wdn_opacity = pow(10.0, lg_rho_op);
     }
+
     OpacityFunction(wdn_opacity, density_scale_,
                     tgas, temperature_scale_,
                     length_scale_, gm1, mean_mol_weight_,
