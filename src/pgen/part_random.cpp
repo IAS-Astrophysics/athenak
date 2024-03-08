@@ -49,6 +49,8 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     // choose parent MeshBlock randomly
     int m = static_cast<int>(rand_gen.frand()*(gide - gids + 1.0));
     pi(PGID,p) = gids + m;
+    pr(IPM,p) = 1.0;
+    pr(IPC,p) = 1.0;
 
     Real rand = rand_gen.frand();
     pr(IPX,p) = (1. - rand)*mbsize.d_view(m).x1min + rand*mbsize.d_view(m).x1max;

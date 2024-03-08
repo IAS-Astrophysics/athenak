@@ -75,10 +75,14 @@ void Particles::BorisStep( const Real dt, DvceArray2D<Real> &pr, const DvceArray
 	int is = indcs.is;
 	int js = indcs.js;
 	int ks = indcs.ks;
+	int ie = indcs.ie;
+	int je = indcs.je;
+	int ke = indcs.ke;
 	auto &mbsize = pmy_pack->pmb->mb_size;
 	auto gids = pmy_pack->gids;
 	bool is_minkowski = pmy_pack->pcoord->coord_data.is_minkowski;
 	Real spin = pmy_pack->pcoord->coord_data.bh_spin;
+	int nmb1 = pmy_pack -> nmb_thispack-1;
 
       // First half-step in space
       par_for("part_boris",DevExeSpace(),0,(nprtcl_thispack-1),
@@ -90,20 +94,20 @@ void Particles::BorisStep( const Real dt, DvceArray2D<Real> &pr, const DvceArray
 	Real ADM_lower[4][4], ADM_upper[4][4]; // Metric components in ADM formalism
 					       // (remember: glower[0][0] = alpha, glower[0][i] = beta[i]
 	ComputeMetricAndInverse(pr(IPX,p),pr(IPY,p),pr(IPZ,p), is_minkowski, spin, ADM_lower, ADM_upper); 
-	Real g_Lor = 0.0; //Lorentz gamma factor
+	Real g_Lor = 0.0; //Lorentz gamma factor (though it's not the usual expression it plays a similar role in these equations)
 	for (int i1 = 0; i1 < 3; ++i1 ){ 
 		for (int i2 = 0; i2 < 3; ++i2 ){ 
 		g_Lor += ADM_upper[i1+1][i2+1]*up[i1]*up[i2];
 		}
 	}
 	g_Lor = sqrt(1.0 + g_Lor);
-        //std::cout << "g_Lor " << p << " " << g_Lor <<//std::endl;
+        std::cout << "g_Lor " << p << " " << g_Lor << std::endl;
 
 	x1 = pr(IPX,p) + dt/(2.0*g_Lor)*up[0];
         if (multi_d) { x2 = pr(IPY,p) + dt/(2.0*g_Lor)*up[1]; }
         if (three_d) { x3 = pr(IPZ,p) + dt/(2.0*g_Lor)*up[2]; }
 
-        //std::cout << "x123 " << p << " " << x1 << " " << x2 << " " << x3<<//std::endl;
+        std::cout << "x123 " << global_variable::my_rank << " " << pi(PTAG,p) << " " << x1 << " " << x2 << " " << x3 << std::endl;
 	Real uE[3]; //Evolution of the velocity due to the electric field (first half). Index 1... stands for dimension (0 is time).
 	Real uB[3]; //Evolution of the velocity due to the magnetic field. Index 1... stands for dimension (0 is time).
 
@@ -111,6 +115,16 @@ void Particles::BorisStep( const Real dt, DvceArray2D<Real> &pr, const DvceArray
         int ip = (pr(IPX,p) - mbsize.d_view(m).x1min)/mbsize.d_view(m).dx1 + is;
 	int jp = (pr(IPY,p) - mbsize.d_view(m).x2min)/mbsize.d_view(m).dx2 + js;
 	int kp = (pr(IPZ,p) - mbsize.d_view(m).x3min)/mbsize.d_view(m).dx3 + ks;
+	/***/
+	if ( (ip*jp*kp < 0.0) || (ip > 33) || (jp > 33) || (kp > 33) || (m > nmb1)){
+	std::cout << global_variable::my_rank <<std::endl;
+	std::cout << "mbsize " << m << " " << mbsize.d_view(m).x2min << " " << mbsize.d_view(m).dx2 << std::endl; 
+	std::cout << "pr " << pi(PTAG,p) << " " << pr(IPX,p) << " " << pr(IPY,p) << " " << pr(IPZ,p) << std::endl; 
+	std::cout << "Idx i "  << pi(PTAG,p) << " "<< is << " " << ip << " " << ie << std::endl; 
+	std::cout << "Idx j "  << pi(PTAG,p) << " "<< js << " " << jp << " " << je << std::endl; 
+	std::cout << "Idx k "  << pi(PTAG,p) << " "<< ks << " " << kp << " " << ke << std::endl; 
+	}
+	/***/
 	Real &x1min = mbsize.d_view(m).x1min;
 	Real &x2min = mbsize.d_view(m).x2min;
 	Real &x3min = mbsize.d_view(m).x3min;
@@ -133,9 +147,6 @@ void Particles::BorisStep( const Real dt, DvceArray2D<Real> &pr, const DvceArray
         if (multi_d) { uE[1] = up[1] + dt*pr(IPC,p)/(2.0*pr(IPM,p))*E[1]; }
         if (three_d) { uE[2] = up[2] + dt*pr(IPC,p)/(2.0*pr(IPM,p))*E[2]; }
 
-	// if (p == 53){
-        // std::cout << "uE " << p << " " << uE[0] << " " << uE[1] << " " << uE[2]<<std::endl;
-	// }
 	// Get metric components at new location x1,x2,x3
 	ComputeMetricAndInverse(x1,x2,x3, is_minkowski, spin, ADM_lower, ADM_upper); 
 	g_Lor = 0.0; //Intermediate Lorentz gamma factor
@@ -194,6 +205,7 @@ void Particles::BorisStep( const Real dt, DvceArray2D<Real> &pr, const DvceArray
         if (three_d) { pr(IPZ,p) = x3 + dt/(2.0*g_Lor)*pr(IPVZ,p); }
         //std::cout << "pp1 " << p << " " << pr(IPX,p)<< " " << pr(IPY,p)<< " " << pr(IPZ,p)<<//std::endl;
       });
+      return;
 }
 
 } // namespace particles

@@ -1,26 +1,26 @@
 # AthenaXXX input file for random particle drift
 
 <comment>
-problem   = MgnetizedParticles_Boris 
+problem   = MagnetizedParticles_Boris 
 
 <job>
 basename  = boris       # problem ID: basename of output filenames
 
 <mesh>
 nghost    = 2         # Number of ghost cells
-nx1       = 64       # Number of zones in X1-direction
+nx1       = 128       # Number of zones in X1-direction
 x1max     = 0.5      # maximum value of X1
 x1min     = -0.5       # maximum value of X1
 ix1_bc    = periodic  # Inner-X1 boundary condition flag
 ox1_bc    = periodic  # Outer-X1 boundary condition flag
 
-nx2       = 64       # Number of zones in X2-direction
+nx2       = 128       # Number of zones in X2-direction
 x2max     = 0.5      # maximum value of X2
 x2min     = -0.5       # maximum value of X2
 ix2_bc    = periodic  # Inner-X2 boundary condition flag
 ox2_bc    = periodic  # Outer-X2 boundary condition flag
 
-nx3       = 64       # Number of zones in X3-direction
+nx3       = 128       # Number of zones in X3-direction
 x3max     = 0.5      # maximum value of X3
 x3min     = -0.5       # maximum value of X3
 ix3_bc    = periodic  # Inner-X3 boundary condition flag
@@ -53,7 +53,7 @@ rsolver     = hlld      # Riemann-solver to be used
 gamma       = 1.6666667 # gamma = C_p/C_v
 
 <problem>
-max_init_vel = 0.1
+max_init_vel = 0.01
 b0_strength = 1.0
 
 <output1>

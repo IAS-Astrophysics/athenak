@@ -36,7 +36,7 @@ evolution  = dynamic   # dynamic/kinematic/static
 integrator = rk2       # time integration algorithm
 cfl_number = 0.9       # The Courant, Friedrichs, & Lewy (CFL) Number
 nlim       = -1        # cycle limit
-tlim       = 2.0      # time limit
+tlim       = 10.0      # time limit
 ndiag      = 10        # cycles between diagostic output
 
 <particles>
@@ -53,7 +53,7 @@ rsolver     = hlld      # Riemann-solver to be used
 gamma       = 1.6666667 # gamma = C_p/C_v
 
 <problem>
-max_init_vel = 0.1
+max_init_vel = 0.025
 b0_strength = 1.0
 user_hist = true
 

@@ -26,6 +26,7 @@ void LarmorMotionErrors(HistoryData *hdata, Mesh *pm);
 Real * x_init;
 Real * v_init;
 Real * x_aux;
+Real * v_aux;
 Real * all_diffs_;
 ParameterInput * aux_pin;
 
@@ -64,6 +65,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   x_init = (Real *) malloc( 3*npart*sizeof(Real) );
   v_init = (Real *) malloc( 3*npart*sizeof(Real) );
   x_aux = (Real *) malloc( 3*npart*sizeof(Real) );
+  v_aux = (Real *) malloc( 3*npart*sizeof(Real) );
   all_diffs_ = (Real *) malloc( npart*sizeof(Real) );
   Real * x = x_init;
   Real * v = v_init;
@@ -145,6 +147,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   Real &dtnew_ = pmy_mesh_->pmb_pack->ppart->dtnew;
   dtnew_ = std::min(mbsize.h_view(0).dx1, mbsize.h_view(0).dx2);
   dtnew_ = std::min(dtnew_, mbsize.h_view(0).dx3);
+  dtnew_ *= pin->GetOrAddReal("time", "cfl_number", 0.8);
 
   return;
 }
@@ -154,9 +157,11 @@ void LarmorMotionErrors(HistoryData *pdata, Mesh *pm){
 	// at t=tlim using the analytical expression for helical/Larmor motion.
 	// This is used as a metric for the accuracy of the Boris pusher.
 	
-	  pdata->nhist = 2;
-	  pdata->label[0] = "rms_diff";
-	  pdata->label[1] = "max_diff";
+	  pdata->nhist = 3;
+	  pdata->label[0] = "rms_diff"; //rms difference between the analytically computed position and the numerical one
+	  pdata->label[1] = "max_diff"; //sqrt of the maximum of the squared differences in position
+	  pdata->label[2] = "avg_rel_dEdt"; //rms difference in the kinetic energy between the initial condition and the current time
+					//Only perpendicular motion
 
 	  // Re-compute the initial positions
 	  auto &mbsize = pm->pmb_pack->pmb->mb_size;
@@ -170,6 +175,7 @@ void LarmorMotionErrors(HistoryData *pdata, Mesh *pm){
 	  Real * x = x_init;
 	  Real * v = v_init;
 	  Real * x1 = x_aux;
+	  Real * v1 = v_aux;
 	  Real * all_diffs = all_diffs_;
 	  Real max_init_vel = aux_pin->GetOrAddReal("problem", "max_init_vel", 1.0);
 	  Real prtcl_mass = aux_pin->GetOrAddReal("particles", "mass", 1.0E-10);
@@ -180,37 +186,43 @@ void LarmorMotionErrors(HistoryData *pdata, Mesh *pm){
 	  Real sfac = (curr_time == 0.0) ? 0.0 : 1.0; //First diagnostic should not be evolved
 
 	  Real rms_diff = 0.0;
+	  Real rel_dEdt = 0.0;
 	  for (int ip = 0; ip<npart; ++ip){
 		all_diffs[ip] = 0.0;
 	  }
 	  Kokkos::parallel_reduce("part_compare",Kokkos::RangePolicy<>(DevExeSpace(),0,(npart-1)),
-			  KOKKOS_LAMBDA(const int p_aux, Real &rms_this) {
+			  KOKKOS_LAMBDA(const int p_aux, Real &rms_pos, Real &rel_dE) {
 
 	    int p = pi(PTAG,p_aux);
 	    Real g_Lor = 1.0/sqrt(1.0 - SQR(v[3*p]) - SQR(v[3*p+1]) - SQR(v[3*p+2]));
-	    Real B_rel = B_strength*g_Lor;
 	    Real v_mod = sqrt( SQR(v[3*p]) + SQR(v[3*p+1]) +SQR(v[3*p+2]) );
 	    Real ang_to_b = atan2( sqrt( SQR(v[3*p]) + SQR(v[3*p+1]) ) , v[3*p+2] );
-	    Real v_perp = ( v_mod*sin(ang_to_b) )/g_Lor;
-	    Real v_par = v[3*p+2]/g_Lor;
+	    Real v_perp = ( v_mod*sin(ang_to_b) );
+	    Real v_par = v[3*p+2];
 	    Real init_phase = - atan2(v[3*p+1],v[3*p]);
-	    x1[3*p] = x[3*p] + sfac*(prtcl_mass*v_perp*g_Lor)/(prtcl_charge*B_strength)*sin(
-	       	 init_phase + (prtcl_charge*B_strength/(g_Lor*prtcl_mass))*curr_time );
-	    x1[3*p+1] = x[3*p+1] + sfac*(prtcl_mass*v_perp*g_Lor)/(prtcl_charge*B_strength)*cos(
-	       	 init_phase + (prtcl_charge*B_strength/(g_Lor*prtcl_mass))*curr_time );
+	    Real rho = (prtcl_mass*v_perp*g_Lor)/(prtcl_charge*B_strength); //Larmor radius
+
+	    x1[3*p] = x[3*p] + sfac*rho*sin(
+	       	 init_phase + (prtcl_charge*B_strength/(prtcl_mass))*curr_time );
+	    x1[3*p+1] = x[3*p+1] + sfac*rho*cos(
+	       	 init_phase + (prtcl_charge*B_strength/(prtcl_mass))*curr_time );
 	    x1[3*p+2] = x[3*p+2] + sfac*v_par*curr_time;
 	    
-	    rms_this = ( SQR(pr(IPX,p_aux) - x1[3*p]) + SQR(pr(IPY,p_aux) - x1[3*p+1]) + SQR(pr(IPZ,p_aux) - x1[3*p+2]) );
-	    all_diffs[p] = ( SQR(pr(IPX,p_aux) - x1[3*p]) + SQR(pr(IPY,p_aux) - x1[3*p+1]) + SQR(pr(IPZ,p_aux) - x1[3*p+2]) );
-	  }, Kokkos::Sum<Real>(rms_diff));
+	    v1[3*p] = sfac*v_perp*cos(
+	       	 init_phase + (prtcl_charge*B_strength/(prtcl_mass))*curr_time );
+	    v1[3*p+1] = - sfac*v_perp*sin(
+	       	 init_phase + (prtcl_charge*B_strength/(prtcl_mass))*curr_time );
+	    v1[3*p+2] = v[3*p+2];// + sfac*v_par*curr_time;
 
-	  /***/
-	  std::cout << pr(IPX,25) << " " << pr(IPY,25) << " " << pr(IPZ,25) << " " << pr(IPX,65) << " " << pr(IPY,65) << " " << pr(IPZ,65) << " " << std::endl;
-	  std::cout << x1[75] << " " << x1[76] << " " << x1[77] << " " << x1[195] << " " << x1[196] << " " << x1[197] << " " << std::endl;
-	  std::cout << (pr(IPY,25) - x1[76]) << " " << (pr(IPY,75) - x1[196]) << std::endl;
-	  /***/
+	    // Initial kinetic energy vs. current kinetic energy (pure magnetic field shouldn't do any work)
+	    rel_dE = ( SQR(v1[3*p]) + SQR(v1[3*p+1]) + SQR(v1[3*p+2]) ) - ( SQR(v[3*p]) + SQR(v[3*p+1]) + SQR(v[3*p+2]) );
+	    rel_dE /= ( SQR(v[3*p]) + SQR(v[3*p+1]) + SQR(v[3*p+2]) );
+	    rms_pos = ( SQR(pr(IPX,p_aux) - x1[3*p]) + SQR(pr(IPY,p_aux) - x1[3*p+1]) + SQR(pr(IPZ,p_aux) - x1[3*p+2]) );
+	    all_diffs[p] = ( SQR(pr(IPX,p_aux) - x1[3*p]) + SQR(pr(IPY,p_aux) - x1[3*p+1]) + SQR(pr(IPZ,p_aux) - x1[3*p+2]) );
+	  }, Kokkos::Sum<Real>(rms_diff), Kokkos::Sum<Real>(rel_dEdt));
+
 	  rms_diff = sqrt( rms_diff/(npart-1) );
-	  std::cout << "On rank " << global_variable::my_rank << " at time " << curr_time << " rms_diff: " << rms_diff << std::endl;
+	  rel_dEdt = rel_dEdt/(npart) ;
 	  Real ismax = -1.0;
 	  for (int ip = 0; ip<npart; ++ip){
 	  	if (all_diffs[ip] > ismax){
@@ -218,14 +230,25 @@ void LarmorMotionErrors(HistoryData *pdata, Mesh *pm){
 		}
 	  }
 	  ismax = sqrt(ismax);
+	  /***
+	  std::cout << "On rank " << global_variable::my_rank << " at time " << curr_time << " rel_dEdt: " << rel_dEdt << std::endl;
+	  std::cout << "On rank " << global_variable::my_rank << " at time " << curr_time << " rms_diff: " << rms_diff << std::endl;
 	  std::cout << "On rank " << global_variable::my_rank << " at time " << curr_time << " max_diff: " << ismax << std::endl;
+	  std::cout << pr(IPVX,25) << " " << pr(IPVY,25) << " " << pr(IPVZ,25) << " " << pr(IPVX,65) << " " << pr(IPVY,65) << " " << pr(IPVZ,65) << " " << std::endl;
+	  std::cout << v1[75] << " " << v1[76] << " " << v1[77] << " " << v1[195] << " " << v1[196] << " " << v1[197] << " " << std::endl;
+	  std::cout << "=====================================" << std::endl;
+	  std::cout << pr(IPX,25) << " " << pr(IPY,25) << " " << pr(IPZ,25) << " " << pr(IPX,65) << " " << pr(IPY,65) << " " << pr(IPZ,65) << " " << std::endl;
+	  std::cout << x1[75] << " " << x1[76] << " " << x1[77] << " " << x1[195] << " " << x1[196] << " " << x1[197] << " " << std::endl;
+	  ***/
 	  pdata->hdata[0] = rms_diff;
 	  pdata->hdata[1] = ismax;
+	  pdata->hdata[2] = rel_dEdt;
 	  if (curr_time == aux_pin->GetOrAddReal("time", "tlim", 1.0)){
-		std::cout << "Freeing auxiliary mallocs." << std::endl;
+		std::cout << "Freeing auxiliary mallocs for particle test problem." << std::endl;
 	  	free(x_init);
 	  	free(v_init);
 	  	free(x_aux);
+	  	free(v_aux);
 	  	free(all_diffs_);
 	  }
 	  return;
