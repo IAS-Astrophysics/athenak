@@ -11,6 +11,8 @@
 #include <string>
 #include <vector>
 
+#include "Kokkos_ScatterView.hpp"
+
 #include "athena.hpp"
 #include "io_wrapper.hpp"
 
@@ -19,23 +21,32 @@
     #error NHISTORY > NREDUCTION in outputs.hpp
 #endif
 
-#define NOUTPUT_CHOICES 144
+#define NOUTPUT_CHOICES 151
 // choices for output variables used in <ouput> blocks in input file
 // TO ADD MORE CHOICES:
 //   - add more strings to array below, change NOUTPUT_CHOICES above appropriately
 //   - add code to load new variables in BaseOutputType constructor
 //   - may need to change index limits that test whether physics is defined for
-//     requested output variable near start of BaseOutputType constructor
+//     requested output variable near start of BaseOutputType constructor (TODO)
 static const char *var_choice[NOUTPUT_CHOICES] = {
-  "hydro_u_d", "hydro_u_m1", "hydro_u_m2", "hydro_u_m3", "hydro_u_e", "hydro_u",
-  "hydro_w_d", "hydro_w_vx", "hydro_w_vy", "hydro_w_vz", "hydro_w_e", "hydro_w",
-  "hydro_u_s", "hydro_w_s",  "hydro_wz",   "hydro_w2",
-  "mhd_u_d",   "mhd_u_m1",   "mhd_u_m2",   "mhd_u_m3",   "mhd_u_e",   "mhd_u",
-  "mhd_w_d",   "mhd_w_vx",   "mhd_w_vy",   "mhd_w_vz",   "mhd_w_e",   "mhd_w",
+  "hydro_u_d", "hydro_u_m1", "hydro_u_m2", "hydro_u_m3", "hydro_u_e",     "hydro_u",
+  "hydro_w_d", "hydro_w_vx", "hydro_w_vy", "hydro_w_vz", "hydro_w_e",     "hydro_w",
+  "hydro_u_s", "hydro_w_s",
+  // hydro derived variables
+  "hydro_wz",   "hydro_w2",
+  "mhd_u_d",   "mhd_u_m1",   "mhd_u_m2",   "mhd_u_m3",   "mhd_u_e",       "mhd_u",
+  "mhd_w_d",   "mhd_w_vx",   "mhd_w_vy",   "mhd_w_vz",   "mhd_w_e",       "mhd_w",
   "mhd_u_s",   "mhd_w_s",    "mhd_wz",     "mhd_w2",
-  "mhd_bcc1",  "mhd_bcc2",   "mhd_bcc3",   "mhd_bcc",    "mhd_u_bcc", "mhd_w_bcc",
-  "mhd_jz",    "mhd_j2",     "mhd_divb",
+  "mhd_bcc1",  "mhd_bcc2",   "mhd_bcc3",   "mhd_bcc",    "mhd_u_bcc",     "mhd_w_bcc",
+  // MHD derived variables
+  "mhd_jz", "mhd_j2",  "mhd_curv", "mhd_k_jxb", "mhd_curv_perp", "mhd_bmag",  "mhd_divb",
+  // useful for coarsened binary output
+  "hydro_sgs", "mhd_sgs",
+  // dynamo wavenumber scales
+  "mhd_dynamo_ks",
+  // turbulence
   "turb_force",
+  //radiation
   "rad_coord",     "rad_fluid",      "rad_coord_fluid",
   "rad_hydro_u_d", "rad_hydro_u_m1", "rad_hydro_u_m2", "rad_hydro_u_m3", "rad_hydro_u_e",
   "rad_hydro_u",   "rad_hydro_w_d",  "rad_hydro_w_vx", "rad_hydro_w_vy", "rad_hydro_w_vz",
@@ -112,6 +123,15 @@ struct OutputParameters {
   int coarsen_factor;
   bool compute_moments; // if true then will compute
   // <q>, <q^2>, <q^3>, <q^4> for each variable q
+  // DBF parameters for PDF:
+  // number of derived variables, index of current derived variable
+  int n_derived=0, i_derived=0;
+  std::string variable_2; // DBF: for 2d PDFs
+  Real bin_min, bin_max;
+  Real bin2_min, bin2_max;
+  int nbin=0, nbin2=0;
+  bool logscale=true, logscale2=true;
+  bool mass_weighted=false;
 };
 
 //----------------------------------------------------------------------------------------
@@ -266,6 +286,45 @@ class CoarsenedBinaryOutput : public BaseTypeOutput {
   // void CoarsenVariable(const DvceArray3D<Real>& full_data,
   //                            DvceArray3D<Real>& coarsen_data,
   //                            const int coarsen_factor);
+  void LoadOutputData(Mesh *pm) override;
+  void WriteOutputFile(Mesh *pm, ParameterInput *pin) override;
+};
+
+//----------------------------------------------------------------------------------------
+//! \struct PDFData
+//  \brief  container for PDF data
+
+struct PDFData {
+  int pdf_dimension;
+  int nbin, nbin2;
+  Kokkos::View<Real*> bins;
+  Kokkos::View<Real*> bins2;
+  bool bins_written;
+  // if logscale is true then this step is the log10 of the step size
+  Real step_size, step_size2;
+  bool mass_weighted;
+  bool logscale, logscale2;
+
+  DvceArray2D<Real> result_; // resulting histogram
+  Kokkos::Experimental::ScatterView<Real **, LayoutWrapper> scatter_result;
+
+  PDFData(int dim, int nbinVal, int nbin2Val)
+    : pdf_dimension(dim), nbin(nbinVal), nbin2(nbin2Val),
+      bins("bins", nbin + 1), bins2("bins2", nbin2 + 1),
+      bins_written(false), mass_weighted(false), logscale(false), logscale2(false) {
+  }
+};
+
+//----------------------------------------------------------------------------------------
+//! \class PDFOutput
+//  \brief derived BaseTypeOutput class for pdf data
+
+class PDFOutput : public BaseTypeOutput {
+ public:
+  PDFOutput(ParameterInput *pin, Mesh *pm, OutputParameters oparams);
+
+  PDFData pdf_data;
+
   void LoadOutputData(Mesh *pm) override;
   void WriteOutputFile(Mesh *pm, ParameterInput *pin) override;
 };
