@@ -545,7 +545,14 @@ BaseTypeOutput::BaseTypeOutput(OutputParameters opar, Mesh *pm) :
     for (int v = 0; v < 16; ++v) {
         int muval = int(v/4);
         int muhatval = v - muval * 4;
-        outvars.emplace_back("L_mu_muhat" + std::to_string(muval) + "_" + std::to_string(muhatval), v, &(pm->pmb_pack->padm->u_adm));
+        outvars.emplace_back("L_mu_muhat" + std::to_string(muval) + "_" + std::to_string(muhatval), v, &(pm->pmb_pack->pradfemn->L_mu_muhat0_data));
+    }
+  }
+
+  // radiation femn fluid velocity
+  if (out_params.variable.compare("rad_femn_fluid_vel") == 0) {
+    for (int v = 0; v < 4; ++v) {
+      outvars.emplace_back("u_mu_" + std::to_string(v), v, &(pm->pmb_pack->pradfemn->u_mu_data));
     }
   }
 

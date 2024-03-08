@@ -43,8 +43,8 @@ void RadiationFEMN::AssembleRadiationFEMNTasks(TaskList &start, TaskList &run, T
   } else {
     id.copycons = run.AddTask(&RadiationFEMN::CopyCons, this, none);
   }
-  id.rad_tetrad = run.AddTask(&RadiationFEMN::CalculateFluxes, this, id.copycons);
-  id.rad_flux = run.AddTask(&RadiationFEMN::TetradOrthogonalize, this, id.rad_tetrad);
+  id.rad_tetrad = run.AddTask(&RadiationFEMN::TetradOrthogonalize, this, id.copycons);
+  id.rad_flux = run.AddTask(&RadiationFEMN::CalculateFluxes, this, id.rad_tetrad);
   id.rad_sendf = run.AddTask(&RadiationFEMN::SendFlux, this, id.rad_flux);
   id.rad_recvf = run.AddTask(&RadiationFEMN::RecvFlux, this, id.rad_sendf);
   id.rad_expl = run.AddTask(&RadiationFEMN::ExpRKUpdate, this, id.rad_recvf);

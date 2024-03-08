@@ -4,38 +4,28 @@
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
 //! \file radiation_femn_initialize.cpp
-//  \brief this is a temporary file -- it hardcodes metric and fluid velocities
+//  \brief this is a temporary file -- it hardcodes fluid velocities
 
 #include "radiation_femn/radiation_femn.hpp"
 
-namespace radiationfemn {
+namespace radiationfemn
+{
+    void RadiationFEMN::InitializeFluidVelocity()
+    {
+        auto& indices = pmy_pack->pmesh->mb_indcs;
+        int &is = indices.is, &ie = indices.ie;
+        int &js = indices.js, &je = indices.je;
+        int &ks = indices.ks, &ke = indices.ke;
 
-void RadiationFEMN::InitializeMetricFluid() {
+        int nmb1 = pmy_pack->nmb_thispack - 1;
+        auto& indcs = pmy_pack->pmesh->mb_indcs;
 
-  auto &indices = pmy_pack->pmesh->mb_indcs;
-  int &is = indices.is, &ie = indices.ie;
-  int &js = indices.js, &je = indices.je;
-  int &ks = indices.ks, &ke = indices.ke;
-
-  int nmb1 = pmy_pack->nmb_thispack - 1;
-  int nmb = pmy_pack->nmb_thispack;
-  auto &indcs = pmy_pack->pmesh->mb_indcs;
-  int ncells1 = indcs.nx1 + 2 * (indcs.ng);
-  int ncells2 = (indcs.nx2 > 1) ? (indcs.nx2 + 2 * (indcs.ng)) : 1;
-  int ncells3 = (indcs.nx3 > 1) ? (indcs.nx3 + 2 * (indcs.ng)) : 1;
-
-  DvceArray5D<Real> u_mu_host;
-
-  Kokkos::realloc(u_mu_host, nmb, 4, ncells3, ncells2, ncells1);
-
-  Kokkos::deep_copy(u_mu_host, 0.);
-
-  par_for("radiation_femn_dummy_initialize_1", DevExeSpace(), 0, nmb1, ks, ke, js, je, is, ie,
-          KOKKOS_LAMBDA(int m, int k, int j, int i) {
-            u_mu_host(m, 0, k, j, i) = 1;
-          });
-
-  Kokkos::deep_copy(u_mu, u_mu_host);
-  
-}
+        auto &u_mu_ = pmy_pack->pradfemn->u_mu;
+        /*
+        par_for("radiation_femn_dummy_initialize_1", DevExeSpace(), 0, nmb1, ks, ke, js, je, is, ie,
+                KOKKOS_LAMBDA(int m, int k, int j, int i)
+                {
+                    u_mu_(m, 0, k, j, i) = 1;
+                }); */
+    }
 }

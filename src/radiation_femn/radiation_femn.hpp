@@ -145,7 +145,8 @@ class RadiationFEMN {
   AthenaTensor4d<Real, TensorSymm::NONE, 4, 2> L_mu_muhat0;
 
   // fluid velocity
-  DvceArray5D<Real> u_mu;
+  DvceArray5D<Real> u_mu_data;
+  AthenaTensor4d<Real, TensorSymm::NONE, 4, 1> u_mu;
 
   // ---------------------------------------------------------------------------
   // arrays for source terms
@@ -199,7 +200,7 @@ class RadiationFEMN {
   void ComputeMassInverse();
   void ComputePMatrices();
   void ComputeSourceMatrices();
-  void InitializeMetricFluid();
+  void InitializeFluidVelocity();
   void InitializeBeamsSourcesFEMN();
   void InitializeBeamsSourcesFPN();
   void InitializeBeamsSourcesM1();

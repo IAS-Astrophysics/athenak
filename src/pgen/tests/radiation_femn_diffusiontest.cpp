@@ -94,7 +94,7 @@ void ProblemGenerator::RadiationFEMNDiffusiontest(ParameterInput *pin, const boo
   par_for("pgen_diffusiontest_radiation_femn_velocity", DevExeSpace(), 0, (pmbp->nmb_thispack - 1), ks, ke, js, je, is, ie,
           KOKKOS_LAMBDA(int m, int k, int j, int i) {
 
-            u_mu_(m, 1, k, j, i) = sqrt(1. + fluid_vel * fluid_vel);
+            u_mu_(m, 0, k, j, i) = sqrt(1. + fluid_vel * fluid_vel);
             u_mu_(m, 1, k, j, i) = fluid_vel;
             u_mu_(m, 2, k, j, i) = 0;
             u_mu_(m, 3, k, j, i) = 0;
