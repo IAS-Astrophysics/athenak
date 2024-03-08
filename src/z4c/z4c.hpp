@@ -8,12 +8,18 @@
 //! \file z4c.hpp
 //! \brief definitions for Z4c class
 
+#include <map>
+#include <memory>    // make_unique, unique_ptr
+#include <string>
+#include <vector>
 #include "athena.hpp"
 #include "utils/finite_diff.hpp"
 #include "parameter_input.hpp"
 #include "tasklist/task_list.hpp"
 #include "bvals/bvals.hpp"
 #include "athena_tensor.hpp"
+#include "geodesic-grid/geodesic_grid.hpp"
+#include "geodesic-grid/spherical_grid.hpp"
 
 // forward declarations
 class Coordinates;
@@ -40,10 +46,13 @@ struct Z4cTaskIDs {
   TaskID csend;
   TaskID crecv;
   TaskID restu;
-  TaskID ptrack;
+  TaskID ptrck;
+  TaskID weyl_scalar;
+  TaskID waveform;
 };
 
 namespace z4c {
+class Z4c_AMR;
 
 // Shift needed for derivatives
 //----------------------------------------------------------------------------------------
@@ -97,6 +106,7 @@ class Z4c {
   DvceArray5D<Real> u1;        // z4c solution at intermediate timestep
   DvceArray5D<Real> u_rhs;     // z4c rhs storage
   DvceArray5D<Real> coarse_u0; // coarse representation of z4c solution
+  DvceArray5D<Real> u_weyl; // weyl scalars
 
   // puncture location
   Real ppos[3] = {0.,0.,0.}; // later on initiate from input file
@@ -116,6 +126,12 @@ class Z4c {
     AthenaHostTensor<Real, TensorSymm::SYM2, 3, 2> g_dd;
     AthenaHostTensor<Real, TensorSymm::SYM2, 3, 2> vK_dd;
   };
+
+  struct Wave_Extr_vars {
+    AthenaTensor<Real, TensorSymm::NONE, 3, 0> rpsi4;
+    AthenaTensor<Real, TensorSymm::NONE, 3, 0> ipsi4;
+  };
+  Wave_Extr_vars weyl;
 
   struct Z4c_vars {
     AthenaTensor<Real, TensorSymm::NONE, 3, 0> chi;     // conf. factor
@@ -169,6 +185,8 @@ class Z4c {
     Real shift_hh;
     Real shift_advect;
     Real shift_eta;
+    // Boundary extrapolation order
+    int extrap_order;
   };
   Options opt;
   Real diss;              // Dissipation parameter
@@ -180,6 +198,13 @@ class Z4c {
   Real dtnew;
   // container to hold names of TaskIDs
   Z4cTaskIDs id;
+
+  // geodesic grid for wave extr
+  std::vector<std::unique_ptr<SphericalGrid>> spherical_grids;
+  // array storing waveform at each radii
+  HostArray3D<Real> psi_out;
+  Real waveform_dt;
+  Real last_output_time;
 
   // functions
   void AssembleZ4cTasks(std::map<std::string, std::shared_ptr<TaskList>> tl);
@@ -200,6 +225,8 @@ class Z4c {
   TaskStatus Z4cBoundaryRHS(Driver *d, int stage);
   TaskStatus RestrictU(Driver *d, int stage);
   TaskStatus PunctureTracker(Driver *d, int stage);
+  TaskStatus CalcWeylScalar_(Driver *d, int stage);
+  TaskStatus CalcWaveForm_(Driver *d, int stage);
 
   template <int NGHOST>
   TaskStatus CalcRHS(Driver *d, int stage);
@@ -209,23 +236,19 @@ class Z4c {
   void Z4cToADM(MeshBlockPack *pmbp);
   template <int NGHOST>
   void ADMConstraints(MeshBlockPack *pmbp);
+  template <int NGHOST>
+  void Z4cWeyl(MeshBlockPack *pmbp);
+  void WaveExtr(MeshBlockPack *pmbp);
   void AlgConstr(MeshBlockPack *pmbp);
 
-  // Sommerfeld boundary conditions
-  KOKKOS_FUNCTION
-  void Z4cSommerfeld(int const m,
-                     int const is, int const ie,
-                     int const js, int const j,
-                     int const ks, int const k,
-                     int const parity,
-                     int const scr_size,
-                     int const scr_level,
-                     TeamMember_t member);
-
+  // amr criteria
+  Z4c_AMR *pz4c_amr{nullptr};
 
  private:
   MeshBlockPack* pmy_pack;  // ptr to MeshBlockPack containing this Z4c
 };
+
+
 
 } // namespace z4c
 #endif //Z4C_Z4C_HPP_

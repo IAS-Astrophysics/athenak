@@ -126,8 +126,8 @@ class MeshBoundaryValues {
 #endif
 
   //functions
-  virtual void InitSendIndices(MeshBoundaryBuffer &buf, int x, int y, int z, int a, int b)=0;
-  virtual void InitRecvIndices(MeshBoundaryBuffer &buf, int x, int y, int z, int a, int b)=0;
+  virtual void InitSendIndices(MeshBoundaryBuffer &buf,int x,int y,int z,int a,int b)=0;
+  virtual void InitRecvIndices(MeshBoundaryBuffer &buf,int x,int y,int z,int a,int b)=0;
   void InitializeBuffers(const int nvar);
 
   TaskStatus InitRecv(const int nvar);
@@ -141,6 +141,8 @@ class MeshBoundaryValues {
   static void HydroBCs(MeshBlockPack *pp, DualArray2D<Real> uin, DvceArray5D<Real> u0);
   static void BFieldBCs(MeshBlockPack *pp, DualArray2D<Real> bin, DvceFaceFld4D<Real> b0);
   static void RadiationBCs(MeshBlockPack *pp,DualArray2D<Real> iin,DvceArray5D<Real> i0);
+  static void Z4cBCs(MeshBlockPack *pp, DualArray2D<Real> uin, DvceArray5D<Real> u0,
+                     DvceArray5D<Real> coarse_u0);
 
  protected:
   // must use pointer to MBPack and not parent physics module since parent can be one of
@@ -158,8 +160,8 @@ class BoundaryValuesCC : public MeshBoundaryValues {
   BoundaryValuesCC(MeshBlockPack *ppack, ParameterInput *pin, bool z4c);
 
   //functions
-  void InitSendIndices(MeshBoundaryBuffer &buf, int o1, int o2,int o3,int f1,int f2) override;
-  void InitRecvIndices(MeshBoundaryBuffer &buf, int o1, int o2,int o3,int f1,int f2) override;
+  void InitSendIndices(MeshBoundaryBuffer &b,int o1,int o2,int o3,int f1,int f2) override;
+  void InitRecvIndices(MeshBoundaryBuffer &b,int o1,int o2,int o3,int f1,int f2) override;
   TaskStatus InitFluxRecv(const int nvar) override;
 
   TaskStatus PackAndSendCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca);
@@ -186,8 +188,8 @@ class BoundaryValuesFC : public MeshBoundaryValues {
   BoundaryValuesFC(MeshBlockPack *ppack, ParameterInput *pin);
 
   //functions
-  void InitSendIndices(MeshBoundaryBuffer &buf, int o1, int o2,int o3,int f1,int f2) override;
-  void InitRecvIndices(MeshBoundaryBuffer &buf, int o1, int o2,int o3,int f1,int f2) override;
+  void InitSendIndices(MeshBoundaryBuffer &b,int o1,int o2,int o3,int f1,int f2) override;
+  void InitRecvIndices(MeshBoundaryBuffer &b,int o1,int o2,int o3,int f1,int f2) override;
   TaskStatus InitFluxRecv(const int nvar) override;
 
   TaskStatus PackAndSendFC(DvceFaceFld4D<Real> &b, DvceFaceFld4D<Real> &cb);
@@ -209,8 +211,8 @@ class BoundaryValuesFC : public MeshBoundaryValues {
 
 struct ParticleLocationData {
   int prtcl_indx;   // index in particle array
-  int dest_gid ;    // GID of target MeshBlock
-  int dest_rank ;   // rank of target MeshBlock
+  int dest_gid;     // GID of target MeshBlock
+  int dest_rank;    // rank of target MeshBlock
 };
 
 // Custom operators to sort ParticleLocationData array by dest_rank or prtcl_indx
@@ -276,6 +278,6 @@ class ParticlesBoundaryValues {
  protected:
   particles::Particles* pmy_part;
 };
-}
+} // namespace particles
 
 #endif // BVALS_BVALS_HPP_

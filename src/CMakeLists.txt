@@ -27,6 +27,7 @@ add_executable(
         bvals/physics/hydro_bcs.cpp
         bvals/physics/bfield_bcs.cpp
         bvals/physics/radiation_bcs.cpp
+        bvals/physics/z4c_bcs.cpp
 
         coordinates/coordinates.cpp
         coordinates/excision.cpp
@@ -86,6 +87,7 @@ add_executable(
         outputs/formatted_table.cpp
         outputs/history.cpp
         outputs/restart.cpp
+        outputs/coarsened_binary.cpp
         outputs/track_prtcl.cpp
         outputs/vtk_mesh.cpp
         outputs/vtk_prtcl.cpp
@@ -123,6 +125,7 @@ add_executable(
         units/units.cpp
         utils/change_rundir.cpp
         utils/show_config.cpp
+        utils/lagrange_interpolator.cpp
 
         z4c/z4c.cpp
         z4c/z4c_adm.cpp
@@ -132,6 +135,10 @@ add_executable(
         z4c/z4c_update.cpp
         z4c/z4c_gauge.cpp
         z4c/z4c_Sbc.cpp
+        z4c/z4c_calculate_weyl_scalars.cpp
+        z4c/z4c_wave_extr.cpp
+        z4c/z4c_puncture_tracker.cpp
+        z4c/z4c_amr.cpp
 )
 
 # custom problem generator to be included in compile

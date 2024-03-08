@@ -19,7 +19,7 @@
     #error NHISTORY > NREDUCTION in outputs.hpp
 #endif
 
-#define NOUTPUT_CHOICES 141
+#define NOUTPUT_CHOICES 144
 // choices for output variables used in <ouput> blocks in input file
 // TO ADD MORE CHOICES:
 //   - add more strings to array below, change NOUTPUT_CHOICES above appropriately
@@ -45,7 +45,6 @@ static const char *var_choice[NOUTPUT_CHOICES] = {
   "rad_mhd_w_e",   "rad_mhd_w",      "rad_mhd_u_s",    "rad_mhd_w_s",    "rad_mhd_bcc1",
   "rad_mhd_bcc2",  "rad_mhd_bcc3",   "rad_mhd_bcc",    "rad_mhd_u_bcc",  "rad_mhd_w_bcc",
 
-
   "adm_gxx", "adm_gxy", "adm_gxz", "adm_gyy", "adm_gyz", "adm_gzz",
   "adm_Kxx", "adm_Kxy", "adm_Kxz", "adm_Kyy", "adm_Kyz", "adm_Kzz",
   "adm_psi4",
@@ -62,6 +61,9 @@ static const char *var_choice[NOUTPUT_CHOICES] = {
   "z4c_betax", "z4c_betay", "z4c_betaz",
   "z4c",
 
+  "weyl_rpsi4", "weyl_ipsi4",
+  "weyl",
+
   "con_C",
   "con_H",
   "con_M",
@@ -76,6 +78,7 @@ static const char *var_choice[NOUTPUT_CHOICES] = {
 
   "prtcl_all", "prtcl_d"
 };
+
 
 // forward declarations
 class Mesh;
@@ -103,6 +106,12 @@ struct OutputParameters {
   bool user_hist_only;
   std::string data_format;
   bool contains_derived=false;
+  // DBF parameters for coarsened binary:
+  // cannot be less than 2 and must be a power of 2 and
+  // cannot be greater than shortest meshblock dimension
+  int coarsen_factor;
+  bool compute_moments; // if true then will compute
+  // <q>, <q^2>, <q^3>, <q^4> for each variable q
 };
 
 //----------------------------------------------------------------------------------------
@@ -217,6 +226,7 @@ class BaseTypeOutput {
   std::vector<OutputVariableInfo> outvars;
 };
 
+
 //----------------------------------------------------------------------------------------
 //! \class FormattedTableOutput
 //  \brief derived BaseTypeOutput class for formatted table (tabular) data
@@ -242,6 +252,21 @@ class HistoryOutput : public BaseTypeOutput {
   void LoadHydroHistoryData(HistoryData *pdata, Mesh *pm);
   void LoadMHDHistoryData(HistoryData *pdata, Mesh *pm);
   void LoadZ4cHistoryData(HistoryData *pdata, Mesh *pm);
+  void WriteOutputFile(Mesh *pm, ParameterInput *pin) override;
+};
+
+//----------------------------------------------------------------------------------------
+//! \class CoarsenedBinaryOutput
+//  \brief derived BaseTypeOutput class for coarsened binary grid data
+
+class CoarsenedBinaryOutput : public BaseTypeOutput {
+ public:
+  CoarsenedBinaryOutput(ParameterInput *pin, Mesh *pm, OutputParameters oparams);
+
+  // void CoarsenVariable(const DvceArray3D<Real>& full_data,
+  //                            DvceArray3D<Real>& coarsen_data,
+  //                            const int coarsen_factor);
+  void LoadOutputData(Mesh *pm) override;
   void WriteOutputFile(Mesh *pm, ParameterInput *pin) override;
 };
 
@@ -274,7 +299,6 @@ class ParticleVTKOutput : public BaseTypeOutput {
 //----------------------------------------------------------------------------------------
 //! \class MeshBinaryOutput
 //  \brief derived BaseTypeOutput class for binary mesh data (nbf format in pegasus++)
-
 class MeshBinaryOutput : public BaseTypeOutput {
  public:
   MeshBinaryOutput(ParameterInput *pin, Mesh *pm, OutputParameters oparams);

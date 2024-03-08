@@ -8,6 +8,7 @@
 //! \file io_wrapper.hpp
 //  \brief defines a set of small wrapper functions for MPI versus serial outputs.
 
+#include <string>
 #include <cstdio>
 #include "athena.hpp"
 

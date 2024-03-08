@@ -6,7 +6,11 @@
 //! \file z4c_tasks.cpp
 //! \brief functions that control z4c tasks in the appropriate task list
 
+#include <map>
+#include <memory>
+#include <string>
 #include <iostream>
+#include <cstdio>
 
 #include "athena.hpp"
 #include "globals.hpp"
@@ -15,6 +19,7 @@
 #include "mesh/mesh.hpp"
 #include "bvals/bvals.hpp"
 #include "z4c/z4c.hpp"
+#include "z4c/z4c_puncture_tracker.hpp"
 
 namespace z4c {
 //----------------------------------------------------------------------------------------
@@ -49,16 +54,14 @@ void Z4c::AssembleZ4cTasks(std::map<std::string, std::shared_ptr<TaskList>> tl) 
   id.bcs   = tl["stagen"]->AddTask(&Z4c::ApplyPhysicalBCs, this, id.recvu);
   id.prol  = tl["stagen"]->AddTask(&Z4c::Prolongate, this, id.bcs);
   id.algc  = tl["stagen"]->AddTask(&Z4c::EnforceAlgConstr, this, id.prol);
-  id.z4tad = tl["stagen"]->AddTask(&Z4c::Z4cToADM_, this, id.algc);
-  id.admc  = tl["stagen"]->AddTask(&Z4c::ADMConstraints_, this, id.z4tad);
-  id.newdt = tl["stagen"]->AddTask(&Z4c::NewTimeStep, this, id.admc);
+  id.newdt = tl["stagen"]->AddTask(&Z4c::NewTimeStep, this, id.algc);
   // "after_stagen" task list
   id.csend = tl["after_stagen"]->AddTask(&Z4c::ClearSend, this, none);
   id.crecv = tl["after_stagen"]->AddTask(&Z4c::ClearRecv, this, id.csend);
-
-  // if (pmy_pack->pmesh->ncycle%64 == 0) {
-    // place holder for horizon finder
-  // }
+  id.z4tad = tl["after_stagen"]->AddTask(&Z4c::Z4cToADM_, this, id.crecv);
+  id.admc  = tl["after_stagen"]->AddTask(&Z4c::ADMConstraints_, this, id.z4tad);
+  id.weyl_scalar  = tl["after_stagen"]->AddTask(&Z4c::CalcWeylScalar_, this, id.admc);
+  id.ptrck = tl["after_stagen"]->AddTask(&Z4c::PunctureTracker, this, id.admc);
   return;
 }
 
@@ -70,12 +73,6 @@ void Z4c::AssembleZ4cTasks(std::map<std::string, std::shared_ptr<TaskList>> tl) 
 TaskStatus Z4c::InitRecv(Driver *pdrive, int stage) {
   TaskStatus tstat = pbval_u->InitRecv(nz4c);
   if (tstat != TaskStatus::complete) return tstat;
-
-  // with SMR/AMR post receives for fluxes of U
-  // do not post receives for fluxes when stage < 0 (i.e. ICs)
-  if (pmy_pack->pmesh->multilevel && (stage >= 0)) {
-    tstat = pbval_u->InitFluxRecv(nz4c);
-  }
   return tstat;
 }
 
@@ -86,12 +83,6 @@ TaskStatus Z4c::InitRecv(Driver *pdrive, int stage) {
 TaskStatus Z4c::ClearRecv(Driver *pdrive, int stage) {
   TaskStatus tstat = pbval_u->ClearRecv();
   if (tstat != TaskStatus::complete) return tstat;
-
-  // with SMR/AMR check receives of restricted fluxes of U complete
-  // do not check flux receives when stage < 0 (i.e. ICs)
-  if (pmy_pack->pmesh->multilevel && (stage >= 0)) {
-    tstat = pbval_u->ClearFluxRecv();
-  }
   return tstat;
 }
 
@@ -102,12 +93,6 @@ TaskStatus Z4c::ClearRecv(Driver *pdrive, int stage) {
 TaskStatus Z4c::ClearSend(Driver *pdrive, int stage) {
   TaskStatus tstat = pbval_u->ClearSend();
   if (tstat != TaskStatus::complete) return tstat;
-
-  // with SMR/AMR check sends of restricted fluxes of U complete
-  // do not check flux send for ICs (stage < 0)
-  if (pmy_pack->pmesh->multilevel && (stage >= 0)) {
-    tstat = pbval_u->ClearFluxSend();
-  }
   return tstat;
 }
 
@@ -208,6 +193,31 @@ TaskStatus Z4c::ADMConstraints_(Driver *pdrive, int stage) {
 }
 
 //----------------------------------------------------------------------------------------
+//! \fn  void Z4c::CalcWeylScalar_
+//! \brief
+
+TaskStatus Z4c::CalcWeylScalar_(Driver *pdrive, int stage) {
+  float time_32 = static_cast<float>(pmy_pack->pmesh->time);
+  float next_32 = static_cast<float>(last_output_time+waveform_dt);
+  if ((time_32 >= next_32) || (time_32 == 0)) {
+    auto &indcs = pmy_pack->pmesh->mb_indcs;
+    if (stage == pdrive->nexp_stages) {
+      switch (indcs.ng) {
+        case 2: Z4cWeyl<2>(pmy_pack);
+                break;
+        case 3: Z4cWeyl<3>(pmy_pack);
+                break;
+        case 4: Z4cWeyl<4>(pmy_pack);
+                break;
+      }
+      WaveExtr(pmy_pack);
+      last_output_time = time_32;
+    }
+  }
+  return TaskStatus::complete;
+}
+
+//----------------------------------------------------------------------------------------
 //! \fn  void Z4c::RestrictU
 //! \brief
 
@@ -240,11 +250,22 @@ TaskStatus Z4c::ApplyPhysicalBCs(Driver *pdrive, int stage) {
   // only apply BCs if domain is not strictly periodic
   if (!(pmy_pack->pmesh->strictly_periodic)) {
     // physical BCs
-    pbval_u->HydroBCs((pmy_pack), (pbval_u->u_in), u0);
+    pbval_u->Z4cBCs((pmy_pack), (pbval_u->u_in), u0, coarse_u0);
 
     // user BCs
     if (pmy_pack->pmesh->pgen->user_bcs) {
       (pmy_pack->pmesh->pgen->user_bcs_func)(pmy_pack->pmesh);
+    }
+  }
+  return TaskStatus::complete;
+}
+
+TaskStatus Z4c::PunctureTracker(Driver *pdrive, int stage) {
+  if (stage == pdrive->nexp_stages) {
+    for (auto ptracker : pmy_pack->pz4c_ptracker) {
+      ptracker->InterpolateShift(pmy_pack);
+      ptracker->EvolveTracker();
+      ptracker->WriteTracker();
     }
   }
   return TaskStatus::complete;

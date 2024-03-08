@@ -8,6 +8,10 @@
 //! \file ion-neutral.hpp
 //  \brief definitions for IonNeutral class
 
+#include <map>
+#include <memory>
+#include <string>
+
 #include "athena.hpp"
 #include "parameter_input.hpp"
 #include "tasklist/task_list.hpp"

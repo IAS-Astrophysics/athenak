@@ -106,7 +106,8 @@ struct torus_pgen {
   bool prograde;                              // flag indicating disk is prograde (FM)
   Real r_edge, r_peak, l, rho_max;            // fixed torus parameters
   Real l_peak;                                // fixed torus parameters
-  Real c_param, n_param;                      // fixed disk parameters
+  Real c_param;                               // calculated chakrabarti parameter
+  Real n_param;                               // fixed or calculated chakrabarti parameter
   Real log_h_edge, log_h_peak;                // calculated torus parameters
   Real ptot_over_rho_peak, rho_peak;          // more calculated torus parameters
   Real r_outer_edge;                          // even more calculated torus parameters
@@ -221,6 +222,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   torus.rho_max = pin->GetReal("problem", "rho_max");
   torus.r_edge = pin->GetReal("problem", "r_edge");
   torus.r_peak = pin->GetReal("problem", "r_peak");
+  torus.n_param = pin->GetOrAddReal("problem", "n_param",0.0);
   torus.prograde = pin->GetOrAddBoolean("problem","prograde",true);
   torus.fm_torus = pin->GetOrAddBoolean("problem", "fm_torus", false);
   torus.chakrabarti_torus = pin->GetOrAddBoolean("problem", "chakrabarti_torus", false);
@@ -922,10 +924,14 @@ static Real CalculateT(struct torus_pgen pgen, Real rho, Real ptot_over_rho) {
 
 //----------------------------------------------------------------------------------------
 // Function for calculating c, n parameters controlling angular momentum profile
-// in Chakrabarti torus
+// in Chakrabarti torus, where l = c * lambda^n. edited so that n can be pre-specified
+// such that the assumption of keplerian angular momentum at the inner edge is dropped
 
 KOKKOS_INLINE_FUNCTION
 static void CalculateCN(struct torus_pgen pgen, Real *cparam, Real *nparam) {
+  Real n_input = pgen.n_param;
+  Real nn; // slope of angular momentum profile
+  Real cc; // constant of angular momentum profile
   Real l_edge = ((SQR(pgen.r_edge) + SQR(pgen.spin) - 2.0*pgen.spin*sqrt(pgen.r_edge))/
                  (sqrt(pgen.r_edge)*(pgen.r_edge - 2.0) + pgen.spin));
   Real l_peak = ((SQR(pgen.r_peak) + SQR(pgen.spin) - 2.0*pgen.spin*sqrt(pgen.r_peak))/
@@ -936,8 +942,13 @@ static void CalculateCN(struct torus_pgen pgen, Real *cparam, Real *nparam) {
   Real lambda_peak = sqrt((l_peak*(-2.0*pgen.spin*l_peak + SQR(pgen.r_peak)*pgen.r_peak
                                    + SQR(pgen.spin)*(2.0+pgen.r_peak)))/
                           (2.0*pgen.spin + l_peak*(pgen.r_peak - 2.0)));
-  Real nn = log(l_peak/l_edge)/log(lambda_peak/lambda_edge);
-  Real cc = l_edge*pow(lambda_edge, -nn);
+  if (n_input == 0.0) {
+    nn = log(l_peak/l_edge)/log(lambda_peak/lambda_edge);
+    cc = l_edge*pow(lambda_edge, -nn);
+  } else {
+    nn = n_input;
+    cc = l_peak*pow(lambda_peak, -nn);
+  }
   *cparam = cc;
   *nparam = nn;
   return;

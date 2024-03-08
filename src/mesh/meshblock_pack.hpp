@@ -8,7 +8,10 @@
 //! \file meshblock_pack.hpp
 //  \brief defines MeshBlockPack class, a container for MeshBlocks
 
+#include <map>
 #include <memory>
+#include <string>
+#include <vector>
 
 #include "parameter_input.hpp"
 #include "coordinates/coordinates.hpp"
@@ -23,6 +26,7 @@ namespace ion_neutral {class IonNeutral;}
 class TurbulenceDriver;
 namespace radiation {class Radiation;}
 namespace z4c {class Z4c;}
+namespace z4c {class PunctureTracker;}
 namespace adm {class ADM;}
 namespace particles {class Particles;}
 namespace units {class Units;}
@@ -60,6 +64,7 @@ class MeshBlockPack {
   radiation::Radiation *prad=nullptr;
   z4c::Z4c *pz4c=nullptr;
   adm::ADM *padm=nullptr;
+  std::vector<z4c::PunctureTracker *> pz4c_ptracker;
   particles::Particles *ppart=nullptr;
 
   // units (needed to convert code units to cgs for, e.g., cooling or radiation)

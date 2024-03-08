@@ -8,6 +8,10 @@
 //! \file particles.hpp
 //  \brief definitions for Particles class
 
+#include <map>
+#include <memory>
+#include <string>
+
 #include "athena.hpp"
 #include "parameter_input.hpp"
 #include "tasklist/task_list.hpp"

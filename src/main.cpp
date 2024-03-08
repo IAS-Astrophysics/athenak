@@ -28,6 +28,7 @@
 #include <iostream>
 #include <string>
 #include <memory>
+#include <cstdio> // sscanf
 
 // Athena headers
 #include "athena.hpp"
@@ -289,8 +290,8 @@ int main(int argc, char *argv[]) {
   // Construct Driver and Outputs. Actual outputs (including initial conditions) are made
   // in Driver.Initialize(). Add wall clock timer to Driver if necessary.
 
-  Driver* pdriver = new Driver(pinput, pmesh, wtlim, &timer);
   ChangeRunDir(run_dir);
+  Driver* pdriver = new Driver(pinput, pmesh, wtlim, &timer);
   Outputs* pout = new Outputs(pinput, pmesh);
 
   //--- Step 7. --------------------------------------------------------------------------

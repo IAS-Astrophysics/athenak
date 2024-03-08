@@ -10,6 +10,7 @@
 #include <iomanip>    // std::setprecision()
 #include <limits>
 #include <algorithm>
+#include <string> // string
 
 #include "athena.hpp"
 #include "globals.hpp"
@@ -377,11 +378,6 @@ void Driver::Execute(Mesh *pmesh, ParameterInput *pin, Outputs *pout) {
             static_cast<float>(pmesh->nmb_total);
       }
 
-      // AMR
-      if (pmesh->adaptive) {pmesh->pmr->AdaptiveMeshRefinement(this, pin);}
-      // compute new timestep AFTER all Meshblocks refined/derefined
-      pmesh->NewTimeStep(tlim);
-
       // Test for/make outputs
       for (auto &out : pout->pout_list) {
         // compare at floating point (32-bit) precision to reduce effect of round off
@@ -396,6 +392,11 @@ void Driver::Execute(Mesh *pmesh, ParameterInput *pin, Outputs *pout) {
           out->WriteOutputFile(pmesh, pin);
         }
       }
+
+      // AMR
+      if (pmesh->adaptive) {pmesh->pmr->AdaptiveMeshRefinement(this, pin);}
+      // compute new timestep AFTER all Meshblocks refined/derefined
+      pmesh->NewTimeStep(tlim);
 
       // Update wall clock time if needed.
       if (wall_time > 0.) {

@@ -8,6 +8,10 @@
 //! \file hydro.hpp
 //  \brief definitions for Hydro class
 
+#include <map>
+#include <memory>
+#include <string>
+
 #include "athena.hpp"
 #include "parameter_input.hpp"
 #include "tasklist/task_list.hpp"

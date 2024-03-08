@@ -12,6 +12,7 @@
 #include <limits>
 #include <iostream>
 #include <iomanip>    // std::setprecision()
+#include <algorithm> // min
 
 #include "athena.hpp"
 #include "mesh/mesh.hpp"

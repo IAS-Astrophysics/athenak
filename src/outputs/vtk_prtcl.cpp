@@ -9,6 +9,7 @@
 //! Data over multiple MeehBlocks and MPI ranks is written to a single file using MPI-IO.
 
 #include <sys/stat.h>  // mkdir
+#include <vector>
 
 #include <algorithm>
 #include <cstdio>      // fwrite(), fclose(), fopen(), fnprintf(), snprintf()

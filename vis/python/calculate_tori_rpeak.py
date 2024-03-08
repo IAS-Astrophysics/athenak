@@ -2,13 +2,16 @@
 
 """
 Script for calculating radius of pressure maximum given inner and outer edges
-of equilibrium torus.
+of equilibrium torus (and optionally, the power law scaling of angular momentum,
+n, for the chakrabarti case).
 
 Usage:
-calculate_tori_rpeak.py <fm or c> <spin> <r_in> <r_out>
+calculate_tori_rpeak.py <fm or c> <spin> <r_in> <r_out> <--n>
 
 This covers both the Fishbone-Moncrief (FM: 1976 ApJ 207 962) and Chakrabarti
-(C: 1985 ApJ 288 1) tori. The latter is generally thinner for the same inputs.
+(C: 1985 ApJ 288 1) tori. The latter is generally thinner for the same inputs,
+assuming n is not set. Otherwise, you can specify n to control the thickness,
+which will also shift the location of the pressure maximum.
 Formulas also reference Abramowicz, Jaroszynski, & Sikora (AJS: 1978 AA 63 21)
 and Penna, Kulkarni, & Narayan (PKN: 2013 AA 559 A116).
 """
@@ -39,7 +42,7 @@ def main(**kwargs):
     # Calculate peak radius for Chakrabarti torus
     if kwargs['torus_type'] == 'c':
         def res(r):
-            c, n = c_cn(kwargs['spin'], kwargs['r_in'], r)
+            c, n = c_cn(kwargs['spin'], kwargs['r_in'], r, kwargs['n'])
             l_in = c_l(kwargs['spin'], kwargs['r_in'], np.pi / 2.0, c, n)
             l_out = c_l(kwargs['spin'], kwargs['r_out'], np.pi / 2.0, c, n)
             h_in = c_h(kwargs['spin'], kwargs['r_in'], np.pi / 2.0, l_in, c, n,
@@ -127,13 +130,17 @@ def vz(spin, r, ll):
 
 
 # Chakrabarti c and n (C 2.14a)
-def c_cn(spin, r_in, r_peak):
+def c_cn(spin, r_in, r_peak, n_input):
     l_in = l_k(spin, r_in)
     l_peak = l_k(spin, r_peak)
     lambda_in = vz(spin, r_in, l_in)
     lambda_peak = vz(spin, r_peak, l_peak)
-    n = np.log(l_peak / l_in) / np.log(lambda_peak / lambda_in)
-    c = l_in / lambda_in ** n
+    if n_input == 0.0:
+        n = np.log(l_peak / l_in) / np.log(lambda_peak / lambda_in)
+        c = l_in / lambda_in ** n
+    else:
+        c = l_peak / lambda_peak ** n_input
+        n = n_input
     return c, n
 
 
@@ -175,5 +182,7 @@ if __name__ == '__main__':
     parser.add_argument('spin', type=float, help='dimensionless spin')
     parser.add_argument('r_in', type=float, help='inner edge in gravitational radii')
     parser.add_argument('r_out', type=float, help='outer edge in gravitational radii')
+    parser.add_argument('--n', type=float, help='slope of angular momentum scaling',
+                        default=0.0)
     args = parser.parse_args()
     main(**vars(args))

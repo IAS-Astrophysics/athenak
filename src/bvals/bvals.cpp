@@ -10,6 +10,7 @@
 #include <cstdlib>
 #include <iostream>
 #include <utility>
+#include <algorithm> // max
 
 #include "athena.hpp"
 #include "globals.hpp"
@@ -45,11 +46,13 @@ MeshBoundaryValues::MeshBoundaryValues(MeshBlockPack *pp, ParameterInput *pin, b
 #endif
     // initialize data sizes in each send/recv buffer to zero
     send_buf[n].isame_ndat = 0;
+    send_buf[n].isame_z4c_ndat = 0;
     send_buf[n].icoar_ndat = 0;
     send_buf[n].ifine_ndat = 0;
     send_buf[n].iflxs_ndat = 0;
     send_buf[n].iflxc_ndat = 0;
     recv_buf[n].isame_ndat = 0;
+    recv_buf[n].isame_z4c_ndat = 0;
     recv_buf[n].icoar_ndat = 0;
     recv_buf[n].ifine_ndat = 0;
     recv_buf[n].iflxs_ndat = 0;

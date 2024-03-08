@@ -8,6 +8,7 @@
 
 #include <cstdlib>
 #include <iostream>
+#include <algorithm> // max
 
 #include "athena.hpp"
 #include "globals.hpp"

@@ -8,6 +8,8 @@
 
 #include <iostream>
 #include <cinttypes>
+#include <limits> // numeric_limits<>
+#include <memory> // make_unique<>
 
 #include "athena.hpp"
 #include "globals.hpp"

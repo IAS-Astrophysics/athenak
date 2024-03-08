@@ -6,6 +6,9 @@
 //! \file radiation_tasks.cpp
 //! \brief functions that control Radiation tasks stored in tasklists in MeshBlockPack
 
+#include <map>
+#include <memory>
+#include <string>
 #include <iostream>
 
 #include "athena.hpp"

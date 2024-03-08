@@ -9,6 +9,7 @@
 #include <algorithm>
 #include <cmath>
 #include <sstream>
+#include <iostream>
 
 #include "parameter_input.hpp"
 #include "athena.hpp"
