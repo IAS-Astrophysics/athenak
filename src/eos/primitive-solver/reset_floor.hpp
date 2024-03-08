@@ -55,7 +55,7 @@ class ResetFloor : public ErrorPolicyInterface {
   KOKKOS_INLINE_FUNCTION bool ConservedFloor(Real& D, Real Sd[3], Real& tau, Real *Y,
                                 Real D_floor, Real tau_floor, Real tau_abs_floor,
                                 int n_species) const {
-    if (D < D_floor) {
+    if (D < D_floor*n_threshold) {
       D = D_floor;
       Sd[0] = 0.0;
       Sd[1] = 0.0;
