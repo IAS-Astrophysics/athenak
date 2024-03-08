@@ -43,7 +43,7 @@ Radiation::Radiation(MeshBlockPack *ppack, ParameterInput *pin) :
     na("na",1,1,1,1,1,1),
     norm_to_tet("norm_to_tet",1,1,1,1,1,1),
     beam_mask("beam_mask",1,1,1,1,1),
-    w_noupdate("w_noupdate",1,1,1,1,1),
+    // w_noupdate("w_noupdate",1,1,1,1,1),
     tgas_radsource("tgas_radsource",1,1,1,1) {
   // Check for general relativity
   if (!(pmy_pack->pcoord->is_general_relativistic)) {
@@ -167,7 +167,7 @@ Radiation::Radiation(MeshBlockPack *ppack, ParameterInput *pin) :
   if (is_mhd_enabled) {
     int &nmhd_ = pmy_pack->pmhd->nmhd;
     int &nscalars_ = pmy_pack->pmhd->nscalars;
-    if (!update_vel_in_rad_source) Kokkos::realloc(w_noupdate,nmb,(nmhd_+nscalars_),ncells3,ncells2,ncells1);
+    // if (!update_vel_in_rad_source) Kokkos::realloc(w_noupdate,nmb,(nmhd_+nscalars_),ncells3,ncells2,ncells1);
   }
 
   // allocate memory to save updated gas temperature

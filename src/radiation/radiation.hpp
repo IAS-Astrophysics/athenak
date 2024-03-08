@@ -96,7 +96,7 @@ class Radiation {
   bool temperature_fix_turn_on;         // adopt temperature fix after radiation source term
   bool cellavg_rad_source;              // adopt cellavg for radiation source term
   Real floor_planck;                    // floor for planck mean coefficient
-  bool correct_radsrc_opacity; 
+  bool correct_radsrc_opacity;
   Real dfloor_opacity;
 
   // Radiation source term parameters
@@ -148,7 +148,7 @@ class Radiation {
 
   // save the updated gas temperature computed from source term
   DvceArray4D<Real> tgas_radsource;
-  DvceArray5D<Real> w_noupdate;
+  // DvceArray5D<Real> w_noupdate;
 
   // reconstruction method
   ReconstructionMethod recon_method;

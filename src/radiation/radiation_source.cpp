@@ -131,15 +131,16 @@ TaskStatus Radiation::AddRadiationSourceTerm(Driver *pdriver, int stage) {
   auto &solid_angles_ = prgeo->solid_angles;
 
   // Extract hydro/mhd quantities
-  DvceArray5D<Real> u0_, w0_, w_noupdate_;
+  DvceArray5D<Real> u0_, w0_;
+  // DvceArray5D<Real> u0_, w0_, w_noupdate_;
   if (is_hydro_enabled_) {
     u0_ = pmy_pack->phydro->u0;
     w0_ = pmy_pack->phydro->w0;
-    w_noupdate_ = pmy_pack->phydro->w0;
+    // w_noupdate_ = pmy_pack->phydro->w0;
   } else if (is_mhd_enabled_) {
     u0_ = pmy_pack->pmhd->u0;
     w0_ = pmy_pack->pmhd->w0;
-    w_noupdate_ = update_vel_in_rad_source_ ? pmy_pack->pmhd->w0 : w_noupdate;
+    // w_noupdate_ = update_vel_in_rad_source_ ? pmy_pack->pmhd->w0 : w_noupdate;
   }
 
   // Extract timestep
@@ -179,9 +180,12 @@ TaskStatus Radiation::AddRadiationSourceTerm(Driver *pdriver, int stage) {
 
     // fluid state
     Real wdn = w0_(m,IDN,k,j,i);
-    Real &wvx = update_vel_in_rad_source_ ? w0_(m,IVX,k,j,i) : w_noupdate_(m,IVX,k,j,i);
-    Real &wvy = update_vel_in_rad_source_ ? w0_(m,IVY,k,j,i) : w_noupdate_(m,IVY,k,j,i);
-    Real &wvz = update_vel_in_rad_source_ ? w0_(m,IVZ,k,j,i) : w_noupdate_(m,IVZ,k,j,i);
+    Real &wvx = w0_(m,IVX,k,j,i);
+    Real &wvy = w0_(m,IVY,k,j,i);
+    Real &wvz = w0_(m,IVZ,k,j,i);
+    // Real &wvx = update_vel_in_rad_source_ ? w0_(m,IVX,k,j,i) : w_noupdate_(m,IVX,k,j,i);
+    // Real &wvy = update_vel_in_rad_source_ ? w0_(m,IVY,k,j,i) : w_noupdate_(m,IVY,k,j,i);
+    // Real &wvz = update_vel_in_rad_source_ ? w0_(m,IVZ,k,j,i) : w_noupdate_(m,IVZ,k,j,i);
     Real wen = w0_(m,IEN,k,j,i);
 
     // compute sigma_cold
