@@ -283,7 +283,7 @@ TaskStatus Radiation::AddRadiationSourceTerm(Driver *pdriver, int stage) {
 
     if (correct_radsrc_opacity_ && (sigma_cold > sigma_cold_cut_)) {
       Real dfloor_op = dfloor_opacity_;
-      Real fac_trunc = 100.0;
+      Real fac_trunc = 1.0e2;
       Real wid_trunc = 0.2;
       Real del_reduce = log10(dfloor) - log10(dfloor_op);
       Real fac_inv = 1.0 + exp( -1./wid_trunc * ( log10(wdn) - (log10(dfloor) + 0.5*log10(fac_trunc)) ) );
