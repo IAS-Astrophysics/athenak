@@ -276,28 +276,30 @@ TaskStatus Radiation::AddRadiationSourceTerm(Driver *pdriver, int stage) {
 
     // set opacities
     Real sigma_a, sigma_s, sigma_p;
+    OpacityFunction(wdn, density_scale_,
+                    tgas, temperature_scale_,
+                    length_scale_, gm1, mean_mol_weight_,
+                    power_opacity_, rosseland_coef_, planck_minus_rosseland_coef_,
+                    kappa_a_, kappa_s_, kappa_p_,
+                    sigma_a, sigma_s, sigma_p);
+
     Real wdn_opacity = fmax(wdn-dfloor, dfloor_opacity_);
     // if (correct_radsrc_opacity_ && (sigma_cold > sigma_cold_cut_)) {
     //   wdn_opacity = dfloor_opacity_;
     // }
 
     if (correct_radsrc_opacity_ && (sigma_cold > sigma_cold_cut_)) {
-      Real wdn_real = wdn-dfloor;
-      Real dfloor_op = dfloor_opacity_;
       Real fac_trunc = 1.0e2;
       Real wid_trunc = 0.2;
+      Real wdn_real = fmax(wdn-dfloor, dfloor_opacity_);
+      Real dfloor_op = dfloor_opacity_;
       Real del_reduce = log10(dfloor) - log10(dfloor_op);
       Real fac_inv = 1.0 + exp( -1./wid_trunc * ( log10(wdn_real) - (log10(dfloor) + 0.5*log10(fac_trunc)) ) );
       Real lg_rho_op = log10(wdn_real) - (1.-1./fac_inv) * del_reduce;
       wdn_opacity = pow(10.0, lg_rho_op);
     }
+    sigma_s *= wdn_opacity/wdn;
 
-    OpacityFunction(wdn_opacity, density_scale_,
-                    tgas, temperature_scale_,
-                    length_scale_, gm1, mean_mol_weight_,
-                    power_opacity_, rosseland_coef_, planck_minus_rosseland_coef_,
-                    kappa_a_, kappa_s_, kappa_p_,
-                    sigma_a, sigma_s, sigma_p);
     // sigma_p = fmax(sigma_p, floor_planck_-sigma_a);
     Real dtcsiga = dt_*sigma_a;
     Real dtcsigs = dt_*sigma_s;
