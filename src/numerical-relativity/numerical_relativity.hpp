@@ -105,8 +105,8 @@ class NumericalRelativity {
   // Task function must have arguments (Driver*, int).
   template <class F>
   void QueueTask(F func, TaskName name, const std::string name_string,
-                 TaskLocation loc, std::vector<TaskName>& dependencies,
-                 std::vector<TaskName>& optional) {
+                 TaskLocation loc, std::vector<TaskName> dependencies = {},
+                 std::vector<TaskName> optional = {}) {
     // Don't add this task if its physics dependencies aren't met, e.g,
     // don't add Z4c matter source terms if Z4c is disabled.
     if (!DependenciesMet(dependencies)) {
@@ -125,8 +125,8 @@ class NumericalRelativity {
   // function of class T.
   template <class F, class T>
   void QueueTask(F func, T *obj, TaskName name, const std::string name_string,
-                 TaskLocation loc, std::vector<TaskName>& dependencies,
-                 std::vector<TaskName>& optional) {
+                 TaskLocation loc, std::vector<TaskName> dependencies = {},
+                 std::vector<TaskName> optional = {}) {
     // Don't add this task if its physics dependencies aren't met, e.g.,
     // don't add Z4c matter source terms if Z4c is disabled.
     if (!DependenciesMet(dependencies)) {

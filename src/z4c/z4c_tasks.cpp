@@ -79,91 +79,47 @@ void Z4c::QueueZ4cTasks() {
   NumericalRelativity *pnr = pmy_pack->pnr;
   auto &indcs = pmy_pack->pmesh->mb_indcs;
 
-  std::vector<TaskName> none;
-  std::vector<TaskName> dep;
-  std::vector<TaskName> opt;
-
   // Start task list
-  pnr->QueueTask(&Z4c::InitRecv, this, Z4c_Recv, "Z4c_Recv", Task_Start, none, none);
+  pnr->QueueTask(&Z4c::InitRecv, this, Z4c_Recv, "Z4c_Recv", Task_Start);
 
   // Run task list
-  pnr->QueueTask(&Z4c::CopyU, this, Z4c_CopyU, "Z4c_CopyU", Task_Run, none, none);
-
-  dep.push_back(Z4c_Recv);
-  opt.push_back(MHD_SetTmunu);
+  pnr->QueueTask(&Z4c::CopyU, this, Z4c_CopyU, "Z4c_CopyU", Task_Run);
   switch (indcs.ng) {
     case 2:
       pnr->QueueTask(&Z4c::CalcRHS<2>, this, Z4c_CalcRHS, "Z4c_CalcRHS",
-                     Task_Run, dep, opt);
+                     Task_Run, {Z4c_Recv}, {MHD_SetTmunu});
       break;
     case 3:
       pnr->QueueTask(&Z4c::CalcRHS<3>, this, Z4c_CalcRHS, "Z4c_CalcRHS",
-                     Task_Run, dep, opt);
+                     Task_Run, {Z4c_Recv}, {MHD_SetTmunu});
       break;
     case 4:
       pnr->QueueTask(&Z4c::CalcRHS<4>, this, Z4c_CalcRHS, "Z4c_CalcRHS",
-                     Task_Run, dep, opt);
+                     Task_Run, {Z4c_Recv}, {MHD_SetTmunu});
       break;
   }
-  opt.clear();
-  dep.clear();
-
-  dep.push_back(Z4c_CalcRHS);
-  pnr->QueueTask(&Z4c::Z4cBoundaryRHS, this, Z4c_SomBC, "Z4c_SomBC", Task_Run, dep, none);
-  dep.clear();
-
-  dep.push_back(Z4c_SomBC);
-  pnr->QueueTask(&Z4c::ExpRKUpdate, this, Z4c_ExplRK, "Z4c_ExplRK", Task_Run, dep, none);
-  dep.clear();
-
-  dep.push_back(Z4c_ExplRK);
-  pnr->QueueTask(&Z4c::RestrictU, this, Z4c_RestU, "Z4c_RestU", Task_Run, dep, none);
-  dep.clear();
-
-  dep.push_back(Z4c_RestU);
-  pnr->QueueTask(&Z4c::SendU, this, Z4c_SendU, "Z4c_SendU", Task_Run, dep, none);
-  dep.clear();
-
-  dep.push_back(Z4c_SendU);
-  pnr->QueueTask(&Z4c::RecvU, this, Z4c_RecvU, "Z4c_RecvU", Task_Run, dep, none);
-  dep.clear();
-
-  dep.push_back(Z4c_RecvU);
-  pnr->QueueTask(&Z4c::ApplyPhysicalBCs, this, Z4c_BCS, "Z4c_BCS", Task_Run, dep, none);
-  dep.clear();
-
-  dep.push_back(Z4c_BCS);
-  pnr->QueueTask(&Z4c::Prolongate, this, Z4c_Prolong, "Z4c_Prolong", Task_Run, dep, none);
-  dep.clear();
-
-  dep.push_back(Z4c_Prolong);
-  pnr->QueueTask(&Z4c::EnforceAlgConstr, this, Z4c_AlgC, "Z4c_AlgC", Task_Run, dep, none);
-  dep.clear();
-
-  dep.push_back(Z4c_AlgC);
-  opt.push_back(MHD_Flux);
-  opt.push_back(MHD_ExplRK);
-  pnr->QueueTask(&Z4c::NewTimeStep, this, Z4c_Newdt, "Z4c_Newdt", Task_Run, dep, opt);
-  dep.clear();
+  pnr->QueueTask(&Z4c::Z4cBoundaryRHS, this, Z4c_SomBC, "Z4c_SomBC", Task_Run,
+                 {Z4c_CalcRHS});
+  pnr->QueueTask(&Z4c::ExpRKUpdate, this, Z4c_ExplRK, "Z4c_ExplRK", Task_Run,
+                 {Z4c_SomBC});
+  pnr->QueueTask(&Z4c::RestrictU, this, Z4c_RestU, "Z4c_RestU", Task_Run, {Z4c_ExplRK});
+  pnr->QueueTask(&Z4c::SendU, this, Z4c_SendU, "Z4c_SendU", Task_Run, {Z4c_RestU});
+  pnr->QueueTask(&Z4c::RecvU, this, Z4c_RecvU, "Z4c_RecvU", Task_Run, {Z4c_SendU});
+  pnr->QueueTask(&Z4c::ApplyPhysicalBCs, this, Z4c_BCS, "Z4c_BCS", Task_Run, {Z4c_RecvU});
+  pnr->QueueTask(&Z4c::Prolongate, this, Z4c_Prolong, "Z4c_Prolong", Task_Run, {Z4c_BCS});
+  pnr->QueueTask(&Z4c::EnforceAlgConstr, this, Z4c_AlgC, "Z4c_AlgC", Task_Run,
+                 {Z4c_Prolong});
+  pnr->QueueTask(&Z4c::NewTimeStep, this, Z4c_Newdt, "Z4c_Newdt", Task_Run, {Z4c_AlgC},
+                 {MHD_Flux, MHD_ExplRK});
 
   // End task list
-  pnr->QueueTask(&Z4c::ClearSend, this, Z4c_ClearS, "Z4c_ClearS", Task_End, none, none);
-
-  dep.push_back(Z4c_ClearS);
-  pnr->QueueTask(&Z4c::ClearRecv, this, Z4c_ClearR, "Z4c_ClearR", Task_End, none, none);
-  dep.clear();
-
-  dep.push_back(Z4c_ClearR);
-  pnr->QueueTask(&Z4c::Z4cToADM_, this, Z4c_Z4c2ADM, "Z4c_Z4c2ADM", Task_End, dep, none);
-  dep.clear();
-
-  dep.push_back(Z4c_Z4c2ADM);
-  pnr->QueueTask(&Z4c::ADMConstraints_, this, Z4c_ADMC, "Z4c_ADMC", Task_End, dep, none);
-  dep.clear();
-
-  dep.push_back(Z4c_ADMC);
-  pnr->QueueTask(&Z4c::CalcWeylScalar_, this, Z4c_Weyl, "Z4c_Weyl", Task_End, dep, none);
-  dep.clear();
+  pnr->QueueTask(&Z4c::ClearSend, this, Z4c_ClearS, "Z4c_ClearS", Task_End);
+  pnr->QueueTask(&Z4c::ClearRecv, this, Z4c_ClearR, "Z4c_ClearR", Task_End, {Z4c_ClearS});
+  pnr->QueueTask(&Z4c::Z4cToADM_, this, Z4c_Z4c2ADM, "Z4c_Z4c2ADM", Task_End,
+                 {Z4c_ClearR});
+  pnr->QueueTask(&Z4c::ADMConstraints_, this, Z4c_ADMC, "Z4c_ADMC", Task_End,
+                 {Z4c_Z4c2ADM});
+  pnr->QueueTask(&Z4c::CalcWeylScalar_, this, Z4c_Weyl, "Z4c_Weyl", Task_End, {Z4c_ADMC});
 }
 
 //----------------------------------------------------------------------------------------

@@ -135,27 +135,22 @@ void DynGRPS<EOSPolicy, ErrorPolicy>::QueueDynGRTasks() {
   MHD *pmhd = pmy_pack->pmhd;
   NumericalRelativity *pnr = pmy_pack->pnr;
 
-  std::vector<TaskName> none;
-  std::vector<TaskName> dep;
-  std::vector<TaskName> opt;
-
   // Start task list
-  pnr->QueueTask(&MHD::InitRecv, pmhd, MHD_Recv, "MHD_Recv", Task_Start, none, none);
+  pnr->QueueTask(&MHD::InitRecv, pmhd, MHD_Recv, "MHD_Recv", Task_Start);
 
   // Run task list
-  pnr->QueueTask(&MHD::CopyCons, pmhd, MHD_CopyU, "MHD_CopyU", Task_Run, none, none);
+  pnr->QueueTask(&MHD::CopyCons, pmhd, MHD_CopyU, "MHD_CopyU", Task_Run);
 
   // Select which CalculateFlux function to add based on rsolver_method.
   // CalcFlux requires metric in flux - must happen before z4ctoadm updates the metric
-  dep.push_back(MHD_CopyU);
   if (rsolver_method == DynGR_RSolver::llf_dyngr) {
     pnr->QueueTask(
            &DynGRPS<EOSPolicy, ErrorPolicy>::CalcFluxes<DynGR_RSolver::llf_dyngr>,
-           this, MHD_Flux, "MHD_Flux", Task_Run, dep, none);
+           this, MHD_Flux, "MHD_Flux", Task_Run, {MHD_CopyU});
   } else if (rsolver_method == DynGR_RSolver::hlle_dyngr) {
     pnr->QueueTask(
            &DynGRPS<EOSPolicy, ErrorPolicy>::CalcFluxes<DynGR_RSolver::hlle_dyngr>,
-           this, MHD_Flux, "MHD_Flux", Task_Run, dep, none);
+           this, MHD_Flux, "MHD_Flux", Task_Run, {MHD_CopyU});
   } else { // put more rsolvers here
     abort();
   }
@@ -163,85 +158,38 @@ void DynGRPS<EOSPolicy, ErrorPolicy>::QueueDynGRTasks() {
   // Now the rest of the MHD run tasks
   if (pz4c != nullptr) {
     pnr->QueueTask(&DynGR::SetTmunu, this, MHD_SetTmunu, "MHD_SetTmunu",
-                   Task_Run, dep, none);
+                   Task_Run, {MHD_CopyU});
   }
-  dep.clear();
-  dep.push_back(MHD_Flux);
   pnr->QueueTask(&MHD::SendFlux, pmhd, MHD_SendFlux, "MHD_SendFlux",
-                 Task_Run, dep, none);
-
-  dep.clear();
-  dep.push_back(MHD_SendFlux);
+                 Task_Run, {MHD_Flux});
   pnr->QueueTask(&MHD::RecvFlux, pmhd, MHD_RecvFlux, "MHD_RecvFlux",
-                 Task_Run, dep, none);
-
-  dep.clear();
-  dep.push_back(MHD_RecvFlux);
+                 Task_Run, {MHD_SendFlux});
   if (pz4c != nullptr) {
-    dep.push_back(MHD_SetTmunu);
+    pnr->QueueTask(&MHD::ExpRKUpdate, pmhd, MHD_ExplRK, "MHD_ExplRK", Task_Run,
+                   {MHD_RecvFlux, MHD_SetTmunu});
+  } else {
+    pnr->QueueTask(&MHD::ExpRKUpdate, pmhd, MHD_ExplRK, "MHD_ExplRK", Task_Run,
+                   {MHD_RecvFlux});
   }
-  pnr->QueueTask(&MHD::ExpRKUpdate, pmhd, MHD_ExplRK, "MHD_ExplRK", Task_Run, dep, none);
-
-  dep.clear();
-  dep.push_back(MHD_ExplRK);
-  pnr->QueueTask(&MHD::RestrictU, pmhd, MHD_RestU, "MHD_RestU", Task_Run, dep, none);
-
-  dep.clear();
-  dep.push_back(MHD_RestU);
-  pnr->QueueTask(&MHD::SendU, pmhd, MHD_SendU, "MHD_SendU", Task_Run, dep, none);
-
-  dep.clear();
-  dep.push_back(MHD_SendU);
-  pnr->QueueTask(&MHD::RecvU, pmhd, MHD_RecvU, "MHD_RecvU", Task_Run, dep, none);
-
-  dep.clear();
-  dep.push_back(MHD_RecvU);
-  pnr->QueueTask(&MHD::CornerE, pmhd, MHD_EField, "MHD_EField", Task_Run, dep, none);
-
-  dep.clear();
-  dep.push_back(MHD_EField);
-  pnr->QueueTask(&MHD::SendE, pmhd, MHD_SendE, "MHD_SendE", Task_Run, dep, none);
-
-  dep.clear();
-  dep.push_back(MHD_SendE);
-  pnr->QueueTask(&MHD::RecvE, pmhd, MHD_RecvE, "MHD_RecvE", Task_Run, dep, none);
-
-  dep.clear();
-  dep.push_back(MHD_RecvE);
-  pnr->QueueTask(&MHD::CT, pmhd, MHD_CT, "MHD_CT", Task_Run, dep, none);
-
-  dep.clear();
-  dep.push_back(MHD_CT);
-  pnr->QueueTask(&MHD::RestrictB, pmhd, MHD_RestB, "MHD_RestB", Task_Run, dep, none);
-
-  dep.clear();
-  dep.push_back(MHD_RestB);
-  pnr->QueueTask(&MHD::SendB, pmhd, MHD_SendB, "MHD_SendB", Task_Run, dep, none);
-
-  dep.clear();
-  dep.push_back(MHD_SendB);
-  pnr->QueueTask(&MHD::RecvB, pmhd, MHD_RecvB, "MHD_RecvB", Task_Run, dep, none);
-
-  dep.clear();
-  dep.push_back(MHD_RecvB);
-  pnr->QueueTask(&MHD::ApplyPhysicalBCs, pmhd, MHD_BCS, "MHD_BCS", Task_Run, dep, none);
+  pnr->QueueTask(&MHD::RestrictU, pmhd, MHD_RestU, "MHD_RestU", Task_Run, {MHD_ExplRK});
+  pnr->QueueTask(&MHD::SendU, pmhd, MHD_SendU, "MHD_SendU", Task_Run, {MHD_RestU});
+  pnr->QueueTask(&MHD::RecvU, pmhd, MHD_RecvU, "MHD_RecvU", Task_Run, {MHD_SendU});
+  pnr->QueueTask(&MHD::CornerE, pmhd, MHD_EField, "MHD_EField", Task_Run, {MHD_RecvU});
+  pnr->QueueTask(&MHD::SendE, pmhd, MHD_SendE, "MHD_SendE", Task_Run, {MHD_EField});
+  pnr->QueueTask(&MHD::RecvE, pmhd, MHD_RecvE, "MHD_RecvE", Task_Run, {MHD_SendE});
+  pnr->QueueTask(&MHD::CT, pmhd, MHD_CT, "MHD_CT", Task_Run, {MHD_RecvE});
+  pnr->QueueTask(&MHD::RestrictB, pmhd, MHD_RestB, "MHD_RestB", Task_Run, {MHD_CT});
+  pnr->QueueTask(&MHD::SendB, pmhd, MHD_SendB, "MHD_SendB", Task_Run, {MHD_RestB});
+  pnr->QueueTask(&MHD::RecvB, pmhd, MHD_RecvB, "MHD_RecvB", Task_Run, {MHD_SendB});
+  pnr->QueueTask(&MHD::ApplyPhysicalBCs, pmhd, MHD_BCS, "MHD_BCS", Task_Run, {MHD_RecvB});
   //pnr->QueueTask(&DynGR::ApplyPhysicalBCs, this, MHD_BCS, "MHD_BCS", Task_Run, dep, none);
-
-  dep.clear();
-  dep.push_back(MHD_BCS);
-  pnr->QueueTask(&MHD::Prolongate, pmhd, MHD_Prolong, "MHD_Prolong", Task_Run, dep, none);
-
-  dep.clear();
-  dep.push_back(MHD_Prolong);
-  opt.push_back(Z4c_Z4c2ADM);
+  pnr->QueueTask(&MHD::Prolongate, pmhd, MHD_Prolong, "MHD_Prolong", Task_Run, {MHD_BCS});
   pnr->QueueTask(&DynGRPS<EOSPolicy, ErrorPolicy>::ConToPrim, this, MHD_C2P, "MHD_C2P",
-                 Task_Run, dep, opt);
+                 Task_Run, {MHD_Prolong}, {Z4c_Z4c2ADM});
+  pnr->QueueTask(&MHD::NewTimeStep, pmhd, MHD_Newdt, "MHD_Newdt", Task_Run, {MHD_C2P});
 
-  dep.clear();
-  dep.push_back(MHD_C2P);
-  pnr->QueueTask(&MHD::NewTimeStep, pmhd, MHD_Newdt, "MHD_Newdt", Task_Run, dep, none);
-
-  pnr->QueueTask(&MHD::ClearSend, pmhd, MHD_Clear, "MHD_Clear", Task_End, none, none);
+  // End task list
+  pnr->QueueTask(&MHD::ClearSend, pmhd, MHD_Clear, "MHD_Clear", Task_End);
 }
 
 //----------------------------------------------------------------------------------------
