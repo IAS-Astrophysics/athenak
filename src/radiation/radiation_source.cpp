@@ -73,6 +73,7 @@ TaskStatus Radiation::AddRadiationSourceTerm(Driver *pdriver, int stage) {
   Real &spin = coord.bh_spin;
   bool &excise = pmy_pack->pcoord->coord_data.bh_excise;
   auto &rad_mask_ = pmy_pack->pcoord->excision_floor;
+  auto &excision_flux_ = pmy_pack->pcoord->excision_flux;
   Real &n_0_floor_ = n_0_floor;
 
   // Extract radiation constant and units
@@ -289,18 +290,20 @@ TaskStatus Radiation::AddRadiationSourceTerm(Driver *pdriver, int stage) {
     // }
 
     if (correct_radsrc_opacity_ && (sigma_cold > sigma_cold_cut_)) {
-      Real fac_trunc = 1.0e2;
-      Real wid_trunc = 0.2;
-      Real wdn_real = fmax(wdn-dfloor, dfloor_opacity_);
-      Real dfloor_op = dfloor_opacity_;
-      Real del_reduce = log10(dfloor) - log10(dfloor_op);
-      Real fac_inv = 1.0 + exp( -1./wid_trunc * ( log10(wdn_real) - (log10(dfloor) + 0.5*log10(fac_trunc)) ) );
-      Real lg_rho_op = log10(wdn_real) - (1.-1./fac_inv) * del_reduce;
-      wdn_opacity = pow(10.0, lg_rho_op);
+      if (excision_flux_(m,k,j,i)) {
+        wdn_opacity = dfloor_opacity_;
+      } else {
+        Real fac_trunc = 1.0e2;
+        Real wid_trunc = 0.2;
+        Real wdn_real = fmax(wdn-dfloor, dfloor_opacity_);
+        Real dfloor_op = dfloor_opacity_;
+        Real del_reduce = log10(dfloor) - log10(dfloor_op);
+        Real fac_inv = 1.0 + exp( -1./wid_trunc * ( log10(wdn_real) - (log10(dfloor) + 0.5*log10(fac_trunc)) ) );
+        Real lg_rho_op = log10(wdn_real) - (1.-1./fac_inv) * del_reduce;
+        wdn_opacity = pow(10.0, lg_rho_op);
+      }
     }
-    sigma_s *= wdn_opacity/wdn;
 
-    // sigma_p = fmax(sigma_p, floor_planck_-sigma_a);
     Real dtcsiga = dt_*sigma_a;
     Real dtcsigs = dt_*sigma_s;
     Real dtcsigp = dt_*sigma_p;
@@ -445,6 +448,14 @@ TaskStatus Radiation::AddRadiationSourceTerm(Driver *pdriver, int stage) {
       } // endif (erad_f_ > wdn + wen)
     } // endif (correct_vel_in_rad_source_)
 
+
+    // Before applying absorption and scattering source terms
+    if (correct_radsrc_opacity_ && (sigma_cold > sigma_cold_cut_)) {
+      sigma_p = (sigma_p+sigma_a)*wdn_opacity/wdn - sigma_a;
+      dtcsigp = dt_*sigma_p;
+      dtaucsigp = dtcsigp/u0;
+    }
+
     // Calculate polynomial coefficients
     Real wght_sum = 0.0;
     Real suma1 = 0.0;
@@ -581,6 +592,12 @@ TaskStatus Radiation::AddRadiationSourceTerm(Driver *pdriver, int stage) {
 
     // compton scattering
     if (is_compton_enabled_) {
+      if (correct_radsrc_opacity_ && (sigma_cold > sigma_cold_cut_)) {
+        sigma_s *= wdn_opacity/wdn;
+        dtcsigs *= wdn_opacity/wdn;
+        dtaucsigs *= wdn_opacity/wdn;
+      }
+
       // use partially updated gas temperature
       tgas = tgasnew;
 
