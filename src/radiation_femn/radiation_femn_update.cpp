@@ -119,106 +119,7 @@ namespace radiationfemn
 
                           Real idx[] = {1 / mbsize.d_view(m).dx1, 1 / mbsize.d_view(m).dx2, 1 / mbsize.d_view(m).dx3};
 
-                          // lapse derivatives (\p_mu alpha)
-                          Real dtalpha_d = 0.; // time derivatives, get from z4c
-                          AthenaScratchTensor<Real, TensorSymm::NONE, 3, 1> dalpha_d; // spatial derivatives
-                          dalpha_d(0) = Dx<NGHOST>(0, idx, adm.alpha, m, k, j, i);
-                          dalpha_d(1) = (multi_d) ? Dx<NGHOST>(1, idx, adm.alpha, m, k, j, i) : 0.;
-                          dalpha_d(2) = (three_d) ? Dx<NGHOST>(2, idx, adm.alpha, m, k, j, i) : 0.;
-
-                          // shift derivatives (\p_mu beta^i)
-                          Real dtbetax_du = 0.; // time derivatives, get from z4c
-                          Real dtbetay_du = 0.;
-                          Real dtbetaz_du = 0.;
-                          AthenaScratchTensor<Real, TensorSymm::NONE, 3, 2> dbeta_du; // spatial derivatives
-                          for (int a = 0; a < 3; ++a)
-                          {
-                              dbeta_du(0, a) = Dx<NGHOST>(0, idx, adm.beta_u, m, a, k, j, i);
-                              dbeta_du(1, a) = (multi_d) ? Dx<NGHOST>(1, idx, adm.beta_u, m, a, k, j, i) : 0.;
-                              dbeta_du(1, a) = (three_d) ? Dx<NGHOST>(1, idx, adm.beta_u, m, a, k, j, i) : 0.;
-                          }
-
-                          // covariant shift (beta_i)
-                          Real betax_d = adm.g_dd(m, 0, 0, k, j, i) * adm.beta_u(m, 0, k, j, i) + adm.g_dd(m, 0, 1, k, j, i) * adm.beta_u(m, 1, k, j, i)
-                              + adm.g_dd(m, 0, 2, k, j, i) * adm.beta_u(m, 2, k, j, i);
-                          Real betay_d = adm.g_dd(m, 1, 0, k, j, i) * adm.beta_u(m, 0, k, j, i) + adm.g_dd(m, 1, 1, k, j, i) * adm.beta_u(m, 1, k, j, i)
-                              + adm.g_dd(m, 1, 2, k, j, i) * adm.beta_u(m, 2, k, j, i);
-                          Real betaz_d = adm.g_dd(m, 2, 0, k, j, i) * adm.beta_u(m, 0, k, j, i) + adm.g_dd(m, 2, 1, k, j, i) * adm.beta_u(m, 1, k, j, i)
-                              + adm.g_dd(m, 2, 2, k, j, i) * adm.beta_u(m, 2, k, j, i);
-
-                          // derivatives of spatial metric (\p_mu g_ij)
-                          AthenaScratchTensor<Real, TensorSymm::SYM2, 3, 2> dtg_dd;
-                          AthenaScratchTensor<Real, TensorSymm::SYM2, 3, 3> dg_ddd;
-                          for (int a = 0; a < 3; ++a)
-                          {
-                              for (int b = a; b < 3; ++b)
-                              {
-                                  dtg_dd(a, b) = 0.; // time derivatives, get from z4c
-
-                                  dg_ddd(0, a, b) = Dx<NGHOST>(0, idx, adm.g_dd, m, a, b, k, j, i); // spatial derivatives
-                                  dg_ddd(1, a, b) = (multi_d) ? Dx<NGHOST>(1, idx, adm.g_dd, m, a, b, k, j, i) : 0.;
-                                  dg_ddd(2, a, b) = (three_d) ? Dx<NGHOST>(2, idx, adm.g_dd, m, a, b, k, j, i) : 0.;
-                              }
-                          }
-
-                          // derivatives of the 4-metric: time derivatives
-                          AthenaScratchTensor4d<Real, TensorSymm::SYM2, 4, 3> dg4_ddd; //f
-                          dg4_ddd(0, 0, 0) = -2. * adm.alpha(m, k, j, i) * dtalpha_d + 2. * betax_d * dtbetax_du + 2. * betay_d * dtbetay_du + 2. * betaz_d * dtbetaz_du
-                              + dtg_dd(0, 0) * adm.beta_u(m, 0, k, j, i) * adm.beta_u(m, 0, k, j, i) + 2. * dtg_dd(0, 1) * adm.beta_u(m, 0, k, j, i) * adm.beta_u(m, 1, k, j, i)
-                              + 2. * dtg_dd(0, 2) * adm.beta_u(m, 0, k, j, i) * adm.beta_u(m, 2, k, j, i) + dtg_dd(1, 1) * adm.beta_u(m, 1, k, j, i) * adm.beta_u(m, 1, k, j, i)
-                              + 2. * dtg_dd(1, 2) * adm.beta_u(m, 1, k, j, i) * adm.beta_u(m, 2, k, j, i) + dtg_dd(2, 2) * adm.beta_u(m, 2, k, j, i) * adm.beta_u(m, 2, k, j, i);
-                          for (int a = 1; a < 4; ++a)
-                          {
-                              dg4_ddd(0, a, 0) = adm.g_dd(m, 0, 0, k, j, i) * dtbetax_du + adm.g_dd(m, 0, 1, k, j, i) * dtbetay_du + adm.g_dd(m, 0, 2, k, j, i) * dtbetaz_du
-                                  + dtg_dd(a - 1, 0) * adm.beta_u(m, 0, k, j, i) + dtg_dd(a - 1, 1) * adm.beta_u(m, 1, k, j, i) + dtg_dd(a - 1, 2) * adm.beta_u(m, 2, k, j, i);
-                          }
-                          for (int a = 1; a < 4; ++a)
-                          {
-                              for (int b = 1; b < 4; ++b)
-                              {
-                                  dg4_ddd(0, a, b) = 0.; // time derivatives, get from z4c
-                              }
-                          }
-
-                          // derivatives of the 4-metric: spatial derivatives
-                          for (int a = 1; a < 4; ++a)
-                          {
-                              for (int b = 1; b < 4; ++b)
-                              {
-                                  dg4_ddd(1, a, b) = Dx<NGHOST>(0, idx, adm.g_dd, m, a - 1, b - 1, k, j, i);
-                                  dg4_ddd(2, a, b) = (multi_d) ? Dx<NGHOST>(1, idx, adm.g_dd, m, a - 1, b - 1, k, j, i) : 0.;
-                                  dg4_ddd(3, a, b) = (three_d) ? Dx<NGHOST>(2, idx, adm.g_dd, m, a - 1, b - 1, k, j, i) : 0.;
-
-                                  dg4_ddd(a, 0, b) = adm.g_dd(m, 0, 0, k, j, i) * dbeta_du(a - 1, 0) + adm.g_dd(m, 0, 1, k, j, i) * dbeta_du(a - 1, 1)
-                                      + adm.g_dd(m, 0, 2, k, j, i) * dbeta_du(a - 1, 2) + dg_ddd(a - 1, 0, b - 1) * adm.beta_u(m, 0, k, j, i)
-                                      + dg_ddd(a - 1, 1, b - 1) * adm.beta_u(m, 1, k, j, i) + dg_ddd(a - 1, 2, b - 1) * adm.beta_u(m, 2, k, j, i);
-                              }
-                              dg4_ddd(a, 0, 0) = -2. * adm.alpha(m, k, j, i) * dalpha_d(a - 1) + 2. * betax_d * dbeta_du(a - 1, 0) + 2. * betay_d * dbeta_du(a - 1, 1)
-                                  + 2. * betaz_d * dbeta_du(a - 1, 2) + dtg_dd(0, 0) * adm.beta_u(m, 0, k, j, i) * adm.beta_u(m, 0, k, j, i)
-                                  + 2. * dg_ddd(a - 1, 0, 1) * adm.beta_u(m, 0, k, j, i) * adm.beta_u(m, 1, k, j, i)
-                                  + 2. * dg_ddd(a - 1, 0, 2) * adm.beta_u(m, 0, k, j, i) * adm.beta_u(m, 2, k, j, i)
-                                  + dg_ddd(a - 1, 1, 1) * adm.beta_u(m, 1, k, j, i) * adm.beta_u(m, 1, k, j, i)
-                                  + 2. * dg_ddd(a - 1, 1, 2) * adm.beta_u(m, 1, k, j, i) * adm.beta_u(m, 2, k, j, i)
-                                  + dg_ddd(a - 1, 2, 2) * adm.beta_u(m, 2, k, j, i) * adm.beta_u(m, 2, k, j, i);
-                          }
-
-                          // Christoeffel symbols
-                          AthenaScratchTensor4d<Real, TensorSymm::SYM2, 4, 3> Gamma_udd;
-                          for (int a = 0; a < 4; ++a)
-                          {
-                              for (int b = 0; b < 4; ++b)
-                              {
-                                  for (int c = 0; c < 4; ++c)
-                                  {
-                                      Gamma_udd(a, b, c) = 0.0;
-                                      for (int d = 0; d < 4; ++d)
-                                      {
-                                          Gamma_udd(a, b, c) += 0.5 * g_uu[a + 4 * d] * ((dg4_ddd(b, d, c)) + (dg4_ddd(c, b, d)) - (dg4_ddd(d, b, c)));
-                                      }
-                                  }
-                              }
-                          }
-
+                          //----------------------------------------------------------------------------------------
                           Real& x1min = mbsize.d_view(m).x1min;
                           Real& x1max = mbsize.d_view(m).x1max;
                           int nx1 = indcs.nx1;
@@ -231,6 +132,8 @@ namespace radiationfemn
 
                           Real M = 1.;
                           Real r = sqrt(x1 * x1 + x2 * x2);
+                          std::cout << "r: " << r << std::endl;
+
                           /*
                           // Start of metric check
                           Real gdd_0_0 = -pow(M - 2 * r, 2) / pow(M + 2 * r, 2);
@@ -268,7 +171,374 @@ namespace radiationfemn
                           std::cout << "gdd_33:" << g_dd[3 + 4 * 3] << " " << gdd_3_3 << std::endl;
                           // End of metric check
                           */
+                          // Start of metric inverse check
+                          /*
+                          Real guu_0_0 = (-pow(M, 2) - 4 * M * r - 4 * pow(r, 2)) / (pow(M, 2) - 4 * M * r + 4 * pow(r, 2));
+                          Real guu_0_1 = 0;
+                          Real guu_0_2 = 0;
+                          Real guu_0_3 = 0;
+                          Real guu_1_0 = 0;
+                          Real guu_1_1 = 16 * pow(r, 4) / (pow(M, 4) + 8 * pow(M, 3) * r + 24 * pow(M, 2) * pow(r, 2) + 32 * M * pow(r, 3) + 16 * pow(r, 4));
+                          Real guu_1_2 = 0;
+                          Real guu_1_3 = 0;
+                          Real guu_2_0 = 0;
+                          Real guu_2_1 = 0;
+                          Real guu_2_2 = 16 * pow(r, 4) / (pow(M, 4) + 8 * pow(M, 3) * r + 24 * pow(M, 2) * pow(r, 2) + 32 * M * pow(r, 3) + 16 * pow(r, 4));
+                          Real guu_2_3 = 0;
+                          Real guu_3_0 = 0;
+                          Real guu_3_1 = 0;
+                          Real guu_3_2 = 0;
+                          Real guu_3_3 = 16 * pow(r, 4) / (pow(M, 4) + 8 * pow(M, 3) * r + 24 * pow(M, 2) * pow(r, 2) + 32 * M * pow(r, 3) + 16 * pow(r, 4));
 
+                          std::cout << "guu_00:" << g_uu[0 + 4 * 0] << " " << guu_0_0 << std::endl;
+                          std::cout << "guu_01:" << g_uu[0 + 4 * 1] << " " << guu_0_1 << std::endl;
+                          std::cout << "guu_02:" << g_uu[0 + 4 * 2] << " " << guu_0_2 << std::endl;
+                          std::cout << "guu_03:" << g_uu[0 + 4 * 3] << " " << guu_0_3 << std::endl;
+                          std::cout << "guu_10:" << g_uu[1 + 4 * 0] << " " << guu_1_0 << std::endl;
+                          std::cout << "guu_11:" << g_uu[1 + 4 * 1] << " " << guu_1_1 << std::endl;
+                          std::cout << "guu_12:" << g_uu[1 + 4 * 2] << " " << guu_1_2 << std::endl;
+                          std::cout << "guu_13:" << g_uu[1 + 4 * 3] << " " << guu_1_3 << std::endl;
+                          std::cout << "guu_20:" << g_uu[2 + 4 * 0] << " " << guu_2_0 << std::endl;
+                          std::cout << "guu_21:" << g_uu[2 + 4 * 1] << " " << guu_2_1 << std::endl;
+                          std::cout << "guu_22:" << g_uu[2 + 4 * 2] << " " << guu_2_2 << std::endl;
+                          std::cout << "guu_23:" << g_uu[2 + 4 * 3] << " " << guu_2_3 << std::endl;
+                          std::cout << "guu_30:" << g_uu[3 + 4 * 0] << " " << guu_3_0 << std::endl;
+                          std::cout << "guu_31:" << g_uu[3 + 4 * 1] << " " << guu_3_1 << std::endl;
+                          std::cout << "guu_32:" << g_uu[3 + 4 * 2] << " " << guu_3_2 << std::endl;
+                          std::cout << "guu_33:" << g_uu[3 + 4 * 3] << " " << guu_3_3 << std::endl;
+                          */
+                          // End of metric inverse check
+                          // ---------------------------------------------------------------
+
+                          // lapse derivatives (\p_mu alpha)
+                          Real dtalpha_d = 0.; // time derivatives, get from z4c
+                          AthenaScratchTensor<Real, TensorSymm::NONE, 3, 1> dalpha_d; // spatial derivatives
+                          dalpha_d(0) = Dx<NGHOST>(0, idx, adm.alpha, m, k, j, i);
+                          dalpha_d(1) = (multi_d) ? Dx<NGHOST>(1, idx, adm.alpha, m, k, j, i) : 0.;
+                          dalpha_d(2) = (three_d) ? Dx<NGHOST>(2, idx, adm.alpha, m, k, j, i) : 0.;
+
+                          //-----------------------------------------------
+                          /*
+                          Real dalpha_x = 4 * M * x1 / (pow(M + 2 * sqrt(pow(x1, 2) + pow(x2, 2)), 2) * sqrt(pow(x1, 2) + pow(x2, 2)));
+                          Real dalpha_y = 4 * M * x2 / (pow(M + 2 * sqrt(pow(x1, 2) + pow(x2, 2)), 2) * sqrt(pow(x1, 2) + pow(x2, 2)));
+                          Real dalpha_z = 0;
+                          std::cout << "Lapse derivatives: spatial" << std::endl;
+                          std::cout << "dalpha_x:" << dalpha_x << " " << dalpha_d(0) << std::endl;
+                          std::cout << "dalpha_y:" << dalpha_y << " " << dalpha_d(1) << std::endl;
+                          std::cout << "dalpha_z:" << dalpha_z << " " << dalpha_d(2) << std::endl;
+                          */
+                          // ----------------------------------------------
+
+                          // shift derivatives (\p_mu beta^i)
+                          Real dtbetax_du = 0.; // time derivatives, get from z4c
+                          Real dtbetay_du = 0.;
+                          Real dtbetaz_du = 0.;
+                          AthenaScratchTensor<Real, TensorSymm::NONE, 3, 2> dbeta_du; // spatial derivatives
+                          for (int a = 0; a < 3; ++a)
+                          {
+                              dbeta_du(0, a) = Dx<NGHOST>(0, idx, adm.beta_u, m, a, k, j, i);
+                              dbeta_du(1, a) = (multi_d) ? Dx<NGHOST>(1, idx, adm.beta_u, m, a, k, j, i) : 0.;
+                              dbeta_du(1, a) = (three_d) ? Dx<NGHOST>(1, idx, adm.beta_u, m, a, k, j, i) : 0.;
+                          }
+
+                          // covariant shift (beta_i)
+                          Real betax_d = adm.g_dd(m, 0, 0, k, j, i) * adm.beta_u(m, 0, k, j, i) + adm.g_dd(m, 0, 1, k, j, i) * adm.beta_u(m, 1, k, j, i)
+                              + adm.g_dd(m, 0, 2, k, j, i) * adm.beta_u(m, 2, k, j, i);
+                          Real betay_d = adm.g_dd(m, 1, 0, k, j, i) * adm.beta_u(m, 0, k, j, i) + adm.g_dd(m, 1, 1, k, j, i) * adm.beta_u(m, 1, k, j, i)
+                              + adm.g_dd(m, 1, 2, k, j, i) * adm.beta_u(m, 2, k, j, i);
+                          Real betaz_d = adm.g_dd(m, 2, 0, k, j, i) * adm.beta_u(m, 0, k, j, i) + adm.g_dd(m, 2, 1, k, j, i) * adm.beta_u(m, 1, k, j, i)
+                              + adm.g_dd(m, 2, 2, k, j, i) * adm.beta_u(m, 2, k, j, i);
+
+                          // ---------------------------------------
+                          /*
+                          std::cout << "Shift and derivatives: " << std::endl;
+                          std::cout << "dx_beta_1: " << dbeta_du(0, 0) << std::endl;
+                          std::cout << "dx_beta_2: " << dbeta_du(0, 1) << std::endl;
+                          std::cout << "dx_beta_3: " << dbeta_du(0, 2) << std::endl;
+                          std::cout << "dy_beta_1: " << dbeta_du(1, 0) << std::endl;
+                          std::cout << "dy_beta_2: " << dbeta_du(1, 1) << std::endl;
+                          std::cout << "dy_beta_3: " << dbeta_du(1, 2) << std::endl;
+                          std::cout << "dz_beta_1: " << dbeta_du(2, 0) << std::endl;
+                          std::cout << "dz_beta_2: " << dbeta_du(2, 1) << std::endl;
+                          std::cout << "dz_beta_3: " << dbeta_du(2, 2) << std::endl;
+                          std::cout << "betax_d: " << betax_d << std::endl;
+                          std::cout << "betay_d: " << betay_d << std::endl;
+                          std::cout << "betaz_d: " << betaz_d << std::endl;
+                          */
+                          // ---------------------------------------
+
+                          // derivatives of spatial metric (\p_mu g_ij)
+                          AthenaScratchTensor<Real, TensorSymm::SYM2, 3, 2> dtg_dd;
+                          AthenaScratchTensor<Real, TensorSymm::SYM2, 3, 3> dg_ddd;
+                          for (int a = 0; a < 3; ++a)
+                          {
+                              for (int b = a; b < 3; ++b)
+                              {
+                                  dtg_dd(a, b) = 0.; // time derivatives, get from z4c
+
+                                  dg_ddd(0, a, b) = Dx<NGHOST>(0, idx, adm.g_dd, m, a, b, k, j, i); // spatial derivatives
+                                  dg_ddd(1, a, b) = (multi_d) ? Dx<NGHOST>(1, idx, adm.g_dd, m, a, b, k, j, i) : 0.;
+                                  dg_ddd(2, a, b) = (three_d) ? Dx<NGHOST>(2, idx, adm.g_dd, m, a, b, k, j, i) : 0.;
+                              }
+                          }
+
+                          // --------------------
+                          // print spatial derivatives of spatial metric
+                          /*
+                          Real dx_gdd_11 = -1.0 / 4.0 * M * x1 * pow(M + 2 * sqrt(pow(x1, 2) + pow(x2, 2)), 3) / pow(pow(x1, 2) + pow(x2, 2), 3);
+                          Real dy_gdd_11 = -1.0 / 4.0 * M * x2 * pow(M + 2 * sqrt(pow(x1, 2) + pow(x2, 2)), 3) / pow(pow(x1, 2) + pow(x2, 2), 3);
+                          Real dz_gdd_11 = 0;
+                          Real dx_gdd_12 = 0;
+                          Real dy_gdd_12 = 0;
+                          Real dz_gdd_12 = 0;
+                          Real dx_gdd_13 = 0;
+                          Real dy_gdd_13 = 0;
+                          Real dz_gdd_13 = 0;
+                          Real dx_gdd_21 = 0;
+                          Real dy_gdd_21 = 0;
+                          Real dz_gdd_21 = 0;
+                          Real dx_gdd_22 = -1.0 / 4.0 * M * x1 * pow(M + 2 * sqrt(pow(x1, 2) + pow(x2, 2)), 3) / pow(pow(x1, 2) + pow(x2, 2), 3);
+                          Real dy_gdd_22 = -1.0 / 4.0 * M * x2 * pow(M + 2 * sqrt(pow(x1, 2) + pow(x2, 2)), 3) / pow(pow(x1, 2) + pow(x2, 2), 3);
+                          Real dz_gdd_22 = 0;
+                          Real dx_gdd_23 = 0;
+                          Real dy_gdd_23 = 0;
+                          Real dz_gdd_23 = 0;
+                          Real dx_gdd_31 = 0;
+                          Real dy_gdd_31 = 0;
+                          Real dz_gdd_31 = 0;
+                          Real dx_gdd_32 = 0;
+                          Real dy_gdd_32 = 0;
+                          Real dz_gdd_32 = 0;
+                          Real dx_gdd_33 = -1.0 / 4.0 * M * x1 * pow(M + 2 * sqrt(pow(x1, 2) + pow(x2, 2)), 3) / pow(pow(x1, 2) + pow(x2, 2), 3);
+                          Real dy_gdd_33 = -1.0 / 4.0 * M * x2 * pow(M + 2 * sqrt(pow(x1, 2) + pow(x2, 2)), 3) / pow(pow(x1, 2) + pow(x2, 2), 3);
+                          Real dz_gdd_33 = 0;
+
+                          std::cout << "dx_gdd_11: " << dx_gdd_11 << " " << dg_ddd(0, 0, 0) << std::endl;
+                          std::cout << "dy_gdd_11: " << dy_gdd_11 << " " << dg_ddd(1, 0, 0) << std::endl;
+                          std::cout << "dz_gdd_11: " << dz_gdd_11 << " " << dg_ddd(2, 0, 0) << std::endl;
+                          std::cout << "dx_gdd_12: " << dx_gdd_12 << " " << dg_ddd(0, 0, 1) << std::endl;
+                          std::cout << "dy_gdd_12: " << dy_gdd_12 << " " << dg_ddd(1, 0, 1) << std::endl;
+                          std::cout << "dz_gdd_12: " << dz_gdd_12 << " " << dg_ddd(2, 0, 1) << std::endl;
+                          std::cout << "dx_gdd_13: " << dx_gdd_13 << " " << dg_ddd(0, 0, 2) << std::endl;
+                          std::cout << "dy_gdd_13: " << dy_gdd_13 << " " << dg_ddd(1, 0, 2) << std::endl;
+                          std::cout << "dz_gdd_13: " << dz_gdd_13 << " " << dg_ddd(2, 0, 2) << std::endl;
+                          std::cout << "dx_gdd_21: " << dx_gdd_21 << " " << dg_ddd(0, 1, 0) << std::endl;
+                          std::cout << "dy_gdd_21: " << dy_gdd_21 << " " << dg_ddd(1, 1, 0) << std::endl;
+                          std::cout << "dz_gdd_21: " << dz_gdd_21 << " " << dg_ddd(2, 1, 0) << std::endl;
+                          std::cout << "dx_gdd_22: " << dx_gdd_22 << " " << dg_ddd(0, 1, 1) << std::endl;
+                          std::cout << "dy_gdd_22: " << dy_gdd_22 << " " << dg_ddd(1, 1, 1) << std::endl;
+                          std::cout << "dz_gdd_22: " << dz_gdd_22 << " " << dg_ddd(2, 1, 1) << std::endl;
+                          std::cout << "dx_gdd_23: " << dx_gdd_23 << " " << dg_ddd(0, 1, 2) << std::endl;
+                          std::cout << "dy_gdd_23: " << dy_gdd_23 << " " << dg_ddd(1, 1, 2) << std::endl;
+                          std::cout << "dz_gdd_23: " << dz_gdd_23 << " " << dg_ddd(2, 1, 2) << std::endl;
+                          std::cout << "dx_gdd_31: " << dx_gdd_31 << " " << dg_ddd(0, 2, 0) << std::endl;
+                          std::cout << "dy_gdd_31: " << dy_gdd_31 << " " << dg_ddd(1, 2, 0) << std::endl;
+                          std::cout << "dz_gdd_31: " << dz_gdd_31 << " " << dg_ddd(2, 2, 0) << std::endl;
+                          std::cout << "dx_gdd_32: " << dx_gdd_32 << " " << dg_ddd(0, 2, 1) << std::endl;
+                          std::cout << "dy_gdd_32: " << dy_gdd_32 << " " << dg_ddd(1, 2, 1) << std::endl;
+                          std::cout << "dz_gdd_32: " << dz_gdd_32 << " " << dg_ddd(2, 2, 1) << std::endl;
+                          std::cout << "dx_gdd_33: " << dx_gdd_33 << " " << dg_ddd(0, 2, 2) << std::endl;
+                          std::cout << "dy_gdd_33: " << dy_gdd_33 << " " << dg_ddd(1, 2, 2) << std::endl;
+                          std::cout << "dz_gdd_33: " << dz_gdd_33 << " " << dg_ddd(2, 2, 2) << std::endl;
+                          std::cout << std::endl;
+                          */
+                          // end of spatial derivatives of spatial metric
+                          // --------------------
+
+                          // derivatives of the 4-metric: time derivatives
+                          AthenaScratchTensor4d<Real, TensorSymm::SYM2, 4, 3> dg4_ddd; //f
+                          dg4_ddd(0, 0, 0) = -2. * adm.alpha(m, k, j, i) * dtalpha_d + 2. * betax_d * dtbetax_du + 2. * betay_d * dtbetay_du + 2. * betaz_d * dtbetaz_du
+                              + dtg_dd(0, 0) * adm.beta_u(m, 0, k, j, i) * adm.beta_u(m, 0, k, j, i) + 2. * dtg_dd(0, 1) * adm.beta_u(m, 0, k, j, i) * adm.beta_u(m, 1, k, j, i)
+                              + 2. * dtg_dd(0, 2) * adm.beta_u(m, 0, k, j, i) * adm.beta_u(m, 2, k, j, i) + dtg_dd(1, 1) * adm.beta_u(m, 1, k, j, i) * adm.beta_u(m, 1, k, j, i)
+                              + 2. * dtg_dd(1, 2) * adm.beta_u(m, 1, k, j, i) * adm.beta_u(m, 2, k, j, i) + dtg_dd(2, 2) * adm.beta_u(m, 2, k, j, i) * adm.beta_u(m, 2, k, j, i);
+                          for (int a = 1; a < 4; ++a)
+                          {
+                              dg4_ddd(0, a, 0) = adm.g_dd(m, 0, 0, k, j, i) * dtbetax_du + adm.g_dd(m, 0, 1, k, j, i) * dtbetay_du + adm.g_dd(m, 0, 2, k, j, i) * dtbetaz_du
+                                  + dtg_dd(a - 1, 0) * adm.beta_u(m, 0, k, j, i) + dtg_dd(a - 1, 1) * adm.beta_u(m, 1, k, j, i) + dtg_dd(a - 1, 2) * adm.beta_u(m, 2, k, j, i);
+                          }
+                          for (int a = 1; a < 4; ++a)
+                          {
+                              for (int b = 1; b < 4; ++b)
+                              {
+                                  dg4_ddd(0, a, b) = 0.; // time derivatives, get from z4c
+                              }
+                          }
+
+                          // -------------------------------
+                          // print time derivatives of 4 metric
+                          /*
+                          for (int a = 0; a < 4; a++)
+                          {
+                              for (int b = 0; b < 4; b++)
+                              {
+                                  std::cout << "dt_gdd_" << a << b << ": " << dg4_ddd(0, a, b) << std::endl;
+                              }
+                          }
+                          */
+                          // end time derivatives of 4 metric
+                          // --------------------------------
+
+                          // derivatives of the 4-metric: spatial derivatives
+                          for (int a = 1; a < 4; ++a)
+                          {
+                              for (int b = 1; b < 4; ++b)
+                              {
+                                  dg4_ddd(1, a, b) = dg_ddd(0, a - 1, b - 1);
+                                  dg4_ddd(2, a, b) = dg_ddd(1, a - 1, b - 1);
+                                  dg4_ddd(3, a, b) = dg_ddd(2, a - 1, b - 1);
+
+                                  dg4_ddd(a, 0, b) = adm.g_dd(m, 0, 0, k, j, i) * dbeta_du(a - 1, 0) + adm.g_dd(m, 0, 1, k, j, i) * dbeta_du(a - 1, 1)
+                                      + adm.g_dd(m, 0, 2, k, j, i) * dbeta_du(a - 1, 2) + dg_ddd(a - 1, 0, b - 1) * adm.beta_u(m, 0, k, j, i)
+                                      + dg_ddd(a - 1, 1, b - 1) * adm.beta_u(m, 1, k, j, i) + dg_ddd(a - 1, 2, b - 1) * adm.beta_u(m, 2, k, j, i);
+                              }
+                              dg4_ddd(a, 0, 0) = -2. * adm.alpha(m, k, j, i) * dalpha_d(a - 1) + 2. * betax_d * dbeta_du(a - 1, 0) + 2. * betay_d * dbeta_du(a - 1, 1)
+                                  + 2. * betaz_d * dbeta_du(a - 1, 2) + dtg_dd(0, 0) * adm.beta_u(m, 0, k, j, i) * adm.beta_u(m, 0, k, j, i)
+                                  + 2. * dg_ddd(a - 1, 0, 1) * adm.beta_u(m, 0, k, j, i) * adm.beta_u(m, 1, k, j, i)
+                                  + 2. * dg_ddd(a - 1, 0, 2) * adm.beta_u(m, 0, k, j, i) * adm.beta_u(m, 2, k, j, i)
+                                  + dg_ddd(a - 1, 1, 1) * adm.beta_u(m, 1, k, j, i) * adm.beta_u(m, 1, k, j, i)
+                                  + 2. * dg_ddd(a - 1, 1, 2) * adm.beta_u(m, 1, k, j, i) * adm.beta_u(m, 2, k, j, i)
+                                  + dg_ddd(a - 1, 2, 2) * adm.beta_u(m, 2, k, j, i) * adm.beta_u(m, 2, k, j, i);
+                          }
+
+                          // ------------------
+                          // print spatial derivatives of 4-metric
+                          /*
+                          Real dx_gdd_00 = 8 * M * x1 * (M - 2 * sqrt(pow(x1, 2) + pow(x2, 2))) / (pow(M + 2 * sqrt(pow(x1, 2) + pow(x2, 2)), 3) * sqrt(pow(x1, 2) + pow(x2, 2)));
+                          Real dy_gdd_00 = 8 * M * x2 * (M - 2 * sqrt(pow(x1, 2) + pow(x2, 2))) / (pow(M + 2 * sqrt(pow(x1, 2) + pow(x2, 2)), 3) * sqrt(pow(x1, 2) + pow(x2, 2)));
+                          Real dz_gdd_00 = 0;
+                          Real dx_gdd_01 = 0;
+                          Real dy_gdd_01 = 0;
+                          Real dz_gdd_01 = 0;
+                          Real dx_gdd_02 = 0;
+                          Real dy_gdd_02 = 0;
+                          Real dz_gdd_02 = 0;
+                          Real dx_gdd_03 = 0;
+                          Real dy_gdd_03 = 0;
+                          Real dz_gdd_03 = 0;
+                          Real dx_gdd_10 = 0;
+                          Real dy_gdd_10 = 0;
+                          Real dz_gdd_10 = 0;
+                          Real dx_gdd_11 = -1.0 / 4.0 * M * x1 * pow(M + 2 * sqrt(pow(x1, 2) + pow(x2, 2)), 3) / pow(pow(x1, 2) + pow(x2, 2), 3);
+                          Real dy_gdd_11 = -1.0 / 4.0 * M * x2 * pow(M + 2 * sqrt(pow(x1, 2) + pow(x2, 2)), 3) / pow(pow(x1, 2) + pow(x2, 2), 3);
+                          Real dz_gdd_11 = 0;
+                          Real dx_gdd_12 = 0;
+                          Real dy_gdd_12 = 0;
+                          Real dz_gdd_12 = 0;
+                          Real dx_gdd_13 = 0;
+                          Real dy_gdd_13 = 0;
+                          Real dz_gdd_13 = 0;
+                          Real dx_gdd_20 = 0;
+                          Real dy_gdd_20 = 0;
+                          Real dz_gdd_20 = 0;
+                          Real dx_gdd_21 = 0;
+                          Real dy_gdd_21 = 0;
+                          Real dz_gdd_21 = 0;
+                          Real dx_gdd_22 = -1.0 / 4.0 * M * x1 * pow(M + 2 * sqrt(pow(x1, 2) + pow(x2, 2)), 3) / pow(pow(x1, 2) + pow(x2, 2), 3);
+                          Real dy_gdd_22 = -1.0 / 4.0 * M * x2 * pow(M + 2 * sqrt(pow(x1, 2) + pow(x2, 2)), 3) / pow(pow(x1, 2) + pow(x2, 2), 3);
+                          Real dz_gdd_22 = 0;
+                          Real dx_gdd_23 = 0;
+                          Real dy_gdd_23 = 0;
+                          Real dz_gdd_23 = 0;
+                          Real dx_gdd_30 = 0;
+                          Real dy_gdd_30 = 0;
+                          Real dz_gdd_30 = 0;
+                          Real dx_gdd_31 = 0;
+                          Real dy_gdd_31 = 0;
+                          Real dz_gdd_31 = 0;
+                          Real dx_gdd_32 = 0;
+                          Real dy_gdd_32 = 0;
+                          Real dz_gdd_32 = 0;
+                          Real dx_gdd_33 = -1.0 / 4.0 * M * x1 * pow(M + 2 * sqrt(pow(x1, 2) + pow(x2, 2)), 3) / pow(pow(x1, 2) + pow(x2, 2), 3);
+                          Real dy_gdd_33 = -1.0 / 4.0 * M * x2 * pow(M + 2 * sqrt(pow(x1, 2) + pow(x2, 2)), 3) / pow(pow(x1, 2) + pow(x2, 2), 3);
+                          Real dz_gdd_33 = 0;
+
+                          std::cout << "dt_gdd_00: " << 0 << " " << dg4_ddd(0, 0, 0) << std::endl;
+                          std::cout << "dx_gdd_00: " << dx_gdd_00 << " " << dg4_ddd(1, 0, 0) << std::endl;
+                          std::cout << "dy_gdd_00: " << dy_gdd_00 << " " << dg4_ddd(2, 0, 0) << std::endl;
+                          std::cout << "dz_gdd_00: " << dz_gdd_00 << " " << dg4_ddd(3, 0, 0) << std::endl;
+                          std::cout << "dt_gdd_01: " << 0 << " " << dg4_ddd(0, 0, 1) << std::endl;
+                          std::cout << "dx_gdd_01: " << dx_gdd_01 << " " << dg4_ddd(1, 0, 1) << std::endl;
+                          std::cout << "dy_gdd_01: " << dy_gdd_01 << " " << dg4_ddd(2, 0, 1) << std::endl;
+                          std::cout << "dz_gdd_01: " << dz_gdd_01 << " " << dg4_ddd(3, 0, 1) << std::endl;
+                          std::cout << "dt_gdd_02: " << 0 << " " << dg4_ddd(0, 0, 2) << std::endl;
+                          std::cout << "dx_gdd_02: " << dx_gdd_02 << " " << dg4_ddd(1, 0, 2) << std::endl;
+                          std::cout << "dy_gdd_02: " << dy_gdd_02 << " " << dg4_ddd(2, 0, 2) << std::endl;
+                          std::cout << "dz_gdd_02: " << dz_gdd_02 << " " << dg4_ddd(3, 0, 2) << std::endl;
+                          std::cout << "dt_gdd_03: " << 0 << " " << dg4_ddd(0, 0, 3) << std::endl;
+                          std::cout << "dx_gdd_03: " << dx_gdd_03 << " " << dg4_ddd(1, 0, 3) << std::endl;
+                          std::cout << "dy_gdd_03: " << dy_gdd_03 << " " << dg4_ddd(2, 0, 3) << std::endl;
+                          std::cout << "dz_gdd_03: " << dz_gdd_03 << " " << dg4_ddd(3, 0, 3) << std::endl;
+                          std::cout << "dt_gdd_10: " << 0 << " " << dg4_ddd(0, 1, 0) << std::endl;
+                          std::cout << "dx_gdd_10: " << dx_gdd_10 << " " << dg4_ddd(1, 1, 0) << std::endl;
+                          std::cout << "dy_gdd_10: " << dy_gdd_10 << " " << dg4_ddd(2, 1, 0) << std::endl;
+                          std::cout << "dz_gdd_10: " << dz_gdd_10 << " " << dg4_ddd(3, 1, 0) << std::endl;
+                          std::cout << "dt_gdd_11: " << 0 << " " << dg4_ddd(0, 1, 1) << std::endl;
+                          std::cout << "dx_gdd_11: " << dx_gdd_11 << " " << dg4_ddd(1, 1, 1) << std::endl;
+                          std::cout << "dy_gdd_11: " << dy_gdd_11 << " " << dg4_ddd(2, 1, 1) << std::endl;
+                          std::cout << "dz_gdd_11: " << dz_gdd_11 << " " << dg4_ddd(3, 1, 1) << std::endl;
+                          std::cout << "dt_gdd_12: " << 0 << " " << dg4_ddd(0, 1, 2) << std::endl;
+                          std::cout << "dx_gdd_12: " << dx_gdd_12 << " " << dg4_ddd(1, 1, 2) << std::endl;
+                          std::cout << "dy_gdd_12: " << dy_gdd_12 << " " << dg4_ddd(2, 1, 2) << std::endl;
+                          std::cout << "dz_gdd_12: " << dz_gdd_12 << " " << dg4_ddd(3, 1, 2) << std::endl;
+                          std::cout << "dt_gdd_13: " << 0 << " " << dg4_ddd(0, 1, 3) << std::endl;
+                          std::cout << "dx_gdd_13: " << dx_gdd_13 << " " << dg4_ddd(1, 1, 3) << std::endl;
+                          std::cout << "dy_gdd_13: " << dy_gdd_13 << " " << dg4_ddd(2, 1, 3) << std::endl;
+                          std::cout << "dz_gdd_13: " << dz_gdd_13 << " " << dg4_ddd(3, 1, 3) << std::endl;
+                          std::cout << "dt_gdd_20: " << 0 << " " << dg4_ddd(0, 2, 0) << std::endl;
+                          std::cout << "dx_gdd_20: " << dx_gdd_20 << " " << dg4_ddd(1, 2, 0) << std::endl;
+                          std::cout << "dy_gdd_20: " << dy_gdd_20 << " " << dg4_ddd(2, 2, 0) << std::endl;
+                          std::cout << "dz_gdd_20: " << dz_gdd_20 << " " << dg4_ddd(3, 2, 0) << std::endl;
+                          std::cout << "dt_gdd_21: " << 0 << " " << dg4_ddd(0, 2, 1) << std::endl;
+                          std::cout << "dx_gdd_21: " << dx_gdd_21 << " " << dg4_ddd(1, 2, 1) << std::endl;
+                          std::cout << "dy_gdd_21: " << dy_gdd_21 << " " << dg4_ddd(2, 2, 1) << std::endl;
+                          std::cout << "dz_gdd_21: " << dz_gdd_21 << " " << dg4_ddd(3, 2, 1) << std::endl;
+                          std::cout << "dt_gdd_22: " << 0 << " " << dg4_ddd(0, 2, 2) << std::endl;
+                          std::cout << "dx_gdd_22: " << dx_gdd_22 << " " << dg4_ddd(1, 2, 2) << std::endl;
+                          std::cout << "dy_gdd_22: " << dy_gdd_22 << " " << dg4_ddd(2, 2, 2) << std::endl;
+                          std::cout << "dz_gdd_22: " << dz_gdd_22 << " " << dg4_ddd(3, 2, 2) << std::endl;
+                          std::cout << "dt_gdd_23: " << 0 << " " << dg4_ddd(0, 2, 3) << std::endl;
+                          std::cout << "dx_gdd_23: " << dx_gdd_23 << " " << dg4_ddd(1, 2, 3) << std::endl;
+                          std::cout << "dy_gdd_23: " << dy_gdd_23 << " " << dg4_ddd(2, 2, 3) << std::endl;
+                          std::cout << "dz_gdd_23: " << dz_gdd_23 << " " << dg4_ddd(3, 2, 3) << std::endl;
+                          std::cout << "dt_gdd_30: " << 0 << " " << dg4_ddd(0, 3, 0) << std::endl;
+                          std::cout << "dx_gdd_30: " << dx_gdd_30 << " " << dg4_ddd(1, 3, 0) << std::endl;
+                          std::cout << "dy_gdd_30: " << dy_gdd_30 << " " << dg4_ddd(2, 3, 0) << std::endl;
+                          std::cout << "dz_gdd_30: " << dz_gdd_30 << " " << dg4_ddd(3, 3, 0) << std::endl;
+                          std::cout << "dt_gdd_31: " << 0 << " " << dg4_ddd(0, 3, 1) << std::endl;
+                          std::cout << "dx_gdd_31: " << dx_gdd_31 << " " << dg4_ddd(1, 3, 1) << std::endl;
+                          std::cout << "dy_gdd_31: " << dy_gdd_31 << " " << dg4_ddd(2, 3, 1) << std::endl;
+                          std::cout << "dz_gdd_31: " << dz_gdd_31 << " " << dg4_ddd(3, 3, 1) << std::endl;
+                          std::cout << "dt_gdd_32: " << 0 << " " << dg4_ddd(0, 3, 2) << std::endl;
+                          std::cout << "dx_gdd_32: " << dx_gdd_32 << " " << dg4_ddd(1, 3, 2) << std::endl;
+                          std::cout << "dy_gdd_32: " << dy_gdd_32 << " " << dg4_ddd(2, 3, 2) << std::endl;
+                          std::cout << "dz_gdd_32: " << dz_gdd_32 << " " << dg4_ddd(3, 3, 2) << std::endl;
+                          std::cout << "dt_gdd_33: " << 0 << " " << dg4_ddd(0, 3, 3) << std::endl;
+                          std::cout << "dx_gdd_33: " << dx_gdd_33 << " " << dg4_ddd(1, 3, 3) << std::endl;
+                          std::cout << "dy_gdd_33: " << dy_gdd_33 << " " << dg4_ddd(2, 3, 3) << std::endl;
+                          std::cout << "dz_gdd_33: " << dz_gdd_33 << " " << dg4_ddd(3, 3, 3) << std::endl;
+                          */
+                          // end of spatial derivatives of spatial metric
+                          // ------------------
+
+                          // Christoeffel symbols
+                          AthenaScratchTensor4d<Real, TensorSymm::SYM2, 4, 3> Gamma_udd;
+                          for (int a = 0; a < 4; ++a)
+                          {
+                              for (int b = 0; b < 4; ++b)
+                              {
+                                  for (int c = 0; c < 4; ++c)
+                                  {
+                                      Gamma_udd(a, b, c) = 0.0;
+                                      for (int d = 0; d < 4; ++d)
+                                      {
+                                          Gamma_udd(a, b, c) += 0.5 * g_uu[a + 4 * d] * (dg4_ddd(b, d, c) + dg4_ddd(c, b, d) - dg4_ddd(d, b, c));
+                                      }
+                                  }
+                              }
+                          }
+
+                          // -------------------------------
+                          // start of 4-Christoeffel print
                           Real gamma4d_0_0_0 = 0;
                           Real gamma4d_0_0_1 = 4 * M / (-pow(M, 2) + 4 * pow(r, 2));
                           Real gamma4d_0_0_2 = 0;
@@ -335,7 +605,6 @@ namespace radiationfemn
                           Real gamma4d_3_3_2 = 0;
                           Real gamma4d_3_3_3 = 0;
 
-                          std::cout << std::endl;
                           std::cout << "000:" << Gamma_udd(0, 0, 0) << " " << gamma4d_0_0_0 << std::endl;
                           std::cout << "001:" << Gamma_udd(0, 0, 1) << " " << gamma4d_0_0_1 << std::endl;
                           std::cout << "002:" << Gamma_udd(0, 0, 2) << " " << gamma4d_0_0_2 << std::endl;
@@ -400,6 +669,10 @@ namespace radiationfemn
                           std::cout << "331:" << Gamma_udd(3, 3, 1) << " " << gamma4d_3_3_1 << std::endl;
                           std::cout << "332:" << Gamma_udd(3, 3, 2) << " " << gamma4d_3_3_2 << std::endl;
                           std::cout << "333:" << Gamma_udd(3, 3, 3) << " " << gamma4d_3_3_3 << std::endl;
+                          // end of 4-Christoeffel print
+                          exit(EXIT_FAILURE);
+                          // end of 4-Christoeffel print
+                          // -----------------------------------
 
                           // Ricci rotation coefficients
                           AthenaScratchTensor4d<Real, TensorSymm::SYM2, 4, 3> Gamma_fluid_udd;
