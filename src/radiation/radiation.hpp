@@ -99,6 +99,7 @@ class Radiation {
 
   bool correct_radsrc_opacity;
   Real dfloor_opacity;
+  Real dens_trunc_max;
   Real tau_truncation;
   Real sigmoid_residual; // sigmoid residual must be less than 0.5
 
