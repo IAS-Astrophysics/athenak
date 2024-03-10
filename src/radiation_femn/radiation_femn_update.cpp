@@ -218,7 +218,7 @@ namespace radiationfemn
                                   }
                               }
                           }
-                          /*
+
                           Real& x1min = mbsize.d_view(m).x1min;
                           Real& x1max = mbsize.d_view(m).x1max;
                           int nx1 = indcs.nx1;
@@ -231,12 +231,49 @@ namespace radiationfemn
 
                           Real M = 1.;
                           Real r = sqrt(x1 * x1 + x2 * x2);
+                          /*
+                          // Start of metric check
+                          Real gdd_0_0 = -pow(M - 2 * r, 2) / pow(M + 2 * r, 2);
+                          Real gdd_0_1 = 0;
+                          Real gdd_0_2 = 0;
+                          Real gdd_0_3 = 0;
+                          Real gdd_1_0 = 0;
+                          Real gdd_1_1 = (1.0 / 16.0) * pow(M + 2 * r, 4) / pow(r, 4);
+                          Real gdd_1_2 = 0;
+                          Real gdd_1_3 = 0;
+                          Real gdd_2_0 = 0;
+                          Real gdd_2_1 = 0;
+                          Real gdd_2_2 = (1.0 / 16.0) * pow(M + 2 * r, 4) / pow(r, 4);
+                          Real gdd_2_3 = 0;
+                          Real gdd_3_0 = 0;
+                          Real gdd_3_1 = 0;
+                          Real gdd_3_2 = 0;
+                          Real gdd_3_3 = (1.0 / 16.0) * pow(M + 2 * r, 4) / pow(r, 4);
+
+                          std::cout << "gdd_00:" << g_dd[0 + 4 * 0] << " " << gdd_0_0 << std::endl;
+                          std::cout << "gdd_01:" << g_dd[0 + 4 * 1] << " " << gdd_0_1 << std::endl;
+                          std::cout << "gdd_02:" << g_dd[0 + 4 * 2] << " " << gdd_0_2 << std::endl;
+                          std::cout << "gdd_03:" << g_dd[0 + 4 * 3] << " " << gdd_0_3 << std::endl;
+                          std::cout << "gdd_10:" << g_dd[1 + 4 * 0] << " " << gdd_1_0 << std::endl;
+                          std::cout << "gdd_11:" << g_dd[1 + 4 * 1] << " " << gdd_1_1 << std::endl;
+                          std::cout << "gdd_12:" << g_dd[1 + 4 * 2] << " " << gdd_1_2 << std::endl;
+                          std::cout << "gdd_13:" << g_dd[1 + 4 * 3] << " " << gdd_1_3 << std::endl;
+                          std::cout << "gdd_20:" << g_dd[2 + 4 * 0] << " " << gdd_2_0 << std::endl;
+                          std::cout << "gdd_21:" << g_dd[2 + 4 * 1] << " " << gdd_2_1 << std::endl;
+                          std::cout << "gdd_22:" << g_dd[2 + 4 * 2] << " " << gdd_2_2 << std::endl;
+                          std::cout << "gdd_23:" << g_dd[2 + 4 * 3] << " " << gdd_2_3 << std::endl;
+                          std::cout << "gdd_30:" << g_dd[3 + 4 * 0] << " " << gdd_3_0 << std::endl;
+                          std::cout << "gdd_31:" << g_dd[3 + 4 * 1] << " " << gdd_3_1 << std::endl;
+                          std::cout << "gdd_32:" << g_dd[3 + 4 * 2] << " " << gdd_3_2 << std::endl;
+                          std::cout << "gdd_33:" << g_dd[3 + 4 * 3] << " " << gdd_3_3 << std::endl;
+                          // End of metric check
+                          */
 
                           Real gamma4d_0_0_0 = 0;
-                          Real gamma4d_0_0_1 = 2 * M / (-pow(M, 2) + 4 * pow(r, 2));
+                          Real gamma4d_0_0_1 = 4 * M / (-pow(M, 2) + 4 * pow(r, 2));
                           Real gamma4d_0_0_2 = 0;
                           Real gamma4d_0_0_3 = 0;
-                          Real gamma4d_0_1_0 = 2 * M / (-pow(M, 2) + 4 * pow(r, 2));
+                          Real gamma4d_0_1_0 = 4 * M / (-pow(M, 2) + 4 * pow(r, 2));
                           Real gamma4d_0_1_1 = 0;
                           Real gamma4d_0_1_2 = 0;
                           Real gamma4d_0_1_3 = 0;
@@ -248,8 +285,8 @@ namespace radiationfemn
                           Real gamma4d_0_3_1 = 0;
                           Real gamma4d_0_3_2 = 0;
                           Real gamma4d_0_3_3 = 0;
-                          Real gamma4d_1_0_0 = -32 * M * pow(r, 4) / (pow(M + 2 * r, 2) * (pow(M, 4) + 8 * pow(M, 3) * r + 24 * pow(M, 2) * pow(r, 2) + 32 * M * pow(r, 3) + 16 *
-                              pow(r, 4)));
+                          Real gamma4d_1_0_0 = -64 * M * pow(r, 4) * (M - 2 * r) / (pow(M + 2 * r, 3) * (pow(M, 4) + 8 * pow(M, 3) * r + 24 * pow(M, 2) * pow(r, 2) + 32 * M *
+                              pow(r, 3) + 16 * pow(r, 4)));
                           Real gamma4d_1_0_1 = 0;
                           Real gamma4d_1_0_2 = 0;
                           Real gamma4d_1_0_3 = 0;
@@ -298,7 +335,7 @@ namespace radiationfemn
                           Real gamma4d_3_3_2 = 0;
                           Real gamma4d_3_3_3 = 0;
 
-                          std::cout << "rval = " << r << std::endl;
+                          std::cout << std::endl;
                           std::cout << "000:" << Gamma_udd(0, 0, 0) << " " << gamma4d_0_0_0 << std::endl;
                           std::cout << "001:" << Gamma_udd(0, 0, 1) << " " << gamma4d_0_0_1 << std::endl;
                           std::cout << "002:" << Gamma_udd(0, 0, 2) << " " << gamma4d_0_0_2 << std::endl;
@@ -363,8 +400,6 @@ namespace radiationfemn
                           std::cout << "331:" << Gamma_udd(3, 3, 1) << " " << gamma4d_3_3_1 << std::endl;
                           std::cout << "332:" << Gamma_udd(3, 3, 2) << " " << gamma4d_3_3_2 << std::endl;
                           std::cout << "333:" << Gamma_udd(3, 3, 3) << " " << gamma4d_3_3_3 << std::endl;
-                          std::cout << std::endl;
-                          */
 
                           // Ricci rotation coefficients
                           AthenaScratchTensor4d<Real, TensorSymm::SYM2, 4, 3> Gamma_fluid_udd;
