@@ -293,13 +293,19 @@ TaskStatus Radiation::AddRadiationSourceTerm(Driver *pdriver, int stage) {
       if (excision_flux_(m,k,j,i)) {
         wdn_opacity = dfloor_opacity_;
       } else {
-        Real fac_trunc = 1.0e2;
-        Real wid_trunc = 0.2;
+        Real tau_cut = 1.e-3;
+        Real residual = fmin(1e-2, 1./3); // this number must be less than 0.5
+        Real delta_l = fmax(fmax(size.d_view(m).dx1, size.d_view(m).dx2), size.d_view(m).dx3);
+        Real dtrunc = tau_cut / (kappa_s_*delta_l);
+        Real fac_trunc = dtrunc / dfloor;
+        Real wid_trunc = 0.5*log10(fac_trunc) / log(1./residual - 1.);
+
         Real wdn_real = fmax(wdn-dfloor, dfloor_opacity_);
         Real dfloor_op = dfloor_opacity_;
         Real del_reduce = log10(dfloor) - log10(dfloor_op);
         Real fac_inv = 1.0 + exp( -1./wid_trunc * ( log10(wdn_real) - (log10(dfloor) + 0.5*log10(fac_trunc)) ) );
         Real lg_rho_op = log10(wdn_real) - (1.-1./fac_inv) * del_reduce;
+
         wdn_opacity = pow(10.0, lg_rho_op);
       }
     }
