@@ -84,7 +84,7 @@ Radiation::Radiation(MeshBlockPack *ppack, ParameterInput *pin) :
   dfloor_opacity = pin->GetOrAddReal("radiation","dfloor_opacity",1e-100);
   tau_truncation = pin->GetOrAddReal("radiation","tau_truncation",1e-2);
   sigmoid_residual = pin->GetOrAddReal("radiation","sigmoid_residual",1e-2);
-  sigmoid_residual = fmin(sigmoid_residual, 1./3) // sigmoid residual must be less than 0.5
+  sigmoid_residual = fmin(sigmoid_residual, 1./3); // sigmoid residual must be less than 0.5
   if (!is_mhd_enabled) update_vel_in_rad_source=true; // non-updated velocity is only saved for MHD
 
   // Enable radiation source term (radiation+(M)HD) by default if hydro or mhd enabled
@@ -167,11 +167,11 @@ Radiation::Radiation(MeshBlockPack *ppack, ParameterInput *pin) :
   Kokkos::realloc(i0,nmb,prgeo->nangles,ncells3,ncells2,ncells1);
 
   // allocate memory to save non-updated gas primitive variables
-  if (is_mhd_enabled) {
-    int &nmhd_ = pmy_pack->pmhd->nmhd;
-    int &nscalars_ = pmy_pack->pmhd->nscalars;
-    // if (!update_vel_in_rad_source) Kokkos::realloc(w_noupdate,nmb,(nmhd_+nscalars_),ncells3,ncells2,ncells1);
-  }
+  // if (is_mhd_enabled) {
+  //   int &nmhd_ = pmy_pack->pmhd->nmhd;
+  //   int &nscalars_ = pmy_pack->pmhd->nscalars;
+  //   if (!update_vel_in_rad_source) Kokkos::realloc(w_noupdate,nmb,(nmhd_+nscalars_),ncells3,ncells2,ncells1);
+  // }
 
   // allocate memory to save updated gas temperature
   Kokkos::realloc(tgas_radsource,nmb,ncells3,ncells2,ncells1);

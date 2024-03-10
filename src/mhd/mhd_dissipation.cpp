@@ -60,7 +60,7 @@ void MHD::AddKODissipation() {
       Real &wvy = w0_(m,IVY,k,j,i);
       Real &wvz = w0_(m,IVZ,k,j,i);
       Real &wen = w0_(m,IEN,k,j,i);
-      Real tgas = wdn/wen;
+      // Real tgas = wdn/wen;
 
       // primitives at center and in adjacent cells
       int ic=4; int jc=4; int kc=4;

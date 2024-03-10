@@ -61,7 +61,7 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
   DvceArray4D<Real> tgas_radsource_;
   if (is_radiation_enabled_) tgas_radsource_ = pmy_pack->prad->tgas_radsource;
   bool &cellavg_fix_turn_on_ = pmy_pack->pmhd->cellavg_fix_turn_on;
-  bool &turn_on_sao_operation_ = pmy_pack->pmhd->turn_on_sao_operation;
+  // bool &turn_on_sao_operation_ = pmy_pack->pmhd->turn_on_sao_operation;
   // bool is_horsmooth_ = false;
   auto &use_ko_dissipation_ = pmy_pack->pmhd->use_ko_dissipation;
   auto &ko_dissipation_ = pmy_pack->pmhd->ko_dissipation;

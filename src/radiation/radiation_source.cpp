@@ -53,7 +53,7 @@ TaskStatus Radiation::AddRadiationSourceTerm(Driver *pdriver, int stage) {
   bool &affect_fluid_ = affect_fluid;
 
   // Extract variables and flags for ad hoc fixes
-  bool &update_vel_in_rad_source_ = update_vel_in_rad_source;
+  // bool &update_vel_in_rad_source_ = update_vel_in_rad_source;
   bool &correct_vel_in_rad_source_ = correct_vel_in_rad_source;
   bool &use_old_coupling_in_rad_source_ = use_old_coupling_in_rad_source;
   bool &compton_second_order_correction_ = compton_second_order_correction;
@@ -67,7 +67,7 @@ TaskStatus Radiation::AddRadiationSourceTerm(Driver *pdriver, int stage) {
   Real &dfloor_opacity_ = dfloor_opacity;
   auto &tau_cut = tau_truncation;
   auto &residual = sigmoid_residual;
-  Real &floor_planck_ = floor_planck;
+  // Real &floor_planck_ = floor_planck;
 
   // Extract coordinate/excision data
   auto &coord = pmy_pack->pcoord->coord_data;
@@ -96,18 +96,19 @@ TaskStatus Radiation::AddRadiationSourceTerm(Driver *pdriver, int stage) {
   }
 
   // Extract adiabatic index and velocity ceiling
-  Real gm1, dfloor, pfloor;
+  // Real gm1, dfloor, pfloor;
+  Real gm1, dfloor;
   Real v_sq_max = 1. - 1.e-12;
   if (is_hydro_enabled_) {
     gm1 = pmy_pack->phydro->peos->eos_data.gamma - 1.0;
     v_sq_max = 1. - 1./SQR(pmy_pack->phydro->peos->eos_data.gamma_max);
     dfloor = pmy_pack->phydro->peos->eos_data.dfloor;
-    pfloor = pmy_pack->phydro->peos->eos_data.pfloor;
+    // pfloor = pmy_pack->phydro->peos->eos_data.pfloor;
   } else if (is_mhd_enabled_) {
     gm1 = pmy_pack->pmhd->peos->eos_data.gamma - 1.0;
     v_sq_max = 1. - 1./SQR(pmy_pack->pmhd->peos->eos_data.gamma_max);
     dfloor = pmy_pack->pmhd->peos->eos_data.dfloor;
-    pfloor = pmy_pack->pmhd->peos->eos_data.pfloor;
+    // pfloor = pmy_pack->pmhd->peos->eos_data.pfloor;
   }
 
   // Extract flag and index for entropy fix
