@@ -65,6 +65,8 @@ TaskStatus Radiation::AddRadiationSourceTerm(Driver *pdriver, int stage) {
   // bool turn_on_sao_radsrc_ = false;
   auto &correct_radsrc_opacity_ = correct_radsrc_opacity;
   Real &dfloor_opacity_ = dfloor_opacity;
+  auto &tau_cut = tau_truncation;
+  auto &residual = sigmoid_residual;
   Real &floor_planck_ = floor_planck;
 
   // Extract coordinate/excision data
@@ -293,8 +295,6 @@ TaskStatus Radiation::AddRadiationSourceTerm(Driver *pdriver, int stage) {
       if (excision_flux_(m,k,j,i)) {
         wdn_opacity = dfloor_opacity_;
       } else {
-        Real tau_cut = 1.e-2;
-        Real residual = fmin(1e-2, 1./3); // this number must be less than 0.5
         Real delta_l = fmax(fmax(size.d_view(m).dx1, size.d_view(m).dx2), size.d_view(m).dx3);
         Real dtrunc = tau_cut / (kappa_s_*delta_l);
         Real fac_trunc = dtrunc / dfloor;
