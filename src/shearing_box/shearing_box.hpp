@@ -33,15 +33,15 @@ struct ShearingBoxTaskIDs {
 //----------------------------------------------------------------------------------------
 //! \struct ShearingBoxBuffer
 //! \brief container for storage for boundary buffers with the shearing box
-//! Basically a much simplified version of the BoundaryBuffer struct.
+//! Basically a much simplified version of the MeshBoundaryBuffer struct.
 
 struct ShearingBoxBuffer {
-  // 5D Views that store buffer data on device
-  DvceArray5D<Real> vars, flds;
+  // Views that store buffer data and fluxes on device
+  DvceArray2D<Real> vars, flux;
 #if MPI_PARALLEL_ENABLED
   // vectors of length (number of MBs) to hold MPI requests
   // Using STL vector causes problems with some GPU compilers, so just use plain C array
-  MPI_Request *vars_req, *flds_req;
+  MPI_Request *vars_req, *flux_req;
 #endif
 };
 
@@ -62,8 +62,12 @@ class ShearingBox {
   // container to hold names of TaskIDs
   ShearingBoxTaskIDs id;
 
-  // data buffers for orbital advection. Only two x2-faces communicate
-  ShearingBoxBuffer sendbuf_orb[2], recvbuf_orb[2];
+  // data buffers for CC and FC vars for orbital advection. Only two x2-faces communicate
+  ShearingBoxBuffer sendcc_orb[2], recvcc_orb[2];
+  ShearingBoxBuffer sendfc_orb[2], recvfc_orb[2];
+  // data buffers for CC and FC vars for shearing sheet BCs. Only two x1-faces communicate
+  ShearingBoxBuffer sendcc_shr[2], recvcc_shr[2];
+  ShearingBoxBuffer sendfc_shr[2], recvfc_shr[2];
 
 #if MPI_PARALLEL_ENABLED
   // unique MPI communicators for orbital advection and shearing box

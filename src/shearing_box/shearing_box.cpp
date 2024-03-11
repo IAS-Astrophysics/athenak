@@ -9,6 +9,7 @@
 #include <iostream>
 #include <string>
 #include <algorithm>
+#include <vector>
 
 #include "athena.hpp"
 #include "parameter_input.hpp"
@@ -21,7 +22,7 @@
 #include "shearing_box.hpp"
 
 //----------------------------------------------------------------------------------------
-// constructor, initializes data structures and parameters
+//! constructor, initializes data structures and parameters
 
 ShearingBox::ShearingBox(MeshBlockPack *ppack, ParameterInput *pin, int nvar) :
     qshear(0.0),
@@ -38,27 +39,6 @@ ShearingBox::ShearingBox(MeshBlockPack *ppack, ParameterInput *pin, int nvar) :
   Real xmax = fabs(ppack->pmesh->mesh_size.x1max);
   maxjshift = static_cast<int>((ppack->pmesh->cfl_no)*std::max(xmin,xmax)) + 1;
 
-#if MPI_PARALLEL_ENABLED
-  // For shearing box, communication is only with x2-face neighbors
-  // initialize vectors of MPI request in 2 elements of fixed length arrays
-  for (int n=0; n<2; ++n) {
-    int nmb = std::max((ppack->nmb_thispack), (ppack->pmesh->nmb_maxperrank));
-    sendbuf_orb[n].vars_req = new MPI_Request[nmb];
-    sendbuf_orb[n].flds_req = new MPI_Request[nmb];
-    recvbuf_orb[n].vars_req = new MPI_Request[nmb];
-    recvbuf_orb[n].flds_req = new MPI_Request[nmb];
-    for (int m=0; m<nmb; ++m) {
-      sendbuf_orb[n].vars_req[m] = MPI_REQUEST_NULL;
-      sendbuf_orb[n].flds_req[m] = MPI_REQUEST_NULL;
-      recvbuf_orb[n].vars_req[m] = MPI_REQUEST_NULL;
-      recvbuf_orb[n].flds_req[m] = MPI_REQUEST_NULL;
-    }
-  }
-
-  // create unique communicators for orbital advection
-  MPI_Comm_dup(MPI_COMM_WORLD, &comm_sbox);
-#endif
-
   // Allocate send/recv buffers for orbital advection
   int nmb = std::max((ppack->nmb_thispack), (ppack->pmesh->nmb_maxperrank));
   auto &indcs = ppack->pmesh->mb_indcs;
@@ -67,14 +47,53 @@ ShearingBox::ShearingBox(MeshBlockPack *ppack, ParameterInput *pin, int nvar) :
   int ncells1 = indcs.nx1;
   // cell-centered data
   for (int n=0; n<2; ++n) {
-    Kokkos::realloc(sendbuf_orb[n].vars,nmb,nvar,ncells3,ncells2,ncells1);
-    Kokkos::realloc(recvbuf_orb[n].vars,nmb,nvar,ncells3,ncells2,ncells1);
+    Kokkos::realloc(sendcc_orb[n].vars,nmb,(nvar*ncells3*ncells2*ncells1));
+    Kokkos::realloc(recvcc_orb[n].vars,nmb,(nvar*ncells3*ncells2*ncells1));
   }
   // face-centered data
   for (int n=0; n<2; ++n) {
-    Kokkos::realloc(sendbuf_orb[n].flds,nmb,2,ncells3+1,ncells2,ncells1+1);
-    Kokkos::realloc(recvbuf_orb[n].flds,nmb,2,ncells3+1,ncells2,ncells1+1);
+    Kokkos::realloc(sendfc_orb[n].vars,nmb,(2*(ncells3+1)*ncells2*(ncells1+1)));
+    Kokkos::realloc(recvfc_orb[n].vars,nmb,(2*(ncells3+1)*ncells2*(ncells1+1)));
   }
+#if MPI_PARALLEL_ENABLED
+  // For orbital advection, communication is only with x2-face neighbors
+  // initialize vectors of MPI request in 2 elements of fixed length arrays
+  for (int n=0; n<2; ++n) {
+    int nmb = std::max((ppack->nmb_thispack), (ppack->pmesh->nmb_maxperrank));
+    sendcc_orb[n].vars_req = new MPI_Request[nmb];
+    sendfc_orb[n].vars_req = new MPI_Request[nmb];
+    recvcc_orb[n].vars_req = new MPI_Request[nmb];
+    recvfc_orb[n].vars_req = new MPI_Request[nmb];
+    for (int m=0; m<nmb; ++m) {
+      sendcc_orb[n].vars_req[m] = MPI_REQUEST_NULL;
+      sendfc_orb[n].vars_req[m] = MPI_REQUEST_NULL;
+      recvcc_orb[n].vars_req[m] = MPI_REQUEST_NULL;
+      recvfc_orb[n].vars_req[m] = MPI_REQUEST_NULL;
+    }
+  }
+  // create unique communicators for shearing box
+  MPI_Comm_dup(MPI_COMM_WORLD, &comm_sbox);
+#endif
+
+/*
+  // Work out how many MBs on this rank are at x1 shearing-box boundaries
+  std::vector<int> sbox_gids;
+  for (int m=0; m<nmb; ++m) {
+    if (mbbcs.h_view(m) == BoundaryFlag::shear_periodic) {
+      sbox_gids.push_back(mbgid);
+    }
+  }
+  nsbox_mbs = sbox_gids.size();
+
+  // load GIDs of meshblocks at boundaries into DualArray
+  Kokkos::realloc(sbox_mbids, nsbox_mbs);
+  for (int m=0; m<nsbox_mbs; ++m) {
+    sbox_gids.h_view(m) = sbox_gids;
+  }
+  // sync device array
+
+  // Now allocate send/recv buffers for shearing box BCs
+*/
 }
 
 //----------------------------------------------------------------------------------------

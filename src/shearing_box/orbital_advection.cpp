@@ -40,8 +40,8 @@ TaskStatus ShearingBox::PackAndSendCC_Orb(DvceArray5D<Real> &a) {
   auto &nghbr = pmy_pack->pmb->nghbr;
   auto &mbgid = pmy_pack->pmb->mb_gid;
   auto &mblev = pmy_pack->pmb->mb_lev;
-  auto &sbuf = sendbuf_orb;
-  auto &rbuf = recvbuf_orb;
+  auto &sbuf = sendcc_orb;
+  auto &rbuf = recvcc_orb;
 
   auto &indcs = pmy_pack->pmesh->mb_indcs;
   auto &is = indcs.is, &ie = indcs.ie;
@@ -98,11 +98,11 @@ TaskStatus ShearingBox::PackAndSendCC_Orb(DvceArray5D<Real> &a) {
 
         // copy directly into recv buffer if MeshBlocks on same rank
         if (nghbr.d_view(m,nnghbr).rank == my_rank) {
-          rbuf[dn].vars(dm,v,k-kl,j-jl,i-il) = a(m,v,k,j,i);
+          rbuf[dn].vars(dm, (i-il + ni*(j-jl + nj*(k-kl + nk*v))) ) = a(m,v,k,j,i);
 
         // else copy into send buffer for MPI communication below
         } else {
-          sbuf[n].vars(m,v,k-kl,j-jl,i-il) = a(m,v,k,j,i);
+          sbuf[n].vars(m, (i-il + ni*(j-jl + nj*(k-kl + nk*v))) ) = a(m,v,k,j,i);
         }
       });
     } // end if-neighbor-exists block
@@ -157,7 +157,7 @@ TaskStatus ShearingBox::RecvAndUnpackCC_Orb(DvceArray5D<Real> &u0,
   int nmb = pmy_pack->nmb_thispack;
   int nnghbr = pmy_pack->pmb->nnghbr;
   auto &nghbr = pmy_pack->pmb->nghbr;
-  auto &rbuf = recvbuf_orb;
+  auto &rbuf = recvcc_orb;
 #if MPI_PARALLEL_ENABLED
   //----- STEP 1: check that recv boundary buffer communications have all completed
 
@@ -197,10 +197,12 @@ TaskStatus ShearingBox::RecvAndUnpackCC_Orb(DvceArray5D<Real> &u0,
   auto &js = indcs.js, &je = indcs.je;
   auto &ks = indcs.ks, &ke = indcs.ke;
   auto &ng = indcs.ng;
-  int ncells2 = indcs.nx2 + 2*(indcs.ng);
   int jfs = ng + maxjshift;
   int jfe = jfs + indcs.nx2 - 1;
   int nfx = indcs.nx2 + 2*(ng + maxjshift);
+  int ni = ie - is + 1;
+  int nj = (ng + maxjshift);
+  int nk = ke - ks + 1;
 
 
   auto &mbsize = pmy_pack->pmb->mb_size;
@@ -229,13 +231,14 @@ TaskStatus ShearingBox::RecvAndUnpackCC_Orb(DvceArray5D<Real> &u0,
     par_for_inner(member, 0, (nfx-1), [&](const int jf) {
       if (jf < jfs) {
         // Load from L boundary buffer
-        u0_(jf) = rbuf[0].vars(m,n,k-ks,jf,i-is);
+        u0_(jf) = rbuf[0].vars(m, (i-is + ni*(jf + nj*(k-ks + nk*n))) );
       } else if (jf <= jfe) {
         // Load from conserved variables themselves (addressed with j=jf-jfs+js)
         u0_(jf) = u0(m,n,k,jf-jfs+js,i);
       } else {
         // Load from R boundary buffer
-        u0_(jf) = rbuf[1].vars(m,n,k-ks,jf-(jfe+1),i-is);
+        u0_(jf) = rbuf[1].vars(m, (i-is + ni*(jf-(jfe+1) + nj*(k-ks + nk*n))) );
+
       }
     });
     member.team_barrier();
@@ -283,8 +286,8 @@ TaskStatus ShearingBox::PackAndSendFC_Orb(DvceFaceFld4D<Real> &b) {
   auto &nghbr = pmy_pack->pmb->nghbr;
   auto &mbgid = pmy_pack->pmb->mb_gid;
   auto &mblev = pmy_pack->pmb->mb_lev;
-  auto &sbuf = sendbuf_orb;
-  auto &rbuf = recvbuf_orb;
+  auto &sbuf = sendfc_orb;
+  auto &rbuf = recvfc_orb;
 
   auto &indcs = pmy_pack->pmesh->mb_indcs;
   auto &is = indcs.is, &ie = indcs.ie;
@@ -340,13 +343,12 @@ TaskStatus ShearingBox::PackAndSendFC_Orb(DvceFaceFld4D<Real> &b) {
 
         // copy B1/B3 directly into recv buffer if MeshBlocks on same rank
         if (nghbr.d_view(m,nnghbr).rank == my_rank) {
-          rbuf[dn].flds(dm,0,k-kl,j-jl,i-il) = b.x3f(m,k,j,i);
-          rbuf[dn].flds(dm,1,k-kl,j-jl,i-il) = b.x1f(m,k,j,i);
-
+          rbuf[dn].vars(dm, (i-il + ni*(j-jl + nj*(k-kl     ))) ) = b.x3f(m,k,j,i);
+          rbuf[dn].vars(dm, (i-il + ni*(j-jl + nj*(k-kl + nk))) ) = b.x1f(m,k,j,i);
         // else copy B1/B3 into send buffer for MPI communication below
         } else {
-          sbuf[n].flds(m,0,k-kl,j-jl,i-il) = b.x3f(m,k,j,i);
-          sbuf[n].flds(m,1,k-kl,j-jl,i-il) = b.x1f(m,k,j,i);
+          sbuf[n].vars(m, (i-il + ni*(j-jl + nj*(k-kl     ))) ) = b.x3f(m,k,j,i);
+          sbuf[n].vars(m, (i-il + ni*(j-jl + nj*(k-kl + nk))) ) = b.x1f(m,k,j,i);
         }
       });
     } // end if-neighbor-exists block
@@ -404,7 +406,7 @@ TaskStatus ShearingBox::RecvAndUnpackFC_Orb(DvceFaceFld4D<Real> &b0,
   int nmb = pmy_pack->nmb_thispack;
   int nnghbr = pmy_pack->pmb->nnghbr;
   auto &nghbr = pmy_pack->pmb->nghbr;
-  auto &rbuf = recvbuf_orb;
+  auto &rbuf = recvfc_orb;
 #if MPI_PARALLEL_ENABLED
   //----- STEP 1: check that recv boundary buffer communications have all completed
 
@@ -442,10 +444,12 @@ TaskStatus ShearingBox::RecvAndUnpackFC_Orb(DvceFaceFld4D<Real> &b0,
   auto &js = indcs.js, &je = indcs.je;
   auto &ks = indcs.ks, &ke = indcs.ke;
   auto &ng = indcs.ng;
-  int ncells2 = indcs.nx2 + 2*(indcs.ng);
   int jfs = ng + maxjshift;
   int jfe = jfs + indcs.nx2 - 1;
   int nfx = indcs.nx2 + 2*(ng + maxjshift);
+  int ni = ie - is + 2;
+  int nj = (ng + maxjshift);
+  int nk = ke - ks + 2;
 
   auto &mbsize = pmy_pack->pmb->mb_size;
   auto &mesh_size = pmy_pack->pmesh->mesh_size;
@@ -482,7 +486,7 @@ TaskStatus ShearingBox::RecvAndUnpackFC_Orb(DvceFaceFld4D<Real> &b0,
     par_for_inner(member, 0, (nfx-1), [&](const int jf) {
       if (jf < jfs) {
         // Load from L boundary buffer
-        b0_(jf) = rbuf[0].flds(m,v,k-ks,jf,i-is);
+        b0_(jf) = rbuf[0].vars(m, (i-is + ni*(jf + nj*(k-ks + nk*v))) );
       } else if (jf <= jfe) {
         // Load from array itself (addressed with j=jf-jfs+js)
         if (v==0) {
@@ -492,7 +496,7 @@ TaskStatus ShearingBox::RecvAndUnpackFC_Orb(DvceFaceFld4D<Real> &b0,
         }
       } else {
         // Load scratch arrays from R boundary buffer
-        b0_(jf) = rbuf[1].flds(m,v,k-ks,(jf-(jfe+1)),i-is);
+        b0_(jf) = rbuf[1].vars(m, (i-is + ni*(jf-(jfe+1) + nj*(k-ks + nk*v))) );
       }
     });
     member.team_barrier();

@@ -37,7 +37,7 @@ evolution  = dynamic   # dynamic/kinematic/static
 integrator = rk2       # time integration algorithm
 cfl_number = 0.3       # The Courant, Friedrichs, & Lewy (CFL) Number
 nlim       = -1        # cycle limit
-tlim       = 100.0     # time limit (about 8 orbits = 16\pi)
+tlim       = 20.0     # time limit (about 8 orbits = 16\pi)
 ndiag      = 1         # cycles between diagostic output
 
 <shearing_box>
@@ -46,7 +46,7 @@ omega0 = 1.0
 
 <hydro>
 eos          = ideal   # EOS type
-reconstruct  = dc      # spatial reconstruction method
+reconstruct  = plm     # spatial reconstruction method
 rsolver      = hllc    # Riemann-solver to be used
 gamma        = 1.6666666666666667 # gamma = C_p/C_v
 
