@@ -170,7 +170,8 @@ namespace radiationfemn
                           std::cout << "gdd_32:" << g_dd[3 + 4 * 2] << " " << gdd_3_2 << std::endl;
                           std::cout << "gdd_33:" << g_dd[3 + 4 * 3] << " " << gdd_3_3 << std::endl;
                           // End of metric check
-                          */
+                          *
+                          /
                           // Start of metric inverse check
                           /*
                           Real guu_0_0 = (-pow(M, 2) - 4 * M * r - 4 * pow(r, 2)) / (pow(M, 2) - 4 * M * r + 4 * pow(r, 2));
@@ -537,6 +538,56 @@ namespace radiationfemn
                               }
                           }
 
+                          // Ricci rotation coefficients
+                          AthenaScratchTensor4d<Real, TensorSymm::SYM2, 4, 3> Gamma_fluid_udd;
+                          for (int a = 0; a < 4; ++a)
+                          {
+                              for (int b = 0; b < 4; ++b)
+                              {
+                                  for (int c = 0; c < 4; ++c)
+                                  {
+                                      Gamma_fluid_udd(a, b, c) = 0.0;
+                                      for (int d = 0; d < 64; ++d)
+                                      {
+                                          int a_idx = int(d / (4 * 4));
+                                          int b_idx = int((d - 4 * 4 * a_idx) / 4);
+                                          int c_idx = d - a_idx * 4 * 4 - b_idx * 4;
+
+                                          Real l_sign = (a == 0) ? -1. : +1.;
+                                          Real L_ahat_aidx = l_sign * (g_dd[a_idx + 4 * 0] * L_mu_muhat0_(m, 0, a, k, j, i) + g_dd[a_idx + 4 * 1] * L_mu_muhat0_(m, 1, a, k, j, i)
+                                              + g_dd[a_idx + 4 * 2] * L_mu_muhat0_(m, 2, a, k, j, i) + g_dd[a_idx + 4 * 3] * L_mu_muhat0_(m, 3, a, k, j, i));
+                                          Gamma_fluid_udd(a, b, c) +=
+                                              L_mu_muhat0_(m, b_idx, b, k, j, i) * L_mu_muhat0_(m, c_idx, c, k, j, i) * L_ahat_aidx * Gamma_udd(a_idx, b_idx, c_idx);
+                                      }
+
+                                      for (int a_idx = 0; a_idx < 4; ++a_idx)
+                                      {
+                                          Real l_sign = (a == 0) ? -1. : +1.;
+                                          Real L_ahat_aidx = l_sign * (g_dd[a_idx + 4 * 0] * L_mu_muhat0_(m, 0, a, k, j, i) + g_dd[a_idx + 4 * 1] * L_mu_muhat0_(m, 1, a, k, j, i)
+                                              + g_dd[a_idx + 4 * 2] * L_mu_muhat0_(m, 2, a, k, j, i) + g_dd[a_idx + 4 * 3] * L_mu_muhat0_(m, 3, a, k, j, i));
+
+                                          Gamma_fluid_udd(a, b, c) +=
+                                              L_ahat_aidx * (L_mu_muhat0_(m, 1, c, k, j, i) - (u_mu_(m, 1, k, j, i) / u_mu_(m, 0, k, j, i)) * L_mu_muhat0_(m, 0, c, k, j, i))
+                                              * Dx<NGHOST>(0, idx, L_mu_muhat0_, m, a_idx, c, k, j, i);
+
+                                          if (multi_d)
+                                          {
+                                              Gamma_fluid_udd(a, b, c) +=
+                                                  L_ahat_aidx * (L_mu_muhat0_(m, 2, c, k, j, i) - (u_mu_(m, 2, k, j, i) / u_mu_(m, 0, k, j, i)) * L_mu_muhat0_(m, 0, c, k, j, i))
+                                                  * Dx<NGHOST>(1, idx, L_mu_muhat0_, m, a_idx, c, k, j, i);
+                                          }
+
+                                          if (three_d)
+                                          {
+                                              Gamma_fluid_udd(a, b, c) +=
+                                                  L_ahat_aidx * (L_mu_muhat0_(m, 3, c, k, j, i) - (u_mu_(m, 3, k, j, i) / u_mu_(m, 0, k, j, i)) * L_mu_muhat0_(m, 0, c, k, j, i))
+                                                  * Dx<NGHOST>(2, idx, L_mu_muhat0_, m, a_idx, c, k, j, i);
+                                          }
+                                      }
+                                  }
+                              }
+                          }
+
                           // -------------------------------
                           // start of 4-Christoeffel print
                           /*
@@ -737,59 +788,74 @@ namespace radiationfemn
                           std::cout << "331:" << Gamma_udd(3, 3, 1) << " " << gamma4d_3_3_1 << std::endl;
                           std::cout << "332:" << Gamma_udd(3, 3, 2) << " " << gamma4d_3_3_2 << std::endl;
                           std::cout << "333:" << Gamma_udd(3, 3, 3) << " " << gamma4d_3_3_3 << std::endl;
+                          std::cout << std::endl;
+                          std::cout << "000:" << Gamma_fluid_udd(0, 0, 0) << " " << gamma4d_0_0_0 << std::endl;
+                          std::cout << "001:" << Gamma_fluid_udd(0, 0, 1) << " " << gamma4d_0_0_1 << std::endl;
+                          std::cout << "002:" << Gamma_fluid_udd(0, 0, 2) << " " << gamma4d_0_0_2 << std::endl;
+                          std::cout << "003:" << Gamma_fluid_udd(0, 0, 3) << " " << gamma4d_0_0_3 << std::endl;
+                          std::cout << "010:" << Gamma_fluid_udd(0, 1, 0) << " " << gamma4d_0_1_0 << std::endl;
+                          std::cout << "011:" << Gamma_fluid_udd(0, 1, 1) << " " << gamma4d_0_1_1 << std::endl;
+                          std::cout << "012:" << Gamma_fluid_udd(0, 1, 2) << " " << gamma4d_0_1_2 << std::endl;
+                          std::cout << "013:" << Gamma_fluid_udd(0, 1, 3) << " " << gamma4d_0_1_3 << std::endl;
+                          std::cout << "020:" << Gamma_fluid_udd(0, 2, 0) << " " << gamma4d_0_2_0 << std::endl;
+                          std::cout << "021:" << Gamma_fluid_udd(0, 2, 1) << " " << gamma4d_0_2_1 << std::endl;
+                          std::cout << "022:" << Gamma_fluid_udd(0, 2, 2) << " " << gamma4d_0_2_2 << std::endl;
+                          std::cout << "023:" << Gamma_fluid_udd(0, 2, 3) << " " << gamma4d_0_2_3 << std::endl;
+                          std::cout << "030:" << Gamma_fluid_udd(0, 3, 0) << " " << gamma4d_0_3_0 << std::endl;
+                          std::cout << "031:" << Gamma_fluid_udd(0, 3, 1) << " " << gamma4d_0_3_1 << std::endl;
+                          std::cout << "032:" << Gamma_fluid_udd(0, 3, 2) << " " << gamma4d_0_3_2 << std::endl;
+                          std::cout << "033:" << Gamma_fluid_udd(0, 3, 3) << " " << gamma4d_0_3_3 << std::endl;
+                          std::cout << "100:" << Gamma_fluid_udd(1, 0, 0) << " " << gamma4d_1_0_0 << std::endl;
+                          std::cout << "101:" << Gamma_fluid_udd(1, 0, 1) << " " << gamma4d_1_0_1 << std::endl;
+                          std::cout << "102:" << Gamma_fluid_udd(1, 0, 2) << " " << gamma4d_1_0_2 << std::endl;
+                          std::cout << "103:" << Gamma_fluid_udd(1, 0, 3) << " " << gamma4d_1_0_3 << std::endl;
+                          std::cout << "110:" << Gamma_fluid_udd(1, 1, 0) << " " << gamma4d_1_1_0 << std::endl;
+                          std::cout << "111:" << Gamma_fluid_udd(1, 1, 1) << " " << gamma4d_1_1_1 << std::endl;
+                          std::cout << "112:" << Gamma_fluid_udd(1, 1, 2) << " " << gamma4d_1_1_2 << std::endl;
+                          std::cout << "113:" << Gamma_fluid_udd(1, 1, 3) << " " << gamma4d_1_1_3 << std::endl;
+                          std::cout << "120:" << Gamma_fluid_udd(1, 2, 0) << " " << gamma4d_1_2_0 << std::endl;
+                          std::cout << "121:" << Gamma_fluid_udd(1, 2, 1) << " " << gamma4d_1_2_1 << std::endl;
+                          std::cout << "122:" << Gamma_fluid_udd(1, 2, 2) << " " << gamma4d_1_2_2 << std::endl;
+                          std::cout << "123:" << Gamma_fluid_udd(1, 2, 3) << " " << gamma4d_1_2_3 << std::endl;
+                          std::cout << "130:" << Gamma_fluid_udd(1, 3, 0) << " " << gamma4d_1_3_0 << std::endl;
+                          std::cout << "131:" << Gamma_fluid_udd(1, 3, 1) << " " << gamma4d_1_3_1 << std::endl;
+                          std::cout << "132:" << Gamma_fluid_udd(1, 3, 2) << " " << gamma4d_1_3_2 << std::endl;
+                          std::cout << "133:" << Gamma_fluid_udd(1, 3, 3) << " " << gamma4d_1_3_3 << std::endl;
+                          std::cout << "200:" << Gamma_fluid_udd(2, 0, 0) << " " << gamma4d_2_0_0 << std::endl;
+                          std::cout << "201:" << Gamma_fluid_udd(2, 0, 1) << " " << gamma4d_2_0_1 << std::endl;
+                          std::cout << "202:" << Gamma_fluid_udd(2, 0, 2) << " " << gamma4d_2_0_2 << std::endl;
+                          std::cout << "203:" << Gamma_fluid_udd(2, 0, 3) << " " << gamma4d_2_0_3 << std::endl;
+                          std::cout << "210:" << Gamma_fluid_udd(2, 1, 0) << " " << gamma4d_2_1_0 << std::endl;
+                          std::cout << "211:" << Gamma_fluid_udd(2, 1, 1) << " " << gamma4d_2_1_1 << std::endl;
+                          std::cout << "212:" << Gamma_fluid_udd(2, 1, 2) << " " << gamma4d_2_1_2 << std::endl;
+                          std::cout << "213:" << Gamma_fluid_udd(2, 1, 3) << " " << gamma4d_2_1_3 << std::endl;
+                          std::cout << "220:" << Gamma_fluid_udd(2, 2, 0) << " " << gamma4d_2_2_0 << std::endl;
+                          std::cout << "221:" << Gamma_fluid_udd(2, 2, 1) << " " << gamma4d_2_2_1 << std::endl;
+                          std::cout << "222:" << Gamma_fluid_udd(2, 2, 2) << " " << gamma4d_2_2_2 << std::endl;
+                          std::cout << "223:" << Gamma_fluid_udd(2, 2, 3) << " " << gamma4d_2_2_3 << std::endl;
+                          std::cout << "230:" << Gamma_fluid_udd(2, 3, 0) << " " << gamma4d_2_3_0 << std::endl;
+                          std::cout << "231:" << Gamma_fluid_udd(2, 3, 1) << " " << gamma4d_2_3_1 << std::endl;
+                          std::cout << "232:" << Gamma_fluid_udd(2, 3, 2) << " " << gamma4d_2_3_2 << std::endl;
+                          std::cout << "233:" << Gamma_fluid_udd(2, 3, 3) << " " << gamma4d_2_3_3 << std::endl;
+                          std::cout << "300:" << Gamma_fluid_udd(3, 0, 0) << " " << gamma4d_3_0_0 << std::endl;
+                          std::cout << "301:" << Gamma_fluid_udd(3, 0, 1) << " " << gamma4d_3_0_1 << std::endl;
+                          std::cout << "302:" << Gamma_fluid_udd(3, 0, 2) << " " << gamma4d_3_0_2 << std::endl;
+                          std::cout << "303:" << Gamma_fluid_udd(3, 0, 3) << " " << gamma4d_3_0_3 << std::endl;
+                          std::cout << "310:" << Gamma_fluid_udd(3, 1, 0) << " " << gamma4d_3_1_0 << std::endl;
+                          std::cout << "311:" << Gamma_fluid_udd(3, 1, 1) << " " << gamma4d_3_1_1 << std::endl;
+                          std::cout << "312:" << Gamma_fluid_udd(3, 1, 2) << " " << gamma4d_3_1_2 << std::endl;
+                          std::cout << "313:" << Gamma_fluid_udd(3, 1, 3) << " " << gamma4d_3_1_3 << std::endl;
+                          std::cout << "320:" << Gamma_fluid_udd(3, 2, 0) << " " << gamma4d_3_2_0 << std::endl;
+                          std::cout << "321:" << Gamma_fluid_udd(3, 2, 1) << " " << gamma4d_3_2_1 << std::endl;
+                          std::cout << "322:" << Gamma_fluid_udd(3, 2, 2) << " " << gamma4d_3_2_2 << std::endl;
+                          std::cout << "323:" << Gamma_fluid_udd(3, 2, 3) << " " << gamma4d_3_2_3 << std::endl;
+                          std::cout << "330:" << Gamma_fluid_udd(3, 3, 0) << " " << gamma4d_3_3_0 << std::endl;
+                          std::cout << "331:" << Gamma_fluid_udd(3, 3, 1) << " " << gamma4d_3_3_1 << std::endl;
+                          std::cout << "332:" << Gamma_fluid_udd(3, 3, 2) << " " << gamma4d_3_3_2 << std::endl;
+                          std::cout << "333:" << Gamma_fluid_udd(3, 3, 3) << " " << gamma4d_3_3_3 << std::endl;
                           exit(EXIT_FAILURE); */
                           // end of 4-Christoeffel print
                           // -----------------------------------
-
-                          // Ricci rotation coefficients
-                          AthenaScratchTensor4d<Real, TensorSymm::SYM2, 4, 3> Gamma_fluid_udd;
-                          for (int a = 0; a < 4; ++a)
-                          {
-                              for (int b = 0; b < 4; ++b)
-                              {
-                                  for (int c = 0; c < 4; ++c)
-                                  {
-                                      Gamma_fluid_udd(a, b, c) = 0.0;
-                                      for (int d = 0; d < 64; ++d)
-                                      {
-                                          int a_idx = int(d / (4 * 4));
-                                          int b_idx = int((d - 4 * 4 * a_idx) / 4);
-                                          int c_idx = d - a_idx * 4 * 4 - b_idx * 4;
-
-                                          Real l_sign = (a == 0) ? -1. : +1.;
-                                          Real L_ahat_aidx = l_sign * (g_dd[a_idx + 4 * 0] * L_mu_muhat0_(m, 0, a, k, j, i) + g_dd[a_idx + 4 * 1] * L_mu_muhat0_(m, 1, a, k, j, i)
-                                              + g_dd[a_idx + 4 * 2] * L_mu_muhat0_(m, 2, a, k, j, i) + g_dd[a_idx + 4 * 3] * L_mu_muhat0_(m, 3, a, k, j, i));
-                                          Gamma_fluid_udd(a, b, c) +=
-                                              L_mu_muhat0_(m, b_idx, b, k, j, i) * L_mu_muhat0_(m, c_idx, c, k, j, i) * L_ahat_aidx * Gamma_udd(a_idx, b_idx, c_idx);
-                                      }
-
-                                      for (int a_idx = 0; a_idx < 4; ++a_idx)
-                                      {
-                                          Real l_sign = (a == 0) ? -1. : +1.;
-                                          Real L_ahat_aidx = l_sign * (g_dd[a_idx + 4 * 0] * L_mu_muhat0_(m, 0, a, k, j, i) + g_dd[a_idx + 4 * 1] * L_mu_muhat0_(m, 1, a, k, j, i)
-                                              + g_dd[a_idx + 4 * 2] * L_mu_muhat0_(m, 2, a, k, j, i) + g_dd[a_idx + 4 * 3] * L_mu_muhat0_(m, 3, a, k, j, i));
-
-                                          Gamma_fluid_udd(a, b, c) +=
-                                              L_ahat_aidx * (L_mu_muhat0_(m, 1, c, k, j, i) - (u_mu_(m, 1, k, j, i) / u_mu_(m, 0, k, j, i)) * L_mu_muhat0_(m, 0, c, k, j, i))
-                                              * Dx<NGHOST>(0, idx, L_mu_muhat0_, m, a_idx, c, k, j, i);
-
-                                          if (multi_d)
-                                          {
-                                              Gamma_fluid_udd(a, b, c) +=
-                                                  L_ahat_aidx * (L_mu_muhat0_(m, 2, c, k, j, i) - (u_mu_(m, 2, k, j, i) / u_mu_(m, 0, k, j, i)) * L_mu_muhat0_(m, 0, c, k, j, i))
-                                                  * Dx<NGHOST>(1, idx, L_mu_muhat0_, m, a_idx, c, k, j, i);
-                                          }
-
-                                          if (three_d)
-                                          {
-                                              Gamma_fluid_udd(a, b, c) +=
-                                                  L_ahat_aidx * (L_mu_muhat0_(m, 3, c, k, j, i) - (u_mu_(m, 3, k, j, i) / u_mu_(m, 0, k, j, i)) * L_mu_muhat0_(m, 0, c, k, j, i))
-                                                  * Dx<NGHOST>(2, idx, L_mu_muhat0_, m, a_idx, c, k, j, i);
-                                          }
-                                      }
-                                  }
-                              }
-                          }
 
                           // Compute F Gam and G Gam matrices
                           ScrArray2D<Real> F_Gamma_AB = ScrArray2D<Real>(member.team_scratch(scr_level), num_points_, num_points_);
