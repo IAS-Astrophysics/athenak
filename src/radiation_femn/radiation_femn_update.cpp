@@ -120,6 +120,7 @@ namespace radiationfemn
                           Real idx[] = {1 / mbsize.d_view(m).dx1, 1 / mbsize.d_view(m).dx2, 1 / mbsize.d_view(m).dx3};
 
                           //----------------------------------------------------------------------------------------
+                          /*
                           Real& x1min = mbsize.d_view(m).x1min;
                           Real& x1max = mbsize.d_view(m).x1max;
                           int nx1 = indcs.nx1;
@@ -134,7 +135,6 @@ namespace radiationfemn
                           Real r = sqrt(x1 * x1 + x2 * x2);
                           std::cout << "r: " << r << std::endl;
 
-                          /*
                           // Start of metric check
                           Real gdd_0_0 = -pow(M - 2 * r, 2) / pow(M + 2 * r, 2);
                           Real gdd_0_1 = 0;
@@ -539,15 +539,36 @@ namespace radiationfemn
 
                           // -------------------------------
                           // start of 4-Christoeffel print
+                          /*
                           Real gamma4d_0_0_0 = 0;
-                          Real gamma4d_0_0_1 = 4 * M / (-pow(M, 2) + 4 * pow(r, 2));
-                          Real gamma4d_0_0_2 = 0;
+                          Real gamma4d_0_0_1 = 4 * M * x1 * (-pow(M, 3) + 6 * pow(M, 2) * sqrt(pow(x1, 2) + pow(x2, 2)) - 12 * M * pow(x1, 2) - 12 * M * pow(x2, 2) + 8 * pow(x1, 2)
+                              * sqrt(pow(x1, 2) + pow(x2, 2)) + 8 * pow(x2, 2) * sqrt(pow(x1, 2) + pow(x2, 2))) / (pow(M, 5) * sqrt(pow(x1, 2) + pow(x2, 2)) - 6 * pow(M, 4) *
+                              pow(x1, 2) - 6 * pow(M, 4) * pow(x2, 2) + 8 * pow(M, 3) * pow(x1, 2) * sqrt(pow(x1, 2) + pow(x2, 2)) + 8 * pow(M, 3) * pow(x2, 2) *
+                              sqrt(pow(x1, 2) + pow(x2, 2)) + 16 * pow(M, 2) * pow(x1, 4) + 32 * pow(M, 2) * pow(x1, 2) * pow(x2, 2) + 16 * pow(M, 2) * pow(x2, 4) - 48 * M *
+                              pow(x1, 4) * sqrt(pow(x1, 2) + pow(x2, 2)) - 96 * M * pow(x1, 2) * pow(x2, 2) * sqrt(pow(x1, 2) + pow(x2, 2)) - 48 * M * pow(x2, 4) *
+                              sqrt(pow(x1, 2) + pow(x2, 2)) + 32 * pow(x1, 6) + 96 * pow(x1, 4) * pow(x2, 2) + 96 * pow(x1, 2) * pow(x2, 4) + 32 * pow(x2, 6));
+                          Real gamma4d_0_0_2 = 4 * M * x2 * (-pow(M, 3) + 6 * pow(M, 2) * sqrt(pow(x1, 2) + pow(x2, 2)) - 12 * M * pow(x1, 2) - 12 * M * pow(x2, 2) + 8 * pow(x1, 2)
+                              * sqrt(pow(x1, 2) + pow(x2, 2)) + 8 * pow(x2, 2) * sqrt(pow(x1, 2) + pow(x2, 2))) / (pow(M, 5) * sqrt(pow(x1, 2) + pow(x2, 2)) - 6 * pow(M, 4) *
+                              pow(x1, 2) - 6 * pow(M, 4) * pow(x2, 2) + 8 * pow(M, 3) * pow(x1, 2) * sqrt(pow(x1, 2) + pow(x2, 2)) + 8 * pow(M, 3) * pow(x2, 2) *
+                              sqrt(pow(x1, 2) + pow(x2, 2)) + 16 * pow(M, 2) * pow(x1, 4) + 32 * pow(M, 2) * pow(x1, 2) * pow(x2, 2) + 16 * pow(M, 2) * pow(x2, 4) - 48 * M *
+                              pow(x1, 4) * sqrt(pow(x1, 2) + pow(x2, 2)) - 96 * M * pow(x1, 2) * pow(x2, 2) * sqrt(pow(x1, 2) + pow(x2, 2)) - 48 * M * pow(x2, 4) *
+                              sqrt(pow(x1, 2) + pow(x2, 2)) + 32 * pow(x1, 6) + 96 * pow(x1, 4) * pow(x2, 2) + 96 * pow(x1, 2) * pow(x2, 4) + 32 * pow(x2, 6));
                           Real gamma4d_0_0_3 = 0;
-                          Real gamma4d_0_1_0 = 4 * M / (-pow(M, 2) + 4 * pow(r, 2));
+                          Real gamma4d_0_1_0 = 4 * M * x1 * (-pow(M, 3) + 6 * pow(M, 2) * sqrt(pow(x1, 2) + pow(x2, 2)) - 12 * M * pow(x1, 2) - 12 * M * pow(x2, 2) + 8 * pow(x1, 2)
+                              * sqrt(pow(x1, 2) + pow(x2, 2)) + 8 * pow(x2, 2) * sqrt(pow(x1, 2) + pow(x2, 2))) / (pow(M, 5) * sqrt(pow(x1, 2) + pow(x2, 2)) - 6 * pow(M, 4) *
+                              pow(x1, 2) - 6 * pow(M, 4) * pow(x2, 2) + 8 * pow(M, 3) * pow(x1, 2) * sqrt(pow(x1, 2) + pow(x2, 2)) + 8 * pow(M, 3) * pow(x2, 2) *
+                              sqrt(pow(x1, 2) + pow(x2, 2)) + 16 * pow(M, 2) * pow(x1, 4) + 32 * pow(M, 2) * pow(x1, 2) * pow(x2, 2) + 16 * pow(M, 2) * pow(x2, 4) - 48 * M *
+                              pow(x1, 4) * sqrt(pow(x1, 2) + pow(x2, 2)) - 96 * M * pow(x1, 2) * pow(x2, 2) * sqrt(pow(x1, 2) + pow(x2, 2)) - 48 * M * pow(x2, 4) *
+                              sqrt(pow(x1, 2) + pow(x2, 2)) + 32 * pow(x1, 6) + 96 * pow(x1, 4) * pow(x2, 2) + 96 * pow(x1, 2) * pow(x2, 4) + 32 * pow(x2, 6));
                           Real gamma4d_0_1_1 = 0;
                           Real gamma4d_0_1_2 = 0;
                           Real gamma4d_0_1_3 = 0;
-                          Real gamma4d_0_2_0 = 0;
+                          Real gamma4d_0_2_0 = 4 * M * x2 * (-pow(M, 3) + 6 * pow(M, 2) * sqrt(pow(x1, 2) + pow(x2, 2)) - 12 * M * pow(x1, 2) - 12 * M * pow(x2, 2) + 8 * pow(x1, 2)
+                              * sqrt(pow(x1, 2) + pow(x2, 2)) + 8 * pow(x2, 2) * sqrt(pow(x1, 2) + pow(x2, 2))) / (pow(M, 5) * sqrt(pow(x1, 2) + pow(x2, 2)) - 6 * pow(M, 4) *
+                              pow(x1, 2) - 6 * pow(M, 4) * pow(x2, 2) + 8 * pow(M, 3) * pow(x1, 2) * sqrt(pow(x1, 2) + pow(x2, 2)) + 8 * pow(M, 3) * pow(x2, 2) *
+                              sqrt(pow(x1, 2) + pow(x2, 2)) + 16 * pow(M, 2) * pow(x1, 4) + 32 * pow(M, 2) * pow(x1, 2) * pow(x2, 2) + 16 * pow(M, 2) * pow(x2, 4) - 48 * M *
+                              pow(x1, 4) * sqrt(pow(x1, 2) + pow(x2, 2)) - 96 * M * pow(x1, 2) * pow(x2, 2) * sqrt(pow(x1, 2) + pow(x2, 2)) - 48 * M * pow(x2, 4) *
+                              sqrt(pow(x1, 2) + pow(x2, 2)) + 32 * pow(x1, 6) + 96 * pow(x1, 4) * pow(x2, 2) + 96 * pow(x1, 2) * pow(x2, 4) + 32 * pow(x2, 6));
                           Real gamma4d_0_2_1 = 0;
                           Real gamma4d_0_2_2 = 0;
                           Real gamma4d_0_2_3 = 0;
@@ -555,39 +576,74 @@ namespace radiationfemn
                           Real gamma4d_0_3_1 = 0;
                           Real gamma4d_0_3_2 = 0;
                           Real gamma4d_0_3_3 = 0;
-                          Real gamma4d_1_0_0 = -64 * M * pow(r, 4) * (M - 2 * r) / (pow(M + 2 * r, 3) * (pow(M, 4) + 8 * pow(M, 3) * r + 24 * pow(M, 2) * pow(r, 2) + 32 * M *
-                              pow(r, 3) + 16 * pow(r, 4)));
+                          Real gamma4d_1_0_0 = -64 * M * x1 * (M - 2 * sqrt(pow(x1, 2) + pow(x2, 2))) * (pow(x1, 4) + 2 * pow(x1, 2) * pow(x2, 2) + pow(x2, 4)) / (
+                              pow(M + 2 * sqrt(pow(x1, 2) + pow(x2, 2)), 3) * sqrt(pow(x1, 2) + pow(x2, 2)) * (pow(M, 4) + 8 * pow(M, 3) * sqrt(pow(x1, 2) + pow(x2, 2)) + 24 *
+                                  pow(M, 2) * pow(x1, 2) + 24 * pow(M, 2) * pow(x2, 2) + 32 * M * pow(x1, 2) * sqrt(pow(x1, 2) + pow(x2, 2)) + 32 * M * pow(x2, 2) *
+                                  sqrt(pow(x1, 2) + pow(x2, 2)) + 16 * pow(x1, 4) + 32 * pow(x1, 2) * pow(x2, 2) + 16 * pow(x2, 4)));
                           Real gamma4d_1_0_1 = 0;
                           Real gamma4d_1_0_2 = 0;
                           Real gamma4d_1_0_3 = 0;
                           Real gamma4d_1_1_0 = 0;
-                          Real gamma4d_1_1_1 = -2 * M / (r * (M + 2 * r));
-                          Real gamma4d_1_1_2 = 0;
+                          Real gamma4d_1_1_1 = -2 * M * x1 * pow(M + 2 * sqrt(pow(x1, 2) + pow(x2, 2)), 3) * (pow(x1, 4) + 2 * pow(x1, 2) * pow(x2, 2) + pow(x2, 4)) / (
+                              pow(pow(x1, 2) + pow(x2, 2), 3) * (pow(M, 4) + 8 * pow(M, 3) * sqrt(pow(x1, 2) + pow(x2, 2)) + 24 * pow(M, 2) * pow(x1, 2) + 24 * pow(M, 2) *
+                                  pow(x2, 2) + 32 * M * pow(x1, 2) * sqrt(pow(x1, 2) + pow(x2, 2)) + 32 * M * pow(x2, 2) * sqrt(pow(x1, 2) + pow(x2, 2)) + 16 * pow(x1, 4) + 32 *
+                                  pow(x1, 2) * pow(x2, 2) + 16 * pow(x2, 4)));
+                          Real gamma4d_1_1_2 = -2 * M * x2 * pow(M + 2 * sqrt(pow(x1, 2) + pow(x2, 2)), 3) * (pow(x1, 4) + 2 * pow(x1, 2) * pow(x2, 2) + pow(x2, 4)) / (
+                              pow(pow(x1, 2) + pow(x2, 2), 3) * (pow(M, 4) + 8 * pow(M, 3) * sqrt(pow(x1, 2) + pow(x2, 2)) + 24 * pow(M, 2) * pow(x1, 2) + 24 * pow(M, 2) *
+                                  pow(x2, 2) + 32 * M * pow(x1, 2) * sqrt(pow(x1, 2) + pow(x2, 2)) + 32 * M * pow(x2, 2) * sqrt(pow(x1, 2) + pow(x2, 2)) + 16 * pow(x1, 4) + 32 *
+                                  pow(x1, 2) * pow(x2, 2) + 16 * pow(x2, 4)));
                           Real gamma4d_1_1_3 = 0;
                           Real gamma4d_1_2_0 = 0;
-                          Real gamma4d_1_2_1 = 0;
-                          Real gamma4d_1_2_2 = 2 * M / (r * (M + 2 * r));
+                          Real gamma4d_1_2_1 = -2 * M * x2 * pow(M + 2 * sqrt(pow(x1, 2) + pow(x2, 2)), 3) * (pow(x1, 4) + 2 * pow(x1, 2) * pow(x2, 2) + pow(x2, 4)) / (
+                              pow(pow(x1, 2) + pow(x2, 2), 3) * (pow(M, 4) + 8 * pow(M, 3) * sqrt(pow(x1, 2) + pow(x2, 2)) + 24 * pow(M, 2) * pow(x1, 2) + 24 * pow(M, 2) *
+                                  pow(x2, 2) + 32 * M * pow(x1, 2) * sqrt(pow(x1, 2) + pow(x2, 2)) + 32 * M * pow(x2, 2) * sqrt(pow(x1, 2) + pow(x2, 2)) + 16 * pow(x1, 4) + 32 *
+                                  pow(x1, 2) * pow(x2, 2) + 16 * pow(x2, 4)));
+                          Real gamma4d_1_2_2 = 2 * M * x1 * pow(M + 2 * sqrt(pow(x1, 2) + pow(x2, 2)), 3) * (pow(x1, 4) + 2 * pow(x1, 2) * pow(x2, 2) + pow(x2, 4)) / (
+                              pow(pow(x1, 2) + pow(x2, 2), 3) * (pow(M, 4) + 8 * pow(M, 3) * sqrt(pow(x1, 2) + pow(x2, 2)) + 24 * pow(M, 2) * pow(x1, 2) + 24 * pow(M, 2) *
+                                  pow(x2, 2) + 32 * M * pow(x1, 2) * sqrt(pow(x1, 2) + pow(x2, 2)) + 32 * M * pow(x2, 2) * sqrt(pow(x1, 2) + pow(x2, 2)) + 16 * pow(x1, 4) + 32 *
+                                  pow(x1, 2) * pow(x2, 2) + 16 * pow(x2, 4)));
                           Real gamma4d_1_2_3 = 0;
                           Real gamma4d_1_3_0 = 0;
                           Real gamma4d_1_3_1 = 0;
                           Real gamma4d_1_3_2 = 0;
-                          Real gamma4d_1_3_3 = 2 * M / (r * (M + 2 * r));
-                          Real gamma4d_2_0_0 = 0;
+                          Real gamma4d_1_3_3 = 2 * M * x1 * pow(M + 2 * sqrt(pow(x1, 2) + pow(x2, 2)), 3) * (pow(x1, 4) + 2 * pow(x1, 2) * pow(x2, 2) + pow(x2, 4)) / (
+                              pow(pow(x1, 2) + pow(x2, 2), 3) * (pow(M, 4) + 8 * pow(M, 3) * sqrt(pow(x1, 2) + pow(x2, 2)) + 24 * pow(M, 2) * pow(x1, 2) + 24 * pow(M, 2) *
+                                  pow(x2, 2) + 32 * M * pow(x1, 2) * sqrt(pow(x1, 2) + pow(x2, 2)) + 32 * M * pow(x2, 2) * sqrt(pow(x1, 2) + pow(x2, 2)) + 16 * pow(x1, 4) + 32 *
+                                  pow(x1, 2) * pow(x2, 2) + 16 * pow(x2, 4)));
+                          Real gamma4d_2_0_0 = -64 * M * x2 * (M - 2 * sqrt(pow(x1, 2) + pow(x2, 2))) * (pow(x1, 4) + 2 * pow(x1, 2) * pow(x2, 2) + pow(x2, 4)) / (
+                              pow(M + 2 * sqrt(pow(x1, 2) + pow(x2, 2)), 3) * sqrt(pow(x1, 2) + pow(x2, 2)) * (pow(M, 4) + 8 * pow(M, 3) * sqrt(pow(x1, 2) + pow(x2, 2)) + 24 *
+                                  pow(M, 2) * pow(x1, 2) + 24 * pow(M, 2) * pow(x2, 2) + 32 * M * pow(x1, 2) * sqrt(pow(x1, 2) + pow(x2, 2)) + 32 * M * pow(x2, 2) *
+                                  sqrt(pow(x1, 2) + pow(x2, 2)) + 16 * pow(x1, 4) + 32 * pow(x1, 2) * pow(x2, 2) + 16 * pow(x2, 4)));
                           Real gamma4d_2_0_1 = 0;
                           Real gamma4d_2_0_2 = 0;
                           Real gamma4d_2_0_3 = 0;
                           Real gamma4d_2_1_0 = 0;
-                          Real gamma4d_2_1_1 = 0;
-                          Real gamma4d_2_1_2 = -2 * M / (r * (M + 2 * r));
+                          Real gamma4d_2_1_1 = 2 * M * x2 * pow(M + 2 * sqrt(pow(x1, 2) + pow(x2, 2)), 3) * (pow(x1, 4) + 2 * pow(x1, 2) * pow(x2, 2) + pow(x2, 4)) / (
+                              pow(pow(x1, 2) + pow(x2, 2), 3) * (pow(M, 4) + 8 * pow(M, 3) * sqrt(pow(x1, 2) + pow(x2, 2)) + 24 * pow(M, 2) * pow(x1, 2) + 24 * pow(M, 2) *
+                                  pow(x2, 2) + 32 * M * pow(x1, 2) * sqrt(pow(x1, 2) + pow(x2, 2)) + 32 * M * pow(x2, 2) * sqrt(pow(x1, 2) + pow(x2, 2)) + 16 * pow(x1, 4) + 32 *
+                                  pow(x1, 2) * pow(x2, 2) + 16 * pow(x2, 4)));
+                          Real gamma4d_2_1_2 = -2 * M * x1 * pow(M + 2 * sqrt(pow(x1, 2) + pow(x2, 2)), 3) * (pow(x1, 4) + 2 * pow(x1, 2) * pow(x2, 2) + pow(x2, 4)) / (
+                              pow(pow(x1, 2) + pow(x2, 2), 3) * (pow(M, 4) + 8 * pow(M, 3) * sqrt(pow(x1, 2) + pow(x2, 2)) + 24 * pow(M, 2) * pow(x1, 2) + 24 * pow(M, 2) *
+                                  pow(x2, 2) + 32 * M * pow(x1, 2) * sqrt(pow(x1, 2) + pow(x2, 2)) + 32 * M * pow(x2, 2) * sqrt(pow(x1, 2) + pow(x2, 2)) + 16 * pow(x1, 4) + 32 *
+                                  pow(x1, 2) * pow(x2, 2) + 16 * pow(x2, 4)));
                           Real gamma4d_2_1_3 = 0;
                           Real gamma4d_2_2_0 = 0;
-                          Real gamma4d_2_2_1 = -2 * M / (r * (M + 2 * r));
-                          Real gamma4d_2_2_2 = 0;
+                          Real gamma4d_2_2_1 = -2 * M * x1 * pow(M + 2 * sqrt(pow(x1, 2) + pow(x2, 2)), 3) * (pow(x1, 4) + 2 * pow(x1, 2) * pow(x2, 2) + pow(x2, 4)) / (
+                              pow(pow(x1, 2) + pow(x2, 2), 3) * (pow(M, 4) + 8 * pow(M, 3) * sqrt(pow(x1, 2) + pow(x2, 2)) + 24 * pow(M, 2) * pow(x1, 2) + 24 * pow(M, 2) *
+                                  pow(x2, 2) + 32 * M * pow(x1, 2) * sqrt(pow(x1, 2) + pow(x2, 2)) + 32 * M * pow(x2, 2) * sqrt(pow(x1, 2) + pow(x2, 2)) + 16 * pow(x1, 4) + 32 *
+                                  pow(x1, 2) * pow(x2, 2) + 16 * pow(x2, 4)));
+                          Real gamma4d_2_2_2 = -2 * M * x2 * pow(M + 2 * sqrt(pow(x1, 2) + pow(x2, 2)), 3) * (pow(x1, 4) + 2 * pow(x1, 2) * pow(x2, 2) + pow(x2, 4)) / (
+                              pow(pow(x1, 2) + pow(x2, 2), 3) * (pow(M, 4) + 8 * pow(M, 3) * sqrt(pow(x1, 2) + pow(x2, 2)) + 24 * pow(M, 2) * pow(x1, 2) + 24 * pow(M, 2) *
+                                  pow(x2, 2) + 32 * M * pow(x1, 2) * sqrt(pow(x1, 2) + pow(x2, 2)) + 32 * M * pow(x2, 2) * sqrt(pow(x1, 2) + pow(x2, 2)) + 16 * pow(x1, 4) + 32 *
+                                  pow(x1, 2) * pow(x2, 2) + 16 * pow(x2, 4)));
                           Real gamma4d_2_2_3 = 0;
                           Real gamma4d_2_3_0 = 0;
                           Real gamma4d_2_3_1 = 0;
                           Real gamma4d_2_3_2 = 0;
-                          Real gamma4d_2_3_3 = 0;
+                          Real gamma4d_2_3_3 = 2 * M * x2 * pow(M + 2 * sqrt(pow(x1, 2) + pow(x2, 2)), 3) * (pow(x1, 4) + 2 * pow(x1, 2) * pow(x2, 2) + pow(x2, 4)) / (
+                              pow(pow(x1, 2) + pow(x2, 2), 3) * (pow(M, 4) + 8 * pow(M, 3) * sqrt(pow(x1, 2) + pow(x2, 2)) + 24 * pow(M, 2) * pow(x1, 2) + 24 * pow(M, 2) *
+                                  pow(x2, 2) + 32 * M * pow(x1, 2) * sqrt(pow(x1, 2) + pow(x2, 2)) + 32 * M * pow(x2, 2) * sqrt(pow(x1, 2) + pow(x2, 2)) + 16 * pow(x1, 4) + 32 *
+                                  pow(x1, 2) * pow(x2, 2) + 16 * pow(x2, 4)));
                           Real gamma4d_3_0_0 = 0;
                           Real gamma4d_3_0_1 = 0;
                           Real gamma4d_3_0_2 = 0;
@@ -595,14 +651,26 @@ namespace radiationfemn
                           Real gamma4d_3_1_0 = 0;
                           Real gamma4d_3_1_1 = 0;
                           Real gamma4d_3_1_2 = 0;
-                          Real gamma4d_3_1_3 = -2 * M / (r * (M + 2 * r));
+                          Real gamma4d_3_1_3 = -2 * M * x1 * pow(M + 2 * sqrt(pow(x1, 2) + pow(x2, 2)), 3) * (pow(x1, 4) + 2 * pow(x1, 2) * pow(x2, 2) + pow(x2, 4)) / (
+                              pow(pow(x1, 2) + pow(x2, 2), 3) * (pow(M, 4) + 8 * pow(M, 3) * sqrt(pow(x1, 2) + pow(x2, 2)) + 24 * pow(M, 2) * pow(x1, 2) + 24 * pow(M, 2) *
+                                  pow(x2, 2) + 32 * M * pow(x1, 2) * sqrt(pow(x1, 2) + pow(x2, 2)) + 32 * M * pow(x2, 2) * sqrt(pow(x1, 2) + pow(x2, 2)) + 16 * pow(x1, 4) + 32 *
+                                  pow(x1, 2) * pow(x2, 2) + 16 * pow(x2, 4)));
                           Real gamma4d_3_2_0 = 0;
                           Real gamma4d_3_2_1 = 0;
                           Real gamma4d_3_2_2 = 0;
-                          Real gamma4d_3_2_3 = 0;
+                          Real gamma4d_3_2_3 = -2 * M * x2 * pow(M + 2 * sqrt(pow(x1, 2) + pow(x2, 2)), 3) * (pow(x1, 4) + 2 * pow(x1, 2) * pow(x2, 2) + pow(x2, 4)) / (
+                              pow(pow(x1, 2) + pow(x2, 2), 3) * (pow(M, 4) + 8 * pow(M, 3) * sqrt(pow(x1, 2) + pow(x2, 2)) + 24 * pow(M, 2) * pow(x1, 2) + 24 * pow(M, 2) *
+                                  pow(x2, 2) + 32 * M * pow(x1, 2) * sqrt(pow(x1, 2) + pow(x2, 2)) + 32 * M * pow(x2, 2) * sqrt(pow(x1, 2) + pow(x2, 2)) + 16 * pow(x1, 4) + 32 *
+                                  pow(x1, 2) * pow(x2, 2) + 16 * pow(x2, 4)));
                           Real gamma4d_3_3_0 = 0;
-                          Real gamma4d_3_3_1 = -2 * M / (r * (M + 2 * r));
-                          Real gamma4d_3_3_2 = 0;
+                          Real gamma4d_3_3_1 = -2 * M * x1 * pow(M + 2 * sqrt(pow(x1, 2) + pow(x2, 2)), 3) * (pow(x1, 4) + 2 * pow(x1, 2) * pow(x2, 2) + pow(x2, 4)) / (
+                              pow(pow(x1, 2) + pow(x2, 2), 3) * (pow(M, 4) + 8 * pow(M, 3) * sqrt(pow(x1, 2) + pow(x2, 2)) + 24 * pow(M, 2) * pow(x1, 2) + 24 * pow(M, 2) *
+                                  pow(x2, 2) + 32 * M * pow(x1, 2) * sqrt(pow(x1, 2) + pow(x2, 2)) + 32 * M * pow(x2, 2) * sqrt(pow(x1, 2) + pow(x2, 2)) + 16 * pow(x1, 4) + 32 *
+                                  pow(x1, 2) * pow(x2, 2) + 16 * pow(x2, 4)));
+                          Real gamma4d_3_3_2 = -2 * M * x2 * pow(M + 2 * sqrt(pow(x1, 2) + pow(x2, 2)), 3) * (pow(x1, 4) + 2 * pow(x1, 2) * pow(x2, 2) + pow(x2, 4)) / (
+                              pow(pow(x1, 2) + pow(x2, 2), 3) * (pow(M, 4) + 8 * pow(M, 3) * sqrt(pow(x1, 2) + pow(x2, 2)) + 24 * pow(M, 2) * pow(x1, 2) + 24 * pow(M, 2) *
+                                  pow(x2, 2) + 32 * M * pow(x1, 2) * sqrt(pow(x1, 2) + pow(x2, 2)) + 32 * M * pow(x2, 2) * sqrt(pow(x1, 2) + pow(x2, 2)) + 16 * pow(x1, 4) + 32 *
+                                  pow(x1, 2) * pow(x2, 2) + 16 * pow(x2, 4)));
                           Real gamma4d_3_3_3 = 0;
 
                           std::cout << "000:" << Gamma_udd(0, 0, 0) << " " << gamma4d_0_0_0 << std::endl;
@@ -669,8 +737,7 @@ namespace radiationfemn
                           std::cout << "331:" << Gamma_udd(3, 3, 1) << " " << gamma4d_3_3_1 << std::endl;
                           std::cout << "332:" << Gamma_udd(3, 3, 2) << " " << gamma4d_3_3_2 << std::endl;
                           std::cout << "333:" << Gamma_udd(3, 3, 3) << " " << gamma4d_3_3_3 << std::endl;
-                          // end of 4-Christoeffel print
-                          exit(EXIT_FAILURE);
+                          exit(EXIT_FAILURE); */
                           // end of 4-Christoeffel print
                           // -----------------------------------
 
