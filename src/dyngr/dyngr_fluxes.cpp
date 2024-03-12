@@ -191,7 +191,7 @@ TaskStatus DynGRPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int stag
       ScrArray2D<Real> scr5(member.team_scratch(scr_level), 3, ncells1);
       ScrArray2D<Real> scr6(member.team_scratch(scr_level), 3, ncells1);
 
-      for (int j=js-1; j<=je+1; ++j) {
+      for (int j=jl; j<=ju; ++j) {
         // Permute scratch arrays.
         auto wl     = scr1;
         auto wl_jp1 = scr2;
@@ -235,7 +235,7 @@ TaskStatus DynGRPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int stag
         // Sync all threads in the team so that scratch memory is consistent
         member.team_barrier();
 
-        // compute fluxes over [is,ie+1]
+        // compute fluxes over [js,je+1]
         auto &dyn_eos = dyn_eos_;
         auto &indcs = indcs_;
         auto &size = size_;
@@ -248,7 +248,7 @@ TaskStatus DynGRPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int stag
         auto nscal_ = nvars - nhyd;
         auto &adm_ = adm;
         //int il = is; int iu = ie;
-        if (j>(js-1)) {
+        if (j>(jl)) {
           if constexpr (rsolver_method_ == DynGR_RSolver::llf_dyngr) {
             LLF_DYNGR<IVY>(member, dyn_eos, indcs, size, coord, m, k, j, is-1, ie+1,
                       wl, wr, bl, br, by, nhyd_, nscal_, adm_, flx2, e12, e32);
@@ -299,7 +299,7 @@ TaskStatus DynGRPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int stag
       ScrArray2D<Real> scr5(member.team_scratch(scr_level), 3, ncells1);
       ScrArray2D<Real> scr6(member.team_scratch(scr_level), 3, ncells1);
 
-      for (int k=ks-1; k<=ke+1; ++k) {
+      for (int k=kl; k<=ku; ++k) {
         // Permute scratch arrays.
         auto wl     = scr1;
         auto wl_kp1 = scr2;
@@ -356,7 +356,7 @@ TaskStatus DynGRPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int stag
         auto &nhyd_ = nhyd;
         auto nscal_ = nvars - nhyd;
         //int il = is; int iu = ie;
-        if (k>(ks-1)) {
+        if (k>(kl)) {
           if constexpr (rsolver_method_ == DynGR_RSolver::llf_dyngr) {
             LLF_DYNGR<IVZ>(member, dyn_eos, indcs, size, coord, m, k, j, is-1, ie+1,
                       wl, wr, bl, br, bz, nhyd_, nscal_, adm_, flx3, e23, e13);
