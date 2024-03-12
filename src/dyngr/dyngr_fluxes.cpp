@@ -55,6 +55,7 @@ TaskStatus DynGRPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int stag
   auto &adm = pmy_pack->padm->adm;
   auto &eos_ = pmy_pack->pmhd->peos->eos_data;
   auto &dyn_eos_ = eos;
+  auto &use_fofc = pmy_pack->pmhd->use_fofc;
   bool extrema = false;
   if (recon_method_ == ReconstructionMethod::ppmx) {
     extrema = true;
@@ -84,6 +85,8 @@ TaskStatus DynGRPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int stag
   } else {
     jl = js-1, ju = je+1, kl = ks-1, ku = ke+1;
   }
+  int il = is, iu = ie+1;
+  if (use_fofc) { il = is-1, iu = ie+2; }
 
   par_for_outer("dyngrflux_x1",DevExeSpace(), scr_size, scr_level,
       0, nmb1, kl, ku, jl, ju,
@@ -96,23 +99,23 @@ TaskStatus DynGRPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int stag
     // Reconstruct qR[i] and qL[i+1]
     switch (recon_method_) {
       case ReconstructionMethod::dc:
-        DonorCellX1(member, m, k, j, is-1, ie+1, w0_, wl, wr);
-        DonorCellX1(member, m, k, j, is-1, ie+1, b0_, bl, br);
+        DonorCellX1(member, m, k, j, il-1, iu, w0_, wl, wr);
+        DonorCellX1(member, m, k, j, il-1, iu, b0_, bl, br);
         break;
       case ReconstructionMethod::plm:
-        PiecewiseLinearX1(member, m, k, j, is-1, ie+1, w0_, wl, wr);
-        PiecewiseLinearX1(member, m, k, j, is-1, ie+1, b0_, bl, br);
+        PiecewiseLinearX1(member, m, k, j, il-1, iu, w0_, wl, wr);
+        PiecewiseLinearX1(member, m, k, j, il-1, iu, b0_, bl, br);
         break;
       // JF: These higher-order reconstruction methods all need EOS_Data to calculate a
       // floor. However, it isn't used by DynGR at all.
       case ReconstructionMethod::ppm4:
       case ReconstructionMethod::ppmx:
-        PiecewiseParabolicX1(member,eos_,extrema,false, m, k, j, is-1, ie+1, w0_, wl, wr);
-        PiecewiseParabolicX1(member,eos_,extrema,false, m, k, j, is-1, ie+1, b0_, bl, br);
+        PiecewiseParabolicX1(member,eos_,extrema,false, m, k, j, il-1, iu, w0_, wl, wr);
+        PiecewiseParabolicX1(member,eos_,extrema,false, m, k, j, il-1, iu, b0_, bl, br);
         break;
       case ReconstructionMethod::wenoz:
-        WENOZX1(member, eos_, false, m, k, j, is-1, ie+1, w0_, wl, wr);
-        WENOZX1(member, eos_, false, m, k, j, is-1, ie+1, b0_, bl, br);
+        WENOZX1(member, eos_, false, m, k, j, il-1, iu, w0_, wl, wr);
+        WENOZX1(member, eos_, false, m, k, j, il-1, iu, b0_, bl, br);
         break;
       default:
         break;
@@ -132,13 +135,13 @@ TaskStatus DynGRPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int stag
     auto &nhyd_ = nhyd;
     auto nscal_ = nvars - nhyd;
     auto &adm_ = adm;
-    int il = is; int iu = ie+1;
+    //int il = is; int iu = ie+1;
     if constexpr (rsolver_method_ == DynGR_RSolver::llf_dyngr) {
-      LLF_DYNGR<IVX>(member, dyn_eos, indcs, size, coord, m, k, j, is, ie+1,
+      LLF_DYNGR<IVX>(member, dyn_eos, indcs, size, coord, m, k, j, il, iu,
                 wl, wr, bl, br, bx, nhyd_, nscal_, adm_,
                 flx1, e31, e21);
     } else if constexpr (rsolver_method_ == DynGR_RSolver::hlle_dyngr) {
-      HLLE_DYNGR<IVX>(member, dyn_eos, indcs, size, coord, m, k, j, is, ie+1,
+      HLLE_DYNGR<IVX>(member, dyn_eos, indcs, size, coord, m, k, j, il, iu,
                 wl, wr, bl, br, bx, nhyd_, nscal_, adm_,
                 flx1, e31, e21);
     } 
@@ -147,7 +150,7 @@ TaskStatus DynGRPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int stag
     // Calculate fluxes of scalars (if any)
     if (nvars > nhyd) {
       for (int n=nhyd; n<nvars; ++n) {
-        par_for_inner(member, is, ie+1, [&](const int i) {
+        par_for_inner(member, il, iu, [&](const int i) {
           if (flx1(m,IDN,k,j,i) >= 0.0) {
             flx1(m,n,k,j,i) = flx1(m,IDN,k,j,i)*wl(n,i);
           } else {
@@ -176,6 +179,8 @@ TaskStatus DynGRPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int stag
     } else { // 3D
       kl = ks-1, ku = ke+1;
     }
+    jl = js-1, ju = je+1;
+    if (use_fofc) { jl = js-2, ju = je+2; }
 
     par_for_outer("dyngrflux_x2",DevExeSpace(), scr_size, scr_level, 0, nmb1, kl, ku,
     KOKKOS_LAMBDA(TeamMember_t member, const int m, const int k) {
@@ -242,7 +247,7 @@ TaskStatus DynGRPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int stag
         auto &nhyd_ = nhyd;
         auto nscal_ = nvars - nhyd;
         auto &adm_ = adm;
-        int il = is; int iu = ie;
+        //int il = is; int iu = ie;
         if (j>(js-1)) {
           if constexpr (rsolver_method_ == DynGR_RSolver::llf_dyngr) {
             LLF_DYNGR<IVY>(member, dyn_eos, indcs, size, coord, m, k, j, is-1, ie+1,
@@ -257,7 +262,7 @@ TaskStatus DynGRPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int stag
         // Calculate fluxes of scalars (if any)
         if (nvars > nhyd) {
           for (int n=nhyd; n<nvars; ++n) {
-            par_for_inner(member, is, ie, [&](const int i) {
+            par_for_inner(member, is-1, ie+1, [&](const int i) {
               if (flx2(m,IDN,k,j,i) >= 0.0) {
                 flx2(m,n,k,j,i) = flx2(m,IDN,k,j,i)*wl(n,i);
               } else {
@@ -281,6 +286,9 @@ TaskStatus DynGRPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int stag
     auto &bz_   = pmy_pack->pmhd->b0.x3f;
     auto &e23_  = pmy_pack->pmhd->e2x3;
     auto &e13_  = pmy_pack->pmhd->e1x3;
+
+    kl = ks-1, ku = ke+1;
+    if (use_fofc) { kl = ks-2, ku = ke+2; }
 
     par_for_outer("dyngrflux_x3",DevExeSpace(), scr_size, scr_level, 0, nmb1, js-1, je+1,
     KOKKOS_LAMBDA(TeamMember_t member, const int m, const int j) {
@@ -347,7 +355,7 @@ TaskStatus DynGRPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int stag
         auto &adm_ = adm;
         auto &nhyd_ = nhyd;
         auto nscal_ = nvars - nhyd;
-        int il = is; int iu = ie;
+        //int il = is; int iu = ie;
         if (k>(ks-1)) {
           if constexpr (rsolver_method_ == DynGR_RSolver::llf_dyngr) {
             LLF_DYNGR<IVZ>(member, dyn_eos, indcs, size, coord, m, k, j, is-1, ie+1,
@@ -362,7 +370,7 @@ TaskStatus DynGRPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int stag
         // Calculate fluxes of scalars (if any)
         if (nvars > nhyd) {
           for (int n=nhyd; n<nvars; ++n) {
-            par_for_inner(member, is, ie, [&](const int i) {
+            par_for_inner(member, is-1, ie+1, [&](const int i) {
               if (flx3(m,IDN,k,j,i) >= 0.0) {
                 flx3(m,n,k,j,i) = flx3(m,IDN,k,j,i)*wl(n,i);
               } else {
