@@ -194,7 +194,7 @@ void LarmorMotionErrors(HistoryData *pdata, Mesh *pm){
 			  KOKKOS_LAMBDA(const int p_aux, Real &rms_pos, Real &rel_dE) {
 
 	    int p = pi(PTAG,p_aux);
-	    Real g_Lor = 1.0/sqrt(1.0 - SQR(v[3*p]) - SQR(v[3*p+1]) - SQR(v[3*p+2]));
+	    Real g_Lor = sqrt(1.0 + SQR(v[3*p]) + SQR(v[3*p+1]) + SQR(v[3*p+2]));
 	    Real v_mod = sqrt( SQR(v[3*p]) + SQR(v[3*p+1]) +SQR(v[3*p+2]) );
 	    Real ang_to_b = atan2( sqrt( SQR(v[3*p]) + SQR(v[3*p+1]) ) , v[3*p+2] );
 	    Real v_perp = ( v_mod*sin(ang_to_b) );
@@ -203,15 +203,15 @@ void LarmorMotionErrors(HistoryData *pdata, Mesh *pm){
 	    Real rho = (prtcl_mass*v_perp*g_Lor)/(prtcl_charge*B_strength); //Larmor radius
 
 	    x1[3*p] = x[3*p] + sfac*rho*sin(
-	       	 init_phase + (prtcl_charge*B_strength/(prtcl_mass))*curr_time );
+	       	 init_phase + (prtcl_charge*B_strength/(prtcl_mass*g_Lor))*curr_time );
 	    x1[3*p+1] = x[3*p+1] + sfac*rho*cos(
-	       	 init_phase + (prtcl_charge*B_strength/(prtcl_mass))*curr_time );
+	       	 init_phase + (prtcl_charge*B_strength/(prtcl_mass*g_Lor))*curr_time );
 	    x1[3*p+2] = x[3*p+2] + sfac*v_par*curr_time;
 	    
 	    v1[3*p] = sfac*v_perp*cos(
-	       	 init_phase + (prtcl_charge*B_strength/(prtcl_mass))*curr_time );
+	       	 init_phase + (prtcl_charge*B_strength/(prtcl_mass*g_Lor))*curr_time );
 	    v1[3*p+1] = - sfac*v_perp*sin(
-	       	 init_phase + (prtcl_charge*B_strength/(prtcl_mass))*curr_time );
+	       	 init_phase + (prtcl_charge*B_strength/(prtcl_mass*g_Lor))*curr_time );
 	    v1[3*p+2] = v[3*p+2];// + sfac*v_par*curr_time;
 
 	    // Initial kinetic energy vs. current kinetic energy (pure magnetic field shouldn't do any work)
@@ -230,7 +230,7 @@ void LarmorMotionErrors(HistoryData *pdata, Mesh *pm){
 		}
 	  }
 	  ismax = sqrt(ismax);
-	  /***
+	  /***/
 	  std::cout << "On rank " << global_variable::my_rank << " at time " << curr_time << " rel_dEdt: " << rel_dEdt << std::endl;
 	  std::cout << "On rank " << global_variable::my_rank << " at time " << curr_time << " rms_diff: " << rms_diff << std::endl;
 	  std::cout << "On rank " << global_variable::my_rank << " at time " << curr_time << " max_diff: " << ismax << std::endl;
@@ -239,7 +239,7 @@ void LarmorMotionErrors(HistoryData *pdata, Mesh *pm){
 	  std::cout << "=====================================" << std::endl;
 	  std::cout << pr(IPX,25) << " " << pr(IPY,25) << " " << pr(IPZ,25) << " " << pr(IPX,65) << " " << pr(IPY,65) << " " << pr(IPZ,65) << " " << std::endl;
 	  std::cout << x1[75] << " " << x1[76] << " " << x1[77] << " " << x1[195] << " " << x1[196] << " " << x1[197] << " " << std::endl;
-	  ***/
+	  /***/
 	  pdata->hdata[0] = rms_diff;
 	  pdata->hdata[1] = ismax;
 	  pdata->hdata[2] = rel_dEdt;
