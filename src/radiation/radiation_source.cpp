@@ -316,6 +316,11 @@ TaskStatus Radiation::AddRadiationSourceTerm(Driver *pdriver, int stage) {
         Real lg_rho_op = log10(wdn_real) - (1.-1./fac_inv) * del_reduce;
         wdn_opacity = pow(10.0, lg_rho_op);
       }
+
+      // apply to all sigma
+      sigma_s *= wdn_opacity/wdn;
+      sigma_a *= wdn_opacity/wdn;
+      sigma_p *= wdn_opacity/wdn;
     } // endif correct_radsrc_opacity_
 
     Real dtcsiga = dt_*sigma_a;
@@ -465,11 +470,11 @@ TaskStatus Radiation::AddRadiationSourceTerm(Driver *pdriver, int stage) {
 
     // Before applying absorption and scattering source terms
     // if (correct_radsrc_opacity_ && (sigma_cold > sigma_cold_cut_)) {
-    if (correct_radsrc_opacity_) {
-      sigma_p = (sigma_p+sigma_a)*wdn_opacity/wdn - sigma_a;
-      dtcsigp = dt_*sigma_p;
-      dtaucsigp = dtcsigp/u0;
-    }
+    // if (correct_radsrc_opacity_) {
+    //   sigma_p = (sigma_p+sigma_a)*wdn_opacity/wdn - sigma_a;
+    //   dtcsigp = dt_*sigma_p;
+    //   dtaucsigp = dtcsigp/u0;
+    // }
 
     // Calculate polynomial coefficients
     Real wght_sum = 0.0;
@@ -608,11 +613,11 @@ TaskStatus Radiation::AddRadiationSourceTerm(Driver *pdriver, int stage) {
     // compton scattering
     if (is_compton_enabled_) {
       // if (correct_radsrc_opacity_ && (sigma_cold > sigma_cold_cut_)) {
-      if (correct_radsrc_opacity_) {
-        sigma_s *= wdn_opacity/wdn;
-        dtcsigs *= wdn_opacity/wdn;
-        dtaucsigs *= wdn_opacity/wdn;
-      }
+      // if (correct_radsrc_opacity_) {
+      //   sigma_s *= wdn_opacity/wdn;
+      //   dtcsigs *= wdn_opacity/wdn;
+      //   dtaucsigs *= wdn_opacity/wdn;
+      // }
 
       // use partially updated gas temperature
       tgas = tgasnew;
