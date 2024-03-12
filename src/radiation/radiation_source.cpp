@@ -61,7 +61,7 @@ TaskStatus Radiation::AddRadiationSourceTerm(Driver *pdriver, int stage) {
   bool &temperature_fix_turn_on_ = temperature_fix_turn_on;
   // auto &cellavg_rad_source_ = cellavg_rad_source;
   auto &tgas_radsource_ = tgas_radsource; // for saving final gas temperature
-  Real sigma_cold_cut_ = (is_mhd_enabled_) ? pmy_pack->pmhd->sigma_cold_cut : 1.e1;
+  // Real sigma_cold_cut_ = (is_mhd_enabled_) ? pmy_pack->pmhd->sigma_cold_cut : 1.e1;
   // bool turn_on_sao_radsrc_ = false;
   auto &correct_radsrc_opacity_ = correct_radsrc_opacity;
   Real &dfloor_opacity_ = dfloor_opacity;
