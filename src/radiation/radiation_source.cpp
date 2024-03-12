@@ -86,12 +86,14 @@ TaskStatus Radiation::AddRadiationSourceTerm(Driver *pdriver, int stage) {
   }
 
   // Extract adiabatic index
-  Real gm1, dfloor;
+  Real gm1, dfloor, v_sq_max;
   if (is_hydro_enabled_) {
     gm1 = pmy_pack->phydro->peos->eos_data.gamma - 1.0;
+    v_sq_max = 1.-1./SQR(pmy_pack->phydro->peos->eos_data.gamma_max);
     dfloor = pmy_pack->phydro->peos->eos_data.dfloor;
   } else if (is_mhd_enabled_) {
     gm1 = pmy_pack->pmhd->peos->eos_data.gamma - 1.0;
+    v_sq_max = 1.-1./SQR(pmy_pack->pmhd->peos->eos_data.gamma_max);
     dfloor = pmy_pack->pmhd->peos->eos_data.dfloor;
   }
 
@@ -356,7 +358,6 @@ TaskStatus Radiation::AddRadiationSourceTerm(Driver *pdriver, int stage) {
         if (is_compton_enabled_) {
           Real trad = sqrt(sqrt(erad_f_/arad_));
           emissivity += chi_s*4*(tgas-trad)*inv_t_electron_*erad_f_;
-          if (compton_second_order_correction_) emissivity += chi_s*16*SQR(tgas*inv_t_electron_)*erad_f_;
         }
         Real gg_tet1 = -emissivity*u_tet[1] - chi_a*(-u_tet[0]*rr_tet01 + u_tet[1]*rr_tet11 + u_tet[2]*rr_tet12 + u_tet[3]*rr_tet13);
         Real gg_tet2 = -emissivity*u_tet[2] - chi_a*(-u_tet[0]*rr_tet02 + u_tet[1]*rr_tet12 + u_tet[2]*rr_tet22 + u_tet[3]*rr_tet23);
