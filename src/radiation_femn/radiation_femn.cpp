@@ -174,8 +174,8 @@ namespace radiationfemn
         else
         {
             // FPN case [default: quadrature => lebedev (2702)]
-            scheme_num_points = pin->GetOrAddInteger("radiation-femn", "quad_scheme_num_points", 2702);
-            scheme_name = pin->GetOrAddString("radiation-femn", "quad_scheme_name", "lebedev");
+            scheme_num_points = pin->GetOrAddInteger("radiation-femn", "quad_scheme_num_points", 6050);
+            scheme_name = pin->GetOrAddString("radiation-femn", "quad_scheme_name", "gauss_legendre");
 
             if (!(scheme_name == "lebedev" || scheme_name == "gauss_legendre"))
             {

@@ -223,14 +223,12 @@ Real IntegrateMatrixFPN(int la, int ma, int lb, int mb, const HostArray1D<Real> 
       break;
     case 4:
       for (size_t i = 0; i < scheme_weights.size(); i++) {
-        if (!(fabs(scheme_points(i, 0) - 0.) < 1e-14 || fabs(scheme_points(i, 0) - M_PI) < 1e-14)) { // basis derivatives vanish at 0 and pi
           result += 4. * M_PI * scheme_weights(i)
               * mom(nu, scheme_points(i, 0), scheme_points(i, 1))
               * mom(mu, scheme_points(i, 0), scheme_points(i, 1))
               * fpn_basis_lm(la, ma, scheme_points(i, 0), scheme_points(i, 1))
               * (inv_jac_itilde_ihat(scheme_points(i, 0), scheme_points(i, 1), 1, ihat) * dfpn_dOmega(lb, mb, scheme_points(i, 0), scheme_points(i, 1), 1)
                   + inv_jac_itilde_ihat(scheme_points(i, 0), scheme_points(i, 1), 2, ihat) * dfpn_dOmega(lb, mb, scheme_points(i, 0), scheme_points(i, 1), 2));
-        }
       }
       break;
     case 5:
