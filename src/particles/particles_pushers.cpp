@@ -71,6 +71,7 @@ KOKKOS_INLINE_FUNCTION
 void Particles::BorisStep( const Real dt, DvceArray2D<Real> &pr, const DvceArray2D<int> &pi, const bool multi_d, const bool three_d ){
 	
 	auto &b0_ = pmy_pack->pmhd->b0;
+	auto &e0_ = pmy_pack->pmhd->efld;
 	auto &indcs = pmy_pack->pmesh->mb_indcs;
 	int is = indcs.is;
 	int js = indcs.js;
@@ -115,7 +116,7 @@ void Particles::BorisStep( const Real dt, DvceArray2D<Real> &pr, const DvceArray
         int ip = (pr(IPX,p) - mbsize.d_view(m).x1min)/mbsize.d_view(m).dx1 + is;
 	int jp = (pr(IPY,p) - mbsize.d_view(m).x2min)/mbsize.d_view(m).dx2 + js;
 	int kp = (pr(IPZ,p) - mbsize.d_view(m).x3min)/mbsize.d_view(m).dx3 + ks;
-	/***/
+	/***
 	if ( (ip*jp*kp < 0.0) || (ip > 33) || (jp > 33) || (kp > 33) || (m > nmb1)){
 	std::cout << global_variable::my_rank <<std::endl;
 	std::cout << "mbsize " << m << " " << mbsize.d_view(m).x2min << " " << mbsize.d_view(m).dx2 << std::endl; 
@@ -124,7 +125,7 @@ void Particles::BorisStep( const Real dt, DvceArray2D<Real> &pr, const DvceArray
 	std::cout << "Idx j "  << pi(PTAG,p) << " "<< js << " " << jp << " " << je << std::endl; 
 	std::cout << "Idx k "  << pi(PTAG,p) << " "<< ks << " " << kp << " " << ke << std::endl; 
 	}
-	/***/
+	***/
 	Real &x1min = mbsize.d_view(m).x1min;
 	Real &x2min = mbsize.d_view(m).x2min;
 	Real &x3min = mbsize.d_view(m).x3min;
@@ -142,6 +143,9 @@ void Particles::BorisStep( const Real dt, DvceArray2D<Real> &pr, const DvceArray
         // Interpolate Electric Field at new particle location x1, x2, x3
 	// Store it in an array for convenience 
 	Real E[3] = {0.0, 0.0, 0.0};
+	E[0] = e0_.x1e(m, kp, jp, ip) + (x1 - x1v)*(e0_.x1e(m, kp, jp, ip+1) - e0_.x1e(m, kp, jp, ip))/Dx;
+	E[1] = e0_.x2e(m, kp, jp, ip) + (x2 - x2v)*(e0_.x2e(m, kp, jp+1, ip) - e0_.x2e(m, kp, jp, ip))/Dy;
+	E[2] = e0_.x3e(m, kp, jp, ip) + (x3 - x3v)*(e0_.x3e(m, kp+1, jp, ip) - e0_.x3e(m, kp, jp, ip))/Dz;
 
 	uE[0] = up[0] + dt*pr(IPC,p)/(2.0*pr(IPM,p))*E[0];
         if (multi_d) { uE[1] = up[1] + dt*pr(IPC,p)/(2.0*pr(IPM,p))*E[1]; }
