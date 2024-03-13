@@ -117,118 +117,14 @@ namespace radiationfemn
                           });
                           member.team_barrier();
 
-                          Real idx[] = {1 / mbsize.d_view(m).dx1, 1 / mbsize.d_view(m).dx2, 1 / mbsize.d_view(m).dx3};
-
-                          //----------------------------------------------------------------------------------------
-                          /*
-                          Real& x1min = mbsize.d_view(m).x1min;
-                          Real& x1max = mbsize.d_view(m).x1max;
-                          int nx1 = indcs.nx1;
-                          Real x1 = CellCenterX(i - is, nx1, x1min, x1max);
-
-                          Real& x2min = mbsize.d_view(m).x2min;
-                          Real& x2max = mbsize.d_view(m).x2max;
-                          int nx2 = indcs.nx2;
-                          Real x2 = CellCenterX(j - js, nx2, x2min, x2max);
-
-                          Real M = 1.;
-                          Real r = sqrt(x1 * x1 + x2 * x2);
-                          std::cout << "r: " << r << std::endl;
-
-                          // Start of metric check
-                          Real gdd_0_0 = -pow(M - 2 * r, 2) / pow(M + 2 * r, 2);
-                          Real gdd_0_1 = 0;
-                          Real gdd_0_2 = 0;
-                          Real gdd_0_3 = 0;
-                          Real gdd_1_0 = 0;
-                          Real gdd_1_1 = (1.0 / 16.0) * pow(M + 2 * r, 4) / pow(r, 4);
-                          Real gdd_1_2 = 0;
-                          Real gdd_1_3 = 0;
-                          Real gdd_2_0 = 0;
-                          Real gdd_2_1 = 0;
-                          Real gdd_2_2 = (1.0 / 16.0) * pow(M + 2 * r, 4) / pow(r, 4);
-                          Real gdd_2_3 = 0;
-                          Real gdd_3_0 = 0;
-                          Real gdd_3_1 = 0;
-                          Real gdd_3_2 = 0;
-                          Real gdd_3_3 = (1.0 / 16.0) * pow(M + 2 * r, 4) / pow(r, 4);
-
-                          std::cout << "gdd_00:" << g_dd[0 + 4 * 0] << " " << gdd_0_0 << std::endl;
-                          std::cout << "gdd_01:" << g_dd[0 + 4 * 1] << " " << gdd_0_1 << std::endl;
-                          std::cout << "gdd_02:" << g_dd[0 + 4 * 2] << " " << gdd_0_2 << std::endl;
-                          std::cout << "gdd_03:" << g_dd[0 + 4 * 3] << " " << gdd_0_3 << std::endl;
-                          std::cout << "gdd_10:" << g_dd[1 + 4 * 0] << " " << gdd_1_0 << std::endl;
-                          std::cout << "gdd_11:" << g_dd[1 + 4 * 1] << " " << gdd_1_1 << std::endl;
-                          std::cout << "gdd_12:" << g_dd[1 + 4 * 2] << " " << gdd_1_2 << std::endl;
-                          std::cout << "gdd_13:" << g_dd[1 + 4 * 3] << " " << gdd_1_3 << std::endl;
-                          std::cout << "gdd_20:" << g_dd[2 + 4 * 0] << " " << gdd_2_0 << std::endl;
-                          std::cout << "gdd_21:" << g_dd[2 + 4 * 1] << " " << gdd_2_1 << std::endl;
-                          std::cout << "gdd_22:" << g_dd[2 + 4 * 2] << " " << gdd_2_2 << std::endl;
-                          std::cout << "gdd_23:" << g_dd[2 + 4 * 3] << " " << gdd_2_3 << std::endl;
-                          std::cout << "gdd_30:" << g_dd[3 + 4 * 0] << " " << gdd_3_0 << std::endl;
-                          std::cout << "gdd_31:" << g_dd[3 + 4 * 1] << " " << gdd_3_1 << std::endl;
-                          std::cout << "gdd_32:" << g_dd[3 + 4 * 2] << " " << gdd_3_2 << std::endl;
-                          std::cout << "gdd_33:" << g_dd[3 + 4 * 3] << " " << gdd_3_3 << std::endl;
-                          // End of metric check
-                          *
-                          /
-                          // Start of metric inverse check
-                          /*
-                          Real guu_0_0 = (-pow(M, 2) - 4 * M * r - 4 * pow(r, 2)) / (pow(M, 2) - 4 * M * r + 4 * pow(r, 2));
-                          Real guu_0_1 = 0;
-                          Real guu_0_2 = 0;
-                          Real guu_0_3 = 0;
-                          Real guu_1_0 = 0;
-                          Real guu_1_1 = 16 * pow(r, 4) / (pow(M, 4) + 8 * pow(M, 3) * r + 24 * pow(M, 2) * pow(r, 2) + 32 * M * pow(r, 3) + 16 * pow(r, 4));
-                          Real guu_1_2 = 0;
-                          Real guu_1_3 = 0;
-                          Real guu_2_0 = 0;
-                          Real guu_2_1 = 0;
-                          Real guu_2_2 = 16 * pow(r, 4) / (pow(M, 4) + 8 * pow(M, 3) * r + 24 * pow(M, 2) * pow(r, 2) + 32 * M * pow(r, 3) + 16 * pow(r, 4));
-                          Real guu_2_3 = 0;
-                          Real guu_3_0 = 0;
-                          Real guu_3_1 = 0;
-                          Real guu_3_2 = 0;
-                          Real guu_3_3 = 16 * pow(r, 4) / (pow(M, 4) + 8 * pow(M, 3) * r + 24 * pow(M, 2) * pow(r, 2) + 32 * M * pow(r, 3) + 16 * pow(r, 4));
-
-                          std::cout << "guu_00:" << g_uu[0 + 4 * 0] << " " << guu_0_0 << std::endl;
-                          std::cout << "guu_01:" << g_uu[0 + 4 * 1] << " " << guu_0_1 << std::endl;
-                          std::cout << "guu_02:" << g_uu[0 + 4 * 2] << " " << guu_0_2 << std::endl;
-                          std::cout << "guu_03:" << g_uu[0 + 4 * 3] << " " << guu_0_3 << std::endl;
-                          std::cout << "guu_10:" << g_uu[1 + 4 * 0] << " " << guu_1_0 << std::endl;
-                          std::cout << "guu_11:" << g_uu[1 + 4 * 1] << " " << guu_1_1 << std::endl;
-                          std::cout << "guu_12:" << g_uu[1 + 4 * 2] << " " << guu_1_2 << std::endl;
-                          std::cout << "guu_13:" << g_uu[1 + 4 * 3] << " " << guu_1_3 << std::endl;
-                          std::cout << "guu_20:" << g_uu[2 + 4 * 0] << " " << guu_2_0 << std::endl;
-                          std::cout << "guu_21:" << g_uu[2 + 4 * 1] << " " << guu_2_1 << std::endl;
-                          std::cout << "guu_22:" << g_uu[2 + 4 * 2] << " " << guu_2_2 << std::endl;
-                          std::cout << "guu_23:" << g_uu[2 + 4 * 3] << " " << guu_2_3 << std::endl;
-                          std::cout << "guu_30:" << g_uu[3 + 4 * 0] << " " << guu_3_0 << std::endl;
-                          std::cout << "guu_31:" << g_uu[3 + 4 * 1] << " " << guu_3_1 << std::endl;
-                          std::cout << "guu_32:" << g_uu[3 + 4 * 2] << " " << guu_3_2 << std::endl;
-                          std::cout << "guu_33:" << g_uu[3 + 4 * 3] << " " << guu_3_3 << std::endl;
-                          */
-                          // End of metric inverse check
-                          // ---------------------------------------------------------------
+                          Real deltax[] = {1 / mbsize.d_view(m).dx1, 1 / mbsize.d_view(m).dx2, 1 / mbsize.d_view(m).dx3};
 
                           // lapse derivatives (\p_mu alpha)
                           Real dtalpha_d = 0.; // time derivatives, get from z4c
                           AthenaScratchTensor<Real, TensorSymm::NONE, 3, 1> dalpha_d; // spatial derivatives
-                          dalpha_d(0) = Dx<NGHOST>(0, idx, adm.alpha, m, k, j, i);
-                          dalpha_d(1) = (multi_d) ? Dx<NGHOST>(1, idx, adm.alpha, m, k, j, i) : 0.;
-                          dalpha_d(2) = (three_d) ? Dx<NGHOST>(2, idx, adm.alpha, m, k, j, i) : 0.;
-
-                          //-----------------------------------------------
-                          /*
-                          Real dalpha_x = 4 * M * x1 / (pow(M + 2 * sqrt(pow(x1, 2) + pow(x2, 2)), 2) * sqrt(pow(x1, 2) + pow(x2, 2)));
-                          Real dalpha_y = 4 * M * x2 / (pow(M + 2 * sqrt(pow(x1, 2) + pow(x2, 2)), 2) * sqrt(pow(x1, 2) + pow(x2, 2)));
-                          Real dalpha_z = 0;
-                          std::cout << "Lapse derivatives: spatial" << std::endl;
-                          std::cout << "dalpha_x:" << dalpha_x << " " << dalpha_d(0) << std::endl;
-                          std::cout << "dalpha_y:" << dalpha_y << " " << dalpha_d(1) << std::endl;
-                          std::cout << "dalpha_z:" << dalpha_z << " " << dalpha_d(2) << std::endl;
-                          */
-                          // ----------------------------------------------
+                          dalpha_d(0) = Dx<NGHOST>(0, deltax, adm.alpha, m, k, j, i);
+                          dalpha_d(1) = (multi_d) ? Dx<NGHOST>(1, deltax, adm.alpha, m, k, j, i) : 0.;
+                          dalpha_d(2) = (three_d) ? Dx<NGHOST>(2, deltax, adm.alpha, m, k, j, i) : 0.;
 
                           // shift derivatives (\p_mu beta^i)
                           Real dtbetax_du = 0.; // time derivatives, get from z4c
@@ -237,9 +133,9 @@ namespace radiationfemn
                           AthenaScratchTensor<Real, TensorSymm::NONE, 3, 2> dbeta_du; // spatial derivatives
                           for (int a = 0; a < 3; ++a)
                           {
-                              dbeta_du(0, a) = Dx<NGHOST>(0, idx, adm.beta_u, m, a, k, j, i);
-                              dbeta_du(1, a) = (multi_d) ? Dx<NGHOST>(1, idx, adm.beta_u, m, a, k, j, i) : 0.;
-                              dbeta_du(1, a) = (three_d) ? Dx<NGHOST>(1, idx, adm.beta_u, m, a, k, j, i) : 0.;
+                              dbeta_du(0, a) = Dx<NGHOST>(0, deltax, adm.beta_u, m, a, k, j, i);
+                              dbeta_du(1, a) = (multi_d) ? Dx<NGHOST>(1, deltax, adm.beta_u, m, a, k, j, i) : 0.;
+                              dbeta_du(1, a) = (three_d) ? Dx<NGHOST>(1, deltax, adm.beta_u, m, a, k, j, i) : 0.;
                           }
 
                           // covariant shift (beta_i)
@@ -250,24 +146,6 @@ namespace radiationfemn
                           Real betaz_d = adm.g_dd(m, 2, 0, k, j, i) * adm.beta_u(m, 0, k, j, i) + adm.g_dd(m, 2, 1, k, j, i) * adm.beta_u(m, 1, k, j, i)
                               + adm.g_dd(m, 2, 2, k, j, i) * adm.beta_u(m, 2, k, j, i);
 
-                          // ---------------------------------------
-                          /*
-                          std::cout << "Shift and derivatives: " << std::endl;
-                          std::cout << "dx_beta_1: " << dbeta_du(0, 0) << std::endl;
-                          std::cout << "dx_beta_2: " << dbeta_du(0, 1) << std::endl;
-                          std::cout << "dx_beta_3: " << dbeta_du(0, 2) << std::endl;
-                          std::cout << "dy_beta_1: " << dbeta_du(1, 0) << std::endl;
-                          std::cout << "dy_beta_2: " << dbeta_du(1, 1) << std::endl;
-                          std::cout << "dy_beta_3: " << dbeta_du(1, 2) << std::endl;
-                          std::cout << "dz_beta_1: " << dbeta_du(2, 0) << std::endl;
-                          std::cout << "dz_beta_2: " << dbeta_du(2, 1) << std::endl;
-                          std::cout << "dz_beta_3: " << dbeta_du(2, 2) << std::endl;
-                          std::cout << "betax_d: " << betax_d << std::endl;
-                          std::cout << "betay_d: " << betay_d << std::endl;
-                          std::cout << "betaz_d: " << betaz_d << std::endl;
-                          */
-                          // ---------------------------------------
-
                           // derivatives of spatial metric (\p_mu g_ij)
                           AthenaScratchTensor<Real, TensorSymm::SYM2, 3, 2> dtg_dd;
                           AthenaScratchTensor<Real, TensorSymm::SYM2, 3, 3> dg_ddd;
@@ -277,74 +155,11 @@ namespace radiationfemn
                               {
                                   dtg_dd(a, b) = 0.; // time derivatives, get from z4c
 
-                                  dg_ddd(0, a, b) = Dx<NGHOST>(0, idx, adm.g_dd, m, a, b, k, j, i); // spatial derivatives
-                                  dg_ddd(1, a, b) = (multi_d) ? Dx<NGHOST>(1, idx, adm.g_dd, m, a, b, k, j, i) : 0.;
-                                  dg_ddd(2, a, b) = (three_d) ? Dx<NGHOST>(2, idx, adm.g_dd, m, a, b, k, j, i) : 0.;
+                                  dg_ddd(0, a, b) = Dx<NGHOST>(0, deltax, adm.g_dd, m, a, b, k, j, i); // spatial derivatives
+                                  dg_ddd(1, a, b) = (multi_d) ? Dx<NGHOST>(1, deltax, adm.g_dd, m, a, b, k, j, i) : 0.;
+                                  dg_ddd(2, a, b) = (three_d) ? Dx<NGHOST>(2, deltax, adm.g_dd, m, a, b, k, j, i) : 0.;
                               }
                           }
-
-                          // --------------------
-                          // print spatial derivatives of spatial metric
-                          /*
-                          Real dx_gdd_11 = -1.0 / 4.0 * M * x1 * pow(M + 2 * sqrt(pow(x1, 2) + pow(x2, 2)), 3) / pow(pow(x1, 2) + pow(x2, 2), 3);
-                          Real dy_gdd_11 = -1.0 / 4.0 * M * x2 * pow(M + 2 * sqrt(pow(x1, 2) + pow(x2, 2)), 3) / pow(pow(x1, 2) + pow(x2, 2), 3);
-                          Real dz_gdd_11 = 0;
-                          Real dx_gdd_12 = 0;
-                          Real dy_gdd_12 = 0;
-                          Real dz_gdd_12 = 0;
-                          Real dx_gdd_13 = 0;
-                          Real dy_gdd_13 = 0;
-                          Real dz_gdd_13 = 0;
-                          Real dx_gdd_21 = 0;
-                          Real dy_gdd_21 = 0;
-                          Real dz_gdd_21 = 0;
-                          Real dx_gdd_22 = -1.0 / 4.0 * M * x1 * pow(M + 2 * sqrt(pow(x1, 2) + pow(x2, 2)), 3) / pow(pow(x1, 2) + pow(x2, 2), 3);
-                          Real dy_gdd_22 = -1.0 / 4.0 * M * x2 * pow(M + 2 * sqrt(pow(x1, 2) + pow(x2, 2)), 3) / pow(pow(x1, 2) + pow(x2, 2), 3);
-                          Real dz_gdd_22 = 0;
-                          Real dx_gdd_23 = 0;
-                          Real dy_gdd_23 = 0;
-                          Real dz_gdd_23 = 0;
-                          Real dx_gdd_31 = 0;
-                          Real dy_gdd_31 = 0;
-                          Real dz_gdd_31 = 0;
-                          Real dx_gdd_32 = 0;
-                          Real dy_gdd_32 = 0;
-                          Real dz_gdd_32 = 0;
-                          Real dx_gdd_33 = -1.0 / 4.0 * M * x1 * pow(M + 2 * sqrt(pow(x1, 2) + pow(x2, 2)), 3) / pow(pow(x1, 2) + pow(x2, 2), 3);
-                          Real dy_gdd_33 = -1.0 / 4.0 * M * x2 * pow(M + 2 * sqrt(pow(x1, 2) + pow(x2, 2)), 3) / pow(pow(x1, 2) + pow(x2, 2), 3);
-                          Real dz_gdd_33 = 0;
-
-                          std::cout << "dx_gdd_11: " << dx_gdd_11 << " " << dg_ddd(0, 0, 0) << std::endl;
-                          std::cout << "dy_gdd_11: " << dy_gdd_11 << " " << dg_ddd(1, 0, 0) << std::endl;
-                          std::cout << "dz_gdd_11: " << dz_gdd_11 << " " << dg_ddd(2, 0, 0) << std::endl;
-                          std::cout << "dx_gdd_12: " << dx_gdd_12 << " " << dg_ddd(0, 0, 1) << std::endl;
-                          std::cout << "dy_gdd_12: " << dy_gdd_12 << " " << dg_ddd(1, 0, 1) << std::endl;
-                          std::cout << "dz_gdd_12: " << dz_gdd_12 << " " << dg_ddd(2, 0, 1) << std::endl;
-                          std::cout << "dx_gdd_13: " << dx_gdd_13 << " " << dg_ddd(0, 0, 2) << std::endl;
-                          std::cout << "dy_gdd_13: " << dy_gdd_13 << " " << dg_ddd(1, 0, 2) << std::endl;
-                          std::cout << "dz_gdd_13: " << dz_gdd_13 << " " << dg_ddd(2, 0, 2) << std::endl;
-                          std::cout << "dx_gdd_21: " << dx_gdd_21 << " " << dg_ddd(0, 1, 0) << std::endl;
-                          std::cout << "dy_gdd_21: " << dy_gdd_21 << " " << dg_ddd(1, 1, 0) << std::endl;
-                          std::cout << "dz_gdd_21: " << dz_gdd_21 << " " << dg_ddd(2, 1, 0) << std::endl;
-                          std::cout << "dx_gdd_22: " << dx_gdd_22 << " " << dg_ddd(0, 1, 1) << std::endl;
-                          std::cout << "dy_gdd_22: " << dy_gdd_22 << " " << dg_ddd(1, 1, 1) << std::endl;
-                          std::cout << "dz_gdd_22: " << dz_gdd_22 << " " << dg_ddd(2, 1, 1) << std::endl;
-                          std::cout << "dx_gdd_23: " << dx_gdd_23 << " " << dg_ddd(0, 1, 2) << std::endl;
-                          std::cout << "dy_gdd_23: " << dy_gdd_23 << " " << dg_ddd(1, 1, 2) << std::endl;
-                          std::cout << "dz_gdd_23: " << dz_gdd_23 << " " << dg_ddd(2, 1, 2) << std::endl;
-                          std::cout << "dx_gdd_31: " << dx_gdd_31 << " " << dg_ddd(0, 2, 0) << std::endl;
-                          std::cout << "dy_gdd_31: " << dy_gdd_31 << " " << dg_ddd(1, 2, 0) << std::endl;
-                          std::cout << "dz_gdd_31: " << dz_gdd_31 << " " << dg_ddd(2, 2, 0) << std::endl;
-                          std::cout << "dx_gdd_32: " << dx_gdd_32 << " " << dg_ddd(0, 2, 1) << std::endl;
-                          std::cout << "dy_gdd_32: " << dy_gdd_32 << " " << dg_ddd(1, 2, 1) << std::endl;
-                          std::cout << "dz_gdd_32: " << dz_gdd_32 << " " << dg_ddd(2, 2, 1) << std::endl;
-                          std::cout << "dx_gdd_33: " << dx_gdd_33 << " " << dg_ddd(0, 2, 2) << std::endl;
-                          std::cout << "dy_gdd_33: " << dy_gdd_33 << " " << dg_ddd(1, 2, 2) << std::endl;
-                          std::cout << "dz_gdd_33: " << dz_gdd_33 << " " << dg_ddd(2, 2, 2) << std::endl;
-                          std::cout << std::endl;
-                          */
-                          // end of spatial derivatives of spatial metric
-                          // --------------------
 
                           // derivatives of the 4-metric: time derivatives
                           AthenaScratchTensor4d<Real, TensorSymm::SYM2, 4, 3> dg4_ddd; //f
@@ -364,20 +179,6 @@ namespace radiationfemn
                                   dg4_ddd(0, a, b) = 0.; // time derivatives, get from z4c
                               }
                           }
-
-                          // -------------------------------
-                          // print time derivatives of 4 metric
-                          /*
-                          for (int a = 0; a < 4; a++)
-                          {
-                              for (int b = 0; b < 4; b++)
-                              {
-                                  std::cout << "dt_gdd_" << a << b << ": " << dg4_ddd(0, a, b) << std::endl;
-                              }
-                          }
-                          */
-                          // end time derivatives of 4 metric
-                          // --------------------------------
 
                           // derivatives of the 4-metric: spatial derivatives
                           for (int a = 1; a < 4; ++a)
@@ -400,126 +201,6 @@ namespace radiationfemn
                                   + 2. * dg_ddd(a - 1, 1, 2) * adm.beta_u(m, 1, k, j, i) * adm.beta_u(m, 2, k, j, i)
                                   + dg_ddd(a - 1, 2, 2) * adm.beta_u(m, 2, k, j, i) * adm.beta_u(m, 2, k, j, i);
                           }
-
-                          // ------------------
-                          // print spatial derivatives of 4-metric
-                          /*
-                          Real dx_gdd_00 = 8 * M * x1 * (M - 2 * sqrt(pow(x1, 2) + pow(x2, 2))) / (pow(M + 2 * sqrt(pow(x1, 2) + pow(x2, 2)), 3) * sqrt(pow(x1, 2) + pow(x2, 2)));
-                          Real dy_gdd_00 = 8 * M * x2 * (M - 2 * sqrt(pow(x1, 2) + pow(x2, 2))) / (pow(M + 2 * sqrt(pow(x1, 2) + pow(x2, 2)), 3) * sqrt(pow(x1, 2) + pow(x2, 2)));
-                          Real dz_gdd_00 = 0;
-                          Real dx_gdd_01 = 0;
-                          Real dy_gdd_01 = 0;
-                          Real dz_gdd_01 = 0;
-                          Real dx_gdd_02 = 0;
-                          Real dy_gdd_02 = 0;
-                          Real dz_gdd_02 = 0;
-                          Real dx_gdd_03 = 0;
-                          Real dy_gdd_03 = 0;
-                          Real dz_gdd_03 = 0;
-                          Real dx_gdd_10 = 0;
-                          Real dy_gdd_10 = 0;
-                          Real dz_gdd_10 = 0;
-                          Real dx_gdd_11 = -1.0 / 4.0 * M * x1 * pow(M + 2 * sqrt(pow(x1, 2) + pow(x2, 2)), 3) / pow(pow(x1, 2) + pow(x2, 2), 3);
-                          Real dy_gdd_11 = -1.0 / 4.0 * M * x2 * pow(M + 2 * sqrt(pow(x1, 2) + pow(x2, 2)), 3) / pow(pow(x1, 2) + pow(x2, 2), 3);
-                          Real dz_gdd_11 = 0;
-                          Real dx_gdd_12 = 0;
-                          Real dy_gdd_12 = 0;
-                          Real dz_gdd_12 = 0;
-                          Real dx_gdd_13 = 0;
-                          Real dy_gdd_13 = 0;
-                          Real dz_gdd_13 = 0;
-                          Real dx_gdd_20 = 0;
-                          Real dy_gdd_20 = 0;
-                          Real dz_gdd_20 = 0;
-                          Real dx_gdd_21 = 0;
-                          Real dy_gdd_21 = 0;
-                          Real dz_gdd_21 = 0;
-                          Real dx_gdd_22 = -1.0 / 4.0 * M * x1 * pow(M + 2 * sqrt(pow(x1, 2) + pow(x2, 2)), 3) / pow(pow(x1, 2) + pow(x2, 2), 3);
-                          Real dy_gdd_22 = -1.0 / 4.0 * M * x2 * pow(M + 2 * sqrt(pow(x1, 2) + pow(x2, 2)), 3) / pow(pow(x1, 2) + pow(x2, 2), 3);
-                          Real dz_gdd_22 = 0;
-                          Real dx_gdd_23 = 0;
-                          Real dy_gdd_23 = 0;
-                          Real dz_gdd_23 = 0;
-                          Real dx_gdd_30 = 0;
-                          Real dy_gdd_30 = 0;
-                          Real dz_gdd_30 = 0;
-                          Real dx_gdd_31 = 0;
-                          Real dy_gdd_31 = 0;
-                          Real dz_gdd_31 = 0;
-                          Real dx_gdd_32 = 0;
-                          Real dy_gdd_32 = 0;
-                          Real dz_gdd_32 = 0;
-                          Real dx_gdd_33 = -1.0 / 4.0 * M * x1 * pow(M + 2 * sqrt(pow(x1, 2) + pow(x2, 2)), 3) / pow(pow(x1, 2) + pow(x2, 2), 3);
-                          Real dy_gdd_33 = -1.0 / 4.0 * M * x2 * pow(M + 2 * sqrt(pow(x1, 2) + pow(x2, 2)), 3) / pow(pow(x1, 2) + pow(x2, 2), 3);
-                          Real dz_gdd_33 = 0;
-
-                          std::cout << "dt_gdd_00: " << 0 << " " << dg4_ddd(0, 0, 0) << std::endl;
-                          std::cout << "dx_gdd_00: " << dx_gdd_00 << " " << dg4_ddd(1, 0, 0) << std::endl;
-                          std::cout << "dy_gdd_00: " << dy_gdd_00 << " " << dg4_ddd(2, 0, 0) << std::endl;
-                          std::cout << "dz_gdd_00: " << dz_gdd_00 << " " << dg4_ddd(3, 0, 0) << std::endl;
-                          std::cout << "dt_gdd_01: " << 0 << " " << dg4_ddd(0, 0, 1) << std::endl;
-                          std::cout << "dx_gdd_01: " << dx_gdd_01 << " " << dg4_ddd(1, 0, 1) << std::endl;
-                          std::cout << "dy_gdd_01: " << dy_gdd_01 << " " << dg4_ddd(2, 0, 1) << std::endl;
-                          std::cout << "dz_gdd_01: " << dz_gdd_01 << " " << dg4_ddd(3, 0, 1) << std::endl;
-                          std::cout << "dt_gdd_02: " << 0 << " " << dg4_ddd(0, 0, 2) << std::endl;
-                          std::cout << "dx_gdd_02: " << dx_gdd_02 << " " << dg4_ddd(1, 0, 2) << std::endl;
-                          std::cout << "dy_gdd_02: " << dy_gdd_02 << " " << dg4_ddd(2, 0, 2) << std::endl;
-                          std::cout << "dz_gdd_02: " << dz_gdd_02 << " " << dg4_ddd(3, 0, 2) << std::endl;
-                          std::cout << "dt_gdd_03: " << 0 << " " << dg4_ddd(0, 0, 3) << std::endl;
-                          std::cout << "dx_gdd_03: " << dx_gdd_03 << " " << dg4_ddd(1, 0, 3) << std::endl;
-                          std::cout << "dy_gdd_03: " << dy_gdd_03 << " " << dg4_ddd(2, 0, 3) << std::endl;
-                          std::cout << "dz_gdd_03: " << dz_gdd_03 << " " << dg4_ddd(3, 0, 3) << std::endl;
-                          std::cout << "dt_gdd_10: " << 0 << " " << dg4_ddd(0, 1, 0) << std::endl;
-                          std::cout << "dx_gdd_10: " << dx_gdd_10 << " " << dg4_ddd(1, 1, 0) << std::endl;
-                          std::cout << "dy_gdd_10: " << dy_gdd_10 << " " << dg4_ddd(2, 1, 0) << std::endl;
-                          std::cout << "dz_gdd_10: " << dz_gdd_10 << " " << dg4_ddd(3, 1, 0) << std::endl;
-                          std::cout << "dt_gdd_11: " << 0 << " " << dg4_ddd(0, 1, 1) << std::endl;
-                          std::cout << "dx_gdd_11: " << dx_gdd_11 << " " << dg4_ddd(1, 1, 1) << std::endl;
-                          std::cout << "dy_gdd_11: " << dy_gdd_11 << " " << dg4_ddd(2, 1, 1) << std::endl;
-                          std::cout << "dz_gdd_11: " << dz_gdd_11 << " " << dg4_ddd(3, 1, 1) << std::endl;
-                          std::cout << "dt_gdd_12: " << 0 << " " << dg4_ddd(0, 1, 2) << std::endl;
-                          std::cout << "dx_gdd_12: " << dx_gdd_12 << " " << dg4_ddd(1, 1, 2) << std::endl;
-                          std::cout << "dy_gdd_12: " << dy_gdd_12 << " " << dg4_ddd(2, 1, 2) << std::endl;
-                          std::cout << "dz_gdd_12: " << dz_gdd_12 << " " << dg4_ddd(3, 1, 2) << std::endl;
-                          std::cout << "dt_gdd_13: " << 0 << " " << dg4_ddd(0, 1, 3) << std::endl;
-                          std::cout << "dx_gdd_13: " << dx_gdd_13 << " " << dg4_ddd(1, 1, 3) << std::endl;
-                          std::cout << "dy_gdd_13: " << dy_gdd_13 << " " << dg4_ddd(2, 1, 3) << std::endl;
-                          std::cout << "dz_gdd_13: " << dz_gdd_13 << " " << dg4_ddd(3, 1, 3) << std::endl;
-                          std::cout << "dt_gdd_20: " << 0 << " " << dg4_ddd(0, 2, 0) << std::endl;
-                          std::cout << "dx_gdd_20: " << dx_gdd_20 << " " << dg4_ddd(1, 2, 0) << std::endl;
-                          std::cout << "dy_gdd_20: " << dy_gdd_20 << " " << dg4_ddd(2, 2, 0) << std::endl;
-                          std::cout << "dz_gdd_20: " << dz_gdd_20 << " " << dg4_ddd(3, 2, 0) << std::endl;
-                          std::cout << "dt_gdd_21: " << 0 << " " << dg4_ddd(0, 2, 1) << std::endl;
-                          std::cout << "dx_gdd_21: " << dx_gdd_21 << " " << dg4_ddd(1, 2, 1) << std::endl;
-                          std::cout << "dy_gdd_21: " << dy_gdd_21 << " " << dg4_ddd(2, 2, 1) << std::endl;
-                          std::cout << "dz_gdd_21: " << dz_gdd_21 << " " << dg4_ddd(3, 2, 1) << std::endl;
-                          std::cout << "dt_gdd_22: " << 0 << " " << dg4_ddd(0, 2, 2) << std::endl;
-                          std::cout << "dx_gdd_22: " << dx_gdd_22 << " " << dg4_ddd(1, 2, 2) << std::endl;
-                          std::cout << "dy_gdd_22: " << dy_gdd_22 << " " << dg4_ddd(2, 2, 2) << std::endl;
-                          std::cout << "dz_gdd_22: " << dz_gdd_22 << " " << dg4_ddd(3, 2, 2) << std::endl;
-                          std::cout << "dt_gdd_23: " << 0 << " " << dg4_ddd(0, 2, 3) << std::endl;
-                          std::cout << "dx_gdd_23: " << dx_gdd_23 << " " << dg4_ddd(1, 2, 3) << std::endl;
-                          std::cout << "dy_gdd_23: " << dy_gdd_23 << " " << dg4_ddd(2, 2, 3) << std::endl;
-                          std::cout << "dz_gdd_23: " << dz_gdd_23 << " " << dg4_ddd(3, 2, 3) << std::endl;
-                          std::cout << "dt_gdd_30: " << 0 << " " << dg4_ddd(0, 3, 0) << std::endl;
-                          std::cout << "dx_gdd_30: " << dx_gdd_30 << " " << dg4_ddd(1, 3, 0) << std::endl;
-                          std::cout << "dy_gdd_30: " << dy_gdd_30 << " " << dg4_ddd(2, 3, 0) << std::endl;
-                          std::cout << "dz_gdd_30: " << dz_gdd_30 << " " << dg4_ddd(3, 3, 0) << std::endl;
-                          std::cout << "dt_gdd_31: " << 0 << " " << dg4_ddd(0, 3, 1) << std::endl;
-                          std::cout << "dx_gdd_31: " << dx_gdd_31 << " " << dg4_ddd(1, 3, 1) << std::endl;
-                          std::cout << "dy_gdd_31: " << dy_gdd_31 << " " << dg4_ddd(2, 3, 1) << std::endl;
-                          std::cout << "dz_gdd_31: " << dz_gdd_31 << " " << dg4_ddd(3, 3, 1) << std::endl;
-                          std::cout << "dt_gdd_32: " << 0 << " " << dg4_ddd(0, 3, 2) << std::endl;
-                          std::cout << "dx_gdd_32: " << dx_gdd_32 << " " << dg4_ddd(1, 3, 2) << std::endl;
-                          std::cout << "dy_gdd_32: " << dy_gdd_32 << " " << dg4_ddd(2, 3, 2) << std::endl;
-                          std::cout << "dz_gdd_32: " << dz_gdd_32 << " " << dg4_ddd(3, 3, 2) << std::endl;
-                          std::cout << "dt_gdd_33: " << 0 << " " << dg4_ddd(0, 3, 3) << std::endl;
-                          std::cout << "dx_gdd_33: " << dx_gdd_33 << " " << dg4_ddd(1, 3, 3) << std::endl;
-                          std::cout << "dy_gdd_33: " << dy_gdd_33 << " " << dg4_ddd(2, 3, 3) << std::endl;
-                          std::cout << "dz_gdd_33: " << dz_gdd_33 << " " << dg4_ddd(3, 3, 3) << std::endl;
-                          */
-                          // end of spatial derivatives of spatial metric
-                          // ------------------
 
                           // Christoeffel symbols
                           AthenaScratchTensor4d<Real, TensorSymm::SYM2, 4, 3> Gamma_udd;
@@ -549,10 +230,12 @@ namespace radiationfemn
                                       Gamma_fluid_udd(a, b, c) = 0.0;
                                       for (int d = 0; d < 64; ++d)
                                       {
+                                          // check three lines
                                           int a_idx = int(d / (4 * 4));
                                           int b_idx = int((d - 4 * 4 * a_idx) / 4);
                                           int c_idx = d - a_idx * 4 * 4 - b_idx * 4;
 
+                                          // check contraction
                                           Real l_sign = (a == 0) ? -1. : +1.;
                                           Real L_ahat_aidx = l_sign * (g_dd[a_idx + 4 * 0] * L_mu_muhat0_(m, 0, a, k, j, i) + g_dd[a_idx + 4 * 1] * L_mu_muhat0_(m, 1, a, k, j, i)
                                               + g_dd[a_idx + 4 * 2] * L_mu_muhat0_(m, 2, a, k, j, i) + g_dd[a_idx + 4 * 3] * L_mu_muhat0_(m, 3, a, k, j, i));
@@ -568,294 +251,25 @@ namespace radiationfemn
 
                                           Gamma_fluid_udd(a, b, c) +=
                                               L_ahat_aidx * (L_mu_muhat0_(m, 1, c, k, j, i) - (u_mu_(m, 1, k, j, i) / u_mu_(m, 0, k, j, i)) * L_mu_muhat0_(m, 0, c, k, j, i))
-                                              * Dx<NGHOST>(0, idx, L_mu_muhat0_, m, a_idx, c, k, j, i);
+                                              * Dx<NGHOST>(0, deltax, L_mu_muhat0_, m, a_idx, c, k, j, i);
 
                                           if (multi_d)
                                           {
                                               Gamma_fluid_udd(a, b, c) +=
                                                   L_ahat_aidx * (L_mu_muhat0_(m, 2, c, k, j, i) - (u_mu_(m, 2, k, j, i) / u_mu_(m, 0, k, j, i)) * L_mu_muhat0_(m, 0, c, k, j, i))
-                                                  * Dx<NGHOST>(1, idx, L_mu_muhat0_, m, a_idx, c, k, j, i);
+                                                  * Dx<NGHOST>(1, deltax, L_mu_muhat0_, m, a_idx, c, k, j, i);
                                           }
 
                                           if (three_d)
                                           {
                                               Gamma_fluid_udd(a, b, c) +=
                                                   L_ahat_aidx * (L_mu_muhat0_(m, 3, c, k, j, i) - (u_mu_(m, 3, k, j, i) / u_mu_(m, 0, k, j, i)) * L_mu_muhat0_(m, 0, c, k, j, i))
-                                                  * Dx<NGHOST>(2, idx, L_mu_muhat0_, m, a_idx, c, k, j, i);
+                                                  * Dx<NGHOST>(2, deltax, L_mu_muhat0_, m, a_idx, c, k, j, i);
                                           }
                                       }
                                   }
                               }
                           }
-
-                          // -------------------------------
-                          // start of 4-Christoeffel print
-                          /*
-                          Real gamma4d_0_0_0 = 0;
-                          Real gamma4d_0_0_1 = 4 * M * x1 * (-pow(M, 3) + 6 * pow(M, 2) * sqrt(pow(x1, 2) + pow(x2, 2)) - 12 * M * pow(x1, 2) - 12 * M * pow(x2, 2) + 8 * pow(x1, 2)
-                              * sqrt(pow(x1, 2) + pow(x2, 2)) + 8 * pow(x2, 2) * sqrt(pow(x1, 2) + pow(x2, 2))) / (pow(M, 5) * sqrt(pow(x1, 2) + pow(x2, 2)) - 6 * pow(M, 4) *
-                              pow(x1, 2) - 6 * pow(M, 4) * pow(x2, 2) + 8 * pow(M, 3) * pow(x1, 2) * sqrt(pow(x1, 2) + pow(x2, 2)) + 8 * pow(M, 3) * pow(x2, 2) *
-                              sqrt(pow(x1, 2) + pow(x2, 2)) + 16 * pow(M, 2) * pow(x1, 4) + 32 * pow(M, 2) * pow(x1, 2) * pow(x2, 2) + 16 * pow(M, 2) * pow(x2, 4) - 48 * M *
-                              pow(x1, 4) * sqrt(pow(x1, 2) + pow(x2, 2)) - 96 * M * pow(x1, 2) * pow(x2, 2) * sqrt(pow(x1, 2) + pow(x2, 2)) - 48 * M * pow(x2, 4) *
-                              sqrt(pow(x1, 2) + pow(x2, 2)) + 32 * pow(x1, 6) + 96 * pow(x1, 4) * pow(x2, 2) + 96 * pow(x1, 2) * pow(x2, 4) + 32 * pow(x2, 6));
-                          Real gamma4d_0_0_2 = 4 * M * x2 * (-pow(M, 3) + 6 * pow(M, 2) * sqrt(pow(x1, 2) + pow(x2, 2)) - 12 * M * pow(x1, 2) - 12 * M * pow(x2, 2) + 8 * pow(x1, 2)
-                              * sqrt(pow(x1, 2) + pow(x2, 2)) + 8 * pow(x2, 2) * sqrt(pow(x1, 2) + pow(x2, 2))) / (pow(M, 5) * sqrt(pow(x1, 2) + pow(x2, 2)) - 6 * pow(M, 4) *
-                              pow(x1, 2) - 6 * pow(M, 4) * pow(x2, 2) + 8 * pow(M, 3) * pow(x1, 2) * sqrt(pow(x1, 2) + pow(x2, 2)) + 8 * pow(M, 3) * pow(x2, 2) *
-                              sqrt(pow(x1, 2) + pow(x2, 2)) + 16 * pow(M, 2) * pow(x1, 4) + 32 * pow(M, 2) * pow(x1, 2) * pow(x2, 2) + 16 * pow(M, 2) * pow(x2, 4) - 48 * M *
-                              pow(x1, 4) * sqrt(pow(x1, 2) + pow(x2, 2)) - 96 * M * pow(x1, 2) * pow(x2, 2) * sqrt(pow(x1, 2) + pow(x2, 2)) - 48 * M * pow(x2, 4) *
-                              sqrt(pow(x1, 2) + pow(x2, 2)) + 32 * pow(x1, 6) + 96 * pow(x1, 4) * pow(x2, 2) + 96 * pow(x1, 2) * pow(x2, 4) + 32 * pow(x2, 6));
-                          Real gamma4d_0_0_3 = 0;
-                          Real gamma4d_0_1_0 = 4 * M * x1 * (-pow(M, 3) + 6 * pow(M, 2) * sqrt(pow(x1, 2) + pow(x2, 2)) - 12 * M * pow(x1, 2) - 12 * M * pow(x2, 2) + 8 * pow(x1, 2)
-                              * sqrt(pow(x1, 2) + pow(x2, 2)) + 8 * pow(x2, 2) * sqrt(pow(x1, 2) + pow(x2, 2))) / (pow(M, 5) * sqrt(pow(x1, 2) + pow(x2, 2)) - 6 * pow(M, 4) *
-                              pow(x1, 2) - 6 * pow(M, 4) * pow(x2, 2) + 8 * pow(M, 3) * pow(x1, 2) * sqrt(pow(x1, 2) + pow(x2, 2)) + 8 * pow(M, 3) * pow(x2, 2) *
-                              sqrt(pow(x1, 2) + pow(x2, 2)) + 16 * pow(M, 2) * pow(x1, 4) + 32 * pow(M, 2) * pow(x1, 2) * pow(x2, 2) + 16 * pow(M, 2) * pow(x2, 4) - 48 * M *
-                              pow(x1, 4) * sqrt(pow(x1, 2) + pow(x2, 2)) - 96 * M * pow(x1, 2) * pow(x2, 2) * sqrt(pow(x1, 2) + pow(x2, 2)) - 48 * M * pow(x2, 4) *
-                              sqrt(pow(x1, 2) + pow(x2, 2)) + 32 * pow(x1, 6) + 96 * pow(x1, 4) * pow(x2, 2) + 96 * pow(x1, 2) * pow(x2, 4) + 32 * pow(x2, 6));
-                          Real gamma4d_0_1_1 = 0;
-                          Real gamma4d_0_1_2 = 0;
-                          Real gamma4d_0_1_3 = 0;
-                          Real gamma4d_0_2_0 = 4 * M * x2 * (-pow(M, 3) + 6 * pow(M, 2) * sqrt(pow(x1, 2) + pow(x2, 2)) - 12 * M * pow(x1, 2) - 12 * M * pow(x2, 2) + 8 * pow(x1, 2)
-                              * sqrt(pow(x1, 2) + pow(x2, 2)) + 8 * pow(x2, 2) * sqrt(pow(x1, 2) + pow(x2, 2))) / (pow(M, 5) * sqrt(pow(x1, 2) + pow(x2, 2)) - 6 * pow(M, 4) *
-                              pow(x1, 2) - 6 * pow(M, 4) * pow(x2, 2) + 8 * pow(M, 3) * pow(x1, 2) * sqrt(pow(x1, 2) + pow(x2, 2)) + 8 * pow(M, 3) * pow(x2, 2) *
-                              sqrt(pow(x1, 2) + pow(x2, 2)) + 16 * pow(M, 2) * pow(x1, 4) + 32 * pow(M, 2) * pow(x1, 2) * pow(x2, 2) + 16 * pow(M, 2) * pow(x2, 4) - 48 * M *
-                              pow(x1, 4) * sqrt(pow(x1, 2) + pow(x2, 2)) - 96 * M * pow(x1, 2) * pow(x2, 2) * sqrt(pow(x1, 2) + pow(x2, 2)) - 48 * M * pow(x2, 4) *
-                              sqrt(pow(x1, 2) + pow(x2, 2)) + 32 * pow(x1, 6) + 96 * pow(x1, 4) * pow(x2, 2) + 96 * pow(x1, 2) * pow(x2, 4) + 32 * pow(x2, 6));
-                          Real gamma4d_0_2_1 = 0;
-                          Real gamma4d_0_2_2 = 0;
-                          Real gamma4d_0_2_3 = 0;
-                          Real gamma4d_0_3_0 = 0;
-                          Real gamma4d_0_3_1 = 0;
-                          Real gamma4d_0_3_2 = 0;
-                          Real gamma4d_0_3_3 = 0;
-                          Real gamma4d_1_0_0 = -64 * M * x1 * (M - 2 * sqrt(pow(x1, 2) + pow(x2, 2))) * (pow(x1, 4) + 2 * pow(x1, 2) * pow(x2, 2) + pow(x2, 4)) / (
-                              pow(M + 2 * sqrt(pow(x1, 2) + pow(x2, 2)), 3) * sqrt(pow(x1, 2) + pow(x2, 2)) * (pow(M, 4) + 8 * pow(M, 3) * sqrt(pow(x1, 2) + pow(x2, 2)) + 24 *
-                                  pow(M, 2) * pow(x1, 2) + 24 * pow(M, 2) * pow(x2, 2) + 32 * M * pow(x1, 2) * sqrt(pow(x1, 2) + pow(x2, 2)) + 32 * M * pow(x2, 2) *
-                                  sqrt(pow(x1, 2) + pow(x2, 2)) + 16 * pow(x1, 4) + 32 * pow(x1, 2) * pow(x2, 2) + 16 * pow(x2, 4)));
-                          Real gamma4d_1_0_1 = 0;
-                          Real gamma4d_1_0_2 = 0;
-                          Real gamma4d_1_0_3 = 0;
-                          Real gamma4d_1_1_0 = 0;
-                          Real gamma4d_1_1_1 = -2 * M * x1 * pow(M + 2 * sqrt(pow(x1, 2) + pow(x2, 2)), 3) * (pow(x1, 4) + 2 * pow(x1, 2) * pow(x2, 2) + pow(x2, 4)) / (
-                              pow(pow(x1, 2) + pow(x2, 2), 3) * (pow(M, 4) + 8 * pow(M, 3) * sqrt(pow(x1, 2) + pow(x2, 2)) + 24 * pow(M, 2) * pow(x1, 2) + 24 * pow(M, 2) *
-                                  pow(x2, 2) + 32 * M * pow(x1, 2) * sqrt(pow(x1, 2) + pow(x2, 2)) + 32 * M * pow(x2, 2) * sqrt(pow(x1, 2) + pow(x2, 2)) + 16 * pow(x1, 4) + 32 *
-                                  pow(x1, 2) * pow(x2, 2) + 16 * pow(x2, 4)));
-                          Real gamma4d_1_1_2 = -2 * M * x2 * pow(M + 2 * sqrt(pow(x1, 2) + pow(x2, 2)), 3) * (pow(x1, 4) + 2 * pow(x1, 2) * pow(x2, 2) + pow(x2, 4)) / (
-                              pow(pow(x1, 2) + pow(x2, 2), 3) * (pow(M, 4) + 8 * pow(M, 3) * sqrt(pow(x1, 2) + pow(x2, 2)) + 24 * pow(M, 2) * pow(x1, 2) + 24 * pow(M, 2) *
-                                  pow(x2, 2) + 32 * M * pow(x1, 2) * sqrt(pow(x1, 2) + pow(x2, 2)) + 32 * M * pow(x2, 2) * sqrt(pow(x1, 2) + pow(x2, 2)) + 16 * pow(x1, 4) + 32 *
-                                  pow(x1, 2) * pow(x2, 2) + 16 * pow(x2, 4)));
-                          Real gamma4d_1_1_3 = 0;
-                          Real gamma4d_1_2_0 = 0;
-                          Real gamma4d_1_2_1 = -2 * M * x2 * pow(M + 2 * sqrt(pow(x1, 2) + pow(x2, 2)), 3) * (pow(x1, 4) + 2 * pow(x1, 2) * pow(x2, 2) + pow(x2, 4)) / (
-                              pow(pow(x1, 2) + pow(x2, 2), 3) * (pow(M, 4) + 8 * pow(M, 3) * sqrt(pow(x1, 2) + pow(x2, 2)) + 24 * pow(M, 2) * pow(x1, 2) + 24 * pow(M, 2) *
-                                  pow(x2, 2) + 32 * M * pow(x1, 2) * sqrt(pow(x1, 2) + pow(x2, 2)) + 32 * M * pow(x2, 2) * sqrt(pow(x1, 2) + pow(x2, 2)) + 16 * pow(x1, 4) + 32 *
-                                  pow(x1, 2) * pow(x2, 2) + 16 * pow(x2, 4)));
-                          Real gamma4d_1_2_2 = 2 * M * x1 * pow(M + 2 * sqrt(pow(x1, 2) + pow(x2, 2)), 3) * (pow(x1, 4) + 2 * pow(x1, 2) * pow(x2, 2) + pow(x2, 4)) / (
-                              pow(pow(x1, 2) + pow(x2, 2), 3) * (pow(M, 4) + 8 * pow(M, 3) * sqrt(pow(x1, 2) + pow(x2, 2)) + 24 * pow(M, 2) * pow(x1, 2) + 24 * pow(M, 2) *
-                                  pow(x2, 2) + 32 * M * pow(x1, 2) * sqrt(pow(x1, 2) + pow(x2, 2)) + 32 * M * pow(x2, 2) * sqrt(pow(x1, 2) + pow(x2, 2)) + 16 * pow(x1, 4) + 32 *
-                                  pow(x1, 2) * pow(x2, 2) + 16 * pow(x2, 4)));
-                          Real gamma4d_1_2_3 = 0;
-                          Real gamma4d_1_3_0 = 0;
-                          Real gamma4d_1_3_1 = 0;
-                          Real gamma4d_1_3_2 = 0;
-                          Real gamma4d_1_3_3 = 2 * M * x1 * pow(M + 2 * sqrt(pow(x1, 2) + pow(x2, 2)), 3) * (pow(x1, 4) + 2 * pow(x1, 2) * pow(x2, 2) + pow(x2, 4)) / (
-                              pow(pow(x1, 2) + pow(x2, 2), 3) * (pow(M, 4) + 8 * pow(M, 3) * sqrt(pow(x1, 2) + pow(x2, 2)) + 24 * pow(M, 2) * pow(x1, 2) + 24 * pow(M, 2) *
-                                  pow(x2, 2) + 32 * M * pow(x1, 2) * sqrt(pow(x1, 2) + pow(x2, 2)) + 32 * M * pow(x2, 2) * sqrt(pow(x1, 2) + pow(x2, 2)) + 16 * pow(x1, 4) + 32 *
-                                  pow(x1, 2) * pow(x2, 2) + 16 * pow(x2, 4)));
-                          Real gamma4d_2_0_0 = -64 * M * x2 * (M - 2 * sqrt(pow(x1, 2) + pow(x2, 2))) * (pow(x1, 4) + 2 * pow(x1, 2) * pow(x2, 2) + pow(x2, 4)) / (
-                              pow(M + 2 * sqrt(pow(x1, 2) + pow(x2, 2)), 3) * sqrt(pow(x1, 2) + pow(x2, 2)) * (pow(M, 4) + 8 * pow(M, 3) * sqrt(pow(x1, 2) + pow(x2, 2)) + 24 *
-                                  pow(M, 2) * pow(x1, 2) + 24 * pow(M, 2) * pow(x2, 2) + 32 * M * pow(x1, 2) * sqrt(pow(x1, 2) + pow(x2, 2)) + 32 * M * pow(x2, 2) *
-                                  sqrt(pow(x1, 2) + pow(x2, 2)) + 16 * pow(x1, 4) + 32 * pow(x1, 2) * pow(x2, 2) + 16 * pow(x2, 4)));
-                          Real gamma4d_2_0_1 = 0;
-                          Real gamma4d_2_0_2 = 0;
-                          Real gamma4d_2_0_3 = 0;
-                          Real gamma4d_2_1_0 = 0;
-                          Real gamma4d_2_1_1 = 2 * M * x2 * pow(M + 2 * sqrt(pow(x1, 2) + pow(x2, 2)), 3) * (pow(x1, 4) + 2 * pow(x1, 2) * pow(x2, 2) + pow(x2, 4)) / (
-                              pow(pow(x1, 2) + pow(x2, 2), 3) * (pow(M, 4) + 8 * pow(M, 3) * sqrt(pow(x1, 2) + pow(x2, 2)) + 24 * pow(M, 2) * pow(x1, 2) + 24 * pow(M, 2) *
-                                  pow(x2, 2) + 32 * M * pow(x1, 2) * sqrt(pow(x1, 2) + pow(x2, 2)) + 32 * M * pow(x2, 2) * sqrt(pow(x1, 2) + pow(x2, 2)) + 16 * pow(x1, 4) + 32 *
-                                  pow(x1, 2) * pow(x2, 2) + 16 * pow(x2, 4)));
-                          Real gamma4d_2_1_2 = -2 * M * x1 * pow(M + 2 * sqrt(pow(x1, 2) + pow(x2, 2)), 3) * (pow(x1, 4) + 2 * pow(x1, 2) * pow(x2, 2) + pow(x2, 4)) / (
-                              pow(pow(x1, 2) + pow(x2, 2), 3) * (pow(M, 4) + 8 * pow(M, 3) * sqrt(pow(x1, 2) + pow(x2, 2)) + 24 * pow(M, 2) * pow(x1, 2) + 24 * pow(M, 2) *
-                                  pow(x2, 2) + 32 * M * pow(x1, 2) * sqrt(pow(x1, 2) + pow(x2, 2)) + 32 * M * pow(x2, 2) * sqrt(pow(x1, 2) + pow(x2, 2)) + 16 * pow(x1, 4) + 32 *
-                                  pow(x1, 2) * pow(x2, 2) + 16 * pow(x2, 4)));
-                          Real gamma4d_2_1_3 = 0;
-                          Real gamma4d_2_2_0 = 0;
-                          Real gamma4d_2_2_1 = -2 * M * x1 * pow(M + 2 * sqrt(pow(x1, 2) + pow(x2, 2)), 3) * (pow(x1, 4) + 2 * pow(x1, 2) * pow(x2, 2) + pow(x2, 4)) / (
-                              pow(pow(x1, 2) + pow(x2, 2), 3) * (pow(M, 4) + 8 * pow(M, 3) * sqrt(pow(x1, 2) + pow(x2, 2)) + 24 * pow(M, 2) * pow(x1, 2) + 24 * pow(M, 2) *
-                                  pow(x2, 2) + 32 * M * pow(x1, 2) * sqrt(pow(x1, 2) + pow(x2, 2)) + 32 * M * pow(x2, 2) * sqrt(pow(x1, 2) + pow(x2, 2)) + 16 * pow(x1, 4) + 32 *
-                                  pow(x1, 2) * pow(x2, 2) + 16 * pow(x2, 4)));
-                          Real gamma4d_2_2_2 = -2 * M * x2 * pow(M + 2 * sqrt(pow(x1, 2) + pow(x2, 2)), 3) * (pow(x1, 4) + 2 * pow(x1, 2) * pow(x2, 2) + pow(x2, 4)) / (
-                              pow(pow(x1, 2) + pow(x2, 2), 3) * (pow(M, 4) + 8 * pow(M, 3) * sqrt(pow(x1, 2) + pow(x2, 2)) + 24 * pow(M, 2) * pow(x1, 2) + 24 * pow(M, 2) *
-                                  pow(x2, 2) + 32 * M * pow(x1, 2) * sqrt(pow(x1, 2) + pow(x2, 2)) + 32 * M * pow(x2, 2) * sqrt(pow(x1, 2) + pow(x2, 2)) + 16 * pow(x1, 4) + 32 *
-                                  pow(x1, 2) * pow(x2, 2) + 16 * pow(x2, 4)));
-                          Real gamma4d_2_2_3 = 0;
-                          Real gamma4d_2_3_0 = 0;
-                          Real gamma4d_2_3_1 = 0;
-                          Real gamma4d_2_3_2 = 0;
-                          Real gamma4d_2_3_3 = 2 * M * x2 * pow(M + 2 * sqrt(pow(x1, 2) + pow(x2, 2)), 3) * (pow(x1, 4) + 2 * pow(x1, 2) * pow(x2, 2) + pow(x2, 4)) / (
-                              pow(pow(x1, 2) + pow(x2, 2), 3) * (pow(M, 4) + 8 * pow(M, 3) * sqrt(pow(x1, 2) + pow(x2, 2)) + 24 * pow(M, 2) * pow(x1, 2) + 24 * pow(M, 2) *
-                                  pow(x2, 2) + 32 * M * pow(x1, 2) * sqrt(pow(x1, 2) + pow(x2, 2)) + 32 * M * pow(x2, 2) * sqrt(pow(x1, 2) + pow(x2, 2)) + 16 * pow(x1, 4) + 32 *
-                                  pow(x1, 2) * pow(x2, 2) + 16 * pow(x2, 4)));
-                          Real gamma4d_3_0_0 = 0;
-                          Real gamma4d_3_0_1 = 0;
-                          Real gamma4d_3_0_2 = 0;
-                          Real gamma4d_3_0_3 = 0;
-                          Real gamma4d_3_1_0 = 0;
-                          Real gamma4d_3_1_1 = 0;
-                          Real gamma4d_3_1_2 = 0;
-                          Real gamma4d_3_1_3 = -2 * M * x1 * pow(M + 2 * sqrt(pow(x1, 2) + pow(x2, 2)), 3) * (pow(x1, 4) + 2 * pow(x1, 2) * pow(x2, 2) + pow(x2, 4)) / (
-                              pow(pow(x1, 2) + pow(x2, 2), 3) * (pow(M, 4) + 8 * pow(M, 3) * sqrt(pow(x1, 2) + pow(x2, 2)) + 24 * pow(M, 2) * pow(x1, 2) + 24 * pow(M, 2) *
-                                  pow(x2, 2) + 32 * M * pow(x1, 2) * sqrt(pow(x1, 2) + pow(x2, 2)) + 32 * M * pow(x2, 2) * sqrt(pow(x1, 2) + pow(x2, 2)) + 16 * pow(x1, 4) + 32 *
-                                  pow(x1, 2) * pow(x2, 2) + 16 * pow(x2, 4)));
-                          Real gamma4d_3_2_0 = 0;
-                          Real gamma4d_3_2_1 = 0;
-                          Real gamma4d_3_2_2 = 0;
-                          Real gamma4d_3_2_3 = -2 * M * x2 * pow(M + 2 * sqrt(pow(x1, 2) + pow(x2, 2)), 3) * (pow(x1, 4) + 2 * pow(x1, 2) * pow(x2, 2) + pow(x2, 4)) / (
-                              pow(pow(x1, 2) + pow(x2, 2), 3) * (pow(M, 4) + 8 * pow(M, 3) * sqrt(pow(x1, 2) + pow(x2, 2)) + 24 * pow(M, 2) * pow(x1, 2) + 24 * pow(M, 2) *
-                                  pow(x2, 2) + 32 * M * pow(x1, 2) * sqrt(pow(x1, 2) + pow(x2, 2)) + 32 * M * pow(x2, 2) * sqrt(pow(x1, 2) + pow(x2, 2)) + 16 * pow(x1, 4) + 32 *
-                                  pow(x1, 2) * pow(x2, 2) + 16 * pow(x2, 4)));
-                          Real gamma4d_3_3_0 = 0;
-                          Real gamma4d_3_3_1 = -2 * M * x1 * pow(M + 2 * sqrt(pow(x1, 2) + pow(x2, 2)), 3) * (pow(x1, 4) + 2 * pow(x1, 2) * pow(x2, 2) + pow(x2, 4)) / (
-                              pow(pow(x1, 2) + pow(x2, 2), 3) * (pow(M, 4) + 8 * pow(M, 3) * sqrt(pow(x1, 2) + pow(x2, 2)) + 24 * pow(M, 2) * pow(x1, 2) + 24 * pow(M, 2) *
-                                  pow(x2, 2) + 32 * M * pow(x1, 2) * sqrt(pow(x1, 2) + pow(x2, 2)) + 32 * M * pow(x2, 2) * sqrt(pow(x1, 2) + pow(x2, 2)) + 16 * pow(x1, 4) + 32 *
-                                  pow(x1, 2) * pow(x2, 2) + 16 * pow(x2, 4)));
-                          Real gamma4d_3_3_2 = -2 * M * x2 * pow(M + 2 * sqrt(pow(x1, 2) + pow(x2, 2)), 3) * (pow(x1, 4) + 2 * pow(x1, 2) * pow(x2, 2) + pow(x2, 4)) / (
-                              pow(pow(x1, 2) + pow(x2, 2), 3) * (pow(M, 4) + 8 * pow(M, 3) * sqrt(pow(x1, 2) + pow(x2, 2)) + 24 * pow(M, 2) * pow(x1, 2) + 24 * pow(M, 2) *
-                                  pow(x2, 2) + 32 * M * pow(x1, 2) * sqrt(pow(x1, 2) + pow(x2, 2)) + 32 * M * pow(x2, 2) * sqrt(pow(x1, 2) + pow(x2, 2)) + 16 * pow(x1, 4) + 32 *
-                                  pow(x1, 2) * pow(x2, 2) + 16 * pow(x2, 4)));
-                          Real gamma4d_3_3_3 = 0;
-
-                          std::cout << "000:" << Gamma_udd(0, 0, 0) << " " << gamma4d_0_0_0 << std::endl;
-                          std::cout << "001:" << Gamma_udd(0, 0, 1) << " " << gamma4d_0_0_1 << std::endl;
-                          std::cout << "002:" << Gamma_udd(0, 0, 2) << " " << gamma4d_0_0_2 << std::endl;
-                          std::cout << "003:" << Gamma_udd(0, 0, 3) << " " << gamma4d_0_0_3 << std::endl;
-                          std::cout << "010:" << Gamma_udd(0, 1, 0) << " " << gamma4d_0_1_0 << std::endl;
-                          std::cout << "011:" << Gamma_udd(0, 1, 1) << " " << gamma4d_0_1_1 << std::endl;
-                          std::cout << "012:" << Gamma_udd(0, 1, 2) << " " << gamma4d_0_1_2 << std::endl;
-                          std::cout << "013:" << Gamma_udd(0, 1, 3) << " " << gamma4d_0_1_3 << std::endl;
-                          std::cout << "020:" << Gamma_udd(0, 2, 0) << " " << gamma4d_0_2_0 << std::endl;
-                          std::cout << "021:" << Gamma_udd(0, 2, 1) << " " << gamma4d_0_2_1 << std::endl;
-                          std::cout << "022:" << Gamma_udd(0, 2, 2) << " " << gamma4d_0_2_2 << std::endl;
-                          std::cout << "023:" << Gamma_udd(0, 2, 3) << " " << gamma4d_0_2_3 << std::endl;
-                          std::cout << "030:" << Gamma_udd(0, 3, 0) << " " << gamma4d_0_3_0 << std::endl;
-                          std::cout << "031:" << Gamma_udd(0, 3, 1) << " " << gamma4d_0_3_1 << std::endl;
-                          std::cout << "032:" << Gamma_udd(0, 3, 2) << " " << gamma4d_0_3_2 << std::endl;
-                          std::cout << "033:" << Gamma_udd(0, 3, 3) << " " << gamma4d_0_3_3 << std::endl;
-                          std::cout << "100:" << Gamma_udd(1, 0, 0) << " " << gamma4d_1_0_0 << std::endl;
-                          std::cout << "101:" << Gamma_udd(1, 0, 1) << " " << gamma4d_1_0_1 << std::endl;
-                          std::cout << "102:" << Gamma_udd(1, 0, 2) << " " << gamma4d_1_0_2 << std::endl;
-                          std::cout << "103:" << Gamma_udd(1, 0, 3) << " " << gamma4d_1_0_3 << std::endl;
-                          std::cout << "110:" << Gamma_udd(1, 1, 0) << " " << gamma4d_1_1_0 << std::endl;
-                          std::cout << "111:" << Gamma_udd(1, 1, 1) << " " << gamma4d_1_1_1 << std::endl;
-                          std::cout << "112:" << Gamma_udd(1, 1, 2) << " " << gamma4d_1_1_2 << std::endl;
-                          std::cout << "113:" << Gamma_udd(1, 1, 3) << " " << gamma4d_1_1_3 << std::endl;
-                          std::cout << "120:" << Gamma_udd(1, 2, 0) << " " << gamma4d_1_2_0 << std::endl;
-                          std::cout << "121:" << Gamma_udd(1, 2, 1) << " " << gamma4d_1_2_1 << std::endl;
-                          std::cout << "122:" << Gamma_udd(1, 2, 2) << " " << gamma4d_1_2_2 << std::endl;
-                          std::cout << "123:" << Gamma_udd(1, 2, 3) << " " << gamma4d_1_2_3 << std::endl;
-                          std::cout << "130:" << Gamma_udd(1, 3, 0) << " " << gamma4d_1_3_0 << std::endl;
-                          std::cout << "131:" << Gamma_udd(1, 3, 1) << " " << gamma4d_1_3_1 << std::endl;
-                          std::cout << "132:" << Gamma_udd(1, 3, 2) << " " << gamma4d_1_3_2 << std::endl;
-                          std::cout << "133:" << Gamma_udd(1, 3, 3) << " " << gamma4d_1_3_3 << std::endl;
-                          std::cout << "200:" << Gamma_udd(2, 0, 0) << " " << gamma4d_2_0_0 << std::endl;
-                          std::cout << "201:" << Gamma_udd(2, 0, 1) << " " << gamma4d_2_0_1 << std::endl;
-                          std::cout << "202:" << Gamma_udd(2, 0, 2) << " " << gamma4d_2_0_2 << std::endl;
-                          std::cout << "203:" << Gamma_udd(2, 0, 3) << " " << gamma4d_2_0_3 << std::endl;
-                          std::cout << "210:" << Gamma_udd(2, 1, 0) << " " << gamma4d_2_1_0 << std::endl;
-                          std::cout << "211:" << Gamma_udd(2, 1, 1) << " " << gamma4d_2_1_1 << std::endl;
-                          std::cout << "212:" << Gamma_udd(2, 1, 2) << " " << gamma4d_2_1_2 << std::endl;
-                          std::cout << "213:" << Gamma_udd(2, 1, 3) << " " << gamma4d_2_1_3 << std::endl;
-                          std::cout << "220:" << Gamma_udd(2, 2, 0) << " " << gamma4d_2_2_0 << std::endl;
-                          std::cout << "221:" << Gamma_udd(2, 2, 1) << " " << gamma4d_2_2_1 << std::endl;
-                          std::cout << "222:" << Gamma_udd(2, 2, 2) << " " << gamma4d_2_2_2 << std::endl;
-                          std::cout << "223:" << Gamma_udd(2, 2, 3) << " " << gamma4d_2_2_3 << std::endl;
-                          std::cout << "230:" << Gamma_udd(2, 3, 0) << " " << gamma4d_2_3_0 << std::endl;
-                          std::cout << "231:" << Gamma_udd(2, 3, 1) << " " << gamma4d_2_3_1 << std::endl;
-                          std::cout << "232:" << Gamma_udd(2, 3, 2) << " " << gamma4d_2_3_2 << std::endl;
-                          std::cout << "233:" << Gamma_udd(2, 3, 3) << " " << gamma4d_2_3_3 << std::endl;
-                          std::cout << "300:" << Gamma_udd(3, 0, 0) << " " << gamma4d_3_0_0 << std::endl;
-                          std::cout << "301:" << Gamma_udd(3, 0, 1) << " " << gamma4d_3_0_1 << std::endl;
-                          std::cout << "302:" << Gamma_udd(3, 0, 2) << " " << gamma4d_3_0_2 << std::endl;
-                          std::cout << "303:" << Gamma_udd(3, 0, 3) << " " << gamma4d_3_0_3 << std::endl;
-                          std::cout << "310:" << Gamma_udd(3, 1, 0) << " " << gamma4d_3_1_0 << std::endl;
-                          std::cout << "311:" << Gamma_udd(3, 1, 1) << " " << gamma4d_3_1_1 << std::endl;
-                          std::cout << "312:" << Gamma_udd(3, 1, 2) << " " << gamma4d_3_1_2 << std::endl;
-                          std::cout << "313:" << Gamma_udd(3, 1, 3) << " " << gamma4d_3_1_3 << std::endl;
-                          std::cout << "320:" << Gamma_udd(3, 2, 0) << " " << gamma4d_3_2_0 << std::endl;
-                          std::cout << "321:" << Gamma_udd(3, 2, 1) << " " << gamma4d_3_2_1 << std::endl;
-                          std::cout << "322:" << Gamma_udd(3, 2, 2) << " " << gamma4d_3_2_2 << std::endl;
-                          std::cout << "323:" << Gamma_udd(3, 2, 3) << " " << gamma4d_3_2_3 << std::endl;
-                          std::cout << "330:" << Gamma_udd(3, 3, 0) << " " << gamma4d_3_3_0 << std::endl;
-                          std::cout << "331:" << Gamma_udd(3, 3, 1) << " " << gamma4d_3_3_1 << std::endl;
-                          std::cout << "332:" << Gamma_udd(3, 3, 2) << " " << gamma4d_3_3_2 << std::endl;
-                          std::cout << "333:" << Gamma_udd(3, 3, 3) << " " << gamma4d_3_3_3 << std::endl;
-                          std::cout << std::endl;
-                          std::cout << "000:" << Gamma_fluid_udd(0, 0, 0) << " " << gamma4d_0_0_0 << std::endl;
-                          std::cout << "001:" << Gamma_fluid_udd(0, 0, 1) << " " << gamma4d_0_0_1 << std::endl;
-                          std::cout << "002:" << Gamma_fluid_udd(0, 0, 2) << " " << gamma4d_0_0_2 << std::endl;
-                          std::cout << "003:" << Gamma_fluid_udd(0, 0, 3) << " " << gamma4d_0_0_3 << std::endl;
-                          std::cout << "010:" << Gamma_fluid_udd(0, 1, 0) << " " << gamma4d_0_1_0 << std::endl;
-                          std::cout << "011:" << Gamma_fluid_udd(0, 1, 1) << " " << gamma4d_0_1_1 << std::endl;
-                          std::cout << "012:" << Gamma_fluid_udd(0, 1, 2) << " " << gamma4d_0_1_2 << std::endl;
-                          std::cout << "013:" << Gamma_fluid_udd(0, 1, 3) << " " << gamma4d_0_1_3 << std::endl;
-                          std::cout << "020:" << Gamma_fluid_udd(0, 2, 0) << " " << gamma4d_0_2_0 << std::endl;
-                          std::cout << "021:" << Gamma_fluid_udd(0, 2, 1) << " " << gamma4d_0_2_1 << std::endl;
-                          std::cout << "022:" << Gamma_fluid_udd(0, 2, 2) << " " << gamma4d_0_2_2 << std::endl;
-                          std::cout << "023:" << Gamma_fluid_udd(0, 2, 3) << " " << gamma4d_0_2_3 << std::endl;
-                          std::cout << "030:" << Gamma_fluid_udd(0, 3, 0) << " " << gamma4d_0_3_0 << std::endl;
-                          std::cout << "031:" << Gamma_fluid_udd(0, 3, 1) << " " << gamma4d_0_3_1 << std::endl;
-                          std::cout << "032:" << Gamma_fluid_udd(0, 3, 2) << " " << gamma4d_0_3_2 << std::endl;
-                          std::cout << "033:" << Gamma_fluid_udd(0, 3, 3) << " " << gamma4d_0_3_3 << std::endl;
-                          std::cout << "100:" << Gamma_fluid_udd(1, 0, 0) << " " << gamma4d_1_0_0 << std::endl;
-                          std::cout << "101:" << Gamma_fluid_udd(1, 0, 1) << " " << gamma4d_1_0_1 << std::endl;
-                          std::cout << "102:" << Gamma_fluid_udd(1, 0, 2) << " " << gamma4d_1_0_2 << std::endl;
-                          std::cout << "103:" << Gamma_fluid_udd(1, 0, 3) << " " << gamma4d_1_0_3 << std::endl;
-                          std::cout << "110:" << Gamma_fluid_udd(1, 1, 0) << " " << gamma4d_1_1_0 << std::endl;
-                          std::cout << "111:" << Gamma_fluid_udd(1, 1, 1) << " " << gamma4d_1_1_1 << std::endl;
-                          std::cout << "112:" << Gamma_fluid_udd(1, 1, 2) << " " << gamma4d_1_1_2 << std::endl;
-                          std::cout << "113:" << Gamma_fluid_udd(1, 1, 3) << " " << gamma4d_1_1_3 << std::endl;
-                          std::cout << "120:" << Gamma_fluid_udd(1, 2, 0) << " " << gamma4d_1_2_0 << std::endl;
-                          std::cout << "121:" << Gamma_fluid_udd(1, 2, 1) << " " << gamma4d_1_2_1 << std::endl;
-                          std::cout << "122:" << Gamma_fluid_udd(1, 2, 2) << " " << gamma4d_1_2_2 << std::endl;
-                          std::cout << "123:" << Gamma_fluid_udd(1, 2, 3) << " " << gamma4d_1_2_3 << std::endl;
-                          std::cout << "130:" << Gamma_fluid_udd(1, 3, 0) << " " << gamma4d_1_3_0 << std::endl;
-                          std::cout << "131:" << Gamma_fluid_udd(1, 3, 1) << " " << gamma4d_1_3_1 << std::endl;
-                          std::cout << "132:" << Gamma_fluid_udd(1, 3, 2) << " " << gamma4d_1_3_2 << std::endl;
-                          std::cout << "133:" << Gamma_fluid_udd(1, 3, 3) << " " << gamma4d_1_3_3 << std::endl;
-                          std::cout << "200:" << Gamma_fluid_udd(2, 0, 0) << " " << gamma4d_2_0_0 << std::endl;
-                          std::cout << "201:" << Gamma_fluid_udd(2, 0, 1) << " " << gamma4d_2_0_1 << std::endl;
-                          std::cout << "202:" << Gamma_fluid_udd(2, 0, 2) << " " << gamma4d_2_0_2 << std::endl;
-                          std::cout << "203:" << Gamma_fluid_udd(2, 0, 3) << " " << gamma4d_2_0_3 << std::endl;
-                          std::cout << "210:" << Gamma_fluid_udd(2, 1, 0) << " " << gamma4d_2_1_0 << std::endl;
-                          std::cout << "211:" << Gamma_fluid_udd(2, 1, 1) << " " << gamma4d_2_1_1 << std::endl;
-                          std::cout << "212:" << Gamma_fluid_udd(2, 1, 2) << " " << gamma4d_2_1_2 << std::endl;
-                          std::cout << "213:" << Gamma_fluid_udd(2, 1, 3) << " " << gamma4d_2_1_3 << std::endl;
-                          std::cout << "220:" << Gamma_fluid_udd(2, 2, 0) << " " << gamma4d_2_2_0 << std::endl;
-                          std::cout << "221:" << Gamma_fluid_udd(2, 2, 1) << " " << gamma4d_2_2_1 << std::endl;
-                          std::cout << "222:" << Gamma_fluid_udd(2, 2, 2) << " " << gamma4d_2_2_2 << std::endl;
-                          std::cout << "223:" << Gamma_fluid_udd(2, 2, 3) << " " << gamma4d_2_2_3 << std::endl;
-                          std::cout << "230:" << Gamma_fluid_udd(2, 3, 0) << " " << gamma4d_2_3_0 << std::endl;
-                          std::cout << "231:" << Gamma_fluid_udd(2, 3, 1) << " " << gamma4d_2_3_1 << std::endl;
-                          std::cout << "232:" << Gamma_fluid_udd(2, 3, 2) << " " << gamma4d_2_3_2 << std::endl;
-                          std::cout << "233:" << Gamma_fluid_udd(2, 3, 3) << " " << gamma4d_2_3_3 << std::endl;
-                          std::cout << "300:" << Gamma_fluid_udd(3, 0, 0) << " " << gamma4d_3_0_0 << std::endl;
-                          std::cout << "301:" << Gamma_fluid_udd(3, 0, 1) << " " << gamma4d_3_0_1 << std::endl;
-                          std::cout << "302:" << Gamma_fluid_udd(3, 0, 2) << " " << gamma4d_3_0_2 << std::endl;
-                          std::cout << "303:" << Gamma_fluid_udd(3, 0, 3) << " " << gamma4d_3_0_3 << std::endl;
-                          std::cout << "310:" << Gamma_fluid_udd(3, 1, 0) << " " << gamma4d_3_1_0 << std::endl;
-                          std::cout << "311:" << Gamma_fluid_udd(3, 1, 1) << " " << gamma4d_3_1_1 << std::endl;
-                          std::cout << "312:" << Gamma_fluid_udd(3, 1, 2) << " " << gamma4d_3_1_2 << std::endl;
-                          std::cout << "313:" << Gamma_fluid_udd(3, 1, 3) << " " << gamma4d_3_1_3 << std::endl;
-                          std::cout << "320:" << Gamma_fluid_udd(3, 2, 0) << " " << gamma4d_3_2_0 << std::endl;
-                          std::cout << "321:" << Gamma_fluid_udd(3, 2, 1) << " " << gamma4d_3_2_1 << std::endl;
-                          std::cout << "322:" << Gamma_fluid_udd(3, 2, 2) << " " << gamma4d_3_2_2 << std::endl;
-                          std::cout << "323:" << Gamma_fluid_udd(3, 2, 3) << " " << gamma4d_3_2_3 << std::endl;
-                          std::cout << "330:" << Gamma_fluid_udd(3, 3, 0) << " " << gamma4d_3_3_0 << std::endl;
-                          std::cout << "331:" << Gamma_fluid_udd(3, 3, 1) << " " << gamma4d_3_3_1 << std::endl;
-                          std::cout << "332:" << Gamma_fluid_udd(3, 3, 2) << " " << gamma4d_3_3_2 << std::endl;
-                          std::cout << "333:" << Gamma_fluid_udd(3, 3, 3) << " " << gamma4d_3_3_3 << std::endl;
-                          exit(EXIT_FAILURE); */
-                          // end of 4-Christoeffel print
-                          // -----------------------------------
 
                           // Compute F Gam and G Gam matrices
                           ScrArray2D<Real> F_Gamma_AB = ScrArray2D<Real>(member.team_scratch(scr_level), num_points_, num_points_);
@@ -987,11 +401,10 @@ namespace radiationfemn
                           par_for_inner(member, 0, num_points_ - 1, [&](const int idx)
                           {
                               Real final_result = 0.;
-                              Kokkos::parallel_reduce(Kokkos::ThreadVectorRange(member, 0, num_points_), [&](const int A, Real& partial_sum)
+                              for (int A = 0; A < num_points_; A++)
                               {
-                                  partial_sum += Qinv_matrix(idx, A) * (g_rhs_scratch(A));
-                              }, final_result);
-                              member.team_barrier();
+                                  final_result += Qinv_matrix(idx, A) * (g_rhs_scratch(A));
+                              }
 
                               auto unifiedidx = IndicesUnited(nu, en, idx, num_species_, num_energy_bins_, num_points_);
                               f0_(m, unifiedidx, k, j, i) = final_result;
