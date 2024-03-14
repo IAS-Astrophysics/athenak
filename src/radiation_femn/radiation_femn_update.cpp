@@ -299,7 +299,7 @@ namespace radiationfemn
                               G_Gamma_AB(row, col) = sum_nuhatmuhat_g;
                           });
                           member.team_barrier();
-                        /*
+
                           // Add Christoeffel terms to rhs and compute Lax Friedrich's const K
                           Real K = 0.;
                           for (int idx = 0; idx < num_points_ * num_points_; idx++)
@@ -314,7 +314,7 @@ namespace radiationfemn
 
                               K += F_Gamma_AB(idx_b, idx_a) * F_Gamma_AB(idx_b, idx_a);
                           }
-                          K = sqrt(K); */
+                          K = sqrt(K);
                             /*
                           // adding energy coupling terms for multi-energy case
                           if (num_energy_bins_ > 1)

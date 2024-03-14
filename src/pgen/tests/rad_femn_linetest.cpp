@@ -70,20 +70,6 @@ void ProblemGenerator::RadiationFEMNLinetest(ParameterInput* pin, const bool res
     auto& u_mu_ = pmbp->pradfemn->u_mu;
     adm::ADM::ADM_vars& adm = pmbp->padm->adm;
 
-    // set metric to minkowski
-    par_for("pgen_linetest_minkowski_initialize", DevExeSpace(), 0, nmb - 1, ksg, keg, jsg, jeg, isg, ieg,
-            KOKKOS_LAMBDA(const int m, const int k, const int j, const int i)
-            {
-                for (int a = 0; a < 3; ++a)
-                    for (int b = a; b < 3; ++b)
-                    {
-                        adm.g_dd(m, a, b, k, j, i) = (a == b ? 1. : 0.);
-                    }
-
-                adm.alpha(m, k, j, i) = 1.;
-                adm.psi4(m, k, j, i) = 1.;
-            });
-
     Real omega = 0.03; //  Eqn. (58) of Garrett & Hauck 2013 (DOI: 10.1080/00411450.2014.910226)
     auto& f0_ = pmbp->pradfemn->f0;
 
