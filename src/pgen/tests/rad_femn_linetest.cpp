@@ -136,7 +136,7 @@ void ProblemGenerator::RadiationFEMNLinetest(ParameterInput* pin, const bool res
 
                 adm.psi4(m, k, j, i) = 1.; // adm.psi4
 
-                adm.alpha(m, k, j, i) = -1.;
+                adm.alpha(m, k, j, i) = 1.;
 
                 u_mu_(m, 0, k, j, i) = 1.;
                 u_mu_(m, 1, k, j, i) = 0.;
