@@ -147,7 +147,7 @@ void DynGRPS<EOSPolicy, ErrorPolicy>::FOFC(Driver *pdriver, int stage) {
     // Test whether conversion to primitives requires floors
     // Note b0 and w0 passed to function, but not used/changed.
     eos.ConsToPrim(utest_, pmy_pack->pmhd->b0, bcctest_,
-                           pmy_pack->pmhd->w0, is, ie, js, je, ks, ke, true);
+                           pmy_pack->pmhd->w0, il, iu, jl, ju, kl, ku, true);
   }
 
   auto &coord = pmy_pack->pcoord->coord_data;
