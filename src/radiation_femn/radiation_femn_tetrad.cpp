@@ -17,9 +17,18 @@ namespace radiationfemn
     TaskStatus RadiationFEMN::TetradOrthogonalize(Driver* pdriver, int stage)
     {
         auto& indcs = pmy_pack->pmesh->mb_indcs;
-        int &is = indcs.is, &ie = indcs.ie;
-        int &js = indcs.js, &je = indcs.je;
-        int &ks = indcs.ks, &ke = indcs.ke;
+        int& is = indcs.is;
+        int& ie = indcs.ie;
+        int& js = indcs.js;
+        int& je = indcs.je;
+        int& ks = indcs.ks;
+        int& ke = indcs.ke;
+        int isg = is - indcs.ng;
+        int ieg = ie + indcs.ng;
+        int jsg = (indcs.nx2 > 1) ? js - indcs.ng : js;
+        int jeg = (indcs.nx2 > 1) ? je + indcs.ng : je;
+        int ksg = (indcs.nx3 > 1) ? ks - indcs.ng : ks;
+        int keg = (indcs.nx3 > 1) ? ke + indcs.ng : ke;
         int nmb1 = pmy_pack->nmb_thispack - 1;
         //auto &mbsize = pmy_pack->pmb->mb_size;
 
@@ -28,14 +37,14 @@ namespace radiationfemn
         adm::ADM::ADM_vars& adm = pmy_pack->padm->adm;
 
         // L^mu_0 = u^mu
-        par_for("radiation_femn_tetrad_compute_L_mu_0", DevExeSpace(), 0, nmb1, 0, 3, ks, ke, js, je, is, ie,
+        par_for("radiation_femn_tetrad_compute_L_mu_0", DevExeSpace(), 0, nmb1, 0, 3, ksg, keg, jsg, jeg, isg, ieg,
                 KOKKOS_LAMBDA(int m, int mu, int k, int j, int i)
                 {
                     L_mu_muhat0_(m, mu, 0, k, j, i) = u_mu_(m, mu, k, j, i);
                 });
 
         // L^mu_1 = p_x + (d_x.L^mu_0)L^mu_0, p_x = (0,1,0,0), d_x.L^mu_0 = g_mu_nu d_x^mu L^nu_0
-        par_for("radiation_femn_tetrad_compute_L_mu_1", DevExeSpace(), 0, nmb1, 0, 3, ks, ke, js, je, is, ie,
+        par_for("radiation_femn_tetrad_compute_L_mu_1", DevExeSpace(), 0, nmb1, 0, 3, ksg, keg, jsg, jeg, isg, ieg,
                 KOKKOS_LAMBDA(int m, int mu, int k, int j, int i)
                 {
                     Real g_dd[16];
@@ -51,7 +60,7 @@ namespace radiationfemn
                 });
 
         // L^mu_1 = L^mu_1/||L^mu_1||, ||L^mu_1|| = sqrt(g_mu_mu L^mu_1 L^nu_1)
-        par_for("radiation_femn_tetrad_normalize_L_mu_1", DevExeSpace(), 0, nmb1, ks, ke, js, je, is, ie,
+        par_for("radiation_femn_tetrad_normalize_L_mu_1", DevExeSpace(), 0, nmb1, ksg, keg, jsg, jeg, isg, ieg,
                 KOKKOS_LAMBDA(int m, int k, int j, int i)
                 {
                     Real g_dd[16];
@@ -76,7 +85,7 @@ namespace radiationfemn
                 });
 
         // L^mu_2 = p_y - (d_y.L^mu_1)L^mu_1 + (d_x.L^mu_0)L^mu_0, d_x = (0,1,0,0), d_y = (0,0,1,0)
-        par_for("radiation_femn_tetrad_compute_L_mu_2", DevExeSpace(), 0, nmb1, 0, 3, ks, ke, js, je, is, ie,
+        par_for("radiation_femn_tetrad_compute_L_mu_2", DevExeSpace(), 0, nmb1, 0, 3, ksg, keg, jsg, jeg, isg, ieg,
                 KOKKOS_LAMBDA(int m, int mu, int k, int j, int i)
                 {
                     Real g_dd[16];
@@ -95,7 +104,7 @@ namespace radiationfemn
                 });
 
         // L^mu_2 = L^mu_2/||L^mu_2||, ||L^mu_2|| = sqrt(g_mu_mu L^mu_2 L^nu_2)
-        par_for("radiation_femn_tetrad_normalize_L_mu_2", DevExeSpace(), 0, nmb1, ks, ke, js, je, is, ie,
+        par_for("radiation_femn_tetrad_normalize_L_mu_2", DevExeSpace(), 0, nmb1, ksg, keg, jsg, jeg, isg, ieg,
                 KOKKOS_LAMBDA(int m, int k, int j, int i)
                 {
                     Real g_dd[16];
@@ -120,7 +129,7 @@ namespace radiationfemn
                 });
 
         // L^mu_3 = p_y - (d_z.L^mu_1) L^mu_1 - (d_z.L^mu_2) L^mu_2 + (d_x.L^mu_0) L^mu_0, d_x = (0,1,0,0), d_y = (0,0,1,0), d_z = (0,0,0,1)
-        par_for("radiation_femn_tetrad_compute_L_mu_3", DevExeSpace(), 0, nmb1, 0, 3, ks, ke, js, je, is, ie,
+        par_for("radiation_femn_tetrad_compute_L_mu_3", DevExeSpace(), 0, nmb1, 0, 3, ksg, keg, jsg, jeg, isg, ieg,
                 KOKKOS_LAMBDA(int m, int mu, int k, int j, int i)
                 {
                     Real g_dd[16];
@@ -142,7 +151,7 @@ namespace radiationfemn
                 });
 
         // L^mu_3 = L^mu_3/||L^mu_3||, ||L^mu_3|| = sqrt(g_mu_mu L^mu_3 L^nu_3)
-        par_for("radiation_femn_tetrad_normalize_L_mu_3", DevExeSpace(), 0, nmb1, ks, ke, js, je, is, ie,
+        par_for("radiation_femn_tetrad_normalize_L_mu_3", DevExeSpace(), 0, nmb1, ksg, keg, jsg, jeg, isg, ieg,
                 KOKKOS_LAMBDA(int m, int k, int j, int i)
                 {
                     Real g_dd[16];
