@@ -129,7 +129,7 @@ void ProblemGenerator::RadiationFEMNBeamtestKS(ParameterInput* pin, const bool r
     int nmb = pmbp->nmb_thispack;
     auto& u_mu_ = pmbp->pradfemn->u_mu;
     adm::ADM::ADM_vars& adm = pmbp->padm->adm;
-    Real ADM_mass = 0.;
+    Real ADM_mass = 1.;
 
     par_for("pgen_linetest_metric_initialize", DevExeSpace(), 0, nmb - 1, ksg, keg, jsg, jeg, isg, ieg,
             KOKKOS_LAMBDA(const int m, const int k, const int j, const int i)
