@@ -95,8 +95,8 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     x[3*p+1] = pr(IPY,p);
     x[3*p+2] = pr(IPZ,p);
 
-    pr(IPVX,p) = max_init_vel*p/npart*(x1max_actual - x1min_actual);
-    pr(IPVY,p) = max_init_vel*p/npart*(x2max_actual - x2min_actual);
+    pr(IPVX,p) = max_init_vel*(p+0.01)/npart*(x1max_actual - x1min_actual);
+    pr(IPVY,p) = max_init_vel*(p+0.01)/npart*(x2max_actual - x2min_actual);
     // v_z chosen small enough to avoid reflection at the boundary
     pr(IPVZ,p) = 1.0E-2;
     v[3*p] = pr(IPVX,p);
@@ -113,6 +113,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   int ie = indcs.ie, je = indcs.je, ke = indcs.ke;
   int nmb = pmy_mesh_->pmb_pack->nmb_thispack;
   auto &b0_ = pmy_mesh_->pmb_pack->pmhd->b0;
+  auto &e0_ = pmy_mesh_->pmb_pack->pmhd->efld;
   auto &bcc0_ = pmy_mesh_->pmb_pack->pmhd->bcc0;
   auto &w0_ = pmy_mesh_->pmb_pack->pmhd->w0;
 
@@ -131,12 +132,24 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     b0_.x1f(m,k,j,i) = 0.0;
     b0_.x2f(m,k,j,i) = 0.0;
     b0_.x3f(m,k,j,i) = B_strength;
+    e0_.x1e(m,k,j,i) = 0.0;
+    e0_.x2e(m,k,j,i) = 0.0;
+    e0_.x3e(m,k,j,i) = 0.0;
     bcc0_(m,IBX,k,j,i) = 0.0;
     bcc0_(m,IBY,k,j,i) = 0.0;
     bcc0_(m,IBZ,k,j,i) = B_strength;
-    if (i==ie) { b0_.x1f(m,k,j,i+1) = 0.0; }
-    if (j==je) { b0_.x2f(m,k,j+1,i) = 0.0; }
-    if (k==ke) { b0_.x3f(m,k+1,j,i) = B_strength; }
+    if (i==ie) {
+   	 b0_.x1f(m,k,j,i+1) = 0.0;
+   	 e0_.x1e(m,k,j,i+1) = 0.0;
+    }
+    if (j==je) {
+	    b0_.x2f(m,k,j+1,i) = 0.0;
+	    e0_.x2e(m,k,j+1,i) = 0.0;
+    }
+    if (k==ke) {
+	    b0_.x3f(m,k+1,j,i) = B_strength;
+	    e0_.x3e(m,k+1,j,i) = 0.0;
+    }
   });
   // Need to initialize all MHD properties to ensure pmhd->newdt is computed as expected
   auto &u0_ = pmy_mesh_->pmb_pack->pmhd->u0;
@@ -177,9 +190,6 @@ void LarmorMotionErrors(HistoryData *pdata, Mesh *pm){
 	  Real * x1 = x_aux;
 	  Real * v1 = v_aux;
 	  Real * all_diffs = all_diffs_;
-	  Real max_init_vel = aux_pin->GetOrAddReal("problem", "max_init_vel", 1.0);
-	  Real prtcl_mass = aux_pin->GetOrAddReal("particles", "mass", 1.0E-10);
-	  Real prtcl_charge = aux_pin->GetOrAddReal("particles", "charge", 1.0);
 	  Real B_strength = aux_pin->GetOrAddReal("problem", "b0_strength", 1.0E-8);
 	  Real curr_time = pm->time;
 
@@ -191,34 +201,35 @@ void LarmorMotionErrors(HistoryData *pdata, Mesh *pm){
 		all_diffs[ip] = 0.0;
 	  }
 	  Kokkos::parallel_reduce("part_compare",Kokkos::RangePolicy<>(DevExeSpace(),0,(npart-1)),
-			  KOKKOS_LAMBDA(const int p_aux, Real &rms_pos, Real &rel_dE) {
+			  KOKKOS_LAMBDA(const int p, Real &rms_pos, Real &rel_dE) {
 
-	    int p = pi(PTAG,p_aux);
-	    Real g_Lor = sqrt(1.0 + SQR(v[3*p]) + SQR(v[3*p+1]) + SQR(v[3*p+2]));
+	    //int p = pi(PTAG,p);
+	    Real prtcl_mass = pr(IPM,p);
+	    Real prtcl_charge = pr(IPC,p);
+	    // In idealized case Lorentz gamma should be constant throughout simulation
+	    // and there's no acceleration, thus compute with initial velocities
+	    Real g_Lor = 1.0/sqrt(1.0 - SQR(v[3*p]) - SQR(v[3*p+1]) - SQR(v[3*p+2]));
 	    Real v_mod = sqrt( SQR(v[3*p]) + SQR(v[3*p+1]) +SQR(v[3*p+2]) );
 	    Real ang_to_b = atan2( sqrt( SQR(v[3*p]) + SQR(v[3*p+1]) ) , v[3*p+2] );
 	    Real v_perp = ( v_mod*sin(ang_to_b) );
 	    Real v_par = v[3*p+2];
 	    Real init_phase = - atan2(v[3*p+1],v[3*p]);
 	    Real rho = (prtcl_mass*v_perp*g_Lor)/(prtcl_charge*B_strength); //Larmor radius
+	    Real omega = prtcl_charge*B_strength/(prtcl_mass); //Larmor frequency
 
-	    x1[3*p] = x[3*p] + sfac*rho*sin(
-	       	 init_phase + (prtcl_charge*B_strength/(prtcl_mass*g_Lor))*curr_time );
-	    x1[3*p+1] = x[3*p+1] + sfac*rho*cos(
-	       	 init_phase + (prtcl_charge*B_strength/(prtcl_mass*g_Lor))*curr_time );
+	    x1[3*p] = x[3*p] + sfac*rho*sin( init_phase + omega*curr_time );
+	    x1[3*p+1] = x[3*p+1] + sfac*rho*cos( init_phase + omega*curr_time );
 	    x1[3*p+2] = x[3*p+2] + sfac*v_par*curr_time;
 	    
-	    v1[3*p] = sfac*v_perp*cos(
-	       	 init_phase + (prtcl_charge*B_strength/(prtcl_mass*g_Lor))*curr_time );
-	    v1[3*p+1] = - sfac*v_perp*sin(
-	       	 init_phase + (prtcl_charge*B_strength/(prtcl_mass*g_Lor))*curr_time );
-	    v1[3*p+2] = v[3*p+2];// + sfac*v_par*curr_time;
+	    v1[3*p] = v_perp*cos( init_phase + omega*curr_time );
+	    v1[3*p+1] = - v_perp*sin( init_phase + omega*curr_time );
+	    v1[3*p+2] = v_par;// + sfac*v_par*curr_time;
 
 	    // Initial kinetic energy vs. current kinetic energy (pure magnetic field shouldn't do any work)
 	    rel_dE = ( SQR(v1[3*p]) + SQR(v1[3*p+1]) + SQR(v1[3*p+2]) ) - ( SQR(v[3*p]) + SQR(v[3*p+1]) + SQR(v[3*p+2]) );
 	    rel_dE /= ( SQR(v[3*p]) + SQR(v[3*p+1]) + SQR(v[3*p+2]) );
-	    rms_pos = ( SQR(pr(IPX,p_aux) - x1[3*p]) + SQR(pr(IPY,p_aux) - x1[3*p+1]) + SQR(pr(IPZ,p_aux) - x1[3*p+2]) );
-	    all_diffs[p] = ( SQR(pr(IPX,p_aux) - x1[3*p]) + SQR(pr(IPY,p_aux) - x1[3*p+1]) + SQR(pr(IPZ,p_aux) - x1[3*p+2]) );
+	    rms_pos = ( SQR(pr(IPX,p) - x1[3*p]) + SQR(pr(IPY,p) - x1[3*p+1]) + SQR(pr(IPZ,p) - x1[3*p+2]) )/SQR(rho);
+	    all_diffs[p] = ( SQR(pr(IPX,p) - x1[3*p]) + SQR(pr(IPY,p) - x1[3*p+1]) + SQR(pr(IPZ,p) - x1[3*p+2]) )/SQR(rho);
 	  }, Kokkos::Sum<Real>(rms_diff), Kokkos::Sum<Real>(rel_dEdt));
 
 	  rms_diff = sqrt( rms_diff/(npart-1) );
