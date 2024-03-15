@@ -251,6 +251,16 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
         w.vz = w_old.vz;
       }
 
+      // apply temperature floor within r_tfix_cut_
+      bool apply_tfloor = true;
+      if (apply_tfloor) {
+        Real tgas_ = gm1*w.e/w.d;
+        if ((SQR(x1v) + SQR(x2v) + SQR(x3v)) < SQR(r_tfix_cut_)) {
+          tgas_ = fmax(eos.tfloor, tgas_);
+        }
+        w.e = w.d*tgas_/gm1;
+      }
+
       // compute sigma_cold (2*pmag/rho) to decide whether turn on the fixes
       Real sigma_cold = 0.0;
       if (!c2p_failure) {
