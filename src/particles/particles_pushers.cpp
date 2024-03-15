@@ -88,21 +88,30 @@ void Particles::BorisStep( const Real dt, DvceArray2D<Real> &pr, const DvceArray
       // First half-step in space
       par_for("part_boris",DevExeSpace(),0,(nprtcl_thispack-1),
       KOKKOS_LAMBDA(const int p) {
-
+      
 	Real up[3] = {pr(IPVX,p), pr(IPVY,p), pr(IPVZ,p)};
 	Real x1,x2,x3; //Half-step increment. Index 1... stands for dimension (0 is time).
+	// Push in local frame
+	x1 = pr(IPX,p) + dt/(2.0)*up[0];
+        if (multi_d) { x2 = pr(IPY,p) + dt/(2.0)*up[1]; }
+        if (three_d) { x3 = pr(IPZ,p) + dt/(2.0)*up[2]; }
 	// Get metric components at new location x1,x2,x3
-	Real glower[4][4], gupper[4][4], ADM_upper[3][3]; // Metric components in ADM formalism
+	Real glower[4][4], gupper[4][4], ADM_upper[3][3]; // Metric 
 					       // (remember: sqrt(-1/gupper[0][0]) = alpha, glower[0][i] = beta[i])
 	ComputeMetricAndInverse(pr(IPX,p),pr(IPY,p),pr(IPZ,p), is_minkowski, spin, glower, gupper); 
+	//Boost the local velocity to the covariant one using the "usual" definition of Lorentz factor
+	Real g_Lor = 0.0;
+	for (int i1 = 0; i1<3; ++i1){ g_Lor += SQR(up[i1]); }
+	g_Lor = 1.0/sqrt(1.0 - g_Lor);
+	for (int i1 = 0; i1<3; ++i1){ up[i1] *= g_Lor; }
 	// Compute 3x3 ADM spatial metric from covariant metric 
 	for (int i1 = 0; i1 < 3; ++i1 ){ 
 		for (int i2 = 0; i2 < 3; ++i2 ){ 
 		ADM_upper[i1][i2] = gupper[i1+1][i2+1] + gupper[0][i2+1]*gupper[i1+1][0];
 		}
 	}
-	Real alpha = sqrt(-1.0/gupper[0][0]);
-	Real g_Lor = 0.0; //Lorentz gamma factor (though it's not the usual expression it plays a similar role in these equations)
+	//Use deinition of the Lorentz factor in ADM formalism
+	g_Lor = 0.0;
 	for (int i1 = 0; i1 < 3; ++i1 ){ 
 		for (int i2 = 0; i2 < 3; ++i2 ){ 
 		g_Lor += ADM_upper[i1][i2]*up[i1]*up[i2];
@@ -110,10 +119,6 @@ void Particles::BorisStep( const Real dt, DvceArray2D<Real> &pr, const DvceArray
 	}
 	g_Lor = sqrt(1.0 + g_Lor);
         //std::cout << "g_Lor " << p << " " << g_Lor << std::endl;
-
-	x1 = pr(IPX,p) + dt/(2.0*g_Lor)*up[0];
-        if (multi_d) { x2 = pr(IPY,p) + dt/(2.0*g_Lor)*up[1]; }
-        if (three_d) { x3 = pr(IPZ,p) + dt/(2.0*g_Lor)*up[2]; }
 
         //std::cout << "x123 " << global_variable::my_rank << " " << pi(PTAG,p) << " " << x1 << " " << x2 << " " << x3 << std::endl;
 	Real uE[3]; //Evolution of the velocity due to the electric field (first half). Index 1... stands for dimension (0 is time).
@@ -143,20 +148,20 @@ void Particles::BorisStep( const Real dt, DvceArray2D<Real> &pr, const DvceArray
 	x1v = LeftEdgeX(ip, indcs.nx1, x1min, x1max);
 	x2v = LeftEdgeX(jp, indcs.nx2, x2min, x2max);
 	x3v = LeftEdgeX(kp, indcs.nx3, x3min, x3max);
-	Real Dx,Dy,Dz;
-	Dx = (x1max - x1min)/indcs.nx1;
-	Dy = (x2max - x2min)/indcs.nx2;
-	Dz = (x3max - x3min)/indcs.nx3;
+	Real Lx,Ly,Lz;
+	Lx = (x1max - x1min);
+	Ly = (x2max - x2min);
+	Lz = (x3max - x3min);
         // Interpolate Electric Field at new particle location x1, x2, x3
 	// Store it in an array for convenience 
 	Real E[3] = {0.0, 0.0, 0.0};
-	E[0] = e0_.x1e(m, kp, jp, ip) + (x1 - x1v)*(e0_.x1e(m, kp, jp, ip+1) - e0_.x1e(m, kp, jp, ip))/Dx;
-	E[1] = e0_.x2e(m, kp, jp, ip) + (x2 - x2v)*(e0_.x2e(m, kp, jp+1, ip) - e0_.x2e(m, kp, jp, ip))/Dy;
-	E[2] = e0_.x3e(m, kp, jp, ip) + (x3 - x3v)*(e0_.x3e(m, kp+1, jp, ip) - e0_.x3e(m, kp, jp, ip))/Dz;
+	E[0] = e0_.x1e(m, kp, jp, ip) + (x1 - x1v)*(e0_.x1e(m, kp, jp, ip+1) - e0_.x1e(m, kp, jp, ip))/Lx;
+	E[1] = e0_.x2e(m, kp, jp, ip) + (x2 - x2v)*(e0_.x2e(m, kp, jp+1, ip) - e0_.x2e(m, kp, jp, ip))/Ly;
+	E[2] = e0_.x3e(m, kp, jp, ip) + (x3 - x3v)*(e0_.x3e(m, kp+1, jp, ip) - e0_.x3e(m, kp, jp, ip))/Lz;
 
-	uE[0] = up[0] + dt*pr(IPC,p)*alpha/(2.0*pr(IPM,p))*E[0];
-        if (multi_d) { uE[1] = up[1] + dt*pr(IPC,p)*alpha/(2.0*pr(IPM,p))*E[1]; }
-        if (three_d) { uE[2] = up[2] + dt*pr(IPC,p)*alpha/(2.0*pr(IPM,p))*E[2]; }
+	uE[0] = up[0] + dt*pr(IPC,p)/(2.0*pr(IPM,p))*E[0];
+        if (multi_d) { uE[1] = up[1] + dt*pr(IPC,p)/(2.0*pr(IPM,p))*E[1]; }
+        if (three_d) { uE[2] = up[2] + dt*pr(IPC,p)/(2.0*pr(IPM,p))*E[2]; }
 
 	// Get metric components at new location x1,x2,x3
 	ComputeMetricAndInverse(x1,x2,x3, is_minkowski, spin, glower, gupper); 
@@ -165,7 +170,6 @@ void Particles::BorisStep( const Real dt, DvceArray2D<Real> &pr, const DvceArray
 		ADM_upper[i1][i2] = gupper[i1+1][i2+1] + gupper[0][i2+1]*gupper[i1+1][0];
 		}
 	}
-	alpha = sqrt(-1.0/gupper[0][0]);
 	g_Lor = 0.0; //Intermediate Lorentz gamma factor
 	for (int i1 = 0; i1 < 3; ++i1 ){ 
 		for (int i2 = 0; i2 < 3; ++i2 ){ 
@@ -176,9 +180,9 @@ void Particles::BorisStep( const Real dt, DvceArray2D<Real> &pr, const DvceArray
         // Interpolate Magnetic Field at new particle location x1, x2, x3
 	// Store it in an array for convenience 
 	Real B[3] = {0.0, 0.0, 0.0};
-	B[0] = b0_.x1f(m, kp, jp, ip) + (x1 - x1v)*(b0_.x1f(m, kp, jp, ip+1) - b0_.x1f(m, kp, jp, ip))/Dx;
-	B[1] = b0_.x2f(m, kp, jp, ip) + (x2 - x2v)*(b0_.x2f(m, kp, jp+1, ip) - b0_.x2f(m, kp, jp, ip))/Dy;
-	B[2] = b0_.x3f(m, kp, jp, ip) + (x3 - x3v)*(b0_.x3f(m, kp+1, jp, ip) - b0_.x3f(m, kp, jp, ip))/Dz;
+	B[0] = b0_.x1f(m, kp, jp, ip) + (x1 - x1v)*(b0_.x1f(m, kp, jp, ip+1) - b0_.x1f(m, kp, jp, ip))/Lx;
+	B[1] = b0_.x2f(m, kp, jp, ip) + (x2 - x2v)*(b0_.x2f(m, kp, jp+1, ip) - b0_.x2f(m, kp, jp, ip))/Ly;
+	B[2] = b0_.x3f(m, kp, jp, ip) + (x3 - x3v)*(b0_.x3f(m, kp+1, jp, ip) - b0_.x3f(m, kp, jp, ip))/Lz;
 
 	// if (p == 53){
         // std::cout << "B " << p << " " << B[0] << " " << B[1] << " " << B[2]<<std::endl;
@@ -202,24 +206,23 @@ void Particles::BorisStep( const Real dt, DvceArray2D<Real> &pr, const DvceArray
         if (multi_d) { uB[1] = uE[1] + 2.0/(1.0+mod_t_sqr)*( (uE[2] + vec_ut[2])*t[0] - (uE[0] + vec_ut[0])*t[2] ); }
         if (three_d) { uB[2] = uE[2] + 2.0/(1.0+mod_t_sqr)*( (uE[0] + vec_ut[0])*t[1] - (uE[1] + vec_ut[1])*t[0] ); }
 
-	// Finally update velocity
-	pr(IPVX,p) = uB[0] + dt*pr(IPC,p)*alpha/(2.0*pr(IPM,p))*E[0] ;
-	pr(IPVY,p) = uB[1] + dt*pr(IPC,p)*alpha/(2.0*pr(IPM,p))*E[1] ;
-	pr(IPVZ,p) = uB[2] + dt*pr(IPC,p)*alpha/(2.0*pr(IPM,p))*E[2] ;
-
-        //std::cout << "pr1 " << p << " " << pr(IPVX,p)<<//std::endl;
-      // Second half-step in space
 	g_Lor = 0.0; //Lorentz gamma factor
 	for (int i1 = 0; i1 < 3; ++i1 ){ 
 		for (int i2 = 0; i2 < 3; ++i2 ){ 
-		g_Lor += ADM_upper[i1][i2]*pr(2*i1+1,p)*pr(2*i2+1,p);
+		g_Lor += ADM_upper[i1][i2]*uB[i1]*uB[i2];
 		}
 	}
 	g_Lor = sqrt(1.0 + g_Lor);
+	// Finally update velocity in local space
+	pr(IPVX,p) = (uB[0] + dt*pr(IPC,p)/(2.0*pr(IPM,p))*E[0])/g_Lor ;
+	pr(IPVY,p) = (uB[1] + dt*pr(IPC,p)/(2.0*pr(IPM,p))*E[1])/g_Lor ;
+	pr(IPVZ,p) = (uB[2] + dt*pr(IPC,p)/(2.0*pr(IPM,p))*E[2])/g_Lor ;
 
-	pr(IPX,p) = x1 + dt/(2.0*g_Lor)*pr(IPVX,p);
-        if (multi_d) { pr(IPY,p) = x2 + dt/(2.0*g_Lor)*pr(IPVY,p); }
-        if (three_d) { pr(IPZ,p) = x3 + dt/(2.0*g_Lor)*pr(IPVZ,p); }
+        //std::cout << "pr1 " << p << " " << pr(IPVX,p)<<//std::endl;
+
+	pr(IPX,p) = x1 + dt/(2.0)*pr(IPVX,p);
+        if (multi_d) { pr(IPY,p) = x2 + dt/(2.0)*pr(IPVY,p); }
+        if (three_d) { pr(IPZ,p) = x3 + dt/(2.0)*pr(IPVZ,p); }
         //std::cout << "pp1 " << p << " " << pr(IPX,p)<< " " << pr(IPY,p)<< " " << pr(IPZ,p)<<//std::endl;
       });
       return;
