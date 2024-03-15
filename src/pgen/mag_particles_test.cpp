@@ -241,7 +241,7 @@ void LarmorMotionErrors(HistoryData *pdata, Mesh *pm){
 		}
 	  }
 	  ismax = sqrt(ismax);
-	  /***/
+	  /***
 	  std::cout << "On rank " << global_variable::my_rank << " at time " << curr_time << " rel_dEdt: " << rel_dEdt << std::endl;
 	  std::cout << "On rank " << global_variable::my_rank << " at time " << curr_time << " rms_diff: " << rms_diff << std::endl;
 	  std::cout << "On rank " << global_variable::my_rank << " at time " << curr_time << " max_diff: " << ismax << std::endl;
@@ -250,7 +250,7 @@ void LarmorMotionErrors(HistoryData *pdata, Mesh *pm){
 	  std::cout << "=====================================" << std::endl;
 	  std::cout << pr(IPX,25) << " " << pr(IPY,25) << " " << pr(IPZ,25) << " " << pr(IPX,65) << " " << pr(IPY,65) << " " << pr(IPZ,65) << " " << std::endl;
 	  std::cout << x1[75] << " " << x1[76] << " " << x1[77] << " " << x1[195] << " " << x1[196] << " " << x1[197] << " " << std::endl;
-	  /***/
+	  ***/
 	  pdata->hdata[0] = rms_diff;
 	  pdata->hdata[1] = ismax;
 	  pdata->hdata[2] = rel_dEdt;
