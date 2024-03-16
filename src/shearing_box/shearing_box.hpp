@@ -56,6 +56,8 @@ class ShearingBox {
   // data
   Real qshear, omega0;      // shearing box parameters
   int maxjshift;            // maximum integer shift of any cell in orbital advection
+  int nmb_x1bndry;          // number of MBs that touch shear periodic x1 boundaries
+  DualArray2D<int> x1bndry_mbs; // stores GIDs of MBs at shear periodic boundaries
   // ***following is not yet implemented***
   bool shearing_box_r_phi;  // indicates calculation in 2D (r-\phi) plane
 
@@ -65,9 +67,9 @@ class ShearingBox {
   // data buffers for CC and FC vars for orbital advection. Only two x2-faces communicate
   ShearingBoxBuffer sendcc_orb[2], recvcc_orb[2];
   ShearingBoxBuffer sendfc_orb[2], recvfc_orb[2];
-  // data buffers for CC and FC vars for shearing sheet BCs. Only two x1-faces communicate
-  ShearingBoxBuffer sendcc_shr[2], recvcc_shr[2];
-  ShearingBoxBuffer sendfc_shr[2], recvfc_shr[2];
+  // data buffers for CC and FC vars for shearing sheet BCs. Only one x1-face communicates
+  ShearingBoxBuffer sendcc_shr, recvcc_shr;
+  ShearingBoxBuffer sendfc_shr, recvfc_shr;
 
 #if MPI_PARALLEL_ENABLED
   // unique MPI communicators for orbital advection and shearing box
@@ -86,6 +88,8 @@ class ShearingBox {
   // functions to communicate FC data with orbital advection
   TaskStatus PackAndSendFC_Orb(DvceFaceFld4D<Real> &b);
   TaskStatus RecvAndUnpackFC_Orb(DvceFaceFld4D<Real> &b0, ReconstructionMethod rcon);
+  // functions to communicate CC data with shearing box BCs
+  TaskStatus ShearPeriodic_CC(DvceArray5D<Real> &a);
 
  private:
   MeshBlockPack *pmy_pack;
