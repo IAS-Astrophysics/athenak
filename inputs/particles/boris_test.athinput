@@ -40,7 +40,7 @@ tlim       = 10.0      # time limit
 ndiag      = 10        # cycles between diagostic output
 
 <particles>
-ppc    = 0.001
+ppc    = 0.1
 pusher = boris
 particle_type = cosmic_ray
 mass = 1.0E+0
@@ -53,7 +53,7 @@ rsolver     = hlld      # Riemann-solver to be used
 gamma       = 1.6666667 # gamma = C_p/C_v
 
 <problem>
-max_init_vel = 0.9
+max_init_vel = 0.5
 b0_strength = 1.0
 user_hist = true
 
@@ -65,7 +65,7 @@ dt          = 1.0E-1     # time increment between outputs
 <output2>
 file_type   = bin      # Particle VTK data dump
 variable    = mhd_w_bcc
-dt          = 2.0E-0     # time increment between outputs
+dt          = 2.5E-0     # time increment between outputs
 
 <output3>
 file_type   = hst      # Particle VTK data dump
