@@ -189,7 +189,8 @@ void DynGRPS<EOSPolicy, ErrorPolicy>::QueueDynGRTasks() {
   pnr->QueueTask(&MHD::NewTimeStep, pmhd, MHD_Newdt, "MHD_Newdt", Task_Run, {MHD_C2P});
 
   // End task list
-  pnr->QueueTask(&MHD::ClearSend, pmhd, MHD_Clear, "MHD_Clear", Task_End);
+  pnr->QueueTask(&MHD::ClearSend, pmhd, MHD_ClearS, "MHD_ClearS", Task_End);
+  pnr->QueueTask(&MHD::ClearRecv, pmhd, MHD_ClearR, "MHD_ClearR", Task_End);
 }
 
 //----------------------------------------------------------------------------------------

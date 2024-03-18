@@ -48,7 +48,8 @@ enum TaskName {
   MHD_Prolong,
   MHD_C2P,
   MHD_Newdt,
-  MHD_Clear,
+  MHD_ClearS,
+  MHD_ClearR,
   MHD_NTASKS,
 
   Z4c_Recv,
