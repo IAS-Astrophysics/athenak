@@ -19,15 +19,8 @@ class Root {
  public:
   /// Maximum number of iterations
   unsigned int iterations;
-  /// Solver tolerance
-  Real tol;
-  /// Only used for benchmarking, not thread-safe.
-  //int last_count;
 
-  Root() : iterations(30), tol(1e-15) {}
-
-  //Root(Root const&) = delete;
-  //void operator=(Root const&) = delete;
+  Root() : iterations(30) {}
 
   // FalsePosition {{{
 
@@ -47,7 +40,8 @@ class Root {
 
   template<class Functor, class ... Types>
   KOKKOS_INLINE_FUNCTION
-  bool FalsePosition(Functor&& f, Real &lb, Real &ub, Real& x, Types ... args) const {
+  bool FalsePosition(Functor&& f, Real &lb, Real &ub, Real& x, Real tol,
+                     Types ... args) const {
     int side = 0;
     Real ftest;
     unsigned int count = 0;
@@ -126,7 +120,8 @@ class Root {
 
   template<class Functor, class ... Types>
   KOKKOS_INLINE_FUNCTION
-  bool Chandrupatla(Functor&& f, Real &lb, Real &ub, Real& x, Types ... args) const {
+  bool Chandrupatla(Functor&& f, Real &lb, Real &ub, Real& x, Real tol,
+                    Types ... args) const {
     unsigned int count = 0;
     //last_count = 0;
     // Get our initial bracket.
@@ -209,7 +204,8 @@ class Root {
    */
   template<class Functor, class ... Types>
   KOKKOS_INLINE_FUNCTION
-  bool NewtonSafe(Functor&& f, Real &lb, Real &ub, Real& x, Types ... args) const {
+  bool NewtonSafe(Functor&& f, Real &lb, Real &ub, Real& x, Real tol,
+                  Types ... args) const {
     Real fx;
     Real dfx;
     Real xold;
@@ -238,13 +234,6 @@ class Root {
       xold = x;
       // Calculate f and df at point x.
       f(fx, dfx, x, args...);
-      x = x - fx/dfx;
-      // Check that the root is bounded properly.
-      if (x > ub || x < lb) {
-        // Revert to bisection if the root is not converging.
-        x = 0.5*(ub + lb);
-        //f(fx, dfx, x, args...);
-      }
       // Correct the bounds.
       if (fx*flb > 0) {
         flb = fx;
@@ -252,6 +241,14 @@ class Root {
       } else if (fx*fub > 0) {
         fub = fx;
         ub = xold;
+      }
+      // Update the root.
+      x = x - fx/dfx;
+      // Check that the root is bounded properly.
+      if (x > ub || x < lb) {
+        // Revert to bisection if the root is not converging.
+        x = 0.5*(ub + lb);
+        //f(fx, dfx, x, args...);
       }
       count++;
     } while (fabs((xold-x)/x) > tol && count < iterations);

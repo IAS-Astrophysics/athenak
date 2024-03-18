@@ -34,6 +34,8 @@
 #include "parameter_input.hpp"
 #include "adm/adm.hpp"
 #include "mhd/mhd.hpp"
+#include "coordinates/coordinates.hpp"
+#include "coordinates/cell_locations.hpp"
 
 template<class EOSPolicy, class ErrorPolicy>
 class PrimitiveSolverHydro {
@@ -104,7 +106,7 @@ class PrimitiveSolverHydro {
     ps.GetEOSMutable().SetDensityFloor(pin->GetOrAddReal(block, "dfloor", (FLT_MIN)));
     ps.GetEOSMutable().SetTemperatureFloor(pin->GetOrAddReal(block, "tfloor", (FLT_MIN)));
     ps.GetEOSMutable().SetThreshold(pin->GetOrAddReal(block, "dthreshold", 1.0));
-    ps.GetRootSolverMutable().tol = pin->GetOrAddReal(block, "c2p_tol", 1e-15);
+    ps.tol = pin->GetOrAddReal(block, "c2p_tol", 1e-15);
     ps.GetRootSolverMutable().iterations = pin->GetOrAddInteger(block, "c2p_iter", 50);
     errcap = pin->GetOrAddInteger(block, "c2perrs", 1000);
     SetPolicyParams(block, pin);
@@ -279,9 +281,10 @@ class PrimitiveSolverHydro {
                   DvceArray5D<Real> &bcc0, DvceArray5D<Real> &prim,
                   const int il, const int iu, const int jl, const int ju,
                   const int kl, const int ku, bool floors_only=false) {
-    //auto &indcs = pmy_pack->pmesh->mb_indcs;
-    //int &is = indcs.is, &js = indcs.js, &ks = indcs.ks;
-    //auto &size = pmy_pack->pmb->mb_size;
+    auto &indcs = pmy_pack->pmesh->mb_indcs;
+    int &is = indcs.is, &js = indcs.js, &ks = indcs.ks;
+    int &ie = indcs.ie, &je = indcs.ie, &ke = indcs.ke;
+    auto &size = pmy_pack->pmb->mb_size;
 
     int &nhyd = pmy_pack->pmhd->nmhd;
     int &nscal = pmy_pack->pmhd->nscalars;
@@ -468,6 +471,32 @@ class PrimitiveSolverHydro {
         // If the conservative variables were floored or adjusted for consistency,
         // we need to copy the conserved variables, too.
         if (result.cons_floor || result.cons_adjusted) {
+          /*if (fabs((cons_pt[CDN] - cons_pt_old[CDN])/cons_pt_old[CDN]) > 1e-12) {
+            Real &x1min = size.d_view(m).x1min;
+            Real &x1max = size.d_view(m).x1max;
+            Real x1v = CellCenterX(i-is, indcs.nx1, x1min, x1max);
+
+            Real &x2min = size.d_view(m).x2min;
+            Real &x2max = size.d_view(m).x2max;
+            Real x2v = CellCenterX(j-js, indcs.nx2, x2min, x2max);
+
+            Real &x3min = size.d_view(m).x3min;
+            Real &x3max = size.d_view(m).x3max;
+            Real x3v = CellCenterX(k-ks, indcs.nx3, x3min, x3max);
+            bool is_ghost = (i < is) || (i > ie) ||
+                            (j < js) || (j > je) ||
+                            (k < ks) || (k > ke);
+
+            printf("Density was nontrivially adjusted on MeshBlock %d!\n"
+                   "  Grid index: (i=%d, j=%d, k=%d)\n"
+                   "  Physical position: (%g, %g, %g)\n"
+                   "  D (old): %.17g\n"
+                   "  D (new): %.17g\n"
+                   "  Ghost zone? %s\n",
+                   m, i, j, k,
+                   x1v, x2v, x3v, cons_pt_old[CDN], cons_pt[CDN],
+                   is_ghost ? "true" : "false");
+          }*/
           cons(m, IDN, k, j, i) = cons_pt[CDN]*sdetg;
           cons(m, IM1, k, j, i) = cons_pt[CSX]*sdetg;
           cons(m, IM2, k, j, i) = cons_pt[CSY]*sdetg;
