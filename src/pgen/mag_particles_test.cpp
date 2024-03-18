@@ -88,8 +88,8 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     Real x1max_actual = (mbsize.d_view(m).x1max <= 0) ? 1.25*mbsize.d_view(m).x1max : 0.75*mbsize.d_view(m).x1max;
     Real x2max_actual = (mbsize.d_view(m).x2max <= 0) ? 1.25*mbsize.d_view(m).x2max : 0.75*mbsize.d_view(m).x2max;
     Real x3max_actual = (mbsize.d_view(m).x3max <= 0) ? 1.25*mbsize.d_view(m).x3max : 0.75*mbsize.d_view(m).x3max;
-    pr(IPX,p) = x1min_actual + (p%n_sqrt)*(x1max_actual - x1min_actual)/n_sqrt;
-    pr(IPY,p) = x2min_actual + floor(p/n_sqrt)*(x2max_actual - x2min_actual)/n_sqrt;
+    pr(IPX,p) = (x1max_actual + x1min_actual)/2.0;
+    pr(IPY,p) = (x2max_actual +  x2min_actual)/2.0;
     pr(IPZ,p) = x3min_actual;
     x[3*p] = pr(IPX,p);
     x[3*p+1] = pr(IPY,p);
