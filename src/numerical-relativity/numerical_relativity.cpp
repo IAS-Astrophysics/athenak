@@ -6,8 +6,6 @@
 //! \file numerical_relativity.cpp
 //  \brief implementation of functions for NumericalRelativity
 #include <iostream>
-#include <string>
-#include <sstream>
 
 #include "numerical_relativity.hpp"
 #include "z4c/z4c.hpp"
@@ -110,7 +108,6 @@ bool NumericalRelativity::AssembleNumericalRelativityTasks(
     TaskList &list, std::vector<QueuedTask> &queue) {
   int added = 0;
   int size = queue.size();
-  std::stringstream ss;
   while (added < size) {
     int cycle_added = 0;
     for (auto &task : queue) {
