@@ -18,6 +18,8 @@ add_executable(
         bvals/buffs_fc.cpp
         bvals/bvals_cc.cpp
         bvals/bvals_fc.cpp
+        bvals/bvals_part.cpp
+        bvals/bvals_tasks.cpp
         bvals/flux_correct_cc.cpp
         bvals/flux_correct_fc.cpp
         bvals/prolongation.cpp
@@ -61,7 +63,8 @@ add_executable(
         hydro/hydro_tasks.cpp
         hydro/hydro_update.cpp
 
-        ion-neutral/ion_neutral.cpp
+        ion-neutral/ion-neutral.cpp
+        ion-neutral/ion-neutral_tasks.cpp
 
         mesh/build_tree.cpp
         mesh/load_balance.cpp
@@ -82,19 +85,6 @@ add_executable(
 
         numerical-relativity/numerical_relativity.cpp
 
-        tmunu/tmunu.cpp
-
-        z4c/z4c.cpp
-        z4c/z4c_adm.cpp
-        z4c/z4c_calcrhs.cpp
-        z4c/z4c_newdt.cpp
-        z4c/z4c_tasks.cpp
-        z4c/z4c_update.cpp
-        z4c/z4c_gauge.cpp
-        z4c/z4c_Sbc.cpp
-        z4c/z4c_calculate_weyl_scalars.cpp
-        z4c/z4c_wave_extr.cpp
-
         outputs/io_wrapper.cpp
         outputs/outputs.cpp
         outputs/basetype_output.cpp
@@ -104,7 +94,15 @@ add_executable(
         outputs/formatted_table.cpp
         outputs/history.cpp
         outputs/restart.cpp
-        outputs/vtk.cpp
+        outputs/coarsened_binary.cpp
+        outputs/track_prtcl.cpp
+        outputs/vtk_mesh.cpp
+        outputs/vtk_prtcl.cpp
+
+        particles/particles.cpp
+        particles/particles_pushers.cpp
+        particles/particles_tasks.cpp
+        outputs/pdf.cpp
 
         pgen/pgen.cpp
         pgen/tests/advection.cpp
@@ -133,9 +131,25 @@ add_executable(
         srcterms/srcterms_newdt.cpp
         srcterms/turb_driver.cpp
 
+        tmunu/tmunu.cpp
+
         units/units.cpp
         utils/change_rundir.cpp
         utils/show_config.cpp
+        utils/lagrange_interpolator.cpp
+
+        z4c/z4c.cpp
+        z4c/z4c_adm.cpp
+        z4c/z4c_calcrhs.cpp
+        z4c/z4c_newdt.cpp
+        z4c/z4c_tasks.cpp
+        z4c/z4c_update.cpp
+        z4c/z4c_gauge.cpp
+        z4c/z4c_Sbc.cpp
+        z4c/z4c_calculate_weyl_scalars.cpp
+        z4c/z4c_wave_extr.cpp
+        z4c/z4c_puncture_tracker.cpp
+        z4c/z4c_amr.cpp
 )
 
 # custom problem generator to be included in compile

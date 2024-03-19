@@ -5,6 +5,7 @@
 //========================================================================================
 //! \file coordinates.cpp
 //! \brief
+#include <iostream> // cout
 
 #include "athena.hpp"
 #include "mesh/mesh.hpp"

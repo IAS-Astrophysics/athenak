@@ -8,7 +8,10 @@
 //! \file meshblock_pack.hpp
 //  \brief defines MeshBlockPack class, a container for MeshBlocks
 
+#include <map>
 #include <memory>
+#include <string>
+#include <vector>
 
 #include "parameter_input.hpp"
 #include "coordinates/coordinates.hpp"
@@ -21,13 +24,16 @@ class ADM;
 class Tmunu;
 namespace hydro {class Hydro;}
 namespace mhd {class MHD;}
-namespace z4c {class Z4c;}
-namespace adm {class ADM;}
 namespace ion_neutral {class IonNeutral;}
 namespace radiation {class Radiation;}
 namespace dyngr {class DynGR;}
 namespace numrel {class NumericalRelativity;}
 class TurbulenceDriver;
+namespace radiation {class Radiation;}
+namespace z4c {class Z4c;}
+namespace z4c {class PunctureTracker;}
+namespace adm {class ADM;}
+namespace particles {class Particles;}
 namespace units {class Units;}
 
 //----------------------------------------------------------------------------------------
@@ -64,13 +70,16 @@ class MeshBlockPack {
   dyngr::DynGR *pdyngr=nullptr;
   numrel::NumericalRelativity *pnr=nullptr;
   ion_neutral::IonNeutral *pionn=nullptr;
-  radiation::Radiation *prad=nullptr;
   TurbulenceDriver *pturb=nullptr;
+  radiation::Radiation *prad=nullptr;
+  std::vector<z4c::PunctureTracker *> pz4c_ptracker;
+  particles::Particles *ppart=nullptr;
+
+  // units (needed to convert code units to cgs for, e.g., cooling or radiation)
   units::Units *punit=nullptr;
 
-  // task lists for all MeshBlocks in this MeshBlockPack
-  TaskList operator_split_tl;            // operator-split physics
-  TaskList start_tl, run_tl, end_tl;     // each stage of RK integrators
+  // map for task lists which operate over all MeshBlocks in this MeshBlockPack
+  std::map<std::string, std::shared_ptr<TaskList>> tl_map;
 
   // functions
   void AddPhysics(ParameterInput *pin);

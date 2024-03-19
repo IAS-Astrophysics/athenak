@@ -17,6 +17,7 @@
 #include <sstream>
 #include <string>
 #include <vector>
+#include <algorithm> // min
 
 #include "athena.hpp"
 #include "globals.hpp"
@@ -25,10 +26,10 @@
 #include "outputs.hpp"
 
 //----------------------------------------------------------------------------------------
-// ctor: also calls BaseTypeOutput base class constructor
+// Constructor: also calls BaseTypeOutput base class constructor
 
-BinaryOutput::BinaryOutput(OutputParameters op, Mesh *pm) :
-  BaseTypeOutput(op, pm) {
+MeshBinaryOutput::MeshBinaryOutput(ParameterInput *pin, Mesh *pm, OutputParameters op) :
+  BaseTypeOutput(pin, pm, op) {
   // create directories for outputs
   // useful for mpiio-based outputs because on some supercomputers you may need to
   // set different stripe counts depending on whether mpiio is used in order to
@@ -37,11 +38,11 @@ BinaryOutput::BinaryOutput(OutputParameters op, Mesh *pm) :
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn void BinaryOutput:::WriteOutputFile(Mesh *pm)
+//! \fn void MeshBinaryOutput:::WriteOutputFile(Mesh *pm)
 //  \brief Cycles over all MeshBlocks and writes OutputData in binary format
 //   All MeshBlocks are written to the same file.
 
-void BinaryOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
+void MeshBinaryOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
   // check if slicing
   bool bin_slice = (out_params.slice1 || out_params.slice2 || out_params.slice3);
 
@@ -68,39 +69,43 @@ void BinaryOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
   // 2. Current time
   // 3. List of variables in the file
   // 4. Header (input file information)
-  {std::stringstream msg;
-  msg << "Athena binary output version=1.1" << std::endl
-      // preheader size includes "size of preheader" line up to "number of variables"
-      << "  size of preheader=5" << std::endl
-      << "  time=" << pm->time << std::endl
-      << "  cycle=" << pm->ncycle << std::endl
-      << "  size of location=" << sizeof(Real) << std::endl
-      << "  size of variable=" << sizeof(float) << std::endl
-      << "  number of variables=" << outvars.size() << std::endl
-      << "  variables:  ";
-  for (int n=0; n<outvars.size(); n++) {
-    msg << outvars[n].label.c_str() << "  ";
+  {
+    std::stringstream msg;
+    msg << "Athena binary output version=1.1" << std::endl
+        // preheader size includes "size of preheader" line up to "number of variables"
+        << "  size of preheader=5" << std::endl
+        << "  time=" << pm->time << std::endl
+        << "  cycle=" << pm->ncycle << std::endl
+        << "  size of location=" << sizeof(Real) << std::endl
+        << "  size of variable=" << sizeof(float) << std::endl
+        << "  number of variables=" << outvars.size() << std::endl
+        << "  variables:  ";
+    for (int n=0; n<outvars.size(); n++) {
+      msg << outvars[n].label.c_str() << "  ";
+    }
+    msg << std::endl;
+    if (global_variable::my_rank == 0) {
+      binfile.Write_any_type(msg.str().c_str(),msg.str().size(),"byte");
+    }
+    header_offset += msg.str().size();
   }
-  msg << std::endl;
-  if (global_variable::my_rank == 0) {
-    binfile.Write_bytes(msg.str().c_str(),sizeof(char),msg.str().size());
+  {
+    std::stringstream msg;
+    // prepare the input parameters
+    std::stringstream ost;
+    pin->ParameterDump(ost);
+    std::string sbuf=ost.str();
+    msg << "  header offset=" << sbuf.size()*sizeof(char)  << std::endl;
+    if (global_variable::my_rank == 0) {
+      binfile.Write_any_type(msg.str().c_str(),msg.str().size(),"byte");
+      binfile.Write_any_type(sbuf.c_str(),sbuf.size(),"byte");
+    }
+    header_offset += sbuf.size()*sizeof(char);
+    header_offset += msg.str().size();
   }
-  header_offset += msg.str().size();}
-  {std::stringstream msg;
-  // prepare the input parameters
-  std::stringstream ost;
-  pin->ParameterDump(ost);
-  std::string sbuf=ost.str();
-  msg << "  header offset=" << sbuf.size()*sizeof(char)  << std::endl;
-  if (global_variable::my_rank == 0) {
-    binfile.Write_bytes(msg.str().c_str(),sizeof(char),msg.str().size());
-    binfile.Write_bytes(sbuf.c_str(),sizeof(char),sbuf.size());
-  }
-  header_offset += sbuf.size()*sizeof(char);
-  header_offset += msg.str().size();}
 
-  //  5. Data.  An arbitrary number of scalars and vectors can be written (every node
-  //  in the OutputData doubly linked lists), all in binary floats format
+  //  5. Data.  An arbitrary number of scalars and vectors can be written (every element
+  //  of the outvars vector), all in binary floats format
 
   int nout_vars = outvars.size();
   int nout_mbs = outmbs.size();
@@ -216,10 +221,10 @@ void BinaryOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
                      std::next(rank_offset.begin()));
     std::size_t myoffset=header_offset+data_size*rank_offset[global_variable::my_rank];
     if (noutmbs_min > 0) {
-      binfile.Write_bytes_at_all(data,data_size,nout_mbs,myoffset);
+      binfile.Write_any_type_at_all(data,(data_size*nout_mbs),myoffset,"byte");
     } else {
       if (nout_mbs > 0) {
-        binfile.Write_bytes_at(data,data_size,nout_mbs,myoffset);
+        binfile.Write_any_type_at(data,(data_size*nout_mbs),myoffset,"byte");
       }
     }
   } else {
@@ -227,7 +232,7 @@ void BinaryOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
     if (data_size*nb_mbs<=2147483648) {
       // now write binary data in parallel
       std::size_t myoffset=header_offset+data_size*ns_mbs;
-      binfile.Write_bytes_at_all(data,data_size,nb_mbs,myoffset);
+      binfile.Write_any_type_at_all(data,(data_size*nb_mbs),myoffset,"byte");
     } else {
       // write data over each MeshBlock sequentially and in parallel
       // calculate max/min number of MeshBlocks across all ranks
@@ -242,7 +247,7 @@ void BinaryOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
         std::size_t myoffset=header_offset+data_size*ns_mbs+data_size*m;
         // every rank has a MB to write, so write collectively
         if (m < noutmbs_min) {
-          if (binfile.Write_bytes_at_all(pdata,data_size,1,myoffset) != 1) {
+          if (binfile.Write_any_type_at_all(pdata,(data_size),myoffset,"byte") != 1) {
             std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                 << std::endl << "binary data not written correctly to binary file, "
                 << "binary file is broken." << std::endl;
@@ -250,7 +255,7 @@ void BinaryOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
           }
         // some ranks are finished writing, so use non-collective write
         } else if (m < pm->nmb_thisrank) {
-          if (binfile.Write_bytes_at(pdata,data_size,1,myoffset) != 1) {
+          if (binfile.Write_any_type_at(pdata,(data_size),myoffset,"byte") != 1) {
             std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                  << std::endl << "binary data not written correctly to binary file, "
                  << "binary file is broken." << std::endl;

@@ -9,6 +9,7 @@
 //  \brief NumericalRelativity handles the creation of a TaskList for NR modules.
 
 #include <vector>
+#include <map>
 #include <functional>
 #include <string>
 
@@ -70,6 +71,7 @@ enum TaskName {
   Z4c_ClearR,
   Z4c_Weyl,
   Z4c_Wave,
+  Z4c_PT,
   Z4c_NTASKS
 };
 
@@ -143,7 +145,8 @@ class NumericalRelativity {
       [=](Driver *d, int s) mutable -> TaskStatus {return (obj->*func)(d,s);}));
   }
 
-  void AssembleNumericalRelativityTasks(TaskList &start, TaskList &run, TaskList &end);
+  void AssembleNumericalRelativityTasks(
+         std::map<std::string, std::shared_ptr<TaskList>>& tl);
 
  private:
   MeshBlockPack *pmy_pack;
@@ -162,7 +165,8 @@ class NumericalRelativity {
   void AddExtraDependencies(std::vector<TaskName>& required,
                             std::vector<TaskName>& optional);
 
-  bool AssembleNumericalRelativityTasks(TaskList &list, std::vector<QueuedTask> &queue);
+  bool AssembleNumericalRelativityTasks(std::shared_ptr<TaskList>& list,
+         std::vector<QueuedTask> &queue);
 };
 
 } // namespace numrel

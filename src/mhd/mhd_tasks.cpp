@@ -4,9 +4,11 @@
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
 //! \file mhd_tasks.cpp
-//! \brief functions that control MHD tasks in the four task lists stored in the
-//! MeshBlockPack: start_tl, run_tl, end_tl, operator_split_tl
+//! \brief functions that control MHD tasks in the appropriate task lists
 
+#include <map>
+#include <memory>
+#include <string>
 #include <iostream>
 
 #include "athena.hpp"
@@ -25,43 +27,41 @@
 namespace mhd {
 //----------------------------------------------------------------------------------------
 //! \fn void MHD::AssembleMHDTasks
-//! \brief Adds mhd tasks to stage start/run/end task lists used by time integrators
+//! \brief Adds mhd tasks to appropriate task lists used by time integrators.
 //! Called by MeshBlockPack::AddPhysics() function directly after MHD constructor
-//! Many of the functions in the task list are implemented in this file because they are
-//! simple, or they are wrappers that call one or more other functions.
 
-void MHD::AssembleMHDTasks(TaskList &start, TaskList &run, TaskList &end) {
+void MHD::AssembleMHDTasks(std::map<std::string, std::shared_ptr<TaskList>> tl) {
   TaskID none(0);
 
-  // assemble start task list
-  id.irecv = start.AddTask(&MHD::InitRecv, this, none);
+  // assemble "before_stagen" task list
+  id.irecv = tl["before_stagen"]->AddTask(&MHD::InitRecv, this, none);
 
-  // assemble run task list
-  id.copyu = run.AddTask(&MHD::CopyCons, this, none);
-  id.flux  = run.AddTask(&MHD::Fluxes, this, id.copyu);
-  id.sendf = run.AddTask(&MHD::SendFlux, this, id.flux);
-  id.recvf = run.AddTask(&MHD::RecvFlux, this, id.sendf);
-  id.expl  = run.AddTask(&MHD::ExpRKUpdate, this, id.recvf);
-  id.restu = run.AddTask(&MHD::RestrictU, this, id.expl);
-  id.sendu = run.AddTask(&MHD::SendU, this, id.restu);
-  id.recvu = run.AddTask(&MHD::RecvU, this, id.sendu);
-  id.efld  = run.AddTask(&MHD::CornerE, this, id.recvu);
-  id.sende = run.AddTask(&MHD::SendE, this, id.efld);
-  id.recve = run.AddTask(&MHD::RecvE, this, id.sende);
-  id.ct    = run.AddTask(&MHD::CT, this, id.recve);
-  id.restb = run.AddTask(&MHD::RestrictB, this, id.ct);
-  id.sendb = run.AddTask(&MHD::SendB, this, id.restb);
-  id.recvb = run.AddTask(&MHD::RecvB, this, id.sendb);
-  id.bcs   = run.AddTask(&MHD::ApplyPhysicalBCs, this, id.recvb);
-  id.prol  = run.AddTask(&MHD::Prolongate, this, id.bcs);
-  id.c2p   = run.AddTask(&MHD::ConToPrim, this, id.prol);
-  id.newdt = run.AddTask(&MHD::NewTimeStep, this, id.c2p);
+  // assemble "stagen" task list
+  id.copyu = tl["stagen"]->AddTask(&MHD::CopyCons, this, none);
+  id.flux  = tl["stagen"]->AddTask(&MHD::Fluxes, this, id.copyu);
+  id.sendf = tl["stagen"]->AddTask(&MHD::SendFlux, this, id.flux);
+  id.recvf = tl["stagen"]->AddTask(&MHD::RecvFlux, this, id.sendf);
+  id.expl  = tl["stagen"]->AddTask(&MHD::ExpRKUpdate, this, id.recvf);
+  id.restu = tl["stagen"]->AddTask(&MHD::RestrictU, this, id.expl);
+  id.sendu = tl["stagen"]->AddTask(&MHD::SendU, this, id.restu);
+  id.recvu = tl["stagen"]->AddTask(&MHD::RecvU, this, id.sendu);
+  id.efld  = tl["stagen"]->AddTask(&MHD::CornerE, this, id.recvu);
+  id.sende = tl["stagen"]->AddTask(&MHD::SendE, this, id.efld);
+  id.recve = tl["stagen"]->AddTask(&MHD::RecvE, this, id.sende);
+  id.ct    = tl["stagen"]->AddTask(&MHD::CT, this, id.recve);
+  id.restb = tl["stagen"]->AddTask(&MHD::RestrictB, this, id.ct);
+  id.sendb = tl["stagen"]->AddTask(&MHD::SendB, this, id.restb);
+  id.recvb = tl["stagen"]->AddTask(&MHD::RecvB, this, id.sendb);
+  id.bcs   = tl["stagen"]->AddTask(&MHD::ApplyPhysicalBCs, this, id.recvb);
+  id.prol  = tl["stagen"]->AddTask(&MHD::Prolongate, this, id.bcs);
+  id.c2p   = tl["stagen"]->AddTask(&MHD::ConToPrim, this, id.prol);
+  id.newdt = tl["stagen"]->AddTask(&MHD::NewTimeStep, this, id.c2p);
 
-  // assemble end task list
-  id.csend = end.AddTask(&MHD::ClearSend, this, none);
+  // assemble "after_stagen" task list
+  id.csend = tl["after_stagen"]->AddTask(&MHD::ClearSend, this, none);
   // although RecvFlux/U/E/B functions check that all recvs complete, add ClearRecv to
   // task list anyways to catch potential bugs in MPI communication logic
-  id.crecv = end.AddTask(&MHD::ClearRecv, this, id.csend);
+  id.crecv = tl["after_stagen"]->AddTask(&MHD::ClearRecv, this, id.csend);
 
   return;
 }
@@ -318,8 +318,7 @@ TaskStatus MHD::ConToPrim(Driver *pdrive, int stage) {
 
 //----------------------------------------------------------------------------------------
 //! \fn TaskStatus MHD::ClearSend
-//! \brief Wrapper task list function that checks all MPI sends have completed.  Called
-//! in end_tl, when all steps in run_tl over all MeshBlocks have completed.
+//! \brief Wrapper task list function that checks all MPI sends have completed.
 
 TaskStatus MHD::ClearSend(Driver *pdrive, int stage) {
   // check sends of U complete

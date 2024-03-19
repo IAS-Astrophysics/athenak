@@ -16,6 +16,7 @@
 #include <sstream>
 #include <string>
 #include <vector>
+#include <cstdio> // fclose
 
 // AthenaK headers
 #include "athena.hpp"

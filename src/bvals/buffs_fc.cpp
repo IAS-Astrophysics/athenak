@@ -8,6 +8,7 @@
 
 #include <cstdlib>
 #include <iostream>
+#include <algorithm> // max
 
 #include "athena.hpp"
 #include "globals.hpp"
@@ -25,7 +26,7 @@
 //! relative to center of MeshBlock (0,0,0).  The arguments f1/2 are the coordinates
 //! of subblocks within faces/edges (only relevant with SMR/AMR)
 
-void BoundaryValuesFC::InitSendIndices(BoundaryBuffer &buf,
+void BoundaryValuesFC::InitSendIndices(MeshBoundaryBuffer &buf,
                                        int ox1, int ox2, int ox3, int f1, int f2) {
   auto &mb_indcs  = pmy_pack->pmesh->mb_indcs;
   int ng  = mb_indcs.ng;
@@ -384,7 +385,7 @@ void BoundaryValuesFC::InitSendIndices(BoundaryBuffer &buf,
 //! relative to center of MeshBlock (0,0,0).  The arguments f1/2 are the coordinates
 //! of subblocks within faces/edges (only relevant with SMR/AMR)
 
-void BoundaryValuesFC::InitRecvIndices(BoundaryBuffer &buf,
+void BoundaryValuesFC::InitRecvIndices(MeshBoundaryBuffer &buf,
                                        int ox1, int ox2, int ox3, int f1, int f2) {
   auto &mb_indcs  = pmy_pack->pmesh->mb_indcs;
   int ng = mb_indcs.ng;

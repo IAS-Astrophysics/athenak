@@ -21,6 +21,7 @@
 #include "mesh/mesh.hpp"
 #include "bvals/bvals.hpp"
 #include "z4c/z4c.hpp"
+#include "z4c/z4c_amr.hpp"
 #include "adm/adm.hpp"
 
 namespace z4c {
@@ -62,7 +63,8 @@ Z4c::Z4c(MeshBlockPack *ppack, ParameterInput *pin) :
   u1("u1 z4c",1,1,1,1,1),
   u_rhs("u_rhs z4c",1,1,1,1,1),
   u_weyl("u_weyl",1,1,1,1,1),
-  psi_out("psi_out",1,1,1) {
+  psi_out("psi_out",1,1,1),
+  pz4c_amr(new Z4c_AMR(this,pin)) {
   // (1) read time-evolution option [already error checked in driver constructor]
   // Then initialize memory and algorithms for reconstruction and Riemann solvers
   std::string evolution_t = pin->GetString("time","evolution");
@@ -230,6 +232,7 @@ void Z4c::AlgConstr(MeshBlockPack *pmbp) {
 // destructor
 Z4c::~Z4c() {
   delete pbval_u;
+  delete pz4c_amr;
 }
 
 } // namespace z4c

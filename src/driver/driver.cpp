@@ -10,6 +10,7 @@
 #include <iomanip>    // std::setprecision()
 #include <limits>
 #include <algorithm>
+#include <string> // string
 
 #include "athena.hpp"
 #include "globals.hpp"
@@ -20,7 +21,7 @@
 #include "mhd/mhd.hpp"
 #include "z4c/z4c.hpp"
 #include "dyngr/dyngr.hpp"
-#include "ion-neutral/ion_neutral.hpp"
+#include "ion-neutral/ion-neutral.hpp"
 #include "radiation/radiation.hpp"
 #include "driver.hpp"
 
@@ -53,14 +54,13 @@
 // Notation: exclusively using "stage", equivalent in lit. to "substage" or "substep"
 // (infrequently "step"), to refer to the intermediate values of U^{l} between each
 // "timestep" = "cycle" in explicit, multistage methods.
-//
-// Driver::Execute() invokes the tasklist from stage=1 to stage=ptlist->nstages
 
 Driver::Driver(ParameterInput *pin, Mesh *pmesh, Real wtlim, Kokkos::Timer* ptimer) :
   tlim(-1.0),
   nlim(-1),
   ndiag(1),
   nmb_updated_(0),
+  npart_updated_(0),
   lb_efficiency_(0),
   pwall_clock_(ptimer),
   wall_time(wtlim),
@@ -238,6 +238,31 @@ Driver::Driver(ParameterInput *pin, Mesh *pmesh, Real wtlim, Kokkos::Timer* ptim
 }
 
 //----------------------------------------------------------------------------------------
+//! \fn Driver::ExecuteTaskList()
+//! \brief Perform tasks over all MeshBlocks for the TaskList specified by string "tl".
+//! Integer argument "stage" can be used to indicate at which step in overall algorithm
+//! these tasks are to be performed, e.g. which stage of a multi-stage RK integrator.
+
+void Driver::ExecuteTaskList(Mesh *pm, std::string tl, int stage) {
+  MeshBlockPack* pmbp = pm->pmb_pack;
+  for (int p=0; p<(pm->nmb_packs_thisrank); ++p) {
+    if (!(pmbp->tl_map[tl]->Empty())) {pmbp->tl_map[tl]->Reset();}
+  }
+  int npack_left = (pm->nmb_packs_thisrank);
+  while (npack_left > 0) {
+    if (pmbp->tl_map[tl]->Empty()) {
+      npack_left--;
+    } else {
+      if (!pmbp->tl_map[tl]->IsComplete()) {
+        auto status = pmbp->tl_map[tl]->DoAvailable(this, stage);
+        if (status == TaskListStatus::complete) { npack_left--; }
+      }
+    }
+  }
+  return;
+}
+
+//----------------------------------------------------------------------------------------
 // Driver::Initialize()
 // Tasks to be performed before execution of Driver, such as setting ghost zones (BCs),
 //  outputting ICs, and computing initial time step
@@ -305,18 +330,13 @@ void Driver::Initialize(Mesh *pmesh, ParameterInput *pin, Outputs *pout, bool re
 
 //----------------------------------------------------------------------------------------
 //! \fn Driver::Execute()
-//! \brief Executes all relevant task lists over all MeshBlockPacks.  For static
-//! (non-evolving) problems, currently implemented task lists are:
-//!  (1) TODO
-//! For dynamic (time-evolving) problems, currently implemented task lists are:
-//!  (1) operator split physics (operator_split_tl)
-//!  (2) each stage of both explicit and ImEx RK integrators (start_tl, run_tl, end_tl)
-//!  [Note for ImEx integrators, the first two fully implicit updates should be performed
-//!  at the start of the first stage.]
+//! \brief Executes "main loop" by running all relevant task lists over all MeshBlockPacks
+//! until a relevant stopping criteria is found (e.g. t > tlim). Calls AMR driver, and
+//! performs outputs. Updates counters like (ncycle, time, etc.)
 
 void Driver::Execute(Mesh *pmesh, ParameterInput *pin, Outputs *pout) {
   if (global_variable::my_rank == 0) {
-    std::cout << "\nSetup complete, executing task list...\n" << std::endl;
+    std::cout << "\nSetup complete, executing task list(s)...\n" << std::endl;
   }
 
   if (time_evolution == TimeEvolution::tstatic) {
@@ -329,95 +349,27 @@ void Driver::Execute(Mesh *pmesh, ParameterInput *pin, Outputs *pout) {
     while ((pmesh->time < tlim) && (pmesh->ncycle < nlim || nlim < 0) &&
            (elapsed_time < wall_time)) {
       if (global_variable::my_rank == 0) {OutputCycleDiagnostics(pmesh);}
-      int npacks = 1;  // TODO(@user): extend for multiple MeshBlockPacks
-      MeshBlockPack* pmbp = pmesh->pmb_pack;
-      //---------------------------------------
-      // (1) Do *** operator split *** TaskList
-      {
-        for (int p=0; p<npacks; ++p) {
-          if (!(pmbp->operator_split_tl.Empty())) {pmbp->operator_split_tl.Reset();}
-        }
-        int npack_left = npacks;
-        while (npack_left > 0) {
-          if (pmbp->operator_split_tl.Empty()) {
-            npack_left--;
-          } else {
-            if (!pmbp->operator_split_tl.IsComplete()) {
-              // note 2nd argument to DoAvailable (stage) is not used, set to 0
-              auto status = pmbp->operator_split_tl.DoAvailable(this, 0);
-              if (status == TaskListStatus::complete) { npack_left--; }
-            }
-          }
-        }
+
+      // Execute TaskLists
+      // Work before time integrator indicated by "0" in stage
+      ExecuteTaskList(pmesh, "before_timeintegrator", 0);
+
+      // time-integrator tasks for each stage of integrator
+      for (int stage=1; stage<=(nexp_stages); ++stage) {
+        ExecuteTaskList(pmesh, "before_stagen", stage);
+        ExecuteTaskList(pmesh, "stagen", stage);
+        ExecuteTaskList(pmesh, "after_stagen", stage);
       }
 
-      //--------------------------------------------------------------
-      // (2) Do *** explicit and ImEx RK time-integrator *** TaskLists
-      for (int stage=1; stage<=(nexp_stages); ++stage) {
-        // (2a) StageStart Tasks
-        // tasks that must be completed over all MBPacks at start of each explicit stage
-        {
-          for (int p=0; p<npacks; ++p) {
-            if (!(pmbp->start_tl.Empty())) {pmbp->start_tl.Reset();}
-          }
-          int npack_left = npacks;
-          while (npack_left > 0) {
-            if (pmbp->start_tl.Empty()) {
-              npack_left--;
-            } else {
-              if (!pmbp->start_tl.IsComplete()) {
-                auto status = pmbp->start_tl.DoAvailable(this, stage);
-                if (status == TaskListStatus::complete) { npack_left--; }
-              }
-            }
-          }
-        }
+      // Work after time integrator indicated by "1" in stage
+      ExecuteTaskList(pmesh, "after_timeintegrator", 1);
 
-        // (2b) StageRun Tasks
-        // tasks in each explicit stage
-        {
-          for (int p=0; p<npacks; ++p) {
-            if (!(pmbp->run_tl.Empty())) {pmbp->run_tl.Reset();}
-          }
-          int npack_left = npacks;
-          while (npack_left > 0) {
-            if (pmbp->run_tl.Empty()) {
-              npack_left--;
-            } else {
-              if (!pmbp->run_tl.IsComplete()) {
-                auto status = pmbp->run_tl.DoAvailable(this, stage);
-                if (status == TaskListStatus::complete) { npack_left--; }
-              }
-            }
-          }
-        }
-
-        // (2c) StageEnd Tasks
-        // tasks that must be completed over all MBs at end of each explicit stage
-        {
-          for (int p=0; p<npacks; ++p) {
-            if (!(pmbp->end_tl.Empty())) {pmbp->end_tl.Reset();}
-          }
-          int npack_left = npacks;
-          while (npack_left > 0) {
-            if (pmbp->end_tl.Empty()) {
-              npack_left--;
-            } else {
-              if (!pmbp->end_tl.IsComplete()) {
-                auto status = pmbp->end_tl.DoAvailable(this, stage);
-                if (status == TaskListStatus::complete) { npack_left--; }
-              }
-            }
-          }
-        }
-      } // end for loop over stages
-
-      //-------------------------------
-      // (3) Work outside of TaskLists:
+      // Work outside of TaskLists:
       // increment time, ncycle, etc.
       pmesh->time = pmesh->time + pmesh->dt;
       pmesh->ncycle++;
       nmb_updated_ += pmesh->nmb_total;
+      npart_updated_ += pmesh->nprtcl_total;
       // load balancing efficiency
       if (global_variable::nranks > 1) {
         int minnmb = std::numeric_limits<int>::max();
@@ -452,7 +404,7 @@ void Driver::Execute(Mesh *pmesh, ParameterInput *pin, Outputs *pout) {
       if (wall_time > 0.) {
         elapsed_time = pwall_clock_->seconds();
       }
-    }  // end while((t < tlim) && (n < nlim) && (elapsed_time < wall_time))
+    }  // end while
   }    // end of (time_evolution != tstatic) clause
   return;
 }
@@ -514,10 +466,12 @@ void Driver::Finalize(Mesh *pmesh, ParameterInput *pin, Outputs *pout) {
       std::uint64_t zonecycles = nmb_updated_ *
                                  static_cast<uint64_t>(pmesh->NumberOfMeshBlockCells());
       float zcps = static_cast<float>(zonecycles) / exe_time;
+      float pups = static_cast<float>(npart_updated_) / exe_time;
 
       std::cout << std::endl << "MeshBlock-cycles = " << nmb_updated_ << std::endl;
       std::cout << "cpu time used  = " << exe_time << std::endl;
       std::cout << "zone-cycles/cpu_second = " << zcps << std::endl;
+      std::cout << "particle-updates/cpu_second = " << pups << std::endl;
     }
   }
   return;

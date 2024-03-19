@@ -8,6 +8,9 @@
 //! load balancing when MPI is used, both for uniform grids and with SMR/AMR.
 
 #include <iostream>
+#include <limits> // numeric_limits<>
+#include <algorithm> // max
+#include <utility> // make_pair
 
 #include "athena.hpp"
 #include "globals.hpp"

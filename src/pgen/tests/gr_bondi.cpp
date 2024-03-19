@@ -10,6 +10,8 @@
 #include <cstring> // strcmp()
 #include <iostream>
 #include <sstream>
+#include <string> // string
+#include <cstdio> // fclose
 
 #include <Kokkos_StdAlgorithms.hpp>
 

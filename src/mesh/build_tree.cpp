@@ -8,6 +8,8 @@
 
 #include <iostream>
 #include <cinttypes>
+#include <limits> // numeric_limits<>
+#include <memory> // make_unique<>
 
 #include "athena.hpp"
 #include "globals.hpp"
@@ -261,6 +263,7 @@ void Mesh::BuildTreeFromScratch(ParameterInput *pin) {
   nmb_thisrank = nmb_eachrank[global_variable::my_rank];
 
   pmb_pack = new MeshBlockPack(this, mbp_gids, mbp_gide);
+  nmb_packs_thisrank = 1;
   pmb_pack->AddMeshBlocks(pin);
   pmb_pack->pmb->SetNeighbors(ptree, rank_eachmb);
 

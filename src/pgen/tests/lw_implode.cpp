@@ -8,6 +8,7 @@
 //
 // REFERENCE: R. Liska & B. Wendroff, SIAM J. Sci. Comput., 25, 995 (2003)
 //========================================================================================
+#include <iostream> // cout
 
 #include "athena.hpp"
 #include "parameter_input.hpp"

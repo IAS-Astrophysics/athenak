@@ -12,6 +12,7 @@
 
 // C++ headers
 #include <cmath>  // sin()
+#include <iostream> // cout
 
 // Athena++ headers
 #include "athena.hpp"

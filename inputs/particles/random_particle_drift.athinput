@@ -1,0 +1,57 @@
+# AthenaXXX input file for random particle drift
+
+<comment>
+problem   = RandomParticleDrift 
+
+<job>
+basename  = random       # problem ID: basename of output filenames
+
+<mesh>
+nghost    = 2         # Number of ghost cells
+nx1       = 256       # Number of zones in X1-direction
+x1min     = -0.5      # minimum value of X1
+x1max     = 0.5       # maximum value of X1
+ix1_bc    = periodic  # Inner-X1 boundary condition flag
+ox1_bc    = periodic  # Outer-X1 boundary condition flag
+
+nx2       = 256       # Number of zones in X2-direction
+x2min     = -0.5      # minimum value of X2
+x2max     = 0.5       # maximum value of X2
+ix2_bc    = periodic  # Inner-X2 boundary condition flag
+ox2_bc    = periodic  # Outer-X2 boundary condition flag
+
+nx3       = 256       # Number of zones in X3-direction
+x3min     = -0.5      # minimum value of X3
+x3max     = 0.5       # maximum value of X3
+ix3_bc    = periodic  # Inner-X3 boundary condition flag
+ox3_bc    = periodic  # Outer-X3 boundary condition flag
+
+<meshblock>
+nx1       = 64       # Number of cells in each MeshBlock, X1-dir
+nx2       = 64       # Number of cells in each MeshBlock, X2-dir
+nx3       = 64       # Number of cells in each MeshBlock, X3-dir
+
+<time>
+evolution  = dynamic   # dynamic/kinematic/static
+integrator = rk2       # time integration algorithm
+cfl_number = 0.8       # The Courant, Friedrichs, & Lewy (CFL) Number
+nlim       = -1        # cycle limit
+tlim       = 0.25      # time limit
+ndiag      = 1         # cycles between diagostic output
+
+<particles>
+particle_type = cosmic_ray
+ppc    = 0.01
+pusher = drift
+
+<problem>
+
+<output1>
+file_type   = pvtk      # Particle VTK data dump
+variable    = prtcl_all
+dt          = 0.01      # time increment between outputs
+
+<output2>
+file_type   = vtk       # Mesh VTK data dump
+variable    = prtcl_d
+dt          = 0.01      # time increment between outputs

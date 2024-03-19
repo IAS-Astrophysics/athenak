@@ -1376,16 +1376,24 @@ void MeshRefinement::InitInterpWghts() {
   auto &res_4th_e = weights.restrict_4th_edge;
 
   // Allocate memory for the arrays
-  Kokkos::realloc(pro_2nd,3);
+  Kokkos::realloc(pro_2nd,3,3,3);
   Kokkos::realloc(res_2nd,3);
-  Kokkos::realloc(pro_4th,5);
+  Kokkos::realloc(pro_4th,5,5,5);
   Kokkos::realloc(res_4th,5);
   Kokkos::realloc(res_4th_e,5);
 
   // 2nd order prolongation weights
-  pro_2nd.h_view(0) = 0.15625;
+  const Real wght2[3] = {0.15625, 0.9375, -0.09375};
+  for (int k = 0; k < 3; k++) {
+    for (int j = 0; j < 3; j++) {
+      for (int i = 0; i < 3; i++) {
+        pro_2nd.h_view(k,j,i) = wght2[k]*wght2[j]*wght2[i];
+      }
+    }
+  }
+  /*pro_2nd.h_view(0) = 0.15625;
   pro_2nd.h_view(1) = 0.9375;
-  pro_2nd.h_view(2) = -0.09375;
+  pro_2nd.h_view(2) = -0.09375;*/
 
   // 2nd order restriction weights
   res_2nd.h_view(0) = 0.375;
@@ -1393,11 +1401,20 @@ void MeshRefinement::InitInterpWghts() {
   res_2nd.h_view(2) = -0.125;
 
   // 4th order prolongation weights
-  pro_4th.h_view(0) = -0.02197265625;
+  const Real wght4[5] = {-0.02197265625, 0.205078125, 0.9228515625,
+                         -0.123046875, 0.01708984375};
+  for (int k = 0; k < 5; k++) {
+    for (int j = 0; j < 5; j++) {
+      for (int i = 0; i < 5; i++) {
+        pro_4th.h_view(k,j,i) = wght4[k]*wght4[j]*wght4[i];
+      }
+    }
+  }
+  /*pro_4th.h_view(0) = -0.02197265625;
   pro_4th.h_view(1) = 0.205078125;
   pro_4th.h_view(2) = 0.9228515625;
   pro_4th.h_view(3) = -0.123046875;
-  pro_4th.h_view(4) = 0.01708984375;
+  pro_4th.h_view(4) = 0.01708984375;*/
 
   // 4th order restriction weights
   res_4th.h_view(0) = -0.0390625;

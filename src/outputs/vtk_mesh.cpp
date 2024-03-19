@@ -3,9 +3,9 @@
 // Copyright(C) 2020 James M. Stone <jmstone@ias.edu> and the Athena code team
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
-//! \file vtk.cpp
-//! \brief writes output data in (legacy) vtk format.
-//! Data is written in RECTILINEAR_GRID geometry, in BINARY format, and in FLOAT type
+//! \file vtk_mesh.cpp
+//! \brief writes mesh data in (legacy) vtk format.
+//! Data is written in STRUCTURED_POINTS geometry, in BINARY format, and in FLOAT type
 //! Data over multiple MeshBlocks and MPI ranks is written to a single file using MPI-IO.
 
 // TODO(@user): create new communicator for MPI-IO for slicing, including only those ranks
@@ -21,6 +21,7 @@
 #include <iostream>
 #include <sstream>
 #include <string>
+#include <limits> // numeric_limits<>
 
 #include "athena.hpp"
 #include "coordinates/cell_locations.hpp"
@@ -33,55 +34,26 @@
 // ctor: also calls BaseTypeOutput base class constructor
 // Checks compatibility options for VTK outputs
 
-VTKOutput::VTKOutput(OutputParameters op, Mesh *pm) :
-  BaseTypeOutput(op, pm) {
-  // create directories for outputs. Comments in binary.cpp constructor explain why
+MeshVTKOutput::MeshVTKOutput(ParameterInput *pin, Mesh *pm, OutputParameters op) :
+  BaseTypeOutput(pin, pm, op) {
+  // create new directory for this output. Comments in binary.cpp constructor explain why
   mkdir("vtk",0775);
 }
 
 //----------------------------------------------------------------------------------------
-// Functions to detect big endian machine, and to byte-swap 32-bit words.  The vtk
-// legacy format requires data to be stored as big-endian.
+//! \fn void MeshVTKOutput:::WriteOutputFile(Mesh *pm)
+//! \brief Cycles over all MeshBlocks and writes output data in (legacy) vtk format.
+//! With MPI, all MeshBlocks are written to the same file in proper order.
+//!
+//! There are five basic parts to the VTK "legacy" file format for structured meshes.
+//!  1. File version and identifier
+//!  2. Header (time, cycle, variables, etc.)
+//!  3. File format
+//!  4. Dataset structure, including type and dimensions of data, and coordinates.
+//!  5. Data.  An arbitrary number of scalars and vectors can be written
 
-namespace swap_function {
-
-int IsBigEndian() {
-  std::int32_t n = 1;
-  char *ep = reinterpret_cast<char *>(&n);
-  return (*ep == 0); // Returns 1 (true) on a big endian machine
-}
-
-inline void Swap4Bytes(void *vdat) {
-  char tmp, *dat = static_cast<char *>(vdat);
-  tmp = dat[0];  dat[0] = dat[3];  dat[3] = tmp;
-  tmp = dat[1];  dat[1] = dat[2];  dat[2] = tmp;
-}
-
-} // namespace swap_function
-
-//----------------------------------------------------------------------------------------
-//! \fn void VTKOutput:::WriteOutputFile(Mesh *pm)
-//! \brief Cycles over all MeshBlocks and writes outputdata in (legacy) vtk format.
-//! All MeshBlocks are written to the same file in proper order.
-
-void VTKOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
-  int big_end = swap_function::IsBigEndian(); // =1 on big endian machine
-
-  // output entire grid unless gid is specified
-  int nout1,nout2,nout3;   // total number of cells output (across all MeshBlocks)
-  auto &indcs = pm->pmb_pack->pmesh->mb_indcs;
-  if ((pm->nmb_total > 1) && (out_params.gid < 0)) {
-    nout1 = (out_params.slice1)? 1 : (pm->nmb_rootx1*indcs.nx1);
-    nout2 = (out_params.slice2)? 1 : (pm->nmb_rootx2*indcs.nx2);
-    nout3 = (out_params.slice3)? 1 : (pm->nmb_rootx3*indcs.nx3);
-  } else {
-    nout1 = outmbs[0].oie - outmbs[0].ois + 1;
-    nout2 = outmbs[0].oje - outmbs[0].ojs + 1;
-    nout3 = outmbs[0].oke - outmbs[0].oks + 1;
-  }
-  int ncoord1 = (nout1 > 1)? nout1+1 : nout1;
-  int ncoord2 = (nout2 > 1)? nout2+1 : nout2;
-  int ncoord3 = (nout3 > 1)? nout3+1 : nout3;
+void MeshVTKOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
+  int big_end = IsBigEndian(); // =1 on big endian machine
 
   // create filename: "vtk/file_basename"."file_id"."gid"."XXXXX".vtk
   // where XXXXX = 5-digit file_number, and gid only added if specified
@@ -101,12 +73,23 @@ void VTKOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
   fname.append(number);
   fname.append(".vtk");
 
-  // Create string with header text.
-  // There are five basic parts to the VTK "legacy" file format.
-  //  1. File version and identifier
-  //  2. Header (time, cycle, variables, etc.)
-  //  3. File format
-  //  4. Dataset structure, including type and dimensions of data, and coordinates.
+  //  Select data ranges for outputs (entire grid unless gid is specified)
+  int nout1,nout2,nout3;   // total number of cells output (across all MeshBlocks)
+  auto &indcs = pm->pmb_pack->pmesh->mb_indcs;
+  if ((pm->nmb_total > 1) && (out_params.gid < 0)) {
+    nout1 = (out_params.slice1)? 1 : (pm->nmb_rootx1*indcs.nx1);
+    nout2 = (out_params.slice2)? 1 : (pm->nmb_rootx2*indcs.nx2);
+    nout3 = (out_params.slice3)? 1 : (pm->nmb_rootx3*indcs.nx3);
+  } else {
+    nout1 = outmbs[0].oie - outmbs[0].ois + 1;
+    nout2 = outmbs[0].oje - outmbs[0].ojs + 1;
+    nout3 = outmbs[0].oke - outmbs[0].oks + 1;
+  }
+  int ncoord1 = (nout1 > 1)? nout1+1 : nout1;
+  int ncoord2 = (nout2 > 1)? nout2+1 : nout2;
+  int ncoord3 = (nout3 > 1)? nout3+1 : nout3;
+
+  // Write parts 1-4: Create string with header text.
   std::stringstream msg;
   msg << "# vtk DataFile Version 2.0" << std::endl
       << "# Athena++ data at time= " << pm->time
@@ -118,7 +101,7 @@ void VTKOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
       << "DATASET STRUCTURED_POINTS" << std::endl
       << "DIMENSIONS " << ncoord1 << " " << ncoord2 << " " << ncoord3 << std::endl;
 
-  // Specify the uniform Cartesian mesh with grid minima and spacings
+  // Specify uniform Cartesian mesh with grid minima and spacings
   // output physical dimensions of entire grid, unless gid is specified
   Real x1min,x2min,x3min,dx1,dx2,dx3;
   if (out_params.gid < 0) {
@@ -146,8 +129,8 @@ void VTKOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
       << "ORIGIN " << x1min << " " << x2min << " " << x3min << " " <<  std::endl
       << "SPACING " << dx1  << " " << dx2   << " " << dx3   << " " <<  std::endl;
 
-  //  5. Data.  An arbitrary number of scalars and vectors can be written (every node
-  //  in the OutputData doubly linked lists), all in binary floats format
+  // Write part 5: An arbitrary number of scalars and vectors can be written (every
+  // element of the outvars vector), all in binary floats format
   msg.seekp(0, std::ios_base::end);
   msg << std::endl << "CELL_DATA " << nout1*nout2*nout3 << std::endl;
 
@@ -228,7 +211,7 @@ void VTKOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
         }
         if (!big_end) {
           for (int i=0; i<(nx1*nx2*nx3); ++i) {
-            swap_function::Swap4Bytes(&data[i]);
+            Swap4Bytes(&data[i]);
           }
         }
         // create new datatype representing this block in grid of MBs, and set file view
@@ -316,9 +299,7 @@ void VTKOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
 
     // swap data for this variable into big endian order
     if (!big_end) {
-      for (int i=0; i<(nout1*nout2*nout3); ++i) {
-        swap_function::Swap4Bytes(&data[i]);
-      }
+      for (int i=0; i<(nout1*nout2*nout3); ++i) { Swap4Bytes(&data[i]); }
     }
     // now write the data as unformatted binary
     std::fwrite(&(data[0]), sizeof(float), nout1*nout2*nout3, pfile);

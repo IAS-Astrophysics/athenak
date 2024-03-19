@@ -11,6 +11,8 @@
 #include <string>
 #include <vector>
 
+#include "Kokkos_ScatterView.hpp"
+
 #include "athena.hpp"
 #include "io_wrapper.hpp"
 
@@ -19,39 +21,51 @@
     #error NHISTORY > NREDUCTION in outputs.hpp
 #endif
 
-#define NOUTPUT_CHOICES 142
+#define NOUTPUT_CHOICES 151
 // choices for output variables used in <ouput> blocks in input file
 // TO ADD MORE CHOICES:
 //   - add more strings to array below, change NOUTPUT_CHOICES above appropriately
 //   - add code to load new variables in BaseOutputType constructor
 //   - may need to change index limits that test whether physics is defined for
-//     requested output variable near start of BaseOutputType constructor
+//     requested output variable near start of BaseOutputType constructor (TODO)
 static const char *var_choice[NOUTPUT_CHOICES] = {
-  "hydro_u_d", "hydro_u_m1", "hydro_u_m2", "hydro_u_m3", "hydro_u_e", "hydro_u",
-  "hydro_w_d", "hydro_w_vx", "hydro_w_vy", "hydro_w_vz", "hydro_w_e", "hydro_w",
-  "hydro_u_s", "hydro_w_s",  "hydro_wz",   "hydro_w2", // 0-15
-  "mhd_u_d",   "mhd_u_m1",   "mhd_u_m2",   "mhd_u_m3",   "mhd_u_e",   "mhd_u",
-  "mhd_w_d",   "mhd_w_vx",   "mhd_w_vy",   "mhd_w_vz",   "mhd_w_e",   "mhd_w",
-  "mhd_u_s",   "mhd_w_s",    "mhd_wz",     "mhd_w2", // 16-31
-  "mhd_bcc1",  "mhd_bcc2",   "mhd_bcc3",   "mhd_bcc",    "mhd_u_bcc", "mhd_w_bcc",
-  "mhd_jz",    "mhd_j2",     "mhd_divb", // 32-40
-  "turb_force", // 41
+  // hydro variables (0-13)
+  "hydro_u_d", "hydro_u_m1", "hydro_u_m2", "hydro_u_m3", "hydro_u_e",     "hydro_u",
+  "hydro_w_d", "hydro_w_vx", "hydro_w_vy", "hydro_w_vz", "hydro_w_e",     "hydro_w",
+  "hydro_u_s", "hydro_w_s",
+  // hydro derived variables (14-15)
+  "hydro_wz",   "hydro_w2",
+  // MHD variables (16-37)
+  "mhd_u_d",   "mhd_u_m1",   "mhd_u_m2",   "mhd_u_m3",   "mhd_u_e",       "mhd_u",
+  "mhd_w_d",   "mhd_w_vx",   "mhd_w_vy",   "mhd_w_vz",   "mhd_w_e",       "mhd_w",
+  "mhd_u_s",   "mhd_w_s",    "mhd_wz",     "mhd_w2",
+  "mhd_bcc1",  "mhd_bcc2",   "mhd_bcc3",   "mhd_bcc",    "mhd_u_bcc",     "mhd_w_bcc",
+  // MHD derived variables (38-44)
+  "mhd_jz", "mhd_j2",  "mhd_curv", "mhd_k_jxb", "mhd_curv_perp", "mhd_bmag",  "mhd_divb",
+  // useful for coarsened binary output (45-46)
+  "hydro_sgs", "mhd_sgs",
+  // dynamo wavenumber scales (47)
+  "mhd_dynamo_ks",
+  // turbulence (48)
+  "turb_force",
+  // radiation (49-65, 66-85)
   "rad_coord",     "rad_fluid",      "rad_coord_fluid",
   "rad_hydro_u_d", "rad_hydro_u_m1", "rad_hydro_u_m2", "rad_hydro_u_m3", "rad_hydro_u_e",
   "rad_hydro_u",   "rad_hydro_w_d",  "rad_hydro_w_vx", "rad_hydro_w_vy", "rad_hydro_w_vz",
-  "rad_hydro_w_e", "rad_hydro_w",    "rad_hydro_u_s",  "rad_hydro_w_s", // 42-58
+  "rad_hydro_w_e", "rad_hydro_w",    "rad_hydro_u_s",  "rad_hydro_w_s",
   "rad_mhd_u_d",   "rad_mhd_u_m1",   "rad_mhd_u_m2",   "rad_mhd_u_m3",   "rad_mhd_u_e",
   "rad_mhd_u",     "rad_mhd_w_d",    "rad_mhd_w_vx",   "rad_mhd_w_vy",   "rad_mhd_w_vz",
   "rad_mhd_w_e",   "rad_mhd_w",      "rad_mhd_u_s",    "rad_mhd_w_s",    "rad_mhd_bcc1",
   "rad_mhd_bcc2",  "rad_mhd_bcc3",   "rad_mhd_bcc",    "rad_mhd_u_bcc",  "rad_mhd_w_bcc",
-  // 59-78
 
+  // ADM (86-103)
   "adm_gxx", "adm_gxy", "adm_gxz", "adm_gyy", "adm_gyz", "adm_gzz",
   "adm_Kxx", "adm_Kxy", "adm_Kxz", "adm_Kyy", "adm_Kyz", "adm_Kzz",
   "adm_psi4",
-  "adm_alpha", "adm_betax", "adm_betay", "adm_betaz", // 79-95
-  "adm", // 96
+  "adm_alpha", "adm_betax", "adm_betay", "adm_betaz",
+  "adm",
 
+  // Z4c (104-126)
   "z4c_chi",
   "z4c_gxx", "z4c_gxy", "z4c_gxz", "z4c_gyy", "z4c_gyz", "z4c_gzz",
   "z4c_Khat",
@@ -59,24 +73,31 @@ static const char *var_choice[NOUTPUT_CHOICES] = {
   "z4c_Gamx", "z4c_Gamy", "z4c_Gamz",
   "z4c_Theta",
   "z4c_alpha",
-  "z4c_betax", "z4c_betay", "z4c_betaz", // 97-118
-  "z4c", // 119
+  "z4c_betax", "z4c_betay", "z4c_betaz",
+  "z4c",
 
-  "weyl_rpsi4", "weyl_ipsi4", // 120 - 121
-  "weyl", // 122
+  // Weyl (127-129)
+  "weyl_rpsi4", "weyl_ipsi4",
+  "weyl",
 
+  // ADM constraints (130-137)
   "con_C",
   "con_H",
   "con_M",
   "con_Z",
-  "con_Mx", "con_My", "con_Mz", // 123-129
-  "con", // 130
+  "con_Mx", "con_My", "con_Mz",
+  "con",
 
+  // Tmunu (138-148)
   "tmunu_Sxx", "tmunu_Sxy", "tmunu_Sxz", "tmunu_Syy", "tmunu_Syz", "tmunu_Szz",
   "tmunu_E",
-  "tmunu_Sx", "tmunu_Sy", "tmunu_Sz", // 131-140
-  "tmunu" // 141
+  "tmunu_Sx", "tmunu_Sy", "tmunu_Sz",
+  "tmunu",
+
+  // Particles (149-150)
+  "prtcl_all", "prtcl_d"
 };
+
 
 // forward declarations
 class Mesh;
@@ -84,25 +105,41 @@ class ParameterInput;
 
 //----------------------------------------------------------------------------------------
 //! \struct OutputParameters
-//  \brief  container for parameters read from <output> block in the input file
+//  \brief container for parameters read from <output> block in the input file by the
+//  Outputs constructor.
 
 struct OutputParameters {
   int block_number;
   std::string block_name;
-  std::string file_basename;
-  std::string file_id;
-  std::string file_type;
-  std::string variable;
-  std::string data_format;
   Real last_time, dt;
-  int dcycle;  // enables outputs every 'dcycle'
+  int dcycle;                 // enables outputs every 'dcycle'
   int file_number;
-  int gid;
+  std::string file_basename;
+  std::string file_type;
+  std::string file_id;
+  std::string variable;
   bool include_gzs;
+  int gid;
   bool slice1, slice2, slice3;
   Real slice_x1, slice_x2, slice_x3;
   bool user_hist_only;
+  std::string data_format;
   bool contains_derived=false;
+  // DBF parameters for coarsened binary:
+  // cannot be less than 2 and must be a power of 2 and
+  // cannot be greater than shortest meshblock dimension
+  int coarsen_factor;
+  bool compute_moments; // if true then will compute
+  // <q>, <q^2>, <q^3>, <q^4> for each variable q
+  // DBF parameters for PDF:
+  // number of derived variables, index of current derived variable
+  int n_derived=0, i_derived=0;
+  std::string variable_2; // DBF: for 2d PDFs
+  Real bin_min, bin_max;
+  Real bin2_min, bin2_max;
+  int nbin=0, nbin2=0;
+  bool logscale=true, logscale2=true;
+  bool mass_weighted=false;
 };
 
 //----------------------------------------------------------------------------------------
@@ -150,12 +187,22 @@ struct HistoryData {
 };
 
 //----------------------------------------------------------------------------------------
+//! \struct TrackedParticleData
+//! \brief data (tag, pos, vel) output for tracked particles
+
+struct TrackedParticleData {
+  int tag;
+  Real x,y,z;
+  Real vx,vy,vz;
+};
+
+//----------------------------------------------------------------------------------------
 // \brief abstract base class for different output types (modes/formats); node in
 //        std::list of BaseTypeOutput created & stored in the Outputs class
 
 class BaseTypeOutput {
  public:
-  BaseTypeOutput(OutputParameters oparams, Mesh *pm);
+  BaseTypeOutput(ParameterInput *pin, Mesh *pm, OutputParameters oparams);
   virtual ~BaseTypeOutput() = default;
   // copy constructor and assignment operator
   BaseTypeOutput(const BaseTypeOutput& copy_other) = default;
@@ -174,6 +221,19 @@ class BaseTypeOutput {
   // virtual functions may be over-ridden in derived classes
   virtual void LoadOutputData(Mesh *pm);
   virtual void WriteOutputFile(Mesh *pm, ParameterInput *pin) = 0;
+
+  // Functions to detect big endian machine, and to byte-swap 32-bit words.  The vtk
+  // legacy format requires data to be stored as big-endian.
+  int IsBigEndian() {
+    std::int32_t n = 1;
+    char *ep = reinterpret_cast<char *>(&n);
+    return (*ep == 0); // Returns 1 (true) on a big endian machine
+  }
+  inline void Swap4Bytes(void *vdat) {
+    char tmp, *dat = static_cast<char *>(vdat);
+    tmp = dat[0];  dat[0] = dat[3];  dat[3] = tmp;
+    tmp = dat[1];  dat[1] = dat[2];  dat[2] = tmp;
+  }
 
  protected:
   // CC output data on host with dims (n,m,k,j,i) except
@@ -194,13 +254,14 @@ class BaseTypeOutput {
   std::vector<OutputVariableInfo> outvars;
 };
 
+
 //----------------------------------------------------------------------------------------
 //! \class FormattedTableOutput
 //  \brief derived BaseTypeOutput class for formatted table (tabular) data
 
 class FormattedTableOutput : public BaseTypeOutput {
  public:
-  FormattedTableOutput(OutputParameters oparams, Mesh *pm);
+  FormattedTableOutput(ParameterInput *pin, Mesh *pm, OutputParameters oparams);
   void WriteOutputFile(Mesh *pm, ParameterInput *pin) override;
 };
 
@@ -210,7 +271,7 @@ class FormattedTableOutput : public BaseTypeOutput {
 
 class HistoryOutput : public BaseTypeOutput {
  public:
-  HistoryOutput(OutputParameters oparams, Mesh *pm);
+  HistoryOutput(ParameterInput *pin, Mesh *pm, OutputParameters oparams);
 
   // vector of length [# of physics modules] containing hdata arrays
   std::vector<HistoryData> hist_data;
@@ -223,22 +284,91 @@ class HistoryOutput : public BaseTypeOutput {
 };
 
 //----------------------------------------------------------------------------------------
-//! \class VTKOutput
-//  \brief derived BaseTypeOutput class for vtk binary data (VTK legacy format)
+//! \class CoarsenedBinaryOutput
+//  \brief derived BaseTypeOutput class for coarsened binary grid data
 
-class VTKOutput : public BaseTypeOutput {
+class CoarsenedBinaryOutput : public BaseTypeOutput {
  public:
-  VTKOutput(OutputParameters oparams, Mesh *pm);
+  CoarsenedBinaryOutput(ParameterInput *pin, Mesh *pm, OutputParameters oparams);
+
+  // void CoarsenVariable(const DvceArray3D<Real>& full_data,
+  //                            DvceArray3D<Real>& coarsen_data,
+  //                            const int coarsen_factor);
+  void LoadOutputData(Mesh *pm) override;
   void WriteOutputFile(Mesh *pm, ParameterInput *pin) override;
 };
 
 //----------------------------------------------------------------------------------------
-//! \class BinaryOutput
-//  \brief derived BaseTypeOutput class for binary grid data (nbf format in pegasus++)
+//! \struct PDFData
+//  \brief  container for PDF data
 
-class BinaryOutput : public BaseTypeOutput {
+struct PDFData {
+  int pdf_dimension;
+  int nbin, nbin2;
+  Kokkos::View<Real*> bins;
+  Kokkos::View<Real*> bins2;
+  bool bins_written;
+  // if logscale is true then this step is the log10 of the step size
+  Real step_size, step_size2;
+  bool mass_weighted;
+  bool logscale, logscale2;
+
+  DvceArray2D<Real> result_; // resulting histogram
+  Kokkos::Experimental::ScatterView<Real **, LayoutWrapper> scatter_result;
+
+  PDFData(int dim, int nbinVal, int nbin2Val)
+    : pdf_dimension(dim), nbin(nbinVal), nbin2(nbin2Val),
+      bins("bins", nbin + 1), bins2("bins2", nbin2 + 1),
+      bins_written(false), mass_weighted(false), logscale(false), logscale2(false) {
+  }
+};
+
+//----------------------------------------------------------------------------------------
+//! \class PDFOutput
+//  \brief derived BaseTypeOutput class for pdf data
+
+class PDFOutput : public BaseTypeOutput {
  public:
-  BinaryOutput(OutputParameters oparams, Mesh *pm);
+  PDFOutput(ParameterInput *pin, Mesh *pm, OutputParameters oparams);
+
+  PDFData pdf_data;
+
+  void LoadOutputData(Mesh *pm) override;
+  void WriteOutputFile(Mesh *pm, ParameterInput *pin) override;
+};
+
+//----------------------------------------------------------------------------------------
+//! \class MeshVTKOutput
+//  \brief derived BaseTypeOutput class for mesh data in VTK (legacy) format
+
+class MeshVTKOutput : public BaseTypeOutput {
+ public:
+  MeshVTKOutput(ParameterInput *pin, Mesh *pm, OutputParameters oparams);
+  void WriteOutputFile(Mesh *pm, ParameterInput *pin) override;
+};
+
+//----------------------------------------------------------------------------------------
+//! \class ParticleVTKOutput
+//  \brief derived BaseTypeOutput class for particle data in VTK (legacy) format
+
+class ParticleVTKOutput : public BaseTypeOutput {
+ public:
+  ParticleVTKOutput(ParameterInput *pin, Mesh *pm, OutputParameters oparams);
+  void LoadOutputData(Mesh *pm) override;
+  void WriteOutputFile(Mesh *pm, ParameterInput *pin) override;
+ protected:
+  int npout_thisrank;
+  int npout_total;
+  HostArray2D<Real> outpart_rdata;
+  HostArray2D<int>  outpart_idata;
+};
+
+//----------------------------------------------------------------------------------------
+//! \class MeshBinaryOutput
+//  \brief derived BaseTypeOutput class for binary mesh data (nbf format in pegasus++)
+class MeshBinaryOutput : public BaseTypeOutput {
+ public:
+  MeshBinaryOutput(ParameterInput *pin, Mesh *pm, OutputParameters oparams);
   void WriteOutputFile(Mesh *pm, ParameterInput *pin) override;
 };
 
@@ -248,7 +378,7 @@ class BinaryOutput : public BaseTypeOutput {
 
 class RestartOutput : public BaseTypeOutput {
  public:
-  RestartOutput(OutputParameters oparams, Mesh *pm);
+  RestartOutput(ParameterInput *pin, Mesh *pm, OutputParameters oparams);
   void LoadOutputData(Mesh *pm) override;
   void WriteOutputFile(Mesh *pm, ParameterInput *pin) override;
 };
@@ -259,7 +389,7 @@ class RestartOutput : public BaseTypeOutput {
 
 class EventLogOutput : public BaseTypeOutput {
  public:
-  EventLogOutput(OutputParameters oparams, Mesh *pm);
+  EventLogOutput(ParameterInput *pin, Mesh *pm, OutputParameters oparams);
 
   // various flags to denote output status
   bool header_written=false;
@@ -267,6 +397,24 @@ class EventLogOutput : public BaseTypeOutput {
 
   void LoadOutputData(Mesh *pm) override;
   void WriteOutputFile(Mesh *pm, ParameterInput *pin) override;
+};
+
+//----------------------------------------------------------------------------------------
+//! \class TrackedParticleOutput
+//  \brief derived BaseTypeOutput class for tracked particle data in binary format
+
+class TrackedParticleOutput : public BaseTypeOutput {
+ public:
+  TrackedParticleOutput(ParameterInput *pin, Mesh *pm, OutputParameters oparams);
+  void LoadOutputData(Mesh *pm) override;
+  void WriteOutputFile(Mesh *pm, ParameterInput *pin) override;
+ protected:
+  int ntrack;           // total number of tracked particles across all ranks
+  int ntrack_thisrank;  // number of tracked particles this rank (guess)
+  int npout;            // number of tracked particles to be written this rank
+  bool header_written;
+  std::vector<int> npout_eachrank;
+  HostArray1D<TrackedParticleData> outpart;
 };
 
 //----------------------------------------------------------------------------------------

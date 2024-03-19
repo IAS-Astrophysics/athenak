@@ -15,6 +15,7 @@
 #include <iostream>
 #include <sstream>
 #include <string>
+#include <utility> // make_pair
 
 #include "athena.hpp"
 #include "coordinates/cell_locations.hpp"
@@ -32,8 +33,8 @@
 //----------------------------------------------------------------------------------------
 // ctor: also calls BaseTypeOutput base class constructor
 
-RestartOutput::RestartOutput(OutputParameters op, Mesh *pm) :
-  BaseTypeOutput(op, pm) {
+RestartOutput::RestartOutput(ParameterInput *pin, Mesh *pm, OutputParameters op) :
+  BaseTypeOutput(pin, pm, op) {
   // create directories for outputs. Comments in binary.cpp constructor explain why
   mkdir("rst",0775);
 }
@@ -191,25 +192,26 @@ void RestartOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
   resfile.Open(fname.c_str(), IOWrapper::FileMode::write);
   if (global_variable::my_rank == 0) {
     // output the input parameters (input file)
-    resfile.Write_bytes(sbuf.c_str(),sizeof(char),sbuf.size());
+    resfile.Write_any_type(sbuf.c_str(),sbuf.size(),"byte");
 
     // output Mesh information
-    resfile.Write_bytes(&(pm->nmb_total), sizeof(int), 1);
-    resfile.Write_bytes(&(pm->root_level), sizeof(int), 1);
-    resfile.Write_bytes(&(pm->mesh_size), sizeof(RegionSize), 1);
-    resfile.Write_bytes(&(pm->mesh_indcs), sizeof(RegionIndcs), 1);
-    resfile.Write_bytes(&(pm->mb_indcs), sizeof(RegionIndcs), 1);
-    resfile.Write_bytes(&(pm->time), sizeof(Real), 1);
-    resfile.Write_bytes(&(pm->dt), sizeof(Real), 1);
-    resfile.Write_bytes(&(pm->ncycle), sizeof(int), 1);
+    resfile.Write_any_type(&(pm->nmb_total), (sizeof(int)), "byte");
+    resfile.Write_any_type(&(pm->root_level), (sizeof(int)), "byte");
+    resfile.Write_any_type(&(pm->mesh_size), (sizeof(RegionSize)), "byte");
+    resfile.Write_any_type(&(pm->mesh_indcs), (sizeof(RegionIndcs)), "byte");
+    resfile.Write_any_type(&(pm->mb_indcs), (sizeof(RegionIndcs)), "byte");
+    resfile.Write_any_type(&(pm->time), (sizeof(Real)), "byte");
+    resfile.Write_any_type(&(pm->dt), (sizeof(Real)), "byte");
+    resfile.Write_any_type(&(pm->ncycle), (sizeof(int)), "byte");
   }
 
   //--- STEP 2.  Root process writes list of logical locations and cost of MeshBlocks
   // This data read in Mesh::BuildTreeFromRestart()
 
   if (global_variable::my_rank == 0) {
-    resfile.Write_bytes(&(pm->lloc_eachmb[0]),(pm->nmb_total)*sizeof(LogicalLocation), 1);
-    resfile.Write_bytes(&(pm->cost_eachmb[0]), (pm->nmb_total)*sizeof(float), 1);
+    resfile.Write_any_type(&(pm->lloc_eachmb[0]),(pm->nmb_total)*sizeof(LogicalLocation),
+                           "byte");
+    resfile.Write_any_type(&(pm->cost_eachmb[0]), (pm->nmb_total)*sizeof(float),"byte");
   }
 
   //--- STEP 3.  All ranks write data over all MeshBlocks (5D arrays) in parallel
@@ -239,9 +241,9 @@ void RestartOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
     data_size += nout1*nout2*nout3*nadm*sizeof(Real);   // adm u_adm
   }
   if (global_variable::my_rank == 0) {
-    resfile.Write_bytes(&(data_size), sizeof(IOWrapperSizeT), 1);
+    resfile.Write_any_type(&(data_size), sizeof(IOWrapperSizeT), "byte");
     if (pturb != nullptr) {
-      resfile.Write_bytes(&(pturb->rstate), sizeof(RNG_State), 1);
+      resfile.Write_any_type(&(pturb->rstate), sizeof(RNG_State), "byte");
     }
   }
 
@@ -267,7 +269,7 @@ void RestartOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
         auto mbptr = Kokkos::subview(outarray_hyd, m, Kokkos::ALL, Kokkos::ALL,
                                      Kokkos::ALL, Kokkos::ALL);
         int mbcnt = mbptr.size();
-        if (resfile.Write_Reals_at_all(mbptr.data(), mbcnt, myoffset) != mbcnt) {
+        if (resfile.Write_any_type_at_all(mbptr.data(),mbcnt,myoffset,"Real") != mbcnt) {
           std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
           << std::endl << "cell-centered hydro data not written correctly to rst file, "
           << "restart file is broken." << std::endl;
@@ -281,7 +283,7 @@ void RestartOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
         auto mbptr = Kokkos::subview(outarray_hyd, m, Kokkos::ALL, Kokkos::ALL,
                                      Kokkos::ALL, Kokkos::ALL);
         int mbcnt = mbptr.size();
-        if (resfile.Write_Reals_at(mbptr.data(), mbcnt, myoffset) != mbcnt) {
+        if (resfile.Write_any_type_at(mbptr.data(), mbcnt, myoffset,"Real") != mbcnt) {
           std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
           << std::endl << "cell-centered hydro data not written correctly to rst file, "
           << "restart file is broken." << std::endl;
@@ -301,7 +303,7 @@ void RestartOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
         auto mbptr = Kokkos::subview(outarray_mhd, m, Kokkos::ALL, Kokkos::ALL,
                                      Kokkos::ALL, Kokkos::ALL);
         int mbcnt = mbptr.size();
-        if (resfile.Write_Reals_at_all(mbptr.data(), mbcnt, myoffset) != mbcnt) {
+        if (resfile.Write_any_type_at_all(mbptr.data(),mbcnt,myoffset,"Real") != mbcnt) {
           std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
           << std::endl << "cell-centered mhd data not written correctly to rst file, "
           << "restart file is broken." << std::endl;
@@ -315,7 +317,7 @@ void RestartOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
         auto mbptr = Kokkos::subview(outarray_mhd, m, Kokkos::ALL, Kokkos::ALL,
                                      Kokkos::ALL, Kokkos::ALL);
         int mbcnt = mbptr.size();
-        if (resfile.Write_Reals_at(mbptr.data(), mbcnt, myoffset) != mbcnt) {
+        if (resfile.Write_any_type_at(mbptr.data(), mbcnt, myoffset,"Real") != mbcnt) {
           std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
           << std::endl << "cell-centered mhd data not written correctly to rst file, "
           << "restart file is broken." << std::endl;
@@ -333,7 +335,7 @@ void RestartOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
         // get ptr to x1-face field
         auto x1fptr = Kokkos::subview(outfield.x1f,m,Kokkos::ALL,Kokkos::ALL,Kokkos::ALL);
         int fldcnt = x1fptr.size();
-        if (resfile.Write_Reals_at_all(x1fptr.data(),fldcnt,myoffset) != fldcnt) {
+        if (resfile.Write_any_type_at_all(x1fptr.data(),fldcnt,myoffset,"Real")!=fldcnt) {
           std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                     << std::endl << "b0.x1f data not written correctly to rst file, "
                     << "restart file is broken." << std::endl;
@@ -344,7 +346,7 @@ void RestartOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
         // get ptr to x2-face field
         auto x2fptr = Kokkos::subview(outfield.x2f,m,Kokkos::ALL,Kokkos::ALL,Kokkos::ALL);
         fldcnt = x2fptr.size();
-        if (resfile.Write_Reals_at_all(x2fptr.data(),fldcnt,myoffset) != fldcnt) {
+        if (resfile.Write_any_type_at_all(x2fptr.data(),fldcnt,myoffset,"Real")!=fldcnt) {
           std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                     << std::endl << "b0.x2f data not written correctly to rst file, "
                     << "restart file is broken." << std::endl;
@@ -355,7 +357,7 @@ void RestartOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
         // get ptr to x3-face field
         auto x3fptr = Kokkos::subview(outfield.x3f,m,Kokkos::ALL,Kokkos::ALL,Kokkos::ALL);
         fldcnt = x3fptr.size();
-        if (resfile.Write_Reals_at_all(x3fptr.data(),fldcnt,myoffset) != fldcnt) {
+        if (resfile.Write_any_type_at_all(x3fptr.data(),fldcnt,myoffset,"Real")!=fldcnt) {
           std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                     << std::endl << "b0.x3f data not written correctly to rst file, "
                     << "restart file is broken." << std::endl;
@@ -370,7 +372,7 @@ void RestartOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
         // get ptr to x1-face field
         auto x1fptr = Kokkos::subview(outfield.x1f,m,Kokkos::ALL,Kokkos::ALL,Kokkos::ALL);
         int fldcnt = x1fptr.size();
-        if (resfile.Write_Reals_at(x1fptr.data(),fldcnt,myoffset) != fldcnt) {
+        if (resfile.Write_any_type_at(x1fptr.data(),fldcnt,myoffset,"Real") != fldcnt) {
           std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                     << std::endl << "b0.x1f data not written correctly to rst file, "
                     << "restart file is broken." << std::endl;
@@ -381,7 +383,7 @@ void RestartOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
         // get ptr to x2-face field
         auto x2fptr = Kokkos::subview(outfield.x2f,m,Kokkos::ALL,Kokkos::ALL,Kokkos::ALL);
         fldcnt = x2fptr.size();
-        if (resfile.Write_Reals_at(x2fptr.data(),fldcnt,myoffset) != fldcnt) {
+        if (resfile.Write_any_type_at(x2fptr.data(),fldcnt,myoffset,"Real") != fldcnt) {
           std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                     << std::endl << "b0.x2f data not written correctly to rst file, "
                     << "restart file is broken." << std::endl;
@@ -392,7 +394,7 @@ void RestartOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
         // get ptr to x3-face field
         auto x3fptr = Kokkos::subview(outfield.x3f,m,Kokkos::ALL,Kokkos::ALL,Kokkos::ALL);
         fldcnt = x3fptr.size();
-        if (resfile.Write_Reals_at(x3fptr.data(),fldcnt,myoffset) != fldcnt) {
+        if (resfile.Write_any_type_at(x3fptr.data(),fldcnt,myoffset,"Real") != fldcnt) {
           std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                     << std::endl << "b0.x3f data not written correctly to rst file, "
                     << "restart file is broken." << std::endl;
@@ -417,7 +419,7 @@ void RestartOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
         auto mbptr = Kokkos::subview(outarray_rad, m, Kokkos::ALL, Kokkos::ALL,
                                      Kokkos::ALL, Kokkos::ALL);
         int mbcnt = mbptr.size();
-        if (resfile.Write_Reals_at_all(mbptr.data(), mbcnt, myoffset) != mbcnt) {
+        if (resfile.Write_any_type_at_all(mbptr.data(),mbcnt,myoffset,"Real") != mbcnt) {
           std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
           << std::endl << "cell-centered rad data not written correctly to rst file, "
           << "restart file is broken." << std::endl;
@@ -431,7 +433,7 @@ void RestartOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
         auto mbptr = Kokkos::subview(outarray_rad, m, Kokkos::ALL, Kokkos::ALL,
                                      Kokkos::ALL, Kokkos::ALL);
         int mbcnt = mbptr.size();
-        if (resfile.Write_Reals_at(mbptr.data(), mbcnt, myoffset) != mbcnt) {
+        if (resfile.Write_any_type_at(mbptr.data(),mbcnt,myoffset,"Real") != mbcnt) {
           std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
           << std::endl << "cell-centered rad data not written correctly to rst file, "
           << "restart file is broken." << std::endl;
@@ -452,7 +454,7 @@ void RestartOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
         auto mbptr = Kokkos::subview(outarray_force, m, Kokkos::ALL, Kokkos::ALL,
                                      Kokkos::ALL, Kokkos::ALL);
         int mbcnt = mbptr.size();
-        if (resfile.Write_Reals_at_all(mbptr.data(), mbcnt, myoffset) != mbcnt) {
+        if (resfile.Write_any_type_at_all(mbptr.data(),mbcnt,myoffset,"Real") != mbcnt) {
           std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
           << std::endl << "cell-centered turb data not written correctly to rst file, "
           << "restart file is broken." << std::endl;
@@ -466,7 +468,7 @@ void RestartOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
         auto mbptr = Kokkos::subview(outarray_force, m, Kokkos::ALL, Kokkos::ALL,
                                      Kokkos::ALL, Kokkos::ALL);
         int mbcnt = mbptr.size();
-        if (resfile.Write_Reals_at(mbptr.data(), mbcnt, myoffset) != mbcnt) {
+        if (resfile.Write_any_type_at(mbptr.data(), mbcnt, myoffset,"Real") != mbcnt) {
           std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
           << std::endl << "cell-centered turb data not written correctly to rst file, "
           << "restart file is broken." << std::endl;
@@ -487,7 +489,7 @@ void RestartOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
         auto mbptr = Kokkos::subview(outarray_z4c, m, Kokkos::ALL, Kokkos::ALL,
                                      Kokkos::ALL, Kokkos::ALL);
         int mbcnt = mbptr.size();
-        if (resfile.Write_Reals_at_all(mbptr.data(), mbcnt, myoffset) != mbcnt) {
+        if (resfile.Write_any_type_at_all(mbptr.data(),mbcnt,myoffset,"Real") != mbcnt) {
           std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
           << std::endl << "cell-centered z4c data not written correctly to rst file, "
           << "restart file is broken." << std::endl;
@@ -501,7 +503,7 @@ void RestartOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
         auto mbptr = Kokkos::subview(outarray_z4c, m, Kokkos::ALL, Kokkos::ALL,
                                      Kokkos::ALL, Kokkos::ALL);
         int mbcnt = mbptr.size();
-        if (resfile.Write_Reals_at(mbptr.data(), mbcnt, myoffset) != mbcnt) {
+        if (resfile.Write_any_type_at(mbptr.data(), mbcnt, myoffset,"Real") != mbcnt) {
           std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
           << std::endl << "cell-centered z4c data not written correctly to rst file, "
           << "restart file is broken." << std::endl;
@@ -520,7 +522,7 @@ void RestartOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
         auto mbptr = Kokkos::subview(outarray_adm, m, Kokkos::ALL, Kokkos::ALL,
                                      Kokkos::ALL, Kokkos::ALL);
         int mbcnt = mbptr.size();
-        if (resfile.Write_Reals_at_all(mbptr.data(), mbcnt, myoffset) != mbcnt) {
+        if (resfile.Write_any_type_at_all(mbptr.data(),mbcnt,myoffset,"Real") != mbcnt) {
           std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
           << std::endl << "cell-centered adm data not written correctly to rst file, "
           << "restart file is broken." << std::endl;
@@ -534,7 +536,7 @@ void RestartOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
         auto mbptr = Kokkos::subview(outarray_adm, m, Kokkos::ALL, Kokkos::ALL,
                                      Kokkos::ALL, Kokkos::ALL);
         int mbcnt = mbptr.size();
-        if (resfile.Write_Reals_at(mbptr.data(), mbcnt, myoffset) != mbcnt) {
+        if (resfile.Write_any_type_at(mbptr.data(), mbcnt, myoffset,"Real") != mbcnt) {
           std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
           << std::endl << "cell-centered adm data not written correctly to rst file, "
           << "restart file is broken." << std::endl;

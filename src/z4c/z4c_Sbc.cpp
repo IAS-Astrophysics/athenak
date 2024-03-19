@@ -160,7 +160,6 @@ TaskStatus Z4c::Z4cBoundaryRHS(Driver *pdriver, int stage) {
         case BoundaryFlag::diode:
         case BoundaryFlag::outflow:
             Z4cSommerfeld(z4c_, rhs_, indcs, size, m, k, j, is);
-            //Z4cSommerfeld(z4c_, rhs_, indcs, size, m, k, j, is+1);
           break;
         case BoundaryFlag::user:
             if (user_Sbc) {
@@ -175,7 +174,6 @@ TaskStatus Z4c::Z4cBoundaryRHS(Driver *pdriver, int stage) {
         case BoundaryFlag::diode:
         case BoundaryFlag::outflow:
             Z4cSommerfeld(z4c_, rhs_, indcs, size, m, k, j, ie);
-            //Z4cSommerfeld(z4c_, rhs_, indcs, size, m, k, j, ie-1);
           break;
         case BoundaryFlag::user:
             if (user_Sbc) {
@@ -200,7 +198,6 @@ TaskStatus Z4c::Z4cBoundaryRHS(Driver *pdriver, int stage) {
         case BoundaryFlag::diode:
         case BoundaryFlag::outflow:
             Z4cSommerfeld(z4c_, rhs_, indcs, size, m, k, js, i);
-            //Z4cSommerfeld(z4c_, rhs_, indcs, size, m, k, js+1, i);
           break;
         case BoundaryFlag::user:
             if (user_Sbc) {
@@ -215,7 +212,6 @@ TaskStatus Z4c::Z4cBoundaryRHS(Driver *pdriver, int stage) {
         case BoundaryFlag::diode:
         case BoundaryFlag::outflow:
             Z4cSommerfeld(z4c_, rhs_, indcs, size, m, k, je, i);
-            //Z4cSommerfeld(z4c_, rhs_, indcs, size, m, k, je-1, i);
           break;
         case BoundaryFlag::user:
             if (user_Sbc) {
@@ -240,7 +236,6 @@ TaskStatus Z4c::Z4cBoundaryRHS(Driver *pdriver, int stage) {
         case BoundaryFlag::diode:
         case BoundaryFlag::outflow:
             Z4cSommerfeld(z4c_, rhs_, indcs, size, m, ks, j, i);
-            //Z4cSommerfeld(z4c_, rhs_, indcs, size, m, ks+1, j, i);
           break;
         case BoundaryFlag::user:
             if (user_Sbc) {
@@ -255,7 +250,6 @@ TaskStatus Z4c::Z4cBoundaryRHS(Driver *pdriver, int stage) {
         case BoundaryFlag::diode:
         case BoundaryFlag::outflow:
             Z4cSommerfeld(z4c_, rhs_, indcs, size, m, ke, j, i);
-            //Z4cSommerfeld(z4c_, rhs_, indcs, size, m, ke-1, j, i);
           break;
         case BoundaryFlag::user:
             if (user_Sbc) {
@@ -273,4 +267,3 @@ TaskStatus Z4c::Z4cBoundaryRHS(Driver *pdriver, int stage) {
 }
 
 } // end namespace z4c
-

@@ -72,6 +72,31 @@ int IOWrapper::Open(const char* fname, FileMode rw) {
       std::exit(EXIT_FAILURE);
     }
 #endif
+
+  // open file for append
+  } else if (rw == FileMode::append) {
+#if MPI_PARALLEL_ENABLED
+    int errcode = MPI_File_open(comm_, fname, MPI_MODE_WRONLY + MPI_MODE_APPEND,
+                                MPI_INFO_NULL, &fh_);
+    if (errcode != MPI_SUCCESS) {
+      char msg[MPI_MAX_ERROR_STRING];
+      int resultlen;
+      MPI_Error_string(errcode, msg, &resultlen);
+      printf("%.*s\n", resultlen, msg);
+      MPI_Abort(MPI_COMM_WORLD, 1);
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                << std::endl << "Input file '" << fname << "' could not be appended"
+                << std::endl;
+      std::exit(EXIT_FAILURE);
+    }
+#else
+    if ((fh_ = std::fopen(fname,"a")) == nullptr) {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                << std::endl << "Output file '" << fname << "' could not be opened"
+                << std::endl;
+      std::exit(EXIT_FAILURE);
+    }
+#endif
   } else {
     return false;
   }
@@ -235,15 +260,35 @@ std::size_t IOWrapper::Read_Reals_at_all(void *buf, IOWrapperSizeT cnt,
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn int IOWrapper::Write_bytes(const void *buf,IOWrapperSizeT size,IOWrapperSizeT cnt)
-//! \brief wrapper for {MPI_File_write} versus {std::fwrite}
-//! Returns number of byte-blocks of given "size" actually written.
+//! \fn int IOWrapper::Write_any_type()
+//! \brief wrapper for {MPI_File_write} versus {std::fwrite} for writing any type of
+//! data, specified by the mpitype argument. Returns number of data elements of given
+//! "type" actually written.
 
-std::size_t IOWrapper::Write_bytes(const void *buf, IOWrapperSizeT size,
-                                   IOWrapperSizeT cnt) {
+std::size_t IOWrapper::Write_any_type(const void *buf, IOWrapperSizeT cnt,
+                                      std::string datatype) {
 #if MPI_PARALLEL_ENABLED
+  // set appropriate MPI_Datatype
+  MPI_Datatype mpitype;
+  if (datatype.compare("byte") == 0) {
+    mpitype = MPI_BYTE;
+  } else if (datatype.compare("int") == 0) {
+    mpitype = MPI_INT;
+  } else if (datatype.compare("float") == 0) {
+    mpitype = MPI_FLOAT;
+  } else if (datatype.compare("double") == 0) {
+    mpitype = MPI_DOUBLE;
+  } else if (datatype.compare("Real") == 0) {
+    mpitype = MPI_ATHENA_REAL;
+  } else {
+    MPI_Abort(MPI_COMM_WORLD, 1);
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+              << std::endl << "Unrecognized datatype '" << datatype << "'" << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+  // Now write data using MPI-IO
   MPI_Status status;
-  int errcode = MPI_File_write(fh_, buf, cnt*size, MPI_BYTE, &status);
+  int errcode = MPI_File_write(fh_, buf, cnt, mpitype, &status);
   if (errcode != MPI_SUCCESS) {
     char msg[MPI_MAX_ERROR_STRING];
     int resultlen;
@@ -252,104 +297,61 @@ std::size_t IOWrapper::Write_bytes(const void *buf, IOWrapperSizeT size,
     return 0;
   }
   int nwrite;
-  if (MPI_Get_count(&status,MPI_BYTE,&nwrite) == MPI_UNDEFINED) {return 0;}
-  return nwrite/size;
-#else
-  return std::fwrite(buf,size,cnt,fh_);
-#endif
-}
-
-//----------------------------------------------------------------------------------------
-//! \fn int IOWrapper::Write_bytes_at(const void *buf, IOWrapperSizeT size,
-//!                                   IOWrapperSizeT cnt, IOWrapperSizeT offset)
-//! \brief wrapper for {MPI_File_write_at} versus {std::fseek+std::fwrite}.
-//! Returns number of byte-blocks of given "size" actually written.
-
-std::size_t IOWrapper::Write_bytes_at(const void *buf, IOWrapperSizeT size,
-                                      IOWrapperSizeT cnt, IOWrapperSizeT offset) {
-#if MPI_PARALLEL_ENABLED
-  // create new MPI datatype to avoid exceeding limit of 2^31 elements
-  MPI_Status status;
-  int errcode = MPI_File_write_at(fh_, offset, buf, cnt*size, MPI_BYTE, &status);
-  if (errcode != MPI_SUCCESS) {
-    char msg[MPI_MAX_ERROR_STRING];
-    int resultlen;
-    MPI_Error_string(errcode, msg, &resultlen);
-    printf("%.*s\n", resultlen, msg);
-    return 0;
-  }
-  int nwrite;
-  if (MPI_Get_count(&status,MPI_BYTE,&nwrite) == MPI_UNDEFINED) {return 0;}
-  return nwrite/size;
-#else
-  std::fseek(fh_, offset, SEEK_SET);
-  return std::fwrite(buf,size,cnt,fh_);
-#endif
-}
-
-//----------------------------------------------------------------------------------------
-//! \fn int IOWrapper::Write_bytes_at_all(const void *buf, IOWrapperSizeT size,
-//!                                       IOWrapperSizeT cnt, IOWrapperSizeT offset)
-//! \brief wrapper for {MPI_File_write_at_all} versus {std::fseek+std::fwrite}.
-//! Returns number of byte-blocks of given "size" actually written.
-
-std::size_t IOWrapper::Write_bytes_at_all(const void *buf, IOWrapperSizeT size,
-                                          IOWrapperSizeT cnt, IOWrapperSizeT offset) {
-#if MPI_PARALLEL_ENABLED
-  // create new MPI datatype to avoid exceeding limit of 2^31 elements
-  MPI_Status status;
-  int errcode = MPI_File_write_at_all(fh_, offset, buf, cnt*size, MPI_BYTE, &status);
-  if (errcode != MPI_SUCCESS) {
-    char msg[MPI_MAX_ERROR_STRING];
-    int resultlen;
-    MPI_Error_string(errcode, msg, &resultlen);
-    printf("%.*s\n", resultlen, msg);
-    return 0;
-  }
-  int nwrite;
-  if (MPI_Get_count(&status,MPI_BYTE,&nwrite) == MPI_UNDEFINED) {return 0;}
-  return nwrite/size;
-#else
-  std::fseek(fh_, offset, SEEK_SET);
-  return std::fwrite(buf,size,cnt,fh_);
-#endif
-}
-
-//----------------------------------------------------------------------------------------
-//! \fn int IOWrapper::Write_Reals(const void *buf,IOWrapperSizeT cnt)
-//! \brief wrapper for {MPI_File_write} versus {std::fwrite} for writing Athena Reals
-//! Returns number of Reals actually written.
-
-std::size_t IOWrapper::Write_Reals(const void *buf, IOWrapperSizeT cnt) {
-#if MPI_PARALLEL_ENABLED
-  MPI_Status status;
-  int errcode = MPI_File_write(fh_, buf, cnt, MPI_ATHENA_REAL, &status);
-  if (errcode != MPI_SUCCESS) {
-    char msg[MPI_MAX_ERROR_STRING];
-    int resultlen;
-    MPI_Error_string(errcode, msg, &resultlen);
-    printf("%.*s\n", resultlen, msg);
-    return 0;
-  }
-  int nwrite;
-  if (MPI_Get_count(&status,MPI_ATHENA_REAL,&nwrite) == MPI_UNDEFINED) {return 0;}
+  if (MPI_Get_count(&status, mpitype, &nwrite) == MPI_UNDEFINED) {return 0;}
   return nwrite;
 #else
-  return std::fwrite(buf,sizeof(Real),cnt,fh_);
+  // set appropriate datasize
+  std:size_t datasize;
+  if (datatype.compare("byte") == 0) {
+    datasize = sizeof(char);
+  } else if (datatype.compare("int") == 0) {
+    datasize = sizeof(int);
+  } else if (datatype.compare("float") == 0) {
+    datasize = sizeof(float);
+  } else if (datatype.compare("double") == 0) {
+    datasize = sizeof(double);
+  } else if (datatype.compare("Real") == 0) {
+    datasize = sizeof(Real);
+  } else {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+              << std::endl << "Unrecognized datatype '" << datatype << "'" << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+  // Write data using standard C functions
+  return std::fwrite(buf,datasize,cnt,fh_);
 #endif
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn int IOWrapper::Write_Reals_at(const void *buf, IOWrapperSizeT size,
-//!                                   IOWrapperSizeT cnt, IOWrapperSizeT offset)
-//! \brief wrapper for {MPI_File_write_at} versus {std::fseek+std::fwrite}.
-//! Returns number of Reals actually written.
+//! \fn int IOWrapper::Write_any_type_at()
+//! \brief wrapper for {MPI_File_write_at} versus {std::fseek+std::fwrite} for writing any
+//! type of data, specified by the datatype argument. Returns number of data elements of
+//! given "type" actually written.
 
-std::size_t IOWrapper::Write_Reals_at(const void *buf, IOWrapperSizeT cnt,
-                                      IOWrapperSizeT offset) {
+std::size_t IOWrapper::Write_any_type_at(const void *buf, IOWrapperSizeT cnt,
+                                         IOWrapperSizeT offset, std::string datatype) {
 #if MPI_PARALLEL_ENABLED
+  // set appropriate MPI_Datatype
+  MPI_Datatype mpitype;
+  if (datatype.compare("byte") == 0) {
+    mpitype = MPI_BYTE;
+  } else if (datatype.compare("int") == 0) {
+    mpitype = MPI_INT;
+  } else if (datatype.compare("float") == 0) {
+    mpitype = MPI_FLOAT;
+  } else if (datatype.compare("double") == 0) {
+    mpitype = MPI_DOUBLE;
+  } else if (datatype.compare("Real") == 0) {
+    mpitype = MPI_ATHENA_REAL;
+  } else {
+    MPI_Abort(MPI_COMM_WORLD, 1);
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+              << std::endl << "Unrecognized datatype '" << datatype << "'" << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+  // Now write data using MPI-IO
   MPI_Status status;
-  int errcode = MPI_File_write_at(fh_, offset, buf, cnt, MPI_ATHENA_REAL, &status);
+  int errcode = MPI_File_write_at(fh_, offset, buf, cnt, mpitype, &status);
   if (errcode != MPI_SUCCESS) {
     char msg[MPI_MAX_ERROR_STRING];
     int resultlen;
@@ -358,26 +360,62 @@ std::size_t IOWrapper::Write_Reals_at(const void *buf, IOWrapperSizeT cnt,
     return 0;
   }
   int nwrite;
-  if (MPI_Get_count(&status,MPI_ATHENA_REAL,&nwrite) == MPI_UNDEFINED) {return 0;}
+  if (MPI_Get_count(&status, mpitype, &nwrite) == MPI_UNDEFINED) {return 0;}
   return nwrite;
 #else
+  // set appropriate datasize
+  std:size_t datasize;
+  if (datatype.compare("byte") == 0) {
+    datasize = sizeof(char);
+  } else if (datatype.compare("int") == 0) {
+    datasize = sizeof(int);
+  } else if (datatype.compare("float") == 0) {
+    datasize = sizeof(float);
+  } else if (datatype.compare("double") == 0) {
+    datasize = sizeof(double);
+  } else if (datatype.compare("Real") == 0) {
+    datasize = sizeof(Real);
+  } else {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+              << std::endl << "Unrecognized datatype '" << datatype << "'" << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+  // Write data using standard C functions
   std::fseek(fh_, offset, SEEK_SET);
-  return std::fwrite(buf,sizeof(Real),cnt,fh_);
+  return std::fwrite(buf,datasize,cnt,fh_);
 #endif
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn int IOWrapper::Write_Reals_at_all(const void *buf, IOWrapperSizeT size,
-//!                                       IOWrapperSizeT cnt, IOWrapperSizeT offset)
-//! \brief wrapper for {MPI_File_write_at_all} versus {std::fseek+std::fwrite}.
-//! Returns number of Reals actually written.
+//! \fn int IOWrapper::Write_any_type_at_all()
+//! \brief wrapper for {MPI_File_write_at_all} versus {std::fseek+std::fwrite} for writing
+//! any type of data, specified by the datatype argument.
+//! Returns number of data elements of given "type" actually written.
 
-std::size_t IOWrapper::Write_Reals_at_all(const void *buf, IOWrapperSizeT cnt,
-                                          IOWrapperSizeT offset) {
+std::size_t IOWrapper::Write_any_type_at_all(const void *buf, IOWrapperSizeT cnt,
+                                            IOWrapperSizeT offset, std::string datatype) {
 #if MPI_PARALLEL_ENABLED
-  // create new MPI datatype to avoid exceeding limit of 2^31 elements
+  // set appropriate MPI_Datatype
+  MPI_Datatype mpitype;
+  if (datatype.compare("byte") == 0) {
+    mpitype = MPI_BYTE;
+  } else if (datatype.compare("int") == 0) {
+    mpitype = MPI_INT;
+  } else if (datatype.compare("float") == 0) {
+    mpitype = MPI_FLOAT;
+  } else if (datatype.compare("double") == 0) {
+    mpitype = MPI_DOUBLE;
+  } else if (datatype.compare("Real") == 0) {
+    mpitype = MPI_ATHENA_REAL;
+  } else {
+    MPI_Abort(MPI_COMM_WORLD, 1);
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+              << std::endl << "Unrecognized datatype '" << datatype << "'" << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+  // Now write data using MPI-IO
   MPI_Status status;
-  int errcode = MPI_File_write_at_all(fh_, offset, buf, cnt, MPI_ATHENA_REAL, &status);
+  int errcode = MPI_File_write_at_all(fh_, offset, buf, cnt, mpitype, &status);
   if (errcode != MPI_SUCCESS) {
     char msg[MPI_MAX_ERROR_STRING];
     int resultlen;
@@ -386,11 +424,29 @@ std::size_t IOWrapper::Write_Reals_at_all(const void *buf, IOWrapperSizeT cnt,
     return 0;
   }
   int nwrite;
-  if (MPI_Get_count(&status,MPI_ATHENA_REAL,&nwrite) == MPI_UNDEFINED) {return 0;}
+  if (MPI_Get_count(&status,mpitype,&nwrite) == MPI_UNDEFINED) {return 0;}
   return nwrite;
 #else
+  // set appropriate datasize
+  std:size_t datasize;
+  if (datatype.compare("byte") == 0) {
+    datasize = sizeof(char);
+  } else if (datatype.compare("int") == 0) {
+    datasize = sizeof(int);
+  } else if (datatype.compare("float") == 0) {
+    datasize = sizeof(float);
+  } else if (datatype.compare("double") == 0) {
+    datasize = sizeof(double);
+  } else if (datatype.compare("Real") == 0) {
+    datasize = sizeof(Real);
+  } else {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+              << std::endl << "Unrecognized datatype '" << datatype << "'" << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+  // Write data using standard C functions
   std::fseek(fh_, offset, SEEK_SET);
-  return std::fwrite(buf,sizeof(Real),cnt,fh_);
+  return std::fwrite(buf,datasize,cnt,fh_);
 #endif
 }
 

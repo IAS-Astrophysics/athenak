@@ -8,6 +8,10 @@
 //! \file radiation.hpp
 //  \brief definitions for Radiation class
 
+#include <map>
+#include <memory>
+#include <string>
+
 #include "athena.hpp"
 #include "parameter_input.hpp"
 #include "tasklist/task_list.hpp"
@@ -28,7 +32,7 @@ struct RadiationTaskIDs {
   TaskID rad_irecv;
   TaskID mhd_irecv;
   TaskID hyd_irecv;
-  TaskID copycons;
+  TaskID copyu;
   TaskID rad_flux;
   TaskID mhd_flux;
   TaskID hyd_flux;
@@ -141,10 +145,10 @@ class Radiation {
   RadiationTaskIDs id;
 
   // functions...
-  void AssembleRadiationTasks(TaskList &start, TaskList &run, TaskList &end);
-  // ...in start task list
+  void AssembleRadTasks(std::map<std::string, std::shared_ptr<TaskList>> tl);
+  // ...in "before_stagen_tl" task list
   TaskStatus InitRecv(Driver *d, int stage);
-  // ...in run task list
+  // ...in "stagen_tl" task list
   TaskStatus CopyCons(Driver *d, int stage);
   TaskStatus CalculateFluxes(Driver *d, int stage);
   TaskStatus SendFlux(Driver *d, int stage);
@@ -157,7 +161,7 @@ class Radiation {
   TaskStatus ApplyPhysicalBCs(Driver* pdrive, int stage);
   TaskStatus Prolongate(Driver* pdrive, int stage);
   TaskStatus NewTimeStep(Driver *d, int stage);
-  // ...in end task list
+  // ...in "after_stagen_tl" task list
   TaskStatus ClearSend(Driver *d, int stage);
   TaskStatus ClearRecv(Driver *d, int stage);
 

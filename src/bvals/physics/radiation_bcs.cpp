@@ -13,12 +13,12 @@
 #include "mesh/mesh.hpp"
 
 //----------------------------------------------------------------------------------------
-// \!fn void BoundaryValues::RadiationBCs()
-// \brief Apply physical boundary conditions for radiation at faces of MB which
-//  are at the edge of the computational domain
+//! \!fn void BoundaryValues::RadiationBCs()
+//! \brief Apply physical boundary conditions for radiation at faces of MB which
+//! are at the edge of the computational domain
 
-void BoundaryValues::RadiationBCs(MeshBlockPack *ppack, DualArray2D<Real> i_in,
-                                  DvceArray5D<Real> i0) {
+void MeshBoundaryValues::RadiationBCs(MeshBlockPack *ppack, DualArray2D<Real> i_in,
+                                      DvceArray5D<Real> i0) {
   // loop over all MeshBlocks in this MeshBlockPack
   auto &pm = ppack->pmesh;
   auto &indcs = ppack->pmesh->mb_indcs;
