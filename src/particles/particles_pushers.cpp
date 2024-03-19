@@ -30,6 +30,7 @@ TaskStatus Particles::Push(Driver *pdriver, int stage) {
   auto &pr = prtcl_rdata;
   auto dt_ = (pmy_pack->pmesh->dt);
   auto gids = pmy_pack->gids;
+  auto gide = pmy_pack->gide;
 
   switch (pusher) {
     case ParticlesPusher::drift:
@@ -54,7 +55,7 @@ TaskStatus Particles::Push(Driver *pdriver, int stage) {
     break;
     
     case ParticlesPusher::boris:
-      BorisStep(dt_, pr, pi, multi_d, three_d);
+      BorisStep(dt_, multi_d, three_d);
     break;
 
     default:
@@ -68,8 +69,10 @@ TaskStatus Particles::Push(Driver *pdriver, int stage) {
 //also for half-steps
 //Largely implemented following Ripperda et al. 2018 (https://doi.org/10.3847/1538-4365/aab114)
 KOKKOS_INLINE_FUNCTION
-void Particles::BorisStep( const Real dt, DvceArray2D<Real> &pr, const DvceArray2D<int> &pi, const bool multi_d, const bool three_d ){
+void Particles::BorisStep( const Real dt, const bool multi_d, const bool three_d ){
 	
+	auto &pi = prtcl_idata;
+	auto &pr = prtcl_rdata;
 	auto &b0_ = pmy_pack->pmhd->b0;
 	auto &e0_ = pmy_pack->pmhd->efld;
 	auto &indcs = pmy_pack->pmesh->mb_indcs;
@@ -128,16 +131,17 @@ void Particles::BorisStep( const Real dt, DvceArray2D<Real> &pr, const DvceArray
         int ip = (pr(IPX,p) - mbsize.d_view(m).x1min)/mbsize.d_view(m).dx1 + is;
 	int jp = (pr(IPY,p) - mbsize.d_view(m).x2min)/mbsize.d_view(m).dx2 + js;
 	int kp = (pr(IPZ,p) - mbsize.d_view(m).x3min)/mbsize.d_view(m).dx3 + ks;
-	/***
-	if ( (ip*jp*kp < 0.0) || (ip > 33) || (jp > 33) || (kp > 33) || (m > nmb1)){
+	/***/
+	if ( (ip*jp*kp < 0.0) || (ip > ie) || (jp > je) || (kp > ke) || (m > nmb1)){
 	std::cout << global_variable::my_rank <<std::endl;
+	std::cout << "gids " << gids << " " << pi(PGID,p) << std::endl; 
 	std::cout << "mbsize " << m << " " << mbsize.d_view(m).x2min << " " << mbsize.d_view(m).dx2 << std::endl; 
 	std::cout << "pr " << pi(PTAG,p) << " " << pr(IPX,p) << " " << pr(IPY,p) << " " << pr(IPZ,p) << std::endl; 
 	std::cout << "Idx i "  << pi(PTAG,p) << " "<< is << " " << ip << " " << ie << std::endl; 
 	std::cout << "Idx j "  << pi(PTAG,p) << " "<< js << " " << jp << " " << je << std::endl; 
 	std::cout << "Idx k "  << pi(PTAG,p) << " "<< ks << " " << kp << " " << ke << std::endl; 
 	}
-	***/
+	/***/
 	Real &x1min = mbsize.d_view(m).x1min;
 	Real &x2min = mbsize.d_view(m).x2min;
 	Real &x3min = mbsize.d_view(m).x3min;
@@ -148,16 +152,16 @@ void Particles::BorisStep( const Real dt, DvceArray2D<Real> &pr, const DvceArray
 	x1v = LeftEdgeX(ip, indcs.nx1, x1min, x1max);
 	x2v = LeftEdgeX(jp, indcs.nx2, x2min, x2max);
 	x3v = LeftEdgeX(kp, indcs.nx3, x3min, x3max);
-	Real Lx,Ly,Lz;
-	Lx = (x1max - x1min);
-	Ly = (x2max - x2min);
-	Lz = (x3max - x3min);
+	Real Dx,Dy,Dz;
+	Dx = (x1max - x1min)/indcs.nx1;
+	Dy = (x2max - x2min)/indcs.nx2;
+	Dz = (x3max - x3min)/indcs.nx3;
         // Interpolate Electric Field at new particle location x1, x2, x3
 	// Store it in an array for convenience 
 	Real E[3] = {0.0, 0.0, 0.0};
-	E[0] = e0_.x1e(m, kp, jp, ip) + (x1 - x1v)*(e0_.x1e(m, kp, jp, ip+1) - e0_.x1e(m, kp, jp, ip))/Lx;
-	E[1] = e0_.x2e(m, kp, jp, ip) + (x2 - x2v)*(e0_.x2e(m, kp, jp+1, ip) - e0_.x2e(m, kp, jp, ip))/Ly;
-	E[2] = e0_.x3e(m, kp, jp, ip) + (x3 - x3v)*(e0_.x3e(m, kp+1, jp, ip) - e0_.x3e(m, kp, jp, ip))/Lz;
+	E[0] = e0_.x1e(m, kp, jp, ip) + (x1 - x1v)*(e0_.x1e(m, kp, jp, ip+1) - e0_.x1e(m, kp, jp, ip))/Dx;
+	E[1] = e0_.x2e(m, kp, jp, ip) + (x2 - x2v)*(e0_.x2e(m, kp, jp+1, ip) - e0_.x2e(m, kp, jp, ip))/Dy;
+	E[2] = e0_.x3e(m, kp, jp, ip) + (x3 - x3v)*(e0_.x3e(m, kp+1, jp, ip) - e0_.x3e(m, kp, jp, ip))/Dz;
 
 	uE[0] = up[0] + dt*pr(IPC,p)/(2.0*pr(IPM,p))*E[0];
         if (multi_d) { uE[1] = up[1] + dt*pr(IPC,p)/(2.0*pr(IPM,p))*E[1]; }
@@ -180,9 +184,9 @@ void Particles::BorisStep( const Real dt, DvceArray2D<Real> &pr, const DvceArray
         // Interpolate Magnetic Field at new particle location x1, x2, x3
 	// Store it in an array for convenience 
 	Real B[3] = {0.0, 0.0, 0.0};
-	B[0] = b0_.x1f(m, kp, jp, ip) + (x1 - x1v)*(b0_.x1f(m, kp, jp, ip+1) - b0_.x1f(m, kp, jp, ip))/Lx;
-	B[1] = b0_.x2f(m, kp, jp, ip) + (x2 - x2v)*(b0_.x2f(m, kp, jp+1, ip) - b0_.x2f(m, kp, jp, ip))/Ly;
-	B[2] = b0_.x3f(m, kp, jp, ip) + (x3 - x3v)*(b0_.x3f(m, kp+1, jp, ip) - b0_.x3f(m, kp, jp, ip))/Lz;
+	B[0] = b0_.x1f(m, kp, jp, ip) + (x1 - x1v)*(b0_.x1f(m, kp, jp, ip+1) - b0_.x1f(m, kp, jp, ip))/Dx;
+	B[1] = b0_.x2f(m, kp, jp, ip) + (x2 - x2v)*(b0_.x2f(m, kp, jp+1, ip) - b0_.x2f(m, kp, jp, ip))/Dy;
+	B[2] = b0_.x3f(m, kp, jp, ip) + (x3 - x3v)*(b0_.x3f(m, kp+1, jp, ip) - b0_.x3f(m, kp, jp, ip))/Dz;
 
 	// if (p == 53){
         // std::cout << "B " << p << " " << B[0] << " " << B[1] << " " << B[2]<<std::endl;
