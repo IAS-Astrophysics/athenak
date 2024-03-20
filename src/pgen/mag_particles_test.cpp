@@ -76,8 +76,9 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     auto rand_gen = rand_pool64.get_state();  // get random number state this thread
     // choose parent MeshBlock randomly
     int m = static_cast<int>(rand_gen.frand()*(gide - gids + 1.0));
-    rand_pool64.free_state(rand_gen);  // free state for use by other threads
     pi(PGID,p) = gids + m;
+    pr(IPVZ,p) = (rand_gen.frand()-0.5);
+    rand_pool64.free_state(rand_gen);  // free state for use by other threads
     pr(IPM,p) = prtcl_mass;
     pr(IPC,p) = prtcl_charge;
 
@@ -89,16 +90,16 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     Real x2max_actual = (mbsize.d_view(m).x2max <= 0) ? 1.25*mbsize.d_view(m).x2max : 0.75*mbsize.d_view(m).x2max;
     Real x3max_actual = (mbsize.d_view(m).x3max <= 0) ? 1.25*mbsize.d_view(m).x3max : 0.75*mbsize.d_view(m).x3max;
     pr(IPX,p) = (x1max_actual + x1min_actual)/2.0;
-    pr(IPY,p) = (x2max_actual +  x2min_actual)/2.0;
-    pr(IPZ,p) = x3min_actual;
+    pr(IPY,p) = (x2max_actual + x2min_actual)/2.0;
+    pr(IPZ,p) = (x3max_actual + x3min_actual)/2.0;
     x[3*p] = pr(IPX,p);
     x[3*p+1] = pr(IPY,p);
     x[3*p+2] = pr(IPZ,p);
 
     pr(IPVX,p) = max_init_vel*(p+0.01)/npart*(x1max_actual - x1min_actual);
     pr(IPVY,p) = max_init_vel*(p+0.01)/npart*(x2max_actual - x2min_actual);
-    // v_z chosen small enough to avoid reflection at the boundary
-    pr(IPVZ,p) = 1.0E-2;
+    // v_z chosen to ensure reflection at the boundary
+    pr(IPVZ,p) *= 5.0E-1;
     v[3*p] = pr(IPVX,p);
     v[3*p+1] = pr(IPVY,p);
     v[3*p+2] = pr(IPVZ,p);
