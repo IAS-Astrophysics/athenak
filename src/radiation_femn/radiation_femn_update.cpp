@@ -219,8 +219,22 @@ namespace radiationfemn
                               }
                           }
 
+                          Real& x1min = mbsize.d_view(m).x1min;
+                          Real& x1max = mbsize.d_view(m).x1max;
+                          int nx1 = indcs.nx1;
+                          Real x1 = CellCenterX(i - is, nx1, x1min, x1max);
+
+                          Real& x2min = mbsize.d_view(m).x2min;
+                          Real& x2max = mbsize.d_view(m).x2max;
+                          int nx2 = indcs.nx2;
+                          Real x2 = CellCenterX(j - js, nx2, x2min, x2max);
+                          Real x3 = 0;
+
+                          Real M = 1.;
+                          Real r = sqrt(x1 * x1 + x2 * x2);
+                          std::cout << "r: " << r << std::endl;
                           // Ricci rotation coefficients
-                          AthenaScratchTensor4d<Real, TensorSymm::SYM2, 4, 3> Gamma_fluid_udd;
+                          AthenaScratchTensor4d<Real, TensorSymm::NONE, 4, 3> Gamma_fluid_udd;
                           for (int a = 0; a < 4; ++a)
                           {
                               for (int b = 0; b < 4; ++b)
@@ -241,35 +255,200 @@ namespace radiationfemn
                                               + g_dd[a_idx + 4 * 2] * L_mu_muhat0_(m, 2, a, k, j, i) + g_dd[a_idx + 4 * 3] * L_mu_muhat0_(m, 3, a, k, j, i));
                                           Gamma_fluid_udd(a, b, c) +=
                                               L_mu_muhat0_(m, b_idx, b, k, j, i) * L_mu_muhat0_(m, c_idx, c, k, j, i) * L_ahat_aidx * Gamma_udd(a_idx, b_idx, c_idx);
-                                      }
 
-                                      for (int a_idx = 0; a_idx < 4; ++a_idx)
-                                      {
-                                          Real l_sign = (a == 0) ? -1. : +1.;
-                                          Real L_ahat_aidx = l_sign * (g_dd[a_idx + 4 * 0] * L_mu_muhat0_(m, 0, a, k, j, i) + g_dd[a_idx + 4 * 1] * L_mu_muhat0_(m, 1, a, k, j, i)
-                                              + g_dd[a_idx + 4 * 2] * L_mu_muhat0_(m, 2, a, k, j, i) + g_dd[a_idx + 4 * 3] * L_mu_muhat0_(m, 3, a, k, j, i));
-
-                                          Gamma_fluid_udd(a, b, c) +=
-                                              L_ahat_aidx * (L_mu_muhat0_(m, 1, c, k, j, i) - (u_mu_(m, 1, k, j, i) / u_mu_(m, 0, k, j, i)) * L_mu_muhat0_(m, 0, c, k, j, i))
-                                              * Dx<NGHOST>(0, deltax, L_mu_muhat0_, m, a_idx, c, k, j, i);
-
-                                          if (multi_d)
-                                          {
-                                              Gamma_fluid_udd(a, b, c) +=
-                                                  L_ahat_aidx * (L_mu_muhat0_(m, 2, c, k, j, i) - (u_mu_(m, 2, k, j, i) / u_mu_(m, 0, k, j, i)) * L_mu_muhat0_(m, 0, c, k, j, i))
-                                                  * Dx<NGHOST>(1, deltax, L_mu_muhat0_, m, a_idx, c, k, j, i);
-                                          }
-
-                                          if (three_d)
-                                          {
-                                              Gamma_fluid_udd(a, b, c) +=
-                                                  L_ahat_aidx * (L_mu_muhat0_(m, 3, c, k, j, i) - (u_mu_(m, 3, k, j, i) / u_mu_(m, 0, k, j, i)) * L_mu_muhat0_(m, 0, c, k, j, i))
-                                                  * Dx<NGHOST>(2, deltax, L_mu_muhat0_, m, a_idx, c, k, j, i);
-                                          }
+                                          Real derL[4];
+                                          derL[0] = 0.;
+                                          derL[1] = Dx<NGHOST>(0, deltax, L_mu_muhat0_, m, a_idx, b, k, j, i);
+                                          derL[2] = (multi_d) ? Dx<NGHOST>(1, deltax, L_mu_muhat0_, m, a_idx, b, k, j, i) : 0.;
+                                          derL[3] = (three_d) ? Dx<NGHOST>(2, deltax, L_mu_muhat0_, m, a_idx, b, k, j, i) : 0.;
+                                          Gamma_fluid_udd(a, b, c) += L_ahat_aidx * L_mu_muhat0_(m, c_idx, c, k, j, i) * derL[c_idx];
                                       }
                                   }
                               }
                           }
+
+                          Real gamma_fluid_test_000 = Gamma_udd(0, 0, 0) * ((1.0 / 2.0) * M / sqrt(pow(x1, 2) + pow(x2, 2) + pow(x3, 2)) + 1) / (-1.0 / 2.0 * M / sqrt(
+                              pow(x1, 2) + pow(x2, 2) + pow(x3, 2)) + 1);
+                          Real gamma_fluid_test_001 = Gamma_udd(0, 0, 1) / pow((1.0 / 2.0) * M / sqrt(pow(x1, 2) + pow(x2, 2) + pow(x3, 2)) + 1, 2) + 4 * (-1.0 / 2.0 * M /
+                              sqrt(pow(x1, 2) + pow(x2, 2) + pow(x3, 2)) + 1) * (-1.0 / 2.0 * M * x1 / ((-1.0 / 2.0 * M / sqrt(pow(x1, 2) + pow(x2, 2) + pow(x3, 2)) + 1) *
+                              pow(pow(x1, 2) + pow(x2, 2) + pow(x3, 2), 3.0 / 2.0)) - 1.0 / 2.0 * M * x1 * ((1.0 / 2.0) * M / sqrt(pow(x1, 2) + pow(x2, 2) + pow(x3, 2)) + 1) / (
+                              pow(-1.0 / 2.0 * M / sqrt(pow(x1, 2) + pow(x2, 2) + pow(x3, 2)) + 1, 2) * pow(pow(x1, 2) + pow(x2, 2) + pow(x3, 2), 3.0 / 2.0))) / pow(
+                              (1.0 / 2.0) * M / sqrt(pow(x1, 2) + pow(x2, 2) + pow(x3, 2)) + 1, 3);
+                          Real gamma_fluid_test_002 = Gamma_udd(0, 0, 2) / pow((1.0 / 2.0) * M / sqrt(pow(x1, 2) + pow(x2, 2) + pow(x3, 2)) + 1, 2) + 4 * (-1.0 / 2.0 * M /
+                              sqrt(pow(x1, 2) + pow(x2, 2) + pow(x3, 2)) + 1) * (-1.0 / 2.0 * M * x2 / ((-1.0 / 2.0 * M / sqrt(pow(x1, 2) + pow(x2, 2) + pow(x3, 2)) + 1) *
+                              pow(pow(x1, 2) + pow(x2, 2) + pow(x3, 2), 3.0 / 2.0)) - 1.0 / 2.0 * M * x2 * ((1.0 / 2.0) * M / sqrt(pow(x1, 2) + pow(x2, 2) + pow(x3, 2)) + 1) / (
+                              pow(-1.0 / 2.0 * M / sqrt(pow(x1, 2) + pow(x2, 2) + pow(x3, 2)) + 1, 2) * pow(pow(x1, 2) + pow(x2, 2) + pow(x3, 2), 3.0 / 2.0))) / pow(
+                              (1.0 / 2.0) * M / sqrt(pow(x1, 2) + pow(x2, 2) + pow(x3, 2)) + 1, 3);
+                          Real gamma_fluid_test_003 = Gamma_udd(0, 0, 3) / pow((1.0 / 2.0) * M / sqrt(pow(x1, 2) + pow(x2, 2) + pow(x3, 2)) + 1, 2) + 4 * (-1.0 / 2.0 * M /
+                              sqrt(pow(x1, 2) + pow(x2, 2) + pow(x3, 2)) + 1) * (-1.0 / 2.0 * M * x3 / ((-1.0 / 2.0 * M / sqrt(pow(x1, 2) + pow(x2, 2) + pow(x3, 2)) + 1) *
+                              pow(pow(x1, 2) + pow(x2, 2) + pow(x3, 2), 3.0 / 2.0)) - 1.0 / 2.0 * M * x3 * ((1.0 / 2.0) * M / sqrt(pow(x1, 2) + pow(x2, 2) + pow(x3, 2)) + 1) / (
+                              pow(-1.0 / 2.0 * M / sqrt(pow(x1, 2) + pow(x2, 2) + pow(x3, 2)) + 1, 2) * pow(pow(x1, 2) + pow(x2, 2) + pow(x3, 2), 3.0 / 2.0))) / pow(
+                              (1.0 / 2.0) * M / sqrt(pow(x1, 2) + pow(x2, 2) + pow(x3, 2)) + 1, 3);
+                          Real gamma_fluid_test_010 = Gamma_udd(0, 1, 0) / pow((1.0 / 2.0) * M / sqrt(pow(x1, 2) + pow(x2, 2) + pow(x3, 2)) + 1, 2);
+                          Real gamma_fluid_test_011 = Gamma_udd(0, 1, 1) * (-1.0 / 2.0 * M / sqrt(pow(x1, 2) + pow(x2, 2) + pow(x3, 2)) + 1) / pow(
+                              (1.0 / 2.0) * M / sqrt(pow(x1, 2) + pow(x2, 2) + pow(x3, 2)) + 1, 5);
+                          Real gamma_fluid_test_012 = Gamma_udd(0, 1, 2) * (-1.0 / 2.0 * M / sqrt(pow(x1, 2) + pow(x2, 2) + pow(x3, 2)) + 1) / pow(
+                              (1.0 / 2.0) * M / sqrt(pow(x1, 2) + pow(x2, 2) + pow(x3, 2)) + 1, 5);
+                          Real gamma_fluid_test_013 = Gamma_udd(0, 1, 3) * (-1.0 / 2.0 * M / sqrt(pow(x1, 2) + pow(x2, 2) + pow(x3, 2)) + 1) / pow(
+                              (1.0 / 2.0) * M / sqrt(pow(x1, 2) + pow(x2, 2) + pow(x3, 2)) + 1, 5);
+                          Real gamma_fluid_test_020 = Gamma_udd(0, 2, 0) / pow((1.0 / 2.0) * M / sqrt(pow(x1, 2) + pow(x2, 2) + pow(x3, 2)) + 1, 2);
+                          Real gamma_fluid_test_021 = Gamma_udd(0, 2, 1) * (-1.0 / 2.0 * M / sqrt(pow(x1, 2) + pow(x2, 2) + pow(x3, 2)) + 1) / pow(
+                              (1.0 / 2.0) * M / sqrt(pow(x1, 2) + pow(x2, 2) + pow(x3, 2)) + 1, 5);
+                          Real gamma_fluid_test_022 = Gamma_udd(0, 2, 2) * (-1.0 / 2.0 * M / sqrt(pow(x1, 2) + pow(x2, 2) + pow(x3, 2)) + 1) / pow(
+                              (1.0 / 2.0) * M / sqrt(pow(x1, 2) + pow(x2, 2) + pow(x3, 2)) + 1, 5);
+                          Real gamma_fluid_test_023 = Gamma_udd(0, 2, 3) * (-1.0 / 2.0 * M / sqrt(pow(x1, 2) + pow(x2, 2) + pow(x3, 2)) + 1) / pow(
+                              (1.0 / 2.0) * M / sqrt(pow(x1, 2) + pow(x2, 2) + pow(x3, 2)) + 1, 5);
+                          Real gamma_fluid_test_030 = Gamma_udd(0, 3, 0) / pow((1.0 / 2.0) * M / sqrt(pow(x1, 2) + pow(x2, 2) + pow(x3, 2)) + 1, 2);
+                          Real gamma_fluid_test_031 = Gamma_udd(0, 3, 1) * (-1.0 / 2.0 * M / sqrt(pow(x1, 2) + pow(x2, 2) + pow(x3, 2)) + 1) / pow(
+                              (1.0 / 2.0) * M / sqrt(pow(x1, 2) + pow(x2, 2) + pow(x3, 2)) + 1, 5);
+                          Real gamma_fluid_test_032 = Gamma_udd(0, 3, 2) * (-1.0 / 2.0 * M / sqrt(pow(x1, 2) + pow(x2, 2) + pow(x3, 2)) + 1) / pow(
+                              (1.0 / 2.0) * M / sqrt(pow(x1, 2) + pow(x2, 2) + pow(x3, 2)) + 1, 5);
+                          Real gamma_fluid_test_033 = Gamma_udd(0, 3, 3) * (-1.0 / 2.0 * M / sqrt(pow(x1, 2) + pow(x2, 2) + pow(x3, 2)) + 1) / pow(
+                              (1.0 / 2.0) * M / sqrt(pow(x1, 2) + pow(x2, 2) + pow(x3, 2)) + 1, 5);
+                          Real gamma_fluid_test_100 = Gamma_udd(1, 0, 0) * pow((1.0 / 2.0) * M / sqrt(pow(x1, 2) + pow(x2, 2) + pow(x3, 2)) + 1, 4) / pow(
+                              -1.0 / 2.0 * M / sqrt(pow(x1, 2) + pow(x2, 2) + pow(x3, 2)) + 1, 2);
+                          Real gamma_fluid_test_101 = Gamma_udd(1, 0, 1) * ((1.0 / 2.0) * M / sqrt(pow(x1, 2) + pow(x2, 2) + pow(x3, 2)) + 1) / (-1.0 / 2.0 * M / sqrt(
+                              pow(x1, 2) + pow(x2, 2) + pow(x3, 2)) + 1);
+                          Real gamma_fluid_test_102 = Gamma_udd(1, 0, 2) * ((1.0 / 2.0) * M / sqrt(pow(x1, 2) + pow(x2, 2) + pow(x3, 2)) + 1) / (-1.0 / 2.0 * M / sqrt(
+                              pow(x1, 2) + pow(x2, 2) + pow(x3, 2)) + 1);
+                          Real gamma_fluid_test_103 = Gamma_udd(1, 0, 3) * ((1.0 / 2.0) * M / sqrt(pow(x1, 2) + pow(x2, 2) + pow(x3, 2)) + 1) / (-1.0 / 2.0 * M / sqrt(
+                              pow(x1, 2) + pow(x2, 2) + pow(x3, 2)) + 1);
+                          Real gamma_fluid_test_110 = Gamma_udd(1, 1, 0) * ((1.0 / 2.0) * M / sqrt(pow(x1, 2) + pow(x2, 2) + pow(x3, 2)) + 1) / (-1.0 / 2.0 * M / sqrt(
+                              pow(x1, 2) + pow(x2, 2) + pow(x3, 2)) + 1);
+                          Real gamma_fluid_test_111 = Gamma_udd(1, 1, 1) / pow((1.0 / 2.0) * M / sqrt(pow(x1, 2) + pow(x2, 2) + pow(x3, 2)) + 1, 2) + 4 * M * x1 / (pow(
+                              (1.0 / 2.0) * M / sqrt(pow(x1, 2) + pow(x2, 2) + pow(x3, 2)) + 1, 3) * pow(pow(x1, 2) + pow(x2, 2) + pow(x3, 2), 3.0 / 2.0));
+                          Real gamma_fluid_test_112 = Gamma_udd(1, 1, 2) / pow((1.0 / 2.0) * M / sqrt(pow(x1, 2) + pow(x2, 2) + pow(x3, 2)) + 1, 2) + 4 * M * x2 / (pow(
+                              (1.0 / 2.0) * M / sqrt(pow(x1, 2) + pow(x2, 2) + pow(x3, 2)) + 1, 3) * pow(pow(x1, 2) + pow(x2, 2) + pow(x3, 2), 3.0 / 2.0));
+                          Real gamma_fluid_test_113 = Gamma_udd(1, 1, 3) / pow((1.0 / 2.0) * M / sqrt(pow(x1, 2) + pow(x2, 2) + pow(x3, 2)) + 1, 2) + 4 * M * x3 / (pow(
+                              (1.0 / 2.0) * M / sqrt(pow(x1, 2) + pow(x2, 2) + pow(x3, 2)) + 1, 3) * pow(pow(x1, 2) + pow(x2, 2) + pow(x3, 2), 3.0 / 2.0));
+                          Real gamma_fluid_test_120 = Gamma_udd(1, 2, 0) * ((1.0 / 2.0) * M / sqrt(pow(x1, 2) + pow(x2, 2) + pow(x3, 2)) + 1) / (-1.0 / 2.0 * M / sqrt(
+                              pow(x1, 2) + pow(x2, 2) + pow(x3, 2)) + 1);
+                          Real gamma_fluid_test_121 = Gamma_udd(1, 2, 1) / pow((1.0 / 2.0) * M / sqrt(pow(x1, 2) + pow(x2, 2) + pow(x3, 2)) + 1, 2);
+                          Real gamma_fluid_test_122 = Gamma_udd(1, 2, 2) / pow((1.0 / 2.0) * M / sqrt(pow(x1, 2) + pow(x2, 2) + pow(x3, 2)) + 1, 2);
+                          Real gamma_fluid_test_123 = Gamma_udd(1, 2, 3) / pow((1.0 / 2.0) * M / sqrt(pow(x1, 2) + pow(x2, 2) + pow(x3, 2)) + 1, 2);
+                          Real gamma_fluid_test_130 = Gamma_udd(1, 3, 0) * ((1.0 / 2.0) * M / sqrt(pow(x1, 2) + pow(x2, 2) + pow(x3, 2)) + 1) / (-1.0 / 2.0 * M / sqrt(
+                              pow(x1, 2) + pow(x2, 2) + pow(x3, 2)) + 1);
+                          Real gamma_fluid_test_131 = Gamma_udd(1, 3, 1) / pow((1.0 / 2.0) * M / sqrt(pow(x1, 2) + pow(x2, 2) + pow(x3, 2)) + 1, 2);
+                          Real gamma_fluid_test_132 = Gamma_udd(1, 3, 2) / pow((1.0 / 2.0) * M / sqrt(pow(x1, 2) + pow(x2, 2) + pow(x3, 2)) + 1, 2);
+                          Real gamma_fluid_test_133 = Gamma_udd(1, 3, 3) / pow((1.0 / 2.0) * M / sqrt(pow(x1, 2) + pow(x2, 2) + pow(x3, 2)) + 1, 2);
+                          Real gamma_fluid_test_200 = Gamma_udd(2, 0, 0) * pow((1.0 / 2.0) * M / sqrt(pow(x1, 2) + pow(x2, 2) + pow(x3, 2)) + 1, 4) / pow(
+                              -1.0 / 2.0 * M / sqrt(pow(x1, 2) + pow(x2, 2) + pow(x3, 2)) + 1, 2);
+                          Real gamma_fluid_test_201 = Gamma_udd(2, 0, 1) * ((1.0 / 2.0) * M / sqrt(pow(x1, 2) + pow(x2, 2) + pow(x3, 2)) + 1) / (-1.0 / 2.0 * M / sqrt(
+                              pow(x1, 2) + pow(x2, 2) + pow(x3, 2)) + 1);
+                          Real gamma_fluid_test_202 = Gamma_udd(2, 0, 2) * ((1.0 / 2.0) * M / sqrt(pow(x1, 2) + pow(x2, 2) + pow(x3, 2)) + 1) / (-1.0 / 2.0 * M / sqrt(
+                              pow(x1, 2) + pow(x2, 2) + pow(x3, 2)) + 1);
+                          Real gamma_fluid_test_203 = Gamma_udd(2, 0, 3) * ((1.0 / 2.0) * M / sqrt(pow(x1, 2) + pow(x2, 2) + pow(x3, 2)) + 1) / (-1.0 / 2.0 * M / sqrt(
+                              pow(x1, 2) + pow(x2, 2) + pow(x3, 2)) + 1);
+                          Real gamma_fluid_test_210 = Gamma_udd(2, 1, 0) * ((1.0 / 2.0) * M / sqrt(pow(x1, 2) + pow(x2, 2) + pow(x3, 2)) + 1) / (-1.0 / 2.0 * M / sqrt(
+                              pow(x1, 2) + pow(x2, 2) + pow(x3, 2)) + 1);
+                          Real gamma_fluid_test_211 = Gamma_udd(2, 1, 1) / pow((1.0 / 2.0) * M / sqrt(pow(x1, 2) + pow(x2, 2) + pow(x3, 2)) + 1, 2);
+                          Real gamma_fluid_test_212 = Gamma_udd(2, 1, 2) / pow((1.0 / 2.0) * M / sqrt(pow(x1, 2) + pow(x2, 2) + pow(x3, 2)) + 1, 2);
+                          Real gamma_fluid_test_213 = Gamma_udd(2, 1, 3) / pow((1.0 / 2.0) * M / sqrt(pow(x1, 2) + pow(x2, 2) + pow(x3, 2)) + 1, 2);
+                          Real gamma_fluid_test_220 = Gamma_udd(2, 2, 0) * ((1.0 / 2.0) * M / sqrt(pow(x1, 2) + pow(x2, 2) + pow(x3, 2)) + 1) / (-1.0 / 2.0 * M / sqrt(
+                              pow(x1, 2) + pow(x2, 2) + pow(x3, 2)) + 1);
+                          Real gamma_fluid_test_221 = Gamma_udd(2, 2, 1) / pow((1.0 / 2.0) * M / sqrt(pow(x1, 2) + pow(x2, 2) + pow(x3, 2)) + 1, 2) + 4 * M * x1 / (pow(
+                              (1.0 / 2.0) * M / sqrt(pow(x1, 2) + pow(x2, 2) + pow(x3, 2)) + 1, 3) * pow(pow(x1, 2) + pow(x2, 2) + pow(x3, 2), 3.0 / 2.0));
+                          Real gamma_fluid_test_222 = Gamma_udd(2, 2, 2) / pow((1.0 / 2.0) * M / sqrt(pow(x1, 2) + pow(x2, 2) + pow(x3, 2)) + 1, 2) + 4 * M * x2 / (pow(
+                              (1.0 / 2.0) * M / sqrt(pow(x1, 2) + pow(x2, 2) + pow(x3, 2)) + 1, 3) * pow(pow(x1, 2) + pow(x2, 2) + pow(x3, 2), 3.0 / 2.0));
+                          Real gamma_fluid_test_223 = Gamma_udd(2, 2, 3) / pow((1.0 / 2.0) * M / sqrt(pow(x1, 2) + pow(x2, 2) + pow(x3, 2)) + 1, 2) + 4 * M * x3 / (pow(
+                              (1.0 / 2.0) * M / sqrt(pow(x1, 2) + pow(x2, 2) + pow(x3, 2)) + 1, 3) * pow(pow(x1, 2) + pow(x2, 2) + pow(x3, 2), 3.0 / 2.0));
+                          Real gamma_fluid_test_230 = Gamma_udd(2, 3, 0) * ((1.0 / 2.0) * M / sqrt(pow(x1, 2) + pow(x2, 2) + pow(x3, 2)) + 1) / (-1.0 / 2.0 * M / sqrt(
+                              pow(x1, 2) + pow(x2, 2) + pow(x3, 2)) + 1);
+                          Real gamma_fluid_test_231 = Gamma_udd(2, 3, 1) / pow((1.0 / 2.0) * M / sqrt(pow(x1, 2) + pow(x2, 2) + pow(x3, 2)) + 1, 2);
+                          Real gamma_fluid_test_232 = Gamma_udd(2, 3, 2) / pow((1.0 / 2.0) * M / sqrt(pow(x1, 2) + pow(x2, 2) + pow(x3, 2)) + 1, 2);
+                          Real gamma_fluid_test_233 = Gamma_udd(2, 3, 3) / pow((1.0 / 2.0) * M / sqrt(pow(x1, 2) + pow(x2, 2) + pow(x3, 2)) + 1, 2);
+                          Real gamma_fluid_test_300 = Gamma_udd(3, 0, 0) * pow((1.0 / 2.0) * M / sqrt(pow(x1, 2) + pow(x2, 2) + pow(x3, 2)) + 1, 4) / pow(
+                              -1.0 / 2.0 * M / sqrt(pow(x1, 2) + pow(x2, 2) + pow(x3, 2)) + 1, 2);
+                          Real gamma_fluid_test_301 = Gamma_udd(3, 0, 1) * ((1.0 / 2.0) * M / sqrt(pow(x1, 2) + pow(x2, 2) + pow(x3, 2)) + 1) / (-1.0 / 2.0 * M / sqrt(
+                              pow(x1, 2) + pow(x2, 2) + pow(x3, 2)) + 1);
+                          Real gamma_fluid_test_302 = Gamma_udd(3, 0, 2) * ((1.0 / 2.0) * M / sqrt(pow(x1, 2) + pow(x2, 2) + pow(x3, 2)) + 1) / (-1.0 / 2.0 * M / sqrt(
+                              pow(x1, 2) + pow(x2, 2) + pow(x3, 2)) + 1);
+                          Real gamma_fluid_test_303 = Gamma_udd(3, 0, 3) * ((1.0 / 2.0) * M / sqrt(pow(x1, 2) + pow(x2, 2) + pow(x3, 2)) + 1) / (-1.0 / 2.0 * M / sqrt(
+                              pow(x1, 2) + pow(x2, 2) + pow(x3, 2)) + 1);
+                          Real gamma_fluid_test_310 = Gamma_udd(3, 1, 0) * ((1.0 / 2.0) * M / sqrt(pow(x1, 2) + pow(x2, 2) + pow(x3, 2)) + 1) / (-1.0 / 2.0 * M / sqrt(
+                              pow(x1, 2) + pow(x2, 2) + pow(x3, 2)) + 1);
+                          Real gamma_fluid_test_311 = Gamma_udd(3, 1, 1) / pow((1.0 / 2.0) * M / sqrt(pow(x1, 2) + pow(x2, 2) + pow(x3, 2)) + 1, 2);
+                          Real gamma_fluid_test_312 = Gamma_udd(3, 1, 2) / pow((1.0 / 2.0) * M / sqrt(pow(x1, 2) + pow(x2, 2) + pow(x3, 2)) + 1, 2);
+                          Real gamma_fluid_test_313 = Gamma_udd(3, 1, 3) / pow((1.0 / 2.0) * M / sqrt(pow(x1, 2) + pow(x2, 2) + pow(x3, 2)) + 1, 2);
+                          Real gamma_fluid_test_320 = Gamma_udd(3, 2, 0) * ((1.0 / 2.0) * M / sqrt(pow(x1, 2) + pow(x2, 2) + pow(x3, 2)) + 1) / (-1.0 / 2.0 * M / sqrt(
+                              pow(x1, 2) + pow(x2, 2) + pow(x3, 2)) + 1);
+                          Real gamma_fluid_test_321 = Gamma_udd(3, 2, 1) / pow((1.0 / 2.0) * M / sqrt(pow(x1, 2) + pow(x2, 2) + pow(x3, 2)) + 1, 2);
+                          Real gamma_fluid_test_322 = Gamma_udd(3, 2, 2) / pow((1.0 / 2.0) * M / sqrt(pow(x1, 2) + pow(x2, 2) + pow(x3, 2)) + 1, 2);
+                          Real gamma_fluid_test_323 = Gamma_udd(3, 2, 3) / pow((1.0 / 2.0) * M / sqrt(pow(x1, 2) + pow(x2, 2) + pow(x3, 2)) + 1, 2);
+                          Real gamma_fluid_test_330 = Gamma_udd(3, 3, 0) * ((1.0 / 2.0) * M / sqrt(pow(x1, 2) + pow(x2, 2) + pow(x3, 2)) + 1) / (-1.0 / 2.0 * M / sqrt(
+                              pow(x1, 2) + pow(x2, 2) + pow(x3, 2)) + 1);
+                          Real gamma_fluid_test_331 = Gamma_udd(3, 3, 1) / pow((1.0 / 2.0) * M / sqrt(pow(x1, 2) + pow(x2, 2) + pow(x3, 2)) + 1, 2) + 4 * M * x1 / (pow(
+                              (1.0 / 2.0) * M / sqrt(pow(x1, 2) + pow(x2, 2) + pow(x3, 2)) + 1, 3) * pow(pow(x1, 2) + pow(x2, 2) + pow(x3, 2), 3.0 / 2.0));
+                          Real gamma_fluid_test_332 = Gamma_udd(3, 3, 2) / pow((1.0 / 2.0) * M / sqrt(pow(x1, 2) + pow(x2, 2) + pow(x3, 2)) + 1, 2) + 4 * M * x2 / (pow(
+                              (1.0 / 2.0) * M / sqrt(pow(x1, 2) + pow(x2, 2) + pow(x3, 2)) + 1, 3) * pow(pow(x1, 2) + pow(x2, 2) + pow(x3, 2), 3.0 / 2.0));
+                          Real gamma_fluid_test_333 = Gamma_udd(3, 3, 3) / pow((1.0 / 2.0) * M / sqrt(pow(x1, 2) + pow(x2, 2) + pow(x3, 2)) + 1, 2) + 4 * M * x3 / (pow(
+                              (1.0 / 2.0) * M / sqrt(pow(x1, 2) + pow(x2, 2) + pow(x3, 2)) + 1, 3) * pow(pow(x1, 2) + pow(x2, 2) + pow(x3, 2), 3.0 / 2.0));
+
+                          std::cout << "Ricci rotation 000 : " << Gamma_fluid_udd(0, 0, 0) << " " << gamma_fluid_test_000 << std::endl;
+                          std::cout << "Ricci rotation 001 : " << Gamma_fluid_udd(0, 0, 1) << " " << gamma_fluid_test_001 << std::endl;
+                          std::cout << "Ricci rotation 002 : " << Gamma_fluid_udd(0, 0, 2) << " " << gamma_fluid_test_002 << std::endl;
+                          std::cout << "Ricci rotation 003 : " << Gamma_fluid_udd(0, 0, 3) << " " << gamma_fluid_test_003 << std::endl;
+                          std::cout << "Ricci rotation 010 : " << Gamma_fluid_udd(0, 1, 0) << " " << gamma_fluid_test_010 << std::endl;
+                          std::cout << "Ricci rotation 011 : " << Gamma_fluid_udd(0, 1, 1) << " " << gamma_fluid_test_011 << std::endl;
+                          std::cout << "Ricci rotation 012 : " << Gamma_fluid_udd(0, 1, 2) << " " << gamma_fluid_test_012 << std::endl;
+                          std::cout << "Ricci rotation 013 : " << Gamma_fluid_udd(0, 1, 3) << " " << gamma_fluid_test_013 << std::endl;
+                          std::cout << "Ricci rotation 020 : " << Gamma_fluid_udd(0, 2, 0) << " " << gamma_fluid_test_020 << std::endl;
+                          std::cout << "Ricci rotation 021 : " << Gamma_fluid_udd(0, 2, 1) << " " << gamma_fluid_test_021 << std::endl;
+                          std::cout << "Ricci rotation 022 : " << Gamma_fluid_udd(0, 2, 2) << " " << gamma_fluid_test_022 << std::endl;
+                          std::cout << "Ricci rotation 023 : " << Gamma_fluid_udd(0, 2, 3) << " " << gamma_fluid_test_023 << std::endl;
+                          std::cout << "Ricci rotation 030 : " << Gamma_fluid_udd(0, 3, 0) << " " << gamma_fluid_test_030 << std::endl;
+                          std::cout << "Ricci rotation 031 : " << Gamma_fluid_udd(0, 3, 1) << " " << gamma_fluid_test_031 << std::endl;
+                          std::cout << "Ricci rotation 032 : " << Gamma_fluid_udd(0, 3, 2) << " " << gamma_fluid_test_032 << std::endl;
+                          std::cout << "Ricci rotation 033 : " << Gamma_fluid_udd(0, 3, 3) << " " << gamma_fluid_test_033 << std::endl;
+                          std::cout << "Ricci rotation 100 : " << Gamma_fluid_udd(1, 0, 0) << " " << gamma_fluid_test_100 << std::endl;
+                          std::cout << "Ricci rotation 101 : " << Gamma_fluid_udd(1, 0, 1) << " " << gamma_fluid_test_101 << std::endl;
+                          std::cout << "Ricci rotation 102 : " << Gamma_fluid_udd(1, 0, 2) << " " << gamma_fluid_test_102 << std::endl;
+                          std::cout << "Ricci rotation 103 : " << Gamma_fluid_udd(1, 0, 3) << " " << gamma_fluid_test_103 << std::endl;
+                          std::cout << "Ricci rotation 110 : " << Gamma_fluid_udd(1, 1, 0) << " " << gamma_fluid_test_110 << std::endl;
+                          std::cout << "Ricci rotation 111 : " << Gamma_fluid_udd(1, 1, 1) << " " << gamma_fluid_test_111 << std::endl;
+                          std::cout << "Ricci rotation 112 : " << Gamma_fluid_udd(1, 1, 2) << " " << gamma_fluid_test_112 << std::endl;
+                          std::cout << "Ricci rotation 113 : " << Gamma_fluid_udd(1, 1, 3) << " " << gamma_fluid_test_113 << std::endl;
+                          std::cout << "Ricci rotation 120 : " << Gamma_fluid_udd(1, 2, 0) << " " << gamma_fluid_test_120 << std::endl;
+                          std::cout << "Ricci rotation 121 : " << Gamma_fluid_udd(1, 2, 1) << " " << gamma_fluid_test_121 << std::endl;
+                          std::cout << "Ricci rotation 122 : " << Gamma_fluid_udd(1, 2, 2) << " " << gamma_fluid_test_122 << std::endl;
+                          std::cout << "Ricci rotation 123 : " << Gamma_fluid_udd(1, 2, 3) << " " << gamma_fluid_test_123 << std::endl;
+                          std::cout << "Ricci rotation 130 : " << Gamma_fluid_udd(1, 3, 0) << " " << gamma_fluid_test_130 << std::endl;
+                          std::cout << "Ricci rotation 131 : " << Gamma_fluid_udd(1, 3, 1) << " " << gamma_fluid_test_131 << std::endl;
+                          std::cout << "Ricci rotation 132 : " << Gamma_fluid_udd(1, 3, 2) << " " << gamma_fluid_test_132 << std::endl;
+                          std::cout << "Ricci rotation 133 : " << Gamma_fluid_udd(1, 3, 3) << " " << gamma_fluid_test_133 << std::endl;
+                          std::cout << "Ricci rotation 200 : " << Gamma_fluid_udd(2, 0, 0) << " " << gamma_fluid_test_200 << std::endl;
+                          std::cout << "Ricci rotation 201 : " << Gamma_fluid_udd(2, 0, 1) << " " << gamma_fluid_test_201 << std::endl;
+                          std::cout << "Ricci rotation 202 : " << Gamma_fluid_udd(2, 0, 2) << " " << gamma_fluid_test_202 << std::endl;
+                          std::cout << "Ricci rotation 203 : " << Gamma_fluid_udd(2, 0, 3) << " " << gamma_fluid_test_203 << std::endl;
+                          std::cout << "Ricci rotation 210 : " << Gamma_fluid_udd(2, 1, 0) << " " << gamma_fluid_test_210 << std::endl;
+                          std::cout << "Ricci rotation 211 : " << Gamma_fluid_udd(2, 1, 1) << " " << gamma_fluid_test_211 << std::endl;
+                          std::cout << "Ricci rotation 212 : " << Gamma_fluid_udd(2, 1, 2) << " " << gamma_fluid_test_212 << std::endl;
+                          std::cout << "Ricci rotation 213 : " << Gamma_fluid_udd(2, 1, 3) << " " << gamma_fluid_test_213 << std::endl;
+                          std::cout << "Ricci rotation 220 : " << Gamma_fluid_udd(2, 2, 0) << " " << gamma_fluid_test_220 << std::endl;
+                          std::cout << "Ricci rotation 221 : " << Gamma_fluid_udd(2, 2, 1) << " " << gamma_fluid_test_221 << std::endl;
+                          std::cout << "Ricci rotation 222 : " << Gamma_fluid_udd(2, 2, 2) << " " << gamma_fluid_test_222 << std::endl;
+                          std::cout << "Ricci rotation 223 : " << Gamma_fluid_udd(2, 2, 3) << " " << gamma_fluid_test_223 << std::endl;
+                          std::cout << "Ricci rotation 230 : " << Gamma_fluid_udd(2, 3, 0) << " " << gamma_fluid_test_230 << std::endl;
+                          std::cout << "Ricci rotation 231 : " << Gamma_fluid_udd(2, 3, 1) << " " << gamma_fluid_test_231 << std::endl;
+                          std::cout << "Ricci rotation 232 : " << Gamma_fluid_udd(2, 3, 2) << " " << gamma_fluid_test_232 << std::endl;
+                          std::cout << "Ricci rotation 233 : " << Gamma_fluid_udd(2, 3, 3) << " " << gamma_fluid_test_233 << std::endl;
+                          std::cout << "Ricci rotation 300 : " << Gamma_fluid_udd(3, 0, 0) << " " << gamma_fluid_test_300 << std::endl;
+                          std::cout << "Ricci rotation 301 : " << Gamma_fluid_udd(3, 0, 1) << " " << gamma_fluid_test_301 << std::endl;
+                          std::cout << "Ricci rotation 302 : " << Gamma_fluid_udd(3, 0, 2) << " " << gamma_fluid_test_302 << std::endl;
+                          std::cout << "Ricci rotation 303 : " << Gamma_fluid_udd(3, 0, 3) << " " << gamma_fluid_test_303 << std::endl;
+                          std::cout << "Ricci rotation 310 : " << Gamma_fluid_udd(3, 1, 0) << " " << gamma_fluid_test_310 << std::endl;
+                          std::cout << "Ricci rotation 311 : " << Gamma_fluid_udd(3, 1, 1) << " " << gamma_fluid_test_311 << std::endl;
+                          std::cout << "Ricci rotation 312 : " << Gamma_fluid_udd(3, 1, 2) << " " << gamma_fluid_test_312 << std::endl;
+                          std::cout << "Ricci rotation 313 : " << Gamma_fluid_udd(3, 1, 3) << " " << gamma_fluid_test_313 << std::endl;
+                          std::cout << "Ricci rotation 320 : " << Gamma_fluid_udd(3, 2, 0) << " " << gamma_fluid_test_320 << std::endl;
+                          std::cout << "Ricci rotation 321 : " << Gamma_fluid_udd(3, 2, 1) << " " << gamma_fluid_test_321 << std::endl;
+                          std::cout << "Ricci rotation 322 : " << Gamma_fluid_udd(3, 2, 2) << " " << gamma_fluid_test_322 << std::endl;
+                          std::cout << "Ricci rotation 323 : " << Gamma_fluid_udd(3, 2, 3) << " " << gamma_fluid_test_323 << std::endl;
+                          std::cout << "Ricci rotation 330 : " << Gamma_fluid_udd(3, 3, 0) << " " << gamma_fluid_test_330 << std::endl;
+                          std::cout << "Ricci rotation 331 : " << Gamma_fluid_udd(3, 3, 1) << " " << gamma_fluid_test_331 << std::endl;
+                          std::cout << "Ricci rotation 332 : " << Gamma_fluid_udd(3, 3, 2) << " " << gamma_fluid_test_332 << std::endl;
+                          std::cout << "Ricci rotation 333 : " << Gamma_fluid_udd(3, 3, 3) << " " << gamma_fluid_test_333 << std::endl;
+                          exit(EXIT_FAILURE);
 
                           // Compute F Gam and G Gam matrices
                           ScrArray2D<Real> F_Gamma_AB = ScrArray2D<Real>(member.team_scratch(scr_level), num_points_, num_points_);
@@ -315,65 +494,65 @@ namespace radiationfemn
                               K += F_Gamma_AB(idx_b, idx_a) * F_Gamma_AB(idx_b, idx_a);
                           }
                           K = sqrt(K);
-                            /*
-                          // adding energy coupling terms for multi-energy case
-                          if (num_energy_bins_ > 1)
-                          {
-                              ScrArray1D<Real> energy_terms = ScrArray1D<Real>(member.team_scratch(scr_level), num_points_);
-                              par_for_inner(member, 0, num_points_ - 1, [&](const int idx)
-                              {
-                                  Real part_sum_idx = 0.;
-                                  for (int A = 0; A < num_points_; A++)
-                                  {
-                                      Real fn = f0_(m, en * num_points + A, k, j, i);
-                                      Real fnm1 = (en - 1 >= 0 && en - 1 < num_energy_bins_) ? f0_(m, (en - 1) * num_points_ + A, k, j, i) : 0.;
-                                      Real fnm2 = (en - 2 >= 0 && en - 2 < num_energy_bins_) ? f0_(m, (en - 2) * num_points_ + A, k, j, i) : 0.;
-                                      Real fnp1 = (en + 1 >= 0 && en + 1 < num_energy_bins_) ? f0_(m, (en + 1) * num_points_ + A, k, j, i) : 0.;
-                                      Real fnp2 = (en + 2 >= 0 && en + 2 < num_energy_bins_) ? f0_(m, (en + 2) * num_points_ + A, k, j, i) : 0.;
+                          /*
+                        // adding energy coupling terms for multi-energy case
+                        if (num_energy_bins_ > 1)
+                        {
+                            ScrArray1D<Real> energy_terms = ScrArray1D<Real>(member.team_scratch(scr_level), num_points_);
+                            par_for_inner(member, 0, num_points_ - 1, [&](const int idx)
+                            {
+                                Real part_sum_idx = 0.;
+                                for (int A = 0; A < num_points_; A++)
+                                {
+                                    Real fn = f0_(m, en * num_points + A, k, j, i);
+                                    Real fnm1 = (en - 1 >= 0 && en - 1 < num_energy_bins_) ? f0_(m, (en - 1) * num_points_ + A, k, j, i) : 0.;
+                                    Real fnm2 = (en - 2 >= 0 && en - 2 < num_energy_bins_) ? f0_(m, (en - 2) * num_points_ + A, k, j, i) : 0.;
+                                    Real fnp1 = (en + 1 >= 0 && en + 1 < num_energy_bins_) ? f0_(m, (en + 1) * num_points_ + A, k, j, i) : 0.;
+                                    Real fnp2 = (en + 2 >= 0 && en + 2 < num_energy_bins_) ? f0_(m, (en + 2) * num_points_ + A, k, j, i) : 0.;
 
-                                      // {F^A} for n and n+1 th bin
-                                      Real f_term1_np1 = 0.5 * (fnp1 + fn);
-                                      Real f_term1_n = 0.5 * (fn + fnm1);
+                                    // {F^A} for n and n+1 th bin
+                                    Real f_term1_np1 = 0.5 * (fnp1 + fn);
+                                    Real f_term1_n = 0.5 * (fn + fnm1);
 
-                                      // [[F^A]] for n and n+1 th bin
-                                      Real f_term2_np1 = fn - fnp1;
-                                      Real f_term2_n = (fnm1 - fn);
+                                    // [[F^A]] for n and n+1 th bin
+                                    Real f_term2_np1 = fn - fnp1;
+                                    Real f_term2_n = (fnm1 - fn);
 
-                                      // width of energy bin (uniform grid)
-                                      Real delta_energy = energy_grid_(1) - energy_grid_(0);
+                                    // width of energy bin (uniform grid)
+                                    Real delta_energy = energy_grid_(1) - energy_grid_(0);
 
-                                      Real Dmfn = (fn - fnm1) / delta_energy;
-                                      Real Dpfn = (fnp1 - fn) / delta_energy;
-                                      Real Dfn = (fnp1 - fnm1) / (2. * delta_energy);
+                                    Real Dmfn = (fn - fnm1) / delta_energy;
+                                    Real Dpfn = (fnp1 - fn) / delta_energy;
+                                    Real Dfn = (fnp1 - fnm1) / (2. * delta_energy);
 
-                                      Real Dmfnm1 = (fnm1 - fnm2) / delta_energy;
-                                      Real Dpfnm1 = (fn - fnm1) / delta_energy;
-                                      Real Dfnm1 = (fn - fnm2) / (2. * delta_energy);
+                                    Real Dmfnm1 = (fnm1 - fnm2) / delta_energy;
+                                    Real Dpfnm1 = (fn - fnm1) / delta_energy;
+                                    Real Dfnm1 = (fn - fnm2) / (2. * delta_energy);
 
-                                      Real Dmfnp1 = (fnp1 - fn) / delta_energy;
-                                      Real Dpfnp1 = (fnp2 - fnp1) / delta_energy;
-                                      Real Dfnp1 = (fnp2 - fn) / (2. * delta_energy);
+                                    Real Dmfnp1 = (fnp1 - fn) / delta_energy;
+                                    Real Dpfnp1 = (fnp2 - fnp1) / delta_energy;
+                                    Real Dfnp1 = (fnp2 - fn) / (2. * delta_energy);
 
-                                      Real theta_np12 = (Dfn < energy_par_ * delta_energy || Dmfn * Dpfn > 0.) ? 0. : 1.;
-                                      Real theta_nm12 = (Dfnm1 < energy_par_ * delta_energy || Dmfnm1 * Dpfnm1 > 0.) ? 0. : 1.;
-                                      Real theta_np32 = (Dfnp1 < energy_par_ * delta_energy || Dmfnp1 * Dpfnp1 > 0.) ? 0. : 1.;
+                                    Real theta_np12 = (Dfn < energy_par_ * delta_energy || Dmfn * Dpfn > 0.) ? 0. : 1.;
+                                    Real theta_nm12 = (Dfnm1 < energy_par_ * delta_energy || Dmfnm1 * Dpfnm1 > 0.) ? 0. : 1.;
+                                    Real theta_np32 = (Dfnp1 < energy_par_ * delta_energy || Dmfnp1 * Dpfnp1 > 0.) ? 0. : 1.;
 
-                                      Real theta_n = (theta_nm12 > theta_np12) ? theta_nm12 : theta_np12;
-                                      Real theta_np1 = (theta_np12 > theta_np32) ? theta_np12 : theta_np32;
+                                    Real theta_n = (theta_nm12 > theta_np12) ? theta_nm12 : theta_np12;
+                                    Real theta_np1 = (theta_np12 > theta_np32) ? theta_np12 : theta_np32;
 
-                                      part_sum_idx +=
-                                      (energy_grid(en + 1) * energy_grid(en + 1) * energy_grid(en + 1) * (F_Gamma_AB(A, idx) * f_term1_np1 - theta_np1 * K * f_term2_np1 / 2.)
-                                          - energy_grid(en) * energy_grid(en) * energy_grid(en) * (F_Gamma_AB(A, idx) * f_term1_n - theta_n * K * f_term2_n / 2.));
-                                  }
-                                  energy_terms(idx) = part_sum_idx;
-                              });
-                              member.team_barrier();
+                                    part_sum_idx +=
+                                    (energy_grid(en + 1) * energy_grid(en + 1) * energy_grid(en + 1) * (F_Gamma_AB(A, idx) * f_term1_np1 - theta_np1 * K * f_term2_np1 / 2.)
+                                        - energy_grid(en) * energy_grid(en) * energy_grid(en) * (F_Gamma_AB(A, idx) * f_term1_n - theta_n * K * f_term2_n / 2.));
+                                }
+                                energy_terms(idx) = part_sum_idx;
+                            });
+                            member.team_barrier();
 
-                              for (int idx = 0; idx < num_points_; idx++)
-                              {
-                                  g_rhs_scratch(idx) += energy_terms(idx);
-                              }
-                          } */
+                            for (int idx = 0; idx < num_points_; idx++)
+                            {
+                                g_rhs_scratch(idx) += energy_terms(idx);
+                            }
+                        } */
                           // matrix inverse
                           ScrArray2D<Real> Q_matrix = ScrArray2D<Real>(member.team_scratch(scr_level), num_points_, num_points_);
                           ScrArray2D<Real> Qinv_matrix = ScrArray2D<Real>(member.team_scratch(scr_level), num_points_, num_points_);
