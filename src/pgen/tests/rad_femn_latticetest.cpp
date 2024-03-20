@@ -58,6 +58,7 @@ void ProblemGenerator::RadiationFEMNLatticetest(ParameterInput *pin, const bool 
   int ksg = (indcs.nx3 > 1) ? ks - indcs.ng : ks;
   int keg = (indcs.nx3 > 1) ? ke + indcs.ng : ke;
   int nmb = pmbp->nmb_thispack;
+  auto &u_mu_ = pmbp->pradfemn->u_mu;
   adm::ADM::ADM_vars &adm = pmbp->padm->adm;
 
   if (pmbp->pradfemn->num_energy_bins != 1) {
@@ -106,17 +107,21 @@ void ProblemGenerator::RadiationFEMNLatticetest(ParameterInput *pin, const bool 
           });
 
   // set metric to minkowski
-  par_for("pgen_linetest_minkowski_initialize", DevExeSpace(), 0, nmb - 1, ksg, keg, jsg, jeg, isg, ieg,
+  par_for("pgen_linetest_metric_initialize", DevExeSpace(), 0, nmb - 1, ksg, keg, jsg, jeg, isg, ieg,
           KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
-
             for (int a = 0; a < 3; ++a)
               for (int b = a; b < 3; ++b) {
                 adm.g_dd(m, a, b, k, j, i) = (a == b ? 1. : 0.);
               }
 
-            adm.alpha(m, k, j, i) = 1.;
-            adm.psi4(m, k, j, i) = 1.;
+            adm.psi4(m, k, j, i) = 1.; // adm.psi4
 
+            adm.alpha(m, k, j, i) = 1.;
+
+            u_mu_(m, 0, k, j, i) = 1.;
+            u_mu_(m, 1, k, j, i) = 0.;
+            u_mu_(m, 2, k, j, i) = 0.;
+            u_mu_(m, 3, k, j, i) = 0.;
           });
 
   return;
