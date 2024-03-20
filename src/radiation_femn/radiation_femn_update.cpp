@@ -270,7 +270,7 @@ TaskStatus RadiationFEMN::ExpRKUpdate(Driver *pdriver, int stage) {
                     int idx_united = IndicesUnited(nu, en, idx_a, num_species_, num_energy_bins_, num_points_);
 
                     g_rhs_scratch(idx_b) -=
-                        (F_Gamma_AB(idx_b, idx_a) + G_Gamma_AB(idx_b, idx_a)) * (gam0 * f0_(m, idx_united, k, j, i) + gam1 * f1_(m, idx_united, k, j, i));
+                        sqrt_det_g_ijk * (F_Gamma_AB(idx_a, idx_b) + G_Gamma_AB(idx_a, idx_b)) * (gam0 * f0_(m, idx_united, k, j, i) + gam1 * f1_(m, idx_united, k, j, i));
 
                     K += F_Gamma_AB(idx_b, idx_a) * F_Gamma_AB(idx_b, idx_a);
                   }
