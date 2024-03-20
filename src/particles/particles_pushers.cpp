@@ -57,6 +57,12 @@ TaskStatus Particles::Push(Driver *pdriver, int stage) {
     case ParticlesPusher::boris:
       BorisStep(dt_, multi_d, three_d);
     break;
+    
+    case ParticlesPusher::full_gr:
+      BorisStep(dt_/2.0, multi_d, three_d);
+      GeodesicIterations(dt_, multi_d, three_d);
+      BorisStep(dt_/2.0, multi_d, three_d);
+    break;
 
     default:
     break;
@@ -71,6 +77,7 @@ TaskStatus Particles::Push(Driver *pdriver, int stage) {
 KOKKOS_INLINE_FUNCTION
 void Particles::BorisStep( const Real dt, const bool multi_d, const bool three_d ){
 	
+	auto &npart = nprtcl_thispack;
 	auto &pi = prtcl_idata;
 	auto &pr = prtcl_rdata;
 	auto &b0_ = pmy_pack->pmhd->b0;
@@ -89,7 +96,7 @@ void Particles::BorisStep( const Real dt, const bool multi_d, const bool three_d
 	int nmb1 = pmy_pack -> nmb_thispack-1;
 
       // First half-step in space
-      par_for("part_boris",DevExeSpace(),0,(nprtcl_thispack-1),
+      par_for("part_boris",DevExeSpace(),0,(npart-1),
       KOKKOS_LAMBDA(const int p) {
       
 	Real up[3] = {pr(IPVX,p), pr(IPVY,p), pr(IPVZ,p)};
@@ -131,7 +138,7 @@ void Particles::BorisStep( const Real dt, const bool multi_d, const bool three_d
         int ip = (pr(IPX,p) - mbsize.d_view(m).x1min)/mbsize.d_view(m).dx1 + is;
 	int jp = (pr(IPY,p) - mbsize.d_view(m).x2min)/mbsize.d_view(m).dx2 + js;
 	int kp = (pr(IPZ,p) - mbsize.d_view(m).x3min)/mbsize.d_view(m).dx3 + ks;
-	/***/
+	/***
 	if ( (ip*jp*kp < 0.0) || (ip > ie) || (jp > je) || (kp > ke) || (m > nmb1)){
 	std::cout << global_variable::my_rank <<std::endl;
 	std::cout << "gids " << gids << " " << pi(PGID,p) << std::endl; 
@@ -141,7 +148,7 @@ void Particles::BorisStep( const Real dt, const bool multi_d, const bool three_d
 	std::cout << "Idx j "  << pi(PTAG,p) << " "<< js << " " << jp << " " << je << std::endl; 
 	std::cout << "Idx k "  << pi(PTAG,p) << " "<< ks << " " << kp << " " << ke << std::endl; 
 	}
-	/***/
+	***/
 	Real &x1min = mbsize.d_view(m).x1min;
 	Real &x2min = mbsize.d_view(m).x2min;
 	Real &x3min = mbsize.d_view(m).x3min;
@@ -228,6 +235,117 @@ void Particles::BorisStep( const Real dt, const bool multi_d, const bool three_d
         if (multi_d) { pr(IPY,p) = x2 + dt/(2.0)*pr(IPVY,p); }
         if (three_d) { pr(IPZ,p) = x3 + dt/(2.0)*pr(IPVZ,p); }
         //std::cout << "pp1 " << p << " " << pr(IPX,p)<< " " << pr(IPY,p)<< " " << pr(IPZ,p)<<//std::endl;
+      });
+      return;
+}
+
+//Provide dt as input parameter in order to be able to use this function
+//also for half-steps
+//Largely implemented following Bacchini et al. 2020 (https://doi.org/10.3847/1538-4365/abb604)
+KOKKOS_INLINE_FUNCTION
+void Particles::GeodesicIterations( const Real dt, const bool multi_d, const bool three_d ){
+	auto &pi = prtcl_idata;
+	auto &pr = prtcl_rdata;
+	bool is_minkowski = pmy_pack->pcoord->coord_data.is_minkowski;
+	Real spin = pmy_pack->pcoord->coord_data.bh_spin;
+
+      // First attempt: not iterative, approximate
+      par_for("part_fullgr",DevExeSpace(),0,(nprtcl_thispack-1),
+      KOKKOS_LAMBDA(const int p) {
+
+        // Iterate per particle such that those that converge quicker don't go through as many iterations
+	int n_iter = 0;
+	Real rest[3] = {1.0,1.0,1.0};
+	Real x_curr[3] = {pr(IPX,p), pr(IPY,p), pr(IPZ,p)}; 
+	// u0 depends on nature of the particles (massive/massless)
+	Real u_curr[4] = {1.0, pr(IPVX,p), pr(IPVY,p), pr(IPVZ,p)}; //c = 1??
+	Real glower[4][4], gupper[4][4]; // Metric components
+	Real dg_dx1[4][4], dg_dx2[4][4], dg_dx3[4][4]; // Metric derivatives
+	Real T1, T2, T3, T4_1, T4_2, T4_3; // Auxiliary variables
+	Real accel[4] = {0.0, 0.0, 0.0, 0.0}; //c = 1??
+	Real alpha;
+
+//	while( n_iter < max_iter ){
+
+	// Get metric components at new location x1,x2,x3
+	ComputeMetricAndInverse(x_curr[0],x_curr[1],x_curr[2], is_minkowski, spin, glower, gupper); 
+	ComputeMetricDerivatives(x_curr[0],x_curr[1],x_curr[2], is_minkowski, spin, dg_dx1, dg_dx2, dg_dx3); 
+	alpha = sqrt(-1.0/gupper[0][0]);
+	for (int i1 = 0; i1 < 4; ++i1){
+		u_curr[i1] *= alpha;
+	}
+	T1, T2, T3 = 0.0;
+	    	       // Following ex_currression technically has a factor 2 before each term,
+	    	       // but this gets multiplied by 1/2 in the end, so just skip it.
+	    	       // Also, with static metric terms with g_0i don't contribute.
+	T1 += dg_dx1[0][1]*u_curr[0]*u_curr[1] + dg_dx2[0][1]*u_curr[0]*u_curr[2] + dg_dx3[0][1]*u_curr[3]*u_curr[0];
+	T1 += dg_dx1[1][1]*u_curr[1]*u_curr[1] + dg_dx2[2][1]*u_curr[2]*u_curr[2] + dg_dx3[3][1]*u_curr[3]*u_curr[3];
+	T1 += (dg_dx1[2][1] + dg_dx2[1][1])*u_curr[1]*u_curr[2] 
+	     + (dg_dx1[3][1] + dg_dx3[1][1])*u_curr[1]*u_curr[3] + (dg_dx2[3][1] + dg_dx3[2][1])*u_curr[2]*u_curr[3];
+
+	T2 += dg_dx1[0][2]*u_curr[0]*u_curr[1] + dg_dx2[0][2]*u_curr[0]*u_curr[2] + dg_dx3[0][2]*u_curr[3]*u_curr[0];
+	T2 += dg_dx1[1][2]*u_curr[1]*u_curr[1] + dg_dx2[2][2]*u_curr[2]*u_curr[2] + dg_dx3[3][2]*u_curr[3]*u_curr[3];
+	T2 += (dg_dx1[2][2] + dg_dx2[1][2])*u_curr[1]*u_curr[2] 
+	    + (dg_dx1[3][2] + dg_dx3[1][2])*u_curr[1]*u_curr[3] + (dg_dx2[3][2] + dg_dx3[2][2])*u_curr[2]*u_curr[3];
+
+	T3 += dg_dx1[0][3]*u_curr[0]*u_curr[1] + dg_dx2[0][3]*u_curr[0]*u_curr[2] + dg_dx3[0][3]*u_curr[3]*u_curr[0];
+	T3 += dg_dx1[1][3]*u_curr[1]*u_curr[1] + dg_dx2[2][3]*u_curr[2]*u_curr[2] + dg_dx3[3][3]*u_curr[3]*u_curr[3];
+	T3 += (dg_dx1[2][3] + dg_dx2[1][3])*u_curr[1]*u_curr[2] 
+	   + (dg_dx1[3][3] + dg_dx3[1][3])*u_curr[1]*u_curr[3] + (dg_dx2[3][3] + dg_dx3[2][3])*u_curr[2]*u_curr[3];
+
+	T4_1, T4_2, T4_3 = 0.0;
+	for ( int i = 0; i<4; ++i){
+	    for (int j = 0; j<4; ++j){
+	    	T4_1 += dg_dx1[i][j]*u_curr[i]*u_curr[j];
+	    	T4_2 += dg_dx2[i][j]*u_curr[i]*u_curr[j];
+	    	T4_3 += dg_dx3[i][j]*u_curr[i]*u_curr[j];
+	    }
+	}
+	        
+	/***/
+	accel[0] = (T4_1 - T1)*gupper[0][1] 
+	        + (T4_2 - T2)*gupper[0][2] 
+	        + (T4_3 - T3)*gupper[0][3];
+	/***/
+	accel[1] = (T4_1 - T1)*gupper[1][1] 
+	        + (T4_2 - T2)*gupper[1][2] 
+	        + (T4_3 - T3)*gupper[1][3];
+	accel[2] = (T4_1 - T1)*gupper[2][1] 
+	        + (T4_2 - T2)*gupper[2][2] 
+	        + (T4_3 - T3)*gupper[2][3];
+	accel[3] = (T4_1 - T1)*gupper[3][1] 
+		+ (T4_2 - T2)*gupper[3][2] 
+		+ (T4_3 - T3)*gupper[3][3];
+	
+	u_curr[1] += dt*accel[1]; 
+        if (multi_d) { u_curr[2] += dt*accel[2]; }
+        if (three_d) { u_curr[3] += dt*accel[3]; }
+	x_curr[0] += dt/2.0*u_curr[1];
+        if (multi_d) { x_curr[1] += dt/2.0*u_curr[2]; }
+        if (three_d) { x_curr[2] += dt/2.0*u_curr[3]; }
+	
+        //std::cout << "pp1 " << p << " " << pr(IPX,p)<< " " << pr(IPY,p)<< " " << pr(IPZ,p)<<//std::endl;
+	rest[0] = x_curr[0] - pr(IPX, p) - dt/2.0*u_curr[1];
+	rest[1] = x_curr[1] - pr(IPY, p) - dt/2.0*u_curr[2];
+	rest[2] = x_curr[2] - pr(IPZ, p) - dt/2.0*u_curr[3];
+	++n_iter;
+//	if ( sqrt(SQR(rest[0]) + SQR(rest[1]) + SQR(rest[2])) > iter_tolerance ){
+		//Compute values for next iteration with gradient descent
+
+//	} else {
+		//Stop iterations
+//		break;
+//	}
+//	}
+//	if (n_iter == (max_iter - 1 )) { std::cout << "Limit of implicit iterations reached on particle " << pi(PTAG,p) << " on rank " << global_variable::my_rank << std::endl; }
+
+	// Done with iterations, update ``true'' values
+	pr(IPVX,p) = u_curr[1]/alpha;
+        if (multi_d) { pr(IPVY,p) = u_curr[2]/alpha; }
+	if (three_d) { pr(IPVZ,p) = u_curr[3]/alpha; }
+	pr(IPX,p) += dt*pr(IPVX,p);
+        if (multi_d) { pr(IPY,p) += dt*pr(IPVY,p); }
+        if (three_d) { pr(IPZ,p) += dt*pr(IPVZ,p); }
       });
       return;
 }

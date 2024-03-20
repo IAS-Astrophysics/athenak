@@ -24,7 +24,7 @@ class MHD;
 class EquationOfState;
 
 // constants that enumerate ParticlesPusher options
-enum class ParticlesPusher {drift, leap_frog, lagrangian_tracer, lagrangian_mc, boris};
+enum class ParticlesPusher {drift, leap_frog, lagrangian_tracer, lagrangian_mc, boris, full_gr};
 
 // constants that enumerate ParticleTypes
 enum class ParticleType {cosmic_ray};
@@ -65,6 +65,8 @@ class Particles {
   DvceArray2D<Real> prtcl_rdata;   // real number properties each particle (x,v,etc.)
   DvceArray2D<int>  prtcl_idata;   // integer properties each particle (gid, tag, etc.)
   Real dtnew;
+  Real iter_tolerance;
+  int max_iter;
 
   ParticlesPusher pusher;
 
@@ -86,7 +88,8 @@ class Particles {
   TaskStatus ClearSend(Driver *pdriver, int stage);
   TaskStatus ClearRecv(Driver *pdriver, int stage);
 
-  void BorisStep( const Real dt, DvceArray2D<Real> &pr, const DvceArray2D<int> &pi, const bool multi_d, const bool three_d );
+  void BorisStep( const Real dt, const bool multi_d, const bool three_d );
+  void GeodesicIterations( const Real dt, const bool multi_d, const bool three_d );
  private:
   MeshBlockPack* pmy_pack;  // ptr to MeshBlockPack containing this Particles
 };

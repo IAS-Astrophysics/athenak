@@ -59,6 +59,10 @@ Particles::Particles(MeshBlockPack *ppack, ParameterInput *pin) :
     pusher = ParticlesPusher::drift;
   } else if (ppush.compare("boris") == 0) {
     pusher = ParticlesPusher::boris;
+  } else if (ppush.compare("full_gr") == 0) {
+    pusher = ParticlesPusher::full_gr;
+    max_iter = pin->GetOrAddInteger("particles", "max_iter", 10);
+    iter_tolerance = pin->GetOrAddInteger("particles", "iter_tolerance", 1.0E-7);
   } else {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
               << "Particle pusher must be specified in <particles> block" <<std::endl;
