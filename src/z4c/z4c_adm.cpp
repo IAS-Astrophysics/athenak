@@ -396,7 +396,7 @@ void Z4c::ADMConstraints(MeshBlockPack *pmbp) {
     for (int a = 0; a < 3; ++a) {
       Gamma_u_z4c(a) = adm.psi4(m,k,j,i)*Gamma_u(a);
       for (int b = 0; b < 3; ++b) {
-        Gamma_u_z4c(a) += g_uu(a,b)*dpsi4_d(b);
+        Gamma_u_z4c(a) += 0.5*g_uu(a,b)*dpsi4_d(b);
       }
     }
 
