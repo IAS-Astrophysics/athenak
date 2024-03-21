@@ -221,7 +221,7 @@ TaskStatus Z4c::EnforceAlgConstr(Driver *pdrive, int stage) {
 //! \brief
 
 TaskStatus Z4c::Z4cToADM_(Driver *pdrive, int stage) {
-  if (stage == pdrive->nexp_stages) {
+  if (pmy_pack->pdyngr != nullptr || stage == pdrive->nexp_stages) {
     Z4cToADM(pmy_pack);
   }
   return TaskStatus::complete;
