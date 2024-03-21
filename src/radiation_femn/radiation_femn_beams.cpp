@@ -74,19 +74,17 @@ TaskStatus RadiationFEMN::BeamsSourcesFEMN(Driver *pdriver, int stage) {
 
 void RadiationFEMN::InitializeBeamsSourcesFPN() {
 
-  auto &num_points_ = pmy_pack->pradfemn->num_points;
-  auto &num_beams_ = pmy_pack->pradfemn->num_beams;
   auto &beam_source_1_vals_ = pmy_pack->pradfemn->beam_source_1_vals;
   auto &beam_source_2_vals_ = pmy_pack->pradfemn->beam_source_2_vals;
 
   std::cout << "Initializing beam sources for FPN" << std::endl;
-  for (int i = 0; i < num_points_; i++) {
-    beam_source_1_vals_(i) = fpn_basis_lm(angular_grid(i, 0), angular_grid(i, 1), beam_source_1_phi, beam_source_1_theta);
+  for (int i = 0; i < num_points; i++) {
+    beam_source_1_vals_(i) = fpn_basis_lm((int)angular_grid(i, 0), (int)angular_grid(i, 1), beam_source_1_phi, beam_source_1_theta);
   }
 
-  if (num_beams_ > 1) {
-    for (int i = 0; i < num_points_; i++) {
-      beam_source_2_vals_(i) = fpn_basis_lm(angular_grid(i, 0), angular_grid(i, 1), beam_source_2_phi, beam_source_2_theta);
+  if (num_beams > 1) {
+    for (int i = 0; i < num_points; i++) {
+      beam_source_2_vals_(i) = fpn_basis_lm((int)angular_grid(i, 0), (int)angular_grid(i, 1), beam_source_2_phi, beam_source_2_theta);
     }
   }
 }
