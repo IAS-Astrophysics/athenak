@@ -106,7 +106,18 @@ TaskStatus RadiationFEMN::ExpRKUpdate(Driver *pdriver, int stage) {
                       divf_s += flx3(m, nuenangidx, k, j, i) / (2. * mbsize.d_view(m).dx3);
                     }
 
-                    g_rhs_scratch(idx) = gam0 * f0_(m, nuenangidx, k, j, i) + gam1 * f1_(m, nuenangidx, k, j, i) - beta_dt * divf_s
+                    Real fval = 0;
+                    for (int index = 0; index < num_points_; index++) {
+                      int nuenangindexa = IndicesUnited(nu, en, index, num_species_, num_energy_bins_, num_points_);
+                      Real factor = sqrt_det_g_ijk * (L_mu_muhat0_(m, 0, 0, k, j, i) * P_matrix_(0, nuenangindexa, idx)
+                                                      + L_mu_muhat0_(m, 0, 1, k, j, i) * P_matrix_(1, nuenangindexa, idx)
+                                                      + L_mu_muhat0_(m, 0, 2, k, j, i) * P_matrix_(2, nuenangindexa, idx)
+                                                      + L_mu_muhat0_(m, 0, 3, k, j, i) * P_matrix_(3, nuenangindexa, idx));
+
+                      fval += factor * (gam0 * f0_(m, nuenangindexa, k, j, i) + gam1 * f1_(m, nuenangindexa, k, j, i));
+                    }
+
+                    g_rhs_scratch(idx) = fval - beta_dt * divf_s
                                          + sqrt_det_g_ijk * beta_dt * eta_(m, k, j, i) * e_source_(idx) / Ven;
                   });
                   member.team_barrier();
@@ -346,7 +357,8 @@ TaskStatus RadiationFEMN::ExpRKUpdate(Driver *pdriver, int stage) {
                     int row = int(idx / num_points_);
                     int col = idx - row * num_points_;
                     Q_matrix(row, col) = sqrt_det_g_ijk * (L_mu_muhat0_(m, 0, 0, k, j, i) * P_matrix_(0, row, col)
-                                                           + L_mu_muhat0_(m, 0, 1, k, j, i) * P_matrix_(1, row, col) + L_mu_muhat0_(m, 0, 2, k, j, i) * P_matrix_(2, row, col)
+                                                           + L_mu_muhat0_(m, 0, 1, k, j, i) * P_matrix_(1, row, col)
+                                                           + L_mu_muhat0_(m, 0, 2, k, j, i) * P_matrix_(2, row, col)
                                                            + L_mu_muhat0_(m, 0, 3, k, j, i) * P_matrix_(3, row, col))
                                          + sqrt_det_g_ijk * beta_dt * (kappa_s_(m, k, j, i) + kappa_a_(m, k, j, i)) * (row == col) / Ven
                                          - sqrt_det_g_ijk * beta_dt * (1. / (4. * M_PI)) * kappa_s_(m, k, j, i) * S_source_(row, col) / Ven;
