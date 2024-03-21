@@ -93,13 +93,13 @@ TaskStatus RadiationFEMN::CalculateFluxes(Driver *pdriver, int stage) {
                       Real L_mu_muhat0_L = 1.5 * L_mu_muhat0_(m, 1, muhat, kk, jj, ii) - 0.5 * L_mu_muhat0_(m, 1, muhat, kk, jj, ii + 1);
                       Fminus += (0.5) * (sqrt_det_g_L * L_mu_muhat0_L) * (P_matrix_(muhat, B, A)
                           * ((1.5) * f0_scratch(A) - (0.5) * f0_scratch_p1(A) + (1.5) * f0_scratch_m1(A) - (0.5) * f0_scratch_m2(A))
-                          - Sgn(L_mu_muhat0_L) * Pmod_matrix_(muhat, B, A)
+                          + Sgn(L_mu_muhat0_L) * Pmod_matrix_(muhat, B, A)
                               * ((1.5) * f0_scratch_m1(A) - (0.5) * f0_scratch_m2(A) - (1.5) * f0_scratch(A) + (0.5) * f0_scratch_p1(A)));
 
                       Real L_mu_muhat0_R = -0.5 * L_mu_muhat0_(m, 1, muhat, kk, jj, ii) + 1.5 * L_mu_muhat0_(m, 1, muhat, kk, jj, ii + 1);
                       Fplus += (0.5) * (sqrt_det_g_R * L_mu_muhat0_R) * (P_matrix_(muhat, B, A) *
                           ((1.5) * f0_scratch_p2(A) - (0.5) * f0_scratch_p3(A) + (1.5) * f0_scratch_p1(A) - (0.5) * f0_scratch(A))
-                          - Sgn(L_mu_muhat0_R) * Pmod_matrix_(muhat, B, A) *
+                          + Sgn(L_mu_muhat0_R) * Pmod_matrix_(muhat, B, A) *
                               ((1.5) * f0_scratch_p1(A) - (0.5) * f0_scratch(A) - (1.5) * f0_scratch_p2(A) + (0.5) * f0_scratch_p3(A)));
                     }
 
@@ -163,13 +163,13 @@ TaskStatus RadiationFEMN::CalculateFluxes(Driver *pdriver, int stage) {
                         Real L_mu_muhat0_L = 1.5 * L_mu_muhat0_(m, 2, muhat, kk, jj, ii) - 0.5 * L_mu_muhat0_(m, 2, muhat, kk, jj + 1, ii);
                         Fminus += (0.5) * (sqrt_det_g_L * L_mu_muhat0_L) * (P_matrix_(muhat, B, A)
                             * ((1.5) * f0_scratch(A) - (0.5) * f0_scratch_p1(A) + (1.5) * f0_scratch_m1(A) - (0.5) * f0_scratch_m2(A))
-                            - Sgn(L_mu_muhat0_L) * Pmod_matrix_(muhat, B, A)
+                            + Sgn(L_mu_muhat0_L) * Pmod_matrix_(muhat, B, A)
                                 * ((1.5) * f0_scratch_m1(A) - (0.5) * f0_scratch_m2(A) - (1.5) * f0_scratch(A) + (0.5) * f0_scratch_p1(A)));
 
                         Real L_mu_muhat0_R = -0.5 * L_mu_muhat0_(m, 2, muhat, kk, jj, ii) + 1.5 * L_mu_muhat0_(m, 2, muhat, kk, jj + 1, ii);
                         Fplus += (0.5) * (sqrt_det_g_R * L_mu_muhat0_R) * (P_matrix_(muhat, B, A) *
                             ((1.5) * f0_scratch_p2(A) - (0.5) * f0_scratch_p3(A) + (1.5) * f0_scratch_p1(A) - (0.5) * f0_scratch(A))
-                            - Sgn(L_mu_muhat0_R) * Pmod_matrix_(muhat, B, A) *
+                            + Sgn(L_mu_muhat0_R) * Pmod_matrix_(muhat, B, A) *
                                 ((1.5) * f0_scratch_p1(A) - (0.5) * f0_scratch(A) - (1.5) * f0_scratch_p2(A) + (0.5) * f0_scratch_p3(A)));
                       }
 
@@ -238,14 +238,14 @@ TaskStatus RadiationFEMN::CalculateFluxes(Driver *pdriver, int stage) {
 
                         Fminus += (0.5) * (sqrt_det_g_L * L_mu_muhat0_L) * (P_matrix_(muhat, B, A)
                             * ((1.5) * f0_scratch(A) - (0.5) * f0_scratch_p1(A) + (1.5) * f0_scratch_m1(A) - (0.5) * f0_scratch_m2(A))
-                            - Sgn(L_mu_muhat0_L) * Pmod_matrix_(muhat, B, A)
+                            + Sgn(L_mu_muhat0_L) * Pmod_matrix_(muhat, B, A)
                                 * ((1.5) * f0_scratch_m1(A) - (0.5) * f0_scratch_m2(A) - (1.5) * f0_scratch(A) + (0.5) * f0_scratch_p1(A)));
 
                         Real L_mu_muhat0_R = -0.5 * L_mu_muhat0_(m, 3, muhat, kk, jj, ii) + 1.5 * L_mu_muhat0_(m, 3, muhat, kk + 1, jj, ii);
 
                         Fplus += (0.5) * (sqrt_det_g_R * L_mu_muhat0_R) * (P_matrix_(muhat, B, A) *
                             ((1.5) * f0_scratch_p2(A) - (0.5) * f0_scratch_p3(A) + (1.5) * f0_scratch_p1(A) - (0.5) * f0_scratch(A))
-                            - Sgn(L_mu_muhat0_R) * Pmod_matrix_(muhat, B, A) *
+                            + Sgn(L_mu_muhat0_R) * Pmod_matrix_(muhat, B, A) *
                                 ((1.5) * f0_scratch_p1(A) - (0.5) * f0_scratch(A) - (1.5) * f0_scratch_p2(A) + (0.5) * f0_scratch_p3(A)));
                       }
 

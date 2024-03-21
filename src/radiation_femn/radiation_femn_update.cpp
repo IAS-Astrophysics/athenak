@@ -117,7 +117,7 @@ TaskStatus RadiationFEMN::ExpRKUpdate(Driver *pdriver, int stage) {
                       fval += factor * (gam0 * f0_(m, nuenangindexa, k, j, i) + gam1 * f1_(m, nuenangindexa, k, j, i));
                     }
 
-                    g_rhs_scratch(idx) = fval - beta_dt * divf_s
+                    g_rhs_scratch(idx) = fval + beta_dt * divf_s
                                          + sqrt_det_g_ijk * beta_dt * eta_(m, k, j, i) * e_source_(idx) / Ven;
                   });
                   member.team_barrier();
