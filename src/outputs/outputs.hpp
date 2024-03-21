@@ -21,7 +21,7 @@
     #error NHISTORY > NREDUCTION in outputs.hpp
 #endif
 
-#define NOUTPUT_CHOICES 151
+#define NOUTPUT_CHOICES 152
 // choices for output variables used in <ouput> blocks in input file
 // TO ADD MORE CHOICES:
 //   - add more strings to array below, change NOUTPUT_CHOICES above appropriately
@@ -33,13 +33,14 @@ static const char *var_choice[NOUTPUT_CHOICES] = {
   "hydro_w_d", "hydro_w_vx", "hydro_w_vy", "hydro_w_vz", "hydro_w_e",     "hydro_w",
   "hydro_u_s", "hydro_w_s",
   // hydro derived variables
-  "hydro_wz",   "hydro_w2",
+  "hydro_wz",  "hydro_w2",
   "mhd_u_d",   "mhd_u_m1",   "mhd_u_m2",   "mhd_u_m3",   "mhd_u_e",       "mhd_u",
   "mhd_w_d",   "mhd_w_vx",   "mhd_w_vy",   "mhd_w_vz",   "mhd_w_e",       "mhd_w",
   "mhd_u_s",   "mhd_w_s",    "mhd_wz",     "mhd_w2",
   "mhd_bcc1",  "mhd_bcc2",   "mhd_bcc3",   "mhd_bcc",    "mhd_u_bcc",     "mhd_w_bcc",
   // MHD derived variables
-  "mhd_jz", "mhd_j2",  "mhd_curv", "mhd_k_jxb", "mhd_curv_perp", "mhd_bmag",  "mhd_divb",
+  "mhd_jz",    "mhd_j2",     "mhd_curv",   "mhd_k_jxb",  "mhd_curv_perp", "mhd_bmag",
+  "mhd_divb", "mhd_jcon",
   // useful for coarsened binary output
   "hydro_sgs", "mhd_sgs",
   // dynamo wavenumber scales

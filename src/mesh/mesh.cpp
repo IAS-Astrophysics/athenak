@@ -47,7 +47,8 @@ Mesh::Mesh(ParameterInput *pin) :
   strictly_periodic(true),
   nmb_packs_thisrank(1),
   nprtcl_thisrank(0),
-  nprtcl_total(0) {
+  nprtcl_total(0),
+  dtold(0.) {
   // Set physical size and number of cells in mesh (root level)
   mesh_size.x1min = pin->GetReal("mesh", "x1min");
   mesh_size.x1max = pin->GetReal("mesh", "x1max");
@@ -532,6 +533,12 @@ std::string Mesh::GetBoundaryString(BoundaryFlag input_flag) {
 // \fn Mesh::NewTimeStep()
 
 void Mesh::NewTimeStep(const Real tlim) {
+  // save old timestep
+  dtold = dt;
+  if (dt == std::numeric_limits<float>::max()) {
+    dtold = 0.;
+  }
+
   // cycle over all MeshBlocks on this rank and find minimum dt
   // Requires at least ONE of the physics modules to be defined.
   // limit increase in timestep to 2x old value

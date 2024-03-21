@@ -12,6 +12,7 @@
 //!   - z-component of current density Jz  [non-relativistic]
 //!   - magnitude of current density J^2  [non-relativistic]
 
+#include <iostream>
 #include <sstream>
 #include <string>   // std::string, to_string()
 
@@ -28,6 +29,7 @@
 #include "radiation/radiation_tetrad.hpp"
 #include "particles/particles.hpp"
 #include "outputs.hpp"
+#include "utils/current.hpp"
 
 //----------------------------------------------------------------------------------------
 // BaseTypeOutput::ComputeDerivedVariable()
@@ -223,7 +225,6 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
     i_dv += 1; // increment derived variable index
   }
 
-
   // magnitude of curvature = |b_hat dot nabla b_hat|.
   // Calculated from cell-centered fields.
   // Not computed in ghost zones since requires derivative
@@ -309,6 +310,149 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
       dv(m,i_dv,k,j,i) = sqrt(curv1*curv1 + curv2*curv2 + curv3*curv3);
     });
     i_dv += 1; // increment derived variable index
+  }
+
+  // contravariant four-current jcon.  Calculated from cell-centered fields.
+  // Not computed in ghost zones since requires derivative
+  if (name.compare("mhd_jcon") == 0) {
+    Kokkos::realloc(derived_var, nmb, 4, n3, n2, n1);
+    auto jcon = derived_var;
+
+    // Coordinates
+    auto &coord = pm->pmb_pack->pcoord->coord_data;
+    bool &flat = coord.is_minkowski;
+    auto &spin = coord.bh_spin;
+
+    auto &dtold = pm->dtold;
+    auto w0_ = pm->pmb_pack->pmhd->w0;
+    auto bcc_ = pm->pmb_pack->pmhd->bcc0;
+    auto wsaved_ = pm->pmb_pack->pmhd->wsaved;
+    auto bccsaved_ = pm->pmb_pack->pmhd->bccsaved;
+
+    if (!pm->pmb_pack->pmhd->wbcc_saved) {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+        << std::endl << "Cannot compute jcon without saved MHD state" << std::endl;
+      std::exit(EXIT_FAILURE);
+    }
+
+    par_for("jcon", DevExeSpace(), 0, (nmb-1), ks, ke, js, je, is, ie,
+    KOKKOS_LAMBDA(int m, int k, int j, int i) {
+      Real &x1min = size.d_view(m).x1min;
+      Real &x1max = size.d_view(m).x1max;
+      Real x1v = CellCenterX(i-is, indcs.nx1, x1min, x1max);
+
+      Real &x2min = size.d_view(m).x2min;
+      Real &x2max = size.d_view(m).x2max;
+      Real x2v = CellCenterX(j-js, indcs.nx2, x2min, x2max);
+
+      Real &x3min = size.d_view(m).x3min;
+      Real &x3max = size.d_view(m).x3max;
+      Real x3v = CellCenterX(k-ks, indcs.nx3, x3min, x3max);
+
+      // Extract components of metric
+      Real glower[4][4], gupper[4][4];
+      ComputeMetricAndInverse(x1v, x2v, x3v, flat, spin, glower, gupper);
+
+      // Get 4-velocity for current step
+      const Real &uu1 = w0_(m,IVX,k,j,i);
+      const Real &uu2 = w0_(m,IVY,k,j,i);
+      const Real &uu3 = w0_(m,IVZ,k,j,i);
+
+      Real uu_sq = glower[1][1]*uu1*uu1 + 2.0*glower[1][2]*uu1*uu2
+                 + 2.0*glower[1][3]*uu1*uu3
+                 + glower[2][2]*uu2*uu2 + 2.0*glower[2][3]*uu2*uu3
+                 + glower[3][3]*uu3*uu3;
+      Real alpha = sqrt(-1.0/gupper[0][0]);
+      Real gamma = sqrt(1.0 + uu_sq);
+
+      Real ucon[4];
+      ucon[0] = gamma / alpha;
+      ucon[1] = uu1 - alpha * gamma * gupper[0][1];
+      ucon[2] = uu2 - alpha * gamma * gupper[0][2];
+      ucon[3] = uu3 - alpha * gamma * gupper[0][3];
+
+      // Get 4-velocity for last step
+      const Real &uu1saved = wsaved_(m,IVX,k,j,i);
+      const Real &uu2saved = wsaved_(m,IVY,k,j,i);
+      const Real &uu3saved = wsaved_(m,IVZ,k,j,i);
+
+      uu_sq = glower[1][1]*uu1saved*uu1saved + 2.0*glower[1][2]*uu1saved*uu2saved
+            + 2.0*glower[1][3]*uu1saved*uu3saved
+            + glower[2][2]*uu2saved*uu2saved + 2.0*glower[2][3]*uu2saved*uu3saved
+            + glower[3][3]*uu3saved*uu3saved;
+      gamma = sqrt(1.0 + uu_sq);
+
+      Real uconsaved[4];
+      uconsaved[0] = gamma / alpha;
+      uconsaved[1] = uu1saved - alpha * gamma * gupper[0][1];
+      uconsaved[2] = uu2saved - alpha * gamma * gupper[0][2];
+      uconsaved[3] = uu3saved - alpha * gamma * gupper[0][3];
+
+      // Lower 4-velocities
+      Real ucov[4], ucovsaved[4];
+      for (int mu=0; mu<4; ++mu) {
+        ucov[mu] = 0.0;
+        ucovsaved[mu] = 0.0;
+        for (int nu=0; nu<4; ++nu) {
+          ucov[mu] += glower[mu][nu]*ucon[nu];
+          ucovsaved[mu] += glower[mu][nu]*uconsaved[nu];
+        }
+      }
+
+      // Get bcon and bconsaved
+      Real bcon[4];
+      Real bconsaved[4];
+
+      bcon[0] = bcc_(m,IBX,k,j,i) * ucov[1] + bcc_(m,IBY,k,j,i) * ucov[2]
+              + bcc_(m,IBZ,k,j,i) * ucov[3];
+      bcon[1] = (bcc_(m,IBX,k,j,i) + bcon[0] * ucon[1]) / ucon[0];
+      bcon[2] = (bcc_(m,IBY,k,j,i) + bcon[0] * ucon[2]) / ucon[0];
+      bcon[3] = (bcc_(m,IBZ,k,j,i) + bcon[0] * ucon[3]) / ucon[0];
+
+      bconsaved[0] = bccsaved_(m,IBX,k,j,i) * ucovsaved[1]
+                   + bccsaved_(m,IBY,k,j,i) * ucovsaved[2]
+                   + bccsaved_(m,IBZ,k,j,i) * ucovsaved[3];
+      bconsaved[1] = (bccsaved_(m,IBX,k,j,i) + bconsaved[0]*uconsaved[1]) / uconsaved[0];
+      bconsaved[2] = (bccsaved_(m,IBY,k,j,i) + bconsaved[0]*uconsaved[2]) / uconsaved[0];
+      bconsaved[3] = (bccsaved_(m,IBZ,k,j,i) + bconsaved[0]*uconsaved[3]) / uconsaved[0];
+
+      // Lower bcon and bconsaved
+      Real bcov[4], bcovsaved[4];
+
+      for (int mu=0; mu<4; ++mu) {
+        bcov[mu] = 0.0;
+        bcovsaved[mu] = 0.0;
+        for (int nu=0; nu<4; ++nu) {
+          bcov[mu] += glower[mu][nu]*bcon[nu];
+          bcovsaved[mu] += glower[mu][nu]*bconsaved[nu];
+        }
+      }
+
+      // Compute current
+      for (int mu=0; mu<4; ++mu) {
+        if (dtold > 0) {
+          const Real gF0p = get_detg_Fcon(0, mu, ucov, bcov);
+          const Real gF0m = get_detg_Fcon(0, mu, ucovsaved, bcovsaved);
+          const Real gF1p = get_detg_Fcon(1, mu, ucov, bcov);
+          const Real gF1m = get_detg_Fcon(1, mu, ucovsaved, bcovsaved);
+          const Real gF2p = (multi_d) ? get_detg_Fcon(2, mu, ucov, bcov) : 0.;
+          const Real gF2m = (multi_d) ? get_detg_Fcon(2, mu, ucovsaved, bcovsaved) : 0.;
+          const Real gF3p = (three_d) ? get_detg_Fcon(3, mu, ucov, bcov) : 0.;
+          const Real gF3m = (three_d) ? get_detg_Fcon(3, mu, ucovsaved, bcovsaved) : 0.;
+
+          const Real dgF0 = (gF0p - gF0m) / dtold;
+          const Real dgF1 = (gF1p - gF1m) / (2 * size.d_view(m).dx1);
+          const Real dgF2 = (multi_d) ? (gF2p - gF2m) / (2 * size.d_view(m).dx2) : 0.;
+          const Real dgF3 = (three_d) ? (gF3p - gF3m) / (2 * size.d_view(m).dx3) : 0.;
+
+          const Real detg = 1.;
+          jcon(m,mu,k,j,i) = 1. / (detg * sqrt(4. * M_PI)) * (dgF0 + dgF1 + dgF2 + dgF3);
+        } else {
+          // zero current if dtold == 0 (e.g., when we don't have a previous step)
+          jcon(m,mu,k,j,i) = 0.;
+        }
+      }
+    });
   }
 
   // get all sgs terms for the MHD equations
@@ -708,8 +852,6 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
     i_dv += 1; // increment derived variable index
   }
 
-
-
   // magnitude of bmag = |bcc|
   // Calculated from cell-centered fields.
   // Not computed in ghost zones since requires derivative
@@ -726,8 +868,6 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
     });
     i_dv += 1; // increment derived variable index
   }
-
-
 
   // Calculated from cell-centered fields.
   // Not computed in ghost zones since requires derivative
@@ -830,7 +970,6 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
                       / dx_squared;
     });
   }
-
 
   // divergence of B, including ghost zones
   if (name.compare("mhd_divb") == 0) {
