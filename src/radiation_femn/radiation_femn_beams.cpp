@@ -103,7 +103,7 @@ void RadiationFEMN::InitializeBeamsSourcesM1() {
   beam_source_1_vals(0) = (1. / sqrt(4. * M_PI)) * E;
   beam_source_1_vals(1) = 0;
   beam_source_1_vals(2) = 0;
-  beam_source_1_vals(3) = sqrt(3. / (4. * M_PI)) * Fx;
+  beam_source_1_vals(3) = - sqrt(3. / (4. * M_PI)) * Fx;
   beam_source_1_vals(4) = 0;
   beam_source_1_vals(5) = 0;
   beam_source_1_vals(6) = 0;
