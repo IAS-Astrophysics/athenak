@@ -273,10 +273,10 @@ void Z4c::ADMConstraints(MeshBlockPack *pmbp) {
     AthenaScratchTensor<Real, TensorSymm::NONE, 3, 1> Gamma_u;
     AthenaScratchTensor<Real, TensorSymm::NONE, 3, 1> Gamma_u_z4c;
     AthenaScratchTensor<Real, TensorSymm::NONE, 3, 1> M_u;
-    AthenaScratchTensor<Real, TensorSymm::NONE, 3, 1> dphi_d;
+    AthenaScratchTensor<Real, TensorSymm::NONE, 3, 1> dpsi4_d;
 
     AthenaScratchTensor<Real, TensorSymm::SYM2, 3, 2> g_uu;
-    AthenaScratchTensor<Real, TensorSymm::SYM2, 3, 2> g_uu_z4c;
+    //AthenaScratchTensor<Real, TensorSymm::SYM2, 3, 2> g_uu_z4c;
     AthenaScratchTensor<Real, TensorSymm::SYM2, 3, 2> R_dd;
     AthenaScratchTensor<Real, TensorSymm::SYM2, 3, 2> K_ud;
 
@@ -284,9 +284,9 @@ void Z4c::ADMConstraints(MeshBlockPack *pmbp) {
     AthenaScratchTensor<Real, TensorSymm::SYM2, 3, 3> dg_ddd_z4c;
     AthenaScratchTensor<Real, TensorSymm::SYM2, 3, 3> dK_ddd;
     AthenaScratchTensor<Real, TensorSymm::SYM2, 3, 3> Gamma_ddd;
-    AthenaScratchTensor<Real, TensorSymm::SYM2, 3, 3> Gamma_ddd_z4c;
+    //AthenaScratchTensor<Real, TensorSymm::SYM2, 3, 3> Gamma_ddd_z4c;
     AthenaScratchTensor<Real, TensorSymm::SYM2, 3, 3> Gamma_udd;
-    AthenaScratchTensor<Real, TensorSymm::SYM2, 3, 3> Gamma_udd_z4c;
+    //AthenaScratchTensor<Real, TensorSymm::SYM2, 3, 3> Gamma_udd_z4c;
     AthenaScratchTensor<Real, TensorSymm::SYM2, 3, 3> DK_ddd;
     AthenaScratchTensor<Real, TensorSymm::SYM2, 3, 3> DK_udd;
 
@@ -304,6 +304,11 @@ void Z4c::ADMConstraints(MeshBlockPack *pmbp) {
       dg_ddd(c,a,b) = Dx<NGHOST>(c, idx, adm.g_dd, m,a,b,k,j,i);
       dg_ddd_z4c(c,a,b) = Dx<NGHOST>(c, idx, z4c.g_dd, m,a,b,k,j,i);
       dK_ddd(c,a,b) = Dx<NGHOST>(c, idx, adm.vK_dd, m,a,b,k,j,i);
+    }
+
+    // first derivative of psi4
+    for (int a =0; a < 3; ++a) {
+      dpsi4_d(a) = Dx<NGHOST>(a, idx, adm.psi4, m, k, j, i);
     }
 
     // second derivatives of g
@@ -330,14 +335,14 @@ void Z4c::ADMConstraints(MeshBlockPack *pmbp) {
                &g_uu(0,0), &g_uu(0,1), &g_uu(0,2),
                &g_uu(1,1), &g_uu(1,2), &g_uu(2,2));
 
-    Real detg_z4c = adm::SpatialDet(z4c.g_dd(m,0,0,k,j,i), z4c.g_dd(m,0,1,k,j,i),
+    /*Real detg_z4c = adm::SpatialDet(z4c.g_dd(m,0,0,k,j,i), z4c.g_dd(m,0,1,k,j,i),
                                 z4c.g_dd(m,0,2,k,j,i), z4c.g_dd(m,1,1,k,j,i),
                                 z4c.g_dd(m,1,2,k,j,i), z4c.g_dd(m,2,2,k,j,i));
     adm::SpatialInv(1./detg_z4c,
                z4c.g_dd(m,0,0,k,j,i), z4c.g_dd(m,0,1,k,j,i), z4c.g_dd(m,0,2,k,j,i),
                z4c.g_dd(m,1,1,k,j,i), z4c.g_dd(m,1,2,k,j,i), z4c.g_dd(m,2,2,k,j,i),
                &g_uu_z4c(0,0), &g_uu_z4c(0,1), &g_uu_z4c(0,2),
-               &g_uu_z4c(1,1), &g_uu_z4c(1,2), &g_uu_z4c(2,2));
+               &g_uu_z4c(1,1), &g_uu_z4c(1,2), &g_uu_z4c(2,2));*/
 
     // -----------------------------------------------------------------------------------
     // Christoffel symbols
@@ -365,7 +370,7 @@ void Z4c::ADMConstraints(MeshBlockPack *pmbp) {
     }
 
     // same but for z4c metric
-    for(int c = 0; c < 3; ++c)
+    /*for(int c = 0; c < 3; ++c)
     for(int a = 0; a < 3; ++a)
     for(int b = a; b < 3; ++b) {
       Gamma_ddd_z4c(c,a,b) = 0.5*(dg_ddd_z4c(a,b,c)
@@ -385,6 +390,13 @@ void Z4c::ADMConstraints(MeshBlockPack *pmbp) {
       for(int b = 0; b < 3; ++b)
       for(int c = 0; c < 3; ++c) {
         Gamma_u_z4c(a) += g_uu_z4c(b,c)*Gamma_udd_z4c(a,b,c);
+      }
+    }*/
+    // Find the contracted conformal Christoffel symbol
+    for (int a = 0; a < 3; ++a) {
+      Gamma_u_z4c(a) = adm.psi4(m,k,j,i)*Gamma_u(a);
+      for (int b = 0; b < 3; ++b) {
+        Gamma_u_z4c(a) += g_uu(a,b)*dpsi4_d(b);
       }
     }
 
