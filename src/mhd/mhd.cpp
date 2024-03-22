@@ -40,6 +40,8 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
     b1("B_fc1",1,1,1,1),
     uflx("uflx",1,1,1,1,1),
     efld("efld",1,1,1,1),
+    wsaved("wsaved",1,1,1,1,1),
+    bccsaved("bccsaved",1,1,1,1,1),
     e3x1("e3x1",1,1,1,1),
     e2x1("e2x1",1,1,1,1),
     e1x2("e1x2",1,1,1,1),
@@ -347,6 +349,23 @@ MHD::~MHD() {
   if (presist!= nullptr) {delete presist;}
   if (pcond != nullptr) {delete pcond;}
   if (psrc!= nullptr) {delete psrc;}
+}
+
+//----------------------------------------------------------------------------------------
+// SetSaveWBcc:  set flag to save primitives and cell-centered B field, e.g., for jcon
+
+void MHD::SetSaveWBcc() {
+  int nmb = std::max((pmy_pack->nmb_thispack), (pmy_pack->pmesh->nmb_maxperrank));
+  auto &indcs = pmy_pack->pmesh->mb_indcs;
+  int ncells1 = indcs.nx1 + 2*(indcs.ng);
+  int ncells2 = (indcs.nx2 > 1)? (indcs.nx2 + 2*(indcs.ng)) : 1;
+  int ncells3 = (indcs.nx3 > 1)? (indcs.nx3 + 2*(indcs.ng)) : 1;
+
+  // allocated saved arrays for time derivatives
+  Kokkos::realloc(wsaved,   nmb, (nmhd+nscalars), ncells3, ncells2, ncells1);
+  Kokkos::realloc(bccsaved, nmb, 3,               ncells3, ncells2, ncells1);
+
+  wbcc_saved = true;
 }
 
 } // namespace mhd

@@ -183,6 +183,16 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
       break;
   }
   TwoPunctures_finalise(data);
+
+  pmbp->pz4c->Z4cToADM(pmbp);
+  switch (indcs.ng) {
+    case 2: pmbp->pz4c->ADMConstraints<2>(pmbp);
+            break;
+    case 3: pmbp->pz4c->ADMConstraints<3>(pmbp);
+            break;
+    case 4: pmbp->pz4c->ADMConstraints<4>(pmbp);
+            break;
+  }
   std::cout << "TwoPuncture initialized." << std::endl;
   return;
 }

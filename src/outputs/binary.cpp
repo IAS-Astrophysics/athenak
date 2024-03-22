@@ -26,7 +26,7 @@
 #include "outputs.hpp"
 
 //----------------------------------------------------------------------------------------
-// ctor: also calls BaseTypeOutput base class constructor
+// Constructor: also calls BaseTypeOutput base class constructor
 
 MeshBinaryOutput::MeshBinaryOutput(ParameterInput *pin, Mesh *pm, OutputParameters op) :
   BaseTypeOutput(pin, pm, op) {

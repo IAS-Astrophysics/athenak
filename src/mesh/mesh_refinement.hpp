@@ -76,9 +76,9 @@ class MeshRefinement {
   // Lagrange Interpolation weights for prolongation and restriction operators
   // naming convention: {prolong/restrict}_{order of interpolation}_{optional index}
   struct InterpWeight {
-    DualArray1D<Real> prolong_2nd;
+    DualArray3D<Real> prolong_2nd;
     DualArray1D<Real> restrict_2nd;
-    DualArray1D<Real> prolong_4th;
+    DualArray3D<Real> prolong_4th;
     DualArray1D<Real> restrict_4th_edge;
     DualArray1D<Real> restrict_4th;
   };

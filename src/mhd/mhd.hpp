@@ -42,6 +42,7 @@ enum class MHD_RSolver {advect, llf, hlle, hlld, roe,   // non-relativistic
 //  \brief container to hold TaskIDs of all mhd tasks
 
 struct MHDTaskIDs {
+  TaskID savest;
   TaskID irecv;
   TaskID copyu;
   TaskID flux;
@@ -118,6 +119,11 @@ class MHD {
   DvceEdgeFld4D<Real> efld;   // edge-centered electric fields (fluxes of B)
   Real dtnew;
 
+  // following used for time derivatives in computation of jcon
+  bool wbcc_saved = false;
+  DvceArray5D<Real> wsaved;
+  DvceArray5D<Real> bccsaved;
+
   // following used for FOFC algorithm
   DvceArray4D<bool> fofc;  // flag for each cell to indicate if FOFC is needed
   bool use_fofc = false;   // flag to enable FOFC
@@ -126,7 +132,10 @@ class MHD {
   MHDTaskIDs id;
 
   // functions...
+  void SetSaveWBcc();
   void AssembleMHDTasks(std::map<std::string, std::shared_ptr<TaskList>> tl);
+  // ...in "before_timeintegrator" task list
+  TaskStatus SaveMHDState(Driver *d, int stage);
   // ...in "before_stagen_tl" task list
   TaskStatus InitRecv(Driver *d, int stage);
   // ...in "stagen_tl" task list

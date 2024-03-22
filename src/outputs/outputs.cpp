@@ -161,6 +161,48 @@ Outputs::Outputs(ParameterInput *pin, Mesh *pm) {
         opar.slice3 = false;
       }
 
+      // read ghost cell option
+      opar.include_gzs = pin->GetOrAddBoolean(opar.block_name, "ghost_zones", false);
+
+      // read MeshBlock ID (if specified)
+      opar.gid = pin->GetOrAddInteger(opar.block_name, "gid", -1);
+      if (opar.gid >= 0 && pm->nmb_total == 1) {
+        std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+            << std::endl << "Cannot specify MeshBlock ID in output block '"
+            << opar.block_name << "' when there is only one" << std::endl;
+        exit(EXIT_FAILURE);
+      }
+      if (opar.gid > (pm->nmb_total-1)) {
+        std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+            << std::endl << "MeshBlock gid=" << opar.gid << " in output block '"
+            << opar.block_name << "' exceeds total number of MeshBlocks" << std::endl;
+        exit(EXIT_FAILURE);
+      }
+
+      // set output variable and optional file id (default is output variable name)
+      if (opar.file_type.compare("hst") != 0 &&
+          opar.file_type.compare("rst") != 0 &&
+          opar.file_type.compare("log") != 0) {
+        opar.variable = pin->GetString(opar.block_name, "variable");
+        opar.file_id = pin->GetOrAddString(opar.block_name,"id",opar.variable);
+      }
+
+      // check that pdf variables are single variables
+      // raise error if variable = mhd_w, mhd_u, hydro_w, hydro_u
+      if (opar.file_type.compare("pdf") == 0) {
+        if (opar.variable.compare("mhd_w") == 0 ||
+            opar.variable.compare("mhd_u") == 0 ||
+            opar.variable.compare("hydro_w") == 0 ||
+            opar.variable.compare("hydro_u") == 0) {
+          std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+              << std::endl << "PDF output block '" << opar.block_name
+              << "' cannot output variable '" << opar.variable << "'."
+              << " The variable must be a single variable not a variable group"
+              << std::endl;
+          exit(EXIT_FAILURE);
+        }
+      }
+
       // set optional boolean to output only user-defined history variables
       if (opar.file_type.compare("hst") == 0) {
         opar.user_hist_only =pin->GetOrAddBoolean(opar.block_name,"user_hist_only",false);
@@ -198,6 +240,34 @@ Outputs::Outputs(ParameterInput *pin, Mesh *pm) {
         pout_list.insert(pout_list.begin(),pnode);
       } else if (opar.file_type.compare("trk") == 0) {
         pnode = new TrackedParticleOutput(pin,pm,opar);
+        pout_list.insert(pout_list.begin(),pnode);
+      } else if (opar.file_type.compare("cbin") == 0) {
+        opar.coarsen_factor = pin->GetInteger(opar.block_name,"coarsen_factor");
+        opar.compute_moments = pin->GetOrAddBoolean(opar.block_name,
+          "compute_moments", false);
+        pnode = new CoarsenedBinaryOutput(pin,pm,opar);
+        pout_list.insert(pout_list.begin(),pnode);
+      } else if (opar.file_type.compare("pdf") == 0) {
+        opar.bin_min = pin->GetReal(opar.block_name,"bin_min");
+        opar.bin_max = pin->GetReal(opar.block_name,"bin_max");
+        opar.nbin = pin->GetInteger(opar.block_name,"nbin");
+        opar.logscale = pin->GetOrAddBoolean(opar.block_name,"logscale",true);
+        opar.mass_weighted = pin->GetOrAddBoolean(opar.block_name,"mass_weighted",false);
+        // check and set second variable option.
+        if (pin->DoesParameterExist(opar.block_name,"variable_2")) {
+          opar.variable_2 = pin->GetString(opar.block_name, "variable_2");
+          opar.bin2_min = pin->GetOrAddReal(opar.block_name,"bin2_min",0);
+          opar.bin2_max = pin->GetOrAddReal(opar.block_name,"bin2_max",1);
+          opar.nbin2 = pin->GetOrAddInteger(opar.block_name,"nbin2",0);
+          opar.logscale2 = pin->GetOrAddBoolean(opar.block_name,"logscale2",true);
+        } else {
+          opar.variable_2 = "";
+          opar.bin2_min = 0;
+          opar.bin2_max = 1;
+          opar.nbin2 = 0;
+          opar.logscale2 = true;
+        }
+        pnode = new PDFOutput(pin,pm,opar);
         pout_list.insert(pout_list.begin(),pnode);
       } else if (opar.file_type.compare("bin") == 0) {
         pnode = new MeshBinaryOutput(pin,pm,opar);
