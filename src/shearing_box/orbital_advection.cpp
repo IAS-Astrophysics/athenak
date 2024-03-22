@@ -98,11 +98,11 @@ TaskStatus ShearingBox::PackAndSendCC_Orb(DvceArray5D<Real> &a) {
 
         // copy directly into recv buffer if MeshBlocks on same rank
         if (nghbr.d_view(m,nnghbr).rank == my_rank) {
-          rbuf[dn].vars(dm, (i-il + ni*(j-jl + nj*(k-kl + nk*v))) ) = a(m,v,k,j,i);
+          rbuf[dn].vars(dm,v,(k-kl),(j-jl),(i-il)) = a(m,v,k,j,i);
 
         // else copy into send buffer for MPI communication below
         } else {
-          sbuf[n].vars(m, (i-il + ni*(j-jl + nj*(k-kl + nk*v))) ) = a(m,v,k,j,i);
+          sbuf[n].vars(m,v,(k-kl),(j-jl),(i-il)) = a(m,v,k,j,i);
         }
       });
     } // end if-neighbor-exists block
@@ -231,13 +231,13 @@ TaskStatus ShearingBox::RecvAndUnpackCC_Orb(DvceArray5D<Real> &u0,
     par_for_inner(member, 0, (nfx-1), [&](const int jf) {
       if (jf < jfs) {
         // Load from L boundary buffer
-        u0_(jf) = rbuf[0].vars(m, (i-is + ni*(jf + nj*(k-ks + nk*n))) );
+        u0_(jf) = rbuf[0].vars(m,n,(k-ks),jf,(i-is));
       } else if (jf <= jfe) {
         // Load from conserved variables themselves (addressed with j=jf-jfs+js)
         u0_(jf) = u0(m,n,k,jf-jfs+js,i);
       } else {
         // Load from R boundary buffer
-        u0_(jf) = rbuf[1].vars(m, (i-is + ni*(jf-(jfe+1) + nj*(k-ks + nk*n))) );
+        u0_(jf) = rbuf[1].vars(m,n,(k-ks),jf-(jfe+1),(i-is));
 
       }
     });
@@ -343,12 +343,12 @@ TaskStatus ShearingBox::PackAndSendFC_Orb(DvceFaceFld4D<Real> &b) {
 
         // copy B1/B3 directly into recv buffer if MeshBlocks on same rank
         if (nghbr.d_view(m,nnghbr).rank == my_rank) {
-          rbuf[dn].vars(dm, (i-il + ni*(j-jl + nj*(k-kl     ))) ) = b.x3f(m,k,j,i);
-          rbuf[dn].vars(dm, (i-il + ni*(j-jl + nj*(k-kl + nk))) ) = b.x1f(m,k,j,i);
+          rbuf[dn].vars(dm,0,(k-kl),(j-jl),(i-il)) = b.x3f(m,k,j,i);
+          rbuf[dn].vars(dm,1,(k-kl),(j-jl),(i-il)) = b.x1f(m,k,j,i);
         // else copy B1/B3 into send buffer for MPI communication below
         } else {
-          sbuf[n].vars(m, (i-il + ni*(j-jl + nj*(k-kl     ))) ) = b.x3f(m,k,j,i);
-          sbuf[n].vars(m, (i-il + ni*(j-jl + nj*(k-kl + nk))) ) = b.x1f(m,k,j,i);
+          sbuf[n].vars(m,0,(k-kl),(j-jl),(i-il)) = b.x3f(m,k,j,i);
+          sbuf[n].vars(m,1,(k-kl),(j-jl),(i-il)) = b.x1f(m,k,j,i);
         }
       });
     } // end if-neighbor-exists block
@@ -402,7 +402,6 @@ TaskStatus ShearingBox::PackAndSendFC_Orb(DvceFaceFld4D<Real> &b) {
 
 TaskStatus ShearingBox::RecvAndUnpackFC_Orb(DvceFaceFld4D<Real> &b0,
                                             ReconstructionMethod rcon){
-  // create local references for variables in kernel
   int nmb = pmy_pack->nmb_thispack;
   int nnghbr = pmy_pack->pmb->nnghbr;
   auto &nghbr = pmy_pack->pmb->nghbr;
@@ -486,7 +485,7 @@ TaskStatus ShearingBox::RecvAndUnpackFC_Orb(DvceFaceFld4D<Real> &b0,
     par_for_inner(member, 0, (nfx-1), [&](const int jf) {
       if (jf < jfs) {
         // Load from L boundary buffer
-        b0_(jf) = rbuf[0].vars(m, (i-is + ni*(jf + nj*(k-ks + nk*v))) );
+        b0_(jf) = rbuf[0].vars(m,v,(k-ks),jf,(i-is));
       } else if (jf <= jfe) {
         // Load from array itself (addressed with j=jf-jfs+js)
         if (v==0) {
@@ -496,7 +495,7 @@ TaskStatus ShearingBox::RecvAndUnpackFC_Orb(DvceFaceFld4D<Real> &b0,
         }
       } else {
         // Load scratch arrays from R boundary buffer
-        b0_(jf) = rbuf[1].vars(m, (i-is + ni*(jf-(jfe+1) + nj*(k-ks + nk*v))) );
+        b0_(jf) = rbuf[1].vars(m,v,(k-ks),jf-(jfe+1),(i-is));
       }
     });
     member.team_barrier();
@@ -531,6 +530,11 @@ TaskStatus ShearingBox::RecvAndUnpackFC_Orb(DvceFaceFld4D<Real> &b0,
         for (int jj=(joffset+1); jj<=0; jj++) {
           emfx(m,k,j,i) += b0_(jf-jj);
         }
+/****/
+if (emfx(m,k,j,i) > 1.e-12) {
+std::cout<<"m="<<m<<" k,j,i="<<k<<" "<<j<<" "<<i<<"  emfx="<<emfx(m,k,j,i)<<"  b0="<<b0_(j)<<std::endl;
+}
+/****/
       });
 
     // Compute emfz =  VyBx, which is at cell-face in x1-direction

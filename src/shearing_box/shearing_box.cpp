@@ -49,13 +49,13 @@ ShearingBox::ShearingBox(MeshBlockPack *ppack, ParameterInput *pin, int nvar) :
     int ncells1 = indcs.nx1;
     // cell-centered data
     for (int n=0; n<2; ++n) {
-      Kokkos::realloc(sendcc_orb[n].vars,nmb,(nvar*ncells3*ncells2*ncells1));
-      Kokkos::realloc(recvcc_orb[n].vars,nmb,(nvar*ncells3*ncells2*ncells1));
+      Kokkos::realloc(sendcc_orb[n].vars,nmb,nvar,ncells3,ncells2,ncells1);
+      Kokkos::realloc(recvcc_orb[n].vars,nmb,nvar,ncells3,ncells2,ncells1);
     }
     // face-centered data
     for (int n=0; n<2; ++n) {
-      Kokkos::realloc(sendfc_orb[n].vars,nmb,(2*(ncells3+1)*ncells2*(ncells1+1)));
-      Kokkos::realloc(recvfc_orb[n].vars,nmb,(2*(ncells3+1)*ncells2*(ncells1+1)));
+      Kokkos::realloc(sendfc_orb[n].vars,nmb,2,(ncells3+1),ncells2,(ncells1+1));
+      Kokkos::realloc(recvfc_orb[n].vars,nmb,2,(ncells3+1),ncells2,(ncells1+1));
     }
   }
 #if MPI_PARALLEL_ENABLED
@@ -93,7 +93,7 @@ ShearingBox::ShearingBox(MeshBlockPack *ppack, ParameterInput *pin, int nvar) :
   nmb_x1bndry = cnt_x1bndry_mbs.size();
 
   // load GIDs of meshblocks at boundaries into DualArray
-  Kokkos::realloc(x1bndry_mbs, nmb_x1bndry);
+  Kokkos::realloc(x1bndry_mbs, nmb_x1bndry, 2);
   for (int m=0; m<nmb_x1bndry; ++m) {
     x1bndry_mbs.h_view(m,0) = cnt_x1bndry_mbs[m].first;
     x1bndry_mbs.h_view(m,1) = cnt_x1bndry_mbs[m].second;
@@ -109,11 +109,11 @@ ShearingBox::ShearingBox(MeshBlockPack *ppack, ParameterInput *pin, int nvar) :
     int ncells2 = indcs.nx2 + 2*indcs.ng;
     int ncells1 = indcs.ng;
     // cell-centered data
-    Kokkos::realloc(sendcc_shr.vars,nmb_x1bndry,(nvar*ncells3*ncells2*ncells1));
-    Kokkos::realloc(recvcc_shr.vars,nmb_x1bndry,(nvar*ncells3*ncells2*ncells1));
+    Kokkos::realloc(sendcc_shr.vars,nmb_x1bndry,nvar,ncells3,ncells2,ncells1);
+    Kokkos::realloc(recvcc_shr.vars,nmb_x1bndry,nvar,ncells3,ncells2,ncells1);
     // face-centered data
-    Kokkos::realloc(sendfc_shr.vars,nmb_x1bndry,(3*(ncells3+1)*(ncells2+1)*ncells1));
-    Kokkos::realloc(recvfc_shr.vars,nmb_x1bndry,(3*(ncells3+1)*(ncells2+1)*ncells1));
+    Kokkos::realloc(sendfc_shr.vars,nmb_x1bndry,3,(ncells3+1),(ncells2+1),ncells1);
+    Kokkos::realloc(recvfc_shr.vars,nmb_x1bndry,3,(ncells3+1),(ncells2+1),ncells1);
   }
 }
 

@@ -37,7 +37,7 @@ struct ShearingBoxTaskIDs {
 
 struct ShearingBoxBuffer {
   // Views that store buffer data and fluxes on device
-  DvceArray2D<Real> vars, flux;
+  DvceArray5D<Real> vars, flux;
 #if MPI_PARALLEL_ENABLED
   // vectors of length (number of MBs) to hold MPI requests
   // Using STL vector causes problems with some GPU compilers, so just use plain C array
