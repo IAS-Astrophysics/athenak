@@ -23,7 +23,7 @@
 enum class ParticlesPusher {drift, leap_frog, lagrangian_tracer, lagrangian_mc};
 
 // constants that enumerate ParticleTypes
-enum class ParticleType {cosmic_ray};
+enum class ParticleType {cosmic_ray, lagrangian_mc};
 
 //----------------------------------------------------------------------------------------
 //! \struct ParticlesTaskIDs

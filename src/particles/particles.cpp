@@ -45,6 +45,10 @@ Particles::Particles(MeshBlockPack *ppack, ParameterInput *pin) :
     std::string ptype = pin->GetString("particles","particle_type");
     if (ptype.compare("cosmic_ray") == 0) {
       particle_type = ParticleType::cosmic_ray;
+    } else if (ptype.compare("lagrangian_mc") == 0) {
+      // TODO(GNW): Support initialization
+      // TODO(GNW): Restrict which pusher is alowed based on particle type
+      particle_type = ParticleType::lagrangian_mc;
     } else {
       std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                 << std::endl << "Particle type = '" << ptype << "' not recognized"
@@ -58,6 +62,8 @@ Particles::Particles(MeshBlockPack *ppack, ParameterInput *pin) :
     std::string ppush = pin->GetString("particles","pusher");
     if (ppush.compare("drift") == 0) {
       pusher = ParticlesPusher::drift;
+    } else if (ppush.compare("lagrangian_mc") == 0) {
+      pusher = ParticlesPusher::lagrangian_mc;
     } else {
       std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                 << std::endl << "Particle pusher must be specified in <particles> block"
@@ -77,6 +83,16 @@ Particles::Particles(MeshBlockPack *ppack, ParameterInput *pin) :
       {
         int ndim=4;
         if (pmy_pack->pmesh->three_d) {ndim+=2;}
+        nrdata = ndim;
+        nidata = 2;
+        break;
+      }
+    case ParticleType::lagrangian_mc:
+      {
+        // TODO(GNW): This implementation may have issues for IPX, IPY, IPZ
+        //            without IVX, IVY, IVZ...
+        int ndim=2;
+        if (pmy_pack->pmesh->three_d) {ndim+=1;}
         nrdata = ndim;
         nidata = 2;
         break;
