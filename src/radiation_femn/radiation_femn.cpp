@@ -61,6 +61,7 @@ namespace radiationfemn
         // source terms => off, beams => off]
         mass_lumping = pin->GetOrAddInteger("radiation-femn", "mass_lumping", 1) == 1;
         limiter_dg = pin->GetOrAddString("radiation-femn", "limiter_dg", "minmod2");
+        limiter_dg_minmod = limiter_dg == "minmod";
         fpn = pin->GetOrAddInteger("radiation-femn", "fpn", 0) == 1;
         num_energy_bins = pin->GetOrAddInteger("radiation-femn", "num_energy_bins", 1);
         energy_max = pin->GetOrAddReal("radiation-femn", "energy_max", 1);
@@ -77,6 +78,8 @@ namespace radiationfemn
         beam_source_2_y2 = pin->GetOrAddReal("radiation-femn", "beam_source_2_y2", -42.);
         beam_source_2_phi = pin->GetOrAddReal("radiation-femn", "beam_source_2_phi", -42.);
         beam_source_2_theta = pin->GetOrAddReal("radiation-femn", "beam_source_2_theta", -42.);
+
+        std::cout << "Choice of DG limiter: " << limiter_dg << std::endl;
 
         // set up energy ang angular grids (redundant values => -42)
 

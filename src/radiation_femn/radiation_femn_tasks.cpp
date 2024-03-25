@@ -55,7 +55,7 @@ void RadiationFEMN::AssembleRadiationFEMNTasks(TaskList &start, TaskList &run, T
     id.rad_src = id.rad_expl;
   }
 
-  if (limiter_dg == "minmod2") {
+  if (limiter_dg == "minmod2" || limiter_dg == "minmod") {
     id.rad_limdg = run.AddTask(&RadiationFEMN::ApplyLimiterDG, this, id.rad_src);
   } else {
     id.rad_limdg = id.rad_src;

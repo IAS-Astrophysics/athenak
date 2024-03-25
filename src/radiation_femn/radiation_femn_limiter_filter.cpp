@@ -33,9 +33,25 @@ Real minmod2(Real a, Real b, Real c) {
   auto min_abs_b_abs_c = fmin(absb, absc);
 
   auto result = (s * absa) * int(absa < 2.0 * min_abs_b_abs_c) +
-      (s * min_abs_b_abs_c) * int(absa >= 2.0 * min_abs_b_abs_c);
+                (s * min_abs_b_abs_c) * int(absa >= 2.0 * min_abs_b_abs_c);
 
   return result;
+}
+
+KOKKOS_INLINE_FUNCTION
+Real minmod(Real a, Real b, Real c) {
+  auto signa = int((0 < a) - (a < 0));
+  auto signb = int((0 < b) - (b < 0));
+  auto signc = int((0 < c) - (c < 0));
+
+  auto absa = abs(a);
+  auto absb = abs(b);
+  auto absc = abs(c);
+
+  auto sign = int(abs(signa + signb + signc) == 3);
+  auto min_abs_a_abs_b_abs_c = fmin(fmin(absa, absb), absc);
+
+  return sign * min_abs_a_abs_b_abs_c;
 }
 
 /* \fn RadiationFEMN::ApplyFilterLanczos
@@ -100,14 +116,17 @@ TaskStatus RadiationFEMN::ApplyLimiterFEM(Driver *pdriver, int stage) {
                   Real numerator = 0.;
                   Kokkos::parallel_reduce(Kokkos::ThreadVectorRange(member, 0, num_points_), [=](const int A, Real &partial_sum_angle) {
                     partial_sum_angle += f0_(m, outervar * num_energy_bins_ + A, k, j, i) * (Q_matrix_(0, A) * L_mu_muhat_(m, 0, 0, k, j, i)
-                        + Q_matrix_(1, A) * L_mu_muhat_(m, 0, 1, k, j, i) + Q_matrix_(2, A) * L_mu_muhat_(m, 0, 2, k, j, i) + Q_matrix_(3, A) * L_mu_muhat_(m, 0, 3, k, j, i));
+                                                                                             + Q_matrix_(1, A) * L_mu_muhat_(m, 0, 1, k, j, i) +
+                                                                                             Q_matrix_(2, A) * L_mu_muhat_(m, 0, 2, k, j, i) +
+                                                                                             Q_matrix_(3, A) * L_mu_muhat_(m, 0, 3, k, j, i));
                   }, numerator);
 
                   Real denominator = 0.;
                   Kokkos::parallel_reduce(Kokkos::ThreadVectorRange(member, 0, num_points_), [=](const int A, Real &partial_sum_angle) {
                     Real tmp = f0_(m, outervar * num_energy_bins_ + A, k, j, i);
                     partial_sum_angle += fmax(0, tmp) * (Q_matrix_(0, A) * L_mu_muhat_(m, 0, 0, k, j, i)
-                        + Q_matrix_(1, A) * L_mu_muhat_(m, 0, 1, k, j, i) + Q_matrix_(2, A) * L_mu_muhat_(m, 0, 2, k, j, i) + Q_matrix_(3, A) * L_mu_muhat_(m, 0, 3, k, j, i));
+                                                         + Q_matrix_(1, A) * L_mu_muhat_(m, 0, 1, k, j, i) + Q_matrix_(2, A) * L_mu_muhat_(m, 0, 2, k, j, i) +
+                                                         Q_matrix_(3, A) * L_mu_muhat_(m, 0, 3, k, j, i));
                   }, denominator);
                   member.team_barrier();
 
@@ -140,6 +159,11 @@ TaskStatus RadiationFEMN::ApplyLimiterDG(Driver *pdriver, int stage) {
   auto &f0_ = pmy_pack->pradfemn->f0;
   auto &ftemp_ = pmy_pack->pradfemn->ftemp;
 
+  auto minmodgeneral = minmod2;
+  if (limiter_dg_minmod) {
+    minmodgeneral = minmod;
+  }
+
   Kokkos::deep_copy(ftemp_, 0.);
 
   if (one_d) {
@@ -158,7 +182,7 @@ TaskStatus RadiationFEMN::ApplyLimiterDG(Driver *pdriver, int stage) {
               auto dplusx = (f0_cellavg_px - f0_cellavg) / (2.0 * mbsize.d_view(m).dx1);
               auto islopex = 2.0 * (f0_(m, enang, kk, jj, ii + 1) - f0_(m, enang, kk, jj, ii)) / (2.0 * mbsize.d_view(m).dx1);
 
-              auto sigmax = minmod2(islopex, dminusx, dplusx);
+              auto sigmax = minmodgeneral(islopex, dminusx, dplusx);
 
               Real &x1min = mbsize.d_view(m).x1min;
               Real &x1max = mbsize.d_view(m).x1max;
@@ -195,15 +219,15 @@ TaskStatus RadiationFEMN::ApplyLimiterDG(Driver *pdriver, int stage) {
               auto dminusx = (f0_cellavg - f0_cellavg_mx) / (2.0 * mbsize.d_view(m).dx1);
               auto dplusx = (f0_cellavg_px - f0_cellavg) / (2.0 * mbsize.d_view(m).dx1);
               auto islopex = 2.0 * (f0_(m, enang, kk, jj, ii + 1) - f0_(m, enang, kk, jj, ii) + f0_(m, enang, kk, jj + 1, ii + 1) - f0_(m, enang, kk, jj + 1, ii))
-                  / (2.0 * 2.0 * mbsize.d_view(m).dx1);
+                             / (2.0 * 2.0 * mbsize.d_view(m).dx1);
 
               auto dminusy = (f0_cellavg - f0_cellavg_my) / (2.0 * mbsize.d_view(m).dx2);
               auto dplusy = (f0_cellavg_py - f0_cellavg) / (2.0 * mbsize.d_view(m).dx2);
               auto islopey = 2.0 * (f0_(m, enang, kk, jj + 1, ii) - f0_(m, enang, kk, jj, ii) + f0_(m, enang, kk, jj + 1, ii + 1) - f0_(m, enang, kk, jj, ii + 1))
-                  / (2.0 * 2.0 * mbsize.d_view(m).dx2);
+                             / (2.0 * 2.0 * mbsize.d_view(m).dx2);
 
-              auto sigmax = minmod2(islopex, dminusx, dplusx);
-              auto sigmay = minmod2(islopey, dminusy, dplusy);
+              auto sigmax = minmodgeneral(islopex, dminusx, dplusx);
+              auto sigmay = minmodgeneral(islopey, dminusy, dplusy);
 
               Real &x1min = mbsize.d_view(m).x1min;
               Real &x1max = mbsize.d_view(m).x1max;
@@ -236,53 +260,55 @@ TaskStatus RadiationFEMN::ApplyLimiterDG(Driver *pdriver, int stage) {
               auto ii = 2 * i - 2;
 
               auto f0_cellavg = (1.0 / 8.0)
-                  * (f0_(m, enang, kk, jj, ii) + f0_(m, enang, kk, jj, ii + 1) + f0_(m, enang, kk, jj + 1, ii) + f0_(m, enang, kk, jj + 1, ii + 1)
-                      + f0_(m, enang, kk + 1, jj, ii)
-                      + f0_(m, enang, kk + 1, jj, ii + 1) + f0_(m, enang, kk + 1, jj + 1, ii) + f0_(m, enang, kk + 1, jj + 1, ii + 1));
+                                * (f0_(m, enang, kk, jj, ii) + f0_(m, enang, kk, jj, ii + 1) + f0_(m, enang, kk, jj + 1, ii) + f0_(m, enang, kk, jj + 1, ii + 1)
+                                   + f0_(m, enang, kk + 1, jj, ii)
+                                   + f0_(m, enang, kk + 1, jj, ii + 1) + f0_(m, enang, kk + 1, jj + 1, ii) + f0_(m, enang, kk + 1, jj + 1, ii + 1));
               auto f0_cellavg_mx =
                   (1.0 / 8.0) * (f0_(m, enang, kk, jj, ii - 2) + f0_(m, enang, kk, jj, ii - 1) + f0_(m, enang, kk, jj + 1, ii - 2) + f0_(m, enang, kk, jj + 1, ii - 1)
-                      + f0_(m, enang, kk + 1, jj, ii - 2) + f0_(m, enang, kk + 1, jj, ii - 1) + f0_(m, enang, kk + 1, jj + 1, ii - 2)
-                      + f0_(m, enang, kk + 1, jj + 1, ii - 1));
+                                 + f0_(m, enang, kk + 1, jj, ii - 2) + f0_(m, enang, kk + 1, jj, ii - 1) + f0_(m, enang, kk + 1, jj + 1, ii - 2)
+                                 + f0_(m, enang, kk + 1, jj + 1, ii - 1));
               auto f0_cellavg_px = (1.0 / 8.0)
-                  * (f0_(m, enang, kk, jj, ii + 2) + f0_(m, enang, kk, jj, ii + 3) + f0_(m, enang, kk, jj + 1, ii + 2) + f0_(m, enang, kk, jj + 1, ii + 3)
-                      + f0_(m, enang, kk + 1, jj, ii + 2) + f0_(m, enang, kk + 1, jj, ii + 3) + f0_(m, enang, kk + 1, jj + 1, ii + 2)
-                      + f0_(m, enang, kk + 1, jj + 1, ii + 3));
+                                   * (f0_(m, enang, kk, jj, ii + 2) + f0_(m, enang, kk, jj, ii + 3) + f0_(m, enang, kk, jj + 1, ii + 2) + f0_(m, enang, kk, jj + 1, ii + 3)
+                                      + f0_(m, enang, kk + 1, jj, ii + 2) + f0_(m, enang, kk + 1, jj, ii + 3) + f0_(m, enang, kk + 1, jj + 1, ii + 2)
+                                      + f0_(m, enang, kk + 1, jj + 1, ii + 3));
               auto f0_cellavg_my = (1.0 / 8.0)
-                  * (f0_(m, enang, kk, jj - 2, ii) + f0_(m, enang, kk, jj - 2, ii + 1) + f0_(m, enang, kk, jj - 1, ii) + f0_(m, enang, kk, jj - 1, ii + 1)
-                      + f0_(m, enang, kk + 1, jj - 2, ii) + f0_(m, enang, kk + 1, jj - 2, ii + 1) + f0_(m, enang, kk + 1, jj - 1, ii)
-                      + f0_(m, enang, kk + 1, jj - 1, ii + 1));
+                                   * (f0_(m, enang, kk, jj - 2, ii) + f0_(m, enang, kk, jj - 2, ii + 1) + f0_(m, enang, kk, jj - 1, ii) + f0_(m, enang, kk, jj - 1, ii + 1)
+                                      + f0_(m, enang, kk + 1, jj - 2, ii) + f0_(m, enang, kk + 1, jj - 2, ii + 1) + f0_(m, enang, kk + 1, jj - 1, ii)
+                                      + f0_(m, enang, kk + 1, jj - 1, ii + 1));
               auto f0_cellavg_py = (1.0 / 8.0)
-                  * (f0_(m, enang, kk, jj + 2, ii) + f0_(m, enang, kk, jj + 2, ii + 1) + f0_(m, enang, kk, jj + 3, ii) + f0_(m, enang, kk, jj + 3, ii + 1)
-                      + f0_(m, enang, kk + 1, jj + 2, ii) + f0_(m, enang, kk + 1, jj + 2, ii + 1) + f0_(m, enang, kk + 1, jj + 3, ii)
-                      + f0_(m, enang, kk + 1, jj + 3, ii + 1));
+                                   * (f0_(m, enang, kk, jj + 2, ii) + f0_(m, enang, kk, jj + 2, ii + 1) + f0_(m, enang, kk, jj + 3, ii) + f0_(m, enang, kk, jj + 3, ii + 1)
+                                      + f0_(m, enang, kk + 1, jj + 2, ii) + f0_(m, enang, kk + 1, jj + 2, ii + 1) + f0_(m, enang, kk + 1, jj + 3, ii)
+                                      + f0_(m, enang, kk + 1, jj + 3, ii + 1));
               auto f0_cellavg_mz = (1.0 / 8.0)
-                  * (f0_(m, enang, kk - 2, jj, ii) + f0_(m, enang, kk - 2, jj, ii + 1) + f0_(m, enang, kk - 2, jj + 1, ii) + f0_(m, enang, kk - 2, jj + 1, ii + 1)
-                      + f0_(m, enang, kk - 1, jj, ii) + f0_(m, enang, kk - 1, jj, ii + 1) + f0_(m, enang, kk - 1, jj + 1, ii) + f0_(m, enang, kk - 1, jj + 1, ii + 1));
+                                   * (f0_(m, enang, kk - 2, jj, ii) + f0_(m, enang, kk - 2, jj, ii + 1) + f0_(m, enang, kk - 2, jj + 1, ii) + f0_(m, enang, kk - 2, jj + 1, ii + 1)
+                                      + f0_(m, enang, kk - 1, jj, ii) + f0_(m, enang, kk - 1, jj, ii + 1) + f0_(m, enang, kk - 1, jj + 1, ii) +
+                                      f0_(m, enang, kk - 1, jj + 1, ii + 1));
               auto f0_cellavg_pz = (1.0 / 8.0)
-                  * (f0_(m, enang, kk + 2, jj, ii) + f0_(m, enang, kk + 2, jj, ii + 1) + f0_(m, enang, kk + 2, jj + 1, ii) + f0_(m, enang, kk + 2, jj + 1, ii + 1)
-                      + f0_(m, enang, kk + 3, jj, ii) + f0_(m, enang, kk + 3, jj, ii + 1) + f0_(m, enang, kk + 3, jj + 1, ii) + f0_(m, enang, kk + 3, jj + 1, ii + 1));
+                                   * (f0_(m, enang, kk + 2, jj, ii) + f0_(m, enang, kk + 2, jj, ii + 1) + f0_(m, enang, kk + 2, jj + 1, ii) + f0_(m, enang, kk + 2, jj + 1, ii + 1)
+                                      + f0_(m, enang, kk + 3, jj, ii) + f0_(m, enang, kk + 3, jj, ii + 1) + f0_(m, enang, kk + 3, jj + 1, ii) +
+                                      f0_(m, enang, kk + 3, jj + 1, ii + 1));
 
               auto dminusx = (f0_cellavg - f0_cellavg_mx) / (2.0 * mbsize.d_view(m).dx1);
               auto dplusx = (f0_cellavg_px - f0_cellavg) / (2.0 * mbsize.d_view(m).dx1);
               auto islopex = 2.0 * (f0_(m, enang, kk, jj, ii + 1) - f0_(m, enang, kk, jj, ii) + f0_(m, enang, kk, jj + 1, ii + 1) - f0_(m, enang, kk, jj + 1, ii)
-                  + f0_(m, enang, kk + 1, jj, ii + 1) - f0_(m, enang, kk + 1, jj, ii) + f0_(m, enang, kk + 1, jj + 1, ii + 1) - f0_(m, enang, kk + 1, jj + 1, ii))
-                  / (2.0 * 2.0 * 2.0 * mbsize.d_view(m).dx1);
+                                    + f0_(m, enang, kk + 1, jj, ii + 1) - f0_(m, enang, kk + 1, jj, ii) + f0_(m, enang, kk + 1, jj + 1, ii + 1) - f0_(m, enang, kk + 1, jj + 1, ii))
+                             / (2.0 * 2.0 * 2.0 * mbsize.d_view(m).dx1);
 
               auto dminusy = (f0_cellavg - f0_cellavg_my) / (2.0 * mbsize.d_view(m).dx2);
               auto dplusy = (f0_cellavg_py - f0_cellavg) / (2.0 * mbsize.d_view(m).dx2);
               auto islopey = 2.0 * (f0_(m, enang, kk, jj + 1, ii) - f0_(m, enang, kk, jj, ii) + f0_(m, enang, kk, jj + 1, ii + 1) - f0_(m, enang, kk, jj, ii + 1)
-                  + f0_(m, enang, kk + 1, jj + 1, ii) - f0_(m, enang, kk + 1, jj, ii) + f0_(m, enang, kk + 1, jj + 1, ii + 1) - f0_(m, enang, kk + 1, jj, ii + 1))
-                  / (2.0 * 2.0 * 2.0 * mbsize.d_view(m).dx2);
+                                    + f0_(m, enang, kk + 1, jj + 1, ii) - f0_(m, enang, kk + 1, jj, ii) + f0_(m, enang, kk + 1, jj + 1, ii + 1) - f0_(m, enang, kk + 1, jj, ii + 1))
+                             / (2.0 * 2.0 * 2.0 * mbsize.d_view(m).dx2);
 
               auto dminusz = (f0_cellavg - f0_cellavg_mz) / (2.0 * mbsize.d_view(m).dx3);
               auto dplusz = (f0_cellavg_pz - f0_cellavg) / (2.0 * mbsize.d_view(m).dx3);
               auto islopez = 2.0 * (f0_(m, enang, kk + 1, jj, ii) - f0_(m, enang, kk, jj, ii) + f0_(m, enang, kk + 1, jj, ii + 1) - f0_(m, enang, kk, jj, ii + 1)
-                  + f0_(m, enang, kk + 1, jj + 1, ii) - f0_(m, enang, kk, jj + 1, ii) + f0_(m, enang, kk + 1, jj + 1, ii + 1) - f0_(m, enang, kk, jj, ii + 1))
-                  / (2.0 * 2.0 * 2.0 * mbsize.d_view(m).dx3);
+                                    + f0_(m, enang, kk + 1, jj + 1, ii) - f0_(m, enang, kk, jj + 1, ii) + f0_(m, enang, kk + 1, jj + 1, ii + 1) - f0_(m, enang, kk, jj, ii + 1))
+                             / (2.0 * 2.0 * 2.0 * mbsize.d_view(m).dx3);
 
-              auto sigmax = minmod2(islopex, dminusx, dplusx);
-              auto sigmay = minmod2(islopey, dminusy, dplusy);
-              auto sigmaz = minmod2(islopez, dminusz, dplusz);
+              auto sigmax = minmodgeneral(islopex, dminusx, dplusx);
+              auto sigmay = minmodgeneral(islopey, dminusy, dplusy);
+              auto sigmaz = minmodgeneral(islopez, dminusz, dplusz);
 
               Real &x1min = mbsize.d_view(m).x1min;
               Real &x1max = mbsize.d_view(m).x1max;
