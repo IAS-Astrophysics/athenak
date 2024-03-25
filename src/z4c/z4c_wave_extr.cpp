@@ -157,17 +157,55 @@ void Z4c::WaveExtr(MeshBlockPack *pmbp) {
       bool fileExists2 = fileCheck2.good();
       fileCheck2.close();
 
+
       // If the file doesn't exist, create it
       if (!fileExists) {
-          std::ofstream createFile(filename);
-          createFile.close();
+        std::ofstream createFile(filename);
+        createFile.close();
+
+        // Open a file stream for writing header
+        std::ofstream outFile;
+        // append mode
+        outFile.open(filename, std::ios::out | std::ios::app);
+        // first append time
+        outFile << "# 1:time" << "\t";
+        // append waveform
+        int a = 2;
+        for (int l = 2; l < lmax+1; ++l) {
+          for (int m = -l; m < l+1 ; ++m) {
+            outFile << std::to_string(a)+":"+std::to_string(l)+std::to_string(m) << '\t';
+            a++;
+          }
+        }
+        outFile << '\n';
+
+        // Close the file stream
+        outFile.close();
       }
       if (!fileExists2) {
-          std::ofstream createFile(filename2);
-          createFile.close();
-      }
+        std::ofstream createFile(filename2);
+        createFile.close();
 
-      // Open a file stream for writing
+        // Open a file stream for writing header
+        std::ofstream outFile;
+        // append mode
+        outFile.open(filename2, std::ios::out | std::ios::app);
+        // first append time
+        outFile << "# 1:time" << "\t";
+        // append waveform
+        int a = 2;
+        for (int l = 2; l < lmax+1; ++l) {
+          for (int m = -l; m < l+1 ; ++m) {
+            outFile << std::to_string(a)+":"+std::to_string(l)+std::to_string(m) << '\t';
+            a++;
+          }
+        }
+        outFile << '\n';
+
+        // Close the file stream
+        outFile.close();
+      }
+      // Open a file stream for writing header
       std::ofstream outFile;
       std::ofstream outFile2;
 
@@ -182,8 +220,8 @@ void Z4c::WaveExtr(MeshBlockPack *pmbp) {
       // append waveform
       for (int l = 2; l < lmax+1; ++l) {
         for (int m = -l; m < l+1 ; ++m) {
-          outFile << psi_out(g,LmIndex(l,m),0) << '\t';
-          outFile2 << psi_out(g,LmIndex(l,m),1) << '\t';
+          outFile << std::setprecision(15) << psi_out(g,LmIndex(l,m),0) << '\t';
+          outFile2 << std::setprecision(15) << psi_out(g,LmIndex(l,m),1) << '\t';
         }
       }
       outFile << '\n';
