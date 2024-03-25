@@ -189,8 +189,8 @@ void ParticleVTKOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
       msg << std::endl << std::endl << "POINT_DATA " << npout_total << std::endl
           << "SCALARS gid float" << std::endl << "LOOKUP_TABLE default" << std::endl;
     } else if (n == static_cast<int>(PTAG)) {
-      msg << std::endl << std::endl << "POINT_DATA " << npout_total << std::endl
-          << "SCALARS ptag float" << std::endl << "LOOKUP_TABLE default" << std::endl;
+      //msg << std::endl << std::endl << "POINT_DATA " << npout_total << std::endl
+      msg << "SCALARS ptag float" << std::endl << "LOOKUP_TABLE default" << std::endl;
     }
     if (global_variable::my_rank == 0) {
       partfile.Write_any_type_at(msg.str().c_str(),msg.str().size(),header_offset,"byte");
