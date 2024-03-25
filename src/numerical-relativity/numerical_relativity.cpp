@@ -73,25 +73,28 @@ bool NumericalRelativity::DependenciesMet(std::vector<TaskName>& tasks) {
 bool NumericalRelativity::DependenciesMet(QueuedTask& task,
                                           std::vector<QueuedTask>& queue,
                                           TaskID& dependencies) {
-  for (auto& test_task : queue) {
-    if (HasDependency(test_task.name, task.dependencies)) {
-      if (!test_task.added) {
-        return false;
+  // Loop through all the dependencies, then compare them to each task in the queue.
+  // If a dependency hasn't been added to the task list, return false. Otherwise, add its
+  // id to the dependency id. If the dependency simply doesn't exist in the list, always
+  // return false.
+  for (auto& dep : task.dependencies) {
+    bool found = false;
+    for (auto &test_task : queue) {
+      if (test_task.name == dep) {
+        found = true;
+        if (!test_task.added) {
+          return false;
+        }
+        dependencies = dependencies | test_task.id;
       }
-      dependencies = dependencies | test_task.id;
+    }
+    // This handles the corner case where the dependency isn't in the queue.
+    if (!found) {
+      return false;
     }
   }
-  return true;
-}
 
-bool NumericalRelativity::HasDependency(TaskName task,
-                                        std::vector<TaskName>& dependencies) {
-  for (TaskName test_task : dependencies) {
-    if (task == test_task) {
-      return true;
-    }
-  }
-  return false;
+  return true;
 }
 
 void NumericalRelativity::AddExtraDependencies(std::vector<TaskName>& required,
@@ -117,7 +120,11 @@ bool NumericalRelativity::AssembleNumericalRelativityTasks(
         task.id = list->AddTask(task.func_, dep);
         cycle_added++;
         added++;
-        //std::cout << "Successfully added " << task.name_string << " to task list!\n";
+        /*std::cout << "Successfully added " << task.name_string << " to task list!\n"
+                  << "  ID: ";
+        task.id.PrintID();
+        std::cout << "  Dependencies: ";
+        dep.PrintID();*/
       }
     }
     if (cycle_added == 0) {
@@ -126,6 +133,21 @@ bool NumericalRelativity::AssembleNumericalRelativityTasks(
   }
 
   return true;
+}
+
+void NumericalRelativity::PrintMissingTasks(std::vector<QueuedTask> &queue) {
+  std::cout << "Successfully added the following tasks:\n";
+  for (auto& task : queue) {
+    if (task.added) {
+      std::cout << "  " << task.name_string << "\n";
+    }
+  }
+  std::cout << "Could not add the following tasks:\n";
+  for (auto& task : queue) {
+    if (!task.added) {
+      std::cout << "  " << task.name_string << "\n";
+    }
+  }
 }
 
 void NumericalRelativity::AssembleNumericalRelativityTasks(
@@ -142,6 +164,7 @@ void NumericalRelativity::AssembleNumericalRelativityTasks(
   if (!success) {
     std::cout << "NumericalRelativity: Failed to construct start TaskList!\n"
               << "  Check that there are no cyclical dependencies or missing tasks.\n";
+    PrintMissingTasks(start_queue);
     abort();
   }
 
@@ -149,6 +172,7 @@ void NumericalRelativity::AssembleNumericalRelativityTasks(
   if (!success) {
     std::cout << "NumericalRelativity: Failed to construct run TaskList!\n"
               << "  Check that there are no cyclical dependencies or missing tasks.\n";
+    PrintMissingTasks(run_queue);
     abort();
   }
 
@@ -156,6 +180,7 @@ void NumericalRelativity::AssembleNumericalRelativityTasks(
   if (!success) {
     std::cout << "NumericalRelativity: Failed to construct end TaskList!\n"
               << "  Check that there are no cyclical dependencies or missing tasks.\n";
+    PrintMissingTasks(end_queue);
     abort();
   }
 }

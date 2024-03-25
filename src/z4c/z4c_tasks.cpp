@@ -83,15 +83,15 @@ void Z4c::QueueZ4cTasks() {
   switch (indcs.ng) {
     case 2:
       pnr->QueueTask(&Z4c::CalcRHS<2>, this, Z4c_CalcRHS, "Z4c_CalcRHS",
-                     Task_Run, {Z4c_Recv}, {MHD_SetTmunu});
+                     Task_Run, {Z4c_CopyU}, {MHD_SetTmunu});
       break;
     case 3:
       pnr->QueueTask(&Z4c::CalcRHS<3>, this, Z4c_CalcRHS, "Z4c_CalcRHS",
-                     Task_Run, {Z4c_Recv}, {MHD_SetTmunu});
+                     Task_Run, {Z4c_CopyU}, {MHD_SetTmunu});
       break;
     case 4:
       pnr->QueueTask(&Z4c::CalcRHS<4>, this, Z4c_CalcRHS, "Z4c_CalcRHS",
-                     Task_Run, {Z4c_Recv}, {MHD_SetTmunu});
+                     Task_Run, {Z4c_CopyU}, {MHD_SetTmunu});
       break;
   }
   pnr->QueueTask(&Z4c::Z4cBoundaryRHS, this, Z4c_SomBC, "Z4c_SomBC", Task_Run,
@@ -105,16 +105,18 @@ void Z4c::QueueZ4cTasks() {
   pnr->QueueTask(&Z4c::Prolongate, this, Z4c_Prolong, "Z4c_Prolong", Task_Run, {Z4c_BCS});
   pnr->QueueTask(&Z4c::EnforceAlgConstr, this, Z4c_AlgC, "Z4c_AlgC", Task_Run,
                  {Z4c_Prolong});
+  pnr->QueueTask(&Z4c::Z4cToADM_, this, Z4c_Z4c2ADM, "Z4c_Z4c2ADM", Task_Run, {Z4c_AlgC});
   pnr->QueueTask(&Z4c::NewTimeStep, this, Z4c_Newdt, "Z4c_Newdt", Task_Run, {Z4c_AlgC},
                  {MHD_Flux, MHD_ExplRK});
 
   // End task list
   pnr->QueueTask(&Z4c::ClearSend, this, Z4c_ClearS, "Z4c_ClearS", Task_End);
   pnr->QueueTask(&Z4c::ClearRecv, this, Z4c_ClearR, "Z4c_ClearR", Task_End, {Z4c_ClearS});
-  pnr->QueueTask(&Z4c::Z4cToADM_, this, Z4c_Z4c2ADM, "Z4c_Z4c2ADM", Task_End,
-                 {Z4c_ClearR});
+  /*pnr->QueueTask(&Z4c::Z4cToADM_, this, Z4c_Z4c2ADM, "Z4c_Z4c2ADM", Task_End,
+                 {Z4c_ClearR});*/
   pnr->QueueTask(&Z4c::ADMConstraints_, this, Z4c_ADMC, "Z4c_ADMC", Task_End,
-                 {Z4c_Z4c2ADM});
+  //               {Z4c_Z4c2ADM});
+                 {Z4c_ClearR});
   pnr->QueueTask(&Z4c::CalcWeylScalar_, this, Z4c_Weyl, "Z4c_Weyl", Task_End, {Z4c_ADMC});
   pnr->QueueTask(&Z4c::PunctureTracker, this, Z4c_PT, "Z4c_PT", Task_End, {Z4c_ADMC});
 }

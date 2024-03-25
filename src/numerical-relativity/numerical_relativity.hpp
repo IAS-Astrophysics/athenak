@@ -165,6 +165,8 @@ class NumericalRelativity {
   void AddExtraDependencies(std::vector<TaskName>& required,
                             std::vector<TaskName>& optional);
 
+  void PrintMissingTasks(std::vector<QueuedTask> &queue);
+
   bool AssembleNumericalRelativityTasks(std::shared_ptr<TaskList>& list,
          std::vector<QueuedTask> &queue);
 };
