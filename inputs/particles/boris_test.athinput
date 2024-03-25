@@ -53,7 +53,7 @@ rsolver     = hlld      # Riemann-solver to be used
 gamma       = 1.6666667 # gamma = C_p/C_v
 
 <problem>
-max_init_vel = 0.5
+max_init_vel = 0.1
 b0_strength = 1.0
 user_hist = true
 
