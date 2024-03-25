@@ -77,12 +77,12 @@ void RadiationFEMN::InitializeBeamsSourcesFPN() {
   std::cout << "Initializing beam sources for FPN" << std::endl;
 
   for (int i = 0; i < num_points; i++) {
-    beam_source_1_vals(i) = fpn_basis_lm((int)angular_grid(i, 0), (int)angular_grid(i, 1), beam_source_1_phi, beam_source_1_theta);
+    beam_source_1_vals(i) = fpn_basis_lm((int) angular_grid(i, 0), (int) angular_grid(i, 1), beam_source_1_phi, beam_source_1_theta);
   }
 
   if (num_beams > 1) {
     for (int i = 0; i < num_points; i++) {
-      beam_source_2_vals(i) = fpn_basis_lm((int)angular_grid(i, 0), (int)angular_grid(i, 1), beam_source_2_phi, beam_source_2_theta);
+      beam_source_2_vals(i) = fpn_basis_lm((int) angular_grid(i, 0), (int) angular_grid(i, 1), beam_source_2_phi, beam_source_2_theta);
     }
   }
 }
@@ -93,21 +93,37 @@ void RadiationFEMN::InitializeBeamsSourcesM1() {
 
   Real Fnorm = 4.;
   Real E = Fnorm;
-  Real Fx = E - 1e-6;
-  //Real Fx = Fnorm * sin(beam_source_1_theta) * cos(beam_source_1_phi);
-  Real Fy = 0 * Fnorm * sin(beam_source_1_theta) * sin(beam_source_1_phi);
-  Real Fz = 0 * Fnorm * cos(beam_source_1_theta);
+  Real Fx = Fnorm * sin(beam_source_1_theta) * cos(beam_source_1_phi) - 1e-6;
+  Real Fy = Fnorm * sin(beam_source_1_theta) * sin(beam_source_1_phi) - 1e-6;
+  Real Fz = Fnorm * cos(beam_source_1_theta) - 1e-6;
 
   beam_source_1_vals(0) = (1. / sqrt(4. * M_PI)) * E;
-  beam_source_1_vals(1) = 0;
-  beam_source_1_vals(2) = 0;
-  beam_source_1_vals(3) = - sqrt(3. / (4. * M_PI)) * Fx;
+  beam_source_1_vals(1) = -sqrt(3. / (4. * M_PI)) * Fy;
+  beam_source_1_vals(2) = sqrt(3. / (4. * M_PI)) * Fz;
+  beam_source_1_vals(3) = -sqrt(3. / (4. * M_PI)) * Fx;
   beam_source_1_vals(4) = 0;
   beam_source_1_vals(5) = 0;
   beam_source_1_vals(6) = 0;
   beam_source_1_vals(7) = 0;
   beam_source_1_vals(8) = 0;
 
+  if (num_beams > 1) {
+    Fnorm = 4.;
+    E = Fnorm;
+    Fx = Fnorm * sin(beam_source_2_theta) * cos(beam_source_2_phi) - 1e-6;
+    Fy = Fnorm * sin(beam_source_2_theta) * sin(beam_source_2_phi) - 1e-6;
+    Fz = Fnorm * cos(beam_source_2_theta) - 1e-6;
+
+    beam_source_2_vals(0) = (1. / sqrt(4. * M_PI)) * E;
+    beam_source_2_vals(1) = -sqrt(3. / (4. * M_PI)) * Fy;
+    beam_source_2_vals(2) = sqrt(3. / (4. * M_PI)) * Fz;
+    beam_source_2_vals(3) = -sqrt(3. / (4. * M_PI)) * Fx;
+    beam_source_2_vals(4) = 0;
+    beam_source_2_vals(5) = 0;
+    beam_source_2_vals(6) = 0;
+    beam_source_2_vals(7) = 0;
+    beam_source_2_vals(8) = 0;
+  }
 }
 
 void RadiationFEMN::InitializeBeamsSourcesFEMN() {
@@ -134,11 +150,11 @@ void RadiationFEMN::InitializeBeamsSourcesFEMN() {
     Real z3 = angular_grid_cartesian(triangle_information(i, 2), 2);
 
     Real a = (x3 * y2 * z0 - x2 * y3 * z0 - x3 * y0 * z2 + x0 * y3 * z2 + x2 * y0 * z3 - x0 * y2 * z3)
-        / (x3 * y2 * z1 - x2 * y3 * z1 - x3 * y1 * z2 + x1 * y3 * z2 + x2 * y1 * z3 - x1 * y2 * z3);
+             / (x3 * y2 * z1 - x2 * y3 * z1 - x3 * y1 * z2 + x1 * y3 * z2 + x2 * y1 * z3 - x1 * y2 * z3);
     Real b = (x3 * y1 * z0 - x1 * y3 * z0 - x3 * y0 * z1 + x0 * y3 * z1 + x1 * y0 * z3 - x0 * y1 * z3)
-        / (-(x3 * y2 * z1) + x2 * y3 * z1 + x3 * y1 * z2 - x1 * y3 * z2 - x2 * y1 * z3 + x1 * y2 * z3);
+             / (-(x3 * y2 * z1) + x2 * y3 * z1 + x3 * y1 * z2 - x1 * y3 * z2 - x2 * y1 * z3 + x1 * y2 * z3);
     Real c = (x2 * y1 * z0 - x1 * y2 * z0 - x2 * y0 * z1 + x0 * y2 * z1 + x1 * y0 * z2 - x0 * y1 * z2)
-        / (x3 * y2 * z1 - x2 * y3 * z1 - x3 * y1 * z2 + x1 * y3 * z2 + x2 * y1 * z3 - x1 * y2 * z3);
+             / (x3 * y2 * z1 - x2 * y3 * z1 - x3 * y1 * z2 + x1 * y3 * z2 + x2 * y1 * z3 - x1 * y2 * z3);
 
     Real lam = 1. / (a + b + c);
 
@@ -180,11 +196,11 @@ void RadiationFEMN::InitializeBeamsSourcesFEMN() {
       Real z3 = angular_grid_cartesian(triangle_information(i, 2), 2);
 
       Real a = (x3 * y2 * z0 - x2 * y3 * z0 - x3 * y0 * z2 + x0 * y3 * z2 + x2 * y0 * z3 - x0 * y2 * z3)
-          / (x3 * y2 * z1 - x2 * y3 * z1 - x3 * y1 * z2 + x1 * y3 * z2 + x2 * y1 * z3 - x1 * y2 * z3);
+               / (x3 * y2 * z1 - x2 * y3 * z1 - x3 * y1 * z2 + x1 * y3 * z2 + x2 * y1 * z3 - x1 * y2 * z3);
       Real b = (x3 * y1 * z0 - x1 * y3 * z0 - x3 * y0 * z1 + x0 * y3 * z1 + x1 * y0 * z3 - x0 * y1 * z3)
-          / (-(x3 * y2 * z1) + x2 * y3 * z1 + x3 * y1 * z2 - x1 * y3 * z2 - x2 * y1 * z3 + x1 * y2 * z3);
+               / (-(x3 * y2 * z1) + x2 * y3 * z1 + x3 * y1 * z2 - x1 * y3 * z2 - x2 * y1 * z3 + x1 * y2 * z3);
       Real c = (x2 * y1 * z0 - x1 * y2 * z0 - x2 * y0 * z1 + x0 * y2 * z1 + x1 * y0 * z2 - x0 * y1 * z2)
-          / (x3 * y2 * z1 - x2 * y3 * z1 - x3 * y1 * z2 + x1 * y3 * z2 + x2 * y1 * z3 - x1 * y2 * z3);
+               / (x3 * y2 * z1 - x2 * y3 * z1 - x3 * y1 * z2 + x1 * y3 * z2 + x2 * y1 * z3 - x1 * y2 * z3);
 
       Real lam = 1. / (a + b + c);
 
