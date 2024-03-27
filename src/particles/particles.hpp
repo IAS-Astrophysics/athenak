@@ -88,8 +88,10 @@ class Particles {
   TaskStatus ClearSend(Driver *pdriver, int stage);
   TaskStatus ClearRecv(Driver *pdriver, int stage);
 
-  void BorisStep( const Real dt, const bool multi_d, const bool three_d );
+  void BorisStep( const Real dt, const bool multi_d, const bool three_d, const bool only_v );
   void GeodesicIterations( const Real dt, const bool multi_d, const bool three_d );
+  void ComputeGeodesicTerms( const Real * x, const Real * u, Real * acc );
+  void ComputeLorentzFactorGR( const Real * x, const Real * u, Real * g_Lor );
  private:
   MeshBlockPack* pmy_pack;  // ptr to MeshBlockPack containing this Particles
 };
