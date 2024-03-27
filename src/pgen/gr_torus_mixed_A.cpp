@@ -1302,10 +1302,12 @@ static void CalculateVectorPotentialInTiltedTorus(struct torus_pgen pgen,
         aphi_tilt = pow(rho/pgen.rho_max, pgen.potential_rho_pow)*scaling_param;
         aphi_tilt -= pgen.potential_cutoff;
         aphi_tilt = fmax(aphi_tilt, 0.0);
+        aphi_tilt *= pgen.potential_pol_frac;
 
         atheta_tilt = pow(rho/pgen.rho_max, pgen.potential_rho_pow_tor)*scaling_param_tor;
         atheta_tilt -= pgen.potential_cutoff;
         atheta_tilt = fmax(atheta_tilt, 0.0);
+        atheta_tilt *= (1.0 - pgen.potential_pol_frac);
         if (pgen.psi != 0.0) {
           Real dvarphi_dtheta = -pgen.sin_psi * sin_phi / SQR(sin_vartheta);
           Real dvarphi_dphi = sin_theta / SQR(sin_vartheta)
