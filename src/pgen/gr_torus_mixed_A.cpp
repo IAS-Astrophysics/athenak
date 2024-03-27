@@ -1316,7 +1316,7 @@ static void CalculateVectorPotentialInTiltedTorus(struct torus_pgen pgen,
           Real dvartheta_dtheta = pgen.cos_psi * cos_phi;
           Real dvartheta_dphi = -pgen.sin_psi * sin_phi;
           atheta = dvarphi_dtheta * aphi_tilt + dvartheta_dtheta * atheta_tilt;
-          aphi = dvarphi_dphi * aphi_tilt + dvarphi_dphi * atheta_tilt;
+          aphi = dvarphi_dphi * aphi_tilt + dvartheta_dphi * atheta_tilt;
         } else {
           atheta = atheta_tilt;
           aphi = aphi_tilt;
