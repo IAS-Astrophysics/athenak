@@ -58,9 +58,9 @@ TaskStatus Particles::Push(Driver *pdriver, int stage) {
     break;
     
     case ParticlesPusher::full_gr:
-      //BorisStep(dt_/2.0, multi_d, three_d, true);
+      BorisStep(dt_/2.0, multi_d, three_d, true);
       GeodesicIterations(dt_, multi_d, three_d);
-      //BorisStep(dt_/2.0, multi_d, three_d, true);
+      BorisStep(dt_/2.0, multi_d, three_d, true);
     break;
 
     default:
@@ -94,36 +94,46 @@ void Particles::BorisStep( const Real dt, const bool multi_d, const bool three_d
       par_for("part_boris",DevExeSpace(),0,(npart-1),
       KOKKOS_LAMBDA(const int p) {
       
-	Real up[3] = {pr(IPVX,p), pr(IPVY,p), pr(IPVZ,p)};
-	Real x1,x2,x3; //Half-step increment. Index 1... stands for dimension (0 is time).
-	// Push in local frame
-	x1 = pr(IPX,p) + dt/(2.0)*up[0];
-        if (multi_d) { x2 = pr(IPY,p) + dt/(2.0)*up[1]; }
-        if (three_d) { x3 = pr(IPZ,p) + dt/(2.0)*up[2]; }
+        // Contravariant and co-variant 4-velocities
+	Real u_con[3] = {pr(IPVX,p), pr(IPVY,p), pr(IPVZ,p)};
+	Real u_cov[3];
+	Real x[3]; //Half-step increment.
+	Real g_Lor;
+	x[0] = pr(IPX,p) + dt/(2.0)*u_con[0];
+        if (multi_d) { x[1] = pr(IPY,p) + dt/(2.0)*u_con[1]; }
+        if (three_d) { x[2] = pr(IPZ,p) + dt/(2.0)*u_con[2]; }
 	// Get metric components at new location x1,x2,x3
 	Real glower[4][4], gupper[4][4], ADM_upper[3][3]; // Metric 
 					       // (remember: sqrt(-1/gupper[0][0]) = alpha, glower[0][i] = beta[i])
 	ComputeMetricAndInverse(pr(IPX,p),pr(IPY,p),pr(IPZ,p), is_minkowski, spin, glower, gupper); 
-	//Boost the local velocity to the covariant one using the "usual" definition of Lorentz factor
-	Real g_Lor = 0.0;
-	for (int i1 = 0; i1<3; ++i1){ g_Lor += SQR(up[i1]); }
-	g_Lor = 1.0/sqrt(1.0 - g_Lor);
         //std::cout << "g_Lor " << p << " " << g_Lor << std::endl;
-	for (int i1 = 0; i1<3; ++i1){ up[i1] *= g_Lor; }
 	// Compute 3x3 ADM spatial metric from covariant metric 
 	for (int i1 = 0; i1 < 3; ++i1 ){ 
 		for (int i2 = 0; i2 < 3; ++i2 ){ 
 		ADM_upper[i1][i2] = gupper[i1+1][i2+1] + gupper[0][i2+1]*gupper[i1+1][0];
 		}
 	}
-	//Use deinition of the Lorentz factor in ADM formalism
+	// ADM_lower = glower for i,j = 1,2,3
+	// Lower indeces of u_con (g_Lor is applied afterwards)
+	for (int i1 = 0; i1 < 3; ++i1 ){ 
+		u_cov[i1] = 0.0;
+		for (int i2 = 0; i2 < 3; ++i2 ){ 
+		u_cov[i1] += glower[i1+1][i2+1]*u_con[i2];
+		}
+	}
+	//Use definition of the Lorentz factor in ADM formalism
 	g_Lor = 0.0;
 	for (int i1 = 0; i1 < 3; ++i1 ){ 
 		for (int i2 = 0; i2 < 3; ++i2 ){ 
-		g_Lor += ADM_upper[i1][i2]*up[i1]*up[i2];
+		g_Lor += ADM_upper[i1][i2]*u_cov[i1]*u_cov[i2];
 		}
 	}
 	g_Lor = sqrt(1.0 + g_Lor);
+	//Boost velocities
+	for ( int i=0; i<3; ++i){
+		u_cov[i] *= g_Lor;
+		u_con[i] *= g_Lor;
+	}
 
         //std::cout << "x123 " << global_variable::my_rank << " " << pi(PTAG,p) << " " << x1 << " " << x2 << " " << x3 << std::endl;
 	Real uE[3]; //Evolution of the velocity due to the electric field (first half). Index 1... stands for dimension (0 is time).
@@ -163,35 +173,42 @@ void Particles::BorisStep( const Real dt, const bool multi_d, const bool three_d
         // Interpolate Electric Field at new particle location x1, x2, x3
 	// Store it in an array for convenience 
 	Real E[3] = {0.0, 0.0, 0.0};
-	E[0] = e0_.x1e(m, kp, jp, ip) + (x1 - x1v)*(e0_.x1e(m, kp, jp, ip+1) - e0_.x1e(m, kp, jp, ip))/Dx;
-	E[1] = e0_.x2e(m, kp, jp, ip) + (x2 - x2v)*(e0_.x2e(m, kp, jp+1, ip) - e0_.x2e(m, kp, jp, ip))/Dy;
-	E[2] = e0_.x3e(m, kp, jp, ip) + (x3 - x3v)*(e0_.x3e(m, kp+1, jp, ip) - e0_.x3e(m, kp, jp, ip))/Dz;
+	E[0] = e0_.x1e(m, kp, jp, ip) + (x[0] - x1v)*(e0_.x1e(m, kp, jp, ip+1) - e0_.x1e(m, kp, jp, ip))/Dx;
+	E[1] = e0_.x2e(m, kp, jp, ip) + (x[1] - x2v)*(e0_.x2e(m, kp, jp+1, ip) - e0_.x2e(m, kp, jp, ip))/Dy;
+	E[2] = e0_.x3e(m, kp, jp, ip) + (x[2] - x3v)*(e0_.x3e(m, kp+1, jp, ip) - e0_.x3e(m, kp, jp, ip))/Dz;
         //std::cout << "E " << p << " " << E[0] << " " << E[1] << " " << E[2]<< std::endl;
 
-	uE[0] = up[0] + dt*pr(IPC,p)/(2.0*pr(IPM,p))*E[0];
-        if (multi_d) { uE[1] = up[1] + dt*pr(IPC,p)/(2.0*pr(IPM,p))*E[1]; }
-        if (three_d) { uE[2] = up[2] + dt*pr(IPC,p)/(2.0*pr(IPM,p))*E[2]; }
+	uE[0] = u_con[0] + dt*pr(IPC,p)/(2.0*pr(IPM,p))*E[0];
+        if (multi_d) { uE[1] = u_con[1] + dt*pr(IPC,p)/(2.0*pr(IPM,p))*E[1]; }
+        if (three_d) { uE[2] = u_con[2] + dt*pr(IPC,p)/(2.0*pr(IPM,p))*E[2]; }
 
 	// Get metric components at new location x1,x2,x3
-	ComputeMetricAndInverse(x1,x2,x3, is_minkowski, spin, glower, gupper); 
+	ComputeMetricAndInverse(x[0],x[1],x[2], is_minkowski, spin, glower, gupper); 
 	for (int i1 = 0; i1 < 3; ++i1 ){ 
 		for (int i2 = 0; i2 < 3; ++i2 ){ 
 		ADM_upper[i1][i2] = gupper[i1+1][i2+1] + gupper[0][i2+1]*gupper[i1+1][0];
 		}
 	}
+	// Lower indeces of u_con
+	for (int i1 = 0; i1 < 3; ++i1 ){ 
+		u_cov[i1] = 0.0;
+		for (int i2 = 0; i2 < 3; ++i2 ){ 
+		u_cov[i1] += glower[i1+1][i2+1]*uE[i2];
+		}
+	}
 	g_Lor = 0.0; //Intermediate Lorentz gamma factor
 	for (int i1 = 0; i1 < 3; ++i1 ){ 
 		for (int i2 = 0; i2 < 3; ++i2 ){ 
-		g_Lor += ADM_upper[i1][i2]*uE[i1]*uE[i2];
+		g_Lor += ADM_upper[i1][i2]*u_cov[i1]*u_cov[i2];
 		}
 	}
 	g_Lor = sqrt(1.0 + g_Lor);
         // Interpolate Magnetic Field at new particle location x1, x2, x3
 	// Store it in an array for convenience 
 	Real B[3] = {0.0, 0.0, 0.0};
-	B[0] = b0_.x1f(m, kp, jp, ip) + (x1 - x1v)*(b0_.x1f(m, kp, jp, ip+1) - b0_.x1f(m, kp, jp, ip))/Dx;
-	B[1] = b0_.x2f(m, kp, jp, ip) + (x2 - x2v)*(b0_.x2f(m, kp, jp+1, ip) - b0_.x2f(m, kp, jp, ip))/Dy;
-	B[2] = b0_.x3f(m, kp, jp, ip) + (x3 - x3v)*(b0_.x3f(m, kp+1, jp, ip) - b0_.x3f(m, kp, jp, ip))/Dz;
+	B[0] = b0_.x1f(m, kp, jp, ip) + (x[0] - x1v)*(b0_.x1f(m, kp, jp, ip+1) - b0_.x1f(m, kp, jp, ip))/Dx;
+	B[1] = b0_.x2f(m, kp, jp, ip) + (x[1] - x2v)*(b0_.x2f(m, kp, jp+1, ip) - b0_.x2f(m, kp, jp, ip))/Dy;
+	B[2] = b0_.x3f(m, kp, jp, ip) + (x[2] - x3v)*(b0_.x3f(m, kp+1, jp, ip) - b0_.x3f(m, kp, jp, ip))/Dz;
         //std::cout << "B " << p << " " << B[0] << " " << B[1] << " " << B[2]<< std::endl;
 
 	// if (p == 53){
@@ -216,10 +233,17 @@ void Particles::BorisStep( const Real dt, const bool multi_d, const bool three_d
         if (multi_d) { uB[1] = uE[1] + 2.0/(1.0+mod_t_sqr)*( (uE[2] + vec_ut[2])*t[0] - (uE[0] + vec_ut[0])*t[2] ); }
         if (three_d) { uB[2] = uE[2] + 2.0/(1.0+mod_t_sqr)*( (uE[0] + vec_ut[0])*t[1] - (uE[1] + vec_ut[1])*t[0] ); }
 
-	g_Lor = 0.0; //Lorentz gamma factor
+	// Lower indeces of u_con
+	for (int i1 = 0; i1 < 3; ++i1 ){ 
+		u_cov[i1] = 0.0;
+		for (int i2 = 0; i2 < 3; ++i2 ){ 
+		u_cov[i1] += glower[i1+1][i2+1]*uB[i2];
+		}
+	}
+	g_Lor = 0.0; //Intermediate Lorentz gamma factor
 	for (int i1 = 0; i1 < 3; ++i1 ){ 
 		for (int i2 = 0; i2 < 3; ++i2 ){ 
-		g_Lor += ADM_upper[i1][i2]*uB[i1]*uB[i2];
+		g_Lor += ADM_upper[i1][i2]*u_cov[i1]*u_cov[i2];
 		}
 	}
 	g_Lor = sqrt(1.0 + g_Lor);
@@ -231,9 +255,9 @@ void Particles::BorisStep( const Real dt, const bool multi_d, const bool three_d
         //std::cout << "pr1 " << p << " " << pr(IPVX,p)<< std::endl;
 
 	if (!only_v){
-	pr(IPX,p) = x1 + dt/(2.0)*pr(IPVX,p);
-        if (multi_d) { pr(IPY,p) = x2 + dt/(2.0)*pr(IPVY,p); }
-        if (three_d) { pr(IPZ,p) = x3 + dt/(2.0)*pr(IPVZ,p); }
+	pr(IPX,p) = x[0] + dt/(2.0)*pr(IPVX,p);
+        if (multi_d) { pr(IPY,p) = x[1] + dt/(2.0)*pr(IPVY,p); }
+        if (three_d) { pr(IPZ,p) = x[2] + dt/(2.0)*pr(IPVZ,p); }
 	}
 	//std::cout << "pp1 " << p << " " << pr(IPX,p)<< " " << pr(IPY,p)<< " " << pr(IPZ,p)<<//std::endl;
       });
