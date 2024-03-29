@@ -66,39 +66,78 @@ void ProblemGenerator::RadiationFEMNBeamtestBH(ParameterInput *pin, const bool r
   auto &u_mu_ = pmbp->pradfemn->u_mu;
   adm::ADM::ADM_vars &adm = pmbp->padm->adm;
   Real ADM_mass = pin->GetOrAddReal("adm", "bh_mass", 1.);
+  auto metric = pin->GetOrAddString("adm", "metric", "isotropic");
 
-  par_for("pgen_linetest_metric_initialize", DevExeSpace(), 0, nmb - 1, ksg, keg, jsg, jeg, isg, ieg,
-          KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
-            Real &x1min = size.d_view(m).x1min;
-            Real &x1max = size.d_view(m).x1max;
-            int nx1 = indcs.nx1;
-            Real x1v = CellCenterX(i - is, nx1, x1min, x1max);
+  std::cout << "Choice of metric: " << metric << std::endl;
 
-            Real &x2min = size.d_view(m).x2min;
-            Real &x2max = size.d_view(m).x2max;
-            int nx2 = indcs.nx2;
-            Real x2v = CellCenterX(j - js, nx2, x2min, x2max);
+  if (metric == "kerrschild") {
+    par_for("pgen_linetest_metric_initialize_kerrschild", DevExeSpace(), 0, nmb - 1, ksg, keg, jsg, jeg, isg, ieg,
+            KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
+              Real &x1min = size.d_view(m).x1min;
+              Real &x1max = size.d_view(m).x1max;
+              int nx1 = indcs.nx1;
+              Real x1v = CellCenterX(i - is, nx1, x1min, x1max);
 
-            Real r = std::sqrt(std::pow(x2v, 2) + std::pow(x1v, 2));
-            Real lvec[3] = {x1v / r, x2v / r, 0};
+              Real &x2min = size.d_view(m).x2min;
+              Real &x2max = size.d_view(m).x2max;
+              int nx2 = indcs.nx2;
+              Real x2v = CellCenterX(j - js, nx2, x2min, x2max);
 
-            for (int a = 0; a < 3; ++a)
-              for (int b = a; b < 3; ++b) {
-                adm.g_dd(m, a, b, k, j, i) = (a == b ? 1. : 0.);
-                adm.g_dd(m, a, b, k, j, i) += 2. * ADM_mass * lvec[a] * lvec[b] / r;
-              }
+              Real r = std::sqrt(std::pow(x2v, 2) + std::pow(x1v, 2));
 
-            adm.psi4(m, k, j, i) = 1.;
-            adm.alpha(m, k, j, i) = 1. / sqrt(1.0 + 2. * ADM_mass / r);
-            adm.beta_u(m, 0, k, j, i) = 2. * ADM_mass * adm.alpha(m, k, j, i) * adm.alpha(m, k, j, i) * lvec[0] / r;
-            adm.beta_u(m, 1, k, j, i) = 2. * ADM_mass * adm.alpha(m, k, j, i) * adm.alpha(m, k, j, i) * lvec[1] / r;
-            adm.beta_u(m, 2, k, j, i) = 2. * ADM_mass * adm.alpha(m, k, j, i) * adm.alpha(m, k, j, i) * lvec[2] / r;
+              for (int a = 0; a < 3; ++a)
+                for (int b = a; b < 3; ++b) {
+                  adm.g_dd(m, a, b, k, j, i) = (a == b ? 1. : 0.);
+                }
 
-            u_mu_(m, 0, k, j, i) = 1. / sqrt(1.0 - 2. * ADM_mass / r);
-            u_mu_(m, 1, k, j, i) = 0.;
-            u_mu_(m, 2, k, j, i) = 0.;
-            u_mu_(m, 3, k, j, i) = 0.;
-          });
+              adm.psi4(m, k, j, i) = std::pow(1.0 + 0.5 * ADM_mass / r, 4);
+
+              for (int a = 0; a < 3; ++a)
+                for (int b = a; b < 3; ++b) {
+                  adm.g_dd(m, a, b, k, j, i) *= adm.psi4(m, k, j, i);
+                }
+
+              adm.alpha(m, k, j, i) = (1.0 - 0.5 * ADM_mass / r) / (1.0 + 0.5 * ADM_mass / r);
+
+              u_mu_(m, 0, k, j, i) = sqrt(1. / (adm.alpha(m, k, j, i) * adm.alpha(m, k, j, i)));
+              u_mu_(m, 1, k, j, i) = 0.;
+              u_mu_(m, 2, k, j, i) = 0.;
+              u_mu_(m, 3, k, j, i) = 0.;
+            });
+  } else {
+    par_for("pgen_linetest_metric_initialize_isotropic", DevExeSpace(), 0, nmb - 1, ksg, keg, jsg, jeg, isg, ieg,
+            KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
+              Real &x1min = size.d_view(m).x1min;
+              Real &x1max = size.d_view(m).x1max;
+              int nx1 = indcs.nx1;
+              Real x1v = CellCenterX(i - is, nx1, x1min, x1max);
+
+              Real &x2min = size.d_view(m).x2min;
+              Real &x2max = size.d_view(m).x2max;
+              int nx2 = indcs.nx2;
+              Real x2v = CellCenterX(j - js, nx2, x2min, x2max);
+
+              Real r = std::sqrt(std::pow(x2v, 2) + std::pow(x1v, 2));
+              Real lvec[3] = {x1v / r, x2v / r, 0};
+
+              for (int a = 0; a < 3; ++a)
+                for (int b = a; b < 3; ++b) {
+                  adm.g_dd(m, a, b, k, j, i) = (a == b ? 1. : 0.);
+                  adm.g_dd(m, a, b, k, j, i) += 2. * ADM_mass * lvec[a] * lvec[b] / r;
+                }
+
+              adm.psi4(m, k, j, i) = 1.;
+              adm.alpha(m, k, j, i) = 1. / sqrt(1.0 + 2. * ADM_mass / r);
+              adm.beta_u(m, 0, k, j, i) = 2. * ADM_mass * adm.alpha(m, k, j, i) * adm.alpha(m, k, j, i) * lvec[0] / r;
+              adm.beta_u(m, 1, k, j, i) = 2. * ADM_mass * adm.alpha(m, k, j, i) * adm.alpha(m, k, j, i) * lvec[1] / r;
+              adm.beta_u(m, 2, k, j, i) = 2. * ADM_mass * adm.alpha(m, k, j, i) * adm.alpha(m, k, j, i) * lvec[2] / r;
+
+              u_mu_(m, 0, k, j, i) = 1. / sqrt(1.0 - 2. * ADM_mass / r);
+              u_mu_(m, 1, k, j, i) = 0.;
+              u_mu_(m, 2, k, j, i) = 0.;
+              u_mu_(m, 3, k, j, i) = 0.;
+            });
+  }
 
   return;
 }
