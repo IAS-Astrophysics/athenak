@@ -161,7 +161,7 @@ void BCHelper(MeshBlockPack *ppack, DualArray2D<Real> u_in, DvceArray5D<Real> u0
         case BoundaryFlag::vacuum:
           for (int i=0; i<ng; ++i) {
             //u0(m,n,k,j,is-i-1) = u0(m,n,k,j,is);
-            u0(m,n,k,j,is-i-1) = Extrapolate<order>(u0,m,n,k,j,is,0,0,1,-i-1);
+            u0(m,n,k,j,is-i-1) = Extrapolate<order>(u0,m,n,k,j,is,0,0,1,i+1);
           }
           break;
         case BoundaryFlag::inflow:
@@ -229,7 +229,7 @@ void BCHelper(MeshBlockPack *ppack, DualArray2D<Real> u_in, DvceArray5D<Real> u0
         case BoundaryFlag::vacuum:
           for (int j=0; j<ng; ++j) {
             //u0(m,n,k,js-j-1,i) = u0(m,n,k,js,i);
-            u0(m,n,k,js-j-1,i) = Extrapolate<order>(u0,m,n,k,js,i,0,1,0,-j-1);
+            u0(m,n,k,js-j-1,i) = Extrapolate<order>(u0,m,n,k,js,i,0,1,0,j+1);
           }
           break;
         case BoundaryFlag::inflow:
@@ -296,7 +296,7 @@ void BCHelper(MeshBlockPack *ppack, DualArray2D<Real> u_in, DvceArray5D<Real> u0
       case BoundaryFlag::vacuum:
         for (int k=0; k<ng; ++k) {
           //u0(m,n,ks-k-1,j,i) = u0(m,n,ks,j,i);
-          u0(m,n,ks-k-1,j,i) = Extrapolate<order>(u0,m,n,ks,j,i,1,0,0,-k-1);
+          u0(m,n,ks-k-1,j,i) = Extrapolate<order>(u0,m,n,ks,j,i,1,0,0,k+1);
         }
         break;
       case BoundaryFlag::inflow:
