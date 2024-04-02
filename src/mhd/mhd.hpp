@@ -48,6 +48,7 @@ struct MHDTaskIDs {
   TaskID sendf;
   TaskID recvf;
   TaskID expl;
+  TaskID savef;
   TaskID restu;
   TaskID sendu;
   TaskID recvu;
@@ -115,6 +116,10 @@ class MHD {
   DvceArray5D<Real> wsaved;
   DvceArray5D<Real> bccsaved;
 
+  // following used to save step-to-step flux values
+  bool uflxidn_saved = false;
+  DvceFaceFld4D<Real> uflxidnsaved;
+
   // following used for FOFC algorithm
   DvceArray4D<bool> fofc;  // flag for each cell to indicate if FOFC is needed
   bool use_fofc = false;   // flag to enable FOFC
@@ -124,6 +129,7 @@ class MHD {
 
   // functions...
   void SetSaveWBcc();
+  void SetSaveUFlxIdn();
   void AssembleMHDTasks(std::map<std::string, std::shared_ptr<TaskList>> tl);
   // ...in "before_timeintegrator" task list
   TaskStatus SaveMHDState(Driver *d, int stage);
@@ -135,6 +141,7 @@ class MHD {
   TaskStatus SendFlux(Driver *d, int stage);
   TaskStatus RecvFlux(Driver *d, int stage);
   TaskStatus ExpRKUpdate(Driver *d, int stage);
+  TaskStatus SaveFlux(Driver *d, int stage);
   TaskStatus RestrictU(Driver *d, int stage);
   TaskStatus SendU(Driver *d, int stage);
   TaskStatus RecvU(Driver *d, int stage);

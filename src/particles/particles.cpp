@@ -14,6 +14,8 @@
 #include "globals.hpp"
 #include "parameter_input.hpp"
 #include "mesh/mesh.hpp"
+#include "hydro/hydro.hpp"
+#include "mhd/mhd.hpp"
 #include "bvals/bvals.hpp"
 #include "particles.hpp"
 
@@ -22,7 +24,8 @@ namespace particles {
 // constructor, initializes data structures and parameters
 
 Particles::Particles(MeshBlockPack *ppack, ParameterInput *pin) :
-    pmy_pack(ppack) {
+    pmy_pack(ppack),
+    rand_pool64(pmy_pack->gids) {
   // check this is at least a 2D problem
   if (pmy_pack->pmesh->one_d) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
@@ -46,7 +49,6 @@ Particles::Particles(MeshBlockPack *ppack, ParameterInput *pin) :
     if (ptype.compare("cosmic_ray") == 0) {
       particle_type = ParticleType::cosmic_ray;
     } else if (ptype.compare("lagrangian_mc") == 0) {
-      // TODO(GNW): Support initialization
       // TODO(GNW): Restrict which pusher is alowed based on particle type
       particle_type = ParticleType::lagrangian_mc;
     } else {
@@ -62,8 +64,22 @@ Particles::Particles(MeshBlockPack *ppack, ParameterInput *pin) :
     std::string ppush = pin->GetString("particles","pusher");
     if (ppush.compare("drift") == 0) {
       pusher = ParticlesPusher::drift;
+      if (particle_type == ParticleType::lagrangian_mc) {
+        std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                  << std::endl << "Particle pusher 'drift' not allowed for lagrangian_mc"
+                  << std::endl;
+        std::exit(EXIT_FAILURE);
+      }
     } else if (ppush.compare("lagrangian_mc") == 0) {
+      // TODO(GNW): is this the right place to set timestep?
+      // force driver to inherit timestep from fluid
+      dtnew = std::numeric_limits<float>::max();
       pusher = ParticlesPusher::lagrangian_mc;
+      if (ppack->pmhd != nullptr) {
+        ppack->pmhd->SetSaveUFlxIdn();
+      } else if (ppack->phydro != nullptr) {
+        ppack->phydro->SetSaveUFlxIdn();
+      }
     } else {
       std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                 << std::endl << "Particle pusher must be specified in <particles> block"
@@ -81,19 +97,15 @@ Particles::Particles(MeshBlockPack *ppack, ParameterInput *pin) :
   switch (particle_type) {
     case ParticleType::cosmic_ray:
       {
-        int ndim=4;
-        if (pmy_pack->pmesh->three_d) {ndim+=2;}
-        nrdata = ndim;
+        // save particle position then velocity for compiler optimizations even though
+        // 2d runs will not require all six real entries
+        nrdata = 6;  
         nidata = 2;
         break;
       }
     case ParticleType::lagrangian_mc:
       {
-        // TODO(GNW): This implementation may have issues for IPX, IPY, IPZ
-        //            without IVX, IVY, IVZ...
-        int ndim=2;
-        if (pmy_pack->pmesh->three_d) {ndim+=1;}
-        nrdata = ndim;
+        nrdata = 3;
         nidata = 2;
         break;
       }
@@ -104,7 +116,7 @@ Particles::Particles(MeshBlockPack *ppack, ParameterInput *pin) :
   Kokkos::realloc(prtcl_idata, nidata, nprtcl_thispack);
 
   // allocate boundary object
-  pbval_part = new ParticlesBoundaryValues(this, pin);
+  pbval_part = new ParticlesBoundaryValues(this, pin);  // TODO(GNW): do I need to check this?
 }
 
 //----------------------------------------------------------------------------------------

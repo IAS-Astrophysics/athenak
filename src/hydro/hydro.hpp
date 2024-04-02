@@ -41,6 +41,7 @@ struct HydroTaskIDs {
   TaskID sendf;
   TaskID recvf;
   TaskID expl;
+  TaskID savef;
   TaskID restu;
   TaskID sendu;
   TaskID recvu;
@@ -88,6 +89,10 @@ class Hydro {
   DvceFaceFld5D<Real> uflx;   // fluxes of conserved quantities on cell faces
   Real dtnew;
 
+  // following used to save step-to-step flux values
+  bool uflxidn_saved = false;
+  DvceFaceFld4D<Real> uflxidnsaved;
+
   // following used for FOFC
   DvceArray4D<bool> fofc;  // flag for each cell to indicate if FOFC is needed
   bool use_fofc = false;   // flag to enable FOFC
@@ -96,6 +101,7 @@ class Hydro {
   HydroTaskIDs id;
 
   // functions...
+  void SetSaveUFlxIdn();
   void AssembleHydroTasks(std::map<std::string, std::shared_ptr<TaskList>> tl);
   // ...in "before_stagen_tl" list
   TaskStatus InitRecv(Driver *d, int stage);
@@ -105,6 +111,7 @@ class Hydro {
   TaskStatus SendFlux(Driver *d, int stage);
   TaskStatus RecvFlux(Driver *d, int stage);
   TaskStatus ExpRKUpdate(Driver *d, int stage);
+  TaskStatus SaveFlux(Driver *d, int stage);
   TaskStatus RestrictU(Driver *d, int stage);
   TaskStatus SendU(Driver *d, int stage);
   TaskStatus RecvU(Driver *d, int stage);

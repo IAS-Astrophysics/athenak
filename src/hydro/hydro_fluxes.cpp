@@ -356,4 +356,65 @@ template void Hydro::CalculateFluxes<Hydro_RSolver::hllc_sr>(Driver *pdriver, in
 template void Hydro::CalculateFluxes<Hydro_RSolver::llf_gr>(Driver *pdriver, int stage);
 template void Hydro::CalculateFluxes<Hydro_RSolver::hlle_gr>(Driver *pdriver, int stage);
 
+//----------------------------------------------------------------------------------------
+//! \fn TaskStatus Hydro::SaveFlux
+//! \brief Save IDN fluxes across all stages for full time step
+
+TaskStatus Hydro::SaveFlux(Driver *pdrive, int stage) {
+  if (uflxidn_saved) {
+    auto &indcs = pmy_pack->pmesh->mb_indcs;
+    int is = indcs.is, ie = indcs.ie;
+    int js = indcs.js, je = indcs.je;
+    int ks = indcs.ks, ke = indcs.ke;
+    bool &multi_d = pmy_pack->pmesh->multi_d;
+    bool &three_d = pmy_pack->pmesh->three_d;
+
+    Real dt = pmy_pack->pmesh->dt;
+    int nmb1 = pmy_pack->nmb_thispack - 1;
+    auto flx1 = uflx.x1f;
+    auto flx2 = uflx.x2f;
+    auto flx3 = uflx.x3f;
+    auto flxidn1 = uflxidnsaved.x1f;
+    auto flxidn2 = uflxidnsaved.x2f;
+    auto flxidn3 = uflxidnsaved.x3f;
+    auto &mbsize = pmy_pack->pmb->mb_size;
+
+    Real dtfactor = dt / 2.0;
+
+    par_for("flux_save",DevExeSpace(),0,nmb1,ks,ke+1,js,je+1,is,ie+1,
+    KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
+
+      // TODO(GNW): need to be careful with different time integrators
+
+      // save dF1/dx1
+      if (j <= je && k <= ke)  {
+        if (stage == 1) {
+          flxidn1(m,k,j,i) = flx1(m,IDN,k,j,i) / mbsize.d_view(m).dx1 * dtfactor;
+        } else {
+          flxidn1(m,k,j,i) += flx1(m,IDN,k,j,i) / mbsize.d_view(m).dx1 * dtfactor;
+        }
+      }
+
+      // save dF2/dx2
+      if (multi_d && i <= ie && k <= ke) {
+        if (stage == 1) {
+          flxidn2(m,k,j,i) = flx2(m,IDN,k,j,i) / mbsize.d_view(m).dx2 * dtfactor;
+        } else {
+          flxidn2(m,k,j,i) += flx2(m,IDN,k,j,i) / mbsize.d_view(m).dx2 * dtfactor;
+        }
+      }
+
+      // save dF3/dx3
+      if (three_d && i <= ie && j <= je) {
+        if (stage == 1) {
+          flxidn3(m,k,j,i) = flx3(m,IDN,k,j,i) / mbsize.d_view(m).dx3 * dtfactor;
+        } else {
+          flxidn3(m,k,j,i) += flx3(m,IDN,k,j,i) / mbsize.d_view(m).dx3 * dtfactor;
+        }
+      }
+    });
+  }
+  return TaskStatus::complete;
+}
+
 } // namespace hydro

@@ -20,6 +20,9 @@
 #include "hydro/hydro.hpp"
 #include "mhd/mhd.hpp"
 #include "pgen.hpp"
+#include "particles/particles.hpp"
+
+#include <Kokkos_Random.hpp>
 
 //----------------------------------------------------------------------------------------
 //! \fn
@@ -184,6 +187,64 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     auto &u0_ = pmbp->pmhd->u0;
     auto &bcc0_ = pmbp->pmhd->bcc0;
     pmbp->pmhd->peos->PrimToCons(w0_, bcc0_, u0_, is, ie, js, je, ks, ke);
+  }
+
+  // TODO(GNW): support 2d-only particles
+  // Initialize particles
+  if (pmbp->ppart != nullptr) {
+
+    // captures for the kernel
+    auto &u0_ = (pmbp->phydro != nullptr) ? pmbp->phydro->u0 : pmbp->pmhd->u0;
+    auto &pr = pmy_mesh_->pmb_pack->ppart->prtcl_rdata;
+    auto &pi = pmy_mesh_->pmb_pack->ppart->prtcl_idata;
+    auto &mbsize = pmy_mesh_->pmb_pack->pmb->mb_size;
+    auto &npart = pmy_mesh_->pmb_pack->ppart->nprtcl_thispack;
+    auto gids = pmy_mesh_->pmb_pack->gids;
+    auto gide = pmy_mesh_->pmb_pack->gide;
+
+    auto &indcs = pmy_mesh_->mb_indcs;
+    int &is = indcs.is;
+    int &js = indcs.js;
+    int &ks = indcs.ks;
+    int &nx1 = indcs.nx1;
+    int &nx2 = indcs.nx2;
+    int &nx3 = indcs.nx3;
+
+    // initialize particles
+    Kokkos::Random_XorShift64_Pool<> rand_pool64(pmbp->gids);
+    par_for("part_update",DevExeSpace(),0,(npart-1),
+    KOKKOS_LAMBDA(const int p) {
+      auto rand_gen = rand_pool64.get_state();  // get random number state this thread
+      // choose parent MeshBlock randomly
+      int m = static_cast<int>(rand_gen.frand()*(gide - gids + 1.0));
+      pi(PGID,p) = gids + m;
+
+      int ip = 0;
+      int jp = 0;
+      int kp = 0;
+
+      // choose random cell based on density
+      while (true) {
+        ip = static_cast<int>(rand_gen.frand()*nx1) + is;
+        jp = static_cast<int>(rand_gen.frand()*nx2) + js;
+        kp = static_cast<int>(rand_gen.frand()*nx3) + ks;
+        if (u0_(m,IDN,kp,jp,ip) < 1.5) {
+          if (rand_gen.frand() < 0.5) break;
+        } else {
+          break;
+        }
+      }
+
+      // set particle position to cell center + random offset
+      pr(IPX,p) = CellCenterX(ip-is, nx1, mbsize.d_view(m).x1min, mbsize.d_view(m).x1max) +
+                  mbsize.d_view(m).dx1*(rand_gen.frand()-0.5);
+      pr(IPY,p) = CellCenterX(jp-js, nx2, mbsize.d_view(m).x2min, mbsize.d_view(m).x2max) +
+                  mbsize.d_view(m).dx2*(rand_gen.frand()-0.5);
+      pr(IPZ,p) = CellCenterX(kp-ks, nx3, mbsize.d_view(m).x3min, mbsize.d_view(m).x3max) +
+                  mbsize.d_view(m).dx3*(rand_gen.frand()-0.5);
+
+      rand_pool64.free_state(rand_gen);  // free state for use by other threads
+    });
   }
 
   return;

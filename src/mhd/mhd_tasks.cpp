@@ -45,7 +45,8 @@ void MHD::AssembleMHDTasks(std::map<std::string, std::shared_ptr<TaskList>> tl) 
   id.sendf = tl["stagen"]->AddTask(&MHD::SendFlux, this, id.flux);
   id.recvf = tl["stagen"]->AddTask(&MHD::RecvFlux, this, id.sendf);
   id.expl  = tl["stagen"]->AddTask(&MHD::ExpRKUpdate, this, id.recvf);
-  id.restu = tl["stagen"]->AddTask(&MHD::RestrictU, this, id.expl);
+  id.savef = tl["stagen"]->AddTask(&MHD::SaveFlux, this, id.expl);
+  id.restu = tl["stagen"]->AddTask(&MHD::RestrictU, this, id.savef);
   id.sendu = tl["stagen"]->AddTask(&MHD::SendU, this, id.restu);
   id.recvu = tl["stagen"]->AddTask(&MHD::RecvU, this, id.sendu);
   id.efld  = tl["stagen"]->AddTask(&MHD::CornerE, this, id.recvu);

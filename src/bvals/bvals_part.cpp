@@ -65,8 +65,6 @@ TaskStatus ParticlesBoundaryValues::SetNewPrtclGID() {
   par_for("part_update",DevExeSpace(),0,(npart-1), KOKKOS_LAMBDA(const int p) {
     int m = pi(PGID,p) - gids;
 
-    // TODO(GNW): This won't work if we don't store particle velocities because then
-    //            IPX, IPY, IPZ will resolve to 0, 2, 4 rather than 0, 1, 2
     Real x1 = pr(IPX,p);
     Real x2 = pr(IPY,p);
     Real x3 = pr(IPZ,p);
@@ -194,6 +192,7 @@ TaskStatus ParticlesBoundaryValues::SetNewPrtclGID() {
       pr(IPZ,p) -= (meshsize.x3max - meshsize.x3min);
     }
   });
+
   nprtcl_send = counter;
   Kokkos::resize(sendlist, nprtcl_send);
   // sync sendlist device array with host
