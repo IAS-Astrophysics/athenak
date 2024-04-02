@@ -235,38 +235,18 @@ KOKKOS_INLINE_FUNCTION
 Real ProlongInterpolation(const int m, const int v, int k, int j, int i,
                             const int nx1, const int nx2, const int nx3,
                             const bool offsetk, const bool offsetj, const bool offseti,
-                        const DvceArray5D<Real> &ca, const DualArray1D<Real> &weights) {
+                        const DvceArray5D<Real> &ca, const DualArray3D<Real> &weights) {
   // interpolated value at new grid point
   Real ivals = 0;
 
-  if (NGHOST==2) {
-    for (int ii=0; ii<NGHOST+1; ii++) {
-      for (int jj=0; jj<NGHOST+1; jj++) {
-        for (int kk=0; kk<NGHOST+1; kk++) {
-          int wghti = (offseti) ? NGHOST-ii : ii;
-          int wghtj = (offsetj) ? NGHOST-jj : jj;
-          int wghtk = (offsetk) ? NGHOST-kk : kk;
-          Real iwght = weights.d_view(wghti)
-                      *weights.d_view(wghtj)
-                      *weights.d_view(wghtk);
-          ivals += iwght*ca(m,v,k-NGHOST/2+kk,j-NGHOST/2+jj,i-NGHOST/2+ii);
-        }
-      }
-    }
-  }
-
-  if (NGHOST==4) {
-    for (int ii=0; ii<NGHOST+1; ii++) {
-      for (int jj=0; jj<NGHOST+1; jj++) {
-        for (int kk=0; kk<NGHOST+1; kk++) {
-          int wghti = (offseti) ? NGHOST-ii : ii;
-          int wghtj = (offsetj) ? NGHOST-jj : jj;
-          int wghtk = (offsetk) ? NGHOST-kk : kk;
-          Real iwght = weights.d_view(wghti)
-                      *weights.d_view(wghtj)
-                      *weights.d_view(wghtk);
-          ivals += iwght*ca(m,v,k-NGHOST/2+kk,j-NGHOST/2+jj,i-NGHOST/2+ii);
-        }
+  for (int kk=0; kk<NGHOST+1; kk++) {
+    for (int jj=0; jj<NGHOST+1; jj++) {
+      for (int ii=0; ii<NGHOST+1; ii++) {
+        int wghti = (offseti) ? NGHOST-ii : ii;
+        int wghtj = (offsetj) ? NGHOST-jj : jj;
+        int wghtk = (offsetk) ? NGHOST-kk : kk;
+        ivals += weights.d_view(wghtk,wghtj,wghti)*ca(m,v,
+                    k-NGHOST/2+kk,j-NGHOST/2+jj,i-NGHOST/2+ii);
       }
     }
   }
@@ -283,7 +263,7 @@ KOKKOS_INLINE_FUNCTION
 void HighOrderProlongCC(const int m, const int v, const int k, const int j, const int i,
                const int fk, const int fj, const int fi, const int nx1, const int nx2,
                const int nx3, const DvceArray5D<Real> &ca, const DvceArray5D<Real> &a,
-               const DualArray1D<Real> &weights) {
+               const DualArray3D<Real> &weights) {
   // stencil size for interpolator
   a(m,v,fk  ,fj  ,fi  ) = ProlongInterpolation<NGHOST>(m,v,k,j,i, nx1, nx2, nx3,
                                                         false,false,false, ca, weights);

@@ -12,6 +12,7 @@
 
 #include <Kokkos_Core.hpp>
 #include <Kokkos_DualView.hpp>
+#include <Kokkos_Macros.hpp>
 #include "config.hpp"
 
 //----------------------------------------------------------------------------------------
