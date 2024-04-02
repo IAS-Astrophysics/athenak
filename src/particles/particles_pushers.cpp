@@ -54,13 +54,13 @@ TaskStatus Particles::Push(Driver *pdriver, int stage) {
     break;
     
     case ParticlesPusher::boris:
-      BorisStep(dt_, multi_d, three_d, false);
+      BorisStep(dt_, false);
     break;
     
     case ParticlesPusher::full_gr:
-      BorisStep(dt_/2.0, multi_d, three_d, true);
-      GeodesicIterations(dt_, multi_d, three_d);
-      BorisStep(dt_/2.0, multi_d, three_d, true);
+      BorisStep(dt_/2.0, true);
+      GeodesicIterations(dt_);
+      BorisStep(dt_/2.0, true);
     break;
 
     default:
@@ -74,7 +74,7 @@ TaskStatus Particles::Push(Driver *pdriver, int stage) {
 //also for half-steps in the full_gr pusher
 //Largely implemented following Ripperda et al. 2018 (https://doi.org/10.3847/1538-4365/aab114)
 KOKKOS_INLINE_FUNCTION
-void Particles::BorisStep( const Real dt, const bool multi_d, const bool three_d, const bool only_v ){
+void Particles::BorisStep( const Real dt, const bool only_v ){
 	
 	auto &npart = nprtcl_thispack;
 	auto &pi = prtcl_idata;
@@ -82,13 +82,15 @@ void Particles::BorisStep( const Real dt, const bool multi_d, const bool three_d
 	auto &b0_ = pmy_pack->pmhd->b0;
 	auto &e0_ = pmy_pack->pmhd->efld;
 	auto &indcs = pmy_pack->pmesh->mb_indcs;
-	int is = indcs.is;
-	int js = indcs.js;
-	int ks = indcs.ks;
+	const int is = indcs.is;
+	const int js = indcs.js;
+	const int ks = indcs.ks;
 	auto &mbsize = pmy_pack->pmb->mb_size;
 	auto gids = pmy_pack->gids;
-	bool is_minkowski = pmy_pack->pcoord->coord_data.is_minkowski;
-	Real spin = pmy_pack->pcoord->coord_data.bh_spin;
+	const bool is_minkowski = pmy_pack->pcoord->coord_data.is_minkowski;
+	const Real spin = pmy_pack->pcoord->coord_data.bh_spin;
+	const bool &multi_d = pmy_pack->pmesh->multi_d;
+	const bool &three_d = pmy_pack->pmesh->three_d;
 
       // First half-step in space
       par_for("part_boris",DevExeSpace(),0,(npart-1),
@@ -268,11 +270,13 @@ void Particles::BorisStep( const Real dt, const bool multi_d, const bool three_d
 //also for half-steps
 //Largely implemented following Bacchini et al. 2020 (https://doi.org/10.3847/1538-4365/abb604)
 KOKKOS_INLINE_FUNCTION
-void Particles::GeodesicIterations( const Real dt, const bool multi_d, const bool three_d ){
+void Particles::GeodesicIterations( const Real dt ){
 	auto &pi = prtcl_idata;
 	auto &pr = prtcl_rdata;
 	const Real it_tol = iter_tolerance;
 	const int it_max = max_iter;
+	const bool &multi_d = pmy_pack->pmesh->multi_d;
+	const bool &three_d = pmy_pack->pmesh->three_d;
 
       // First attempt: not iterative, approximate
       par_for("part_fullgr",DevExeSpace(),0,(nprtcl_thispack-1),
@@ -397,8 +401,8 @@ void Particles::GeodesicIterations( const Real dt, const bool multi_d, const boo
 KOKKOS_INLINE_FUNCTION
 void Particles::ComputeGeodesicTerms(const Real * x, const Real * u, Real * acc){
 
-	bool is_minkowski = pmy_pack->pcoord->coord_data.is_minkowski;
-	Real spin = pmy_pack->pcoord->coord_data.bh_spin;
+	const bool is_minkowski = pmy_pack->pcoord->coord_data.is_minkowski;
+	const Real spin = pmy_pack->pcoord->coord_data.bh_spin;
 	Real glower[4][4], gupper[4][4]; // Metric components
 	Real dg_dx1[4][4], dg_dx2[4][4], dg_dx3[4][4]; // Metric derivatives
 	Real T0, T1, T2, T3, T4_1, T4_2, T4_3; //Temporary variables
@@ -469,8 +473,8 @@ void Particles::ComputeGeodesicTerms(const Real * x, const Real * u, Real * acc)
 KOKKOS_INLINE_FUNCTION
 void Particles::ComputeLorentzFactorGR( const Real * x, const Real * u, Real * g_Lor ){
 
-	bool is_minkowski = pmy_pack->pcoord->coord_data.is_minkowski;
-	Real spin = pmy_pack->pcoord->coord_data.bh_spin;
+	const bool is_minkowski = pmy_pack->pcoord->coord_data.is_minkowski;
+	const Real spin = pmy_pack->pcoord->coord_data.bh_spin;
 	Real glower[4][4], gupper[4][4]; // Metric components
 					       //
 	ComputeMetricAndInverse(x[0],x[1],x[2], is_minkowski, spin, glower, gupper); 
