@@ -97,7 +97,7 @@ void Z4c::QueueZ4cTasks() {
   pnr->QueueTask(&Z4c::Z4cBoundaryRHS, this, Z4c_SomBC, "Z4c_SomBC", Task_Run,
                  {Z4c_CalcRHS});
   pnr->QueueTask(&Z4c::ExpRKUpdate, this, Z4c_ExplRK, "Z4c_ExplRK", Task_Run,
-                 {Z4c_SomBC});
+                 {Z4c_SomBC},{MHD_EField});
   pnr->QueueTask(&Z4c::RestrictU, this, Z4c_RestU, "Z4c_RestU", Task_Run, {Z4c_ExplRK});
   pnr->QueueTask(&Z4c::SendU, this, Z4c_SendU, "Z4c_SendU", Task_Run, {Z4c_RestU});
   pnr->QueueTask(&Z4c::RecvU, this, Z4c_RecvU, "Z4c_RecvU", Task_Run, {Z4c_SendU});
@@ -105,8 +105,7 @@ void Z4c::QueueZ4cTasks() {
   pnr->QueueTask(&Z4c::Prolongate, this, Z4c_Prolong, "Z4c_Prolong", Task_Run, {Z4c_BCS});
   pnr->QueueTask(&Z4c::EnforceAlgConstr, this, Z4c_AlgC, "Z4c_AlgC", Task_Run,
                  {Z4c_Prolong});
-  pnr->QueueTask(&Z4c::Z4cToADM_, this, Z4c_Z4c2ADM, "Z4c_Z4c2ADM", Task_Run, {Z4c_AlgC},
-                 {MHD_ExplRK});
+  pnr->QueueTask(&Z4c::Z4cToADM_, this, Z4c_Z4c2ADM, "Z4c_Z4c2ADM", Task_Run, {Z4c_AlgC});
   pnr->QueueTask(&Z4c::NewTimeStep, this, Z4c_Newdt, "Z4c_Newdt", Task_Run,
                  {Z4c_Z4c2ADM});
 
