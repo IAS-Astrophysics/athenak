@@ -33,6 +33,9 @@ namespace mhd {
 void MHD::AssembleMHDTasks(std::map<std::string, std::shared_ptr<TaskList>> tl) {
   TaskID none(0);
 
+  // assemble "before_timeintegrator" task list
+  id.savest = tl["before_timeintegrator"]->AddTask(&MHD::SaveMHDState, this, none);
+
   // assemble "before_stagen" task list
   id.irecv = tl["before_stagen"]->AddTask(&MHD::InitRecv, this, none);
 
@@ -64,6 +67,20 @@ void MHD::AssembleMHDTasks(std::map<std::string, std::shared_ptr<TaskList>> tl) 
   id.crecv = tl["after_stagen"]->AddTask(&MHD::ClearRecv, this, id.csend);
 
   return;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn TaskStatus MHD::SaveMHDState
+//! \brief Copy primitives and bcc before step to enable computation of time derivative
+//! across steps in jcon calculation.
+
+TaskStatus MHD::SaveMHDState(Driver *pdrive, int stage) {
+  if (wbcc_saved) {
+    Kokkos::deep_copy(DevExeSpace(), wsaved, w0);
+    Kokkos::deep_copy(DevExeSpace(), bccsaved, bcc0);
+  }
+
+  return TaskStatus::complete;
 }
 
 //----------------------------------------------------------------------------------------

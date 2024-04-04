@@ -48,6 +48,10 @@
 #include <omp.h>
 #endif
 
+#if defined(KOKKOS_ENABLE_HIP)
+#include <hip/hip_runtime.h>
+#endif
+
 //----------------------------------------------------------------------------------------
 //! \fn int main(int argc, char *argv[])
 //! \brief Athena main program
@@ -64,6 +68,12 @@ int main(int argc, char *argv[]) {
   // Initialize environment (must initialize MPI first, then Kokkos)
 
 #if MPI_PARALLEL_ENABLED
+#if defined(KOKKOS_ENABLE_HIP)
+  // JMF: This is a bizarre workaround to avoid segmentation faults on Frontier.
+  // See OLCFDEV-1655: Occasional seg-fault during MPI_Init inside the Frontier
+  // documentation.
+  (void) hipInit(0);
+#endif
 #if OPENMP_PARALLEL_ENABLED
   int mpiprv;
   if (MPI_SUCCESS != MPI_Init_thread(&argc, &argv, MPI_THREAD_MULTIPLE, &mpiprv)) {

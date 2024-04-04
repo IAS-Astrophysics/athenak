@@ -12,6 +12,7 @@
 #include <cstdio> // snprintf
 #include <algorithm> // min_element
 #include <utility> // pair<>
+#include <vector>
 
 #include "athena.hpp"
 #include "parameter_input.hpp"
@@ -70,28 +71,28 @@ BaseTypeOutput::BaseTypeOutput(ParameterInput *pin, Mesh *pm, OutputParameters o
        << std::endl << "Input file is likely missing a <hydro> block" << std::endl;
     exit(EXIT_FAILURE);
   }
-  if ((ivar>=16) && (ivar<41) && (pm->pmb_pack->pmhd == nullptr)) {
+  if ((ivar>=16) && (ivar<49) && (pm->pmb_pack->pmhd == nullptr)) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
        << "Output of MHD variable requested in <output> block '"
        << out_params.block_name << "' but no MHD object has been constructed."
        << std::endl << "Input file is likely missing a <mhd> block" << std::endl;
     exit(EXIT_FAILURE);
   }
-  if ((ivar==41) && (pm->pmb_pack->pturb == nullptr)) {
+  if ((ivar==49) && (pm->pmb_pack->pturb == nullptr)) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
        << "Output of Force variable requested in <output> block '"
        << out_params.block_name << "' but no Force object has been constructed."
        << std::endl << "Input file is likely missing a <forcing> block" << std::endl;
     exit(EXIT_FAILURE);
   }
-  if (ivar==42 && (pm->pmb_pack->prad == nullptr)) {
+  if (ivar==50 && (pm->pmb_pack->prad == nullptr)) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
        << "Output of Radiation moments requested in <output> block '"
        << out_params.block_name << "' but no Radiation object has been constructed."
        << std::endl << "Input file is likely missing a <radiation> block" << std::endl;
     exit(EXIT_FAILURE);
   }
-  if ((ivar==43 || ivar==44) &&
+  if ((ivar==51 || ivar==52) &&
       ((pm->pmb_pack->prad == nullptr) ||
        (pm->pmb_pack->phydro == nullptr && pm->pmb_pack->pmhd == nullptr))) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
@@ -100,7 +101,7 @@ BaseTypeOutput::BaseTypeOutput(ParameterInput *pin, Mesh *pm, OutputParameters o
        << " constructed, or corresponding Hydro or MHD object missing" << std::endl;
     exit(EXIT_FAILURE);
   }
-  if ((ivar>=45) && (ivar<59) &&
+  if ((ivar>=52) && (ivar<67) &&
       (pm->pmb_pack->prad == nullptr || pm->pmb_pack->phydro == nullptr)) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
        << "Output of Radiation Hydro variables requested in <output> block '"
@@ -108,7 +109,7 @@ BaseTypeOutput::BaseTypeOutput(ParameterInput *pin, Mesh *pm, OutputParameters o
        << std::endl << "Input file is likely missing corresponding block" << std::endl;
     exit(EXIT_FAILURE);
   }
-  if ((ivar>=59) && (ivar<79) &&
+  if ((ivar>=67) && (ivar<87) &&
       (pm->pmb_pack->prad == nullptr || pm->pmb_pack->pmhd == nullptr)) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
        << "Output of Radiation MHD variables requested in <output> block '"
@@ -116,28 +117,28 @@ BaseTypeOutput::BaseTypeOutput(ParameterInput *pin, Mesh *pm, OutputParameters o
        << std::endl << "Input file is likely missing corresponding block" << std::endl;
     exit(EXIT_FAILURE);
   }
-  if ((ivar>=79) && (ivar<97) && (pm->pmb_pack->padm == nullptr)) {
+  if ((ivar>=87) && (ivar<105) && (pm->pmb_pack->padm == nullptr)) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
        << "Output of ADM variable requested in <output> block '"
        << out_params.block_name << "' but ADM object not constructed."
        << std::endl << "Input file is likely missing corresponding block" << std::endl;
     exit(EXIT_FAILURE);
   }
-  if ((ivar>=97) && (ivar<139) && (pm->pmb_pack->pz4c == nullptr)) {
+  if ((ivar>=105) && (ivar<128) && (pm->pmb_pack->pz4c == nullptr)) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
        << "Output of Z4c variable requested in <output> block '"
        << out_params.block_name << "' but Z4c object not constructed."
        << std::endl << "Input file is likely missing corresponding block" << std::endl;
     exit(EXIT_FAILURE);
   }
-  if ((ivar>=139) && (ivar<142) && (pm->pmb_pack->pz4c == nullptr)) {
+  if ((ivar>=140) && (ivar<143) && (pm->pmb_pack->pz4c == nullptr)) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
        << "Output of weyl variable requested in <output> block '"
        << out_params.block_name << "' but weyl object not constructed."
        << std::endl << "Input file is likely missing corresponding block" << std::endl;
     exit(EXIT_FAILURE);
   }
-  if ((ivar>=142) && (ivar<144) && (pm->pmb_pack->ppart == nullptr)) {
+  if ((ivar>=143) && (ivar<145) && (pm->pmb_pack->ppart == nullptr)) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
        << "Output of particles requested in <output> block '"
        << out_params.block_name << "' but particle object not constructed."
@@ -148,355 +149,462 @@ BaseTypeOutput::BaseTypeOutput(ParameterInput *pin, Mesh *pm, OutputParameters o
   // Now load STL vector of output variables
   outvars.clear();
 
-  // hydro (lab-frame) density
-  if (out_params.variable.compare("hydro_u_d") == 0 ||
-      out_params.variable.compare("hydro_u") == 0 ||
-      out_params.variable.compare("rad_hydro_u_d") == 0 ||
-      out_params.variable.compare("rad_hydro_u") == 0) {
-    outvars.emplace_back("dens",0,&(pm->pmb_pack->phydro->u0));
-  }
+  // make a vector of out_params.variables
+  std::vector<std::string> variables;
 
-  // hydro (rest-frame) density
-  if (out_params.variable.compare("hydro_w_d") == 0 ||
-      out_params.variable.compare("hydro_w") == 0 ||
-      out_params.variable.compare("rad_hydro_w_d") == 0 ||
-      out_params.variable.compare("rad_hydro_w") == 0) {
-    outvars.emplace_back("dens",0,&(pm->pmb_pack->phydro->w0));
-  }
-
-  // hydro components of momentum
-  if (out_params.variable.compare("hydro_u_m1") == 0 ||
-      out_params.variable.compare("hydro_u") == 0 ||
-      out_params.variable.compare("rad_hydro_u_m1") == 0 ||
-      out_params.variable.compare("rad_hydro_u") == 0) {
-    outvars.emplace_back("mom1",1,&(pm->pmb_pack->phydro->u0));
-  }
-  if (out_params.variable.compare("hydro_u_m2") == 0 ||
-      out_params.variable.compare("hydro_u") == 0 ||
-      out_params.variable.compare("rad_hydro_u_m2") == 0 ||
-      out_params.variable.compare("rad_hydro_u") == 0) {
-    outvars.emplace_back("mom2",2,&(pm->pmb_pack->phydro->u0));
-  }
-  if (out_params.variable.compare("hydro_u_m3") == 0 ||
-      out_params.variable.compare("hydro_u") == 0 ||
-      out_params.variable.compare("rad_hydro_u_m3") == 0 ||
-      out_params.variable.compare("rad_hydro_u") == 0) {
-    outvars.emplace_back("mom3",3,&(pm->pmb_pack->phydro->u0));
-  }
-
-  // hydro components of velocity
-  if (out_params.variable.compare("hydro_w_vx") == 0 ||
-      out_params.variable.compare("hydro_w") == 0 ||
-      out_params.variable.compare("rad_hydro_w_vx") == 0 ||
-      out_params.variable.compare("rad_hydro_w") == 0) {
-    outvars.emplace_back("velx",1,&(pm->pmb_pack->phydro->w0));
-  }
-  if (out_params.variable.compare("hydro_w_vy") == 0 ||
-      out_params.variable.compare("hydro_w") == 0 ||
-      out_params.variable.compare("rad_hydro_w_vy") == 0 ||
-      out_params.variable.compare("rad_hydro_w") == 0) {
-    outvars.emplace_back("vely",2,&(pm->pmb_pack->phydro->w0));
-  }
-  if (out_params.variable.compare("hydro_w_vz") == 0 ||
-      out_params.variable.compare("hydro_w") == 0 ||
-      out_params.variable.compare("rad_hydro_w_vz") == 0 ||
-      out_params.variable.compare("rad_hydro_w") == 0) {
-    outvars.emplace_back("velz",3,&(pm->pmb_pack->phydro->w0));
-  }
-
-  // hydro total energy
-  if (out_params.variable.compare("hydro_u_e") == 0 ||
-      out_params.variable.compare("hydro_u") == 0 ||
-      out_params.variable.compare("rad_hydro_u_e") == 0 ||
-      out_params.variable.compare("rad_hydro_u") == 0) {
-    if (pm->pmb_pack->phydro->peos->eos_data.is_ideal) {
-      outvars.emplace_back("ener",4,&(pm->pmb_pack->phydro->u0));
+  variables.push_back(out_params.variable);
+  if (out_params.file_type == "pdf") {
+    if (out_params.nbin2 > 1) {
+      variables.push_back(out_params.variable_2);
     }
   }
 
-  // hydro internal energy or temperature
-  if (out_params.variable.compare("hydro_w_e") == 0 ||
-      out_params.variable.compare("hydro_w") == 0 ||
-      out_params.variable.compare("rad_hydro_w_e") == 0 ||
-      out_params.variable.compare("rad_hydro_w") == 0) {
-    if (pm->pmb_pack->phydro->peos->eos_data.is_ideal) {
-      outvars.emplace_back("eint",4,&(pm->pmb_pack->phydro->w0));
+
+  for (const auto& variable : variables) {
+    // hydro (lab-frame) density
+    if (variable.compare("hydro_u_d") == 0 ||
+        variable.compare("hydro_u") == 0 ||
+        variable.compare("rad_hydro_u_d") == 0 ||
+        variable.compare("rad_hydro_u") == 0) {
+      outvars.emplace_back("dens",0,&(pm->pmb_pack->phydro->u0));
     }
-  }
 
-  // hydro passive scalars mass densities (s*d)
-  if (out_params.variable.compare("hydro_u_s") == 0 ||
-      out_params.variable.compare("hydro_u") == 0 ||
-      out_params.variable.compare("rad_hydro_u_s") == 0 ||
-      out_params.variable.compare("rad_hydro_u") == 0) {
-    int nhyd = pm->pmb_pack->phydro->nhydro;
-    int nvars = nhyd + pm->pmb_pack->phydro->nscalars;
-    for (int n=nhyd; n<nvars; ++n) {
-      char number[3];
-      std::snprintf(number,sizeof(number),"%02d",(n - nhyd));
-      std::string vname;
-      vname.assign("r_");
-      vname.append(number);
-      outvars.emplace_back(vname,n,&(pm->pmb_pack->phydro->u0));
+    // hydro (rest-frame) density
+    if (variable.compare("hydro_w_d") == 0 ||
+        variable.compare("hydro_w") == 0 ||
+        variable.compare("rad_hydro_w_d") == 0 ||
+        variable.compare("rad_hydro_w") == 0) {
+      outvars.emplace_back("dens",0,&(pm->pmb_pack->phydro->w0));
     }
-  }
 
-  // hydro passive scalars (s)
-  if (out_params.variable.compare("hydro_w_s") == 0 ||
-      out_params.variable.compare("hydro_w") == 0 ||
-      out_params.variable.compare("rad_hydro_w_s") == 0 ||
-      out_params.variable.compare("rad_hydro_w") == 0) {
-    int nhyd = pm->pmb_pack->phydro->nhydro;
-    int nvars = nhyd + pm->pmb_pack->phydro->nscalars;
-    for (int n=nhyd; n<nvars; ++n) {
-      char number[3];
-      std::snprintf(number,sizeof(number),"%02d",(n - nhyd));
-      std::string vname;
-      vname.assign("s_");
-      vname.append(number);
-      outvars.emplace_back(vname,n,&(pm->pmb_pack->phydro->w0));
+    // hydro components of momentum
+    if (variable.compare("hydro_u_m1") == 0 ||
+        variable.compare("hydro_u") == 0 ||
+        variable.compare("rad_hydro_u_m1") == 0 ||
+        variable.compare("rad_hydro_u") == 0) {
+      outvars.emplace_back("mom1",1,&(pm->pmb_pack->phydro->u0));
     }
-  }
-
-  // mhd (lab-frame) density
-  if (out_params.variable.compare("mhd_u_d") == 0 ||
-      out_params.variable.compare("mhd_u") == 0 ||
-      out_params.variable.compare("mhd_u_bcc") == 0 ||
-      out_params.variable.compare("rad_mhd_u_d") == 0 ||
-      out_params.variable.compare("rad_mhd_u") == 0 ||
-      out_params.variable.compare("rad_mhd_u_bcc") == 0) {
-    outvars.emplace_back("dens",0,&(pm->pmb_pack->pmhd->u0));
-  }
-
-  // mhd (rest-frame) density
-  if (out_params.variable.compare("mhd_w_d") == 0 ||
-      out_params.variable.compare("mhd_w") == 0 ||
-      out_params.variable.compare("mhd_w_bcc") == 0 ||
-      out_params.variable.compare("rad_mhd_w_d") == 0 ||
-      out_params.variable.compare("rad_mhd_w") == 0 ||
-      out_params.variable.compare("rad_mhd_w_bcc") == 0) {
-    outvars.emplace_back("dens",0,&(pm->pmb_pack->pmhd->w0));
-  }
-
-  // mhd components of momentum
-  if (out_params.variable.compare("mhd_u_m1") == 0 ||
-      out_params.variable.compare("mhd_u") == 0 ||
-      out_params.variable.compare("mhd_u_bcc") == 0 ||
-      out_params.variable.compare("rad_mhd_u_m1") == 0 ||
-      out_params.variable.compare("rad_mhd_u") == 0 ||
-      out_params.variable.compare("rad_mhd_u_bcc") == 0) {
-    outvars.emplace_back("mom1",1,&(pm->pmb_pack->pmhd->u0));
-  }
-  if (out_params.variable.compare("mhd_u_m2") == 0 ||
-      out_params.variable.compare("mhd_u") == 0 ||
-      out_params.variable.compare("mhd_u_bcc") == 0 ||
-      out_params.variable.compare("rad_mhd_u_m2") == 0 ||
-      out_params.variable.compare("rad_mhd_u") == 0 ||
-      out_params.variable.compare("rad_mhd_u_bcc") == 0) {
-    outvars.emplace_back("mom2",2,&(pm->pmb_pack->pmhd->u0));
-  }
-  if (out_params.variable.compare("mhd_u_m3") == 0 ||
-      out_params.variable.compare("mhd_u") == 0 ||
-      out_params.variable.compare("mhd_u_bcc") == 0 ||
-      out_params.variable.compare("rad_mhd_u_m3") == 0 ||
-      out_params.variable.compare("rad_mhd_u") == 0 ||
-      out_params.variable.compare("rad_mhd_u_bcc") == 0) {
-    outvars.emplace_back("mom3",3,&(pm->pmb_pack->pmhd->u0));
-  }
-
-  // mhd components of velocity
-  if (out_params.variable.compare("mhd_w_vx") == 0 ||
-      out_params.variable.compare("mhd_w") == 0 ||
-      out_params.variable.compare("mhd_w_bcc") == 0 ||
-      out_params.variable.compare("rad_mhd_w_vx") == 0 ||
-      out_params.variable.compare("rad_mhd_w") == 0 ||
-      out_params.variable.compare("rad_mhd_w_bcc") == 0) {
-    outvars.emplace_back("velx",1,&(pm->pmb_pack->pmhd->w0));
-  }
-  if (out_params.variable.compare("mhd_w_vy") == 0 ||
-      out_params.variable.compare("mhd_w") == 0 ||
-      out_params.variable.compare("mhd_w_bcc") == 0 ||
-      out_params.variable.compare("rad_mhd_w_vy") == 0 ||
-      out_params.variable.compare("rad_mhd_w") == 0 ||
-      out_params.variable.compare("rad_mhd_w_bcc") == 0) {
-    outvars.emplace_back("vely",2,&(pm->pmb_pack->pmhd->w0));
-  }
-  if (out_params.variable.compare("mhd_w_vz") == 0 ||
-      out_params.variable.compare("mhd_w") == 0 ||
-      out_params.variable.compare("mhd_w_bcc") == 0 ||
-      out_params.variable.compare("rad_mhd_w_vz") == 0 ||
-      out_params.variable.compare("rad_mhd_w") == 0 ||
-      out_params.variable.compare("rad_mhd_w_bcc") == 0) {
-    outvars.emplace_back("velz",3,&(pm->pmb_pack->pmhd->w0));
-  }
-
-  // mhd total energy
-  if (out_params.variable.compare("mhd_u_e") == 0 ||
-      out_params.variable.compare("mhd_u") == 0 ||
-      out_params.variable.compare("mhd_u_bcc") == 0 ||
-      out_params.variable.compare("rad_mhd_u_e") == 0 ||
-      out_params.variable.compare("rad_mhd_u") == 0 ||
-      out_params.variable.compare("rad_mhd_u_bcc") == 0) {
-    if (pm->pmb_pack->pmhd->peos->eos_data.is_ideal) {
-      outvars.emplace_back("ener",4,&(pm->pmb_pack->pmhd->u0));
+    if (variable.compare("hydro_u_m2") == 0 ||
+        variable.compare("hydro_u") == 0 ||
+        variable.compare("rad_hydro_u_m2") == 0 ||
+        variable.compare("rad_hydro_u") == 0) {
+      outvars.emplace_back("mom2",2,&(pm->pmb_pack->phydro->u0));
     }
-  }
-
-  // mhd internal energy or temperature
-  if (out_params.variable.compare("mhd_w_e") == 0 ||
-      out_params.variable.compare("mhd_w") == 0 ||
-      out_params.variable.compare("mhd_w_bcc") == 0 ||
-      out_params.variable.compare("rad_mhd_w_e") == 0 ||
-      out_params.variable.compare("rad_mhd_w") == 0 ||
-      out_params.variable.compare("rad_mhd_w_bcc") == 0) {
-    if (pm->pmb_pack->pmhd->peos->eos_data.is_ideal) {
-      outvars.emplace_back("eint",4,&(pm->pmb_pack->pmhd->w0));
+    if (variable.compare("hydro_u_m3") == 0 ||
+        variable.compare("hydro_u") == 0 ||
+        variable.compare("rad_hydro_u_m3") == 0 ||
+        variable.compare("rad_hydro_u") == 0) {
+      outvars.emplace_back("mom3",3,&(pm->pmb_pack->phydro->u0));
     }
-  }
 
-  // mhd passive scalars mass densities (s*d)
-  if (out_params.variable.compare("mhd_u_s") == 0 ||
-      out_params.variable.compare("mhd_u") == 0 ||
-      out_params.variable.compare("mhd_u_bcc") == 0 ||
-      out_params.variable.compare("rad_mhd_u_s") == 0 ||
-      out_params.variable.compare("rad_mhd_u") == 0 ||
-      out_params.variable.compare("rad_mhd_u_bcc") == 0) {
-    int nmhd = pm->pmb_pack->pmhd->nmhd;
-    int nvars = nmhd + pm->pmb_pack->pmhd->nscalars;
-    for (int n=nmhd; n<nvars; ++n) {
-      char number[3];
-      std::snprintf(number,sizeof(number),"%02d",(n - nmhd));
-      std::string vname;
-      vname.assign("r_");
-      vname.append(number);
-      outvars.emplace_back(vname,n,&(pm->pmb_pack->pmhd->u0));
+    // hydro components of velocity
+    if (variable.compare("hydro_w_vx") == 0 ||
+        variable.compare("hydro_w") == 0 ||
+        variable.compare("rad_hydro_w_vx") == 0 ||
+        variable.compare("rad_hydro_w") == 0) {
+      outvars.emplace_back("velx",1,&(pm->pmb_pack->phydro->w0));
     }
-  }
-
-  // mhd passive scalars (s)
-  if (out_params.variable.compare("mhd_w_s") == 0 ||
-      out_params.variable.compare("mhd_w") == 0 ||
-      out_params.variable.compare("mhd_w_bcc") == 0 ||
-      out_params.variable.compare("rad_mhd_w_s") == 0 ||
-      out_params.variable.compare("rad_mhd_w") == 0 ||
-      out_params.variable.compare("rad_mhd_w_bcc") == 0) {
-    int nmhd = pm->pmb_pack->pmhd->nmhd;
-    int nvars = nmhd + pm->pmb_pack->pmhd->nscalars;
-    for (int n=nmhd; n<nvars; ++n) {
-      char number[3];
-      std::snprintf(number,sizeof(number),"%02d",(n - nmhd));
-      std::string vname;
-      vname.assign("s_");
-      vname.append(number);
-      outvars.emplace_back(vname,n,&(pm->pmb_pack->pmhd->w0));
+    if (variable.compare("hydro_w_vy") == 0 ||
+        variable.compare("hydro_w") == 0 ||
+        variable.compare("rad_hydro_w_vy") == 0 ||
+        variable.compare("rad_hydro_w") == 0) {
+      outvars.emplace_back("vely",2,&(pm->pmb_pack->phydro->w0));
     }
-  }
-
-  // mhd cell-centered magnetic fields
-  if (out_params.variable.compare("mhd_bcc1") == 0 ||
-      out_params.variable.compare("mhd_bcc") == 0 ||
-      out_params.variable.compare("mhd_u_bcc") == 0 ||
-      out_params.variable.compare("mhd_w_bcc") == 0 ||
-      out_params.variable.compare("rad_mhd_bcc1") == 0 ||
-      out_params.variable.compare("rad_mhd_bcc") == 0 ||
-      out_params.variable.compare("rad_mhd_u_bcc") == 0 ||
-      out_params.variable.compare("rad_mhd_w_bcc") == 0) {
-    outvars.emplace_back("bcc1",0,&(pm->pmb_pack->pmhd->bcc0));
-  }
-  if (out_params.variable.compare("mhd_bcc2") == 0 ||
-      out_params.variable.compare("mhd_bcc") == 0 ||
-      out_params.variable.compare("mhd_u_bcc") == 0 ||
-      out_params.variable.compare("mhd_w_bcc") == 0 ||
-      out_params.variable.compare("rad_mhd_bcc2") == 0 ||
-      out_params.variable.compare("rad_mhd_bcc") == 0 ||
-      out_params.variable.compare("rad_mhd_u_bcc") == 0 ||
-      out_params.variable.compare("rad_mhd_w_bcc") == 0) {
-    outvars.emplace_back("bcc2",1,&(pm->pmb_pack->pmhd->bcc0));
-  }
-  if (out_params.variable.compare("mhd_bcc3") == 0 ||
-      out_params.variable.compare("mhd_bcc") == 0 ||
-      out_params.variable.compare("mhd_u_bcc") == 0 ||
-      out_params.variable.compare("mhd_w_bcc") == 0 ||
-      out_params.variable.compare("rad_mhd_bcc3") == 0 ||
-      out_params.variable.compare("rad_mhd_bcc") == 0 ||
-      out_params.variable.compare("rad_mhd_u_bcc") == 0 ||
-      out_params.variable.compare("rad_mhd_w_bcc") == 0) {
-    outvars.emplace_back("bcc3",2,&(pm->pmb_pack->pmhd->bcc0));
-  }
-
-  // hydro/mhd z-component of vorticity (useful in 2D)
-  if (out_params.variable.compare("hydro_wz") == 0 ||
-      out_params.variable.compare("mhd_wz") == 0) {
-    out_params.contains_derived = true;
-    outvars.emplace_back("vorz",0,&(derived_var));
-  }
-
-  // hydro/mhd magnitude of vorticity (useful in 3D)
-  if (out_params.variable.compare("hydro_w2") == 0 ||
-      out_params.variable.compare("mhd_w2") == 0) {
-    out_params.contains_derived = true;
-    outvars.emplace_back("vor2",0,&(derived_var));
-  }
-
-  // mhd z-component of current density (useful in 2D)
-  if (out_params.variable.compare("mhd_jz") == 0) {
-    out_params.contains_derived = true;
-    outvars.emplace_back("jz",0,&(derived_var));
-  }
-
-  // mhd magnitude of current density (useful in 3D)
-  if (out_params.variable.compare("mhd_j2") == 0) {
-    out_params.contains_derived = true;
-    outvars.emplace_back("j2",0,&(derived_var));
-  }
-
-  // mhd divergence of B
-  if (out_params.variable.compare("mhd_divb") == 0) {
-    out_params.contains_derived = true;
-    outvars.emplace_back("divb",0,&(derived_var));
-  }
-
-  // turbulent forcing
-  if (out_params.variable.compare("turb_force") == 0) {
-    outvars.emplace_back("force1",0,&(pm->pmb_pack->pturb->force));
-    outvars.emplace_back("force2",1,&(pm->pmb_pack->pturb->force));
-    outvars.emplace_back("force3",2,&(pm->pmb_pack->pturb->force));
-  }
-
-  // ADM variables, excluding gauge
-  for (int v = 0; v < adm::ADM::nadm - 4; ++v) {
-    if (out_params.variable.compare("adm") == 0 ||
-        out_params.variable.compare(adm::ADM::ADM_names[v]) == 0) {
-      outvars.emplace_back(adm::ADM::ADM_names[v], v, &(pm->pmb_pack->padm->u_adm));
+    if (variable.compare("hydro_w_vz") == 0 ||
+        variable.compare("hydro_w") == 0 ||
+        variable.compare("rad_hydro_w_vz") == 0 ||
+        variable.compare("rad_hydro_w") == 0) {
+      outvars.emplace_back("velz",3,&(pm->pmb_pack->phydro->w0));
     }
+
+    // hydro total energy
+    if (variable.compare("hydro_u_e") == 0 ||
+        variable.compare("hydro_u") == 0 ||
+        variable.compare("rad_hydro_u_e") == 0 ||
+        variable.compare("rad_hydro_u") == 0) {
+      if (pm->pmb_pack->phydro->peos->eos_data.is_ideal) {
+        outvars.emplace_back("ener",4,&(pm->pmb_pack->phydro->u0));
+      }
+    }
+
+    // hydro internal energy or temperature
+    if (variable.compare("hydro_w_e") == 0 ||
+        variable.compare("hydro_w") == 0 ||
+        variable.compare("rad_hydro_w_e") == 0 ||
+        variable.compare("rad_hydro_w") == 0) {
+      if (pm->pmb_pack->phydro->peos->eos_data.is_ideal) {
+        outvars.emplace_back("eint",4,&(pm->pmb_pack->phydro->w0));
+      }
+    }
+
+    // hydro passive scalars mass densities (s*d)
+    if (variable.compare("hydro_u_s") == 0 ||
+        variable.compare("hydro_u") == 0 ||
+        variable.compare("rad_hydro_u_s") == 0 ||
+        variable.compare("rad_hydro_u") == 0) {
+      int nhyd = pm->pmb_pack->phydro->nhydro;
+      int nvars = nhyd + pm->pmb_pack->phydro->nscalars;
+      for (int n=nhyd; n<nvars; ++n) {
+        char number[3];
+        std::snprintf(number,sizeof(number),"%02d",(n - nhyd));
+        std::string vname;
+        vname.assign("r_");
+        vname.append(number);
+        outvars.emplace_back(vname,n,&(pm->pmb_pack->phydro->u0));
+      }
+    }
+
+    // hydro passive scalars (s)
+    if (variable.compare("hydro_w_s") == 0 ||
+        variable.compare("hydro_w") == 0 ||
+        variable.compare("rad_hydro_w_s") == 0 ||
+        variable.compare("rad_hydro_w") == 0) {
+      int nhyd = pm->pmb_pack->phydro->nhydro;
+      int nvars = nhyd + pm->pmb_pack->phydro->nscalars;
+      for (int n=nhyd; n<nvars; ++n) {
+        char number[3];
+        std::snprintf(number,sizeof(number),"%02d",(n - nhyd));
+        std::string vname;
+        vname.assign("s_");
+        vname.append(number);
+        outvars.emplace_back(vname,n,&(pm->pmb_pack->phydro->w0));
+      }
+    }
+
+    // mhd (lab-frame) density
+    if (variable.compare("mhd_u_d") == 0 ||
+        variable.compare("mhd_u") == 0 ||
+        variable.compare("mhd_u_bcc") == 0 ||
+        variable.compare("rad_mhd_u_d") == 0 ||
+        variable.compare("rad_mhd_u") == 0 ||
+        variable.compare("rad_mhd_u_bcc") == 0) {
+      outvars.emplace_back("dens",0,&(pm->pmb_pack->pmhd->u0));
+    }
+
+    // mhd (rest-frame) density
+    if (variable.compare("mhd_w_d") == 0 ||
+        variable.compare("mhd_w") == 0 ||
+        variable.compare("mhd_w_bcc") == 0 ||
+        variable.compare("rad_mhd_w_d") == 0 ||
+        variable.compare("rad_mhd_w") == 0 ||
+        variable.compare("rad_mhd_w_bcc") == 0) {
+      outvars.emplace_back("dens",0,&(pm->pmb_pack->pmhd->w0));
+    }
+
+    // mhd components of momentum
+    if (variable.compare("mhd_u_m1") == 0 ||
+        variable.compare("mhd_u") == 0 ||
+        variable.compare("mhd_u_bcc") == 0 ||
+        variable.compare("rad_mhd_u_m1") == 0 ||
+        variable.compare("rad_mhd_u") == 0 ||
+        variable.compare("rad_mhd_u_bcc") == 0) {
+      outvars.emplace_back("mom1",1,&(pm->pmb_pack->pmhd->u0));
+    }
+    if (variable.compare("mhd_u_m2") == 0 ||
+        variable.compare("mhd_u") == 0 ||
+        variable.compare("mhd_u_bcc") == 0 ||
+        variable.compare("rad_mhd_u_m2") == 0 ||
+        variable.compare("rad_mhd_u") == 0 ||
+        variable.compare("rad_mhd_u_bcc") == 0) {
+      outvars.emplace_back("mom2",2,&(pm->pmb_pack->pmhd->u0));
+    }
+    if (variable.compare("mhd_u_m3") == 0 ||
+        variable.compare("mhd_u") == 0 ||
+        variable.compare("mhd_u_bcc") == 0 ||
+        variable.compare("rad_mhd_u_m3") == 0 ||
+        variable.compare("rad_mhd_u") == 0 ||
+        variable.compare("rad_mhd_u_bcc") == 0) {
+      outvars.emplace_back("mom3",3,&(pm->pmb_pack->pmhd->u0));
+    }
+
+    // mhd components of velocity
+    if (variable.compare("mhd_w_vx") == 0 ||
+        variable.compare("mhd_w") == 0 ||
+        variable.compare("mhd_w_bcc") == 0 ||
+        variable.compare("rad_mhd_w_vx") == 0 ||
+        variable.compare("rad_mhd_w") == 0 ||
+        variable.compare("rad_mhd_w_bcc") == 0) {
+      outvars.emplace_back("velx",1,&(pm->pmb_pack->pmhd->w0));
+    }
+    if (variable.compare("mhd_w_vy") == 0 ||
+        variable.compare("mhd_w") == 0 ||
+        variable.compare("mhd_w_bcc") == 0 ||
+        variable.compare("rad_mhd_w_vy") == 0 ||
+        variable.compare("rad_mhd_w") == 0 ||
+        variable.compare("rad_mhd_w_bcc") == 0) {
+      outvars.emplace_back("vely",2,&(pm->pmb_pack->pmhd->w0));
+    }
+    if (variable.compare("mhd_w_vz") == 0 ||
+        variable.compare("mhd_w") == 0 ||
+        variable.compare("mhd_w_bcc") == 0 ||
+        variable.compare("rad_mhd_w_vz") == 0 ||
+        variable.compare("rad_mhd_w") == 0 ||
+        variable.compare("rad_mhd_w_bcc") == 0) {
+      outvars.emplace_back("velz",3,&(pm->pmb_pack->pmhd->w0));
+    }
+
+    // mhd total energy
+    if (variable.compare("mhd_u_e") == 0 ||
+        variable.compare("mhd_u") == 0 ||
+        variable.compare("mhd_u_bcc") == 0 ||
+        variable.compare("rad_mhd_u_e") == 0 ||
+        variable.compare("rad_mhd_u") == 0 ||
+        variable.compare("rad_mhd_u_bcc") == 0) {
+      if (pm->pmb_pack->pmhd->peos->eos_data.is_ideal) {
+        outvars.emplace_back("ener",4,&(pm->pmb_pack->pmhd->u0));
+      }
+    }
+
+    // mhd internal energy or temperature
+    if (variable.compare("mhd_w_e") == 0 ||
+        variable.compare("mhd_w") == 0 ||
+        variable.compare("mhd_w_bcc") == 0 ||
+        variable.compare("rad_mhd_w_e") == 0 ||
+        variable.compare("rad_mhd_w") == 0 ||
+        variable.compare("rad_mhd_w_bcc") == 0) {
+      if (pm->pmb_pack->pmhd->peos->eos_data.is_ideal) {
+        outvars.emplace_back("eint",4,&(pm->pmb_pack->pmhd->w0));
+      }
+    }
+
+    // mhd passive scalars mass densities (s*d)
+    if (variable.compare("mhd_u_s") == 0 ||
+        variable.compare("mhd_u") == 0 ||
+        variable.compare("mhd_u_bcc") == 0 ||
+        variable.compare("rad_mhd_u_s") == 0 ||
+        variable.compare("rad_mhd_u") == 0 ||
+        variable.compare("rad_mhd_u_bcc") == 0) {
+      int nmhd = pm->pmb_pack->pmhd->nmhd;
+      int nvars = nmhd + pm->pmb_pack->pmhd->nscalars;
+      for (int n=nmhd; n<nvars; ++n) {
+        char number[3];
+        std::snprintf(number,sizeof(number),"%02d",(n - nmhd));
+        std::string vname;
+        vname.assign("r_");
+        vname.append(number);
+        outvars.emplace_back(vname,n,&(pm->pmb_pack->pmhd->u0));
+      }
+    }
+
+    // mhd passive scalars (s)
+    if (variable.compare("mhd_w_s") == 0 ||
+        variable.compare("mhd_w") == 0 ||
+        variable.compare("mhd_w_bcc") == 0 ||
+        variable.compare("rad_mhd_w_s") == 0 ||
+        variable.compare("rad_mhd_w") == 0 ||
+        variable.compare("rad_mhd_w_bcc") == 0) {
+      int nmhd = pm->pmb_pack->pmhd->nmhd;
+      int nvars = nmhd + pm->pmb_pack->pmhd->nscalars;
+      for (int n=nmhd; n<nvars; ++n) {
+        char number[3];
+        std::snprintf(number,sizeof(number),"%02d",(n - nmhd));
+        std::string vname;
+        vname.assign("s_");
+        vname.append(number);
+        outvars.emplace_back(vname,n,&(pm->pmb_pack->pmhd->w0));
+      }
+    }
+
+    // mhd cell-centered magnetic fields
+    if (variable.compare("mhd_bcc1") == 0 ||
+        variable.compare("mhd_bcc") == 0 ||
+        variable.compare("mhd_u_bcc") == 0 ||
+        variable.compare("mhd_w_bcc") == 0 ||
+        variable.compare("rad_mhd_bcc1") == 0 ||
+        variable.compare("rad_mhd_bcc") == 0 ||
+        variable.compare("rad_mhd_u_bcc") == 0 ||
+        variable.compare("rad_mhd_w_bcc") == 0) {
+      outvars.emplace_back("bcc1",0,&(pm->pmb_pack->pmhd->bcc0));
+    }
+    if (variable.compare("mhd_bcc2") == 0 ||
+        variable.compare("mhd_bcc") == 0 ||
+        variable.compare("mhd_u_bcc") == 0 ||
+        variable.compare("mhd_w_bcc") == 0 ||
+        variable.compare("rad_mhd_bcc2") == 0 ||
+        variable.compare("rad_mhd_bcc") == 0 ||
+        variable.compare("rad_mhd_u_bcc") == 0 ||
+        variable.compare("rad_mhd_w_bcc") == 0) {
+      outvars.emplace_back("bcc2",1,&(pm->pmb_pack->pmhd->bcc0));
+    }
+    if (variable.compare("mhd_bcc3") == 0 ||
+        variable.compare("mhd_bcc") == 0 ||
+        variable.compare("mhd_u_bcc") == 0 ||
+        variable.compare("mhd_w_bcc") == 0 ||
+        variable.compare("rad_mhd_bcc3") == 0 ||
+        variable.compare("rad_mhd_bcc") == 0 ||
+        variable.compare("rad_mhd_u_bcc") == 0 ||
+        variable.compare("rad_mhd_w_bcc") == 0) {
+      outvars.emplace_back("bcc3",2,&(pm->pmb_pack->pmhd->bcc0));
+    }
+
+    // hydro/mhd z-component of vorticity (useful in 2D)
+    if (variable.compare("hydro_wz") == 0 ||
+        variable.compare("mhd_wz") == 0) {
+      out_params.contains_derived = true;
+      out_params.n_derived += 1;
+      int i_derived = out_params.n_derived - 1;
+      outvars.emplace_back("vorz",i_derived,&(derived_var));
+    }
+
+    // hydro/mhd magnitude of vorticity (useful in 3D)
+    if (variable.compare("hydro_w2") == 0 ||
+        variable.compare("mhd_w2") == 0) {
+      out_params.contains_derived = true;
+      out_params.n_derived += 1;
+      int i_derived = out_params.n_derived - 1;
+      outvars.emplace_back("vor2",i_derived,&(derived_var));
+    }
+
+    // mhd z-component of current density (useful in 2D)
+    if (variable.compare("mhd_jz") == 0) {
+      out_params.contains_derived = true;
+      out_params.n_derived += 1;
+      int i_derived = out_params.n_derived - 1;
+      outvars.emplace_back("jz",i_derived,&(derived_var));
+    }
+
+    // mhd magnitude of current density (useful in 3D)
+    if (variable.compare("mhd_j2") == 0) {
+      out_params.contains_derived = true;
+      out_params.n_derived += 1;
+      int i_derived = out_params.n_derived - 1;
+      outvars.emplace_back("j2",i_derived,&(derived_var));
+    }
+
+    // Added by DBF --- check & update NOUTPUT_CHOICES
+    // mhd magnitude of magnetic curvature
+    if (variable.compare("mhd_curv") == 0) {
+      out_params.contains_derived = true;
+      out_params.n_derived += 1;
+      int i_derived = out_params.n_derived - 1;
+      outvars.emplace_back("curv",i_derived,&(derived_var));
+    }
+
+    // mhd magnitude of magnetic curvature
+    if (variable.compare("mhd_k_jxb") == 0) {
+      out_params.contains_derived = true;
+      out_params.n_derived += 1;
+      int i_derived = out_params.n_derived - 1;
+      outvars.emplace_back("k_jxb",i_derived,&(derived_var));
+    }
+
+    // mhd magnitude of magnetic curvature
+    if (variable.compare("mhd_curv_perp") == 0) {
+      out_params.contains_derived = true;
+      out_params.n_derived += 1;
+      int i_derived = out_params.n_derived - 1;
+      outvars.emplace_back("curv_perp",i_derived,&(derived_var));
+    }
+
+    // mhd magnitude of magnetic curvature
+    if (variable.compare("mhd_bmag") == 0) {
+      out_params.contains_derived = true;
+      out_params.n_derived += 1;
+      int i_derived = out_params.n_derived - 1;
+      outvars.emplace_back("bmag",i_derived,&(derived_var));
+    }
+
+    // mhd divergence of B
+    if (variable.compare("mhd_divb") == 0) {
+      out_params.contains_derived = true;
+      out_params.n_derived += 1;
+      int i_derived = out_params.n_derived - 1;
+      outvars.emplace_back("divb",i_derived,&(derived_var));
+    }
+
+    // added by GNW --- contravariant components of magnetic field
+    if (out_params.variable.compare("mhd_jcon") == 0) {
+      pm->pmb_pack->pmhd->SetSaveWBcc();
+      out_params.contains_derived = true;
+      out_params.n_derived += 4;
+      outvars.emplace_back("jcon0",0,&(derived_var));
+      outvars.emplace_back("jcon1",1,&(derived_var));
+      outvars.emplace_back("jcon2",2,&(derived_var));
+      outvars.emplace_back("jcon3",3,&(derived_var));
+    }
+
+    // Hydro SGS tensor
+    if (variable.compare("hydro_sgs") == 0) {
+      out_params.contains_derived = true;
+      // emplace all 23 components of the SGS tensor
+      for (int i=0; i<23; ++i) {
+          std::string variable_name;
+          variable_name.assign("hydro_sgs_");
+          variable_name.append(std::to_string(i+1));
+          out_params.n_derived += 1;
+          outvars.emplace_back(variable_name,i,&(derived_var));
+      }
+    }
+
+    // Mhd SGS tensor
+    if (variable.compare("mhd_sgs") == 0) {
+      out_params.contains_derived = true;
+      // emplace all 59 components of the SGS tensor
+      for (int i=0; i<59; ++i) {
+          std::string variable_name;
+          variable_name.assign("mhd_sgs_");
+          variable_name.append(std::to_string(i+1));
+          out_params.n_derived += 1;
+          outvars.emplace_back(variable_name.c_str(),i,&(derived_var));
+      }
+    }
+
+    // mhd_dynamo_ks
+    if (variable.compare("mhd_dynamo_ks") == 0) {
+      out_params.contains_derived = true;
+      // emplace all 8 components of the SGS tensor
+      outvars.emplace_back("mhd_dynamo_B^2",0,&(derived_var));
+      outvars.emplace_back("mhd_dynamo_B^4",1,&(derived_var));
+      outvars.emplace_back("mhd_dynamo_dB^2",2,&(derived_var));
+      outvars.emplace_back("mhd_dynamo_BdB^2",3,&(derived_var));
+      outvars.emplace_back("mhd_dynamo_|BxJ|^2",4,&(derived_var));
+      outvars.emplace_back("mhd_dynamo_|B.J|^2",5,&(derived_var));
+      outvars.emplace_back("mhd_dynamo_U^2",6,&(derived_var));
+      outvars.emplace_back("mhd_dynamo_dU",7,&(derived_var));
+      out_params.n_derived += 8;
+    }
+
+    // turbulent forcing
+    if (variable.compare("turb_force") == 0) {
+      outvars.emplace_back("force1",0,&(pm->pmb_pack->pturb->force));
+      outvars.emplace_back("force2",1,&(pm->pmb_pack->pturb->force));
+      outvars.emplace_back("force3",2,&(pm->pmb_pack->pturb->force));
   }
 
-  // ADM gauge variables
-  if (nullptr == pm->pmb_pack->pz4c) {
-    for (int v = adm::ADM::nadm - 4; v < adm::ADM::nadm; ++v) {
-      if (out_params.variable.compare("adm") == 0 ||
-          out_params.variable.compare(adm::ADM::ADM_names[v]) == 0) {
+    // ADM variables, excluding gauge
+    for (int v = 0; v < adm::ADM::nadm - 4; ++v) {
+      if (variable.compare("adm") == 0 ||
+          variable.compare(adm::ADM::ADM_names[v]) == 0) {
         outvars.emplace_back(adm::ADM::ADM_names[v], v, &(pm->pmb_pack->padm->u_adm));
       }
     }
-  }
 
-  // con z4c variables
-  for (int v = 0; v < z4c::Z4c::ncon; ++v) {
-    if (out_params.variable.compare("con") == 0 ||
-        out_params.variable.compare(z4c::Z4c::Constraint_names[v]) == 0) {
-      outvars.emplace_back(z4c::Z4c::Constraint_names[v], v,
-      &(pm->pmb_pack->pz4c->u_con));
+    // ADM gauge variables
+    if (nullptr == pm->pmb_pack->pz4c) {
+      for (int v = adm::ADM::nadm - 4; v < adm::ADM::nadm; ++v) {
+        if (variable.compare("adm") == 0 ||
+            variable.compare(adm::ADM::ADM_names[v]) == 0) {
+          outvars.emplace_back(adm::ADM::ADM_names[v], v, &(pm->pmb_pack->padm->u_adm));
+        }
+      }
     }
-  }
 
-  // mat z4c variables
-  for (int v = 0; v < z4c::Z4c::nmat; ++v) {
-    if (out_params.variable.compare("mat") == 0 ||
-        out_params.variable.compare(z4c::Z4c::Matter_names[v]) == 0) {
-      outvars.emplace_back(z4c::Z4c::Matter_names[v], v, &(pm->pmb_pack->pz4c->u_mat));
+    // con z4c variables
+    for (int v = 0; v < z4c::Z4c::ncon; ++v) {
+      if (variable.compare("con") == 0 ||
+          variable.compare(z4c::Z4c::Constraint_names[v]) == 0) {
+        outvars.emplace_back(z4c::Z4c::Constraint_names[v], v,
+        &(pm->pmb_pack->pz4c->u_con));
+      }
     }
-  }
+
+    // mat z4c variables
+    for (int v = 0; v < z4c::Z4c::nmat; ++v) {
+      if (variable.compare("mat") == 0 ||
+          variable.compare(z4c::Z4c::Matter_names[v]) == 0) {
+        outvars.emplace_back(z4c::Z4c::Matter_names[v], v, &(pm->pmb_pack->pz4c->u_mat));
+      }
+    }
 
   // z4c variables
   for (int v = 0; v < z4c::Z4c::nz4c; ++v) {
@@ -512,41 +620,44 @@ BaseTypeOutput::BaseTypeOutput(ParameterInput *pin, Mesh *pm, OutputParameters o
     outvars.emplace_back("weyl_ipsi4",1,&(pm->pmb_pack->pz4c->u_weyl));
   }
 
-  // radiation moments in coordinate frame
-  if (out_params.variable.compare(0, 9, "rad_coord") == 0 ||
-      out_params.variable.compare(0, 9, "rad_hydro") == 0 ||
-      out_params.variable.compare(0, 7, "rad_mhd") == 0) {
-    out_params.contains_derived = true;
-    outvars.emplace_back("r00",0,&(derived_var));
-    outvars.emplace_back("r01",1,&(derived_var));
-    outvars.emplace_back("r02",2,&(derived_var));
-    outvars.emplace_back("r03",3,&(derived_var));
-    outvars.emplace_back("r11",4,&(derived_var));
-    outvars.emplace_back("r12",5,&(derived_var));
-    outvars.emplace_back("r13",6,&(derived_var));
-    outvars.emplace_back("r22",7,&(derived_var));
-    outvars.emplace_back("r23",8,&(derived_var));
-    outvars.emplace_back("r33",9,&(derived_var));
-  }
+    // radiation moments in coordinate frame
+    if (variable.compare(0, 9, "rad_coord") == 0 ||
+        variable.compare(0, 9, "rad_hydro") == 0 ||
+        variable.compare(0, 7, "rad_mhd") == 0) {
+      out_params.contains_derived = true;
+      out_params.n_derived += 10;
+      outvars.emplace_back("r00",0,&(derived_var));
+      outvars.emplace_back("r01",1,&(derived_var));
+      outvars.emplace_back("r02",2,&(derived_var));
+      outvars.emplace_back("r03",3,&(derived_var));
+      outvars.emplace_back("r11",4,&(derived_var));
+      outvars.emplace_back("r12",5,&(derived_var));
+      outvars.emplace_back("r13",6,&(derived_var));
+      outvars.emplace_back("r22",7,&(derived_var));
+      outvars.emplace_back("r23",8,&(derived_var));
+      outvars.emplace_back("r33",9,&(derived_var));
+    }
 
-  // radiation moments in fluid frame
-  if (out_params.variable.compare("rad_fluid") == 0 ||
-      out_params.variable.compare("rad_coord_fluid") == 0 ||
-      out_params.variable.compare(0, 9, "rad_hydro") == 0 ||
-      out_params.variable.compare(0, 7, "rad_mhd") == 0) {
-    bool needs_fluid_only = (out_params.variable.compare("rad_fluid") == 0);
-    int moments_offset = !(needs_fluid_only) ? 10 : 0;
-    out_params.contains_derived = true;
-    outvars.emplace_back("r00_ff",moments_offset+0,&(derived_var));
-    outvars.emplace_back("r01_ff",moments_offset+1,&(derived_var));
-    outvars.emplace_back("r02_ff",moments_offset+2,&(derived_var));
-    outvars.emplace_back("r03_ff",moments_offset+3,&(derived_var));
-    outvars.emplace_back("r11_ff",moments_offset+4,&(derived_var));
-    outvars.emplace_back("r12_ff",moments_offset+5,&(derived_var));
-    outvars.emplace_back("r13_ff",moments_offset+6,&(derived_var));
-    outvars.emplace_back("r22_ff",moments_offset+7,&(derived_var));
-    outvars.emplace_back("r23_ff",moments_offset+8,&(derived_var));
-    outvars.emplace_back("r33_ff",moments_offset+9,&(derived_var));
+    // radiation moments in fluid frame
+    if (variable.compare("rad_fluid") == 0 ||
+        variable.compare("rad_coord_fluid") == 0 ||
+        variable.compare(0, 9, "rad_hydro") == 0 ||
+        variable.compare(0, 7, "rad_mhd") == 0) {
+      bool needs_fluid_only = (variable.compare("rad_fluid") == 0);
+      int moments_offset = !(needs_fluid_only) ? 10 : 0;
+      out_params.contains_derived = true;
+      out_params.n_derived += 10;
+      outvars.emplace_back("r00_ff",moments_offset+0,&(derived_var));
+      outvars.emplace_back("r01_ff",moments_offset+1,&(derived_var));
+      outvars.emplace_back("r02_ff",moments_offset+2,&(derived_var));
+      outvars.emplace_back("r03_ff",moments_offset+3,&(derived_var));
+      outvars.emplace_back("r11_ff",moments_offset+4,&(derived_var));
+      outvars.emplace_back("r12_ff",moments_offset+5,&(derived_var));
+      outvars.emplace_back("r13_ff",moments_offset+6,&(derived_var));
+      outvars.emplace_back("r22_ff",moments_offset+7,&(derived_var));
+      outvars.emplace_back("r23_ff",moments_offset+8,&(derived_var));
+      outvars.emplace_back("r33_ff",moments_offset+9,&(derived_var));
+    }
   }
 
   // particle density binned to mesh
