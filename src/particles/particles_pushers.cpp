@@ -58,9 +58,9 @@ TaskStatus Particles::Push(Driver *pdriver, int stage) {
     break;
     
     case ParticlesPusher::full_gr:
-      BorisStep(dt_/2.0, true);
+      //BorisStep(dt_/2.0, true);
       GeodesicIterations(dt_);
-      BorisStep(dt_/2.0, true);
+      //BorisStep(dt_/2.0, true);
     break;
 
     default:
@@ -72,8 +72,6 @@ TaskStatus Particles::Push(Driver *pdriver, int stage) {
 
 //Provide dt and only_v as input parameter in order to be able to use this function
 //also for half-steps in the full_gr pusher
-//Use of ADM formalism allows use of "local" electric and magnetic fields,
-//at the cost of having to convert the expression of the metric
 //Largely implemented following Ripperda et al. 2018 (https://doi.org/10.3847/1538-4365/aab114)
 KOKKOS_INLINE_FUNCTION
 void Particles::BorisStep( const Real dt, const bool only_v ){
@@ -94,10 +92,11 @@ void Particles::BorisStep( const Real dt, const bool only_v ){
 	const bool &multi_d = pmy_pack->pmesh->multi_d;
 	const bool &three_d = pmy_pack->pmesh->three_d;
 
+      // First half-step in space
       par_for("part_boris",DevExeSpace(),0,(npart-1),
       KOKKOS_LAMBDA(const int p) {
       
-        // Contravariant and co-variant 3-velocities
+        // Contravariant and co-variant 4-velocities
 	Real u_con[3] = {pr(IPVX,p), pr(IPVY,p), pr(IPVZ,p)};
 	Real u_cov[3];
 	Real x[3]; //Half-step increment.
@@ -107,7 +106,9 @@ void Particles::BorisStep( const Real dt, const bool only_v ){
         if (three_d) { x[2] = pr(IPZ,p) + dt/(2.0)*u_con[2]; }
 	// Get metric components at new location x1,x2,x3
 	Real glower[4][4], gupper[4][4], ADM_upper[3][3]; // Metric 
+					       // (remember: sqrt(-1/gupper[0][0]) = alpha, glower[0][i] = beta[i])
 	ComputeMetricAndInverse(pr(IPX,p),pr(IPY,p),pr(IPZ,p), is_minkowski, spin, glower, gupper); 
+        //std::cout << "g_Lor " << p << " " << g_Lor << std::endl;
 	// Compute 3x3 ADM spatial metric from covariant metric 
 	for (int i1 = 0; i1 < 3; ++i1 ){ 
 		for (int i2 = 0; i2 < 3; ++i2 ){ 
@@ -136,19 +137,33 @@ void Particles::BorisStep( const Real dt, const bool only_v ){
 		u_con[i] *= g_Lor;
 	}
 
-	Real uE[3]; //Evolution of the velocity due to the electric field (first half).
-	Real uB[3]; //Evolution of the velocity due to the magnetic field.
+        //std::cout << "x123 " << global_variable::my_rank << " " << pi(PTAG,p) << " " << x1 << " " << x2 << " " << x3 << std::endl;
+	Real uE[3]; //Evolution of the velocity due to the electric field (first half). Index 1... stands for dimension (0 is time).
+	Real uB[3]; //Evolution of the velocity due to the magnetic field. Index 1... stands for dimension (0 is time).
 
-        const int m = pi(PGID,p) - gids;
-        const int ip = (pr(IPX,p) - mbsize.d_view(m).x1min)/mbsize.d_view(m).dx1 + is;
-	const int jp = (pr(IPY,p) - mbsize.d_view(m).x2min)/mbsize.d_view(m).dx2 + js;
-	const int kp = (pr(IPZ,p) - mbsize.d_view(m).x3min)/mbsize.d_view(m).dx3 + ks;
-	const Real &x1min = mbsize.d_view(m).x1min;
-	const Real &x2min = mbsize.d_view(m).x2min;
-	const Real &x3min = mbsize.d_view(m).x3min;
-	const Real &x1max = mbsize.d_view(m).x1max;
-	const Real &x2max = mbsize.d_view(m).x2max;
-	const Real &x3max = mbsize.d_view(m).x3max;
+        int m = pi(PGID,p) - gids;
+        int ip = (pr(IPX,p) - mbsize.d_view(m).x1min)/mbsize.d_view(m).dx1 + is;
+	int jp = (pr(IPY,p) - mbsize.d_view(m).x2min)/mbsize.d_view(m).dx2 + js;
+	int kp = (pr(IPZ,p) - mbsize.d_view(m).x3min)/mbsize.d_view(m).dx3 + ks;
+	//std::cout << p << " " << pr(IPX,p) << " " << pr(IPY,p) << " " << pr(IPZ,p) << std::endl;
+	//std::cout << p << " " << ip << " " << jp << " " << kp << std::endl;
+	/***
+	if ( (ip*jp*kp < 0.0) || (ip > ie) || (jp > je) || (kp > ke) || (m > nmb1)){
+	std::cout << global_variable::my_rank <<std::endl;
+	std::cout << "gids " << gids << " " << pi(PGID,p) << std::endl; 
+	std::cout << "mbsize " << m << " " << mbsize.d_view(m).x2min << " " << mbsize.d_view(m).dx2 << std::endl; 
+	std::cout << "pr " << pi(PTAG,p) << " " << pr(IPX,p) << " " << pr(IPY,p) << " " << pr(IPZ,p) << std::endl; 
+	std::cout << "Idx i "  << pi(PTAG,p) << " "<< is << " " << ip << " " << ie << std::endl; 
+	std::cout << "Idx j "  << pi(PTAG,p) << " "<< js << " " << jp << " " << je << std::endl; 
+	std::cout << "Idx k "  << pi(PTAG,p) << " "<< ks << " " << kp << " " << ke << std::endl; 
+	}
+	***/
+	Real &x1min = mbsize.d_view(m).x1min;
+	Real &x2min = mbsize.d_view(m).x2min;
+	Real &x3min = mbsize.d_view(m).x3min;
+	Real &x1max = mbsize.d_view(m).x1max;
+	Real &x2max = mbsize.d_view(m).x2max;
+	Real &x3max = mbsize.d_view(m).x3max;
 	Real x1v,x2v,x3v;
 	x1v = LeftEdgeX(ip, indcs.nx1, x1min, x1max);
 	x2v = LeftEdgeX(jp, indcs.nx2, x2min, x2max);
@@ -163,6 +178,7 @@ void Particles::BorisStep( const Real dt, const bool only_v ){
 	E[0] = e0_.x1e(m, kp, jp, ip) + (x[0] - x1v)*(e0_.x1e(m, kp, jp, ip+1) - e0_.x1e(m, kp, jp, ip))/Dx;
 	E[1] = e0_.x2e(m, kp, jp, ip) + (x[1] - x2v)*(e0_.x2e(m, kp, jp+1, ip) - e0_.x2e(m, kp, jp, ip))/Dy;
 	E[2] = e0_.x3e(m, kp, jp, ip) + (x[2] - x3v)*(e0_.x3e(m, kp+1, jp, ip) - e0_.x3e(m, kp, jp, ip))/Dz;
+        //std::cout << "E " << p << " " << E[0] << " " << E[1] << " " << E[2]<< std::endl;
 
 	uE[0] = u_con[0] + dt*pr(IPC,p)/(2.0*pr(IPM,p))*E[0];
         if (multi_d) { uE[1] = u_con[1] + dt*pr(IPC,p)/(2.0*pr(IPM,p))*E[1]; }
@@ -195,7 +211,11 @@ void Particles::BorisStep( const Real dt, const bool only_v ){
 	B[0] = b0_.x1f(m, kp, jp, ip) + (x[0] - x1v)*(b0_.x1f(m, kp, jp, ip+1) - b0_.x1f(m, kp, jp, ip))/Dx;
 	B[1] = b0_.x2f(m, kp, jp, ip) + (x[1] - x2v)*(b0_.x2f(m, kp, jp+1, ip) - b0_.x2f(m, kp, jp, ip))/Dy;
 	B[2] = b0_.x3f(m, kp, jp, ip) + (x[2] - x3v)*(b0_.x3f(m, kp+1, jp, ip) - b0_.x3f(m, kp, jp, ip))/Dz;
+        //std::cout << "B " << p << " " << B[0] << " " << B[1] << " " << B[2]<< std::endl;
 
+	// if (p == 53){
+        // std::cout << "B " << p << " " << B[0] << " " << B[1] << " " << B[2]<<std::endl;
+	// }
 	Real mod_t_sqr = 0.0;
 	Real t[3];
 	for (int i1 = 0; i1 < 3; ++i1 ){ 
@@ -210,6 +230,7 @@ void Particles::BorisStep( const Real dt, const bool only_v ){
 	uE[0]*t[1] - uE[1]*t[0],
 	};
 
+        //std::cout << "vec_ut " << p << " " << vec_ut[0] << " " << vec_ut[1] << " " << vec_ut[2]<< std::endl;
 	uB[0] = uE[0] + 2.0/(1.0+mod_t_sqr)*( (uE[1] + vec_ut[1])*t[2] - (uE[2] + vec_ut[2])*t[1] );
         if (multi_d) { uB[1] = uE[1] + 2.0/(1.0+mod_t_sqr)*( (uE[2] + vec_ut[2])*t[0] - (uE[0] + vec_ut[0])*t[2] ); }
         if (three_d) { uB[2] = uE[2] + 2.0/(1.0+mod_t_sqr)*( (uE[0] + vec_ut[0])*t[1] - (uE[1] + vec_ut[1])*t[0] ); }
@@ -221,7 +242,7 @@ void Particles::BorisStep( const Real dt, const bool only_v ){
 		u_cov[i1] += glower[i1+1][i2+1]*uB[i2];
 		}
 	}
-	g_Lor = 0.0; //Final Lorentz gamma factor
+	g_Lor = 0.0; //Intermediate Lorentz gamma factor
 	for (int i1 = 0; i1 < 3; ++i1 ){ 
 		for (int i2 = 0; i2 < 3; ++i2 ){ 
 		g_Lor += ADM_upper[i1][i2]*u_cov[i1]*u_cov[i2];
@@ -233,21 +254,20 @@ void Particles::BorisStep( const Real dt, const bool only_v ){
 	pr(IPVY,p) = (uB[1] + dt*pr(IPC,p)/(2.0*pr(IPM,p))*E[1])/g_Lor ;
 	pr(IPVZ,p) = (uB[2] + dt*pr(IPC,p)/(2.0*pr(IPM,p))*E[2])/g_Lor ;
 
+        //std::cout << "pr1 " << p << " " << pr(IPVX,p)<< std::endl;
 
 	if (!only_v){
 	pr(IPX,p) = x[0] + dt/(2.0)*pr(IPVX,p);
         if (multi_d) { pr(IPY,p) = x[1] + dt/(2.0)*pr(IPVY,p); }
         if (three_d) { pr(IPZ,p) = x[2] + dt/(2.0)*pr(IPVZ,p); }
 	}
+	//std::cout << "pp1 " << p << " " << pr(IPX,p)<< " " << pr(IPY,p)<< " " << pr(IPZ,p)<<//std::endl;
       });
       return;
 }
 
 //Provide dt as input parameter in order to be able to use this function
 //also for half-steps
-//Currently gradient descent is only done on velocity, which seems sufficient (convergence in ~2 iterations).
-//Doing gradient descent on position requires computing the second derivatives of the metric, i.e. 6 4x4 matrices.
-//Might be needed for more complex problems?
 //Largely implemented following Bacchini et al. 2020 (https://doi.org/10.3847/1538-4365/abb604)
 KOKKOS_INLINE_FUNCTION
 void Particles::GeodesicIterations( const Real dt ){
@@ -258,12 +278,15 @@ void Particles::GeodesicIterations( const Real dt ){
 	const bool &multi_d = pmy_pack->pmesh->multi_d;
 	const bool &three_d = pmy_pack->pmesh->three_d;
 
+      // First attempt: not iterative, approximate
       par_for("part_fullgr",DevExeSpace(),0,(nprtcl_thispack-1),
       KOKKOS_LAMBDA(const int p) {
 
+	std::cout << "Particle: " << p << " " << pr(IPX,p) << " " << pr(IPY,p) << " " << pr(IPZ,p) << " " << pr(IPVX,p) << " " << pr(IPVY,p) << " " << pr(IPVZ,p) << std::endl;
         // Iterate per particle such that those that converge quicker don't go through as many iterations
 	// Initialize iteration variables
 	int n_iter = 0;
+	bool doneExtra = false; //There should be an extra iteration after the tolerance has been achieved
 	Real rest_x[3] = {1.0,1.0,1.0};
 	Real x_curr[3] = {pr(IPX,p), pr(IPY,p), pr(IPZ,p)};
 	Real v_curr[3] = {pr(IPVX,p), pr(IPVY,p), pr(IPVZ,p)};
@@ -274,49 +297,24 @@ void Particles::GeodesicIterations( const Real dt ){
 
 	Real a_eval[4] = {0.0, 0.0, 0.0, 0.0};
 
-	// Need a first evaluation of the velocity at the next step
-	u_curr[0] = 1.0;
-	u_curr[1] = pr(IPVX,p);
-	u_curr[2] = pr(IPVY,p);
-	u_curr[3] = pr(IPVZ,p);
-	ComputeLorentzFactorGR(x_curr, u_curr, &g_Lor);
-	// Boost the 4-velocity
-	for (int i1 = 0; i1 < 4; ++i1){ u_curr[i1] *= g_Lor; }
-	ComputeGeodesicTerms(x_curr, u_curr, a_eval);
-	
-	//update g_Lor after acceleration
-	u_eval[0] = u_curr[0] + dt*a_eval[0];
-	u_eval[1] = u_curr[1] + dt*a_eval[1]; 
-	u_eval[2] = u_curr[2] + dt*a_eval[2];
-	u_eval[3] = u_curr[3] + dt*a_eval[3];
-	g_Lor = u_eval[0];
-	v_next[0] = u_eval[1]/g_Lor;
-	v_next[1] = u_eval[2]/g_Lor;
-	v_next[2] = u_eval[3]/g_Lor;
-	x_next[0] = x_curr[0] + dt*pr(IPVX,p);
-	x_next[1] = x_curr[1] + dt*pr(IPVY,p);
-	x_next[2] = x_curr[2] + dt*pr(IPVZ,p);
-	
-	// Pre-iteration might already satisfy tolerance condition
-	rest_x[0] = x_next[0] - pr(IPX,p) - dt*(pr(IPVX,p)+v_next[0])/2.0;
-	rest_x[1] = x_next[1] - pr(IPY,p) - dt*(pr(IPVY,p)+v_next[1])/2.0;
-	rest_x[2] = x_next[2] - pr(IPZ,p) - dt*(pr(IPVZ,p)+v_next[2])/2.0;
+	// First iteration done with same velocity
+	v_next[0] = pr(IPVX,p);
+	v_next[1] = pr(IPVY,p);
+	v_next[2] = pr(IPVZ,p);
 
-	while(
-		(n_iter < it_max)
-		&& (sqrt(SQR(rest_x[0]) + SQR(rest_x[1]) + SQR(rest_x[2])) > it_tol)
-	     ){
+	x_next[0] = pr(IPX,p) + dt*pr(IPVX,p);
+	x_next[1] = pr(IPY,p) + dt*pr(IPVY,p);
+	x_next[2] = pr(IPZ,p) + dt*pr(IPVZ,p);
+
+	while( n_iter < it_max ){
 	//Compute values for curr iteration with gradient descent
-	v_next[0] += rest_x[0]*2.0/dt;
-	v_next[1] += rest_x[1]*2.0/dt;
-	v_next[2] += rest_x[2]*2.0/dt;
 	
 	u_curr[0] = 1.0;
 	u_curr[1] = v_curr[0];
 	u_curr[2] = v_curr[1];
 	u_curr[3] = v_curr[2];
 	ComputeLorentzFactorGR(x_curr, u_curr, &g_Lor);
-	// Boost the current 4-velocity
+	// Boost the 4-velocity
 	for (int i1 = 0; i1 < 4; ++i1){ u_curr[i1] *= g_Lor; }
 
 	u_next[0] = 1.0;
@@ -324,9 +322,9 @@ void Particles::GeodesicIterations( const Real dt ){
 	u_next[2] = v_next[1];
 	u_next[3] = v_next[2];
 	ComputeLorentzFactorGR(x_next, u_next, &g_Lor);
-	// Boost the next-step 4-velocity
+	// Boost the 4-velocity
 	for (int i1 = 0; i1 < 4; ++i1){ u_next[i1] *= g_Lor; }
-	// Evaluation is done at the mid-point between current and next
+	std::cout << "g_Lor 2: " << g_Lor << " particle: " << p <<std::endl;
 	u_eval[0] = (u_next[0] + u_curr[0])/2.0;
 	u_eval[1] = (u_next[1] + u_curr[1])/2.0;
 	u_eval[2] = (u_next[2] + u_curr[2])/2.0;
@@ -346,19 +344,24 @@ void Particles::GeodesicIterations( const Real dt ){
 	x_next[0] = x_curr[0] + dt*(v_curr[0] + v_next[0])/2.0;
         x_next[1] = x_curr[1] + dt*(v_curr[1] + v_next[1])/2.0;
         x_next[2] = x_curr[2] + dt*(v_curr[2] + v_next[2])/2.0;
+        //std::cout << "r_next " << sqrt(SQR(x_next[0]) + SQR(x_next[1]) + SQR(x_next[2])) << " r_curr " << sqrt(SQR(x_curr[0]) + SQR(x_curr[1]) + SQR(x_curr[2])) << std::endl;
 	// Check if values found are solution to the initial problem within tolerance
 	rest_x[0] = x_next[0] - pr(IPX,p) - dt*(pr(IPVX,p)+v_next[0])/2.0;
 	rest_x[1] = x_next[1] - pr(IPY,p) - dt*(pr(IPVY,p)+v_next[1])/2.0;
 	rest_x[2] = x_next[2] - pr(IPZ,p) - dt*(pr(IPVZ,p)+v_next[2])/2.0;
+	//std::cout << "POST rst: " << sqrt(SQR(rest_x[0]) + SQR(rest_x[1]) + SQR(rest_x[2])) << " p: " << p << std::endl;
 	++n_iter;
-	if (sqrt(SQR(rest_x[0]) + SQR(rest_x[1]) + SQR(rest_x[2])) < it_tol) { break; }
+	if ( doneExtra )  { break; }
+	if (sqrt(SQR(rest_x[0]) + SQR(rest_x[1]) + SQR(rest_x[2])) < it_tol) { doneExtra = true; }
 	for ( int i = 0; i < 3; ++i ){
 		v_curr[i] = v_next[i];
 		x_curr[i] = x_next[i];
+		v_next[i] += rest_x[i]*2.0/dt;
 	}
 	}
 	if (n_iter == (it_max )) { std::cout << "Limit of implicit iterations reached on particle " << pi(PTAG,p) << " on rank " << global_variable::my_rank << std::endl; }
 
+	std::cout << "Particle: " << p << " rst: " << sqrt(SQR(rest_x[0]) + SQR(rest_x[1]) + SQR(rest_x[2])) << " after " << n_iter << " iteration(s)." << std::endl;
 	// Done with iterations, update ``true'' values
 	pr(IPVX,p) = v_next[0];
         if (multi_d) { pr(IPVY,p) = v_next[1]; }
@@ -366,6 +369,7 @@ void Particles::GeodesicIterations( const Real dt ){
 	pr(IPX,p) = x_next[0];
         if (multi_d) { pr(IPY,p) = x_next[1]; }
         if (three_d) { pr(IPZ,p) = x_next[2]; }
+	std::cout << "Particle: " << p << " " << pr(IPX,p) << " " << pr(IPY,p) << " " << pr(IPZ,p) << " " << pr(IPVX,p) << " " << pr(IPVY,p) << " " << pr(IPVZ,p) << std::endl;
       });
       return;
 }
