@@ -61,7 +61,7 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
   DvceArray4D<Real> tgas_radsource_;
   if (is_radiation_enabled_) tgas_radsource_ = pmy_pack->prad->tgas_radsource;
   bool &cellavg_fix_turn_on_ = pmy_pack->pmhd->cellavg_fix_turn_on;
-  // bool &turn_on_sao_operation_ = pmy_pack->pmhd->turn_on_sao_operation;
+  bool &turn_on_sao_operation_ = pmy_pack->pmhd->turn_on_sao_operation;
   // bool is_horsmooth_ = false;
   auto &use_ko_dissipation_ = pmy_pack->pmhd->use_ko_dissipation;
   auto &ko_dissipation_ = pmy_pack->pmhd->ko_dissipation;
@@ -252,8 +252,7 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
       }
 
       // apply temperature floor within r_tfix_cut_
-      bool apply_tfloor = true;
-      if (apply_tfloor) {
+      if (turn_on_sao_operation_) {
         Real tgas_ = gm1*w.e/w.d;
         if ((SQR(x1v) + SQR(x2v) + SQR(x3v)) < SQR(r_tfix_cut_)) {
           tgas_ = fmax(eos.tfloor, tgas_);
