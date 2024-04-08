@@ -27,7 +27,6 @@
 #include "dyngr/rsolvers/hlle_dyngrmhd.hpp"
 // include PrimitiveSolver stuff
 #include "eos/primitive-solver/idealgas.hpp"
-#include "eos/primitive-solver/polytrope.hpp"
 #include "eos/primitive-solver/reset_floor.hpp"
 
 namespace dyngr {
@@ -144,7 +143,7 @@ TaskStatus DynGRPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int stag
       HLLE_DYNGR<IVX>(member, dyn_eos, indcs, size, coord, m, k, j, il, iu,
                 wl, wr, bl, br, bx, nhyd_, nscal_, adm_,
                 flx1, e31, e21);
-    } 
+    }
     member.team_barrier();
 
     // Calculate fluxes of scalars (if any)
@@ -404,6 +403,5 @@ TaskStatus DynGRPS<EOSPolicy, ErrorPolicy>::\
 
 INSTANTIATE_CALC_FLUXES(Primitive::IdealGas, Primitive::ResetFloor)
 INSTANTIATE_CALC_FLUXES(Primitive::PiecewisePolytrope, Primitive::ResetFloor)
-INSTANTIATE_CALC_FLUXES(Primitive::Polytrope, Primitive::ResetFloor)
 
 } // namespace dyngr

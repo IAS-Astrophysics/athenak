@@ -658,7 +658,7 @@ void VacuumBC(Mesh *pm) {
   int &js = indcs.js;  int &je  = indcs.je;
   int &ks = indcs.ks;  int &ke  = indcs.ke;
   auto &mb_bcs = pm->pmb_pack->pmb->mb_bcs;
-  
+
   DvceArray5D<Real> u0_, w0_;
   u0_ = pm->pmb_pack->pmhd->u0;
   w0_ = pm->pmb_pack->pmhd->w0;
@@ -667,7 +667,7 @@ void VacuumBC(Mesh *pm) {
   int nvar = u0_.extent_int(1);
 
   Real &dfloor = pm->pmb_pack->pmhd->peos->eos_data.dfloor;
-  
+
   // X1-Boundary
   // Set X1-BCs on b0 if Meshblock face is at the edge of the computational domain.
   par_for("noinflow_x1", DevExeSpace(),0,(nmb-1),0,(n3-1),0,(n2-1),

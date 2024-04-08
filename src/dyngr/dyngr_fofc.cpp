@@ -116,7 +116,7 @@ void DynGRPS<EOSPolicy, ErrorPolicy>::FOFC(Driver *pdriver, int stage) {
               }
             }
           }
-          if (utest_(m,indcs[n],k,j,i) > dmp_M_*varmax || 
+          if (utest_(m,indcs[n],k,j,i) > dmp_M_*varmax ||
               utest_(m,indcs[n],k,j,i) < varmin/dmp_M_) {
             fofc_(m,k,j,i) = true;
           }
@@ -354,7 +354,8 @@ void DynGRPS<EOSPolicy, ErrorPolicy>::FOFC(Driver *pdriver, int stage) {
         blj[IBY] = brj[IBY] = b0_.x2f(m, k, j+1, i);
 
         // Compute the metric terms at j+1/2
-        adm::Face2Metric(m, k, j+1, i, adm.g_dd, adm.beta_u, adm.alpha, g3d, beta_u, alpha);
+        adm::Face2Metric(m, k, j+1, i, adm.g_dd, adm.beta_u, adm.alpha,
+                         g3d, beta_u, alpha);
 
         // Compute new 1st-order LLF flux at j-face
         if constexpr (rsolver_method_ == DynGR_RSolver::llf_dyngr) {
@@ -391,7 +392,8 @@ void DynGRPS<EOSPolicy, ErrorPolicy>::FOFC(Driver *pdriver, int stage) {
         bmk[IBZ] = bpk[IBZ] = b0_.x3f(m, k+1, j, i);
 
         // Compute the metric terms at k+1/2
-        adm::Face3Metric(m, k+1, j, i, adm.g_dd, adm.beta_u, adm.alpha, g3d, beta_u, alpha);
+        adm::Face3Metric(m, k+1, j, i, adm.g_dd, adm.beta_u, adm.alpha,
+                         g3d, beta_u, alpha);
 
         // Compute new 1st-order LLF flux at k-face
         if constexpr (rsolver_method_ == DynGR_RSolver::llf_dyngr) {
@@ -439,6 +441,5 @@ void DynGRPS<EOSPolicy, ErrorPolicy>::\
 
 INSTANTIATE_FOFC(Primitive::IdealGas, Primitive::ResetFloor)
 INSTANTIATE_FOFC(Primitive::PiecewisePolytrope, Primitive::ResetFloor)
-INSTANTIATE_FOFC(Primitive::Polytrope, Primitive::ResetFloor)
 
-} // namespace mhd
+} // namespace dyngr

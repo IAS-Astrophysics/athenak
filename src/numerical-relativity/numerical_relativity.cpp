@@ -6,6 +6,10 @@
 //! \file numerical_relativity.cpp
 //  \brief implementation of functions for NumericalRelativity
 #include <iostream>
+#include <map>
+#include <memory>
+#include <string>
+#include <vector>
 
 #include "numerical_relativity.hpp"
 #include "z4c/z4c.hpp"

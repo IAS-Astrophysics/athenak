@@ -56,7 +56,7 @@ Coordinates::Coordinates(ParameterInput *pin, MeshBlockPack *ppack) :
       coord_data.dexcise = pin->GetReal("coord","dexcise");
       coord_data.pexcise = pin->GetReal("coord","pexcise");
       coord_data.flux_excise_r = (pin->DoesBlockExist("radiation")) ?
-        1.0+sqrt(1.0-SQR(coord_data.bh_spin)) : 
+        1.0+sqrt(1.0-SQR(coord_data.bh_spin)) :
         pin->GetOrAddReal("coord","flux_excise_r",1.0);
       coord_data.rexcise =
         (pin->DoesBlockExist("radiation")) ? 1.0+sqrt(1.0-SQR(coord_data.bh_spin)) : 1.0;

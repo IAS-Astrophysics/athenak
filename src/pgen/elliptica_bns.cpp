@@ -10,6 +10,9 @@
 #include <math.h>
 
 #include <algorithm>
+#include <iostream>
+#include <limits>
+#include <string>
 #include <sstream>
 
 #include "athena.hpp"
@@ -77,7 +80,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   Real *y_coords = new Real[width];
   Real *z_coords = new Real[width];
 
-  printf("Allocated coordinates of size %d\n",width);
+  std::cout << "Allocated coordinates of size " << width << std::endl;
 
   // Populate coordinates for Elliptica
   // TODO(JMF): Replace with a Kokkos loop on Kokkos::DefaultHostExecutionSpace() to
@@ -102,7 +105,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
         Real y = CellCenterX(j - js, nx2, x2min, x2max);
         for (int i = 0; i < ncells1; i++) {
           Real x = CellCenterX(i - is, nx1, x1min, x1max);
-          
+
           x_coords[idx] = x;
           y_coords[idx] = y;
           z_coords[idx] = z;
@@ -121,7 +124,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   idr->x_coords = x_coords;
   idr->y_coords = y_coords;
   idr->z_coords = z_coords;
-  printf("Coordinates assigned.\n");
+  std::cout << "Coordinates assigned." << std::endl;
   elliptica_id_reader_interpolate(idr);
 
   // Free the coordinates, since we'll no longer need them.
@@ -129,7 +132,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   delete[] y_coords;
   delete[] z_coords;
 
-  printf("Coordinates freed.\n");
+  std::cout << "Coordinates freed." << std::endl;
 
   // Capture variables for kernel; note that when Z4c is enabled, the gauge variables
   // are part of the Z4c class.
@@ -155,7 +158,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   host_adm.vK_dd.InitWithShallowSlice(host_u_adm,
       adm::ADM::I_ADM_KXX, adm::ADM::I_ADM_KZZ);
 
-  printf("Host mirrors created.\n");
+  std::cout << "Host mirrors created." << std::endl;
 
   // Save Elliptica field indices for shorthand and a small optimization.
   const int i_alpha = idr->indx("alpha");
@@ -183,7 +186,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   const int i_vy    = idr->indx("grhd_vy");
   const int i_vz    = idr->indx("grhd_vz");
 
-  printf("Label indices saved.\n");
+  std::cout << "Label indices saved." << std::endl;
 
   // TODO(JMF): Replace with a Kokkos loop on Kokkos::DefaultHostExecutionSpace() to
   // improve performance.
@@ -197,7 +200,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
           host_adm.beta_u(m, 0, k, j, i) = idr->field[i_betax][idx];
           host_adm.beta_u(m, 1, k, j, i) = idr->field[i_betay][idx];
           host_adm.beta_u(m, 2, k, j, i) = idr->field[i_betaz][idx];
-          
+
           Real g3d[NSPMETRIC];
           host_adm.g_dd(m, 0, 0, k, j, i) = g3d[S11] = idr->field[i_gxx][idx];
           host_adm.g_dd(m, 0, 1, k, j, i) = g3d[S12] = idr->field[i_gxy][idx];
@@ -220,14 +223,14 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
                         idr->field[i_vy][idx],
                         idr->field[i_vz][idx]};
 
-          // Before we store the velocity, we need to make sure it's physical and 
+          // Before we store the velocity, we need to make sure it's physical and
           // calculate the Lorentz factor. If the velocity is superluminal, we make a
-          // last-ditch attempt to salvage the solution by rescaling it to 
+          // last-ditch attempt to salvage the solution by rescaling it to
           // vsq = 1.0 - 1e-15
           Real vsq = Primitive::SquareVector(vu, g3d);
           if (1.0 - vsq <= 0) {
-            printf("The velocity is superluminal!\n"
-                   "Attempting to adjust...\n");
+            std::cout << "The velocity is superluminal!" << std::endl
+                      << "Attempting to adjust..." << std::endl;
             Real fac = sqrt((1.0 - 1e-15)/vsq);
             vu[0] *= fac;
             vu[1] *= fac;
@@ -235,7 +238,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
             vsq = 1.0 - 1.0e-15;
           }
           Real W = sqrt(1.0 / (1.0 - vsq));
-          
+
           host_w0(m, IVX, k, j, i) = W*vu[0];
           host_w0(m, IVY, k, j, i) = W*vu[1];
           host_w0(m, IVZ, k, j, i) = W*vu[2];
@@ -246,19 +249,19 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     }
   }
 
-  printf("Host mirrors filled.\n");
+  std::cout << "Host mirrors filled." << std::endl;
 
   // Cleanup
   elliptica_id_reader_free(idr);
 
-  printf("Elliptica freed.\n");
+  std::cout << "Elliptica freed." << std::endl;
 
   // Copy the data to the GPU.
   Kokkos::deep_copy(u_adm, host_u_adm);
   Kokkos::deep_copy(w0, host_w0);
   Kokkos::deep_copy(u_z4c, host_u_z4c);
 
-  printf("Data copied.\n");
+  std::cout << "Data copied." << std::endl;
 
   // TODO(JMF): Add magnetic fields
   auto &b0 = pmbp->pmhd->b0;
@@ -279,7 +282,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     }
   });
 
-  printf("Face-centered fields zeroed.\n");
+  std::cout << "Face-centered fields zeroed." << std::endl;
 
   // Compute cell-centered fields
   auto &bcc0 = pmbp->pmhd->bcc0;
@@ -290,7 +293,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     bcc0(m, IBZ, k, j, i) = 0.5*(b0.x3f(m, k, j, i) + b0.x3f(m, k+1, j, i));
   });
 
-  printf("Cell-centered fields calculated.\n");
+  std::cout << "Cell-centered fields calculated." << std::endl;
 
   pmbp->pdyngr->PrimToConInit(0, (ncells1-1), 0, (ncells2-1), 0, (ncells3-1));
   switch (indcs.ng) {

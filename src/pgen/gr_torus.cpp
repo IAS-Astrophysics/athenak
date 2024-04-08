@@ -461,8 +461,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     Real ptot;
     if (!use_dyngr) {
       ptot = gm1*w0_(m,IEN,k,j,i);
-    }
-    else {
+    } else {
       ptot = w0_(m,IPR,k,j,i);
     }
     if (is_radiation_enabled) ptot += urad/3.0;

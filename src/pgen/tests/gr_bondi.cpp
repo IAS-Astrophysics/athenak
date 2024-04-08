@@ -89,12 +89,14 @@ void ProblemGenerator::BondiAccretion(ParameterInput *pin, const bool restart) {
 
   if (pmbp->pdyngr == nullptr) {
     if (!(pmbp->phydro->peos->eos_data.use_e)) {
-      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                << std::endl
                 << "gr_bondi test requires hydro/use_e=true" << std::endl;
       exit(EXIT_FAILURE);
     }
     if (!pmbp->pcoord->is_general_relativistic) {
-      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                << std::endl
                 << "GR bondi problem can only be run when GR defined in <coord> block"
                 << std::endl;
       exit(EXIT_FAILURE);
@@ -114,8 +116,7 @@ void ProblemGenerator::BondiAccretion(ParameterInput *pin, const bool restart) {
   // Get ideal gas EOS data
   if (pmbp->pdyngr == nullptr) {
     bondi.gm = pmbp->phydro->peos->eos_data.gamma;
-  }
-  else {
+  } else {
     bondi.gm = pmbp->pmhd->peos->eos_data.gamma;
   }
   Real gm1 = bondi.gm - 1.0;
@@ -295,15 +296,13 @@ void BondiErrors(ParameterInput *pin, Mesh *pm) {
     u1_ = pmbp->phydro->u1;
     is_ideal = pmbp->phydro->peos->eos_data.is_ideal;
     nvars = pmbp->phydro->nhydro;
-  }
-  else if (pmbp->pmhd != nullptr) {
+  } else if (pmbp->pmhd != nullptr) {
     u0_ = pmbp->pmhd->u0;
     u1_ = pmbp->pmhd->u1;
     is_ideal = pmbp->pmhd->peos->eos_data.is_ideal;
     nvars = pmbp->pmhd->nmhd;
   }
   if (pmbp->phydro != nullptr || pmbp->pmhd != nullptr) {
-
     const int nmkji = (pmbp->nmb_thispack)*nx3*nx2*nx1;
     const int nkji = nx3*nx2*nx1;
     const int nji  = nx2*nx1;

@@ -29,7 +29,6 @@
 #include "eos/primitive_solver_hyd.hpp"
 #include "eos/primitive-solver/idealgas.hpp"
 #include "eos/primitive-solver/piecewise_polytrope.hpp"
-#include "eos/primitive-solver/polytrope.hpp"
 #include "eos/primitive-solver/reset_floor.hpp"
 
 namespace dyngr {
@@ -45,9 +44,6 @@ DynGR* SelectDynGREOS(MeshBlockPack *ppack, ParameterInput *pin, DynGR_EOS eos_p
     case DynGR_EOS::eos_piecewise_poly:
       dyn_gr = new DynGRPS<Primitive::PiecewisePolytrope, ErrorPolicy>(ppack, pin);
       break;
-    case DynGR_EOS::eos_poly:
-      dyn_gr = new DynGRPS<Primitive::Polytrope, ErrorPolicy>(ppack, pin);
-      break;
   }
   return dyn_gr;
 }
@@ -62,9 +58,7 @@ DynGR* BuildDynGR(MeshBlockPack *ppack, ParameterInput *pin) {
     eos_policy = DynGR_EOS::eos_ideal;
   } else if (eos_string.compare("piecewise_poly") == 0) {
     eos_policy = DynGR_EOS::eos_piecewise_poly;
-  } else if (eos_string.compare("polytrope") == 0) {
-    eos_policy = DynGR_EOS::eos_poly;
-  }else {
+  } else {
     std::cout << "### FATAL ERROR in " <<__FILE__ << " at line " << __LINE__
               << std::endl << "<mhd> dyn_eos = '" << eos_string
               << "' not implemented for GR dynamics" << std::endl;
@@ -182,7 +176,8 @@ void DynGRPS<EOSPolicy, ErrorPolicy>::QueueDynGRTasks() {
   pnr->QueueTask(&MHD::SendB, pmhd, MHD_SendB, "MHD_SendB", Task_Run, {MHD_RestB});
   pnr->QueueTask(&MHD::RecvB, pmhd, MHD_RecvB, "MHD_RecvB", Task_Run, {MHD_SendB});
   pnr->QueueTask(&MHD::ApplyPhysicalBCs, pmhd, MHD_BCS, "MHD_BCS", Task_Run, {MHD_RecvB});
-  //pnr->QueueTask(&DynGR::ApplyPhysicalBCs, this, MHD_BCS, "MHD_BCS", Task_Run, dep, none);
+  //pnr->QueueTask(&DynGR::ApplyPhysicalBCs, this, MHD_BCS, "MHD_BCS", Task_Run,
+  //                 {MHD_RecvB});
   pnr->QueueTask(&MHD::Prolongate, pmhd, MHD_Prolong, "MHD_Prolong", Task_Run, {MHD_BCS});
   pnr->QueueTask(&DynGRPS<EOSPolicy, ErrorPolicy>::ConToPrim, this, MHD_C2P, "MHD_C2P",
                  Task_Run, {MHD_Prolong}, {Z4c_Z4c2ADM});
@@ -305,7 +300,7 @@ TaskStatus DynGR::ApplyPhysicalBCs(Driver *pdrive, int stage) {
   int &is = indcs.is;  int &ie  = indcs.ie;
   int &js = indcs.js;  int &je  = indcs.je;
   int &ks = indcs.ks;  int &ke  = indcs.ke;
-  // X1-boundary 
+  // X1-boundary
   ConToPrimBC(is-ng, is+ng, 0, (n2-1), 0, (n3-1));
   ConToPrimBC(ie-ng, ie+ng, 0, (n2-1), 0, (n3-1));
   // X2-boundary
@@ -329,7 +324,7 @@ TaskStatus DynGR::ApplyPhysicalBCs(Driver *pdrive, int stage) {
   }
 
   // We now need to do a PrimToCon on all these boundary points.
-  // X1-boundary 
+  // X1-boundary
   PrimToConInit(is-ng, is, 0, (n2-1), 0, (n3-1));
   PrimToConInit(ie, ie+ng, 0, (n2-1), 0, (n3-1));
   // X2-boundary
@@ -457,7 +452,7 @@ void DynGRPS<EOSPolicy, ErrorPolicy>::AddCoordTermsEOS(const DvceArray5D<Real> &
                            adm.g_dd(m,0,2,k,j,i), adm.g_dd(m,1,1,k,j,i),
                            adm.g_dd(m,1,2,k,j,i), adm.g_dd(m,2,2,k,j,i)};
     const Real& alpha = adm.alpha(m, k, j, i);
-    Real beta_u[3] = {adm.beta_u(m,0,k,j,i), 
+    Real beta_u[3] = {adm.beta_u(m,0,k,j,i),
                       adm.beta_u(m,1,k,j,i), adm.beta_u(m,2,k,j,i)};
     Real detg = adm::SpatialDet(g3d[S11], g3d[S12], g3d[S13],
                                 g3d[S22], g3d[S23], g3d[S33]);
@@ -572,7 +567,6 @@ void DynGRPS<EOSPolicy, ErrorPolicy>::AddCoordTermsEOS(const DvceArray5D<Real> &
 // Instantiated templates
 template class DynGRPS<Primitive::IdealGas, Primitive::ResetFloor>;
 template class DynGRPS<Primitive::PiecewisePolytrope, Primitive::ResetFloor>;
-template class DynGRPS<Primitive::Polytrope, Primitive::ResetFloor>;
 
 // Macro for defining CoordTerms templates
 #define INSTANTIATE_COORD_TERMS(EOSPolicy, ErrorPolicy) \
@@ -588,7 +582,6 @@ void DynGRPS<EOSPolicy, ErrorPolicy>::AddCoordTermsEOS<4>(const DvceArray5D<Real
 
 INSTANTIATE_COORD_TERMS(Primitive::IdealGas, Primitive::ResetFloor);
 INSTANTIATE_COORD_TERMS(Primitive::PiecewisePolytrope, Primitive::ResetFloor);
-INSTANTIATE_COORD_TERMS(Primitive::Polytrope, Primitive::ResetFloor);
 
 #undef INSTANTIATE_COORD_TERMS
 

@@ -61,7 +61,7 @@ void SingleStateLLF_DYNGR(const PrimitiveSolverHydro<EOSPolicy, ErrorPolicy>& eo
   Real bsql, bsqr;
   SingleStateFlux<ivx>(eos, prim_l, prim_r, Bu_lund, Bu_rund, nmhd, nscal, g3d, beta_u,
                        alpha, cons_l, cons_r, fl, fr, bfl, bfr, bsql, bsqr);
-  
+
 
   // Calculate the magnetosonic speeds for both states
   Real lambda_pl, lambda_pr, lambda_ml, lambda_mr;
@@ -175,7 +175,7 @@ void LLF_DYNGR(TeamMember_t const &member,
                                     prim_l[PTM], &prim_l[PYF]);
     eos.ps.GetEOS().ApplyPrimitiveFloor(prim_r[PRH], &prim_r[PVX], prim_r[PPR],
                                     prim_r[PTM], &prim_r[PYF]);
-    
+
     // Calculate the left and right fluxes
     Real cons_l[NCONS], cons_r[NCONS];
     Real fl[NCONS], fr[NCONS], bfl[NMAG], bfr[NMAG];
@@ -213,7 +213,7 @@ void LLF_DYNGR(TeamMember_t const &member,
     // Ez = Fx(Bz), rather than Ez = -Fx(By) and Ey = Fx(Bz). However, the appropriate
     // containers for ey and ez for each direction are passed in as arguments to this
     // function, ensuring that the result is entirely consistent.
-    ey(m, k, j, i) = -0.5*sdetg*(alpha*(bfl[iby] + bfr[iby]) - 
+    ey(m, k, j, i) = -0.5*sdetg*(alpha*(bfl[iby] + bfr[iby]) -
                           lambda * (Bu_r[iby] - Bu_l[iby]));
     ez(m, k, j, i) = 0.5*sdetg*(alpha*(bfl[ibz] + bfr[ibz]) -
                           lambda * (Bu_r[ibz] - Bu_l[ibz]));

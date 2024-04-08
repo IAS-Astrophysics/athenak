@@ -110,6 +110,6 @@ void SingleStateFlux(const PrimitiveSolverHydro<EOSPolicy, ErrorPolicy>& eos,
                     Bu_r[ibx]*(prim_r[pvz]*iWr - beta_u[pvz - PVX]*ialpha));
 }
 
-} 
+} // namespace dyngr
 
 #endif  // DYNGR_RSOLVERS_FLUX_DYNGRMHD_HPP_

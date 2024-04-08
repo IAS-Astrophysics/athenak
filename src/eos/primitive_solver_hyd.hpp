@@ -12,6 +12,7 @@
 // C headers
 #include <float.h>
 #include <math.h>
+#include <stdio.h>
 
 // C++ headers
 #include <string>
@@ -24,7 +25,6 @@
 #include "eos/primitive-solver/primitive_solver.hpp"
 #include "eos/primitive-solver/idealgas.hpp"
 #include "eos/primitive-solver/piecewise_polytrope.hpp"
-#include "eos/primitive-solver/polytrope.hpp"
 #include "eos/primitive-solver/reset_floor.hpp"
 
 // AthenaK headers
@@ -45,11 +45,6 @@ class PrimitiveSolverHydro {
     if constexpr(std::is_same_v<Primitive::IdealGas, EOSPolicy>) {
       ps.GetEOSMutable().SetGamma(pin->GetOrAddReal(block, "gamma", 5.0/3.0));
       ps.GetEOSMutable().SetNSpecies(pin->GetOrAddInteger(block, "nscalars", 0));
-    }
-    // Parameters for a simple polytrope
-    if constexpr(std::is_same_v<Primitive::Polytrope, EOSPolicy>) {
-      ps.GetEOSMutable().SetGamma(pin->GetOrAddReal(block, "gamma", 2.0));
-      ps.GetEOSMutable().SetKappa(pin->GetOrAddReal(block, "K", 100.0));
     }
     // Parameters for a piecewise polytrope
     if constexpr(std::is_same_v<Primitive::PiecewisePolytrope, EOSPolicy>) {
@@ -512,58 +507,12 @@ class PrimitiveSolverHydro {
     if (floors_only) {
       ps.GetEOSMutable().SetPrimitiveFloorFailure(prim_failure);
       ps.GetEOSMutable().SetConservedFloorFailure(cons_failure);
-    }
-    else {
+    } else {
       nerrs += count_errs;
     }
   }
 
   // Get the transformed magnetosonic speeds at a point in a given direction.
-  /*KOKKOS_INLINE_FUNCTION
-  void GetGRFastMagnetosonicSpeeds(Real& lambda_p, Real& lambda_m,
-                                   Real prim[NPRIM], Real bsq, Real g3d[NSPMETRIC],
-                                   Real beta_u[3], Real alpha, Real gii,
-                                   int pvx) const {
-    Real uu[3] = {prim[PVX], prim[PVY], prim[PVZ]};
-    Real usq = Primitive::SquareVector(uu, g3d);
-    int index = pvx - PVX;
-
-    // Get the Lorentz factor and the 3-velocity.
-    Real iWsq = 1.0/(1.0 + usq);
-    Real iW = sqrt(iWsq);
-    Real vsq = usq*iWsq;
-    Real vu = uu[index]*iW;
-
-    // Calculate the fast magnetosonic speed in the comoving frame.
-    Real cs = ps.GetEOS().GetSoundSpeed(prim[PRH], prim[PTM], &prim[PYF]);
-    Real csq = cs*cs;
-    Real H = ps.GetEOS().GetBaryonMass()*prim[PRH]*
-             ps.GetEOS().GetEnthalpy(prim[PRH], prim[PTM], &prim[PYF]);
-    Real vasq = bsq/(bsq + H);
-    Real cmsq = csq + vasq - csq*vasq;
-
-    Real iWsq_ad = 1.0 - vsq*cmsq;
-    Real dis = (cmsq*iWsq)*(gii*iWsq_ad - vu*vu*(1.0 - cmsq));
-    if (dis < 0.) {
-      printf("There's a problem with the magnetosonic speed!\n"
-             "  dis = %.17g\n"
-             "  gii = %.17g\n"
-             "  csq = %.17g\n"
-             "  vsq = %.17g\n"
-             "  usq = %.17g\n"
-             "  rho = %.17g\n"
-             "  vu  = %.17g\n"
-             "  T   = %.17g\n"
-             "  bsq = %.17g\n",
-             dis, gii, csq, vsq, usq, prim[PRH], prim[PTM], vu, bsq);
-      //exit(EXIT_FAILURE);
-    }
-    Real sdis = sqrt(dis);
-
-    lambda_p = alpha*(vu*(1.0 - cmsq) + sdis)/iWsq_ad - beta_u[index];
-    lambda_m = alpha*(vu*(1.0 - cmsq) - sdis)/iWsq_ad - beta_u[index];
-  }*/
-
   KOKKOS_INLINE_FUNCTION
   void GetGRFastMagnetosonicSpeeds(Real& lambda_p, Real& lambda_m,
                                    Real prim[NPRIM], Real bsq, Real g3d[NSPMETRIC],
@@ -639,23 +588,23 @@ class PrimitiveSolverHydro {
   int CheckForConservedNaNs(const Real cons_pt[NCONS]) const {
     int nans = 0;
     if (!isfinite(cons_pt[CDN])) {
-      printf("D is NaN!\n");
+      printf("D is NaN!\n"); // NOLINT
       nans = 1;
     }
     if (!isfinite(cons_pt[CSX])) {
-      printf("Sx is NaN!\n");
+      printf("Sx is NaN!\n"); // NOLINT
       nans = 1;
     }
     if (!isfinite(cons_pt[CSY])) {
-      printf("Sy is NaN!\n");
+      printf("Sy is NaN!\n"); // NOLINT
       nans = 1;
     }
     if (!isfinite(cons_pt[CSZ])) {
-      printf("Sz is NaN!\n");
+      printf("Sz is NaN!\n"); // NOLINT
       nans = 1;
     }
     if (!isfinite(cons_pt[CTA])) {
-      printf("Tau is NaN!\n");
+      printf("Tau is NaN!\n"); // NOLINT
       nans = 1;
     }
 

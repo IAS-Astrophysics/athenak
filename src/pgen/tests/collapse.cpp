@@ -10,6 +10,8 @@
 
 #include <math.h>
 
+#include <iostream>
+
 #include "athena.hpp"
 #include "parameter_input.hpp"
 #include "coordinates/cell_locations.hpp"
@@ -119,7 +121,7 @@ void ProblemGenerator::SphericalCollapse(ParameterInput *pin, const bool restart
     }
     a = 1. - 2*M/(r + 1.e-15);
     b = (1.0/a - 1.0)/SQR(r + 1.e-15);
-    
+
     // ADM variables
     adm.alpha(m, k, j, i) = sqrt(a);
     adm.beta_u(m, 0, k, j, i) = 0.0;

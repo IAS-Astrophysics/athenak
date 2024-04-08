@@ -174,7 +174,7 @@ class PiecewisePolytrope : public EOSPolicyInterface {
                           Real rho_min, Real P0, Real m, int n) {
     // Make sure that we actually *have* polytropes
     if (n <= 0) {
-      printf("PiecewisePolytrope: Invalid number of polytropes requested.");
+      printf("PiecewisePolytrope: Invalid number of polytropes requested."); // NOLINT
       return false;
     }
     // Before we even try to construct anything, we need to make sure that
@@ -183,18 +183,18 @@ class PiecewisePolytrope : public EOSPolicyInterface {
       if(densities[i] <= densities[i-1]) {
         // The densities must be ordered from smallest to largest and strictly
         // increasing.
-        printf("PiecewisePolytrope: Densities must be strictly increasing.");
+        printf("PiecewisePolytrope: Densities must be strictly increasing."); // NOLINT
         return false;
       }
     }
     if (rho_min >= densities[0]) {
-      printf("PiecewisePolytrope: minimum density above lowest transition.");
+      printf("PiecewisePolytrope: minimum density above lowest transition."); // NOLINT
       return false;
     }
 
     // Make sure that we're not trying to allocate too many polytropes
     if (n > MAX_PIECES) {
-      printf("PiecewisePolytrope: number of pieces requested exceeds limit.");
+      printf("PiecewisePolytrope: number of pieces requested exceeds limit."); // NOLINT
       return false;
     }
 
@@ -230,7 +230,7 @@ class PiecewisePolytrope : public EOSPolicyInterface {
                            densities[i]/pressure_pieces[i]),1.0/(gammas[i]-1.0)) *
                        densities[i];
         if (densities[i] > rho_max) {
-          printf("The i = %d"
+          printf("The i = %d" // NOLINT
                  " piece of the polytrope permits superluminal sound speeds: \n"
                  "  rho[i]     = %g\n"
                  "  rho_max[i] = %g\n",i,densities[i],rho_max);
