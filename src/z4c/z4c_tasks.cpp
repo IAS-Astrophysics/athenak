@@ -106,6 +106,10 @@ void Z4c::QueueZ4cTasks() {
   pnr->QueueTask(&Z4c::EnforceAlgConstr, this, Z4c_AlgC, "Z4c_AlgC", Task_Run,
                  {Z4c_Prolong});
   pnr->QueueTask(&Z4c::Z4cToADM_, this, Z4c_Z4c2ADM, "Z4c_Z4c2ADM", Task_Run, {Z4c_AlgC});
+  if (pmy_pack->pdyngr != nullptr) {
+    pnr->QueueTask(&Z4c::UpdateExcisionMasks, this, Z4c_Excise, "Z4c_Excise", Task_Run,
+                   {Z4c_Z4c2ADM});
+  }
   pnr->QueueTask(&Z4c::NewTimeStep, this, Z4c_Newdt, "Z4c_Newdt", Task_Run,
                  {Z4c_Z4c2ADM});
 
@@ -225,6 +229,17 @@ TaskStatus Z4c::EnforceAlgConstr(Driver *pdrive, int stage) {
 TaskStatus Z4c::Z4cToADM_(Driver *pdrive, int stage) {
   if (pmy_pack->pdyngr != nullptr || stage == pdrive->nexp_stages) {
     Z4cToADM(pmy_pack);
+  }
+  return TaskStatus::complete;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void Z4c::UpdateExcisionMasks
+//! \brief
+
+TaskStatus Z4c::UpdateExcisionMasks(Driver *pdrive, int stage) {
+  if (pmy_pack->pcoord->coord_data.bh_excise) {
+    pmy_pack->pcoord->UpdateExcisionMasks();
   }
   return TaskStatus::complete;
 }

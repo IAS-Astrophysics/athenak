@@ -226,6 +226,7 @@ class Z4c {
   TaskStatus EnforceAlgConstr(Driver *d, int stage);
 
   TaskStatus Z4cToADM_(Driver *d, int stage);
+  TaskStatus UpdateExcisionMasks(Driver *d, int stage);
   TaskStatus ADMConstraints_(Driver *d, int stage);
   TaskStatus Z4cBoundaryRHS(Driver *d, int stage);
   TaskStatus RestrictU(Driver *d, int stage);

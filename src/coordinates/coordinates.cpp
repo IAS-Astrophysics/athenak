@@ -60,6 +60,22 @@ Coordinates::Coordinates(ParameterInput *pin, MeshBlockPack *ppack) :
         pin->GetOrAddReal("coord","flux_excise_r",1.0);
       coord_data.rexcise =
         (pin->DoesBlockExist("radiation")) ? 1.0+sqrt(1.0-SQR(coord_data.bh_spin)) : 1.0;
+      
+      coord_data.excision_scheme = ExcisionScheme::fixed;
+      if (is_dynamical_relativistic) {
+        std::string emethod = pin->GetOrAddString("coord","excision_scheme","fixed");
+        if (emethod.compare("fixed")) {
+          coord_data.excision_scheme = ExcisionScheme::fixed;
+        } else if (emethod.compare("lapse")) {
+          coord_data.excision_scheme = ExcisionScheme::lapse;
+          coord_data.excise_lapse = pin->GetOrAddReal("coord","excise_lapse", 0.25);
+        } else {
+          std::cout << "### FATAL ERROR in " << __FILE__ << " at line "
+                    << __LINE__ << std::endl
+                    << "Unknown excision method: " << emethod << std::endl;
+          std::exit(EXIT_FAILURE);
+        }
+      }
 
       // boolean masks allocation
       int nmb = ppack->nmb_thispack;
@@ -69,7 +85,9 @@ Coordinates::Coordinates(ParameterInput *pin, MeshBlockPack *ppack) :
       int ncells3 = (indcs.nx3 > 1)? (indcs.nx3 + 2*(indcs.ng)) : 1;
       Kokkos::realloc(excision_floor, nmb, ncells3, ncells2, ncells1);
       Kokkos::realloc(excision_flux, nmb, ncells3, ncells2, ncells1);
-      SetExcisionMasks(excision_floor, excision_flux);
+      if (coord_data.excision_scheme == ExcisionScheme::fixed) {
+        SetExcisionMasks(excision_floor, excision_flux);
+      }
     }
   }
 }

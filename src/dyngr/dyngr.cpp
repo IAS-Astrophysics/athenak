@@ -180,7 +180,7 @@ void DynGRPS<EOSPolicy, ErrorPolicy>::QueueDynGRTasks() {
   //                 {MHD_RecvB});
   pnr->QueueTask(&MHD::Prolongate, pmhd, MHD_Prolong, "MHD_Prolong", Task_Run, {MHD_BCS});
   pnr->QueueTask(&DynGRPS<EOSPolicy, ErrorPolicy>::ConToPrim, this, MHD_C2P, "MHD_C2P",
-                 Task_Run, {MHD_Prolong}, {Z4c_Z4c2ADM});
+                 Task_Run, {MHD_Prolong}, {Z4c_Excise});
   pnr->QueueTask(&MHD::NewTimeStep, pmhd, MHD_Newdt, "MHD_Newdt", Task_Run, {MHD_C2P});
 
   // End task list

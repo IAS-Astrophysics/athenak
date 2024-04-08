@@ -12,6 +12,7 @@
 #include "mesh/mesh.hpp"
 #include "coordinates.hpp"
 #include "cell_locations.hpp"
+#include "adm/adm.hpp"
 
 // inlined spherical Kerr-Schild r evaluated at CKS x1, x2, x3
 KOKKOS_INLINE_FUNCTION
@@ -163,4 +164,30 @@ void Coordinates::SetExcisionMasks(DvceArray4D<bool> &excision_floor,
   });
 
   return;
+}
+
+void Coordinates::UpdateExcisionMasks() {
+  if (coord_data.excision_scheme == ExcisionScheme::lapse) {
+    // capture variables for kernel
+    auto &indcs = pmy_pack->pmesh->mb_indcs;
+    int is = indcs.is; int js = indcs.js; int ks = indcs.ks;
+    int &ng = indcs.ng;
+    int n1 = indcs.nx1 + 2*ng;
+    int n2 = (indcs.nx2 > 1)? (indcs.nx2 + 2*ng) : 1;
+    int n3 = (indcs.nx3 > 1)? (indcs.nx3 + 2*ng) : 1;
+    int nmb1 = pmy_pack->nmb_thispack - 1;
+    auto &size = pmy_pack->pmb->mb_size;
+    auto &adm = pmy_pack->padm->adm;
+    auto &floor = excision_floor;
+    auto &flux = excision_flux;
+
+    Real &excise_lapse = coord_data.excise_lapse;
+    
+    par_for("set_excision", DevExeSpace(), 0, nmb1, 0, (n3-1), 0, (n2-1), 0, (n1-1),
+    KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
+      bool excise = (adm.alpha(m,k,j,i) < excise_lapse);
+      floor(m,k,j,i) = excise;
+      flux(m,k,j,i) = excise;
+    });
+  }
 }

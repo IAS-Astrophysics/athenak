@@ -18,6 +18,12 @@
 // forward declarations
 struct EOS_Data;
 
+// Enumerator for the excision method
+enum class ExcisionScheme {
+  fixed,
+  lapse
+};
+
 //----------------------------------------------------------------------------------------
 //! \struct CoordData
 //! \brief container for Coordinate variables and functions needed inside kernels. Storing
@@ -33,6 +39,8 @@ struct CoordData {
   Real dexcise;                    // rest-mass density inside excised region
   Real pexcise;                    // pressure inside excised region
   Real flux_excise_r;              // reduce to first-order inside this radius
+  ExcisionScheme excision_scheme;  // excision method
+  Real excise_lapse;               // if excision_scheme = lapse, excise under this lapse
 };
 
 //----------------------------------------------------------------------------------------
@@ -62,6 +70,8 @@ class Coordinates {
   void AddCoordTerms(const DvceArray5D<Real> &w0, const DvceArray5D<Real> &bcc,
                      const EOS_Data &eos, const Real dt, DvceArray5D<Real> &u0);
   void SetExcisionMasks(DvceArray4D<bool> &floor, DvceArray4D<bool> &flux);
+
+  void UpdateExcisionMasks();
 
  private:
   MeshBlockPack* pmy_pack;

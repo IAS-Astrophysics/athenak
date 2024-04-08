@@ -66,6 +66,7 @@ enum TaskName {
   Z4c_Prolong,
   Z4c_AlgC,
   Z4c_Z4c2ADM,
+  Z4c_Excise,
   Z4c_ADMC,
   Z4c_ClearS,
   Z4c_ClearR,
