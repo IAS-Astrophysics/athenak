@@ -12,7 +12,9 @@
 #include <math.h>
 
 #include <algorithm>
+#include <limits>
 #include <sstream>
+#include <string>
 
 #include "athena.hpp"
 #include "globals.hpp"
@@ -54,12 +56,12 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   int &js = indcs.js; int &je = indcs.je;
   int &ks = indcs.ks; int &ke = indcs.ke;
 
-  if (pmbp->pdyngr == nullptr || pmbp->pz4c == nullptr) {
+  /*if (pmbp->pdyngr == nullptr || pmbp->pz4c == nullptr) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
               << "BNS data requires <mhd> and <z4c> blocks."
               << std::endl;
     exit(EXIT_FAILURE);
-  }
+  }*/
 
   // Conversion constants to translate between Lorene and AthenaK
   const Real c_light  = Lorene::Unites::c_si;      // speed of light [m/s]
@@ -95,7 +97,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   Real *y_coords = new Real[width];
   Real *z_coords = new Real[width];
 
-  printf("Allocated coordinates of size %d\n",width);
+  std::cout << "Allocated coordinates of size " << width << std::endl;
 
   // Populate coordinates for LORENE
   // TODO(JMF): Replace with a Kokkos loop on Kokkos::DefaultHostExecutionSpace() to
@@ -120,7 +122,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
         Real y = CellCenterX(j - js, nx2, x2min, x2max);
         for (int i = 0; i < ncells1; i++) {
           Real x = CellCenterX(i - is, nx1, x1min, x1max);
-          
+
           x_coords[idx] = coord_unit*x;
           y_coords[idx] = coord_unit*y;
           z_coords[idx] = coord_unit*z;
@@ -133,7 +135,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   }
 
   // Interpolate the data
-  printf("Coordinates assigned.\n");
+  std::cout << "Coordinates assigned." << std::endl;
   Lorene::Bin_NS *bns = new Lorene::Bin_NS(width, x_coords, y_coords, z_coords,
                                           fname.c_str());
 
@@ -142,14 +144,14 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   delete[] y_coords;
   delete[] z_coords;
 
-  printf("Coordinates freed.\n");
+  std::cout << "Coordinates freed." << std::endl;
 
   // Capture variables for kernel; note that when Z4c is enabled, the gauge variables
   // are part of the Z4c class.
   auto &u_adm = pmbp->padm->u_adm;
   auto &adm   = pmbp->padm->adm;
   auto &w0    = pmbp->pmhd->w0;
-  auto &u_z4c = pmbp->pz4c->u0;
+  //auto &u_z4c = pmbp->pz4c->u0;
   // Because Elliptica only operates on the CPU, we can't construct the data on the GPU.
   // Instead, we create a mirror guaranteed to be on the CPU, populate the data there,
   // then move it back to the GPU.
@@ -158,17 +160,25 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   // memory space.
   HostArray5D<Real>::HostMirror host_u_adm = create_mirror_view(u_adm);
   HostArray5D<Real>::HostMirror host_w0 = create_mirror_view(w0);
-  HostArray5D<Real>::HostMirror host_u_z4c = create_mirror_view(u_z4c);
+  //HostArray5D<Real>::HostMirror host_u_z4c = create_mirror_view(u_z4c);
+  HostArray5D<Real>::HostMirror host_u_z4c;
   adm::ADM::ADMhost_vars host_adm;
-  host_adm.alpha.InitWithShallowSlice(host_u_z4c, z4c::Z4c::I_Z4C_ALPHA);
-  host_adm.beta_u.InitWithShallowSlice(host_u_z4c,
-      z4c::Z4c::I_Z4C_BETAX, z4c::Z4c::I_Z4C_BETAZ);
+  if (pmbp->pz4c != nullptr) {
+    host_u_z4c = create_mirror_view(pmbp->pz4c->u0);
+    host_adm.alpha.InitWithShallowSlice(host_u_z4c, z4c::Z4c::I_Z4C_ALPHA);
+    host_adm.beta_u.InitWithShallowSlice(host_u_z4c,
+        z4c::Z4c::I_Z4C_BETAX, z4c::Z4c::I_Z4C_BETAZ);
+  } else {
+    host_adm.alpha.InitWithShallowSlice(host_u_adm, adm::ADM::I_ADM_ALPHA);
+    host_adm.beta_u.InitWithShallowSlice(host_u_adm,
+        adm::ADM::I_ADM_BETAX, adm::ADM::I_ADM_BETAZ);
+  }
   host_adm.g_dd.InitWithShallowSlice(host_u_adm,
       adm::ADM::I_ADM_GXX, adm::ADM::I_ADM_GZZ);
   host_adm.vK_dd.InitWithShallowSlice(host_u_adm,
       adm::ADM::I_ADM_KXX, adm::ADM::I_ADM_KZZ);
 
-  printf("Host mirrors created.\n");
+  std::cout << "Host mirrors created." << std::endl;
 
   // TODO(JMF): Replace with a Kokkos loop on Kokkos::DefaultHostExecutionSpace() to
   // improve performance.
@@ -177,12 +187,26 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     for (int k = 0; k < ncells3; k++) {
       for (int j = 0; j < ncells2; j++) {
         for (int i = 0; i < ncells1; i++) {
+  /*const int nn = nmb;
+  const int nk = ncells3;
+  const int nj = ncells2;
+  const int ni = ncells1;
+  const int nnkji = nn * nk * nj * ni;
+  const int nkji = nk * nj * ni;
+  const int nji = nj * ni;
+  Kokkos::parallel_for("pgen_lorene",
+  Kokkos::RangePolicy<>(HostExeSpace(), 0, nnkji),
+  KOKKOS_LAMBDA(const int &idx) {
+          int m = (idx)/nkji;
+          int k = (idx - m*nkji)/nji;
+          int j = (idx - m*nkji - k*nji)/ni;
+          int i = (idx - m*nkji - k*nji - j*ni);*/
           // Extract metric quantities
           host_adm.alpha(m, k, j, i) = bns->nnn[idx];
           host_adm.beta_u(m, 0, k, j, i) = bns->beta_x[idx];
           host_adm.beta_u(m, 1, k, j, i) = bns->beta_y[idx];
           host_adm.beta_u(m, 2, k, j, i) = bns->beta_z[idx];
-          
+
           Real g3d[NSPMETRIC];
           host_adm.g_dd(m, 0, 0, k, j, i) = g3d[S11] = bns->g_xx[idx];
           host_adm.g_dd(m, 0, 1, k, j, i) = g3d[S12] = bns->g_xy[idx];
@@ -212,14 +236,14 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
                         bns->u_euler_y[idx] / vel_unit,
                         bns->u_euler_z[idx] / vel_unit};
 
-          // Before we store the velocity, we need to make sure it's physical and 
+          // Before we store the velocity, we need to make sure it's physical and
           // calculate the Lorentz factor. If the velocity is superluminal, we make a
-          // last-ditch attempt to salvage the solution by rescaling it to 
+          // last-ditch attempt to salvage the solution by rescaling it to
           // vsq = 1.0 - 1e-15
           Real vsq = Primitive::SquareVector(vu, g3d);
           if (1.0 - vsq <= 0) {
-            printf("The velocity is superluminal!\n"
-                   "Attempting to adjust...\n");
+            std::cout << "The velocity is superluminal!" << std::endl
+                      << "Attempting to adjust..." << std::endl;
             Real fac = sqrt((1.0 - 1e-15)/vsq);
             vu[0] *= fac;
             vu[1] *= fac;
@@ -227,30 +251,33 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
             vsq = 1.0 - 1.0e-15;
           }
           Real W = sqrt(1.0 / (1.0 - vsq));
-          
+
           host_w0(m, IVX, k, j, i) = W*vu[0];
           host_w0(m, IVY, k, j, i) = W*vu[1];
           host_w0(m, IVZ, k, j, i) = W*vu[2];
 
           idx++;
+  //});
         }
       }
     }
   }
 
-  printf("Host mirrors filled.\n");
+  std::cout << "Host mirrors filled." << std::endl;
 
   // Cleanup
   delete bns;
 
-  printf("Lorene freed.\n");
+  std::cout << "Lorene freed." << std::endl;
 
   // Copy the data to the GPU.
   Kokkos::deep_copy(u_adm, host_u_adm);
   Kokkos::deep_copy(w0, host_w0);
-  Kokkos::deep_copy(u_z4c, host_u_z4c);
+  if (pmbp->pz4c != nullptr) {
+    Kokkos::deep_copy(pmbp->pz4c->u0, host_u_z4c);
+  }
 
-  printf("Data copied.\n");
+  std::cout << "Data copied." << std::endl;
 
   // Convert internal energy to pressure.
   pmbp->pdyngr->ConvertInternalEnergyToPressure(0, (ncells1-1),
@@ -277,7 +304,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     }
   });
 
-  printf("Face-centered fields zeroed.\n");
+  std::cout << "Face-centered fields zeroed." << std::endl;
 
   // Compute cell-centered fields
   auto &bcc0 = pmbp->pmhd->bcc0;
@@ -288,16 +315,18 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     bcc0(m, IBZ, k, j, i) = 0.5*(b0.x3f(m, k, j, i) + b0.x3f(m, k+1, j, i));
   });
 
-  printf("Cell-centered fields calculated.\n");
+  std::cout << "Cell-centered fields calculated." << std::endl;
 
   pmbp->pdyngr->PrimToConInit(0, (ncells1-1), 0, (ncells2-1), 0, (ncells3-1));
-  switch (indcs.ng) {
-    case 2: pmbp->pz4c->ADMToZ4c<2>(pmbp, pin);
-            break;
-    case 3: pmbp->pz4c->ADMToZ4c<3>(pmbp, pin);
-            break;
-    case 4: pmbp->pz4c->ADMToZ4c<4>(pmbp, pin);
-            break;
+  if (pmbp->pz4c != nullptr) {
+    switch (indcs.ng) {
+      case 2: pmbp->pz4c->ADMToZ4c<2>(pmbp, pin);
+              break;
+      case 3: pmbp->pz4c->ADMToZ4c<3>(pmbp, pin);
+              break;
+      case 4: pmbp->pz4c->ADMToZ4c<4>(pmbp, pin);
+              break;
+    }
   }
 
   return;
@@ -346,7 +375,7 @@ void BNSHistory(HistoryData *pdata, Mesh *pm) {
     MPI_Reduce(MPI_IN_PLACE, &alpha_min, 1, MPI_ATHENA_REAL, MPI_MIN, 0, MPI_COMM_WORLD);
   } else {
     MPI_Reduce(&rho_max, &rho_max, 1, MPI_ATHENA_REAL, MPI_MAX, 0, MPI_COMM_WORLD);
-    MPI_Reduce(&alpha_min, &alpha_min, 1, MPI_ATHENA_REAL, MPI_MAX, 0, MPI_COMM_WORLD);
+    MPI_Reduce(&alpha_min, &alpha_min, 1, MPI_ATHENA_REAL, MPI_MIN, 0, MPI_COMM_WORLD);
     rho_max = 0.;
     alpha_min = 0.;
   }
