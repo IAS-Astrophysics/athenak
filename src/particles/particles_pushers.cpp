@@ -284,91 +284,177 @@ void Particles::GeodesicIterations( const Real dt ){
 
 	std::cout << "Particle: " << p << " " << pr(IPX,p) << " " << pr(IPY,p) << " " << pr(IPZ,p) << " " << pr(IPVX,p) << " " << pr(IPVY,p) << " " << pr(IPVZ,p) << std::endl;
         // Iterate per particle such that those that converge quicker don't go through as many iterations
+	const bool is_minkowski = pmy_pack->pcoord->coord_data.is_minkowski;
+	const Real spin = pmy_pack->pcoord->coord_data.bh_spin;
 	// Initialize iteration variables
 	int n_iter = 0;
-	bool doneExtra = false; //There should be an extra iteration after the tolerance has been achieved
+	Real rest_u[4] = {1.0,1.0,1.0,1.0};
 	Real rest_x[3] = {1.0,1.0,1.0};
-	Real x_curr[3] = {pr(IPX,p), pr(IPY,p), pr(IPZ,p)};
-	Real v_curr[3] = {pr(IPVX,p), pr(IPVY,p), pr(IPVZ,p)};
-	// Auxiliary quantities
-	Real g_Lor;
-	//u is always contravariant
-	Real v_next[3], x_next[3], x_eval[3], u_eval[4], u_curr[4], u_next[4]; 
+	Real x_init[3] = {pr(IPX,p), pr(IPY,p), pr(IPZ,p)};
+	Real v_init[3] = {pr(IPVX,p), pr(IPVY,p), pr(IPVZ,p)};
+	Real a_init[4] = {0.0, 0.0, 0.0, 0.0};
+	Real x_eval[3] = {pr(IPX,p) + dt*pr(IPVX,p), pr(IPY,p) + dt*pr(IPVY,p), pr(IPZ,p) + dt*pr(IPVZ,p)};
+	Real v_eval[3] = {pr(IPVX,p), pr(IPVY,p), pr(IPVZ,p)};
+	Real x_prev[3] = {pr(IPX,p), pr(IPY,p), pr(IPZ,p)};
+	Real v_prev[3] = {pr(IPVX,p), pr(IPVY,p), pr(IPVZ,p)};
+	//u is always contravariant. Iteration variables
+	Real u_eval[4], a_eval[4]; 
+	Real Jacob[3][3], init_Jacob_x[3][3], init_Jacob_u[3][3], inv_Jacob[3][3], JT[4][4];
+	Real aux, dx_g_Lor[3], dx_g_Lor_init[3], du_g_Lor[3], du_g_Lor_init[3], dtau, dtau_init;
+	Real g_Lor, u_init[4];
 
-	Real a_eval[4] = {0.0, 0.0, 0.0, 0.0};
+	// To keep for evaluating rest function on velocity
+	u_init[0] = 1.0;
+	u_init[1] = v_init[0];
+	u_init[2] = v_init[1];
+	u_init[3] = v_init[2];
 
-	// First iteration done with same velocity
-	v_next[0] = pr(IPVX,p);
-	v_next[1] = pr(IPVY,p);
-	v_next[2] = pr(IPVZ,p);
+	//ComputeMetricAndInverse(x_init[0],x_init[1],x_init[2], is_minkowski, spin, glower, gupper); 
+	//ComputeMetricDerivatives(x_init[0],x_init[1],x_init[2], is_minkowski, spin, dg_dx1, dg_dx2, dg_dx3); 
 
-	x_next[0] = pr(IPX,p) + dt*pr(IPVX,p);
-	x_next[1] = pr(IPY,p) + dt*pr(IPVY,p);
-	x_next[2] = pr(IPZ,p) + dt*pr(IPVZ,p);
+	//dx_g_Lor_init[0] = 0.0;
+	//du_g_Lor_init[0] = 0.0;
+	//for (int i1=0; i1<4; ++i1){
+	//	for (int i2=0; i2<4; ++i2){
+	//		dx_g_Lor_init[0] += dg_dx1[i1][i2]*u_init[i1]*u_init[i1];
+	//	}
+	//	du_g_Lor_init[0] += 2.0*glower[1][i1]*u_init[i1];
+	//}
+	//dx_g_Lor_init[1] = 0.0;
+	//du_g_Lor_init[1] = 0.0;
+	//for (int i1=0; i1<4; ++i1){
+	//	for (int i2=0; i2<4; ++i2){
+	//		dx_g_Lor_init[1] += dg_dx2[i1][i2]*u_init[i1]*u_init[i1];
+	//	}
+	//	du_g_Lor_init[1] += 2.0*glower[2][i1]*u_init[i1];
+	//}
+	//dx_g_Lor_init[2] = 0.0;
+	//du_g_Lor_init[2] = 0.0;
+	//for (int i1=0; i1<4; ++i1){
+	//	for (int i2=0; i2<4; ++i2){
+	//		dx_g_Lor_init[2] += dg_dx3[i1][i2]*u_init[i1]*u_init[i1];
+	//	}
+	//	du_g_Lor_init[2] += 2.0*glower[3][i1]*u_init[i1];
+	//}
 
-	while( n_iter < it_max ){
-	//Compute values for curr iteration with gradient descent
+	// Boost u_init now
+	ComputeLorentzFactorGR(x_init, u_init, &g_Lor);
+	// g_Lor = 0.0;
+	// for (int i=0; i<3; ++i) { g_Lor += SQR(v_init[i]); }
+        // g_Lor = 1.0/sqrt(1.0 - g_Lor);	
+	//g_Lor = 1.0/g_Lor;
+	std::cout << "g_Lor: " << g_Lor << " p: " << p << std::endl;
+	for (int i1 = 0; i1 < 4; ++i1){ u_init[i1] *= g_Lor; }
+
+	ComputeGeodesicTerms(x_init, u_init, a_init);
+	dtau_init = dt/g_Lor;
 	
-	u_curr[0] = 1.0;
-	u_curr[1] = v_curr[0];
-	u_curr[2] = v_curr[1];
-	u_curr[3] = v_curr[2];
-	ComputeLorentzFactorGR(x_curr, u_curr, &g_Lor);
-	// Boost the 4-velocity
-	for (int i1 = 0; i1 < 4; ++i1){ u_curr[i1] *= g_Lor; }
+	// u_init was not boosted, hence the g_Lor factor
+	//for (int j=0; j<3; ++j){
+	//	for( int i=0; i<3; ++i) {
+	//	       	init_Jacob_x[i][j] = - dt/2.0*a_init[i+1]*dx_g_Lor_init[j]/SQR(g_Lor);
+	//	       	init_Jacob_u[i][j] = - dt/2.0*a_init[i+1]*du_g_Lor_init[j]/SQR(g_Lor);
+	//       	}
+	//}
 
-	u_next[0] = 1.0;
-	u_next[1] = v_next[0];
-	u_next[2] = v_next[1];
-	u_next[3] = v_next[2];
-	ComputeLorentzFactorGR(x_next, u_next, &g_Lor);
-	// Boost the 4-velocity
-	for (int i1 = 0; i1 < 4; ++i1){ u_next[i1] *= g_Lor; }
-	std::cout << "g_Lor 2: " << g_Lor << " particle: " << p <<std::endl;
-	u_eval[0] = (u_next[0] + u_curr[0])/2.0;
-	u_eval[1] = (u_next[1] + u_curr[1])/2.0;
-	u_eval[2] = (u_next[2] + u_curr[2])/2.0;
-	u_eval[3] = (u_next[3] + u_curr[3])/2.0;
+	// Start iterating
+	do{
+		
+	++n_iter;
+	for (int i=0; i<3; ++i) { x_prev[i] = x_eval[i]; v_prev[i] = v_eval[i]; }
 
-	x_eval[0] = (x_curr[0] + x_next[0])/2.0;
-	x_eval[1] = (x_curr[1] + x_next[1])/2.0;
-	x_eval[2] = (x_curr[2] + x_next[2])/2.0;
+	u_eval[0] = 1.0;
+	u_eval[1] = v_eval[0];
+	u_eval[2] = v_eval[1];
+	u_eval[3] = v_eval[2];
+	ComputeLorentzFactorGR(x_eval, u_eval, &g_Lor);
+	// g_Lor = 0.0;
+	// for (int i=0; i<3; ++i) { g_Lor += SQR(v_eval[i]); }
+        // g_Lor = 1.0/sqrt(1.0 - g_Lor);	
+	for (int i1 = 0; i1 < 4; ++i1){ u_eval[i1] *= g_Lor; }
+	//g_Lor = 1.0/g_Lor;
+	std::cout << "g_Lor: " << g_Lor << " p: " << p << std::endl;
+	dtau = dt/g_Lor;
 
 	ComputeGeodesicTerms(x_eval, u_eval, a_eval);
 	
-	g_Lor = u_curr[0] + dt*a_eval[0];
-	v_next[0] = ( u_curr[1] + dt*a_eval[1] )/g_Lor;
-        v_next[1] = ( u_curr[2] + dt*a_eval[2] )/g_Lor;
-        v_next[2] = ( u_curr[3] + dt*a_eval[3] )/g_Lor;
-	
-	x_next[0] = x_curr[0] + dt*(v_curr[0] + v_next[0])/2.0;
-        x_next[1] = x_curr[1] + dt*(v_curr[1] + v_next[1])/2.0;
-        x_next[2] = x_curr[2] + dt*(v_curr[2] + v_next[2])/2.0;
-        //std::cout << "r_next " << sqrt(SQR(x_next[0]) + SQR(x_next[1]) + SQR(x_next[2])) << " r_curr " << sqrt(SQR(x_curr[0]) + SQR(x_curr[1]) + SQR(x_curr[2])) << std::endl;
-	// Check if values found are solution to the initial problem within tolerance
-	rest_x[0] = x_next[0] - pr(IPX,p) - dt*(pr(IPVX,p)+v_next[0])/2.0;
-	rest_x[1] = x_next[1] - pr(IPY,p) - dt*(pr(IPVY,p)+v_next[1])/2.0;
-	rest_x[2] = x_next[2] - pr(IPZ,p) - dt*(pr(IPVZ,p)+v_next[2])/2.0;
-	//std::cout << "POST rst: " << sqrt(SQR(rest_x[0]) + SQR(rest_x[1]) + SQR(rest_x[2])) << " p: " << p << std::endl;
-	++n_iter;
-	if ( doneExtra )  { break; }
-	if (sqrt(SQR(rest_x[0]) + SQR(rest_x[1]) + SQR(rest_x[2])) < it_tol) { doneExtra = true; }
-	for ( int i = 0; i < 3; ++i ){
-		v_curr[i] = v_next[i];
-		x_curr[i] = x_next[i];
-		v_next[i] += rest_x[i]*2.0/dt;
-	}
-	}
-	if (n_iter == (it_max )) { std::cout << "Limit of implicit iterations reached on particle " << pi(PTAG,p) << " on rank " << global_variable::my_rank << std::endl; }
+	// u_eval[0] = u_init[0] + (dtau_init*a_init[0] + dtau*a_eval[0])/2.0;
+	// u_eval[1] = u_init[1] + (dtau_init*a_init[1] + dtau*a_eval[1])/2.0;
+	// u_eval[2] = u_init[2] + (dtau_init*a_init[2] + dtau*a_eval[2])/2.0;
+	// u_eval[3] = u_init[3] + (dtau_init*a_init[3] + dtau*a_eval[3])/2.0;
+	// ComputeLorentzFactorGR(x_eval, u_eval, &g_Lor);
+	// // u_eval is boosted, invert gamma
+	// g_Lor = 1.0/g_Lor;
+	// std::cout << "g_Lor: " << g_Lor << " p: " << p << std::endl;
 
-	std::cout << "Particle: " << p << " rst: " << sqrt(SQR(rest_x[0]) + SQR(rest_x[1]) + SQR(rest_x[2])) << " after " << n_iter << " iteration(s)." << std::endl;
+	// v_eval[0] = u_eval[1]/g_Lor;
+        // v_eval[1] = u_eval[2]/g_Lor;
+        // v_eval[2] = u_eval[3]/g_Lor;
+	
+	// x_eval[0] = x_init[0] + dt*(v_eval[0] + v_init[0])/2.0;
+        // x_eval[1] = x_init[1] + dt*(v_eval[1] + v_init[1])/2.0;
+        // x_eval[2] = x_init[2] + dt*(v_eval[2] + v_init[2])/2.0;
+
+        //std::cout << "r_next " << sqrt(SQR(x_next[0]) + SQR(x_next[1]) + SQR(x_next[2])) << " r_curr " << sqrt(SQR(x_curr[0]) + SQR(x_curr[1]) + SQR(x_curr[2])) << std::endl;
+	// Check for convergence
+	
+	//
+	//Compute next values with gradient descent
+
+	// // Update X
+	rest_x[0] = x_eval[0] - x_init[0] - (v_init[0] + v_eval[0])*dt/2.0;
+	rest_x[1] = x_eval[1] - x_init[1] - (v_init[1] + v_eval[1])*dt/2.0;
+	rest_x[2] = x_eval[2] - x_init[2] - (v_init[2] + v_eval[2])*dt/2.0;
+
+	for (int i=0; i<3; ++i) {
+	       	x_eval[i] -= rest_x[i]; 
+       	}
+	
+	// Note that definition of a_eval requires sign inversion
+	rest_u[0] = u_eval[0] - u_init[0] - (dtau_init*a_init[0] + dtau*a_eval[0])/2.0;
+	rest_u[1] = u_eval[1] - u_init[1] - (dtau_init*a_init[1] + dtau*a_eval[1])/2.0;
+	rest_u[2] = u_eval[2] - u_init[2] - (dtau_init*a_init[2] + dtau*a_eval[2])/2.0;
+	rest_u[3] = u_eval[3] - u_init[3] - (dtau_init*a_init[3] + dtau*a_eval[3])/2.0;
+
+	ComputeJacobianTerms(x_eval, u_eval, JT, dx_g_Lor, du_g_Lor);
+	// u_eval used for du_g_Lor is boosted, need to divide by g_Lor on top of the SQR(g_Lor) already in the derivative
+	// Technically this is missing term with second derivatives of the metric
+	// this would require 6 4x4 matrices to be computed
+
+	// // Then do V
+	for (int i = 0; i<3; ++i){
+		for (int j = 0; j<3; ++j){
+			aux = (i == j) ? 1.0 : 0.0;
+			Jacob[i][j] = aux +  dt/2.0*( 2.0*JT[i+1][j+1]/g_Lor - du_g_Lor[i]*a_eval[j+1]/SQR(g_Lor)/g_Lor );
+		}
+	}
+	ComputeInverseMatrix3(Jacob, inv_Jacob);
+
+	//v_eval[0] = pr(IPVX,p);
+	for (int j = 0; j<3; ++j){ v_eval[0] = (u_eval[1] - rest_u[j+1]*inv_Jacob[0][j])/g_Lor; }
+	//v_eval[1] = pr(IPVY,p);
+	for (int j = 0; j<3; ++j){ v_eval[1] = (u_eval[2] - rest_u[j+1]*inv_Jacob[1][j])/g_Lor; }
+	//v_eval[2] = pr(IPVZ,p);
+	for (int j = 0; j<3; ++j){ v_eval[2] = (u_eval[3] - rest_u[j+1]*inv_Jacob[2][j])/g_Lor; }
+
+        std::cout << "r_next " << sqrt(SQR(x_eval[0] - x_prev[0]) + SQR(x_eval[1] - x_prev[1]) + SQR(x_eval[2] - x_prev[2])) << std::endl;
+        std::cout << "u_nevt " << sqrt(SQR(v_eval[0] - v_prev[0]) + SQR(v_eval[1] - v_prev[1]) + SQR(v_eval[2] - v_prev[2])) << std::endl;
+	}while(
+		n_iter < it_max
+		&& ( sqrt(SQR(x_eval[0] - x_prev[0]) + SQR(x_eval[1] - x_prev[1]) + SQR(x_eval[2] - x_prev[2])) > it_tol
+		|| sqrt(SQR(v_eval[0] - v_prev[0]) + SQR(v_eval[1] - v_prev[1]) + SQR(v_eval[2] - v_prev[2])) > it_tol )
+	     );
+
+	if (n_iter == it_max) { std::cout << "Limit of iterations reached on particle " << pi(PTAG,p) << " on rank " << global_variable::my_rank << std::endl; }
+
+	std::cout << "Particle: " << p << " rst: " << sqrt(SQR(rest_u[0]) + SQR(rest_u[1]) + SQR(rest_u[2])) << " after " << n_iter << " iteration(s)." << std::endl;
 	// Done with iterations, update ``true'' values
-	pr(IPVX,p) = v_next[0];
-        if (multi_d) { pr(IPVY,p) = v_next[1]; }
-	if (three_d) { pr(IPVZ,p) = v_next[2]; }
-	pr(IPX,p) = x_next[0];
-        if (multi_d) { pr(IPY,p) = x_next[1]; }
-        if (three_d) { pr(IPZ,p) = x_next[2]; }
+	pr(IPVX,p) = v_eval[0];
+        if (multi_d) { pr(IPVY,p) = v_eval[1]; }
+	if (three_d) { pr(IPVZ,p) = v_eval[2]; }
+	pr(IPX,p) = x_eval[0];
+        if (multi_d) { pr(IPY,p) = x_eval[1]; }
+        if (three_d) { pr(IPZ,p) = x_eval[2]; }
 	std::cout << "Particle: " << p << " " << pr(IPX,p) << " " << pr(IPY,p) << " " << pr(IPZ,p) << " " << pr(IPVX,p) << " " << pr(IPVY,p) << " " << pr(IPVZ,p) << std::endl;
       });
       return;
@@ -459,6 +545,101 @@ void Particles::ComputeLorentzFactorGR( const Real * x, const Real * u, Real * g
 		for (int i2 = 0; i2<4; ++i2){
 			*g_Lor += glower[i1][i2]*u[i1]*u[i2];
 		}
+	}
+}
+
+KOKKOS_INLINE_FUNCTION
+void Particles::ComputeInverseMatrix3( const Real inputMat[][3], Real outputMat[][3] ){
+
+	Real determinant = 0.0;
+	determinant = inputMat[0][0]*inputMat[1][1]*inputMat[2][2] + inputMat[0][1]*inputMat[1][2]*inputMat[2][0]
+		+ inputMat[1][0]*inputMat[2][1]*inputMat[0][2]
+		- inputMat[2][0]*inputMat[1][1]*inputMat[0][2] - inputMat[1][0]*inputMat[0][1]*inputMat[2][2]
+		- inputMat[2][1]*inputMat[1][2]*inputMat[1][1];
+
+	// Transposition of Jacobian is skipped and indeces are inverted instead
+	outputMat[0][0] = (inputMat[1][1]*inputMat[2][2] - inputMat[2][1]*inputMat[1][2])/determinant;
+	outputMat[0][1] = -(inputMat[1][0]*inputMat[2][2] - inputMat[0][2]*inputMat[2][1])/determinant;
+	outputMat[0][2] = (inputMat[1][1]*inputMat[1][2] - inputMat[0][2]*inputMat[1][1])/determinant;
+	outputMat[1][0] = -(inputMat[1][0]*inputMat[2][2] - inputMat[1][2]*inputMat[2][0])/determinant;
+	outputMat[1][1] = (inputMat[0][0]*inputMat[2][2] - inputMat[0][2]*inputMat[2][0])/determinant;
+	outputMat[1][2] = -(inputMat[0][0]*inputMat[1][2] - inputMat[0][2]*inputMat[1][0])/determinant;
+	outputMat[2][0] = (inputMat[1][0]*inputMat[2][1] - inputMat[1][1]*inputMat[2][0])/determinant;
+	outputMat[2][1] = -(inputMat[0][0]*inputMat[2][1] - inputMat[0][1]*inputMat[2][0])/determinant;
+	outputMat[2][2] = (inputMat[0][0]*inputMat[1][1] - inputMat[0][1]*inputMat[1][0])/determinant;
+
+}
+
+KOKKOS_INLINE_FUNCTION
+void Particles::ComputeJacobianTerms(const Real * x, const Real * u, Real JT[][4], Real * dx_g_Lor, Real * du_g_Lor){
+
+	const bool is_minkowski = pmy_pack->pcoord->coord_data.is_minkowski;
+	const Real spin = pmy_pack->pcoord->coord_data.bh_spin;
+	Real glower[4][4], gupper[4][4]; // Metric components
+	Real dg_dx1[4][4], dg_dx2[4][4], dg_dx3[4][4]; // Metric derivatives
+	Real auxM[4][4], auxN[4][4];	
+	//
+	Real half = 0.5;
+	ComputeMetricAndInverse(x[0],x[1],x[2], is_minkowski, spin, glower, gupper); 
+	ComputeMetricDerivatives(x[0],x[1],x[2], is_minkowski, spin, dg_dx1, dg_dx2, dg_dx3); 
+		     
+	for (int j=0; j<4; ++j){
+		auxN[j][0] = dg_dx1[j][0]*u[1] + dg_dx2[j][0]*u[2] + dg_dx3[j][0]*u[3];
+		auxN[j][1] = dg_dx1[j][1]*u[1] + dg_dx2[j][1]*u[2] + dg_dx3[j][1]*u[3];
+		for (int i=0; i<4; ++i) { auxN[j][1] += dg_dx1[j][i]*u[i] ; }
+		auxN[j][2] = dg_dx1[j][2]*u[1] + dg_dx2[j][2]*u[2] + dg_dx3[j][2]*u[3];
+		for (int i=0; i<4; ++i) { auxN[j][2] += dg_dx2[j][i]*u[i] ; }
+		auxN[j][3] = dg_dx1[j][3]*u[1] + dg_dx2[j][3]*u[2] + dg_dx3[j][3]*u[3];
+		for (int i=0; i<4; ++i) { auxN[j][3] += dg_dx3[j][i]*u[i] ; }
+	}
+
+	for (int j = 0; j<4; ++j) {
+		auxM[1][j] = auxN[1][j];
+        	for (int i = 0; i<4; ++i) {
+		        half = (i == j+1) ? 0.5 : 1.0;
+			auxM[1][j] -= half*dg_dx2[j][i]*u[i];
+	       	}
+	}
+	for (int j = 0; j<4; ++j) {
+		auxM[2][j] = auxN[2][j];
+        	for (int i = 0; i<4; ++i) {
+		        half = (i == j+1) ? 0.5 : 1.0;
+			auxM[2][j] -= half*dg_dx3[j][i]*u[i];
+	       	}
+	}
+	for (int j = 0; j<4; ++j) {
+		auxM[3][j] = auxN[3][j];
+        	for (int i = 0; i<4; ++i) {
+		        half = (i == j+1) ? 0.5 : 1.0;
+			auxM[3][j] -= half*dg_dx3[j][i]*u[i];
+	       	}
+	}
+	
+	//Raise indices
+	for (int i=0; i<4; ++i){
+		for (int j=0; j<4; ++j){
+			JT[i][j] = 0.0;
+			for (int k=0; k<4; ++k){
+				JT[i][j] += gupper[i][k]*auxM[k][j];
+			}
+		}
+	}
+	        
+	dx_g_Lor[0] = 0.0;
+	du_g_Lor[0] = 0.0;
+	dx_g_Lor[1] = 0.0;
+	du_g_Lor[1] = 0.0;
+	dx_g_Lor[2] = 0.0;
+	du_g_Lor[2] = 0.0;
+	for (int i1=0; i1<4; ++i1){
+		for (int i2=0; i2<4; ++i2){
+			dx_g_Lor[0] += dg_dx1[i1][i2]*u[i1]*u[i1];
+			dx_g_Lor[1] += dg_dx2[i1][i2]*u[i1]*u[i1];
+			dx_g_Lor[2] += dg_dx3[i1][i2]*u[i1]*u[i1];
+		}
+		du_g_Lor[0] += 2.0*glower[1][i1]*u[i1];
+		du_g_Lor[1] += 2.0*glower[2][i1]*u[i1];
+		du_g_Lor[2] += 2.0*glower[3][i1]*u[i1];
 	}
 }
 } // namespace particles
