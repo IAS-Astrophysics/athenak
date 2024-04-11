@@ -64,9 +64,9 @@ Coordinates::Coordinates(ParameterInput *pin, MeshBlockPack *ppack) :
       coord_data.excision_scheme = ExcisionScheme::fixed;
       if (is_dynamical_relativistic) {
         std::string emethod = pin->GetOrAddString("coord","excision_scheme","fixed");
-        if (emethod.compare("fixed")) {
+        if (emethod.compare("fixed") == 0) {
           coord_data.excision_scheme = ExcisionScheme::fixed;
-        } else if (emethod.compare("lapse")) {
+        } else if (emethod.compare("lapse") == 0) {
           coord_data.excision_scheme = ExcisionScheme::lapse;
           coord_data.excise_lapse = pin->GetOrAddReal("coord","excise_lapse", 0.25);
         } else {
