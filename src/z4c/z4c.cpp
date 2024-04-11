@@ -61,6 +61,7 @@ Z4c::Z4c(MeshBlockPack *ppack, ParameterInput *pin) :
   u1("u1 z4c",1,1,1,1,1),
   u_rhs("u_rhs z4c",1,1,1,1,1),
   u_weyl("u_weyl",1,1,1,1,1),
+  coarse_u_weyl("coarse_u_weyl",1,1,1,1,1),
   psi_out("psi_out",1,1,1),
   pz4c_amr(new Z4c_AMR(this,pin)) {
   // (1) read time-evolution option [already error checked in driver constructor]
@@ -147,6 +148,7 @@ Z4c::Z4c(MeshBlockPack *ppack, ParameterInput *pin) :
     int nccells2 = (indcs.cnx2 > 1)? (indcs.cnx2 + 2*(indcs.ng)) : 1;
     int nccells3 = (indcs.cnx3 > 1)? (indcs.cnx3 + 2*(indcs.ng)) : 1;
     Kokkos::realloc(coarse_u0, nmb, (nz4c), nccells3, nccells2, nccells1);
+    Kokkos::realloc(coarse_u_weyl, nmb, (2), nccells3, nccells2, nccells1);
   }
   Kokkos::Profiling::popRegion();
 
