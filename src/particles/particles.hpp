@@ -91,7 +91,7 @@ class Particles {
   void BorisStep( const Real dt, const bool only_v );
   void GeodesicIterations( const Real dt );
   void ComputeGeodesicTerms( const Real * x, const Real * u, Real * acc );
-  void ComputeLorentzFactorGR( const Real * x, const Real * u, Real * g_Lor );
+  void ComputeLorentzFactorGR( const Real * x, const Real * v, Real * u, Real * g_Lor );
   void ComputeInverseMatrix3( const Real iMat[][3], Real oMat[][3] );
   void ComputeJacobianTerms(const Real * x, const Real * u, Real JT[][4], Real * dx_g_Lor, Real * du_g_Lor);
  private:
