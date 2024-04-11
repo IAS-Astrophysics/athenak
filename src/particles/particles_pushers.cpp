@@ -108,7 +108,6 @@ void Particles::BorisStep( const Real dt, const bool only_v ){
 	Real glower[4][4], gupper[4][4], ADM_upper[3][3]; // Metric 
 					       // (remember: sqrt(-1/gupper[0][0]) = alpha, glower[0][i] = beta[i])
 	ComputeMetricAndInverse(pr(IPX,p),pr(IPY,p),pr(IPZ,p), is_minkowski, spin, glower, gupper); 
-        //std::cout << "g_Lor " << p << " " << g_Lor << std::endl;
 	// Compute 3x3 ADM spatial metric from covariant metric 
 	for (int i1 = 0; i1 < 3; ++i1 ){ 
 		for (int i2 = 0; i2 < 3; ++i2 ){ 
@@ -133,11 +132,9 @@ void Particles::BorisStep( const Real dt, const bool only_v ){
 	g_Lor = sqrt(1.0 + g_Lor);
 	//Boost velocities
 	for ( int i=0; i<3; ++i){
-		u_cov[i] *= g_Lor;
 		u_con[i] *= g_Lor;
 	}
 
-        //std::cout << "x123 " << global_variable::my_rank << " " << pi(PTAG,p) << " " << x1 << " " << x2 << " " << x3 << std::endl;
 	Real uE[3]; //Evolution of the velocity due to the electric field (first half). Index 1... stands for dimension (0 is time).
 	Real uB[3]; //Evolution of the velocity due to the magnetic field. Index 1... stands for dimension (0 is time).
 
@@ -145,19 +142,7 @@ void Particles::BorisStep( const Real dt, const bool only_v ){
         int ip = (pr(IPX,p) - mbsize.d_view(m).x1min)/mbsize.d_view(m).dx1 + is;
 	int jp = (pr(IPY,p) - mbsize.d_view(m).x2min)/mbsize.d_view(m).dx2 + js;
 	int kp = (pr(IPZ,p) - mbsize.d_view(m).x3min)/mbsize.d_view(m).dx3 + ks;
-	//std::cout << p << " " << pr(IPX,p) << " " << pr(IPY,p) << " " << pr(IPZ,p) << std::endl;
-	//std::cout << p << " " << ip << " " << jp << " " << kp << std::endl;
-	/***
-	if ( (ip*jp*kp < 0.0) || (ip > ie) || (jp > je) || (kp > ke) || (m > nmb1)){
-	std::cout << global_variable::my_rank <<std::endl;
-	std::cout << "gids " << gids << " " << pi(PGID,p) << std::endl; 
-	std::cout << "mbsize " << m << " " << mbsize.d_view(m).x2min << " " << mbsize.d_view(m).dx2 << std::endl; 
-	std::cout << "pr " << pi(PTAG,p) << " " << pr(IPX,p) << " " << pr(IPY,p) << " " << pr(IPZ,p) << std::endl; 
-	std::cout << "Idx i "  << pi(PTAG,p) << " "<< is << " " << ip << " " << ie << std::endl; 
-	std::cout << "Idx j "  << pi(PTAG,p) << " "<< js << " " << jp << " " << je << std::endl; 
-	std::cout << "Idx k "  << pi(PTAG,p) << " "<< ks << " " << kp << " " << ke << std::endl; 
-	}
-	***/
+
 	Real &x1min = mbsize.d_view(m).x1min;
 	Real &x2min = mbsize.d_view(m).x2min;
 	Real &x3min = mbsize.d_view(m).x3min;
@@ -178,7 +163,6 @@ void Particles::BorisStep( const Real dt, const bool only_v ){
 	E[0] = e0_.x1e(m, kp, jp, ip) + (x[0] - x1v)*(e0_.x1e(m, kp, jp, ip+1) - e0_.x1e(m, kp, jp, ip))/Dx;
 	E[1] = e0_.x2e(m, kp, jp, ip) + (x[1] - x2v)*(e0_.x2e(m, kp, jp+1, ip) - e0_.x2e(m, kp, jp, ip))/Dy;
 	E[2] = e0_.x3e(m, kp, jp, ip) + (x[2] - x3v)*(e0_.x3e(m, kp+1, jp, ip) - e0_.x3e(m, kp, jp, ip))/Dz;
-        //std::cout << "E " << p << " " << E[0] << " " << E[1] << " " << E[2]<< std::endl;
 
 	uE[0] = u_con[0] + dt*pr(IPC,p)/(2.0*pr(IPM,p))*E[0];
         if (multi_d) { uE[1] = u_con[1] + dt*pr(IPC,p)/(2.0*pr(IPM,p))*E[1]; }
@@ -211,11 +195,7 @@ void Particles::BorisStep( const Real dt, const bool only_v ){
 	B[0] = b0_.x1f(m, kp, jp, ip) + (x[0] - x1v)*(b0_.x1f(m, kp, jp, ip+1) - b0_.x1f(m, kp, jp, ip))/Dx;
 	B[1] = b0_.x2f(m, kp, jp, ip) + (x[1] - x2v)*(b0_.x2f(m, kp, jp+1, ip) - b0_.x2f(m, kp, jp, ip))/Dy;
 	B[2] = b0_.x3f(m, kp, jp, ip) + (x[2] - x3v)*(b0_.x3f(m, kp+1, jp, ip) - b0_.x3f(m, kp, jp, ip))/Dz;
-        //std::cout << "B " << p << " " << B[0] << " " << B[1] << " " << B[2]<< std::endl;
 
-	// if (p == 53){
-        // std::cout << "B " << p << " " << B[0] << " " << B[1] << " " << B[2]<<std::endl;
-	// }
 	Real mod_t_sqr = 0.0;
 	Real t[3];
 	for (int i1 = 0; i1 < 3; ++i1 ){ 
@@ -230,7 +210,6 @@ void Particles::BorisStep( const Real dt, const bool only_v ){
 	uE[0]*t[1] - uE[1]*t[0],
 	};
 
-        //std::cout << "vec_ut " << p << " " << vec_ut[0] << " " << vec_ut[1] << " " << vec_ut[2]<< std::endl;
 	uB[0] = uE[0] + 2.0/(1.0+mod_t_sqr)*( (uE[1] + vec_ut[1])*t[2] - (uE[2] + vec_ut[2])*t[1] );
         if (multi_d) { uB[1] = uE[1] + 2.0/(1.0+mod_t_sqr)*( (uE[2] + vec_ut[2])*t[0] - (uE[0] + vec_ut[0])*t[2] ); }
         if (three_d) { uB[2] = uE[2] + 2.0/(1.0+mod_t_sqr)*( (uE[0] + vec_ut[0])*t[1] - (uE[1] + vec_ut[1])*t[0] ); }
@@ -254,14 +233,11 @@ void Particles::BorisStep( const Real dt, const bool only_v ){
 	pr(IPVY,p) = (uB[1] + dt*pr(IPC,p)/(2.0*pr(IPM,p))*E[1])/g_Lor ;
 	pr(IPVZ,p) = (uB[2] + dt*pr(IPC,p)/(2.0*pr(IPM,p))*E[2])/g_Lor ;
 
-        //std::cout << "pr1 " << p << " " << pr(IPVX,p)<< std::endl;
-
 	if (!only_v){
 	pr(IPX,p) = x[0] + dt/(2.0)*pr(IPVX,p);
         if (multi_d) { pr(IPY,p) = x[1] + dt/(2.0)*pr(IPVY,p); }
         if (three_d) { pr(IPZ,p) = x[2] + dt/(2.0)*pr(IPVZ,p); }
 	}
-	//std::cout << "pp1 " << p << " " << pr(IPX,p)<< " " << pr(IPY,p)<< " " << pr(IPZ,p)<<//std::endl;
       });
       return;
 }
