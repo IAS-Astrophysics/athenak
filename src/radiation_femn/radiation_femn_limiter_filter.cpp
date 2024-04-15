@@ -51,7 +51,7 @@ Real minmod(Real a, Real b, Real c) {
   auto sign = int(abs(signa + signb + signc) == 3);
   auto min_abs_a_abs_b_abs_c = fmin(fmin(absa, absb), absc);
 
-  return sign * min_abs_a_abs_b_abs_c;
+  return signa * sign * min_abs_a_abs_b_abs_c;
 }
 
 /* \fn RadiationFEMN::ApplyFilterLanczos

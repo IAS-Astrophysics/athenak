@@ -58,6 +58,7 @@ void ApplyM1Closure(TeamMember_t member, int num_points, int m, int en, int kk, 
     Real a = (1. - chi) / 2.;
     Real b = (3. * chi - 1.) / 2.;
 
+    /*
     // P_{ij} = [a \delta_{ij} + b n_i n_j] E (old closure)
     Real Pxx = (a + b * nx * nx) * E;
     Real Pyy = (a + b * ny * ny) * E;
@@ -65,8 +66,9 @@ void ApplyM1Closure(TeamMember_t member, int num_points, int m, int en, int kk, 
     Real Pxy = b * nx * ny * E;
     Real Pxz = b * nx * nz * E;
     Real Pyz = b * ny * nz * E;
+    */
 
-    /*
+
     // Shibata closure
     Real Pxx = a * E + b * nx * nx * Fnorm;
     Real Pyy = a * E + b * ny * ny * Fnorm;
@@ -74,7 +76,7 @@ void ApplyM1Closure(TeamMember_t member, int num_points, int m, int en, int kk, 
     Real Pxy = b * nx * ny * Fnorm;
     Real Pxz = b * nx * nz * Fnorm;
     Real Pyz = b * ny * nz * Fnorm;
-    */
+
     /*
     // simple closure
     Real Pxx = a * E + b * nx * nx * Fnorm * Fnorm / E;
@@ -82,7 +84,8 @@ void ApplyM1Closure(TeamMember_t member, int num_points, int m, int en, int kk, 
     Real Pzz = a * E + b * nz * nz * Fnorm * Fnorm / E;
     Real Pxy = b * nx * ny * Fnorm * Fnorm / E;
     Real Pxz = b * nx * nz * Fnorm * Fnorm / E;
-    Real Pyz = b * ny * nz * Fnorm * Fnorm / E ; */
+    Real Pyz = b * ny * nz * Fnorm * Fnorm / E ;
+    */
 
     f_scratch(0) = f(m, en * num_points + 0, kk, jj, ii);
     f_scratch(1) = f(m, en * num_points + 1, kk, jj, ii);

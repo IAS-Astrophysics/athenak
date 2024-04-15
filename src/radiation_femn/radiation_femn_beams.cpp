@@ -91,11 +91,12 @@ void RadiationFEMN::InitializeBeamsSourcesM1() {
 
   std::cout << "Initializing beam sources for M1" << std::endl;
 
-  Real Fnorm = 4.;
+  Real Sen = (pow(energy_max, 4) - 0.) / 4.0;
+  Real Fnorm = 1./Sen;
   Real E = Fnorm;
-  Real Fx = Fnorm * sin(beam_source_1_theta) * cos(beam_source_1_phi) - 1e-6;
-  Real Fy = Fnorm * sin(beam_source_1_theta) * sin(beam_source_1_phi) - 1e-6;
-  Real Fz = Fnorm * cos(beam_source_1_theta) - 1e-6;
+  Real Fx = Fnorm * sin(beam_source_1_theta) * cos(beam_source_1_phi) - 1e-3;
+  Real Fy = Fnorm * sin(beam_source_1_theta) * sin(beam_source_1_phi) - 1e-3;
+  Real Fz = Fnorm * cos(beam_source_1_theta) - 1e-3;
 
   beam_source_1_vals(0) = (1. / sqrt(4. * M_PI)) * E;
   beam_source_1_vals(1) = -sqrt(3. / (4. * M_PI)) * Fy;
@@ -108,11 +109,11 @@ void RadiationFEMN::InitializeBeamsSourcesM1() {
   beam_source_1_vals(8) = 0;
 
   if (num_beams > 1) {
-    Fnorm = 4.;
+    Fnorm = 1./Sen;
     E = Fnorm;
-    Fx = Fnorm * sin(beam_source_2_theta) * cos(beam_source_2_phi) - 1e-6;
-    Fy = Fnorm * sin(beam_source_2_theta) * sin(beam_source_2_phi) - 1e-6;
-    Fz = Fnorm * cos(beam_source_2_theta) - 1e-6;
+    Fx = Fnorm * sin(beam_source_2_theta) * cos(beam_source_2_phi) - 1e-3;
+    Fy = Fnorm * sin(beam_source_2_theta) * sin(beam_source_2_phi) - 1e-3;
+    Fz = Fnorm * cos(beam_source_2_theta) - 1e-3;
 
     beam_source_2_vals(0) = (1. / sqrt(4. * M_PI)) * E;
     beam_source_2_vals(1) = -sqrt(3. / (4. * M_PI)) * Fy;
