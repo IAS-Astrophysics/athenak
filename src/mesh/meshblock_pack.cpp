@@ -21,6 +21,7 @@
 #include "adm/adm.hpp"
 #include "z4c/z4c.hpp"
 #include "z4c/z4c_puncture_tracker.hpp"
+#include "z4c/cce/cce.hpp"
 #include "diffusion/viscosity.hpp"
 #include "diffusion/resistivity.hpp"
 #include "radiation/radiation.hpp"
@@ -58,10 +59,18 @@ MeshBlockPack::~MeshBlockPack() {
   if (punit  != nullptr) {delete punit;}
   if (pz4c   != nullptr) {
     delete pz4c;
+    
+    // punc tracker
     for (auto ptracker : pz4c_ptracker) {
       delete ptracker;
     }
     pz4c_ptracker.resize(0);
+    
+    // cce dump
+    for (auto cce : pz4c_cce) {
+      delete cce;
+    }
+    pz4c_cce.resize(0);
   }
   if (ppart  != nullptr) {delete ppart;}
   // must be last, since it calls ~BoundaryValues() which (MPI) uses pmy_pack->pmb->nnghbr
@@ -192,7 +201,27 @@ void MeshBlockPack::AddPhysics(ParameterInput *pin) {
         pz4c_ptracker.push_back(new z4c::PunctureTracker(pmesh, pin, n));
       }
     }
-
+    
+    // init cce dump
+#if CCE_ENABLED
+    int ncce = pin->GetOrAddInteger("cce", "num_radii", 0);
+    cce.reserve(10*ncce);// 10 different components for each radius
+    for(int n = 0; n < ncce; ++n)
+    {
+      // NOTE: these names are used for pittnull code, so DON'T change the convention
+      pz4c_cce.push_back(new CCE(this, pin, "gxx",n));
+      pz4c_cce.push_back(new CCE(this, pin, "gxy",n));
+      pz4c_cce.push_back(new CCE(this, pin, "gxz",n));
+      pz4c_cce.push_back(new CCE(this, pin, "gyy",n));
+      pz4c_cce.push_back(new CCE(this, pin, "gyz",n));
+      pz4c_cce.push_back(new CCE(this, pin, "gzz",n));
+      pz4c_cce.push_back(new CCE(this, pin, "betax",n));
+      pz4c_cce.push_back(new CCE(this, pin, "betay",n));
+      pz4c_cce.push_back(new CCE(this, pin, "betaz",n));
+      pz4c_cce.push_back(new CCE(this, pin, "alp",n));
+    }
+#endif
+    
     nphysics++;
   } else {
     pz4c = nullptr;
