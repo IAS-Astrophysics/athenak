@@ -45,19 +45,23 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   auto &size = pmbp->pmb->mb_size;
 
   // Select either Hydro or MHD
-  DvceArray5D<Real> w0_;
   Real gm1, p0;
   int nfluid, nscalars;
   if (pmbp->phydro != nullptr) {
-    w0_ = pmbp->phydro->w0;
     gm1 = (pmbp->phydro->peos->eos_data.gamma) - 1.0;
     nfluid = pmbp->phydro->nhydro;
     nscalars = pmbp->phydro->nscalars;
   } else if (pmbp->pmhd != nullptr) {
-    w0_ = pmbp->pmhd->w0;
     gm1 = (pmbp->pmhd->peos->eos_data.gamma) - 1.0;
     nfluid = pmbp->pmhd->nmhd;
     nscalars = pmbp->pmhd->nscalars;
+  }
+  auto &w0_ = (pmbp->phydro != nullptr)? pmbp->phydro->w0 : pmbp->pmhd->w0;
+
+  bool is_relativistic = false;
+  if (pmbp->pcoord->is_special_relativistic ||
+      pmbp->pcoord->is_general_relativistic) {
+    is_relativistic = true;
   }
 
   if (nscalars == 0) {
@@ -84,11 +88,6 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
 
     // Lorentz factor (needed to initializve 4-velocity in SR)
     Real u00 = 1.0;
-    bool is_relativistic = false;
-    if (pmbp->pcoord->is_special_relativistic ||
-        pmbp->pcoord->is_general_relativistic) {
-      is_relativistic = true;
-    }
 
     Real dens,pres,vx,vy,vz,scal;
 

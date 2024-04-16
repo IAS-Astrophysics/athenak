@@ -25,6 +25,7 @@
 #include "mhd/mhd.hpp"
 #include "radiation/radiation.hpp"
 #include "z4c/z4c.hpp"
+#include "z4c/z4c_amr.hpp"
 #include "prolongation.hpp"
 #include "restriction.hpp"
 
@@ -74,10 +75,6 @@ MeshRefinement::MeshRefinement(Mesh *pm, ParameterInput *pin) :
     }
     if (pin->DoesParameterExist("mesh_refinement", "dvel_max")) {
       dd_threshold_ = pin->GetReal("mesh_refinement", "dvel_max");
-      check_cons_ = true;
-    }
-    if (pin->DoesParameterExist("mesh_refinement", "chi_min")) {
-      chi_threshold_ = pin->GetReal("mesh_refinement", "chi_min");
       check_cons_ = true;
     }
   }
@@ -199,7 +196,6 @@ void MeshRefinement::CheckForRefinement(MeshBlockPack* pmbp) {
   auto &dens_thresh  = d_threshold_;
   auto &ddens_thresh = dd_threshold_;
   auto &dpres_thresh = dp_threshold_;
-  auto &chi_thresh = chi_threshold_;
   int nmb = pmbp->nmb_thispack;
   int mbs = pmy_mesh->gids_eachrank[global_variable::my_rank];
   if (((pmbp->phydro != nullptr) || (pmbp->pmhd != nullptr)) && check_cons_) {
@@ -263,28 +259,6 @@ void MeshRefinement::CheckForRefinement(MeshBlockPack* pmbp) {
 
         if (team_dpmax > dpres_thresh) {refine_flag_.d_view(m+mbs) = 1;}
         if (team_dpmax < 0.25*dpres_thresh) {refine_flag_.d_view(m+mbs) = -1;}
-      }
-    });
-  } else if (pmbp->pz4c != nullptr) {
-    auto &u0 = pmbp->pz4c->u0;
-    int I_Z4C_CHI = pmbp->pz4c->I_Z4C_CHI;
-    par_for_outer("ConsRefineCond",DevExeSpace(), 0, 0, 0, (nmb-1),
-    KOKKOS_LAMBDA(TeamMember_t tmember, const int m) {
-      // chi threshold
-      if (chi_thresh!= 0.0) {
-        Real team_dmin;
-        Kokkos::parallel_reduce(Kokkos::TeamThreadRange(tmember, nkji),
-        [=](const int idx, Real& dmin) {
-          int k = (idx)/nji;
-          int j = (idx - k*nji)/nx1;
-          int i = (idx - k*nji - j*nx1) + is;
-          j += js;
-          k += ks;
-          dmin = fmin(u0(m,I_Z4C_CHI,k,j,i), dmin);
-        },Kokkos::Min<Real>(team_dmin));
-
-        if (team_dmin < chi_thresh) {refine_flag_.d_view(m+mbs) = 1;}
-        if (team_dmin > 1.25*chi_thresh) {refine_flag_.d_view(m+mbs) = -1;}
       }
     });
   }
@@ -1375,16 +1349,24 @@ void MeshRefinement::InitInterpWghts() {
   auto &res_4th_e = weights.restrict_4th_edge;
 
   // Allocate memory for the arrays
-  Kokkos::realloc(pro_2nd,3);
+  Kokkos::realloc(pro_2nd,3,3,3);
   Kokkos::realloc(res_2nd,3);
-  Kokkos::realloc(pro_4th,5);
+  Kokkos::realloc(pro_4th,5,5,5);
   Kokkos::realloc(res_4th,5);
   Kokkos::realloc(res_4th_e,5);
 
   // 2nd order prolongation weights
-  pro_2nd.h_view(0) = 0.15625;
+  const Real wght2[3] = {0.15625, 0.9375, -0.09375};
+  for (int k = 0; k < 3; k++) {
+    for (int j = 0; j < 3; j++) {
+      for (int i = 0; i < 3; i++) {
+        pro_2nd.h_view(k,j,i) = wght2[k]*wght2[j]*wght2[i];
+      }
+    }
+  }
+  /*pro_2nd.h_view(0) = 0.15625;
   pro_2nd.h_view(1) = 0.9375;
-  pro_2nd.h_view(2) = -0.09375;
+  pro_2nd.h_view(2) = -0.09375;*/
 
   // 2nd order restriction weights
   res_2nd.h_view(0) = 0.375;
@@ -1392,11 +1374,20 @@ void MeshRefinement::InitInterpWghts() {
   res_2nd.h_view(2) = -0.125;
 
   // 4th order prolongation weights
-  pro_4th.h_view(0) = -0.02197265625;
+  const Real wght4[5] = {-0.02197265625, 0.205078125, 0.9228515625,
+                         -0.123046875, 0.01708984375};
+  for (int k = 0; k < 5; k++) {
+    for (int j = 0; j < 5; j++) {
+      for (int i = 0; i < 5; i++) {
+        pro_4th.h_view(k,j,i) = wght4[k]*wght4[j]*wght4[i];
+      }
+    }
+  }
+  /*pro_4th.h_view(0) = -0.02197265625;
   pro_4th.h_view(1) = 0.205078125;
   pro_4th.h_view(2) = 0.9228515625;
   pro_4th.h_view(3) = -0.123046875;
-  pro_4th.h_view(4) = 0.01708984375;
+  pro_4th.h_view(4) = 0.01708984375;*/
 
   // 4th order restriction weights
   res_4th.h_view(0) = -0.0390625;
