@@ -1224,7 +1224,7 @@ KOKKOS_INLINE_FUNCTION
 void Particles::GetUpperAdmMetric( const Real inputMat[][4], Real outputMat[][3] ){
 	for (int i1 = 0; i1 < 3; ++i1 ){ 
 		for (int i2 = 0; i2 < 3; ++i2 ){ 
-		outputMat[i1][i2] = inputMat[i1+1][i2+1] - inputMat[0][i2+1]*inputMat[i1+1][0]*inputMat[0][0];
+		outputMat[i1][i2] = inputMat[i1+1][i2+1] - inputMat[0][i2+1]*inputMat[i1+1][0]/inputMat[0][0];
 		}
 	}
 }
