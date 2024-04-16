@@ -41,6 +41,104 @@ TaskStatus RadiationFEMN::BeamsSourcesFEMN(Driver *pdriver, int stage) {
   auto &beam_source_1_vals_ = pmy_pack->pradfemn->beam_source_1_vals;
   auto &beam_source_2_vals_ = pmy_pack->pradfemn->beam_source_2_vals;
 
+  // adding extra things from here
+  //auto &indcs = pmy_pack->pmesh->mb_indcs;
+  //int &is = indcs.is;
+  int &ie = indcs.ie;
+  //int &js = indcs.js;
+  int &je = indcs.je;
+  int &ks = indcs.ks;
+  int &ke = indcs.ke;
+  //int npts1 = num_points_total - 1;
+  //int nmb1 = pmy_pack->nmb_thispack - 1;
+  //auto &mb_bcs = pmy_pack->pmb->mb_bcs;
+  //auto &size = pmy_pack->pmb->mb_size;
+
+  //int &ng = indcs.ng;
+  int n1 = indcs.nx1 + 2 * ng;
+  //int n2 = (indcs.nx2 > 1) ? (indcs.nx2 + 2 * ng) : 1;
+  //int n3 = (indcs.nx3 > 1) ? (indcs.nx3 + 2 * ng) : 1;
+  //auto &f0_ = pmy_pack->pradfemn->f0;
+
+  bool &multi_d = pmy_pack->pmesh->multi_d;
+  bool &three_d = pmy_pack->pmesh->three_d;
+  // apply physical boundaries to inner and outer x1
+  par_for("radiation_femn_bc_x1", DevExeSpace(), 0, nmb1, 0, npts1, 0, (n3 - 1), 0, (n2 - 1),
+          KOKKOS_LAMBDA(int m, int n, int k, int j) {
+            switch (mb_bcs.d_view(m, BoundaryFace::inner_x1)) {
+              case BoundaryFlag::outflow:
+                for (int i = 0; i < ng; ++i) {
+                  f0_(m, n, k, j, is - i - 1) = 0.;
+                }
+                break;
+
+              default:break;
+            }
+            switch (mb_bcs.d_view(m, BoundaryFace::outer_x1)) {
+              case BoundaryFlag::outflow:
+                for (int i = 0; i < ng; ++i) {
+                  f0_(m, n, k, j, ie + i + 1) = 0.;
+                }
+                break;
+
+              default:break;
+            }
+
+          });
+
+  if (multi_d) {
+    // apply physical boundaries to inner and outer x2
+    par_for("radiation_femn_bc_x2", DevExeSpace(), 0, nmb1, 0, npts1, 0, (n3 - 1), 0, (n1 - 1),
+            KOKKOS_LAMBDA(int m, int n, int k, int i) {
+              switch (mb_bcs.d_view(m, BoundaryFace::inner_x2)) {
+                case BoundaryFlag::outflow:
+                  for (int j = 0; j < ng; ++j) {
+                    f0_(m, n, k, js - j - 1, i) = 0.;
+                  }
+                  break;
+
+                default:break;
+              }
+
+              switch (mb_bcs.d_view(m, BoundaryFace::outer_x2)) {
+                case BoundaryFlag::outflow:
+                  for (int j = 0; j < ng; ++j) {
+                    f0_(m, n, k, je + j + 1, i) = 0.;
+                  }
+                  break;
+
+                default:break;
+              }
+            });
+  }
+
+  if (three_d) {
+    // apply physical boundaries to inner and outer x3
+    par_for("radiation_femn_bc_x3", DevExeSpace(), 0, nmb1, 0, npts1, 0, (n2 - 1), 0, (n1 - 1),
+            KOKKOS_LAMBDA(int m, int n, int j, int i) {
+              switch (mb_bcs.d_view(m, BoundaryFace::inner_x3)) {
+                case BoundaryFlag::outflow:
+                  for (int k = 0; k < ng; ++k) {
+                    f0_(m, n, ks - k - 1, j, i) = 0.;
+                  }
+                  break;
+
+                default:break;
+              }
+
+              switch (mb_bcs.d_view(m, BoundaryFace::outer_x3)) {
+                case BoundaryFlag::outflow:
+                  for (int k = 0; k < ng; ++k) {
+                    f0_(m, n, ke + k + 1, j, i) = 0.;
+                  }
+                  break;
+
+                default:break;
+              }
+            });
+  }
+  // end adding things here
+
   par_for("radiation_femn_beams_populate", DevExeSpace(), 0, nmb1, 0, npts1, 0, (n3 - 1), 0, (n2 - 1),
           KOKKOS_LAMBDA(int m, int n, int k, int j) {
 
@@ -92,11 +190,14 @@ void RadiationFEMN::InitializeBeamsSourcesM1() {
   std::cout << "Initializing beam sources for M1" << std::endl;
 
   Real Sen = (pow(energy_max, 4) - 0.) / 4.0;
-  Real Fnorm = 1./Sen;
+  Real Fnorm = 1. / Sen;
   Real E = Fnorm;
-  Real Fx = Fnorm * sin(beam_source_1_theta) * cos(beam_source_1_phi) - 1e-3;
-  Real Fy = Fnorm * sin(beam_source_1_theta) * sin(beam_source_1_phi) - 1e-3;
-  Real Fz = Fnorm * cos(beam_source_1_theta) - 1e-3;
+  //Real Fx = Fnorm * sin(beam_source_1_theta) * cos(beam_source_1_phi) - 1e-3;
+  //Real Fy = Fnorm * sin(beam_source_1_theta) * sin(beam_source_1_phi) - 1e-3;
+  //Real Fz = Fnorm * cos(beam_source_1_theta) - 1e-3;
+  Real Fx = Fnorm - 1e-3;
+  Real Fy = 0;
+  Real Fz = 0;
 
   beam_source_1_vals(0) = (1. / sqrt(4. * M_PI)) * E;
   beam_source_1_vals(1) = -sqrt(3. / (4. * M_PI)) * Fy;
@@ -109,7 +210,7 @@ void RadiationFEMN::InitializeBeamsSourcesM1() {
   beam_source_1_vals(8) = 0;
 
   if (num_beams > 1) {
-    Fnorm = 1./Sen;
+    Fnorm = 1. / Sen;
     E = Fnorm;
     Fx = Fnorm * sin(beam_source_2_theta) * cos(beam_source_2_phi) - 1e-3;
     Fy = Fnorm * sin(beam_source_2_theta) * sin(beam_source_2_phi) - 1e-3;
