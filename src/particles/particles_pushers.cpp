@@ -98,7 +98,7 @@ void Particles::BorisStep( const Real dt, const bool only_v ){
       
         // Contravariant and co-variant 4-velocities
 	Real u_con[3] = {pr(IPVX,p), pr(IPVY,p), pr(IPVZ,p)};
-	Real u_cov[3];
+	//Real u_cov[3];
 	Real x[3]; //Half-step increment.
 	Real g_Lor;
 	x[0] = pr(IPX,p) + dt/(2.0)*u_con[0];
@@ -112,24 +112,24 @@ void Particles::BorisStep( const Real dt, const bool only_v ){
 	GetUpperAdmMetric( gupper, ADM_upper );
 	// ADM_lower = glower for i,j = 1,2,3
 	// Lower indeces of u_con (g_Lor is applied afterwards)
-	for (int i1 = 0; i1 < 3; ++i1 ){ 
-		u_cov[i1] = 0.0;
-		for (int i2 = 0; i2 < 3; ++i2 ){ 
-		u_cov[i1] += glower[i1+1][i2+1]*u_con[i2];
-		}
-	}
+	// for (int i1 = 0; i1 < 3; ++i1 ){ 
+	// 	u_cov[i1] = 0.0;
+	// 	for (int i2 = 0; i2 < 3; ++i2 ){ 
+	// 	u_cov[i1] += glower[i1+1][i2+1]*u_con[i2];
+	// 	}
+	// }
 	//Use definition of the Lorentz factor in ADM formalism
 	g_Lor = 0.0;
 	for (int i1 = 0; i1 < 3; ++i1 ){ 
 		for (int i2 = 0; i2 < 3; ++i2 ){ 
-		g_Lor += ADM_upper[i1][i2]*u_cov[i1]*u_cov[i2];
+		g_Lor += ADM_upper[i1][i2]*u_con[i1]*u_con[i2];
 		}
 	}
 	g_Lor = sqrt(1.0 + g_Lor);
 	//Boost velocities
-	for ( int i=0; i<3; ++i){
-		u_con[i] *= g_Lor;
-	}
+	// for ( int i=0; i<3; ++i){
+	// 	u_con[i] *= g_Lor;
+	// }
 
 	Real uE[3]; //Evolution of the velocity due to the electric field (first half). Index 1... stands for dimension (0 is time).
 	Real uB[3]; //Evolution of the velocity due to the magnetic field. Index 1... stands for dimension (0 is time).
@@ -206,17 +206,10 @@ void Particles::BorisStep( const Real dt, const bool only_v ){
         if (multi_d) { uB[1] = uE[1] + 2.0/(1.0+mod_t_sqr)*( (uE[2] + vec_ut[2])*t[0] - (uE[0] + vec_ut[0])*t[2] ); }
         if (three_d) { uB[2] = uE[2] + 2.0/(1.0+mod_t_sqr)*( (uE[0] + vec_ut[0])*t[1] - (uE[1] + vec_ut[1])*t[0] ); }
 
-	// Lower indeces of u_con
-	for (int i1 = 0; i1 < 3; ++i1 ){ 
-		u_cov[i1] = 0.0;
-		for (int i2 = 0; i2 < 3; ++i2 ){ 
-		u_cov[i1] += glower[i1+1][i2+1]*uB[i2];
-		}
-	}
 	g_Lor = 0.0; //Intermediate Lorentz gamma factor
 	for (int i1 = 0; i1 < 3; ++i1 ){ 
 		for (int i2 = 0; i2 < 3; ++i2 ){ 
-		g_Lor += ADM_upper[i1][i2]*u_cov[i1]*u_cov[i2];
+		g_Lor += ADM_upper[i1][i2]*u_con[i1]*u_con[i2];
 		}
 	}
 	g_Lor = sqrt(1.0 + g_Lor);
