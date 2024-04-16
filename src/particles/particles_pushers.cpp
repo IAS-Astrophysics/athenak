@@ -109,11 +109,7 @@ void Particles::BorisStep( const Real dt, const bool only_v ){
 					       // (remember: sqrt(-1/gupper[0][0]) = alpha, glower[0][i] = beta[i])
 	ComputeMetricAndInverse(pr(IPX,p),pr(IPY,p),pr(IPZ,p), is_minkowski, spin, glower, gupper); 
 	// Compute 3x3 ADM spatial metric from covariant metric 
-	for (int i1 = 0; i1 < 3; ++i1 ){ 
-		for (int i2 = 0; i2 < 3; ++i2 ){ 
-		ADM_upper[i1][i2] = gupper[i1+1][i2+1] + gupper[0][i2+1]*gupper[i1+1][0];
-		}
-	}
+	GetUpperAdmMetric( gupper, ADM_upper );
 	// ADM_lower = glower for i,j = 1,2,3
 	// Lower indeces of u_con (g_Lor is applied afterwards)
 	for (int i1 = 0; i1 < 3; ++i1 ){ 
@@ -170,11 +166,7 @@ void Particles::BorisStep( const Real dt, const bool only_v ){
 
 	// Get metric components at new location x1,x2,x3
 	ComputeMetricAndInverse(x[0],x[1],x[2], is_minkowski, spin, glower, gupper); 
-	for (int i1 = 0; i1 < 3; ++i1 ){ 
-		for (int i2 = 0; i2 < 3; ++i2 ){ 
-		ADM_upper[i1][i2] = gupper[i1+1][i2+1] + gupper[0][i2+1]*gupper[i1+1][0];
-		}
-	}
+	GetUpperAdmMetric( gupper, ADM_upper );
 	// Lower indeces of u_con
 	for (int i1 = 0; i1 < 3; ++i1 ){ 
 		u_cov[i1] = 0.0;
@@ -253,6 +245,8 @@ void Particles::GeodesicIterations( const Real dt ){
 	const int it_max = max_iter;
 	const bool &multi_d = pmy_pack->pmesh->multi_d;
 	const bool &three_d = pmy_pack->pmesh->three_d;
+	const Real x_step = 1.0E-10;
+	const Real v_step = 1.0E-10;
 
       // First attempt: not iterative, approximate
       par_for("part_fullgr",DevExeSpace(),0,(nprtcl_thispack-1),
@@ -262,97 +256,102 @@ void Particles::GeodesicIterations( const Real dt ){
         // Iterate per particle such that those that converge quicker don't go through as many iterations
 	const bool is_minkowski = pmy_pack->pcoord->coord_data.is_minkowski;
 	const Real spin = pmy_pack->pcoord->coord_data.bh_spin;
-	Real glower[4][4], gupper[4][4]; // Metric components
 	// Initialize iteration variables
 	int n_iter = 0;
-	Real rest_u[4] = {1.0,1.0,1.0,1.0};
-	Real rest_x[3] = {1.0,1.0,1.0};
 	Real x_init[3] = {pr(IPX,p), pr(IPY,p), pr(IPZ,p)};
 	Real v_init[3] = {pr(IPVX,p), pr(IPVY,p), pr(IPVZ,p)};
-	Real a_init[4] = {0.0, 0.0, 0.0, 0.0};
-	Real x_eval[3] = {pr(IPX,p) + dt*pr(IPVX,p), pr(IPY,p) + dt*pr(IPVY,p), pr(IPZ,p) + dt*pr(IPVZ,p)};
+	Real x_eval[3] = {pr(IPX,p)+pr(IPVX,p)*dt, pr(IPY,p)+pr(IPVY,p)*dt, pr(IPZ,p)+pr(IPVZ,p)*dt};
 	Real v_eval[3] = {pr(IPVX,p), pr(IPVY,p), pr(IPVZ,p)};
 	Real x_prev[3] = {pr(IPX,p), pr(IPY,p), pr(IPZ,p)};
 	Real v_prev[3] = {pr(IPVX,p), pr(IPVY,p), pr(IPVZ,p)};
 	//u is always contravariant. Iteration variables
-	Real u_eval[4], a_eval[4]; 
-	Real Jacob[3][3], inv_Jacob[3][3], JT[4][4];
-	Real aux, dx_g_Lor[3], du_g_Lor[3], dtau, dtau_init;
-	Real g_Lor, u_init[4];
+	Real RHS_eval_v[3], RHS_eval_x[3]; 
+	Real Jacob[3][3], inv_Jacob[3][3];
+	Real x_grad[3], v_grad[3];
+	Real RHS_grad_1[3], RHS_grad_2[3];
 
-	// To keep for evaluating rest function on velocity
-	ComputeLorentzFactorGR(x_init, v_init, u_init, &g_Lor);
-	std::cout << "g_Lor: " << g_Lor << " p: " << p << std::endl;
-	ComputeGeodesicTerms(x_init, u_init, a_init);
-	dtau_init = dt/g_Lor;
-	for (int i=0; i<4; ++i) { u_eval[i] = u_init[i] + dtau_init*a_init[i]; }
-	//ComputeLorentzFactorGR(x_init, u_eval, &g_Lor);
-	g_Lor = u_eval[0];
-	dtau = dt/g_Lor;
-	ComputeMetricAndInverse(x_init[0],x_init[1],x_init[2], is_minkowski, spin, glower, gupper); 
-	for (int i=0; i<3; ++i) { v_eval[i] = u_eval[i+1]*sqrt(glower[i+1][i+1])/g_Lor; }
-	for (int i=0; i<3; ++i){ rest_x[i] = x_eval[i] - x_init[i] - (v_init[i] + v_eval[i])*dt/2.0; }
-	for (int i=0; i<3; ++i) { x_eval[i] -= rest_x[i]; }
-	// Note that definition of a_eval requires sign inversion
-	for (int i=0; i<4; ++i){ rest_u[i] = u_eval[i] - u_init[i] - (dtau_init*a_init[i] + dtau*a_eval[i])/2.0; }
-	ComputeJacobianTerms(x_eval, u_eval, JT, dx_g_Lor, du_g_Lor);
-	// u_eval used for du_g_Lor is boosted, need to divide by g_Lor on top of the SQR(g_Lor) already in the derivative
-	// Technically this is missing term with second derivatives of the metric
-	// this would require 6 4x4 matrices to be computed
-	// // Then do V
-	for (int i = 0; i<3; ++i){
-		for (int j = 0; j<3; ++j){
-			aux = (i == j) ? 1.0 : 0.0;
-			Jacob[i][j] = aux +  dt/2.0*( 2.0*JT[i+1][j+1]/g_Lor - du_g_Lor[i]*a_eval[j+1]/SQR(g_Lor)/g_Lor );
-		}
-	}
-	ComputeInverseMatrix3(Jacob, inv_Jacob);
-	ComputeMetricAndInverse(x_eval[0],x_eval[1],x_eval[2], is_minkowski, spin, glower, gupper); 
-	for (int j = 0; j<3; ++j){ v_eval[0] = (u_eval[1] - rest_u[j+1]*inv_Jacob[0][j])*sqrt(glower[1][1])/g_Lor; }
-	for (int j = 0; j<3; ++j){ v_eval[1] = (u_eval[2] - rest_u[j+1]*inv_Jacob[1][j])*sqrt(glower[2][2])/g_Lor; }
-	for (int j = 0; j<3; ++j){ v_eval[2] = (u_eval[3] - rest_u[j+1]*inv_Jacob[2][j])*sqrt(glower[3][3])/g_Lor; }
-	
-        std::cout << "x_diff " << sqrt(SQR(x_eval[0] - x_prev[0]) + SQR(x_eval[1] - x_prev[1]) + SQR(x_eval[2] - x_prev[2])) << std::endl;
-        std::cout << "u_diff " << sqrt(SQR(v_eval[0] - v_prev[0]) + SQR(v_eval[1] - v_prev[1]) + SQR(v_eval[2] - v_prev[2])) << std::endl;
-	
 	// Start iterating
+	// Using Newton method, thus computing the Jacobian at each iteration
 	do{
 		
 	++n_iter;
-	for (int i=0; i<3; ++i) { x_prev[i] = x_eval[i]; v_prev[i] = v_eval[i]; }
 
-	ComputeLorentzFactorGR(x_eval, v_eval, u_eval, &g_Lor);
-	//u_eval is not boosted
-	std::cout << "g_Lor: " << g_Lor << " p: " << p << std::endl;
-	dtau = dt/g_Lor;
-	ComputeGeodesicTerms(x_eval, u_eval, a_eval);
-        //std::cout << "r_next " << sqrt(SQR(x_next[0]) + SQR(x_next[1]) + SQR(x_next[2])) << " r_curr " << sqrt(SQR(x_curr[0]) + SQR(x_curr[1]) + SQR(x_curr[2])) << std::endl;
-	// Check for convergence
-	
-	//
-	//Compute next values with gradient descent
+	HamiltonEquation_Position(x_init, x_eval, v_init, v_eval, RHS_eval_x);
+	HamiltonEquation_Velocity(x_init, x_eval, v_init, v_eval, x_step, RHS_eval_v);
+	std::cout << "RHS_eval_x: " << RHS_eval_x[0] << " " << RHS_eval_x[1] << " " << RHS_eval_x[2] << std::endl;
+	std::cout << "RHS_eval_v: " << RHS_eval_v[0] << " " << RHS_eval_v[1] << " " << RHS_eval_v[2] << std::endl;
 
-	// // Update X
-	for (int i=0; i<3; ++i){ rest_x[i] = x_eval[i] - x_init[i] - (v_init[i] + v_eval[i])*dt/2.0; }
-	for (int i=0; i<3; ++i) { x_eval[i] -= rest_x[i]; }
-	for (int i=0; i<4; ++i){ rest_u[i] = u_eval[i] - u_init[i] - (dtau_init*a_init[i] + dtau*a_eval[i])/2.0; }
-	// Note that definition of a_eval requires sign inversion
-	ComputeJacobianTerms(x_eval, u_eval, JT, dx_g_Lor, du_g_Lor);
-	// u_eval used for du_g_Lor is boosted, need to divide by g_Lor on top of the SQR(g_Lor) already in the derivative
-	// Technically this is missing term with second derivatives of the metric
-	// this would require 6 4x4 matrices to be computed
-	// // Then do V
-	for (int i = 0; i<3; ++i){
-		for (int j = 0; j<3; ++j){
-			aux = (i == j) ? 1.0 : 0.0;
-			Jacob[i][j] = aux +  dt/2.0*( 2.0*JT[i+1][j+1]/g_Lor - du_g_Lor[i]*a_eval[j+1]/SQR(g_Lor)/g_Lor );
-		}
+	// First Jacobian for position
+	// Variation along x
+	x_grad[0] = x_eval[0] + x_step;
+	x_grad[1] = x_eval[1]; x_grad[2] = x_eval[2];
+	HamiltonEquation_Position(x_init, x_grad, v_init, v_eval, RHS_grad_1);
+	x_grad[0] = x_eval[0] - x_step;
+	HamiltonEquation_Position(x_init, x_grad, v_init, v_eval, RHS_grad_2);
+	for (int i=0; i<3; ++i) { Jacob[0][i] = - (RHS_grad_1[i] - RHS_grad_2[i])*dt/(2.0*x_step); }
+	Jacob[0][0] += 1.0; // Diagonal terms
+	// Variation along y
+	x_grad[1] = x_eval[1] + x_step;
+	x_grad[0] = x_eval[0]; x_grad[2] = x_eval[2];
+	HamiltonEquation_Position(x_init, x_grad, v_init, v_eval, RHS_grad_1);
+	x_grad[1] = x_eval[1] - x_step;
+	HamiltonEquation_Position(x_init, x_grad, v_init, v_eval, RHS_grad_2);
+	for (int i=0; i<3; ++i) { Jacob[1][i] = - (RHS_grad_1[i] - RHS_grad_2[i])*dt/(2.0*x_step); }
+	Jacob[1][1] += 1.0; // Diagonal terms
+	// Variation along z
+	x_grad[2] = x_eval[2] + x_step;
+	x_grad[0] = x_eval[0]; x_grad[1] = x_eval[1];
+	HamiltonEquation_Position(x_init, x_grad, v_init, v_eval, RHS_grad_1);
+	x_grad[2] = x_eval[2] - x_step;
+	HamiltonEquation_Position(x_init, x_grad, v_init, v_eval, RHS_grad_2);
+	for (int i=0; i<3; ++i) { Jacob[2][i] = - (RHS_grad_1[i] - RHS_grad_2[i])*dt/(2.0*x_step); }
+	Jacob[2][2] += 1.0; // Diagonal terms
+	ComputeInverseMatrix3( Jacob, inv_Jacob );
+
+	// Store values for use with velocity Jacobian
+	for (int i=0; i<3; ++i) { x_grad[i] = x_eval[i]; }
+
+	for (int i=0; i<3; ++i){
+		for (int j=0; j<3; ++j){ x_eval[i] -= inv_Jacob[j][i]*(x_grad[j] - x_init[j] - RHS_eval_x[j]*dt); }
 	}
-	ComputeInverseMatrix3(Jacob, inv_Jacob);
-	ComputeMetricAndInverse(x_eval[0],x_eval[1],x_eval[2], is_minkowski, spin, glower, gupper); 
-	for (int j = 0; j<3; ++j){ v_eval[0] = (u_eval[1] - rest_u[j+1]*inv_Jacob[0][j])*sqrt(glower[1][1])/g_Lor; }
-	for (int j = 0; j<3; ++j){ v_eval[1] = (u_eval[2] - rest_u[j+1]*inv_Jacob[1][j])*sqrt(glower[2][2])/g_Lor; }
-	for (int j = 0; j<3; ++j){ v_eval[2] = (u_eval[3] - rest_u[j+1]*inv_Jacob[2][j])*sqrt(glower[3][3])/g_Lor; }
+
+	// Then Jacobian for velocity
+	// Variation along x
+	v_grad[0] = v_eval[0] + v_step;
+	v_grad[1] = v_eval[1]; v_grad[2] = v_eval[2];
+	HamiltonEquation_Velocity(x_init, x_grad, v_init, v_grad, x_step, RHS_grad_1);
+	v_grad[0] = v_eval[0] - v_step;
+	HamiltonEquation_Velocity(x_init, x_grad, v_init, v_grad, x_step, RHS_grad_2);
+	for (int i=0; i<3; ++i) { Jacob[0][i] = - (RHS_grad_1[i] - RHS_grad_2[i])*dt/(2.0*v_step); }
+	Jacob[0][0] += 1.0; // Diagonal terms
+	// Variation along y
+	v_grad[1] = v_eval[1] + v_step;
+	v_grad[0] = v_eval[0]; v_grad[2] = v_eval[2];
+	HamiltonEquation_Velocity(x_init, x_grad, v_init, v_grad, x_step, RHS_grad_1);
+	v_grad[1] = v_eval[1] - v_step;
+	HamiltonEquation_Velocity(x_init, x_grad, v_init, v_grad, x_step, RHS_grad_2);
+	for (int i=0; i<3; ++i) { Jacob[1][i] = - (RHS_grad_1[i] - RHS_grad_2[i])*dt/(2.0*v_step); }
+	Jacob[1][1] += 1.0; // Diagonal terms
+	// Variation along z
+	v_grad[2] = v_eval[2] + v_step;
+	v_grad[0] = v_eval[0]; v_grad[1] = v_eval[1];
+	HamiltonEquation_Velocity(x_init, x_grad, v_init, v_grad, x_step, RHS_grad_1);
+	v_grad[2] = v_eval[2] - v_step;
+	HamiltonEquation_Velocity(x_init, x_grad, v_init, v_grad, x_step, RHS_grad_2);
+	for (int i=0; i<3; ++i) { Jacob[2][i] = - (RHS_grad_1[i] - RHS_grad_2[i])*dt/(2.0*v_step); }
+	Jacob[2][2] += 1.0; // Diagonal terms
+	ComputeInverseMatrix3( Jacob, inv_Jacob );
+	
+	for (int i=0; i<3; ++i) { v_grad[i] = v_eval[i]; }
+
+	for (int i=0; i<3; ++i){
+		for (int j=0; j<3; ++j){ v_eval[i] -= inv_Jacob[j][i]*(v_grad[j] - v_init[j] - RHS_eval_v[j]*dt); }
+	}
+
+	// Store for next iteration
+	for (int i=0; i<3; ++i) { x_prev[i] = x_grad[i]; }
+	for (int i=0; i<3; ++i) { v_prev[i] = v_grad[i]; }
+
         std::cout << "x_diff " << sqrt(SQR(x_eval[0] - x_prev[0]) + SQR(x_eval[1] - x_prev[1]) + SQR(x_eval[2] - x_prev[2])) << std::endl;
         std::cout << "u_diff " << sqrt(SQR(v_eval[0] - v_prev[0]) + SQR(v_eval[1] - v_prev[1]) + SQR(v_eval[2] - v_prev[2])) << std::endl;
 	}while(
@@ -376,107 +375,842 @@ void Particles::GeodesicIterations( const Real dt ){
       return;
 }
 
+// Following function largely implented based on the appendix in Bacchini et al. 2018 (doi.org/10.3847/1538-4365/aac9ca
+// It's an expression of the derivative of the ADM Hamiltonian for geodesics with respect to the velocity
+// That prevents singularities for small increments and is used to compute the time derivative of the position
+// Would be nice to come up with a way to compute these terms algorithmically, rather than by hard coding, but thus far I wasn't able to
 KOKKOS_INLINE_FUNCTION
-void Particles::ComputeGeodesicTerms(const Real * x, const Real * u, Real * acc){
+void Particles::HamiltonEquation_Position(const Real * x_0, const Real * x_1, const Real * u_0, const Real * u_1, Real * H){
 
 	const bool is_minkowski = pmy_pack->pcoord->coord_data.is_minkowski;
 	const Real spin = pmy_pack->pcoord->coord_data.bh_spin;
-	Real glower[4][4], gupper[4][4]; // Metric components
-	Real dg_dx1[4][4], dg_dx2[4][4], dg_dx3[4][4]; // Metric derivatives
-	Real T0, T1, T2, T3, T4_1, T4_2, T4_3; //Temporary variables
-					       //
-	Real half = 0.5;
-	ComputeMetricAndInverse(x[0],x[1],x[2], is_minkowski, spin, glower, gupper); 
-	ComputeMetricDerivatives(x[0],x[1],x[2], is_minkowski, spin, dg_dx1, dg_dx2, dg_dx3); 
-	// Evolve covariant velocity but convert to contravariant at the end
-	T0, T1, T2, T3 = 0.0;
-	    	       // Following expression technically has a factor 2 before each term
-		       // that is not on the diagonal, but this gets multiplied by 1/2 in the end,
-		       // so just skip it and divide by 2 values on diagonal of metric.
-		     
-	// Terms with 0 index in metric
-	T0 += half*dg_dx1[0][0]*u[0]*u[1] + half*dg_dx2[0][0]*u[0]*u[2] + half*dg_dx3[0][0]*u[3]*u[0];
-	// diagonal terms
-	T0 += dg_dx1[0][1]*u[1]*u[1] + dg_dx2[0][2]*u[2]*u[2] + dg_dx3[0][3]*u[3]*u[3];
-	// off-diagonal terms
-	T0 += (dg_dx1[0][2] + dg_dx2[1][0])*u[1]*u[2] 
-	    + (dg_dx1[0][3] + dg_dx3[0][1])*u[1]*u[3] + (dg_dx2[0][3] + dg_dx3[0][2])*u[2]*u[3];
-		
-	T1 += dg_dx1[0][1]*u[0]*u[1] + dg_dx2[0][1]*u[0]*u[2] + dg_dx3[0][1]*u[3]*u[0];
-	T1 += half*dg_dx1[1][1]*u[1]*u[1] + dg_dx2[2][1]*u[2]*u[2] + dg_dx3[3][1]*u[3]*u[3];
-	T1 += (dg_dx1[2][1] + half*dg_dx2[1][1])*u[1]*u[2] 
-	     + (dg_dx1[3][1] + half*dg_dx3[1][1])*u[1]*u[3] + (dg_dx2[3][1] + dg_dx3[2][1])*u[2]*u[3];
+	Real glower[4][4], gupper[4][4], ADM_upper[3][3]; // Metric components
+	Real massive = 1.0; //TODO for photons/massless particles this needs to be 0: condition on ptype
+	Real U_1, U_0, perp;
 
-	T2 += dg_dx1[0][2]*u[0]*u[1] + dg_dx2[0][2]*u[0]*u[2] + dg_dx3[0][2]*u[3]*u[0];
-	T2 += dg_dx1[1][2]*u[1]*u[1] + half*dg_dx2[2][2]*u[2]*u[2] + dg_dx3[3][2]*u[3]*u[3];
-	T2 += (half*dg_dx1[2][2] + dg_dx2[1][2])*u[1]*u[2] 
-	    + (dg_dx1[3][2] + dg_dx3[1][2])*u[1]*u[3] + (dg_dx2[3][2] + half*dg_dx3[2][2])*u[2]*u[3];
+	for (int i=0; i<3; ++i){ H[i] = 0.0; }
 
-	T3 += dg_dx1[0][3]*u[0]*u[1] + dg_dx2[0][3]*u[0]*u[2] + dg_dx3[0][3]*u[3]*u[0];
-	T3 += dg_dx1[1][3]*u[1]*u[1] + dg_dx2[2][3]*u[2]*u[2] + half*dg_dx3[3][3]*u[3]*u[3];
-	T3 += (dg_dx1[2][3] + dg_dx2[1][3])*u[1]*u[2] 
-	   + (half*dg_dx1[3][3] + dg_dx3[1][3])*u[1]*u[3] + (half*dg_dx2[3][3] + dg_dx3[2][3])*u[2]*u[3];
+	//Metric with all old positions
+	//Common to all terms
+	ComputeMetricAndInverse(x_0[0],x_0[1],x_0[2], is_minkowski, spin, glower, gupper); 
+	GetUpperAdmMetric( gupper, ADM_upper );
 
-	// Static metric has no T4_0
-	// Terms where the derivative has the same index as the resulting component
-	T4_1, T4_2, T4_3 = 0.0;
-	for ( int i = 0; i<4; ++i){
-	    for (int j = 0; j<4; ++j){
-		half = (i == j) ? 0.5 : 1.0;
-	    	T4_1 += half*dg_dx1[i][j]*u[i]*u[j];
-	    	T4_2 += half*dg_dx2[i][j]*u[i]*u[j];
-	    	T4_3 += half*dg_dx3[i][j]*u[i]*u[j];
-	    }
+	perp = ADM_upper[1][1]*SQR(u_0[1]) + ADM_upper[2][2]*SQR(u_0[2]) + ADM_upper[1][2]*u_0[1]*u_0[2];
+	U_1 = ADM_upper[0][0]*SQR(u_1[0]) + 2.0*ADM_upper[0][1]*u_1[0]*u_0[1] + 2.0*ADM_upper[0][2]*u_1[0]*u_0[2];
+	U_1 += perp;	
+	U_1 = sqrt(U_1 + massive); 
+	U_0 = ADM_upper[0][0]*SQR(u_0[0]) + 2.0*ADM_upper[0][1]*u_0[0]*u_0[1] + 2.0*ADM_upper[0][2]*u_0[0]*u_0[2];
+	U_0 += perp;	
+	U_0 = sqrt(U_0 + massive); 
+	// Alpha term
+	H[0] += sqrt(-1.0/gupper[0][0])*(
+		ADM_upper[0][0]*(u_1[0]+u_0[0]) + 2.0*ADM_upper[0][1]*u_0[1] + 2.0*ADM_upper[0][2]*u_0[2]
+	       	)/(U_0 + U_1);
+	// Beta term
+	H[0] += gupper[0][0]*gupper[0][1];
+	
+	perp =  ADM_upper[0][0]*SQR(u_0[0]) + ADM_upper[2][2]*SQR(u_0[2]) + ADM_upper[0][2]*u_0[0]*u_0[2];
+	U_1 = ADM_upper[1][1]*SQR(u_1[1]) + 2.0*ADM_upper[0][1]*u_1[1]*u_0[0] + 2.0*ADM_upper[1][2]*u_1[1]*u_0[2];
+	U_1 += perp;	
+	U_1 = sqrt(U_1 + massive); 
+	U_0 = ADM_upper[1][1]*SQR(u_0[1]) + 2.0*ADM_upper[0][1]*u_0[0]*u_0[1] + 2.0*ADM_upper[1][2]*u_0[1]*u_0[2];
+	U_0 += perp;	
+	U_0 = sqrt(U_0 + massive); 
+	// Alpha term
+	H[1] += sqrt(-1.0/gupper[0][0])*(
+		ADM_upper[1][1]*(u_1[1]+u_0[1]) + 2.0*ADM_upper[0][1]*u_0[0] + 2.0*ADM_upper[1][2]*u_0[2]
+	       	)/(U_0 + U_1);
+	// Beta term
+	H[1] += gupper[0][0]*gupper[0][2];
+
+	perp = ADM_upper[0][0]*SQR(u_0[0]) + ADM_upper[1][1]*SQR(u_0[1]) + ADM_upper[1][0]*u_0[1]*u_0[0];
+	U_1 = ADM_upper[2][2]*SQR(u_1[2]) + 2.0*ADM_upper[0][2]*u_1[0]*u_0[2] + 2.0*ADM_upper[1][2]*u_1[1]*u_0[2];
+	U_1 += perp;
+	U_1 = sqrt(U_1 + massive); 
+	U_0 = ADM_upper[2][2]*SQR(u_0[2]) + 2.0*ADM_upper[2][1]*u_0[2]*u_0[1] + 2.0*ADM_upper[1][2]*u_0[1]*u_0[2];
+	U_0 += perp;	
+	U_0 = sqrt(U_0 + massive); 
+	// Alpha term
+	H[2] += sqrt(-1.0/gupper[0][0])*(
+		ADM_upper[2][2]*(u_1[2]+u_0[2]) + 2.0*ADM_upper[0][2]*u_0[0] + 2.0*ADM_upper[1][2]*u_0[1]
+	       	)/(U_0 + U_1);
+	// Beta term
+	H[2] += gupper[0][0]*gupper[0][3];
+	
+	//
+	//Metric with all new positions
+	//Common to all terms
+	ComputeMetricAndInverse(x_1[0],x_1[1],x_1[2], is_minkowski, spin, glower, gupper); 
+	GetUpperAdmMetric( gupper, ADM_upper );
+
+	perp = ADM_upper[1][1]*SQR(u_1[1]) + ADM_upper[2][2]*SQR(u_1[2]) + ADM_upper[1][2]*u_1[1]*u_1[2];
+	U_1 = ADM_upper[0][0]*SQR(u_1[0]) + 2.0*ADM_upper[0][1]*u_1[0]*u_1[1] + 2.0*ADM_upper[0][2]*u_1[0]*u_1[2];
+	U_1 += perp;
+	U_1 = sqrt(U_1 + massive); 
+	U_0 = ADM_upper[0][0]*SQR(u_0[0]) + 2.0*ADM_upper[0][1]*u_0[0]*u_1[1] + 2.0*ADM_upper[0][2]*u_0[0]*u_1[2];
+	U_0 += perp;
+	U_0 = sqrt(U_0 + massive); 
+	// Alpha term
+	H[0] += sqrt(-1.0/gupper[0][0])*(
+		ADM_upper[0][0]*(u_1[0]+u_0[0]) + 2.0*ADM_upper[0][1]*u_1[1] + 2.0*ADM_upper[0][2]*u_1[2]
+	       	)/(U_0 + U_1);
+	// Beta term
+	H[0] += gupper[0][0]*gupper[0][1];
+	
+	perp = ADM_upper[0][0]*SQR(u_1[0]) + ADM_upper[2][2]*SQR(u_1[2]) + ADM_upper[0][2]*u_1[0]*u_1[2];
+	U_1 = ADM_upper[1][1]*SQR(u_1[1]) + 2.0*ADM_upper[0][1]*u_1[1]*u_1[0] + 2.0*ADM_upper[1][2]*u_1[1]*u_1[2];
+	U_1 += perp;
+	U_1 = sqrt(U_1 + massive); 
+	U_0 = ADM_upper[1][1]*SQR(u_0[1]) + 2.0*ADM_upper[0][1]*u_1[0]*u_0[1] + 2.0*ADM_upper[1][2]*u_0[1]*u_1[2];
+	U_0 += perp;
+	U_0 = sqrt(U_0 + massive); 
+	// Alpha term
+	H[1] += sqrt(-1.0/gupper[0][0])*(
+		ADM_upper[1][1]*(u_1[1]+u_0[1]) + 2.0*ADM_upper[0][1]*u_1[0] + 2.0*ADM_upper[1][2]*u_1[2]
+	       	)/(U_0 + U_1);
+	// Beta term
+	H[1] += gupper[0][0]*gupper[0][2];
+
+	perp = ADM_upper[0][0]*SQR(u_1[0]) + ADM_upper[1][1]*SQR(u_1[1]) + ADM_upper[1][0]*u_1[1]*u_1[0];
+	U_1 = ADM_upper[2][2]*SQR(u_1[2]) + 2.0*ADM_upper[0][2]*u_1[0]*u_1[2] + 2.0*ADM_upper[1][2]*u_1[1]*u_1[2];
+	U_1 += perp;
+	U_1 = sqrt(U_1 + massive); 
+	U_0 = ADM_upper[2][2]*SQR(u_0[2]) + 2.0*ADM_upper[2][1]*u_0[2]*u_1[1] + 2.0*ADM_upper[0][2]*u_1[0]*u_0[2];
+	U_0 += perp;
+	U_0 = sqrt(U_0 + massive); 
+	// Alpha term
+	H[2] += sqrt(-1.0/gupper[0][0])*(
+		ADM_upper[2][2]*(u_1[2]+u_0[2]) + 2.0*ADM_upper[0][2]*u_0[0] + 2.0*ADM_upper[1][2]*u_0[1]
+	       	)/(U_0 + U_1);
+	// Beta term
+	H[2] += gupper[0][0]*gupper[0][3];
+
+	//
+	//Metric with x_0[0], x_1[1], x_1[2]
+	//Common to terms 0 and 2
+	ComputeMetricAndInverse(x_0[0],x_1[1],x_1[2], is_minkowski, spin, glower, gupper); 
+	GetUpperAdmMetric( gupper, ADM_upper );
+
+	perp = ADM_upper[1][1]*SQR(u_1[1]) + ADM_upper[2][2]*SQR(u_1[2]) + ADM_upper[1][2]*u_1[1]*u_1[2];
+	U_1 = ADM_upper[0][0]*SQR(u_1[0]) + 2.0*ADM_upper[0][1]*u_1[0]*u_1[1] + 2.0*ADM_upper[0][2]*u_1[0]*u_1[2];
+	U_1 += perp;
+	U_1 = sqrt(U_1 + massive); 
+	U_0 = ADM_upper[0][0]*SQR(u_0[0]) + 2.0*ADM_upper[0][1]*u_0[0]*u_1[1] + 2.0*ADM_upper[0][2]*u_0[0]*u_1[2];
+	U_0 += perp;
+	U_0 = sqrt(U_0 + massive); 
+	// Alpha term
+	H[0] += sqrt(-1.0/gupper[0][0])*(
+		ADM_upper[0][0]*(u_1[0]+u_0[0]) + 2.0*ADM_upper[0][1]*u_1[1] + 2.0*ADM_upper[0][2]*u_1[2]
+	       	)/(U_0 + U_1);
+	// Beta term
+	H[0] += gupper[0][0]*gupper[0][1];
+
+	perp = ADM_upper[0][0]*SQR(u_0[0]) + ADM_upper[1][1]*SQR(u_1[1]) + ADM_upper[1][0]*u_1[1]*u_0[0];
+	U_1 = ADM_upper[2][2]*SQR(u_1[2]) + 2.0*ADM_upper[0][2]*u_0[0]*u_1[2] + 2.0*ADM_upper[1][2]*u_1[1]*u_1[2];
+	U_1 += perp;
+	U_1 = sqrt(U_1 + massive); 
+	U_0 = ADM_upper[2][2]*SQR(u_0[2]) + 2.0*ADM_upper[2][1]*u_0[2]*u_1[1] + 2.0*ADM_upper[0][2]*u_0[0]*u_0[2];
+	U_0 += perp;
+	U_0 = sqrt(U_0 + massive); 
+	// Alpha term
+	H[2] += sqrt(-1.0/gupper[0][0])*(
+		ADM_upper[2][2]*(u_1[2]+u_0[2]) + 2.0*ADM_upper[0][2]*u_0[0] + 2.0*ADM_upper[1][2]*u_1[1]
+	       	)/(U_0 + U_1);
+	// Beta term
+	H[2] += gupper[0][0]*gupper[0][3];
+
+
+	//
+	//Metric with x_1[0], x_0[1], x_0[2]
+	//Common to terms 0 and 1
+	ComputeMetricAndInverse(x_1[0],x_0[1],x_0[2], is_minkowski, spin, glower, gupper); 
+	GetUpperAdmMetric( gupper, ADM_upper );
+
+	perp = ADM_upper[1][1]*SQR(u_0[1]) + ADM_upper[2][2]*SQR(u_0[2]) + ADM_upper[1][2]*u_0[1]*u_0[2];
+	U_1 = ADM_upper[0][0]*SQR(u_1[0]) + 2.0*ADM_upper[0][1]*u_1[0]*u_0[1] + 2.0*ADM_upper[0][2]*u_1[0]*u_0[2];
+	U_1 += perp;
+	U_1 = sqrt(U_1 + massive); 
+	U_0 = ADM_upper[0][0]*SQR(u_0[0]) + 2.0*ADM_upper[0][1]*u_0[0]*u_0[1] + 2.0*ADM_upper[0][2]*u_0[0]*u_0[2];
+	U_0 += perp;
+	U_0 = sqrt(U_0 + massive); 
+	// Alpha term
+	H[0] += sqrt(-1.0/gupper[0][0])*(
+		ADM_upper[0][0]*(u_1[0]+u_0[0]) + 2.0*ADM_upper[0][1]*u_0[1] + 2.0*ADM_upper[0][2]*u_0[2]
+	       	)/(U_0 + U_1);
+	// Beta term
+	H[0] += gupper[0][0]*gupper[0][1];
+	
+	perp = ADM_upper[0][0]*SQR(u_1[0]) + ADM_upper[2][2]*SQR(u_0[2]) + ADM_upper[0][2]*u_1[0]*u_0[2];
+	U_1 = ADM_upper[1][1]*SQR(u_1[1]) + 2.0*ADM_upper[0][1]*u_1[1]*u_1[0] + 2.0*ADM_upper[1][2]*u_1[1]*u_0[2];
+	U_1 += perp;
+	U_1 = sqrt(U_1 + massive); 
+	U_0 = ADM_upper[1][1]*SQR(u_0[1]) + 2.0*ADM_upper[0][1]*u_1[0]*u_0[1] + 2.0*ADM_upper[1][2]*u_0[1]*u_0[2];
+	U_0 += perp;
+	U_0 = sqrt(U_0 + massive); 
+	// Alpha term
+	H[1] += sqrt(-1.0/gupper[0][0])*(
+		ADM_upper[1][1]*(u_1[1]+u_0[1]) + 2.0*ADM_upper[0][1]*u_1[0] + 2.0*ADM_upper[1][2]*u_0[2]
+	       	)/(U_0 + U_1);
+	// Beta term
+	H[1] += gupper[0][0]*gupper[0][2];
+
+
+	//
+	//Metric with x_1[0], x_0[1], x_1[2]
+	//Common to terms 0 and 1
+	ComputeMetricAndInverse(x_1[0],x_0[1],x_1[2], is_minkowski, spin, glower, gupper); 
+	GetUpperAdmMetric( gupper, ADM_upper );
+
+	perp = ADM_upper[1][1]*SQR(u_0[1]) + ADM_upper[2][2]*SQR(u_1[2]) + ADM_upper[1][2]*u_0[1]*u_1[2];
+	U_1 = ADM_upper[0][0]*SQR(u_1[0]) + 2.0*ADM_upper[0][1]*u_1[0]*u_0[1] + 2.0*ADM_upper[0][2]*u_1[0]*u_1[2];
+	U_1 += perp;
+	U_1 = sqrt(U_1 + massive); 
+	U_0 = ADM_upper[0][0]*SQR(u_0[0]) + 2.0*ADM_upper[0][1]*u_0[0]*u_0[1] + 2.0*ADM_upper[0][2]*u_0[0]*u_1[2];
+	U_0 += perp;
+	U_0 = sqrt(U_0 + massive); 
+	// Alpha term
+	H[0] += sqrt(-1.0/gupper[0][0])*(
+		ADM_upper[0][0]*(u_1[0]+u_0[0]) + 2.0*ADM_upper[0][1]*u_0[1] + 2.0*ADM_upper[0][2]*u_1[2]
+	       	)/(U_0 + U_1);
+	// Beta term
+	H[0] += gupper[0][0]*gupper[0][1];
+	
+	perp = ADM_upper[0][0]*SQR(u_1[0]) + ADM_upper[2][2]*SQR(u_1[2]) + ADM_upper[0][2]*u_1[0]*u_1[2];
+	U_1 = ADM_upper[1][1]*SQR(u_1[1]) + 2.0*ADM_upper[0][1]*u_1[1]*u_1[0] + 2.0*ADM_upper[1][2]*u_1[1]*u_1[2];
+	U_1 += perp;
+	U_1 = sqrt(U_1 + massive); 
+	U_0 = ADM_upper[1][1]*SQR(u_0[1]) + 2.0*ADM_upper[0][1]*u_1[0]*u_0[1] + 2.0*ADM_upper[1][2]*u_0[1]*u_1[2];
+	U_0 += perp;
+	U_0 = sqrt(U_0 + massive); 
+	// Alpha term
+	H[1] += sqrt(-1.0/gupper[0][0])*(
+		ADM_upper[1][1]*(u_1[1]+u_0[1]) + 2.0*ADM_upper[0][1]*u_1[0] + 2.0*ADM_upper[1][2]*u_1[2]
+	       	)/(U_0 + U_1);
+	// Beta term
+	H[1] += gupper[0][0]*gupper[0][2];
+
+
+	//
+	//Metric with x_0[0], x_0[1], x_1[2]
+	//Common to terms 0 and 2
+	ComputeMetricAndInverse(x_0[0],x_0[1],x_0[2], is_minkowski, spin, glower, gupper); 
+	GetUpperAdmMetric( gupper, ADM_upper );
+
+	perp = ADM_upper[1][1]*SQR(u_0[1]) + ADM_upper[2][2]*SQR(u_1[2]) + ADM_upper[1][2]*u_0[1]*u_1[2];
+	U_1 = ADM_upper[0][0]*SQR(u_1[0]) + 2.0*ADM_upper[0][1]*u_1[0]*u_0[1] + 2.0*ADM_upper[0][2]*u_1[0]*u_1[2];
+	U_1 += perp;
+	U_1 = sqrt(U_1 + massive); 
+	U_0 = ADM_upper[0][0]*SQR(u_0[0]) + 2.0*ADM_upper[0][1]*u_0[0]*u_0[1] + 2.0*ADM_upper[0][2]*u_0[0]*u_1[2];
+	U_0 += perp;
+	U_0 = sqrt(U_0 + massive); 
+	// Alpha term
+	H[0] += sqrt(-1.0/gupper[0][0])*(
+		ADM_upper[0][0]*(u_1[0]+u_0[0]) + 2.0*ADM_upper[0][1]*u_0[1] + 2.0*ADM_upper[0][2]*u_1[2]
+	       	)/(U_0 + U_1);
+	// Beta term
+	H[0] += gupper[0][0]*gupper[0][1];
+
+	perp = ADM_upper[0][0]*SQR(u_0[0]) + ADM_upper[1][1]*SQR(u_0[1]) + ADM_upper[1][0]*u_0[1]*u_0[0];
+	U_1 = ADM_upper[2][2]*SQR(u_1[2]) + 2.0*ADM_upper[0][2]*u_0[0]*u_1[2] + 2.0*ADM_upper[1][2]*u_0[1]*u_1[2];
+	U_1 += perp;
+	U_1 = sqrt(U_1 + massive); 
+	U_0 = ADM_upper[2][2]*SQR(u_0[2]) + 2.0*ADM_upper[2][1]*u_0[2]*u_0[1] + 2.0*ADM_upper[0][2]*u_0[0]*u_0[2];
+	U_0 += perp;
+	U_0 = sqrt(U_0 + massive); 
+	// Alpha term
+	H[2] += sqrt(-1.0/gupper[0][0])*(
+		ADM_upper[2][2]*(u_1[2]+u_0[2]) + 2.0*ADM_upper[0][2]*u_0[0] + 2.0*ADM_upper[1][2]*u_0[1]
+	       	)/(U_0 + U_1);
+	// Beta term
+	H[2] += gupper[0][0]*gupper[0][3];
+
+
+	//
+	//Metric with x_1[0], x_1[1], x_0[2]
+	//Common to terms 1 and 2
+	ComputeMetricAndInverse(x_0[0],x_0[1],x_0[2], is_minkowski, spin, glower, gupper); 
+	GetUpperAdmMetric( gupper, ADM_upper );
+
+	perp = ADM_upper[0][0]*SQR(u_1[0]) + ADM_upper[2][2]*SQR(u_0[2]) + ADM_upper[0][2]*u_1[0]*u_0[2];
+	U_1 = ADM_upper[1][1]*SQR(u_1[1]) + 2.0*ADM_upper[0][1]*u_1[1]*u_1[0] + 2.0*ADM_upper[1][2]*u_1[1]*u_0[2];
+	U_1 += perp;
+	U_1 = sqrt(U_1 + massive); 
+	U_0 = ADM_upper[1][1]*SQR(u_0[1]) + 2.0*ADM_upper[0][1]*u_1[0]*u_0[1] + 2.0*ADM_upper[1][2]*u_0[1]*u_0[2];
+	U_0 += perp;
+	U_0 = sqrt(U_0 + massive); 
+	// Alpha term
+	H[1] += sqrt(-1.0/gupper[0][0])*(
+		ADM_upper[1][1]*(u_1[1]+u_0[1]) + 2.0*ADM_upper[0][1]*u_1[0] + 2.0*ADM_upper[1][2]*u_0[2]
+	       	)/(U_0 + U_1);
+	// Beta term
+	H[1] += gupper[0][0]*gupper[0][2];
+
+	perp = ADM_upper[0][0]*SQR(u_1[0]) + ADM_upper[1][1]*SQR(u_1[1]) + ADM_upper[1][0]*u_1[1]*u_1[0];
+	U_1 = ADM_upper[2][2]*SQR(u_1[2]) + 2.0*ADM_upper[0][2]*u_1[0]*u_1[2] + 2.0*ADM_upper[1][2]*u_1[1]*u_1[2];
+	U_1 += perp;
+	U_1 = sqrt(U_1 + massive); 
+	U_0 = ADM_upper[2][2]*SQR(u_0[2]) + 2.0*ADM_upper[2][1]*u_0[2]*u_1[1] + 2.0*ADM_upper[0][2]*u_1[0]*u_0[2];
+	U_0 += perp;
+	U_0 = sqrt(U_0 + massive); 
+	// Alpha term
+	H[2] += sqrt(-1.0/gupper[0][0])*(
+		ADM_upper[2][2]*(u_1[2]+u_0[2]) + 2.0*ADM_upper[0][2]*u_1[0] + 2.0*ADM_upper[1][2]*u_1[1]
+	       	)/(U_0 + U_1);
+	// Beta term
+	H[2] += gupper[0][0]*gupper[0][3];
+
+
+	//
+	//Metric with x_0[0], x_1[1], x_0[2]
+	//Common to terms 1 and 2
+	ComputeMetricAndInverse(x_0[0],x_0[1],x_0[2], is_minkowski, spin, glower, gupper); 
+	GetUpperAdmMetric( gupper, ADM_upper );
+
+	perp = ADM_upper[0][0]*SQR(u_0[0]) + ADM_upper[2][2]*SQR(u_0[2]) + ADM_upper[0][2]*u_0[0]*u_0[2];
+	U_1 = ADM_upper[1][1]*SQR(u_1[1]) + 2.0*ADM_upper[0][1]*u_1[1]*u_0[0] + 2.0*ADM_upper[1][2]*u_1[1]*u_0[2];
+	U_1 += perp;
+	U_1 = sqrt(U_1 + massive); 
+	U_0 = ADM_upper[1][1]*SQR(u_0[1]) + 2.0*ADM_upper[0][1]*u_0[0]*u_0[1] + 2.0*ADM_upper[1][2]*u_0[1]*u_0[2];
+	U_0 += perp;
+	U_0 = sqrt(U_0 + massive); 
+	// Alpha term
+	H[1] += sqrt(-1.0/gupper[0][0])*(
+		ADM_upper[1][1]*(u_1[1]+u_0[1]) + 2.0*ADM_upper[0][1]*u_0[0] + 2.0*ADM_upper[1][2]*u_0[2]
+	       	)/(U_0 + U_1);
+	// Beta term
+	H[1] += gupper[0][0]*gupper[0][2];
+
+	perp = ADM_upper[0][0]*SQR(u_0[0]) + ADM_upper[1][1]*SQR(u_1[1]) + ADM_upper[1][0]*u_1[1]*u_0[0];
+	U_1 = ADM_upper[2][2]*SQR(u_1[2]) + 2.0*ADM_upper[0][2]*u_0[0]*u_1[2] + 2.0*ADM_upper[1][2]*u_1[1]*u_1[2];
+	U_1 += perp;
+	U_1 = sqrt(U_1 + massive); 
+	U_0 = ADM_upper[2][2]*SQR(u_0[2]) + 2.0*ADM_upper[2][1]*u_0[2]*u_1[1] + 2.0*ADM_upper[0][2]*u_0[0]*u_0[2];
+	U_0 += perp;
+	U_0 = sqrt(U_0 + massive); 
+	// Alpha term
+	H[2] += sqrt(-1.0/gupper[0][0])*(
+		ADM_upper[2][2]*(u_1[2]+u_0[2]) + 2.0*ADM_upper[0][2]*u_0[0] + 2.0*ADM_upper[1][2]*u_1[1]
+	       	)/(U_0 + U_1);
+	// Beta term
+	H[2] += gupper[0][0]*gupper[0][3];
+	
+
+	for (int i=0; i<3; ++i){ H[i] /= 6.0; }
+}
+
+// Following function largely implented based on the appendix in Bacchini et al. 2018 (doi.org/10.3847/1538-4365/aac9ca
+// It's an expression of the derivative of the ADM Hamiltonian for geodesics with respect to the position
+// That prevents singularities for small increments and is used to compute the time derivative of the velocity
+// Would be nice to come up with a way to compute these terms algorithmically, rather than by hard coding, but thus far I wasn't able to
+KOKKOS_INLINE_FUNCTION
+void Particles::HamiltonEquation_Velocity(const Real * x_0, const Real * x_1, const Real * u_0, const Real * u_1, const Real x_step, Real * H){
+
+	const bool is_minkowski = pmy_pack->pcoord->coord_data.is_minkowski;
+	const Real spin = pmy_pack->pcoord->coord_data.bh_spin;
+	const Real it_tol = iter_tolerance;
+	Real gl_0[4][4], gu_0[4][4], gl_1[4][4], gu_1[4][4]; // Metric components
+	Real aux_gl_0[4][4], aux_gu_0[4][4], aux_gl_1[4][4], aux_gu_1[4][4]; // Metric components
+	Real dx, dy, dz, u[3];
+       	// Difference between old and new points might be too small
+	// Use drivative instead
+	bool use_derivative_x, use_derivative_y, use_derivative_z;
+
+	for (int i=0; i<3; ++i){ H[i] = 0.0; }
+	dx = x_1[0] - x_0[0];
+	use_derivative_x = (fabs(dx) < sqrt(it_tol)) ? true : false;
+	dy = x_1[1] - x_0[1];
+	use_derivative_y = (fabs(dy) < sqrt(it_tol)) ? true : false;
+	dz = x_1[2] - x_0[2];
+	use_derivative_z = (fabs(dz) < sqrt(it_tol)) ? true : false;
+
+	//Terms with all old velocities
+	//Common to all directions
+	u[0] = u_0[0]; 
+	u[1] = u_0[1]; 
+	u[2] = u_0[2]; 
+
+	ComputeMetricAndInverse(x_0[0],x_0[1],x_0[2], is_minkowski, spin, gl_0, gu_0); 
+
+	if (use_derivative_x){
+		ComputeMetricAndInverse(x_0[0]-x_step,x_0[1],x_0[2], is_minkowski, spin, aux_gl_1, aux_gu_1); 
+		ComputeMetricAndInverse(x_0[0]+x_step,x_0[1],x_0[2], is_minkowski, spin, aux_gl_0, aux_gu_0);
+	        for(int i=0; i<4; ++i){
+			for(int j=0; j<4; ++j){
+				aux_gu_0[i][j] -= aux_gu_1[i][j];
+				aux_gu_0[i][j] /= (2.0*x_step);
+			}
+		}	
 	}
-	        
-	//Convert to contravariant for ease of passage to local variables
-	acc[0] = - T0*gupper[0][0]
-		 + (T4_1 - T1)*gupper[0][1] 
-	         + (T4_2 - T2)*gupper[0][2] 
-	         + (T4_3 - T3)*gupper[0][3];
-	acc[1] = - T0*gupper[1][0]
-		 + (T4_1 - T1)*gupper[1][1] 
-	         + (T4_2 - T2)*gupper[1][2] 
-	         + (T4_3 - T3)*gupper[1][3];
-	acc[2] = - T0*gupper[2][0]
-		 + (T4_1 - T1)*gupper[2][1] 
-	         + (T4_2 - T2)*gupper[2][2] 
-	         + (T4_3 - T3)*gupper[2][3];
-	acc[3] = - T0*gupper[3][0]
-		 + (T4_1 - T1)*gupper[3][1] 
-		 + (T4_2 - T2)*gupper[3][2] 
-		 + (T4_3 - T3)*gupper[3][3];
+	
+	ComputeMetricAndInverse(x_1[0],x_0[1],x_0[2], is_minkowski, spin, gl_1, gu_1); 
+	if (use_derivative_x){
+		ComputeAndAddSingleTerm_Velocity(gu_0, gu_1, aux_gu_0, u, &H[0]);
+	}else{
+		ComputeAndAddSingleTerm_Velocity(gu_0, gu_1, u, &H[0]);
+	}
+	
+	// Change only _1 quantities as old quantities are unchanged
+	if (use_derivative_y){
+		ComputeMetricAndInverse(x_0[0],x_0[1]-x_step,x_0[2], is_minkowski, spin, aux_gl_1, aux_gu_1); 
+		ComputeMetricAndInverse(x_0[0],x_0[1]+x_step,x_0[2], is_minkowski, spin, aux_gl_0, aux_gu_0);
+	        for(int i=0; i<4; ++i){
+			for(int j=0; j<4; ++j){
+				aux_gu_0[i][j] -= aux_gu_1[i][j];
+				aux_gu_0[i][j] /= (2.0*x_step);
+			}
+		}	
+	}
+
+	ComputeMetricAndInverse(x_0[0],x_1[1],x_0[2], is_minkowski, spin, gl_1, gu_1); 
+	if (use_derivative_y){
+		ComputeAndAddSingleTerm_Velocity(gu_0, gu_1, aux_gu_0, u, &H[1]);
+	}else{
+		ComputeAndAddSingleTerm_Velocity(gu_0, gu_1, u, &H[1]);
+	}
+
+	if (use_derivative_z){
+		ComputeMetricAndInverse(x_0[0],x_0[1],x_0[2]-x_step, is_minkowski, spin, aux_gl_1, aux_gu_1); 
+		ComputeMetricAndInverse(x_0[0],x_0[1],x_0[2]+x_step, is_minkowski, spin, aux_gl_0, aux_gu_0);
+	        for(int i=0; i<4; ++i){
+			for(int j=0; j<4; ++j){
+				aux_gu_0[i][j] -= aux_gu_1[i][j];
+				aux_gu_0[i][j] /= (2.0*x_step);
+			}
+		}	
+	}
+
+	ComputeMetricAndInverse(x_0[0],x_0[1],x_1[2], is_minkowski, spin, gl_1, gu_1); 
+	if (use_derivative_z){
+		ComputeAndAddSingleTerm_Velocity(gu_0, gu_1, aux_gu_0, u, &H[2]);
+	}else{
+		ComputeAndAddSingleTerm_Velocity(gu_0, gu_1, u, &H[2]);
+	}
+
+	//Terms with all new velocities
+	//Common to all directions
+	u[0] = u_1[0]; 
+	u[1] = u_1[1]; 
+	u[2] = u_1[2]; 
+
+	// Notice inversion of gu_1 and gu_0 as constant
+	ComputeMetricAndInverse(x_1[0],x_1[1],x_1[2], is_minkowski, spin, gl_1, gu_1); 
+
+	if (use_derivative_x){
+		ComputeMetricAndInverse(x_1[0]-x_step,x_1[1],x_1[2], is_minkowski, spin, aux_gl_1, aux_gu_1); 
+		ComputeMetricAndInverse(x_1[0]+x_step,x_1[1],x_1[2], is_minkowski, spin, aux_gl_0, aux_gu_0);
+	        for(int i=0; i<4; ++i){
+			for(int j=0; j<4; ++j){
+				aux_gu_0[i][j] -= aux_gu_1[i][j];
+				aux_gu_0[i][j] /= (2.0*x_step);
+			}
+		}	
+	}
+	
+	ComputeMetricAndInverse(x_0[0],x_1[1],x_1[2], is_minkowski, spin, gl_0, gu_0); 
+	if (use_derivative_x){
+		ComputeAndAddSingleTerm_Velocity(gu_0, gu_1, aux_gu_0, u, &H[0]);
+	}else{
+		ComputeAndAddSingleTerm_Velocity(gu_0, gu_1, u, &H[0]);
+	}
+
+	if (use_derivative_y){
+		ComputeMetricAndInverse(x_1[0],x_1[1]-x_step,x_1[2], is_minkowski, spin, aux_gl_1, aux_gu_1); 
+		ComputeMetricAndInverse(x_1[0],x_1[1]+x_step,x_1[2], is_minkowski, spin, aux_gl_0, aux_gu_0);
+	        for(int i=0; i<4; ++i){
+			for(int j=0; j<4; ++j){
+				aux_gu_0[i][j] -= aux_gu_1[i][j];
+				aux_gu_0[i][j] /= (2.0*x_step);
+			}
+		}	
+	}
+
+	ComputeMetricAndInverse(x_1[0],x_0[1],x_1[2], is_minkowski, spin, gl_0, gu_0); 
+	if (use_derivative_y){
+		ComputeAndAddSingleTerm_Velocity(gu_0, gu_1, aux_gu_0, u, &H[1]);
+	}else{
+		ComputeAndAddSingleTerm_Velocity(gu_0, gu_1, u, &H[1]);
+	}
+
+	if (use_derivative_z){
+		ComputeMetricAndInverse(x_1[0],x_1[1],x_1[2]-x_step, is_minkowski, spin, aux_gl_1, aux_gu_1); 
+		ComputeMetricAndInverse(x_1[0],x_1[1],x_1[2]+x_step, is_minkowski, spin, aux_gl_0, aux_gu_0);
+	        for(int i=0; i<4; ++i){
+			for(int j=0; j<4; ++j){
+				aux_gu_0[i][j] -= aux_gu_1[i][j];
+				aux_gu_0[i][j] /= (2.0*x_step);
+			}
+		}	
+	}
+
+	ComputeMetricAndInverse(x_1[0],x_1[1],x_0[2], is_minkowski, spin, gl_0, gu_0); 
+	if (use_derivative_z){
+		ComputeAndAddSingleTerm_Velocity(gu_0, gu_1, aux_gu_0, u, &H[2]);
+	}else{
+		ComputeAndAddSingleTerm_Velocity(gu_0, gu_1, u, &H[2]);
+	}
+	
+	//Terms with new velocities for y and z
+	//Common to terms 0 and 2
+	u[0] = u_0[0]; 
+	u[1] = u_1[1]; 
+	u[2] = u_1[2]; 
+
+	ComputeMetricAndInverse(x_0[0],x_1[1],x_1[2], is_minkowski, spin, gl_0, gu_0); 
+	if (use_derivative_x){
+		ComputeMetricAndInverse(x_0[0]-x_step,x_1[1],x_1[2], is_minkowski, spin, aux_gl_1, aux_gu_1); 
+		ComputeMetricAndInverse(x_0[0]+x_step,x_1[1],x_1[2], is_minkowski, spin, aux_gl_0, aux_gu_0);
+	        for(int i=0; i<4; ++i){
+			for(int j=0; j<4; ++j){
+				aux_gu_0[i][j] -= aux_gu_1[i][j];
+				aux_gu_0[i][j] /= (2.0*x_step);
+			}
+		}	
+	}
+	
+	ComputeMetricAndInverse(x_1[0],x_1[1],x_1[2], is_minkowski, spin, gl_1, gu_1); 
+	if (use_derivative_x){
+		ComputeAndAddSingleTerm_Velocity(gu_0, gu_1, aux_gu_0, u, &H[0]);
+	}else{
+		ComputeAndAddSingleTerm_Velocity(gu_0, gu_1, u, &H[0]);
+	}
+	
+	ComputeMetricAndInverse(x_0[0],x_1[1],x_0[2], is_minkowski, spin, gl_0, gu_0); 
+	if (use_derivative_z){
+		ComputeMetricAndInverse(x_0[0],x_1[1],x_0[2]-x_step, is_minkowski, spin, aux_gl_1, aux_gu_1); 
+		ComputeMetricAndInverse(x_0[0],x_1[1],x_0[2]+x_step, is_minkowski, spin, aux_gl_0, aux_gu_0);
+	        for(int i=0; i<4; ++i){
+			for(int j=0; j<4; ++j){
+				aux_gu_0[i][j] -= aux_gu_1[i][j];
+				aux_gu_0[i][j] /= (2.0*x_step);
+			}
+		}	
+	}
+
+	ComputeMetricAndInverse(x_0[0],x_1[1],x_1[2], is_minkowski, spin, gl_1, gu_1); 
+	if (use_derivative_z){
+		ComputeAndAddSingleTerm_Velocity(gu_0, gu_1, aux_gu_0, u, &H[2]);
+	}else{
+		ComputeAndAddSingleTerm_Velocity(gu_0, gu_1, u, &H[2]);
+	}
+	
+	//Terms with new velocities for x and y
+	//Common to terms 1 and 2
+	u[0] = u_1[0]; 
+	u[1] = u_1[1]; 
+	u[2] = u_0[2]; 
+
+	ComputeMetricAndInverse(x_1[0],x_0[1],x_0[2], is_minkowski, spin, gl_0, gu_0); 
+	if (use_derivative_y){
+		ComputeMetricAndInverse(x_1[0],x_0[1]-x_step,x_0[2], is_minkowski, spin, aux_gl_1, aux_gu_1); 
+		ComputeMetricAndInverse(x_1[0],x_0[1]+x_step,x_0[2], is_minkowski, spin, aux_gl_0, aux_gu_0);
+	        for(int i=0; i<4; ++i){
+			for(int j=0; j<4; ++j){
+				aux_gu_0[i][j] -= aux_gu_1[i][j];
+				aux_gu_0[i][j] /= (2.0*x_step);
+			}
+		}	
+	}
+
+	ComputeMetricAndInverse(x_1[0],x_1[1],x_0[2], is_minkowski, spin, gl_1, gu_1); 
+	if (use_derivative_y){
+		ComputeAndAddSingleTerm_Velocity(gu_0, gu_1, aux_gu_0, u, &H[1]);
+	}else{
+		ComputeAndAddSingleTerm_Velocity(gu_0, gu_1, u, &H[1]);
+	}
+	
+	ComputeMetricAndInverse(x_1[0],x_1[1],x_0[2], is_minkowski, spin, gl_0, gu_0); 
+	if (use_derivative_z){
+		ComputeMetricAndInverse(x_1[0],x_1[1],x_0[2]-x_step, is_minkowski, spin, aux_gl_1, aux_gu_1); 
+		ComputeMetricAndInverse(x_1[0],x_1[1],x_0[2]+x_step, is_minkowski, spin, aux_gl_0, aux_gu_0);
+	        for(int i=0; i<4; ++i){
+			for(int j=0; j<4; ++j){
+				aux_gu_0[i][j] -= aux_gu_1[i][j];
+				aux_gu_0[i][j] /= (2.0*x_step);
+			}
+		}	
+	}
+
+	ComputeMetricAndInverse(x_1[0],x_1[1],x_1[2], is_minkowski, spin, gl_1, gu_1); 
+	if (use_derivative_z){
+		ComputeAndAddSingleTerm_Velocity(gu_0, gu_1, aux_gu_0, u, &H[2]);
+	}else{
+		ComputeAndAddSingleTerm_Velocity(gu_0, gu_1, u, &H[2]);
+	}
+
+	//Terms with new velocities for x and z
+	//Common to terms 0 and 1
+	u[0] = u_1[0]; 
+	u[1] = u_0[1]; 
+	u[2] = u_1[2]; 
+
+	ComputeMetricAndInverse(x_0[0],x_0[1],x_1[2], is_minkowski, spin, gl_0, gu_0); 
+	if (use_derivative_x){
+		ComputeMetricAndInverse(x_0[0]-x_step,x_0[1],x_1[2], is_minkowski, spin, aux_gl_1, aux_gu_1); 
+		ComputeMetricAndInverse(x_0[0]+x_step,x_0[1],x_1[2], is_minkowski, spin, aux_gl_0, aux_gu_0);
+	        for(int i=0; i<4; ++i){
+			for(int j=0; j<4; ++j){
+				aux_gu_0[i][j] -= aux_gu_1[i][j];
+				aux_gu_0[i][j] /= (2.0*x_step);
+			}
+		}	
+	}
+	
+	ComputeMetricAndInverse(x_1[0],x_0[1],x_1[2], is_minkowski, spin, gl_1, gu_1); 
+	if (use_derivative_x){
+		ComputeAndAddSingleTerm_Velocity(gu_0, gu_1, aux_gu_0, u, &H[0]);
+	}else{
+		ComputeAndAddSingleTerm_Velocity(gu_0, gu_1, u, &H[0]);
+	}
+	
+	ComputeMetricAndInverse(x_1[0],x_0[1],x_1[2], is_minkowski, spin, gl_0, gu_0); 
+	if (use_derivative_y){
+		ComputeMetricAndInverse(x_1[0],x_0[1]-x_step,x_1[2], is_minkowski, spin, aux_gl_1, aux_gu_1); 
+		ComputeMetricAndInverse(x_1[0],x_0[1]+x_step,x_1[2], is_minkowski, spin, aux_gl_0, aux_gu_0);
+	        for(int i=0; i<4; ++i){
+			for(int j=0; j<4; ++j){
+				aux_gu_0[i][j] -= aux_gu_1[i][j];
+				aux_gu_0[i][j] /= (2.0*x_step);
+			}
+		}	
+	}
+
+	ComputeMetricAndInverse(x_1[0],x_1[1],x_1[2], is_minkowski, spin, gl_1, gu_1); 
+	if (use_derivative_y){
+		ComputeAndAddSingleTerm_Velocity(gu_0, gu_1, aux_gu_0, u, &H[1]);
+	}else{
+		ComputeAndAddSingleTerm_Velocity(gu_0, gu_1, u, &H[1]);
+	}
+
+	//Terms with new velocities for y only
+	//Common to terms 1 and 2
+	u[0] = u_0[0]; 
+	u[1] = u_1[1]; 
+	u[2] = u_0[2]; 
+
+	ComputeMetricAndInverse(x_0[0],x_0[1],x_0[2], is_minkowski, spin, gl_0, gu_0); 
+	if (use_derivative_y){
+		ComputeMetricAndInverse(x_0[0],x_0[1]-x_step,x_0[2], is_minkowski, spin, aux_gl_1, aux_gu_1); 
+		ComputeMetricAndInverse(x_0[0],x_0[1]+x_step,x_0[2], is_minkowski, spin, aux_gl_0, aux_gu_0);
+	        for(int i=0; i<4; ++i){
+			for(int j=0; j<4; ++j){
+				aux_gu_0[i][j] -= aux_gu_1[i][j];
+				aux_gu_0[i][j] /= (2.0*x_step);
+			}
+		}	
+	}
+
+	ComputeMetricAndInverse(x_0[0],x_1[1],x_0[2], is_minkowski, spin, gl_1, gu_1); 
+	if (use_derivative_y){
+		ComputeAndAddSingleTerm_Velocity(gu_0, gu_1, aux_gu_0, u, &H[1]);
+	}else{
+		ComputeAndAddSingleTerm_Velocity(gu_0, gu_1, u, &H[1]);
+	}
+	
+	ComputeMetricAndInverse(x_0[0],x_1[1],x_0[2], is_minkowski, spin, gl_0, gu_0); 
+	if (use_derivative_z){
+		ComputeMetricAndInverse(x_0[0],x_1[1],x_0[2]-x_step, is_minkowski, spin, aux_gl_1, aux_gu_1); 
+		ComputeMetricAndInverse(x_0[0],x_1[1],x_0[2]+x_step, is_minkowski, spin, aux_gl_0, aux_gu_0);
+	        for(int i=0; i<4; ++i){
+			for(int j=0; j<4; ++j){
+				aux_gu_0[i][j] -= aux_gu_1[i][j];
+				aux_gu_0[i][j] /= (2.0*x_step);
+			}
+		}	
+	}
+
+	ComputeMetricAndInverse(x_0[0],x_1[1],x_1[2], is_minkowski, spin, gl_1, gu_1); 
+	if (use_derivative_z){
+		ComputeAndAddSingleTerm_Velocity(gu_0, gu_1, aux_gu_0, u, &H[2]);
+	}else{
+		ComputeAndAddSingleTerm_Velocity(gu_0, gu_1, u, &H[2]);
+	}
+
+	//Terms with new velocities for z only
+	//Common to terms 0 and 2
+	u[0] = u_0[0]; 
+	u[1] = u_0[1]; 
+	u[2] = u_1[2]; 
+
+	ComputeMetricAndInverse(x_0[0],x_0[1],x_1[2], is_minkowski, spin, gl_0, gu_0); 
+	if (use_derivative_x){
+		ComputeMetricAndInverse(x_0[0]-x_step,x_0[1],x_1[2], is_minkowski, spin, aux_gl_1, aux_gu_1); 
+		ComputeMetricAndInverse(x_0[0]+x_step,x_0[1],x_1[2], is_minkowski, spin, aux_gl_0, aux_gu_0);
+	        for(int i=0; i<4; ++i){
+			for(int j=0; j<4; ++j){
+				aux_gu_0[i][j] -= aux_gu_1[i][j];
+				aux_gu_0[i][j] /= (2.0*x_step);
+			}
+		}	
+	}
+	
+	ComputeMetricAndInverse(x_1[0],x_0[1],x_1[2], is_minkowski, spin, gl_1, gu_1); 
+	if (use_derivative_x){
+		ComputeAndAddSingleTerm_Velocity(gu_0, gu_1, aux_gu_0, u, &H[0]);
+	}else{
+		ComputeAndAddSingleTerm_Velocity(gu_0, gu_1, u, &H[0]);
+	}
+	
+	ComputeMetricAndInverse(x_0[0],x_0[1],x_0[2], is_minkowski, spin, gl_0, gu_0); 
+	if (use_derivative_z){
+		ComputeMetricAndInverse(x_0[0],x_0[1],x_0[2]-x_step, is_minkowski, spin, aux_gl_1, aux_gu_1); 
+		ComputeMetricAndInverse(x_0[0],x_0[1],x_0[2]+x_step, is_minkowski, spin, aux_gl_0, aux_gu_0);
+	        for(int i=0; i<4; ++i){
+			for(int j=0; j<4; ++j){
+				aux_gu_0[i][j] -= aux_gu_1[i][j];
+				aux_gu_0[i][j] /= (2.0*x_step);
+			}
+		}	
+	}
+
+	ComputeMetricAndInverse(x_0[0],x_0[1],x_1[2], is_minkowski, spin, gl_1, gu_1); 
+	if (use_derivative_z){
+		ComputeAndAddSingleTerm_Velocity(gu_0, gu_1, aux_gu_0, u, &H[2]);
+	}else{
+		ComputeAndAddSingleTerm_Velocity(gu_0, gu_1, u, &H[2]);
+	}
+
+	//Terms with new velocities for x only
+	//Common to terms 0 and 1
+	u[0] = u_1[0]; 
+	u[1] = u_0[1]; 
+	u[2] = u_0[2]; 
+
+	ComputeMetricAndInverse(x_0[0],x_0[1],x_0[2], is_minkowski, spin, gl_0, gu_0); 
+	if (use_derivative_x){
+		ComputeMetricAndInverse(x_0[0]-x_step,x_0[1],x_0[2], is_minkowski, spin, aux_gl_1, aux_gu_1); 
+		ComputeMetricAndInverse(x_0[0]+x_step,x_0[1],x_0[2], is_minkowski, spin, aux_gl_0, aux_gu_0);
+	        for(int i=0; i<4; ++i){
+			for(int j=0; j<4; ++j){
+				aux_gu_0[i][j] -= aux_gu_1[i][j];
+				aux_gu_0[i][j] /= (2.0*x_step);
+			}
+		}	
+	}
+	
+	ComputeMetricAndInverse(x_1[0],x_0[1],x_0[2], is_minkowski, spin, gl_1, gu_1); 
+	if (use_derivative_x){
+		ComputeAndAddSingleTerm_Velocity(gu_0, gu_1, aux_gu_0, u, &H[0]);
+	}else{
+		ComputeAndAddSingleTerm_Velocity(gu_0, gu_1, u, &H[0]);
+	}
+
+	ComputeMetricAndInverse(x_1[0],x_0[1],x_0[2], is_minkowski, spin, gl_0, gu_0); 
+	if (use_derivative_y){
+		ComputeMetricAndInverse(x_1[0],x_0[1]-x_step,x_0[2], is_minkowski, spin, aux_gl_1, aux_gu_1); 
+		ComputeMetricAndInverse(x_1[0],x_0[1]+x_step,x_0[2], is_minkowski, spin, aux_gl_0, aux_gu_0);
+	        for(int i=0; i<4; ++i){
+			for(int j=0; j<4; ++j){
+				aux_gu_0[i][j] -= aux_gu_1[i][j];
+				aux_gu_0[i][j] /= (2.0*x_step);
+			}
+		}	
+	}
+
+	ComputeMetricAndInverse(x_1[0],x_1[1],x_0[2], is_minkowski, spin, gl_1, gu_1); 
+	if (use_derivative_y){
+		ComputeAndAddSingleTerm_Velocity(gu_0, gu_1, aux_gu_0, u, &H[1]);
+	}else{
+		ComputeAndAddSingleTerm_Velocity(gu_0, gu_1, u, &H[1]);
+	}
+
+	for (int i=0; i<3; ++i){ H[i] /= 6.0; }
+	if (!use_derivative_x){	H[0] /= dx; }
+	if (!use_derivative_y){	H[1] /= dy; }
+	if (!use_derivative_z){	H[2] /= dz; }
+	//std::cout << "H: " << H[0] << " " << H[1] << " " << H[2] << std::endl;
 }
 
 KOKKOS_INLINE_FUNCTION
-void Particles::ComputeLorentzFactorGR( const Real * x, const Real * v, Real * u, Real * g_Lor ){
+void Particles::ComputeAndAddSingleTerm_Velocity(const Real gu_0[4][4], const Real gu_1[4][4], const Real * u, Real * H){
+	Real U_0, U_1, aux, beta_t;
+	Real ADM_0[3][3], ADM_1[3][3];
+	Real massive = 1.0; //TODO for photons/massless particles this needs to be 0: condition on ptype
 
-	const bool is_minkowski = pmy_pack->pcoord->coord_data.is_minkowski;
-	const Real spin = pmy_pack->pcoord->coord_data.bh_spin;
-	Real glower[4][4], gupper[4][4]; // Metric components
-	Real v0, a;				       
-	
-	ComputeMetricAndInverse(x[0],x[1],x[2], is_minkowski, spin, glower, gupper); 
+	GetUpperAdmMetric( gu_0, ADM_0 );
+	GetUpperAdmMetric( gu_1, ADM_1 );
 
-	u[0] = 1.0;
-	u[1] = v[0]/sqrt(glower[1][1]);
-	u[2] = v[1]/sqrt(glower[2][2]);
-	u[3] = v[2]/sqrt(glower[3][3]);
-
-	a = 0.0;
-	for (int j=0; j<4; ++j){
-		for (int i=0; i<4; ++i){
-		       	a += glower[j][i]*u[i]*u[j] ;
-	       	}
+	U_0 = 0.0;
+	for (int i1 = 0; i1 < 3; ++i1 ){ 
+		for (int i2 = 0; i2 < 3; ++i2 ){ 
+		U_0 += ADM_0[i1][i2]*u[i1]*u[i2];
+		}
 	}
-	std::cout << "a: " << a << " glower[0][0]: " << glower[0][0] << std::endl;
-	v0 = sqrt( 1.0/a );
-	u[0] = v0;
-	u[1] *= v0;
-	u[2] *= v0;
-	u[3] *= v0;
+	U_0 = sqrt(U_0 + massive); 
+	U_1 = 0.0;
+	for (int i1 = 0; i1 < 3; ++i1 ){ 
+		for (int i2 = 0; i2 < 3; ++i2 ){ 
+		U_1 += ADM_1[i1][i2]*u[i1]*u[i2];
+		}
+	}
+	U_1 = sqrt(U_1 + massive); 
+	aux = 0.0;
+	for (int i1 = 0; i1 < 3; ++i1 ){ 
+		for (int i2 = 0; i2 < 3; ++i2 ){ 
+		aux += (ADM_1[i1][i2] - ADM_0[i1][i2])*u[i1]*u[i2];
+		}
+	}
+	beta_t = 0.0;
+	for (int i1 = 0; i1 < 3; ++i1 ){ 
+		beta_t += ( -gu_1[0][i1]*gu_1[0][0] + gu_0[0][i1]*gu_0[0][0])*u[i1];
+	}
 
-	*g_Lor = v0;
+	//std::cout << "No Derivative, (U_0 + U_1):" << (U_0 + U_1) << std::endl;
+	//std::cout << "No Derivative, ( sqrt(-1.0/gu_1[0][0]) - sqrt(-1.0/gu_0[0][0]) ):" << ( sqrt(-1.0/gu_1[0][0]) - sqrt(-1.0/gu_0[0][0]) ) << std::endl;
+	//std::cout << "No Derivative, aux:" << aux << std::endl;
+	//std::cout << "No Derivative, beta_t:" << beta_t << std::endl;
+	*H -= 0.5*(U_0 + U_1)*( sqrt(-1.0/gu_1[0][0]) - sqrt(-1.0/gu_0[0][0]) ) ;
+	*H -= 0.5*aux*( sqrt(-1.0/gu_1[0][0]) + sqrt(-1.0/gu_0[0][0]) )/(U_1 + U_0) ;
+	*H += beta_t ;
+}
+
+// Overload previous function to use the derivative of the metric if needed
+KOKKOS_INLINE_FUNCTION
+void Particles::ComputeAndAddSingleTerm_Velocity(const Real gu_0[4][4], const Real gu_1[4][4], const Real g_der[4][4], const Real * u, Real * H){
+	Real U_0, U_1, aux, beta_t;
+	Real ADM_0[3][3], ADM_1[3][3], ADM_der[3][3];
+	Real massive = 1.0; //TODO for photons/massless particles this needs to be 0: condition on ptype
+
+	GetUpperAdmMetric( gu_0, ADM_0 );
+	GetUpperAdmMetric( gu_1, ADM_1 );
+	for (int i1 = 0; i1 < 3; ++i1 ){ 
+		for (int i2 = 0; i2 < 3; ++i2 ){ 
+		ADM_der[i1][i2] = g_der[i1+1][i2+1]
+		       	+ 3.0*g_der[0][0]*gu_0[0][i1+1]*gu_0[0][i2+1]*SQR(gu_0[0][0])
+			+ 2.0*g_der[0][i1+1]*gu_0[0][i2+1]*gu_0[0][0];
+		}
+	}
+	U_0 = 0.0;
+	for (int i1 = 0; i1 < 3; ++i1 ){ 
+		for (int i2 = 0; i2 < 3; ++i2 ){ 
+		U_0 += ADM_0[i1][i2]*u[i1]*u[i2];
+		}
+	}
+	U_0 = sqrt(U_0 + massive); 
+	U_1 = 0.0;
+	for (int i1 = 0; i1 < 3; ++i1 ){ 
+		for (int i2 = 0; i2 < 3; ++i2 ){ 
+		U_1 += ADM_1[i1][i2]*u[i1]*u[i2];
+		}
+	}
+	U_1 = sqrt(U_1 + massive); 
+	aux = 0.0;
+	for (int i1 = 0; i1 < 3; ++i1 ){ 
+		for (int i2 = 0; i2 < 3; ++i2 ){ 
+		aux += ADM_der[i1][i2]*u[i1]*u[i2];
+		}
+	}
+	beta_t = 0.0;
+	for (int i1 = 0; i1 < 3; ++i1 ){ 
+		beta_t -= gu_0[0][0]*(g_der[0][i1] + gu_0[0][i1]*g_der[0][0])*u[i1];
+	}
+	// std::cout << "Derivative, (U_0 + U_1):" << (U_0 + U_1) << std::endl;
+	// std::cout << "Derivative, ( 0.5*sqrt(-1.0/gu_0[0][0])*g_der[0][0]/gu_0[0][0] ):" << ( 0.5*sqrt(-1.0/gu_0[0][0])*g_der[0][0]/gu_0[0][0] ) << std::endl;
+	// std::cout << "Derivative, aux:" << aux << std::endl;
+	// std::cout << "Derivative, beta_t:" << beta_t << std::endl;
+
+	*H -= 0.5*(U_0 + U_1)*( 0.5*sqrt(-1.0/gu_0[0][0])*g_der[0][0]/gu_0[0][0] ) ;
+	*H -= 0.5*aux*( sqrt(-1.0/gu_1[0][0]) + sqrt(-1.0/gu_0[0][0]) )/(U_1 + U_0) ;
+	*H += beta_t ;
 }
 
 KOKKOS_INLINE_FUNCTION
@@ -502,75 +1236,12 @@ void Particles::ComputeInverseMatrix3( const Real inputMat[][3], Real outputMat[
 }
 
 KOKKOS_INLINE_FUNCTION
-void Particles::ComputeJacobianTerms(const Real * x, const Real * u, Real JT[][4], Real * dx_g_Lor, Real * du_g_Lor){
-
-	const bool is_minkowski = pmy_pack->pcoord->coord_data.is_minkowski;
-	const Real spin = pmy_pack->pcoord->coord_data.bh_spin;
-	Real glower[4][4], gupper[4][4]; // Metric components
-	Real dg_dx1[4][4], dg_dx2[4][4], dg_dx3[4][4]; // Metric derivatives
-	Real auxM[4][4], auxN[4][4];	
-	//
-	Real half = 0.5;
-	ComputeMetricAndInverse(x[0],x[1],x[2], is_minkowski, spin, glower, gupper); 
-	ComputeMetricDerivatives(x[0],x[1],x[2], is_minkowski, spin, dg_dx1, dg_dx2, dg_dx3); 
-		     
-	for (int j=0; j<4; ++j){
-		auxN[j][0] = dg_dx1[j][0]*u[1] + dg_dx2[j][0]*u[2] + dg_dx3[j][0]*u[3];
-		auxN[j][1] = dg_dx1[j][1]*u[1] + dg_dx2[j][1]*u[2] + dg_dx3[j][1]*u[3];
-		for (int i=0; i<4; ++i) { auxN[j][1] += dg_dx1[j][i]*u[i] ; }
-		auxN[j][2] = dg_dx1[j][2]*u[1] + dg_dx2[j][2]*u[2] + dg_dx3[j][2]*u[3];
-		for (int i=0; i<4; ++i) { auxN[j][2] += dg_dx2[j][i]*u[i] ; }
-		auxN[j][3] = dg_dx1[j][3]*u[1] + dg_dx2[j][3]*u[2] + dg_dx3[j][3]*u[3];
-		for (int i=0; i<4; ++i) { auxN[j][3] += dg_dx3[j][i]*u[i] ; }
-	}
-
-	for (int j = 0; j<4; ++j) {
-		auxM[1][j] = auxN[1][j];
-        	for (int i = 0; i<4; ++i) {
-		        half = (i == j+1) ? 0.5 : 1.0;
-			auxM[1][j] -= half*dg_dx2[j][i]*u[i];
-	       	}
-	}
-	for (int j = 0; j<4; ++j) {
-		auxM[2][j] = auxN[2][j];
-        	for (int i = 0; i<4; ++i) {
-		        half = (i == j+1) ? 0.5 : 1.0;
-			auxM[2][j] -= half*dg_dx3[j][i]*u[i];
-	       	}
-	}
-	for (int j = 0; j<4; ++j) {
-		auxM[3][j] = auxN[3][j];
-        	for (int i = 0; i<4; ++i) {
-		        half = (i == j+1) ? 0.5 : 1.0;
-			auxM[3][j] -= half*dg_dx3[j][i]*u[i];
-	       	}
-	}
-	
-	//Raise indices
-	for (int i=0; i<4; ++i){
-		for (int j=0; j<4; ++j){
-			JT[i][j] = 0.0;
-			for (int k=0; k<4; ++k){
-				JT[i][j] += gupper[i][k]*auxM[k][j];
-			}
+void Particles::GetUpperAdmMetric( const Real inputMat[][4], Real outputMat[][3] ){
+	for (int i1 = 0; i1 < 3; ++i1 ){ 
+		for (int i2 = 0; i2 < 3; ++i2 ){ 
+		outputMat[i1][i2] = inputMat[i1+1][i2+1] - inputMat[0][i2+1]*inputMat[i1+1][0]*inputMat[0][0];
 		}
-	}
-	        
-	dx_g_Lor[0] = 0.0;
-	du_g_Lor[0] = 0.0;
-	dx_g_Lor[1] = 0.0;
-	du_g_Lor[1] = 0.0;
-	dx_g_Lor[2] = 0.0;
-	du_g_Lor[2] = 0.0;
-	for (int i1=0; i1<4; ++i1){
-		for (int i2=0; i2<4; ++i2){
-			dx_g_Lor[0] += dg_dx1[i1][i2]*u[i1]*u[i1];
-			dx_g_Lor[1] += dg_dx2[i1][i2]*u[i1]*u[i1];
-			dx_g_Lor[2] += dg_dx3[i1][i2]*u[i1]*u[i1];
-		}
-		du_g_Lor[0] += 2.0*glower[1][i1]*u[i1];
-		du_g_Lor[1] += 2.0*glower[2][i1]*u[i1];
-		du_g_Lor[2] += 2.0*glower[3][i1]*u[i1];
 	}
 }
+
 } // namespace particles

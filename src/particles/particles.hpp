@@ -90,10 +90,13 @@ class Particles {
 
   void BorisStep( const Real dt, const bool only_v );
   void GeodesicIterations( const Real dt );
-  void ComputeGeodesicTerms( const Real * x, const Real * u, Real * acc );
-  void ComputeLorentzFactorGR( const Real * x, const Real * v, Real * u, Real * g_Lor );
-  void ComputeInverseMatrix3( const Real iMat[][3], Real oMat[][3] );
-  void ComputeJacobianTerms(const Real * x, const Real * u, Real JT[][4], Real * dx_g_Lor, Real * du_g_Lor);
+  void HamiltonEquation_Position(const Real * x_0, const Real * x_1, const Real * v_0, const Real * v_1, Real * H);
+  void HamiltonEquation_Velocity(const Real * x_0, const Real * x_1, const Real * v_0, const Real * v_1, const Real x_step, Real * H);
+  void ComputeAndAddSingleTerm_Velocity(const Real gu_0[4][4], const Real gu_1[4][4], const Real * u, Real * H);
+  void ComputeAndAddSingleTerm_Velocity(const Real gu_0[4][4], const Real gu_1[4][4], const Real g_der[4][4], const Real * u, Real * H);
+  void ComputeInverseMatrix3( const Real inMat[][3], Real outMat[][3] );
+  void GetUpperAdmMetric( const Real inMat[][4], Real outMat[][3] );
+
  private:
   MeshBlockPack* pmy_pack;  // ptr to MeshBlockPack containing this Particles
 };
