@@ -167,17 +167,10 @@ void Particles::BorisStep( const Real dt, const bool only_v ){
 	// Get metric components at new location x1,x2,x3
 	ComputeMetricAndInverse(x[0],x[1],x[2], is_minkowski, spin, glower, gupper); 
 	GetUpperAdmMetric( gupper, ADM_upper );
-	// Lower indeces of u_con
-	for (int i1 = 0; i1 < 3; ++i1 ){ 
-		u_cov[i1] = 0.0;
-		for (int i2 = 0; i2 < 3; ++i2 ){ 
-		u_cov[i1] += glower[i1+1][i2+1]*uE[i2];
-		}
-	}
 	g_Lor = 0.0; //Intermediate Lorentz gamma factor
 	for (int i1 = 0; i1 < 3; ++i1 ){ 
 		for (int i2 = 0; i2 < 3; ++i2 ){ 
-		g_Lor += ADM_upper[i1][i2]*u_cov[i1]*u_cov[i2];
+		g_Lor += ADM_upper[i1][i2]*u_con[i1]*u_con[i2];
 		}
 	}
 	g_Lor = sqrt(1.0 + g_Lor);
@@ -687,8 +680,7 @@ void Particles::HamiltonEquation_Position(const Real * x_0, const Real * x_1, co
 	// Beta term
 	H[2] += gupper[0][0]*gupper[0][3];
 	
-
-	for (int i=0; i<3; ++i){ H[i] /= 6.0; }
+	//for (int i=0; i<3; ++i){ H[i] /= 6.0; }
 }
 
 // Following function largely implented based on the appendix in Bacchini et al. 2018 (doi.org/10.3847/1538-4365/aac9ca
@@ -1106,7 +1098,7 @@ void Particles::HamiltonEquation_Velocity(const Real * x_0, const Real * x_1, co
 		ComputeAndAddSingleTerm_Velocity(gu_0, gu_1, u, &H[1]);
 	}
 
-	for (int i=0; i<3; ++i){ H[i] /= 6.0; }
+	//for (int i=0; i<3; ++i){ H[i] /= 6.0; }
 	if (!use_derivative_x){	H[0] /= dx; }
 	if (!use_derivative_y){	H[1] /= dy; }
 	if (!use_derivative_z){	H[2] /= dz; }
