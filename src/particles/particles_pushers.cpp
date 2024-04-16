@@ -1139,10 +1139,6 @@ void Particles::ComputeAndAddSingleTerm_Velocity(const Real gu_0[4][4], const Re
 		beta_t += ( -gu_1[0][i1]/gu_1[0][0] + gu_0[0][i1]/gu_0[0][0])*u[i1];
 	}
 
-	//std::cout << "No Derivative, (U_0 + U_1):" << (U_0 + U_1) << std::endl;
-	//std::cout << "No Derivative, ( sqrt(-1.0/gu_1[0][0]) - sqrt(-1.0/gu_0[0][0]) ):" << ( sqrt(-1.0/gu_1[0][0]) - sqrt(-1.0/gu_0[0][0]) ) << std::endl;
-	//std::cout << "No Derivative, aux:" << aux << std::endl;
-	//std::cout << "No Derivative, beta_t:" << beta_t << std::endl;
 	*H -= 0.5*(U_0 + U_1)*( sqrt(-1.0/gu_1[0][0]) - sqrt(-1.0/gu_0[0][0]) ) ;
 	*H -= 0.5*aux*( sqrt(-1.0/gu_1[0][0]) + sqrt(-1.0/gu_0[0][0]) )/(U_1 + U_0) ;
 	*H += beta_t ;
@@ -1186,14 +1182,11 @@ void Particles::ComputeAndAddSingleTerm_Velocity(const Real gu_0[4][4], const Re
 	}
 	beta_t = 0.0;
 	for (int i1 = 0; i1 < 3; ++i1 ){ 
-		beta_t -= gu_0[0][0]*(g_der[0][i1] + gu_0[0][i1]*g_der[0][0])*u[i1];
+		beta_t -= (g_der[0][i1] - gu_0[0][i1]*g_der[0][0]/gu_0[0][0])/gu_0[0][0]*u[i1];
 	}
-	// std::cout << "Derivative, (U_0 + U_1):" << (U_0 + U_1) << std::endl;
-	// std::cout << "Derivative, ( 0.5*sqrt(-1.0/gu_0[0][0])*g_der[0][0]/gu_0[0][0] ):" << ( 0.5*sqrt(-1.0/gu_0[0][0])*g_der[0][0]/gu_0[0][0] ) << std::endl;
-	// std::cout << "Derivative, aux:" << aux << std::endl;
-	// std::cout << "Derivative, beta_t:" << beta_t << std::endl;
 
-	*H -= 0.5*(U_0 + U_1)*( 0.5*sqrt(-1.0/gu_0[0][0])*g_der[0][0]/gu_0[0][0] ) ;
+	// Notice plus sign from derivative of alpha
+	*H += 0.5*(U_0 + U_1)*( 0.5*sqrt(-1.0/gu_0[0][0])*g_der[0][0]/gu_0[0][0] ) ;
 	*H -= 0.5*aux*( sqrt(-1.0/gu_1[0][0]) + sqrt(-1.0/gu_0[0][0]) )/(U_1 + U_0) ;
 	*H += beta_t ;
 }
