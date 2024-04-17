@@ -31,10 +31,12 @@ class Z4c_AMR {
   Real x1max, x1min;      // full grid extent
   Real half_initial_d; // half of the initial separation,e.g.,two puncture par_b
   Real chi_thresh;     // chi threshold for chi refinement method
+  Real dchi_thresh;    // dchi threshold for dchi refinement method
  public:
   void LinfBoxInBox(MeshBlockPack *pmbp);     // Linf box in box method
   void L2SphereInSphere(MeshBlockPack *pmbp); // L2 Sphere in Sphere method
   void ChiMin(MeshBlockPack *pmbp);           // Refine based on min{chi}
+  void DchiMax(MeshBlockPack *pmbp);           // Refine based on max{dchi}
 };
 
 } // namespace z4c
