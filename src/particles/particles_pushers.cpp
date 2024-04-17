@@ -466,7 +466,7 @@ void Particles::HamiltonEquation_Position(const Real * x_0, const Real * x_1, co
 	U_0 = sqrt(U_0 + massive); 
 	// Alpha term
 	H[2] += sqrt(-1.0/gupper[0][0])*(
-		ADM_upper[2][2]*(u_1[2]+u_0[2]) + 2.0*ADM_upper[0][2]*u_0[0] + 2.0*ADM_upper[1][2]*u_0[1]
+		ADM_upper[2][2]*(u_1[2]+u_0[2]) + 2.0*ADM_upper[0][2]*u_1[0] + 2.0*ADM_upper[1][2]*u_1[1]
 	       	)/(U_0 + U_1);
 	// Beta term
 	H[2] += gupper[0][3]/gupper[0][0];
@@ -579,7 +579,7 @@ void Particles::HamiltonEquation_Position(const Real * x_0, const Real * x_1, co
 	//
 	//Metric with x_0[0], x_0[1], x_1[2]
 	//Common to terms 0 and 2
-	ComputeMetricAndInverse(x_0[0],x_0[1],x_0[2], is_minkowski, spin, glower, gupper); 
+	ComputeMetricAndInverse(x_0[0],x_0[1],x_1[2], is_minkowski, spin, glower, gupper); 
 	GetUpperAdmMetric( gupper, ADM_upper );
 
 	perp = ADM_upper[1][1]*SQR(u_0[1]) + ADM_upper[2][2]*SQR(u_1[2]) + ADM_upper[1][2]*u_0[1]*u_1[2];
@@ -614,7 +614,7 @@ void Particles::HamiltonEquation_Position(const Real * x_0, const Real * x_1, co
 	//
 	//Metric with x_1[0], x_1[1], x_0[2]
 	//Common to terms 1 and 2
-	ComputeMetricAndInverse(x_0[0],x_0[1],x_0[2], is_minkowski, spin, glower, gupper); 
+	ComputeMetricAndInverse(x_1[0],x_1[1],x_0[2], is_minkowski, spin, glower, gupper); 
 	GetUpperAdmMetric( gupper, ADM_upper );
 
 	perp = ADM_upper[0][0]*SQR(u_1[0]) + ADM_upper[2][2]*SQR(u_0[2]) + ADM_upper[0][2]*u_1[0]*u_0[2];
@@ -649,7 +649,7 @@ void Particles::HamiltonEquation_Position(const Real * x_0, const Real * x_1, co
 	//
 	//Metric with x_0[0], x_1[1], x_0[2]
 	//Common to terms 1 and 2
-	ComputeMetricAndInverse(x_0[0],x_0[1],x_0[2], is_minkowski, spin, glower, gupper); 
+	ComputeMetricAndInverse(x_0[0],x_1[1],x_0[2], is_minkowski, spin, glower, gupper); 
 	GetUpperAdmMetric( gupper, ADM_upper );
 
 	perp = ADM_upper[0][0]*SQR(u_0[0]) + ADM_upper[2][2]*SQR(u_0[2]) + ADM_upper[0][2]*u_0[0]*u_0[2];
