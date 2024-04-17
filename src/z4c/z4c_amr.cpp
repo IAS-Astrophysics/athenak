@@ -49,6 +49,7 @@ Z4c_AMR::Z4c_AMR(Z4c *z4c, ParameterInput *pin): pz4c(z4c), pin(pin) {
   // "chi_min"
   ref_method = pin->GetOrAddString("z4c_amr", "method", "L2_sphere_in_sphere");
   chi_thresh = pin->GetOrAddReal("z4c_amr", "chi_min", 0.2);
+  dchi_thresh = pin->GetOrAddReal("z4c_amr", "dchi_max", 0.1);
   x1max      = pin->GetReal("mesh", "x1max");
   x1min      = pin->GetReal("mesh", "x1min");
   half_initial_d = pin->GetOrAddReal("problem", "par_b", 1.);
@@ -64,6 +65,8 @@ void Z4c_AMR::Refine(MeshBlockPack *pmy_pack) {
     L2SphereInSphere(pmy_pack);
   } else if (ref_method == "chi_min") {
     ChiMin(pmy_pack);
+  } else if (ref_method == "dchi_max") {
+    DchiMax(pmy_pack);
   } else {
     std::stringstream msg;
     msg << "No such option for z4c/refinement" << std::endl;
@@ -341,6 +344,51 @@ void Z4c_AMR::ChiMin(MeshBlockPack *pmbp) {
         refine_flag.d_view(m + mbs) = 1;
       }
       if (team_dmin > 1.25 * chi_thresh) {
+        refine_flag.d_view(m + mbs) = -1;
+      }
+    });
+}
+
+// refine based on max{dchi}
+void Z4c_AMR::DchiMax(MeshBlockPack *pmbp) {
+  Mesh *pmesh       = pmbp->pmesh;
+  int nmb           = pmbp->nmb_thispack;
+  int mbs           = pmesh->gids_eachrank[global_variable::my_rank];
+  auto &refine_flag = pmesh->pmr->refine_flag;
+  auto &indcs       = pmesh->mb_indcs;
+  int &is = indcs.is, nx1 = indcs.nx1;
+  int &js = indcs.js, nx2 = indcs.nx2;
+  int &ks = indcs.ks, nx3 = indcs.nx3;
+  const int nkji = nx3 * nx2 * nx1;
+  const int nji  = nx2 * nx1;
+  auto &u0       = pmbp->pz4c->u0;
+  int I_Z4C_CHI  = pmbp->pz4c->I_Z4C_CHI;
+  // note: we need this to prevent capture by this in the lambda expr.
+  auto dchi_thresh = this->dchi_thresh;
+
+  par_for_outer(
+    "Z4c_AMR::ChiMin", DevExeSpace(), 0, 0, 0, (nmb - 1),
+    KOKKOS_LAMBDA(TeamMember_t tmember, const int m) {
+      Real team_dmax;
+      Kokkos::parallel_reduce(
+        Kokkos::TeamThreadRange(tmember, nkji),
+        [=](const int idx, Real &dmax) {
+          int k = (idx) / nji;
+          int j = (idx - k * nji) / nx1;
+          int i = (idx - k * nji - j * nx1) + is;
+          j += js;
+          k += ks;
+          Real d2 = SQR(u0(m,I_Z4C_CHI,k,j,i+1) - u0(m,I_Z4C_CHI,k,j,i-1));
+          d2 += SQR(u0(m,I_Z4C_CHI,k,j+1,i) - u0(m,I_Z4C_CHI,k,j-1,i));
+          d2 += SQR(u0(m,I_Z4C_CHI,k+1,j,i) - u0(m,I_Z4C_CHI,k-1,j,i));
+          dmax = fmax((sqrt(d2)), dmax);
+        },
+        Kokkos::Max<Real>(team_dmax));
+
+      if (team_dmax > dchi_thresh) {
+        refine_flag.d_view(m + mbs) = 1;
+      }
+      if (team_dmax < 0.5 * dchi_thresh) {
         refine_flag.d_view(m + mbs) = -1;
       }
     });
