@@ -60,6 +60,8 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     int m = static_cast<int>(rand_gen.frand()*(gide - gids + 1.0));
     pi(PGID,p) = gids + m;
 
+    // Following is needed to ensure particle is being created
+    // within the randomly chosen meshblock
     Real x1min = mbsize.d_view(m).x1min;
     Real x2min = mbsize.d_view(m).x2min;
     Real x3min = mbsize.d_view(m).x3min;
@@ -71,8 +73,6 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     Real R_min = sqrt( R_min_plane2 + SQR( fmin(fabs(x3min), fabs(x3max)) ) );
     Real R_max = sqrt( R_max_plane2 + SQR( fmax(fabs(x3min), fabs(x3max)) ) );
     
-    Real E = max_init_vel*(1.0 + 0.015*rand_gen.frand());
-
     Real den = fabs(x3min) > fabs(x3max) ? x3min : x3max;
     Real th_min = atan2( sqrt(R_min_plane2) , den );
     den = fabs(x3min) < fabs(x3max) ? x3min : x3max;
@@ -84,26 +84,19 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     den = fabs(x1min) < fabs(x1max) ? x1min : x1max;
     Real phi_max = atan2( num , den );
     // Avoid generating particles too close to the BH
-    R_min = fmax(5.0,R_min);
-    // R_max might exceed x_i_max because of diagonals
-    R_max = 15.0;
-    r = L/sqrt(2.0*E); //R_min + (R_max - R_min)*rand_gen.frand();
+    R_min = L*(L/2.0 - sqrt(SQR(L)/2.0 - 3.0));
+    R_max = L*(L/2.0 + sqrt(SQR(L)/2.0 - 3.0));
+    r = R_min + (R_max - R_min)*p/npart;
     th = equator ? M_PI/2.0 : th_min + (th_max - th_min)*rand_gen.frand();
     // All particles are initialized at y = 0 
-    phi = 0.0;//phi_min + (phi_max - phi_min)*rand_gen.frand();
+    phi = 0.0;
 
-    // All particles are initialized with v_x = 0 
+    // All particles are initialized with v_x = 0 (i.e. only "toroidal" velocity)
     pr(IPVX,p) = 0.0;
-    pr(IPVY,p) = sqrt(2.0*E);
+    pr(IPVY,p) = L/r;
     pr(IPVZ,p) = equator ? 0.0 : 2.0*max_init_vel*(rand_gen.frand()-0.5);
     rand_pool64.free_state(rand_gen);  // free state for use by other threads
-    // Check particles are not faster than light
-    Real v_mod = sqrt(SQR(pr(IPVX,p)) + SQR(pr(IPVY,p)) + SQR(pr(IPVZ,p)));
-    if (v_mod >= 1){
-    	pr(IPVX,p) /= (v_mod*1.1);
-        pr(IPVY,p) /= (v_mod*1.1);
-        pr(IPVZ,p) /= (v_mod*1.1);
-    }
+
     pr(IPX,p) = r*sin(th)*cos(phi);
     pr(IPY,p) = r*sin(th)*sin(phi);
     pr(IPZ,p) = equator ? 0.0 : r*cos(th);
