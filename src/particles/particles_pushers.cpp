@@ -238,7 +238,7 @@ void Particles::GeodesicIterations( const Real dt ){
       par_for("part_fullgr",DevExeSpace(),0,(nprtcl_thispack-1),
       KOKKOS_LAMBDA(const int p) {
 
-	std::cout << "Particle: " << p << " " << pr(IPX,p) << " " << pr(IPY,p) << " " << pr(IPZ,p) << " " << pr(IPVX,p) << " " << pr(IPVY,p) << " " << pr(IPVZ,p) << std::endl;
+	//std::cout << "Particle: " << p << " " << pr(IPX,p) << " " << pr(IPY,p) << " " << pr(IPZ,p) << " " << pr(IPVX,p) << " " << pr(IPVY,p) << " " << pr(IPVZ,p) << std::endl;
         // Iterate per particle such that those that converge quicker don't go through as many iterations
 	const bool is_minkowski = pmy_pack->pcoord->coord_data.is_minkowski;
 	const Real spin = pmy_pack->pcoord->coord_data.bh_spin;
@@ -264,8 +264,8 @@ void Particles::GeodesicIterations( const Real dt ){
 
 	HamiltonEquation_Position(x_init, x_eval, v_init, v_eval, RHS_eval_x);
 	HamiltonEquation_Velocity(x_init, x_eval, v_init, v_eval, x_step, RHS_eval_v);
-	std::cout << "RHS_eval_x: " << RHS_eval_x[0] << " " << RHS_eval_x[1] << " " << RHS_eval_x[2] << std::endl;
-	std::cout << "RHS_eval_v: " << RHS_eval_v[0] << " " << RHS_eval_v[1] << " " << RHS_eval_v[2] << std::endl;
+	//std::cout << "RHS_eval_x: " << RHS_eval_x[0] << " " << RHS_eval_x[1] << " " << RHS_eval_x[2] << std::endl;
+	//std::cout << "RHS_eval_v: " << RHS_eval_v[0] << " " << RHS_eval_v[1] << " " << RHS_eval_v[2] << std::endl;
 
 	// First Jacobian for position
 	// Variation along x
@@ -338,17 +338,17 @@ void Particles::GeodesicIterations( const Real dt ){
 	for (int i=0; i<3; ++i) { x_prev[i] = x_grad[i]; }
 	for (int i=0; i<3; ++i) { v_prev[i] = v_grad[i]; }
 
-        std::cout << "x_diff " << sqrt(SQR(x_eval[0] - x_prev[0]) + SQR(x_eval[1] - x_prev[1]) + SQR(x_eval[2] - x_prev[2])) << std::endl;
-        std::cout << "u_diff " << sqrt(SQR(v_eval[0] - v_prev[0]) + SQR(v_eval[1] - v_prev[1]) + SQR(v_eval[2] - v_prev[2])) << std::endl;
+        //std::cout << "x_diff " << sqrt(SQR(x_eval[0] - x_prev[0]) + SQR(x_eval[1] - x_prev[1]) + SQR(x_eval[2] - x_prev[2])) << std::endl;
+        //std::cout << "u_diff " << sqrt(SQR(v_eval[0] - v_prev[0]) + SQR(v_eval[1] - v_prev[1]) + SQR(v_eval[2] - v_prev[2])) << std::endl;
 	}while(
 		n_iter < it_max
 		&& ( sqrt(SQR(x_eval[0] - x_prev[0]) + SQR(x_eval[1] - x_prev[1]) + SQR(x_eval[2] - x_prev[2])) > it_tol
 		|| sqrt(SQR(v_eval[0] - v_prev[0]) + SQR(v_eval[1] - v_prev[1]) + SQR(v_eval[2] - v_prev[2])) > it_tol )
 	     );
 
-	if (n_iter == it_max) { std::cout << "Limit of iterations reached on particle " << pi(PTAG,p) << " on rank " << global_variable::my_rank << std::endl; }
+	//if (n_iter == it_max) { std::cout << "Limit of iterations reached on particle " << pi(PTAG,p) << " on rank " << global_variable::my_rank << std::endl; }
 
-	std::cout << "Particle " << p << ": " << n_iter << " iteration(s)." << std::endl;
+	//std::cout << "Particle " << p << ": " << n_iter << " iteration(s)." << std::endl;
 	// Done with iterations, update ``true'' values
 	pr(IPVX,p) = v_eval[0];
         if (multi_d) { pr(IPVY,p) = v_eval[1]; }
@@ -356,7 +356,7 @@ void Particles::GeodesicIterations( const Real dt ){
 	pr(IPX,p) = x_eval[0];
         if (multi_d) { pr(IPY,p) = x_eval[1]; }
         if (three_d) { pr(IPZ,p) = x_eval[2]; }
-	std::cout << "Particle: " << p << " " << pr(IPX,p) << " " << pr(IPY,p) << " " << pr(IPZ,p) << " " << pr(IPVX,p) << " " << pr(IPVY,p) << " " << pr(IPVZ,p) << std::endl;
+	//std::cout << "Particle: " << p << " " << pr(IPX,p) << " " << pr(IPY,p) << " " << pr(IPZ,p) << " " << pr(IPVX,p) << " " << pr(IPVY,p) << " " << pr(IPVZ,p) << std::endl;
       });
       return;
 }
