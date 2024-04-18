@@ -246,7 +246,7 @@ void Particles::GeodesicIterations( const Real dt ){
 	int n_iter = 0;
 	Real x_init[3] = {pr(IPX,p), pr(IPY,p), pr(IPZ,p)};
 	Real v_init[3] = {pr(IPVX,p), pr(IPVY,p), pr(IPVZ,p)};
-	Real x_eval[3] = {pr(IPX,p)+pr(IPVX,p)*dt, pr(IPY,p)+pr(IPVY,p)*dt, pr(IPZ,p)+pr(IPVZ,p)*dt};
+	Real x_eval[3] = {pr(IPX,p), pr(IPY,p), pr(IPZ,p)};
 	Real v_eval[3] = {pr(IPVX,p), pr(IPVY,p), pr(IPVZ,p)};
 	Real x_prev[3] = {pr(IPX,p), pr(IPY,p), pr(IPZ,p)};
 	Real v_prev[3] = {pr(IPVX,p), pr(IPVY,p), pr(IPVZ,p)};
@@ -264,8 +264,6 @@ void Particles::GeodesicIterations( const Real dt ){
 
 	HamiltonEquation_Position(x_init, x_eval, v_init, v_eval, RHS_eval_x);
 	HamiltonEquation_Velocity(x_init, x_eval, v_init, v_eval, x_step, RHS_eval_v);
-	std::cout << "RHS_eval_x: " << RHS_eval_x[0] << " " << RHS_eval_x[1] << " " << RHS_eval_x[2] << std::endl;
-	std::cout << "RHS_eval_v: " << RHS_eval_v[0] << " " << RHS_eval_v[1] << " " << RHS_eval_v[2] << std::endl;
 
 	// First Jacobian for position
 	// Variation along x
@@ -392,8 +390,6 @@ void Particles::HamiltonEquation_Position(const Real * x_0, const Real * x_1, co
 	H[0] += sqrt(-1.0/gupper[0][0])*(
 		ADM_upper[0][0]*(u_1[0]+u_0[0]) + 2.0*ADM_upper[0][1]*u_0[1] + 2.0*ADM_upper[0][2]*u_0[2]
 	       	)/(U_0 + U_1);
-	// Beta term
-	H[0] += gupper[0][1]/gupper[0][0];
 	
 	perp =  ADM_upper[0][0]*SQR(u_0[0]) + ADM_upper[2][2]*SQR(u_0[2]) + ADM_upper[0][2]*u_0[0]*u_0[2];
 	U_1 = ADM_upper[1][1]*SQR(u_1[1]) + 2.0*ADM_upper[0][1]*u_1[1]*u_0[0] + 2.0*ADM_upper[1][2]*u_1[1]*u_0[2];
@@ -406,8 +402,6 @@ void Particles::HamiltonEquation_Position(const Real * x_0, const Real * x_1, co
 	H[1] += sqrt(-1.0/gupper[0][0])*(
 		ADM_upper[1][1]*(u_1[1]+u_0[1]) + 2.0*ADM_upper[0][1]*u_0[0] + 2.0*ADM_upper[1][2]*u_0[2]
 	       	)/(U_0 + U_1);
-	// Beta term
-	H[1] += gupper[0][2]/gupper[0][0];
 
 	perp = ADM_upper[0][0]*SQR(u_0[0]) + ADM_upper[1][1]*SQR(u_0[1]) + ADM_upper[1][0]*u_0[1]*u_0[0];
 	U_1 = ADM_upper[2][2]*SQR(u_1[2]) + 2.0*ADM_upper[0][2]*u_1[0]*u_0[2] + 2.0*ADM_upper[1][2]*u_1[1]*u_0[2];
@@ -420,8 +414,6 @@ void Particles::HamiltonEquation_Position(const Real * x_0, const Real * x_1, co
 	H[2] += sqrt(-1.0/gupper[0][0])*(
 		ADM_upper[2][2]*(u_1[2]+u_0[2]) + 2.0*ADM_upper[0][2]*u_0[0] + 2.0*ADM_upper[1][2]*u_0[1]
 	       	)/(U_0 + U_1);
-	// Beta term
-	H[2] += gupper[0][3]/gupper[0][0];
 	
 	//
 	//Metric with all new positions
@@ -440,8 +432,6 @@ void Particles::HamiltonEquation_Position(const Real * x_0, const Real * x_1, co
 	H[0] += sqrt(-1.0/gupper[0][0])*(
 		ADM_upper[0][0]*(u_1[0]+u_0[0]) + 2.0*ADM_upper[0][1]*u_1[1] + 2.0*ADM_upper[0][2]*u_1[2]
 	       	)/(U_0 + U_1);
-	// Beta term
-	H[0] += gupper[0][1]/gupper[0][0];
 	
 	perp = ADM_upper[0][0]*SQR(u_1[0]) + ADM_upper[2][2]*SQR(u_1[2]) + ADM_upper[0][2]*u_1[0]*u_1[2];
 	U_1 = ADM_upper[1][1]*SQR(u_1[1]) + 2.0*ADM_upper[0][1]*u_1[1]*u_1[0] + 2.0*ADM_upper[1][2]*u_1[1]*u_1[2];
@@ -454,8 +444,6 @@ void Particles::HamiltonEquation_Position(const Real * x_0, const Real * x_1, co
 	H[1] += sqrt(-1.0/gupper[0][0])*(
 		ADM_upper[1][1]*(u_1[1]+u_0[1]) + 2.0*ADM_upper[0][1]*u_1[0] + 2.0*ADM_upper[1][2]*u_1[2]
 	       	)/(U_0 + U_1);
-	// Beta term
-	H[1] += gupper[0][2]/gupper[0][0];
 
 	perp = ADM_upper[0][0]*SQR(u_1[0]) + ADM_upper[1][1]*SQR(u_1[1]) + ADM_upper[1][0]*u_1[1]*u_1[0];
 	U_1 = ADM_upper[2][2]*SQR(u_1[2]) + 2.0*ADM_upper[0][2]*u_1[0]*u_1[2] + 2.0*ADM_upper[1][2]*u_1[1]*u_1[2];
@@ -468,8 +456,6 @@ void Particles::HamiltonEquation_Position(const Real * x_0, const Real * x_1, co
 	H[2] += sqrt(-1.0/gupper[0][0])*(
 		ADM_upper[2][2]*(u_1[2]+u_0[2]) + 2.0*ADM_upper[0][2]*u_1[0] + 2.0*ADM_upper[1][2]*u_1[1]
 	       	)/(U_0 + U_1);
-	// Beta term
-	H[2] += gupper[0][3]/gupper[0][0];
 
 	//
 	//Metric with x_0[0], x_1[1], x_1[2]
@@ -488,8 +474,6 @@ void Particles::HamiltonEquation_Position(const Real * x_0, const Real * x_1, co
 	H[0] += sqrt(-1.0/gupper[0][0])*(
 		ADM_upper[0][0]*(u_1[0]+u_0[0]) + 2.0*ADM_upper[0][1]*u_1[1] + 2.0*ADM_upper[0][2]*u_1[2]
 	       	)/(U_0 + U_1);
-	// Beta term
-	H[0] += gupper[0][1]/gupper[0][0];
 
 	perp = ADM_upper[0][0]*SQR(u_0[0]) + ADM_upper[1][1]*SQR(u_1[1]) + ADM_upper[1][0]*u_1[1]*u_0[0];
 	U_1 = ADM_upper[2][2]*SQR(u_1[2]) + 2.0*ADM_upper[0][2]*u_0[0]*u_1[2] + 2.0*ADM_upper[1][2]*u_1[1]*u_1[2];
@@ -502,8 +486,6 @@ void Particles::HamiltonEquation_Position(const Real * x_0, const Real * x_1, co
 	H[2] += sqrt(-1.0/gupper[0][0])*(
 		ADM_upper[2][2]*(u_1[2]+u_0[2]) + 2.0*ADM_upper[0][2]*u_0[0] + 2.0*ADM_upper[1][2]*u_1[1]
 	       	)/(U_0 + U_1);
-	// Beta term
-	H[2] += gupper[0][3]/gupper[0][0];
 
 
 	//
@@ -523,8 +505,6 @@ void Particles::HamiltonEquation_Position(const Real * x_0, const Real * x_1, co
 	H[0] += sqrt(-1.0/gupper[0][0])*(
 		ADM_upper[0][0]*(u_1[0]+u_0[0]) + 2.0*ADM_upper[0][1]*u_0[1] + 2.0*ADM_upper[0][2]*u_0[2]
 	       	)/(U_0 + U_1);
-	// Beta term
-	H[0] += gupper[0][1]/gupper[0][0];
 	
 	perp = ADM_upper[0][0]*SQR(u_1[0]) + ADM_upper[2][2]*SQR(u_0[2]) + ADM_upper[0][2]*u_1[0]*u_0[2];
 	U_1 = ADM_upper[1][1]*SQR(u_1[1]) + 2.0*ADM_upper[0][1]*u_1[1]*u_1[0] + 2.0*ADM_upper[1][2]*u_1[1]*u_0[2];
@@ -537,8 +517,6 @@ void Particles::HamiltonEquation_Position(const Real * x_0, const Real * x_1, co
 	H[1] += sqrt(-1.0/gupper[0][0])*(
 		ADM_upper[1][1]*(u_1[1]+u_0[1]) + 2.0*ADM_upper[0][1]*u_1[0] + 2.0*ADM_upper[1][2]*u_0[2]
 	       	)/(U_0 + U_1);
-	// Beta term
-	H[1] += gupper[0][2]/gupper[0][0];
 
 
 	//
@@ -558,8 +536,6 @@ void Particles::HamiltonEquation_Position(const Real * x_0, const Real * x_1, co
 	H[0] += sqrt(-1.0/gupper[0][0])*(
 		ADM_upper[0][0]*(u_1[0]+u_0[0]) + 2.0*ADM_upper[0][1]*u_0[1] + 2.0*ADM_upper[0][2]*u_1[2]
 	       	)/(U_0 + U_1);
-	// Beta term
-	H[0] += gupper[0][1]/gupper[0][0];
 	
 	perp = ADM_upper[0][0]*SQR(u_1[0]) + ADM_upper[2][2]*SQR(u_1[2]) + ADM_upper[0][2]*u_1[0]*u_1[2];
 	U_1 = ADM_upper[1][1]*SQR(u_1[1]) + 2.0*ADM_upper[0][1]*u_1[1]*u_1[0] + 2.0*ADM_upper[1][2]*u_1[1]*u_1[2];
@@ -572,8 +548,6 @@ void Particles::HamiltonEquation_Position(const Real * x_0, const Real * x_1, co
 	H[1] += sqrt(-1.0/gupper[0][0])*(
 		ADM_upper[1][1]*(u_1[1]+u_0[1]) + 2.0*ADM_upper[0][1]*u_1[0] + 2.0*ADM_upper[1][2]*u_1[2]
 	       	)/(U_0 + U_1);
-	// Beta term
-	H[1] += gupper[0][2]/gupper[0][0];
 
 
 	//
@@ -593,8 +567,6 @@ void Particles::HamiltonEquation_Position(const Real * x_0, const Real * x_1, co
 	H[0] += sqrt(-1.0/gupper[0][0])*(
 		ADM_upper[0][0]*(u_1[0]+u_0[0]) + 2.0*ADM_upper[0][1]*u_0[1] + 2.0*ADM_upper[0][2]*u_1[2]
 	       	)/(U_0 + U_1);
-	// Beta term
-	H[0] += gupper[0][1]/gupper[0][0];
 
 	perp = ADM_upper[0][0]*SQR(u_0[0]) + ADM_upper[1][1]*SQR(u_0[1]) + ADM_upper[1][0]*u_0[1]*u_0[0];
 	U_1 = ADM_upper[2][2]*SQR(u_1[2]) + 2.0*ADM_upper[0][2]*u_0[0]*u_1[2] + 2.0*ADM_upper[1][2]*u_0[1]*u_1[2];
@@ -607,8 +579,6 @@ void Particles::HamiltonEquation_Position(const Real * x_0, const Real * x_1, co
 	H[2] += sqrt(-1.0/gupper[0][0])*(
 		ADM_upper[2][2]*(u_1[2]+u_0[2]) + 2.0*ADM_upper[0][2]*u_0[0] + 2.0*ADM_upper[1][2]*u_0[1]
 	       	)/(U_0 + U_1);
-	// Beta term
-	H[2] += gupper[0][3]/gupper[0][0];
 
 
 	//
@@ -628,8 +598,6 @@ void Particles::HamiltonEquation_Position(const Real * x_0, const Real * x_1, co
 	H[1] += sqrt(-1.0/gupper[0][0])*(
 		ADM_upper[1][1]*(u_1[1]+u_0[1]) + 2.0*ADM_upper[0][1]*u_1[0] + 2.0*ADM_upper[1][2]*u_0[2]
 	       	)/(U_0 + U_1);
-	// Beta term
-	H[1] += gupper[0][2]/gupper[0][0];
 
 	perp = ADM_upper[0][0]*SQR(u_1[0]) + ADM_upper[1][1]*SQR(u_1[1]) + ADM_upper[1][0]*u_1[1]*u_1[0];
 	U_1 = ADM_upper[2][2]*SQR(u_1[2]) + 2.0*ADM_upper[0][2]*u_1[0]*u_1[2] + 2.0*ADM_upper[1][2]*u_1[1]*u_1[2];
@@ -642,8 +610,6 @@ void Particles::HamiltonEquation_Position(const Real * x_0, const Real * x_1, co
 	H[2] += sqrt(-1.0/gupper[0][0])*(
 		ADM_upper[2][2]*(u_1[2]+u_0[2]) + 2.0*ADM_upper[0][2]*u_1[0] + 2.0*ADM_upper[1][2]*u_1[1]
 	       	)/(U_0 + U_1);
-	// Beta term
-	H[2] += gupper[0][3]/gupper[0][0];
 
 
 	//
@@ -663,8 +629,6 @@ void Particles::HamiltonEquation_Position(const Real * x_0, const Real * x_1, co
 	H[1] += sqrt(-1.0/gupper[0][0])*(
 		ADM_upper[1][1]*(u_1[1]+u_0[1]) + 2.0*ADM_upper[0][1]*u_0[0] + 2.0*ADM_upper[1][2]*u_0[2]
 	       	)/(U_0 + U_1);
-	// Beta term
-	H[1] += gupper[0][2]/gupper[0][0];
 
 	perp = ADM_upper[0][0]*SQR(u_0[0]) + ADM_upper[1][1]*SQR(u_1[1]) + ADM_upper[1][0]*u_1[1]*u_0[0];
 	U_1 = ADM_upper[2][2]*SQR(u_1[2]) + 2.0*ADM_upper[0][2]*u_0[0]*u_1[2] + 2.0*ADM_upper[1][2]*u_1[1]*u_1[2];
@@ -677,10 +641,9 @@ void Particles::HamiltonEquation_Position(const Real * x_0, const Real * x_1, co
 	H[2] += sqrt(-1.0/gupper[0][0])*(
 		ADM_upper[2][2]*(u_1[2]+u_0[2]) + 2.0*ADM_upper[0][2]*u_0[0] + 2.0*ADM_upper[1][2]*u_1[1]
 	       	)/(U_0 + U_1);
-	// Beta term
-	H[2] += gupper[0][3]/gupper[0][0];
 	
-	for (int i=0; i<3; ++i){ H[i] /= 6.0; }
+	//Add beta terms once rather than each time
+	for (int i=0; i<3; ++i){ H[i] = H[i]/6.0 + gupper[0][i+1]/gupper[0][0]; }
 }
 
 // Following function largely implented based on the appendix in Bacchini et al. 2018 (doi.org/10.3847/1538-4365/aac9ca
