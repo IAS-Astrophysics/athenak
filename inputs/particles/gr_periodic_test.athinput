@@ -1,0 +1,65 @@
+# AthenaXXX input file for random particle drift
+
+<comment>
+problem   = GRParticles_Test 
+
+<job>
+basename  = gr_particles_test       # problem ID: basename of output filenames
+
+<mesh>
+nghost    = 2         # Number of ghost cells
+nx1       = 64       # Number of zones in X1-direction
+x1max     = 100.0      # maximum value of X5
+x1min     = -100.0       # maximum value of X5
+ix1_bc    = periodic  # Inner-X5 boundary condition flag
+ox1_bc    = periodic  # Outer-X5 boundary condition flag
+
+nx2       = 64       # Number of zones in X2-direction
+x2max     = 100.0      # maximum value of X2
+x2min     = -100.0       # maximum value of X2
+ix2_bc    = periodic  # Inner-X2 boundary condition flag
+ox2_bc    = periodic  # Outer-X2 boundary condition flag
+
+nx3       = 64       # Number of zones in X3-direction
+x3max     = 100.0      # maximum value of X3
+x3min     = -100.0       # maximum value of X3
+ix3_bc    = periodic  # Inner-X3 boundary condition flag
+ox3_bc    = periodic  # Outer-X3 boundary condition flag
+
+<meshblock>
+nx1       = 32       # Number of cells in each MeshBlock, X1-dir
+nx2       = 32       # Number of cells in each MeshBlock, X2-dir
+nx3       = 32       # Number of cells in each MeshBlock, X3-dir
+
+<time>
+evolution  = dynamic   # dynamic/kinematic/static
+integrator = rk2       # time integration algorithm
+cfl_number = 0.1     # The Courant, Friedrichs, & Lewy (CFL) Number
+nlim       = -1        # cycle limit
+tlim       = 5000.0      # time limit
+ndiag      = 10        # cycles between diagostic output
+
+<coord>
+general_rel = true
+a = 0.0
+excise = true
+dexcise = 1.0E-10
+pexcise = 1.0E-10
+
+<particles>
+ppc    = 0.0001
+pusher = full_gr
+iter_tolerance = 1.0E-10
+max_iter = 10
+particle_type = cosmic_ray
+mass = 1.0
+charge = 0.0
+
+<problem>
+equatorial = true
+angular_momentum = 4.5
+
+<output1>
+file_type   = pvtk      # Particle VTK data dump
+variable    = prtcl_all
+dt          = 1.0E-0     # time increment between outputs
