@@ -35,7 +35,6 @@ struct RadiationFEMNTaskIDs {
   TaskID rad_limfem;
   TaskID rad_limdg;
   TaskID rad_filterfpn;
-  TaskID rad_src;
   TaskID rad_resti;
   TaskID rad_sendi;
   TaskID rad_recvi;

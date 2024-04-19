@@ -219,7 +219,7 @@ void RadiationFEMN::LoadFPNMatrices() {
   Kokkos::deep_copy(sx_, temp_matrix);
   Kokkos::deep_copy(sy_, temp_matrix_2);
   Kokkos::deep_copy(sz_, temp_matrix_3);
-
+/*
   // compute the F matrices
   std::cout << "Computing the F matrices (FPN) ... " << std::endl;
   for (int i = 0; i < num_points; i++) {
@@ -269,7 +269,7 @@ void RadiationFEMN::LoadFPNMatrices() {
       }
     }
   }
-
+*/
   HostArray1D<Real> e_source_temp;
   Kokkos::realloc(e_source_temp, num_points);
 

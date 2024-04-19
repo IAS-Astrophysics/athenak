@@ -378,9 +378,11 @@ TaskStatus RadiationFEMN::ExpRKUpdate(Driver *pdriver, int stage) {
                     auto unifiedidx = IndicesUnited(nu, en, idx, num_species_, num_energy_bins_, num_points_);
                     f0_(m, unifiedidx, k, j, i) = final_result;
 
-                    if(unifiedidx == 0) {
+                    // floor energy density if using M1
+                    if(unifiedidx == 0 && m1_flag) {
                       f0_(m, unifiedidx, k, j, i) = fmax(final_result, 0);
                     }
+
                   });
                   member.team_barrier();
                 });
