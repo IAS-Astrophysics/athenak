@@ -36,7 +36,7 @@ evolution  = dynamic   # dynamic/kinematic/static
 integrator = rk2       # time integration algorithm
 cfl_number = 0.9       # The Courant, Friedrichs, & Lewy (CFL) Number
 nlim       = -1        # cycle limit
-tlim       = 10.0      # time limit
+tlim       = 100.0      # time limit
 ndiag      = 10        # cycles between diagostic output
 
 <particles>
@@ -65,9 +65,9 @@ dt          = 1.0E-1     # time increment between outputs
 <output2>
 file_type   = bin      # Particle VTK data dump
 variable    = mhd_w_bcc
-dt          = 2.5E-0     # time increment between outputs
+dt          = 5.0E+1     # time increment between outputs
 
 <output3>
 file_type   = hst      # Particle VTK data dump
 user_hist_only    = true
-dt          = 5.0E-2     # time increment between outputs
+dt          = 1.0E-1     # time increment between outputs

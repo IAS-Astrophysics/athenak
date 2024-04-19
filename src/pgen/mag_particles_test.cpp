@@ -98,7 +98,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
 
     pr(IPVX,p) = max_init_vel*(p+0.01)/npart*(x1max_actual - x1min_actual);
     pr(IPVY,p) = max_init_vel*(p+0.01)/npart*(x2max_actual - x2min_actual);
-    pr(IPVZ,p) *= 1.0E-2;
+    pr(IPVZ,p) *= 2.5E-3;
     v[3*p] = pr(IPVX,p);
     v[3*p+1] = pr(IPVY,p);
     v[3*p+2] = pr(IPVZ,p);

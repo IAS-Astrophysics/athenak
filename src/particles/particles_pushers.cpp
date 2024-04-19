@@ -97,34 +97,39 @@ void Particles::BorisStep( const Real dt, const bool only_v ){
       KOKKOS_LAMBDA(const int p) {
       
         // Contravariant and co-variant 4-velocities
-	Real u_con[3] = {pr(IPVX,p), pr(IPVY,p), pr(IPVZ,p)};
-	//Real u_cov[3];
+	// To have compatibility with GR the velocity stored should be the covariant one
+	Real u_cov[3] = {pr(IPVX,p), pr(IPVY,p), pr(IPVZ,p)};
+	Real u_con[3];
 	Real x[3]; //Half-step increment.
 	Real g_Lor;
-	x[0] = pr(IPX,p) + dt/(2.0)*u_con[0];
-        if (multi_d) { x[1] = pr(IPY,p) + dt/(2.0)*u_con[1]; }
-        if (three_d) { x[2] = pr(IPZ,p) + dt/(2.0)*u_con[2]; }
 	// Get metric components at new location x1,x2,x3
 	Real glower[4][4], gupper[4][4], ADM_upper[3][3]; // Metric 
 					       // (remember: sqrt(-1/gupper[0][0]) = alpha, glower[0][i] = beta[i])
 	ComputeMetricAndInverse(pr(IPX,p),pr(IPY,p),pr(IPZ,p), is_minkowski, spin, glower, gupper); 
 	// Compute 3x3 ADM spatial metric from covariant metric 
 	GetUpperAdmMetric( gupper, ADM_upper );
-	// ADM_lower = glower for i,j = 1,2,3
-	// Lower indeces of u_con (g_Lor is applied afterwards)
-	// for (int i1 = 0; i1 < 3; ++i1 ){ 
-	// 	u_cov[i1] = 0.0;
-	// 	for (int i2 = 0; i2 < 3; ++i2 ){ 
-	// 	u_cov[i1] += glower[i1+1][i2+1]*u_con[i2];
-	// 	}
-	// }
+	// Raise indeces of u_cov
+	for (int i1 = 0; i1 < 3; ++i1 ){ 
+		u_con[i1] = 0.0;
+		for (int i2 = 0; i2 < 3; ++i2 ){ 
+		u_con[i1] += ADM_upper[i1][i2]*u_cov[i2];
+		}
+	}
+	x[0] = pr(IPX,p) + dt/(2.0)*u_con[0];
+        if (multi_d) { x[1] = pr(IPY,p) + dt/(2.0)*u_con[1]; }
+        if (three_d) { x[2] = pr(IPZ,p) + dt/(2.0)*u_con[2]; }
 	//Use definition of the Lorentz factor in ADM formalism
+	//Sometimes called u0 instead
 	g_Lor = 0.0;
 	for (int i1 = 0; i1 < 3; ++i1 ){ 
 		for (int i2 = 0; i2 < 3; ++i2 ){ 
-		g_Lor += ADM_upper[i1][i2]*u_con[i1]*u_con[i2];
+		g_Lor += ADM_upper[i1][i2]*u_cov[i1]*u_cov[i2];
 		}
 	}
+	// In principle the 1.0 should be replaced by a 0 if
+	// the particle is massless, but I don't know of 
+	// any massless particle that can interact with an 
+	// electromagnetic field (unless one goes into quantum mechanics)
 	g_Lor = sqrt(1.0 + g_Lor);
 	//Boost velocities
 	// for ( int i=0; i<3; ++i){
@@ -167,10 +172,19 @@ void Particles::BorisStep( const Real dt, const bool only_v ){
 	// Get metric components at new location x1,x2,x3
 	ComputeMetricAndInverse(x[0],x[1],x[2], is_minkowski, spin, glower, gupper); 
 	GetUpperAdmMetric( gupper, ADM_upper );
+	// Lower indeces of u_con
+	// This and the following computation of g_Lor
+	// can probably be compressed into a single expression
+	for (int i1 = 0; i1 < 3; ++i1 ){ 
+		u_cov[i1] = 0.0;
+		for (int i2 = 0; i2 < 3; ++i2 ){ 
+		u_cov[i1] += glower[i1+1][i2+1]*uE[i2];
+		}
+	}
 	g_Lor = 0.0; //Intermediate Lorentz gamma factor
 	for (int i1 = 0; i1 < 3; ++i1 ){ 
 		for (int i2 = 0; i2 < 3; ++i2 ){ 
-		g_Lor += ADM_upper[i1][i2]*u_con[i1]*u_con[i2];
+		g_Lor += ADM_upper[i1][i2]*u_cov[i1]*u_cov[i2];
 		}
 	}
 	g_Lor = sqrt(1.0 + g_Lor);
@@ -199,22 +213,35 @@ void Particles::BorisStep( const Real dt, const bool only_v ){
         if (multi_d) { uB[1] = uE[1] + 2.0/(1.0+mod_t_sqr)*( (uE[2] + vec_ut[2])*t[0] - (uE[0] + vec_ut[0])*t[2] ); }
         if (three_d) { uB[2] = uE[2] + 2.0/(1.0+mod_t_sqr)*( (uE[0] + vec_ut[0])*t[1] - (uE[1] + vec_ut[1])*t[0] ); }
 
+	for (int i1 = 0; i1 < 3; ++i1 ){ 
+		u_cov[i1] = 0.0;
+		for (int i2 = 0; i2 < 3; ++i2 ){ 
+		u_cov[i1] += glower[i1+1][i2+1]*uB[i2];
+		}
+	}
 	g_Lor = 0.0; //Intermediate Lorentz gamma factor
 	for (int i1 = 0; i1 < 3; ++i1 ){ 
 		for (int i2 = 0; i2 < 3; ++i2 ){ 
-		g_Lor += ADM_upper[i1][i2]*u_con[i1]*u_con[i2];
+		g_Lor += ADM_upper[i1][i2]*u_cov[i1]*u_cov[i2];
 		}
 	}
 	g_Lor = sqrt(1.0 + g_Lor);
 	// Finally update velocity in local space
-	pr(IPVX,p) = (uB[0] + dt*pr(IPC,p)/(2.0*pr(IPM,p))*E[0])/g_Lor ;
-	pr(IPVY,p) = (uB[1] + dt*pr(IPC,p)/(2.0*pr(IPM,p))*E[1])/g_Lor ;
-	pr(IPVZ,p) = (uB[2] + dt*pr(IPC,p)/(2.0*pr(IPM,p))*E[2])/g_Lor ;
+	pr(IPVX,p) = u_cov[0];
+	pr(IPVY,p) = u_cov[1];
+	pr(IPVZ,p) = u_cov[2];
 
 	if (!only_v){
-	pr(IPX,p) = x[0] + dt/(2.0)*pr(IPVX,p);
-        if (multi_d) { pr(IPY,p) = x[1] + dt/(2.0)*pr(IPVY,p); }
-        if (three_d) { pr(IPZ,p) = x[2] + dt/(2.0)*pr(IPVZ,p); }
+	// Raise indeces of u_cov to update position
+	for (int i1 = 0; i1 < 3; ++i1 ){ 
+		u_con[i1] = 0.0;
+		for (int i2 = 0; i2 < 3; ++i2 ){ 
+		u_con[i1] += ADM_upper[i1][i2]*u_cov[i2];
+		}
+	}
+	pr(IPX,p) = x[0] + dt/(2.0*g_Lor)*pr(IPVX,p);
+        if (multi_d) { pr(IPY,p) = x[1] + dt/(2.0*g_Lor)*pr(IPVY,p); }
+        if (three_d) { pr(IPZ,p) = x[2] + dt/(2.0*g_Lor)*pr(IPVZ,p); }
 	}
       });
       return;
