@@ -228,6 +228,7 @@ class Z4c {
   TaskStatus PunctureTracker(Driver *d, int stage);
   TaskStatus CalcWeylScalar_(Driver *d, int stage);
   TaskStatus CalcWaveForm_(Driver *d, int stage);
+  TaskStatus CCEDump(Driver *pdrive, int stage);
 
   template <int NGHOST>
   TaskStatus CalcRHS(Driver *d, int stage);
