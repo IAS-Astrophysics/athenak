@@ -2,16 +2,19 @@
 #define CCE_HPP
 
 #include <string>
-#include "../../athena.hpp"
-#include "../../athena_arrays.hpp"
-
-class Mesh;
-class MeshBlock;
-class ParameterInput;
-namespace decomp_decompose {class decomp_info;};
+#include "athena.hpp"
+#include "globals.hpp"
 
 // max absolute value of spin in spin weighted Ylm
 #define MAX_SPIN (2)
+
+class Mesh;
+class MeshBlock;
+class MeshBlockPack;
+class ParameterInput;
+namespace decomp_decompose {class decomp_info;};
+
+namespace z4c {
 
 class CCE
 {
@@ -53,3 +56,4 @@ class CCE
 
 #endif
 
+} // end namespace z4c

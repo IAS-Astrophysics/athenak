@@ -18,12 +18,12 @@
 #include "sYlm.hpp"
 #include "myassert.hpp"
 #include "decomp.hpp"
-#include "../../parameter_input.hpp"
-#include "../../mesh/mesh.hpp"
-#include "../../coordinates/coordinates.hpp"
-#include "../../utils/lagrange_interp.hpp"
-#include "../../globals.hpp"
-#include "../z4c.hpp"
+#include "z4c/z4c.hpp"
+#include "athena.hpp"
+#include "globals.hpp"
+#include "mesh/mesh.hpp"
+#include "parameter_input.hpp"
+#include "utils/lagrange_interpolator.hpp"
 
 #define BUFFSIZE  (1024)
 #define MAX_RADII (100)
@@ -47,6 +47,8 @@ using namespace decomp_matrix_class;
 using namespace decomp_sYlm;
 using namespace decomp_decompose;
 
+
+namespace z4c {
 
 static int output_3Dmodes(const int iter,
        const char *dir,
@@ -257,7 +259,7 @@ void CCE::Interpolate(MeshBlockPack *pmbp)
     
     if (intrp->point_exist)
     {
-      ifield[p] = isign*intrp(u0,isrc_field);
+      ifield[p] = isign*intrp->Interpolate(u0,isrc_field);
 
 #pragma omp atomic update
       count_interp_pnts++;
@@ -298,7 +300,7 @@ void CCE::ReduceInterpolation()
 // decompose the field and write into an h5 file
 void CCE::DecomposeAndWrite(int iter/* number of times writes into an h5 file */, Real curr_time)
 {
-  if (0 != Globals::my_rank) return;
+  if (0 != global_variable::my_rank) return;
   
   // create workspace
   Real *re_m = new Real [nlmmodes*num_x_points];
@@ -471,3 +473,4 @@ static int output_3Dmodes(const int iter/* output iteration */, const char *dir,
   return 0;
 }
 
+} // end namespace z4c
