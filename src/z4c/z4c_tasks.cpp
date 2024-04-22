@@ -20,6 +20,7 @@
 #include "bvals/bvals.hpp"
 #include "z4c/z4c.hpp"
 #include "z4c/z4c_puncture_tracker.hpp"
+#include "z4c/cce/cce.hpp"
 
 namespace z4c {
 //----------------------------------------------------------------------------------------
@@ -288,7 +289,7 @@ TaskStatus Z4c::CCEDump(Driver *pdrive, int stage) {
       for (auto cce : pmy_pack->pz4c_cce) {
         cce->Interpolate(pmy_pack);
         cce->ReduceInterpolation();
-        cce->DecomposeAndWrite(cce_iter, pmesh->time);
+        cce->DecomposeAndWrite(cce_iter,pmy_pack->pmesh->time);
       }
     }
   }
