@@ -32,9 +32,8 @@ ParameterInput * aux_pin;
 
 void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   user_hist_func = LarmorMotionErrors;
-  if (restart) return;
-
   aux_pin = pin;
+  if (restart) return;
 
   MeshBlockPack *pmbp = pmy_mesh_->pmb_pack;
   if (pmbp->ppart == nullptr) {
