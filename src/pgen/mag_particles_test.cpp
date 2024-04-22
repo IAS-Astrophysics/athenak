@@ -196,9 +196,6 @@ void LarmorMotionErrors(HistoryData *pdata, Mesh *pm){
 
 	  Real rms_diff = 0.0;
 	  Real rel_dEdt = 0.0;
-	  for (int ip = 0; ip<npart; ++ip){
-		all_diffs[ip] = 0.0;
-	  }
 	  Kokkos::parallel_reduce("part_compare",Kokkos::RangePolicy<>(DevExeSpace(),0,(npart-1)),
 			  KOKKOS_LAMBDA(const int p, Real &rms_pos, Real &rel_dE) {
 
