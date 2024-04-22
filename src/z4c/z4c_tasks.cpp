@@ -285,7 +285,7 @@ TaskStatus Z4c::CCEDump(Driver *pdrive, int stage) {
   if ((time_32 >= next_32)) {
     if (stage == pdrive->nexp_stages) {
       int cce_iter = 0;
-      for (auto cce : pmy_pack->pz4c_pcce) {
+      for (auto cce : pmy_pack->pz4c_cce) {
         cce->Interpolate(pmy_pack);
         cce->ReduceInterpolation();
         cce->DecomposeAndWrite(cce_iter, pmesh->time);
