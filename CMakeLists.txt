@@ -129,6 +129,13 @@ if (${PROBLEM} STREQUAL "z4c_two_puncture")
         #target_link_libraries(athena PUBLIC ${CMAKE_SOURCE_DIR}/gsl/lib/libgslcblas.a)
 	find_package(GSL REQUIRED)
 	target_link_libraries(athena PUBLIC GSL::gsl GSL::gslcblas)
+## HDF5 for CCE
+	#find_package(HDF5 REQUIRED)
+	set(CMAKE_HDF5_LIBRARY)
+	set(CMAKE_HDF5_INCLUDE)
+	target_include_directories(athena PUBLIC ${CMAKE_HDF5_INCLUDE})
+	target_link_libraries(athena PUBLIC ${CMAKE_HDF5_LIBRARY})
+
 	set(TWO_PUNCTURES 1)
 else()
 	set(TWO_PUNCTURES 0)
