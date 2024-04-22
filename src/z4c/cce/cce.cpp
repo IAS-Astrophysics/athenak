@@ -178,77 +178,64 @@ CCE::~CCE()
 }
 
 // given a Cartesian point, interpolate the pertinent field for that point
-void CCE::Interpolate(MeshBlock *const pmb)
+void CCE::Interpolate(MeshBlockPack *pmbp)
 {
   const int Npoints = nangle*num_x_points;
+  auto &pz4c = pmbp->pz4c;
+  auto &u0   = pz4c->u0;
   Real bitant_sign  = 0.; // set according to the field and symmetry
-  Real const origin[3] = {pmb->pcoord->x1f(0),
-                          pmb->pcoord->x2f(0),
-                          pmb->pcoord->x3f(0)};
-  Real const delta[3]  = {pmb->pcoord->dx1f(0),
-                          pmb->pcoord->dx2f(0),
-                          pmb->pcoord->dx3f(0)};
-  int const size[3]    = {pmb->nverts1,
-                          pmb->nverts2,
-                          pmb->nverts3};
+  int isrc_field = -1; // index of field to interpolate
 
   // find the src field
-  Real *src_field = nullptr;
-  Z4c *const pz4c = pmb->pz4c;
-  Z4c::Z4c_vars z4c;
-  Z4c::ADM_vars adm;
-  pz4c->SetZ4cAliases(pz4c->storage.u, z4c);
-  pz4c->SetADMAliases(pz4c->storage.adm, adm);
-  
   if (fieldname == "gxx")
   {
-    src_field = &adm.g_dd(0,0, 0,0,0);
+    isrc_field = pz4c->I_Z4C_GXX;
     bitant_sign = 1.;
   }
   else if (fieldname == "gxy")
   {
-    src_field = &adm.g_dd(0,1, 0,0,0);
+    isrc_field = pz4c->I_Z4C_GXY;
     bitant_sign = 1.;
   }
   else if (fieldname == "gxz")
   {
-    src_field = &adm.g_dd(0,2, 0,0,0);
+    isrc_field = pz4c->I_Z4C_GXZ;
     bitant_sign = -1.;
   }
   else if (fieldname == "gyy")
   {
-    src_field = &adm.g_dd(1,1, 0,0,0);
+    isrc_field = pz4c->I_Z4C_GYY;
     bitant_sign = 1.;
   }
   else if (fieldname == "gyz")
   {
-    src_field = &adm.g_dd(1,2, 0,0,0);
+    isrc_field =  pz4c->I_Z4C_GYZ;
     bitant_sign = -1.;
   }
   else if (fieldname == "gzz")
   {
-    src_field = &adm.g_dd(2,2, 0,0,0);
+    isrc_field = pz4c->I_Z4C_GZZ;
     bitant_sign = 1.;
   }
   else if (fieldname == "betax")
   {
-    src_field = &z4c.beta_u(0, 0, 0, 0);
+    isrc_field = pz4c->I_Z4C_BETAX;
     bitant_sign = 1.;
   }
   else if (fieldname == "betay")
   {
-    src_field = &z4c.beta_u(1, 0, 0, 0);
+    isrc_field = pz4c->I_Z4C_BETAY;
     bitant_sign = 1.;
   }
   else if (fieldname == "betaz")
   {
-    src_field = &z4c.beta_u(2, 0, 0, 0);
+    isrc_field = pz4c->I_Z4C_BETAZ;
     bitant_sign = -1.;
 
   }
   else if (fieldname == "alp")
   {
-    src_field = &z4c.alpha(0, 0, 0);
+    isrc_field = pz4c->I_Z4C_ALPHA;
     bitant_sign = 1.;
   }
   else
@@ -265,10 +252,12 @@ void CCE::Interpolate(MeshBlock *const pmb)
     Real isign = IsBitant ? bitant_sign: 1.;
     Real zsign = IsBitant ? -1.        : 1.;
     Real coord[3] = {xb[p], yb[p], zsign*zb[p]};
-    if (pmb->PointContainedExclusive(coord[0], coord[1], coord[2]))
+    
+    auto *intrp = new LagrangeInterpolator(pmbp, coord);
+    
+    if (intrp->point_exist)
     {
-      LagrangeInterpND<2*NGHOST-1, 3> linterp(origin, delta, size, coord);
-      ifield[p] = isign*linterp.eval(src_field);
+      ifield[p] = isign*intrp(u0,isrc_field);
 
 #pragma omp atomic update
       count_interp_pnts++;

@@ -46,7 +46,7 @@ class CCE
   public:
     CCE(Mesh *const pm, ParameterInput *const pin, std::string fname, int rn);
     ~CCE();
-    void Interpolate(MeshBlock *const pmb);
+    void Interpolate(MeshBlockPack *pmbp);
     void ReduceInterpolation();
     void DecomposeAndWrite(int iter, Real curr_time);
 };
