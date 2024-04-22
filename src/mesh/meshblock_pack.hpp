@@ -66,9 +66,7 @@ class MeshBlockPack {
   z4c::Z4c *pz4c=nullptr;
   adm::ADM *padm=nullptr;
   std::vector<z4c::PunctureTracker *> pz4c_ptracker;
-#if CCE_ENABLED
   std::vector<z4c::CCE *> pz4c_cce;
-#endif
   particles::Particles *ppart=nullptr;
 
   // units (needed to convert code units to cgs for, e.g., cooling or radiation)
