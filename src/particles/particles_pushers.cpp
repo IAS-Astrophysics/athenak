@@ -1212,8 +1212,7 @@ void Particles::ComputeAndAddSingleTerm_Velocity(const Real gu_0[4][4], const Re
 		beta_t -= (g_der[0][i1+1] - gu_0[0][i1+1]*g_der[0][0]/gu_0[0][0])/gu_0[0][0]*u[i1];
 	}
 
-	// Notice plus sign from derivative of alpha
-	*H += 0.5*(U_0 + U_1)*( 0.5*sqrt(-1.0/gu_0[0][0])*g_der[0][0]/fabs(gu_0[0][0]) ) ;
+	*H -= 0.5*(U_0 + U_1)*( 0.5*sqrt(-1.0/gu_0[0][0])*g_der[0][0]/fabs(gu_0[0][0]) ) ;
 	*H -= 0.5*aux*( sqrt(-1.0/gu_1[0][0]) + sqrt(-1.0/gu_0[0][0]) )/(U_1 + U_0) ;
 	*H += beta_t ;
 }
