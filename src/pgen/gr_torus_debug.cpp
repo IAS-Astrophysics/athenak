@@ -534,7 +534,6 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
             Real xl = x1v + 0.25*dx1;
             Real xr = x1v - 0.25*dx1;
             a1(m,k,j,i) = 0.5*(A1(trs, xl,x2f,x3f) + A1(trs, xr,x2f,x3f));
-            printf("Corrected A1 on block %i, at (%i, %i, %i) from value at (%.4f, %.4f, %.4f) to avg of (%.4f,_,_) and (%.4f,_,_), from %.4f to %.4f \n ", m, k, j, i, x1v, x2f, x3f, xl, xr, A1(trs,x1v,x2f,x3f), a1(m,k,j,i));
           }
 
       // Correct A2 at x1-faces, x3-faces, and x1x3-edges
@@ -565,7 +564,6 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
         Real xl = x2v + 0.25*dx2;
         Real xr = x2v - 0.25*dx2;
         a2(m,k,j,i) = 0.5*(A2(trs, x1f,xl,x3f) + A2(trs, x1f,xr,x3f));
-        printf("Corrected A2 on block %i, at (%i, %i, %i) from value at (%.4f, %.4f, %.4f) to avg of (_,%.4f,_) and (_,%.4f,_), from %.4f to %.4f \n ", m, k, j, i, x1f, x2v, x3f, xl, xr, A2(trs,x1f,x2v,x3f), a2(m,k,j,i));
       }
 
       // Correct A3 at x1-faces, x2-faces, and x1x2-edges
@@ -596,7 +594,6 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
         Real xl = x3v + 0.25*dx3;
         Real xr = x3v - 0.25*dx3;
         a3(m,k,j,i) = 0.5*(A3(trs, x1f,x2f,xl) + A3(trs, x1f,x2f,xr));
-        printf("Corrected A3 on block %i, at (%i, %i, %i) from value at (%.4f, %.4f, %.4f) to avg of (_,_,%.4f) and (_,_,%.4f), from %.4f to %.4f \n ", m, k, j, i, x1f, x2f, x3v, xl, xr, A3(trs,x1f,x2f,x3v), a3(m,k,j,i));
       }
     });
 
@@ -608,25 +605,31 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
       Real dx2 = size.d_view(m).dx2;
       Real dx3 = size.d_view(m).dx3;
 
-      b0.x1f(m,k,j,i) = ((a3(m,k,j+1,i) - a3(m,k,j,i))/dx2 -
-                         (a2(m,k+1,j,i) - a2(m,k,j,i))/dx3);
-      b0.x2f(m,k,j,i) = ((a1(m,k+1,j,i) - a1(m,k,j,i))/dx3 -
-                         (a3(m,k,j,i+1) - a3(m,k,j,i))/dx1);
-      b0.x3f(m,k,j,i) = ((a2(m,k,j,i+1) - a2(m,k,j,i))/dx1 -
-                         (a1(m,k,j+1,i) - a1(m,k,j,i))/dx2);
+      // b0.x1f(m,k,j,i) = ((a3(m,k,j+1,i) - a3(m,k,j,i))/dx2 -
+      //                    (a2(m,k+1,j,i) - a2(m,k,j,i))/dx3);
+      // b0.x2f(m,k,j,i) = ((a1(m,k+1,j,i) - a1(m,k,j,i))/dx3 -
+      //                    (a3(m,k,j,i+1) - a3(m,k,j,i))/dx1);
+      // b0.x3f(m,k,j,i) = ((a2(m,k,j,i+1) - a2(m,k,j,i))/dx1 -
+      //                    (a1(m,k,j+1,i) - a1(m,k,j,i))/dx2);
 
+      b0.x1f(m,k,j,i) = 1.0;
+      b0.x2f(m,k,j,i) = 0.0;
+      b0.x3f(m,k,j,i) = 0.0;
       // Include extra face-component at edge of block in each direction
       if (i==ie) {
-        b0.x1f(m,k,j,i+1) = ((a3(m,k,j+1,i+1) - a3(m,k,j,i+1))/dx2 -
-                             (a2(m,k+1,j,i+1) - a2(m,k,j,i+1))/dx3);
+        // b0.x1f(m,k,j,i+1) = ((a3(m,k,j+1,i+1) - a3(m,k,j,i+1))/dx2 -
+        //                      (a2(m,k+1,j,i+1) - a2(m,k,j,i+1))/dx3);
+        b0.x1f(m,k,j,i+1) = 1.0;
       }
       if (j==je) {
-        b0.x2f(m,k,j+1,i) = ((a1(m,k+1,j+1,i) - a1(m,k,j+1,i))/dx3 -
-                             (a3(m,k,j+1,i+1) - a3(m,k,j+1,i))/dx1);
+        // b0.x2f(m,k,j+1,i) = ((a1(m,k+1,j+1,i) - a1(m,k,j+1,i))/dx3 -
+        //                      (a3(m,k,j+1,i+1) - a3(m,k,j+1,i))/dx1);
+        b0.x2f(m,k,j+1,i) = 0.0;
       }
       if (k==ke) {
-        b0.x3f(m,k+1,j,i) = ((a2(m,k+1,j,i+1) - a2(m,k+1,j,i))/dx1 -
-                             (a1(m,k+1,j+1,i) - a1(m,k+1,j,i))/dx2);
+        // b0.x3f(m,k+1,j,i) = ((a2(m,k+1,j,i+1) - a2(m,k+1,j,i))/dx1 -
+        //                      (a1(m,k+1,j+1,i) - a1(m,k+1,j,i))/dx2);
+        b0.x3f(m,k+1,j,i) = 0.0;
       }
     });
 
