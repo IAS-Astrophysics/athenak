@@ -533,9 +533,8 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
               (nghbr.d_view(m,47).lev > mblev.d_view(m) && j==je+1 && k==ke+1)) {
             Real xl = x1v + 0.25*dx1;
             Real xr = x1v - 0.25*dx1;
-            printf("A1 on m = %i from value at x1v = %.4f, x2f = %.4f, x3f = %.4f of A1 = %.4f", m, x1v, x2f, x3f, a1(m,k,j,i));
             a1(m,k,j,i) = 0.5*(A1(trs, xl,x2f,x3f) + A1(trs, xr,x2f,x3f));
-            printf("to avg between xl = %.4f, xr = %.4f, A1 = %.4f \n", xl, xr, a1(m,k,j,i));
+            printf("Corrected A1 on block %i, at (%i, %i, %i) from value at (%.4f, %.4f, %.4f) to avg of (%.4f,_,_) and (%.4f,_,_), from %.4f to %.4f \n ", m, k, j, i, x1v, x2f, x3f, xl, xr, A1(trs,x1v,x2f,x3f), a1(m,k,j,i));
           }
 
       // Correct A2 at x1-faces, x3-faces, and x1x3-edges
@@ -565,9 +564,8 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
           (nghbr.d_view(m,39).lev > mblev.d_view(m) && i==ie+1 && k==ke+1)) {
         Real xl = x2v + 0.25*dx2;
         Real xr = x2v - 0.25*dx2;
-        printf("A2 on m = %i from value at x1f = %.4f, x2v = %.4f, x3f = %.4f of A2 = %.4f", m, x1f, x2v, x3f, a2(m,k,j,i));
         a2(m,k,j,i) = 0.5*(A2(trs, x1f,xl,x3f) + A2(trs, x1f,xr,x3f));
-        printf("to avg between xl = %.4f, xr = %.4f, A2 = %.4f \n", xl, xr, a2(m,k,j,i));
+        printf("Corrected A2 on block %i, at (%i, %i, %i) from value at (%.4f, %.4f, %.4f) to avg of (_,%.4f,_) and (_,%.4f,_), from %.4f to %.4f \n ", m, k, j, i, x1f, x2v, x3f, xl, xr, A2(trs,x1f,x2v,x3f), a2(m,k,j,i));
       }
 
       // Correct A3 at x1-faces, x2-faces, and x1x2-edges
@@ -597,9 +595,8 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
           (nghbr.d_view(m,23).lev > mblev.d_view(m) && i==ie+1 && j==je+1)) {
         Real xl = x3v + 0.25*dx3;
         Real xr = x3v - 0.25*dx3;
-        printf("A3 on m = %i from value at x1f = %.4f, x2f = %.4f, x3v = %.4f of A3 = %.4f", m, x1f, x2f, x3v, a3(m,k,j,i));
         a3(m,k,j,i) = 0.5*(A3(trs, x1f,x2f,xl) + A3(trs, x1f,x2f,xr));
-        printf("to avg between xl = %.4f, xr = %.4f, A3 = %.4f \n", xl, xr, a3(m,k,j,i));
+        printf("Corrected A3 on block %i, at (%i, %i, %i) from value at (%.4f, %.4f, %.4f) to avg of (_,_,%.4f) and (_,_,%.4f), from %.4f to %.4f \n ", m, k, j, i, x1f, x2f, x3v, xl, xr, A3(trs,x1f,x2f,x3v), a3(m,k,j,i));
       }
     });
 
