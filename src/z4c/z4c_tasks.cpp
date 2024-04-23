@@ -61,8 +61,15 @@ void Z4c::AssembleZ4cTasks(std::map<std::string, std::shared_ptr<TaskList>> tl) 
   id.crecv = tl["after_stagen"]->AddTask(&Z4c::ClearRecv, this, id.csend);
   id.z4tad = tl["after_stagen"]->AddTask(&Z4c::Z4cToADM_, this, id.crecv);
   id.admc  = tl["after_stagen"]->AddTask(&Z4c::ADMConstraints_, this, id.z4tad);
-  id.weyl_scalar  = tl["after_stagen"]->AddTask(&Z4c::CalcWeylScalar_, this, id.admc);
-  id.ptrck = tl["after_stagen"]->AddTask(&Z4c::PunctureTracker, this, id.admc);
+  id.weyl_scalar  = tl["after_stagen"]->AddTask(&Z4c::CalcWeylScalar_, this, id.z4tad);
+  id.weyl_rest = tl["after_stagen"]->AddTask(&Z4c::RestrictWeyl, this, id.weyl_scalar);
+  id.weyl_send = tl["after_stagen"]->AddTask(&Z4c::SendWeyl, this, id.weyl_rest);
+  id.weyl_recv = tl["after_stagen"]->AddTask(&Z4c::RecvWeyl, this, id.weyl_send);
+  id.weyl_prol  = tl["after_stagen"]->AddTask(&Z4c::ProlongateWeyl, this, id.weyl_recv);
+  id.csend2 = tl["after_stagen"]->AddTask(&Z4c::ClearSend, this, id.weyl_prol);
+  id.crecv2 = tl["after_stagen"]->AddTask(&Z4c::ClearRecv, this, id.csend2);
+  id.wave_extr = tl["after_stagen"]->AddTask(&Z4c::CalcWaveForm_, this, id.crecv2);
+  id.ptrck = tl["after_stagen"]->AddTask(&Z4c::PunctureTracker, this, id.z4tad);
   return;
 }
 
@@ -264,31 +271,6 @@ TaskStatus Z4c::ADMConstraints_(Driver *pdrive, int stage) {
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn  void Z4c::CalcWeylScalar_
-//! \brief
-
-TaskStatus Z4c::CalcWeylScalar_(Driver *pdrive, int stage) {
-  float time_32 = static_cast<float>(pmy_pack->pmesh->time);
-  float next_32 = static_cast<float>(last_output_time+waveform_dt);
-  if ((time_32 >= next_32) || (time_32 == 0)) {
-    auto &indcs = pmy_pack->pmesh->mb_indcs;
-    if (stage == pdrive->nexp_stages) {
-      switch (indcs.ng) {
-        case 2: Z4cWeyl<2>(pmy_pack);
-                break;
-        case 3: Z4cWeyl<3>(pmy_pack);
-                break;
-        case 4: Z4cWeyl<4>(pmy_pack);
-                break;
-      }
-      WaveExtr(pmy_pack);
-      last_output_time = time_32;
-    }
-  }
-  return TaskStatus::complete;
-}
-
-//----------------------------------------------------------------------------------------
 //! \fn  void Z4c::RestrictU
 //! \brief
 
@@ -337,6 +319,96 @@ TaskStatus Z4c::PunctureTracker(Driver *pdrive, int stage) {
       ptracker->InterpolateShift(pmy_pack);
       ptracker->EvolveTracker();
       ptracker->WriteTracker();
+    }
+  }
+  return TaskStatus::complete;
+}
+
+
+//----------------------------------------------------------------------------------------
+//! \fn  void Z4c::CalcWeylScalar_
+//! \brief
+
+TaskStatus Z4c::CalcWeylScalar_(Driver *pdrive, int stage) {
+  float time_32 = static_cast<float>(pmy_pack->pmesh->time);
+  float next_32 = static_cast<float>(last_output_time+waveform_dt);
+  if ((time_32 >= next_32) || (time_32 == 0)) {
+    auto &indcs = pmy_pack->pmesh->mb_indcs;
+    if (stage == pdrive->nexp_stages) {
+      switch (indcs.ng) {
+        case 2: Z4cWeyl<2>(pmy_pack);
+                break;
+        case 3: Z4cWeyl<3>(pmy_pack);
+                break;
+        case 4: Z4cWeyl<4>(pmy_pack);
+                break;
+      }
+      last_output_time = time_32;
+    }
+  }
+  return TaskStatus::complete;
+}
+
+TaskStatus Z4c::CalcWaveForm_(Driver *pdrive, int stage) {
+  float time_32 = static_cast<float>(pmy_pack->pmesh->time);
+  if ((last_output_time==time_32) && (stage == pdrive->nexp_stages)) {
+    WaveExtr(pmy_pack);
+  }
+  return TaskStatus::complete;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn  void Z4c::SendWeyl
+//! \brief sends cell-centered conserved variables
+
+TaskStatus Z4c::SendWeyl(Driver *pdrive, int stage) {
+  float time_32 = static_cast<float>(pmy_pack->pmesh->time);
+  if ((last_output_time==time_32) && (stage == pdrive->nexp_stages)) {
+    TaskStatus tstat = pbval_u->PackAndSendCC(u_weyl, coarse_u_weyl);
+    return tstat;
+  } else {
+    return TaskStatus::complete;
+  }
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn  void Z4c::RecvWeyl
+//! \brief receives cell-centered conserved variables
+
+TaskStatus Z4c::RecvWeyl(Driver *pdrive, int stage) {
+  float time_32 = static_cast<float>(pmy_pack->pmesh->time);
+  if ((last_output_time==time_32) && (stage == pdrive->nexp_stages)) {
+    TaskStatus tstat = pbval_u->RecvAndUnpackCC(u_weyl, coarse_u_weyl);
+    return tstat;
+  } else {
+    return TaskStatus::complete;
+  }
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn  void Z4c::RestrictU
+//! \brief
+
+TaskStatus Z4c::RestrictWeyl(Driver *pdrive, int stage) {
+  float time_32 = static_cast<float>(pmy_pack->pmesh->time);
+  if ((last_output_time==time_32) && (stage == pdrive->nexp_stages)) {
+    if (pmy_pack->pmesh->multilevel) {
+      pmy_pack->pmesh->pmr->RestrictCC(u_weyl, coarse_u_weyl);
+    }
+  }
+  return TaskStatus::complete;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn TaskList Z4c::ProlongateWeyl
+//! \brief Wrapper task list function to prolongate weyl scalar
+//! at fine/coarse boundaries with SMR/AMR
+
+TaskStatus Z4c::ProlongateWeyl(Driver *pdrive, int stage) {
+  float time_32 = static_cast<float>(pmy_pack->pmesh->time);
+  if ((last_output_time==time_32) && (stage == pdrive->nexp_stages)) {
+    if (pmy_pack->pmesh->multilevel) {
+      pbval_u->ProlongateCC(u_weyl, coarse_u_weyl);
     }
   }
   return TaskStatus::complete;

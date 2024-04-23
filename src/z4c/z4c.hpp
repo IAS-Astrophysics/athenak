@@ -48,7 +48,13 @@ struct Z4cTaskIDs {
   TaskID restu;
   TaskID ptrck;
   TaskID weyl_scalar;
-  TaskID waveform;
+  TaskID wave_extr;
+  TaskID weyl_rest;
+  TaskID weyl_send;
+  TaskID weyl_prol;
+  TaskID weyl_recv;
+  TaskID csend2;
+  TaskID crecv2;
 };
 
 namespace z4c {
@@ -107,6 +113,7 @@ class Z4c {
   DvceArray5D<Real> u_rhs;     // z4c rhs storage
   DvceArray5D<Real> coarse_u0; // coarse representation of z4c solution
   DvceArray5D<Real> u_weyl; // weyl scalars
+  DvceArray5D<Real> coarse_u_weyl; // coarse representation of weyl scalars
 
   // puncture location
   Real ppos[3] = {0.,0.,0.}; // later on initiate from input file
@@ -219,7 +226,10 @@ class Z4c {
   TaskStatus CopyU(Driver *d, int stage);
   TaskStatus SendU(Driver *d, int stage);
   TaskStatus RecvU(Driver *d, int stage);
+  TaskStatus SendWeyl(Driver *d, int stage);
+  TaskStatus RecvWeyl(Driver *d, int stage);
   TaskStatus Prolongate(Driver *pdrive, int stage);
+  TaskStatus ProlongateWeyl(Driver *pdrive, int stage);
   TaskStatus ExpRKUpdate(Driver *d, int stage);
   TaskStatus NewTimeStep(Driver *d, int stage);
   TaskStatus ApplyPhysicalBCs(Driver *d, int stage);
@@ -230,6 +240,7 @@ class Z4c {
   TaskStatus ADMConstraints_(Driver *d, int stage);
   TaskStatus Z4cBoundaryRHS(Driver *d, int stage);
   TaskStatus RestrictU(Driver *d, int stage);
+  TaskStatus RestrictWeyl(Driver *d, int stage);
   TaskStatus PunctureTracker(Driver *d, int stage);
   TaskStatus CalcWeylScalar_(Driver *d, int stage);
   TaskStatus CalcWaveForm_(Driver *d, int stage);
