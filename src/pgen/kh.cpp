@@ -34,9 +34,12 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   Real amp   = pin->GetReal("problem","amp");
   Real sigma = pin->GetReal("problem","sigma");
   Real vshear= pin->GetReal("problem","vshear");
+  Real a_char = pin->GetOrAddReal("problem","a_char", 0.01);
   Real rho0  = pin->GetOrAddReal("problem","rho0",1.0);
   Real rho1  = pin->GetOrAddReal("problem","rho1",1.0);
   Real drho_rho0 = pin->GetOrAddReal("problem", "drho_rho0", 0.0);
+
+  //user_hist_func = KHHistory;
 
   // capture variables for kernel
   auto &indcs = pmy_mesh_->mb_indcs;
@@ -72,7 +75,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   }
 
   // initialize primitive variables
-  bool is_relativistic = pmbp->pcoord->is_special_relativistic || 
+  bool is_relativistic = pmbp->pcoord->is_special_relativistic ||
                          pmbp->pcoord->is_general_relativistic ||
                          pmbp->pcoord->is_dynamical_relativistic;
   par_for("pgen_kh1", DevExeSpace(), 0,(pmbp->nmb_thispack-1),ks,ke,js,je,is,ie,
@@ -107,17 +110,17 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
       pres = 1.0;
       vz = 0.0;
       if(x2v <= 0.0) {
-        dens = rho0 - rho1*tanh((x2v-0.5)/sigma);
-        vx = -vshear*tanh((x2v-0.5)/sigma);
-        vy = -amp*vshear*sin(2.*M_PI*x1v)*exp( -SQR((x2v-0.5)/sigma) );
+        dens = rho0 - rho1*tanh((x2v+0.5)/a_char);
+        vx = -vshear*tanh((x2v+0.5)/a_char);
+        vy = -amp*vshear*sin(2.*M_PI*x1v)*exp( -SQR((x2v+0.5)/sigma) );
         if (is_relativistic) {
           u00 = 1.0/sqrt(1.0 - vx*vx - vy*vy);
         }
         scal = 0.0;
-        if (x2v < 0.5) scal = 1.0;
+        if (x2v < -0.5) scal = 1.0;
       } else {
-        dens = rho0 + rho1*tanh((x2v-0.5)/sigma);
-        vx = vshear*tanh((x2v-0.5)/sigma);
+        dens = rho0 + rho1*tanh((x2v-0.5)/a_char);
+        vx = vshear*tanh((x2v-0.5)/a_char);
         vy = amp*vshear*sin(2.*M_PI*x1v)*exp( -SQR((x2v-0.5)/sigma) );
         if (is_relativistic) {
           u00 = 1.0/sqrt(1.0 - vx*vx - vy*vy);
@@ -204,7 +207,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
       adm.g_dd(m, 1, 1, k, j, i) = 1.0;
       adm.g_dd(m, 1, 2, k, j, i) = 0.0;
       adm.g_dd(m, 2, 2, k, j, i) = 1.0;
-      
+
       adm.vK_dd(m, 0, 0, k, j, i) = 0.0;
       adm.vK_dd(m, 0, 1, k, j, i) = 0.0;
       adm.vK_dd(m, 0, 2, k, j, i) = 0.0;
