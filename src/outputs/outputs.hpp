@@ -21,7 +21,7 @@
     #error NHISTORY > NREDUCTION in outputs.hpp
 #endif
 
-#define NOUTPUT_CHOICES 151
+#define NOUTPUT_CHOICES 152
 // choices for output variables used in <ouput> blocks in input file
 // TO ADD MORE CHOICES:
 //   - add more strings to array below, change NOUTPUT_CHOICES above appropriately
@@ -40,15 +40,16 @@ static const char *var_choice[NOUTPUT_CHOICES] = {
   "mhd_w_d",   "mhd_w_vx",   "mhd_w_vy",   "mhd_w_vz",   "mhd_w_e",       "mhd_w",
   "mhd_u_s",   "mhd_w_s",    "mhd_wz",     "mhd_w2",
   "mhd_bcc1",  "mhd_bcc2",   "mhd_bcc3",   "mhd_bcc",    "mhd_u_bcc",     "mhd_w_bcc",
-  // MHD derived variables (38-44)
-  "mhd_jz", "mhd_j2",  "mhd_curv", "mhd_k_jxb", "mhd_curv_perp", "mhd_bmag",  "mhd_divb",
-  // useful for coarsened binary output (45-46)
+  // MHD derived variables (38-45)
+  "mhd_jz",    "mhd_j2",     "mhd_curv",   "mhd_k_jxb",  "mhd_curv_perp", "mhd_bmag",
+  "mhd_divb", "mhd_jcon",
+  // useful for coarsened binary output (46-47)
   "hydro_sgs", "mhd_sgs",
-  // dynamo wavenumber scales (47)
+  // dynamo wavenumber scales (48)
   "mhd_dynamo_ks",
-  // turbulence (48)
+  // turbulence (49)
   "turb_force",
-  // radiation (49-65, 66-85)
+  // radiation (50-66, 67-86)
   "rad_coord",     "rad_fluid",      "rad_coord_fluid",
   "rad_hydro_u_d", "rad_hydro_u_m1", "rad_hydro_u_m2", "rad_hydro_u_m3", "rad_hydro_u_e",
   "rad_hydro_u",   "rad_hydro_w_d",  "rad_hydro_w_vx", "rad_hydro_w_vy", "rad_hydro_w_vz",
@@ -58,14 +59,14 @@ static const char *var_choice[NOUTPUT_CHOICES] = {
   "rad_mhd_w_e",   "rad_mhd_w",      "rad_mhd_u_s",    "rad_mhd_w_s",    "rad_mhd_bcc1",
   "rad_mhd_bcc2",  "rad_mhd_bcc3",   "rad_mhd_bcc",    "rad_mhd_u_bcc",  "rad_mhd_w_bcc",
 
-  // ADM (86-103)
+  // ADM (87-104)
   "adm_gxx", "adm_gxy", "adm_gxz", "adm_gyy", "adm_gyz", "adm_gzz",
   "adm_Kxx", "adm_Kxy", "adm_Kxz", "adm_Kyy", "adm_Kyz", "adm_Kzz",
   "adm_psi4",
   "adm_alpha", "adm_betax", "adm_betay", "adm_betaz",
   "adm",
 
-  // Z4c (104-126)
+  // Z4c (105-127)
   "z4c_chi",
   "z4c_gxx", "z4c_gxy", "z4c_gxz", "z4c_gyy", "z4c_gyz", "z4c_gzz",
   "z4c_Khat",
@@ -76,11 +77,11 @@ static const char *var_choice[NOUTPUT_CHOICES] = {
   "z4c_betax", "z4c_betay", "z4c_betaz",
   "z4c",
 
-  // Weyl (127-129)
+  // Weyl (128-130)
   "weyl_rpsi4", "weyl_ipsi4",
   "weyl",
 
-  // ADM constraints (130-137)
+  // ADM constraints (131-138)
   "con_C",
   "con_H",
   "con_M",
@@ -88,13 +89,13 @@ static const char *var_choice[NOUTPUT_CHOICES] = {
   "con_Mx", "con_My", "con_Mz",
   "con",
 
-  // Tmunu (138-148)
+  // Tmunu (139-149)
   "tmunu_Sxx", "tmunu_Sxy", "tmunu_Sxz", "tmunu_Syy", "tmunu_Syz", "tmunu_Szz",
   "tmunu_E",
   "tmunu_Sx", "tmunu_Sy", "tmunu_Sz",
   "tmunu",
 
-  // Particles (149-150)
+  // Particles (150-151)
   "prtcl_all", "prtcl_d"
 };
 

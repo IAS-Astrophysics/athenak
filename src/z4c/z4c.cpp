@@ -204,9 +204,10 @@ void Z4c::AlgConstr(MeshBlockPack *pmbp) {
                               z4c.g_dd(m,0,2,k,j,i),z4c.g_dd(m,1,1,k,j,i),
                               z4c.g_dd(m,1,2,k,j,i), z4c.g_dd(m,2,2,k,j,i));
     detg = detg > 0. ? detg : 1.;
-    Real eps = detg - 1.;
-    Real oopsi4 = (eps < opt.eps_floor) ? (1. - opt.eps_floor/3.) :
-                (pow(1./detg, 1./3.));
+    // Real eps = detg - 1.;
+    // Real oopsi4 = (eps < opt.eps_floor) ? (1. - opt.eps_floor/3.) :
+    //             (std::pow(1./detg, 1./3.));
+    Real oopsi4 = std::cbrt(1./detg);
 
     for(int a = 0; a < 3; ++a)
     for(int b = a; b < 3; ++b) {
