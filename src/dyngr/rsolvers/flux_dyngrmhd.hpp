@@ -43,7 +43,6 @@ void SingleStateFlux(const PrimitiveSolverHydro<EOSPolicy, ErrorPolicy>& eos,
   // Calculate conserved variables
   eos.ps.PrimToCon(prim_l, cons_l, Bu_l, g3d);
   eos.ps.PrimToCon(prim_r, cons_r, Bu_r, g3d);
-  // Densitize the conserved variables
 
   // Calculate W for the left state.
   Real uul[3] = {prim_l[IVX], prim_l[IVY], prim_l[IVZ]};
@@ -62,6 +61,21 @@ void SingleStateFlux(const PrimitiveSolverHydro<EOSPolicy, ErrorPolicy>& eos,
   }
   bsql = (Primitive::SquareVector(Bu_l, g3d) + SQR(alpha*bul0))*iWsql;
 
+  // Calculate fluxes for the left state.
+  flux_l[CDN] = cons_l[CDN]*vcl;
+  flux_l[CSX] = (cons_l[CSX]*vcl - bdl[0]*Bu_l[ibx]*iWl);
+  flux_l[CSY] = (cons_l[CSY]*vcl - bdl[1]*Bu_l[ibx]*iWl);
+  flux_l[CSZ] = (cons_l[CSZ]*vcl - bdl[2]*Bu_l[ibx]*iWl);
+  flux_l[csx] += (prim_l[PPR] + 0.5*bsql);
+  flux_l[CTA] = (cons_l[CTA]*vcl - alpha*bul0*Bu_l[ibx]*iWl
+          + (prim_l[PPR] + 0.5*bsql)*prim_l[ivx]*iWl);
+
+  bflux_l[ibx] = 0.0;
+  bflux_l[iby] = (Bu_l[iby]*vcl -
+                    Bu_l[ibx]*(prim_l[pvy]*iWl - beta_u[pvy - PVX]*ialpha));
+  bflux_l[ibz] = (Bu_l[ibz]*vcl -
+                    Bu_l[ibx]*(prim_l[pvz]*iWl - beta_u[pvz - PVX]*ialpha));
+
   // Calculate W for the right state.
   Real uur[3] = {prim_r[IVX], prim_r[IVY], prim_r[IVZ]};
   Real udr[3];
@@ -78,21 +92,6 @@ void SingleStateFlux(const PrimitiveSolverHydro<EOSPolicy, ErrorPolicy>& eos,
     bdr[a] = (alpha*bur0*udr[a] + Bd_r[a])*iWr;
   }
   bsqr = (Primitive::SquareVector(Bu_r, g3d) + SQR(alpha*bur0))*iWsqr;
-
-  // Calculate fluxes for the left state.
-  flux_l[CDN] = cons_l[CDN]*vcl;
-  flux_l[CSX] = (cons_l[CSX]*vcl - bdl[0]*Bu_l[ibx]*iWl);
-  flux_l[CSY] = (cons_l[CSY]*vcl - bdl[1]*Bu_l[ibx]*iWl);
-  flux_l[CSZ] = (cons_l[CSZ]*vcl - bdl[2]*Bu_l[ibx]*iWl);
-  flux_l[csx] += (prim_l[PPR] + 0.5*bsql);
-  flux_l[CTA] = (cons_l[CTA]*vcl - alpha*bul0*Bu_l[ibx]*iWl
-          + (prim_l[PPR] + 0.5*bsql)*prim_l[ivx]*iWl);
-
-  bflux_l[ibx] = 0.0;
-  bflux_l[iby] = (Bu_l[iby]*vcl -
-                    Bu_l[ibx]*(prim_l[pvy]*iWl - beta_u[pvy - PVX]*ialpha));
-  bflux_l[ibz] = (Bu_l[ibz]*vcl -
-                    Bu_l[ibx]*(prim_l[pvz]*iWl - beta_u[pvz - PVX]*ialpha));
 
   // Calculate fluxes for the right state.
   flux_r[CDN] = cons_r[CDN]*vcr;

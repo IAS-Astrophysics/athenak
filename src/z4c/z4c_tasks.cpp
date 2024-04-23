@@ -216,7 +216,7 @@ TaskStatus Z4c::RecvU(Driver *pdrive, int stage) {
 //! \brief
 
 TaskStatus Z4c::EnforceAlgConstr(Driver *pdrive, int stage) {
-  if (stage == pdrive->nexp_stages) {
+  if (pmy_pack->pdyngr != nullptr || stage == pdrive->nexp_stages) {
     AlgConstr(pmy_pack);
   }
   return TaskStatus::complete;
@@ -238,7 +238,7 @@ TaskStatus Z4c::Z4cToADM_(Driver *pdrive, int stage) {
 //! \brief
 
 TaskStatus Z4c::UpdateExcisionMasks(Driver *pdrive, int stage) {
-  if (pmy_pack->pcoord->coord_data.bh_excise) {
+  if (pmy_pack->pcoord->coord_data.bh_excise && stage == pdrive->nexp_stages) {
     pmy_pack->pcoord->UpdateExcisionMasks();
   }
   return TaskStatus::complete;
