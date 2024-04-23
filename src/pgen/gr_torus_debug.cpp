@@ -783,6 +783,14 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
       w_bx = 0.5*(b0.x1f(m,k,j,i) + b0.x1f(m,k,j,i+1));
       w_by = 0.5*(b0.x2f(m,k,j,i) + b0.x2f(m,k,j+1,i));
       w_bz = 0.5*(b0.x3f(m,k,j,i) + b0.x3f(m,k+1,j,i));
+
+      if (((m==10) && (k==4 ) && (j==4 ) && (i==36)) ||
+          ((m==14) && (k==36) && (j==4 ) && (i==36)) ||
+          ((m==9 ) && (k==4 ) && (j==4 ) && (i==4 )) ||
+          ((m==13) && (k==36) && (j==4 ) && (i==4 ))) {
+            printf("B0 at block %i, at (%i, %i, %i) is (%.4f, %.4f, %.4f) \n", m, k, j, i, b0.x1f(m,k,j,i), b0.x2f(m,k,j,i), b0.x3f(m,k,j,i));
+            printf("Bcc at block %i, at (%i, %i, %i) is (%.4f, %.4f, %.4f) \n", m, k, j, i, w_bx, w_by, w_bz);
+          }
     });
   }
 
