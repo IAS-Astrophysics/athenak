@@ -530,14 +530,13 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
           (nghbr.d_view(m,44).lev > mblev.d_view(m) && j==js && k==ke+1) ||
           (nghbr.d_view(m,45).lev > mblev.d_view(m) && j==js && k==ke+1) ||
           (nghbr.d_view(m,46).lev > mblev.d_view(m) && j==je+1 && k==ke+1) ||
-          (nghbr.d_view(m,47).lev > mblev.d_view(m) && j==je+1 && k==ke+1)) {
-        Real xl = x1v + 0.25*dx1;
-        Real xr = x1v - 0.25*dx1;
-        printf("A1 corrected on m = %i from value at x1v = %.4f, x2f = %.4f,
-          x3f = %.4f of A1 = %.4f", m, x1v, x2f, x3f, a1(m,k,j,i));
-        a1(m,k,j,i) = 0.5*(A1(trs, xl,x2f,x3f) + A1(trs, xr,x2f,x3f));
-        printf("to average between xl = %.4f, xr = %.4f, A1 = %.4f \n", xl, xr, a1(m,k,j,i));
-      }
+              (nghbr.d_view(m,47).lev > mblev.d_view(m) && j==je+1 && k==ke+1)) {
+            Real xl = x1v + 0.25*dx1;
+            Real xr = x1v - 0.25*dx1;
+            printf("A1 on m = %i from value at x1v = %.4f, x2f = %.4f, x3f = %.4f of A1 = %.4f", m, x1v, x2f, x3f, a1(m,k,j,i));
+            a1(m,k,j,i) = 0.5*(A1(trs, xl,x2f,x3f) + A1(trs, xr,x2f,x3f));
+            printf("to avg between xl = %.4f, xr = %.4f, A1 = %.4f \n", xl, xr, a1(m,k,j,i));
+          }
 
       // Correct A2 at x1-faces, x3-faces, and x1x3-edges
       if ((nghbr.d_view(m,0 ).lev > mblev.d_view(m) && i==is) ||
@@ -566,10 +565,9 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
           (nghbr.d_view(m,39).lev > mblev.d_view(m) && i==ie+1 && k==ke+1)) {
         Real xl = x2v + 0.25*dx2;
         Real xr = x2v - 0.25*dx2;
-        printf("A2 corrected on m = %i from value at x1f = %.4f, x2v = %.4f,
-          x3f = %.4f of A2 = %.4f", m, x1f, x2v, x3f, a2(m,k,j,i));
+        printf("A2 on m = %i from value at x1f = %.4f, x2v = %.4f, x3f = %.4f of A2 = %.4f", m, x1f, x2v, x3f, a2(m,k,j,i));
         a2(m,k,j,i) = 0.5*(A2(trs, x1f,xl,x3f) + A2(trs, x1f,xr,x3f));
-        printf("to average between xl = %.4f, xr = %.4f, A2 = %.4f \n", xl, xr, a2(m,k,j,i));
+        printf("to avg between xl = %.4f, xr = %.4f, A2 = %.4f \n", xl, xr, a2(m,k,j,i));
       }
 
       // Correct A3 at x1-faces, x2-faces, and x1x2-edges
@@ -599,10 +597,9 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
           (nghbr.d_view(m,23).lev > mblev.d_view(m) && i==ie+1 && j==je+1)) {
         Real xl = x3v + 0.25*dx3;
         Real xr = x3v - 0.25*dx3;
-        printf("A3 corrected on m = %i from value at x1f = %.4f, x2f = %.4f,
-          x3v = %.4f of A3 = %.4f", m, x1f, x2f, x3v, a3(m,k,j,i));
+        printf("A3 on m = %i from value at x1f = %.4f, x2f = %.4f, x3v = %.4f of A3 = %.4f", m, x1f, x2f, x3v, a3(m,k,j,i));
         a3(m,k,j,i) = 0.5*(A3(trs, x1f,x2f,xl) + A3(trs, x1f,x2f,xr));
-        printf("to average between xl = %.4f, xr = %.4f, A3 = %.4f \n", xl, xr, a3(m,k,j,i));
+        printf("to avg between xl = %.4f, xr = %.4f, A3 = %.4f \n", xl, xr, a3(m,k,j,i));
       }
     });
 
