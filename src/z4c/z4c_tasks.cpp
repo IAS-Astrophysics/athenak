@@ -129,6 +129,17 @@ void Z4c::QueueZ4cTasks() {
   //               {Z4c_Z4c2ADM});
                  {Z4c_ClearR});
   pnr->QueueTask(&Z4c::CalcWeylScalar_, this, Z4c_Weyl, "Z4c_Weyl", Task_End, {Z4c_ADMC});
+  pnr->QueueTask(&Z4c::RestrictWeyl, this, Z4c_RestW, "Z4c_RestW", Task_End, {Z4c_Weyl});
+  pnr->QueueTask(&Z4c::SendWeyl, this, Z4c_SendW, "Z4c_SendW", Task_End, {Z4c_RestW});
+  pnr->QueueTask(&Z4c::RecvWeyl, this, Z4c_RecvW, "Z4c_RecvW", Task_End, {Z4c_SendW});
+  pnr->QueueTask(&Z4c::ProlongateWeyl, this, Z4c_ProlW, "Z4c_ProlW", Task_End,
+                 {Z4c_RecvW});
+  pnr->QueueTask(&Z4c::ClearSend, this, Z4c_ClearS2, "Z4c_ClearS2", Task_End,
+                 {Z4c_ProlW});
+  pnr->QueueTask(&Z4c::ClearRecv, this, Z4c_ClearR2, "Z4c_ClearR2", Task_End,
+                 {Z4c_ClearS2});
+  pnr->QueueTask(&Z4c::CalcWaveForm_, this, Z4c_Wave, "Z4c_Wave", Task_End,
+                 {Z4c_ClearR2});
   pnr->QueueTask(&Z4c::PunctureTracker, this, Z4c_PT, "Z4c_PT", Task_End, {Z4c_ADMC});
 }
 
