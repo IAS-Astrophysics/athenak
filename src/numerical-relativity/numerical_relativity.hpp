@@ -71,6 +71,12 @@ enum TaskName {
   Z4c_ClearS,
   Z4c_ClearR,
   Z4c_Weyl,
+  Z4c_RestW,
+  Z4c_SendW,
+  Z4c_RecvW,
+  Z4c_ProlW,
+  Z4c_ClearS2,
+  Z4c_ClearR2,
   Z4c_Wave,
   Z4c_PT,
   Z4c_NTASKS
