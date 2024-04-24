@@ -15,6 +15,7 @@
 #include "mesh/mesh.hpp"
 #include "particles/particles.hpp"
 #include "globals.hpp"
+#include "coordinates/cartesian_ks.hpp"
 
 #include <Kokkos_Random.hpp>
 
@@ -22,6 +23,7 @@
 //! \fn ProblemGenerator::UserProblem_()
 //! \brief Problem Generator for random particle positions/velocities
 void EnergyConservationTest(HistoryData *hdata, Mesh *pm);
+void GetUpperAdmMetric( const Real inMat[][4], Real outMat[][3] );
 Real * E_init;
 Real * all_diffs_;
 ParameterInput * aux_pin;
@@ -46,18 +48,21 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   auto &npart = pmy_mesh_->pmb_pack->ppart->nprtcl_thispack;
   auto gids = pmy_mesh_->pmb_pack->gids;
   auto gide = pmy_mesh_->pmb_pack->gide;
+  const bool is_minkowski = !(pin->GetOrAddBoolean("coord", "general_rel", true));
+  const Real spin = pin->GetOrAddReal("coord", "a", 0.0);
 
   E_init = (Real *) malloc( npart*sizeof(Real) );
   all_diffs_ = (Real *) malloc( npart*sizeof(Real) );
 
   Real max_init_vel = pin->GetOrAddReal("problem", "max_init_vel", 0.9);
-  Real L = pin->GetOrAddReal("problem", "angular_momentum", 0.9);
+  Real L = pin->GetOrAddReal("problem", "angular_momentum", 3.9);
   bool equator = pin->GetOrAddBoolean("problem", "equatorial", false);
   Real prtcl_mass = pin->GetOrAddReal("particles", "mass", 1.0);
   Real prtcl_charge = pin->GetOrAddReal("particles", "charge", 0.0);
   Real mesh_x1_min = fmin(fabs(pin->GetReal("mesh", "x1max")), fabs(pin->GetReal("mesh", "x1min")));
   Real mesh_x2_min = fmin(fabs(pin->GetReal("mesh", "x2max")), fabs(pin->GetReal("mesh", "x2min")));
   Real mesh_x3_min = fmin(fabs(pin->GetReal("mesh", "x3max")), fabs(pin->GetReal("mesh", "x3min")));
+  Real massive = 1.0; //TODO for photons/massless particles this needs to be 0: condition on ptype
   // initialize particles
   Kokkos::Random_XorShift64_Pool<> rand_pool64(pmbp->gids);
   par_for("part_init",DevExeSpace(),0,(npart-1),
@@ -85,17 +90,22 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     Real th_min = atan2( sqrt(R_min_plane2) , den );
     den = fabs(x3min) < fabs(x3max) ? x3min : x3max;
     Real th_max = atan2( sqrt(R_max_plane2) , den );
-    // Avoid generating particles that become either unbound or that fall into the black hole
+    // Avoid generating particles that either become unbound or that fall into the black hole
     if (L < 4.0){
     	R_min = SQR(L)/2.0 - L/2.0*sqrt(SQR(L) - 12.0);
     } else {
-	R_min = SQR(L)/4.0 + sqrt(SQR(L) - 16.0)/4.0;
+	R_min = SQR(L)/4.0 + sqrt(SQR(L) - 16.0)*L/4.0;
+	// Don't take exactly the leftmost point as this is bound at infinity
+	R_min *= 1.25;
     }
     R_max = SQR(L)/2.0 + L/2.0*sqrt(SQR(L) - 12.0);
-    r = R_min + (R_max - R_min)*p/npart;
+    //r = 4.65380315;
+    //r = R_max;
+    r =  R_min + (R_max - R_min)*p/(npart-1);
     th = equator ? M_PI/2.0 : th_min + (th_max - th_min)*rand_gen.frand();
     // All particles are initialized at y = 0 
     // Such that v_y is toroidal velocity
+    // And r = x
 
     // All particles are initialized with v_x = 0 (i.e. only "toroidal" velocity)
     pr(IPVX,p) = 0.0;
@@ -103,11 +113,43 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     pr(IPVZ,p) = equator ? 0.0 : 2.0*max_init_vel*(rand_gen.frand()-0.5);
     rand_pool64.free_state(rand_gen);  // free state for use by other threads
 
-    E_init[p] = 1.0 - 2.0/r + SQR(L)/SQR(r) - SQR(L)/SQR(r)/r + SQR(pr(IPVZ,p)); //Initial motion has no radial velocity
-
     pr(IPX,p) = r;
     pr(IPY,p) = 0.0;//r*sin(th)*sin(phi);
     pr(IPZ,p) = 0.0;//equator ? 0.0 : r*cos(th);
+		    //
+    Real u[3] = {pr(IPVX,p), pr(IPVY,p), pr(IPVZ,p)};	  
+    Real gu[4][4], gl[4][4], ADM[3][3];
+    ComputeMetricAndInverse(pr(IPX,p),pr(IPY,p),pr(IPZ,p), is_minkowski, spin, gl, gu); 
+    Real U_0 = 0.0;
+    for (int i1 = 0; i1 < 3; ++i1 ){ 
+    	for (int i2 = 0; i2 < 3; ++i2 ){ 
+    	U_0 += gl[i1+1][i2+1]*u[i1]*u[i2];
+    	}
+    }
+    U_0 = sqrt(U_0 + massive); 
+    u[0] += gu[0][1]*U_0/sqrt(-gu[0][0]);
+    u[1] += gu[0][2]*U_0/sqrt(-gu[0][0]);
+    u[2] += gu[0][3]*U_0/sqrt(-gu[0][0]);
+    pr(IPVX,p) = gl[1][1]*u[0] + gl[1][2]*u[1] + gl[1][3]*u[2];
+    pr(IPVY,p) = gl[2][1]*u[0] + gl[2][2]*u[1] + gl[2][3]*u[2];
+    pr(IPVZ,p) = gl[3][1]*u[0] + gl[3][2]*u[1] + gl[3][3]*u[2];
+    // See Eq. 14 in Bacchini et al. 2018
+    u[0] = pr(IPVX,p);
+    u[1] = pr(IPVY,p);
+    u[2] = pr(IPVZ,p);
+    GetUpperAdmMetric( gu, ADM );
+    U_0 = 0.0;
+    for (int i1 = 0; i1 < 3; ++i1 ){ 
+    	for (int i2 = 0; i2 < 3; ++i2 ){ 
+    	U_0 += ADM[i1][i2]*u[i1]*u[i2];
+    	}
+    }
+    U_0 = sqrt(U_0 + massive); 
+    U_0 *= -sqrt(-1.0/gu[0][0]);
+    U_0 -= gu[0][1]/gu[0][0]*pr(IPVX,p);
+    U_0 -= gu[0][2]/gu[0][0]*pr(IPVY,p);
+    U_0 -= gu[0][3]/gu[0][0]*pr(IPVZ,p);
+    E_init[p] = U_0;
 
     pr(IPM,p) = prtcl_mass;
     pr(IPC,p) = prtcl_charge;
@@ -123,6 +165,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   return;
 }
 
+KOKKOS_INLINE_FUNCTION
 void EnergyConservationTest(HistoryData *pdata, Mesh *pm){
 	// This function computes the energy at time "curr_time" for each particle
 	// and compares to the energy at the beginning of the simulation.
@@ -139,35 +182,46 @@ void EnergyConservationTest(HistoryData *pdata, Mesh *pm){
 	  auto &npart = pm->pmb_pack->ppart->nprtcl_thispack;
 	  auto gids = pm->pmb_pack->gids;
 	  auto gide = pm->pmb_pack->gide;
-	  int n_sqrt = int(sqrt(npart));
+	  const bool is_minkowski = !(aux_pin->GetOrAddBoolean("coord", "general_rel", true));
+	  const Real spin = aux_pin->GetOrAddReal("coord", "a", 0.0);
+	  Real massive = 1.0; //TODO for photons/massless particles this needs to be 0: condition on ptype
 
 	  Real * E_i = E_init;
 	  Real * all_diffs = all_diffs_;
 	  Real curr_time = pm->time;
 
 	  Real rel_dEdt = 0.0;
-	  for (int ip = 0; ip<npart; ++ip){
-		all_diffs[ip] = 0.0;
-	  }
 	  Kokkos::parallel_reduce("part_compare",Kokkos::RangePolicy<>(DevExeSpace(),0,(npart-1)),
 			  KOKKOS_LAMBDA(const int p, Real &rel_dE) {
 
-	    Real r = sqrt( SQR(pr(IPX,p)) + SQR(pr(IPY,p)) + SQR(pr(IPZ,p)) );
-	    Real E = SQR(pr(IPVX,p)) + SQR(pr(IPVY,p)) + SQR(pr(IPVZ,p)) + 1.0 - 1.0/r;
+	    Real u[3] = {pr(IPVX,p), pr(IPVY,p), pr(IPVZ,p)};	  
+	    Real gu[4][4], gl[4][4], ADM[3][3];
+	    ComputeMetricAndInverse(pr(IPX,p),pr(IPY,p),pr(IPZ,p), is_minkowski, spin, gl, gu); 
+	    GetUpperAdmMetric( gu, ADM );
+	    Real U_0 = 0.0;
+	    for (int i1 = 0; i1 < 3; ++i1 ){ 
+	    	for (int i2 = 0; i2 < 3; ++i2 ){ 
+	    	U_0 += ADM[i1][i2]*u[i1]*u[i2];
+	    	}
+	    }
+	    U_0 = sqrt(U_0 + massive); 
+	    // See Eq. 14 in Bacchini et al. 2018
+	    U_0 *= -sqrt(-1.0/gu[0][0]);
+	    for (int i=0; i<3; ++i){ U_0 -= gu[0][i+1]/gu[0][0]*u[i]; }
 
 	    // Initial energy vs. current energy
-	    rel_dE = ( SQR(E) - SQR(E_i[p]) )/SQR(E_i[p]);
-	    all_diffs[p] = ( SQR(E) - SQR(E_i[p]) )/SQR(E_i[p]);
+	    rel_dE = fabs( U_0 - E_i[p] )/fabs(E_i[p]);
+	    all_diffs[p] = rel_dE;
 	  }, Kokkos::Sum<Real>(rel_dEdt));
 
-	  rel_dEdt = rel_dEdt/(npart) ;
+	  rel_dEdt = rel_dEdt/npart ;
 	  Real ismax = -1.0;
 	  for (int ip = 0; ip<npart; ++ip){
 	  	if (all_diffs[ip] > ismax){
 			ismax = all_diffs[ip];
 		}
 	  }
-	  ismax = sqrt(ismax);
+	  //ismax = ismax;
 	  pdata->hdata[0] = rel_dEdt;
 	  pdata->hdata[1] = ismax;
 	  if (curr_time == aux_pin->GetOrAddReal("time", "tlim", 1.0)){
@@ -177,4 +231,13 @@ void EnergyConservationTest(HistoryData *pdata, Mesh *pm){
 	  }
 	  return;
 	  
+}
+
+KOKKOS_INLINE_FUNCTION
+void GetUpperAdmMetric( const Real inputMat[][4], Real outputMat[][3] ){
+	for (int i1 = 0; i1 < 3; ++i1 ){ 
+		for (int i2 = 0; i2 < 3; ++i2 ){ 
+		outputMat[i1][i2] = inputMat[i1+1][i2+1] - inputMat[0][i2+1]*inputMat[i1+1][0]/inputMat[0][0];
+		}
+	}
 }
