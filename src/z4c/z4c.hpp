@@ -212,6 +212,7 @@ class Z4c {
   HostArray3D<Real> psi_out;
   Real waveform_dt;
   Real last_output_time;
+  int nrad; // number of radii to perform wave extraction
 
   // functions
   void AssembleZ4cTasks(std::map<std::string, std::shared_ptr<TaskList>> tl);
@@ -236,8 +237,8 @@ class Z4c {
   TaskStatus RestrictU(Driver *d, int stage);
   TaskStatus RestrictWeyl(Driver *d, int stage);
   TaskStatus PunctureTracker(Driver *d, int stage);
-  TaskStatus CalcWeylScalar_(Driver *d, int stage);
-  TaskStatus CalcWaveForm_(Driver *d, int stage);
+  TaskStatus CalcWeylScalar(Driver *d, int stage);
+  TaskStatus CalcWaveForm(Driver *d, int stage);
 
   template <int NGHOST>
   TaskStatus CalcRHS(Driver *d, int stage);
