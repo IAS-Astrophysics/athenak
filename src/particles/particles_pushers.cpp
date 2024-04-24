@@ -260,6 +260,8 @@ void Particles::GeodesicIterations( const Real dt ){
 	const bool &three_d = pmy_pack->pmesh->three_d;
 	const Real x_step = 1.0E-10;
 	const Real v_step = 1.0E-10;
+	const bool is_minkowski = pmy_pack->pcoord->coord_data.is_minkowski;
+	const Real spin = pmy_pack->pcoord->coord_data.bh_spin;
 
       // First attempt: not iterative, approximate
       par_for("part_fullgr",DevExeSpace(),0,(nprtcl_thispack-1),
@@ -267,8 +269,6 @@ void Particles::GeodesicIterations( const Real dt ){
 
 	//std::cout << "Particle: " << p << " " << pr(IPX,p) << " " << pr(IPY,p) << " " << pr(IPZ,p) << " " << pr(IPVX,p) << " " << pr(IPVY,p) << " " << pr(IPVZ,p) << std::endl;
         // Iterate per particle such that those that converge quicker don't go through as many iterations
-	const bool is_minkowski = pmy_pack->pcoord->coord_data.is_minkowski;
-	const Real spin = pmy_pack->pcoord->coord_data.bh_spin;
 	// Initialize iteration variables
 	int n_iter = 0;
 	Real x_init[3] = {pr(IPX,p), pr(IPY,p), pr(IPZ,p)};
@@ -408,7 +408,7 @@ void Particles::HamiltonEquation_Position(const Real * x_0, const Real * x_1, co
 	ComputeMetricAndInverse(x_0[0],x_0[1],x_0[2], is_minkowski, spin, glower, gupper); 
 	GetUpperAdmMetric( gupper, ADM_upper );
 
-	perp = ADM_upper[1][1]*SQR(u_0[1]) + ADM_upper[2][2]*SQR(u_0[2]) + ADM_upper[1][2]*u_0[1]*u_0[2];
+	perp = ADM_upper[1][1]*SQR(u_0[1]) + ADM_upper[2][2]*SQR(u_0[2]) + 2.0*ADM_upper[1][2]*u_0[1]*u_0[2];
 	U_1 = ADM_upper[0][0]*SQR(u_1[0]) + 2.0*ADM_upper[0][1]*u_1[0]*u_0[1] + 2.0*ADM_upper[0][2]*u_1[0]*u_0[2];
 	U_1 += perp;	
 	U_1 = sqrt(U_1 + massive); 
@@ -422,7 +422,7 @@ void Particles::HamiltonEquation_Position(const Real * x_0, const Real * x_1, co
 	// Beta term
 	H[0] += gupper[0][1]/gupper[0][0];
 	
-	perp =  ADM_upper[0][0]*SQR(u_0[0]) + ADM_upper[2][2]*SQR(u_0[2]) + ADM_upper[0][2]*u_0[0]*u_0[2];
+	perp =  ADM_upper[0][0]*SQR(u_0[0]) + ADM_upper[2][2]*SQR(u_0[2]) + 2.0*ADM_upper[0][2]*u_0[0]*u_0[2];
 	U_1 = ADM_upper[1][1]*SQR(u_1[1]) + 2.0*ADM_upper[0][1]*u_1[1]*u_0[0] + 2.0*ADM_upper[1][2]*u_1[1]*u_0[2];
 	U_1 += perp;	
 	U_1 = sqrt(U_1 + massive); 
@@ -436,11 +436,11 @@ void Particles::HamiltonEquation_Position(const Real * x_0, const Real * x_1, co
 	// Beta term
 	H[1] += gupper[0][2]/gupper[0][0];
 
-	perp = ADM_upper[0][0]*SQR(u_0[0]) + ADM_upper[1][1]*SQR(u_0[1]) + ADM_upper[1][0]*u_0[1]*u_0[0];
+	perp = ADM_upper[0][0]*SQR(u_0[0]) + ADM_upper[1][1]*SQR(u_0[1]) + 2.0*ADM_upper[1][0]*u_0[1]*u_0[0];
 	U_1 = ADM_upper[2][2]*SQR(u_1[2]) + 2.0*ADM_upper[0][2]*u_1[0]*u_0[2] + 2.0*ADM_upper[1][2]*u_1[1]*u_0[2];
 	U_1 += perp;
 	U_1 = sqrt(U_1 + massive); 
-	U_0 = ADM_upper[2][2]*SQR(u_0[2]) + 2.0*ADM_upper[2][1]*u_0[2]*u_0[1] + 2.0*ADM_upper[1][2]*u_0[1]*u_0[2];
+	U_0 = ADM_upper[2][2]*SQR(u_0[2]) + 2.0*ADM_upper[0][2]*u_0[2]*u_0[0] + 2.0*ADM_upper[1][2]*u_0[1]*u_0[2];
 	U_0 += perp;	
 	U_0 = sqrt(U_0 + massive); 
 	// Alpha term
@@ -456,7 +456,7 @@ void Particles::HamiltonEquation_Position(const Real * x_0, const Real * x_1, co
 	ComputeMetricAndInverse(x_1[0],x_1[1],x_1[2], is_minkowski, spin, glower, gupper); 
 	GetUpperAdmMetric( gupper, ADM_upper );
 
-	perp = ADM_upper[1][1]*SQR(u_1[1]) + ADM_upper[2][2]*SQR(u_1[2]) + ADM_upper[1][2]*u_1[1]*u_1[2];
+	perp = ADM_upper[1][1]*SQR(u_1[1]) + ADM_upper[2][2]*SQR(u_1[2]) + 2.0*ADM_upper[1][2]*u_1[1]*u_1[2];
 	U_1 = ADM_upper[0][0]*SQR(u_1[0]) + 2.0*ADM_upper[0][1]*u_1[0]*u_1[1] + 2.0*ADM_upper[0][2]*u_1[0]*u_1[2];
 	U_1 += perp;
 	U_1 = sqrt(U_1 + massive); 
@@ -470,7 +470,7 @@ void Particles::HamiltonEquation_Position(const Real * x_0, const Real * x_1, co
 	// Beta term
 	H[0] += gupper[0][1]/gupper[0][0];
 	
-	perp = ADM_upper[0][0]*SQR(u_1[0]) + ADM_upper[2][2]*SQR(u_1[2]) + ADM_upper[0][2]*u_1[0]*u_1[2];
+	perp = ADM_upper[0][0]*SQR(u_1[0]) + ADM_upper[2][2]*SQR(u_1[2]) + 2.0*ADM_upper[0][2]*u_1[0]*u_1[2];
 	U_1 = ADM_upper[1][1]*SQR(u_1[1]) + 2.0*ADM_upper[0][1]*u_1[1]*u_1[0] + 2.0*ADM_upper[1][2]*u_1[1]*u_1[2];
 	U_1 += perp;
 	U_1 = sqrt(U_1 + massive); 
@@ -484,11 +484,11 @@ void Particles::HamiltonEquation_Position(const Real * x_0, const Real * x_1, co
 	// Beta term
 	H[1] += gupper[0][2]/gupper[0][0];
 
-	perp = ADM_upper[0][0]*SQR(u_1[0]) + ADM_upper[1][1]*SQR(u_1[1]) + ADM_upper[1][0]*u_1[1]*u_1[0];
+	perp = ADM_upper[0][0]*SQR(u_1[0]) + ADM_upper[1][1]*SQR(u_1[1]) + 2.0*ADM_upper[1][0]*u_1[1]*u_1[0];
 	U_1 = ADM_upper[2][2]*SQR(u_1[2]) + 2.0*ADM_upper[0][2]*u_1[0]*u_1[2] + 2.0*ADM_upper[1][2]*u_1[1]*u_1[2];
 	U_1 += perp;
 	U_1 = sqrt(U_1 + massive); 
-	U_0 = ADM_upper[2][2]*SQR(u_0[2]) + 2.0*ADM_upper[2][1]*u_0[2]*u_1[1] + 2.0*ADM_upper[0][2]*u_1[0]*u_0[2];
+	U_0 = ADM_upper[2][2]*SQR(u_0[2]) + 2.0*ADM_upper[0][2]*u_1[0]*u_0[2] + 2.0*ADM_upper[1][2]*u_1[1]*u_0[2];
 	U_0 += perp;
 	U_0 = sqrt(U_0 + massive); 
 	// Alpha term
@@ -504,7 +504,7 @@ void Particles::HamiltonEquation_Position(const Real * x_0, const Real * x_1, co
 	ComputeMetricAndInverse(x_0[0],x_1[1],x_1[2], is_minkowski, spin, glower, gupper); 
 	GetUpperAdmMetric( gupper, ADM_upper );
 
-	perp = ADM_upper[1][1]*SQR(u_1[1]) + ADM_upper[2][2]*SQR(u_1[2]) + ADM_upper[1][2]*u_1[1]*u_1[2];
+	perp = ADM_upper[1][1]*SQR(u_1[1]) + ADM_upper[2][2]*SQR(u_1[2]) + 2.0*ADM_upper[1][2]*u_1[1]*u_1[2];
 	U_1 = ADM_upper[0][0]*SQR(u_1[0]) + 2.0*ADM_upper[0][1]*u_1[0]*u_1[1] + 2.0*ADM_upper[0][2]*u_1[0]*u_1[2];
 	U_1 += perp;
 	U_1 = sqrt(U_1 + massive); 
@@ -518,11 +518,11 @@ void Particles::HamiltonEquation_Position(const Real * x_0, const Real * x_1, co
 	// Beta term
 	H[0] += gupper[0][1]/gupper[0][0];
 
-	perp = ADM_upper[0][0]*SQR(u_0[0]) + ADM_upper[1][1]*SQR(u_1[1]) + ADM_upper[1][0]*u_1[1]*u_0[0];
+	perp = ADM_upper[0][0]*SQR(u_0[0]) + ADM_upper[1][1]*SQR(u_1[1]) + 2.0*ADM_upper[1][0]*u_1[1]*u_0[0];
 	U_1 = ADM_upper[2][2]*SQR(u_1[2]) + 2.0*ADM_upper[0][2]*u_0[0]*u_1[2] + 2.0*ADM_upper[1][2]*u_1[1]*u_1[2];
 	U_1 += perp;
 	U_1 = sqrt(U_1 + massive); 
-	U_0 = ADM_upper[2][2]*SQR(u_0[2]) + 2.0*ADM_upper[2][1]*u_0[2]*u_1[1] + 2.0*ADM_upper[0][2]*u_0[0]*u_0[2];
+	U_0 = ADM_upper[2][2]*SQR(u_0[2]) + 2.0*ADM_upper[0][2]*u_0[0]*u_0[2] + 2.0*ADM_upper[1][2]*u_1[1]*u_0[2];
 	U_0 += perp;
 	U_0 = sqrt(U_0 + massive); 
 	// Alpha term
@@ -539,7 +539,7 @@ void Particles::HamiltonEquation_Position(const Real * x_0, const Real * x_1, co
 	ComputeMetricAndInverse(x_1[0],x_0[1],x_0[2], is_minkowski, spin, glower, gupper); 
 	GetUpperAdmMetric( gupper, ADM_upper );
 
-	perp = ADM_upper[1][1]*SQR(u_0[1]) + ADM_upper[2][2]*SQR(u_0[2]) + ADM_upper[1][2]*u_0[1]*u_0[2];
+	perp = ADM_upper[1][1]*SQR(u_0[1]) + ADM_upper[2][2]*SQR(u_0[2]) + 2.0*ADM_upper[1][2]*u_0[1]*u_0[2];
 	U_1 = ADM_upper[0][0]*SQR(u_1[0]) + 2.0*ADM_upper[0][1]*u_1[0]*u_0[1] + 2.0*ADM_upper[0][2]*u_1[0]*u_0[2];
 	U_1 += perp;
 	U_1 = sqrt(U_1 + massive); 
@@ -553,7 +553,7 @@ void Particles::HamiltonEquation_Position(const Real * x_0, const Real * x_1, co
 	// Beta term
 	H[0] += gupper[0][1]/gupper[0][0];
 	
-	perp = ADM_upper[0][0]*SQR(u_1[0]) + ADM_upper[2][2]*SQR(u_0[2]) + ADM_upper[0][2]*u_1[0]*u_0[2];
+	perp = ADM_upper[0][0]*SQR(u_1[0]) + ADM_upper[2][2]*SQR(u_0[2]) + 2.0*ADM_upper[0][2]*u_1[0]*u_0[2];
 	U_1 = ADM_upper[1][1]*SQR(u_1[1]) + 2.0*ADM_upper[0][1]*u_1[1]*u_1[0] + 2.0*ADM_upper[1][2]*u_1[1]*u_0[2];
 	U_1 += perp;
 	U_1 = sqrt(U_1 + massive); 
@@ -574,7 +574,7 @@ void Particles::HamiltonEquation_Position(const Real * x_0, const Real * x_1, co
 	ComputeMetricAndInverse(x_1[0],x_0[1],x_1[2], is_minkowski, spin, glower, gupper); 
 	GetUpperAdmMetric( gupper, ADM_upper );
 
-	perp = ADM_upper[1][1]*SQR(u_0[1]) + ADM_upper[2][2]*SQR(u_1[2]) + ADM_upper[1][2]*u_0[1]*u_1[2];
+	perp = ADM_upper[1][1]*SQR(u_0[1]) + ADM_upper[2][2]*SQR(u_1[2]) + 2.0*ADM_upper[1][2]*u_0[1]*u_1[2];
 	U_1 = ADM_upper[0][0]*SQR(u_1[0]) + 2.0*ADM_upper[0][1]*u_1[0]*u_0[1] + 2.0*ADM_upper[0][2]*u_1[0]*u_1[2];
 	U_1 += perp;
 	U_1 = sqrt(U_1 + massive); 
@@ -588,7 +588,7 @@ void Particles::HamiltonEquation_Position(const Real * x_0, const Real * x_1, co
 	// Beta term
 	H[0] += gupper[0][1]/gupper[0][0];
 	
-	perp = ADM_upper[0][0]*SQR(u_1[0]) + ADM_upper[2][2]*SQR(u_1[2]) + ADM_upper[0][2]*u_1[0]*u_1[2];
+	perp = ADM_upper[0][0]*SQR(u_1[0]) + ADM_upper[2][2]*SQR(u_1[2]) + 2.0*ADM_upper[0][2]*u_1[0]*u_1[2];
 	U_1 = ADM_upper[1][1]*SQR(u_1[1]) + 2.0*ADM_upper[0][1]*u_1[1]*u_1[0] + 2.0*ADM_upper[1][2]*u_1[1]*u_1[2];
 	U_1 += perp;
 	U_1 = sqrt(U_1 + massive); 
@@ -609,7 +609,7 @@ void Particles::HamiltonEquation_Position(const Real * x_0, const Real * x_1, co
 	ComputeMetricAndInverse(x_0[0],x_0[1],x_1[2], is_minkowski, spin, glower, gupper); 
 	GetUpperAdmMetric( gupper, ADM_upper );
 
-	perp = ADM_upper[1][1]*SQR(u_0[1]) + ADM_upper[2][2]*SQR(u_1[2]) + ADM_upper[1][2]*u_0[1]*u_1[2];
+	perp = ADM_upper[1][1]*SQR(u_0[1]) + ADM_upper[2][2]*SQR(u_1[2]) + 2.0*ADM_upper[1][2]*u_0[1]*u_1[2];
 	U_1 = ADM_upper[0][0]*SQR(u_1[0]) + 2.0*ADM_upper[0][1]*u_1[0]*u_0[1] + 2.0*ADM_upper[0][2]*u_1[0]*u_1[2];
 	U_1 += perp;
 	U_1 = sqrt(U_1 + massive); 
@@ -623,11 +623,11 @@ void Particles::HamiltonEquation_Position(const Real * x_0, const Real * x_1, co
 	// Beta term
 	H[0] += gupper[0][1]/gupper[0][0];
 
-	perp = ADM_upper[0][0]*SQR(u_0[0]) + ADM_upper[1][1]*SQR(u_0[1]) + ADM_upper[1][0]*u_0[1]*u_0[0];
+	perp = ADM_upper[0][0]*SQR(u_0[0]) + ADM_upper[1][1]*SQR(u_0[1]) + 2.0*ADM_upper[1][0]*u_0[1]*u_0[0];
 	U_1 = ADM_upper[2][2]*SQR(u_1[2]) + 2.0*ADM_upper[0][2]*u_0[0]*u_1[2] + 2.0*ADM_upper[1][2]*u_0[1]*u_1[2];
 	U_1 += perp;
 	U_1 = sqrt(U_1 + massive); 
-	U_0 = ADM_upper[2][2]*SQR(u_0[2]) + 2.0*ADM_upper[2][1]*u_0[2]*u_0[1] + 2.0*ADM_upper[0][2]*u_0[0]*u_0[2];
+	U_0 = ADM_upper[2][2]*SQR(u_0[2]) + 2.0*ADM_upper[0][2]*u_0[0]*u_0[2] + 2.0*ADM_upper[1][2]*u_0[1]*u_0[2];
 	U_0 += perp;
 	U_0 = sqrt(U_0 + massive); 
 	// Alpha term
@@ -644,7 +644,7 @@ void Particles::HamiltonEquation_Position(const Real * x_0, const Real * x_1, co
 	ComputeMetricAndInverse(x_1[0],x_1[1],x_0[2], is_minkowski, spin, glower, gupper); 
 	GetUpperAdmMetric( gupper, ADM_upper );
 
-	perp = ADM_upper[0][0]*SQR(u_1[0]) + ADM_upper[2][2]*SQR(u_0[2]) + ADM_upper[0][2]*u_1[0]*u_0[2];
+	perp = ADM_upper[0][0]*SQR(u_1[0]) + ADM_upper[2][2]*SQR(u_0[2]) + 2.0*ADM_upper[0][2]*u_1[0]*u_0[2];
 	U_1 = ADM_upper[1][1]*SQR(u_1[1]) + 2.0*ADM_upper[0][1]*u_1[1]*u_1[0] + 2.0*ADM_upper[1][2]*u_1[1]*u_0[2];
 	U_1 += perp;
 	U_1 = sqrt(U_1 + massive); 
@@ -658,11 +658,11 @@ void Particles::HamiltonEquation_Position(const Real * x_0, const Real * x_1, co
 	// Beta term
 	H[1] += gupper[0][2]/gupper[0][0];
 
-	perp = ADM_upper[0][0]*SQR(u_1[0]) + ADM_upper[1][1]*SQR(u_1[1]) + ADM_upper[1][0]*u_1[1]*u_1[0];
+	perp = ADM_upper[0][0]*SQR(u_1[0]) + ADM_upper[1][1]*SQR(u_1[1]) + 2.0*ADM_upper[1][0]*u_1[1]*u_1[0];
 	U_1 = ADM_upper[2][2]*SQR(u_1[2]) + 2.0*ADM_upper[0][2]*u_1[0]*u_1[2] + 2.0*ADM_upper[1][2]*u_1[1]*u_1[2];
 	U_1 += perp;
 	U_1 = sqrt(U_1 + massive); 
-	U_0 = ADM_upper[2][2]*SQR(u_0[2]) + 2.0*ADM_upper[2][1]*u_0[2]*u_1[1] + 2.0*ADM_upper[0][2]*u_1[0]*u_0[2];
+	U_0 = ADM_upper[2][2]*SQR(u_0[2]) + 2.0*ADM_upper[0][2]*u_1[0]*u_0[2] + 2.0*ADM_upper[1][2]*u_1[1]*u_0[2];
 	U_0 += perp;
 	U_0 = sqrt(U_0 + massive); 
 	// Alpha term
@@ -679,7 +679,7 @@ void Particles::HamiltonEquation_Position(const Real * x_0, const Real * x_1, co
 	ComputeMetricAndInverse(x_0[0],x_1[1],x_0[2], is_minkowski, spin, glower, gupper); 
 	GetUpperAdmMetric( gupper, ADM_upper );
 
-	perp = ADM_upper[0][0]*SQR(u_0[0]) + ADM_upper[2][2]*SQR(u_0[2]) + ADM_upper[0][2]*u_0[0]*u_0[2];
+	perp = ADM_upper[0][0]*SQR(u_0[0]) + ADM_upper[2][2]*SQR(u_0[2]) + 2.0*ADM_upper[0][2]*u_0[0]*u_0[2];
 	U_1 = ADM_upper[1][1]*SQR(u_1[1]) + 2.0*ADM_upper[0][1]*u_1[1]*u_0[0] + 2.0*ADM_upper[1][2]*u_1[1]*u_0[2];
 	U_1 += perp;
 	U_1 = sqrt(U_1 + massive); 
@@ -693,11 +693,11 @@ void Particles::HamiltonEquation_Position(const Real * x_0, const Real * x_1, co
 	// Beta term
 	H[1] += gupper[0][2]/gupper[0][0];
 
-	perp = ADM_upper[0][0]*SQR(u_0[0]) + ADM_upper[1][1]*SQR(u_1[1]) + ADM_upper[1][0]*u_1[1]*u_0[0];
+	perp = ADM_upper[0][0]*SQR(u_0[0]) + ADM_upper[1][1]*SQR(u_1[1]) + 2.0*ADM_upper[1][0]*u_1[1]*u_0[0];
 	U_1 = ADM_upper[2][2]*SQR(u_1[2]) + 2.0*ADM_upper[0][2]*u_0[0]*u_1[2] + 2.0*ADM_upper[1][2]*u_1[1]*u_1[2];
 	U_1 += perp;
 	U_1 = sqrt(U_1 + massive); 
-	U_0 = ADM_upper[2][2]*SQR(u_0[2]) + 2.0*ADM_upper[2][1]*u_0[2]*u_1[1] + 2.0*ADM_upper[0][2]*u_0[0]*u_0[2];
+	U_0 = ADM_upper[2][2]*SQR(u_0[2]) + 2.0*ADM_upper[0][2]*u_0[0]*u_0[2] + 2.0*ADM_upper[1][2]*u_1[1]*u_0[2];
 	U_0 += perp;
 	U_0 = sqrt(U_0 + massive); 
 	// Alpha term
