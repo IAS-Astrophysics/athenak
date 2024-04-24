@@ -328,12 +328,15 @@ void Particles::GeodesicIterations( const Real dt ){
 
 	// Then Jacobian for velocity
 	// Variation along x
+	// Not that the velocity here is covariant, thus derivatives along 
+	// a given velocity direction result in "upper" indeces
+	// and the lower indeces are provided by the rest function itself
 	v_grad[0] = v_eval[0] + v_step;
 	v_grad[1] = v_eval[1]; v_grad[2] = v_eval[2];
 	HamiltonEquation_Velocity(x_init, x_grad, v_init, v_grad, x_step, RHS_grad_1);
 	v_grad[0] = v_eval[0] - v_step;
 	HamiltonEquation_Velocity(x_init, x_grad, v_init, v_grad, x_step, RHS_grad_2);
-	for (int i=0; i<3; ++i) { Jacob[0][i] = - (RHS_grad_1[i] - RHS_grad_2[i])*dt/(2.0*v_step); }
+	for (int i=0; i<3; ++i) { Jacob[i][0] = - (RHS_grad_1[i] - RHS_grad_2[i])*dt/(2.0*v_step); }
 	Jacob[0][0] += 1.0; // Diagonal terms
 	// Variation along y
 	v_grad[1] = v_eval[1] + v_step;
@@ -341,7 +344,7 @@ void Particles::GeodesicIterations( const Real dt ){
 	HamiltonEquation_Velocity(x_init, x_grad, v_init, v_grad, x_step, RHS_grad_1);
 	v_grad[1] = v_eval[1] - v_step;
 	HamiltonEquation_Velocity(x_init, x_grad, v_init, v_grad, x_step, RHS_grad_2);
-	for (int i=0; i<3; ++i) { Jacob[1][i] = - (RHS_grad_1[i] - RHS_grad_2[i])*dt/(2.0*v_step); }
+	for (int i=0; i<3; ++i) { Jacob[i][1] = - (RHS_grad_1[i] - RHS_grad_2[i])*dt/(2.0*v_step); }
 	Jacob[1][1] += 1.0; // Diagonal terms
 	// Variation along z
 	v_grad[2] = v_eval[2] + v_step;
@@ -349,14 +352,14 @@ void Particles::GeodesicIterations( const Real dt ){
 	HamiltonEquation_Velocity(x_init, x_grad, v_init, v_grad, x_step, RHS_grad_1);
 	v_grad[2] = v_eval[2] - v_step;
 	HamiltonEquation_Velocity(x_init, x_grad, v_init, v_grad, x_step, RHS_grad_2);
-	for (int i=0; i<3; ++i) { Jacob[2][i] = - (RHS_grad_1[i] - RHS_grad_2[i])*dt/(2.0*v_step); }
+	for (int i=0; i<3; ++i) { Jacob[i][2] = - (RHS_grad_1[i] - RHS_grad_2[i])*dt/(2.0*v_step); }
 	Jacob[2][2] += 1.0; // Diagonal terms
 	ComputeInverseMatrix3( Jacob, inv_Jacob );
 	
 	for (int i=0; i<3; ++i) { v_grad[i] = v_eval[i]; }
 
 	for (int i=0; i<3; ++i){
-		for (int j=0; j<3; ++j){ v_eval[i] -= inv_Jacob[j][i]*(v_grad[j] - v_init[j] - RHS_eval_v[j]*dt); }
+		for (int j=0; j<3; ++j){ v_eval[i] -= inv_Jacob[j][i]*(v_grad[j] - v_init[j] + RHS_eval_v[j]*dt); }
 	}
 
 	// Store for next iteration
