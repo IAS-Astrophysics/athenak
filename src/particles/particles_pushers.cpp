@@ -741,6 +741,7 @@ void Particles::HamiltonEquation_Velocity(const Real * x_0, const Real * x_1, co
 
 	ComputeMetricAndInverse(x_0[0],x_0[1],x_0[2], is_minkowski, spin, gl_0, gu_0); 
 
+	ComputeMetricAndInverse(x_1[0],x_0[1],x_0[2], is_minkowski, spin, gl_1, gu_1); 
 	if (use_derivative_x){
 		ComputeMetricAndInverse(x_0[0]-x_step,x_0[1],x_0[2], is_minkowski, spin, aux_gl_1, aux_gu_1); 
 		ComputeMetricAndInverse(x_0[0]+x_step,x_0[1],x_0[2], is_minkowski, spin, aux_gl_0, aux_gu_0);
@@ -750,16 +751,13 @@ void Particles::HamiltonEquation_Velocity(const Real * x_0, const Real * x_1, co
 				aux_gu_0[i][j] /= (2.0*x_step);
 			}
 		}	
-	}
-	
-	ComputeMetricAndInverse(x_1[0],x_0[1],x_0[2], is_minkowski, spin, gl_1, gu_1); 
-	if (use_derivative_x){
 		ComputeAndAddSingleTerm_Velocity(gu_0, gu_1, aux_gu_0, u, &H[0]);
 	}else{
 		ComputeAndAddSingleTerm_Velocity(gu_0, gu_1, u, &H[0]);
 	}
 	
 	// Change only _1 quantities as old quantities are unchanged
+	ComputeMetricAndInverse(x_0[0],x_1[1],x_0[2], is_minkowski, spin, gl_1, gu_1); 
 	if (use_derivative_y){
 		ComputeMetricAndInverse(x_0[0],x_0[1]-x_step,x_0[2], is_minkowski, spin, aux_gl_1, aux_gu_1); 
 		ComputeMetricAndInverse(x_0[0],x_0[1]+x_step,x_0[2], is_minkowski, spin, aux_gl_0, aux_gu_0);
@@ -769,15 +767,12 @@ void Particles::HamiltonEquation_Velocity(const Real * x_0, const Real * x_1, co
 				aux_gu_0[i][j] /= (2.0*x_step);
 			}
 		}	
-	}
-
-	ComputeMetricAndInverse(x_0[0],x_1[1],x_0[2], is_minkowski, spin, gl_1, gu_1); 
-	if (use_derivative_y){
 		ComputeAndAddSingleTerm_Velocity(gu_0, gu_1, aux_gu_0, u, &H[1]);
 	}else{
 		ComputeAndAddSingleTerm_Velocity(gu_0, gu_1, u, &H[1]);
 	}
 
+	ComputeMetricAndInverse(x_0[0],x_0[1],x_1[2], is_minkowski, spin, gl_1, gu_1); 
 	if (use_derivative_z){
 		ComputeMetricAndInverse(x_0[0],x_0[1],x_0[2]-x_step, is_minkowski, spin, aux_gl_1, aux_gu_1); 
 		ComputeMetricAndInverse(x_0[0],x_0[1],x_0[2]+x_step, is_minkowski, spin, aux_gl_0, aux_gu_0);
@@ -787,10 +782,6 @@ void Particles::HamiltonEquation_Velocity(const Real * x_0, const Real * x_1, co
 				aux_gu_0[i][j] /= (2.0*x_step);
 			}
 		}	
-	}
-
-	ComputeMetricAndInverse(x_0[0],x_0[1],x_1[2], is_minkowski, spin, gl_1, gu_1); 
-	if (use_derivative_z){
 		ComputeAndAddSingleTerm_Velocity(gu_0, gu_1, aux_gu_0, u, &H[2]);
 	}else{
 		ComputeAndAddSingleTerm_Velocity(gu_0, gu_1, u, &H[2]);
@@ -805,6 +796,7 @@ void Particles::HamiltonEquation_Velocity(const Real * x_0, const Real * x_1, co
 	// Notice inversion of gu_1 and gu_0 as constant
 	ComputeMetricAndInverse(x_1[0],x_1[1],x_1[2], is_minkowski, spin, gl_1, gu_1); 
 
+	ComputeMetricAndInverse(x_0[0],x_1[1],x_1[2], is_minkowski, spin, gl_0, gu_0); 
 	if (use_derivative_x){
 		ComputeMetricAndInverse(x_1[0]-x_step,x_1[1],x_1[2], is_minkowski, spin, aux_gl_1, aux_gu_1); 
 		ComputeMetricAndInverse(x_1[0]+x_step,x_1[1],x_1[2], is_minkowski, spin, aux_gl_0, aux_gu_0);
@@ -814,15 +806,12 @@ void Particles::HamiltonEquation_Velocity(const Real * x_0, const Real * x_1, co
 				aux_gu_0[i][j] /= (2.0*x_step);
 			}
 		}	
-	}
-	
-	ComputeMetricAndInverse(x_0[0],x_1[1],x_1[2], is_minkowski, spin, gl_0, gu_0); 
-	if (use_derivative_x){
 		ComputeAndAddSingleTerm_Velocity(gu_0, gu_1, aux_gu_0, u, &H[0]);
 	}else{
 		ComputeAndAddSingleTerm_Velocity(gu_0, gu_1, u, &H[0]);
 	}
 
+	ComputeMetricAndInverse(x_1[0],x_0[1],x_1[2], is_minkowski, spin, gl_0, gu_0); 
 	if (use_derivative_y){
 		ComputeMetricAndInverse(x_1[0],x_1[1]-x_step,x_1[2], is_minkowski, spin, aux_gl_1, aux_gu_1); 
 		ComputeMetricAndInverse(x_1[0],x_1[1]+x_step,x_1[2], is_minkowski, spin, aux_gl_0, aux_gu_0);
@@ -832,15 +821,12 @@ void Particles::HamiltonEquation_Velocity(const Real * x_0, const Real * x_1, co
 				aux_gu_0[i][j] /= (2.0*x_step);
 			}
 		}	
-	}
-
-	ComputeMetricAndInverse(x_1[0],x_0[1],x_1[2], is_minkowski, spin, gl_0, gu_0); 
-	if (use_derivative_y){
 		ComputeAndAddSingleTerm_Velocity(gu_0, gu_1, aux_gu_0, u, &H[1]);
 	}else{
 		ComputeAndAddSingleTerm_Velocity(gu_0, gu_1, u, &H[1]);
 	}
 
+	ComputeMetricAndInverse(x_1[0],x_1[1],x_0[2], is_minkowski, spin, gl_0, gu_0); 
 	if (use_derivative_z){
 		ComputeMetricAndInverse(x_1[0],x_1[1],x_1[2]-x_step, is_minkowski, spin, aux_gl_1, aux_gu_1); 
 		ComputeMetricAndInverse(x_1[0],x_1[1],x_1[2]+x_step, is_minkowski, spin, aux_gl_0, aux_gu_0);
@@ -850,10 +836,6 @@ void Particles::HamiltonEquation_Velocity(const Real * x_0, const Real * x_1, co
 				aux_gu_0[i][j] /= (2.0*x_step);
 			}
 		}	
-	}
-
-	ComputeMetricAndInverse(x_1[0],x_1[1],x_0[2], is_minkowski, spin, gl_0, gu_0); 
-	if (use_derivative_z){
 		ComputeAndAddSingleTerm_Velocity(gu_0, gu_1, aux_gu_0, u, &H[2]);
 	}else{
 		ComputeAndAddSingleTerm_Velocity(gu_0, gu_1, u, &H[2]);
@@ -866,6 +848,7 @@ void Particles::HamiltonEquation_Velocity(const Real * x_0, const Real * x_1, co
 	u[2] = u_1[2]; 
 
 	ComputeMetricAndInverse(x_0[0],x_1[1],x_1[2], is_minkowski, spin, gl_0, gu_0); 
+	ComputeMetricAndInverse(x_1[0],x_1[1],x_1[2], is_minkowski, spin, gl_1, gu_1); 
 	if (use_derivative_x){
 		ComputeMetricAndInverse(x_0[0]-x_step,x_1[1],x_1[2], is_minkowski, spin, aux_gl_1, aux_gu_1); 
 		ComputeMetricAndInverse(x_0[0]+x_step,x_1[1],x_1[2], is_minkowski, spin, aux_gl_0, aux_gu_0);
@@ -875,16 +858,13 @@ void Particles::HamiltonEquation_Velocity(const Real * x_0, const Real * x_1, co
 				aux_gu_0[i][j] /= (2.0*x_step);
 			}
 		}	
-	}
-	
-	ComputeMetricAndInverse(x_1[0],x_1[1],x_1[2], is_minkowski, spin, gl_1, gu_1); 
-	if (use_derivative_x){
 		ComputeAndAddSingleTerm_Velocity(gu_0, gu_1, aux_gu_0, u, &H[0]);
 	}else{
 		ComputeAndAddSingleTerm_Velocity(gu_0, gu_1, u, &H[0]);
 	}
 	
 	ComputeMetricAndInverse(x_0[0],x_1[1],x_0[2], is_minkowski, spin, gl_0, gu_0); 
+	ComputeMetricAndInverse(x_0[0],x_1[1],x_1[2], is_minkowski, spin, gl_1, gu_1); 
 	if (use_derivative_z){
 		ComputeMetricAndInverse(x_0[0],x_1[1],x_0[2]-x_step, is_minkowski, spin, aux_gl_1, aux_gu_1); 
 		ComputeMetricAndInverse(x_0[0],x_1[1],x_0[2]+x_step, is_minkowski, spin, aux_gl_0, aux_gu_0);
@@ -894,10 +874,6 @@ void Particles::HamiltonEquation_Velocity(const Real * x_0, const Real * x_1, co
 				aux_gu_0[i][j] /= (2.0*x_step);
 			}
 		}	
-	}
-
-	ComputeMetricAndInverse(x_0[0],x_1[1],x_1[2], is_minkowski, spin, gl_1, gu_1); 
-	if (use_derivative_z){
 		ComputeAndAddSingleTerm_Velocity(gu_0, gu_1, aux_gu_0, u, &H[2]);
 	}else{
 		ComputeAndAddSingleTerm_Velocity(gu_0, gu_1, u, &H[2]);
@@ -910,6 +886,7 @@ void Particles::HamiltonEquation_Velocity(const Real * x_0, const Real * x_1, co
 	u[2] = u_0[2]; 
 
 	ComputeMetricAndInverse(x_1[0],x_0[1],x_0[2], is_minkowski, spin, gl_0, gu_0); 
+	ComputeMetricAndInverse(x_1[0],x_1[1],x_0[2], is_minkowski, spin, gl_1, gu_1); 
 	if (use_derivative_y){
 		ComputeMetricAndInverse(x_1[0],x_0[1]-x_step,x_0[2], is_minkowski, spin, aux_gl_1, aux_gu_1); 
 		ComputeMetricAndInverse(x_1[0],x_0[1]+x_step,x_0[2], is_minkowski, spin, aux_gl_0, aux_gu_0);
@@ -919,16 +896,13 @@ void Particles::HamiltonEquation_Velocity(const Real * x_0, const Real * x_1, co
 				aux_gu_0[i][j] /= (2.0*x_step);
 			}
 		}	
-	}
-
-	ComputeMetricAndInverse(x_1[0],x_1[1],x_0[2], is_minkowski, spin, gl_1, gu_1); 
-	if (use_derivative_y){
 		ComputeAndAddSingleTerm_Velocity(gu_0, gu_1, aux_gu_0, u, &H[1]);
 	}else{
 		ComputeAndAddSingleTerm_Velocity(gu_0, gu_1, u, &H[1]);
 	}
 	
 	ComputeMetricAndInverse(x_1[0],x_1[1],x_0[2], is_minkowski, spin, gl_0, gu_0); 
+	ComputeMetricAndInverse(x_1[0],x_1[1],x_1[2], is_minkowski, spin, gl_1, gu_1); 
 	if (use_derivative_z){
 		ComputeMetricAndInverse(x_1[0],x_1[1],x_0[2]-x_step, is_minkowski, spin, aux_gl_1, aux_gu_1); 
 		ComputeMetricAndInverse(x_1[0],x_1[1],x_0[2]+x_step, is_minkowski, spin, aux_gl_0, aux_gu_0);
@@ -938,10 +912,6 @@ void Particles::HamiltonEquation_Velocity(const Real * x_0, const Real * x_1, co
 				aux_gu_0[i][j] /= (2.0*x_step);
 			}
 		}	
-	}
-
-	ComputeMetricAndInverse(x_1[0],x_1[1],x_1[2], is_minkowski, spin, gl_1, gu_1); 
-	if (use_derivative_z){
 		ComputeAndAddSingleTerm_Velocity(gu_0, gu_1, aux_gu_0, u, &H[2]);
 	}else{
 		ComputeAndAddSingleTerm_Velocity(gu_0, gu_1, u, &H[2]);
@@ -954,6 +924,7 @@ void Particles::HamiltonEquation_Velocity(const Real * x_0, const Real * x_1, co
 	u[2] = u_1[2]; 
 
 	ComputeMetricAndInverse(x_0[0],x_0[1],x_1[2], is_minkowski, spin, gl_0, gu_0); 
+	ComputeMetricAndInverse(x_1[0],x_0[1],x_1[2], is_minkowski, spin, gl_1, gu_1); 
 	if (use_derivative_x){
 		ComputeMetricAndInverse(x_0[0]-x_step,x_0[1],x_1[2], is_minkowski, spin, aux_gl_1, aux_gu_1); 
 		ComputeMetricAndInverse(x_0[0]+x_step,x_0[1],x_1[2], is_minkowski, spin, aux_gl_0, aux_gu_0);
@@ -963,16 +934,13 @@ void Particles::HamiltonEquation_Velocity(const Real * x_0, const Real * x_1, co
 				aux_gu_0[i][j] /= (2.0*x_step);
 			}
 		}	
-	}
-	
-	ComputeMetricAndInverse(x_1[0],x_0[1],x_1[2], is_minkowski, spin, gl_1, gu_1); 
-	if (use_derivative_x){
 		ComputeAndAddSingleTerm_Velocity(gu_0, gu_1, aux_gu_0, u, &H[0]);
 	}else{
 		ComputeAndAddSingleTerm_Velocity(gu_0, gu_1, u, &H[0]);
 	}
 	
 	ComputeMetricAndInverse(x_1[0],x_0[1],x_1[2], is_minkowski, spin, gl_0, gu_0); 
+	ComputeMetricAndInverse(x_1[0],x_1[1],x_1[2], is_minkowski, spin, gl_1, gu_1); 
 	if (use_derivative_y){
 		ComputeMetricAndInverse(x_1[0],x_0[1]-x_step,x_1[2], is_minkowski, spin, aux_gl_1, aux_gu_1); 
 		ComputeMetricAndInverse(x_1[0],x_0[1]+x_step,x_1[2], is_minkowski, spin, aux_gl_0, aux_gu_0);
@@ -982,10 +950,6 @@ void Particles::HamiltonEquation_Velocity(const Real * x_0, const Real * x_1, co
 				aux_gu_0[i][j] /= (2.0*x_step);
 			}
 		}	
-	}
-
-	ComputeMetricAndInverse(x_1[0],x_1[1],x_1[2], is_minkowski, spin, gl_1, gu_1); 
-	if (use_derivative_y){
 		ComputeAndAddSingleTerm_Velocity(gu_0, gu_1, aux_gu_0, u, &H[1]);
 	}else{
 		ComputeAndAddSingleTerm_Velocity(gu_0, gu_1, u, &H[1]);
@@ -998,6 +962,7 @@ void Particles::HamiltonEquation_Velocity(const Real * x_0, const Real * x_1, co
 	u[2] = u_0[2]; 
 
 	ComputeMetricAndInverse(x_0[0],x_0[1],x_0[2], is_minkowski, spin, gl_0, gu_0); 
+	ComputeMetricAndInverse(x_0[0],x_1[1],x_0[2], is_minkowski, spin, gl_1, gu_1); 
 	if (use_derivative_y){
 		ComputeMetricAndInverse(x_0[0],x_0[1]-x_step,x_0[2], is_minkowski, spin, aux_gl_1, aux_gu_1); 
 		ComputeMetricAndInverse(x_0[0],x_0[1]+x_step,x_0[2], is_minkowski, spin, aux_gl_0, aux_gu_0);
@@ -1007,16 +972,13 @@ void Particles::HamiltonEquation_Velocity(const Real * x_0, const Real * x_1, co
 				aux_gu_0[i][j] /= (2.0*x_step);
 			}
 		}	
-	}
-
-	ComputeMetricAndInverse(x_0[0],x_1[1],x_0[2], is_minkowski, spin, gl_1, gu_1); 
-	if (use_derivative_y){
 		ComputeAndAddSingleTerm_Velocity(gu_0, gu_1, aux_gu_0, u, &H[1]);
 	}else{
 		ComputeAndAddSingleTerm_Velocity(gu_0, gu_1, u, &H[1]);
 	}
 	
 	ComputeMetricAndInverse(x_0[0],x_1[1],x_0[2], is_minkowski, spin, gl_0, gu_0); 
+	ComputeMetricAndInverse(x_0[0],x_1[1],x_1[2], is_minkowski, spin, gl_1, gu_1); 
 	if (use_derivative_z){
 		ComputeMetricAndInverse(x_0[0],x_1[1],x_0[2]-x_step, is_minkowski, spin, aux_gl_1, aux_gu_1); 
 		ComputeMetricAndInverse(x_0[0],x_1[1],x_0[2]+x_step, is_minkowski, spin, aux_gl_0, aux_gu_0);
@@ -1026,10 +988,6 @@ void Particles::HamiltonEquation_Velocity(const Real * x_0, const Real * x_1, co
 				aux_gu_0[i][j] /= (2.0*x_step);
 			}
 		}	
-	}
-
-	ComputeMetricAndInverse(x_0[0],x_1[1],x_1[2], is_minkowski, spin, gl_1, gu_1); 
-	if (use_derivative_z){
 		ComputeAndAddSingleTerm_Velocity(gu_0, gu_1, aux_gu_0, u, &H[2]);
 	}else{
 		ComputeAndAddSingleTerm_Velocity(gu_0, gu_1, u, &H[2]);
@@ -1042,6 +1000,7 @@ void Particles::HamiltonEquation_Velocity(const Real * x_0, const Real * x_1, co
 	u[2] = u_1[2]; 
 
 	ComputeMetricAndInverse(x_0[0],x_0[1],x_1[2], is_minkowski, spin, gl_0, gu_0); 
+	ComputeMetricAndInverse(x_1[0],x_0[1],x_1[2], is_minkowski, spin, gl_1, gu_1); 
 	if (use_derivative_x){
 		ComputeMetricAndInverse(x_0[0]-x_step,x_0[1],x_1[2], is_minkowski, spin, aux_gl_1, aux_gu_1); 
 		ComputeMetricAndInverse(x_0[0]+x_step,x_0[1],x_1[2], is_minkowski, spin, aux_gl_0, aux_gu_0);
@@ -1051,16 +1010,13 @@ void Particles::HamiltonEquation_Velocity(const Real * x_0, const Real * x_1, co
 				aux_gu_0[i][j] /= (2.0*x_step);
 			}
 		}	
-	}
-	
-	ComputeMetricAndInverse(x_1[0],x_0[1],x_1[2], is_minkowski, spin, gl_1, gu_1); 
-	if (use_derivative_x){
 		ComputeAndAddSingleTerm_Velocity(gu_0, gu_1, aux_gu_0, u, &H[0]);
 	}else{
 		ComputeAndAddSingleTerm_Velocity(gu_0, gu_1, u, &H[0]);
 	}
 	
 	ComputeMetricAndInverse(x_0[0],x_0[1],x_0[2], is_minkowski, spin, gl_0, gu_0); 
+	ComputeMetricAndInverse(x_0[0],x_0[1],x_1[2], is_minkowski, spin, gl_1, gu_1); 
 	if (use_derivative_z){
 		ComputeMetricAndInverse(x_0[0],x_0[1],x_0[2]-x_step, is_minkowski, spin, aux_gl_1, aux_gu_1); 
 		ComputeMetricAndInverse(x_0[0],x_0[1],x_0[2]+x_step, is_minkowski, spin, aux_gl_0, aux_gu_0);
@@ -1070,10 +1026,6 @@ void Particles::HamiltonEquation_Velocity(const Real * x_0, const Real * x_1, co
 				aux_gu_0[i][j] /= (2.0*x_step);
 			}
 		}	
-	}
-
-	ComputeMetricAndInverse(x_0[0],x_0[1],x_1[2], is_minkowski, spin, gl_1, gu_1); 
-	if (use_derivative_z){
 		ComputeAndAddSingleTerm_Velocity(gu_0, gu_1, aux_gu_0, u, &H[2]);
 	}else{
 		ComputeAndAddSingleTerm_Velocity(gu_0, gu_1, u, &H[2]);
@@ -1086,6 +1038,7 @@ void Particles::HamiltonEquation_Velocity(const Real * x_0, const Real * x_1, co
 	u[2] = u_0[2]; 
 
 	ComputeMetricAndInverse(x_0[0],x_0[1],x_0[2], is_minkowski, spin, gl_0, gu_0); 
+	ComputeMetricAndInverse(x_1[0],x_0[1],x_0[2], is_minkowski, spin, gl_1, gu_1); 
 	if (use_derivative_x){
 		ComputeMetricAndInverse(x_0[0]-x_step,x_0[1],x_0[2], is_minkowski, spin, aux_gl_1, aux_gu_1); 
 		ComputeMetricAndInverse(x_0[0]+x_step,x_0[1],x_0[2], is_minkowski, spin, aux_gl_0, aux_gu_0);
@@ -1095,16 +1048,13 @@ void Particles::HamiltonEquation_Velocity(const Real * x_0, const Real * x_1, co
 				aux_gu_0[i][j] /= (2.0*x_step);
 			}
 		}	
-	}
-	
-	ComputeMetricAndInverse(x_1[0],x_0[1],x_0[2], is_minkowski, spin, gl_1, gu_1); 
-	if (use_derivative_x){
 		ComputeAndAddSingleTerm_Velocity(gu_0, gu_1, aux_gu_0, u, &H[0]);
 	}else{
 		ComputeAndAddSingleTerm_Velocity(gu_0, gu_1, u, &H[0]);
 	}
 
 	ComputeMetricAndInverse(x_1[0],x_0[1],x_0[2], is_minkowski, spin, gl_0, gu_0); 
+	ComputeMetricAndInverse(x_1[0],x_1[1],x_0[2], is_minkowski, spin, gl_1, gu_1); 
 	if (use_derivative_y){
 		ComputeMetricAndInverse(x_1[0],x_0[1]-x_step,x_0[2], is_minkowski, spin, aux_gl_1, aux_gu_1); 
 		ComputeMetricAndInverse(x_1[0],x_0[1]+x_step,x_0[2], is_minkowski, spin, aux_gl_0, aux_gu_0);
@@ -1114,10 +1064,6 @@ void Particles::HamiltonEquation_Velocity(const Real * x_0, const Real * x_1, co
 				aux_gu_0[i][j] /= (2.0*x_step);
 			}
 		}	
-	}
-
-	ComputeMetricAndInverse(x_1[0],x_1[1],x_0[2], is_minkowski, spin, gl_1, gu_1); 
-	if (use_derivative_y){
 		ComputeAndAddSingleTerm_Velocity(gu_0, gu_1, aux_gu_0, u, &H[1]);
 	}else{
 		ComputeAndAddSingleTerm_Velocity(gu_0, gu_1, u, &H[1]);
