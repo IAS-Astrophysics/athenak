@@ -73,11 +73,41 @@ void ProblemGenerator::RadiationFEMNGaussiantest(ParameterInput *pin, const bool
   Kokkos::deep_copy(P_matrix_, 0.);
   Kokkos::deep_copy(Pmod_matrix_, 0.);
 
-  par_for("pgen_gaussiantest_radiation_femn_reinitialize_matrices", DevExeSpace(), 0, 3, 0, pmbp->pradfemn->num_points - 1, 0, pmbp->pradfemn->num_points - 1,
-          KOKKOS_LAMBDA(int mu, int A, int B) {
-            P_matrix_(mu, A, B) = (A == B);
-            Pmod_matrix_(mu, A, B) = (A == B);
-          });
+  if (pmy_mesh_->one_d) {
+    par_for("pgen_gaussiantest_radiation_femn_reinitialize_matrices_1d", DevExeSpace(), 0, pmbp->pradfemn->num_points - 1, 0, pmbp->pradfemn->num_points - 1,
+            KOKKOS_LAMBDA(int A, int B) {
+              P_matrix_(0, A, B) = (A == B);
+              Pmod_matrix_(0, A, B) = (A == B);
+              P_matrix_(1, A, B) = (A == B);
+              Pmod_matrix_(1, A, B) = (A == B);
+            });
+  }
+
+  if (pmy_mesh_->two_d) {
+    par_for("pgen_gaussiantest_radiation_femn_reinitialize_matrices_2d", DevExeSpace(), 0, pmbp->pradfemn->num_points - 1, 0, pmbp->pradfemn->num_points - 1,
+            KOKKOS_LAMBDA(int A, int B) {
+              P_matrix_(0, A, B) = (A == B);
+              Pmod_matrix_(0, A, B) = (A == B);
+              P_matrix_(1, A, B) = (A == B);
+              Pmod_matrix_(1, A, B) = (A == B);
+              P_matrix_(2, A, B) = (A == B);
+              Pmod_matrix_(2, A, B) = (A == B);
+            });
+  }
+
+  if (pmy_mesh_->three_d) {
+    par_for("pgen_gaussiantest_radiation_femn_reinitialize_matrices_3d", DevExeSpace(), 0, pmbp->pradfemn->num_points - 1, 0, pmbp->pradfemn->num_points - 1,
+            KOKKOS_LAMBDA(int A, int B) {
+              P_matrix_(0, A, B) = (A == B);
+              Pmod_matrix_(0, A, B) = (A == B);
+              P_matrix_(1, A, B) = (A == B);
+              Pmod_matrix_(1, A, B) = (A == B);
+              P_matrix_(2, A, B) = (A == B);
+              Pmod_matrix_(2, A, B) = (A == B);
+              P_matrix_(3, A, B) = (A == B);
+              Pmod_matrix_(3, A, B) = (A == B);
+            });
+  }
 
   par_for("pgen_gaussiantest_radiation_femn", DevExeSpace(), 0, (pmbp->nmb_thispack - 1), 0, npts1, ks, ke, js, je, is, ie,
           KOKKOS_LAMBDA(int m, int A, int k, int j, int i) {
