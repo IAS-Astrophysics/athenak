@@ -42,8 +42,6 @@ class MeshBlock {
   DualArray2D<BoundaryFlag> mb_bcs;  // boundary conditions at 6 faces of each MeshBlock
   DualArray2D<NeighborBlock> nghbr;  // data on all (up to 56) neighbors for each MB
 
-  // function to compute index of 56 neighbors
-  int NeighborIndx(int i, int j, int k, int n1, int n2);
   // function to set data describing neighbors
   void SetNeighbors(std::unique_ptr<MeshBlockTree> &ptree, int *ranklist);
 
