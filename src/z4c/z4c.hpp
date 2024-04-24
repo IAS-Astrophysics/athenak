@@ -31,6 +31,7 @@ class Driver;
 
 struct Z4cTaskIDs {
   TaskID irecv;
+  TaskID irecvweyl;
   TaskID copyu;
   TaskID crhs;
   TaskID sombc;
@@ -53,8 +54,8 @@ struct Z4cTaskIDs {
   TaskID weyl_send;
   TaskID weyl_prol;
   TaskID weyl_recv;
-  TaskID csend2;
-  TaskID crecv2;
+  TaskID csendweyl;
+  TaskID crecvweyl;
 };
 
 namespace z4c {
@@ -205,6 +206,9 @@ class Z4c {
   // Boundary communication buffers and functions for u
   BoundaryValuesCC *pbval_u;
 
+  // Boundary communication buffers for the weyl scalar
+  BoundaryValuesCC *pbval_weyl;
+
   // following only used for time-evolving flow
   Real dtnew;
   // container to hold names of TaskIDs
@@ -216,6 +220,7 @@ class Z4c {
   HostArray3D<Real> psi_out;
   Real waveform_dt;
   Real last_output_time;
+  int nrad; // number of radii to perform wave extraction
 
   // functions
   void AssembleZ4cTasks(std::map<std::string, std::shared_ptr<TaskList>> tl);
@@ -223,6 +228,9 @@ class Z4c {
   TaskStatus InitRecv(Driver *d, int stage);
   TaskStatus ClearRecv(Driver *d, int stage);
   TaskStatus ClearSend(Driver *d, int stage);
+  TaskStatus InitRecvWeyl(Driver *d, int stage);
+  TaskStatus ClearRecvWeyl(Driver *d, int stage);
+  TaskStatus ClearSendWeyl(Driver *d, int stage);
   TaskStatus CopyU(Driver *d, int stage);
   TaskStatus SendU(Driver *d, int stage);
   TaskStatus RecvU(Driver *d, int stage);
@@ -242,8 +250,8 @@ class Z4c {
   TaskStatus RestrictU(Driver *d, int stage);
   TaskStatus RestrictWeyl(Driver *d, int stage);
   TaskStatus PunctureTracker(Driver *d, int stage);
-  TaskStatus CalcWeylScalar_(Driver *d, int stage);
-  TaskStatus CalcWaveForm_(Driver *d, int stage);
+  TaskStatus CalcWeylScalar(Driver *d, int stage);
+  TaskStatus CalcWaveForm(Driver *d, int stage);
 
   template <int NGHOST>
   TaskStatus CalcRHS(Driver *d, int stage);

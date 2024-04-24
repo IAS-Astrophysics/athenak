@@ -162,12 +162,15 @@ Z4c::Z4c(MeshBlockPack *ppack, ParameterInput *pin) :
   Kokkos::Profiling::pushRegion("Buffers");
   pbval_u = new BoundaryValuesCC(ppack, pin, true);
   pbval_u->InitializeBuffers((nz4c));
+  pbval_weyl = new BoundaryValuesCC(ppack, pin, true);
+  pbval_weyl->InitializeBuffers((2));
   Kokkos::Profiling::popRegion();
 
   // wave extraction spheres
   // TODO(@hzhu): Read radii from input file
   auto &grids = spherical_grids;
-  int nrad = pin->GetOrAddReal("z4c", "nrad_wave_extraction", 1);
+  // set nrad_wave_extraction = 0 to turn off wave extraction
+  nrad = pin->GetOrAddReal("z4c", "nrad_wave_extraction", 1);
   int nlev = pin->GetOrAddReal("z4c", "extraction_nlev", 10);
   for (int i=1; i<=nrad; i++) {
     Real rad = pin->GetOrAddReal("z4c", "extraction_radius_"+std::to_string(i), 10);
@@ -235,6 +238,7 @@ void Z4c::AlgConstr(MeshBlockPack *pmbp) {
 // destructor
 Z4c::~Z4c() {
   delete pbval_u;
+  delete pbval_weyl;
   delete pz4c_amr;
 }
 
