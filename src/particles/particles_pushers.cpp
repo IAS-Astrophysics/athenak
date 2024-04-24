@@ -260,8 +260,6 @@ void Particles::GeodesicIterations( const Real dt ){
 	const bool &three_d = pmy_pack->pmesh->three_d;
 	const Real x_step = 1.0E-10;
 	const Real v_step = 1.0E-10;
-	const bool is_minkowski = pmy_pack->pcoord->coord_data.is_minkowski;
-	const Real spin = pmy_pack->pcoord->coord_data.bh_spin;
 
       // First attempt: not iterative, approximate
       par_for("part_fullgr",DevExeSpace(),0,(nprtcl_thispack-1),
@@ -437,10 +435,10 @@ void Particles::HamiltonEquation_Position(const Real * x_0, const Real * x_1, co
 	H[1] += gupper[0][2]/gupper[0][0];
 
 	perp = ADM_upper[0][0]*SQR(u_0[0]) + ADM_upper[1][1]*SQR(u_0[1]) + 2.0*ADM_upper[1][0]*u_0[1]*u_0[0];
-	U_1 = ADM_upper[2][2]*SQR(u_1[2]) + 2.0*ADM_upper[0][2]*u_1[0]*u_0[2] + 2.0*ADM_upper[1][2]*u_1[1]*u_0[2];
+	U_1 = ADM_upper[2][2]*SQR(u_1[2]) + 2.0*ADM_upper[0][2]*u_0[0]*u_1[2] + 2.0*ADM_upper[1][2]*u_0[1]*u_1[2];
 	U_1 += perp;
 	U_1 = sqrt(U_1 + massive); 
-	U_0 = ADM_upper[2][2]*SQR(u_0[2]) + 2.0*ADM_upper[0][2]*u_0[2]*u_0[0] + 2.0*ADM_upper[1][2]*u_0[1]*u_0[2];
+	U_0 = ADM_upper[2][2]*SQR(u_0[2]) + 2.0*ADM_upper[0][2]*u_0[0]*u_0[2] + 2.0*ADM_upper[1][2]*u_0[1]*u_0[2];
 	U_0 += perp;	
 	U_0 = sqrt(U_0 + massive); 
 	// Alpha term
