@@ -31,6 +31,7 @@ class Driver;
 
 struct Z4cTaskIDs {
   TaskID irecv;
+  TaskID irecvweyl;
   TaskID copyu;
   TaskID crhs;
   TaskID sombc;
@@ -53,8 +54,8 @@ struct Z4cTaskIDs {
   TaskID weyl_send;
   TaskID weyl_prol;
   TaskID weyl_recv;
-  TaskID csend2;
-  TaskID crecv2;
+  TaskID csendweyl;
+  TaskID crecvweyl;
 };
 
 namespace z4c {
@@ -201,6 +202,9 @@ class Z4c {
   // Boundary communication buffers and functions for u
   BoundaryValuesCC *pbval_u;
 
+  // Boundary communication buffers for the weyl scalar
+  BoundaryValuesCC *pbval_weyl;
+
   // following only used for time-evolving flow
   Real dtnew;
   // container to hold names of TaskIDs
@@ -219,6 +223,9 @@ class Z4c {
   TaskStatus InitRecv(Driver *d, int stage);
   TaskStatus ClearRecv(Driver *d, int stage);
   TaskStatus ClearSend(Driver *d, int stage);
+  TaskStatus InitRecvWeyl(Driver *d, int stage);
+  TaskStatus ClearRecvWeyl(Driver *d, int stage);
+  TaskStatus ClearSendWeyl(Driver *d, int stage);
   TaskStatus CopyU(Driver *d, int stage);
   TaskStatus SendU(Driver *d, int stage);
   TaskStatus RecvU(Driver *d, int stage);
