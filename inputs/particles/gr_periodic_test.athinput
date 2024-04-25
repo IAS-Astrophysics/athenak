@@ -34,14 +34,14 @@ nx3       = 32       # Number of cells in each MeshBlock, X3-dir
 <time>
 evolution  = dynamic   # dynamic/kinematic/static
 integrator = rk2       # time integration algorithm
-cfl_number = 0.1     # The Courant, Friedrichs, & Lewy (CFL) Number
+cfl_number = 0.5     # The Courant, Friedrichs, & Lewy (CFL) Number
 nlim       = -1        # cycle limit
 tlim       = 5000.0      # time limit
-ndiag      = 10        # cycles between diagostic output
+ndiag      = 50        # cycles between diagostic output
 
 <coord>
 general_rel = true
-a = 0.0
+a = 0.99
 excise = true
 dexcise = 1.0E-10
 pexcise = 1.0E-10
@@ -56,10 +56,17 @@ mass = 1.0
 charge = 0.0
 
 <problem>
-equatorial = true
-angular_momentum = 4.5
+equatorial = false
+angular_momentum = 3.8
+user_hist = true
+max_init_vel = 0.2
 
 <output1>
 file_type   = pvtk      # Particle VTK data dump
 variable    = prtcl_all
-dt          = 1.0E-0     # time increment between outputs
+dt          = 1.0E+1     # time increment between outputs
+
+<output2>
+file_type   = hst      # Particle VTK data dump
+user_hist_only    = true
+dt          = 5.0E-0     # time increment between outputs
