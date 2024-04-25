@@ -359,7 +359,7 @@ void Particles::GeodesicIterations( const Real dt ){
 	for (int i=0; i<3; ++i) { v_grad[i] = v_eval[i]; }
 
 	for (int i=0; i<3; ++i){
-		for (int j=0; j<3; ++j){ v_eval[i] -= inv_Jacob[j][i]*(v_grad[j] - v_init[j] + RHS_eval_v[j]*dt); }
+		for (int j=0; j<3; ++j){ v_eval[i] -= inv_Jacob[j][i]*(v_grad[j] - v_init[j] - RHS_eval_v[j]*dt); }
 	}
 
 	// Store for next iteration
