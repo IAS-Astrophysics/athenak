@@ -802,6 +802,9 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
       if ((fabs(x3f)<4.0) && (fabs(x1v-64.0) < 8.0) && (fabs(x2v) < 4.0)) {
             printf("B0 at (%i; %i, %i, %i), (%.4f, %.4f, %.4f) is (%.4f, %.4f, %.4f) \n", m, k, j, i, x1f, x2f, x3f, b0.x1f(m,k,j,i), b0.x2f(m,k,j,i), b0.x3f(m,k,j,i));
             printf("Bcc at (%i; %i, %i, %i), (%.4f, %.4f, %.4f) is (%.4f, %.4f, %.4f) \n", m, k, j, i, x1v, x2v, x3v, w_bx, w_by, w_bz);
+            if (i==ie) {
+              printf("B0 at (%i; %i, %i, %i), (%.4f, %.4f, %.4f) is (%.4f, %.4f, %.4f) \n", m, k, j, i+1, x1v, x2v, x3v, b0.x1f(m,k,j,i+1), b0.x2f(m,k,j,i+1), b0.x3f(m,k,j,i+1));
+            }
           }
     });
   }
