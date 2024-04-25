@@ -534,9 +534,6 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
             Real xl = x1v + 0.25*dx1;
             Real xr = x1v - 0.25*dx1;
             a1(m,k,j,i) = 0.5*(A1(trs, xl,x2f,x3f) + A1(trs, xr,x2f,x3f));
-            if (x3f == 0.0) {
-              printf("Corrected A1 on block %i, at (%i, %i, %i) from value at (%.4f, %.4f, %.4f) to avg of (%.4f,_,_) and (%.4f,_,_), from %.4f to %.4f \n ", m, k, j, i, x1v, x2f, x3f, xl, xr, A1(trs,x1v,x2f,x3f), a1(m,k,j,i));
-            }
           }
 
       // Correct A2 at x1-faces, x3-faces, and x1x3-edges
@@ -567,9 +564,6 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
         Real xl = x2v + 0.25*dx2;
         Real xr = x2v - 0.25*dx2;
         a2(m,k,j,i) = 0.5*(A2(trs, x1f,xl,x3f) + A2(trs, x1f,xr,x3f));
-        if (x3f == 0.0) {
-          printf("Corrected A2 on block %i, at (%i, %i, %i) from value at (%.4f, %.4f, %.4f) to avg of (_,%.4f,_) and (_,%.4f,_), from %.4f to %.4f \n ", m, k, j, i, x1f, x2v, x3f, xl, xr, A2(trs,x1f,x2v,x3f), a2(m,k,j,i));
-        }
       }
 
       // Correct A3 at x1-faces, x2-faces, and x1x2-edges
@@ -600,9 +594,6 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
         Real xl = x3v + 0.25*dx3;
         Real xr = x3v - 0.25*dx3;
         a3(m,k,j,i) = 0.5*(A3(trs, x1f,x2f,xl) + A3(trs, x1f,x2f,xr));
-        if (x3f == 0.0) {
-          printf("Corrected A3 on block %i, at (%i, %i, %i) from value at (%.4f, %.4f, %.4f) to avg of (_,_,%.4f) and (_,_,%.4f), from %.4f to %.4f \n ", m, k, j, i, x1f, x2f, x3v, xl, xr, A3(trs,x1f,x2f,x3v), a3(m,k,j,i));
-        }
       }
     });
 
@@ -790,19 +781,27 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
       w_by = 0.5*(b0.x2f(m,k,j,i) + b0.x2f(m,k,j+1,i));
       w_bz = 0.5*(b0.x3f(m,k,j,i) + b0.x3f(m,k+1,j,i));
 
+      Real &x1min = size.d_view(m).x1min;
+      Real &x1max = size.d_view(m).x1max;
+      int nx1 = indcs.nx1;
+      Real x1v = CellCenterX(i-is, nx1, x1min, x1max);
+      Real x1f   = LeftEdgeX(i  -is, nx1, x1min, x1max);
+
+      Real &x2min = size.d_view(m).x2min;
+      Real &x2max = size.d_view(m).x2max;
+      int nx2 = indcs.nx2;
+      Real x2v = CellCenterX(j-js, nx2, x2min, x2max);
+      Real x2f   = LeftEdgeX(j  -js, nx2, x2min, x2max);
+
       Real &x3min = size.d_view(m).x3min;
       Real &x3max = size.d_view(m).x3max;
       int nx3 = indcs.nx3;
       Real x3v = CellCenterX(k-ks, nx3, x3min, x3max);
       Real x3f   = LeftEdgeX(k  -ks, nx3, x3min, x3max);
 
-      if ((((k==4 ) && (j==4 ) && (i==36)) ||
-          ((k==36) && (j==4 ) && (i==36)) ||
-          ((k==4 ) && (j==4 ) && (i==4 )) ||
-          ((k==36) && (j==4 ) && (i==4 )))
-          && (x3f == 0.0)) {
-            printf("B0 at block %i, at (%i, %i, %i) is (%.4f, %.4f, %.4f) \n", m, k, j, i, b0.x1f(m,k,j,i), b0.x2f(m,k,j,i), b0.x3f(m,k,j,i));
-            printf("Bcc at block %i, at (%i, %i, %i) is (%.4f, %.4f, %.4f) \n", m, k, j, i, w_bx, w_by, w_bz);
+      if ((fabs(x3f)<4.0) && (fabs(x1v-64.0) < 8.0) && (fabs(x1v) < 4.0)) {
+            printf("B0 at (%i; %i, %i, %i), (%.4f, %.4f, %.4f) is (%.4f, %.4f, %.4f) \n", m, k, j, i, x1f, x2f, x3f, b0.x1f(m,k,j,i), b0.x2f(m,k,j,i), b0.x3f(m,k,j,i));
+            printf("Bcc at (%i; %i, %i, %i), (%.4f, %.4f, %.4f) is (%.4f, %.4f, %.4f) \n", m, k, j, i, x1v, x2v, x3v, w_bx, w_by, w_bz);
           }
     });
   }
