@@ -212,6 +212,7 @@ void LarmorMotionErrors(HistoryData *pdata, Mesh *pm){
 	    Real init_phase = - atan2(v[3*p+1],v[3*p]);
 	    Real rho = (prtcl_mass*v_perp*g_Lor)/(prtcl_charge*B_strength); //Larmor radius
 	    Real omega = prtcl_charge*B_strength/(prtcl_mass); //Larmor frequency
+	    Real aux = 0.0;
 
 	    x1[3*p] = x[3*p] + sfac*rho*sin( init_phase + omega*curr_time );
 	    x1[3*p+1] = x[3*p+1] + sfac*rho*cos( init_phase + omega*curr_time );
@@ -222,9 +223,10 @@ void LarmorMotionErrors(HistoryData *pdata, Mesh *pm){
 	    v1[3*p+2] = v_par;// + sfac*v_par*curr_time;
 
 	    // Initial kinetic energy vs. current kinetic energy (pure magnetic field shouldn't do any work)
-	    rel_dE = ( SQR(v1[3*p]) + SQR(v1[3*p+1]) + SQR(v1[3*p+2]) ) - ( SQR(v[3*p]) + SQR(v[3*p+1]) + SQR(v[3*p+2]) );
-	    rel_dE /= ( SQR(v[3*p]) + SQR(v[3*p+1]) + SQR(v[3*p+2]) );
-	    rms_pos = ( SQR(pr(IPX,p) - x1[3*p]) + SQR(pr(IPY,p) - x1[3*p+1]) + SQR(pr(IPZ,p) - x1[3*p+2]) )/SQR(rho);
+	    aux = ( SQR(v1[3*p]) + SQR(v1[3*p+1]) + SQR(v1[3*p+2]) ) - ( SQR(v[3*p]) + SQR(v[3*p+1]) + SQR(v[3*p+2]) );
+	    aux /= ( SQR(v[3*p]) + SQR(v[3*p+1]) + SQR(v[3*p+2]) );
+	    rel_dE += aux;
+	    rms_pos += ( SQR(pr(IPX,p) - x1[3*p]) + SQR(pr(IPY,p) - x1[3*p+1]) + SQR(pr(IPZ,p) - x1[3*p+2]) )/SQR(rho);
 	    all_diffs[p] = ( SQR(pr(IPX,p) - x1[3*p]) + SQR(pr(IPY,p) - x1[3*p+1]) + SQR(pr(IPZ,p) - x1[3*p+2]) )/SQR(rho);
 	  }, Kokkos::Sum<Real>(rms_diff), Kokkos::Sum<Real>(rel_dEdt));
 
