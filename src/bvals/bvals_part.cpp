@@ -91,37 +91,55 @@ TaskStatus ParticlesBoundaryValues::SetNewPrtclGID() {
       if (iz == 0) {
         if (iy == 0) {
           // x1 face
-          int indx = NeighborIndex(ix,0,0,0,0);
-          if (nghbr.d_view(m,indx).lev > mylevel) {indx = NeighborIndex(ix,0,0,fy,fz);}
+          int indx = NeighborIndex(ix,0,0,0,0);           // neighbor at same level
+          if (nghbr.d_view(m,indx).lev > mylevel) {       // neighbor at finer level
+            indx = NeighborIndex(ix,0,0,fy,fz);
+          }
+          while (nghbr.d_view(m,indx).gid < 0) {indx++;}  // neighbor at coarser level
           UpdateGID(pi(PGID,p), nghbr.d_view(m,indx), myrank, pcounter, psendl, p);
         } else if (ix == 0) {
           // x2 face
           int indx = NeighborIndex(0,iy,0,0,0);
-          if (nghbr.d_view(m,indx).lev > mylevel) {indx = NeighborIndex(0,iy,0,fx,fz);}
+          if (nghbr.d_view(m,indx).lev > mylevel) {
+            indx = NeighborIndex(0,iy,0,fx,fz);
+          }
+          while (nghbr.d_view(m,indx).gid < 0) {indx++;}
           UpdateGID(pi(PGID,p), nghbr.d_view(m,indx), myrank, pcounter, psendl, p);
         } else {
           // x1x2 edge
           int indx = NeighborIndex(ix,iy,0,0,0);
-          if (nghbr.d_view(m,indx).lev > mylevel) {indx = NeighborIndex(ix,iy,0,fz,0);}
+          if (nghbr.d_view(m,indx).lev > mylevel) {
+            indx = NeighborIndex(ix,iy,0,fz,0);
+          }
+          while (nghbr.d_view(m,indx).gid < 0) {indx++;}
           UpdateGID(pi(PGID,p), nghbr.d_view(m,indx), myrank, pcounter, psendl, p);
         }
       } else if (iy == 0) {
         if (ix == 0) {
           // x3 face
           int indx = NeighborIndex(0,0,iz,0,0);
-          if (nghbr.d_view(m,indx).lev > mylevel) {indx = NeighborIndex(0,0,iz,fx,fy);}
+          if (nghbr.d_view(m,indx).lev > mylevel) {
+            indx = NeighborIndex(0,0,iz,fx,fy);
+          }
+          while (nghbr.d_view(m,indx).gid < 0) {indx++;}
           UpdateGID(pi(PGID,p), nghbr.d_view(m,indx), myrank, pcounter, psendl, p);
         } else {
           // x3x1 edge
           int indx = NeighborIndex(ix,0,iz,0,0);
-          if (nghbr.d_view(m,indx).lev > mylevel) {indx = NeighborIndex(ix,0,iz,fy,0);}
+          if (nghbr.d_view(m,indx).lev > mylevel) {
+            indx = NeighborIndex(ix,0,iz,fy,0);
+          }
+          while (nghbr.d_view(m,indx).gid < 0) {indx++;}
           UpdateGID(pi(PGID,p), nghbr.d_view(m,indx), myrank, pcounter, psendl, p);
         }
       } else {
         if (ix == 0) {
           // x2x3 edge
           int indx = NeighborIndex(0,iy,iz,0,0);
-          if (nghbr.d_view(m,indx).lev > mylevel) {indx = NeighborIndex(0,iy,iz,fx,0);}
+          if (nghbr.d_view(m,indx).lev > mylevel) {
+            indx = NeighborIndex(0,iy,iz,fx,0);
+          }
+          while (nghbr.d_view(m,indx).gid < 0) {indx++;}
           UpdateGID(pi(PGID,p), nghbr.d_view(m,indx), myrank, pcounter, psendl, p);
         } else {
           // corners
@@ -146,7 +164,6 @@ TaskStatus ParticlesBoundaryValues::SetNewPrtclGID() {
       } else if (x3 > meshsize.x3max) {
         pr(IPZ,p) -= (meshsize.x3max - meshsize.x3min);
       }
-//std::cout << "m="<<m<<" newID="<<pi(PGID,p)<<" (ix,iy,iz) = "<<ix<<" "<<iy<<" "<<iz<<"   (fx,fy,fz) = "<<fx<<" "<<fy<<" "<<fz<<std::endl;
     }
   });
   nprtcl_send = counter;
