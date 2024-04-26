@@ -54,6 +54,7 @@ enum TaskName {
   MHD_NTASKS,
 
   Z4c_Recv,
+  Z4c_IRecvW,
   Z4c_CopyU,
   Z4c_CalcRHS,
   Z4c_SomBC,
@@ -75,8 +76,8 @@ enum TaskName {
   Z4c_SendW,
   Z4c_RecvW,
   Z4c_ProlW,
-  Z4c_ClearS2,
-  Z4c_ClearR2,
+  Z4c_ClearSW,
+  Z4c_ClearRW,
   Z4c_Wave,
   Z4c_PT,
   Z4c_NTASKS
