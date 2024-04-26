@@ -85,6 +85,7 @@ void Z4c::QueueZ4cTasks() {
 
   // Start task list
   pnr->QueueTask(&Z4c::InitRecv, this, Z4c_Recv, "Z4c_Recv", Task_Start);
+  pnr->QueueTask(&Z4c::InitRecvWeyl, this, Z4c_IRecvW, "Z4c_IRecvW", Task_Start);
 
   // Run task list
   pnr->QueueTask(&Z4c::CopyU, this, Z4c_CopyU, "Z4c_CopyU", Task_Run);
@@ -129,18 +130,18 @@ void Z4c::QueueZ4cTasks() {
   pnr->QueueTask(&Z4c::ADMConstraints_, this, Z4c_ADMC, "Z4c_ADMC", Task_End,
   //               {Z4c_Z4c2ADM});
                  {Z4c_ClearR});
-  pnr->QueueTask(&Z4c::CalcWeylScalar_, this, Z4c_Weyl, "Z4c_Weyl", Task_End, {Z4c_ADMC});
+  pnr->QueueTask(&Z4c::CalcWeylScalar, this, Z4c_Weyl, "Z4c_Weyl", Task_End, {Z4c_ADMC});
   pnr->QueueTask(&Z4c::RestrictWeyl, this, Z4c_RestW, "Z4c_RestW", Task_End, {Z4c_Weyl});
   pnr->QueueTask(&Z4c::SendWeyl, this, Z4c_SendW, "Z4c_SendW", Task_End, {Z4c_RestW});
   pnr->QueueTask(&Z4c::RecvWeyl, this, Z4c_RecvW, "Z4c_RecvW", Task_End, {Z4c_SendW});
   pnr->QueueTask(&Z4c::ProlongateWeyl, this, Z4c_ProlW, "Z4c_ProlW", Task_End,
                  {Z4c_RecvW});
-  pnr->QueueTask(&Z4c::ClearSend, this, Z4c_ClearS2, "Z4c_ClearS2", Task_End,
+  pnr->QueueTask(&Z4c::ClearSendWeyl, this, Z4c_ClearSW, "Z4c_ClearS2", Task_End,
                  {Z4c_ProlW});
-  pnr->QueueTask(&Z4c::ClearRecv, this, Z4c_ClearR2, "Z4c_ClearR2", Task_End,
-                 {Z4c_ClearS2});
-  pnr->QueueTask(&Z4c::CalcWaveForm_, this, Z4c_Wave, "Z4c_Wave", Task_End,
-                 {Z4c_ClearR2});
+  pnr->QueueTask(&Z4c::ClearRecvWeyl, this, Z4c_ClearRW, "Z4c_ClearR2", Task_End,
+                 {Z4c_ClearSW});
+  pnr->QueueTask(&Z4c::CalcWaveForm, this, Z4c_Wave, "Z4c_Wave", Task_End,
+                 {Z4c_ClearRW});
   pnr->QueueTask(&Z4c::PunctureTracker, this, Z4c_PT, "Z4c_PT", Task_End, {Z4c_ADMC});
 }
 
@@ -459,9 +460,13 @@ TaskStatus Z4c::InitRecvWeyl(Driver *pdrive, int stage) {
   if (pmy_pack->pz4c->nrad == 0) {
     return TaskStatus::complete;
   } else {
-    TaskStatus tstat = pbval_weyl->InitRecv(2);
-    if (tstat != TaskStatus::complete) return tstat;
-    return tstat;
+    float time_32 = static_cast<float>(pmy_pack->pmesh->time);
+    if ((last_output_time==time_32) && (stage == pdrive->nexp_stages)) {
+      TaskStatus tstat = pbval_weyl->InitRecv(2);
+      return tstat;
+    } else {
+      return TaskStatus::complete;
+    }
   }
 }
 
@@ -473,9 +478,13 @@ TaskStatus Z4c::ClearRecvWeyl(Driver *pdrive, int stage) {
   if (pmy_pack->pz4c->nrad == 0) {
     return TaskStatus::complete;
   } else {
-    TaskStatus tstat = pbval_weyl->ClearRecv();
-    if (tstat != TaskStatus::complete) return tstat;
-    return tstat;
+    float time_32 = static_cast<float>(pmy_pack->pmesh->time);
+    if ((last_output_time==time_32) && (stage == pdrive->nexp_stages)) {
+      TaskStatus tstat = pbval_weyl->ClearRecv();
+      return tstat;
+    } else {
+      return TaskStatus::complete;
+    }
   }
 }
 
@@ -487,9 +496,13 @@ TaskStatus Z4c::ClearSendWeyl(Driver *pdrive, int stage) {
   if (pmy_pack->pz4c->nrad == 0) {
     return TaskStatus::complete;
   } else {
-    TaskStatus tstat = pbval_weyl->ClearSend();
-    if (tstat != TaskStatus::complete) return tstat;
-    return tstat;
+    float time_32 = static_cast<float>(pmy_pack->pmesh->time);
+    if ((last_output_time==time_32) && (stage == pdrive->nexp_stages)) {
+      TaskStatus tstat = pbval_weyl->ClearSend();
+      return tstat;
+    } else {
+      return TaskStatus::complete;
+    }
   }
 }
 
