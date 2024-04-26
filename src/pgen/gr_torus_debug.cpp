@@ -803,7 +803,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
             printf("B0 at (%i; %i, %i, %i), (%.4f, %.4f, %.4f) is (%.4f, %.4f, %.4f) \n", m, k, j, i, x1f, x2f, x3f, b0.x1f(m,k,j,i), b0.x2f(m,k,j,i), b0.x3f(m,k,j,i));
             printf("Bcc at (%i; %i, %i, %i), (%.4f, %.4f, %.4f) is (%.4f, %.4f, %.4f) \n", m, k, j, i, x1v, x2v, x3v, w_bx, w_by, w_bz);
             if (i==ie) {
-              printf("B0 at (%i; %i, %i, %i), (%.4f, %.4f, %.4f) is (%.4f, %.4f, %.4f) \n", m, k, j, i+1, x1v, x2v, x3v, b0.x1f(m,k,j,i+1), b0.x2f(m,k,j,i+1), b0.x3f(m,k,j,i+1));
+              printf("B0 at (%i; %i, %i, %i), (%.4f, %.4f, %.4f) is (%.4f, %.4f, %.4f) \n", m, k, j, i+1, x1f, x2f, x3f, b0.x1f(m,k,j,i+1), b0.x2f(m,k,j,i+1), b0.x3f(m,k,j,i+1));
             }
           }
     });
