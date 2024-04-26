@@ -260,15 +260,16 @@ void Particles::GeodesicIterations( const Real dt ){
 	const bool &three_d = pmy_pack->pmesh->three_d;
 	const Real x_step = 1.0E-10;
 	const Real v_step = 1.0E-10;
+        Real avg_iter = 0.0;
 
-      // First attempt: not iterative, approximate
-      par_for("part_fullgr",DevExeSpace(),0,(nprtcl_thispack-1),
-      KOKKOS_LAMBDA(const int p) {
+      Kokkos::parallel_reduce("part_fullgr",Kokkos::RangePolicy<>(DevExeSpace(),0,(nprtcl_thispack-1)),
+			  KOKKOS_LAMBDA(const int p, Real &aux_n_iter) {
+      //par_for("part_fullgr",DevExeSpace(),0,(nprtcl_thispack-1),
+      //KOKKOS_LAMBDA(const int p) {
 
 	//std::cout << "Particle: " << p << " " << pr(IPX,p) << " " << pr(IPY,p) << " " << pr(IPZ,p) << " " << pr(IPVX,p) << " " << pr(IPVY,p) << " " << pr(IPVZ,p) << std::endl;
         // Iterate per particle such that those that converge quicker don't go through as many iterations
 	// Initialize iteration variables
-	int n_iter = 0;
 	Real x_init[3] = {pr(IPX,p), pr(IPY,p), pr(IPZ,p)};
 	Real v_init[3] = {pr(IPVX,p), pr(IPVY,p), pr(IPVZ,p)};
 	Real x_eval[3] = {pr(IPX,p)+pr(IPVX,p)*dt, pr(IPY,p)+pr(IPVY,p)*dt, pr(IPZ,p)+pr(IPVZ,p)*dt};
@@ -280,6 +281,7 @@ void Particles::GeodesicIterations( const Real dt ){
 	Real Jacob[3][3], inv_Jacob[3][3];
 	Real x_grad[3], v_grad[3];
 	Real RHS_grad_1[3], RHS_grad_2[3];
+	int n_iter = 0;
 
 	// Start iterating
 	// Using Newton method, thus computing the Jacobian at each iteration
@@ -384,8 +386,10 @@ void Particles::GeodesicIterations( const Real dt ){
 	pr(IPX,p) = x_eval[0];
         if (multi_d) { pr(IPY,p) = x_eval[1]; }
         if (three_d) { pr(IPZ,p) = x_eval[2]; }
+	aux_n_iter += n_iter;
 	//std::cout << "Particle: " << p << " " << pr(IPX,p) << " " << pr(IPY,p) << " " << pr(IPZ,p) << " " << pr(IPVX,p) << " " << pr(IPVY,p) << " " << pr(IPVZ,p) << std::endl;
-      });
+      }, Kokkos::Sum<Real>(avg_iter));
+      average_iteration_number += avg_iter / nprtcl_thispack;
       return;
 }
 

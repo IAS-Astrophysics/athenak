@@ -66,6 +66,7 @@ class Particles {
   DvceArray2D<int>  prtcl_idata;   // integer properties each particle (gid, tag, etc.)
   Real dtnew;
   Real iter_tolerance;
+  Real average_iteration_number;
   int max_iter;
 
   ParticlesPusher pusher;

@@ -171,15 +171,18 @@ void EnergyConservationTest(HistoryData *pdata, Mesh *pm){
 	// and compares to the energy at the beginning of the simulation.
 	// This is used as a metric for the accuracy of the gr integration.
 	
-	  pdata->nhist = 2;
-	  pdata->label[0] = "avg_rel_dEdt"; //rms difference in the energy between the initial condition and the current time
-	  pdata->label[1] = "max_diff"; //sqrt of the maximum of the squared differences in energy
+	  pdata->nhist = 3;
+	  pdata->label[0] = "avg_rel_dE"; //rms difference in the energy between the initial condition and the current time
+	  pdata->label[1] = "max_diff"; //Maximum relative difference
+	  pdata->label[2] = "avg_iter"; // Average number of iterations for this diagnostic interval
 
 	  // Re-compute the initial positions
 	  auto &mbsize = pm->pmb_pack->pmb->mb_size;
 	  auto &pr = pm->pmb_pack->ppart->prtcl_rdata;
 	  auto &pi = pm->pmb_pack->ppart->prtcl_idata;
 	  auto &npart = pm->pmb_pack->ppart->nprtcl_thispack;
+	  auto &avg_it = pm->pmb_pack->ppart->average_iteration_number;
+	  auto &ncycles = pm->ncycle;
 	  auto gids = pm->pmb_pack->gids;
 	  auto gide = pm->pmb_pack->gide;
 	  const bool is_minkowski = !(aux_pin->GetOrAddBoolean("coord", "general_rel", true));
@@ -210,8 +213,8 @@ void EnergyConservationTest(HistoryData *pdata, Mesh *pm){
 	    for (int i=0; i<3; ++i){ U_0 -= gu[0][i+1]/gu[0][0]*u[i]; }
 
 	    // Initial energy vs. current energy
-	    rel_dE = fabs( U_0 - E_i[p] )/fabs(E_i[p]);
-	    all_diffs[p] = rel_dE;
+	    rel_dE += fabs( U_0 - E_i[p] )/fabs(E_i[p]);
+	    all_diffs[p] = fabs( U_0 - E_i[p] )/fabs(E_i[p]);
 	  }, Kokkos::Sum<Real>(rel_dEdt));
 
 	  rel_dEdt = rel_dEdt/npart ;
@@ -224,7 +227,9 @@ void EnergyConservationTest(HistoryData *pdata, Mesh *pm){
 	  //ismax = ismax;
 	  pdata->hdata[0] = rel_dEdt;
 	  pdata->hdata[1] = ismax;
+	  pdata->hdata[2] = avg_it/ncycles;
 	  if (curr_time == aux_pin->GetOrAddReal("time", "tlim", 1.0)){
+		std::cout << "Avg iterations: " << avg_it/ncycles << std::endl;
 		std::cout << "Freeing auxiliary mallocs for particle test problem." << std::endl;
 	  	free(E_init);
 	  	free(all_diffs_);

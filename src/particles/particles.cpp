@@ -39,6 +39,7 @@ Particles::Particles(MeshBlockPack *ppack, ParameterInput *pin) :
   Real r_npart = ppc*static_cast<Real>((pmy_pack->nmb_thispack)*ncells);
   // then cast to integer
   nprtcl_thispack = static_cast<int>(r_npart);
+  average_iteration_number = 0.0;
 
   // select particle type
   {
