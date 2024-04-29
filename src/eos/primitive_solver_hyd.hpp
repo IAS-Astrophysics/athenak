@@ -241,10 +241,10 @@ class PrimitiveSolverHydro {
       ps_.PrimToCon(prim_pt, cons_pt, b, g3d);
 
       // Check for NaNs
-      if (CheckForConservedNaNs(cons_pt)) {
+      /*if (CheckForConservedNaNs(cons_pt)) {
         printf("Error occurred in PrimToCons at (%d, %d, %d, %d)\n", m, k, j, i);
         DumpPrimitiveVars(prim_pt);
-      }
+      }*/
 
       // Save the densitized conserved variables.
       cons(m, IDN, k, j, i) = cons_pt[CDN]*sdetg;
@@ -416,7 +416,7 @@ class PrimitiveSolverHydro {
         if (result.error != Primitive::Error::SUCCESS && (nerrs_ + sumerrs < errcap_)) {
           // TODO(JF): put in a proper error response here.
           sumerrs++;
-          printf("An error occurred during the primitive solve: %s\n"
+          /*printf("An error occurred during the primitive solve: %s\n"
                  "  Location: (%d, %d, %d, %d)\n"
                  "  Conserved vars: \n"
                  "    D   = %.17g\n"
@@ -446,11 +446,11 @@ class PrimitiveSolverHydro {
                  adm.vK_dd(m, 0, 0, k, j, i), adm.vK_dd(m, 0, 1, k, j, i),
                  adm.vK_dd(m, 0, 2, k, j, i),
                  adm.vK_dd(m, 1, 1, k, j, i), adm.vK_dd(m, 1, 2, k, j, i),
-                 adm.vK_dd(m, 2, 2, k, j, i));
+                 adm.vK_dd(m, 2, 2, k, j, i));*/
           if (nerrs_ + sumerrs == errcap_) {
-            printf("%d C2P errors have been detected on rank %d. All future C2P errors\n"
+            /*printf("%d C2P errors have been detected on rank %d. All future C2P errors\n"
                    "on this rank will be suppressed. Fix your code!\n",
-                   nerrs_ + sumerrs,rank);
+                   nerrs_ + sumerrs,rank);*/
           }
         }
         // Regardless of failure, we need to copy the primitives.
@@ -587,7 +587,7 @@ class PrimitiveSolverHydro {
   KOKKOS_INLINE_FUNCTION
   int CheckForConservedNaNs(const Real cons_pt[NCONS]) const {
     int nans = 0;
-    if (!isfinite(cons_pt[CDN])) {
+    /*if (!isfinite(cons_pt[CDN])) {
       printf("D is NaN!\n"); // NOLINT
       nans = 1;
     }
@@ -606,14 +606,14 @@ class PrimitiveSolverHydro {
     if (!isfinite(cons_pt[CTA])) {
       printf("Tau is NaN!\n"); // NOLINT
       nans = 1;
-    }
+    }*/
 
     return nans;
   }
 
   KOKKOS_INLINE_FUNCTION
   void DumpPrimitiveVars(const Real prim_pt[NPRIM]) const {
-    printf("Primitive vars: \n"
+    /*printf("Primitive vars: \n"
            "  rho = %.17g\n"
            "  ux  = %.17g\n"
            "  uy  = %.17g\n"
@@ -621,7 +621,7 @@ class PrimitiveSolverHydro {
            "  P   = %.17g\n"
            "  T   = %.17g\n",
            prim_pt[PRH], prim_pt[PVX], prim_pt[PVY],
-           prim_pt[PVZ], prim_pt[PPR], prim_pt[PTM]);
+           prim_pt[PVZ], prim_pt[PPR], prim_pt[PTM]);*/
   }
 };
 #endif  // EOS_PRIMITIVE_SOLVER_HYD_HPP_
