@@ -279,15 +279,13 @@ TaskStatus Z4c::PunctureTracker(Driver *pdrive, int stage) {
 // ! \brief CCE initial data for Pittnull code (cce dumps for Pittnull).
 
 TaskStatus Z4c::CCEDump(Driver *pdrive, int stage) {
-  printf("%s",__func__);
-  
   float time_32 = static_cast<float>(pmy_pack->pmesh->time);
   float next_32 = static_cast<float>(cce_dump_last_output_time+cce_dump_dt);
   //if ((time_32 >= next_32) || (time_32 == 0)) {
   // dump only at t>0
   if ((time_32 >= next_32)) {
     if (stage == pdrive->nexp_stages) {
-      printf("%s:(ctime,dt)=(%f,%f)",__func__,pmy_pack->pmesh->time,cce_dump_dt);
+      //printf("%s:(ctime,dt)=(%f,%f)",__func__,pmy_pack->pmesh->time,cce_dump_dt);
       int cce_iter = 0;
       for (auto cce : pmy_pack->pz4c_cce) {
         cce->Interpolate(pmy_pack);
