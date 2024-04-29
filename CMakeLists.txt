@@ -35,6 +35,7 @@ option(Athena_SINGLE_PRECISION "Compile for single precision" OFF)
 option(Athena_ENABLE_MPI "Compile with MPI parallelism enabled" OFF)
 option(Athena_ENABLE_OPENMP "Compile with OpenMP parallelism enabled" OFF)
 set(PROBLEM built_in_pgens CACHE STRING "Name of problem generator function")
+option(Z4c_CCE "Activate CCE dump for Z4c" OFF)
 
 #------ set macros exported to config.hpp ------------------------------------------------
 
@@ -129,12 +130,18 @@ if (${PROBLEM} STREQUAL "z4c_two_puncture")
         #target_link_libraries(athena PUBLIC ${CMAKE_SOURCE_DIR}/gsl/lib/libgslcblas.a)
 	find_package(GSL REQUIRED)
 	target_link_libraries(athena PUBLIC GSL::gsl GSL::gslcblas)
+## CCE on/off
+	if (Z4c_CCE)
+		set(Z4C_CCE_ENABLED 1)
 ## HDF5 for CCE
-	#find_package(HDF5 REQUIRED)
-	set(CMAKE_HDF5_LIBRARY)
-	set(CMAKE_HDF5_INCLUDE)
-	target_include_directories(athena PUBLIC ${CMAKE_HDF5_INCLUDE})
-	target_link_libraries(athena PUBLIC ${CMAKE_HDF5_LIBRARY})
+		#find_package(HDF5 REQUIRED)
+		set(HDF5_LIBRARY)
+		set(HDF5_INCLUDE)
+		target_include_directories(athena PUBLIC ${HDF5_INCLUDE})
+		target_link_libraries(athena PUBLIC ${HDF5_LIBRARY})
+	else()
+		set(Z4C_CCE_ENABLED 0)
+	endif()
 
 	set(TWO_PUNCTURES 1)
 else()
