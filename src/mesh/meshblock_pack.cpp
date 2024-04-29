@@ -67,10 +67,12 @@ MeshBlockPack::~MeshBlockPack() {
     pz4c_ptracker.resize(0);
     
     // cce dump
+#if Z4C_CCE_ENABLED
     for (auto cce : pz4c_cce) {
       delete cce;
     }
     pz4c_cce.resize(0);
+#endif
   }
   if (ppart  != nullptr) {delete ppart;}
   // must be last, since it calls ~BoundaryValues() which (MPI) uses pmy_pack->pmb->nnghbr
