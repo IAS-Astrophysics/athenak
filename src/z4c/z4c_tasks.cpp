@@ -347,19 +347,15 @@ TaskStatus Z4c::CalcWeylScalar(Driver *pdrive, int stage) {
     return TaskStatus::complete;
   } else {
     float time_32 = static_cast<float>(pmy_pack->pmesh->time);
-    float next_32 = static_cast<float>(last_output_time+waveform_dt);
-    if ((time_32 >= next_32) || (time_32 == 0)) {
+    if (last_output_time==time_32 && stage == pdrive->nexp_stages) {
       auto &indcs = pmy_pack->pmesh->mb_indcs;
-      if (stage == pdrive->nexp_stages) {
-        switch (indcs.ng) {
-          case 2: Z4cWeyl<2>(pmy_pack);
-                  break;
-          case 3: Z4cWeyl<3>(pmy_pack);
-                  break;
-          case 4: Z4cWeyl<4>(pmy_pack);
-                  break;
-        }
-        last_output_time = time_32;
+      switch (indcs.ng) {
+        case 2: Z4cWeyl<2>(pmy_pack);
+                break;
+        case 3: Z4cWeyl<3>(pmy_pack);
+                break;
+        case 4: Z4cWeyl<4>(pmy_pack);
+                break;
       }
     }
     return TaskStatus::complete;
@@ -461,7 +457,9 @@ TaskStatus Z4c::InitRecvWeyl(Driver *pdrive, int stage) {
     return TaskStatus::complete;
   } else {
     float time_32 = static_cast<float>(pmy_pack->pmesh->time);
-    if ((last_output_time==time_32) && (stage == pdrive->nexp_stages)) {
+    float next_32 = static_cast<float>(last_output_time+waveform_dt);
+    if (((time_32 >= next_32) || (time_32 == 0)) && stage == pdrive->nexp_stages) {
+      last_output_time = time_32;
       TaskStatus tstat = pbval_weyl->InitRecv(2);
       return tstat;
     } else {
