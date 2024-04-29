@@ -203,6 +203,8 @@ void MeshBlockPack::AddPhysics(ParameterInput *pin) {
     }
     
     // init cce dump
+    pz4c_cce.reserve(0);
+#if Z4C_CCE_ENABLED
     int ncce = pin->GetOrAddInteger("cce", "num_radii", 0);
     pz4c_cce.reserve(10*ncce);// 10 different components for each radius
     for(int n = 0; n < ncce; ++n)
@@ -219,7 +221,7 @@ void MeshBlockPack::AddPhysics(ParameterInput *pin) {
       pz4c_cce.push_back(new z4c::CCE(pmesh, pin, "betaz",n));
       pz4c_cce.push_back(new z4c::CCE(pmesh, pin, "alp",n));
     }
-    
+#endif
     nphysics++;
   } else {
     pz4c = nullptr;

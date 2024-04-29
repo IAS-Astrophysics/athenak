@@ -1,3 +1,8 @@
+#include "athena.hpp"
+#include "globals.hpp"
+
+#if Z4C_CCE_ENABLED
+
 #include <algorithm> // for fill
 #include <cmath>     // for NAN
 #include <stdexcept>
@@ -474,3 +479,5 @@ static int output_3Dmodes(const int iter/* output iteration */, const char *dir,
 }
 
 } // end namespace z4c
+
+#endif // Z4C_CCE_ENABLED
