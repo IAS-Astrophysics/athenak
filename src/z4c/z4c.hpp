@@ -206,6 +206,9 @@ class Z4c {
   HostArray3D<Real> psi_out;
   Real waveform_dt;
   Real last_output_time;
+  // CCE
+  Real cce_dump_dt;
+  Real cce_dump_last_output_time;
 
   // functions
   void AssembleZ4cTasks(std::map<std::string, std::shared_ptr<TaskList>> tl);
