@@ -121,7 +121,7 @@ void ProblemGenerator::RadiationFEMNGaussiantest(ParameterInput *pin, const bool
             int nx2 = indcs.nx2;
             Real x2 = CellCenterX(j - js, nx2, x2min, x2max);
 
-            f0_(m, A, k, j, i) = exp(-(x1 * x1 + x2 * x2) / 4.);
+            f0_(m, A, k, j, i) = exp(-3 * (x1 * x1 + x2 * x2));
           });
 
   // set metric to minkowski
