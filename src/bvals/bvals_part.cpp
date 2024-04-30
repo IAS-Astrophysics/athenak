@@ -208,6 +208,12 @@ TaskStatus ParticlesBoundaryValues::CountSendsAndRecvs() {
 #if MPI_PARALLEL_ENABLED
   // Sort sendlist on host by destrank.
   namespace KE = Kokkos::Experimental;
+  // Custom operators to sort ParticleLocationData array by dest_rank or prtcl_indx
+  struct {
+  bool operator()(ParticleLocationData a, ParticleLocationData b)
+    const { return a.dest_rank < b.dest_rank; }
+  } SortByRank;
+
   std::sort(KE::begin(sendlist.h_view), KE::end(sendlist.h_view), SortByRank);
   // sync sendlist host array with device.  This results in sorted array on device
   sendlist.template modify<HostMemSpace>();
@@ -441,6 +447,13 @@ TaskStatus ParticlesBoundaryValues::RecvAndUnpackPrtcls() {
 #if MPI_PARALLEL_ENABLED
   // Sort sendlist on host by index in particle array
   namespace KE = Kokkos::Experimental;
+  
+  // Custom operators to sort ParticleLocationData array by dest_rank or prtcl_indx
+  struct {
+  bool operator()(ParticleLocationData a, ParticleLocationData b)
+    const { return a.prtcl_indx < b.prtcl_indx; }
+  } SortByIndex;
+
   std::sort(KE::begin(sendlist.h_view), KE::end(sendlist.h_view), SortByIndex);
   // sync sendlist host array with device.  This results in sorted array on device
   sendlist.template modify<HostMemSpace>();

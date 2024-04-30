@@ -215,16 +215,6 @@ struct ParticleLocationData {
   int dest_rank;    // rank of target MeshBlock
 };
 
-// Custom operators to sort ParticleLocationData array by dest_rank or prtcl_indx
-struct {
-  bool operator()(ParticleLocationData a, ParticleLocationData b)
-    const { return a.dest_rank < b.dest_rank; }
-} SortByRank;
-struct {
-  bool operator()(ParticleLocationData a, ParticleLocationData b)
-    const { return a.prtcl_indx < b.prtcl_indx; }
-} SortByIndex;
-
 //----------------------------------------------------------------------------------------
 //! \struct ParticleMessageData
 //! \brief Data describing MPI messages containing particles
