@@ -713,19 +713,19 @@ static void GetPrimitivesAtIsoPoint(const tov_pgen& tov, Real r_iso,
     idx--;
   }*/
   if (idx >= tov.npoints || idx < 0) {
-    printf("There's a problem with the index!\n" // NOLINT
+    /*printf("There's a problem with the index!\n" // NOLINT
            " idx = %d\n"
            " r_iso = %g\n"
-           " dr = %g\n",idx,r_iso,tov.dr);
+           " dr = %g\n",idx,r_iso,tov.dr);*/
   }
   // Interpolate to get the primitive.
   p = Interpolate(r_iso, R_iso(idx), R_iso(idx+1), Ps(idx), Ps(idx+1));
   m = Interpolate(r_iso, R_iso(idx), R_iso(idx+1), Ms(idx), Ms(idx+1));
   alp = Interpolate(r_iso, R_iso(idx), R_iso(idx+1), alps(idx), alps(idx+1));
   rho = pow(p/tov.kappa, 1.0/tov.gamma);
-  if (!isfinite(p)) {
+  /*if (!isfinite(p)) {
     printf("There's a problem with p!\n");
-  }
+  }*/
 }
 
 KOKKOS_INLINE_FUNCTION
