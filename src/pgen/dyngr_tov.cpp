@@ -81,6 +81,8 @@ static void GetPrimitivesAtIsoPoint(const tov_pgen& pgen, Real r_iso,
 KOKKOS_INLINE_FUNCTION
 static void GetPandRho(const tov_pgen& pgen, Real r, Real &rho, Real &p);
 KOKKOS_INLINE_FUNCTION
+static void GetPandRhoIso(const tov_pgen& pgen, Real r, Real &rho, Real &p);
+KOKKOS_INLINE_FUNCTION
 static Real Interpolate(Real x,
                         const Real x1, const Real x2, const Real y1, const Real y2);
 KOKKOS_INLINE_FUNCTION
@@ -274,11 +276,18 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     adm.vK_dd(m,1,1,k,j,i) = adm.vK_dd(m,1,2,k,j,i) = adm.vK_dd(m,2,2,k,j,i) = 0.0;
   });
 
-  if (pmbp->pmhd != nullptr && !tov.isotropic) {
+  if (pmbp->pmhd != nullptr) {
     // parse some parameters
     tov.b_norm = pin->GetOrAddReal("problem", "b_norm", 0.0);
     tov.pcut = pin->GetOrAddReal("problem", "pcut", 1e-6);
     tov.magindex = pin->GetOrAddReal("problem", "magindex", 2);
+
+    // If use_pcut_rel = true, we take pcut to be a percentage of pmax rather than
+    // an absolute cutoff.
+    if (pin->GetOrAddBoolean("problem", "use_pcut_rel", false)) {
+      Real pmax = tov.kappa*pow(tov.rhoc, tov.gamma);
+      tov.pcut = tov.pcut * pmax;
+    }
 
     // compute vector potential over all faces
     int ncells1 = indcs.nx1 + 2*(indcs.ng);
@@ -745,10 +754,30 @@ static void GetPandRho(const tov_pgen& tov, Real r, Real &rho, Real &p) {
 }
 
 KOKKOS_INLINE_FUNCTION
+static void GetPandRhoIso(const tov_pgen& tov, Real r, Real &rho, Real &p) {
+  if (r >= tov.R_edge_iso) {
+    rho = 0.;
+    p   = 0.;
+    return;
+  }
+  // We need to search to find the right index because isotropic coordinates aren't
+  // evenly spaced.
+  int idx = FindIsotropicIndex(tov, r);
+  const auto R_iso = tov.R_iso.d_view;
+  const auto &Ps = tov.P.d_view;
+  p = Interpolate(r, R_iso(idx), R_iso(idx+1), Ps(idx), Ps(idx+1));
+  rho = pow(p/tov.kappa, 1.0/tov.gamma);
+}
+
+KOKKOS_INLINE_FUNCTION
 static Real A1(const tov_pgen& tov, Real x1, Real x2, Real x3) {
   Real r = sqrt(SQR(x1) + SQR(x2) + SQR(x3));
   Real p, rho;
-  GetPandRho(tov, r, rho, p);
+  if (!tov.isotropic) {
+    GetPandRho(tov, r, rho, p);
+  } else {
+    GetPandRhoIso(tov, r, rho, p);
+  }
   return -x2*tov.b_norm*fmax(p - tov.pcut, 0.0)*pow(1.0 - rho/tov.rhoc,tov.magindex);
 }
 
@@ -756,7 +785,11 @@ KOKKOS_INLINE_FUNCTION
 static Real A2(const tov_pgen& tov, Real x1, Real x2, Real x3) {
   Real r = sqrt(SQR(x1) + SQR(x2) + SQR(x3));
   Real p, rho;
-  GetPandRho(tov, r, rho, p);
+  if (!tov.isotropic) {
+    GetPandRho(tov, r, rho, p);
+  } else {
+    GetPandRhoIso(tov, r, rho, p);
+  }
   return x1*tov.b_norm*fmax(p - tov.pcut, 0.0)*pow(1.0 - rho/tov.rhoc,tov.magindex);
 }
 
