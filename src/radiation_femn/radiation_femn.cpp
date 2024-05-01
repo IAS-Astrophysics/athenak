@@ -238,7 +238,7 @@ namespace radiationfemn
         }
 
         // beam sources
-        Real beam_source = false;
+        Real beam_source = true;
         if (beam_source && fpn)
         {
             Kokkos::realloc(beam_source_1_vals, num_points);

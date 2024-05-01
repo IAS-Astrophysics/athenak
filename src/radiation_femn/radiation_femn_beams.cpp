@@ -17,59 +17,75 @@
 
 namespace radiationfemn {
 
-TaskStatus RadiationFEMN::BeamsSourcesFEMN(Driver *pdriver, int stage) {
-
-  auto &indcs = pmy_pack->pmesh->mb_indcs;
+void ApplyBeamSourcesFEMN(Mesh *pmesh) {
+  auto &indcs = pmesh->mb_indcs;
   int &is = indcs.is;
   int &js = indcs.js;
   //int &ks = indcs.ks;
-  int npts1 = num_points_total - 1;
-  int nmb1 = pmy_pack->nmb_thispack - 1;
-  auto &mb_bcs = pmy_pack->pmb->mb_bcs;
-  auto &size = pmy_pack->pmb->mb_size;
+  int npts1 = pmesh->pmb_pack->pradfemn->num_points_total - 1;
+  int nmb1 = pmesh->pmb_pack->nmb_thispack - 1;
+  auto &mb_bcs = pmesh->pmb_pack->pmb->mb_bcs;
+  auto &size = pmesh->pmb_pack->pmb->mb_size;
 
   int &ng = indcs.ng;
   //int n1 = indcs.nx1 + 2 * ng;
   int n2 = (indcs.nx2 > 1) ? (indcs.nx2 + 2 * ng) : 1;
   int n3 = (indcs.nx3 > 1) ? (indcs.nx3 + 2 * ng) : 1;
-  auto &f0_ = pmy_pack->pradfemn->f0;
-  auto &num_beams_ = pmy_pack->pradfemn->num_beams;
-  auto &beam_source_1_y1_ = pmy_pack->pradfemn->beam_source_1_y1;
-  auto &beam_source_1_y2_ = pmy_pack->pradfemn->beam_source_1_y2;
-  auto &beam_source_2_y1_ = pmy_pack->pradfemn->beam_source_2_y1;
-  auto &beam_source_2_y2_ = pmy_pack->pradfemn->beam_source_2_y2;
-  auto &beam_source_1_vals_ = pmy_pack->pradfemn->beam_source_1_vals;
-  auto &beam_source_2_vals_ = pmy_pack->pradfemn->beam_source_2_vals;
+  auto &f0_ = pmesh->pmb_pack->pradfemn->f0;
+  auto &num_beams_ = pmesh->pmb_pack->pradfemn->num_beams;
+  auto &beam_source_1_y1_ = pmesh->pmb_pack->pradfemn->beam_source_1_y1;
+  auto &beam_source_1_y2_ = pmesh->pmb_pack->pradfemn->beam_source_1_y2;
+  auto &beam_source_2_y1_ = pmesh->pmb_pack->pradfemn->beam_source_2_y1;
+  auto &beam_source_2_y2_ = pmesh->pmb_pack->pradfemn->beam_source_2_y2;
+  auto &beam_source_1_vals_ = pmesh->pmb_pack->pradfemn->beam_source_1_vals;
+  auto &beam_source_2_vals_ = pmesh->pmb_pack->pradfemn->beam_source_2_vals;
 
-  par_for("radiation_femn_beams_populate", DevExeSpace(), 0, nmb1, 0, npts1, 0, (n3 - 1), 0, (n2 - 1),
-          KOKKOS_LAMBDA(int m, int n, int k, int j) {
+  if (pmesh->one_d) {
+    par_for("radiation_femn_beams_populate_1d", DevExeSpace(), 0, nmb1, 0, npts1, 0, (n3 - 1), 0, (n2 - 1),
+            KOKKOS_LAMBDA(int m, int n, int k, int j) {
 
-            Real &x2min = size.d_view(m).x2min;
-            Real &x2max = size.d_view(m).x2max;
-            int nx2 = indcs.nx2;
-            Real x2 = CellCenterX(j - js, nx2, x2min, x2max);
-
-            switch (mb_bcs.d_view(m, BoundaryFace::inner_x1)) {
-              case BoundaryFlag::outflow:
-
-                if (beam_source_1_y1_ <= x2 && x2 <= beam_source_1_y2_) {
+              switch (mb_bcs.d_view(m, BoundaryFace::inner_x1)) {
+                case BoundaryFlag::outflow:
                   for (int i = 0; i < ng; ++i) {
                     f0_(m, n, k, j, is - i - 1) = beam_source_1_vals_(n);
                   }
-                }
 
-                if (num_beams_ > 1 && beam_source_2_y1_ <= x2 && x2 <= beam_source_2_y2_) {
-                  for (int i = 0; i < ng; ++i) {
-                    f0_(m, n, k, j, is - i - 1) = beam_source_2_vals_(n);
+                  break;
+
+                default:break;
+              }
+            });
+  } else if (pmesh->two_d) {
+    par_for("radiation_femn_beams_populate", DevExeSpace(), 0, nmb1, 0, npts1, 0, (n3 - 1), 0, (n2 - 1),
+            KOKKOS_LAMBDA(int m, int n, int k, int j) {
+
+              Real &x2min = size.d_view(m).x2min;
+              Real &x2max = size.d_view(m).x2max;
+              int nx2 = indcs.nx2;
+              Real x2 = CellCenterX(j - js, nx2, x2min, x2max);
+
+              switch (mb_bcs.d_view(m, BoundaryFace::inner_x1)) {
+                case BoundaryFlag::outflow:
+                  if (beam_source_1_y1_ <= x2 && x2 <= beam_source_1_y2_) {
+                    for (int i = 0; i < ng; ++i) {
+                      f0_(m, n, k, j, is - i - 1) = beam_source_1_vals_(n);
+                    }
                   }
-                }
-                break;
 
-              default:break;
-            }
-          });
+                  if (num_beams_ > 1 && beam_source_2_y1_ <= x2 && x2 <= beam_source_2_y2_) {
+                    for (int i = 0; i < ng; ++i) {
+                      f0_(m, n, k, j, is - i - 1) = beam_source_2_vals_(n);
+                    }
+                  }
+                  break;
 
-  return TaskStatus::complete;
+                default:break;
+              }
+            });
+  } else {
+    std::cout << "Beams for Radiation FEMN not implemented in 3d!" << std::endl;
+    exit(EXIT_FAILURE);
+  }
 }
 
 void RadiationFEMN::InitializeBeamsSourcesFPN() {

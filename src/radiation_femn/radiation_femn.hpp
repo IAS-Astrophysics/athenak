@@ -211,6 +211,8 @@ class RadiationFEMN {
 
 };
 
+void ApplyBeamSourcesFEMN(Mesh *pmesh);
+
 KOKKOS_INLINE_FUNCTION
 Real Sgn(Real x) {
   return (x >= 0) ? +1. : -1.;

@@ -84,6 +84,9 @@ void ProblemGenerator::RadiationFEMNShadowtest(ParameterInput* pin, const bool r
         exit(EXIT_FAILURE);
     }
 
+    user_bcs = true;
+    user_bcs_func = radiationfemn::ApplyBeamSourcesFEMN;
+
     //auto &eta_ = pmbp->pradfemn->eta;
     auto& kappa_a_ = pmbp->pradfemn->kappa_a;
     //auto &kappa_s_ = pmbp->pradfemn->kappa_s;
