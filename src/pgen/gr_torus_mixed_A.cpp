@@ -638,7 +638,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     par_for("pgen_bcc", DevExeSpace(), 0,nmb-1,ks,ke,js,je,is,ie,
     KOKKOS_LAMBDA(int m, int k, int j, int i) {
       // cell-centered fields are simple linear average of face-centered fields
-      Real& w_bx = bcc_(m,IBX,k,j,i);
+      Real& w_bx = bcc_(m,IBX,k,j,i); 
       Real& w_by = bcc_(m,IBY,k,j,i);
       Real& w_bz = bcc_(m,IBZ,k,j,i);
       w_bx = 0.5*(b0.x1f(m,k,j,i) + b0.x1f(m,k,j,i+1));
@@ -774,7 +774,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
       if (i==ie) { b0.x1f(m,k,j,i+1) *= bnorm; }
       if (j==je) { b0.x2f(m,k,j+1,i) *= bnorm; }
       if (k==ke) { b0.x3f(m,k+1,j,i) *= bnorm; }
-    });
+    });   
 
     // Recompute cell-centered magnetic field
     par_for("pgen_normbcc", DevExeSpace(), 0,nmb-1,ks,ke,js,je,is,ie,
@@ -1295,17 +1295,16 @@ static void CalculateVectorPotentialInTiltedTorus(struct torus_pgen pgen,
       Real atheta_tilt = 0.0;
       if (in_torus) {
         Real scaling_param = pow((r/pgen.r_edge)*sin_vartheta, pgen.potential_r_pow);
-        Real scaling_param_tor = pow(r/pgen.r_edge, pgen.potential_r_pow_tor);
+        Real scaling_param_tor = pow((r/pgen.r_edge)*sin_vartheta, pgen.potential_r_pow_tor);
         if (pgen.potential_falloff != 0) {
           scaling_param *= exp(-r/pgen.potential_falloff);
         }
-        aphi_tilt = pow(rho/pgen.rho_max, pgen.potential_rho_pow)*scaling_param;
-        aphi_tilt -= pgen.potential_cutoff;
+        Real rho_cut = fmax(rho - pgen.potential_cutoff, 0.0)/pgen.rho_max;
+        aphi_tilt = pow(rho_cut, pgen.potential_rho_pow)*scaling_param;
         aphi_tilt = fmax(aphi_tilt, 0.0);
         aphi_tilt *= pgen.potential_pol_frac;
-
-        atheta_tilt = pow(rho/pgen.rho_max, pgen.potential_rho_pow_tor)*scaling_param_tor;
-        atheta_tilt -= pgen.potential_cutoff;
+        
+        atheta_tilt = pow(rho_cut, pgen.potential_rho_pow_tor)*scaling_param_tor;
         atheta_tilt = fmax(atheta_tilt, 0.0);
         atheta_tilt *= (1.0 - pgen.potential_pol_frac);
         if (pgen.psi != 0.0) {
