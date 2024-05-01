@@ -83,7 +83,6 @@ class RadiationFEMN {
   int filter_sigma_eff;           // effective opacity of the FP_N filter, set to 0 by default (FP_N)
   bool limiter_dg_minmod;
   bool rad_source;                // flag to enable/disable source terms for radiation, disabled by default
-  bool beam_source;               // flag to enable/disable beam sources, disabled by default
 
   int num_beams;                  // number of beams, defaults to zero
   Real beam_source_1_y1;

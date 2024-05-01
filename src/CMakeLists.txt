@@ -156,6 +156,7 @@ add_executable(
         radiation_femn/radiation_femn_beams.cpp
 		radiation_femn/radiation_femn_initialize.cpp
 		pgen/tests/rad_femn_gaussiantest.cpp
+		bvals/physics/radiation_femn_bcs.cpp
 )
 
 # custom problem generator to be included in compile

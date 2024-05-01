@@ -38,12 +38,8 @@ void RadiationFEMN::AssembleRadiationFEMNTasks(TaskList &start, TaskList &run, T
   id.rad_irecv = start.AddTask(&RadiationFEMN::InitRecv, this, none);
 
   // assemble run task list
-  if (beam_source) {
-    id.rad_beams = run.AddTask(&RadiationFEMN::BeamsSourcesFEMN, this, none);
-    id.copycons = run.AddTask(&RadiationFEMN::CopyCons, this, id.rad_beams);
-  } else {
-    id.copycons = run.AddTask(&RadiationFEMN::CopyCons, this, none);
-  }
+  id.copycons = run.AddTask(&RadiationFEMN::CopyCons, this, none);
+
   id.rad_tetrad = run.AddTask(&RadiationFEMN::TetradOrthogonalize, this, id.copycons);
   id.rad_flux = run.AddTask(&RadiationFEMN::CalculateFluxes, this, id.rad_tetrad);
   id.rad_sendf = run.AddTask(&RadiationFEMN::SendFlux, this, id.rad_flux);
@@ -177,102 +173,11 @@ TaskStatus RadiationFEMN::RecvI(Driver *pdrive, int stage) {
 //! \brief Wrapper task list function to call funtions that set physical and user BCs
 
 TaskStatus RadiationFEMN::ApplyPhysicalBCs(Driver *pdrive, int stage) {
-  auto &indcs = pmy_pack->pmesh->mb_indcs;
-  int &is = indcs.is;
-  int &ie = indcs.ie;
-  int &js = indcs.js;
-  int &je = indcs.je;
-  int &ks = indcs.ks;
-  int &ke = indcs.ke;
-  int npts1 = num_points_total - 1;
-  int nmb1 = pmy_pack->nmb_thispack - 1;
-  auto &mb_bcs = pmy_pack->pmb->mb_bcs;
-  auto &size = pmy_pack->pmb->mb_size;
-
-  int &ng = indcs.ng;
-  int n1 = indcs.nx1 + 2 * ng;
-  int n2 = (indcs.nx2 > 1) ? (indcs.nx2 + 2 * ng) : 1;
-  int n3 = (indcs.nx3 > 1) ? (indcs.nx3 + 2 * ng) : 1;
-  auto &f0_ = pmy_pack->pradfemn->f0;
-
-  bool &multi_d = pmy_pack->pmesh->multi_d;
-  bool &three_d = pmy_pack->pmesh->three_d;
-
-  // apply physical boundaries to inner and outer x1
-  par_for("radiation_femn_bc_x1", DevExeSpace(), 0, nmb1, 0, npts1, 0, (n3 - 1), 0, (n2 - 1),
-          KOKKOS_LAMBDA(int m, int n, int k, int j) {
-            switch (mb_bcs.d_view(m, BoundaryFace::inner_x1)) {
-              case BoundaryFlag::outflow:
-                for (int i = 0; i < ng; ++i) {
-                  f0_(m, n, k, j, is - i - 1) = 0.;
-                }
-                break;
-
-              default:break;
-            }
-            switch (mb_bcs.d_view(m, BoundaryFace::outer_x1)) {
-              case BoundaryFlag::outflow:
-                for (int i = 0; i < ng; ++i) {
-                  f0_(m, n, k, j, ie + i + 1) = 0.;
-                }
-                break;
-
-              default:break;
-            }
-
-          });
-
-  if (multi_d) {
-    // apply physical boundaries to inner and outer x2
-    par_for("radiation_femn_bc_x2", DevExeSpace(), 0, nmb1, 0, npts1, 0, (n3 - 1), 0, (n1 - 1),
-            KOKKOS_LAMBDA(int m, int n, int k, int i) {
-              switch (mb_bcs.d_view(m, BoundaryFace::inner_x2)) {
-                case BoundaryFlag::outflow:
-                  for (int j = 0; j < ng; ++j) {
-                    f0_(m, n, k, js - j - 1, i) = 0.;
-                  }
-                  break;
-
-                default:break;
-              }
-
-              switch (mb_bcs.d_view(m, BoundaryFace::outer_x2)) {
-                case BoundaryFlag::outflow:
-                  for (int j = 0; j < ng; ++j) {
-                    f0_(m, n, k, je + j + 1, i) = 0.;
-                  }
-                  break;
-
-                default:break;
-              }
-            });
+  if (pmy_pack->pmesh->strictly_periodic) {
+    return TaskStatus::complete;
   }
 
-  if (three_d) {
-    // apply physical boundaries to inner and outer x3
-    par_for("radiation_femn_bc_x3", DevExeSpace(), 0, nmb1, 0, npts1, 0, (n2 - 1), 0, (n1 - 1),
-            KOKKOS_LAMBDA(int m, int n, int j, int i) {
-              switch (mb_bcs.d_view(m, BoundaryFace::inner_x3)) {
-                case BoundaryFlag::outflow:
-                  for (int k = 0; k < ng; ++k) {
-                    f0_(m, n, ks - k - 1, j, i) = 0.;
-                  }
-                  break;
-
-                default:break;
-              }
-
-              switch (mb_bcs.d_view(m, BoundaryFace::outer_x3)) {
-                case BoundaryFlag::outflow:
-                  for (int k = 0; k < ng; ++k) {
-                    f0_(m, n, ke + k + 1, j, i) = 0.;
-                  }
-                  break;
-
-                default:break;
-              }
-            });
-  }
+  pbval_f->RadiationBCs((pmy_pack), (pbval_f->i_in), f0);
 
   // user BCs
   if (pmy_pack->pmesh->pgen->user_bcs) {
