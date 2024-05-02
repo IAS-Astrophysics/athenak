@@ -78,6 +78,18 @@ namespace radiationfemn
         beam_source_2_phi = pin->GetOrAddReal("radiation-femn", "beam_source_2_phi", -42.);
         beam_source_2_theta = pin->GetOrAddReal("radiation-femn", "beam_source_2_theta", -42.);
 
+        m1_closure = M1Closure::Minerbo;
+        if(pin->GetOrAddString("radiation-femn", "m1_closure", "minerbo") == "shibata") {
+          m1_closure = M1Closure::Shibata;
+        }
+        if(pin->GetOrAddString("radiation-femn", "m1_closure", "minerbo") == "simple") {
+          m1_closure = M1Closure::Simple;
+        }
+
+        const std::string closures[] = {"Minerbo", "Shibata", "Simple"};
+        if(m1_flag) {
+          std::cout << "Choice of M1 closure: " << closures[m1_closure] << std::endl;
+        }
         std::cout << "Choice of DG limiter: " << limiter_dg << std::endl;
 
         // set up energy ang angular grids (redundant values => -42)
