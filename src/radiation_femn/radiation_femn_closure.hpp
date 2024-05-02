@@ -26,7 +26,8 @@ void ApplyM1Closure(TeamMember_t member, int num_points, int m, int en, int kk, 
   Real Fx = -sqrt(4. * M_PI / 3.0) * f(m, en * num_points + 3, kk, jj, ii);  // (1, 1)
   Real Fy = -sqrt(4. * M_PI / 3.0) * f(m, en * num_points + 1, kk, jj, ii);  // (1, -1)
   Real Fz = sqrt(4. * M_PI / 3.0) * f(m, en * num_points + 2, kk, jj, ii);   // (1, 0)
-  Real Fnorm = sqrt(Fx * Fx + Fy * Fy + Fz * Fz);
+  Real F2 = Fx * Fx + Fy * Fy + Fz * Fz;
+  Real Fnorm = sqrt(F2);
 
   if (E < 1e-14 || Fnorm < 1e-14) {
     f_scratch(0) = f(m, en * num_points + 0, kk, jj, ii);
@@ -59,14 +60,35 @@ void ApplyM1Closure(TeamMember_t member, int num_points, int m, int en, int kk, 
     Real b = (3. * chi - 1.) / 2.;
 
 
+    Real Pxx = 0;
+    Real Pyy = 0;
+    Real Pzz = 0;
+    Real Pxy = 0;
+    Real Pxz = 0;
+    Real Pyz = 0;
     // P_{ij} = [a \delta_{ij} + b n_i n_j] E (old closure)
-    Real Pxx = (a + b * nx * nx) * E;
-    Real Pyy = (a + b * ny * ny) * E;
-    Real Pzz = (a + b * nz * nz) * E;
-    Real Pxy = b * nx * ny * E;
-    Real Pxz = b * nx * nz * E;
-    Real Pyz = b * ny * nz * E;
-
+    if (m1_closure == M1Closure::Minerbo) {
+      Pxx = a * E + b * nx * nx * E;
+      Pyy = a * E + b * ny * ny * E;
+      Pzz = a * E + b * nz * nz * E;
+      Pxy = b * nx * ny * E;
+      Pxz = b * nx * nz * E;
+      Pyz = b * ny * nz * E;
+    } else if (m1_closure == M1Closure::Shibata) {
+      Pxx = a * E + b * nx * nx * E;
+      Pyy = a * E + b * ny * ny * E;
+      Pzz = a * E + b * nz * nz * E;
+      Pxy = b * nx * ny * E;
+      Pxz = b * nx * nz * E;
+      Pyz = b * ny * nz * E;
+    } else {
+      Pxx = a * E + b * nx * nx * E;
+      Pyy = a * E + b * ny * ny * E;
+      Pzz = a * E + b * nz * nz * E;
+      Pxy = b * nx * ny * E;
+      Pxz = b * nx * nz * E;
+      Pyz = b * ny * nz * E;
+    }
 
 
     // Shibata closure

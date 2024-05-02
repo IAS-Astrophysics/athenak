@@ -380,7 +380,7 @@ TaskStatus RadiationFEMN::ExpRKUpdate(Driver *pdriver, int stage) {
 
                     // floor energy density if using M1
                     if(unifiedidx == 0 && m1_flag) {
-                      f0_(m, unifiedidx, k, j, i) = fmax(final_result, 0);
+                      f0_(m, unifiedidx, k, j, i) = fmax(final_result, 1e-15);
                     }
 
                   });
