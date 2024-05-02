@@ -78,7 +78,7 @@ namespace radiationfemn
         beam_source_2_phi = pin->GetOrAddReal("radiation-femn", "beam_source_2_phi", -42.);
         beam_source_2_theta = pin->GetOrAddReal("radiation-femn", "beam_source_2_theta", -42.);
 
-        m1_closure = M1Closure::Minerbo;
+        m1_closure = M1Closure::Charon;
         if(pin->GetOrAddString("radiation-femn", "m1_closure", "minerbo") == "shibata") {
           m1_closure = M1Closure::Shibata;
         }
@@ -86,9 +86,22 @@ namespace radiationfemn
           m1_closure = M1Closure::Simple;
         }
 
-        const std::string closures[] = {"Minerbo", "Shibata", "Simple"};
+        closure_fun = ClosureFunc::Minerbo;
+        if(pin->GetOrAddString("radiation-femn", "m1_closure_fun", "minerbo") == "eddington") {
+          closure_fun = ClosureFunc::Eddington;
+        }
+        if(pin->GetOrAddString("radiation-femn", "m1_closure_fun", "minerbo") == "kershaw") {
+          closure_fun = ClosureFunc::Kershaw;
+        }
+        if(pin->GetOrAddString("radiation-femn", "m1_closure_fun", "minerbo") == "thin") {
+          closure_fun = ClosureFunc::Thin;
+        }
+
+        const std::string closure_func[] = {"Eddington", "Kershaw", "Minerbo", "Thin"};
+        const std::string closures[] = {"Charon", "Shibata", "Simple"};
         if(m1_flag) {
           std::cout << "Choice of M1 closure: " << closures[m1_closure] << std::endl;
+          std::cout << "Choice of M1 closure function: " << closure_func[closure_fun] << std::endl;
         }
         std::cout << "Choice of DG limiter: " << limiter_dg << std::endl;
 

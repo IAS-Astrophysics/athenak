@@ -20,7 +20,8 @@ void ApplyFEMNFPNClosure(TeamMember_t member, int num_points, int m, int en, int
 }
 
 KOKKOS_INLINE_FUNCTION
-void ApplyM1Closure(TeamMember_t member, int num_points, int m, int en, int kk, int jj, int ii, DvceArray5D<Real> f, ScrArray1D<Real> f_scratch, M1Closure m1_closure) {
+void ApplyM1Closure(TeamMember_t member, int num_points, int m, int en, int kk, int jj, int ii, DvceArray5D<Real> f, ScrArray1D<Real> f_scratch,
+                    M1Closure m1_closure, ClosureFunc m1_closure_fun) {
 
   Real E = sqrt(4. * M_PI) * f(m, en * num_points + 0, kk, jj, ii);          // (0,0)
   Real Fx = -sqrt(4. * M_PI / 3.0) * f(m, en * num_points + 3, kk, jj, ii);  // (1, 1)
@@ -53,12 +54,21 @@ void ApplyM1Closure(TeamMember_t member, int num_points, int m, int en, int kk, 
     Real ny = fy / fnorm;
     Real nz = fz / fnorm;
 
-    // Eddington factor and closure
+
     Real chi = (3. + 4. * fixed_fnorm * fixed_fnorm) / (5. + 2. * sqrt(4. - 3. * fixed_fnorm * fixed_fnorm));
-    //Real chi = 1.;
+
+    if(m1_closure_fun == ClosureFunc::Eddington) {
+      chi = 1./3.;
+    }
+    if(m1_closure_fun == ClosureFunc::Thin) {
+      chi = 1;
+    }
+    if(m1_closure_fun == ClosureFunc::Kershaw) {
+      chi = 1; // @TODO: fix later
+    }
+
     Real a = (1. - chi) / 2.;
     Real b = (3. * chi - 1.) / 2.;
-
 
     Real Pxx = 0;
     Real Pyy = 0;
@@ -66,8 +76,8 @@ void ApplyM1Closure(TeamMember_t member, int num_points, int m, int en, int kk, 
     Real Pxy = 0;
     Real Pxz = 0;
     Real Pyz = 0;
-    // P_{ij} = [a \delta_{ij} + b n_i n_j] E (old closure)
-    if (m1_closure == M1Closure::Minerbo) {
+
+    if (m1_closure == M1Closure::Charon) {
       Pxx = a * E + b * nx * nx * E;
       Pyy = a * E + b * ny * ny * E;
       Pzz = a * E + b * nz * nz * E;
@@ -75,41 +85,20 @@ void ApplyM1Closure(TeamMember_t member, int num_points, int m, int en, int kk, 
       Pxz = b * nx * nz * E;
       Pyz = b * ny * nz * E;
     } else if (m1_closure == M1Closure::Shibata) {
-      Pxx = a * E + b * nx * nx * E;
-      Pyy = a * E + b * ny * ny * E;
-      Pzz = a * E + b * nz * nz * E;
-      Pxy = b * nx * ny * E;
-      Pxz = b * nx * nz * E;
-      Pyz = b * ny * nz * E;
+      Pxx = a * E + b * Fx * Fx / Fnorm;
+      Pyy = a * E + b * Fy * Fy / Fnorm;
+      Pzz = a * E + b * Fz * Fz / Fnorm;
+      Pxy = b * Fx * Fy / Fnorm;
+      Pxz = b * Fx * Fz / Fnorm;
+      Pyz = b * Fy * Fz / Fnorm;
     } else {
-      Pxx = a * E + b * nx * nx * E;
-      Pyy = a * E + b * ny * ny * E;
-      Pzz = a * E + b * nz * nz * E;
-      Pxy = b * nx * ny * E;
-      Pxz = b * nx * nz * E;
-      Pyz = b * ny * nz * E;
+      Pxx = a * E + b * Fx * Fx / E;
+      Pyy = a * E + b * Fy * Fy / E;
+      Pzz = a * E + b * Fz * Fz / E;
+      Pxy = b * Fx * Fy / E;
+      Pxz = b * Fx * Fz / E;
+      Pyz = b * Fy * Fz / E;
     }
-
-
-    // Shibata closure
-    /*
-    Real Pxx = a * E + b * nx * nx * Fnorm;
-    Real Pyy = a * E + b * ny * ny * Fnorm;
-    Real Pzz = a * E + b * nz * nz * Fnorm;
-    Real Pxy = b * nx * ny * Fnorm;
-    Real Pxz = b * nx * nz * Fnorm;
-    Real Pyz = b * ny * nz * Fnorm;
-    */
-
-    /*
-    // simple closure
-    Real Pxx = a * E + b * nx * nx * Fnorm * Fnorm / E;
-    Real Pyy = a * E + b * ny * ny * Fnorm * Fnorm / E;
-    Real Pzz = a * E + b * nz * nz * Fnorm * Fnorm / E;
-    Real Pxy = b * nx * ny * Fnorm * Fnorm / E;
-    Real Pxz = b * nx * nz * Fnorm * Fnorm / E;
-    Real Pyz = b * ny * nz * Fnorm * Fnorm / E ;
-    */
 
     f_scratch(0) = f(m, en * num_points + 0, kk, jj, ii);
     f_scratch(1) = f(m, en * num_points + 1, kk, jj, ii);
@@ -125,26 +114,17 @@ void ApplyM1Closure(TeamMember_t member, int num_points, int m, int en, int kk, 
 }
 
 KOKKOS_INLINE_FUNCTION
-void ApplyClosure(TeamMember_t member, int num_points, int m, int en, int kk, int jj, int ii, DvceArray5D<Real> f, ScrArray1D<Real> f_scratch, bool m1_flag, M1Closure m1_closure) {
-  if (m1_flag) {
-    ApplyM1Closure(member, num_points, m, en, kk, jj, ii, f, f_scratch, m1_closure);
-  } else {
-    ApplyFEMNFPNClosure(member, num_points, m, en, kk, jj, ii, f, f_scratch);
-  }
-}
-
-KOKKOS_INLINE_FUNCTION
 void ApplyClosureX(TeamMember_t member, int num_species, int num_energy_bins, int num_points, int m, int nuidx, int enidx, int kk, int jj, int ii,
                    DvceArray5D<Real> f, ScrArray1D<Real> f0_scratch, ScrArray1D<Real> f0_scratch_p1, ScrArray1D<Real> f0_scratch_p2,
-                   ScrArray1D<Real> f0_scratch_p3, ScrArray1D<Real> f0_scratch_m1, ScrArray1D<Real> f0_scratch_m2, bool m1_flag, M1Closure m1_closure) {
+                   ScrArray1D<Real> f0_scratch_p3, ScrArray1D<Real> f0_scratch_m1, ScrArray1D<Real> f0_scratch_m2, bool m1_flag, M1Closure m1_closure, ClosureFunc m1_closure_fun) {
   if (m1_flag) {
     int nuen = nuidx * num_energy_bins * num_points + enidx * num_points;
-    ApplyM1Closure(member, num_points, m, nuen, kk, jj, ii, f, f0_scratch, m1_closure);
-    ApplyM1Closure(member, num_points, m, nuen, kk, jj, ii + 1, f, f0_scratch_p1, m1_closure);
-    ApplyM1Closure(member, num_points, m, nuen, kk, jj, ii + 2, f, f0_scratch_p2, m1_closure);
-    ApplyM1Closure(member, num_points, m, nuen, kk, jj, ii + 3, f, f0_scratch_p3, m1_closure);
-    ApplyM1Closure(member, num_points, m, nuen, kk, jj, ii - 1, f, f0_scratch_m1, m1_closure);
-    ApplyM1Closure(member, num_points, m, nuen, kk, jj, ii - 2, f, f0_scratch_m2, m1_closure);
+    ApplyM1Closure(member, num_points, m, nuen, kk, jj, ii, f, f0_scratch, m1_closure, m1_closure_fun);
+    ApplyM1Closure(member, num_points, m, nuen, kk, jj, ii + 1, f, f0_scratch_p1, m1_closure, m1_closure_fun);
+    ApplyM1Closure(member, num_points, m, nuen, kk, jj, ii + 2, f, f0_scratch_p2, m1_closure, m1_closure_fun);
+    ApplyM1Closure(member, num_points, m, nuen, kk, jj, ii + 3, f, f0_scratch_p3, m1_closure, m1_closure_fun);
+    ApplyM1Closure(member, num_points, m, nuen, kk, jj, ii - 1, f, f0_scratch_m1, m1_closure, m1_closure_fun);
+    ApplyM1Closure(member, num_points, m, nuen, kk, jj, ii - 2, f, f0_scratch_m2, m1_closure, m1_closure_fun);
   } else {
     int nang1 = num_points - 1;
     par_for_inner(member, 0, nang1, [&](const int idx) {
@@ -162,15 +142,15 @@ void ApplyClosureX(TeamMember_t member, int num_species, int num_energy_bins, in
 KOKKOS_INLINE_FUNCTION
 void ApplyClosureY(TeamMember_t member, int num_species, int num_energy_bins, int num_points, int m, int nuidx, int enidx, int kk, int jj, int ii,
                    DvceArray5D<Real> f, ScrArray1D<Real> f0_scratch, ScrArray1D<Real> f0_scratch_p1, ScrArray1D<Real> f0_scratch_p2,
-                   ScrArray1D<Real> f0_scratch_p3, ScrArray1D<Real> f0_scratch_m1, ScrArray1D<Real> f0_scratch_m2, bool m1_flag, M1Closure m1_closure) {
+                   ScrArray1D<Real> f0_scratch_p3, ScrArray1D<Real> f0_scratch_m1, ScrArray1D<Real> f0_scratch_m2, bool m1_flag, M1Closure m1_closure, ClosureFunc m1_closure_fun) {
   if (m1_flag) {
     int nuen = nuidx * num_energy_bins * num_points + enidx * num_points;
-    ApplyM1Closure(member, num_points, m, nuen, kk, jj, ii, f, f0_scratch, m1_closure);
-    ApplyM1Closure(member, num_points, m, nuen, kk, jj + 1, ii, f, f0_scratch_p1, m1_closure);
-    ApplyM1Closure(member, num_points, m, nuen, kk, jj + 2, ii, f, f0_scratch_p2, m1_closure);
-    ApplyM1Closure(member, num_points, m, nuen, kk, jj + 3, ii, f, f0_scratch_p3, m1_closure);
-    ApplyM1Closure(member, num_points, m, nuen, kk, jj - 1, ii, f, f0_scratch_m1, m1_closure);
-    ApplyM1Closure(member, num_points, m, nuen, kk, jj - 2, ii, f, f0_scratch_m2, m1_closure);
+    ApplyM1Closure(member, num_points, m, nuen, kk, jj, ii, f, f0_scratch, m1_closure, m1_closure_fun);
+    ApplyM1Closure(member, num_points, m, nuen, kk, jj + 1, ii, f, f0_scratch_p1, m1_closure, m1_closure_fun);
+    ApplyM1Closure(member, num_points, m, nuen, kk, jj + 2, ii, f, f0_scratch_p2, m1_closure, m1_closure_fun);
+    ApplyM1Closure(member, num_points, m, nuen, kk, jj + 3, ii, f, f0_scratch_p3, m1_closure, m1_closure_fun);
+    ApplyM1Closure(member, num_points, m, nuen, kk, jj - 1, ii, f, f0_scratch_m1, m1_closure, m1_closure_fun);
+    ApplyM1Closure(member, num_points, m, nuen, kk, jj - 2, ii, f, f0_scratch_m2, m1_closure, m1_closure_fun);
   } else {
     int nang1 = num_points - 1;
     par_for_inner(member, 0, nang1, [&](const int idx) {
@@ -188,15 +168,15 @@ void ApplyClosureY(TeamMember_t member, int num_species, int num_energy_bins, in
 KOKKOS_INLINE_FUNCTION
 void ApplyClosureZ(TeamMember_t member, int num_species, int num_energy_bins, int num_points, int m, int nuidx, int enidx, int kk, int jj, int ii,
                    DvceArray5D<Real> f, ScrArray1D<Real> f0_scratch, ScrArray1D<Real> f0_scratch_p1, ScrArray1D<Real> f0_scratch_p2,
-                   ScrArray1D<Real> f0_scratch_p3, ScrArray1D<Real> f0_scratch_m1, ScrArray1D<Real> f0_scratch_m2, bool m1_flag, M1Closure m1_closure) {
+                   ScrArray1D<Real> f0_scratch_p3, ScrArray1D<Real> f0_scratch_m1, ScrArray1D<Real> f0_scratch_m2, bool m1_flag, M1Closure m1_closure, ClosureFunc m1_closure_fun) {
   if (m1_flag) {
     int nuen = nuidx * num_energy_bins * num_points + enidx * num_points;
-    ApplyM1Closure(member, num_points, m, nuen, kk, jj, ii, f, f0_scratch, m1_closure);
-    ApplyM1Closure(member, num_points, m, nuen, kk + 1, jj, ii, f, f0_scratch_p1, m1_closure);
-    ApplyM1Closure(member, num_points, m, nuen, kk + 2, jj, ii, f, f0_scratch_p2, m1_closure);
-    ApplyM1Closure(member, num_points, m, nuen, kk + 3, jj, ii, f, f0_scratch_p3, m1_closure);
-    ApplyM1Closure(member, num_points, m, nuen, kk - 1, jj, ii, f, f0_scratch_m1, m1_closure);
-    ApplyM1Closure(member, num_points, m, nuen, kk - 2, jj, ii, f, f0_scratch_m2, m1_closure);
+    ApplyM1Closure(member, num_points, m, nuen, kk, jj, ii, f, f0_scratch, m1_closure, m1_closure_fun);
+    ApplyM1Closure(member, num_points, m, nuen, kk + 1, jj, ii, f, f0_scratch_p1, m1_closure, m1_closure_fun);
+    ApplyM1Closure(member, num_points, m, nuen, kk + 2, jj, ii, f, f0_scratch_p2, m1_closure, m1_closure_fun);
+    ApplyM1Closure(member, num_points, m, nuen, kk + 3, jj, ii, f, f0_scratch_p3, m1_closure, m1_closure_fun);
+    ApplyM1Closure(member, num_points, m, nuen, kk - 1, jj, ii, f, f0_scratch_m1, m1_closure, m1_closure_fun);
+    ApplyM1Closure(member, num_points, m, nuen, kk - 2, jj, ii, f, f0_scratch_m2, m1_closure, m1_closure_fun);
   } else {
     int nang1 = num_points - 1;
     par_for_inner(member, 0, nang1, [&](const int idx) {

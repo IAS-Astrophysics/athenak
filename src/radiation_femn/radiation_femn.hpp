@@ -52,10 +52,18 @@ struct RadiationFEMNPhaseIndices {
 };
 
 enum M1Closure {
-  Minerbo,
+  Charon,
   Shibata,
   Simple
 };
+
+enum ClosureFunc {
+  Eddington,
+  Kershaw,
+  Minerbo,
+  Thin
+};
+
 namespace radiationfemn {
 
 //----------------------------------------------------------------------------------------------
@@ -89,6 +97,7 @@ class RadiationFEMN {
   bool limiter_dg_minmod;
   bool rad_source;                // flag to enable/disable source terms for radiation, disabled by default
   M1Closure m1_closure;           // choice of M1 closure
+  ClosureFunc closure_fun;
   int num_beams;                  // number of beams, defaults to zero
   Real beam_source_1_y1;
   Real beam_source_1_y2;
