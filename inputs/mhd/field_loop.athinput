@@ -1,0 +1,61 @@
+# AthenaK input file for 2D field loop test
+
+<comment>
+problem   = field loop advection test
+reference = Gardiner, T.A. & Stone, J.M., JCP, 205, 509 (2005)
+
+<job>
+basename  = Loop      # problem ID: basename of output filenames
+
+<mesh>
+nghost     = 2         # Number of ghost cells
+nx1        = 128       # Number of zones in X1-direction
+x1min      = -1.0      # minimum value of X1
+x1max      = 1.0       # maximum value of X1
+ix1_bc     = periodic  # inner-X1 boundary flag
+ox1_bc     = periodic  # outer-X1 boundary flag
+
+nx2        = 64        # Number of zones in X2-direction
+x2min      = -0.5      # minimum value of X2
+x2max      = 0.5       # maximum value of X2
+ix2_bc     = periodic  # inner-X2 boundary flag
+ox2_bc     = periodic  # outer-X2 boundary flag
+
+nx3        = 64        # Number of zones in X3-direction
+x3min      = -0.5      # minimum value of X3
+x3max      = 0.5       # maximum value of X3
+ix3_bc     = periodic  # inner-X3 boundary flag
+ox3_bc     = periodic  # outer-X3 boundary flag
+
+<meshblock>
+nx1       = 128        # Number of cells in each MeshBlock, X1-dir
+nx2       = 64         # Number of cells in each MeshBlock, X2-dir
+nx3       = 64         # Number of cells in each MeshBlock, X3-dir
+
+<time>
+evolution  = dynamic   # dynamic/kinematic/static
+integrator = rk2       # time integration algorithm
+cfl_number = 0.4       # The Courant, Friedrichs, & Lewy (CFL) Number
+nlim       = -1        # cycle limit
+tlim       = 1.0       # time limit (one loop along diagonal)
+ndiag      = 1         # cycles between diagostic output
+
+<mhd>
+eos         = ideal    # EOS type
+reconstruct = plm      # spatial reconstruction method
+rsolver     = hlld     # Riemann-solver to be used
+gamma       = 1.666666667     # gamma = C_p/C_v
+
+<problem>
+rad        = 0.3       # Radius of loop
+amp        = 1.0e-3    # Amplitude of B in loop
+iprob      = 1         # 1=loop in x1-x2 plane
+
+<output1>  
+file_type = hst         # History data dump
+dt        = 0.01        # time increment between outputs
+
+<output2>  
+file_type = vtk         # VTK data dump
+variable  = mhd_w_bcc   # variables to be output
+dt        = 0.01        # time increment between outputs
