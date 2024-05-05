@@ -25,7 +25,7 @@ namespace radiation {
 //! \fn  void Hydro::Update
 //  \brief Explicit RK update of flux divergence and physical source terms
 
-TaskStatus Radiation::ExpRKUpdate(Driver *pdriver, int stage) {
+TaskStatus Radiation::RKUpdate(Driver *pdriver, int stage) {
   auto &indcs = pmy_pack->pmesh->mb_indcs;
   int &is = indcs.is, &ie = indcs.ie;
   int &js = indcs.js, &je = indcs.je;

@@ -48,10 +48,10 @@ struct MHDTaskIDs {
   TaskID flux;
   TaskID sendf;
   TaskID recvf;
-  TaskID expl;
+  TaskID rkupdt;
   TaskID srctrms;
-  TaskID sndu_oa;
-  TaskID rcvu_oa;
+  TaskID senduoa;
+  TaskID recvuoa;
   TaskID restu;
   TaskID sendu;
   TaskID recvu;
@@ -60,8 +60,8 @@ struct MHDTaskIDs {
   TaskID sende;
   TaskID recve;
   TaskID ct;
-  TaskID sndb_oa;
-  TaskID rcvb_oa;
+  TaskID sendboa;
+  TaskID recvboa;
   TaskID restb;
   TaskID sendb;
   TaskID recvb;
@@ -143,7 +143,7 @@ class MHD {
   TaskStatus Fluxes(Driver *d, int stage);
   TaskStatus SendFlux(Driver *d, int stage);
   TaskStatus RecvFlux(Driver *d, int stage);
-  TaskStatus ExpRKUpdate(Driver *d, int stage);
+  TaskStatus RKUpdate(Driver *d, int stage);
   TaskStatus MHDSrcTerms(Driver *d, int stage);
   TaskStatus SendU_OA(Driver *d, int stage);
   TaskStatus RecvU_OA(Driver *d, int stage);

@@ -31,7 +31,7 @@
 //!
 //! Input arrays must be 5D Kokkos View dimensioned (nmb, nvar, nx3, nx2, nx1)
 
-TaskStatus ShearingBox::PackAndSendCC_Orb(DvceArray5D<Real> &a) {
+TaskStatus ShearingBox::OrbitalAdvectionSendCC(DvceArray5D<Real> &a) {
   // create local references for variables in kernel
   int nmb = pmy_pack->nmb_thispack;
   int nvar = a.extent_int(1);  // TODO(@user): 2nd index from L of in array must be NVAR
@@ -151,7 +151,7 @@ TaskStatus ShearingBox::PackAndSendCC_Orb(DvceArray5D<Real> &a) {
 //! Cell-centered variables in input array u0 are remapped during unpack by applying
 //! both an integer shift and a fractional offset.
 
-TaskStatus ShearingBox::RecvAndUnpackCC_Orb(DvceArray5D<Real> &u0,
+TaskStatus ShearingBox::OrbitalAdvectionRecvCC(DvceArray5D<Real> &u0,
                                             ReconstructionMethod rcon){
   // create local references for variables in kernel
   int nmb = pmy_pack->nmb_thispack;
@@ -278,7 +278,7 @@ TaskStatus ShearingBox::RecvAndUnpackCC_Orb(DvceArray5D<Real> &u0,
 //! the orbital advection step. Only ghost zones on the x2-faces (Y-faces) are passed.
 //! Note only B3 and B1 need be passed.
 
-TaskStatus ShearingBox::PackAndSendFC_Orb(DvceFaceFld4D<Real> &b) {
+TaskStatus ShearingBox::OrbitalAdvectionSendFC(DvceFaceFld4D<Real> &b) {
   // create local references for variables in kernel
   int nmb = pmy_pack->nmb_thispack;
 
@@ -400,7 +400,7 @@ TaskStatus ShearingBox::PackAndSendFC_Orb(DvceFaceFld4D<Real> &b) {
 //! shifts.  These fields are then used to update B using CT. The fields themselves are
 //! not directly remapped like the CC variables.
 
-TaskStatus ShearingBox::RecvAndUnpackFC_Orb(DvceFaceFld4D<Real> &b0,
+TaskStatus ShearingBox::OrbitalAdvectionRecvFC(DvceFaceFld4D<Real> &b0,
                                             ReconstructionMethod rcon){
   int nmb = pmy_pack->nmb_thispack;
   int nnghbr = pmy_pack->pmb->nnghbr;

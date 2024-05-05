@@ -47,11 +47,11 @@ void MHD::AssembleMHDTasks(std::map<std::string, std::shared_ptr<TaskList>> tl) 
   id.flux    = tl["stagen"]->AddTask(&MHD::Fluxes, this, id.copyu);
   id.sendf   = tl["stagen"]->AddTask(&MHD::SendFlux, this, id.flux);
   id.recvf   = tl["stagen"]->AddTask(&MHD::RecvFlux, this, id.sendf);
-  id.expl    = tl["stagen"]->AddTask(&MHD::ExpRKUpdate, this, id.recvf);
-  id.srctrms = tl["stagen"]->AddTask(&MHD::MHDSrcTerms, this, id.expl);
-  id.sndu_oa = tl["stagen"]->AddTask(&MHD::SendU_OA, this, id.srctrms);
-  id.rcvu_oa = tl["stagen"]->AddTask(&MHD::RecvU_OA, this, id.sndu_oa);
-  id.restu   = tl["stagen"]->AddTask(&MHD::RestrictU, this, id.rcvu_oa);
+  id.rkupdt  = tl["stagen"]->AddTask(&MHD::RKUpdate, this, id.recvf);
+  id.srctrms = tl["stagen"]->AddTask(&MHD::MHDSrcTerms, this, id.rkupdt);
+  id.senduoa = tl["stagen"]->AddTask(&MHD::SendU_OA, this, id.srctrms);
+  id.recvuoa = tl["stagen"]->AddTask(&MHD::RecvU_OA, this, id.senduoa);
+  id.restu   = tl["stagen"]->AddTask(&MHD::RestrictU, this, id.recvuoa);
   id.sendu   = tl["stagen"]->AddTask(&MHD::SendU, this, id.restu);
   id.recvu   = tl["stagen"]->AddTask(&MHD::RecvU, this, id.sendu);
   id.efld    = tl["stagen"]->AddTask(&MHD::CornerE, this, id.recvu);
@@ -59,9 +59,9 @@ void MHD::AssembleMHDTasks(std::map<std::string, std::shared_ptr<TaskList>> tl) 
   id.sende   = tl["stagen"]->AddTask(&MHD::SendE, this, id.efldsrc);
   id.recve   = tl["stagen"]->AddTask(&MHD::RecvE, this, id.sende);
   id.ct      = tl["stagen"]->AddTask(&MHD::CT, this, id.recve);
-  id.sndb_oa = tl["stagen"]->AddTask(&MHD::SendB_OA, this, id.ct);
-  id.rcvb_oa = tl["stagen"]->AddTask(&MHD::RecvB_OA, this, id.sndb_oa);
-  id.restb   = tl["stagen"]->AddTask(&MHD::RestrictB, this, id.rcvb_oa);
+  id.sendboa = tl["stagen"]->AddTask(&MHD::SendB_OA, this, id.ct);
+  id.recvboa = tl["stagen"]->AddTask(&MHD::RecvB_OA, this, id.sendboa);
+  id.restb   = tl["stagen"]->AddTask(&MHD::RestrictB, this, id.recvboa);
   id.sendb   = tl["stagen"]->AddTask(&MHD::SendB, this, id.restb);
   id.recvb   = tl["stagen"]->AddTask(&MHD::RecvB, this, id.sendb);
   id.bcs     = tl["stagen"]->AddTask(&MHD::ApplyPhysicalBCs, this, id.recvb);
@@ -257,7 +257,7 @@ TaskStatus MHD::SendU_OA(Driver *pdrive, int stage) {
   // only execute when (shearing box defined) AND (last stage) AND (3D OR 2d_r_phi)
   if ((shearing_box) && (stage == (pdrive->nexp_stages)) &&
       (pmy_pack->pmesh->three_d || psb->shearing_box_r_phi)) {
-    tstat = psb->PackAndSendCC_Orb(u0);
+    tstat = psb->OrbitalAdvectionSendCC(u0);
   }
   return tstat;
 }
@@ -271,7 +271,7 @@ TaskStatus MHD::RecvU_OA(Driver *pdrive, int stage) {
   // only execute when (shearing box defined) AND (last stage) AND (3D OR 2d_r_phi)
   if ((shearing_box) && (stage == (pdrive->nexp_stages)) &&
       (pmy_pack->pmesh->three_d || psb->shearing_box_r_phi)) {
-    tstat = psb->RecvAndUnpackCC_Orb(u0, recon_method);
+    tstat = psb->OrbitalAdvectionRecvCC(u0, recon_method);
   }
   return tstat;
 }
@@ -351,7 +351,7 @@ TaskStatus MHD::SendB_OA(Driver *pdrive, int stage) {
   // only execute when (shearing box defined) AND (last stage) AND (3D OR 2d_r_phi)
   if ((shearing_box) && (stage == (pdrive->nexp_stages)) &&
       (pmy_pack->pmesh->three_d || psb->shearing_box_r_phi)) {
-    tstat = psb->PackAndSendFC_Orb(b0);
+    tstat = psb->OrbitalAdvectionSendFC(b0);
   }
   return tstat;
 }
@@ -365,7 +365,7 @@ TaskStatus MHD::RecvB_OA(Driver *pdrive, int stage) {
   // only execute when (shearing box defined) AND (last stage) AND (3D OR 2d_r_phi)
   if ((shearing_box) && (stage == (pdrive->nexp_stages)) &&
       (pmy_pack->pmesh->three_d || psb->shearing_box_r_phi)) {
-    tstat = psb->RecvAndUnpackFC_Orb(b0, recon_method);
+    tstat = psb->OrbitalAdvectionRecvFC(b0, recon_method);
   }
   return tstat;
 }

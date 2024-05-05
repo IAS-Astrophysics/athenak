@@ -83,11 +83,11 @@ class ShearingBox {
   void EFieldSrcTerms(const DvceFaceFld4D<Real> &b0, DvceEdgeFld4D<Real> &efld);
 
   // functions to communicate CC data with orbital advection
-  TaskStatus PackAndSendCC_Orb(DvceArray5D<Real> &a);
-  TaskStatus RecvAndUnpackCC_Orb(DvceArray5D<Real> &a, ReconstructionMethod rcon);
+  TaskStatus OrbitalAdvectionSendCC(DvceArray5D<Real> &a);
+  TaskStatus OrbitalAdvectionRecvCC(DvceArray5D<Real> &a, ReconstructionMethod rcon);
   // functions to communicate FC data with orbital advection
-  TaskStatus PackAndSendFC_Orb(DvceFaceFld4D<Real> &b);
-  TaskStatus RecvAndUnpackFC_Orb(DvceFaceFld4D<Real> &b0, ReconstructionMethod rcon);
+  TaskStatus OrbitalAdvectionSendFC(DvceFaceFld4D<Real> &b);
+  TaskStatus OrbitalAdvectionRecvFC(DvceFaceFld4D<Real> &b0, ReconstructionMethod rcon);
   // functions to communicate CC data with shearing box BCs
   TaskStatus ShearPeriodic_CC(DvceArray5D<Real> &a);
 

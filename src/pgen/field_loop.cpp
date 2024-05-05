@@ -202,7 +202,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
         if (shearing_box_) {
           for (int n=0; n<5; ++n) {
             if (sqrt(SQR(x1f-xpt[n]) + SQR(x2f-ypt[n])) < (0.1*lx)) {
-              az(m,k,j,i) = amp*(rad - sqrt(SQR(x1f-xpt[n]) + SQR(x2f-ypt[n])));
+              az(m,k,j,i) = amp*((0.1*lx) - sqrt(SQR(x1f-xpt[n]) + SQR(x2f-ypt[n])));
             }
           }
         } else {

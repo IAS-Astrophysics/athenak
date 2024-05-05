@@ -42,9 +42,9 @@ struct RadiationTaskIDs {
   TaskID rad_recvf;
   TaskID mhd_recvf;
   TaskID hyd_recvf;
-  TaskID rad_expl;
-  TaskID mhd_expl;
-  TaskID hyd_expl;
+  TaskID rad_rkupdt;
+  TaskID mhd_rkupdt;
+  TaskID hyd_rkupdt;
   TaskID rad_src;
   TaskID rad_resti;
   TaskID hyd_restu;
@@ -153,7 +153,7 @@ class Radiation {
   TaskStatus CalculateFluxes(Driver *d, int stage);
   TaskStatus SendFlux(Driver *d, int stage);
   TaskStatus RecvFlux(Driver *d, int stage);
-  TaskStatus ExpRKUpdate(Driver *d, int stage);
+  TaskStatus RKUpdate(Driver *d, int stage);
   TaskStatus AddRadiationSourceTerm(Driver *d, int stage);
   TaskStatus RestrictI(Driver *d, int stage);
   TaskStatus SendI(Driver *d, int stage);

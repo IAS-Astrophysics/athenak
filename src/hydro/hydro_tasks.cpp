@@ -57,11 +57,11 @@ void Hydro::AssembleHydroTasks(std::map<std::string, std::shared_ptr<TaskList>> 
   id.flux    = tl["stagen"]->AddTask(&Hydro::Fluxes,this,id.copyu);
   id.sendf   = tl["stagen"]->AddTask(&Hydro::SendFlux, this, id.flux);
   id.recvf   = tl["stagen"]->AddTask(&Hydro::RecvFlux, this, id.sendf);
-  id.expl    = tl["stagen"]->AddTask(&Hydro::ExpRKUpdate, this, id.recvf);
-  id.srctrms = tl["stagen"]->AddTask(&Hydro::HydroSrcTerms, this, id.expl);
-  id.sndu_oa = tl["stagen"]->AddTask(&Hydro::SendU_OA, this, id.srctrms);
-  id.rcvu_oa = tl["stagen"]->AddTask(&Hydro::RecvU_OA, this, id.sndu_oa);
-  id.restu   = tl["stagen"]->AddTask(&Hydro::RestrictU, this, id.rcvu_oa);
+  id.rkupdt  = tl["stagen"]->AddTask(&Hydro::RKUpdate, this, id.recvf);
+  id.srctrms = tl["stagen"]->AddTask(&Hydro::HydroSrcTerms, this, id.rkupdt);
+  id.senduoa = tl["stagen"]->AddTask(&Hydro::SendU_OA, this, id.srctrms);
+  id.recvuoa = tl["stagen"]->AddTask(&Hydro::RecvU_OA, this, id.senduoa);
+  id.restu   = tl["stagen"]->AddTask(&Hydro::RestrictU, this, id.recvuoa);
   id.sendu   = tl["stagen"]->AddTask(&Hydro::SendU, this, id.restu);
   id.recvu   = tl["stagen"]->AddTask(&Hydro::RecvU, this, id.sendu);
   id.bcs     = tl["stagen"]->AddTask(&Hydro::ApplyPhysicalBCs, this, id.recvu);
@@ -245,7 +245,7 @@ TaskStatus Hydro::SendU_OA(Driver *pdrive, int stage) {
   // only execute when (shearing box defined) AND (last stage) AND (3D OR 2d_r_phi)
   if ((shearing_box) && (stage == (pdrive->nexp_stages)) &&
       (pmy_pack->pmesh->three_d || psb->shearing_box_r_phi)) {
-    tstat = psb->PackAndSendCC_Orb(u0);
+    tstat = psb->OrbitalAdvectionSendCC(u0);
   }
   return tstat;
 }
@@ -253,13 +253,14 @@ TaskStatus Hydro::SendU_OA(Driver *pdrive, int stage) {
 //----------------------------------------------------------------------------------------
 //! \fn TaskList Hydro::RecvU_OA
 //! \brief Wrapper task list function to receive and unpack data for orbital advection
+//! Orbital remap is performed in this step.
 
 TaskStatus Hydro::RecvU_OA(Driver *pdrive, int stage) {
   TaskStatus tstat = TaskStatus::complete;
   // only execute when (shearing box defined) AND (last stage) AND (3D OR 2d_r_phi)
   if ((shearing_box) && (stage == (pdrive->nexp_stages)) &&
       (pmy_pack->pmesh->three_d || psb->shearing_box_r_phi)) {
-    tstat = psb->RecvAndUnpackCC_Orb(u0, recon_method);
+    tstat = psb->OrbitalAdvectionRecvCC(u0, recon_method);
   }
   return tstat;
 }

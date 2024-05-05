@@ -20,7 +20,7 @@ namespace mhd {
 //! \fn  void MHD::Update
 //  \brief Explicit RK update including flux divergence terms
 
-TaskStatus MHD::ExpRKUpdate(Driver *pdriver, int stage) {
+TaskStatus MHD::RKUpdate(Driver *pdriver, int stage) {
   auto &indcs = pmy_pack->pmesh->mb_indcs;
   int is = indcs.is, ie = indcs.ie;
   int js = indcs.js, je = indcs.je;

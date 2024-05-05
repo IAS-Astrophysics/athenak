@@ -28,12 +28,12 @@ struct IonNeutralTaskIDs {
   TaskID i_flux;
   TaskID i_sendf;
   TaskID i_recvf;
-  TaskID i_expl;
+  TaskID i_rkupdt;
   TaskID i_restu;
   TaskID n_flux;
   TaskID n_sendf;
   TaskID n_recvf;
-  TaskID n_expl;
+  TaskID n_rkupdt;
   TaskID n_restu;
   TaskID impl;
   TaskID i_sendu;

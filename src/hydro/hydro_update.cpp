@@ -20,7 +20,7 @@ namespace hydro {
 //! \fn  void Hydro::Update
 //  \brief Explicit RK update including flux divergence terms
 
-TaskStatus Hydro::ExpRKUpdate(Driver *pdriver, int stage) {
+TaskStatus Hydro::RKUpdate(Driver *pdriver, int stage) {
   auto &indcs = pmy_pack->pmesh->mb_indcs;
   int is = indcs.is, ie = indcs.ie;
   int js = indcs.js, je = indcs.je;
