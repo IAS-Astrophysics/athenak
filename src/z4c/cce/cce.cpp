@@ -276,6 +276,7 @@ void CCE::Interpolate(MeshBlockPack *pmbp)
       count_interp_pnts++;
       // printf("f(%g,%g,%g) = %g\n",coord[0],coord[1],coord[2],ifield[p]);
     }
+    delete intrp;
   }
 }
 
