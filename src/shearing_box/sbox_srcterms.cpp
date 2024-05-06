@@ -19,17 +19,18 @@
 //----------------------------------------------------------------------------------------
 //! \fn
 //! Shearing box source terms in the momentum and energy equations for Hydro.
-//! source terms must all be computed using primitive (w0) and NOT conserved (u0) vars
+//! Note: srcterms must be computed using primitive (w0) and NOT conserved (u0) vars
 
-void ShearingBox::SrcTerms(DvceArray5D<Real> &u0, const DvceArray5D<Real> &w0,
-                           const Real bdt) {
+void ShearingBox::SrcTerms(const DvceArray5D<Real> &w0, const EOS_Data &eos_data,
+                           const Real bdt, DvceArray5D<Real> &u0) {
   auto &indcs = pmy_pack->pmesh->mb_indcs;
   int is = indcs.is, ie = indcs.ie;
   int js = indcs.js, je = indcs.je;
   int ks = indcs.ks, ke = indcs.ke;
   int nmb1 = pmy_pack->nmb_thispack - 1;
+  auto three_d_ = pmy_pack->pmesh->three_d;
 
-  if (shearing_box_r_phi) {
+  if (shearing_box_r_phi || three_d_) {
     Real coef1 = 2.0*bdt*omega0;
     Real coef2 = (2.0-qshear)*bdt*omega0;
     Real qo = qshear*omega0;
@@ -40,7 +41,7 @@ void ShearingBox::SrcTerms(DvceArray5D<Real> &u0, const DvceArray5D<Real> &w0,
       Real mom2 = den*w0(m,IVY,k,j,i);
       u0(m,IM1,k,j,i) += coef1*mom2;
       u0(m,IM2,k,j,i) -= coef2*mom1;
-      if ((u0.extent_int(1) - 1) == IEN) {
+      if (eos_data.is_ideal) {
         // For more accuracy, better to use flux values
         u0(m,IEN,k,j,i) += bdt*mom1*mom2/den*qo;
       }
@@ -56,7 +57,7 @@ void ShearingBox::SrcTerms(DvceArray5D<Real> &u0, const DvceArray5D<Real> &w0,
       Real mom3 = den*w0(m,IVZ,k,j,i);
       u0(m,IM1,k,j,i) += coef1*mom3;
       u0(m,IM3,k,j,i) -= coef3*mom1;
-      if ((u0.extent_int(1) - 1) == IEN) {
+      if (eos_data.is_ideal) {
         // For more accuracy, better to use flux values
         u0(m,IEN,k,j,i) += bdt*mom1*mom3/den*qo;
       }
@@ -71,15 +72,16 @@ void ShearingBox::SrcTerms(DvceArray5D<Real> &u0, const DvceArray5D<Real> &w0,
 //! Shearing box source terms in the momentum and energy equations for MHD.
 //! NOTE: srcterms must be computed using primitive (w0) and NOT conserved (u0) vars
 
-void ShearingBox::SrcTerms(DvceArray5D<Real> &u0, const DvceArray5D<Real> &w0,
-                                 const DvceArray5D<Real> &bcc0, const Real bdt) {
+void ShearingBox::SrcTerms(const DvceArray5D<Real> &w0, const DvceArray5D<Real> &bcc0,
+                        const EOS_Data &eos_data, const Real bdt, DvceArray5D<Real> &u0) {
   auto &indcs = pmy_pack->pmesh->mb_indcs;
   int is = indcs.is, ie = indcs.ie;
   int js = indcs.js, je = indcs.je;
   int ks = indcs.ks, ke = indcs.ke;
   int nmb1 = pmy_pack->nmb_thispack - 1;
+  auto three_d_ = pmy_pack->pmesh->three_d;
 
-  if (shearing_box_r_phi) {
+  if (shearing_box_r_phi || three_d_) {
     Real coef1 = 2.0*bdt*omega0;
     Real coef2 = (2.0-qshear)*bdt*omega0;
     Real qo = qshear*omega0;
@@ -90,7 +92,7 @@ void ShearingBox::SrcTerms(DvceArray5D<Real> &u0, const DvceArray5D<Real> &w0,
       Real mom2 = den*w0(m,IVY,k,j,i);
       u0(m,IM1,k,j,i) += coef1*mom2;
       u0(m,IM2,k,j,i) -= coef2*mom1;
-      if ((u0.extent_int(1) - 1) == IEN) {
+      if (eos_data.is_ideal) {
         // For more accuracy, better to use flux values
         u0(m,IEN,k,j,i) += bdt*(mom1*mom2/den-bcc0(m,IBX,k,j,i)*bcc0(m,IBY,k,j,i))*qo;
       }
@@ -106,7 +108,7 @@ void ShearingBox::SrcTerms(DvceArray5D<Real> &u0, const DvceArray5D<Real> &w0,
       Real mom3 = den*w0(m,IVZ,k,j,i);
       u0(m,IM1,k,j,i) += coef1*mom3;
       u0(m,IM3,k,j,i) -= coef3*mom1;
-      if ((u0.extent_int(1) - 1) == IEN) {
+      if (eos_data.is_ideal) {
         // For more accuracy, better to use flux values
         u0(m,IEN,k,j,i) += bdt*(mom1*mom3/den-bcc0(m,IBX,k,j,i)*bcc0(m,IBZ,k,j,i))*qo;
       }

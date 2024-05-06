@@ -312,11 +312,11 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
       } else {
         u0(m,IM1,k,j,i) = vflow*lx/diag;
         u0(m,IM2,k,j,i) = vflow*ly/diag;
-        if (three_d) {
-          u0(m,IM3,k,j,i) = vflow*lz/diag;
-        } else {
+//        if (three_d) {
+//          u0(m,IM3,k,j,i) = vflow*lz/diag;
+//        } else {
           u0(m,IM3,k,j,i) = 0.0;
-        }
+//        }
       }
       if (eos.is_ideal) {
         u0(m,IEN,k,j,i) = 1.0/gm1 +

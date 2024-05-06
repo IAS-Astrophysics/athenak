@@ -58,11 +58,12 @@ class SourceTerms {
   Real dii_dt;
 
   // functions
-  void ConstantAccel(DvceArray5D<Real> &u0,const DvceArray5D<Real> &w0,const Real dt);
-  void ISMCooling(DvceArray5D<Real> &u0, const DvceArray5D<Real> &w0, const EOS_Data &eos,
-                  const Real dt);
-  void RelCooling(DvceArray5D<Real> &u0, const DvceArray5D<Real> &w0, const EOS_Data &eos,
-                  const Real dt);
+  void ConstantAccel(const DvceArray5D<Real> &w0, const EOS_Data &eos,
+                     const Real dt, DvceArray5D<Real> &u0);
+  void ISMCooling(const DvceArray5D<Real> &w0, const EOS_Data &eos,
+                  const Real dt, DvceArray5D<Real> &u0);
+  void RelCooling(const DvceArray5D<Real> &w0, const EOS_Data &eos,
+                  const Real dt, DvceArray5D<Real> &u0);
   void BeamSource(DvceArray5D<Real> &i0, const Real dt);
   void NewTimeStep(const DvceArray5D<Real> &w0, const EOS_Data &eos);
 

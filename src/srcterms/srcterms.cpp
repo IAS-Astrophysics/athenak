@@ -80,10 +80,10 @@ SourceTerms::~SourceTerms() {
 //----------------------------------------------------------------------------------------
 //! \fn
 // Add constant acceleration
-// NOTE source terms must all be computed using primitive (w0) and NOT conserved (u0) vars
+// NOTE source terms must be computed using primitive (w0) and NOT conserved (u0) vars
 
-void SourceTerms::ConstantAccel(DvceArray5D<Real> &u0, const DvceArray5D<Real> &w0,
-                                const Real bdt) {
+void SourceTerms::ConstantAccel(const DvceArray5D<Real> &w0, const EOS_Data &eos_data,
+                                const Real bdt, DvceArray5D<Real> &u0) {
   auto &indcs = pmy_pack->pmesh->mb_indcs;
   int is = indcs.is, ie = indcs.ie;
   int js = indcs.js, je = indcs.je;
@@ -97,7 +97,7 @@ void SourceTerms::ConstantAccel(DvceArray5D<Real> &u0, const DvceArray5D<Real> &
   KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
     Real src = bdt*g*w0(m,IDN,k,j,i);
     u0(m,dir,k,j,i) += src;
-    if ((u0.extent_int(1) - 1) == IEN) { u0(m,IEN,k,j,i) += src*w0(m,dir,k,j,i); }
+    if (eos_data.is_ideal) { u0(m,IEN,k,j,i) += src*w0(m,dir,k,j,i); }
   });
 
   return;
@@ -106,10 +106,10 @@ void SourceTerms::ConstantAccel(DvceArray5D<Real> &u0, const DvceArray5D<Real> &
 //----------------------------------------------------------------------------------------
 //! \fn void SourceTerms::ISMCooling()
 //! \brief Add explict ISM cooling and heating source terms in the energy equations.
-// NOTE source terms must all be computed using primitive (w0) and NOT conserved (u0) vars
+// NOTE source terms must be computed using primitive (w0) and NOT conserved (u0) vars
 
-void SourceTerms::ISMCooling(DvceArray5D<Real> &u0, const DvceArray5D<Real> &w0,
-                             const EOS_Data &eos_data, const Real bdt) {
+void SourceTerms::ISMCooling(const DvceArray5D<Real> &w0, const EOS_Data &eos_data,
+                             const Real bdt, DvceArray5D<Real> &u0) {
   auto &indcs = pmy_pack->pmesh->mb_indcs;
   int is = indcs.is, ie = indcs.ie;
   int js = indcs.js, je = indcs.je;
@@ -148,13 +148,11 @@ void SourceTerms::ISMCooling(DvceArray5D<Real> &u0, const DvceArray5D<Real> &w0,
 
 //----------------------------------------------------------------------------------------
 //! \fn void SourceTerms::RelCooling()
-//! \brief Add explict relativistic cooling in the energy and momentum
-//! equations.
-// NOTE source terms must all be computed using primitive (w0) and NOT conserved
-// (u0) vars
+//! \brief Add explict relativistic cooling in the energy and momentum equations.
+// NOTE source terms must be computed using primitive (w0) and NOT conserved (u0) vars
 
-void SourceTerms::RelCooling(DvceArray5D<Real> &u0, const DvceArray5D<Real> &w0,
-                             const EOS_Data &eos_data, const Real bdt) {
+void SourceTerms::RelCooling(const DvceArray5D<Real> &w0, const EOS_Data &eos_data,
+                             const Real bdt, DvceArray5D<Real> &u0) {
   auto &indcs = pmy_pack->pmesh->mb_indcs;
   int is = indcs.is, ie = indcs.ie;
   int js = indcs.js, je = indcs.je;

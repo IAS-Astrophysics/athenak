@@ -211,11 +211,11 @@ TaskStatus Hydro::RecvFlux(Driver *pdrive, int stage) {
 TaskStatus Hydro::HydroSrcTerms(Driver *pdrive, int stage) {
   Real beta_dt = (pdrive->beta[stage-1])*(pmy_pack->pmesh->dt);
 
-  // Add source terms for various physics
+  // Add source terms for various physics.  Must be computed from primitives.
   if (psrc->source_terms_enabled) {
-    if (psrc->const_accel) psrc->ConstantAccel(u0, w0, beta_dt);
-    if (psrc->ism_cooling) psrc->ISMCooling(u0, w0, peos->eos_data, beta_dt);
-    if (psrc->rel_cooling) psrc->RelCooling(u0, w0, peos->eos_data, beta_dt);
+    if (psrc->const_accel) psrc->ConstantAccel(w0, peos->eos_data,  beta_dt, u0);
+    if (psrc->ism_cooling) psrc->ISMCooling(w0, peos->eos_data, beta_dt, u0);
+    if (psrc->rel_cooling) psrc->RelCooling(w0, peos->eos_data, beta_dt, u0);
   }
 
   // Add coordinate source terms in GR.  Again, must be computed with only primitives.
@@ -230,7 +230,7 @@ TaskStatus Hydro::HydroSrcTerms(Driver *pdrive, int stage) {
 
   // Add shearing box source terms
   if (shearing_box) {
-    psb->SrcTerms(u0, w0, beta_dt);
+    psb->SrcTerms(w0, peos->eos_data, beta_dt, u0);
   }
 
   return TaskStatus::complete;

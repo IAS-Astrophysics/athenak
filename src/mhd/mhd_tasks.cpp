@@ -49,12 +49,12 @@ void MHD::AssembleMHDTasks(std::map<std::string, std::shared_ptr<TaskList>> tl) 
   id.recvf   = tl["stagen"]->AddTask(&MHD::RecvFlux, this, id.sendf);
   id.rkupdt  = tl["stagen"]->AddTask(&MHD::RKUpdate, this, id.recvf);
   id.srctrms = tl["stagen"]->AddTask(&MHD::MHDSrcTerms, this, id.rkupdt);
-  id.senduoa = tl["stagen"]->AddTask(&MHD::SendU_OA, this, id.srctrms);
+  id.senduoa = tl["stagen"]->AddTask(&MHD::SendU_OA, this, id.efldsrc);
   id.recvuoa = tl["stagen"]->AddTask(&MHD::RecvU_OA, this, id.senduoa);
   id.restu   = tl["stagen"]->AddTask(&MHD::RestrictU, this, id.recvuoa);
   id.sendu   = tl["stagen"]->AddTask(&MHD::SendU, this, id.restu);
   id.recvu   = tl["stagen"]->AddTask(&MHD::RecvU, this, id.sendu);
-  id.efld    = tl["stagen"]->AddTask(&MHD::CornerE, this, id.recvu);
+  id.efld    = tl["stagen"]->AddTask(&MHD::CornerE, this, id.srctrms);
   id.efldsrc = tl["stagen"]->AddTask(&MHD::EFieldSrc, this, id.efld);
   id.sende   = tl["stagen"]->AddTask(&MHD::SendE, this, id.efldsrc);
   id.recve   = tl["stagen"]->AddTask(&MHD::RecvE, this, id.sende);
@@ -225,9 +225,9 @@ TaskStatus MHD::MHDSrcTerms(Driver *pdrive, int stage) {
 
   // Add source terms for various physics
   if (psrc->source_terms_enabled) {
-    if (psrc->const_accel) psrc->ConstantAccel(u0, w0, beta_dt);
-    if (psrc->ism_cooling) psrc->ISMCooling(u0, w0, peos->eos_data, beta_dt);
-    if (psrc->rel_cooling) psrc->RelCooling(u0, w0, peos->eos_data, beta_dt);
+    if (psrc->const_accel) psrc->ConstantAccel(w0, peos->eos_data, beta_dt, u0);
+    if (psrc->ism_cooling) psrc->ISMCooling(w0, peos->eos_data, beta_dt, u0);
+    if (psrc->rel_cooling) psrc->RelCooling(w0, peos->eos_data, beta_dt, u0);
   }
 
   // Add coordinate source terms in GR.  Again, must be computed with only primitives.
@@ -242,7 +242,7 @@ TaskStatus MHD::MHDSrcTerms(Driver *pdrive, int stage) {
 
   // Add shearing box source terms
   if (shearing_box) {
-    psb->SrcTerms(u0, w0, bcc0, beta_dt);
+    psb->SrcTerms(w0, bcc0, peos->eos_data, beta_dt, u0);
   }
 
   return TaskStatus::complete;

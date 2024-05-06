@@ -458,8 +458,12 @@ TaskStatus ShearingBox::OrbitalAdvectionRecvFC(DvceFaceFld4D<Real> &b0,
 
   int scr_lvl=0;
   size_t scr_size = ScrArray1D<Real>::shmem_size(nfx) * 3;
-  auto emfx = pmy_pack->pmhd->efld.x1e;
-  auto emfz = pmy_pack->pmhd->efld.x3e;
+  DvceArray4D<Real> emfx, emfz;
+    int ncells1 = indcs.nx1 + 2*(indcs.ng);
+    int ncells2 = indcs.nx2 + 2*(indcs.ng);
+    int ncells3 = indcs.nx3 + 2*(indcs.ng);
+    Kokkos::realloc(emfx,nmb,ncells3,ncells2,ncells1);
+    Kokkos::realloc(emfz,nmb,ncells3,ncells2,ncells1);
   par_for_outer("oa-unB",DevExeSpace(),scr_size,scr_lvl,0,(nmb-1),0,1,ks,ke+1,is,ie+1,
   KOKKOS_LAMBDA(TeamMember_t member, const int m, const int v, const int k, const int i) {
     ScrArray1D<Real> b0_(member.team_scratch(scr_lvl), nfx); // 1D slice of data

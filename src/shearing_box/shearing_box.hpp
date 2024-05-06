@@ -77,9 +77,10 @@ class ShearingBox {
 #endif
 
   // functions to add source terms
-  void SrcTerms(DvceArray5D<Real> &u0, const DvceArray5D<Real> &w0, const Real bdt);
-  void SrcTerms(DvceArray5D<Real> &u0, const DvceArray5D<Real> &w0,
-                const DvceArray5D<Real> &bcc0, const Real bdt);
+  void SrcTerms(const DvceArray5D<Real> &w0, const EOS_Data &eos_data, const Real bdt,
+                DvceArray5D<Real> &u0);
+  void SrcTerms(const DvceArray5D<Real> &w0, const DvceArray5D<Real> &bcc0,
+                const EOS_Data &eos_data, const Real bdt, DvceArray5D<Real> &u0);
   void EFieldSrcTerms(const DvceFaceFld4D<Real> &b0, DvceEdgeFld4D<Real> &efld);
 
   // functions to communicate CC data with orbital advection
