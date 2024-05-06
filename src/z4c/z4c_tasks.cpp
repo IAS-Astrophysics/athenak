@@ -291,20 +291,23 @@ TaskStatus Z4c::CCEDump(Driver *pdrive, int stage) {
       
       Kokkos::Timer timer;
       for (auto cce : pmy_pack->pz4c_cce) {
-        timer.reset()
+        timer.reset();
         
         cce->Interpolate(pmy_pack);
         
-        printf("interp time = %gs\n",time.seconds());
-        timer.reset()
+        printf("interp time = %gs\n",timer.seconds());
+        fflush(stdout);
+        timer.reset();
         
         cce->ReduceInterpolation();
         
-        printf("reduce interp time = %gs\n",time.seconds());
-        timer.reset()
+        printf("reduce interp time = %gs\n",timer.seconds());
+        fflush(stdout);
+        timer.reset();
         
         cce->DecomposeAndWrite(cce_iter,pmy_pack->pmesh->time);
-        printf("decompose time = %gs\n",time.seconds());
+        printf("decompose time = %gs\n",timer.seconds());
+        fflush(stdout);
       }
       cce_dump_last_output_time = time_32;
     }// if (stage == pdrive->nexp_stages)
