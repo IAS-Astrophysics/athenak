@@ -288,10 +288,23 @@ TaskStatus Z4c::CCEDump(Driver *pdrive, int stage) {
     if (stage == pdrive->nexp_stages) {
       //printf("%s:(ctime,dt)=(%f,%f)",__func__,pmy_pack->pmesh->time,cce_dump_dt);
       int cce_iter = 0;
+      
+      Kokkos::Timer timer;
       for (auto cce : pmy_pack->pz4c_cce) {
+        timer.reset()
+        
         cce->Interpolate(pmy_pack);
+        
+        printf("interp time = %gs\n",time.seconds());
+        timer.reset()
+        
         cce->ReduceInterpolation();
+        
+        printf("reduce interp time = %gs\n",time.seconds());
+        timer.reset()
+        
         cce->DecomposeAndWrite(cce_iter,pmy_pack->pmesh->time);
+        printf("decompose time = %gs\n",time.seconds());
       }
       cce_dump_last_output_time = time_32;
     }// if (stage == pdrive->nexp_stages)
