@@ -57,10 +57,14 @@ TaskStatus Particles::Push(Driver *pdriver, int stage) {
       BorisStep(dt_, false);
     break;
     
-    case ParticlesPusher::full_gr:
-      //BorisStep(dt_/2.0, true);
+    case ParticlesPusher::only_gr:
       GeodesicIterations(dt_);
-      //BorisStep(dt_/2.0, true);
+    break;
+
+    case ParticlesPusher::full_gr:
+      BorisStep(dt_/2.0, true);
+      GeodesicIterations(dt_);
+      BorisStep(dt_/2.0, true);
     break;
 
     default:
