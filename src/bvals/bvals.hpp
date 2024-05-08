@@ -153,11 +153,11 @@ class MeshBoundaryValues {
 
 //----------------------------------------------------------------------------------------
 //! \class BoundaryValuesCC
-//  \brief boundary values for cell-centered variables
+//  \brief Derived class implementing boundary values for cell-centered variables
 
-class BoundaryValuesCC : public MeshBoundaryValues {
+class MeshBoundaryValuesCC : public MeshBoundaryValues {
  public:
-  BoundaryValuesCC(MeshBlockPack *ppack, ParameterInput *pin, bool z4c);
+  MeshBoundaryValuesCC(MeshBlockPack *ppack, ParameterInput *pin, bool z4c);
 
   //functions
   void InitSendIndices(MeshBoundaryBuffer &b,int o1,int o2,int o3,int f1,int f2) override;
@@ -184,11 +184,11 @@ class BoundaryValuesCC : public MeshBoundaryValues {
 
 //----------------------------------------------------------------------------------------
 //! \class BoundaryValuesFC
-//  \brief boundary values for face-centered vector fields
+//  \brief Derived class implementing boundary values for face-centered vector fields
 
-class BoundaryValuesFC : public MeshBoundaryValues {
+class MeshBoundaryValuesFC : public MeshBoundaryValues {
  public:
-  BoundaryValuesFC(MeshBlockPack *ppack, ParameterInput *pin);
+  MeshBoundaryValuesFC(MeshBlockPack *ppack, ParameterInput *pin);
 
   //functions
   void InitSendIndices(MeshBoundaryBuffer &b,int o1,int o2,int o3,int f1,int f2) override;

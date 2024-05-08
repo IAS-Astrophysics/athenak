@@ -27,7 +27,6 @@ namespace hydro {
 
 Hydro::Hydro(MeshBlockPack *ppack, ParameterInput *pin) :
     pmy_pack(ppack),
-    shearing_box(false),
     u0("cons",1,1,1,1,1),
     w0("prim",1,1,1,1,1),
     coarse_u0("ccons",1,1,1,1,1),
@@ -90,15 +89,6 @@ Hydro::Hydro(MeshBlockPack *ppack, ParameterInput *pin) :
   // Source terms (constructor parses input file to initialize only srcterms needed)
   psrc = new SourceTerms("hydro", ppack, pin);
 
-  // Shearing box (if requested in input file)
-  if (pin->DoesBlockExist("shearing_box")) {
-    psb = new ShearingBox(ppack, pin, (nhydro+nscalars));
-    shearing_box = true;
-  } else {
-    psb = nullptr;
-    shearing_box = false;
-  }
-
   // (3) read time-evolution option [already error checked in driver constructor]
   // Then initialize memory and algorithms for reconstruction and Riemann solvers
   std::string evolution_t = pin->GetString("time","evolution");
@@ -126,8 +116,17 @@ Hydro::Hydro(MeshBlockPack *ppack, ParameterInput *pin) :
   }
 
   // allocate boundary buffers for conserved (cell-centered) variables
-  pbval_u = new BoundaryValuesCC(ppack, pin, false);
+  pbval_u = new MeshBoundaryValuesCC(ppack, pin, false);
   pbval_u->InitializeBuffers((nhydro+nscalars));
+
+  // Orbital advection and shearing box BCs (if requested in input file)
+  if (pin->DoesBlockExist("shearing_box")) {
+    porb_u = new OrbitalAdvectionCC(ppack, pin, (nhydro+nscalars));
+//    psbox_u = new ShearingBoxBoundaryCC(ppack, pin, (nhydro+nscalars));
+  } else {
+    porb_u = nullptr;
+//    psbox_u = nullptr;
+  }
 
   // for time-evolving problems, continue to construct methods, allocate arrays
   if (evolution_t.compare("stationary") != 0) {

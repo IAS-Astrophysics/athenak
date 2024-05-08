@@ -29,16 +29,14 @@
 
 //----------------------------------------------------------------------------------------
 // constructor, parses input file and initializes data structures and parameters
-// Only source terms specified in input file are initialized.  If none
-// requested, 'source_terms_enabled' flag is false.
+// Only source terms specified in input file are initialized.
 
 SourceTerms::SourceTerms(std::string block, MeshBlockPack *pp, ParameterInput *pin) :
   pmy_pack(pp),
-  source_terms_enabled(false) {
+  shearing_box_r_phi(false) {
   // (1) (constant) gravitational acceleration
   const_accel = pin->GetOrAddBoolean(block, "const_accel", false);
   if (const_accel) {
-    source_terms_enabled = true;
     const_accel_val = pin->GetReal(block, "const_accel_val");
     const_accel_dir = pin->GetInteger(block, "const_accel_dir");
     if (const_accel_dir < 1 || const_accel_dir > 3) {
@@ -51,24 +49,31 @@ SourceTerms::SourceTerms(std::string block, MeshBlockPack *pp, ParameterInput *p
   // (2) Optically thin (ISM) cooling
   ism_cooling = pin->GetOrAddBoolean(block, "ism_cooling", false);
   if (ism_cooling) {
-    source_terms_enabled = true;
     hrate = pin->GetReal(block, "hrate");
   }
 
   // (3) beam source (radiation)
   beam = pin->GetOrAddBoolean(block, "beam_source", false);
   if (beam) {
-    source_terms_enabled = true;
     dii_dt = pin->GetReal(block, "dii_dt");
   }
 
   // (4) cooling (relativistic)
   rel_cooling = pin->GetOrAddBoolean(block, "rel_cooling", false);
   if (rel_cooling) {
-    source_terms_enabled = true;
     crate_rel = pin->GetReal(block, "crate_rel");
     cpower_rel = pin->GetOrAddReal(block, "cpower_rel", 1.);
   }
+
+  // (5) shearing box
+  if (pin->DoesBlockExist("shearing_box")) {
+    shearing_box = true;
+    qshear = pin->GetReal("shearing_box","qshear");
+    omega0 = pin->GetReal("shearing_box","omega0");
+  } else {
+    shearing_box = false;
+  }
+
 }
 
 //----------------------------------------------------------------------------------------

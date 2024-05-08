@@ -5,7 +5,14 @@
 //========================================================================================
 //! \file bvals_tasks.cpp
 //! \brief functions included in task lists to post/clear non-blocking MPI calls for
-//! both Mesh and particle boundary value classes
+//! Mesh variables. These are generic functions that work for both CC and FC variables.
+//!
+//! Note: InitFluxRecv() functions for flux correction step are specific to CC/FC vars,
+//! and are implemented in flux_correct_XX.cpp files respectively. The ClearFluxRecv()
+//! and ClearFluxSend() functions are generic and implemented below.
+//!
+//! Note2: task list functions for particle communication are all implemented in
+//! bvals_part.cpp file.
 
 #include <cstdlib>
 #include <iostream>

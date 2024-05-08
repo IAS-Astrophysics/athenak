@@ -129,7 +129,7 @@ class Radiation {
   DvceArray5D<Real> coarse_i0;  // intensities on 2x coarser grid (for SMR/AMR)
 
   // Boundary communication buffers and functions for i
-  BoundaryValuesCC *pbval_i;
+  MeshBoundaryValuesCC *pbval_i;
 
   // following only used for time-evolving flow
   DvceArray5D<Real> i1;         // intensity at intermediate step

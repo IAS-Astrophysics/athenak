@@ -1,20 +1,19 @@
 #ifndef SHEARING_BOX_SHEARING_BOX_HPP_
 #define SHEARING_BOX_SHEARING_BOX_HPP_
 //========================================================================================
-// AthenaK astrophysical fluid dynamics code
+// AthenaK astrophysical fluid dynamics & numerical relativity code
 // Copyright(C) 2020 James M. Stone <jmstone@ias.edu> and the Athena code team
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
 //! \file shearing_box.hpp
-//  \brief definitions for ShearingBox class
+//! \brief definitions for classes that implement both orbital adfection and shearing box.
+//! Both OrbitalAdvection and ShearingBox are abstract base classes that are used to
+//! define derived classes for CC and FC variables.
 
 #include "athena.hpp"
 #include "parameter_input.hpp"
 #include "tasklist/task_list.hpp"
 #include "bvals/bvals.hpp"
-
-// forward declarations
-
 
 //----------------------------------------------------------------------------------------
 //! \struct ShearingBoxTaskIDs
@@ -31,11 +30,12 @@ struct ShearingBoxTaskIDs {
 };
 
 //----------------------------------------------------------------------------------------
-//! \struct ShearingBoxBuffer
-//! \brief container for storage for boundary buffers with the shearing box
+//! \struct ShearingBoxBoundaryBuffer
+//! \brief container for storing boundary buffers. Used by both the orbital advection and
+//! shearing box methods for both CC and FC variables.
 //! Basically a much simplified version of the MeshBoundaryBuffer struct.
 
-struct ShearingBoxBuffer {
+struct ShearingBoxBoundaryBuffer {
   // Views that store buffer data and fluxes on device
   DvceArray5D<Real> vars, flux;
 #if MPI_PARALLEL_ENABLED
@@ -46,53 +46,91 @@ struct ShearingBoxBuffer {
 };
 
 //----------------------------------------------------------------------------------------
-//! \class ShearingBox
+//! \class OrbitalAdvection
+//  \brief Abstract base class for orbital advection of CC and FC variables
 
-class ShearingBox {
+class OrbitalAdvection {
  public:
-  ShearingBox(MeshBlockPack *ppack, ParameterInput *pin, int nvar);
-  ~ShearingBox();
+  OrbitalAdvection(MeshBlockPack *ppack, ParameterInput *pin, int nvar);
+  ~OrbitalAdvection();
 
   // data
-  Real qshear, omega0;      // shearing box parameters
   int maxjshift;            // maximum integer shift of any cell in orbital advection
-  int nmb_x1bndry;          // number of MBs that touch shear periodic x1 boundaries
-  DualArray2D<int> x1bndry_mbs; // stores GIDs of MBs at shear periodic boundaries
-  // ***following is not yet implemented***
-  bool shearing_box_r_phi;  // indicates calculation in 2D (r-\phi) plane
-
-  // container to hold names of TaskIDs
-  ShearingBoxTaskIDs id;
 
   // data buffers for CC and FC vars for orbital advection. Only two x2-faces communicate
-  ShearingBoxBuffer sendcc_orb[2], recvcc_orb[2];
-  ShearingBoxBuffer sendfc_orb[2], recvfc_orb[2];
-  // data buffers for CC and FC vars for shearing sheet BCs. Only one x1-face communicates
-  ShearingBoxBuffer sendcc_shr, recvcc_shr;
-  ShearingBoxBuffer sendfc_shr, recvfc_shr;
+  ShearingBoxBoundaryBuffer sendbuf[2], recvbuf[2];
 
 #if MPI_PARALLEL_ENABLED
   // unique MPI communicators for orbital advection and shearing box
-  MPI_Comm comm_orb;
+  MPI_Comm comm_orb_advect;
 #endif
 
-  // functions to add source terms
-  void SrcTerms(const DvceArray5D<Real> &w0, const EOS_Data &eos_data, const Real bdt,
-                DvceArray5D<Real> &u0);
-  void SrcTerms(const DvceArray5D<Real> &w0, const DvceArray5D<Real> &bcc0,
-                const EOS_Data &eos_data, const Real bdt, DvceArray5D<Real> &u0);
-  void EFieldSrcTerms(const DvceFaceFld4D<Real> &b0, DvceEdgeFld4D<Real> &efld);
-
-  // functions to communicate CC data with orbital advection
-  TaskStatus OrbitalAdvectionSendCC(DvceArray5D<Real> &a);
-  TaskStatus OrbitalAdvectionRecvCC(DvceArray5D<Real> &a, ReconstructionMethod rcon);
-  // functions to communicate FC data with orbital advection
-  TaskStatus OrbitalAdvectionSendFC(DvceFaceFld4D<Real> &b);
-  TaskStatus OrbitalAdvectionRecvFC(DvceFaceFld4D<Real> &b0, ReconstructionMethod rcon);
-  // functions to communicate CC data with shearing box BCs
-  TaskStatus ShearPeriodic_CC(DvceArray5D<Real> &a);
-
- private:
+ protected:
+  // must use pointer to MBPack and not parent physics module since parent can be one of
+  // many types (Hydro, MHD, Radiation, etc.)
   MeshBlockPack *pmy_pack;
 };
+
+//----------------------------------------------------------------------------------------
+//! \class OrbitalAdvectionCC
+//  \brief Derived class implementing orbital advection of CC variables
+
+class OrbitalAdvectionCC : public OrbitalAdvection {
+ public:
+  OrbitalAdvectionCC(MeshBlockPack *ppack, ParameterInput *pin, int nvar);
+  // functions to communicate CC data with orbital advection
+  TaskStatus PackAndSendCC(DvceArray5D<Real> &a);
+  TaskStatus RecvAndUnpackCC(DvceArray5D<Real> &a, ReconstructionMethod rcon, Real qo);
+};
+
+//----------------------------------------------------------------------------------------
+//! \class OrbitalAdvectionFC
+//  \brief Derived class implementing orbital advection of FC variables
+
+class OrbitalAdvectionFC : public OrbitalAdvection {
+ public:
+  OrbitalAdvectionFC(MeshBlockPack *ppack, ParameterInput *pin, int nvar);
+  // functions to communicate FC data with orbital advection
+  TaskStatus PackAndSendFC(DvceFaceFld4D<Real> &b);
+  TaskStatus RecvAndUnpackFC(DvceFaceFld4D<Real> &b0, ReconstructionMethod rcon, Real qo);
+};
+
+//----------------------------------------------------------------------------------------
+//! \class ShearingBoxBoundary
+//  \brief Abstract base class for shearing box boundary conditions for CC and FC vars
+
+class ShearingBoxBoundary {
+ public:
+  ShearingBoxBoundary(MeshBlockPack *ppack, ParameterInput *pin, int nvar);
+  ~ShearingBoxBoundary();
+
+  // data
+  int nmb_x1bndry;          // number of MBs that touch shear periodic x1 boundaries
+  DualArray2D<int> x1bndry_mbs; // stores GIDs of MBs at shear periodic boundaries
+
+  // data buffers for CC and FC vars for shearing sheet BCs. Only one x1-face communicates
+  ShearingBoxBoundaryBuffer sendbuf, recvbuf;
+
+#if MPI_PARALLEL_ENABLED
+  // unique MPI communicators for orbital advection and shearing box
+  MPI_Comm comm_sbox;
+#endif
+
+ protected:
+  // must use pointer to MBPack and not parent physics module since parent can be one of
+  // many types (Hydro, MHD, Radiation, etc.)
+  MeshBlockPack *pmy_pack;
+};
+
+//----------------------------------------------------------------------------------------
+//! \class ShearingBoxBoundaryCC
+//  \brief Derived class implementing shearing box boundary conditions for CC vars
+
+class ShearingBoxBoundaryCC {
+ public:
+  ShearingBoxBoundaryCC(MeshBlockPack *ppack, ParameterInput *pin, int nvar);
+  // functions to communicate CC data with shearing box BCs
+  TaskStatus PackAndSendCC(DvceArray5D<Real> &a);
+};
+
 #endif // SHEARING_BOX_SHEARING_BOX_HPP_

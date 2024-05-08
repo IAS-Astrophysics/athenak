@@ -23,7 +23,7 @@ class Coordinates;
 class Viscosity;
 class Conduction;
 class SourceTerms;
-class ShearingBox;
+class OrbitalAdvectionCC;
 class Driver;
 
 // constants that enumerate Hydro Riemann Solver options
@@ -70,7 +70,6 @@ class Hydro {
   ReconstructionMethod recon_method;
   Hydro_RSolver rsolver_method;
   EquationOfState *peos;  // chosen EOS
-  bool shearing_box;
 
   int nhydro;             // number of hydro variables (5/4 for ideal/isothermal EOS)
   int nscalars;           // number of passive scalars
@@ -81,13 +80,16 @@ class Hydro {
   DvceArray5D<Real> coarse_w0;  // primitive variables on 2x coarser grid (for SMR/AMR)
 
   // Boundary communication buffers and functions for u
-  BoundaryValuesCC *pbval_u;
+  MeshBoundaryValuesCC *pbval_u;
+
+  // Orbital advection and shearing box BCs
+  OrbitalAdvectionCC *porb_u = nullptr;
+//  ShearingBoxBoundaryCC *psbox_u = nullptr;
 
   // Object(s) for extra physics (viscosity, thermal conduction, srcterms)
   Viscosity *pvisc = nullptr;
   Conduction *pcond = nullptr;
   SourceTerms *psrc = nullptr;
-  ShearingBox *psb = nullptr;
 
   // following only used for time-evolving flow
   DvceArray5D<Real> u1;       // conserved variables at intermediate step

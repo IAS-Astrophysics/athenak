@@ -158,7 +158,7 @@ Radiation::Radiation(MeshBlockPack *ppack, ParameterInput *pin) :
   }
 
   // allocate boundary buffers for conserved (cell-centered) variables
-  pbval_i = new BoundaryValuesCC(ppack, pin, false);
+  pbval_i = new MeshBoundaryValuesCC(ppack, pin, false);
   pbval_i->InitializeBuffers(prgeo->nangles);
 
   // for time-evolving problems, continue to construct methods, allocate arrays

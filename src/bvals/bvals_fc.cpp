@@ -22,12 +22,12 @@
 //----------------------------------------------------------------------------------------
 // BValFC constructor:
 
-BoundaryValuesFC::BoundaryValuesFC(MeshBlockPack *pp, ParameterInput *pin) :
+MeshBoundaryValuesFC::MeshBoundaryValuesFC(MeshBlockPack *pp, ParameterInput *pin) :
   MeshBoundaryValues(pp, pin, false) {
 }
 
 //----------------------------------------------------------------------------------------
-//! \!fn void BoundaryValuesFC::PackAndSendFC()
+//! \!fn void MeshBoundaryValuesFC::PackAndSendFC()
 //! \brief Pack face-centered Mesh variables into boundary buffers and send to neighbors.
 //!
 //! As for cell-centered data, this routine packs ALL the buffers on ALL the faces, edges,
@@ -37,8 +37,8 @@ BoundaryValuesFC::BoundaryValuesFC(MeshBlockPack *pp, ParameterInput *pin) :
 //! Input array must be DvceFaceFld4D dimensioned (nmb, nx3, nx2, nx1)
 //! DvceFaceFld4D of coarsened (restricted) fields also required with SMR/AMR
 
-TaskStatus BoundaryValuesFC::PackAndSendFC(DvceFaceFld4D<Real> &b,
-                                           DvceFaceFld4D<Real> &cb) {
+TaskStatus MeshBoundaryValuesFC::PackAndSendFC(DvceFaceFld4D<Real> &b,
+                                               DvceFaceFld4D<Real> &cb) {
   // create local references for variables in kernel
   int nmb = pmy_pack->nmb_thispack;
   int nnghbr = pmy_pack->pmb->nnghbr;
@@ -235,8 +235,8 @@ TaskStatus BoundaryValuesFC::PackAndSendFC(DvceFaceFld4D<Real> &b,
 // \!fn void RecvBuffers()
 // \brief Unpack boundary buffers
 
-TaskStatus BoundaryValuesFC::RecvAndUnpackFC(DvceFaceFld4D<Real> &b,
-                                             DvceFaceFld4D<Real> &cb) {
+TaskStatus MeshBoundaryValuesFC::RecvAndUnpackFC(DvceFaceFld4D<Real> &b,
+                                                 DvceFaceFld4D<Real> &cb) {
   // create local references for variables in kernel
   int nmb = pmy_pack->nmb_thispack;
   int nnghbr = pmy_pack->pmb->nnghbr;

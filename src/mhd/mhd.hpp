@@ -24,7 +24,8 @@ class Viscosity;
 class Resistivity;
 class Conduction;
 class SourceTerms;
-class ShearingBox;
+class OrbitalAdvectionCC;
+class OrbitalAdvectionFC;
 class Driver;
 
 // function ptr for user-defined MHD boundary functions enrolled in problem generator
@@ -87,7 +88,6 @@ class MHD {
   ReconstructionMethod recon_method;
   MHD_RSolver rsolver_method;
   EquationOfState *peos;   // chosen EOS
-  bool shearing_box;
 
   int nmhd;                // number of mhd variables (5/4 for ideal/isothermal EOS)
   int nscalars;            // number of passive scalars
@@ -101,16 +101,20 @@ class MHD {
   DvceFaceFld4D<Real> coarse_b0;  // face-centered B-field on 2x coarser grid
 
   // Objects containing boundary communication buffers and routines for u and b
-  BoundaryValuesCC *pbval_u;
-  BoundaryValuesFC *pbval_b;
+  MeshBoundaryValuesCC *pbval_u;
+  MeshBoundaryValuesFC *pbval_b;
   MHDBoundaryFnPtr MHDBoundaryFunc[6];
+
+  // Orbital advection and shearing box BCs
+  OrbitalAdvectionCC *porb_u = nullptr;
+  OrbitalAdvectionFC *porb_b = nullptr;
+//  ShearingBoxBoundaryCC *psbox_u = nullptr;
 
   // Object(s) for extra physics (viscosity, resistivity, thermal conduction, srcterms)
   Viscosity *pvisc = nullptr;
   Resistivity *presist = nullptr;
   Conduction *pcond = nullptr;
   SourceTerms *psrc = nullptr;
-  ShearingBox *psb = nullptr;
 
   // following only used for time-evolving flow
   DvceArray5D<Real> u1;       // conserved variables, second register

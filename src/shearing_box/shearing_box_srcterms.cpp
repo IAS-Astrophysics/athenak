@@ -3,7 +3,9 @@
 // Copyright(C) 2020 James M. Stone <jmstone@ias.edu> and the Athena code team
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
-//! \file sbox_srcterms.cpp
+//! \file shearing_box_srcterms.cpp
+//! \brief Implements shearing box source terms.  All functions are members of the
+//! SourceTerm class
 
 #include <iostream>
 #include <string>
@@ -14,15 +16,16 @@
 #include "eos/eos.hpp"
 #include "hydro/hydro.hpp"
 #include "mhd/mhd.hpp"
-#include "shearing_box.hpp"
+#include "srcterms/srcterms.hpp"
 
 //----------------------------------------------------------------------------------------
-//! \fn
-//! Shearing box source terms in the momentum and energy equations for Hydro.
+//! \fn SourceTerms::ShearingBox
+//! \brief Shearing box source terms in the momentum and energy equations for Hydro.
+//! Note MHD function has same name but different argument list.
 //! Note: srcterms must be computed using primitive (w0) and NOT conserved (u0) vars
 
-void ShearingBox::SrcTerms(const DvceArray5D<Real> &w0, const EOS_Data &eos_data,
-                           const Real bdt, DvceArray5D<Real> &u0) {
+void SourceTerms::ShearingBox(const DvceArray5D<Real> &w0, const EOS_Data &eos_data,
+                              const Real bdt, DvceArray5D<Real> &u0) {
   auto &indcs = pmy_pack->pmesh->mb_indcs;
   int is = indcs.is, ie = indcs.ie;
   int js = indcs.js, je = indcs.je;
@@ -68,11 +71,12 @@ void ShearingBox::SrcTerms(const DvceArray5D<Real> &w0, const EOS_Data &eos_data
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn
-//! Shearing box source terms in the momentum and energy equations for MHD.
+//! \fn SourceTerms::ShearingBox
+//! \brief Shearing box source terms in the momentum and energy equations for MHD.
+//! Note Hydro function has same name but different argument list.
 //! NOTE: srcterms must be computed using primitive (w0) and NOT conserved (u0) vars
 
-void ShearingBox::SrcTerms(const DvceArray5D<Real> &w0, const DvceArray5D<Real> &bcc0,
+void SourceTerms::ShearingBox(const DvceArray5D<Real> &w0, const DvceArray5D<Real> &bcc0,
                         const EOS_Data &eos_data, const Real bdt, DvceArray5D<Real> &u0) {
   auto &indcs = pmy_pack->pmesh->mb_indcs;
   int is = indcs.is, ie = indcs.ie;
@@ -124,7 +128,7 @@ void ShearingBox::SrcTerms(const DvceArray5D<Real> &w0, const DvceArray5D<Real> 
 //  background orbital velocity v_{K} = - q \Omega x in the toriodal (\phi or y) direction
 //  See SG eqs. [49-52] (eqs for orbital advection), and [60]
 
-void ShearingBox::EFieldSrcTerms(const DvceFaceFld4D<Real> &b0, DvceEdgeFld4D<Real> &efld) {
+void SourceTerms::SBoxEField(const DvceFaceFld4D<Real> &b0, DvceEdgeFld4D<Real> &efld) {
   auto &indcs = pmy_pack->pmesh->mb_indcs;
   auto &size = pmy_pack->pmb->mb_size;
   int is = indcs.is, ie = indcs.ie;

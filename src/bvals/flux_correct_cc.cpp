@@ -17,7 +17,7 @@
 #include "bvals.hpp"
 
 //----------------------------------------------------------------------------------------
-//! \fn void BoundaryValuesCC::PackAndSendFlux()
+//! \fn void MeshBoundaryValuesCC::PackAndSendFlux()
 //! \brief Pack restricted fluxes of cell-centered variables at fine/coarse boundaries
 //! into boundary buffers and send to neighbors for flux-correction step.  These fluxes
 //! (e.g. for the conserved hydro variables) live at cell faces.
@@ -26,7 +26,7 @@
 //! MeshBlocks. Buffer data are then sent (via MPI) or copied directly for periodic or
 //! block boundaries.
 
-TaskStatus BoundaryValuesCC::PackAndSendFluxCC(DvceFaceFld5D<Real> &flx) {
+TaskStatus MeshBoundaryValuesCC::PackAndSendFluxCC(DvceFaceFld5D<Real> &flx) {
   // create local references for variables in kernel
   int nmb = pmy_pack->nmb_thispack;
   int nnghbr = pmy_pack->pmb->nnghbr;
@@ -198,7 +198,7 @@ TaskStatus BoundaryValuesCC::PackAndSendFluxCC(DvceFaceFld5D<Real> &flx) {
 //! \fn void RecvBuffers()
 //! \brief Unpack boundary buffers for flux correction of CC variables.
 
-TaskStatus BoundaryValuesCC::RecvAndUnpackFluxCC(DvceFaceFld5D<Real> &flx) {
+TaskStatus MeshBoundaryValuesCC::RecvAndUnpackFluxCC(DvceFaceFld5D<Real> &flx) {
   // create local references for variables in kernel
   int nmb = pmy_pack->nmb_thispack;
   int nnghbr = pmy_pack->pmb->nnghbr;
@@ -305,7 +305,7 @@ TaskStatus BoundaryValuesCC::RecvAndUnpackFluxCC(DvceFaceFld5D<Real> &flx) {
 //! cell-centered variables, which are communicated at FACES of MeshBlocks at the SAME
 //! levels.  This is different than for fluxes of face-centered vars.
 
-TaskStatus BoundaryValuesCC::InitFluxRecv(const int nvars) {
+TaskStatus MeshBoundaryValuesCC::InitFluxRecv(const int nvars) {
 #if MPI_PARALLEL_ENABLED
   int &nmb = pmy_pack->nmb_thispack;
   int &nnghbr = pmy_pack->pmb->nnghbr;

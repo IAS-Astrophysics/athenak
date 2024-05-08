@@ -224,11 +224,10 @@ TaskStatus MHD::MHDSrcTerms(Driver *pdrive, int stage) {
   Real beta_dt = (pdrive->beta[stage-1])*(pmy_pack->pmesh->dt);
 
   // Add source terms for various physics
-  if (psrc->source_terms_enabled) {
-    if (psrc->const_accel) psrc->ConstantAccel(w0, peos->eos_data, beta_dt, u0);
-    if (psrc->ism_cooling) psrc->ISMCooling(w0, peos->eos_data, beta_dt, u0);
-    if (psrc->rel_cooling) psrc->RelCooling(w0, peos->eos_data, beta_dt, u0);
-  }
+  if (psrc->const_accel)  psrc->ConstantAccel(w0, peos->eos_data, beta_dt, u0);
+  if (psrc->ism_cooling)  psrc->ISMCooling(w0, peos->eos_data, beta_dt, u0);
+  if (psrc->rel_cooling)  psrc->RelCooling(w0, peos->eos_data, beta_dt, u0);
+  if (psrc->shearing_box) psrc->ShearingBox(w0, bcc0, peos->eos_data, beta_dt, u0);
 
   // Add coordinate source terms in GR.  Again, must be computed with only primitives.
   if (pmy_pack->pcoord->is_general_relativistic) {
@@ -238,11 +237,6 @@ TaskStatus MHD::MHDSrcTerms(Driver *pdrive, int stage) {
   // Add user source terms
   if (pmy_pack->pmesh->pgen->user_srcs) {
     (pmy_pack->pmesh->pgen->user_srcs_func)(pmy_pack->pmesh, beta_dt);
-  }
-
-  // Add shearing box source terms
-  if (shearing_box) {
-    psb->SrcTerms(w0, bcc0, peos->eos_data, beta_dt, u0);
   }
 
   return TaskStatus::complete;
@@ -255,9 +249,9 @@ TaskStatus MHD::MHDSrcTerms(Driver *pdrive, int stage) {
 TaskStatus MHD::SendU_OA(Driver *pdrive, int stage) {
   TaskStatus tstat = TaskStatus::complete;
   // only execute when (shearing box defined) AND (last stage) AND (3D OR 2d_r_phi)
-  if ((shearing_box) && (stage == (pdrive->nexp_stages)) &&
-      (pmy_pack->pmesh->three_d || psb->shearing_box_r_phi)) {
-    tstat = psb->OrbitalAdvectionSendCC(u0);
+  if ((psrc->shearing_box) && (stage == pdrive->nexp_stages) &&
+      (pmy_pack->pmesh->three_d || psrc->shearing_box_r_phi)) {
+    tstat = porb_u->PackAndSendCC(u0);
   }
   return tstat;
 }
@@ -269,9 +263,10 @@ TaskStatus MHD::SendU_OA(Driver *pdrive, int stage) {
 TaskStatus MHD::RecvU_OA(Driver *pdrive, int stage) {
   TaskStatus tstat = TaskStatus::complete;
   // only execute when (shearing box defined) AND (last stage) AND (3D OR 2d_r_phi)
-  if ((shearing_box) && (stage == (pdrive->nexp_stages)) &&
-      (pmy_pack->pmesh->three_d || psb->shearing_box_r_phi)) {
-    tstat = psb->OrbitalAdvectionRecvCC(u0, recon_method);
+  if ((psrc->shearing_box) && (stage == pdrive->nexp_stages) &&
+      (pmy_pack->pmesh->three_d || psrc->shearing_box_r_phi)) {
+    Real qom = (psrc->qshear)*(psrc->omega0);
+    tstat = porb_u->RecvAndUnpackCC(u0, recon_method, qom);
   }
   return tstat;
 }
@@ -312,8 +307,8 @@ TaskStatus MHD::RecvU(Driver *pdrive, int stage) {
 
 TaskStatus MHD::EFieldSrc(Driver *pdrive, int stage) {
   // only execute when (shearing box defined) AND (2D)
-  if ((shearing_box) && (pmy_pack->pmesh->two_d)) {
-    psb->EFieldSrcTerms(b0, efld);
+  if ((psrc->shearing_box) && (pmy_pack->pmesh->two_d)) {
+    psrc->SBoxEField(b0, efld);
   }
   return TaskStatus::complete;
 }
@@ -349,9 +344,9 @@ TaskStatus MHD::RecvE(Driver *pdrive, int stage) {
 TaskStatus MHD::SendB_OA(Driver *pdrive, int stage) {
   TaskStatus tstat = TaskStatus::complete;
   // only execute when (shearing box defined) AND (last stage) AND (3D OR 2d_r_phi)
-  if ((shearing_box) && (stage == (pdrive->nexp_stages)) &&
-      (pmy_pack->pmesh->three_d || psb->shearing_box_r_phi)) {
-    tstat = psb->OrbitalAdvectionSendFC(b0);
+  if ((psrc->shearing_box) && (stage == pdrive->nexp_stages) &&
+      (pmy_pack->pmesh->three_d || psrc->shearing_box_r_phi)) {
+    tstat = porb_b->PackAndSendFC(b0);
   }
   return tstat;
 }
@@ -363,9 +358,10 @@ TaskStatus MHD::SendB_OA(Driver *pdrive, int stage) {
 TaskStatus MHD::RecvB_OA(Driver *pdrive, int stage) {
   TaskStatus tstat = TaskStatus::complete;
   // only execute when (shearing box defined) AND (last stage) AND (3D OR 2d_r_phi)
-  if ((shearing_box) && (stage == (pdrive->nexp_stages)) &&
-      (pmy_pack->pmesh->three_d || psb->shearing_box_r_phi)) {
-    tstat = psb->OrbitalAdvectionRecvFC(b0, recon_method);
+  if ((psrc->shearing_box) && (stage == pdrive->nexp_stages) &&
+      (pmy_pack->pmesh->three_d || psrc->shearing_box_r_phi)) {
+    Real qom = (psrc->qshear)*(psrc->omega0);
+    tstat = porb_b->RecvAndUnpackFC(b0, recon_method, qom);
   }
   return tstat;
 }

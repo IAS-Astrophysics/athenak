@@ -1,32 +1,105 @@
 //========================================================================================
-// AthenaK astrophysical fluid dynamics and numerical relativity code
-// Copyright(C) 2020 James M. Stone <jmstone@ias.edu> and other code contributors
-// Licensed under the 3-clause BSD License, see LICENSE file for details
+// AthenaK astrophysical fluid dynamics code
+// Copyright(C) 2020 James M. Stone <jmstone@ias.edu> and the Athena code team
+// Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
-//! \file bvals_shear.cpp
-//! \brief functions to apply shearing sheet BCs in both 2D (r_phi) and 3D coordinates.
-//! This requires pack/send and recv/unpack steps for ix1 and ox1 ghost zones with MPI.
+//! \file shearing_box_cc.cpp
+//! \brief implementation of ShearingBox class constructor and assorted other functions
 
-#include <cstdlib>
 #include <iostream>
-#include <utility>
+#include <string>
+#include <algorithm>
+#include <vector>
 
 #include "athena.hpp"
-#include "globals.hpp"
 #include "parameter_input.hpp"
 #include "mesh/mesh.hpp"
-#include "coordinates/cell_locations.hpp"
+#include "eos/eos.hpp"
+#include "diffusion/viscosity.hpp"
+#include "diffusion/conduction.hpp"
+#include "srcterms/srcterms.hpp"
+#include "bvals/bvals.hpp"
 #include "shearing_box.hpp"
-#include "mhd/mhd.hpp"
-#include "remap_fluxes.hpp"
 
 //----------------------------------------------------------------------------------------
-//! \fn void ShearingBox::ShearPeriodic_CC()
+//! ShearingBoxBoundary base class constructor
+
+ShearingBoxBoundary::ShearingBoxBoundary(MeshBlockPack *ppack, ParameterInput *pin,
+                                         int nvar) :
+    nmb_x1bndry(0),
+    pmy_pack(ppack) {
+
+#if MPI_PARALLEL_ENABLED
+  // TODO(@user) FIX THIS FOR SHEARING BOX
+  // For orbital advection, communication is only with x2-face neighbors
+  // initialize vectors of MPI request in 2 elements of fixed length arrays
+    int nmb = std::max((ppack->nmb_thispack), (ppack->pmesh->nmb_maxperrank));
+    sendbuf.vars_req = new MPI_Request[nmb];
+    recvbuf.vars_req = new MPI_Request[nmb];
+    for (int m=0; m<nmb; ++m) {
+      sendbuf.vars_req[m] = MPI_REQUEST_NULL;
+      recvbuf.vars_req[m] = MPI_REQUEST_NULL;
+    }
+  // create unique communicators for shearing box
+  MPI_Comm_dup(MPI_COMM_WORLD, &comm_orb_advect);
+#endif
+
+  // --- Step 2.  Initialize data for shearing sheet BCs
+  // Work out how many MBs on this rank are at x1 shearing-box boundaries
+  std::vector<std::pair<int,int>> cnt_x1bndry_mbs;
+  auto &mbbcs = ppack->pmb->mb_bcs;
+  for (int m=0; m<(ppack->nmb_thispack); ++m) {
+    if (mbbcs.h_view(m,BoundaryFace::inner_x1) == BoundaryFlag::shear_periodic) {
+      cnt_x1bndry_mbs.push_back(std::make_pair(0,(m+ppack->gids)));
+    }
+    if (mbbcs.h_view(m,BoundaryFace::outer_x1) == BoundaryFlag::shear_periodic) {
+      cnt_x1bndry_mbs.push_back(std::make_pair(1,(m+ppack->gids)));
+    }
+  }
+  nmb_x1bndry = cnt_x1bndry_mbs.size();
+
+  // load GIDs of meshblocks at boundaries into DualArray
+  Kokkos::realloc(x1bndry_mbs, nmb_x1bndry, 2);
+  for (int m=0; m<nmb_x1bndry; ++m) {
+    x1bndry_mbs.h_view(m,0) = cnt_x1bndry_mbs[m].first;
+    x1bndry_mbs.h_view(m,1) = cnt_x1bndry_mbs[m].second;
+  }
+  // sync device array
+  x1bndry_mbs.template modify<HostMemSpace>();
+  x1bndry_mbs.template sync<DevExeSpace>();
+
+  // Now allocate send/recv buffers for shearing box BCs
+  {
+    auto &indcs = ppack->pmesh->mb_indcs;
+    int ncells3 = indcs.nx3 + 2*indcs.ng;
+    int ncells2 = indcs.nx2 + 2*indcs.ng;
+    int ncells1 = indcs.ng;
+    // cell-centered data
+    Kokkos::realloc(sendbuf.vars,nmb_x1bndry,nvar,ncells3,ncells2,ncells1);
+    Kokkos::realloc(recvbuf.vars,nmb_x1bndry,nvar,ncells3,ncells2,ncells1);
+    // face-centered data
+    Kokkos::realloc(sendbuf.vars,nmb_x1bndry,3,(ncells3+1),(ncells2+1),ncells1);
+    Kokkos::realloc(recvbuf.vars,nmb_x1bndry,3,(ncells3+1),(ncells2+1),ncells1);
+  }
+}
+
+//----------------------------------------------------------------------------------------
+// MeshBoundaryValues destructor
+
+ShearingBoxBoundary::~ShearingBoxBoundary() {
+#if MPI_PARALLEL_ENABLED
+  delete [] sendbuf.vars_req;
+  delete [] recvbuf.vars_req;
+#endif
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void ShearingBoxBoundary::PackAndSendCC()
 //! \brief Apply shearing sheet BCs to cell-centered variables, including MPI
 //! MPI communications. Both the inner_x1 and outer_x1 boundaries are updated.
 //! Called on the physics_bcs task after purely periodic BC communication is finished.
 
-TaskStatus ShearingBox::ShearPeriodic_CC(DvceArray5D<Real> &a) {
+TaskStatus ShearingBoxBoundaryCC::PackAndSendCC(DvceArray5D<Real> &a) {
 /*
   auto &indcs = pmy_pack->pmesh->mb_indcs;
   auto &is = indcs.is, &ie = indcs.ie;

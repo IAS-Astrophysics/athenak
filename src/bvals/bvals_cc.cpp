@@ -21,12 +21,13 @@
 //----------------------------------------------------------------------------------------
 // BValCC constructor:
 
-BoundaryValuesCC::BoundaryValuesCC(MeshBlockPack *pp, ParameterInput *pin, bool z4c) :
+MeshBoundaryValuesCC::MeshBoundaryValuesCC(MeshBlockPack *pp, ParameterInput *pin,
+                                           bool z4c) :
   MeshBoundaryValues(pp, pin, z4c) {
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn void BoundaryValuesCC::PackAndSendCC()
+//! \fn void MeshBoundaryValuesCC::PackAndSendCC()
 //! \brief Pack cell-centered variables into boundary buffers and send to neighbors.
 //!
 //! This routine packs ALL the buffers on ALL the faces, edges, and corners simultaneously
@@ -37,7 +38,8 @@ BoundaryValuesCC::BoundaryValuesCC(MeshBlockPack *pp, ParameterInput *pin, bool 
 //! Input arrays must be 5D Kokkos View dimensioned (nmb, nvar, nx3, nx2, nx1)
 //! 5D Kokkos View of coarsened (restricted) array data also required with SMR/AMR
 
-TaskStatus BoundaryValuesCC::PackAndSendCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca) {
+TaskStatus MeshBoundaryValuesCC::PackAndSendCC(DvceArray5D<Real> &a,
+                                               DvceArray5D<Real> &ca) {
   // create local references for variables in kernel
   int nmb = pmy_pack->nmb_thispack;
   int nnghbr = pmy_pack->pmb->nnghbr;
@@ -259,8 +261,8 @@ TaskStatus BoundaryValuesCC::PackAndSendCC(DvceArray5D<Real> &a, DvceArray5D<Rea
 // \!fn void RecvBuffers()
 // \brief Unpack boundary buffers
 
-TaskStatus BoundaryValuesCC::RecvAndUnpackCC(DvceArray5D<Real> &a,
-  DvceArray5D<Real> &ca) {
+TaskStatus MeshBoundaryValuesCC::RecvAndUnpackCC(DvceArray5D<Real> &a,
+                                                 DvceArray5D<Real> &ca) {
   // create local references for variables in kernel
   int nmb = pmy_pack->nmb_thispack;
   int nnghbr = pmy_pack->pmb->nnghbr;

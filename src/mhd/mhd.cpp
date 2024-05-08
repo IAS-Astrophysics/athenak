@@ -28,7 +28,6 @@ namespace mhd {
 
 MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
     pmy_pack(ppack),
-    shearing_box(false),
     u0("cons",1,1,1,1,1),
     w0("prim",1,1,1,1,1),
     b0("B_fc",1,1,1,1),
@@ -117,15 +116,6 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
   // Source terms (constructor parses input file to initialize only srcterms needed)
   psrc = new SourceTerms("mhd", ppack, pin);
 
-  // Shearing box (if requested in input file)
-  if (pin->DoesBlockExist("shearing_box")) {
-    psb = new ShearingBox(ppack, pin, (nmhd+nscalars));
-    shearing_box = true;
-  } else {
-    psb = nullptr;
-    shearing_box = false;
-  }
-
   // (3) read time-evolution option [already error checked in driver constructor]
   // Then initialize memory and algorithms for reconstruction and Riemann solvers
   std::string evolution_t = pin->GetString("time","evolution");
@@ -161,13 +151,22 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
     Kokkos::realloc(coarse_b0.x3f, nmb, n_ccells3+1, n_ccells2, n_ccells1);
   }
 
-  // allocate boundary buffers for conserved (cell-centered) variables
-  pbval_u = new BoundaryValuesCC(ppack, pin, false);
+  // allocate boundary buffers for conserved (cell-centered) and face-centered variables
+  pbval_u = new MeshBoundaryValuesCC(ppack, pin, false);
   pbval_u->InitializeBuffers((nmhd+nscalars));
-
-  // allocate boundary buffers for face-centered magnetic field
-  pbval_b = new BoundaryValuesFC(ppack, pin);
+  pbval_b = new MeshBoundaryValuesFC(ppack, pin);
   pbval_b->InitializeBuffers(3);
+
+  // Orbital advection and shearing box BCs (if requested in input file)
+  if (pin->DoesBlockExist("shearing_box")) {
+    porb_u = new OrbitalAdvectionCC(ppack, pin, (nmhd+nscalars));
+    porb_b = new OrbitalAdvectionFC(ppack, pin, 2);
+//    psbox_u = new ShearingBoxBoundaryCC(ppack, pin, (nhydro+nscalars));
+  } else {
+    porb_u = nullptr;
+    porb_b = nullptr;
+//    psbox_u = nullptr;
+  }
 
   // for time-evolving problems, continue to construct methods, allocate arrays
   if (evolution_t.compare("stationary") != 0) {

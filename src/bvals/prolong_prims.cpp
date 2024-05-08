@@ -32,8 +32,8 @@
 //! arguments.
 //! Only works for hydrodynamics, the same function for MHD has different argument list.
 
-void BoundaryValuesCC::ConsToPrimCoarseBndry(const DvceArray5D<Real> &cons,
-                                             DvceArray5D<Real> &prim) {
+void MeshBoundaryValuesCC::ConsToPrimCoarseBndry(const DvceArray5D<Real> &cons,
+                                                 DvceArray5D<Real> &prim) {
   // create local references for variables in kernel
   int nmb = pmy_pack->nmb_thispack;
   int nnghbr = pmy_pack->pmb->nnghbr;
@@ -187,8 +187,8 @@ void BoundaryValuesCC::ConsToPrimCoarseBndry(const DvceArray5D<Real> &cons,
 //! buffers into Hydro conservative variables.
 //! Note same function for MHD has different argument list.
 
-void BoundaryValuesCC::PrimToConsFineBndry(const DvceArray5D<Real> &prim,
-                                           DvceArray5D<Real> &cons) {
+void MeshBoundaryValuesCC::PrimToConsFineBndry(const DvceArray5D<Real> &prim,
+                                               DvceArray5D<Real> &cons) {
   // create local references for variables in kernel
   int nmb = pmy_pack->nmb_thispack;
   int nnghbr = pmy_pack->pmb->nnghbr;
@@ -300,8 +300,8 @@ void BoundaryValuesCC::PrimToConsFineBndry(const DvceArray5D<Real> &prim,
 //! arguments.
 //! Only works for MHD, the same function for hydro has different argument list.
 
-void BoundaryValuesCC::ConsToPrimCoarseBndry(const DvceArray5D<Real> &cons,
-                      const DvceFaceFld4D<Real> &b, DvceArray5D<Real> &prim) {
+void MeshBoundaryValuesCC::ConsToPrimCoarseBndry(const DvceArray5D<Real> &cons,
+                                 const DvceFaceFld4D<Real> &b, DvceArray5D<Real> &prim) {
   // create local references for variables in kernel
   int nmb = pmy_pack->nmb_thispack;
   int nnghbr = pmy_pack->pmb->nnghbr;
@@ -462,7 +462,7 @@ void BoundaryValuesCC::ConsToPrimCoarseBndry(const DvceArray5D<Real> &cons,
 //! into MHD conservative variables.
 //! Note same function for Hydrodynamics has different argument list.
 
-void BoundaryValuesCC::PrimToConsFineBndry(const DvceArray5D<Real> &prim,
+void MeshBoundaryValuesCC::PrimToConsFineBndry(const DvceArray5D<Real> &prim,
                                const DvceFaceFld4D<Real> &b, DvceArray5D<Real> &cons) {
   // create local references for variables in kernel
   int nmb = pmy_pack->nmb_thispack;

@@ -34,11 +34,11 @@ class SourceTerms {
 
   // data
   // flags for various source terms
-  bool source_terms_enabled;  // true if any srcterm included
   bool const_accel;
   bool ism_cooling;
   bool rel_cooling;
   bool beam;
+  bool shearing_box, shearing_box_r_phi;
 
   // new timestep
   Real dtnew;
@@ -57,6 +57,9 @@ class SourceTerms {
   // beam source
   Real dii_dt;
 
+  // shearing box
+  Real qshear, omega0;
+
   // functions
   void ConstantAccel(const DvceArray5D<Real> &w0, const EOS_Data &eos,
                      const Real dt, DvceArray5D<Real> &u0);
@@ -65,6 +68,13 @@ class SourceTerms {
   void RelCooling(const DvceArray5D<Real> &w0, const EOS_Data &eos,
                   const Real dt, DvceArray5D<Real> &u0);
   void BeamSource(DvceArray5D<Real> &i0, const Real dt);
+  void ShearingBox(const DvceArray5D<Real> &w0, const EOS_Data &eos_data, const Real bdt,
+                   DvceArray5D<Real> &u0);
+  void ShearingBox(const DvceArray5D<Real> &w0, const DvceArray5D<Real> &bcc0,
+                   const EOS_Data &eos_data, const Real bdt, DvceArray5D<Real> &u0);
+  // in 2D shearing box there is a source term for Ex and Ey
+  void SBoxEField(const DvceFaceFld4D<Real> &b0, DvceEdgeFld4D<Real> &efld);
+
   void NewTimeStep(const DvceArray5D<Real> &w0, const EOS_Data &eos);
 
  private:
