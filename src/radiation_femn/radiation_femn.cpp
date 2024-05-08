@@ -69,6 +69,7 @@ namespace radiationfemn
         m1_flag = pin->GetOrAddBoolean("radiation-femn", "m1", false);
         rad_source = pin->GetOrAddBoolean("radiation-femn", "source_terms", false);
         num_beams = pin->GetOrAddInteger("radiation-femn", "num_beam_sources", 0);
+        beam_source = pin->GetOrAddBoolean("radiation-femn", "beam_source", false);
         beam_source_1_y1 = pin->GetOrAddReal("radiation-femn", "beam_source_1_y1", -42.);
         beam_source_1_y2 = pin->GetOrAddReal("radiation-femn", "beam_source_1_y2", -42.);
         beam_source_1_phi = pin->GetOrAddReal("radiation-femn", "beam_source_1_phi", -42.);
@@ -263,7 +264,6 @@ namespace radiationfemn
         }
 
         // beam sources
-        Real beam_source = true;
         if (beam_source && fpn)
         {
             Kokkos::realloc(beam_source_1_vals, num_points);

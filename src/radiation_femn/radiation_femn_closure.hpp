@@ -57,13 +57,13 @@ void ApplyM1Closure(TeamMember_t member, int num_points, int m, int en, int kk, 
 
     Real chi = (3. + 4. * fixed_fnorm * fixed_fnorm) / (5. + 2. * sqrt(4. - 3. * fixed_fnorm * fixed_fnorm));
 
-    if(m1_closure_fun == ClosureFunc::Eddington) {
-      chi = 1./3.;
+    if (m1_closure_fun == ClosureFunc::Eddington) {
+      chi = 1. / 3.;
     }
-    if(m1_closure_fun == ClosureFunc::Thin) {
+    if (m1_closure_fun == ClosureFunc::Thin) {
       chi = 1;
     }
-    if(m1_closure_fun == ClosureFunc::Kershaw) {
+    if (m1_closure_fun == ClosureFunc::Kershaw) {
       chi = 1; // @TODO: fix later
     }
 
@@ -92,12 +92,12 @@ void ApplyM1Closure(TeamMember_t member, int num_points, int m, int en, int kk, 
       Pxz = b * Fx * Fz / Fnorm;
       Pyz = b * Fy * Fz / Fnorm;
     } else {
-      Pxx = a * E + b * Fx * Fx / E;
-      Pyy = a * E + b * Fy * Fy / E;
-      Pzz = a * E + b * Fz * Fz / E;
-      Pxy = b * Fx * Fy / E;
-      Pxz = b * Fx * Fz / E;
-      Pyz = b * Fy * Fz / E;
+      Pxx = a * E + b * nx * nx * (F2 / E);
+      Pyy = a * E + b * ny * ny * (F2 / E);
+      Pzz = a * E + b * nz * nz * (F2 / E);
+      Pxy = b * nx * ny * (F2 / E);
+      Pxz = b * nx * nz * (F2 / E);
+      Pyz = b * ny * nz * (F2 / E);
     }
 
     f_scratch(0) = f(m, en * num_points + 0, kk, jj, ii);

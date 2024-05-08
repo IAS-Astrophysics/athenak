@@ -99,6 +99,7 @@ class RadiationFEMN {
   M1Closure m1_closure;           // choice of M1 closure
   ClosureFunc closure_fun;
   int num_beams;                  // number of beams, defaults to zero
+  bool beam_source;
   Real beam_source_1_y1;
   Real beam_source_1_y2;
   Real beam_source_2_y1;
