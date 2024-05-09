@@ -182,7 +182,7 @@ TaskStatus RadiationFEMN::ApplyLimiterDG(Driver *pdriver, int stage) {
               auto dplusx = (f0_cellavg_px - f0_cellavg) / (2.0 * mbsize.d_view(m).dx1);
               auto islopex = 2.0 * (f0_(m, enang, kk, jj, ii + 1) - f0_(m, enang, kk, jj, ii)) / (2.0 * mbsize.d_view(m).dx1);
 
-              auto sigmax = minmodgeneral(islopex, dminusx, dplusx);
+              auto sigmax = minmod2(islopex, dminusx, dplusx);
 
               Real &x1min = mbsize.d_view(m).x1min;
               Real &x1max = mbsize.d_view(m).x1max;
@@ -226,8 +226,8 @@ TaskStatus RadiationFEMN::ApplyLimiterDG(Driver *pdriver, int stage) {
               auto islopey = 2.0 * (f0_(m, enang, kk, jj + 1, ii) - f0_(m, enang, kk, jj, ii) + f0_(m, enang, kk, jj + 1, ii + 1) - f0_(m, enang, kk, jj, ii + 1))
                              / (2.0 * 2.0 * mbsize.d_view(m).dx2);
 
-              auto sigmax = minmodgeneral(islopex, dminusx, dplusx);
-              auto sigmay = minmodgeneral(islopey, dminusy, dplusy);
+              auto sigmax = minmod2(islopex, dminusx, dplusx);
+              auto sigmay = minmod2(islopey, dminusy, dplusy);
 
               Real &x1min = mbsize.d_view(m).x1min;
               Real &x1max = mbsize.d_view(m).x1max;
@@ -306,9 +306,9 @@ TaskStatus RadiationFEMN::ApplyLimiterDG(Driver *pdriver, int stage) {
                                     + f0_(m, enang, kk + 1, jj + 1, ii) - f0_(m, enang, kk, jj + 1, ii) + f0_(m, enang, kk + 1, jj + 1, ii + 1) - f0_(m, enang, kk, jj, ii + 1))
                              / (2.0 * 2.0 * 2.0 * mbsize.d_view(m).dx3);
 
-              auto sigmax = minmodgeneral(islopex, dminusx, dplusx);
-              auto sigmay = minmodgeneral(islopey, dminusy, dplusy);
-              auto sigmaz = minmodgeneral(islopez, dminusz, dplusz);
+              auto sigmax = minmod2(islopex, dminusx, dplusx);
+              auto sigmay = minmod2(islopey, dminusy, dplusy);
+              auto sigmaz = minmod2(islopez, dminusz, dplusz);
 
               Real &x1min = mbsize.d_view(m).x1min;
               Real &x1max = mbsize.d_view(m).x1max;

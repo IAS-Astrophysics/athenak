@@ -33,6 +33,7 @@ TaskStatus RadiationFEMN::ExpRKUpdate(Driver *pdriver, int stage) {
 
   bool &multi_d = pmy_pack->pmesh->multi_d;
   bool &three_d = pmy_pack->pmesh->three_d;
+  bool &m1_flag_ = pmy_pack->pradfemn->m1_flag;
 
   Real &gam0 = pdriver->gam0[stage - 1];
   Real &gam1 = pdriver->gam1[stage - 1];
@@ -379,7 +380,7 @@ TaskStatus RadiationFEMN::ExpRKUpdate(Driver *pdriver, int stage) {
                     f0_(m, unifiedidx, k, j, i) = final_result;
 
                     // floor energy density if using M1
-                    if(unifiedidx == 0 && m1_flag) {
+                    if(unifiedidx == 0 && m1_flag_) {
                       f0_(m, unifiedidx, k, j, i) = fmax(final_result, 1e-15);
                     }
 
