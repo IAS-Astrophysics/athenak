@@ -92,20 +92,35 @@ void RadiationFEMN::InitializeBeamsSourcesFPN() {
 
   std::cout << "Initializing beam sources for FPN" << std::endl;
 
+  HostArray1D<Real> beam_source_1_vals_h;
+  HostArray1D<Real> beam_source_2_vals_h;
+  HostArray2D<Real> angular_grid_h;
+  Kokkos::realloc(beam_source_1_vals_h, num_points);
+  Kokkos::realloc(beam_source_2_vals_h, num_points);
+  Kokkos::realloc(angular_grid_h, num_points, 2);
+  Kokkos::deep_copy(angular_grid_h, angular_grid);
+
   for (int i = 0; i < num_points; i++) {
-    beam_source_1_vals(i) = fpn_basis_lm((int) angular_grid(i, 0), (int) angular_grid(i, 1), beam_source_1_phi, beam_source_1_theta);
+    beam_source_1_vals_h(i) = fpn_basis_lm((int) angular_grid_h(i, 0), (int) angular_grid_h(i, 1), beam_source_1_phi, beam_source_1_theta);
   }
+  Kokkos::deep_copy(beam_source_1_vals, beam_source_1_vals_h);
 
   if (num_beams > 1) {
     for (int i = 0; i < num_points; i++) {
-      beam_source_2_vals(i) = fpn_basis_lm((int) angular_grid(i, 0), (int) angular_grid(i, 1), beam_source_2_phi, beam_source_2_theta);
+      beam_source_2_vals_h(i) = fpn_basis_lm((int) angular_grid_h(i, 0), (int) angular_grid_h(i, 1), beam_source_2_phi, beam_source_2_theta);
     }
+    Kokkos::deep_copy(beam_source_2_vals, beam_source_2_vals_h);
   }
 }
 
 void RadiationFEMN::InitializeBeamsSourcesM1() {
 
   std::cout << "Initializing beam sources for M1" << std::endl;
+
+  HostArray1D<Real> beam_source_1_vals_h;
+  HostArray1D<Real> beam_source_2_vals_h;
+  Kokkos::realloc(beam_source_1_vals_h, num_points);
+  Kokkos::realloc(beam_source_2_vals_h, num_points);
 
   Real Sen = (pow(energy_max, 4) - 0.) / 4.0;
   Real Fnorm = 1. / Sen;
@@ -114,15 +129,17 @@ void RadiationFEMN::InitializeBeamsSourcesM1() {
   Real Fy = Fnorm * sin(beam_source_1_theta) * sin(beam_source_1_phi) - 1e-3;
   Real Fz = Fnorm * cos(beam_source_1_theta) - 1e-3;
 
-  beam_source_1_vals(0) = (1. / sqrt(4. * M_PI)) * E;
-  beam_source_1_vals(1) = -sqrt(3. / (4. * M_PI)) * Fy;
-  beam_source_1_vals(2) = sqrt(3. / (4. * M_PI)) * Fz;
-  beam_source_1_vals(3) = -sqrt(3. / (4. * M_PI)) * Fx;
-  beam_source_1_vals(4) = 0;
-  beam_source_1_vals(5) = 0;
-  beam_source_1_vals(6) = 0;
-  beam_source_1_vals(7) = 0;
-  beam_source_1_vals(8) = 0;
+  beam_source_1_vals_h(0) = (1. / sqrt(4. * M_PI)) * E;
+  beam_source_1_vals_h(1) = -sqrt(3. / (4. * M_PI)) * Fy;
+  beam_source_1_vals_h(2) = sqrt(3. / (4. * M_PI)) * Fz;
+  beam_source_1_vals_h(3) = -sqrt(3. / (4. * M_PI)) * Fx;
+  beam_source_1_vals_h(4) = 0;
+  beam_source_1_vals_h(5) = 0;
+  beam_source_1_vals_h(6) = 0;
+  beam_source_1_vals_h(7) = 0;
+  beam_source_1_vals_h(8) = 0;
+
+  Kokkos::deep_copy(beam_source_1_vals, beam_source_1_vals_h);
 
   if (num_beams > 1) {
     Fnorm = 1. / Sen;
@@ -131,19 +148,23 @@ void RadiationFEMN::InitializeBeamsSourcesM1() {
     Fy = Fnorm * sin(beam_source_2_theta) * sin(beam_source_2_phi) - 1e-3;
     Fz = Fnorm * cos(beam_source_2_theta) - 1e-3;
 
-    beam_source_2_vals(0) = (1. / sqrt(4. * M_PI)) * E;
-    beam_source_2_vals(1) = -sqrt(3. / (4. * M_PI)) * Fy;
-    beam_source_2_vals(2) = sqrt(3. / (4. * M_PI)) * Fz;
-    beam_source_2_vals(3) = -sqrt(3. / (4. * M_PI)) * Fx;
-    beam_source_2_vals(4) = 0;
-    beam_source_2_vals(5) = 0;
-    beam_source_2_vals(6) = 0;
-    beam_source_2_vals(7) = 0;
-    beam_source_2_vals(8) = 0;
+    beam_source_2_vals_h(0) = (1. / sqrt(4. * M_PI)) * E;
+    beam_source_2_vals_h(1) = -sqrt(3. / (4. * M_PI)) * Fy;
+    beam_source_2_vals_h(2) = sqrt(3. / (4. * M_PI)) * Fz;
+    beam_source_2_vals_h(3) = -sqrt(3. / (4. * M_PI)) * Fx;
+    beam_source_2_vals_h(4) = 0;
+    beam_source_2_vals_h(5) = 0;
+    beam_source_2_vals_h(6) = 0;
+    beam_source_2_vals_h(7) = 0;
+    beam_source_2_vals_h(8) = 0;
+
+    Kokkos::deep_copy(beam_source_2_vals, beam_source_2_vals_h);
   }
 }
 
 void RadiationFEMN::InitializeBeamsSourcesFEMN() {
+
+  std::cout << "Initializing beam sources for FEM" << std::endl;
 
   HostArray1D<Real> psi_basis;
   Kokkos::realloc(psi_basis, num_points);
