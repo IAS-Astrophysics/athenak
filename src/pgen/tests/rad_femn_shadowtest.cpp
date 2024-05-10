@@ -90,11 +90,13 @@ void ProblemGenerator::RadiationFEMNShadowtest(ParameterInput* pin, const bool r
     //auto &eta_ = pmbp->pradfemn->eta;
     auto& kappa_a_ = pmbp->pradfemn->kappa_a;
     //auto &kappa_s_ = pmbp->pradfemn->kappa_s;
-    auto Ven = (1. / 3.) * (pow(pmbp->pradfemn->energy_grid(1), 3) - pow(pmbp->pradfemn->energy_grid(0), 3));
+    auto &energy_grid_ = pmbp->pradfemn->energy_grid;
 
     par_for("pgen_linetest_radiation_femn", DevExeSpace(), 0, (pmbp->nmb_thispack - 1), ks, ke, js, je, is, ie,
             KOKKOS_LAMBDA(int m, int k, int j, int i)
             {
+                Real Ven = (1. / 3.) * (pow(energy_grid_(1), 3) - pow(energy_grid_(0), 3));
+
                 Real& x1min = size.d_view(m).x1min;
                 Real& x1max = size.d_view(m).x1max;
                 int nx1 = indcs.nx1;
