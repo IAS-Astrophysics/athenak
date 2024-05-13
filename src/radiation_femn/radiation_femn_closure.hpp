@@ -23,12 +23,12 @@ KOKKOS_INLINE_FUNCTION
 void ApplyM1Closure(TeamMember_t member, int num_points, int m, int en, int kk, int jj, int ii, DvceArray5D<Real> f, ScrArray1D<Real> f_scratch,
                     M1Closure m1_closure, ClosureFunc m1_closure_fun) {
 
-  Real E = sqrt(4. * M_PI) * f(m, en * num_points + 0, kk, jj, ii);          // (0,0)
-  Real Fx = -sqrt(4. * M_PI / 3.0) * f(m, en * num_points + 3, kk, jj, ii);  // (1, 1)
-  Real Fy = -sqrt(4. * M_PI / 3.0) * f(m, en * num_points + 1, kk, jj, ii);  // (1, -1)
-  Real Fz = sqrt(4. * M_PI / 3.0) * f(m, en * num_points + 2, kk, jj, ii);   // (1, 0)
+  Real E = Kokkos::sqrt(4. * M_PI) * f(m, en * num_points + 0, kk, jj, ii);          // (0,0)
+  Real Fx = -Kokkos::sqrt(4. * M_PI / 3.0) * f(m, en * num_points + 3, kk, jj, ii);  // (1, 1)
+  Real Fy = -Kokkos::sqrt(4. * M_PI / 3.0) * f(m, en * num_points + 1, kk, jj, ii);  // (1, -1)
+  Real Fz = Kokkos::sqrt(4. * M_PI / 3.0) * f(m, en * num_points + 2, kk, jj, ii);   // (1, 0)
   Real F2 = Fx * Fx + Fy * Fy + Fz * Fz;
-  Real Fnorm = sqrt(F2);
+  Real Fnorm = Kokkos::sqrt(F2);
 
   if (E < 1e-14 || Fnorm < 1e-14) {
     f_scratch(0) = f(m, en * num_points + 0, kk, jj, ii);
@@ -47,7 +47,7 @@ void ApplyM1Closure(TeamMember_t member, int num_points, int m, int en, int kk, 
     Real fy = Fy / E;
     Real fz = Fz / E;
     Real fnorm = Fnorm / E;
-    Real fixed_fnorm = fmin(1.0, fnorm);
+    Real fixed_fnorm = Kokkos::fmin(1.0, fnorm);
 
     // Flux direction
     Real nx = fx / fnorm;
@@ -55,7 +55,7 @@ void ApplyM1Closure(TeamMember_t member, int num_points, int m, int en, int kk, 
     Real nz = fz / fnorm;
 
 
-    Real chi = (3. + 4. * fixed_fnorm * fixed_fnorm) / (5. + 2. * sqrt(4. - 3. * fixed_fnorm * fixed_fnorm));
+    Real chi = (3. + 4. * fixed_fnorm * fixed_fnorm) / (5. + 2. * Kokkos::sqrt(4. - 3. * fixed_fnorm * fixed_fnorm));
 
     if (m1_closure_fun == ClosureFunc::Eddington) {
       chi = 1. / 3.;
@@ -104,11 +104,11 @@ void ApplyM1Closure(TeamMember_t member, int num_points, int m, int en, int kk, 
     f_scratch(1) = f(m, en * num_points + 1, kk, jj, ii);
     f_scratch(2) = f(m, en * num_points + 2, kk, jj, ii);
     f_scratch(3) = f(m, en * num_points + 3, kk, jj, ii);
-    f_scratch(4) = sqrt(60. * M_PI) * Pxy / (4. * M_PI);            // (2, -2)
-    f_scratch(5) = -sqrt(60. * M_PI) * Pyz / (4. * M_PI);           // (2, -1)
-    f_scratch(6) = sqrt(5. * M_PI) * (3. * Pzz - E) / (4. * M_PI);   // (2, 0)
-    f_scratch(7) = -sqrt(60. * M_PI) * Pxz / (4. * M_PI);           // (2, 1)
-    f_scratch(8) = sqrt(15. * M_PI) * (Pxx - Pyy) / (4. * M_PI);    // (2, 2)
+    f_scratch(4) = Kokkos::sqrt(60. * M_PI) * Pxy / (4. * M_PI);            // (2, -2)
+    f_scratch(5) = -Kokkos::sqrt(60. * M_PI) * Pyz / (4. * M_PI);           // (2, -1)
+    f_scratch(6) = Kokkos::sqrt(5. * M_PI) * (3. * Pzz - E) / (4. * M_PI);   // (2, 0)
+    f_scratch(7) = -Kokkos::sqrt(60. * M_PI) * Pxz / (4. * M_PI);           // (2, 1)
+    f_scratch(8) = Kokkos::sqrt(15. * M_PI) * (Pxx - Pyy) / (4. * M_PI);    // (2, 2)
   }
 
 }

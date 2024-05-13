@@ -213,7 +213,6 @@ class RadiationFEMN {
   void ComputeMassInverse();
   void ComputePMatrices();
   void ComputeSourceMatrices();
-  void InitializeFluidVelocity();
   void InitializeBeamsSourcesFEMN();
   void InitializeBeamsSourcesFPN();
   void InitializeBeamsSourcesM1();
@@ -233,10 +232,10 @@ Real Sgn(Real x) {
   return (x >= 0) ? +1. : -1.;
 }
 
-KOKKOS_INLINE_FUNCTION
-Real fmax(Real x, Real y) {
-  return (x > y) ? x : y;
-}
+//KOKKOS_INLINE_FUNCTION
+//Real fmax(Real x, Real y) {
+//  return (x > y) ? x : y;
+//}
 
 KOKKOS_INLINE_FUNCTION
 RadiationFEMNPhaseIndices IndicesComponent(int n, int num_points, int num_energy_bins = 1, int num_species = 1) {

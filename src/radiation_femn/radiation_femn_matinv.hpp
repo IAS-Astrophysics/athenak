@@ -29,8 +29,8 @@ KOKKOS_INLINE_FUNCTION void LUDec(T1 square_matrix, T1 lu_matrix, T3 pivot_indic
 
   int num_rows = square_matrix.extent(0);
 
-  double largest_pivot;
-  double swap_value;
+  Real largest_pivot;
+  Real swap_value;
 
   // begin construction of the row shifted square matrix
   for (int k = 0; k < num_rows - 1; k++) {
@@ -38,8 +38,8 @@ KOKKOS_INLINE_FUNCTION void LUDec(T1 square_matrix, T1 lu_matrix, T3 pivot_indic
     // get the best pivot
     largest_pivot = 0.;
     for (int i = k; i < num_rows; i++) {
-      if (fabs(lu_matrix(i, k)) > largest_pivot) {
-        largest_pivot = fabs(lu_matrix(i, k));
+      if (Kokkos::fabs(lu_matrix(i, k)) > largest_pivot) {
+        largest_pivot = Kokkos::fabs(lu_matrix(i, k));
         pivot_indices(k) = i;
       }
     }
@@ -74,7 +74,7 @@ template<typename T1, typename T2, typename T3>
 KOKKOS_INLINE_FUNCTION void LUSolve(const T1 lu_matrix, const T3 pivot_indices, const T2 b_array, T2 x_array) {
 
   int num_rows = b_array.extent(0);
-  double swap_value;
+  Real swap_value;
 
   // Forward substitution to find solution to L y = b
   for (int k = 0; k < num_rows - 1; k++) {

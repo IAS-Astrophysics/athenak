@@ -9,7 +9,7 @@
 //   partial time step appropriate to stage.
 //  Explicit (not implicit) radiation source terms are included in this update.
 
-#include <coordinates/cell_locations.hpp>
+#include <math.h>
 
 #include "athena.hpp"
 #include "mesh/mesh.hpp"
@@ -86,7 +86,7 @@ TaskStatus RadiationFEMN::ExpRKUpdate(Driver *pdriver, int stage) {
                                             adm.beta_u(m, 0, k, j, i), adm.beta_u(m, 1, k, j, i), adm.beta_u(m, 2, k, j, i),
                                             adm.g_dd(m, 0, 0, k, j, i), adm.g_dd(m, 0, 1, k, j, i), adm.g_dd(m, 0, 2, k, j, i),
                                             adm.g_dd(m, 1, 1, k, j, i), adm.g_dd(m, 1, 2, k, j, i), adm.g_dd(m, 2, 2, k, j, i), g_uu);
-                  Real sqrt_det_g_ijk = adm.alpha(m, k, j, i) * sqrt(adm::SpatialDet(adm.g_dd(m, 0, 0, k, j, i), adm.g_dd(m, 0, 1, k, j, i),
+                  Real sqrt_det_g_ijk = adm.alpha(m, k, j, i) * Kokkos::sqrt(adm::SpatialDet(adm.g_dd(m, 0, 0, k, j, i), adm.g_dd(m, 0, 1, k, j, i),
                                                                                      adm.g_dd(m, 0, 2, k, j, i), adm.g_dd(m, 1, 1, k, j, i),
                                                                                      adm.g_dd(m, 1, 2, k, j, i), adm.g_dd(m, 2, 2, k, j, i)));
 
@@ -382,7 +382,7 @@ TaskStatus RadiationFEMN::ExpRKUpdate(Driver *pdriver, int stage) {
 
                     // floor energy density if using M1
                     //if(unifiedidx == 0 && m1_flag_) {
-                    //  f0_(m, unifiedidx, k, j, i) = fmax(final_result, 1e-15);
+                    //  f0_(m, unifiedidx, k, j, i) = Kokkos::fmax(final_result, 1e-15);
                     //}
 
                   });

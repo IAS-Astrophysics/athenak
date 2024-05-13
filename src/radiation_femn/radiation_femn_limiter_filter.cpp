@@ -16,7 +16,7 @@ namespace radiationfemn {
 
 KOKKOS_INLINE_FUNCTION
 Real Lanczos(Real eta) {
-  return eta == 0 ? 1 : sin(eta) / eta;
+  return eta == 0 ? 1 : Kokkos::sin(eta) / eta;
 }
 
 KOKKOS_INLINE_FUNCTION
@@ -25,12 +25,12 @@ Real minmod2(Real a, Real b, Real c) {
   auto signb = int((0 < b) - (b < 0));
   auto signc = int((0 < c) - (c < 0));
 
-  auto absa = abs(a);
-  auto absb = abs(b);
-  auto absc = abs(c);
+  auto absa = Kokkos::fabs(a);
+  auto absb = Kokkos::fabs(b);
+  auto absc = Kokkos::fabs(c);
 
-  auto s = signa * int(abs(signa + signb + signc) == 3);
-  auto min_abs_b_abs_c = fmin(absb, absc);
+  auto s = signa * int(Kokkos::fabs(signa + signb + signc) == 3);
+  auto min_abs_b_abs_c = Kokkos::fmin(absb, absc);
 
   auto result = (s * absa) * int(absa < 2.0 * min_abs_b_abs_c) +
                 (s * min_abs_b_abs_c) * int(absa >= 2.0 * min_abs_b_abs_c);
@@ -44,12 +44,12 @@ Real minmod(Real a, Real b, Real c) {
   auto signb = int((0 < b) - (b < 0));
   auto signc = int((0 < c) - (c < 0));
 
-  auto absa = abs(a);
-  auto absb = abs(b);
-  auto absc = abs(c);
+  auto absa = Kokkos::fabs(a);
+  auto absb = Kokkos::fabs(b);
+  auto absc = Kokkos::fabs(c);
 
-  auto sign = int(abs(signa + signb + signc) == 3);
-  auto min_abs_a_abs_b_abs_c = fmin(fmin(absa, absb), absc);
+  auto sign = int(Kokkos::abs(signa + signb + signc) == 3);
+  auto min_abs_a_abs_b_abs_c = Kokkos::fmin(Kokkos::fmin(absa, absb), absc);
 
   return signa * sign * min_abs_a_abs_b_abs_c;
 }
@@ -81,7 +81,7 @@ TaskStatus RadiationFEMN::ApplyFilterLanczos(Driver *pdriver, int stage) {
             int B = idcs.angidx;
             auto lval = angular_grid_(B, 0);
 
-            f0_(m, nuenang, k, j, i) = pow(Lanczos(Real(lval) / (Real(lmax_) + 1.0)), filtstrength) * f0_(m, nuenang, k, j, i);
+            f0_(m, nuenang, k, j, i) = Kokkos::pow(Lanczos(Real(lval) / (Real(lmax_) + 1.0)), filtstrength) * f0_(m, nuenang, k, j, i);
           });
 
   return TaskStatus::complete;
@@ -124,7 +124,7 @@ TaskStatus RadiationFEMN::ApplyLimiterFEM(Driver *pdriver, int stage) {
                   Real denominator = 0.;
                   Kokkos::parallel_reduce(Kokkos::ThreadVectorRange(member, 0, num_points_), [=](const int A, Real &partial_sum_angle) {
                     Real tmp = f0_(m, outervar * num_energy_bins_ + A, k, j, i);
-                    partial_sum_angle += fmax(0, tmp) * (Q_matrix_(0, A) * L_mu_muhat_(m, 0, 0, k, j, i)
+                    partial_sum_angle += Kokkos::fmax(0, tmp) * (Q_matrix_(0, A) * L_mu_muhat_(m, 0, 0, k, j, i)
                                                          + Q_matrix_(1, A) * L_mu_muhat_(m, 0, 1, k, j, i) + Q_matrix_(2, A) * L_mu_muhat_(m, 0, 2, k, j, i) +
                                                          Q_matrix_(3, A) * L_mu_muhat_(m, 0, 3, k, j, i));
                   }, denominator);
@@ -134,7 +134,7 @@ TaskStatus RadiationFEMN::ApplyLimiterFEM(Driver *pdriver, int stage) {
 
                   par_for_inner(member, 0, num_points_ - 1, [&](const int A) {
                     Real tmp = f0_(m, outervar * num_energy_bins_ + A, k, j, i);
-                    f0_(m, outervar * num_energy_bins_ + A, k, j, i) = correction_factor * fmax(tmp, 0.);
+                    f0_(m, outervar * num_energy_bins_ + A, k, j, i) = correction_factor * Kokkos::fmax(tmp, 0.);
                   });
                   member.team_barrier();
 
@@ -159,10 +159,10 @@ TaskStatus RadiationFEMN::ApplyLimiterDG(Driver *pdriver, int stage) {
   auto &f0_ = pmy_pack->pradfemn->f0;
   auto &ftemp_ = pmy_pack->pradfemn->ftemp;
 
-  auto minmodgeneral = minmod2;
-  if (limiter_dg_minmod) {
-    minmodgeneral = minmod;
-  }
+  //auto minmodgeneral = minmod2;
+  //if (limiter_dg_minmod) {
+  //  minmodgeneral = minmod;
+  //}
 
   Kokkos::deep_copy(ftemp_, 0.);
 

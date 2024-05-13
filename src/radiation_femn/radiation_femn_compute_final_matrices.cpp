@@ -74,7 +74,7 @@ void RadiationFEMN::ComputePMatrices() {
   Kokkos::deep_copy(temp_array_host, temp_array);
 
   // stilde-x mod matrix
-  radiationfemn::ZeroSpeedCorrection(temp_array_host, temp_array_corrected, 1. / sqrt(3.));
+  radiationfemn::ZeroSpeedCorrection(temp_array_host, temp_array_corrected, 1. / Kokkos::sqrt(3.));
   auto Pmod_matrix_1 = Kokkos::subview(Pmod_matrix, 1, Kokkos::ALL, Kokkos::ALL);
   Kokkos::deep_copy(Pmod_matrix_1, temp_array_corrected);
 
@@ -85,7 +85,7 @@ void RadiationFEMN::ComputePMatrices() {
   Kokkos::deep_copy(temp_array_host, temp_array);
 
   // stilde-y mod matrix
-  radiationfemn::ZeroSpeedCorrection(temp_array_host, temp_array_corrected, 1. / sqrt(3.));
+  radiationfemn::ZeroSpeedCorrection(temp_array_host, temp_array_corrected, 1. / Kokkos::sqrt(3.));
   auto Pmod_matrix_2 = Kokkos::subview(Pmod_matrix, 2, Kokkos::ALL, Kokkos::ALL);
   Kokkos::deep_copy(Pmod_matrix_2, temp_array_corrected);
 
@@ -96,7 +96,7 @@ void RadiationFEMN::ComputePMatrices() {
   Kokkos::deep_copy(temp_array_host, temp_array);
 
   // stilde-z mod matrix
-  radiationfemn::ZeroSpeedCorrection(temp_array_host, temp_array_corrected, 1. / sqrt(3.));
+  radiationfemn::ZeroSpeedCorrection(temp_array_host, temp_array_corrected, 1. / Kokkos::sqrt(3.));
   auto Pmod_matrix_3 = Kokkos::subview(Pmod_matrix, 3, Kokkos::ALL, Kokkos::ALL);
   Kokkos::deep_copy(Pmod_matrix_3, temp_array_corrected);
 

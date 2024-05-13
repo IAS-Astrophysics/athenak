@@ -122,17 +122,17 @@ void RadiationFEMN::InitializeBeamsSourcesM1() {
   Kokkos::realloc(beam_source_1_vals_h, num_points);
   Kokkos::realloc(beam_source_2_vals_h, num_points);
 
-  Real Sen = (pow(energy_max, 4) - 0.) / 4.0;
+  Real Sen = (Kokkos::pow(energy_max, 4) - 0.) / 4.0;
   Real Fnorm = 1. / Sen;
   Real E = Fnorm;
-  Real Fx = Fnorm * sin(beam_source_1_theta) * cos(beam_source_1_phi) - 1e-3;
-  Real Fy = Fnorm * sin(beam_source_1_theta) * sin(beam_source_1_phi) - 1e-3;
-  Real Fz = Fnorm * cos(beam_source_1_theta) - 1e-3;
+  Real Fx = Fnorm * Kokkos::sin(beam_source_1_theta) * Kokkos::cos(beam_source_1_phi) - 1e-3;
+  Real Fy = Fnorm * Kokkos::sin(beam_source_1_theta) * Kokkos::sin(beam_source_1_phi) - 1e-3;
+  Real Fz = Fnorm * Kokkos::cos(beam_source_1_theta) - 1e-3;
 
-  beam_source_1_vals_h(0) = (1. / sqrt(4. * M_PI)) * E;
-  beam_source_1_vals_h(1) = -sqrt(3. / (4. * M_PI)) * Fy;
-  beam_source_1_vals_h(2) = sqrt(3. / (4. * M_PI)) * Fz;
-  beam_source_1_vals_h(3) = -sqrt(3. / (4. * M_PI)) * Fx;
+  beam_source_1_vals_h(0) = (1. / Kokkos::sqrt(4. * M_PI)) * E;
+  beam_source_1_vals_h(1) = -Kokkos::sqrt(3. / (4. * M_PI)) * Fy;
+  beam_source_1_vals_h(2) = Kokkos::sqrt(3. / (4. * M_PI)) * Fz;
+  beam_source_1_vals_h(3) = -Kokkos::sqrt(3. / (4. * M_PI)) * Fx;
   beam_source_1_vals_h(4) = 0;
   beam_source_1_vals_h(5) = 0;
   beam_source_1_vals_h(6) = 0;
@@ -144,14 +144,14 @@ void RadiationFEMN::InitializeBeamsSourcesM1() {
   if (num_beams > 1) {
     Fnorm = 1. / Sen;
     E = Fnorm;
-    Fx = Fnorm * sin(beam_source_2_theta) * cos(beam_source_2_phi) - 1e-3;
-    Fy = Fnorm * sin(beam_source_2_theta) * sin(beam_source_2_phi) - 1e-3;
-    Fz = Fnorm * cos(beam_source_2_theta) - 1e-3;
+    Fx = Fnorm * Kokkos::sin(beam_source_2_theta) * Kokkos::cos(beam_source_2_phi) - 1e-3;
+    Fy = Fnorm * Kokkos::sin(beam_source_2_theta) * Kokkos::sin(beam_source_2_phi) - 1e-3;
+    Fz = Fnorm * Kokkos::cos(beam_source_2_theta) - 1e-3;
 
-    beam_source_2_vals_h(0) = (1. / sqrt(4. * M_PI)) * E;
-    beam_source_2_vals_h(1) = -sqrt(3. / (4. * M_PI)) * Fy;
-    beam_source_2_vals_h(2) = sqrt(3. / (4. * M_PI)) * Fz;
-    beam_source_2_vals_h(3) = -sqrt(3. / (4. * M_PI)) * Fx;
+    beam_source_2_vals_h(0) = (1. / Kokkos::sqrt(4. * M_PI)) * E;
+    beam_source_2_vals_h(1) = -Kokkos::sqrt(3. / (4. * M_PI)) * Fy;
+    beam_source_2_vals_h(2) = Kokkos::sqrt(3. / (4. * M_PI)) * Fz;
+    beam_source_2_vals_h(3) = -Kokkos::sqrt(3. / (4. * M_PI)) * Fx;
     beam_source_2_vals_h(4) = 0;
     beam_source_2_vals_h(5) = 0;
     beam_source_2_vals_h(6) = 0;
@@ -170,9 +170,9 @@ void RadiationFEMN::InitializeBeamsSourcesFEMN() {
   Kokkos::realloc(psi_basis, num_points);
   Kokkos::deep_copy(psi_basis, 0);
 
-  Real x0 = sin(beam_source_1_theta) * cos(beam_source_1_phi);
-  Real y0 = sin(beam_source_1_theta) * sin(beam_source_1_phi);
-  Real z0 = cos(beam_source_1_theta);
+  Real x0 = Kokkos::sin(beam_source_1_theta) * Kokkos::cos(beam_source_1_phi);
+  Real y0 = Kokkos::sin(beam_source_1_theta) * Kokkos::sin(beam_source_1_phi);
+  Real z0 = Kokkos::cos(beam_source_1_theta);
 
   for (int i = 0; i < num_triangles; i++) {
     Real x1 = angular_grid_cartesian(triangle_information(i, 0), 0);
@@ -216,9 +216,9 @@ void RadiationFEMN::InitializeBeamsSourcesFEMN() {
   if (num_beams > 1) {
     Kokkos::deep_copy(psi_basis, 0);
 
-    x0 = sin(beam_source_2_theta) * cos(beam_source_2_phi);
-    y0 = sin(beam_source_2_theta) * sin(beam_source_2_phi);
-    z0 = cos(beam_source_2_theta);
+    x0 = Kokkos::sin(beam_source_2_theta) * Kokkos::cos(beam_source_2_phi);
+    y0 = Kokkos::sin(beam_source_2_theta) * Kokkos::sin(beam_source_2_phi);
+    z0 = Kokkos::cos(beam_source_2_theta);
 
     for (int i = 0; i < num_triangles; i++) {
       Real x1 = angular_grid_cartesian(triangle_information(i, 0), 0);

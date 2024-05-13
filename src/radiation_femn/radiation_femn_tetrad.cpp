@@ -6,6 +6,8 @@
 //! \file radiation_femn_tetrad.cpp
 //  \brief construct tetrad for radiation FEM_N
 
+#include <math.h>
+
 #include "athena.hpp"
 #include "mesh/mesh.hpp"
 #include "driver/driver.hpp"
@@ -76,7 +78,7 @@ namespace radiationfemn
                         int nu = munu - 4 * mu;
                         L_mu_1_norm += g_dd[munu] * L_mu_muhat0_(m, mu, 1, k, j, i) * L_mu_muhat0_(m, nu, 1, k, j, i);
                     }
-                    L_mu_1_norm = sqrt(L_mu_1_norm);
+                    L_mu_1_norm = Kokkos::sqrt(L_mu_1_norm);
 
                     L_mu_muhat0_(m, 0, 1, k, j, i) = L_mu_muhat0_(m, 0, 1, k, j, i) / L_mu_1_norm;
                     L_mu_muhat0_(m, 1, 1, k, j, i) = L_mu_muhat0_(m, 1, 1, k, j, i) / L_mu_1_norm;
@@ -120,7 +122,7 @@ namespace radiationfemn
                         int nu = munu - 4 * mu;
                         L_mu_2_norm += g_dd[munu] * L_mu_muhat0_(m, mu, 2, k, j, i) * L_mu_muhat0_(m, nu, 2, k, j, i);
                     }
-                    L_mu_2_norm = sqrt(L_mu_2_norm);
+                    L_mu_2_norm = Kokkos::sqrt(L_mu_2_norm);
 
                     L_mu_muhat0_(m, 0, 2, k, j, i) = L_mu_muhat0_(m, 0, 2, k, j, i) / L_mu_2_norm;
                     L_mu_muhat0_(m, 1, 2, k, j, i) = L_mu_muhat0_(m, 1, 2, k, j, i) / L_mu_2_norm;
@@ -167,7 +169,7 @@ namespace radiationfemn
                         int nu = munu - 4 * mu;
                         L_mu_3_norm += g_dd[munu] * L_mu_muhat0_(m, mu, 3, k, j, i) * L_mu_muhat0_(m, nu, 3, k, j, i);
                     }
-                    L_mu_3_norm = sqrt(L_mu_3_norm);
+                    L_mu_3_norm = Kokkos::sqrt(L_mu_3_norm);
 
                     L_mu_muhat0_(m, 0, 3, k, j, i) = L_mu_muhat0_(m, 0, 3, k, j, i) / L_mu_3_norm;
                     L_mu_muhat0_(m, 1, 3, k, j, i) = L_mu_muhat0_(m, 1, 3, k, j, i) / L_mu_3_norm;

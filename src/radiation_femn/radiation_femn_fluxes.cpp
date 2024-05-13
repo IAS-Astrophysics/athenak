@@ -58,10 +58,10 @@ TaskStatus RadiationFEMN::CalculateFluxes(Driver *pdriver, int stage) {
                   int enidx = nuenidx.enidx;
                   int nuidx = nuenidx.nuidx;
 
-                  Real sqrt_det_g_ii = adm.alpha(m, kk, jj, ii) * sqrt(adm::SpatialDet(adm.g_dd(m, 0, 0, kk, jj, ii), adm.g_dd(m, 0, 1, kk, jj, ii),
+                  Real sqrt_det_g_ii = adm.alpha(m, kk, jj, ii) * Kokkos::sqrt(adm::SpatialDet(adm.g_dd(m, 0, 0, kk, jj, ii), adm.g_dd(m, 0, 1, kk, jj, ii),
                                                                                        adm.g_dd(m, 0, 2, kk, jj, ii), adm.g_dd(m, 1, 1, kk, jj, ii),
                                                                                        adm.g_dd(m, 1, 2, kk, jj, ii), adm.g_dd(m, 2, 2, kk, jj, ii)));
-                  Real sqrt_det_g_iip1 = adm.alpha(m, kk, jj, ii + 1) * sqrt(adm::SpatialDet(adm.g_dd(m, 0, 0, kk, jj, ii + 1), adm.g_dd(m, 0, 1, kk, jj, ii + 1),
+                  Real sqrt_det_g_iip1 = adm.alpha(m, kk, jj, ii + 1) * Kokkos::sqrt(adm::SpatialDet(adm.g_dd(m, 0, 0, kk, jj, ii + 1), adm.g_dd(m, 0, 1, kk, jj, ii + 1),
                                                                                              adm.g_dd(m, 0, 2, kk, jj, ii + 1), adm.g_dd(m, 1, 1, kk, jj, ii + 1),
                                                                                              adm.g_dd(m, 1, 2, kk, jj, ii + 1), adm.g_dd(m, 2, 2, kk, jj, ii + 1)));
 
@@ -128,10 +128,10 @@ TaskStatus RadiationFEMN::CalculateFluxes(Driver *pdriver, int stage) {
                     int enidx = nuenidx.enidx;
                     int nuidx = nuenidx.nuidx;
 
-                    Real sqrt_det_g_jj = adm.alpha(m, kk, jj, ii) * sqrt(adm::SpatialDet(adm.g_dd(m, 0, 0, kk, jj, ii), adm.g_dd(m, 0, 1, kk, jj, ii),
+                    Real sqrt_det_g_jj = adm.alpha(m, kk, jj, ii) * Kokkos::sqrt(adm::SpatialDet(adm.g_dd(m, 0, 0, kk, jj, ii), adm.g_dd(m, 0, 1, kk, jj, ii),
                                                                                          adm.g_dd(m, 0, 2, kk, jj, ii), adm.g_dd(m, 1, 1, kk, jj, ii),
                                                                                          adm.g_dd(m, 1, 2, kk, jj, ii), adm.g_dd(m, 2, 2, kk, jj, ii)));
-                    Real sqrt_det_g_jjp1 = adm.alpha(m, kk, jj + 1, ii) * sqrt(adm::SpatialDet(adm.g_dd(m, 0, 0, kk, jj + 1, ii), adm.g_dd(m, 0, 1, kk, jj + 1, ii),
+                    Real sqrt_det_g_jjp1 = adm.alpha(m, kk, jj + 1, ii) * Kokkos::sqrt(adm::SpatialDet(adm.g_dd(m, 0, 0, kk, jj + 1, ii), adm.g_dd(m, 0, 1, kk, jj + 1, ii),
                                                                                                adm.g_dd(m, 0, 2, kk, jj + 1, ii), adm.g_dd(m, 1, 1, kk, jj + 1, ii),
                                                                                                adm.g_dd(m, 1, 2, kk, jj + 1, ii), adm.g_dd(m, 2, 2, kk, jj + 1, ii)));
 
@@ -201,10 +201,10 @@ TaskStatus RadiationFEMN::CalculateFluxes(Driver *pdriver, int stage) {
                     int enidx = nuenidx.enidx;
                     int nuidx = nuenidx.nuidx;
 
-                    Real sqrt_det_g_kk = adm.alpha(m, kk, jj, ii) * sqrt(adm::SpatialDet(adm.g_dd(m, 0, 0, kk, jj, ii), adm.g_dd(m, 0, 1, kk, jj, ii),
+                    Real sqrt_det_g_kk = adm.alpha(m, kk, jj, ii) * Kokkos::sqrt(adm::SpatialDet(adm.g_dd(m, 0, 0, kk, jj, ii), adm.g_dd(m, 0, 1, kk, jj, ii),
                                                                                          adm.g_dd(m, 0, 2, kk, jj, ii), adm.g_dd(m, 1, 1, kk, jj, ii),
                                                                                          adm.g_dd(m, 1, 2, kk, jj, ii), adm.g_dd(m, 2, 2, kk, jj, ii)));
-                    Real sqrt_det_g_kkp1 = adm.alpha(m, kk + 1, jj, ii) * sqrt(adm::SpatialDet(adm.g_dd(m, 0, 0, kk + 1, jj, ii), adm.g_dd(m, 0, 1, kk + 1, jj, ii),
+                    Real sqrt_det_g_kkp1 = adm.alpha(m, kk + 1, jj, ii) * Kokkos::sqrt(adm::SpatialDet(adm.g_dd(m, 0, 0, kk + 1, jj, ii), adm.g_dd(m, 0, 1, kk + 1, jj, ii),
                                                                                                adm.g_dd(m, 0, 2, kk + 1, jj, ii), adm.g_dd(m, 1, 1, kk + 1, jj, ii),
                                                                                                adm.g_dd(m, 1, 2, kk + 1, jj, ii), adm.g_dd(m, 2, 2, kk + 1, jj, ii)));
 
