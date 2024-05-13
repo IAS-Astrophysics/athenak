@@ -347,6 +347,7 @@ TaskStatus RadiationFEMN::ExpRKUpdate(Driver *pdriver, int stage) {
                     }
                 } */
                   // matrix inverse
+                  /*
                   ScrArray2D<Real> Q_matrix = ScrArray2D<Real>(member.team_scratch(scr_level), num_points_, num_points_);
                   ScrArray2D<Real> Qinv_matrix = ScrArray2D<Real>(member.team_scratch(scr_level), num_points_, num_points_);
                   ScrArray2D<Real> lu_matrix = ScrArray2D<Real>(member.team_scratch(scr_level), num_points_, num_points_);
@@ -369,20 +370,20 @@ TaskStatus RadiationFEMN::ExpRKUpdate(Driver *pdriver, int stage) {
 
                   radiationfemn::LUInv<ScrArray2D<Real>, ScrArray1D<Real>, ScrArray1D<int>>(member, Q_matrix, Qinv_matrix, lu_matrix, x_array, b_array, pivots);
                   member.team_barrier();
-
+                  */
                   par_for_inner(member, 0, num_points_ - 1, [&](const int idx) {
                     Real final_result = 0.;
-                    for (int A = 0; A < num_points_; A++) {
-                      final_result += Qinv_matrix(idx, A) * (g_rhs_scratch(A));
-                    }
+                    //for (int A = 0; A < num_points_; A++) {
+                    //  final_result += Qinv_matrix(idx, A) * (g_rhs_scratch(A));
+                    //}
 
                     auto unifiedidx = IndicesUnited(nu, en, idx, num_species_, num_energy_bins_, num_points_);
-                    f0_(m, unifiedidx, k, j, i) = final_result;
+                    f0_(m, unifiedidx, k, j, i) = g_rhs_scratch(idx);
 
                     // floor energy density if using M1
-                    if(unifiedidx == 0 && m1_flag_) {
-                      f0_(m, unifiedidx, k, j, i) = fmax(final_result, 1e-15);
-                    }
+                    //if(unifiedidx == 0 && m1_flag_) {
+                    //  f0_(m, unifiedidx, k, j, i) = fmax(final_result, 1e-15);
+                    //}
 
                   });
                   member.team_barrier();
