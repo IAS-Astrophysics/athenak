@@ -7,13 +7,11 @@
 //! \file radiation_femn_linalg.cpp
 //  \brief implementation of the matrix inverse routines
 
-#include <cmath>
 #include <complex>
 #include <gsl/gsl_math.h>
 #include <gsl/gsl_eigen.h>
 #include <gsl/gsl_linalg.h>
 #include "athena.hpp"
-#include "radiation_femn/radiation_femn.hpp"
 
 namespace radiationfemn {
 

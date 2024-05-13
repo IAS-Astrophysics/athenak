@@ -9,7 +9,6 @@
 //! \file radiation_femn_matinv.cpp
 //  \brief implementation of routines for matrix inversion
 
-#include <cmath>
 #include "athena.hpp"
 #include "radiation_femn/radiation_femn.hpp"
 

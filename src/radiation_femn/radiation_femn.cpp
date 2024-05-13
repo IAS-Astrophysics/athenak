@@ -7,7 +7,6 @@
 //  \brief implementation of the radiation FEM class constructor and other functions
 
 #include <string>
-#include <cmath>
 #include "athena.hpp"
 #include "parameter_input.hpp"
 #include "mesh/mesh.hpp"

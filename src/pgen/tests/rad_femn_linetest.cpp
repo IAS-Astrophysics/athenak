@@ -8,9 +8,7 @@
 
 // C++ headers
 #include <iostream>
-#include <sstream>
-#include <cmath>        // exp
-#include <algorithm>    // max
+#include <math.h>        // exp
 
 // AthenaK headers
 #include "athena.hpp"
