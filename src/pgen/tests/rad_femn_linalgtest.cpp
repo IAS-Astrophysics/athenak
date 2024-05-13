@@ -9,9 +9,6 @@
 // C++ headers
 #include <iostream>
 #include <fstream>
-#include <sstream>
-#include <cmath>        // exp
-#include <algorithm>    // max
 
 // AthenaK headers
 #include "athena.hpp"
@@ -33,13 +30,13 @@ void ProblemGenerator::RadiationFEMNLinalgtest(ParameterInput *pin, const bool r
               << "<radiation-femn> block in input file" << std::endl;
     exit(EXIT_FAILURE);
   }
-	/*
+
   std::cout << "Testing linear algebra routines for radiation FEMN:" << std::endl;
   std::cout << std::endl;
 
-  HostArray2D <Real> matrix;
-  HostArray2D <Real> matrix_answer;
-  HostArray2D <Real> lu_matrix;
+  HostArray2D<Real> matrix;
+  HostArray2D<Real> matrix_answer;
+  HostArray2D<Real> lu_matrix;
   HostArray1D<int> pivots;
   HostArray1D<Real> x_array;
   HostArray1D<Real> b_array;
@@ -74,8 +71,8 @@ void ProblemGenerator::RadiationFEMNLinalgtest(ParameterInput *pin, const bool r
   Kokkos::deep_copy(lu_matrix, matrix);
 
 
-  // [1] Check the LU decomposition of matrix from Golub & Van Loan example 3.4.1
-  std::cout << "Test 1: Check LU decomposition of matrix" << std::endl;
+  // [1] Check the LU decomposition of matrix from Golub & Van Loan example 3.4.1 [CPU]
+  std::cout << "Test 1: Check LU decomposition of matrix [CPU]" << std::endl;
   std::cout << std::endl;
   std::cout << "Matrix information:" << std::endl;
   std::cout << "Number of rows: " << matrix.extent(0) << std::endl;
@@ -111,7 +108,7 @@ void ProblemGenerator::RadiationFEMNLinalgtest(ParameterInput *pin, const bool r
   }
   std::cout << std::endl;
 
-  double error = -42.;
+  Real error = -42.;
   for (int i = 0; i < matrix.extent(0); i++) {
     for (int j = 0; j < matrix.extent(1); j++) {
       if (fabs(lu_matrix(i, j) - matrix_answer(i, j)) > error) {
@@ -128,6 +125,80 @@ void ProblemGenerator::RadiationFEMNLinalgtest(ParameterInput *pin, const bool r
   }
   std::cout << std::endl;
 
+  // [2] Check the LU decomposition of matrix from Golub & Van Loan example 3.4.1 [GPU]
+  std::cout << "Test 2: Check same LU decomposition of matrix [GPU]" << std::endl;
+  std::cout << std::endl;
+
+  DvceArray2D<Real> matrix_dvce;
+  DvceArray3D<Real> matrix_dvce_answer;
+  HostArray3D<Real> matrix_dvce_answer_h;
+  DvceArray2D<Real> lu_matrix_dvce;
+  DvceArray1D<int> pivots_dvce;
+
+  Kokkos::realloc(matrix_dvce, 3, 3);
+  Kokkos::realloc(matrix_dvce_answer, 4, 3, 3);
+  Kokkos::realloc(matrix_dvce_answer_h, 4, 3, 3);
+  Kokkos::realloc(lu_matrix_dvce, 3, 3);
+  Kokkos::realloc(pivots_dvce, 2);
+
+  Kokkos::deep_copy(matrix_dvce, matrix);
+  Kokkos::deep_copy(lu_matrix_dvce, matrix);
+
+  size_t scr_size = ScrArray2D<Real>::shmem_size(3, 3) * 2 + ScrArray1D<Real>::shmem_size(2);
+  int scr_level = 0;
+  par_for_outer("radiation_femn_linalgtest_lu", DevExeSpace(), scr_size, scr_level, 0, 1, 0, 1,
+                KOKKOS_LAMBDA(TeamMember_t member, const int mv, const int nv) {
+
+                  ScrArray2D<Real> matrix_scratch(member.team_scratch(scr_level), 3, 3);
+                  ScrArray2D<Real> lu_matrix_scratch(member.team_scratch(scr_level), 3, 3);
+                  ScrArray1D<int> pivots_scratch(member.team_scratch(scr_level), 2);
+
+                  pivots_scratch(0) = 0;
+                  pivots_scratch(1) = 0;
+                  for (int i = 0; i < 3; i++) {
+                    for (int j = 0; j < 3; j++) {
+                      matrix_scratch(i, j) = matrix_dvce(i, j);
+                      lu_matrix_scratch(i, j) = matrix_dvce(i, j);
+                    }
+                  }
+
+                  radiationfemn::LUDec<ScrArray2D<Real>, ScrArray1D<int>>(matrix_scratch, lu_matrix_scratch, pivots_scratch);
+                  member.team_barrier();
+
+                  Kokkos::single(Kokkos::PerTeam(member), [=]() {
+                    for (int i = 0; i < 3; i++) {
+                      for (int j = 0; j < 3; j++) {
+                        matrix_dvce_answer(member.league_rank(), i, j) = lu_matrix_scratch(i, j);
+                      }
+                    }
+                  });
+
+
+                });
+
+  Kokkos::deep_copy(matrix_dvce_answer_h, matrix_dvce_answer);
+
+  std::cout << "Answer:" << std::endl;
+  for (int i = 0; i < matrix.extent(0); i++) {
+    for (int j = 0; j < matrix.extent(1); j++) {
+      std::cout << matrix_dvce_answer_h(1, i, j) << " " << std::flush;
+    }
+    std::cout << std::endl;
+  }
+  std::cout << std::endl;
+
+  error = -42.;
+  for (int i = 0; i < matrix.extent(0); i++) {
+    for (int j = 0; j < matrix.extent(1); j++) {
+      if (fabs(lu_matrix(i, j) - matrix_answer(i, j)) > error) {
+        error = fabs(lu_matrix(i, j) - matrix_dvce_answer_h(1, i, j));
+      }
+    }
+  }
+  std::cout << "Maximum error: " << error << std::endl;
+  std::cout << std::endl;
+
+  /*
   // [2] Solve a linear system of equations with the LU decomposed matrix
   std::cout << "Test 2: Solve A x = b using the LU matrix" << std::endl;
   std::cout << std::endl;
