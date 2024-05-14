@@ -51,9 +51,10 @@ void TrackedParticleOutput::LoadOutputData(Mesh *pm) {
   auto &pr = pm->pmb_pack->ppart->prtcl_rdata;
   auto &pi = pm->pmb_pack->ppart->prtcl_idata;
   int counter=0;
+  int ntrack_ = ntrack;
   int *pcounter = &counter;
   par_for("part_update",DevExeSpace(),0,(npart-1), KOKKOS_LAMBDA(const int p) {
-    if (pi(PTAG,p) < ntrack) {
+    if (pi(PTAG,p) < ntrack_) {
       int index = Kokkos::atomic_fetch_add(pcounter,1);
       tracked_prtcl.d_view(index).tag = pi(PTAG,p);
       tracked_prtcl.d_view(index).x   = pr(IPX,p);

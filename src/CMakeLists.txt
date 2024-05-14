@@ -92,6 +92,7 @@ add_executable(
         outputs/vtk_mesh.cpp
         outputs/vtk_prtcl.cpp
 
+        particles/boris_gr.cpp
         particles/particles.cpp
         particles/particles_pushers.cpp
         particles/particles_tasks.cpp
