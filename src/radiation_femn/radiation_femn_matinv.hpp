@@ -154,4 +154,81 @@ KOKKOS_INLINE_FUNCTION void LUInv(T1 A_matrix, T1 A_matrix_inverse, T1 lu_matrix
 
 }
 
+template<typename T2>
+KOKKOS_INLINE_FUNCTION Real dot(T2 a, T2 b) {
+  Real result = 0.;
+  for (int i = 0; i < a.extent(0); i++) {
+    result += a(i) * b(i);
+  }
+  return result;
+}
+
+template<typename T1, typename T2>
+KOKKOS_INLINE_FUNCTION void dot(T1 a, T2 b, T2 result) {
+  for (int i = 0; i < a.extent(0); i++) {
+    result(i) = 0;
+    for (int j = 0; j < a.extent(1); j++) {
+      result(i) += a(i, j) * b(j);
+    }
+  }
+}
+
+template<typename T1, typename T2>
+KOKKOS_INLINE_FUNCTION void uBiCGSTAB(T1 A_test, T2 b_test, T2 x0, T2 rhat0, T2 r0, T2 rho0, T2 p0, T2 v, T2 h, T2 s, T2 t, Real tol = 1e-6, int tot_iter = 200) {
+
+  int niter = 0;
+  int num_rows = A_test.extent(0);
+
+  for (int i = 0; i < num_rows; i++) {
+    x0(i) = 0;
+    rhat0(i) = 0;
+
+    r0(i) = b_test(i);
+    for (int j = 0; j < num_rows; j++) {
+      r0(i) -= A_test(i, j) * x0(j);
+    }
+  }
+
+
+  rho0 = dot<T2>(rhat0, r0);
+  Kokkos::deep_copy(p0, r0);
+
+  for (int i = 0; i < tot_iter; i++) {
+    niter++;
+
+    dot<T1, T2>(A_test, p0, v);
+    auto alpha = rho0 / dot<T2>(rhat0, v);
+
+    for (int j = 0; j < num_rows; j++) {
+      h(j) = x0(j) + alpha * p0(j);
+      s(j) = r0(j) - alpha * v(j);
+    }
+
+    if (dot<T2>(s, s) < tol) {
+      Kokkos::deep_copy(x0, h);
+      break;
+    }
+
+    dot<T1, T2>(A_test, s, t);
+    auto omega = dot<T2, T2>(t, s) / dot<T2, T2>(t, t);
+
+    for (int j = 0; j < num_rows; j++) {
+      x0(j) = h(j) + omega * s(j);
+      r0(j) = s(j) - omega * t(j);
+    }
+
+    if (dot<T2, T2>(r0, r0) < tol) {
+      break;
+    }
+
+    auto rho1 = dot<T2, T2>(rhat0, r0);
+    auto beta = (rho1 / rho0) * (alpha / omega);
+    rho0 = rho1;
+
+    for (int j = 0; j < num_rows; j++) {
+      p0(j) = r0(j) + beta * (p0(j) - omega * v(j));
+    }
+  }
+}
+
 #endif //ATHENA_SRC_RADIATION_FEMN_RADIATION_FEMN_MATINV_HPP_
