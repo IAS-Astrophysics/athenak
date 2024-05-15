@@ -48,7 +48,7 @@ pexcise = 1.0E-10
 
 <particles>
 ppc    = 0.0001
-pusher = full_gr
+pusher = only_gr
 iter_tolerance = 1.0E-10
 max_iter = 10
 particle_type = cosmic_ray
