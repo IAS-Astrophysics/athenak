@@ -462,7 +462,7 @@ TaskStatus ParticlesBoundaryValues::RecvAndUnpackPrtcls() {
     auto &pi = pmy_part->prtcl_idata;
     auto &rrecvbuf = prtcl_rrecvbuf;
     auto &irecvbuf = prtcl_irecvbuf;
-    int npart = pmy_part->nprtcl_thispack;
+    int &npart = pmy_part->nprtcl_thispack;
     par_for("punpack",DevExeSpace(),0,(nprtcl_recv-1), KOKKOS_LAMBDA(const int n) {
       int p;
       if (n < nprtcl_send) {
@@ -477,36 +477,37 @@ TaskStatus ParticlesBoundaryValues::RecvAndUnpackPrtcls() {
         pr(i,p) = rrecvbuf(nrdata*n + i);
       }
     });
+  }
 
-    // At this point have filled npart_recv holes in particle arrays from sends
-    // If (nprtcl_recv < nprtcl_send), have to move particles from end of arrays to fill
-    // remaining holes
-    int nremain = nprtcl_send - nprtcl_recv;
-    if (nremain > 0) {
-      int i_last_hole = nprtcl_send-1;
-      int i_next_hole = nprtcl_recv;
-      for (int n=1; n<=nremain; ++n) {
-        int nend = npart-n;
-        if (nend > sendlist.h_view(i_last_hole).prtcl_indx) {
-          // copy particle from end into hole
-          int next_hole = sendlist.h_view(i_next_hole).prtcl_indx;
-          auto rdest = Kokkos::subview(pmy_part->prtcl_rdata, Kokkos::ALL, next_hole);
-          auto rsrc  = Kokkos::subview(pmy_part->prtcl_rdata, Kokkos::ALL, nend);
-          Kokkos::deep_copy(rdest, rsrc);
-          auto idest = Kokkos::subview(pmy_part->prtcl_idata, Kokkos::ALL, next_hole);
-          auto isrc  = Kokkos::subview(pmy_part->prtcl_idata, Kokkos::ALL, nend);
-          Kokkos::deep_copy(idest, isrc);
-          i_next_hole += 1;
-        } else {
-          // this index contains a hole, so do nothing except find new index of last hole
-          i_last_hole -= 1;
-        }
+  // At this point have filled npart_recv holes in particle arrays from sends
+  // If (nprtcl_recv < nprtcl_send), have to move particles from end of arrays to fill
+  // remaining holes
+  int nremain = nprtcl_send - nprtcl_recv;
+  if (nremain > 0) {
+    int &npart = pmy_part->nprtcl_thispack;
+    int i_last_hole = nprtcl_send-1;
+    int i_next_hole = nprtcl_recv;
+    for (int n=1; n<=nremain; ++n) {
+      int nend = npart-n;
+      if (nend > sendlist.h_view(i_last_hole).prtcl_indx) {
+        // copy particle from end into hole
+        int next_hole = sendlist.h_view(i_next_hole).prtcl_indx;
+        auto rdest = Kokkos::subview(pmy_part->prtcl_rdata, Kokkos::ALL, next_hole);
+        auto rsrc  = Kokkos::subview(pmy_part->prtcl_rdata, Kokkos::ALL, nend);
+        Kokkos::deep_copy(rdest, rsrc);
+        auto idest = Kokkos::subview(pmy_part->prtcl_idata, Kokkos::ALL, next_hole);
+        auto isrc  = Kokkos::subview(pmy_part->prtcl_idata, Kokkos::ALL, nend);
+        Kokkos::deep_copy(idest, isrc);
+        i_next_hole += 1;
+      } else {
+        // this index contains a hole, so do nothing except find new index of last hole
+        i_last_hole -= 1;
       }
-
-      // shrink size of particle data arrays
-      Kokkos::resize(pmy_part->prtcl_idata, pmy_part->nidata, new_npart);
-      Kokkos::resize(pmy_part->prtcl_rdata, pmy_part->nrdata, new_npart);
     }
+
+    // shrink size of particle data arrays
+    Kokkos::resize(pmy_part->prtcl_idata, pmy_part->nidata, new_npart);
+    Kokkos::resize(pmy_part->prtcl_rdata, pmy_part->nrdata, new_npart);
   }
 
   // Update nparticles_thisrank.  Update cost array (use npart_thismb[nmb]?)
