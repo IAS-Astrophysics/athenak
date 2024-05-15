@@ -125,10 +125,9 @@ void ComputeAndAddSingleTerm_Velocity(const Real gu_0[4][4], const Real gu_1[4][
 // That prevents singularities for small increments and is used to compute the time derivative of the position
 // Would be nice to come up with a way to compute these terms algorithmically, rather than by hard coding, but thus far I wasn't able to
 KOKKOS_INLINE_FUNCTION
-void HamiltonEquation_Position(const Real * x_0, const Real * x_1, const Real * u_0, const Real * u_1, Real * H){
+void HamiltonEquation_Position(const Real * x_0, const Real * x_1, const Real * u_0, const Real * u_1, const Real spin, Real * H){
 
-	const bool is_minkowski = pmy_pack->pcoord->coord_data.is_minkowski;
-	const Real spin = pmy_pack->pcoord->coord_data.bh_spin;
+	const bool is_minkowski = false; //Since this function is only for the GR pusher, this can be kept as a ``constant''
 	Real glower[4][4], gupper[4][4], ADM_upper[3][3]; // Metric components
 	Real massive = 1.0; //TODO for photons/massless particles this needs to be 0: condition on ptype
 	Real U_1, U_0, perp;
@@ -450,11 +449,9 @@ void HamiltonEquation_Position(const Real * x_0, const Real * x_1, const Real * 
 // That prevents singularities for small increments and is used to compute the time derivative of the velocity
 // Would be nice to come up with a way to compute these terms algorithmically, rather than by hard coding, but thus far I wasn't able to
 KOKKOS_INLINE_FUNCTION
-void HamiltonEquation_Velocity(const Real * x_0, const Real * x_1, const Real * u_0, const Real * u_1, const Real x_step, Real * H){
+void HamiltonEquation_Velocity(const Real * x_0, const Real * x_1, const Real * u_0, const Real * u_1, const Real x_step, const Real spin, const Real it_tol, Real * H){
 
-	const bool is_minkowski = pmy_pack->pcoord->coord_data.is_minkowski;
-	const Real spin = pmy_pack->pcoord->coord_data.bh_spin;
-	const Real it_tol = iter_tolerance;
+	const bool is_minkowski = false; //Since this function is only for the GR pusher, this can be kept as a ``constant''
 	Real gl_0[4][4], gu_0[4][4], gl_1[4][4], gu_1[4][4]; // Metric components
 	Real aux_gl_0[4][4], aux_gu_0[4][4], aux_gl_1[4][4], aux_gu_1[4][4]; // Metric components
 	Real dx, dy, dz, u[3];
@@ -1028,9 +1025,9 @@ void Particles::BorisStep( const Real dt, const bool only_v ){
 //also for half-steps
 //Largely implemented following Bacchini et al. 2020 (https://doi.org/10.3847/1538-4365/abb604)
 void Particles::GeodesicIterations( const Real dt ){
-	auto &pi = prtcl_idata;
 	auto &pr = prtcl_rdata;
 	const Real it_tol = iter_tolerance;
+	const Real spin = pmy_pack->pcoord->coord_data.bh_spin;
 	const int it_max = max_iter;
 	const bool &multi_d = pmy_pack->pmesh->multi_d;
 	const bool &three_d = pmy_pack->pmesh->three_d;
@@ -1043,7 +1040,6 @@ void Particles::GeodesicIterations( const Real dt ){
       //par_for("part_fullgr",DevExeSpace(),0,(nprtcl_thispack-1),
       //KOKKOS_LAMBDA(const int p) {
 
-	//std::cout << "Particle: " << p << " " << pr(IPX,p) << " " << pr(IPY,p) << " " << pr(IPZ,p) << " " << pr(IPVX,p) << " " << pr(IPVY,p) << " " << pr(IPVZ,p) << std::endl;
         // Iterate per particle such that those that converge quicker don't go through as many iterations
 	// Initialize iteration variables
 	Real x_init[3] = {pr(IPX,p), pr(IPY,p), pr(IPZ,p)};
@@ -1065,34 +1061,32 @@ void Particles::GeodesicIterations( const Real dt ){
 		
 	++n_iter;
 
-	HamiltonEquation_Position(x_init, x_eval, v_init, v_eval, RHS_eval_x);
-	HamiltonEquation_Velocity(x_init, x_eval, v_init, v_eval, x_step, RHS_eval_v);
-	//std::cout << "RHS_eval_x: " << RHS_eval_x[0] << " " << RHS_eval_x[1] << " " << RHS_eval_x[2] << std::endl;
-	//std::cout << "RHS_eval_v: " << RHS_eval_v[0] << " " << RHS_eval_v[1] << " " << RHS_eval_v[2] << std::endl;
+	HamiltonEquation_Position(x_init, x_eval, v_init, v_eval, spin, RHS_eval_x);
+	HamiltonEquation_Velocity(x_init, x_eval, v_init, v_eval, x_step, spin, it_tol, RHS_eval_v);
 
 	// First Jacobian for position
 	// Variation along x
 	x_grad[0] = x_eval[0] + x_step;
 	x_grad[1] = x_eval[1]; x_grad[2] = x_eval[2];
-	HamiltonEquation_Position(x_init, x_grad, v_init, v_eval, RHS_grad_1);
+	HamiltonEquation_Position(x_init, x_grad, v_init, v_eval, spin, RHS_grad_1);
 	x_grad[0] = x_eval[0] - x_step;
-	HamiltonEquation_Position(x_init, x_grad, v_init, v_eval, RHS_grad_2);
+	HamiltonEquation_Position(x_init, x_grad, v_init, v_eval, spin, RHS_grad_2);
 	for (int i=0; i<3; ++i) { Jacob[0][i] = - (RHS_grad_1[i] - RHS_grad_2[i])*dt/(2.0*x_step); }
 	Jacob[0][0] += 1.0; // Diagonal terms
 	// Variation along y
 	x_grad[1] = x_eval[1] + x_step;
 	x_grad[0] = x_eval[0]; x_grad[2] = x_eval[2];
-	HamiltonEquation_Position(x_init, x_grad, v_init, v_eval, RHS_grad_1);
+	HamiltonEquation_Position(x_init, x_grad, v_init, v_eval, spin, RHS_grad_1);
 	x_grad[1] = x_eval[1] - x_step;
-	HamiltonEquation_Position(x_init, x_grad, v_init, v_eval, RHS_grad_2);
+	HamiltonEquation_Position(x_init, x_grad, v_init, v_eval, spin, RHS_grad_2);
 	for (int i=0; i<3; ++i) { Jacob[1][i] = - (RHS_grad_1[i] - RHS_grad_2[i])*dt/(2.0*x_step); }
 	Jacob[1][1] += 1.0; // Diagonal terms
 	// Variation along z
 	x_grad[2] = x_eval[2] + x_step;
 	x_grad[0] = x_eval[0]; x_grad[1] = x_eval[1];
-	HamiltonEquation_Position(x_init, x_grad, v_init, v_eval, RHS_grad_1);
+	HamiltonEquation_Position(x_init, x_grad, v_init, v_eval, spin, RHS_grad_1);
 	x_grad[2] = x_eval[2] - x_step;
-	HamiltonEquation_Position(x_init, x_grad, v_init, v_eval, RHS_grad_2);
+	HamiltonEquation_Position(x_init, x_grad, v_init, v_eval, spin, RHS_grad_2);
 	for (int i=0; i<3; ++i) { Jacob[2][i] = - (RHS_grad_1[i] - RHS_grad_2[i])*dt/(2.0*x_step); }
 	Jacob[2][2] += 1.0; // Diagonal terms
 	ComputeInverseMatrix3( Jacob, inv_Jacob );
@@ -1111,25 +1105,25 @@ void Particles::GeodesicIterations( const Real dt ){
 	// and the lower indeces are provided by the rest function itself
 	v_grad[0] = v_eval[0] + v_step;
 	v_grad[1] = v_eval[1]; v_grad[2] = v_eval[2];
-	HamiltonEquation_Velocity(x_init, x_grad, v_init, v_grad, x_step, RHS_grad_1);
+	HamiltonEquation_Velocity(x_init, x_grad, v_init, v_grad, x_step, spin, it_tol, RHS_grad_1);
 	v_grad[0] = v_eval[0] - v_step;
-	HamiltonEquation_Velocity(x_init, x_grad, v_init, v_grad, x_step, RHS_grad_2);
+	HamiltonEquation_Velocity(x_init, x_grad, v_init, v_grad, x_step, spin, it_tol, RHS_grad_2);
 	for (int i=0; i<3; ++i) { Jacob[i][0] = - (RHS_grad_1[i] - RHS_grad_2[i])*dt/(2.0*v_step); }
 	Jacob[0][0] += 1.0; // Diagonal terms
 	// Variation along y
 	v_grad[1] = v_eval[1] + v_step;
 	v_grad[0] = v_eval[0]; v_grad[2] = v_eval[2];
-	HamiltonEquation_Velocity(x_init, x_grad, v_init, v_grad, x_step, RHS_grad_1);
+	HamiltonEquation_Velocity(x_init, x_grad, v_init, v_grad, x_step, spin, it_tol, RHS_grad_1);
 	v_grad[1] = v_eval[1] - v_step;
-	HamiltonEquation_Velocity(x_init, x_grad, v_init, v_grad, x_step, RHS_grad_2);
+	HamiltonEquation_Velocity(x_init, x_grad, v_init, v_grad, x_step, spin, it_tol, RHS_grad_2);
 	for (int i=0; i<3; ++i) { Jacob[i][1] = - (RHS_grad_1[i] - RHS_grad_2[i])*dt/(2.0*v_step); }
 	Jacob[1][1] += 1.0; // Diagonal terms
 	// Variation along z
 	v_grad[2] = v_eval[2] + v_step;
 	v_grad[0] = v_eval[0]; v_grad[1] = v_eval[1];
-	HamiltonEquation_Velocity(x_init, x_grad, v_init, v_grad, x_step, RHS_grad_1);
+	HamiltonEquation_Velocity(x_init, x_grad, v_init, v_grad, x_step, spin, it_tol, RHS_grad_1);
 	v_grad[2] = v_eval[2] - v_step;
-	HamiltonEquation_Velocity(x_init, x_grad, v_init, v_grad, x_step, RHS_grad_2);
+	HamiltonEquation_Velocity(x_init, x_grad, v_init, v_grad, x_step, spin, it_tol, RHS_grad_2);
 	for (int i=0; i<3; ++i) { Jacob[i][2] = - (RHS_grad_1[i] - RHS_grad_2[i])*dt/(2.0*v_step); }
 	Jacob[2][2] += 1.0; // Diagonal terms
 	ComputeInverseMatrix3( Jacob, inv_Jacob );
@@ -1144,8 +1138,6 @@ void Particles::GeodesicIterations( const Real dt ){
 	for (int i=0; i<3; ++i) { x_prev[i] = x_grad[i]; }
 	for (int i=0; i<3; ++i) { v_prev[i] = v_grad[i]; }
 
-        //std::cout << "x_diff " << sqrt(SQR(x_eval[0] - x_prev[0]) + SQR(x_eval[1] - x_prev[1]) + SQR(x_eval[2] - x_prev[2])) << std::endl;
-        //std::cout << "u_diff " << sqrt(SQR(v_eval[0] - v_prev[0]) + SQR(v_eval[1] - v_prev[1]) + SQR(v_eval[2] - v_prev[2])) << std::endl;
 	}while(
 		n_iter < it_max
 		&& ( sqrt(SQR(x_eval[0] - x_prev[0]) + SQR(x_eval[1] - x_prev[1]) + SQR(x_eval[2] - x_prev[2])) > it_tol
@@ -1154,7 +1146,6 @@ void Particles::GeodesicIterations( const Real dt ){
 
 	//if (n_iter == it_max) { std::cout << "Limit of iterations reached on particle " << pi(PTAG,p) << " on rank " << global_variable::my_rank << std::endl; }
 
-	//std::cout << "Particle " << p << ": " << n_iter << " iteration(s)." << std::endl;
 	// Done with iterations, update ``true'' values
 	pr(IPVX,p) = v_eval[0];
         if (multi_d) { pr(IPVY,p) = v_eval[1]; }
@@ -1163,7 +1154,6 @@ void Particles::GeodesicIterations( const Real dt ){
         if (multi_d) { pr(IPY,p) = x_eval[1]; }
         if (three_d) { pr(IPZ,p) = x_eval[2]; }
 	aux_n_iter += n_iter;
-	//std::cout << "Particle: " << p << " " << pr(IPX,p) << " " << pr(IPY,p) << " " << pr(IPZ,p) << " " << pr(IPVX,p) << " " << pr(IPVY,p) << " " << pr(IPVZ,p) << std::endl;
       }, Kokkos::Sum<Real>(avg_iter));
       average_iteration_number += avg_iter / nprtcl_thispack;
       return;
