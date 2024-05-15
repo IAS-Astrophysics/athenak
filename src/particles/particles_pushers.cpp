@@ -10,8 +10,6 @@
 #include "mesh/mesh.hpp"
 #include "driver/driver.hpp"
 #include "particles.hpp"
-#include "coordinates/cell_locations.hpp"
-#include "coordinates/cartesian_ks.hpp"
 
 namespace particles {
 //----------------------------------------------------------------------------------------
