@@ -164,6 +164,15 @@ KOKKOS_INLINE_FUNCTION Real dot(T2 a, T2 b) {
 }
 
 template<typename T1, typename T2>
+KOKKOS_INLINE_FUNCTION Real dot(int i, T1 a, T2 b) {
+  Real result = 0.;
+  for (int j = 0; j < a.extent(0); j++) {
+    result += a(i, j) * b(j);
+  }
+  return result;
+}
+
+template<typename T1, typename T2>
 KOKKOS_INLINE_FUNCTION void dot(T1 a, T2 b, T2 result) {
   for (int i = 0; i < a.extent(0); i++) {
     result(i) = 0;
@@ -182,13 +191,8 @@ KOKKOS_INLINE_FUNCTION void uBiCGSTAB(T1 A_test, T2 b_test, T2 x0, T2 rhat0, T2 
   for (int i = 0; i < num_rows; i++) {
     x0(i) = 0;
     rhat0(i) = 0;
-
-    r0(i) = b_test(i);
-    for (int j = 0; j < num_rows; j++) {
-      r0(i) -= A_test(i, j) * x0(j);
-    }
+    r0(i) = b_test(i) - dot<T1, T2>(i, A_test, x0);
   }
-
 
   rho0 = dot<T2>(rhat0, r0);
   Kokkos::deep_copy(p0, r0);
