@@ -140,7 +140,7 @@ TaskStatus RadiationFEMN::ExpRKUpdate(Driver *pdriver, int stage) {
                   for (int a = 0; a < 3; ++a) {
                     dbeta_du(0, a) = Dx<NGHOST>(0, deltax, adm.beta_u, m, a, k, j, i);
                     dbeta_du(1, a) = (multi_d) ? Dx<NGHOST>(1, deltax, adm.beta_u, m, a, k, j, i) : 0.;
-                    dbeta_du(1, a) = (three_d) ? Dx<NGHOST>(1, deltax, adm.beta_u, m, a, k, j, i) : 0.;
+                    dbeta_du(2, a) = (three_d) ? Dx<NGHOST>(2, deltax, adm.beta_u, m, a, k, j, i) : 0.;
                   }
 
                   // covariant shift (beta_i)
@@ -173,6 +173,7 @@ TaskStatus RadiationFEMN::ExpRKUpdate(Driver *pdriver, int stage) {
                                      dtg_dd(1, 1) * adm.beta_u(m, 1, k, j, i) * adm.beta_u(m, 1, k, j, i)
                                      + 2. * dtg_dd(1, 2) * adm.beta_u(m, 1, k, j, i) * adm.beta_u(m, 2, k, j, i) +
                                      dtg_dd(2, 2) * adm.beta_u(m, 2, k, j, i) * adm.beta_u(m, 2, k, j, i);
+
                   for (int a = 1; a < 4; ++a) {
                     dg4_ddd(0, a, 0) = adm.g_dd(m, 0, 0, k, j, i) * dtbetax_du + adm.g_dd(m, 0, 1, k, j, i) * dtbetay_du + adm.g_dd(m, 0, 2, k, j, i) * dtbetaz_du
                                        + dtg_dd(a - 1, 0) * adm.beta_u(m, 0, k, j, i) + dtg_dd(a - 1, 1) * adm.beta_u(m, 1, k, j, i) + dtg_dd(a - 1, 2) * adm.beta_u(m, 2, k, j, i);
