@@ -62,6 +62,8 @@ TaskStatus ParticlesBoundaryValues::SetNewPrtclGID() {
   auto &psendl = sendlist;
   int counter=0;
   int *pcounter = &counter;
+  bool &multi_d = pmy_part->pmy_pack->pmesh->multi_d;
+  bool &three_d = pmy_part->pmy_pack->pmesh->three_d;
 
   Kokkos::realloc(sendlist, static_cast<int>(0.1*npart));
   par_for("part_update",DevExeSpace(),0,(npart-1), KOKKOS_LAMBDA(const int p) {
@@ -85,6 +87,8 @@ TaskStatus ParticlesBoundaryValues::SetNewPrtclGID() {
     int fx = (x1 < 0.5*(mbsize.d_view(m).x1min + mbsize.d_view(m).x1max))? 0 : 1;
     int fy = (x2 < 0.5*(mbsize.d_view(m).x2min + mbsize.d_view(m).x2max))? 0 : 1;
     int fz = (x3 < 0.5*(mbsize.d_view(m).x3min + mbsize.d_view(m).x3max))? 0 : 1;
+    fy = multi_d ? fy : 0;
+    fz = three_d ? fz : 0;
 
     // only update particle GID if it has crossed MeshBlock boundary
     if ((abs(ix) + abs(iy) + abs(iz)) != 0) {
