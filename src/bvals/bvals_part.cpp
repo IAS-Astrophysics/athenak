@@ -17,6 +17,7 @@
 #include "athena.hpp"
 #include "globals.hpp"
 #include "parameter_input.hpp"
+#include "mesh/nghbr_index.hpp"
 #include "mesh/mesh.hpp"
 #include "particles/particles.hpp"
 #include "bvals.hpp"
@@ -53,142 +54,120 @@ TaskStatus ParticlesBoundaryValues::SetNewPrtclGID() {
   auto &pr = pmy_part->prtcl_rdata;
   auto &pi = pmy_part->prtcl_idata;
   int npart = pmy_part->nprtcl_thispack;
-  auto mbsize = pmy_part->pmy_pack->pmb->mb_size;
-  auto meshsize = pmy_part->pmy_pack->pmesh->mesh_size;
+  auto &mbsize = pmy_part->pmy_pack->pmb->mb_size;
+  auto &mblev = pmy_part->pmy_pack->pmb->mb_lev;
+  auto &meshsize = pmy_part->pmy_pack->pmesh->mesh_size;
   auto myrank = global_variable::my_rank;
-  auto nghbr = pmy_part->pmy_pack->pmb->nghbr;
+  auto &nghbr = pmy_part->pmy_pack->pmb->nghbr;
   auto &psendl = sendlist;
   int counter=0;
   int *pcounter = &counter;
+  bool &multi_d = pmy_part->pmy_pack->pmesh->multi_d;
+  bool &three_d = pmy_part->pmy_pack->pmesh->three_d;
 
   Kokkos::realloc(sendlist, static_cast<int>(0.1*npart));
   par_for("part_update",DevExeSpace(),0,(npart-1), KOKKOS_LAMBDA(const int p) {
     int m = pi(PGID,p) - gids;
+    int mylevel = mblev.d_view(m);
     Real x1 = pr(IPX,p);
     Real x2 = pr(IPY,p);
     Real x3 = pr(IPZ,p);
 
-    if (x1 < mbsize.d_view(m).x1min) {
-      if (x2 < mbsize.d_view(m).x2min) {
-        if (x3 < mbsize.d_view(m).x3min) {
-          // corner
-          UpdateGID(pi(PGID,p), nghbr.d_view(m,48), myrank, pcounter, psendl, p);
-        } else if (x3 > mbsize.d_view(m).x3max) {
-          // corner
-          UpdateGID(pi(PGID,p), nghbr.d_view(m,52), myrank, pcounter, psendl, p);
-        } else {
-          // x1x2 edge
-          UpdateGID(pi(PGID,p), nghbr.d_view(m,16), myrank, pcounter, psendl, p);
-        }
-      } else if (x2 > mbsize.d_view(m).x2max) {
-        if (x3 < mbsize.d_view(m).x3min) {
-          // corner
-          UpdateGID(pi(PGID,p), nghbr.d_view(m,50), myrank, pcounter, psendl, p);
-        } else if (x3 > mbsize.d_view(m).x3max) {
-          // corner
-          UpdateGID(pi(PGID,p), nghbr.d_view(m,54), myrank, pcounter, psendl, p);
-        } else {
-          // x1x2 edge
-          UpdateGID(pi(PGID,p), nghbr.d_view(m,20), myrank, pcounter, psendl, p);
-        }
-      } else {
-        if (x3 < mbsize.d_view(m).x3min) {
-          // x3x1 edge
-          UpdateGID(pi(PGID,p), nghbr.d_view(m,32), myrank, pcounter, psendl, p);
-        } else if (x3 > mbsize.d_view(m).x3max) {
-          // x3x1 edge
-          UpdateGID(pi(PGID,p), nghbr.d_view(m,36), myrank, pcounter, psendl, p);
-        } else {
+    // length of MeshBlock in each direction
+    Real lx = (mbsize.d_view(m).x1max - mbsize.d_view(m).x1min);
+    Real ly = (mbsize.d_view(m).x2max - mbsize.d_view(m).x2min);
+    Real lz = (mbsize.d_view(m).x3max - mbsize.d_view(m).x3min);
+
+    // integer offset of particle relative to center of MeshBlock (-1,0,+1)
+    int ix = static_cast<int>((x1 - mbsize.d_view(m).x1min + lx)/lx) - 1;
+    int iy = static_cast<int>((x2 - mbsize.d_view(m).x2min + ly)/ly) - 1;
+    int iz = static_cast<int>((x3 - mbsize.d_view(m).x3min + lz)/lz) - 1;
+
+    // sublock indices for faces and edges with S/AMR
+    int fx = (x1 < 0.5*(mbsize.d_view(m).x1min + mbsize.d_view(m).x1max))? 0 : 1;
+    int fy = (x2 < 0.5*(mbsize.d_view(m).x2min + mbsize.d_view(m).x2max))? 0 : 1;
+    int fz = (x3 < 0.5*(mbsize.d_view(m).x3min + mbsize.d_view(m).x3max))? 0 : 1;
+    fy = multi_d ? fy : 0;
+    fz = three_d ? fz : 0;
+
+    // only update particle GID if it has crossed MeshBlock boundary
+    if ((abs(ix) + abs(iy) + abs(iz)) != 0) {
+      if (iz == 0) {
+        if (iy == 0) {
           // x1 face
-          UpdateGID(pi(PGID,p), nghbr.d_view(m,0), myrank, pcounter, psendl, p);
-        }
-      }
-
-    } else if (x1 > mbsize.d_view(m).x1max) {
-      if (x2 < mbsize.d_view(m).x2min) {
-        if (x3 < mbsize.d_view(m).x3min) {
-          // corner
-          UpdateGID(pi(PGID,p), nghbr.d_view(m,49), myrank, pcounter, psendl, p);
-        } else if (x3 > mbsize.d_view(m).x3max) {
-          // corner
-          UpdateGID(pi(PGID,p), nghbr.d_view(m,53), myrank, pcounter, psendl, p);
+          int indx = NeighborIndex(ix,0,0,0,0);           // neighbor at same level
+          if (nghbr.d_view(m,indx).lev > mylevel) {       // neighbor at finer level
+            indx = NeighborIndex(ix,0,0,fy,fz);
+          }
+          while (nghbr.d_view(m,indx).gid < 0) {indx++;}  // neighbor at coarser level
+          UpdateGID(pi(PGID,p), nghbr.d_view(m,indx), myrank, pcounter, psendl, p);
+        } else if (ix == 0) {
+          // x2 face
+          int indx = NeighborIndex(0,iy,0,0,0);
+          if (nghbr.d_view(m,indx).lev > mylevel) {
+            indx = NeighborIndex(0,iy,0,fx,fz);
+          }
+          while (nghbr.d_view(m,indx).gid < 0) {indx++;}
+          UpdateGID(pi(PGID,p), nghbr.d_view(m,indx), myrank, pcounter, psendl, p);
         } else {
           // x1x2 edge
-          UpdateGID(pi(PGID,p), nghbr.d_view(m,18), myrank, pcounter, psendl, p);
+          int indx = NeighborIndex(ix,iy,0,0,0);
+          if (nghbr.d_view(m,indx).lev > mylevel) {
+            indx = NeighborIndex(ix,iy,0,fz,0);
+          }
+          while (nghbr.d_view(m,indx).gid < 0) {indx++;}
+          UpdateGID(pi(PGID,p), nghbr.d_view(m,indx), myrank, pcounter, psendl, p);
         }
-      } else if (x2 > mbsize.d_view(m).x2max) {
-        if (x3 < mbsize.d_view(m).x3min) {
-          // corner
-          UpdateGID(pi(PGID,p), nghbr.d_view(m,51), myrank, pcounter, psendl, p);
-        } else if (x3 > mbsize.d_view(m).x3max) {
-          // corner
-          UpdateGID(pi(PGID,p), nghbr.d_view(m,55), myrank, pcounter, psendl, p);
+      } else if (iy == 0) {
+        if (ix == 0) {
+          // x3 face
+          int indx = NeighborIndex(0,0,iz,0,0);
+          if (nghbr.d_view(m,indx).lev > mylevel) {
+            indx = NeighborIndex(0,0,iz,fx,fy);
+          }
+          while (nghbr.d_view(m,indx).gid < 0) {indx++;}
+          UpdateGID(pi(PGID,p), nghbr.d_view(m,indx), myrank, pcounter, psendl, p);
         } else {
-          // x1x2 edge
-          UpdateGID(pi(PGID,p), nghbr.d_view(m,22), myrank, pcounter, psendl, p);
+          // x3x1 edge
+          int indx = NeighborIndex(ix,0,iz,0,0);
+          if (nghbr.d_view(m,indx).lev > mylevel) {
+            indx = NeighborIndex(ix,0,iz,fy,0);
+          }
+          while (nghbr.d_view(m,indx).gid < 0) {indx++;}
+          UpdateGID(pi(PGID,p), nghbr.d_view(m,indx), myrank, pcounter, psendl, p);
         }
       } else {
-        if (x3 < mbsize.d_view(m).x3min) {
-          // x3x1 edge
-          UpdateGID(pi(PGID,p), nghbr.d_view(m,34), myrank, pcounter, psendl, p);
-        } else if (x3 > mbsize.d_view(m).x3max) {
-          // x3x1 edge
-          UpdateGID(pi(PGID,p), nghbr.d_view(m,38), myrank, pcounter, psendl, p);
+        if (ix == 0) {
+          // x2x3 edge
+          int indx = NeighborIndex(0,iy,iz,0,0);
+          if (nghbr.d_view(m,indx).lev > mylevel) {
+            indx = NeighborIndex(0,iy,iz,fx,0);
+          }
+          while (nghbr.d_view(m,indx).gid < 0) {indx++;}
+          UpdateGID(pi(PGID,p), nghbr.d_view(m,indx), myrank, pcounter, psendl, p);
         } else {
-          // x1 face
-          UpdateGID(pi(PGID,p), nghbr.d_view(m,4), myrank, pcounter, psendl, p);
+          // corners
+          int indx = NeighborIndex(ix,iy,iz,0,0);
+          UpdateGID(pi(PGID,p), nghbr.d_view(m,indx), myrank, pcounter, psendl, p);
         }
       }
 
-    } else {
-      if (x2 < mbsize.d_view(m).x2min) {
-        if (x3 < mbsize.d_view(m).x3min) {
-          // x2x3 edge
-          UpdateGID(pi(PGID,p), nghbr.d_view(m,40), myrank, pcounter, psendl, p);
-        } else if (x3 > mbsize.d_view(m).x3max) {
-          // x2x3 edge
-          UpdateGID(pi(PGID,p), nghbr.d_view(m,44), myrank, pcounter, psendl, p);
-        } else {
-          // x2 face
-          UpdateGID(pi(PGID,p), nghbr.d_view(m,8), myrank, pcounter, psendl, p);
-        }
-      } else if (x2 > mbsize.d_view(m).x2max) {
-        if (x3 < mbsize.d_view(m).x3min) {
-          // x2x3 edge
-          UpdateGID(pi(PGID,p), nghbr.d_view(m,42), myrank, pcounter, psendl, p);
-        } else if (x3 > mbsize.d_view(m).x3max) {
-          // x2x3 edge
-          UpdateGID(pi(PGID,p), nghbr.d_view(m,46), myrank, pcounter, psendl, p);
-        } else {
-          // x2 face
-          UpdateGID(pi(PGID,p), nghbr.d_view(m,12), myrank, pcounter, psendl, p);
-        }
-      } else {
-        if (x3 < mbsize.d_view(m).x3min) {
-          // x3 face
-          UpdateGID(pi(PGID,p), nghbr.d_view(m,24), myrank, pcounter, psendl, p);
-        } else if (x3 > mbsize.d_view(m).x3max) {
-          // x3 face
-          UpdateGID(pi(PGID,p), nghbr.d_view(m,28), myrank, pcounter, psendl, p);
-        }
+      // reset x,y,z positions if particle crosses Mesh boundary using periodic BCs
+      if (x1 < meshsize.x1min) {
+        pr(IPX,p) += (meshsize.x1max - meshsize.x1min);
+      } else if (x1 > meshsize.x1max) {
+        pr(IPX,p) -= (meshsize.x1max - meshsize.x1min);
       }
-    }
-
-    // reset x,y,z positions if particle crosses Mesh boundary using periodic BCs
-    if (x1 < meshsize.x1min) {
-      pr(IPX,p) += (meshsize.x1max - meshsize.x1min);
-    } else if (x1 > meshsize.x1max) {
-      pr(IPX,p) -= (meshsize.x1max - meshsize.x1min);
-    }
-    if (x2 < meshsize.x2min) {
-      pr(IPY,p) += (meshsize.x2max - meshsize.x2min);
-    } else if (x2 > meshsize.x2max) {
-      pr(IPY,p) -= (meshsize.x2max - meshsize.x2min);
-    }
-    if (x3 < meshsize.x3min) {
-      pr(IPZ,p) += (meshsize.x3max - meshsize.x3min);
-    } else if (x3 > meshsize.x3max) {
-      pr(IPZ,p) -= (meshsize.x3max - meshsize.x3min);
+      if (x2 < meshsize.x2min) {
+        pr(IPY,p) += (meshsize.x2max - meshsize.x2min);
+      } else if (x2 > meshsize.x2max) {
+        pr(IPY,p) -= (meshsize.x2max - meshsize.x2min);
+      }
+      if (x3 < meshsize.x3min) {
+        pr(IPZ,p) += (meshsize.x3max - meshsize.x3min);
+      } else if (x3 > meshsize.x3max) {
+        pr(IPZ,p) -= (meshsize.x3max - meshsize.x3min);
+      }
     }
   });
   nprtcl_send = counter;
@@ -487,7 +466,7 @@ TaskStatus ParticlesBoundaryValues::RecvAndUnpackPrtcls() {
     auto &pi = pmy_part->prtcl_idata;
     auto &rrecvbuf = prtcl_rrecvbuf;
     auto &irecvbuf = prtcl_irecvbuf;
-    int npart = pmy_part->nprtcl_thispack;
+    int &npart = pmy_part->nprtcl_thispack;
     par_for("punpack",DevExeSpace(),0,(nprtcl_recv-1), KOKKOS_LAMBDA(const int n) {
       int p;
       if (n < nprtcl_send) {
@@ -502,36 +481,37 @@ TaskStatus ParticlesBoundaryValues::RecvAndUnpackPrtcls() {
         pr(i,p) = rrecvbuf(nrdata*n + i);
       }
     });
+  }
 
-    // At this point have filled npart_recv holes in particle arrays from sends
-    // If (nprtcl_recv < nprtcl_send), have to move particles from end of arrays to fill
-    // remaining holes
-    int nremain = nprtcl_send - nprtcl_recv;
-    if (nremain > 0) {
-      int i_last_hole = nprtcl_send-1;
-      int i_next_hole = nprtcl_recv;
-      for (int n=1; n<=nremain; ++n) {
-        int nend = npart-n;
-        if (nend > sendlist.h_view(i_last_hole).prtcl_indx) {
-          // copy particle from end into hole
-          int next_hole = sendlist.h_view(i_next_hole).prtcl_indx;
-          auto rdest = Kokkos::subview(pmy_part->prtcl_rdata, Kokkos::ALL, next_hole);
-          auto rsrc  = Kokkos::subview(pmy_part->prtcl_rdata, Kokkos::ALL, nend);
-          Kokkos::deep_copy(rdest, rsrc);
-          auto idest = Kokkos::subview(pmy_part->prtcl_idata, Kokkos::ALL, next_hole);
-          auto isrc  = Kokkos::subview(pmy_part->prtcl_idata, Kokkos::ALL, nend);
-          Kokkos::deep_copy(idest, isrc);
-          i_next_hole += 1;
-        } else {
-          // this index contains a hole, so do nothing except find new index of last hole
-          i_last_hole -= 1;
-        }
+  // At this point have filled npart_recv holes in particle arrays from sends
+  // If (nprtcl_recv < nprtcl_send), have to move particles from end of arrays to fill
+  // remaining holes
+  int nremain = nprtcl_send - nprtcl_recv;
+  if (nremain > 0) {
+    int &npart = pmy_part->nprtcl_thispack;
+    int i_last_hole = nprtcl_send-1;
+    int i_next_hole = nprtcl_recv;
+    for (int n=1; n<=nremain; ++n) {
+      int nend = npart-n;
+      if (nend > sendlist.h_view(i_last_hole).prtcl_indx) {
+        // copy particle from end into hole
+        int next_hole = sendlist.h_view(i_next_hole).prtcl_indx;
+        auto rdest = Kokkos::subview(pmy_part->prtcl_rdata, Kokkos::ALL, next_hole);
+        auto rsrc  = Kokkos::subview(pmy_part->prtcl_rdata, Kokkos::ALL, nend);
+        Kokkos::deep_copy(rdest, rsrc);
+        auto idest = Kokkos::subview(pmy_part->prtcl_idata, Kokkos::ALL, next_hole);
+        auto isrc  = Kokkos::subview(pmy_part->prtcl_idata, Kokkos::ALL, nend);
+        Kokkos::deep_copy(idest, isrc);
+        i_next_hole += 1;
+      } else {
+        // this index contains a hole, so do nothing except find new index of last hole
+        i_last_hole -= 1;
       }
-
-      // shrink size of particle data arrays
-      Kokkos::resize(pmy_part->prtcl_idata, pmy_part->nidata, new_npart);
-      Kokkos::resize(pmy_part->prtcl_rdata, pmy_part->nrdata, new_npart);
     }
+
+    // shrink size of particle data arrays
+    Kokkos::resize(pmy_part->prtcl_idata, pmy_part->nidata, new_npart);
+    Kokkos::resize(pmy_part->prtcl_rdata, pmy_part->nrdata, new_npart);
   }
 
   // Update nparticles_thisrank.  Update cost array (use npart_thismb[nmb]?)
