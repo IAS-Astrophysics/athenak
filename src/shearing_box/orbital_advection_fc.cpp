@@ -23,7 +23,7 @@
 #include "remap_fluxes.hpp"
 
 //----------------------------------------------------------------------------------------
-// OrbitalAdvectionFC constructor:
+// OrbitalAdvectionFC derived class constructor:
 
 OrbitalAdvectionFC::OrbitalAdvectionFC(MeshBlockPack *pp, ParameterInput *pin, int nv) :
   OrbitalAdvection(pp, pin, nv) {

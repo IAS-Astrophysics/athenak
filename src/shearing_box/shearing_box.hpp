@@ -65,6 +65,11 @@ class OrbitalAdvection {
   MPI_Comm comm_orb_advect;
 #endif
 
+  // functions
+  TaskStatus InitRecv();
+  TaskStatus ClearRecv();
+  TaskStatus ClearSend();
+
  protected:
   // must use pointer to MBPack and not parent physics module since parent can be one of
   // many types (Hydro, MHD, Radiation, etc.)

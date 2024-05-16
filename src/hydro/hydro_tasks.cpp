@@ -93,6 +93,16 @@ TaskStatus Hydro::InitRecv(Driver *pdrive, int stage) {
   if (pmy_pack->pmesh->multilevel && (stage >= 0)) {
     tstat = pbval_u->InitFluxRecv(nhydro+nscalars);
   }
+  if (tstat != TaskStatus::complete) return tstat;
+
+  // with shearing box post receives for U
+  // only execute when (shearing box defined) AND (last stage) AND (3D OR 2d_r_phi)
+  if ((psrc->shearing_box) && (stage == pdrive->nexp_stages) &&
+      (pmy_pack->pmesh->three_d || psrc->shearing_box_r_phi)) {
+    tstat = porb_u->InitRecv();
+  }
+  if (tstat != TaskStatus::complete) return tstat;
+
   return tstat;
 }
 
@@ -355,6 +365,15 @@ TaskStatus Hydro::ClearSend(Driver *pdrive, int stage) {
   if (pmy_pack->pmesh->multilevel && (stage >= 0)) {
     tstat = pbval_u->ClearFluxSend();
   }
+  if (tstat != TaskStatus::complete) return tstat;
+
+  // with shearing box check sends of U complete
+  // only execute when (shearing box defined) AND (last stage) AND (3D OR 2d_r_phi)
+  if ((psrc->shearing_box) && (stage == pdrive->nexp_stages) &&
+      (pmy_pack->pmesh->three_d || psrc->shearing_box_r_phi)) {
+    tstat = porb_u->ClearSend();
+  }
+  if (tstat != TaskStatus::complete) return tstat;
 
   return tstat;
 }
@@ -374,6 +393,16 @@ TaskStatus Hydro::ClearRecv(Driver *pdrive, int stage) {
   if (pmy_pack->pmesh->multilevel && (stage >= 0)) {
     tstat = pbval_u->ClearFluxRecv();
   }
+  if (tstat != TaskStatus::complete) return tstat;
+
+  // with shearing box check receives of U complete
+  // only execute when (shearing box defined) AND (last stage) AND (3D OR 2d_r_phi)
+  if ((psrc->shearing_box) && (stage == pdrive->nexp_stages) &&
+      (pmy_pack->pmesh->three_d || psrc->shearing_box_r_phi)) {
+    tstat = porb_u->ClearRecv();
+  }
+  if (tstat != TaskStatus::complete) return tstat;
+
   return tstat;
 }
 

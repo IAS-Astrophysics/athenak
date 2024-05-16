@@ -4,19 +4,22 @@
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
 //! \file field_loop.cpp
-//! \brief Problem generator for advection of a field loop test.
+//! \brief Problem generator for advection tests with and without the shearing box. Can be
+//! used with Hydro, but only for advection of density cylinders in shearing box.  Can be
+//! used in MHD for advection of field loop both with and without shearing box.
 //!
 //! Can only be run in 2D or 3D.  Input parameters are:
 //!  -  problem/rad   = radius of field loop
 //!  -  problem/amp   = amplitude of vector potential (and therefore B)
 //!  -  problem/drat  = density ratio in loop, to test density advection and conduction
-//! The flow is automatically set to run along the diagonal.
+//! Without the shearing box the flow is automatically set to run along the diagonal.
 //!
 //! Various test cases are possible:
 //!  - (iprob=1): field loop in x1-x2 plane (cylinder in 3D)
 //!  - (iprob=2): field loop in x2-x3 plane (cylinder in 3D)
 //!  - (iprob=3): field loop in x3-x1 plane (cylinder in 3D)
 //!  - (iprob=4): rotated cylindrical field loop in 3D.
+//! Only iprob=1,4 work with the shearing box.
 //!
 //! REFERENCE: T. Gardiner & J.M. Stone, "An unsplit Godunov method for ideal MHD via
 //! constrined transport", JCP, 205, 509 (2005)

@@ -41,7 +41,7 @@ ShearingBoxBoundary::ShearingBoxBoundary(MeshBlockPack *ppack, ParameterInput *p
       recvbuf.vars_req[m] = MPI_REQUEST_NULL;
     }
   // create unique communicators for shearing box
-  MPI_Comm_dup(MPI_COMM_WORLD, &comm_orb_advect);
+  MPI_Comm_dup(MPI_COMM_WORLD, &comm_sbox);
 #endif
 
   // --- Step 2.  Initialize data for shearing sheet BCs
