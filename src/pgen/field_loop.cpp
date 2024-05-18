@@ -63,8 +63,8 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   Real ly = msize.x2max - msize.x2min;
   Real lz = msize.x3max - msize.x3min;
   Real x0 = msize.x1min, y0 = msize.x2min;
-  Real xpt[5] = {(x0+0.25*lx), (x0+0.25*lx), (x0+0.5*lx), (x0+0.75*lx), (x0+0.75*lx)};
-  Real ypt[5] = {(y0+0.25*ly), (y0+0.75*ly), (y0+0.5*ly), (y0+0.25*ly), (y0+0.75*ly)};
+  Real xpt[5] = {(x0+0.2*lx), (x0+0.3*lx), (x0+0.5*lx), (x0+0.8*lx), (x0+0.7*lx)};
+  Real ypt[5] = {(y0+0.3*ly), (y0+0.7*ly), (y0+0.5*ly), (y0+0.2*ly), (y0+0.8*ly)};
   auto three_d = pmy_mesh_->three_d;
   Real diag;
   if (three_d) {

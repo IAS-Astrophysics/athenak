@@ -49,12 +49,12 @@ void MHD::AssembleMHDTasks(std::map<std::string, std::shared_ptr<TaskList>> tl) 
   id.recvf   = tl["stagen"]->AddTask(&MHD::RecvFlux, this, id.sendf);
   id.rkupdt  = tl["stagen"]->AddTask(&MHD::RKUpdate, this, id.recvf);
   id.srctrms = tl["stagen"]->AddTask(&MHD::MHDSrcTerms, this, id.rkupdt);
-  id.senduoa = tl["stagen"]->AddTask(&MHD::SendU_OA, this, id.efldsrc);
+  id.senduoa = tl["stagen"]->AddTask(&MHD::SendU_OA, this, id.srctrms);
   id.recvuoa = tl["stagen"]->AddTask(&MHD::RecvU_OA, this, id.senduoa);
   id.restu   = tl["stagen"]->AddTask(&MHD::RestrictU, this, id.recvuoa);
   id.sendu   = tl["stagen"]->AddTask(&MHD::SendU, this, id.restu);
   id.recvu   = tl["stagen"]->AddTask(&MHD::RecvU, this, id.sendu);
-  id.efld    = tl["stagen"]->AddTask(&MHD::CornerE, this, id.srctrms);
+  id.efld    = tl["stagen"]->AddTask(&MHD::CornerE, this, id.recvu);
   id.efldsrc = tl["stagen"]->AddTask(&MHD::EFieldSrc, this, id.efld);
   id.sende   = tl["stagen"]->AddTask(&MHD::SendE, this, id.efldsrc);
   id.recve   = tl["stagen"]->AddTask(&MHD::RecvE, this, id.sende);
@@ -108,6 +108,7 @@ TaskStatus MHD::InitRecv(Driver *pdrive, int stage) {
   tstat = pbval_b->InitRecv(3);
   if (tstat != TaskStatus::complete) return tstat;
 
+  // post receives for fluxes of U (with AMR/SMR) and B (always)
   // do not post receives for fluxes when stage < 0 (i.e. ICs)
   if (stage >= 0) {
     // with SMR/AMR, post receives for fluxes of U
@@ -115,9 +116,18 @@ TaskStatus MHD::InitRecv(Driver *pdrive, int stage) {
       tstat = pbval_u->InitFluxRecv(nmhd+nscalars);
       if (tstat != TaskStatus::complete) return tstat;
     }
-
     // post receives for fluxes of B, which are used even with uniform grids
     tstat = pbval_b->InitFluxRecv(3);
+    if (tstat != TaskStatus::complete) return tstat;
+  }
+
+  // post receives for U and B with shearing box
+  // only execute when (shearing box defined) AND (last stage) AND (3D OR 2d_r_phi)
+  if ((psrc->shearing_box) && (stage == pdrive->nexp_stages) &&
+      (pmy_pack->pmesh->three_d || psrc->shearing_box_r_phi)) {
+    tstat = porb_u->InitRecv();
+    if (tstat != TaskStatus::complete) return tstat;
+    tstat = porb_b->InitRecv();
     if (tstat != TaskStatus::complete) return tstat;
   }
 
@@ -453,6 +463,7 @@ TaskStatus MHD::ClearSend(Driver *pdrive, int stage) {
   tstat = pbval_b->ClearSend();
   if (tstat != TaskStatus::complete) return tstat;
 
+  // check sends for fluxes of U (with AMR/SMR) and B (always) are complete
   // do not check flux send for ICs (stage < 0)
   if (stage >= 0) {
     // with SMR/AMR check sends of restricted fluxes of U complete
@@ -460,9 +471,18 @@ TaskStatus MHD::ClearSend(Driver *pdrive, int stage) {
       tstat = pbval_u->ClearFluxSend();
       if (tstat != TaskStatus::complete) return tstat;
     }
-
     // check sends of restricted fluxes of B complete even for uniform grids
     tstat = pbval_b->ClearFluxSend();
+    if (tstat != TaskStatus::complete) return tstat;
+  }
+
+  // check sends for U and B with shearing box are complete
+  // only execute when (shearing box defined) AND (last stage) AND (3D OR 2d_r_phi)
+  if ((psrc->shearing_box) && (stage == pdrive->nexp_stages) &&
+      (pmy_pack->pmesh->three_d || psrc->shearing_box_r_phi)) {
+    tstat = porb_u->ClearSend();
+    if (tstat != TaskStatus::complete) return tstat;
+    tstat = porb_b->ClearSend();
     if (tstat != TaskStatus::complete) return tstat;
   }
 
@@ -483,6 +503,7 @@ TaskStatus MHD::ClearRecv(Driver *pdrive, int stage) {
   tstat = pbval_b->ClearRecv();
   if (tstat != TaskStatus::complete) return tstat;
 
+  // check receives of fluxes of U (with AMR/SMR) and B (always) are complete
   // do not check flux receives when stage < 0 (i.e. ICs)
   if (stage >= 0) {
     // with SMR/AMR check receives of restricted fluxes of U complete
@@ -490,9 +511,18 @@ TaskStatus MHD::ClearRecv(Driver *pdrive, int stage) {
       tstat = pbval_u->ClearFluxRecv();
       if (tstat != TaskStatus::complete) return tstat;
     }
-
     // with SMR/AMR check receives of restricted fluxes of B complete
     tstat = pbval_b->ClearFluxRecv();
+    if (tstat != TaskStatus::complete) return tstat;
+  }
+
+  // check receives of U and B with shearing box are complete
+  // only execute when (shearing box defined) AND (last stage) AND (3D OR 2d_r_phi)
+  if ((psrc->shearing_box) && (stage == pdrive->nexp_stages) &&
+      (pmy_pack->pmesh->three_d || psrc->shearing_box_r_phi)) {
+    tstat = porb_u->ClearRecv();
+    if (tstat != TaskStatus::complete) return tstat;
+    tstat = porb_b->ClearRecv();
     if (tstat != TaskStatus::complete) return tstat;
   }
 
