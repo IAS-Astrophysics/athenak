@@ -4,10 +4,11 @@
 // Licensed under the 3-clause BSD License, see LICENSE file for details
 //========================================================================================
 //! \file orbital_advection_cc.cpp
-//! \brief functions to pack/send and recv/unpack boundary values for cell-centered (CC)
-//! variables in the orbital advection step used with the shearing box. Data is shifted
-//! by the appropriate offset during the recv/unpack step, so these functions both
-//! communicate the data and perform the shift. Based on BoundaryValues send/recv funcs.
+//! \brief constructor for OrbitalAdvection abstract base class, as well as functions to
+//! pack/send and recv/unpack boundary values for cell-centered (CC) variables in the
+//! orbital advection step. Data is shifted by the appropriate offset during the
+//! recv/unpack step, so these functions both communicate the data and perform the shift.
+//! Based on BoundaryValues send/recv funcs.
 
 #include <cstdlib>
 #include <iostream>
@@ -51,7 +52,7 @@ OrbitalAdvection::OrbitalAdvection(MeshBlockPack *ppack, ParameterInput *pin, in
 }
 
 //----------------------------------------------------------------------------------------
-// MeshBoundaryValues destructor
+// OrbitalAdvection base class destructor
 
 OrbitalAdvection::~OrbitalAdvection() {
 #if MPI_PARALLEL_ENABLED

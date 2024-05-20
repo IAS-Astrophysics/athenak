@@ -57,11 +57,11 @@ class OrbitalAdvection {
   // data
   int maxjshift;            // maximum integer shift of any cell in orbital advection
 
-  // data buffers for CC and FC vars for orbital advection. Only two x2-faces communicate
+  // data buffers for orbital advection. Only two x2-faces communicate
   ShearingBoxBoundaryBuffer sendbuf[2], recvbuf[2];
 
 #if MPI_PARALLEL_ENABLED
-  // unique MPI communicators for orbital advection and shearing box
+  // unique MPI communicator for orbital advection
   MPI_Comm comm_orb_advect;
 #endif
 
@@ -110,14 +110,16 @@ class ShearingBoxBoundary {
   ~ShearingBoxBoundary();
 
   // data
-  int nmb_x1bndry;          // number of MBs that touch shear periodic x1 boundaries
-  DualArray2D<int> x1bndry_mbs; // stores GIDs of MBs at shear periodic boundaries
+  int nmb_ix1bndry, nmb_ox1bndry;   // number of MBs that touch inner/outer x1 boundaries
+  DualArray1D<int> ix1bndry_mbgid;  // GIDs of MBs at inner x1 shear periodic boundaries
+  DualArray1D<int> ox1bndry_mbgid;  // GIDs of MBs at outer x1 shear periodic boundaries
 
-  // data buffers for CC and FC vars for shearing sheet BCs. Only one x1-face communicates
-  ShearingBoxBoundaryBuffer sendbuf, recvbuf;
+  // data buffers for shearing box BCs. One x1-face can communicate with up to 3 nghbrs
+  ShearingBoxBoundaryBuffer sendbuf_ix1[3], recvbuf_ix1[3];
+  ShearingBoxBoundaryBuffer sendbuf_ox1[3], recvbuf_ox1[3];
 
 #if MPI_PARALLEL_ENABLED
-  // unique MPI communicators for orbital advection and shearing box
+  // unique MPI communicator for shearing box
   MPI_Comm comm_sbox;
 #endif
 
@@ -131,7 +133,7 @@ class ShearingBoxBoundary {
 //! \class ShearingBoxBoundaryCC
 //  \brief Derived class implementing shearing box boundary conditions for CC vars
 
-class ShearingBoxBoundaryCC {
+class ShearingBoxBoundaryCC : public ShearingBoxBoundary {
  public:
   ShearingBoxBoundaryCC(MeshBlockPack *ppack, ParameterInput *pin, int nvar);
   // functions to communicate CC data with shearing box BCs

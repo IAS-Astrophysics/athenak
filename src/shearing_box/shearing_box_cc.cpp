@@ -4,7 +4,11 @@
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
 //! \file shearing_box_cc.cpp
-//! \brief implementation of ShearingBox class constructor and assorted other functions
+//! \brief constructor for ShearingBoxBoundary abstract base class, as well as functions
+//! to pack/send and recv/unpack boundary values for cell-centered (CC) variables with
+//! shearing box boundaries. Data is shifted by the appropriate offset during the
+//! recv/unpack step, so these functions both communicate the data and perform the shift.
+//! Based on BoundaryValues send/recv funcs.
 
 #include <iostream>
 #include <string>
@@ -26,71 +30,112 @@
 
 ShearingBoxBoundary::ShearingBoxBoundary(MeshBlockPack *ppack, ParameterInput *pin,
                                          int nvar) :
-    nmb_x1bndry(0),
+    nmb_ix1bndry(0),
+    nmb_ox1bndry(0),
     pmy_pack(ppack) {
-
-#if MPI_PARALLEL_ENABLED
-  // TODO(@user) FIX THIS FOR SHEARING BOX
-  // For orbital advection, communication is only with x2-face neighbors
-  // initialize vectors of MPI request in 2 elements of fixed length arrays
-    int nmb = std::max((ppack->nmb_thispack), (ppack->pmesh->nmb_maxperrank));
-    sendbuf.vars_req = new MPI_Request[nmb];
-    recvbuf.vars_req = new MPI_Request[nmb];
-    for (int m=0; m<nmb; ++m) {
-      sendbuf.vars_req[m] = MPI_REQUEST_NULL;
-      recvbuf.vars_req[m] = MPI_REQUEST_NULL;
-    }
-  // create unique communicators for shearing box
-  MPI_Comm_dup(MPI_COMM_WORLD, &comm_sbox);
-#endif
-
-  // --- Step 2.  Initialize data for shearing sheet BCs
-  // Work out how many MBs on this rank are at x1 shearing-box boundaries
-  std::vector<std::pair<int,int>> cnt_x1bndry_mbs;
+  // Work out how many MBs on this rank are at ix1/ox1 shearing-box boundaries
+  std::vector<int> tmp_ix1bndry_mbs, tmp_ox1bndry_mbs;
   auto &mbbcs = ppack->pmb->mb_bcs;
   for (int m=0; m<(ppack->nmb_thispack); ++m) {
     if (mbbcs.h_view(m,BoundaryFace::inner_x1) == BoundaryFlag::shear_periodic) {
-      cnt_x1bndry_mbs.push_back(std::make_pair(0,(m+ppack->gids)));
+      tmp_ix1bndry_mbs.push_back(m + ppack->gids);
     }
     if (mbbcs.h_view(m,BoundaryFace::outer_x1) == BoundaryFlag::shear_periodic) {
-      cnt_x1bndry_mbs.push_back(std::make_pair(1,(m+ppack->gids)));
+      tmp_ox1bndry_mbs.push_back(m + ppack->gids);
     }
   }
-  nmb_x1bndry = cnt_x1bndry_mbs.size();
+  nmb_ix1bndry = tmp_ix1bndry_mbs.size();
+  nmb_ox1bndry = tmp_ox1bndry_mbs.size();
 
-  // load GIDs of meshblocks at boundaries into DualArray
-  Kokkos::realloc(x1bndry_mbs, nmb_x1bndry, 2);
-  for (int m=0; m<nmb_x1bndry; ++m) {
-    x1bndry_mbs.h_view(m,0) = cnt_x1bndry_mbs[m].first;
-    x1bndry_mbs.h_view(m,1) = cnt_x1bndry_mbs[m].second;
+  // load GIDs of meshblocks at ix1 boundaries into DualArray
+  if (nmb_ix1bndry > 0) {
+    Kokkos::realloc(ix1bndry_mbgid, nmb_ix1bndry);
+    for (int m=0; m<nmb_ix1bndry; ++m) {
+      ix1bndry_mbgid.h_view(m) = tmp_ix1bndry_mbs[m];
+    }
+    // sync device array
+    ix1bndry_mbgid.template modify<HostMemSpace>();
+    ix1bndry_mbgid.template sync<DevExeSpace>();
   }
-  // sync device array
-  x1bndry_mbs.template modify<HostMemSpace>();
-  x1bndry_mbs.template sync<DevExeSpace>();
+  // load GIDs of meshblocks at ox1 boundaries into DualArray
+  if (nmb_ox1bndry > 0) {
+    Kokkos::realloc(ox1bndry_mbgid, nmb_ox1bndry);
+    for (int m=0; m<nmb_ox1bndry; ++m) {
+      ox1bndry_mbgid.h_view(m) = tmp_ox1bndry_mbs[m];
+    }
+    // sync device array
+    ox1bndry_mbgid.template modify<HostMemSpace>();
+    ox1bndry_mbgid.template sync<DevExeSpace>();
+  }
 
-  // Now allocate send/recv buffers for shearing box BCs
-  {
-    auto &indcs = ppack->pmesh->mb_indcs;
-    int ncells3 = indcs.nx3 + 2*indcs.ng;
-    int ncells2 = indcs.nx2 + 2*indcs.ng;
-    int ncells1 = indcs.ng;
-    // cell-centered data
-    Kokkos::realloc(sendbuf.vars,nmb_x1bndry,nvar,ncells3,ncells2,ncells1);
-    Kokkos::realloc(recvbuf.vars,nmb_x1bndry,nvar,ncells3,ncells2,ncells1);
-    // face-centered data
-    Kokkos::realloc(sendbuf.vars,nmb_x1bndry,3,(ncells3+1),(ncells2+1),ncells1);
-    Kokkos::realloc(recvbuf.vars,nmb_x1bndry,3,(ncells3+1),(ncells2+1),ncells1);
+#if MPI_PARALLEL_ENABLED
+  // initialize vectors of MPI requests for ix1/ox1 boundaries in fixed length arrays
+  if (nmb_ix1bndry > 0) {
+    for (int n=0; n<3; ++n) {
+      sendbuf_ix1[n].vars_req = new MPI_Request[nmb_ix1bndry];
+      recvbuf_ix1[n].vars_req = new MPI_Request[nmb_ix1bndry];
+      for (int m=0; m<nmb_ix1bndry; ++m) {
+        sendbuf_ix1[n].vars_req[m] = MPI_REQUEST_NULL;
+        recvbuf_ix1[n].vars_req[m] = MPI_REQUEST_NULL;
+      }
+    }
   }
+  if (nmb_ox1bndry > 0) {
+    for (int n=0; n<3; ++n) {
+      sendbuf_ox1[n].vars_req = new MPI_Request[nmb_ox1bndry];
+      recvbuf_ox1[n].vars_req = new MPI_Request[nmb_ox1bndry];
+      for (int m=0; m<nmb_ox1bndry; ++m) {
+        sendbuf_ox1[n].vars_req[m] = MPI_REQUEST_NULL;
+        recvbuf_ox1[n].vars_req[m] = MPI_REQUEST_NULL;
+      }
+    }
+  }
+  // create unique communicators for shearing box
+  MPI_Comm_dup(MPI_COMM_WORLD, &comm_sbox);
+#endif
 }
 
 //----------------------------------------------------------------------------------------
-// MeshBoundaryValues destructor
+// ShearingBoxBoundary base class destructor
 
 ShearingBoxBoundary::~ShearingBoxBoundary() {
 #if MPI_PARALLEL_ENABLED
-  delete [] sendbuf.vars_req;
-  delete [] recvbuf.vars_req;
+  if (nmb_ix1bndry > 0) {
+    for (int n=0; n<3; ++n) {
+      delete [] sendbuf_ix1[n].vars_req;
+      delete [] recvbuf_ix1[n].vars_req;
+    }
+  }
+  if (nmb_ox1bndry > 0) {
+    for (int n=0; n<3; ++n) {
+      delete [] sendbuf_ox1[n].vars_req;
+      delete [] recvbuf_ox1[n].vars_req;
+    }
+  }
 #endif
+}
+
+//----------------------------------------------------------------------------------------
+// ShearingBoxBoundaryCC derived class constructor:
+
+ShearingBoxBoundaryCC::ShearingBoxBoundaryCC(MeshBlockPack *pp, ParameterInput *pin,
+                                             int nvar) :
+    ShearingBoxBoundary(pp, pin, nvar) {
+  // Allocate boundary buffers
+  auto &indcs = pp->pmesh->mb_indcs;
+  int ncells3 = indcs.nx3 + 2*indcs.ng;
+  int ncells2 = indcs.nx2 + 2*indcs.ng;
+  int ncells1 = indcs.ng;
+  // Note only [0] index element of buffer variables is used to send data to neighboring
+  // Meshblocks. The [1] and [2] elements are therefore not allocated any memory
+  if (nmb_ix1bndry > 0) {
+    Kokkos::realloc(sendbuf_ix1[0].vars,nmb_ix1bndry,nvar,ncells3,ncells2,ncells1);
+    Kokkos::realloc(recvbuf_ix1[0].vars,nmb_ix1bndry,nvar,ncells3,ncells2,ncells1);
+  }
+  if (nmb_ox1bndry > 0) {
+    Kokkos::realloc(sendbuf_ox1[0].vars,nmb_ox1bndry,nvar,ncells3,ncells2,ncells1);
+    Kokkos::realloc(recvbuf_ox1[0].vars,nmb_ox1bndry,nvar,ncells3,ncells2,ncells1);
+  }
 }
 
 //----------------------------------------------------------------------------------------
