@@ -145,25 +145,28 @@ ShearingBoxBoundaryCC::ShearingBoxBoundaryCC(MeshBlockPack *pp, ParameterInput *
 //! Called on the physics_bcs task after purely periodic BC communication is finished.
 
 TaskStatus ShearingBoxBoundaryCC::PackAndSendCC(DvceArray5D<Real> &a) {
-/*
   auto &indcs = pmy_pack->pmesh->mb_indcs;
   auto &is = indcs.is, &ie = indcs.ie;
   auto &js = indcs.js, &je = indcs.je;
   auto &ks = indcs.ks, &ke = indcs.ke;
   auto &ng = indcs.ng;
   // copy ix1 and ox1 ghost zones into send buffer view
-  for (int m=0; m<nmb_x1bndry; ++m) {
-    std::pair<int,int> isrc, idst;
-    if (x1bndry_mbs.h_view(m,0)==0) {
-      isrc = std::make_pair(0,ng);
-      idst = std::make_pair(0,ng);
-    } else {
-      isrc = std::make_pair(ie+1,ie+1+ng);
-      idst = std::make_pair(0,ng);
-    }
+  // Note only variables in [0] index of buffer array are used here and throughout
+  std::pair<int,int> isrc, idst;
+  isrc = std::make_pair(0,ng);
+  idst = std::make_pair(0,ng);
+  for (int m=0; m<nmb_ix1bndry; ++m) {
     using namespace Kokkos;
     auto src = subview(a,m,ALL,ALL,ALL,isrc);
-    auto dst = subview(sendcc_shr.vars,m,ALL,ALL,ALL,isrc);
+    auto dst = subview(sendbuf_ix1[0].vars,m,ALL,ALL,ALL,idst);
+    deep_copy(DevExeSpace(), dst, src);
+  }
+  isrc = std::make_pair(ie+1,ie+1+ng);
+  idst = std::make_pair(0,ng);
+  for (int m=0; m<nmb_ox1bndry; ++m) {
+    using namespace Kokkos;
+    auto src = subview(a,m,ALL,ALL,ALL,isrc);
+    auto dst = subview(sendbuf_ox1[0].vars,m,ALL,ALL,ALL,idst);
     deep_copy(DevExeSpace(), dst, src);
   }
 
@@ -172,6 +175,7 @@ TaskStatus ShearingBoxBoundaryCC::PackAndSendCC(DvceArray5D<Real> &a) {
   Real &time = pmy_pack->pmesh->time;
   Real lx = (mesh_size.x1max - mesh_size.x1min);
   Real yshear = qshear*omega0*lx*time;
+/*
 
   // apply fractional cell offset to data in send buffer using conservative remap
   int nvar = a.extent_int(1);  // TODO(@user): 2nd index from L of in array must be NVAR
