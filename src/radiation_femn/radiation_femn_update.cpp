@@ -22,6 +22,8 @@
 namespace radiationfemn {
 TaskStatus RadiationFEMN::ExpRKUpdate(Driver *pdriver, int stage) {
   const int NGHOST = 2;
+  const int tot_iter = num_points * 5;
+  const Real tol = 1e-6;
 
   auto &indcs = pmy_pack->pmesh->mb_indcs;
   int &is = indcs.is, &ie = indcs.ie;
@@ -67,7 +69,7 @@ TaskStatus RadiationFEMN::ExpRKUpdate(Driver *pdriver, int stage) {
   adm::ADM::ADM_vars &adm = pmy_pack->padm->adm;
 
   size_t scr_size = ScrArray2D<Real>::shmem_size(num_points_, num_points_) * 5 + ScrArray1D<Real>::shmem_size(num_points_) * 5
-                    + ScrArray1D<int>::shmem_size(num_points_ - 1) * 1 + +ScrArray1D<Real>::shmem_size(4 * 4 * 4) * 2;
+                    + ScrArray1D<Real>::shmem_size(num_points_) * 8 + ScrArray1D<Real>::shmem_size(4 * 4 * 4) * 2;
   int scr_level = 0;
   par_for_outer("radiation_femn_update", DevExeSpace(), scr_size, scr_level, 0, nmb1, 0, num_species_energy - 1, ks, ke, js, je, is, ie,
                 KOKKOS_LAMBDA(TeamMember_t member, int m, int nuen, int k, int j, int i) {
@@ -86,8 +88,8 @@ TaskStatus RadiationFEMN::ExpRKUpdate(Driver *pdriver, int stage) {
                                             adm.g_dd(m, 0, 0, k, j, i), adm.g_dd(m, 0, 1, k, j, i), adm.g_dd(m, 0, 2, k, j, i),
                                             adm.g_dd(m, 1, 1, k, j, i), adm.g_dd(m, 1, 2, k, j, i), adm.g_dd(m, 2, 2, k, j, i), g_uu);
                   Real sqrt_det_g_ijk = adm.alpha(m, k, j, i) * Kokkos::sqrt(adm::SpatialDet(adm.g_dd(m, 0, 0, k, j, i), adm.g_dd(m, 0, 1, k, j, i),
-                                                                                     adm.g_dd(m, 0, 2, k, j, i), adm.g_dd(m, 1, 1, k, j, i),
-                                                                                     adm.g_dd(m, 1, 2, k, j, i), adm.g_dd(m, 2, 2, k, j, i)));
+                                                                                             adm.g_dd(m, 0, 2, k, j, i), adm.g_dd(m, 1, 1, k, j, i),
+                                                                                             adm.g_dd(m, 1, 2, k, j, i), adm.g_dd(m, 2, 2, k, j, i)));
 
                   // derivative terms
                   ScrArray1D<Real> g_rhs_scratch = ScrArray1D<Real>(member.team_scratch(scr_level), num_points_);
@@ -346,15 +348,24 @@ TaskStatus RadiationFEMN::ExpRKUpdate(Driver *pdriver, int stage) {
                         g_rhs_scratch(idx) += energy_terms(idx);
                     }
                 } */
-                  // matrix inverse
-                  /*
-                  ScrArray2D<Real> Q_matrix = ScrArray2D<Real>(member.team_scratch(scr_level), num_points_, num_points_);
-                  ScrArray2D<Real> Qinv_matrix = ScrArray2D<Real>(member.team_scratch(scr_level), num_points_, num_points_);
-                  ScrArray2D<Real> lu_matrix = ScrArray2D<Real>(member.team_scratch(scr_level), num_points_, num_points_);
-                  ScrArray1D<Real> x_array = ScrArray1D<Real>(member.team_scratch(scr_level), num_points_);
-                  ScrArray1D<Real> b_array = ScrArray1D<Real>(member.team_scratch(scr_level), num_points_);
-                  ScrArray1D<int> pivots = ScrArray1D<int>(member.team_scratch(scr_level), num_points_ - 1);
 
+
+                  // -------------------------------------
+                  // matrix inverse (BiCGSTAB) begins here
+                  // -------------------------------------
+
+                  // define scratch arrays needed for inverse
+                  ScrArray2D<Real> Q_matrix = ScrArray2D<Real>(member.team_scratch(scr_level), num_points_, num_points_);
+                  ScrArray1D<Real> x0_arr = ScrArray1D<Real>(member.team_scratch(scr_level), num_points_);
+                  ScrArray1D<Real> r0 = ScrArray1D<Real>(member.team_scratch(scr_level), num_points_);
+                  ScrArray1D<Real> p0 = ScrArray1D<Real>(member.team_scratch(scr_level), num_points_);
+                  ScrArray1D<Real> rhat0 = ScrArray1D<Real>(member.team_scratch(scr_level), num_points_);
+                  ScrArray1D<Real> v_arr = ScrArray1D<Real>(member.team_scratch(scr_level), num_points_);
+                  ScrArray1D<Real> h_arr = ScrArray1D<Real>(member.team_scratch(scr_level), num_points_);
+                  ScrArray1D<Real> s_arr = ScrArray1D<Real>(member.team_scratch(scr_level), num_points_);
+                  ScrArray1D<Real> t_arr = ScrArray1D<Real>(member.team_scratch(scr_level), num_points_);
+
+                  // construct matrix A [num_points x num_points]
                   par_for_inner(member, 0, num_points_ * num_points_ - 1, [&](const int idx) {
                     int row = int(idx / num_points_);
                     int col = idx - row * num_points_;
@@ -364,27 +375,68 @@ TaskStatus RadiationFEMN::ExpRKUpdate(Driver *pdriver, int stage) {
                                                            + L_mu_muhat0_(m, 0, 3, k, j, i) * P_matrix_(3, row, col))
                                          + sqrt_det_g_ijk * beta_dt * (kappa_s_(m, k, j, i) + kappa_a_(m, k, j, i)) * (row == col) / Ven
                                          - sqrt_det_g_ijk * beta_dt * (1. / (4. * M_PI)) * kappa_s_(m, k, j, i) * S_source_(row, col) / Ven;
-                    lu_matrix(row, col) = Q_matrix(row, col);
                   });
                   member.team_barrier();
 
-                  radiationfemn::LUInv<ScrArray2D<Real>, ScrArray1D<Real>, ScrArray1D<int>>(member, Q_matrix, Qinv_matrix, lu_matrix, x_array, b_array, pivots);
+                  for (int index = 0; index < num_points_; index++) {
+                    x0_arr(index) = 1;
+                    rhat0(index) = 1;
+                    r0(index) = g_rhs_scratch(index) - dot<ScrArray2D<Real>, ScrArray1D<Real>>(index, Q_matrix, x0_arr);
+                    p0(index) = r0(index);
+                  }
+
+                  Real rho0 = dot<ScrArray1D<Real>>(rhat0, r0);
+
+                  int n_iter = 0;
+                  for (int index = 0; index < tot_iter; index++) {
+                    n_iter++;
+
+                    dot<ScrArray2D<Real>, ScrArray1D<Real>>(Q_matrix, p0, v_arr);
+                    Real alpha = rho0 / dot<ScrArray1D<Real>>(rhat0, v_arr);
+
+                    for (int index2 = 0; index2 < num_points_; index2++) {
+                      h_arr(index2) = x0_arr(index2) + alpha * p0(index2);
+                      s_arr(index2) = r0(index2) - alpha * v_arr(index2);
+                    }
+
+                    if (dot<ScrArray1D<Real>>(s_arr, s_arr) < tol) {
+                      for (int index2 = 0; index2 < num_points_; index2++) {
+                        x0_arr(index2) = h_arr(index2);
+                      }
+                      break;
+                    }
+
+                    dot<ScrArray2D<Real>, ScrArray1D<Real>>(Q_matrix, s_arr, t_arr);
+                    Real omega = dot<ScrArray1D<Real>>(t_arr, s_arr) / dot<ScrArray1D<Real>>(t_arr, t_arr);
+
+                    for (int index2 = 0; index2 < num_points_; index2++) {
+                      x0_arr(index2) = h_arr(index2) + omega * s_arr(index2);
+                      r0(index2) = s_arr(index2) - omega * t_arr(index2);
+                    }
+
+                    if (dot<ScrArray1D<Real>>(r0, r0) < tol) {
+                      break;
+                    }
+
+                    Real rho1 = dot<ScrArray1D<Real>>(rhat0, r0);
+                    Real beta = (rho1 / rho0) * (alpha / omega);
+                    rho0 = rho1;
+
+                    for (int index2 = 0; index2 < num_points_; index2++) {
+                      p0(index2) = r0(index2) + beta * (p0(index) - omega * v_arr(index));
+                    }
+                  }
                   member.team_barrier();
-                  */
+
                   par_for_inner(member, 0, num_points_ - 1, [&](const int idx) {
-                    Real final_result = 0.;
-                    //for (int A = 0; A < num_points_; A++) {
-                    //  final_result += Qinv_matrix(idx, A) * (g_rhs_scratch(A));
-                    //}
 
                     auto unifiedidx = IndicesUnited(nu, en, idx, num_species_, num_energy_bins_, num_points_);
-                    f0_(m, unifiedidx, k, j, i) = g_rhs_scratch(idx);
+                    f0_(m, unifiedidx, k, j, i) = x0_arr(idx);
 
                     // floor energy density if using M1
                     //if(unifiedidx == 0 && m1_flag_) {
                     //  f0_(m, unifiedidx, k, j, i) = Kokkos::fmax(final_result, 1e-15);
                     //}
-
                   });
                   member.team_barrier();
                 });
