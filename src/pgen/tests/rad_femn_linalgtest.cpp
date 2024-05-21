@@ -126,7 +126,7 @@ void ProblemGenerator::RadiationFEMNLinalgtest(ParameterInput *pin, const bool r
   std::cout << std::endl;
 
   // [2] Check the LU decomposition of matrix from Golub & Van Loan example 3.4.1 [GPU]
-  std::cout << "Test 2: Check same LU decomposition of matrix [GPU]" << std::endl;
+  std::cout << "Test 2: Check inverse of same matrix [GPU]" << std::endl;
   std::cout << std::endl;
 
   DvceArray2D<Real> matrix_dvce;
@@ -144,31 +144,36 @@ void ProblemGenerator::RadiationFEMNLinalgtest(ParameterInput *pin, const bool r
   Kokkos::deep_copy(matrix_dvce, matrix);
   Kokkos::deep_copy(lu_matrix_dvce, matrix);
 
-  size_t scr_size = ScrArray2D<Real>::shmem_size(3, 3) * 2 + ScrArray1D<Real>::shmem_size(2);
+  size_t scr_size = ScrArray2D<Real>::shmem_size(3, 3) * 3 + ScrArray1D<int>::shmem_size(2) + ScrArray1D<Real>::shmem_size(3) * 2;
   int scr_level = 0;
-  par_for_outer("radiation_femn_linalgtest_lu", DevExeSpace(), scr_size, scr_level, 0, 1, 0, 1,
+  par_for_outer("radiation_femn_linalgtest_inverse", DevExeSpace(), scr_size, scr_level, 0, 0, 0, 0,
                 KOKKOS_LAMBDA(TeamMember_t member, const int mv, const int nv) {
 
                   ScrArray2D<Real> matrix_scratch(member.team_scratch(scr_level), 3, 3);
                   ScrArray2D<Real> lu_matrix_scratch(member.team_scratch(scr_level), 3, 3);
+                  ScrArray2D<Real> matrix_inverse_scratch(member.team_scratch(scr_level), 3, 3);
                   ScrArray1D<int> pivots_scratch(member.team_scratch(scr_level), 2);
+                  ScrArray1D<Real> x_array_scratch = ScrArray1D<Real>(member.team_scratch(scr_level), 3);
+                  ScrArray1D<Real> b_array_scratch = ScrArray1D<Real>(member.team_scratch(scr_level), 3);
 
                   pivots_scratch(0) = 0;
                   pivots_scratch(1) = 0;
                   for (int i = 0; i < 3; i++) {
                     for (int j = 0; j < 3; j++) {
                       matrix_scratch(i, j) = matrix_dvce(i, j);
+                      matrix_inverse_scratch(i, j) = matrix_dvce(i, j);
                       lu_matrix_scratch(i, j) = matrix_dvce(i, j);
                     }
                   }
 
-                  radiationfemn::LUDec<ScrArray2D<Real>, ScrArray1D<int>>(matrix_scratch, lu_matrix_scratch, pivots_scratch);
+                  radiationfemn::LUInv<ScrArray2D<Real>, ScrArray1D<Real>, ScrArray1D<int>>(member, matrix_scratch, matrix_inverse_scratch, lu_matrix_scratch,
+                                                                                            x_array_scratch, b_array_scratch, pivots_scratch);
                   member.team_barrier();
 
                   Kokkos::single(Kokkos::PerTeam(member), [=]() {
                     for (int i = 0; i < 3; i++) {
                       for (int j = 0; j < 3; j++) {
-                        matrix_dvce_answer(member.league_rank(), i, j) = lu_matrix_scratch(i, j);
+                        matrix_dvce_answer(member.league_rank(), i, j) = matrix_inverse_scratch(i, j);
                       }
                     }
                   });
@@ -195,8 +200,8 @@ void ProblemGenerator::RadiationFEMNLinalgtest(ParameterInput *pin, const bool r
       }
     }
   }
-  std::cout << "Maximum error: " << error << std::endl;
-  std::cout << std::endl;
+  //std::cout << "Maximum error: " << error << std::endl;
+  //std::cout << std::endl;
 
   /*
   // [2] Solve a linear system of equations with the LU decomposed matrix

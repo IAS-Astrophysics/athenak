@@ -35,9 +35,8 @@ TaskStatus RadiationFEMN::ExpRKUpdate(Driver *pdriver, int stage) {
   bool &three_d = pmy_pack->pmesh->three_d;
   bool &m1_flag_ = pmy_pack->pradfemn->m1_flag;
 
-  Real &gam0 = pdriver->gam0[stage - 1];
-  Real &gam1 = pdriver->gam1[stage - 1];
-  Real beta_dt = (pdriver->beta[stage - 1]) * (pmy_pack->pmesh->dt);
+  Real beta[2] = {0.5, 1.0};
+  Real beta_dt = (beta[stage - 1]) * (pmy_pack->pmesh->dt);
 
   //int ncells1 = indcs.nx1 + 2 * (indcs.ng);
   //int ncells2 = (indcs.nx2 > 1) ? (indcs.nx2 + 2 * (indcs.ng)) : 1;
@@ -115,7 +114,7 @@ TaskStatus RadiationFEMN::ExpRKUpdate(Driver *pdriver, int stage) {
                                                       + L_mu_muhat0_(m, 0, 2, k, j, i) * P_matrix_(2, nuenangindexa, idx)
                                                       + L_mu_muhat0_(m, 0, 3, k, j, i) * P_matrix_(3, nuenangindexa, idx));
 
-                      fval += factor * (gam0 * f0_(m, nuenangindexa, k, j, i) + gam1 * f1_(m, nuenangindexa, k, j, i));
+                      fval += factor * f1_(m, nuenangindexa, k, j, i);
                     }
 
                     g_rhs_scratch(idx) = fval + beta_dt * divf_s
@@ -283,7 +282,7 @@ TaskStatus RadiationFEMN::ExpRKUpdate(Driver *pdriver, int stage) {
                     int idx_united = IndicesUnited(nu, en, idx_a, num_species_, num_energy_bins_, num_points_);
 
                     g_rhs_scratch(idx_b) -= beta_dt * sqrt_det_g_ijk * (F_Gamma_AB(idx_a, idx_b) + G_Gamma_AB(idx_a, idx_b)) *
-                                            (gam0 * f0_(m, idx_united, k, j, i) + gam1 * f1_(m, idx_united, k, j, i));
+                                            (f0_(m, idx_united, k, j, i));
 
                     K += F_Gamma_AB(idx_b, idx_a) * F_Gamma_AB(idx_b, idx_a);
                   }
