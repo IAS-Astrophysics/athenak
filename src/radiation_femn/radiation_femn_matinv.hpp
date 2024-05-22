@@ -155,11 +155,12 @@ KOKKOS_INLINE_FUNCTION void LUInv(T1 A_matrix, T1 A_matrix_inverse, T1 lu_matrix
 }
 
 template<typename T2>
-KOKKOS_INLINE_FUNCTION Real dot(T2 a, T2 b) {
-  Real result = 0.;
-  for (int i = 0; i < a.extent(0); i++) {
-    result += a(i) * b(i);
-  }
+KOKKOS_INLINE_FUNCTION Real dot(TeamMember_t member, T2 a, T2 b) {
+  Real result = 0;
+  Kokkos::parallel_reduce(Kokkos::TeamVectorRange(member, 0, a.extent(0)), [&](const int j, Real &partial_sum) {
+    partial_sum += a(j) * b(j);
+  }, result);
+  member.team_barrier();
   return result;
 }
 
@@ -173,13 +174,24 @@ KOKKOS_INLINE_FUNCTION Real dot(int i, T1 a, T2 b) {
 }
 
 template<typename T1, typename T2>
-KOKKOS_INLINE_FUNCTION void dot(T1 a, T2 b, T2 result) {
+KOKKOS_INLINE_FUNCTION Real dot(TeamMember_t member, int i, T1 a, T2 b) {
+  Real result = 0;
+  Kokkos::parallel_reduce(Kokkos::TeamVectorRange(member, 0, a.extent(0)), [&](const int j, Real &partial_sum) {
+    partial_sum += a(i, j) * b(j);
+  }, result);
+  member.team_barrier();
+  return result;
+}
+
+template<typename T1, typename T2>
+KOKKOS_INLINE_FUNCTION void dot(TeamMember_t member, T1 a, T2 b, T2 result) {
   for (int i = 0; i < a.extent(0); i++) {
     result(i) = 0;
     for (int j = 0; j < a.extent(1); j++) {
       result(i) += a(i, j) * b(j);
     }
   }
+  member.team_barrier();
 }
 
 template<typename T1, typename T2>

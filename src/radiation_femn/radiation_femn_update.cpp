@@ -381,44 +381,52 @@ TaskStatus RadiationFEMN::ExpRKUpdate(Driver *pdriver, int stage) {
                   for (int index = 0; index < num_points_; index++) {
                     x0_arr(index) = 1;
                     rhat0(index) = 1;
-                    r0(index) = g_rhs_scratch(index) - dot<ScrArray2D<Real>, ScrArray1D<Real>>(index, Q_matrix, x0_arr);
+                  }
+                  for (int index = 0; index < num_points_; index++) {
+                    auto dot_Q_x0 = dot<ScrArray2D<Real>, ScrArray1D<Real>>(member, index, Q_matrix, x0_arr);
+                    r0(index) = g_rhs_scratch(index) - dot_Q_x0;
                     p0(index) = r0(index);
                   }
 
-                  Real rho0 = dot<ScrArray1D<Real>>(rhat0, r0);
+                  Real rho0 = dot<ScrArray1D<Real>>(member, rhat0, r0);
 
                   int n_iter = 0;
                   for (int index = 0; index < tot_iter; index++) {
                     n_iter++;
 
-                    dot<ScrArray2D<Real>, ScrArray1D<Real>>(Q_matrix, p0, v_arr);
-                    Real alpha = rho0 / dot<ScrArray1D<Real>>(rhat0, v_arr);
+                    dot<ScrArray2D<Real>, ScrArray1D<Real>>(member, Q_matrix, p0, v_arr);
+                    Real dot_rhat0_v_arr = dot<ScrArray1D<Real>>(member, rhat0, v_arr);
+                    Real alpha = rho0 / dot_rhat0_v_arr;
 
                     for (int index2 = 0; index2 < num_points_; index2++) {
                       h_arr(index2) = x0_arr(index2) + alpha * p0(index2);
                       s_arr(index2) = r0(index2) - alpha * v_arr(index2);
                     }
 
-                    if (dot<ScrArray1D<Real>>(s_arr, s_arr) < tol) {
+                    Real dot_s_arr_s_arr = dot<ScrArray1D<Real>>(member, s_arr, s_arr);
+                    if (dot_s_arr_s_arr < tol) {
                       for (int index2 = 0; index2 < num_points_; index2++) {
                         x0_arr(index2) = h_arr(index2);
                       }
                       break;
                     }
 
-                    dot<ScrArray2D<Real>, ScrArray1D<Real>>(Q_matrix, s_arr, t_arr);
-                    Real omega = dot<ScrArray1D<Real>>(t_arr, s_arr) / dot<ScrArray1D<Real>>(t_arr, t_arr);
+                    dot<ScrArray2D<Real>, ScrArray1D<Real>>(member, Q_matrix, s_arr, t_arr);
+                    Real dot_t_arr_s_arr = dot<ScrArray1D<Real>>(member, t_arr, s_arr);
+                    Real dot_t_arr_t_arr = dot<ScrArray1D<Real>>(member, t_arr, t_arr);
+                    Real omega = dot_t_arr_s_arr / dot_t_arr_t_arr;
 
                     for (int index2 = 0; index2 < num_points_; index2++) {
                       x0_arr(index2) = h_arr(index2) + omega * s_arr(index2);
                       r0(index2) = s_arr(index2) - omega * t_arr(index2);
                     }
 
-                    if (dot<ScrArray1D<Real>>(r0, r0) < tol) {
+                    Real dot_r0_r0 = dot<ScrArray1D<Real>>(member, r0, r0);
+                    if (dot_r0_r0 < tol) {
                       break;
                     }
 
-                    Real rho1 = dot<ScrArray1D<Real>>(rhat0, r0);
+                    Real rho1 = dot<ScrArray1D<Real>>(member, rhat0, r0);
                     Real beta = (rho1 / rho0) * (alpha / omega);
                     rho0 = rho1;
 
