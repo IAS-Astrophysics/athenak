@@ -112,6 +112,6 @@ void ProblemGenerator::RadiationFEMNDiffusiontest(ParameterInput *pin, const boo
             u_mu_(m, 2, k, j, i) = 0.;
             u_mu_(m, 3, k, j, i) = 0.;
 
-            kappa_s_(m, k, j, i) = Ven * 1e3;
+            kappa_s_(m, k, j, i) =  Ven * 1e3;
           });
 }
