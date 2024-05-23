@@ -51,7 +51,6 @@ TaskStatus BoundaryValuesCC::PackAndSendCC(DvceArray5D<Real> &a, DvceArray5D<Rea
   auto &rbuf = recv_buf;
   auto &is_z4c = is_z4c_;
   auto &multilevel = pmy_pack->pmesh->multilevel;
-
   // Outer loop over (# of MeshBlocks)*(# of buffers)*(# of variables)
   int nmnv = nmb*nnghbr*nvar;
   Kokkos::TeamPolicy<> policy(DevExeSpace(), nmnv, Kokkos::AUTO);

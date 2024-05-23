@@ -17,7 +17,7 @@
 
 # Obtain Google C++ Style Linter:
 echo "Obtaining Google C++ Style cpplint.py test"
-curl https://raw.githubusercontent.com/cpplint/cpplint/develop/cpplint.py \
+curl https://raw.githubusercontent.com/cpplint/cpplint/master/cpplint.py \
 --output cpplint.py --silent
 
 # Apply Google C++ Style Linter to all source code files at once:
