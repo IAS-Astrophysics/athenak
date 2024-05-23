@@ -110,18 +110,27 @@ class ShearingBoxBoundary {
   ~ShearingBoxBoundary();
 
   // data
-  int nmb_ix1bndry, nmb_ox1bndry;   // number of MBs that touch inner/outer x1 boundaries
-  DualArray1D<int> ix1bndry_mbgid;  // GIDs of MBs at inner x1 shear periodic boundaries
-  DualArray1D<int> ox1bndry_mbgid;  // GIDs of MBs at outer x1 shear periodic boundaries
+  HostArray1D<int> nmb_x1bndry;      // number of MBs that touch x1 boundaries
+  HostArray2D<int> x1bndry_mbgid;    // GIDs of MBs at x1 boundaries
 
-  // data buffers for shearing box BCs. One x1-face can communicate with up to 3 nghbrs
-  ShearingBoxBoundaryBuffer sendbuf_ix1[3], recvbuf_ix1[3];
-  ShearingBoxBoundaryBuffer sendbuf_ox1[3], recvbuf_ox1[3];
+  // data buffers for shearing box BCs.  Only two x1-faces get sheared
+  // Use seperate variables for ix1/ox1 since number of MBs on each face can be different
+  ShearingBoxBoundaryBuffer sendbuf[2], recvbuf[2];
 
 #if MPI_PARALLEL_ENABLED
   // unique MPI communicator for shearing box
   MPI_Comm comm_sbox;
 #endif
+
+  // function to find target MB offset by shear.  Returns GID and rank
+  void FindTargetMB(const int igid, const int jshift, int &gid, int &rank);
+  // function to find index in x1bndry array of MB with input GID
+  int TargetIndex(const int n, const int tgid) {
+    for (int m=0; m<nmb_x1bndry(n); ++m) {
+      if (x1bndry_mbgid(n,m) == tgid) return m;
+    }
+    return -1;
+  }
 
  protected:
   // must use pointer to MBPack and not parent physics module since parent can be one of
@@ -137,7 +146,7 @@ class ShearingBoxBoundaryCC : public ShearingBoxBoundary {
  public:
   ShearingBoxBoundaryCC(MeshBlockPack *ppack, ParameterInput *pin, int nvar);
   // functions to communicate CC data with shearing box BCs
-  TaskStatus PackAndSendCC(DvceArray5D<Real> &a);
+  TaskStatus PackAndSendCC(DvceArray5D<Real> &a, ReconstructionMethod rcon, Real qom);
 };
 
 #endif // SHEARING_BOX_SHEARING_BOX_HPP_

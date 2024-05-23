@@ -16,77 +16,64 @@
 #include <vector>
 
 #include "athena.hpp"
+#include "globals.hpp"
 #include "parameter_input.hpp"
 #include "mesh/mesh.hpp"
 #include "eos/eos.hpp"
-#include "diffusion/viscosity.hpp"
-#include "diffusion/conduction.hpp"
-#include "srcterms/srcterms.hpp"
 #include "bvals/bvals.hpp"
 #include "shearing_box.hpp"
+#include "remap_fluxes.hpp"
 
 //----------------------------------------------------------------------------------------
 //! ShearingBoxBoundary base class constructor
 
 ShearingBoxBoundary::ShearingBoxBoundary(MeshBlockPack *ppack, ParameterInput *pin,
                                          int nvar) :
-    nmb_ix1bndry(0),
-    nmb_ox1bndry(0),
+    nmb_x1bndry("nmbx1",2),
+    x1bndry_mbgid("x1gid",1,1),
     pmy_pack(ppack) {
   // Work out how many MBs on this rank are at ix1/ox1 shearing-box boundaries
-  std::vector<int> tmp_ix1bndry_mbs, tmp_ox1bndry_mbs;
+  std::vector<int> tmp_ix1bndry_gid, tmp_ox1bndry_gid;
   auto &mbbcs = ppack->pmb->mb_bcs;
   for (int m=0; m<(ppack->nmb_thispack); ++m) {
     if (mbbcs.h_view(m,BoundaryFace::inner_x1) == BoundaryFlag::shear_periodic) {
-      tmp_ix1bndry_mbs.push_back(m + ppack->gids);
+      tmp_ix1bndry_gid.push_back(m + ppack->gids);
     }
     if (mbbcs.h_view(m,BoundaryFace::outer_x1) == BoundaryFlag::shear_periodic) {
-      tmp_ox1bndry_mbs.push_back(m + ppack->gids);
+      tmp_ox1bndry_gid.push_back(m + ppack->gids);
     }
   }
-  nmb_ix1bndry = tmp_ix1bndry_mbs.size();
-  nmb_ox1bndry = tmp_ox1bndry_mbs.size();
+  nmb_x1bndry(0) = tmp_ix1bndry_gid.size();
+  nmb_x1bndry(1) = tmp_ox1bndry_gid.size();
 
-  // load GIDs of meshblocks at ix1 boundaries into DualArray
-  if (nmb_ix1bndry > 0) {
-    Kokkos::realloc(ix1bndry_mbgid, nmb_ix1bndry);
-    for (int m=0; m<nmb_ix1bndry; ++m) {
-      ix1bndry_mbgid.h_view(m) = tmp_ix1bndry_mbs[m];
+  // allocate mbgid array and initialize GIDs to -1
+  int nmb = std::max(nmb_x1bndry(0),nmb_x1bndry(1));
+  Kokkos::realloc(x1bndry_mbgid, 2, nmb);
+  for (int n=0; n<2; ++n) {
+    for (int m=0; m<nmb; ++m) {
+      x1bndry_mbgid(n,m) = -1;
     }
-    // sync device array
-    ix1bndry_mbgid.template modify<HostMemSpace>();
-    ix1bndry_mbgid.template sync<DevExeSpace>();
   }
-  // load GIDs of meshblocks at ox1 boundaries into DualArray
-  if (nmb_ox1bndry > 0) {
-    Kokkos::realloc(ox1bndry_mbgid, nmb_ox1bndry);
-    for (int m=0; m<nmb_ox1bndry; ++m) {
-      ox1bndry_mbgid.h_view(m) = tmp_ox1bndry_mbs[m];
-    }
-    // sync device array
-    ox1bndry_mbgid.template modify<HostMemSpace>();
-    ox1bndry_mbgid.template sync<DevExeSpace>();
+  // load GIDs of meshblocks at x1 boundaries into DualArray
+  for (int m=0; m<nmb_x1bndry(0); ++m) {
+    x1bndry_mbgid(0,m) = tmp_ix1bndry_gid[m];
+  }
+  for (int m=0; m<nmb_x1bndry(1); ++m) {
+    x1bndry_mbgid(1,m) = tmp_ox1bndry_gid[m];
   }
 
 #if MPI_PARALLEL_ENABLED
   // initialize vectors of MPI requests for ix1/ox1 boundaries in fixed length arrays
-  if (nmb_ix1bndry > 0) {
-    for (int n=0; n<3; ++n) {
-      sendbuf_ix1[n].vars_req = new MPI_Request[nmb_ix1bndry];
-      recvbuf_ix1[n].vars_req = new MPI_Request[nmb_ix1bndry];
-      for (int m=0; m<nmb_ix1bndry; ++m) {
-        sendbuf_ix1[n].vars_req[m] = MPI_REQUEST_NULL;
-        recvbuf_ix1[n].vars_req[m] = MPI_REQUEST_NULL;
-      }
-    }
-  }
-  if (nmb_ox1bndry > 0) {
-    for (int n=0; n<3; ++n) {
-      sendbuf_ox1[n].vars_req = new MPI_Request[nmb_ox1bndry];
-      recvbuf_ox1[n].vars_req = new MPI_Request[nmb_ox1bndry];
-      for (int m=0; m<nmb_ox1bndry; ++m) {
-        sendbuf_ox1[n].vars_req[m] = MPI_REQUEST_NULL;
-        recvbuf_ox1[n].vars_req[m] = MPI_REQUEST_NULL;
+  // each MB on x1-face can communicate with up to 3 nghbrs
+  for (int n=0; n<2; ++n) {
+    if (nmb_x1bndry(n) > 0) {
+      sendbuf[n].vars_req = new MPI_Request[3*nmb_x1bndry(n)];
+      recvbuf[n].vars_req = new MPI_Request[3*nmb_x1bndry(n)];
+      for (int m=0; m<nmb_x1bndry(0); ++m) {
+        for (int n=0; n<3; ++n) {
+          sendbuf[n].vars_req[3*m + n] = MPI_REQUEST_NULL;
+          recvbuf[n].vars_req[3*m + n] = MPI_REQUEST_NULL;
+        }
       }
     }
   }
@@ -100,16 +87,10 @@ ShearingBoxBoundary::ShearingBoxBoundary(MeshBlockPack *ppack, ParameterInput *p
 
 ShearingBoxBoundary::~ShearingBoxBoundary() {
 #if MPI_PARALLEL_ENABLED
-  if (nmb_ix1bndry > 0) {
-    for (int n=0; n<3; ++n) {
-      delete [] sendbuf_ix1[n].vars_req;
-      delete [] recvbuf_ix1[n].vars_req;
-    }
-  }
-  if (nmb_ox1bndry > 0) {
-    for (int n=0; n<3; ++n) {
-      delete [] sendbuf_ox1[n].vars_req;
-      delete [] recvbuf_ox1[n].vars_req;
+  for (int n=0; n<2; ++n) {
+    if (nmb_x1bndry(n) > 0) {
+      delete [] sendbuf[n].vars_req;
+      delete [] recvbuf[n].vars_req;
     }
   }
 #endif
@@ -126,16 +107,30 @@ ShearingBoxBoundaryCC::ShearingBoxBoundaryCC(MeshBlockPack *pp, ParameterInput *
   int ncells3 = indcs.nx3 + 2*indcs.ng;
   int ncells2 = indcs.nx2 + 2*indcs.ng;
   int ncells1 = indcs.ng;
-  // Note only [0] index element of buffer variables is used to send data to neighboring
-  // Meshblocks. The [1] and [2] elements are therefore not allocated any memory
-  if (nmb_ix1bndry > 0) {
-    Kokkos::realloc(sendbuf_ix1[0].vars,nmb_ix1bndry,nvar,ncells3,ncells2,ncells1);
-    Kokkos::realloc(recvbuf_ix1[0].vars,nmb_ix1bndry,nvar,ncells3,ncells2,ncells1);
+  for (int n=0; n<2; ++n) {
+    int nmb = std::max(1,nmb_x1bndry(n));
+    Kokkos::realloc(sendbuf[n].vars,nmb,nvar,ncells3,ncells2,ncells1);
+    Kokkos::realloc(recvbuf[n].vars,nmb,nvar,ncells3,ncells2,ncells1);
   }
-  if (nmb_ox1bndry > 0) {
-    Kokkos::realloc(sendbuf_ox1[0].vars,nmb_ox1bndry,nvar,ncells3,ncells2,ncells1);
-    Kokkos::realloc(recvbuf_ox1[0].vars,nmb_ox1bndry,nvar,ncells3,ncells2,ncells1);
-  }
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void ShearingBoxBoundary::FindTargetMB()
+//! \brief  function to find target MB offset by shear.  Returns GID and rank
+
+void ShearingBoxBoundary::FindTargetMB(const int igid, const int jshift, int &gid,
+                                       int &rank){
+  Mesh *pm = pmy_pack->pmesh;
+  // find lloc of input MB
+  LogicalLocation lloc = pm->lloc_eachmb[igid];
+  // find number of MBs in x2 direction at this level
+  std::int32_t nmbx2 = pm->nmb_rootx2 << (lloc.level - pm->root_level);
+  // apply shift by input number of blocks
+  lloc.lx2 = static_cast<std::int32_t>((lloc.lx2 + jshift)/nmbx2);
+  // find target GID and rank
+  gid = (pm->ptree->FindMeshBlock(lloc))->GetGID();
+  rank = pm->rank_eachmb[gid];
+  return;
 }
 
 //----------------------------------------------------------------------------------------
@@ -144,117 +139,211 @@ ShearingBoxBoundaryCC::ShearingBoxBoundaryCC(MeshBlockPack *pp, ParameterInput *
 //! MPI communications. Both the inner_x1 and outer_x1 boundaries are updated.
 //! Called on the physics_bcs task after purely periodic BC communication is finished.
 
-TaskStatus ShearingBoxBoundaryCC::PackAndSendCC(DvceArray5D<Real> &a) {
+TaskStatus ShearingBoxBoundaryCC::PackAndSendCC(DvceArray5D<Real> &a,
+                                                ReconstructionMethod rcon, Real qom) {
   auto &indcs = pmy_pack->pmesh->mb_indcs;
   auto &is = indcs.is, &ie = indcs.ie;
   auto &js = indcs.js, &je = indcs.je;
   auto &ks = indcs.ks, &ke = indcs.ke;
   auto &ng = indcs.ng;
-  // copy ix1 and ox1 ghost zones into send buffer view
-  // Note only variables in [0] index of buffer array are used here and throughout
-  std::pair<int,int> isrc, idst;
-  isrc = std::make_pair(0,ng);
-  idst = std::make_pair(0,ng);
-  for (int m=0; m<nmb_ix1bndry; ++m) {
-    using namespace Kokkos;
-    auto src = subview(a,m,ALL,ALL,ALL,isrc);
-    auto dst = subview(sendbuf_ix1[0].vars,m,ALL,ALL,ALL,idst);
-    deep_copy(DevExeSpace(), dst, src);
-  }
-  isrc = std::make_pair(ie+1,ie+1+ng);
-  idst = std::make_pair(0,ng);
-  for (int m=0; m<nmb_ox1bndry; ++m) {
-    using namespace Kokkos;
-    auto src = subview(a,m,ALL,ALL,ALL,isrc);
-    auto dst = subview(sendbuf_ox1[0].vars,m,ALL,ALL,ALL,idst);
-    deep_copy(DevExeSpace(), dst, src);
+  // copy ghost zones at x1-faces into send buffer view
+  for (int n=0; n<2; ++n) {
+    std::pair<int,int> isrc;
+    if (n==0) {
+      isrc = std::make_pair(0,ng);
+    } else {
+      isrc = std::make_pair(ie+1,ie+1+ng);
+    }
+    for (int m=0; m<nmb_x1bndry(n); ++m) {
+      int mm = x1bndry_mbgid(n,m) - pmy_pack->gids;
+      using namespace Kokkos;
+      auto src = subview(a,mm,ALL,ALL,ALL,isrc);
+      auto dst = subview(sendbuf[n].vars,m,ALL,ALL,ALL,ALL);
+      deep_copy(DevExeSpace(), dst, src);
+    }
   }
 
   // figure out distance boundaries are sheared
   auto &mesh_size = pmy_pack->pmesh->mesh_size;
   Real &time = pmy_pack->pmesh->time;
   Real lx = (mesh_size.x1max - mesh_size.x1min);
-  Real yshear = qshear*omega0*lx*time;
-/*
+  Real yshear = qom*lx*time;
 
-  // apply fractional cell offset to data in send buffer using conservative remap
+  // apply fractional cell offset to data in send buffers using conservative remap
   int nvar = a.extent_int(1);  // TODO(@user): 2nd index from L of in array must be NVAR
   auto &mbsize = pmy_pack->pmb->mb_size;
   int nj = indcs.nx2 + 2*ng;
-  int nmb1 = nmb_x1bndry-1;
-  auto sbuf = sendcc_shr;
+  auto sbuf = sendbuf;
   int scr_lvl=0;
   size_t scr_size = ScrArray1D<Real>::shmem_size(nj) * 3;
-  par_for_outer("shrcc0",DevExeSpace(),scr_size,scr_lvl,0,nmb1,0,(nvar-1),ks,ke,is,ie,
-  KOKKOS_LAMBDA(TeamMember_t member, const int m, const int n, const int k, const int i) {
-    ScrArray1D<Real> u0_(member.team_scratch(scr_lvl), nfx); // 1D slice of data
-    ScrArray1D<Real> flx(member.team_scratch(scr_lvl), nfx); // "flux" at faces
-    ScrArray1D<Real> q1_(member.team_scratch(scr_lvl), nfx); // scratch array
+  for (int n=0; n<2; ++n) {
+    int nmb1 = nmb_x1bndry(n) - 1;
+    par_for_outer("shrcc",DevExeSpace(),scr_size,scr_lvl,0,nmb1,0,(nvar-1),ks,ke,is,ie,
+    KOKKOS_LAMBDA(TeamMember_t member, const int m, const int v, const int k, const int i)
+    {
+      ScrArray1D<Real> u0_(member.team_scratch(scr_lvl), nj); // 1D slice of data
+      ScrArray1D<Real> flx(member.team_scratch(scr_lvl), nj); // "flux" at faces
+      ScrArray1D<Real> q1_(member.team_scratch(scr_lvl), nj); // scratch array
 
-    // Load scratch array
-    par_for_inner(member, 0, nj, [&](const int j) {
-      u0_(j) = a(m,n,k,j,i);
-    });
-    member.team_barrier();
+      // Load scratch array
+      par_for_inner(member, 0, nj, [&](const int j) {
+        u0_(j) = sbuf[n].vars(m,v,k,j,i);
+      });
+      member.team_barrier();
 
-    // compute fractional offset
-    Real eps = fmod(yshear,(mbsize.d_view(m).dx2))/(mbsize.d_view(m).dx2);
-    if (x1bndry_mbs.d_view(m,0) != 0) {eps *= -1.0;}
+      // compute fractional offset
+      Real eps = fmod(yshear,(mbsize.d_view(m).dx2))/(mbsize.d_view(m).dx2);
+      if (n == 1) {eps *= -1.0;}
 
-    // Compute "fluxes" at shifted cell faces
-    switch (rcon) {
-      case ReconstructionMethod::dc:
-        DonorCellOrbAdvFlx(member, js, (je+1), eps, u0_, q1_, flx);
-        break;
-      case ReconstructionMethod::plm:
-        PcwsLinearOrbAdvFlx(member, js, (je+1), eps, u0_, q1_, flx);
-        break;
+      // Compute "fluxes" at shifted cell faces
+      switch (rcon) {
+        case ReconstructionMethod::dc:
+          DCRemapFlx(member, js, (je+1), eps, u0_, q1_, flx);
+          break;
+        case ReconstructionMethod::plm:
+          PLMRemapFlx(member, js, (je+1), eps, u0_, q1_, flx);
+          break;
 //      case ReconstructionMethod::ppm4:
 //      case ReconstructionMethod::ppmx:
 //          PPMRemapFlx(member,eos_,extrema,true,m,k,j,il,iu, w0_, wl_jp1, wr);
 //        break;
-      default:
-        break;
-    }
-    member.team_barrier();
+        default:
+          break;
+      }
+      member.team_barrier();
 
-    // update data in send buffer with fracational shift
-    par_for_inner(member, js, je, [&](const int j) {
-      sbuf(m,n,k,j,i) -= (flx(j+1) - flx(j));
+      // update data in send buffer with fracational shift
+      par_for_inner(member, js, je, [&](const int j) {
+        sbuf[n].vars(m,v,k,j,i) -= (flx(j+1) - flx(j));
+      });
     });
-  });
+  }
 
-  // copy data into recieve buffer for any MBs on the same rank
-  for (int m=0; m<nmb_x1bndry; ++m) {
-    // Find integer and fractional number of grids over which offset extends.
-    // This assumes every grid has same number of cells in x2-direction!
-    int jshear  = static_cast<int>(yshear/(mbsize.h_view(m).dx2));
-    int jsheari = jshear/mbsize.h_view(m).nx2;
-    int jshearf = jshear - jsheari*mbsize.h_view(m).nx2;
+  // shift data at x1 boundaries by integer number of cells.
+  // Algorithm is broken into three steps: case1/2/3.
+  //  * Case1 and case3 are when the integer shift (jr<ng), so that the sending MB
+  //    overlaps the ghost cells of the two neighbors, and so requires copies
+  //    to three seperate target MB.
+  //  * Case2 is when the sending MB straddles the boundary between MBs, and so requires
+  //    copies to only two target MBs.
+  // j-indices of domain to be copied are stored in std::pair in each case.
+  // Use deep copy if target MB on same rank, or MPI sends if not
+  for (int n=0; n<2; ++n) {
+    int &nx2 = indcs.nx2;
+    for (int m=0; m<nmb_x1bndry(n); ++m) {
+      int gid = x1bndry_mbgid(n,m);
+      int mm = gid - pmy_pack->gids;
+      // Find integer and fractional number of grids over which offset extends.
+      // This assumes every grid has same number of cells in x2-direction!
+      int joffset  = static_cast<int>(yshear/(mbsize.h_view(mm).dx2));
+      int ji = joffset/(pmy_pack->pmesh->mb_indcs.nx2);
+      int jr = joffset - ji*(pmy_pack->pmesh->mb_indcs.nx2);
 
-    Mesh *pm = pmy_pack->pmesh;
-    LogicalLocation lloc = pm->lloc_eachmb[pmy_pack->gids + m];
-    std::int32_t nmbx2 = pm->nmb_rootx2 << (lloc.level - pm->root_level);
-    lloc.lx2 = static_cast<std::int32_t>((lloc.lx2 + jsheari)/nmbx2);
-//    MeshBlockTree *bt = pm->ptree->FindMeshBlock(lloc);
-    int tgid = (pm->ptree->FindMeshBlock(lloc))->GetGID();
-    int trank = pm->rank_eachmb[tgid];
-    int tm = tgid - gids_eachrank[trank];
-
-    if (jshearf < ng) {
-      // send to (dm-1)
-      std::pair<int,int> isrc = std::make_pair(0,ng);
-      std::pair<int,int> idst = std::make_pair(0,ng);
-      using Kokkos;
-      auto src = subview(a,m,ALL,ALL,ALL,isrc);
-      auto dst = subview(sendcc_shr.vars,tm,ALL,ALL,ALL,isrc);
-      deep_copyaDevExeSpace(), dst, src)
-      // send to dm
-
-      // send to (dm+1)
+      if (jr < ng) {  //-------------------------------------- CASE 1 (in my nomenclature)
+        int tgid, trank;
+        std::pair<int,int> jsrc[3],jdst[3];
+        if (n==0) {
+          jsrc[0] = std::make_pair(js,js+ng-jr);
+          jsrc[1] = std::make_pair(js,je+1);
+          jsrc[2] = std::make_pair(je-(ng-1)-jr,je+1);
+          jdst[0] = std::make_pair(je+1+jr,je+ng+1);
+          jdst[1] = std::make_pair(js+jr,je+jr+1);
+          jdst[2] = std::make_pair(js-ng,js+jr);
+        } else {
+          jsrc[0] = std::make_pair(js,js+ng+jr);
+          jsrc[1] = std::make_pair(js,je+1);
+          jsrc[2] = std::make_pair(je-(ng-1)+jr,je+1);
+          jdst[0] = std::make_pair(je+1-jr,je+ng+1);
+          jdst[1] = std::make_pair(js-jr,je-jr+1);
+          jdst[2] = std::make_pair(js-ng,js-jr);
+        }
+        // send to (target-1) through (target+1) [ix1 boundary]
+        // send to (target-1) through (target+1) [ox1 boundary]
+        for (int l=0; l<=2; ++l) {
+          int jshift = l-1;
+          FindTargetMB(gid,(ji+jshift),tgid,trank);
+          if (trank == global_variable::my_rank) {
+            int tm = TargetIndex(n,tgid);
+            using namespace Kokkos;
+            auto src = subview(sendbuf[n].vars,m, ALL,ALL,jsrc[l],ALL);
+            auto dst = subview(recvbuf[n].vars,tm,ALL,ALL,jdst[l],ALL);
+            deep_copy(DevExeSpace(), dst, src);
+#if MPI_PARALLEL_ENABLED
+          } else {
+#endif
+          }
+        }
+      } else if (jr < (nx2-ng)) {  //--- CASE 2
+        int tgid, trank;
+        std::pair<int,int> jsrc[2],jdst[2];
+        if (n==0) {
+          jsrc[0] = std::make_pair(js,je+ng-jr+1);
+          jsrc[1] = std::make_pair(je-(ng-1)-jr,je+1);
+          jdst[0] = std::make_pair(js+jr,je+ng+1);
+          jdst[1] = std::make_pair(js-ng,js+jr);
+        } else {
+          jsrc[0] = std::make_pair(js,je+ng+jr+1);
+          jsrc[1] = std::make_pair(js-ng+jr,je+1);
+          jdst[0] = std::make_pair(je-jr+1,je+ng+1);
+          jdst[1] = std::make_pair(js-ng,je-jr+1);
+        }
+        // send to (target  ) through (target+1) [ix1 boundary]
+        // send to (target-1) through (target  ) [ox1 boundary]
+        for (int l=0; l<=1; ++l) {
+          int jshift;
+          if (n==0) {jshift = l;} else {jshift = l-1;}
+          FindTargetMB(gid,(ji+jshift),tgid,trank);
+          if (trank == global_variable::my_rank) {
+            int tm = TargetIndex(n,tgid);
+            using namespace Kokkos;
+            auto src = subview(sendbuf[n].vars,m, ALL,ALL,jsrc[l],ALL);
+            auto dst = subview(recvbuf[n].vars,tm,ALL,ALL,jdst[l],ALL);
+            deep_copy(DevExeSpace(), dst, src);
+#if MPI_PARALLEL_ENABLED
+          } else {
+#endif
+          }
+        }
+      } else {  //--------------------------------------------------- CASE 3
+        int tgid, trank;
+        std::pair<int,int> jsrc[3],jdst[3];
+        if (n==0) {
+          jsrc[0] = std::make_pair(js,js+ng+(nx2-jr));
+          jsrc[1] = std::make_pair(js,je+1);
+          jsrc[2] = std::make_pair(je-(ng-1)+(nx2-jr),je+1);
+          jdst[0] = std::make_pair(je+1-(nx2-jr),je+ng+1);
+          jdst[1] = std::make_pair(js-(nx2-jr),je-(nx2-jr)+1);
+          jdst[2] = std::make_pair(js-ng,js-(nx2-jr));
+        } else {
+          jsrc[0] = std::make_pair(js,js+ng-(nx2-jr));
+          jsrc[1] = std::make_pair(js,je+1);
+          jsrc[2] = std::make_pair(je-(ng-1)-(nx2-jr),je+1);
+          jdst[0] = std::make_pair(je+1+(nx2-jr),je+ng+1);
+          jdst[1] = std::make_pair(js+(nx2-jr),je+(nx2-jr)+1);
+          jdst[2] = std::make_pair(js-ng,js+(nx2-jr));
+        }
+        // send to (target  ) through (target+2) [ix1 boundary]
+        // send to (target-2) through (target  ) [ox1 boundary]
+        for (int l=0; l<=2; ++l) {
+          int jshift;
+          if (n==0) {jshift = l;} else {jshift = l-2;}
+          FindTargetMB(gid,(ji+jshift),tgid,trank);
+          if (trank == global_variable::my_rank) {
+            int tm = TargetIndex(n,tgid);
+            using namespace Kokkos;
+            auto src = subview(sendbuf[n].vars,m, ALL,ALL,jsrc[l],ALL);
+            auto dst = subview(recvbuf[n].vars,tm,ALL,ALL,jdst[l],ALL);
+            deep_copy(DevExeSpace(), dst, src);
+#if MPI_PARALLEL_ENABLED
+          } else {
+#endif
+          }
+        }
+      }
     }
   }
 
+/*
 
 #if MPI_PARALLEL_ENABLED
   // Send boundary buffer to neighboring MeshBlocks using MPI

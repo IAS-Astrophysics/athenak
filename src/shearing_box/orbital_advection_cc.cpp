@@ -310,14 +310,14 @@ TaskStatus OrbitalAdvectionCC::RecvAndUnpackCC(DvceArray5D<Real> &u0,
     Real epsi = fmod(yshear,(mbsize.d_view(m).dx2))/(mbsize.d_view(m).dx2);
     switch (rcon) {
       case ReconstructionMethod::dc:
-        DonorCellOrbAdvFlx(member, (jfs-joffset), (jfe+1-joffset), epsi, u0_, q1_, flx);
+        DCRemapFlx(member, (jfs-joffset), (jfe+1-joffset), epsi, u0_, q1_, flx);
         break;
       case ReconstructionMethod::plm:
-        PcwsLinearOrbAdvFlx(member, (jfs-joffset), (jfe+1-joffset), epsi, u0_, q1_, flx);
+        PLMRemapFlx(member, (jfs-joffset), (jfe+1-joffset), epsi, u0_, q1_, flx);
         break;
 //      case ReconstructionMethod::ppm4:
 //      case ReconstructionMethod::ppmx:
-//          PiecewiseParabolicOrbAdvFlx(member,eos_,extrema,true,m,k,j,il,iu, w0_, wl_jp1, wr);
+//          PPMRemapFlx(member,eos_,extrema,true,m,k,j,il,iu, w0_, wl_jp1, wr);
 //        break;
       default:
         break;

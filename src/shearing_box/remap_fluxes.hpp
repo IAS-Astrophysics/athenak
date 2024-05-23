@@ -15,9 +15,8 @@
 //! \fn DonorCellOrbAdvFlx()
 
 KOKKOS_INLINE_FUNCTION
-void DonorCellOrbAdvFlx(TeamMember_t const &member, const int jl, const int ju,
-                        const Real eps, const ScrArray1D<Real> &u, ScrArray1D<Real> &q1,
-                        ScrArray1D<Real> &ust) {
+void DCRemapFlx(TeamMember_t const &member, const int jl, const int ju, const Real eps,
+                const ScrArray1D<Real> &u, ScrArray1D<Real> &q1, ScrArray1D<Real> &ust) {
   if (eps > 0.0) {
     par_for_inner(member, jl, ju, [&](const int j) {
       ust(j) = eps*u(j-1);
@@ -34,10 +33,8 @@ void DonorCellOrbAdvFlx(TeamMember_t const &member, const int jl, const int ju,
 //! \fn PiecewiseLinearOrbAdvFlx()
 
 KOKKOS_INLINE_FUNCTION
-void PcwsLinearOrbAdvFlx(TeamMember_t const &member, const int jl, const int ju,
-                         const Real eps, const ScrArray1D<Real> &u, ScrArray1D<Real> &q1,
-                         ScrArray1D<Real> &ust) {
-
+void PLMRemapFlx(TeamMember_t const &member, const int jl, const int ju, const Real eps,
+                 const ScrArray1D<Real> &u, ScrArray1D<Real> &q1, ScrArray1D<Real> &ust) {
   // compute limited slopes
   par_for_inner(member, jl-1, ju, [&](const int j) {
     Real dql = u(j  ) - u(j-1);
