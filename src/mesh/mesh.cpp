@@ -482,6 +482,8 @@ BoundaryFlag Mesh::GetBoundaryFlag(const std::string& input_string) {
     return BoundaryFlag::user;
   } else if (input_string == "periodic") {
     return BoundaryFlag::periodic;
+  } else if (input_string == "vacuum") {
+    return BoundaryFlag::vacuum;
   } else if (input_string == "shear_periodic") {
     return BoundaryFlag::shear_periodic;
   } else if (input_string == "undef") {
