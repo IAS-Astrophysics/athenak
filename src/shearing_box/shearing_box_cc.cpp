@@ -176,18 +176,19 @@ TaskStatus ShearingBoxBoundaryCC::PackAndSendCC(DvceArray5D<Real> &a,
   auto sbuf = sendbuf;
   int scr_lvl=0;
   size_t scr_size = ScrArray1D<Real>::shmem_size(nj) * 3;
+/*
   for (int n=0; n<2; ++n) {
     int nmb1 = nmb_x1bndry(n) - 1;
     par_for_outer("shrcc",DevExeSpace(),scr_size,scr_lvl,0,nmb1,0,(nvar-1),ks,ke,is,ie,
     KOKKOS_LAMBDA(TeamMember_t member, const int m, const int v, const int k, const int i)
     {
-      ScrArray1D<Real> u0_(member.team_scratch(scr_lvl), nj); // 1D slice of data
+      ScrArray1D<Real> a_(member.team_scratch(scr_lvl), nj); // 1D slice of data
       ScrArray1D<Real> flx(member.team_scratch(scr_lvl), nj); // "flux" at faces
       ScrArray1D<Real> q1_(member.team_scratch(scr_lvl), nj); // scratch array
 
       // Load scratch array
       par_for_inner(member, 0, nj, [&](const int j) {
-        u0_(j) = sbuf[n].vars(m,v,k,j,i);
+        a_(j) = sbuf[n].vars(m,v,k,j,i);
       });
       member.team_barrier();
 
@@ -198,10 +199,10 @@ TaskStatus ShearingBoxBoundaryCC::PackAndSendCC(DvceArray5D<Real> &a,
       // Compute "fluxes" at shifted cell faces
       switch (rcon) {
         case ReconstructionMethod::dc:
-          DCRemapFlx(member, js, (je+1), eps, u0_, q1_, flx);
+          DCRemapFlx(member, js, (je+1), eps, a_, q1_, flx);
           break;
         case ReconstructionMethod::plm:
-          PLMRemapFlx(member, js, (je+1), eps, u0_, q1_, flx);
+          PLMRemapFlx(member, js, (je+1), eps, a_, q1_, flx);
           break;
 //      case ReconstructionMethod::ppm4:
 //      case ReconstructionMethod::ppmx:
@@ -218,6 +219,7 @@ TaskStatus ShearingBoxBoundaryCC::PackAndSendCC(DvceArray5D<Real> &a,
       });
     });
   }
+*/
 
   // shift data at x1 boundaries by integer number of cells.
   // Algorithm is broken into three steps: case1/2/3.
@@ -238,6 +240,7 @@ TaskStatus ShearingBoxBoundaryCC::PackAndSendCC(DvceArray5D<Real> &a,
       int joffset  = static_cast<int>(yshear/(mbsize.h_view(mm).dx2));
       int ji = joffset/(pmy_pack->pmesh->mb_indcs.nx2);
       int jr = joffset - ji*(pmy_pack->pmesh->mb_indcs.nx2);
+//std::cout<<"n="<<n<<"  jr="<<jr<<std::endl;
 
       if (jr < ng) {  //-------------------------------------- CASE 1 (in my nomenclature)
         int tgid, trank;
@@ -282,7 +285,7 @@ TaskStatus ShearingBoxBoundaryCC::PackAndSendCC(DvceArray5D<Real> &a,
           jdst[0] = std::make_pair(js+jr,je+ng+1);
           jdst[1] = std::make_pair(js-ng,js+jr);
         } else {
-          jsrc[0] = std::make_pair(js,je+ng+jr+1);
+          jsrc[0] = std::make_pair(js,js+ng+jr);
           jsrc[1] = std::make_pair(js-ng+jr,je+1);
           jdst[0] = std::make_pair(je-jr+1,je+ng+1);
           jdst[1] = std::make_pair(js-ng,je-jr+1);
@@ -357,5 +360,74 @@ TaskStatus ShearingBoxBoundaryCC::PackAndSendCC(DvceArray5D<Real> &a,
   }
 #endif
 */
+  return TaskStatus::complete;
+}
+
+//----------------------------------------------------------------------------------------
+//! \!fn void ShearingBoxBoundaryCC::RecvAndUnpackCC()
+//! \brief Check MPI communication of boundary buffers for CC variables have finished,
+//! then copy buffers into ghost zones. Shift has already been performed in
+//! PackAndSendCC() function
+
+TaskStatus ShearingBoxBoundaryCC::RecvAndUnpackCC(DvceArray5D<Real> &a){
+  // create local references for variables in kernel
+  int nmb = pmy_pack->nmb_thispack;
+  int nnghbr = pmy_pack->pmb->nnghbr;
+  auto &nghbr = pmy_pack->pmb->nghbr;
+  auto &rbuf = recvbuf;
+#if MPI_PARALLEL_ENABLED
+  //----- STEP 1: check that recv boundary buffer communications have all completed
+  bool bflag = false;
+  bool no_errors=true;
+  for (int m=0; m<nmb; ++m) {
+    for (int n=0; n<2; ++n) {
+      // indices of x2-face buffers in nghbr view
+      int nnghbr;
+      if (n==0) {nnghbr=8;} else {nnghbr=12;}
+      if (nghbr.h_view(m,nnghbr).gid >= 0) { // neighbor exists and not a physical bndry
+        if (nghbr.h_view(m,nnghbr).rank != global_variable::my_rank) {
+          int test;
+          int ierr = MPI_Test(&(rbuf[n].vars_req[m]), &test, MPI_STATUS_IGNORE);
+          if (ierr != MPI_SUCCESS) {no_errors=false;}
+          if (!(static_cast<bool>(test))) {
+            bflag = true;
+          }
+        }
+      }
+    }
+  }
+  // Quit if MPI error detected
+  if (!(no_errors)) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+              << std::endl << "MPI error in testing non-blocking receives"
+              << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+  // exit if recv boundary buffer communications have not completed
+  if (bflag) {return TaskStatus::incomplete;}
+#endif
+
+  //----- STEP 2: communications have all completed, so unpack and apply shift
+
+  auto &indcs = pmy_pack->pmesh->mb_indcs;
+  auto &is = indcs.is, &ie = indcs.ie;
+  auto &ng = indcs.ng;
+  // copy recv buffer view into ghost zones at x1-faces
+  for (int n=0; n<2; ++n) {
+    std::pair<int,int> idst;
+    if (n==0) {
+      idst = std::make_pair(0,ng);
+    } else {
+      idst = std::make_pair(ie+1,ie+1+ng);
+    }
+    for (int m=0; m<nmb_x1bndry(n); ++m) {
+      int mm = x1bndry_mbgid(n,m) - pmy_pack->gids;
+      using namespace Kokkos;
+      auto src = subview(recvbuf[n].vars,m,ALL,ALL,ALL,ALL);
+      auto dst = subview(a,mm,ALL,ALL,ALL,idst);
+      deep_copy(DevExeSpace(), dst, src);
+    }
+  }
+
   return TaskStatus::complete;
 }

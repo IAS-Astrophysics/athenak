@@ -24,6 +24,7 @@ class Viscosity;
 class Conduction;
 class SourceTerms;
 class OrbitalAdvectionCC;
+class ShearingBoxBoundaryCC;
 class Driver;
 
 // constants that enumerate Hydro Riemann Solver options
@@ -43,11 +44,13 @@ struct HydroTaskIDs {
   TaskID recvf;
   TaskID rkupdt;
   TaskID srctrms;
-  TaskID senduoa;
-  TaskID recvuoa;
+  TaskID sendu_oa;
+  TaskID recvu_oa;
   TaskID restu;
   TaskID sendu;
   TaskID recvu;
+  TaskID sendu_shr;
+  TaskID recvu_shr;
   TaskID bcs;
   TaskID prol;
   TaskID c2p;
@@ -84,7 +87,7 @@ class Hydro {
 
   // Orbital advection and shearing box BCs
   OrbitalAdvectionCC *porb_u = nullptr;
-//  ShearingBoxBoundaryCC *psbox_u = nullptr;
+  ShearingBoxBoundaryCC *psbox_u = nullptr;
 
   // Object(s) for extra physics (viscosity, thermal conduction, srcterms)
   Viscosity *pvisc = nullptr;
@@ -119,6 +122,8 @@ class Hydro {
   TaskStatus RestrictU(Driver *d, int stage);
   TaskStatus SendU(Driver *d, int stage);
   TaskStatus RecvU(Driver *d, int stage);
+  TaskStatus SendU_Shr(Driver *d, int stage);
+  TaskStatus RecvU_Shr(Driver *d, int stage);
   TaskStatus ApplyPhysicalBCs(Driver* pdrive, int stage);
   TaskStatus Prolongate(Driver* pdrive, int stage);
   TaskStatus ConToPrim(Driver *d, int stage);

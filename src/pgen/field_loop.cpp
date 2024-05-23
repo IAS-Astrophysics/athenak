@@ -54,6 +54,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   Real rad = pin->GetOrAddReal("problem","rad",0.0);
   Real amp = pin->GetOrAddReal("problem","amp",0.0);
   Real drat = pin->GetOrAddReal("problem","drat",1.0);
+  Real vx0 = pin->GetOrAddReal("problem","vx0",0.0);
   int iprob = pin->GetInteger("problem","iprob");
   Real cos_a2(0.0), sin_a2(0.0), lambda(0.0);
 
@@ -63,7 +64,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   Real ly = msize.x2max - msize.x2min;
   Real lz = msize.x3max - msize.x3min;
   Real x0 = msize.x1min, y0 = msize.x2min;
-  Real xpt[5] = {(x0+0.2*lx), (x0+0.3*lx), (x0+0.5*lx), (x0+0.8*lx), (x0+0.7*lx)};
+  Real xpt[5] = {(x0+0.1*lx), (x0+0.3*lx), (x0+0.5*lx), (x0+0.7*lx), (x0+0.9*lx)};
   Real ypt[5] = {(y0+0.3*ly), (y0+0.7*ly), (y0+0.5*ly), (y0+0.2*ly), (y0+0.8*ly)};
   auto three_d = pmy_mesh_->three_d;
   Real diag;
@@ -154,10 +155,10 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
       }
 
       u0(m,IDN,k,j,i) = dens;
-      u0(m,IM1,k,j,i) = 0.0;
+      u0(m,IM1,k,j,i) = dens*vx0;
       u0(m,IM2,k,j,i) = 0.0;
       u0(m,IM3,k,j,i) = 0.0;
-      if (eos.is_ideal) { u0(m,IEN,k,j,i) = 1.0/gm1; }
+      if (eos.is_ideal) { u0(m,IEN,k,j,i) = 1.0/gm1 + 0.5*dens*vx0*vx0; }
     });
   }
 
@@ -310,7 +311,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
 
       u0(m,IDN,k,j,i) = 1.0;
       if (shearing_box_) {
-        u0(m,IM1,k,j,i) = 0.0;
+        u0(m,IM1,k,j,i) = vx0;
         u0(m,IM2,k,j,i) = 0.0;
         u0(m,IM3,k,j,i) = 0.0;
       } else {

@@ -53,21 +53,23 @@ void Hydro::AssembleHydroTasks(std::map<std::string, std::shared_ptr<TaskList>> 
   id.irecv = tl["before_stagen"]->AddTask(&Hydro::InitRecv, this, none);
 
   // assemble "stagen" task list
-  id.copyu   = tl["stagen"]->AddTask(&Hydro::CopyCons, this, none);
-  id.flux    = tl["stagen"]->AddTask(&Hydro::Fluxes,this,id.copyu);
-  id.sendf   = tl["stagen"]->AddTask(&Hydro::SendFlux, this, id.flux);
-  id.recvf   = tl["stagen"]->AddTask(&Hydro::RecvFlux, this, id.sendf);
-  id.rkupdt  = tl["stagen"]->AddTask(&Hydro::RKUpdate, this, id.recvf);
-  id.srctrms = tl["stagen"]->AddTask(&Hydro::HydroSrcTerms, this, id.rkupdt);
-  id.senduoa = tl["stagen"]->AddTask(&Hydro::SendU_OA, this, id.srctrms);
-  id.recvuoa = tl["stagen"]->AddTask(&Hydro::RecvU_OA, this, id.senduoa);
-  id.restu   = tl["stagen"]->AddTask(&Hydro::RestrictU, this, id.recvuoa);
-  id.sendu   = tl["stagen"]->AddTask(&Hydro::SendU, this, id.restu);
-  id.recvu   = tl["stagen"]->AddTask(&Hydro::RecvU, this, id.sendu);
-  id.bcs     = tl["stagen"]->AddTask(&Hydro::ApplyPhysicalBCs, this, id.recvu);
-  id.prol    = tl["stagen"]->AddTask(&Hydro::Prolongate, this, id.bcs);
-  id.c2p     = tl["stagen"]->AddTask(&Hydro::ConToPrim, this, id.prol);
-  id.newdt   = tl["stagen"]->AddTask(&Hydro::NewTimeStep, this, id.c2p);
+  id.copyu     = tl["stagen"]->AddTask(&Hydro::CopyCons, this, none);
+  id.flux      = tl["stagen"]->AddTask(&Hydro::Fluxes,this,id.copyu);
+  id.sendf     = tl["stagen"]->AddTask(&Hydro::SendFlux, this, id.flux);
+  id.recvf     = tl["stagen"]->AddTask(&Hydro::RecvFlux, this, id.sendf);
+  id.rkupdt    = tl["stagen"]->AddTask(&Hydro::RKUpdate, this, id.recvf);
+  id.srctrms   = tl["stagen"]->AddTask(&Hydro::HydroSrcTerms, this, id.rkupdt);
+  id.sendu_oa  = tl["stagen"]->AddTask(&Hydro::SendU_OA, this, id.srctrms);
+  id.recvu_oa  = tl["stagen"]->AddTask(&Hydro::RecvU_OA, this, id.sendu_oa);
+  id.restu     = tl["stagen"]->AddTask(&Hydro::RestrictU, this, id.recvu_oa);
+  id.sendu     = tl["stagen"]->AddTask(&Hydro::SendU, this, id.restu);
+  id.recvu     = tl["stagen"]->AddTask(&Hydro::RecvU, this, id.sendu);
+  id.sendu_shr = tl["stagen"]->AddTask(&Hydro::SendU_Shr, this, id.recvu);
+  id.recvu_shr = tl["stagen"]->AddTask(&Hydro::RecvU_Shr, this, id.sendu_shr);
+  id.bcs       = tl["stagen"]->AddTask(&Hydro::ApplyPhysicalBCs, this, id.recvu_shr);
+  id.prol      = tl["stagen"]->AddTask(&Hydro::Prolongate, this, id.bcs);
+  id.c2p       = tl["stagen"]->AddTask(&Hydro::ConToPrim, this, id.prol);
+  id.newdt     = tl["stagen"]->AddTask(&Hydro::NewTimeStep, this, id.c2p);
 
   // assemble "after_stagen" task list
   id.csend = tl["after_stagen"]->AddTask(&Hydro::ClearSend, this, none);
@@ -297,6 +299,36 @@ TaskStatus Hydro::SendU(Driver *pdrive, int stage) {
 
 TaskStatus Hydro::RecvU(Driver *pdrive, int stage) {
   TaskStatus tstat = pbval_u->RecvAndUnpackCC(u0, coarse_u0);
+  return tstat;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn TaskList Hydro::SendU_Shr
+//! \brief Wrapper task list function to send data for orbital advection
+
+TaskStatus Hydro::SendU_Shr(Driver *pdrive, int stage) {
+  TaskStatus tstat = TaskStatus::complete;
+  // only execute when (shearing box defined) AND (last stage) AND (3D OR 2d_r_phi)
+  if ((psrc->shearing_box) && (stage == pdrive->nexp_stages) &&
+      (pmy_pack->pmesh->three_d || psrc->shearing_box_r_phi)) {
+    Real qom = (psrc->qshear)*(psrc->omega0);
+    tstat = psbox_u->PackAndSendCC(u0, recon_method, qom);
+  }
+  return tstat;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn TaskList Hydro::RecvU_Shr
+//! \brief Wrapper task list function to receive and unpack data for orbital advection
+//! Orbital remap is performed in this step.
+
+TaskStatus Hydro::RecvU_Shr(Driver *pdrive, int stage) {
+  TaskStatus tstat = TaskStatus::complete;
+  // only execute when (shearing box defined) AND (last stage) AND (3D OR 2d_r_phi)
+  if ((psrc->shearing_box) && (stage == pdrive->nexp_stages) &&
+      (pmy_pack->pmesh->three_d || psrc->shearing_box_r_phi)) {
+    tstat = psbox_u->RecvAndUnpackCC(u0);
+  }
   return tstat;
 }
 

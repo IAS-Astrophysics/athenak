@@ -210,9 +210,9 @@ TaskStatus OrbitalAdvectionCC::PackAndSendCC(DvceArray5D<Real> &a) {
 //! \!fn void OrbitalAdvectionCC::RecvAndUnpackCC()
 //! \brief Receive and unpack boundary buffers for CC variables with orbital advection,
 //! and apply shift in x2- (y-) direction across entire MeshBlock by applying both an
-//! integer shift and a fractional offset to input array u0.
+//! integer shift and a fractional offset to input array a.
 
-TaskStatus OrbitalAdvectionCC::RecvAndUnpackCC(DvceArray5D<Real> &u0,
+TaskStatus OrbitalAdvectionCC::RecvAndUnpackCC(DvceArray5D<Real> &a,
                                                ReconstructionMethod rcon, Real qom){
   // create local references for variables in kernel
   int nmb = pmy_pack->nmb_thispack;
@@ -254,7 +254,7 @@ TaskStatus OrbitalAdvectionCC::RecvAndUnpackCC(DvceArray5D<Real> &u0,
 
   //----- STEP 2: buffers have all completed, so unpack and apply shift
 
-  int nvar = u0.extent_int(1);  // TODO(@user): 2nd index from L of in array must be NVAR
+  int nvar = a.extent_int(1);  // TODO(@user): 2nd index from L of in array must be NVAR
 
   auto &indcs = pmy_pack->pmesh->mb_indcs;
   auto &is = indcs.is, &ie = indcs.ie;
@@ -278,7 +278,7 @@ TaskStatus OrbitalAdvectionCC::RecvAndUnpackCC(DvceArray5D<Real> &u0,
   size_t scr_size = ScrArray1D<Real>::shmem_size(nfx) * 3;
   par_for_outer("oa-unpk",DevExeSpace(),scr_size,scr_lvl,0,(nmb-1),0,(nvar-1),ks,ke,is,ie,
   KOKKOS_LAMBDA(TeamMember_t member, const int m, const int n, const int k, const int i) {
-    ScrArray1D<Real> u0_(member.team_scratch(scr_lvl), nfx); // 1D slice of data
+    ScrArray1D<Real> a_(member.team_scratch(scr_lvl), nfx); // 1D slice of data
     ScrArray1D<Real> flx(member.team_scratch(scr_lvl), nfx); // "flux" at faces
     ScrArray1D<Real> q1_(member.team_scratch(scr_lvl), nfx); // scratch array
 
@@ -294,13 +294,13 @@ TaskStatus OrbitalAdvectionCC::RecvAndUnpackCC(DvceArray5D<Real> &u0,
     par_for_inner(member, 0, (nfx-1), [&](const int jf) {
       if (jf < jfs) {
         // Load from L boundary buffer
-        u0_(jf) = rbuf[0].vars(m,n,(k-ks),jf,(i-is));
+        a_(jf) = rbuf[0].vars(m,n,(k-ks),jf,(i-is));
       } else if (jf <= jfe) {
         // Load from conserved variables themselves (addressed with j=jf-jfs+js)
-        u0_(jf) = u0(m,n,k,jf-jfs+js,i);
+        a_(jf) = a(m,n,k,jf-jfs+js,i);
       } else {
         // Load from R boundary buffer
-        u0_(jf) = rbuf[1].vars(m,n,(k-ks),jf-(jfe+1),(i-is));
+        a_(jf) = rbuf[1].vars(m,n,(k-ks),jf-(jfe+1),(i-is));
 
       }
     });
@@ -310,10 +310,10 @@ TaskStatus OrbitalAdvectionCC::RecvAndUnpackCC(DvceArray5D<Real> &u0,
     Real epsi = fmod(yshear,(mbsize.d_view(m).dx2))/(mbsize.d_view(m).dx2);
     switch (rcon) {
       case ReconstructionMethod::dc:
-        DCRemapFlx(member, (jfs-joffset), (jfe+1-joffset), epsi, u0_, q1_, flx);
+        DCRemapFlx(member, (jfs-joffset), (jfe+1-joffset), epsi, a_, q1_, flx);
         break;
       case ReconstructionMethod::plm:
-        PLMRemapFlx(member, (jfs-joffset), (jfe+1-joffset), epsi, u0_, q1_, flx);
+        PLMRemapFlx(member, (jfs-joffset), (jfe+1-joffset), epsi, a_, q1_, flx);
         break;
 //      case ReconstructionMethod::ppm4:
 //      case ReconstructionMethod::ppmx:
@@ -324,11 +324,11 @@ TaskStatus OrbitalAdvectionCC::RecvAndUnpackCC(DvceArray5D<Real> &u0,
     }
     member.team_barrier();
 
-    // Update CC variables with both integer shift (from u0_) and a conservative remap
+    // Update CC variables with both integer shift (from a_) and a conservative remap
     // for the remaining fraction of a cell using upwind "fluxes"
     par_for_inner(member, js, je, [&](const int j) {
       int jf = j-js + jfs;
-      u0(m,n,k,j,i) = u0_(jf-joffset) - (flx(jf+1-joffset) - flx(jf-joffset));
+      a(m,n,k,j,i) = a_(jf-joffset) - (flx(jf+1-joffset) - flx(jf-joffset));
     });
   });
 
