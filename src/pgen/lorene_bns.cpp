@@ -15,6 +15,7 @@
 #include <limits>
 #include <sstream>
 #include <string>
+#include <iostream>
 
 #include "athena.hpp"
 #include "globals.hpp"
@@ -44,7 +45,6 @@ void BNSHistory(HistoryData *pdata, Mesh *pm);
 //! \fn ProblemGenerator::UserProblem_()
 //! \brief Problem Generator for BNS with LORENE
 void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
-
   user_hist_func = &BNSHistory;
 
   if (restart) return;

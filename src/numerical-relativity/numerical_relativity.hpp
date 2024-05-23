@@ -12,6 +12,7 @@
 #include <map>
 #include <functional>
 #include <string>
+#include <memory>
 
 #include "athena.hpp"
 #include "parameter_input.hpp"

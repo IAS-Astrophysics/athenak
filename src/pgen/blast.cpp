@@ -23,6 +23,55 @@
 #include "adm/adm.hpp"
 #include "coordinates/cell_locations.hpp"
 
+KOKKOS_INLINE_FUNCTION
+Real GetCartesianFromScrewball(Real u, Real a) {
+  // We define u = x*exp(-x^2/2a^2), so the transformation from u to x is not analytic.
+  // However, we restrict u s.t. u \in [0, a/sqrt(e)], so we also know that x \in [u, a].
+  // We thus define x as the solution to x - u*exp(x^2/2a^2) = 0.
+
+  // In the event that u = 0, we can return the exact solution.
+  if (u == 0.0 || u == -0.0) {
+    return 0.0;
+  }
+
+  // Flip the sign of u if necessary. We can do this because u is an odd function.
+  Real sign = 1.0;
+  if (u < 0) {
+    sign = -1;
+    u = -u;
+  }
+  Real lb = u;
+  Real ub = a;
+  Real x = 0.5*(lb + ub);
+  Real gauss = std::exp(x*x/(2.0*a*a));
+  Real f = x - u*gauss;
+  Real tol = 1e-15;
+  int its = 0;
+  int max_its = 30;
+  while (std::abs(f) > tol && its < max_its) {
+    // Newton iteration.
+    Real df = 1.0 - u*x/(a*a)*gauss;
+    x = x - f/df;
+
+    // Use bisection if we would travel outside the bracket.
+    if (x < lb || x > ub) {
+      x = 0.5*(lb + ub);
+    }
+    // Check how well x satisfies f.
+    gauss = std::exp(x*x/(2.0*a*a));
+    f = x - u*gauss;
+    // Update the bracket.
+    if (f < 0) {
+      lb = x;
+    } else {
+      ub = x;
+    }
+    its++;
+  }
+
+  return sign*x;
+}
+
 //----------------------------------------------------------------------------------------
 //! \fn ProblemGenerator::UserProblem_()
 //! \brief Problem Generator for spherical blast problem
@@ -42,6 +91,8 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   Real prat = pin->GetReal("problem", "prat");
   Real drat = pin->GetOrAddReal("problem", "drat", 1.0);
   Real b_amb = pin->GetOrAddReal("problem", "b_amb", 0.1);
+  Real warp = pin->GetOrAddBoolean("problem", "warp", false);
+  Real a_warp = pin->GetOrAddReal("problem", "a_warp", 6.0);
 
   // capture variables for the kernel
   auto &indcs = pmy_mesh_->mb_indcs;
@@ -128,7 +179,14 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
       int nx3 = indcs.nx3;
       Real x3v = CellCenterX(k-ks, nx3, x3min, x3max);
 
-      Real rad = std::sqrt(SQR(x1v) + SQR(x2v) + SQR(x3v));
+      Real rad;
+      if (warp) {
+        Real x = GetCartesianFromScrewball(x1v, a_warp);
+        Real y = GetCartesianFromScrewball(x2v, a_warp);
+        rad = std::sqrt(SQR(x) + SQR(y) + SQR(x3v));
+      } else {
+        rad = std::sqrt(SQR(x1v) + SQR(x2v) + SQR(x3v));
+      }
 
       Real den = di_amb;
       Real pres = pi_amb;
@@ -155,12 +213,22 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     auto &b0 = pmbp->pmhd->b0;
     par_for("pgen_blast2",DevExeSpace(),0,(pmbp->nmb_thispack-1),ks,ke,js,je,is,ie,
     KOKKOS_LAMBDA(int m, int k, int j, int i) {
-      b0.x1f(m,k,j,i) = b_amb;
+      Real jac = 1.0;
+      if (warp) {
+        Real &x2min = size.d_view(m).x2min;
+        Real &x2max = size.d_view(m).x2max;
+        int nx2 = indcs.nx2;
+        Real x2v = CellCenterX(j-js, nx2, x2min, x2max);
+        Real y = GetCartesianFromScrewball(x2v, a_warp);
+
+        jac = 1.0/(1.0 - (y*y)/(a_warp*a_warp))*std::exp(y*y/(2.0*a_warp*a_warp));
+      }
+      b0.x1f(m,k,j,i) = jac*b_amb;
       b0.x2f(m,k,j,i) = 0.0;
       b0.x3f(m,k,j,i) = 0.0;
 
       // Include extra face-component at edge of block in each direction
-      if (i==ie) {b0.x1f(m,k,j,i+1) = b_amb;}
+      if (i==ie) {b0.x1f(m,k,j,i+1) = jac*b_amb;}
       if (j==je) {b0.x2f(m,k,j+1,i) = 0.0;}
       if (k==ke) {b0.x3f(m,k+1,j,i) = 0.0;}
     });
@@ -195,6 +263,31 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     int n3 = (indcs.nx3 > 1) ? (indcs.nx3 + 2*ng) : 1;
     par_for("pgen_adm_vars", DevExeSpace(), 0,nmb1,0,(n3-1),0,(n2-1),0,(n1-1),
     KOKKOS_LAMBDA(int m, int k, int j, int i) {
+      Real xmul = 1.0;
+      Real ymul = 1.0;
+      if (warp) {
+        Real &x1min = size.d_view(m).x1min;
+        Real &x1max = size.d_view(m).x1max;
+        int nx1 = indcs.nx1;
+        Real x1v = CellCenterX(i-is, nx1, x1min, x1max);
+
+        Real &x2min = size.d_view(m).x2min;
+        Real &x2max = size.d_view(m).x2max;
+        int nx2 = indcs.nx2;
+        Real x2v = CellCenterX(j-js, nx2, x2min, x2max);
+
+        Real &x3min = size.d_view(m).x3min;
+        Real &x3max = size.d_view(m).x3max;
+        int nx3 = indcs.nx3;
+        Real x3v = CellCenterX(k-ks, nx3, x3min, x3max);
+
+        Real x = GetCartesianFromScrewball(x1v, a_warp);
+        Real y = GetCartesianFromScrewball(x2v, a_warp);
+
+        xmul = 1.0/SQR(1.0 - x*x/(a_warp*a_warp))*std::exp(-x*x/(a_warp*a_warp));
+        ymul = 1.0/SQR(1.0 - y*y/(a_warp*a_warp))*std::exp(-y*y/(a_warp*a_warp));
+      }
+
       // Set ADM to flat space
       adm.alpha(m, k, j, i) = 1.0;
       adm.beta_u(m, 0, k, j, i) = 0.0;
@@ -203,10 +296,10 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
 
       adm.psi4(m, k, j, i) = 1.0;
 
-      adm.g_dd(m, 0, 0, k, j, i) = 1.0;
+      adm.g_dd(m, 0, 0, k, j, i) = xmul;
       adm.g_dd(m, 0, 1, k, j, i) = 0.0;
       adm.g_dd(m, 0, 2, k, j, i) = 0.0;
-      adm.g_dd(m, 1, 1, k, j, i) = 1.0;
+      adm.g_dd(m, 1, 1, k, j, i) = ymul;
       adm.g_dd(m, 1, 2, k, j, i) = 0.0;
       adm.g_dd(m, 2, 2, k, j, i) = 1.0;
 

@@ -613,7 +613,7 @@ class PrimitiveSolverHydro {
 
   KOKKOS_INLINE_FUNCTION
   void DumpPrimitiveVars(const Real prim_pt[NPRIM]) const {
-    printf("Primitive vars: \n"
+    printf("Primitive vars: \n" // NOLINT
            "  rho = %.17g\n"
            "  ux  = %.17g\n"
            "  uy  = %.17g\n"

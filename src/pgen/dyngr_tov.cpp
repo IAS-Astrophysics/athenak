@@ -733,7 +733,7 @@ static void GetPrimitivesAtIsoPoint(const tov_pgen& tov, Real r_iso,
   alp = Interpolate(r_iso, R_iso(idx), R_iso(idx+1), alps(idx), alps(idx+1));
   rho = pow(p/tov.kappa, 1.0/tov.gamma);
   if (!isfinite(p)) {
-    printf("There's a problem with p!\n");
+    printf("There's a problem with p!\n"); // NOLINT
   }
 }
 
