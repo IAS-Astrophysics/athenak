@@ -34,7 +34,7 @@ void ProblemGenerator::RadiationFEMNSpheretest(ParameterInput *pin, const bool r
   if (pmbp->pmesh->three_d == false) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
               << "The 3d sphere test problem generator can only be run with three dimensions, but parfile"
-              << "grid setup is not in 2d" << std::endl;
+              << "grid setup is not in 3d" << std::endl;
     exit(EXIT_FAILURE);
   }
 
