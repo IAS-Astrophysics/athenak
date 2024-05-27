@@ -253,7 +253,7 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
 
       // Temporary add this to solve Jake's problem
       if (turn_on_sao_operation_) {
-        if fmax(gm1*w.e <= eos.pfloor) {
+        if (gm1*w.e <= eos.pfloor) {
           w.d  = w_old.d;
           w.e  = w_old.e;
           w.vx = w_old.vx;
