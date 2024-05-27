@@ -252,12 +252,14 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
       }
 
       // Temporary add this to solve Jake's problem
-      if (turn_on_sao_operation_ && efloor_used) {
-        w.d  = w_old.d;
-        w.e  = w_old.e;
-        w.vx = w_old.vx;
-        w.vy = w_old.vy;
-        w.vz = w_old.vz;
+      if (turn_on_sao_operation_) {
+        if fmax(gm1*w.e <= eos.pfloor) {
+          w.d  = w_old.d;
+          w.e  = w_old.e;
+          w.vx = w_old.vx;
+          w.vy = w_old.vy;
+          w.vz = w_old.vz;
+        }
       }
 
       // apply temperature floor within r_tfix_cut_
