@@ -22,7 +22,7 @@
 namespace radiationfemn {
 TaskStatus RadiationFEMN::ExpRKUpdate(Driver *pdriver, int stage) {
   const int NGHOST = 2;
-  const int tot_iter = num_points * 5;
+  const int tot_iter = num_points;
   const Real tol = 1e-30;
 
   auto &indcs = pmy_pack->pmesh->mb_indcs;
@@ -380,7 +380,7 @@ TaskStatus RadiationFEMN::ExpRKUpdate(Driver *pdriver, int stage) {
 
                   for (int index = 0; index < num_points_; index++) {
                     auto index_f1 = IndicesUnited(nu, en, index, num_species_, num_energy_bins_, num_points_);
-                    x0_arr(index) = f0_(m, index_f1, k, j, i);
+                    x0_arr(index) = f0_(m, index_f1, k, j, i) + 1e-14;
                     rhat0(index) = 1;
                   }
                   for (int index = 0; index < num_points_; index++) {
