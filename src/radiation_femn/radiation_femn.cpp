@@ -77,6 +77,8 @@ namespace radiationfemn
         beam_source_2_y2 = pin->GetOrAddReal("radiation-femn", "beam_source_2_y2", -42.);
         beam_source_2_phi = pin->GetOrAddReal("radiation-femn", "beam_source_2_phi", -42.);
         beam_source_2_theta = pin->GetOrAddReal("radiation-femn", "beam_source_2_theta", -42.);
+        rad_E_floor = pin->GetOrAddReal("radiation-femn", "rad_E_floor", 1e-15);
+        rad_eps = pin->GetOrAddReal("radiation-femn", "rad_eps", 1e-5);
 
         m1_closure = M1Closure::Charon;
         if(pin->GetOrAddString("radiation-femn", "m1_closure", "minerbo") == "shibata") {

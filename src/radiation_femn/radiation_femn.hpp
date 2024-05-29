@@ -98,6 +98,8 @@ class RadiationFEMN {
   bool rad_source;                // flag to enable/disable source terms for radiation, disabled by default
   M1Closure m1_closure;           // choice of M1 closure
   ClosureFunc closure_fun;
+  Real rad_E_floor;
+  Real rad_eps;
   int num_beams;                  // number of beams, defaults to zero
   bool beam_source;
   Real beam_source_1_y1;

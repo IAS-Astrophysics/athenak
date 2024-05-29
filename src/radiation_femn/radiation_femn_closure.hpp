@@ -35,11 +35,26 @@ void ApplyM1Closure(TeamMember_t member, int num_points, int m, int en, int kk, 
     f_scratch(1) = f(m, en * num_points + 1, kk, jj, ii);
     f_scratch(2) = f(m, en * num_points + 2, kk, jj, ii);
     f_scratch(3) = f(m, en * num_points + 3, kk, jj, ii);
-    f_scratch(4) = 0.;
-    f_scratch(5) = 0.;
-    f_scratch(6) = 0.;
-    f_scratch(7) = 0.;
-    f_scratch(8) = 0.;
+
+    Real a = 1. / 3.;
+    Real Pxx = a * E;
+    Real Pyy = a * E;
+    Real Pzz = a * E;
+    Real Pxy = 0.;
+    Real Pxz = 0.;
+    Real Pyz = 0.;
+
+    //f_scratch(4) = 0;
+    //f_scratch(5) = 0;
+    //f_scratch(6) = 0;
+    //f_scratch(7) = 0;
+    //f_scratch(8) = 0;
+
+    f_scratch(4) = Kokkos::sqrt(60. * M_PI) * Pxy / (4. * M_PI);            // (2, -2)
+    f_scratch(5) = -Kokkos::sqrt(60. * M_PI) * Pyz / (4. * M_PI);           // (2, -1)
+    f_scratch(6) = Kokkos::sqrt(5. * M_PI) * (3. * Pzz - E) / (4. * M_PI);   // (2, 0)
+    f_scratch(7) = -Kokkos::sqrt(60. * M_PI) * Pxz / (4. * M_PI);           // (2, 1)
+    f_scratch(8) = Kokkos::sqrt(15. * M_PI) * (Pxx - Pyy) / (4. * M_PI);    // (2, 2)
   } else {
 
     // Normalized flux
@@ -188,6 +203,25 @@ void ApplyClosureZ(TeamMember_t member, int num_species, int num_energy_bins, in
       f0_scratch_m1(idx) = f(m, nuenang, kk - 1, jj, ii);
       f0_scratch_m2(idx) = f(m, nuenang, kk - 2, jj, ii);
     });
+  }
+}
+
+KOKKOS_INLINE_FUNCTION
+void ApplyM1Floor(TeamMember_t member, ScrArray1D<Real> x, Real rad_E_floor, Real rad_eps) {
+  Real E = Kokkos::sqrt(4. * M_PI) * x(0);          // (0,0)
+  Real Fx = -Kokkos::sqrt(4. * M_PI / 3.0) * x(3);  // (1, 1)
+  Real Fy = -Kokkos::sqrt(4. * M_PI / 3.0) * x(1);  // (1, -1)
+  Real Fz = Kokkos::sqrt(4. * M_PI / 3.0) * x(2);   // (1, 0)
+  Real F2 = Fx * Fx + Fy * Fy + Fz * Fz;
+  Real lim = E * E * (1. - rad_eps);
+
+  x(0) = Kokkos::fmax(x(0), rad_E_floor / Kokkos::sqrt(4. * M_PI));
+
+  if (F2 > lim) {
+    Real fac = lim / F2;
+    x(1) = fac * x(1);
+    x(2) = fac * x(2);
+    x(3) = fac * x(3);
   }
 }
 

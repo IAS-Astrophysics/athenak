@@ -18,6 +18,7 @@
 #include "radiation_femn/radiation_femn_matinv.hpp"
 #include "adm/adm.hpp"
 #include "z4c/z4c.hpp"
+#include "radiation_femn_closure.hpp"
 
 namespace radiationfemn {
 TaskStatus RadiationFEMN::ExpRKUpdate(Driver *pdriver, int stage) {
@@ -48,6 +49,8 @@ TaskStatus RadiationFEMN::ExpRKUpdate(Driver *pdriver, int stage) {
   int &num_energy_bins_ = pmy_pack->pradfemn->num_energy_bins;
   int &num_species_ = pmy_pack->pradfemn->num_species;
   int num_species_energy = num_species_ * num_energy_bins_;
+  Real &rad_E_floor_ = pmy_pack->pradfemn->rad_E_floor;
+  Real &rad_eps_ = pmy_pack->pradfemn->rad_eps;
 
   auto &f0_ = pmy_pack->pradfemn->f0;
   auto &f1_ = pmy_pack->pradfemn->f1;
@@ -439,15 +442,16 @@ TaskStatus RadiationFEMN::ExpRKUpdate(Driver *pdriver, int stage) {
                   }
                   member.team_barrier();
 
+                  if(m1_flag_) {
+                    ApplyM1Floor(member, x0_arr, rad_E_floor_, rad_eps_);
+                    member.team_barrier();
+                  }
+
                   par_for_inner(member, 0, num_points_ - 1, [&](const int idx) {
 
                     auto unifiedidx = IndicesUnited(nu, en, idx, num_species_, num_energy_bins_, num_points_);
                     f0_(m, unifiedidx, k, j, i) = x0_arr(idx);
 
-                    // floor energy density if using M1
-                    //if(unifiedidx == 0 && m1_flag_) {
-                    //  f0_(m, unifiedidx, k, j, i) = Kokkos::fmax(final_result, 1e-15);
-                    //}
                   });
                   member.team_barrier();
                 });
