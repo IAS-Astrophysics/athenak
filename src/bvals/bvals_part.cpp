@@ -53,6 +53,7 @@ void UpdateGID(int &newgid, NeighborBlock nghbr, int myrank, int *pcounter,
 KOKKOS_INLINE_FUNCTION
 void MarkForDestruction(int *pcounter, DualArray1D<ParticleLocationData> dlist, int p) {
     int index = Kokkos::atomic_fetch_add(pcounter,1);
+    std::cout << "p: " << p << std::endl;
     dlist.d_view(index).prtcl_indx = p;
     // These particles don't actually get sent, thus following information is not needed
     dlist.d_view(index).dest_gid   = 0;
@@ -114,6 +115,7 @@ TaskStatus ParticlesBoundaryValues::SetNewPrtclGID() {
 
     // only update particle GID if it has crossed MeshBlock boundary
     if ((abs(ix) + abs(iy) + abs(iz)) != 0) {
+      std::cout << "p: " << pi(PTAG,p) << " ix: " << ix << " " << x1 << " iy: " << iy << " " << x2 << " iz: " << iz << " " << x3 << std::endl;
       bool check_boundary = ( mb_bcs.d_view(m,BoundaryFace::inner_x3) == BoundaryFlag::user && iz < 0)
 	      || ( mb_bcs.d_view(m,BoundaryFace::outer_x3) == BoundaryFlag::user && iz > 0)
 	      || ( mb_bcs.d_view(m,BoundaryFace::inner_x2) == BoundaryFlag::user && iy < 0)
@@ -121,9 +123,9 @@ TaskStatus ParticlesBoundaryValues::SetNewPrtclGID() {
 	      || ( mb_bcs.d_view(m,BoundaryFace::inner_x1) == BoundaryFlag::user && ix < 0)
 	      || ( mb_bcs.d_view(m,BoundaryFace::outer_x1) == BoundaryFlag::user && ix > 0);
       // Add particle to destruction list
-	    // At the time of sending the particles that need to be destroyed
-	    // are counted among those that have been sent
-	    // without actually being sent
+      // At the time of sending the particles that need to be destroyed
+      // are counted among those that have been sent
+      // without actually being sent
       if (check_boundary) { MarkForDestruction(pdc, pdestroyl, p); }
       else {
         if (iz == 0) {
@@ -150,6 +152,23 @@ TaskStatus ParticlesBoundaryValues::SetNewPrtclGID() {
               indx = NeighborIndex(ix,iy,0,fz,0);
             }
             while (nghbr.d_view(m,indx).gid < 0) {indx++;}
+            // Using SMR some edge and corner neighbours are uninitialized,
+            // thus check if the index has increased over the appropriate range
+            // and try to communicate through faces to a coarser meshblock
+            if (indx > 23){
+              bool found_coarser = false;
+              // First try through x face
+              indx = NeighborIndex(ix,0,0,0,0);
+              while (nghbr.d_view(m,indx).gid < 0) {indx++;}
+              if (nghbr.d_view(m,indx).lev < mylevel) { found_coarser = true; }
+              // If all faces in the x direction are on a finer level this should
+              // have already been covered by previous logic, thus check y
+              if ( !found_coarser ){
+                indx = NeighborIndex(0,iy,0,0,0);
+                while (nghbr.d_view(m,indx).gid < 0) {indx++;}
+                if (nghbr.d_view(m,indx).lev < mylevel) { found_coarser = true; }
+              }
+            }
             UpdateGID(pi(PGID,p), nghbr.d_view(m,indx), myrank, pcounter, psendl, p);
           }
         } else if (iy == 0) {
@@ -168,20 +187,62 @@ TaskStatus ParticlesBoundaryValues::SetNewPrtclGID() {
               indx = NeighborIndex(ix,0,iz,fy,0);
             }
             while (nghbr.d_view(m,indx).gid < 0) {indx++;}
+            if (indx > 39){
+              bool found_coarser = false;
+              indx = NeighborIndex(ix,0,0,0,0);
+              while (nghbr.d_view(m,indx).gid < 0) {indx++;}
+              if (nghbr.d_view(m,indx).lev < mylevel) { found_coarser = true; }
+              if ( !found_coarser ){
+                indx = NeighborIndex(0,0,iz,0,0);
+                while (nghbr.d_view(m,indx).gid < 0) {indx++;}
+                if (nghbr.d_view(m,indx).lev < mylevel) { found_coarser = true; }
+              }
+            }
             UpdateGID(pi(PGID,p), nghbr.d_view(m,indx), myrank, pcounter, psendl, p);
           }
         } else {
           if (ix == 0) {
             // x2x3 edge
             int indx = NeighborIndex(0,iy,iz,0,0);
+            std::cout << "indx " << indx << std::endl;
             if (nghbr.d_view(m,indx).lev > mylevel) {
               indx = NeighborIndex(0,iy,iz,fx,0);
             }
+            std::cout << "indx " << indx << std::endl;
             while (nghbr.d_view(m,indx).gid < 0) {indx++;}
+            std::cout << "indx " << indx << std::endl;
+            if (indx > 47){
+              bool found_coarser = false;
+              indx = NeighborIndex(0,iy,0,0,0);
+              while (nghbr.d_view(m,indx).gid < 0) {indx++;}
+              if (nghbr.d_view(m,indx).lev < mylevel) { found_coarser = true; }
+              if ( !found_coarser ){
+                indx = NeighborIndex(0,0,iz,0,0);
+                while (nghbr.d_view(m,indx).gid < 0) {indx++;}
+                if (nghbr.d_view(m,indx).lev < mylevel) { found_coarser = true; }
+              }
+            }
+            std::cout << "indx " << indx << std::endl;
             UpdateGID(pi(PGID,p), nghbr.d_view(m,indx), myrank, pcounter, psendl, p);
           } else {
             // corners
             int indx = NeighborIndex(ix,iy,iz,0,0);
+            if (indx > 55 || nghbr.d_view(m,indx).gid < 0){
+              bool found_coarser = false;
+              indx = NeighborIndex(ix,0,0,0,0);
+              while (nghbr.d_view(m,indx).gid < 0) {indx++;}
+              if (nghbr.d_view(m,indx).lev < mylevel) { found_coarser = true; }
+              if ( !found_coarser ){
+                indx = NeighborIndex(0,iy,0,0,0);
+                while (nghbr.d_view(m,indx).gid < 0) {indx++;}
+                if (nghbr.d_view(m,indx).lev < mylevel) { found_coarser = true; }
+              }
+              if ( !found_coarser ){
+                indx = NeighborIndex(0,0,iz,0,0);
+                while (nghbr.d_view(m,indx).gid < 0) {indx++;}
+                if (nghbr.d_view(m,indx).lev < mylevel) { found_coarser = true; }
+              }
+            }
             UpdateGID(pi(PGID,p), nghbr.d_view(m,indx), myrank, pcounter, psendl, p);
           }
         }
