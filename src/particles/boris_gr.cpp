@@ -807,7 +807,6 @@ void HamiltonEquation_Velocity(const Real * x_0, const Real * x_1, const Real * 
 	if (!use_derivative_x){	H[0] /= dx; }
 	if (!use_derivative_y){	H[1] /= dy; }
 	if (!use_derivative_z){	H[2] /= dz; }
-	//std::cout << "H: " << H[0] << " " << H[1] << " " << H[2] << std::endl;
 }
 
 //----------------------------------------------------------------------------------------
@@ -1143,8 +1142,6 @@ void Particles::GeodesicIterations( const Real dt ){
 		&& ( sqrt(SQR(x_eval[0] - x_prev[0]) + SQR(x_eval[1] - x_prev[1]) + SQR(x_eval[2] - x_prev[2])) > it_tol
 		|| sqrt(SQR(v_eval[0] - v_prev[0]) + SQR(v_eval[1] - v_prev[1]) + SQR(v_eval[2] - v_prev[2])) > it_tol )
 	     );
-
-	//if (n_iter == it_max) { std::cout << "Limit of iterations reached on particle " << pi(PTAG,p) << " on rank " << global_variable::my_rank << std::endl; }
 
 	// Done with iterations, update ``true'' values
 	pr(IPVX,p) = v_eval[0];
