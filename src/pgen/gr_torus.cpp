@@ -861,8 +861,6 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
 	      pr(IPVY,p) = gl[2][1]*u[0] + gl[2][2]*u[1] + gl[2][3]*u[2];
 	      pr(IPVZ,p) = gl[3][1]*u[0] + gl[3][2]*u[1] + gl[3][3]*u[2];
 	      //std::cout << "p: " << pi(PTAG,p) << " " << pr(IPVX,p) << " " << pr(IPVY,p) << " " << pr(IPVZ,p) << std::endl;
-	    }else{
-	      continue;
 	    }
 	  }
 	  prtcl_rand.free_state(rand_gen);
