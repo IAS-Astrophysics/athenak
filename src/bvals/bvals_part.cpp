@@ -546,6 +546,7 @@ TaskStatus ParticlesBoundaryValues::RecvAndUnpackPrtcls() {
     int i_next_hole = nprtcl_recv;
     for (int n=1; n<=nremain; ++n) {
       int nend = npart-n;
+      --nremain_d;
       if (nend > sendlist.h_view(i_last_hole).prtcl_indx) {
         // copy particle from end into hole
         int next_hole = sendlist.h_view(i_next_hole).prtcl_indx;
@@ -556,7 +557,6 @@ TaskStatus ParticlesBoundaryValues::RecvAndUnpackPrtcls() {
         auto isrc  = Kokkos::subview(pmy_part->prtcl_idata, Kokkos::ALL, nend);
         Kokkos::deep_copy(idest, isrc);
         i_next_hole += 1;
-        --nremain_d;
       } else {
         // this index contains a hole, so do nothing except find new index of last hole
         i_last_hole -= 1;
@@ -577,7 +577,8 @@ TaskStatus ParticlesBoundaryValues::RecvAndUnpackPrtcls() {
     // (nprtcl_recv>0) branch, otherwise simply destroy all particles in the list
     int i_next_hole = nprtcl_recv-nprtcl_send < 0 ? 0 : nprtcl_recv-nprtcl_send;
     for (int n=1; n<=nremain_d; ++n) {
-      int nend = npart-n;
+      //At this point already nremain particles might have been removed, check for that
+      int nend = nremain > 0 ? npart-nremain-n : npart - n;
       if (nend > destroylist.h_view(i_last_hole).prtcl_indx) {
         // copy particle from end into hole
         int next_hole = destroylist.h_view(i_next_hole).prtcl_indx;
