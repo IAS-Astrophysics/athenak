@@ -15,7 +15,7 @@
 #include "eos/primitive_solver_hyd.hpp"
 
 enum class DynGR_RSolver {llf_dyngr, hlle_dyngr};     // Riemann solvers for dynamical GR
-enum class DynGR_EOS {eos_ideal, eos_piecewise_poly}; // EOS policies for dynamical GR
+enum class DynGR_EOS {eos_ideal, eos_piecewise_poly, eos_compose}; // EOS policies for dynamical GR
 enum class DynGR_Error {reset_floor};                 // Error policies for dynamical GR
 
 //----------------------------------------------------------------------------------------

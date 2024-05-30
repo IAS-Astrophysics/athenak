@@ -94,6 +94,7 @@ void ProblemGenerator::ShockTube(ParameterInput *pin, const bool restart) {
     if (pmbp->pcoord->is_dynamical_relativistic) {
       wl.e = pin->GetReal("problem","pl");
     }
+    Real yl = pin->GetOrAddReal("problem","yl",1.0);
 
     // Parse right state read from input file: d,vx,vy,vz,[P]
     wr.d  = pin->GetReal("problem","dr");
@@ -110,6 +111,7 @@ void ProblemGenerator::ShockTube(ParameterInput *pin, const bool restart) {
     if (pmbp->pcoord->is_dynamical_relativistic) {
       wr.e = pin->GetReal("problem","pr");
     }
+    Real yr = pin->GetOrAddReal("problem","yr",0.0);
 
     auto &w0 = pmbp->phydro->w0;
     par_for("pgen_shock1", DevExeSpace(),0,(pmbp->nmb_thispack-1),ks,ke,js,je,is,ie,
@@ -139,12 +141,18 @@ void ProblemGenerator::ShockTube(ParameterInput *pin, const bool restart) {
         w0(m,ivy,k,j,i) = wl.vy*u0l;
         w0(m,ivz,k,j,i) = wl.vz*u0l;
         w0(m,IEN,k,j,i) = wl.e;
+        for (int r=0; r<pmbp->phydro->nscalars; ++r) {
+          w0(m,IYF+r,k,j,i) = yl;
+        }
       } else {
         w0(m,IDN,k,j,i) = wr.d;
         w0(m,ivx,k,j,i) = wr.vx*u0r;
         w0(m,ivy,k,j,i) = wr.vy*u0r;
         w0(m,ivz,k,j,i) = wr.vz*u0r;
         w0(m,IEN,k,j,i) = wr.e;
+        for (int r=0; r<pmbp->phydro->nscalars; ++r) {
+          w0(m,IYF+r,k,j,i) = yr;
+        }
       }
     });
 
@@ -177,6 +185,7 @@ void ProblemGenerator::ShockTube(ParameterInput *pin, const bool restart) {
     if (pmbp->pcoord->is_dynamical_relativistic) {
       wl.e = pin->GetReal("problem", "pl");
     }
+    Real yl = pin->GetOrAddReal("problem","yl",1.0);
 
     // Parse right state read from input file: d,vx,vy,vz,[P]
     wr.d  = pin->GetReal("problem","dr");
@@ -196,6 +205,7 @@ void ProblemGenerator::ShockTube(ParameterInput *pin, const bool restart) {
     if (pmbp->pcoord->is_dynamical_relativistic) {
       wr.e = pin->GetReal("problem", "pr");
     }
+    Real yr = pin->GetOrAddReal("problem","yr",0.0);
 
     auto &w0 = pmbp->pmhd->w0;
     auto &b0 = pmbp->pmhd->b0;
@@ -233,6 +243,9 @@ void ProblemGenerator::ShockTube(ParameterInput *pin, const bool restart) {
         w0(m,ivy,k,j,i) = wl.vy*u0l;
         w0(m,ivz,k,j,i) = wl.vz*u0l;
         w0(m,IEN,k,j,i) = wl.e;
+        for (int r=0; r<pmbp->pmhd->nscalars; ++r) {
+          w0(m,IYF+r,k,j,i) = yl;
+        }
         b0.x1f(m,k,j,i) = bxl;
         b0.x2f(m,k,j,i) = byl;
         b0.x3f(m,k,j,i) = bzl;
@@ -248,6 +261,9 @@ void ProblemGenerator::ShockTube(ParameterInput *pin, const bool restart) {
         w0(m,ivy,k,j,i) = wr.vy*u0r;
         w0(m,ivz,k,j,i) = wr.vz*u0r;
         w0(m,IEN,k,j,i) = wr.e;
+        for (int r=0; r<pmbp->pmhd->nscalars; ++r) {
+          w0(m,IYF+r,k,j,i) = yr;
+        }
         b0.x1f(m,k,j,i) = bxr;
         b0.x2f(m,k,j,i) = byr;
         b0.x3f(m,k,j,i) = bzr;

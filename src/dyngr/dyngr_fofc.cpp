@@ -441,5 +441,6 @@ void DynGRPS<EOSPolicy, ErrorPolicy>::\
 
 INSTANTIATE_FOFC(Primitive::IdealGas, Primitive::ResetFloor)
 INSTANTIATE_FOFC(Primitive::PiecewisePolytrope, Primitive::ResetFloor)
+INSTANTIATE_FOFC(Primitive::EOSCompOSE, Primitive::ResetFloor)
 
 } // namespace dyngr

@@ -37,6 +37,9 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   Real a_char = pin->GetOrAddReal("problem","a_char", 0.01);
   Real rho0  = pin->GetOrAddReal("problem","rho0",1.0);
   Real rho1  = pin->GetOrAddReal("problem","rho1",1.0);
+  Real y0    = pin->GetOrAddReal("problem","y0",0.0);
+  Real y1    = pin->GetOrAddReal("problem","y1",1.0);
+  Real p_in  = pin->GetOrAddReal("problem","press",1.0);
   Real drho_rho0 = pin->GetOrAddReal("problem", "drho_rho0", 0.0);
 
   //user_hist_func = KHHistory;
@@ -109,7 +112,8 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
       scal = 0.0;
       if (x2v > 0.0) scal = 1.0;
     } else if (iprob == 2) {
-      pres = 1.0;
+      // pres = 1.0;
+      pres = p_in;
       vz = 0.0;
       if(x2v <= 0.0) {
         dens = rho0 - rho1*tanh((x2v+0.5)/a_char);
@@ -118,8 +122,9 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
         if (is_relativistic) {
           u00 = 1.0/sqrt(1.0 - vx*vx - vy*vy);
         }
-        scal = 0.0;
-        if (x2v < -0.5) scal = 1.0;
+        // scal = 0.0;
+        // if (x2v < -0.5) scal = 1.0;
+        scal = y0 - y1*tanh((x2v+0.5)/a_char);
       } else {
         dens = rho0 + rho1*tanh((x2v-0.5)/a_char);
         vx = vshear*tanh((x2v-0.5)/a_char);
@@ -127,8 +132,9 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
         if (is_relativistic) {
           u00 = 1.0/sqrt(1.0 - vx*vx - vy*vy);
         }
-        scal = 0.0;
-        if (x2v > 0.5) scal = 1.0;
+        // scal = 0.0;
+        // if (x2v > 0.5) scal = 1.0;
+        scal = y0 + y1*tanh((x2v-0.5)/a_char);
       }
     // Lecoanet test ICs
     } else if (iprob == 4) {

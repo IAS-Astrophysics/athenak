@@ -25,6 +25,7 @@
 #include "eos/primitive-solver/primitive_solver.hpp"
 #include "eos/primitive-solver/idealgas.hpp"
 #include "eos/primitive-solver/piecewise_polytrope.hpp"
+#include "eos/primitive-solver/eos_compose.hpp"
 #include "eos/primitive-solver/reset_floor.hpp"
 
 // AthenaK headers
@@ -86,6 +87,18 @@ class PrimitiveSolverHydro {
         std::exit(EXIT_FAILURE);
       }
       ps.GetEOSMutable().SetThermalGamma(pin->GetOrAddReal(block, "gamma_thermal", 1.5));
+    }
+    // Parameters for CompOSE EoS
+    if constexpr(std::is_same_v<Primitive::EOSCompOSE, EOSPolicy>) {
+      // Get and set number of scalars in table. This will currently fail if not 1.
+      ps.GetEOSMutable().SetNSpecies(pin->GetOrAddInteger(block, "nscalars", 1));
+
+      // Get table filename, then read the table,
+      std::string fname = pin->GetString(block, "table");
+      ps.GetEOSMutable().ReadTableFromFile(fname);
+      
+      // Ensure table was read properly
+      assert(ps.GetEOSMutable().IsInitialized());
     }
   }
 

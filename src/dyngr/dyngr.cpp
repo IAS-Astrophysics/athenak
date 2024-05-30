@@ -44,6 +44,9 @@ DynGR* SelectDynGREOS(MeshBlockPack *ppack, ParameterInput *pin, DynGR_EOS eos_p
     case DynGR_EOS::eos_piecewise_poly:
       dyn_gr = new DynGRPS<Primitive::PiecewisePolytrope, ErrorPolicy>(ppack, pin);
       break;
+    case DynGR_EOS::eos_compose:
+      dyn_gr = new DynGRPS<Primitive::EOSCompOSE, ErrorPolicy>(ppack, pin);
+      break;
   }
   return dyn_gr;
 }
@@ -58,6 +61,8 @@ DynGR* BuildDynGR(MeshBlockPack *ppack, ParameterInput *pin) {
     eos_policy = DynGR_EOS::eos_ideal;
   } else if (eos_string.compare("piecewise_poly") == 0) {
     eos_policy = DynGR_EOS::eos_piecewise_poly;
+  } else if (eos_string.compare("compose") == 0) {
+    eos_policy = DynGR_EOS::eos_compose;
   } else {
     std::cout << "### FATAL ERROR in " <<__FILE__ << " at line " << __LINE__
               << std::endl << "<mhd> dyn_eos = '" << eos_string
@@ -567,6 +572,7 @@ void DynGRPS<EOSPolicy, ErrorPolicy>::AddCoordTermsEOS(const DvceArray5D<Real> &
 // Instantiated templates
 template class DynGRPS<Primitive::IdealGas, Primitive::ResetFloor>;
 template class DynGRPS<Primitive::PiecewisePolytrope, Primitive::ResetFloor>;
+template class DynGRPS<Primitive::EOSCompOSE, Primitive::ResetFloor>;
 
 // Macro for defining CoordTerms templates
 #define INSTANTIATE_COORD_TERMS(EOSPolicy, ErrorPolicy) \
@@ -582,6 +588,7 @@ void DynGRPS<EOSPolicy, ErrorPolicy>::AddCoordTermsEOS<4>(const DvceArray5D<Real
 
 INSTANTIATE_COORD_TERMS(Primitive::IdealGas, Primitive::ResetFloor);
 INSTANTIATE_COORD_TERMS(Primitive::PiecewisePolytrope, Primitive::ResetFloor);
+INSTANTIATE_COORD_TERMS(Primitive::EOSCompOSE, Primitive::ResetFloor);
 
 #undef INSTANTIATE_COORD_TERMS
 
