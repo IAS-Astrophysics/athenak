@@ -308,11 +308,14 @@ TaskStatus Hydro::RecvU(Driver *pdrive, int stage) {
 
 TaskStatus Hydro::SendU_Shr(Driver *pdrive, int stage) {
   TaskStatus tstat = TaskStatus::complete;
-  // only execute when (shearing box defined) AND (last stage) AND (3D OR 2d_r_phi)
-  if ((psrc->shearing_box) && (stage == pdrive->nexp_stages) &&
-      (pmy_pack->pmesh->three_d || psrc->shearing_box_r_phi)) {
+  // only execute when (shearing box defined) AND (3D OR 2d_r_phi)
+  if ((psrc->shearing_box) && (pmy_pack->pmesh->three_d || psrc->shearing_box_r_phi)) {
     Real qom = (psrc->qshear)*(psrc->omega0);
-    tstat = psbox_u->PackAndSendCC(u0, recon_method, qom);
+    Real time = pmy_pack->pmesh->time;
+    if (stage == pdrive->nexp_stages) {
+      time += pmy_pack->pmesh->dt;
+    }
+    tstat = psbox_u->PackAndSendCC(u0, recon_method, qom, time);
   }
   return tstat;
 }
@@ -324,9 +327,8 @@ TaskStatus Hydro::SendU_Shr(Driver *pdrive, int stage) {
 
 TaskStatus Hydro::RecvU_Shr(Driver *pdrive, int stage) {
   TaskStatus tstat = TaskStatus::complete;
-  // only execute when (shearing box defined) AND (last stage) AND (3D OR 2d_r_phi)
-  if ((psrc->shearing_box) && (stage == pdrive->nexp_stages) &&
-      (pmy_pack->pmesh->three_d || psrc->shearing_box_r_phi)) {
+  // only execute when (shearing box defined) AND (3D OR 2d_r_phi)
+  if ((psrc->shearing_box) && (pmy_pack->pmesh->three_d || psrc->shearing_box_r_phi)) {
     tstat = psbox_u->RecvAndUnpackCC(u0);
   }
   return tstat;

@@ -146,7 +146,8 @@ class ShearingBoxBoundaryCC : public ShearingBoxBoundary {
  public:
   ShearingBoxBoundaryCC(MeshBlockPack *ppack, ParameterInput *pin, int nvar);
   // functions to communicate CC data with shearing box BCs
-  TaskStatus PackAndSendCC(DvceArray5D<Real> &a, ReconstructionMethod rcon, Real qom);
+  TaskStatus PackAndSendCC(DvceArray5D<Real> &a, ReconstructionMethod rcon,
+                           Real qom, Real time);
   TaskStatus RecvAndUnpackCC(DvceArray5D<Real> &a);
 };
 

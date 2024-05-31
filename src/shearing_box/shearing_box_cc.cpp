@@ -126,7 +126,7 @@ void ShearingBoxBoundary::FindTargetMB(const int igid, const int jshift, int &gi
   // find number of MBs in x2 direction at this level
   std::int32_t nmbx2 = pm->nmb_rootx2 << (lloc.level - pm->root_level);
   // apply shift by input number of blocks
-  lloc.lx2 = static_cast<std::int32_t>((lloc.lx2 + jshift)/nmbx2);
+  lloc.lx2 = static_cast<std::int32_t>((lloc.lx2 + jshift) % nmbx2);
   // find target GID and rank
   gid = (pm->ptree->FindMeshBlock(lloc))->GetGID();
   rank = pm->rank_eachmb[gid];
@@ -140,7 +140,7 @@ void ShearingBoxBoundary::FindTargetMB(const int igid, const int jshift, int &gi
 //! Called on the physics_bcs task after purely periodic BC communication is finished.
 
 TaskStatus ShearingBoxBoundaryCC::PackAndSendCC(DvceArray5D<Real> &a,
-                                                ReconstructionMethod rcon, Real qom) {
+                                  ReconstructionMethod rcon, Real qom, Real time) {
   auto &indcs = pmy_pack->pmesh->mb_indcs;
   auto &is = indcs.is, &ie = indcs.ie;
   auto &js = indcs.js, &je = indcs.je;
@@ -165,7 +165,6 @@ TaskStatus ShearingBoxBoundaryCC::PackAndSendCC(DvceArray5D<Real> &a,
 
   // figure out distance boundaries are sheared
   auto &mesh_size = pmy_pack->pmesh->mesh_size;
-  Real &time = pmy_pack->pmesh->time;
   Real lx = (mesh_size.x1max - mesh_size.x1min);
   Real yshear = qom*lx*time;
 
@@ -176,10 +175,10 @@ TaskStatus ShearingBoxBoundaryCC::PackAndSendCC(DvceArray5D<Real> &a,
   auto sbuf = sendbuf;
   int scr_lvl=0;
   size_t scr_size = ScrArray1D<Real>::shmem_size(nj) * 3;
-/*
   for (int n=0; n<2; ++n) {
     int nmb1 = nmb_x1bndry(n) - 1;
-    par_for_outer("shrcc",DevExeSpace(),scr_size,scr_lvl,0,nmb1,0,(nvar-1),ks,ke,is,ie,
+// TODO(@user) extend loop over ks-2,ke+2 in 3D
+    par_for_outer("shrcc",DevExeSpace(),scr_size,scr_lvl,0,nmb1,0,(nvar-1),ks,ke,0,(ng-1),
     KOKKOS_LAMBDA(TeamMember_t member, const int m, const int v, const int k, const int i)
     {
       ScrArray1D<Real> a_(member.team_scratch(scr_lvl), nj); // 1D slice of data
@@ -219,7 +218,6 @@ TaskStatus ShearingBoxBoundaryCC::PackAndSendCC(DvceArray5D<Real> &a,
       });
     });
   }
-*/
 
   // shift data at x1 boundaries by integer number of cells.
   // Algorithm is broken into three steps: case1/2/3.
@@ -240,7 +238,6 @@ TaskStatus ShearingBoxBoundaryCC::PackAndSendCC(DvceArray5D<Real> &a,
       int joffset  = static_cast<int>(yshear/(mbsize.h_view(mm).dx2));
       int ji = joffset/(pmy_pack->pmesh->mb_indcs.nx2);
       int jr = joffset - ji*(pmy_pack->pmesh->mb_indcs.nx2);
-//std::cout<<"n="<<n<<"  jr="<<jr<<std::endl;
 
       if (jr < ng) {  //-------------------------------------- CASE 1 (in my nomenclature)
         int tgid, trank;
@@ -263,8 +260,9 @@ TaskStatus ShearingBoxBoundaryCC::PackAndSendCC(DvceArray5D<Real> &a,
         // send to (target-1) through (target+1) [ix1 boundary]
         // send to (target-1) through (target+1) [ox1 boundary]
         for (int l=0; l<=2; ++l) {
-          int jshift = l-1;
-          FindTargetMB(gid,(ji+jshift),tgid,trank);
+          int jshift;
+          if (n==0) {jshift = ji+l-1;} else {jshift = l-1-ji;}
+          FindTargetMB(gid,jshift,tgid,trank);
           if (trank == global_variable::my_rank) {
             int tm = TargetIndex(n,tgid);
             using namespace Kokkos;
@@ -294,8 +292,8 @@ TaskStatus ShearingBoxBoundaryCC::PackAndSendCC(DvceArray5D<Real> &a,
         // send to (target-1) through (target  ) [ox1 boundary]
         for (int l=0; l<=1; ++l) {
           int jshift;
-          if (n==0) {jshift = l;} else {jshift = l-1;}
-          FindTargetMB(gid,(ji+jshift),tgid,trank);
+          if (n==0) {jshift = ji+l;} else {jshift = l-1-ji;}
+          FindTargetMB(gid,jshift,tgid,trank);
           if (trank == global_variable::my_rank) {
             int tm = TargetIndex(n,tgid);
             using namespace Kokkos;
@@ -329,8 +327,8 @@ TaskStatus ShearingBoxBoundaryCC::PackAndSendCC(DvceArray5D<Real> &a,
         // send to (target-2) through (target  ) [ox1 boundary]
         for (int l=0; l<=2; ++l) {
           int jshift;
-          if (n==0) {jshift = l;} else {jshift = l-2;}
-          FindTargetMB(gid,(ji+jshift),tgid,trank);
+          if (n==0) {jshift = ji+l;} else {jshift = l-2-ji;}
+          FindTargetMB(gid,jshift,tgid,trank);
           if (trank == global_variable::my_rank) {
             int tm = TargetIndex(n,tgid);
             using namespace Kokkos;
