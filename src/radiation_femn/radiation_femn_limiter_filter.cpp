@@ -54,6 +54,14 @@ Real minmod(Real a, Real b, Real c) {
   return signa * sign * min_abs_a_abs_b_abs_c;
 }
 
+KOKKOS_INLINE_FUNCTION Real slope_limiter(const Real a, const Real b, const Real c, const LimiterDG limiter_dg_minmod_type) {
+  if (limiter_dg_minmod_type == LimiterDG::minmod2) {
+    return minmod2(a, b, c);
+  } else {
+    return minmod(a, b, c);
+  }
+}
+
 /* \fn RadiationFEMN::ApplyFilterLanczos
  *
  * \brief Applies a Lanczos for all angles in each energy bin for
@@ -125,8 +133,8 @@ TaskStatus RadiationFEMN::ApplyLimiterFEM(Driver *pdriver, int stage) {
                   Kokkos::parallel_reduce(Kokkos::ThreadVectorRange(member, 0, num_points_), [=](const int A, Real &partial_sum_angle) {
                     Real tmp = f0_(m, outervar * num_energy_bins_ + A, k, j, i);
                     partial_sum_angle += Kokkos::fmax(0, tmp) * (Q_matrix_(0, A) * L_mu_muhat_(m, 0, 0, k, j, i)
-                                                         + Q_matrix_(1, A) * L_mu_muhat_(m, 0, 1, k, j, i) + Q_matrix_(2, A) * L_mu_muhat_(m, 0, 2, k, j, i) +
-                                                         Q_matrix_(3, A) * L_mu_muhat_(m, 0, 3, k, j, i));
+                                                                 + Q_matrix_(1, A) * L_mu_muhat_(m, 0, 1, k, j, i) + Q_matrix_(2, A) * L_mu_muhat_(m, 0, 2, k, j, i) +
+                                                                 Q_matrix_(3, A) * L_mu_muhat_(m, 0, 3, k, j, i));
                   }, denominator);
                   member.team_barrier();
 
@@ -159,11 +167,6 @@ TaskStatus RadiationFEMN::ApplyLimiterDG(Driver *pdriver, int stage) {
   auto &f0_ = pmy_pack->pradfemn->f0;
   auto &ftemp_ = pmy_pack->pradfemn->ftemp;
 
-  //auto minmodgeneral = minmod2;
-  //if (limiter_dg_minmod) {
-  //  minmodgeneral = minmod;
-  //}
-
   Kokkos::deep_copy(ftemp_, 0.);
 
   if (one_d) {
@@ -182,7 +185,7 @@ TaskStatus RadiationFEMN::ApplyLimiterDG(Driver *pdriver, int stage) {
               auto dplusx = (f0_cellavg_px - f0_cellavg) / (2.0 * mbsize.d_view(m).dx1);
               auto islopex = 2.0 * (f0_(m, enang, kk, jj, ii + 1) - f0_(m, enang, kk, jj, ii)) / (2.0 * mbsize.d_view(m).dx1);
 
-              auto sigmax = minmod2(islopex, dminusx, dplusx);
+              auto sigmax = slope_limiter(islopex, dminusx, dplusx, limiter_dg_minmod_type);
 
               Real &x1min = mbsize.d_view(m).x1min;
               Real &x1max = mbsize.d_view(m).x1max;
@@ -226,8 +229,8 @@ TaskStatus RadiationFEMN::ApplyLimiterDG(Driver *pdriver, int stage) {
               auto islopey = 2.0 * (f0_(m, enang, kk, jj + 1, ii) - f0_(m, enang, kk, jj, ii) + f0_(m, enang, kk, jj + 1, ii + 1) - f0_(m, enang, kk, jj, ii + 1))
                              / (2.0 * 2.0 * mbsize.d_view(m).dx2);
 
-              auto sigmax = minmod2(islopex, dminusx, dplusx);
-              auto sigmay = minmod2(islopey, dminusy, dplusy);
+              auto sigmax = slope_limiter(islopex, dminusx, dplusx, limiter_dg_minmod_type);
+              auto sigmay = slope_limiter(islopey, dminusy, dplusy, limiter_dg_minmod_type);
 
               Real &x1min = mbsize.d_view(m).x1min;
               Real &x1max = mbsize.d_view(m).x1max;
@@ -306,9 +309,9 @@ TaskStatus RadiationFEMN::ApplyLimiterDG(Driver *pdriver, int stage) {
                                     + f0_(m, enang, kk + 1, jj + 1, ii) - f0_(m, enang, kk, jj + 1, ii) + f0_(m, enang, kk + 1, jj + 1, ii + 1) - f0_(m, enang, kk, jj, ii + 1))
                              / (2.0 * 2.0 * 2.0 * mbsize.d_view(m).dx3);
 
-              auto sigmax = minmod2(islopex, dminusx, dplusx);
-              auto sigmay = minmod2(islopey, dminusy, dplusy);
-              auto sigmaz = minmod2(islopez, dminusz, dplusz);
+              auto sigmax = slope_limiter(islopex, dminusx, dplusx, limiter_dg_minmod_type);
+              auto sigmay = slope_limiter(islopey, dminusy, dplusy, limiter_dg_minmod_type);
+              auto sigmaz = slope_limiter(islopez, dminusz, dplusz, limiter_dg_minmod_type);
 
               Real &x1min = mbsize.d_view(m).x1min;
               Real &x1max = mbsize.d_view(m).x1max;

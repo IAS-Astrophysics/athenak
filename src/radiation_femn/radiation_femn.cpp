@@ -60,7 +60,6 @@ namespace radiationfemn
         // source terms => off, beams => off]
         mass_lumping = pin->GetOrAddInteger("radiation-femn", "mass_lumping", 1) == 1;
         limiter_dg = pin->GetOrAddString("radiation-femn", "limiter_dg", "minmod2");
-        limiter_dg_minmod = limiter_dg == "minmod";
         fpn = pin->GetOrAddInteger("radiation-femn", "fpn", 0) == 1;
         num_energy_bins = pin->GetOrAddInteger("radiation-femn", "num_energy_bins", 1);
         energy_max = pin->GetOrAddReal("radiation-femn", "energy_max", 1);
@@ -79,6 +78,17 @@ namespace radiationfemn
         beam_source_2_theta = pin->GetOrAddReal("radiation-femn", "beam_source_2_theta", -42.);
         rad_E_floor = pin->GetOrAddReal("radiation-femn", "rad_E_floor", 1e-15);
         rad_eps = pin->GetOrAddReal("radiation-femn", "rad_eps", 1e-5);
+
+        limiter_dg_minmod_type = LimiterDG::none;
+        if(limiter_dg == "minmod") {
+          limiter_dg_minmod_type = LimiterDG::minmod;
+        }
+        if(limiter_dg == "minmod2") {
+          limiter_dg_minmod_type = LimiterDG::minmod2;
+        }
+
+        const std::string minmod_func[] = {"none", "minmod", "minmod2"};
+        std::cout << "Choice of DG limiter: " << minmod_func[limiter_dg_minmod_type] << std::endl;
 
         m1_closure = M1Closure::Charon;
         if(pin->GetOrAddString("radiation-femn", "m1_closure", "minerbo") == "shibata") {
@@ -105,7 +115,6 @@ namespace radiationfemn
           std::cout << "Choice of M1 closure: " << closures[m1_closure] << std::endl;
           std::cout << "Choice of M1 closure function: " << closure_func[closure_fun] << std::endl;
         }
-        std::cout << "Choice of DG limiter: " << limiter_dg << std::endl;
 
         // set up energy ang angular grids (redundant values => -42)
 
