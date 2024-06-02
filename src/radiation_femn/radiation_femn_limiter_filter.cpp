@@ -163,6 +163,7 @@ TaskStatus RadiationFEMN::ApplyLimiterDG(Driver *pdriver, int stage) {
   bool &one_d = pmy_pack->pmesh->one_d;
   bool &two_d = pmy_pack->pmesh->multi_d;
   bool &three_d = pmy_pack->pmesh->three_d;
+  auto &limiter_dg_minmod_type_ = pmy_pack->pradfemn->limiter_dg_minmod_type;
 
   auto &f0_ = pmy_pack->pradfemn->f0;
   auto &ftemp_ = pmy_pack->pradfemn->ftemp;
@@ -185,7 +186,7 @@ TaskStatus RadiationFEMN::ApplyLimiterDG(Driver *pdriver, int stage) {
               auto dplusx = (f0_cellavg_px - f0_cellavg) / (2.0 * mbsize.d_view(m).dx1);
               auto islopex = 2.0 * (f0_(m, enang, kk, jj, ii + 1) - f0_(m, enang, kk, jj, ii)) / (2.0 * mbsize.d_view(m).dx1);
 
-              auto sigmax = slope_limiter(islopex, dminusx, dplusx, limiter_dg_minmod_type);
+              auto sigmax = slope_limiter(islopex, dminusx, dplusx, limiter_dg_minmod_type_);
 
               Real &x1min = mbsize.d_view(m).x1min;
               Real &x1max = mbsize.d_view(m).x1max;
@@ -229,8 +230,8 @@ TaskStatus RadiationFEMN::ApplyLimiterDG(Driver *pdriver, int stage) {
               auto islopey = 2.0 * (f0_(m, enang, kk, jj + 1, ii) - f0_(m, enang, kk, jj, ii) + f0_(m, enang, kk, jj + 1, ii + 1) - f0_(m, enang, kk, jj, ii + 1))
                              / (2.0 * 2.0 * mbsize.d_view(m).dx2);
 
-              auto sigmax = slope_limiter(islopex, dminusx, dplusx, limiter_dg_minmod_type);
-              auto sigmay = slope_limiter(islopey, dminusy, dplusy, limiter_dg_minmod_type);
+              auto sigmax = slope_limiter(islopex, dminusx, dplusx, limiter_dg_minmod_type_);
+              auto sigmay = slope_limiter(islopey, dminusy, dplusy, limiter_dg_minmod_type_);
 
               Real &x1min = mbsize.d_view(m).x1min;
               Real &x1max = mbsize.d_view(m).x1max;
@@ -309,9 +310,9 @@ TaskStatus RadiationFEMN::ApplyLimiterDG(Driver *pdriver, int stage) {
                                     + f0_(m, enang, kk + 1, jj + 1, ii) - f0_(m, enang, kk, jj + 1, ii) + f0_(m, enang, kk + 1, jj + 1, ii + 1) - f0_(m, enang, kk, jj, ii + 1))
                              / (2.0 * 2.0 * 2.0 * mbsize.d_view(m).dx3);
 
-              auto sigmax = slope_limiter(islopex, dminusx, dplusx, limiter_dg_minmod_type);
-              auto sigmay = slope_limiter(islopey, dminusy, dplusy, limiter_dg_minmod_type);
-              auto sigmaz = slope_limiter(islopez, dminusz, dplusz, limiter_dg_minmod_type);
+              auto sigmax = slope_limiter(islopex, dminusx, dplusx, limiter_dg_minmod_type_);
+              auto sigmay = slope_limiter(islopey, dminusy, dplusy, limiter_dg_minmod_type_);
+              auto sigmaz = slope_limiter(islopez, dminusz, dplusz, limiter_dg_minmod_type_);
 
               Real &x1min = mbsize.d_view(m).x1min;
               Real &x1max = mbsize.d_view(m).x1max;
