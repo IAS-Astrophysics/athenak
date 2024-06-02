@@ -109,7 +109,7 @@ void ProblemGenerator::RadiationFEMNShadowtest(ParameterInput* pin, const bool r
 
                 if (x1 * x1 + x2 * x2 <= 1)
                 {
-                    kappa_a_(m, k, j, i) = Ven * 10.;
+                    kappa_a_(m, k, j, i) = Ven * 1.;
                 }
             });
 
