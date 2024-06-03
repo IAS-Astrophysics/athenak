@@ -114,10 +114,10 @@ TaskStatus RadiationFEMN::ExpRKUpdate(Driver *pdriver, int stage) {
                     Real fval = 0;
                     for (int index = 0; index < num_points_; index++) {
                       int nuenangindexa = IndicesUnited(nu, en, index, num_species_, num_energy_bins_, num_points_);
-                      Real factor = sqrt_det_g_ijk * (L_mu_muhat0_(m, 0, 0, k, j, i) * P_matrix_(0, nuenangindexa, idx)
-                                                      + L_mu_muhat0_(m, 0, 1, k, j, i) * P_matrix_(1, nuenangindexa, idx)
-                                                      + L_mu_muhat0_(m, 0, 2, k, j, i) * P_matrix_(2, nuenangindexa, idx)
-                                                      + L_mu_muhat0_(m, 0, 3, k, j, i) * P_matrix_(3, nuenangindexa, idx));
+                      Real factor = sqrt_det_g_ijk * (L_mu_muhat0_(m, 0, 0, k, j, i) * P_matrix_(0, index, idx)
+                                                      + L_mu_muhat0_(m, 0, 1, k, j, i) * P_matrix_(1, index, idx)
+                                                      + L_mu_muhat0_(m, 0, 2, k, j, i) * P_matrix_(2, index, idx)
+                                                      + L_mu_muhat0_(m, 0, 3, k, j, i) * P_matrix_(3, index, idx));
 
                       fval += factor * f1_(m, nuenangindexa, k, j, i);
                     }
