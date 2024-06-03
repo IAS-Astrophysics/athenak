@@ -68,6 +68,9 @@ void ProblemGenerator::RadiationFEMNBeamtestBH(ParameterInput *pin, const bool r
   Real ADM_mass = pin->GetOrAddReal("adm", "bh_mass", 1.);
   auto metric = pin->GetOrAddString("adm", "metric", "isotropic");
 
+  user_bcs = true;
+  user_bcs_func = radiationfemn::ApplyBeamSourcesFEMN;
+
   std::cout << "Choice of metric: " << metric << std::endl;
 
   if (metric == "kerrschild") {
