@@ -23,7 +23,7 @@
 namespace radiationfemn {
 TaskStatus RadiationFEMN::ExpRKUpdate(Driver *pdriver, int stage) {
   const int NGHOST = 2;
-  const int tot_iter = num_points;
+  const int tot_iter = 10 * num_points;
   const Real tol = 1e-30;
 
   auto &indcs = pmy_pack->pmesh->mb_indcs;
@@ -398,7 +398,9 @@ TaskStatus RadiationFEMN::ExpRKUpdate(Driver *pdriver, int stage) {
                   for (int index = 0; index < tot_iter; index++) {
                     n_iter++;
 
-                    if (n_iter >= tot_iter) { printf("Warning! BiCGSTAB routine exceeded total number of iterations without converging!\n"); }
+                    if (n_iter >= tot_iter) {
+                      printf("Warning! BiCGSTAB routine exceeded total number of iterations without converging!\n");
+                    }
 
                     dot<ScrArray2D<Real>, ScrArray1D<Real>>(member, Q_matrix, p0, v_arr);
                     Real dot_rhat0_v_arr = dot<ScrArray1D<Real>>(member, rhat0, v_arr);
@@ -437,7 +439,7 @@ TaskStatus RadiationFEMN::ExpRKUpdate(Driver *pdriver, int stage) {
                     rho0 = rho1;
 
                     for (int index2 = 0; index2 < num_points_; index2++) {
-                      p0(index2) = r0(index2) + beta * (p0(index) - omega * v_arr(index));
+                      p0(index2) = r0(index2) + beta * (p0(index2) - omega * v_arr(index2));
                     }
                   }
                   member.team_barrier();
