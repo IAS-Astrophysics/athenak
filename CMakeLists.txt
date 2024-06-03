@@ -132,6 +132,12 @@ else()
 	set(TWO_PUNCTURES 0)
 endif()
 
+# add kokkos-kernels
+add_subdirectory(kokkos-kernels)
+include_directories(${KokkosKernels_INCLUDE_DIRS_RET})
+target_link_libraries(athena PUBLIC Kokkos::kokkos KokkosKernels::kokkoskernels)
+
+# add gsl
 find_package(GSL REQUIRED)
 target_link_libraries(athena PUBLIC GSL::gsl GSL::gslcblas)
 
