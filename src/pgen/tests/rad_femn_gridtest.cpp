@@ -56,12 +56,14 @@ void ProblemGenerator::RadiationFEMNGridtest(ParameterInput *pin, const bool res
   Kokkos::realloc(angular_grid_host, pmbp->pradfemn->num_points, 2);
   Kokkos::deep_copy(angular_grid_host, pmbp->pradfemn->angular_grid);
   std::ofstream fout2(pathdir + filenamepart + "_grid_coordinates" + ".txt");
+  fout2 << std::scientific << std::setprecision(14);
   fout2 << "phi theta" << std::endl;
   for (size_t i = 0; i < pmbp->pradfemn->num_points; i++) {
     fout2 << angular_grid_host(i, 0) << " " << angular_grid_host(i, 1) << std::endl;
   }
 
   std::ofstream fout7(pathdir + filenamepart + "_quadrature_info" + ".txt");
+  fout7 << std::scientific << std::setprecision(14);
   for (int i = 0; i < pmbp->pradfemn->scheme_num_points; i++) {
     fout7 << pmbp->pradfemn->scheme_points(i, 0) << " " << pmbp->pradfemn->scheme_points(i, 1) << " " << pmbp->pradfemn->scheme_points(i, 2) << " "
           << pmbp->pradfemn->scheme_weights(i) << std::endl;
@@ -77,6 +79,7 @@ void ProblemGenerator::RadiationFEMNGridtest(ParameterInput *pin, const bool res
 
   double sum = 0.;
   std::ofstream fout3(pathdir + filenamepart + "_mass_matrix" + ".txt");
+  fout3 << std::scientific << std::setprecision(14);
   for (int i = 0; i < pmbp->pradfemn->num_points; i++) {
     for (int j = 0; j < pmbp->pradfemn->num_points; j++) {
       fout3 << mass_matrix_host(i, j) << " ";
@@ -87,6 +90,7 @@ void ProblemGenerator::RadiationFEMNGridtest(ParameterInput *pin, const bool res
   fout << "sum of mass matrix = " << sum << std::endl;
 
   std::ofstream fout3i(pathdir + filenamepart + "_mass_matrix_inv" + ".txt");
+  fout3i << std::scientific << std::setprecision(14);
   for (int i = 0; i < pmbp->pradfemn->num_points; i++) {
     for (int j = 0; j < pmbp->pradfemn->num_points; j++) {
       fout3i << mass_matrix_inv_host(i, j) << " ";
@@ -108,6 +112,7 @@ void ProblemGenerator::RadiationFEMNGridtest(ParameterInput *pin, const bool res
   Kokkos::deep_copy(stiffness_matrix_z_host, pmbp->pradfemn->stiffness_matrix_z);
 
   std::ofstream fout4(pathdir + filenamepart + "_stiffness_x" + ".txt");
+  fout4 << std::scientific << std::setprecision(14);
   for (int i = 0; i < pmbp->pradfemn->num_points; i++) {
     for (int j = 0; j < pmbp->pradfemn->num_points; j++) {
       fout4 << stiffness_matrix_x_host(i, j) << " ";
@@ -116,6 +121,7 @@ void ProblemGenerator::RadiationFEMNGridtest(ParameterInput *pin, const bool res
   }
 
   std::ofstream fout5(pathdir + filenamepart + "_stiffness_y" + ".txt");
+  fout5 << std::scientific << std::setprecision(14);
   for (int i = 0; i < pmbp->pradfemn->num_points; i++) {
     for (int j = 0; j < pmbp->pradfemn->num_points; j++) {
       fout5 << stiffness_matrix_y_host(i, j) << " ";
@@ -124,6 +130,7 @@ void ProblemGenerator::RadiationFEMNGridtest(ParameterInput *pin, const bool res
   }
 
   std::ofstream fout6(pathdir + filenamepart + "_stiffness_z" + ".txt");
+  fout6 << std::scientific << std::setprecision(14);
   for (int i = 0; i < pmbp->pradfemn->num_points; i++) {
     for (int j = 0; j < pmbp->pradfemn->num_points; j++) {
       fout6 << stiffness_matrix_z_host(i, j) << " ";
@@ -136,6 +143,7 @@ void ProblemGenerator::RadiationFEMNGridtest(ParameterInput *pin, const bool res
   Kokkos::realloc(P_matrix_host, 4, pmbp->pradfemn->num_points, pmbp->pradfemn->num_points);
   Kokkos::deep_copy(P_matrix_host, pmbp->pradfemn->P_matrix);
   std::ofstream fout9(pathdir + filenamepart + "_P_matrix_0" + ".txt");
+  fout9 << std::scientific << std::setprecision(14);
   for (int i = 0; i < pmbp->pradfemn->num_points; i++) {
     for (int j = 0; j < pmbp->pradfemn->num_points; j++) {
       fout9 << P_matrix_host(0, i, j) << " ";
@@ -144,6 +152,7 @@ void ProblemGenerator::RadiationFEMNGridtest(ParameterInput *pin, const bool res
   }
 
   std::ofstream fout10(pathdir + filenamepart + "_P_matrix_1" + ".txt");
+  fout10 << std::scientific << std::setprecision(14);
   for (int i = 0; i < pmbp->pradfemn->num_points; i++) {
     for (int j = 0; j < pmbp->pradfemn->num_points; j++) {
       fout10 << P_matrix_host(1, i, j) << " ";
@@ -152,6 +161,7 @@ void ProblemGenerator::RadiationFEMNGridtest(ParameterInput *pin, const bool res
   }
 
   std::ofstream fout11(pathdir + filenamepart + "_P_matrix_2" + ".txt");
+  fout11 << std::scientific << std::setprecision(14);
   for (int i = 0; i < pmbp->pradfemn->num_points; i++) {
     for (int j = 0; j < pmbp->pradfemn->num_points; j++) {
       fout11 << P_matrix_host(2, i, j) << " ";
@@ -160,6 +170,7 @@ void ProblemGenerator::RadiationFEMNGridtest(ParameterInput *pin, const bool res
   }
 
   std::ofstream fout12(pathdir + filenamepart + "_P_matrix_3" + ".txt");
+  fout12 << std::scientific << std::setprecision(14);
   for (int i = 0; i < pmbp->pradfemn->num_points; i++) {
     for (int j = 0; j < pmbp->pradfemn->num_points; j++) {
       fout12 << P_matrix_host(3, i, j) << " ";
@@ -172,6 +183,7 @@ void ProblemGenerator::RadiationFEMNGridtest(ParameterInput *pin, const bool res
   Kokkos::realloc(e_source_host, pmbp->pradfemn->num_points);
   Kokkos::deep_copy(e_source_host, pmbp->pradfemn->e_source);
   std::ofstream fout13(pathdir + filenamepart + "_e_matrix" + ".txt");
+  fout13 << std::scientific << std::setprecision(14);
   for (int i = 0; i < pmbp->pradfemn->num_points; i++) {
     fout13 << e_source_host(i) << std::endl;
   }
@@ -181,6 +193,7 @@ void ProblemGenerator::RadiationFEMNGridtest(ParameterInput *pin, const bool res
   Kokkos::realloc(S_source_host, pmbp->pradfemn->num_points, pmbp->pradfemn->num_points);
   Kokkos::deep_copy(S_source_host, pmbp->pradfemn->S_source);
   std::ofstream fout14(pathdir + filenamepart + "_s_matrix.txt");
+  fout14 << std::scientific << std::setprecision(14);
   for (int i = 0; i < pmbp->pradfemn->num_points; i++) {
     for (int j = 0; j < pmbp->pradfemn->num_points; j++) {
       fout14 << S_source_host(i, j) << " ";
@@ -190,6 +203,7 @@ void ProblemGenerator::RadiationFEMNGridtest(ParameterInput *pin, const bool res
 
   // [7] Save G_matrix, no multiplication by M^-1
   std::ofstream fout15(pathdir + filenamepart + "_G_matrix_nominv" + ".txt");
+  fout15 << std::scientific << std::setprecision(14);
   for (int nu = 0; nu < 4; nu++) {
     for (int mu = 0; mu < 4; mu++) {
       for (int i = 0; i < 3; i++) {
@@ -207,6 +221,7 @@ void ProblemGenerator::RadiationFEMNGridtest(ParameterInput *pin, const bool res
 
   // [8] Save F_matrix, no multiplication by M^-1
   std::ofstream fout16(pathdir + filenamepart + "_F_matrix_nominv" + ".txt");
+  fout16 << std::scientific << std::setprecision(14);
   for (int nu = 0; nu < 4; nu++) {
     for (int mu = 0; mu < 4; mu++) {
       for (int i = 0; i < 3; i++) {
@@ -227,6 +242,7 @@ void ProblemGenerator::RadiationFEMNGridtest(ParameterInput *pin, const bool res
   Kokkos::realloc(temp_array_5d, 4, 4, 3, pmbp->pradfemn->num_points, pmbp->pradfemn->num_points);
   Kokkos::deep_copy(temp_array_5d, pmbp->pradfemn->G_matrix);
   std::ofstream fout17(pathdir + filenamepart + "_G_matrix" + ".txt");
+  fout17 << std::scientific << std::setprecision(14);
   for (int nu = 0; nu < 4; nu++) {
     for (int mu = 0; mu < 4; mu++) {
       for (int i = 0; i < 3; i++) {
@@ -245,6 +261,7 @@ void ProblemGenerator::RadiationFEMNGridtest(ParameterInput *pin, const bool res
   // [9] Save F_matrix
   Kokkos::deep_copy(temp_array_5d, pmbp->pradfemn->F_matrix);
   std::ofstream fout18(pathdir + filenamepart + "_F_matrix" + ".txt");
+  fout18 << std::scientific << std::setprecision(14);
   for (int nu = 0; nu < 4; nu++) {
     for (int mu = 0; mu < 4; mu++) {
       for (int i = 0; i < 3; i++) {

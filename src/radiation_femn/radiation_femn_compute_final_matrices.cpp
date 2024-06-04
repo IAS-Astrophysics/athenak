@@ -45,6 +45,7 @@ void RadiationFEMN::ComputeMassInverse() {
   Kokkos::deep_copy(mass_matrix_inv, mass_matrix_inv_host);
 
 }
+
 // compute P and Pmod matrices (multiplied by M^-1)
 void RadiationFEMN::ComputePMatrices() {
 
@@ -61,14 +62,22 @@ void RadiationFEMN::ComputePMatrices() {
   Kokkos::realloc(temp_array_5d, 4, 4, 3, num_points, num_points);
 
   // M^-1 M
-  radiationfemn::MatMatMultiply(mass_matrix_inv, mass_matrix, temp_array);
+  if (!multiply_massinv) {
+    Kokkos::deep_copy(temp_array, mass_matrix);
+  } else {
+    radiationfemn::MatMatMultiply(mass_matrix_inv, mass_matrix, temp_array);
+  }
   auto P_matrix_0 = Kokkos::subview(P_matrix, 0, Kokkos::ALL, Kokkos::ALL);
   Kokkos::deep_copy(P_matrix_0, temp_array);
   auto Pmod_matrix_0 = Kokkos::subview(Pmod_matrix, 0, Kokkos::ALL, Kokkos::ALL);
   Kokkos::deep_copy(Pmod_matrix_0, temp_array);
 
   // stilde-x matrix
-  radiationfemn::MatMatMultiply(mass_matrix_inv, stiffness_matrix_x, temp_array);
+  if (!multiply_massinv) {
+    Kokkos::deep_copy(temp_array, stiffness_matrix_x);
+  } else {
+    radiationfemn::MatMatMultiply(mass_matrix_inv, stiffness_matrix_x, temp_array);
+  }
   auto P_matrix_1 = Kokkos::subview(P_matrix, 1, Kokkos::ALL, Kokkos::ALL);
   Kokkos::deep_copy(P_matrix_1, temp_array);
   Kokkos::deep_copy(temp_array_host, temp_array);
@@ -79,7 +88,11 @@ void RadiationFEMN::ComputePMatrices() {
   Kokkos::deep_copy(Pmod_matrix_1, temp_array_corrected);
 
   // stilde-y matrix
-  radiationfemn::MatMatMultiply(mass_matrix_inv, stiffness_matrix_y, temp_array);
+  if (!multiply_massinv) {
+    Kokkos::deep_copy(temp_array, stiffness_matrix_y);
+  } else {
+    radiationfemn::MatMatMultiply(mass_matrix_inv, stiffness_matrix_y, temp_array);
+  }
   auto P_matrix_2 = Kokkos::subview(P_matrix, 2, Kokkos::ALL, Kokkos::ALL);
   Kokkos::deep_copy(P_matrix_2, temp_array);
   Kokkos::deep_copy(temp_array_host, temp_array);
@@ -90,7 +103,11 @@ void RadiationFEMN::ComputePMatrices() {
   Kokkos::deep_copy(Pmod_matrix_2, temp_array_corrected);
 
   // stilde-z matrix
-  radiationfemn::MatMatMultiply(mass_matrix_inv, stiffness_matrix_z, temp_array);
+  if (!multiply_massinv) {
+    Kokkos::deep_copy(temp_array, stiffness_matrix_z);
+  } else {
+    radiationfemn::MatMatMultiply(mass_matrix_inv, stiffness_matrix_z, temp_array);
+  }
   auto P_matrix_3 = Kokkos::subview(P_matrix, 3, Kokkos::ALL, Kokkos::ALL);
   Kokkos::deep_copy(P_matrix_3, temp_array);
   Kokkos::deep_copy(temp_array_host, temp_array);
@@ -110,8 +127,11 @@ void RadiationFEMN::ComputePMatrices() {
       for (int i = 0; i < 3; i++) {
         auto gm_host = Kokkos::subview(G_mat_host, nu, mu, i, Kokkos::ALL, Kokkos::ALL);
         auto gm_temp = Kokkos::subview(temp_array_5d, nu, mu, i, Kokkos::ALL, Kokkos::ALL);
-        radiationfemn::MatMultiplyHost(mass_matrix_inv_host, gm_host, temp_array_host);
-
+        if (!multiply_massinv) {
+          Kokkos::deep_copy(temp_array_host, gm_host);
+        } else {
+          radiationfemn::MatMultiplyHost(mass_matrix_inv_host, gm_host, temp_array_host);
+        }
         Kokkos::deep_copy(gm_temp, temp_array_host);
       }
     }
@@ -123,8 +143,12 @@ void RadiationFEMN::ComputePMatrices() {
       for (int i = 0; i < 3; i++) {
         auto fm_host = Kokkos::subview(F_mat_host, nu, mu, i, Kokkos::ALL, Kokkos::ALL);
         auto fm_temp = Kokkos::subview(temp_array_5d, nu, mu, i, Kokkos::ALL, Kokkos::ALL);
-        radiationfemn::MatMultiplyHost(mass_matrix_inv_host, fm_host, temp_array_host);
 
+        if (!multiply_massinv) {
+          Kokkos::deep_copy(temp_array_host, fm_host);
+        } else {
+          radiationfemn::MatMultiplyHost(mass_matrix_inv_host, fm_host, temp_array_host);
+        }
         Kokkos::deep_copy(fm_temp, temp_array_host);
       }
     }
@@ -151,7 +175,11 @@ void RadiationFEMN::ComputeSourceMatrices() {
   Kokkos::deep_copy(e_source_temp, e_source);
   Kokkos::deep_copy(e_source_nominv, e_source);
 
-  radiationfemn::MatVecMultiply(mass_matrix_inv, e_source, e_source_temp_mod);
+  if (!multiply_massinv) {
+    Kokkos::deep_copy(e_source_temp_mod, e_source);
+  } else {
+    radiationfemn::MatVecMultiply(mass_matrix_inv, e_source, e_source_temp_mod);
+  }
   Kokkos::deep_copy(e_source, e_source_temp_mod);
 
   par_for("radiation_femn_compute_source_smatrix", DevExeSpace(), 0, num_points - 1, 0, num_points - 1,
@@ -159,7 +187,11 @@ void RadiationFEMN::ComputeSourceMatrices() {
             S_source_temp(i, j) = e_source_temp(i) * e_source_temp(j);
           });
 
-  radiationfemn::MatMatMultiply(mass_matrix_inv, S_source_temp, S_source_temp_mod);
+  if (!multiply_massinv) {
+    Kokkos::deep_copy(S_source_temp_mod, S_source);
+  } else {
+    radiationfemn::MatMatMultiply(mass_matrix_inv, S_source_temp, S_source_temp_mod);
+  }
   Kokkos::deep_copy(S_source, S_source_temp_mod);
 
 }

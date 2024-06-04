@@ -92,6 +92,7 @@ class RadiationFEMN {
   int num_triangles;              // number of unique triangular elements
   int basis;                      // choice of basis functions on the geodesic grid (1: tent - FEM_N)
   bool mass_lumping;              // flag for mass lumping
+  bool multiply_massinv;          // flag to multiply everything by inverse of mass matrix
   bool moving_medium;
   bool gravity;
   bool m1_flag;                   // flag for M1

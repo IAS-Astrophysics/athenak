@@ -78,6 +78,7 @@ namespace radiationfemn
         beam_source_2_theta = pin->GetOrAddReal("radiation-femn", "beam_source_2_theta", -42.);
         rad_E_floor = pin->GetOrAddReal("radiation-femn", "rad_E_floor", 1e-15);
         rad_eps = pin->GetOrAddReal("radiation-femn", "rad_eps", 1e-5);
+        multiply_massinv = pin->GetOrAddBoolean("radiation-femn", "multiply_massinv", true);
 
         limiter_dg_minmod_type = LimiterDG::none;
         if(limiter_dg == "minmod") {
@@ -232,6 +233,7 @@ namespace radiationfemn
             radiationfemn::MatLumping(mass_matrix);
         }
 
+        std::cout << "Multiply by mass inverse: " << multiply_massinv << std::endl;
         this->ComputeMassInverse();
 
         // compute mass-stiffness and matrices
