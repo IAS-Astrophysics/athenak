@@ -119,31 +119,31 @@ TaskStatus ParticlesBoundaryValues::SetNewPrtclGID() {
       bool send_to_coarser = false;
       if (ix < 0) {
 	      // level might be initizialized to -1 on some neighbours
-              for (int iop = 0; iop <= 3; ++iop){
-          	   if (nghbr.d_view(m,iop).lev < mylevel && nghbr.d_view(m,iop).lev > 0) { send_to_coarser = true; }
-              }
+        for (int iop = 0; iop <= 3; ++iop){
+          if (nghbr.d_view(m,iop).lev < mylevel && nghbr.d_view(m,iop).lev > 0) { send_to_coarser = true; }
+        }
       } else if (ix > 0) {
-              for (int iop = 4; iop <= 7; ++iop){
-          	   if (nghbr.d_view(m,iop).lev < mylevel && nghbr.d_view(m,iop).lev > 0) { send_to_coarser = true; }
-              }
+         for (int iop = 4; iop <= 7; ++iop){
+          if (nghbr.d_view(m,iop).lev < mylevel && nghbr.d_view(m,iop).lev > 0) { send_to_coarser = true; }
+         }
       }
       if (iy < 0) {
-              for (int iop = 8; iop <= 11; ++iop){
-          	   if (nghbr.d_view(m,iop).lev < mylevel && nghbr.d_view(m,iop).lev > 0) { send_to_coarser = true; }
-              }
+        for (int iop = 8; iop <= 11; ++iop){
+          if (nghbr.d_view(m,iop).lev < mylevel && nghbr.d_view(m,iop).lev > 0) { send_to_coarser = true; }
+        }
       } else if (iy > 0) {
-              for (int iop = 12; iop <= 15; ++iop){
-          	   if (nghbr.d_view(m,iop).lev < mylevel && nghbr.d_view(m,iop).lev > 0) { send_to_coarser = true; }
-              }
+        for (int iop = 12; iop <= 15; ++iop){
+          if (nghbr.d_view(m,iop).lev < mylevel && nghbr.d_view(m,iop).lev > 0) { send_to_coarser = true; }
+        }
       }
       if (iz < 0) {
-              for (int iop = 24; iop <= 27; ++iop){
-          	   if (nghbr.d_view(m,iop).lev < mylevel && nghbr.d_view(m,iop).lev > 0) { send_to_coarser = true; }
-              }
+        for (int iop = 24; iop <= 27; ++iop){
+          if (nghbr.d_view(m,iop).lev < mylevel && nghbr.d_view(m,iop).lev > 0) { send_to_coarser = true; }
+        }
       } else if (iz > 0) {
-              for (int iop = 28; iop <= 31; ++iop){
-          	   if (nghbr.d_view(m,iop).lev < mylevel && nghbr.d_view(m,iop).lev > 0) { send_to_coarser = true; }
-              }
+          for (int iop = 28; iop <= 31; ++iop){
+            if (nghbr.d_view(m,iop).lev < mylevel && nghbr.d_view(m,iop).lev > 0) { send_to_coarser = true; }
+        }
       }
 
       bool check_boundary = ( mb_bcs.d_view(m,BoundaryFace::inner_x3) == BoundaryFlag::user && iz < 0)
