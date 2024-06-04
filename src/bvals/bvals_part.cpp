@@ -46,8 +46,9 @@ void UpdateGID(int &newgid, NeighborBlock nghbr, int myrank, int *pcounter,
 
 //----------------------------------------------------------------------------------------
 //! \fn void ParticlesBoundaryValues::MarkForDestruction()
-//! \brief Adds particles that cross the user-defined mesh boundaries to a list used then to destroy them.
-//! the list uses the same structure as the sendlist for convenience in the following functions.
+//! \brief Adds particles that cross the user-defined mesh boundariesto a list used then
+//! to destroy them. The list uses the same structure as the sendlist for convenience
+//! in the following functions.
 //! This opeartion should also be performed for single process runs
 
 KOKKOS_INLINE_FUNCTION
@@ -114,18 +115,65 @@ TaskStatus ParticlesBoundaryValues::SetNewPrtclGID() {
 
     // only update particle GID if it has crossed MeshBlock boundary
     if ((abs(ix) + abs(iy) + abs(iz)) != 0) {
-      bool check_boundary = ( mb_bcs.d_view(m,BoundaryFace::inner_x3) == BoundaryFlag::user && iz < 0)
-	      || ( mb_bcs.d_view(m,BoundaryFace::outer_x3) == BoundaryFlag::user && iz > 0)
-	      || ( mb_bcs.d_view(m,BoundaryFace::inner_x2) == BoundaryFlag::user && iy < 0)
-	      || ( mb_bcs.d_view(m,BoundaryFace::outer_x2) == BoundaryFlag::user && iy > 0)
-	      || ( mb_bcs.d_view(m,BoundaryFace::inner_x1) == BoundaryFlag::user && ix < 0)
-	      || ( mb_bcs.d_view(m,BoundaryFace::outer_x1) == BoundaryFlag::user && ix > 0);
+      // The way GIDs are determined currently is not reliable in SMR cases
+      // due to nighbours across edges and corners being uninitialized.
+      // Need extra check
+      bool send_to_coarser = false;
+      if (ix < 0) {
+        // level might be initizialized to -1 on some neighbours
+        for (int iop = 0; iop <= 3; ++iop) {
+          if (nghbr.d_view(m,iop).lev < mylevel && nghbr.d_view(m,iop).lev > 0) {
+            send_to_coarser = true;
+          }
+        }
+      } else if (ix > 0) {
+         for (int iop = 4; iop <= 7; ++iop) {
+          if (nghbr.d_view(m,iop).lev < mylevel && nghbr.d_view(m,iop).lev > 0) {
+            send_to_coarser = true;
+          }
+         }
+      }
+      if (iy < 0) {
+        for (int iop = 8; iop <= 11; ++iop) {
+          if (nghbr.d_view(m,iop).lev < mylevel && nghbr.d_view(m,iop).lev > 0) {
+            send_to_coarser = true;
+          }
+        }
+      } else if (iy > 0) {
+        for (int iop = 12; iop <= 15; ++iop) {
+          if (nghbr.d_view(m,iop).lev < mylevel && nghbr.d_view(m,iop).lev > 0) {
+            send_to_coarser = true;
+          }
+        }
+      }
+      if (iz < 0) {
+        for (int iop = 24; iop <= 27; ++iop) {
+          if (nghbr.d_view(m,iop).lev < mylevel && nghbr.d_view(m,iop).lev > 0) {
+            send_to_coarser = true;
+          }
+        }
+      } else if (iz > 0) {
+          for (int iop = 28; iop <= 31; ++iop) {
+            if (nghbr.d_view(m,iop).lev < mylevel && nghbr.d_view(m,iop).lev > 0) {
+              send_to_coarser = true;
+            }
+        }
+      }
+
+      bool check_boundary =
+        ( mb_bcs.d_view(m,BoundaryFace::inner_x3) == BoundaryFlag::user && iz < 0)
+        || ( mb_bcs.d_view(m,BoundaryFace::outer_x3) == BoundaryFlag::user && iz > 0)
+        || ( mb_bcs.d_view(m,BoundaryFace::inner_x2) == BoundaryFlag::user && iy < 0)
+        || ( mb_bcs.d_view(m,BoundaryFace::outer_x2) == BoundaryFlag::user && iy > 0)
+        || ( mb_bcs.d_view(m,BoundaryFace::inner_x1) == BoundaryFlag::user && ix < 0)
+        || ( mb_bcs.d_view(m,BoundaryFace::outer_x1) == BoundaryFlag::user && ix > 0);
       // Add particle to destruction list
-	    // At the time of sending the particles that need to be destroyed
-	    // are counted among those that have been sent
-	    // without actually being sent
-      if (check_boundary) { MarkForDestruction(pdc, pdestroyl, p); }
-      else {
+      // At the time of sending the particles that need to be destroyed
+      // are treated like those that have been sent
+      // without actually being sent (i.e. they're remove from arrays)
+      if (check_boundary) {
+        MarkForDestruction(pdc, pdestroyl, p);
+      } else {
         if (iz == 0) {
           if (iy == 0) {
             // x1 face
@@ -150,6 +198,24 @@ TaskStatus ParticlesBoundaryValues::SetNewPrtclGID() {
               indx = NeighborIndex(ix,iy,0,fz,0);
             }
             while (nghbr.d_view(m,indx).gid < 0) {indx++;}
+            // Using SMR some edge and corner neighbours are uninitialized,
+            // thus check if the index has increased over the appropriate range
+            // and try to communicate through faces to a coarser meshblock
+            // Communication to coarser meshblocks should always go through faces
+            if (indx > 23 || send_to_coarser) {
+              bool found_coarser = false;
+              // First try through x face
+              indx = NeighborIndex(ix,0,0,0,0);
+              while (nghbr.d_view(m,indx).gid < 0) {indx++;}
+              if (nghbr.d_view(m,indx).lev < mylevel) { found_coarser = true; }
+              // If all faces in the x direction are on a finer level this should
+              // have already been covered by previous logic, thus check y
+              if ( !found_coarser ) {
+                indx = NeighborIndex(0,iy,0,0,0);
+                while (nghbr.d_view(m,indx).gid < 0) {indx++;}
+                if (nghbr.d_view(m,indx).lev < mylevel) { found_coarser = true; }
+              }
+            }
             UpdateGID(pi(PGID,p), nghbr.d_view(m,indx), myrank, pcounter, psendl, p);
           }
         } else if (iy == 0) {
@@ -168,6 +234,17 @@ TaskStatus ParticlesBoundaryValues::SetNewPrtclGID() {
               indx = NeighborIndex(ix,0,iz,fy,0);
             }
             while (nghbr.d_view(m,indx).gid < 0) {indx++;}
+            if (indx > 39 || send_to_coarser) {
+              bool found_coarser = false;
+              indx = NeighborIndex(ix,0,0,0,0);
+              while (nghbr.d_view(m,indx).gid < 0) {indx++;}
+              if (nghbr.d_view(m,indx).lev < mylevel) { found_coarser = true; }
+              if ( !found_coarser ) {
+                indx = NeighborIndex(0,0,iz,0,0);
+                while (nghbr.d_view(m,indx).gid < 0) {indx++;}
+                if (nghbr.d_view(m,indx).lev < mylevel) { found_coarser = true; }
+              }
+            }
             UpdateGID(pi(PGID,p), nghbr.d_view(m,indx), myrank, pcounter, psendl, p);
           }
         } else {
@@ -178,10 +255,37 @@ TaskStatus ParticlesBoundaryValues::SetNewPrtclGID() {
               indx = NeighborIndex(0,iy,iz,fx,0);
             }
             while (nghbr.d_view(m,indx).gid < 0) {indx++;}
+            if (indx > 47 || send_to_coarser) {
+              bool found_coarser = false;
+              indx = NeighborIndex(0,iy,0,0,0);
+              while (nghbr.d_view(m,indx).gid < 0) {indx++;}
+              if (nghbr.d_view(m,indx).lev < mylevel) { found_coarser = true; }
+              if ( !found_coarser ) {
+                indx = NeighborIndex(0,0,iz,0,0);
+                while (nghbr.d_view(m,indx).gid < 0) {indx++;}
+                if (nghbr.d_view(m,indx).lev < mylevel) { found_coarser = true; }
+              }
+            }
             UpdateGID(pi(PGID,p), nghbr.d_view(m,indx), myrank, pcounter, psendl, p);
           } else {
             // corners
             int indx = NeighborIndex(ix,iy,iz,0,0);
+            if (nghbr.d_view(m,indx).gid < 0 || send_to_coarser) {
+              bool found_coarser = false;
+              indx = NeighborIndex(ix,0,0,0,0);
+              while (nghbr.d_view(m,indx).gid < 0) {indx++;}
+              if (nghbr.d_view(m,indx).lev < mylevel) { found_coarser = true; }
+              if ( !found_coarser ) {
+                indx = NeighborIndex(0,iy,0,0,0);
+                while (nghbr.d_view(m,indx).gid < 0) {indx++;}
+                if (nghbr.d_view(m,indx).lev < mylevel) { found_coarser = true; }
+              }
+              if ( !found_coarser ) {
+                indx = NeighborIndex(0,0,iz,0,0);
+                while (nghbr.d_view(m,indx).gid < 0) {indx++;}
+                if (nghbr.d_view(m,indx).lev < mylevel) { found_coarser = true; }
+              }
+            }
             UpdateGID(pi(PGID,p), nghbr.d_view(m,indx), myrank, pcounter, psendl, p);
           }
         }
@@ -524,9 +628,11 @@ TaskStatus ParticlesBoundaryValues::RecvAndUnpackPrtcls() {
       if (n < nprtcl_send) {
         p = sendlist.d_view(n).prtcl_indx;  // place particles in holes created by send
       } else if (n < nprtcl_send + nprtcl_destroy ) {
-        p = destroylist.d_view(n-nprtcl_send).prtcl_indx;  // place particles in holes created by destroy
+        // place particles in holes created by destroy
+        p = destroylist.d_view(n-nprtcl_send).prtcl_indx;
       } else {
-        p = npart + (n - nprtcl_send - nprtcl_destroy );     // place particle at end of arrays
+        // place particle at end of arrays
+        p = npart + (n - nprtcl_send - nprtcl_destroy );
       }
       for (int i=0; i<nidata; ++i) {
         pi(i,p) = irecvbuf(nidata*n + i);
@@ -595,7 +701,7 @@ TaskStatus ParticlesBoundaryValues::RecvAndUnpackPrtcls() {
       }
     }
   }
-  if (nprtcl_send + nprtcl_destroy - nprtcl_recv > 0){
+  if (nprtcl_send + nprtcl_destroy - nprtcl_recv > 0) {
     // shrink size of particle data arrays
     Kokkos::resize(pmy_part->prtcl_idata, pmy_part->nidata, new_npart);
     Kokkos::resize(pmy_part->prtcl_rdata, pmy_part->nrdata, new_npart);
