@@ -357,6 +357,7 @@ TaskStatus RadiationFEMN::ExpRKUpdate(Driver *pdriver, int stage) {
                   // matrix inverse (BiCGSTAB) begins here
                   // -------------------------------------
 
+                  /*
                   // define scratch arrays needed for inverse
                   ScrArray2D<Real> Q_matrix = ScrArray2D<Real>(member.team_scratch(scr_level), num_points_, num_points_);
                   ScrArray1D<Real> x0_arr = ScrArray1D<Real>(member.team_scratch(scr_level), num_points_);
@@ -455,7 +456,49 @@ TaskStatus RadiationFEMN::ExpRKUpdate(Driver *pdriver, int stage) {
                     f0_(m, unifiedidx, k, j, i) = x0_arr(idx);
 
                   });
+                  member.team_barrier(); */
+
+                  ScrArray2D<Real> Q_matrix = ScrArray2D<Real>(member.team_scratch(scr_level), num_points_, num_points_);
+                  ScrArray2D<Real> Qinv_matrix = ScrArray2D<Real>(member.team_scratch(scr_level), num_points_, num_points_);
+                  ScrArray2D<Real> lu_matrix = ScrArray2D<Real>(member.team_scratch(scr_level), num_points_, num_points_);
+                  ScrArray1D<Real> x_array = ScrArray1D<Real>(member.team_scratch(scr_level), num_points_);
+                  ScrArray1D<Real> b_array = ScrArray1D<Real>(member.team_scratch(scr_level), num_points_);
+                  ScrArray1D<int> pivots = ScrArray1D<int>(member.team_scratch(scr_level), num_points_ - 1);
+
+                  par_for_inner(member, 0, num_points_ * num_points_ - 1, [&](const int idx) {
+                    int row = int(idx / num_points_);
+                    int col = idx - row * num_points_;
+                    Q_matrix(row, col) = sqrt_det_g_ijk * (L_mu_muhat0_(m, 0, 0, k, j, i) * P_matrix_(0, row, col)
+                                                           + L_mu_muhat0_(m, 0, 1, k, j, i) * P_matrix_(1, row, col)
+                                                           + L_mu_muhat0_(m, 0, 2, k, j, i) * P_matrix_(2, row, col)
+                                                           + L_mu_muhat0_(m, 0, 3, k, j, i) * P_matrix_(3, row, col))
+                                         + sqrt_det_g_ijk * beta_dt * (kappa_s_(m, k, j, i) + kappa_a_(m, k, j, i)) * P_matrix_(0, row, col) / Ven
+                                         - sqrt_det_g_ijk * beta_dt * (1. / (4. * M_PI)) * kappa_s_(m, k, j, i) * S_source_(row, col) / Ven;
+                    lu_matrix(row, col) = Q_matrix(row, col);
+                  });
                   member.team_barrier();
+
+                  for (int index_i = 0; index_i < num_points_; index_i++) {
+                    x_array(index_i) = g_rhs_scratch(index_i);
+                  }
+                  radiationfemn::LUSolveAxb<ScrArray2D<Real>, ScrArray1D<Real>, ScrArray1D<int>>(member, Q_matrix, lu_matrix, x_array, g_rhs_scratch, pivots);
+                  member.team_barrier();
+
+                  member.team_barrier();
+
+                  if(m1_flag_) {
+                    ApplyM1Floor(member, x_array, rad_E_floor_, rad_eps_);
+                    member.team_barrier();
+                  }
+
+                  par_for_inner(member, 0, num_points_ - 1, [&](const int idx) {
+
+                    auto unifiedidx = IndicesUnited(nu, en, idx, num_species_, num_energy_bins_, num_points_);
+                    f0_(m, unifiedidx, k, j, i) = x_array(idx);
+
+                  });
+                  member.team_barrier();
+
                 });
 
   return TaskStatus::complete;

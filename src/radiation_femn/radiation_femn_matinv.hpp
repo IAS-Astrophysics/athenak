@@ -129,6 +129,16 @@ KOKKOS_INLINE_FUNCTION void LUInv(TeamMember_t member, T1 A_matrix, T1 A_matrix_
 }
 
 template<typename T1, typename T2, typename T3>
+KOKKOS_INLINE_FUNCTION void LUSolveAxb(TeamMember_t member, T1 A_matrix, T1 lu_matrix, T2 x_array, T2 b_array, T3 pivots) {
+
+  int n = A_matrix.extent(0);
+
+  radiationfemn::LUDec<T1, T3>(A_matrix, lu_matrix, pivots);
+  radiationfemn::LUSolve<T1, T2, T3>(lu_matrix, pivots, b_array, x_array);
+
+}
+
+template<typename T1, typename T2, typename T3>
 KOKKOS_INLINE_FUNCTION void LUInv(T1 A_matrix, T1 A_matrix_inverse, T1 lu_matrix, T2 x_array, T2 b_array, T3 pivots) {
 
   int n = A_matrix.extent(0);

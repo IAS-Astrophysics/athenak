@@ -125,9 +125,9 @@ void RadiationFEMN::InitializeBeamsSourcesM1() {
   Real Sen = (Kokkos::pow(energy_max, 4) - 0.) / 4.0;
   Real Fnorm = 1. / Sen;
   Real E = Fnorm;
-  Real Fx = Fnorm * Kokkos::sin(beam_source_1_theta) * Kokkos::cos(beam_source_1_phi);
-  Real Fy = Fnorm * Kokkos::sin(beam_source_1_theta) * Kokkos::sin(beam_source_1_phi);
-  Real Fz = Fnorm * Kokkos::cos(beam_source_1_theta);
+  Real Fx = 0.99498743710662 * Fnorm * Kokkos::sin(beam_source_1_theta) * Kokkos::cos(beam_source_1_phi);
+  Real Fy = 0.99498743710662 * Fnorm * Kokkos::sin(beam_source_1_theta) * Kokkos::sin(beam_source_1_phi);
+  Real Fz = 0.99498743710662 * Fnorm * Kokkos::cos(beam_source_1_theta);
   Real F2 = Fx * Fx + Fy * Fy + Fz * Fz;
 
   E = Kokkos::fmax(E, rad_E_floor);
