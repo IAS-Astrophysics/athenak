@@ -178,6 +178,45 @@ void ProblemGenerator::RadiationFEMNGridtest(ParameterInput *pin, const bool res
     fout12 << std::endl;
   }
 
+  HostArray3D<Real> Pmod_matrix_host;
+  Kokkos::realloc(Pmod_matrix_host, 4, pmbp->pradfemn->num_points, pmbp->pradfemn->num_points);
+  Kokkos::deep_copy(Pmod_matrix_host, pmbp->pradfemn->Pmod_matrix);
+
+  std::ofstream foutmod0(pathdir + filenamepart + "_Pmod_matrix_0" + ".txt");
+  foutmod0 << std::scientific << std::setprecision(14);
+  for (int i = 0; i < pmbp->pradfemn->num_points; i++) {
+    for (int j = 0; j < pmbp->pradfemn->num_points; j++) {
+      foutmod0 << Pmod_matrix_host(0, i, j) << " ";
+    }
+    foutmod0 << std::endl;
+  }
+
+  std::ofstream foutmod1(pathdir + filenamepart + "_Pmod_matrix_1" + ".txt");
+  foutmod1 << std::scientific << std::setprecision(14);
+  for (int i = 0; i < pmbp->pradfemn->num_points; i++) {
+    for (int j = 0; j < pmbp->pradfemn->num_points; j++) {
+      foutmod1 << Pmod_matrix_host(1, i, j) << " ";
+    }
+    foutmod1 << std::endl;
+  }
+
+  std::ofstream foutmod2(pathdir + filenamepart + "_Pmod_matrix_2" + ".txt");
+  foutmod2 << std::scientific << std::setprecision(14);
+  for (int i = 0; i < pmbp->pradfemn->num_points; i++) {
+    for (int j = 0; j < pmbp->pradfemn->num_points; j++) {
+      foutmod2 << Pmod_matrix_host(2, i, j) << " ";
+    }
+    foutmod2 << std::endl;
+  }
+
+  std::ofstream foutmod3(pathdir + filenamepart + "_Pmod_matrix_3" + ".txt");
+  foutmod3 << std::scientific << std::setprecision(14);
+  for (int i = 0; i < pmbp->pradfemn->num_points; i++) {
+    for (int j = 0; j < pmbp->pradfemn->num_points; j++) {
+      foutmod3 << Pmod_matrix_host(3, i, j) << " ";
+    }
+    foutmod3 << std::endl;
+  }
   // [5] save e-matrix
   HostArray1D<Real> e_source_host;
   Kokkos::realloc(e_source_host, pmbp->pradfemn->num_points);
