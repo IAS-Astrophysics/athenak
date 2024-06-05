@@ -175,24 +175,24 @@ void RadiationFEMN::ComputeSourceMatrices() {
   Kokkos::deep_copy(e_source_temp, e_source);
   Kokkos::deep_copy(e_source_nominv, e_source);
 
-  if (!multiply_massinv) {
-    Kokkos::deep_copy(e_source_temp_mod, e_source);
-  } else {
+  if (multiply_massinv) {
     radiationfemn::MatVecMultiply(mass_matrix_inv, e_source, e_source_temp_mod);
+    Kokkos::deep_copy(e_source, e_source_temp_mod);
   }
-  Kokkos::deep_copy(e_source, e_source_temp_mod);
+
 
   par_for("radiation_femn_compute_source_smatrix", DevExeSpace(), 0, num_points - 1, 0, num_points - 1,
           KOKKOS_LAMBDA(const int j, const int i) {
             S_source_temp(i, j) = e_source_temp(i) * e_source_temp(j);
           });
 
-  if (!multiply_massinv) {
-    Kokkos::deep_copy(S_source_temp_mod, S_source);
-  } else {
+  if (multiply_massinv) {
     radiationfemn::MatMatMultiply(mass_matrix_inv, S_source_temp, S_source_temp_mod);
+    Kokkos::deep_copy(S_source, S_source_temp_mod);
+  } else {
+    Kokkos::deep_copy(S_source, S_source_temp);
   }
-  Kokkos::deep_copy(S_source, S_source_temp_mod);
+
 
 }
 

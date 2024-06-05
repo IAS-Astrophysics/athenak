@@ -376,7 +376,7 @@ TaskStatus RadiationFEMN::ExpRKUpdate(Driver *pdriver, int stage) {
                                                            + L_mu_muhat0_(m, 0, 1, k, j, i) * P_matrix_(1, row, col)
                                                            + L_mu_muhat0_(m, 0, 2, k, j, i) * P_matrix_(2, row, col)
                                                            + L_mu_muhat0_(m, 0, 3, k, j, i) * P_matrix_(3, row, col))
-                                         + sqrt_det_g_ijk * beta_dt * (kappa_s_(m, k, j, i) + kappa_a_(m, k, j, i)) * (row == col) / Ven
+                                         + sqrt_det_g_ijk * beta_dt * (kappa_s_(m, k, j, i) + kappa_a_(m, k, j, i)) * P_matrix_(0, row, col) / Ven
                                          - sqrt_det_g_ijk * beta_dt * (1. / (4. * M_PI)) * kappa_s_(m, k, j, i) * S_source_(row, col) / Ven;
                   });
                   member.team_barrier();
