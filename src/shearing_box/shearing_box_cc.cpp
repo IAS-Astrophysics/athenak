@@ -70,9 +70,9 @@ ShearingBoxBoundary::ShearingBoxBoundary(MeshBlockPack *ppack, ParameterInput *p
       sendbuf[n].vars_req = new MPI_Request[3*nmb_x1bndry(n)];
       recvbuf[n].vars_req = new MPI_Request[3*nmb_x1bndry(n)];
       for (int m=0; m<nmb_x1bndry(0); ++m) {
-        for (int n=0; n<3; ++n) {
-          sendbuf[n].vars_req[3*m + n] = MPI_REQUEST_NULL;
-          recvbuf[n].vars_req[3*m + n] = MPI_REQUEST_NULL;
+        for (int l=0; l<3; ++l) {
+          sendbuf[n].vars_req[3*m + l] = MPI_REQUEST_NULL;
+          recvbuf[n].vars_req[3*m + l] = MPI_REQUEST_NULL;
         }
       }
     }
@@ -140,12 +140,12 @@ void ShearingBoxBoundary::FindTargetMB(const int igid, const int jshift, int &gi
 //! Called on the physics_bcs task after purely periodic BC communication is finished.
 
 TaskStatus ShearingBoxBoundaryCC::PackAndSendCC(DvceArray5D<Real> &a,
-                                  ReconstructionMethod rcon, Real qom, Real time) {
-  auto &indcs = pmy_pack->pmesh->mb_indcs;
-  auto &is = indcs.is, &ie = indcs.ie;
-  auto &js = indcs.js, &je = indcs.je;
-  auto &ks = indcs.ks, &ke = indcs.ke;
-  auto &ng = indcs.ng;
+                                                ReconstructionMethod rcon) {
+  const auto &indcs = pmy_pack->pmesh->mb_indcs;
+  const auto &is = indcs.is, &ie = indcs.ie;
+  const auto &js = indcs.js, &je = indcs.je;
+  const auto &ks = indcs.ks, &ke = indcs.ke;
+  const auto &ng = indcs.ng;
   // copy ghost zones at x1-faces into send buffer view
   for (int n=0; n<2; ++n) {
     std::pair<int,int> isrc;
@@ -163,22 +163,18 @@ TaskStatus ShearingBoxBoundaryCC::PackAndSendCC(DvceArray5D<Real> &a,
     }
   }
 
-  // figure out distance boundaries are sheared
-  auto &mesh_size = pmy_pack->pmesh->mesh_size;
-  Real lx = (mesh_size.x1max - mesh_size.x1min);
-  Real yshear = qom*lx*time;
-
   // apply fractional cell offset to data in send buffers using conservative remap
-  int nvar = a.extent_int(1);  // TODO(@user): 2nd index from L of in array must be NVAR
-  auto &mbsize = pmy_pack->pmb->mb_size;
+  const int nvar = a.extent_int(1);  // TODO(@user): 2nd index from L must be NVAR
+  const auto &mbsize = pmy_pack->pmb->mb_size;
+  int kl=ks, ku=ke;
+  if (pmy_pack->pmesh->three_d) {kl -= ng; ku += ng;}
   int nj = indcs.nx2 + 2*ng;
   auto sbuf = sendbuf;
   int scr_lvl=0;
   size_t scr_size = ScrArray1D<Real>::shmem_size(nj) * 3;
   for (int n=0; n<2; ++n) {
     int nmb1 = nmb_x1bndry(n) - 1;
-// TODO(@user) extend loop over ks-2,ke+2 in 3D
-    par_for_outer("shrcc",DevExeSpace(),scr_size,scr_lvl,0,nmb1,0,(nvar-1),ks,ke,0,(ng-1),
+    par_for_outer("shrcc",DevExeSpace(),scr_size,scr_lvl,0,nmb1,0,(nvar-1),kl,ku,0,(ng-1),
     KOKKOS_LAMBDA(TeamMember_t member, const int m, const int v, const int k, const int i)
     {
       ScrArray1D<Real> a_(member.team_scratch(scr_lvl), nj); // 1D slice of data
@@ -222,24 +218,24 @@ TaskStatus ShearingBoxBoundaryCC::PackAndSendCC(DvceArray5D<Real> &a,
   // shift data at x1 boundaries by integer number of cells.
   // Algorithm is broken into three steps: case1/2/3.
   //  * Case1 and case3 are when the integer shift (jr<ng), so that the sending MB
-  //    overlaps the ghost cells of the two neighbors, and so requires copies
-  //    to three seperate target MB.
+  //    overlaps the ghost cells of the two neighbors, and so requires copy/send
+  //    to three separate target MBs.
   //  * Case2 is when the sending MB straddles the boundary between MBs, and so requires
-  //    copies to only two target MBs.
-  // j-indices of domain to be copied are stored in std::pair in each case.
+  //    copy/send to only two target MBs.
   // Use deep copy if target MB on same rank, or MPI sends if not
+  const int &nx2 = indcs.nx2;
+  bool no_errors=true;
   for (int n=0; n<2; ++n) {
-    int &nx2 = indcs.nx2;
     for (int m=0; m<nmb_x1bndry(n); ++m) {
       int gid = x1bndry_mbgid(n,m);
       int mm = gid - pmy_pack->gids;
       // Find integer and fractional number of grids over which offset extends.
       // This assumes every grid has same number of cells in x2-direction!
       int joffset  = static_cast<int>(yshear/(mbsize.h_view(mm).dx2));
-      int ji = joffset/(pmy_pack->pmesh->mb_indcs.nx2);
-      int jr = joffset - ji*(pmy_pack->pmesh->mb_indcs.nx2);
+      int ji = joffset/nx2;
+      int jr = joffset - ji*nx2;
 
-      if (jr < ng) {  //-------------------------------------- CASE 1 (in my nomenclature)
+      if (jr < ng) {               //--- CASE 1 (in my nomenclature)
         int tgid, trank;
         std::pair<int,int> jsrc[3],jdst[3];
         if (n==0) {
@@ -257,11 +253,11 @@ TaskStatus ShearingBoxBoundaryCC::PackAndSendCC(DvceArray5D<Real> &a,
           jdst[1] = std::make_pair(js-jr,je-jr+1);
           jdst[2] = std::make_pair(js-ng,js-jr);
         }
-        // send to (target-1) through (target+1) [ix1 boundary]
-        // send to (target-1) through (target+1) [ox1 boundary]
-        for (int l=0; l<=2; ++l) {
+        // ix1 boundary: send to (target-1) through (target+1)
+        // ox1 boundary: send to (target-1) through (target+1)
+        for (int l=0; l<3; ++l) {
           int jshift;
-          if (n==0) {jshift = ji+l-1;} else {jshift = l-1-ji;}
+          if (n==0) {jshift = ji+l-1;} else {jshift = l-1-ji;} // offset of target
           FindTargetMB(gid,jshift,tgid,trank);
           if (trank == global_variable::my_rank) {
             int tm = TargetIndex(n,tgid);
@@ -271,6 +267,14 @@ TaskStatus ShearingBoxBoundaryCC::PackAndSendCC(DvceArray5D<Real> &a,
             deep_copy(DevExeSpace(), dst, src);
 #if MPI_PARALLEL_ENABLED
           } else {
+            using namespace Kokkos;
+            auto send_ptr = subview(sendbuf[n].vars,m,ALL,ALL,jsrc[l],ALL);
+            // create tag using GID of *receiving* MeshBlock
+            int tag = CreateBvals_MPI_Tag(tgid, l);
+            int data_size = send_ptr.size();
+            int ierr = MPI_Isend(send_ptr.data(), data_size, MPI_ATHENA_REAL, trank, tag,
+                                 comm_sbox, &(sendbuf[n].vars_req[3*m + l]));
+            if (ierr != MPI_SUCCESS) {no_errors=false;}
 #endif
           }
         }
@@ -288,9 +292,9 @@ TaskStatus ShearingBoxBoundaryCC::PackAndSendCC(DvceArray5D<Real> &a,
           jdst[0] = std::make_pair(je-jr+1,je+ng+1);
           jdst[1] = std::make_pair(js-ng,je-jr+1);
         }
-        // send to (target  ) through (target+1) [ix1 boundary]
-        // send to (target-1) through (target  ) [ox1 boundary]
-        for (int l=0; l<=1; ++l) {
+        // ix1 boundary: send to (target  ) through (target+1)
+        // ox1 boundary: send to (target-1) through (target  )
+        for (int l=0; l<2; ++l) {
           int jshift;
           if (n==0) {jshift = ji+l;} else {jshift = l-1-ji;}
           FindTargetMB(gid,jshift,tgid,trank);
@@ -302,10 +306,18 @@ TaskStatus ShearingBoxBoundaryCC::PackAndSendCC(DvceArray5D<Real> &a,
             deep_copy(DevExeSpace(), dst, src);
 #if MPI_PARALLEL_ENABLED
           } else {
+            using namespace Kokkos;
+            auto send_ptr = subview(sendbuf[n].vars,m,ALL,ALL,jsrc[l],ALL);
+            // create tag using GID of *receiving* MeshBlock
+            int tag = CreateBvals_MPI_Tag(tgid, l);
+            int data_size = send_ptr.size();
+            int ierr = MPI_Isend(send_ptr.data(), data_size, MPI_ATHENA_REAL, trank, tag,
+                                 comm_sbox, &(sendbuf[n].vars_req[3*m + l]));
+            if (ierr != MPI_SUCCESS) {no_errors=false;}
 #endif
           }
         }
-      } else {  //--------------------------------------------------- CASE 3
+      } else {                     //--- CASE 3
         int tgid, trank;
         std::pair<int,int> jsrc[3],jdst[3];
         if (n==0) {
@@ -323,9 +335,9 @@ TaskStatus ShearingBoxBoundaryCC::PackAndSendCC(DvceArray5D<Real> &a,
           jdst[1] = std::make_pair(js+(nx2-jr),je+(nx2-jr)+1);
           jdst[2] = std::make_pair(js-ng,js+(nx2-jr));
         }
-        // send to (target  ) through (target+2) [ix1 boundary]
-        // send to (target-2) through (target  ) [ox1 boundary]
-        for (int l=0; l<=2; ++l) {
+        // ix1 boundary: send to (target  ) through (target+2)
+        // ox1 boundary: send to (target-2) through (target  )
+        for (int l=0; l<3; ++l) {
           int jshift;
           if (n==0) {jshift = ji+l;} else {jshift = l-2-ji;}
           FindTargetMB(gid,jshift,tgid,trank);
@@ -337,27 +349,24 @@ TaskStatus ShearingBoxBoundaryCC::PackAndSendCC(DvceArray5D<Real> &a,
             deep_copy(DevExeSpace(), dst, src);
 #if MPI_PARALLEL_ENABLED
           } else {
+            using namespace Kokkos;
+            auto send_ptr = subview(sendbuf[n].vars,m,ALL,ALL,jsrc[l],ALL);
+            // create tag using GID of *receiving* MeshBlock
+            int tag = CreateBvals_MPI_Tag(tgid, l);
+            int data_size = send_ptr.size();
+            int ierr = MPI_Isend(send_ptr.data(), data_size, MPI_ATHENA_REAL, trank, tag,
+                                 comm_sbox, &(sendbuf[n].vars_req[3*m + l]));
 #endif
           }
         }
       }
     }
   }
-
-/*
-
-#if MPI_PARALLEL_ENABLED
-  // Send boundary buffer to neighboring MeshBlocks using MPI
-  Kokkos::fence();
-  bool no_errors=true;
-  // Quit if MPI error detected
   if (!(no_errors)) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
        << std::endl << "MPI error in posting sends" << std::endl;
     std::exit(EXIT_FAILURE);
   }
-#endif
-*/
   return TaskStatus::complete;
 }
 
@@ -369,26 +378,66 @@ TaskStatus ShearingBoxBoundaryCC::PackAndSendCC(DvceArray5D<Real> &a,
 
 TaskStatus ShearingBoxBoundaryCC::RecvAndUnpackCC(DvceArray5D<Real> &a){
   // create local references for variables in kernel
-  int nmb = pmy_pack->nmb_thispack;
-  int nnghbr = pmy_pack->pmb->nnghbr;
-  auto &nghbr = pmy_pack->pmb->nghbr;
-  auto &rbuf = recvbuf;
+  const auto &indcs = pmy_pack->pmesh->mb_indcs;
+  const int &ng = indcs.ng;
 #if MPI_PARALLEL_ENABLED
   //----- STEP 1: check that recv boundary buffer communications have all completed
+  const int &nx2 = indcs.nx2;
   bool bflag = false;
   bool no_errors=true;
-  for (int m=0; m<nmb; ++m) {
-    for (int n=0; n<2; ++n) {
-      // indices of x2-face buffers in nghbr view
-      int nnghbr;
-      if (n==0) {nnghbr=8;} else {nnghbr=12;}
-      if (nghbr.h_view(m,nnghbr).gid >= 0) { // neighbor exists and not a physical bndry
-        if (nghbr.h_view(m,nnghbr).rank != global_variable::my_rank) {
-          int test;
-          int ierr = MPI_Test(&(rbuf[n].vars_req[m]), &test, MPI_STATUS_IGNORE);
-          if (ierr != MPI_SUCCESS) {no_errors=false;}
-          if (!(static_cast<bool>(test))) {
-            bflag = true;
+  for (int n=0; n<2; ++n) {
+    for (int m=0; m<nmb_x1bndry(n); ++m) {
+      int gid = x1bndry_mbgid(n,m);
+      int mm = gid - pmy_pack->gids;
+      // Find integer and fractional number of grids over which offset extends.
+      // This assumes every grid has same number of cells in x2-direction!
+      int joffset  = static_cast<int>(yshear/(pmy_pack->pmb->mb_size.h_view(mm).dx2));
+      int ji = joffset/nx2;
+      int jr = joffset - ji*nx2;
+
+      if (jr < ng) {               //--- CASE 1 (in my nomenclature)
+        // ix1 boundary: receive from (target+1) through (target-1)
+        // ox1 boundary: receive from (target+1) through (target-1)
+        for (int l=0; l<3; ++l) {
+          int jshift;
+          if (n==0) {jshift = -(ji+l-1);} else {jshift = -(l-1-ji);} // offset of sender
+          int sgid, srank;
+          FindTargetMB(gid,jshift,sgid,srank);
+          if (srank != global_variable::my_rank) {
+            int test;
+            int ierr = MPI_Test(&(recvbuf[n].vars_req[3*m + l]),&test,MPI_STATUS_IGNORE);
+            if (ierr != MPI_SUCCESS) {no_errors=false;}
+            if (!(static_cast<bool>(test))) {bflag = true;}
+          }
+        }
+      } else if (jr < (nx2-ng)) {  //--- CASE 2
+        // ix1 boundary: receive from (target  ) through (target-1)
+        // ox1 boundary: receive from (target+1) through (target  )
+        for (int l=0; l<2; ++l) {
+          int jshift;
+          if (n==0) {jshift = -(ji+l);} else {jshift = -(l-1-ji);} // offset of sender
+          int sgid, srank;
+          FindTargetMB(gid,jshift,sgid,srank);
+          if (srank != global_variable::my_rank) {
+            int test;
+            int ierr = MPI_Test(&(recvbuf[n].vars_req[3*m + l]),&test,MPI_STATUS_IGNORE);
+            if (ierr != MPI_SUCCESS) {no_errors=false;}
+            if (!(static_cast<bool>(test))) {bflag = true;}
+          }
+        }
+      } else {                     //--- CASE 3
+        // ix1 boundary: send to (target  ) through (target+2)
+        // ox1 boundary: send to (target-2) through (target  )
+        for (int l=0; l<3; ++l) {
+          int jshift;
+          if (n==0) {jshift = -(ji+l);} else {jshift = -(l-2-ji);} // offset of sender
+          int sgid, srank;
+          FindTargetMB(gid,jshift,sgid,srank);
+          if (srank != global_variable::my_rank) {
+            int test;
+            int ierr = MPI_Test(&(recvbuf[n].vars_req[3*m + l]),&test,MPI_STATUS_IGNORE);
+            if (ierr != MPI_SUCCESS) {no_errors=false;}
+            if (!(static_cast<bool>(test))) {bflag = true;}
           }
         }
       }
@@ -406,11 +455,8 @@ TaskStatus ShearingBoxBoundaryCC::RecvAndUnpackCC(DvceArray5D<Real> &a){
 #endif
 
   //----- STEP 2: communications have all completed, so unpack and apply shift
-
-  auto &indcs = pmy_pack->pmesh->mb_indcs;
-  auto &is = indcs.is, &ie = indcs.ie;
-  auto &ng = indcs.ng;
   // copy recv buffer view into ghost zones at x1-faces
+  const int &is = indcs.is, &ie = indcs.ie;
   for (int n=0; n<2; ++n) {
     std::pair<int,int> idst;
     if (n==0) {

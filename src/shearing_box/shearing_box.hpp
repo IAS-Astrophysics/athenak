@@ -110,8 +110,9 @@ class ShearingBoxBoundary {
   ~ShearingBoxBoundary();
 
   // data
-  HostArray1D<int> nmb_x1bndry;      // number of MBs that touch x1 boundaries
-  HostArray2D<int> x1bndry_mbgid;    // GIDs of MBs at x1 boundaries
+  HostArray1D<int> nmb_x1bndry;    // number of MBs that touch x1 boundaries
+  HostArray2D<int> x1bndry_mbgid;  // GIDs of MBs at x1 boundaries
+  Real yshear;                     // x2-distance x1-boundaries have sheared
 
   // data buffers for shearing box BCs.  Only two x1-faces get sheared
   // Use seperate variables for ix1/ox1 since number of MBs on each face can be different
@@ -122,6 +123,10 @@ class ShearingBoxBoundary {
   MPI_Comm comm_sbox;
 #endif
 
+  // functions
+  TaskStatus InitRecv(Real qom, Real time);
+  TaskStatus ClearRecv();
+  TaskStatus ClearSend();
   // function to find target MB offset by shear.  Returns GID and rank
   void FindTargetMB(const int igid, const int jshift, int &gid, int &rank);
   // function to find index in x1bndry array of MB with input GID
@@ -146,8 +151,7 @@ class ShearingBoxBoundaryCC : public ShearingBoxBoundary {
  public:
   ShearingBoxBoundaryCC(MeshBlockPack *ppack, ParameterInput *pin, int nvar);
   // functions to communicate CC data with shearing box BCs
-  TaskStatus PackAndSendCC(DvceArray5D<Real> &a, ReconstructionMethod rcon,
-                           Real qom, Real time);
+  TaskStatus PackAndSendCC(DvceArray5D<Real> &a, ReconstructionMethod rcon);
   TaskStatus RecvAndUnpackCC(DvceArray5D<Real> &a);
 };
 
