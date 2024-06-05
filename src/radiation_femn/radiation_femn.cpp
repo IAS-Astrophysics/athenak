@@ -78,7 +78,7 @@ namespace radiationfemn
         beam_source_2_theta = pin->GetOrAddReal("radiation-femn", "beam_source_2_theta", -42.);
         rad_E_floor = pin->GetOrAddReal("radiation-femn", "rad_E_floor", 1e-15);
         rad_eps = pin->GetOrAddReal("radiation-femn", "rad_eps", 1e-5);
-        multiply_massinv = pin->GetOrAddBoolean("radiation-femn", "multiply_massinv", true);
+        multiply_massinv = pin->GetOrAddBoolean("radiation-femn", "multiply_massinv", false);
 
         limiter_dg_minmod_type = LimiterDG::none;
         if(limiter_dg == "minmod") {
