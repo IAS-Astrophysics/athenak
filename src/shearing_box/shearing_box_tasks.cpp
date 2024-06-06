@@ -183,7 +183,7 @@ TaskStatus ShearingBoxBoundary::InitRecv(Real qom, Real time) {
           FindTargetMB(gid,jshift,sgid,srank);
           if (srank != global_variable::my_rank) {
             // create tag using local ID of *receiving* MeshBlock
-            int tag = CreateBvals_MPI_Tag(gid, l);
+            int tag = CreateBvals_MPI_Tag(gid, ((n<<2) | l));
 
             // get pointer to variables
             using namespace Kokkos;
@@ -194,6 +194,9 @@ TaskStatus ShearingBoxBoundary::InitRecv(Real qom, Real time) {
             int ierr = MPI_Irecv(recv_ptr.data(), data_size, MPI_ATHENA_REAL, srank, tag,
                                  comm_sbox, &(recvbuf[n].vars_req[3*m + l]));
             if (ierr != MPI_SUCCESS) {no_errors=false;}
+/****/
+std::cout<<"Rank="<<global_variable::my_rank<<" posted SBox Recv,  n="<<n<<" GID="<<gid<<" l="<<l<<" from srank="<<srank<<" tag="<<tag<<" size="<<data_size<<std::endl;
+/***/
           }
         }
       } else if (jr < (nx2-ng)) {  //--- CASE 2
@@ -214,7 +217,7 @@ TaskStatus ShearingBoxBoundary::InitRecv(Real qom, Real time) {
           FindTargetMB(gid,jshift,sgid,srank);
           if (srank != global_variable::my_rank) {
             // create tag using local ID of *receiving* MeshBlock
-            int tag = CreateBvals_MPI_Tag(gid, l);
+            int tag = CreateBvals_MPI_Tag(gid, ((n<<2) | l));
 
             // get pointer to variables
             using namespace Kokkos;
@@ -227,7 +230,7 @@ TaskStatus ShearingBoxBoundary::InitRecv(Real qom, Real time) {
             if (ierr != MPI_SUCCESS) {no_errors=false;}
           }
         }
-      } else if (jr < (nx2-ng)) {  //--- CASE 2
+      } else {                      //--- CASE 3
         std::pair<int,int> jdst[3];
         if (n==0) {
           jdst[0] = std::make_pair(je+1-(nx2-jr),je+ng+1);
@@ -247,7 +250,7 @@ TaskStatus ShearingBoxBoundary::InitRecv(Real qom, Real time) {
           FindTargetMB(gid,jshift,sgid,srank);
           if (srank != global_variable::my_rank) {
             // create tag using local ID of *receiving* MeshBlock
-            int tag = CreateBvals_MPI_Tag(gid, l);
+            int tag = CreateBvals_MPI_Tag(gid, ((n<<2) | l));
 
             // get pointer to variables
             using namespace Kokkos;
@@ -305,6 +308,9 @@ TaskStatus ShearingBoxBoundary::ClearRecv() {
           if (srank != global_variable::my_rank) {
             int ierr = MPI_Wait(&(recvbuf[n].vars_req[3*m + l]), MPI_STATUS_IGNORE);
             if (ierr != MPI_SUCCESS) {no_errors=false;}
+/****/
+std::cout<<"Rank="<<global_variable::my_rank<<" Clear Recv,  n="<<n<<" GID="<<gid<<" l="<<l<<std::endl;
+/***/
           }
         }
       } else if (jr < (nx2-ng)) {  //--- CASE 2

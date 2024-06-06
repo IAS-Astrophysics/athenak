@@ -394,11 +394,19 @@ TaskStatus Hydro::ConToPrim(Driver *pdrive, int stage) {
 
 //----------------------------------------------------------------------------------------
 //! \fn TaskList Hydro::ClearSend
-//! \brief Wrapper task list function that checks all MPI sends have completed.
+//! \brief Wrapper task list function that checks all MPI sends have completed. Used in
+//! TaskList and in Driver::InitBoundaryValuesAndPrimitives()
+//! If stage=(last stage):      clears sends of U, Flx_U, U_OA, U_Shr
+//! If (last stage)>stage>=(0): clears sends of U, Flx_U,       U_Shr
+//! If stage=(-1):              clears sends of U
+//! If stage=(-4):              clears sends of                 U_Shr
 
 TaskStatus Hydro::ClearSend(Driver *pdrive, int stage) {
+  TaskStatus tstat;
   // check sends of U complete
-  TaskStatus tstat = pbval_u->ClearSend();
+  if ((stage >= 0) || (stage == -1)) {
+    tstat = pbval_u->ClearSend();
+  }
   if (tstat != TaskStatus::complete) return tstat;
 
   // with SMR/AMR check sends of restricted fluxes of U complete
@@ -417,8 +425,9 @@ TaskStatus Hydro::ClearSend(Driver *pdrive, int stage) {
   if (tstat != TaskStatus::complete) return tstat;
 
   // with shearing box boundaries check sends of U complete
-  // only execute when (shearing box defined) AND (3D OR 2d_r_phi)
-  if ((psrc->shearing_box) && (pmy_pack->pmesh->three_d || psrc->shearing_box_r_phi)) {
+  // only execute when (shearing box defined) AND (stage>=0 or -4) AND (3D OR 2d_r_phi)
+  if ((psrc->shearing_box) && ((stage >= 0) || (stage == -4)) &&
+      (pmy_pack->pmesh->three_d || psrc->shearing_box_r_phi)) {
     tstat = psbox_u->ClearSend();
   }
 
@@ -427,12 +436,19 @@ TaskStatus Hydro::ClearSend(Driver *pdrive, int stage) {
 
 //----------------------------------------------------------------------------------------
 //! \fn TaskList Hydro::ClearRecv
-//! \brief iWrapper task list function that checks all MPI receives have completed.
-//! Needed in Driver::Initialize to set ghost zones in ICs.
+//! \brief Wrapper task list function that checks all MPI receives have completed. Used in
+//! TaskList and in Driver::InitBoundaryValuesAndPrimitives()
+//! If stage=(last stage):      clears recvs of U, Flx_U, U_OA, U_Shr
+//! If (last stage)>stage>=(0): clears recvs of U, Flx_U,       U_Shr
+//! If stage=(-1):              clears recvs of U
+//! If stage=(-4):              clears recvs of                 U_Shr
 
 TaskStatus Hydro::ClearRecv(Driver *pdrive, int stage) {
+  TaskStatus tstat;
   // check receives of U complete
-  TaskStatus tstat = pbval_u->ClearRecv();
+  if ((stage >= 0) || (stage == -1)) {
+    tstat = pbval_u->ClearRecv();
+  }
   if (tstat != TaskStatus::complete) return tstat;
 
   // with SMR/AMR check receives of restricted fluxes of U complete
@@ -451,8 +467,9 @@ TaskStatus Hydro::ClearRecv(Driver *pdrive, int stage) {
   if (tstat != TaskStatus::complete) return tstat;
 
   // with shearing box boundaries check receives of U complete
-  // only execute when (shearing box defined) AND (3D OR 2d_r_phi)
-  if ((psrc->shearing_box) && (pmy_pack->pmesh->three_d || psrc->shearing_box_r_phi)) {
+  // only execute when (shearing box defined) AND (stage>=0 or -4) AND (3D OR 2d_r_phi)
+  if ((psrc->shearing_box) && ((stage >= 0) || (stage == -4)) &&
+      (pmy_pack->pmesh->three_d || psrc->shearing_box_r_phi)) {
     tstat = psbox_u->ClearRecv();
   }
 

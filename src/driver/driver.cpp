@@ -504,9 +504,13 @@ void Driver::InitBoundaryValuesAndPrimitives(Mesh *pm) {
     (void) phydro->RestrictU(this, 0);
     (void) phydro->InitRecv(this, -1);  // stage < 0 suppresses InitFluxRecv
     (void) phydro->SendU(this, 0);
-    (void) phydro->ClearSend(this, -1);
-    (void) phydro->ClearRecv(this, -1);
+    (void) phydro->ClearSend(this, -1); // stage = -1 only clear SendU
+    (void) phydro->ClearRecv(this, -1); // stage = -1 only clear RecvU
     (void) phydro->RecvU(this, 0);
+    (void) phydro->SendU_Shr(this, 0);
+    (void) phydro->ClearSend(this, -4); // stage = -4 only clear SendU_Shr
+    (void) phydro->ClearRecv(this, -4); // stage = -4 only clear RecvU_Shr
+    (void) phydro->RecvU_Shr(this, 0);
     (void) phydro->ApplyPhysicalBCs(this, 0);
     (void) phydro->Prolongate(this, 0);
     (void) phydro->ConToPrim(this, 0);

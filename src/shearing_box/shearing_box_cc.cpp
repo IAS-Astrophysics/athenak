@@ -270,8 +270,11 @@ TaskStatus ShearingBoxBoundaryCC::PackAndSendCC(DvceArray5D<Real> &a,
             using namespace Kokkos;
             auto send_ptr = subview(sendbuf[n].vars,m,ALL,ALL,jsrc[l],ALL);
             // create tag using GID of *receiving* MeshBlock
-            int tag = CreateBvals_MPI_Tag(tgid, l);
+            int tag = CreateBvals_MPI_Tag(tgid, ((n<<2) | l));
             int data_size = send_ptr.size();
+/****/
+std::cout<<"Rank="<<global_variable::my_rank<<" posted Send,  n="<<n<<" target GID="<<tgid<<" l="<<l<<" to trank="<<trank<<" tag="<<tag<<" size="<<data_size<<std::endl;
+/***/
             int ierr = MPI_Isend(send_ptr.data(), data_size, MPI_ATHENA_REAL, trank, tag,
                                  comm_sbox, &(sendbuf[n].vars_req[3*m + l]));
             if (ierr != MPI_SUCCESS) {no_errors=false;}
@@ -309,7 +312,7 @@ TaskStatus ShearingBoxBoundaryCC::PackAndSendCC(DvceArray5D<Real> &a,
             using namespace Kokkos;
             auto send_ptr = subview(sendbuf[n].vars,m,ALL,ALL,jsrc[l],ALL);
             // create tag using GID of *receiving* MeshBlock
-            int tag = CreateBvals_MPI_Tag(tgid, l);
+            int tag = CreateBvals_MPI_Tag(tgid, ((n<<2) | l));
             int data_size = send_ptr.size();
             int ierr = MPI_Isend(send_ptr.data(), data_size, MPI_ATHENA_REAL, trank, tag,
                                  comm_sbox, &(sendbuf[n].vars_req[3*m + l]));
@@ -352,7 +355,7 @@ TaskStatus ShearingBoxBoundaryCC::PackAndSendCC(DvceArray5D<Real> &a,
             using namespace Kokkos;
             auto send_ptr = subview(sendbuf[n].vars,m,ALL,ALL,jsrc[l],ALL);
             // create tag using GID of *receiving* MeshBlock
-            int tag = CreateBvals_MPI_Tag(tgid, l);
+            int tag = CreateBvals_MPI_Tag(tgid, ((n<<2) | l));
             int data_size = send_ptr.size();
             int ierr = MPI_Isend(send_ptr.data(), data_size, MPI_ATHENA_REAL, trank, tag,
                                  comm_sbox, &(sendbuf[n].vars_req[3*m + l]));
