@@ -171,6 +171,8 @@ void HLLE_DYNGR(TeamMember_t const &member,
     for (int n = 0; n < nscal; n++) {
       prim_l[PYF + n] = wl(nhyd + n, i);
     }
+    eos.ps.GetEOS().ApplyDensityLimits(prim_l[PRH]);
+    eos.ps.GetEOS().ApplySpeciesLimits(&prim_l[PYF]);
     prim_l[PPR] = wl(IPR, i);
     prim_l[PTM] = eos.ps.GetEOS().GetTemperatureFromP(
                   prim_l[PRH], prim_l[PPR], &prim_l[PYF]);
@@ -185,6 +187,8 @@ void HLLE_DYNGR(TeamMember_t const &member,
     for (int n = 0; n < nscal; n++) {
       prim_r[PYF + n] = wr(nhyd + n, i);
     }
+    eos.ps.GetEOS().ApplyDensityLimits(prim_r[PRH]);
+    eos.ps.GetEOS().ApplySpeciesLimits(&prim_r[PYF]);
     prim_r[PPR] = wr(IPR, i);
     prim_r[PTM] = eos.ps.GetEOS().GetTemperatureFromP(
                   prim_r[PRH], prim_r[PPR], &prim_r[PYF]);

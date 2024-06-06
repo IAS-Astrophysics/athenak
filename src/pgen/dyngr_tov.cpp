@@ -28,6 +28,7 @@
 #include "hydro/hydro.hpp"
 #include "mhd/mhd.hpp"
 #include "dyngr/dyngr.hpp"
+#include "utils/tr_table.hpp"
 
 #include <Kokkos_Random.hpp>
 
@@ -35,7 +36,6 @@
 // Useful container for physical parameters of star
 struct tov_pgen {
   Real rhoc;
-  Real kappa;
   Real gamma;
   Real dfloor;
   Real pfloor;
@@ -63,95 +63,279 @@ struct tov_pgen {
   bool isotropic; // Whether or not the TOV uses isotropic coordinates.
 };
 
-
 // Prototypes for functions used internally in this pgen.
-static void ConstructTOV(tov_pgen& pgen);
-static void RHS(Real r, Real P, Real m, Real alp, Real R,
+template<class TOVEOS>
+static void ConstructTOV(tov_pgen& pgen, TOVEOS& eos);
+template<class TOVEOS>
+static void RHS(Real r, Real P, Real m, Real alp, Real R, TOVEOS& eos,
                 tov_pgen& tov, Real& dP, Real& dm, Real& dalp, Real& dR);
 KOKKOS_INLINE_FUNCTION
 static Real FindSchwarzschildR(const tov_pgen& pgen, Real r_iso, Real mass);
 KOKKOS_INLINE_FUNCTION
 static int FindIsotropicIndex(const tov_pgen& pgen, Real r_iso);
+template<class TOVEOS>
 KOKKOS_INLINE_FUNCTION
-static void GetPrimitivesAtPoint(const tov_pgen& pgen, Real r,
+static void GetPrimitivesAtPoint(const tov_pgen& pgen, const TOVEOS& eos, Real r,
                                  Real &rho, Real &p, Real &m, Real &alp);
+template<class TOVEOS>
 KOKKOS_INLINE_FUNCTION
-static void GetPrimitivesAtIsoPoint(const tov_pgen& pgen, Real r_iso,
+static void GetPrimitivesAtIsoPoint(const tov_pgen& pgen, const TOVEOS& eos, Real r_iso,
                                  Real &rho, Real &p, Real &m, Real &alp);
+template<class TOVEOS>
 KOKKOS_INLINE_FUNCTION
-static void GetPandRho(const tov_pgen& pgen, Real r, Real &rho, Real &p);
+static void GetPandRho(const tov_pgen& pgen, const TOVEOS& eos,
+                       Real r, Real &rho, Real &p);
+template<class TOVEOS>
 KOKKOS_INLINE_FUNCTION
-static void GetPandRhoIso(const tov_pgen& pgen, Real r, Real &rho, Real &p);
+static void GetPandRhoIso(const tov_pgen& pgen, const TOVEOS& eos,
+                          Real r, Real &rho, Real &p);
 KOKKOS_INLINE_FUNCTION
 static Real Interpolate(Real x,
                         const Real x1, const Real x2, const Real y1, const Real y2);
+template<class TOVEOS>
 KOKKOS_INLINE_FUNCTION
-static Real A1(const tov_pgen& pgen, Real x1, Real x2, Real x3);
+static Real A1(const tov_pgen& pgen, const TOVEOS& eos, Real x1, Real x2, Real x3);
+template<class TOVEOS>
 KOKKOS_INLINE_FUNCTION
-static Real A2(const tov_pgen& pgen, Real x1, Real x2, Real x3);
+static Real A2(const tov_pgen& pgen, const TOVEOS& eos, Real x1, Real x2, Real x3);
+
+enum class LocationTag {Host, Device};
+
+// EOS policies
+class PolytropeEOS {
+ private:
+  Real kappa;
+  Real gamma;
+ public:
+  PolytropeEOS(ParameterInput* pin) {
+    kappa = pin->GetReal("problem", "kappa");
+    gamma = pin->GetReal("mhd", "gamma");
+  }
+
+  template<LocationTag loc>
+  KOKKOS_INLINE_FUNCTION
+  Real GetPFromRho(Real rho) const {
+    return kappa*Kokkos::pow(rho, gamma);
+  }
+  
+  template<LocationTag loc>
+  KOKKOS_INLINE_FUNCTION
+  Real GetRhoFromP(Real P) const {
+    return Kokkos::pow(P/kappa, 1.0/gamma);
+  }
+
+  template<LocationTag loc>
+  KOKKOS_INLINE_FUNCTION
+  Real GetEFromRho(Real rho) const {
+    return rho + kappa*Kokkos::pow(rho, gamma)/(gamma - 1.0);
+  }
+};
+
+class TabulatedEOS {
+ private:
+  DualArray1D<Real> m_log_rho;
+  DualArray1D<Real> m_log_p;
+  DualArray1D<Real> m_log_e;
+  DualArray1D<Real> m_ye;
+
+  Real dlrho;
+  Real lrho_min;
+  Real lrho_max;
+  Real lP_min;
+  Real lP_max;
+
+  std::string fname;
+  size_t m_nn;
+
+  //static const Real fm_to_Msun = 6.771781959609192e-19
+  //static const Real MeV_to_Msun = 8.962968324680417e-61
+  static constexpr Real ener_to_geo = 2.8863099290608455e-6;
+ public:
+  TabulatedEOS(ParameterInput* pin) {
+    fname = pin->GetString("problem", "table");
+
+    TableReader::Table table;
+
+    auto read_result = table.ReadTable(fname);
+    if (read_result.error != TableReader::ReadResult::SUCCESS) {
+      std::cout << "TOV EOS table could not be read.\n";
+      assert(false);
+    }
+    // TODO(JMF) Check that table has right fields and dimensions
+    auto& table_scalars = table.GetScalars();
+    Real mb = table_scalars.at("mn");
+
+    // Get table dimensions
+    auto& point_info = table.GetPointInfo();
+    m_nn = point_info[0].second;
+
+    // Allocate storage
+    Kokkos::realloc(m_log_rho, m_nn);
+    Kokkos::realloc(m_log_p, m_nn);
+    Kokkos::realloc(m_log_e, m_nn);
+    Kokkos::realloc(m_ye, m_nn);
+
+    // Read rho
+    Real * table_nb = table["nb"];
+    for (size_t in = 0; in < m_nn; in++) {
+      m_log_rho.h_view(in) = log(table_nb[in]*mb*ener_to_geo);
+    }
+    dlrho = m_log_rho.h_view(1)-m_log_rho.h_view(0);
+    lrho_min = m_log_rho.h_view(0);
+    lrho_max = m_log_rho.h_view(m_nn-1);
+    
+    // Read pressure
+    Real * table_Q1 = table["Q1"];
+    for (size_t in = 0; in < m_nn; in++) {
+      m_log_p.h_view(in) = log(table_Q1[in]*table_nb[in]*ener_to_geo);
+    }
+    lP_min = m_log_p.h_view(0);
+    lP_max = m_log_p.h_view(m_nn-1);
+
+    // Read energy
+    Real * table_Q7 = table["Q7"];
+    for (size_t in = 0; in < m_nn; in++) {
+      m_log_e.h_view(in) = log(mb*(table_Q7[in] + 1.)*table_nb[in]*ener_to_geo);
+    }
+
+    // Read electron fraction
+    Real * table_ye = table["Y[e]"];
+    for (size_t in = 0; in < m_nn; in++) {
+      m_ye.h_view(in) = table_ye[in];
+    }
+
+    std::cout << "Loaded table " << fname << std::endl
+              << "  rho = [" << exp(lrho_min) << ", " << exp(lrho_max) << "]" << std::endl
+              << "  P = [" << exp(lP_min) << ", " << exp(lP_max) << "]" << std::endl;
+
+    // Sync the views to the GPU
+    m_log_rho.template modify<HostMemSpace>();
+    m_log_p.template modify<HostMemSpace>();
+    m_log_e.template modify<HostMemSpace>();
+    m_ye.template modify<HostMemSpace>();
+
+    m_log_rho.template sync<DevExeSpace>();
+    m_log_p.template sync<DevExeSpace>();
+    m_log_e.template sync<DevExeSpace>();
+    m_ye.template sync<DevExeSpace>();
+  }
+
+  template<LocationTag loc>
+  KOKKOS_INLINE_FUNCTION
+  Real GetPFromRho(Real rho) const {
+    Real lrho = log(rho);
+    if (lrho < lrho_min) {
+      return 0.0;
+    }
+    int lb = (int)((lrho-lrho_min)/dlrho);
+    int ub = lb + 1;
+    if constexpr (loc == LocationTag::Host) {
+      return exp(Interpolate(lrho, m_log_rho.h_view(lb), m_log_rho.h_view(ub),
+                              m_log_p.h_view(lb), m_log_p.h_view(ub)));
+    } else {
+      return exp(Interpolate(lrho, m_log_rho.d_view(lb), m_log_rho.d_view(ub),
+                              m_log_p.d_view(lb), m_log_p.d_view(ub)));
+    }
+  }
+
+  template<LocationTag loc>
+  KOKKOS_INLINE_FUNCTION
+  Real GetEFromRho(Real rho) const {
+    Real lrho = log(rho);
+    if (lrho < lrho_min) {
+      return 0.0;
+    }
+    int lb = (int)((lrho-lrho_min)/dlrho);
+    int ub = lb + 1;
+    if constexpr (loc == LocationTag::Host) {
+      return exp(Interpolate(lrho, m_log_rho.h_view(lb), m_log_rho.h_view(ub),
+                              m_log_e.h_view(lb), m_log_e.h_view(ub)));
+    } else {
+      return exp(Interpolate(lrho, m_log_rho.d_view(lb), m_log_rho.d_view(ub),
+                              m_log_e.d_view(lb), m_log_e.d_view(ub)));
+    }
+  }
+
+  template<LocationTag loc>
+  KOKKOS_INLINE_FUNCTION
+  Real GetYeFromRho(Real rho) const {
+    Real lrho = log(rho);
+    int lb = (int)((lrho-lrho_min)/dlrho);
+    int ub = lb + 1;
+    if constexpr (loc == LocationTag::Host) {
+      return Interpolate(lrho, m_log_rho.h_view(lb), m_log_rho.h_view(ub),
+                          m_ye.h_view(lb), m_ye.h_view(ub));
+    } else {
+      return Interpolate(lrho, m_log_rho.d_view(lb), m_log_rho.d_view(ub),
+                          m_ye.d_view(lb), m_ye.d_view(ub));
+    }
+  }
+
+  template<LocationTag loc>
+  KOKKOS_INLINE_FUNCTION
+  Real GetRhoFromP(Real P) const {
+    Real lP = log(P);
+    int lb = 0;
+    int ub = m_nn;
+    // If the pressure is below the minimum of the table, we return zero density.
+    if (lP < lP_min) {
+      return 0.0;
+    }
+    // Do a binary search for the lower and upper indices of the pressure
+    if constexpr (loc == LocationTag::Host) {
+      while (ub - lb > 1) {
+        int idx = (lb + ub)/2;
+        if (m_log_p.h_view(idx) > lP) {
+          ub = idx;
+        } else {
+          lb = idx;
+        }
+      }
+      return exp(Interpolate(lP, m_log_p.h_view(lb), m_log_p.h_view(ub),
+                              m_log_rho.h_view(lb), m_log_rho.h_view(ub)));
+    } else {
+      while (ub - lb > 1) {
+        int idx = (lb + ub)/2;
+        if (m_log_p.d_view(idx) > lP) {
+          ub = idx;
+        } else {
+          lb = idx;
+        }
+      }
+      return exp(Interpolate(lP, m_log_p.d_view(lb), m_log_p.d_view(ub),
+                              m_log_rho.d_view(lb), m_log_rho.d_view(ub)));
+    }
+  }
+};
 
 // Prototypes for user-defined BCs and history
 void TOVHistory(HistoryData *pdata, Mesh *pm);
 void VacuumBC(Mesh *pm);
 
-//----------------------------------------------------------------------------------------
-//! \fn void ProblemGenerator::UserProblem()
-//  \brief Sets initial conditions for TOV star in DynGR
-//  Compile with '-D PROBLEM=dyngr_tov' to enroll as user-specific problem generator
-
-void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
-  MeshBlockPack *pmbp = pmy_mesh_->pmb_pack;
-  if (!pmbp->pcoord->is_dynamical_relativistic) {
-    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
-              << "TOV star problem can only be run when <adm> block is present"
-              << std::endl;
-    exit(EXIT_FAILURE);
-  }
-
-  tov_pgen tov;
-  // FIXME: Set boundary condition function?
-  user_bcs_func = VacuumBC;
-
-  // Read problem-specific parameters from input file
-  // global parameters
-  tov.rhoc  = pin->GetReal("problem", "rhoc");
-  tov.kappa = pin->GetReal("problem", "kappa");
-  tov.npoints = pin->GetReal("problem", "npoints");
-  tov.dr    = pin->GetReal("problem", "dr");
-  if (pmbp->pdyngr->eos_policy != DynGR_EOS::eos_ideal) {
-    std::cout << "### WARNING in " << __FILE__ << "  at line " << __LINE__ << std::endl
-              << "TOV star problem currently assumes a fixed polytropic EOS" << std::endl;
-    /*std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
-              << "TOV star problem currently only compatible with eos_ideal and eos_poly"
-              << std::endl;
-    exit(EXIT_FAILURE);*/
-  }
-  // Select either Hydro or MHD
-  std::string block;
-  DvceArray5D<Real> u0_, w0_;
-  if (pmbp->phydro != nullptr) {
-    u0_ = pmbp->phydro->u0;
-    w0_ = pmbp->phydro->w0;
-    block = std::string("hydro");
-  } else if (pmbp->pmhd != nullptr) {
-    u0_ = pmbp->pmhd->u0;
-    w0_ = pmbp->pmhd->w0;
-    block = std::string("mhd");
-  }
-  tov.gamma = pin->GetOrAddReal(block, "gamma", 5.0/3.0);
-  tov.dfloor = pin->GetOrAddReal(block, "dfloor", (FLT_MIN));
-  tov.pfloor = pin->GetOrAddReal(block, "pfloor", (FLT_MIN));
-  tov.v_pert = pin->GetOrAddReal("problem" , "v_pert", 0.0);
-  tov.p_pert = pin->GetOrAddReal("problem", "p_pert", 0.0);
-  tov.isotropic = pin->GetOrAddBoolean("problem", "isotropic", false);
+template<class TOVEOS>
+void SetupTOV(ParameterInput* pin, Mesh* pmy_mesh_, tov_pgen& tov) {
+  MeshBlockPack* pmbp = pmy_mesh_->pmb_pack;
+  TOVEOS eos{pin};
 
   bool minkowski = pin->GetOrAddBoolean("problem", "minkowski", false);
 
-  // Set the history function for a TOV star
-  user_hist_func = &TOVHistory;
-
   // Generate the TOV star
-  ConstructTOV(tov);
+  ConstructTOV(tov, eos);
+
+  constexpr bool use_ye = std::is_same<TOVEOS, TabulatedEOS>::value;
+
+  // Select either Hydro or MHD
+  DvceArray5D<Real> u0_, w0_;
+  int nvars_;
+  if (pmbp->phydro != nullptr) {
+    u0_ = pmbp->phydro->u0;
+    w0_ = pmbp->phydro->w0;
+    nvars_ = pmbp->phydro->nhydro;
+  } else if (pmbp->pmhd != nullptr) {
+    u0_ = pmbp->pmhd->u0;
+    w0_ = pmbp->pmhd->w0;
+    nvars_ = pmbp->pmhd->nmhd;
+  }
 
   // Capture variables for kernel
   auto &indcs = pmy_mesh_->mb_indcs;
@@ -166,19 +350,12 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   int &je = indcs.je;
   int &ke = indcs.ke;
   int nmb1 = pmbp->nmb_thispack - 1;
-  auto &coord = pmbp->pcoord->coord_data;
-
-  // initialize primitive variables for restart ----------------------------------------
-  // FIXME: need to load data on restart?
-  if (restart) {
-    return;
-  }
 
   auto &size = pmbp->pmb->mb_size;
   auto &adm = pmbp->padm->adm;
   auto &tov_ = tov;
+  auto &eos_ = eos;
   Kokkos::Random_XorShift64_Pool<> rand_pool64(pmbp->gids);
-  std::cout << "Entering assignment and interpolation loop!\n";
   par_for("pgen_tov1", DevExeSpace(), 0, nmb1, 0, (n3-1), 0, (n2-1), 0, (n1-1),
   KOKKOS_LAMBDA(int m, int k, int j, int i) {
     Real &x1min = size.d_view(m).x1min;
@@ -200,18 +377,23 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     Real rho, p, mass, alp, r_schw;
     Real vr = 0.;
     Real p_pert = 0.;
+    Real ye = 0.5;
+    auto &use_ye_ = use_ye;
     //printf("Grabbing primitives!\n");
     if (!tov.isotropic) {
-      GetPrimitivesAtPoint(tov_, r, rho, p, mass, alp);
+      GetPrimitivesAtPoint(tov_, eos_, r, rho, p, mass, alp);
       if (r <= tov.R_edge) {
         Real x = r/tov.R_edge;
         vr = 0.5*tov_.v_pert*(3.0*x - x*x*x);
         auto rand_gen = rand_pool64.get_state();
         p_pert = 2.0*tov_.p_pert*(rand_gen.frand() - 0.5);
         rand_pool64.free_state(rand_gen);
+        if constexpr (use_ye) {
+          ye = eos_.template GetYeFromRho<LocationTag::Device>(rho);
+        }
       }
     } else {
-      GetPrimitivesAtIsoPoint(tov_, r, rho, p, mass, alp);
+      GetPrimitivesAtIsoPoint(tov_, eos_, r, rho, p, mass, alp);
       r_schw = FindSchwarzschildR(tov, r, mass);
       if (r_schw <= tov.R_edge) {
         Real x = r_schw/tov.R_edge;
@@ -219,6 +401,9 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
         auto rand_gen = rand_pool64.get_state();
         p_pert = 2.0*tov_.p_pert*(rand_gen.frand() - 0.5);
         rand_pool64.free_state(rand_gen);
+        if constexpr (use_ye) {
+          ye = eos_.template GetYeFromRho<LocationTag::Device>(rho);
+        }
       }
     }
     //printf("Primitives retrieved!\n");
@@ -232,6 +417,10 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     w0_(m,IVX,k,j,i) = vr*x1v/r;
     w0_(m,IVY,k,j,i) = vr*x2v/r;
     w0_(m,IVZ,k,j,i) = vr*x3v/r;
+    auto &nvars = nvars_;
+    if constexpr (use_ye) {
+      w0_(m,nvars,k,j,i) = ye;
+    }
 
     // Set ADM variables
     adm.alpha(m,k,j,i) = alp;
@@ -285,7 +474,9 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     // If use_pcut_rel = true, we take pcut to be a percentage of pmax rather than
     // an absolute cutoff.
     if (pin->GetOrAddBoolean("problem", "use_pcut_rel", false)) {
-      Real pmax = tov.kappa*pow(tov.rhoc, tov.gamma);
+      // FIXME: Assumes ideal gas!
+      //Real pmax = tov.kappa*pow(tov.rhoc, tov.gamma);
+      Real pmax = eos_.template GetPFromRho<LocationTag::Device>(tov.rhoc);
       tov.pcut = tov.pcut * pmax;
     }
 
@@ -329,8 +520,8 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
       Real dx2 = size.d_view(m).dx2;
       Real dx3 = size.d_view(m).dx3;
 
-      a1(m,k,j,i) = A1(tov_, x1v, x2f, x3f);
-      a2(m,k,j,i) = A2(tov_, x1f, x2v, x3f);
+      a1(m,k,j,i) = A1(tov_, eos_, x1v, x2f, x3f);
+      a2(m,k,j,i) = A2(tov_, eos_, x1f, x2v, x3f);
       a3(m,k,j,i) = 0.0;
 
       // When neighboring MeshBock is at finer level, compute vector potential as sum of
@@ -364,7 +555,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
           (nghbr.d_view(m,47).lev > mblev.d_view(m) && j==je+1 && k==ke+1)) {
         Real xl = x1v + 0.25*dx1;
         Real xr = x1v - 0.25*dx1;
-        a1(m,k,j,i) = 0.5*(A1(tov_, xl,x2f,x3f) + A1(tov_, xr,x2f,x3f));
+        a1(m,k,j,i) = 0.5*(A1(tov_, eos_, xl,x2f,x3f) + A1(tov_, eos_, xr,x2f,x3f));
       }
 
       // Correct A2 at x1-faces, x3-faces, and x1x3-edges
@@ -394,7 +585,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
           (nghbr.d_view(m,39).lev > mblev.d_view(m) && i==ie+1 && k==ke+1)) {
         Real xl = x2v + 0.25*dx2;
         Real xr = x2v - 0.25*dx2;
-        a2(m,k,j,i) = 0.5*(A2(tov_, x1f,xl,x3f) + A2(tov_, x1f,xr,x3f));
+        a2(m,k,j,i) = 0.5*(A2(tov_, eos_, x1f,xl,x3f) + A2(tov_, eos_, x1f,xr,x3f));
       }
     });
 
@@ -441,8 +632,72 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
       w_bz = 0.5*(b0.x3f(m,k,j,i) + b0.x3f(m,k+1,j,i));
     });
   }
+}
 
-  std::cout << "Interpolation and assignment complete!\n";
+//----------------------------------------------------------------------------------------
+//! \fn void ProblemGenerator::UserProblem()
+//  \brief Sets initial conditions for TOV star in DynGR
+//  Compile with '-D PROBLEM=dyngr_tov' to enroll as user-specific problem generator
+
+void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
+  MeshBlockPack *pmbp = pmy_mesh_->pmb_pack;
+  if (!pmbp->pcoord->is_dynamical_relativistic) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+              << "TOV star problem can only be run when <adm> block is present"
+              << std::endl;
+    exit(EXIT_FAILURE);
+  }
+
+  tov_pgen tov;
+  // FIXME: Set boundary condition function?
+  user_bcs_func = VacuumBC;
+
+  // Read problem-specific parameters from input file
+  // global parameters
+  tov.rhoc  = pin->GetReal("problem", "rhoc");
+  tov.npoints = pin->GetReal("problem", "npoints");
+  tov.dr    = pin->GetReal("problem", "dr");
+  // Select either Hydro or MHD
+  std::string block;
+  if (pmbp->phydro != nullptr) {
+    block = std::string("hydro");
+  } else if (pmbp->pmhd != nullptr) {
+    block = std::string("mhd");
+  }
+  tov.gamma = pin->GetOrAddReal(block, "gamma", 5.0/3.0);
+  tov.dfloor = pin->GetOrAddReal(block, "dfloor", (FLT_MIN));
+  tov.pfloor = pin->GetOrAddReal(block, "pfloor", (FLT_MIN));
+  tov.v_pert = pin->GetOrAddReal("problem" , "v_pert", 0.0);
+  tov.p_pert = pin->GetOrAddReal("problem", "p_pert", 0.0);
+  tov.isotropic = pin->GetOrAddBoolean("problem", "isotropic", false);
+
+  // Set the history function for a TOV star
+  user_hist_func = &TOVHistory;
+
+  // initialize primitive variables for restart ----------------------------------------
+  // FIXME: need to load data on restart?
+  if (restart) {
+    return;
+  }
+
+  // Select the right TOV template based on the EOS we need.
+  if (pmbp->pdyngr->eos_policy == DynGR_EOS::eos_ideal) {
+    SetupTOV<PolytropeEOS>(pin, pmy_mesh_, tov);
+  } else if (pmbp->pdyngr->eos_policy == DynGR_EOS::eos_compose) {
+    SetupTOV<TabulatedEOS>(pin, pmy_mesh_, tov);
+  } else {
+    std::cout << "### WARNING in " << __FILE__ << " at line " << __LINE__ << std::endl
+              << "Unknown EOS requested for TOV star problem" << std::endl
+              << "Defaulting to fixed polytropic EOS" << std::endl;
+    SetupTOV<PolytropeEOS>(pin, pmy_mesh_, tov);
+  }
+
+  // Mesh block info for loop limits
+  auto &indcs = pmy_mesh_->mb_indcs;
+  int &ng = indcs.ng;
+  int n1 = indcs.nx1 + 2*ng;
+  int n2 = (indcs.nx2 > 1) ? (indcs.nx2 + 2*ng) : 1;
+  int n3 = (indcs.nx3 > 1) ? (indcs.nx3 + 2*ng) : 1;
 
   // Convert primitives to conserved
   if (pmbp->padm == nullptr) {
@@ -468,7 +723,8 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   return;
 }
 
-static void RHS(Real r, Real P, Real m, Real alp, Real R,
+template<class TOVEOS>
+static void RHS(Real r, Real P, Real m, Real alp, Real R, TOVEOS& eos,
                 tov_pgen& tov, Real& dP, Real& dm, Real& dalp, Real& dR) {
   // In our units, the equations take the form
   // dP/dr = -(e + P)/(1 - 2m/r) (m + 4\pi r^3 P)/r^2
@@ -483,8 +739,11 @@ static void RHS(Real r, Real P, Real m, Real alp, Real R,
     dR = 1.0;
     return;
   }
-  Real rho = pow(P/tov.kappa, 1.0/tov.gamma);
-  Real e   = rho + P/(tov.gamma - 1.0);
+  // FIXME: Assumes ideal gas!
+  /*Real rho = pow(P/tov.kappa, 1.0/tov.gamma);
+  Real e   = rho + P/(tov.gamma - 1.0);*/
+  Real rho = eos.template GetRhoFromP<LocationTag::Host>(P);
+  Real e = eos.template GetEFromRho<LocationTag::Host>(rho);
 
   Real A = 1.0/(1.0 - 2.0*m/r);
   Real B = (m + 4.0*M_PI*r*r*r*P)/SQR(r);
@@ -495,7 +754,8 @@ static void RHS(Real r, Real P, Real m, Real alp, Real R,
 }
 
 // Construct a TOV star using the shooting method.
-static void ConstructTOV(tov_pgen& tov) {
+template<class TOVEOS>
+static void ConstructTOV(tov_pgen& tov, TOVEOS& eos) {
   // First, allocate the data.
   /*tov.R   = new Real[tov.npoints];
   tov.M   = new Real[tov.npoints];
@@ -521,7 +781,9 @@ static void ConstructTOV(tov_pgen& tov) {
   R(0) = 0.0;
   R_iso(0) = 0.0;
   M(0) = 0.0;
-  P(0) = tov.kappa*pow(tov.rhoc, tov.gamma);
+  P(0) = eos.template GetPFromRho<LocationTag::Host>(tov.rhoc);
+  // FIXME: Assumes ideal gas!
+  //P(0) = tov.kappa*pow(tov.rhoc, tov.gamma);
   alp(0) = 1.0;
 
   // Integrate outward using RK4
@@ -535,7 +797,7 @@ static void ConstructTOV(tov_pgen& tov) {
     alp_pt = alp(i);
     m_pt = M(i);
     R_pt = R_iso(i);
-    RHS(r, P_pt, m_pt, alp_pt, R_pt, tov, dP1, dm1, dalp1, dR1);
+    RHS(r, P_pt, m_pt, alp_pt, R_pt, eos, tov, dP1, dm1, dalp1, dR1);
 
     // Second stage
     Real dP2, dm2, dalp2, dR2;
@@ -544,7 +806,7 @@ static void ConstructTOV(tov_pgen& tov) {
     m_pt = M(i) + 0.5*dr*dm1;
     alp_pt = alp(i) + 0.5*dr*dalp1;
     R_pt = R_iso(i) + 0.5*dr*dR1;
-    RHS(r, P_pt, m_pt, alp_pt, R_pt, tov, dP2, dm2, dalp2, dR2);
+    RHS(r, P_pt, m_pt, alp_pt, R_pt, eos, tov, dP2, dm2, dalp2, dR2);
 
     // Third stage
     Real dP3, dm3, dalp3, dR3;
@@ -552,7 +814,7 @@ static void ConstructTOV(tov_pgen& tov) {
     m_pt = M(i) + 0.5*dr*dm2;
     alp_pt = alp(i) + 0.5*dr*dalp2;
     R_pt = R_iso(i) + 0.5*dr*dR2;
-    RHS(r, P_pt, m_pt, alp_pt, R_pt, tov, dP3, dm3, dalp3, dR3);
+    RHS(r, P_pt, m_pt, alp_pt, R_pt, eos, tov, dP3, dm3, dalp3, dR3);
 
     // Fourth stage
     Real dP4, dm4, dalp4, dR4;
@@ -561,7 +823,7 @@ static void ConstructTOV(tov_pgen& tov) {
     m_pt = M(i) + dr*dm3;
     alp_pt = alp(i) + dr*dalp3;
     R_pt = R_iso(i) + dr*dR3;
-    RHS(r, P_pt, m_pt, alp_pt, R_pt, tov, dP4, dm4, dalp4, dR4);
+    RHS(r, P_pt, m_pt, alp_pt, R_pt, eos, tov, dP4, dm4, dalp4, dR4);
 
     // Combine all the stages together
     R(i+1) = (i + 1)*dr;
@@ -626,8 +888,9 @@ static void ConstructTOV(tov_pgen& tov) {
   tov.P.template sync<DevExeSpace>();
 }
 
+template<class TOVEOS>
 KOKKOS_INLINE_FUNCTION
-static void GetPrimitivesAtPoint(const tov_pgen& tov, Real r,
+static void GetPrimitivesAtPoint(const tov_pgen& tov, const TOVEOS& eos, Real r,
                                  Real &rho, Real &p, Real &m, Real &alp) {
   // Check if we're past the edge of the star.
   // If so, we just return atmosphere with Schwarzschild.
@@ -648,7 +911,9 @@ static void GetPrimitivesAtPoint(const tov_pgen& tov, Real r,
   p = Interpolate(r, R(idx), R(idx+1), Ps(idx), Ps(idx+1));
   m = Interpolate(r, R(idx), R(idx+1), Ms(idx), Ms(idx+1));
   alp = Interpolate(r, R(idx), R(idx+1), alps(idx), alps(idx+1));
-  rho = pow(p/tov.kappa, 1.0/tov.gamma);
+  // FIXME: Assumes ideal gas!
+  //rho = pow(p/tov.kappa, 1.0/tov.gamma);
+  rho = eos.template GetRhoFromP<LocationTag::Device>(p);
 }
 
 KOKKOS_INLINE_FUNCTION
@@ -683,8 +948,9 @@ static Real FindSchwarzschildR(const tov_pgen& tov, Real r_iso, Real mass) {
   return Interpolate(r_iso, R_iso(idx), R_iso(idx+1), R(idx), R(idx+1));
 }
 
+template<class TOVEOS>
 KOKKOS_INLINE_FUNCTION
-static void GetPrimitivesAtIsoPoint(const tov_pgen& tov, Real r_iso,
+static void GetPrimitivesAtIsoPoint(const tov_pgen& tov, const TOVEOS& eos, Real r_iso,
                                     Real &rho, Real &p, Real &m, Real &alp) {
   // Check if we're past the edge of the star.
   // If so, we just return atmosphere with Schwarzschild.
@@ -699,28 +965,10 @@ static void GetPrimitivesAtIsoPoint(const tov_pgen& tov, Real r_iso,
   // the right index. We can set a lower bound because r_iso <= r, and then we choose the
   // edge of the star as an upper bound.
   const auto &R_iso = tov.R_iso.d_view;
-  int lb = static_cast<int>(r_iso/tov.dr);
-  int ub = tov.n_r;
   int idx = FindIsotropicIndex(tov, r_iso);
-  /*while(r_iso - R_iso(lb) > tov.dr) {
-    idx = (lb + ub)/2;
-    if (R_iso(idx) < r_iso) {
-      lb = idx;
-    } else {
-      ub = idx;
-    }
-  }*/
-  /*Real r = 0.;
-  if (r_iso > 0.) {
-    r = r_iso*(1. + m/(2.*r_iso))*(1. + m/(2.*r_iso));
-  }
-  int idx = static_cast<int>(r/tov.dr);*/
   const auto &Ps = tov.P.d_view;
   const auto &alps = tov.alp.d_view;
   const auto &Ms = tov.M.d_view;
-  /*while (R_iso(idx) > r_iso) {
-    idx--;
-  }*/
   if (idx >= tov.npoints || idx < 0) {
     printf("There's a problem with the index!\n" // NOLINT
            " idx = %d\n"
@@ -731,14 +979,17 @@ static void GetPrimitivesAtIsoPoint(const tov_pgen& tov, Real r_iso,
   p = Interpolate(r_iso, R_iso(idx), R_iso(idx+1), Ps(idx), Ps(idx+1));
   m = Interpolate(r_iso, R_iso(idx), R_iso(idx+1), Ms(idx), Ms(idx+1));
   alp = Interpolate(r_iso, R_iso(idx), R_iso(idx+1), alps(idx), alps(idx+1));
-  rho = pow(p/tov.kappa, 1.0/tov.gamma);
+  // FIXME: Assumes ideal gas!
+  //rho = pow(p/tov.kappa, 1.0/tov.gamma);
+  rho = eos.template GetRhoFromP<LocationTag::Device>(p);
   if (!isfinite(p)) {
     printf("There's a problem with p!\n"); // NOLINT
   }
 }
 
+template<class TOVEOS>
 KOKKOS_INLINE_FUNCTION
-static void GetPandRho(const tov_pgen& tov, Real r, Real &rho, Real &p) {
+static void GetPandRho(const tov_pgen& tov, const TOVEOS& eos, Real r, Real &rho, Real &p) {
   if (r >= tov.R_edge) {
     rho = 0.;
     p   = 0.;
@@ -750,11 +1001,15 @@ static void GetPandRho(const tov_pgen& tov, Real r, Real &rho, Real &p) {
   const auto &Ps = tov.P.d_view;
   // Interpolate to get the pressure
   p = Interpolate(r, R(idx), R(idx+1), Ps(idx), Ps(idx+1));
-  rho = pow(p/tov.kappa, 1.0/tov.gamma);
+  // FIXME: Assumes ideal gas!
+  //rho = pow(p/tov.kappa, 1.0/tov.gamma);
+  rho = eos.template GetRhoFromP<LocationTag::Device>(p);
 }
 
+template<class TOVEOS>
 KOKKOS_INLINE_FUNCTION
-static void GetPandRhoIso(const tov_pgen& tov, Real r, Real &rho, Real &p) {
+static void GetPandRhoIso(const tov_pgen& tov, const TOVEOS& eos,
+                          Real r, Real &rho, Real &p) {
   if (r >= tov.R_edge_iso) {
     rho = 0.;
     p   = 0.;
@@ -766,29 +1021,33 @@ static void GetPandRhoIso(const tov_pgen& tov, Real r, Real &rho, Real &p) {
   const auto R_iso = tov.R_iso.d_view;
   const auto &Ps = tov.P.d_view;
   p = Interpolate(r, R_iso(idx), R_iso(idx+1), Ps(idx), Ps(idx+1));
-  rho = pow(p/tov.kappa, 1.0/tov.gamma);
+  // FIXME: Assumes ideal gas!
+  //rho = pow(p/tov.kappa, 1.0/tov.gamma);
+  rho = eos.template GetRhoFromP<LocationTag::Device>(p);
 }
 
+template<class TOVEOS>
 KOKKOS_INLINE_FUNCTION
-static Real A1(const tov_pgen& tov, Real x1, Real x2, Real x3) {
+static Real A1(const tov_pgen& tov, const TOVEOS& eos, Real x1, Real x2, Real x3) {
   Real r = sqrt(SQR(x1) + SQR(x2) + SQR(x3));
   Real p, rho;
   if (!tov.isotropic) {
-    GetPandRho(tov, r, rho, p);
+    GetPandRho(tov, eos, r, rho, p);
   } else {
-    GetPandRhoIso(tov, r, rho, p);
+    GetPandRhoIso(tov, eos, r, rho, p);
   }
   return -x2*tov.b_norm*fmax(p - tov.pcut, 0.0)*pow(1.0 - rho/tov.rhoc,tov.magindex);
 }
 
+template<class TOVEOS>
 KOKKOS_INLINE_FUNCTION
-static Real A2(const tov_pgen& tov, Real x1, Real x2, Real x3) {
+static Real A2(const tov_pgen& tov, const TOVEOS& eos, Real x1, Real x2, Real x3) {
   Real r = sqrt(SQR(x1) + SQR(x2) + SQR(x3));
   Real p, rho;
   if (!tov.isotropic) {
-    GetPandRho(tov, r, rho, p);
+    GetPandRho(tov, eos, r, rho, p);
   } else {
-    GetPandRhoIso(tov, r, rho, p);
+    GetPandRhoIso(tov, eos, r, rho, p);
   }
   return x1*tov.b_norm*fmax(p - tov.pcut, 0.0)*pow(1.0 - rho/tov.rhoc,tov.magindex);
 }
@@ -975,7 +1234,6 @@ void VacuumBC(Mesh *pm) {
 // History function
 void TOVHistory(HistoryData *pdata, Mesh *pm) {
   // Select the number of outputs and create labels for them.
-  int &nmhd = pm->pmb_pack->pmhd->nmhd;
   pdata->nhist = 2;
   pdata->label[0] = "rho-max";
   pdata->label[1] = "alpha-min";

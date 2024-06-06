@@ -92,6 +92,21 @@ class PrimitiveSolverHydro {
     if constexpr(std::is_same_v<Primitive::EOSCompOSE, EOSPolicy>) {
       // Get and set number of scalars in table. This will currently fail if not 1.
       ps.GetEOSMutable().SetNSpecies(pin->GetOrAddInteger(block, "nscalars", 1));
+      std::string units = pin->GetOrAddString(block, "units", "geometric_solar");
+      if (!units.compare("geometric_solar")) {
+        ps.GetEOSMutable().SetCodeUnitSystem(Primitive::MakeGeometricSolar());
+      } else if (!units.compare("geometric_kilometer")) {
+        ps.GetEOSMutable().SetCodeUnitSystem(Primitive::MakeGeometricKilometer());
+      } else if (!units.compare("nuclear")) {
+        ps.GetEOSMutable().SetCodeUnitSystem(Primitive::MakeNuclear());
+      } else if (!units.compare("cgs")) {
+        ps.GetEOSMutable().SetCodeUnitSystem(Primitive::MakeCGS());
+      } else {
+        std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                  << std::endl << "Unknown unit system " << units << " requested."
+                  << std::endl;
+        std::exit(EXIT_FAILURE);
+      }
 
       // Get table filename, then read the table,
       std::string fname = pin->GetString(block, "table");
@@ -111,13 +126,14 @@ class PrimitiveSolverHydro {
   PrimitiveSolverHydro(std::string block, MeshBlockPack *pp, ParameterInput *pin) :
 //        pmy_pack(pp), ps{&eos} {
         pmy_pack(pp), nerrs(0) {
-    ps.GetEOSMutable().SetDensityFloor(pin->GetOrAddReal(block, "dfloor", (FLT_MIN)));
+    SetPolicyParams(block, pin);
+    Real mb = ps.GetEOS().GetBaryonMass();
+    ps.GetEOSMutable().SetDensityFloor(pin->GetOrAddReal(block, "dfloor", (FLT_MIN))/mb);
     ps.GetEOSMutable().SetTemperatureFloor(pin->GetOrAddReal(block, "tfloor", (FLT_MIN)));
     ps.GetEOSMutable().SetThreshold(pin->GetOrAddReal(block, "dthreshold", 1.0));
     ps.tol = pin->GetOrAddReal(block, "c2p_tol", 1e-15);
     ps.GetRootSolverMutable().iterations = pin->GetOrAddInteger(block, "c2p_iter", 50);
     errcap = pin->GetOrAddInteger(block, "c2perrs", 1000);
-    SetPolicyParams(block, pin);
 
     // Calculate maximum allowed velocity
     Real Wmax = pin->GetOrAddReal(block, "gamma_max", 50.0);
@@ -375,7 +391,7 @@ class PrimitiveSolverHydro {
       cons_pt[CSZ] = cons_pt_old[CSZ] = cons(m, IM3, k, j, i)*isdetg;
       cons_pt[CTA] = cons_pt_old[CTA] = cons(m, IEN, k, j, i)*isdetg;
       for (int n = 0; n < nscal; n++) {
-        cons_pt[CYD + n] = cons(m, nhyd + n, k, j, i)*isdetg;
+        cons_pt[CYD + n] = cons_pt_old[CYD + n] = cons(m, nhyd + n, k, j, i)*isdetg;
       }
       // If we're only testing the floors, we can use the CC fields.
       Real b3u[NMAG];
@@ -440,6 +456,7 @@ class PrimitiveSolverHydro {
                  "    Bx  = %.17g\n"
                  "    By  = %.17g\n"
                  "    Bz  = %.17g\n"
+                 "    Dye = %.17g\n"
                  "  Metric vars: \n"
                  "    detg = %.17g\n"
                  "    g_dd = {%.17g, %.17g, %.17g, %.17g, %.17g, %.17g}\n"
@@ -450,7 +467,7 @@ class PrimitiveSolverHydro {
                  ErrorToString(result.error),
                  m, k, j, i,
                  cons_pt_old[CDN], cons_pt_old[CSX], cons_pt_old[CSY], cons_pt_old[CSZ],
-                 cons_pt_old[CTA], b3u[IBX], b3u[IBY], b3u[IBZ], detg,
+                 cons_pt_old[CTA], cons_pt_old[CYD], b3u[IBX], b3u[IBY], b3u[IBZ], detg,
                  g3d[S11], g3d[S12], g3d[S13], g3d[S22], g3d[S23], g3d[S33],
                  adm.alpha(m, k, j, i),
                  adm.beta_u(m, 0, k, j, i),
