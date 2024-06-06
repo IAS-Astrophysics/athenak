@@ -628,19 +628,16 @@ TaskStatus ParticlesBoundaryValues::RecvAndUnpackPrtcls() {
     auto &pi = pmy_part->prtcl_idata;
     auto &rrecvbuf = prtcl_rrecvbuf;
     auto &irecvbuf = prtcl_irecvbuf;
-    int npd = pmy_part->nprtcl_destroy;
-    int nps = pmy_part->nprtcl_send;
-    int npr = pmy_part->nprtcl_recv;
-    par_for("punpack",DevExeSpace(),0,(npr-1), KOKKOS_LAMBDA(const int n) {
+    par_for("punpack",DevExeSpace(),0,(nprtcl_recv-1), KOKKOS_LAMBDA(const int n) {
       int p;
-      if (n < nps ) {
+      if (n < nprtcl_send ) {
         p = sendlist.d_view(n).prtcl_indx;  // place particles in holes created by send
-      } else if (n < nps + npd ) {
+      } else if (n < nprtcl_send + nprtcl_destroy ) {
         // place particles in holes created by destroy
-        p = destroylist.d_view(n-nps).prtcl_indx;
+        p = destroylist.d_view(n-nprtcl_send).prtcl_indx;
       } else {
         // place particle at end of arrays
-        p = npart + (n - nps - npd );
+        p = npart + (n - nprtcl_send - nprtcl_destroy );
       }
       for (int i=0; i<nidata; ++i) {
         pi(i,p) = irecvbuf(nidata*n + i);
