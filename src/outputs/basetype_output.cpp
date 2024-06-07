@@ -808,5 +808,4 @@ void BaseTypeOutput::LoadOutputData(Mesh *pm) {
       Kokkos::deep_copy(h_slice,h_output_var);
     }
   }
-int ierr = MPI_Barrier(MPI_COMM_WORLD);
 }

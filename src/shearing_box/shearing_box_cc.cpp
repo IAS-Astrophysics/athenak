@@ -4,11 +4,8 @@
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
 //! \file shearing_box_cc.cpp
-//! \brief constructor for ShearingBoxBoundary abstract base class, as well as functions
-//! to pack/send and recv/unpack boundary values for cell-centered (CC) variables with
-//! shearing box boundaries. Data is shifted by the appropriate offset during the
-//! recv/unpack step, so these functions both communicate the data and perform the shift.
-//! Based on BoundaryValues send/recv funcs.
+//! \brief functions to pack/send and recv/unpack boundary values for cell-centered (CC)
+//! variables with shearing box boundaries.
 
 #include <iostream>
 #include <string>
@@ -25,78 +22,6 @@
 #include "remap_fluxes.hpp"
 
 //----------------------------------------------------------------------------------------
-//! ShearingBoxBoundary base class constructor
-
-ShearingBoxBoundary::ShearingBoxBoundary(MeshBlockPack *ppack, ParameterInput *pin,
-                                         int nvar) :
-    nmb_x1bndry("nmbx1",2),
-    x1bndry_mbgid("x1gid",1,1),
-    pmy_pack(ppack) {
-  // Work out how many MBs on this rank are at ix1/ox1 shearing-box boundaries
-  std::vector<int> tmp_ix1bndry_gid, tmp_ox1bndry_gid;
-  auto &mbbcs = ppack->pmb->mb_bcs;
-  for (int m=0; m<(ppack->nmb_thispack); ++m) {
-    if (mbbcs.h_view(m,BoundaryFace::inner_x1) == BoundaryFlag::shear_periodic) {
-      tmp_ix1bndry_gid.push_back(m + ppack->gids);
-    }
-    if (mbbcs.h_view(m,BoundaryFace::outer_x1) == BoundaryFlag::shear_periodic) {
-      tmp_ox1bndry_gid.push_back(m + ppack->gids);
-    }
-  }
-  nmb_x1bndry(0) = tmp_ix1bndry_gid.size();
-  nmb_x1bndry(1) = tmp_ox1bndry_gid.size();
-
-  // allocate mbgid array and initialize GIDs to -1
-  int nmb = std::max(nmb_x1bndry(0),nmb_x1bndry(1));
-  Kokkos::realloc(x1bndry_mbgid, 2, nmb);
-  for (int n=0; n<2; ++n) {
-    for (int m=0; m<nmb; ++m) {
-      x1bndry_mbgid(n,m) = -1;
-    }
-  }
-  // load GIDs of meshblocks at x1 boundaries into DualArray
-  for (int m=0; m<nmb_x1bndry(0); ++m) {
-    x1bndry_mbgid(0,m) = tmp_ix1bndry_gid[m];
-  }
-  for (int m=0; m<nmb_x1bndry(1); ++m) {
-    x1bndry_mbgid(1,m) = tmp_ox1bndry_gid[m];
-  }
-
-#if MPI_PARALLEL_ENABLED
-  // initialize vectors of MPI requests for ix1/ox1 boundaries in fixed length arrays
-  // each MB on x1-face can communicate with up to 3 nghbrs
-  for (int n=0; n<2; ++n) {
-    if (nmb_x1bndry(n) > 0) {
-      sendbuf[n].vars_req = new MPI_Request[3*nmb_x1bndry(n)];
-      recvbuf[n].vars_req = new MPI_Request[3*nmb_x1bndry(n)];
-      for (int m=0; m<nmb_x1bndry(0); ++m) {
-        for (int l=0; l<3; ++l) {
-          sendbuf[n].vars_req[3*m + l] = MPI_REQUEST_NULL;
-          recvbuf[n].vars_req[3*m + l] = MPI_REQUEST_NULL;
-        }
-      }
-    }
-  }
-  // create unique communicators for shearing box
-  MPI_Comm_dup(MPI_COMM_WORLD, &comm_sbox);
-#endif
-}
-
-//----------------------------------------------------------------------------------------
-// ShearingBoxBoundary base class destructor
-
-ShearingBoxBoundary::~ShearingBoxBoundary() {
-#if MPI_PARALLEL_ENABLED
-  for (int n=0; n<2; ++n) {
-    if (nmb_x1bndry(n) > 0) {
-      delete [] sendbuf[n].vars_req;
-      delete [] recvbuf[n].vars_req;
-    }
-  }
-#endif
-}
-
-//----------------------------------------------------------------------------------------
 // ShearingBoxBoundaryCC derived class constructor:
 
 ShearingBoxBoundaryCC::ShearingBoxBoundaryCC(MeshBlockPack *pp, ParameterInput *pin,
@@ -109,28 +34,9 @@ ShearingBoxBoundaryCC::ShearingBoxBoundaryCC(MeshBlockPack *pp, ParameterInput *
   int ncells1 = indcs.ng;
   for (int n=0; n<2; ++n) {
     int nmb = std::max(1,nmb_x1bndry(n));
-    Kokkos::realloc(sendbuf[n].vars,nmb,nvar,ncells3,ncells2,ncells1);
-    Kokkos::realloc(recvbuf[n].vars,nmb,nvar,ncells3,ncells2,ncells1);
+    Kokkos::realloc(sendbuf[n].vars,nmb,ncells2,nvar,ncells3,ncells1);
+    Kokkos::realloc(recvbuf[n].vars,nmb,ncells2,nvar,ncells3,ncells1);
   }
-}
-
-//----------------------------------------------------------------------------------------
-//! \fn void ShearingBoxBoundary::FindTargetMB()
-//! \brief  function to find target MB offset by shear.  Returns GID and rank
-
-void ShearingBoxBoundary::FindTargetMB(const int igid, const int jshift, int &gid,
-                                       int &rank){
-  Mesh *pm = pmy_pack->pmesh;
-  // find lloc of input MB
-  LogicalLocation lloc = pm->lloc_eachmb[igid];
-  // find number of MBs in x2 direction at this level
-  std::int32_t nmbx2 = pm->nmb_rootx2 << (lloc.level - pm->root_level);
-  // apply shift by input number of blocks
-  lloc.lx2 = static_cast<std::int32_t>((lloc.lx2 + jshift) % nmbx2);
-  // find target GID and rank
-  gid = (pm->ptree->FindMeshBlock(lloc))->GetGID();
-  rank = pm->rank_eachmb[gid];
-  return;
 }
 
 //----------------------------------------------------------------------------------------
@@ -146,23 +52,8 @@ TaskStatus ShearingBoxBoundaryCC::PackAndSendCC(DvceArray5D<Real> &a,
   const auto &js = indcs.js, &je = indcs.je;
   const auto &ks = indcs.ks, &ke = indcs.ke;
   const auto &ng = indcs.ng;
-  // copy ghost zones at x1-faces into send buffer view
-  for (int n=0; n<2; ++n) {
-    std::pair<int,int> isrc;
-    if (n==0) {
-      isrc = std::make_pair(0,ng);
-    } else {
-      isrc = std::make_pair(ie+1,ie+1+ng);
-    }
-    for (int m=0; m<nmb_x1bndry(n); ++m) {
-      int mm = x1bndry_mbgid(n,m) - pmy_pack->gids;
-      using namespace Kokkos;
-      auto src = subview(a,mm,ALL,ALL,ALL,isrc);
-      auto dst = subview(sendbuf[n].vars,m,ALL,ALL,ALL,ALL);
-      deep_copy(DevExeSpace(), dst, src);
-    }
-  }
 
+  // copy ghost zones at x1-faces into send buffer view
   // apply fractional cell offset to data in send buffers using conservative remap
   const int nvar = a.extent_int(1);  // TODO(@user): 2nd index from L must be NVAR
   const auto &mbsize = pmy_pack->pmb->mb_size;
@@ -180,15 +71,22 @@ TaskStatus ShearingBoxBoundaryCC::PackAndSendCC(DvceArray5D<Real> &a,
       ScrArray1D<Real> a_(member.team_scratch(scr_lvl), nj); // 1D slice of data
       ScrArray1D<Real> flx(member.team_scratch(scr_lvl), nj); // "flux" at faces
       ScrArray1D<Real> q1_(member.team_scratch(scr_lvl), nj); // scratch array
+      int mm = x1bndry_mbgid.d_view(n,m) - pmy_pack->gids;
 
       // Load scratch array
-      par_for_inner(member, 0, nj, [&](const int j) {
-        a_(j) = sbuf[n].vars(m,v,k,j,i);
-      });
+      if (n==0) {
+        par_for_inner(member, 0, nj, [&](const int j) {
+          a_(j) = a(mm,v,k,j,i);
+        });
+      } else {
+        par_for_inner(member, 0, nj, [&](const int j) {
+          a_(j) = a(mm,v,k,j,(ie+1)+i);
+        });
+      }
       member.team_barrier();
 
       // compute fractional offset
-      Real eps = fmod(yshear,(mbsize.d_view(m).dx2))/(mbsize.d_view(m).dx2);
+      Real eps = fmod(yshear,(mbsize.d_view(mm).dx2))/(mbsize.d_view(mm).dx2);
       if (n == 1) {eps *= -1.0;}
 
       // Compute "fluxes" at shifted cell faces
@@ -210,7 +108,7 @@ TaskStatus ShearingBoxBoundaryCC::PackAndSendCC(DvceArray5D<Real> &a,
 
       // update data in send buffer with fracational shift
       par_for_inner(member, js, je, [&](const int j) {
-        sbuf[n].vars(m,v,k,j,i) -= (flx(j+1) - flx(j));
+        sbuf[n].vars(m,j,v,k,i) = a_(j) - (flx(j+1) - flx(j));
       });
     });
   }
@@ -227,7 +125,7 @@ TaskStatus ShearingBoxBoundaryCC::PackAndSendCC(DvceArray5D<Real> &a,
   bool no_errors=true;
   for (int n=0; n<2; ++n) {
     for (int m=0; m<nmb_x1bndry(n); ++m) {
-      int gid = x1bndry_mbgid(n,m);
+      int gid = x1bndry_mbgid.h_view(n,m);
       int mm = gid - pmy_pack->gids;
       // Find integer and fractional number of grids over which offset extends.
       // This assumes every grid has same number of cells in x2-direction!
@@ -262,19 +160,19 @@ TaskStatus ShearingBoxBoundaryCC::PackAndSendCC(DvceArray5D<Real> &a,
           if (trank == global_variable::my_rank) {
             int tm = TargetIndex(n,tgid);
             using namespace Kokkos;
-            auto src = subview(sendbuf[n].vars,m, ALL,ALL,jsrc[l],ALL);
-            auto dst = subview(recvbuf[n].vars,tm,ALL,ALL,jdst[l],ALL);
+            auto src = subview(sendbuf[n].vars,m, jsrc[l],ALL,ALL,ALL);
+            auto dst = subview(recvbuf[n].vars,tm,jdst[l],ALL,ALL,ALL);
             deep_copy(DevExeSpace(), dst, src);
 #if MPI_PARALLEL_ENABLED
           } else {
             using namespace Kokkos;
-            auto send_ptr = subview(sendbuf[n].vars,m,ALL,ALL,jsrc[l],ALL);
+            auto send_ptr = subview(sendbuf[n].vars,m,jsrc[l],ALL,ALL,ALL);
             // create tag using GID of *receiving* MeshBlock
             int tag = CreateBvals_MPI_Tag(tgid, ((n<<2) | l));
             int data_size = send_ptr.size();
-/****/
+/****
 std::cout<<"Rank="<<global_variable::my_rank<<" posted Send,  n="<<n<<" target GID="<<tgid<<" l="<<l<<" to trank="<<trank<<" tag="<<tag<<" size="<<data_size<<std::endl;
-/***/
+***/
             int ierr = MPI_Isend(send_ptr.data(), data_size, MPI_ATHENA_REAL, trank, tag,
                                  comm_sbox, &(sendbuf[n].vars_req[3*m + l]));
             if (ierr != MPI_SUCCESS) {no_errors=false;}
@@ -304,13 +202,13 @@ std::cout<<"Rank="<<global_variable::my_rank<<" posted Send,  n="<<n<<" target G
           if (trank == global_variable::my_rank) {
             int tm = TargetIndex(n,tgid);
             using namespace Kokkos;
-            auto src = subview(sendbuf[n].vars,m, ALL,ALL,jsrc[l],ALL);
-            auto dst = subview(recvbuf[n].vars,tm,ALL,ALL,jdst[l],ALL);
+            auto src = subview(sendbuf[n].vars,m, jsrc[l],ALL,ALL,ALL);
+            auto dst = subview(recvbuf[n].vars,tm,jdst[l],ALL,ALL,ALL);
             deep_copy(DevExeSpace(), dst, src);
 #if MPI_PARALLEL_ENABLED
           } else {
             using namespace Kokkos;
-            auto send_ptr = subview(sendbuf[n].vars,m,ALL,ALL,jsrc[l],ALL);
+            auto send_ptr = subview(sendbuf[n].vars,m,jsrc[l],ALL,ALL,ALL);
             // create tag using GID of *receiving* MeshBlock
             int tag = CreateBvals_MPI_Tag(tgid, ((n<<2) | l));
             int data_size = send_ptr.size();
@@ -347,13 +245,13 @@ std::cout<<"Rank="<<global_variable::my_rank<<" posted Send,  n="<<n<<" target G
           if (trank == global_variable::my_rank) {
             int tm = TargetIndex(n,tgid);
             using namespace Kokkos;
-            auto src = subview(sendbuf[n].vars,m, ALL,ALL,jsrc[l],ALL);
-            auto dst = subview(recvbuf[n].vars,tm,ALL,ALL,jdst[l],ALL);
+            auto src = subview(sendbuf[n].vars,m, jsrc[l],ALL,ALL,ALL);
+            auto dst = subview(recvbuf[n].vars,tm,jdst[l],ALL,ALL,ALL);
             deep_copy(DevExeSpace(), dst, src);
 #if MPI_PARALLEL_ENABLED
           } else {
             using namespace Kokkos;
-            auto send_ptr = subview(sendbuf[n].vars,m,ALL,ALL,jsrc[l],ALL);
+            auto send_ptr = subview(sendbuf[n].vars,m,jsrc[l],ALL,ALL,ALL);
             // create tag using GID of *receiving* MeshBlock
             int tag = CreateBvals_MPI_Tag(tgid, ((n<<2) | l));
             int data_size = send_ptr.size();
@@ -390,7 +288,7 @@ TaskStatus ShearingBoxBoundaryCC::RecvAndUnpackCC(DvceArray5D<Real> &a){
   bool no_errors=true;
   for (int n=0; n<2; ++n) {
     for (int m=0; m<nmb_x1bndry(n); ++m) {
-      int gid = x1bndry_mbgid(n,m);
+      int gid = x1bndry_mbgid.h_view(n,m);
       int mm = gid - pmy_pack->gids;
       // Find integer and fractional number of grids over which offset extends.
       // This assumes every grid has same number of cells in x2-direction!
@@ -459,21 +357,31 @@ TaskStatus ShearingBoxBoundaryCC::RecvAndUnpackCC(DvceArray5D<Real> &a){
 
   //----- STEP 2: communications have all completed, so unpack and apply shift
   // copy recv buffer view into ghost zones at x1-faces
-  const int &is = indcs.is, &ie = indcs.ie;
+  const int nvar = a.extent_int(1);  // TODO(@user): 2nd index from L must be NVAR
+  const auto &mbsize = pmy_pack->pmb->mb_size;
+  const int &ie = indcs.ie;
+  int kl=indcs.ks, ku=indcs.ke;
+  if (pmy_pack->pmesh->three_d) {kl -= ng; ku += ng;}
+  int nj = indcs.nx2 + 2*ng;
+  auto rbuf = recvbuf;
+  int scr_lvl=0;
+  size_t scr_size = ScrArray1D<Real>::shmem_size(nj) * 3;
   for (int n=0; n<2; ++n) {
-    std::pair<int,int> idst;
-    if (n==0) {
-      idst = std::make_pair(0,ng);
-    } else {
-      idst = std::make_pair(ie+1,ie+1+ng);
-    }
-    for (int m=0; m<nmb_x1bndry(n); ++m) {
-      int mm = x1bndry_mbgid(n,m) - pmy_pack->gids;
-      using namespace Kokkos;
-      auto src = subview(recvbuf[n].vars,m,ALL,ALL,ALL,ALL);
-      auto dst = subview(a,mm,ALL,ALL,ALL,idst);
-      deep_copy(DevExeSpace(), dst, src);
-    }
+    int nmb1 = nmb_x1bndry(n) - 1;
+    par_for_outer("shrcc",DevExeSpace(),scr_size,scr_lvl,0,nmb1,0,(nvar-1),kl,ku,0,(ng-1),
+    KOKKOS_LAMBDA(TeamMember_t member, const int m, const int v, const int k, const int i)
+    {
+      int mm = x1bndry_mbgid.h_view(n,m) - pmy_pack->gids;
+      if (n==0) {
+        par_for_inner(member, 0, nj, [&](const int j) {
+          a(mm,v,k,j,i) = rbuf[n].vars(m,j,v,k,i);
+        });
+      } else {
+        par_for_inner(member, 0, nj, [&](const int j) {
+          a(mm,v,k,j,(ie+1)+i) = rbuf[n].vars(m,j,v,k,i);
+        });
+      }
+    });
   }
 
   return TaskStatus::complete;

@@ -4,11 +4,10 @@
 // Licensed under the 3-clause BSD License, see LICENSE file for details
 //========================================================================================
 //! \file orbital_advection_cc.cpp
-//! \brief constructor for OrbitalAdvection abstract base class, as well as functions to
-//! pack/send and recv/unpack boundary values for cell-centered (CC) variables in the
-//! orbital advection step. Data is shifted by the appropriate offset during the
-//! recv/unpack step, so these functions both communicate the data and perform the shift.
-//! Based on BoundaryValues send/recv funcs.
+//! \brief functions to pack/send and recv/unpack boundary values for cell-centered (CC)
+//! variables in the orbital advection step. Data is shifted by the appropriate offset
+//! during the recv/unpack step, so these functions both communicate the data and perform
+//! the shift.
 
 #include <cstdlib>
 #include <iostream>
@@ -22,46 +21,6 @@
 #include "shearing_box.hpp"
 #include "mhd/mhd.hpp"
 #include "remap_fluxes.hpp"
-
-//----------------------------------------------------------------------------------------
-//! OrbitalAdvection base class constructor
-
-OrbitalAdvection::OrbitalAdvection(MeshBlockPack *ppack, ParameterInput *pin, int nvar) :
-    maxjshift(1),
-    pmy_pack(ppack) {
-  // estimate maximum integer shift in x2-direction for orbital advection
-  Real xmin = fabs(ppack->pmesh->mesh_size.x1min);
-  Real xmax = fabs(ppack->pmesh->mesh_size.x1max);
-  maxjshift = static_cast<int>((ppack->pmesh->cfl_no)*std::max(xmin,xmax)) + 1;
-
-#if MPI_PARALLEL_ENABLED
-  // For orbital advection, communication is only with x2-face neighbors
-  // initialize vectors of MPI request in 2 elements of fixed length arrays
-  for (int n=0; n<2; ++n) {
-    int nmb = std::max((ppack->nmb_thispack), (ppack->pmesh->nmb_maxperrank));
-    sendbuf[n].vars_req = new MPI_Request[nmb];
-    recvbuf[n].vars_req = new MPI_Request[nmb];
-    for (int m=0; m<nmb; ++m) {
-      sendbuf[n].vars_req[m] = MPI_REQUEST_NULL;
-      recvbuf[n].vars_req[m] = MPI_REQUEST_NULL;
-    }
-  }
-  // create unique communicators for shearing box
-  MPI_Comm_dup(MPI_COMM_WORLD, &comm_orb_advect);
-#endif
-}
-
-//----------------------------------------------------------------------------------------
-// OrbitalAdvection base class destructor
-
-OrbitalAdvection::~OrbitalAdvection() {
-#if MPI_PARALLEL_ENABLED
-  for (int n=0; n<2; ++n) {
-    delete [] sendbuf[n].vars_req;
-    delete [] recvbuf[n].vars_req;
-  }
-#endif
-}
 
 //----------------------------------------------------------------------------------------
 // OrbitalAdvectionCC derived class constructor:

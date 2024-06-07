@@ -155,7 +155,7 @@ TaskStatus ShearingBoxBoundary::InitRecv(Real qom, Real time) {
   const int &nx2 = indcs.nx2;
   for (int n=0; n<2; ++n) {
     for (int m=0; m<nmb_x1bndry(n); ++m) {
-      int gid = x1bndry_mbgid(n,m);
+      int gid = x1bndry_mbgid.h_view(n,m);
       int mm = gid - pmy_pack->gids;
       // Find integer and fractional number of grids over which offset extends.
       // This assumes every grid has same number of cells in x2-direction!
@@ -187,16 +187,16 @@ TaskStatus ShearingBoxBoundary::InitRecv(Real qom, Real time) {
 
             // get pointer to variables
             using namespace Kokkos;
-            auto recv_ptr = Kokkos::subview(recvbuf[n].vars, m, ALL, ALL, jdst[l], ALL);
+            auto recv_ptr = Kokkos::subview(recvbuf[n].vars, m, jdst[l], ALL, ALL, ALL);
             int data_size = recv_ptr.size();
 
             // Post non-blocking receive for this buffer on this MeshBlock
             int ierr = MPI_Irecv(recv_ptr.data(), data_size, MPI_ATHENA_REAL, srank, tag,
                                  comm_sbox, &(recvbuf[n].vars_req[3*m + l]));
             if (ierr != MPI_SUCCESS) {no_errors=false;}
-/****/
+/****
 std::cout<<"Rank="<<global_variable::my_rank<<" posted SBox Recv,  n="<<n<<" GID="<<gid<<" l="<<l<<" from srank="<<srank<<" tag="<<tag<<" size="<<data_size<<std::endl;
-/***/
+***/
           }
         }
       } else if (jr < (nx2-ng)) {  //--- CASE 2
@@ -221,7 +221,7 @@ std::cout<<"Rank="<<global_variable::my_rank<<" posted SBox Recv,  n="<<n<<" GID
 
             // get pointer to variables
             using namespace Kokkos;
-            auto recv_ptr = Kokkos::subview(recvbuf[n].vars, m, ALL, ALL, jdst[l], ALL);
+            auto recv_ptr = Kokkos::subview(recvbuf[n].vars, m, jdst[l], ALL, ALL, ALL);
             int data_size = recv_ptr.size();
 
             // Post non-blocking receive for this buffer on this MeshBlock
@@ -254,7 +254,7 @@ std::cout<<"Rank="<<global_variable::my_rank<<" posted SBox Recv,  n="<<n<<" GID
 
             // get pointer to variables
             using namespace Kokkos;
-            auto recv_ptr = Kokkos::subview(recvbuf[n].vars, m, ALL, ALL, jdst[l], ALL);
+            auto recv_ptr = Kokkos::subview(recvbuf[n].vars, m, jdst[l], ALL, ALL, ALL);
             int data_size = recv_ptr.size();
 
             // Post non-blocking receive for this buffer on this MeshBlock
@@ -289,7 +289,7 @@ TaskStatus ShearingBoxBoundary::ClearRecv() {
   // wait for all non-blocking receives for vars to finish before continuing
   for (int n=0; n<2; ++n) {
     for (int m=0; m<nmb_x1bndry(n); ++m) {
-      int gid = x1bndry_mbgid(n,m);
+      int gid = x1bndry_mbgid.h_view(n,m);
       int mm = gid - pmy_pack->gids;
       // Find integer and fractional number of grids over which offset extends.
       // This assumes every grid has same number of cells in x2-direction!
@@ -308,9 +308,9 @@ TaskStatus ShearingBoxBoundary::ClearRecv() {
           if (srank != global_variable::my_rank) {
             int ierr = MPI_Wait(&(recvbuf[n].vars_req[3*m + l]), MPI_STATUS_IGNORE);
             if (ierr != MPI_SUCCESS) {no_errors=false;}
-/****/
+/****
 std::cout<<"Rank="<<global_variable::my_rank<<" Clear Recv,  n="<<n<<" GID="<<gid<<" l="<<l<<std::endl;
-/***/
+***/
           }
         }
       } else if (jr < (nx2-ng)) {  //--- CASE 2
@@ -366,7 +366,7 @@ TaskStatus ShearingBoxBoundary::ClearSend() {
   // wait for all non-blocking sends for vars to finish before continuing
   for (int n=0; n<2; ++n) {
     for (int m=0; m<nmb_x1bndry(n); ++m) {
-      int gid = x1bndry_mbgid(n,m);
+      int gid = x1bndry_mbgid.h_view(n,m);
       int mm = gid - pmy_pack->gids;
       // Find integer and fractional number of grids over which offset extends.
       // This assumes every grid has same number of cells in x2-direction!

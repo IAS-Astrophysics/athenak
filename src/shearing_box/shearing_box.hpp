@@ -111,7 +111,7 @@ class ShearingBoxBoundary {
 
   // data
   HostArray1D<int> nmb_x1bndry;    // number of MBs that touch x1 boundaries
-  HostArray2D<int> x1bndry_mbgid;  // GIDs of MBs at x1 boundaries
+  DualArray2D<int> x1bndry_mbgid;  // GIDs of MBs at x1 boundaries
   Real yshear;                     // x2-distance x1-boundaries have sheared
 
   // data buffers for shearing box BCs.  Only two x1-faces get sheared
@@ -132,7 +132,7 @@ class ShearingBoxBoundary {
   // function to find index in x1bndry array of MB with input GID
   int TargetIndex(const int n, const int tgid) {
     for (int m=0; m<nmb_x1bndry(n); ++m) {
-      if (x1bndry_mbgid(n,m) == tgid) return m;
+      if (x1bndry_mbgid.h_view(n,m) == tgid) return m;
     }
     return -1;
   }
