@@ -56,7 +56,6 @@ TaskStatus OrbitalAdvectionCC::PackAndSendCC(DvceArray5D<Real> &a) {
   int my_rank = global_variable::my_rank;
   auto &nghbr = pmy_pack->pmb->nghbr;
   auto &mbgid = pmy_pack->pmb->mb_gid;
-  auto &mblev = pmy_pack->pmb->mb_lev;
   auto &sbuf = sendbuf;
   auto &rbuf = recvbuf;
 
@@ -65,6 +64,7 @@ TaskStatus OrbitalAdvectionCC::PackAndSendCC(DvceArray5D<Real> &a) {
   auto &js = indcs.js, &je = indcs.je;
   auto &ks = indcs.ks, &ke = indcs.ke;
   auto &ng = indcs.ng;
+  auto &maxjshift_ = maxjshift;
 
   // Outer loop over (# of MeshBlocks)*(# of buffers)*(# of variables)
   int nmnv = nmb*2*nvar;  // only consider 2 neighbors (x2-faces)
@@ -87,9 +87,9 @@ TaskStatus OrbitalAdvectionCC::PackAndSendCC(DvceArray5D<Real> &a) {
       int jl, ju;
       if (n==0) {
         jl = js;
-        ju = js + (ng + maxjshift - 1);;
+        ju = js + (ng + maxjshift_ - 1);;
       } else {
-        jl = je - (ng + maxjshift - 1);
+        jl = je - (ng + maxjshift_ - 1);
         ju = je;
       }
       int kl = ks;
@@ -175,10 +175,9 @@ TaskStatus OrbitalAdvectionCC::RecvAndUnpackCC(DvceArray5D<Real> &a,
                                                ReconstructionMethod rcon, Real qom){
   // create local references for variables in kernel
   int nmb = pmy_pack->nmb_thispack;
-  int nnghbr = pmy_pack->pmb->nnghbr;
-  auto &nghbr = pmy_pack->pmb->nghbr;
   auto &rbuf = recvbuf;
 #if MPI_PARALLEL_ENABLED
+  auto &nghbr = pmy_pack->pmb->nghbr;
   //----- STEP 1: check that recv boundary buffer communications have all completed
 
   bool bflag = false;
@@ -223,10 +222,6 @@ TaskStatus OrbitalAdvectionCC::RecvAndUnpackCC(DvceArray5D<Real> &a,
   int jfs = ng + maxjshift;
   int jfe = jfs + indcs.nx2 - 1;
   int nfx = indcs.nx2 + 2*(ng + maxjshift);
-  int ni = ie - is + 1;
-  int nj = (ng + maxjshift);
-  int nk = ke - ks + 1;
-
 
   auto &mbsize = pmy_pack->pmb->mb_size;
   auto &mesh_size = pmy_pack->pmesh->mesh_size;

@@ -52,7 +52,6 @@ TaskStatus OrbitalAdvectionFC::PackAndSendFC(DvceFaceFld4D<Real> &b) {
   int my_rank = global_variable::my_rank;
   auto &nghbr = pmy_pack->pmb->nghbr;
   auto &mbgid = pmy_pack->pmb->mb_gid;
-  auto &mblev = pmy_pack->pmb->mb_lev;
   auto &sbuf = sendbuf;
   auto &rbuf = recvbuf;
 
@@ -61,6 +60,7 @@ TaskStatus OrbitalAdvectionFC::PackAndSendFC(DvceFaceFld4D<Real> &b) {
   auto &js = indcs.js, &je = indcs.je;
   auto &ks = indcs.ks, &ke = indcs.ke;
   auto &ng = indcs.ng;
+  const int &maxjshift_ = maxjshift;
 
   // Outer loop over (# of MeshBlocks)*(# of buffers)*(# of variables)
   int nmnv = nmb*2;  // only consider 2 neighbors (x2-faces) and only 2 vars
@@ -82,9 +82,9 @@ TaskStatus OrbitalAdvectionFC::PackAndSendFC(DvceFaceFld4D<Real> &b) {
       int jl, ju;
       if (n==0) {
         jl = js;
-        ju = js + (ng + maxjshift - 1);;
+        ju = js + (ng + maxjshift_ - 1);;
       } else {
-        jl = je - (ng + maxjshift - 1);
+        jl = je - (ng + maxjshift_ - 1);
         ju = je;
       }
       int kl = ks;
@@ -173,10 +173,9 @@ TaskStatus OrbitalAdvectionFC::PackAndSendFC(DvceFaceFld4D<Real> &b) {
 TaskStatus OrbitalAdvectionFC::RecvAndUnpackFC(DvceFaceFld4D<Real> &b0,
                                              ReconstructionMethod rcon, Real qom){
   int nmb = pmy_pack->nmb_thispack;
-  int nnghbr = pmy_pack->pmb->nnghbr;
-  auto &nghbr = pmy_pack->pmb->nghbr;
   auto &rbuf = recvbuf;
 #if MPI_PARALLEL_ENABLED
+  auto &nghbr = pmy_pack->pmb->nghbr;
   //----- STEP 1: check that recv boundary buffer communications have all completed
 
   bool bflag = false;
@@ -219,9 +218,6 @@ TaskStatus OrbitalAdvectionFC::RecvAndUnpackFC(DvceFaceFld4D<Real> &b0,
   int jfs = ng + maxjshift;
   int jfe = jfs + indcs.nx2 - 1;
   int nfx = indcs.nx2 + 2*(ng + maxjshift);
-  int ni = ie - is + 2;
-  int nj = (ng + maxjshift);
-  int nk = ke - ks + 2;
 
   auto &mbsize = pmy_pack->pmb->mb_size;
   auto &mesh_size = pmy_pack->pmesh->mesh_size;
@@ -306,11 +302,6 @@ TaskStatus OrbitalAdvectionFC::RecvAndUnpackFC(DvceFaceFld4D<Real> &b0,
         for (int jj=(joffset+1); jj<=0; jj++) {
           emfx(m,k,j,i) += b0_(jf-jj);
         }
-/****/
-if (emfx(m,k,j,i) > 1.e-12) {
-std::cout<<"m="<<m<<" k,j,i="<<k<<" "<<j<<" "<<i<<"  emfx="<<emfx(m,k,j,i)<<"  b0="<<b0_(j)<<std::endl;
-}
-/****/
       });
 
     // Compute emfz =  VyBx, which is at cell-face in x1-direction
@@ -339,11 +330,12 @@ std::cout<<"m="<<m<<" k,j,i="<<k<<" "<<j<<" "<<i<<"  emfx="<<emfx(m,k,j,i)<<"  b
   }
 
   //---- update B2 (curl terms in 1D and 3D problems)
+  const bool &three_d_ = pmy_pack->pmesh->three_d;
   par_for("oaCT-b2", DevExeSpace(), 0, nmb-1, ks, ke, js, je+1, is, ie,
   KOKKOS_LAMBDA(int m, int k, int j, int i) {
     Real dydx = mbsize.d_view(m).dx2/mbsize.d_view(m).dx1;
     b0.x2f(m,k,j,i) += dydx*(emfz(m,k,j,i+1) - emfz(m,k,j,i));
-    if (pmy_pack->pmesh->three_d) {
+    if (three_d_) {
       Real dydz = mbsize.d_view(m).dx2/mbsize.d_view(m).dx3;
       b0.x2f(m,k,j,i) -= dydz*(emfx(m,k+1,j,i) - emfx(m,k,j,i));
     }

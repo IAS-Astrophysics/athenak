@@ -48,7 +48,7 @@ ShearingBoxBoundaryCC::ShearingBoxBoundaryCC(MeshBlockPack *pp, ParameterInput *
 TaskStatus ShearingBoxBoundaryCC::PackAndSendCC(DvceArray5D<Real> &a,
                                                 ReconstructionMethod rcon) {
   const auto &indcs = pmy_pack->pmesh->mb_indcs;
-  const auto &is = indcs.is, &ie = indcs.ie;
+  const auto &ie = indcs.ie;
   const auto &js = indcs.js, &je = indcs.je;
   const auto &ks = indcs.ks, &ke = indcs.ke;
   const auto &ng = indcs.ng;
@@ -60,7 +60,10 @@ TaskStatus ShearingBoxBoundaryCC::PackAndSendCC(DvceArray5D<Real> &a,
   int kl=ks, ku=ke;
   if (pmy_pack->pmesh->three_d) {kl -= ng; ku += ng;}
   int nj = indcs.nx2 + 2*ng;
-  auto sbuf = sendbuf;
+  const int &gids_ = pmy_pack->gids;
+  const Real &yshear_ = yshear;
+  const auto &x1bndry_mbgid_ = x1bndry_mbgid;
+  auto &sbuf = sendbuf;
   int scr_lvl=0;
   size_t scr_size = ScrArray1D<Real>::shmem_size(nj) * 3;
   for (int n=0; n<2; ++n) {
@@ -71,7 +74,7 @@ TaskStatus ShearingBoxBoundaryCC::PackAndSendCC(DvceArray5D<Real> &a,
       ScrArray1D<Real> a_(member.team_scratch(scr_lvl), nj); // 1D slice of data
       ScrArray1D<Real> flx(member.team_scratch(scr_lvl), nj); // "flux" at faces
       ScrArray1D<Real> q1_(member.team_scratch(scr_lvl), nj); // scratch array
-      int mm = x1bndry_mbgid.d_view(n,m) - pmy_pack->gids;
+      int mm = x1bndry_mbgid_.d_view(n,m) - gids_;
 
       // Load scratch array
       if (n==0) {
@@ -86,7 +89,7 @@ TaskStatus ShearingBoxBoundaryCC::PackAndSendCC(DvceArray5D<Real> &a,
       member.team_barrier();
 
       // compute fractional offset
-      Real eps = fmod(yshear,(mbsize.d_view(mm).dx2))/(mbsize.d_view(mm).dx2);
+      Real eps = fmod(yshear_,(mbsize.d_view(mm).dx2))/(mbsize.d_view(mm).dx2);
       if (n == 1) {eps *= -1.0;}
 
       // Compute "fluxes" at shifted cell faces
@@ -358,12 +361,13 @@ TaskStatus ShearingBoxBoundaryCC::RecvAndUnpackCC(DvceArray5D<Real> &a){
   //----- STEP 2: communications have all completed, so unpack and apply shift
   // copy recv buffer view into ghost zones at x1-faces
   const int nvar = a.extent_int(1);  // TODO(@user): 2nd index from L must be NVAR
-  const auto &mbsize = pmy_pack->pmb->mb_size;
   const int &ie = indcs.ie;
   int kl=indcs.ks, ku=indcs.ke;
   if (pmy_pack->pmesh->three_d) {kl -= ng; ku += ng;}
   int nj = indcs.nx2 + 2*ng;
-  auto rbuf = recvbuf;
+  const int &gids_ = pmy_pack->gids;
+  const auto &x1bndry_mbgid_ = x1bndry_mbgid;
+  auto &rbuf = recvbuf;
   int scr_lvl=0;
   size_t scr_size = ScrArray1D<Real>::shmem_size(nj) * 3;
   for (int n=0; n<2; ++n) {
@@ -371,7 +375,7 @@ TaskStatus ShearingBoxBoundaryCC::RecvAndUnpackCC(DvceArray5D<Real> &a){
     par_for_outer("shrcc",DevExeSpace(),scr_size,scr_lvl,0,nmb1,0,(nvar-1),kl,ku,0,(ng-1),
     KOKKOS_LAMBDA(TeamMember_t member, const int m, const int v, const int k, const int i)
     {
-      int mm = x1bndry_mbgid.h_view(n,m) - pmy_pack->gids;
+      int mm = x1bndry_mbgid_.d_view(n,m) - gids_;
       if (n==0) {
         par_for_inner(member, 0, nj, [&](const int j) {
           a(mm,v,k,j,i) = rbuf[n].vars(m,j,v,k,i);
