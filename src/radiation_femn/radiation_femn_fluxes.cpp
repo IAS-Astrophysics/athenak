@@ -34,6 +34,7 @@ TaskStatus RadiationFEMN::CalculateFluxes(Driver *pdriver, int stage) {
   bool &multi_d = pmy_pack->pmesh->multi_d;
   bool &three_d = pmy_pack->pmesh->three_d;
 
+  auto &rad_mask_array_ = pmy_pack->pradfemn->radiation_mask;
   auto &f0_ = pmy_pack->pradfemn->f0;
   auto &energy_grid_ = pmy_pack->pradfemn->energy_grid;
   auto &P_matrix_ = pmy_pack->pradfemn->P_matrix;
@@ -54,63 +55,67 @@ TaskStatus RadiationFEMN::CalculateFluxes(Driver *pdriver, int stage) {
                   auto jj = j;
                   auto ii = 2 * i - 2;
 
-                  RadiationFEMNPhaseIndices nuenidx = NuEnIndicesComponent(nuen, num_species_, num_energy_bins_);
-                  int enidx = nuenidx.enidx;
-                  int nuidx = nuenidx.nuidx;
+                  if (rad_mask_array_(m, kk, jj, ii)) {
+                    RadiationFEMNPhaseIndices nuenidx = NuEnIndicesComponent(nuen, num_species_, num_energy_bins_);
+                    int enidx = nuenidx.enidx;
+                    int nuidx = nuenidx.nuidx;
 
-                  Real sqrt_det_g_ii = adm.alpha(m, kk, jj, ii) * Kokkos::sqrt(adm::SpatialDet(adm.g_dd(m, 0, 0, kk, jj, ii), adm.g_dd(m, 0, 1, kk, jj, ii),
-                                                                                       adm.g_dd(m, 0, 2, kk, jj, ii), adm.g_dd(m, 1, 1, kk, jj, ii),
-                                                                                       adm.g_dd(m, 1, 2, kk, jj, ii), adm.g_dd(m, 2, 2, kk, jj, ii)));
-                  Real sqrt_det_g_iip1 = adm.alpha(m, kk, jj, ii + 1) * Kokkos::sqrt(adm::SpatialDet(adm.g_dd(m, 0, 0, kk, jj, ii + 1), adm.g_dd(m, 0, 1, kk, jj, ii + 1),
-                                                                                             adm.g_dd(m, 0, 2, kk, jj, ii + 1), adm.g_dd(m, 1, 1, kk, jj, ii + 1),
-                                                                                             adm.g_dd(m, 1, 2, kk, jj, ii + 1), adm.g_dd(m, 2, 2, kk, jj, ii + 1)));
+                    Real sqrt_det_g_ii = adm.alpha(m, kk, jj, ii) * Kokkos::sqrt(adm::SpatialDet(adm.g_dd(m, 0, 0, kk, jj, ii), adm.g_dd(m, 0, 1, kk, jj, ii),
+                                                                                                 adm.g_dd(m, 0, 2, kk, jj, ii), adm.g_dd(m, 1, 1, kk, jj, ii),
+                                                                                                 adm.g_dd(m, 1, 2, kk, jj, ii), adm.g_dd(m, 2, 2, kk, jj, ii)));
+                    Real sqrt_det_g_iip1 = adm.alpha(m, kk, jj, ii + 1) * Kokkos::sqrt(adm::SpatialDet(adm.g_dd(m, 0, 0, kk, jj, ii + 1), adm.g_dd(m, 0, 1, kk, jj, ii + 1),
+                                                                                                       adm.g_dd(m, 0, 2, kk, jj, ii + 1), adm.g_dd(m, 1, 1, kk, jj, ii + 1),
+                                                                                                       adm.g_dd(m, 1, 2, kk, jj, ii + 1), adm.g_dd(m, 2, 2, kk, jj, ii + 1)));
 
-                  Real sqrt_det_g_L = 1.5 * sqrt_det_g_ii - 0.5 * sqrt_det_g_iip1;
-                  Real sqrt_det_g_R = -0.5 * sqrt_det_g_ii + 1.5 * sqrt_det_g_iip1;
+                    Real sqrt_det_g_L = 1.5 * sqrt_det_g_ii - 0.5 * sqrt_det_g_iip1;
+                    Real sqrt_det_g_R = -0.5 * sqrt_det_g_ii + 1.5 * sqrt_det_g_iip1;
 
-                  // load scratch arrays using closure
-                  ScrArray1D<Real> f0_scratch = ScrArray1D<Real>(member.team_scratch(scr_level), num_points_);
-                  ScrArray1D<Real> f0_scratch_p1 = ScrArray1D<Real>(member.team_scratch(scr_level), num_points_);
-                  ScrArray1D<Real> f0_scratch_p2 = ScrArray1D<Real>(member.team_scratch(scr_level), num_points_);
-                  ScrArray1D<Real> f0_scratch_p3 = ScrArray1D<Real>(member.team_scratch(scr_level), num_points_);
-                  ScrArray1D<Real> f0_scratch_m1 = ScrArray1D<Real>(member.team_scratch(scr_level), num_points_);
-                  ScrArray1D<Real> f0_scratch_m2 = ScrArray1D<Real>(member.team_scratch(scr_level), num_points_);
-                  ApplyClosureX(member, num_species_, num_energy_bins_, num_points_, m, nuidx, enidx, kk, jj, ii, f0_, f0_scratch, f0_scratch_p1, f0_scratch_p2,
-                                f0_scratch_p3, f0_scratch_m1, f0_scratch_m2, m1_flag_, m1_closure_, m1_closure_fun_);
-                  member.team_barrier();
+                    // load scratch arrays using closure
+                    ScrArray1D<Real> f0_scratch = ScrArray1D<Real>(member.team_scratch(scr_level), num_points_);
+                    ScrArray1D<Real> f0_scratch_p1 = ScrArray1D<Real>(member.team_scratch(scr_level), num_points_);
+                    ScrArray1D<Real> f0_scratch_p2 = ScrArray1D<Real>(member.team_scratch(scr_level), num_points_);
+                    ScrArray1D<Real> f0_scratch_p3 = ScrArray1D<Real>(member.team_scratch(scr_level), num_points_);
+                    ScrArray1D<Real> f0_scratch_m1 = ScrArray1D<Real>(member.team_scratch(scr_level), num_points_);
+                    ScrArray1D<Real> f0_scratch_m2 = ScrArray1D<Real>(member.team_scratch(scr_level), num_points_);
+                    ApplyClosureX(member, num_species_, num_energy_bins_, num_points_, m, nuidx, enidx, kk, jj, ii, f0_, f0_scratch, f0_scratch_p1, f0_scratch_p2,
+                                  f0_scratch_p3, f0_scratch_m1, f0_scratch_m2, m1_flag_, m1_closure_, m1_closure_fun_);
+                    member.team_barrier();
 
-                  par_for_inner(member, 0, num_points_ - 1, [&](const int B) {
+                    par_for_inner(member, 0, num_points_ - 1, [&](const int B) {
 
-                    Real Favg = 0.;
-                    Real Fminus = 0.;
-                    Real Fplus = 0;
+                      Real Favg = 0.;
+                      Real Fminus = 0.;
+                      Real Fplus = 0;
 
-                    for (int muhatA = 0; muhatA < 4 * num_points_; muhatA++) {
-                      int muhat = int(muhatA / num_points_);
-                      int A = muhatA - muhat * num_points_;
+                      for (int muhatA = 0; muhatA < 4 * num_points_; muhatA++) {
+                        int muhat = int(muhatA / num_points_);
+                        int A = muhatA - muhat * num_points_;
 
-                      Favg += (0.5) * (P_matrix_(muhat, B, A) * sqrt_det_g_ii * L_mu_muhat0_(m, 1, muhat, kk, jj, ii) * f0_scratch(A)
-                          + P_matrix_(muhat, B, A) * sqrt_det_g_iip1 * L_mu_muhat0_(m, 1, muhat, kk, jj, ii + 1) * f0_scratch_p1(A));
+                        Favg += (0.5) * (P_matrix_(muhat, B, A) * sqrt_det_g_ii * L_mu_muhat0_(m, 1, muhat, kk, jj, ii) * f0_scratch(A)
+                                         + P_matrix_(muhat, B, A) * sqrt_det_g_iip1 * L_mu_muhat0_(m, 1, muhat, kk, jj, ii + 1) * f0_scratch_p1(A));
 
-                      Real L_mu_muhat0_L = 1.5 * L_mu_muhat0_(m, 1, muhat, kk, jj, ii) - 0.5 * L_mu_muhat0_(m, 1, muhat, kk, jj, ii + 1);
-                      Fminus += (0.5) * (sqrt_det_g_L * L_mu_muhat0_L) * (P_matrix_(muhat, B, A)
-                          * ((1.5) * f0_scratch(A) - (0.5) * f0_scratch_p1(A) + (1.5) * f0_scratch_m1(A) - (0.5) * f0_scratch_m2(A))
-                          - Sgn(L_mu_muhat0_L) * Pmod_matrix_(muhat, B, A)
-                              * (-(1.5) * f0_scratch_m1(A) + (0.5) * f0_scratch_m2(A) + (1.5) * f0_scratch(A) - (0.5) * f0_scratch_p1(A)));
+                        Real L_mu_muhat0_L = 1.5 * L_mu_muhat0_(m, 1, muhat, kk, jj, ii) - 0.5 * L_mu_muhat0_(m, 1, muhat, kk, jj, ii + 1);
+                        Fminus += (0.5) * (sqrt_det_g_L * L_mu_muhat0_L) * (P_matrix_(muhat, B, A)
+                                                                            *
+                                                                            ((1.5) * f0_scratch(A) - (0.5) * f0_scratch_p1(A) + (1.5) * f0_scratch_m1(A) - (0.5) * f0_scratch_m2(A))
+                                                                            - Sgn(L_mu_muhat0_L) * Pmod_matrix_(muhat, B, A)
+                                                                              * (-(1.5) * f0_scratch_m1(A) + (0.5) * f0_scratch_m2(A) + (1.5) * f0_scratch(A) -
+                                                                                 (0.5) * f0_scratch_p1(A)));
 
-                      Real L_mu_muhat0_R = -0.5 * L_mu_muhat0_(m, 1, muhat, kk, jj, ii) + 1.5 * L_mu_muhat0_(m, 1, muhat, kk, jj, ii + 1);
-                      Fplus += (0.5) * (sqrt_det_g_R * L_mu_muhat0_R) * (P_matrix_(muhat, B, A) *
-                          ((1.5) * f0_scratch_p2(A) - (0.5) * f0_scratch_p3(A) + (1.5) * f0_scratch_p1(A) - (0.5) * f0_scratch(A))
-                          - Sgn(L_mu_muhat0_R) * Pmod_matrix_(muhat, B, A) *
-                              (-(1.5) * f0_scratch_p1(A) + (0.5) * f0_scratch(A) + (1.5) * f0_scratch_p2(A) - (0.5) * f0_scratch_p3(A)));
-                    }
+                        Real L_mu_muhat0_R = -0.5 * L_mu_muhat0_(m, 1, muhat, kk, jj, ii) + 1.5 * L_mu_muhat0_(m, 1, muhat, kk, jj, ii + 1);
+                        Fplus += (0.5) * (sqrt_det_g_R * L_mu_muhat0_R) * (P_matrix_(muhat, B, A) *
+                                                                           ((1.5) * f0_scratch_p2(A) - (0.5) * f0_scratch_p3(A) + (1.5) * f0_scratch_p1(A) - (0.5) * f0_scratch(A))
+                                                                           - Sgn(L_mu_muhat0_R) * Pmod_matrix_(muhat, B, A) *
+                                                                             (-(1.5) * f0_scratch_p1(A) + (0.5) * f0_scratch(A) + (1.5) * f0_scratch_p2(A) -
+                                                                              (0.5) * f0_scratch_p3(A)));
+                      }
 
-                    int nuenang = IndicesUnited(nuidx, enidx, B, num_species_, num_energy_bins_, num_points_);
-                    flx1(m, nuenang, kk, jj, ii) = ((1.5) * Fminus - Favg - (0.5) * Fplus);
-                    flx1(m, nuenang, kk, jj, ii + 1) = ((0.5) * Fminus + Favg - (1.5) * Fplus);
+                      int nuenang = IndicesUnited(nuidx, enidx, B, num_species_, num_energy_bins_, num_points_);
+                      flx1(m, nuenang, kk, jj, ii) = ((1.5) * Fminus - Favg - (0.5) * Fplus);
+                      flx1(m, nuenang, kk, jj, ii + 1) = ((0.5) * Fminus + Favg - (1.5) * Fplus);
 
-                  });
-
+                    });
+                  }
                 });
 //--------------------------------------------------------------------------------------
 // j-direction
@@ -124,63 +129,69 @@ TaskStatus RadiationFEMN::CalculateFluxes(Driver *pdriver, int stage) {
                     auto jj = 2 * j - 2;
                     auto ii = i;
 
-                    RadiationFEMNPhaseIndices nuenidx = NuEnIndicesComponent(nuen, num_species_, num_energy_bins_);
-                    int enidx = nuenidx.enidx;
-                    int nuidx = nuenidx.nuidx;
+                    if (rad_mask_array_(m, kk, jj, ii)) {
+                      RadiationFEMNPhaseIndices nuenidx = NuEnIndicesComponent(nuen, num_species_, num_energy_bins_);
+                      int enidx = nuenidx.enidx;
+                      int nuidx = nuenidx.nuidx;
 
-                    Real sqrt_det_g_jj = adm.alpha(m, kk, jj, ii) * Kokkos::sqrt(adm::SpatialDet(adm.g_dd(m, 0, 0, kk, jj, ii), adm.g_dd(m, 0, 1, kk, jj, ii),
-                                                                                         adm.g_dd(m, 0, 2, kk, jj, ii), adm.g_dd(m, 1, 1, kk, jj, ii),
-                                                                                         adm.g_dd(m, 1, 2, kk, jj, ii), adm.g_dd(m, 2, 2, kk, jj, ii)));
-                    Real sqrt_det_g_jjp1 = adm.alpha(m, kk, jj + 1, ii) * Kokkos::sqrt(adm::SpatialDet(adm.g_dd(m, 0, 0, kk, jj + 1, ii), adm.g_dd(m, 0, 1, kk, jj + 1, ii),
-                                                                                               adm.g_dd(m, 0, 2, kk, jj + 1, ii), adm.g_dd(m, 1, 1, kk, jj + 1, ii),
-                                                                                               adm.g_dd(m, 1, 2, kk, jj + 1, ii), adm.g_dd(m, 2, 2, kk, jj + 1, ii)));
+                      Real sqrt_det_g_jj = adm.alpha(m, kk, jj, ii) * Kokkos::sqrt(adm::SpatialDet(adm.g_dd(m, 0, 0, kk, jj, ii), adm.g_dd(m, 0, 1, kk, jj, ii),
+                                                                                                   adm.g_dd(m, 0, 2, kk, jj, ii), adm.g_dd(m, 1, 1, kk, jj, ii),
+                                                                                                   adm.g_dd(m, 1, 2, kk, jj, ii), adm.g_dd(m, 2, 2, kk, jj, ii)));
+                      Real sqrt_det_g_jjp1 = adm.alpha(m, kk, jj + 1, ii) * Kokkos::sqrt(adm::SpatialDet(adm.g_dd(m, 0, 0, kk, jj + 1, ii), adm.g_dd(m, 0, 1, kk, jj + 1, ii),
+                                                                                                         adm.g_dd(m, 0, 2, kk, jj + 1, ii), adm.g_dd(m, 1, 1, kk, jj + 1, ii),
+                                                                                                         adm.g_dd(m, 1, 2, kk, jj + 1, ii), adm.g_dd(m, 2, 2, kk, jj + 1, ii)));
 
-                    Real sqrt_det_g_L = 1.5 * sqrt_det_g_jj - 0.5 * sqrt_det_g_jjp1;
-                    Real sqrt_det_g_R = -0.5 * sqrt_det_g_jj + 1.5 * sqrt_det_g_jjp1;
+                      Real sqrt_det_g_L = 1.5 * sqrt_det_g_jj - 0.5 * sqrt_det_g_jjp1;
+                      Real sqrt_det_g_R = -0.5 * sqrt_det_g_jj + 1.5 * sqrt_det_g_jjp1;
 
-                    // load scratch arrays using closure
-                    ScrArray1D<Real> f0_scratch = ScrArray1D<Real>(member.team_scratch(scr_level), num_points_);
-                    ScrArray1D<Real> f0_scratch_p1 = ScrArray1D<Real>(member.team_scratch(scr_level), num_points_);
-                    ScrArray1D<Real> f0_scratch_p2 = ScrArray1D<Real>(member.team_scratch(scr_level), num_points_);
-                    ScrArray1D<Real> f0_scratch_p3 = ScrArray1D<Real>(member.team_scratch(scr_level), num_points_);
-                    ScrArray1D<Real> f0_scratch_m1 = ScrArray1D<Real>(member.team_scratch(scr_level), num_points_);
-                    ScrArray1D<Real> f0_scratch_m2 = ScrArray1D<Real>(member.team_scratch(scr_level), num_points_);
-                    ApplyClosureY(member, num_species_, num_energy_bins_, num_points_, m, nuidx, enidx, kk, jj, ii, f0_, f0_scratch,
-                                  f0_scratch_p1, f0_scratch_p2, f0_scratch_p3, f0_scratch_m1, f0_scratch_m2, m1_flag_, m1_closure_, m1_closure_fun_);
-                    member.team_barrier();
+                      // load scratch arrays using closure
+                      ScrArray1D<Real> f0_scratch = ScrArray1D<Real>(member.team_scratch(scr_level), num_points_);
+                      ScrArray1D<Real> f0_scratch_p1 = ScrArray1D<Real>(member.team_scratch(scr_level), num_points_);
+                      ScrArray1D<Real> f0_scratch_p2 = ScrArray1D<Real>(member.team_scratch(scr_level), num_points_);
+                      ScrArray1D<Real> f0_scratch_p3 = ScrArray1D<Real>(member.team_scratch(scr_level), num_points_);
+                      ScrArray1D<Real> f0_scratch_m1 = ScrArray1D<Real>(member.team_scratch(scr_level), num_points_);
+                      ScrArray1D<Real> f0_scratch_m2 = ScrArray1D<Real>(member.team_scratch(scr_level), num_points_);
+                      ApplyClosureY(member, num_species_, num_energy_bins_, num_points_, m, nuidx, enidx, kk, jj, ii, f0_, f0_scratch,
+                                    f0_scratch_p1, f0_scratch_p2, f0_scratch_p3, f0_scratch_m1, f0_scratch_m2, m1_flag_, m1_closure_, m1_closure_fun_);
+                      member.team_barrier();
 
-                    par_for_inner(member, 0, num_points_ - 1, [&](const int B) {
+                      par_for_inner(member, 0, num_points_ - 1, [&](const int B) {
 
-                      Real Favg = 0.;
-                      Real Fminus = 0.;
-                      Real Fplus = 0;
+                        Real Favg = 0.;
+                        Real Fminus = 0.;
+                        Real Fplus = 0;
 
-                      for (int muhatA = 0; muhatA < 4 * num_points_; muhatA++) {
-                        int muhat = int(muhatA / num_points_);
-                        int A = muhatA - muhat * num_points_;
+                        for (int muhatA = 0; muhatA < 4 * num_points_; muhatA++) {
+                          int muhat = int(muhatA / num_points_);
+                          int A = muhatA - muhat * num_points_;
 
-                        Favg += (0.5) * (P_matrix_(muhat, B, A) * sqrt_det_g_jj * L_mu_muhat0_(m, 2, muhat, kk, jj, ii) * f0_scratch(A)
-                            + P_matrix_(muhat, B, A) * sqrt_det_g_jjp1 * L_mu_muhat0_(m, 2, muhat, kk, jj + 1, ii) * f0_scratch_p1(A));
+                          Favg += (0.5) * (P_matrix_(muhat, B, A) * sqrt_det_g_jj * L_mu_muhat0_(m, 2, muhat, kk, jj, ii) * f0_scratch(A)
+                                           + P_matrix_(muhat, B, A) * sqrt_det_g_jjp1 * L_mu_muhat0_(m, 2, muhat, kk, jj + 1, ii) * f0_scratch_p1(A));
 
-                        Real L_mu_muhat0_L = 1.5 * L_mu_muhat0_(m, 2, muhat, kk, jj, ii) - 0.5 * L_mu_muhat0_(m, 2, muhat, kk, jj + 1, ii);
-                        Fminus += (0.5) * (sqrt_det_g_L * L_mu_muhat0_L) * (P_matrix_(muhat, B, A)
-                            * ((1.5) * f0_scratch(A) - (0.5) * f0_scratch_p1(A) + (1.5) * f0_scratch_m1(A) - (0.5) * f0_scratch_m2(A))
-                            - Sgn(L_mu_muhat0_L) * Pmod_matrix_(muhat, B, A)
-                                * (-(1.5) * f0_scratch_m1(A) + (0.5) * f0_scratch_m2(A) + (1.5) * f0_scratch(A) - (0.5) * f0_scratch_p1(A)));
+                          Real L_mu_muhat0_L = 1.5 * L_mu_muhat0_(m, 2, muhat, kk, jj, ii) - 0.5 * L_mu_muhat0_(m, 2, muhat, kk, jj + 1, ii);
+                          Fminus += (0.5) * (sqrt_det_g_L * L_mu_muhat0_L) * (P_matrix_(muhat, B, A)
+                                                                              *
+                                                                              ((1.5) * f0_scratch(A) - (0.5) * f0_scratch_p1(A) + (1.5) * f0_scratch_m1(A) -
+                                                                               (0.5) * f0_scratch_m2(A))
+                                                                              - Sgn(L_mu_muhat0_L) * Pmod_matrix_(muhat, B, A)
+                                                                                * (-(1.5) * f0_scratch_m1(A) + (0.5) * f0_scratch_m2(A) + (1.5) * f0_scratch(A) -
+                                                                                   (0.5) * f0_scratch_p1(A)));
 
-                        Real L_mu_muhat0_R = -0.5 * L_mu_muhat0_(m, 2, muhat, kk, jj, ii) + 1.5 * L_mu_muhat0_(m, 2, muhat, kk, jj + 1, ii);
-                        Fplus += (0.5) * (sqrt_det_g_R * L_mu_muhat0_R) * (P_matrix_(muhat, B, A) *
-                            ((1.5) * f0_scratch_p2(A) - (0.5) * f0_scratch_p3(A) + (1.5) * f0_scratch_p1(A) - (0.5) * f0_scratch(A))
-                            - Sgn(L_mu_muhat0_R) * Pmod_matrix_(muhat, B, A) *
-                                (-(1.5) * f0_scratch_p1(A) + (0.5) * f0_scratch(A) + (1.5) * f0_scratch_p2(A) - (0.5) * f0_scratch_p3(A)));
-                      }
+                          Real L_mu_muhat0_R = -0.5 * L_mu_muhat0_(m, 2, muhat, kk, jj, ii) + 1.5 * L_mu_muhat0_(m, 2, muhat, kk, jj + 1, ii);
+                          Fplus += (0.5) * (sqrt_det_g_R * L_mu_muhat0_R) * (P_matrix_(muhat, B, A) *
+                                                                             ((1.5) * f0_scratch_p2(A) - (0.5) * f0_scratch_p3(A) + (1.5) * f0_scratch_p1(A) -
+                                                                              (0.5) * f0_scratch(A))
+                                                                             - Sgn(L_mu_muhat0_R) * Pmod_matrix_(muhat, B, A) *
+                                                                               (-(1.5) * f0_scratch_p1(A) + (0.5) * f0_scratch(A) + (1.5) * f0_scratch_p2(A) -
+                                                                                (0.5) * f0_scratch_p3(A)));
+                        }
 
-                      int nuenang = IndicesUnited(nuidx, enidx, B, num_species_, num_energy_bins_, num_points_);
-                      flx2(m, nuenang, kk, jj, ii) = ((1.5) * Fminus - Favg - (0.5) * Fplus);
-                      flx2(m, nuenang, kk, jj + 1, ii) = ((0.5) * Fminus + Favg - (1.5) * Fplus);
+                        int nuenang = IndicesUnited(nuidx, enidx, B, num_species_, num_energy_bins_, num_points_);
+                        flx2(m, nuenang, kk, jj, ii) = ((1.5) * Fminus - Favg - (0.5) * Fplus);
+                        flx2(m, nuenang, kk, jj + 1, ii) = ((0.5) * Fminus + Favg - (1.5) * Fplus);
 
-                    });
-
+                      });
+                    }
                   });
 
   }
@@ -197,66 +208,72 @@ TaskStatus RadiationFEMN::CalculateFluxes(Driver *pdriver, int stage) {
                     auto jj = j;
                     auto ii = i;
 
-                    RadiationFEMNPhaseIndices nuenidx = NuEnIndicesComponent(nuen, num_species_, num_energy_bins_);
-                    int enidx = nuenidx.enidx;
-                    int nuidx = nuenidx.nuidx;
+                    if (rad_mask_array_(m, kk, jj, ii)) {
+                      RadiationFEMNPhaseIndices nuenidx = NuEnIndicesComponent(nuen, num_species_, num_energy_bins_);
+                      int enidx = nuenidx.enidx;
+                      int nuidx = nuenidx.nuidx;
 
-                    Real sqrt_det_g_kk = adm.alpha(m, kk, jj, ii) * Kokkos::sqrt(adm::SpatialDet(adm.g_dd(m, 0, 0, kk, jj, ii), adm.g_dd(m, 0, 1, kk, jj, ii),
-                                                                                         adm.g_dd(m, 0, 2, kk, jj, ii), adm.g_dd(m, 1, 1, kk, jj, ii),
-                                                                                         adm.g_dd(m, 1, 2, kk, jj, ii), adm.g_dd(m, 2, 2, kk, jj, ii)));
-                    Real sqrt_det_g_kkp1 = adm.alpha(m, kk + 1, jj, ii) * Kokkos::sqrt(adm::SpatialDet(adm.g_dd(m, 0, 0, kk + 1, jj, ii), adm.g_dd(m, 0, 1, kk + 1, jj, ii),
-                                                                                               adm.g_dd(m, 0, 2, kk + 1, jj, ii), adm.g_dd(m, 1, 1, kk + 1, jj, ii),
-                                                                                               adm.g_dd(m, 1, 2, kk + 1, jj, ii), adm.g_dd(m, 2, 2, kk + 1, jj, ii)));
+                      Real sqrt_det_g_kk = adm.alpha(m, kk, jj, ii) * Kokkos::sqrt(adm::SpatialDet(adm.g_dd(m, 0, 0, kk, jj, ii), adm.g_dd(m, 0, 1, kk, jj, ii),
+                                                                                                   adm.g_dd(m, 0, 2, kk, jj, ii), adm.g_dd(m, 1, 1, kk, jj, ii),
+                                                                                                   adm.g_dd(m, 1, 2, kk, jj, ii), adm.g_dd(m, 2, 2, kk, jj, ii)));
+                      Real sqrt_det_g_kkp1 = adm.alpha(m, kk + 1, jj, ii) * Kokkos::sqrt(adm::SpatialDet(adm.g_dd(m, 0, 0, kk + 1, jj, ii), adm.g_dd(m, 0, 1, kk + 1, jj, ii),
+                                                                                                         adm.g_dd(m, 0, 2, kk + 1, jj, ii), adm.g_dd(m, 1, 1, kk + 1, jj, ii),
+                                                                                                         adm.g_dd(m, 1, 2, kk + 1, jj, ii), adm.g_dd(m, 2, 2, kk + 1, jj, ii)));
 
-                    // compute quantities at the left and right boundaries
-                    Real sqrt_det_g_L = 1.5 * sqrt_det_g_kk - 0.5 * sqrt_det_g_kkp1;
-                    Real sqrt_det_g_R = -0.5 * sqrt_det_g_kk + 1.5 * sqrt_det_g_kkp1;
+                      // compute quantities at the left and right boundaries
+                      Real sqrt_det_g_L = 1.5 * sqrt_det_g_kk - 0.5 * sqrt_det_g_kkp1;
+                      Real sqrt_det_g_R = -0.5 * sqrt_det_g_kk + 1.5 * sqrt_det_g_kkp1;
 
-                    // load scratch arrays using closure
-                    ScrArray1D<Real> f0_scratch = ScrArray1D<Real>(member.team_scratch(scr_level), num_points_);
-                    ScrArray1D<Real> f0_scratch_p1 = ScrArray1D<Real>(member.team_scratch(scr_level), num_points_);
-                    ScrArray1D<Real> f0_scratch_p2 = ScrArray1D<Real>(member.team_scratch(scr_level), num_points_);
-                    ScrArray1D<Real> f0_scratch_p3 = ScrArray1D<Real>(member.team_scratch(scr_level), num_points_);
-                    ScrArray1D<Real> f0_scratch_m1 = ScrArray1D<Real>(member.team_scratch(scr_level), num_points_);
-                    ScrArray1D<Real> f0_scratch_m2 = ScrArray1D<Real>(member.team_scratch(scr_level), num_points_);
-                    ApplyClosureZ(member, num_species_, num_energy_bins_, num_points_, m, nuidx, enidx, kk, jj, ii, f0_, f0_scratch, f0_scratch_p1,
-                                  f0_scratch_p2, f0_scratch_p3, f0_scratch_m1, f0_scratch_m2, m1_flag_, m1_closure_, m1_closure_fun_);
-                    member.team_barrier();
+                      // load scratch arrays using closure
+                      ScrArray1D<Real> f0_scratch = ScrArray1D<Real>(member.team_scratch(scr_level), num_points_);
+                      ScrArray1D<Real> f0_scratch_p1 = ScrArray1D<Real>(member.team_scratch(scr_level), num_points_);
+                      ScrArray1D<Real> f0_scratch_p2 = ScrArray1D<Real>(member.team_scratch(scr_level), num_points_);
+                      ScrArray1D<Real> f0_scratch_p3 = ScrArray1D<Real>(member.team_scratch(scr_level), num_points_);
+                      ScrArray1D<Real> f0_scratch_m1 = ScrArray1D<Real>(member.team_scratch(scr_level), num_points_);
+                      ScrArray1D<Real> f0_scratch_m2 = ScrArray1D<Real>(member.team_scratch(scr_level), num_points_);
+                      ApplyClosureZ(member, num_species_, num_energy_bins_, num_points_, m, nuidx, enidx, kk, jj, ii, f0_, f0_scratch, f0_scratch_p1,
+                                    f0_scratch_p2, f0_scratch_p3, f0_scratch_m1, f0_scratch_m2, m1_flag_, m1_closure_, m1_closure_fun_);
+                      member.team_barrier();
 
-                    par_for_inner(member, 0, num_points_ - 1, [&](const int B) {
+                      par_for_inner(member, 0, num_points_ - 1, [&](const int B) {
 
-                      Real Favg = 0.;
-                      Real Fminus = 0.;
-                      Real Fplus = 0;
+                        Real Favg = 0.;
+                        Real Fminus = 0.;
+                        Real Fplus = 0;
 
-                      for (int muhatA = 0; muhatA < 4 * num_points_; muhatA++) {
-                        int muhat = int(muhatA / num_points_);
-                        int A = muhatA - muhat * num_points_;
+                        for (int muhatA = 0; muhatA < 4 * num_points_; muhatA++) {
+                          int muhat = int(muhatA / num_points_);
+                          int A = muhatA - muhat * num_points_;
 
-                        Favg += (0.5) * (P_matrix_(muhat, B, A) * sqrt_det_g_kk * L_mu_muhat0_(m, 3, muhat, kk, jj, ii) * f0_scratch(A)
-                            + P_matrix_(muhat, B, A) * sqrt_det_g_kk * L_mu_muhat0_(m, 3, muhat, kk + 1, jj, ii) * f0_scratch_p1(A));
+                          Favg += (0.5) * (P_matrix_(muhat, B, A) * sqrt_det_g_kk * L_mu_muhat0_(m, 3, muhat, kk, jj, ii) * f0_scratch(A)
+                                           + P_matrix_(muhat, B, A) * sqrt_det_g_kk * L_mu_muhat0_(m, 3, muhat, kk + 1, jj, ii) * f0_scratch_p1(A));
 
-                        Real L_mu_muhat0_L = 1.5 * L_mu_muhat0_(m, 3, muhat, kk, jj, ii) - 0.5 * L_mu_muhat0_(m, 3, muhat, kk + 1, jj, ii);
+                          Real L_mu_muhat0_L = 1.5 * L_mu_muhat0_(m, 3, muhat, kk, jj, ii) - 0.5 * L_mu_muhat0_(m, 3, muhat, kk + 1, jj, ii);
 
-                        Fminus += (0.5) * (sqrt_det_g_L * L_mu_muhat0_L) * (P_matrix_(muhat, B, A)
-                            * ((1.5) * f0_scratch(A) - (0.5) * f0_scratch_p1(A) + (1.5) * f0_scratch_m1(A) - (0.5) * f0_scratch_m2(A))
-                            - Sgn(L_mu_muhat0_L) * Pmod_matrix_(muhat, B, A)
-                                * (-(1.5) * f0_scratch_m1(A) + (0.5) * f0_scratch_m2(A) + (1.5) * f0_scratch(A) - (0.5) * f0_scratch_p1(A)));
+                          Fminus += (0.5) * (sqrt_det_g_L * L_mu_muhat0_L) * (P_matrix_(muhat, B, A)
+                                                                              *
+                                                                              ((1.5) * f0_scratch(A) - (0.5) * f0_scratch_p1(A) + (1.5) * f0_scratch_m1(A) -
+                                                                               (0.5) * f0_scratch_m2(A))
+                                                                              - Sgn(L_mu_muhat0_L) * Pmod_matrix_(muhat, B, A)
+                                                                                * (-(1.5) * f0_scratch_m1(A) + (0.5) * f0_scratch_m2(A) + (1.5) * f0_scratch(A) -
+                                                                                   (0.5) * f0_scratch_p1(A)));
 
-                        Real L_mu_muhat0_R = -0.5 * L_mu_muhat0_(m, 3, muhat, kk, jj, ii) + 1.5 * L_mu_muhat0_(m, 3, muhat, kk + 1, jj, ii);
+                          Real L_mu_muhat0_R = -0.5 * L_mu_muhat0_(m, 3, muhat, kk, jj, ii) + 1.5 * L_mu_muhat0_(m, 3, muhat, kk + 1, jj, ii);
 
-                        Fplus += (0.5) * (sqrt_det_g_R * L_mu_muhat0_R) * (P_matrix_(muhat, B, A) *
-                            ((1.5) * f0_scratch_p2(A) - (0.5) * f0_scratch_p3(A) + (1.5) * f0_scratch_p1(A) - (0.5) * f0_scratch(A))
-                            - Sgn(L_mu_muhat0_R) * Pmod_matrix_(muhat, B, A) *
-                                (-(1.5) * f0_scratch_p1(A) + (0.5) * f0_scratch(A) + (1.5) * f0_scratch_p2(A) - (0.5) * f0_scratch_p3(A)));
-                      }
+                          Fplus += (0.5) * (sqrt_det_g_R * L_mu_muhat0_R) * (P_matrix_(muhat, B, A) *
+                                                                             ((1.5) * f0_scratch_p2(A) - (0.5) * f0_scratch_p3(A) + (1.5) * f0_scratch_p1(A) -
+                                                                              (0.5) * f0_scratch(A))
+                                                                             - Sgn(L_mu_muhat0_R) * Pmod_matrix_(muhat, B, A) *
+                                                                               (-(1.5) * f0_scratch_p1(A) + (0.5) * f0_scratch(A) + (1.5) * f0_scratch_p2(A) -
+                                                                                (0.5) * f0_scratch_p3(A)));
+                        }
 
-                      int nuenang = IndicesUnited(nuidx, enidx, B, num_species_, num_energy_bins_, num_points_);
-                      flx3(m, nuenang, kk, jj, ii) = ((1.5) * Fminus - Favg - (0.5) * Fplus);
-                      flx3(m, nuenang, kk + 1, jj, ii) = ((0.5) * Fminus + Favg - (1.5) * Fplus);
+                        int nuenang = IndicesUnited(nuidx, enidx, B, num_species_, num_energy_bins_, num_points_);
+                        flx3(m, nuenang, kk, jj, ii) = ((1.5) * Fminus - Favg - (0.5) * Fplus);
+                        flx3(m, nuenang, kk + 1, jj, ii) = ((0.5) * Fminus + Favg - (1.5) * Fplus);
 
-                    });
-
+                      });
+                    }
                   });
   }
 
