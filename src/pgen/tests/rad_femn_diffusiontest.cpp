@@ -72,6 +72,7 @@ void ProblemGenerator::RadiationFEMNDiffusiontest(ParameterInput *pin, const boo
   auto vx = pin->GetOrAddReal("radiation-femn", "fluid_velocity_x", 0.5);
   auto Sen = (1. / 4.) * (pow(energy_grid_(1), 4) - pow(energy_grid_(0), 4));
   auto Ven = (1. / 3.) * (pow(energy_grid_(1), 3) - pow(energy_grid_(0), 3));
+  auto lorentz_w = 1./sqrt(1 - vx * vx);
 
   if (!pmbp->pradfemn->fpn) {
     par_for("pgen_diffusiontest_radiation_femn", DevExeSpace(), 0, (pmbp->nmb_thispack - 1), 0, npts1, ks, ke, js, je, is, ie,
@@ -107,8 +108,8 @@ void ProblemGenerator::RadiationFEMNDiffusiontest(ParameterInput *pin, const boo
 
             adm.alpha(m, k, j, i) = 1.;
 
-            u_mu_(m, 0, k, j, i) = sqrt(1. + vx * vx);
-            u_mu_(m, 1, k, j, i) = vx;
+            u_mu_(m, 0, k, j, i) = lorentz_w;
+            u_mu_(m, 1, k, j, i) = vx * lorentz_w;
             u_mu_(m, 2, k, j, i) = 0.;
             u_mu_(m, 3, k, j, i) = 0.;
 
