@@ -46,7 +46,8 @@ void ProblemGenerator::RadiationFEMNShadowtest(ParameterInput *pin, const bool r
     exit(EXIT_FAILURE);
   }
 
-  // capture var pmy_mesh_->mb_indcs;
+  auto scattering = pin->GetOrAddBoolean("problem", "scattering", false);
+
   auto &indcs = pmy_mesh_->mb_indcs;
   auto &size = pmbp->pmb->mb_size;
   int &is = indcs.is;
@@ -78,13 +79,13 @@ void ProblemGenerator::RadiationFEMNShadowtest(ParameterInput *pin, const bool r
     exit(EXIT_FAILURE);
   }
 
+  std::cout << "Pgen: Shadow test" << std::endl;
+  std::cout << "Scattering: " << std::boolalpha << scattering <<std::endl;
   user_bcs = true;
   user_bcs_func = radiationfemn::ApplyBeamSourcesFEMN;
 
-  //auto &eta_ = pmbp->pradfemn->eta;
   auto &kappa_a_ = pmbp->pradfemn->kappa_a;
-  //auto &kappa_s_ = pmbp->pradfemn->kappa_s;
-  auto &energy_grid_ = pmbp->pradfemn->energy_grid;
+  auto &kappa_s_ = pmbp->pradfemn->kappa_s;
 
   par_for("pgen_linetest_radiation_femn", DevExeSpace(), 0, (pmbp->nmb_thispack - 1), ks, ke, js, je, is, ie,
           KOKKOS_LAMBDA(int m, int k, int j, int i) {
@@ -101,6 +102,8 @@ void ProblemGenerator::RadiationFEMNShadowtest(ParameterInput *pin, const bool r
 
             if (x1 * x1 + x2 * x2 <= 1) {
               kappa_a_(m, k, j, i) = 1.;
+            } else {
+              if (scattering) { kappa_s_(m, k, j, i) = 0.1; }
             }
           });
 
