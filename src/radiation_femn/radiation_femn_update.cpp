@@ -101,7 +101,7 @@ TaskStatus RadiationFEMN::ExpRKUpdate(Driver *pdriver, int stage) {
 
                     // derivative terms
                     ScrArray1D<Real> g_rhs_scratch = ScrArray1D<Real>(member.team_scratch(scr_level), num_points_);
-                    auto Ven = (1. / 3.) * (pow(energy_grid_(en + 1), 3) - pow(energy_grid_(en), 3));
+                    auto Ven = (num_energy_bins_ > 1) ? (1. / 3.) * (pow(energy_grid_(en + 1), 3) - pow(energy_grid_(en), 3)): 1.;
 
                     par_for_inner(member, 0, num_points_ - 1, [&](const int idx) {
                       int nuenangidx = IndicesUnited(nu, en, idx, num_species_, num_energy_bins_, num_points_);

@@ -70,9 +70,7 @@ void ProblemGenerator::RadiationFEMNDiffusiontest(ParameterInput *pin, const boo
   auto &energy_grid_ = pmbp->pradfemn->energy_grid;
   auto &kappa_s_ = pmbp->pradfemn->kappa_s;
   auto vx = pin->GetOrAddReal("radiation-femn", "fluid_velocity_x", 0.5);
-  auto Sen = (1. / 4.) * (pow(energy_grid_(1), 4) - pow(energy_grid_(0), 4));
-  auto Ven = (1. / 3.) * (pow(energy_grid_(1), 3) - pow(energy_grid_(0), 3));
-  auto lorentz_w = 1./sqrt(1 - vx * vx);
+  auto lorentz_w = 1. / sqrt(1 - vx * vx);
 
   if (!pmbp->pradfemn->fpn) {
     par_for("pgen_diffusiontest_radiation_femn", DevExeSpace(), 0, (pmbp->nmb_thispack - 1), 0, npts1, ks, ke, js, je, is, ie,
@@ -82,7 +80,7 @@ void ProblemGenerator::RadiationFEMNDiffusiontest(ParameterInput *pin, const boo
               int nx1 = indcs.nx1;
               Real x1 = CellCenterX(i - is, nx1, x1min, x1max);
 
-              f0_(m, A, k, j, i) = (1. / Sen) * (1. / (4. * M_PI)) * exp(-(9. * x1 * x1));
+              f0_(m, A, k, j, i) = (1. / (4. * M_PI)) * exp(-(9. * x1 * x1));
             });
   } else {
     par_for("pgen_diffusiontest_radiation_fpn", DevExeSpace(), 0, (pmbp->nmb_thispack - 1), ks, ke, js, je, is, ie,
@@ -92,7 +90,7 @@ void ProblemGenerator::RadiationFEMNDiffusiontest(ParameterInput *pin, const boo
               int nx1 = indcs.nx1;
               Real x1 = CellCenterX(i - is, nx1, x1min, x1max);
 
-              f0_(m, 0, k, j, i) = (1. / Sen) * (1. / (4. * M_PI)) * 2. * sqrt(M_PI) * exp(-(9. * x1 * x1));
+              f0_(m, 0, k, j, i) = (1. / (4. * M_PI)) * 2. * sqrt(M_PI) * exp(-(9. * x1 * x1));
             });
   }
 
@@ -113,6 +111,6 @@ void ProblemGenerator::RadiationFEMNDiffusiontest(ParameterInput *pin, const boo
             u_mu_(m, 2, k, j, i) = 0.;
             u_mu_(m, 3, k, j, i) = 0.;
 
-            kappa_s_(m, k, j, i) =  Ven * 1e3;
+            kappa_s_(m, k, j, i) = 1e3;
           });
 }

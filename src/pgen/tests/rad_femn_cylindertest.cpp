@@ -81,8 +81,6 @@ void ProblemGenerator::RadiationFEMNCylindertest(ParameterInput *pin, const bool
   par_for("pgen_linetest_radiation_femn", DevExeSpace(), 0, (pmbp->nmb_thispack - 1), ks, ke, js, je, is, ie,
           KOKKOS_LAMBDA(int m, int k, int j, int i) {
 
-            auto Ven = (1. / 3.) * (pow(pmbp->pradfemn->energy_grid(1), 3) - pow(pmbp->pradfemn->energy_grid(0), 3));
-
             Real &x1min = size.d_view(m).x1min;
             Real &x1max = size.d_view(m).x1max;
             int nx1 = indcs.nx1;
@@ -94,8 +92,8 @@ void ProblemGenerator::RadiationFEMNCylindertest(ParameterInput *pin, const bool
             Real x2 = CellCenterX(j - js, nx2, x2min, x2max);
 
             if (x1 * x1 + x2 * x2 <= 1) {
-              eta_(m, k, j, i) = Ven * 10.;
-              kappa_a_(m, k, j, i) = Ven * 10.;
+              eta_(m, k, j, i) = 10.;
+              kappa_a_(m, k, j, i) = 10.;
             }
 
           });

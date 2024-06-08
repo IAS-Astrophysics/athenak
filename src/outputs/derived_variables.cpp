@@ -226,7 +226,7 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
                       n_0 += tetcov_c_(m, d, 0, k, j, i) * nh_c_.d_view(n, d);
                     }
                     dv(m, n12, k, j, i) += (nmun1 * nmun2 * (i0_(m, n, k, j, i) / (n0 * n_0)) *
-                        solid_angles_.d_view(n));
+                                            solid_angles_.d_view(n));
                   }
                 }
               }
@@ -256,18 +256,18 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
                 Real uu2 = w0_(m, IVY, k, j, i);
                 Real uu3 = w0_(m, IVZ, k, j, i);
                 Real q = glower[1][1] * uu1 * uu1 + 2.0 * glower[1][2] * uu1 * uu2 + 2.0 * glower[1][3] * uu1 * uu3
-                    + glower[2][2] * uu2 * uu2 + 2.0 * glower[2][3] * uu2 * uu3
-                    + glower[3][3] * uu3 * uu3;
+                         + glower[2][2] * uu2 * uu2 + 2.0 * glower[2][3] * uu2 * uu3
+                         + glower[3][3] * uu3 * uu3;
                 Real uu0 = sqrt(1.0 + q);
                 Real u_tet_[4];
                 u_tet_[0] = (norm_to_tet_(m, 0, 0, k, j, i) * uu0 + norm_to_tet_(m, 0, 1, k, j, i) * uu1 +
-                    norm_to_tet_(m, 0, 2, k, j, i) * uu2 + norm_to_tet_(m, 0, 3, k, j, i) * uu3);
+                             norm_to_tet_(m, 0, 2, k, j, i) * uu2 + norm_to_tet_(m, 0, 3, k, j, i) * uu3);
                 u_tet_[1] = (norm_to_tet_(m, 1, 0, k, j, i) * uu0 + norm_to_tet_(m, 1, 1, k, j, i) * uu1 +
-                    norm_to_tet_(m, 1, 2, k, j, i) * uu2 + norm_to_tet_(m, 1, 3, k, j, i) * uu3);
+                             norm_to_tet_(m, 1, 2, k, j, i) * uu2 + norm_to_tet_(m, 1, 3, k, j, i) * uu3);
                 u_tet_[2] = (norm_to_tet_(m, 2, 0, k, j, i) * uu0 + norm_to_tet_(m, 2, 1, k, j, i) * uu1 +
-                    norm_to_tet_(m, 2, 2, k, j, i) * uu2 + norm_to_tet_(m, 2, 3, k, j, i) * uu3);
+                             norm_to_tet_(m, 2, 2, k, j, i) * uu2 + norm_to_tet_(m, 2, 3, k, j, i) * uu3);
                 u_tet_[3] = (norm_to_tet_(m, 3, 0, k, j, i) * uu0 + norm_to_tet_(m, 3, 1, k, j, i) * uu1 +
-                    norm_to_tet_(m, 3, 2, k, j, i) * uu2 + norm_to_tet_(m, 3, 3, k, j, i) * uu3);
+                             norm_to_tet_(m, 3, 2, k, j, i) * uu2 + norm_to_tet_(m, 3, 3, k, j, i) * uu3);
 
                 // Construct Lorentz boost from tetrad frame to orthonormal fluid frame
                 Real tet_to_fluid[4][4];
@@ -295,8 +295,8 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
                     for (int m1 = 0; m1 < 4; ++m1) {
                       for (int m2 = 0; m2 < 4; ++m2) {
                         dv(m, moments_offset + n12, k, j, i) += (tetcov_c_(m, n1, m1, k, j, i) *
-                            tetcov_c_(m, n2, m2, k, j, i) *
-                            moments_coord[m1][m2]);
+                                                                 tetcov_c_(m, n2, m2, k, j, i) *
+                                                                 moments_coord[m1][m2]);
                       }
                     }
                   }
@@ -331,8 +331,8 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
                     for (int m1 = 0; m1 < 4; ++m1) {
                       for (int m2 = 0; m2 < 4; ++m2) {
                         dv(m, moments_offset + n12, k, j, i) += (tet_to_fluid[n1][m1] *
-                            tet_to_fluid[n2][m2] *
-                            moments_tetrad[m1][m2]);
+                                                                 tet_to_fluid[n2][m2] *
+                                                                 moments_tetrad[m1][m2]);
                       }
                     }
                   }
@@ -367,40 +367,13 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
                       int A = enA - en * num_points_;
 
                       int nuenang = radiationfemn::IndicesUnited(species, en, A, num_species_, num_energy_bins_, num_points_);
-                      Real Sen = (pow(energy_grid_(en + 1), 4) - pow(energy_grid_(en), 4)) / 4.0;
+                      Real Sen = (num_energy_bins_ > 1) ? (pow(energy_grid_(en + 1), 4) - pow(energy_grid_(en), 4)) / 4.0 : 1.;
                       partial_sum += Sen * e_source_nominv_(A) * f0_(m, nuenang, k, j, i);
 
                     }, temp_sum);
 
                     dv(m, 0, k, j, i) = temp_sum;
                   });
-    /*
-    par_for_outer("rad_femn_E_compute_femn", DevExeSpace(), scr_size, scr_level, 0, nmb - 1, 0, num_points_total -1, ks, ke, js, je, is, ie,
-                KOKKOS_LAMBDA(TeamMember_t member, const int m, const int enang, const int k, const int j, const int i) {
-
-      RadiationFEMNPhaseIndices idcs = pm->pmb_pack->pradfemn->IndicesComponent(enang);
-      int en = idcs.eindex;
-      int B = idcs.angindex;
-
-      Real temp_sum = 0.;
-      Kokkos::parallel_reduce(Kokkos::TeamVectorRange(member, 0, num_points), [&](const int A, Real &partial_sum) {
-        Real Sen = (pow(energy_grid_(en + 1), 4) - pow(energy_grid_(en), 4)) / 4.0;
-        partial_sum += Sen * mm_(B, A) * f0_(m, enang, k, j, i);
-        }, temp_sum);
-        member.team_barrier();
-
-        dv(m, 0, k, j, i) += temp_sum;
-    });
-    */
-
-    /*
-    par_for("rad_femn_E_compute", DevExeSpace(), 0, (nmb - 1), ks, ke, js, je, is, ie, 0, (num_points - 1), 0, (num_points_total - 1),
-            KOKKOS_LAMBDA(int m, int k, int j, int i, int B, int enang) {
-              int en = int(enang / num_points);
-              int A = enang - en * num_points;
-              auto Sen = (pow(energy_grid_(en + 1), 4) - pow(energy_grid_(en), 4)) / 4.0;
-              dv(m, 0, k, j, i) += Sen * mm_(B, A) * f0_(m, enang, k, j, i);
-            }); */
   }
 
   if (name.compare("rad_femn_E") == 0 && pm->pmb_pack->pradfemn->fpn != 0) {
@@ -410,6 +383,7 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
     auto neng = pm->pmb_pack->pradfemn->num_energy_bins;
     auto nmodes = pm->pmb_pack->pradfemn->num_points;
     auto &energy_grid_ = pm->pmb_pack->pradfemn->energy_grid;
+    auto &num_energy_bins_ = pm->pmb_pack->pradfemn->num_energy_bins;
 
     // Compute sum_{B} sqrt(4 pi) S_n F^n0 where S_n = (e_{n+1}^4 - e_{n}^4)/4
     int scr_level = 0;
@@ -419,7 +393,7 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
 
                     Real Eval = 0.;
                     Kokkos::parallel_reduce(Kokkos::TeamVectorRange(member, 0, neng), [&](const int en, Real &partial_sum) {
-                      Real Sen = (pow(energy_grid_(en + 1), 4) - pow(energy_grid_(en), 4)) / 4.0;
+                      Real Sen = (num_energy_bins_ > 1) ? (pow(energy_grid_(en + 1), 4) - pow(energy_grid_(en), 4)) / 4.0 : 1.;
                       partial_sum += Sen * 2. * sqrt(M_PI) * f0_(m, en * nmodes, k, j, i);
                     }, Eval);
                     member.team_barrier();
