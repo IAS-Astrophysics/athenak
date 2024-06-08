@@ -236,6 +236,7 @@ class RadiationFEMN {
 };
 
 void ApplyBeamSourcesFEMN(Mesh *pmesh);
+void ApplyBeamSourcesBlackHoleM1(Mesh *pmesh);
 
 KOKKOS_INLINE_FUNCTION
 Real Sgn(Real x) {

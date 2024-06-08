@@ -73,7 +73,7 @@ void ProblemGenerator::RadiationFEMNBeamtestBH(ParameterInput *pin, const bool r
 
   // set user boundary conditions to true (needed for beams)
   user_bcs = true;
-  user_bcs_func = radiationfemn::ApplyBeamSourcesFEMN;
+  user_bcs_func = radiationfemn::ApplyBeamSourcesBlackHoleM1;
 
   if (metric_type == "isotropic") {
     par_for("pgen_beamtest_initialize_isotropic", DevExeSpace(), 0, nmb - 1, ksg, keg, jsg, jeg, isg, ieg,

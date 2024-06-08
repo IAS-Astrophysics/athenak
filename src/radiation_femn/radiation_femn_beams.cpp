@@ -10,6 +10,8 @@
 #include "mesh/mesh.hpp"
 #include "eos/eos.hpp"
 #include "units/units.hpp"
+#include "adm/adm.hpp"
+#include "z4c/z4c.hpp"
 #include "radiation_femn/radiation_femn.hpp"
 #include "radiation_femn/radiation_femn_linalg.hpp"
 #include "coordinates/cell_locations.hpp"
@@ -86,6 +88,96 @@ void ApplyBeamSourcesFEMN(Mesh *pmesh) {
     std::cout << "Beams for Radiation FEMN not implemented in 3d!" << std::endl;
     exit(EXIT_FAILURE);
   }
+}
+
+void ApplyBeamSourcesBlackHoleM1(Mesh *pmesh) {
+  auto &indcs = pmesh->mb_indcs;
+  int &is = indcs.is;
+  int &js = indcs.js;
+
+  int npts1 = pmesh->pmb_pack->pradfemn->num_points_total - 1;
+  int nmb1 = pmesh->pmb_pack->nmb_thispack - 1;
+  auto &mb_bcs = pmesh->pmb_pack->pmb->mb_bcs;
+  auto &size = pmesh->pmb_pack->pmb->mb_size;
+  int &ng = indcs.ng;
+  int n2 = (indcs.nx2 > 1) ? (indcs.nx2 + 2 * ng) : 1;
+  int n3 = (indcs.nx3 > 1) ? (indcs.nx3 + 2 * ng) : 1;
+  auto &f0_ = pmesh->pmb_pack->pradfemn->f0;
+  adm::ADM::ADM_vars &adm = pmesh->pmb_pack->padm->adm;
+
+  auto &beam_source_1_y1_ = pmesh->pmb_pack->pradfemn->beam_source_1_y1;
+  auto &beam_source_1_y2_ = pmesh->pmb_pack->pradfemn->beam_source_1_y2;
+
+  auto &rad_E_floor_ = pmesh->pmb_pack->pradfemn->rad_E_floor;
+  auto &rad_eps_ = pmesh->pmb_pack->pradfemn->rad_eps;
+
+  par_for("radiation_femn_black_hole_beam_populate_m1", DevExeSpace(), 0, nmb1, 0, (n3 - 1), 0, (n2 - 1),
+          KOKKOS_LAMBDA(int m, int k, int j) {
+
+            Real &x2min = size.d_view(m).x2min;
+            Real &x2max = size.d_view(m).x2max;
+            int nx2 = indcs.nx2;
+            Real x2 = CellCenterX(j - js, nx2, x2min, x2max);
+
+            switch (mb_bcs.d_view(m, BoundaryFace::inner_x1)) {
+              case BoundaryFlag::outflow:
+                if (beam_source_1_y1_ <= x2 && x2 <= beam_source_1_y2_) {
+                  for (int i = 0; i < ng; ++i) {
+
+                    const Real eps = 0;
+                    const Real g_xx = adm.g_dd(m, 0, 0, k, j, i);
+                    const Real beta_x = adm.g_dd(m, 0, 0, k, j, i) * adm.beta_u(m, 0, k, j, i) + adm.g_dd(m, 0, 1, k, j, i) * adm.beta_u(m, 1, k, j, i)
+                                        + adm.g_dd(m, 0, 2, k, j, i) * adm.beta_u(m, 2, k, j, i);
+                    const Real beta2 = adm.g_dd(m, 0, 0, k, j, i) * adm.beta_u(m, 0, k, j, i) * adm.beta_u(m, 0, k, j, i)
+                                       + 2. * adm.g_dd(m, 0, 1, k, j, i) * adm.beta_u(m, 0, k, j, i) * adm.beta_u(m, 1, k, j, i)
+                                       + 2. * adm.g_dd(m, 0, 2, k, j, i) * adm.beta_u(m, 0, k, j, i) * adm.beta_u(m, 2, k, j, i)
+                                       + adm.g_dd(m, 1, 1, k, j, i) * adm.beta_u(m, 1, k, j, i) * adm.beta_u(m, 1, k, j, i)
+                                       + 2. * adm.g_dd(m, 1, 2, k, j, i) * adm.beta_u(m, 1, k, j, i) * adm.beta_u(m, 2, k, j, i)
+                                       + 2. * adm.g_dd(m, 2, 2, k, j, i) * adm.beta_u(m, 2, k, j, i) * adm.beta_u(m, 2, k, j, i);
+                    const Real a = (-beta_x + sqrt(beta_x * beta_x - beta2 + adm.alpha(m, k, j, i) * adm.alpha(m, k, j, i) * (1 - eps))) / g_xx;
+
+
+                    Real E = 4;
+                    Real Fx = a * E / adm.alpha(m, k, j, i) + adm.beta_u(m, 0, k, j, i) * E / adm.alpha(m, k, j, i);
+                    Real Fy = 0 * adm.beta_u(m, 1, k, j, i) * E / adm.alpha(m, k, j, i);
+                    Real Fz = adm.beta_u(m, 2, k, j, i) * E / adm.alpha(m, k, j, i);
+
+                    /*
+                    Real E = 4;
+                    Real Fx = adm.beta_u(m, 0, k, j, i) * E / adm.alpha(m, k, j, i);
+                    Real Fy = adm.beta_u(m, 1, k, j, i) * E / adm.alpha(m, k, j, i);
+                    Real Fz = adm.beta_u(m, 2, k, j, i) * E / adm.alpha(m, k, j, i);
+
+                    */
+
+                    Real F2 = Fx * Fx + Fy * Fy + Fz * Fz;
+                    E = Kokkos::fmax(E, rad_E_floor_);
+                    Real lim = E * E * (1. - rad_eps_);
+                    if (F2 > lim) {
+                      Real fac = lim / F2;
+                      Fx = fac * Fx;
+                      Fy = fac * Fy;
+                      Fz = fac * Fz;
+                    }
+
+                    f0_(m, 0, k, j, is - i - 1) = E / Kokkos::sqrt(4. * M_PI);                             // (0,0)
+                    f0_(m, 1, k, j, is - i - 1) = -Fy / Kokkos::sqrt(4. * M_PI / 3.0);                     // (1,-1)
+                    f0_(m, 2, k, j, is - i - 1) = Fz / Kokkos::sqrt(4. * M_PI / 3.0);                      // (1,0)
+                    f0_(m, 3, k, j, is - i - 1) = -Fx / Kokkos::sqrt(4. * M_PI / 3.0);                     // (1,1)
+                    f0_(m, 4, k, j, is - i - 1) = 0;
+                    f0_(m, 5, k, j, is - i - 1) = 0;
+                    f0_(m, 6, k, j, is - i - 1) = 0;
+                    f0_(m, 7, k, j, is - i - 1) = 0;
+                    f0_(m, 8, k, j, is - i - 1) = 0;
+                    f0_(m, 8, k, j, is - i - 1) = 0;
+                  }
+                }
+
+                break;
+
+              default:break;
+            }
+          });
 }
 
 void RadiationFEMN::InitializeBeamsSourcesFPN() {
