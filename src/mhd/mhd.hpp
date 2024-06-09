@@ -26,6 +26,8 @@ class Conduction;
 class SourceTerms;
 class OrbitalAdvectionCC;
 class OrbitalAdvectionFC;
+class ShearingBoxBoundaryCC;
+class ShearingBoxBoundaryFC;
 class Driver;
 
 // function ptr for user-defined MHD boundary functions enrolled in problem generator
@@ -51,21 +53,25 @@ struct MHDTaskIDs {
   TaskID recvf;
   TaskID rkupdt;
   TaskID srctrms;
-  TaskID senduoa;
-  TaskID recvuoa;
+  TaskID sendu_oa;
+  TaskID recvu_oa;
   TaskID restu;
   TaskID sendu;
   TaskID recvu;
+  TaskID sendu_shr;
+  TaskID recvu_shr;
   TaskID efld;
   TaskID efldsrc;
   TaskID sende;
   TaskID recve;
   TaskID ct;
-  TaskID sendboa;
-  TaskID recvboa;
+  TaskID sendb_oa;
+  TaskID recvb_oa;
   TaskID restb;
   TaskID sendb;
   TaskID recvb;
+  TaskID sendb_shr;
+  TaskID recvb_shr;
   TaskID bcs;
   TaskID prol;
   TaskID c2p;
@@ -108,7 +114,8 @@ class MHD {
   // Orbital advection and shearing box BCs
   OrbitalAdvectionCC *porb_u = nullptr;
   OrbitalAdvectionFC *porb_b = nullptr;
-//  ShearingBoxBoundaryCC *psbox_u = nullptr;
+  ShearingBoxBoundaryCC *psbox_u = nullptr;
+  ShearingBoxBoundaryFC *psbox_b = nullptr;
 
   // Object(s) for extra physics (viscosity, resistivity, thermal conduction, srcterms)
   Viscosity *pvisc = nullptr;
@@ -154,6 +161,8 @@ class MHD {
   TaskStatus RestrictU(Driver *d, int stage);
   TaskStatus SendU(Driver *d, int stage);
   TaskStatus RecvU(Driver *d, int stage);
+  TaskStatus SendU_Shr(Driver *d, int stage);
+  TaskStatus RecvU_Shr(Driver *d, int stage);
   TaskStatus CornerE(Driver *d, int stage);
   TaskStatus EFieldSrc(Driver *d, int stage);
   TaskStatus SendE(Driver *d, int stage);
@@ -164,6 +173,8 @@ class MHD {
   TaskStatus RestrictB(Driver *d, int stage);
   TaskStatus SendB(Driver *d, int stage);
   TaskStatus RecvB(Driver *d, int stage);
+  TaskStatus SendB_Shr(Driver *d, int stage);
+  TaskStatus RecvB_Shr(Driver *d, int stage);
   TaskStatus ApplyPhysicalBCs(Driver* pdrive, int stage);
   TaskStatus Prolongate(Driver* pdrive, int stage);
   TaskStatus ConToPrim(Driver *d, int stage);

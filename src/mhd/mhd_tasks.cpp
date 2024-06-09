@@ -4,7 +4,7 @@
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
 //! \file mhd_tasks.cpp
-//! \brief functions that control MHD tasks in the appropriate task lists
+//! \brief functions that control MHD tasks stored in tasklists in MeshBlockPack
 
 #include <map>
 #include <memory>
@@ -43,31 +43,33 @@ void MHD::AssembleMHDTasks(std::map<std::string, std::shared_ptr<TaskList>> tl) 
   id.irecv = tl["before_stagen"]->AddTask(&MHD::InitRecv, this, none);
 
   // assemble "stagen" task list
-  id.copyu   = tl["stagen"]->AddTask(&MHD::CopyCons, this, none);
-  id.flux    = tl["stagen"]->AddTask(&MHD::Fluxes, this, id.copyu);
-  id.sendf   = tl["stagen"]->AddTask(&MHD::SendFlux, this, id.flux);
-  id.recvf   = tl["stagen"]->AddTask(&MHD::RecvFlux, this, id.sendf);
-  id.rkupdt  = tl["stagen"]->AddTask(&MHD::RKUpdate, this, id.recvf);
-  id.srctrms = tl["stagen"]->AddTask(&MHD::MHDSrcTerms, this, id.rkupdt);
-  id.senduoa = tl["stagen"]->AddTask(&MHD::SendU_OA, this, id.srctrms);
-  id.recvuoa = tl["stagen"]->AddTask(&MHD::RecvU_OA, this, id.senduoa);
-  id.restu   = tl["stagen"]->AddTask(&MHD::RestrictU, this, id.recvuoa);
-  id.sendu   = tl["stagen"]->AddTask(&MHD::SendU, this, id.restu);
-  id.recvu   = tl["stagen"]->AddTask(&MHD::RecvU, this, id.sendu);
-  id.efld    = tl["stagen"]->AddTask(&MHD::CornerE, this, id.recvu);
-  id.efldsrc = tl["stagen"]->AddTask(&MHD::EFieldSrc, this, id.efld);
-  id.sende   = tl["stagen"]->AddTask(&MHD::SendE, this, id.efldsrc);
-  id.recve   = tl["stagen"]->AddTask(&MHD::RecvE, this, id.sende);
-  id.ct      = tl["stagen"]->AddTask(&MHD::CT, this, id.recve);
-  id.sendboa = tl["stagen"]->AddTask(&MHD::SendB_OA, this, id.ct);
-  id.recvboa = tl["stagen"]->AddTask(&MHD::RecvB_OA, this, id.sendboa);
-  id.restb   = tl["stagen"]->AddTask(&MHD::RestrictB, this, id.recvboa);
-  id.sendb   = tl["stagen"]->AddTask(&MHD::SendB, this, id.restb);
-  id.recvb   = tl["stagen"]->AddTask(&MHD::RecvB, this, id.sendb);
-  id.bcs     = tl["stagen"]->AddTask(&MHD::ApplyPhysicalBCs, this, id.recvb);
-  id.prol    = tl["stagen"]->AddTask(&MHD::Prolongate, this, id.bcs);
-  id.c2p     = tl["stagen"]->AddTask(&MHD::ConToPrim, this, id.prol);
-  id.newdt   = tl["stagen"]->AddTask(&MHD::NewTimeStep, this, id.c2p);
+  id.copyu     = tl["stagen"]->AddTask(&MHD::CopyCons, this, none);
+  id.flux      = tl["stagen"]->AddTask(&MHD::Fluxes, this, id.copyu);
+  id.sendf     = tl["stagen"]->AddTask(&MHD::SendFlux, this, id.flux);
+  id.recvf     = tl["stagen"]->AddTask(&MHD::RecvFlux, this, id.sendf);
+  id.rkupdt    = tl["stagen"]->AddTask(&MHD::RKUpdate, this, id.recvf);
+  id.srctrms   = tl["stagen"]->AddTask(&MHD::MHDSrcTerms, this, id.rkupdt);
+  id.sendu_oa  = tl["stagen"]->AddTask(&MHD::SendU_OA, this, id.srctrms);
+  id.recvu_oa  = tl["stagen"]->AddTask(&MHD::RecvU_OA, this, id.sendu_oa);
+  id.restu     = tl["stagen"]->AddTask(&MHD::RestrictU, this, id.recvu_oa);
+  id.sendu     = tl["stagen"]->AddTask(&MHD::SendU, this, id.restu);
+  id.recvu     = tl["stagen"]->AddTask(&MHD::RecvU, this, id.sendu);
+  id.sendu_shr = tl["stagen"]->AddTask(&MHD::SendU_Shr, this, id.recvu);
+  id.recvu_shr = tl["stagen"]->AddTask(&MHD::RecvU_Shr, this, id.sendu_shr);
+  id.efld      = tl["stagen"]->AddTask(&MHD::CornerE, this, id.recvu_shr);
+  id.efldsrc   = tl["stagen"]->AddTask(&MHD::EFieldSrc, this, id.efld);
+  id.sende     = tl["stagen"]->AddTask(&MHD::SendE, this, id.efldsrc);
+  id.recve     = tl["stagen"]->AddTask(&MHD::RecvE, this, id.sende);
+  id.ct        = tl["stagen"]->AddTask(&MHD::CT, this, id.recve);
+  id.sendb_oa  = tl["stagen"]->AddTask(&MHD::SendB_OA, this, id.ct);
+  id.recvb_oa  = tl["stagen"]->AddTask(&MHD::RecvB_OA, this, id.sendb_oa);
+  id.restb     = tl["stagen"]->AddTask(&MHD::RestrictB, this, id.recvb_oa);
+  id.sendb     = tl["stagen"]->AddTask(&MHD::SendB, this, id.restb);
+  id.recvb     = tl["stagen"]->AddTask(&MHD::RecvB, this, id.sendb);
+  id.bcs       = tl["stagen"]->AddTask(&MHD::ApplyPhysicalBCs, this, id.recvb);
+  id.prol      = tl["stagen"]->AddTask(&MHD::Prolongate, this, id.bcs);
+  id.c2p       = tl["stagen"]->AddTask(&MHD::ConToPrim, this, id.prol);
+  id.newdt     = tl["stagen"]->AddTask(&MHD::NewTimeStep, this, id.c2p);
 
   // assemble "after_stagen" task list
   id.csend = tl["after_stagen"]->AddTask(&MHD::ClearSend, this, none);
@@ -80,15 +82,14 @@ void MHD::AssembleMHDTasks(std::map<std::string, std::shared_ptr<TaskList>> tl) 
 
 //----------------------------------------------------------------------------------------
 //! \fn TaskStatus MHD::SaveMHDState
-//! \brief Copy primitives and bcc before step to enable computation of time derivative
-//! across steps in jcon calculation.
+//! \brief Copy primitives and bcc before step to enable computation of time derivatives,
+//! for example to compute jcon in GRMHD.
 
 TaskStatus MHD::SaveMHDState(Driver *pdrive, int stage) {
   if (wbcc_saved) {
     Kokkos::deep_copy(DevExeSpace(), wsaved, w0);
     Kokkos::deep_copy(DevExeSpace(), bccsaved, bcc0);
   }
-
   return TaskStatus::complete;
 }
 
@@ -103,12 +104,11 @@ TaskStatus MHD::InitRecv(Driver *pdrive, int stage) {
   // post receives for U
   TaskStatus tstat = pbval_u->InitRecv(nmhd+nscalars);
   if (tstat != TaskStatus::complete) return tstat;
-
   // post receives for B
   tstat = pbval_b->InitRecv(3);
   if (tstat != TaskStatus::complete) return tstat;
 
-  // post receives for fluxes of U (with AMR/SMR) and B (always)
+  // with SMR/AMR post receives for fluxes of U, always post receives for fluxes of B
   // do not post receives for fluxes when stage < 0 (i.e. ICs)
   if (stage >= 0) {
     // with SMR/AMR, post receives for fluxes of U
@@ -121,7 +121,7 @@ TaskStatus MHD::InitRecv(Driver *pdrive, int stage) {
     if (tstat != TaskStatus::complete) return tstat;
   }
 
-  // post receives for U and B with shearing box
+  // with orbital advection post receives for U and B
   // only execute when (shearing box defined) AND (last stage) AND (3D OR 2d_r_phi)
   if ((psrc->shearing_box) && (stage == pdrive->nexp_stages) &&
       (pmy_pack->pmesh->three_d || psrc->shearing_box_r_phi)) {
@@ -131,7 +131,22 @@ TaskStatus MHD::InitRecv(Driver *pdrive, int stage) {
     if (tstat != TaskStatus::complete) return tstat;
   }
 
-  return TaskStatus::complete;
+  // with shearing box boundaries caluclate x2-distance x1-boundaries have sheared and
+  // with MPI post receives for U and B
+  // only execute when (shearing box defined) AND (3D OR 2d_r_phi)
+  if ((psrc->shearing_box) && (pmy_pack->pmesh->three_d || psrc->shearing_box_r_phi)) {
+    Real qom = (psrc->qshear)*(psrc->omega0);
+    Real time = pmy_pack->pmesh->time;
+    if (stage == pdrive->nexp_stages) {
+      time += pmy_pack->pmesh->dt;
+    }
+    tstat = psbox_u->InitRecv(qom, time);
+    if (tstat != TaskStatus::complete) return tstat;
+    tstat = psbox_b->InitRecv(qom, time);
+    if (tstat != TaskStatus::complete) return tstat;
+  }
+
+  return tstat;
 }
 
 //----------------------------------------------------------------------------------------
@@ -254,7 +269,7 @@ TaskStatus MHD::MHDSrcTerms(Driver *pdrive, int stage) {
 
 //----------------------------------------------------------------------------------------
 //! \fn TaskList MHD::SendU_OA
-//! \brief Wrapper task list function to send data for orbital advection
+//! \brief Wrapper task list function to pack/send data for orbital advection
 
 TaskStatus MHD::SendU_OA(Driver *pdrive, int stage) {
   TaskStatus tstat = TaskStatus::complete;
@@ -268,7 +283,7 @@ TaskStatus MHD::SendU_OA(Driver *pdrive, int stage) {
 
 //----------------------------------------------------------------------------------------
 //! \fn TaskList MHD::RecvU_OA
-//! \brief Wrapper task list function to receive and unpack data for orbital advection
+//! \brief Wrapper task list function to recv/unpack data for orbital advection
 
 TaskStatus MHD::RecvU_OA(Driver *pdrive, int stage) {
   TaskStatus tstat = TaskStatus::complete;
@@ -312,6 +327,33 @@ TaskStatus MHD::RecvU(Driver *pdrive, int stage) {
 }
 
 //----------------------------------------------------------------------------------------
+//! \fn TaskList MHD::SendU_Shr
+//! \brief Wrapper task list function to pack/send data for shearing box boundaries
+
+TaskStatus MHD::SendU_Shr(Driver *pdrive, int stage) {
+  TaskStatus tstat = TaskStatus::complete;
+  // only execute when (shearing box defined) AND (3D OR 2d_r_phi)
+  if ((psrc->shearing_box) && (pmy_pack->pmesh->three_d || psrc->shearing_box_r_phi)) {
+    tstat = psbox_u->PackAndSendCC(u0, recon_method);
+  }
+  return tstat;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn TaskList MHD::RecvU_Shr
+//! \brief Wrapper task list function to recv/unpack data for shearing box boundaries
+//! Orbital remap is performed in this step.
+
+TaskStatus MHD::RecvU_Shr(Driver *pdrive, int stage) {
+  TaskStatus tstat = TaskStatus::complete;
+  // only execute when (shearing box defined) AND (3D OR 2d_r_phi)
+  if ((psrc->shearing_box) && (pmy_pack->pmesh->three_d || psrc->shearing_box_r_phi)) {
+    tstat = psbox_u->RecvAndUnpackCC(u0);
+  }
+  return tstat;
+}
+
+//----------------------------------------------------------------------------------------
 //! \fn TaskList MHD::EFieldSrc
 //! \brief Wrapper task list function to apply source terms to electric field
 
@@ -349,7 +391,7 @@ TaskStatus MHD::RecvE(Driver *pdrive, int stage) {
 
 //----------------------------------------------------------------------------------------
 //! \fn TaskList MHD::SendB_OA
-//! \brief Wrapper task list function to send data for orbital advection
+//! \brief Wrapper task list function to pack/send data for orbital advection
 
 TaskStatus MHD::SendB_OA(Driver *pdrive, int stage) {
   TaskStatus tstat = TaskStatus::complete;
@@ -363,7 +405,7 @@ TaskStatus MHD::SendB_OA(Driver *pdrive, int stage) {
 
 //----------------------------------------------------------------------------------------
 //! \fn TaskList MHD::RecvB_OA
-//! \brief Wrapper task list function to receive and unpack data for orbital advection
+//! \brief Wrapper task list function to recv/unpack data for orbital advection
 
 TaskStatus MHD::RecvB_OA(Driver *pdrive, int stage) {
   TaskStatus tstat = TaskStatus::complete;
@@ -391,6 +433,33 @@ TaskStatus MHD::SendB(Driver *pdrive, int stage) {
 
 TaskStatus MHD::RecvB(Driver *pdrive, int stage) {
   TaskStatus tstat = pbval_b->RecvAndUnpackFC(b0, coarse_b0);
+  return tstat;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn TaskList MHD::SendB_Shr
+//! \brief Wrapper task list function to pack/send data for shearing box boundaries
+
+TaskStatus MHD::SendB_Shr(Driver *pdrive, int stage) {
+  TaskStatus tstat = TaskStatus::complete;
+  // only execute when (shearing box defined) AND (3D OR 2d_r_phi)
+  if ((psrc->shearing_box) && (pmy_pack->pmesh->three_d || psrc->shearing_box_r_phi)) {
+    tstat = psbox_b->PackAndSendFC(b0, recon_method);
+  }
+  return tstat;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn TaskList MHD::RecvB_Shr
+//! \brief Wrapper task list function to recv/unpack data for shearing box boundaries
+//! Orbital remap is performed in this step.
+
+TaskStatus MHD::RecvB_Shr(Driver *pdrive, int stage) {
+  TaskStatus tstat = TaskStatus::complete;
+  // only execute when (shearing box defined) AND (3D OR 2d_r_phi)
+  if ((psrc->shearing_box) && (pmy_pack->pmesh->three_d || psrc->shearing_box_r_phi)) {
+    tstat = psbox_b->RecvAndUnpackFC(b0);
+  }
   return tstat;
 }
 
@@ -452,18 +521,25 @@ TaskStatus MHD::ConToPrim(Driver *pdrive, int stage) {
 
 //----------------------------------------------------------------------------------------
 //! \fn TaskStatus MHD::ClearSend
-//! \brief Wrapper task list function that checks all MPI sends have completed.
+//! \brief Wrapper task list function that checks all MPI sends have completed. Used in
+//! TaskList and in Driver::InitBoundaryValuesAndPrimitives()
+//! If stage=(last stage):      clears U, B, Flx_U, Flx_B, U_OA, B_OA, U_Shr, BShr
+//! If (last stage)>stage>=(0): clears U, B, Flx_U, Flx_B,             U_Shr, B_Shr
+//! If stage=(-1):              clears U, B
+//! If stage=(-4):              clears                                 U_Shr, B_Shr
 
 TaskStatus MHD::ClearSend(Driver *pdrive, int stage) {
-  // check sends of U complete
-  TaskStatus tstat = pbval_u->ClearSend();
-  if (tstat != TaskStatus::complete) return tstat;
+  TaskStatus tstat;
+  if ((stage >= 0) || (stage == -1)) {
+    // check sends of U complete
+    TaskStatus tstat = pbval_u->ClearSend();
+    if (tstat != TaskStatus::complete) return tstat;
+    // check sends of B complete
+    tstat = pbval_b->ClearSend();
+    if (tstat != TaskStatus::complete) return tstat;
+  }
 
-  // check sends of B complete
-  tstat = pbval_b->ClearSend();
-  if (tstat != TaskStatus::complete) return tstat;
-
-  // check sends for fluxes of U (with AMR/SMR) and B (always) are complete
+  // with SMR/AMR check sends for fluxes of U complete.  Always check sends of E complete
   // do not check flux send for ICs (stage < 0)
   if (stage >= 0) {
     // with SMR/AMR check sends of restricted fluxes of U complete
@@ -476,7 +552,7 @@ TaskStatus MHD::ClearSend(Driver *pdrive, int stage) {
     if (tstat != TaskStatus::complete) return tstat;
   }
 
-  // check sends for U and B with shearing box are complete
+  // with orbital advection check sends for U and B complete
   // only execute when (shearing box defined) AND (last stage) AND (3D OR 2d_r_phi)
   if ((psrc->shearing_box) && (stage == pdrive->nexp_stages) &&
       (pmy_pack->pmesh->three_d || psrc->shearing_box_r_phi)) {
@@ -486,24 +562,40 @@ TaskStatus MHD::ClearSend(Driver *pdrive, int stage) {
     if (tstat != TaskStatus::complete) return tstat;
   }
 
+  // with shearing box boundaries check sends of U and B complete
+  // only execute when (shearing box defined) AND (stage>=0 or -4) AND (3D OR 2d_r_phi)
+  if ((psrc->shearing_box) && ((stage >= 0) || (stage == -4)) &&
+      (pmy_pack->pmesh->three_d || psrc->shearing_box_r_phi)) {
+    tstat = psbox_u->ClearSend();
+    if (tstat != TaskStatus::complete) return tstat;
+    tstat = psbox_b->ClearSend();
+    if (tstat != TaskStatus::complete) return tstat;
+  }
+
   return TaskStatus::complete;
 }
 
 //----------------------------------------------------------------------------------------
 //! \fn TaskStatus MHD::ClearRecv
-//! \brief Wrapper task list function that checks all MPI receives have completed.
-//! Needed in Driver::Initialize to set ghost zones in ICs.
+//! \brief Wrapper task list function that checks all MPI receives have completed. Used in
+//! TaskList and in Driver::InitBoundaryValuesAndPrimitives()
+//! If stage=(last stage):      clears U, B, Flx_U, Flx_B, U_OA, B_OA, U_Shr, BShr
+//! If (last stage)>stage>=(0): clears U, B, Flx_U, Flx_B,             U_Shr, B_Shr
+//! If stage=(-1):              clears U, B
+//! If stage=(-4):              clears                                 U_Shr, B_Shr
 
 TaskStatus MHD::ClearRecv(Driver *pdrive, int stage) {
-  // check receives of U complete
-  TaskStatus tstat = pbval_u->ClearRecv();
-  if (tstat != TaskStatus::complete) return tstat;
+  TaskStatus tstat;
+  if ((stage >= 0) || (stage == -1)) {
+    // check receives of U complete
+    tstat = pbval_u->ClearRecv();
+    if (tstat != TaskStatus::complete) return tstat;
+    // check receives of B complete
+    tstat = pbval_b->ClearRecv();
+    if (tstat != TaskStatus::complete) return tstat;
+  }
 
-  // check receives of B complete
-  tstat = pbval_b->ClearRecv();
-  if (tstat != TaskStatus::complete) return tstat;
-
-  // check receives of fluxes of U (with AMR/SMR) and B (always) are complete
+  // with SMR/AMR check recvs for fluxes of U complete.  Always check recvs of E complete
   // do not check flux receives when stage < 0 (i.e. ICs)
   if (stage >= 0) {
     // with SMR/AMR check receives of restricted fluxes of U complete
@@ -516,13 +608,23 @@ TaskStatus MHD::ClearRecv(Driver *pdrive, int stage) {
     if (tstat != TaskStatus::complete) return tstat;
   }
 
-  // check receives of U and B with shearing box are complete
+  // with orbital advection check receives of U and B are complete
   // only execute when (shearing box defined) AND (last stage) AND (3D OR 2d_r_phi)
   if ((psrc->shearing_box) && (stage == pdrive->nexp_stages) &&
       (pmy_pack->pmesh->three_d || psrc->shearing_box_r_phi)) {
     tstat = porb_u->ClearRecv();
     if (tstat != TaskStatus::complete) return tstat;
     tstat = porb_b->ClearRecv();
+    if (tstat != TaskStatus::complete) return tstat;
+  }
+
+  // with shearing box boundaries check receives of U and B complete
+  // only execute when (shearing box defined) AND (stage>=0 or -4) AND (3D OR 2d_r_phi)
+  if ((psrc->shearing_box) && ((stage >= 0) || (stage == -4)) &&
+      (pmy_pack->pmesh->three_d || psrc->shearing_box_r_phi)) {
+    tstat = psbox_u->ClearRecv();
+    if (tstat != TaskStatus::complete) return tstat;
+    tstat = psbox_b->ClearRecv();
     if (tstat != TaskStatus::complete) return tstat;
   }
 

@@ -22,7 +22,7 @@
 //----------------------------------------------------------------------------------------
 //! OrbitalAdvection base class constructor
 
-OrbitalAdvection::OrbitalAdvection(MeshBlockPack *ppack, ParameterInput *pin, int nvar) :
+OrbitalAdvection::OrbitalAdvection(MeshBlockPack *ppack, ParameterInput *pin) :
     maxjshift(1),
     pmy_pack(ppack) {
   // estimate maximum integer shift in x2-direction for orbital advection

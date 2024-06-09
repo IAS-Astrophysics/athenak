@@ -18,8 +18,7 @@
 //----------------------------------------------------------------------------------------
 //! ShearingBoxBoundary base class constructor
 
-ShearingBoxBoundary::ShearingBoxBoundary(MeshBlockPack *ppack, ParameterInput *pin,
-                                         int nvar) :
+ShearingBoxBoundary::ShearingBoxBoundary(MeshBlockPack *ppack, ParameterInput *pin) :
     nmb_x1bndry("nmbx1",2),
     x1bndry_mbgid("x1gid",1,1),
     pmy_pack(ppack) {

@@ -51,7 +51,7 @@ struct ShearingBoxBoundaryBuffer {
 
 class OrbitalAdvection {
  public:
-  OrbitalAdvection(MeshBlockPack *ppack, ParameterInput *pin, int nvar);
+  OrbitalAdvection(MeshBlockPack *ppack, ParameterInput *pin);
   ~OrbitalAdvection();
 
   // data
@@ -94,7 +94,7 @@ class OrbitalAdvectionCC : public OrbitalAdvection {
 
 class OrbitalAdvectionFC : public OrbitalAdvection {
  public:
-  OrbitalAdvectionFC(MeshBlockPack *ppack, ParameterInput *pin, int nvar);
+  OrbitalAdvectionFC(MeshBlockPack *ppack, ParameterInput *pin);
   // functions to communicate FC data with orbital advection
   TaskStatus PackAndSendFC(DvceFaceFld4D<Real> &b);
   TaskStatus RecvAndUnpackFC(DvceFaceFld4D<Real> &b0, ReconstructionMethod rcon, Real qo);
@@ -106,7 +106,7 @@ class OrbitalAdvectionFC : public OrbitalAdvection {
 
 class ShearingBoxBoundary {
  public:
-  ShearingBoxBoundary(MeshBlockPack *ppack, ParameterInput *pin, int nvar);
+  ShearingBoxBoundary(MeshBlockPack *ppack, ParameterInput *pin);
   ~ShearingBoxBoundary();
 
   // data
@@ -153,6 +153,18 @@ class ShearingBoxBoundaryCC : public ShearingBoxBoundary {
   // functions to communicate CC data with shearing box BCs
   TaskStatus PackAndSendCC(DvceArray5D<Real> &a, ReconstructionMethod rcon);
   TaskStatus RecvAndUnpackCC(DvceArray5D<Real> &a);
+};
+
+//----------------------------------------------------------------------------------------
+//! \class ShearingBoxBoundaryFC
+//  \brief Derived class implementing shearing box boundary conditions for FC vars
+
+class ShearingBoxBoundaryFC : public ShearingBoxBoundary {
+ public:
+  ShearingBoxBoundaryFC(MeshBlockPack *ppack, ParameterInput *pin);
+  // functions to communicate CC data with shearing box BCs
+  TaskStatus PackAndSendFC(DvceFaceFld4D<Real> &b, ReconstructionMethod rcon);
+  TaskStatus RecvAndUnpackFC(DvceFaceFld4D<Real> &b);
 };
 
 #endif // SHEARING_BOX_SHEARING_BOX_HPP_

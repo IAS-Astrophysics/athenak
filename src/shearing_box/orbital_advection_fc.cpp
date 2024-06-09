@@ -25,8 +25,8 @@
 //----------------------------------------------------------------------------------------
 // OrbitalAdvectionFC derived class constructor:
 
-OrbitalAdvectionFC::OrbitalAdvectionFC(MeshBlockPack *pp, ParameterInput *pin, int nv) :
-  OrbitalAdvection(pp, pin, nv) {
+OrbitalAdvectionFC::OrbitalAdvectionFC(MeshBlockPack *pp, ParameterInput *pin) :
+  OrbitalAdvection(pp, pin) {
   // Initialize boundary buffers
   int nmb = std::max((pp->nmb_thispack), (pp->pmesh->nmb_maxperrank));
   auto &indcs = pp->pmesh->mb_indcs;
@@ -34,8 +34,8 @@ OrbitalAdvectionFC::OrbitalAdvectionFC(MeshBlockPack *pp, ParameterInput *pin, i
   int ncells2 = indcs.ng + maxjshift;
   int ncells1 = indcs.nx1 + 1;
   for (int n=0; n<2; ++n) {
-    Kokkos::realloc(sendbuf[n].vars,nmb,nv,ncells3,ncells2,ncells1);
-    Kokkos::realloc(recvbuf[n].vars,nmb,nv,ncells3,ncells2,ncells1);
+    Kokkos::realloc(sendbuf[n].vars,nmb,2,ncells3,ncells2,ncells1);
+    Kokkos::realloc(recvbuf[n].vars,nmb,2,ncells3,ncells2,ncells1);
   }
 }
 

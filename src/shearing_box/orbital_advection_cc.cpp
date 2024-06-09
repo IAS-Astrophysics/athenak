@@ -26,7 +26,7 @@
 // OrbitalAdvectionCC derived class constructor:
 
 OrbitalAdvectionCC::OrbitalAdvectionCC(MeshBlockPack *pp, ParameterInput *pin, int nv) :
-    OrbitalAdvection(pp, pin, nv) {
+    OrbitalAdvection(pp, pin) {
   // Initialize boundary buffers
   int nmb = std::max((pp->nmb_thispack), (pp->pmesh->nmb_maxperrank));
   auto &indcs = pp->pmesh->mb_indcs;

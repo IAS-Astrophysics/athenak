@@ -160,12 +160,14 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
   // Orbital advection and shearing box BCs (if requested in input file)
   if (pin->DoesBlockExist("shearing_box")) {
     porb_u = new OrbitalAdvectionCC(ppack, pin, (nmhd+nscalars));
-    porb_b = new OrbitalAdvectionFC(ppack, pin, 2);
-//    psbox_u = new ShearingBoxBoundaryCC(ppack, pin, (nhydro+nscalars));
+    porb_b = new OrbitalAdvectionFC(ppack, pin);
+    psbox_u = new ShearingBoxBoundaryCC(ppack, pin, (nmhd+nscalars));
+    psbox_b = new ShearingBoxBoundaryFC(ppack, pin);
   } else {
     porb_u = nullptr;
     porb_b = nullptr;
-//    psbox_u = nullptr;
+    psbox_u = nullptr;
+    psbox_b = nullptr;
   }
 
   // for time-evolving problems, continue to construct methods, allocate arrays

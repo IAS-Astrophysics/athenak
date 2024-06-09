@@ -3,9 +3,9 @@
 // Copyright(C) 2020 James M. Stone <jmstone@ias.edu> and the Athena code team
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
-//! \file shearing_box_cc.cpp
-//! \brief functions to pack/send and recv/unpack boundary values for cell-centered (CC)
-//! variables with shearing box boundaries.
+//! \file shearing_box_fc.cpp
+//! \brief functions to pack/send and recv/unpack boundary values for face-centered (FC)
+//! variables (magnetic fields) with shearing box boundaries.
 
 #include <iostream>
 #include <string>
@@ -22,10 +22,9 @@
 #include "remap_fluxes.hpp"
 
 //----------------------------------------------------------------------------------------
-// ShearingBoxBoundaryCC derived class constructor:
+// ShearingBoxBoundaryFC derived class constructor:
 
-ShearingBoxBoundaryCC::ShearingBoxBoundaryCC(MeshBlockPack *pp, ParameterInput *pin,
-                                             int nvar) :
+ShearingBoxBoundaryFC::ShearingBoxBoundaryFC(MeshBlockPack *pp, ParameterInput *pin) :
     ShearingBoxBoundary(pp, pin) {
   // Allocate boundary buffers
   auto &indcs = pp->pmesh->mb_indcs;
@@ -34,18 +33,18 @@ ShearingBoxBoundaryCC::ShearingBoxBoundaryCC(MeshBlockPack *pp, ParameterInput *
   int ncells1 = indcs.ng;
   for (int n=0; n<2; ++n) {
     int nmb = std::max(1,nmb_x1bndry(n));
-    Kokkos::realloc(sendbuf[n].vars,nmb,ncells2,nvar,ncells3,ncells1);
-    Kokkos::realloc(recvbuf[n].vars,nmb,ncells2,nvar,ncells3,ncells1);
+    Kokkos::realloc(sendbuf[n].vars,nmb,ncells2,3,ncells3,ncells1);
+    Kokkos::realloc(recvbuf[n].vars,nmb,ncells2,3,ncells3,ncells1);
   }
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn void ShearingBoxBoundary::PackAndSendCC()
+//! \fn void ShearingBoxBoundary::PackAndSendFC()
 //! \brief Apply shearing sheet BCs to cell-centered variables, including MPI
 //! MPI communications. Both the inner_x1 and outer_x1 boundaries are updated.
 //! Called on the physics_bcs task after purely periodic BC communication is finished.
 
-TaskStatus ShearingBoxBoundaryCC::PackAndSendCC(DvceArray5D<Real> &a,
+TaskStatus ShearingBoxBoundaryFC::PackAndSendFC(DvceFaceFld4D<Real> &b,
                                                 ReconstructionMethod rcon) {
   const auto &indcs = pmy_pack->pmesh->mb_indcs;
   const auto &ie = indcs.ie;
@@ -55,7 +54,6 @@ TaskStatus ShearingBoxBoundaryCC::PackAndSendCC(DvceArray5D<Real> &a,
 
   // copy ghost zones at x1-faces into send buffer view
   // apply fractional cell offset to data in send buffers using conservative remap
-  const int nvar = a.extent_int(1);  // TODO(@user): 2nd index from L must be NVAR
   const auto &mbsize = pmy_pack->pmb->mb_size;
   int kl=ks, ku=ke;
   if (pmy_pack->pmesh->three_d) {kl -= ng; ku += ng;}
@@ -68,7 +66,7 @@ TaskStatus ShearingBoxBoundaryCC::PackAndSendCC(DvceArray5D<Real> &a,
   size_t scr_size = ScrArray1D<Real>::shmem_size(nj) * 3;
   for (int n=0; n<2; ++n) {
     int nmb1 = nmb_x1bndry(n) - 1;
-    par_for_outer("shrcc",DevExeSpace(),scr_size,scr_lvl,0,nmb1,0,(nvar-1),kl,ku,0,(ng-1),
+    par_for_outer("shrcc",DevExeSpace(),scr_size,scr_lvl,0,nmb1,0,2,kl,ku,0,(ng-1),
     KOKKOS_LAMBDA(TeamMember_t member, const int m, const int v, const int k, const int i)
     {
       ScrArray1D<Real> a_(member.team_scratch(scr_lvl), nj); // 1D slice of data
@@ -78,13 +76,33 @@ TaskStatus ShearingBoxBoundaryCC::PackAndSendCC(DvceArray5D<Real> &a,
 
       // Load scratch array
       if (n==0) {
-        par_for_inner(member, 0, nj, [&](const int j) {
-          a_(j) = a(mm,v,k,j,i);
-        });
-      } else {
-        par_for_inner(member, 0, nj, [&](const int j) {
-          a_(j) = a(mm,v,k,j,(ie+1)+i);
-        });
+        if (v==0) {
+          par_for_inner(member, 0, nj, [&](const int j) {
+            a_(j) = b.x1f(mm,k,j,i);
+          });
+        } else if (v==1) {
+          par_for_inner(member, 0, nj, [&](const int j) {
+            a_(j) = b.x2f(mm,k,j,i);
+          });
+        } else if (v==2) {
+          par_for_inner(member, 0, nj, [&](const int j) {
+            a_(j) = b.x3f(mm,k,j,i);
+          });
+        }
+      } else if (n==1) {
+        if (v==0) {
+          par_for_inner(member, 0, nj, [&](const int j) {
+            a_(j) = b.x1f(mm,k,j,(ie+2)+i);
+          });
+        } else if (v==1) {
+          par_for_inner(member, 0, nj, [&](const int j) {
+            a_(j) = b.x2f(mm,k,j,(ie+1)+i);
+          });
+        } else if (v==2) {
+          par_for_inner(member, 0, nj, [&](const int j) {
+            a_(j) = b.x3f(mm,k,j,(ie+1)+i);
+          });
+        }
       }
       member.team_barrier();
 
@@ -275,12 +293,12 @@ std::cout<<"Rank="<<global_variable::my_rank<<" posted Send,  n="<<n<<" target G
 }
 
 //----------------------------------------------------------------------------------------
-//! \!fn void ShearingBoxBoundaryCC::RecvAndUnpackCC()
-//! \brief Check MPI communication of boundary buffers for CC variables have finished,
+//! \!fn void ShearingBoxBoundaryFC::RecvAndUnpackFC()
+//! \brief Check MPI communication of boundary buffers for FC variables have finished,
 //! then copy buffers into ghost zones. Shift has already been performed in
-//! PackAndSendCC() function
+//! PackAndSendFC() function
 
-TaskStatus ShearingBoxBoundaryCC::RecvAndUnpackCC(DvceArray5D<Real> &a){
+TaskStatus ShearingBoxBoundaryFC::RecvAndUnpackFC(DvceFaceFld4D<Real> &b){
   // create local references for variables in kernel
   const auto &indcs = pmy_pack->pmesh->mb_indcs;
   const int &ng = indcs.ng;
@@ -360,7 +378,6 @@ TaskStatus ShearingBoxBoundaryCC::RecvAndUnpackCC(DvceArray5D<Real> &a){
 
   //----- STEP 2: communications have all completed, so unpack and apply shift
   // copy recv buffer view into ghost zones at x1-faces
-  const int nvar = a.extent_int(1);  // TODO(@user): 2nd index from L must be NVAR
   const int &ie = indcs.ie;
   int kl=indcs.ks, ku=indcs.ke;
   if (pmy_pack->pmesh->three_d) {kl -= ng; ku += ng;}
@@ -372,18 +389,38 @@ TaskStatus ShearingBoxBoundaryCC::RecvAndUnpackCC(DvceArray5D<Real> &a){
   size_t scr_size = ScrArray1D<Real>::shmem_size(nj) * 3;
   for (int n=0; n<2; ++n) {
     int nmb1 = nmb_x1bndry(n) - 1;
-    par_for_outer("shrcc",DevExeSpace(),scr_size,scr_lvl,0,nmb1,0,(nvar-1),kl,ku,0,(ng-1),
+    par_for_outer("shrcc",DevExeSpace(),scr_size,scr_lvl,0,nmb1,0,2,kl,ku,0,(ng-1),
     KOKKOS_LAMBDA(TeamMember_t member, const int m, const int v, const int k, const int i)
     {
       int mm = x1bndry_mbgid_.d_view(n,m) - gids_;
       if (n==0) {
-        par_for_inner(member, 0, nj, [&](const int j) {
-          a(mm,v,k,j,i) = rbuf[n].vars(m,j,v,k,i);
-        });
+        if (v==0) {
+          par_for_inner(member, 0, nj, [&](const int j) {
+            b.x1f(mm,k,j,i) = rbuf[n].vars(m,j,v,k,i);
+          });
+        } else if (v==1) {
+          par_for_inner(member, 0, nj, [&](const int j) {
+            b.x2f(mm,k,j,i) = rbuf[n].vars(m,j,v,k,i);
+          });
+        } else if (v==2) {
+          par_for_inner(member, 0, nj, [&](const int j) {
+            b.x3f(mm,k,j,i) = rbuf[n].vars(m,j,v,k,i);
+          });
+        }
       } else {
-        par_for_inner(member, 0, nj, [&](const int j) {
-          a(mm,v,k,j,(ie+1)+i) = rbuf[n].vars(m,j,v,k,i);
-        });
+        if (v==0) {
+          par_for_inner(member, 0, nj, [&](const int j) {
+            b.x1f(mm,k,j,(ie+2)+i) = rbuf[n].vars(m,j,v,k,i);
+          });
+        } else if (v==1) {
+          par_for_inner(member, 0, nj, [&](const int j) {
+            b.x2f(mm,k,j,(ie+1)+i) = rbuf[n].vars(m,j,v,k,i);
+          });
+        } else if (v==2) {
+          par_for_inner(member, 0, nj, [&](const int j) {
+            b.x3f(mm,k,j,(ie+1)+i) = rbuf[n].vars(m,j,v,k,i);
+          });
+        }
       }
     });
   }
