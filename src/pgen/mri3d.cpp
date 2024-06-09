@@ -43,7 +43,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   if (restart) return;
 
   // First, do some error checks
-  if (pmy_mesh_->three_d) {
+  if (!(pmy_mesh_->three_d)) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
               << "mri3d problem generator only works in 2D (nx3=1)" << std::endl;
     exit(EXIT_FAILURE);
