@@ -213,53 +213,55 @@ inline Real recurrence_derivative_legendre(Real l, Real m, Real x) {
  * var_index: 1 => phi, 2 => theta)
  */
 using dfpn_dOmega_fn = Real (*)(int, int, Real, Real);
-const dfpn_dOmega_fn dfpn_domega_fns[2] = {dfpn_dphi, dfpn_dtheta};
+const dfpn_dOmega_fn dfpn_domega_fns[2] = {cosec_dfpn_dphi, dfpn_dtheta};
 
 Real dfpn_dOmega(int l, int m, Real phi, Real theta, int var_index) {
   return dfpn_domega_fns[var_index - 1](l, m, phi, theta);
 }
 
-// dYlm/dphi = - m Yl-m
-inline Real dfpn_dphi(int l, int m, Real phi, Real theta) {
-  return -m * fpn_basis_lm(l, -m, phi, theta);
+// cosec(theta) dYlm/dphi = - m cosec(theta) Yl-m
+inline Real cosec_dfpn_dphi(int l, int m, Real phi, Real theta) {
+
+  Real result = 0.;
+  if (-m > 0) {
+    result = -sqrt(2.) * cos(-m * phi) * recurrence_derivative_legendre(l, -m, cos(theta));
+  } else if (m == 0) {
+    result = 0;
+  } else {
+    result = -sqrt(2.) * sin(abs(-m) * phi) * recurrence_derivative_legendre(l, abs(-m), cos(theta));
+  }
+  return result;
 }
 
 /* dYlm/dtheta
  *
- * Note: Uses (1-x^2) dP^m_l/dx = (m-l-1) P^m_l+1 + (l+1)xP^m_l
- *       When x = -1, 1, dP^m_l/dx = 0
- *       When m = -k < 0, dP^-k_l/dx = (-1)^k (l-k)!/(l+k)! dP^k_l/dx
  */
 inline Real dfpn_dtheta(int l, int m, Real phi, Real theta) {
   Real result = 0.;
   const Real x = cos(theta);
 
-  if (abs(x - 1.) < 1e-14) {
-    return 0.;
-  }
-
-  Real der_legendre = -sin(theta) * ((m - l - 1.) * gsl_sf_legendre_sphPlm(l + 1, abs(m), x) + (l + 1) * x * gsl_sf_legendre_sphPlm(l, abs(m), x)) / (1. - x * x);
-
   if (m > 0) {
-    result = sqrt(2.) * cos(m * phi) * der_legendre;
+    result = -sqrt(2.) * cos(m * phi) * recurrence_derivative_legendre(l, m, x);
   } else if (m == 0) {
-    result = der_legendre;
+    result = -recurrence_derivative_legendre(l, m, x);
   } else {
-    result = pow(-1, -m) * (gsl_sf_fact(l + m) / gsl_sf_fact(l - m)) * sqrt(2.) * sin(abs(m) * phi) * der_legendre;
+    result = -sqrt(2.) * sin(abs(m) * phi) * recurrence_derivative_legendre(l, abs(m), x);
   }
   return result;
 }
 
 /* Inverse Jacobian P^itilde_ihat [e = 1, itilde = (phi, theta), ihat = (x,y,z)]
  *
- * P^itilde_ihat = [-cosec(theta)*sin(phi)  cosec(theta)*cos(phi)   0]
+ * P^itilde_ihat = [-sin(phi)               cos(phi)                          0]
  *                 [cos(theta)*cos(phi)     cos(theta)*sin(phi)     -sin(theta)]
+ *
+ * Note: This does not contain the cosec(theta) terms in the first row!
  */
 using inv_jac_fn = Real (*)(Real, Real);
 const inv_jac_fn inv_jac_fns[2][3] = {
     {
-        [](Real phi, Real theta) { return -sin(phi) / sin(theta); },
-        [](Real phi, Real theta) { return cos(phi) / sin(theta); },
+        [](Real phi, Real theta) { return -sin(phi); },
+        [](Real phi, Real theta) { return cos(phi); },
         [](Real phi, Real theta) { return 0.0; }
     },
     {

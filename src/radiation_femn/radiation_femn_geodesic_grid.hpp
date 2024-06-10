@@ -49,7 +49,7 @@ namespace radiationfemn
 
     Real fpn_basis_lm(int l, int m, Real phi, Real theta);
     Real dfpn_dtheta(int l, int m, Real phi, Real theta);
-    Real dfpn_dphi(int l, int m, Real phi, Real theta);
+    Real cosec_dfpn_dphi(int l, int m, Real phi, Real theta);
     Real dfpn_dOmega(int l, int m, Real phi, Real theta, int var_index);
     Real inv_jac_itilde_ihat(Real phi, Real theta, int tilde_index, int hat_index);
 
