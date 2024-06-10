@@ -16,7 +16,7 @@
 //! - ifield = 3 - uniform By
 //! Random perturbations to the pressure are added in the initial conditions to seed MRI
 //!
-//! REFERENCE: Hawley, J. F. & Balbus, S. A., ApJ 400, 595-609 (1992).
+//! REFERENCE: Hawley, J. F., Gammie, C.F. & Balbus, S. A., ApJ 440, 742-763 (1995).
 
 // C++ headers
 #include <cmath>      // sqrt()
