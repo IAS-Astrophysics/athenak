@@ -1,14 +1,14 @@
 # AthenaXXX input file for 2D MRI
 
 <comment>
-problem   = 2D MRI
-reference = J.F. Hawley & S.A. Balbus. ApJ 400, 595-609 (1992)
+problem   = 3D MRI
+reference = Hawley, J. F., Gammie, C.F. & Balbus, S. A., ApJ 440, 742-763 (1995) 
 
 <job>
-basename  = HB3       # problem ID: basename of output filenames
+basename  = HGB       # problem ID: basename of output filenames
 
 <mesh>
-nghost    = 3         # Number of ghost cells
+nghost    = 2         # Number of ghost cells
 nx1       = 64        # Number of zones in X1-direction
 x1min     = -0.5      # minimum value of X1
 x1max     = 0.5       # maximum value of X1
@@ -34,8 +34,8 @@ nx3       = 64         # Number of cells in each MeshBlock, X3-dir
 
 <time>
 evolution  = dynamic   # dynamic/kinematic/static
-integrator = rk3       # time integration algorithm
-cfl_number = 0.4       # The Courant, Friedrichs, & Lewy (CFL) Number
+integrator = rk2       # time integration algorithm
+cfl_number = 0.3       # The Courant, Friedrichs, & Lewy (CFL) Number
 nlim       = -1        # cycle limit
 tlim       = 62.831854      # time limit (about 8 orbits = 16\pi)
 ndiag      = 1         # cycles between diagostic output
@@ -46,12 +46,12 @@ omega0 = 1.0
 
 <mhd>
 eos          = ideal   # EOS type
-reconstruct  = ppm4    # spatial reconstruction method
+reconstruct  = plm    # spatial reconstruction method
 rsolver      = hlld    # Riemann-solver to be used
 gamma        = 1.6666666666666667 # gamma = C_p/C_v
 
 <problem>
-beta       = 4000      # Plasma beta
+beta       = 400       # Plasma beta
 amp        = 0.01      # dP/P <= amp
 ifield     = 2         # 1 for zero-net-flux Bz, 2 for constant Bz
 nwx        = 1         # wavenumber in x1
