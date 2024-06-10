@@ -498,6 +498,7 @@ void Driver::InitBoundaryValuesAndPrimitives(Mesh *pm) {
   // Note: with MPI, sends on ALL MBs must be complete before receives execute
 
   // Initialize HYDRO: ghost zones and primitive variables (everywhere)
+  // includes communications for shearing box boundaries
   hydro::Hydro *phydro = pm->pmb_pack->phydro;
   if (phydro != nullptr) {
     // following functions return a TaskStatus, but it is ignored so cast to (void)
@@ -517,7 +518,7 @@ void Driver::InitBoundaryValuesAndPrimitives(Mesh *pm) {
   }
 
   // Initialize MHD: ghost zones and primitive variables (everywhere)
-  // Note this requires communicating BOTH u and B
+  // includes communications for shearing box boundaries
   mhd::MHD *pmhd = pm->pmb_pack->pmhd;
   if (pmhd != nullptr) {
     (void) pmhd->RestrictU(this, 0);
@@ -525,16 +526,23 @@ void Driver::InitBoundaryValuesAndPrimitives(Mesh *pm) {
     (void) pmhd->InitRecv(this, -1);  // stage < 0 suppresses InitFluxRecv
     (void) pmhd->SendU(this, 0);
     (void) pmhd->SendB(this, 0);
-    (void) pmhd->ClearSend(this, -1);
-    (void) pmhd->ClearRecv(this, -1);
+    (void) pmhd->ClearSend(this, -1); // stage = -1 only clear SendU, SendB
+    (void) pmhd->ClearRecv(this, -1); // stage = -1 only clear RecvU, RecvB
     (void) pmhd->RecvU(this, 0);
     (void) pmhd->RecvB(this, 0);
+    (void) pmhd->SendU_Shr(this, 0);
+    (void) pmhd->SendB_Shr(this, 0);
+    (void) pmhd->ClearSend(this, -4); // stage = -4 only clear SendU_Shr, SendB_Shr
+    (void) pmhd->ClearRecv(this, -4); // stage = -4 only clear RecvU_Shr, SendB_Shr
+    (void) pmhd->RecvU_Shr(this, 0);
+    (void) pmhd->RecvB_Shr(this, 0);
     (void) pmhd->ApplyPhysicalBCs(this, 0);
     (void) pmhd->Prolongate(this, 0);
     (void) pmhd->ConToPrim(this, 0);
   }
 
   // Initialize radiation: ghost zones and intensity (everywhere)
+  // DOES NOT include communications for shearing box boundaries
   radiation::Radiation *prad = pm->pmb_pack->prad;
   if (prad != nullptr) {
     (void) prad->RestrictI(this, 0);

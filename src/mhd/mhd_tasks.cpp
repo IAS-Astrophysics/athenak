@@ -66,7 +66,9 @@ void MHD::AssembleMHDTasks(std::map<std::string, std::shared_ptr<TaskList>> tl) 
   id.restb     = tl["stagen"]->AddTask(&MHD::RestrictB, this, id.recvb_oa);
   id.sendb     = tl["stagen"]->AddTask(&MHD::SendB, this, id.restb);
   id.recvb     = tl["stagen"]->AddTask(&MHD::RecvB, this, id.sendb);
-  id.bcs       = tl["stagen"]->AddTask(&MHD::ApplyPhysicalBCs, this, id.recvb);
+  id.sendb_shr = tl["stagen"]->AddTask(&MHD::SendB_Shr, this, id.recvb);
+  id.recvb_shr = tl["stagen"]->AddTask(&MHD::RecvB_Shr, this, id.sendb_shr);
+  id.bcs       = tl["stagen"]->AddTask(&MHD::ApplyPhysicalBCs, this, id.recvb_shr);
   id.prol      = tl["stagen"]->AddTask(&MHD::Prolongate, this, id.bcs);
   id.c2p       = tl["stagen"]->AddTask(&MHD::ConToPrim, this, id.prol);
   id.newdt     = tl["stagen"]->AddTask(&MHD::NewTimeStep, this, id.c2p);
