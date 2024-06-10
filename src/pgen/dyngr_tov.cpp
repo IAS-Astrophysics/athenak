@@ -276,7 +276,7 @@ class TabulatedEOS {
   Real GetRhoFromP(Real P) const {
     Real lP = log(P);
     int lb = 0;
-    int ub = m_nn;
+    int ub = m_nn-1;
     // If the pressure is below the minimum of the table, we return zero density.
     if (lP < lP_min) {
       return 0.0;
@@ -316,6 +316,9 @@ template<class TOVEOS>
 void SetupTOV(ParameterInput* pin, Mesh* pmy_mesh_, tov_pgen& tov) {
   MeshBlockPack* pmbp = pmy_mesh_->pmb_pack;
   TOVEOS eos{pin};
+
+  // Set pfloor to be consistent with the density floor.
+  tov.pfloor = eos.template GetPFromRho<LocationTag::Host>(tov.dfloor);
 
   bool minkowski = pin->GetOrAddBoolean("problem", "minkowski", false);
 
@@ -666,7 +669,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   }
   tov.gamma = pin->GetOrAddReal(block, "gamma", 5.0/3.0);
   tov.dfloor = pin->GetOrAddReal(block, "dfloor", (FLT_MIN));
-  tov.pfloor = pin->GetOrAddReal(block, "pfloor", (FLT_MIN));
+  //tov.pfloor = pin->GetOrAddReal(block, "pfloor", (FLT_MIN));
   tov.v_pert = pin->GetOrAddReal("problem" , "v_pert", 0.0);
   tov.p_pert = pin->GetOrAddReal("problem", "p_pert", 0.0);
   tov.isotropic = pin->GetOrAddBoolean("problem", "isotropic", false);
@@ -833,7 +836,7 @@ static void ConstructTOV(tov_pgen& tov, TOVEOS& eos) {
     R_iso(i+1) = R_iso(i) + dr*(dR1 + 2.0*dR2 + 2.0*dR3 + dR4)/6.0;
 
     // If the pressure falls below zero, we've hit the edge of the star.
-    if (P(i+1) <= 0.0) {
+    if (P(i+1) <= 0.0 || P(i+1) <= tov.pfloor) {
       tov.n_r = i+1;
       break;
     }
@@ -841,11 +844,11 @@ static void ConstructTOV(tov_pgen& tov, TOVEOS& eos) {
 
   // Now we can do a linear interpolation to estimate the actual edge of the star.
   int n_r = tov.n_r;
-  tov.R_edge = Interpolate(0.0, P(n_r-1), P(n_r), R(n_r-1), R(n_r));
+  tov.R_edge = Interpolate(tov.pfloor, P(n_r-1), P(n_r), R(n_r-1), R(n_r));
   tov.M_edge = Interpolate(tov.R_edge, R(n_r-1), R(n_r), M(n_r-1), M(n_r));
 
   // Replace the edges of the star.
-  P(n_r) = 0.0;
+  P(n_r) = tov.pfloor;
   M(n_r) = tov.M_edge;
   alp(n_r) = Interpolate(tov.R_edge, R(n_r-1), R(n_r), alp(n_r-1), alp(n_r));
   R(n_r) = tov.R_edge;
