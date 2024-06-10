@@ -76,6 +76,7 @@ class ProblemGenerator {
   void RadiationFEMNShadowtest(ParameterInput *pin, const bool restart);
   void RadiationFEMNDopplertest(ParameterInput *pin, const bool restart);
   void RadiationFEMNDiffusiontest(ParameterInput *pin, const bool restart);
+  void RadiationFEMNDiffusiontestErf(ParameterInput *pin, const bool restart);
   void RadiationFEMNBeamtestBH(ParameterInput *pin, const bool restart);
   void RadiationFEMNGaussiantest(ParameterInput *pin, const bool restart);
   // template for user-specified problem generator

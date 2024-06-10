@@ -95,6 +95,8 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm) :
     RadiationFEMNDopplertest(pin, false);
   } else if (pgen_fun_name.compare("rad_femn_diffusiontest") == 0) {
     RadiationFEMNDiffusiontest(pin, false);
+  } else if (pgen_fun_name.compare("rad_femn_diffusiontest_erf") == 0) {
+    RadiationFEMNDiffusiontestErf(pin, false);
   } else if (pgen_fun_name.compare("rad_femn_beamtest_bh") == 0) {
     RadiationFEMNBeamtestBH(pin, false);
   } else if (pgen_fun_name.compare("rad_femn_gaussiantest") == 0) {

@@ -136,19 +136,10 @@ void ApplyBeamSourcesBlackHoleM1(Mesh *pmesh) {
                                        + 2. * adm.g_dd(m, 2, 2, k, j, i) * adm.beta_u(m, 2, k, j, i) * adm.beta_u(m, 2, k, j, i);
                     const Real a = (-beta_x + sqrt(beta_x * beta_x - beta2 + adm.alpha(m, k, j, i) * adm.alpha(m, k, j, i) * (1 - eps))) / g_xx;
 
-
-                    Real E = 4;
+                    Real E = 1;
                     Real Fx = a * E / adm.alpha(m, k, j, i) + adm.beta_u(m, 0, k, j, i) * E / adm.alpha(m, k, j, i);
-                    Real Fy = 0 * adm.beta_u(m, 1, k, j, i) * E / adm.alpha(m, k, j, i);
-                    Real Fz = adm.beta_u(m, 2, k, j, i) * E / adm.alpha(m, k, j, i);
-
-                    /*
-                    Real E = 4;
-                    Real Fx = adm.beta_u(m, 0, k, j, i) * E / adm.alpha(m, k, j, i);
                     Real Fy = adm.beta_u(m, 1, k, j, i) * E / adm.alpha(m, k, j, i);
                     Real Fz = adm.beta_u(m, 2, k, j, i) * E / adm.alpha(m, k, j, i);
-
-                    */
 
                     Real F2 = Fx * Fx + Fy * Fy + Fz * Fz;
                     E = Kokkos::fmax(E, rad_E_floor_);
