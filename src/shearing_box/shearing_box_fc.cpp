@@ -80,31 +80,36 @@ TaskStatus ShearingBoxBoundaryFC::PackAndSendFC(DvceFaceFld4D<Real> &b,
           par_for_inner(member, 0, nj, [&](const int j) {
             a_(j) = b.x1f(mm,k,j,i);
           });
+          member.team_barrier();
         } else if (v==1) {
           par_for_inner(member, 0, nj, [&](const int j) {
             a_(j) = b.x2f(mm,k,j,i);
           });
+          member.team_barrier();
         } else if (v==2) {
           par_for_inner(member, 0, nj, [&](const int j) {
             a_(j) = b.x3f(mm,k,j,i);
           });
+          member.team_barrier();
         }
       } else if (n==1) {
         if (v==0) {
           par_for_inner(member, 0, nj, [&](const int j) {
             a_(j) = b.x1f(mm,k,j,(ie+2)+i);
           });
+          member.team_barrier();
         } else if (v==1) {
           par_for_inner(member, 0, nj, [&](const int j) {
             a_(j) = b.x2f(mm,k,j,(ie+1)+i);
           });
+          member.team_barrier();
         } else if (v==2) {
           par_for_inner(member, 0, nj, [&](const int j) {
             a_(j) = b.x3f(mm,k,j,(ie+1)+i);
           });
+          member.team_barrier();
         }
       }
-      member.team_barrier();
 
       // compute fractional offset
       Real eps = fmod(yshear_,(mbsize.d_view(mm).dx2))/(mbsize.d_view(mm).dx2);
@@ -125,7 +130,6 @@ TaskStatus ShearingBoxBoundaryFC::PackAndSendFC(DvceFaceFld4D<Real> &b,
         default:
           break;
       }
-      member.team_barrier();
 
       // update data in send buffer with fracational shift
       par_for_inner(member, js, je, [&](const int j) {
@@ -142,6 +146,7 @@ TaskStatus ShearingBoxBoundaryFC::PackAndSendFC(DvceFaceFld4D<Real> &b,
   //  * Case2 is when the sending MB straddles the boundary between MBs, and so requires
   //    copy/send to only two target MBs.
   // Use deep copy if target MB on same rank, or MPI sends if not
+  Kokkos::fence();
   const int &nx2 = indcs.nx2;
   bool no_errors=true;
   for (int n=0; n<2; ++n) {
@@ -398,28 +403,34 @@ TaskStatus ShearingBoxBoundaryFC::RecvAndUnpackFC(DvceFaceFld4D<Real> &b){
           par_for_inner(member, 0, nj, [&](const int j) {
             b.x1f(mm,k,j,i) = rbuf[n].vars(m,j,v,k,i);
           });
+          member.team_barrier();
         } else if (v==1) {
           par_for_inner(member, 0, nj, [&](const int j) {
             b.x2f(mm,k,j,i) = rbuf[n].vars(m,j,v,k,i);
           });
+          member.team_barrier();
         } else if (v==2) {
           par_for_inner(member, 0, nj, [&](const int j) {
             b.x3f(mm,k,j,i) = rbuf[n].vars(m,j,v,k,i);
           });
+          member.team_barrier();
         }
       } else {
         if (v==0) {
           par_for_inner(member, 0, nj, [&](const int j) {
             b.x1f(mm,k,j,(ie+2)+i) = rbuf[n].vars(m,j,v,k,i);
           });
+          member.team_barrier();
         } else if (v==1) {
           par_for_inner(member, 0, nj, [&](const int j) {
             b.x2f(mm,k,j,(ie+1)+i) = rbuf[n].vars(m,j,v,k,i);
           });
+          member.team_barrier();
         } else if (v==2) {
           par_for_inner(member, 0, nj, [&](const int j) {
             b.x3f(mm,k,j,(ie+1)+i) = rbuf[n].vars(m,j,v,k,i);
           });
+          member.team_barrier();
         }
       }
     });

@@ -276,7 +276,6 @@ TaskStatus OrbitalAdvectionCC::RecvAndUnpackCC(DvceArray5D<Real> &a,
       default:
         break;
     }
-    member.team_barrier();
 
     // Update CC variables with both integer shift (from a_) and a conservative remap
     // for the remaining fraction of a cell using upwind "fluxes"

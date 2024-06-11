@@ -288,7 +288,6 @@ TaskStatus OrbitalAdvectionFC::RecvAndUnpackFC(DvceFaceFld4D<Real> &b0,
       default:
         break;
     }
-    member.team_barrier();
 
     // Compute emfx = -VyBz, which is at cell-center in x1-direction
     if (v==0) {
@@ -303,6 +302,7 @@ TaskStatus OrbitalAdvectionFC::RecvAndUnpackFC(DvceFaceFld4D<Real> &b0,
           emfx(m,k,j,i) += b0_(jf-jj);
         }
       });
+      member.team_barrier();
 
     // Compute emfz =  VyBx, which is at cell-face in x1-direction
     } else if (v==1) {
@@ -317,6 +317,7 @@ TaskStatus OrbitalAdvectionFC::RecvAndUnpackFC(DvceFaceFld4D<Real> &b0,
           emfz(m,k,j,i) -= b0_(jf-jj);
         }
       });
+      member.team_barrier();
     }
   });
 

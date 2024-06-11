@@ -81,12 +81,13 @@ TaskStatus ShearingBoxBoundaryCC::PackAndSendCC(DvceArray5D<Real> &a,
         par_for_inner(member, 0, nj, [&](const int j) {
           a_(j) = a(mm,v,k,j,i);
         });
+        member.team_barrier();
       } else {
         par_for_inner(member, 0, nj, [&](const int j) {
           a_(j) = a(mm,v,k,j,(ie+1)+i);
         });
+        member.team_barrier();
       }
-      member.team_barrier();
 
       // compute fractional offset
       Real eps = fmod(yshear_,(mbsize.d_view(mm).dx2))/(mbsize.d_view(mm).dx2);
@@ -107,7 +108,6 @@ TaskStatus ShearingBoxBoundaryCC::PackAndSendCC(DvceArray5D<Real> &a,
         default:
           break;
       }
-      member.team_barrier();
 
       // update data in send buffer with fracational shift
       par_for_inner(member, js, je, [&](const int j) {
@@ -124,6 +124,7 @@ TaskStatus ShearingBoxBoundaryCC::PackAndSendCC(DvceArray5D<Real> &a,
   //  * Case2 is when the sending MB straddles the boundary between MBs, and so requires
   //    copy/send to only two target MBs.
   // Use deep copy if target MB on same rank, or MPI sends if not
+  Kokkos::fence();
   const int &nx2 = indcs.nx2;
   bool no_errors=true;
   for (int n=0; n<2; ++n) {
@@ -380,10 +381,12 @@ TaskStatus ShearingBoxBoundaryCC::RecvAndUnpackCC(DvceArray5D<Real> &a){
         par_for_inner(member, 0, nj, [&](const int j) {
           a(mm,v,k,j,i) = rbuf[n].vars(m,j,v,k,i);
         });
+        member.team_barrier();
       } else {
         par_for_inner(member, 0, nj, [&](const int j) {
           a(mm,v,k,j,(ie+1)+i) = rbuf[n].vars(m,j,v,k,i);
         });
+        member.team_barrier();
       }
     });
   }
