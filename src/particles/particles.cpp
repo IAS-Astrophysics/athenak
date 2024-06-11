@@ -108,7 +108,7 @@ void Particles::CreateParticleTags(ParameterInput *pin) {
   // tags are assigned sequentially within this rank, starting at 0 with rank=0
   if (assign.compare("index_order") == 0) {
     int tagstart = 0;
-    for (int n=1; n<global_variable::my_rank; ++n) {
+    for (int n=1; n<=global_variable::my_rank; ++n) {
       tagstart += pmy_pack->pmesh->nprtcl_eachrank[n-1];
     }
 

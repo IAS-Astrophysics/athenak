@@ -150,7 +150,7 @@ TaskStatus Z4c::Z4cBoundaryRHS(Driver *pdriver, int stage) {
       || pm->mesh_bcs[BoundaryFace::inner_x1] == BoundaryFlag::diode
       || pm->mesh_bcs[BoundaryFace::outer_x1] == BoundaryFlag::outflow
       || pm->mesh_bcs[BoundaryFace::outer_x1] == BoundaryFlag::diode) {
-    par_for("z4crhs_bc_x1", DevExeSpace(), 0, (nmb-1), 0, (n3-1), 0, (n2-1),
+    par_for("z4crhs_bc_x1", DevExeSpace(), 0, (nmb-1), ks, ke, js, je,
     KOKKOS_LAMBDA(int m, int k, int j) {
       // Inner boundary
       switch(mb_bcs.d_view(m,BoundaryFace::inner_x1)) {
@@ -176,7 +176,7 @@ TaskStatus Z4c::Z4cBoundaryRHS(Driver *pdriver, int stage) {
       || pm->mesh_bcs[BoundaryFace::inner_x2] == BoundaryFlag::diode
       || pm->mesh_bcs[BoundaryFace::outer_x2] == BoundaryFlag::outflow
       || pm->mesh_bcs[BoundaryFace::outer_x2] == BoundaryFlag::diode) {
-    par_for("z4crhs_bc_x1", DevExeSpace(), 0, (nmb-1), 0, (n3-1), 0, (n1-1),
+    par_for("z4crhs_bc_x1", DevExeSpace(), 0, (nmb-1), ks, ke, is, ie,
     KOKKOS_LAMBDA(int m, int k, int i) {
       // Inner boundary
       switch(mb_bcs.d_view(m,BoundaryFace::inner_x2)) {
@@ -202,7 +202,7 @@ TaskStatus Z4c::Z4cBoundaryRHS(Driver *pdriver, int stage) {
       || pm->mesh_bcs[BoundaryFace::inner_x3] == BoundaryFlag::diode
       || pm->mesh_bcs[BoundaryFace::outer_x3] == BoundaryFlag::outflow
       || pm->mesh_bcs[BoundaryFace::outer_x3] == BoundaryFlag::diode) {
-    par_for("z4crhs_bc_x1", DevExeSpace(), 0, (nmb-1), 0, (n2-1), 0, (n1-1),
+    par_for("z4crhs_bc_x1", DevExeSpace(), 0, (nmb-1), js, je, is, ie,
     KOKKOS_LAMBDA(int m, int j, int i) {
       // Inner boundary
       switch(mb_bcs.d_view(m,BoundaryFace::inner_x3)) {
