@@ -180,14 +180,38 @@ Real fpn_basis_lm(int l, int m, Real phi, Real theta) {
   return result;
 }
 
+inline Real legendre(int l, int m, Real x) {
+  // if l is smaller than zero, replace by -l-1
+  l = (l >= 0) ? l : -l - 1;
+
+  // if |m| > l, return 0
+  if (abs(m) > l) {
+    return 0;
+  }
+
+  // formula for negative l
+  if (m < 0) {
+    return pow(-1, m) * (gsl_sf_fact(l + m) / gsl_sf_fact(l - m)) * gsl_sf_legendre_Plm(l, m, x);
+  } else {
+    // 0 <= m <= l
+    return gsl_sf_legendre_Plm(l, m, x);
+  }
+}
+
+inline Real legendre_factor(int l, int m) {
+  assert(l >= abs(m));
+  return sqrt((2. * l + 1.) / (4. * M_PI)) * sqrt(gsl_sf_fact(l - abs(m)) / gsl_sf_fact(l + abs(m)));
+}
+
 /* Recurrence relation for Legendre polynomials
  *
  * m 1/sqrt(1-x^2) P^m_l = - (1/2) * (P^m+1_l+1(x) + (l-m+1)(l-m+2)P^m-1_l+1(x))
  *
+ * Note: does not contain constant factor
  */
-inline Real recurrence_legendre(Real l, Real m, Real x) {
-  return -(0.5) * (gsl_sf_legendre_sphPlm(l + 1, m + 1, x)
-                   + (l - m + 1) * (l - m + 2) * gsl_sf_legendre_sphPlm(l + 1, m - 1, x));
+inline Real recurrence_legendre(int l, int m, Real x) {
+  return -(0.5) * (legendre(l + 1, m + 1, x)
+                   + (l - m + 1) * (l - m + 2) * legendre(l + 1, m - 1, x));
 }
 
 /* Recurrence relation for Legendre polynomials
@@ -195,9 +219,9 @@ inline Real recurrence_legendre(Real l, Real m, Real x) {
  * m 1/sqrt(1-x^2) P^m_l = - (1/2) * (P^m+1_l-1(x) + (l+m-1)(l+m)P^m-1_l-1(x))
  *
  */
-inline Real recurrence_legendre_alt(Real l, Real m, Real x) {
-  return -(0.5) * (gsl_sf_legendre_sphPlm(l - 1, m + 1, x)
-                   + (l + m - 1) * (l + m) * gsl_sf_legendre_sphPlm(l - 1, m - 1, x));
+inline Real recurrence_legendre_alt(int l, int m, Real x) {
+  return -(0.5) * (legendre(l - 1, m + 1, x)
+                   + (l + m - 1) * (l + m) * legendre(l - 1, m - 1, x));
 }
 
 /* Recurrence relation for derivative of Legendre polynomials
@@ -205,7 +229,7 @@ inline Real recurrence_legendre_alt(Real l, Real m, Real x) {
  * sqrt(1 - x^2) dP^m_l/dx = (0.5) * ((l+m)(l-m+1)P^m-1_l(x) - P^m+1_l(x))
  */
 inline Real recurrence_derivative_legendre(Real l, Real m, Real x) {
-  return (0.5) * ((l + m) * (l - m + 1) * gsl_sf_legendre_sphPlm(l, m - 1, x) - gsl_sf_legendre_sphPlm(l, m + 1, x));
+  return (0.5) * ((l + m) * (l - m + 1) * legendre(l, m - 1, x) - legendre(l, m + 1, x));
 }
 
 /* Derivative of FPN basis wrt angle
@@ -221,14 +245,13 @@ Real dfpn_dOmega(int l, int m, Real phi, Real theta, int var_index) {
 
 // cosec(theta) dYlm/dphi = - m cosec(theta) Yl-m
 inline Real cosec_dfpn_dphi(int l, int m, Real phi, Real theta) {
-
   Real result = 0.;
   if (-m > 0) {
-    result = -sqrt(2.) * cos(-m * phi) * recurrence_derivative_legendre(l, -m, cos(theta));
+    result = -sqrt(2.) * cos(-m * phi) * legendre_factor(l, -m) * recurrence_legendre(l, -m, cos(theta));
   } else if (m == 0) {
     result = 0;
   } else {
-    result = -sqrt(2.) * sin(abs(-m) * phi) * recurrence_derivative_legendre(l, abs(-m), cos(theta));
+    result = -sqrt(2.) * sin(abs(-m) * phi) * legendre_factor(l, m) * recurrence_legendre(l, abs(-m), cos(theta));
   }
   return result;
 }
@@ -241,11 +264,11 @@ inline Real dfpn_dtheta(int l, int m, Real phi, Real theta) {
   const Real x = cos(theta);
 
   if (m > 0) {
-    result = -sqrt(2.) * cos(m * phi) * recurrence_derivative_legendre(l, m, x);
+    result = -sqrt(2.) * cos(m * phi) * legendre_factor(l, m) * recurrence_derivative_legendre(l, m, x);
   } else if (m == 0) {
-    result = -recurrence_derivative_legendre(l, m, x);
+    result = -legendre_factor(l, m) * recurrence_derivative_legendre(l, m, x);
   } else {
-    result = -sqrt(2.) * sin(abs(m) * phi) * recurrence_derivative_legendre(l, abs(m), x);
+    result = -sqrt(2.) * sin(abs(m) * phi) * legendre_factor(l, abs(m)) * recurrence_derivative_legendre(l, abs(m), x);
   }
   return result;
 }
