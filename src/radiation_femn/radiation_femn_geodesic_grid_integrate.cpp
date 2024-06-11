@@ -187,7 +187,7 @@ Real IntegrateMatrixFPN(int la, int ma, int lb, int mb, const HostArray1D<Real> 
                         int matrixchoice, int nu, int mu, int ihat) {
 
   Real result = 0.;
-  /*
+
   switch (matrixchoice) {
 
     case 0:
@@ -250,7 +250,7 @@ Real IntegrateMatrixFPN(int la, int ma, int lb, int mb, const HostArray1D<Real> 
     default:result = -42.;
 
   }
-  */
+
   return result;
 }
 

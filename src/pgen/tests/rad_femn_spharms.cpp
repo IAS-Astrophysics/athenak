@@ -76,7 +76,7 @@ void ProblemGenerator::RadiationFEMNSpharms(ParameterInput *pin, const bool rest
   Real x1 = 0.23;
   Real error3 = -42;
   for (int m = 20; m < 35; m++) {
-    for (int l = -(m-1); l <= (m-1); l++) {
+    for (int l = -(m); l <= (m - 1); l++) {
       Real legval = radiationfemn::legendre(l, m, x);
       if (fabs(legval) > error3) {
         error3 = fabs(legval);
@@ -85,5 +85,27 @@ void ProblemGenerator::RadiationFEMNSpharms(ParameterInput *pin, const bool rest
     }
   }
   std::cout << "Error: " << error3 << std::endl;
+  std::cout << std::endl;
+
+  std::cout << "Test: Recurrence relation for associated Legendre functions" << std::endl;
+  Real x2 = 0.9999;
+  Real lwhere = -42;
+  Real mwhere = -42;
+  Real error4 = -42;
+  for (int l = 0; l < 20; l++) {
+    for (int m = -l; m <= l; m++) {
+      Real legval = m * radiationfemn::legendre(l, m, x2) / sqrt(1 - x2 * x2);
+      Real recur_legval1 = radiationfemn::recurrence_legendre(l, m, x2);
+      Real recur_legval2 = radiationfemn::recurrence_legendre_alt(l, m, x2);
+      Real rel_error = fabs(legval) > 1e-14 ? fabs(legval - recur_legval1) / fabs(legval) : fabs(legval - recur_legval1);
+      if (rel_error > error4) {
+        error4 = rel_error;
+        lwhere = l;
+        mwhere = m;
+      }
+      std::cout << "l = " << l << ", m = " << m << ": " << legval << " " << recur_legval1 << " " << recur_legval2 << std::endl;
+    }
+  }
+  std::cout << "Error: (" << lwhere << ", " << mwhere << ") " << error4 << std::endl;
   std::cout << std::endl;
 }

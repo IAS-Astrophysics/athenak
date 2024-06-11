@@ -212,7 +212,7 @@ Real legendre(int l, int m, Real x) {
 
 inline Real legendre_factor(int l, int m) {
   assert(l >= abs(m));
-  return sqrt((2. * l + 1.) / (4. * M_PI)) * sqrt(gsl_sf_fact(l - abs(m)) / gsl_sf_fact(l + abs(m)));
+  return sqrt((2. * l + 1.) / (4. * M_PI)) * sqrt(gsl_sf_fact(l - m) / gsl_sf_fact(l + m));
 }
 
 /* Recurrence relation for Legendre polynomials
@@ -221,7 +221,7 @@ inline Real legendre_factor(int l, int m) {
  *
  * Note: does not contain constant factor
  */
-inline Real recurrence_legendre(int l, int m, Real x) {
+Real recurrence_legendre(int l, int m, Real x) {
   return -(0.5) * (legendre(l + 1, m + 1, x)
                    + (l - m + 1) * (l - m + 2) * legendre(l + 1, m - 1, x));
 }
@@ -231,7 +231,7 @@ inline Real recurrence_legendre(int l, int m, Real x) {
  * m 1/sqrt(1-x^2) P^m_l = - (1/2) * (P^m+1_l-1(x) + (l+m-1)(l+m)P^m-1_l-1(x))
  *
  */
-inline Real recurrence_legendre_alt(int l, int m, Real x) {
+Real recurrence_legendre_alt(int l, int m, Real x) {
   return -(0.5) * (legendre(l - 1, m + 1, x)
                    + (l + m - 1) * (l + m) * legendre(l - 1, m - 1, x));
 }
