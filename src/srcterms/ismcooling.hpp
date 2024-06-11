@@ -55,5 +55,4 @@ Real ISMCoolFn(Real temp) {
   Real logcool = (lhd[ipps+1]*dx - lhd[ipps]*(dx - 0.04))*25.0;
   return pow(10.0,logcool);
 }
-
 #endif // SRCTERMS_ISMCOOLING_HPP_

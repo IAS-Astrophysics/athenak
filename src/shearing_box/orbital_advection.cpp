@@ -6,6 +6,7 @@
 //! \file orbital_advection.cpp
 //! \brief constructor for OrbitalAdvection abstract base class.
 
+#include <algorithm>
 #include <cstdlib>
 #include <iostream>
 #include <utility>

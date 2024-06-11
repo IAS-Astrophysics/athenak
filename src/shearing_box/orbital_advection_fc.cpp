@@ -9,6 +9,7 @@
 //! by the appropriate offset during the recv/unpack step, so these functions both
 //! communicate the data and perform the shift.
 
+#include <algorithm>
 #include <cstdlib>
 #include <iostream>
 #include <utility>
@@ -140,7 +141,7 @@ TaskStatus OrbitalAdvectionFC::PackAndSendFC(DvceFaceFld4D<Real> &b) {
           int tag = CreateBvals_MPI_Tag(lid, dn);
 
           // get ptr to send buffer when neighbor is at coarser/same/fine level
-          using namespace Kokkos;
+          using Kokkos::ALL;
           auto send_ptr = Kokkos::subview(sbuf[n].vars, m, ALL, ALL, ALL, ALL);
           int data_size = send_ptr.size();
 
@@ -171,7 +172,7 @@ TaskStatus OrbitalAdvectionFC::PackAndSendFC(DvceFaceFld4D<Real> &b) {
 //! The fields themselves are not directly remapped like the CC variables.
 
 TaskStatus OrbitalAdvectionFC::RecvAndUnpackFC(DvceFaceFld4D<Real> &b0,
-                                             ReconstructionMethod rcon, Real qom){
+                                             ReconstructionMethod rcon, Real qom) {
   int nmb = pmy_pack->nmb_thispack;
   auto &rbuf = recvbuf;
 #if MPI_PARALLEL_ENABLED

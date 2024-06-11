@@ -11,6 +11,7 @@
 #include <string>
 #include <algorithm>
 #include <vector>
+#include <utility>
 
 #include "athena.hpp"
 #include "globals.hpp"
@@ -67,8 +68,7 @@ TaskStatus ShearingBoxBoundaryFC::PackAndSendFC(DvceFaceFld4D<Real> &b,
   for (int n=0; n<2; ++n) {
     int nmb1 = nmb_x1bndry(n) - 1;
     par_for_outer("shrcc",DevExeSpace(),scr_size,scr_lvl,0,nmb1,0,2,kl,ku,0,(ng-1),
-    KOKKOS_LAMBDA(TeamMember_t member, const int m, const int v, const int k, const int i)
-    {
+    KOKKOS_LAMBDA(TeamMember_t member,const int m,const int v,const int k,const int i) {
       ScrArray1D<Real> a_(member.team_scratch(scr_lvl), nj); // 1D slice of data
       ScrArray1D<Real> flx(member.team_scratch(scr_lvl), nj); // "flux" at faces
       ScrArray1D<Real> q1_(member.team_scratch(scr_lvl), nj); // scratch array
@@ -185,20 +185,17 @@ TaskStatus ShearingBoxBoundaryFC::PackAndSendFC(DvceFaceFld4D<Real> &b,
           FindTargetMB(gid,jshift,tgid,trank);
           if (trank == global_variable::my_rank) {
             int tm = TargetIndex(n,tgid);
-            using namespace Kokkos;
+            using Kokkos::ALL;
             auto src = subview(sendbuf[n].vars,m, jsrc[l],ALL,ALL,ALL);
             auto dst = subview(recvbuf[n].vars,tm,jdst[l],ALL,ALL,ALL);
             deep_copy(DevExeSpace(), dst, src);
 #if MPI_PARALLEL_ENABLED
           } else {
-            using namespace Kokkos;
+            using Kokkos::ALL;
             auto send_ptr = subview(sendbuf[n].vars,m,jsrc[l],ALL,ALL,ALL);
             // create tag using GID of *receiving* MeshBlock
             int tag = CreateBvals_MPI_Tag(tgid, ((n<<2) | l));
             int data_size = send_ptr.size();
-/****
-std::cout<<"Rank="<<global_variable::my_rank<<" posted Send,  n="<<n<<" target GID="<<tgid<<" l="<<l<<" to trank="<<trank<<" tag="<<tag<<" size="<<data_size<<std::endl;
-***/
             int ierr = MPI_Isend(send_ptr.data(), data_size, MPI_ATHENA_REAL, trank, tag,
                                  comm_sbox, &(sendbuf[n].vars_req[3*m + l]));
             if (ierr != MPI_SUCCESS) {no_errors=false;}
@@ -227,13 +224,13 @@ std::cout<<"Rank="<<global_variable::my_rank<<" posted Send,  n="<<n<<" target G
           FindTargetMB(gid,jshift,tgid,trank);
           if (trank == global_variable::my_rank) {
             int tm = TargetIndex(n,tgid);
-            using namespace Kokkos;
+            using Kokkos::ALL;
             auto src = subview(sendbuf[n].vars,m, jsrc[l],ALL,ALL,ALL);
             auto dst = subview(recvbuf[n].vars,tm,jdst[l],ALL,ALL,ALL);
             deep_copy(DevExeSpace(), dst, src);
 #if MPI_PARALLEL_ENABLED
           } else {
-            using namespace Kokkos;
+            using Kokkos::ALL;
             auto send_ptr = subview(sendbuf[n].vars,m,jsrc[l],ALL,ALL,ALL);
             // create tag using GID of *receiving* MeshBlock
             int tag = CreateBvals_MPI_Tag(tgid, ((n<<2) | l));
@@ -270,13 +267,13 @@ std::cout<<"Rank="<<global_variable::my_rank<<" posted Send,  n="<<n<<" target G
           FindTargetMB(gid,jshift,tgid,trank);
           if (trank == global_variable::my_rank) {
             int tm = TargetIndex(n,tgid);
-            using namespace Kokkos;
+            using Kokkos::ALL;
             auto src = subview(sendbuf[n].vars,m, jsrc[l],ALL,ALL,ALL);
             auto dst = subview(recvbuf[n].vars,tm,jdst[l],ALL,ALL,ALL);
             deep_copy(DevExeSpace(), dst, src);
 #if MPI_PARALLEL_ENABLED
           } else {
-            using namespace Kokkos;
+            using Kokkos::ALL;
             auto send_ptr = subview(sendbuf[n].vars,m,jsrc[l],ALL,ALL,ALL);
             // create tag using GID of *receiving* MeshBlock
             int tag = CreateBvals_MPI_Tag(tgid, ((n<<2) | l));
@@ -303,7 +300,7 @@ std::cout<<"Rank="<<global_variable::my_rank<<" posted Send,  n="<<n<<" target G
 //! then copy buffers into ghost zones. Shift has already been performed in
 //! PackAndSendFC() function
 
-TaskStatus ShearingBoxBoundaryFC::RecvAndUnpackFC(DvceFaceFld4D<Real> &b){
+TaskStatus ShearingBoxBoundaryFC::RecvAndUnpackFC(DvceFaceFld4D<Real> &b) {
   // create local references for variables in kernel
   const auto &indcs = pmy_pack->pmesh->mb_indcs;
   const int &ng = indcs.ng;
@@ -395,8 +392,7 @@ TaskStatus ShearingBoxBoundaryFC::RecvAndUnpackFC(DvceFaceFld4D<Real> &b){
   for (int n=0; n<2; ++n) {
     int nmb1 = nmb_x1bndry(n) - 1;
     par_for_outer("shrcc",DevExeSpace(),scr_size,scr_lvl,0,nmb1,0,2,kl,ku,0,(ng-1),
-    KOKKOS_LAMBDA(TeamMember_t member, const int m, const int v, const int k, const int i)
-    {
+    KOKKOS_LAMBDA(TeamMember_t member,const int m,const int v,const int k,const int i) {
       int mm = x1bndry_mbgid_.d_view(n,m) - gids_;
       if (n==0) {
         if (v==0) {

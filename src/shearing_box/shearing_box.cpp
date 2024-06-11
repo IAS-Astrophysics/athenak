@@ -6,6 +6,7 @@
 //! \file shearing_box.cpp
 //! \brief constructor for ShearingBoxBoundary abstract base class, and utility functions
 
+#include <algorithm>
 #include <iostream>
 #include <string>
 #include <vector>
@@ -96,7 +97,7 @@ ShearingBoxBoundary::~ShearingBoxBoundary() {
 //! \brief  function to find target MB offset by shear.  Returns GID and rank
 
 void ShearingBoxBoundary::FindTargetMB(const int igid, const int jshift, int &gid,
-                                       int &rank){
+                                       int &rank) {
   Mesh *pm = pmy_pack->pmesh;
   // find lloc of input MB
   LogicalLocation lloc = pm->lloc_eachmb[igid];

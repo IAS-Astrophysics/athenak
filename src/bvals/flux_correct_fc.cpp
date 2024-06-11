@@ -478,7 +478,6 @@ void MeshBoundaryValuesFC::SumBoundaryFluxes(DvceEdgeFld4D<Real> &flx,
                ((n==4)||(n==18)||(n==22)||(n==34)||(n==35)||(n==38)||(n==39))))
           && (((same_level) && (nghbr.d_view(m,n).lev == mblev.d_view(m))) ||
               (!(same_level) && (nghbr.d_view(m,n).lev > mblev.d_view(m)))) ) {
-
         int il, iu, jl, ju, kl, ku, ndat;
         // if neighbor is at same level, use same indices to unpack buffer
         if (same_level) {

@@ -9,6 +9,7 @@
 //! during the recv/unpack step, so these functions both communicate the data and perform
 //! the shift.
 
+#include <algorithm>
 #include <cstdlib>
 #include <iostream>
 #include <utility>
@@ -144,7 +145,7 @@ TaskStatus OrbitalAdvectionCC::PackAndSendCC(DvceArray5D<Real> &a) {
           int tag = CreateBvals_MPI_Tag(lid, dn);
 
           // get ptr to send buffer when neighbor is at coarser/same/fine level
-          using namespace Kokkos;
+          using Kokkos::ALL;
           auto send_ptr = Kokkos::subview(sbuf[n].vars, m, ALL, ALL, ALL, ALL);
           int data_size = send_ptr.size();
 
@@ -172,7 +173,7 @@ TaskStatus OrbitalAdvectionCC::PackAndSendCC(DvceArray5D<Real> &a) {
 //! integer shift and a fractional offset to input array a.
 
 TaskStatus OrbitalAdvectionCC::RecvAndUnpackCC(DvceArray5D<Real> &a,
-                                               ReconstructionMethod rcon, Real qom){
+                                               ReconstructionMethod rcon, Real qom) {
   // create local references for variables in kernel
   int nmb = pmy_pack->nmb_thispack;
   auto &rbuf = recvbuf;
@@ -255,7 +256,6 @@ TaskStatus OrbitalAdvectionCC::RecvAndUnpackCC(DvceArray5D<Real> &a,
       } else {
         // Load from R boundary buffer
         a_(jf) = rbuf[1].vars(m,n,(k-ks),jf-(jfe+1),(i-is));
-
       }
     });
     member.team_barrier();

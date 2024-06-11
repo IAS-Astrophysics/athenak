@@ -45,7 +45,7 @@ TaskStatus OrbitalAdvection::InitRecv() {
           int tag = CreateBvals_MPI_Tag(m, nnghbr);
 
           // get pointer to variables
-          using namespace Kokkos;
+          using Kokkos::ALL;
           auto recv_ptr = Kokkos::subview(recvbuf[n].vars, m, ALL, ALL, ALL, ALL);
           int data_size = recv_ptr.size();
 
@@ -186,7 +186,7 @@ TaskStatus ShearingBoxBoundary::InitRecv(Real qom, Real time) {
             int tag = CreateBvals_MPI_Tag(gid, ((n<<2) | l));
 
             // get pointer to variables
-            using namespace Kokkos;
+            using Kokkos::ALL;
             auto recv_ptr = Kokkos::subview(recvbuf[n].vars, m, jdst[l], ALL, ALL, ALL);
             int data_size = recv_ptr.size();
 
@@ -194,9 +194,6 @@ TaskStatus ShearingBoxBoundary::InitRecv(Real qom, Real time) {
             int ierr = MPI_Irecv(recv_ptr.data(), data_size, MPI_ATHENA_REAL, srank, tag,
                                  comm_sbox, &(recvbuf[n].vars_req[3*m + l]));
             if (ierr != MPI_SUCCESS) {no_errors=false;}
-/****
-std::cout<<"Rank="<<global_variable::my_rank<<" posted SBox Recv,  n="<<n<<" GID="<<gid<<" l="<<l<<" from srank="<<srank<<" tag="<<tag<<" size="<<data_size<<std::endl;
-***/
           }
         }
       } else if (jr < (nx2-ng)) {  //--- CASE 2
@@ -220,7 +217,7 @@ std::cout<<"Rank="<<global_variable::my_rank<<" posted SBox Recv,  n="<<n<<" GID
             int tag = CreateBvals_MPI_Tag(gid, ((n<<2) | l));
 
             // get pointer to variables
-            using namespace Kokkos;
+            using Kokkos::ALL;
             auto recv_ptr = Kokkos::subview(recvbuf[n].vars, m, jdst[l], ALL, ALL, ALL);
             int data_size = recv_ptr.size();
 
@@ -253,7 +250,7 @@ std::cout<<"Rank="<<global_variable::my_rank<<" posted SBox Recv,  n="<<n<<" GID
             int tag = CreateBvals_MPI_Tag(gid, ((n<<2) | l));
 
             // get pointer to variables
-            using namespace Kokkos;
+            using Kokkos::ALL;
             auto recv_ptr = Kokkos::subview(recvbuf[n].vars, m, jdst[l], ALL, ALL, ALL);
             int data_size = recv_ptr.size();
 
@@ -308,9 +305,6 @@ TaskStatus ShearingBoxBoundary::ClearRecv() {
           if (srank != global_variable::my_rank) {
             int ierr = MPI_Wait(&(recvbuf[n].vars_req[3*m + l]), MPI_STATUS_IGNORE);
             if (ierr != MPI_SUCCESS) {no_errors=false;}
-/****
-std::cout<<"Rank="<<global_variable::my_rank<<" Clear Recv,  n="<<n<<" GID="<<gid<<" l="<<l<<std::endl;
-***/
           }
         }
       } else if (jr < (nx2-ng)) {  //--- CASE 2
@@ -324,7 +318,6 @@ std::cout<<"Rank="<<global_variable::my_rank<<" Clear Recv,  n="<<n<<" GID="<<gi
           if (srank != global_variable::my_rank) {
             int ierr = MPI_Wait(&(recvbuf[n].vars_req[3*m + l]), MPI_STATUS_IGNORE);
             if (ierr != MPI_SUCCESS) {no_errors=false;}
-
           }
         }
       } else {                     //--- CASE 3

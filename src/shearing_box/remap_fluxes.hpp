@@ -1,5 +1,5 @@
-#ifndef SHEARING_BOX_ORBITAL_ADVECTION_HPP_
-#define SHEARING_BOX_ORBITAL_ADVECTION_HPP_
+#ifndef SHEARING_BOX_REMAP_FLUXES_HPP_
+#define SHEARING_BOX_REMAP_FLUXES_HPP_
 //========================================================================================
 // AthenaK astrophysical fluid dynamics code
 // Copyright(C) 2020 James M. Stone <jmstone@ias.edu> and the Athena code team
@@ -62,4 +62,4 @@ void PLMRemapFlx(TeamMember_t const &tmember, const int jl, const int ju, const 
   return;
 }
 
-#endif // SHEARING_BOX_ORBITAL_ADVECTION_HPP_
+#endif // SHEARING_BOX_REMAP_FLUXES_HPP_

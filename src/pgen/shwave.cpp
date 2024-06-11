@@ -132,7 +132,6 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
                 << "Hydro test needs to have ipert = 1 or 2." << std::endl;
       exit(EXIT_FAILURE);
     }
-    
   }
 
   if (pmbp->pmhd != nullptr) {
@@ -171,7 +170,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     Real cf1 = std::sqrt(B02*(1.0+beta));
     Real cf2 = amp*std::sqrt(sch*std::sqrt(k2*beta/(1.0+beta)));
     Real vd = cf1/std::sqrt(k2)*cf2;
-     
+
     par_for("shwave3_c", DevExeSpace(), 0,(pmbp->nmb_thispack-1),ks,ke,js,je,is,ie,
     KOKKOS_LAMBDA(int m, int k, int j, int i) {
       Real &x1min = size.d_view(m).x1min;

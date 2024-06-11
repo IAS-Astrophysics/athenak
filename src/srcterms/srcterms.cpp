@@ -73,7 +73,6 @@ SourceTerms::SourceTerms(std::string block, MeshBlockPack *pp, ParameterInput *p
   } else {
     shearing_box = false;
   }
-
 }
 
 //----------------------------------------------------------------------------------------
