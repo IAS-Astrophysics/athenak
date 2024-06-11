@@ -48,10 +48,17 @@ namespace radiationfemn
                      Real xi1, Real xi2, Real xi3, int basis_choice);
 
     Real fpn_basis_lm(int l, int m, Real phi, Real theta);
+    Real fpn_basis_lm_alt(int l, int m, Real phi, Real theta);
     Real dfpn_dtheta(int l, int m, Real phi, Real theta);
     Real cosec_dfpn_dphi(int l, int m, Real phi, Real theta);
     Real dfpn_dOmega(int l, int m, Real phi, Real theta, int var_index);
     Real inv_jac_itilde_ihat(Real phi, Real theta, int tilde_index, int hat_index);
+
+    Real legendre(int l, int m, Real x);
+    Real legendre_factor(int l, int m);
+    Real recurrence_legendre(int l, int m, Real x);
+    Real recurrence_legendre_alt(int l, int m, Real x);
+    Real recurrence_derivative_legendre(Real l, Real m, Real x);
 
     // helper functions and other functions over geodesic grid
     void BarycentricToCartesian(Real x1, Real y1, Real z1, Real x2, Real y2, Real z2, Real x3, Real y3, Real z3, Real xi1, Real xi2, Real xi3,

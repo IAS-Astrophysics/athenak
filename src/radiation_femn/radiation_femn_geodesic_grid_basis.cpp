@@ -171,6 +171,18 @@ Real fem_basis_a(int a, int t1, int t2, int t3, Real xi1, Real xi2, Real xi3, in
 Real fpn_basis_lm(int l, int m, Real phi, Real theta) {
   Real result = 0.;
   if (m > 0) {
+    result = sqrt(2.) * legendre_factor(l,m) * cos(m * phi) * legendre(l, m, cos(theta));
+  } else if (m == 0) {
+    result = legendre_factor(l,m) * legendre(l, 0, cos(theta));
+  } else {
+    result = sqrt(2.) * legendre_factor(l,abs(m)) * sin(abs(m) * phi) * legendre(l, abs(m), cos(theta));
+  }
+  return result;
+}
+
+Real fpn_basis_lm_alt(int l, int m, Real phi, Real theta) {
+  Real result = 0.;
+  if (m > 0) {
     result = sqrt(2.) * cos(m * phi) * gsl_sf_legendre_sphPlm(l, m, cos(theta));
   } else if (m == 0) {
     result = gsl_sf_legendre_sphPlm(l, 0, cos(theta));
@@ -180,7 +192,7 @@ Real fpn_basis_lm(int l, int m, Real phi, Real theta) {
   return result;
 }
 
-inline Real legendre(int l, int m, Real x) {
+Real legendre(int l, int m, Real x) {
   // if l is smaller than zero, replace by -l-1
   l = (l >= 0) ? l : -l - 1;
 
@@ -191,7 +203,7 @@ inline Real legendre(int l, int m, Real x) {
 
   // formula for negative l
   if (m < 0) {
-    return pow(-1, m) * (gsl_sf_fact(l + m) / gsl_sf_fact(l - m)) * gsl_sf_legendre_Plm(l, m, x);
+    return pow(-1, -m) * (gsl_sf_fact(l + m) / gsl_sf_fact(l - m)) * gsl_sf_legendre_Plm(l, -m, x);
   } else {
     // 0 <= m <= l
     return gsl_sf_legendre_Plm(l, m, x);
