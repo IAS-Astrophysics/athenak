@@ -43,39 +43,39 @@ void IonNeutral::AssembleIonNeutralTasks(
   id.impl_2x = tl["stagen"]->AddTask(&IonNeutral::FirstTwoImpRK, this, none);
   // above does CopyCons
 
-  id.i_flux  = tl["stagen"]->AddTask(&MHD::Fluxes, pmhd, id.impl_2x);
-  id.i_sendf = tl["stagen"]->AddTask(&MHD::SendFlux, pmhd, id.i_flux);
-  id.i_recvf = tl["stagen"]->AddTask(&MHD::RecvFlux, pmhd, id.i_sendf);
-  id.i_expl  = tl["stagen"]->AddTask(&MHD::ExpRKUpdate, pmhd, id.i_recvf);
+  id.i_flux   = tl["stagen"]->AddTask(&MHD::Fluxes, pmhd, id.impl_2x);
+  id.i_sendf  = tl["stagen"]->AddTask(&MHD::SendFlux, pmhd, id.i_flux);
+  id.i_recvf  = tl["stagen"]->AddTask(&MHD::RecvFlux, pmhd, id.i_sendf);
+  id.i_rkupdt = tl["stagen"]->AddTask(&MHD::RKUpdate, pmhd, id.i_recvf);
 
-  id.n_flux  = tl["stagen"]->AddTask(&Hydro::Fluxes, phyd, id.i_expl);
-  id.n_sendf = tl["stagen"]->AddTask(&Hydro::SendFlux, phyd, id.n_flux);
-  id.n_recvf = tl["stagen"]->AddTask(&Hydro::RecvFlux, phyd, id.n_sendf);
-  id.n_expl  = tl["stagen"]->AddTask(&Hydro::ExpRKUpdate, phyd, id.n_recvf);
+  id.n_flux   = tl["stagen"]->AddTask(&Hydro::Fluxes, phyd, id.i_rkupdt);
+  id.n_sendf  = tl["stagen"]->AddTask(&Hydro::SendFlux, phyd, id.n_flux);
+  id.n_recvf  = tl["stagen"]->AddTask(&Hydro::RecvFlux, phyd, id.n_sendf);
+  id.n_rkupdt = tl["stagen"]->AddTask(&Hydro::RKUpdate, phyd, id.n_recvf);
 
-  id.impl = tl["stagen"]->AddTask(&IonNeutral::ImpRKUpdate, this, id.n_expl);
-  id.i_restu = tl["stagen"]->AddTask(&MHD::RestrictU, pmhd, id.impl);
-  id.n_restu = tl["stagen"]->AddTask(&Hydro::RestrictU, phyd, id.i_restu);
+  id.impl     = tl["stagen"]->AddTask(&IonNeutral::ImpRKUpdate, this, id.n_rkupdt);
+  id.i_restu  = tl["stagen"]->AddTask(&MHD::RestrictU, pmhd, id.impl);
+  id.n_restu  = tl["stagen"]->AddTask(&Hydro::RestrictU, phyd, id.i_restu);
 
-  id.i_sendu = tl["stagen"]->AddTask(&MHD::SendU, pmhd, id.n_restu);
-  id.n_sendu = tl["stagen"]->AddTask(&Hydro::SendU, phyd, id.n_restu);
-  id.i_recvu = tl["stagen"]->AddTask(&MHD::RecvU, pmhd, id.i_sendu);
-  id.n_recvu = tl["stagen"]->AddTask(&Hydro::RecvU, phyd, id.n_sendu);
+  id.i_sendu  = tl["stagen"]->AddTask(&MHD::SendU, pmhd, id.n_restu);
+  id.n_sendu  = tl["stagen"]->AddTask(&Hydro::SendU, phyd, id.n_restu);
+  id.i_recvu  = tl["stagen"]->AddTask(&MHD::RecvU, pmhd, id.i_sendu);
+  id.n_recvu  = tl["stagen"]->AddTask(&Hydro::RecvU, phyd, id.n_sendu);
 
-  id.efld  = tl["stagen"]->AddTask(&MHD::CornerE, pmhd, id.i_recvu);
-  id.ct    = tl["stagen"]->AddTask(&MHD::CT, pmhd, id.efld);
-  id.restb = tl["stagen"]->AddTask(&MHD::RestrictB, pmhd, id.ct);
-  id.sendb = tl["stagen"]->AddTask(&MHD::SendB, pmhd, id.restb);
-  id.recvb = tl["stagen"]->AddTask(&MHD::RecvB, pmhd, id.sendb);
+  id.efld     = tl["stagen"]->AddTask(&MHD::CornerE, pmhd, id.i_recvu);
+  id.ct       = tl["stagen"]->AddTask(&MHD::CT, pmhd, id.efld);
+  id.restb    = tl["stagen"]->AddTask(&MHD::RestrictB, pmhd, id.ct);
+  id.sendb    = tl["stagen"]->AddTask(&MHD::SendB, pmhd, id.restb);
+  id.recvb    = tl["stagen"]->AddTask(&MHD::RecvB, pmhd, id.sendb);
 
-  id.i_bcs   = tl["stagen"]->AddTask(&MHD::ApplyPhysicalBCs, pmhd, id.recvb);
-  id.n_bcs   = tl["stagen"]->AddTask(&Hydro::ApplyPhysicalBCs, phyd, id.n_recvu);
-  id.i_prol  = tl["stagen"]->AddTask(&MHD::Prolongate, pmhd, id.i_bcs);
-  id.n_prol  = tl["stagen"]->AddTask(&Hydro::Prolongate, phyd, id.n_bcs);
-  id.i_c2p   = tl["stagen"]->AddTask(&MHD::ConToPrim, pmhd, id.i_prol);
-  id.n_c2p   = tl["stagen"]->AddTask(&Hydro::ConToPrim, phyd, id.n_prol);
-  id.i_newdt = tl["stagen"]->AddTask(&MHD::NewTimeStep, pmhd, id.i_c2p);
-  id.n_newdt = tl["stagen"]->AddTask(&Hydro::NewTimeStep, phyd, id.n_c2p);
+  id.i_bcs    = tl["stagen"]->AddTask(&MHD::ApplyPhysicalBCs, pmhd, id.recvb);
+  id.n_bcs    = tl["stagen"]->AddTask(&Hydro::ApplyPhysicalBCs, phyd, id.n_recvu);
+  id.i_prol   = tl["stagen"]->AddTask(&MHD::Prolongate, pmhd, id.i_bcs);
+  id.n_prol   = tl["stagen"]->AddTask(&Hydro::Prolongate, phyd, id.n_bcs);
+  id.i_c2p    = tl["stagen"]->AddTask(&MHD::ConToPrim, pmhd, id.i_prol);
+  id.n_c2p    = tl["stagen"]->AddTask(&Hydro::ConToPrim, phyd, id.n_prol);
+  id.i_newdt  = tl["stagen"]->AddTask(&MHD::NewTimeStep, pmhd, id.i_c2p);
+  id.n_newdt  = tl["stagen"]->AddTask(&Hydro::NewTimeStep, phyd, id.n_c2p);
 
   // assemble "after_stagen_tl" task list
   id.i_clear = tl["after_stagen"]->AddTask(&MHD::ClearSend, pmhd, none);

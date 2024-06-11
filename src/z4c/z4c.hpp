@@ -203,7 +203,7 @@ class Z4c {
   MeshBoundaryValuesCC *pbval_u;
 
   // Boundary communication buffers for the weyl scalar
-  BoundaryValuesCC *pbval_weyl;
+  MeshBoundaryValuesCC *pbval_weyl;
 
   // following only used for time-evolving flow
   Real dtnew;

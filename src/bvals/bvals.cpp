@@ -120,10 +120,10 @@ void MeshBoundaryValues::InitializeBuffers(const int nvar) {
     for (int fz=0; fz<nfz; fz++) {
       for (int fy = 0; fy<nfy; fy++) {
         int indx = NeighborIndex(n,0,0,fy,fz);
-        InitSendIndices(send_buf[indx],n, 0, 0, fy, fz);
-        InitRecvIndices(recv_buf[indx],n, 0, 0, fy, fz);
-        send_buf[indx].AllocateBuffers(nmb, nvar, is_z4c_);
-        recv_buf[indx].AllocateBuffers(nmb, nvar, is_z4c_);
+        InitSendIndices(sendbuf[indx],n, 0, 0, fy, fz);
+        InitRecvIndices(recvbuf[indx],n, 0, 0, fy, fz);
+        sendbuf[indx].AllocateBuffers(nmb, nvar, is_z4c_);
+        recvbuf[indx].AllocateBuffers(nmb, nvar, is_z4c_);
         indx++;
       }
     }
@@ -136,10 +136,10 @@ void MeshBoundaryValues::InitializeBuffers(const int nvar) {
       for (int fz=0; fz<nfz; fz++) {
         for (int fx=0; fx<nfx; fx++) {
           int indx = NeighborIndex(0,m,0,fx,fz);
-          InitSendIndices(send_buf[indx],0, m, 0, fx, fz);
-          InitRecvIndices(recv_buf[indx],0, m, 0, fx, fz);
-          send_buf[indx].AllocateBuffers(nmb, nvar, is_z4c_);
-          recv_buf[indx].AllocateBuffers(nmb, nvar, is_z4c_);
+          InitSendIndices(sendbuf[indx],0, m, 0, fx, fz);
+          InitRecvIndices(recvbuf[indx],0, m, 0, fx, fz);
+          sendbuf[indx].AllocateBuffers(nmb, nvar, is_z4c_);
+          recvbuf[indx].AllocateBuffers(nmb, nvar, is_z4c_);
           indx++;
         }
       }
@@ -150,10 +150,10 @@ void MeshBoundaryValues::InitializeBuffers(const int nvar) {
       for (int n=-1; n<=1; n+=2) {
         for (int fz=0; fz<nfz; fz++) {
           int indx = NeighborIndex(n,m,0,fz,0);
-          InitSendIndices(send_buf[indx],n, m, 0, fz, 0);
-          InitRecvIndices(recv_buf[indx],n, m, 0, fz, 0);
-          send_buf[indx].AllocateBuffers(nmb, nvar, is_z4c_);
-          recv_buf[indx].AllocateBuffers(nmb, nvar, is_z4c_);
+          InitSendIndices(sendbuf[indx],n, m, 0, fz, 0);
+          InitRecvIndices(recvbuf[indx],n, m, 0, fz, 0);
+          sendbuf[indx].AllocateBuffers(nmb, nvar, is_z4c_);
+          recvbuf[indx].AllocateBuffers(nmb, nvar, is_z4c_);
           indx++;
         }
       }
@@ -167,10 +167,10 @@ void MeshBoundaryValues::InitializeBuffers(const int nvar) {
       for (int fy=0; fy<nfy; fy++) {
         for (int fx=0; fx<nfx; fx++) {
           int indx = NeighborIndex(0,0,l,fx,fy);
-          InitSendIndices(send_buf[indx],0, 0, l, fx, fy);
-          InitRecvIndices(recv_buf[indx],0, 0, l, fx, fy);
-          send_buf[indx].AllocateBuffers(nmb, nvar, is_z4c_);
-          recv_buf[indx].AllocateBuffers(nmb, nvar, is_z4c_);
+          InitSendIndices(sendbuf[indx],0, 0, l, fx, fy);
+          InitRecvIndices(recvbuf[indx],0, 0, l, fx, fy);
+          sendbuf[indx].AllocateBuffers(nmb, nvar, is_z4c_);
+          recvbuf[indx].AllocateBuffers(nmb, nvar, is_z4c_);
           indx++;
         }
       }
@@ -181,10 +181,10 @@ void MeshBoundaryValues::InitializeBuffers(const int nvar) {
       for (int n=-1; n<=1; n+=2) {
         for (int fy=0; fy<nfy; fy++) {
           int indx = NeighborIndex(n,0,l,fy,0);
-          InitSendIndices(send_buf[indx],n, 0, l, fy, 0);
-          InitRecvIndices(recv_buf[indx],n, 0, l, fy, 0);
-          send_buf[indx].AllocateBuffers(nmb, nvar, is_z4c_);
-          recv_buf[indx].AllocateBuffers(nmb, nvar, is_z4c_);
+          InitSendIndices(sendbuf[indx],n, 0, l, fy, 0);
+          InitRecvIndices(recvbuf[indx],n, 0, l, fy, 0);
+          sendbuf[indx].AllocateBuffers(nmb, nvar, is_z4c_);
+          recvbuf[indx].AllocateBuffers(nmb, nvar, is_z4c_);
           indx++;
         }
       }
@@ -195,10 +195,10 @@ void MeshBoundaryValues::InitializeBuffers(const int nvar) {
       for (int m=-1; m<=1; m+=2) {
         for (int fx=0; fx<nfx; fx++) {
           int indx = NeighborIndex(0,m,l,fx,0);
-          InitSendIndices(send_buf[indx],0, m, l, fx, 0);
-          InitRecvIndices(recv_buf[indx],0, m, l, fx, 0);
-          send_buf[indx].AllocateBuffers(nmb, nvar, is_z4c_);
-          recv_buf[indx].AllocateBuffers(nmb, nvar, is_z4c_);
+          InitSendIndices(sendbuf[indx],0, m, l, fx, 0);
+          InitRecvIndices(recvbuf[indx],0, m, l, fx, 0);
+          sendbuf[indx].AllocateBuffers(nmb, nvar, is_z4c_);
+          recvbuf[indx].AllocateBuffers(nmb, nvar, is_z4c_);
           indx++;
         }
       }
@@ -209,10 +209,10 @@ void MeshBoundaryValues::InitializeBuffers(const int nvar) {
       for (int m=-1; m<=1; m+=2) {
         for (int n=-1; n<=1; n+=2) {
           int indx = NeighborIndex(n,m,l,0,0);
-          InitSendIndices(send_buf[indx],n, m, l, 0, 0);
-          InitRecvIndices(recv_buf[indx],n, m, l, 0, 0);
-          send_buf[indx].AllocateBuffers(nmb, nvar, is_z4c_);
-          recv_buf[indx].AllocateBuffers(nmb, nvar, is_z4c_);
+          InitSendIndices(sendbuf[indx],n, m, l, 0, 0);
+          InitRecvIndices(recvbuf[indx],n, m, l, 0, 0);
+          sendbuf[indx].AllocateBuffers(nmb, nvar, is_z4c_);
+          recvbuf[indx].AllocateBuffers(nmb, nvar, is_z4c_);
         }
       }
     }

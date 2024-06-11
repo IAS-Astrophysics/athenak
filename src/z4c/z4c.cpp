@@ -156,7 +156,7 @@ Z4c::Z4c(MeshBlockPack *ppack, ParameterInput *pin) :
   Kokkos::Profiling::pushRegion("Buffers");
   pbval_u = new MeshBoundaryValuesCC(ppack, pin, true);
   pbval_u->InitializeBuffers((nz4c));
-  pbval_weyl = new BoundaryValuesCC(ppack, pin, true);
+  pbval_weyl = new MeshBoundaryValuesCC(ppack, pin, true);
   pbval_weyl->InitializeBuffers((2));
   Kokkos::Profiling::popRegion();
 
