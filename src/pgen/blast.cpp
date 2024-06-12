@@ -24,6 +24,50 @@
 #include "coordinates/cell_locations.hpp"
 
 KOKKOS_INLINE_FUNCTION
+Real GetCartesianFromSnake(Real w, Real y, Real A, Real k) {
+  return w + A*sin(k*M_PI*y);
+}
+
+KOKKOS_INLINE_FUNCTION
+void GetCartesianFromRipple(Real &x, Real &y, Real w, Real v, Real A, Real k) {
+  // We do a 2D Newton-Raphson solve for the Cartesian coordinates. Since it follows that
+  // w \in [x-A, x+A], we know that x \in [w-2A, w+2A]. The same holds for y. Thus we can
+  // use these as bounds to keep the solver from diverging.
+  Real xlb = w - 2.0*A;
+  Real xub = w + 2.0*A;
+  Real ylb = v - 2.0*A;
+  Real yub = v + 2.0*A;
+  Real tol = 1e-15;
+
+  x = w;
+  y = v;
+
+  Real fx = x - w - A*sin(k*M_PI*y);
+  Real fy = y - v - A*sin(k*M_PI*x);
+  int its = 0;
+  int max_its = 30;
+  while ((std::abs(fx) > tol || std::abs(fy) > tol) && its < max_its) {
+    // Auxiliary quantities needed for the root solve.
+    Real delx = A*k*M_PI*cos(k*M_PI*x);
+    Real dely = A*k*M_PI*cos(k*M_PI*y);
+    Real idet = 1.0/(1.0 - delx*dely);
+
+    // Estimate the updated roots (J^-1 f)
+    x = x - (fx + dely*fy)*idet;
+    y = y - (fy + delx*fx)*idet;
+    // Limit the roots
+    x = (x < xlb) ? xlb : x;
+    x = (x > xub) ? xub : x;
+    y = (y < ylb) ? ylb : y;
+    y = (y > yub) ? yub : y;
+
+    // Update the function values
+    fx = x - w - A*sin(k*M_PI*y);
+    fy = y - v - A*sin(k*M_PI*x);
+  }
+}
+
+KOKKOS_INLINE_FUNCTION
 Real GetCartesianFromScrewball(Real u, Real a) {
   // We define u = x*exp(-x^2/2a^2), so the transformation from u to x is not analytic.
   // However, we restrict u s.t. u \in [0, a/sqrt(e)], so we also know that x \in [u, a].
@@ -91,8 +135,28 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   Real prat = pin->GetReal("problem", "prat");
   Real drat = pin->GetOrAddReal("problem", "drat", 1.0);
   Real b_amb = pin->GetOrAddReal("problem", "b_amb", 0.1);
-  Real warp = pin->GetOrAddBoolean("problem", "warp", false);
+  std::string coords = pin->GetOrAddString("problem", "coordinates", "cartesian");
+  bool warp = false;
+  bool snake = false;
+  bool ripple = false;
+  if (coords.compare("cartesian") != 0 && pmbp->padm == nullptr) {
+    std::cout << "Alternate coordinates are only supported for DynGR.\n"
+    std::cout << "Defaulting to Cartesian.\n";
+  } else {
+    if (coords.compare("warp") == 0) {
+      warp = true;
+    } else if (coords.compare("snake") == 0) {
+      snake = true;
+    } else if (coords.compare("ripple") == 0) {
+      ripple = true;
+    } else if (coords.compare("cartesian") != 0) {
+      std::cout << "Unknown coordinates '" << coords << "' requested.\n"
+                << "Defaulting to Cartesian.\n";
+    }
+  }
   Real a_warp = pin->GetOrAddReal("problem", "a_warp", 6.0);
+  Real A_snake = pin->GetOrAddReal("problem", "A_snake", 0.1);
+  Real k_snake = pin->GetOrAddReal("problem", "k_snake", 2.0);
 
   // capture variables for the kernel
   auto &indcs = pmy_mesh_->mb_indcs;
@@ -184,6 +248,13 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
         Real x = GetCartesianFromScrewball(x1v, a_warp);
         Real y = GetCartesianFromScrewball(x2v, a_warp);
         rad = std::sqrt(SQR(x) + SQR(y) + SQR(x3v));
+      } else if (snake) {
+        Real x = GetCartesianFromSnake(x1v, x2v, A_snake, k_snake);
+        rad = std::sqrt(SQR(x) + SQR(x2v) + SQR(x3v));
+      } else if (ripple) {
+        Real x, y;
+        GetCartesianFromRipple(x, y, x1v, x2v, A_snake, k_snake);
+        rad = std::sqrt(SQR(x) + SQR(y) + SQR(x3v));
       } else {
         rad = std::sqrt(SQR(x1v) + SQR(x2v) + SQR(x3v));
       }
@@ -213,23 +284,89 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     auto &b0 = pmbp->pmhd->b0;
     par_for("pgen_blast2",DevExeSpace(),0,(pmbp->nmb_thispack-1),ks,ke,js,je,is,ie,
     KOKKOS_LAMBDA(int m, int k, int j, int i) {
-      Real jac = 1.0;
+      Real jacx = 1.0;
+      Real jacy = 0.0;
+
+      Real &x1min = size.d_view(m).x1min;
+      Real &x1max = size.d_view(m).x1max;
+      int nx1 = indcs.nx1;
+      Real x1v = CellCenterX(i-is, nx1, x1min, x1max);
+      Real x1f = LeftEdgeX(i-is, nx1, x1min, x1max);
+      Real &x2min = size.d_view(m).x2min;
+      Real &x2max = size.d_view(m).x2max;
+      int nx2 = indcs.nx2;
+      Real x2v = CellCenterX(j-js, nx2, x2min, x2max);
+      Real x2f = LeftEdgeX(j-js, nx2, x2min, x2max);
+
       if (warp) {
-        Real &x2min = size.d_view(m).x2min;
-        Real &x2max = size.d_view(m).x2max;
-        int nx2 = indcs.nx2;
-        Real x2v = CellCenterX(j-js, nx2, x2min, x2max);
         Real y = GetCartesianFromScrewball(x2v, a_warp);
 
-        jac = 1.0/(1.0 - (y*y)/(a_warp*a_warp))*std::exp(y*y/(2.0*a_warp*a_warp));
+        jacx = 1.0/(1.0 - (y*y)/(a_warp*a_warp))*std::exp(y*y/(2.0*a_warp*a_warp));
+      } else if (snake) {
+        jacx = 1.0;
+      } else if (ripple) {
+        // WARNING (JF)
+        // In ripple coordinates, B^x, B^y are no longer independent of x and y. Because
+        // we transform B^i directly rather than working with the vector potential, div B
+        // will not be 0 to double precision for the discretized solution. Since this
+        // coordinate transformation is very contrived and really only suitable for
+        // validating the coordinate independence of the Valencia solver, I did not think
+        // it was worth the time to convert this to use the vector potential. However, if
+        // someone is particularly bothered by this, they are welcome to change it
+        // themselves.
+        Real x, y;
+        GetCartesianFromRipple(x, y, x1f, x2v, A_snake, k_snake);
+
+        Real delx = A_snake*k_snake*M_PI*cos(k_snake*M_PI*x);
+        Real dely = A_snake*k_snake*M_PI*cos(k_snake*M_PI*y);
+        Real idetJ = 1.0/(1.0 - delx*dely);
+
+        jacx = idetJ;
+        //Real jacy = -delx*idetJ;
       }
-      b0.x1f(m,k,j,i) = jac*b_amb;
-      b0.x2f(m,k,j,i) = 0.0;
+      b0.x1f(m,k,j,i) = jacx*b_amb;
+      if (ripple) {
+        Real x, y;
+        GetCartesianFromRipple(x, y, x1v, x2f, A_snake, k_snake);
+
+        Real delx = A_snake*k_snake*M_PI*cos(k_snake*M_PI*x);
+        Real dely = A_snake*k_snake*M_PI*cos(k_snake*M_PI*y);
+        Real idetJ = 1.0/(1.0 - delx*dely);
+
+        jacy = -delx*idetJ;
+      }
+      b0.x2f(m,k,j,i) = jacy*b_amb;
       b0.x3f(m,k,j,i) = 0.0;
 
       // Include extra face-component at edge of block in each direction
-      if (i==ie) {b0.x1f(m,k,j,i+1) = jac*b_amb;}
-      if (j==je) {b0.x2f(m,k,j+1,i) = 0.0;}
+      if (i==ie) {
+        if (ripple) {
+          x1f = LeftEdgeX(i+1-is, nx1, x1min, x1max);
+          Real x, y;
+          GetCartesianFromRipple(x, y, x1f, x2v, A_snake, k_snake);
+
+          Real delx = A_snake*k_snake*M_PI*cos(k_snake*M_PI*x);
+          Real dely = A_snake*k_snake*M_PI*cos(k_snake*M_PI*y);
+          Real idetJ = 1.0/(1.0 - delx*dely);
+
+          jacx = idetJ;
+        }
+        b0.x1f(m,k,j,i+1) = jacx*b_amb;
+      }
+      if (j==je) {
+        if (ripple) {
+          x2f = LeftEdgeX(j+1-js, nx2, x2min, x2max);
+          Real x, y;
+          GetCartesianFromRipple(x, y, x1v, x2f, A_snake, k_snake);
+
+          Real delx = A_snake*k_snake*M_PI*cos(k_snake*M_PI*x);
+          Real dely = A_snake*k_snake*M_PI*cos(k_snake*M_PI*y);
+          Real idetJ = 1.0/(1.0 - delx*dely);
+
+          jacy = -delx*idetJ;
+        }
+        b0.x2f(m,k,j+1,i) = jacy*b_amb;
+      }
       if (k==ke) {b0.x3f(m,k+1,j,i) = 0.0;}
     });
 
@@ -265,27 +402,41 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     KOKKOS_LAMBDA(int m, int k, int j, int i) {
       Real xmul = 1.0;
       Real ymul = 1.0;
+      Real offxy = 0.0;
+      Real &x1min = size.d_view(m).x1min;
+      Real &x1max = size.d_view(m).x1max;
+      int nx1 = indcs.nx1;
+      Real x1v = CellCenterX(i-is, nx1, x1min, x1max);
+
+      Real &x2min = size.d_view(m).x2min;
+      Real &x2max = size.d_view(m).x2max;
+      int nx2 = indcs.nx2;
+      Real x2v = CellCenterX(j-js, nx2, x2min, x2max);
+
       if (warp) {
-        Real &x1min = size.d_view(m).x1min;
-        Real &x1max = size.d_view(m).x1max;
-        int nx1 = indcs.nx1;
-        Real x1v = CellCenterX(i-is, nx1, x1min, x1max);
-
-        Real &x2min = size.d_view(m).x2min;
-        Real &x2max = size.d_view(m).x2max;
-        int nx2 = indcs.nx2;
-        Real x2v = CellCenterX(j-js, nx2, x2min, x2max);
-
-        Real &x3min = size.d_view(m).x3min;
-        Real &x3max = size.d_view(m).x3max;
-        int nx3 = indcs.nx3;
-        Real x3v = CellCenterX(k-ks, nx3, x3min, x3max);
-
         Real x = GetCartesianFromScrewball(x1v, a_warp);
         Real y = GetCartesianFromScrewball(x2v, a_warp);
 
         xmul = 1.0/SQR(1.0 - x*x/(a_warp*a_warp))*std::exp(-x*x/(a_warp*a_warp));
         ymul = 1.0/SQR(1.0 - y*y/(a_warp*a_warp))*std::exp(-y*y/(a_warp*a_warp));
+      } else if (snake) {
+        Real delta = A_snake*k_snake*M_PI*cos(k_snake*M_PI*x2v);
+
+        ymul = 1.0 + delta*delta;
+        offxy = delta;
+      } else if (ripple) {
+        Real x, y;
+        GetCartesianFromRipple(x, y, x1v, x2v, A_snake, k_snake);
+
+        Real delx = A_snake*k_snake*M_PI*cos(k_snake*M_PI*x);
+        Real dely = A_snake*k_snake*M_PI*cos(k_snake*M_PI*y);
+
+        Real vol = 1.0/(1. - delx*dely);
+        Real detg = vol*vol;
+
+        xmul = detg*(1. + delx*delx);
+        ymul = detg*(1. + dely*dely);
+        offxy = delx + dely;
       }
 
       // Set ADM to flat space
@@ -297,7 +448,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
       adm.psi4(m, k, j, i) = 1.0;
 
       adm.g_dd(m, 0, 0, k, j, i) = xmul;
-      adm.g_dd(m, 0, 1, k, j, i) = 0.0;
+      adm.g_dd(m, 0, 1, k, j, i) = offxy;
       adm.g_dd(m, 0, 2, k, j, i) = 0.0;
       adm.g_dd(m, 1, 1, k, j, i) = ymul;
       adm.g_dd(m, 1, 2, k, j, i) = 0.0;
