@@ -171,11 +171,11 @@ Real fem_basis_a(int a, int t1, int t2, int t3, Real xi1, Real xi2, Real xi3, in
 Real fpn_basis_lm(int l, int m, Real phi, Real theta) {
   Real result = 0.;
   if (m > 0) {
-    result = sqrt(2.) * legendre_factor(l,m) * cos(m * phi) * legendre(l, m, cos(theta));
+    result = sqrt(2.) * legendre_factor(l, m) * cos(m * phi) * legendre(l, m, cos(theta));
   } else if (m == 0) {
-    result = legendre_factor(l,m) * legendre(l, 0, cos(theta));
+    result = legendre_factor(l, m) * legendre(l, 0, cos(theta));
   } else {
-    result = sqrt(2.) * legendre_factor(l,abs(m)) * sin(abs(m) * phi) * legendre(l, abs(m), cos(theta));
+    result = sqrt(2.) * legendre_factor(l, abs(m)) * sin(abs(m) * phi) * legendre(l, abs(m), cos(theta));
   }
   return result;
 }
@@ -240,7 +240,7 @@ Real recurrence_legendre_alt(int l, int m, Real x) {
  *
  * sqrt(1 - x^2) dP^m_l/dx = (0.5) * ((l+m)(l-m+1)P^m-1_l(x) - P^m+1_l(x))
  */
-inline Real recurrence_derivative_legendre(Real l, Real m, Real x) {
+Real recurrence_derivative_legendre(Real l, Real m, Real x) {
   return (0.5) * ((l + m) * (l - m + 1) * legendre(l, m - 1, x) - legendre(l, m + 1, x));
 }
 
@@ -258,19 +258,17 @@ Real dfpn_dOmega(int l, int m, Real phi, Real theta, int var_index) {
 // cosec(theta) dYlm/dphi = - m cosec(theta) Yl-m
 inline Real cosec_dfpn_dphi(int l, int m, Real phi, Real theta) {
   Real result = 0.;
-  if (-m > 0) {
-    result = -sqrt(2.) * cos(-m * phi) * legendre_factor(l, -m) * recurrence_legendre(l, -m, cos(theta));
+  if (m < 0) {
+    result = -sqrt(2.) * cos(abs(m) * phi) * legendre_factor(l, abs(m)) * recurrence_legendre(l, abs(m), cos(theta));
   } else if (m == 0) {
     result = 0;
   } else {
-    result = -sqrt(2.) * sin(abs(-m) * phi) * legendre_factor(l, m) * recurrence_legendre(l, abs(-m), cos(theta));
+    result = -sqrt(2.) * sin(m * phi) * legendre_factor(l, m) * recurrence_legendre(l, m, cos(theta));
   }
   return result;
 }
 
-/* dYlm/dtheta
- *
- */
+// dYlm/dtheta
 inline Real dfpn_dtheta(int l, int m, Real phi, Real theta) {
   Real result = 0.;
   const Real x = cos(theta);

@@ -11,6 +11,8 @@
 #include <sstream>
 #include <cmath>        // exp
 #include <algorithm>    // max
+#include <gsl/gsl_sf_legendre.h>
+#include <gsl/gsl_sf.h>
 
 // AthenaK headers
 #include "athena.hpp"
@@ -107,5 +109,33 @@ void ProblemGenerator::RadiationFEMNSpharms(ParameterInput *pin, const bool rest
     }
   }
   std::cout << "Error: (" << lwhere << ", " << mwhere << ") " << error4 << std::endl;
+  std::cout << std::endl;
+
+  std::cout << "Test: Recurrence relation for derivatives of legendre functions " << std::endl;
+  Real error5 = -42;
+  x = 0.9543;
+  N = 50;
+  Real l_arr_der[] = {3, 21, 4, 4, 1, 6, 30, 1, 1, 5, 14, 3, 12, 1, 22, 2, 13, 16, 9, 7, 6, 22, 30, 1, 16, 5, 9, 15, 20, 6, 7, 13, 27, 26, 24, 19, 22, 29, 30, 12, 7, 2, 25, 19, 9,
+                      9, 24, 15, 2, 15};
+  Real m_arr_der[] = {3, -17, 4, -2, 1, 2, 10, 0, 1, -2, 14, -2, 12, 0, 0, 0, -8, 5, 8, 6, -5, -9, -21, 0, -13, 3, 1, 9, 20, -1, 4, 13, 24, -26, -19, -14, 16, -9, 13, -7, -4, -2,
+                      3, -16, -7, 1, -8, -9, 1, -7};
+  Real answers_der[] = {12.833678446477364, -3.7485313358964635e-27, -35.79658907705998, -0.18885751517075017, 3.1932374042960863, -205.8081964694436, -4575541402899365.0, 1.0,
+                        3.1932374042960863, -0.15700256295482534, -1447338394.3152037, -0.2165081837500001, -20578422.92138207, 1.0, -4.331736109744453, 2.8629000000000007,
+                        -3.641462521813354e-10, 8209233.363531861, -176658.00880122583, -5793.574402291702, -3.10289334851494e-05, -2.658855619591872e-12, -1.1604338894053653e-35,
+                        1.0, -3.4647872930601917e-19, 299.16774845362556, -105.39268087143103, 5440353368.61422, -2207000067008977.2, 0.1570454386532748, -4532.723627758876,
+                        166558928.94211188, -1.399080982140365e+24, -2.3612857317855684e-46, -2.5794445596378183e-31, -3.488453514888697e-21, -2.5367209978784794e+17,
+                        -6.118025142041337e-13, 1.4769455048587022e+19, -1.669350482698397e-08, -0.0006813257016232078, -0.2385750000000001, -104770.0248203713,
+                        -4.263312189412571e-25, -2.1672181765526562e-08, -105.39268087143103, -6.832905219781743e-11, -6.313263785449105e-12, 8.24536842365218,
+                        -1.1752104590970943e-08};
+  for (int i = 0; i < N; i++) {
+    Real legval_der = radiationfemn::recurrence_derivative_legendre(l_arr[i], m_arr[i], x);
+    Real answers_der_final = sqrt(1 - x*x) * answers_der[i];
+    Real erval = fabs(answers_der_final) > 1e-14 ? fabs(legval_der - answers_der_final)/ fabs(answers_der_final) : fabs(legval_der - answers_der_final);
+    if (erval > error5) {
+      error2 = erval;
+    }
+    std::cout << "l = " << l_arr[i] << ", m = " << m_arr[i] << ": " << legval_der << " " << answers_der_final << std::endl;
+  }
+  std::cout << "Relative Error: " << error2 << std::endl;
   std::cout << std::endl;
 }
