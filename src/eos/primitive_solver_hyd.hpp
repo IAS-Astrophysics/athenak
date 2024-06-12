@@ -584,7 +584,7 @@ class PrimitiveSolverHydro {
 
   // A function for converting PrimitiveSolver errors to strings
   KOKKOS_INLINE_FUNCTION
-  const char * ErrorToString(Primitive::Error e) {
+  static const char * ErrorToString(Primitive::Error e) {
     switch(e) {
       case Primitive::Error::SUCCESS:
         return "SUCCESS";
@@ -615,7 +615,7 @@ class PrimitiveSolverHydro {
 
   // A function for checking for NaNs in the conserved variables.
   KOKKOS_INLINE_FUNCTION
-  int CheckForConservedNaNs(const Real cons_pt[NCONS]) const {
+  static int CheckForConservedNaNs(const Real cons_pt[NCONS]) {
     int nans = 0;
     if (!isfinite(cons_pt[CDN])) {
       printf("D is NaN!\n"); // NOLINT
@@ -642,7 +642,7 @@ class PrimitiveSolverHydro {
   }
 
   KOKKOS_INLINE_FUNCTION
-  void DumpPrimitiveVars(const Real prim_pt[NPRIM]) const {
+  static void DumpPrimitiveVars(const Real prim_pt[NPRIM]) {
     printf("Primitive vars: \n" // NOLINT
            "  rho = %.17g\n"
            "  ux  = %.17g\n"

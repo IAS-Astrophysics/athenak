@@ -10,7 +10,7 @@
 //         member variables needed by an EOSPolicy.
 
 #include "ps_types.hpp"
-#include "unit_system.hpp" 
+#include "unit_system.hpp"
 
 namespace Primitive {
 
