@@ -104,6 +104,7 @@ void ApplyBeamSourcesBlackHoleM1(Mesh *pmesh) {
   int n3 = (indcs.nx3 > 1) ? (indcs.nx3 + 2 * ng) : 1;
   auto &f0_ = pmesh->pmb_pack->pradfemn->f0;
   adm::ADM::ADM_vars &adm = pmesh->pmb_pack->padm->adm;
+  auto &L_mu_muhat0_ = pmesh->pmb_pack->pradfemn->L_mu_muhat0;
 
   auto &beam_source_1_y1_ = pmesh->pmb_pack->pradfemn->beam_source_1_y1;
   auto &beam_source_1_y2_ = pmesh->pmb_pack->pradfemn->beam_source_1_y2;
@@ -133,13 +134,39 @@ void ApplyBeamSourcesBlackHoleM1(Mesh *pmesh) {
                                        + 2. * adm.g_dd(m, 0, 2, k, j, i) * adm.beta_u(m, 0, k, j, i) * adm.beta_u(m, 2, k, j, i)
                                        + adm.g_dd(m, 1, 1, k, j, i) * adm.beta_u(m, 1, k, j, i) * adm.beta_u(m, 1, k, j, i)
                                        + 2. * adm.g_dd(m, 1, 2, k, j, i) * adm.beta_u(m, 1, k, j, i) * adm.beta_u(m, 2, k, j, i)
-                                       + 2. * adm.g_dd(m, 2, 2, k, j, i) * adm.beta_u(m, 2, k, j, i) * adm.beta_u(m, 2, k, j, i);
+                                       + adm.g_dd(m, 2, 2, k, j, i) * adm.beta_u(m, 2, k, j, i) * adm.beta_u(m, 2, k, j, i);
                     const Real a = (-beta_x + sqrt(beta_x * beta_x - beta2 + adm.alpha(m, k, j, i) * adm.alpha(m, k, j, i) * (1 - eps))) / g_xx;
 
                     Real E = 1;
                     Real Fx = a * E / adm.alpha(m, k, j, i) + adm.beta_u(m, 0, k, j, i) * E / adm.alpha(m, k, j, i);
                     Real Fy = adm.beta_u(m, 1, k, j, i) * E / adm.alpha(m, k, j, i);
                     Real Fz = adm.beta_u(m, 2, k, j, i) * E / adm.alpha(m, k, j, i);
+
+
+                    Real Fx_tetrad = adm.g_dd(m, 0, 0, k, j, i) * L_mu_muhat0_(m, 1, 1, k, j, i) * Fx + adm.g_dd(m, 0, 1, k, j, i) * L_mu_muhat0_(m, 1, 1, k, j, i) * Fy +
+                                     adm.g_dd(m, 0, 2, k, j, i) * L_mu_muhat0_(m, 1, 1, k, j, i) * Fz
+                                     + adm.g_dd(m, 1, 0, k, j, i) * L_mu_muhat0_(m, 2, 1, k, j, i) * Fx + adm.g_dd(m, 1, 1, k, j, i) * L_mu_muhat0_(m, 2, 1, k, j, i) * Fy +
+                                     adm.g_dd(m, 1, 2, k, j, i) * L_mu_muhat0_(m, 2, 1, k, j, i) * Fz
+                                     + adm.g_dd(m, 2, 0, k, j, i) * L_mu_muhat0_(m, 3, 1, k, j, i) * Fx + adm.g_dd(m, 2, 1, k, j, i) * L_mu_muhat0_(m, 3, 1, k, j, i) * Fy +
+                                     adm.g_dd(m, 2, 2, k, j, i) * L_mu_muhat0_(m, 3, 1, k, j, i) * Fz;
+
+                    Real Fy_tetrad = adm.g_dd(m, 0, 0, k, j, i) * L_mu_muhat0_(m, 1, 2, k, j, i) * Fx + adm.g_dd(m, 0, 1, k, j, i) * L_mu_muhat0_(m, 1, 2, k, j, i) * Fy +
+                                     adm.g_dd(m, 0, 2, k, j, i) * L_mu_muhat0_(m, 1, 2, k, j, i) * Fz
+                                     + adm.g_dd(m, 1, 0, k, j, i) * L_mu_muhat0_(m, 2, 2, k, j, i) * Fx + adm.g_dd(m, 1, 1, k, j, i) * L_mu_muhat0_(m, 2, 2, k, j, i) * Fy +
+                                     adm.g_dd(m, 1, 2, k, j, i) * L_mu_muhat0_(m, 2, 2, k, j, i) * Fz
+                                     + adm.g_dd(m, 2, 0, k, j, i) * L_mu_muhat0_(m, 3, 2, k, j, i) * Fx + adm.g_dd(m, 2, 1, k, j, i) * L_mu_muhat0_(m, 3, 2, k, j, i) * Fy +
+                                     adm.g_dd(m, 2, 2, k, j, i) * L_mu_muhat0_(m, 3, 2, k, j, i) * Fz;
+
+                    Real Fz_tetrad = adm.g_dd(m, 0, 0, k, j, i) * L_mu_muhat0_(m, 1, 3, k, j, i) * Fx + adm.g_dd(m, 0, 1, k, j, i) * L_mu_muhat0_(m, 1, 3, k, j, i) * Fy +
+                                     adm.g_dd(m, 0, 2, k, j, i) * L_mu_muhat0_(m, 1, 3, k, j, i) * Fz
+                                     + adm.g_dd(m, 1, 0, k, j, i) * L_mu_muhat0_(m, 2, 3, k, j, i) * Fx + adm.g_dd(m, 1, 1, k, j, i) * L_mu_muhat0_(m, 2, 3, k, j, i) * Fy +
+                                     adm.g_dd(m, 1, 2, k, j, i) * L_mu_muhat0_(m, 2, 3, k, j, i) * Fz
+                                     + adm.g_dd(m, 2, 0, k, j, i) * L_mu_muhat0_(m, 3, 3, k, j, i) * Fx + adm.g_dd(m, 2, 1, k, j, i) * L_mu_muhat0_(m, 3, 3, k, j, i) * Fy +
+                                     adm.g_dd(m, 2, 2, k, j, i) * L_mu_muhat0_(m, 3, 3, k, j, i) * Fz;
+
+                    Fx = Fx_tetrad;
+                    Fy = Fy_tetrad;
+                    Fz = Fz_tetrad;
 
                     Real F2 = Fx * Fx + Fy * Fy + Fz * Fz;
                     E = Kokkos::fmax(E, rad_E_floor_);
