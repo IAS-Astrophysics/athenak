@@ -3,8 +3,8 @@
 // Copyright(C) 2020 James M. Stone <jmstone@ias.edu> and the Athena code team
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
-//! \file radiation_femn_shadowtest.cpp
-//! \brief initializes the 2d shadow test problem with FEM_N/FP_N/M1
+//! \file radiation_femn_spharms.cpp
+//! \brief test the spherical harmonics basis functions for fpn
 
 // C++ headers
 #include <iostream>
@@ -26,12 +26,16 @@
 void ProblemGenerator::RadiationFEMNSpharms(ParameterInput *pin, const bool restart) {
   if (restart) return;
 
-  Real error = -42;
+  std::cout << "----------------------------- " << std::endl;
+  std::cout << "Tests for FPN basis functions " << std::endl;
+  std::cout << "----------------------------- " << std::endl;
 
-  Real phi = -3. * M_PI / 2.;
+// ----------
+  std::cout << "Test: FPN basis new vs old implementation" << std::endl;
+  Real error = -42;
+  Real phi = -3. * M_PI / 2. - 0.2;
   Real theta = 1.9889;
 
-  std::cout << "Test: Check fpn basis implementation works and legendre matches with the gsl implementation" << std::endl;
   for (int l = 0; l < 25; l++) {
     for (int m = -l; m <= l; m++) {
       Real fpn_new_basis = radiationfemn::fpn_basis_lm(l, m, phi, theta);
@@ -44,10 +48,11 @@ void ProblemGenerator::RadiationFEMNSpharms(ParameterInput *pin, const bool rest
       std::cout << "l = " << l << ", m = " << m << ": " << fpn_new_basis << " " << fpn_basis_gsl << std::endl;
     }
   }
-  std::cout << "Error: " << error << std::endl;
+  std::cout << "Absolute error: " << error << std::endl;
   std::cout << std::endl;
 
-  std::cout << "Test: check legendre implementation for l >= 0, |m| <= l" << std::endl;
+  // ------------
+  std::cout << "Test: Check associated Legendre implementation for l >= 0, |m| <= l with scipy implementation" << std::endl;
   Real error2 = -42;
   Real x = 0.8987;
   int N = 30;
@@ -65,16 +70,17 @@ void ProblemGenerator::RadiationFEMNSpharms(ParameterInput *pin, const bool rest
 
   for (int i = 0; i < N; i++) {
     Real legval = radiationfemn::legendre(l_arr[i], m_arr[i], x);
-
-    if (fabs((legval - answers[i]) / answers[i]) > error2) {
-      error2 = fabs((legval - answers[i]) / answers[i]);
+    Real relerror = fabs(answers[i]) > 1e-14 ? fabs((legval - answers[i]) / answers[i]): fabs((legval - answers[i]));
+    if (relerror > error2) {
+      error2 = relerror;
     }
     std::cout << "l = " << l_arr[i] << ", m = " << m_arr[i] << ": " << legval << " " << answers[i] << std::endl;
   }
-  std::cout << "Relative Error: " << error2 << std::endl;
+  std::cout << "Relative error: " << error2 << std::endl;
   std::cout << std::endl;
 
-  std::cout << "Test: check legendre implementation for |m| > l (should be zero)" << std::endl;
+  // -------------
+  std::cout << "Test: Check associated Legendre implementation for |m| > l (should be zero)" << std::endl;
   Real x1 = 0.23;
   Real error3 = -42;
   for (int m = 20; m < 35; m++) {
@@ -86,10 +92,11 @@ void ProblemGenerator::RadiationFEMNSpharms(ParameterInput *pin, const bool rest
       std::cout << "l = " << l << ", m = " << m << ": " << legval << " " << "0" << std::endl;
     }
   }
-  std::cout << "Error: " << error3 << std::endl;
+  std::cout << "Absolute error: " << error3 << std::endl;
   std::cout << std::endl;
 
-  std::cout << "Test: Recurrence relation for associated Legendre functions" << std::endl;
+  // -----------
+  std::cout << "Test: Check recurrence relations for associated Legendre functions" << std::endl;
   Real x2 = 0.9999;
   Real lwhere = -42;
   Real mwhere = -42;
@@ -99,19 +106,26 @@ void ProblemGenerator::RadiationFEMNSpharms(ParameterInput *pin, const bool rest
       Real legval = m * radiationfemn::legendre(l, m, x2) / sqrt(1 - x2 * x2);
       Real recur_legval1 = radiationfemn::recurrence_legendre(l, m, x2);
       Real recur_legval2 = radiationfemn::recurrence_legendre_alt(l, m, x2);
-      Real rel_error = fabs(legval) > 1e-14 ? fabs(legval - recur_legval1) / fabs(legval) : fabs(legval - recur_legval1);
+      Real rel_error = fabs(legval) > 1e-14 ? fabs(legval - recur_legval1) / fabs(recur_legval1) : fabs(legval - recur_legval1);
+      Real rel_error2 = fabs(legval) > 1e-14 ? fabs(legval - recur_legval2) / fabs(recur_legval2) : fabs(legval - recur_legval2);
       if (rel_error > error4) {
         error4 = rel_error;
+        lwhere = l;
+        mwhere = m;
+      }
+      if (rel_error2 > error4) {
+        error4 = rel_error2;
         lwhere = l;
         mwhere = m;
       }
       std::cout << "l = " << l << ", m = " << m << ": " << legval << " " << recur_legval1 << " " << recur_legval2 << std::endl;
     }
   }
-  std::cout << "Error: (" << lwhere << ", " << mwhere << ") " << error4 << std::endl;
+  std::cout << "Relative error: (" << lwhere << ", " << mwhere << ") " << error4 << std::endl;
   std::cout << std::endl;
 
-  std::cout << "Test: Recurrence relation for derivatives of legendre functions " << std::endl;
+  // ------------
+  std::cout << "Test: Check recurrence relation for derivatives of associated Legendre functions with scipy implementation" << std::endl;
   Real error5 = -42;
   x = 0.9543;
   N = 50;
@@ -128,14 +142,23 @@ void ProblemGenerator::RadiationFEMNSpharms(ParameterInput *pin, const bool rest
                         -4.263312189412571e-25, -2.1672181765526562e-08, -105.39268087143103, -6.832905219781743e-11, -6.313263785449105e-12, 8.24536842365218,
                         -1.1752104590970943e-08};
   for (int i = 0; i < N; i++) {
-    Real legval_der = radiationfemn::recurrence_derivative_legendre(l_arr[i], m_arr[i], x);
+    Real legval_der = radiationfemn::recurrence_derivative_legendre(l_arr_der[i], m_arr_der[i], x);
     Real answers_der_final = sqrt(1 - x*x) * answers_der[i];
     Real erval = fabs(answers_der_final) > 1e-14 ? fabs(legval_der - answers_der_final)/ fabs(answers_der_final) : fabs(legval_der - answers_der_final);
     if (erval > error5) {
-      error2 = erval;
+      error5 = erval;
     }
-    std::cout << "l = " << l_arr[i] << ", m = " << m_arr[i] << ": " << legval_der << " " << answers_der_final << std::endl;
+    std::cout << "l = " << l_arr_der[i] << ", m = " << m_arr_der[i] << ": " << legval_der << " " << answers_der_final << std::endl;
   }
-  std::cout << "Relative Error: " << error2 << std::endl;
+  std::cout << "Relative error: " << error5 << std::endl;
   std::cout << std::endl;
+
+  std::cout << "--------" << std::endl;
+  std::cout << "Results:" << std::endl;
+  std::cout << "Test 1: " << error  << " (abs error)" <<std::endl;
+  std::cout << "Test 2: " << error2 << " (rel error)" <<std::endl;
+  std::cout << "Test 3: " << error3 << " (abs error)" <<std::endl;
+  std::cout << "Test 4: " << error4 << " (rel error)" <<std::endl;
+  std::cout << "Test 5: " << error5 << " (rel error)" <<std::endl;
+  std::cout << "--------" << std::endl;
 }
