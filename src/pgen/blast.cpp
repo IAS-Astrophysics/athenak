@@ -9,9 +9,12 @@
 //! REFERENCE: P. Londrillo & L. Del Zanna, "High-order upwind schemes for
 //!   multidimensional MHD", ApJ, 530, 508 (2000), and references therein.
 
+#include <math.h>
+
 #include <algorithm>
-#include <cmath>
 #include <sstream>
+#include <string>
+#include <iostream>
 
 #include "parameter_input.hpp"
 #include "athena.hpp"
@@ -46,7 +49,7 @@ void GetCartesianFromRipple(Real &x, Real &y, Real w, Real v, Real A, Real k) {
   Real fy = y - v - A*sin(k*M_PI*x);
   int its = 0;
   int max_its = 30;
-  while ((std::abs(fx) > tol || std::abs(fy) > tol) && its < max_its) {
+  while ((fabs(fx) > tol || fabs(fy) > tol) && its < max_its) {
     // Auxiliary quantities needed for the root solve.
     Real delx = A*k*M_PI*cos(k*M_PI*x);
     Real dely = A*k*M_PI*cos(k*M_PI*y);
@@ -87,12 +90,12 @@ Real GetCartesianFromScrewball(Real u, Real a) {
   Real lb = u;
   Real ub = a;
   Real x = 0.5*(lb + ub);
-  Real gauss = std::exp(x*x/(2.0*a*a));
+  Real gauss = exp(x*x/(2.0*a*a));
   Real f = x - u*gauss;
   Real tol = 1e-15;
   int its = 0;
   int max_its = 30;
-  while (std::abs(f) > tol && its < max_its) {
+  while (fabs(f) > tol && its < max_its) {
     // Newton iteration.
     Real df = 1.0 - u*x/(a*a)*gauss;
     x = x - f/df;
@@ -102,7 +105,7 @@ Real GetCartesianFromScrewball(Real u, Real a) {
       x = 0.5*(lb + ub);
     }
     // Check how well x satisfies f.
-    gauss = std::exp(x*x/(2.0*a*a));
+    gauss = exp(x*x/(2.0*a*a));
     f = x - u*gauss;
     // Update the bracket.
     if (f < 0) {
@@ -190,7 +193,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
       int nx3 = indcs.nx3;
       Real x3v = CellCenterX(k-ks, nx3, x3min, x3max);
 
-      Real rad = std::sqrt(SQR(x1v) + SQR(x2v) + SQR(x3v));
+      Real rad = sqrt(SQR(x1v) + SQR(x2v) + SQR(x3v));
 
       Real den = dn_amb;
       Real pres = pn_amb;
@@ -247,16 +250,16 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
       if (warp) {
         Real x = GetCartesianFromScrewball(x1v, a_warp);
         Real y = GetCartesianFromScrewball(x2v, a_warp);
-        rad = std::sqrt(SQR(x) + SQR(y) + SQR(x3v));
+        rad = sqrt(SQR(x) + SQR(y) + SQR(x3v));
       } else if (snake) {
         Real x = GetCartesianFromSnake(x1v, x2v, A_snake, k_snake);
-        rad = std::sqrt(SQR(x) + SQR(x2v) + SQR(x3v));
+        rad = sqrt(SQR(x) + SQR(x2v) + SQR(x3v));
       } else if (ripple) {
         Real x, y;
         GetCartesianFromRipple(x, y, x1v, x2v, A_snake, k_snake);
-        rad = std::sqrt(SQR(x) + SQR(y) + SQR(x3v));
+        rad = sqrt(SQR(x) + SQR(y) + SQR(x3v));
       } else {
-        rad = std::sqrt(SQR(x1v) + SQR(x2v) + SQR(x3v));
+        rad = sqrt(SQR(x1v) + SQR(x2v) + SQR(x3v));
       }
 
       Real den = di_amb;
@@ -301,7 +304,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
       if (warp) {
         Real y = GetCartesianFromScrewball(x2v, a_warp);
 
-        jacx = 1.0/(1.0 - (y*y)/(a_warp*a_warp))*std::exp(y*y/(2.0*a_warp*a_warp));
+        jacx = 1.0/(1.0 - (y*y)/(a_warp*a_warp))*exp(y*y/(2.0*a_warp*a_warp));
       } else if (snake) {
         jacx = 1.0;
       } else if (ripple) {
@@ -417,8 +420,8 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
         Real x = GetCartesianFromScrewball(x1v, a_warp);
         Real y = GetCartesianFromScrewball(x2v, a_warp);
 
-        xmul = 1.0/SQR(1.0 - x*x/(a_warp*a_warp))*std::exp(-x*x/(a_warp*a_warp));
-        ymul = 1.0/SQR(1.0 - y*y/(a_warp*a_warp))*std::exp(-y*y/(a_warp*a_warp));
+        xmul = 1.0/SQR(1.0 - x*x/(a_warp*a_warp))*exp(-x*x/(a_warp*a_warp));
+        ymul = 1.0/SQR(1.0 - y*y/(a_warp*a_warp))*exp(-y*y/(a_warp*a_warp));
       } else if (snake) {
         Real delta = A_snake*k_snake*M_PI*cos(k_snake*M_PI*x2v);
 

@@ -111,7 +111,7 @@ class PrimitiveSolverHydro {
       // Get table filename, then read the table,
       std::string fname = pin->GetString(block, "table");
       ps.GetEOSMutable().ReadTableFromFile(fname);
-      
+
       // Ensure table was read properly
       assert(ps.GetEOSMutable().IsInitialized());
     }

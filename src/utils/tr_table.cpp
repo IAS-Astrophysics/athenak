@@ -1,3 +1,8 @@
+//========================================================================================
+// AthenaXXX astrophysical plasma code
+// Copyright(C) 2020 James M. Stone <jmstone@ias.edu> and the Athena code team
+// Licensed under the 3-clause BSD License (the "LICENSE")
+//========================================================================================
 //! \file tr_table.cpp
 //! \brief Implementation of Table class
 #include <string>
@@ -9,7 +14,7 @@
 #include "tr_table.hpp"
 #include "tr_utils.hpp"
 
-using namespace TableReader;
+using namespace TableReader; // NOLINT
 
 Table::Table() : ndim(0), npoints(0), mem_size(0), initialized(false) {
 }
@@ -210,12 +215,10 @@ ReadResult Table::ExtractBlock(std::ifstream& file, const std::string name,
         ss << "Unexpected new block before reaching end of '" << name << "' in header.\n";
         result.message = ss.str();
         return result;
-      }
-      else {
+      } else {
         break;
       }
-    }
-    else {
+    } else {
       lines.push_back(line);
     }
   }

@@ -106,8 +106,9 @@ class PolytropeEOS {
  private:
   Real kappa;
   Real gamma;
+
  public:
-  PolytropeEOS(ParameterInput* pin) {
+  explicit PolytropeEOS(ParameterInput* pin) {
     kappa = pin->GetReal("problem", "kappa");
     gamma = pin->GetReal("mhd", "gamma");
   }
@@ -117,7 +118,7 @@ class PolytropeEOS {
   Real GetPFromRho(Real rho) const {
     return kappa*Kokkos::pow(rho, gamma);
   }
-  
+
   template<LocationTag loc>
   KOKKOS_INLINE_FUNCTION
   Real GetRhoFromP(Real P) const {
@@ -150,8 +151,9 @@ class TabulatedEOS {
   //static const Real fm_to_Msun = 6.771781959609192e-19
   //static const Real MeV_to_Msun = 8.962968324680417e-61
   static constexpr Real ener_to_geo = 2.8863099290608455e-6;
+
  public:
-  TabulatedEOS(ParameterInput* pin) {
+  explicit TabulatedEOS(ParameterInput* pin) {
     fname = pin->GetString("problem", "table");
 
     TableReader::Table table;
@@ -183,7 +185,7 @@ class TabulatedEOS {
     dlrho = m_log_rho.h_view(1)-m_log_rho.h_view(0);
     lrho_min = m_log_rho.h_view(0);
     lrho_max = m_log_rho.h_view(m_nn-1);
-    
+
     // Read pressure
     Real * table_Q1 = table["Q1"];
     for (size_t in = 0; in < m_nn; in++) {
@@ -227,7 +229,7 @@ class TabulatedEOS {
     if (lrho < lrho_min) {
       return 0.0;
     }
-    int lb = (int)((lrho-lrho_min)/dlrho);
+    int lb = static_cast<int>((lrho-lrho_min)/dlrho);
     int ub = lb + 1;
     if constexpr (loc == LocationTag::Host) {
       return exp(Interpolate(lrho, m_log_rho.h_view(lb), m_log_rho.h_view(ub),
@@ -245,7 +247,7 @@ class TabulatedEOS {
     if (lrho < lrho_min) {
       return 0.0;
     }
-    int lb = (int)((lrho-lrho_min)/dlrho);
+    int lb = static_cast<int>((lrho-lrho_min)/dlrho);
     int ub = lb + 1;
     if constexpr (loc == LocationTag::Host) {
       return exp(Interpolate(lrho, m_log_rho.h_view(lb), m_log_rho.h_view(ub),
@@ -260,7 +262,7 @@ class TabulatedEOS {
   KOKKOS_INLINE_FUNCTION
   Real GetYeFromRho(Real rho) const {
     Real lrho = log(rho);
-    int lb = (int)((lrho-lrho_min)/dlrho);
+    int lb = static_cast<int>((lrho-lrho_min)/dlrho);
     int ub = lb + 1;
     if constexpr (loc == LocationTag::Host) {
       return Interpolate(lrho, m_log_rho.h_view(lb), m_log_rho.h_view(ub),
@@ -992,7 +994,8 @@ static void GetPrimitivesAtIsoPoint(const tov_pgen& tov, const TOVEOS& eos, Real
 
 template<class TOVEOS>
 KOKKOS_INLINE_FUNCTION
-static void GetPandRho(const tov_pgen& tov, const TOVEOS& eos, Real r, Real &rho, Real &p) {
+static void GetPandRho(const tov_pgen& tov, const TOVEOS& eos,
+                       Real r, Real &rho, Real &p) {
   if (r >= tov.R_edge) {
     rho = 0.;
     p   = 0.;

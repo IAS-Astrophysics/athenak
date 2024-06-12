@@ -1,5 +1,10 @@
-#ifndef TR_TABLE_HPP_
-#define TR_TABLE_HPP_
+#ifndef UTILS_TR_TABLE_HPP_
+#define UTILS_TR_TABLE_HPP_
+//========================================================================================
+// AthenaXXX astrophysical plasma code
+// Copyright(C) 2020 James M. Stone <jmstone@ias.edu> and the Athena code team
+// Licensed under the 3-clause BSD License (the "LICENSE")
+//========================================================================================
 //! \file tr_table.hpp
 //! \brief Declares Table class
 
@@ -74,7 +79,6 @@ class Table {
   }
 
  private:
-
   template<typename F>
   ReadResult ParseBlock(std::string name, std::vector<std::string>& block_lines, F add) {
     ReadResult result;
@@ -116,4 +120,4 @@ class Table {
 
 } // namespace TableReader
 
-#endif
+#endif // UTILS_TR_TABLE_HPP_

@@ -1,5 +1,10 @@
-#ifndef TR_UTILS_HPP_
-#define TR_UTILS_HPP_
+#ifndef UTILS_TR_UTILS_HPP_
+#define UTILS_TR_UTILS_HPP_
+//========================================================================================
+// AthenaXXX astrophysical plasma code
+// Copyright(C) 2020 James M. Stone <jmstone@ias.edu> and the Athena code team
+// Licensed under the 3-clause BSD License (the "LICENSE")
+//========================================================================================
 //! \file tr_utils.hpp
 //! \brief Various utility functions needed by the table reader which aren't necessarily
 //!        specific to the table reader itself.
@@ -48,4 +53,4 @@ inline bool IsLittleEndian() {
 
 } // namespace TableReader
 
-#endif
+#endif // UTILS_TR_UTILS_HPP_

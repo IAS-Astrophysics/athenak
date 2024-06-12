@@ -1,17 +1,24 @@
+//========================================================================================
+// PrimitiveSolver equation-of-state framework
+// Copyright(C) 2023 Jacob M. Fields <jmf6719@psu.edu>
+// Licensed under the 3-clause BSD License (the "LICENSE")
+//========================================================================================
 //! \file eos_compose.cpp
 //  \brief Implementation of EOSCompose
 
+#include <math.h>
+
 #include <cassert>
-#include <cmath>
 #include <cstdio>
 #include <limits>
 #include <iostream>
 #include <cstddef>
+#include <string>
 
 #include "eos_compose.hpp"
 #include "utils/tr_table.hpp"
 
-using namespace Primitive;
+using namespace Primitive; // NOLINT
 
 void EOSCompOSE::ReadTableFromFile(std::string fname) {
   if (m_initialized==false) {
@@ -23,7 +30,7 @@ void EOSCompOSE::ReadTableFromFile(std::string fname) {
     }
     // Make sure table has correct dimentions
     assert(table.GetNDimensions()==3);
-    // TODO check that required fields are present?
+    // TODO(PH) check that required fields are present?
 
     // Read baryon (neutron) mass
     auto& table_scalars = table.GetScalars();
@@ -40,7 +47,7 @@ void EOSCompOSE::ReadTableFromFile(std::string fname) {
     Kokkos::realloc(m_yq,     m_ny);
     Kokkos::realloc(m_log_t,  m_nt);
     Kokkos::realloc(m_table, ECNVARS, m_nn, m_ny, m_nt);
-    
+
     // Create host storage to read into
     HostArray1D<Real>::HostMirror host_log_nb = create_mirror_view(m_log_nb);
     HostArray1D<Real>::HostMirror host_yq =     create_mirror_view(m_yq);
@@ -168,19 +175,19 @@ void EOSCompOSE::ReadTableFromFile(std::string fname) {
     Kokkos::deep_copy(m_table,  host_table);
 
     m_initialized = true;
-    
+
     m_min_h = std::numeric_limits<Real>::max();
     // Compute minimum enthalpy
     for (int in = 0; in < m_nn; ++in) {
       Real const nb = exp(host_log_nb(in));
       for (int it = 0; it < m_nt; ++it) {
         for (int iy = 0; iy < m_ny; ++iy) {
-          // This would use GPU memory, and we are currently on the CPU, so Enthalpy is hardcoded
-          // m_min_h = std::min(m_min_h, Enthalpy(nb, t, &host_yq(iy)));
+          // This would use GPU memory, and we are currently on the CPU, so Enthalpy is
+          // hardcoded
           Real e = exp(host_table(ECLOGE,in,iy,it));
           Real p = exp(host_table(ECLOGP,in,iy,it));
           Real h = (e + p) / nb;
-          m_min_h = std::min(m_min_h, h);
+          m_min_h = fmin(m_min_h, h);
         }
       }
     }
