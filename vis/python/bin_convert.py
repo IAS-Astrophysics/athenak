@@ -673,6 +673,7 @@ def write_xdmf_for(xdmfname, dumpname, fdata, mode="auto"):
 
     fp.close()
 
+
 def convert_file(binary_fname):
     """
     Converts a single file.
@@ -681,7 +682,8 @@ def convert_file(binary_fname):
       binary_filename - string
         filename of bin file to convert
 
-    This will create new files "binary_data.bin" -> "binary_data.athdf" and "binary_data.athdf.xdmf"
+    This will create new files "binary_data.bin" -> "binary_data.athdf" and
+    "binary_data.athdf.xdmf"
     """
     athdf_fname = binary_fname.replace(".bin", "") + ".athdf"
     xdmf_fname = athdf_fname + ".xdmf"
@@ -689,11 +691,12 @@ def convert_file(binary_fname):
     write_athdf(athdf_fname, filedata)
     write_xdmf_for(xdmf_fname, os.path.basename(athdf_fname), filedata)
 
+
 if __name__ == "__main__":
     import sys
     try:
         from tqdm import tqdm
-    except:
+    except ModuleNotFoundError:
         def tqdm(L):
             for x in L:
                 print(x)
