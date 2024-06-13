@@ -101,7 +101,7 @@ TaskStatus RadiationFEMN::ExpRKUpdate(Driver *pdriver, int stage) {
 
                     // derivative terms
                     ScrArray1D<Real> g_rhs_scratch = ScrArray1D<Real>(member.team_scratch(scr_level), num_points_);
-                    auto Ven = (num_energy_bins_ > 1) ? (1. / 3.) * (pow(energy_grid_(en + 1), 3) - pow(energy_grid_(en), 3)): 1.;
+                    auto Ven = (num_energy_bins_ > 1) ? (1. / 3.) * (pow(energy_grid_(en + 1), 3) - pow(energy_grid_(en), 3)) : 1.;
 
                     par_for_inner(member, 0, num_points_ - 1, [&](const int idx) {
                       int nuenangidx = IndicesUnited(nu, en, idx, num_species_, num_energy_bins_, num_points_);
@@ -286,18 +286,19 @@ TaskStatus RadiationFEMN::ExpRKUpdate(Driver *pdriver, int stage) {
 
                     // Add Christoeffel terms to rhs and compute Lax Friedrich's const K
                     Real K = 0.;
-                    for (int idx = 0; idx < num_points_ * num_points_; idx++) {
-                      int idx_b = int(idx / num_points_);
-                      int idx_a = idx - idx_b * num_points_;
+                    for (int index_b = 0; index_b < num_points_; index_b++) {
 
-                      int idx_united = IndicesUnited(nu, en, idx_a, num_species_, num_energy_bins_, num_points_);
-
-                      g_rhs_scratch(idx_b) -= beta_dt * sqrt_det_g_ijk * (F_Gamma_AB(idx_a, idx_b) + G_Gamma_AB(idx_a, idx_b)) *
-                                              (f0_(m, idx_united, k, j, i));
-
-                      K += F_Gamma_AB(idx_b, idx_a) * F_Gamma_AB(idx_b, idx_a);
+                      Real sum_terms = 0.;
+                      for (int index_a = 0; index_a < num_points_; index_a++) {
+                        int index_a_united = IndicesUnited(nu, en, index_a, num_species_, num_energy_bins_, num_points_);
+                        sum_terms += (F_Gamma_AB(index_a, index_b) + G_Gamma_AB(index_a, index_b)) * f0_(m, index_a_united, k, j, i);
+                        K += F_Gamma_AB(index_a, index_b) * F_Gamma_AB(index_a, index_b);
+                      }
+                      g_rhs_scratch(index_b) = g_rhs_scratch(index_b) - beta_dt * sqrt_det_g_ijk * sum_terms;
                     }
+                    member.team_barrier();
                     K = sqrt(K);
+
                     /*
                   // adding energy coupling terms for multi-energy case
                   if (num_energy_bins_ > 1)
