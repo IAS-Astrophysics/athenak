@@ -438,7 +438,11 @@ void DynGRPS<EOSPolicy, ErrorPolicy>::AddCoordTermsEOS(const DvceArray5D<Real> &
   int &nscal = pmy_pack->pmhd->nscalars;
 
   const Real mb = eos.ps.GetEOS().GetBaryonMass();
-  const int imap[3][3] = {{S11, S12, S13}, {S12, S22, S23}, {S13, S23, S33}};
+  const int imap[3][3] = {
+    {S11, S12, S13},
+    {S12, S22, S23},
+    {S13, S23, S33}
+  };
 
   // Check the number of dimensions to determine which derivatives we need.
   int ndim;
