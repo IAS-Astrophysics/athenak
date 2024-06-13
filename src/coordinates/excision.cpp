@@ -182,7 +182,7 @@ void Coordinates::UpdateExcisionMasks() {
     auto &flux = excision_flux;
 
     Real &excise_lapse = coord_data.excise_lapse;
-    
+
     par_for("set_excision", DevExeSpace(), 0, nmb1, 0, (n3-1), 0, (n2-1), 0, (n1-1),
     KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
       bool excise = (adm.alpha(m,k,j,i) < excise_lapse);

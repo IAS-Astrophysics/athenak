@@ -6,6 +6,7 @@
 //! \file coordinates.cpp
 //! \brief
 #include <iostream> // cout
+#include <string>
 
 #include "athena.hpp"
 #include "mesh/mesh.hpp"
@@ -60,7 +61,7 @@ Coordinates::Coordinates(ParameterInput *pin, MeshBlockPack *ppack) :
         pin->GetOrAddReal("coord","flux_excise_r",1.0);
       coord_data.rexcise =
         (pin->DoesBlockExist("radiation")) ? 1.0+sqrt(1.0-SQR(coord_data.bh_spin)) : 1.0;
-      
+
       coord_data.excision_scheme = ExcisionScheme::fixed;
       if (is_dynamical_relativistic) {
         std::string emethod = pin->GetOrAddString("coord","excision_scheme","fixed");
