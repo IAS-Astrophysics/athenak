@@ -190,7 +190,7 @@ void ComputeADMDecomposition(Real x, Real y, Real z, bool minkowski, Real a,
     - SQR(z)/(SQR(r)*r) * ( qb )/( qa ) + 1.0/r},
   };
 
-  Real const dg_ddd[3][3][3] = {
+  /*Real const dg_ddd[3][3][3] = {
     // \partial_x g_ik
     {{2.*dH_d[0]*l_d[0]*l_d[0] + 2.*H*dl_dd[0][0]*l_d[0] + 2.*H*l_d[0]*dl_dd[0][0],
     2.*dH_d[0]*l_d[0]*l_d[1] + 2.*H*dl_dd[0][0]*l_d[1] + 2.*H*l_d[0]*dl_dd[0][1],
@@ -221,13 +221,15 @@ void ComputeADMDecomposition(Real x, Real y, Real z, bool minkowski, Real a,
     {2.*dH_d[2]*l_d[2]*l_d[0] + 2.*H*dl_dd[2][2]*l_d[0] + 2.*H*l_d[2]*dl_dd[2][0],
     2.*dH_d[2]*l_d[2]*l_d[1] + 2.*H*dl_dd[2][2]*l_d[1] + 2.*H*l_d[2]*dl_dd[2][1],
     2.*dH_d[2]*l_d[2]*l_d[2] + 2.*H*dl_dd[2][2]*l_d[2] + 2.*H*l_d[2]*dl_dd[2][2]}},
-  };
-  /*Real dg_ddd[3][3][3] = {0.0};
+  };*/
+  Real dg_ddd[3][3][3] = {0.0};
   for (int i = 0; i < 3; i++)
   for (int a = 0; a < 3; a++)
   for (int b = 0; b < 3; b++) {
-    dg_ddd[i][a][b] = 2.*dH_d[i]*l_d[a]*l_d[b] + 2.*H*dl_dd[i][a]*l_d[b] + 2.*H*l_d[a]*dl_dd[i][b];
-  }*/
+    dg_ddd[i][a][b] = 2.*dH_d[i]*l_d[a]*l_d[b] +
+                      2.*H*dl_dd[i][a]*l_d[b] +
+                      2.*H*l_d[a]*dl_dd[i][b];
+  }
 
   //
   // Compute Christoffel symbols
@@ -258,6 +260,12 @@ void ComputeADMDecomposition(Real x, Real y, Real z, bool minkowski, Real a,
     2.*dH_d[2]*l_d[1] + 2.*H*dl_dd[2][1],
     2.*dH_d[2]*l_d[2] + 2.*H*dl_dd[2][2]},
   };
+  /*Real dbeta_dd[3][3];
+  for (int a = 0; a < 3; a++) {
+    for (int b = 0; b < 3; b++) {
+      dbeta_dd[a][b] = 2.*dH_d[a]*l_d[b] + 2.*H*dl_dd[a][b];
+    }
+  }*/
 
   //
   // Covariant derivative of the shift vector
@@ -272,10 +280,10 @@ void ComputeADMDecomposition(Real x, Real y, Real z, bool minkowski, Real a,
 
   //
   // Extrinsic curvature: K_ab = 1/(2 alp) * (D_a beta_b + D_b beta_a)
-  Real delta[3][3] = {0.};
+  /*Real delta[3][3] = {0.};
   delta[0][0] = 1.;
   delta[1][1] = 1.;
-  delta[2][2] = 1.;
+  delta[2][2] = 1.;*/
   Real K_dd[3][3];
   for (int a = 0; a < 3; ++a)
   for (int b = 0; b < 3; ++b) {
@@ -401,5 +409,6 @@ void ComputeMetricDerivatives(Real x, Real y, Real z, bool minkowski, Real a,
 
   return;
 }
+
 
 #endif // COORDINATES_CARTESIAN_KS_HPP_
