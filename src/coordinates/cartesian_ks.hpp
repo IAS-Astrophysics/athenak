@@ -190,38 +190,6 @@ void ComputeADMDecomposition(Real x, Real y, Real z, bool minkowski, Real a,
     - SQR(z)/(SQR(r)*r) * ( qb )/( qa ) + 1.0/r},
   };
 
-  /*Real const dg_ddd[3][3][3] = {
-    // \partial_x g_ik
-    {{2.*dH_d[0]*l_d[0]*l_d[0] + 2.*H*dl_dd[0][0]*l_d[0] + 2.*H*l_d[0]*dl_dd[0][0],
-    2.*dH_d[0]*l_d[0]*l_d[1] + 2.*H*dl_dd[0][0]*l_d[1] + 2.*H*l_d[0]*dl_dd[0][1],
-    2.*dH_d[0]*l_d[0]*l_d[2] + 2.*H*dl_dd[0][0]*l_d[2] + 2.*H*l_d[0]*dl_dd[0][2]},
-    {2.*dH_d[0]*l_d[1]*l_d[0] + 2.*H*dl_dd[0][1]*l_d[0] + 2.*H*l_d[1]*dl_dd[0][0],
-    2.*dH_d[0]*l_d[1]*l_d[1] + 2.*H*dl_dd[0][1]*l_d[1] + 2.*H*l_d[1]*dl_dd[0][1],
-    2.*dH_d[0]*l_d[1]*l_d[2] + 2.*H*dl_dd[0][1]*l_d[2] + 2.*H*l_d[1]*dl_dd[0][2]},
-    {2.*dH_d[0]*l_d[2]*l_d[0] + 2.*H*dl_dd[0][2]*l_d[0] + 2.*H*l_d[2]*dl_dd[0][0],
-    2.*dH_d[0]*l_d[2]*l_d[1] + 2.*H*dl_dd[0][2]*l_d[1] + 2.*H*l_d[2]*dl_dd[0][1],
-    2.*dH_d[0]*l_d[2]*l_d[2] + 2.*H*dl_dd[0][2]*l_d[2] + 2.*H*l_d[2]*dl_dd[0][2]}},
-    // \partial_y g_ik
-    {{2.*dH_d[1]*l_d[0]*l_d[0] + 2.*H*dl_dd[1][0]*l_d[0] + 2.*H*l_d[0]*dl_dd[1][0],
-    2.*dH_d[1]*l_d[0]*l_d[1] + 2.*H*dl_dd[1][0]*l_d[1] + 2.*H*l_d[0]*dl_dd[1][1],
-    2.*dH_d[1]*l_d[0]*l_d[2] + 2.*H*dl_dd[1][0]*l_d[2] + 2.*H*l_d[0]*dl_dd[1][2]},
-    {2.*dH_d[1]*l_d[1]*l_d[0] + 2.*H*dl_dd[1][1]*l_d[0] + 2.*H*l_d[1]*dl_dd[1][0],
-    2.*dH_d[1]*l_d[1]*l_d[1] + 2.*H*dl_dd[1][1]*l_d[1] + 2.*H*l_d[1]*dl_dd[1][1],
-    2.*dH_d[1]*l_d[1]*l_d[2] + 2.*H*dl_dd[1][1]*l_d[2] + 2.*H*l_d[1]*dl_dd[1][2]},
-    {2.*dH_d[1]*l_d[2]*l_d[0] + 2.*H*dl_dd[1][2]*l_d[0] + 2.*H*l_d[2]*dl_dd[1][0],
-    2.*dH_d[1]*l_d[2]*l_d[1] + 2.*H*dl_dd[1][2]*l_d[1] + 2.*H*l_d[2]*dl_dd[1][1],
-    2.*dH_d[1]*l_d[2]*l_d[2] + 2.*H*dl_dd[1][2]*l_d[2] + 2.*H*l_d[2]*dl_dd[1][2]}},
-    // \partial_z g_ik
-    {{2.*dH_d[2]*l_d[0]*l_d[0] + 2.*H*dl_dd[2][0]*l_d[0] + 2.*H*l_d[0]*dl_dd[2][0],
-    2.*dH_d[2]*l_d[0]*l_d[1] + 2.*H*dl_dd[2][0]*l_d[1] + 2.*H*l_d[0]*dl_dd[2][1],
-    2.*dH_d[2]*l_d[0]*l_d[2] + 2.*H*dl_dd[2][0]*l_d[2] + 2.*H*l_d[0]*dl_dd[2][2]},
-    {2.*dH_d[2]*l_d[1]*l_d[0] + 2.*H*dl_dd[2][1]*l_d[0] + 2.*H*l_d[1]*dl_dd[2][0],
-    2.*dH_d[2]*l_d[1]*l_d[1] + 2.*H*dl_dd[2][1]*l_d[1] + 2.*H*l_d[1]*dl_dd[2][1],
-    2.*dH_d[2]*l_d[1]*l_d[2] + 2.*H*dl_dd[2][1]*l_d[2] + 2.*H*l_d[1]*dl_dd[2][2]},
-    {2.*dH_d[2]*l_d[2]*l_d[0] + 2.*H*dl_dd[2][2]*l_d[0] + 2.*H*l_d[2]*dl_dd[2][0],
-    2.*dH_d[2]*l_d[2]*l_d[1] + 2.*H*dl_dd[2][2]*l_d[1] + 2.*H*l_d[2]*dl_dd[2][1],
-    2.*dH_d[2]*l_d[2]*l_d[2] + 2.*H*dl_dd[2][2]*l_d[2] + 2.*H*l_d[2]*dl_dd[2][2]}},
-  };*/
   Real dg_ddd[3][3][3] = {0.0};
   for (int i = 0; i < 3; i++)
   for (int a = 0; a < 3; a++)
