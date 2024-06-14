@@ -142,9 +142,9 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   bool warp = false;
   bool snake = false;
   bool ripple = false;
-  if (coords.compare("cartesian") != 0 && pmbp->padm == nullptr) {
+  if (coords.compare("cartesian") != 0 && pmy_mesh_->pmb_pack->padm == nullptr) {
     std::cout << "Alternate coordinates are only supported for DynGR.\n"
-    std::cout << "Defaulting to Cartesian.\n";
+              << "Defaulting to Cartesian.\n";
   } else {
     if (coords.compare("warp") == 0) {
       warp = true;
