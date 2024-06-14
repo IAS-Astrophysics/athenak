@@ -252,15 +252,15 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
       }
 
       // Temporary add this to solve Jake's problem
-      if (turn_on_sao_operation_) {
-        if (gm1*w.e <= eos.pfloor) {
-          w.d  = w_old.d;
-          w.e  = w_old.e;
-          w.vx = w_old.vx;
-          w.vy = w_old.vy;
-          w.vz = w_old.vz;
-        }
-      }
+      // if (turn_on_sao_operation_) {
+      //   if (gm1*w.e <= eos.pfloor) {
+      //     w.d  = w_old.d;
+      //     w.e  = w_old.e;
+      //     w.vx = w_old.vx;
+      //     w.vy = w_old.vy;
+      //     w.vz = w_old.vz;
+      //   }
+      // }
 
       // apply temperature floor within r_tfix_cut_
       // if (turn_on_sao_operation_) {
@@ -503,16 +503,35 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
         }
       }
 
+      // Set indices around the problematic cell
+      int km1 = (k-1 < kl) ? kl : k-1;
+      int kp1 = (k+1 > ku) ? ku : k+1;
+      int jm1 = (j-1 < jl) ? jl : j-1;
+      int jp1 = (j+1 > ju) ? ju : j+1;
+      int im1 = (i-1 < il) ? il : i-1;
+      int ip1 = (i+1 > iu) ? iu : i+1;
+      bool flag_jake_use_smooth = false;
+      if (  (gm1*prim(m,IEN,km1,j,i) > eos.pfloor)
+          & (gm1*prim(m,IEN,kp1,j,i) > eos.pfloor)
+          & (gm1*prim(m,IEN,k,jm1,i) > eos.pfloor)
+          & (gm1*prim(m,IEN,k,jp1,i) > eos.pfloor)
+          & (gm1*prim(m,IEN,k,j,im1) > eos.pfloor)
+          & (gm1*prim(m,IEN,k,j,ip1) > eos.pfloor) ) {
+            flag_jake = false;
+      } else flag_jake = true;
+
       // Assign fallback state if inversion fails
       // if ((!c2p_flag_(m,k,j,i) || smooth_flag_(m,k,j,i)) && !(excised)) {
-      if (!(c2p_flag_(m,k,j,i)) && !(excised)) {
+      // if (!(c2p_flag_(m,k,j,i)) && !(excised)) {
+      if ((!c2p_flag_(m,k,j,i) || flag_jake) && !(excised)) { //jake
+        // jake (comment following)
         // Set indices around the problematic cell
-        int km1 = (k-1 < kl) ? kl : k-1;
-        int kp1 = (k+1 > ku) ? ku : k+1;
-        int jm1 = (j-1 < jl) ? jl : j-1;
-        int jp1 = (j+1 > ju) ? ju : j+1;
-        int im1 = (i-1 < il) ? il : i-1;
-        int ip1 = (i+1 > iu) ? iu : i+1;
+        // int km1 = (k-1 < kl) ? kl : k-1;
+        // int kp1 = (k+1 > ku) ? ku : k+1;
+        // int jm1 = (j-1 < jl) ? jl : j-1;
+        // int jp1 = (j+1 > ju) ? ju : j+1;
+        // int im1 = (i-1 < il) ? il : i-1;
+        // int ip1 = (i+1 > iu) ? iu : i+1;
 
         // try to identify checkboard region
         // if (customize_fofc_) {
