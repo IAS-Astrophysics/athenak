@@ -510,20 +510,19 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
       int jp1 = (j+1 > ju) ? ju : j+1;
       int im1 = (i-1 < il) ? il : i-1;
       int ip1 = (i+1 > iu) ? iu : i+1;
-      bool flag_jake_use_smooth = false;
-      if (  (gm1*prim(m,IEN,km1,j,i) > eos.pfloor)
-          & (gm1*prim(m,IEN,kp1,j,i) > eos.pfloor)
-          & (gm1*prim(m,IEN,k,jm1,i) > eos.pfloor)
-          & (gm1*prim(m,IEN,k,jp1,i) > eos.pfloor)
-          & (gm1*prim(m,IEN,k,j,im1) > eos.pfloor)
-          & (gm1*prim(m,IEN,k,j,ip1) > eos.pfloor) ) {
-            flag_jake = false;
-      } else flag_jake = true;
+
+      int count_jake = 0;
+      if (gm1*prim(m,IEN,km1,j,i) <= eos.pfloor) count_jake+=1;
+      if (gm1*prim(m,IEN,kp1,j,i) <= eos.pfloor) count_jake+=1;
+      if (gm1*prim(m,IEN,k,jm1,i) <= eos.pfloor) count_jake+=1;
+      if (gm1*prim(m,IEN,k,jp1,i) <= eos.pfloor) count_jake+=1;
+      if (gm1*prim(m,IEN,k,j,im1) <= eos.pfloor) count_jake+=1;
+      if (gm1*prim(m,IEN,k,j,ip1) <= eos.pfloor) count_jake+=1;
 
       // Assign fallback state if inversion fails
       // if ((!c2p_flag_(m,k,j,i) || smooth_flag_(m,k,j,i)) && !(excised)) {
       // if (!(c2p_flag_(m,k,j,i)) && !(excised)) {
-      if ((!c2p_flag_(m,k,j,i) || flag_jake) && !(excised)) { //jake
+      if ((!c2p_flag_(m,k,j,i) || (count_jake==1)) && !(excised)) { //jake
         // jake (comment following)
         // Set indices around the problematic cell
         // int km1 = (k-1 < kl) ? kl : k-1;
