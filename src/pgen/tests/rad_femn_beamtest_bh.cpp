@@ -76,7 +76,6 @@ void ProblemGenerator::RadiationFEMNBeamtestBH(ParameterInput *pin, const bool r
   user_bcs_func = radiationfemn::ApplyBeamSourcesBlackHoleM1;
 
   if (metric_type == "isotropic") {
-    exit(EXIT_FAILURE); // temporarily block the isotropic case
     par_for("pgen_beamtest_initialize_isotropic", DevExeSpace(), 0, nmb - 1, ksg, keg, jsg, jeg, isg, ieg,
             KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
               Real &x1min = size.d_view(m).x1min;
@@ -94,7 +93,8 @@ void ProblemGenerator::RadiationFEMNBeamtestBH(ParameterInput *pin, const bool r
               // set metric
               for (int a = 0; a < 3; ++a) {
                 for (int b = a; b < 3; ++b) {
-                  adm.g_dd(m, a, b, k, j, i) = (a == b ? 1. : 0.);
+                  Real eta_ij = (a == b ? 1. : 0.);
+                  adm.g_dd(m, a, b, k, j, i) = eta_ij;
                 }
               }
               adm.psi4(m, k, j, i) = std::pow(1.0 + 0.5 * adm_mass / r, 4);
@@ -104,6 +104,9 @@ void ProblemGenerator::RadiationFEMNBeamtestBH(ParameterInput *pin, const bool r
                 }
               }
               adm.alpha(m, k, j, i) = (1.0 - 0.5 * adm_mass / r) / (1.0 + 0.5 * adm_mass / r);
+              adm.beta_u(m, 0, k, j, i) = 0;
+              adm.beta_u(m, 1, k, j, i) = 0;
+              adm.beta_u(m, 2, k, j, i) = 0;
 
               // set fluid velocity
               u_mu_(m, 0, k, j, i) = 1. / adm.alpha(m, k, j, i); // for isotropic coordinates only
