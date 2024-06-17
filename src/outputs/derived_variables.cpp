@@ -401,4 +401,24 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
                     dv(m, 0, k, j, i) = Eval;
                   });
   }
+
+  if (name.compare("rad_femn_flux") == 0 && pm->pmb_pack->pradfemn->fpn != 0 && pm->pmb_pack->pradfemn->m1_flag != false) {
+    Kokkos::realloc(derived_var, nmb, 3, n3, n2, n1);
+    auto dv = derived_var;
+    auto &f0_ = pm->pmb_pack->pradfemn->f0;
+    auto neng = pm->pmb_pack->pradfemn->num_energy_bins;
+    auto nmodes = pm->pmb_pack->pradfemn->num_points;
+    auto &energy_grid_ = pm->pmb_pack->pradfemn->energy_grid;
+    auto &num_energy_bins_ = pm->pmb_pack->pradfemn->num_energy_bins;
+
+    int scr_level = 0;
+    int scr_size = 1;
+    // only works for a single energy bin and single species
+    par_for_outer("rad_femn_E_compute_flux_m1", DevExeSpace(), scr_size, scr_level, 0, nmb - 1, ks, ke, js, je, is, ie,
+                  KOKKOS_LAMBDA(TeamMember_t member, const int m, const int k, const int j, const int i) {
+                    dv(m, 0, k, j, i) = -Kokkos::sqrt(4. * M_PI / 3.0) * f0_(m, 3, k, j, i);
+                    dv(m, 1, k, j, i) = -Kokkos::sqrt(4. * M_PI / 3.0) * f0_(m, 1, k, j, i);
+                    dv(m, 2, k, j, i) = Kokkos::sqrt(4. * M_PI / 3.0) * f0_(m, 2, k, j, i);
+                  });
+  }
 }

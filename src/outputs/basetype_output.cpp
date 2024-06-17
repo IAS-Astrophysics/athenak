@@ -562,6 +562,14 @@ BaseTypeOutput::BaseTypeOutput(OutputParameters opar, Mesh *pm) :
     outvars.emplace_back("E", 0, &(derived_var));
   }
 
+  // radiation flux for M1
+  if (out_params.variable.compare("rad_femn_flux") == 0) {
+    out_params.contains_derived = true;
+    outvars.emplace_back("Fx", 0, &(derived_var));
+    outvars.emplace_back("Fy", 1, &(derived_var));
+    outvars.emplace_back("Fz", 2, &(derived_var));
+  }
+
   // initialize vector containing number of output MBs per rank
   noutmbs.assign(global_variable::nranks, 0);
 }
