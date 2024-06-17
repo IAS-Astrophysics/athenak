@@ -76,6 +76,7 @@ void ProblemGenerator::RadiationFEMNBeamtestBH(ParameterInput *pin, const bool r
   user_bcs_func = radiationfemn::ApplyBeamSourcesBlackHoleM1;
 
   if (metric_type == "isotropic") {
+    exit(EXIT_FAILURE); // temporarily block the isotropic case
     par_for("pgen_beamtest_initialize_isotropic", DevExeSpace(), 0, nmb - 1, ksg, keg, jsg, jeg, isg, ieg,
             KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
               Real &x1min = size.d_view(m).x1min;
@@ -135,20 +136,20 @@ void ProblemGenerator::RadiationFEMNBeamtestBH(ParameterInput *pin, const bool r
               // set metric
               for (int a = 0; a < 3; ++a)
                 for (int b = a; b < 3; ++b) {
-                  adm.g_dd(m, a, b, k, j, i) = (a == b ? 1. : 0.);
-                  adm.g_dd(m, a, b, k, j, i) += 2. * adm_mass * lvec[a] * lvec[b] / r;
+                  Real eta_ij = (a == b) ? 1. : 0.;
+                  adm.g_dd(m, a, b, k, j, i) = eta_ij + 2. * adm_mass * lvec[a] * lvec[b] / r;
                 }
               adm.psi4(m, k, j, i) = 1.;
-              adm.alpha(m, k, j, i) = 1. / sqrt(1.0 + 2. * adm_mass / r);
+              adm.alpha(m, k, j, i) = sqrt(r / (r + 2. * adm_mass));
               adm.beta_u(m, 0, k, j, i) = 2. * adm_mass * adm.alpha(m, k, j, i) * adm.alpha(m, k, j, i) * lvec[0] / r;
               adm.beta_u(m, 1, k, j, i) = 2. * adm_mass * adm.alpha(m, k, j, i) * adm.alpha(m, k, j, i) * lvec[1] / r;
               adm.beta_u(m, 2, k, j, i) = 2. * adm_mass * adm.alpha(m, k, j, i) * adm.alpha(m, k, j, i) * lvec[2] / r;
 
               // set fluid velocity
-              u_mu_(m, 0, k, j, i) = 1. / sqrt(1.0 - 2. * adm_mass / r);
-              u_mu_(m, 1, k, j, i) = 0.;
-              u_mu_(m, 2, k, j, i) = 0.;
-              u_mu_(m, 3, k, j, i) = 0.;
+              u_mu_(m, 0, k, j, i) = 1. / adm.alpha(m, k, j, i);
+              u_mu_(m, 1, k, j, i) = -(1. / adm.alpha(m, k, j, i)) * adm.beta_u(m, 0, k, j, i);
+              u_mu_(m, 2, k, j, i) = -(1. / adm.alpha(m, k, j, i)) * adm.beta_u(m, 1, k, j, i);
+              u_mu_(m, 3, k, j, i) = -(1. / adm.alpha(m, k, j, i)) * adm.beta_u(m, 2, k, j, i);
 
               // set mask
               if (r <= 2. * adm_mass + 0.2) {
