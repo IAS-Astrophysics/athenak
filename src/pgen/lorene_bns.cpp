@@ -34,10 +34,6 @@
 #include "bin_ns.h"
 #include "unites.h"
 
-#if LORENE==0
-#error lorene_bns.cpp requires LORENE
-#endif
-
 // Prototype for user-defined history function
 void BNSHistory(HistoryData *pdata, Mesh *pm);
 

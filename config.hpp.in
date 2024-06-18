@@ -12,10 +12,6 @@
 
 #define TWO_PUNCTURES @TWO_PUNCTURES@
 
-#define ELLIPTICA @ELLIPTICA@
-
-#define LORENE @LORENE@
-
 // Code versions defined in CMakeLists.txt
 #define ATHENA_VERSION_MAJOR @athena_VERSION_MAJOR@
 #define ATHENA_VERSION_MINOR @athena_VERSION_MINOR@

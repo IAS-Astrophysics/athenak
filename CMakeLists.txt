@@ -139,9 +139,6 @@ if (${PROBLEM} STREQUAL "elliptica_bns")
       ${CMAKE_SOURCE_DIR}/Elliptica_ID_Reader/include)
   target_link_libraries(athena PUBLIC
       ${CMAKE_SOURCE_DIR}/Elliptica_ID_Reader/lib/libelliptica_id_reader.a)
-  set(ELLIPTICA 1)
-else()
-  set(ELLIPTICA 0)
 endif()
 
 if (${PROBLEM} STREQUAL "lorene_bns")
@@ -164,9 +161,6 @@ if (${PROBLEM} STREQUAL "lorene_bns")
       ${CMAKE_SOURCE_DIR}/Lorene/Lib/liblorenef77.a
       ${BLAS_LIBRARIES} ${LAPACK_LIBRARIES}
       GSL::gsl ${CMAKE_Fortran_IMPLICIT_LINK_LIBRARIES})
-  set(LORENE 1)
-else()
-  set(LORENE 0)
 endif()
 
 # enable include of header files created in build directories
