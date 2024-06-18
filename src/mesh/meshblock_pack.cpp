@@ -20,7 +20,7 @@
 #include "ion-neutral/ion-neutral.hpp"
 #include "adm/adm.hpp"
 #include "tmunu/tmunu.hpp"
-#include "numerical-relativity/numerical_relativity.hpp"
+#include "tasklist/numerical_relativity.hpp"
 #include "z4c/z4c.hpp"
 #include "dyngr/dyngr.hpp"
 #include "z4c/z4c_puncture_tracker.hpp"

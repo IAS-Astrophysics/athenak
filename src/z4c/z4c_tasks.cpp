@@ -19,7 +19,7 @@
 #include "mesh/mesh.hpp"
 #include "bvals/bvals.hpp"
 #include "z4c/z4c.hpp"
-#include <numerical-relativity/numerical_relativity.hpp>
+#include "tasklist/numerical_relativity.hpp"
 #include "z4c/z4c_puncture_tracker.hpp"
 
 namespace z4c {

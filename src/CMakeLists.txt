@@ -84,8 +84,6 @@ add_executable(
         mhd/mhd_tasks.cpp
         mhd/mhd_update.cpp
 
-        numerical-relativity/numerical_relativity.cpp
-
         outputs/io_wrapper.cpp
         outputs/outputs.cpp
         outputs/basetype_output.cpp
@@ -131,6 +129,8 @@ add_executable(
         srcterms/srcterms.cpp
         srcterms/srcterms_newdt.cpp
         srcterms/turb_driver.cpp
+
+        tasklist/numerical_relativity.cpp
 
         tmunu/tmunu.cpp
 
