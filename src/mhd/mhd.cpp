@@ -18,6 +18,7 @@
 #include "diffusion/resistivity.hpp"
 #include "diffusion/conduction.hpp"
 #include "srcterms/srcterms.hpp"
+#include "shearing_box/shearing_box.hpp"
 #include "bvals/bvals.hpp"
 #include "mhd/mhd.hpp"
 
@@ -150,13 +151,24 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
     Kokkos::realloc(coarse_b0.x3f, nmb, n_ccells3+1, n_ccells2, n_ccells1);
   }
 
-  // allocate boundary buffers for conserved (cell-centered) variables
-  pbval_u = new BoundaryValuesCC(ppack, pin, false);
+  // allocate boundary buffers for conserved (cell-centered) and face-centered variables
+  pbval_u = new MeshBoundaryValuesCC(ppack, pin, false);
   pbval_u->InitializeBuffers((nmhd+nscalars));
-
-  // allocate boundary buffers for face-centered magnetic field
-  pbval_b = new BoundaryValuesFC(ppack, pin);
+  pbval_b = new MeshBoundaryValuesFC(ppack, pin);
   pbval_b->InitializeBuffers(3);
+
+  // Orbital advection and shearing box BCs (if requested in input file)
+  if (pin->DoesBlockExist("shearing_box")) {
+    porb_u = new OrbitalAdvectionCC(ppack, pin, (nmhd+nscalars));
+    porb_b = new OrbitalAdvectionFC(ppack, pin);
+    psbox_u = new ShearingBoxBoundaryCC(ppack, pin, (nmhd+nscalars));
+    psbox_b = new ShearingBoxBoundaryFC(ppack, pin);
+  } else {
+    porb_u = nullptr;
+    porb_b = nullptr;
+    psbox_u = nullptr;
+    psbox_b = nullptr;
+  }
 
   // for time-evolving problems, continue to construct methods, allocate arrays
   if (evolution_t.compare("stationary") != 0) {

@@ -68,7 +68,7 @@ Coordinates::Coordinates(ParameterInput *pin, MeshBlockPack *ppack) :
 //! \fn
 // Coordinate (geometric) source term function for GR hydrodynamics
 
-void Coordinates::AddCoordTerms(const DvceArray5D<Real> &prim, const EOS_Data &eos,
+void Coordinates::CoordSrcTerms(const DvceArray5D<Real> &prim, const EOS_Data &eos,
                                 const Real dt, DvceArray5D<Real> &cons) {
   // capture variables for kernel
   auto &indcs = pmy_pack->pmesh->mb_indcs;
@@ -190,7 +190,7 @@ void Coordinates::AddCoordTerms(const DvceArray5D<Real> &prim, const EOS_Data &e
 // be a smarter way to generalize these two functions and avoid duplicated code.
 // Functions distinguished only by argument list.
 
-void Coordinates::AddCoordTerms(const DvceArray5D<Real> &prim,
+void Coordinates::CoordSrcTerms(const DvceArray5D<Real> &prim,
                                 const DvceArray5D<Real> &bcc, const EOS_Data &eos,
                                 const Real dt, DvceArray5D<Real> &cons) {
   // capture variables for kernel

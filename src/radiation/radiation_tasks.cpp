@@ -45,12 +45,12 @@ void Radiation::AssembleRadTasks(std::map<std::string, std::shared_ptr<TaskList>
     id.rad_flux  = tl["stagen"]->AddTask(&Radiation::CalculateFluxes, this, id.copyu);
     id.rad_sendf = tl["stagen"]->AddTask(&Radiation::SendFlux, this, id.rad_flux);
     id.rad_recvf = tl["stagen"]->AddTask(&Radiation::RecvFlux, this, id.rad_sendf);
-    id.rad_expl  = tl["stagen"]->AddTask(&Radiation::ExpRKUpdate, this, id.rad_recvf);
-    id.mhd_flux  = tl["stagen"]->AddTask(&mhd::MHD::Fluxes, pmhd, id.rad_expl);
+    id.rad_rkupdt= tl["stagen"]->AddTask(&Radiation::RKUpdate, this, id.rad_recvf);
+    id.mhd_flux  = tl["stagen"]->AddTask(&mhd::MHD::Fluxes, pmhd, id.rad_rkupdt);
     id.mhd_sendf = tl["stagen"]->AddTask(&mhd::MHD::SendFlux, pmhd, id.mhd_flux);
     id.mhd_recvf = tl["stagen"]->AddTask(&mhd::MHD::RecvFlux, pmhd, id.mhd_sendf);
-    id.mhd_expl  = tl["stagen"]->AddTask(&mhd::MHD::ExpRKUpdate, pmhd, id.mhd_recvf);
-    id.mhd_efld  = tl["stagen"]->AddTask(&mhd::MHD::CornerE, pmhd, id.mhd_expl);
+    id.mhd_rkupdt= tl["stagen"]->AddTask(&mhd::MHD::RKUpdate, pmhd, id.mhd_recvf);
+    id.mhd_efld  = tl["stagen"]->AddTask(&mhd::MHD::CornerE, pmhd, id.mhd_rkupdt);
     id.mhd_sende = tl["stagen"]->AddTask(&mhd::MHD::SendE, pmhd, id.mhd_efld);
     id.mhd_recve = tl["stagen"]->AddTask(&mhd::MHD::RecvE, pmhd, id.mhd_sende);
     id.mhd_ct    = tl["stagen"]->AddTask(&mhd::MHD::CT, pmhd, id.mhd_recve);
@@ -90,13 +90,13 @@ void Radiation::AssembleRadTasks(std::map<std::string, std::shared_ptr<TaskList>
     id.rad_flux  = tl["stagen"]->AddTask(&Radiation::CalculateFluxes, this, id.copyu);
     id.rad_sendf = tl["stagen"]->AddTask(&Radiation::SendFlux, this, id.rad_flux);
     id.rad_recvf = tl["stagen"]->AddTask(&Radiation::RecvFlux, this, id.rad_sendf);
-    id.rad_expl  = tl["stagen"]->AddTask(&Radiation::ExpRKUpdate, this, id.rad_recvf);
-    id.hyd_flux  = tl["stagen"]->AddTask(&hydro::Hydro::Fluxes, phyd, id.rad_expl);
+    id.rad_rkupdt= tl["stagen"]->AddTask(&Radiation::RKUpdate, this, id.rad_recvf);
+    id.hyd_flux  = tl["stagen"]->AddTask(&hydro::Hydro::Fluxes, phyd, id.rad_rkupdt);
     id.hyd_sendf = tl["stagen"]->AddTask(&hydro::Hydro::SendFlux, phyd, id.hyd_flux);
     id.hyd_recvf = tl["stagen"]->AddTask(&hydro::Hydro::RecvFlux, phyd, id.hyd_sendf);
-    id.hyd_expl  = tl["stagen"]->AddTask(&hydro::Hydro::ExpRKUpdate,phyd,id.hyd_recvf);
+    id.hyd_rkupdt= tl["stagen"]->AddTask(&hydro::Hydro::RKUpdate,phyd,id.hyd_recvf);
     id.rad_src   = tl["stagen"]->AddTask(
-                                    &Radiation::AddRadiationSourceTerm,this,id.hyd_expl);
+                                   &Radiation::AddRadiationSourceTerm,this,id.hyd_rkupdt);
     id.rad_resti = tl["stagen"]->AddTask(&Radiation::RestrictI, this, id.rad_src);
     id.rad_sendi = tl["stagen"]->AddTask(&Radiation::SendI, this, id.rad_resti);
     id.rad_recvi = tl["stagen"]->AddTask(&Radiation::RecvI, this, id.rad_sendi);
@@ -128,9 +128,9 @@ void Radiation::AssembleRadTasks(std::map<std::string, std::shared_ptr<TaskList>
     id.rad_flux  = tl["stagen"]->AddTask(&Radiation::CalculateFluxes, this, id.copyu);
     id.rad_sendf = tl["stagen"]->AddTask(&Radiation::SendFlux, this, id.rad_flux);
     id.rad_recvf = tl["stagen"]->AddTask(&Radiation::RecvFlux, this, id.rad_sendf);
-    id.rad_expl  = tl["stagen"]->AddTask(&Radiation::ExpRKUpdate, this, id.rad_recvf);
+    id.rad_rkupdt= tl["stagen"]->AddTask(&Radiation::RKUpdate, this, id.rad_recvf);
     id.rad_src   = tl["stagen"]->AddTask(
-                                    &Radiation::AddRadiationSourceTerm,this,id.rad_expl);
+                                   &Radiation::AddRadiationSourceTerm,this,id.rad_rkupdt);
     id.rad_resti = tl["stagen"]->AddTask(&Radiation::RestrictI, this, id.rad_src);
     id.rad_sendi = tl["stagen"]->AddTask(&Radiation::SendI, this, id.rad_resti);
     id.rad_recvi = tl["stagen"]->AddTask(&Radiation::RecvI, this, id.rad_sendi);

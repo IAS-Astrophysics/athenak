@@ -34,10 +34,13 @@
 #endif
 
 //----------------------------------------------------------------------------------------
-// Mesh constructor: initializes some mesh variables at start of calculation using
-// parameters in input file.  Most objects in Mesh are constructed in the BuildTree()
-// function, so that they can store a pointer to the Mesh which can be reliably referenced
-// only after the Mesh constructor has finished
+//! Mesh constructor:
+//! initializes some mesh variables using parameters in input file.
+//! The MeshBlockPack, MeshRefinement, and ShearingBox objects are constructed in
+//! BuildTreeFromScratch() or BuildTreeFromRestart()
+//! The MeshBlockTree and ProblemGenerator objects are constructed in main().
+//! This is so that they can store a pointer to the Mesh which can be reliably referenced
+//! only after the Mesh constructor has finished.
 
 Mesh::Mesh(ParameterInput *pin) :
   one_d(false),
@@ -87,19 +90,24 @@ Mesh::Mesh(ParameterInput *pin) :
     strictly_periodic = false;
   }
 
-  // Check if x1 boundaries are shear_periodic.
-  if (mesh_bcs[BoundaryFace::inner_x1] == BoundaryFlag::shear_periodic
-      && mesh_bcs[BoundaryFace::outer_x1] == BoundaryFlag::shear_periodic) {
+  // Error checks if one of x1 boundaries set to shear_periodic.
+  if (mesh_bcs[BoundaryFace::inner_x1] == BoundaryFlag::shear_periodic &&
+      mesh_bcs[BoundaryFace::outer_x1] == BoundaryFlag::shear_periodic) {
     if (one_d) {
       std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-                << std::endl << "Shear Periodic Boundaries require 2D or 3D."
-                << std::endl;
+                << std::endl << "Shear Periodic Boundaries require 2D or 3D" << std::endl;
       std::exit(EXIT_FAILURE);
     }
-  } else if ((mesh_bcs[BoundaryFace::inner_x1] == BoundaryFlag::shear_periodic
-              && mesh_bcs[BoundaryFace::outer_x1] != BoundaryFlag::shear_periodic)
-            || (mesh_bcs[BoundaryFace::inner_x1] != BoundaryFlag::shear_periodic
-              && mesh_bcs[BoundaryFace::outer_x1] == BoundaryFlag::shear_periodic)) {
+    if (!(pin->DoesBlockExist("shearing_box"))) {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                << std::endl << "Shear Periodic Boundaries set but no <shearing_box>"
+                << " block in input file" <<std::endl;
+      std::exit(EXIT_FAILURE);
+    }
+  } else if ((mesh_bcs[BoundaryFace::inner_x1] == BoundaryFlag::shear_periodic &&
+              mesh_bcs[BoundaryFace::outer_x1] != BoundaryFlag::shear_periodic) ||
+             (mesh_bcs[BoundaryFace::inner_x1] != BoundaryFlag::shear_periodic &&
+              mesh_bcs[BoundaryFace::outer_x1] == BoundaryFlag::shear_periodic)) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
               << std::endl << "In shearing box, both x1 bcs must be shear_periodic"
               << std::endl;
@@ -120,6 +128,13 @@ Mesh::Mesh(ParameterInput *pin) :
     if (mesh_bcs[BoundaryFace::inner_x2] != BoundaryFlag::periodic) {
       strictly_periodic = false;
     }
+    if (mesh_bcs[BoundaryFace::inner_x2] == BoundaryFlag::shear_periodic ||
+        mesh_bcs[BoundaryFace::outer_x2] == BoundaryFlag::shear_periodic) {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                << std::endl << "Shear Periodic Boundaries cannot be applied in x2"
+                << std::endl;
+      std::exit(EXIT_FAILURE);
+    }
   } else {
     // ix2/ox2 BC flags set to undef for 1D problems
     mesh_bcs[BoundaryFace::inner_x2] = BoundaryFlag::undef;
@@ -139,6 +154,13 @@ Mesh::Mesh(ParameterInput *pin) :
     }
     if (mesh_bcs[BoundaryFace::inner_x3] != BoundaryFlag::periodic) {
       strictly_periodic = false;
+    }
+    if (mesh_bcs[BoundaryFace::inner_x3] == BoundaryFlag::shear_periodic ||
+        mesh_bcs[BoundaryFace::outer_x3] == BoundaryFlag::shear_periodic) {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                << std::endl << "Shear Periodic Boundaries cannot be applied in x3"
+                << std::endl;
+      std::exit(EXIT_FAILURE);
     }
   } else {
     // ix3/ox3 BC flags set to undef for 1D or 2D problems
@@ -556,9 +578,7 @@ void Mesh::NewTimeStep(const Real tlim) {
       dt = std::min(dt, (cfl_no)*(pmb_pack->phydro->pcond->dtnew) );
     }
     // source terms timestep
-    if (pmb_pack->phydro->psrc->source_terms_enabled) {
-      dt = std::min(dt, (cfl_no)*(pmb_pack->phydro->psrc->dtnew) );
-    }
+    dt = std::min(dt, (cfl_no)*(pmb_pack->phydro->psrc->dtnew) );
   }
   // MHD timestep
   if (pmb_pack->pmhd != nullptr) {
@@ -576,9 +596,7 @@ void Mesh::NewTimeStep(const Real tlim) {
       dt = std::min(dt, (cfl_no)*(pmb_pack->pmhd->pcond->dtnew) );
     }
     // source terms timestep
-    if (pmb_pack->pmhd->psrc->source_terms_enabled) {
-      dt = std::min(dt, (cfl_no)*(pmb_pack->pmhd->psrc->dtnew) );
-    }
+    dt = std::min(dt, (cfl_no)*(pmb_pack->pmhd->psrc->dtnew) );
   }
   // z4c timestep
   if (pmb_pack->pz4c != nullptr) {

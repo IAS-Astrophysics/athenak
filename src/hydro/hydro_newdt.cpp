@@ -26,8 +26,8 @@ namespace hydro {
 // \!fn void Hydro::NewTimeStep()
 // \brief calculate the minimum timestep within a MeshBlockPack for hydrodynamic problems
 
-TaskStatus Hydro::NewTimeStep(Driver *pdriver, int stage) {
-  if (stage != (pdriver->nexp_stages)) {
+TaskStatus Hydro::NewTimeStep(Driver *pdrive, int stage) {
+  if (stage != (pdrive->nexp_stages)) {
     return TaskStatus::complete; // only execute last stage
   }
 
@@ -50,7 +50,7 @@ TaskStatus Hydro::NewTimeStep(Driver *pdriver, int stage) {
   const int nkji = nx3*nx2*nx1;
   const int nji  = nx2*nx1;
 
-  if (pdriver->time_evolution == TimeEvolution::kinematic) {
+  if (pdrive->time_evolution == TimeEvolution::kinematic) {
     // find smallest (dx/v) in each direction for advection problems
     Kokkos::parallel_reduce("HydroNudt1",Kokkos::RangePolicy<>(DevExeSpace(), 0, nmkji),
     KOKKOS_LAMBDA(const int &idx, Real &min_dt1, Real &min_dt2, Real &min_dt3) {
@@ -127,9 +127,7 @@ TaskStatus Hydro::NewTimeStep(Driver *pdriver, int stage) {
     pcond->NewTimeStep(w0, peos->eos_data);
   }
   // compute source terms timestep
-  if (psrc->source_terms_enabled) {
-    psrc->NewTimeStep(w0, peos->eos_data);
-  }
+  psrc->NewTimeStep(w0, peos->eos_data);
 
   return TaskStatus::complete;
 }

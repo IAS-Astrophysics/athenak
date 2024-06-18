@@ -23,6 +23,8 @@ class Coordinates;
 class Viscosity;
 class Conduction;
 class SourceTerms;
+class OrbitalAdvectionCC;
+class ShearingBoxBoundaryCC;
 class Driver;
 
 // constants that enumerate Hydro Riemann Solver options
@@ -40,10 +42,15 @@ struct HydroTaskIDs {
   TaskID flux;
   TaskID sendf;
   TaskID recvf;
-  TaskID expl;
+  TaskID rkupdt;
+  TaskID srctrms;
+  TaskID sendu_oa;
+  TaskID recvu_oa;
   TaskID restu;
   TaskID sendu;
   TaskID recvu;
+  TaskID sendu_shr;
+  TaskID recvu_shr;
   TaskID bcs;
   TaskID prol;
   TaskID c2p;
@@ -76,7 +83,11 @@ class Hydro {
   DvceArray5D<Real> coarse_w0;  // primitive variables on 2x coarser grid (for SMR/AMR)
 
   // Boundary communication buffers and functions for u
-  BoundaryValuesCC *pbval_u;
+  MeshBoundaryValuesCC *pbval_u;
+
+  // Orbital advection and shearing box BCs
+  OrbitalAdvectionCC *porb_u = nullptr;
+  ShearingBoxBoundaryCC *psbox_u = nullptr;
 
   // Object(s) for extra physics (viscosity, thermal conduction, srcterms)
   Viscosity *pvisc = nullptr;
@@ -104,10 +115,15 @@ class Hydro {
   TaskStatus Fluxes(Driver *d, int stage);
   TaskStatus SendFlux(Driver *d, int stage);
   TaskStatus RecvFlux(Driver *d, int stage);
-  TaskStatus ExpRKUpdate(Driver *d, int stage);
+  TaskStatus RKUpdate(Driver *d, int stage);
+  TaskStatus HydroSrcTerms(Driver *d, int stage);
+  TaskStatus SendU_OA(Driver *d, int stage);
+  TaskStatus RecvU_OA(Driver *d, int stage);
   TaskStatus RestrictU(Driver *d, int stage);
   TaskStatus SendU(Driver *d, int stage);
   TaskStatus RecvU(Driver *d, int stage);
+  TaskStatus SendU_Shr(Driver *d, int stage);
+  TaskStatus RecvU_Shr(Driver *d, int stage);
   TaskStatus ApplyPhysicalBCs(Driver* pdrive, int stage);
   TaskStatus Prolongate(Driver* pdrive, int stage);
   TaskStatus ConToPrim(Driver *d, int stage);

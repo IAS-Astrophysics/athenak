@@ -24,6 +24,10 @@ class Viscosity;
 class Resistivity;
 class Conduction;
 class SourceTerms;
+class OrbitalAdvectionCC;
+class OrbitalAdvectionFC;
+class ShearingBoxBoundaryCC;
+class ShearingBoxBoundaryFC;
 class Driver;
 
 // function ptr for user-defined MHD boundary functions enrolled in problem generator
@@ -47,17 +51,27 @@ struct MHDTaskIDs {
   TaskID flux;
   TaskID sendf;
   TaskID recvf;
-  TaskID expl;
+  TaskID rkupdt;
+  TaskID srctrms;
+  TaskID sendu_oa;
+  TaskID recvu_oa;
   TaskID restu;
   TaskID sendu;
   TaskID recvu;
+  TaskID sendu_shr;
+  TaskID recvu_shr;
   TaskID efld;
+  TaskID efldsrc;
   TaskID sende;
   TaskID recve;
   TaskID ct;
+  TaskID sendb_oa;
+  TaskID recvb_oa;
   TaskID restb;
   TaskID sendb;
   TaskID recvb;
+  TaskID sendb_shr;
+  TaskID recvb_shr;
   TaskID bcs;
   TaskID prol;
   TaskID c2p;
@@ -93,9 +107,15 @@ class MHD {
   DvceFaceFld4D<Real> coarse_b0;  // face-centered B-field on 2x coarser grid
 
   // Objects containing boundary communication buffers and routines for u and b
-  BoundaryValuesCC *pbval_u;
-  BoundaryValuesFC *pbval_b;
+  MeshBoundaryValuesCC *pbval_u;
+  MeshBoundaryValuesFC *pbval_b;
   MHDBoundaryFnPtr MHDBoundaryFunc[6];
+
+  // Orbital advection and shearing box BCs
+  OrbitalAdvectionCC *porb_u = nullptr;
+  OrbitalAdvectionFC *porb_b = nullptr;
+  ShearingBoxBoundaryCC *psbox_u = nullptr;
+  ShearingBoxBoundaryFC *psbox_b = nullptr;
 
   // Object(s) for extra physics (viscosity, resistivity, thermal conduction, srcterms)
   Viscosity *pvisc = nullptr;
@@ -134,17 +154,27 @@ class MHD {
   TaskStatus Fluxes(Driver *d, int stage);
   TaskStatus SendFlux(Driver *d, int stage);
   TaskStatus RecvFlux(Driver *d, int stage);
-  TaskStatus ExpRKUpdate(Driver *d, int stage);
+  TaskStatus RKUpdate(Driver *d, int stage);
+  TaskStatus MHDSrcTerms(Driver *d, int stage);
+  TaskStatus SendU_OA(Driver *d, int stage);
+  TaskStatus RecvU_OA(Driver *d, int stage);
   TaskStatus RestrictU(Driver *d, int stage);
   TaskStatus SendU(Driver *d, int stage);
   TaskStatus RecvU(Driver *d, int stage);
+  TaskStatus SendU_Shr(Driver *d, int stage);
+  TaskStatus RecvU_Shr(Driver *d, int stage);
   TaskStatus CornerE(Driver *d, int stage);
+  TaskStatus EFieldSrc(Driver *d, int stage);
   TaskStatus SendE(Driver *d, int stage);
   TaskStatus RecvE(Driver *d, int stage);
   TaskStatus CT(Driver *d, int stage);
+  TaskStatus SendB_OA(Driver *d, int stage);
+  TaskStatus RecvB_OA(Driver *d, int stage);
   TaskStatus RestrictB(Driver *d, int stage);
   TaskStatus SendB(Driver *d, int stage);
   TaskStatus RecvB(Driver *d, int stage);
+  TaskStatus SendB_Shr(Driver *d, int stage);
+  TaskStatus RecvB_Shr(Driver *d, int stage);
   TaskStatus ApplyPhysicalBCs(Driver* pdrive, int stage);
   TaskStatus Prolongate(Driver* pdrive, int stage);
   TaskStatus ConToPrim(Driver *d, int stage);
