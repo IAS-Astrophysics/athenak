@@ -125,12 +125,13 @@ TaskStatus RadiationFEMN::TetradOrthogonalize(Driver *pdriver, int stage) {
               tetr_val -= g_dd[8 + nu] * tetr_mu_muhat0_(m, nu, 1, k, j, i);
             }
             tetr_val *= tetr_mu_muhat0_(m, mu, 1, k, j, i);
+            Real tetr_val_2 = 0;
             for (int nu = 0; nu < 4; nu++) {
-              tetr_val += g_dd[8 + nu] * tetr_mu_muhat0_(m, nu, 0, k, j, i);
+              tetr_val_2 += g_dd[8 + nu] * tetr_mu_muhat0_(m, nu, 0, k, j, i);
             }
-            tetr_val *= tetr_mu_muhat0_(m, mu, 0, k, j, i);
-            tetr_val += static_cast<int>(mu == 2);
-            tetr_mu_muhat0_(m, mu, 2, k, j, i) = tetr_val;
+            tetr_val_2 *= tetr_mu_muhat0_(m, mu, 0, k, j, i);
+            tetr_mu_muhat0_(m, mu, 2, k, j, i) =
+                static_cast<int>(mu == 2) + tetr_val + tetr_val_2;
           });
 
   // L^mu_2 = L^mu_2/||L^mu_2||
@@ -189,16 +190,18 @@ TaskStatus RadiationFEMN::TetradOrthogonalize(Driver *pdriver, int stage) {
               tetr_val -= g_dd[12 + nu] * tetr_mu_muhat0_(m, nu, 1, k, j, i);
             }
             tetr_val *= tetr_mu_muhat0_(m, mu, 1, k, j, i);
+            Real tetr_val_2 = 0;
             for (int nu = 0; nu < 4; nu++) {
-              tetr_val -= g_dd[12 + nu] * tetr_mu_muhat0_(m, nu, 2, k, j, i);
+              tetr_val_2 -= g_dd[12 + nu] * tetr_mu_muhat0_(m, nu, 2, k, j, i);
             }
-            tetr_val *= tetr_mu_muhat0_(m, mu, 2, k, j, i);
+            tetr_val_2 *= tetr_mu_muhat0_(m, mu, 2, k, j, i);
+            Real tetr_val_3 = 0;
             for (int nu = 0; nu < 4; nu++) {
-              tetr_val += g_dd[12 + nu] * tetr_mu_muhat0_(m, nu, 0, k, j, i);
+              tetr_val_3 += g_dd[12 + nu] * tetr_mu_muhat0_(m, nu, 0, k, j, i);
             }
-            tetr_val *= tetr_mu_muhat0_(m, mu, 0, k, j, i);
-            tetr_val += static_cast<int>(mu == 3);
-            tetr_mu_muhat0_(m, mu, 3, k, j, i) = tetr_val;
+            tetr_val_3 *= tetr_mu_muhat0_(m, mu, 0, k, j, i);
+            tetr_mu_muhat0_(m, mu, 3, k, j, i) =
+                static_cast<int>(mu == 3) + tetr_val + tetr_val_2 + tetr_val_3;
           });
 
   // L^mu_3 = L^mu_3/||L^mu_3||
