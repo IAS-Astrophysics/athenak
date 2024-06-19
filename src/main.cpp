@@ -29,6 +29,7 @@
 #include <string>
 #include <memory>
 #include <cstdio> // sscanf
+#include <fenv.h>
 
 // Athena headers
 #include "athena.hpp"
@@ -63,6 +64,8 @@ int main(int argc, char *argv[]) {
   bool narg_flag = false;  // set to true if -n        argument is on cmdline
   bool  res_flag = false;  // set to true if -r <file> argument is on cmdline
   Real wtlim = 0;
+
+  feenableexcept(FE_DIVBYZERO|FE_INVALID);
 
   //--- Step 1. --------------------------------------------------------------------------
   // Initialize environment (must initialize MPI first, then Kokkos)

@@ -56,8 +56,16 @@ struct UnitSystem {
     return b.mass/mass;
   }
 
+  KOKKOS_INLINE_FUNCTION constexpr Real MassDensityConversion(const UnitSystem & b) const {
+    return (b.density/density)*(b.mass/mass);
+  }
+
   KOKKOS_INLINE_FUNCTION constexpr Real EnergyConversion(const UnitSystem& b) const {
     return b.energy/energy;
+  }
+
+  KOKKOS_INLINE_FUNCTION constexpr Real EnergyDensityConversion(const UnitSystem& b) const {
+    return (b.density/density)*(b.energy/energy);
   }
 
   KOKKOS_INLINE_FUNCTION constexpr Real EntropyConversion(const UnitSystem& b) const {
@@ -93,12 +101,13 @@ static UnitSystem CGS{
 
   1.0, // length, cm
   1.0, // time, s
-  1.0, // density, g cm^-3
+  1.0, // density, cm^-3
   1.0, // mass, g
   1.0, // energy, erg
   1.0, // pressure, erg/cm^3
   1.0  // temperature, K
 };
+
 //! Geometric units with length in kilometers
 UnitSystem MakeGeometricKilometer();
 /*static UnitSystem GeometricKilometer{
@@ -116,6 +125,7 @@ UnitSystem MakeGeometricKilometer();
   CGS.G/(CGS.c*CGS.c*CGS.c*CGS.c)*1e10, // pressure, km^-2
   CGS.kb*CGS.G/(CGS.c*CGS.c*CGS.c*CGS.c)*1e-5, // temperature, km
 };*/
+
 //! Geometric units with length in solar masses
 UnitSystem MakeGeometricSolar();
 /*static UnitSystem GeometricSolar{
@@ -133,6 +143,7 @@ UnitSystem MakeGeometricSolar();
   PS_CUBE( CGS.G/(CGS.c*CGS.c) ) * PS_SQR( CGS.Msun/(CGS.c) ), // pressure, Msun^-2
   CGS.kb / (CGS.Msun * CGS.c*CGS.c), // temperature, Msun
 };*/
+
 //! Nuclear units
 UnitSystem MakeNuclear();
 /*static UnitSystem Nuclear{
@@ -150,6 +161,9 @@ UnitSystem MakeNuclear();
   1e-39/CGS.MeV, // pressure, MeV/fm^3
   CGS.kb/CGS.MeV, // temperature, MeV
 };*/
+
+//! MKS unit systems
+UnitSystem MakeMKS();
 
 } // namespace Primitive
 

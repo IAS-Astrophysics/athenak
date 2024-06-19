@@ -25,6 +25,8 @@
 #include "coordinates/coordinates.hpp"
 #include "coordinates/cell_locations.hpp"
 #include "eos/eos.hpp"
+#include "eos/primitive-solver/eos.hpp"
+#include "eos/primitive-solver/piecewise_polytrope.hpp"
 #include "hydro/hydro.hpp"
 #include "mhd/mhd.hpp"
 #include "dyn_grmhd/dyn_grmhd.hpp"
@@ -130,6 +132,39 @@ class PolytropeEOS {
   Real GetEFromRho(Real rho) const {
     return rho + kappa*Kokkos::pow(rho, gamma)/(gamma - 1.0);
   }
+};
+
+class PiecewisePolytropeEOS: public Primitive::PiecewisePolytrope {
+  private:
+
+  public:
+    explicit PiecewisePolytropeEOS(ParameterInput *pin)
+    {
+      ReadParametersFromInput("mhd", pin);
+    }
+
+    template<LocationTag loc>
+    KOKKOS_INLINE_FUNCTION
+    Real GetPFromRho(Real rho) const {
+      Real nb = rho/mb;
+      int p = FindPiece(nb);
+      return GetColdPressure(nb, p);
+    }
+
+    template<LocationTag loc>
+    KOKKOS_INLINE_FUNCTION
+    Real GetRhoFromP(Real P) const {
+      Real rhob = GetDensityFromColdPressure(P);
+      return rhob;
+    }
+
+    template<LocationTag loc>
+    KOKKOS_INLINE_FUNCTION
+    Real GetEFromRho(Real rho) const {
+      Real nb = rho/mb;
+      int p = FindPiece(nb);
+      return GetColdEnergy(nb, p);
+    }
 };
 
 class TabulatedEOS {
@@ -690,6 +725,8 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     SetupTOV<PolytropeEOS>(pin, pmy_mesh_, tov);
   } else if (pmbp->pdyngr->eos_policy == DynGRMHD_EOS::eos_compose) {
     SetupTOV<TabulatedEOS>(pin, pmy_mesh_, tov);
+  } else if (pmbp->pdyngr->eos_policy == DynGR_EOS::eos_piecewise_poly) {
+    SetupTOV<PiecewisePolytropeEOS>(pin, pmy_mesh_, tov);
   } else {
     std::cout << "### WARNING in " << __FILE__ << " at line " << __LINE__ << std::endl
               << "Unknown EOS requested for TOV star problem" << std::endl
@@ -986,9 +1023,10 @@ static void GetPrimitivesAtIsoPoint(const tov_pgen& tov, const TOVEOS& eos, Real
   alp = Interpolate(r_iso, R_iso(idx), R_iso(idx+1), alps(idx), alps(idx+1));
   // FIXME: Assumes ideal gas!
   //rho = pow(p/tov.kappa, 1.0/tov.gamma);
-  rho = eos.template GetRhoFromP<LocationTag::Device>(p);
+  rho = eos.template GetRhoFromP<LocationTag::Device>(fmax(p, tov.pfloor));
   if (!isfinite(p)) {
     printf("There's a problem with p!\n"); // NOLINT
+    assert(false);
   }
 }
 
