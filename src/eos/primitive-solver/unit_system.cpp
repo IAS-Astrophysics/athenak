@@ -83,5 +83,23 @@ Primitive::UnitSystem Primitive::MakeNuclear() {
   };
 }
 
+Primitive::UnitSystem Primitive::MakeMKS() {
+  return UnitSystem{
+    CGS.c/1e2,        // c
+    CGS.G/1e3,        // G
+    CGS.kb/1e7,       // kb
+    CGS.Msun/1e3,     // Msun
+    CGS.MeV/1e7,      // MeV
+
+    1e-2,             // 1 cm in m
+    1.0,              // 1 s in s
+    1e6,              // 1 cm^-3 in m^-3
+    1e-3,             // 1 g in kg
+    1e-7,             // 1 erg in J
+    0.1,              // 1 dyne/cm in Pa
+    1.0,              // 1 K in K
+  };
+}
+
 #undef PS_SQR
 #undef PS_CUBE

@@ -37,10 +37,10 @@ class PiecewisePolytrope : public EOSPolicyInterface {
   int n_pieces;
 
   /// Parameters for the EOS
-  Real density_pieces[MAX_PIECES+1];
-  Real a_pieces[MAX_PIECES+1];
-  Real gamma_pieces[MAX_PIECES+1];
-  Real pressure_pieces[MAX_PIECES+1];
+  Real density_pieces[MAX_PIECES];
+  Real gamma_pieces[MAX_PIECES];
+  Real pressure_pieces[MAX_PIECES];
+  Real eps_pieces[MAX_PIECES];
   Real gamma_thermal;
   bool initialized;
 
@@ -55,7 +55,7 @@ class PiecewisePolytrope : public EOSPolicyInterface {
       min_Y[i] = 0.0;
       max_Y[i] = 1.0;
     }
-    eos_units = MakeNuclear();
+    eos_units = MakeGeometricSolar();
   }
 
   /// Destructor
@@ -162,18 +162,21 @@ class PiecewisePolytrope : public EOSPolicyInterface {
     return false;
   }
 
+  //! \brief Load the EOS parameters from the input file
+  //  The input file is assumed to be in .pizza format
+  bool ReadParametersFromInput(std::string block, ParameterInput * pin);
+
   //! \brief Initialize PiecewisePolytrope from data.
   //
-  //  \param[in] densities The dividing densities
+  //  \param[in] densities The dividing densities (including rho_min)
   //  \param[in] gammas    The adiabatic index for each polytrope
-  //  \param[in] rho_min   The minimum density for the EOS
   //  \param[in] P0        The pressure at the first polytrope division
   //  \param[in] m         The baryon mass
   //  \param[in] n         The number of pieces in the EOS
   KOKKOS_INLINE_FUNCTION bool InitializeFromData(Real *densities, Real *gammas,
-                          Real rho_min, Real P0, Real m, int n) {
+                          Real P0, Real m, int n) {
     // Make sure that we actually *have* polytropes
-    if (n <= 0) {
+    if (n <= 1) {
       printf("PiecewisePolytrope: Invalid number of polytropes requested."); // NOLINT
       return false;
     }
@@ -187,10 +190,6 @@ class PiecewisePolytrope : public EOSPolicyInterface {
         return false;
       }
     }
-    if (rho_min >= densities[0]) {
-      printf("PiecewisePolytrope: minimum density above lowest transition."); // NOLINT
-      return false;
-    }
 
     // Make sure that we're not trying to allocate too many polytropes
     if (n > MAX_PIECES) {
@@ -202,51 +201,29 @@ class PiecewisePolytrope : public EOSPolicyInterface {
     n_pieces = n;
     mb = m;
     min_n = 0.0;
-    max_n = densities[n-1]/mb;
+    max_n = DBL_MAX;
 
     // Now we can construct the different pieces.
-    density_pieces[0] = densities[0]/m;
+    //
+    // Note that we store densities 1 twice, because on the first segment we need to
+    // write the pressure in terms of rho1 and not rho0 (which would give a
+    // division by zero)
+    density_pieces[0] = densities[1]/mb;
     gamma_pieces[0] = gammas[0];
     pressure_pieces[0] = P0;
-    if (n > 1) {
-      a_pieces[0] = P0/densities[0]*(1.0/(gammas[0] - 1.0) - 1.0/(gammas[1] - 1.0));
-    } else {
-      a_pieces[0] = 0.0;
-    }
+
     for (int i = 1; i < n; i++) {
-      density_pieces[i] = densities[i]/m;
+      density_pieces[i] = densities[i]/mb;
       gamma_pieces[i] = gammas[i];
       pressure_pieces[i] = pressure_pieces[i-1] *
-                           pow(densities[i]/densities[i-1],gammas[i]);
+          pow(density_pieces[i]/density_pieces[i-1], gamma_pieces[i-1]);
       // Because we've rewritten the EOS in terms of temperature, we don't need
       // kappa in its current form. However, we can use it to define the a
       // constants that show up in our equations.
-      a_pieces[i] = a_pieces[i-1] + pressure_pieces[i-1]/
-                      densities[i-1]*(1.0/(gammas[i-1] - 1.0) - 1.0/(gammas[i] - 1.0));
-      // Let's double-check that the density is physical.
-      if (gamma_pieces[i] > 2.0) {
-        Real rho_max = pow((gammas[i] - 1.0) *
-                           (1.0 + a_pieces[i])/(gammas[i]*(gammas[i]-2.0) *
-                           densities[i]/pressure_pieces[i]),1.0/(gammas[i]-1.0)) *
-                       densities[i];
-        if (densities[i] > rho_max) {
-          printf("The i = %d" // NOLINT
-                 " piece of the polytrope permits superluminal sound speeds: \n"
-                 "  rho[i]     = %g\n"
-                 "  rho_max[i] = %g\n",i,densities[i],rho_max);
-          return false;
-        }
-      }
-    }
+      eps_pieces[i] = eps_pieces[i-1] + pressure_pieces[i] /
+                      (mb*(gammas[i-1] - 1.0)*density_pieces[i]);
 
-    // Set up the default case. Because of thermodynamic constraints,
-    // we must force a to be zero. Gamma is fixed by continuity.
-    a_pieces[n] = 0.0;
-    Real factor = (gammas[0] - 1.0)*rho_min*a_pieces[0];
-    Real P_min = P0*pow(rho_min/densities[0],gammas[0]);
-    gamma_pieces[n] = (gammas[0]*P_min + factor)/(P_min + factor);
-    density_pieces[n] = rho_min/mb;
-    pressure_pieces[n] = P_min;
+    }
 
     // Because we're adding in a finite-temperature component via the ideal gas,
     // the only restriction on our temperature is that it needs to be nonnegative.
@@ -274,7 +251,8 @@ class PiecewisePolytrope : public EOSPolicyInterface {
 
   /// Set the adiabatic constant for the thermal part.
   KOKKOS_INLINE_FUNCTION void SetThermalGamma(Real g) {
-    gamma_thermal = (g <= 1.0) ? 1.00001 : ((g >= 2.0) ? 2.00001 : g);
+    assert(g > 1.0);
+    gamma_thermal = g;
   }
 
   /// Get the adiabatic constant for the thermal part.
@@ -285,26 +263,17 @@ class PiecewisePolytrope : public EOSPolicyInterface {
   /// Find the index of the piece that the density aligns with.
   KOKKOS_INLINE_FUNCTION int FindPiece(Real n) const {
     // WARNING: assumes the EOS is initialized!
-    // In case the density is below the minimum, we
-    // implement a default case that is stored just
-    // past the current polytrope.
-    int polytrope = n_pieces-1;
-    if (n < density_pieces[n_pieces]) {
-      return n_pieces;
-    }
-    for (int i = 0; i < n_pieces; i++) {
-      if (n <= density_pieces[i]) {
-        polytrope = i;
-        break;
+    for (int i = 0; i < n_pieces-1; ++i) {
+      if (n < density_pieces[i+1]) {
+        return i;
       }
     }
-
-    return polytrope;
+    return n_pieces - 1;
   }
 
   /// Polytropic Energy Density
   KOKKOS_INLINE_FUNCTION Real GetColdEnergy(Real n, int p) const {
-    return mb*n*(1.0 + a_pieces[p]) + GetColdPressure(n, p)/(gamma_pieces[p] - 1.0);
+    return mb*n*(1.0 + eps_pieces[p]) + GetColdPressure(n, p)/(gamma_pieces[p] - 1.0);
   }
 
   /// Polytropic Pressure
@@ -312,12 +281,23 @@ class PiecewisePolytrope : public EOSPolicyInterface {
     return pressure_pieces[p]*pow((n/density_pieces[p]), gamma_pieces[p]);
   }
 
+  /// Inverse of GetColdPressure
+  KOKKOS_INLINE_FUNCTION Real GetDensityFromColdPressure(Real p) const {
+    int ip = n_pieces - 1;
+    for (int i = 0; i < n_pieces-1; ++i) {
+      if (p < pressure_pieces[i+1]) {
+        ip = i;
+        break;
+      }
+    }
+    return density_pieces[ip]*pow((p/pressure_pieces[ip]), 1.0/gamma_pieces[ip]);
+  }
+
   /// Set the number of species. Throw an exception if
   /// the number of species is invalid.
   KOKKOS_INLINE_FUNCTION void SetNSpecies(int n) {
     if (n > MAX_SPECIES || n < 0) {
-      // FIXME: We need to abort here.
-      return;
+      abort();
     }
     n_species = n;
   }
