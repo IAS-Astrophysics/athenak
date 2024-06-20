@@ -312,61 +312,52 @@ TaskStatus RadiationFEMN::ExpRKUpdate(Driver *pdriver, int stage) {
                       }
                     }
                     // Compute F Gam and G Gam matrices
-                    ScrArray2D<Real> F_Gamma_AB =
+                    ScrArray2D<Real> f_gam =
                         ScrArray2D<Real>(member.team_scratch(scr_level), num_points_,
                                          num_points_);
-                    ScrArray2D<Real> G_Gamma_AB =
+                    ScrArray2D<Real> g_gam =
                         ScrArray2D<Real>(member.team_scratch(scr_level), num_points_,
                                          num_points_);
 
                     par_for_inner(member, 0, num_points_ * num_points_ - 1,
                                   [&](const int idx) {
-                                    int row = static_cast<int>(idx / num_points_);
-                                    int col = idx - row * num_points_;
+                                    const int row = static_cast<int>(idx / num_points_);
+                                    const int col = idx - row * num_points_;
 
-                                    Real sum_nuhatmuhat_f = 0.;
-                                    Real sum_nuhatmuhat_g = 0.;
-                                    for (int nuhatmuhat = 0; nuhatmuhat < 16;
-                                         nuhatmuhat++) {
-                                      int nuhat = static_cast<int>(nuhatmuhat / 4);
-                                      int muhat = nuhatmuhat - nuhat * 4;
+                                    Real sum_fgam = 0.;
+                                    Real sum_ggam = 0.;
+                                    for (int inumu = 0; inumu < 48; inumu++) {
+                                      RadiationFEMNPhaseIndices idx_numui =
+                                          IndicesComponent(inumu, 3, 4, 4);
+                                      int id_i = idx_numui.nuidx;
+                                      int id_nu = idx_numui.enidx;
+                                      int id_mu = idx_numui.angidx;
 
-                                      sum_nuhatmuhat_f +=
-                                          f_matrix(nuhat, muhat, 0, row, col)
-                                              * Gamma_fluid_udd(1, nuhat, muhat)
-                                              + f_matrix(nuhat, muhat, 1, row, col)
-                                                  * Gamma_fluid_udd(2, nuhat, muhat)
-                                              + f_matrix(nuhat, muhat, 2, row, col)
-                                                  * Gamma_fluid_udd(3, nuhat, muhat);
-
-                                      sum_nuhatmuhat_g +=
-                                          g_matrix(nuhat, muhat, 0, row, col)
-                                              * Gamma_fluid_udd(1, nuhat, muhat)
-                                              + g_matrix(nuhat, muhat, 1, row, col)
-                                                  * Gamma_fluid_udd(2, nuhat, muhat)
-                                              + g_matrix(nuhat, muhat, 2, row, col)
-                                                  * Gamma_fluid_udd(3, nuhat, muhat);
+                                      sum_fgam +=
+                                          f_matrix(id_nu, id_mu, id_i, row, col)
+                                              * Gamma_fluid_udd(id_i + 1, id_nu, id_mu);
+                                      sum_ggam +=
+                                          g_matrix(id_nu, id_mu, id_i, row, col)
+                                              * Gamma_fluid_udd(id_i + 1, id_nu, id_mu);
                                     }
-                                    F_Gamma_AB(row, col) = sum_nuhatmuhat_f;
-                                    G_Gamma_AB(row, col) = sum_nuhatmuhat_g;
+                                    f_gam(row, col) = sum_fgam;
+                                    g_gam(row, col) = sum_ggam;
                                   });
                     member.team_barrier();
 
                     // Add Christoeffel terms to rhs and compute Lax Friedrich's const K
                     Real K = 0.;
                     for (int index_b = 0; index_b < num_points_; index_b++) {
-
                       Real sum_terms = 0.;
                       for (int index_a = 0; index_a < num_points_; index_a++) {
                         int index_a_united = IndicesUnited(nu, en, index_a, num_species_,
                                                            num_energy_bins_, num_points_);
                         sum_terms +=
-                            (F_Gamma_AB(index_a, index_b) + G_Gamma_AB(index_a, index_b))
+                            (f_gam(index_a, index_b) + g_gam(index_a, index_b))
                                 * f0_(m, index_a_united, k, j, i);
-                        K += F_Gamma_AB(index_a, index_b) * F_Gamma_AB(index_a, index_b);
+                        K += f_gam(index_a, index_b) * f_gam(index_a, index_b);
                       }
-                      g_rhs_scratch(index_b) =
-                          g_rhs_scratch(index_b) - beta_dt * sqrt_det_g_ijk * sum_terms;
+                      g_rhs_scratch(index_b) += -beta_dt * sqrt_det_g_ijk * sum_terms;
                     }
                     member.team_barrier();
                     K = sqrt(K);
