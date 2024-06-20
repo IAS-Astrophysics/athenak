@@ -328,7 +328,7 @@ TaskStatus RadiationFEMN::ExpRKUpdate(Driver *pdriver, int stage) {
                                     Real sum_ggam = 0.;
                                     for (int inumu = 0; inumu < 48; inumu++) {
                                       RadiationFEMNPhaseIndices idx_numui =
-                                          IndicesComponent(inumu, 3, 4, 4);
+                                          IndicesComponent(inumu, 4, 4, 3);
                                       int id_i = idx_numui.nuidx;
                                       int id_nu = idx_numui.enidx;
                                       int id_mu = idx_numui.angidx;
