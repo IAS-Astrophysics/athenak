@@ -209,40 +209,31 @@ TaskStatus RadiationFEMN::ExpRKUpdate(Driver *pdriver, int stage) {
                     dg4_ddd(0, 0, 0) = -2. * adm.alpha(m, k, j, i) * dtalpha_d;
                     for (int a = 0; a < 3; ++a) {
                       dg4_ddd(0, 0, 0) += 2. * beta_d[a] * dtbeta_du[a];
+                      dg4_ddd(0, a + 1, 0) = 0;
                       for (int b = 0; b < 3; ++b) {
                         dg4_ddd(0, 0, 0) += dtg_dd(a, b)
                             * adm.beta_u(m, a, k, j, i)
                             * adm.beta_u(m, b, k, j, i);
-                      }
-                    }
-                    for (int a = 1; a < 4; ++a) {
-                      dg4_ddd(0, a, 0) = 0;
-                      for (int b = 0; b < 3; ++b) {
-                        dg4_ddd(0, a, 0) += dtg_dd(a - 1, b) * adm.beta_u(m, b, k, j, i)
-                            + adm.g_dd(m, a - 1, b, k, j, i) * dtbeta_du[b];
-                      }
-                    }
-                    for (int a = 1; a < 4; ++a) {
-                      for (int b = 1; b < 4; ++b) {
-                        dg4_ddd(0, a, b) = dtg_dd(a - 1, b - 1);
+                        dg4_ddd(0, a + 1, 0) += dtg_dd(a, b) * adm.beta_u(m, b, k, j, i)
+                            + adm.g_dd(m, a, b, k, j, i) * dtbeta_du[b];
+                        dg4_ddd(0, a + 1, b + 1) = dtg_dd(a, b);
                       }
                     }
 
                     // derivatives of the 4-metric: spatial derivatives
-                    for (int a = 1; a < 4; ++a) {
-                      dg4_ddd(a, 0, 0) = -2. * adm.alpha(m, k, j, i) * dalpha_d(a - 1);
-                      for (int b = 1; b < 4; ++b) {
-                        dg4_ddd(a, 0, 0) += 2. * beta_d[b - 1] * dbeta_du(a - 1, b - 1);
-                        dg4_ddd(a, 0, b) = 0;
-                        for (int c = 1; c < 4; ++c) {
-                          dg4_ddd(c, a, b) = dg_ddd(c - 1, a - 1, b - 1);
-                          dg4_ddd(a, 0, b) +=
-                              adm.g_dd(m, 0, c - 1, k, j, i) * dbeta_du(a - 1, c - 1)
-                                  + dg_ddd(a - 1, c - 1, b - 1)
-                                      * adm.beta_u(m, c - 1, k, j, i);
-                          dg4_ddd(a, 0, 0) += dg_ddd(a - 1, b - 1, c - 1)
-                              * adm.beta_u(m, b - 1, k, j, i)
-                              * adm.beta_u(m, c - 1, k, j, i);
+                    for (int c = 0; c < 3; c++) {
+                      dg4_ddd(c + 1, 0, 0) = -2. * adm.alpha(m, k, j, i) * dalpha_d(c);
+                      for (int a = 0; a < 3; ++a) {
+                        dg4_ddd(c + 1, 0, 0) += 2. * beta_d[a] * dbeta_du(c, a);
+                        dg4_ddd(c + 1, a + 1, 0) = 0;
+                        for (int b = 0; b < 3; ++b) {
+                          dg4_ddd(c + 1, 0, 0) += dg_ddd(c, a, b)
+                              * adm.beta_u(m, a, k, j, i)
+                              * adm.beta_u(m, b, k, j, i);
+                          dg4_ddd(c + 1, a + 1, 0) +=
+                              dg_ddd(c, a, b) * adm.beta_u(m, b, k, j, i)
+                                  + adm.g_dd(m, a, b, k, j, i) * dbeta_du(c, b);
+                          dg4_ddd(c + 1, a + 1, b + 1) = dg_ddd(c, a, b);
                         }
                       }
                     }
@@ -271,44 +262,38 @@ TaskStatus RadiationFEMN::ExpRKUpdate(Driver *pdriver, int stage) {
                           Gamma_fluid_udd(a, b, c) = 0.0;
                           for (int d = 0; d < 64; ++d) {
                             // check three lines
-                            int a_idx = int(d / (4 * 4));
-                            int b_idx = int((d - 4 * 4 * a_idx) / 4);
+                            int a_idx = static_cast<int>(d / (4 * 4));
+                            int b_idx = static_cast<int>((d - 4 * 4 * a_idx) / 4);
                             int c_idx = d - a_idx * 4 * 4 - b_idx * 4;
 
                             // check contraction
                             Real l_sign = (a == 0) ? -1. : +1.;
-                            Real L_ahat_aidx = l_sign
-                                * (g_dd[a_idx + 4 * 0] * tetr_mu_muhat0_(m, 0, a, k, j, i)
-                                    + g_dd[a_idx + 4 * 1]
-                                        * tetr_mu_muhat0_(m, 1, a, k, j, i)
-                                    + g_dd[a_idx + 4 * 2]
-                                        * tetr_mu_muhat0_(m, 2, a, k, j, i)
-                                    + g_dd[a_idx + 4 * 3]
-                                        * tetr_mu_muhat0_(m, 3, a, k, j, i));
+                            Real tetr_ahat_aidx = 0;
+                            for (int p_idx = 0; p_idx < 4; p_idx++) {
+                              tetr_ahat_aidx = l_sign * g_dd[a_idx + 4 * p_idx]
+                                  * tetr_mu_muhat0_(m, p_idx, a, k, j, i);
+                            }
+
                             Gamma_fluid_udd(a, b, c) +=
                                 tetr_mu_muhat0_(m, b_idx, b, k, j, i)
-                                    * tetr_mu_muhat0_(m, c_idx, c, k, j, i) * L_ahat_aidx
+                                    * tetr_mu_muhat0_(m, c_idx, c, k, j, i)
+                                    * tetr_ahat_aidx
                                     * Gamma_udd(a_idx, b_idx, c_idx);
 
-                            Real derL[4];
-                            derL[0] = 0.;
-                            derL[1] = Dx<NGHOST>(0, deltax, tetr_mu_muhat0_, m, a_idx, b,
-                                                 k, j, i);
-                            derL[2] =
+                            Real dtetr_d[4];
+                            dtetr_d[0] = 0.;
+                            dtetr_d[1] =
+                                Dx<NGHOST>(0, deltax, tetr_mu_muhat0_, m, a_idx, b,
+                                           k, j, i);
+                            dtetr_d[2] =
                                 (multi_d) ? Dx<NGHOST>(1, deltax, tetr_mu_muhat0_, m,
                                                        a_idx, b, k, j, i) : 0.;
-                            derL[3] = (three_d) ? Dx<NGHOST>(2,
-                                                             deltax,
-                                                             tetr_mu_muhat0_,
-                                                             m,
-                                                             a_idx,
-                                                             b,
-                                                             k,
-                                                             j,
-                                                             i) : 0.;
+                            dtetr_d[3] =
+                                (three_d) ? Dx<NGHOST>(2, deltax, tetr_mu_muhat0_,
+                                                       m, a_idx, b, k, j, i) : 0.;
                             Gamma_fluid_udd(a, b, c) +=
-                                L_ahat_aidx * tetr_mu_muhat0_(m, c_idx, c, k, j, i)
-                                    * derL[c_idx];
+                                tetr_ahat_aidx * tetr_mu_muhat0_(m, c_idx, c, k, j, i)
+                                    * dtetr_d[c_idx];
                           }
                         }
                       }
@@ -316,26 +301,22 @@ TaskStatus RadiationFEMN::ExpRKUpdate(Driver *pdriver, int stage) {
 
                     // Compute F Gam and G Gam matrices
                     ScrArray2D<Real> F_Gamma_AB =
-                        ScrArray2D<Real>(member.team_scratch(scr_level),
-                                         num_points_,
+                        ScrArray2D<Real>(member.team_scratch(scr_level), num_points_,
                                          num_points_);
                     ScrArray2D<Real> G_Gamma_AB =
-                        ScrArray2D<Real>(member.team_scratch(scr_level),
-                                         num_points_,
+                        ScrArray2D<Real>(member.team_scratch(scr_level), num_points_,
                                          num_points_);
 
-                    par_for_inner(member,
-                                  0,
-                                  num_points_ * num_points_ - 1,
+                    par_for_inner(member, 0, num_points_ * num_points_ - 1,
                                   [&](const int idx) {
-                                    int row = int(idx / num_points_);
+                                    int row = static_cast<int>(idx / num_points_);
                                     int col = idx - row * num_points_;
 
                                     Real sum_nuhatmuhat_f = 0.;
                                     Real sum_nuhatmuhat_g = 0.;
                                     for (int nuhatmuhat = 0; nuhatmuhat < 16;
                                          nuhatmuhat++) {
-                                      int nuhat = int(nuhatmuhat / 4);
+                                      int nuhat = static_cast<int>(nuhatmuhat / 4);
                                       int muhat = nuhatmuhat - nuhat * 4;
 
                                       sum_nuhatmuhat_f +=
@@ -365,12 +346,8 @@ TaskStatus RadiationFEMN::ExpRKUpdate(Driver *pdriver, int stage) {
 
                       Real sum_terms = 0.;
                       for (int index_a = 0; index_a < num_points_; index_a++) {
-                        int index_a_united = IndicesUnited(nu,
-                                                           en,
-                                                           index_a,
-                                                           num_species_,
-                                                           num_energy_bins_,
-                                                           num_points_);
+                        int index_a_united = IndicesUnited(nu, en, index_a, num_species_,
+                                                           num_energy_bins_, num_points_);
                         sum_terms +=
                             (F_Gamma_AB(index_a, index_b) + G_Gamma_AB(index_a, index_b))
                                 * f0_(m, index_a_united, k, j, i);
@@ -435,23 +412,15 @@ TaskStatus RadiationFEMN::ExpRKUpdate(Driver *pdriver, int stage) {
                                                                pivots);
                     member.team_barrier();
 
-                    member.team_barrier();
-
                     if (m1_flag_) {
                       ApplyM1Floor(member, x_array, rad_E_floor_, rad_eps_);
                       member.team_barrier();
                     }
 
                     par_for_inner(member, 0, num_points_ - 1, [&](const int idx) {
-
-                      auto unifiedidx = IndicesUnited(nu,
-                                                      en,
-                                                      idx,
-                                                      num_species_,
-                                                      num_energy_bins_,
-                                                      num_points_);
+                      auto unifiedidx = IndicesUnited(nu, en, idx, num_species_,
+                                                      num_energy_bins_, num_points_);
                       f0_(m, unifiedidx, k, j, i) = x_array(idx);
-
                     });
                     member.team_barrier();
                   }
