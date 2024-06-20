@@ -191,7 +191,7 @@ TaskStatus RadiationFEMN::ExpRKUpdate(Driver *pdriver, int stage) {
                     AthenaScratchTensor<Real, TensorSymm::SYM2, 3, 2> dtg_dd;
                     AthenaScratchTensor<Real, TensorSymm::SYM2, 3, 3> dg_ddd;
                     for (int a = 0; a < 3; ++a) {
-                      for (int b = a; b < 3; ++b) {
+                      for (int b = 0; b < 3; ++b) {
                         dtg_dd(a, b) = 0.; // time derivatives, get from z4c
                         dg_ddd(0, a, b) =
                             Dx<NGHOST>(0, deltax, adm.g_dd, m, a, b, k, j, i);
@@ -238,7 +238,7 @@ TaskStatus RadiationFEMN::ExpRKUpdate(Driver *pdriver, int stage) {
                       }
                     }
 
-                    // Christoeffel symbols
+                    // 4-Christoeffel symbols
                     AthenaScratchTensor4d<Real, TensorSymm::SYM2, 4, 3> Gamma_udd;
                     for (int a = 0; a < 4; ++a) {
                       for (int b = 0; b < 4; ++b) {
