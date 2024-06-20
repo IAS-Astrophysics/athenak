@@ -377,27 +377,25 @@ TaskStatus RadiationFEMN::ExpRKUpdate(Driver *pdriver, int stage) {
                     ScrArray1D<int> pivots =
                         ScrArray1D<int>(member.team_scratch(scr_level), num_points_ - 1);
 
-                    par_for_inner(member,
-                                  0,
-                                  num_points_ * num_points_ - 1,
+                    par_for_inner(member, 0, num_points_ * num_points_ - 1,
                                   [&](const int idx) {
                                     int row = int(idx / num_points_);
                                     int col = idx - row * num_points_;
-                                    Q_matrix(row, col) = sqrt_det_g_ijk
-                                        * (tetr_mu_muhat0_(m, 0, 0, k, j, i)
-                                            * p_matrix(0, row, col)
-                                            + tetr_mu_muhat0_(m, 0, 1, k, j, i)
-                                                * p_matrix(1, row, col)
-                                            + tetr_mu_muhat0_(m, 0, 2, k, j, i)
-                                                * p_matrix(2, row, col)
-                                            + tetr_mu_muhat0_(m, 0, 3, k, j, i)
-                                                * p_matrix(3, row, col))
-                                        + sqrt_det_g_ijk * beta_dt * (kappa_s_(m, k, j, i)
-                                            + kappa_a_(m, k, j, i))
+
+                                    Real sum_val = 0;
+                                    for (int id_i = 0; id_i < 4; ++id_i) {
+                                      sum_val += tetr_mu_muhat0_(m, 0, id_i, k, j, i)
+                                          * p_matrix(id_i, row, col);
+                                    }
+                                    Q_matrix(row, col) = sum_val
+                                        + sqrt_det_g_ijk * beta_dt
+                                            * (kappa_s_(m, k, j, i)
+                                                + kappa_a_(m, k, j, i))
                                             * p_matrix(0, row, col) / Ven
-                                        - sqrt_det_g_ijk * beta_dt * (1. / (4. * M_PI))
-                                            * kappa_s_(m, k, j, i) * s_source(row, col)
-                                            / Ven;
+                                        - sqrt_det_g_ijk * beta_dt
+                                            * (1. / (4. * M_PI))
+                                            * kappa_s_(m, k, j, i)
+                                            * s_source(row, col) / Ven;
                                     lu_matrix(row, col) = Q_matrix(row, col);
                                   });
                     member.team_barrier();
