@@ -143,7 +143,7 @@ void ProblemGenerator::RadiationFEMNSpharms(ParameterInput *pin, const bool rest
                         -1.1752104590970943e-08};
   for (int i = 0; i < N; i++) {
     Real legval_der = radiationfemn::recurrence_derivative_legendre(l_arr_der[i], m_arr_der[i], x);
-    Real answers_der_final = sqrt(1 - x*x) * answers_der[i];
+    Real answers_der_final = - sqrt(1 - x*x) * answers_der[i];
     Real erval = fabs(answers_der_final) > 1e-14 ? fabs(legval_der - answers_der_final)/ fabs(answers_der_final) : fabs(legval_der - answers_der_final);
     if (erval > error5) {
       error5 = erval;
