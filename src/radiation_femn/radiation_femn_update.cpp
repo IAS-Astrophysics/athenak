@@ -260,29 +260,25 @@ TaskStatus RadiationFEMN::ExpRKUpdate(Driver *pdriver, int stage) {
                       for (int b = 0; b < 4; ++b) {
                         for (int c = 0; c < 4; ++c) {
                           Gamma_fluid_udd(a, b, c) = 0.0;
-                          for (int d = 0; d < 64; ++d) {
-                            // recycle nu-en-ang decomposition routine
-                            const RadiationFEMNPhaseIndices
-                                abc_idx = IndicesComponent(d, 4, 4, 4);
-                            const int a_idx = abc_idx.nuidx;
-                            const int b_idx = abc_idx.enidx;
-                            const int c_idx = abc_idx.angidx;
+                          for (int ac_idx = 0; ac_idx < 4 * 4; ++ac_idx) {
+                            const int a_idx = static_cast<int>(ac_idx / 4);
+                            const int c_idx = ac_idx - a_idx * 4;
 
-                            // compute inverse of tetrad
+                            // compute inverse tetrad
                             Real sign_factor = (a == 0) ? -1. : +1.;
                             Real tetr_a_aidx = 0;
-                            for (int p_idx = 0; p_idx < 4; p_idx++) {
-                              tetr_a_aidx += sign_factor * g_dd[a_idx + 4 * p_idx]
-                                  * tetr_mu_muhat0_(m, p_idx, a, k, j, i);
+                            for (int d_idx = 0; d_idx < 4; ++d_idx) {
+                              tetr_a_aidx += sign_factor * g_dd[a_idx + 4 * d_idx]
+                                  * tetr_mu_muhat0_(m, d_idx, a, k, j, i);
                             }
 
-                            Gamma_fluid_udd(a, b, c) +=
-                                tetr_mu_muhat0_(m, b_idx, b, k, j, i)
-                                    * tetr_mu_muhat0_(m, c_idx, c, k, j, i)
-                                    * tetr_a_aidx
-                                    * Gamma_udd(a_idx, b_idx, c_idx);
-                          }
-                          for (int a_idx = 0; a_idx < 4; ++a_idx) {
+                            for (int b_idx = 0; b_idx < 4; ++b_idx) {
+                              Gamma_fluid_udd(a, b, c) += tetr_a_aidx
+                                  * tetr_mu_muhat0_(m, c_idx, c, k, j, i)
+                                  * tetr_mu_muhat0_(m, b_idx, b, k, j, i)
+                                  * Gamma_udd(a_idx, b_idx, c_idx);
+                            }
+
                             Real dtetr_mu_muhat_d[4];
                             dtetr_mu_muhat_d[0] = 0.; // no time derivatives currently
                             dtetr_mu_muhat_d[1] =
@@ -294,19 +290,9 @@ TaskStatus RadiationFEMN::ExpRKUpdate(Driver *pdriver, int stage) {
                             dtetr_mu_muhat_d[3] =
                                 (three_d) ? Dx<NGHOST>(2, deltax, tetr_mu_muhat0_,
                                                        m, a_idx, b, k, j, i) : 0.;
-
-                            // compute inverse of tetrad
-                            Real sign_factor = (a == 0) ? -1. : +1.;
-                            Real tetr_a_aidx = 0;
-                            for (int p_idx = 0; p_idx < 4; ++p_idx) {
-                              tetr_a_aidx += sign_factor * g_dd[a_idx + 4 * p_idx]
-                                  * tetr_mu_muhat0_(m, p_idx, a, k, j, i);
-                            }
-                            for (int p_idx = 0; p_idx < 4; ++p_idx) {
-                              Gamma_fluid_udd(a, b, c) +=
-                                  tetr_a_aidx * tetr_mu_muhat0_(m, p_idx, c, k, j, i)
-                                      * dtetr_mu_muhat_d[p_idx];
-                            }
+                            Gamma_fluid_udd(a, b, c) += tetr_a_aidx
+                                * tetr_mu_muhat0_(m, c_idx, c, k, j, i)
+                                * dtetr_mu_muhat_d[c_idx];
                           }
                         }
                       }
