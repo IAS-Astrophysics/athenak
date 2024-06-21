@@ -311,6 +311,7 @@ TaskStatus RadiationFEMN::ExpRKUpdate(Driver *pdriver, int stage) {
                         }
                       }
                     }
+                    member.team_barrier();
                     // Compute F Gam and G Gam matrices
                     ScrArray2D<Real> f_gam =
                         ScrArray2D<Real>(member.team_scratch(scr_level), num_points_,
