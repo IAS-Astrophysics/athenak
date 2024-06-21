@@ -238,10 +238,10 @@ Real recurrence_legendre_alt(int l, int m, Real x) {
 
 /* Recurrence relation for derivative of Legendre polynomials
  *
- * sqrt(1 - x^2) dP^m_l/dx = (0.5) * ((l+m)(l-m+1)P^m-1_l(x) - P^m+1_l(x))
+ * -sqrt(1 - x^2) dP^m_l/dx = -(0.5) * ((l+m)(l-m+1)P^m-1_l(x) - P^m+1_l(x))
  */
 Real recurrence_derivative_legendre(Real l, Real m, Real x) {
-  return (0.5) * ((l + m) * (l - m + 1) * legendre(l, m - 1, x) - legendre(l, m + 1, x));
+  return -(0.5) * ((l + m) * (l - m + 1) * legendre(l, m - 1, x) - legendre(l, m + 1, x));
 }
 
 /* Derivative of FPN basis wrt angle
@@ -274,11 +274,11 @@ inline Real dfpn_dtheta(int l, int m, Real phi, Real theta) {
   const Real x = cos(theta);
 
   if (m > 0) {
-    result = -sqrt(2.) * cos(m * phi) * legendre_factor(l, m) * recurrence_derivative_legendre(l, m, x);
+    result = sqrt(2.) * cos(m * phi) * legendre_factor(l, m) * recurrence_derivative_legendre(l, m, x);
   } else if (m == 0) {
-    result = -legendre_factor(l, m) * recurrence_derivative_legendre(l, m, x);
+    result = legendre_factor(l, m) * recurrence_derivative_legendre(l, m, x);
   } else {
-    result = -sqrt(2.) * sin(abs(m) * phi) * legendre_factor(l, abs(m)) * recurrence_derivative_legendre(l, abs(m), x);
+    result = sqrt(2.) * sin(abs(m) * phi) * legendre_factor(l, abs(m)) * recurrence_derivative_legendre(l, abs(m), x);
   }
   return result;
 }
