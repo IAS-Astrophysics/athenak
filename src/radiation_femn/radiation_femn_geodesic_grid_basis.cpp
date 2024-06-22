@@ -192,6 +192,80 @@ Real fpn_basis_lm_alt(int l, int m, Real phi, Real theta) {
   return result;
 }
 
+// ---------------------------------------------------------------------------------------
+// Old function for computing G matrices
+// ---------------------------------------------------------------------------------------
+/* Derivative of FPN basis wrt angle
+ *
+ * var_index: 1 => phi, 2 => theta)
+ */
+using dfpn_dOmega_fn_alt = Real (*)(int, int, Real, Real);
+const dfpn_dOmega_fn_alt dfpn_domega_fns_alt[2] = {dfpn_dphi_alt, dfpn_dtheta_alt};
+
+Real dfpn_dOmega_alt(int l, int m, Real phi, Real theta, int var_index) {
+  return dfpn_domega_fns_alt[var_index - 1](l, m, phi, theta);
+}
+
+// dYlm/dphi = - m Yl-m
+inline Real dfpn_dphi_alt(int l, int m, Real phi, Real theta) {
+  return -m * fpn_basis_lm_alt(l, -m, phi, theta);
+}
+
+/* dYlm/dtheta
+ *
+ * Note: Uses (1-x^2) dP^m_l/dx = (m-l-1) P^m_l+1 + (l+1)xP^m_l
+ *       When x = -1, 1, dP^m_l/dx = 0
+ *       When m = -k < 0, dP^-k_l/dx = (-1)^k (l-k)!/(l+k)! dP^k_l/dx
+ */
+inline Real dfpn_dtheta_alt(int l, int m, Real phi, Real theta) {
+  Real result = 0.;
+  const Real x = cos(theta);
+
+  if (abs(x - 1.) < 1e-14) {
+    return 0.;
+  }
+
+  Real der_legendre = -sin(theta)
+      * ((m - l - 1.) * gsl_sf_legendre_sphPlm(l + 1, abs(m), x)
+          + (l + 1) * x * gsl_sf_legendre_sphPlm(l, abs(m), x)) / (1. - x * x);
+
+  if (m > 0) {
+    result = sqrt(2.) * cos(m * phi) * der_legendre;
+  } else if (m == 0) {
+    result = der_legendre;
+  } else {
+    result = pow(-1, -m) * (gsl_sf_fact(l + m) / gsl_sf_fact(l - m)) * sqrt(2.)
+        * sin(abs(m) * phi) * der_legendre;
+  }
+  return result;
+}
+
+/* Inverse Jacobian P^itilde_ihat [e = 1, itilde = (phi, theta), ihat = (x,y,z)]
+ *
+ * P^itilde_ihat = [-cosec(theta)*sin(phi)  cosec(theta)*cos(phi)   0]
+ *                 [cos(theta)*cos(phi)     cos(theta)*sin(phi)     -sin(theta)]
+ */
+using inv_jac_fn_alt = Real (*)(Real, Real);
+const inv_jac_fn_alt inv_jac_fns_alt[2][3] = {
+    {
+        [](Real phi, Real theta) { return -sin(phi) / sin(theta); },
+        [](Real phi, Real theta) { return cos(phi) / sin(theta); },
+        [](Real phi, Real theta) { return 0.0; }
+    },
+    {
+        [](Real phi, Real theta) { return cos(phi) * cos(theta); },
+        [](Real phi, Real theta) { return sin(phi) * cos(theta); },
+        [](Real phi, Real theta) { return -sin(theta); }
+    }
+};
+
+Real inv_jac_itilde_ihat_alt(Real phi, Real theta, int tilde_index, int hat_index) {
+  return inv_jac_fns_alt[tilde_index - 1][hat_index - 1](phi, theta);
+}
+// ---------------------------------------------------------------------------------------
+// Old function for computing G matrices end
+// ---------------------------------------------------------------------------------------
+
 Real legendre(int l, int m, Real x) {
   // if l is smaller than zero, replace by -l-1
   l = (l >= 0) ? l : -l - 1;
@@ -261,7 +335,7 @@ inline Real cosec_dfpn_dphi(int l, int m, Real phi, Real theta) {
   if (m < 0) {
     result = -sqrt(2.) * cos(abs(m) * phi) * legendre_factor(l, abs(m)) * recurrence_legendre(l, abs(m), cos(theta));
   } else if (m == 0) {
-    result = 0;
+    result = - legendre_factor(l, abs(m)) * recurrence_legendre(l, abs(m), cos(theta));
   } else {
     result = -sqrt(2.) * sin(m * phi) * legendre_factor(l, m) * recurrence_legendre(l, m, cos(theta));
   }

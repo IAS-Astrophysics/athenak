@@ -54,6 +54,11 @@ namespace radiationfemn
     Real dfpn_dOmega(int l, int m, Real phi, Real theta, int var_index);
     Real inv_jac_itilde_ihat(Real phi, Real theta, int tilde_index, int hat_index);
 
+    Real dfpn_dtheta_alt(int l, int m, Real phi, Real theta);
+    Real dfpn_dphi_alt(int l, int m, Real phi, Real theta);
+    Real dfpn_dOmega_alt(int l, int m, Real phi, Real theta, int var_index);
+    Real inv_jac_itilde_ihat_alt(Real phi, Real theta, int tilde_index, int hat_index);
+
     Real legendre(int l, int m, Real x);
     Real legendre_factor(int l, int m);
     Real recurrence_legendre(int l, int m, Real x);
