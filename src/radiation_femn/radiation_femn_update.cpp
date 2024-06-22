@@ -374,7 +374,7 @@ TaskStatus RadiationFEMN::ExpRKUpdate(Driver *pdriver, int stage) {
                                       sum_val += tetr_mu_muhat0_(m, 0, id_i, k, j, i)
                                           * p_matrix(id_i, row, col);
                                     }
-                                    Q_matrix(row, col) = sum_val
+                                    Q_matrix(row, col) = sqrt_det_g_ijk * sum_val
                                         + sqrt_det_g_ijk * beta_dt
                                             * (kappa_s_(m, k, j, i)
                                                 + kappa_a_(m, k, j, i))
