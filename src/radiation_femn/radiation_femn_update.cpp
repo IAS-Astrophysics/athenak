@@ -135,8 +135,7 @@ TaskStatus RadiationFEMN::ExpRKUpdate(Driver *pdriver, int stage) {
                             nuenangidx_a = IndicesUnited(nu, en, idx_a, num_species_,
                                                          num_energy_bins_, num_points_);
                         for (int muhat = 0; muhat < 4; muhat++) {
-                          fval += sqrt_det_g_ijk
-                              * tetr_mu_muhat0_(m, 0, muhat, k, j, i)
+                          fval += tetr_mu_muhat0_(m, 0, muhat, k, j, i)
                               * p_matrix(muhat, idx_a, idx)
                               * f1_(m, nuenangidx_a, k, j, i);
                         }
@@ -344,7 +343,7 @@ TaskStatus RadiationFEMN::ExpRKUpdate(Driver *pdriver, int stage) {
                                 * f0_(m, index_a_united, k, j, i);
                         K += f_gam(index_a, index_b) * f_gam(index_a, index_b);
                       }
-                      g_rhs_scratch(index_b) -= beta_dt * sqrt_det_g_ijk * sum_terms;
+                      g_rhs_scratch(index_b) -= beta_dt * sum_terms;
                     }
                     member.team_barrier();
                     K = sqrt(K);
@@ -374,12 +373,12 @@ TaskStatus RadiationFEMN::ExpRKUpdate(Driver *pdriver, int stage) {
                                       sum_val += tetr_mu_muhat0_(m, 0, id_i, k, j, i)
                                           * p_matrix(id_i, row, col);
                                     }
-                                    Q_matrix(row, col) = sqrt_det_g_ijk * sum_val
-                                        + sqrt_det_g_ijk * beta_dt
+                                    Q_matrix(row, col) = sum_val
+                                        + beta_dt
                                             * (kappa_s_(m, k, j, i)
                                                 + kappa_a_(m, k, j, i))
                                             * p_matrix(0, row, col) / Ven
-                                        - sqrt_det_g_ijk * beta_dt
+                                        - beta_dt
                                             * (1. / (4. * M_PI))
                                             * kappa_s_(m, k, j, i)
                                             * s_source(row, col) / Ven;

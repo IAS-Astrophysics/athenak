@@ -169,6 +169,7 @@ void RadiationFEMN::LoadFPNMatrices() {
   auto &fmatrix_ = F_mat_host;
   auto &gmatrix_ = G_mat_host;
   auto &e_source_ = e_source;
+  auto &Q_matrix_ = Q_matrix;
 
   // populate angular grid with (l,m) values
   //auto &lm_grid_ = angular_grid;
@@ -272,14 +273,27 @@ void RadiationFEMN::LoadFPNMatrices() {
 
   HostArray1D<Real> e_source_temp;
   Kokkos::realloc(e_source_temp, num_points);
+  HostArray2D<Real> Q_matrix_temp;
+  Kokkos::realloc(Q_matrix_temp, 4, num_points);
 
   std::cout << "Computing the e-matrix (FPN) ... " << std::endl;
   for (int i = 0; i < num_points; i++) {
     e_source_temp(i) =
         radiationfemn::IntegrateMatrixFPN(int(temp_angular_grid(i, 0)), int(temp_angular_grid(i, 1)), int(temp_angular_grid(i, 0)), int(temp_angular_grid(i, 1)),
                                           scheme_weights, scheme_points, 6, -42, -42, -42);
+    Q_matrix_temp(0, i) = e_source_temp(i);
   }
   Kokkos::deep_copy(e_source_, e_source_temp);
 
+  std::cout << "Computing the matrices for clp limiter (FPN) ... " << std::endl;
+  for (int i = 0; i < num_points; i++) {
+    Q_matrix_temp(1, i) =  radiationfemn::IntegrateMatrixFPN(int(temp_angular_grid(i, 0)), int(temp_angular_grid(i, 1)), int(temp_angular_grid(i, 0)), int(temp_angular_grid(i, 1)),
+                                          scheme_weights, scheme_points, 7, -42, -42, -42);
+    Q_matrix_temp(2, i) =  radiationfemn::IntegrateMatrixFPN(int(temp_angular_grid(i, 0)), int(temp_angular_grid(i, 1)), int(temp_angular_grid(i, 0)), int(temp_angular_grid(i, 1)),
+                                          scheme_weights, scheme_points, 8, -42, -42, -42);
+    Q_matrix_temp(3, i) =  radiationfemn::IntegrateMatrixFPN(int(temp_angular_grid(i, 0)), int(temp_angular_grid(i, 1)), int(temp_angular_grid(i, 0)), int(temp_angular_grid(i, 1)),
+                                          scheme_weights, scheme_points, 9, -42, -42, -42);
+  }
+  Kokkos::deep_copy(Q_matrix_, Q_matrix_temp);
 }
 }  // namespace radiationfemn

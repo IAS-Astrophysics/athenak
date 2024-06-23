@@ -61,58 +61,6 @@ TaskStatus RadiationFEMN::CalculateFluxes(Driver *pdriver, int stage) {
                     const int enidx = nuenidx.enidx;
                     const int nuidx = nuenidx.nuidx;
 
-                    // sqrt (-g) at ii, ii+1, ii - 1/2, ii + 3/2
-                    const Real sqrt_det_g_ii = adm.alpha(m, kk, jj, ii)
-                        * Kokkos::sqrt(adm::SpatialDet(adm.g_dd(m, 0, 0, kk, jj, ii),
-                                                       adm.g_dd(m, 0, 1, kk, jj, ii),
-                                                       adm.g_dd(m, 0, 2, kk, jj, ii),
-                                                       adm.g_dd(m, 1, 1, kk, jj, ii),
-                                                       adm.g_dd(m, 1, 2, kk, jj, ii),
-                                                       adm.g_dd(m, 2, 2, kk, jj, ii)
-                        ));
-                    const Real sqrt_det_g_iip1 = adm.alpha(m, kk, jj, ii + 1)
-                        * Kokkos::sqrt(adm::SpatialDet(adm.g_dd(m, 0, 0, kk, jj, ii + 1),
-                                                       adm.g_dd(m, 0, 1, kk, jj, ii + 1),
-                                                       adm.g_dd(m, 0, 2, kk, jj, ii + 1),
-                                                       adm.g_dd(m, 1, 1, kk, jj, ii + 1),
-                                                       adm.g_dd(m, 1, 2, kk, jj, ii + 1),
-                                                       adm.g_dd(m, 2, 2, kk, jj, ii + 1)
-                        ));
-                    const Real sqrt_det_g_L =
-                        0.5 * (adm.alpha(m, kk, jj, ii - 1)
-                            + adm.alpha(m, kk, jj, ii))
-                            * Kokkos::sqrt(adm::SpatialDet(
-                                0.5 * (adm.g_dd(m, 0, 0, kk, jj, ii - 1)
-                                    + adm.g_dd(m, 0, 0, kk, jj, ii)),
-                                0.5 * (adm.g_dd(m, 0, 1, kk, jj, ii - 1)
-                                    + adm.g_dd(m, 0, 1, kk, jj, ii)),
-                                0.5 * (adm.g_dd(m, 0, 2, kk, jj, ii - 1)
-                                    + adm.g_dd(m, 0, 2, kk, jj, ii)),
-                                0.5 * (adm.g_dd(m, 1, 1, kk, jj, ii - 1)
-                                    + adm.g_dd(m, 1, 1, kk, jj, ii)),
-                                0.5 * (adm.g_dd(m, 1, 2, kk, jj, ii - 1)
-                                    + adm.g_dd(m, 1, 2, kk, jj, ii)),
-                                0.5 * (adm.g_dd(m, 2, 2, kk, jj, ii - 1)
-                                    + adm.g_dd(m, 2, 2, kk, jj, ii))
-                            ));
-                    const Real sqrt_det_g_R =
-                        0.5 * (adm.alpha(m, kk, jj, ii + 1)
-                            + adm.alpha(m, kk, jj, ii + 2))
-                            * Kokkos::sqrt(adm::SpatialDet(
-                                0.5 * (adm.g_dd(m, 0, 0, kk, jj, ii + 1)
-                                    + adm.g_dd(m, 0, 0, kk, jj, ii + 2)),
-                                0.5 * (adm.g_dd(m, 0, 1, kk, jj, ii + 1)
-                                    + adm.g_dd(m, 0, 1, kk, jj, ii + 2)),
-                                0.5 * (adm.g_dd(m, 0, 2, kk, jj, ii + 1)
-                                    + adm.g_dd(m, 0, 2, kk, jj, ii + 2)),
-                                0.5 * (adm.g_dd(m, 1, 1, kk, jj, ii + 1)
-                                    + adm.g_dd(m, 1, 1, kk, jj, ii + 2)),
-                                0.5 * (adm.g_dd(m, 1, 2, kk, jj, ii + 1)
-                                    + adm.g_dd(m, 1, 2, kk, jj, ii + 2)),
-                                0.5 * (adm.g_dd(m, 2, 2, kk, jj, ii + 1)
-                                    + adm.g_dd(m, 2, 2, kk, jj, ii + 2))
-                            ));
-
                     // load scratch arrays using closure
                     ScrArray1D<Real> f0_scratch =
                         ScrArray1D<Real>(member.team_scratch(scr_level), num_points_);
@@ -142,16 +90,16 @@ TaskStatus RadiationFEMN::CalculateFluxes(Driver *pdriver, int stage) {
                         const int muhat = static_cast<int>(muhatA / num_points_);
                         const int A = muhatA - muhat * num_points_;
 
-                        favg += (0.5) * (p_matrix(muhat, B, A) * sqrt_det_g_ii
+                        favg += (0.5) * (p_matrix(muhat, B, A)
                             * tetr_mu_muhat0_(m, 1, muhat, kk, jj, ii) * f0_scratch(A)
-                            + p_matrix(muhat, B, A) * sqrt_det_g_iip1
+                            + p_matrix(muhat, B, A)
                                 * tetr_mu_muhat0_(m, 1, muhat, kk, jj, ii + 1)
                                 * f0_scratch_p1(A));
 
                         const Real tetr_mu_muhat0_L =
                             0.5 * (tetr_mu_muhat0_(m, 1, muhat, kk, jj, ii - 1)
                                 + tetr_mu_muhat0_(m, 1, muhat, kk, jj, ii));
-                        fminus += (0.5) * (sqrt_det_g_L * tetr_mu_muhat0_L)
+                        fminus += (0.5) * (tetr_mu_muhat0_L)
                             * (p_matrix(muhat, B, A) * ((1.5) * f0_scratch(A)
                                 - (0.5) * f0_scratch_p1(A)
                                 + (1.5) * f0_scratch_m1(A)
@@ -165,7 +113,7 @@ TaskStatus RadiationFEMN::CalculateFluxes(Driver *pdriver, int stage) {
                         const Real tetr_mu_muhat0_R =
                             0.5 * (tetr_mu_muhat0_(m, 1, muhat, kk, jj, ii + 1)
                                 + tetr_mu_muhat0_(m, 1, muhat, kk, jj, ii + 2));
-                        fplus += (0.5) * (sqrt_det_g_R * tetr_mu_muhat0_R)
+                        fplus += (0.5) * (tetr_mu_muhat0_R)
                             * (p_matrix(muhat, B, A) * ((1.5) * f0_scratch_p2(A)
                                 - (0.5) * f0_scratch_p3(A)
                                 + (1.5) * f0_scratch_p1(A)
@@ -203,58 +151,6 @@ TaskStatus RadiationFEMN::CalculateFluxes(Driver *pdriver, int stage) {
                       const int enidx = nuenidx.enidx;
                       const int nuidx = nuenidx.nuidx;
 
-                      // sqrt (-g) at jj, jj+1, jj-1/2, jj+3/2
-                      const Real sqrt_det_g_jj = adm.alpha(m, kk, jj, ii) *
-                          Kokkos::sqrt(adm::SpatialDet(adm.g_dd(m, 0, 0, kk, jj, ii),
-                                                       adm.g_dd(m, 0, 1, kk, jj, ii),
-                                                       adm.g_dd(m, 0, 2, kk, jj, ii),
-                                                       adm.g_dd(m, 1, 1, kk, jj, ii),
-                                                       adm.g_dd(m, 1, 2, kk, jj, ii),
-                                                       adm.g_dd(m, 2, 2, kk, jj, ii)
-                          ));
-                      const Real sqrt_det_g_jjp1 = adm.alpha(m, kk, jj + 1, ii) *
-                          Kokkos::sqrt(adm::SpatialDet(adm.g_dd(m, 0, 0, kk, jj + 1, ii),
-                                                       adm.g_dd(m, 0, 1, kk, jj + 1, ii),
-                                                       adm.g_dd(m, 0, 2, kk, jj + 1, ii),
-                                                       adm.g_dd(m, 1, 1, kk, jj + 1, ii),
-                                                       adm.g_dd(m, 1, 2, kk, jj + 1, ii),
-                                                       adm.g_dd(m, 2, 2, kk, jj + 1, ii)
-                          ));
-                      const Real sqrt_det_g_L =
-                          0.5 * (adm.alpha(m, kk, jj - 1, ii)
-                              + adm.alpha(m, kk, jj, ii))
-                              * Kokkos::sqrt(adm::SpatialDet(
-                                  0.5 * (adm.g_dd(m, 0, 0, kk, jj - 1, ii)
-                                      + adm.g_dd(m, 0, 0, kk, jj, ii)),
-                                  0.5 * (adm.g_dd(m, 0, 1, kk, jj - 1, ii)
-                                      + adm.g_dd(m, 0, 1, kk, jj, ii)),
-                                  0.5 * (adm.g_dd(m, 0, 2, kk, jj - 1, ii)
-                                      + adm.g_dd(m, 0, 2, kk, jj, ii)),
-                                  0.5 * (adm.g_dd(m, 1, 1, kk, jj - 1, ii)
-                                      + adm.g_dd(m, 1, 1, kk, jj, ii)),
-                                  0.5 * (adm.g_dd(m, 1, 2, kk, jj - 1, ii)
-                                      + adm.g_dd(m, 1, 2, kk, jj, ii)),
-                                  0.5 * (adm.g_dd(m, 2, 2, kk, jj - 1, ii)
-                                      + adm.g_dd(m, 2, 2, kk, jj, ii))
-                              ));
-                      const Real sqrt_det_g_R =
-                          0.5 * (adm.alpha(m, kk, jj + 1, ii)
-                              + adm.alpha(m, kk, jj + 2, ii))
-                              * Kokkos::sqrt(adm::SpatialDet(
-                                  0.5 * (adm.g_dd(m, 0, 0, kk, jj + 1, ii)
-                                      + adm.g_dd(m, 0, 0, kk, jj + 2, ii)),
-                                  0.5 * (adm.g_dd(m, 0, 1, kk, jj + 1, ii)
-                                      + adm.g_dd(m, 0, 1, kk, jj + 2, ii)),
-                                  0.5 * (adm.g_dd(m, 0, 2, kk, jj + 1, ii)
-                                      + adm.g_dd(m, 0, 2, kk, jj + 2, ii)),
-                                  0.5 * (adm.g_dd(m, 1, 1, kk, jj + 1, ii)
-                                      + adm.g_dd(m, 1, 1, kk, jj + 2, ii)),
-                                  0.5 * (adm.g_dd(m, 1, 2, kk, jj + 1, ii)
-                                      + adm.g_dd(m, 1, 2, kk, jj + 2, ii)),
-                                  0.5 * (adm.g_dd(m, 2, 2, kk, jj + 1, ii)
-                                      + adm.g_dd(m, 2, 2, kk, jj + 2, ii))
-                              ));
-
                       // load scratch arrays using closure
                       ScrArray1D<Real> f0_scratch =
                           ScrArray1D<Real>(member.team_scratch(scr_level), num_points_);
@@ -284,16 +180,16 @@ TaskStatus RadiationFEMN::CalculateFluxes(Driver *pdriver, int stage) {
                           const int muhat = static_cast<int>(muhatA / num_points_);
                           const int A = muhatA - muhat * num_points_;
 
-                          favg += (0.5) * (p_matrix(muhat, B, A) * sqrt_det_g_jj
+                          favg += (0.5) * (p_matrix(muhat, B, A)
                               * tetr_mu_muhat0_(m, 2, muhat, kk, jj, ii) * f0_scratch(A)
-                              + p_matrix(muhat, B, A) * sqrt_det_g_jjp1
+                              + p_matrix(muhat, B, A)
                                   * tetr_mu_muhat0_(m, 2, muhat, kk, jj + 1, ii)
                                   * f0_scratch_p1(A));
 
                           Real tetr_mu_muhat0_L =
                               0.5 * (tetr_mu_muhat0_(m, 2, muhat, kk, jj - 1, ii)
                                   + tetr_mu_muhat0_(m, 2, muhat, kk, jj, ii));
-                          fminus += (0.5) * (sqrt_det_g_L * tetr_mu_muhat0_L)
+                          fminus += (0.5) * (tetr_mu_muhat0_L)
                               * (p_matrix(muhat, B, A)
                                   * ((1.5) * f0_scratch(A)
                                       - (0.5) * f0_scratch_p1(A)
@@ -308,7 +204,7 @@ TaskStatus RadiationFEMN::CalculateFluxes(Driver *pdriver, int stage) {
                           Real tetr_mu_muhat0_R =
                               0.5 * (tetr_mu_muhat0_(m, 2, muhat, kk, jj + 1, ii)
                                   + tetr_mu_muhat0_(m, 2, muhat, kk, jj + 2, ii));
-                          fplus += (0.5) * (sqrt_det_g_R * tetr_mu_muhat0_R)
+                          fplus += (0.5) * (tetr_mu_muhat0_R)
                               * (p_matrix(muhat, B, A)
                                   * ((1.5) * f0_scratch_p2(A)
                                       - (0.5) * f0_scratch_p3(A)
@@ -351,58 +247,6 @@ TaskStatus RadiationFEMN::CalculateFluxes(Driver *pdriver, int stage) {
                       int enidx = nuenidx.enidx;
                       int nuidx = nuenidx.nuidx;
 
-                      // sqrt (-g) at kk, kk+1, kk-1/2, kk+3/2
-                      const Real sqrt_det_g_kk = adm.alpha(m, kk, jj, ii) *
-                          Kokkos::sqrt(adm::SpatialDet(adm.g_dd(m, 0, 0, kk, jj, ii),
-                                                       adm.g_dd(m, 0, 1, kk, jj, ii),
-                                                       adm.g_dd(m, 0, 2, kk, jj, ii),
-                                                       adm.g_dd(m, 1, 1, kk, jj, ii),
-                                                       adm.g_dd(m, 1, 2, kk, jj, ii),
-                                                       adm.g_dd(m, 2, 2, kk, jj, ii)
-                          ));
-                      const Real sqrt_det_g_kkp1 = adm.alpha(m, kk + 1, jj, ii) *
-                          Kokkos::sqrt(adm::SpatialDet(adm.g_dd(m, 0, 0, kk + 1, jj, ii),
-                                                       adm.g_dd(m, 0, 1, kk + 1, jj, ii),
-                                                       adm.g_dd(m, 0, 2, kk + 1, jj, ii),
-                                                       adm.g_dd(m, 1, 1, kk + 1, jj, ii),
-                                                       adm.g_dd(m, 1, 2, kk + 1, jj, ii),
-                                                       adm.g_dd(m, 2, 2, kk + 1, jj, ii)
-                          ));
-                      const Real sqrt_det_g_L =
-                          0.5 * (adm.alpha(m, kk - 1, jj, ii)
-                              + adm.alpha(m, kk, jj, ii))
-                              * Kokkos::sqrt(adm::SpatialDet(
-                                  0.5 * (adm.g_dd(m, 0, 0, kk - 1, jj, ii)
-                                      + adm.g_dd(m, 0, 0, kk, jj, ii)),
-                                  0.5 * (adm.g_dd(m, 0, 1, kk - 1, jj, ii)
-                                      + adm.g_dd(m, 0, 1, kk, jj, ii)),
-                                  0.5 * (adm.g_dd(m, 0, 2, kk - 1, jj, ii)
-                                      + adm.g_dd(m, 0, 2, kk, jj, ii)),
-                                  0.5 * (adm.g_dd(m, 1, 1, kk - 1, jj, ii)
-                                      + adm.g_dd(m, 1, 1, kk, jj, ii)),
-                                  0.5 * (adm.g_dd(m, 1, 2, kk - 1, jj, ii)
-                                      + adm.g_dd(m, 1, 2, kk, jj, ii)),
-                                  0.5 * (adm.g_dd(m, 2, 2, kk - 1, jj, ii)
-                                      + adm.g_dd(m, 2, 2, kk, jj, ii))
-                              ));
-                      const Real sqrt_det_g_R =
-                          0.5 * (adm.alpha(m, kk + 1, jj, ii)
-                              + adm.alpha(m, kk + 2, jj, ii))
-                              * Kokkos::sqrt(adm::SpatialDet(
-                                  0.5 * (adm.g_dd(m, 0, 0, kk + 1, jj, ii)
-                                      + adm.g_dd(m, 0, 0, kk + 2, jj, ii)),
-                                  0.5 * (adm.g_dd(m, 0, 1, kk + 1, jj, ii)
-                                      + adm.g_dd(m, 0, 1, kk + 2, jj, ii)),
-                                  0.5 * (adm.g_dd(m, 0, 2, kk + 1, jj, ii)
-                                      + adm.g_dd(m, 0, 2, kk + 2, jj, ii)),
-                                  0.5 * (adm.g_dd(m, 1, 1, kk + 1, jj, ii)
-                                      + adm.g_dd(m, 1, 1, kk + 2, jj, ii)),
-                                  0.5 * (adm.g_dd(m, 1, 2, kk + 1, jj, ii)
-                                      + adm.g_dd(m, 1, 2, kk + 2, jj, ii)),
-                                  0.5 * (adm.g_dd(m, 2, 2, kk + 1, jj, ii)
-                                      + adm.g_dd(m, 2, 2, kk + 2, jj, ii))
-                              ));
-
                       // load scratch arrays using closure
                       ScrArray1D<Real> f0_scratch =
                           ScrArray1D<Real>(member.team_scratch(scr_level), num_points_);
@@ -432,16 +276,16 @@ TaskStatus RadiationFEMN::CalculateFluxes(Driver *pdriver, int stage) {
                           const int muhat = static_cast<int>(muhatA / num_points_);
                           const int A = muhatA - muhat * num_points_;
 
-                          favg += (0.5) * (p_matrix(muhat, B, A) * sqrt_det_g_kk
+                          favg += (0.5) * (p_matrix(muhat, B, A)
                               * tetr_mu_muhat0_(m, 3, muhat, kk, jj, ii) * f0_scratch(A)
-                              + p_matrix(muhat, B, A) * sqrt_det_g_kk
+                              + p_matrix(muhat, B, A)
                                   * tetr_mu_muhat0_(m, 3, muhat, kk + 1, jj, ii)
                                   * f0_scratch_p1(A));
 
                           const Real tetr_mu_muhat0_L =
                               0.5 * (tetr_mu_muhat0_(m, 3, muhat, kk - 1, jj, ii)
                                   + tetr_mu_muhat0_(m, 3, muhat, kk, jj, ii));
-                          fminus += (0.5) * (sqrt_det_g_L * tetr_mu_muhat0_L)
+                          fminus += (0.5) * (tetr_mu_muhat0_L)
                               * (p_matrix(muhat, B, A)
                                   * ((1.5) * f0_scratch(A)
                                       - (0.5) * f0_scratch_p1(A)
@@ -456,7 +300,7 @@ TaskStatus RadiationFEMN::CalculateFluxes(Driver *pdriver, int stage) {
                           const Real tetr_mu_muhat0_R = 0.5
                               * (tetr_mu_muhat0_(m, 3, muhat, kk + 1, jj, ii)
                                   + tetr_mu_muhat0_(m, 3, muhat, kk + 2, jj, ii));
-                          fplus += (0.5) * (sqrt_det_g_R * tetr_mu_muhat0_R)
+                          fplus += (0.5) * (tetr_mu_muhat0_R)
                               * (p_matrix(muhat, B, A)
                                   * ((1.5) * f0_scratch_p2(A)
                                       - (0.5) * f0_scratch_p3(A)

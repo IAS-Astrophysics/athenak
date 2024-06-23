@@ -169,6 +169,10 @@ inline Real IntegrateMatrixSphericalTriangle(int a, int b, int basis, int t1, in
  * [3] stiffness matrix z: \int cos(theta) psi_a psi_b dOmega
  * [4] G^nu^mu_ihat: \int p(1)^nu p(1)^mu \psi_a dpsi_b/dp^ihat dOmega
  * [5] F^nu^mu_ihat: \int p(1)^nu p(1)^mu \psi_a \psi_b p(1)_ihat dOmega
+ * [6] \int psi_a dOmega
+ * [7] \int cos(phi) sin(theta) psi_a dOmega
+ * [8] \int sin(phi) sin(theta) psi_a dOmega
+ * [9] \int cos(theta) psi_a dOmega
  *
  * Inputs:
  * ------
@@ -245,6 +249,27 @@ Real IntegrateMatrixFPN(int la, int ma, int lb, int mb, const HostArray1D<Real> 
       for (size_t i = 0; i < scheme_weights.size(); i++) {
         result += 4. * M_PI * scheme_weights(i)
             * fpn_basis_lm(la, ma, scheme_points(i, 0), scheme_points(i, 1));
+      }
+      break;
+    case 7:
+      for (size_t i = 0; i < scheme_weights.size(); i++) {
+        result += 4. * M_PI * scheme_weights(i)
+            * fpn_basis_lm(la, ma, scheme_points(i, 0), scheme_points(i, 1))
+            * mom(1, scheme_points(i, 0), scheme_points(i, 1));
+      }
+      break;
+    case 8:
+      for (size_t i = 0; i < scheme_weights.size(); i++) {
+        result += 4. * M_PI * scheme_weights(i)
+            * fpn_basis_lm(la, ma, scheme_points(i, 0), scheme_points(i, 1))
+            * mom(2, scheme_points(i, 0), scheme_points(i, 1));
+      }
+      break;
+    case 9:
+      for (size_t i = 0; i < scheme_weights.size(); i++) {
+        result += 4. * M_PI * scheme_weights(i)
+            * fpn_basis_lm(la, ma, scheme_points(i, 0), scheme_points(i, 1))
+            * mom(3, scheme_points(i, 0), scheme_points(i, 1));
       }
       break;
     default:result = -42.;

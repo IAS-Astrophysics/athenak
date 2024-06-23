@@ -128,7 +128,7 @@ BaseTypeOutput::BaseTypeOutput(OutputParameters opar, Mesh *pm) :
     exit(EXIT_FAILURE);
   }
 
-  if ((ivar >= 139) && (ivar < 141) && (pm->pmb_pack->pradfemn == nullptr)) {
+  if ((ivar >= 139) && (ivar < 145) && (pm->pmb_pack->pradfemn == nullptr)) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
               << "Output of Radiation FEMN variable requested in <output> block '"
               << out_params.block_name << "' but no Force object has been constructed."
@@ -554,6 +554,12 @@ BaseTypeOutput::BaseTypeOutput(OutputParameters opar, Mesh *pm) :
     for (int v = 0; v < 4; ++v) {
       outvars.emplace_back("u_mu_" + std::to_string(v), v, &(pm->pmb_pack->pradfemn->u_mu_data));
     }
+  }
+
+  // radiation femn number density
+  if (out_params.variable.compare("rad_femn_N") == 0) {
+    out_params.contains_derived = true;
+    outvars.emplace_back("N", 0, &(derived_var));
   }
 
   // radiation femn energy density
