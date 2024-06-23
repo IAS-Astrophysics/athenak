@@ -101,6 +101,8 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm) :
     RadiationFEMNBeamtestBH(pin, false);
   } else if (pgen_fun_name.compare("rad_femn_gaussiantest") == 0) {
     RadiationFEMNGaussiantest(pin, false);
+  } else if (pgen_fun_name.compare("rad_femn_gaussian_nonflat") == 0) {
+    RadiationFEMNGaussianNonflat(pin, false);
   } else if (pgen_fun_name.compare("rad_femn_spharmstest") == 0) {
     RadiationFEMNSpharms(pin, false);
     // else, name not set on command line or input file, print warning and quit
