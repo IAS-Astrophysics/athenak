@@ -23,8 +23,21 @@ namespace radiationfemn {
  * Output:
  * (xval, yval, zval): the cartesian coordinates of the point
  */
-inline void BarycentricToCartesian(Real x1, Real y1, Real z1, Real x2, Real y2, Real z2, Real x3, Real y3, Real z3,
-                                   Real xi1, Real xi2, Real xi3, Real &xval, Real &yval, Real &zval) {
+inline void BarycentricToCartesian(Real x1,
+                                   Real y1,
+                                   Real z1,
+                                   Real x2,
+                                   Real y2,
+                                   Real z2,
+                                   Real x3,
+                                   Real y3,
+                                   Real z3,
+                                   Real xi1,
+                                   Real xi2,
+                                   Real xi3,
+                                   Real &xval,
+                                   Real &yval,
+                                   Real &zval) {
   xval = xi1 * x1 + xi2 * x2 + xi3 * x3;
   yval = xi1 * y1 + xi2 * y2 + xi3 * y3;
   zval = xi1 * z1 + xi2 * z2 + xi3 * z3;
@@ -42,7 +55,11 @@ inline void BarycentricToCartesian(Real x1, Real y1, Real z1, Real x2, Real y2, 
  * edge_triangles: the vertex information of shared edge(s)
  * is_edge: bool for if the vertices share an edge or not
  */
-void FindTriangles(int a, int b, const HostArray2D<int> &triangles, HostArray2D<int> &edge_triangles, bool &is_edge) {
+void FindTriangles(int a,
+                   int b,
+                   const HostArray2D<int> &triangles,
+                   HostArray2D<int> &edge_triangles,
+                   bool &is_edge) {
   is_edge = false;
   Kokkos::realloc(edge_triangles, 6, 3);
   Kokkos::deep_copy(edge_triangles, -42.);
@@ -63,8 +80,12 @@ void FindTriangles(int a, int b, const HostArray2D<int> &triangles, HostArray2D<
   } else if (a != b) {
     size_t index{0};
     for (size_t i = 0; i < triangles.size() / 3; i++) {
-      if ((triangles(i, 0) == a && triangles(i, 1) == b) || (triangles(i, 0) == a && triangles(i, 2) == b) || (triangles(i, 0) == b && triangles(i, 1) == a)
-          || (triangles(i, 0) == b && triangles(i, 2) == a) || (triangles(i, 1) == a && triangles(i, 2) == b) || (triangles(i, 1) == b && triangles(i, 2) == a)) {
+      if ((triangles(i, 0) == a && triangles(i, 1) == b)
+          || (triangles(i, 0) == a && triangles(i, 2) == b)
+          || (triangles(i, 0) == b && triangles(i, 1) == a)
+          || (triangles(i, 0) == b && triangles(i, 2) == a)
+          || (triangles(i, 1) == a && triangles(i, 2) == b)
+          || (triangles(i, 1) == b && triangles(i, 2) == a)) {
         is_edge = true;
         edge_triangles(index, 0) = triangles(i, 0);
         edge_triangles(index, 1) = triangles(i, 1);
@@ -83,9 +104,12 @@ void FindTriangles(int a, int b, const HostArray2D<int> &triangles, HostArray2D<
  */
 using fem_basis_type = Real (*)(Real, Real, Real);
 const fem_basis_type fem_basis_fn[3][4] = {
-    {fem_overtent_index1, fem_smalltent_index1, fem_overhoney_index1, fem_smallhoney_index1},
-    {fem_overtent_index2, fem_smalltent_index2, fem_overhoney_index2, fem_smallhoney_index2},
-    {fem_overtent_index3, fem_smalltent_index3, fem_overhoney_index3, fem_smallhoney_index3}
+    {fem_overtent_index1, fem_smalltent_index1, fem_overhoney_index1,
+     fem_smallhoney_index1},
+    {fem_overtent_index2, fem_smalltent_index2, fem_overhoney_index2,
+     fem_smallhoney_index2},
+    {fem_overtent_index3, fem_smalltent_index3, fem_overhoney_index3,
+     fem_smallhoney_index3}
 };
 
 inline Real fem_basis(Real xi1, Real xi2, Real xi3, int basis_index, int basis_choice) {
@@ -93,18 +117,30 @@ inline Real fem_basis(Real xi1, Real xi2, Real xi3, int basis_index, int basis_c
 }
 
 // Overlapping tent basis
-inline Real fem_overtent_index1(Real xi1, Real xi2, Real xi3) { return 2. * xi1 + xi2 + xi3 - 1.; }
+inline Real fem_overtent_index1(Real xi1, Real xi2, Real xi3) {
+  return 2. * xi1 + xi2 + xi3 - 1.;
+}
 
-inline Real fem_overtent_index2(Real xi1, Real xi2, Real xi3) { return xi1 + 2. * xi2 + xi3 - 1.; }
+inline Real fem_overtent_index2(Real xi1, Real xi2, Real xi3) {
+  return xi1 + 2. * xi2 + xi3 - 1.;
+}
 
-inline Real fem_overtent_index3(Real xi1, Real xi2, Real xi3) { return xi1 + xi2 + 2. * xi3 - 1.; }
+inline Real fem_overtent_index3(Real xi1, Real xi2, Real xi3) {
+  return xi1 + xi2 + 2. * xi3 - 1.;
+}
 
 // Small tent basis
-inline Real fem_smalltent_index1(Real xi1, Real xi2, Real xi3) { return (xi1 >= 0.5) * (xi1 - xi2 - xi3); }
+inline Real fem_smalltent_index1(Real xi1, Real xi2, Real xi3) {
+  return (xi1 >= 0.5) * (xi1 - xi2 - xi3);
+}
 
-inline Real fem_smalltent_index2(Real xi1, Real xi2, Real xi3) { return (xi2 >= 0.5) * (xi2 - xi3 - xi1); }
+inline Real fem_smalltent_index2(Real xi1, Real xi2, Real xi3) {
+  return (xi2 >= 0.5) * (xi2 - xi3 - xi1);
+}
 
-inline Real fem_smalltent_index3(Real xi1, Real xi2, Real xi3) { return (xi3 >= 0.5) * (xi3 - xi1 - xi2); }
+inline Real fem_smalltent_index3(Real xi1, Real xi2, Real xi3) {
+  return (xi3 >= 0.5) * (xi3 - xi1 - xi2);
+}
 
 // Overlapping honeycomb
 inline Real fem_overhoney_index1(Real xi1, Real xi2, Real xi3) { return 1.; }
@@ -114,11 +150,17 @@ inline Real fem_overhoney_index2(Real xi1, Real xi2, Real xi3) { return 1.; }
 inline Real fem_overhoney_index3(Real xi1, Real xi2, Real xi3) { return 1.; }
 
 // Small honeycomb
-inline Real fem_smallhoney_index1(Real xi1, Real xi2, Real xi3) { return (xi1 >= xi2) * (xi1 > xi3) * 1.; }
+inline Real fem_smallhoney_index1(Real xi1, Real xi2, Real xi3) {
+  return (xi1 >= xi2) * (xi1 > xi3) * 1.;
+}
 
-inline Real fem_smallhoney_index2(Real xi1, Real xi2, Real xi3) { return (xi2 >= xi3) * (xi2 > xi1) * 1.; }
+inline Real fem_smallhoney_index2(Real xi1, Real xi2, Real xi3) {
+  return (xi2 >= xi3) * (xi2 > xi1) * 1.;
+}
 
-inline Real fem_smallhoney_index3(Real xi1, Real xi2, Real xi3) { return (xi3 >= xi1) * (xi3 > xi2) * 1.; }
+inline Real fem_smallhoney_index3(Real xi1, Real xi2, Real xi3) {
+  return (xi3 >= xi1) * (xi3 > xi2) * 1.;
+}
 
 /* Derivative of FEM basis wrt barycentric coordinates: dpsi/dxi
  *
@@ -141,10 +183,19 @@ Real dfem_dxi(Real xi1, Real xi2, Real xi3, int basis_index, int xi_index) {
  * t1, t2, t3: vertex indices of the triangular element being considered
  * basis_choice: type of basis function (1 => overlapping tent, 2 => small tent, 3 => overlapping honeycomb, 4 => small honeycomb)
  */
-Real fem_basis_ab(int a, int b, int t1, int t2, int t3, Real xi1, Real xi2, Real xi3, int basis_choice) {
+Real fem_basis_ab(int a,
+                  int b,
+                  int t1,
+                  int t2,
+                  int t3,
+                  Real xi1,
+                  Real xi2,
+                  Real xi3,
+                  int basis_choice) {
   int basis_index_a = (a == t1) * 1 + (a == t2) * 2 + (a == t3) * 3;
   int basis_index_b = (b == t1) * 1 + (b == t2) * 2 + (b == t3) * 3;
-  return fem_basis(xi1, xi2, xi3, basis_index_a, basis_choice) * fem_basis(xi1, xi2, xi3, basis_index_b, basis_choice);
+  return fem_basis(xi1, xi2, xi3, basis_index_a, basis_choice)
+      * fem_basis(xi1, xi2, xi3, basis_index_b, basis_choice);
 }
 
 /* A FEM basis function evaluated in a triangular element: psi_a
@@ -153,7 +204,14 @@ Real fem_basis_ab(int a, int b, int t1, int t2, int t3, Real xi1, Real xi2, Real
  * t1, t2, t3: vertex indices of the triangular element being considered
  * basis_choice: type of basis function (1 => overlapping tent, 2 => small tent, 3 => overlapping honeycomb, 4 => small honeycomb)
  */
-Real fem_basis_a(int a, int t1, int t2, int t3, Real xi1, Real xi2, Real xi3, int basis_choice) {
+Real fem_basis_a(int a,
+                 int t1,
+                 int t2,
+                 int t3,
+                 Real xi1,
+                 Real xi2,
+                 Real xi3,
+                 int basis_choice) {
   int basis_index_a = (a == t1) * 1 + (a == t2) * 2 + (a == t3) * 3;
   return fem_basis(xi1, xi2, xi3, basis_index_a, basis_choice);
 }
@@ -175,7 +233,8 @@ Real fpn_basis_lm(int l, int m, Real phi, Real theta) {
   } else if (m == 0) {
     result = legendre_factor(l, m) * legendre(l, 0, cos(theta));
   } else {
-    result = sqrt(2.) * legendre_factor(l, abs(m)) * sin(abs(m) * phi) * legendre(l, abs(m), cos(theta));
+    result = sqrt(2.) * legendre_factor(l, abs(m)) * sin(abs(m) * phi)
+        * legendre(l, abs(m), cos(theta));
   }
   return result;
 }
@@ -225,17 +284,21 @@ inline Real dfpn_dtheta_alt(int l, int m, Real phi, Real theta) {
     return 0.;
   }
 
-  Real der_legendre = -sin(theta)
-      * ((m - l - 1.) * gsl_sf_legendre_sphPlm(l + 1, abs(m), x)
-          + (l + 1) * x * gsl_sf_legendre_sphPlm(l, abs(m), x)) / (1. - x * x);
-
   if (m > 0) {
-    result = sqrt(2.) * cos(m * phi) * der_legendre;
+    Real der_legendre = -sin(theta)
+        * ((m - l - 1.) * gsl_sf_legendre_Plm(l + 1, m, x)
+            + (l + 1) * x * gsl_sf_legendre_Plm(l, m, x)) / (1. - x * x);
+    result = sqrt(2.) * legendre_factor(l, m) * cos(m * phi) * der_legendre;
   } else if (m == 0) {
-    result = der_legendre;
+    Real der_legendre = -sin(theta)
+        * ((m - l - 1.) * gsl_sf_legendre_Plm(l + 1, m, x)
+            + (l + 1) * x * gsl_sf_legendre_Plm(l, m, x)) / (1. - x * x);
+    result = legendre_factor(l, m) * der_legendre;
   } else {
-    result = pow(-1, -m) * (gsl_sf_fact(l + m) / gsl_sf_fact(l - m)) * sqrt(2.)
-        * sin(abs(m) * phi) * der_legendre;
+    Real der_legendre = -sin(theta)
+        * ((abs(m) - l - 1.) * gsl_sf_legendre_Plm(l + 1, abs(m), x)
+            + (l + 1) * x * gsl_sf_legendre_Plm(l, abs(m), x)) / (1. - x * x);
+    result = sqrt(2.) * legendre_factor(l, abs(m)) * sin(abs(m) * phi) * der_legendre;
   }
   return result;
 }
@@ -277,7 +340,8 @@ Real legendre(int l, int m, Real x) {
 
   // formula for negative l
   if (m < 0) {
-    return pow(-1, -m) * (gsl_sf_fact(l + m) / gsl_sf_fact(l - m)) * gsl_sf_legendre_Plm(l, -m, x);
+    return pow(-1, -m) * (gsl_sf_fact(l + m) / gsl_sf_fact(l - m))
+        * gsl_sf_legendre_Plm(l, -m, x);
   } else {
     // 0 <= m <= l
     return gsl_sf_legendre_Plm(l, m, x);
@@ -286,7 +350,8 @@ Real legendre(int l, int m, Real x) {
 
 inline Real legendre_factor(int l, int m) {
   assert(l >= abs(m));
-  return sqrt((2. * l + 1.) / (4. * M_PI)) * sqrt(gsl_sf_fact(l - m) / gsl_sf_fact(l + m));
+  return sqrt((2. * l + 1.) / (4. * M_PI))
+      * sqrt(gsl_sf_fact(l - m) / gsl_sf_fact(l + m));
 }
 
 /* Recurrence relation for Legendre polynomials
@@ -297,7 +362,7 @@ inline Real legendre_factor(int l, int m) {
  */
 Real recurrence_legendre(int l, int m, Real x) {
   return -(0.5) * (legendre(l + 1, m + 1, x)
-                   + (l - m + 1) * (l - m + 2) * legendre(l + 1, m - 1, x));
+      + (l - m + 1) * (l - m + 2) * legendre(l + 1, m - 1, x));
 }
 
 /* Recurrence relation for Legendre polynomials
@@ -307,7 +372,7 @@ Real recurrence_legendre(int l, int m, Real x) {
  */
 Real recurrence_legendre_alt(int l, int m, Real x) {
   return -(0.5) * (legendre(l - 1, m + 1, x)
-                   + (l + m - 1) * (l + m) * legendre(l - 1, m - 1, x));
+      + (l + m - 1) * (l + m) * legendre(l - 1, m - 1, x));
 }
 
 /* Recurrence relation for derivative of Legendre polynomials
@@ -333,11 +398,13 @@ Real dfpn_dOmega(int l, int m, Real phi, Real theta, int var_index) {
 inline Real cosec_dfpn_dphi(int l, int m, Real phi, Real theta) {
   Real result = 0.;
   if (m > 0) {
-    result = -sqrt(2.) * sin(m * phi) * legendre_factor(l, m) * recurrence_legendre(l, m, cos(theta));
+    result = -sqrt(2.) * sin(m * phi) * legendre_factor(l, m)
+        * recurrence_legendre(l, m, cos(theta));
   } else if (m == 0) {
     result = 0;
   } else {
-    result = sqrt(2.) * cos(abs(m) * phi) * legendre_factor(l, abs(m)) * recurrence_legendre(l, abs(m), cos(theta));
+    result = sqrt(2.) * cos(abs(m) * phi) * legendre_factor(l, abs(m))
+        * recurrence_legendre(l, abs(m), cos(theta));
   }
   return result;
 }
@@ -348,11 +415,13 @@ inline Real dfpn_dtheta(int l, int m, Real phi, Real theta) {
   const Real x = cos(theta);
 
   if (m > 0) {
-    result = sqrt(2.) * cos(m * phi) * legendre_factor(l, m) * recurrence_derivative_legendre(l, m, x);
+    result = sqrt(2.) * cos(m * phi) * legendre_factor(l, m)
+        * recurrence_derivative_legendre(l, m, x);
   } else if (m == 0) {
     result = legendre_factor(l, m) * recurrence_derivative_legendre(l, m, x);
   } else {
-    result = sqrt(2.) * sin(abs(m) * phi) * legendre_factor(l, abs(m)) * recurrence_derivative_legendre(l, abs(m), x);
+    result = sqrt(2.) * sin(abs(m) * phi) * legendre_factor(l, abs(m))
+        * recurrence_derivative_legendre(l, abs(m), x);
   }
   return result;
 }
@@ -383,9 +452,34 @@ Real inv_jac_itilde_ihat(Real phi, Real theta, int tilde_index, int hat_index) {
 }
 
 // x-component of momentum (e = 1): cos(phi) sin(theta)
-Real cos_phi_sin_theta(Real x1, Real y1, Real z1, Real x2, Real y2, Real z2, Real x3, Real y3, Real z3, Real xi1, Real xi2, Real xi3) {
+Real cos_phi_sin_theta(Real x1,
+                       Real y1,
+                       Real z1,
+                       Real x2,
+                       Real y2,
+                       Real z2,
+                       Real x3,
+                       Real y3,
+                       Real z3,
+                       Real xi1,
+                       Real xi2,
+                       Real xi3) {
   Real xval, yval, zval;
-  BarycentricToCartesian(x1, y1, z1, x2, y2, z2, x3, y3, z3, xi1, xi2, xi3, xval, yval, zval);
+  BarycentricToCartesian(x1,
+                         y1,
+                         z1,
+                         x2,
+                         y2,
+                         z2,
+                         x3,
+                         y3,
+                         z3,
+                         xi1,
+                         xi2,
+                         xi3,
+                         xval,
+                         yval,
+                         zval);
 
   Real rval = sqrt(xval * xval + yval * yval + zval * zval);
   Real thetaval = acos(zval / rval);
@@ -395,9 +489,34 @@ Real cos_phi_sin_theta(Real x1, Real y1, Real z1, Real x2, Real y2, Real z2, Rea
 }
 
 // y-component of momentum (e = 1): sin(phi) sin(theta)
-Real sin_phi_sin_theta(Real x1, Real y1, Real z1, Real x2, Real y2, Real z2, Real x3, Real y3, Real z3, Real xi1, Real xi2, Real xi3) {
+Real sin_phi_sin_theta(Real x1,
+                       Real y1,
+                       Real z1,
+                       Real x2,
+                       Real y2,
+                       Real z2,
+                       Real x3,
+                       Real y3,
+                       Real z3,
+                       Real xi1,
+                       Real xi2,
+                       Real xi3) {
   Real xval, yval, zval;
-  BarycentricToCartesian(x1, y1, z1, x2, y2, z2, x3, y3, z3, xi1, xi2, xi3, xval, yval, zval);
+  BarycentricToCartesian(x1,
+                         y1,
+                         z1,
+                         x2,
+                         y2,
+                         z2,
+                         x3,
+                         y3,
+                         z3,
+                         xi1,
+                         xi2,
+                         xi3,
+                         xval,
+                         yval,
+                         zval);
 
   Real rval = sqrt(xval * xval + yval * yval + zval * zval);
   Real thetaval = acos(zval / rval);
@@ -407,9 +526,34 @@ Real sin_phi_sin_theta(Real x1, Real y1, Real z1, Real x2, Real y2, Real z2, Rea
 }
 
 // z-component of momentum (e = 1): cos(theta)
-Real cos_theta(Real x1, Real y1, Real z1, Real x2, Real y2, Real z2, Real x3, Real y3, Real z3, Real xi1, Real xi2, Real xi3) {
+Real cos_theta(Real x1,
+               Real y1,
+               Real z1,
+               Real x2,
+               Real y2,
+               Real z2,
+               Real x3,
+               Real y3,
+               Real z3,
+               Real xi1,
+               Real xi2,
+               Real xi3) {
   Real xval, yval, zval;
-  BarycentricToCartesian(x1, y1, z1, x2, y2, z2, x3, y3, z3, xi1, xi2, xi3, xval, yval, zval);
+  BarycentricToCartesian(x1,
+                         y1,
+                         z1,
+                         x2,
+                         y2,
+                         z2,
+                         x3,
+                         y3,
+                         z3,
+                         xi1,
+                         xi2,
+                         xi3,
+                         xval,
+                         yval,
+                         zval);
 
   Real rval = sqrt(xval * xval + yval * yval + zval * zval);
   Real thetaval = acos(zval / rval);
@@ -418,15 +562,49 @@ Real cos_theta(Real x1, Real y1, Real z1, Real x2, Real y2, Real z2, Real x3, Re
 }
 
 // Momentum p^mu (e = 1) for FEM
-using mom_fem_fn = Real (*)(Real, Real, Real, Real, Real, Real, Real, Real, Real, Real, Real, Real);
+using mom_fem_fn = Real (*)(Real,
+                            Real,
+                            Real,
+                            Real,
+                            Real,
+                            Real,
+                            Real,
+                            Real,
+                            Real,
+                            Real,
+                            Real,
+                            Real);
 const mom_fem_fn mom_fem_fns[4] = {
-    [](Real x1, Real y1, Real z1, Real x2, Real y2, Real z2, Real x3, Real y3, Real z3, Real xi1, Real xi2, Real xi3) { return 1.; },
+    [](Real x1,
+       Real y1,
+       Real z1,
+       Real x2,
+       Real y2,
+       Real z2,
+       Real x3,
+       Real y3,
+       Real z3,
+       Real xi1,
+       Real xi2,
+       Real xi3) { return 1.; },
     cos_phi_sin_theta,
     sin_phi_sin_theta,
     cos_theta
 };
 
-Real mom(int mu, Real x1, Real y1, Real z1, Real x2, Real y2, Real z2, Real x3, Real y3, Real z3, Real xi1, Real xi2, Real xi3) {
+Real mom(int mu,
+         Real x1,
+         Real y1,
+         Real z1,
+         Real x2,
+         Real y2,
+         Real z2,
+         Real x3,
+         Real y3,
+         Real z3,
+         Real xi1,
+         Real xi2,
+         Real xi3) {
   return mom_fem_fns[mu](x1, y1, z1, x2, y2, z2, x3, y3, z3, xi1, xi2, xi3);
 }
 
@@ -454,36 +632,118 @@ Real mom(int mu, Real phi, Real theta) {
  *                 [y1 y2 y3]
  *                 [z1 z2 z3]
  */
-using dfem_dxihat_fn = Real (*)(Real, Real, Real, Real, Real, Real, Real, Real, Real, Real, Real, Real, int);
+using dfem_dxihat_fn = Real (*)(Real,
+                                Real,
+                                Real,
+                                Real,
+                                Real,
+                                Real,
+                                Real,
+                                Real,
+                                Real,
+                                Real,
+                                Real,
+                                Real,
+                                int);
 const dfem_dxihat_fn dfem_dxihat_fns[3] = {
-    [](Real x1, Real y1, Real z1, Real x2, Real y2, Real z2, Real x3, Real y3, Real z3, Real xi1, Real xi2, Real xi3, int basis_index_a) {
+    [](Real x1,
+       Real y1,
+       Real z1,
+       Real x2,
+       Real y2,
+       Real z2,
+       Real x3,
+       Real y3,
+       Real z3,
+       Real xi1,
+       Real xi2,
+       Real xi3,
+       int basis_index_a) {
       return dfem_dxi(xi1, xi2, xi3, basis_index_a, 1) * (y3 * z2 - y2 * z3)
-             / (x3 * y2 * z1 - x2 * y3 * z1 - x3 * y1 * z2 + x1 * y3 * z2 + x2 * y1 * z3 - x1 * y2 * z3)
-             + dfem_dxi(xi1, xi2, xi3, basis_index_a, 2) * (y3 * z1 - y1 * z3)
-               / (-(x3 * y2 * z1) + x2 * y3 * z1 + x3 * y1 * z2 - x1 * y3 * z2 - x2 * y1 * z3 + x1 * y2 * z3)
-             + dfem_dxi(xi1, xi2, xi3, basis_index_a, 3) * (y2 * z1 - y1 * z2)
-               / (x3 * y2 * z1 - x2 * y3 * z1 - x3 * y1 * z2 + x1 * y3 * z2 + x2 * y1 * z3 - x1 * y2 * z3);
+          / (x3 * y2 * z1 - x2 * y3 * z1 - x3 * y1 * z2 + x1 * y3 * z2 + x2 * y1 * z3
+              - x1 * y2 * z3)
+          + dfem_dxi(xi1, xi2, xi3, basis_index_a, 2) * (y3 * z1 - y1 * z3)
+              / (-(x3 * y2 * z1) + x2 * y3 * z1 + x3 * y1 * z2 - x1 * y3 * z2
+                  - x2 * y1 * z3 + x1 * y2 * z3)
+          + dfem_dxi(xi1, xi2, xi3, basis_index_a, 3) * (y2 * z1 - y1 * z2)
+              / (x3 * y2 * z1 - x2 * y3 * z1 - x3 * y1 * z2 + x1 * y3 * z2 + x2 * y1 * z3
+                  - x1 * y2 * z3);
     },
-    [](Real x1, Real y1, Real z1, Real x2, Real y2, Real z2, Real x3, Real y3, Real z3, Real xi1, Real xi2, Real xi3, int basis_index_a) {
+    [](Real x1,
+       Real y1,
+       Real z1,
+       Real x2,
+       Real y2,
+       Real z2,
+       Real x3,
+       Real y3,
+       Real z3,
+       Real xi1,
+       Real xi2,
+       Real xi3,
+       int basis_index_a) {
       return dfem_dxi(xi1, xi2, xi3, basis_index_a, 1) * (x3 * z2 - x2 * z3)
-             / (-(x3 * y2 * z1) + x2 * y3 * z1 + x3 * y1 * z2 - x1 * y3 * z2 - x2 * y1 * z3 + x1 * y2 * z3)
-             + dfem_dxi(xi1, xi2, xi3, basis_index_a, 2) * (x3 * z1 - x1 * z3)
-               / (x3 * y2 * z1 - x2 * y3 * z1 - x3 * y1 * z2 + x1 * y3 * z2 + x2 * y1 * z3 - x1 * y2 * z3)
-             + dfem_dxi(xi1, xi2, xi3, basis_index_a, 3) * (x2 * z1 - x1 * z2)
-               / (-(x3 * y2 * z1) + x2 * y3 * z1 + x3 * y1 * z2 - x1 * y3 * z2 - x2 * y1 * z3 + x1 * y2 * z3);
+          / (-(x3 * y2 * z1) + x2 * y3 * z1 + x3 * y1 * z2 - x1 * y3 * z2 - x2 * y1 * z3
+              + x1 * y2 * z3)
+          + dfem_dxi(xi1, xi2, xi3, basis_index_a, 2) * (x3 * z1 - x1 * z3)
+              / (x3 * y2 * z1 - x2 * y3 * z1 - x3 * y1 * z2 + x1 * y3 * z2 + x2 * y1 * z3
+                  - x1 * y2 * z3)
+          + dfem_dxi(xi1, xi2, xi3, basis_index_a, 3) * (x2 * z1 - x1 * z2)
+              / (-(x3 * y2 * z1) + x2 * y3 * z1 + x3 * y1 * z2 - x1 * y3 * z2
+                  - x2 * y1 * z3 + x1 * y2 * z3);
     },
-    [](Real x1, Real y1, Real z1, Real x2, Real y2, Real z2, Real x3, Real y3, Real z3, Real xi1, Real xi2, Real xi3, int basis_index_a) {
+    [](Real x1,
+       Real y1,
+       Real z1,
+       Real x2,
+       Real y2,
+       Real z2,
+       Real x3,
+       Real y3,
+       Real z3,
+       Real xi1,
+       Real xi2,
+       Real xi3,
+       int basis_index_a) {
       return dfem_dxi(xi1, xi2, xi3, basis_index_a, 1) * (x3 * y2 - x2 * y3)
-             / (x3 * y2 * z1 - x2 * y3 * z1 - x3 * y1 * z2 + x1 * y3 * z2 + x2 * y1 * z3 - x1 * y2 * z3)
-             + dfem_dxi(xi1, xi2, xi3, basis_index_a, 2) * (x3 * y1 - x1 * y3)
-               / (-(x3 * y2 * z1) + x2 * y3 * z1 + x3 * y1 * z2 - x1 * y3 * z2 - x2 * y1 * z3 + x1 * y2 * z3)
-             + dfem_dxi(xi1, xi2, xi3, basis_index_a, 3) * (x2 * y1 - x1 * y2)
-               / (x3 * y2 * z1 - x2 * y3 * z1 - x3 * y1 * z2 + x1 * y3 * z2 + x2 * y1 * z3 - x1 * y2 * z3);
+          / (x3 * y2 * z1 - x2 * y3 * z1 - x3 * y1 * z2 + x1 * y3 * z2 + x2 * y1 * z3
+              - x1 * y2 * z3)
+          + dfem_dxi(xi1, xi2, xi3, basis_index_a, 2) * (x3 * y1 - x1 * y3)
+              / (-(x3 * y2 * z1) + x2 * y3 * z1 + x3 * y1 * z2 - x1 * y3 * z2
+                  - x2 * y1 * z3 + x1 * y2 * z3)
+          + dfem_dxi(xi1, xi2, xi3, basis_index_a, 3) * (x2 * y1 - x1 * y2)
+              / (x3 * y2 * z1 - x2 * y3 * z1 - x3 * y1 * z2 + x1 * y3 * z2 + x2 * y1 * z3
+                  - x1 * y2 * z3);
     }
 };
 
-inline Real dfem_dxihat(Real x1, Real y1, Real z1, Real x2, Real y2, Real z2, Real x3, Real y3, Real z3, Real xi1, Real xi2, Real xi3, int basis_index_a, int idx) {
-  return dfem_dxihat_fns[idx - 1](x1, y1, z1, x2, y2, z2, x3, y3, z3, xi1, xi2, xi3, basis_index_a);
+inline Real dfem_dxihat(Real x1,
+                        Real y1,
+                        Real z1,
+                        Real x2,
+                        Real y2,
+                        Real z2,
+                        Real x3,
+                        Real y3,
+                        Real z3,
+                        Real xi1,
+                        Real xi2,
+                        Real xi3,
+                        int basis_index_a,
+                        int idx) {
+  return dfem_dxihat_fns[idx - 1](x1,
+                                  y1,
+                                  z1,
+                                  x2,
+                                  y2,
+                                  z2,
+                                  x3,
+                                  y3,
+                                  z3,
+                                  xi1,
+                                  xi2,
+                                  xi3,
+                                  basis_index_a);
 }
 
 /* Computes R^jhat_ihat = delta^jhat_ihat - n^jhat n_ihat where n^ihat is the normal to the unit sphere
@@ -494,26 +754,69 @@ inline Real dfem_dxihat(Real x1, Real y1, Real z1, Real x2, Real y2, Real z2, Re
  */
 const fpn_phitheta_fn matrix_jac_r[3][3] = {
     {
-        [](Real phival, Real thetaval) { return 1. - sin(thetaval) * sin(thetaval) * cos(phival) * cos(phival); },
-        [](Real phival, Real thetaval) { return -sin(thetaval) * sin(thetaval) * sin(phival) * cos(phival); },
-        [](Real phival, Real thetaval) { return -sin(thetaval) * cos(thetaval) * cos(phival); }
+        [](Real phival, Real thetaval) {
+          return 1. - sin(thetaval) * sin(thetaval) * cos(phival) * cos(phival);
+        },
+        [](Real phival, Real thetaval) {
+          return -sin(thetaval) * sin(thetaval) * sin(phival) * cos(phival);
+        },
+        [](Real phival, Real thetaval) {
+          return -sin(thetaval) * cos(thetaval) * cos(phival);
+        }
     },
     {
-        [](Real phival, Real thetaval) { return -sin(thetaval) * sin(thetaval) * sin(phival) * cos(phival); },
-        [](Real phival, Real thetaval) { return 1. - sin(thetaval) * sin(thetaval) * sin(phival) * sin(phival); },
-        [](Real phival, Real thetaval) { return -sin(thetaval) * cos(thetaval) * sin(phival); }
+        [](Real phival, Real thetaval) {
+          return -sin(thetaval) * sin(thetaval) * sin(phival) * cos(phival);
+        },
+        [](Real phival, Real thetaval) {
+          return 1. - sin(thetaval) * sin(thetaval) * sin(phival) * sin(phival);
+        },
+        [](Real phival, Real thetaval) {
+          return -sin(thetaval) * cos(thetaval) * sin(phival);
+        }
     },
     {
-        [](Real phival, Real thetaval) { return -sin(thetaval) * cos(thetaval) * cos(phival); },
-        [](Real phival, Real thetaval) { return -sin(thetaval) * cos(thetaval) * sin(phival); },
+        [](Real phival, Real thetaval) {
+          return -sin(thetaval) * cos(thetaval) * cos(phival);
+        },
+        [](Real phival, Real thetaval) {
+          return -sin(thetaval) * cos(thetaval) * sin(phival);
+        },
         [](Real phival, Real thetaval) { return sin(thetaval) * sin(thetaval); }
     }
 
 };
 
-inline Real matrix_r(Real x1, Real y1, Real z1, Real x2, Real y2, Real z2, Real x3, Real y3, Real z3, Real xi1, Real xi2, Real xi3, int i, int ihat) {
+inline Real matrix_r(Real x1,
+                     Real y1,
+                     Real z1,
+                     Real x2,
+                     Real y2,
+                     Real z2,
+                     Real x3,
+                     Real y3,
+                     Real z3,
+                     Real xi1,
+                     Real xi2,
+                     Real xi3,
+                     int i,
+                     int ihat) {
   Real xval, yval, zval;
-  BarycentricToCartesian(x1, y1, z1, x2, y2, z2, x3, y3, z3, xi1, xi2, xi3, xval, yval, zval);
+  BarycentricToCartesian(x1,
+                         y1,
+                         z1,
+                         x2,
+                         y2,
+                         z2,
+                         x3,
+                         y3,
+                         z3,
+                         xi1,
+                         xi2,
+                         xi3,
+                         xval,
+                         yval,
+                         zval);
 
   Real rval = sqrt(xval * xval + yval * yval + zval * zval);
   Real thetaval = acos(zval / rval);
@@ -530,12 +833,31 @@ inline Real matrix_r(Real x1, Real y1, Real z1, Real x2, Real y2, Real z2, Real 
  *
  * Note: basis_choice is redundant for now, only works for overlapping tent!
  */
-Real dfem_dpihat(int ihat, int a, int t1, int t2, int t3, Real x1, Real y1, Real z1, Real x2, Real y2, Real z2, Real x3, Real y3, Real z3,
-                 Real xi1, Real xi2, Real xi3, int basis_choice) {
+Real dfem_dpihat(int ihat,
+                 int a,
+                 int t1,
+                 int t2,
+                 int t3,
+                 Real x1,
+                 Real y1,
+                 Real z1,
+                 Real x2,
+                 Real y2,
+                 Real z2,
+                 Real x3,
+                 Real y3,
+                 Real z3,
+                 Real xi1,
+                 Real xi2,
+                 Real xi3,
+                 int basis_choice) {
   int basis_index_a = (a == t1) * 1 + (a == t2) * 2 + (a == t3) * 3;
 
-  return dfem_dxihat(x1, y1, z1, x2, y2, z2, x3, y3, z3, xi1, xi2, xi3, basis_index_a, 1) * matrix_r(x1, y1, z1, x2, y2, z2, x3, y3, z3, xi1, xi2, xi3, 1, ihat)
-         + dfem_dxihat(x1, y1, z1, x2, y2, z2, x3, y3, z3, xi1, xi2, xi3, basis_index_a, 2) * matrix_r(x1, y1, z1, x2, y2, z2, x3, y3, z3, xi1, xi2, xi3, 2, ihat)
-         + dfem_dxihat(x1, y1, z1, x2, y2, z2, x3, y3, z3, xi1, xi2, xi3, basis_index_a, 3) * matrix_r(x1, y1, z1, x2, y2, z2, x3, y3, z3, xi1, xi2, xi3, 3, ihat);
+  return dfem_dxihat(x1, y1, z1, x2, y2, z2, x3, y3, z3, xi1, xi2, xi3, basis_index_a, 1)
+      * matrix_r(x1, y1, z1, x2, y2, z2, x3, y3, z3, xi1, xi2, xi3, 1, ihat)
+      + dfem_dxihat(x1, y1, z1, x2, y2, z2, x3, y3, z3, xi1, xi2, xi3, basis_index_a, 2)
+          * matrix_r(x1, y1, z1, x2, y2, z2, x3, y3, z3, xi1, xi2, xi3, 2, ihat)
+      + dfem_dxihat(x1, y1, z1, x2, y2, z2, x3, y3, z3, xi1, xi2, xi3, basis_index_a, 3)
+          * matrix_r(x1, y1, z1, x2, y2, z2, x3, y3, z3, xi1, xi2, xi3, 3, ihat);
 }
 } // namespace radiationfemn
