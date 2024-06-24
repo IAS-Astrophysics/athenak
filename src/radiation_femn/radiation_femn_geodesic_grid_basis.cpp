@@ -332,12 +332,12 @@ Real dfpn_dOmega(int l, int m, Real phi, Real theta, int var_index) {
 // cosec(theta) dYlm/dphi = - m cosec(theta) Yl-m
 inline Real cosec_dfpn_dphi(int l, int m, Real phi, Real theta) {
   Real result = 0.;
-  if (m < 0) {
-    result = -sqrt(2.) * cos(abs(m) * phi) * legendre_factor(l, abs(m)) * recurrence_legendre(l, abs(m), cos(theta));
-  } else if (m == 0) {
-    result = - legendre_factor(l, abs(m)) * recurrence_legendre(l, abs(m), cos(theta));
-  } else {
+  if (m > 0) {
     result = -sqrt(2.) * sin(m * phi) * legendre_factor(l, m) * recurrence_legendre(l, m, cos(theta));
+  } else if (m == 0) {
+    result = 0;
+  } else {
+    result = sqrt(2.) * cos(abs(m) * phi) * legendre_factor(l, abs(m)) * recurrence_legendre(l, abs(m), cos(theta));
   }
   return result;
 }
