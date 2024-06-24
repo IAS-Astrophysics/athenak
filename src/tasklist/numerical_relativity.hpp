@@ -1,5 +1,5 @@
-#ifndef NUMERICAL_RELATIVITY_NUMERICAL_RELATIVITY_HPP_
-#define NUMERICAL_RELATIVITY_NUMERICAL_RELATIVITY_HPP_
+#ifndef TASKLIST_NUMERICAL_RELATIVITY_HPP_
+#define TASKLIST_NUMERICAL_RELATIVITY_HPP_
 //========================================================================================
 // AthenaXXX astrophysical plasma code
 // Copyright(C) 2020 James M. Stone <jmstone@ias.edu> and the Athena code team
@@ -182,4 +182,4 @@ class NumericalRelativity {
 
 } // namespace numrel
 
-#endif  // NUMERICAL_RELATIVITY_NUMERICAL_RELATIVITY_HPP_
+#endif  // TASKLIST_NUMERICAL_RELATIVITY_HPP_
