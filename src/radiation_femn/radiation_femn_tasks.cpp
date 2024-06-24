@@ -177,7 +177,7 @@ TaskStatus RadiationFEMN::ApplyPhysicalBCs(Driver *pdrive, int stage) {
     return TaskStatus::complete;
   }
 
-  pbval_f->RadiationBCs((pmy_pack), (pbval_f->i_in), f0);
+  RadiationFEMNBCs((pmy_pack), (pbval_f->i_in), f0);
 
   // user BCs
   if (pmy_pack->pmesh->pgen->user_bcs) {

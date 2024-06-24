@@ -159,6 +159,7 @@ add_executable(
 		pgen/tests/rad_femn_diffusiontest_erf.cpp
 		pgen/tests/rad_femn_spharms.cpp
 		pgen/tests/rad_femn_gaussian_nonflat.cpp
+		radiation_femn/radiation_femn_bcs.cpp
 )
 
 # custom problem generator to be included in compile
