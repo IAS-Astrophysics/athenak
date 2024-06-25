@@ -23,7 +23,7 @@
 #include "z4c/z4c.hpp"
 #include "adm/adm.hpp"
 #include "tmunu/tmunu.hpp"
-#include "dyngr.hpp"
+#include "dyn_grmhd.hpp"
 #include "tasklist/numerical_relativity.hpp"
 
 #include "eos/primitive_solver_hyd.hpp"

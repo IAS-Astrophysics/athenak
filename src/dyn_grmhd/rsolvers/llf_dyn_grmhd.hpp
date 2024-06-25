@@ -1,5 +1,5 @@
-#ifndef DYNGR_RSOLVERS_LLF_DYNGRMHD_HPP_
-#define DYNGR_RSOLVERS_LLF_DYNGRMHD_HPP_
+#ifndef DYN_GRMHD_RSOLVERS_LLF_DYN_GRMHD_HPP_
+#define DYN_GRMHD_RSOLVERS_LLF_DYN_GRMHD_HPP_
 //========================================================================================
 // AthenaXXX astrophysical plasma code
 // Copyright(C) 2020 James M. Stone <jmstone@ias.edu> and the Athena code team
@@ -15,7 +15,7 @@
 #include "eos/primitive_solver_hyd.hpp"
 #include "eos/primitive-solver/reset_floor.hpp"
 #include "eos/primitive-solver/geom_math.hpp"
-#include "flux_dyngrmhd.hpp"
+#include "flux_dyn_grmhd.hpp"
 
 namespace dyngr {
 
@@ -226,4 +226,4 @@ void LLF_DYNGR(TeamMember_t const &member,
 
 } // namespace dyngr
 
-#endif  // DYNGR_RSOLVERS_LLF_DYNGRMHD_HPP_
+#endif  // DYN_GRMHD_RSOLVERS_LLF_DYN_GRMHD_HPP_

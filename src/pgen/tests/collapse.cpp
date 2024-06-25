@@ -18,7 +18,7 @@
 #include "mesh/mesh.hpp"
 #include "eos/eos.hpp"
 #include "mhd/mhd.hpp"
-#include "dyngr/dyngr.hpp"
+#include "dyn_grmhd/dyn_grmhd.hpp"
 #include "adm/adm.hpp"
 #include "z4c/z4c.hpp"
 #include "pgen/pgen.hpp"

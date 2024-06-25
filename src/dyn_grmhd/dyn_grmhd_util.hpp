@@ -1,5 +1,5 @@
-#ifndef DYNGR_DYNGR_UTIL_HPP_
-#define DYNGR_DYNGR_UTIL_HPP_
+#ifndef DYN_GRMHD_DYN_GRMHD_UTIL_HPP_
+#define DYN_GRMHD_DYN_GRMHD_UTIL_HPP_
 //========================================================================================
 // AthenaXXX astrophysical plasma code
 // Copyright(C) 2020 James M. Stone <jmstone@ias.edu> and the Athena code team
@@ -10,7 +10,7 @@
 
 #include "athena.hpp"
 #include "adm/adm.hpp"
-#include "dyngr.hpp"
+#include "dyn_grmhd.hpp"
 #include "eos/primitive_solver_hyd.hpp"
 #include "reconstruct/plm.hpp"
 
@@ -55,4 +55,4 @@ void InsertFluxes(const Real flux_pt[NCONS], const DvceArray5D<Real>& flx,
 
 } // namespace dyngr
 
-#endif  // DYNGR_DYNGR_UTIL_HPP_
+#endif  // DYN_GRMHD_DYN_GRMHD_UTIL_HPP_

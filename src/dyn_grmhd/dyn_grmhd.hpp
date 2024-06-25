@@ -1,11 +1,11 @@
-#ifndef DYNGR_DYNGR_HPP_
-#define DYNGR_DYNGR_HPP_
+#ifndef DYN_GRMHD_DYN_GRMHD_HPP_
+#define DYN_GRMHD_DYN_GRMHD_HPP_
 //========================================================================================
 // AthenaXXX astrophysical plasma code
 // Copyright(C) 2020 James M. Stone <jmstone@ias.edu> and the Athena code team
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
-//! \file dyngr.hpp
+//! \file dyn_grmhd.hpp
 //  \brief definitions for DynGR class
 
 #include "athena.hpp"
@@ -146,4 +146,4 @@ DynGR* BuildDynGR(MeshBlockPack *ppack, ParameterInput *pin);
 
 } // namespace dyngr
 
-#endif  // DYNGR_DYNGR_HPP_
+#endif  // DYN_GRMHD_DYN_GRMHD_HPP_

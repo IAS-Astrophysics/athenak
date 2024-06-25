@@ -22,7 +22,7 @@
 #include "tmunu/tmunu.hpp"
 #include "tasklist/numerical_relativity.hpp"
 #include "z4c/z4c.hpp"
-#include "dyngr/dyngr.hpp"
+#include "dyn_grmhd/dyn_grmhd.hpp"
 #include "z4c/z4c_puncture_tracker.hpp"
 #include "diffusion/viscosity.hpp"
 #include "diffusion/resistivity.hpp"

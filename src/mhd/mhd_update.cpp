@@ -16,7 +16,7 @@
 #include "eos/eos.hpp"
 #include "srcterms/srcterms.hpp"
 #include "mhd.hpp"
-#include "dyngr/dyngr.hpp"
+#include "dyn_grmhd/dyn_grmhd.hpp"
 
 namespace mhd {
 //----------------------------------------------------------------------------------------

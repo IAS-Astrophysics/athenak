@@ -1,5 +1,5 @@
-#ifndef DYNGR_RSOLVERS_FLUX_DYNGRMHD_HPP_
-#define DYNGR_RSOLVERS_FLUX_DYNGRMHD_HPP_
+#ifndef DYN_GRMHD_RSOLVERS_FLUX_DYN_GRMHD_HPP_
+#define DYN_GRMHD_RSOLVERS_FLUX_DYN_GRMHD_HPP_
 //========================================================================================
 // AthenaXXX astrophysical plasma code
 // Copyright(C) 2020 James M. Stone <jmstone@ias.edu> and the Athena code team
@@ -111,4 +111,4 @@ void SingleStateFlux(const PrimitiveSolverHydro<EOSPolicy, ErrorPolicy>& eos,
 
 } // namespace dyngr
 
-#endif  // DYNGR_RSOLVERS_FLUX_DYNGRMHD_HPP_
+#endif  // DYN_GRMHD_RSOLVERS_FLUX_DYN_GRMHD_HPP_

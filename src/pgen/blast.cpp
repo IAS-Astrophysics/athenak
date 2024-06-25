@@ -22,7 +22,7 @@
 #include "eos/eos.hpp"
 #include "hydro/hydro.hpp"
 #include "mhd/mhd.hpp"
-#include "dyngr/dyngr.hpp"
+#include "dyn_grmhd/dyn_grmhd.hpp"
 #include "adm/adm.hpp"
 #include "coordinates/cell_locations.hpp"
 
@@ -284,91 +284,74 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     });
 
     // initialize magnetic fields
-    auto &b0 = pmbp->pmhd->b0;
-    par_for("pgen_blast2",DevExeSpace(),0,(pmbp->nmb_thispack-1),ks,ke,js,je,is,ie,
-    KOKKOS_LAMBDA(int m, int k, int j, int i) {
-      Real jacx = 1.0;
-      Real jacy = 0.0;
+    // compute vector potential over all faces
+    int ncells1 = indcs.nx1 + 2*(indcs.ng);
+    int ncells2 = (indcs.nx2 > 1)? (indcs.nx2 + 2*(indcs.ng)) : 1;
+    int ncells3 = (indcs.nx3 > 1)? (indcs.nx3 + 2*(indcs.ng)) : 1;
+    int nmb = pmbp->nmb_thispack;
+    DvceArray4D<Real> a3;
+    Kokkos::realloc(a3, nmb,ncells3,ncells2,ncells1);
 
+    auto &nghbr = pmbp->pmb->nghbr;
+    auto &mblev = pmbp->pmb->mb_lev;
+
+    int ku = ke;
+    if (ncells3 > 1) {
+      ku = ke + 1;
+    }
+
+    par_for("pgen_potential", DevExeSpace(), 0,nmb-1,ks,ku,js,je+1,is,ie+1,
+    KOKKOS_LAMBDA(int m, int k, int j, int i) {
       Real &x1min = size.d_view(m).x1min;
       Real &x1max = size.d_view(m).x1max;
       int nx1 = indcs.nx1;
       Real x1v = CellCenterX(i-is, nx1, x1min, x1max);
-      Real x1f = LeftEdgeX(i-is, nx1, x1min, x1max);
+      Real x1f = LeftEdgeX(i-is,nx1,x1min,x1max);
+
       Real &x2min = size.d_view(m).x2min;
       Real &x2max = size.d_view(m).x2max;
       int nx2 = indcs.nx2;
       Real x2v = CellCenterX(j-js, nx2, x2min, x2max);
-      Real x2f = LeftEdgeX(j-js, nx2, x2min, x2max);
+      Real x2f = LeftEdgeX(j-js,nx2,x2min,x2max);
+
+      Real &x3min = size.d_view(m).x3min;
+      Real &x3max = size.d_view(m).x3max;
+      int nx3 = indcs.nx3;
+      Real x3v = CellCenterX(k-ks, nx3, x3min, x3max);
+      Real x3f = LeftEdgeX(k-ks,nx3,x3min,x3max);
+
+      Real dx1 = size.d_view(m).dx1;
+      Real dx2 = size.d_view(m).dx2;
+      Real dx3 = size.d_view(m).dx3;
+
+      Real y;
 
       if (warp) {
-        Real y = GetCartesianFromScrewball(x2v, a_warp);
-
-        jacx = 1.0/(1.0 - (y*y)/(a_warp*a_warp))*exp(y*y/(2.0*a_warp*a_warp));
-      } else if (snake) {
-        jacx = 1.0;
+        y = GetCartesianFromScrewball(x2f, a_warp);
       } else if (ripple) {
-        // WARNING (JF)
-        // In ripple coordinates, B^x, B^y are no longer independent of x and y. Because
-        // we transform B^i directly rather than working with the vector potential, div B
-        // will not be 0 to double precision for the discretized solution. Since this
-        // coordinate transformation is very contrived and really only suitable for
-        // validating the coordinate independence of the Valencia solver, I did not think
-        // it was worth the time to convert this to use the vector potential. However, if
-        // someone is particularly bothered by this, they are welcome to change it
-        // themselves.
-        Real x, y;
-        GetCartesianFromRipple(x, y, x1f, x2v, A_snake, k_snake);
-
-        Real delx = A_snake*k_snake*M_PI*cos(k_snake*M_PI*x);
-        Real dely = A_snake*k_snake*M_PI*cos(k_snake*M_PI*y);
-        Real idetJ = 1.0/(1.0 - delx*dely);
-
-        jacx = idetJ;
-        //Real jacy = -delx*idetJ;
+        Real x;
+        GetCartesianFromRipple(x, y, x1f, x2f, A_snake, k_snake);
       }
-      b0.x1f(m,k,j,i) = jacx*b_amb;
-      if (ripple) {
-        Real x, y;
-        GetCartesianFromRipple(x, y, x1v, x2f, A_snake, k_snake);
 
-        Real delx = A_snake*k_snake*M_PI*cos(k_snake*M_PI*x);
-        Real dely = A_snake*k_snake*M_PI*cos(k_snake*M_PI*y);
-        Real idetJ = 1.0/(1.0 - delx*dely);
+      a3(m,k,j,i) = b_amb*y;
+    });
 
-        jacy = -delx*idetJ;
-      }
-      b0.x2f(m,k,j,i) = jacy*b_amb;
+
+    // initialize magnetic fields
+    auto &b0 = pmbp->pmhd->b0;
+    par_for("pgen_blast2",DevExeSpace(),0,(pmbp->nmb_thispack-1),ks,ke,js,je,is,ie,
+    KOKKOS_LAMBDA(int m, int k, int j, int i) {
+      Real dx1 = size.d_view(m).dx1;
+      Real dx2 = size.d_view(m).dx2;
+
+      b0.x1f(m,k,j,i) = (a3(m,k,j+1,i) - a3(m,k,j,i))/dx2;
+      b0.x2f(m,k,j,i) = -(a3(m,k,j,i+1) - a3(m,k,j,i))/dx1;
       b0.x3f(m,k,j,i) = 0.0;
-
-      // Include extra face-component at edge of block in each direction
       if (i==ie) {
-        if (ripple) {
-          x1f = LeftEdgeX(i+1-is, nx1, x1min, x1max);
-          Real x, y;
-          GetCartesianFromRipple(x, y, x1f, x2v, A_snake, k_snake);
-
-          Real delx = A_snake*k_snake*M_PI*cos(k_snake*M_PI*x);
-          Real dely = A_snake*k_snake*M_PI*cos(k_snake*M_PI*y);
-          Real idetJ = 1.0/(1.0 - delx*dely);
-
-          jacx = idetJ;
-        }
-        b0.x1f(m,k,j,i+1) = jacx*b_amb;
+        b0.x1f(m,k,j,i+1) = (a3(m,k,j+1,i+1) - a3(m,k,j,i+1))/dx2;
       }
       if (j==je) {
-        if (ripple) {
-          x2f = LeftEdgeX(j+1-js, nx2, x2min, x2max);
-          Real x, y;
-          GetCartesianFromRipple(x, y, x1v, x2f, A_snake, k_snake);
-
-          Real delx = A_snake*k_snake*M_PI*cos(k_snake*M_PI*x);
-          Real dely = A_snake*k_snake*M_PI*cos(k_snake*M_PI*y);
-          Real idetJ = 1.0/(1.0 - delx*dely);
-
-          jacy = -delx*idetJ;
-        }
-        b0.x2f(m,k,j+1,i) = jacy*b_amb;
+        b0.x2f(m,k,j+1,i) = -(a3(m,k,j+1,i+1) - a3(m,k,j+1,i))/dx1;
       }
       if (k==ke) {b0.x3f(m,k+1,j,i) = 0.0;}
     });

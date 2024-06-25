@@ -38,9 +38,9 @@ add_executable(
 
         driver/driver.cpp
 
-        dyngr/dyngr.cpp
-        dyngr/dyngr_fluxes.cpp
-        dyngr/dyngr_fofc.cpp
+        dyn_grmhd/dyn_grmhd.cpp
+        dyn_grmhd/dyn_grmhd_fluxes.cpp
+        dyn_grmhd/dyn_grmhd_fofc.cpp
 
         eos/eos.cpp
         eos/ideal_hyd.cpp

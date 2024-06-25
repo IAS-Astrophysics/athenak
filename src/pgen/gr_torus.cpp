@@ -43,7 +43,7 @@
 #include "hydro/hydro.hpp"
 #include "mhd/mhd.hpp"
 #include "radiation/radiation.hpp"
-#include "dyngr/dyngr.hpp"
+#include "dyn_grmhd/dyn_grmhd.hpp"
 
 #include <Kokkos_Random.hpp>
 

@@ -14,7 +14,7 @@
 #include "numerical_relativity.hpp"
 #include "z4c/z4c.hpp"
 #include "adm/adm.hpp"
-#include "dyngr/dyngr.hpp"
+#include "dyn_grmhd/dyn_grmhd.hpp"
 #include "tmunu/tmunu.hpp"
 
 namespace numrel {
