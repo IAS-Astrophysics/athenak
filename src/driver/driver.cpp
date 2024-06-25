@@ -276,7 +276,7 @@ void Driver::Initialize(Mesh *pmesh, ParameterInput *pin, Outputs *pout, bool re
   mhd::MHD *pmhd = pmesh->pmb_pack->pmhd;
   radiation::Radiation *prad = pmesh->pmb_pack->prad;
   z4c::Z4c *pz4c = pmesh->pmb_pack->pz4c;
-  dyngr::DynGR *pdyngr = pmesh->pmb_pack->pdyngr;
+  dyngr::DynGRMHD *pdyngr = pmesh->pmb_pack->pdyngr;
   if (time_evolution != TimeEvolution::tstatic) {
     if (phydro != nullptr) {
       (void) pmesh->pmb_pack->phydro->NewTimeStep(this, nexp_stages);
@@ -517,7 +517,7 @@ void Driver::InitBoundaryValuesAndPrimitives(Mesh *pm) {
   // Initialize MHD: ghost zones and primitive variables (everywhere)
   // Note this requires communicating BOTH u and B
   mhd::MHD *pmhd = pm->pmb_pack->pmhd;
-  dyngr::DynGR *pdyngr = pm->pmb_pack->pdyngr;
+  dyngr::DynGRMHD *pdyngr = pm->pmb_pack->pdyngr;
   if (pmhd != nullptr) {
     (void) pmhd->RestrictU(this, 0);
     (void) pmhd->RestrictB(this, 0);

@@ -143,7 +143,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   bool snake = false;
   bool ripple = false;
   if (coords.compare("cartesian") != 0 && pmy_mesh_->pmb_pack->padm == nullptr) {
-    std::cout << "Alternate coordinates are only supported for DynGR.\n"
+    std::cout << "Alternate coordinates are only supported for DynGRMHD.\n"
               << "Defaulting to Cartesian.\n";
   } else {
     if (coords.compare("warp") == 0) {
@@ -174,7 +174,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     auto &w0_ = pmbp->phydro->w0;
     Real gm1 = pmbp->phydro->peos->eos_data.gamma - 1.0;
     if (pmbp->pcoord->is_dynamical_relativistic) {
-      gm1 = 1.0; // DynGR uses pressure, not energy.
+      gm1 = 1.0; // DynGRMHD uses pressure, not energy.
     }
     par_for("pgen_blast1",DevExeSpace(),0,(pmbp->nmb_thispack-1),ks,ke,js,je,is,ie,
     KOKKOS_LAMBDA(int m,int k,int j,int i) {
@@ -227,7 +227,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     auto &w0_ = pmbp->pmhd->w0;
     Real gm1 = pmbp->pmhd->peos->eos_data.gamma - 1.0;
     if (pmbp->pcoord->is_dynamical_relativistic) {
-      gm1 = 1.0; // DynGR uses pressure, not energy.
+      gm1 = 1.0; // DynGRMHD uses pressure, not energy.
     }
     par_for("pgen_blast1",DevExeSpace(),0,(pmbp->nmb_thispack-1),ks,ke,js,je,is,ie,
     KOKKOS_LAMBDA(int m,int k,int j,int i) {

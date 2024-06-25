@@ -35,8 +35,8 @@ namespace dyngr {
 //! \brief Calls reconstruction and Riemann solver functions to compute hydro fluxes
 //! Note this function is templated over RS for better performance on GPUs.
 
-template<class EOSPolicy, class ErrorPolicy> template <DynGR_RSolver rsolver_method_>
-TaskStatus DynGRPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int stage) {
+template<class EOSPolicy, class ErrorPolicy> template <DynGRMHD_RSolver rsolver_method_>
+TaskStatus DynGRMHDPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int stage) {
   RegionIndcs indcs_ = pmy_pack->pmesh->mb_indcs;
   int is = indcs_.is, ie = indcs_.ie;
   int js = indcs_.js, je = indcs_.je;
@@ -106,7 +106,7 @@ TaskStatus DynGRPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int stag
         PiecewiseLinearX1(member, m, k, j, il-1, iu, b0_, bl, br);
         break;
       // JF: These higher-order reconstruction methods all need EOS_Data to calculate a
-      // floor. However, it isn't used by DynGR at all.
+      // floor. However, it isn't used by DynGRMHD at all.
       case ReconstructionMethod::ppm4:
       case ReconstructionMethod::ppmx:
         PiecewiseParabolicX1(member,eos_,extrema,false, m, k, j, il-1, iu, w0_, wl, wr);
@@ -135,11 +135,11 @@ TaskStatus DynGRPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int stag
     auto nscal_ = nvars - nhyd;
     auto &adm_ = adm;
     //int il = is; int iu = ie+1;
-    if constexpr (rsolver_method_ == DynGR_RSolver::llf_dyngr) {
+    if constexpr (rsolver_method_ == DynGRMHD_RSolver::llf_dyngr) {
       LLF_DYNGR<IVX>(member, dyn_eos, indcs, size, coord, m, k, j, il, iu,
                 wl, wr, bl, br, bx, nhyd_, nscal_, adm_,
                 flx1, e31, e21);
-    } else if constexpr (rsolver_method_ == DynGR_RSolver::hlle_dyngr) {
+    } else if constexpr (rsolver_method_ == DynGRMHD_RSolver::hlle_dyngr) {
       HLLE_DYNGR<IVX>(member, dyn_eos, indcs, size, coord, m, k, j, il, iu,
                 wl, wr, bl, br, bx, nhyd_, nscal_, adm_,
                 flx1, e31, e21);
@@ -216,7 +216,7 @@ TaskStatus DynGRPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int stag
             PiecewiseLinearX2(member, m, k, j, is-1, ie+1, b0_, bl_jp1, br);
             break;
           // JF: These higher-order reconstruction methods all need EOS_Data to calculate
-          // a floor. However, it isn't used by DynGR.
+          // a floor. However, it isn't used by DynGRMHD.
           case ReconstructionMethod::ppm4:
           case ReconstructionMethod::ppmx:
             PiecewiseParabolicX2(member,eos_,extrema,false, m, k, j, is-1, ie+1,
@@ -248,10 +248,10 @@ TaskStatus DynGRPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int stag
         auto &adm_ = adm;
         //int il = is; int iu = ie;
         if (j>(jl)) {
-          if constexpr (rsolver_method_ == DynGR_RSolver::llf_dyngr) {
+          if constexpr (rsolver_method_ == DynGRMHD_RSolver::llf_dyngr) {
             LLF_DYNGR<IVY>(member, dyn_eos, indcs, size, coord, m, k, j, is-1, ie+1,
                       wl, wr, bl, br, by, nhyd_, nscal_, adm_, flx2, e12, e32);
-          } else if constexpr (rsolver_method_ == DynGR_RSolver::hlle_dyngr) {
+          } else if constexpr (rsolver_method_ == DynGRMHD_RSolver::hlle_dyngr) {
             HLLE_DYNGR<IVY>(member, dyn_eos, indcs, size, coord, m, k, j, is-1, ie+1,
                       wl, wr, bl, br, by, nhyd_, nscal_, adm_, flx2, e12, e32);
           }
@@ -324,7 +324,7 @@ TaskStatus DynGRPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int stag
             PiecewiseLinearX3(member, m, k, j, is-1, ie+1, b0_, bl_kp1, br);
             break;
           // JF: These higher-order reconstruction methods all need EOS_Data to calculate
-          // a floor. However, it isn't used by DynGR.
+          // a floor. However, it isn't used by DynGRMHD.
           case ReconstructionMethod::ppm4:
           case ReconstructionMethod::ppmx:
             PiecewiseParabolicX3(member,eos_,extrema,false, m, k, j, is-1, ie+1,
@@ -356,10 +356,10 @@ TaskStatus DynGRPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int stag
         auto nscal_ = nvars - nhyd;
         //int il = is; int iu = ie;
         if (k>(kl)) {
-          if constexpr (rsolver_method_ == DynGR_RSolver::llf_dyngr) {
+          if constexpr (rsolver_method_ == DynGRMHD_RSolver::llf_dyngr) {
             LLF_DYNGR<IVZ>(member, dyn_eos, indcs, size, coord, m, k, j, is-1, ie+1,
                       wl, wr, bl, br, bz, nhyd_, nscal_, adm_, flx3, e23, e13);
-          } else if constexpr (rsolver_method_ == DynGR_RSolver::hlle_dyngr) {
+          } else if constexpr (rsolver_method_ == DynGRMHD_RSolver::hlle_dyngr) {
             HLLE_DYNGR<IVZ>(member, dyn_eos, indcs, size, coord, m, k, j, is-1, ie+1,
                       wl, wr, bl, br, bz, nhyd_, nscal_, adm_, flx3, e23, e13);
           }
@@ -395,11 +395,11 @@ TaskStatus DynGRPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int stag
 // Macro for instantiating every flux function for each Riemann solver
 #define INSTANTIATE_CALC_FLUXES(EOSPolicy, ErrorPolicy) \
 template \
-TaskStatus DynGRPS<EOSPolicy, ErrorPolicy>::\
-            CalcFluxes<DynGR_RSolver::llf_dyngr>(Driver *pdriver, int stage); \
+TaskStatus DynGRMHDPS<EOSPolicy, ErrorPolicy>::\
+            CalcFluxes<DynGRMHD_RSolver::llf_dyngr>(Driver *pdriver, int stage); \
 template \
-TaskStatus DynGRPS<EOSPolicy, ErrorPolicy>::\
-            CalcFluxes<DynGR_RSolver::hlle_dyngr>(Driver *pdriver, int stage);
+TaskStatus DynGRMHDPS<EOSPolicy, ErrorPolicy>::\
+            CalcFluxes<DynGRMHD_RSolver::hlle_dyngr>(Driver *pdriver, int stage);
 
 INSTANTIATE_CALC_FLUXES(Primitive::IdealGas, Primitive::ResetFloor)
 INSTANTIATE_CALC_FLUXES(Primitive::PiecewisePolytrope, Primitive::ResetFloor)

@@ -26,7 +26,7 @@ namespace hydro {class Hydro;}
 namespace mhd {class MHD;}
 namespace ion_neutral {class IonNeutral;}
 namespace radiation {class Radiation;}
-namespace dyngr {class DynGR;}
+namespace dyngr {class DynGRMHD;}
 namespace numrel {class NumericalRelativity;}
 class TurbulenceDriver;
 namespace radiation {class Radiation;}
@@ -67,7 +67,7 @@ class MeshBlockPack {
   adm::ADM *padm=nullptr;
   Tmunu *ptmunu=nullptr;
   z4c::Z4c *pz4c=nullptr;
-  dyngr::DynGR *pdyngr=nullptr;
+  dyngr::DynGRMHD *pdyngr=nullptr;
   numrel::NumericalRelativity *pnr=nullptr;
   ion_neutral::IonNeutral *pionn=nullptr;
   TurbulenceDriver *pturb=nullptr;

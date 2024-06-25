@@ -21,7 +21,7 @@
 
 // Forward declarations
 namespace z4c {class Z4c;}
-namespace dyngr {class DynGR;}
+namespace dyngr {class DynGRMHD;}
 class ADM;
 class Tmunu;
 class MeshBlockPack;

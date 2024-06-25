@@ -224,7 +224,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
           // pressure. Because PrimitiveSolver is templated, it's difficult to call it
           // directly. Thus, the easiest way is to save the internal energy density, IEN,
           // whose index overlaps the pressure, IPR, move the data to the GPU, then
-          // make a call to a virtual DynGR EOS function that will call the appropriate
+          // make a call to a virtual DynGRMHD EOS function that will call the appropriate
           // template function.
           Real egas = host_w0(m, IDN, k, j, i) * bns->ener_spec[idx] / ener_unit;
           host_w0(m, IEN, k, j, i) = egas;

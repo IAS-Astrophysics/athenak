@@ -158,7 +158,7 @@ void NumericalRelativity::AssembleNumericalRelativityTasks(
        std::map<std::string, std::shared_ptr<TaskList>>& tl) {
   // Assemble the task lists for all physics modules
   if (pmy_pack->pdyngr != nullptr) {
-    pmy_pack->pdyngr->QueueDynGRTasks();
+    pmy_pack->pdyngr->QueueDynGRMHDTasks();
   }
   if (pmy_pack->pz4c != nullptr) {
     pmy_pack->pz4c->QueueZ4cTasks();

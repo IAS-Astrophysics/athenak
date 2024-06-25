@@ -4,7 +4,7 @@
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
 //! \file dyngr.cpp
-//  \brief implementation of functions for DynGR and DynGRPS controlling the task list
+//  \brief implementation of functions for DynGRMHD and DynGRMHDPS controlling the task list
 
 #include <math.h>
 
@@ -35,34 +35,34 @@ namespace dyngr {
 
 // A dumb template function containing the switch statement needed to select an EOS.
 template<class ErrorPolicy>
-DynGR* SelectDynGREOS(MeshBlockPack *ppack, ParameterInput *pin, DynGR_EOS eos_policy) {
-  DynGR* dyn_gr = nullptr;
+DynGRMHD* SelectDynGRMHDEOS(MeshBlockPack *ppack, ParameterInput *pin, DynGRMHD_EOS eos_policy) {
+  DynGRMHD* dyn_gr = nullptr;
   switch(eos_policy) {
-    case DynGR_EOS::eos_ideal:
-      dyn_gr = new DynGRPS<Primitive::IdealGas, ErrorPolicy>(ppack, pin);
+    case DynGRMHD_EOS::eos_ideal:
+      dyn_gr = new DynGRMHDPS<Primitive::IdealGas, ErrorPolicy>(ppack, pin);
       break;
-    case DynGR_EOS::eos_piecewise_poly:
-      dyn_gr = new DynGRPS<Primitive::PiecewisePolytrope, ErrorPolicy>(ppack, pin);
+    case DynGRMHD_EOS::eos_piecewise_poly:
+      dyn_gr = new DynGRMHDPS<Primitive::PiecewisePolytrope, ErrorPolicy>(ppack, pin);
       break;
-    case DynGR_EOS::eos_compose:
-      dyn_gr = new DynGRPS<Primitive::EOSCompOSE, ErrorPolicy>(ppack, pin);
+    case DynGRMHD_EOS::eos_compose:
+      dyn_gr = new DynGRMHDPS<Primitive::EOSCompOSE, ErrorPolicy>(ppack, pin);
       break;
   }
   return dyn_gr;
 }
 
-DynGR* BuildDynGR(MeshBlockPack *ppack, ParameterInput *pin) {
+DynGRMHD* BuildDynGRMHD(MeshBlockPack *ppack, ParameterInput *pin) {
   std::string eos_string = pin->GetString("mhd", "dyn_eos");
   std::string error_string = pin->GetString("mhd", "dyn_error");
-  DynGR_EOS eos_policy;
-  DynGR_Error error_policy;
+  DynGRMHD_EOS eos_policy;
+  DynGRMHD_Error error_policy;
 
   if (eos_string.compare("ideal") == 0) {
-    eos_policy = DynGR_EOS::eos_ideal;
+    eos_policy = DynGRMHD_EOS::eos_ideal;
   } else if (eos_string.compare("piecewise_poly") == 0) {
-    eos_policy = DynGR_EOS::eos_piecewise_poly;
+    eos_policy = DynGRMHD_EOS::eos_piecewise_poly;
   } else if (eos_string.compare("compose") == 0) {
-    eos_policy = DynGR_EOS::eos_compose;
+    eos_policy = DynGRMHD_EOS::eos_compose;
   } else {
     std::cout << "### FATAL ERROR in " <<__FILE__ << " at line " << __LINE__
               << std::endl << "<mhd> dyn_eos = '" << eos_string
@@ -70,7 +70,7 @@ DynGR* BuildDynGR(MeshBlockPack *ppack, ParameterInput *pin) {
     std::exit(EXIT_FAILURE);
   }
   if (error_string.compare("reset_floor") == 0) {
-    error_policy = DynGR_Error::reset_floor;
+    error_policy = DynGRMHD_Error::reset_floor;
   } else {
     std::cout << "### FATAL ERROR in " <<__FILE__ << " at line " << __LINE__
               << std::endl << "<mhd> dyn_error = '" << error_string
@@ -78,11 +78,11 @@ DynGR* BuildDynGR(MeshBlockPack *ppack, ParameterInput *pin) {
     std::exit(EXIT_FAILURE);
   }
 
-  DynGR* dyn_gr = nullptr;
+  DynGRMHD* dyn_gr = nullptr;
 
   switch (error_policy) {
-    case DynGR_Error::reset_floor:
-      dyn_gr = SelectDynGREOS<Primitive::ResetFloor>(ppack, pin, eos_policy);
+    case DynGRMHD_Error::reset_floor:
+      dyn_gr = SelectDynGRMHDEOS<Primitive::ResetFloor>(ppack, pin, eos_policy);
       break;
   }
 
@@ -92,12 +92,12 @@ DynGR* BuildDynGR(MeshBlockPack *ppack, ParameterInput *pin) {
   return dyn_gr;
 }
 
-DynGR::DynGR(MeshBlockPack *pp, ParameterInput *pin) : pmy_pack(pp) {
+DynGRMHD::DynGRMHD(MeshBlockPack *pp, ParameterInput *pin) : pmy_pack(pp) {
   std::string rsolver = pin->GetString("mhd", "rsolver");
   if (rsolver.compare("llf") == 0) {
-    rsolver_method = DynGR_RSolver::llf_dyngr;
+    rsolver_method = DynGRMHD_RSolver::llf_dyngr;
   } else if (rsolver.compare("hlle") == 0) {
-    rsolver_method = DynGR_RSolver::hlle_dyngr;
+    rsolver_method = DynGRMHD_RSolver::hlle_dyngr;
   } else {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
               << std::endl << "<mhd> rsolver = '" << rsolver
@@ -106,9 +106,9 @@ DynGR::DynGR(MeshBlockPack *pp, ParameterInput *pin) : pmy_pack(pp) {
   }
   std::string fofc = pin->GetOrAddString("mhd", "fofc_method", "llf");
   if (fofc.compare("llf") == 0) {
-    fofc_method = DynGR_RSolver::llf_dyngr;
+    fofc_method = DynGRMHD_RSolver::llf_dyngr;
   } else if (fofc.compare("hlle") == 0) {
-    fofc_method = DynGR_RSolver::hlle_dyngr;
+    fofc_method = DynGRMHD_RSolver::hlle_dyngr;
   } else {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
               << std::endl << "<mhd> fofc_method = '" << fofc
@@ -122,11 +122,11 @@ DynGR::DynGR(MeshBlockPack *pp, ParameterInput *pin) : pmy_pack(pp) {
   fixed_evolution = pin->GetOrAddBoolean("mhd", "fixed", false);
 }
 
-DynGR::~DynGR() {
+DynGRMHD::~DynGRMHD() {
 }
 
 template<class EOSPolicy, class ErrorPolicy>
-void DynGRPS<EOSPolicy, ErrorPolicy>::QueueDynGRTasks() {
+void DynGRMHDPS<EOSPolicy, ErrorPolicy>::QueueDynGRMHDTasks() {
   using namespace mhd;  // NOLINT(build/namespaces)
   using namespace z4c;  // NOLINT(build/namespaces)
   using namespace numrel; // NOLINT(build/namespaces)
@@ -142,13 +142,13 @@ void DynGRPS<EOSPolicy, ErrorPolicy>::QueueDynGRTasks() {
 
   // Select which CalculateFlux function to add based on rsolver_method.
   // CalcFlux requires metric in flux - must happen before z4ctoadm updates the metric
-  if (rsolver_method == DynGR_RSolver::llf_dyngr) {
+  if (rsolver_method == DynGRMHD_RSolver::llf_dyngr) {
     pnr->QueueTask(
-           &DynGRPS<EOSPolicy, ErrorPolicy>::CalcFluxes<DynGR_RSolver::llf_dyngr>,
+           &DynGRMHDPS<EOSPolicy, ErrorPolicy>::CalcFluxes<DynGRMHD_RSolver::llf_dyngr>,
            this, MHD_Flux, "MHD_Flux", Task_Run, {MHD_CopyU});
-  } else if (rsolver_method == DynGR_RSolver::hlle_dyngr) {
+  } else if (rsolver_method == DynGRMHD_RSolver::hlle_dyngr) {
     pnr->QueueTask(
-           &DynGRPS<EOSPolicy, ErrorPolicy>::CalcFluxes<DynGR_RSolver::hlle_dyngr>,
+           &DynGRMHDPS<EOSPolicy, ErrorPolicy>::CalcFluxes<DynGRMHD_RSolver::hlle_dyngr>,
            this, MHD_Flux, "MHD_Flux", Task_Run, {MHD_CopyU});
   } else { // put more rsolvers here
     abort();
@@ -156,7 +156,7 @@ void DynGRPS<EOSPolicy, ErrorPolicy>::QueueDynGRTasks() {
 
   // Now the rest of the MHD run tasks
   if (pz4c != nullptr) {
-    pnr->QueueTask(&DynGR::SetTmunu, this, MHD_SetTmunu, "MHD_SetTmunu",
+    pnr->QueueTask(&DynGRMHD::SetTmunu, this, MHD_SetTmunu, "MHD_SetTmunu",
                    Task_Run, {MHD_CopyU});
   }
   pnr->QueueTask(&MHD::SendFlux, pmhd, MHD_SendFlux, "MHD_SendFlux",
@@ -181,10 +181,10 @@ void DynGRPS<EOSPolicy, ErrorPolicy>::QueueDynGRTasks() {
   pnr->QueueTask(&MHD::SendB, pmhd, MHD_SendB, "MHD_SendB", Task_Run, {MHD_RestB});
   pnr->QueueTask(&MHD::RecvB, pmhd, MHD_RecvB, "MHD_RecvB", Task_Run, {MHD_SendB});
   pnr->QueueTask(&MHD::ApplyPhysicalBCs, pmhd, MHD_BCS, "MHD_BCS", Task_Run, {MHD_RecvB});
-  //pnr->QueueTask(&DynGR::ApplyPhysicalBCs, this, MHD_BCS, "MHD_BCS", Task_Run,
+  //pnr->QueueTask(&DynGRMHD::ApplyPhysicalBCs, this, MHD_BCS, "MHD_BCS", Task_Run,
   //                 {MHD_RecvB});
   pnr->QueueTask(&MHD::Prolongate, pmhd, MHD_Prolong, "MHD_Prolong", Task_Run, {MHD_BCS});
-  pnr->QueueTask(&DynGRPS<EOSPolicy, ErrorPolicy>::ConToPrim, this, MHD_C2P, "MHD_C2P",
+  pnr->QueueTask(&DynGRMHDPS<EOSPolicy, ErrorPolicy>::ConToPrim, this, MHD_C2P, "MHD_C2P",
                  Task_Run, {MHD_Prolong}, {Z4c_Excise});
   pnr->QueueTask(&MHD::NewTimeStep, pmhd, MHD_Newdt, "MHD_Newdt", Task_Run, {MHD_C2P});
 
@@ -194,10 +194,10 @@ void DynGRPS<EOSPolicy, ErrorPolicy>::QueueDynGRTasks() {
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn  TaskStatus DynGR::ADMMatterSource_(Driver *pdrive, int stage) {
+//! \fn  TaskStatus DynGRMHD::ADMMatterSource_(Driver *pdrive, int stage) {
 //  \brief
 template<class EOSPolicy, class ErrorPolicy>
-void DynGRPS<EOSPolicy, ErrorPolicy>::PrimToConInit(int is, int ie, int js, int je,
+void DynGRMHDPS<EOSPolicy, ErrorPolicy>::PrimToConInit(int is, int ie, int js, int je,
                                                     int ks, int ke) {
   eos.PrimToCons(pmy_pack->pmhd->w0, pmy_pack->pmhd->bcc0, pmy_pack->pmhd->u0,
                  is, ie, js, je, ks, ke);
@@ -210,10 +210,10 @@ void DynGRPS<EOSPolicy, ErrorPolicy>::PrimToConInit(int is, int ie, int js, int 
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn  void DynGR::ConvertInternalEnergyToPressure
+//! \fn  void DynGRMHD::ConvertInternalEnergyToPressure
 //  \brief
 template<class EOSPolicy, class ErrorPolicy>
-void DynGRPS<EOSPolicy, ErrorPolicy>::ConvertInternalEnergyToPressure(int is, int ie,
+void DynGRMHDPS<EOSPolicy, ErrorPolicy>::ConvertInternalEnergyToPressure(int is, int ie,
     int js, int je, int ks, int ke) {
   int nmb = pmy_pack->nmb_thispack;
   auto &prim = pmy_pack->pmhd->w0;
@@ -237,10 +237,10 @@ void DynGRPS<EOSPolicy, ErrorPolicy>::ConvertInternalEnergyToPressure(int is, in
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn  TaskStatus DynGR::ADMMatterSource_(Driver *pdrive, int stage) {
+//! \fn  TaskStatus DynGRMHD::ADMMatterSource_(Driver *pdrive, int stage) {
 //  \brief
 template<class EOSPolicy, class ErrorPolicy>
-TaskStatus DynGRPS<EOSPolicy, ErrorPolicy>::ConToPrim(Driver *pdrive, int stage) {
+TaskStatus DynGRMHDPS<EOSPolicy, ErrorPolicy>::ConToPrim(Driver *pdrive, int stage) {
   if (fixed_evolution) {
     return TaskStatus::complete;
   }
@@ -257,10 +257,10 @@ TaskStatus DynGRPS<EOSPolicy, ErrorPolicy>::ConToPrim(Driver *pdrive, int stage)
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn void DynGRPS::ConToPrimBC(int is, int ie, int js, int je, int ks, int ke)
+//! \fn void DynGRMHDPS::ConToPrimBC(int is, int ie, int js, int je, int ks, int ke)
 //  \brief
 template<class EOSPolicy, class ErrorPolicy>
-void DynGRPS<EOSPolicy, ErrorPolicy>::ConToPrimBC(int is, int ie, int js, int je,
+void DynGRMHDPS<EOSPolicy, ErrorPolicy>::ConToPrimBC(int is, int ie, int js, int je,
                                                 int ks, int ke) {
   if (fixed_evolution) {
     return;
@@ -270,10 +270,10 @@ void DynGRPS<EOSPolicy, ErrorPolicy>::ConToPrimBC(int is, int ie, int js, int je
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn  TaskStatus DynGR::ADMMatterSource_(Driver *pdrive, int stage) {
+//! \fn  TaskStatus DynGRMHD::ADMMatterSource_(Driver *pdrive, int stage) {
 //  \brief
 template<class EOSPolicy, class ErrorPolicy>
-void DynGRPS<EOSPolicy, ErrorPolicy>::AddCoordTerms(const DvceArray5D<Real> &prim,
+void DynGRMHDPS<EOSPolicy, ErrorPolicy>::AddCoordTerms(const DvceArray5D<Real> &prim,
     const DvceArray5D<Real> &bcc,
     const Real dt, DvceArray5D<Real> &rhs, int nghost) {
   switch (nghost) {
@@ -287,9 +287,9 @@ void DynGRPS<EOSPolicy, ErrorPolicy>::AddCoordTerms(const DvceArray5D<Real> &pri
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn  TaskStatus DynGR::ApplyPhysicalBCs(Driver *pdrive, int stage)
+//! \fn  TaskStatus DynGRMHD::ApplyPhysicalBCs(Driver *pdrive, int stage)
 //  \brief
-TaskStatus DynGR::ApplyPhysicalBCs(Driver *pdrive, int stage) {
+TaskStatus DynGRMHD::ApplyPhysicalBCs(Driver *pdrive, int stage) {
   // do not apply BCs if domain is strictly periodic
   if (pmy_pack->pmesh->strictly_periodic) return TaskStatus::complete;
 
@@ -347,10 +347,10 @@ TaskStatus DynGR::ApplyPhysicalBCs(Driver *pdrive, int stage) {
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn  TaskStatus DynGR::SetTmunu(Driver *pdrive, int stage)
+//! \fn  TaskStatus DynGRMHD::SetTmunu(Driver *pdrive, int stage)
 //! \brief Add the perfect fluid contribution to the stress-energy tensor. This is assumed
 //!  to be the first contribution, so it sets the values rather than adding.
-TaskStatus DynGR::SetTmunu(Driver *pdrive, int stage) {
+TaskStatus DynGRMHD::SetTmunu(Driver *pdrive, int stage) {
   if (fixed_evolution) {
     return TaskStatus::complete;
   }
@@ -416,7 +416,7 @@ TaskStatus DynGR::SetTmunu(Driver *pdrive, int stage) {
 }
 
 template<class EOSPolicy, class ErrorPolicy> template<int NGHOST>
-void DynGRPS<EOSPolicy, ErrorPolicy>::AddCoordTermsEOS(const DvceArray5D<Real> &prim,
+void DynGRMHDPS<EOSPolicy, ErrorPolicy>::AddCoordTermsEOS(const DvceArray5D<Real> &prim,
     const DvceArray5D<Real> &bcc,
     const Real dt, DvceArray5D<Real> &rhs) {
   if (fixed_evolution) {
@@ -574,20 +574,23 @@ void DynGRPS<EOSPolicy, ErrorPolicy>::AddCoordTermsEOS(const DvceArray5D<Real> &
 }
 
 // Instantiated templates
-template class DynGRPS<Primitive::IdealGas, Primitive::ResetFloor>;
-template class DynGRPS<Primitive::PiecewisePolytrope, Primitive::ResetFloor>;
-template class DynGRPS<Primitive::EOSCompOSE, Primitive::ResetFloor>;
+template class DynGRMHDPS<Primitive::IdealGas, Primitive::ResetFloor>;
+template class DynGRMHDPS<Primitive::PiecewisePolytrope, Primitive::ResetFloor>;
+template class DynGRMHDPS<Primitive::EOSCompOSE, Primitive::ResetFloor>;
 
 // Macro for defining CoordTerms templates
 #define INSTANTIATE_COORD_TERMS(EOSPolicy, ErrorPolicy) \
 template \
-void DynGRPS<EOSPolicy, ErrorPolicy>::AddCoordTermsEOS<2>(const DvceArray5D<Real> &prim,\
+void DynGRMHDPS<EOSPolicy, ErrorPolicy>::AddCoordTermsEOS<2>( \
+      const DvceArray5D<Real> &prim, \
       const DvceArray5D<Real> &bcc, const Real dt, DvceArray5D<Real> &rhs); \
 template \
-void DynGRPS<EOSPolicy, ErrorPolicy>::AddCoordTermsEOS<3>(const DvceArray5D<Real> &prim,\
+void DynGRMHDPS<EOSPolicy, ErrorPolicy>::AddCoordTermsEOS<3>( \
+      const DvceArray5D<Real> &prim, \
       const DvceArray5D<Real> &bcc, const Real dt, DvceArray5D<Real> &rhs); \
 template \
-void DynGRPS<EOSPolicy, ErrorPolicy>::AddCoordTermsEOS<4>(const DvceArray5D<Real> &prim,\
+void DynGRMHDPS<EOSPolicy, ErrorPolicy>::AddCoordTermsEOS<4>( \
+      const DvceArray5D<Real> &prim, \
       const DvceArray5D<Real> &bcc, const Real dt, DvceArray5D<Real> &rhs);
 
 INSTANTIATE_COORD_TERMS(Primitive::IdealGas, Primitive::ResetFloor);

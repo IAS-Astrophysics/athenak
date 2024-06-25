@@ -641,7 +641,7 @@ void SetupTOV(ParameterInput* pin, Mesh* pmy_mesh_, tov_pgen& tov) {
 
 //----------------------------------------------------------------------------------------
 //! \fn void ProblemGenerator::UserProblem()
-//  \brief Sets initial conditions for TOV star in DynGR
+//  \brief Sets initial conditions for TOV star in DynGRMHD
 //  Compile with '-D PROBLEM=dyngr_tov' to enroll as user-specific problem generator
 
 void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
@@ -686,9 +686,9 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   }
 
   // Select the right TOV template based on the EOS we need.
-  if (pmbp->pdyngr->eos_policy == DynGR_EOS::eos_ideal) {
+  if (pmbp->pdyngr->eos_policy == DynGRMHD_EOS::eos_ideal) {
     SetupTOV<PolytropeEOS>(pin, pmy_mesh_, tov);
-  } else if (pmbp->pdyngr->eos_policy == DynGR_EOS::eos_compose) {
+  } else if (pmbp->pdyngr->eos_policy == DynGRMHD_EOS::eos_compose) {
     SetupTOV<TabulatedEOS>(pin, pmy_mesh_, tov);
   } else {
     std::cout << "### WARNING in " << __FILE__ << " at line " << __LINE__ << std::endl

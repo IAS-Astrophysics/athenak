@@ -39,7 +39,7 @@ void ProblemGenerator::SphericalCollapse(ParameterInput *pin, const bool restart
 
   if (!pmbp->pcoord->is_dynamical_relativistic) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
-              << "Spherical collapse problem can only be run with DynGR.\n"
+              << "Spherical collapse problem can only be run with DynGRMHD.\n"
               << std::endl;
     exit(EXIT_FAILURE);
   }

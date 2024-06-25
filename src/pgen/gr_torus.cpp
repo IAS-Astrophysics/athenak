@@ -1453,7 +1453,7 @@ Real A3(struct torus_pgen pgen, Real x1, Real x2, Real x3) {
 //----------------------------------------------------------------------------------------
 //! \fn NoInflowTorus
 //  \brief Sets boundary condition on surfaces of computational domain
-// FIXME: Boundaries need to be adjusted for DynGR
+// FIXME: Boundaries need to be adjusted for DynGRMHD
 
 void NoInflowTorus(Mesh *pm) {
   auto &indcs = pm->mb_indcs;
@@ -1769,7 +1769,7 @@ void TorusFluxes(HistoryData *pdata, Mesh *pm) {
     bcc0_ = pmbp->pmhd->bcc0;
   }
 
-  // Calculate conversion for P to e if using DynGR.
+  // Calculate conversion for P to e if using DynGRMHD.
   Real to_ien = 1.;
   if (pmbp->pdyngr != nullptr) {
     to_ien = 1.0 / (gamma - 1.);

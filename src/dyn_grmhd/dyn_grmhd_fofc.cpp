@@ -24,7 +24,7 @@
 
 namespace dyngr {
 //----------------------------------------------------------------------------------------
-//! \fn void DynGRPS::FOFC
+//! \fn void DynGRMHDPS::FOFC
 //! \brief Implements first-order flux-correction (FOFC) algorithm for MHD.  First an
 //! estimate of the updated conserved variables is made. This estimate is then used to
 //! flag any cell where floors will be required during the conversion to primitives. Then
@@ -33,8 +33,8 @@ namespace dyngr {
 //! also exploited for BH excision.  If a cell is about the horizon, FOFC is automatically
 //! triggered (without estimating updated conserved variables).
 
-template<class EOSPolicy, class ErrorPolicy> template <DynGR_RSolver rsolver_method_>
-void DynGRPS<EOSPolicy, ErrorPolicy>::FOFC(Driver *pdriver, int stage) {
+template<class EOSPolicy, class ErrorPolicy> template <DynGRMHD_RSolver rsolver_method_>
+void DynGRMHDPS<EOSPolicy, ErrorPolicy>::FOFC(Driver *pdriver, int stage) {
   auto &indcs = pmy_pack->pmesh->mb_indcs;
   int is = indcs.is, ie = indcs.ie, nx1 = indcs.nx1;
   int js = indcs.js, je = indcs.je, nx2 = indcs.nx2;
@@ -194,10 +194,10 @@ void DynGRPS<EOSPolicy, ErrorPolicy>::FOFC(Driver *pdriver, int stage) {
 
       // compute new 1st-order LLF flux at i-face
       Real flux[NCONS], bflux[NMAG];
-      if constexpr (rsolver_method_ == DynGR_RSolver::llf_dyngr) {
+      if constexpr (rsolver_method_ == DynGRMHD_RSolver::llf_dyngr) {
         SingleStateLLF_DYNGR<IVX>(eos_, wli, wri, bli, bri, nmhd_, nscal_,
                                   g3d, beta_u, alpha, flux, bflux);
-      } else if (rsolver_method_ == DynGR_RSolver::hlle_dyngr) {
+      } else if (rsolver_method_ == DynGRMHD_RSolver::hlle_dyngr) {
         SingleStateHLLE_DYNGR<IVX>(eos_, wli, wri, bli, bri, nmhd_, nscal_,
                                   g3d, beta_u, alpha, flux, bflux);
       }
@@ -230,10 +230,10 @@ void DynGRPS<EOSPolicy, ErrorPolicy>::FOFC(Driver *pdriver, int stage) {
         adm::Face2Metric(m, k, j, i, adm.g_dd, adm.beta_u, adm.alpha, g3d, beta_u, alpha);
 
         // Compute new 1st-order LLF flux at j-face
-        if constexpr (rsolver_method_ == DynGR_RSolver::llf_dyngr) {
+        if constexpr (rsolver_method_ == DynGRMHD_RSolver::llf_dyngr) {
           SingleStateLLF_DYNGR<IVY>(eos_, wlj, wrj, blj, brj, nmhd_, nscal_,
                                     g3d, beta_u, alpha, flux, bflux);
-        } else if (rsolver_method_ == DynGR_RSolver::hlle_dyngr) {
+        } else if (rsolver_method_ == DynGRMHD_RSolver::hlle_dyngr) {
           SingleStateHLLE_DYNGR<IVY>(eos_, wlj, wrj, blj, brj, nmhd_, nscal_,
                                     g3d, beta_u, alpha, flux, bflux);
         }
@@ -267,10 +267,10 @@ void DynGRPS<EOSPolicy, ErrorPolicy>::FOFC(Driver *pdriver, int stage) {
         adm::Face3Metric(m, k, j, i, adm.g_dd, adm.beta_u, adm.alpha, g3d, beta_u, alpha);
 
         // Compute new 1st-order LLF flux at k-face
-        if constexpr (rsolver_method_ == DynGR_RSolver::llf_dyngr) {
+        if constexpr (rsolver_method_ == DynGRMHD_RSolver::llf_dyngr) {
           SingleStateLLF_DYNGR<IVZ>(eos_, wmk, wpk, bmk, bpk, nmhd_, nscal_,
                                     g3d, beta_u, alpha, flux, bflux);
-        } else if (rsolver_method_ == DynGR_RSolver::hlle_dyngr) {
+        } else if (rsolver_method_ == DynGRMHD_RSolver::hlle_dyngr) {
           SingleStateHLLE_DYNGR<IVZ>(eos_, wmk, wpk, bmk, bpk, nmhd_, nscal_,
                                     g3d, beta_u, alpha, flux, bflux);
         }
@@ -321,10 +321,10 @@ void DynGRPS<EOSPolicy, ErrorPolicy>::FOFC(Driver *pdriver, int stage) {
 
       // compute new 1st-order LLF flux at (i+1)-face
       Real flux[NCONS], bflux[NMAG];
-      if constexpr (rsolver_method_ == DynGR_RSolver::llf_dyngr) {
+      if constexpr (rsolver_method_ == DynGRMHD_RSolver::llf_dyngr) {
         SingleStateLLF_DYNGR<IVX>(eos_, wli, wri, bli, bri, nmhd_, nscal_,
                              g3d, beta_u, alpha, flux, bflux);
-      } else if (rsolver_method_ == DynGR_RSolver::hlle_dyngr) {
+      } else if (rsolver_method_ == DynGRMHD_RSolver::hlle_dyngr) {
         SingleStateLLF_DYNGR<IVX>(eos_, wli, wri, bli, bri, nmhd_, nscal_,
                              g3d, beta_u, alpha, flux, bflux);
       }
@@ -358,10 +358,10 @@ void DynGRPS<EOSPolicy, ErrorPolicy>::FOFC(Driver *pdriver, int stage) {
                          g3d, beta_u, alpha);
 
         // Compute new 1st-order LLF flux at j-face
-        if constexpr (rsolver_method_ == DynGR_RSolver::llf_dyngr) {
+        if constexpr (rsolver_method_ == DynGRMHD_RSolver::llf_dyngr) {
           SingleStateLLF_DYNGR<IVY>(eos_, wlj, wrj, blj, brj, nmhd_, nscal_,
                                     g3d, beta_u, alpha, flux, bflux);
-        } else if (rsolver_method_ == DynGR_RSolver::hlle_dyngr) {
+        } else if (rsolver_method_ == DynGRMHD_RSolver::hlle_dyngr) {
           SingleStateHLLE_DYNGR<IVY>(eos_, wlj, wrj, blj, brj, nmhd_, nscal_,
                                     g3d, beta_u, alpha, flux, bflux);
         }
@@ -396,10 +396,10 @@ void DynGRPS<EOSPolicy, ErrorPolicy>::FOFC(Driver *pdriver, int stage) {
                          g3d, beta_u, alpha);
 
         // Compute new 1st-order LLF flux at k-face
-        if constexpr (rsolver_method_ == DynGR_RSolver::llf_dyngr) {
+        if constexpr (rsolver_method_ == DynGRMHD_RSolver::llf_dyngr) {
           SingleStateLLF_DYNGR<IVZ>(eos_, wmk, wpk, bmk, bpk, nmhd_, nscal_,
                                     g3d, beta_u, alpha, flux, bflux);
-        } else if (rsolver_method_ == DynGR_RSolver::hlle_dyngr) {
+        } else if (rsolver_method_ == DynGRMHD_RSolver::hlle_dyngr) {
           SingleStateHLLE_DYNGR<IVZ>(eos_, wmk, wpk, bmk, bpk, nmhd_, nscal_,
                                     g3d, beta_u, alpha, flux, bflux);
         }
@@ -433,11 +433,11 @@ void DynGRPS<EOSPolicy, ErrorPolicy>::FOFC(Driver *pdriver, int stage) {
 // function definitions for each template parameter
 #define INSTANTIATE_FOFC(EOSPolicy, ErrorPolicy) \
 template \
-void DynGRPS<EOSPolicy, ErrorPolicy>::\
-  FOFC<DynGR_RSolver::llf_dyngr>(Driver *pdriver, int stage);\
+void DynGRMHDPS<EOSPolicy, ErrorPolicy>::\
+  FOFC<DynGRMHD_RSolver::llf_dyngr>(Driver *pdriver, int stage);\
 template \
-void DynGRPS<EOSPolicy, ErrorPolicy>::\
-  FOFC<DynGR_RSolver::hlle_dyngr>(Driver *pdriver, int stage);
+void DynGRMHDPS<EOSPolicy, ErrorPolicy>::\
+  FOFC<DynGRMHD_RSolver::hlle_dyngr>(Driver *pdriver, int stage);
 
 INSTANTIATE_FOFC(Primitive::IdealGas, Primitive::ResetFloor)
 INSTANTIATE_FOFC(Primitive::PiecewisePolytrope, Primitive::ResetFloor)

@@ -6,7 +6,7 @@
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
 //! \file dyn_grmhd.hpp
-//  \brief definitions for DynGR class
+//  \brief definitions for DynGRMHD class
 
 #include "athena.hpp"
 #include "parameter_input.hpp"
@@ -14,16 +14,16 @@
 #include "driver/driver.hpp"
 #include "eos/primitive_solver_hyd.hpp"
 
-enum class DynGR_RSolver {llf_dyngr, hlle_dyngr};     // Riemann solvers for dynamical GR
-enum class DynGR_EOS {eos_ideal, eos_piecewise_poly,
+enum class DynGRMHD_RSolver {llf_dyngr, hlle_dyngr};     // Riemann solvers for dynamical GR
+enum class DynGRMHD_EOS {eos_ideal, eos_piecewise_poly,
                       eos_compose}; // EOS policies for dynamical GR
-enum class DynGR_Error {reset_floor};                 // Error policies for dynamical GR
+enum class DynGRMHD_Error {reset_floor};                 // Error policies for dynamical GR
 
 //----------------------------------------------------------------------------------------
-//! \struct DynGRTaskIDs
+//! \struct DynGRMHDTaskIDs
 //  \brief container to hold TaskIDs of all dyngr tasks
 
-struct DynGRTaskIDs {
+struct DynGRMHDTaskIDs {
   TaskID irecv;
   TaskID copyu;
   TaskID flux;
@@ -68,20 +68,20 @@ struct DynGRTaskIDs {
 
 namespace dyngr {
 
-class DynGR {
+class DynGRMHD {
  public:
-  DynGR(MeshBlockPack *ppack, ParameterInput *pin);
-  virtual ~DynGR();
+  DynGRMHD(MeshBlockPack *ppack, ParameterInput *pin);
+  virtual ~DynGRMHD();
 
   // container to hold names of TaskIDs
-  DynGRTaskIDs id;
+  DynGRMHDTaskIDs id;
 
   TaskStatus SetTmunu(Driver *d, int stage);
   TaskStatus ApplyPhysicalBCs(Driver *d, int stage);
 
   // functions
 
-  virtual void QueueDynGRTasks() = 0;
+  virtual void QueueDynGRMHDTasks() = 0;
 
   virtual TaskStatus ConToPrim(Driver* pdrive, int stage) = 0;
   virtual void ConToPrimBC(int is, int ie, int js, int je, int ks, int ke) = 0;
@@ -92,11 +92,11 @@ class DynGR {
   virtual void AddCoordTerms(const DvceArray5D<Real> &w0, const DvceArray5D<Real> &bcc0,
                              const Real dt, DvceArray5D<Real> &u0, int nghost) = 0;
 
-  // DynGR policies
-  DynGR_RSolver rsolver_method;
-  DynGR_RSolver fofc_method;
-  DynGR_EOS eos_policy;
-  DynGR_Error error_policy;
+  // DynGRMHD policies
+  DynGRMHD_RSolver rsolver_method;
+  DynGRMHD_RSolver fofc_method;
+  DynGRMHD_EOS eos_policy;
+  DynGRMHD_Error error_policy;
 
  protected:
   MeshBlockPack *pmy_pack;  // ptr to MeshBlockPack containing this Hydro
@@ -107,24 +107,24 @@ class DynGR {
 };
 
 template<class EOSPolicy, class ErrorPolicy>
-class DynGRPS : public DynGR {
+class DynGRMHDPS : public DynGRMHD {
  public:
-  DynGRPS(MeshBlockPack *ppack, ParameterInput *pin) :
-      DynGR(ppack, pin), eos("mhd", ppack, pin) {}
-  virtual ~DynGRPS() {}
+  DynGRMHDPS(MeshBlockPack *ppack, ParameterInput *pin) :
+      DynGRMHD(ppack, pin), eos("mhd", ppack, pin) {}
+  virtual ~DynGRMHDPS() {}
 
   // Dynamical EOS
   PrimitiveSolverHydro<EOSPolicy, ErrorPolicy> eos;
 
   // CalculateFluxes function templated over Riemann Solvers
-  template<DynGR_RSolver T>
+  template<DynGRMHD_RSolver T>
   TaskStatus CalcFluxes(Driver *d, int stage);
 
-  template<DynGR_RSolver T>
+  template<DynGRMHD_RSolver T>
   void FOFC(Driver *d, int stage);
 
   // functions
-  virtual void QueueDynGRTasks();
+  virtual void QueueDynGRMHDTasks();
 
   virtual TaskStatus ConToPrim(Driver* pdrive, int stage);
   virtual void ConToPrimBC(int is, int ie, int js, int je, int ks, int ke);
@@ -140,9 +140,9 @@ class DynGRPS : public DynGR {
                         const Real dt, DvceArray5D<Real> &u0);
 };
 
-// Factory function for generating DynGR based on parameter input.
+// Factory function for generating DynGRMHD based on parameter input.
 // Used to make the MeshBlockPack creation a little bit cleaner.
-DynGR* BuildDynGR(MeshBlockPack *ppack, ParameterInput *pin);
+DynGRMHD* BuildDynGRMHD(MeshBlockPack *ppack, ParameterInput *pin);
 
 } // namespace dyngr
 
