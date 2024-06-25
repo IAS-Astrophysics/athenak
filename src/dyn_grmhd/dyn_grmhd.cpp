@@ -4,7 +4,8 @@
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
 //! \file dyngr.cpp
-//  \brief implementation of functions for DynGRMHD and DynGRMHDPS controlling the task list
+//! \brief implementation of functions for DynGRMHD and DynGRMHDPS controlling the task
+//! list
 
 #include <math.h>
 
@@ -35,7 +36,8 @@ namespace dyngr {
 
 // A dumb template function containing the switch statement needed to select an EOS.
 template<class ErrorPolicy>
-DynGRMHD* SelectDynGRMHDEOS(MeshBlockPack *ppack, ParameterInput *pin, DynGRMHD_EOS eos_policy) {
+DynGRMHD* SelectDynGRMHDEOS(MeshBlockPack *ppack, ParameterInput *pin,
+                            DynGRMHD_EOS eos_policy) {
   DynGRMHD* dyn_gr = nullptr;
   switch(eos_policy) {
     case DynGRMHD_EOS::eos_ideal:
