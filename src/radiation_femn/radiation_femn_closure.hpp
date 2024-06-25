@@ -103,6 +103,16 @@ void ApplyM1Closure(TeamMember_t member, int num_points, int m, int en, int kk,
   f_scratch(6) = Kokkos::sqrt(5. * M_PI) * (3. * Pzz - E) / (4. * M_PI);  // (2, 0)
   f_scratch(7) = -Kokkos::sqrt(60. * M_PI) * Pxz / (4. * M_PI);           // (2, 1)
   f_scratch(8) = Kokkos::sqrt(15. * M_PI) * (Pxx - Pyy) / (4. * M_PI);    // (2, 2)
+
+  f(m, en * num_points + 0, kk, jj, ii) = f_scratch(0);
+  f(m, en * num_points + 1, kk, jj, ii) = f_scratch(1);
+  f(m, en * num_points + 2, kk, jj, ii) = f_scratch(2);
+  f(m, en * num_points + 3, kk, jj, ii) = f_scratch(3);
+  f(m, en * num_points + 4, kk, jj, ii) = f_scratch(4);
+  f(m, en * num_points + 5, kk, jj, ii) = f_scratch(5);
+  f(m, en * num_points + 6, kk, jj, ii) = f_scratch(6);
+  f(m, en * num_points + 7, kk, jj, ii) = f_scratch(7);
+  f(m, en * num_points + 8, kk, jj, ii) = f_scratch(8);
 }
 
 // Apply closure along the x direction

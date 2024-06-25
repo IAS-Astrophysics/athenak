@@ -32,7 +32,7 @@ void RadiationFEMNBCs(MeshBlockPack *ppack, DualArray2D<Real> i_in,
   int nvar = i0.extent_int(1);  // TODO(@user): 2nd index from L of in array must be NVAR
   int nmb = ppack->nmb_thispack;
 
-  Real floor = 1e-15;
+  Real floor = 0;
   // only apply BCs if not periodic
   if (pm->mesh_bcs[BoundaryFace::inner_x1] != BoundaryFlag::periodic) {
     int &is = indcs.is;

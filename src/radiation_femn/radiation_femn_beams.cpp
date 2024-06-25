@@ -125,9 +125,10 @@ void ApplyBeamSourcesBlackHoleM1(Mesh *pmesh) {
 
             switch (mb_bcs.d_view(m, BoundaryFace::inner_x1)) {
               case BoundaryFlag::outflow:
-                if (beam_source_1_y1_ <= x2 && x2 <= beam_source_1_y2_) {
+                if (true) {
                   for (int i = 0; i < ng; ++i) {
-
+                    Real yavg = (beam_source_1_y1_ + beam_source_1_y2_)/2.;
+                    Real sigma = 0.15;
                     const Real eps = 0.01;
                     const Real g_xx = adm.g_dd(m, 0, 0, k, j, i);
 
@@ -141,7 +142,7 @@ void ApplyBeamSourcesBlackHoleM1(Mesh *pmesh) {
                     }
                     const Real a = (-beta_x + sqrt(beta_x * beta_x - beta2 + adm.alpha(m, k, j, i) * adm.alpha(m, k, j, i) * (1 - eps))) / g_xx;
 
-                    Real en_dens = 1.255;
+                    Real en_dens = 10.255 * exp(-(x2 - yavg)*(x2 - yavg)/(2*(sigma*sigma)));
                     Real fx = a * en_dens / adm.alpha(m, k, j, i) + adm.beta_u(m, 0, k, j, i) * en_dens / adm.alpha(m, k, j, i);
                     Real fy = adm.beta_u(m, 1, k, j, i) * en_dens / adm.alpha(m, k, j, i);
                     Real fz = adm.beta_u(m, 2, k, j, i) * en_dens / adm.alpha(m, k, j, i);
