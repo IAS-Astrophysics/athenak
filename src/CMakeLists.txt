@@ -125,6 +125,15 @@ add_executable(
         radiation/radiation_tetrad.cpp
         radiation/radiation_update.cpp
 
+        shearing_box/orbital_advection.cpp
+        shearing_box/orbital_advection_cc.cpp
+        shearing_box/orbital_advection_fc.cpp
+        shearing_box/shearing_box.cpp
+        shearing_box/shearing_box_cc.cpp
+        shearing_box/shearing_box_fc.cpp
+        shearing_box/shearing_box_srcterms.cpp
+        shearing_box/shearing_box_tasks.cpp
+
         srcterms/srcterms.cpp
         srcterms/srcterms_newdt.cpp
         srcterms/turb_driver.cpp

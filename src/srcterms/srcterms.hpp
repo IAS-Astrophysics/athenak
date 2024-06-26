@@ -34,11 +34,11 @@ class SourceTerms {
 
   // data
   // flags for various source terms
-  bool source_terms_enabled;  // true if any srcterm included
   bool const_accel;
   bool ism_cooling;
   bool rel_cooling;
   bool beam;
+  bool shearing_box, shearing_box_r_phi;
 
   // new timestep
   Real dtnew;
@@ -58,21 +58,23 @@ class SourceTerms {
   Real dii_dt;
 
   // shearing box
-  bool shearing_box;       // flag to indicate calculations in shearing box
-  bool shearing_box_r_phi; // flag to indicate shearing box is r-phi 2D or 3D
-  Real qshear, omega0;     // shearing box parameters
+  Real qshear, omega0;
 
   // functions
-  void AddConstantAccel(DvceArray5D<Real> &u0,const DvceArray5D<Real> &w0,const Real dt);
-  void AddShearingBox(DvceArray5D<Real> &u0,const DvceArray5D<Real> &w0,const Real dt);
-  void AddShearingBox(DvceArray5D<Real> &u0, const DvceArray5D<Real> &w0,
-                      const DvceArray5D<Real> &bcc, const Real dt);
-  void AddSBoxEField(const DvceFaceFld4D<Real> &b0, DvceEdgeFld4D<Real> &efld);
-  void AddISMCooling(DvceArray5D<Real> &u0, const DvceArray5D<Real> &w0,
-                     const EOS_Data &eos, const Real dt);
-  void AddRelCooling(DvceArray5D<Real> &u0, const DvceArray5D<Real> &w0,
-                     const EOS_Data &eos, const Real dt);
-  void AddBeamSource(DvceArray5D<Real> &i0, const Real dt);
+  void ConstantAccel(const DvceArray5D<Real> &w0, const EOS_Data &eos,
+                     const Real dt, DvceArray5D<Real> &u0);
+  void ISMCooling(const DvceArray5D<Real> &w0, const EOS_Data &eos,
+                  const Real dt, DvceArray5D<Real> &u0);
+  void RelCooling(const DvceArray5D<Real> &w0, const EOS_Data &eos,
+                  const Real dt, DvceArray5D<Real> &u0);
+  void BeamSource(DvceArray5D<Real> &i0, const Real dt);
+  void ShearingBox(const DvceArray5D<Real> &w0, const EOS_Data &eos_data, const Real bdt,
+                   DvceArray5D<Real> &u0);
+  void ShearingBox(const DvceArray5D<Real> &w0, const DvceArray5D<Real> &bcc0,
+                   const EOS_Data &eos_data, const Real bdt, DvceArray5D<Real> &u0);
+  // in 2D shearing box there is a source term for Ex and Ey
+  void SBoxEField(const DvceFaceFld4D<Real> &b0, DvceEdgeFld4D<Real> &efld);
+
   void NewTimeStep(const DvceArray5D<Real> &w0, const EOS_Data &eos);
 
  private:

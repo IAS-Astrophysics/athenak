@@ -700,11 +700,12 @@ void BaseTypeOutput::LoadOutputData(Mesh *pm) {
 
   // loop over all MeshBlocks
   // set size & starting indices of output arrays, adjusted accordingly if gz included
-  auto &indcs = pm->pmb_pack->pmesh->mb_indcs;
+  auto &indcs = pm->mb_indcs;
   auto &size  = pm->pmb_pack->pmb->mb_size;
+  auto &gids  = pm->pmb_pack->gids;
   for (int m=0; m<(pm->pmb_pack->nmb_thispack); ++m) {
     // skip if MeshBlock ID is specified and not equal to this ID
-    if (out_params.gid >= 0 && m != out_params.gid) { continue; }
+    if (out_params.gid >= 0 && (m+gids) != out_params.gid) { continue; }
 
     int ois,oie,ojs,oje,oks,oke;
 
@@ -775,6 +776,7 @@ void BaseTypeOutput::LoadOutputData(Mesh *pm) {
 #endif
   noutmbs_min = *std::min_element(noutmbs.begin(), noutmbs.end());
   noutmbs_max = *std::max_element(noutmbs.begin(), noutmbs.end());
+
 
   // get number of output vars and MBs, then realloc outarray (HostArray)
   int nout_vars = outvars.size();

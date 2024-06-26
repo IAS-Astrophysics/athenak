@@ -36,6 +36,7 @@ enum TaskName {
   MHD_SendFlux,
   MHD_RecvFlux,
   MHD_ExplRK,
+  MHD_AddSrc,
   MHD_RestU,
   MHD_SendU,
   MHD_RecvU,

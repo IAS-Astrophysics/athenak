@@ -204,10 +204,10 @@ class Z4c {
   Real diss;              // Dissipation parameter
 
   // Boundary communication buffers and functions for u
-  BoundaryValuesCC *pbval_u;
+  MeshBoundaryValuesCC *pbval_u;
 
   // Boundary communication buffers for the weyl scalar
-  BoundaryValuesCC *pbval_weyl;
+  MeshBoundaryValuesCC *pbval_weyl;
 
   // following only used for time-evolving flow
   Real dtnew;

@@ -21,12 +21,13 @@
 //----------------------------------------------------------------------------------------
 // BValCC constructor:
 
-BoundaryValuesCC::BoundaryValuesCC(MeshBlockPack *pp, ParameterInput *pin, bool z4c) :
+MeshBoundaryValuesCC::MeshBoundaryValuesCC(MeshBlockPack *pp, ParameterInput *pin,
+                                           bool z4c) :
   MeshBoundaryValues(pp, pin, z4c) {
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn void BoundaryValuesCC::PackAndSendCC()
+//! \fn void MeshBoundaryValuesCC::PackAndSendCC()
 //! \brief Pack cell-centered variables into boundary buffers and send to neighbors.
 //!
 //! This routine packs ALL the buffers on ALL the faces, edges, and corners simultaneously
@@ -37,7 +38,8 @@ BoundaryValuesCC::BoundaryValuesCC(MeshBlockPack *pp, ParameterInput *pin, bool 
 //! Input arrays must be 5D Kokkos View dimensioned (nmb, nvar, nx3, nx2, nx1)
 //! 5D Kokkos View of coarsened (restricted) array data also required with SMR/AMR
 
-TaskStatus BoundaryValuesCC::PackAndSendCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca) {
+TaskStatus MeshBoundaryValuesCC::PackAndSendCC(DvceArray5D<Real> &a,
+                                               DvceArray5D<Real> &ca) {
   // create local references for variables in kernel
   int nmb = pmy_pack->nmb_thispack;
   int nnghbr = pmy_pack->pmb->nnghbr;
@@ -47,8 +49,8 @@ TaskStatus BoundaryValuesCC::PackAndSendCC(DvceArray5D<Real> &a, DvceArray5D<Rea
   auto &nghbr = pmy_pack->pmb->nghbr;
   auto &mbgid = pmy_pack->pmb->mb_gid;
   auto &mblev = pmy_pack->pmb->mb_lev;
-  auto &sbuf = send_buf;
-  auto &rbuf = recv_buf;
+  auto &sbuf = sendbuf;
+  auto &rbuf = recvbuf;
   auto &is_z4c = is_z4c_;
   auto &multilevel = pmy_pack->pmesh->multilevel;
   // Outer loop over (# of MeshBlocks)*(# of buffers)*(# of variables)
@@ -226,20 +228,20 @@ TaskStatus BoundaryValuesCC::PackAndSendCC(DvceArray5D<Real> &a, DvceArray5D<Rea
           // get ptr to send buffer when neighbor is at coarser/same/fine level
           int data_size = nvar;
           if ( nghbr.h_view(m,n).lev < pmy_pack->pmb->mb_lev.h_view(m) ) {
-            data_size *= send_buf[n].icoar_ndat;
+            data_size *= sendbuf[n].icoar_ndat;
           } else if ( nghbr.h_view(m,n).lev == pmy_pack->pmb->mb_lev.h_view(m) ) {
             if (is_z4c) {
-              data_size *= send_buf[n].isame_z4c_ndat;
+              data_size *= sendbuf[n].isame_z4c_ndat;
             } else {
-              data_size *= send_buf[n].isame_ndat;
+              data_size *= sendbuf[n].isame_ndat;
             }
           } else {
-            data_size *= send_buf[n].ifine_ndat;
+            data_size *= sendbuf[n].ifine_ndat;
           }
-          auto send_ptr = Kokkos::subview(send_buf[n].vars, m, Kokkos::ALL);
+          auto send_ptr = Kokkos::subview(sendbuf[n].vars, m, Kokkos::ALL);
 
           int ierr = MPI_Isend(send_ptr.data(), data_size, MPI_ATHENA_REAL, drank, tag,
-                               vars_comm, &(send_buf[n].vars_req[m]));
+                               comm_vars, &(sendbuf[n].vars_req[m]));
           if (ierr != MPI_SUCCESS) {no_errors=false;}
         }
       }
@@ -259,13 +261,13 @@ TaskStatus BoundaryValuesCC::PackAndSendCC(DvceArray5D<Real> &a, DvceArray5D<Rea
 // \!fn void RecvBuffers()
 // \brief Unpack boundary buffers
 
-TaskStatus BoundaryValuesCC::RecvAndUnpackCC(DvceArray5D<Real> &a,
-  DvceArray5D<Real> &ca) {
+TaskStatus MeshBoundaryValuesCC::RecvAndUnpackCC(DvceArray5D<Real> &a,
+                                                 DvceArray5D<Real> &ca) {
   // create local references for variables in kernel
   int nmb = pmy_pack->nmb_thispack;
   int nnghbr = pmy_pack->pmb->nnghbr;
   auto &nghbr = pmy_pack->pmb->nghbr;
-  auto &rbuf = recv_buf;
+  auto &rbuf = recvbuf;
   auto &is_z4c = is_z4c_;
   auto &multilevel = pmy_pack->pmesh->multilevel;
 #if MPI_PARALLEL_ENABLED

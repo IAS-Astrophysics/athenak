@@ -298,15 +298,15 @@ void TurbulenceDriver::IncludeAddForcingTask(std::shared_ptr<TaskList> tl, TaskI
   if (pmy_pack->pionn == nullptr) {
     if (pmy_pack->phydro != nullptr) {
       auto id = tl->InsertTask(&TurbulenceDriver::AddForcing, this,
-                              pmy_pack->phydro->id.flux, pmy_pack->phydro->id.expl);
+                              pmy_pack->phydro->id.flux, pmy_pack->phydro->id.rkupdt);
     }
     if (pmy_pack->pmhd != nullptr) {
       auto id = tl->InsertTask(&TurbulenceDriver::AddForcing, this,
-                              pmy_pack->pmhd->id.flux, pmy_pack->pmhd->id.expl);
+                              pmy_pack->pmhd->id.flux, pmy_pack->pmhd->id.rkupdt);
     }
   } else {
     auto id = tl->InsertTask(&TurbulenceDriver::AddForcing, this,
-                            pmy_pack->pionn->id.n_flux, pmy_pack->pionn->id.n_expl);
+                            pmy_pack->pionn->id.n_flux, pmy_pack->pionn->id.n_rkupdt);
   }
 
   return;

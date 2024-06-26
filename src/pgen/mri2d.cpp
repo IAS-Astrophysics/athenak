@@ -29,7 +29,7 @@
 #include "eos/eos.hpp"
 #include "hydro/hydro.hpp"
 #include "mhd/mhd.hpp"
-#include "srcterms/srcterms.hpp"
+#include "shearing_box/shearing_box.hpp"
 #include "pgen.hpp"
 
 #include <Kokkos_Random.hpp>
@@ -56,7 +56,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   // background density, pressure, and magnetic field
   Real d0 = 1.0;
   Real p0 = 1.0;
-  Real B0 = std::sqrt(2.0*p0/beta);
+  Real binit = std::sqrt(2.0*p0/beta);
 
   Real x1size = pmy_mesh_->mesh_size.x1max - pmy_mesh_->mesh_size.x1min;
   Real kx = 2.0*(M_PI/x1size)*(static_cast<Real>(nwx));
@@ -77,7 +77,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
                 << "Shearing box source terms not enabled for mri2d problem" << std::endl;
       exit(EXIT_FAILURE);
     }
-    if (!pmbp->pmhd->psrc->shearing_box || pmbp->pmhd->psrc->shearing_box_r_phi) {
+    if (!pmbp->pmhd->shearing_box || pmbp->pmhd->psb->shearing_box_r_phi) {
       std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                 << std::endl
                 << "hb3 problem generator only works in 2D (x-z) shearing box"
@@ -88,7 +88,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     // Initialize magnetic field first, so entire arrays are initialized before adding
     // magnetic energy to conserved variables in next loop.  For 2D shearing box
     // B1=Bx, B2=Bz, B3=By
-    // ifield = 1 - Bz=B0 sin(kx*xav1) field with zero-net-flux [default]
+    // ifield = 1 - Bz=binit sin(kx*xav1) field with zero-net-flux [default]
     // ifield = 2 - uniform Bz
     auto b0 = pmbp->pmhd->b0;
     par_for("mri2d-b", DevExeSpace(), 0,(pmbp->nmb_thispack-1),ks,ke,js,je,is,ie,
@@ -100,17 +100,17 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
 
       if (ifield == 1) {
         b0.x1f(m,k,j,i) = 0.0;
-        b0.x2f(m,k,j,i) = B0*sin(kx*x1v);
+        b0.x2f(m,k,j,i) = binit*sin(kx*x1v);
         b0.x3f(m,k,j,i) = 0.0;
         if (i==ie) b0.x1f(m,k,j,ie+1) = 0.0;
-        if (j==je) b0.x2f(m,k,je+1,i) = B0*sin(kx*x1v);
+        if (j==je) b0.x2f(m,k,je+1,i) = binit*sin(kx*x1v);
         if (k==ke) b0.x3f(m,ke+1,j,i) = 0.0;
       } else if (ifield == 2) {
         b0.x1f(m,k,j,i) = 0.0;
-        b0.x2f(m,k,j,i) = B0;
+        b0.x2f(m,k,j,i) = binit;
         b0.x3f(m,k,j,i) = 0.0;
         if (i==ie) b0.x1f(m,k,j,ie+1) = 0.0;
-        if (j==je) b0.x2f(m,k,je+1,i) = B0;
+        if (j==je) b0.x2f(m,k,je+1,i) = binit;
         if (k==ke) b0.x3f(m,ke+1,j,i) = 0.0;
       }
     });
@@ -126,7 +126,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
                 << "Shearing box source terms not enabled for mri2d problem" << std::endl;
       exit(EXIT_FAILURE);
     }
-    if (!pmbp->phydro->psrc->shearing_box || pmbp->phydro->psrc->shearing_box_r_phi) {
+    if (!pmbp->phydro->shearing_box || pmbp->phydro->psb->shearing_box_r_phi) {
       std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                 << std::endl
                 << "hb3 problem generator only works in 2D (x-z) shearing box"

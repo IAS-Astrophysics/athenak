@@ -1,0 +1,63 @@
+# AthenaXXX input file for Liska & Wendroff implosion test
+
+<comment>
+problem   = MHD shwave test 
+reference = Johnson, 2007, ApJ, 660, 1375, Johnson et al., 2008, ApJS, 177, 373
+
+<job>
+basename  = jgg     # problem ID: basename of output filenames
+
+<mesh>
+nghost    = 2           # Number of ghost cells
+nx1       = 64          # Number of zones in X1-direction
+x1min     = -0.25       # minimum value of X1
+x1max     = 0.25        # maximum value of X1
+ix1_bc    = periodic    # inner-X1 boundary flag
+ox1_bc    = periodic    # outer-X1 boundary flag
+
+nx2       = 32          # Number of zones in X2irection
+x2min     = -0.25       # minimum value of X2
+x2max     = 0.25        # maximum value of X2
+ix2_bc    = periodic    # inner-X2 boundary flag
+ox2_bc    = periodic    # outer-X2 boundary flag
+
+nx3       = 32          # Number of zones in X3-direction
+x3min     = -0.25       # minimum value of X3
+x3max     = 0.25        # maximum value of X3
+ix3_bc    = periodic    # inner-X3 boundary flag
+ox3_bc    = periodic    # outer-X3 boundary flag
+
+<meshblock>
+nx1       = 64          # Number of cells in each MeshBlock, X1-dir
+nx2       = 32          # Number of cells in each MeshBlock, X2-dir
+nx3       = 32          # Number of cells in each MeshBlock, X3-dir
+
+<time>
+evolution  = dynamic   # dynamic/kinematic/static
+integrator = vl2       # time integration algorithm
+cfl_number = 0.3       # The Courant, Friedrichs, & Lewy (CFL) Number
+nlim       = -1        # cycle limit
+tlim       = 3.0       # time limit
+ndiag      = 1         # cycles between diagostic output
+
+<shearing_box>
+qshear = 1.5 
+omega0 = 1.0 
+
+<hydro>
+eos         = isothermal # EOS type
+reconstruct = plm      # spatial reconstruction method
+rsolver     = hlle     # Riemann-solver to be used
+iso_sound_speed = 1.0  # isothermal sound speed
+
+<problem>
+pgen_name = jgg    # problem generator name
+d0        = 1.0    #
+amp       = 1.0e-6 #
+nwx       = -2     #
+nwy       = 1      #
+nwz       = 1      #
+ipert     = 2      #
+beta      = 20     #
+error_output = 0   #
+

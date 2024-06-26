@@ -17,6 +17,7 @@
 #include "diffusion/viscosity.hpp"
 #include "diffusion/conduction.hpp"
 #include "srcterms/srcterms.hpp"
+#include "shearing_box/shearing_box.hpp"
 #include "bvals/bvals.hpp"
 #include "hydro/hydro.hpp"
 
@@ -70,14 +71,14 @@ Hydro::Hydro(MeshBlockPack *ppack, ParameterInput *pin) :
   // (2) Initialize scalars, diffusion, source terms
   nscalars = pin->GetOrAddInteger("hydro","nscalars",0);
 
-  // Viscosity (only constructed if needed)
+  // Viscosity (if requested in input file)
   if (pin->DoesParameterExist("hydro","viscosity")) {
     pvisc = new Viscosity("hydro", ppack, pin);
   } else {
     pvisc = nullptr;
   }
 
-  // Thermal conduction (only constructed if needed)
+  // Thermal conduction (if requested in input file)
   if (pin->DoesParameterExist("hydro","conductivity") ||
       pin->DoesParameterExist("hydro","tdep_conductivity")) {
     pcond = new Conduction("hydro", ppack, pin);
@@ -115,8 +116,17 @@ Hydro::Hydro(MeshBlockPack *ppack, ParameterInput *pin) :
   }
 
   // allocate boundary buffers for conserved (cell-centered) variables
-  pbval_u = new BoundaryValuesCC(ppack, pin, false);
+  pbval_u = new MeshBoundaryValuesCC(ppack, pin, false);
   pbval_u->InitializeBuffers((nhydro+nscalars));
+
+  // Orbital advection and shearing box BCs (if requested in input file)
+  if (pin->DoesBlockExist("shearing_box")) {
+    porb_u = new OrbitalAdvectionCC(ppack, pin, (nhydro+nscalars));
+    psbox_u = new ShearingBoxBoundaryCC(ppack, pin, (nhydro+nscalars));
+  } else {
+    porb_u = nullptr;
+    psbox_u = nullptr;
+  }
 
   // for time-evolving problems, continue to construct methods, allocate arrays
   if (evolution_t.compare("stationary") != 0) {

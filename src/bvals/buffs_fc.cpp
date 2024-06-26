@@ -17,7 +17,7 @@
 #include "bvals.hpp"
 
 //----------------------------------------------------------------------------------------
-//! \fn void BoundaryValuesFC::InitSendIndices
+//! \fn void MeshBoundaryValuesFC::InitSendIndices
 //! \brief Calculates indices of cells used to pack buffers and send FC data for buffers
 //! on same/coarser and finer levels.  Three sets of indices are needed for each of the
 //! three components (x1f,x2f,x3f) of face-centered fields.
@@ -26,8 +26,8 @@
 //! relative to center of MeshBlock (0,0,0).  The arguments f1/2 are the coordinates
 //! of subblocks within faces/edges (only relevant with SMR/AMR)
 
-void BoundaryValuesFC::InitSendIndices(MeshBoundaryBuffer &buf,
-                                       int ox1, int ox2, int ox3, int f1, int f2) {
+void MeshBoundaryValuesFC::InitSendIndices(MeshBoundaryBuffer &buf,
+                                           int ox1, int ox2, int ox3, int f1, int f2) {
   auto &mb_indcs  = pmy_pack->pmesh->mb_indcs;
   int ng  = mb_indcs.ng;
   int ng1 = ng - 1;
@@ -375,7 +375,7 @@ void BoundaryValuesFC::InitSendIndices(MeshBoundaryBuffer &buf,
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn void BoundaryValuesFC::InitRecvIndices
+//! \fn void MeshBoundaryValuesFC::InitRecvIndices
 //! \brief Calculates indices of cells into which receive buffers are unpacked for FC data
 //! on same/coarser/finer levels, and for prolongation from coarse to fine.  Three sets of
 //! indices are needed for each of the three components (x1f,x2f,x3f) of face-centered
@@ -385,8 +385,8 @@ void BoundaryValuesFC::InitSendIndices(MeshBoundaryBuffer &buf,
 //! relative to center of MeshBlock (0,0,0).  The arguments f1/2 are the coordinates
 //! of subblocks within faces/edges (only relevant with SMR/AMR)
 
-void BoundaryValuesFC::InitRecvIndices(MeshBoundaryBuffer &buf,
-                                       int ox1, int ox2, int ox3, int f1, int f2) {
+void MeshBoundaryValuesFC::InitRecvIndices(MeshBoundaryBuffer &buf,
+                                           int ox1, int ox2, int ox3, int f1, int f2) {
   auto &mb_indcs  = pmy_pack->pmesh->mb_indcs;
   int ng = mb_indcs.ng;
 

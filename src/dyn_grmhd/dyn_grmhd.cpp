@@ -166,13 +166,15 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::QueueDynGRMHDTasks() {
   pnr->QueueTask(&MHD::RecvFlux, pmhd, MHD_RecvFlux, "MHD_RecvFlux",
                  Task_Run, {MHD_SendFlux});
   if (pz4c != nullptr) {
-    pnr->QueueTask(&MHD::ExpRKUpdate, pmhd, MHD_ExplRK, "MHD_ExplRK", Task_Run,
+    pnr->QueueTask(&MHD::RKUpdate, pmhd, MHD_ExplRK, "MHD_ExplRK", Task_Run,
                    {MHD_RecvFlux, MHD_SetTmunu});
   } else {
-    pnr->QueueTask(&MHD::ExpRKUpdate, pmhd, MHD_ExplRK, "MHD_ExplRK", Task_Run,
+    pnr->QueueTask(&MHD::RKUpdate, pmhd, MHD_ExplRK, "MHD_ExplRK", Task_Run,
                    {MHD_RecvFlux});
   }
-  pnr->QueueTask(&MHD::RestrictU, pmhd, MHD_RestU, "MHD_RestU", Task_Run, {MHD_ExplRK});
+  pnr->QueueTask(&MHD::MHDSrcTerms, pmhd, MHD_AddSrc, "MHD_AddSrc", Task_Run,
+                 {MHD_ExplRK});
+  pnr->QueueTask(&MHD::RestrictU, pmhd, MHD_RestU, "MHD_RestU", Task_Run, {MHD_AddSrc});
   pnr->QueueTask(&MHD::SendU, pmhd, MHD_SendU, "MHD_SendU", Task_Run, {MHD_RestU});
   pnr->QueueTask(&MHD::RecvU, pmhd, MHD_RecvU, "MHD_RecvU", Task_Run, {MHD_SendU});
   pnr->QueueTask(&MHD::CornerE, pmhd, MHD_EField, "MHD_EField", Task_Run, {MHD_RecvU});

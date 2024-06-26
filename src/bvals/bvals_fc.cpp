@@ -22,12 +22,12 @@
 //----------------------------------------------------------------------------------------
 // BValFC constructor:
 
-BoundaryValuesFC::BoundaryValuesFC(MeshBlockPack *pp, ParameterInput *pin) :
+MeshBoundaryValuesFC::MeshBoundaryValuesFC(MeshBlockPack *pp, ParameterInput *pin) :
   MeshBoundaryValues(pp, pin, false) {
 }
 
 //----------------------------------------------------------------------------------------
-//! \!fn void BoundaryValuesFC::PackAndSendFC()
+//! \!fn void MeshBoundaryValuesFC::PackAndSendFC()
 //! \brief Pack face-centered Mesh variables into boundary buffers and send to neighbors.
 //!
 //! As for cell-centered data, this routine packs ALL the buffers on ALL the faces, edges,
@@ -37,8 +37,8 @@ BoundaryValuesFC::BoundaryValuesFC(MeshBlockPack *pp, ParameterInput *pin) :
 //! Input array must be DvceFaceFld4D dimensioned (nmb, nx3, nx2, nx1)
 //! DvceFaceFld4D of coarsened (restricted) fields also required with SMR/AMR
 
-TaskStatus BoundaryValuesFC::PackAndSendFC(DvceFaceFld4D<Real> &b,
-                                           DvceFaceFld4D<Real> &cb) {
+TaskStatus MeshBoundaryValuesFC::PackAndSendFC(DvceFaceFld4D<Real> &b,
+                                               DvceFaceFld4D<Real> &cb) {
   // create local references for variables in kernel
   int nmb = pmy_pack->nmb_thispack;
   int nnghbr = pmy_pack->pmb->nnghbr;
@@ -47,8 +47,8 @@ TaskStatus BoundaryValuesFC::PackAndSendFC(DvceFaceFld4D<Real> &b,
   auto &nghbr = pmy_pack->pmb->nghbr;
   auto &mbgid = pmy_pack->pmb->mb_gid;
   auto &mblev = pmy_pack->pmb->mb_lev;
-  auto &sbuf = send_buf;
-  auto &rbuf = recv_buf;
+  auto &sbuf = sendbuf;
+  auto &rbuf = recvbuf;
 
   // Outer loop over (# of MeshBlocks)*(# of buffers)*(three field components)
   int nmnv = 3*nmb;
@@ -206,16 +206,16 @@ TaskStatus BoundaryValuesFC::PackAndSendFC(DvceFaceFld4D<Real> &b,
           // get ptr to send buffer when neighbor is at coarser/same/fine level
           int data_size = 3;
           if ( nghbr.h_view(m,n).lev < pmy_pack->pmb->mb_lev.h_view(m) ) {
-            data_size *= send_buf[n].icoar_ndat;
+            data_size *= sendbuf[n].icoar_ndat;
           } else if ( nghbr.h_view(m,n).lev == pmy_pack->pmb->mb_lev.h_view(m) ) {
-            data_size *= send_buf[n].isame_ndat;
+            data_size *= sendbuf[n].isame_ndat;
           } else {
-            data_size *= send_buf[n].ifine_ndat;
+            data_size *= sendbuf[n].ifine_ndat;
           }
-          auto send_ptr = Kokkos::subview(send_buf[n].vars, m, Kokkos::ALL);
+          auto send_ptr = Kokkos::subview(sendbuf[n].vars, m, Kokkos::ALL);
 
           int ierr = MPI_Isend(send_ptr.data(), data_size, MPI_ATHENA_REAL, drank, tag,
-                               vars_comm, &(send_buf[n].vars_req[m]));
+                               comm_vars, &(sendbuf[n].vars_req[m]));
           if (ierr != MPI_SUCCESS) {no_errors=false;}
         }
       }
@@ -235,13 +235,13 @@ TaskStatus BoundaryValuesFC::PackAndSendFC(DvceFaceFld4D<Real> &b,
 // \!fn void RecvBuffers()
 // \brief Unpack boundary buffers
 
-TaskStatus BoundaryValuesFC::RecvAndUnpackFC(DvceFaceFld4D<Real> &b,
-                                             DvceFaceFld4D<Real> &cb) {
+TaskStatus MeshBoundaryValuesFC::RecvAndUnpackFC(DvceFaceFld4D<Real> &b,
+                                                 DvceFaceFld4D<Real> &cb) {
   // create local references for variables in kernel
   int nmb = pmy_pack->nmb_thispack;
   int nnghbr = pmy_pack->pmb->nnghbr;
   auto &nghbr = pmy_pack->pmb->nghbr;
-  auto &rbuf = recv_buf;
+  auto &rbuf = recvbuf;
 #if MPI_PARALLEL_ENABLED
   //----- STEP 1: check that recv boundary buffer communications have all completed
 
