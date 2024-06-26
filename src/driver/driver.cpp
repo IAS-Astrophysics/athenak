@@ -342,7 +342,7 @@ void Driver::Execute(Mesh *pmesh, ParameterInput *pin, Outputs *pout) {
   } else {
     Real elapsed_time = -1.;
     if (wall_time > 0.) {
-      elapsed_time = pwall_clock_->seconds();
+      elapsed_time = UpdateWallClock();
     }
     while ((pmesh->time < tlim) && (pmesh->ncycle < nlim || nlim < 0) &&
            (elapsed_time < wall_time)) {
@@ -400,7 +400,7 @@ void Driver::Execute(Mesh *pmesh, ParameterInput *pin, Outputs *pout) {
 
       // Update wall clock time if needed.
       if (wall_time > 0.) {
-        elapsed_time = pwall_clock_->seconds();
+        elapsed_time = UpdateWallClock();
       }
     }  // end while
   }    // end of (time_evolution != tstatic) clause
@@ -487,6 +487,25 @@ void Driver::OutputCycleDiagnostics(Mesh *pm) {
               << " time=" << pm->time << " dt=" << pm->dt << std::endl;
   }
   return;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn Driver::UpdateWallClock()
+//! \brief Update and sync the wall clock across all MPI ranks. This is necessary because
+//! the different MPI ranks may 1) initialize their timers at slightly different times,
+//! and 2) may reach the end of a loop to update their timers at slightly different times.
+//! This may result in a weird problem where one or more ranks have timers that fall
+//! slightly below the wall clock time while others determine that it's time to quit.
+
+Real Driver::UpdateWallClock() {
+  Real tnow;
+  if (global_variable::my_rank == 0) {
+    tnow = pwall_clock_->seconds();
+  }
+#if MPI_PARALLEL_ENABLED
+  MPI_Bcast(&tnow, 1, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+#endif
+  return tnow;
 }
 
 //----------------------------------------------------------------------------------------

@@ -60,5 +60,6 @@ class Driver {
   std::uint64_t npart_updated_; // running total of particles updated during run
   float lb_efficiency_;         // measure of how efficient was load balancing
   void OutputCycleDiagnostics(Mesh *pm);
+  Real UpdateWallClock();
 };
 #endif // DRIVER_DRIVER_HPP_
