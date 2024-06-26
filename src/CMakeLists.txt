@@ -11,8 +11,6 @@ add_executable(
         globals.cpp
         parameter_input.cpp
 
-        adm/adm.cpp
-
         bvals/bvals.cpp
         bvals/buffs_cc.cpp
         bvals/buffs_fc.cpp
@@ -29,6 +27,7 @@ add_executable(
         bvals/physics/radiation_bcs.cpp
         bvals/physics/z4c_bcs.cpp
 
+        coordinates/adm.cpp
         coordinates/coordinates.cpp
         coordinates/excision.cpp
 

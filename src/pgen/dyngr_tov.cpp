@@ -20,7 +20,7 @@
 #include "globals.hpp"
 #include "parameter_input.hpp"
 #include "mesh/mesh.hpp"
-#include "adm/adm.hpp"
+#include "coordinates/adm.hpp"
 #include "z4c/z4c.hpp"
 #include "coordinates/coordinates.hpp"
 #include "coordinates/cell_locations.hpp"

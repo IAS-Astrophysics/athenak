@@ -20,7 +20,7 @@
 #include "hydro/hydro.hpp"
 #include "mhd/mhd.hpp"
 #include "dyn_grmhd/dyn_grmhd.hpp"
-#include "adm/adm.hpp"
+#include "coordinates/adm.hpp"
 #include "pgen.hpp"
 
 //----------------------------------------------------------------------------------------

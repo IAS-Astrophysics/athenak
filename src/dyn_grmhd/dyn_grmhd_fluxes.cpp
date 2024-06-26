@@ -14,7 +14,7 @@
 #include "mesh/mesh.hpp"
 #include "dyn_grmhd.hpp"
 #include "dyn_grmhd_util.hpp"
-#include "adm/adm.hpp"
+#include "coordinates/adm.hpp"
 #include "eos/eos.hpp"
 #include "diffusion/viscosity.hpp"
 #include "diffusion/conduction.hpp"

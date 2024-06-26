@@ -13,7 +13,7 @@
 #include <string>
 
 #include "TwoPunctures.h"
-#include "adm/adm.hpp"
+#include "coordinates/adm.hpp"
 #include "athena.hpp"
 #include "coordinates/cell_locations.hpp"
 #include "globals.hpp"

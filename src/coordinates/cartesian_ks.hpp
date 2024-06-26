@@ -14,7 +14,7 @@
 #include "athena.hpp"
 #include "globals.hpp"
 #include "mesh/mesh.hpp"
-#include "adm/adm.hpp"
+#include "coordinates/adm.hpp"
 
 // #define SMALL_NUMBER 1.0e-5
 

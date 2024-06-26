@@ -12,7 +12,7 @@
 #include "mesh/mesh.hpp"
 #include "coordinates.hpp"
 #include "cell_locations.hpp"
-#include "adm/adm.hpp"
+#include "coordinates/adm.hpp"
 
 // inlined spherical Kerr-Schild r evaluated at CKS x1, x2, x3
 KOKKOS_INLINE_FUNCTION

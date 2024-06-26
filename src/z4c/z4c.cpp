@@ -22,7 +22,7 @@
 #include "bvals/bvals.hpp"
 #include "z4c/z4c.hpp"
 #include "z4c/z4c_amr.hpp"
-#include "adm/adm.hpp"
+#include "coordinates/adm.hpp"
 
 namespace z4c {
 

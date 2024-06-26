@@ -33,7 +33,7 @@
 #include "globals.hpp"
 #include "mesh/mesh.hpp"
 #include "parameter_input.hpp"
-#include "adm/adm.hpp"
+#include "coordinates/adm.hpp"
 #include "mhd/mhd.hpp"
 #include "coordinates/coordinates.hpp"
 #include "coordinates/cell_locations.hpp"

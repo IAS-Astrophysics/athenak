@@ -11,7 +11,7 @@
 #include <math.h>
 
 #include "coordinates/cell_locations.hpp"
-#include "adm/adm.hpp"
+#include "coordinates/adm.hpp"
 #include "eos/primitive_solver_hyd.hpp"
 #include "eos/primitive-solver/reset_floor.hpp"
 #include "eos/primitive-solver/geom_math.hpp"

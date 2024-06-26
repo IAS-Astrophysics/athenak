@@ -20,7 +20,7 @@
 #include "dyn_grmhd/rsolvers/hlle_dyn_grmhd.hpp"
 #include "dyn_grmhd/dyn_grmhd_util.hpp"
 #include "mhd/mhd.hpp"
-#include "adm/adm.hpp"
+#include "coordinates/adm.hpp"
 
 namespace dyngr {
 //----------------------------------------------------------------------------------------

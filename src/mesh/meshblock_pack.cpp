@@ -18,7 +18,7 @@
 #include "hydro/hydro.hpp"
 #include "mhd/mhd.hpp"
 #include "ion-neutral/ion-neutral.hpp"
-#include "adm/adm.hpp"
+#include "coordinates/adm.hpp"
 #include "z4c/tmunu.hpp"
 #include "tasklist/numerical_relativity.hpp"
 #include "z4c/z4c.hpp"

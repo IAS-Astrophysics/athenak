@@ -22,7 +22,7 @@
 #include "bvals/bvals.hpp"
 #include "mhd/mhd.hpp"
 #include "z4c/z4c.hpp"
-#include "adm/adm.hpp"
+#include "coordinates/adm.hpp"
 #include "z4c/tmunu.hpp"
 #include "dyn_grmhd.hpp"
 #include "tasklist/numerical_relativity.hpp"
