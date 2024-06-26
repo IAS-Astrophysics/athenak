@@ -1,5 +1,5 @@
-#ifndef TMUNU_TMUNU_HPP_
-#define TMUNU_TMUNU_HPP_
+#ifndef Z4C_TMUNU_HPP_
+#define Z4C_TMUNU_HPP_
 
 //========================================================================================
 // AthenaXXX astrophysical plasma code
@@ -50,4 +50,4 @@ class Tmunu {
   MeshBlockPack* pmy_pack;
 };
 
-#endif  // TMUNU_TMUNU_HPP_
+#endif  // Z4C_TMUNU_HPP_

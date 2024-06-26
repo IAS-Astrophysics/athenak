@@ -1,5 +1,5 @@
-#ifndef ADM_ADM_HPP_
-#define ADM_ADM_HPP_
+#ifndef COORDINATES_ADM_HPP_
+#define COORDINATES_ADM_HPP_
 
 //========================================================================================
 // AthenaXXX astrophysical plasma code
@@ -255,4 +255,4 @@ void Face3Metric(const int m, const int k, const int j, const int i,
 
 
 } // namespace adm
-#endif // ADM_ADM_HPP_
+#endif // COORDINATES_ADM_HPP_
