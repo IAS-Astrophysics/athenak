@@ -23,7 +23,7 @@
 #include "hydro/hydro.hpp"
 #include "mhd/mhd.hpp"
 #include "adm/adm.hpp"
-#include "tmunu/tmunu.hpp"
+#include "z4c/tmunu.hpp"
 #include "z4c/z4c.hpp"
 #include "srcterms/srcterms.hpp"
 #include "srcterms/turb_driver.hpp"

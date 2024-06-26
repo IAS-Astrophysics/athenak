@@ -23,7 +23,7 @@
 #include "mhd/mhd.hpp"
 #include "z4c/z4c.hpp"
 #include "adm/adm.hpp"
-#include "tmunu/tmunu.hpp"
+#include "z4c/tmunu.hpp"
 #include "dyn_grmhd.hpp"
 #include "tasklist/numerical_relativity.hpp"
 

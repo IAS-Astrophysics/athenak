@@ -9,7 +9,7 @@
 #include "athena.hpp"
 #include "athena_tensor.hpp"
 #include "parameter_input.hpp"
-#include "tmunu/tmunu.hpp"
+#include "z4c/tmunu.hpp"
 #include "mesh/mesh.hpp"
 
 char const * const Tmunu::Tmunu_names[Tmunu::N_Tmunu] = {

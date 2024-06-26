@@ -132,14 +132,13 @@ add_executable(
 
         tasklist/numerical_relativity.cpp
 
-        tmunu/tmunu.cpp
-
         units/units.cpp
         utils/change_rundir.cpp
         utils/show_config.cpp
         utils/lagrange_interpolator.cpp
         utils/tr_table.cpp
 
+        z4c/tmunu.cpp
         z4c/z4c.cpp
         z4c/z4c_adm.cpp
         z4c/z4c_calcrhs.cpp
