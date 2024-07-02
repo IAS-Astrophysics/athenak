@@ -175,6 +175,14 @@ Mesh::Mesh(ParameterInput *pin) :
   multilevel = (adaptive || pin->GetString("mesh_refinement","refinement") == "static")
     ?  true : false;
 
+  // FIXME: The shearing box is not currently compatible with SMR/AMR
+  if (multilevel && pin->BlockExists("shearing_box")) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+        << "Shearing box is not currently compatible with mesh refinement"
+        << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+
   // error check physical size of mesh (root level) from input file.
   if (mesh_size.x1max <= mesh_size.x1min) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
