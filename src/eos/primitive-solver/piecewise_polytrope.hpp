@@ -220,9 +220,9 @@ class PiecewisePolytrope : public EOSPolicyInterface {
       // Because we've rewritten the EOS in terms of temperature, we don't need
       // kappa in its current form. However, we can use it to define the a
       // constants that show up in our equations.
-      eps_pieces[i] = eps_pieces[i-1] + pressure_pieces[i] /
-                      (mb*(gammas[i-1] - 1.0)*density_pieces[i]);
-
+      eps_pieces[i] = eps_pieces[i-1] + pressure_pieces[i-1] /
+                      (density_pieces[i-1] * mb) *
+                      (1.0/(gammas[i-1] - 1.0) - 1.0/(gammas[i] - 1.0));
     }
 
     // Because we're adding in a finite-temperature component via the ideal gas,
