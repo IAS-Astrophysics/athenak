@@ -316,7 +316,6 @@ TaskStatus ParticlesBoundaryValues::SetNewPrtclGID() {
   Kokkos::deep_copy(destroy_count, atom_d_count);
   nprtcl_send = counter;
   nprtcl_destroy = destroy_count;
-  std::cout << "nprtcl_destroy: " << nprtcl_destroy << " rank: " << global_variable::my_rank << std::endl;
   Kokkos::resize(sendlist, nprtcl_send);
   Kokkos::resize(destroylist, nprtcl_destroy);
   // sync sendlist device array with host
