@@ -78,13 +78,15 @@ TaskStatus ParticlesBoundaryValues::SetNewPrtclGID() {
   auto &nghbr = pmy_part->pmy_pack->pmb->nghbr;
   auto &psendl = sendlist;
   int counter=0;
-  int *pcounter = &counter;
+  Kokkos::View<int> atom_count("atom_count");
+  Kokkos::deep_copy(atom_count, counter);
   bool &multi_d = pmy_part->pmy_pack->pmesh->multi_d;
   bool &three_d = pmy_part->pmy_pack->pmesh->three_d;
   // Compatibility with user-defined boundary conditions
   auto &mb_bcs = pmy_part->pmy_pack->pmb->mb_bcs;
   int destroy_count = 0;
-  int *pdc = &destroy_count;
+  Kokkos::View<int> atom_d_count("atom_d_count");
+  Kokkos::deep_copy(atom_d_count, destroy_count);
   auto &pdestroyl = destroylist;
 
   Kokkos::realloc(sendlist, static_cast<int>(npart));
@@ -159,41 +161,42 @@ TaskStatus ParticlesBoundaryValues::SetNewPrtclGID() {
             }
         }
       }
-
+      int indx = 0;
       bool check_boundary =
         ( mb_bcs.d_view(m,BoundaryFace::inner_x3) == BoundaryFlag::user && iz < 0)
         || ( mb_bcs.d_view(m,BoundaryFace::outer_x3) == BoundaryFlag::user && iz > 0)
         || ( mb_bcs.d_view(m,BoundaryFace::inner_x2) == BoundaryFlag::user && iy < 0)
         || ( mb_bcs.d_view(m,BoundaryFace::outer_x2) == BoundaryFlag::user && iy > 0)
         || ( mb_bcs.d_view(m,BoundaryFace::inner_x1) == BoundaryFlag::user && ix < 0)
-        || ( mb_bcs.d_view(m,BoundaryFace::outer_x1) == BoundaryFlag::user && ix > 0);
+        || ( mb_bcs.d_view(m,BoundaryFace::outer_x1) == BoundaryFlag::user && ix > 0)
+	|| (SQR(x1) + SQR(x2) + SQR(x3) < 3.0) ;
       // Add particle to destruction list
       // At the time of sending the particles that need to be destroyed
       // are treated like those that have been sent
       // without actually being sent (i.e. they're remove from arrays)
       if (check_boundary) {
-        MarkForDestruction(pdc, pdestroyl, p);
+        MarkForDestruction(&atom_d_count(), pdestroyl, p);
       } else {
         if (iz == 0) {
           if (iy == 0) {
             // x1 face
-            int indx = NeighborIndex(ix,0,0,0,0);           // neighbor at same level
+            indx = NeighborIndex(ix,0,0,0,0);           // neighbor at same level
             if (nghbr.d_view(m,indx).lev > mylevel) {       // neighbor at finer level
               indx = NeighborIndex(ix,0,0,fy,fz);
             }
             while (nghbr.d_view(m,indx).gid < 0) {indx++;}  // neighbor at coarser level
-            UpdateGID(pi(PGID,p), nghbr.d_view(m,indx), myrank, pcounter, psendl, p);
+            UpdateGID(pi(PGID,p), nghbr.d_view(m,indx), myrank, &atom_count(), psendl, p);
           } else if (ix == 0) {
             // x2 face
-            int indx = NeighborIndex(0,iy,0,0,0);
+            indx = NeighborIndex(0,iy,0,0,0);
             if (nghbr.d_view(m,indx).lev > mylevel) {
               indx = NeighborIndex(0,iy,0,fx,fz);
             }
             while (nghbr.d_view(m,indx).gid < 0) {indx++;}
-            UpdateGID(pi(PGID,p), nghbr.d_view(m,indx), myrank, pcounter, psendl, p);
+            UpdateGID(pi(PGID,p), nghbr.d_view(m,indx), myrank, &atom_count(), psendl, p);
           } else {
             // x1x2 edge
-            int indx = NeighborIndex(ix,iy,0,0,0);
+            indx = NeighborIndex(ix,iy,0,0,0);
             if (nghbr.d_view(m,indx).lev > mylevel) {
               indx = NeighborIndex(ix,iy,0,fz,0);
             }
@@ -207,29 +210,29 @@ TaskStatus ParticlesBoundaryValues::SetNewPrtclGID() {
               // First try through x face
               indx = NeighborIndex(ix,0,0,0,0);
               while (nghbr.d_view(m,indx).gid < 0) {indx++;}
-              if (nghbr.d_view(m,indx).lev < mylevel) { found_coarser = true; }
+              if (nghbr.d_view(m,indx).lev < mylevel && nghbr.d_view(m,indx).lev > 0) { found_coarser = true; }
               // If all faces in the x direction are on a finer level this should
               // have already been covered by previous logic, thus check y
               if ( !found_coarser ) {
                 indx = NeighborIndex(0,iy,0,0,0);
                 while (nghbr.d_view(m,indx).gid < 0) {indx++;}
-                if (nghbr.d_view(m,indx).lev < mylevel) { found_coarser = true; }
+                if (nghbr.d_view(m,indx).lev < mylevel && nghbr.d_view(m,indx).lev > 0) { found_coarser = true; }
               }
             }
-            UpdateGID(pi(PGID,p), nghbr.d_view(m,indx), myrank, pcounter, psendl, p);
+            UpdateGID(pi(PGID,p), nghbr.d_view(m,indx), myrank, &atom_count(), psendl, p);
           }
         } else if (iy == 0) {
           if (ix == 0) {
             // x3 face
-            int indx = NeighborIndex(0,0,iz,0,0);
+            indx = NeighborIndex(0,0,iz,0,0);
             if (nghbr.d_view(m,indx).lev > mylevel) {
               indx = NeighborIndex(0,0,iz,fx,fy);
             }
             while (nghbr.d_view(m,indx).gid < 0) {indx++;}
-            UpdateGID(pi(PGID,p), nghbr.d_view(m,indx), myrank, pcounter, psendl, p);
+            UpdateGID(pi(PGID,p), nghbr.d_view(m,indx), myrank, &atom_count(), psendl, p);
           } else {
             // x3x1 edge
-            int indx = NeighborIndex(ix,0,iz,0,0);
+            indx = NeighborIndex(ix,0,iz,0,0);
             if (nghbr.d_view(m,indx).lev > mylevel) {
               indx = NeighborIndex(ix,0,iz,fy,0);
             }
@@ -238,19 +241,19 @@ TaskStatus ParticlesBoundaryValues::SetNewPrtclGID() {
               bool found_coarser = false;
               indx = NeighborIndex(ix,0,0,0,0);
               while (nghbr.d_view(m,indx).gid < 0) {indx++;}
-              if (nghbr.d_view(m,indx).lev < mylevel) { found_coarser = true; }
+              if (nghbr.d_view(m,indx).lev < mylevel && nghbr.d_view(m,indx).lev > 0) { found_coarser = true; }
               if ( !found_coarser ) {
                 indx = NeighborIndex(0,0,iz,0,0);
                 while (nghbr.d_view(m,indx).gid < 0) {indx++;}
-                if (nghbr.d_view(m,indx).lev < mylevel) { found_coarser = true; }
+                if (nghbr.d_view(m,indx).lev < mylevel && nghbr.d_view(m,indx).lev > 0) { found_coarser = true; }
               }
             }
-            UpdateGID(pi(PGID,p), nghbr.d_view(m,indx), myrank, pcounter, psendl, p);
+            UpdateGID(pi(PGID,p), nghbr.d_view(m,indx), myrank, &atom_count(), psendl, p);
           }
         } else {
           if (ix == 0) {
             // x2x3 edge
-            int indx = NeighborIndex(0,iy,iz,0,0);
+            indx = NeighborIndex(0,iy,iz,0,0);
             if (nghbr.d_view(m,indx).lev > mylevel) {
               indx = NeighborIndex(0,iy,iz,fx,0);
             }
@@ -259,34 +262,34 @@ TaskStatus ParticlesBoundaryValues::SetNewPrtclGID() {
               bool found_coarser = false;
               indx = NeighborIndex(0,iy,0,0,0);
               while (nghbr.d_view(m,indx).gid < 0) {indx++;}
-              if (nghbr.d_view(m,indx).lev < mylevel) { found_coarser = true; }
+              if (nghbr.d_view(m,indx).lev < mylevel && nghbr.d_view(m,indx).lev > 0) { found_coarser = true; }
               if ( !found_coarser ) {
                 indx = NeighborIndex(0,0,iz,0,0);
                 while (nghbr.d_view(m,indx).gid < 0) {indx++;}
-                if (nghbr.d_view(m,indx).lev < mylevel) { found_coarser = true; }
+                if (nghbr.d_view(m,indx).lev < mylevel && nghbr.d_view(m,indx).lev > 0) { found_coarser = true; }
               }
             }
-            UpdateGID(pi(PGID,p), nghbr.d_view(m,indx), myrank, pcounter, psendl, p);
+            UpdateGID(pi(PGID,p), nghbr.d_view(m,indx), myrank, &atom_count(), psendl, p);
           } else {
             // corners
-            int indx = NeighborIndex(ix,iy,iz,0,0);
+            indx = NeighborIndex(ix,iy,iz,0,0);
             if (nghbr.d_view(m,indx).gid < 0 || send_to_coarser) {
               bool found_coarser = false;
               indx = NeighborIndex(ix,0,0,0,0);
               while (nghbr.d_view(m,indx).gid < 0) {indx++;}
-              if (nghbr.d_view(m,indx).lev < mylevel) { found_coarser = true; }
+              if (nghbr.d_view(m,indx).lev < mylevel && nghbr.d_view(m,indx).lev > 0) { found_coarser = true; }
               if ( !found_coarser ) {
                 indx = NeighborIndex(0,iy,0,0,0);
                 while (nghbr.d_view(m,indx).gid < 0) {indx++;}
-                if (nghbr.d_view(m,indx).lev < mylevel) { found_coarser = true; }
+                if (nghbr.d_view(m,indx).lev < mylevel && nghbr.d_view(m,indx).lev > 0) { found_coarser = true; }
               }
               if ( !found_coarser ) {
                 indx = NeighborIndex(0,0,iz,0,0);
                 while (nghbr.d_view(m,indx).gid < 0) {indx++;}
-                if (nghbr.d_view(m,indx).lev < mylevel) { found_coarser = true; }
+                if (nghbr.d_view(m,indx).lev < mylevel && nghbr.d_view(m,indx).lev > 0) { found_coarser = true; }
               }
             }
-            UpdateGID(pi(PGID,p), nghbr.d_view(m,indx), myrank, pcounter, psendl, p);
+            UpdateGID(pi(PGID,p), nghbr.d_view(m,indx), myrank, &atom_count(), psendl, p);
           }
         }
 
@@ -309,8 +312,11 @@ TaskStatus ParticlesBoundaryValues::SetNewPrtclGID() {
       }
     }
   });
+  Kokkos::deep_copy(counter, atom_count);
+  Kokkos::deep_copy(destroy_count, atom_d_count);
   nprtcl_send = counter;
   nprtcl_destroy = destroy_count;
+  std::cout << "nprtcl_destroy: " << nprtcl_destroy << " rank: " << global_variable::my_rank << std::endl;
   Kokkos::resize(sendlist, nprtcl_send);
   Kokkos::resize(destroylist, nprtcl_destroy);
   // sync sendlist device array with host
@@ -392,6 +398,8 @@ TaskStatus ParticlesBoundaryValues::CountSendsAndRecvs() {
 //! \brief
 
 TaskStatus ParticlesBoundaryValues::InitPrtclRecv() {
+  // Moved assignment here for better compatibility with destruction logic
+  nprtcl_recv=0;
 #if MPI_PARALLEL_ENABLED
   // load STL::vector of ParticleMessageData with <sendrank,recvrank,nprtcl_recv> for
   // receives // on this rank. Length will be nrecvs, initially this length is unknown
@@ -406,7 +414,6 @@ TaskStatus ParticlesBoundaryValues::InitPrtclRecv() {
   nrecvs = recvs_thisrank.size();
 
   // Figure out how many particles will be received from all ranks
-  nprtcl_recv=0;
   for (int n=0; n<nrecvs; ++n) {
     nprtcl_recv += recvs_thisrank[n].nprtcls;
   }
@@ -625,7 +632,7 @@ TaskStatus ParticlesBoundaryValues::RecvAndUnpackPrtcls() {
     auto &irecvbuf = prtcl_irecvbuf;
     par_for("punpack",DevExeSpace(),0,(nprtcl_recv-1), KOKKOS_LAMBDA(const int n) {
       int p;
-      if (n < nprtcl_send) {
+      if (n < nprtcl_send ) {
         p = sendlist.d_view(n).prtcl_indx;  // place particles in holes created by send
       } else if (n < nprtcl_send + nprtcl_destroy ) {
         // place particles in holes created by destroy
