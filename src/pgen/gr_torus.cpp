@@ -173,6 +173,90 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   grids.push_back(std::make_unique<SphericalGrid>(pmbp, 5, 24.0));
   user_hist_func = TorusFluxes;
 
+  auto aux_trs = torus;
+  bool inject_particles = pin->GetOrAddBoolean("particles", "inject", false);
+  if (has_particles && inject_particles){
+    auto &gids = pmbp->gids;
+    auto &gide = pmbp->gide;
+    auto &size = pmbp->pmb->mb_size;
+    auto &coord = pmbp->pcoord->coord_data;
+    Real prtcl_mass = pin->GetOrAddReal("particles", "mass", 1.0);
+    Real prtcl_charge = pin->GetOrAddReal("particles", "charge", 1.0);
+    int &npart = pmbp->ppart->nprtcl_thispack;
+    auto &pr = pmbp->ppart->prtcl_rdata;
+    auto &pi = pmbp->ppart->prtcl_idata;
+    Real massive = prtcl_mass != 0.0 ? 1.0 : 0.0; 
+    Real min_en = pin->GetOrAddReal("problem", "prtcl_energy_min", 0.005);
+    Real max_en = pin->GetOrAddReal("problem", "prtcl_energy_max", 0.5);
+
+    Kokkos::Random_XorShift64_Pool<> prtcl_rand(gids);
+    par_for("part_init", DevExeSpace(),0,(npart-1),
+	KOKKOS_LAMBDA(const int p){
+	  bool found_mb = false;
+	  auto prtcl_gen = prtcl_rand.get_state();
+	  while(!found_mb){
+            int m = static_cast<int>(prtcl_gen.frand()*(gide-gids+1.0));
+	    // First check that the meshblock is within the torus, or at least outside the horizon
+	    Real &x1min = size.d_view(m).x1min;
+	    Real &x1max = size.d_view(m).x1max;
+	    Real x1v = x1min + prtcl_gen.frand()*(x1max - x1min);
+	    Real &x2min = size.d_view(m).x2min;
+	    Real &x2max = size.d_view(m).x2max;
+	    Real x2v = x2min + prtcl_gen.frand()*(x2max - x2min); 
+	    Real &x3min = size.d_view(m).x3min;
+	    Real &x3max = size.d_view(m).x3max;
+	    Real x3v = x3min + prtcl_gen.frand()*(x3max - x3min);
+	    Real r, th, phi;
+	    GetBoyerLindquistCoordinates(aux_trs, x1v, x2v, x3v, &r, &th, &phi);
+	    if (r >= 2.5){
+	      found_mb = true;
+	      //Actually initialize the particle
+	      pi(PGID,p) = gids+m;
+	      pr(IPM,p) = prtcl_mass;
+	      pr(IPC,p) = prtcl_charge;
+	      pr(IPX,p) = x1v;
+	      pr(IPY,p) = x2v;
+	      pr(IPZ,p) = x3v;
+	      
+	      Real this_en = min_en + prtcl_gen.frand()*(max_en - min_en);
+	     // std::cout << this_en << std::endl;
+	      Real u[3];
+	      int prograde = prtcl_gen.frand() > 0.5 ? -1 : 1;
+	      int updown = prtcl_gen.frand() > 0.5 ? -1 : 1;
+	      u[0] = prograde*sqrt(2.0/3.0*this_en/prtcl_mass);
+	      u[1] = prograde*sqrt(2.0/3.0*this_en/prtcl_mass);
+	      // Distribution centered on init_en
+	      u[2] = updown*sqrt(2.0/3.0*this_en/prtcl_mass);
+	      Real gu[4][4], gl[4][4];
+	      ComputeMetricAndInverse(pr(IPX,p),pr(IPY,p),pr(IPZ,p),coord.is_minkowski,coord.bh_spin,gl,gu); 
+	      Real u_0 = 0.0;
+	      for (int i1 = 0; i1 < 3; ++i1 ){ 
+          for (int i2 = 0; i2 < 3; ++i2 ){
+            u_0 += gl[i1+1][i2+1]*u[i1]*u[i2];
+          }
+	      }
+	      u_0 = sqrt(u_0 + massive); 
+	      u[0] += gu[0][1]*u_0/sqrt(-gu[0][0]);
+	      u[1] += gu[0][2]*u_0/sqrt(-gu[0][0]);
+	      u[2] += gu[0][3]*u_0/sqrt(-gu[0][0]);
+	      pr(IPVX,p) = gl[1][1]*u[0] + gl[1][2]*u[1] + gl[1][3]*u[2];
+	      pr(IPVY,p) = gl[2][1]*u[0] + gl[2][2]*u[1] + gl[2][3]*u[2];
+	      pr(IPVZ,p) = gl[3][1]*u[0] + gl[3][2]*u[1] + gl[3][3]*u[2];
+	      //std::cout << "p: " << pi(PTAG,p) << " " << pr(IPVX,p) << " " << pr(IPVY,p) << " " << pr(IPVZ,p) << std::endl;
+	    }
+	  }
+	  prtcl_rand.free_state(prtcl_gen);
+    });
+    // set timestep (which will remain constant for entire run
+    // Assumes uniform mesh (no SMR or AMR)
+    // Assumes velocities normalized to one, so dt=min(dx)
+    Real &dtnew_ = pmbp->ppart->dtnew;
+    dtnew_ = std::min(size.h_view(0).dx1, size.h_view(0).dx2);
+    dtnew_ = std::min(dtnew_, size.h_view(0).dx3);
+    dtnew_ *= pin->GetOrAddReal("time", "cfl_number", 0.8);
+
+  }
+
   // return if restart
   if (restart) return;
 
@@ -793,87 +877,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     auto &bcc0_ = pmbp->pmhd->bcc0;
     pmbp->pmhd->peos->PrimToCons(w0_, bcc0_, u0_, is, ie, js, je, ks, ke);
   }
-
-  if (has_particles){
-    auto gids = pmbp->gids;
-    auto gide = pmbp->gide;
-    auto &size = pmbp->pmb->mb_size;
-    auto &coord = pmbp->pcoord->coord_data;
-    Real prtcl_mass = pin->GetOrAddReal("particles", "mass", 1.0);
-    Real prtcl_charge = pin->GetOrAddReal("particles", "charge", 1.0);
-    int &npart = pmbp->ppart->nprtcl_thispack;
-    auto &pr = pmbp->ppart->prtcl_rdata;
-    auto &pi = pmbp->ppart->prtcl_idata;
-    Real massive = prtcl_mass != 0.0 ? 1.0 : 0.0; 
-    Real init_en = pin->GetOrAddReal("problem", "prtcl_energy", 0.5);
-
-    Kokkos::Random_XorShift64_Pool<> prtcl_rand(gids);
-    par_for("part_init", DevExeSpace(),0,(npart-1),
-	KOKKOS_LAMBDA(const int p){
-	  bool found_mb = false;
-	  auto rand_gen = prtcl_rand.get_state();
-	  while(!found_mb){
-            int m = static_cast<int>(rand_gen.frand()*(gide-gids+1.0));
-	    // First check that the meshblock is within the torus, or at least outside the horizon
-	    Real &x1min = size.d_view(m).x1min;
-	    Real &x1max = size.d_view(m).x1max;
-	    Real x1v = (x1max + x1min)/2.0;
-	    Real &x2min = size.d_view(m).x2min;
-	    Real &x2max = size.d_view(m).x2max;
-	    Real x2v = (x2max + x2min)/2.0;
-	    Real &x3min = size.d_view(m).x3min;
-	    Real &x3max = size.d_view(m).x3max;
-	    Real x3v = (x3max + x3min)/3.0;
-	    Real r, th, phi;
-	    GetBoyerLindquistCoordinates(trs, x1v, x2v, x3v, &r, &th, &phi);
-	    if (r >= trs.r_edge){
-	      found_mb = true;
-	      //Actually initialize the particle
-	      pi(PGID,p) = gids+m;
-	      pr(IPM,p) = prtcl_mass;
-	      pr(IPC,p) = prtcl_charge;
-	      pr(IPX,p) = x1min + rand_gen.frand()*(x1max - x1min);
-	      pr(IPY,p) = x2min + rand_gen.frand()*(x2max - x2min); 
-	      pr(IPZ,p) = x3min + rand_gen.frand()*(x3max - x3min); 
-	      
-	      Real this_en = rand_gen.frand()*init_en;
-	     // std::cout << this_en << std::endl;
-	      Real u[3];
-	      int prograde = rand_gen.frand() > 0.5 ? -1 : 1;
-	      int updown = rand_gen.frand() > 0.5 ? -1 : 1;
-	      u[0] = prograde*sqrt(2.0/3.0*this_en/prtcl_mass);
-	      u[1] = prograde*sqrt(2.0/3.0*this_en/prtcl_mass);
-	      // Distribution centered on init_en
-	      u[2] = updown*sqrt(2.0/3.0*this_en/prtcl_mass);
-	      Real gu[4][4], gl[4][4];
-	      ComputeMetricAndInverse(pr(IPX,p),pr(IPY,p),pr(IPZ,p),coord.is_minkowski,coord.bh_spin,gl,gu); 
-	      Real U_0 = 0.0;
-	      for (int i1 = 0; i1 < 3; ++i1 ){ 
-		  for (int i2 = 0; i2 < 3; ++i2 ){ 
-		  U_0 += gl[i1+1][i2+1]*u[i1]*u[i2];
-		  }
-	      }
-	      U_0 = sqrt(U_0 + massive); 
-	      u[0] += gu[0][1]*U_0/sqrt(-gu[0][0]);
-	      u[1] += gu[0][2]*U_0/sqrt(-gu[0][0]);
-	      u[2] += gu[0][3]*U_0/sqrt(-gu[0][0]);
-	      pr(IPVX,p) = gl[1][1]*u[0] + gl[1][2]*u[1] + gl[1][3]*u[2];
-	      pr(IPVY,p) = gl[2][1]*u[0] + gl[2][2]*u[1] + gl[2][3]*u[2];
-	      pr(IPVZ,p) = gl[3][1]*u[0] + gl[3][2]*u[1] + gl[3][3]*u[2];
-	      //std::cout << "p: " << pi(PTAG,p) << " " << pr(IPVX,p) << " " << pr(IPVY,p) << " " << pr(IPVZ,p) << std::endl;
-	    }
-	  }
-	  prtcl_rand.free_state(rand_gen);
-    });
-    // set timestep (which will remain constant for entire run
-    // Assumes uniform mesh (no SMR or AMR)
-    // Assumes velocities normalized to one, so dt=min(dx)
-    Real &dtnew_ = pmbp->ppart->dtnew;
-    dtnew_ = std::min(size.h_view(0).dx1, size.h_view(0).dx2);
-    dtnew_ = std::min(dtnew_, size.h_view(0).dx3);
-    dtnew_ *= pin->GetOrAddReal("time", "cfl_number", 0.8);
-
-  }
+  
 
   return;
 }
