@@ -40,6 +40,7 @@ struct ParticlesTaskIDs {
   TaskID recvp;
   TaskID csend;
   TaskID crecv;
+  TaskID mradj;
 };
 
 namespace particles {
@@ -73,6 +74,7 @@ class Particles {
   ParticlesTaskIDs id;
 
   // functions...
+  void ReallocateParticles(int new_nprtcl_thispack);
   void CreateParticleTags(ParameterInput *pin);
   void AssembleTasks(std::map<std::string, std::shared_ptr<TaskList>> tl);
   TaskStatus Push(Driver *pdriver, int stage);
@@ -83,6 +85,7 @@ class Particles {
   TaskStatus RecvP(Driver *pdriver, int stage);
   TaskStatus ClearSend(Driver *pdriver, int stage);
   TaskStatus ClearRecv(Driver *pdriver, int stage);
+  TaskStatus AdjustMeshRefinement(Driver *pdriver, int stage);
 
   // ... for particle pushers
   void PushDrift();

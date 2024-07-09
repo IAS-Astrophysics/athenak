@@ -381,11 +381,10 @@ TaskStatus Hydro::SaveFlux(Driver *pdrive, int stage) {
 
     Real dtfactor = dt / 2.0;
 
+    // GNW 2024-JUL-5: Warning .. be careful when using this different time integrators
     par_for("flux_save",DevExeSpace(),0,nmb1,ks,ke+1,js,je+1,is,ie+1,
     KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
-
-      // TODO(GNW): need to be careful with different time integrators
-
+      
       // save dF1/dx1
       if (j <= je && k <= ke)  {
         if (stage == 1) {

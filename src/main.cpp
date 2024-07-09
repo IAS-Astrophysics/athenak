@@ -295,6 +295,7 @@ int main(int argc, char *argv[]) {
     pmesh->pgen = std::make_unique<ProblemGenerator>(pinput, pmesh, restartfile);
     restartfile.Close();
   }
+  pmesh->FinalizeParticleDataStructures(pinput);
 
   //--- Step 6. --------------------------------------------------------------------------
   // Construct Driver and Outputs. Actual outputs (including initial conditions) are made

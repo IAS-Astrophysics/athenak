@@ -49,7 +49,6 @@ Particles::Particles(MeshBlockPack *ppack, ParameterInput *pin) :
     if (ptype.compare("cosmic_ray") == 0) {
       particle_type = ParticleType::cosmic_ray;
     } else if (ptype.compare("lagrangian_mc") == 0) {
-      // TODO(GNW): Restrict which pusher is alowed based on particle type
       particle_type = ParticleType::lagrangian_mc;
     } else {
       std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
@@ -71,8 +70,7 @@ Particles::Particles(MeshBlockPack *ppack, ParameterInput *pin) :
         std::exit(EXIT_FAILURE);
       }
     } else if (ppush.compare("lagrangian_mc") == 0) {
-      // TODO(GNW): is this the right place to set timestep?
-      // force driver to inherit timestep from fluid
+      // force driver to inherit timestep from fluid by setting desired particle dt to max value
       dtnew = std::numeric_limits<float>::max();
       pusher = ParticlesPusher::lagrangian_mc;
       if (ppack->pmhd != nullptr) {
@@ -106,7 +104,7 @@ Particles::Particles(MeshBlockPack *ppack, ParameterInput *pin) :
     case ParticleType::lagrangian_mc:
       {
         nrdata = 3;
-        nidata = 2;
+        nidata = 4;
         break;
       }
     default:
@@ -116,13 +114,28 @@ Particles::Particles(MeshBlockPack *ppack, ParameterInput *pin) :
   Kokkos::realloc(prtcl_idata, nidata, nprtcl_thispack);
 
   // allocate boundary object
-  pbval_part = new ParticlesBoundaryValues(this, pin);  // TODO(GNW): do I need to check this?
+  pbval_part = new ParticlesBoundaryValues(this, pin);
 }
 
 //----------------------------------------------------------------------------------------
 // destructor
 
 Particles::~Particles() {
+}
+
+//----------------------------------------------------------------------------------------
+// ReallocateParticles()
+// Update particle arrays and update internal particle count data for new number of
+// particles in this pack. This method does not preserve any existing particle data
+
+void Particles::ReallocateParticles(int new_nprtcl_thispack) {
+
+  // TODO(GNW): maybe check that ntrack is set correctly. also check about whether
+  // the rank_order below works given that it might have empty ids
+
+  nprtcl_thispack = new_nprtcl_thispack;
+  Kokkos::realloc(prtcl_rdata, nrdata, nprtcl_thispack);
+  Kokkos::realloc(prtcl_idata, nidata, nprtcl_thispack);
 }
 
 //----------------------------------------------------------------------------------------

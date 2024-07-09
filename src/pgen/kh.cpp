@@ -49,7 +49,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
 
   // Select either Hydro or MHD
   DvceArray5D<Real> w0_;
-  Real gm1, p0;
+  Real gm1;
   int nfluid, nscalars;
   if (pmbp->phydro != nullptr) {
     w0_ = pmbp->phydro->w0;
@@ -189,18 +189,14 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     pmbp->pmhd->peos->PrimToCons(w0_, bcc0_, u0_, is, ie, js, je, ks, ke);
   }
 
-  // TODO(GNW): support 2d-only particles
   // Initialize particles
   if (pmbp->ppart != nullptr) {
 
     // captures for the kernel
     auto &u0_ = (pmbp->phydro != nullptr) ? pmbp->phydro->u0 : pmbp->pmhd->u0;
-    auto &pr = pmy_mesh_->pmb_pack->ppart->prtcl_rdata;
-    auto &pi = pmy_mesh_->pmb_pack->ppart->prtcl_idata;
     auto &mbsize = pmy_mesh_->pmb_pack->pmb->mb_size;
-    auto &npart = pmy_mesh_->pmb_pack->ppart->nprtcl_thispack;
+    auto &mblev = pmy_mesh_->pmb_pack->pmb->mb_lev;
     auto gids = pmy_mesh_->pmb_pack->gids;
-    auto gide = pmy_mesh_->pmb_pack->gide;
 
     auto &indcs = pmy_mesh_->mb_indcs;
     int &is = indcs.is;
@@ -210,40 +206,109 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     int &nx2 = indcs.nx2;
     int &nx3 = indcs.nx3;
 
-    // initialize particles
+    // init RNG
     Kokkos::Random_XorShift64_Pool<> rand_pool64(pmbp->gids);
-    par_for("part_update",DevExeSpace(),0,(npart-1),
-    KOKKOS_LAMBDA(const int p) {
-      auto rand_gen = rand_pool64.get_state();  // get random number state this thread
-      // choose parent MeshBlock randomly
-      int m = static_cast<int>(rand_gen.frand()*(gide - gids + 1.0));
-      pi(PGID,p) = gids + m;
 
-      int ip = 0;
-      int jp = 0;
-      int kp = 0;
+    // count total mass across the domain
+    Real total_mass = 0.0;
+    const int nmkji = (pmbp->nmb_thispack)*indcs.nx3*indcs.nx2*indcs.nx1;
+    const int nkji = indcs.nx3*indcs.nx2*indcs.nx1;
+    const int nji  = indcs.nx2*indcs.nx1;
 
-      // choose random cell based on density
-      while (true) {
-        ip = static_cast<int>(rand_gen.frand()*nx1) + is;
-        jp = static_cast<int>(rand_gen.frand()*nx2) + js;
-        kp = static_cast<int>(rand_gen.frand()*nx3) + ks;
-        if (u0_(m,IDN,kp,jp,ip) < 1.5) {
-          if (rand_gen.frand() < 0.5) break;
-        } else {
-          break;
-        }
+    Kokkos::parallel_reduce("pgen_mass", Kokkos::RangePolicy<>(DevExeSpace(), 0, nmkji),
+    KOKKOS_LAMBDA(const int &idx, Real &total_mass) {
+      // compute m,k,j,i indices of thread and evaluate
+      int m = (idx)/nkji;
+      int k = (idx - m*nkji)/nji;
+      int j = (idx - m*nkji - k*nji)/indcs.nx1;
+      int i = (idx - m*nkji - k*nji - j*indcs.nx1) + is;
+      k += ks;
+      j += js;
+
+      Real vol = mbsize.d_view(m).dx1*mbsize.d_view(m).dx2*mbsize.d_view(m).dx3;
+      total_mass += u0_(m,IDN,k,j,i) * vol;
+    }, total_mass);
+
+    Real total_mass_thispack = total_mass;
+
+#if MPI_PARALLEL_ENABLED
+    // get total mass over all MPI ranks
+    MPI_Allreduce(MPI_IN_PLACE, &total_mass, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+#endif
+
+    // get number of particles for this mbpack using MC to deal with fractional particles
+    Real target_nparticles = pin->GetOrAddReal("particles","target_count",100000.0);
+    Real mass_per_particle = total_mass / target_nparticles;
+
+    // create shared array to hold number of particles per zone
+    DualArray2D<int> nparticles_per_zone("partperzone", nmkji,2);
+    par_for("particle_count", DevExeSpace(), 0,nmkji-1,
+    KOKKOS_LAMBDA(int idx) {
+      int m = (idx)/nkji;
+      int k = (idx - m*nkji)/nji;
+      int j = (idx - m*nkji - k*nji)/indcs.nx1;
+      int i = (idx - m*nkji - k*nji - j*indcs.nx1) + is;
+      k += ks;
+      j += js;
+      Real vol = mbsize.d_view(m).dx1*mbsize.d_view(m).dx2*mbsize.d_view(m).dx3;
+      Real nppc = u0_(m,IDN,k,j,i) * vol / mass_per_particle;
+      int nparticles = static_cast<int>(nppc);
+      nppc = fabs(fmod(nppc, 1.0));
+      auto rand_gen = rand_pool64.get_state();
+      if (rand_gen.frand() < nppc) {
+        nparticles += 1;
       }
+      nparticles_per_zone.d_view(idx,0) = nparticles;
+      rand_pool64.free_state(rand_gen); 
+    });
 
-      // set particle position to cell center + random offset
-      pr(IPX,p) = CellCenterX(ip-is, nx1, mbsize.d_view(m).x1min, mbsize.d_view(m).x1max) +
-                  mbsize.d_view(m).dx1*(rand_gen.frand()-0.5);
-      pr(IPY,p) = CellCenterX(jp-js, nx2, mbsize.d_view(m).x2min, mbsize.d_view(m).x2max) +
-                  mbsize.d_view(m).dx2*(rand_gen.frand()-0.5);
-      pr(IPZ,p) = CellCenterX(kp-ks, nx3, mbsize.d_view(m).x3min, mbsize.d_view(m).x3max) +
-                  mbsize.d_view(m).dx3*(rand_gen.frand()-0.5);
+    // count total number of particles in this pack
+    nparticles_per_zone.template modify<DevExeSpace>();
+    nparticles_per_zone.template sync<HostMemSpace>();
+    int nparticles_thispack = 0;
+    for (int i=0; i<nmkji; ++i) {
+      nparticles_per_zone.h_view(i,1) = nparticles_thispack;
+      nparticles_thispack += nparticles_per_zone.h_view(i,0);
+    }
+    nparticles_per_zone.template modify<HostMemSpace>();
+    nparticles_per_zone.template sync<DevMemSpace>();
 
-      rand_pool64.free_state(rand_gen);  // free state for use by other threads
+    // helpful debug statement
+    std::cout << "total mass across domain: " << total_mass << ", total mass in pack: " << total_mass_thispack
+              << ", target nparticles: " << target_nparticles << ", nparticles in pack: " << nparticles_thispack
+              << std::endl;
+
+    // reallocate space for particles and get relevant pointers
+    pmy_mesh_->pmb_pack->ppart->ReallocateParticles(nparticles_thispack);
+
+    auto &pr = pmy_mesh_->pmb_pack->ppart->prtcl_rdata;
+    auto &pi = pmy_mesh_->pmb_pack->ppart->prtcl_idata;
+
+    // initialize particles. only intended for Lagrangian-type particles
+    par_for("part_init", DevExeSpace(), 0,nmkji-1,
+    KOKKOS_LAMBDA(int idx) {
+      int m = (idx)/nkji;
+      int k = (idx - m*nkji)/nji;
+      int j = (idx - m*nkji - k*nji)/indcs.nx1;
+      int i = (idx - m*nkji - k*nji - j*indcs.nx1) + is;
+      k += ks;
+      j += js;
+
+      int nparticles_in_zone = nparticles_per_zone.d_view(idx,0);
+      int starting_index = nparticles_per_zone.d_view(idx,1);
+
+      for (int p=0; p<nparticles_in_zone; ++p) {
+        int pidx = p + starting_index;
+
+        pi(PGID,pidx) = gids + m;
+        pi(PLASTLEVEL,pidx) = mblev.d_view(m);
+
+        // set particle to zone center
+        pr(IPX,pidx) = CellCenterX(i-is, nx1, mbsize.d_view(m).x1min, mbsize.d_view(m).x1max);
+        pr(IPY,pidx) = CellCenterX(j-js, nx2, mbsize.d_view(m).x2min, mbsize.d_view(m).x2max);
+        pr(IPZ,pidx) = CellCenterX(k-ks, nx3, mbsize.d_view(m).x3min, mbsize.d_view(m).x3max) -
+                       mbsize.d_view(m).dx3/2;
+      }
     });
   }
 

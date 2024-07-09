@@ -613,7 +613,12 @@ void Mesh::AddCoordinatesAndPhysics(ParameterInput *pinput) {
     pmb_pack->AddCoordinates(pinput);
     pmb_pack->AddPhysics(pinput);
   }
+}
 
+//----------------------------------------------------------------------------------------
+// \fn Mesh::FinalizeParticleDataStructures
+
+void Mesh::FinalizeParticleDataStructures(ParameterInput *pinput) {
   // Determine total number of particles across all ranks
   particles::Particles *ppart = pmb_pack->ppart;
   if (ppart != nullptr) {

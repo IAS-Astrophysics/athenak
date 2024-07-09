@@ -54,6 +54,7 @@ void Particles::AssembleTasks(std::map<std::string, std::shared_ptr<TaskList>> t
         id.recvp  = tl["after_timeintegrator"]->AddTask(&Particles::RecvP, this, id.sendp);
         id.crecv  = tl["after_timeintegrator"]->AddTask(&Particles::ClearRecv, this, id.recvp);
         id.csend  = tl["after_timeintegrator"]->AddTask(&Particles::ClearSend, this, id.crecv);
+        id.mradj  = tl["after_timeintegrator"]->AddTask(&Particles::AdjustMeshRefinement, this, id.csend);
         break;
       }
 
@@ -111,7 +112,6 @@ TaskStatus Particles::RecvP(Driver *pdrive, int stage) {
   TaskStatus tstat = pbval_part->RecvAndUnpackPrtcls();
   return tstat;
 }
-
 
 //----------------------------------------------------------------------------------------
 //! \fn TaskList Particles::ClearSend
