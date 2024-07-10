@@ -147,7 +147,7 @@ void ApplyBeamSourcesBlackHoleM1(Mesh *pmesh) {
                     Real fy = adm.beta_u(m, 1, k, j, i) * en_dens / adm.alpha(m, k, j, i);
                     Real fz = adm.beta_u(m, 2, k, j, i) * en_dens / adm.alpha(m, k, j, i);
                     Real f_u[4] = {0, fx, fy, fz};
-
+                    /*
                     Real g_dd[16];
                     adm::SpacetimeMetric(adm.alpha(m, k, j, i),
                                          adm.beta_u(m, 0, k, j, i), adm.beta_u(m, 1, k, j, i), adm.beta_u(m, 2, k, j, i),
@@ -163,7 +163,10 @@ void ApplyBeamSourcesBlackHoleM1(Mesh *pmesh) {
                         fy_tetr += g_dd[idx + 4 * idx2] * tetr_mu_muhat0_(m, idx2, 2, k, j, i) * f_u[idx];
                         fz_tetr += g_dd[idx + 4 * idx2] * tetr_mu_muhat0_(m, idx2, 3, k, j, i) * f_u[idx];
                       }
-                    }
+                    } */
+                    Real fx_tetr = fx;
+                    Real fy_tetr = fy;
+                    Real fz_tetr = fz;
 
                     f0_(m, 0, k, j, is - i - 1) = en_dens / Kokkos::sqrt(4. * M_PI);                                  // (0,0)
                     f0_(m, 1, k, j, is - i - 1) = -fy_tetr / Kokkos::sqrt(4. * M_PI / 3.0);                     // (1,-1)

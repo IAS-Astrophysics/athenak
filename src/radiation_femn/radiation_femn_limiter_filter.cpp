@@ -352,4 +352,79 @@ TaskStatus RadiationFEMN::ApplyLimiterDG(Driver *pdriver, int stage) {
   return TaskStatus::complete;
 }
 
+TaskStatus RadiationFEMN::ApplyLimiterTheta(Driver *pdriver, int stage) {
+  auto &indcs = pmy_pack->pmesh->mb_indcs;
+  int is = indcs.is, ie = indcs.ie;
+  int js = indcs.js, je = indcs.je;
+  int ks = indcs.ks, ke = indcs.ke;
+  int npts1 = pmy_pack->pradfemn->num_points_total - 1;
+  int nmb1 = pmy_pack->nmb_thispack - 1;
+  auto &mbsize = pmy_pack->pmb->mb_size;
+
+  bool &one_d = pmy_pack->pmesh->one_d;
+  bool &two_d = pmy_pack->pmesh->multi_d;
+  bool &three_d = pmy_pack->pmesh->three_d;
+
+  auto &f0_ = pmy_pack->pradfemn->f0;
+  auto &ftemp_ = pmy_pack->pradfemn->ftemp;
+
+  Kokkos::deep_copy(ftemp_, 0.);
+
+  if (one_d) {
+    par_for("radiation_femn_limiter_theta_1d", DevExeSpace(), 0, nmb1, ks, ke, js, je, is, int(ie / 2) + 1,
+            KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
+
+              auto kk = k;
+              auto jj = j;
+              auto ii = 2 * i - 2;
+
+              auto f0_cellavg = (0.5) * (f0_(m, 0, kk, jj, ii) + f0_(m, 0, kk, jj, ii + 1));
+              auto f0_corner_l = (1.5) * f0_(m, 0, kk, jj, ii) - (0.5) * f0_(m, 0, kk, jj, ii + 1);
+              auto f0_corner_r = -(0.5) * f0_(m, 0, kk, jj, ii) + (0.5) * f0_(m, 0, kk, jj, ii + 1);
+              auto f0_corner_min = Kokkos::fmin(f0_corner_l, f0_corner_r);
+
+              Real theta = (f0_corner_min < 0) ? f0_corner_min/(f0_corner_min - f0_cellavg): 0;
+
+              ftemp_(m, 0, kk, jj, ii) = theta * f0_cellavg + (1 - theta) * ftemp_(m, 0, kk, jj, ii);
+              ftemp_(m, 0, kk, jj, ii + 1) = theta * f0_cellavg + (1 - theta) * ftemp_(m, 0, kk, jj, ii + 1);
+
+            });
+  }
+
+  if(two_d) {
+    par_for("radiation_femn_limiter_theta_2d", DevExeSpace(), 0, nmb1, ks, ke, js, int(je / 2) + 1, is, int(ie / 2) + 1,
+            KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
+
+              auto kk = k;
+              auto jj = 2 * j - 2;
+              auto ii = 2 * i - 2;
+
+              auto f0_cellavg = (0.25) * (f0_(m, 0, kk, jj, ii)
+                  + f0_(m, 0, kk, jj, ii + 1)
+                  + f0_(m, 0, kk, jj + 1, ii)
+                  + f0_(m, 0, kk, jj + 1, ii + 1));
+
+              auto f0_side_l_jj = (1.5) * f0_(m, 0, kk, jj, ii) - (0.5) * f0_(m, 0, kk, jj, ii + 1);
+              auto f0_side_r_jj = -(0.5) * f0_(m, 0, kk, jj, ii) + (0.5) * f0_(m, 0, kk, jj, ii + 1);
+              auto f0_side_l_jjp1 = (1.5) * f0_(m, 0, kk, jj + 1, ii) - (0.5) * f0_(m, 0, kk, jj + 1, ii + 1);
+              auto f0_side_r_jjp1 = -(0.5) * f0_(m, 0, kk, jj + 1, ii) + (0.5) * f0_(m, 0, kk, jj + 1, ii + 1);
+              auto f0_corner_l_down = (1.5) * f0_side_l_jj - (0.5) * f0_side_l_jjp1;
+              auto f0_corner_l_up = -(0.5) * f0_side_l_jj + (0.5) * f0_side_l_jjp1;
+              auto f0_corner_r_down = (1.5) * f0_side_r_jj - (0.5) * f0_side_r_jjp1;
+              auto f0_corner_r_up = -(0.5) * f0_side_r_jj + (0.5) * f0_side_r_jjp1;
+              auto f0_corner_min = Kokkos::fmin(Kokkos::fmin(Kokkos::fmin(f0_corner_l_down, f0_corner_l_up), f0_corner_r_down), f0_corner_r_up);
+
+              Real theta = (f0_corner_min < 0) ? f0_corner_min/(f0_corner_min - f0_cellavg): 0;
+
+              ftemp_(m, 0, kk, jj, ii) = theta * f0_cellavg + (1 - theta) * ftemp_(m, 0, kk, jj, ii);
+              ftemp_(m, 0, kk, jj, ii + 1) = theta * f0_cellavg + (1 - theta) * ftemp_(m, 0, kk, jj, ii + 1);
+              ftemp_(m, 0, kk, jj + 1, ii) = theta * f0_cellavg + (1 - theta) * ftemp_(m, 0, kk, jj + 1, ii);
+              ftemp_(m, 0, kk, jj + 1, ii + 1) = theta * f0_cellavg + (1 - theta) * ftemp_(m, 0, kk, jj + 1, ii + 1);
+            });
+  }
+
+  Kokkos::deep_copy(f0_, ftemp_);
+
+  return TaskStatus::complete;
+}
 } // namespace radiationfemn

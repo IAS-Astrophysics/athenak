@@ -203,6 +203,7 @@ class RadiationFEMN {
   TaskStatus RecvFlux(Driver *d, int stage);
   TaskStatus ExpRKUpdate(Driver *d, int stage);
   TaskStatus ApplyLimiterDG(Driver *pdriver, int stage);
+  TaskStatus ApplyLimiterTheta(Driver *pdriver, int stage);
   TaskStatus ApplyLimiterFEM(Driver *pdrive, int stage);
   TaskStatus ApplyFilterLanczos(Driver *pdriver, int stage);
   TaskStatus AddRadiationSourceTerm(Driver *d, int stage);
