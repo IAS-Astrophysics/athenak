@@ -417,50 +417,52 @@ TaskStatus ParticlesBoundaryValues::InitPrtclRecv() {
     nprtcl_recv += recvs_thisrank[n].nprtcls;
   }
 
-  // Allocate receive buffer
-  Kokkos::realloc(prtcl_rrecvbuf, (pmy_part->nrdata)*nprtcl_recv);
-  Kokkos::realloc(prtcl_irecvbuf, (pmy_part->nidata)*nprtcl_recv);
-
-  // Post non-blocking receives
   bool no_errors=true;
-  rrecv_req.clear();
-  irecv_req.clear();
-  for (int n=0; n<nrecvs; ++n) {
-    rrecv_req.emplace_back(MPI_REQUEST_NULL);
-    irecv_req.emplace_back(MPI_REQUEST_NULL);
-  }
+  if (nprtcl_recv > 0){
+    // Allocate receive buffer
+    Kokkos::realloc(prtcl_rrecvbuf, (pmy_part->nrdata)*nprtcl_recv);
+    Kokkos::realloc(prtcl_irecvbuf, (pmy_part->nidata)*nprtcl_recv);
 
-  // Init receives for Reals
-  int data_start=0;
-  for (int n=0; n<nrecvs; ++n) {
-    // calculate amount of data to be passed, get pointer to variables
-    int data_size = (pmy_part->nrdata)*(recvs_thisrank[n].nprtcls);
-    int data_end = data_start + (pmy_part->nrdata)*(recvs_thisrank[n].nprtcls - 1);
-    auto recv_ptr = Kokkos::subview(prtcl_rrecvbuf, std::make_pair(data_start, data_end));
-    int drank = recvs_thisrank[n].sendrank;
-    int tag = 0; // 0 for Reals, 1 for ints
+    // Post non-blocking receives
+    rrecv_req.clear();
+    irecv_req.clear();
+    for (int n=0; n<nrecvs; ++n) {
+      rrecv_req.emplace_back(MPI_REQUEST_NULL);
+      irecv_req.emplace_back(MPI_REQUEST_NULL);
+    }
 
-    // Post non-blocking receive
-    int ierr = MPI_Irecv(recv_ptr.data(), data_size, MPI_ATHENA_REAL, drank, tag,
-                         mpi_comm_part, &(rrecv_req[n]));
-    if (ierr != MPI_SUCCESS) {no_errors=false;}
-    data_start += data_size;
-  }
-  // Init receives for ints
-  data_start=0;
-  for (int n=0; n<nrecvs; ++n) {
-    // calculate amount of data to be passed, get pointer to variables
-    int data_size = (pmy_part->nidata)*(recvs_thisrank[n].nprtcls);
-    int data_end = data_start + (pmy_part->nidata)*(recvs_thisrank[n].nprtcls - 1);
-    auto recv_ptr = Kokkos::subview(prtcl_irecvbuf, std::make_pair(data_start, data_end));
-    int drank = recvs_thisrank[n].sendrank;
-    int tag = 1; // 0 for Reals, 1 for ints
+    // Init receives for Reals
+    int data_start=0;
+    for (int n=0; n<nrecvs; ++n) {
+      // calculate amount of data to be passed, get pointer to variables
+      int data_size = (pmy_part->nrdata)*(recvs_thisrank[n].nprtcls);
+      int data_end = data_start + (pmy_part->nrdata)*(recvs_thisrank[n].nprtcls - 1);
+      auto recv_ptr = Kokkos::subview(prtcl_rrecvbuf, std::make_pair(data_start, data_end));
+      int drank = recvs_thisrank[n].sendrank;
+      int tag = 0; // 0 for Reals, 1 for ints
 
-    // Post non-blocking receive
-    int ierr = MPI_Irecv(recv_ptr.data(), data_size, MPI_INT, drank, tag,
-                         mpi_comm_part, &(irecv_req[n]));
-    if (ierr != MPI_SUCCESS) {no_errors=false;}
-    data_start += data_size;
+      // Post non-blocking receive
+      int ierr = MPI_Irecv(recv_ptr.data(), data_size, MPI_ATHENA_REAL, drank, tag,
+                           mpi_comm_part, &(rrecv_req[n]));
+      if (ierr != MPI_SUCCESS) {no_errors=false;}
+      data_start += data_size;
+    }
+    // Init receives for ints
+    data_start=0;
+    for (int n=0; n<nrecvs; ++n) {
+      // calculate amount of data to be passed, get pointer to variables
+      int data_size = (pmy_part->nidata)*(recvs_thisrank[n].nprtcls);
+      int data_end = data_start + (pmy_part->nidata)*(recvs_thisrank[n].nprtcls - 1);
+      auto recv_ptr = Kokkos::subview(prtcl_irecvbuf, std::make_pair(data_start, data_end));
+      int drank = recvs_thisrank[n].sendrank;
+      int tag = 1; // 0 for Reals, 1 for ints
+
+      // Post non-blocking receive
+      int ierr = MPI_Irecv(recv_ptr.data(), data_size, MPI_INT, drank, tag,
+                           mpi_comm_part, &(irecv_req[n]));
+      if (ierr != MPI_SUCCESS) {no_errors=false;}
+      data_start += data_size;
+    }
   }
 
   // Quit if MPI error detected
@@ -499,8 +501,9 @@ TaskStatus ParticlesBoundaryValues::PackAndSendPrtcls() {
     auto &pi = pmy_part->prtcl_idata;
     auto &rsendbuf = prtcl_rsendbuf;
     auto &isendbuf = prtcl_isendbuf;
+    auto &slist = sendlist;
     par_for("ppack",DevExeSpace(),0,(nprtcl_send-1), KOKKOS_LAMBDA(const int n) {
-      int p = sendlist.d_view(n).prtcl_indx;
+      int p = slist.d_view(n).prtcl_indx;
       for (int i=0; i<nidata; ++i) {
         isendbuf(nidata*n + i) = pi(i,p);
       }
@@ -568,11 +571,6 @@ TaskStatus ParticlesBoundaryValues::PackAndSendPrtcls() {
 
 TaskStatus ParticlesBoundaryValues::RecvAndUnpackPrtcls() {
   namespace KE = Kokkos::Experimental;
-  //particle destruction must happen also for single process runs
-  std::sort(KE::begin(destroylist.h_view), KE::end(destroylist.h_view), SortByIndex);
-  // sync destroylist host array with device.  This results in sorted array on device
-  destroylist.template modify<HostMemSpace>();
-  destroylist.template sync<DevExeSpace>();
 
   //In single process runs, size of particle arrays can only be reduced
   int &npart = pmy_part->nprtcl_thispack;
@@ -583,12 +581,6 @@ TaskStatus ParticlesBoundaryValues::RecvAndUnpackPrtcls() {
   int nremain_d = nprtcl_send + nprtcl_destroy - nprtcl_recv;
 
 #if MPI_PARALLEL_ENABLED
-  // Sort sendlist on host by index in particle array
-  std::sort(KE::begin(sendlist.h_view), KE::end(sendlist.h_view), SortByIndex);
-  // sync sendlist host array with device.  This results in sorted array on device
-  sendlist.template modify<HostMemSpace>();
-  sendlist.template sync<DevExeSpace>();
-
   // increase size of particle arrays if needed
   if (nprtcl_recv > (nprtcl_send + nprtcl_destroy) ) {
     Kokkos::resize(pmy_part->prtcl_idata, pmy_part->nidata, new_npart);
@@ -619,7 +611,27 @@ TaskStatus ParticlesBoundaryValues::RecvAndUnpackPrtcls() {
     std::exit(EXIT_FAILURE);
   }
   // exit if particle communications have not completed
+  
   if (bflag) {return TaskStatus::incomplete;}
+#endif
+
+  if (nprtcl_destroy > 0){
+    //particle destruction must happen also for single process runs
+    //only do it once after communication has occurred
+    std::sort(KE::begin(destroylist.h_view), KE::end(destroylist.h_view), SortByIndex);
+    // sync destroylist host array with device.  This results in sorted array on device
+    destroylist.template modify<HostMemSpace>();
+    destroylist.template sync<DevExeSpace>();
+  }
+
+#if MPI_PARALLEL_ENABLED
+  if (nprtcl_send > 0){
+    // Sort sendlist on host by index in particle array
+    std::sort(KE::begin(sendlist.h_view), KE::end(sendlist.h_view), SortByIndex);
+    // sync sendlist host array with device.  This results in sorted array on device
+    sendlist.template modify<HostMemSpace>();
+    sendlist.template sync<DevExeSpace>();
+  }
 
   // unpack particles into positions of sent or destroyed particles
   if (nprtcl_recv > 0) {
@@ -629,16 +641,20 @@ TaskStatus ParticlesBoundaryValues::RecvAndUnpackPrtcls() {
     auto &pi = pmy_part->prtcl_idata;
     auto &rrecvbuf = prtcl_rrecvbuf;
     auto &irecvbuf = prtcl_irecvbuf;
+    auto &slist = sendlist;
+    auto &dlist = destroylist;
+    int nps = nprtcl_send;
+    int npd = nprtcl_destroy;
     par_for("punpack",DevExeSpace(),0,(nprtcl_recv-1), KOKKOS_LAMBDA(const int n) {
       int p;
-      if (n < nprtcl_send ) {
-        p = sendlist.d_view(n).prtcl_indx;  // place particles in holes created by send
-      } else if (n < nprtcl_send + nprtcl_destroy ) {
+      if (n < nps ) {
+        p = slist.d_view(n).prtcl_indx;  // place particles in holes created by send
+      } else if (n < nps + npd ) {
         // place particles in holes created by destroy
-        p = destroylist.d_view(n-nprtcl_send).prtcl_indx;
+        p = dlist.d_view(n-nps).prtcl_indx;
       } else {
         // place particle at end of arrays
-        p = npart + (n - nprtcl_send - nprtcl_destroy );
+        p = npart + (n - nps - npd );
       }
       for (int i=0; i<nidata; ++i) {
         pi(i,p) = irecvbuf(nidata*n + i);
