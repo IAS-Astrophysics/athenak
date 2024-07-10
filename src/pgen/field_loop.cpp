@@ -12,6 +12,7 @@
 //!  -  problem/rad   = radius of field loop
 //!  -  problem/amp   = amplitude of vector potential (and therefore B)
 //!  -  problem/drat  = density ratio in loop, to test density advection and conduction
+//!  -  problem/press = amplitude of pressure in mhd
 //! Without the shearing box the flow is automatically set to run along the diagonal.
 //!
 //! Various test cases are possible:
@@ -42,6 +43,8 @@
 #include "srcterms/srcterms.hpp"
 #include "hydro/hydro.hpp"
 #include "mhd/mhd.hpp"
+#include "dyn_grmhd/dyn_grmhd.hpp"
+#include "coordinates/adm.hpp"
 #include "pgen.hpp"
 
 //----------------------------------------------------------------------------------------
@@ -55,6 +58,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   Real amp = pin->GetOrAddReal("problem","amp",0.0);
   Real drat = pin->GetOrAddReal("problem","drat",1.0);
   Real vx0 = pin->GetOrAddReal("problem","vx0",0.0);
+  Real press = pin->GetOrAddReal("problem","press",1.0);
   int iprob = pin->GetInteger("problem","iprob");
   Real cos_a2(0.0), sin_a2(0.0), lambda(0.0);
 
@@ -103,7 +107,9 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   int nx1 = indcs.nx1, nx2 = indcs.nx2, nx3 = indcs.nx3;
   MeshBlockPack *pmbp = pmy_mesh_->pmb_pack;
   auto &size = pmbp->pmb->mb_size;
-
+  bool is_relativistic = pmbp->pcoord->is_special_relativistic ||
+                         pmbp->pcoord->is_general_relativistic ||
+                         pmbp->pcoord->is_dynamical_relativistic;
   // Initialize conserved variables in Hydro
   // Hydro only works with shearing box and iprob=1 or 4
   if (pmbp->phydro != nullptr) {
@@ -265,6 +271,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
 
     // compute face-centered fields
     auto &b0 = pmbp->pmhd->b0;
+    auto &bcc0 = pmbp->pmhd->bcc0;
     par_for("floop2", DevExeSpace(), 0,(nmb-1),ks,ke,js,je,is,ie,
     KOKKOS_LAMBDA(int m, int k, int j, int i) {
       Real dx1 = size.d_view(m).dx1;
@@ -293,10 +300,40 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
       }
     });
 
+    // Compute cell-centered fields if relativistic
+    if (is_relativistic) {
+      par_for("pgen_Bcc", DevExeSpace(), 0, (nmb-1),ks,ke,js,je,is,ie,
+      KOKKOS_LAMBDA(int m, int k, int j, int i) {
+        // cell-centered fields are simple linear average of face-centered fields
+        Real& w_bx = bcc0(m,IBX,k,j,i);
+        Real& w_by = bcc0(m,IBY,k,j,i);
+        Real& w_bz = bcc0(m,IBZ,k,j,i);
+        w_bx = 0.5*(b0.x1f(m,k,j,i) + b0.x1f(m,k,j,i+1));
+        w_by = 0.5*(b0.x2f(m,k,j,i) + b0.x2f(m,k,j+1,i));
+        w_bz = 0.0;
+      });
+    }
+
     // Initialize conserved variables in MHD
     EOS_Data &eos = pmbp->pmhd->peos->eos_data;
     Real gm1 = eos.gamma - 1.0;
+    if (pmbp->padm != nullptr) {
+      gm1 = 1.0;
+    }
     auto u0 = pmbp->pmhd->u0;
+    auto w0 = pmbp->pmhd->w0;
+    // If relativity is enabled, use the velocity from the parameter file.
+    Real vx, vy, vz;
+    if (is_relativistic) {
+      vx = pin->GetOrAddReal("problem", "vx", 1./1.2);
+      vy = pin->GetOrAddReal("problem", "vy", 1./2.4);
+      vz = pin->GetOrAddReal("problem", "vz", 0.0);
+      Real vsq = vx*vx + vy*vy + vz*vz;
+      Real W = 1.0/sqrt(1.0 - vsq);
+      vx *= W;
+      vy *= W;
+      vz *= W;
+    }
     par_for("shear1", DevExeSpace(), 0,(pmbp->nmb_thispack-1),ks,ke,js,je,is,ie,
     KOKKOS_LAMBDA(int m, int k, int j, int i) {
       Real &x1min = size.d_view(m).x1min;
@@ -309,29 +346,82 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
       int nx2 = indcs.nx2;
       Real x2v = CellCenterX(j-js, nx2, x2min, x2max);
 
-      u0(m,IDN,k,j,i) = 1.0;
-      if (shearing_box_) {
-        u0(m,IM1,k,j,i) = vx0;
-        u0(m,IM2,k,j,i) = 0.0;
-        u0(m,IM3,k,j,i) = 0.0;
-      } else {
-        u0(m,IM1,k,j,i) = vflow*lx/diag;
-        u0(m,IM2,k,j,i) = vflow*ly/diag;
-//        if (three_d) {
-//          u0(m,IM3,k,j,i) = vflow*lz/diag;
-//        } else {
+      if (!is_relativistic) {
+        u0(m,IDN,k,j,i) = 1.0;
+        if (shearing_box_) {
+          u0(m,IM1,k,j,i) = vx0;
+          u0(m,IM2,k,j,i) = 0.0;
           u0(m,IM3,k,j,i) = 0.0;
-//        }
-      }
-      if (eos.is_ideal) {
-        u0(m,IEN,k,j,i) = 1.0/gm1 +
-         0.5*(SQR(u0(m,IM1,k,j,i)) + SQR(u0(m,IM2,k,j,i)) +
-              SQR(u0(m,IM3,k,j,i)))/u0(m,IDN,k,j,i) +
-         0.5*(SQR(0.5*(b0.x1f(m,k,j,i) + b0.x1f(m,k,j,i+1))) +
-              SQR(0.5*(b0.x2f(m,k,j,i) + b0.x2f(m,k,j+1,i))) +
-              SQR(0.5*(b0.x3f(m,k,j,i) + b0.x3f(m,k+1,j,i))));
+        } else {
+          u0(m,IM1,k,j,i) = vflow*lx/diag;
+          u0(m,IM2,k,j,i) = vflow*ly/diag;
+  //        if (three_d) {
+  //          u0(m,IM3,k,j,i) = vflow*lz/diag;
+  //        } else {
+            u0(m,IM3,k,j,i) = 0.0;
+  //        }
+        }
+        if (eos.is_ideal) {
+          u0(m,IEN,k,j,i) = press/gm1 +
+           0.5*(SQR(u0(m,IM1,k,j,i)) + SQR(u0(m,IM2,k,j,i)) +
+                SQR(u0(m,IM3,k,j,i)))/u0(m,IDN,k,j,i) +
+           0.5*(SQR(0.5*(b0.x1f(m,k,j,i) + b0.x1f(m,k,j,i+1))) +
+                SQR(0.5*(b0.x2f(m,k,j,i) + b0.x2f(m,k,j+1,i))) +
+                SQR(0.5*(b0.x3f(m,k,j,i) + b0.x3f(m,k+1,j,i))));
+        }
+      } else {
+        // If relativity is enabled, initialize the primitive variables instead.
+        w0(m,IDN,k,j,i) = 1.0;
+        w0(m,IVX,k,j,i) = vx;
+        w0(m,IVY,k,j,i) = vy;
+        w0(m,IVZ,k,j,i) = vz;
+        w0(m,IEN,k,j,i) = press/gm1;
       }
     });
+
+    // If relativity is enabled (but not DynGRMHD), call the C2P because we initialized
+    // the primitive variables.
+    if (is_relativistic && pmbp->padm == nullptr) {
+      pmbp->pmhd->peos->PrimToCons(w0, bcc0, u0, is, ie, js, je, ks, ke);
+    }
+  }
+
+  // Initialize the ADM variables if necessary
+  if (pmbp->padm != nullptr) {
+    int n1 = indcs.nx1 + 2*indcs.ng;
+    int n2 = (indcs.nx2 > 1) ? (indcs.nx2 + 2*indcs.ng) : 1;
+    int n3 = (indcs.nx3 > 1) ? (indcs.nx3 + 2*indcs.ng) : 1;
+
+    auto adm = pmbp->padm->adm;
+
+    par_for("pgen_adm_vars", DevExeSpace(), 0,pmbp->nmb_thispack-1,
+    0, (n3-1), 0, (n2-1), 0, (n1-1),
+    KOKKOS_LAMBDA(int m, int k, int j, int i) {
+      adm.alpha(m, k, j, i) = 1.0;
+      adm.beta_u(m, 0, k, j, i) = 0.0;
+      adm.beta_u(m, 1, k, j, i) = 0.0;
+      adm.beta_u(m, 2, k, j, i) = 0.0;
+
+      adm.psi4(m, k, j, i) = 1.0;
+
+      adm.g_dd(m, 0, 0, k, j, i) = 1.0;
+      adm.g_dd(m, 0, 1, k, j, i) = 0.0;
+      adm.g_dd(m, 0, 2, k, j, i) = 0.0;
+      adm.g_dd(m, 1, 1, k, j, i) = 1.0;
+      adm.g_dd(m, 1, 2, k, j, i) = 0.0;
+      adm.g_dd(m, 2, 2, k, j, i) = 1.0;
+
+      adm.vK_dd(m, 0, 0, k, j, i) = 0.0;
+      adm.vK_dd(m, 0, 1, k, j, i) = 0.0;
+      adm.vK_dd(m, 0, 2, k, j, i) = 0.0;
+      adm.vK_dd(m, 1, 1, k, j, i) = 0.0;
+      adm.vK_dd(m, 1, 2, k, j, i) = 0.0;
+      adm.vK_dd(m, 2, 2, k, j, i) = 0.0;
+    });
+
+    // For DynGRMHD, the conserved variables can't be initialized until the ADM variables
+    // have been populated.
+    pmbp->pdyngr->PrimToConInit(is, ie, js, je, ks, ke);
   }
   return;
 }
