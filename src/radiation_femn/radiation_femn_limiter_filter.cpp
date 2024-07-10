@@ -366,9 +366,6 @@ TaskStatus RadiationFEMN::ApplyLimiterTheta(Driver *pdriver, int stage) {
   bool &three_d = pmy_pack->pmesh->three_d;
 
   auto &f0_ = pmy_pack->pradfemn->f0;
-  auto &ftemp_ = pmy_pack->pradfemn->ftemp;
-
-  Kokkos::deep_copy(ftemp_, 0.);
 
   if (one_d) {
     par_for("radiation_femn_limiter_theta_1d", DevExeSpace(), 0, nmb1, ks, ke, js, je, is, int(ie / 2) + 1,
@@ -385,8 +382,8 @@ TaskStatus RadiationFEMN::ApplyLimiterTheta(Driver *pdriver, int stage) {
 
               Real theta = (f0_corner_min < 0) ? f0_corner_min/(f0_corner_min - f0_cellavg): 0;
 
-              ftemp_(m, 0, kk, jj, ii) = theta * f0_cellavg + (1 - theta) * ftemp_(m, 0, kk, jj, ii);
-              ftemp_(m, 0, kk, jj, ii + 1) = theta * f0_cellavg + (1 - theta) * ftemp_(m, 0, kk, jj, ii + 1);
+              f0_(m, 0, kk, jj, ii) = theta * f0_cellavg + (1 - theta) * f0_(m, 0, kk, jj, ii);
+              f0_(m, 0, kk, jj, ii + 1) = theta * f0_cellavg + (1 - theta) * f0_(m, 0, kk, jj, ii + 1);
 
             });
   }
@@ -416,14 +413,12 @@ TaskStatus RadiationFEMN::ApplyLimiterTheta(Driver *pdriver, int stage) {
 
               Real theta = (f0_corner_min < 0) ? f0_corner_min/(f0_corner_min - f0_cellavg): 0;
 
-              ftemp_(m, 0, kk, jj, ii) = theta * f0_cellavg + (1 - theta) * ftemp_(m, 0, kk, jj, ii);
-              ftemp_(m, 0, kk, jj, ii + 1) = theta * f0_cellavg + (1 - theta) * ftemp_(m, 0, kk, jj, ii + 1);
-              ftemp_(m, 0, kk, jj + 1, ii) = theta * f0_cellavg + (1 - theta) * ftemp_(m, 0, kk, jj + 1, ii);
-              ftemp_(m, 0, kk, jj + 1, ii + 1) = theta * f0_cellavg + (1 - theta) * ftemp_(m, 0, kk, jj + 1, ii + 1);
+              f0_(m, 0, kk, jj, ii) = theta * f0_cellavg + (1 - theta) * f0_(m, 0, kk, jj, ii);
+              f0_(m, 0, kk, jj, ii + 1) = theta * f0_cellavg + (1 - theta) * f0_(m, 0, kk, jj, ii + 1);
+              f0_(m, 0, kk, jj + 1, ii) = theta * f0_cellavg + (1 - theta) * f0_(m, 0, kk, jj + 1, ii);
+              f0_(m, 0, kk, jj + 1, ii + 1) = theta * f0_cellavg + (1 - theta) * f0_(m, 0, kk, jj + 1, ii + 1);
             });
   }
-
-  Kokkos::deep_copy(f0_, ftemp_);
 
   return TaskStatus::complete;
 }

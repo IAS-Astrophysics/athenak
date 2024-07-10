@@ -34,6 +34,7 @@ struct RadiationFEMNTaskIDs {
   TaskID rad_expl;
   TaskID rad_limfem;
   TaskID rad_limdg;
+  TaskID rad_limtheta;
   TaskID rad_filterfpn;
   TaskID rad_resti;
   TaskID rad_sendi;
@@ -98,6 +99,7 @@ class RadiationFEMN {
   bool m1_flag;                   // flag for M1
   std::string limiter_dg;         // choice of limiter for DG, set to "minmod2" by default
   std::string limiter_fem;        // choice of limiter for FEM, set to "clp" by default (FEM_N)
+  bool limiter_theta;             // theta limiter
   bool fpn;                       // flag to enable/disable FP_N, disabled by default (FP_N)
   int lmax;                       // maximum value of l when FP_N is used, set to 0 by default (FP_N)
   int filter_sigma_eff;           // effective opacity of the FP_N filter, set to 0 by default (FP_N)
