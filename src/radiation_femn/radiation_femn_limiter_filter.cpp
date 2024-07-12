@@ -400,6 +400,18 @@ TaskStatus RadiationFEMN::ApplyLimiterTheta(Driver *pdriver, int stage) {
                   + f0_(m, 0, kk, jj, ii + 1)
                   + f0_(m, 0, kk, jj + 1, ii)
                   + f0_(m, 0, kk, jj + 1, ii + 1));
+              auto f1_cellavg = (0.25) * (f0_(m, 1, kk, jj, ii)
+                  + f0_(m, 1, kk, jj, ii + 1)
+                  + f0_(m, 1, kk, jj + 1, ii)
+                  + f0_(m, 1, kk, jj + 1, ii + 1));
+              auto f2_cellavg = (0.25) * (f0_(m, 2, kk, jj, ii)
+                  + f0_(m, 2, kk, jj, ii + 1)
+                  + f0_(m, 2, kk, jj + 1, ii)
+                  + f0_(m, 2, kk, jj + 1, ii + 1));
+              auto f3_cellavg = (0.25) * (f0_(m, 3, kk, jj, ii)
+                  + f0_(m, 3, kk, jj, ii + 1)
+                  + f0_(m, 3, kk, jj + 1, ii)
+                  + f0_(m, 3, kk, jj + 1, ii + 1));
 
               auto f0_side_l_jj = (1.5) * f0_(m, 0, kk, jj, ii) - (0.5) * f0_(m, 0, kk, jj, ii + 1);
               auto f0_side_r_jj = -(0.5) * f0_(m, 0, kk, jj, ii) + (0.5) * f0_(m, 0, kk, jj, ii + 1);
@@ -417,6 +429,21 @@ TaskStatus RadiationFEMN::ApplyLimiterTheta(Driver *pdriver, int stage) {
               f0_(m, 0, kk, jj, ii + 1) = theta * f0_cellavg + (1 - theta) * f0_(m, 0, kk, jj, ii + 1);
               f0_(m, 0, kk, jj + 1, ii) = theta * f0_cellavg + (1 - theta) * f0_(m, 0, kk, jj + 1, ii);
               f0_(m, 0, kk, jj + 1, ii + 1) = theta * f0_cellavg + (1 - theta) * f0_(m, 0, kk, jj + 1, ii + 1);
+
+              f0_(m, 1, kk, jj, ii) = theta * f1_cellavg + (1 - theta) * f0_(m, 1, kk, jj, ii);
+              f0_(m, 1, kk, jj, ii + 1) = theta * f1_cellavg + (1 - theta) * f0_(m, 1, kk, jj, ii + 1);
+              f0_(m, 1, kk, jj + 1, ii) = theta * f1_cellavg + (1 - theta) * f0_(m, 1, kk, jj + 1, ii);
+              f0_(m, 1, kk, jj + 1, ii + 1) = theta * f1_cellavg + (1 - theta) * f0_(m, 1, kk, jj + 1, ii + 1);
+
+              f0_(m, 2, kk, jj, ii) = theta * f2_cellavg + (1 - theta) * f0_(m, 2, kk, jj, ii);
+              f0_(m, 2, kk, jj, ii + 1) = theta * f2_cellavg + (1 - theta) * f0_(m, 2, kk, jj, ii + 1);
+              f0_(m, 2, kk, jj + 1, ii) = theta * f2_cellavg + (1 - theta) * f0_(m, 2, kk, jj + 1, ii);
+              f0_(m, 2, kk, jj + 1, ii + 1) = theta * f2_cellavg + (1 - theta) * f0_(m, 2, kk, jj + 1, ii + 1);
+
+              f0_(m, 3, kk, jj, ii) = theta * f3_cellavg + (1 - theta) * f0_(m, 3, kk, jj, ii);
+              f0_(m, 3, kk, jj, ii + 1) = theta * f3_cellavg + (1 - theta) * f0_(m, 3, kk, jj, ii + 1);
+              f0_(m, 3, kk, jj + 1, ii) = theta * f3_cellavg + (1 - theta) * f0_(m, 3, kk, jj + 1, ii);
+              f0_(m, 3, kk, jj + 1, ii + 1) = theta * f3_cellavg + (1 - theta) * f0_(m, 3, kk, jj + 1, ii + 1);
             });
   }
 
