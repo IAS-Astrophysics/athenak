@@ -137,6 +137,7 @@ void ProblemGenerator::RadiationFEMNDopplertest(ParameterInput *pin, const bool 
   // initialize values of the beam sources
   HostArray1D<Real> beam_source_1_vals_h;
   Kokkos::realloc(beam_source_1_vals_h, num_points * num_energy_bins);
+  Kokkos::realloc(beam_source_1_vals_, num_points * num_energy_bins);
 
   user_bcs = true;
   user_bcs_func = radiationfemn::ApplyBeamSourcesFEMN1D;
