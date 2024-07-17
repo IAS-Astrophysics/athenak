@@ -45,6 +45,11 @@ void ProblemGenerator::RadiationFEMNDopplertest(ParameterInput *pin, const bool 
   auto &num_energy_bins_ = pmbp->pradfemn->num_energy_bins;
   auto &energy_grid_ = pmbp->pradfemn->energy_grid;
   auto &energy_max_ = pmbp->pradfemn->energy_max;
+  auto &num_points = pmbp->pradfemn->num_points;
+  auto &num_energy_bins = pmbp->pradfemn->num_energy_bins;
+  auto &rad_E_floor = pmbp->pradfemn->rad_E_floor;
+  auto &rad_eps = pmbp->pradfemn->rad_eps;
+  auto &beam_source_1_vals_ = pmbp->pradfemn->beam_source_1_vals;
 
   num_energy_bins_ = 20;
   energy_max_ = 2 * 1e14;
@@ -128,5 +133,39 @@ void ProblemGenerator::RadiationFEMNDopplertest(ParameterInput *pin, const bool 
             u_mu_(m, 2, k, j, i) = 0.;
             u_mu_(m, 3, k, j, i) = 0.;
           });
+
+  // initialize values of the beam sources
+  HostArray1D<Real> beam_source_1_vals_h;
+  Kokkos::realloc(beam_source_1_vals_h, num_points * num_energy_bins);
+
+  user_bcs = true;
+  user_bcs_func = radiationfemn::ApplyBeamSourcesFEMN1D;
+
+  Real temp = 1000;
+  for (int en = 0; en < num_energy_bins; en++) {
+    int idx = radiationfemn::IndicesUnited(0, en, 0, 1, num_energy_bins, num_points);
+    Real enval = (temp_array(en)+temp_array(en+1))/2.;
+    Real fnorm = B(enval, temp);
+    Real en_dens = fnorm;
+    Real fx = fnorm;
+    Real fy = 0;
+    Real fz = 0;
+    Real f2 = fx * fx + fy * fy + fz * fz;
+
+    en_dens = Kokkos::fmax(en_dens, rad_E_floor);
+    Real lim = en_dens * en_dens * (1. - rad_eps);
+    if (f2 > lim) {
+      Real fac = lim / f2;
+      fx = fac * fx;
+      fy = fac * fy;
+      fz = fac * fz;
+  }
+  beam_source_1_vals_h(idx) = (1. / Kokkos::sqrt(4. * M_PI)) * en_dens;
+  beam_source_1_vals_h(idx+1) = -Kokkos::sqrt(3. / (4. * M_PI)) * fy;
+  beam_source_1_vals_h(idx+2) = Kokkos::sqrt(3. / (4. * M_PI)) * fz;
+  beam_source_1_vals_h(idx+3) = -Kokkos::sqrt(3. / (4. * M_PI)) * fx;
+  }
+  Kokkos::deep_copy(beam_source_1_vals_, beam_source_1_vals_h);
+
   return;
 }
