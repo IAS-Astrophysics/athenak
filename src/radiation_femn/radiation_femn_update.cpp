@@ -348,8 +348,77 @@ TaskStatus RadiationFEMN::ExpRKUpdate(Driver *pdriver, int stage) {
                     member.team_barrier();
                     K = sqrt(K);
 
+                    // terms for multi-energy
                     if (num_energy_bins_ > 1) {
-                      // removed multi-energy scheme for now
+                      ScrArray1D<Real> energy_terms =
+                          ScrArray1D<Real>(member.team_scratch(scr_level), num_points_);
+
+                      par_for_inner(member, 0, num_points_ - 1, [&](const int idx) {
+                        Real part_sum_idx = 0.;
+                        for (int A = 0; A < num_points_; A++) {
+                          Real fn = f0_(m, en * num_points + A, k, j, i);
+                          Real fnm1 = (en - 1 >= 0 && en - 1 < num_energy_bins_) ?
+                                      f0_(m, (en - 1) * num_points_ + A, k, j, i) : 0.;
+                          Real fnm2 = (en - 2 >= 0 && en - 2 < num_energy_bins_) ?
+                                      f0_(m, (en - 2) * num_points_ + A, k, j, i) : 0.;
+                          Real fnp1 = (en + 1 >= 0 && en + 1 < num_energy_bins_) ?
+                                      f0_(m, (en + 1) * num_points_ + A, k, j, i) : 0.;
+                          Real fnp2 = (en + 2 >= 0 && en + 2 < num_energy_bins_) ?
+                                      f0_(m, (en + 2) * num_points_ + A, k, j, i) : 0.;
+
+                          // {F^A} for n and n+1 th bin
+                          Real f_term1_np1 = 0.5 * (fnp1 + fn);
+                          Real f_term1_n = 0.5 * (fn + fnm1);
+
+                          // [[F^A]] for n and n+1 th bin
+                          Real f_term2_np1 = fn - fnp1;
+                          Real f_term2_n = (fnm1 - fn);
+
+                          // width of energy bin (uniform grid)
+                          Real delta_energy = energy_grid_(1) - energy_grid_(0);
+
+                          Real Dmfn = (fn - fnm1) / delta_energy;
+                          Real Dpfn = (fnp1 - fn) / delta_energy;
+                          Real Dfn = (fnp1 - fnm1) / (2. * delta_energy);
+
+                          Real Dmfnm1 = (fnm1 - fnm2) / delta_energy;
+                          Real Dpfnm1 = (fn - fnm1) / delta_energy;
+                          Real Dfnm1 = (fn - fnm2) / (2. * delta_energy);
+
+                          Real Dmfnp1 = (fnp1 - fn) / delta_energy;
+                          Real Dpfnp1 = (fnp2 - fnp1) / delta_energy;
+                          Real Dfnp1 = (fnp2 - fn) / (2. * delta_energy);
+
+                          Real theta_np12 =
+                              (Dfn < energy_par_ * delta_energy || Dmfn * Dpfn > 0.) ?
+                              0. : 1.;
+                          Real theta_nm12 =
+                              (Dfnm1 < energy_par_ * delta_energy || Dmfnm1 * Dpfnm1 > 0.)
+                              ?
+                              0. : 1.;
+                          Real theta_np32 =
+                              (Dfnp1 < energy_par_ * delta_energy || Dmfnp1 * Dpfnp1 > 0.)
+                              ? 0. : 1.;
+
+                          Real theta_n = (theta_nm12 > theta_np12) ?
+                                         theta_nm12 : theta_np12;
+                          Real theta_np1 = (theta_np12 > theta_np32) ?
+                                           theta_np12 : theta_np32;
+
+                          part_sum_idx +=
+                              (energy_grid(en + 1) * energy_grid(en + 1)
+                                  * energy_grid(en + 1) * (f_gam(A, idx) * f_term1_np1
+                                  - theta_np1 * K * f_term2_np1 / 2.)
+                                  - energy_grid(en) * energy_grid(en) * energy_grid(en)
+                                      * (f_gam(A, idx) * f_term1_n
+                                          - theta_n * K * f_term2_n / 2.));
+                        }
+                        energy_terms(idx) = part_sum_idx;
+                      });
+                      member.team_barrier();
+                      for (int idx = 0; idx < num_points_; idx++) {
+                        g_rhs_scratch(idx) += energy_terms(idx);
+                      }
                     }
 
                     ScrArray2D<Real> Q_matrix =
