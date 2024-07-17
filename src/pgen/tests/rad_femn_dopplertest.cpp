@@ -25,6 +25,10 @@
 #include "adm/adm.hpp"
 #include "coordinates/cell_locations.hpp"
 
+KOKKOS_INLINE_FUNCTION Real B(Real en, Real T) {
+  return 2. * en * en * en /(Kokkos::exp(en/T) - 1);
+}
+
 void ProblemGenerator::RadiationFEMNDopplertest(ParameterInput *pin, const bool restart) {
   if (restart) return;
 
