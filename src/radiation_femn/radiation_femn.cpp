@@ -266,8 +266,8 @@ RadiationFEMN::RadiationFEMN(MeshBlockPack *ppack, ParameterInput *pin) :
 
   // beam sources
   if (beam_source && fpn) {
-    Kokkos::realloc(beam_source_1_vals, num_points);
-    Kokkos::realloc(beam_source_2_vals, num_points);
+    Kokkos::realloc(beam_source_1_vals, num_points_total);
+    Kokkos::realloc(beam_source_2_vals, num_points_total);
     if (m1_flag) {
       this->InitializeBeamsSourcesM1();
     } else {
@@ -276,8 +276,8 @@ RadiationFEMN::RadiationFEMN(MeshBlockPack *ppack, ParameterInput *pin) :
   }
 
   if (beam_source && !fpn) {
-    Kokkos::realloc(beam_source_1_vals, num_points);
-    Kokkos::realloc(beam_source_2_vals, num_points);
+    Kokkos::realloc(beam_source_1_vals, num_points_total);
+    Kokkos::realloc(beam_source_2_vals, num_points_total);
     this->InitializeBeamsSourcesFEMN();
   }
 
@@ -288,7 +288,7 @@ RadiationFEMN::RadiationFEMN(MeshBlockPack *ppack, ParameterInput *pin) :
 
   // allocate boundary buffers for cell-centered variables
   pbval_f = new BoundaryValuesCC(ppack, pin, false);
-  pbval_f->InitializeBuffers(num_points);
+  pbval_f->InitializeBuffers(num_points_total);
 }
 
 //----------------------------------------------------------------------------------------------
