@@ -14,14 +14,14 @@
 namespace radiationfemn {
 // Apply M1 closure
 KOKKOS_INLINE_FUNCTION
-void ApplyM1Closure(TeamMember_t member, int num_points, int m, int en, int kk,
+void ApplyM1Closure(TeamMember_t member, int num_points, int m, int nuen, int kk,
                     int jj, int ii, DvceArray5D<Real> f, ScrArray1D<Real> f_scratch,
                     M1Closure m1_closure, ClosureFunc m1_closure_fun,
                     Real rad_E_floor = 1e-15, Real rad_eps = 1e-5) {
-  Real E = Kokkos::sqrt(4. * M_PI) * f(m, en * num_points + 0, kk, jj, ii);         // 00
-  Real Fx = -Kokkos::sqrt(4. * M_PI / 3.0) * f(m, en * num_points + 3, kk, jj, ii); // 11
-  Real Fy = -Kokkos::sqrt(4. * M_PI / 3.0) * f(m, en * num_points + 1, kk, jj, ii); // 1-1
-  Real Fz = Kokkos::sqrt(4. * M_PI / 3.0) * f(m, en * num_points + 2, kk, jj, ii);  // 10
+  Real E = Kokkos::sqrt(4. * M_PI) * f(m, nuen + 0, kk, jj, ii);         // 00
+  Real Fx = -Kokkos::sqrt(4. * M_PI / 3.0) * f(m, nuen + 3, kk, jj, ii); // 11
+  Real Fy = -Kokkos::sqrt(4. * M_PI / 3.0) * f(m, nuen + 1, kk, jj, ii); // 1-1
+  Real Fz = Kokkos::sqrt(4. * M_PI / 3.0) * f(m, nuen + 2, kk, jj, ii);  // 10
   Real F2 = Fx * Fx + Fy * Fy + Fz * Fz;
 
   E = Kokkos::fmax(E, rad_E_floor);
@@ -104,15 +104,15 @@ void ApplyM1Closure(TeamMember_t member, int num_points, int m, int en, int kk,
   f_scratch(7) = -Kokkos::sqrt(60. * M_PI) * Pxz / (4. * M_PI);           // (2, 1)
   f_scratch(8) = Kokkos::sqrt(15. * M_PI) * (Pxx - Pyy) / (4. * M_PI);    // (2, 2)
 
-  f(m, en * num_points + 0, kk, jj, ii) = f_scratch(0);
-  f(m, en * num_points + 1, kk, jj, ii) = f_scratch(1);
-  f(m, en * num_points + 2, kk, jj, ii) = f_scratch(2);
-  f(m, en * num_points + 3, kk, jj, ii) = f_scratch(3);
-  f(m, en * num_points + 4, kk, jj, ii) = f_scratch(4);
-  f(m, en * num_points + 5, kk, jj, ii) = f_scratch(5);
-  f(m, en * num_points + 6, kk, jj, ii) = f_scratch(6);
-  f(m, en * num_points + 7, kk, jj, ii) = f_scratch(7);
-  f(m, en * num_points + 8, kk, jj, ii) = f_scratch(8);
+  f(m, nuen + 0, kk, jj, ii) = f_scratch(0);
+  f(m, nuen + 1, kk, jj, ii) = f_scratch(1);
+  f(m, nuen + 2, kk, jj, ii) = f_scratch(2);
+  f(m, nuen + 3, kk, jj, ii) = f_scratch(3);
+  f(m, nuen + 4, kk, jj, ii) = f_scratch(4);
+  f(m, nuen + 5, kk, jj, ii) = f_scratch(5);
+  f(m, nuen + 6, kk, jj, ii) = f_scratch(6);
+  f(m, nuen + 7, kk, jj, ii) = f_scratch(7);
+  f(m, nuen + 8, kk, jj, ii) = f_scratch(8);
 }
 
 // Apply closure along the x direction
