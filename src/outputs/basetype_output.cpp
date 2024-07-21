@@ -565,7 +565,9 @@ BaseTypeOutput::BaseTypeOutput(OutputParameters opar, Mesh *pm) :
   // radiation femn energy density
   if (out_params.variable.compare("rad_femn_E") == 0) {
     out_params.contains_derived = true;
-    outvars.emplace_back("E", 0, &(derived_var));
+    for (int var = 0; var < pm->pmb_pack->pradfemn->num_energy_bins; var++) {
+      outvars.emplace_back("E" + std::to_string(var), var, &(derived_var));
+    }
   }
 
   // radiation flux for M1

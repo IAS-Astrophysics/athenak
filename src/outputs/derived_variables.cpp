@@ -379,9 +379,9 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
                   });
   }
 
-  // radiation energy density for FEM_N
+  // radiation energy density for FEM_N (multi energy, single species)
   if (name.compare("rad_femn_E") == 0 && pm->pmb_pack->pradfemn->fpn == 0) {
-    Kokkos::realloc(derived_var, nmb, 1, n3, n2, n1);
+    Kokkos::realloc(derived_var, nmb, pm->pmb_pack->pradfemn->num_energy_bins, n3, n2, n1);
     auto dv = derived_var;
     auto &f0_ = pm->pmb_pack->pradfemn->f0;
     auto &e_source_nominv_ = pm->pmb_pack->pradfemn->e_source_nominv;
@@ -398,45 +398,48 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
     par_for_outer("rad_femn_E_compute_femn", DevExeSpace(), scr_size, scr_level, 0, nmb - 1, ks, ke, js, je, is, ie,
                   KOKKOS_LAMBDA(TeamMember_t member, const int m, const int k, const int j, const int i) {
 
-                    Real temp_sum = 0.;
-                    Kokkos::parallel_reduce(Kokkos::TeamVectorRange(member, 0, num_energy_bins_ * num_points_), [=](const int enA, Real &partial_sum) {
+                    par_for_inner(member, 0, num_energy_bins_ - 1,
+                                  [&](const int en){
 
-                      int en = int(enA / num_points_);
-                      int A = enA - en * num_points_;
+                      Real partial_sum = 0.0;
+                      for (int A = 0; A < num_points_; A++){
+                        int nuenang = radiationfemn::IndicesUnited(species, en, A, num_species_, num_energy_bins_, num_points_);
+                        Real Sen = (num_energy_bins_ > 1) ? (pow(energy_grid_(en + 1), 4) - pow(energy_grid_(en), 4)) / 4.0 : 1.;
+                        partial_sum += Sen * e_source_nominv_(A) * f0_(m, nuenang, k, j, i);
+                      }
 
-                      int nuenang = radiationfemn::IndicesUnited(species, en, A, num_species_, num_energy_bins_, num_points_);
-                      Real Sen = (num_energy_bins_ > 1) ? (pow(energy_grid_(en + 1), 4) - pow(energy_grid_(en), 4)) / 4.0 : 1.;
-                      partial_sum += Sen * e_source_nominv_(A) * f0_(m, nuenang, k, j, i);
-
-                    }, temp_sum);
-
-                    dv(m, 0, k, j, i) = temp_sum;
+                      dv(m, en, k, j, i) = partial_sum;
+                    });
                   });
   }
 
+  // radiation energy density for FP_N (multi energy, single species)
   if (name.compare("rad_femn_E") == 0 && pm->pmb_pack->pradfemn->fpn != 0) {
-    Kokkos::realloc(derived_var, nmb, 1, n3, n2, n1);
+    Kokkos::realloc(derived_var, nmb, pm->pmb_pack->pradfemn->num_energy_bins, n3, n2, n1);
     auto dv = derived_var;
     auto &f0_ = pm->pmb_pack->pradfemn->f0;
     auto neng = pm->pmb_pack->pradfemn->num_energy_bins;
     auto nmodes = pm->pmb_pack->pradfemn->num_points;
     auto &energy_grid_ = pm->pmb_pack->pradfemn->energy_grid;
     auto &num_energy_bins_ = pm->pmb_pack->pradfemn->num_energy_bins;
+    auto &num_points_ = pm->pmb_pack->pradfemn->num_points;
+    auto &num_species_ = pm->pmb_pack->pradfemn->num_species;
 
     // Compute sum_{B} sqrt(4 pi) S_n F^n0 where S_n = (e_{n+1}^4 - e_{n}^4)/4
     int scr_level = 0;
     int scr_size = 1;
+    int species = 0;
     par_for_outer("rad_femn_E_compute_fpn", DevExeSpace(), scr_size, scr_level, 0, nmb - 1, ks, ke, js, je, is, ie,
                   KOKKOS_LAMBDA(TeamMember_t member, const int m, const int k, const int j, const int i) {
 
-                    Real Eval = 0.;
-                    Kokkos::parallel_reduce(Kokkos::TeamVectorRange(member, 0, neng), [&](const int en, Real &partial_sum) {
-                      Real Sen = (num_energy_bins_ > 1) ? (pow(energy_grid_(en + 1), 4) - pow(energy_grid_(en), 4)) / 4.0 : 1.;
-                      partial_sum += Sen * 2. * sqrt(M_PI) * f0_(m, en * nmodes, k, j, i);
-                    }, Eval);
-                    member.team_barrier();
+                    par_for_inner(member, 0, num_energy_bins_ - 1,
+                                  [&](const int en){
 
-                    dv(m, 0, k, j, i) = Eval;
+                      Real Sen = (num_energy_bins_ > 1) ? (pow(energy_grid_(en + 1), 4) - pow(energy_grid_(en), 4)) / 4.0 : 1.;
+                      Real partial_sum = Sen * 2. * sqrt(M_PI) * f0_(m, en * nmodes, k, j, i);
+
+                      dv(m, en, k, j, i) = partial_sum;
+                    });
                   });
   }
 
