@@ -21,12 +21,11 @@
 #include "mesh/mesh.hpp"
 #include "pgen/pgen.hpp"
 #include "radiation_femn/radiation_femn.hpp"
-#include "radiation_femn/radiation_femn_geodesic_grid.hpp"
 #include "adm/adm.hpp"
 #include "coordinates/cell_locations.hpp"
 
 KOKKOS_INLINE_FUNCTION Real B(Real en, Real T) {
-  return 2. * en * en * en /(Kokkos::exp(en/T) - 1);
+  return 2. * en * en * en /(Kokkos::exp(en/T) - 1.);
 }
 
 void ProblemGenerator::RadiationFEMNDopplertest(ParameterInput *pin, const bool restart) {
@@ -51,17 +50,10 @@ void ProblemGenerator::RadiationFEMNDopplertest(ParameterInput *pin, const bool 
   auto &rad_eps = pmbp->pradfemn->rad_eps;
   auto &beam_source_1_vals_ = pmbp->pradfemn->beam_source_1_vals;
 
-  num_energy_bins_ = 20;
-  energy_max_ = 2 * 1e14;
   HostArray1D<Real> temp_array;
-  Kokkos::realloc(energy_grid_, num_energy_bins_ + 1);
   Kokkos::realloc(temp_array, num_energy_bins_ + 1);
-  for (int i = 0; i < num_energy_bins_ + 1; i++) {
-    temp_array(i) = i * energy_max_ / Real(num_energy_bins_);
-  }
-  Kokkos::deep_copy(energy_grid_, temp_array);
+  Kokkos::deep_copy(temp_array, energy_grid_);
 
-  std::cout << "Energy grid initialized for Doppler shift test: " << std::endl;
   std::cout << "Number of energy bins: " << num_energy_bins_ << std::endl;
   std::cout << "Number of points on energy grid: " << num_energy_bins_ + 1 << std::endl;
   std::cout << "Energy grid values: " << std::endl;
@@ -142,11 +134,13 @@ void ProblemGenerator::RadiationFEMNDopplertest(ParameterInput *pin, const bool 
   user_bcs = true;
   user_bcs_func = radiationfemn::ApplyBeamSourcesFEMN1D;
 
-  Real temp = 1000;
+  Real temp = 2.083661763613*1e13; // [Hz]
+
   for (int en = 0; en < num_energy_bins; en++) {
     int idx = radiationfemn::IndicesUnited(0, en, 0, 1, num_energy_bins, num_points);
     Real enval = (temp_array(en)+temp_array(en+1))/2.;
-    Real fnorm = B(enval, temp);
+    //Real fnorm = B(enval, temp);
+    Real fnorm = 1;
     Real en_dens = fnorm;
     Real fx = fnorm;
     Real fy = 0;
