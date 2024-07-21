@@ -41,13 +41,6 @@ void ProblemGenerator::RadiationFEMNLinetest(ParameterInput* pin, const bool res
         exit(EXIT_FAILURE);
     }
 
-    if (pmbp->pradfemn->num_energy_bins != 1)
-    {
-        std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
-            << "The 2d line source problem generator can only be run with one energy bin!" << std::endl;
-        exit(EXIT_FAILURE);
-    }
-
     auto& indcs = pmy_mesh_->mb_indcs;
     auto& size = pmbp->pmb->mb_size;
     int& is = indcs.is;
@@ -65,6 +58,8 @@ void ProblemGenerator::RadiationFEMNLinetest(ParameterInput* pin, const bool res
     int ksg = (indcs.nx3 > 1) ? ks - indcs.ng : ks;
     int keg = (indcs.nx3 > 1) ? ke + indcs.ng : ke;
     int nmb = pmbp->nmb_thispack;
+    int &num_energy_bins_ = pmbp->pradfemn->num_energy_bins;
+    int &num_points_ = pmbp->pradfemn->num_points;
     auto& u_mu_ = pmbp->pradfemn->u_mu;
     adm::ADM::ADM_vars& adm = pmbp->padm->adm;
 
@@ -104,7 +99,11 @@ void ProblemGenerator::RadiationFEMNLinetest(ParameterInput* pin, const bool res
                     int nx2 = indcs.nx2;
                     Real x2 = CellCenterX(j - js, nx2, x2min, x2max);
 
-                    f0_(m, 0, k, j, i) = 2. * sqrt(M_PI) * fmax(exp(-(x1 * x1 + x2 * x2) / (2.0 * omega * omega)) / (8.0 * M_PI * omega * omega), 1e-4);
+                    for (int en = 0; en < num_energy_bins_; en++) {
+                      f0_(m, en * num_points_, k, j, i) = 2. * sqrt(M_PI) * fmax(
+                          exp(-(x1 * x1 + x2 * x2) / (2.0 * omega * omega))
+                              / (8.0 * M_PI * omega * omega), 1e-4);
+                    }
                 });
     }
 
