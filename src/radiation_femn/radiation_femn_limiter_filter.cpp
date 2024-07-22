@@ -504,8 +504,26 @@ TaskStatus RadiationFEMN::ApplyLimiterTheta(Driver *pdriver, int stage) {
                                 + f0_(m, 3, kk + 1, jj + 1, ii + 1));
 
               // add logic for computing values at corners and take the minimum
-              auto f0_corner_min = 1.;
-
+              auto f0_side_l_jj = (1.5) * f0_(m, 0, kk, jj, ii) - (0.5) * f0_(m, 0, kk, jj, ii + 1);
+              auto f0_side_r_jj = -(0.5) * f0_(m, 0, kk, jj, ii) + (0.5) * f0_(m, 0, kk, jj, ii + 1);
+              auto f0_side_l_jjp1 = (1.5) * f0_(m, 0, kk, jj + 1, ii) - (0.5) * f0_(m, 0, kk, jj + 1, ii + 1);
+              auto f0_side_r_jjp1 = -(0.5) * f0_(m, 0, kk, jj + 1, ii) + (0.5) * f0_(m, 0, kk, jj + 1, ii + 1);
+              auto f0_side_l_jj_kkp1 = (1.5) * f0_(m, 0, kk + 1, jj, ii) - (0.5) * f0_(m, 0, kk + 1, jj, ii + 1);
+              auto f0_side_r_jj_kkp1 = -(0.5) * f0_(m, 0, kk + 1, jj, ii) + (0.5) * f0_(m, 0, kk + 1, jj, ii + 1);
+              auto f0_side_l_jjp1_kkp1 = (1.5) * f0_(m, 0, kk + 1, jj + 1, ii) - (0.5) * f0_(m, 0, kk + 1, jj + 1, ii + 1);
+              auto f0_side_r_jjp1_kkp1 = -(0.5) * f0_(m, 0, kk + 1, jj + 1, ii) + (0.5) * f0_(m, 0, kk + 1, jj + 1, ii + 1);
+              auto f0_corner_l_down = (1.5) * f0_side_l_jj - (0.5) * f0_side_l_jjp1;
+              auto f0_corner_l_up = -(0.5) * f0_side_l_jj + (0.5) * f0_side_l_jjp1;
+              auto f0_corner_r_down = (1.5) * f0_side_r_jj - (0.5) * f0_side_r_jjp1;
+              auto f0_corner_r_up = -(0.5) * f0_side_r_jj + (0.5) * f0_side_r_jjp1;
+              auto f0_corner_l_down_kkp1 = (1.5) * f0_side_l_jj_kkp1 - (0.5) * f0_side_l_jjp1_kkp1;
+              auto f0_corner_l_up_kkp1 = -(0.5) * f0_side_l_jj_kkp1 + (0.5) * f0_side_l_jjp1_kkp1;
+              auto f0_corner_r_down_kkp1 = (1.5) * f0_side_r_jj_kkp1 - (0.5) * f0_side_r_jjp1_kkp1;
+              auto f0_corner_r_up_kkp1 = -(0.5) * f0_side_r_jj_kkp1 + (0.5) * f0_side_r_jjp1_kkp1;
+              auto f0_corner_min = Kokkos::fmin(
+                      Kokkos::fmin(Kokkos::fmin(Kokkos::fmin(f0_corner_l_down, f0_corner_l_up), f0_corner_r_down), f0_corner_r_up),
+                      Kokkos::fmin(Kokkos::fmin(Kokkos::fmin(f0_corner_l_down_kkp1, f0_corner_l_up_kkp1), f0_corner_r_down_kkp1), f0_corner_r_up_kkp1)
+                      );
               Real theta = (f0_corner_min < 0) ? f0_corner_min/(f0_corner_min - f0_cellavg): 0;
 
               f0_(m, 0, kk, jj, ii) = theta * f0_cellavg + (1 - theta) * f0_(m, 0, kk, jj, ii);
