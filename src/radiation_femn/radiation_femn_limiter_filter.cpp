@@ -457,6 +457,96 @@ TaskStatus RadiationFEMN::ApplyLimiterTheta(Driver *pdriver, int stage) {
             });
   }
 
+  if(three_d) {
+    par_for("radiation_femn_limiter_dg3d", DevExeSpace(), 0, nmb1,
+            ks, int(ke / 2) + 1, js, int(je / 2) + 1, is, int(ie / 2) + 1,
+            KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
+
+              auto kk = 2 * k - 2;
+              auto jj = 2 * j - 2;
+              auto ii = 2 * i - 2;
+
+              auto f0_cellavg = (1.0 / 8.0)
+                                * (f0_(m, 0, kk, jj, ii)
+                                + f0_(m, 0, kk, jj, ii + 1)
+                                + f0_(m, 0, kk, jj + 1, ii)
+                                + f0_(m, 0, kk, jj + 1, ii + 1)
+                                + f0_(m, 0, kk + 1, jj, ii)
+                                + f0_(m, 0, kk + 1, jj, ii + 1)
+                                + f0_(m, 0, kk + 1, jj + 1, ii)
+                                + f0_(m, 0, kk + 1, jj + 1, ii + 1));
+              auto f1_cellavg = (1.0 / 8.0)
+                                * (f0_(m, 1, kk, jj, ii)
+                                + f0_(m, 1, kk, jj, ii + 1)
+                                + f0_(m, 1, kk, jj + 1, ii)
+                                + f0_(m, 1, kk, jj + 1, ii + 1)
+                                + f0_(m, 1, kk + 1, jj, ii)
+                                + f0_(m, 1, kk + 1, jj, ii + 1)
+                                + f0_(m, 1, kk + 1, jj + 1, ii)
+                                + f0_(m, 1, kk + 1, jj + 1, ii + 1));
+              auto f2_cellavg = (1.0 / 8.0)
+                                * (f0_(m, 2, kk, jj, ii)
+                                + f0_(m, 2, kk, jj, ii + 1)
+                                + f0_(m, 2, kk, jj + 1, ii)
+                                + f0_(m, 2, kk, jj + 1, ii + 1)
+                                + f0_(m, 2, kk + 1, jj, ii)
+                                + f0_(m, 2, kk + 1, jj, ii + 1)
+                                + f0_(m, 2, kk + 1, jj + 1, ii)
+                                + f0_(m, 2, kk + 1, jj + 1, ii + 1));
+              auto f3_cellavg = (1.0 / 8.0)
+                                * (f0_(m, 3, kk, jj, ii)
+                                + f0_(m, 3, kk, jj, ii + 1)
+                                + f0_(m, 3, kk, jj + 1, ii)
+                                + f0_(m, 3, kk, jj + 1, ii + 1)
+                                + f0_(m, 3, kk + 1, jj, ii)
+                                + f0_(m, 3, kk + 1, jj, ii + 1)
+                                + f0_(m, 3, kk + 1, jj + 1, ii)
+                                + f0_(m, 3, kk + 1, jj + 1, ii + 1));
+
+              // add logic for computing values at corners and take the minimum
+              auto f0_corner_min = 1.;
+
+              Real theta = (f0_corner_min < 0) ? f0_corner_min/(f0_corner_min - f0_cellavg): 0;
+
+              f0_(m, 0, kk, jj, ii) = theta * f0_cellavg + (1 - theta) * f0_(m, 0, kk, jj, ii);
+              f0_(m, 0, kk, jj, ii + 1) = theta * f0_cellavg + (1 - theta) * f0_(m, 0, kk, jj, ii + 1);
+              f0_(m, 0, kk, jj + 1, ii) = theta * f0_cellavg + (1 - theta) * f0_(m, 0, kk, jj + 1, ii);
+              f0_(m, 0, kk, jj + 1, ii + 1) = theta * f0_cellavg + (1 - theta) * f0_(m, 0, kk, jj + 1, ii + 1);
+              f0_(m, 0, kk + 1, jj, ii) = theta * f0_cellavg + (1 - theta) * f0_(m, 0, kk + 1, jj, ii);
+              f0_(m, 0, kk + 1, jj, ii + 1) = theta * f0_cellavg + (1 - theta) * f0_(m, 0, kk + 1, jj, ii + 1);
+              f0_(m, 0, kk + 1, jj + 1, ii) = theta * f0_cellavg + (1 - theta) * f0_(m, 0, kk + 1, jj + 1, ii);
+              f0_(m, 0, kk + 1, jj + 1, ii + 1) = theta * f0_cellavg + (1 - theta) * f0_(m, 0, kk + 1, jj + 1, ii + 1);
+
+              f0_(m, 1, kk, jj, ii) = theta * f1_cellavg + (1 - theta) * f0_(m, 1, kk, jj, ii);
+              f0_(m, 1, kk, jj, ii + 1) = theta * f1_cellavg + (1 - theta) * f0_(m, 1, kk, jj, ii + 1);
+              f0_(m, 1, kk, jj + 1, ii) = theta * f1_cellavg + (1 - theta) * f0_(m, 1, kk, jj + 1, ii);
+              f0_(m, 1, kk, jj + 1, ii + 1) = theta * f1_cellavg + (1 - theta) * f0_(m, 1, kk, jj + 1, ii + 1);
+              f0_(m, 1, kk + 1, jj, ii) = theta * f1_cellavg + (1 - theta) * f0_(m, 1, kk + 1, jj, ii);
+              f0_(m, 1, kk + 1, jj, ii + 1) = theta * f1_cellavg + (1 - theta) * f0_(m, 1, kk + 1, jj, ii + 1);
+              f0_(m, 1, kk + 1, jj + 1, ii) = theta * f1_cellavg + (1 - theta) * f0_(m, 1, kk + 1, jj + 1, ii);
+              f0_(m, 1, kk + 1, jj + 1, ii + 1) = theta * f1_cellavg + (1 - theta) * f0_(m, 1, kk + 1, jj + 1, ii + 1);
+
+              f0_(m, 2, kk, jj, ii) = theta * f2_cellavg + (1 - theta) * f0_(m, 2, kk, jj, ii);
+              f0_(m, 2, kk, jj, ii + 1) = theta * f2_cellavg + (1 - theta) * f0_(m, 2, kk, jj, ii + 1);
+              f0_(m, 2, kk, jj + 1, ii) = theta * f2_cellavg + (1 - theta) * f0_(m, 2, kk, jj + 1, ii);
+              f0_(m, 2, kk, jj + 1, ii + 1) = theta * f2_cellavg + (1 - theta) * f0_(m, 2, kk, jj + 1, ii + 1);
+              f0_(m, 2, kk + 1, jj, ii) = theta * f2_cellavg + (1 - theta) * f0_(m, 2, kk + 1, jj, ii);
+              f0_(m, 2, kk + 1, jj, ii + 1) = theta * f2_cellavg + (1 - theta) * f0_(m, 2, kk + 1, jj, ii + 1);
+              f0_(m, 2, kk + 1, jj + 1, ii) = theta * f2_cellavg + (1 - theta) * f0_(m, 2, kk + 1, jj + 1, ii);
+              f0_(m, 2, kk + 1, jj + 1, ii + 1) = theta * f2_cellavg + (1 - theta) * f0_(m, 2, kk + 1, jj + 1, ii + 1);
+
+              f0_(m, 3, kk, jj, ii) = theta * f3_cellavg + (1 - theta) * f0_(m, 3, kk, jj, ii);
+              f0_(m, 3, kk, jj, ii + 1) = theta * f3_cellavg + (1 - theta) * f0_(m, 3, kk, jj, ii + 1);
+              f0_(m, 3, kk, jj + 1, ii) = theta * f3_cellavg + (1 - theta) * f0_(m, 3, kk, jj + 1, ii);
+              f0_(m, 3, kk, jj + 1, ii + 1) = theta * f3_cellavg + (1 - theta) * f0_(m, 3, kk, jj + 1, ii + 1);
+              f0_(m, 3, kk + 1, jj, ii) = theta * f3_cellavg + (1 - theta) * f0_(m, 3, kk + 1, jj, ii);
+              f0_(m, 3, kk + 1, jj, ii + 1) = theta * f3_cellavg + (1 - theta) * f0_(m, 3, kk + 1, jj, ii + 1);
+              f0_(m, 3, kk + 1, jj + 1, ii) = theta * f3_cellavg + (1 - theta) * f0_(m, 3, kk + 1, jj + 1, ii);
+              f0_(m, 3, kk + 1, jj + 1, ii + 1) = theta * f3_cellavg + (1 - theta) * f0_(m, 3, kk + 1, jj + 1, ii + 1);
+
+            });
+  }
+
   return TaskStatus::complete;
 }
 } // namespace radiationfemn

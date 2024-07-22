@@ -3,8 +3,8 @@
 // Copyright(C) 2020 James M. Stone <jmstone@ias.edu> and the Athena code team
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
-//! \file radiation_femn_gridtest.cpp
-//! \brief tests the geodesic grid and associated matrices for radiation FEM_N
+//! \file radiation_femn_dopplertest.cpp
+//! \brief doppler test in 1d for radiation FEM_N
 
 // C++ headers
 #include <iostream>
@@ -25,7 +25,11 @@
 #include "coordinates/cell_locations.hpp"
 
 KOKKOS_INLINE_FUNCTION Real B(Real en, Real T) {
-  return 2. * en * en * en /(Kokkos::exp(en/T) - 1.);
+  Real h = 1.;
+  Real cspeed = 1.;
+  Real kb = 1.;
+
+  return ((2. * en * en * en)/(h*h*cspeed*cspeed)) /(Kokkos::exp(en/(kb*T)) - 1.);
 }
 
 void ProblemGenerator::RadiationFEMNDopplertest(ParameterInput *pin, const bool restart) {
@@ -40,7 +44,6 @@ void ProblemGenerator::RadiationFEMNDopplertest(ParameterInput *pin, const bool 
     exit(EXIT_FAILURE);
   }
 
-  // energy grid (20 energy bins from 0 to 2*10^14 Hz]
   auto &num_energy_bins_ = pmbp->pradfemn->num_energy_bins;
   auto &energy_grid_ = pmbp->pradfemn->energy_grid;
   auto &energy_max_ = pmbp->pradfemn->energy_max;
@@ -89,7 +92,7 @@ void ProblemGenerator::RadiationFEMNDopplertest(ParameterInput *pin, const bool 
   Real l = 6.0;
 
   // set metric to minkowski, initialize velocity
-  par_for("pgen_diffusiontest_metric_initialize", DevExeSpace(),
+  par_for("pgen_dopplertest_metric_initialize", DevExeSpace(),
           0, nmb - 1, ksg, keg, jsg, jeg, isg, ieg,
           KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
             for (int a = 0; a < 3; ++a)
@@ -134,13 +137,12 @@ void ProblemGenerator::RadiationFEMNDopplertest(ParameterInput *pin, const bool 
   user_bcs = true;
   user_bcs_func = radiationfemn::ApplyBeamSourcesFEMN1D;
 
-  Real temp = 2.083661763613*1e13; // [Hz]
+  Real temp = 1000; //[K]
 
   for (int en = 0; en < num_energy_bins; en++) {
     int idx = radiationfemn::IndicesUnited(0, en, 0, 1, num_energy_bins, num_points);
     Real enval = (temp_array(en)+temp_array(en+1))/2.;
-    //Real fnorm = B(enval, temp);
-    Real fnorm = 1;
+    Real fnorm = B(enval, temp);
     Real en_dens = fnorm;
     Real fx = fnorm;
     Real fy = 0;
