@@ -135,36 +135,33 @@ class PolytropeEOS {
 };
 
 class PiecewisePolytropeEOS: public Primitive::PiecewisePolytrope {
-  private:
+ public:
+  explicit PiecewisePolytropeEOS(ParameterInput *pin) {
+    ReadParametersFromInput("mhd", pin);
+  }
 
-  public:
-    explicit PiecewisePolytropeEOS(ParameterInput *pin)
-    {
-      ReadParametersFromInput("mhd", pin);
-    }
+  template<LocationTag loc>
+  KOKKOS_INLINE_FUNCTION
+  Real GetPFromRho(Real rho) const {
+    Real nb = rho/mb;
+    int p = FindPiece(nb);
+    return GetColdPressure(nb, p);
+  }
 
-    template<LocationTag loc>
-    KOKKOS_INLINE_FUNCTION
-    Real GetPFromRho(Real rho) const {
-      Real nb = rho/mb;
-      int p = FindPiece(nb);
-      return GetColdPressure(nb, p);
-    }
+  template<LocationTag loc>
+  KOKKOS_INLINE_FUNCTION
+  Real GetRhoFromP(Real P) const {
+    Real rhob = GetDensityFromColdPressure(P);
+    return rhob;
+  }
 
-    template<LocationTag loc>
-    KOKKOS_INLINE_FUNCTION
-    Real GetRhoFromP(Real P) const {
-      Real rhob = GetDensityFromColdPressure(P);
-      return rhob;
-    }
-
-    template<LocationTag loc>
-    KOKKOS_INLINE_FUNCTION
-    Real GetEFromRho(Real rho) const {
-      Real nb = rho/mb;
-      int p = FindPiece(nb);
-      return GetColdEnergy(nb, p);
-    }
+  template<LocationTag loc>
+  KOKKOS_INLINE_FUNCTION
+  Real GetEFromRho(Real rho) const {
+    Real nb = rho/mb;
+    int p = FindPiece(nb);
+    return GetColdEnergy(nb, p);
+  }
 };
 
 class TabulatedEOS {
@@ -725,7 +722,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     SetupTOV<PolytropeEOS>(pin, pmy_mesh_, tov);
   } else if (pmbp->pdyngr->eos_policy == DynGRMHD_EOS::eos_compose) {
     SetupTOV<TabulatedEOS>(pin, pmy_mesh_, tov);
-  } else if (pmbp->pdyngr->eos_policy == DynGR_EOS::eos_piecewise_poly) {
+  } else if (pmbp->pdyngr->eos_policy == DynGRMHD_EOS::eos_piecewise_poly) {
     SetupTOV<PiecewisePolytropeEOS>(pin, pmy_mesh_, tov);
   } else {
     std::cout << "### WARNING in " << __FILE__ << " at line " << __LINE__ << std::endl

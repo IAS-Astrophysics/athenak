@@ -56,7 +56,8 @@ struct UnitSystem {
     return b.mass/mass;
   }
 
-  KOKKOS_INLINE_FUNCTION constexpr Real MassDensityConversion(const UnitSystem & b) const {
+  KOKKOS_INLINE_FUNCTION constexpr
+  Real MassDensityConversion(const UnitSystem & b) const {
     return (b.density/density)*(b.mass/mass);
   }
 
@@ -64,7 +65,8 @@ struct UnitSystem {
     return b.energy/energy;
   }
 
-  KOKKOS_INLINE_FUNCTION constexpr Real EnergyDensityConversion(const UnitSystem& b) const {
+  KOKKOS_INLINE_FUNCTION constexpr
+  Real EnergyDensityConversion(const UnitSystem& b) const {
     return (b.density/density)*(b.energy/energy);
   }
 

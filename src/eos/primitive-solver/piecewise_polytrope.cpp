@@ -10,31 +10,34 @@
 #include <stdio.h>        // BUFSIZ
 #include <string.h>       // snprintf
 
+#include <string>
+
 #include "../../parameter_input.hpp"
 #include "piecewise_polytrope.hpp"
 #include "unit_system.hpp"
 
 #define MAX_PIECES 7
 
-bool Primitive::PiecewisePolytrope::ReadParametersFromInput(std::string block, ParameterInput * pin)
-{
+bool Primitive::PiecewisePolytrope::ReadParametersFromInput(std::string block,
+                                                            ParameterInput * pin) {
   UnitSystem mks = MakeMKS();
 
-  Real poly_rmd = mks.MassDensityConversion(eos_units)*pin->GetReal(block, "pwp_poly_rmd");
+  Real poly_rmd = mks.MassDensityConversion(eos_units)*pin->GetReal(block,
+                                                                    "pwp_poly_rmd");
 
   double densities[MAX_PIECES+1];
   double gammas[MAX_PIECES+1];
-  char cstr[BUFSIZ];
+  char cstr[BUFSIZ]; // NOLINT
   int np;
   for (np = 0; np < MAX_PIECES; ++np) {
-    snprintf(cstr, BUFSIZ, "pwp_density_pieces_%d", np);
+    snprintf(cstr, BUFSIZ, "pwp_density_pieces_%d", np); // NOLINT
     if (pin->DoesParameterExist(block, std::string(cstr))) {
-      densities[np] = mks.MassDensityConversion(eos_units)*pin->GetReal(block, std::string(cstr));
+      densities[np] = mks.MassDensityConversion(eos_units)*pin->GetReal(block,
+                      std::string(cstr));
 
-      snprintf(cstr, BUFSIZ, "pwp_gamma_pieces_%d", np);
+      snprintf(cstr, BUFSIZ, "pwp_gamma_pieces_%d", np); // NOLINT
       gammas[np] = pin->GetReal(block, std::string(cstr));
-    }
-    else {
+    } else {
       break;
     }
   }
