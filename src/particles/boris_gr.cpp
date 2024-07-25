@@ -909,10 +909,10 @@ void Particles::BorisStep( const Real dt, const bool only_v ){
 	Real uE[3]; //Evolution of the velocity due to the electric field (first half). Index 1... stands for dimension (0 is time).
 	Real uB[3]; //Evolution of the velocity due to the magnetic field. Index 1... stands for dimension (0 is time).
 
-        int m = pi(PGID,p) - gids;
-        int ip = (pr(IPX,p) - mbsize.d_view(m).x1min)/mbsize.d_view(m).dx1 + is;
-	int jp = (pr(IPY,p) - mbsize.d_view(m).x2min)/mbsize.d_view(m).dx2 + js;
-	int kp = (pr(IPZ,p) - mbsize.d_view(m).x3min)/mbsize.d_view(m).dx3 + ks;
+	int m = pi(PGID,p) - gids;
+	int ip = (x[0] - mbsize.d_view(m).x1min)/mbsize.d_view(m).dx1 + is;
+	int jp = (x[1] - mbsize.d_view(m).x2min)/mbsize.d_view(m).dx2 + js;
+	int kp = (x[2] - mbsize.d_view(m).x3min)/mbsize.d_view(m).dx3 + ks;
 
 	Real &x1min = mbsize.d_view(m).x1min;
 	Real &x2min = mbsize.d_view(m).x2min;
