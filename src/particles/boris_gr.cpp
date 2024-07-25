@@ -1061,7 +1061,7 @@ void Particles::GeodesicIterations( const Real dt ){
 		
 	++n_iter;
 	if (n_iter > 5){
-		step_fac = 10E+2;
+		step_fac = 1E+3;
 	}
 
 	HamiltonEquation_Position(x_init, x_eval, v_init, v_eval, spin, RHS_eval_x);
