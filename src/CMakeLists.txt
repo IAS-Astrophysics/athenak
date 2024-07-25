@@ -145,6 +145,7 @@ add_executable(
         utils/change_rundir.cpp
         utils/show_config.cpp
         utils/lagrange_interpolator.cpp
+        utils/tov/tov.cpp
         utils/tr_table.cpp
 
         z4c/tmunu.cpp
