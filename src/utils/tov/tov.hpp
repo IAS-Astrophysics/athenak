@@ -11,7 +11,6 @@
 #include <math.h>
 
 #include <type_traits>
-#include <iostream>
 
 #include "athena.hpp"
 #include "globals.hpp"
@@ -23,7 +22,7 @@ namespace tov {
 // Useful container for physical parameters of star
 class TOVStar {
  private:
-  explicit TOVStar(ParameterInput* pin);
+  TOVStar(ParameterInput* pin);
 
   template<class TOVEOS>
   void RHS(Real r, Real P_pt, Real m_pt, Real alp_pt, Real R_pt, TOVEOS& eos,
@@ -41,7 +40,7 @@ class TOVStar {
       dR = 1.0;
       return;
     }
-
+    
     Real rho = eos.template GetRhoFromP<LocationTag::Host>(P_pt);
     Real e = eos.template GetEFromRho<LocationTag::Host>(rho);
 
@@ -49,14 +48,13 @@ class TOVStar {
     Real B = (m_pt + 4.0*M_PI*r*r*r*P_pt)/SQR(r);
     dP = -(e + P_pt)*A * B;
     dm = 4.0*M_PI*SQR(r)*e;
-    //dalp = alp_pt*A * B;
-    dalp = A * B;
+    dalp = alp_pt*A * B;
     dR = R_pt/r*sqrt(A);
   }
 
  public:
   template<class TOVEOS>
-  static TOVStar ConstructTOV(ParameterInput* pin, TOVEOS& eos, bool verbose=true);
+  static TOVStar ConstructTOV(ParameterInput* pin, TOVEOS& eos);
 
   KOKKOS_INLINE_FUNCTION
   Real FindSchwarzschildR(Real r_iso, Real mass) const {
@@ -89,49 +87,6 @@ class TOVStar {
       }
     }
     return lb;
-  }
-
-  KOKKOS_INLINE_FUNCTION
-  void GetMandAlpha(Real r, Real &m, Real &alp) const {
-    if (r > R_edge) {
-      m = M_edge;
-      alp = sqrt(1.0 - 2.0*m/r);
-      return;
-    }
-
-    int idx = static_cast<int>(r/dr);
-    const auto &R_l = R.d_view;
-    const auto &alps_l = alpha.d_view;
-    const auto &Ms_l = M.d_view;
-    m = Interpolate(r, R_l(idx), R_l(idx+1), Ms_l(idx), Ms_l(idx+1));
-    alp = Interpolate(r, R_l(idx), R_l(idx+1), alps_l(idx), alps_l(idx+1));
-
-    return;
-  }
-
-  KOKKOS_INLINE_FUNCTION
-  void GetMandAlphaIso(Real r_iso, Real &m, Real &alp) const {
-    if (r_iso > R_edge_iso) {
-      m = M_edge;
-      alp = (1. - m/(2.*r_iso))/(1. + m/(2.*r_iso));
-      return;
-    }
-    // Because isotropic coordinates are not evenly spaced, we need to search for the
-    // right index.
-    const auto &R_iso_l = R_iso.d_view;
-    int idx = FindIsotropicIndex(r_iso);
-    const auto &alps_l = alpha.d_view;
-    const auto &Ms_l = M.d_view;
-    if (idx >= npoints || idx < 0) {
-      Kokkos::printf("There's a problem with the index!\n" // NOLINT
-                     " idx = %d\n"
-                     " r_iso = %g\n"
-                     " dr = %g\n",idx,r_iso,dr);
-    }
-    m = Interpolate(r_iso, R_iso_l(idx), R_iso_l(idx+1), Ms_l(idx), Ms_l(idx+1));
-    alp = Interpolate(r_iso, R_iso_l(idx), R_iso_l(idx+1), alps_l(idx), alps_l(idx+1));
-
-    return;
   }
 
   template<class TOVEOS>
@@ -172,7 +127,7 @@ class TOVStar {
 };
 
 template<class TOVEOS>
-TOVStar TOVStar::ConstructTOV(ParameterInput *pin, TOVEOS& eos, bool verbose) {
+TOVStar TOVStar::ConstructTOV(ParameterInput *pin, TOVEOS& eos) {
   TOVStar tov{pin};
 
   tov.pfloor = eos.template GetPFromRho<LocationTag::Host>(tov.dfloor);
@@ -200,11 +155,9 @@ TOVStar TOVStar::ConstructTOV(ParameterInput *pin, TOVEOS& eos, bool verbose) {
   P(0) = eos.template GetPFromRho<LocationTag::Host>(tov.rhoc);
   // FIXME: Assumes ideal gas!
   //P(0) = tov.kappa*pow(tov.rhoc, tov.gamma);
-  //alp(0) = 1.0;
-  alp(0) = 0.0;
+  alp(0) = 1.0;
 
   // Integrate outward using RK4
-  tov.n_r = 0;
   for (int i = 0; i < npoints-1; i++) {
     Real r, P_pt, alp_pt, m_pt, R_pt;
 
@@ -257,13 +210,6 @@ TOVStar TOVStar::ConstructTOV(ParameterInput *pin, TOVEOS& eos, bool verbose) {
     }
   }
 
-  if (tov.n_r == 0) {
-    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
-              << "TOV solver failed to find the edge of the star." << std::endl
-              << "Increase number of points, radial step, or rho_cut." << std::endl;
-    exit(EXIT_FAILURE);
-  }
-
   // Now we can do a linear interpolation to estimate the actual edge of the star.
   int n_r = tov.n_r;
   tov.R_edge = Interpolate(tov.pfloor, P(n_r-1), P(n_r), R(n_r-1), R(n_r));
@@ -275,10 +221,6 @@ TOVStar TOVStar::ConstructTOV(ParameterInput *pin, TOVEOS& eos, bool verbose) {
   alp(n_r) = Interpolate(tov.R_edge, R(n_r-1), R(n_r), alp(n_r-1), alp(n_r));
   R(n_r) = tov.R_edge;
   R_iso(n_r) = Interpolate(tov.R_edge, R(n_r-1), R(n_r), R_iso(n_r-1), R_iso(n_r));
-
-  for (int i = 0; i <= n_r; i++) {
-    alp(i) = exp(alp(i));
-  }
 
   // Rescale alpha so that it matches the Schwarzschild metric at the boundary.
   // We also need to rescale the isotropic radius to agree at the boundary.
@@ -293,7 +235,7 @@ TOVStar TOVStar::ConstructTOV(ParameterInput *pin, TOVEOS& eos, bool verbose) {
   }
 
   // Print out details of the calculation
-  if (global_variable::my_rank == 0 && verbose) {
+  if (global_variable::my_rank == 0) {
     std::cout << "\nTOV INITIAL DATA\n"
               << "----------------\n";
     std::cout << "Total points in buffer: " << tov.npoints << "\n";
