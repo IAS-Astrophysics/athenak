@@ -8,6 +8,7 @@
 
 #include <stdio.h>
 #include <math.h>
+#include <sys/stat.h>  // mkdir
 
 #include <algorithm>
 #include <iostream>
@@ -90,10 +91,14 @@ void SGRIDHistory(HistoryData *pdata, Mesh *pm);
 //! \fn ProblemGenerator::UserProblem_()
 //! \brief Problem Generator for BNS with Elliptica
 void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
-  if (restart) return;
-
   // Set the custom history function
   user_hist_func = &SGRIDHistory;
+
+  if (restart) return;
+
+  if (global_variable::my_rank == 0) {
+    mkdir("SGRID", 0775);
+  }
 
   MeshBlockPack *pmbp = pmy_mesh_->pmb_pack;
   auto &indcs = pmy_mesh_->mb_indcs;
@@ -429,12 +434,15 @@ void DNS_init_sgrid(ParameterInput *pin)
   const int myrank = global_variable::my_rank;
 
   const bool verbose = pin->GetOrAddBoolean("problem", "verbose", 0);
-  char *sgrid_datadir = const_cast<char *>(pin->GetString("problem", "datadir").c_str());
+  std::string const sgrid_datadir_const = pin->GetString("problem", "datadir");
   const bool keep_sgrid_output = pin->GetOrAddBoolean("problem", "keep_sgrid_output", false);
   const bool Interpolate_verbose = pin->GetOrAddBoolean("problem", "Interpolate_verbose", false);
   const bool Interpolate_make_finer_grid2 = pin->GetOrAddBoolean("problem", "Interpolate_make_finer_grid2", false);
   const Real Interpolate_max_xyz_diff = pin->GetOrAddReal("problem", "Interpolate_max_xyz_diff", 0.0);
-  char const *outdir = pin->GetOrAddString("problem", "outdir","SGRID").c_str();
+  std::string const outdir = pin->GetOrAddString("problem", "outdir","SGRID");
+
+  char * sgrid_datadir = (char *)malloc(sgrid_datadir_const.length() + 1);
+  std::strcpy(sgrid_datadir, sgrid_datadir_const.c_str());
 
   char command[STRLEN+65676];
   char sgrid_exe[] = "sgrid"; // name is not important 
@@ -446,9 +454,9 @@ void DNS_init_sgrid(ParameterInput *pin)
 
   // initialize file names 
   //std::sprintf(gridfile, "%s/grid_level_%d_proc_%d.dat", outdir, level_l, MPIrank);
-  std::sprintf(sgridoutdir, "%s/sgrid_level_%d_proc_%d", outdir, level_l, myrank);
+  std::sprintf(sgridoutdir, "%s/sgrid_level_%d_proc_%d", outdir.c_str(), level_l, myrank);
   std::sprintf(sgridoutdir_previous, "%s/sgrid_level_%d_proc_%d_previous",
-          outdir, level_l, myrank);
+          outdir.c_str(), level_l, myrank);
   std::snprintf(sgridcheckpoint_indir, STRLEN-1, "%s", sgrid_datadir);
   stringptr = strrchr(sgrid_datadir, '/'); // find last / 
   if(stringptr==NULL) { // no / found in DNSdataReader_sgrid_datadir 
@@ -726,9 +734,8 @@ int DNS_parameters(ParameterInput *pin)
   Real qmax2 = atof(str);
 
   //
-  // Set Athena++ parameters for later
+  // Set AthenaK parameters for later
   //
-  
   pin->SetReal("problem", "x_CM" , sgrid_x_CM);
   pin->SetReal("problem", "Omega", Omega);
   pin->SetReal("problem", "ecc"  , ecc);
