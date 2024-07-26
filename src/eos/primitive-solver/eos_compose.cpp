@@ -73,7 +73,7 @@ void EOSCompOSE<LogPolicy>::ReadTableFromFile(std::string fname) {
 
       m_id_log_nb = 1.0/(host_log_nb(1) - host_log_nb(0));
       min_n = table_nb[0];
-      max_n = table_nb[m_nn-1];
+      max_n = table_nb[m_nn-1]*(1 - 1e-15);
     }
 
     { // read yq
@@ -83,7 +83,7 @@ void EOSCompOSE<LogPolicy>::ReadTableFromFile(std::string fname) {
       }
       m_id_yq = 1.0/(host_yq(1) - host_yq(0));
       min_Y[0] = table_yq[0];
-      max_Y[0] = table_yq[m_ny-1];
+      max_Y[0] = table_yq[m_ny-1]*(1 - 1e-15);
     }
 
     { // read T

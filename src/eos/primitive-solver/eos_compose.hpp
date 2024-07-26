@@ -104,7 +104,10 @@ class EOSCompOSE : public EOSPolicyInterface, public LogPolicy, public SupportsE
     assert (m_initialized);
     if (n < min_n) {
       return min_T;
-    } else if (p <= MinimumPressure(n, Y)) {
+    }
+    Real p_min = MinimumPressure(n, Y);
+    if (p <= p_min) {
+      p = p_min;
       return min_T;
     }
     Real log_p = log2_(p);
