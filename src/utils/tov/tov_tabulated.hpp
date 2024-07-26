@@ -110,7 +110,7 @@ class TabulatedEOS {
   Real GetPFromRho(Real rho) const {
     Real lrho = log(rho);
     if (lrho < lrho_min) {
-      return 0.0;
+      return exp(lP_min);
     }
     int lb = static_cast<int>((lrho-lrho_min)/dlrho);
     int ub = lb + 1;
