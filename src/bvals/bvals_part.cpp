@@ -88,6 +88,7 @@ TaskStatus ParticlesBoundaryValues::SetNewPrtclGID() {
   Kokkos::View<int> atom_d_count("atom_d_count");
   Kokkos::deep_copy(atom_d_count, destroy_count);
   auto &pdestroyl = destroylist;
+  const Real &min_rad = pmy_part->min_radius;
 
   Kokkos::realloc(sendlist, static_cast<int>(npart));
   Kokkos::realloc(destroylist, static_cast<int>(npart));
@@ -115,8 +116,24 @@ TaskStatus ParticlesBoundaryValues::SetNewPrtclGID() {
     fy = multi_d ? fy : 0;
     fz = three_d ? fz : 0;
 
+    bool check_boundary =
+        ( mb_bcs.d_view(m,BoundaryFace::inner_x3) == BoundaryFlag::user && iz < 0)
+        || ( mb_bcs.d_view(m,BoundaryFace::outer_x3) == BoundaryFlag::user && iz > 0)
+        || ( mb_bcs.d_view(m,BoundaryFace::inner_x2) == BoundaryFlag::user && iy < 0)
+        || ( mb_bcs.d_view(m,BoundaryFace::outer_x2) == BoundaryFlag::user && iy > 0)
+        || ( mb_bcs.d_view(m,BoundaryFace::inner_x1) == BoundaryFlag::user && ix < 0)
+        || ( mb_bcs.d_view(m,BoundaryFace::outer_x1) == BoundaryFlag::user && ix > 0)
+	|| (SQR(x1) + SQR(x2) + SQR(x3) < SQR(min_rad)) ;
+      // Add particle to destruction list
+      // At the time of sending the particles that need to be destroyed
+      // are treated like those that have been sent
+      // without actually being sent (i.e. they're remove from arrays)
+
+    if (check_boundary) {
+        MarkForDestruction(&atom_d_count(), pdestroyl, p);
+    }
     // only update particle GID if it has crossed MeshBlock boundary
-    if ((abs(ix) + abs(iy) + abs(iz)) != 0) {
+    if ((abs(ix) + abs(iy) + abs(iz)) != 0 && !check_boundary) {
       // The way GIDs are determined currently is not reliable in SMR cases
       // due to nighbours across edges and corners being uninitialized.
       // Need extra check
@@ -162,21 +179,6 @@ TaskStatus ParticlesBoundaryValues::SetNewPrtclGID() {
         }
       }
       int indx = 0;
-      bool check_boundary =
-        ( mb_bcs.d_view(m,BoundaryFace::inner_x3) == BoundaryFlag::user && iz < 0)
-        || ( mb_bcs.d_view(m,BoundaryFace::outer_x3) == BoundaryFlag::user && iz > 0)
-        || ( mb_bcs.d_view(m,BoundaryFace::inner_x2) == BoundaryFlag::user && iy < 0)
-        || ( mb_bcs.d_view(m,BoundaryFace::outer_x2) == BoundaryFlag::user && iy > 0)
-        || ( mb_bcs.d_view(m,BoundaryFace::inner_x1) == BoundaryFlag::user && ix < 0)
-        || ( mb_bcs.d_view(m,BoundaryFace::outer_x1) == BoundaryFlag::user && ix > 0)
-	|| (SQR(x1) + SQR(x2) + SQR(x3) < 3.0) ;
-      // Add particle to destruction list
-      // At the time of sending the particles that need to be destroyed
-      // are treated like those that have been sent
-      // without actually being sent (i.e. they're remove from arrays)
-      if (check_boundary) {
-        MarkForDestruction(&atom_d_count(), pdestroyl, p);
-      } else {
         if (iz == 0) {
           if (iy == 0) {
             // x1 face
@@ -310,7 +312,6 @@ TaskStatus ParticlesBoundaryValues::SetNewPrtclGID() {
           pr(IPZ,p) -= (meshsize.x3max - meshsize.x3min);
         }
       }
-    }
   });
   Kokkos::deep_copy(counter, atom_count);
   Kokkos::deep_copy(destroy_count, atom_d_count);
@@ -645,6 +646,7 @@ TaskStatus ParticlesBoundaryValues::RecvAndUnpackPrtcls() {
     auto &dlist = destroylist;
     int nps = nprtcl_send;
     int npd = nprtcl_destroy;
+    int npa = pmy_part->nprtcl_thispack;
     par_for("punpack",DevExeSpace(),0,(nprtcl_recv-1), KOKKOS_LAMBDA(const int n) {
       int p;
       if (n < nps ) {
@@ -654,7 +656,7 @@ TaskStatus ParticlesBoundaryValues::RecvAndUnpackPrtcls() {
         p = dlist.d_view(n-nps).prtcl_indx;
       } else {
         // place particle at end of arrays
-        p = npart + (n - nps - npd );
+        p = npa + (n - nps - npd );
       }
       for (int i=0; i<nidata; ++i) {
         pi(i,p) = irecvbuf(nidata*n + i);
