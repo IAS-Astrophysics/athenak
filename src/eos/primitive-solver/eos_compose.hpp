@@ -82,6 +82,9 @@ class EOSCompOSE : public EOSPolicyInterface {
   /// Calculate the temperature using.
   KOKKOS_INLINE_FUNCTION Real TemperatureFromP(Real n, Real p, Real *Y) const {
     assert (m_initialized);
+    if (n < min_n) {
+      return min_T;
+    }
     Real p_min = MinimumPressure(n, Y);
     if (p <= p_min) {
       p = p_min;

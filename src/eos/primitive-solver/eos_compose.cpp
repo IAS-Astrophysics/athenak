@@ -54,6 +54,10 @@ void EOSCompOSE::ReadTableFromFile(std::string fname) {
     HostArray1D<Real>::HostMirror host_log_t =  create_mirror_view(m_log_t);
     HostArray4D<Real>::HostMirror host_table =  create_mirror_view(m_table);
 
+    // Note that the some quantities are perturbed down slightly from what the top of
+    // the table allows. This is because a lot of the interpolation operations need
+    // n[i], n[i+1], yq[j], and yq[j+1], where i and j are the indices providing the
+    // nearest table values at or below a specified i and yq.
     { // read nb
       Real * table_nb = table["nb"];
       for (size_t in=0; in<m_nn; ++in) {
@@ -61,7 +65,7 @@ void EOSCompOSE::ReadTableFromFile(std::string fname) {
       }
       m_id_log_nb = 1.0/(host_log_nb(1) - host_log_nb(0));
       min_n = table_nb[0];
-      max_n = table_nb[m_nn-1];
+      max_n = table_nb[m_nn-1]*(1 - 1e-15);
     }
 
     { // read yq
@@ -71,7 +75,7 @@ void EOSCompOSE::ReadTableFromFile(std::string fname) {
       }
       m_id_yq = 1.0/(host_yq(1) - host_yq(0));
       min_Y[0] = table_yq[0];
-      max_Y[0] = table_yq[m_ny-1];
+      max_Y[0] = table_yq[m_ny-1]*(1 - 1e-15);
     }
 
     { // read T

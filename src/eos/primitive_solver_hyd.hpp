@@ -114,7 +114,7 @@ class PrimitiveSolverHydro {
 
     for (int n = 0; n < ps.GetEOS().GetNSpecies(); n++) {
       std::stringstream spec_name;
-      spec_name << "s" << (n + 1) << "_atmosphere";
+      spec_name << "s" << n << "_atmosphere";
       ps.GetEOSMutable().SetSpeciesAtmosphere(
           pin->GetOrAddReal(block, spec_name.str(), 0.0), n);
     }

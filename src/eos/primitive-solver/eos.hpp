@@ -343,13 +343,13 @@ class EOS : public EOSPolicy, public ErrorPolicy {
   //  \brief Set the density floor used by the EOS ErrorPolicy.
   //         Also adjusts the pressure and tau floor to be consistent.
   KOKKOS_INLINE_FUNCTION void SetDensityFloor(Real floor) {
-    n_atm = (floor >= 0.0) ? floor : 0.0;
+    n_atm = (floor >= min_n) ? floor : min_n;
   }
 
   //! \fn void SetTemperatureFloor(Real floor)
   //  \brief Set the temperature floor (in code units) used by the EOS ErrorPolicy.
   KOKKOS_INLINE_FUNCTION void SetTemperatureFloor(Real floor) {
-    T_atm = (floor >= 0.0) ? floor : 0.0;
+    T_atm = (floor >= min_T) ? floor : min_T;
   }
 
   //! \fn void SetSpeciesAtmospher(Real atmo, int i)
@@ -466,8 +466,8 @@ class EOS : public EOSPolicy, public ErrorPolicy {
   }
 
   //! \brief Limit Y to a specified range
-  KOKKOS_INLINE_FUNCTION void ApplySpeciesLimits(Real *Y) const {
-    SpeciesLimits(Y, min_Y, max_Y, n_species);
+  KOKKOS_INLINE_FUNCTION bool ApplySpeciesLimits(Real *Y) const {
+    return SpeciesLimits(Y, min_Y, max_Y, n_species);
   }
 
   //! \brief Limit the pressure to a specified range at a given density and composition
