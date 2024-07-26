@@ -63,10 +63,12 @@ Particles::Particles(MeshBlockPack *ppack, ParameterInput *pin) :
   } else if (ppush.compare("only_gr") == 0) {
     max_iter = pin->GetOrAddInteger("particles", "max_iter", 10);
     iter_tolerance = pin->GetOrAddReal("particles", "iter_tolerance", 1.0E-7);
+    min_radius = pin->GetOrAddReal("particles", "min_radius", 3.0);
     pusher = ParticlesPusher::only_gr;
   } else if (ppush.compare("full_gr") == 0) {
     max_iter = pin->GetOrAddInteger("particles", "max_iter", 10);
     iter_tolerance = pin->GetOrAddReal("particles", "iter_tolerance", 1.0E-7);
+    min_radius = pin->GetOrAddReal("particles", "min_radius", 3.0);
     pusher = ParticlesPusher::full_gr;
   } else {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
