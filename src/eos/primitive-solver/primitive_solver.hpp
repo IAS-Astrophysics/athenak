@@ -375,8 +375,11 @@ SolverResult PrimitiveSolver<EOSPolicy, ErrorPolicy>::ConToPrim(Real prim[NPRIM]
   // Extract the particle fractions.
   const int n_species = eos.GetNSpecies();
   Real Y[MAX_SPECIES] = {0.0};
-  for (int s = 0; s < n_species; s++) {
-    Y[s] = cons[CYD + s]/cons[CDN];
+  // Avoid division by zero.
+  if (cons[CDN] > 0 ) {
+    for (int s = 0; s < n_species; s++) {
+      Y[s] = cons[CYD + s]/cons[CDN];
+    }
   }
   // Apply limits to Y to ensure a physical state
   bool Y_adjusted = eos.ApplySpeciesLimits(Y);
