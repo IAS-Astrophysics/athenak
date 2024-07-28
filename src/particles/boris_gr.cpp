@@ -996,6 +996,13 @@ void Particles::BorisStep( const Real dt, const bool only_v ){
 	pr(IPVZ,p) = u_cov[2];
 
 	if (!only_v){
+	g_Lor = 0.0; //Intermediate Lorentz gamma factor
+	for (int i1 = 0; i1 < 3; ++i1 ){ 
+		for (int i2 = 0; i2 < 3; ++i2 ){ 
+		g_Lor += ADM_upper[i1][i2]*u_cov[i1]*u_cov[i2];
+		}
+	}
+	g_Lor = sqrt(1.0 + g_Lor)/sqrt(-gupper[0][0]);
 	// Raise indeces of u_cov to update position
 	for (int i1 = 0; i1 < 3; ++i1 ){ 
 		u_con[i1] = 0.0;
