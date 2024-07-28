@@ -871,7 +871,7 @@ void Particles::BorisStep( const Real dt, const bool only_v ){
 	Real g_Lor;
 	// Get metric components at new location x1,x2,x3
 	Real glower[4][4], gupper[4][4], ADM_upper[3][3]; // Metric 
-					       // (remember: sqrt(-1/gupper[0][0]) = alpha, glower[0][i] = beta[i])
+					       // (remember: sqrt(-1/gupper[0][0]) = alpha)
         Real x1p = pr(IPX,p);
         Real x2p = pr(IPY,p);
         Real x3p = pr(IPZ,p);
@@ -885,9 +885,6 @@ void Particles::BorisStep( const Real dt, const bool only_v ){
 		u_con[i1] += ADM_upper[i1][i2]*u_cov[i2];
 		}
 	}
-	x[0] = pr(IPX,p) + dt/(2.0)*u_con[0];
-        if (multi_d) { x[1] = pr(IPY,p) + dt/(2.0)*u_con[1]; }
-        if (three_d) { x[2] = pr(IPZ,p) + dt/(2.0)*u_con[2]; }
 	//Use definition of the Lorentz factor in ADM formalism
 	//Sometimes called u0 instead
 	g_Lor = 0.0;
@@ -900,14 +897,18 @@ void Particles::BorisStep( const Real dt, const bool only_v ){
 	// the particle is massless, but I don't know of 
 	// any massless particle that can interact with an 
 	// electromagnetic field (unless one goes into quantum mechanics)
-	g_Lor = sqrt(1.0 + g_Lor);
+	g_Lor = sqrt(1.0 + g_Lor)/sqrt(-gupper[0][0]);
 	//Boost velocities
 	// for ( int i=0; i<3; ++i){
 	// 	u_con[i] *= g_Lor;
 	// }
 
-	Real uE[3]; //Evolution of the velocity due to the electric field (first half). Index 1... stands for dimension (0 is time).
-	Real uB[3]; //Evolution of the velocity due to the magnetic field. Index 1... stands for dimension (0 is time).
+	x[0] = pr(IPX,p) + dt/(2.0)*(u_con[0]/g_Lor + gupper[0][1]/gupper[0][0]) ;
+        if (multi_d) { x[1] = pr(IPY,p) + dt/(2.0)*(u_con[1]/g_Lor + gupper[0][2]/gupper[0][0]) ; }
+        if (three_d) { x[2] = pr(IPZ,p) + dt/(2.0)*(u_con[2]/g_Lor + gupper[0][3]/gupper[0][0]) ; }
+
+	Real uE[3]; //Evolution of the velocity due to the electric field (first half).
+	Real uB[3]; //Evolution of the velocity due to the magnetic field.
 
 	int m = pi(PGID,p) - gids;
 	int ip = (x[0] - mbsize.d_view(m).x1min)/mbsize.d_view(m).dx1 + is;
@@ -957,7 +958,7 @@ void Particles::BorisStep( const Real dt, const bool only_v ){
 		g_Lor += ADM_upper[i1][i2]*u_cov[i1]*u_cov[i2];
 		}
 	}
-	g_Lor = sqrt(1.0 + g_Lor);
+	g_Lor = sqrt(1.0 + g_Lor)/sqrt(-gupper[0][0]);
         // Interpolate Magnetic Field at new particle location x1, x2, x3
 	// Store it in an array for convenience 
 	Real B[3] = {0.0, 0.0, 0.0};
@@ -989,13 +990,6 @@ void Particles::BorisStep( const Real dt, const bool only_v ){
 		u_cov[i1] += glower[i1+1][i2+1]*uB[i2];
 		}
 	}
-	g_Lor = 0.0; //Intermediate Lorentz gamma factor
-	for (int i1 = 0; i1 < 3; ++i1 ){ 
-		for (int i2 = 0; i2 < 3; ++i2 ){ 
-		g_Lor += ADM_upper[i1][i2]*u_cov[i1]*u_cov[i2];
-		}
-	}
-	g_Lor = sqrt(1.0 + g_Lor);
 	// Finally update velocity in local space
 	pr(IPVX,p) = u_cov[0];
 	pr(IPVY,p) = u_cov[1];
@@ -1009,9 +1003,9 @@ void Particles::BorisStep( const Real dt, const bool only_v ){
 		u_con[i1] += ADM_upper[i1][i2]*u_cov[i2];
 		}
 	}
-	pr(IPX,p) = x[0] + dt/(2.0*g_Lor)*pr(IPVX,p);
-        if (multi_d) { pr(IPY,p) = x[1] + dt/(2.0*g_Lor)*pr(IPVY,p); }
-        if (three_d) { pr(IPZ,p) = x[2] + dt/(2.0*g_Lor)*pr(IPVZ,p); }
+	pr(IPX,p) = x[0] + dt/(2.0)*(u_con[0]/g_Lor + gupper[0][1]/gupper[0][0]) ;
+        if (multi_d) { pr(IPY,p) = x[1] + dt/(2.0)*(u_con[1]/g_Lor + gupper[0][2]/gupper[0][0]) ; }
+        if (three_d) { pr(IPZ,p) = x[2] + dt/(2.0)*(u_con[2]/g_Lor + gupper[0][3]/gupper[0][0]) ; }
 	}
       });
       return;
