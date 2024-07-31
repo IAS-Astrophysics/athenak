@@ -32,29 +32,46 @@ void Particles::AssembleTasks(std::map<std::string, std::shared_ptr<TaskList>> t
     case ParticleType::cosmic_ray:
       {
         // particle integration done in "before_timeintegrator" task list
-        id.push   = tl["before_timeintegrator"]->AddTask(&Particles::Push, this, none);
-        id.newgid = tl["before_timeintegrator"]->AddTask(&Particles::NewGID, this, id.push);
-        id.count  = tl["before_timeintegrator"]->AddTask(&Particles::SendCnt, this, id.newgid);
-        id.irecv  = tl["before_timeintegrator"]->AddTask(&Particles::InitRecv, this, id.count);
-        id.sendp  = tl["before_timeintegrator"]->AddTask(&Particles::SendP, this, id.irecv);
-        id.recvp  = tl["before_timeintegrator"]->AddTask(&Particles::RecvP, this, id.sendp);
-        id.crecv  = tl["before_timeintegrator"]->AddTask(&Particles::ClearRecv, this, id.recvp);
-        id.csend  = tl["before_timeintegrator"]->AddTask(&Particles::ClearSend, this, id.crecv);
+        id.push   = tl["before_timeintegrator"]->AddTask(&Particles::Push,
+                                                         this, none);
+        id.newgid = tl["before_timeintegrator"]->AddTask(&Particles::NewGID,
+                                                         this, id.push);
+        id.count  = tl["before_timeintegrator"]->AddTask(&Particles::SendCnt,
+                                                         this, id.newgid);
+        id.irecv  = tl["before_timeintegrator"]->AddTask(&Particles::InitRecv,
+                                                         this, id.count);
+        id.sendp  = tl["before_timeintegrator"]->AddTask(&Particles::SendP,
+                                                         this, id.irecv);
+        id.recvp  = tl["before_timeintegrator"]->AddTask(&Particles::RecvP,
+                                                         this, id.sendp);
+        id.crecv  = tl["before_timeintegrator"]->AddTask(&Particles::ClearRecv,
+                                                         this, id.recvp);
+        id.csend  = tl["before_timeintegrator"]->AddTask(&Particles::ClearSend,
+                                                         this, id.crecv);
         break;
       }
 
     case ParticleType::lagrangian_mc:
       {
         // particle integration done in "after_timeintegrator" task list
-        id.push   = tl["after_timeintegrator"]->AddTask(&Particles::Push, this, none);
-        id.newgid = tl["after_timeintegrator"]->AddTask(&Particles::NewGID, this, id.push);
-        id.count  = tl["after_timeintegrator"]->AddTask(&Particles::SendCnt, this, id.newgid);
-        id.irecv  = tl["after_timeintegrator"]->AddTask(&Particles::InitRecv, this, id.count);
-        id.sendp  = tl["after_timeintegrator"]->AddTask(&Particles::SendP, this, id.irecv);
-        id.recvp  = tl["after_timeintegrator"]->AddTask(&Particles::RecvP, this, id.sendp);
-        id.crecv  = tl["after_timeintegrator"]->AddTask(&Particles::ClearRecv, this, id.recvp);
-        id.csend  = tl["after_timeintegrator"]->AddTask(&Particles::ClearSend, this, id.crecv);
-        id.mradj  = tl["after_timeintegrator"]->AddTask(&Particles::AdjustMeshRefinement, this, id.csend);
+        id.push   = tl["after_timeintegrator"]->AddTask(&Particles::Push,
+                                                        this, none);
+        id.newgid = tl["after_timeintegrator"]->AddTask(&Particles::NewGID,
+                                                        this, id.push);
+        id.count  = tl["after_timeintegrator"]->AddTask(&Particles::SendCnt,
+                                                        this, id.newgid);
+        id.irecv  = tl["after_timeintegrator"]->AddTask(&Particles::InitRecv,
+                                                        this, id.count);
+        id.sendp  = tl["after_timeintegrator"]->AddTask(&Particles::SendP,
+                                                        this, id.irecv);
+        id.recvp  = tl["after_timeintegrator"]->AddTask(&Particles::RecvP,
+                                                        this, id.sendp);
+        id.crecv  = tl["after_timeintegrator"]->AddTask(&Particles::ClearRecv,
+                                                        this, id.recvp);
+        id.csend  = tl["after_timeintegrator"]->AddTask(&Particles::ClearSend,
+                                                        this, id.crecv);
+        id.mradj  = tl["after_timeintegrator"]->AddTask(&Particles::AdjustMeshRefinement,
+                                                        this, id.csend);
         break;
       }
 

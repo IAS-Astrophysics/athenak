@@ -21,7 +21,6 @@ namespace particles {
 //  \brief wrapper with switch to access different particle pushers
 
 TaskStatus Particles::Push(Driver *pdriver, int stage) {
-
   switch (pusher) {
     case ParticlesPusher::drift:
       PushDrift();
@@ -42,7 +41,7 @@ TaskStatus Particles::Push(Driver *pdriver, int stage) {
 //! \fn void Particles::PushDrift
 //! \brief push particles based on stored particle internal velocity
 
-void Particles::PushDrift() {  
+void Particles::PushDrift() {
   auto &indcs = pmy_pack->pmesh->mb_indcs;
   int is = indcs.is;
   int js = indcs.js;
@@ -75,11 +74,10 @@ void Particles::PushDrift() {
 
 //----------------------------------------------------------------------------------------
 //! \fn void Particles::PushLagrangianMC
-//! \brief push particles using Lagrangian Monte Carlo method (Genel+ 2013, MNRAS.435.1426G)
+//! \brief push with Lagrangian Monte Carlo method (Genel+ 2013, MNRAS.435.1426G)
 //         WARNING: this implementation may not work well with AMR
 
 void Particles::PushLagrangianMC() {
-
   auto &indcs = pmy_pack->pmesh->mb_indcs;
   int is = indcs.is;
   int js = indcs.js;
@@ -93,7 +91,8 @@ void Particles::PushLagrangianMC() {
   auto &mblev = pmy_pack->pmb->mb_lev;
 
   auto &u1_ = (pmy_pack->phydro != nullptr)?pmy_pack->phydro->u1:pmy_pack->pmhd->u1;
-  auto &uflxidn_ = (pmy_pack->phydro != nullptr)?pmy_pack->phydro->uflxidnsaved:pmy_pack->pmhd->uflxidnsaved;
+  auto &uflxidn_ = (pmy_pack->phydro != nullptr)?
+                    pmy_pack->phydro->uflxidnsaved:pmy_pack->pmhd->uflxidnsaved;
   auto &flx1_ = uflxidn_.x1f;
   auto &flx2_ = uflxidn_.x2f;
   auto &flx3_ = uflxidn_.x3f;
@@ -103,7 +102,6 @@ void Particles::PushLagrangianMC() {
   // GNW 2024-JUL-5: Warning, this may not play well with AMR
   par_for("part_update",DevExeSpace(),0,(nprtcl_thispack-1),
   KOKKOS_LAMBDA(const int p) {
-
     int m = pi(PGID,p) - gids;
 
     int ip = (pr(IPX,p) - mbsize.d_view(m).x1min)/mbsize.d_view(m).dx1 + is;
@@ -159,10 +157,12 @@ void Particles::PushLagrangianMC() {
     } else if (multi_d && rand < flx1_left + flx1_right + flx2_left + flx2_right) {
       pr(IPY,p) += mbsize.d_view(m).dx2;
       pi(PLASTMOVE,p) += 4;
-    } else if (three_d && rand < flx1_left + flx1_right + flx2_left + flx2_right + flx3_left) {
+    } else if (three_d && rand < flx1_left + flx1_right + flx2_left + flx2_right
+                               + flx3_left) {
       pr(IPZ,p) -= mbsize.d_view(m).dx3;
       pi(PLASTMOVE,p) += 5;
-    } else if (three_d && rand < flx1_left + flx1_right + flx2_left + flx2_right + flx3_left + flx3_right) {
+    } else if (three_d && rand < flx1_left + flx1_right + flx2_left + flx2_right
+                               + flx3_left + flx3_right) {
       pr(IPZ,p) += mbsize.d_view(m).dx3;
       pi(PLASTMOVE,p) += 6;
     }
@@ -174,7 +174,6 @@ void Particles::PushLagrangianMC() {
 //! \brief update locations of particles that enter meshblocks with new refinement levels
 
 TaskStatus Particles::AdjustMeshRefinement(Driver *pdriver, int stage) {
-
   auto &indcs = pmy_pack->pmesh->mb_indcs;
   int is = indcs.is;
   int js = indcs.js;
@@ -187,16 +186,16 @@ TaskStatus Particles::AdjustMeshRefinement(Driver *pdriver, int stage) {
   bool &three_d = pmy_pack->pmesh->three_d;
   auto &mbsize = pmy_pack->pmb->mb_size;
 
-  auto &uflxidn_ = (pmy_pack->phydro != nullptr)?pmy_pack->phydro->uflxidnsaved:pmy_pack->pmhd->uflxidnsaved;
+  auto &uflxidn_ = (pmy_pack->phydro != nullptr)?
+                   pmy_pack->phydro->uflxidnsaved:pmy_pack->pmhd->uflxidnsaved;
   auto &flx1_ = uflxidn_.x1f;
   auto &flx2_ = uflxidn_.x2f;
   auto &flx3_ = uflxidn_.x3f;
 
   auto &rand_pool64_ = rand_pool64;
-  
+
   par_for("particle_meshshift",DevExeSpace(),0,(nprtcl_thispack-1),
   KOKKOS_LAMBDA(const int p) {
-
     int m = pi(PGID,p) - gids;
     int level = mblev.d_view(m);
 
@@ -223,7 +222,7 @@ TaskStatus Particles::AdjustMeshRefinement(Driver *pdriver, int stage) {
 
     if (level > lastlevel) {
       // this is a higher refinement level, i.e., the zones are smaller now
- 
+
       if (lastmove == 1) {
         // came from zone to right (dx--)
         pr(IPX,p) += dx1/2;
@@ -334,7 +333,7 @@ TaskStatus Particles::AdjustMeshRefinement(Driver *pdriver, int stage) {
       auto rand_gen = rand_pool64_.get_state();
       Real rand = rand_gen.frand();
       rand_pool64_.free_state(rand_gen);  // free state for use by other threads
-      
+
       int target_zone = 4;
       if (rand < flx1) {
         target_zone = 1;

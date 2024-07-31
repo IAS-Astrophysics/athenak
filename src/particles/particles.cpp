@@ -9,6 +9,7 @@
 #include <iostream>
 #include <string>
 #include <algorithm>
+#include <limits>
 
 #include "athena.hpp"
 #include "globals.hpp"
@@ -70,7 +71,7 @@ Particles::Particles(MeshBlockPack *ppack, ParameterInput *pin) :
         std::exit(EXIT_FAILURE);
       }
     } else if (ppush.compare("lagrangian_mc") == 0) {
-      // force driver to inherit timestep from fluid by setting desired particle dt to max value
+      // force driver to inherit timestep from fluid by setting particle dt to max value
       dtnew = std::numeric_limits<float>::max();
       pusher = ParticlesPusher::lagrangian_mc;
       if (ppack->pmhd != nullptr) {
@@ -97,7 +98,7 @@ Particles::Particles(MeshBlockPack *ppack, ParameterInput *pin) :
       {
         // save particle position then velocity for compiler optimizations even though
         // 2d runs will not require all six real entries
-        nrdata = 6;  
+        nrdata = 6;
         nidata = 2;
         break;
       }
@@ -129,7 +130,6 @@ Particles::~Particles() {
 // particles in this pack. This method does not preserve any existing particle data
 
 void Particles::ReallocateParticles(int new_nprtcl_thispack) {
-
   // TODO(GNW): maybe check that ntrack is set correctly. also check about whether
   // the rank_order below works given that it might have empty ids
 

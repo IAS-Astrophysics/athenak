@@ -191,7 +191,6 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
 
   // Initialize particles
   if (pmbp->ppart != nullptr) {
-
     // captures for the kernel
     auto &u0_ = (pmbp->phydro != nullptr) ? pmbp->phydro->u0 : pmbp->pmhd->u0;
     auto &mbsize = pmy_mesh_->pmb_pack->pmb->mb_size;
@@ -259,7 +258,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
         nparticles += 1;
       }
       nparticles_per_zone.d_view(idx,0) = nparticles;
-      rand_pool64.free_state(rand_gen); 
+      rand_pool64.free_state(rand_gen);
     });
 
     // count total number of particles in this pack
@@ -274,8 +273,10 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     nparticles_per_zone.template sync<DevMemSpace>();
 
     // helpful debug statement
-    std::cout << "total mass across domain: " << total_mass << ", total mass in pack: " << total_mass_thispack
-              << ", target nparticles: " << target_nparticles << ", nparticles in pack: " << nparticles_thispack
+    std::cout << "total mass across domain: " << total_mass
+              <<  ", total mass in pack: " << total_mass_thispack
+              << ", target nparticles: " << target_nparticles
+              << ", nparticles in pack: " << nparticles_thispack
               << std::endl;
 
     // reallocate space for particles and get relevant pointers
@@ -304,9 +305,12 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
         pi(PLASTLEVEL,pidx) = mblev.d_view(m);
 
         // set particle to zone center
-        pr(IPX,pidx) = CellCenterX(i-is, nx1, mbsize.d_view(m).x1min, mbsize.d_view(m).x1max);
-        pr(IPY,pidx) = CellCenterX(j-js, nx2, mbsize.d_view(m).x2min, mbsize.d_view(m).x2max);
-        pr(IPZ,pidx) = CellCenterX(k-ks, nx3, mbsize.d_view(m).x3min, mbsize.d_view(m).x3max) -
+        pr(IPX,pidx) = CellCenterX(i-is, nx1, mbsize.d_view(m).x1min,
+                                   mbsize.d_view(m).x1max);
+        pr(IPY,pidx) = CellCenterX(j-js, nx2, mbsize.d_view(m).x2min,
+                                   mbsize.d_view(m).x2max);
+        pr(IPZ,pidx) = CellCenterX(k-ks, nx3, mbsize.d_view(m).x3min,
+                                   mbsize.d_view(m).x3max) -
                        mbsize.d_view(m).dx3/2;
       }
     });
