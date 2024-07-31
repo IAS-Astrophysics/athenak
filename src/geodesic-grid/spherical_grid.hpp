@@ -12,6 +12,9 @@
 #include "athena.hpp"
 #include "geodesic-grid/geodesic_grid.hpp"
 
+// Forward declarations
+class MeshBlockPack;
+
 //----------------------------------------------------------------------------------------
 //! \class SphericalGrid
 

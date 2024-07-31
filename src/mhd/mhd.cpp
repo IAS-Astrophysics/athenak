@@ -330,8 +330,9 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
 
       // allocate array of flags used with FOFC
       if (use_fofc) {
+        int nvars = (pmy_pack->pcoord->is_dynamical_relativistic) ? nmhd+nscalars : nmhd;
         Kokkos::realloc(fofc,    nmb, ncells3, ncells2, ncells1);
-        Kokkos::realloc(utest,   nmb, nmhd, ncells3, ncells2, ncells1);
+        Kokkos::realloc(utest,   nmb, nvars, ncells3, ncells2, ncells1);
         Kokkos::realloc(bcctest, nmb, 3,    ncells3, ncells2, ncells1);
         Kokkos::deep_copy(fofc, false);
       }

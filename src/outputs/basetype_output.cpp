@@ -22,7 +22,8 @@
 #include "globals.hpp"
 #include "hydro/hydro.hpp"
 #include "mhd/mhd.hpp"
-#include "adm/adm.hpp"
+#include "coordinates/adm.hpp"
+#include "z4c/tmunu.hpp"
 #include "z4c/z4c.hpp"
 #include "srcterms/srcterms.hpp"
 #include "srcterms/turb_driver.hpp"
@@ -131,14 +132,27 @@ BaseTypeOutput::BaseTypeOutput(ParameterInput *pin, Mesh *pm, OutputParameters o
        << std::endl << "Input file is likely missing corresponding block" << std::endl;
     exit(EXIT_FAILURE);
   }
-  if ((ivar>=140) && (ivar<143) && (pm->pmb_pack->pz4c == nullptr)) {
+  if ((ivar>=128) && (ivar<131) && (pm->pmb_pack->pz4c == nullptr)) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
        << "Output of weyl variable requested in <output> block '"
        << out_params.block_name << "' but weyl object not constructed."
        << std::endl << "Input file is likely missing corresponding block" << std::endl;
     exit(EXIT_FAILURE);
   }
-  if ((ivar>=143) && (ivar<145) && (pm->pmb_pack->ppart == nullptr)) {
+  if ((ivar>=131) && (ivar<139) && (pm->pmb_pack->pz4c == nullptr)) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+       << "Output of constraint variables request in <output> block '"
+       << out_params.block_name << "' but Z4c object not constructed."
+       << std::endl << "Input file is likely missing corresponding block" << std::endl;
+    exit(EXIT_FAILURE);
+  }
+  if ((ivar>=139) && (ivar<150) && (pm->pmb_pack->ptmunu == nullptr)) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+       << "Output of Tmunu variable requested in <output> block '"
+       << out_params.block_name << "' but no Tmunu object has been constructed."
+       << std::endl << "Input file is likely missing a <adm> block" << std::endl;
+  }
+  if ((ivar>=150) && (ivar<152) && (pm->pmb_pack->ppart == nullptr)) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
        << "Output of particles requested in <output> block '"
        << out_params.block_name << "' but particle object not constructed."
@@ -148,6 +162,7 @@ BaseTypeOutput::BaseTypeOutput(ParameterInput *pin, Mesh *pm, OutputParameters o
 
   // Now load STL vector of output variables
   outvars.clear();
+  int ndvars=0;
 
   // make a vector of out_params.variables
   std::vector<std::string> variables;
@@ -569,7 +584,7 @@ BaseTypeOutput::BaseTypeOutput(ParameterInput *pin, Mesh *pm, OutputParameters o
       outvars.emplace_back("force1",0,&(pm->pmb_pack->pturb->force));
       outvars.emplace_back("force2",1,&(pm->pmb_pack->pturb->force));
       outvars.emplace_back("force3",2,&(pm->pmb_pack->pturb->force));
-  }
+    }
 
     // ADM variables, excluding gauge
     for (int v = 0; v < adm::ADM::nadm - 4; ++v) {
@@ -589,6 +604,13 @@ BaseTypeOutput::BaseTypeOutput(ParameterInput *pin, Mesh *pm, OutputParameters o
       }
     }
 
+    // mat z4c variables
+    for (int v = 0; v < Tmunu::N_Tmunu; ++v) {
+      if (out_params.variable.compare("tmunu") == 0 ||
+          out_params.variable.compare(Tmunu::Tmunu_names[v]) == 0) {
+        outvars.emplace_back(Tmunu::Tmunu_names[v], v, &(pm->pmb_pack->ptmunu->u_tmunu));
+      }
+    }
     // con z4c variables
     for (int v = 0; v < z4c::Z4c::ncon; ++v) {
       if (variable.compare("con") == 0 ||
@@ -598,27 +620,19 @@ BaseTypeOutput::BaseTypeOutput(ParameterInput *pin, Mesh *pm, OutputParameters o
       }
     }
 
-    // mat z4c variables
-    for (int v = 0; v < z4c::Z4c::nmat; ++v) {
-      if (variable.compare("mat") == 0 ||
-          variable.compare(z4c::Z4c::Matter_names[v]) == 0) {
-        outvars.emplace_back(z4c::Z4c::Matter_names[v], v, &(pm->pmb_pack->pz4c->u_mat));
+    // z4c variables
+    for (int v = 0; v < z4c::Z4c::nz4c; ++v) {
+      if (out_params.variable.compare("z4c") == 0 ||
+          out_params.variable.compare(z4c::Z4c::Z4c_names[v]) == 0) {
+        outvars.emplace_back(z4c::Z4c::Z4c_names[v], v, &(pm->pmb_pack->pz4c->u0));
       }
     }
 
-  // z4c variables
-  for (int v = 0; v < z4c::Z4c::nz4c; ++v) {
-    if (out_params.variable.compare("z4c") == 0 ||
-        out_params.variable.compare(z4c::Z4c::Z4c_names[v]) == 0) {
-      outvars.emplace_back(z4c::Z4c::Z4c_names[v], v, &(pm->pmb_pack->pz4c->u0));
+    // weyl scalars
+    if (out_params.variable.compare("weyl") == 0) {
+      outvars.emplace_back("weyl_rpsi4",0,&(pm->pmb_pack->pz4c->u_weyl));
+      outvars.emplace_back("weyl_ipsi4",1,&(pm->pmb_pack->pz4c->u_weyl));
     }
-  }
-
-  // weyl scalars
-  if (out_params.variable.compare("weyl") == 0) {
-    outvars.emplace_back("weyl_rpsi4",0,&(pm->pmb_pack->pz4c->u_weyl));
-    outvars.emplace_back("weyl_ipsi4",1,&(pm->pmb_pack->pz4c->u_weyl));
-  }
 
     // radiation moments in coordinate frame
     if (variable.compare(0, 9, "rad_coord") == 0 ||

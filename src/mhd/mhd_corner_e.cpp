@@ -62,8 +62,29 @@ TaskStatus MHD::CornerE(Driver *pdriver, int stage) {
     auto bcc_ = bcc0;
     auto e3cc_ = e3_cc;
 
-    // compute cell-centered EMF in GR MHD
-    if (pmy_pack->pcoord->is_general_relativistic) {
+    // compute cell-centered EMF in dynamical GRMHD
+    if (pmy_pack->padm != nullptr) {
+      auto &adm = pmy_pack->padm->adm;
+      par_for("e_cc_2d", DevExeSpace(), 0, nmb1, js-1, je+1, is-1, ie+1,
+      KOKKOS_LAMBDA(int m, int j, int i) {
+        // Calculate the spatial components of the three-velocity
+        const Real &ux = w0_(m,IVX,ks,j,i);
+        const Real &uy = w0_(m,IVY,ks,j,i);
+        const Real &uz = w0_(m,IVZ,ks,j,i);
+        Real iW = 1.0/sqrt(1.0
+                    + adm.g_dd(m,0,0,ks,j,i)*ux*ux + 2.0*adm.g_dd(m,0,1,ks,j,i)*ux*uy
+                    + 2.0*adm.g_dd(m,0,2,ks,j,i)*ux*uz + adm.g_dd(m,1,1,ks,j,i)*uy*uy
+                    + 2.0*adm.g_dd(m,1,2,ks,j,i)*uy*uz + adm.g_dd(m,2,2,ks,j,i)*uz*uz);
+        Real v1 = ux*iW;
+        Real v2 = uy*iW;
+        //Real v3 = uz*iW;
+
+        const Real &alpha = adm.alpha(m,ks,j,i);
+        e3cc_(m,ks,j,i) = bcc_(m,IBX,ks,j,i)*(alpha*v2 - adm.beta_u(m, 1, ks, j, i))
+                        - bcc_(m,IBY,ks,j,i)*(alpha*v1 - adm.beta_u(m, 0, ks, j, i));
+      });
+    } else if (pmy_pack->pcoord->is_general_relativistic) {
+      // compute cell-centered EMF in GR MHD
       par_for("e_cc_2d", DevExeSpace(), 0, nmb1, js-1, je+1, is-1, ie+1,
       KOKKOS_LAMBDA(int m, int j, int i) {
         // Extract components of metric
@@ -193,8 +214,34 @@ TaskStatus MHD::CornerE(Driver *pdriver, int stage) {
     auto e2cc_ = e2_cc;
     auto e3cc_ = e3_cc;
 
-    // compute cell-centered EMFs in GR MHD
-    if (pmy_pack->pcoord->is_general_relativistic) {
+    // compute cell-centered EMFs in dynamical GRMHD
+    if (pmy_pack->padm != nullptr) {
+      auto &adm = pmy_pack->padm->adm;
+      par_for("e_cc_3d", DevExeSpace(), 0, nmb1, ks-1, ke+1, js-1, je+1, is-1, ie+1,
+      KOKKOS_LAMBDA(int m, int k, int j, int i) {
+        // Calculate something that resembles the spatial components of the four-velocity
+        // normalized by W.
+        const Real &ux = w0_(m,IVX,k,j,i);
+        const Real &uy = w0_(m,IVY,k,j,i);
+        const Real &uz = w0_(m,IVZ,k,j,i);
+        const Real &bx = bcc_(m,IBX,k,j,i);
+        const Real &by = bcc_(m,IBY,k,j,i);
+        const Real &bz = bcc_(m,IBZ,k,j,i);
+        Real iW = 1.0/sqrt(1.0
+                         + adm.g_dd(m,0,0,k,j,i)*ux*ux + 2.0*adm.g_dd(m,0,1,k,j,i)*ux*uy
+                         + 2.0*adm.g_dd(m,0,2,k,j,i)*ux*uz + adm.g_dd(m,1,1,k,j,i)*uy*uy
+                         + 2.0*adm.g_dd(m,1,2,k,j,i)*uy*uz + adm.g_dd(m,2,2,k,j,i)*uz*uz);
+        const Real &alpha = adm.alpha(m, k, j, i);
+        Real v1c = alpha*ux*iW - adm.beta_u(m, 0, k, j, i);
+        Real v2c = alpha*uy*iW - adm.beta_u(m, 1, k, j, i);
+        Real v3c = alpha*uz*iW - adm.beta_u(m, 2, k, j, i);
+
+        e1cc_(m,k,j,i) = by * v3c - bz * v2c;
+        e2cc_(m,k,j,i) = bz * v1c - bx * v3c;
+        e3cc_(m,k,j,i) = bx * v2c - by * v1c;
+      });
+    } else if (pmy_pack->pcoord->is_general_relativistic) {
+      // compute cell-centered EMFs in GR MHD
       par_for("e_cc_3d", DevExeSpace(), 0, nmb1, ks-1, ke+1, js-1, je+1, is-1, ie+1,
       KOKKOS_LAMBDA(int m, int k, int j, int i) {
         // Extract components of metric

@@ -14,6 +14,7 @@
 #include "driver/driver.hpp"
 #include "eos/eos.hpp"
 #include "mhd.hpp"
+#include "dyn_grmhd/dyn_grmhd.hpp"
 
 namespace mhd {
 //----------------------------------------------------------------------------------------

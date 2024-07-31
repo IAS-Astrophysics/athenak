@@ -27,12 +27,13 @@
 //! boundaries between MeshBlocks at the same level.
 
 void MeshBoundaryValuesCC::FillCoarseInBndryCC(DvceArray5D<Real> &a,
-                                               DvceArray5D<Real> &ca) {
+                                               DvceArray5D<Real> &ca,
+                                               bool is_z4c) {
   // create local references for variables in kernel
   int nmb = pmy_pack->nmb_thispack;
   int nnghbr = pmy_pack->pmb->nnghbr;
   MeshBlockPack* pmbp = pmy_pack->pmesh->pmb_pack;
-  bool not_z4c = (pmbp->pz4c == nullptr)? true : false;
+  //bool not_z4c = (pmbp->pz4c == nullptr)? true : false;
 
   int nvar = a.extent_int(1);  // TODO(@user): 2nd index from L of in array must be NVAR
   int nmnv = nmb*nnghbr*nvar;
@@ -101,7 +102,7 @@ void MeshBoundaryValuesCC::FillCoarseInBndryCC(DvceArray5D<Real> &a,
                                  + a(m,v,kl,finej+1,finei) + a(m,v,kl,finej+1,finei+1));
           // restrict in 3D
           } else {
-            if (not_z4c) {
+            if (!is_z4c) {
               ca(m,v,k,j,i) = 0.125*(
                   a(m,v,finek  ,finej  ,finei) + a(m,v,finek  ,finej  ,finei+1)
                 + a(m,v,finek  ,finej+1,finei) + a(m,v,finek  ,finej+1,finei+1)
@@ -131,14 +132,15 @@ void MeshBoundaryValuesCC::FillCoarseInBndryCC(DvceArray5D<Real> &a,
 //! \brief Prolongate data at boundaries for cell-centered data.
 //! Code here is based on MeshRefinement::ProlongateCellCenteredValues() in C++ version
 
-void MeshBoundaryValuesCC::ProlongateCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca) {
+void MeshBoundaryValuesCC::ProlongateCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca,
+    bool is_z4c) {
   // create local references for variables in kernel
   int nmb = pmy_pack->nmb_thispack;
   int nnghbr = pmy_pack->pmb->nnghbr;
 
   // ptr to z4c, which requires different prolongation/restriction scheme
   MeshBlockPack* pmbp = pmy_pack->pmesh->pmb_pack;
-  bool not_z4c = (pmbp->pz4c == nullptr)? true : false;
+  //bool not_z4c = (pmbp->pz4c == nullptr)? true : false;
 
   int nvar = a.extent_int(1);  // TODO(@user): 2nd index from L of in array must be NVAR
   int nmnv = nmb*nnghbr*nvar;
@@ -190,7 +192,7 @@ void MeshBoundaryValuesCC::ProlongateCC(DvceArray5D<Real> &a, DvceArray5D<Real> 
         int fj = (j - indcs.cjs)*2 + indcs.js;
         int fk = (k - indcs.cks)*2 + indcs.ks;
         // call inlined prolongation operator for CC variables
-        if (not_z4c) {
+        if (!is_z4c) {
           ProlongCC(m,v,k,j,i,fk,fj,fi,multi_d,three_d,ca,a);
         } else {
           switch (indcs.ng) {

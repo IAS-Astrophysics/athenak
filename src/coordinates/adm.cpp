@@ -7,7 +7,7 @@
 //  \brief implementation of ADM class
 #include <algorithm>
 
-#include "adm/adm.hpp"
+#include "coordinates/adm.hpp"
 #include "athena.hpp"
 #include "parameter_input.hpp"
 #include "mesh/mesh.hpp"
@@ -54,3 +54,4 @@ ADM::ADM(MeshBlockPack *ppack, ParameterInput *pin):
 ADM::~ADM() {}
 
 } // namespace adm
+

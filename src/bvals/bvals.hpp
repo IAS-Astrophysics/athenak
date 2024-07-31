@@ -17,7 +17,7 @@ enum BoundaryFace {undef=-1, inner_x1, outer_x1, inner_x2, outer_x2, inner_x3, o
 
 // identifiers for boundary conditions
 enum class BoundaryFlag {undef=-1,block, reflect, inflow, outflow, diode, user, periodic,
-                         shear_periodic};
+                         shear_periodic, vacuum};
 
 #include <algorithm>
 #include <vector>
@@ -172,8 +172,9 @@ class MeshBoundaryValuesCC : public MeshBoundaryValues {
   TaskStatus RecvAndUnpackFluxCC(DvceFaceFld5D<Real> &flx);
 
   // functions to prolongate conserved and primitive CC variables
-  void FillCoarseInBndryCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca);
-  void ProlongateCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca);
+  void FillCoarseInBndryCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca,
+       bool is_z4c=false);
+  void ProlongateCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca, bool is_z4c=false);
   void ConsToPrimCoarseBndry(const DvceArray5D<Real> &cons, DvceArray5D<Real> &prim);
   void PrimToConsFineBndry(const DvceArray5D<Real> &prim, DvceArray5D<Real> &cons);
   void ConsToPrimCoarseBndry(const DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &b,

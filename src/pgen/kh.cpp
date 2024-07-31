@@ -19,6 +19,8 @@
 #include "eos/eos.hpp"
 #include "hydro/hydro.hpp"
 #include "mhd/mhd.hpp"
+#include "dyn_grmhd/dyn_grmhd.hpp"
+#include "coordinates/adm.hpp"
 #include "pgen.hpp"
 
 //----------------------------------------------------------------------------------------
@@ -32,9 +34,15 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   Real amp   = pin->GetReal("problem","amp");
   Real sigma = pin->GetReal("problem","sigma");
   Real vshear= pin->GetReal("problem","vshear");
+  Real a_char = pin->GetOrAddReal("problem","a_char", 0.01);
   Real rho0  = pin->GetOrAddReal("problem","rho0",1.0);
   Real rho1  = pin->GetOrAddReal("problem","rho1",1.0);
+  Real y0    = pin->GetOrAddReal("problem","y0",0.0);
+  Real y1    = pin->GetOrAddReal("problem","y1",1.0);
+  Real p_in  = pin->GetOrAddReal("problem","press",1.0);
   Real drho_rho0 = pin->GetOrAddReal("problem", "drho_rho0", 0.0);
+
+  //user_hist_func = KHHistory;
 
   // capture variables for kernel
   auto &indcs = pmy_mesh_->mb_indcs;
@@ -56,11 +64,15 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     nfluid = pmbp->pmhd->nmhd;
     nscalars = pmbp->pmhd->nscalars;
   }
+  if (pmbp->padm != nullptr) {
+    gm1 = 1.0;
+  }
   auto &w0_ = (pmbp->phydro != nullptr)? pmbp->phydro->w0 : pmbp->pmhd->w0;
 
   bool is_relativistic = false;
   if (pmbp->pcoord->is_special_relativistic ||
-      pmbp->pcoord->is_general_relativistic) {
+      pmbp->pcoord->is_general_relativistic ||
+      pmbp->pcoord->is_dynamical_relativistic) {
     is_relativistic = true;
   }
 
@@ -100,26 +112,29 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
       scal = 0.0;
       if (x2v > 0.0) scal = 1.0;
     } else if (iprob == 2) {
-      pres = 1.0;
+      // pres = 1.0;
+      pres = p_in;
       vz = 0.0;
       if(x2v <= 0.0) {
-        dens = rho0 - rho1*tanh((x2v-0.5)/sigma);
-        vx = -vshear*tanh((x2v-0.5)/sigma);
-        vy = -amp*vshear*sin(2.*M_PI*x1v)*exp( -SQR((x2v-0.5)/sigma) );
+        dens = rho0 - rho1*tanh((x2v+0.5)/a_char);
+        vx = -vshear*tanh((x2v+0.5)/a_char);
+        vy = -amp*vshear*sin(2.*M_PI*x1v)*exp( -SQR((x2v+0.5)/sigma) );
         if (is_relativistic) {
           u00 = 1.0/sqrt(1.0 - vx*vx - vy*vy);
         }
-        scal = 0.0;
-        if (x2v < 0.5) scal = 1.0;
+        // scal = 0.0;
+        // if (x2v < -0.5) scal = 1.0;
+        scal = y0 - y1*tanh((x2v+0.5)/a_char);
       } else {
-        dens = rho0 + rho1*tanh((x2v-0.5)/sigma);
-        vx = vshear*tanh((x2v-0.5)/sigma);
+        dens = rho0 + rho1*tanh((x2v-0.5)/a_char);
+        vx = vshear*tanh((x2v-0.5)/a_char);
         vy = amp*vshear*sin(2.*M_PI*x1v)*exp( -SQR((x2v-0.5)/sigma) );
         if (is_relativistic) {
           u00 = 1.0/sqrt(1.0 - vx*vx - vy*vy);
         }
-        scal = 0.0;
-        if (x2v > 0.5) scal = 1.0;
+        // scal = 0.0;
+        // if (x2v > 0.5) scal = 1.0;
+        scal = y0 + y1*tanh((x2v-0.5)/a_char);
       }
     // Lecoanet test ICs
     } else if (iprob == 4) {
@@ -175,14 +190,53 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     });
   }
 
+  // Initialize the ADM variables if enabled
+  if (pmbp->padm != nullptr) {
+    // Assume Minkowski space
+    auto &adm = pmbp->padm->adm;
+    int nmb1 = pmbp->nmb_thispack - 1;
+    int ng = indcs.ng;
+    int n1 = indcs.nx1 + 2*ng;
+    int n2 = (indcs.nx2 > 1) ? (indcs.nx2 + 2*ng) : 1;
+    int n3 = (indcs.nx3 > 1) ? (indcs.nx3 + 2*ng) : 1;
+
+    par_for("pgen_adm_vars", DevExeSpace(), 0,nmb1,0,(n3-1),0,(n2-1),0,(n1-1),
+    KOKKOS_LAMBDA(int m, int k, int j, int i) {
+      adm.alpha(m, k, j, i) = 1.0;
+      adm.beta_u(m, 0, k, j, i) = 0.0;
+      adm.beta_u(m, 1, k, j, i) = 0.0;
+      adm.beta_u(m, 2, k, j, i) = 0.0;
+
+      adm.psi4(m, k, j, i) = 1.0;
+
+      adm.g_dd(m, 0, 0, k, j, i) = 1.0;
+      adm.g_dd(m, 0, 1, k, j, i) = 0.0;
+      adm.g_dd(m, 0, 2, k, j, i) = 0.0;
+      adm.g_dd(m, 1, 1, k, j, i) = 1.0;
+      adm.g_dd(m, 1, 2, k, j, i) = 0.0;
+      adm.g_dd(m, 2, 2, k, j, i) = 1.0;
+
+      adm.vK_dd(m, 0, 0, k, j, i) = 0.0;
+      adm.vK_dd(m, 0, 1, k, j, i) = 0.0;
+      adm.vK_dd(m, 0, 2, k, j, i) = 0.0;
+      adm.vK_dd(m, 1, 1, k, j, i) = 0.0;
+      adm.vK_dd(m, 1, 2, k, j, i) = 0.0;
+      adm.vK_dd(m, 2, 2, k, j, i) = 0.0;
+    });
+
+    pmbp->pdyngr->PrimToConInit(is, ie, js, je, ks, ke);
+  }
+
   // Convert primitives to conserved
-  if (pmbp->phydro != nullptr) {
-    auto &u0_ = pmbp->phydro->u0;
-    pmbp->phydro->peos->PrimToCons(w0_, u0_, is, ie, js, je, ks, ke);
-  } else if (pmbp->pmhd != nullptr) {
-    auto &u0_ = pmbp->pmhd->u0;
-    auto &bcc0_ = pmbp->pmhd->bcc0;
-    pmbp->pmhd->peos->PrimToCons(w0_, bcc0_, u0_, is, ie, js, je, ks, ke);
+  if (pmbp->padm == nullptr) {
+    if (pmbp->phydro != nullptr) {
+      auto &u0_ = pmbp->phydro->u0;
+      pmbp->phydro->peos->PrimToCons(w0_, u0_, is, ie, js, je, ks, ke);
+    } else if (pmbp->pmhd != nullptr) {
+      auto &u0_ = pmbp->pmhd->u0;
+      auto &bcc0_ = pmbp->pmhd->bcc0;
+      pmbp->pmhd->peos->PrimToCons(w0_, bcc0_, u0_, is, ie, js, je, ks, ke);
+    }
   }
 
   return;

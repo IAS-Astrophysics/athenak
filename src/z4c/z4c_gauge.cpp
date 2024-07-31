@@ -14,7 +14,7 @@
 // Athena++ headers
 #include "parameter_input.hpp"
 #include "athena.hpp"
-#include "adm/adm.hpp"
+#include "coordinates/adm.hpp"
 #include "mesh/mesh.hpp"
 #include "z4c/z4c.hpp"
 #include "coordinates/cell_locations.hpp"

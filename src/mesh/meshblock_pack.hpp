@@ -20,9 +20,14 @@
 
 // Forward declarations
 class MeshBlock;
+class ADM;
+class Tmunu;
 namespace hydro {class Hydro;}
 namespace mhd {class MHD;}
 namespace ion_neutral {class IonNeutral;}
+namespace radiation {class Radiation;}
+namespace dyngr {class DynGRMHD;}
+namespace numrel {class NumericalRelativity;}
 class TurbulenceDriver;
 namespace radiation {class Radiation;}
 namespace z4c {class Z4c;}
@@ -59,11 +64,14 @@ class MeshBlockPack {
   // physics (controlled by AddPhysics() function in meshblock_pack.cpp)
   hydro::Hydro *phydro=nullptr;
   mhd::MHD *pmhd=nullptr;
+  adm::ADM *padm=nullptr;
+  Tmunu *ptmunu=nullptr;
+  z4c::Z4c *pz4c=nullptr;
+  dyngr::DynGRMHD *pdyngr=nullptr;
+  numrel::NumericalRelativity *pnr=nullptr;
   ion_neutral::IonNeutral *pionn=nullptr;
   TurbulenceDriver *pturb=nullptr;
   radiation::Radiation *prad=nullptr;
-  z4c::Z4c *pz4c=nullptr;
-  adm::ADM *padm=nullptr;
   std::vector<z4c::PunctureTracker *> pz4c_ptracker;
   particles::Particles *ppart=nullptr;
 

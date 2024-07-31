@@ -96,14 +96,14 @@ class Z4c {
   // Names of costraint variables
   static char const * const Constraint_names[ncon];
   // Indices of matter fields
-  enum {
+  /*enum {
     I_MAT_RHO,
     I_MAT_SX, I_MAT_SY, I_MAT_SZ,
     I_MAT_SXX, I_MAT_SXY, I_MAT_SXZ, I_MAT_SYY, I_MAT_SYZ, I_MAT_SZZ,
     nmat
   };
   // Names of matter variables
-  static char const * const Matter_names[nmat];
+  static char const * const Matter_names[nmat];*/
 
   // data
   // flags to denote relativistic dynamics
@@ -165,12 +165,12 @@ class Z4c {
   Constraint_vars con;
 
   // aliases for the matter variables
-  struct Matter_vars {
+  /*struct Matter_vars {
     AthenaTensor<Real, TensorSymm::NONE, 3, 0> rho;       // matter energy density
     AthenaTensor<Real, TensorSymm::NONE, 3, 1> vS_d;       // matter momentum density
     AthenaTensor<Real, TensorSymm::SYM2, 3, 2> vS_dd;      // matter stress tensor
   };
-  Matter_vars mat;
+  Matter_vars mat;*/
 
   struct Options {
     Real chi_psi_power;   // chi = psi^N, N = chi_psi_power
@@ -193,6 +193,10 @@ class Z4c {
     Real shift_hh;
     Real shift_advect;
     Real shift_eta;
+    // Enable BSSN if false (disable theta)
+    bool use_z4c;
+    // Apply the Sommerfeld condition for user BCs.
+    bool user_Sbc;
     // Boundary extrapolation order
     int extrap_order;
   };
@@ -220,6 +224,7 @@ class Z4c {
 
   // functions
   void AssembleZ4cTasks(std::map<std::string, std::shared_ptr<TaskList>> tl);
+  void QueueZ4cTasks();
   TaskStatus InitRecv(Driver *d, int stage);
   TaskStatus ClearRecv(Driver *d, int stage);
   TaskStatus ClearSend(Driver *d, int stage);
@@ -239,6 +244,7 @@ class Z4c {
   TaskStatus EnforceAlgConstr(Driver *d, int stage);
 
   TaskStatus Z4cToADM_(Driver *d, int stage);
+  TaskStatus UpdateExcisionMasks(Driver *d, int stage);
   TaskStatus ADMConstraints_(Driver *d, int stage);
   TaskStatus Z4cBoundaryRHS(Driver *d, int stage);
   TaskStatus RestrictU(Driver *d, int stage);

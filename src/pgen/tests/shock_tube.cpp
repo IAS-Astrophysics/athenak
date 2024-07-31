@@ -22,6 +22,8 @@
 #include "eos/eos.hpp"
 #include "hydro/hydro.hpp"
 #include "mhd/mhd.hpp"
+#include "dyn_grmhd/dyn_grmhd.hpp"
+#include "coordinates/adm.hpp"
 #include "pgen/pgen.hpp"
 
 //----------------------------------------------------------------------------------------
@@ -85,9 +87,14 @@ void ProblemGenerator::ShockTube(ParameterInput *pin, const bool restart) {
     wl.e  = (pin->GetReal("problem","pl"))/(eos.gamma - 1.0);
     // compute Lorentz factor (needed for SR/GR)
     Real u0l = 1.0;
-    if (pmbp->pcoord->is_special_relativistic || pmbp->pcoord->is_general_relativistic) {
+    if (pmbp->pcoord->is_special_relativistic || pmbp->pcoord->is_general_relativistic ||
+        pmbp->pcoord->is_dynamical_relativistic) {
       u0l = 1.0/sqrt( 1.0 - (SQR(wl.vx) + SQR(wl.vy) + SQR(wl.vz)) );
     }
+    if (pmbp->pcoord->is_dynamical_relativistic) {
+      wl.e = pin->GetReal("problem","pl");
+    }
+    Real yl = pin->GetOrAddReal("problem","yl",1.0);
 
     // Parse right state read from input file: d,vx,vy,vz,[P]
     wr.d  = pin->GetReal("problem","dr");
@@ -97,9 +104,14 @@ void ProblemGenerator::ShockTube(ParameterInput *pin, const bool restart) {
     wr.e  = (pin->GetReal("problem","pr"))/(eos.gamma - 1.0);
     // compute Lorentz factor (needed for SR/GR)
     Real u0r = 1.0;
-    if (pmbp->pcoord->is_special_relativistic || pmbp->pcoord->is_general_relativistic) {
+    if (pmbp->pcoord->is_special_relativistic || pmbp->pcoord->is_general_relativistic ||
+        pmbp->pcoord->is_dynamical_relativistic) {
       u0r = 1.0/sqrt( 1.0 - (SQR(wr.vx) + SQR(wr.vy) + SQR(wr.vz)) );
     }
+    if (pmbp->pcoord->is_dynamical_relativistic) {
+      wr.e = pin->GetReal("problem","pr");
+    }
+    Real yr = pin->GetOrAddReal("problem","yr",0.0);
 
     auto &w0 = pmbp->phydro->w0;
     par_for("pgen_shock1", DevExeSpace(),0,(pmbp->nmb_thispack-1),ks,ke,js,je,is,ie,
@@ -129,18 +141,26 @@ void ProblemGenerator::ShockTube(ParameterInput *pin, const bool restart) {
         w0(m,ivy,k,j,i) = wl.vy*u0l;
         w0(m,ivz,k,j,i) = wl.vz*u0l;
         w0(m,IEN,k,j,i) = wl.e;
+        for (int r=0; r<pmbp->phydro->nscalars; ++r) {
+          w0(m,IYF+r,k,j,i) = yl;
+        }
       } else {
         w0(m,IDN,k,j,i) = wr.d;
         w0(m,ivx,k,j,i) = wr.vx*u0r;
         w0(m,ivy,k,j,i) = wr.vy*u0r;
         w0(m,ivz,k,j,i) = wr.vz*u0r;
         w0(m,IEN,k,j,i) = wr.e;
+        for (int r=0; r<pmbp->phydro->nscalars; ++r) {
+          w0(m,IYF+r,k,j,i) = yr;
+        }
       }
     });
 
     // Convert primitives to conserved
     auto &u0 = pmbp->phydro->u0;
-    pmbp->phydro->peos->PrimToCons(w0, u0, is, ie, js, je, ks, ke);
+    if (pmbp->padm == nullptr) {
+      pmbp->phydro->peos->PrimToCons(w0, u0, is, ie, js, je, ks, ke);
+    }
   } // End initialization of Hydro variables
 
   // Initialize MHD variables -------------------------------
@@ -158,9 +178,14 @@ void ProblemGenerator::ShockTube(ParameterInput *pin, const bool restart) {
     Real bx_l = pin->GetReal("problem","bxl");
     // compute Lorentz factor (needed for SR/GR)
     Real u0l = 1.0;
-    if (pmbp->pcoord->is_special_relativistic || pmbp->pcoord->is_general_relativistic) {
+    if (pmbp->pcoord->is_special_relativistic || pmbp->pcoord->is_general_relativistic ||
+        pmbp->pcoord->is_dynamical_relativistic) {
       u0l = 1.0/sqrt( 1.0 - (SQR(wl.vx) + SQR(wl.vy) + SQR(wl.vz)) );
     }
+    if (pmbp->pcoord->is_dynamical_relativistic) {
+      wl.e = pin->GetReal("problem", "pl");
+    }
+    Real yl = pin->GetOrAddReal("problem","yl",1.0);
 
     // Parse right state read from input file: d,vx,vy,vz,[P]
     wr.d  = pin->GetReal("problem","dr");
@@ -173,9 +198,14 @@ void ProblemGenerator::ShockTube(ParameterInput *pin, const bool restart) {
     Real bx_r = pin->GetReal("problem","bxr");
     // compute Lorentz factor (needed for SR/GR)
     Real u0r = 1.0;
-    if (pmbp->pcoord->is_special_relativistic || pmbp->pcoord->is_general_relativistic) {
+    if (pmbp->pcoord->is_special_relativistic || pmbp->pcoord->is_general_relativistic ||
+        pmbp->pcoord->is_dynamical_relativistic) {
       u0r = 1.0/sqrt( 1.0 - (SQR(wr.vx) + SQR(wr.vy) + SQR(wr.vz)) );
     }
+    if (pmbp->pcoord->is_dynamical_relativistic) {
+      wr.e = pin->GetReal("problem", "pr");
+    }
+    Real yr = pin->GetOrAddReal("problem","yr",0.0);
 
     auto &w0 = pmbp->pmhd->w0;
     auto &b0 = pmbp->pmhd->b0;
@@ -213,6 +243,9 @@ void ProblemGenerator::ShockTube(ParameterInput *pin, const bool restart) {
         w0(m,ivy,k,j,i) = wl.vy*u0l;
         w0(m,ivz,k,j,i) = wl.vz*u0l;
         w0(m,IEN,k,j,i) = wl.e;
+        for (int r=0; r<pmbp->pmhd->nscalars; ++r) {
+          w0(m,IYF+r,k,j,i) = yl;
+        }
         b0.x1f(m,k,j,i) = bxl;
         b0.x2f(m,k,j,i) = byl;
         b0.x3f(m,k,j,i) = bzl;
@@ -228,6 +261,9 @@ void ProblemGenerator::ShockTube(ParameterInput *pin, const bool restart) {
         w0(m,ivy,k,j,i) = wr.vy*u0r;
         w0(m,ivz,k,j,i) = wr.vz*u0r;
         w0(m,IEN,k,j,i) = wr.e;
+        for (int r=0; r<pmbp->pmhd->nscalars; ++r) {
+          w0(m,IYF+r,k,j,i) = yr;
+        }
         b0.x1f(m,k,j,i) = bxr;
         b0.x2f(m,k,j,i) = byr;
         b0.x3f(m,k,j,i) = bzr;
@@ -241,8 +277,121 @@ void ProblemGenerator::ShockTube(ParameterInput *pin, const bool restart) {
     });
     // Convert primitives to conserved
     auto &u0 = pmbp->pmhd->u0;
-    pmbp->pmhd->peos->PrimToCons(w0, bcc0, u0, is, ie, js, je, ks, ke);
+    if (!pmbp->pcoord->is_dynamical_relativistic) {
+      pmbp->pmhd->peos->PrimToCons(w0, bcc0, u0, is, ie, js, je, ks, ke);
+    }
   } // End initialization of MHD variables
+
+  // Initialize ADM variables -------------------------------
+  if (pmbp->padm != nullptr) {
+    // Assume Minkowski space for now
+    bool schwarzschild = pin->GetOrAddBoolean("problem", "schwarzschild", false);
+    auto &adm = pmbp->padm->adm;
+    auto &size = pmbp->pmb->mb_size;
+    int nmb1 = pmbp->nmb_thispack - 1;
+    int ng = indcs.ng;
+    int n1 = indcs.nx1 + 2*ng;
+    int n2 = (indcs.nx2 > 1) ? (indcs.nx2 + 2*ng) : 1;
+    int n3 = (indcs.nx3 > 1) ? (indcs.nx3 + 2*ng) : 1;
+    if (!schwarzschild) {
+      Real lapse_pow = pin->GetOrAddReal("problem", "lapse_pow", 0.0);
+      Real lapse     = pin->GetOrAddReal("problem", "lapse", 1.0);
+      Real gshock    = pin->GetOrAddReal("problem", "gshock", 1.0);
+      Real gshock_pow= pin->GetOrAddReal("problem", "gshock_pow", 0.0);
+      par_for("pgen_adm_vars", DevExeSpace(), 0,nmb1,0,(n3-1),0,(n2-1),0,(n1-1),
+      KOKKOS_LAMBDA(int m, int k, int j, int i) {
+        Real r[3] = {0.,0.,0.};
+        Real &x1min = size.d_view(m).x1min;
+        Real &x1max = size.d_view(m).x1max;
+        r[0] = CellCenterX(i-is, indcs.nx1, x1min, x1max);
+
+        Real &x2min = size.d_view(m).x2min;
+        Real &x2max = size.d_view(m).x2max;
+        r[1] = CellCenterX(j-js, indcs.nx2, x2min, x2max);
+
+        Real &x3min = size.d_view(m).x3min;
+        Real &x3max = size.d_view(m).x3max;
+        r[2] = CellCenterX(k-ks, indcs.nx3, x3min, x3max);
+
+        // Set ADM to flat space
+        adm.alpha(m, k, j, i) = pow(r[shk_dir-1],lapse_pow)*lapse;
+        adm.beta_u(m, 0, k, j, i) = 0.0;
+        adm.beta_u(m, 1, k, j, i) = 0.0;
+        adm.beta_u(m, 2, k, j, i) = 0.0;
+
+        adm.psi4(m, k, j, i) = 1.0/sqrt(adm.alpha(m, k, j, i));
+
+        adm.g_dd(m, 0, 0, k, j, i) = 1.0;
+        adm.g_dd(m, 0, 1, k, j, i) = 0.0;
+        adm.g_dd(m, 0, 2, k, j, i) = 0.0;
+        adm.g_dd(m, 1, 1, k, j, i) = 1.0;
+        adm.g_dd(m, 1, 2, k, j, i) = 0.0;
+        adm.g_dd(m, 2, 2, k, j, i) = 1.0;
+
+        adm.g_dd(m, shk_dir-1, shk_dir-1, k, j, i) = gshock*pow(r[shk_dir-1],gshock_pow);
+
+        adm.vK_dd(m, 0, 0, k, j, i) = 0.0;
+        adm.vK_dd(m, 0, 1, k, j, i) = 0.0;
+        adm.vK_dd(m, 0, 2, k, j, i) = 0.0;
+        adm.vK_dd(m, 1, 1, k, j, i) = 0.0;
+        adm.vK_dd(m, 1, 2, k, j, i) = 0.0;
+        adm.vK_dd(m, 2, 2, k, j, i) = 0.0;
+      });
+    } else {
+      par_for("pgen_adm_vars", DevExeSpace(), 0,nmb1,0,(n3-1),0,(n2-1),0,(n1-1),
+      KOKKOS_LAMBDA(int m, int k, int j, int i) {
+        Real &x1min = size.d_view(m).x1min;
+        Real &x1max = size.d_view(m).x1max;
+        Real x1v = CellCenterX(i-is, indcs.nx1, x1min, x1max);
+
+        Real &x2min = size.d_view(m).x2min;
+        Real &x2max = size.d_view(m).x2max;
+        Real x2v = CellCenterX(j-js, indcs.nx2, x2min, x2max);
+
+        Real &x3min = size.d_view(m).x3min;
+        Real &x3max = size.d_view(m).x3max;
+        Real x3v = CellCenterX(k-ks, indcs.nx3, x3min, x3max);
+
+        // Set ADM to Schwarzschild coordinates
+        Real r = 0;
+        if (shk_dir == 1) {
+          r = x1v;
+        } else if (shk_dir == 2) {
+          r = x2v;
+        } else if (shk_dir == 3) {
+          r = x3v;
+        }
+        Real fac = 1. - 2./r;
+
+        adm.alpha(m, k, j, i) = sqrt(fac);
+        adm.beta_u(m, 0, k, j, i) = 0.0;
+        adm.beta_u(m, 1, k, j, i) = 0.0;
+        adm.beta_u(m, 2, k, j, i) = 0.0;
+
+        adm.psi4(m, k, j, i) = 1.0/sqrt(adm.alpha(m, k, j, i));
+
+        adm.g_dd(m, ivx-IVX, ivx-IVX, k, j, i) = 1.0/fac;
+        adm.g_dd(m, ivy-IVX, ivy-IVX, k, j, i) = r*r;
+        adm.g_dd(m, ivz-IVX, ivz-IVX, k, j, i) = r*r;
+        adm.g_dd(m, 0, 1, k, j, i) = 0.0;
+        adm.g_dd(m, 0, 2, k, j, i) = 0.0;
+        adm.g_dd(m, 1, 2, k, j, i) = 0.0;
+
+        adm.vK_dd(m, 0, 0, k, j, i) = 0.0;
+        adm.vK_dd(m, 0, 1, k, j, i) = 0.0;
+        adm.vK_dd(m, 0, 2, k, j, i) = 0.0;
+        adm.vK_dd(m, 1, 1, k, j, i) = 0.0;
+        adm.vK_dd(m, 1, 2, k, j, i) = 0.0;
+        adm.vK_dd(m, 2, 2, k, j, i) = 0.0;
+      });
+    }
+
+    // If we're using the ADM variables, then we've got dynamic GR enabled.
+    // Because we need the metric, we can't initialize the conserved variables
+    // until we've filled out the ADM variables.
+    pmbp->pdyngr->PrimToConInit(is, ie, js, je, ks, ke);
+  }
+
 
   return;
 }
