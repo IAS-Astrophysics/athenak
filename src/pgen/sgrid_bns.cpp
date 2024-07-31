@@ -67,13 +67,13 @@ extern "C" {
 
 #define STRLEN (16384)
 
-// Indexes for Initial data variables (IDVars) 
+// Indexes for Initial data variables (IDVars)
 enum{idvar_alpha,
   idvar_Bx,idvar_By, idvar_Bz,
   idvar_gxx, idvar_gxy, idvar_gxz, idvar_gyy, idvar_gyz, idvar_gzz,
   idvar_Kxx, idvar_Kxy, idvar_Kxz, idvar_Kyy, idvar_Kyz, idvar_Kzz,
   idvar_q,
-  idvar_VRx, idvar_VRy, idvar_VRz, 
+  idvar_VRx, idvar_VRy, idvar_VRz,
   idvar_NDATAMAX, //TODO in NMESH this is 23, but they are 20, and only 20 used...
 };
 
@@ -168,14 +168,15 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
 
   if (verbose) std::cout << "Host mirrors created." << std::endl;
 
-  // TODO(JMF): Replace with a Kokkos loop on Kokkos::DefaultHostExecutionSpace() to
-  // improve performance.
-  // REMARK: if using OpenMP, you need to compile SGRID with OpenMP support
+  // REMARK: you need to compile SGRID with OpenMP support!
   int ncells1 = indcs.nx1 + 2*(indcs.ng);
   int ncells2 = indcs.nx2 + 2*(indcs.ng);
   int ncells3 = indcs.nx3 + 2*(indcs.ng);
   int nmb = pmbp->nmb_thispack;
-  for (int m = 0; m < nmb; m++) {
+
+  Kokkos::parallel_for("read_sgrid_data",
+  Kokkos::MDRangePolicy< Kokkos::OpenMP, Kokkos::Rank<4>>({0,0,0,0}, {nmb, ncells3, ncells2, ncells1}),
+  KOKKOS_LAMBDA(int m, int k, int j, int i) {
     Real &x1min = size.h_view(m).x1min;
     // not to be confused by xmax1, which is used by SGRID
     Real &x1max = size.h_view(m).x1max;
@@ -190,121 +191,115 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     Real &x3max = size.h_view(m).x3max;
     int nx3 = indcs.nx3;
 
-    for (int k = 0; k < ncells3; k++) {
-      const Real z = CellCenterX(k - ks, nx3, x3min, x3max);
-      for (int j = 0; j < ncells2; j++) {
-        const Real y = CellCenterX(j - js, nx2, x2min, x2max);
-        for (int i = 0; i < ncells1; i++) {
-          Real x = CellCenterX(i - is, nx1, x1min, x1max);
+    const Real z = CellCenterX(k - ks, nx3, x3min, x3max);
+    const Real y = CellCenterX(j - js, nx2, x2min, x2max);
+    const Real x = CellCenterX(i - is, nx1, x1min, x1max);
 
-          Real zb = z;
-          Real yb = y * s180; // multiply by -1 if 180 degree rotation
-          Real xb = x * s180; 
-          Real xs = xb + sgrid_x_CM;   // shift x-coord 
-          Real xyz[3] = {xs, yb, zb};
+    Real zb = z;
+    Real yb = y * s180; // multiply by -1 if 180 degree rotation
+    Real xb = x * s180;
+    Real xs = xb + sgrid_x_CM;   // shift x-coord
+    Real xyz[3] = {xs, yb, zb};
 
-          // Initial data variables at one point 
-          // 20 values for the fields at (x_i,y_j,z_k) ordered as:
-          //  alpha DNSdata_Bx DNSdata_By DNSdata_Bz
-          //  gxx gxy gxz gyy gyz gzz
-          //  Kxx Kxy Kxz Kyy Kyz Kzz
-          //  q VRx VRy VRz
-          Real IDvars[idvar_NDATAMAX]; 
+    // Initial data variables at one point
+    // 20 values for the fields at (x_i,y_j,z_k) ordered as:
+    //  alpha DNSdata_Bx DNSdata_By DNSdata_Bz
+    //  gxx gxy gxz gyy gyz gzz
+    //  Kxx Kxy Kxz Kyy Kyz Kzz
+    //  q VRx VRy VRz
+    Real IDvars[idvar_NDATAMAX];
 
-          // Interpolate
-          // This call is supposed to be threadsafe, it contains an OMP Critical
-          SGRID_DNSdata_Interpolate_ADMvars_to_xyz(xyz, IDvars, 0);
+    // Interpolate
+    // This call is supposed to be threadsafe, it contains an OMP Critical
+    SGRID_DNSdata_Interpolate_ADMvars_to_xyz(xyz, IDvars, 0);
 
-          // transform some tensor components, if we have a 180 degree rotation 
-          IDvars[idvar_Bx]  *= s180;
-          IDvars[idvar_By]  *= s180;
-          IDvars[idvar_gxz] *= s180;
-          IDvars[idvar_gyz] *= s180;
-          IDvars[idvar_Kxz] *= s180;
-          IDvars[idvar_Kyz] *= s180;
-          IDvars[idvar_VRx] *= s180;
-          IDvars[idvar_VRy] *= s180;
+    // transform some tensor components, if we have a 180 degree rotation
+    IDvars[idvar_Bx]  *= s180;
+    IDvars[idvar_By]  *= s180;
+    IDvars[idvar_gxz] *= s180;
+    IDvars[idvar_gyz] *= s180;
+    IDvars[idvar_Kxz] *= s180;
+    IDvars[idvar_Kyz] *= s180;
+    IDvars[idvar_VRx] *= s180;
+    IDvars[idvar_VRy] *= s180;
 
-          // Extract metric quantities
-          host_adm.alpha(m, k, j, i) = IDvars[idvar_alpha];
-          host_adm.beta_u(m, 0, k, j, i) = IDvars[idvar_Bx];
-          host_adm.beta_u(m, 1, k, j, i) = IDvars[idvar_By];
-          host_adm.beta_u(m, 2, k, j, i) = IDvars[idvar_Bz];
+    // Extract metric quantities
+    host_adm.alpha(m, k, j, i) = IDvars[idvar_alpha];
+    host_adm.beta_u(m, 0, k, j, i) = IDvars[idvar_Bx];
+    host_adm.beta_u(m, 1, k, j, i) = IDvars[idvar_By];
+    host_adm.beta_u(m, 2, k, j, i) = IDvars[idvar_Bz];
 
-          Real g3d[NSPMETRIC];
-          host_adm.g_dd(m, 0, 0, k, j, i) = g3d[S11] = IDvars[idvar_gxx];
-          host_adm.g_dd(m, 0, 1, k, j, i) = g3d[S12] = IDvars[idvar_gxy];
-          host_adm.g_dd(m, 0, 2, k, j, i) = g3d[S13] = IDvars[idvar_gxz];
-          host_adm.g_dd(m, 1, 1, k, j, i) = g3d[S22] = IDvars[idvar_gyy];
-          host_adm.g_dd(m, 1, 2, k, j, i) = g3d[S23] = IDvars[idvar_gyz];
-          host_adm.g_dd(m, 2, 2, k, j, i) = g3d[S33] = IDvars[idvar_gzz];
+    Real g3d[NSPMETRIC];
+    host_adm.g_dd(m, 0, 0, k, j, i) = g3d[S11] = IDvars[idvar_gxx];
+    host_adm.g_dd(m, 0, 1, k, j, i) = g3d[S12] = IDvars[idvar_gxy];
+    host_adm.g_dd(m, 0, 2, k, j, i) = g3d[S13] = IDvars[idvar_gxz];
+    host_adm.g_dd(m, 1, 1, k, j, i) = g3d[S22] = IDvars[idvar_gyy];
+    host_adm.g_dd(m, 1, 2, k, j, i) = g3d[S23] = IDvars[idvar_gyz];
+    host_adm.g_dd(m, 2, 2, k, j, i) = g3d[S33] = IDvars[idvar_gzz];
 
-          host_adm.vK_dd(m, 0, 0, k, j, i) = IDvars[idvar_Kxx];
-          host_adm.vK_dd(m, 0, 1, k, j, i) = IDvars[idvar_Kxy];
-          host_adm.vK_dd(m, 0, 2, k, j, i) = IDvars[idvar_Kxz];
-          host_adm.vK_dd(m, 1, 1, k, j, i) = IDvars[idvar_Kyy];
-          host_adm.vK_dd(m, 1, 2, k, j, i) = IDvars[idvar_Kyz];
-          host_adm.vK_dd(m, 2, 2, k, j, i) = IDvars[idvar_Kzz];
+    host_adm.vK_dd(m, 0, 0, k, j, i) = IDvars[idvar_Kxx];
+    host_adm.vK_dd(m, 0, 1, k, j, i) = IDvars[idvar_Kxy];
+    host_adm.vK_dd(m, 0, 2, k, j, i) = IDvars[idvar_Kxz];
+    host_adm.vK_dd(m, 1, 1, k, j, i) = IDvars[idvar_Kyy];
+    host_adm.vK_dd(m, 1, 2, k, j, i) = IDvars[idvar_Kyz];
+    host_adm.vK_dd(m, 2, 2, k, j, i) = IDvars[idvar_Kzz];
 
-          // Extract hydro quantities
-          Real rho = 0;
-          Real press = 0;
-          Real eps = 0;
-          Real v_u_x = 0, v_u_y = 0, v_u_z = 0;
-          
-          // if we are in matter region, convert q, VR to rho, press, eps, v^i :
-          if (IDvars[idvar_q] > 0.0) {
-            SGRID_EoS_T0_rho0_P_rhoE_from_hm1(IDvars[idvar_q], &rho, &press, &eps);
+    // Extract hydro quantities
+    Real rho = 0;
+    Real press = 0;
+    Real eps = 0;
+    Real v_u_x = 0, v_u_y = 0, v_u_z = 0;
 
-           	// 3-velocity  v^i
-	          Real xmax = (xb>0)?xmax1:xmax2;
-	
-	          // construct KV xi from Omega, ecc, rdot, xmax1-xmax2 
-	          Real xix = -Omega*yb + xb*rdotor; // CM is at (0,0,0) in bam 
-	          Real xiy =  Omega*(xb - ecc*xmax) + yb*rdotor;
-	          Real xiz =  zb*rdotor;
+    // if we are in matter region, convert q, VR to rho, press, eps, v^i :
+    if (IDvars[idvar_q] > 0.0) {
+      SGRID_EoS_T0_rho0_P_rhoE_from_hm1(IDvars[idvar_q], &rho, &press, &eps);
 
-	          // vI^i = VR^i + xi^i 
-	          Real vIx = IDvars[idvar_VRx] + xix;
-	          Real vIy = IDvars[idvar_VRy] + xiy;
-	          Real vIz = IDvars[idvar_VRz] + xiz;
+     	// 3-velocity  v^i
+	    Real xmax = (xb>0)?xmax1:xmax2;
 
-	          // Note: vI^i = u^i/u^0 in DNSdata,
-	          //       while matter_v^i = u^i/(alpha u^0) + beta^i / alpha
-	          //   ==> matter_v^i = (vI^i + beta^i)/alpha                    
-	          v_u_x = (vIx + IDvars[idvar_Bx])/IDvars[idvar_alpha];
-	          v_u_y = (vIy + IDvars[idvar_By])/IDvars[idvar_alpha];
-	          v_u_z = (vIz + IDvars[idvar_Bz])/IDvars[idvar_alpha];
-          }
+	    // construct KV xi from Omega, ecc, rdot, xmax1-xmax2
+	    Real xix = -Omega*yb + xb*rdotor; // CM is at (0,0,0) in bam
+	    Real xiy =  Omega*(xb - ecc*xmax) + yb*rdotor;
+	    Real xiz =  zb*rdotor;
 
-          // Store fluid quantities
-          host_w0(m, IDN, k, j, i) = rho;
-          host_w0(m, IPR, k, j, i) = press;
-          Real vu[3] = { v_u_x, v_u_y, v_u_z };
+	    // vI^i = VR^i + xi^i
+	    Real vIx = IDvars[idvar_VRx] + xix;
+	    Real vIy = IDvars[idvar_VRy] + xiy;
+	    Real vIz = IDvars[idvar_VRz] + xiz;
 
-          // Before we store the velocity, we need to make sure it's physical and
-          // calculate the Lorentz factor. If the velocity is superluminal, we make a
-          // last-ditch attempt to salvage the solution by rescaling it to
-          // vsq = 1.0 - 1e-15
-          Real vsq = Primitive::SquareVector(vu, g3d);
-          if (1.0 - vsq <= 0) {
-            std::cout << "The velocity is superluminal!" << std::endl
-                      << "Attempting to adjust..." << std::endl;
-            Real fac = sqrt((1.0 - 1e-15)/vsq);
-            vu[0] *= fac;
-            vu[1] *= fac;
-            vu[2] *= fac;
-            vsq = 1.0 - 1.0e-15;
-          }
-          Real W = sqrt(1.0 / (1.0 - vsq));
-
-          host_w0(m, IVX, k, j, i) = W*vu[0];
-          host_w0(m, IVY, k, j, i) = W*vu[1];
-          host_w0(m, IVZ, k, j, i) = W*vu[2];
-        }
-      }
+	    // Note: vI^i = u^i/u^0 in DNSdata,
+	    //       while matter_v^i = u^i/(alpha u^0) + beta^i / alpha
+	    //   ==> matter_v^i = (vI^i + beta^i)/alpha
+	    v_u_x = (vIx + IDvars[idvar_Bx])/IDvars[idvar_alpha];
+	    v_u_y = (vIy + IDvars[idvar_By])/IDvars[idvar_alpha];
+	    v_u_z = (vIz + IDvars[idvar_Bz])/IDvars[idvar_alpha];
     }
-  }
+
+    // Store fluid quantities
+    host_w0(m, IDN, k, j, i) = rho;
+    host_w0(m, IPR, k, j, i) = press;
+    Real vu[3] = { v_u_x, v_u_y, v_u_z };
+
+    // Before we store the velocity, we need to make sure it's physical and
+    // calculate the Lorentz factor. If the velocity is superluminal, we make a
+    // last-ditch attempt to salvage the solution by rescaling it to
+    // vsq = 1.0 - 1e-15
+    Real vsq = Primitive::SquareVector(vu, g3d);
+    if (1.0 - vsq <= 0) {
+      std::cout << "The velocity is superluminal!" << std::endl
+                << "Attempting to adjust..." << std::endl;
+      Real fac = sqrt((1.0 - 1e-15)/vsq);
+      vu[0] *= fac;
+      vu[1] *= fac;
+      vu[2] *= fac;
+      vsq = 1.0 - 1.0e-15;
+    }
+    Real W = sqrt(1.0 / (1.0 - vsq));
+
+    host_w0(m, IVX, k, j, i) = W*vu[0];
+    host_w0(m, IVY, k, j, i) = W*vu[1];
+    host_w0(m, IVZ, k, j, i) = W*vu[2];
+  });
 
   if (verbose) std::cout << "Host mirrors filled." << std::endl;
 
@@ -388,7 +383,7 @@ void SGRIDHistory(HistoryData *pdata, Mesh *pm) {
   const int nji = nx2*nx1;
   Real rho_max = std::numeric_limits<Real>::max();
   Real alpha_min = -rho_max;
-  Kokkos::parallel_reduce("TOVHistSums",Kokkos::RangePolicy<>(DevExeSpace(), 0, nmkji),
+  Kokkos::parallel_reduce("BNSHistSums",Kokkos::RangePolicy<>(DevExeSpace(), 0, nmkji),
   KOKKOS_LAMBDA(const int &idx, Real &mb_max, Real &mb_alp_min) {
     // coompute n,k,j,i indices of thread
     int m = (idx)/nkji;
@@ -430,7 +425,7 @@ namespace {
 //  This code is adapted from W.Tichy NMESH example
 void DNS_init_sgrid(ParameterInput *pin)
 {
-  const int level_l = 0; 
+  const int level_l = 0;
   const int myrank = global_variable::my_rank;
 
   const bool verbose = pin->GetOrAddBoolean("problem", "verbose", 0);
@@ -445,38 +440,38 @@ void DNS_init_sgrid(ParameterInput *pin)
   std::strcpy(sgrid_datadir, sgrid_datadir_const.c_str());
 
   char command[STRLEN+65676];
-  char sgrid_exe[] = "sgrid"; // name is not important 
+  char sgrid_exe[] = "sgrid"; // name is not important
   char sgridoutdir[STRLEN], sgridoutdir_previous[STRLEN];
   char sgridcheckpoint_indir[STRLEN];
   char sgridparfile[STRLEN];
   char *stringptr;
   int ret;
 
-  // initialize file names 
+  // initialize file names
   //std::sprintf(gridfile, "%s/grid_level_%d_proc_%d.dat", outdir, level_l, MPIrank);
   std::sprintf(sgridoutdir, "%s/sgrid_level_%d_proc_%d", outdir.c_str(), level_l, myrank);
   std::sprintf(sgridoutdir_previous, "%s/sgrid_level_%d_proc_%d_previous",
           outdir.c_str(), level_l, myrank);
   std::snprintf(sgridcheckpoint_indir, STRLEN-1, "%s", sgrid_datadir);
-  stringptr = strrchr(sgrid_datadir, '/'); // find last / 
-  if(stringptr==NULL) { // no / found in DNSdataReader_sgrid_datadir 
+  stringptr = strrchr(sgrid_datadir, '/'); // find last /
+  if(stringptr==NULL) { // no / found in DNSdataReader_sgrid_datadir
     std::snprintf(sgridparfile, STRLEN-1, "%s.par", sgrid_datadir);
   } else {
     std::snprintf(sgridparfile, STRLEN-1, "%s%s", stringptr+1, ".par");
   }
-  
+
   // IMPORTANT: Put sgrid in a mode where it does not free its memory before
   // returning from libsgrid_main. So later we need to explicitly call
   //   SGRID_free_everything();
   // Done in UserWorkAfterLoop
   SGRID_memory_persists = 1;
 
-  // init sgrid if needed, so that we can call funcs in it 
+  // init sgrid if needed, so that we can call funcs in it
   if(!SGRID_grid_exists())
   {
     if (verbose) std::printf("Init sgrid\n");
-    
-    // call sgrid without running interpolator 
+
+    // call sgrid without running interpolator
     std::sprintf(command, "%s %s/%s "
             "--modify-par:BNSdata_Interpolate_pointsfile=%s "
             "--modify-par:BNSdata_Interpolate_output=%s "
@@ -485,13 +480,13 @@ void DNS_init_sgrid(ParameterInput *pin)
             sgrid_exe, sgrid_datadir, sgridparfile,
             "****NONE****", "<NONE>", sgridoutdir, sgridcheckpoint_indir);
 
-    // low verbosity 
+    // low verbosity
     std::strcat(command,
            " --modify-par:Coordinates_set_bfaces=no"
            " --modify-par:verbose=no"
            " --modify-par:Coordinates_verbose=no");
 
-    // add other pars 
+    // add other pars
     if(Interpolate_verbose)
       std::strcat(command, " --modify-par:BNSdata_Interpolate_verbose=yes");
     if(Interpolate_max_xyz_diff>0.0)
@@ -509,9 +504,9 @@ void DNS_init_sgrid(ParameterInput *pin)
     int ret = DNS_call_sgrid(command);
     if (verbose) std::printf("DNS_call_sgrid returned: %d\n", ret);
   }
-  
+
 }
-  
+
 //----------------------------------------------------------------------------------------
 //! \fn int DNS_call_sgrid(const char *command)
 //  \brief Utility for SGRID DNS files: call libsgrid
@@ -524,29 +519,29 @@ int DNS_call_sgrid(const char *command)
   int size = global_variable::nranks;
   int rkop;
 
-  // cleanup in case we have called this already before 
+  // cleanup in case we have called this already before
   if(SGRID_grid_exists()) SGRID_free_everything();
 
   std::printf("calling libsgrid_main with these arguments:\n%s\n", command);
 
   //argc = construct_argv(com, &argv);
   argc = SGRID_construct_argv(com, &argv);
- 
+
   status = libsgrid_main(argc, argv);
 
   if(status!=0) {
-    std::printf("WARNING: Return value = %d\n", status); 
+    std::printf("WARNING: Return value = %d\n", status);
   }
-  
-  free(argv); // free since construct_argv allocates argv 
+
+  free(argv); // free since construct_argv allocates argv
   free(com);
 
   return status;
 }
-  
+
 //----------------------------------------------------------------------------------------
 //! \fn int DNS_parameters(ParameterInput *pin)
-//  \brief Utility for SGRID DNS files: read SGRID BNSdata_properties.txt and get pars 
+//  \brief Utility for SGRID DNS files: read SGRID BNSdata_properties.txt and get pars
 //  This code is minimally changed from W.Tichy NMESH example
 int DNS_parameters(ParameterInput *pin)
 {
@@ -575,15 +570,15 @@ int DNS_parameters(ParameterInput *pin)
   //
   // Open file
   //
-  
+
   fp1 = fopen(datadir, "r");
   if(fp1==NULL) {
     std::cout << "### FATAL ERROR datadir: " << datadir << " "
               << " could not be accessed." << std::endl;
     exit(EXIT_FAILURE);
   }
-  
-  // move fp1 to place where time = 0 is 
+
+  // move fp1 to place where time = 0 is
   j = DNS_position_fileptr_after_str(fp1, "NS data properties (time = 0):\n");
   if(j==EOF) {
     std::cout << "### FATAL ERROR could not find (time = 0) in: " << datadir << std::endl;
@@ -598,7 +593,7 @@ int DNS_parameters(ParameterInput *pin)
   Real ret = SGRID_fgetparameter(fp1, "EoS_type", EoS_type);
   if(ret==EOF)
   {
-    // if we can't find EoS_type default to PwP 
+    // if we can't find EoS_type default to PwP
     std::sprintf(EoS_type, "%s", "PwP");
     rewind(fp1);
     j = DNS_position_fileptr_after_str(fp1, "NS data properties (time = 0):\n");
@@ -606,7 +601,7 @@ int DNS_parameters(ParameterInput *pin)
   }
   if (verbose) std::printf("EoS_type = %s\n", EoS_type);
 
-  // Check if we need to read piecewise poly (PwP) pars 
+  // Check if we need to read piecewise poly (PwP) pars
   if( (strcmp(EoS_type,"PwP")==0) || (strcmp(EoS_type,"pwp")==0) )
   {
     SGRID_fgotonext(fp1, "n_list");
@@ -630,7 +625,7 @@ int DNS_parameters(ParameterInput *pin)
 	     "      compute each Gamma using:  Gamma = 1 + 1/n\n");
     }
   }
-  
+
   // Check if EoS is in sgrid table
   if(strcmp(EoS_type,"tab1d_AtT0")==0)
   {
@@ -641,11 +636,11 @@ int DNS_parameters(ParameterInput *pin)
     }
   }
 
-  //TODO set/adapt AthenaK EOS parameters from SGRID data 
+  //TODO set/adapt AthenaK EOS parameters from SGRID data
   /*
     Real rho0max, epslmax, Pmax;
 
-    set some Nmesh EoS pars according to what was read 
+    set some Nmesh EoS pars according to what was read
     if(strrho0[0])  Sets(Par("EoS_PwP_rho0"), strrho0);
     if(strn[0])     Sets(Par("EoS_PwP_n"), strn);
     if(strkappa[0]) Sets(Par("EoS_PwP_kappa"), strkappa);
@@ -658,7 +653,7 @@ int DNS_parameters(ParameterInput *pin)
     if(strkappa[0]) printf("EoS_PwP_kappa = %s\n", Gets(Par("EoS_PwP_kappa")));
     if(EoS_file[0]) printf("EoS_tab1d_load_file = %s\n", Gets(Par("EoS_tab1d_load_file")));
     printf("Make sure PwP_init_from_parameters gives a compatible EoS!!!\n");
-  
+
     EoS_reinit_from_pars(mesh);
 
     qmax = fmax(qmax1, qmax2);
@@ -673,29 +668,29 @@ int DNS_parameters(ParameterInput *pin)
     Real dPdrho0, dPdepsl;
     tab1d_Of_hm1_AtT0(qmax, &rho0max, &epslmax, &Pmax, &dPdrho0, &dPdepsl);
     }
-    else // read rho0max, Pmax from file fp1 
+    else // read rho0max, Pmax from file fp1
     {
     Real rho0max1=-1, Pmax1=-1, rho0max2=-1, Pmax2=-1;
     rewind(fp1);
     j=DNS_position_fileptr_after_str(fp1, "NS data properties (time = 0):\n");
-    
+
     ret = SGRID_fgetparameter(fp1, "rho0max1", str);
     if(ret!=EOF) rho0max1 = atof(str);
     ret = SGRID_fgetparameter(fp1, "Pmax1", str);
     if(ret!=EOF) Pmax1 = atof(str);
-    
+
     ret = SGRID_fgetparameter(fp1, "rho0max2", str);
     if(ret!=EOF) rho0max2 = atof(str);
     ret = SGRID_fgetparameter(fp1, "Pmax2", str);
     if(ret!=EOF) Pmax2 = atof(str);
-    
+
     rho0max = fmax(rho0max1, rho0max2);
     Pmax    = fmax(Pmax1, Pmax2);
     if(rho0max<0. || Pmax<0.)
     errorexit("unable to find rho0max1/2 and Pmax1/2 in "
     "BNSdata_properties.txt");
-    
-    // Set epslmax using: q = h-1 = epsl + P/rho0  =>  epsl = q - P/rho0 
+
+    // Set epslmax using: q = h-1 = epsl + P/rho0  =>  epsl = q - P/rho0
     epslmax = qmax - Pmax/rho0max;
     }
   */
@@ -715,9 +710,9 @@ int DNS_parameters(ParameterInput *pin)
   SGRID_fgetparameter(fp1, "m02", str);
   Real m02 = atof(str);
 
-  // Shift xmax1/2 such that CM is at 0, also read qmax1/2 
+  // Shift xmax1/2 such that CM is at 0, also read qmax1/2
   SGRID_fgetparameter(fp1, "xin1", str);
-  Real xin1 = atof(str)-sgrid_x_CM;  
+  Real xin1 = atof(str)-sgrid_x_CM;
   SGRID_fgetparameter(fp1, "xmax1", str);
   Real xmax1 = atof(str)-sgrid_x_CM;
   SGRID_fgetparameter(fp1, "xout1", str);
@@ -742,7 +737,7 @@ int DNS_parameters(ParameterInput *pin)
   pin->SetReal("problem", "rdot" , rdot);
   pin->SetReal("problem", "m01"  , m01);
   pin->SetReal("problem", "m02"  , m02);
-  
+
   pin->SetReal("problem", "xin1" , xin1);
   pin->SetReal("problem", "xmax1", xmax1);
   pin->SetReal("problem", "qmax1", qmax1);
@@ -764,7 +759,7 @@ int DNS_parameters(ParameterInput *pin)
   pin->SetReal("problem", "center2_z", 0.);
 
   //
-  // Close file 
+  // Close file
   //
   fclose(fp1);
 
