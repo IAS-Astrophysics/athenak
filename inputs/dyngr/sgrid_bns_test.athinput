@@ -71,7 +71,7 @@ a           = 0.0
 
 <mhd>
 eos         = ideal        # EOS type
-dyn_eos     = ideal        # PrimitiveSolver EOSPolicy
+dyn_eos     = piecewise_poly # PrimitiveSolver EOSPolicy
 dyn_error   = reset_floor  # PrimitiveSolver ErrorPolicy
 reconstruct = wenoz        # spatial reconstruction method
 rsolver     = llf          # Riemann solver to be used

@@ -85,7 +85,12 @@ namespace {
   int DNS_call_sgrid(const char *command);
 }
 
+namespace {
+  Real rho_thresh{-1.0};    // Density threshold for AMR
+}
+
 void SGRIDHistory(HistoryData *pdata, Mesh *pm);
+void RefinementCondition(MeshBlockPack * pmbp);
 
 //----------------------------------------------------------------------------------------
 //! \fn ProblemGenerator::UserProblem_()
@@ -93,6 +98,9 @@ void SGRIDHistory(HistoryData *pdata, Mesh *pm);
 void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   // Set the custom history function
   user_hist_func = &SGRIDHistory;
+  user_ref_func  = &RefinementCondition;
+
+  rho_thresh = pin->GetOrAddReal("problem", "rho_thresh", -1.0);
 
   if (restart) return;
 
@@ -168,15 +176,17 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
 
   if (verbose) std::cout << "Host mirrors created." << std::endl;
 
-  // REMARK: you need to compile SGRID with OpenMP support!
+  // REMARK: you need to compile SGRID without OpenMP support!
   int ncells1 = indcs.nx1 + 2*(indcs.ng);
   int ncells2 = indcs.nx2 + 2*(indcs.ng);
   int ncells3 = indcs.nx3 + 2*(indcs.ng);
   int nmb = pmbp->nmb_thispack;
 
-  Kokkos::parallel_for("read_sgrid_data",
-  Kokkos::MDRangePolicy< Kokkos::OpenMP, Kokkos::Rank<4>>({0,0,0,0}, {nmb, ncells3, ncells2, ncells1}),
-  KOKKOS_LAMBDA(int m, int k, int j, int i) {
+  // TODO(DR): Use a Kokkos loop to improve performance
+  for (int m = 0; m < nmb; m++)
+  for (int k = 0; k < ncells3; k++)
+  for (int j = 0; j < ncells2; j++)
+  for (int i = 0; i < ncells1; i++) {
     Real &x1min = size.h_view(m).x1min;
     // not to be confused by xmax1, which is used by SGRID
     Real &x1max = size.h_view(m).x1max;
@@ -299,7 +309,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     host_w0(m, IVX, k, j, i) = W*vu[0];
     host_w0(m, IVY, k, j, i) = W*vu[1];
     host_w0(m, IVZ, k, j, i) = W*vu[2];
-  });
+  }
 
   if (verbose) std::cout << "Host mirrors filled." << std::endl;
 
@@ -414,6 +424,51 @@ void SGRIDHistory(HistoryData *pdata, Mesh *pm) {
   // store data in hdata array
   pdata->hdata[0] = rho_max;
   pdata->hdata[1] = alpha_min;
+}
+
+// This code is adapted from Z4c_AMR::ChiMin
+void RefinementCondition(MeshBlockPack * pmbp) {
+  if (rho_thresh <= 0) {
+    return;
+  }
+
+  Mesh *pmesh       = pmbp->pmesh;
+  int nmb           = pmbp->nmb_thispack;
+  int mbs           = pmesh->gids_eachrank[global_variable::my_rank];
+  auto &refine_flag = pmesh->pmr->refine_flag;
+  auto &indcs       = pmesh->mb_indcs;
+  int &is = indcs.is, nx1 = indcs.nx1;
+  int &js = indcs.js, nx2 = indcs.nx2;
+  int &ks = indcs.ks, nx3 = indcs.nx3;
+  const int nkji = nx3 * nx2 * nx1;
+  const int nji  = nx2 * nx1;
+  auto &w0       = pmbp->pmhd->w0;
+  auto rho_thresh_ = rho_thresh;
+
+  par_for_outer(
+    "RefinementCondition", DevExeSpace(), 0, 0, 0, (nmb - 1),
+    KOKKOS_LAMBDA(TeamMember_t tmember, const int m) {
+      Real team_dmin;
+      Kokkos::parallel_reduce(
+        Kokkos::TeamThreadRange(tmember, nkji),
+        [=](const int idx, Real &dmin) {
+          int k = (idx) / nji;
+          int j = (idx - k * nji) / nx1;
+          int i = (idx - k * nji - j * nx1) + is;
+          j += js;
+          k += ks;
+          dmin = fmin(w0(m, IDN, k, j, i), dmin);
+        },
+        Kokkos::Min<Real>(team_dmin));
+
+      if (team_dmin < rho_thresh_) {
+        refine_flag.d_view(m + mbs) = 1;
+      }
+      if (team_dmin > 1.25 * rho_thresh_) {
+        refine_flag.d_view(m + mbs) = -1;
+      }
+    });
+
 }
 
 
@@ -635,66 +690,6 @@ int DNS_parameters(ParameterInput *pin)
       std::printf("EoS_file = %s\n", EoS_file);
     }
   }
-
-  //TODO set/adapt AthenaK EOS parameters from SGRID data
-  /*
-    Real rho0max, epslmax, Pmax;
-
-    set some Nmesh EoS pars according to what was read
-    if(strrho0[0])  Sets(Par("EoS_PwP_rho0"), strrho0);
-    if(strn[0])     Sets(Par("EoS_PwP_n"), strn);
-    if(strkappa[0]) Sets(Par("EoS_PwP_kappa"), strkappa);
-    if(EoS_file[0]) Sets(Par("EoS_tab1d_load_file"), EoS_file);
-
-    std::printf("NOTE: Some nmesh pars have been set:\n");
-    if(EoS_type[0]) printf("EoS_type = %s\n", Gets(Par("EoS_type")));
-    if(strrho0[0])  printf("EoS_PwP_rho0 = %s\n", Gets(Par("EoS_PwP_rho0")));
-    if(strn[0])     printf("EoS_PwP_n = %s\n", Gets(Par("EoS_PwP_n")));
-    if(strkappa[0]) printf("EoS_PwP_kappa = %s\n", Gets(Par("EoS_PwP_kappa")));
-    if(EoS_file[0]) printf("EoS_tab1d_load_file = %s\n", Gets(Par("EoS_tab1d_load_file")));
-    printf("Make sure PwP_init_from_parameters gives a compatible EoS!!!\n");
-
-    EoS_reinit_from_pars(mesh);
-
-    qmax = fmax(qmax1, qmax2);
-    if( (strcmp(EoS_type,"PwP")==0) || (strcmp(EoS_type,"pwp")==0) )
-    {
-    Real rhoEmax, drho0dhm1;
-    PwP_polytrope_of_hm1(qmax, &rho0max, &Pmax, &rhoEmax, &drho0dhm1);
-    epslmax = (rhoEmax-rho0max)/rho0max; //rhoE=(1+epsl)rho0
-    }
-    else if(strcmp(EoS_type,"tab1d_AtT0")==0)
-    {
-    Real dPdrho0, dPdepsl;
-    tab1d_Of_hm1_AtT0(qmax, &rho0max, &epslmax, &Pmax, &dPdrho0, &dPdepsl);
-    }
-    else // read rho0max, Pmax from file fp1
-    {
-    Real rho0max1=-1, Pmax1=-1, rho0max2=-1, Pmax2=-1;
-    rewind(fp1);
-    j=DNS_position_fileptr_after_str(fp1, "NS data properties (time = 0):\n");
-
-    ret = SGRID_fgetparameter(fp1, "rho0max1", str);
-    if(ret!=EOF) rho0max1 = atof(str);
-    ret = SGRID_fgetparameter(fp1, "Pmax1", str);
-    if(ret!=EOF) Pmax1 = atof(str);
-
-    ret = SGRID_fgetparameter(fp1, "rho0max2", str);
-    if(ret!=EOF) rho0max2 = atof(str);
-    ret = SGRID_fgetparameter(fp1, "Pmax2", str);
-    if(ret!=EOF) Pmax2 = atof(str);
-
-    rho0max = fmax(rho0max1, rho0max2);
-    Pmax    = fmax(Pmax1, Pmax2);
-    if(rho0max<0. || Pmax<0.)
-    errorexit("unable to find rho0max1/2 and Pmax1/2 in "
-    "BNSdata_properties.txt");
-
-    // Set epslmax using: q = h-1 = epsl + P/rho0  =>  epsl = q - P/rho0
-    epslmax = qmax - Pmax/rho0max;
-    }
-  */
-
 
   // Other parameters
   SGRID_fgetparameter(fp1, "x_CM", str);
