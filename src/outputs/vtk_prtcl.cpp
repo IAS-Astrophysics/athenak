@@ -182,15 +182,24 @@ void ParticleVTKOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
   }
 
   // Write Part 6: scalar particle data
-  // Write gid of points
+  bool have_written_pointdata_header = false;
+
   for (int n=0; n<(pm->pmb_pack->ppart->nidata); ++n) {
     std::stringstream msg;
+
+    if (!have_written_pointdata_header) {
+      have_written_pointdata_header = true;
+      msg << std::endl << std::endl << "POINT_DATA " << npout_total << std::endl;
+    }
+
     if (n == static_cast<int>(PGID)) {
-      msg << std::endl << std::endl << "POINT_DATA " << npout_total << std::endl
-          << "SCALARS gid float" << std::endl << "LOOKUP_TABLE default" << std::endl;
+      msg << std::endl << "SCALARS gid float" << std::endl
+          << "LOOKUP_TABLE default" << std::endl;
     } else if (n == static_cast<int>(PTAG)) {
-      msg << std::endl << std::endl << "POINT_DATA " << npout_total << std::endl
-          << "SCALARS ptag float" << std::endl << "LOOKUP_TABLE default" << std::endl;
+      msg << std::endl << "SCALARS ptag float" << std::endl
+          << "LOOKUP_TABLE default" << std::endl;
+    } else if (n == static_cast<int>(PLASTMOVE) || n == static_cast<int>(PLASTLEVEL)) {
+      continue;
     }
     if (global_variable::my_rank == 0) {
       partfile.Write_any_type_at(msg.str().c_str(),msg.str().size(),header_offset,"byte");
