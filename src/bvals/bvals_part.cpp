@@ -45,6 +45,23 @@ void UpdateGID(int &newgid, NeighborBlock nghbr, int myrank, int *pcounter,
 }
 
 //----------------------------------------------------------------------------------------
+//! \fn void ParticlesBoundaryValues::MarkForDestruction()
+//! \brief Adds particles that cross the user-defined mesh boundariesto a list used then
+//! to destroy them. The list uses the same structure as the sendlist for convenience
+//! in the following functions.
+//! This opeartion should also be performed for single process runs
+
+KOKKOS_INLINE_FUNCTION
+void MarkForDestruction(int *pcounter, DualArray1D<ParticleLocationData> dlist, int p) {
+    int index = Kokkos::atomic_fetch_add(pcounter,1);
+    dlist.d_view(index).prtcl_indx = p;
+    // These particles don't actually get sent, thus following information is not needed
+    dlist.d_view(index).dest_gid   = 0;
+    dlist.d_view(index).dest_rank  = 0;
+  return;
+}
+
+//----------------------------------------------------------------------------------------
 //! \fn void ParticlesBoundaryValues::SetNewGID()
 //! \brief
 
@@ -61,14 +78,14 @@ TaskStatus ParticlesBoundaryValues::SetNewPrtclGID() {
   auto &nghbr = pmy_part->pmy_pack->pmb->nghbr;
   auto &psendl = sendlist;
   int counter=0;
-  int *pcounter = &counter;
+  Kokkos::View<int> atom_count("atom_count");
+  Kokkos::deep_copy(atom_count, counter);
   bool &multi_d = pmy_part->pmy_pack->pmesh->multi_d;
   bool &three_d = pmy_part->pmy_pack->pmesh->three_d;
 
-  Kokkos::realloc(sendlist, static_cast<int>(0.1*npart));
+  Kokkos::realloc(sendlist, static_cast<int>(npart));
   par_for("part_update",DevExeSpace(),0,(npart-1), KOKKOS_LAMBDA(const int p) {
     int m = pi(PGID,p) - gids;
-
     int mylevel = mblev.d_view(m);
     Real x1 = pr(IPX,p);
     Real x2 = pr(IPY,p);
@@ -88,94 +105,215 @@ TaskStatus ParticlesBoundaryValues::SetNewPrtclGID() {
     int fx = (x1 < 0.5*(mbsize.d_view(m).x1min + mbsize.d_view(m).x1max))? 0 : 1;
     int fy = (x2 < 0.5*(mbsize.d_view(m).x2min + mbsize.d_view(m).x2max))? 0 : 1;
     int fz = (x3 < 0.5*(mbsize.d_view(m).x3min + mbsize.d_view(m).x3max))? 0 : 1;
-
     fy = multi_d ? fy : 0;
     fz = three_d ? fz : 0;
 
-    // only update particle GID if it has crossed MeshBlock boundary
-    if ((abs(ix) + abs(iy) + abs(iz)) != 0) {
-      if (iz == 0) {
-        if (iy == 0) {
-          // x1 face
-          int indx = NeighborIndex(ix,0,0,0,0);           // neighbor at same level
-          if (nghbr.d_view(m,indx).lev > mylevel) {       // neighbor at finer level
-            indx = NeighborIndex(ix,0,0,fy,fz);
-          }
-          while (nghbr.d_view(m,indx).gid < 0) {indx++;}  // neighbor at coarser level
-          UpdateGID(pi(PGID,p), nghbr.d_view(m,indx), myrank, pcounter, psendl, p);
-        } else if (ix == 0) {
-          // x2 face
-          int indx = NeighborIndex(0,iy,0,0,0);
-          if (nghbr.d_view(m,indx).lev > mylevel) {
-            indx = NeighborIndex(0,iy,0,fx,fz);
-          }
-          while (nghbr.d_view(m,indx).gid < 0) {indx++;}
-          UpdateGID(pi(PGID,p), nghbr.d_view(m,indx), myrank, pcounter, psendl, p);
-        } else {
-          // x1x2 edge
-          int indx = NeighborIndex(ix,iy,0,0,0);
-          if (nghbr.d_view(m,indx).lev > mylevel) {
-            indx = NeighborIndex(ix,iy,0,fz,0);
-          }
-          while (nghbr.d_view(m,indx).gid < 0) {indx++;}
-          UpdateGID(pi(PGID,p), nghbr.d_view(m,indx), myrank, pcounter, psendl, p);
-        }
-      } else if (iy == 0) {
-        if (ix == 0) {
-          // x3 face
-          int indx = NeighborIndex(0,0,iz,0,0);
-          if (nghbr.d_view(m,indx).lev > mylevel) {
-            indx = NeighborIndex(0,0,iz,fx,fy);
-          }
-          while (nghbr.d_view(m,indx).gid < 0) {indx++;}
-          UpdateGID(pi(PGID,p), nghbr.d_view(m,indx), myrank, pcounter, psendl, p);
-        } else {
-          // x3x1 edge
-          int indx = NeighborIndex(ix,0,iz,0,0);
-          if (nghbr.d_view(m,indx).lev > mylevel) {
-            indx = NeighborIndex(ix,0,iz,fy,0);
-          }
-          while (nghbr.d_view(m,indx).gid < 0) {indx++;}
-          UpdateGID(pi(PGID,p), nghbr.d_view(m,indx), myrank, pcounter, psendl, p);
-        }
-      } else {
-        if (ix == 0) {
-          // x2x3 edge
-          int indx = NeighborIndex(0,iy,iz,0,0);
-          if (nghbr.d_view(m,indx).lev > mylevel) {
-            indx = NeighborIndex(0,iy,iz,fx,0);
-          }
-          while (nghbr.d_view(m,indx).gid < 0) {indx++;}
-          UpdateGID(pi(PGID,p), nghbr.d_view(m,indx), myrank, pcounter, psendl, p);
-        } else {
-          // corners
-          int indx = NeighborIndex(ix,iy,iz,0,0);
-          UpdateGID(pi(PGID,p), nghbr.d_view(m,indx), myrank, pcounter, psendl, p);
-        }
-      }
+    bool check_boundary = false;
 
-      // reset x,y,z positions if particle crosses Mesh boundary using periodic BCs
-      if (x1 < meshsize.x1min) {
-        pr(IPX,p) += (meshsize.x1max - meshsize.x1min);
-      } else if (x1 > meshsize.x1max) {
-        pr(IPX,p) -= (meshsize.x1max - meshsize.x1min);
+    // only update particle GID if it has crossed MeshBlock boundary
+    if ((abs(ix) + abs(iy) + abs(iz)) != 0 && !check_boundary) {
+      // The way GIDs are determined currently is not reliable in SMR cases
+      // due to nighbours across edges and corners being uninitialized.
+      // Need extra check
+      bool send_to_coarser = false;
+      if (ix < 0) {
+        // level might be initizialized to -1 on some neighbours
+        for (int iop = 0; iop <= 3; ++iop) {
+          if (nghbr.d_view(m,iop).lev < mylevel && nghbr.d_view(m,iop).lev > 0) {
+            send_to_coarser = true;
+          }
+        }
+      } else if (ix > 0) {
+         for (int iop = 4; iop <= 7; ++iop) {
+          if (nghbr.d_view(m,iop).lev < mylevel && nghbr.d_view(m,iop).lev > 0) {
+            send_to_coarser = true;
+          }
+         }
       }
-      if (x2 < meshsize.x2min) {
-        pr(IPY,p) += (meshsize.x2max - meshsize.x2min);
-      } else if (x2 > meshsize.x2max) {
-        pr(IPY,p) -= (meshsize.x2max - meshsize.x2min);
+      if (iy < 0) {
+        for (int iop = 8; iop <= 11; ++iop) {
+          if (nghbr.d_view(m,iop).lev < mylevel && nghbr.d_view(m,iop).lev > 0) {
+            send_to_coarser = true;
+          }
+        }
+      } else if (iy > 0) {
+        for (int iop = 12; iop <= 15; ++iop) {
+          if (nghbr.d_view(m,iop).lev < mylevel && nghbr.d_view(m,iop).lev > 0) {
+            send_to_coarser = true;
+          }
+        }
       }
-      if (x3 < meshsize.x3min) {
-        pr(IPZ,p) += (meshsize.x3max - meshsize.x3min);
-      } else if (x3 > meshsize.x3max) {
-        pr(IPZ,p) -= (meshsize.x3max - meshsize.x3min);
+      if (iz < 0) {
+        for (int iop = 24; iop <= 27; ++iop) {
+          if (nghbr.d_view(m,iop).lev < mylevel && nghbr.d_view(m,iop).lev > 0) {
+            send_to_coarser = true;
+          }
+        }
+      } else if (iz > 0) {
+          for (int iop = 28; iop <= 31; ++iop) {
+            if (nghbr.d_view(m,iop).lev < mylevel && nghbr.d_view(m,iop).lev > 0) {
+              send_to_coarser = true;
+            }
+        }
       }
-    }
+      int indx = 0;
+        if (iz == 0) {
+          if (iy == 0) {
+            // x1 face
+            indx = NeighborIndex(ix,0,0,0,0);           // neighbor at same level
+            if (nghbr.d_view(m,indx).lev > mylevel) {   // neighbor at finer level
+              indx = NeighborIndex(ix,0,0,fy,fz);
+            }
+            while (nghbr.d_view(m,indx).gid < 0) {indx++;}  // neighbor at coarser level
+            UpdateGID(pi(PGID,p), nghbr.d_view(m,indx), myrank, &atom_count(), psendl, p);
+          } else if (ix == 0) {
+            // x2 face
+            indx = NeighborIndex(0,iy,0,0,0);
+            if (nghbr.d_view(m,indx).lev > mylevel) {
+              indx = NeighborIndex(0,iy,0,fx,fz);
+            }
+            while (nghbr.d_view(m,indx).gid < 0) {indx++;}
+            UpdateGID(pi(PGID,p), nghbr.d_view(m,indx), myrank, &atom_count(), psendl, p);
+          } else {
+            // x1x2 edge
+            indx = NeighborIndex(ix,iy,0,0,0);
+            if (nghbr.d_view(m,indx).lev > mylevel) {
+              indx = NeighborIndex(ix,iy,0,fz,0);
+            }
+            while (nghbr.d_view(m,indx).gid < 0) {indx++;}
+            // Using SMR some edge and corner neighbours are uninitialized,
+            // thus check if the index has increased over the appropriate range
+            // and try to communicate through faces to a coarser meshblock
+            // Communication to coarser meshblocks should always go through faces
+            if (indx > 23 || send_to_coarser) {
+              bool found_coarser = false;
+              // First try through x face
+              indx = NeighborIndex(ix,0,0,0,0);
+              while (nghbr.d_view(m,indx).gid < 0) {indx++;}
+              if (nghbr.d_view(m,indx).lev < mylevel && nghbr.d_view(m,indx).lev > 0) {
+                found_coarser = true;
+              }
+              // If all faces in the x direction are on a finer level this should
+              // have already been covered by previous logic, thus check y
+              if ( !found_coarser ) {
+                indx = NeighborIndex(0,iy,0,0,0);
+                while (nghbr.d_view(m,indx).gid < 0) {indx++;}
+                if (nghbr.d_view(m,indx).lev < mylevel && nghbr.d_view(m,indx).lev > 0) {
+                  found_coarser = true;
+                }
+              }
+            }
+            UpdateGID(pi(PGID,p), nghbr.d_view(m,indx), myrank, &atom_count(), psendl, p);
+          }
+        } else if (iy == 0) {
+          if (ix == 0) {
+            // x3 face
+            indx = NeighborIndex(0,0,iz,0,0);
+            if (nghbr.d_view(m,indx).lev > mylevel) {
+              indx = NeighborIndex(0,0,iz,fx,fy);
+            }
+            while (nghbr.d_view(m,indx).gid < 0) {indx++;}
+            UpdateGID(pi(PGID,p), nghbr.d_view(m,indx), myrank, &atom_count(), psendl, p);
+          } else {
+            // x3x1 edge
+            indx = NeighborIndex(ix,0,iz,0,0);
+            if (nghbr.d_view(m,indx).lev > mylevel) {
+              indx = NeighborIndex(ix,0,iz,fy,0);
+            }
+            while (nghbr.d_view(m,indx).gid < 0) {indx++;}
+            if (indx > 39 || send_to_coarser) {
+              bool found_coarser = false;
+              indx = NeighborIndex(ix,0,0,0,0);
+              while (nghbr.d_view(m,indx).gid < 0) {indx++;}
+              if (nghbr.d_view(m,indx).lev < mylevel && nghbr.d_view(m,indx).lev > 0) {
+                found_coarser = true;
+              }
+              if ( !found_coarser ) {
+                indx = NeighborIndex(0,0,iz,0,0);
+                while (nghbr.d_view(m,indx).gid < 0) {indx++;}
+                if (nghbr.d_view(m,indx).lev < mylevel && nghbr.d_view(m,indx).lev > 0) {
+                  found_coarser = true;
+                }
+              }
+            }
+            UpdateGID(pi(PGID,p), nghbr.d_view(m,indx), myrank, &atom_count(), psendl, p);
+          }
+        } else {
+          if (ix == 0) {
+            // x2x3 edge
+            indx = NeighborIndex(0,iy,iz,0,0);
+            if (nghbr.d_view(m,indx).lev > mylevel) {
+              indx = NeighborIndex(0,iy,iz,fx,0);
+            }
+            while (nghbr.d_view(m,indx).gid < 0) {indx++;}
+            if (indx > 47 || send_to_coarser) {
+              bool found_coarser = false;
+              indx = NeighborIndex(0,iy,0,0,0);
+              while (nghbr.d_view(m,indx).gid < 0) {indx++;}
+              if (nghbr.d_view(m,indx).lev < mylevel && nghbr.d_view(m,indx).lev > 0) {
+                found_coarser = true;
+              }
+              if ( !found_coarser ) {
+                indx = NeighborIndex(0,0,iz,0,0);
+                while (nghbr.d_view(m,indx).gid < 0) {indx++;}
+                if (nghbr.d_view(m,indx).lev < mylevel && nghbr.d_view(m,indx).lev > 0) {
+                  found_coarser = true;
+                }
+              }
+            }
+            UpdateGID(pi(PGID,p), nghbr.d_view(m,indx), myrank, &atom_count(), psendl, p);
+          } else {
+            // corners
+            indx = NeighborIndex(ix,iy,iz,0,0);
+            if (nghbr.d_view(m,indx).gid < 0 || send_to_coarser) {
+              bool found_coarser = false;
+              indx = NeighborIndex(ix,0,0,0,0);
+              while (nghbr.d_view(m,indx).gid < 0) {indx++;}
+              if (nghbr.d_view(m,indx).lev < mylevel && nghbr.d_view(m,indx).lev > 0) {
+                found_coarser = true;
+              }
+              if ( !found_coarser ) {
+                indx = NeighborIndex(0,iy,0,0,0);
+                while (nghbr.d_view(m,indx).gid < 0) {indx++;}
+                if (nghbr.d_view(m,indx).lev < mylevel && nghbr.d_view(m,indx).lev > 0) {
+                  found_coarser = true;
+                }
+              }
+              if ( !found_coarser ) {
+                indx = NeighborIndex(0,0,iz,0,0);
+                while (nghbr.d_view(m,indx).gid < 0) {indx++;}
+                if (nghbr.d_view(m,indx).lev < mylevel && nghbr.d_view(m,indx).lev > 0) {
+                  found_coarser = true;
+                }
+              }
+            }
+            UpdateGID(pi(PGID,p), nghbr.d_view(m,indx), myrank, &atom_count(), psendl, p);
+          }
+        }
+
+        // reset x,y,z positions if particle crosses Mesh boundary using periodic BCs
+        if (x1 < meshsize.x1min) {
+          pr(IPX,p) += (meshsize.x1max - meshsize.x1min);
+        } else if (x1 > meshsize.x1max) {
+          pr(IPX,p) -= (meshsize.x1max - meshsize.x1min);
+        }
+        if (x2 < meshsize.x2min) {
+          pr(IPY,p) += (meshsize.x2max - meshsize.x2min);
+        } else if (x2 > meshsize.x2max) {
+          pr(IPY,p) -= (meshsize.x2max - meshsize.x2min);
+        }
+        if (x3 < meshsize.x3min) {
+          pr(IPZ,p) += (meshsize.x3max - meshsize.x3min);
+        } else if (x3 > meshsize.x3max) {
+          pr(IPZ,p) -= (meshsize.x3max - meshsize.x3min);
+        }
+      }
   });
 
+  Kokkos::deep_copy(counter, atom_count);
   nprtcl_send = counter;
   Kokkos::resize(sendlist, nprtcl_send);
-  // sync sendlist device array with host
+
   sendlist.template modify<DevExeSpace>();
   sendlist.template sync<HostMemSpace>();
 
@@ -251,6 +389,8 @@ TaskStatus ParticlesBoundaryValues::CountSendsAndRecvs() {
 //! \brief
 
 TaskStatus ParticlesBoundaryValues::InitPrtclRecv() {
+  // Moved assignment here for better compatibility with destruction logic
+  nprtcl_recv=0;
 #if MPI_PARALLEL_ENABLED
   // load STL::vector of ParticleMessageData with <sendrank,recvrank,nprtcl_recv> for
   // receives // on this rank. Length will be nrecvs, initially this length is unknown
@@ -265,55 +405,58 @@ TaskStatus ParticlesBoundaryValues::InitPrtclRecv() {
   nrecvs = recvs_thisrank.size();
 
   // Figure out how many particles will be received from all ranks
-  nprtcl_recv=0;
   for (int n=0; n<nrecvs; ++n) {
     nprtcl_recv += recvs_thisrank[n].nprtcls;
   }
 
-  // Allocate receive buffer
-  Kokkos::realloc(prtcl_rrecvbuf, (pmy_part->nrdata)*nprtcl_recv);
-  Kokkos::realloc(prtcl_irecvbuf, (pmy_part->nidata)*nprtcl_recv);
-
-  // Post non-blocking receives
   bool no_errors=true;
-  rrecv_req.clear();
-  irecv_req.clear();
-  for (int n=0; n<nrecvs; ++n) {
-    rrecv_req.emplace_back(MPI_REQUEST_NULL);
-    irecv_req.emplace_back(MPI_REQUEST_NULL);
-  }
+  if (nprtcl_recv > 0) {
+    // Allocate receive buffer
+    Kokkos::realloc(prtcl_rrecvbuf, (pmy_part->nrdata)*nprtcl_recv);
+    Kokkos::realloc(prtcl_irecvbuf, (pmy_part->nidata)*nprtcl_recv);
 
-  // Init receives for Reals
-  int data_start=0;
-  for (int n=0; n<nrecvs; ++n) {
-    // calculate amount of data to be passed, get pointer to variables
-    int data_size = (pmy_part->nrdata)*(recvs_thisrank[n].nprtcls);
-    int data_end = data_start + (pmy_part->nrdata)*(recvs_thisrank[n].nprtcls - 1);
-    auto recv_ptr = Kokkos::subview(prtcl_rrecvbuf, std::make_pair(data_start, data_end));
-    int drank = recvs_thisrank[n].sendrank;
-    int tag = 0; // 0 for Reals, 1 for ints
+    // Post non-blocking receives
+    rrecv_req.clear();
+    irecv_req.clear();
+    for (int n=0; n<nrecvs; ++n) {
+      rrecv_req.emplace_back(MPI_REQUEST_NULL);
+      irecv_req.emplace_back(MPI_REQUEST_NULL);
+    }
 
-    // Post non-blocking receive
-    int ierr = MPI_Irecv(recv_ptr.data(), data_size, MPI_ATHENA_REAL, drank, tag,
-                         mpi_comm_part, &(rrecv_req[n]));
-    if (ierr != MPI_SUCCESS) {no_errors=false;}
-    data_start += data_size;
-  }
-  // Init receives for ints
-  data_start=0;
-  for (int n=0; n<nrecvs; ++n) {
-    // calculate amount of data to be passed, get pointer to variables
-    int data_size = (pmy_part->nidata)*(recvs_thisrank[n].nprtcls);
-    int data_end = data_start + (pmy_part->nidata)*(recvs_thisrank[n].nprtcls - 1);
-    auto recv_ptr = Kokkos::subview(prtcl_irecvbuf, std::make_pair(data_start, data_end));
-    int drank = recvs_thisrank[n].sendrank;
-    int tag = 1; // 0 for Reals, 1 for ints
+    // Init receives for Reals
+    int data_start=0;
+    for (int n=0; n<nrecvs; ++n) {
+      // calculate amount of data to be passed, get pointer to variables
+      int data_size = (pmy_part->nrdata)*(recvs_thisrank[n].nprtcls);
+      int data_end = data_start + (pmy_part->nrdata)*(recvs_thisrank[n].nprtcls - 1);
+      auto recv_ptr = Kokkos::subview(prtcl_rrecvbuf,
+                                      std::make_pair(data_start, data_end));
+      int drank = recvs_thisrank[n].sendrank;
+      int tag = 0; // 0 for Reals, 1 for ints
 
-    // Post non-blocking receive
-    int ierr = MPI_Irecv(recv_ptr.data(), data_size, MPI_INT, drank, tag,
-                         mpi_comm_part, &(irecv_req[n]));
-    if (ierr != MPI_SUCCESS) {no_errors=false;}
-    data_start += data_size;
+      // Post non-blocking receive
+      int ierr = MPI_Irecv(recv_ptr.data(), data_size, MPI_ATHENA_REAL, drank, tag,
+                           mpi_comm_part, &(rrecv_req[n]));
+      if (ierr != MPI_SUCCESS) {no_errors=false;}
+      data_start += data_size;
+    }
+    // Init receives for ints
+    data_start=0;
+    for (int n=0; n<nrecvs; ++n) {
+      // calculate amount of data to be passed, get pointer to variables
+      int data_size = (pmy_part->nidata)*(recvs_thisrank[n].nprtcls);
+      int data_end = data_start + (pmy_part->nidata)*(recvs_thisrank[n].nprtcls - 1);
+      auto recv_ptr = Kokkos::subview(prtcl_irecvbuf,
+                                      std::make_pair(data_start, data_end));
+      int drank = recvs_thisrank[n].sendrank;
+      int tag = 1; // 0 for Reals, 1 for ints
+
+      // Post non-blocking receive
+      int ierr = MPI_Irecv(recv_ptr.data(), data_size, MPI_INT, drank, tag,
+                           mpi_comm_part, &(irecv_req[n]));
+      if (ierr != MPI_SUCCESS) {no_errors=false;}
+      data_start += data_size;
+    }
   }
 
   // Quit if MPI error detected
@@ -352,8 +495,9 @@ TaskStatus ParticlesBoundaryValues::PackAndSendPrtcls() {
     auto &pi = pmy_part->prtcl_idata;
     auto &rsendbuf = prtcl_rsendbuf;
     auto &isendbuf = prtcl_isendbuf;
+    auto &slist = sendlist;
     par_for("ppack",DevExeSpace(),0,(nprtcl_send-1), KOKKOS_LAMBDA(const int n) {
-      int p = sendlist.d_view(n).prtcl_indx;
+      int p = slist.d_view(n).prtcl_indx;
       for (int i=0; i<nidata; ++i) {
         isendbuf(nidata*n + i) = pi(i,p);
       }
@@ -420,16 +564,19 @@ TaskStatus ParticlesBoundaryValues::PackAndSendPrtcls() {
 //! \brief
 
 TaskStatus ParticlesBoundaryValues::RecvAndUnpackPrtcls() {
-#if MPI_PARALLEL_ENABLED
-  // Sort sendlist on host by index in particle array
   namespace KE = Kokkos::Experimental;
-  std::sort(KE::begin(sendlist.h_view), KE::end(sendlist.h_view), SortByIndex);
-  // sync sendlist host array with device.  This results in sorted array on device
-  sendlist.template modify<HostMemSpace>();
-  sendlist.template sync<DevExeSpace>();
 
+  //In single process runs, size of particle arrays can only be reduced
+  int &npart = pmy_part->nprtcl_thispack;
+
+  int new_npart = npart + (nprtcl_recv - nprtcl_send);
+
+  // nremain defined outside compiler instructions for end logic
+  int nremain = 0;
+  int nremain_d = nprtcl_send - nprtcl_recv;
+
+#if MPI_PARALLEL_ENABLED
   // increase size of particle arrays if needed
-  int new_npart = pmy_part->nprtcl_thispack + (nprtcl_recv - nprtcl_send);
   if (nprtcl_recv > nprtcl_send) {
     Kokkos::resize(pmy_part->prtcl_idata, pmy_part->nidata, new_npart);
     Kokkos::resize(pmy_part->prtcl_rdata, pmy_part->nrdata, new_npart);
@@ -460,8 +607,18 @@ TaskStatus ParticlesBoundaryValues::RecvAndUnpackPrtcls() {
   }
   // exit if particle communications have not completed
   if (bflag) {return TaskStatus::incomplete;}
+#endif
 
-  // unpack particles into positions of sent particles
+#if MPI_PARALLEL_ENABLED
+  if (nprtcl_send > 0) {
+    // Sort sendlist on host by index in particle array
+    std::sort(KE::begin(sendlist.h_view), KE::end(sendlist.h_view), SortByIndex);
+    // sync sendlist host array with device.  This results in sorted array on device
+    sendlist.template modify<HostMemSpace>();
+    sendlist.template sync<DevExeSpace>();
+  }
+
+  // unpack particles into positions of sent or destroyed particles
   if (nprtcl_recv > 0) {
     int nrdata = pmy_part->nrdata;
     int nidata = pmy_part->nidata;
@@ -469,13 +626,16 @@ TaskStatus ParticlesBoundaryValues::RecvAndUnpackPrtcls() {
     auto &pi = pmy_part->prtcl_idata;
     auto &rrecvbuf = prtcl_rrecvbuf;
     auto &irecvbuf = prtcl_irecvbuf;
-    int npart = pmy_part->nprtcl_thispack;
+    auto &slist = sendlist;
+    int nps = nprtcl_send;
+    int npa = pmy_part->nprtcl_thispack;
     par_for("punpack",DevExeSpace(),0,(nprtcl_recv-1), KOKKOS_LAMBDA(const int n) {
       int p;
-      if (n < nprtcl_send) {
-        p = sendlist.d_view(n).prtcl_indx; // place particles in holes created by sends
+      if (n < nps ) {
+        p = slist.d_view(n).prtcl_indx;  // place particles in holes created by send
       } else {
-        p = npart + (n - nprtcl_send);     // place particle at end of arrays
+        // place particle at end of arrays
+        p = npa + (n - nps);
       }
       for (int i=0; i<nidata; ++i) {
         pi(i,p) = irecvbuf(nidata*n + i);
@@ -484,44 +644,47 @@ TaskStatus ParticlesBoundaryValues::RecvAndUnpackPrtcls() {
         pr(i,p) = rrecvbuf(nrdata*n + i);
       }
     });
+  }
 
-    // At this point have filled npart_recv holes in particle arrays from sends
-    // If (nprtcl_recv < nprtcl_send), have to move particles from end of arrays to fill
-    // remaining holes
-    int nremain = nprtcl_send - nprtcl_recv;
-    if (nremain > 0) {
-      int i_last_hole = nprtcl_send-1;
-      int i_next_hole = nprtcl_recv;
-      for (int n=1; n<=nremain; ++n) {
-        int nend = npart-n;
-        if (nend > sendlist.h_view(i_last_hole).prtcl_indx) {
-          // copy particle from end into hole
-          int next_hole = sendlist.h_view(i_next_hole).prtcl_indx;
-          auto rdest = Kokkos::subview(pmy_part->prtcl_rdata, Kokkos::ALL, next_hole);
-          auto rsrc  = Kokkos::subview(pmy_part->prtcl_rdata, Kokkos::ALL, nend);
-          Kokkos::deep_copy(rdest, rsrc);
-          auto idest = Kokkos::subview(pmy_part->prtcl_idata, Kokkos::ALL, next_hole);
-          auto isrc  = Kokkos::subview(pmy_part->prtcl_idata, Kokkos::ALL, nend);
-          Kokkos::deep_copy(idest, isrc);
-          i_next_hole += 1;
-        } else {
-          // this index contains a hole, so do nothing except find new index of last hole
-          i_last_hole -= 1;
-        }
+  // At this point have filled npart_recv holes in particle arrays from sends
+  // If (nprtcl_recv < nprtcl_send), have to move particles from end of arrays to fill
+  // remaining holes
+  nremain = nprtcl_send - nprtcl_recv;
+  if (nremain > 0) {
+    int i_last_hole = nprtcl_send-1;
+    int i_next_hole = nprtcl_recv;
+    for (int n=1; n<=nremain; ++n) {
+      int nend = npart-n;
+      --nremain_d;
+      if (nend > sendlist.h_view(i_last_hole).prtcl_indx) {
+        // copy particle from end into hole
+        int next_hole = sendlist.h_view(i_next_hole).prtcl_indx;
+        auto rdest = Kokkos::subview(pmy_part->prtcl_rdata, Kokkos::ALL, next_hole);
+        auto rsrc  = Kokkos::subview(pmy_part->prtcl_rdata, Kokkos::ALL, nend);
+        Kokkos::deep_copy(rdest, rsrc);
+        auto idest = Kokkos::subview(pmy_part->prtcl_idata, Kokkos::ALL, next_hole);
+        auto isrc  = Kokkos::subview(pmy_part->prtcl_idata, Kokkos::ALL, nend);
+        Kokkos::deep_copy(idest, isrc);
+        i_next_hole += 1;
+      } else {
+        // this index contains a hole, so do nothing except find new index of last hole
+        i_last_hole -= 1;
       }
-
-      // shrink size of particle data arrays
-      Kokkos::resize(pmy_part->prtcl_idata, pmy_part->nidata, new_npart);
-      Kokkos::resize(pmy_part->prtcl_rdata, pmy_part->nrdata, new_npart);
     }
   }
 
   // Update nparticles_thisrank.  Update cost array (use npart_thismb[nmb]?)
-  pmy_part->nprtcl_thispack = new_npart;
-  pmy_part->pmy_pack->pmesh->nprtcl_thisrank = new_npart;
   MPI_Allgather(&new_npart,1,MPI_INT,(pmy_part->pmy_pack->pmesh->nprtcl_eachrank),1,
                 MPI_INT,MPI_COMM_WORLD);
 #endif
+
+  if (nprtcl_send - nprtcl_recv > 0) {
+    // shrink size of particle data arrays
+    Kokkos::resize(pmy_part->prtcl_idata, pmy_part->nidata, new_npart);
+    Kokkos::resize(pmy_part->prtcl_rdata, pmy_part->nrdata, new_npart);
+  }
+  pmy_part->nprtcl_thispack = new_npart;
+  pmy_part->pmy_pack->pmesh->nprtcl_thisrank = new_npart;
   return TaskStatus::complete;
 }
 
