@@ -53,7 +53,7 @@ class EOSCompOSE : public EOSPolicyInterface, public LogPolicy, public SupportsE
       m_log_nb("log nb",1),
       m_log_t("log T",1),
       m_yq("yq",1),
-      m_table("EoS table",1,1,1,1) {
+      m_table("EoS table",1,1,1,1,1) {
     n_species = 1;
     eos_units = MakeNuclear();
     m_initialized = false;
@@ -297,14 +297,16 @@ class EOSCompOSE : public EOSPolicyInterface, public LogPolicy, public SupportsE
     return m_log_t;
   }
   /// Get the raw table data
-  KOKKOS_INLINE_FUNCTION DvceArray4D<Real> const GetRawTable() const {
+  KOKKOS_INLINE_FUNCTION DvceArray5D<Real> const GetRawTable() const {
     return m_table;
   }
 
+/* Unused?
   // Indexing used to access the data
   KOKKOS_INLINE_FUNCTION ptrdiff_t index(int iv, int in, int iy, int it) const {
     return it + m_nt*(iy + m_ny*(in + m_nn*iv));
   }
+*/
 
   /// Check if the EOS has been initialized properly.
   KOKKOS_INLINE_FUNCTION bool IsInitialized() const {
@@ -348,14 +350,14 @@ class EOSCompOSE : public EOSPolicyInterface, public LogPolicy, public SupportsE
     weight_idx_lt(&wt0, &wt1, &it, log_t);
 
     return
-      wn0 * (wy0 * (wt0 * m_table(iv, in+0, iy+0, it+0)   +
-                    wt1 * m_table(iv, in+0, iy+0, it+1))  +
-             wy1 * (wt0 * m_table(iv, in+0, iy+1, it+0)   +
-                    wt1 * m_table(iv, in+0, iy+1, it+1))) +
-      wn1 * (wy0 * (wt0 * m_table(iv, in+1, iy+0, it+0)   +
-                    wt1 * m_table(iv, in+1, iy+0, it+1))  +
-             wy1 * (wt0 * m_table(iv, in+1, iy+1, it+0)   +
-                    wt1 * m_table(iv, in+1, iy+1, it+1)));
+      wn0 * (wy0 * (wt0 * m_table(iv, in, iy, it, 0)   +
+                    wt1 * m_table(iv, in, iy, it, 1))  +
+             wy1 * (wt0 * m_table(iv, in, iy, it, 2)   +
+                    wt1 * m_table(iv, in, iy, it, 3))) +
+      wn1 * (wy0 * (wt0 * m_table(iv, in, iy, it, 4)   +
+                    wt1 * m_table(iv, in, iy, it, 5))  +
+             wy1 * (wt0 * m_table(iv, in, iy, it, 6)   +
+                    wt1 * m_table(iv, in, iy, it, 7)));
   }
 
   /// Evaluate interpolation weight for density
@@ -413,10 +415,10 @@ class EOSCompOSE : public EOSPolicyInterface, public LogPolicy, public SupportsE
 
     auto f = [=](int it){
       Real var_pt =
-        wn0 * (wy0 * m_table(iv, in+0, iy+0, it)  +
-               wy1 * m_table(iv, in+0, iy+1, it)) +
-        wn1 * (wy0 * m_table(iv, in+1, iy+0, it)  +
-               wy1 * m_table(iv, in+1, iy+1, it));
+        wn0 * (wy0 * m_table(iv, in, iy, it, 0)  +
+               wy1 * m_table(iv, in, iy, it, 2)) +
+        wn1 * (wy0 * m_table(iv, in, iy, it, 4)  +
+               wy1 * m_table(iv, in, iy, it, 6));
 
       return var - var_pt;
     };
@@ -754,29 +756,7 @@ class EOSCompOSE : public EOSPolicyInterface, public LogPolicy, public SupportsE
   DvceArray1D<Real> m_log_nb;
   DvceArray1D<Real> m_yq;
   DvceArray1D<Real> m_log_t;
-  DvceArray4D<Real> m_table;
-
- private:
-  // Neutrino equilibrium parameters
-  Real nu_2DNR_eps_lim; // tolerance in 2D NR (required for 1e-12 err in T)
-  int nu_2DNR_n_max;    // Newton-Raphson max number of iterations
-  int nu_bis_n_cut_max; // Bisection max number of iterations
-
-  // Neutrino equilibrium physical constants
-  const Real hc_mevfm = 1.23984172e3;           // hc    [MeV fm] (not reduced)
-  const Real pi       = 3.14159265358979323846; // pi    [-]
-  const Real pi2      = pi*pi;                  // pi**2 [-]
-  const Real pi4      = pi2*pi2;                // pi**4 [-]
-
-  // 4/3 *pi/(hc)**3 [1/MeV^3/fm^3]
-  const Real nu_n_prefactor = 4.0/3.0*pi/(hc_mevfm*hc_mevfm*hc_mevfm);
-  // 4*pi/(hc)**3    [1/MeV^3 fm^3]
-  const Real nu_e_prefactor = 4.0*pi/(hc_mevfm*hc_mevfm*hc_mevfm);
-
-  const Real nu_7pi4_60 = 7.0*pi4/60.0;  // 7*pi**4/60  [-]
-  const Real nu_7pi4_30 = 7.0*pi4/30.0;  // 7*pi**4/30  [-]
-  const Real nu_7pi4_15 = 7.0*pi4/15.0;  // 7*pi**4/15  [-]
-  const Real nu_14pi4_15 = 14.0*pi4/15.0; // 14*pi**4/15 [-]
+  DvceArray5D<Real> m_table;
 };
 
 }; // namespace Primitive
