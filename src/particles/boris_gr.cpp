@@ -983,11 +983,16 @@ void Particles::BorisStep( const Real dt, const bool only_v ){
 	uB[0] = uE[0] + 2.0/(1.0+mod_t_sqr)*( (uE[1] + vec_ut[1])*t[2] - (uE[2] + vec_ut[2])*t[1] );
         if (multi_d) { uB[1] = uE[1] + 2.0/(1.0+mod_t_sqr)*( (uE[2] + vec_ut[2])*t[0] - (uE[0] + vec_ut[0])*t[2] ); }
         if (three_d) { uB[2] = uE[2] + 2.0/(1.0+mod_t_sqr)*( (uE[0] + vec_ut[0])*t[1] - (uE[1] + vec_ut[1])*t[0] ); }
+	
+	//Second half-step with electric field
+	uE[0] = uB[0] + dt*pr(IPC,p)/(2.0*pr(IPM,p))*E[0];
+        if (multi_d) { uE[1] = uB[1] + dt*pr(IPC,p)/(2.0*pr(IPM,p))*E[1]; }
+        if (three_d) { uE[2] = uB[2] + dt*pr(IPC,p)/(2.0*pr(IPM,p))*E[2]; }
 
 	for (int i1 = 0; i1 < 3; ++i1 ){ 
 		u_cov[i1] = 0.0;
 		for (int i2 = 0; i2 < 3; ++i2 ){ 
-		u_cov[i1] += glower[i1+1][i2+1]*uB[i2];
+		u_cov[i1] += glower[i1+1][i2+1]*uE[i2];
 		}
 	}
 	// Finally update velocity in local space
