@@ -85,16 +85,7 @@ namespace {
   int DNS_call_sgrid(const char *command);
 }
 
-namespace {
-  bool do_initial_data;        // Are we constructing the initial data?
-  Real star1_xmin, star1_xmax;
-  Real star2_xmin, star2_xmax;
-  Real star_radius;
-  Real rho_thresh{-1.0};    // Density threshold for AMR
-}
-
 void SGRIDHistory(HistoryData *pdata, Mesh *pm);
-void RefinementCondition(MeshBlockPack * pmbp);
 
 //----------------------------------------------------------------------------------------
 //! \fn ProblemGenerator::UserProblem_()
@@ -102,15 +93,7 @@ void RefinementCondition(MeshBlockPack * pmbp);
 void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   // Set the custom history function
   user_hist_func = &SGRIDHistory;
-  user_ref_func  = &RefinementCondition;
-
-  rho_thresh = pin->GetOrAddReal("problem", "rho_thresh", -1.0);
-
-  if (restart) {
-    do_initial_data = false;
-    return;
-  }
-  do_initial_data = true;
+  // user_ref_func  = &RefinementCondition;
 
   if (global_variable::my_rank == 0) {
     mkdir("SGRID", 0775);
@@ -146,12 +129,6 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   const Real ecc = pin->GetReal("problem", "ecc");
   const Real xmax1 = pin->GetReal("problem","xmax1");
   const Real xmax2 = pin->GetReal("problem","xmax2");
-
-  star1_xmin = pin->GetReal("problem", "xin1");
-  star1_xmax = pin->GetReal("problem", "xout1");
-  star2_xmin = pin->GetReal("problem", "xout2");
-  star2_xmax = pin->GetReal("problem", "xin2");
-  star_radius = std::max(star1_xmax - star1_xmin, star2_xmax - star2_xmin);
 
   const Real rdot  = pin->GetReal("problem","rdot");
   const Real rdotor = rdot/(xmax1-xmax2);
@@ -442,85 +419,6 @@ void SGRIDHistory(HistoryData *pdata, Mesh *pm) {
   pdata->hdata[0] = rho_max;
   pdata->hdata[1] = alpha_min;
 }
-
-// This code is adapted from Z4c_AMR::ChiMin
-void RefinementCondition(MeshBlockPack * pmbp) {
-  if (rho_thresh <= 0) {
-    return;
-  }
-
-  Mesh *pmesh       = pmbp->pmesh;
-  int nmb           = pmbp->nmb_thispack;
-  int mbs           = pmesh->gids_eachrank[global_variable::my_rank];
-  auto &refine_flag = pmesh->pmr->refine_flag;
-  auto &indcs       = pmesh->mb_indcs;
-  int & is = indcs.is, ie = indcs.ie, nx1 = indcs.nx1;
-  int & js = indcs.js, je = indcs.je, nx2 = indcs.nx2;
-  int & ks = indcs.ks, ke = indcs.ke, nx3 = indcs.nx3;
-  const int nkji = nx3 * nx2 * nx1;
-  const int nji  = nx2 * nx1;
-
-  if (do_initial_data) {
-    auto &size = pmbp->pmb->mb_size;
-    Real star_radius_ = star_radius;
-    Real star1_xmin_ = star1_xmin;
-    Real star1_xmax_ = star1_xmax;
-    Real star2_xmin_ = star2_xmin;
-    Real star2_xmax_ = star2_xmax;
-
-    par_for("RefinementConditionID", DevExeSpace(), 0,nmb-1, ks,ke, js,je, is,ie,
-    KOKKOS_LAMBDA(int m, int k, int j, int i) {
-      Real &x1min = size.d_view(m).x1min;
-      Real &x1max = size.d_view(m).x1max;
-      Real x1v = CellCenterX(i-is, indcs.nx1, x1min, x1max);
-
-      Real &x2min = size.d_view(m).x2min;
-      Real &x2max = size.d_view(m).x2max;
-      Real x2v = CellCenterX(j-js, indcs.nx2, x2min, x2max);
-
-      Real &x3min = size.d_view(m).x3min;
-      Real &x3max = size.d_view(m).x3max;
-      Real x3v = CellCenterX(k-ks, indcs.nx3, x3min, x3max);
-
-      if (abs(x2v) < star_radius_ && abs(x3v) < star_radius_ && (
-        (x1v > star1_xmin_ && x1v < star1_xmax_) || (x1v > star2_xmin_ && x1v < star2_xmax_) )) {
-        refine_flag.d_view(m + mbs) = -1;
-      }
-      else {
-        refine_flag.d_view(m + mbs) = -1;
-      }
-    });
-  }
-  else {
-    auto &w0       = pmbp->pmhd->w0;
-    auto rho_thresh_ = rho_thresh;
-
-    par_for_outer(
-      "RefinementCondition", DevExeSpace(), 0, 0, 0, (nmb - 1),
-      KOKKOS_LAMBDA(TeamMember_t tmember, const int m) {
-      Real team_dmin;
-      Kokkos::parallel_reduce(
-        Kokkos::TeamThreadRange(tmember, nkji),
-        [=](const int idx, Real &dmin) {
-          int k = (idx) / nji;
-          int j = (idx - k * nji) / nx1;
-          int i = (idx - k * nji - j * nx1) + is;
-          j += js;
-          k += ks;
-          dmin = fmin(w0(m, IDN, k, j, i), dmin);
-        },
-        Kokkos::Min<Real>(team_dmin));
-
-      if (team_dmin < rho_thresh_) {
-        refine_flag.d_view(m + mbs) = 1;
-      }
-      if (team_dmin > 1.25 * rho_thresh_) {
-        refine_flag.d_view(m + mbs) = -1;
-      }
-    });
-  }
-}
-
 
 namespace {
 
