@@ -808,6 +808,9 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     int &nx2 = indcs.nx2;
     int &nx3 = indcs.nx3;
 
+    // set inner radius
+    pmy_mesh_->pmb_pack->ppart->min_radius = 1. + sqrt(1. - coord.bh_spin*coord.bh_spin);
+
     // init RNG
     Kokkos::Random_XorShift64_Pool<> rand_pool64(pmbp->gids);
 

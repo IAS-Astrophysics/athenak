@@ -46,7 +46,7 @@ void UpdateGID(int &newgid, NeighborBlock nghbr, int myrank, int *pcounter,
 
 //----------------------------------------------------------------------------------------
 //! \fn void ParticlesBoundaryValues::MarkForDestruction()
-//! \brief Adds particles that cross the user-defined mesh boundariesto a list used then
+//! \brief Adds particles that cross the user-defined mesh boundaries to a list used
 //! to destroy them. The list uses the same structure as the sendlist for convenience
 //! in the following functions.
 //! This opeartion should also be performed for single process runs
@@ -83,80 +83,105 @@ TaskStatus ParticlesBoundaryValues::SetNewPrtclGID() {
   bool &multi_d = pmy_part->pmy_pack->pmesh->multi_d;
   bool &three_d = pmy_part->pmy_pack->pmesh->three_d;
 
+  // support for user boundary conditions like for gr torus
+  auto &mb_bcs = pmy_part->pmy_pack->pmb->mb_bcs;
+  const Real &min_rad = pmy_part->min_radius;
+
   Kokkos::realloc(sendlist, static_cast<int>(npart));
   par_for("part_update",DevExeSpace(),0,(npart-1), KOKKOS_LAMBDA(const int p) {
-    int m = pi(PGID,p) - gids;
-    int mylevel = mblev.d_view(m);
-    Real x1 = pr(IPX,p);
-    Real x2 = pr(IPY,p);
-    Real x3 = pr(IPZ,p);
+    if (pi(PLASTMOVE,p) == -1) {
+      // this particle is frozen so skip update
+    } else if (pi(PLASTMOVE,p) == -2) {
+      // TODO, mark for deletion
+    } else {
+      // do regular boundary search and update
+      int m = pi(PGID,p) - gids;
+      int mylevel = mblev.d_view(m);
+      Real x1 = pr(IPX,p);
+      Real x2 = pr(IPY,p);
+      Real x3 = pr(IPZ,p);
 
-    // length of MeshBlock in each direction
-    Real lx = (mbsize.d_view(m).x1max - mbsize.d_view(m).x1min);
-    Real ly = (mbsize.d_view(m).x2max - mbsize.d_view(m).x2min);
-    Real lz = (mbsize.d_view(m).x3max - mbsize.d_view(m).x3min);
+      // length of MeshBlock in each direction
+      Real lx = (mbsize.d_view(m).x1max - mbsize.d_view(m).x1min);
+      Real ly = (mbsize.d_view(m).x2max - mbsize.d_view(m).x2min);
+      Real lz = (mbsize.d_view(m).x3max - mbsize.d_view(m).x3min);
 
-    // integer offset of particle relative to center of MeshBlock (-1,0,+1)
-    int ix = static_cast<int>((x1 - mbsize.d_view(m).x1min + lx)/lx) - 1;
-    int iy = static_cast<int>((x2 - mbsize.d_view(m).x2min + ly)/ly) - 1;
-    int iz = static_cast<int>((x3 - mbsize.d_view(m).x3min + lz)/lz) - 1;
+      // integer offset of particle relative to center of MeshBlock (-1,0,+1)
+      int ix = static_cast<int>((x1 - mbsize.d_view(m).x1min + lx)/lx) - 1;
+      int iy = static_cast<int>((x2 - mbsize.d_view(m).x2min + ly)/ly) - 1;
+      int iz = static_cast<int>((x3 - mbsize.d_view(m).x3min + lz)/lz) - 1;
 
-    // sublock indices for faces and edges with S/AMR
-    int fx = (x1 < 0.5*(mbsize.d_view(m).x1min + mbsize.d_view(m).x1max))? 0 : 1;
-    int fy = (x2 < 0.5*(mbsize.d_view(m).x2min + mbsize.d_view(m).x2max))? 0 : 1;
-    int fz = (x3 < 0.5*(mbsize.d_view(m).x3min + mbsize.d_view(m).x3max))? 0 : 1;
-    fy = multi_d ? fy : 0;
-    fz = three_d ? fz : 0;
+      // sublock indices for faces and edges with S/AMR
+      int fx = (x1 < 0.5*(mbsize.d_view(m).x1min + mbsize.d_view(m).x1max))? 0 : 1;
+      int fy = (x2 < 0.5*(mbsize.d_view(m).x2min + mbsize.d_view(m).x2max))? 0 : 1;
+      int fz = (x3 < 0.5*(mbsize.d_view(m).x3min + mbsize.d_view(m).x3max))? 0 : 1;
+      fy = multi_d ? fy : 0;
+      fz = three_d ? fz : 0;
 
-    bool check_boundary = false;
+      // if the particle is outside of the "user-defined" boundaries,
+      // mark it for no more updates
+      bool check_boundary = (
+          mb_bcs.d_view(m, BoundaryFace::inner_x3) == BoundaryFlag::user && iz < 0)
+      || ( mb_bcs.d_view(m, BoundaryFace::outer_x3) == BoundaryFlag::user && iz > 0)
+      || ( mb_bcs.d_view(m, BoundaryFace::inner_x2) == BoundaryFlag::user && iy < 0)
+      || ( mb_bcs.d_view(m, BoundaryFace::outer_x2) == BoundaryFlag::user && iy > 0)
+      || ( mb_bcs.d_view(m, BoundaryFace::inner_x1) == BoundaryFlag::user && ix < 0)
+      || ( mb_bcs.d_view(m, BoundaryFace::outer_x1) == BoundaryFlag::user && ix > 0)
+      || (SQR(x1) + SQR(x2) + SQR(x3) < SQR(min_rad)
+                            );
 
-    // only update particle GID if it has crossed MeshBlock boundary
-    if ((abs(ix) + abs(iy) + abs(iz)) != 0 && !check_boundary) {
-      // The way GIDs are determined currently is not reliable in SMR cases
-      // due to nighbours across edges and corners being uninitialized.
-      // Need extra check
-      bool send_to_coarser = false;
-      if (ix < 0) {
-        // level might be initizialized to -1 on some neighbours
-        for (int iop = 0; iop <= 3; ++iop) {
-          if (nghbr.d_view(m,iop).lev < mylevel && nghbr.d_view(m,iop).lev > 0) {
-            send_to_coarser = true;
-          }
-        }
-      } else if (ix > 0) {
-         for (int iop = 4; iop <= 7; ++iop) {
-          if (nghbr.d_view(m,iop).lev < mylevel && nghbr.d_view(m,iop).lev > 0) {
-            send_to_coarser = true;
-          }
-         }
+      if (check_boundary) {
+        pi(PLASTMOVE,p) = -1;
       }
-      if (iy < 0) {
-        for (int iop = 8; iop <= 11; ++iop) {
-          if (nghbr.d_view(m,iop).lev < mylevel && nghbr.d_view(m,iop).lev > 0) {
-            send_to_coarser = true;
-          }
-        }
-      } else if (iy > 0) {
-        for (int iop = 12; iop <= 15; ++iop) {
-          if (nghbr.d_view(m,iop).lev < mylevel && nghbr.d_view(m,iop).lev > 0) {
-            send_to_coarser = true;
-          }
-        }
-      }
-      if (iz < 0) {
-        for (int iop = 24; iop <= 27; ++iop) {
-          if (nghbr.d_view(m,iop).lev < mylevel && nghbr.d_view(m,iop).lev > 0) {
-            send_to_coarser = true;
-          }
-        }
-      } else if (iz > 0) {
-          for (int iop = 28; iop <= 31; ++iop) {
+
+      // only update particle GID if it has crossed MeshBlock boundary
+      if ((abs(ix) + abs(iy) + abs(iz)) != 0 && !check_boundary) {
+        // The way GIDs are determined currently is not reliable in SMR cases
+        // due to nighbours across edges and corners being uninitialized.
+        // Need extra check
+        bool send_to_coarser = false;
+        if (ix < 0) {
+          // level might be initizialized to -1 on some neighbours
+          for (int iop = 0; iop <= 3; ++iop) {
             if (nghbr.d_view(m,iop).lev < mylevel && nghbr.d_view(m,iop).lev > 0) {
               send_to_coarser = true;
             }
+          }
+        } else if (ix > 0) {
+          for (int iop = 4; iop <= 7; ++iop) {
+            if (nghbr.d_view(m,iop).lev < mylevel && nghbr.d_view(m,iop).lev > 0) {
+              send_to_coarser = true;
+            }
+          }
         }
-      }
-      int indx = 0;
+        if (iy < 0) {
+          for (int iop = 8; iop <= 11; ++iop) {
+            if (nghbr.d_view(m,iop).lev < mylevel && nghbr.d_view(m,iop).lev > 0) {
+              send_to_coarser = true;
+            }
+          }
+        } else if (iy > 0) {
+          for (int iop = 12; iop <= 15; ++iop) {
+            if (nghbr.d_view(m,iop).lev < mylevel && nghbr.d_view(m,iop).lev > 0) {
+              send_to_coarser = true;
+            }
+          }
+        }
+        if (iz < 0) {
+          for (int iop = 24; iop <= 27; ++iop) {
+            if (nghbr.d_view(m,iop).lev < mylevel && nghbr.d_view(m,iop).lev > 0) {
+              send_to_coarser = true;
+            }
+          }
+        } else if (iz > 0) {
+            for (int iop = 28; iop <= 31; ++iop) {
+              if (nghbr.d_view(m,iop).lev < mylevel && nghbr.d_view(m,iop).lev > 0) {
+                send_to_coarser = true;
+              }
+          }
+        }
+
+        int indx = 0;
         if (iz == 0) {
           if (iy == 0) {
             // x1 face
@@ -195,7 +220,7 @@ TaskStatus ParticlesBoundaryValues::SetNewPrtclGID() {
               }
               // If all faces in the x direction are on a finer level this should
               // have already been covered by previous logic, thus check y
-              if ( !found_coarser ) {
+              if (!found_coarser) {
                 indx = NeighborIndex(0,iy,0,0,0);
                 while (nghbr.d_view(m,indx).gid < 0) {indx++;}
                 if (nghbr.d_view(m,indx).lev < mylevel && nghbr.d_view(m,indx).lev > 0) {
@@ -228,7 +253,7 @@ TaskStatus ParticlesBoundaryValues::SetNewPrtclGID() {
               if (nghbr.d_view(m,indx).lev < mylevel && nghbr.d_view(m,indx).lev > 0) {
                 found_coarser = true;
               }
-              if ( !found_coarser ) {
+              if (!found_coarser) {
                 indx = NeighborIndex(0,0,iz,0,0);
                 while (nghbr.d_view(m,indx).gid < 0) {indx++;}
                 if (nghbr.d_view(m,indx).lev < mylevel && nghbr.d_view(m,indx).lev > 0) {
@@ -253,7 +278,7 @@ TaskStatus ParticlesBoundaryValues::SetNewPrtclGID() {
               if (nghbr.d_view(m,indx).lev < mylevel && nghbr.d_view(m,indx).lev > 0) {
                 found_coarser = true;
               }
-              if ( !found_coarser ) {
+              if (!found_coarser) {
                 indx = NeighborIndex(0,0,iz,0,0);
                 while (nghbr.d_view(m,indx).gid < 0) {indx++;}
                 if (nghbr.d_view(m,indx).lev < mylevel && nghbr.d_view(m,indx).lev > 0) {
@@ -272,14 +297,14 @@ TaskStatus ParticlesBoundaryValues::SetNewPrtclGID() {
               if (nghbr.d_view(m,indx).lev < mylevel && nghbr.d_view(m,indx).lev > 0) {
                 found_coarser = true;
               }
-              if ( !found_coarser ) {
+              if (!found_coarser) {
                 indx = NeighborIndex(0,iy,0,0,0);
                 while (nghbr.d_view(m,indx).gid < 0) {indx++;}
                 if (nghbr.d_view(m,indx).lev < mylevel && nghbr.d_view(m,indx).lev > 0) {
                   found_coarser = true;
                 }
               }
-              if ( !found_coarser ) {
+              if (!found_coarser) {
                 indx = NeighborIndex(0,0,iz,0,0);
                 while (nghbr.d_view(m,indx).gid < 0) {indx++;}
                 if (nghbr.d_view(m,indx).lev < mylevel && nghbr.d_view(m,indx).lev > 0) {
@@ -297,17 +322,20 @@ TaskStatus ParticlesBoundaryValues::SetNewPrtclGID() {
         } else if (x1 > meshsize.x1max) {
           pr(IPX,p) -= (meshsize.x1max - meshsize.x1min);
         }
+
         if (x2 < meshsize.x2min) {
           pr(IPY,p) += (meshsize.x2max - meshsize.x2min);
         } else if (x2 > meshsize.x2max) {
           pr(IPY,p) -= (meshsize.x2max - meshsize.x2min);
         }
+
         if (x3 < meshsize.x3min) {
           pr(IPZ,p) += (meshsize.x3max - meshsize.x3min);
         } else if (x3 > meshsize.x3max) {
           pr(IPZ,p) -= (meshsize.x3max - meshsize.x3min);
         }
       }
+    }
   });
 
   Kokkos::deep_copy(counter, atom_count);

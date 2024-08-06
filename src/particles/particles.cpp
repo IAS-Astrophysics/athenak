@@ -106,6 +106,11 @@ Particles::Particles(MeshBlockPack *ppack, ParameterInput *pin) :
       {
         nrdata = 3;
         nidata = 4;
+        // gid, ptag, lastmove, lastlevel
+        // lastmove:
+        //  if >= 0 => save parity of current zone stored as (i_isodd,j_isodd,k_isodd) * 8
+        //  if -1   => freeze particle and perform no updates or position checks
+        //  if -2   => remove from domain at next chance (TODO NOT IMPLEMENTED)
         break;
       }
     default:
@@ -115,6 +120,7 @@ Particles::Particles(MeshBlockPack *ppack, ParameterInput *pin) :
   Kokkos::realloc(prtcl_idata, nidata, nprtcl_thispack);
 
   // allocate boundary object
+  min_radius = -1;
   pbval_part = new ParticlesBoundaryValues(this, pin);
 }
 

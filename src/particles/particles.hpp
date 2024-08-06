@@ -65,6 +65,8 @@ class Particles {
   DvceArray2D<int>  prtcl_idata;   // integer properties each particle (gid, tag, etc.)
   Real dtnew;
 
+  Real min_radius;  // particles that enter within this radius will not be updated
+
   ParticlesPusher pusher;
 
   // Boundary communication buffers and functions for particles
