@@ -92,7 +92,7 @@ TaskStatus ParticlesBoundaryValues::SetNewPrtclGID() {
     if (pi(PLASTMOVE,p) == -1) {
       // this particle is frozen so skip update
     } else if (pi(PLASTMOVE,p) == -2) {
-      // TODO, mark for deletion
+      // TODO(@GNW) mark for deletion
     } else {
       // do regular boundary search and update
       int m = pi(PGID,p) - gids;
