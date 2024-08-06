@@ -180,12 +180,10 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     auto &gide = pmbp->gide;
     auto &size = pmbp->pmb->mb_size;
     auto &coord = pmbp->pcoord->coord_data;
-    Real prtcl_mass = pin->GetOrAddReal("particles", "mass", 1.0);
-    Real prtcl_charge = pin->GetOrAddReal("particles", "charge", 1.0);
     int &npart = pmbp->ppart->nprtcl_thispack;
     auto &pr = pmbp->ppart->prtcl_rdata;
     auto &pi = pmbp->ppart->prtcl_idata;
-    Real massive = prtcl_mass != 0.0 ? 1.0 : 0.0; 
+    Real massive = 1.0; 
     Real min_en = pin->GetOrAddReal("problem", "prtcl_energy_min", 0.005);
     Real max_en = pin->GetOrAddReal("problem", "prtcl_energy_max", 0.5);
 
@@ -212,8 +210,6 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
 	      found_mb = true;
 	      //Actually initialize the particle
 	      pi(PGID,p) = gids+m;
-	      pr(IPM,p) = prtcl_mass;
-	      pr(IPC,p) = prtcl_charge;
 	      pr(IPX,p) = x1v;
 	      pr(IPY,p) = x2v;
 	      pr(IPZ,p) = x3v;
@@ -223,10 +219,10 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
 	      Real u[3];
 	      int prograde = prtcl_gen.frand() > 0.5 ? -1 : 1;
 	      int updown = prtcl_gen.frand() > 0.5 ? -1 : 1;
-	      u[0] = prograde*sqrt(2.0/3.0*this_en/prtcl_mass);
-	      u[1] = prograde*sqrt(2.0/3.0*this_en/prtcl_mass);
+	      u[0] = prograde*sqrt(2.0/3.0*this_en);
+	      u[1] = prograde*sqrt(2.0/3.0*this_en);
 	      // Distribution centered on init_en
-	      u[2] = updown*sqrt(2.0/3.0*this_en/prtcl_mass);
+	      u[2] = updown*sqrt(2.0/3.0*this_en);
 	      Real gu[4][4], gl[4][4];
 	      ComputeMetricAndInverse(pr(IPX,p),pr(IPY,p),pr(IPZ,p),coord.is_minkowski,coord.bh_spin,gl,gu); 
 	      Real u_0 = 0.0;
@@ -254,6 +250,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     dtnew_ = std::min(size.h_view(0).dx1, size.h_view(0).dx2);
     dtnew_ = std::min(dtnew_, size.h_view(0).dx3);
     dtnew_ *= pin->GetOrAddReal("time", "cfl_number", 0.8);
+    std::cout << "Injected " << npart << " particles." << std::endl;
 
   }
 

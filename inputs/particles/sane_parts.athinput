@@ -79,12 +79,12 @@ evolution  = dynamic     # dynamic/kinematic/static
 integrator = rk2         # time integration algorithm
 cfl_number = 0.5         # The Courant, Friedrichs, & Lewy (CFL) Number
 nlim       = -1          # cycle limit
-tlim       = 100.0     # time limit
+tlim       = 10.0     # time limit
 ndiag      = 1           # cycles between diagostic output
 
 <coord>
 general_rel = true       # general relativity
-a           = 0.9375     # black hole spin a (0 <= a/M < 1)
+a           = 0.9     # black hole spin a (0 <= a/M < 1)
 excise      = true       # excise r_ks <= 1.0
 dexcise     = 1.0e-10    # density inside excision
 pexcise     = 0.333e-12  # pressure inside excision
@@ -105,8 +105,8 @@ pusher = full_gr
 iter_tolerance = 1.0E-10
 max_iter = 15
 particle_type = cosmic_ray
-mass = 1.0
-charge = 1.0
+charge_over_mass = 1.0
+inject = true
 
 <problem>
 fm_torus   = true  # Fishbone & Moncrief
@@ -137,6 +137,10 @@ variable   = mhd_w_bcc  # variables to be output
 dt         = 5.0      # time increment between outputs
 
 <output3>
+file_type   = rst
+dt          = 5.0     # time increment between outputs
+
+<output4>
 file_type   = pvtk      # Particle VTK data dump
 variable    = prtcl_all
 dt          = 1.0     # time increment between outputs

@@ -57,8 +57,6 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   Real max_init_vel = pin->GetOrAddReal("problem", "max_init_vel", 0.9);
   Real L = pin->GetOrAddReal("problem", "angular_momentum", 3.9);
   bool equator = pin->GetOrAddBoolean("problem", "equatorial", false);
-  Real prtcl_mass = pin->GetOrAddReal("particles", "mass", 1.0);
-  Real prtcl_charge = pin->GetOrAddReal("particles", "charge", 0.0);
   Real mesh_x1_min = fmin(fabs(pin->GetReal("mesh", "x1max")), fabs(pin->GetReal("mesh", "x1min")));
   Real mesh_x2_min = fmin(fabs(pin->GetReal("mesh", "x2max")), fabs(pin->GetReal("mesh", "x2min")));
   Real mesh_x3_min = fmin(fabs(pin->GetReal("mesh", "x3max")), fabs(pin->GetReal("mesh", "x3min")));
@@ -151,8 +149,6 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     U_0 -= gu[0][3]/gu[0][0]*pr(IPVZ,p);
     E_init[p] = U_0;
 
-    pr(IPM,p) = prtcl_mass;
-    pr(IPC,p) = prtcl_charge;
   });
   // set timestep (which will remain constant for entire run
   // Assumes uniform mesh (no SMR or AMR)

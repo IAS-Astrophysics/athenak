@@ -52,8 +52,7 @@ pusher = only_gr
 iter_tolerance = 1.0E-10
 max_iter = 10
 particle_type = cosmic_ray
-mass = 1.0
-charge = 0.0
+charge_over_mass = 1.0
 
 <problem>
 equatorial = false

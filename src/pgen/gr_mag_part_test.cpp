@@ -49,8 +49,6 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   auto gide = pmy_mesh_->pmb_pack->gide;
 
   Real max_init_vel = pin->GetOrAddReal("problem", "max_init_vel", 1.0);
-  Real prtcl_mass = pin->GetOrAddReal("particles", "mass", 1.0E-10);
-  Real prtcl_charge = pin->GetOrAddReal("particles", "charge", 1.0);
   Real mesh_x1_min = fmin(fabs(pin->GetReal("mesh", "x1max")), fabs(pin->GetReal("mesh", "x1min")));
   Real mesh_x2_min = fmin(fabs(pin->GetReal("mesh", "x2max")), fabs(pin->GetReal("mesh", "x2min")));
   Real mesh_x3_min = fmin(fabs(pin->GetReal("mesh", "x3max")), fabs(pin->GetReal("mesh", "x3min")));
@@ -78,8 +76,6 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     pr(IPVZ,p) = 2.0*max_init_vel*(rand_gen.frand()-0.5);
     rand_pool64.free_state(rand_gen);  // free state for use by other threads
 
-    pr(IPM,p) = prtcl_mass;
-    pr(IPC,p) = prtcl_charge;
   });
   
   auto &indcs = pmy_mesh_->mb_indcs;

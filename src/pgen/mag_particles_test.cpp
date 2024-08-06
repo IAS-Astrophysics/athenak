@@ -58,8 +58,6 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   auto gide = pmy_mesh_->pmb_pack->gide;
 
   Real max_init_vel = pin->GetOrAddReal("problem", "max_init_vel", 1.0);
-  Real prtcl_mass = pin->GetOrAddReal("particles", "mass", 1.0E-10);
-  Real prtcl_charge = pin->GetOrAddReal("particles", "charge", 1.0);
   int n_sqrt = int(sqrt(npart));
   x_init = (Real *) malloc( 3*npart*sizeof(Real) );
   v_init = (Real *) malloc( 3*npart*sizeof(Real) );
@@ -78,8 +76,6 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     pi(PGID,p) = gids + m;
     pr(IPVZ,p) = (rand_gen.frand()-0.5);
     rand_pool64.free_state(rand_gen);  // free state for use by other threads
-    pr(IPM,p) = prtcl_mass;
-    pr(IPC,p) = prtcl_charge;
 
     // Basically avoid having to deal with periodic boundary conditions
     Real x1min_actual = (mbsize.d_view(m).x1min <= 0) ? 0.75*mbsize.d_view(m).x1min : 1.25*mbsize.d_view(m).x1min;
@@ -183,6 +179,7 @@ void LarmorMotionErrors(HistoryData *pdata, Mesh *pm){
 	  auto gids = pm->pmb_pack->gids;
 	  auto gide = pm->pmb_pack->gide;
 	  int n_sqrt = int(sqrt(npart));
+	  const Real &q_over_m = pm->pmb_pack->ppart->charge_over_mass;
 
 	  Real * x = x_init;
 	  Real * v = v_init;
@@ -200,8 +197,6 @@ void LarmorMotionErrors(HistoryData *pdata, Mesh *pm){
 			  KOKKOS_LAMBDA(const int p, Real &rms_pos, Real &rel_dE) {
 
 	    //int p = pi(PTAG,p);
-	    Real prtcl_mass = pr(IPM,p);
-	    Real prtcl_charge = pr(IPC,p);
 	    // In idealized case Lorentz gamma should be constant throughout simulation
 	    // and there's no acceleration, thus compute with initial velocities
 	    Real g_Lor = 1.0/sqrt(1.0 - SQR(v[3*p]) - SQR(v[3*p+1]) - SQR(v[3*p+2]));
@@ -210,8 +205,8 @@ void LarmorMotionErrors(HistoryData *pdata, Mesh *pm){
 	    Real v_perp = ( v_mod*sin(ang_to_b) );
 	    Real v_par = v[3*p+2];
 	    Real init_phase = - atan2(v[3*p+1],v[3*p]);
-	    Real rho = (prtcl_mass*v_perp*g_Lor)/(prtcl_charge*B_strength); //Larmor radius
-	    Real omega = prtcl_charge*B_strength/(prtcl_mass); //Larmor frequency
+	    Real rho = (q_over_m*v_perp*g_Lor)/(B_strength); //Larmor radius
+	    Real omega = q_over_m*B_strength; //Larmor frequency
 	    Real aux = 0.0;
 
 	    x1[3*p] = x[3*p] + sfac*rho*sin( init_phase + omega*curr_time );

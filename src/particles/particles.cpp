@@ -59,16 +59,19 @@ Particles::Particles(MeshBlockPack *ppack, ParameterInput *pin) :
   if (ppush.compare("drift") == 0) {
     pusher = ParticlesPusher::drift;
   } else if (ppush.compare("boris") == 0) {
+    charge_over_mass = pin->GetOrAddReal("particles", "charge_over_mass", 1.0);
     pusher = ParticlesPusher::boris;
   } else if (ppush.compare("only_gr") == 0) {
     max_iter = pin->GetOrAddInteger("particles", "max_iter", 10);
     iter_tolerance = pin->GetOrAddReal("particles", "iter_tolerance", 1.0E-7);
     min_radius = pin->GetOrAddReal("particles", "min_radius", 3.0);
+    charge_over_mass = pin->GetOrAddReal("particles", "charge_over_mass", 1.0);
     pusher = ParticlesPusher::only_gr;
   } else if (ppush.compare("full_gr") == 0) {
     max_iter = pin->GetOrAddInteger("particles", "max_iter", 10);
     iter_tolerance = pin->GetOrAddReal("particles", "iter_tolerance", 1.0E-7);
     min_radius = pin->GetOrAddReal("particles", "min_radius", 3.0);
+    charge_over_mass = pin->GetOrAddReal("particles", "charge_over_mass", 1.0);
     pusher = ParticlesPusher::full_gr;
   } else {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
@@ -85,7 +88,7 @@ Particles::Particles(MeshBlockPack *ppack, ParameterInput *pin) :
   switch (particle_type) {
     case ParticleType::cosmic_ray:
       {
-        int ndim=6;
+        int ndim=4;
         if (pmy_pack->pmesh->three_d) {ndim+=2;}
         nrdata = ndim;
         nidata = 2;

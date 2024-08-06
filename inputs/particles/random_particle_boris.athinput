@@ -43,8 +43,7 @@ ndiag      = 10         # cycles between diagostic output
 ppc    = 0.00001
 pusher = boris
 particle_type = cosmic_ray
-mass = 1.0E+0
-charge = 1.0E+0
+charge_over_mass = 1.0
 
 <mhd>
 eos         = ideal     # EOS type

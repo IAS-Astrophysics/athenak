@@ -858,6 +858,7 @@ void Particles::BorisStep( const Real dt, const bool only_v ){
 	const Real spin = pmy_pack->pcoord->coord_data.bh_spin;
 	const bool &multi_d = pmy_pack->pmesh->multi_d;
 	const bool &three_d = pmy_pack->pmesh->three_d;
+	const Real &q_over_m = charge_over_mass;
 
       // First half-step in space
       par_for("part_boris",DevExeSpace(),0,(npart-1),
@@ -936,9 +937,9 @@ void Particles::BorisStep( const Real dt, const bool only_v ){
 	E[1] = e0_.x2e(m, kp, jp, ip) + (x[1] - x2v)*(e0_.x2e(m, kp, jp+1, ip) - e0_.x2e(m, kp, jp, ip))/Dy;
 	E[2] = e0_.x3e(m, kp, jp, ip) + (x[2] - x3v)*(e0_.x3e(m, kp+1, jp, ip) - e0_.x3e(m, kp, jp, ip))/Dz;
 
-	uE[0] = u_con[0] + dt*pr(IPC,p)/(2.0*pr(IPM,p))*E[0];
-        if (multi_d) { uE[1] = u_con[1] + dt*pr(IPC,p)/(2.0*pr(IPM,p))*E[1]; }
-        if (three_d) { uE[2] = u_con[2] + dt*pr(IPC,p)/(2.0*pr(IPM,p))*E[2]; }
+	uE[0] = u_con[0] + dt*q_over_m/(2.0)*E[0];
+        if (multi_d) { uE[1] = u_con[1] + dt*q_over_m/(2.0)*E[1]; }
+        if (three_d) { uE[2] = u_con[2] + dt*q_over_m/(2.0)*E[2]; }
 
 	// Get metric components at new location x1,x2,x3
 	ComputeMetricAndInverse(x[0],x[1],x[2], is_minkowski, spin, glower, gupper); 
@@ -969,7 +970,7 @@ void Particles::BorisStep( const Real dt, const bool only_v ){
 	Real mod_t_sqr = 0.0;
 	Real t[3];
 	for (int i1 = 0; i1 < 3; ++i1 ){ 
-	t[i1] = B[i1]*pr(IPC,p)*dt/(2.0*pr(IPM,p)*g_Lor);
+	t[i1] = B[i1]*q_over_m/(2.0*g_Lor)*dt;
 	mod_t_sqr += SQR(t[i1]);
 	}
 
@@ -985,9 +986,9 @@ void Particles::BorisStep( const Real dt, const bool only_v ){
         if (three_d) { uB[2] = uE[2] + 2.0/(1.0+mod_t_sqr)*( (uE[0] + vec_ut[0])*t[1] - (uE[1] + vec_ut[1])*t[0] ); }
 	
 	//Second half-step with electric field
-	uE[0] = uB[0] + dt*pr(IPC,p)/(2.0*pr(IPM,p))*E[0];
-        if (multi_d) { uE[1] = uB[1] + dt*pr(IPC,p)/(2.0*pr(IPM,p))*E[1]; }
-        if (three_d) { uE[2] = uB[2] + dt*pr(IPC,p)/(2.0*pr(IPM,p))*E[2]; }
+	uE[0] = uB[0] + dt*q_over_m/(2.0)*E[0];
+        if (multi_d) { uE[1] = uB[1] + dt*q_over_m/(2.0)*E[1]; }
+        if (three_d) { uE[2] = uB[2] + dt*q_over_m/(2.0)*E[2]; }
 
 	for (int i1 = 0; i1 < 3; ++i1 ){ 
 		u_cov[i1] = 0.0;
