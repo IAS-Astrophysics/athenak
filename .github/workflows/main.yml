@@ -5,9 +5,8 @@ on:
   push:
     branches:
       - main
-      - master
-      - merge_requests
-
+  pull_request:
+          
 jobs:
   lint_python-job:
     runs-on: [self-hosted, ias-cuda01]
