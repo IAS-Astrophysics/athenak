@@ -86,6 +86,7 @@ The read_*(...) functions return a filedata dictionary-like object with
 import numpy as np
 import struct
 import h5py
+import os
 
 
 def read_binary(filename):
@@ -671,3 +672,39 @@ def write_xdmf_for(xdmfname, dumpname, fdata, mode="auto"):
     fp.write("""</Xdmf>\n""")
 
     fp.close()
+
+
+def convert_file(binary_fname):
+    """
+    Converts a single file.
+
+    args:
+      binary_filename - string
+        filename of bin file to convert
+
+    This will create new files "binary_data.bin" -> "binary_data.athdf" and
+    "binary_data.athdf.xdmf"
+    """
+    athdf_fname = binary_fname.replace(".bin", "") + ".athdf"
+    xdmf_fname = athdf_fname + ".xdmf"
+    filedata = read_binary(binary_fname)
+    write_athdf(athdf_fname, filedata)
+    write_xdmf_for(xdmf_fname, os.path.basename(athdf_fname), filedata)
+
+
+if __name__ == "__main__":
+    import sys
+    try:
+        from tqdm import tqdm
+    except ModuleNotFoundError:
+        def tqdm(L):
+            for x in L:
+                print(x)
+                yield x
+
+    if len(sys.argv) < 2:
+        print(f"Usage: {sys.argv[0]} output_file_1.bin [output_file_2.bin [...]]")
+        exit(1)
+
+    for binary_fname in tqdm(sys.argv[1:]):
+        convert_file(binary_fname)

@@ -1,28 +1,26 @@
 //========================================================================================
-// AthenaXXX astrophysical plasma code
+// AthenaK astrophysical fluid dynamics and numerical relativity code
 // Copyright(C) 2020 James M. Stone <jmstone@ias.edu> and the Athena code team
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
 //! \file hydro_update.cpp
-//  \brief Performs update of Hydro conserved variables (u0) for each stage of explicit
-//  SSP RK integrators (e.g. RK1, RK2, RK3). Update uses weighted average and partial time
-//  step appropriate to stage.
-//  Both the flux divergence and physical source terms are included in the update.
+//! \brief Performs explicit update of Hydro conserved variables (u0) for each stage of
+//! the SSP RK integrators (e.g. RK1, RK2, RK3) implemented in AthenaK, using weighted
+//! average and partial time step update of flux divergence. Source terms are added in
+//! the HydroSrcTerms() function.
 
 #include "athena.hpp"
 #include "mesh/mesh.hpp"
 #include "driver/driver.hpp"
-#include "coordinates/coordinates.hpp"
 #include "eos/eos.hpp"
-#include "srcterms/srcterms.hpp"
 #include "hydro.hpp"
 
 namespace hydro {
 //----------------------------------------------------------------------------------------
 //! \fn  void Hydro::Update
-//  \brief Explicit RK update of flux divergence and physical source terms
+//  \brief Explicit RK update including flux divergence terms
 
-TaskStatus Hydro::ExpRKUpdate(Driver *pdriver, int stage) {
+TaskStatus Hydro::RKUpdate(Driver *pdriver, int stage) {
   auto &indcs = pmy_pack->pmesh->mb_indcs;
   int is = indcs.is, ie = indcs.ie;
   int js = indcs.js, je = indcs.je;
@@ -45,7 +43,7 @@ TaskStatus Hydro::ExpRKUpdate(Driver *pdriver, int stage) {
 
   // hierarchical parallel loop that updates conserved variables to intermediate step
   // using weights and fractional time step appropriate to stages of time-integrator.
-  // Important to use vector inner loop for good performance on cpus
+  // Vector inner loop used for good performance on cpus
   int scr_level = 0;
   size_t scr_size = ScrArray1D<Real>::shmem_size(ncells1);
 
@@ -81,27 +79,6 @@ TaskStatus Hydro::ExpRKUpdate(Driver *pdriver, int stage) {
       u0_(m,n,k,j,i) = gam0*u0_(m,n,k,j,i) + gam1*u1_(m,n,k,j,i) - beta_dt*divf(i);
     });
   });
-
-  // Add physical source terms.
-  // Note source terms must be computed using only primitives (w0), as the conserved
-  // variables (u0) have already been partially updated.
-  if (psrc->source_terms_enabled) {
-    if (psrc->const_accel)  psrc->AddConstantAccel(u0, w0, beta_dt);
-    if (psrc->shearing_box) psrc->AddShearingBox(u0, w0, beta_dt);
-    if (psrc->ism_cooling) psrc->AddISMCooling(u0, w0, peos->eos_data, beta_dt);
-    if (psrc->rel_cooling) psrc->AddRelCooling(u0, w0, peos->eos_data, beta_dt);
-  }
-
-  // Add coordinate source terms in GR.  Again, must be computed with only primitives.
-  if (pmy_pack->pcoord->is_general_relativistic) {
-    pmy_pack->pcoord->AddCoordTerms(w0, peos->eos_data, beta_dt, u0);
-  }
-
-  // Add user source terms
-  if (pmy_pack->pmesh->pgen->user_srcs) {
-    (pmy_pack->pmesh->pgen->user_srcs_func)(pmy_pack->pmesh, beta_dt);
-  }
-
   return TaskStatus::complete;
 }
 } // namespace hydro

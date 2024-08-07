@@ -6,15 +6,18 @@
 //! \fn TaskStatus Z4c::CalcRHS
 //! \brief Computes the wave equation RHS
 
-#include <algorithm>
-#include <cinttypes>
+#include <math.h>
+
+//#include <algorithm>
+//#include <cinttypes>
 #include <iostream>
-#include <limits>
+//#include <limits>
 
 #include "athena.hpp"
 #include "mesh/mesh.hpp"
-#include "adm/adm.hpp"
+#include "coordinates/adm.hpp"
 #include "z4c/z4c.hpp"
+#include "z4c/tmunu.hpp"
 #include "coordinates/cell_locations.hpp"
 
 namespace z4c {
@@ -32,6 +35,7 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage) {
   int nmb = pmy_pack->nmb_thispack;
 
   auto &z4c = pmy_pack->pz4c->z4c;
+  auto &tmunu = pmy_pack->ptmunu->tmunu;
   auto &rhs = pmy_pack->pz4c->rhs;
   auto &opt = pmy_pack->pz4c->opt;
 
@@ -327,7 +331,7 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage) {
     //
     chi_guarded = (z4c.chi(m,k,j,i)>opt.chi_div_floor)
                     ? z4c.chi(m,k,j,i) : opt.chi_div_floor;
-    oopsi4 = std::pow(chi_guarded, -4./opt.chi_psi_power);
+    oopsi4 = pow(chi_guarded, -4./opt.chi_psi_power);
     for(int a = 0; a < 3; ++a) {
       dphi_d(a) = dchi_d(a)/(chi_guarded * opt.chi_psi_power);
     }
@@ -353,6 +357,7 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage) {
       }
     }
 
+    // TODO(JMF): Update with Tmunu terms.
     // -----------------------------------------------------------------------------------
     // Trace of the matter stress tensor
     //
@@ -365,10 +370,15 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage) {
     //    S(1) += oopsi4(1) * g_uu(a,b,i) * mat.S_dd(m,a,b,k,j,i);
     //  }
     //}
+    for (int a = 0; a < 3; ++a)
+    for (int b = 0; b < 3; ++b) {
+      S += oopsi4 * g_uu(a,b) * tmunu.S_dd(m,a,b,k,j,i);
+    }
 
     // -----------------------------------------------------------------------------------
     // 2nd covariant derivative of the lapse
-    //
+    // TODO(JMF): This could potentially be sped up by calculating d_i phi d^i alpha
+    // beforehand.
     for(int a = 0; a < 3; ++a)
     for(int b = 0; b < 3; ++b) {
       Ddalpha_dd(a,b) = ddalpha_dd(a,b)
@@ -406,6 +416,7 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage) {
     for(int d = 0; d < 3; ++d) {
       A_uu(a,b) += g_uu(a,c) * g_uu(b,d) * z4c.vA_dd(m,c,d,k,j,i);
     }
+    // TODO(JMF): dchi_d/chi_guarded is opt.chi_psi_power * dphi_d.
     for(int a = 0; a < 3; ++a) {
       for(int b = 0; b < 3; ++b) {
           DA_u(a) -= (3./2.) * A_uu(a,b) * dchi_d(b) / chi_guarded;
@@ -428,7 +439,7 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage) {
     // -----------------------------------------------------------------------------------
     // Hamiltonian constraint
     //
-    Ht = R + (2./3.)*SQR(K) - AA;
+    Ht = R + (2./3.)*SQR(K) - AA;// - 16.*M_PI*tmunu.E(m,k,j,i);
 
     // -----------------------------------------------------------------------------------
     // Finalize advective (Lie) derivatives
@@ -482,14 +493,16 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage) {
       * (AA + (1./3.)*SQR(K)) +
       LKhat + opt.damp_kappa1*(1 - opt.damp_kappa2)
       * z4c.alpha(m,k,j,i) * z4c.vTheta(m,k,j,i);
-    // Matter commented out
-    //rhs.Khat(m,k,j,i) += 4*M_PI * z4c.alpha(m,k,j,i) * (S(1) + mat.rho(m,k,j,i));
+    // Matter term
+    rhs.vKhat(m,k,j,i) += 4.*M_PI * z4c.alpha(m,k,j,i) * (S + tmunu.E(m,k,j,i));
     rhs.chi(m,k,j,i) = Lchi - (1./6.) * opt.chi_psi_power *
       chi_guarded * z4c.alpha(m,k,j,i) * K;
     rhs.vTheta(m,k,j,i) = LTheta + z4c.alpha(m,k,j,i) * (
         0.5*Ht - (2. + opt.damp_kappa2) * opt.damp_kappa1 * z4c.vTheta(m,k,j,i));
-    // Matter commented out
-    //rhs.Theta(m,k,j,i) -= 8.*M_PI * z4c.alpha(m,k,j,i) * mat.rho(m,k,j,i);
+    // Matter term
+    rhs.vTheta(m,k,j,i) -= 8.*M_PI * z4c.alpha(m,k,j,i) * tmunu.E(m,k,j,i);
+    // If BSSN is enabled, theta is disabled.
+    rhs.vTheta(m,k,j,i) *= opt.use_z4c;
     // Gamma's
     for(int a = 0; a < 3; ++a) {
       rhs.vGam_u(m,a,k,j,i) = 2.*z4c.alpha(m,k,j,i)*DA_u(a) + LGam_u(a);
@@ -497,6 +510,9 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage) {
           (z4c.vGam_u(m,a,k,j,i) - Gamma_u(a));
       for(int b = 0; b < 3; ++b) {
         rhs.vGam_u(m,a,k,j,i) -= 2. * A_uu(a,b) * dalpha_d(b);
+        // Matter term
+        rhs.vGam_u(m,a,k,j,i) -= 16.*M_PI * z4c.alpha(m,k,j,i)
+                              * g_uu(a,b) * tmunu.S_d(m,b,k,j,i);
       }
     }
 
@@ -512,9 +528,9 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage) {
       rhs.vA_dd(m,a,b,k,j,i) += z4c.alpha(m,k,j,i) * (K*z4c.vA_dd(m,a,b,k,j,i)
                              - 2.*AA_dd(a,b));
       rhs.vA_dd(m,a,b,k,j,i) += LA_dd(a,b);
-      // Matter commented out
-      //rhs.A_dd(m,a,b,k,j,i) -= 8.*M_PI * z4c.alpha(m,k,j,i) *
-      // (oopsi4*mat.S_dd(m,a,b,k,j,i) - (1./3.)*S(1)*z4c.g_dd(m,a,b,k,j,i));
+      // Matter term
+      rhs.vA_dd(m,a,b,k,j,i) -= 8.*M_PI * z4c.alpha(m,k,j,i) *
+        (oopsi4*tmunu.S_dd(m,a,b,k,j,i) - (1./3.)*S*z4c.g_dd(m,a,b,k,j,i));
     }
     // lapse function
     Real const f = opt.lapse_oplog * opt.lapse_harmonicf

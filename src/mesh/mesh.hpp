@@ -26,6 +26,7 @@ struct RegionSize {
   Real x1min, x2min, x3min;
   Real x1max, x2max, x3max;
   Real dx1, dx2, dx3;       // (uniform) grid spacing
+  Real idx1, idx2, idx3;
 };
 
 //----------------------------------------------------------------------------------------
@@ -96,6 +97,8 @@ class Mesh {
   friend class MeshBlockPack;
   friend class MeshBlockTree;
   friend class MeshRefinement;
+  // needs to access tree to find target MB offset by shear
+  friend class ShearingBoxBoundary;
 
  public:
   explicit Mesh(ParameterInput *pin);

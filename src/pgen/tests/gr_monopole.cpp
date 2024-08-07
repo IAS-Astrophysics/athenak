@@ -11,7 +11,7 @@
 // C/C++ headers
 #include <stdio.h>
 #include <sys/stat.h>
-#include <cmath>
+#include <math.h>
 #include <iostream>
 #include <sstream>
 #include <string>

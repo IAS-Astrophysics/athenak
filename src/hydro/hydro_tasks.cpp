@@ -20,7 +20,9 @@
 #include "eos/eos.hpp"
 #include "diffusion/viscosity.hpp"
 #include "diffusion/conduction.hpp"
+#include "srcterms/srcterms.hpp"
 #include "bvals/bvals.hpp"
+#include "shearing_box/shearing_box.hpp"
 #include "hydro/hydro.hpp"
 
 namespace hydro {
@@ -31,15 +33,16 @@ namespace hydro {
 //! Many of the functions in the task list are implemented in this file because they are
 //! simple, or they are wrappers that call one or more other functions.
 //!
-//! "before_stagen" tasks are those that must be cmpleted over all MeshBlocks before
-//! EACH stage can be run (such as posting MPI receives, setting BoundaryCommStatus flags,
-//! etc)
+//! "before_stagen" tasks are those that must be cmpleted over all MeshBlocks BEFORE each
+//! stage can be run (such as posting MPI receives, setting BoundaryCommStatus flags, etc)
 //!
-//! "stagen" tasks are those performed in EACH stage
+//! "stagen" tasks are those performed DURING each stage
 //!
-//! "after_stagen" tasks are those that can only be cmpleted after all the "stagen"
-//! tasks are finished over all MeshBlocks for EACH stage, such as clearing all MPI
-//! non-blocking sends, etc.
+//! "after_stagen" tasks are those that can only be completed AFTER all the "stagen" tasks
+//! are completed over ALL MeshBlocks for each stage, such as clearing all MPI calls, etc.
+//!
+//! In addition there are "before_timeintegrator" and "after_timeintegrator" task lists
+//! in the tl map, which are generally used for operator split tasks.
 
 void Hydro::AssembleHydroTasks(std::map<std::string, std::shared_ptr<TaskList>> tl) {
   TaskID none(0);
@@ -48,18 +51,23 @@ void Hydro::AssembleHydroTasks(std::map<std::string, std::shared_ptr<TaskList>> 
   id.irecv = tl["before_stagen"]->AddTask(&Hydro::InitRecv, this, none);
 
   // assemble "stagen" task list
-  id.copyu = tl["stagen"]->AddTask(&Hydro::CopyCons, this, none);
-  id.flux  = tl["stagen"]->AddTask(&Hydro::Fluxes,this,id.copyu);
-  id.sendf = tl["stagen"]->AddTask(&Hydro::SendFlux, this, id.flux);
-  id.recvf = tl["stagen"]->AddTask(&Hydro::RecvFlux, this, id.sendf);
-  id.expl  = tl["stagen"]->AddTask(&Hydro::ExpRKUpdate, this, id.recvf);
-  id.restu = tl["stagen"]->AddTask(&Hydro::RestrictU, this, id.expl);
-  id.sendu = tl["stagen"]->AddTask(&Hydro::SendU, this, id.restu);
-  id.recvu = tl["stagen"]->AddTask(&Hydro::RecvU, this, id.sendu);
-  id.bcs   = tl["stagen"]->AddTask(&Hydro::ApplyPhysicalBCs, this, id.recvu);
-  id.prol  = tl["stagen"]->AddTask(&Hydro::Prolongate, this, id.bcs);
-  id.c2p   = tl["stagen"]->AddTask(&Hydro::ConToPrim, this, id.prol);
-  id.newdt = tl["stagen"]->AddTask(&Hydro::NewTimeStep, this, id.c2p);
+  id.copyu     = tl["stagen"]->AddTask(&Hydro::CopyCons, this, none);
+  id.flux      = tl["stagen"]->AddTask(&Hydro::Fluxes,this,id.copyu);
+  id.sendf     = tl["stagen"]->AddTask(&Hydro::SendFlux, this, id.flux);
+  id.recvf     = tl["stagen"]->AddTask(&Hydro::RecvFlux, this, id.sendf);
+  id.rkupdt    = tl["stagen"]->AddTask(&Hydro::RKUpdate, this, id.recvf);
+  id.srctrms   = tl["stagen"]->AddTask(&Hydro::HydroSrcTerms, this, id.rkupdt);
+  id.sendu_oa  = tl["stagen"]->AddTask(&Hydro::SendU_OA, this, id.srctrms);
+  id.recvu_oa  = tl["stagen"]->AddTask(&Hydro::RecvU_OA, this, id.sendu_oa);
+  id.restu     = tl["stagen"]->AddTask(&Hydro::RestrictU, this, id.recvu_oa);
+  id.sendu     = tl["stagen"]->AddTask(&Hydro::SendU, this, id.restu);
+  id.recvu     = tl["stagen"]->AddTask(&Hydro::RecvU, this, id.sendu);
+  id.sendu_shr = tl["stagen"]->AddTask(&Hydro::SendU_Shr, this, id.recvu);
+  id.recvu_shr = tl["stagen"]->AddTask(&Hydro::RecvU_Shr, this, id.sendu_shr);
+  id.bcs       = tl["stagen"]->AddTask(&Hydro::ApplyPhysicalBCs, this, id.recvu_shr);
+  id.prol      = tl["stagen"]->AddTask(&Hydro::Prolongate, this, id.bcs);
+  id.c2p       = tl["stagen"]->AddTask(&Hydro::ConToPrim, this, id.prol);
+  id.newdt     = tl["stagen"]->AddTask(&Hydro::NewTimeStep, this, id.c2p);
 
   // assemble "after_stagen" task list
   id.csend = tl["after_stagen"]->AddTask(&Hydro::ClearSend, this, none);
@@ -85,6 +93,28 @@ TaskStatus Hydro::InitRecv(Driver *pdrive, int stage) {
   if (pmy_pack->pmesh->multilevel && (stage >= 0)) {
     tstat = pbval_u->InitFluxRecv(nhydro+nscalars);
   }
+  if (tstat != TaskStatus::complete) return tstat;
+
+  // with orbital advection post receives for U
+  // only execute when (shearing box defined) AND (last stage) AND (3D OR 2d_r_phi)
+  if ((psrc->shearing_box) && (stage == pdrive->nexp_stages) &&
+      (pmy_pack->pmesh->three_d || psrc->shearing_box_r_phi)) {
+    tstat = porb_u->InitRecv();
+  }
+  if (tstat != TaskStatus::complete) return tstat;
+
+  // with shearing box boundaries calculate x2-distance x1-boundarues have sheared and
+  // with MPI post receives for U
+  // only execute when (shearing box defined) AND (3D OR 2d_r_phi)
+  if ((psrc->shearing_box) && (pmy_pack->pmesh->three_d || psrc->shearing_box_r_phi)) {
+    Real qom = (psrc->qshear)*(psrc->omega0);
+    Real time = pmy_pack->pmesh->time;
+    if (stage == pdrive->nexp_stages) {
+      time += pmy_pack->pmesh->dt;
+    }
+    tstat = psbox_u->InitRecv(qom, time);
+  }
+
   return tstat;
 }
 
@@ -195,6 +225,64 @@ TaskStatus Hydro::RecvFlux(Driver *pdrive, int stage) {
 }
 
 //----------------------------------------------------------------------------------------
+//! \fn TaskList Hydro::HydroSrcTerms
+//! \brief Wrapper task list function to apply source terms to conservative vars
+//! Note source terms must be computed using only primitives (w0), as the conserved
+//! variables (u0) have already been partially updated when this fn called.
+
+TaskStatus Hydro::HydroSrcTerms(Driver *pdrive, int stage) {
+  Real beta_dt = (pdrive->beta[stage-1])*(pmy_pack->pmesh->dt);
+
+  // Add source terms for various physics.  Must be computed from primitives.
+  if (psrc->const_accel)  psrc->ConstantAccel(w0, peos->eos_data,  beta_dt, u0);
+  if (psrc->ism_cooling)  psrc->ISMCooling(w0, peos->eos_data, beta_dt, u0);
+  if (psrc->rel_cooling)  psrc->RelCooling(w0, peos->eos_data, beta_dt, u0);
+  if (psrc->shearing_box) psrc->ShearingBox(w0, peos->eos_data, beta_dt, u0);
+
+  // Add coordinate source terms in GR.  Again, must be computed with only primitives.
+  if (pmy_pack->pcoord->is_general_relativistic) {
+    pmy_pack->pcoord->CoordSrcTerms(w0, peos->eos_data, beta_dt, u0);
+  }
+
+  // Add user source terms
+  if (pmy_pack->pmesh->pgen->user_srcs) {
+    (pmy_pack->pmesh->pgen->user_srcs_func)(pmy_pack->pmesh, beta_dt);
+  }
+
+  return TaskStatus::complete;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn TaskList Hydro::SendU_OA
+//! \brief Wrapper task list function to pack/send data for orbital advection
+
+TaskStatus Hydro::SendU_OA(Driver *pdrive, int stage) {
+  TaskStatus tstat = TaskStatus::complete;
+  // only execute when (shearing box defined) AND (last stage) AND (3D OR 2d_r_phi)
+  if ((psrc->shearing_box) && (stage == pdrive->nexp_stages) &&
+      (pmy_pack->pmesh->three_d || psrc->shearing_box_r_phi)) {
+    tstat = porb_u->PackAndSendCC(u0);
+  }
+  return tstat;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn TaskList Hydro::RecvU_OA
+//! \brief Wrapper task list function to recv/unpack data for orbital advection
+//! Orbital remap is performed in this step.
+
+TaskStatus Hydro::RecvU_OA(Driver *pdrive, int stage) {
+  TaskStatus tstat = TaskStatus::complete;
+  // only execute when (shearing box defined) AND (last stage) AND (3D OR 2d_r_phi)
+  if ((psrc->shearing_box) && (stage == pdrive->nexp_stages) &&
+      (pmy_pack->pmesh->three_d || psrc->shearing_box_r_phi)) {
+    Real qom = (psrc->qshear)*(psrc->omega0);
+    tstat = porb_u->RecvAndUnpackCC(u0, recon_method, qom);
+  }
+  return tstat;
+}
+
+//----------------------------------------------------------------------------------------
 //! \fn TaskList Hydro::RestrictU
 //! \brief Wrapper task list function to restrict conserved vars
 
@@ -221,6 +309,33 @@ TaskStatus Hydro::SendU(Driver *pdrive, int stage) {
 
 TaskStatus Hydro::RecvU(Driver *pdrive, int stage) {
   TaskStatus tstat = pbval_u->RecvAndUnpackCC(u0, coarse_u0);
+  return tstat;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn TaskList Hydro::SendU_Shr
+//! \brief Wrapper task list function to pack/send data for shearing box boundaries
+
+TaskStatus Hydro::SendU_Shr(Driver *pdrive, int stage) {
+  TaskStatus tstat = TaskStatus::complete;
+  // only execute when (shearing box defined) AND (3D OR 2d_r_phi)
+  if ((psrc->shearing_box) && (pmy_pack->pmesh->three_d || psrc->shearing_box_r_phi)) {
+    tstat = psbox_u->PackAndSendCC(u0, recon_method);
+  }
+  return tstat;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn TaskList Hydro::RecvU_Shr
+//! \brief Wrapper task list function to recv/unpack data for shearing box boundaries
+//! Orbital remap is performed in this step.
+
+TaskStatus Hydro::RecvU_Shr(Driver *pdrive, int stage) {
+  TaskStatus tstat = TaskStatus::complete;
+  // only execute when (shearing box defined) AND (3D OR 2d_r_phi)
+  if ((psrc->shearing_box) && (pmy_pack->pmesh->three_d || psrc->shearing_box_r_phi)) {
+    tstat = psbox_u->RecvAndUnpackCC(u0);
+  }
   return tstat;
 }
 
@@ -277,17 +392,42 @@ TaskStatus Hydro::ConToPrim(Driver *pdrive, int stage) {
 
 //----------------------------------------------------------------------------------------
 //! \fn TaskList Hydro::ClearSend
-//! \brief Wrapper task list function that checks all MPI sends have completed.
+//! \brief Wrapper task list function that checks all MPI sends have completed. Used in
+//! TaskList and in Driver::InitBoundaryValuesAndPrimitives()
+//! If stage=(last stage):      clears sends of U, Flx_U, U_OA, U_Shr
+//! If (last stage)>stage>=(0): clears sends of U, Flx_U,       U_Shr
+//! If stage=(-1):              clears sends of U
+//! If stage=(-4):              clears sends of                 U_Shr
 
 TaskStatus Hydro::ClearSend(Driver *pdrive, int stage) {
+  TaskStatus tstat;
   // check sends of U complete
-  TaskStatus tstat = pbval_u->ClearSend();
-  if (tstat != TaskStatus::complete) return tstat;
+  if ((stage >= 0) || (stage == -1)) {
+    tstat = pbval_u->ClearSend();
+    if (tstat != TaskStatus::complete) return tstat;
+  }
 
   // with SMR/AMR check sends of restricted fluxes of U complete
   // do not check flux send for ICs (stage < 0)
   if (pmy_pack->pmesh->multilevel && (stage >= 0)) {
     tstat = pbval_u->ClearFluxSend();
+    if (tstat != TaskStatus::complete) return tstat;
+  }
+
+  // with orbital advection check sends of U complete
+  // only execute when (shearing box defined) AND (last stage) AND (3D OR 2d_r_phi)
+  if ((psrc->shearing_box) && (stage == pdrive->nexp_stages) &&
+      (pmy_pack->pmesh->three_d || psrc->shearing_box_r_phi)) {
+    tstat = porb_u->ClearSend();
+    if (tstat != TaskStatus::complete) return tstat;
+  }
+
+  // with shearing box boundaries check sends of U complete
+  // only execute when (shearing box defined) AND (stage>=0 or -4) AND (3D OR 2d_r_phi)
+  if ((psrc->shearing_box) && ((stage >= 0) || (stage == -4)) &&
+      (pmy_pack->pmesh->three_d || psrc->shearing_box_r_phi)) {
+    tstat = psbox_u->ClearSend();
+    if (tstat != TaskStatus::complete) return tstat;
   }
 
   return tstat;
@@ -295,19 +435,44 @@ TaskStatus Hydro::ClearSend(Driver *pdrive, int stage) {
 
 //----------------------------------------------------------------------------------------
 //! \fn TaskList Hydro::ClearRecv
-//! \brief iWrapper task list function that checks all MPI receives have completed.
-//! Needed in Driver::Initialize to set ghost zones in ICs.
+//! \brief Wrapper task list function that checks all MPI receives have completed. Used in
+//! TaskList and in Driver::InitBoundaryValuesAndPrimitives()
+//! If stage=(last stage):      clears recvs of U, Flx_U, U_OA, U_Shr
+//! If (last stage)>stage>=(0): clears recvs of U, Flx_U,       U_Shr
+//! If stage=(-1):              clears recvs of U
+//! If stage=(-4):              clears recvs of                 U_Shr
 
 TaskStatus Hydro::ClearRecv(Driver *pdrive, int stage) {
+  TaskStatus tstat;
   // check receives of U complete
-  TaskStatus tstat = pbval_u->ClearRecv();
-  if (tstat != TaskStatus::complete) return tstat;
+  if ((stage >= 0) || (stage == -1)) {
+    tstat = pbval_u->ClearRecv();
+    if (tstat != TaskStatus::complete) return tstat;
+  }
 
   // with SMR/AMR check receives of restricted fluxes of U complete
   // do not check flux receives when stage < 0 (i.e. ICs)
   if (pmy_pack->pmesh->multilevel && (stage >= 0)) {
     tstat = pbval_u->ClearFluxRecv();
+    if (tstat != TaskStatus::complete) return tstat;
   }
+
+  // with orbital advection check receives of U complete
+  // only execute when (shearing box defined) AND (last stage) AND (3D OR 2d_r_phi)
+  if ((psrc->shearing_box) && (stage == pdrive->nexp_stages) &&
+      (pmy_pack->pmesh->three_d || psrc->shearing_box_r_phi)) {
+    tstat = porb_u->ClearRecv();
+    if (tstat != TaskStatus::complete) return tstat;
+  }
+
+  // with shearing box boundaries check receives of U complete
+  // only execute when (shearing box defined) AND (stage>=0 or -4) AND (3D OR 2d_r_phi)
+  if ((psrc->shearing_box) && ((stage >= 0) || (stage == -4)) &&
+      (pmy_pack->pmesh->three_d || psrc->shearing_box_r_phi)) {
+    tstat = psbox_u->ClearRecv();
+    if (tstat != TaskStatus::complete) return tstat;
+  }
+
   return tstat;
 }
 

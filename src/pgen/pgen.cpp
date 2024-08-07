@@ -20,7 +20,7 @@
 #include "mesh/mesh.hpp"
 #include "hydro/hydro.hpp"
 #include "mhd/mhd.hpp"
-#include "adm/adm.hpp"
+#include "coordinates/adm.hpp"
 #include "z4c/z4c.hpp"
 #include "radiation/radiation.hpp"
 #include "srcterms/turb_driver.hpp"
@@ -75,6 +75,8 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm) :
     ShockTube(pin, false);
   } else if (pgen_fun_name.compare("z4c_linear_wave") == 0) {
     Z4cLinearWave(pin, false);
+  } else if (pgen_fun_name.compare("spherical_collapse") == 0) {
+    SphericalCollapse(pin, false);
   // else, name not set on command line or input file, print warning and quit
   } else {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
@@ -546,6 +548,9 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resf
                       Kokkos::ALL, Kokkos::ALL, Kokkos::ALL), ccin);
     offset_myrank += nout1*nout2*nout3*nz4c*sizeof(Real);   // z4c u0
     myoffset = offset_myrank;
+
+    // We also need to reinitialize the ADM data.
+    pz4c->Z4cToADM(pmy_mesh_->pmb_pack);
   } else if (padm != nullptr) {
     Kokkos::realloc(ccin, nmb, nadm, nout3, nout2, nout1);
     for (int m=0;  m<noutmbs_max; ++m) {
@@ -614,6 +619,8 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resf
     ShockTube(pin, true);
   } else if (pgen_fun_name.compare("z4c_linear_wave") == 0) {
     Z4cLinearWave(pin, true);
+  } else if (pgen_fun_name.compare("spherical_collapse") == 0) {
+    SphericalCollapse(pin, true);
   } else {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
         << "Problem generator name could not be found in <problem> block in input file"

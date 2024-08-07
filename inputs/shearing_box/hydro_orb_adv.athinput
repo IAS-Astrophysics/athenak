@@ -1,0 +1,66 @@
+# AthenaK input file for hydro orbital advection test
+
+<comment>
+problem   = orbital advection
+reference = 
+
+<job>
+basename  = orbital   # problem ID: basename of output filenames
+
+<mesh>
+nghost    = 2         # Number of ghost cells
+nx1       = 256       # Number of zones in X1-direction
+x1min     = -10.0     # minimum value of X1
+x1max     = 10.0      # maximum value of X1
+ix1_bc    = outflow   # Inner-X1 boundary condition flag
+ox1_bc    = outflow   # Outer-X1 boundary condition flag
+
+nx2       = 256       # Number of zones in X2-direction
+x2min     = -10.0     # minimum value of X2
+x2max     = 10.0      # maximum value of X2
+ix2_bc    = periodic  # Inner-X2 boundary condition flag
+ox2_bc    = periodic  # Outer-X2 boundary condition flag
+
+nx3       = 4         # Number of zones in X3-direction
+x3min     = -0.5      # minimum value of X3
+x3max     = 0.5       # maximum value of X3
+ix3_bc    = periodic  # Inner-X3 boundary condition flag
+ox3_bc    = periodic  # Outer-X3 boundary condition flag
+
+<meshblock>
+nx1       = 256       # Number of cells in each MeshBlock, X1-dir
+nx2       = 256       # Number of cells in each MeshBlock, X2-dir
+nx3       = 4         # Number of cells in each MeshBlock, X3-dir
+
+<time>
+evolution  = dynamic  # dynamic/kinematic/static
+integrator = rk2      # time integration algorithm
+cfl_number = 0.3      # The Courant, Friedrichs, & Lewy (CFL) Number
+nlim       = -1       # cycle limit
+tlim       = 10.0     # time limit (about 8 orbits = 16\pi)
+ndiag      = 1        # cycles between diagostic output
+
+<shearing_box>
+qshear = 1.5 
+omega0 = 1.0 
+
+<hydro>
+eos          = ideal   # EOS type
+reconstruct  = plm     # spatial reconstruction method
+rsolver      = hllc    # Riemann-solver to be used
+gamma        = 1.6666666666666667 # gamma = C_p/C_v
+
+<problem>
+drat         = 1.01    # Density ratio in clylinders
+amp          = 1.0e-3  # amplitude of vector potential (sets B)
+iprob        = 1       # 1=density cylinders in x1-x2 plane
+
+<output1>
+file_type   = hst      # History data dump
+dt          = 0.1      # time increment between outputs
+data_format = %12.5e   # Optional data format string
+
+<output2>
+file_type   = vtk        # Binary data dump
+variable    = hydro_w    # variables to be output
+dt          = 0.1        # time increment between outputs

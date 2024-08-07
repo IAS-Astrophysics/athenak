@@ -15,6 +15,7 @@
 #include "athena.hpp"
 #include "globals.hpp"
 #include "parameter_input.hpp"
+#include "mesh/nghbr_index.hpp"
 #include "mesh/mesh.hpp"
 #include "particles/particles.hpp"
 #include "bvals.hpp"
@@ -30,39 +31,44 @@ MeshBoundaryValues::MeshBoundaryValues(MeshBlockPack *pp, ParameterInput *pin, b
   i_in("iin",1,1) {
   // allocate vector of status flags and MPI requests (if needed)
   int nnghbr = pmy_pack->pmb->nnghbr;
+
+  // sendbuf and recvbuf are fixed-length [56-element] arrays
+  // Initialize some of the data in appropriate elements based on dimensionality of
+  // problem (indicated by value of nnghbr)
   for (int n=0; n<nnghbr; ++n) {
 #if MPI_PARALLEL_ENABLED
+    // allocate vector of MPI requests (if needed)
     int nmb = std::max((pmy_pack->nmb_thispack), (pmy_pack->pmesh->nmb_maxperrank));
-    send_buf[n].vars_req = new MPI_Request[nmb];
-    send_buf[n].flux_req = new MPI_Request[nmb];
-    recv_buf[n].vars_req = new MPI_Request[nmb];
-    recv_buf[n].flux_req = new MPI_Request[nmb];
+    sendbuf[n].vars_req = new MPI_Request[nmb];
+    sendbuf[n].flux_req = new MPI_Request[nmb];
+    recvbuf[n].vars_req = new MPI_Request[nmb];
+    recvbuf[n].flux_req = new MPI_Request[nmb];
     for (int m=0; m<nmb; ++m) {
-      send_buf[n].vars_req[m] = MPI_REQUEST_NULL;
-      send_buf[n].flux_req[m] = MPI_REQUEST_NULL;
-      recv_buf[n].vars_req[m] = MPI_REQUEST_NULL;
-      recv_buf[n].flux_req[m] = MPI_REQUEST_NULL;
+      sendbuf[n].vars_req[m] = MPI_REQUEST_NULL;
+      sendbuf[n].flux_req[m] = MPI_REQUEST_NULL;
+      recvbuf[n].vars_req[m] = MPI_REQUEST_NULL;
+      recvbuf[n].flux_req[m] = MPI_REQUEST_NULL;
     }
 #endif
     // initialize data sizes in each send/recv buffer to zero
-    send_buf[n].isame_ndat = 0;
-    send_buf[n].isame_z4c_ndat = 0;
-    send_buf[n].icoar_ndat = 0;
-    send_buf[n].ifine_ndat = 0;
-    send_buf[n].iflxs_ndat = 0;
-    send_buf[n].iflxc_ndat = 0;
-    recv_buf[n].isame_ndat = 0;
-    recv_buf[n].isame_z4c_ndat = 0;
-    recv_buf[n].icoar_ndat = 0;
-    recv_buf[n].ifine_ndat = 0;
-    recv_buf[n].iflxs_ndat = 0;
-    recv_buf[n].iflxc_ndat = 0;
+    sendbuf[n].isame_ndat = 0;
+    sendbuf[n].isame_z4c_ndat = 0;
+    sendbuf[n].icoar_ndat = 0;
+    sendbuf[n].ifine_ndat = 0;
+    sendbuf[n].iflxs_ndat = 0;
+    sendbuf[n].iflxc_ndat = 0;
+    recvbuf[n].isame_ndat = 0;
+    recvbuf[n].isame_z4c_ndat = 0;
+    recvbuf[n].icoar_ndat = 0;
+    recvbuf[n].ifine_ndat = 0;
+    recvbuf[n].iflxs_ndat = 0;
+    recvbuf[n].iflxc_ndat = 0;
   }
 
 #if MPI_PARALLEL_ENABLED
   // create unique communicators for variables and fluxes in this BoundaryValues object
-  MPI_Comm_dup(MPI_COMM_WORLD, &vars_comm);
-  MPI_Comm_dup(MPI_COMM_WORLD, &flux_comm);
+  MPI_Comm_dup(MPI_COMM_WORLD, &comm_vars);
+  MPI_Comm_dup(MPI_COMM_WORLD, &comm_flux);
 #endif
 }
 
@@ -73,10 +79,10 @@ MeshBoundaryValues::~MeshBoundaryValues() {
 #if MPI_PARALLEL_ENABLED
   int nnghbr = pmy_pack->pmb->nnghbr;
   for (int n=0; n<nnghbr; ++n) {
-    delete [] send_buf[n].vars_req;
-    delete [] send_buf[n].flux_req;
-    delete [] recv_buf[n].vars_req;
-    delete [] recv_buf[n].flux_req;
+    delete [] sendbuf[n].vars_req;
+    delete [] sendbuf[n].flux_req;
+    delete [] recvbuf[n].vars_req;
+    delete [] recvbuf[n].flux_req;
   }
 #endif
 }
@@ -113,11 +119,11 @@ void MeshBoundaryValues::InitializeBuffers(const int nvar) {
   for (int n=-1; n<=1; n+=2) {
     for (int fz=0; fz<nfz; fz++) {
       for (int fy = 0; fy<nfy; fy++) {
-        int indx = pmy_pack->pmb->NeighborIndx(n,0,0,fy,fz);
-        InitSendIndices(send_buf[indx],n, 0, 0, fy, fz);
-        InitRecvIndices(recv_buf[indx],n, 0, 0, fy, fz);
-        send_buf[indx].AllocateBuffers(nmb, nvar, is_z4c_);
-        recv_buf[indx].AllocateBuffers(nmb, nvar, is_z4c_);
+        int indx = NeighborIndex(n,0,0,fy,fz);
+        InitSendIndices(sendbuf[indx],n, 0, 0, fy, fz);
+        InitRecvIndices(recvbuf[indx],n, 0, 0, fy, fz);
+        sendbuf[indx].AllocateBuffers(nmb, nvar, is_z4c_);
+        recvbuf[indx].AllocateBuffers(nmb, nvar, is_z4c_);
         indx++;
       }
     }
@@ -129,11 +135,11 @@ void MeshBoundaryValues::InitializeBuffers(const int nvar) {
     for (int m=-1; m<=1; m+=2) {
       for (int fz=0; fz<nfz; fz++) {
         for (int fx=0; fx<nfx; fx++) {
-          int indx = pmy_pack->pmb->NeighborIndx(0,m,0,fx,fz);
-          InitSendIndices(send_buf[indx],0, m, 0, fx, fz);
-          InitRecvIndices(recv_buf[indx],0, m, 0, fx, fz);
-          send_buf[indx].AllocateBuffers(nmb, nvar, is_z4c_);
-          recv_buf[indx].AllocateBuffers(nmb, nvar, is_z4c_);
+          int indx = NeighborIndex(0,m,0,fx,fz);
+          InitSendIndices(sendbuf[indx],0, m, 0, fx, fz);
+          InitRecvIndices(recvbuf[indx],0, m, 0, fx, fz);
+          sendbuf[indx].AllocateBuffers(nmb, nvar, is_z4c_);
+          recvbuf[indx].AllocateBuffers(nmb, nvar, is_z4c_);
           indx++;
         }
       }
@@ -143,11 +149,11 @@ void MeshBoundaryValues::InitializeBuffers(const int nvar) {
     for (int m=-1; m<=1; m+=2) {
       for (int n=-1; n<=1; n+=2) {
         for (int fz=0; fz<nfz; fz++) {
-          int indx = pmy_pack->pmb->NeighborIndx(n,m,0,fz,0);
-          InitSendIndices(send_buf[indx],n, m, 0, fz, 0);
-          InitRecvIndices(recv_buf[indx],n, m, 0, fz, 0);
-          send_buf[indx].AllocateBuffers(nmb, nvar, is_z4c_);
-          recv_buf[indx].AllocateBuffers(nmb, nvar, is_z4c_);
+          int indx = NeighborIndex(n,m,0,fz,0);
+          InitSendIndices(sendbuf[indx],n, m, 0, fz, 0);
+          InitRecvIndices(recvbuf[indx],n, m, 0, fz, 0);
+          sendbuf[indx].AllocateBuffers(nmb, nvar, is_z4c_);
+          recvbuf[indx].AllocateBuffers(nmb, nvar, is_z4c_);
           indx++;
         }
       }
@@ -160,11 +166,11 @@ void MeshBoundaryValues::InitializeBuffers(const int nvar) {
     for (int l=-1; l<=1; l+=2) {
       for (int fy=0; fy<nfy; fy++) {
         for (int fx=0; fx<nfx; fx++) {
-          int indx = pmy_pack->pmb->NeighborIndx(0,0,l,fx,fy);
-          InitSendIndices(send_buf[indx],0, 0, l, fx, fy);
-          InitRecvIndices(recv_buf[indx],0, 0, l, fx, fy);
-          send_buf[indx].AllocateBuffers(nmb, nvar, is_z4c_);
-          recv_buf[indx].AllocateBuffers(nmb, nvar, is_z4c_);
+          int indx = NeighborIndex(0,0,l,fx,fy);
+          InitSendIndices(sendbuf[indx],0, 0, l, fx, fy);
+          InitRecvIndices(recvbuf[indx],0, 0, l, fx, fy);
+          sendbuf[indx].AllocateBuffers(nmb, nvar, is_z4c_);
+          recvbuf[indx].AllocateBuffers(nmb, nvar, is_z4c_);
           indx++;
         }
       }
@@ -174,11 +180,11 @@ void MeshBoundaryValues::InitializeBuffers(const int nvar) {
     for (int l=-1; l<=1; l+=2) {
       for (int n=-1; n<=1; n+=2) {
         for (int fy=0; fy<nfy; fy++) {
-          int indx = pmy_pack->pmb->NeighborIndx(n,0,l,fy,0);
-          InitSendIndices(send_buf[indx],n, 0, l, fy, 0);
-          InitRecvIndices(recv_buf[indx],n, 0, l, fy, 0);
-          send_buf[indx].AllocateBuffers(nmb, nvar, is_z4c_);
-          recv_buf[indx].AllocateBuffers(nmb, nvar, is_z4c_);
+          int indx = NeighborIndex(n,0,l,fy,0);
+          InitSendIndices(sendbuf[indx],n, 0, l, fy, 0);
+          InitRecvIndices(recvbuf[indx],n, 0, l, fy, 0);
+          sendbuf[indx].AllocateBuffers(nmb, nvar, is_z4c_);
+          recvbuf[indx].AllocateBuffers(nmb, nvar, is_z4c_);
           indx++;
         }
       }
@@ -188,11 +194,11 @@ void MeshBoundaryValues::InitializeBuffers(const int nvar) {
     for (int l=-1; l<=1; l+=2) {
       for (int m=-1; m<=1; m+=2) {
         for (int fx=0; fx<nfx; fx++) {
-          int indx = pmy_pack->pmb->NeighborIndx(0,m,l,fx,0);
-          InitSendIndices(send_buf[indx],0, m, l, fx, 0);
-          InitRecvIndices(recv_buf[indx],0, m, l, fx, 0);
-          send_buf[indx].AllocateBuffers(nmb, nvar, is_z4c_);
-          recv_buf[indx].AllocateBuffers(nmb, nvar, is_z4c_);
+          int indx = NeighborIndex(0,m,l,fx,0);
+          InitSendIndices(sendbuf[indx],0, m, l, fx, 0);
+          InitRecvIndices(recvbuf[indx],0, m, l, fx, 0);
+          sendbuf[indx].AllocateBuffers(nmb, nvar, is_z4c_);
+          recvbuf[indx].AllocateBuffers(nmb, nvar, is_z4c_);
           indx++;
         }
       }
@@ -202,11 +208,11 @@ void MeshBoundaryValues::InitializeBuffers(const int nvar) {
     for (int l=-1; l<=1; l+=2) {
       for (int m=-1; m<=1; m+=2) {
         for (int n=-1; n<=1; n+=2) {
-          int indx = pmy_pack->pmb->NeighborIndx(n,m,l,0,0);
-          InitSendIndices(send_buf[indx],n, m, l, 0, 0);
-          InitRecvIndices(recv_buf[indx],n, m, l, 0, 0);
-          send_buf[indx].AllocateBuffers(nmb, nvar, is_z4c_);
-          recv_buf[indx].AllocateBuffers(nmb, nvar, is_z4c_);
+          int indx = NeighborIndex(n,m,l,0,0);
+          InitSendIndices(sendbuf[indx],n, m, l, 0, 0);
+          InitRecvIndices(recvbuf[indx],n, m, l, 0, 0);
+          sendbuf[indx].AllocateBuffers(nmb, nvar, is_z4c_);
+          recvbuf[indx].AllocateBuffers(nmb, nvar, is_z4c_);
         }
       }
     }

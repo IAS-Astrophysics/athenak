@@ -16,7 +16,7 @@
 #include "bvals.hpp"
 
 //----------------------------------------------------------------------------------------
-//! \fn void BoundaryValuesCC::InitSendIndices
+//! \fn void MeshBoundaryValuesCC::InitSendIndices
 //! \brief Calculates indices of cells used to pack buffers and send CC data for buffers
 //! on same/coarser/finer levels. Only one set of indices is needed, so only first [0]
 //! component of each index array is used.
@@ -25,8 +25,8 @@
 //! relative to center of MeshBlock (0,0,0).  The arguments f1/2 are the coordinates
 //! of subblocks within faces/edges (only relevant with SMR/AMR)
 
-void BoundaryValuesCC::InitSendIndices(MeshBoundaryBuffer &buf,
-                                       int ox1, int ox2, int ox3, int f1, int f2) {
+void MeshBoundaryValuesCC::InitSendIndices(MeshBoundaryBuffer &buf,
+                                          int ox1, int ox2, int ox3, int f1, int f2) {
   auto &mb_indcs  = pmy_pack->pmesh->mb_indcs;
   int ng  = mb_indcs.ng;
   int ng1 = ng - 1;
@@ -152,7 +152,7 @@ void BoundaryValuesCC::InitSendIndices(MeshBoundaryBuffer &buf,
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn void BoundaryValuesCC::InitRecvIndices
+//! \fn void MeshBoundaryValuesCC::InitRecvIndices
 //! \brief Calculates indices of cells into which receive buffers are unpacked for CC data
 //! on same/coarser/finer levels, and for prolongation from coarse to fine. Again, only
 //! first [0] component of each index array is used.
@@ -161,8 +161,8 @@ void BoundaryValuesCC::InitSendIndices(MeshBoundaryBuffer &buf,
 //! relative to center of MeshBlock (0,0,0).  The arguments f1/2 are the coordinates
 //! of subblocks within faces/edges (only relevant with SMR/AMR)
 
-void BoundaryValuesCC::InitRecvIndices(MeshBoundaryBuffer &buf,
-                                       int ox1, int ox2, int ox3, int f1, int f2) {
+void MeshBoundaryValuesCC::InitRecvIndices(MeshBoundaryBuffer &buf,
+                                           int ox1, int ox2, int ox3, int f1, int f2) {
   auto &mb_indcs  = pmy_pack->pmesh->mb_indcs;
   int ng = mb_indcs.ng;
 

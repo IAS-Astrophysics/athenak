@@ -19,9 +19,10 @@
 #include "outputs/outputs.hpp"
 #include "hydro/hydro.hpp"
 #include "mhd/mhd.hpp"
+#include "z4c/z4c.hpp"
+#include "dyn_grmhd/dyn_grmhd.hpp"
 #include "ion-neutral/ion-neutral.hpp"
 #include "radiation/radiation.hpp"
-#include "z4c/z4c.hpp"
 #include "driver.hpp"
 
 #if MPI_PARALLEL_ENABLED
@@ -275,6 +276,7 @@ void Driver::Initialize(Mesh *pmesh, ParameterInput *pin, Outputs *pout, bool re
   mhd::MHD *pmhd = pmesh->pmb_pack->pmhd;
   radiation::Radiation *prad = pmesh->pmb_pack->prad;
   z4c::Z4c *pz4c = pmesh->pmb_pack->pz4c;
+  dyngr::DynGRMHD *pdyngr = pmesh->pmb_pack->pdyngr;
   if (time_evolution != TimeEvolution::tstatic) {
     if (phydro != nullptr) {
       (void) pmesh->pmb_pack->phydro->NewTimeStep(this, nexp_stages);
@@ -342,7 +344,7 @@ void Driver::Execute(Mesh *pmesh, ParameterInput *pin, Outputs *pout) {
   } else {
     Real elapsed_time = -1.;
     if (wall_time > 0.) {
-      elapsed_time = pwall_clock_->seconds();
+      elapsed_time = UpdateWallClock();
     }
     while ((pmesh->time < tlim) && (pmesh->ncycle < nlim || nlim < 0) &&
            (elapsed_time < wall_time)) {
@@ -400,7 +402,7 @@ void Driver::Execute(Mesh *pmesh, ParameterInput *pin, Outputs *pout) {
 
       // Update wall clock time if needed.
       if (wall_time > 0.) {
-        elapsed_time = pwall_clock_->seconds();
+        elapsed_time = UpdateWallClock();
       }
     }  // end while
   }    // end of (time_evolution != tstatic) clause
@@ -490,6 +492,25 @@ void Driver::OutputCycleDiagnostics(Mesh *pm) {
 }
 
 //----------------------------------------------------------------------------------------
+//! \fn Driver::UpdateWallClock()
+//! \brief Update and sync the wall clock across all MPI ranks. This is necessary because
+//! the different MPI ranks may 1) initialize their timers at slightly different times,
+//! and 2) may reach the end of a loop to update their timers at slightly different times.
+//! This may result in a weird problem where one or more ranks have timers that fall
+//! slightly below the wall clock time while others determine that it's time to quit.
+
+Real Driver::UpdateWallClock() {
+  Real tnow;
+  if (global_variable::my_rank == 0) {
+    tnow = pwall_clock_->seconds();
+  }
+#if MPI_PARALLEL_ENABLED
+  MPI_Bcast(&tnow, 1, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+#endif
+  return tnow;
+}
+
+//----------------------------------------------------------------------------------------
 //! \fn Driver::InitBoundaryValuesAndPrimitives()
 //! \brief Sets boundary conditions on conserved and initializes primitives.  Used both
 //! on initialization, and when new MBs created with AMR.
@@ -498,39 +519,56 @@ void Driver::InitBoundaryValuesAndPrimitives(Mesh *pm) {
   // Note: with MPI, sends on ALL MBs must be complete before receives execute
 
   // Initialize HYDRO: ghost zones and primitive variables (everywhere)
+  // includes communications for shearing box boundaries
   hydro::Hydro *phydro = pm->pmb_pack->phydro;
   if (phydro != nullptr) {
     // following functions return a TaskStatus, but it is ignored so cast to (void)
     (void) phydro->RestrictU(this, 0);
     (void) phydro->InitRecv(this, -1);  // stage < 0 suppresses InitFluxRecv
     (void) phydro->SendU(this, 0);
-    (void) phydro->ClearSend(this, -1);
-    (void) phydro->ClearRecv(this, -1);
+    (void) phydro->ClearSend(this, -1); // stage = -1 only clear SendU
+    (void) phydro->ClearRecv(this, -1); // stage = -1 only clear RecvU
     (void) phydro->RecvU(this, 0);
+    (void) phydro->SendU_Shr(this, 0);
+    (void) phydro->ClearSend(this, -4); // stage = -4 only clear SendU_Shr
+    (void) phydro->ClearRecv(this, -4); // stage = -4 only clear RecvU_Shr
+    (void) phydro->RecvU_Shr(this, 0);
     (void) phydro->ApplyPhysicalBCs(this, 0);
     (void) phydro->Prolongate(this, 0);
     (void) phydro->ConToPrim(this, 0);
   }
 
   // Initialize MHD: ghost zones and primitive variables (everywhere)
-  // Note this requires communicating BOTH u and B
+  // includes communications for shearing box boundaries
   mhd::MHD *pmhd = pm->pmb_pack->pmhd;
+  dyngr::DynGRMHD *pdyngr = pm->pmb_pack->pdyngr;
   if (pmhd != nullptr) {
     (void) pmhd->RestrictU(this, 0);
     (void) pmhd->RestrictB(this, 0);
     (void) pmhd->InitRecv(this, -1);  // stage < 0 suppresses InitFluxRecv
     (void) pmhd->SendU(this, 0);
     (void) pmhd->SendB(this, 0);
-    (void) pmhd->ClearSend(this, -1);
-    (void) pmhd->ClearRecv(this, -1);
+    (void) pmhd->ClearSend(this, -1); // stage = -1 only clear SendU, SendB
+    (void) pmhd->ClearRecv(this, -1); // stage = -1 only clear RecvU, RecvB
     (void) pmhd->RecvU(this, 0);
     (void) pmhd->RecvB(this, 0);
+    (void) pmhd->SendU_Shr(this, 0);
+    (void) pmhd->SendB_Shr(this, 0);
+    (void) pmhd->ClearSend(this, -4); // stage = -4 only clear SendU_Shr, SendB_Shr
+    (void) pmhd->ClearRecv(this, -4); // stage = -4 only clear RecvU_Shr, SendB_Shr
+    (void) pmhd->RecvU_Shr(this, 0);
+    (void) pmhd->RecvB_Shr(this, 0);
     (void) pmhd->ApplyPhysicalBCs(this, 0);
     (void) pmhd->Prolongate(this, 0);
-    (void) pmhd->ConToPrim(this, 0);
+    if (pdyngr == nullptr) {
+      (void) pmhd->ConToPrim(this, 0);
+    } else {
+      pdyngr->ConToPrim(this, 0);
+    }
   }
 
   // Initialize radiation: ghost zones and intensity (everywhere)
+  // DOES NOT include communications for shearing box boundaries
   radiation::Radiation *prad = pm->pmb_pack->prad;
   if (prad != nullptr) {
     (void) prad->RestrictI(this, 0);

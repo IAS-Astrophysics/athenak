@@ -60,7 +60,8 @@ void SphericalGrid::SetInterpolationCoordinates() {
   // Schild data, the SphericalGrid radius is assumed to correspond to a spherical Kerr-
   // Schild radius, meaning that when setting the x1, x2, and x3 interpolation coordinates
   // we must translate between the two coordinate systems.
-  if (pmy_pack->pcoord->is_general_relativistic) {
+  if (pmy_pack->pcoord->is_general_relativistic ||
+      pmy_pack->pcoord->is_dynamical_relativistic) {
     for (int n=0; n<nangles; ++n) {
       Real &spin = pmy_pack->pcoord->coord_data.bh_spin;
       Real &theta = polar_pos.h_view(n,0);

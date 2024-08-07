@@ -40,6 +40,10 @@ nlim       = -1        # cycle limit
 tlim       = 62.831854      # time limit (about 8 orbits = 16\pi)
 ndiag      = 1         # cycles between diagostic output
 
+<shearing_box>
+qshear = 1.5
+omega0 = 1.0
+
 <mhd>
 eos          = ideal   # EOS type
 reconstruct  = ppm4    # spatial reconstruction method
@@ -47,10 +51,6 @@ rsolver      = hlld    # Riemann-solver to be used
 gamma        = 1.6666666666666667 # gamma = C_p/C_v
 
 <problem>
-shearing_box = true #
-shearing_box_r_phi = false #
-qshear = 1.5 #
-omega0 = 1.0 #
 beta       = 4000      # Plasma beta
 amp        = 0.01      # dP/P <= amp
 ifield     = 1         # 1 for zero-net-flux Bz, 2 for constant Bz

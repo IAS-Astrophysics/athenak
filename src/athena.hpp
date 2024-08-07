@@ -48,9 +48,13 @@ using Real = double;
 
 // constants that determine array index of Hydro/MHD variables
 // array indices for conserved: density, momemtum, total energy
-enum VariableIndex {IDN=0, IM1=1, IVX=1, IM2=2, IVY=2, IM3=3, IVZ=3, IEN=4, ITM=4};
+enum VariableIndex {IDN=0, IM1=1, IVX=1, IM2=2, IVY=2, IM3=3, IVZ=3, IEN=4,
+                    ITM=4, IPR=4, IYF=5};
 // array indices for components of magnetic field
-enum BFieldIndex {IBX=0, IBY=1, IBZ=2};
+enum BFieldIndex {IBX=0, IBY=1, IBZ=2, NMAG=3};
+// array indices for metric matrices in GR
+enum MetricIndex {I00=0, I01=1, I02=2, I03=3, I11=4, I12=5, I13=6, I22=7, I23=8, I33=9,
+                  NMETRIC=10};
 // array indices for particle arrays
 enum ParticlesIndex {PGID=0, PTAG=1, IPX=0, IPVX=1, IPY=2, IPVY=3, IPZ=4, IPVZ=5};
 

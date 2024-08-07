@@ -49,6 +49,7 @@ void MeshBoundaryValues::BFieldBCs(MeshBlockPack *ppack, DualArray2D<Real> b_in,
           break;
         case BoundaryFlag::outflow:
         case BoundaryFlag::diode:
+        case BoundaryFlag::vacuum:
           for (int i=0; i<ng; ++i) {
             b0.x1f(m,k,j,is-i-1) = b0.x1f(m,k,j,is);
             b0.x2f(m,k,j,is-i-1) = b0.x2f(m,k,j,is);
@@ -87,6 +88,7 @@ void MeshBoundaryValues::BFieldBCs(MeshBlockPack *ppack, DualArray2D<Real> b_in,
           break;
         case BoundaryFlag::outflow:
         case BoundaryFlag::diode:
+        case BoundaryFlag::vacuum:
           for (int i=0; i<ng; ++i) {
             b0.x1f(m,k,j,ie+i+2) = b0.x1f(m,k,j,ie+1);
             b0.x2f(m,k,j,ie+i+1) = b0.x2f(m,k,j,ie);
@@ -134,6 +136,7 @@ void MeshBoundaryValues::BFieldBCs(MeshBlockPack *ppack, DualArray2D<Real> b_in,
           break;
         case BoundaryFlag::outflow:
         case BoundaryFlag::diode:
+        case BoundaryFlag::vacuum:
           for (int j=0; j<ng; ++j) {
             b0.x1f(m,k,js-j-1,i) = b0.x1f(m,k,js,i);
             if (i == n1-1) {b0.x1f(m,k,js-j-1,i+1) = b0.x1f(m,k,js,i+1);}
@@ -172,6 +175,7 @@ void MeshBoundaryValues::BFieldBCs(MeshBlockPack *ppack, DualArray2D<Real> b_in,
           break;
         case BoundaryFlag::outflow:
         case BoundaryFlag::diode:
+        case BoundaryFlag::vacuum:
           for (int j=0; j<ng; ++j) {
             b0.x1f(m,k,je+j+1,i) = b0.x1f(m,k,je,i);
             if (i == n1-1) {b0.x1f(m,k,je+j+1,i+1) = b0.x1f(m,k,je,i+1);}
@@ -219,6 +223,7 @@ void MeshBoundaryValues::BFieldBCs(MeshBlockPack *ppack, DualArray2D<Real> b_in,
         break;
       case BoundaryFlag::outflow:
       case BoundaryFlag::diode:
+      case BoundaryFlag::vacuum:
         for (int k=0; k<ng; ++k) {
           b0.x1f(m,ks-k-1,j,i) = b0.x1f(m,ks,j,i);
           if (i == n1-1) {b0.x1f(m,ks-k-1,j,i+1) = b0.x1f(m,ks,j,i+1);}
@@ -257,6 +262,7 @@ void MeshBoundaryValues::BFieldBCs(MeshBlockPack *ppack, DualArray2D<Real> b_in,
         break;
       case BoundaryFlag::outflow:
       case BoundaryFlag::diode:
+      case BoundaryFlag::vacuum:
         for (int k=0; k<ng; ++k) {
           b0.x1f(m,ke+k+1,j,i) = b0.x1f(m,ke,j,i);
           if (i == n1-1) {b0.x1f(m,ke+k+1,j,i+1) = b0.x1f(m,ke,j,i+1);}

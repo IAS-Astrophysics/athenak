@@ -183,6 +183,17 @@ class TaskList {
     return id;
   }
 
+  // ADD new Task with ID, given dependency, and a std::function to the end of task
+  // list. Returns ID of new task. Task function must have arguments (Driver*, int).
+  // Usage:
+  //      taskid = tl.AddTask(DoSomething, dependency);
+  TaskID AddTask(std::function<TaskStatus(Driver*, int)> func, TaskID &dep) {
+    auto size = task_list_.size();
+    TaskID id(size+1);
+    task_list_.push_back(Task(id, dep, func));
+    return id;
+  }
+
   // INSERT new Task with ID, given dependency, and a pointer to a member function of
   // class T in a position BEFORE the task with ID 'location'.  Returns ID of new task,
   // or taskID(0) if location not found. Usage:

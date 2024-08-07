@@ -17,7 +17,7 @@
 #include "bvals.hpp"
 
 //----------------------------------------------------------------------------------------
-//! \fn void BoundaryValuesCC::PackAndSendFlux()
+//! \fn void MeshBoundaryValuesCC::PackAndSendFlux()
 //! \brief Pack restricted fluxes of cell-centered variables at fine/coarse boundaries
 //! into boundary buffers and send to neighbors for flux-correction step.  These fluxes
 //! (e.g. for the conserved hydro variables) live at cell faces.
@@ -26,7 +26,7 @@
 //! MeshBlocks. Buffer data are then sent (via MPI) or copied directly for periodic or
 //! block boundaries.
 
-TaskStatus BoundaryValuesCC::PackAndSendFluxCC(DvceFaceFld5D<Real> &flx) {
+TaskStatus MeshBoundaryValuesCC::PackAndSendFluxCC(DvceFaceFld5D<Real> &flx) {
   // create local references for variables in kernel
   int nmb = pmy_pack->nmb_thispack;
   int nnghbr = pmy_pack->pmb->nnghbr;
@@ -40,8 +40,8 @@ TaskStatus BoundaryValuesCC::PackAndSendFluxCC(DvceFaceFld5D<Real> &flx) {
   auto &nghbr = pmy_pack->pmb->nghbr;
   auto &mbgid = pmy_pack->pmb->mb_gid;
   auto &mblev = pmy_pack->pmb->mb_lev;
-  auto &sbuf = send_buf;
-  auto &rbuf = recv_buf;
+  auto &sbuf = sendbuf;
+  auto &rbuf = recvbuf;
   auto &one_d = pmy_pack->pmesh->one_d;
   auto &two_d = pmy_pack->pmesh->two_d;
 
@@ -174,11 +174,11 @@ TaskStatus BoundaryValuesCC::PackAndSendFluxCC(DvceFaceFld5D<Real> &flx) {
           int tag = CreateBvals_MPI_Tag(lid, dn);
 
           // get ptr to send buffer for fluxes
-          int data_size = nvar*(send_buf[n].iflxc_ndat);
-          auto send_ptr = Kokkos::subview(send_buf[n].flux, m, Kokkos::ALL);
+          int data_size = nvar*(sendbuf[n].iflxc_ndat);
+          auto send_ptr = Kokkos::subview(sendbuf[n].flux, m, Kokkos::ALL);
 
           int ierr = MPI_Isend(send_ptr.data(), data_size, MPI_ATHENA_REAL, drank, tag,
-                               flux_comm, &(send_buf[n].flux_req[m]));
+                               comm_flux, &(sendbuf[n].flux_req[m]));
           if (ierr != MPI_SUCCESS) {no_errors=false;}
         }
       }
@@ -198,13 +198,13 @@ TaskStatus BoundaryValuesCC::PackAndSendFluxCC(DvceFaceFld5D<Real> &flx) {
 //! \fn void RecvBuffers()
 //! \brief Unpack boundary buffers for flux correction of CC variables.
 
-TaskStatus BoundaryValuesCC::RecvAndUnpackFluxCC(DvceFaceFld5D<Real> &flx) {
+TaskStatus MeshBoundaryValuesCC::RecvAndUnpackFluxCC(DvceFaceFld5D<Real> &flx) {
   // create local references for variables in kernel
   int nmb = pmy_pack->nmb_thispack;
   int nnghbr = pmy_pack->pmb->nnghbr;
   auto &nghbr = pmy_pack->pmb->nghbr;
   auto &mblev = pmy_pack->pmb->mb_lev;
-  auto &rbuf = recv_buf;
+  auto &rbuf = recvbuf;
 #if MPI_PARALLEL_ENABLED
   //----- STEP 1: check that recv boundary buffer communications have all completed
   // receives only occur for neighbors on faces at a FINER level
@@ -305,7 +305,7 @@ TaskStatus BoundaryValuesCC::RecvAndUnpackFluxCC(DvceFaceFld5D<Real> &flx) {
 //! cell-centered variables, which are communicated at FACES of MeshBlocks at the SAME
 //! levels.  This is different than for fluxes of face-centered vars.
 
-TaskStatus BoundaryValuesCC::InitFluxRecv(const int nvars) {
+TaskStatus MeshBoundaryValuesCC::InitFluxRecv(const int nvars) {
 #if MPI_PARALLEL_ENABLED
   int &nmb = pmy_pack->nmb_thispack;
   int &nnghbr = pmy_pack->pmb->nnghbr;
@@ -329,12 +329,12 @@ TaskStatus BoundaryValuesCC::InitFluxRecv(const int nvars) {
           int tag = CreateBvals_MPI_Tag(m, n);
 
           // calculate amount of data to be passed, get pointer to variables
-          int data_size = nvars*(recv_buf[n].iflxc_ndat);
-          auto recv_ptr = Kokkos::subview(recv_buf[n].flux, m, Kokkos::ALL);
+          int data_size = nvars*(recvbuf[n].iflxc_ndat);
+          auto recv_ptr = Kokkos::subview(recvbuf[n].flux, m, Kokkos::ALL);
 
           // Post non-blocking receive for this buffer on this MeshBlock
           int ierr = MPI_Irecv(recv_ptr.data(), data_size, MPI_ATHENA_REAL, drank, tag,
-                               flux_comm, &(recv_buf[n].flux_req[m]));
+                               comm_flux, &(recvbuf[n].flux_req[m]));
           if (ierr != MPI_SUCCESS) {no_errors=false;}
         }
       }

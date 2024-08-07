@@ -87,7 +87,7 @@ class MeshRefinement {
 #if MPI_PARALLEL_ENABLED
   int nmb_send, nmb_recv;
   MPI_Comm amr_comm;                         // unique communicator for AMR
-  DualArray1D<AMRBuffer> send_buf, recv_buf; // send/recv buffers
+  DualArray1D<AMRBuffer> sendbuf, recvbuf; // send/recv buffers
   MPI_Request *send_req, *recv_req;
   DvceArray1D<Real> send_data, recv_data;    // send/recv device data
 #endif
@@ -110,7 +110,7 @@ class MeshRefinement {
   void RefineCC(DualArray1D<int> &n2o, DvceArray5D<Real> &a, DvceArray5D<Real> &ca);
   void RefineFC(DualArray1D<int> &n2o, DvceFaceFld4D<Real> &b, DvceFaceFld4D<Real> &cb);
 
-  void RestrictCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca);
+  void RestrictCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca, bool is_z4c=false);
   void RestrictFC(DvceFaceFld4D<Real> &b, DvceFaceFld4D<Real> &cb);
   void HighOrderRestrictCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca);
 
