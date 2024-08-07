@@ -93,7 +93,9 @@ void SGRIDHistory(HistoryData *pdata, Mesh *pm);
 void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   // Set the custom history function
   user_hist_func = &SGRIDHistory;
-  // user_ref_func  = &RefinementCondition;
+
+  if (restart)
+    return;
 
   if (global_variable::my_rank == 0) {
     mkdir("SGRID", 0775);
