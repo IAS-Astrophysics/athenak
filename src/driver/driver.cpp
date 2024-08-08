@@ -518,6 +518,20 @@ Real Driver::UpdateWallClock() {
 void Driver::InitBoundaryValuesAndPrimitives(Mesh *pm) {
   // Note: with MPI, sends on ALL MBs must be complete before receives execute
 
+  // Initialize Z4c
+  z4c::Z4c *pz4c = pm->pmb_pack->pz4c;
+  if (pz4c != nullptr) {
+    (void) pz4c->RestrictU(this, 0);
+    (void) pz4c->InitRecv(this, -1);  // stage < 0 suppresses InitFluxRecv
+    (void) pz4c->SendU(this, 0);
+    (void) pz4c->ClearSend(this, -1);
+    (void) pz4c->ClearRecv(this, -1);
+    (void) pz4c->RecvU(this, 0);
+    (void) pz4c->Z4cBoundaryRHS(this, 0);
+    (void) pz4c->ApplyPhysicalBCs(this, 0);
+    (void) pz4c->Prolongate(this, 0);
+  }
+
   // Initialize HYDRO: ghost zones and primitive variables (everywhere)
   // includes communications for shearing box boundaries
   hydro::Hydro *phydro = pm->pmb_pack->phydro;
@@ -563,7 +577,10 @@ void Driver::InitBoundaryValuesAndPrimitives(Mesh *pm) {
     if (pdyngr == nullptr) {
       (void) pmhd->ConToPrim(this, 0);
     } else {
-      pdyngr->ConToPrim(this, 0);
+      if (pz4c != nullptr) {
+        (void) pz4c->Z4cToADM_(this, 0);
+      }
+      (void) pdyngr->ConToPrim(this, 0);
     }
   }
 
@@ -579,20 +596,6 @@ void Driver::InitBoundaryValuesAndPrimitives(Mesh *pm) {
     (void) prad->RecvI(this, 0);
     (void) prad->ApplyPhysicalBCs(this, 0);
     (void) prad->Prolongate(this, 0);
-  }
-
-  // Initialize Z4c
-  z4c::Z4c *pz4c = pm->pmb_pack->pz4c;
-  if (pz4c != nullptr) {
-    (void) pz4c->RestrictU(this, 0);
-    (void) pz4c->InitRecv(this, -1);  // stage < 0 suppresses InitFluxRecv
-    (void) pz4c->SendU(this, 0);
-    (void) pz4c->ClearSend(this, -1);
-    (void) pz4c->ClearRecv(this, -1);
-    (void) pz4c->RecvU(this, 0);
-    (void) pz4c->Z4cBoundaryRHS(this, 0);
-    (void) pz4c->ApplyPhysicalBCs(this, 0);
-    (void) pz4c->Prolongate(this, 0);
   }
 
   return;
