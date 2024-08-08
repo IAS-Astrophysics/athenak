@@ -122,7 +122,6 @@ void ProblemGenerator::ShockTube(ParameterInput *pin, const bool restart) {
 
     auto &w0 = pmbp->phydro->w0;
     auto &nscal = pmbp->phydro->nscalars;
-    auto shk_dir_ = shk_dir;
     par_for("pgen_shock1", DevExeSpace(),0,(pmbp->nmb_thispack-1),ks,ke,js,je,is,ie,
     KOKKOS_LAMBDA(int m,int k, int j, int i) {
       Real x;
@@ -220,7 +219,6 @@ void ProblemGenerator::ShockTube(ParameterInput *pin, const bool restart) {
     auto &b0 = pmbp->pmhd->b0;
     auto &bcc0 = pmbp->pmhd->bcc0;
     auto &nscal = pmbp->pmhd->nscalars;
-    auto shk_dir_ = shk_dir;
     par_for("pgen_shock1", DevExeSpace(),0,(pmbp->nmb_thispack-1),ks,ke,js,je,is,ie,
     KOKKOS_LAMBDA(int m,int k, int j, int i) {
       Real x,bxl,byl,bzl,bxr,byr,bzr;
