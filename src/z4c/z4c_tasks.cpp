@@ -421,7 +421,7 @@ TaskStatus Z4c::RestrictWeyl(Driver *pdrive, int stage) {
     float time_32 = static_cast<float>(pmy_pack->pmesh->time);
     if ((last_output_time==time_32) && (stage == pdrive->nexp_stages)) {
       if (pmy_pack->pmesh->multilevel) {
-        pmy_pack->pmesh->pmr->RestrictCC(u_weyl, coarse_u_weyl);
+        pmy_pack->pmesh->pmr->RestrictCC(u_weyl, coarse_u_weyl, true);
       }
     }
     return TaskStatus::complete;

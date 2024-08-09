@@ -1183,7 +1183,6 @@ void MeshRefinement::RestrictCC(DvceArray5D<Real> &u, DvceArray5D<Real> &cu,
   int nvar = u.extent_int(1);  // TODO(@user): 2nd index from L of in array must be NVAR
 
   MeshBlockPack* pmbp = pmy_mesh->pmb_pack;
-  bool not_z4c = (pmbp->pz4c == nullptr)? true : false;
   auto &indcs = pmy_mesh->mb_indcs;
   auto &cis = indcs.cis, &cie = indcs.cie;
   auto &cjs = indcs.cjs, &cje = indcs.cje;
@@ -1218,7 +1217,7 @@ void MeshRefinement::RestrictCC(DvceArray5D<Real> &u, DvceArray5D<Real> &cu,
       int finei = 2*i - cis;  // correct when cis=is
       int finej = 2*j - cjs;  // correct when cjs=js
       int finek = 2*k - cks;  // correct when cks=ks
-      if (not_z4c) {
+      if (!is_z4c) {
         cu(m,n,k,j,i) =
             0.125*(u(m,n,finek  ,finej  ,finei) + u(m,n,finek  ,finej  ,finei+1)
                 + u(m,n,finek  ,finej+1,finei) + u(m,n,finek  ,finej+1,finei+1)
