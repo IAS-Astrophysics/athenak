@@ -114,6 +114,7 @@ void ProblemGenerator::ShockTube(ParameterInput *pin, const bool restart) {
     Real yr = pin->GetOrAddReal("problem","yr",0.0);
 
     auto &w0 = pmbp->phydro->w0;
+    auto &nscal = pmbp->phydro->nscalars;
     par_for("pgen_shock1", DevExeSpace(),0,(pmbp->nmb_thispack-1),ks,ke,js,je,is,ie,
     KOKKOS_LAMBDA(int m,int k, int j, int i) {
       Real x;
@@ -141,7 +142,7 @@ void ProblemGenerator::ShockTube(ParameterInput *pin, const bool restart) {
         w0(m,ivy,k,j,i) = wl.vy*u0l;
         w0(m,ivz,k,j,i) = wl.vz*u0l;
         w0(m,IEN,k,j,i) = wl.e;
-        for (int r=0; r<pmbp->phydro->nscalars; ++r) {
+        for (int r=0; r<nscal; ++r) {
           w0(m,IYF+r,k,j,i) = yl;
         }
       } else {
@@ -150,7 +151,7 @@ void ProblemGenerator::ShockTube(ParameterInput *pin, const bool restart) {
         w0(m,ivy,k,j,i) = wr.vy*u0r;
         w0(m,ivz,k,j,i) = wr.vz*u0r;
         w0(m,IEN,k,j,i) = wr.e;
-        for (int r=0; r<pmbp->phydro->nscalars; ++r) {
+        for (int r=0; r<nscal; ++r) {
           w0(m,IYF+r,k,j,i) = yr;
         }
       }
@@ -210,6 +211,7 @@ void ProblemGenerator::ShockTube(ParameterInput *pin, const bool restart) {
     auto &w0 = pmbp->pmhd->w0;
     auto &b0 = pmbp->pmhd->b0;
     auto &bcc0 = pmbp->pmhd->bcc0;
+    auto &nscal = pmbp->pmhd->nscalars;
     par_for("pgen_shock1", DevExeSpace(),0,(pmbp->nmb_thispack-1),ks,ke,js,je,is,ie,
     KOKKOS_LAMBDA(int m,int k, int j, int i) {
       Real x,bxl,byl,bzl,bxr,byr,bzr;
@@ -243,7 +245,7 @@ void ProblemGenerator::ShockTube(ParameterInput *pin, const bool restart) {
         w0(m,ivy,k,j,i) = wl.vy*u0l;
         w0(m,ivz,k,j,i) = wl.vz*u0l;
         w0(m,IEN,k,j,i) = wl.e;
-        for (int r=0; r<pmbp->pmhd->nscalars; ++r) {
+        for (int r=0; r<nscal; ++r) {
           w0(m,IYF+r,k,j,i) = yl;
         }
         b0.x1f(m,k,j,i) = bxl;
@@ -261,7 +263,7 @@ void ProblemGenerator::ShockTube(ParameterInput *pin, const bool restart) {
         w0(m,ivy,k,j,i) = wr.vy*u0r;
         w0(m,ivz,k,j,i) = wr.vz*u0r;
         w0(m,IEN,k,j,i) = wr.e;
-        for (int r=0; r<pmbp->pmhd->nscalars; ++r) {
+        for (int r=0; r<nscal; ++r) {
           w0(m,IYF+r,k,j,i) = yr;
         }
         b0.x1f(m,k,j,i) = bxr;
