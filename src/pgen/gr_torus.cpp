@@ -916,8 +916,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
         pr(IPY,pidx) = CellCenterX(j-js, nx2, mbsize.d_view(m).x2min,
                                    mbsize.d_view(m).x2max);
         pr(IPZ,pidx) = CellCenterX(k-ks, nx3, mbsize.d_view(m).x3min,
-                                   mbsize.d_view(m).x3max) -
-                       mbsize.d_view(m).dx3/2;
+                                   mbsize.d_view(m).x3max);
       }
     });
   }
