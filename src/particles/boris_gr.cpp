@@ -26,98 +26,6 @@ void GetUpperAdmMetric( const Real inputMat[][4], Real outputMat[][3] ){
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn  void ComputeAndAddSingleTerm_Velocity
-//  \brief
-KOKKOS_INLINE_FUNCTION
-void ComputeAndAddSingleTerm_Velocity(const Real gu_0[4][4], const Real gu_1[4][4], const Real * u, Real * H){
-        Real U_0, U_1, aux, beta_t;
-        Real ADM_0[3][3], ADM_1[3][3];
-        Real massive = 1.0; //TODO for photons/massless particles this needs to be 0: condition on ptype
-
-        GetUpperAdmMetric( gu_0, ADM_0 );
-        GetUpperAdmMetric( gu_1, ADM_1 );
-
-        U_0 = 0.0;
-        for (int i1 = 0; i1 < 3; ++i1 ){
-                for (int i2 = 0; i2 < 3; ++i2 ){
-                U_0 += ADM_0[i1][i2]*u[i1]*u[i2];
-                }
-        }
-        U_0 = sqrt(U_0 + massive);
-        U_1 = 0.0;
-        for (int i1 = 0; i1 < 3; ++i1 ){
-                for (int i2 = 0; i2 < 3; ++i2 ){
-                U_1 += ADM_1[i1][i2]*u[i1]*u[i2];
-                }
-        }
-        U_1 = sqrt(U_1 + massive);
-        aux = 0.0;
-        for (int i1 = 0; i1 < 3; ++i1 ){
-                for (int i2 = 0; i2 < 3; ++i2 ){
-                aux += (ADM_1[i1][i2] - ADM_0[i1][i2])*u[i1]*u[i2];
-                }
-        }
-        beta_t = 0.0;
-        for (int i1 = 0; i1 < 3; ++i1 ){
-                beta_t += ( -gu_1[0][i1+1]/gu_1[0][0] + gu_0[0][i1+1]/gu_0[0][0])*u[i1];
-        }
-
-        *H -= 0.5*(U_0 + U_1)*( sqrt(-1.0/gu_1[0][0]) - sqrt(-1.0/gu_0[0][0]) ) ;
-        *H -= 0.5*aux*( sqrt(-1.0/gu_1[0][0]) + sqrt(-1.0/gu_0[0][0]) )/(U_1 + U_0) ;
-        *H += beta_t ;
-}
-
-//----------------------------------------------------------------------------------------
-//! \fn  void ComputeAndAddSingleTerm_Velocity
-//  \brief      
-// Overload previous function to use the derivative of the metric if needed
-KOKKOS_INLINE_FUNCTION
-void ComputeAndAddSingleTerm_Velocity(const Real gu_0[4][4], const Real gu_1[4][4], const Real g_der[4][4], const Real * u, Real * H){
-        Real U_0, U_1, aux, beta_t;
-        Real ADM_0[3][3], ADM_1[3][3], ADM_der[3][3];
-        Real massive = 1.0; //TODO for photons/massless particles this needs to be 0: condition on ptype
-
-        GetUpperAdmMetric( gu_0, ADM_0 );
-        GetUpperAdmMetric( gu_1, ADM_1 );
-        for (int i1 = 0; i1 < 3; ++i1 ){
-                for (int i2 = 0; i2 < 3; ++i2 ){ 
-                ADM_der[i1][i2] = g_der[i1+1][i2+1]
-                        + g_der[0][0]*gu_0[0][i1+1]*gu_0[0][i2+1]/SQR(gu_0[0][0])
-                        - 2.0*g_der[0][i1+1]*gu_0[0][i2+1]/gu_0[0][0];
-                }
-        }
-        U_0 = 0.0;
-        for (int i1 = 0; i1 < 3; ++i1 ){ 
-                for (int i2 = 0; i2 < 3; ++i2 ){
-                U_0 += ADM_0[i1][i2]*u[i1]*u[i2];
-                }
-        }       
-        U_0 = sqrt(U_0 + massive); 
-        U_1 = 0.0;      
-        for (int i1 = 0; i1 < 3; ++i1 ){
-                for (int i2 = 0; i2 < 3; ++i2 ){
-                U_1 += ADM_1[i1][i2]*u[i1]*u[i2];
-                }
-        }       
-        U_1 = sqrt(U_1 + massive); 
-        aux = 0.0;
-        for (int i1 = 0; i1 < 3; ++i1 ){
-                for (int i2 = 0; i2 < 3; ++i2 ){
-                aux += ADM_der[i1][i2]*u[i1]*u[i2];
-                }
-        }       
-        beta_t = 0.0;
-        for (int i1 = 0; i1 < 3; ++i1 ){
-                beta_t -= (g_der[0][i1+1] - gu_0[0][i1+1]*g_der[0][0]/gu_0[0][0])/gu_0[0][0]*u[i1];
-        }
-        
-        *H -= 0.5*(U_0 + U_1)*( 0.5*sqrt(-1.0/gu_0[0][0])*g_der[0][0]/fabs(gu_0[0][0]) ) ;
-        *H -= 0.5*aux*( sqrt(-1.0/gu_1[0][0]) + sqrt(-1.0/gu_0[0][0]) )/(U_1 + U_0) ;
-        *H += beta_t ;
-}       
-
-
-//----------------------------------------------------------------------------------------
 //! \fn  void HamiltonEquation_Position
 //  \brief
 // Following function largely implented based on the appendix in Bacchini et al. 2018 (doi.org/10.3847/1538-4365/aac9ca
@@ -440,373 +348,252 @@ void HamiltonEquation_Position(const Real * x_0, const Real * x_1, const Real * 
 	
 	for (int i=0; i<3; ++i){ H[i] /= 6.0; }
 }
+//----------------------------------------------------------------------------------------
+//! \fn  void ComputeAndAddSingleTerm_Velocity
+//  \brief
+KOKKOS_INLINE_FUNCTION
+void ComputeAndAddSingleTerm_Velocity(const Real gu_0[4][4], const Real gu_1[4][4], const Real * u, Real * H){
+        Real U_0, U_1, aux, beta_t;
+        Real ADM_0[3][3], ADM_1[3][3];
+        Real massive = 1.0; //TODO for photons/massless particles this needs to be 0: condition on ptype
+
+        GetUpperAdmMetric( gu_0, ADM_0 );
+        GetUpperAdmMetric( gu_1, ADM_1 );
+
+        U_0 = 0.0;
+        for (int i1 = 0; i1 < 3; ++i1 ){
+                for (int i2 = 0; i2 < 3; ++i2 ){
+                U_0 += ADM_0[i1][i2]*u[i1]*u[i2];
+                }
+        }
+        U_0 = sqrt(U_0 + massive);
+        U_1 = 0.0;
+        for (int i1 = 0; i1 < 3; ++i1 ){
+                for (int i2 = 0; i2 < 3; ++i2 ){
+                U_1 += ADM_1[i1][i2]*u[i1]*u[i2];
+                }
+        }
+        U_1 = sqrt(U_1 + massive);
+        aux = 0.0;
+        for (int i1 = 0; i1 < 3; ++i1 ){
+                for (int i2 = 0; i2 < 3; ++i2 ){
+                aux += (ADM_1[i1][i2] - ADM_0[i1][i2])*u[i1]*u[i2];
+                }
+        }
+        beta_t = 0.0;
+        for (int i1 = 0; i1 < 3; ++i1 ){
+                beta_t += ( -gu_1[0][i1+1]/gu_1[0][0] + gu_0[0][i1+1]/gu_0[0][0])*u[i1];
+        }
+
+        *H -= 0.5*(U_0 + U_1)*( sqrt(-1.0/gu_1[0][0]) - sqrt(-1.0/gu_0[0][0]) ) ;
+        *H -= 0.5*aux*( sqrt(-1.0/gu_1[0][0]) + sqrt(-1.0/gu_0[0][0]) )/(U_1 + U_0) ;
+        *H += beta_t ;
+}
 
 //----------------------------------------------------------------------------------------
-//! \fn  void HamiltonEquation_Velocity
-//  \brief
-// Following function largely implented based on the appendix in Bacchini et al. 2018 (doi.org/10.3847/1538-4365/aac9ca
-// It's an expression of the derivative of the ADM Hamiltonian for geodesics with respect to the position
-// That prevents singularities for small increments and is used to compute the time derivative of the velocity
-// Would be nice to come up with a way to compute these terms algorithmically, rather than by hard coding, but thus far I wasn't able to
+//! \fn  void ComputeAndAddSingleTerm_Velocity
+//  \brief      
+// Overload previous function to use the derivative of the metric if needed
 KOKKOS_INLINE_FUNCTION
-void HamiltonEquation_Velocity(const Real * x_0, const Real * x_1, const Real * u_0, const Real * u_1, const Real x_step, const Real spin, const Real it_tol, Real * H){
+void ComputeAndAddSingleTerm_Velocity(const Real gu_0[4][4], const Real gu_1[4][4], const Real g_der[4][4], const Real * u, Real * H){
+        Real U_0, U_1, aux, beta_t;
+        Real ADM_0[3][3], ADM_1[3][3], ADM_der[3][3];
+        Real massive = 1.0; //TODO for photons/massless particles this needs to be 0: condition on ptype
+
+        GetUpperAdmMetric( gu_0, ADM_0 );
+        GetUpperAdmMetric( gu_1, ADM_1 );
+        for (int i1 = 0; i1 < 3; ++i1 ){
+                for (int i2 = 0; i2 < 3; ++i2 ){ 
+                ADM_der[i1][i2] = g_der[i1+1][i2+1]
+                        + g_der[0][0]*gu_0[0][i1+1]*gu_0[0][i2+1]/SQR(gu_0[0][0])
+                        - 2.0*g_der[0][i1+1]*gu_0[0][i2+1]/gu_0[0][0];
+                }
+        }
+        U_0 = 0.0;
+        for (int i1 = 0; i1 < 3; ++i1 ){ 
+                for (int i2 = 0; i2 < 3; ++i2 ){
+                U_0 += ADM_0[i1][i2]*u[i1]*u[i2];
+                }
+        }       
+        U_0 = sqrt(U_0 + massive); 
+        U_1 = 0.0;      
+        for (int i1 = 0; i1 < 3; ++i1 ){
+                for (int i2 = 0; i2 < 3; ++i2 ){
+                U_1 += ADM_1[i1][i2]*u[i1]*u[i2];
+                }
+        }       
+        U_1 = sqrt(U_1 + massive); 
+        aux = 0.0;
+        for (int i1 = 0; i1 < 3; ++i1 ){
+                for (int i2 = 0; i2 < 3; ++i2 ){
+                aux += ADM_der[i1][i2]*u[i1]*u[i2];
+                }
+        }       
+        beta_t = 0.0;
+        for (int i1 = 0; i1 < 3; ++i1 ){
+                beta_t -= (g_der[0][i1+1] - gu_0[0][i1+1]*g_der[0][0]/gu_0[0][0])/gu_0[0][0]*u[i1];
+        }
+        
+        *H -= 0.5*(U_0 + U_1)*( 0.5*sqrt(-1.0/gu_0[0][0])*g_der[0][0]/fabs(gu_0[0][0]) ) ;
+        *H -= 0.5*aux*( sqrt(-1.0/gu_1[0][0]) + sqrt(-1.0/gu_0[0][0]) )/(U_1 + U_0) ;
+        *H += beta_t ;
+}       
+
+//----------------------------------------------------------------------------------------
+//! \fn  void SingleTermHelper
+//! \brief
+//! Helper function to reduce amount of repetition in HamiltonEquation_Velocity
+KOKKOS_INLINE_FUNCTION
+void SingleTermHelper(const Real * x_0, const Real * x_1, const Real * u, const bool * use_der, const int dir, const Real x_step, const Real spin, const Real it_tol, Real * H){
 
 	const bool is_minkowski = false; //Since this function is only for the GR pusher, this can be kept as a ``constant''
 	Real gl_0[4][4], gu_0[4][4], gl_1[4][4], gu_1[4][4]; // Metric components
 	Real aux_gl_0[4][4], aux_gu_0[4][4], aux_gl_1[4][4], aux_gu_1[4][4]; // Metric components
-	Real dx, dy, dz, u[3];
+	int dir_fac[3] = {0,0,0}; 
+	dir_fac[dir] = 1; // Use this to perform step only in direction of interest
+
+	ComputeMetricAndInverse(x_0[0],x_0[1],x_0[2], is_minkowski, spin, gl_0, gu_0); 
+	ComputeMetricAndInverse(x_1[0],x_1[1],x_1[2], is_minkowski, spin, gl_1, gu_1); 
+
+	if (use_der[dir]){
+		ComputeMetricAndInverse(x_0[0]-x_step*dir_fac[0], x_0[1]-x_step*dir_fac[1], x_0[2]-x_step*dir_fac[2],
+			       	is_minkowski, spin, aux_gl_1, aux_gu_1); 
+		ComputeMetricAndInverse(x_0[0]+x_step*dir_fac[0], x_0[1]+x_step*dir_fac[1], x_0[2]+x_step*dir_fac[2],
+			       	is_minkowski, spin, aux_gl_0, aux_gu_0); 
+	        for(int i=0; i<4; ++i){
+			for(int j=0; j<4; ++j){
+				aux_gu_0[i][j] -= aux_gu_1[i][j];
+				aux_gu_0[i][j] /= (2.0*x_step);
+			}
+		}	
+		ComputeAndAddSingleTerm_Velocity(gu_0, gu_1, aux_gu_0, u, &H[dir]);
+	}else{
+		ComputeAndAddSingleTerm_Velocity(gu_0, gu_1, u, &H[dir]);
+	}
+									     //
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn  void HamiltonEquation_Velocity
+//!  \brief
+//! Following function largely implented based on the appendix in Bacchini et al. 2018 (doi.org/10.3847/1538-4365/aac9ca
+//! It's an expression of the derivative of the ADM Hamiltonian for geodesics with respect to the position
+//! That prevents singularities for small increments and is used to compute the time derivative of the velocity
+//! Would be nice to come up with a way to compute these terms algorithmically, rather than by hard coding, but thus far I wasn't able to
+KOKKOS_INLINE_FUNCTION
+void HamiltonEquation_Velocity(const Real * x_0, const Real * x_1, const Real * u_0, const Real * u_1, const Real x_step, const Real spin, const Real it_tol, Real * H){
+
+	Real incr[3], u[3];
        	// Difference between old and new points might be too small
 	// Use drivative instead
-	bool use_derivative_x, use_derivative_y, use_derivative_z;
+	bool use_derivative[3]; // array to determine whether or not the derivative is needed
+	Real aux_x0[3], aux_x1[3]; // Send these to helper function, but assemble them case by case following energy conserving scheme
 
 	for (int i=0; i<3; ++i){ H[i] = 0.0; }
-	dx = x_1[0] - x_0[0];
-	use_derivative_x = (fabs(dx) < sqrt(it_tol)) ? true : false;
-	dy = x_1[1] - x_0[1];
-	use_derivative_y = (fabs(dy) < sqrt(it_tol)) ? true : false;
-	dz = x_1[2] - x_0[2];
-	use_derivative_z = (fabs(dz) < sqrt(it_tol)) ? true : false;
+	incr[0] = x_1[0] - x_0[0];
+	use_derivative[0] = (fabs(incr[0]) < sqrt(it_tol)) ? true : false;
+	incr[1] = x_1[1] - x_0[1];
+	use_derivative[1] = (fabs(incr[1]) < sqrt(it_tol)) ? true : false;
+	incr[2] = x_1[2] - x_0[2];
+	use_derivative[2] = (fabs(incr[2]) < sqrt(it_tol)) ? true : false;
 
 	//Terms with all old velocities
 	//Common to all directions
-	u[0] = u_0[0]; 
-	u[1] = u_0[1]; 
-	u[2] = u_0[2]; 
+	u[0] = u_0[0]; u[1] = u_0[1]; u[2] = u_0[2]; 
+	aux_x0[0] = x_0[0]; aux_x0[1] = x_0[1]; aux_x0[2] = x_0[2];
+	aux_x1[0] = x_1[0]; aux_x1[1] = x_0[1]; aux_x1[2] = x_0[2];
+	SingleTermHelper(aux_x0, aux_x1, u, use_derivative, 0, x_step, spin, it_tol, H);
 
-	ComputeMetricAndInverse(x_0[0],x_0[1],x_0[2], is_minkowski, spin, gl_0, gu_0); 
-
-	ComputeMetricAndInverse(x_1[0],x_0[1],x_0[2], is_minkowski, spin, gl_1, gu_1); 
-	if (use_derivative_x){
-		ComputeMetricAndInverse(x_0[0]-x_step,x_0[1],x_0[2], is_minkowski, spin, aux_gl_1, aux_gu_1); 
-		ComputeMetricAndInverse(x_0[0]+x_step,x_0[1],x_0[2], is_minkowski, spin, aux_gl_0, aux_gu_0);
-	        for(int i=0; i<4; ++i){
-			for(int j=0; j<4; ++j){
-				aux_gu_0[i][j] -= aux_gu_1[i][j];
-				aux_gu_0[i][j] /= (2.0*x_step);
-			}
-		}	
-		ComputeAndAddSingleTerm_Velocity(gu_0, gu_1, aux_gu_0, u, &H[0]);
-	}else{
-		ComputeAndAddSingleTerm_Velocity(gu_0, gu_1, u, &H[0]);
-	}
+	aux_x1[0] = x_0[0]; aux_x1[1] = x_1[1]; aux_x1[2] = x_0[2];
+	SingleTermHelper(aux_x0, aux_x1, u, use_derivative, 1, x_step, spin, it_tol, H);
 	
-	// Change only _1 quantities as old quantities are unchanged
-	ComputeMetricAndInverse(x_0[0],x_1[1],x_0[2], is_minkowski, spin, gl_1, gu_1); 
-	if (use_derivative_y){
-		ComputeMetricAndInverse(x_0[0],x_0[1]-x_step,x_0[2], is_minkowski, spin, aux_gl_1, aux_gu_1); 
-		ComputeMetricAndInverse(x_0[0],x_0[1]+x_step,x_0[2], is_minkowski, spin, aux_gl_0, aux_gu_0);
-	        for(int i=0; i<4; ++i){
-			for(int j=0; j<4; ++j){
-				aux_gu_0[i][j] -= aux_gu_1[i][j];
-				aux_gu_0[i][j] /= (2.0*x_step);
-			}
-		}	
-		ComputeAndAddSingleTerm_Velocity(gu_0, gu_1, aux_gu_0, u, &H[1]);
-	}else{
-		ComputeAndAddSingleTerm_Velocity(gu_0, gu_1, u, &H[1]);
-	}
-
-	ComputeMetricAndInverse(x_0[0],x_0[1],x_1[2], is_minkowski, spin, gl_1, gu_1); 
-	if (use_derivative_z){
-		ComputeMetricAndInverse(x_0[0],x_0[1],x_0[2]-x_step, is_minkowski, spin, aux_gl_1, aux_gu_1); 
-		ComputeMetricAndInverse(x_0[0],x_0[1],x_0[2]+x_step, is_minkowski, spin, aux_gl_0, aux_gu_0);
-	        for(int i=0; i<4; ++i){
-			for(int j=0; j<4; ++j){
-				aux_gu_0[i][j] -= aux_gu_1[i][j];
-				aux_gu_0[i][j] /= (2.0*x_step);
-			}
-		}	
-		ComputeAndAddSingleTerm_Velocity(gu_0, gu_1, aux_gu_0, u, &H[2]);
-	}else{
-		ComputeAndAddSingleTerm_Velocity(gu_0, gu_1, u, &H[2]);
-	}
+	aux_x1[0] = x_0[0]; aux_x1[1] = x_0[1]; aux_x1[2] = x_1[2];
+	SingleTermHelper(aux_x0, aux_x1, u, use_derivative, 2, x_step, spin, it_tol, H);
 
 	//Terms with all new velocities
 	//Common to all directions
-	u[0] = u_1[0]; 
-	u[1] = u_1[1]; 
-	u[2] = u_1[2]; 
+	u[0] = u_1[0]; u[1] = u_1[1]; u[2] = u_1[2]; 
+	aux_x0[0] = x_0[0]; aux_x0[1] = x_1[1]; aux_x0[2] = x_1[2];
+	aux_x1[0] = x_1[0]; aux_x1[1] = x_1[1]; aux_x1[2] = x_1[2];
+	SingleTermHelper(aux_x0, aux_x1, u, use_derivative, 0, x_step, spin, it_tol, H);
 
-	// Notice inversion of gu_1 and gu_0 as constant
-	ComputeMetricAndInverse(x_1[0],x_1[1],x_1[2], is_minkowski, spin, gl_1, gu_1); 
+	aux_x1[0] = x_1[0]; aux_x1[1] = x_0[1]; aux_x1[2] = x_1[2];
+	SingleTermHelper(aux_x0, aux_x1, u, use_derivative, 1, x_step, spin, it_tol, H);
 
-	ComputeMetricAndInverse(x_0[0],x_1[1],x_1[2], is_minkowski, spin, gl_0, gu_0); 
-	if (use_derivative_x){
-		ComputeMetricAndInverse(x_1[0]-x_step,x_1[1],x_1[2], is_minkowski, spin, aux_gl_1, aux_gu_1); 
-		ComputeMetricAndInverse(x_1[0]+x_step,x_1[1],x_1[2], is_minkowski, spin, aux_gl_0, aux_gu_0);
-	        for(int i=0; i<4; ++i){
-			for(int j=0; j<4; ++j){
-				aux_gu_0[i][j] -= aux_gu_1[i][j];
-				aux_gu_0[i][j] /= (2.0*x_step);
-			}
-		}	
-		ComputeAndAddSingleTerm_Velocity(gu_0, gu_1, aux_gu_0, u, &H[0]);
-	}else{
-		ComputeAndAddSingleTerm_Velocity(gu_0, gu_1, u, &H[0]);
-	}
+	aux_x1[0] = x_1[0]; aux_x1[1] = x_1[1]; aux_x1[2] = x_0[2];
+	SingleTermHelper(aux_x0, aux_x1, u, use_derivative, 2, x_step, spin, it_tol, H);
 
-	ComputeMetricAndInverse(x_1[0],x_0[1],x_1[2], is_minkowski, spin, gl_0, gu_0); 
-	if (use_derivative_y){
-		ComputeMetricAndInverse(x_1[0],x_1[1]-x_step,x_1[2], is_minkowski, spin, aux_gl_1, aux_gu_1); 
-		ComputeMetricAndInverse(x_1[0],x_1[1]+x_step,x_1[2], is_minkowski, spin, aux_gl_0, aux_gu_0);
-	        for(int i=0; i<4; ++i){
-			for(int j=0; j<4; ++j){
-				aux_gu_0[i][j] -= aux_gu_1[i][j];
-				aux_gu_0[i][j] /= (2.0*x_step);
-			}
-		}	
-		ComputeAndAddSingleTerm_Velocity(gu_0, gu_1, aux_gu_0, u, &H[1]);
-	}else{
-		ComputeAndAddSingleTerm_Velocity(gu_0, gu_1, u, &H[1]);
-	}
-
-	ComputeMetricAndInverse(x_1[0],x_1[1],x_0[2], is_minkowski, spin, gl_0, gu_0); 
-	if (use_derivative_z){
-		ComputeMetricAndInverse(x_1[0],x_1[1],x_1[2]-x_step, is_minkowski, spin, aux_gl_1, aux_gu_1); 
-		ComputeMetricAndInverse(x_1[0],x_1[1],x_1[2]+x_step, is_minkowski, spin, aux_gl_0, aux_gu_0);
-	        for(int i=0; i<4; ++i){
-			for(int j=0; j<4; ++j){
-				aux_gu_0[i][j] -= aux_gu_1[i][j];
-				aux_gu_0[i][j] /= (2.0*x_step);
-			}
-		}	
-		ComputeAndAddSingleTerm_Velocity(gu_0, gu_1, aux_gu_0, u, &H[2]);
-	}else{
-		ComputeAndAddSingleTerm_Velocity(gu_0, gu_1, u, &H[2]);
-	}
-	
 	//Terms with new velocities for y and z
 	//Common to terms 0 and 2
-	u[0] = u_0[0]; 
-	u[1] = u_1[1]; 
-	u[2] = u_1[2]; 
+	u[0] = u_0[0]; u[1] = u_1[1]; u[2] = u_1[2]; 
+	aux_x0[0] = x_0[0]; aux_x0[1] = x_1[1]; aux_x0[2] = x_1[2];
+	aux_x1[0] = x_1[0]; aux_x1[1] = x_1[1]; aux_x1[2] = x_1[2];
+	SingleTermHelper(aux_x0, aux_x1, u, use_derivative, 0, x_step, spin, it_tol, H);
 
-	ComputeMetricAndInverse(x_0[0],x_1[1],x_1[2], is_minkowski, spin, gl_0, gu_0); 
-	ComputeMetricAndInverse(x_1[0],x_1[1],x_1[2], is_minkowski, spin, gl_1, gu_1); 
-	if (use_derivative_x){
-		ComputeMetricAndInverse(x_0[0]-x_step,x_1[1],x_1[2], is_minkowski, spin, aux_gl_1, aux_gu_1); 
-		ComputeMetricAndInverse(x_0[0]+x_step,x_1[1],x_1[2], is_minkowski, spin, aux_gl_0, aux_gu_0);
-	        for(int i=0; i<4; ++i){
-			for(int j=0; j<4; ++j){
-				aux_gu_0[i][j] -= aux_gu_1[i][j];
-				aux_gu_0[i][j] /= (2.0*x_step);
-			}
-		}	
-		ComputeAndAddSingleTerm_Velocity(gu_0, gu_1, aux_gu_0, u, &H[0]);
-	}else{
-		ComputeAndAddSingleTerm_Velocity(gu_0, gu_1, u, &H[0]);
-	}
-	
-	ComputeMetricAndInverse(x_0[0],x_1[1],x_0[2], is_minkowski, spin, gl_0, gu_0); 
-	ComputeMetricAndInverse(x_0[0],x_1[1],x_1[2], is_minkowski, spin, gl_1, gu_1); 
-	if (use_derivative_z){
-		ComputeMetricAndInverse(x_0[0],x_1[1],x_0[2]-x_step, is_minkowski, spin, aux_gl_1, aux_gu_1); 
-		ComputeMetricAndInverse(x_0[0],x_1[1],x_0[2]+x_step, is_minkowski, spin, aux_gl_0, aux_gu_0);
-	        for(int i=0; i<4; ++i){
-			for(int j=0; j<4; ++j){
-				aux_gu_0[i][j] -= aux_gu_1[i][j];
-				aux_gu_0[i][j] /= (2.0*x_step);
-			}
-		}	
-		ComputeAndAddSingleTerm_Velocity(gu_0, gu_1, aux_gu_0, u, &H[2]);
-	}else{
-		ComputeAndAddSingleTerm_Velocity(gu_0, gu_1, u, &H[2]);
-	}
+	aux_x0[0] = x_0[0]; aux_x0[1] = x_1[1]; aux_x0[2] = x_0[2];
+	aux_x1[0] = x_0[0]; aux_x1[1] = x_1[1]; aux_x1[2] = x_1[2];
+	SingleTermHelper(aux_x0, aux_x1, u, use_derivative, 2, x_step, spin, it_tol, H);
 	
 	//Terms with new velocities for x and y
 	//Common to terms 1 and 2
-	u[0] = u_1[0]; 
-	u[1] = u_1[1]; 
-	u[2] = u_0[2]; 
-
-	ComputeMetricAndInverse(x_1[0],x_0[1],x_0[2], is_minkowski, spin, gl_0, gu_0); 
-	ComputeMetricAndInverse(x_1[0],x_1[1],x_0[2], is_minkowski, spin, gl_1, gu_1); 
-	if (use_derivative_y){
-		ComputeMetricAndInverse(x_1[0],x_0[1]-x_step,x_0[2], is_minkowski, spin, aux_gl_1, aux_gu_1); 
-		ComputeMetricAndInverse(x_1[0],x_0[1]+x_step,x_0[2], is_minkowski, spin, aux_gl_0, aux_gu_0);
-	        for(int i=0; i<4; ++i){
-			for(int j=0; j<4; ++j){
-				aux_gu_0[i][j] -= aux_gu_1[i][j];
-				aux_gu_0[i][j] /= (2.0*x_step);
-			}
-		}	
-		ComputeAndAddSingleTerm_Velocity(gu_0, gu_1, aux_gu_0, u, &H[1]);
-	}else{
-		ComputeAndAddSingleTerm_Velocity(gu_0, gu_1, u, &H[1]);
-	}
+	u[0] = u_1[0]; u[1] = u_1[1]; u[2] = u_0[2]; 
+	aux_x0[0] = x_1[0]; aux_x0[1] = x_0[1]; aux_x0[2] = x_0[2];
+	aux_x1[0] = x_1[0]; aux_x1[1] = x_1[1]; aux_x1[2] = x_0[2];
+	SingleTermHelper(aux_x0, aux_x1, u, use_derivative, 1, x_step, spin, it_tol, H);
 	
-	ComputeMetricAndInverse(x_1[0],x_1[1],x_0[2], is_minkowski, spin, gl_0, gu_0); 
-	ComputeMetricAndInverse(x_1[0],x_1[1],x_1[2], is_minkowski, spin, gl_1, gu_1); 
-	if (use_derivative_z){
-		ComputeMetricAndInverse(x_1[0],x_1[1],x_0[2]-x_step, is_minkowski, spin, aux_gl_1, aux_gu_1); 
-		ComputeMetricAndInverse(x_1[0],x_1[1],x_0[2]+x_step, is_minkowski, spin, aux_gl_0, aux_gu_0);
-	        for(int i=0; i<4; ++i){
-			for(int j=0; j<4; ++j){
-				aux_gu_0[i][j] -= aux_gu_1[i][j];
-				aux_gu_0[i][j] /= (2.0*x_step);
-			}
-		}	
-		ComputeAndAddSingleTerm_Velocity(gu_0, gu_1, aux_gu_0, u, &H[2]);
-	}else{
-		ComputeAndAddSingleTerm_Velocity(gu_0, gu_1, u, &H[2]);
-	}
+	aux_x0[0] = x_1[0]; aux_x0[1] = x_1[1]; aux_x0[2] = x_0[2];
+	aux_x1[0] = x_1[0]; aux_x1[1] = x_1[1]; aux_x1[2] = x_1[2];
+	SingleTermHelper(aux_x0, aux_x1, u, use_derivative, 2, x_step, spin, it_tol, H);
 
 	//Terms with new velocities for x and z
 	//Common to terms 0 and 1
-	u[0] = u_1[0]; 
-	u[1] = u_0[1]; 
-	u[2] = u_1[2]; 
-
-	ComputeMetricAndInverse(x_0[0],x_0[1],x_1[2], is_minkowski, spin, gl_0, gu_0); 
-	ComputeMetricAndInverse(x_1[0],x_0[1],x_1[2], is_minkowski, spin, gl_1, gu_1); 
-	if (use_derivative_x){
-		ComputeMetricAndInverse(x_0[0]-x_step,x_0[1],x_1[2], is_minkowski, spin, aux_gl_1, aux_gu_1); 
-		ComputeMetricAndInverse(x_0[0]+x_step,x_0[1],x_1[2], is_minkowski, spin, aux_gl_0, aux_gu_0);
-	        for(int i=0; i<4; ++i){
-			for(int j=0; j<4; ++j){
-				aux_gu_0[i][j] -= aux_gu_1[i][j];
-				aux_gu_0[i][j] /= (2.0*x_step);
-			}
-		}	
-		ComputeAndAddSingleTerm_Velocity(gu_0, gu_1, aux_gu_0, u, &H[0]);
-	}else{
-		ComputeAndAddSingleTerm_Velocity(gu_0, gu_1, u, &H[0]);
-	}
+	u[0] = u_1[0]; u[1] = u_0[1]; u[2] = u_1[2]; 
+	aux_x0[0] = x_0[0]; aux_x0[1] = x_0[1]; aux_x0[2] = x_1[2];
+	aux_x1[0] = x_1[0]; aux_x1[1] = x_0[1]; aux_x1[2] = x_1[2];
+	SingleTermHelper(aux_x0, aux_x1, u, use_derivative, 0, x_step, spin, it_tol, H);
 	
-	ComputeMetricAndInverse(x_1[0],x_0[1],x_1[2], is_minkowski, spin, gl_0, gu_0); 
-	ComputeMetricAndInverse(x_1[0],x_1[1],x_1[2], is_minkowski, spin, gl_1, gu_1); 
-	if (use_derivative_y){
-		ComputeMetricAndInverse(x_1[0],x_0[1]-x_step,x_1[2], is_minkowski, spin, aux_gl_1, aux_gu_1); 
-		ComputeMetricAndInverse(x_1[0],x_0[1]+x_step,x_1[2], is_minkowski, spin, aux_gl_0, aux_gu_0);
-	        for(int i=0; i<4; ++i){
-			for(int j=0; j<4; ++j){
-				aux_gu_0[i][j] -= aux_gu_1[i][j];
-				aux_gu_0[i][j] /= (2.0*x_step);
-			}
-		}	
-		ComputeAndAddSingleTerm_Velocity(gu_0, gu_1, aux_gu_0, u, &H[1]);
-	}else{
-		ComputeAndAddSingleTerm_Velocity(gu_0, gu_1, u, &H[1]);
-	}
+	aux_x0[0] = x_1[0]; aux_x0[1] = x_0[1]; aux_x0[2] = x_1[2];
+	aux_x1[0] = x_1[0]; aux_x1[1] = x_1[1]; aux_x1[2] = x_1[2];
+	SingleTermHelper(aux_x0, aux_x1, u, use_derivative, 1, x_step, spin, it_tol, H);
 
 	//Terms with new velocities for y only
 	//Common to terms 1 and 2
-	u[0] = u_0[0]; 
-	u[1] = u_1[1]; 
-	u[2] = u_0[2]; 
-
-	ComputeMetricAndInverse(x_0[0],x_0[1],x_0[2], is_minkowski, spin, gl_0, gu_0); 
-	ComputeMetricAndInverse(x_0[0],x_1[1],x_0[2], is_minkowski, spin, gl_1, gu_1); 
-	if (use_derivative_y){
-		ComputeMetricAndInverse(x_0[0],x_0[1]-x_step,x_0[2], is_minkowski, spin, aux_gl_1, aux_gu_1); 
-		ComputeMetricAndInverse(x_0[0],x_0[1]+x_step,x_0[2], is_minkowski, spin, aux_gl_0, aux_gu_0);
-	        for(int i=0; i<4; ++i){
-			for(int j=0; j<4; ++j){
-				aux_gu_0[i][j] -= aux_gu_1[i][j];
-				aux_gu_0[i][j] /= (2.0*x_step);
-			}
-		}	
-		ComputeAndAddSingleTerm_Velocity(gu_0, gu_1, aux_gu_0, u, &H[1]);
-	}else{
-		ComputeAndAddSingleTerm_Velocity(gu_0, gu_1, u, &H[1]);
-	}
+	u[0] = u_0[0]; u[1] = u_1[1]; u[2] = u_0[2]; 
+	aux_x0[0] = x_0[0]; aux_x0[1] = x_0[1]; aux_x0[2] = x_0[2];
+	aux_x1[0] = x_0[0]; aux_x1[1] = x_1[1]; aux_x1[2] = x_0[2];
+	SingleTermHelper(aux_x0, aux_x1, u, use_derivative, 1, x_step, spin, it_tol, H);
 	
-	ComputeMetricAndInverse(x_0[0],x_1[1],x_0[2], is_minkowski, spin, gl_0, gu_0); 
-	ComputeMetricAndInverse(x_0[0],x_1[1],x_1[2], is_minkowski, spin, gl_1, gu_1); 
-	if (use_derivative_z){
-		ComputeMetricAndInverse(x_0[0],x_1[1],x_0[2]-x_step, is_minkowski, spin, aux_gl_1, aux_gu_1); 
-		ComputeMetricAndInverse(x_0[0],x_1[1],x_0[2]+x_step, is_minkowski, spin, aux_gl_0, aux_gu_0);
-	        for(int i=0; i<4; ++i){
-			for(int j=0; j<4; ++j){
-				aux_gu_0[i][j] -= aux_gu_1[i][j];
-				aux_gu_0[i][j] /= (2.0*x_step);
-			}
-		}	
-		ComputeAndAddSingleTerm_Velocity(gu_0, gu_1, aux_gu_0, u, &H[2]);
-	}else{
-		ComputeAndAddSingleTerm_Velocity(gu_0, gu_1, u, &H[2]);
-	}
+	aux_x0[0] = x_0[0]; aux_x0[1] = x_1[1]; aux_x0[2] = x_0[2];
+	aux_x1[0] = x_0[0]; aux_x1[1] = x_1[1]; aux_x1[2] = x_1[2];
+	SingleTermHelper(aux_x0, aux_x1, u, use_derivative, 2, x_step, spin, it_tol, H);
 
 	//Terms with new velocities for z only
 	//Common to terms 0 and 2
-	u[0] = u_0[0]; 
-	u[1] = u_0[1]; 
-	u[2] = u_1[2]; 
-
-	ComputeMetricAndInverse(x_0[0],x_0[1],x_1[2], is_minkowski, spin, gl_0, gu_0); 
-	ComputeMetricAndInverse(x_1[0],x_0[1],x_1[2], is_minkowski, spin, gl_1, gu_1); 
-	if (use_derivative_x){
-		ComputeMetricAndInverse(x_0[0]-x_step,x_0[1],x_1[2], is_minkowski, spin, aux_gl_1, aux_gu_1); 
-		ComputeMetricAndInverse(x_0[0]+x_step,x_0[1],x_1[2], is_minkowski, spin, aux_gl_0, aux_gu_0);
-	        for(int i=0; i<4; ++i){
-			for(int j=0; j<4; ++j){
-				aux_gu_0[i][j] -= aux_gu_1[i][j];
-				aux_gu_0[i][j] /= (2.0*x_step);
-			}
-		}	
-		ComputeAndAddSingleTerm_Velocity(gu_0, gu_1, aux_gu_0, u, &H[0]);
-	}else{
-		ComputeAndAddSingleTerm_Velocity(gu_0, gu_1, u, &H[0]);
-	}
+	u[0] = u_0[0]; u[1] = u_0[1]; u[2] = u_1[2]; 
+	aux_x0[0] = x_0[0]; aux_x0[1] = x_0[1]; aux_x0[2] = x_1[2];
+	aux_x1[0] = x_1[0]; aux_x1[1] = x_0[1]; aux_x1[2] = x_1[2];
+	SingleTermHelper(aux_x0, aux_x1, u, use_derivative, 0, x_step, spin, it_tol, H);
 	
-	ComputeMetricAndInverse(x_0[0],x_0[1],x_0[2], is_minkowski, spin, gl_0, gu_0); 
-	ComputeMetricAndInverse(x_0[0],x_0[1],x_1[2], is_minkowski, spin, gl_1, gu_1); 
-	if (use_derivative_z){
-		ComputeMetricAndInverse(x_0[0],x_0[1],x_0[2]-x_step, is_minkowski, spin, aux_gl_1, aux_gu_1); 
-		ComputeMetricAndInverse(x_0[0],x_0[1],x_0[2]+x_step, is_minkowski, spin, aux_gl_0, aux_gu_0);
-	        for(int i=0; i<4; ++i){
-			for(int j=0; j<4; ++j){
-				aux_gu_0[i][j] -= aux_gu_1[i][j];
-				aux_gu_0[i][j] /= (2.0*x_step);
-			}
-		}	
-		ComputeAndAddSingleTerm_Velocity(gu_0, gu_1, aux_gu_0, u, &H[2]);
-	}else{
-		ComputeAndAddSingleTerm_Velocity(gu_0, gu_1, u, &H[2]);
-	}
+	aux_x0[0] = x_0[0]; aux_x0[1] = x_0[1]; aux_x0[2] = x_0[2];
+	aux_x1[0] = x_0[0]; aux_x1[1] = x_0[1]; aux_x1[2] = x_1[2];
+	SingleTermHelper(aux_x0, aux_x1, u, use_derivative, 2, x_step, spin, it_tol, H);
 
 	//Terms with new velocities for x only
 	//Common to terms 0 and 1
-	u[0] = u_1[0]; 
-	u[1] = u_0[1]; 
-	u[2] = u_0[2]; 
+	u[0] = u_1[0]; u[1] = u_0[1]; u[2] = u_0[2]; 
+	aux_x0[0] = x_0[0]; aux_x0[1] = x_0[1]; aux_x0[2] = x_0[2];
+	aux_x1[0] = x_1[0]; aux_x1[1] = x_0[1]; aux_x1[2] = x_0[2];
+	SingleTermHelper(aux_x0, aux_x1, u, use_derivative, 0, x_step, spin, it_tol, H);
 
-	ComputeMetricAndInverse(x_0[0],x_0[1],x_0[2], is_minkowski, spin, gl_0, gu_0); 
-	ComputeMetricAndInverse(x_1[0],x_0[1],x_0[2], is_minkowski, spin, gl_1, gu_1); 
-	if (use_derivative_x){
-		ComputeMetricAndInverse(x_0[0]-x_step,x_0[1],x_0[2], is_minkowski, spin, aux_gl_1, aux_gu_1); 
-		ComputeMetricAndInverse(x_0[0]+x_step,x_0[1],x_0[2], is_minkowski, spin, aux_gl_0, aux_gu_0);
-	        for(int i=0; i<4; ++i){
-			for(int j=0; j<4; ++j){
-				aux_gu_0[i][j] -= aux_gu_1[i][j];
-				aux_gu_0[i][j] /= (2.0*x_step);
-			}
-		}	
-		ComputeAndAddSingleTerm_Velocity(gu_0, gu_1, aux_gu_0, u, &H[0]);
-	}else{
-		ComputeAndAddSingleTerm_Velocity(gu_0, gu_1, u, &H[0]);
-	}
+	aux_x0[0] = x_1[0]; aux_x0[1] = x_0[1]; aux_x0[2] = x_0[2];
+	aux_x1[0] = x_1[0]; aux_x1[1] = x_1[1]; aux_x1[2] = x_0[2];
+	SingleTermHelper(aux_x0, aux_x1, u, use_derivative, 1, x_step, spin, it_tol, H);
 
-	ComputeMetricAndInverse(x_1[0],x_0[1],x_0[2], is_minkowski, spin, gl_0, gu_0); 
-	ComputeMetricAndInverse(x_1[0],x_1[1],x_0[2], is_minkowski, spin, gl_1, gu_1); 
-	if (use_derivative_y){
-		ComputeMetricAndInverse(x_1[0],x_0[1]-x_step,x_0[2], is_minkowski, spin, aux_gl_1, aux_gu_1); 
-		ComputeMetricAndInverse(x_1[0],x_0[1]+x_step,x_0[2], is_minkowski, spin, aux_gl_0, aux_gu_0);
-	        for(int i=0; i<4; ++i){
-			for(int j=0; j<4; ++j){
-				aux_gu_0[i][j] -= aux_gu_1[i][j];
-				aux_gu_0[i][j] /= (2.0*x_step);
-			}
-		}	
-		ComputeAndAddSingleTerm_Velocity(gu_0, gu_1, aux_gu_0, u, &H[1]);
-	}else{
-		ComputeAndAddSingleTerm_Velocity(gu_0, gu_1, u, &H[1]);
-	}
+	for (int i=0; i<3; ++i){
+	       	H[i] /= 6.0;
+		if (!use_derivative[i]) { H[i] /= incr[i]; }
 
-	for (int i=0; i<3; ++i){ H[i] /= 6.0; }
-	if (!use_derivative_x){	H[0] /= dx; }
-	if (!use_derivative_y){	H[1] /= dy; }
-	if (!use_derivative_z){	H[2] /= dz; }
+       	}
 }
 
 //----------------------------------------------------------------------------------------
@@ -899,10 +686,6 @@ void Particles::BorisStep( const Real dt, const bool only_v ){
 	// any massless particle that can interact with an 
 	// electromagnetic field (unless one goes into quantum mechanics)
 	g_Lor = sqrt(1.0 + g_Lor)/sqrt(-gupper[0][0]);
-	//Boost velocities
-	// for ( int i=0; i<3; ++i){
-	// 	u_con[i] *= g_Lor;
-	// }
 
 	x[0] = pr(IPX,p) + dt/(2.0)*(u_con[0]/g_Lor + gupper[0][1]/gupper[0][0]) ;
         if (multi_d) { x[1] = pr(IPY,p) + dt/(2.0)*(u_con[1]/g_Lor + gupper[0][2]/gupper[0][0]) ; }
