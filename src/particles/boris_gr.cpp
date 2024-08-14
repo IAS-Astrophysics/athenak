@@ -30,17 +30,14 @@ void GetUpperAdmMetric( const Real inputMat[][4], Real outputMat[][3] ){
 //! \brief
 //! Helper function to reduce amount of repetition in HamiltonEquation_Position
 KOKKOS_INLINE_FUNCTION
-void SingleTermHelper_Position(const Real * u_0, const Real * u_1, const Real gupper[][4], const int dir, Real * H){
+void SingleTermHelper_Position(const Real * u_0, const Real * u_1, const Real alpha, const Real beta, const Real ADM[][3], const int dir, Real * H){
 
 	Real massive = 1.0; //todo for photons/massless particles this needs to be 0: condition on ptype
 	Real U_1, U_0, perp;
 	int i1, i2;
-	Real ADM[3][3];
 	if (dir == 0) { i1 = 1; i2 = 2; }
 	else if (dir == 1) { i1 = 0; i2 = 2; }
 	else if (dir == 2) { i1 = 0; i2 = 1; }
-
-	GetUpperAdmMetric( gupper, ADM );
 
 	perp = ADM[i1][i1]*SQR(u_0[i1]) + ADM[i2][i2]*SQR(u_0[i2]) + 2.0*ADM[i1][i2]*u_0[i1]*u_0[i2];
 	U_1 = ADM[dir][dir]*SQR(u_1[dir]) + 2.0*ADM[dir][i1]*u_1[dir]*u_1[i1] + 2.0*ADM[dir][i2]*u_1[dir]*u_1[i2];
@@ -50,11 +47,11 @@ void SingleTermHelper_Position(const Real * u_0, const Real * u_1, const Real gu
 	U_0 += perp;	
 	U_0 = sqrt(U_0 + massive); 
 	// Alpha term
-	H[dir] += sqrt(-1.0/gupper[0][0])*(
+	H[dir] += alpha*(
 		ADM[dir][dir]*(u_1[dir]+u_0[dir]) + 2.0*ADM[dir][i1]*u_1[i1] + 2.0*ADM[dir][i2]*u_1[i2]
 	       	)/(U_0 + U_1);
 	// Beta term
-	H[dir] += gupper[0][dir+1]/gupper[0][0];
+	H[dir] += beta;
 }
 
 //----------------------------------------------------------------------------------------
@@ -68,7 +65,7 @@ KOKKOS_INLINE_FUNCTION
 void HamiltonEquation_Position(const Real * x_0, const Real * x_1, const Real * u_0, const Real * u_1, const Real spin, Real * H){
 
 	const bool is_minkowski = false; //Since this function is only for the GR pusher, this can be kept as a ``constant''
-	Real glower[4][4], gupper[4][4]; // Metric components
+	Real glower[4][4], gupper[4][4], ADM_g[3][3]; // Metric components
 	Real aux_u0[3], aux_u1[3]; //Send these to helper function on a 'per-case' basis
 				   // Assembling these requires referring to the paper for the correct combinations
 
@@ -77,107 +74,115 @@ void HamiltonEquation_Position(const Real * x_0, const Real * x_1, const Real * 
 	//Metric with all old positions
 	//Common to all terms
 	ComputeMetricAndInverse(x_0[0],x_0[1],x_0[2], is_minkowski, spin, glower, gupper); 
+	GetUpperAdmMetric( gupper, ADM_g );
 	
         aux_u0[0] = u_0[0]; aux_u0[1] = u_0[1]; aux_u0[2] = u_0[2];
         aux_u1[0] = u_1[0]; aux_u1[1] = u_0[1]; aux_u1[2] = u_0[2];
-        SingleTermHelper_Position(aux_u0, aux_u1, gupper, 0, H);
+        SingleTermHelper_Position(aux_u0, aux_u1, sqrt(-1.0/gupper[0][0]), gupper[0][1]/gupper[0][0], ADM_g, 0, H);
 
         aux_u1[0] = u_0[0]; aux_u1[1] = u_1[1]; aux_u1[2] = u_0[2];
-        SingleTermHelper_Position(aux_u0, aux_u1, gupper, 1, H);
+        SingleTermHelper_Position(aux_u0, aux_u1, sqrt(-1.0/gupper[0][0]), gupper[0][2]/gupper[0][0], ADM_g, 1, H);
 
         aux_u1[0] = u_0[0]; aux_u1[1] = u_0[1]; aux_u1[2] = u_1[2];
-        SingleTermHelper_Position(aux_u0, aux_u1, gupper, 2, H);
+        SingleTermHelper_Position(aux_u0, aux_u1, sqrt(-1.0/gupper[0][0]), gupper[0][3]/gupper[0][0], ADM_g, 2, H);
 	
 	//Metric with all new positions
 	//Common to all terms
 	ComputeMetricAndInverse(x_1[0],x_1[1],x_1[2], is_minkowski, spin, glower, gupper); 
+	GetUpperAdmMetric( gupper, ADM_g );
 
         aux_u0[0] = u_0[0]; aux_u0[1] = u_1[1]; aux_u0[2] = u_1[2];
         aux_u1[0] = u_1[0]; aux_u1[1] = u_1[1]; aux_u1[2] = u_1[2];
-        SingleTermHelper_Position(aux_u0, aux_u1, gupper, 0, H);
+        SingleTermHelper_Position(aux_u0, aux_u1, sqrt(-1.0/gupper[0][0]), gupper[0][1]/gupper[0][0], ADM_g, 0, H);
 
         aux_u0[0] = u_1[0]; aux_u0[1] = u_0[1]; aux_u0[2] = u_1[2];
-        SingleTermHelper_Position(aux_u0, aux_u1, gupper, 1, H);
+        SingleTermHelper_Position(aux_u0, aux_u1, sqrt(-1.0/gupper[0][0]), gupper[0][2]/gupper[0][0], ADM_g, 1, H);
 
         aux_u0[0] = u_1[0]; aux_u0[1] = u_1[1]; aux_u0[2] = u_0[2];
-        SingleTermHelper_Position(aux_u0, aux_u1, gupper, 2, H);
+        SingleTermHelper_Position(aux_u0, aux_u1, sqrt(-1.0/gupper[0][0]), gupper[0][3]/gupper[0][0], ADM_g, 2, H);
 
 	//
 	//Metric with x_0[0], x_1[1], x_1[2]
 	//Common to terms 0 and 2
 	ComputeMetricAndInverse(x_0[0],x_1[1],x_1[2], is_minkowski, spin, glower, gupper); 
+	GetUpperAdmMetric( gupper, ADM_g );
 
         aux_u0[0] = u_0[0]; aux_u0[1] = u_1[1]; aux_u0[2] = u_1[2];
-        SingleTermHelper_Position(aux_u0, aux_u1, gupper, 0, H);
+        SingleTermHelper_Position(aux_u0, aux_u1, sqrt(-1.0/gupper[0][0]), gupper[0][1]/gupper[0][0], ADM_g, 0, H);
 
         aux_u0[0] = u_0[0]; aux_u0[1] = u_1[1]; aux_u0[2] = u_0[2];
         aux_u1[0] = u_0[0]; aux_u1[1] = u_1[1]; aux_u1[2] = u_1[2];
-        SingleTermHelper_Position(aux_u0, aux_u1, gupper, 2, H);
+        SingleTermHelper_Position(aux_u0, aux_u1, sqrt(-1.0/gupper[0][0]), gupper[0][3]/gupper[0][0], ADM_g, 2, H);
 
 	//
 	//Metric with x_1[0], x_0[1], x_0[2]
 	//Common to terms 0 and 1
 	ComputeMetricAndInverse(x_1[0],x_0[1],x_0[2], is_minkowski, spin, glower, gupper); 
+	GetUpperAdmMetric( gupper, ADM_g );
 
         aux_u0[0] = u_0[0]; aux_u0[1] = u_0[1]; aux_u0[2] = u_0[2];
         aux_u1[0] = u_1[0]; aux_u1[1] = u_0[1]; aux_u1[2] = u_0[2];
-        SingleTermHelper_Position(aux_u0, aux_u1, gupper, 0, H);
+        SingleTermHelper_Position(aux_u0, aux_u1, sqrt(-1.0/gupper[0][0]), gupper[0][1]/gupper[0][0], ADM_g, 0, H);
 	
         aux_u0[0] = u_1[0]; aux_u0[1] = u_0[1]; aux_u0[2] = u_0[2];
         aux_u1[0] = u_1[0]; aux_u1[1] = u_1[1]; aux_u1[2] = u_0[2];
-        SingleTermHelper_Position(aux_u0, aux_u1, gupper, 1, H);
+        SingleTermHelper_Position(aux_u0, aux_u1, sqrt(-1.0/gupper[0][0]), gupper[0][2]/gupper[0][0], ADM_g, 1, H);
 
 	//
 	//Metric with x_1[0], x_0[1], x_1[2]
 	//Common to terms 0 and 1
 	ComputeMetricAndInverse(x_1[0],x_0[1],x_1[2], is_minkowski, spin, glower, gupper); 
+	GetUpperAdmMetric( gupper, ADM_g );
 
         aux_u0[0] = u_0[0]; aux_u0[1] = u_0[1]; aux_u0[2] = u_1[2];
         aux_u1[0] = u_1[0]; aux_u1[1] = u_0[1]; aux_u1[2] = u_1[2];
-        SingleTermHelper_Position(aux_u0, aux_u1, gupper, 0, H);
+        SingleTermHelper_Position(aux_u0, aux_u1, sqrt(-1.0/gupper[0][0]), gupper[0][1]/gupper[0][0], ADM_g, 0, H);
 	
         aux_u0[0] = u_1[0]; aux_u0[1] = u_0[1]; aux_u0[2] = u_1[2];
         aux_u1[0] = u_1[0]; aux_u1[1] = u_1[1]; aux_u1[2] = u_1[2];
-        SingleTermHelper_Position(aux_u0, aux_u1, gupper, 1, H);
+        SingleTermHelper_Position(aux_u0, aux_u1, sqrt(-1.0/gupper[0][0]), gupper[0][2]/gupper[0][0], ADM_g, 1, H);
 
 	//
 	//Metric with x_0[0], x_0[1], x_1[2]
 	//Common to terms 0 and 2
 	ComputeMetricAndInverse(x_0[0],x_0[1],x_1[2], is_minkowski, spin, glower, gupper); 
+	GetUpperAdmMetric( gupper, ADM_g );
 
         aux_u0[0] = u_0[0]; aux_u0[1] = u_0[1]; aux_u0[2] = u_1[2];
         aux_u1[0] = u_1[0]; aux_u1[1] = u_0[1]; aux_u1[2] = u_1[2];
-        SingleTermHelper_Position(aux_u0, aux_u1, gupper, 0, H);
+        SingleTermHelper_Position(aux_u0, aux_u1, sqrt(-1.0/gupper[0][0]), gupper[0][1]/gupper[0][0], ADM_g, 0, H);
 
         aux_u0[0] = u_0[0]; aux_u0[1] = u_0[1]; aux_u0[2] = u_0[2];
         aux_u1[0] = u_0[0]; aux_u1[1] = u_0[1]; aux_u1[2] = u_1[2];
-        SingleTermHelper_Position(aux_u0, aux_u1, gupper, 2, H);
+        SingleTermHelper_Position(aux_u0, aux_u1, sqrt(-1.0/gupper[0][0]), gupper[0][3]/gupper[0][0], ADM_g, 2, H);
 
 	//
 	//Metric with x_1[0], x_1[1], x_0[2]
 	//Common to terms 1 and 2
 	ComputeMetricAndInverse(x_1[0],x_1[1],x_0[2], is_minkowski, spin, glower, gupper); 
+	GetUpperAdmMetric( gupper, ADM_g );
 
         aux_u0[0] = u_1[0]; aux_u0[1] = u_0[1]; aux_u0[2] = u_0[2];
         aux_u1[0] = u_1[0]; aux_u1[1] = u_1[1]; aux_u1[2] = u_0[2];
-        SingleTermHelper_Position(aux_u0, aux_u1, gupper, 1, H);
+        SingleTermHelper_Position(aux_u0, aux_u1, sqrt(-1.0/gupper[0][0]), gupper[0][2]/gupper[0][0], ADM_g, 1, H);
 
         aux_u0[0] = u_1[0]; aux_u0[1] = u_1[1]; aux_u0[2] = u_0[2];
         aux_u1[0] = u_1[0]; aux_u1[1] = u_1[1]; aux_u1[2] = u_1[2];
-        SingleTermHelper_Position(aux_u0, aux_u1, gupper, 2, H);
+        SingleTermHelper_Position(aux_u0, aux_u1, sqrt(-1.0/gupper[0][0]), gupper[0][3]/gupper[0][0], ADM_g, 2, H);
 
 	//
 	//Metric with x_0[0], x_1[1], x_0[2]
 	//Common to terms 1 and 2
 	ComputeMetricAndInverse(x_0[0],x_1[1],x_0[2], is_minkowski, spin, glower, gupper); 
+	GetUpperAdmMetric( gupper, ADM_g );
 
         aux_u0[0] = u_0[0]; aux_u0[1] = u_0[1]; aux_u0[2] = u_0[2];
         aux_u1[0] = u_0[0]; aux_u1[1] = u_1[1]; aux_u1[2] = u_0[2];
-        SingleTermHelper_Position(aux_u0, aux_u1, gupper, 1, H);
+        SingleTermHelper_Position(aux_u0, aux_u1, sqrt(-1.0/gupper[0][0]), gupper[0][2]/gupper[0][0], ADM_g, 1, H);
 
         aux_u0[0] = u_0[0]; aux_u0[1] = u_1[1]; aux_u0[2] = u_0[2];
         aux_u1[0] = u_0[0]; aux_u1[1] = u_1[1]; aux_u1[2] = u_1[2];
-        SingleTermHelper_Position(aux_u0, aux_u1, gupper, 2, H);
+        SingleTermHelper_Position(aux_u0, aux_u1, sqrt(-1.0/gupper[0][0]), gupper[0][3]/gupper[0][0], ADM_g, 2, H);
 	
 	for (int i=0; i<3; ++i){ H[i] /= 6.0; }
 }
