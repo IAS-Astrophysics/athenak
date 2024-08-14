@@ -277,31 +277,31 @@ void ComputeAndAddSingleTerm_Velocity(const Real gu_0[4][4], const Real gu_1[4][
 //! \brief
 //! Helper function to reduce amount of repetition in HamiltonEquation_Velocity
 KOKKOS_INLINE_FUNCTION
-void SingleTermHelper_Velocity(const Real * x_0, const Real * x_1, const Real * u, const bool * use_der, const int dir, const Real x_step, const Real spin, Real * H){
+void SingleTermHelper_Velocity(const Real * x_0, const Real * x_1, const Real * u, const bool use_der, const int dir, const Real x_step, const Real spin, Real * H){
 
 	const bool is_minkowski = false; //Since this function is only for the GR pusher, this can be kept as a ``constant''
-	Real gl_0[4][4], gu_0[4][4], gl_1[4][4], gu_1[4][4]; // Metric components
-	Real aux_gl_0[4][4], aux_gu_0[4][4], aux_gl_1[4][4], aux_gu_1[4][4]; // Metric components
+	Real gl[4][4], gu_0[4][4], gu_1[4][4]; // Metric components
+	Real aux_gu_0[4][4], aux_gu_1[4][4]; // Metric components
 	int dir_fac[3] = {0,0,0}; 
 	dir_fac[dir] = 1; // Use this to perform step only in direction of interest
 
-	ComputeMetricAndInverse(x_0[0],x_0[1],x_0[2], is_minkowski, spin, gl_0, gu_0); 
-	ComputeMetricAndInverse(x_1[0],x_1[1],x_1[2], is_minkowski, spin, gl_1, gu_1); 
+	ComputeMetricAndInverse(x_0[0],x_0[1],x_0[2], is_minkowski, spin, gl, gu_0); 
+	ComputeMetricAndInverse(x_1[0],x_1[1],x_1[2], is_minkowski, spin, gl, gu_1); 
 
-	if (use_der[dir]){
+	if (use_der){
 		ComputeMetricAndInverse(x_0[0]-x_step*dir_fac[0], x_0[1]-x_step*dir_fac[1], x_0[2]-x_step*dir_fac[2],
-			       	is_minkowski, spin, aux_gl_1, aux_gu_1); 
+			       	is_minkowski, spin, gl, aux_gu_1); 
 		ComputeMetricAndInverse(x_0[0]+x_step*dir_fac[0], x_0[1]+x_step*dir_fac[1], x_0[2]+x_step*dir_fac[2],
-			       	is_minkowski, spin, aux_gl_0, aux_gu_0); 
+			       	is_minkowski, spin, gl, aux_gu_0); 
 	        for(int i=0; i<4; ++i){
 			for(int j=0; j<4; ++j){
 				aux_gu_0[i][j] -= aux_gu_1[i][j];
 				aux_gu_0[i][j] /= (2.0*x_step);
 			}
 		}	
-		ComputeAndAddSingleTerm_Velocity(gu_0, gu_1, aux_gu_0, u, &H[dir]);
+		ComputeAndAddSingleTerm_Velocity(gu_0, gu_1, aux_gu_0, u, H);
 	}else{
-		ComputeAndAddSingleTerm_Velocity(gu_0, gu_1, u, &H[dir]);
+		ComputeAndAddSingleTerm_Velocity(gu_0, gu_1, u, H);
 	}
 									     //
 }
@@ -335,92 +335,92 @@ void HamiltonEquation_Velocity(const Real * x_0, const Real * x_1, const Real * 
 	u[0] = u_0[0]; u[1] = u_0[1]; u[2] = u_0[2]; 
 	aux_x0[0] = x_0[0]; aux_x0[1] = x_0[1]; aux_x0[2] = x_0[2];
 	aux_x1[0] = x_1[0]; aux_x1[1] = x_0[1]; aux_x1[2] = x_0[2];
-	SingleTermHelper_Velocity(aux_x0, aux_x1, u, use_derivative, 0, x_step, spin, H);
+	SingleTermHelper_Velocity(aux_x0, aux_x1, u, use_derivative[0], 0, x_step, spin, &H[0]);
 
 	aux_x1[0] = x_0[0]; aux_x1[1] = x_1[1]; aux_x1[2] = x_0[2];
-	SingleTermHelper_Velocity(aux_x0, aux_x1, u, use_derivative, 1, x_step, spin, H);
+	SingleTermHelper_Velocity(aux_x0, aux_x1, u, use_derivative[1], 1, x_step, spin, &H[1]);
 	
 	aux_x1[0] = x_0[0]; aux_x1[1] = x_0[1]; aux_x1[2] = x_1[2];
-	SingleTermHelper_Velocity(aux_x0, aux_x1, u, use_derivative, 2, x_step, spin, H);
+	SingleTermHelper_Velocity(aux_x0, aux_x1, u, use_derivative[2], 2, x_step, spin, &H[2]);
 
 	//Terms with all new velocities
 	//Common to all directions
 	u[0] = u_1[0]; u[1] = u_1[1]; u[2] = u_1[2]; 
 	aux_x0[0] = x_0[0]; aux_x0[1] = x_1[1]; aux_x0[2] = x_1[2];
 	aux_x1[0] = x_1[0]; aux_x1[1] = x_1[1]; aux_x1[2] = x_1[2];
-	SingleTermHelper_Velocity(aux_x0, aux_x1, u, use_derivative, 0, x_step, spin, H);
+	SingleTermHelper_Velocity(aux_x0, aux_x1, u, use_derivative[0], 0, x_step, spin, &H[0]);
 
 	aux_x1[0] = x_1[0]; aux_x1[1] = x_0[1]; aux_x1[2] = x_1[2];
-	SingleTermHelper_Velocity(aux_x0, aux_x1, u, use_derivative, 1, x_step, spin, H);
+	SingleTermHelper_Velocity(aux_x0, aux_x1, u, use_derivative[1], 1, x_step, spin, &H[1]);
 
 	aux_x1[0] = x_1[0]; aux_x1[1] = x_1[1]; aux_x1[2] = x_0[2];
-	SingleTermHelper_Velocity(aux_x0, aux_x1, u, use_derivative, 2, x_step, spin, H);
+	SingleTermHelper_Velocity(aux_x0, aux_x1, u, use_derivative[2], 2, x_step, spin, &H[2]);
 
 	//Terms with new velocities for y and z
 	//Common to terms 0 and 2
 	u[0] = u_0[0]; u[1] = u_1[1]; u[2] = u_1[2]; 
 	aux_x0[0] = x_0[0]; aux_x0[1] = x_1[1]; aux_x0[2] = x_1[2];
 	aux_x1[0] = x_1[0]; aux_x1[1] = x_1[1]; aux_x1[2] = x_1[2];
-	SingleTermHelper_Velocity(aux_x0, aux_x1, u, use_derivative, 0, x_step, spin, H);
+	SingleTermHelper_Velocity(aux_x0, aux_x1, u, use_derivative[0], 0, x_step, spin, &H[0]);
 
 	aux_x0[0] = x_0[0]; aux_x0[1] = x_1[1]; aux_x0[2] = x_0[2];
 	aux_x1[0] = x_0[0]; aux_x1[1] = x_1[1]; aux_x1[2] = x_1[2];
-	SingleTermHelper_Velocity(aux_x0, aux_x1, u, use_derivative, 2, x_step, spin, H);
+	SingleTermHelper_Velocity(aux_x0, aux_x1, u, use_derivative[2], 2, x_step, spin, &H[2]);
 	
 	//Terms with new velocities for x and y
 	//Common to terms 1 and 2
 	u[0] = u_1[0]; u[1] = u_1[1]; u[2] = u_0[2]; 
 	aux_x0[0] = x_1[0]; aux_x0[1] = x_0[1]; aux_x0[2] = x_0[2];
 	aux_x1[0] = x_1[0]; aux_x1[1] = x_1[1]; aux_x1[2] = x_0[2];
-	SingleTermHelper_Velocity(aux_x0, aux_x1, u, use_derivative, 1, x_step, spin, H);
+	SingleTermHelper_Velocity(aux_x0, aux_x1, u, use_derivative[1], 1, x_step, spin, &H[1]);
 	
 	aux_x0[0] = x_1[0]; aux_x0[1] = x_1[1]; aux_x0[2] = x_0[2];
 	aux_x1[0] = x_1[0]; aux_x1[1] = x_1[1]; aux_x1[2] = x_1[2];
-	SingleTermHelper_Velocity(aux_x0, aux_x1, u, use_derivative, 2, x_step, spin, H);
+	SingleTermHelper_Velocity(aux_x0, aux_x1, u, use_derivative[2], 2, x_step, spin, &H[2]);
 
 	//Terms with new velocities for x and z
 	//Common to terms 0 and 1
 	u[0] = u_1[0]; u[1] = u_0[1]; u[2] = u_1[2]; 
 	aux_x0[0] = x_0[0]; aux_x0[1] = x_0[1]; aux_x0[2] = x_1[2];
 	aux_x1[0] = x_1[0]; aux_x1[1] = x_0[1]; aux_x1[2] = x_1[2];
-	SingleTermHelper_Velocity(aux_x0, aux_x1, u, use_derivative, 0, x_step, spin, H);
+	SingleTermHelper_Velocity(aux_x0, aux_x1, u, use_derivative[0], 0, x_step, spin, &H[0]);
 	
 	aux_x0[0] = x_1[0]; aux_x0[1] = x_0[1]; aux_x0[2] = x_1[2];
 	aux_x1[0] = x_1[0]; aux_x1[1] = x_1[1]; aux_x1[2] = x_1[2];
-	SingleTermHelper_Velocity(aux_x0, aux_x1, u, use_derivative, 1, x_step, spin, H);
+	SingleTermHelper_Velocity(aux_x0, aux_x1, u, use_derivative[1], 1, x_step, spin, &H[1]);
 
 	//Terms with new velocities for y only
 	//Common to terms 1 and 2
 	u[0] = u_0[0]; u[1] = u_1[1]; u[2] = u_0[2]; 
 	aux_x0[0] = x_0[0]; aux_x0[1] = x_0[1]; aux_x0[2] = x_0[2];
 	aux_x1[0] = x_0[0]; aux_x1[1] = x_1[1]; aux_x1[2] = x_0[2];
-	SingleTermHelper_Velocity(aux_x0, aux_x1, u, use_derivative, 1, x_step, spin, H);
+	SingleTermHelper_Velocity(aux_x0, aux_x1, u, use_derivative[1], 1, x_step, spin, &H[1]);
 	
 	aux_x0[0] = x_0[0]; aux_x0[1] = x_1[1]; aux_x0[2] = x_0[2];
 	aux_x1[0] = x_0[0]; aux_x1[1] = x_1[1]; aux_x1[2] = x_1[2];
-	SingleTermHelper_Velocity(aux_x0, aux_x1, u, use_derivative, 2, x_step, spin, H);
+	SingleTermHelper_Velocity(aux_x0, aux_x1, u, use_derivative[2], 2, x_step, spin, &H[2]);
 
 	//Terms with new velocities for z only
 	//Common to terms 0 and 2
 	u[0] = u_0[0]; u[1] = u_0[1]; u[2] = u_1[2]; 
 	aux_x0[0] = x_0[0]; aux_x0[1] = x_0[1]; aux_x0[2] = x_1[2];
 	aux_x1[0] = x_1[0]; aux_x1[1] = x_0[1]; aux_x1[2] = x_1[2];
-	SingleTermHelper_Velocity(aux_x0, aux_x1, u, use_derivative, 0, x_step, spin, H);
+	SingleTermHelper_Velocity(aux_x0, aux_x1, u, use_derivative[0], 0, x_step, spin, &H[0]);
 	
 	aux_x0[0] = x_0[0]; aux_x0[1] = x_0[1]; aux_x0[2] = x_0[2];
 	aux_x1[0] = x_0[0]; aux_x1[1] = x_0[1]; aux_x1[2] = x_1[2];
-	SingleTermHelper_Velocity(aux_x0, aux_x1, u, use_derivative, 2, x_step, spin, H);
+	SingleTermHelper_Velocity(aux_x0, aux_x1, u, use_derivative[2], 2, x_step, spin, &H[2]);
 
 	//Terms with new velocities for x only
 	//Common to terms 0 and 1
 	u[0] = u_1[0]; u[1] = u_0[1]; u[2] = u_0[2]; 
 	aux_x0[0] = x_0[0]; aux_x0[1] = x_0[1]; aux_x0[2] = x_0[2];
 	aux_x1[0] = x_1[0]; aux_x1[1] = x_0[1]; aux_x1[2] = x_0[2];
-	SingleTermHelper_Velocity(aux_x0, aux_x1, u, use_derivative, 0, x_step, spin, H);
+	SingleTermHelper_Velocity(aux_x0, aux_x1, u, use_derivative[0], 0, x_step, spin, &H[0]);
 
 	aux_x0[0] = x_1[0]; aux_x0[1] = x_0[1]; aux_x0[2] = x_0[2];
 	aux_x1[0] = x_1[0]; aux_x1[1] = x_1[1]; aux_x1[2] = x_0[2];
-	SingleTermHelper_Velocity(aux_x0, aux_x1, u, use_derivative, 1, x_step, spin, H);
+	SingleTermHelper_Velocity(aux_x0, aux_x1, u, use_derivative[1], 1, x_step, spin, &H[1]);
 
 	for (int i=0; i<3; ++i){
 	       	H[i] /= 6.0;
