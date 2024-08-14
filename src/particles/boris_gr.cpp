@@ -47,11 +47,11 @@ void SingleTermHelper_Position(const Real * u_0, const Real * u_1, const Real al
 	U_0 += perp;	
 	U_0 = sqrt(U_0 + massive); 
 	// Alpha term
-	H[dir] += alpha*(
+	*H += alpha*(
 		ADM[dir][dir]*(u_1[dir]+u_0[dir]) + 2.0*ADM[dir][i1]*u_1[i1] + 2.0*ADM[dir][i2]*u_1[i2]
 	       	)/(U_0 + U_1);
 	// Beta term
-	H[dir] += beta;
+	*H += beta;
 }
 
 //----------------------------------------------------------------------------------------
@@ -78,13 +78,13 @@ void HamiltonEquation_Position(const Real * x_0, const Real * x_1, const Real * 
 	
         aux_u0[0] = u_0[0]; aux_u0[1] = u_0[1]; aux_u0[2] = u_0[2];
         aux_u1[0] = u_1[0]; aux_u1[1] = u_0[1]; aux_u1[2] = u_0[2];
-        SingleTermHelper_Position(aux_u0, aux_u1, sqrt(-1.0/gupper[0][0]), gupper[0][1]/gupper[0][0], ADM_g, 0, H);
+        SingleTermHelper_Position(aux_u0, aux_u1, sqrt(-1.0/gupper[0][0]), gupper[0][1]/gupper[0][0], ADM_g, 0, &H[0]);
 
         aux_u1[0] = u_0[0]; aux_u1[1] = u_1[1]; aux_u1[2] = u_0[2];
-        SingleTermHelper_Position(aux_u0, aux_u1, sqrt(-1.0/gupper[0][0]), gupper[0][2]/gupper[0][0], ADM_g, 1, H);
+        SingleTermHelper_Position(aux_u0, aux_u1, sqrt(-1.0/gupper[0][0]), gupper[0][2]/gupper[0][0], ADM_g, 1, &H[1]);
 
         aux_u1[0] = u_0[0]; aux_u1[1] = u_0[1]; aux_u1[2] = u_1[2];
-        SingleTermHelper_Position(aux_u0, aux_u1, sqrt(-1.0/gupper[0][0]), gupper[0][3]/gupper[0][0], ADM_g, 2, H);
+        SingleTermHelper_Position(aux_u0, aux_u1, sqrt(-1.0/gupper[0][0]), gupper[0][3]/gupper[0][0], ADM_g, 2, &H[2]);
 	
 	//Metric with all new positions
 	//Common to all terms
@@ -93,13 +93,13 @@ void HamiltonEquation_Position(const Real * x_0, const Real * x_1, const Real * 
 
         aux_u0[0] = u_0[0]; aux_u0[1] = u_1[1]; aux_u0[2] = u_1[2];
         aux_u1[0] = u_1[0]; aux_u1[1] = u_1[1]; aux_u1[2] = u_1[2];
-        SingleTermHelper_Position(aux_u0, aux_u1, sqrt(-1.0/gupper[0][0]), gupper[0][1]/gupper[0][0], ADM_g, 0, H);
+        SingleTermHelper_Position(aux_u0, aux_u1, sqrt(-1.0/gupper[0][0]), gupper[0][1]/gupper[0][0], ADM_g, 0, &H[0]);
 
         aux_u0[0] = u_1[0]; aux_u0[1] = u_0[1]; aux_u0[2] = u_1[2];
-        SingleTermHelper_Position(aux_u0, aux_u1, sqrt(-1.0/gupper[0][0]), gupper[0][2]/gupper[0][0], ADM_g, 1, H);
+        SingleTermHelper_Position(aux_u0, aux_u1, sqrt(-1.0/gupper[0][0]), gupper[0][2]/gupper[0][0], ADM_g, 1, &H[1]);
 
         aux_u0[0] = u_1[0]; aux_u0[1] = u_1[1]; aux_u0[2] = u_0[2];
-        SingleTermHelper_Position(aux_u0, aux_u1, sqrt(-1.0/gupper[0][0]), gupper[0][3]/gupper[0][0], ADM_g, 2, H);
+        SingleTermHelper_Position(aux_u0, aux_u1, sqrt(-1.0/gupper[0][0]), gupper[0][3]/gupper[0][0], ADM_g, 2, &H[2]);
 
 	//
 	//Metric with x_0[0], x_1[1], x_1[2]
@@ -108,11 +108,11 @@ void HamiltonEquation_Position(const Real * x_0, const Real * x_1, const Real * 
 	GetUpperAdmMetric( gupper, ADM_g );
 
         aux_u0[0] = u_0[0]; aux_u0[1] = u_1[1]; aux_u0[2] = u_1[2];
-        SingleTermHelper_Position(aux_u0, aux_u1, sqrt(-1.0/gupper[0][0]), gupper[0][1]/gupper[0][0], ADM_g, 0, H);
+        SingleTermHelper_Position(aux_u0, aux_u1, sqrt(-1.0/gupper[0][0]), gupper[0][1]/gupper[0][0], ADM_g, 0, &H[0]);
 
         aux_u0[0] = u_0[0]; aux_u0[1] = u_1[1]; aux_u0[2] = u_0[2];
         aux_u1[0] = u_0[0]; aux_u1[1] = u_1[1]; aux_u1[2] = u_1[2];
-        SingleTermHelper_Position(aux_u0, aux_u1, sqrt(-1.0/gupper[0][0]), gupper[0][3]/gupper[0][0], ADM_g, 2, H);
+        SingleTermHelper_Position(aux_u0, aux_u1, sqrt(-1.0/gupper[0][0]), gupper[0][3]/gupper[0][0], ADM_g, 2, &H[2]);
 
 	//
 	//Metric with x_1[0], x_0[1], x_0[2]
@@ -122,11 +122,11 @@ void HamiltonEquation_Position(const Real * x_0, const Real * x_1, const Real * 
 
         aux_u0[0] = u_0[0]; aux_u0[1] = u_0[1]; aux_u0[2] = u_0[2];
         aux_u1[0] = u_1[0]; aux_u1[1] = u_0[1]; aux_u1[2] = u_0[2];
-        SingleTermHelper_Position(aux_u0, aux_u1, sqrt(-1.0/gupper[0][0]), gupper[0][1]/gupper[0][0], ADM_g, 0, H);
+        SingleTermHelper_Position(aux_u0, aux_u1, sqrt(-1.0/gupper[0][0]), gupper[0][1]/gupper[0][0], ADM_g, 0, &H[0]);
 	
         aux_u0[0] = u_1[0]; aux_u0[1] = u_0[1]; aux_u0[2] = u_0[2];
         aux_u1[0] = u_1[0]; aux_u1[1] = u_1[1]; aux_u1[2] = u_0[2];
-        SingleTermHelper_Position(aux_u0, aux_u1, sqrt(-1.0/gupper[0][0]), gupper[0][2]/gupper[0][0], ADM_g, 1, H);
+        SingleTermHelper_Position(aux_u0, aux_u1, sqrt(-1.0/gupper[0][0]), gupper[0][2]/gupper[0][0], ADM_g, 1, &H[1]);
 
 	//
 	//Metric with x_1[0], x_0[1], x_1[2]
@@ -136,11 +136,11 @@ void HamiltonEquation_Position(const Real * x_0, const Real * x_1, const Real * 
 
         aux_u0[0] = u_0[0]; aux_u0[1] = u_0[1]; aux_u0[2] = u_1[2];
         aux_u1[0] = u_1[0]; aux_u1[1] = u_0[1]; aux_u1[2] = u_1[2];
-        SingleTermHelper_Position(aux_u0, aux_u1, sqrt(-1.0/gupper[0][0]), gupper[0][1]/gupper[0][0], ADM_g, 0, H);
+        SingleTermHelper_Position(aux_u0, aux_u1, sqrt(-1.0/gupper[0][0]), gupper[0][1]/gupper[0][0], ADM_g, 0, &H[0]);
 	
         aux_u0[0] = u_1[0]; aux_u0[1] = u_0[1]; aux_u0[2] = u_1[2];
         aux_u1[0] = u_1[0]; aux_u1[1] = u_1[1]; aux_u1[2] = u_1[2];
-        SingleTermHelper_Position(aux_u0, aux_u1, sqrt(-1.0/gupper[0][0]), gupper[0][2]/gupper[0][0], ADM_g, 1, H);
+        SingleTermHelper_Position(aux_u0, aux_u1, sqrt(-1.0/gupper[0][0]), gupper[0][2]/gupper[0][0], ADM_g, 1, &H[1]);
 
 	//
 	//Metric with x_0[0], x_0[1], x_1[2]
@@ -150,11 +150,11 @@ void HamiltonEquation_Position(const Real * x_0, const Real * x_1, const Real * 
 
         aux_u0[0] = u_0[0]; aux_u0[1] = u_0[1]; aux_u0[2] = u_1[2];
         aux_u1[0] = u_1[0]; aux_u1[1] = u_0[1]; aux_u1[2] = u_1[2];
-        SingleTermHelper_Position(aux_u0, aux_u1, sqrt(-1.0/gupper[0][0]), gupper[0][1]/gupper[0][0], ADM_g, 0, H);
+        SingleTermHelper_Position(aux_u0, aux_u1, sqrt(-1.0/gupper[0][0]), gupper[0][1]/gupper[0][0], ADM_g, 0, &H[0]);
 
         aux_u0[0] = u_0[0]; aux_u0[1] = u_0[1]; aux_u0[2] = u_0[2];
         aux_u1[0] = u_0[0]; aux_u1[1] = u_0[1]; aux_u1[2] = u_1[2];
-        SingleTermHelper_Position(aux_u0, aux_u1, sqrt(-1.0/gupper[0][0]), gupper[0][3]/gupper[0][0], ADM_g, 2, H);
+        SingleTermHelper_Position(aux_u0, aux_u1, sqrt(-1.0/gupper[0][0]), gupper[0][3]/gupper[0][0], ADM_g, 2, &H[2]);
 
 	//
 	//Metric with x_1[0], x_1[1], x_0[2]
@@ -164,11 +164,11 @@ void HamiltonEquation_Position(const Real * x_0, const Real * x_1, const Real * 
 
         aux_u0[0] = u_1[0]; aux_u0[1] = u_0[1]; aux_u0[2] = u_0[2];
         aux_u1[0] = u_1[0]; aux_u1[1] = u_1[1]; aux_u1[2] = u_0[2];
-        SingleTermHelper_Position(aux_u0, aux_u1, sqrt(-1.0/gupper[0][0]), gupper[0][2]/gupper[0][0], ADM_g, 1, H);
+        SingleTermHelper_Position(aux_u0, aux_u1, sqrt(-1.0/gupper[0][0]), gupper[0][2]/gupper[0][0], ADM_g, 1, &H[1]);
 
         aux_u0[0] = u_1[0]; aux_u0[1] = u_1[1]; aux_u0[2] = u_0[2];
         aux_u1[0] = u_1[0]; aux_u1[1] = u_1[1]; aux_u1[2] = u_1[2];
-        SingleTermHelper_Position(aux_u0, aux_u1, sqrt(-1.0/gupper[0][0]), gupper[0][3]/gupper[0][0], ADM_g, 2, H);
+        SingleTermHelper_Position(aux_u0, aux_u1, sqrt(-1.0/gupper[0][0]), gupper[0][3]/gupper[0][0], ADM_g, 2, &H[2]);
 
 	//
 	//Metric with x_0[0], x_1[1], x_0[2]
@@ -178,11 +178,11 @@ void HamiltonEquation_Position(const Real * x_0, const Real * x_1, const Real * 
 
         aux_u0[0] = u_0[0]; aux_u0[1] = u_0[1]; aux_u0[2] = u_0[2];
         aux_u1[0] = u_0[0]; aux_u1[1] = u_1[1]; aux_u1[2] = u_0[2];
-        SingleTermHelper_Position(aux_u0, aux_u1, sqrt(-1.0/gupper[0][0]), gupper[0][2]/gupper[0][0], ADM_g, 1, H);
+        SingleTermHelper_Position(aux_u0, aux_u1, sqrt(-1.0/gupper[0][0]), gupper[0][2]/gupper[0][0], ADM_g, 1, &H[1]);
 
         aux_u0[0] = u_0[0]; aux_u0[1] = u_1[1]; aux_u0[2] = u_0[2];
         aux_u1[0] = u_0[0]; aux_u1[1] = u_1[1]; aux_u1[2] = u_1[2];
-        SingleTermHelper_Position(aux_u0, aux_u1, sqrt(-1.0/gupper[0][0]), gupper[0][3]/gupper[0][0], ADM_g, 2, H);
+        SingleTermHelper_Position(aux_u0, aux_u1, sqrt(-1.0/gupper[0][0]), gupper[0][3]/gupper[0][0], ADM_g, 2, &H[2]);
 	
 	for (int i=0; i<3; ++i){ H[i] /= 6.0; }
 }
