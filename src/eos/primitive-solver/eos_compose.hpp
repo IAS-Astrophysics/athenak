@@ -301,12 +301,7 @@ class EOSCompOSE : public EOSPolicyInterface {
     int ilo = 0;
     int ihi = m_nt-1;
     Real flo = f(ilo);
-    // Real fhi = f(ihi);
-    Real fhi = var - (wn0 * (wy0 * m_table(iv, in, iy, ihi-1, 1)  +
-                             wy1 * m_table(iv, in, iy, ihi-1, 3)) +
-                      wn1 * (wy0 * m_table(iv, in, iy, ihi-1, 5)  +
-                             wy1 * m_table(iv, in, iy, ihi-1, 7)));
-
+    Real fhi = f(ihi);
     while (flo*fhi>0) {
       if (ilo == ihi - 1) {
         break;
