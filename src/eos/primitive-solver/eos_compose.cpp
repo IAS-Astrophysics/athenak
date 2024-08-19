@@ -46,13 +46,13 @@ void EOSCompOSE::ReadTableFromFile(std::string fname) {
     Kokkos::realloc(m_log_nb, m_nn);
     Kokkos::realloc(m_yq,     m_ny);
     Kokkos::realloc(m_log_t,  m_nt);
-    Kokkos::realloc(m_table, ECNVARS, m_nn-1, m_ny-1, m_nt-1, 8);
+    Kokkos::realloc(m_table, ECNVARS, m_nn, m_ny, m_nt);
 
     // Create host storage to read into
     HostArray1D<Real>::HostMirror host_log_nb = create_mirror_view(m_log_nb);
     HostArray1D<Real>::HostMirror host_yq =     create_mirror_view(m_yq);
     HostArray1D<Real>::HostMirror host_log_t =  create_mirror_view(m_log_t);
-    HostArray5D<Real>::HostMirror host_table =  create_mirror_view(m_table);
+    HostArray4D<Real>::HostMirror host_table =  create_mirror_view(m_table);
 
     // Note that the some quantities are perturbed down slightly from what the top of
     // the table allows. This is because a lot of the interpolation operations need
@@ -88,19 +88,13 @@ void EOSCompOSE::ReadTableFromFile(std::string fname) {
       max_T = table_t[m_nt-2]; // on purpose
     }
 
-    size_t in_o[8] = {0,0,0,0,1,1,1,1};
-    size_t iy_o[8] = {0,0,1,1,0,0,1,1};
-    size_t it_o[8] = {0,1,0,1,0,1,0,1};
-
     { // Read Q1 -> log(P)
       Real * table_Q1 = table["Q1"];
-      for (size_t in=0; in<m_nn-1; ++in) {
-        for (size_t iy=0; iy<m_ny-1; ++iy) {
-          for (size_t it=0; it<m_nt-1; ++it) {
-            for (size_t iv=0; iv<8; ++iv) {
-              size_t iflat = (it+it_o[iv]) + m_nt*((iy+iy_o[iv]) + m_ny*(in+in_o[iv]));
-              host_table(ECLOGP,in,iy,it,iv) = log(table_Q1[iflat]) + host_log_nb(in+in_o[iv]);
-            }
+      for (size_t in=0; in<m_nn; ++in) {
+        for (size_t iy=0; iy<m_ny; ++iy) {
+          for (size_t it=0; it<m_nt; ++it) {
+            size_t iflat = it + m_nt*(iy + m_ny*in);
+            host_table(ECLOGP,in,iy,it) = log(table_Q1[iflat]) + host_log_nb(in);
           }
         }
       }
@@ -108,13 +102,11 @@ void EOSCompOSE::ReadTableFromFile(std::string fname) {
 
     { // Read Q2 -> S
       Real * table_Q2 = table["Q2"];
-      for (size_t in=0; in<m_nn-1; ++in) {
-        for (size_t iy=0; iy<m_ny-1; ++iy) {
-          for (size_t it=0; it<m_nt-1; ++it) {
-            for (size_t iv=0; iv<8; ++iv) {
-              size_t iflat = (it+it_o[iv]) + m_nt*((iy+iy_o[iv]) + m_ny*(in+in_o[iv]));
-              host_table(ECENT,in,iy,it,iv) = table_Q2[iflat];
-            }
+      for (size_t in=0; in<m_nn; ++in) {
+        for (size_t iy=0; iy<m_ny; ++iy) {
+          for (size_t it=0; it<m_nt; ++it) {
+            size_t iflat = it + m_nt*(iy + m_ny*in);
+            host_table(ECENT,in,iy,it) = table_Q2[iflat];
           }
         }
       }
@@ -122,13 +114,11 @@ void EOSCompOSE::ReadTableFromFile(std::string fname) {
 
     { // Read Q3-> mu_b
       Real * table_Q3 = table["Q3"];
-      for (size_t in=0; in<m_nn-1; ++in) {
-        for (size_t iy=0; iy<m_ny-1; ++iy) {
-          for (size_t it=0; it<m_nt-1; ++it) {
-            for (size_t iv=0; iv<8; ++iv) {
-              size_t iflat = (it+it_o[iv]) + m_nt*((iy+iy_o[iv]) + m_ny*(in+in_o[iv]));
-              host_table(ECMUB,in,iy,it,iv) = (table_Q3[iflat]+1)*mb;
-            }
+      for (size_t in=0; in<m_nn; ++in) {
+        for (size_t iy=0; iy<m_ny; ++iy) {
+          for (size_t it=0; it<m_nt; ++it) {
+            size_t iflat = it + m_nt*(iy + m_ny*in);
+            host_table(ECMUB,in,iy,it) = (table_Q3[iflat]+1)*mb;
           }
         }
       }
@@ -136,13 +126,11 @@ void EOSCompOSE::ReadTableFromFile(std::string fname) {
 
     { // Read Q4-> mu_q
       Real * table_Q4 = table["Q4"];
-      for (size_t in=0; in<m_nn-1; ++in) {
-        for (size_t iy=0; iy<m_ny-1; ++iy) {
-          for (size_t it=0; it<m_nt-1; ++it) {
-            for (size_t iv=0; iv<8; ++iv) {
-              size_t iflat = (it+it_o[iv]) + m_nt*((iy+iy_o[iv]) + m_ny*(in+in_o[iv]));
-              host_table(ECMUB,in,iy,it,iv) = table_Q4[iflat]*mb;
-            }
+      for (size_t in=0; in<m_nn; ++in) {
+        for (size_t iy=0; iy<m_ny; ++iy) {
+          for (size_t it=0; it<m_nt; ++it) {
+            size_t iflat = it + m_nt*(iy + m_ny*in);
+            host_table(ECMUB,in,iy,it) = table_Q4[iflat]*mb;
           }
         }
       }
@@ -150,13 +138,11 @@ void EOSCompOSE::ReadTableFromFile(std::string fname) {
 
     { // Read Q5-> mu_le
       Real * table_Q5 = table["Q5"];
-      for (size_t in=0; in<m_nn-1; ++in) {
-        for (size_t iy=0; iy<m_ny-1; ++iy) {
-          for (size_t it=0; it<m_nt-1; ++it) {
-            for (size_t iv=0; iv<8; ++iv) {
-              size_t iflat = (it+it_o[iv]) + m_nt*((iy+iy_o[iv]) + m_ny*(in+in_o[iv]));
-              host_table(ECMUL,in,iy,it,iv) = table_Q5[iflat]*mb;
-            }
+      for (size_t in=0; in<m_nn; ++in) {
+        for (size_t iy=0; iy<m_ny; ++iy) {
+          for (size_t it=0; it<m_nt; ++it) {
+            size_t iflat = it + m_nt*(iy + m_ny*in);
+            host_table(ECMUL,in,iy,it) = table_Q5[iflat]*mb;
           }
         }
       }
@@ -164,13 +150,11 @@ void EOSCompOSE::ReadTableFromFile(std::string fname) {
 
     { // Read Q7-> log(e)
       Real * table_Q7 = table["Q7"];
-      for (size_t in=0; in<m_nn-1; ++in) {
-        for (size_t iy=0; iy<m_ny-1; ++iy) {
-          for (size_t it=0; it<m_nt-1; ++it) {
-            for (size_t iv=0; iv<8; ++iv) {
-              size_t iflat = (it+it_o[iv]) + m_nt*((iy+iy_o[iv]) + m_ny*(in+in_o[iv]));
-              host_table(ECLOGE,in,iy,it,iv) = log(mb*(table_Q7[iflat] + 1)) + host_log_nb(in+in_o[iv]);
-            }
+      for (size_t in=0; in<m_nn; ++in) {
+        for (size_t iy=0; iy<m_ny; ++iy) {
+          for (size_t it=0; it<m_nt; ++it) {
+            size_t iflat = it + m_nt*(iy + m_ny*in);
+            host_table(ECLOGE,in,iy,it) = log(mb*(table_Q7[iflat] + 1)) + host_log_nb(in);
           }
         }
       }
@@ -178,13 +162,11 @@ void EOSCompOSE::ReadTableFromFile(std::string fname) {
 
     { // Read cs2-> cs
       Real * table_cs2 = table["cs2"];
-      for (size_t in=0; in<m_nn-1; ++in) {
-        for (size_t iy=0; iy<m_ny-1; ++iy) {
-          for (size_t it=0; it<m_nt-1; ++it) {
-            for (size_t iv=0; iv<8; ++iv) {
-              size_t iflat = (it+it_o[iv]) + m_nt*((iy+iy_o[iv]) + m_ny*(in+in_o[iv]));
-              host_table(ECCS,in,iy,it,iv) = sqrt(table_cs2[iflat]);
-            }
+      for (size_t in=0; in<m_nn; ++in) {
+        for (size_t iy=0; iy<m_ny; ++iy) {
+          for (size_t it=0; it<m_nt; ++it) {
+            size_t iflat = it + m_nt*(iy + m_ny*in);
+            host_table(ECCS,in,iy,it) = sqrt(table_cs2[iflat]);
           }
         }
       }
@@ -200,18 +182,16 @@ void EOSCompOSE::ReadTableFromFile(std::string fname) {
 
     m_min_h = std::numeric_limits<Real>::max();
     // Compute minimum enthalpy
-    for (int in = 0; in < m_nn-1; ++in) {
-      for (int it = 0; it < m_nt-1; ++it) {
-        for (int iy = 0; iy < m_ny-1; ++iy) {
-          for (int iv = 0; iv < 8; ++iv) {
-            // This would use GPU memory, and we are currently on the CPU, so Enthalpy is
-            // hardcoded
-            Real const nb = exp(host_log_nb(in+in_o[iv]));
-            Real e = exp(host_table(ECLOGE,in,iy,it,iv));
-            Real p = exp(host_table(ECLOGP,in,iy,it,iv));
-            Real h = (e + p) / nb;
-            m_min_h = fmin(m_min_h, h);
-          }
+    for (int in = 0; in < m_nn; ++in) {
+      Real const nb = exp(host_log_nb(in));
+      for (int it = 0; it < m_nt; ++it) {
+        for (int iy = 0; iy < m_ny; ++iy) {
+          // This would use GPU memory, and we are currently on the CPU, so Enthalpy is
+          // hardcoded
+          Real e = exp(host_table(ECLOGE,in,iy,it));
+          Real p = exp(host_table(ECLOGP,in,iy,it));
+          Real h = (e + p) / nb;
+          m_min_h = fmin(m_min_h, h);
         }
       }
     }
