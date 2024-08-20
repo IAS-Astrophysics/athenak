@@ -17,10 +17,12 @@
 
 #include "eos_compose.hpp"
 #include "utils/tr_table.hpp"
+#include "logs.hpp"
 
 using namespace Primitive; // NOLINT
 
-void EOSCompOSE::ReadTableFromFile(std::string fname) {
+template<typename LogPolicy>
+void EOSCompOSE<LogPolicy>::ReadTableFromFile(std::string fname) {
   if (m_initialized==false) {
     TableReader::Table table;
     auto read_result = table.ReadTable(fname);
@@ -61,7 +63,7 @@ void EOSCompOSE::ReadTableFromFile(std::string fname) {
     { // read nb
       Real * table_nb = table["nb"];
       for (size_t in=0; in<m_nn; ++in) {
-        host_log_nb(in) = log(table_nb[in]);
+        host_log_nb(in) = log2_(table_nb[in]);
       }
       m_id_log_nb = 1.0/(host_log_nb(1) - host_log_nb(0));
       min_n = table_nb[0];
@@ -81,7 +83,7 @@ void EOSCompOSE::ReadTableFromFile(std::string fname) {
     { // read T
       Real * table_t = table["t"];
       for (size_t it=0; it<m_nt; ++it) {
-        host_log_t(it) = log(table_t[it]);
+        host_log_t(it) = log2_(table_t[it]);
       }
       m_id_log_t = 1.0/(host_log_t(1) - host_log_t(0));
       min_T = table_t[1];      // These are different
@@ -94,7 +96,7 @@ void EOSCompOSE::ReadTableFromFile(std::string fname) {
         for (size_t iy=0; iy<m_ny; ++iy) {
           for (size_t it=0; it<m_nt; ++it) {
             size_t iflat = it + m_nt*(iy + m_ny*in);
-            host_table(ECLOGP,in,iy,it) = log(table_Q1[iflat]) + host_log_nb(in);
+            host_table(ECLOGP,in,iy,it) = log2_(table_Q1[iflat]) + host_log_nb(in);
           }
         }
       }
@@ -154,7 +156,7 @@ void EOSCompOSE::ReadTableFromFile(std::string fname) {
         for (size_t iy=0; iy<m_ny; ++iy) {
           for (size_t it=0; it<m_nt; ++it) {
             size_t iflat = it + m_nt*(iy + m_ny*in);
-            host_table(ECLOGE,in,iy,it) = log(mb*(table_Q7[iflat] + 1)) + host_log_nb(in);
+            host_table(ECLOGE,in,iy,it) = log2_(mb*(table_Q7[iflat] + 1)) + host_log_nb(in);
           }
         }
       }
@@ -183,13 +185,13 @@ void EOSCompOSE::ReadTableFromFile(std::string fname) {
     m_min_h = std::numeric_limits<Real>::max();
     // Compute minimum enthalpy
     for (int in = 0; in < m_nn; ++in) {
-      Real const nb = exp(host_log_nb(in));
+      Real const nb = exp2_(host_log_nb(in));
       for (int it = 0; it < m_nt; ++it) {
         for (int iy = 0; iy < m_ny; ++iy) {
           // This would use GPU memory, and we are currently on the CPU, so Enthalpy is
           // hardcoded
-          Real e = exp(host_table(ECLOGE,in,iy,it));
-          Real p = exp(host_table(ECLOGP,in,iy,it));
+          Real e = exp2_(host_table(ECLOGE,in,iy,it));
+          Real p = exp2_(host_table(ECLOGP,in,iy,it));
           Real h = (e + p) / nb;
           m_min_h = fmin(m_min_h, h);
         }
@@ -197,3 +199,5 @@ void EOSCompOSE::ReadTableFromFile(std::string fname) {
     }
   } // if (m_initialized==false)
 }
+
+template class EOSCompOSE<NormalLogs>;

@@ -22,10 +22,15 @@
 #include "ps_types.hpp"
 #include "eos_policy_interface.hpp"
 #include "unit_system.hpp"
+#include "logs.hpp"
 
 namespace Primitive {
 
-class EOSCompOSE : public EOSPolicyInterface {
+template<typename LogPolicy>
+class EOSCompOSE : public EOSPolicyInterface, public LogPolicy {
+ private:
+  using LogPolicy::log2_;
+  using LogPolicy::exp2_;
  public:
   enum TableVariables {
     ECLOGP  = 0,  //! log (pressure / 1 MeV fm^-3)
@@ -76,7 +81,7 @@ class EOSCompOSE : public EOSPolicyInterface {
   /// Temperature from energy density
   KOKKOS_INLINE_FUNCTION Real TemperatureFromE(Real n, Real e, Real *Y) const {
     assert (m_initialized);
-    return temperature_from_var(ECLOGE, log(e), n, Y[0]);
+    return temperature_from_var(ECLOGE, log2_(e), n, Y[0]);
   }
 
   /// Calculate the temperature using.
@@ -90,20 +95,20 @@ class EOSCompOSE : public EOSPolicyInterface {
       p = p_min;
       return min_T;
     } else {
-      return temperature_from_var(ECLOGP, log(p), n, Y[0]);
+      return temperature_from_var(ECLOGP, log2_(p), n, Y[0]);
     }
   }
 
   /// Calculate the energy density using.
   KOKKOS_INLINE_FUNCTION Real Energy(Real n, Real T, const Real *Y) const {
     assert (m_initialized);
-    return exp(eval_at_nty(ECLOGE, n, T, Y[0]));
+    return exp2_(eval_at_nty(ECLOGE, n, T, Y[0]));
   }
 
   /// Calculate the pressure using.
   KOKKOS_INLINE_FUNCTION Real Pressure(Real n, Real T, Real *Y) const {
     assert (m_initialized);
-    return exp(eval_at_nty(ECLOGP, n, T, Y[0]));
+    return exp2_(eval_at_nty(ECLOGP, n, T, Y[0]));
   }
 
   /// Calculate the entropy per baryon using.
@@ -229,13 +234,14 @@ class EOSCompOSE : public EOSPolicyInterface {
  private:
   /// Low level evaluation function, not intended for outside use
   KOKKOS_INLINE_FUNCTION Real eval_at_nty(int vi, Real n, Real T, Real Yq) const {
-    return eval_at_lnty(vi, log(n), log(T), Yq);
+    return eval_at_lnty(vi, log2_(n), log2_(T), Yq);
   }
   /// Low level evaluation function, not intended for outside use
   KOKKOS_INLINE_FUNCTION Real eval_at_lnty(int iv, Real log_n, Real log_t, Real yq)
       const {
     int in, iy, it;
     Real wn0, wn1, wy0, wy1, wt0, wt1;
+
 
     weight_idx_ln(&wn0, &wn1, &in, log_n);
     weight_idx_yq(&wy0, &wy1, &iy, yq);
@@ -283,7 +289,7 @@ class EOSCompOSE : public EOSPolicyInterface {
       const {
     int in, iy;
     Real wn0, wn1, wy0, wy1;
-    weight_idx_ln(&wn0, &wn1, &in, log(n));
+    weight_idx_ln(&wn0, &wn1, &in, log2_(n));
     weight_idx_yq(&wy0, &wy1, &iy, Yq);
 
     auto f = [=](int it){
@@ -340,15 +346,8 @@ class EOSCompOSE : public EOSPolicyInterface {
     Real lthi = m_log_t[ihi];
     Real ltlo = m_log_t[ilo];
 
-    if (flo == 0) {
-      return exp(ltlo);
-    }
-    if (fhi == 0) {
-      return exp(lthi);
-    }
-
     Real lt = m_log_t[ilo] - flo*(lthi - ltlo)/(fhi - flo);
-    return exp(lt);
+    return exp2_(lt);
   }
 
 
