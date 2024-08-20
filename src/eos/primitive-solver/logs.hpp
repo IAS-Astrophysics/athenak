@@ -32,6 +32,42 @@ class NormalLogs : public LogPolicy {
 
 };
 
+class NQTLogs : public LogPolicy {
+  public:
+    NQTLogs() = default;
+    ~NQTLogs() = default;
+
+    KOKKOS_INLINE_FUNCTION Real log2_(const Real x) const {
+      // Magic numbers constexpr because C++ doesn't constexpr reinterpret casts
+      // these are floating point numbers as reinterpreted as integers.
+      // as_int(1.0)
+      constexpr int64_t one_as_int = 4607182418800017408;
+      // 1./static_cast<double>(as_int(2.0) - as_int(1.0))
+      constexpr Real scale_down = 2.22044604925031e-16;
+      return static_cast<Real>(as_int(x) - one_as_int) * scale_down;
+    }
+
+    KOKKOS_INLINE_FUNCTION Real exp2_(const Real x) const {
+      // Magic numbers constexpr because C++ doesn't constexpr reinterpret casts
+      // these are floating point numbers as reinterpreted as integers.
+      // as_int(1.0)
+      constexpr int64_t one_as_int = 4607182418800017408;
+      // as_int(2.0) - as_int(1.0)
+      constexpr Real scale_up = 4503599627370496;
+      return as_double(static_cast<int64_t>(x*scale_up) + one_as_int);
+    }
+  private:
+    KOKKOS_INLINE_FUNCTION int64_t as_int(const Real f) const {
+      Real f_ = f;
+      return *reinterpret_cast<int64_t*>(&f_);
+    }
+
+    KOKKOS_INLINE_FUNCTION Real as_double(const int64_t i) const {
+      int64_t i_ = i;
+      return *reinterpret_cast<Real*>(&i_);
+    }
+};
+
 } // namespace Primitive
 
 /*

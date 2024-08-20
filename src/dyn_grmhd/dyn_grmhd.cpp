@@ -47,7 +47,12 @@ DynGRMHD* SelectDynGRMHDEOS(MeshBlockPack *ppack, ParameterInput *pin,
       dyn_gr = new DynGRMHDPS<Primitive::PiecewisePolytrope, ErrorPolicy>(ppack, pin);
       break;
     case DynGRMHD_EOS::eos_compose:
-      dyn_gr = new DynGRMHDPS<Primitive::EOSCompOSE<Primitive::NormalLogs>, ErrorPolicy>(ppack, pin);
+      bool use_NQT = pin->GetOrAddBoolean("mhd", "use_NQT",false);
+      if (use_NQT) {
+        dyn_gr = new DynGRMHDPS<Primitive::EOSCompOSE<Primitive::NQTLogs>, ErrorPolicy>(ppack, pin);
+      } else {
+        dyn_gr = new DynGRMHDPS<Primitive::EOSCompOSE<Primitive::NormalLogs>, ErrorPolicy>(ppack, pin);
+      }
       break;
   }
   return dyn_gr;
@@ -581,6 +586,7 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::AddCoordTermsEOS(const DvceArray5D<Real
 template class DynGRMHDPS<Primitive::IdealGas, Primitive::ResetFloor>;
 template class DynGRMHDPS<Primitive::PiecewisePolytrope, Primitive::ResetFloor>;
 template class DynGRMHDPS<Primitive::EOSCompOSE<Primitive::NormalLogs>, Primitive::ResetFloor>;
+template class DynGRMHDPS<Primitive::EOSCompOSE<Primitive::NQTLogs>, Primitive::ResetFloor>;
 
 // Macro for defining CoordTerms templates
 #define INSTANTIATE_COORD_TERMS(EOSPolicy, ErrorPolicy) \
@@ -600,6 +606,7 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::AddCoordTermsEOS<4>( \
 INSTANTIATE_COORD_TERMS(Primitive::IdealGas, Primitive::ResetFloor);
 INSTANTIATE_COORD_TERMS(Primitive::PiecewisePolytrope, Primitive::ResetFloor);
 INSTANTIATE_COORD_TERMS(Primitive::EOSCompOSE<Primitive::NormalLogs>, Primitive::ResetFloor);
+INSTANTIATE_COORD_TERMS(Primitive::EOSCompOSE<Primitive::NQTLogs>, Primitive::ResetFloor);
 
 #undef INSTANTIATE_COORD_TERMS
 

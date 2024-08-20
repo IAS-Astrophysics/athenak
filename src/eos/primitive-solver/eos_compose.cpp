@@ -62,9 +62,19 @@ void EOSCompOSE<LogPolicy>::ReadTableFromFile(std::string fname) {
     // nearest table values at or below a specified i and yq.
     { // read nb
       Real * table_nb = table["nb"];
+      /* NQT hack
       for (size_t in=0; in<m_nn; ++in) {
         host_log_nb(in) = log2_(table_nb[in]);
       }
+      */
+      
+      Real start = log2_(table_nb[0]);
+      Real end   = log2_(table_nb[m_nn-1]);
+      Real d_log_nb = (end - start)/(m_nn-1);
+      for (size_t in=0; in<m_nn; ++in) {
+        host_log_nb(in) = start + in*d_log_nb;
+      }
+
       m_id_log_nb = 1.0/(host_log_nb(1) - host_log_nb(0));
       min_n = table_nb[0];
       max_n = table_nb[m_nn-1]*(1 - 1e-15);
@@ -82,9 +92,19 @@ void EOSCompOSE<LogPolicy>::ReadTableFromFile(std::string fname) {
 
     { // read T
       Real * table_t = table["t"];
+      /* NQT hack
       for (size_t it=0; it<m_nt; ++it) {
         host_log_t(it) = log2_(table_t[it]);
       }
+      */
+
+      Real start = log2_(table_t[0]);
+      Real end   = log2_(table_t[m_nt-1]);
+      Real d_log_t = (end - start)/(m_nt-1);
+      for (size_t it=0; it<m_nt; ++it) {
+        host_log_t(it) = start + it*d_log_t;
+      }
+
       m_id_log_t = 1.0/(host_log_t(1) - host_log_t(0));
       min_T = table_t[1];      // These are different
       max_T = table_t[m_nt-2]; // on purpose
@@ -96,7 +116,7 @@ void EOSCompOSE<LogPolicy>::ReadTableFromFile(std::string fname) {
         for (size_t iy=0; iy<m_ny; ++iy) {
           for (size_t it=0; it<m_nt; ++it) {
             size_t iflat = it + m_nt*(iy + m_ny*in);
-            host_table(ECLOGP,in,iy,it) = log2_(table_Q1[iflat]) + host_log_nb(in);
+            host_table(ECLOGP,in,iy,it) = log2_(table_Q1[iflat]*exp2_(host_log_nb(in)));
           }
         }
       }
@@ -156,7 +176,7 @@ void EOSCompOSE<LogPolicy>::ReadTableFromFile(std::string fname) {
         for (size_t iy=0; iy<m_ny; ++iy) {
           for (size_t it=0; it<m_nt; ++it) {
             size_t iflat = it + m_nt*(iy + m_ny*in);
-            host_table(ECLOGE,in,iy,it) = log2_(mb*(table_Q7[iflat] + 1)) + host_log_nb(in);
+            host_table(ECLOGE,in,iy,it) = log2_(mb*(table_Q7[iflat] + 1)*exp2_(host_log_nb(in)));
           }
         }
       }
@@ -201,3 +221,4 @@ void EOSCompOSE<LogPolicy>::ReadTableFromFile(std::string fname) {
 }
 
 template class EOSCompOSE<NormalLogs>;
+template class EOSCompOSE<NQTLogs>;
