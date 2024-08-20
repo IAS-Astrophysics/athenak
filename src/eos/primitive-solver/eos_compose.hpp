@@ -29,12 +29,10 @@
 namespace Primitive {
 
 template<typename LogPolicy>
-class EOSCompOSE : public EOSPolicyInterface, public LogPolicy, public SupportsEntropy,
-                   public SupportsChemicalPotentials {
+class EOSCompOSE : public EOSPolicyInterface, public LogPolicy {
  private:
   using LogPolicy::log2_;
   using LogPolicy::exp2_;
-
  public:
   enum TableVariables {
     ECLOGP  = 0,  //! log (pressure / 1 MeV fm^-3)
@@ -90,13 +88,7 @@ class EOSCompOSE : public EOSPolicyInterface, public LogPolicy, public SupportsE
   /// Temperature from energy density
   KOKKOS_INLINE_FUNCTION Real TemperatureFromE(Real n, Real e, Real *Y) const {
     assert (m_initialized);
-    if (n < min_n) {
-      return min_T;
-    } else if (e <= MinimumEnergy(n, Y)) {
-      return min_T;
-    }
-    Real log_e = log2_(e);
-    return temperature_from_var(ECLOGE, log_e, n, Y[0]);
+    return temperature_from_var(ECLOGE, log2_(e), n, Y[0]);
   }
 
   /// Calculate the temperature using.
@@ -109,6 +101,8 @@ class EOSCompOSE : public EOSPolicyInterface, public LogPolicy, public SupportsE
     if (p <= p_min) {
       p = p_min;
       return min_T;
+    } else {
+      return temperature_from_var(ECLOGP, log2_(p), n, Y[0]);
     }
     Real log_p = log2_(p);
     return temperature_from_var(ECLOGP, log_p, n, Y[0]);
@@ -117,15 +111,13 @@ class EOSCompOSE : public EOSPolicyInterface, public LogPolicy, public SupportsE
   /// Calculate the energy density using.
   KOKKOS_INLINE_FUNCTION Real Energy(Real n, Real T, const Real *Y) const {
     assert (m_initialized);
-    Real log_e = eval_at_nty(ECLOGE, n, T, Y[0]);
-    return exp2_(log_e);
+    return exp2_(eval_at_nty(ECLOGE, n, T, Y[0]));
   }
 
   /// Calculate the pressure using.
   KOKKOS_INLINE_FUNCTION Real Pressure(Real n, Real T, Real *Y) const {
     assert (m_initialized);
-    Real log_p = eval_at_nty(ECLOGP, n, T, Y[0]);
-    return exp2_(log_p);
+    return exp2_(eval_at_nty(ECLOGP, n, T, Y[0]));
   }
 
   /// Calculate the entropy per baryon using.
@@ -332,9 +324,7 @@ class EOSCompOSE : public EOSPolicyInterface, public LogPolicy, public SupportsE
  private:
   /// Low level evaluation function, not intended for outside use
   KOKKOS_INLINE_FUNCTION Real eval_at_nty(int vi, Real n, Real T, Real Yq) const {
-    Real log_n = log2_(n);
-    Real log_T = log2_(T);
-    return eval_at_lnty(vi, log_n, log_T, Yq);
+    return eval_at_lnty(vi, log2_(n), log2_(T), Yq);
   }
   /// Low level evaluation function, not intended for outside use
   KOKKOS_INLINE_FUNCTION Real eval_at_lnty(int iv, Real log_n, Real log_t, Real yq)
@@ -407,8 +397,7 @@ class EOSCompOSE : public EOSPolicyInterface, public LogPolicy, public SupportsE
       const {
     int in, iy;
     Real wn0, wn1, wy0, wy1;
-    Real log_n = log2_(n);
-    weight_idx_ln(&wn0, &wn1, &in, log_n);
+    weight_idx_ln(&wn0, &wn1, &in, log2_(n));
     weight_idx_yq(&wy0, &wy1, &iy, Yq);
 
     auto f = [=](int it){
