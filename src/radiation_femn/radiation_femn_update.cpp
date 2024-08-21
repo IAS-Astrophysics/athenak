@@ -356,15 +356,24 @@ TaskStatus RadiationFEMN::ExpRKUpdate(Driver *pdriver, int stage) {
                       par_for_inner(member, 0, num_points_ - 1, [&](const int idx) {
                         Real part_sum_idx = 0.;
                         for (int A = 0; A < num_points_; A++) {
-                          Real fn = f0_(m, en * num_points + A, k, j, i);
+                          int idx_n = IndicesUnited(nu, en, A, num_species_, num_energy_bins_, num_points_);
+                          Real fn = f0_(m, idx_n, k, j, i);
+
+                          int idx_nm1 = IndicesUnited(nu, en - 1, A, num_species_, num_energy_bins_, num_points_);
                           Real fnm1 = (en - 1 >= 0 && en - 1 < num_energy_bins_) ?
-                                      f0_(m, (en - 1) * num_points_ + A, k, j, i) : 0.;
+                                      f0_(m, idx_nm1, k, j, i) : 0.;
+
+                          int idx_nm2 = IndicesUnited(nu, en - 2, A, num_species_, num_energy_bins_, num_points_);
                           Real fnm2 = (en - 2 >= 0 && en - 2 < num_energy_bins_) ?
-                                      f0_(m, (en - 2) * num_points_ + A, k, j, i) : 0.;
+                                      f0_(m, idx_nm2, k, j, i) : 0.;
+
+                          int idx_np1 = IndicesUnited(nu, en + 1, A, num_species_, num_energy_bins_, num_points_);
                           Real fnp1 = (en + 1 >= 0 && en + 1 < num_energy_bins_) ?
-                                      f0_(m, (en + 1) * num_points_ + A, k, j, i) : 0.;
+                                      f0_(m, idx_np1, k, j, i) : 0.;
+
+                          int idx_np2 = IndicesUnited(nu, en + 2, A, num_species_, num_energy_bins_, num_points_);
                           Real fnp2 = (en + 2 >= 0 && en + 2 < num_energy_bins_) ?
-                                      f0_(m, (en + 2) * num_points_ + A, k, j, i) : 0.;
+                                      f0_(m, idx_np2, k, j, i) : 0.;
 
                           // {F^A} for n and n+1 th bin
                           Real f_term1_np1 = 0.5 * (fnp1 + fn);
@@ -408,10 +417,10 @@ TaskStatus RadiationFEMN::ExpRKUpdate(Driver *pdriver, int stage) {
                           part_sum_idx +=
                               (energy_grid(en + 1) * energy_grid(en + 1)
                                   * energy_grid(en + 1) * (f_gam(A, idx) * f_term1_np1
-                                  - theta_np1 * K * f_term2_np1 / 2.)
+                                  + theta_np1 * K * f_term2_np1 / 2.)
                                   - energy_grid(en) * energy_grid(en) * energy_grid(en)
                                       * (f_gam(A, idx) * f_term1_n
-                                          - theta_n * K * f_term2_n / 2.));
+                                          + theta_n * K * f_term2_n / 2.));
                         }
                         energy_terms(idx) = part_sum_idx;
                       });
