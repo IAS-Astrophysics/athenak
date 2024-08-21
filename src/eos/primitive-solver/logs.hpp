@@ -23,11 +23,11 @@ class NormalLogs : public LogPolicy {
     ~NormalLogs() = default;
 
     KOKKOS_INLINE_FUNCTION Real log2_(const Real x) const {
-      return std::log2(x);
+      return Kokkos::log2(x);
     }
 
     KOKKOS_INLINE_FUNCTION Real exp2_(const Real x) const {
-      return std::exp2(x);
+      return Kokkos::exp2(x);
     }
 
 };
