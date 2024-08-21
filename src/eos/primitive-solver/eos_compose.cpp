@@ -15,6 +15,9 @@
 #include <cstddef>
 #include <string>
 
+#include <Kokkos_Core.hpp>
+
+#include "athena.hpp"
 #include "eos_compose.hpp"
 #include "utils/tr_table.hpp"
 #include "logs.hpp"

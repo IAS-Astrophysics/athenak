@@ -18,6 +18,8 @@
 #include <string>
 #include <limits>
 
+#include <Kokkos_Core.hpp>
+
 #include "../../athena.hpp"
 #include "ps_types.hpp"
 #include "eos_policy_interface.hpp"
