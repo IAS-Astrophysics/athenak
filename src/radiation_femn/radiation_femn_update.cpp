@@ -418,11 +418,13 @@ TaskStatus RadiationFEMN::ExpRKUpdate(Driver *pdriver, int stage) {
                               (energy_grid(en + 1) * energy_grid(en + 1)
                                   * energy_grid(en + 1) * (f_gam(A, idx) * f_term1_np1
                                   + theta_np1 * K * f_term2_np1 / 2.)
+                                  * (en + 1 >= 0 && en + 1 < num_energy_bins_)
                                   - energy_grid(en) * energy_grid(en) * energy_grid(en)
                                       * (f_gam(A, idx) * f_term1_n
-                                          + theta_n * K * f_term2_n / 2.));
+                                          + theta_n * K * f_term2_n / 2.))
+                                          * (en >= 0 && en < num_energy_bins_);
                         }
-                        energy_terms(idx) = part_sum_idx;
+                        energy_terms(idx) = part_sum_idx / Ven;
                       });
                       member.team_barrier();
                       for (int idx = 0; idx < num_points_; idx++) {
