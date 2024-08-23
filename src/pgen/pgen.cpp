@@ -21,6 +21,7 @@
 #include "hydro/hydro.hpp"
 #include "mhd/mhd.hpp"
 #include "coordinates/adm.hpp"
+#include "z4c/compact_object_tracker.hpp"
 #include "z4c/z4c.hpp"
 #include "radiation/radiation.hpp"
 #include "srcterms/turb_driver.hpp"
@@ -189,6 +190,38 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resf
   IOWrapperSizeT data_size;
   std::memcpy(&data_size, &(variabledata[0]), sizeof(IOWrapperSizeT));
   // calculate total number of CC variables
+
+  if (pz4c != nullptr) {
+    Real last_output_time;
+    if (global_variable::my_rank == 0) {
+      if (resfile.Read_Reals(&last_output_time, 1) != 1) {
+        std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                  << std::endl << "z4c::last_output_time data size read from restart "
+                  << "file is incorrect, restart file is broken." << std::endl;
+        exit(EXIT_FAILURE);
+      }
+    }
+#if MPI_PARALLEL_ENABLED
+    MPI_Bcast(&last_output_time, sizeof(Real), MPI_CHAR, 0, MPI_COMM_WORLD);
+#endif
+    pz4c->last_output_time = last_output_time;
+
+    for (auto &pt: pz4c->ptracker) {
+      Real pos[3];
+      if (global_variable::my_rank == 0) {
+        if (resfile.Read_Reals(&pos[0], 3) != 3) {
+          std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                    << std::endl << "compact object tracker data size read from restart "
+                    << "file is incorrect, restart file is broken." << std::endl;
+          exit(EXIT_FAILURE);
+        }
+      }
+#if MPI_PARALLEL_ENABLED
+      MPI_Bcast(&pos, sizeof(Real), MPI_CHAR, 3, MPI_COMM_WORLD);
+#endif
+      pt.SetPos(pos);
+    }
+  }
 
   if (pturb != nullptr) {
     // root process reads size the random seed

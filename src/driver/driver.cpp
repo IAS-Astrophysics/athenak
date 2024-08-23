@@ -577,7 +577,7 @@ void Driver::InitBoundaryValuesAndPrimitives(Mesh *pm) {
       (void) pmhd->ConToPrim(this, 0);
     } else {
       if (pz4c != nullptr) {
-        (void) pz4c->Z4cToADM_(this, 0);
+        (void) pz4c->ConvertZ4cToADM(this, 0);
       }
       (void) pdyngr->ConToPrim(this, 0);
     }

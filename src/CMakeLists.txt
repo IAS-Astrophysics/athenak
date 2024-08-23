@@ -147,6 +147,7 @@ add_executable(
         utils/lagrange_interpolator.cpp
         utils/tr_table.cpp
 
+        z4c/compact_object_tracker.cpp
         z4c/tmunu.cpp
         z4c/z4c.cpp
         z4c/z4c_adm.cpp
@@ -158,7 +159,6 @@ add_executable(
         z4c/z4c_Sbc.cpp
         z4c/z4c_calculate_weyl_scalars.cpp
         z4c/z4c_wave_extr.cpp
-        z4c/z4c_puncture_tracker.cpp
         z4c/z4c_amr.cpp
 )
 

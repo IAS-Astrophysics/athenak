@@ -13,8 +13,8 @@
 #include "globals.hpp"
 #include "mesh/mesh.hpp"
 #include "parameter_input.hpp"
+#include "z4c/compact_object_tracker.hpp"
 #include "z4c/z4c.hpp"
-#include "z4c/z4c_puncture_tracker.hpp"
 
 #if 0
 #define PR(x)                                                                  \
@@ -23,10 +23,10 @@
                   0.5 * (x1min + x1max), 0.5 * (x2min + x2max),                \
                   0.5 * (x2min + x2max)};                                      \
     int pn_    = 1; /* punck. number */                                        \
-    for (auto ptracker : pmbp->pz4c_ptracker) {                                \
+    for (auto & ptracker : pmbp->pz4c->ptracker) {                             \
       {                                                                        \
         Real p_[3] = {                                                         \
-          ptracker->GetPos(0), ptracker->GetPos(1), ptracker->GetPos(2)};      \
+          ptracker.GetPos(0), ptracker.GetPos(1), ptracker.GetPos(2)};         \
         Real r_ = sqrt(                                                        \
           pow(p_[0] - c_[0], 2.) + pow(p_[1] - c_[1], 2.)                      \
           + pow(p_[2] - c_[2], 2.));                                           \
@@ -44,7 +44,7 @@
 namespace z4c {
 
 // set some parameters
-Z4c_AMR::Z4c_AMR(Z4c *z4c, ParameterInput *pin): pz4c(z4c), pin(pin) {
+Z4c_AMR::Z4c_AMR(ParameterInput *pin) {
   // available methods: "Linf_box_in_box", "L2_sphere_in_sphere", and
   // "chi_min"
   ref_method = pin->GetOrAddString("z4c_amr", "method", "L2_sphere_in_sphere");
@@ -139,7 +139,7 @@ void Z4c_AMR::LinfBoxInBox(MeshBlockPack *pmbp) {
 
     // Min distance between the two punctures
     Real d = std::numeric_limits<Real>::max();
-    for (auto ptracker : pmbp->pz4c_ptracker) {
+    for (auto & pt : pmbp->pz4c->ptracker) {
       // abs difference
       Real diff;
       // Max norm_inf
@@ -149,7 +149,7 @@ void Z4c_AMR::LinfBoxInBox(MeshBlockPack *pmbp) {
         // Norm_inf
         Real norm_inf = -1;
         for (int i_diff = 0; i_diff < 3; ++i_diff) {
-          diff = std::abs(ptracker->GetPos(i_diff) - xv[i_vert * 3 + i_diff]);
+          diff = std::abs(pt.GetPos(i_diff) - xv[i_vert * 3 + i_diff]);
           if (diff > norm_inf) {
             norm_inf = diff;
           }
@@ -255,7 +255,7 @@ void Z4c_AMR::L2SphereInSphere(MeshBlockPack *pmbp) {
 
     // Min distance between the two punctures
     Real d = std::numeric_limits<Real>::max();
-    for (auto ptracker : pmbp->pz4c_ptracker) {
+    for (auto & pt : pmbp->pz4c->ptracker) {
       // square difference
       Real diff;
 
@@ -264,8 +264,8 @@ void Z4c_AMR::L2SphereInSphere(MeshBlockPack *pmbp) {
         // Norm_L-2
         Real norm_L2 = 0;
         for (int i_diff = 0; i_diff < 3; ++i_diff) {
-          diff = (ptracker->GetPos(i_diff) - xv[i_vert * 3 + i_diff])
-            * (ptracker->GetPos(i_diff) - xv[i_vert * 3 + i_diff]);
+          diff = (pt.GetPos(i_diff) - xv[i_vert * 3 + i_diff])
+               * (pt.GetPos(i_diff) - xv[i_vert * 3 + i_diff]);
           norm_L2 += diff;
         }
         // Compute the L-2 norm

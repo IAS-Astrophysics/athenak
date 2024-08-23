@@ -20,6 +20,7 @@
 #include "parameter_input.hpp"
 #include "mesh/mesh.hpp"
 #include "bvals/bvals.hpp"
+#include "z4c/compact_object_tracker.hpp"
 #include "z4c/z4c.hpp"
 #include "z4c/z4c_amr.hpp"
 #include "coordinates/adm.hpp"
@@ -65,7 +66,7 @@ Z4c::Z4c(MeshBlockPack *ppack, ParameterInput *pin) :
   u_weyl("u_weyl",1,1,1,1,1),
   coarse_u_weyl("coarse_u_weyl",1,1,1,1,1),
   psi_out("psi_out",1,1,1),
-  pz4c_amr(new Z4c_AMR(this,pin)) {
+  pamr(new Z4c_AMR(pin)) {
   // (1) read time-evolution option [already error checked in driver constructor]
   // Then initialize memory and algorithms for reconstruction and Riemann solvers
   std::string evolution_t = pin->GetString("time","evolution");
@@ -180,6 +181,12 @@ Z4c::Z4c(MeshBlockPack *ppack, ParameterInput *pin) :
   mkdir("waveforms",0775);
   waveform_dt = pin->GetOrAddReal("z4c", "waveform_dt", 1);
   last_output_time = 0;
+
+  // Construct the compact object trackers
+  int nco = pin->GetOrAddInteger("z4c", "nco", 0);
+  for (int n = 0; n < nco; ++n) {
+    ptracker.emplace_back(pmy_pack->pmesh, pin, n);
+  }
 }
 
 //----------------------------------------------------------------------------------------
@@ -238,7 +245,7 @@ void Z4c::AlgConstr(MeshBlockPack *pmbp) {
 Z4c::~Z4c() {
   delete pbval_u;
   delete pbval_weyl;
-  delete pz4c_amr;
+  delete pamr;
 }
 
 } // namespace z4c
