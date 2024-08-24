@@ -102,8 +102,10 @@ void Z4c_AMR::RefineTracker(MeshBlockPack *pmbp) {
       if (dmin2 < SQ(pt.GetRadius())) {
         if (level < pt.GetReflevel()) {
           refine_flag.h_view(m + mbs) = 1;
-        } else if (level == pt.GetReflevel() && refine_flag.h_view(m + mbs) == -1) {
+        } else if (level == pt.GetReflevel()) {
           refine_flag.h_view(m + mbs) = 0;
+        } else {
+          refine_flag.h_view(m + mbs) = -1;
         }
       } else {
         refine_flag.h_view(m + mbs) = -1;
