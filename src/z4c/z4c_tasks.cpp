@@ -114,7 +114,8 @@ void Z4c::QueueZ4cTasks() {
   pnr->QueueTask(&Z4c::Prolongate, this, Z4c_Prolong, "Z4c_Prolong", Task_Run, {Z4c_BCS});
   pnr->QueueTask(&Z4c::EnforceAlgConstr, this, Z4c_AlgC, "Z4c_AlgC", Task_Run,
                  {Z4c_Prolong});
-  pnr->QueueTask(&Z4c::ConvertZ4cToADM, this, Z4c_Z4c2ADM, "Z4c_Z4c2ADM", Task_Run, {Z4c_AlgC});
+  pnr->QueueTask(&Z4c::ConvertZ4cToADM, this, Z4c_Z4c2ADM, "Z4c_Z4c2ADM",
+                 Task_Run, {Z4c_AlgC});
   if (pmy_pack->pdyngr != nullptr) {
     pnr->QueueTask(&Z4c::UpdateExcisionMasks, this, Z4c_Excise, "Z4c_Excise", Task_Run,
                    {Z4c_Z4c2ADM});

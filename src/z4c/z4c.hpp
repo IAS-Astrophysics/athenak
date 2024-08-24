@@ -10,6 +10,7 @@
 
 #include <map>
 #include <memory>    // make_unique, unique_ptr
+#include <list>
 #include <string>
 #include <vector>
 #include "athena.hpp"
@@ -262,7 +263,6 @@ class Z4c {
 
   Z4c_AMR *pamr;
   std::list<CompactObjectTracker> ptracker;
-
 
  private:
   MeshBlockPack* pmy_pack;  // ptr to MeshBlockPack containing this Z4c

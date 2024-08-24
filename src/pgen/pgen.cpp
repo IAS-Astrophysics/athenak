@@ -206,7 +206,7 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resf
 #endif
     pz4c->last_output_time = last_output_time;
 
-    for (auto &pt: pz4c->ptracker) {
+    for (auto &pt : pz4c->ptracker) {
       Real pos[3];
       if (global_variable::my_rank == 0) {
         if (resfile.Read_Reals(&pos[0], 3) != 3) {

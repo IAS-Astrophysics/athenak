@@ -224,7 +224,7 @@ void RestartOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
     }
     // output puncture tracker data
     if (nco > 0) {
-      for (auto & pt: pz4c->ptracker) {
+      for (auto & pt : pz4c->ptracker) {
         resfile.Write_any_type(pt.GetPos(), 3*sizeof(Real), "byte");
       }
     }
@@ -274,8 +274,8 @@ void RestartOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
   if (pturb != nullptr) step3size += sizeof(RNG_State);
 
   // write cell-centered variables in parallel
-  IOWrapperSizeT offset_myrank  = step1size + step2size + step3size + sizeof(IOWrapperSizeT) +
-                                  data_size*(pm->gids_eachrank[global_variable::my_rank]);
+  IOWrapperSizeT offset_myrank  = step1size + step2size + step3size +
+        sizeof(IOWrapperSizeT) + data_size*(pm->gids_eachrank[global_variable::my_rank]);
   IOWrapperSizeT myoffset = offset_myrank;
 
   // write cell-centered variables, one MeshBlock at a time (but parallelized over all

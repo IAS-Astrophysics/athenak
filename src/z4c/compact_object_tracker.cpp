@@ -33,36 +33,38 @@
 CompactObjectTracker::CompactObjectTracker(Mesh *pmesh, ParameterInput *pin, int n):
               owns_compact_object{false}, pos{NAN, NAN, NAN}, vel{NAN, NAN, NAN},
               pmesh{pmesh}, out_every{1} {
+  std::string nstr = std::to_string(n);
   std::string ofname = pin->GetString("job", "basename") + ".";
   ofname += pin->GetOrAddString("z4c", "filename", "co_");
-  ofname += std::to_string(n) + ".txt";
+  ofname += nstr + ".txt";
 
-  std::string cotype = pin->GetString("z4c", "co_" + std::to_string(n) + "_type");
+  std::string cotype = pin->GetString("z4c", "co_" + nstr + "_type");
   if (cotype == "BH" || cotype == "BlackHole") {
     type = BlackHole;
-  }
-  else if (cotype == "NS" || cotype == "NeutronStar") {
+  } else if (cotype == "NS" || cotype == "NeutronStar") {
     type = NeutronStar;
-  }
-  else {
+  } else {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line "
               << __LINE__ << std::endl;
     std::cout << "Unknown compact object type: " << cotype << std::endl;
     std::exit(EXIT_FAILURE);
   }
 
-  out_every = pin->GetOrAddInteger("z4c", "co_" + std::to_string(n) + "_out_every", 1);
+  pos[0] = pin->GetOrAddReal("z4c", "co_" + nstr + "_x", 0.0);
+  pos[1] = pin->GetOrAddReal("z4c", "co_" + nstr + "_y", 0.0);
+  pos[2] = pin->GetOrAddReal("z4c", "co_" + nstr + "_z", 0.0);
 
-  pos[0] = pin->GetOrAddReal("z4c", "co_" + std::to_string(n) + "_x", 0.0);
-  pos[1] = pin->GetOrAddReal("z4c", "co_" + std::to_string(n) + "_y", 0.0);
-  pos[2] = pin->GetOrAddReal("z4c", "co_" + std::to_string(n) + "_z", 0.0);
+  reflevel = pin->GetOrAddInteger("z4c", "co_" + nstr + "_reflevel", -1);
+  radius = pin->GetOrAddReal("z4c", "co_" + nstr + "_radius", 0.0);
+
+  out_every = pin->GetOrAddInteger("z4c", "co_" + nstr + "_out_every", 1);
+
   if (0 == global_variable::my_rank) {
     ofile.open(ofname.c_str());
 
     if (type == BlackHole) {
-      ofile << "# Black Hole"; 
-    }
-    else {
+      ofile << "# Black Hole";
+    } else {
       ofile << "# Neutron Star";
     }
     ofile << std::endl;
@@ -115,8 +117,7 @@ void CompactObjectTracker::InterpolateVelocity(MeshBlockPack *pmbp) {
       vel[1] += alp*zy/W;
       vel[2] += alp*zz/W;
     }
-  }
-  else {
+  } else {
     owns_compact_object = false;
   }
 
