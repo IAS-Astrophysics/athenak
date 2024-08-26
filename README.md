@@ -4,10 +4,12 @@ Experimental version of Athena++ with Kokkos.
 
 ## How to clone
 
-The code resides in a private GitLab repo and can only be accessed with two-factor authentication. So first you must create a personal access token for your GitLab account, and then clone recursively:
+Clone this repo with the following command.
+
 ```
-git clone --recursive https://TOKEN_NAME:TOKEN@gitlab.com/theias/hpc/jmstone/athena-parthenon/athenak.git
+git clone --recursive git@github.com:IAS-Astrophysics/athenak.git
 ```
+
 The recursive option clones the Kokkos repository along with Athena. If you clone the code without Kokkos, you must get Kokkos manually in the root directory containing the code:
 ```
 git submodule init
