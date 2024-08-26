@@ -118,6 +118,14 @@ struct torus_pgen {
   Real potential_r_pow;                       // set how vector potential scales
   Real potential_beta_min;                    // set how vector potential scales (cont.)
   Real potential_rho_pow;                     // set vector potential dependence on rho
+  bool is_multiple_loop;                      // use multiple-loop field configuration
+  int potential_r_num;                        // number of loop in r-direction
+  int potential_theta_num;                    // number of loop in theta-direction
+  Real potential_r_min;                       // min r to set up multiple-loop field
+  Real potential_r_max;                       // max r to set up multiple-loop field
+  Real potential_theta_min;                   // min theta to set up multiple-loop field
+  Real potential_pgas_pow;                    // power index of the gas-pressure scaling factor for multiple-loop field
+  Real potential_pgas_cutoff;                 // gas pressure cutoff of the gas-pressure scaling factor for multiple-loop field
 };
 
   torus_pgen torus;
@@ -458,6 +466,16 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     torus.potential_falloff  = pin->GetOrAddReal("problem", "potential_falloff", 0.0);
     torus.potential_r_pow    = pin->GetOrAddReal("problem", "potential_r_pow", 0.0);
     torus.potential_rho_pow  = pin->GetOrAddReal("problem", "potential_rho_pow", 1.0);
+
+    // multiple-loop field configuration
+    torus.is_multiple_loop = pin->GetOrAddBoolean("problem", "multiple_loop", false);
+    torus.potential_r_num     = pin->GetInteger("problem", "potential_r_num");
+    torus.potential_theta_num = pin->GetInteger("problem", "potential_theta_num");
+    torus.potential_r_min     = pin->GetReal("problem", "potential_r_min");
+    torus.potential_r_max     = pin->GetReal("problem", "potential_r_max");
+    torus.potential_theta_min = pin->GetReal("problem", "potential_theta_min");
+    torus.potential_pgas_pow  = pin->GetReal("problem", "potential_pgas_pow");
+    torus.potential_pgas_cutoff = pin->GetReal("problem", "potential_pgas_cutoff");
 
     // compute vector potential over all faces
     int ncells1 = indcs.nx1 + 2*(indcs.ng);
@@ -1264,7 +1282,7 @@ static void CalculateVectorPotentialInTiltedTorus(struct torus_pgen pgen,
   } else {
     if (r >= pgen.r_edge) {
       // Determine if we are in the torus
-      Real rho;
+      Real rho, pgas;
       Real gm1 = pgen.gamma_adi-1.0;
       bool in_torus = false;
       Real log_h = LogHAux(pgen, r, sin_vartheta) - pgen.log_h_edge;  // (FM 3.6)
@@ -1272,6 +1290,7 @@ static void CalculateVectorPotentialInTiltedTorus(struct torus_pgen pgen,
         in_torus = true;
         Real ptot_over_rho = gm1/pgen.gamma_adi * (exp(log_h) - 1.0);
         rho = pow(ptot_over_rho, 1.0/gm1) / pgen.rho_peak;
+        pgas = ptot_over_rho * rho; 
       }
 
       Real aphi_tilt = 0.0;
@@ -1292,6 +1311,13 @@ static void CalculateVectorPotentialInTiltedTorus(struct torus_pgen pgen,
         } else {
           atheta = 0.0;
           aphi = aphi_tilt;
+          if (pgen.is_multiple_loop) { // only apply mutiple-loop field in non-tilted cases
+            // use mutiple-loop field configuration as described in White et al. (2020)
+            Real arg_r = M_PI * pgen.potential_r_num * (r - pgen.potential_r_min) / (pgen.potential_r_max - pgen.potential_r_min);
+            Real arg_theta = M_PI * pgen.potential_theta_num * (theta - pgen.potential_theta_min) / (M_PI - 2.0*pgen.potential_theta_min);
+            Real amp = pow(fmax(pgas - pgen.potential_pgas_cutoff, 0.0), pgen.potential_pgas_pow);
+            aphi = amp * SQR(r) * sin(theta) * sin(arg_r) * sin(arg_theta);
+          } // endif is_multiple_loop
         }
       }
     }
