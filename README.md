@@ -6,8 +6,8 @@ Experimental version of Athena++ with Kokkos.
 
 Clone this repo with the following command.
 
-```
-git clone --recursive git@github.com:IAS-Astrophysics/athenak.git
+```sh
+git clone --recursive https://github.com/IAS-Astrophysics/athenak.git
 ```
 
 The recursive option clones the Kokkos repository along with Athena. If you clone the code without Kokkos, you must get Kokkos manually in the root directory containing the code:
