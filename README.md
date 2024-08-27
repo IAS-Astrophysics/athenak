@@ -18,11 +18,11 @@ We also recommend applying `scratch_fix.patch` to Kokkos. This can be done as fo
 cd kokkos
 git apply ../scratch_fix.patch
 ```
-This patch fixes a small bug in Kokkos 4.1 with uninitialized CUDA scratch locks which can result in crashes when using level 1 scratch memory with Nvidia GPUs.
+This patch fixes a small bug in Kokkos 4.1 with uninitialized CUDA scratch locks which can result in crashes when using level 1 scratch memory with NVIDIA GPUs.
 
 ## How to build
 
-The code uses cmake to manage builds.  In-source builds are not allowed; you must create a new build directory:
+The code uses CMake to manage builds.  In-source builds are not allowed; you must create a new build directory:
 ```shell
 mkdir build
 cd build
@@ -50,7 +50,7 @@ cmake3 -D CMAKE_BUILD_TYPE=Debug ../
 cmake3 -D Athena_ENABLE_MPI=ON ../
 ```
 
-### Default build for Intel Broadwell CPU with Intel C++ compiler and GCC C compiler 
+### Default build for Intel Broadwell CPU with the Classic Intel C++ compiler and GCC C compiler 
 ```shell
 cmake3 -DCMAKE_CXX_COMPILER=icpc -D Kokkos_ARCH_BDW=On -D Kokkos_ENABLE_OPENMP=ON \
    -D CMAKE_CXX_FLAGS="-O3 -inline-forceinline -qopenmp-simd -qopt-prefetch=4 -diag-disable 3180 " \
@@ -101,7 +101,7 @@ ln -s /installation/path/usr/gsl ${path_to_code}
 #### `twopuncturesc`:
 ```shell
 cd $HOME && cd usr
-git clone git@bitbucket.org:bernuzzi/twopuncturesc.git
+git clone git@github.com:computationalrelativity/TwoPuncturesC.git
 cd twopuncturesc
 make -j8
 
