@@ -31,9 +31,9 @@ ix3_bc = user     # inner boundary
 ox3_bc = user     # outer boundary
 
 <meshblock>
-nx1  = 16         # Number of cells in each MeshBlock, X1-dir
-nx2  = 16         # Number of cells in each MeshBlock, X2-dir
-nx3  = 16         # Number of cells in each MeshBlock, X3-dir
+nx1  = 8         # Number of cells in each MeshBlock, X1-dir
+nx2  = 8         # Number of cells in each MeshBlock, X2-dir
+nx3  = 8         # Number of cells in each MeshBlock, X3-dir
 
 <mesh_refinement>
 refinement = static    # type of refinement
@@ -77,9 +77,9 @@ x3max = 4.0
 <time>
 evolution  = dynamic     # dynamic/kinematic/static
 integrator = rk2         # time integration algorithm
-cfl_number = 0.5         # The Courant, Friedrichs, & Lewy (CFL) Number
+cfl_number = 0.3         # The Courant, Friedrichs, & Lewy (CFL) Number
 nlim       = -1          # cycle limit
-tlim       = 10.0     # time limit
+tlim       = 300.0     # time limit
 ndiag      = 1           # cycles between diagostic output
 
 <coord>
@@ -107,13 +107,14 @@ max_iter = 15
 particle_type = cosmic_ray
 charge_over_mass = 1.0
 inject = true
+init_type = flow_align
 
 <problem>
 fm_torus   = true  # Fishbone & Moncrief
-r_edge     = 6.0   # radius of inner edge of disk
-r_peak     = 12.0  # radius of pressure maximum; use l instead if negative
+r_edge     = 10.0   # radius of inner edge of disk
+r_peak     = 20.0  # radius of pressure maximum; use l instead if negative
 tilt_angle = 0.0   # angle (deg) to incl disk spin axis relative to BH spin in dir of x
-potential_beta_min = 0.01  # ratio of gas to magnetic pressure at maxima (diff locations)
+potential_beta_min = 10.0  # ratio of gas to magnetic pressure at maxima (diff locations)
 potential_cutoff   = 0.2    # amount to subtract from density when calculating potential
 potential_rho_pow = 1.0     # dependence of the vector potential on density rho
 rho_min   = 1.0e-5    # background on rho given by rho_min ...
@@ -124,23 +125,24 @@ rho_max   = 1.0       # if > 0, rescale rho to have this peak; rescale pres by s
 l         = 0.0       # const ang. mom. per unit mass u^t u_phi; only used if r_peak < 0
 pert_amp  = 2.0e-2    # perturbation amplitude
 user_hist = true      # enroll user-defined history function
-prtcl_energy = 0.5
+prtcl_energy_min = 0.995
+prtcl_energy_max = 2.5
 
 <output1>
 file_type  = hst        # History output
-dt         = 5.0E-1       # time increment between outputs
+dt         = 1.0E-0       # time increment between outputs
 user_hist_only = true   # only output user-defined history
 
 <output2>
 file_type  = bin        # Binary data dump
 variable   = mhd_w_bcc  # variables to be output
-dt         = 5.0      # time increment between outputs
+dt         = 10.0      # time increment between outputs
 
 <output3>
 file_type   = rst
-dt          = 5.0     # time increment between outputs
+dt          = 150.0     # time increment between outputs
 
 <output4>
 file_type   = pvtk      # Particle VTK data dump
 variable    = prtcl_all
-dt          = 1.0     # time increment between outputs
+dt          = 2.0     # time increment between outputs

@@ -429,6 +429,7 @@ void HamiltonEquation_Velocity(const Real * x_0, const Real * x_1, const Real * 
 
 	for (int i=0; i<3; ++i){
 	       	H[i] /= 6.0;
+		// When using the derivative the division by the increment is done to compute the derivatives
 		if (!use_derivative[i]) { H[i] /= incr[i]; }
 
        	}

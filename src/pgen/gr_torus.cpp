@@ -160,7 +160,6 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   torus.spin = coord.bh_spin;
   const Real r_excise = coord.rexcise;
   const bool is_radiation_enabled = (pmbp->prad != nullptr);
-  const bool has_particles = (pmbp->ppart != nullptr);
 
   // Spherical Grid for user-defined history
   auto &grids = spherical_grids;
@@ -174,8 +173,14 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   user_hist_func = TorusFluxes;
 
   auto aux_trs = torus;
-  bool inject_particles = pin->GetOrAddBoolean("particles", "inject", false);
+
+  const bool has_particles = (pmbp->ppart != nullptr);
+  const bool inject_particles = pin->GetOrAddBoolean("particles", "inject", false);
   if (has_particles && inject_particles){
+    auto &indcs = pmbp->pmesh->mb_indcs;
+    const int is = indcs.is;
+    const int js = indcs.js;
+    const int ks = indcs.ks;
     auto &gids = pmbp->gids;
     auto &gide = pmbp->gide;
     auto &size = pmbp->pmb->mb_size;
@@ -183,67 +188,141 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     int &npart = pmbp->ppart->nprtcl_thispack;
     auto &pr = pmbp->ppart->prtcl_rdata;
     auto &pi = pmbp->ppart->prtcl_idata;
-    Real massive = 1.0; 
+    Real massive = 1.0; //This should be based on ptype, not hard-coded
+    const Real min_rad = pmbp->ppart->min_radius;
     Real min_en = pin->GetOrAddReal("problem", "prtcl_energy_min", 0.005);
     Real max_en = pin->GetOrAddReal("problem", "prtcl_energy_max", 0.5);
+    std::string prtcl_init_type = pin->GetString("particles","init_type");
+    // Need these booleans on device, can't use std::string
+    // .compare() returns 0 for successful comparison, which is opposite of usual boolean
+    const bool prtcl_init_rnd = !(prtcl_init_type.compare("random"));
+    const bool prtcl_init_flow = !(prtcl_init_type.compare("flow_align"));
+    const bool prtcl_init_blob = !(prtcl_init_type.compare("blob"));
+    // Check initialization type has been set
+    if ( prtcl_init_rnd && prtcl_init_flow && prtcl_init_blob ) {
+	std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+		<< "Particle initialization type missing or not recognized." << std::endl;
+	std::exit(EXIT_FAILURE);
+    }
+
+    DvceArray5D<Real> u0_, w0_;
+    if (pmbp->phydro != nullptr) {
+      u0_ = pmbp->phydro->u0;
+      w0_ = pmbp->phydro->w0;
+    } else if (pmbp->pmhd != nullptr) {
+      u0_ = pmbp->pmhd->u0;
+      w0_ = pmbp->pmhd->w0;
+    }
 
     Kokkos::Random_XorShift64_Pool<> prtcl_rand(gids);
     par_for("part_init", DevExeSpace(),0,(npart-1),
-	KOKKOS_LAMBDA(const int p){
-	  bool found_mb = false;
-	  auto prtcl_gen = prtcl_rand.get_state();
-	  while(!found_mb){
+        KOKKOS_LAMBDA(const int p){
+          bool found_mb = false;
+          auto prtcl_gen = prtcl_rand.get_state();
+          while(!found_mb){
             int m = static_cast<int>(prtcl_gen.frand()*(gide-gids+1.0));
-	    // First check that the meshblock is within the torus, or at least outside the horizon
-	    Real &x1min = size.d_view(m).x1min;
-	    Real &x1max = size.d_view(m).x1max;
-	    Real x1v = x1min + prtcl_gen.frand()*(x1max - x1min);
-	    Real &x2min = size.d_view(m).x2min;
-	    Real &x2max = size.d_view(m).x2max;
-	    Real x2v = x2min + prtcl_gen.frand()*(x2max - x2min); 
-	    Real &x3min = size.d_view(m).x3min;
-	    Real &x3max = size.d_view(m).x3max;
-	    Real x3v = x3min + prtcl_gen.frand()*(x3max - x3min);
-	    Real r, th, phi;
-	    GetBoyerLindquistCoordinates(aux_trs, x1v, x2v, x3v, &r, &th, &phi);
-	    if (r >= 2.5){
-	      found_mb = true;
-	      //Actually initialize the particle
-	      pi(PGID,p) = gids+m;
-	      pr(IPX,p) = x1v;
-	      pr(IPY,p) = x2v;
-	      pr(IPZ,p) = x3v;
-	      
-	      Real this_en = min_en + prtcl_gen.frand()*(max_en - min_en);
-	     // std::cout << this_en << std::endl;
-	      Real u[3];
-	      int prograde = prtcl_gen.frand() > 0.5 ? -1 : 1;
-	      int updown = prtcl_gen.frand() > 0.5 ? -1 : 1;
-	      u[0] = prograde*sqrt(2.0/3.0*this_en);
-	      u[1] = prograde*sqrt(2.0/3.0*this_en);
-	      // Distribution centered on init_en
-	      u[2] = updown*sqrt(2.0/3.0*this_en);
-	      Real gu[4][4], gl[4][4];
-	      ComputeMetricAndInverse(pr(IPX,p),pr(IPY,p),pr(IPZ,p),coord.is_minkowski,coord.bh_spin,gl,gu); 
-	      Real u_0 = 0.0;
-	      for (int i1 = 0; i1 < 3; ++i1 ){ 
-          for (int i2 = 0; i2 < 3; ++i2 ){
-            u_0 += gl[i1+1][i2+1]*u[i1]*u[i2];
+            // First check that the meshblock is within the torus, or at least outside the horizon
+            Real &x1min = size.d_view(m).x1min;
+            Real &x1max = size.d_view(m).x1max;
+            Real x1v = x1min + prtcl_gen.frand()*(x1max - x1min);
+            Real &x2min = size.d_view(m).x2min;
+            Real &x2max = size.d_view(m).x2max;
+            Real x2v = x2min + prtcl_gen.frand()*(x2max - x2min); 
+            Real &x3min = size.d_view(m).x3min;
+            Real &x3max = size.d_view(m).x3max;
+            Real x3v = x3min + prtcl_gen.frand()*(x3max - x3min);
+            Real r, th, phi;
+            GetBoyerLindquistCoordinates(aux_trs, x1v, x2v, x3v, &r, &th, &phi);
+            if (r >= min_rad){
+              found_mb = true;
+              //Actually initialize the particle
+              pi(PGID,p) = gids+m;
+              pr(IPX,p) = x1v;
+              pr(IPY,p) = x2v;
+              pr(IPZ,p) = x3v;
+              
+              Real u[3];
+              Real this_en = min_en + prtcl_gen.frand()*(max_en - min_en);
+             // std::cout << this_en << std::endl;
+              if (prtcl_init_rnd){
+                Real gu[4][4], gl[4][4];
+                ComputeMetricAndInverse(x1v,x2v,x3v,coord.is_minkowski,coord.bh_spin,gl,gu); 
+                int prograde = prtcl_gen.frand() > 0.5 ? -1 : 1;
+                int updown = prtcl_gen.frand() > 0.5 ? -1 : 1;
+                u[0] = prograde*sqrt(2.0/3.0*this_en);
+                u[1] = prograde*sqrt(2.0/3.0*this_en);
+                // Distribution centered on init_en
+                u[2] = updown*sqrt(2.0/3.0*this_en);
+                Real u_0 = 0.0;
+                for (int i1 = 0; i1 < 3; ++i1 ){ 
+                  for (int i2 = 0; i2 < 3; ++i2 ){
+                    u_0 += gl[i1+1][i2+1]*u[i1]*u[i2];
+                  }
+                }
+                u_0 = sqrt(u_0 + massive); 
+                u[0] += gu[0][1]*u_0/sqrt(-gu[0][0]);
+                u[1] += gu[0][2]*u_0/sqrt(-gu[0][0]);
+                u[2] += gu[0][3]*u_0/sqrt(-gu[0][0]);
+                pr(IPVX,p) = gl[1][1]*u[0] + gl[1][2]*u[1] + gl[1][3]*u[2];
+                pr(IPVY,p) = gl[2][1]*u[0] + gl[2][2]*u[1] + gl[2][3]*u[2];
+                pr(IPVZ,p) = gl[3][1]*u[0] + gl[3][2]*u[1] + gl[3][3]*u[2];
+  // TODO Currently the "flow_align" initialization assumes that the fluid already has velocity defined
+  // Meaning this initialization only makes sense for restarts. One should move particle initialization
+  // later in the code if particles have to be present from the beginning
+              } else if (prtcl_init_flow){
+                int ip = (x1v - x1min)/size.d_view(m).dx1 + is;
+                int jp = (x2v - x2min)/size.d_view(m).dx2 + js;
+                int kp = (x3v - x3min)/size.d_view(m).dx3 + ks;
+        	// Here max_en and min_en act as multiplication factors
+                Real gu[4][4], gl[4][4];
+                ComputeMetricAndInverse(x1v,x2v,x3v,coord.is_minkowski,coord.bh_spin,gl,gu); 
+		// u0_ is contravariant, while particle velocities are stored as covariant
+		u[0] = u0_(m,IVX,kp,jp,ip);
+		u[1] = u0_(m,IVY,kp,jp,ip);
+		u[2] = u0_(m,IVZ,kp,jp,ip);
+                pr(IPVX,p) = gl[1][1]*u[0] + gl[1][2]*u[1] + gl[1][3]*u[2];
+                pr(IPVY,p) = gl[2][1]*u[0] + gl[2][2]*u[1] + gl[2][3]*u[2];
+                pr(IPVZ,p) = gl[3][1]*u[0] + gl[3][2]*u[1] + gl[3][3]*u[2];
+                pr(IPVX,p) = pr(IPVX,p)*this_en;
+                pr(IPVY,p) = pr(IPVY,p)*this_en;
+                pr(IPVZ,p) = pr(IPVZ,p)*this_en;
+              } else if (prtcl_init_blob){
+                x1v = (x1min + x1max)/2.0;
+                x2v = (x2min + x2max)/2.0;
+                x3v = (x3min + x3max)/2.0;
+                pi(PGID,p) = gids+m;
+                pr(IPX,p) = x1v;
+                pr(IPY,p) = x2v;
+                pr(IPZ,p) = x3v;
+                  
+                int prograde = prtcl_gen.frand() > 0.5 ? -1 : 1;
+                int updown = prtcl_gen.frand() > 0.5 ? -1 : 1;
+                u[0] = prograde*sqrt(2.0/3.0*this_en);
+                u[1] = prograde*sqrt(2.0/3.0*this_en);
+                // Distribution centered on init_en
+                u[2] = updown*sqrt(2.0/3.0*this_en);
+                Real gu[4][4], gl[4][4];
+                ComputeMetricAndInverse(x1v,x2v,x3v,coord.is_minkowski,coord.bh_spin,gl,gu); 
+                Real u_0 = 0.0;
+                for (int i1 = 0; i1 < 3; ++i1 ){ 
+                  for (int i2 = 0; i2 < 3; ++i2 ){
+                    u_0 += gl[i1+1][i2+1]*u[i1]*u[i2];
+                  }
+                }
+                u_0 = sqrt(u_0 + massive); 
+                u[0] += gu[0][1]*u_0/sqrt(-gu[0][0]);
+                u[1] += gu[0][2]*u_0/sqrt(-gu[0][0]);
+                u[2] += gu[0][3]*u_0/sqrt(-gu[0][0]);
+                pr(IPVX,p) = gl[1][1]*u[0] + gl[1][2]*u[1] + gl[1][3]*u[2];
+                pr(IPVY,p) = gl[2][1]*u[0] + gl[2][2]*u[1] + gl[2][3]*u[2];
+                pr(IPVZ,p) = gl[3][1]*u[0] + gl[3][2]*u[1] + gl[3][3]*u[2];
+              }
+              //std::cout << "p: " << pi(PTAG,p) << " " << pr(IPVX,p) << " " << pr(IPVY,p) << " " << pr(IPVZ,p) << std::endl;
+            }
           }
-	      }
-	      u_0 = sqrt(u_0 + massive); 
-	      u[0] += gu[0][1]*u_0/sqrt(-gu[0][0]);
-	      u[1] += gu[0][2]*u_0/sqrt(-gu[0][0]);
-	      u[2] += gu[0][3]*u_0/sqrt(-gu[0][0]);
-	      pr(IPVX,p) = gl[1][1]*u[0] + gl[1][2]*u[1] + gl[1][3]*u[2];
-	      pr(IPVY,p) = gl[2][1]*u[0] + gl[2][2]*u[1] + gl[2][3]*u[2];
-	      pr(IPVZ,p) = gl[3][1]*u[0] + gl[3][2]*u[1] + gl[3][3]*u[2];
-	      //std::cout << "p: " << pi(PTAG,p) << " " << pr(IPVX,p) << " " << pr(IPVY,p) << " " << pr(IPVZ,p) << std::endl;
-	    }
-	  }
-	  prtcl_rand.free_state(prtcl_gen);
+          prtcl_rand.free_state(prtcl_gen);
     });
-    // set timestep (which will remain constant for entire run
+      // set timestep (which will remain constant for entire run
     // Assumes uniform mesh (no SMR or AMR)
     // Assumes velocities normalized to one, so dt=min(dx)
     Real &dtnew_ = pmbp->ppart->dtnew;
