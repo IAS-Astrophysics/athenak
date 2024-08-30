@@ -108,6 +108,7 @@ particle_type = cosmic_ray
 charge_over_mass = 1.0
 inject = true
 init_type = flow_align
+rho_condition = 1.0E+4 # Factor on density to determine whether a given cell should host particles
 
 <problem>
 fm_torus   = true  # Fishbone & Moncrief
@@ -126,7 +127,7 @@ l         = 0.0       # const ang. mom. per unit mass u^t u_phi; only used if r_
 pert_amp  = 2.0e-2    # perturbation amplitude
 user_hist = true      # enroll user-defined history function
 prtcl_energy_min = 0.995
-prtcl_energy_max = 2.5
+prtcl_energy_max = 5.5
 
 <output1>
 file_type  = hst        # History output
