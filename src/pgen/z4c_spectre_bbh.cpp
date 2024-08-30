@@ -12,7 +12,7 @@
 #include <iostream>
 #include <sstream>
 #include <string>
-#include <spectre/Exporter.hpp>
+#include <vector>
 
 #include "athena.hpp"
 #include "coordinates/cell_locations.hpp"
@@ -23,6 +23,8 @@
 #include "z4c/z4c.hpp"
 #include "z4c/z4c_amr.hpp"
 #include "z4c/z4c_puncture_tracker.hpp"
+
+#include <spectre/Exporter.hpp>
 
 // Forward declarations
 void LoadSpectreInitialData(MeshBlockPack *pmbp, const std::string &filename_glob,
@@ -42,8 +44,7 @@ void RefinementCondition(MeshBlockPack *pmbp);
 // - problem.id_observation_step: (Optional) The observation step to load from
 //   the H5 files, in case the initial data is stored at multiple refinement
 //   steps. Set to -1 to load the last step (this is the default).
-void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart)
-{
+void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   user_ref_func = RefinementCondition;
 
   if (restart)
@@ -64,8 +65,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart)
   pmbp->pz4c->GaugePreCollapsedLapse(pmbp, pin);
 
   // Set Z4c variables from ADM variables
-  switch (indcs.ng)
-  {
+  switch (indcs.ng) {
   case 2:
     pmbp->pz4c->ADMToZ4c<2>(pmbp, pin);
     break;
@@ -78,8 +78,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart)
   }
 
   // Compute ADM constrains on initial data slice
-  switch (indcs.ng)
-  {
+  switch (indcs.ng) {
   case 2:
     pmbp->pz4c->ADMConstraints<2>(pmbp);
     break;
@@ -96,8 +95,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart)
 
 //! \brief Interpolate SpECTRE initial data to AthenaK mesh
 void LoadSpectreInitialData(MeshBlockPack *pmbp, const std::string &filename_glob,
-                            const std::string &subfile_name, const int observation_step)
-{
+                            const std::string &subfile_name, const int observation_step) {
   auto &u_adm = pmbp->padm->u_adm;
   HostArray5D<Real>::HostMirror host_u_adm = create_mirror(u_adm);
   z4c::Z4c::ADMhost_vars host_adm;
@@ -138,8 +136,7 @@ void LoadSpectreInitialData(MeshBlockPack *pmbp, const std::string &filename_glo
   x[2].resize(sz);
 
   int nmb = pmbp->nmb_thispack;
-  for (int m = 0; m < nmb; ++m)
-  {
+  for (int m = 0; m < nmb; ++m) {
     // Get the coordinates for this meshblock
     Real &x1min = size.h_view(m).x1min;
     Real &x1max = size.h_view(m).x1max;
@@ -147,12 +144,9 @@ void LoadSpectreInitialData(MeshBlockPack *pmbp, const std::string &filename_glo
     Real &x2max = size.h_view(m).x2max;
     Real &x3min = size.h_view(m).x3min;
     Real &x3max = size.h_view(m).x3max;
-    for (int ix_I = isg; ix_I < ieg + 1; ix_I++)
-    {
-      for (int ix_J = jsg; ix_J < jeg + 1; ix_J++)
-      {
-        for (int ix_K = ksg; ix_K < keg + 1; ix_K++)
-        {
+    for (int ix_I = isg; ix_I < ieg + 1; ix_I++) {
+      for (int ix_J = jsg; ix_J < jeg + 1; ix_J++) {
+        for (int ix_K = ksg; ix_K < keg + 1; ix_K++) {
           int flat_ix = ix_I + n[0] * (ix_J + n[1] * ix_K);
           x[0][flat_ix] = CellCenterX(ix_I - is, nx1, x1min, x1max);
           x[1][flat_ix] = CellCenterX(ix_J - js, nx2, x2min, x2max);
@@ -162,7 +156,8 @@ void LoadSpectreInitialData(MeshBlockPack *pmbp, const std::string &filename_glo
     }
 
     // Interpolate data to the coordinates
-    std::cout << "Interpolating initial data for meshblock " << m << "/" << nmb - 1 << " with " << sz << " points " << std::endl;
+    std::cout << "Interpolating initial data for meshblock " << m << "/"
+              << nmb - 1 << " with " << sz << " points " << std::endl;
     const auto data = spectre::Exporter::interpolate_to_points<3>(
         filename_glob, subfile_name, spectre::Exporter::ObservationStep{observation_step},
         {"SpatialMetric_xx", "SpatialMetric_yx", "SpatialMetric_yy",
@@ -187,8 +182,7 @@ void LoadSpectreInitialData(MeshBlockPack *pmbp, const std::string &filename_glo
     // Move the interpolated data into the meshblock
     for (int k = ksg; k <= keg; k++)
       for (int j = jsg; j <= jeg; j++)
-        for (int i = isg; i <= ieg; i++)
-        {
+        for (int i = isg; i <= ieg; i++) {
           int flat_ix = i + n[0] * (j + n[1] * k);
 
           host_adm.g_dd(m, 0, 0, k, j, i) = gxx[flat_ix];
@@ -211,16 +205,18 @@ void LoadSpectreInitialData(MeshBlockPack *pmbp, const std::string &filename_glo
           //   g_ij = psi^4 \bar{g}_{ij}
           // So, to impose unit determinant on the conformal metric, we set:
           //   psi^4 = det(g)^{1/3}
-          Real detg = adm::SpatialDet(host_adm.g_dd(m, 0, 0, k, j, i), host_adm.g_dd(m, 0, 1, k, j, i),
-                                      host_adm.g_dd(m, 0, 2, k, j, i), host_adm.g_dd(m, 1, 1, k, j, i),
-                                      host_adm.g_dd(m, 1, 2, k, j, i), host_adm.g_dd(m, 2, 2, k, j, i));
+          Real detg = adm::SpatialDet(host_adm.g_dd(m, 0, 0, k, j, i),
+                                      host_adm.g_dd(m, 0, 1, k, j, i),
+                                      host_adm.g_dd(m, 0, 2, k, j, i),
+                                      host_adm.g_dd(m, 1, 1, k, j, i),
+                                      host_adm.g_dd(m, 1, 2, k, j, i),
+                                      host_adm.g_dd(m, 2, 2, k, j, i));
           host_adm.psi4(m, k, j, i) = std::pow(detg, 1. / 3.);
         }
   }
   Kokkos::deep_copy(u_adm, host_u_adm);
 }
 
-void RefinementCondition(MeshBlockPack *pmbp)
-{
+void RefinementCondition(MeshBlockPack *pmbp) {
   pmbp->pz4c->pz4c_amr->Refine(pmbp);
 }
