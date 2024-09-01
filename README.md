@@ -69,6 +69,8 @@ E.g. `cuda` at IAS:
 cmake3 -DKokkos_ENABLE_CUDA=On -DKokkos_ARCH_VOLTA70=On -DCMAKE_CXX_COMPILER=${path_to_code}/athenak/kokkos/bin/nvcc_wrapper ../
 ```
 
+### Default build for Intel Dat
+
 ### Build One Puncture problem for CPU
 
 ```shell
@@ -108,7 +110,7 @@ make -j8
 # link twopuncturesc into athenak
 ln -s /installation/path/usr/twopunctures ${path_to_code}
 ```
-Now create build directory and configure with cmake
+Now create build directory and configure with CMake
 
 ```
 mkdir build_z4c_twopunc && cd build_z4c_twopunc
