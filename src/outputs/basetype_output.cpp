@@ -663,6 +663,7 @@ BaseTypeOutput::BaseTypeOutput(ParameterInput *pin, Mesh *pm, OutputParameters o
   // particle density binned to mesh
   if (out_params.variable.compare("prtcl_d") == 0) {
     out_params.contains_derived = true;
+    out_params.n_derived += 1;
     outvars.emplace_back("pdens",0,&(derived_var));
   }
 
