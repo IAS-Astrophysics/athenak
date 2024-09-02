@@ -32,12 +32,10 @@ void SingleStateLLF_DYNGR(const PrimitiveSolverHydro<EOSPolicy, ErrorPolicy>& eo
     const int nmhd, const int nscal,
     Real g3d[NSPMETRIC], Real beta_u[3], Real alpha,
     Real flux[NCONS], Real bflux[NMAG]) {
-  constexpr int ibx = ivx - IVX;
   constexpr int iby = ((ivx - IVX) + 1)%3;
   constexpr int ibz = ((ivx - IVX) + 2)%3;
 
   constexpr int diag[3] = {S11, S22, S33};
-  constexpr int idx = diag[ivx - IVX];
   constexpr int offdiag[3] = {S23, S13, S12};
   constexpr int offidx = offdiag[ivx - IVX];
   constexpr int idxy = diag[(ivx - IVX + 1) % 3];
@@ -115,7 +113,6 @@ void LLF_DYNGR(TeamMember_t const &member,
     constexpr int ibz = ((ivx - IVX) + 2)%3;
 
     constexpr int diag[3] = {S11, S22, S33};
-    constexpr int idx = diag[ivx - IVX];
     constexpr int offdiag[3] = {S23, S13, S12};
     constexpr int offidx = offdiag[ivx - IVX];
     constexpr int idxy = diag[(ivx - IVX + 1) % 3];

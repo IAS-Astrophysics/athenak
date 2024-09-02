@@ -257,11 +257,9 @@ void Z4c::ADMConstraints(MeshBlockPack *pmbp) {
   int &ks = indcs.ks; int &ke = indcs.ke;
   //For GLOOPS
 
-  int ncells1 = indcs.nx1 + 2*(indcs.ng);
   int nmb = pmbp->nmb_thispack;
 
   auto &z4c = pmbp->pz4c->z4c;
-  auto &opt = pmbp->pz4c->opt;
   auto &adm = pmbp->padm->adm;
   auto &tmunu = pmbp->ptmunu->tmunu;
   auto &u_con = pmbp->pz4c->u_con;
