@@ -38,9 +38,10 @@ class Z4c_AMR {
   Real dchi_thresh;    // dchi threshold for dchi refinement method
  private:
   void RefineTracker(MeshBlockPack *pmbp);      // Refine based on the trackers
+  void RefineRadii(MeshBlockPack *pmbp);        // Refine based on the radii
+ public:
   void RefineChiMin(MeshBlockPack *pmbp);       // Refine based on min{chi}
   void RefineDchiMax(MeshBlockPack *pmbp);      // Refine based on max{dchi}
-  void RefineRadii(MeshBlockPack *pmbp);        // Refine based on the radii
 };
 
 } // namespace z4c
