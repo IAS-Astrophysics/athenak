@@ -5,6 +5,7 @@
 //========================================================================================
 //! \file tmunu.hpp
 //! \brief implementation of Tmunu class
+#include <algorithm>
 
 #include "athena.hpp"
 #include "athena_tensor.hpp"

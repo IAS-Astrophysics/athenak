@@ -43,7 +43,6 @@ TrackedParticleOutput::TrackedParticleOutput(ParameterInput *pin, Mesh *pm,
 // Copies data for tracked particles on this rank to host outpart array
 
 void TrackedParticleOutput::LoadOutputData(Mesh *pm) {
-
   // Load data for tracked particles on this rank into new device array
   DualArray1D<TrackedParticleData> tracked_prtcl("d_trked",ntrack_thisrank);
   int npart = pm->nprtcl_thisrank;

@@ -273,7 +273,6 @@ class PrimitiveSolverHydro {
                   DvceArray5D<Real> &bcc0, DvceArray5D<Real> &prim,
                   const int il, const int iu, const int jl, const int ju,
                   const int kl, const int ku, bool floors_only=false) {
-
     int &nhyd = pmy_pack->pmhd->nmhd;
     int &nscal = pmy_pack->pmhd->nscalars;
     int &nmb = pmy_pack->nmb_thispack;
