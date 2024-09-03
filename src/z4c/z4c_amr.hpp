@@ -26,8 +26,13 @@ class Z4c_AMR {
  public:
   explicit Z4c_AMR(ParameterInput *pin);
   ~Z4c_AMR() noexcept = default;
-  void Refine(MeshBlockPack *pmbp); // call the AMR method
- private:
+
+  void Refine(MeshBlockPack *pmbp);             // call the AMR method
+  void RefineTracker(MeshBlockPack *pmbp);      // Refine based on the trackers
+  void RefineChiMin(MeshBlockPack *pmbp);       // Refine based on min{chi}
+  void RefineDchiMax(MeshBlockPack *pmbp);      // Refine based on max{dchi}
+  void RefineRadii(MeshBlockPack *pmbp);        // Refine based on the radii
+
   RefinementMethod method;
 
   // Optinally set the minimum refinement level inside different radial shells
@@ -36,12 +41,6 @@ class Z4c_AMR {
 
   Real chi_thresh;     // chi threshold for chi refinement method
   Real dchi_thresh;    // dchi threshold for dchi refinement method
- private:
-  void RefineTracker(MeshBlockPack *pmbp);      // Refine based on the trackers
-  void RefineRadii(MeshBlockPack *pmbp);        // Refine based on the radii
- public:
-  void RefineChiMin(MeshBlockPack *pmbp);       // Refine based on min{chi}
-  void RefineDchiMax(MeshBlockPack *pmbp);      // Refine based on max{dchi}
 };
 
 } // namespace z4c
