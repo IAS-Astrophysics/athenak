@@ -171,26 +171,7 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resf
     nadm = padm->nadm;
   }
 
-  // root process reads size of CC and FC data arrays from restart file
-  IOWrapperSizeT variablesize = sizeof(IOWrapperSizeT);
-  char *variabledata = new char[variablesize];
-  if (global_variable::my_rank == 0) { // the master process reads the variables data
-    if (resfile.Read_bytes(variabledata, 1, variablesize) != variablesize) {
-      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-                << std::endl << "Variable data size read from restart file is incorrect, "
-                << "restart file is broken." << std::endl;
-      exit(EXIT_FAILURE);
-    }
-  }
-#if MPI_PARALLEL_ENABLED
-  // then broadcast the datasize information
-  MPI_Bcast(variabledata, variablesize, MPI_CHAR, 0, MPI_COMM_WORLD);
-#endif
-
-  IOWrapperSizeT data_size;
-  std::memcpy(&data_size, &(variabledata[0]), sizeof(IOWrapperSizeT));
-  // calculate total number of CC variables
-
+  // root process reads z4c last_output_time and tracker data
   if (pz4c != nullptr) {
     Real last_output_time;
     if (global_variable::my_rank == 0) {
@@ -243,6 +224,25 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resf
     std::memcpy(&(pturb->rstate), &(rng_data[0]), sizeof(RNG_State));
   }
 
+  // root process reads size of CC and FC data arrays from restart file
+  IOWrapperSizeT variablesize = sizeof(IOWrapperSizeT);
+  char *variabledata = new char[variablesize];
+  if (global_variable::my_rank == 0) { // the master process reads the variables data
+    if (resfile.Read_bytes(variabledata, 1, variablesize) != variablesize) {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                << std::endl << "Variable data size read from restart file is incorrect, "
+                << "restart file is broken." << std::endl;
+      exit(EXIT_FAILURE);
+    }
+  }
+#if MPI_PARALLEL_ENABLED
+  // then broadcast the datasize information
+  MPI_Bcast(variabledata, variablesize, MPI_CHAR, 0, MPI_COMM_WORLD);
+#endif
+  IOWrapperSizeT data_size;
+  std::memcpy(&data_size, &(variabledata[0]), sizeof(IOWrapperSizeT));
+
+  // calculate total number of CC variables
   IOWrapperSizeT headeroffset;
   // master process gets file offset
   if (global_variable::my_rank == 0) {
