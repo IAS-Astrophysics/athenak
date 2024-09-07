@@ -11,6 +11,7 @@
 #include <math.h>
 
 #include <type_traits>
+#include <iostream>
 
 #include "athena.hpp"
 #include "globals.hpp"
