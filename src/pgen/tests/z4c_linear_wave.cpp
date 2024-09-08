@@ -87,7 +87,7 @@ void ProblemGenerator::Z4cLinearWave(ParameterInput *pin, const bool restart) {
   // Calculate angular offset of the wavevector from zhat
   Real theta = std::atan2(sqrt(kx2 * kx2 + kx1 * kx1), kx3);
   Real phi = std::atan2(kx1, kx2);
-  
+
   // Find wavelength
   Real lambda = 1/knorm;
 
