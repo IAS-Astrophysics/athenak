@@ -10,6 +10,7 @@
 
 #include <map>
 #include <memory>    // make_unique, unique_ptr
+#include <list>
 #include <string>
 #include <vector>
 #include "athena.hpp"
@@ -24,6 +25,7 @@
 // forward declarations
 class Coordinates;
 class Driver;
+class CompactObjectTracker;
 
 //----------------------------------------------------------------------------------------
 //! \struct Z4cTaskIDs
@@ -116,12 +118,6 @@ class Z4c {
   DvceArray5D<Real> u_weyl; // weyl scalars
   DvceArray5D<Real> coarse_u_weyl; // coarse representation of weyl scalars
 
-  // puncture location
-  Real ppos[3] = {0.,0.,0.}; // later on initiate from input file
-#if TWO_PUNCTURES
-  // second puncture location
-  Real ppos2[3] = {0.,0.,0.}; // later on initiate from input file
-#endif
   struct ADM_vars {
     AthenaTensor<Real, TensorSymm::NONE, 3, 0> psi4;
     AthenaTensor<Real, TensorSymm::SYM2, 3, 2> g_dd;
@@ -217,7 +213,7 @@ class Z4c {
   // geodesic grid for wave extr
   std::vector<std::unique_ptr<SphericalGrid>> spherical_grids;
   // array storing waveform at each radii
-  HostArray3D<Real> psi_out;
+  Real * psi_out;
   Real waveform_dt;
   Real last_output_time;
   int nrad; // number of radii to perform wave extraction
@@ -242,13 +238,13 @@ class Z4c {
   TaskStatus ApplyPhysicalBCs(Driver *d, int stage);
   TaskStatus EnforceAlgConstr(Driver *d, int stage);
 
-  TaskStatus Z4cToADM_(Driver *d, int stage);
+  TaskStatus ConvertZ4cToADM(Driver *d, int stage);
   TaskStatus UpdateExcisionMasks(Driver *d, int stage);
   TaskStatus ADMConstraints_(Driver *d, int stage);
   TaskStatus Z4cBoundaryRHS(Driver *d, int stage);
   TaskStatus RestrictU(Driver *d, int stage);
   TaskStatus RestrictWeyl(Driver *d, int stage);
-  TaskStatus PunctureTracker(Driver *d, int stage);
+  TaskStatus TrackCompactObjects(Driver *d, int stage);
   TaskStatus CalcWeylScalar(Driver *d, int stage);
   TaskStatus CalcWaveForm(Driver *d, int stage);
 
@@ -265,14 +261,12 @@ class Z4c {
   void WaveExtr(MeshBlockPack *pmbp);
   void AlgConstr(MeshBlockPack *pmbp);
 
-  // amr criteria
-  Z4c_AMR *pz4c_amr{nullptr};
+  Z4c_AMR *pamr;
+  std::list<CompactObjectTracker> ptracker;
 
  private:
   MeshBlockPack* pmy_pack;  // ptr to MeshBlockPack containing this Z4c
 };
-
-
 
 } // namespace z4c
 #endif //Z4C_Z4C_HPP_
