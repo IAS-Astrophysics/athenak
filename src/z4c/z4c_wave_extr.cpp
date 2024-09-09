@@ -70,8 +70,6 @@ void Z4c::WaveExtr(MeshBlockPack *pmbp) {
   auto &grids = pmbp->pz4c->spherical_grids;
   auto &u_weyl = pmbp->pz4c->u_weyl;
   auto &psi_out = pmbp->pz4c->psi_out;
-  // TODO(@hzhu): add an mpi call here to fill in the ghost before interpolation to sphere
-  // TODO(@dur566): is this fixed now?
 
   // number of radii
   int nradii = grids.size();
