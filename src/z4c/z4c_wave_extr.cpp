@@ -77,7 +77,7 @@ void Z4c::WaveExtr(MeshBlockPack *pmbp) {
 
   // maximum l; TODO(@hzhu): read in from input file
   int lmax = 8;
-  bool bitant = false;
+  // bool bitant = false;
 
   Real ylmR,ylmI;
   for (int g=0; g<nradii; ++g) {

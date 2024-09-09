@@ -192,7 +192,7 @@ void MeshBlockPack::AddPhysics(ParameterInput *pin) {
   if (pin->DoesBlockExist("z4c")) {
     pz4c = new z4c::Z4c(this, pin);
     padm = new adm::ADM(this, pin);
-    ptmunu = new Tmunu(this, pin);
+    ptmunu = nullptr;
     // init puncture tracker
     int npunct = pin->GetOrAddInteger("z4c", "npunct", 0);
     if (npunct > 0) {
@@ -223,6 +223,7 @@ void MeshBlockPack::AddPhysics(ParameterInput *pin) {
   if ((pin->DoesBlockExist("z4c") || pin->DoesBlockExist("adm")) &&
       (pin->DoesBlockExist("mhd")) ) {
     pdyngr = dyngr::BuildDynGRMHD(this, pin);
+    ptmunu = new Tmunu(this, pin);
   }
 
   if (pz4c != nullptr || padm != nullptr) {

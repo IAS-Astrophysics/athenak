@@ -170,13 +170,11 @@ void Coordinates::UpdateExcisionMasks() {
   if (coord_data.excision_scheme == ExcisionScheme::lapse) {
     // capture variables for kernel
     auto &indcs = pmy_pack->pmesh->mb_indcs;
-    int is = indcs.is; int js = indcs.js; int ks = indcs.ks;
     int &ng = indcs.ng;
     int n1 = indcs.nx1 + 2*ng;
     int n2 = (indcs.nx2 > 1)? (indcs.nx2 + 2*ng) : 1;
     int n3 = (indcs.nx3 > 1)? (indcs.nx3 + 2*ng) : 1;
     int nmb1 = pmy_pack->nmb_thispack - 1;
-    auto &size = pmy_pack->pmb->mb_size;
     auto &adm = pmy_pack->padm->adm;
     auto &floor = excision_floor;
     auto &flux = excision_flux;
