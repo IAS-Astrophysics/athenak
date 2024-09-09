@@ -379,7 +379,6 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage) {
         S += oopsi4 * g_uu(a,b) * tmunu.S_dd(m,a,b,k,j,i);
       }
     }
-    
 
     // -----------------------------------------------------------------------------------
     // 2nd covariant derivative of the lapse
