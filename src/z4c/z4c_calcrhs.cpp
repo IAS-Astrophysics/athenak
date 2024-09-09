@@ -35,11 +35,12 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage) {
   int nmb = pmy_pack->nmb_thispack;
 
   auto &z4c = pmy_pack->pz4c->z4c;
-  auto &tmunu = pmy_pack->ptmunu->tmunu;
   auto &rhs = pmy_pack->pz4c->rhs;
   auto &opt = pmy_pack->pz4c->opt;
 
   bool is_vacuum = (pmy_pack->ptmunu == nullptr) ? true : false;
+  Tmunu::Tmunu_vars tmunu;
+  if (!is_vacuum) tmunu = pmy_pack->ptmunu->tmunu;
 
   // ===================================================================================
   // Main RHS calculation

@@ -261,11 +261,12 @@ void Z4c::ADMConstraints(MeshBlockPack *pmbp) {
 
   auto &z4c = pmbp->pz4c->z4c;
   auto &adm = pmbp->padm->adm;
-  auto &tmunu = pmbp->ptmunu->tmunu;
   auto &u_con = pmbp->pz4c->u_con;
 
   // vacuum or with matter?
-  bool is_vacuum = (pmbp->ptmunu == nullptr) ? true : false;
+  bool is_vacuum = (pmy_pack->ptmunu == nullptr) ? true : false;
+  Tmunu::Tmunu_vars tmunu;
+  if (!is_vacuum) tmunu = pmy_pack->ptmunu->tmunu;
 
   Kokkos::deep_copy(u_con, 0.);
   auto &con = pmbp->pz4c->con;
