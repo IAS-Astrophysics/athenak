@@ -25,7 +25,7 @@ namespace z4c {
 
 // set some parameters
 Z4c_AMR::Z4c_AMR(ParameterInput *pin) {
-  std::string ref_method = pin->GetOrAddString("z4c_amr", "method", "trival");
+  std::string ref_method = pin->GetOrAddString("z4c_amr", "method", "trivial");
   if (ref_method == "trivial") {
     method = Trivial;
   } else if (ref_method == "tracker") {
