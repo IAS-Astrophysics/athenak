@@ -105,7 +105,9 @@ add_executable(
 
         pgen/pgen.cpp
         pgen/tests/advection.cpp
+        pgen/tests/collapse.cpp
         pgen/tests/cpaw.cpp
+        pgen/tests/diffusion.cpp
         pgen/tests/gr_bondi.cpp
         pgen/tests/gr_monopole.cpp
         pgen/tests/linear_wave.cpp
@@ -116,7 +118,6 @@ add_executable(
         pgen/tests/rad_hohlraum.cpp
         pgen/tests/rad_linear_wave.cpp
         pgen/tests/z4c_linear_wave.cpp
-        pgen/tests/collapse.cpp
 
         radiation/radiation.cpp
         radiation/radiation_fluxes.cpp
