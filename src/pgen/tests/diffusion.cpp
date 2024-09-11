@@ -30,12 +30,17 @@
 #include "hydro/hydro.hpp"
 #include "diffusion/viscosity.hpp"
 
-// function to compute errors in solution at end of run
+// Prototype for function to compute errors in solution at end of run
 void DiffusionErrors(ParameterInput *pin, Mesh *pm);
+// Prototype for user-defined BCs
+void GuassianProfile(Mesh *pm);
 
+// Anonymous namespace used to prevent name collisions outside of this file
 namespace {
 // global variable to control computation of initial conditions versus errors
 bool set_initial_conditions = true;
+// input parameters passed to user-defined BC function
+Real d0, amp, t0, x10;
 } // end anonymous namespace
 
 //----------------------------------------------------------------------------------------
@@ -45,13 +50,15 @@ bool set_initial_conditions = true;
 void ProblemGenerator::Diffusion(ParameterInput *pin, const bool restart) {
   // set diffusion errors function
   pgen_final_func = DiffusionErrors;
+  // user-define BC
+  user_bcs_func = GuassianProfile;
   if (restart) return;
 
   // Read problem parameters
-  Real d0 = 1.0;
-  Real amp = pin->GetOrAddReal("problem", "amp", 1.e-6);
-  Real t0 = pin->GetOrAddReal("problem", "t0", 0.5);
-  Real x10 = pin->GetOrAddReal("problem", "x10", 0.0);
+  d0 = 1.0;
+  amp = pin->GetOrAddReal("problem", "amp", 1.e-6);
+  t0 = pin->GetOrAddReal("problem", "t0", 0.5);
+  x10 = pin->GetOrAddReal("problem", "x10", 0.0);
 
   // capture variables for the kernel
   auto &indcs = pmy_mesh_->mb_indcs;
@@ -243,5 +250,74 @@ void DiffusionErrors(ParameterInput *pin, Mesh *pm) {
     std::fclose(pfile);
   }
 
+  return;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn GuassianProfile
+//  \brief Sets boundary condition on surfaces of computational domain
+// FIXME: Boundaries need to be adjusted for DynGRMHD
+
+void GuassianProfile(Mesh *pm) {
+  auto &indcs = pm->mb_indcs;
+  int &ng = indcs.ng;
+  int n1 = indcs.nx1 + 2*ng;
+  int n2 = (indcs.nx2 > 1)? (indcs.nx2 + 2*ng) : 1;
+  int n3 = (indcs.nx3 > 1)? (indcs.nx3 + 2*ng) : 1;
+  int &is = indcs.is;  int &ie  = indcs.ie;
+  int &js = indcs.js;  int &je  = indcs.je;
+  int &ks = indcs.ks;  int &ke  = indcs.ke;
+  auto &mb_bcs = pm->pmb_pack->pmb->mb_bcs;
+  int nmb = pm->pmb_pack->nmb_thispack;
+  auto &size = pm->pmb_pack->pmb->mb_size;
+
+  EOS_Data &eos = pm->pmb_pack->phydro->peos->eos_data;
+  Real gm1 = eos.gamma - 1.0;
+  Real p0 = 1.0/eos.gamma;
+  Real t1 = t0 + pm->time;
+  auto &nu_iso = pm->pmb_pack->phydro->pvisc->nu_iso;
+  auto &u0 = pm->pmb_pack->phydro->u0;
+
+  par_for("diffusion_x1", DevExeSpace(),0,(nmb-1),0,(n3-1),0,(n2-1),
+  KOKKOS_LAMBDA(int m, int k, int j) {
+    if (mb_bcs.d_view(m,BoundaryFace::inner_x1) == BoundaryFlag::user) {
+      for (int i=0; i<ng; ++i) {
+        Real &x1min = size.d_view(m).x1min;
+        Real &x1max = size.d_view(m).x1max;
+        int nx1 = indcs.nx1;
+        Real x1v = CellCenterX(-1-i, nx1, x1min, x1max);
+
+        u0(m,IDN,k,j,is-i-1) = d0;
+        u0(m,IM1,k,j,is-i-1) = 0.0;
+        u0(m,IM2,k,j,is-i-1) = d0*amp*exp(SQR(x1v-x10)/(-4.0*nu_iso*t1))
+                          /sqrt(4.*M_PI*nu_iso*t1);
+        u0(m,IM3,k,j,is-i-1) = d0*amp*exp(SQR(x1v-x10)/(-4.0*nu_iso*t1))
+                          /sqrt(4.*M_PI*nu_iso*t1);
+        if (eos.is_ideal) {
+          u0(m,IEN,k,j,is-i-1) = p0/gm1 +
+                                 0.5*(SQR(u0(m,IM2,k,j,i)) + SQR(u0(m,IM3,k,j,i)))/d0;
+        }
+      }
+    }
+    if (mb_bcs.d_view(m,BoundaryFace::outer_x1) == BoundaryFlag::user) {
+      for (int i=0; i<ng; ++i) {
+        Real &x1min = size.d_view(m).x1min;
+        Real &x1max = size.d_view(m).x1max;
+        int nx1 = indcs.nx1;
+        Real x1v = CellCenterX(ie-is+1+i, nx1, x1min, x1max);
+
+        u0(m,IDN,k,j,ie+i+1) = d0;
+        u0(m,IM1,k,j,ie+i+1) = 0.0;
+        u0(m,IM2,k,j,ie+i+1) = d0*amp*exp(SQR(x1v-x10)/(-4.0*nu_iso*t1))
+                          /sqrt(4.*M_PI*nu_iso*t1);
+        u0(m,IM3,k,j,ie+i+1) = d0*amp*exp(SQR(x1v-x10)/(-4.0*nu_iso*t1))
+                          /sqrt(4.*M_PI*nu_iso*t1);
+        if (eos.is_ideal) {
+          u0(m,IEN,k,j,ie+i+1) = p0/gm1 +
+                                 0.5*(SQR(u0(m,IM2,k,j,i)) + SQR(u0(m,IM3,k,j,i)))/d0;
+        }
+      }
+    }
+  });
   return;
 }
