@@ -68,6 +68,10 @@ void ProblemGenerator::Diffusion(ParameterInput *pin, const bool restart) {
   MeshBlockPack *pmbp = pmy_mesh_->pmb_pack;
   auto &size = pmbp->pmb->mb_size;
   auto &time = pmbp->pmesh->time;
+  auto &d0_=d0, &amp_=amp, &x10_=x10;
+  // add stopping time when called at end of run
+  Real t1 = t0;
+  if (!(set_initial_conditions)) {t1 += time;}
 
   // Initialize Hydro variables -------------------------------
   if (pmbp->phydro != nullptr) {
@@ -83,8 +87,6 @@ void ProblemGenerator::Diffusion(ParameterInput *pin, const bool restart) {
 
     // compute solution in u1 register. For initial conditions, set u1 -> u0.
     auto &u1 = (set_initial_conditions)? pmbp->phydro->u0 : pmbp->phydro->u1;
-    // add stopping time when called at end of run
-    if (!(set_initial_conditions)) {t0 += time;}
 
     // Initialize Gaussian profile of transverse (x2 and x3) velocity in x1-direction
     par_for("pgen_shock1", DevExeSpace(),0,(pmbp->nmb_thispack-1),ks,ke,js,je,is,ie,
@@ -94,14 +96,14 @@ void ProblemGenerator::Diffusion(ParameterInput *pin, const bool restart) {
       int nx1 = indcs.nx1;
       Real x1v = CellCenterX(i-is, nx1, x1min, x1max);
 
-      u1(m,IDN,k,j,i) = d0;
+      u1(m,IDN,k,j,i) = d0_;
       u1(m,IM1,k,j,i) = 0.0;
-      u1(m,IM2,k,j,i) = d0*amp*exp(SQR(x1v-x10)/(-4.0*nu_iso*t0))
-                        /sqrt(4.*M_PI*nu_iso*t0);
-      u1(m,IM3,k,j,i) = d0*amp*exp(SQR(x1v-x10)/(-4.0*nu_iso*t0))
-                        /sqrt(4.*M_PI*nu_iso*t0);
+      u1(m,IM2,k,j,i) = d0_*amp_*exp(SQR(x1v-x10_)/(-4.0*nu_iso*t1))
+                        /sqrt(4.*M_PI*nu_iso*t1);
+      u1(m,IM3,k,j,i) = d0_*amp_*exp(SQR(x1v-x10_)/(-4.0*nu_iso*t1))
+                        /sqrt(4.*M_PI*nu_iso*t1);
       if (eos.is_ideal) {
-        u1(m,IEN,k,j,i) = p0/gm1 + 0.5*(SQR(u1(m,IM2,k,j,i)) + SQR(u1(m,IM3,k,j,i)))/d0;
+        u1(m,IEN,k,j,i) = p0/gm1 + 0.5*(SQR(u1(m,IM2,k,j,i)) + SQR(u1(m,IM3,k,j,i)))/d0_;
       }
     });
   } // End initialization of Hydro variables
@@ -265,8 +267,6 @@ void GuassianProfile(Mesh *pm) {
   int n2 = (indcs.nx2 > 1)? (indcs.nx2 + 2*ng) : 1;
   int n3 = (indcs.nx3 > 1)? (indcs.nx3 + 2*ng) : 1;
   int &is = indcs.is;  int &ie  = indcs.ie;
-  int &js = indcs.js;  int &je  = indcs.je;
-  int &ks = indcs.ks;  int &ke  = indcs.ke;
   auto &mb_bcs = pm->pmb_pack->pmb->mb_bcs;
   int nmb = pm->pmb_pack->nmb_thispack;
   auto &size = pm->pmb_pack->pmb->mb_size;
@@ -277,6 +277,7 @@ void GuassianProfile(Mesh *pm) {
   Real t1 = t0 + pm->time;
   auto &nu_iso = pm->pmb_pack->phydro->pvisc->nu_iso;
   auto &u0 = pm->pmb_pack->phydro->u0;
+  auto &d0_=d0, &amp_=amp, &x10_=x10;
 
   par_for("diffusion_x1", DevExeSpace(),0,(nmb-1),0,(n3-1),0,(n2-1),
   KOKKOS_LAMBDA(int m, int k, int j) {
@@ -287,15 +288,15 @@ void GuassianProfile(Mesh *pm) {
         int nx1 = indcs.nx1;
         Real x1v = CellCenterX(-1-i, nx1, x1min, x1max);
 
-        u0(m,IDN,k,j,is-i-1) = d0;
+        u0(m,IDN,k,j,is-i-1) = d0_;
         u0(m,IM1,k,j,is-i-1) = 0.0;
-        u0(m,IM2,k,j,is-i-1) = d0*amp*exp(SQR(x1v-x10)/(-4.0*nu_iso*t1))
+        u0(m,IM2,k,j,is-i-1) = d0_*amp_*exp(SQR(x1v-x10_)/(-4.0*nu_iso*t1))
                           /sqrt(4.*M_PI*nu_iso*t1);
-        u0(m,IM3,k,j,is-i-1) = d0*amp*exp(SQR(x1v-x10)/(-4.0*nu_iso*t1))
+        u0(m,IM3,k,j,is-i-1) = d0_*amp_*exp(SQR(x1v-x10_)/(-4.0*nu_iso*t1))
                           /sqrt(4.*M_PI*nu_iso*t1);
         if (eos.is_ideal) {
           u0(m,IEN,k,j,is-i-1) = p0/gm1 +
-                                 0.5*(SQR(u0(m,IM2,k,j,i)) + SQR(u0(m,IM3,k,j,i)))/d0;
+                                 0.5*(SQR(u0(m,IM2,k,j,i)) + SQR(u0(m,IM3,k,j,i)))/d0_;
         }
       }
     }
@@ -306,15 +307,15 @@ void GuassianProfile(Mesh *pm) {
         int nx1 = indcs.nx1;
         Real x1v = CellCenterX(ie-is+1+i, nx1, x1min, x1max);
 
-        u0(m,IDN,k,j,ie+i+1) = d0;
+        u0(m,IDN,k,j,ie+i+1) = d0_;
         u0(m,IM1,k,j,ie+i+1) = 0.0;
-        u0(m,IM2,k,j,ie+i+1) = d0*amp*exp(SQR(x1v-x10)/(-4.0*nu_iso*t1))
+        u0(m,IM2,k,j,ie+i+1) = d0_*amp_*exp(SQR(x1v-x10_)/(-4.0*nu_iso*t1))
                           /sqrt(4.*M_PI*nu_iso*t1);
-        u0(m,IM3,k,j,ie+i+1) = d0*amp*exp(SQR(x1v-x10)/(-4.0*nu_iso*t1))
+        u0(m,IM3,k,j,ie+i+1) = d0_*amp_*exp(SQR(x1v-x10_)/(-4.0*nu_iso*t1))
                           /sqrt(4.*M_PI*nu_iso*t1);
         if (eos.is_ideal) {
           u0(m,IEN,k,j,ie+i+1) = p0/gm1 +
-                                 0.5*(SQR(u0(m,IM2,k,j,i)) + SQR(u0(m,IM3,k,j,i)))/d0;
+                                 0.5*(SQR(u0(m,IM2,k,j,i)) + SQR(u0(m,IM3,k,j,i)))/d0_;
         }
       }
     }
