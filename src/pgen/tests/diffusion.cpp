@@ -14,10 +14,10 @@
 
 // C++ headers
 #include <cmath>      // sqrt()
+#include <cstdio>     // fopen(), fprintf(), freopen()
 #include <cstring>    // strcmp()
 #include <iostream>   // endl
 #include <sstream>    // stringstream
-#include <stdexcept>  // runtime_error
 #include <string>     // c_str()
 
 // Athena++ headers
