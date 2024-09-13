@@ -165,6 +165,11 @@ if (${PROBLEM} STREQUAL "elliptica_bns")
       ${CMAKE_SOURCE_DIR}/Elliptica_ID_Reader/include)
   target_link_libraries(athena PUBLIC
       ${CMAKE_SOURCE_DIR}/Elliptica_ID_Reader/lib/libelliptica_id_reader.a)
+  if (Athena_ENABLE_OPENMP)
+  else ()
+    find_package(OpenMP COMPONENTS CXX)
+    target_link_libraries(athena PUBLIC OpenMP::OpenMP_CXX)
+  endif()
 endif()
 
 if (${PROBLEM} STREQUAL "lorene_bns")
