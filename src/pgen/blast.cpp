@@ -324,7 +324,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
       Real dx2 = size.d_view(m).dx2;
       Real dx3 = size.d_view(m).dx3;
 
-      Real y;
+      Real y = x2f;
 
       if (warp) {
         y = GetCartesianFromScrewball(x2f, a_warp);

@@ -201,7 +201,6 @@ void Z4c::AlgConstr(MeshBlockPack *pmbp) {
   int nmb = pmbp->nmb_thispack;
 
   auto &z4c = pmbp->pz4c->z4c;
-  auto &opt = pmbp->pz4c->opt;
   par_for("Alg constr loop",DevExeSpace(),
   0,nmb-1,ksg,keg,jsg,jeg,isg,ieg,
   KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {

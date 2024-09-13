@@ -223,7 +223,6 @@ class Z4c {
   int nrad; // number of radii to perform wave extraction
 
   // functions
-  void AssembleZ4cTasks(std::map<std::string, std::shared_ptr<TaskList>> tl);
   void QueueZ4cTasks();
   TaskStatus InitRecv(Driver *d, int stage);
   TaskStatus ClearRecv(Driver *d, int stage);

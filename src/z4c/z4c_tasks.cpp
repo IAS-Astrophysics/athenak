@@ -24,60 +24,10 @@
 
 namespace z4c {
 //----------------------------------------------------------------------------------------
-//! \fn  void Z4c::AssembleZ4cTasks
-//! \brief Adds z4c tasks to appropriate task lists used by time integrators.
-//  Called by MeshBlockPack::AddPhysics() function directly after Z4c constrctor
-
-void Z4c::AssembleZ4cTasks(std::map<std::string, std::shared_ptr<TaskList>> tl) {
-  TaskID none(0);
-  printf("AssembleZ4cTasks\n");
-  auto &indcs = pmy_pack->pmesh->mb_indcs;
-  // "before_stagen" task list
-  id.irecv = tl["before_stagen"]->AddTask(&Z4c::InitRecv, this, none);
-  id.irecvweyl = tl["before_stagen"]->AddTask(&Z4c::InitRecvWeyl, this, none);
-
-  // "stagen" task list
-  // id.ptrack = tl["stagen"]->AddTask(&Z4c::PunctureTracker, this, none);
-  id.copyu = tl["stagen"]->AddTask(&Z4c::CopyU, this, none); // id.ptrack);
-
-  switch (indcs.ng) {
-      case 2: id.crhs  = tl["stagen"]->AddTask(&Z4c::CalcRHS<2>, this, id.copyu);
-              break;
-      case 3: id.crhs  = tl["stagen"]->AddTask(&Z4c::CalcRHS<3>, this, id.copyu);
-              break;
-      case 4: id.crhs  = tl["stagen"]->AddTask(&Z4c::CalcRHS<4>, this, id.copyu);
-              break;
-  }
-  id.sombc = tl["stagen"]->AddTask(&Z4c::Z4cBoundaryRHS, this, id.crhs);
-  id.expl  = tl["stagen"]->AddTask(&Z4c::ExpRKUpdate, this, id.sombc);
-  id.restu = tl["stagen"]->AddTask(&Z4c::RestrictU, this, id.expl);
-  id.sendu = tl["stagen"]->AddTask(&Z4c::SendU, this, id.restu);
-  id.recvu = tl["stagen"]->AddTask(&Z4c::RecvU, this, id.sendu);
-  id.bcs   = tl["stagen"]->AddTask(&Z4c::ApplyPhysicalBCs, this, id.recvu);
-  id.prol  = tl["stagen"]->AddTask(&Z4c::Prolongate, this, id.bcs);
-  id.algc  = tl["stagen"]->AddTask(&Z4c::EnforceAlgConstr, this, id.prol);
-  id.newdt = tl["stagen"]->AddTask(&Z4c::NewTimeStep, this, id.algc);
-  // "after_stagen" task list
-  id.csend = tl["after_stagen"]->AddTask(&Z4c::ClearSend, this, none);
-  id.crecv = tl["after_stagen"]->AddTask(&Z4c::ClearRecv, this, id.csend);
-  id.z4tad = tl["after_stagen"]->AddTask(&Z4c::Z4cToADM_, this, id.crecv);
-  id.admc  = tl["after_stagen"]->AddTask(&Z4c::ADMConstraints_, this, id.z4tad);
-  id.weyl_scalar  = tl["after_stagen"]->AddTask(&Z4c::CalcWeylScalar, this, id.z4tad);
-  id.weyl_rest = tl["after_stagen"]->AddTask(&Z4c::RestrictWeyl, this, id.weyl_scalar);
-  id.weyl_send = tl["after_stagen"]->AddTask(&Z4c::SendWeyl, this, id.weyl_rest);
-  id.weyl_recv = tl["after_stagen"]->AddTask(&Z4c::RecvWeyl, this, id.weyl_send);
-  id.weyl_prol  = tl["after_stagen"]->AddTask(&Z4c::ProlongateWeyl, this, id.weyl_recv);
-  id.csendweyl = tl["after_stagen"]->AddTask(&Z4c::ClearSendWeyl, this, id.weyl_prol);
-  id.crecvweyl = tl["after_stagen"]->AddTask(&Z4c::ClearRecvWeyl, this, id.csendweyl);
-  id.wave_extr = tl["after_stagen"]->AddTask(&Z4c::CalcWaveForm, this, id.crecvweyl);
-  id.ptrck = tl["after_stagen"]->AddTask(&Z4c::PunctureTracker, this, id.z4tad);
-  return;
-}
-
-//----------------------------------------------------------------------------------------
 //! \fn  void Z4c::QueueZ4cTasks
 //! \brief queue Z4c tasks into NumericalRelativity
 void Z4c::QueueZ4cTasks() {
+  printf("AssembleZ4cTasks\n");
   using namespace mhd;     // NOLINT(build/namespaces)
   using namespace numrel;  // NOLINT(build/namespaces)
   NumericalRelativity *pnr = pmy_pack->pnr;
