@@ -98,8 +98,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   // Ensure that p0 is sufficiently large to avoid negative pressures
   if (pmbp->pmesh->two_d) {
     p0 -= grav_acc*pmy_mesh_->mesh_size.x2max;
-  }
-  else {
+  } else {
     p0 -= grav_acc*pmy_mesh_->mesh_size.x3max;
   }
 
