@@ -186,15 +186,6 @@ void MeshBlockPack::AddPhysics(ParameterInput *pin) {
     pz4c = new z4c::Z4c(this, pin);
     padm = new adm::ADM(this, pin);
     ptmunu = nullptr;
-
-    // init puncture tracker
-    int npunct = pin->GetOrAddInteger("z4c", "npunct", 0);
-    if (npunct > 0) {
-      pz4c_ptracker.reserve(npunct);
-      for (int n = 0; n < npunct; ++n) {
-        pz4c_ptracker.push_back(new z4c::PunctureTracker(pmesh, pin, n));
-      }
-    }
     nphysics++;
   } else {
     pz4c = nullptr;
