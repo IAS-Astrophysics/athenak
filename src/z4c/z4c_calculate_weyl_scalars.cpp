@@ -37,7 +37,6 @@ void Z4c::Z4cWeyl(MeshBlockPack *pmbp) {
   int &ks = indcs.ks; int &ke = indcs.ke;
   int nmb = pmbp->nmb_thispack;
 
-  auto &z4c = pmbp->pz4c->z4c;
   auto &adm = pmbp->padm->adm;
   auto &weyl = pmbp->pz4c->weyl;
   auto &u_weyl = pmbp->pz4c->u_weyl;

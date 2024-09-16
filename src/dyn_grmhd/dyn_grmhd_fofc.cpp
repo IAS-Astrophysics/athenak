@@ -36,9 +36,9 @@ namespace dyngr {
 template<class EOSPolicy, class ErrorPolicy> template <DynGRMHD_RSolver rsolver_method_>
 void DynGRMHDPS<EOSPolicy, ErrorPolicy>::FOFC(Driver *pdriver, int stage) {
   auto &indcs = pmy_pack->pmesh->mb_indcs;
-  int is = indcs.is, ie = indcs.ie, nx1 = indcs.nx1;
-  int js = indcs.js, je = indcs.je, nx2 = indcs.nx2;
-  int ks = indcs.ks, ke = indcs.ke, nx3 = indcs.nx3;
+  int is = indcs.is, ie = indcs.ie;
+  int js = indcs.js, je = indcs.je;
+  int ks = indcs.ks, ke = indcs.ke;
 
   bool &multi_d = pmy_pack->pmesh->multi_d;
   bool &three_d = pmy_pack->pmesh->three_d;
@@ -150,7 +150,6 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::FOFC(Driver *pdriver, int stage) {
                            pmy_pack->pmhd->w0, il, iu, jl, ju, kl, ku, true);
   }
 
-  auto &coord = pmy_pack->pcoord->coord_data;
   auto &use_fofc_ = pmy_pack->pmhd->use_fofc;
   auto fofc_ = pmy_pack->pmhd->fofc;
   auto &eos_ = eos;

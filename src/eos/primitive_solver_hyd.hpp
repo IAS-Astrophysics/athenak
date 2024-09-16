@@ -181,7 +181,6 @@ class PrimitiveSolverHydro {
                   DvceArray5D<Real> &cons,
                   const int il, const int iu, const int jl, const int ju,
                   const int kl, const int ku) {
-    auto &indcs = pmy_pack->pmesh->mb_indcs;
     //int &is = indcs.is, &js = indcs.js, &ks = indcs.ks;
     //auto &size = pmy_pack->pmb->mb_size;
     //auto &flat = pmy_pack->pcoord->coord_data.is_minkowski;
@@ -274,11 +273,6 @@ class PrimitiveSolverHydro {
                   DvceArray5D<Real> &bcc0, DvceArray5D<Real> &prim,
                   const int il, const int iu, const int jl, const int ju,
                   const int kl, const int ku, bool floors_only=false) {
-    auto &indcs = pmy_pack->pmesh->mb_indcs;
-    int &is = indcs.is, &js = indcs.js, &ks = indcs.ks;
-    int &ie = indcs.ie, &je = indcs.ie, &ke = indcs.ke;
-    auto &size = pmy_pack->pmb->mb_size;
-
     int &nhyd = pmy_pack->pmhd->nmhd;
     int &nscal = pmy_pack->pmhd->nscalars;
     int &nmb = pmy_pack->nmb_thispack;

@@ -276,7 +276,6 @@ void Driver::Initialize(Mesh *pmesh, ParameterInput *pin, Outputs *pout, bool re
   mhd::MHD *pmhd = pmesh->pmb_pack->pmhd;
   radiation::Radiation *prad = pmesh->pmb_pack->prad;
   z4c::Z4c *pz4c = pmesh->pmb_pack->pz4c;
-  dyngr::DynGRMHD *pdyngr = pmesh->pmb_pack->pdyngr;
   if (time_evolution != TimeEvolution::tstatic) {
     if (phydro != nullptr) {
       (void) pmesh->pmb_pack->phydro->NewTimeStep(this, nexp_stages);
@@ -485,7 +484,9 @@ void Driver::OutputCycleDiagnostics(Mesh *pm) {
 //  const int dtprcsn = std::numeric_limits<Real>::max_digits10 - 1;
   const int dtprcsn = 6;
   if (pm->ncycle % ndiag == 0) {
-    std::cout << "cycle=" << pm->ncycle << std::scientific << std::setprecision(dtprcsn)
+    Real elapsed = pwall_clock_->seconds();
+    std::cout << "elapsed=" << elapsed << std::scientific << std::setprecision(dtprcsn)
+              << " cycle=" << pm->ncycle << std::scientific << std::setprecision(dtprcsn)
               << " time=" << pm->time << " dt=" << pm->dt << std::endl;
   }
   return;
@@ -517,6 +518,20 @@ Real Driver::UpdateWallClock() {
 
 void Driver::InitBoundaryValuesAndPrimitives(Mesh *pm) {
   // Note: with MPI, sends on ALL MBs must be complete before receives execute
+
+  // Initialize Z4c
+  z4c::Z4c *pz4c = pm->pmb_pack->pz4c;
+  if (pz4c != nullptr) {
+    (void) pz4c->RestrictU(this, 0);
+    (void) pz4c->InitRecv(this, -1);  // stage < 0 suppresses InitFluxRecv
+    (void) pz4c->SendU(this, 0);
+    (void) pz4c->ClearSend(this, -1);
+    (void) pz4c->ClearRecv(this, -1);
+    (void) pz4c->RecvU(this, 0);
+    (void) pz4c->Z4cBoundaryRHS(this, 0);
+    (void) pz4c->ApplyPhysicalBCs(this, 0);
+    (void) pz4c->Prolongate(this, 0);
+  }
 
   // Initialize HYDRO: ghost zones and primitive variables (everywhere)
   // includes communications for shearing box boundaries
@@ -563,7 +578,10 @@ void Driver::InitBoundaryValuesAndPrimitives(Mesh *pm) {
     if (pdyngr == nullptr) {
       (void) pmhd->ConToPrim(this, 0);
     } else {
-      pdyngr->ConToPrim(this, 0);
+      if (pz4c != nullptr) {
+        (void) pz4c->ConvertZ4cToADM(this, 0);
+      }
+      (void) pdyngr->ConToPrim(this, 0);
     }
   }
 
@@ -579,20 +597,6 @@ void Driver::InitBoundaryValuesAndPrimitives(Mesh *pm) {
     (void) prad->RecvI(this, 0);
     (void) prad->ApplyPhysicalBCs(this, 0);
     (void) prad->Prolongate(this, 0);
-  }
-
-  // Initialize Z4c
-  z4c::Z4c *pz4c = pm->pmb_pack->pz4c;
-  if (pz4c != nullptr) {
-    (void) pz4c->RestrictU(this, 0);
-    (void) pz4c->InitRecv(this, -1);  // stage < 0 suppresses InitFluxRecv
-    (void) pz4c->SendU(this, 0);
-    (void) pz4c->ClearSend(this, -1);
-    (void) pz4c->ClearRecv(this, -1);
-    (void) pz4c->RecvU(this, 0);
-    (void) pz4c->Z4cBoundaryRHS(this, 0);
-    (void) pz4c->ApplyPhysicalBCs(this, 0);
-    (void) pz4c->Prolongate(this, 0);
   }
 
   return;

@@ -8,6 +8,7 @@
 #define Z4C_Z4C_AMR_HPP_
 
 #include <string>
+#include <vector>
 
 #include "athena.hpp"
 
@@ -20,23 +21,26 @@ class Z4c;
 //! \class Z4c_AMR
 //  \brief managing AMR for Z4c simulations
 class Z4c_AMR {
+  enum RefinementMethod { Trivial, Tracker, Chi, dChi };
+
  public:
-  Z4c_AMR(Z4c *z4c, ParameterInput *pin);
+  explicit Z4c_AMR(ParameterInput *pin);
   ~Z4c_AMR() noexcept = default;
-  void Refine(MeshBlockPack *pmbp); // call the AMR method
- private:
-  Z4c *pz4c;              // ptr to z4c
-  ParameterInput *pin;    // ptr to parameter
-  std::string ref_method; // method of refinement
-  Real x1max, x1min;      // full grid extent
-  Real half_initial_d; // half of the initial separation,e.g.,two puncture par_b
+
+  void Refine(MeshBlockPack *pmbp);             // call the AMR method
+  void RefineTracker(MeshBlockPack *pmbp);      // Refine based on the trackers
+  void RefineChiMin(MeshBlockPack *pmbp);       // Refine based on min{chi}
+  void RefineDchiMax(MeshBlockPack *pmbp);      // Refine based on max{dchi}
+  void RefineRadii(MeshBlockPack *pmbp);        // Refine based on the radii
+
+  RefinementMethod method;
+
+  // Optinally set the minimum refinement level inside different radial shells
+  std::vector<Real> radius;
+  std::vector<int> reflevel;
+
   Real chi_thresh;     // chi threshold for chi refinement method
   Real dchi_thresh;    // dchi threshold for dchi refinement method
- public:
-  void LinfBoxInBox(MeshBlockPack *pmbp);     // Linf box in box method
-  void L2SphereInSphere(MeshBlockPack *pmbp); // L2 Sphere in Sphere method
-  void ChiMin(MeshBlockPack *pmbp);           // Refine based on min{chi}
-  void DchiMax(MeshBlockPack *pmbp);           // Refine based on max{dchi}
 };
 
 } // namespace z4c

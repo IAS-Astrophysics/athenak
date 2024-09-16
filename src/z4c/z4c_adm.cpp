@@ -257,14 +257,17 @@ void Z4c::ADMConstraints(MeshBlockPack *pmbp) {
   int &ks = indcs.ks; int &ke = indcs.ke;
   //For GLOOPS
 
-  int ncells1 = indcs.nx1 + 2*(indcs.ng);
   int nmb = pmbp->nmb_thispack;
 
   auto &z4c = pmbp->pz4c->z4c;
-  auto &opt = pmbp->pz4c->opt;
   auto &adm = pmbp->padm->adm;
-  auto &tmunu = pmbp->ptmunu->tmunu;
   auto &u_con = pmbp->pz4c->u_con;
+
+  // vacuum or with matter?
+  bool is_vacuum = (pmy_pack->ptmunu == nullptr) ? true : false;
+  Tmunu::Tmunu_vars tmunu;
+  if (!is_vacuum) tmunu = pmy_pack->ptmunu->tmunu;
+
   Kokkos::deep_copy(u_con, 0.);
   auto &con = pmbp->pz4c->con;
   par_for("ADM constraints loop",DevExeSpace(),
@@ -468,14 +471,18 @@ void Z4c::ADMConstraints(MeshBlockPack *pmbp) {
     //
     // Hamiltonian constraint
     //
-    con.H(m,k,j,i) = R + SQR(K) - KK - 16*M_PI * tmunu.E(m,k,j,i);
-
+    con.H(m,k,j,i) = R + SQR(K) - KK;
+    if(!is_vacuum) {
+      con.H(m,k,j,i) -= 16*M_PI * tmunu.E(m,k,j,i);
+    }
     // Momentum constraint (contravariant)
     //
     for(int a = 0; a < 3; ++a) {
       M_u(a) = 0.0;
       for(int b = 0; b < 3; ++b) {
-        M_u(a) -= 8*M_PI * g_uu(a,b) * tmunu.S_d(m,b,k,j,i);
+        if(!is_vacuum) {
+          M_u(a) -= 8*M_PI * g_uu(a,b) * tmunu.S_d(m,b,k,j,i);
+        }
         for(int c = 0; c < 3; ++c) {
           M_u(a) += g_uu(a,b) * DK_udd(c,b,c);
           M_u(a) -= g_uu(b,c) * DK_udd(a,b,c);

@@ -41,6 +41,8 @@ struct IonNeutralTaskIDs {
   TaskID n_sendu;
   TaskID n_recvu;
   TaskID efld;
+  TaskID sende;
+  TaskID recve;
   TaskID ct;
   TaskID restb;
   TaskID sendb;

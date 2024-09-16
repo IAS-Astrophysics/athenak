@@ -364,7 +364,6 @@ TaskStatus DynGRMHD::SetTmunu(Driver *pdrive, int stage) {
   int &js = indcs.js; int &je = indcs.je;
   int &ks = indcs.ks; int &ke = indcs.ke;
 
-  int ncells1 = indcs.nx1+indcs.ng; // Align scratch buffers with variables
   int nmb = pmy_pack->nmb_thispack;
 
   auto &adm = pmy_pack->padm->adm;

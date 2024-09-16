@@ -43,8 +43,6 @@ TrackedParticleOutput::TrackedParticleOutput(ParameterInput *pin, Mesh *pm,
 // Copies data for tracked particles on this rank to host outpart array
 
 void TrackedParticleOutput::LoadOutputData(Mesh *pm) {
-  particles::Particles *pp = pm->pmb_pack->ppart;
-
   // Load data for tracked particles on this rank into new device array
   DualArray1D<TrackedParticleData> tracked_prtcl("d_trked",ntrack_thisrank);
   int npart = pm->nprtcl_thisrank;
@@ -136,7 +134,6 @@ void TrackedParticleOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
     npout_min = std::min(npout_min, npout_eachrank[n]);
   }
 
-  std::size_t datasize = sizeof(float);
   // Write tracked particle data collectively over minimum shared number of prtcls
   for (int p=0; p<npout_min; ++p) {
     // offset computed assuming tags run 0...(ntrack-1) sequentially
