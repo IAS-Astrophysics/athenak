@@ -13,12 +13,6 @@ For older verisons of Git, replace the options with `--recursive`. If you clone 
 git submodule init
 git submodule update
 ```
-We also recommend applying `scratch_fix.patch` to Kokkos. This can be done as follows:
-```shell
-cd kokkos
-git apply ../scratch_fix.patch
-```
-This patch fixes a small bug in Kokkos 4.1 with uninitialized CUDA scratch locks which can result in crashes when using level 1 scratch memory with NVIDIA GPUs.
 
 ## How to build
 
