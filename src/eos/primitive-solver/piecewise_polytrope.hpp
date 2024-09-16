@@ -17,6 +17,7 @@
 
 #include <math.h>
 #include <float.h>
+#include <cstdio>
 
 #include <stdexcept>
 #include <limits>
