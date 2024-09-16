@@ -56,8 +56,12 @@ class LogPolicy {
   LogPolicy() = default;
   ~LogPolicy() = default;
 
-  // KOKKOS_INLINE_FUNCTION Real log2(const Real x) const {return std::numeric_limits<Real>::quiet_NaN();}
-  // KOKKOS_INLINE_FUNCTION Real exp2(const Real x) const {return std::numeric_limits<Real>::quiet_NaN();}
+  KOKKOS_INLINE_FUNCTION Real log2_(const Real x) const {
+    return std::numeric_limits<Real>::quiet_NaN();
+  }
+  KOKKOS_INLINE_FUNCTION Real exp2_(const Real x) const {
+    return std::numeric_limits<Real>::quiet_NaN();
+  }
 };
 
 class NormalLogs : public LogPolicy {
@@ -79,84 +83,65 @@ class NQTLogs : public LogPolicy {
   public:
     NQTLogs() = default;
     ~NQTLogs() = default;
-
-    KOKKOS_INLINE_FUNCTION Real log2_(const Real x) const {
+    // Because we are using bit-hacks we are explicit/specific about types
+    // These are left here because we could add an option to select the order
+    KOKKOS_FORCEINLINE_FUNCTION
+    _Float64 log2_LANL(const _Float64 x) const {
       // Magic numbers constexpr because C++ doesn't constexpr reinterpret casts
       // these are floating point numbers as reinterpreted as integers.
       // as_int(1.0)
       constexpr int64_t one_as_int = 4607182418800017408;
       // 1./static_cast<double>(as_int(2.0) - as_int(1.0))
-      constexpr Real scale_down = 2.22044604925031e-16;
-      return static_cast<Real>(as_int(x) - one_as_int) * scale_down;
+      constexpr _Float64 scale_down = 2.22044604925031e-16;
+      return static_cast<_Float64>(as_int(x) - one_as_int) * scale_down;
     }
 
-    KOKKOS_INLINE_FUNCTION Real exp2_(const Real x) const {
+    KOKKOS_FORCEINLINE_FUNCTION
+    _Float64 exp2_LANL(const _Float64 x) const {
       // Magic numbers constexpr because C++ doesn't constexpr reinterpret casts
       // these are floating point numbers as reinterpreted as integers.
       // as_int(1.0)
       constexpr int64_t one_as_int = 4607182418800017408;
       // as_int(2.0) - as_int(1.0)
-      constexpr Real scale_up = 4503599627370496;
+      constexpr _Float64 scale_up = 4503599627370496;
       return as_double(static_cast<int64_t>(x*scale_up) + one_as_int);
     }
+
+    KOKKOS_FORCEINLINE_FUNCTION
+    _Float64 log2_(const _Float64 x) const {
+      constexpr int64_t one_as_int = 4607182418800017408;
+      constexpr _Float64 scale_down = 2.220446049250313e-16;
+      int64_t x_as_int = as_int(x) - one_as_int;
+      const int64_t frac_as_int = x_as_int & 4503599627370495;
+      const int64_t frac_high = frac_as_int>>26;
+      const int64_t frac_low  = frac_as_int & 67108863;
+      const int64_t frac_squared = frac_high*frac_high + (frac_high*frac_low>>25);
+      x_as_int += ((frac_as_int - frac_squared)/3);
+      return static_cast<_Float64>(x_as_int) * scale_down;
+  }
+
+    KOKKOS_FORCEINLINE_FUNCTION
+    _Float64 exp2_(const _Float64 x) const {
+      constexpr int64_t one_as_int = 4607182418800017408;
+      constexpr _Float64 scale_up = 4503599627370496;
+      int64_t x_as_int = static_cast<int64_t>(x*scale_up);
+      int64_t frac_as_int = x_as_int & 4503599627370495;
+      _Float64 frac_float = static_cast<_Float64>(frac_as_int) / 4503599627370496;
+      frac_float = 2 - Kokkos::sqrt(4-3*frac_float);
+      frac_as_int = static_cast<int64_t>(frac_float*4503599627370496)-frac_as_int;
+      x_as_int += frac_as_int;
+      return as_double(x_as_int + one_as_int);
+  }
+
   private:
-    KOKKOS_INLINE_FUNCTION int64_t as_int(const Real f) const {
-      Real f_ = f;
-      return *reinterpret_cast<int64_t*>(&f_);
+    KOKKOS_FORCEINLINE_FUNCTION int64_t as_int(_Float64 f) const {
+      return *reinterpret_cast<int64_t*>(&f);
     }
 
-    KOKKOS_INLINE_FUNCTION Real as_double(const int64_t i) const {
-      int64_t i_ = i;
-      return *reinterpret_cast<Real*>(&i_);
+    KOKKOS_FORCEINLINE_FUNCTION _Float64 as_double(int64_t i) const {
+      return *reinterpret_cast<_Float64*>(&i);
     }
 };
 
 } // namespace Primitive
-
-/*
-KOKKOS_INLINE_FUNCTION int64_t as_int(Real f) {
-  return *reinterpret_cast<int64_t*>(&f);
-}
-
-KOKKOS_INLINE_FUNCTION Real as_double(int64_t i) {
-  return *reinterpret_cast<Real*>(&i);
-}
-
-KOKKOS_INLINE_FUNCTION Real NQT_log2(const Real x) {
-  // Magic numbers constexpr because C++ doesn't constexpr reinterpret casts
-  // these are floating point numbers as reinterpreted as integers.
-  // as_int(1.0)
-  constexpr int64_t one_as_int = 4607182418800017408;
-  // 1./static_cast<double>(as_int(2.0) - as_int(1.0))
-  constexpr Real scale_down = 2.22044604925031e-16;
-  return static_cast<Real>(as_int(x) - one_as_int) * scale_down;
-}
-
-KOKKOS_INLINE_FUNCTION Real NQT_exp2(const Real x) {
-  // Magic numbers constexpr because C++ doesn't constexpr reinterpret casts
-  // these are floating point numbers as reinterpreted as integers.
-  // as_int(1.0)
-  constexpr int64_t one_as_int = 4607182418800017408;
-  // as_int(2.0) - as_int(1.0)
-  constexpr Real scale_up = 4503599627370496;
-  return as_double(static_cast<int64_t>(x*scale_up) + one_as_int);
-}
-
-KOKKOS_INLINE_FUNCTION Real log2(Real x, bool use_NQT=false) {
-  if (use_NQT) {
-    return NQT_log2(x);
-  } else {
-    return std::log2(x);
-  }
-}
-
-KOKKOS_INLINE_FUNCTION Real exp2(Real x, bool use_NQT=false) {
-  if (use_NQT) {
-    return NQT_exp2(x);
-  } else {
-    return std::exp2(x);
-  }
-}
-*/
-
 #endif

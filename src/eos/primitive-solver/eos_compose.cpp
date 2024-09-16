@@ -65,21 +65,13 @@ void EOSCompOSE<LogPolicy>::ReadTableFromFile(std::string fname) {
     // nearest table values at or below a specified i and yq.
     { // read nb
       Real * table_nb = table["nb"];
-      /* NQT hack
+      
       for (size_t in=0; in<m_nn; ++in) {
         host_log_nb(in) = log2_(table_nb[in]);
       }
-      */
-      
-      Real start = log2_(table_nb[0]);
-      Real end   = log2_(table_nb[m_nn-1]);
-      Real d_log_nb = (end - start)/(m_nn-1);
-      for (size_t in=0; in<m_nn; ++in) {
-        host_log_nb(in) = start + in*d_log_nb;
-      }
 
       m_id_log_nb = 1.0/(host_log_nb(1) - host_log_nb(0));
-      min_n = table_nb[0];
+      min_n = table_nb[0]*(1 + 1e-15);
       max_n = table_nb[m_nn-1]*(1 - 1e-15);
     }
 
@@ -89,28 +81,20 @@ void EOSCompOSE<LogPolicy>::ReadTableFromFile(std::string fname) {
         host_yq(iy) = table_yq[iy];
       }
       m_id_yq = 1.0/(host_yq(1) - host_yq(0));
-      min_Y[0] = table_yq[0];
+      min_Y[0] = table_yq[0]*(1 + 1e-15);
       max_Y[0] = table_yq[m_ny-1]*(1 - 1e-15);
     }
 
     { // read T
       Real * table_t = table["t"];
-      /* NQT hack
+      
       for (size_t it=0; it<m_nt; ++it) {
         host_log_t(it) = log2_(table_t[it]);
       }
-      */
-
-      Real start = log2_(table_t[0]);
-      Real end   = log2_(table_t[m_nt-1]);
-      Real d_log_t = (end - start)/(m_nt-1);
-      for (size_t it=0; it<m_nt; ++it) {
-        host_log_t(it) = start + it*d_log_t;
-      }
-
+     
       m_id_log_t = 1.0/(host_log_t(1) - host_log_t(0));
-      min_T = table_t[1];      // These are different
-      max_T = table_t[m_nt-2]; // on purpose
+      min_T = table_t[0]*(1 + 1e-15);
+      max_T = table_t[m_nt-1]*(1 - 1e-15);
     }
 
     { // Read Q1 -> log(P)
@@ -119,7 +103,8 @@ void EOSCompOSE<LogPolicy>::ReadTableFromFile(std::string fname) {
         for (size_t iy=0; iy<m_ny; ++iy) {
           for (size_t it=0; it<m_nt; ++it) {
             size_t iflat = it + m_nt*(iy + m_ny*in);
-            host_table(ECLOGP,in,iy,it) = log2_(table_Q1[iflat]*exp2_(host_log_nb(in)));
+            Real p_current = table_Q1[iflat]*exp2_(host_log_nb(in));
+            host_table(ECLOGP,in,iy,it) = log2_(p_current);
           }
         }
       }
@@ -155,7 +140,7 @@ void EOSCompOSE<LogPolicy>::ReadTableFromFile(std::string fname) {
         for (size_t iy=0; iy<m_ny; ++iy) {
           for (size_t it=0; it<m_nt; ++it) {
             size_t iflat = it + m_nt*(iy + m_ny*in);
-            host_table(ECMUB,in,iy,it) = table_Q4[iflat]*mb;
+            host_table(ECMUQ,in,iy,it) = table_Q4[iflat]*mb;
           }
         }
       }
@@ -179,7 +164,8 @@ void EOSCompOSE<LogPolicy>::ReadTableFromFile(std::string fname) {
         for (size_t iy=0; iy<m_ny; ++iy) {
           for (size_t it=0; it<m_nt; ++it) {
             size_t iflat = it + m_nt*(iy + m_ny*in);
-            host_table(ECLOGE,in,iy,it) = log2_(mb*(table_Q7[iflat] + 1)*exp2_(host_log_nb(in)));
+            Real e_current = mb*(table_Q7[iflat] + 1)*exp2_(host_log_nb(in));
+            host_table(ECLOGE,in,iy,it) = log2_(e_current);
           }
         }
       }
@@ -209,8 +195,8 @@ void EOSCompOSE<LogPolicy>::ReadTableFromFile(std::string fname) {
     // Compute minimum enthalpy
     for (int in = 0; in < m_nn; ++in) {
       Real const nb = exp2_(host_log_nb(in));
-      for (int it = 0; it < m_nt; ++it) {
-        for (int iy = 0; iy < m_ny; ++iy) {
+      for (int iy = 0; iy < m_ny; ++iy) {
+        for (int it = 0; it < m_nt; ++it) {
           // This would use GPU memory, and we are currently on the CPU, so Enthalpy is
           // hardcoded
           Real e = exp2_(host_table(ECLOGE,in,iy,it));
