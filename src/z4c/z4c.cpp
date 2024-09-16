@@ -20,6 +20,7 @@
 #include "parameter_input.hpp"
 #include "mesh/mesh.hpp"
 #include "bvals/bvals.hpp"
+#include "z4c/compact_object_tracker.hpp"
 #include "z4c/z4c.hpp"
 #include "z4c/z4c_amr.hpp"
 #include "coordinates/adm.hpp"
@@ -64,8 +65,7 @@ Z4c::Z4c(MeshBlockPack *ppack, ParameterInput *pin) :
   u_rhs("u_rhs z4c",1,1,1,1,1),
   u_weyl("u_weyl",1,1,1,1,1),
   coarse_u_weyl("coarse_u_weyl",1,1,1,1,1),
-  psi_out("psi_out",1,1,1),
-  pz4c_amr(new Z4c_AMR(this,pin)) {
+  pamr(new Z4c_AMR(pin)) {
   // (1) read time-evolution option [already error checked in driver constructor]
   // Then initialize memory and algorithms for reconstruction and Riemann solvers
   std::string evolution_t = pin->GetString("time","evolution");
@@ -176,10 +176,22 @@ Z4c::Z4c(MeshBlockPack *ppack, ParameterInput *pin) :
     Real rad = pin->GetOrAddReal("z4c", "extraction_radius_"+std::to_string(i), 10);
     grids.push_back(std::make_unique<SphericalGrid>(ppack, nlev, rad));
   }
-  Kokkos::realloc(psi_out,nrad,77,2);
+  // TODO(@dur566): Why is the size of psi_out hardcoded?
+  psi_out = new Real[nrad*77*2];
   mkdir("waveforms",0775);
   waveform_dt = pin->GetOrAddReal("z4c", "waveform_dt", 1);
   last_output_time = 0;
+
+  // Construct the compact object trackers
+  int n = 0;
+  while (true) {
+    if (pin->DoesParameterExist("z4c", "co_" + std::to_string(n) + "_type")) {
+      ptracker.emplace_back(pmy_pack->pmesh, pin, n);
+      n++;
+    } else {
+      break;
+    }
+  }
 }
 
 //----------------------------------------------------------------------------------------
@@ -236,9 +248,10 @@ void Z4c::AlgConstr(MeshBlockPack *pmbp) {
 //----------------------------------------------------------------------------------------
 // destructor
 Z4c::~Z4c() {
+  delete[] psi_out;
   delete pbval_u;
   delete pbval_weyl;
-  delete pz4c_amr;
+  delete pamr;
 }
 
 } // namespace z4c

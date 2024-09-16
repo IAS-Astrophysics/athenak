@@ -25,6 +25,7 @@
 #include "hydro/hydro.hpp"
 #include "mhd/mhd.hpp"
 #include "coordinates/adm.hpp"
+#include "z4c/compact_object_tracker.hpp"
 #include "z4c/z4c.hpp"
 #include "radiation/radiation.hpp"
 #include "srcterms/turb_driver.hpp"
@@ -141,7 +142,7 @@ void RestartOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
   TurbulenceDriver* pturb=pm->pmb_pack->pturb;
   z4c::Z4c* pz4c = pm->pmb_pack->pz4c;
   adm::ADM* padm = pm->pmb_pack->padm;
-  int nhydro=0, nmhd=0, nrad=0, nforce=3, nz4c=0, nadm=0;
+  int nhydro=0, nmhd=0, nrad=0, nforce=3, nz4c=0, nadm=0, nco=0;
   if (phydro != nullptr) {
     nhydro = phydro->nhydro + phydro->nscalars;
   }
@@ -153,6 +154,7 @@ void RestartOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
   }
   if (pz4c != nullptr) {
     nz4c = pz4c->nz4c;
+    nco = pz4c->ptracker.size();
   } else if (padm != nullptr) {
     nadm = padm->nadm;
   }
@@ -214,7 +216,25 @@ void RestartOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
     resfile.Write_any_type(&(pm->cost_eachmb[0]), (pm->nmb_total)*sizeof(float),"byte");
   }
 
-  //--- STEP 3.  All ranks write data over all MeshBlocks (5D arrays) in parallel
+  //--- STEP 3.  Root process writes internal state of objects that require it
+  if (global_variable::my_rank == 0) {
+    // store z4c information
+    if (pz4c != nullptr) {
+      resfile.Write_any_type(&(pz4c->last_output_time), sizeof(Real), "byte");
+    }
+    // output puncture tracker data
+    if (nco > 0) {
+      for (auto & pt : pz4c->ptracker) {
+        resfile.Write_any_type(pt.GetPos(), 3*sizeof(Real), "byte");
+      }
+    }
+    // turbulence driver internal RNG
+    if (pturb != nullptr) {
+      resfile.Write_any_type(&(pturb->rstate), sizeof(RNG_State), "byte");
+    }
+  }
+
+  //--- STEP 4.  All ranks write data over all MeshBlocks (5D arrays) in parallel
   // This data read in ProblemGenerator constructor for restarts
 
   // total size of all cell-centered variables and face-centered fields to be written by
@@ -242,9 +262,6 @@ void RestartOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
   }
   if (global_variable::my_rank == 0) {
     resfile.Write_any_type(&(data_size), sizeof(IOWrapperSizeT), "byte");
-    if (pturb != nullptr) {
-      resfile.Write_any_type(&(pturb->rstate), sizeof(RNG_State), "byte");
-    }
   }
 
   // calculate size of data written in Steps 1-2 above
@@ -252,10 +269,13 @@ void RestartOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
                              sizeof(RegionSize) + 2*sizeof(RegionIndcs);
   IOWrapperSizeT step2size = (pm->nmb_total)*(sizeof(LogicalLocation) + sizeof(float));
 
+  IOWrapperSizeT step3size = 3*nco*sizeof(Real);
+  if (pz4c != nullptr) step3size += sizeof(Real);
+  if (pturb != nullptr) step3size += sizeof(RNG_State);
+
   // write cell-centered variables in parallel
-  IOWrapperSizeT offset_myrank  = step1size + step2size + sizeof(IOWrapperSizeT) +
-                                  data_size*(pm->gids_eachrank[global_variable::my_rank]);
-  if (pturb != nullptr) offset_myrank += sizeof(RNG_State);
+  IOWrapperSizeT offset_myrank  = step1size + step2size + step3size +
+        sizeof(IOWrapperSizeT) + data_size*(pm->gids_eachrank[global_variable::my_rank]);
   IOWrapperSizeT myoffset = offset_myrank;
 
   // write cell-centered variables, one MeshBlock at a time (but parallelized over all
