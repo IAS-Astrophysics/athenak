@@ -78,6 +78,9 @@ void ProblemGenerator::Diffusion(ParameterInput *pin, const bool restart) {
   Real t1 = dv.t0;
   if (!(set_initial_conditions)) {t1 += time;}
 
+  // capture variables for the kernel
+  auto dv_=dv;
+
   // Initialize Hydro variables -------------------------------
   if (pmbp->phydro != nullptr) {
     if (pmbp->phydro->pvisc == nullptr) {
@@ -279,10 +282,13 @@ void GaussianProfile(Mesh *pm) {
   EOS_Data &eos = pm->pmb_pack->phydro->peos->eos_data;
   Real gm1 = eos.gamma - 1.0;
   Real p0 = 1.0/eos.gamma;
-  Real t1 = dv.t0 + pm->time;
   auto &nu_iso = pm->pmb_pack->phydro->pvisc->nu_iso;
   auto &u0 = pm->pmb_pack->phydro->u0;
+
+  // capture variables for the kernel
+  auto dv_=dv;
   auto &d0_=dv.d0, &amp_=dv.amp, &x10_=dv.x10;
+  Real t1 = dv.t0 + pm->time;
 
   par_for("diffusion_x1", DevExeSpace(),0,(nmb-1),0,(n3-1),0,(n2-1),
   KOKKOS_LAMBDA(int m, int k, int j) {
