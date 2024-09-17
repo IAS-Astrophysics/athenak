@@ -40,7 +40,13 @@ namespace {
 // global variable to control computation of initial conditions versus errors
 bool set_initial_conditions = true;
 // input parameters passed to user-defined BC function
-Real d0, amp, t0, x10;
+struct DiffusionVariables {
+  Real d0, amp, t0, x10;
+};
+}
+
+DiffusionVariables dv;
+
 } // end anonymous namespace
 
 //----------------------------------------------------------------------------------------
@@ -55,10 +61,10 @@ void ProblemGenerator::Diffusion(ParameterInput *pin, const bool restart) {
   if (restart) return;
 
   // Read problem parameters
-  d0 = 1.0;
-  amp = pin->GetOrAddReal("problem", "amp", 1.e-6);
-  t0 = pin->GetOrAddReal("problem", "t0", 0.5);
-  x10 = pin->GetOrAddReal("problem", "x10", 0.0);
+  dv.d0 = 1.0;
+  dv.amp = pin->GetOrAddReal("problem", "amp", 1.e-6);
+  dv.t0 = pin->GetOrAddReal("problem", "t0", 0.5);
+  dv.x10 = pin->GetOrAddReal("problem", "x10", 0.0);
 
   // capture variables for the kernel
   auto &indcs = pmy_mesh_->mb_indcs;
@@ -68,9 +74,9 @@ void ProblemGenerator::Diffusion(ParameterInput *pin, const bool restart) {
   MeshBlockPack *pmbp = pmy_mesh_->pmb_pack;
   auto &size = pmbp->pmb->mb_size;
   auto &time = pmbp->pmesh->time;
-  auto &d0_=d0, &amp_=amp, &x10_=x10;
+  auto &d0_=dv.d0, &amp_=dv.amp, &x10_=dv.x10;
   // add stopping time when called at end of run
-  Real t1 = t0;
+  Real t1 = dv.t0;
   if (!(set_initial_conditions)) {t1 += time;}
 
   // Initialize Hydro variables -------------------------------
@@ -274,10 +280,10 @@ void GaussianProfile(Mesh *pm) {
   EOS_Data &eos = pm->pmb_pack->phydro->peos->eos_data;
   Real gm1 = eos.gamma - 1.0;
   Real p0 = 1.0/eos.gamma;
-  Real t1 = t0 + pm->time;
+  Real t1 = dv.t0 + pm->time;
   auto &nu_iso = pm->pmb_pack->phydro->pvisc->nu_iso;
   auto &u0 = pm->pmb_pack->phydro->u0;
-  auto &d0_=d0, &amp_=amp, &x10_=x10;
+  auto &d0_=dv.d0, &amp_=dv.amp, &x10_=dv.x10;
 
   par_for("diffusion_x1", DevExeSpace(),0,(nmb-1),0,(n3-1),0,(n2-1),
   KOKKOS_LAMBDA(int m, int k, int j) {
