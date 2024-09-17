@@ -33,7 +33,7 @@
 // Prototype for function to compute errors in solution at end of run
 void DiffusionErrors(ParameterInput *pin, Mesh *pm);
 // Prototype for user-defined BCs
-void GuassianProfile(Mesh *pm);
+void GaussianProfile(Mesh *pm);
 
 // Anonymous namespace used to prevent name collisions outside of this file
 namespace {
@@ -51,7 +51,7 @@ void ProblemGenerator::Diffusion(ParameterInput *pin, const bool restart) {
   // set diffusion errors function
   pgen_final_func = DiffusionErrors;
   // user-define BC
-  user_bcs_func = GuassianProfile;
+  user_bcs_func = GaussianProfile;
   if (restart) return;
 
   // Read problem parameters
@@ -256,11 +256,11 @@ void DiffusionErrors(ParameterInput *pin, Mesh *pm) {
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn GuassianProfile
+//! \fn GaussianProfile
 //  \brief Sets boundary condition on surfaces of computational domain
 // FIXME: Boundaries need to be adjusted for DynGRMHD
 
-void GuassianProfile(Mesh *pm) {
+void GaussianProfile(Mesh *pm) {
   auto &indcs = pm->mb_indcs;
   int &ng = indcs.ng;
   int n1 = indcs.nx1 + 2*ng;
