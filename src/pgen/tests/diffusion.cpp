@@ -43,7 +43,6 @@ bool set_initial_conditions = true;
 struct DiffusionVariables {
   Real d0, amp, t0, x10;
 };
-}
 
 DiffusionVariables dv;
 
