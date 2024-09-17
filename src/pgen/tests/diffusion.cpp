@@ -33,14 +33,19 @@
 // Prototype for function to compute errors in solution at end of run
 void DiffusionErrors(ParameterInput *pin, Mesh *pm);
 // Prototype for user-defined BCs
-void GuassianProfile(Mesh *pm);
+void GaussianProfile(Mesh *pm);
 
 // Anonymous namespace used to prevent name collisions outside of this file
 namespace {
 // global variable to control computation of initial conditions versus errors
 bool set_initial_conditions = true;
 // input parameters passed to user-defined BC function
-Real d0, amp, t0, x10;
+struct DiffusionVariables {
+  Real d0, amp, t0, x10;
+};
+
+DiffusionVariables dv;
+
 } // end anonymous namespace
 
 //----------------------------------------------------------------------------------------
@@ -51,14 +56,14 @@ void ProblemGenerator::Diffusion(ParameterInput *pin, const bool restart) {
   // set diffusion errors function
   pgen_final_func = DiffusionErrors;
   // user-define BC
-  user_bcs_func = GuassianProfile;
+  user_bcs_func = GaussianProfile;
   if (restart) return;
 
   // Read problem parameters
-  d0 = 1.0;
-  amp = pin->GetOrAddReal("problem", "amp", 1.e-6);
-  t0 = pin->GetOrAddReal("problem", "t0", 0.5);
-  x10 = pin->GetOrAddReal("problem", "x10", 0.0);
+  dv.d0 = 1.0;
+  dv.amp = pin->GetOrAddReal("problem", "amp", 1.e-6);
+  dv.t0 = pin->GetOrAddReal("problem", "t0", 0.5);
+  dv.x10 = pin->GetOrAddReal("problem", "x10", 0.0);
 
   // capture variables for the kernel
   auto &indcs = pmy_mesh_->mb_indcs;
@@ -68,9 +73,12 @@ void ProblemGenerator::Diffusion(ParameterInput *pin, const bool restart) {
   MeshBlockPack *pmbp = pmy_mesh_->pmb_pack;
   auto &size = pmbp->pmb->mb_size;
   auto &time = pmbp->pmesh->time;
-  auto &d0_=d0, &amp_=amp, &x10_=x10;
+
+  // capture variables for the kernel
+  //auto dv_=dv;
+  auto d0_=dv.d0, amp_=dv.amp, x10_=dv.x10;
   // add stopping time when called at end of run
-  Real t1 = t0;
+  Real t1 = dv.t0;
   if (!(set_initial_conditions)) {t1 += time;}
 
   // Initialize Hydro variables -------------------------------
@@ -256,14 +264,14 @@ void DiffusionErrors(ParameterInput *pin, Mesh *pm) {
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn GuassianProfile
+//! \fn GaussianProfile
 //  \brief Sets boundary condition on surfaces of computational domain
 // FIXME: Boundaries need to be adjusted for DynGRMHD
 
-void GuassianProfile(Mesh *pm) {
+void GaussianProfile(Mesh *pm) {
   auto &indcs = pm->mb_indcs;
   int &ng = indcs.ng;
-  int n1 = indcs.nx1 + 2*ng;
+  //int n1 = indcs.nx1 + 2*ng;
   int n2 = (indcs.nx2 > 1)? (indcs.nx2 + 2*ng) : 1;
   int n3 = (indcs.nx3 > 1)? (indcs.nx3 + 2*ng) : 1;
   int &is = indcs.is;  int &ie  = indcs.ie;
@@ -274,10 +282,13 @@ void GuassianProfile(Mesh *pm) {
   EOS_Data &eos = pm->pmb_pack->phydro->peos->eos_data;
   Real gm1 = eos.gamma - 1.0;
   Real p0 = 1.0/eos.gamma;
-  Real t1 = t0 + pm->time;
   auto &nu_iso = pm->pmb_pack->phydro->pvisc->nu_iso;
   auto &u0 = pm->pmb_pack->phydro->u0;
-  auto &d0_=d0, &amp_=amp, &x10_=x10;
+
+  // capture variables for the kernel
+  //auto dv_=dv;
+  auto d0_=dv.d0, amp_=dv.amp, x10_=dv.x10;
+  Real t1 = dv.t0 + pm->time;
 
   par_for("diffusion_x1", DevExeSpace(),0,(nmb-1),0,(n3-1),0,(n2-1),
   KOKKOS_LAMBDA(int m, int k, int j) {
