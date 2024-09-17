@@ -75,7 +75,7 @@ void ProblemGenerator::Diffusion(ParameterInput *pin, const bool restart) {
   auto &time = pmbp->pmesh->time;
 
   // capture variables for the kernel
-  auto dv_=dv;
+  //auto dv_=dv;
   auto d0_=dv.d0, amp_=dv.amp, x10_=dv.x10;
   // add stopping time when called at end of run
   Real t1 = dv.t0;
@@ -286,7 +286,7 @@ void GaussianProfile(Mesh *pm) {
   auto &u0 = pm->pmb_pack->phydro->u0;
 
   // capture variables for the kernel
-  auto dv_=dv;
+  //auto dv_=dv;
   auto d0_=dv.d0, amp_=dv.amp, x10_=dv.x10;
   Real t1 = dv.t0 + pm->time;
 
