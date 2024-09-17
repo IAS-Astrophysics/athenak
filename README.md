@@ -20,15 +20,6 @@ AthenaK is targeting challenging problems that require exascale resources, and a
 
 The numerical algorithms implemented in AthenaK are all based on higher-order finite volume methods with a variety of reconstruction algorithms, Riemann solvers, and time integration methods.
 
-## Code papers
-
-For more details on the features and algorithms implemented in AthenaK, see the code papers:
-- Stone et al (2024): basic framework
-- [Zhu et al. (2024)](https://arxiv.org/abs/2409.10383)): numerical relativity solver
-- [Fields at al. (2024)](https://arxiv.org/abs/2409.10384): GR hydro and MHD solver in dynamical spacetimes
-
-Please reference these papers as appropriate for any publications that use AthenaK.
-
 ## Getting Started
 
 The code is designed to be user-friendly with as few external dependencies as possible.
@@ -40,3 +31,12 @@ instructions on how to [download](https://github.com/IAS-Astrophysics/athenak/wi
 Other pages give instructions for running the code.
 
 Since AthenaK is very similar to Athena++, the [Athena++ documention](https://github.com/PrincetonUniversity/athena/wiki) may also be helpful.
+
+## Code papers
+
+For more details on the features and algorithms implemented in AthenaK, see the code papers:
+- Stone et al (2024): basic framework
+- [Zhu et al. (2024)](https://arxiv.org/abs/2409.10383)): numerical relativity solver
+- [Fields at al. (2024)](https://arxiv.org/abs/2409.10384): GR hydro and MHD solver in dynamical spacetimes
+
+Please reference these papers as appropriate for any publications that use AthenaK.
