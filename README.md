@@ -24,10 +24,10 @@ The numerical algorithms implemented in AthenaK are all based on higher-order fi
 
 For more details on the features and algorithms implemented in AthenaK, see the code papers:
 - Stone et al (2024): basic framework
-- [Zhu et al. (2024)](https://arxiv.org/abs/2409.10384): numerical relativity solver
+- [Zhu et al. (2024)](https://arxiv.org/abs/2409.10383)): numerical relativity solver
 - [Fields at al. (2024)](https://arxiv.org/abs/2409.10384): GR hydro and MHD solver in dynamical spacetimes
 
-Please reference these papers as appropriate for any publications that use AthenaK
+Please reference these papers as appropriate for any publications that use AthenaK.
 
 ## Getting Started
 
@@ -36,7 +36,7 @@ The code is designed to be user-friendly with as few external dependencies as po
 Documention is permanently under construction on the [wiki](https://github.com/IAS-Astrophysics/athenak/wiki) pages.
 
 In particular, see the complete list of [requirements](https://github.com/IAS-Astrophysics/athenak/wikis/Requirements), or
-instructions on how to [download](https://github.com/IAS-Astrophysics/athenak/wikis/Download) and [build](https://github.com/IAS-Astrophysics/athenak/wikis/Build) the code for various devices
-Other pages give instructions for running the code
+instructions on how to [download](https://github.com/IAS-Astrophysics/athenak/wikis/Download) and [build](https://github.com/IAS-Astrophysics/athenak/wikis/Build) the code for various devices.
+Other pages give instructions for running the code.
 
 Since AthenaK is very similar to Athena++, the [Athena++ documention](https://github.com/PrincetonUniversity/athena/wiki) may also be helpful.
