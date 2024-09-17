@@ -73,13 +73,13 @@ void ProblemGenerator::Diffusion(ParameterInput *pin, const bool restart) {
   MeshBlockPack *pmbp = pmy_mesh_->pmb_pack;
   auto &size = pmbp->pmb->mb_size;
   auto &time = pmbp->pmesh->time;
-  auto &d0_=dv.d0, &amp_=dv.amp, &x10_=dv.x10;
-  // add stopping time when called at end of run
-  Real t1 = dv.t0;
-  if (!(set_initial_conditions)) {t1 += time;}
 
   // capture variables for the kernel
   auto dv_=dv;
+  auto d0_=dv.d0, amp_=dv.amp, x10_=dv.x10;
+  // add stopping time when called at end of run
+  Real t1 = dv.t0;
+  if (!(set_initial_conditions)) {t1 += time;}
 
   // Initialize Hydro variables -------------------------------
   if (pmbp->phydro != nullptr) {
@@ -271,7 +271,7 @@ void DiffusionErrors(ParameterInput *pin, Mesh *pm) {
 void GaussianProfile(Mesh *pm) {
   auto &indcs = pm->mb_indcs;
   int &ng = indcs.ng;
-  int n1 = indcs.nx1 + 2*ng;
+  //int n1 = indcs.nx1 + 2*ng;
   int n2 = (indcs.nx2 > 1)? (indcs.nx2 + 2*ng) : 1;
   int n3 = (indcs.nx3 > 1)? (indcs.nx3 + 2*ng) : 1;
   int &is = indcs.is;  int &ie  = indcs.ie;
@@ -287,7 +287,7 @@ void GaussianProfile(Mesh *pm) {
 
   // capture variables for the kernel
   auto dv_=dv;
-  auto &d0_=dv.d0, &amp_=dv.amp, &x10_=dv.x10;
+  auto d0_=dv.d0, amp_=dv.amp, x10_=dv.x10;
   Real t1 = dv.t0 + pm->time;
 
   par_for("diffusion_x1", DevExeSpace(),0,(nmb-1),0,(n3-1),0,(n2-1),
