@@ -485,8 +485,8 @@ void Driver::OutputCycleDiagnostics(Mesh *pm) {
   const int dtprcsn = 6;
   if (pm->ncycle % ndiag == 0) {
     Real elapsed = pwall_clock_->seconds();
-    std::cout << "elapsed=" << elapsed << std::scientific << std::setprecision(dtprcsn)
-              << " cycle=" << pm->ncycle << std::scientific << std::setprecision(dtprcsn)
+    std::cout << "elapsed=" << std::scientific << std::setprecision(dtprcsn) << elapsed
+              << " cycle=" << pm->ncycle
               << " time=" << pm->time << " dt=" << pm->dt << std::endl;
   }
   return;
