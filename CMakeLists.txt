@@ -172,6 +172,11 @@ if (${PROBLEM} STREQUAL "elliptica_bns")
   endif()
 endif()
 
+if (${PROBLEM} STREQUAL "sgrid_bns")
+  target_link_libraries(athena PUBLIC
+      ${CMAKE_SOURCE_DIR}/sgrid/lib/libsgrid.a)
+endif()
+
 if (${PROBLEM} STREQUAL "lorene_bns")
   # FIXME(user): The way the Fortran libraries here are linked is not great. Because these
   # are implicit libraries, we shouldn't have to add them manually, but at least on some
