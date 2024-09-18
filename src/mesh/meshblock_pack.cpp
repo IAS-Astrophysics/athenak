@@ -23,7 +23,6 @@
 #include "tasklist/numerical_relativity.hpp"
 #include "z4c/z4c.hpp"
 #include "dyn_grmhd/dyn_grmhd.hpp"
-#include "z4c/z4c_puncture_tracker.hpp"
 #include "z4c/cce/cce.hpp"
 #include "diffusion/viscosity.hpp"
 #include "diffusion/resistivity.hpp"
@@ -65,13 +64,6 @@ MeshBlockPack::~MeshBlockPack() {
   if (punit  != nullptr) {delete punit;}
   if (pz4c   != nullptr) {
     delete pz4c;
-    
-    // punc tracker
-    for (auto ptracker : pz4c_ptracker) {
-      delete ptracker;
-    }
-    pz4c_ptracker.resize(0);
-    
     // cce dump
 #if Z4C_CCE_ENABLED
     for (auto cce : pz4c_cce) {
@@ -203,16 +195,7 @@ void MeshBlockPack::AddPhysics(ParameterInput *pin) {
   if (pin->DoesBlockExist("z4c")) {
     pz4c = new z4c::Z4c(this, pin);
     padm = new adm::ADM(this, pin);
-    ptmunu = new Tmunu(this, pin);
-    // init puncture tracker
-    int npunct = pin->GetOrAddInteger("z4c", "npunct", 0);
-    if (npunct > 0) {
-      pz4c_ptracker.reserve(npunct);
-      for (int n = 0; n < npunct; ++n) {
-        pz4c_ptracker.push_back(new z4c::PunctureTracker(pmesh, pin, n));
-      }
-    }
-    
+    ptmunu = nullptr;
     // init cce dump
     pz4c_cce.reserve(0);
 #if Z4C_CCE_ENABLED
@@ -238,7 +221,6 @@ void MeshBlockPack::AddPhysics(ParameterInput *pin) {
     pz4c = nullptr;
     if (pin->DoesBlockExist("adm")) {
       padm = new adm::ADM(this, pin);
-      //ptmunu = new Tmunu(this, pin);
     } else {
       padm = nullptr;
     }
@@ -254,6 +236,7 @@ void MeshBlockPack::AddPhysics(ParameterInput *pin) {
   if ((pin->DoesBlockExist("z4c") || pin->DoesBlockExist("adm")) &&
       (pin->DoesBlockExist("mhd")) ) {
     pdyngr = dyngr::BuildDynGRMHD(this, pin);
+    ptmunu = new Tmunu(this, pin);
   }
 
   if (pz4c != nullptr || padm != nullptr) {
