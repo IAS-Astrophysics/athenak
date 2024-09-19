@@ -4,7 +4,7 @@
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
 //! \file shwave.cpp
-//! \brief Problem generator for linear HD & MHD in in shearing sheet
+//! \brief Problem generator for linear HD & MHD shearing-wave (shwave) tests
 //!
 //! REFERENCE: Johnson & Gammie 2005, ApJ, 626, 978
 //!            Johnson, Guan, & Gammie, ApJS, 177, 373 (2008)
@@ -12,7 +12,8 @@
 //! Three kinds of problems
 //! - ipert = 1 - epicyclic motion
 //! - ipert = 2 - Hydro compressive shwave test of JG5
-//! - ipert = 3 - MHD compressive shwave test of JGG8
+//! - ipert = 3 - Hydro compressive shwave test of JG5
+//! - ipert = 4 - MHD compressive shwave test of JGG8
 
 
 // C++ headers
@@ -43,43 +44,23 @@
 void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   if (restart) return;
 
-  // box size
+  // read parameters from input file
+  Real d0 = pin->GetReal("problem", "d0");
+  Real p0 = pin->GetOrAddReal("problem", "p0",1.0);
+  Real amp = pin->GetReal("problem", "amp");
+  int ipert = pin->GetInteger("problem", "ipert");
+
+  // box size and wavenumbers
   auto &msize = pmy_mesh_->mesh_size;
   Real Lx = msize.x1max - msize.x1min;
   Real Ly = msize.x2max - msize.x2min;
   Real Lz = msize.x3max - msize.x3min;
-
-  // read parameters from input file
-  MeshBlockPack *pmbp = pmy_mesh_->pmb_pack;
-  EOS_Data &eos = pmbp->pmhd->peos->eos_data;
-  Real d0 = pin->GetReal("problem", "d0");
-  Real p0 = 1.0;
-  if (eos.is_ideal) {
-    p0 = pin->GetReal("problem", "p0");
-  }
-  Real amp = pin->GetReal("problem", "amp");
-  int ipert = pin->GetInteger("problem", "ipert");
-  Real kx, ky, kz;
-  Real beta;
-  if (ipert == 1) {
-    beta = 0.0;
-    kx = 0.0;
-    ky = 0.0;
-    kz = 0.0;
-  } else if (ipert == 2) {
-    beta = 0.0;
-    kx = (2.0*M_PI/Lx)*static_cast<Real>(pin->GetInteger("problem", "nwx"));
-    ky = (2.0*M_PI/Ly)*static_cast<Real>(pin->GetInteger("problem", "nwy"));
-    kz = 0.0;
-  } else if (ipert == 3) {
-    beta = pin->GetReal("problem", "beta");
-    kx = (2.0*M_PI/Lx)*static_cast<Real>(pin->GetInteger("problem", "nwx"));
-    ky = (2.0*M_PI/Ly)*static_cast<Real>(pin->GetInteger("problem", "nwy"));
-    kz = (2.0*M_PI/Lz)*static_cast<Real>(pin->GetInteger("problem", "nwz"));
-  }
-  int error_output_flag = pin->GetInteger("problem", "error_output");
+  Real kx = (2.0*M_PI/Lx)*static_cast<Real>(pin->GetInteger("problem", "nwx"));
+  Real ky = (2.0*M_PI/Ly)*static_cast<Real>(pin->GetInteger("problem", "nwy"));
+  Real kz = (2.0*M_PI/Lz)*static_cast<Real>(pin->GetInteger("problem", "nwz"));
 
   // capture variables for kernel
+  MeshBlockPack *pmbp = pmy_mesh_->pmb_pack;
   auto &indcs = pmy_mesh_->mb_indcs;
   int &is = indcs.is; int &ie = indcs.ie;
   int &js = indcs.js; int &je = indcs.je;
@@ -88,52 +69,81 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   auto &size = pmbp->pmb->mb_size;
 
   if (pmbp->phydro != nullptr) {
-    if (pmbp->phydro->psrc == nullptr) {
+    if (!(pmbp->phydro->psrc->shearing_box)) {
       std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-                << std::endl
-                << "Shearing box source terms are not enabled." << std::endl;
-      exit(EXIT_FAILURE);
-    }
-    if (!pmbp->phydro->shearing_box) {
-      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-                << std::endl
-                << "shwave problem generator only works in shearing box"
+                << std::endl << "shwave problem generator only works in shearing box"
+                << std::endl << "Must add <shearing_box> block to input file"
                 << std::endl;
       exit(EXIT_FAILURE);
     }
+
+    EOS_Data &eos = pmbp->phydro->peos->eos_data;
+    Real gm1 = eos.gamma - 1.0;
+    auto &u0 = pmbp->phydro->u0;
+    // epicyclic oscillations
     if (ipert == 1) {
-      Real rvx = 0.1*iso_cs;
-      par_for("shwave1_c", DevExeSpace(), 0,(pmbp->nmb_thispack-1),ks,ke,js,je,is,ie,
+      par_for("shwave1", DevExeSpace(), 0,(pmbp->nmb_thispack-1),ks,ke,js,je,is,ie,
       KOKKOS_LAMBDA(int m, int k, int j, int i) {
         u0(m,IDN,k,j,i) = d0;
-        u0(m,IM1,k,j,i) = d0*rvx;
+        u0(m,IM1,k,j,i) = amp*d0;
         u0(m,IM2,k,j,i) = 0.0;
         u0(m,IM3,k,j,i) = 0.0;
         if (eos.is_ideal) {
-          u0(m,IEN,k,j,i) = p0/gm1 + 0.5*d0*SQR(rvx);
+          u0(m,IEN,k,j,i) = p0/gm1 + 0.5*d0*SQR(amp);
         }
       });
+    // incompressible (vortical) hydro shwave of JG05
     } else if (ipert == 2) {
-      Real rvx = amp*iso_cs*std::cos(kx*x1 + ky*x2);
-      Real rvy = amp*iso_cs*(ky/kx)*std::cos(kx*x1 + ky*x2);
-      par_for("shwave2_c", DevExeSpace(), 0,(pmbp->nmb_thispack-1),ks,ke,js,je,is,ie,
+      par_for("shwave2", DevExeSpace(), 0,(pmbp->nmb_thispack-1),ks,ke,js,je,is,ie,
       KOKKOS_LAMBDA(int m, int k, int j, int i) {
+        Real &x1min = size.d_view(m).x1min;
+        Real &x1max = size.d_view(m).x1max;
+        Real x1v = CellCenterX(i-is, indcs.nx1, x1min, x1max);
+
+        Real &x2min = size.d_view(m).x2min;
+        Real &x2max = size.d_view(m).x2max;
+        Real x2v = CellCenterX(j-js, indcs.nx2, x2min, x2max);
+
+        Real rvx = amp*std::sin(kx*x1v + ky*x2v);
+        Real rvy = -amp*(kx/ky)*std::sin(kx*x1v + ky*x2v);
+        u0(m,IDN,k,j,i) = d0;
+        u0(m,IM1,k,j,i) = d0*rvx;
+        u0(m,IM2,k,j,i) = d0*rvy;
+        u0(m,IM3,k,j,i) = 0.0;
+        if (eos.is_ideal) {
+          u0(m,IEN,k,j,i) = p0/gm1 + 0.5*d0*(SQR(rvx) + SQR(rvy));
+        }
+      });
+    // compressible hydro shwave of JG05
+    } else if (ipert == 3) {
+      par_for("shwave2", DevExeSpace(), 0,(pmbp->nmb_thispack-1),ks,ke,js,je,is,ie,
+      KOKKOS_LAMBDA(int m, int k, int j, int i) {
+        Real &x1min = size.d_view(m).x1min;
+        Real &x1max = size.d_view(m).x1max;
+        Real x1v = CellCenterX(i-is, indcs.nx1, x1min, x1max);
+
+        Real &x2min = size.d_view(m).x2min;
+        Real &x2max = size.d_view(m).x2max;
+        Real x2v = CellCenterX(j-js, indcs.nx2, x2min, x2max);
+
+        Real rvx = amp*std::cos(kx*x1v + ky*x2v);
+        Real rvy = amp*(ky/kx)*std::cos(kx*x1v + ky*x2v);
         u0(m,IDN,k,j,i) = d0;
         u0(m,IM1,k,j,i) = -d0*rvx;
         u0(m,IM2,k,j,i) = -d0*rvy;
         u0(m,IM3,k,j,i) = 0.0;
         if (eos.is_ideal) {
-          u0(m,IEN,k,j,i) = p0/gm1 + 0.5*d0*(SQR(rvx)+SQR(rvy));
+          u0(m,IEN,k,j,i) = p0/gm1 + 0.5*d0*(SQR(rvx) + SQR(rvy));
         }
       });
     } else {
       std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-                << std::endl
-                << "Hydro test needs to have ipert = 1 or 2." << std::endl;
+                << std::endl << "Hydro test needs to have ipert = 1,2 or 3." << std::endl;
       exit(EXIT_FAILURE);
     }
   }
 
+/*
   if (pmbp->pmhd != nullptr) {
     if (pmbp->pmhd->psrc == nullptr) {
       std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
@@ -305,5 +315,6 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
       });
     }
   }
+*/
   return;
 }
