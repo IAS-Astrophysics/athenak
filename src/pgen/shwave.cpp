@@ -37,6 +37,21 @@
 
 #include <Kokkos_Random.hpp>
 
+// User-defined history function
+void ShwaveHistory(HistoryData *pdata, Mesh *pm);
+
+//----------------------------------------------------------------------------------------
+//! \struct ShwaveVariables
+//! \brief container for variables shared with user-history functions
+
+namespace{
+struct ShwaveVariables {
+  Real kx, ky, kz, qom;
+};
+
+ShwaveVariables shw_var;
+}
+
 //----------------------------------------------------------------------------------------
 //! \fn ProblemGenerator::_()
 //  \brief
@@ -55,9 +70,9 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   Real Lx = msize.x1max - msize.x1min;
   Real Ly = msize.x2max - msize.x2min;
   Real Lz = msize.x3max - msize.x3min;
-  Real kx = (2.0*M_PI/Lx)*static_cast<Real>(pin->GetInteger("problem", "nwx"));
-  Real ky = (2.0*M_PI/Ly)*static_cast<Real>(pin->GetInteger("problem", "nwy"));
-  Real kz = (2.0*M_PI/Lz)*static_cast<Real>(pin->GetInteger("problem", "nwz"));
+  shw_var.kx = (2.0*M_PI/Lx)*static_cast<Real>(pin->GetInteger("problem", "nwx"));
+  shw_var.ky = (2.0*M_PI/Ly)*static_cast<Real>(pin->GetInteger("problem", "nwy"));
+  shw_var.kz = (2.0*M_PI/Lz)*static_cast<Real>(pin->GetInteger("problem", "nwz"));
 
   // capture variables for kernel
   MeshBlockPack *pmbp = pmy_mesh_->pmb_pack;
@@ -67,6 +82,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   int &ks = indcs.ks; int &ke = indcs.ke;
   int nx1 = indcs.nx1, nx2 = indcs.nx2, nx3 = indcs.nx3;
   auto &size = pmbp->pmb->mb_size;
+  auto &sv = shw_var;
 
   if (pmbp->phydro != nullptr) {
     if (!(pmbp->phydro->psrc->shearing_box)) {
@@ -76,6 +92,11 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
                 << std::endl;
       exit(EXIT_FAILURE);
     }
+
+    // enroll user history function for compressible hydro shwaves
+    if (ipert == 3) {user_hist_func = ShwaveHistory;}
+    // compute q*Omega used in user history function
+    sv.qom = (pmbp->phydro->psrc->qshear)*(pmbp->phydro->psrc->omega0);
 
     EOS_Data &eos = pmbp->phydro->peos->eos_data;
     Real gm1 = eos.gamma - 1.0;
@@ -104,8 +125,8 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
         Real &x2max = size.d_view(m).x2max;
         Real x2v = CellCenterX(j-js, indcs.nx2, x2min, x2max);
 
-        Real rvx = amp*std::sin(kx*x1v + ky*x2v);
-        Real rvy = -amp*(kx/ky)*std::sin(kx*x1v + ky*x2v);
+        Real rvx = amp*sin(sv.kx*x1v + sv.ky*x2v);
+        Real rvy = -amp*(sv.kx/sv.ky)*sin(sv.kx*x1v + sv.ky*x2v);
         u0(m,IDN,k,j,i) = d0;
         u0(m,IM1,k,j,i) = d0*rvx;
         u0(m,IM2,k,j,i) = d0*rvy;
@@ -126,8 +147,8 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
         Real &x2max = size.d_view(m).x2max;
         Real x2v = CellCenterX(j-js, indcs.nx2, x2min, x2max);
 
-        Real rvx = amp*std::cos(kx*x1v + ky*x2v);
-        Real rvy = amp*(ky/kx)*std::cos(kx*x1v + ky*x2v);
+        Real rvx = amp*cos(sv.kx*x1v + sv.ky*x2v);
+        Real rvy = amp*(sv.ky/sv.kx)*cos(sv.kx*x1v + sv.ky*x2v);
         u0(m,IDN,k,j,i) = d0;
         u0(m,IM1,k,j,i) = -d0*rvx;
         u0(m,IM2,k,j,i) = -d0*rvy;
@@ -316,5 +337,72 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     }
   }
 */
+  return;
+}
+
+//----------------------------------------------------------------------------------------
+// Function for computing history variables
+// 0 = < dVyc >
+
+void ShwaveHistory(HistoryData *pdata, Mesh *pm) {
+  pdata->nhist = 1;
+  pdata->label[0] = "dVyc";
+
+  // capture class variabels for kernel
+  auto &w0_ = pm->pmb_pack->phydro->w0;
+  auto &size = pm->pmb_pack->pmb->mb_size;
+  int &nhist_ = pdata->nhist;
+  auto &sv = shw_var;
+  Real kx = sv.kx + sv.qom*(pm->time)*sv.ky;
+
+  // loop over all MeshBlocks in this pack
+  auto &indcs = pm->pmb_pack->pmesh->mb_indcs;
+  int is = indcs.is; int nx1 = indcs.nx1;
+  int js = indcs.js; int nx2 = indcs.nx2;
+  int ks = indcs.ks; int nx3 = indcs.nx3;
+  const int nmkji = (pm->pmb_pack->nmb_thispack)*nx3*nx2*nx1;
+  const int nkji = nx3*nx2*nx1;
+  const int nji  = nx2*nx1;
+  array_sum::GlobalSum sum_this_mb;
+  Kokkos::parallel_reduce("HistSums",Kokkos::RangePolicy<>(DevExeSpace(), 0, nmkji),
+  KOKKOS_LAMBDA(const int &idx, array_sum::GlobalSum &mb_sum) {
+    // compute n,k,j,i indices of thread
+    int m = (idx)/nkji;
+    int k = (idx - m*nkji)/nji;
+    int j = (idx - m*nkji - k*nji)/nx1;
+    int i = (idx - m*nkji - k*nji - j*nx1) + is;
+    k += ks;
+    j += js;
+
+    Real vol = size.d_view(m).dx1*size.d_view(m).dx2*size.d_view(m).dx3;
+
+    // summed variables:
+    array_sum::GlobalSum hvars;
+
+    // calculate dVyc
+    Real &x1min = size.d_view(m).x1min;
+    Real &x1max = size.d_view(m).x1max;
+    Real x1v = CellCenterX(i-is, indcs.nx1, x1min, x1max);
+
+    Real &x2min = size.d_view(m).x2min;
+    Real &x2max = size.d_view(m).x2max;
+    Real x2v = CellCenterX(j-js, indcs.nx2, x2min, x2max);
+
+    hvars.the_array[0] = 2.0*w0_(m,IVY,k,j,i)*cos(kx*x1v + sv.ky*x2v);
+
+    // fill rest of the_array with zeros, if nhist < NHISTORY_VARIABLES
+    for (int n=nhist_; n<NHISTORY_VARIABLES; ++n) {
+      hvars.the_array[n] = 0.0;
+    }
+
+    // sum into parallel reduce
+    mb_sum += hvars;
+  }, Kokkos::Sum<array_sum::GlobalSum>(sum_this_mb));
+  Kokkos::fence();
+
+  // store data into hdata array
+  for (int n=0; n<pdata->nhist; ++n) {
+    pdata->hdata[n] = sum_this_mb.the_array[n];
+  }
   return;
 }
