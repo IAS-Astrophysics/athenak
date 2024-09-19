@@ -178,6 +178,10 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   const bool inject_particles = pin->GetOrAddBoolean("particles", "inject", false);
   if (has_particles && inject_particles){
     auto &indcs = pmbp->pmesh->mb_indcs;
+    int &ng = indcs.ng;
+    int n1 = indcs.nx1 + 2*ng;
+    int n2 = (indcs.nx2 > 1)? (indcs.nx2 + 2*ng) : 1;
+    int n3 = (indcs.nx3 > 1)? (indcs.nx3 + 2*ng) : 1;
     const int is = indcs.is;
     const int js = indcs.js;
     const int ks = indcs.ks;
@@ -212,7 +216,13 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     } else if (pmbp->pmhd != nullptr) {
       u0_ = pmbp->pmhd->u0;
       w0_ = pmbp->pmhd->w0;
+      auto &bcc_ = pmbp->pmhd->bcc0;
+      auto &bface_ = pmbp->pmhd->b0;
+      if (prtcl_init_flow) {
+        pmbp->pmhd->peos->ConsToPrim(u0_,bface_,w0_,bcc_,false,is-ng,is,0,(n2-1),0,(n3-1));
+      }
     }
+
     // Array stores whether or not the Meshblock intersects the disk and is viable for particle injection
     DvceArray1D<bool> mb_in_disk;
 
@@ -335,19 +345,32 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
                     jp = (x2v - x2min)/size.d_view(m).dx2 + js;
                     kp = (x3v - x3min)/size.d_view(m).dx3 + ks;                  
                   }
+                  u[0] = w0_(m,IVX,kp,jp,ip)*this_en;
+                  u[1] = w0_(m,IVY,kp,jp,ip)*this_en;
+                  u[2] = w0_(m,IVZ,kp,jp,ip)*this_en;
+                  // Check you haven't exceeded speed of light
+                  if ( SQR(u[0]) + SQR(u[1]) + SQR(u[2]) >= 1.0 ) {
+                      Real aux_fac = SQR(u[0]) + SQR(u[1]) + SQR(u[2]);
+                      u[0] /= aux_fac;
+                      u[1] /= aux_fac;
+                      u[2] /= aux_fac;
+                  }
                   // Here max_en and min_en act as multiplication factors
                   Real gu[4][4], gl[4][4];
                   ComputeMetricAndInverse(x1v,x2v,x3v,coord.is_minkowski,coord.bh_spin,gl,gu); 
-                  // u0_ is contravariant, while particle velocities are stored as covariant
-                  u[0] = u0_(m,IVX,kp,jp,ip);
-                  u[1] = u0_(m,IVY,kp,jp,ip);
-                  u[2] = u0_(m,IVZ,kp,jp,ip);
+                  Real u_0 = 0.0;
+                  for (int i1 = 0; i1 < 3; ++i1 ){ 
+                    for (int i2 = 0; i2 < 3; ++i2 ){
+                      u_0 += gl[i1+1][i2+1]*u[i1]*u[i2];
+                    }
+                  }
+                  u_0 = sqrt(u_0 + massive); 
+                  u[0] += gu[0][1]*u_0/sqrt(-gu[0][0]);
+                  u[1] += gu[0][2]*u_0/sqrt(-gu[0][0]);
+                  u[2] += gu[0][3]*u_0/sqrt(-gu[0][0]);
                   pr(IPVX,p) = gl[1][1]*u[0] + gl[1][2]*u[1] + gl[1][3]*u[2];
                   pr(IPVY,p) = gl[2][1]*u[0] + gl[2][2]*u[1] + gl[2][3]*u[2];
                   pr(IPVZ,p) = gl[3][1]*u[0] + gl[3][2]*u[1] + gl[3][3]*u[2];
-                  pr(IPVX,p) = pr(IPVX,p)*this_en;
-                  pr(IPVY,p) = pr(IPVY,p)*this_en;
-                  pr(IPVZ,p) = pr(IPVZ,p)*this_en;
                 } else if (prtcl_init_blob){
                   x1v = (x1min + x1max)/2.0;
                   x2v = (x2min + x2max)/2.0;
