@@ -46,7 +46,7 @@ void ShwaveHistory(HistoryData *pdata, Mesh *pm);
 
 namespace{
 struct ShwaveVariables {
-  Real kx, ky, kz, qom;
+  Real kx, ky, kz, qshear, omega0;
 };
 
 ShwaveVariables shw_var;
@@ -92,12 +92,6 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
                 << std::endl;
       exit(EXIT_FAILURE);
     }
-
-    // enroll user history function for compressible hydro shwaves
-    if (ipert == 3) {user_hist_func = ShwaveHistory;}
-    // compute q*Omega used in user history function
-    sv.qom = (pmbp->phydro->psrc->qshear)*(pmbp->phydro->psrc->omega0);
-
     EOS_Data &eos = pmbp->phydro->peos->eos_data;
     Real gm1 = eos.gamma - 1.0;
     auto &u0 = pmbp->phydro->u0;
@@ -137,7 +131,12 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
       });
     // compressible hydro shwave of JG05
     } else if (ipert == 3) {
-      par_for("shwave2", DevExeSpace(), 0,(pmbp->nmb_thispack-1),ks,ke,js,je,is,ie,
+      // enroll user history function for compressible hydro shwaves
+      user_hist_func = ShwaveHistory;
+      sv.qshear = (pmbp->phydro->psrc->qshear);
+      sv.omega0 = (pmbp->phydro->psrc->omega0);
+
+      par_for("shwave3", DevExeSpace(), 0,(pmbp->nmb_thispack-1),ks,ke,js,je,is,ie,
       KOKKOS_LAMBDA(int m, int k, int j, int i) {
         Real &x1min = size.d_view(m).x1min;
         Real &x1max = size.d_view(m).x1max;
@@ -164,37 +163,35 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     }
   }
 
-/*
   if (pmbp->pmhd != nullptr) {
-    if (pmbp->pmhd->psrc == nullptr) {
+    if (!(pmbp->pmhd->psrc->shearing_box)) {
       std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-                << std::endl
-                << "Shearing box source terms are not enabled." << std::endl;
-      exit(EXIT_FAILURE);
-    }
-    if (!pmbp->pmhd->shearing_box) {
-      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-                << std::endl
-                << "jgg problem generator only works in shearing box"
+                << std::endl << "shwave problem generator only works in shearing box"
+                << std::endl << "Must add <shearing_box> block to input file"
                 << std::endl;
       exit(EXIT_FAILURE);
     }
-    if (ipert != 3) {
+    if (ipert != 4) {
       std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-                << std::endl
-                << "MHD test needs to have ipert = 3." << std::endl;
+                << std::endl << "MHD shwave test requires ipert = 4." << std::endl;
       exit(EXIT_FAILURE);
     }
-    // Initialize conserved variables in MHD
+    // enroll user history function for compressible hydro shwaves
+    user_hist_func = ShwaveHistory;
+    sv.qshear = (pmbp->pmhd->psrc->qshear);
+    sv.omega0 = (pmbp->pmhd->psrc->omega0);
+
+    EOS_Data &eos = pmbp->pmhd->peos->eos_data;
     Real gm1 = eos.gamma - 1.0;
     auto u0 = pmbp->pmhd->u0;
     auto b0 = pmbp->pmhd->b0;
-    Real omega0 = pmbp->pmhd->psb->omega0;
+    Real omega0 = pmbp->pmhd->psrc->omega0;
 
+    Real beta = pin->GetReal("problem", "beta");
     Real B02 = p0/beta;
-    Real k2 = SQR(kx)+SQR(ky)+SQR(kz);
-    Real rbx = ky*std::sqrt(B02/(SQR(kx)+SQR(ky)));
-    Real rby = -kx*std::sqrt(B02/(SQR(kx)+SQR(ky)));
+    Real k2 = SQR(sv.kx)+SQR(sv.ky)+SQR(sv.kz);
+    Real rbx = sv.ky*std::sqrt(B02/(SQR(sv.kx)+SQR(sv.ky)));
+    Real rby = -sv.kx*std::sqrt(B02/(SQR(sv.kx)+SQR(sv.ky)));
     Real rbz = 0.0;
 
     Real sch = eos.iso_cs/omega0;
@@ -202,7 +199,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     Real cf2 = amp*std::sqrt(sch*std::sqrt(k2*beta/(1.0+beta)));
     Real vd = cf1/std::sqrt(k2)*cf2;
 
-    par_for("shwave3_c", DevExeSpace(), 0,(pmbp->nmb_thispack-1),ks,ke,js,je,is,ie,
+    par_for("shwave4", DevExeSpace(), 0,(pmbp->nmb_thispack-1),ks,ke,js,je,is,ie,
     KOKKOS_LAMBDA(int m, int k, int j, int i) {
       Real &x1min = size.d_view(m).x1min;
       Real &x1max = size.d_view(m).x1max;
@@ -219,14 +216,14 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
       int nx3 = indcs.nx3;
       Real x3v = CellCenterX(k-ks, nx3, x3min, x3max);
 
-      Real CS = std::cos(kx*x1v+ky*x2v+kz*x3v);
-      Real rd = d0*(1.0+cf2*CS);
+      Real csk = cos(sv.kx*x1v+sv.ky*x2v+sv.kz*x3v);
+      Real rd = d0*(1.0+cf2*csk);
       u0(m,IDN,k,j,i) = rd;
-      u0(m,IM1,k,j,i) = rd*vd*kx*CS;
-      u0(m,IM2,k,j,i) = rd*vd*ky*CS;
-      u0(m,IM3,k,j,i) = rd*vd*kz*CS;
+      u0(m,IM1,k,j,i) = rd*vd*sv.kx*csk;
+      u0(m,IM2,k,j,i) = rd*vd*sv.ky*csk;
+      u0(m,IM3,k,j,i) = rd*vd*sv.kz*csk;
       if (eos.is_ideal) {
-        u0(m,IEN,k,j,i) = p0/gm1 + 0.5*rd*SQR(vd*CS)*k2;
+        u0(m,IEN,k,j,i) = p0/gm1 + 0.5*rd*SQR(vd*csk)*k2;
       }
     });
 
@@ -236,8 +233,8 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     int ncells2 = indcs.nx2 + 2*(indcs.ng);
     int ncells3 = indcs.nx3 + 2*(indcs.ng);
     Kokkos::realloc(a1,(pmbp->nmb_thispack),ncells3,ncells2,ncells1);
-    Kokkos::realloc(a1,(pmbp->nmb_thispack),ncells3,ncells2,ncells1);
-    Kokkos::realloc(a1,(pmbp->nmb_thispack),ncells3,ncells2,ncells1);
+    Kokkos::realloc(a2,(pmbp->nmb_thispack),ncells3,ncells2,ncells1);
+    Kokkos::realloc(a3,(pmbp->nmb_thispack),ncells3,ncells2,ncells1);
 
     par_for("shwave3_a1", DevExeSpace(), 0,(pmbp->nmb_thispack-1),ks,ke+1,js,je+1,is,ie,
     KOKKOS_LAMBDA(int m, int k, int j, int i) {
@@ -253,8 +250,8 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
       Real &x3max = size.d_view(m).x3max;
       Real x3f    = LeftEdgeX(k-ks, nx3, x3min, x3max);
 
-      Real temp = cf2/k2*std::sin(kx*x1v+ky*x2f+kz*x3f);
-      a1(m,k,j,i) = temp*(rby*kz-rbz*ky);
+      Real temp = cf2/k2*std::sin(sv.kx*x1v+sv.ky*x2f+sv.kz*x3f);
+      a1(m,k,j,i) = temp*(rby*sv.kz-rbz*sv.ky);
     });
 
     par_for("shwave3_a2", DevExeSpace(), 0,(pmbp->nmb_thispack-1),ks,ke+1,js,je,is,ie+1,
@@ -271,8 +268,8 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
       Real &x3max = size.d_view(m).x3max;
       Real x3f    = LeftEdgeX(k-ks, nx3, x3min, x3max);
 
-      Real temp = cf2/k2*std::sin(kx*x1f+ky*x2v+kz*x3f);
-      a2(m,k,j,i) = temp*(rbz*kx-rbx*kz);
+      Real temp = cf2/k2*std::sin(sv.kx*x1f+sv.ky*x2v+sv.kz*x3f);
+      a2(m,k,j,i) = temp*(rbz*sv.kx-rbx*sv.kz);
     });
 
     par_for("shwave3_a3", DevExeSpace(), 0,(pmbp->nmb_thispack-1),ks,ke,js,je+1,is,ie+1,
@@ -289,8 +286,8 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
       Real &x3max = size.d_view(m).x3max;
       Real x3v    = CellCenterX(k-ks, nx3, x3min, x3max);
 
-      Real temp = cf2/k2*std::sin(kx*x1f+ky*x2f+kz*x3v);
-      a3(m,k,j,i) = temp*(rbx*ky-rby*kx);
+      Real temp = cf2/k2*std::sin(sv.kx*x1f+sv.ky*x2f+sv.kz*x3v);
+      a3(m,k,j,i) = temp*(rbx*sv.ky-rby*sv.kx);
     });
 
     par_for("shwave3_b1", DevExeSpace(), 0,(pmbp->nmb_thispack-1),ks,ke,js,je,is,ie+1,
@@ -336,7 +333,6 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
       });
     }
   }
-*/
   return;
 }
 
@@ -345,15 +341,12 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
 // 0 = < dVyc >
 
 void ShwaveHistory(HistoryData *pdata, Mesh *pm) {
-  pdata->nhist = 1;
-  pdata->label[0] = "dVyc";
-
   // capture class variabels for kernel
-  auto &w0_ = pm->pmb_pack->phydro->w0;
   auto &size = pm->pmb_pack->pmb->mb_size;
   int &nhist_ = pdata->nhist;
   auto &sv = shw_var;
-  Real kx = sv.kx + sv.qom*(pm->time)*sv.ky;
+  Real kx = sv.kx + (sv.qshear)*(sv.omega0)*(pm->time)*sv.ky;
+  Real omega_t = (sv.omega0)*(pm->time);
 
   // loop over all MeshBlocks in this pack
   auto &indcs = pm->pmb_pack->pmesh->mb_indcs;
@@ -364,6 +357,18 @@ void ShwaveHistory(HistoryData *pdata, Mesh *pm) {
   const int nkji = nx3*nx2*nx1;
   const int nji  = nx2*nx1;
   array_sum::GlobalSum sum_this_mb;
+
+  pdata->nhist = 1;
+  pdata->label[0] = "dVyc";
+  bool is_mhd = false;
+  if (pm->pmb_pack->phydro == nullptr) {
+    is_mhd = true;
+    pdata->label[0] = "dByc";
+  }
+  auto &w0_ = (is_mhd)? pm->pmb_pack->pmhd->w0 : pm->pmb_pack->phydro->w0;
+  DvceArray5D<Real> bcc_temp;
+  auto &bcc0_ = (is_mhd)? pm->pmb_pack->pmhd->bcc0 : bcc_temp;
+
   Kokkos::parallel_reduce("HistSums",Kokkos::RangePolicy<>(DevExeSpace(), 0, nmkji),
   KOKKOS_LAMBDA(const int &idx, array_sum::GlobalSum &mb_sum) {
     // compute n,k,j,i indices of thread
@@ -388,7 +393,16 @@ void ShwaveHistory(HistoryData *pdata, Mesh *pm) {
     Real &x2max = size.d_view(m).x2max;
     Real x2v = CellCenterX(j-js, indcs.nx2, x2min, x2max);
 
-    hvars.the_array[0] = 2.0*w0_(m,IVY,k,j,i)*cos(kx*x1v + sv.ky*x2v);
+    Real &x3min = size.d_view(m).x3min;
+    Real &x3max = size.d_view(m).x3max;
+    Real x3v = CellCenterX(k-ks, indcs.nx3, x3min, x3max);
+
+    if (is_mhd) {
+      hvars.the_array[0] = vol*2.0*(bcc0_(m,IBY,k,j,i) - (0.2-0.15*omega_t));
+      hvars.the_array[0] *= cos(kx*x1v + sv.ky*x2v + sv.kz*x3v);
+    } else {
+      hvars.the_array[0] = vol*2.0*w0_(m,IVY,k,j,i)*cos(kx*x1v + sv.ky*x2v);
+    }
 
     // fill rest of the_array with zeros, if nhist < NHISTORY_VARIABLES
     for (int n=nhist_; n<NHISTORY_VARIABLES; ++n) {
