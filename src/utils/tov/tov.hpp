@@ -161,6 +161,7 @@ TOVStar TOVStar::ConstructTOV(ParameterInput *pin, TOVEOS& eos) {
   alp(0) = 0.0;
 
   // Integrate outward using RK4
+  tov.n_r = 0;
   for (int i = 0; i < npoints-1; i++) {
     Real r, P_pt, alp_pt, m_pt, R_pt;
 
@@ -211,6 +212,13 @@ TOVStar TOVStar::ConstructTOV(ParameterInput *pin, TOVEOS& eos) {
       tov.n_r = i+1;
       break;
     }
+  }
+
+  if (tov.n_r == 0) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+              << "TOV solver failed to find the edge of the star." << std::endl
+              << "Increase number of points, radial step, or rho_cut." << std::endl;
+    exit(EXIT_FAILURE);
   }
 
   // Now we can do a linear interpolation to estimate the actual edge of the star.
