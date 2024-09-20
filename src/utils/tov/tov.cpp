@@ -18,7 +18,7 @@ TOVStar::TOVStar(ParameterInput* pin) {
   npoints = pin->GetReal("problem", "npoints");
   dr = pin->GetReal("problem", "dr");
 
-  dfloor = pin->GetOrAddReal("mhd", "dfloor", (FLT_MIN));
+  dfloor = pin->GetOrAddReal("problem", "rho_cut", rhoc*1e-10);
 }
 
 } // namespace tov
