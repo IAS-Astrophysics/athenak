@@ -30,8 +30,6 @@ OrbitalAdvection::OrbitalAdvection(MeshBlockPack *ppack, ParameterInput *pin) :
     maxjshift(1),
     pmy_pack(ppack) {
   // First some error checks
-std::cout << "constructing..." << std::endl;
-
   if (pin->DoesBlockExist("hydro")) {
     std::string xorder = pin->GetString("hydro","reconstruct");
     if (xorder.compare("dc") != 0 &&

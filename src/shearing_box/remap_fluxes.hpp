@@ -122,6 +122,7 @@ const Real eps, const ScrArray1D<Real> &u, ScrArray1D<Real> &ust) {
       ust(j) = eps*(f[0]*alpha[0] + f[1]*alpha[1] + f[2]*alpha[2])/alpha_sum;
     }
   });
+  tmember.team_barrier();
   return;
 }
 
