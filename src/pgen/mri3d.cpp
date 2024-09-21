@@ -136,16 +136,19 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     Real rd = d0;
     Real rp = p0;
     auto rand_gen = rand_pool64.get_state();  // get random number state this thread
-    Real rval = 1.0 + amp*(rand_gen.frand() - 0.5);
+    Real rval = amp*(rand_gen.frand() - 0.5);
     if (eos.is_ideal) {
-      rp = rval*p0;
+      rp = p0*(1.0 + rval);;
     } else {
-      rd = rval*d0;
+      rd = d0*(1.0 + rval);
     }
     u0(m,IDN,k,j,i) = rd;
-    u0(m,IM1,k,j,i) = 0.0;
-    u0(m,IM2,k,j,i) = 0.0;
-    u0(m,IM3,k,j,i) = 0.0;
+    rval = amp*(rand_gen.frand() - 0.5);
+    u0(m,IM1,k,j,i) = d0*rval;
+    rval = amp*(rand_gen.frand() - 0.5);
+    u0(m,IM2,k,j,i) = d0*rval;
+    rval = amp*(rand_gen.frand() - 0.5);
+    u0(m,IM3,k,j,i) = d0*rval;
     if (eos.is_ideal) {
       u0(m,IEN,k,j,i) = rp/gm1 + 0.5*SQR(0.5*(b0.x2f(m,k,j,i) + b0.x2f(m,k,j+1,i))) +
                                  0.5*SQR(0.5*(b0.x3f(m,k,j,i) + b0.x3f(m,k+1,j,i)));
@@ -247,7 +250,7 @@ void MRIHistory(HistoryData *pdata, Mesh *pm) {
 
     // Reynolds and Maxwell stresses
     hvars.the_array[nmhd_+9] = vol*u0_(m,IM1,k,j,i)*u0_(m,IM2,k,j,i)/u0_(m,IDN,k,j,i);
-    hvars.the_array[nmhd_+10] = vol*bcc(m,IBX,k,j,i)*bcc(m,IBY,k,j,i);
+    hvars.the_array[nmhd_+10] = -vol*bcc(m,IBX,k,j,i)*bcc(m,IBY,k,j,i);
 
     // fill rest of the_array with zeros, if nhist < NHISTORY_VARIABLES
     for (int n=nhist_; n<NHISTORY_VARIABLES; ++n) {
