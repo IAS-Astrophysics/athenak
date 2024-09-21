@@ -44,7 +44,7 @@ void ShwaveHistory(HistoryData *pdata, Mesh *pm);
 //! \struct ShwaveVariables
 //! \brief container for variables shared with user-history functions
 
-namespace{
+namespace {
 struct ShwaveVariables {
   Real kx, ky, kz, qshear, omega0;
 };

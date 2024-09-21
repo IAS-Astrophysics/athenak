@@ -226,18 +226,19 @@ TaskStatus OrbitalAdvectionFC::RecvAndUnpackFC(DvceFaceFld4D<Real> &b0,
   Real ly = (mesh_size.x2max - mesh_size.x2min);
 
   int scr_lvl=0;
-  size_t scr_size = ScrArray1D<Real>::shmem_size(nfx) * 3;
+  size_t scr_size = ScrArray1D<Real>::shmem_size(nfx) * 2;
   DvceArray4D<Real> emfx, emfz;
-    int ncells1 = indcs.nx1 + 2*(indcs.ng);
-    int ncells2 = indcs.nx2 + 2*(indcs.ng);
-    int ncells3 = indcs.nx3 + 2*(indcs.ng);
-    Kokkos::realloc(emfx,nmb,ncells3,ncells2,ncells1);
-    Kokkos::realloc(emfz,nmb,ncells3,ncells2,ncells1);
+/**/
+  int ncells1 = indcs.nx1 + 2*(indcs.ng);
+  int ncells2 = indcs.nx2 + 2*(indcs.ng);
+  int ncells3 = indcs.nx3 + 2*(indcs.ng);
+  Kokkos::realloc(emfx,nmb,ncells3,ncells2,ncells1);
+  Kokkos::realloc(emfz,nmb,ncells3,ncells2,ncells1);
+/**/
   par_for_outer("oa-unB",DevExeSpace(),scr_size,scr_lvl,0,(nmb-1),0,1,ks,ke+1,is,ie+1,
   KOKKOS_LAMBDA(TeamMember_t member, const int m, const int v, const int k, const int i) {
     ScrArray1D<Real> b0_(member.team_scratch(scr_lvl), nfx); // 1D slice of data
     ScrArray1D<Real> flx(member.team_scratch(scr_lvl), nfx); // "flux" at faces
-    ScrArray1D<Real> q1_(member.team_scratch(scr_lvl), nfx); // scratch array
 
     Real &x1min = mbsize.d_view(m).x1min;
     Real &x1max = mbsize.d_view(m).x1max;
@@ -277,15 +278,14 @@ TaskStatus OrbitalAdvectionFC::RecvAndUnpackFC(DvceFaceFld4D<Real> &b0,
     Real epsi = fmod(yshear,(mbsize.d_view(m).dx2))/(mbsize.d_view(m).dx2);
     switch (rcon) {
       case ReconstructionMethod::dc:
-        DCRemapFlx(member, (jfs-joffset), (jfe+1-joffset), epsi, b0_, q1_, flx);
+        DC_RemapFlx(member, (jfs-joffset), (jfe+1-joffset), epsi, b0_, flx);
         break;
       case ReconstructionMethod::plm:
-        PLMRemapFlx(member, (jfs-joffset), (jfe+1-joffset), epsi, b0_, q1_, flx);
+        PLM_RemapFlx(member, (jfs-joffset), (jfe+1-joffset), epsi, b0_, flx);
         break;
-//      case ReconstructionMethod::ppm4:
-//      case ReconstructionMethod::ppmx:
-//          PPMRemapFlx(member,eos_,extrema,true,m,k,j,il,iu, w0_, wl_jp1, wr);
-//        break;
+      case ReconstructionMethod::wenoz:
+        WENOZ_RemapFlx(member, (jfs-joffset), (jfe+1-joffset), epsi, b0_, flx);
+        break;
       default:
         break;
     }

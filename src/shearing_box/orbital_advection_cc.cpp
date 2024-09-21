@@ -230,12 +230,11 @@ TaskStatus OrbitalAdvectionCC::RecvAndUnpackCC(DvceArray5D<Real> &a,
   Real ly = (mesh_size.x2max - mesh_size.x2min);
 
   int scr_lvl=0;
-  size_t scr_size = ScrArray1D<Real>::shmem_size(nfx) * 3;
+  size_t scr_size = ScrArray1D<Real>::shmem_size(nfx) * 2;
   par_for_outer("oa-unpk",DevExeSpace(),scr_size,scr_lvl,0,(nmb-1),0,(nvar-1),ks,ke,is,ie,
   KOKKOS_LAMBDA(TeamMember_t member, const int m, const int n, const int k, const int i) {
     ScrArray1D<Real> a_(member.team_scratch(scr_lvl), nfx); // 1D slice of data
     ScrArray1D<Real> flx(member.team_scratch(scr_lvl), nfx); // "flux" at faces
-    ScrArray1D<Real> q1_(member.team_scratch(scr_lvl), nfx); // scratch array
 
     Real &x1min = mbsize.d_view(m).x1min;
     Real &x1max = mbsize.d_view(m).x1max;
@@ -264,15 +263,14 @@ TaskStatus OrbitalAdvectionCC::RecvAndUnpackCC(DvceArray5D<Real> &a,
     Real epsi = fmod(yshear,(mbsize.d_view(m).dx2))/(mbsize.d_view(m).dx2);
     switch (rcon) {
       case ReconstructionMethod::dc:
-        DCRemapFlx(member, (jfs-joffset), (jfe+1-joffset), epsi, a_, q1_, flx);
+        DC_RemapFlx(member, (jfs-joffset), (jfe+1-joffset), epsi, a_, flx);
         break;
       case ReconstructionMethod::plm:
-        PLMRemapFlx(member, (jfs-joffset), (jfe+1-joffset), epsi, a_, q1_, flx);
+        PLM_RemapFlx(member, (jfs-joffset), (jfe+1-joffset), epsi, a_, flx);
         break;
-//      case ReconstructionMethod::ppm4:
-//      case ReconstructionMethod::ppmx:
-//          PPMRemapFlx(member,eos_,extrema,true,m,k,j,il,iu, w0_, wl_jp1, wr);
-//        break;
+      case ReconstructionMethod::wenoz:
+        WENOZ_RemapFlx(member, (jfs-joffset), (jfe+1-joffset), epsi, a_, flx);
+        break;
       default:
         break;
     }
