@@ -29,30 +29,6 @@
 OrbitalAdvection::OrbitalAdvection(MeshBlockPack *ppack, ParameterInput *pin) :
     maxjshift(1),
     pmy_pack(ppack) {
-  // First some error checks
-  if (pin->DoesBlockExist("hydro")) {
-    std::string xorder = pin->GetString("hydro","reconstruct");
-    if (xorder.compare("dc") != 0 &&
-        xorder.compare("plm") != 0 &&
-        xorder.compare("wenoz") != 0) {
-      std::cout << "### FATAL ERROR in "<< __FILE__ <<" at line " << __LINE__ << std::endl
-                << "Only dc, plm, or wenoz reconstruction can be used with the "
-                << "shearing box and orbital advection" << std::endl;
-      std::exit(EXIT_FAILURE);
-    }
-  }
-  if (pin->DoesBlockExist("mhd")) {
-    std::string xorder = pin->GetString("mhd","reconstruct");
-    if (xorder.compare("dc") != 0 &&
-        xorder.compare("plm") != 0 &&
-        xorder.compare("wenoz") != 0) {
-      std::cout << "### FATAL ERROR in "<< __FILE__ <<" at line " << __LINE__ << std::endl
-                << "Only dc, plm, or wenoz reconstruction can be used with the "
-                << "shearing box and orbital advection" << std::endl;
-      std::exit(EXIT_FAILURE);
-    }
-  }
-
   // estimate maximum integer shift in x2-direction for orbital advection
   Real xmin = fabs(ppack->pmesh->mesh_size.x1min);
   Real xmax = fabs(ppack->pmesh->mesh_size.x1max);

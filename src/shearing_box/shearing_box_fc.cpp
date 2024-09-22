@@ -79,36 +79,31 @@ TaskStatus ShearingBoxBoundaryFC::PackAndSendFC(DvceFaceFld4D<Real> &b,
           par_for_inner(member, 0, nj, [&](const int j) {
             a_(j) = b.x1f(mm,k,j,i);
           });
-          member.team_barrier();
         } else if (v==1) {
           par_for_inner(member, 0, nj, [&](const int j) {
             a_(j) = b.x2f(mm,k,j,i);
           });
-          member.team_barrier();
         } else if (v==2) {
           par_for_inner(member, 0, nj, [&](const int j) {
             a_(j) = b.x3f(mm,k,j,i);
           });
-          member.team_barrier();
         }
       } else if (n==1) {
         if (v==0) {
           par_for_inner(member, 0, nj, [&](const int j) {
             a_(j) = b.x1f(mm,k,j,(ie+2)+i);
           });
-          member.team_barrier();
         } else if (v==1) {
           par_for_inner(member, 0, nj, [&](const int j) {
             a_(j) = b.x2f(mm,k,j,(ie+1)+i);
           });
-          member.team_barrier();
         } else if (v==2) {
           par_for_inner(member, 0, nj, [&](const int j) {
             a_(j) = b.x3f(mm,k,j,(ie+1)+i);
           });
-          member.team_barrier();
         }
       }
+      member.team_barrier();
 
       // compute fractional offset
       Real eps = fmod(yshear_,(mbsize.d_view(mm).dx2))/(mbsize.d_view(mm).dx2);
@@ -122,12 +117,15 @@ TaskStatus ShearingBoxBoundaryFC::PackAndSendFC(DvceFaceFld4D<Real> &b,
         case ReconstructionMethod::plm:
           PLM_RemapFlx(member, js, (je+1), eps, a_, flx);
           break;
+        case ReconstructionMethod::ppm4:
+        case ReconstructionMethod::ppmx:
         case ReconstructionMethod::wenoz:
-          WENOZ_RemapFlx(member, js, (je+1), eps, a_, flx);
+          PPMX_RemapFlx(member, js, (je+1), eps, a_, flx);
           break;
         default:
           break;
       }
+      member.team_barrier();
 
       // update data in send buffer with fracational shift
       par_for_inner(member, js, je, [&](const int j) {
