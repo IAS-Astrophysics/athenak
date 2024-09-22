@@ -80,13 +80,12 @@ TaskStatus ShearingBoxBoundaryCC::PackAndSendCC(DvceArray5D<Real> &a,
         par_for_inner(member, 0, nj, [&](const int j) {
           a_(j) = a(mm,v,k,j,i);
         });
-        member.team_barrier();
       } else {
         par_for_inner(member, 0, nj, [&](const int j) {
           a_(j) = a(mm,v,k,j,(ie+1)+i);
         });
-        member.team_barrier();
       }
+      member.team_barrier();
 
       // compute fractional offset
       Real eps = fmod(yshear_,(mbsize.d_view(mm).dx2))/(mbsize.d_view(mm).dx2);
@@ -100,12 +99,15 @@ TaskStatus ShearingBoxBoundaryCC::PackAndSendCC(DvceArray5D<Real> &a,
         case ReconstructionMethod::plm:
           PLM_RemapFlx(member, js, (je+1), eps, a_, flx);
           break;
+        case ReconstructionMethod::ppm4:
+        case ReconstructionMethod::ppmx:
         case ReconstructionMethod::wenoz:
-          WENOZ_RemapFlx(member, js, (je+1), eps, a_, flx);
+          PPMX_RemapFlx(member, js, (je+1), eps, a_, flx);
           break;
         default:
           break;
       }
+      member.team_barrier();
 
       // update data in send buffer with fracational shift
       par_for_inner(member, js, je, [&](const int j) {

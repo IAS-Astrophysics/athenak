@@ -283,12 +283,15 @@ TaskStatus OrbitalAdvectionFC::RecvAndUnpackFC(DvceFaceFld4D<Real> &b0,
       case ReconstructionMethod::plm:
         PLM_RemapFlx(member, (jfs-joffset), (jfe+1-joffset), epsi, b0_, flx);
         break;
+      case ReconstructionMethod::ppm4:
+      case ReconstructionMethod::ppmx:
       case ReconstructionMethod::wenoz:
-        WENOZ_RemapFlx(member, (jfs-joffset), (jfe+1-joffset), epsi, b0_, flx);
+        PPMX_RemapFlx(member, (jfs-joffset), (jfe+1-joffset), epsi, b0_, flx);
         break;
       default:
         break;
     }
+    member.team_barrier();
 
     // Compute emfx = -VyBz, which is at cell-center in x1-direction
     if (v==0) {

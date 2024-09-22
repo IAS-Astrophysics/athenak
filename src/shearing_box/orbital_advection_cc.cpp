@@ -268,12 +268,15 @@ TaskStatus OrbitalAdvectionCC::RecvAndUnpackCC(DvceArray5D<Real> &a,
       case ReconstructionMethod::plm:
         PLM_RemapFlx(member, (jfs-joffset), (jfe+1-joffset), epsi, a_, flx);
         break;
+      case ReconstructionMethod::ppm4:
+      case ReconstructionMethod::ppmx:
       case ReconstructionMethod::wenoz:
-        WENOZ_RemapFlx(member, (jfs-joffset), (jfe+1-joffset), epsi, a_, flx);
+        PPMX_RemapFlx(member, (jfs-joffset), (jfe+1-joffset), epsi, a_, flx);
         break;
       default:
         break;
     }
+    member.team_barrier();
 
     // Update CC variables with both integer shift (from a_) and a conservative remap
     // for the remaining fraction of a cell using upwind "fluxes"
