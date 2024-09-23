@@ -6,11 +6,21 @@
 //! \file z4c_two_puncture.cpp
 //  \brief Problem generator for two punctures
 
-#include <algorithm>
-#include <cmath>
-#include <iostream>
-#include <sstream>
-#include <string>
+#include <stdio.h>
+#include <math.h>
+
+#if MPI_PARALLEL_ENABLED
+#include <mpi.h>
+#endif
+
+#include <algorithm>  // max(), max_element(), min(), min_element()
+#include <iomanip>
+#include <iostream>   // endl
+#include <limits>     // numeric_limits::max()
+#include <memory>
+#include <sstream>    // stringstream
+#include <string>     // c_str(), string
+#include <vector>
 
 #include "TwoPunctures.h"
 #include "coordinates/adm.hpp"
@@ -21,6 +31,16 @@
 #include "parameter_input.hpp"
 #include "z4c/z4c.hpp"
 #include "z4c/z4c_amr.hpp"
+#include "coordinates/coordinates.hpp"
+#include "coordinates/cartesian_ks.hpp"
+#include "eos/eos.hpp"
+#include "geodesic-grid/geodesic_grid.hpp"
+#include "geodesic-grid/spherical_grid.hpp"
+#include "hydro/hydro.hpp"
+#include "mhd/mhd.hpp"
+#include "dyn_grmhd/dyn_grmhd.hpp"
+
+#include <Kokkos_Random.hpp>
 
 static ini_data *data;
 
@@ -31,7 +51,26 @@ void RefinementCondition(MeshBlockPack* pmbp);
 namespace {
 KOKKOS_INLINE_FUNCTION
 static void CalculateCN(struct torus_pgen pgen, Real *cparam, Real *nparam);
-                                      Real *pr, Real *ptheta, Real *pphi);
+
+KOKKOS_INLINE_FUNCTION
+static Real CalculateL(struct torus_pgen pgen, Real r, Real sin_theta);
+
+KOKKOS_INLINE_FUNCTION
+static Real CalculateCovariantUT(struct torus_pgen pgen, Real r, Real sin_theta, Real l);
+
+KOKKOS_INLINE_FUNCTION
+static Real CalculateLFromRPeak(struct torus_pgen pgen, Real r);
+
+KOKKOS_INLINE_FUNCTION
+static Real LogHAux(struct torus_pgen pgen, Real r, Real sin_theta);
+
+KOKKOS_INLINE_FUNCTION
+static Real CalculateT(struct torus_pgen pgen, Real rho, Real ptot_over_rho);
+
+KOKKOS_INLINE_FUNCTION
+static void GetBoyerLindquistCoordinates(struct torus_pgen pgen,
+                                         Real x1, Real x2, Real x3,
+                                         Real *pr, Real *ptheta, Real *pphi);
 
 KOKKOS_INLINE_FUNCTION
 static void CalculateVelocityInTiltedTorus(struct torus_pgen pgen,
@@ -87,25 +126,6 @@ struct torus_pgen {
   torus_pgen torus;
 
 } // namespace
-KOKKOS_INLINE_FUNCTION
-static Real CalculateL(struct torus_pgen pgen, Real r, Real sin_theta);
-
-KOKKOS_INLINE_FUNCTION
-static Real CalculateCovariantUT(struct torus_pgen pgen, Real r, Real sin_theta, Real l);
-
-KOKKOS_INLINE_FUNCTION
-static Real CalculateLFromRPeak(struct torus_pgen pgen, Real r);
-
-KOKKOS_INLINE_FUNCTION
-static Real LogHAux(struct torus_pgen pgen, Real r, Real sin_theta);
-
-KOKKOS_INLINE_FUNCTION
-static Real CalculateT(struct torus_pgen pgen, Real rho, Real ptot_over_rho);
-
-KOKKOS_INLINE_FUNCTION
-static void GetBoyerLindquistCoordinates(struct torus_pgen pgen,
-                                         Real x1, Real x2, Real x3,
-   
 
 // Prototypes for user-defined BCs and history functions
 void NoInflowTorus(Mesh *pm);
@@ -284,7 +304,6 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
 
 
   // Starting initializing the disk
-  MeshBlockPack *pmbp = pmy_mesh_->pmb_pack;
   if (!pmbp->pcoord->is_general_relativistic &&
       !pmbp->pcoord->is_dynamical_relativistic) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
@@ -298,7 +317,6 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   //user_hist_func = &TorusHistory;
 
   // capture variables for kernel
-  auto &indcs = pmy_mesh_->mb_indcs;
   int is = indcs.is, js = indcs.js, ks = indcs.ks;
   int ie = indcs.ie, je = indcs.je, ke = indcs.ke;
   int nmb = pmbp->nmb_thispack;
@@ -324,10 +342,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
 
   // Select either Hydro or MHD
   DvceArray5D<Real> u0_, w0_;
-  if (pmbp->phydro != nullptr) {
-    u0_ = pmbp->phydro->u0;
-    w0_ = pmbp->phydro->w0;
-  } else if (pmbp->pmhd != nullptr) {
+  if (pmbp->pmhd != nullptr) {
     u0_ = pmbp->pmhd->u0;
     w0_ = pmbp->pmhd->w0;
   }
@@ -339,17 +354,10 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   DvceArray5D<Real> i0_;
 
   // Get ideal gas EOS data
-  if (pmbp->phydro != nullptr) {
-    torus.gamma_adi = pmbp->phydro->peos->eos_data.gamma;
-  } else if (pmbp->pmhd != nullptr) {
+  if (pmbp->pmhd != nullptr) {
     torus.gamma_adi = pmbp->pmhd->peos->eos_data.gamma;
   }
   Real gm1 = torus.gamma_adi - 1.0;
-
-  // Get Radiation constant (if radiation enabled)
-  if (pmbp->prad != nullptr) {
-    torus.arad = pmbp->prad->arad;
-  }
 
   // Read problem-specific parameters from input file
   // global parameters
@@ -948,16 +956,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   }
 
   // Convert primitives to conserved
-  if (pmbp->padm == nullptr) {
-    if (pmbp->phydro != nullptr) {
-      pmbp->phydro->peos->PrimToCons(w0_, u0_, is, ie, js, je, ks, ke);
-    } else if (pmbp->pmhd != nullptr) {
-      auto &bcc0_ = pmbp->pmhd->bcc0;
-      pmbp->pmhd->peos->PrimToCons(w0_, bcc0_, u0_, is, ie, js, je, ks, ke);
-    }
-  } else {
-    pmbp->pdyngr->PrimToConInit(is, ie, js, je, ks, ke);
-  }
+  pmbp->pdyngr->PrimToConInit(is, ie, js, je, ks, ke);
   return;
 }
 
@@ -1745,10 +1744,7 @@ void NoInflowTorus(Mesh *pm) {
 
   // Select either Hydro or MHD
   DvceArray5D<Real> u0_, w0_;
-  if (pm->pmb_pack->phydro != nullptr) {
-    u0_ = pm->pmb_pack->phydro->u0;
-    w0_ = pm->pmb_pack->phydro->w0;
-  } else if (pm->pmb_pack->pmhd != nullptr) {
+  if (pm->pmb_pack->pmhd != nullptr) {
     u0_ = pm->pmb_pack->pmhd->u0;
     w0_ = pm->pmb_pack->pmhd->w0;
   }
@@ -1786,10 +1782,7 @@ void NoInflowTorus(Mesh *pm) {
   }
   // ConsToPrim over all X1 ghost zones *and* at the innermost/outermost X1-active zones
   // of Meshblocks, even if Meshblock face is not at the edge of computational domain
-  if (pm->pmb_pack->phydro != nullptr) {
-    pm->pmb_pack->phydro->peos->ConsToPrim(u0_,w0_,false,is-ng,is,0,(n2-1),0,(n3-1));
-    pm->pmb_pack->phydro->peos->ConsToPrim(u0_,w0_,false,ie,ie+ng,0,(n2-1),0,(n3-1));
-  } else if (pm->pmb_pack->pmhd != nullptr) {
+  if (pm->pmb_pack->pmhd != nullptr) {
     auto &b0 = pm->pmb_pack->pmhd->b0;
     auto &bcc = pm->pmb_pack->pmhd->bcc0;
     pm->pmb_pack->pmhd->peos->ConsToPrim(u0_,b0,w0_,bcc,false,is-ng,is,0,(n2-1),0,(n3-1));
@@ -1818,10 +1811,7 @@ void NoInflowTorus(Mesh *pm) {
     }
   });
   // PrimToCons on X1 ghost zones
-  if (pm->pmb_pack->phydro != nullptr) {
-    pm->pmb_pack->phydro->peos->PrimToCons(w0_,u0_,is-ng,is-1,0,(n2-1),0,(n3-1));
-    pm->pmb_pack->phydro->peos->PrimToCons(w0_,u0_,ie+1,ie+ng,0,(n2-1),0,(n3-1));
-  } else if (pm->pmb_pack->pmhd != nullptr) {
+  if (pm->pmb_pack->pmhd != nullptr) {
     auto &bcc0_ = pm->pmb_pack->pmhd->bcc0;
     pm->pmb_pack->pmhd->peos->PrimToCons(w0_,bcc0_,u0_,is-ng,is-1,0,(n2-1),0,(n3-1));
     pm->pmb_pack->pmhd->peos->PrimToCons(w0_,bcc0_,u0_,ie+1,ie+ng,0,(n2-1),0,(n3-1));
@@ -1855,10 +1845,7 @@ void NoInflowTorus(Mesh *pm) {
   }
   // ConsToPrim over all X2 ghost zones *and* at the innermost/outermost X2-active zones
   // of Meshblocks, even if Meshblock face is not at the edge of computational domain
-  if (pm->pmb_pack->phydro != nullptr) {
-    pm->pmb_pack->phydro->peos->ConsToPrim(u0_,w0_,false,0,(n1-1),js-ng,js,0,(n3-1));
-    pm->pmb_pack->phydro->peos->ConsToPrim(u0_,w0_,false,0,(n1-1),je,je+ng,0,(n3-1));
-  } else if (pm->pmb_pack->pmhd != nullptr) {
+  if (pm->pmb_pack->pmhd != nullptr) {
     auto &b0 = pm->pmb_pack->pmhd->b0;
     auto &bcc = pm->pmb_pack->pmhd->bcc0;
     pm->pmb_pack->pmhd->peos->ConsToPrim(u0_,b0,w0_,bcc,false,0,(n1-1),js-ng,js,0,(n3-1));
@@ -1888,10 +1875,7 @@ void NoInflowTorus(Mesh *pm) {
   });
 
   // PrimToCons on X2 ghost zones
-  if (pm->pmb_pack->phydro != nullptr) {
-    pm->pmb_pack->phydro->peos->PrimToCons(w0_,u0_,0,(n1-1),js-ng,js-1,0,(n3-1));
-    pm->pmb_pack->phydro->peos->PrimToCons(w0_,u0_,0,(n1-1),je+1,je+ng,0,(n3-1));
-  } else if (pm->pmb_pack->pmhd != nullptr) {
+  if (pm->pmb_pack->pmhd != nullptr) {
     auto &bcc0_ = pm->pmb_pack->pmhd->bcc0;
     pm->pmb_pack->pmhd->peos->PrimToCons(w0_,bcc0_,u0_,0,(n1-1),js-ng,js-1,0,(n3-1));
     pm->pmb_pack->pmhd->peos->PrimToCons(w0_,bcc0_,u0_,0,(n1-1),je+1,je+ng,0,(n3-1));
@@ -1925,10 +1909,7 @@ void NoInflowTorus(Mesh *pm) {
   }
   // ConsToPrim over all X3 ghost zones *and* at the innermost/outermost X3-active zones
   // of Meshblocks, even if Meshblock face is not at the edge of computational domain
-  if (pm->pmb_pack->phydro != nullptr) {
-    pm->pmb_pack->phydro->peos->ConsToPrim(u0_,w0_,false,0,(n1-1),0,(n2-1),ks-ng,ks);
-    pm->pmb_pack->phydro->peos->ConsToPrim(u0_,w0_,false,0,(n1-1),0,(n2-1),ke,ke+ng);
-  } else if (pm->pmb_pack->pmhd != nullptr) {
+  if (pm->pmb_pack->pmhd != nullptr) {
     auto &b0 = pm->pmb_pack->pmhd->b0;
     auto &bcc = pm->pmb_pack->pmhd->bcc0;
     pm->pmb_pack->pmhd->peos->ConsToPrim(u0_,b0,w0_,bcc,false,0,(n1-1),0,(n2-1),ks-ng,ks);
@@ -1958,10 +1939,7 @@ void NoInflowTorus(Mesh *pm) {
   });
 
   // PrimToCons on X3 ghost zones
-  if (pm->pmb_pack->phydro != nullptr) {
-    pm->pmb_pack->phydro->peos->PrimToCons(w0_,u0_,0,(n1-1),0,(n2-1),ks-ng,ks-1);
-    pm->pmb_pack->phydro->peos->PrimToCons(w0_,u0_,0,(n1-1),0,(n2-1),ke+1,ke+ng);
-  } else if (pm->pmb_pack->pmhd != nullptr) {
+  if (pm->pmb_pack->pmhd != nullptr) {
     auto &bcc0_ = pm->pmb_pack->pmhd->bcc0;
     pm->pmb_pack->pmhd->peos->PrimToCons(w0_,bcc0_,u0_,0,(n1-1),0,(n2-1),ks-ng,ks-1);
     pm->pmb_pack->pmhd->peos->PrimToCons(w0_,bcc0_,u0_,0,(n1-1),0,(n2-1),ke+1,ke+ng);
@@ -1983,11 +1961,7 @@ void TorusFluxes(HistoryData *pdata, Mesh *pm) {
   // set nvars, adiabatic index, primitive array w0, and field array bcc0 if is_mhd
   int nvars; Real gamma; bool is_mhd = false;
   DvceArray5D<Real> w0_, bcc0_;
-  if (pmbp->phydro != nullptr) {
-    nvars = pmbp->phydro->nhydro + pmbp->phydro->nscalars;
-    gamma = pmbp->phydro->peos->eos_data.gamma;
-    w0_ = pmbp->phydro->w0;
-  } else if (pmbp->pmhd != nullptr) {
+  if (pmbp->pmhd != nullptr) {
     is_mhd = true;
     nvars = pmbp->pmhd->nmhd + pmbp->pmhd->nscalars;
     gamma = pmbp->pmhd->peos->eos_data.gamma;
