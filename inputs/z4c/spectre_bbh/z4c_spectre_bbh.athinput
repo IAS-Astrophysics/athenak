@@ -6,7 +6,7 @@ basename  = bbh      # problem ID: basename of output filenames
 
 <problem>
 pgen_name = z4c_spectre_bbh
-id_filename_glob = BbhVolume*.h5
+id_filename_glob = /home/nilsvu/2024-09-bbh-athenak/ID/BbhVolume*.h5
 id_subfile_name = VolumeData
 id_observation_step = -1
 
