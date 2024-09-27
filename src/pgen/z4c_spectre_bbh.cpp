@@ -22,7 +22,6 @@
 #include "parameter_input.hpp"
 #include "z4c/z4c.hpp"
 #include "z4c/z4c_amr.hpp"
-#include "z4c/z4c_puncture_tracker.hpp"
 
 #include <spectre/Exporter.hpp>
 
@@ -218,5 +217,5 @@ void LoadSpectreInitialData(MeshBlockPack *pmbp, const std::string &filename_glo
 }
 
 void RefinementCondition(MeshBlockPack *pmbp) {
-  pmbp->pz4c->pz4c_amr->Refine(pmbp);
+  pmbp->pz4c->pamr->Refine(pmbp);
 }
