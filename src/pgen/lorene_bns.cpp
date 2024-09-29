@@ -41,11 +41,14 @@
 void BNSHistory(HistoryData *pdata, Mesh *pm);
 void LoreneBNSRefinementCondition(MeshBlockPack *pmbp);
 
-// Prototypes for magnetic vector potential
-KOKKOS_INLINE_FUNCTION
-static Real A1(Real x, Real y, Real z, Real I_0, Real r_0);
-KOKKOS_INLINE_FUNCTION
-static Real A2(Real x, Real y, Real z, Real I_0, Real r_0);
+//----------------------------------------------------------------------------------------
+//! \fn ProblemGenerator::UserProblem_()
+//! \brief Problem Generator for BNS with LORENE
+void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
+  user_hist_func = &BNSHistory;
+  user_ref_func = &LoreneBNSRefinementCondition;
+
+  if (restart) return;
 
 template<class TOVEOS>
 void SetupBNS(ParameterInput *pin, Mesh* pmy_mesh_) {
@@ -583,20 +586,4 @@ void BNSHistory(HistoryData *pdata, Mesh *pm) {
 
 void LoreneBNSRefinementCondition(MeshBlockPack *pmbp) {
   pmbp->pz4c->pamr->Refine(pmbp);
-}
-
-KOKKOS_INLINE_FUNCTION
-static Real A1(Real x, Real y, Real z, Real I_0, Real r_0) {
-  Real w2 = SQR(x) + SQR(y);
-  Real r2 = w2 + SQR(z);
-  return -y * M_PI * SQR(r_0)*I_0 / pow(SQR(r_0) + r2, 1.5) *
-         (1.0 + 15.0/8.0*SQR(r_0)*(SQR(r_0)+w2)/SQR(SQR(r_0)+r2));
-}
-
-KOKKOS_INLINE_FUNCTION
-static Real A2(Real x, Real y, Real z, Real I_0, Real r_0) {
-  Real w2 = SQR(x) + SQR(y);
-  Real r2 = w2 + SQR(z);
-  return x * M_PI * SQR(r_0)*I_0 / pow(SQR(r_0) + r2, 1.5) *
-         (1.0 + 15.0/8.0*SQR(r_0)*(SQR(r_0)+w2)/SQR(SQR(r_0)+r2));
 }
