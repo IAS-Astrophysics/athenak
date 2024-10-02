@@ -56,6 +56,7 @@ add_executable(
 
         geodesic-grid/geodesic_grid.cpp
         geodesic-grid/spherical_grid.cpp
+	geodesic-grid/gauss_legendre.cpp
 
         hydro/hydro.cpp
         hydro/hydro_fluxes.cpp
