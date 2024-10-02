@@ -27,11 +27,12 @@ char const * const ADM::ADM_names[ADM::nadm] = {
 //----------------------------------------------------------------------------------------
 // constructor: initializes data structures and parameters
 ADM::ADM(MeshBlockPack *ppack, ParameterInput *pin):
-    SetADMVariables(&ADM::SetADMVariablesToKerrSchild),
-    u_adm("u_adm",1,1,1,1,1),
-    pmy_pack(ppack) {
-  is_dynamic = pin->GetOrAddBoolean("adm" , "dynamic", false);
+  SetADMVariables(&ADM::SetADMVariablesToKerrSchild),
+  u_adm("u_adm",1,1,1,1,1),
+  pmy_pack(ppack) {
 
+  is_dynamic = pin->GetOrAddBoolean("adm" , "dynamic", false);
+  
   int nmb = std::max((ppack->nmb_thispack), (ppack->pmesh->nmb_maxperrank));
   auto &indcs = pmy_pack->pmesh->mb_indcs;
   int ncells1 = indcs.nx1 + 2*(indcs.ng);
@@ -67,6 +68,7 @@ void ADM::SetADMVariablesToKerrSchild(MeshBlockPack *pmbp) {
   auto &indcs = pmbp->pmesh->mb_indcs;
   int &ng = indcs.ng;
   int is = indcs.is, js = indcs.js, ks = indcs.ks;
+  int ie = indcs.ie, je = indcs.je, ke = indcs.ke;
   int nmb = pmbp->nmb_thispack;
   int n1 = indcs.nx1 + 2*ng;
   int n2 = (indcs.nx2 > 1) ? (indcs.nx2 + 2*ng) : 1;
