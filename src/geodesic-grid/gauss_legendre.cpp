@@ -9,7 +9,6 @@
 #include <cmath>
 #include <iostream>
 #include <list>
-#include "athena_tensor.hpp"
 
 #include "athena.hpp"
 #include "coordinates/cell_locations.hpp"
@@ -163,6 +162,7 @@ Real GaussLegendreGrid::Integrate(DualArray1D<Real> integrand) {
   return value;
 }
 
+/*
 // Integrate tensors of rank 0
 Real GaussLegendreGrid::Integrate(AthenaSurfaceTensor<Real,TensorSymm::NONE,3,0> integrand) {
   Real value = 0.;
@@ -171,6 +171,7 @@ Real GaussLegendreGrid::Integrate(AthenaSurfaceTensor<Real,TensorSymm::NONE,3,0>
   }
   return value;
 }
+*/
 
 // calculate spectral representation, maybe change into inline function later
 DualArray1D<Real> GaussLegendreGrid::SpatialToSpectral(DualArray1D<Real> scalar_function) {
@@ -187,7 +188,7 @@ DualArray1D<Real> GaussLegendreGrid::SpatialToSpectral(DualArray1D<Real> scalar_
   }
   return spectral;
 }
-
+/*
 DualArray1D<Real> GaussLegendreGrid::SpatialToSpectral(AthenaSurfaceTensor<Real,TensorSymm::NONE,3,0> scalar_function) {
   DualArray1D<Real> spectral;
   DualArray1D<Real> integrand;
@@ -202,7 +203,7 @@ DualArray1D<Real> GaussLegendreGrid::SpatialToSpectral(AthenaSurfaceTensor<Real,
   }
   return spectral;
 }
-
+*/
 DualArray1D<Real> GaussLegendreGrid::SpectralToSpatial(DualArray1D<Real> scalar_spectrum) {
   DualArray1D<Real> scalar_function;
   Kokkos::realloc(scalar_function,nangles);
@@ -413,7 +414,7 @@ void GaussLegendreGrid::InterpolateToSphere(int nvars, DvceArray5D<Real> &val) {
 
   return;
 }
-
+/*
 AthenaSurfaceTensor<Real,TensorSymm::SYM2,3,2> GaussLegendreGrid::InterpolateToSphere(AthenaTensor<Real, TensorSymm::SYM2, 3, 2> &g_dd) {
   auto &indcs = pmy_pack->pmesh->mb_indcs;
   int &is = indcs.is; int &js = indcs.js; int &ks = indcs.ks;
@@ -530,7 +531,7 @@ GaussLegendreGrid::InterpolateToSphere(AthenaTensor<Real, TensorSymm::SYM2, 3, 3
 
   return tensor_on_sphere;
 }
-
+*/
 
 // Jacobian matrix to transform vector to Cartesian basis
 // first index r theta phi, second index x,y,z
