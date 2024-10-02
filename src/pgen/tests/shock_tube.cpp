@@ -320,12 +320,12 @@ void SetADMVariablesToSchwarzschild(MeshBlockPack *pmbp) {
   int ivy = IVX + ((ivx - IVX) + 1)%3;
   int ivz = IVX + ((ivx - IVX) + 2)%3;
   int is = indcs.is, js = indcs.js, ks = indcs.ks;
+  int ie = indcs.ie, je = indcs.je, ke = indcs.ke;
   int nmb1 = pmbp->nmb_thispack - 1;
   int ng = indcs.ng;
   int n1 = indcs.nx1 + 2*ng;
   int n2 = (indcs.nx2 > 1) ? (indcs.nx2 + 2*ng) : 1;
   int n3 = (indcs.nx3 > 1) ? (indcs.nx3 + 2*ng) : 1;
-  auto shk_dir_ = shk_dir;
   par_for("pgen_adm_vars", DevExeSpace(), 0,nmb1,0,(n3-1),0,(n2-1),0,(n1-1),
   KOKKOS_LAMBDA(int m, int k, int j, int i) {
     Real &x1min = size.d_view(m).x1min;
@@ -342,11 +342,11 @@ void SetADMVariablesToSchwarzschild(MeshBlockPack *pmbp) {
 
     // Set ADM to Schwarzschild coordinates
     Real r = 0;
-    if (shk_dir_ == 1) {
+    if (shk_dir == 1) {
       r = x1v;
-    } else if (shk_dir_ == 2) {
+    } else if (shk_dir == 2) {
       r = x2v;
-    } else if (shk_dir_ == 3) {
+    } else if (shk_dir == 3) {
       r = x3v;
     }
     Real fac = 1. - 2./r;
@@ -374,4 +374,4 @@ void SetADMVariablesToSchwarzschild(MeshBlockPack *pmbp) {
   });
 }
 
-} // namespace
+}
