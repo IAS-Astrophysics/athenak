@@ -543,4 +543,294 @@ AthenaScratchTensor<T, sym, ndim, 4>::AthenaScratchTensor() {
   }
 }
 
+// Tensors defined on a two surface, for the horizon finder
+
+// Here tensors are defined as static 1D arrays, with compile-time dimension calculated as
+// dim**rank
+// this is the abstract base class
+template<typename T, TensorSymm sym, int ndim, int rank>
+class AthenaSurfaceTensor;
+
+//----------------------------------------------------------------------------------------
+// rank 0 AthenaSurfaceTensor: spatially 0D vector and co-vector fields
+// This is a 1D AthenaSurfaceTensor
+template<typename T, TensorSymm sym, int ndim>
+class AthenaSurfaceTensor<T, sym, ndim, 0> {
+ public:
+  // the default constructor/destructor/copy operators are sufficient
+  AthenaSurfaceTensor() = default;
+  ~AthenaSurfaceTensor() = default;
+  AthenaSurfaceTensor(AthenaSurfaceTensor<T, sym, ndim, 0> const &) = default;
+  AthenaSurfaceTensor<T, sym, ndim, 0> & operator=
+  (AthenaSurfaceTensor<T, sym, ndim, 0> const &) = default;
+
+  KOKKOS_INLINE_FUNCTION
+  decltype(auto) operator()(int const i) const {
+    return data_(i);
+  }
+  KOKKOS_INLINE_FUNCTION
+  void NewAthenaSurfaceTensor(int nx) {
+    Kokkos::realloc(data_, nx);
+  }
+  KOKKOS_INLINE_FUNCTION
+  void ZeroClear() {
+    Kokkos::Experimental::local_deep_copy(data_, 0.);
+  }
+ private:
+  DvceArray1D<T> data_;
+};
+
+//----------------------------------------------------------------------------------------
+// rank 1 AthenaSurfaceTensor: spatially 0D vector and co-vector fields
+// This is a 1D AthenaSurfaceTensor
+template<typename T, TensorSymm sym, int ndim>
+class AthenaSurfaceTensor<T, sym, ndim, 1> {
+ public:
+  // the default constructor/destructor/copy operators are sufficient
+  AthenaSurfaceTensor() = default;
+  ~AthenaSurfaceTensor() = default;
+  AthenaSurfaceTensor(AthenaSurfaceTensor<T, sym, ndim, 1> const &) = default;
+  AthenaSurfaceTensor<T, sym, ndim, 1> & operator=
+  (AthenaSurfaceTensor<T, sym, ndim, 1> const &) = default;
+
+  KOKKOS_INLINE_FUNCTION
+  decltype(auto) operator()(int const a, int const i) const {
+    return data_(a, i);
+  }
+  KOKKOS_INLINE_FUNCTION
+  void NewAthenaSurfaceTensor(int nx) {
+    Kokkos::realloc(data_, ndim,nx);
+  }
+  KOKKOS_INLINE_FUNCTION
+  void ZeroClear() {
+    Kokkos::Experimental::local_deep_copy(data_, 0.);
+  }
+ private:
+  DvceArray2D<T> data_;
+};
+
+//----------------------------------------------------------------------------------------
+// rank 2 AthenaSurfaceTensor
+// This is a 1D AthenaSurfaceTensor
+template<typename T, TensorSymm sym, int ndim>
+class AthenaSurfaceTensor<T, sym, ndim, 2> {
+ public:
+  AthenaSurfaceTensor();
+
+  // the default destructor/copy operators are sufficient
+  ~AthenaSurfaceTensor() = default;
+  AthenaSurfaceTensor(AthenaSurfaceTensor<T, sym, ndim, 2> const &) = default;
+  AthenaSurfaceTensor<T, sym, ndim, 2> & operator=
+  (AthenaSurfaceTensor<T, sym, ndim, 2> const &) = default;
+  KOKKOS_INLINE_FUNCTION
+  int idxmap(int const a, int const b) const {
+    return idxmap_[a][b];
+  }
+  KOKKOS_INLINE_FUNCTION
+  decltype(auto) operator()(int const a, int const b, int const i) const {
+    return data_(idxmap_[a][b], i);
+  }
+  KOKKOS_INLINE_FUNCTION
+  void NewAthenaSurfaceTensor(int nx) {
+    Kokkos::realloc(data_, ndof_,nx);
+  }
+  KOKKOS_INLINE_FUNCTION
+  void ZeroClear() {
+    Kokkos::Experimental::local_deep_copy(data_, 0);
+  }
+
+ private:
+  DvceArray2D<T> data_;
+  int idxmap_[ndim][ndim];
+  int ndof_;
+};
+
+//----------------------------------------------------------------------------------------
+// Implementation details
+template<typename T, TensorSymm sym, int ndim>
+  AthenaSurfaceTensor<T, sym, ndim, 2>::AthenaSurfaceTensor() {
+switch(sym) {
+    case TensorSymm::NONE:
+      ndof_ = 0;
+      for(int a = 0; a < ndim; ++a)
+      for(int b = 0; b < ndim; ++b) {
+        idxmap_[a][b] = ndof_++;
+      }
+      break;
+    case TensorSymm::SYM2:
+    case TensorSymm::ISYM2:
+      ndof_ = 0;
+      for(int a = 0; a < ndim; ++a)
+      for(int b = a; b < ndim; ++b) {
+        idxmap_[a][b] = ndof_++;
+        idxmap_[b][a] = idxmap_[a][b];
+      }
+      break;
+  }
+}
+
+//----------------------------------------------------------------------------------------
+// rank 3 AthenaSurfaceTensor
+// This is a 1D AthenaSurfaceTensor
+template<typename T, TensorSymm sym, int ndim>
+class AthenaSurfaceTensor<T, sym, ndim, 3> {
+ public:
+  AthenaSurfaceTensor();
+
+  // the default destructor/copy operators are sufficient
+  ~AthenaSurfaceTensor() = default;
+  AthenaSurfaceTensor(AthenaSurfaceTensor<T, sym, ndim, 3> const &) = default;
+  AthenaSurfaceTensor<T, sym, ndim, 3> & operator=
+  (AthenaSurfaceTensor<T, sym, ndim, 3> const &) = default;
+  KOKKOS_INLINE_FUNCTION
+  int idxmap(int const a, int const b, int const c) const {
+    return idxmap_[a][b][c];
+  }
+  KOKKOS_INLINE_FUNCTION
+  decltype(auto) operator()(int const a, int const b, int const c, int const i) const {
+    return data_(idxmap_[a][b][c], i);
+  }
+  KOKKOS_INLINE_FUNCTION
+  void NewAthenaSurfaceTensor(int nx) {
+    Kokkos::realloc(data_, ndof_,nx);
+  }
+  KOKKOS_INLINE_FUNCTION
+  void ZeroClear() {
+    Kokkos::Experimental::local_deep_copy(data_, 0);
+  }
+
+ private:
+  DvceArray2D<T> data_;
+  int idxmap_[ndim][ndim][ndim];
+  int ndof_;
+};
+
+//----------------------------------------------------------------------------------------
+// Implementation details
+template<typename T, TensorSymm sym, int ndim>
+  AthenaSurfaceTensor<T, sym, ndim, 3>::AthenaSurfaceTensor() {
+  switch(sym) {
+    case TensorSymm::NONE:
+      ndof_ = 0;
+      for(int a = 0; a < ndim; ++a)
+      for(int b = 0; b < ndim; ++b)
+      for(int c = 0; c < ndim; ++c) {
+        idxmap_[a][b][c] = ndof_++;
+      }
+      break;
+    case TensorSymm::SYM2:
+      ndof_ = 0;
+      for(int a = 0; a < ndim; ++a)
+      for(int b = 0; b < ndim; ++b)
+      for(int c = b; c < ndim; ++c) {
+        idxmap_[a][b][c] = ndof_++;
+        idxmap_[a][c][b] = idxmap_[a][b][c];
+      }
+      break;
+    case TensorSymm::ISYM2:
+      ndof_ = 0;
+      for(int a = 0; a < ndim; ++a)
+      for(int b = a; b < ndim; ++b)
+      for(int c = 0; c < ndim; ++c) {
+        idxmap_[a][b][c] = ndof_++;
+        idxmap_[b][a][c] = idxmap_[a][b][c];
+      }
+      break;
+  }
+}
+
+//----------------------------------------------------------------------------------------
+// rank 4 AthenaSurfaceTensor
+// This is a 1D AthenaSurfaceTensor
+template<typename T, TensorSymm sym, int ndim>
+class AthenaSurfaceTensor<T, sym, ndim, 4> {
+ public:
+#ifdef __CUDA_ARCH__
+__device__ __host__ AthenaSurfaceTensor();
+#else
+  AthenaSurfaceTensor();
+#endif
+
+  // the default destructor/copy operators are sufficient
+  ~AthenaSurfaceTensor() = default;
+  AthenaSurfaceTensor(AthenaSurfaceTensor<T, sym, ndim, 4> const &) = default;
+  AthenaSurfaceTensor<T, sym, ndim, 4> & operator=
+  (AthenaSurfaceTensor<T, sym, ndim, 4> const &) = default;
+  KOKKOS_INLINE_FUNCTION
+  int idxmap(int const a, int const b, int const c, int const d) const {
+    return idxmap_[a][b][c][d];
+  }
+  KOKKOS_INLINE_FUNCTION
+  decltype(auto) operator()(int const a, int const b,
+                            int const c, int const d, int const i) const {
+    return data_(idxmap_[a][b][c][d], i);
+  }
+  KOKKOS_INLINE_FUNCTION
+  void NewAthenaSurfaceTensor(int nx) {
+    Kokkos::realloc(data_, ndof_,nx);
+  }
+  KOKKOS_INLINE_FUNCTION
+  void ZeroClear() {
+    Kokkos::Experimental::local_deep_copy(data_, 0);
+  }
+
+ private:
+  DvceArray2D<T> data_;
+  int idxmap_[ndim][ndim][ndim][ndim];
+  int ndof_;
+};
+
+//----------------------------------------------------------------------------------------
+// Implementation details
+template<typename T, TensorSymm sym, int ndim>
+#ifdef __CUDA_ARCH__
+__device__ __host__ AthenaSurfaceTensor<T, sym, ndim, 4>::AthenaSurfaceTensor() {
+#else
+  AthenaSurfaceTensor<T, sym, ndim, 4>::AthenaSurfaceTensor() {
+#endif
+  switch(sym) {
+    case TensorSymm::NONE:
+      ndof_ = 0;
+      for(int a = 0; a < ndim; ++a)
+      for(int b = 0; b < ndim; ++b)
+      for(int c = 0; c < ndim; ++c)
+      for(int d = 0; d < ndim; ++d) {
+        idxmap_[a][b][c][d] = ndof_++;
+      }
+      break;
+    case TensorSymm::SYM2:
+      ndof_ = 0;
+      for(int a = 0; a < ndim; ++a)
+      for(int b = 0; b < ndim; ++b)
+      for(int c = 0; c < ndim; ++c)
+      for(int d = c; d < ndim; ++d) {
+        idxmap_[a][b][c][d] = ndof_++;
+        idxmap_[a][b][d][c] = idxmap_[a][b][c][d];
+      }
+      break;
+    case TensorSymm::ISYM2:
+      ndof_ = 0;
+      for(int a = 0; a < ndim; ++a)
+      for(int b = a; b < ndim; ++b)
+      for(int c = 0; c < ndim; ++c)
+      for(int d = 0; d < ndim; ++d) {
+        idxmap_[a][b][c][d] = ndof_++;
+        idxmap_[b][a][c][d] = idxmap_[a][b][c][d];
+      }
+      break;
+    case TensorSymm::SYM22:
+      ndof_ = 0;
+      for(int a = 0; a < ndim; ++a)
+      for(int b = a; b < ndim; ++b)
+      for(int c = 0; c < ndim; ++c)
+      for(int d = c; d < ndim; ++d) {
+        idxmap_[a][b][c][d] = ndof_++;
+        idxmap_[b][a][c][d] = idxmap_[a][b][c][d];
+        idxmap_[a][b][d][c] = idxmap_[a][b][c][d];
+        idxmap_[b][a][d][c] = idxmap_[a][b][c][d];
+      }
+      break;
+  }
+}
+
 #endif // ATHENA_TENSOR_HPP_

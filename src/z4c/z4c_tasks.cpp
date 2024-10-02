@@ -96,7 +96,7 @@ void Z4c::QueueZ4cTasks() {
   pnr->QueueTask(&Z4c::CalcWaveForm, this, Z4c_Wave, "Z4c_Wave", Task_End,
                  {Z4c_ClearRW});
   pnr->QueueTask(&Z4c::TrackCompactObjects, this, Z4c_PT, "Z4c_PT", Task_End, {Z4c_Wave});
-  pnr->QueueTask(&Z4c::CCEDump, this, CCEDump, "CCEDump", Task_End, {Z4c_PT});
+  pnr->QueueTask(&Z4c::CCEDump, this, Z4c_CCE, "CCEDump", Task_End, {Z4c_PT});
 }
 //----------------------------------------------------------------------------------------
 //! \fn  void Wave::InitRecv
