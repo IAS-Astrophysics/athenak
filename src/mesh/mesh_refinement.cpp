@@ -520,6 +520,9 @@ void MeshRefinement::RedistAndRefineMeshBlocks(ParameterInput *pin, int nnew, in
   } else if (padm != nullptr) {
     CopyCC(padm->u_adm);
   }
+  else if (padm != nullptr) {
+    CopyCC(padm->u_adm);
+  }
   // Step 7.
   // Copy evolved physics variables for MBs flagged for refinement from source fine array
   // to target coarse array, when both are on same rank.
@@ -619,16 +622,9 @@ void MeshRefinement::RedistAndRefineMeshBlocks(ParameterInput *pin, int nnew, in
   delete [] oldtonew;
 
   // Step 11.
-  // Initialize quantities stored on the mesh associated with each physics, if necessary
-  if ((nnew > 0) || (ndel > 0)) {
-    // With dynGRMHD, recalculate ADM variables
-    if ((pz4c == nullptr) && (padm != nullptr)) {
-      padm->SetADMVariables(pm->pmb_pack);
-    }
-    // With radiation, compute tetrads and associated mesh arrays
-    if (prad != nullptr) {
-      prad->SetOrthonormalTetrad();
-    }
+  // Recalculate ADM variables if necessary.
+  if ((pz4c == nullptr) && (padm != nullptr) && (nnew > 0 || ndel > 0)) {
+    padm->SetADMVariables(pm->pmb_pack);
   }
 
   return;
