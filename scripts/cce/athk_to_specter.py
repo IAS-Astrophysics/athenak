@@ -40,6 +40,12 @@ def parse_cli():
       description="convert Athenak CCE dumps to Specter CCE")
   p.add_argument("-f_h5", type=str, required=True, help="/path/to/cce/h5/dumps")
   p.add_argument("-d_out", type=str, required=True, help="/path/to/output/dir")
+  p.add_argument(
+      "-t_deriv",
+      type=str,
+      default="Fourier",
+      help="method to take the time derivative of fields:{Fourier}",
+  )
 
   args = p.parse_args()
   return args
@@ -50,8 +56,9 @@ def load(fpath: str, field_name: str, attr: dict) -> list:
     read the field accroding to attr.
     return convention:
       ret[i] = [dump_time_value,
-                real_array_coeffs_for_given_time,
-                imag_array_coeffs_for_given_time],
+                2d_array_coeffs_for_given_time_real,
+                2d_array_coeffs_for_given_time_imag],
+
       where i indicates the dump number.
     """
 
@@ -113,6 +120,60 @@ def get_attribute(fpath: str,
   return attr
 
 
+def time_derivative_fourier(field_name: str, db: dict, args):
+  """
+    return the time derivative of the given field using Fourier method
+    """
+
+  # populate
+  # note field[i] = [time, re, im]
+  field = db[field_name]["value"]
+  len_all_modes = field[1].shape[0] * field[1].shape[1]
+  len_all_time = len(field[0])
+  coeff = np.empty(shape=(len_all_time))
+  f_coeff = np.empty(shape=(len_all_modes, len_all_time))
+
+  ## it's 2d and not 1d ???
+  for nlm in range(0, len_all_modes):
+    # fetch data along time axis for each nlm coeffs
+    for i in range(0, len_all_time):
+      coeff[i] = complex(field[i][1][nlm], field[i][2][nlm])
+
+    # F. transform
+    f_coeff[nlm] = np.fft.fft(coeff[i])
+
+  # F. derivative
+  wm = math.pi * 2.0 / (nmax * dt)
+  f_coeff[0] = 0
+  for nlm in range(0, len_all_modes):
+    for i in range(1, len_all_time // 2 + 1):
+      omega = i * wm
+
+      re = np.real(f_coeff[i])
+      im = np.imag(f_coeff[i])
+
+      re2 = np.real(f_coeff[len_all_time - i])
+      im2 = np.imag(f_coeff[len_all_time - i])
+
+      f_coeff[i] = np.complex(-im * omega, re * omega)
+      f_coeff[len_all_time - i] = np.complex(-im2 * omega, re2 * omega)
+
+  # F. inverse
+  for nlm in range(0, len_all_modes):
+    d_coeff[nlm] = np.fft.ifft(f_coeff[nlm])
+
+
+def time_derivative(field_name: str, db: dict, args):
+  """
+    return the time derivative of the given field
+    """
+
+  if args["t_deriv"] == "Fourier":
+    return time_derivative_fourier(field_name, db, args)
+  else:
+    raise ValueError("no such option")
+
+
 def main(args):
   """
     create output required by Specter code
@@ -124,11 +185,15 @@ def main(args):
 
   # for each field
   field_name = "gxx"
+
   # load data
-  dat = load(args["f_h5"], field_name, attr)
-  print(dat)
+  db[field_name] = {}
+  db[field_name]["value"] = load(args["f_h5"], field_name, attr)
+
+  # print(dat)
 
   # time derivative
+  db[field_name]["Dt"] = time_derivative(field_name, db, args)
 
   # radial derivative
 
