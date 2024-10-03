@@ -98,6 +98,9 @@ class DynGRMHD {
   DynGRMHD_EOS eos_policy;
   DynGRMHD_Error error_policy;
 
+  // Storage for temperature
+  DvceArray5D<Real> temperature;
+
  protected:
   MeshBlockPack *pmy_pack;  // ptr to MeshBlockPack containing this Hydro
   int scratch_level;        // GPU scratch level for flux and source calculations

@@ -99,7 +99,9 @@ DynGRMHD* BuildDynGRMHD(MeshBlockPack *ppack, ParameterInput *pin) {
   return dyn_gr;
 }
 
-DynGRMHD::DynGRMHD(MeshBlockPack *pp, ParameterInput *pin) : pmy_pack(pp) {
+DynGRMHD::DynGRMHD(MeshBlockPack *pp, ParameterInput *pin) : 
+    pmy_pack(pp), 
+    temperature("temperature",1,1,1,1,1) {
   std::string rsolver = pin->GetString("mhd", "rsolver");
   if (rsolver.compare("llf") == 0) {
     rsolver_method = DynGRMHD_RSolver::llf_dyngr;
@@ -127,6 +129,16 @@ DynGRMHD::DynGRMHD(MeshBlockPack *pp, ParameterInput *pin) : pmy_pack(pp) {
   dmp_M = pin->GetOrAddReal("mhd", "dmp_M", 1.2);
 
   fixed_evolution = pin->GetOrAddBoolean("mhd", "fixed", false);
+
+  // allocate memory for temperature
+  {
+    int nmb = std::max((pmy_pack->nmb_thispack), (pmy_pack->pmesh->nmb_maxperrank));
+    auto &indcs = pmy_pack->pmesh->mb_indcs;
+    int ncells1 = indcs.nx1 + 2*(indcs.ng);
+    int ncells2 = (indcs.nx2 > 1)? (indcs.nx2 + 2*(indcs.ng)) : 1;
+    int ncells3 = (indcs.nx3 > 1)? (indcs.nx3 + 2*(indcs.ng)) : 1;
+    Kokkos::realloc(temperature, nmb, 1, ncells3, ncells2, ncells1);
+  }
 }
 
 DynGRMHD::~DynGRMHD() {
@@ -261,7 +273,7 @@ TaskStatus DynGRMHDPS<EOSPolicy, ErrorPolicy>::ConToPrim(Driver *pdrive, int sta
   int n2m1 = (indcs.nx2 > 1)? (indcs.nx2 + 2*ng - 1) : 0;
   int n3m1 = (indcs.nx3 > 1)? (indcs.nx3 + 2*ng - 1) : 0;
   eos.ConsToPrim(pmy_pack->pmhd->u0, pmy_pack->pmhd->b0, pmy_pack->pmhd->bcc0,
-                 pmy_pack->pmhd->w0, 0, n1m1, 0, n2m1, 0, n3m1, false);
+                 pmy_pack->pmhd->w0, temperature, 0, n1m1, 0, n2m1, 0, n3m1, false);
   return TaskStatus::complete;
 }
 
@@ -275,7 +287,7 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::ConToPrimBC(int is, int ie, int js, int
     return;
   }
   eos.ConsToPrim(pmy_pack->pmhd->u0, pmy_pack->pmhd->b0, pmy_pack->pmhd->bcc0,
-                 pmy_pack->pmhd->w0, is, ie, js, je, ks, ke, false);
+                 pmy_pack->pmhd->w0, temperature, is, ie, js, je, ks, ke, false);
 }
 
 //----------------------------------------------------------------------------------------
