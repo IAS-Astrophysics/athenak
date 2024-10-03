@@ -306,7 +306,7 @@ class PrimitiveSolverHydro {
   }
 
   void ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &bfc,
-                  DvceArray5D<Real> &bcc0, DvceArray5D<Real> &prim,
+                  DvceArray5D<Real> &bcc0, DvceArray5D<Real> &prim, 
                   DvceArray5D<Real> &temperature,
                   const int il, const int iu, const int jl, const int ju,
                   const int kl, const int ku, bool floors_only=false) {
