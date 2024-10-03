@@ -440,6 +440,7 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::\
 
 INSTANTIATE_FOFC(Primitive::IdealGas, Primitive::ResetFloor)
 INSTANTIATE_FOFC(Primitive::PiecewisePolytrope, Primitive::ResetFloor)
-INSTANTIATE_FOFC(Primitive::EOSCompOSE, Primitive::ResetFloor)
+INSTANTIATE_FOFC(Primitive::EOSCompOSE<Primitive::NormalLogs>, Primitive::ResetFloor)
+INSTANTIATE_FOFC(Primitive::EOSCompOSE<Primitive::NQTLogs>, Primitive::ResetFloor)
 
 } // namespace dyngr

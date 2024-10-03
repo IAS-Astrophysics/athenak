@@ -27,6 +27,7 @@
 #include "eos/primitive-solver/piecewise_polytrope.hpp"
 #include "eos/primitive-solver/eos_compose.hpp"
 #include "eos/primitive-solver/reset_floor.hpp"
+#include "eos/primitive-solver/logs.hpp"
 
 // AthenaK headers
 #include "athena.hpp"
@@ -58,7 +59,8 @@ class PrimitiveSolverHydro {
       }
     }
     // Parameters for CompOSE EoS
-    if constexpr(std::is_same_v<Primitive::EOSCompOSE, EOSPolicy>) {
+    if constexpr(std::is_same_v<Primitive::EOSCompOSE<Primitive::NormalLogs>, EOSPolicy> || 
+                 std::is_same_v<Primitive::EOSCompOSE<Primitive::NQTLogs>, EOSPolicy>) {
       // Get and set number of scalars in table. This will currently fail if not 1.
       ps.GetEOSMutable().SetNSpecies(pin->GetOrAddInteger(block, "nscalars", 1));
       std::string units = pin->GetOrAddString(block, "units", "geometric_solar");
