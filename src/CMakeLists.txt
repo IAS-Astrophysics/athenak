@@ -162,13 +162,7 @@ add_executable(
         z4c/z4c_calculate_weyl_scalars.cpp
         z4c/z4c_wave_extr.cpp
         z4c/z4c_amr.cpp
-
         z4c/cce/cce.cpp
-        z4c/cce/Chebyshev.cpp
-        z4c/cce/decomp.cpp
-        z4c/cce/Legendre.cpp
-        z4c/cce/matrix.cpp
-        z4c/cce/sYlm.cpp
 )
 
 # custom problem generator to be included in compile
