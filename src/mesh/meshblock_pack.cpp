@@ -65,12 +65,10 @@ MeshBlockPack::~MeshBlockPack() {
   if (pz4c   != nullptr) {
     delete pz4c;
     // cce dump
-#if Z4C_CCE_ENABLED
     for (auto cce : pz4c_cce) {
       delete cce;
     }
     pz4c_cce.resize(0);
-#endif
   }
   if (ppart  != nullptr) {delete ppart;}
   // must be last, since it calls ~BoundaryValues() which (MPI) uses pmy_pack->pmb->nnghbr
@@ -198,15 +196,13 @@ void MeshBlockPack::AddPhysics(ParameterInput *pin) {
     ptmunu = nullptr;
     // init cce dump
     pz4c_cce.reserve(0);
-#if Z4C_CCE_ENABLED
     int ncce = pin->GetOrAddInteger("cce", "num_radii", 0);
     pz4c_cce.reserve(ncce);// 10 different components for each radius
     for(int n = 0; n < ncce; ++n)
     {
       // NOTE: these names are used for pittnull code, so DON'T change the convention
-      pz4c_cce.push_back(new z4c::CCE(pmesh, pin, "gxx",n));
+      pz4c_cce.push_back(new z4c::CCE(pmesh, pin,n));
     }
-#endif
     nphysics++;
   } else {
     pz4c = nullptr;

@@ -295,11 +295,8 @@ TaskStatus Z4c::TrackCompactObjects(Driver *pdrive, int stage) {
 // ! \brief CCE initial data for Pittnull code (cce dumps for Pittnull).
 
 TaskStatus Z4c::CCEDump(Driver *pdrive, int stage) {
-#if Z4C_CCE_ENABLED
   float time_32 = static_cast<float>(pmy_pack->pmesh->time);
   float next_32 = static_cast<float>(cce_dump_last_output_time+cce_dump_dt);
-  //if ((time_32 >= next_32) || (time_32 == 0)) {
-  // dump only at t>0
   if ((time_32 >= next_32)) {
     if (stage == pdrive->nexp_stages) {
       //printf("%s:(ctime,dt)=(%f,%f)",__func__,pmy_pack->pmesh->time,cce_dump_dt);
@@ -326,9 +323,8 @@ TaskStatus Z4c::CCEDump(Driver *pdrive, int stage) {
         fflush(stdout);
       }
       cce_dump_last_output_time = time_32;
-    }// if (stage == pdrive->nexp_stages)
+    }
   }
-#endif
   return TaskStatus::complete;
 }
 

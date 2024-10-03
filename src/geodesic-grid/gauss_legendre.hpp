@@ -11,6 +11,9 @@
 #include "athena.hpp"
 #include "athena_tensor.hpp"
 
+// Forward declarations
+class MeshBlockPack;
+
 //----------------------------------------------------------------------------------------
 //! \class GaussLegendreGrid
 
