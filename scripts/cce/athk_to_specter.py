@@ -55,14 +55,22 @@ def load(fpath: str, field_name: str, attr: dict) -> list:
   """
     read the field accroding to attr.
     return convention:
-      ret[i] = [dump_time_value,
-                2d_array_coeffs_for_given_time_real,
-                2d_array_coeffs_for_given_time_imag],
-
+      ret dict: {t = ...,
+                 re = ...,
+                 im = ...
+                }
+      e.g:
+      ret["t"][i] = dump_time_value at i,
+      ret["re"][i] = 2d_array_coeffs_for_given_time_real at i,
+      ret["im"][i] = 2d_array_coeffs_for_given_time_imag at i,
       where i indicates the dump number.
     """
 
-  ret = []
+  ret = {}
+  ret["t"] = []
+  ret["re"] = []
+  ret["im"] = []
+  
   if attr["file_type"] == "h5":
     lev_t = attr["lev_t"]
     max_n = attr["max_n"]
@@ -84,7 +92,11 @@ def load(fpath: str, field_name: str, attr: dict) -> list:
         re[:] = h5f[f"{key}/{field_name}/re"]
         im[:] = h5f[f"{key}/{field_name}/im"]
         # save
-        ret.append([t, re, im])
+        ret["t"].append(t)
+        ret["re"].append(re)
+        ret["im"].append(im)
+        
+        
   else:
     raise ValueError("no such option")
 
@@ -126,37 +138,40 @@ def time_derivative_fourier(field_name: str, db: dict, args):
     """
 
   # populate
-  # note field[i] = [time, re, im]
+  # note field[i] = {time, re, im}
   field = db[field_name]["value"]
-  len_all_modes = field[1].shape[0] * field[1].shape[1]
-  len_all_time = len(field[0])
+  # chose 0th one, as should be the same for other fields
+  len_all_n_modes = field["re"][0].shape[0]
+  len_all_lm_modes = field["re"][0].shape[1]
+  len_all_time = len(field["t"])
   coeff = np.empty(shape=(len_all_time))
-  f_coeff = np.empty(shape=(len_all_modes, len_all_time))
+  f_coeff = np.empty(shape=(len_all_n_modes*len_all_lm_mode, len_all_time))
 
   ## it's 2d and not 1d ???
-  for nlm in range(0, len_all_modes):
+  for n, lm in product(n,lm):
     # fetch data along time axis for each nlm coeffs
-    for i in range(0, len_all_time):
-      coeff[i] = complex(field[i][1][nlm], field[i][2][nlm])
+    for t in range(0, len_all_time):
+      print(field["re"][t][n,lm])
+      coeff[t] = complex(field["re"][t][n,lm], field["im"][t][n,lm])
 
     # F. transform
-    f_coeff[nlm] = np.fft.fft(coeff[i])
+    f_coeff[n,lm][:] = np.fft.fft(coeff[i])
 
   # F. derivative
   wm = math.pi * 2.0 / (nmax * dt)
-  f_coeff[0] = 0
   for nlm in range(0, len_all_modes):
+    wm = math.pi * 2.0 / (nmax * dt)
+    f_coeff[nlm][0] = 0
     for i in range(1, len_all_time // 2 + 1):
       omega = i * wm
+      re = np.real(f_coeff[nlm][i])
+      im = np.imag(f_coeff[nlm][i])
 
-      re = np.real(f_coeff[i])
-      im = np.imag(f_coeff[i])
+      re2 = np.real(f_coeff[nlm][len_all_time - i])
+      im2 = np.imag(f_coeff[nlm][len_all_time - i])
 
-      re2 = np.real(f_coeff[len_all_time - i])
-      im2 = np.imag(f_coeff[len_all_time - i])
-
-      f_coeff[i] = np.complex(-im * omega, re * omega)
-      f_coeff[len_all_time - i] = np.complex(-im2 * omega, re2 * omega)
+      f_coeff[nlm][i] = np.complex(-im * omega, re * omega)
+      f_coeff[nlm][len_all_time - i] = np.complex(-im2 * omega, re2 * omega)
 
   # F. inverse
   for nlm in range(0, len_all_modes):
@@ -187,6 +202,7 @@ def main(args):
   field_name = "gxx"
 
   # load data
+  db = {}
   db[field_name] = {}
   db[field_name]["value"] = load(args["f_h5"], field_name, attr)
 
