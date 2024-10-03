@@ -1,0 +1,98 @@
+name: AthenaK CI/CD
+run-name: ${{ github.actor }} ${{ github.ref_name }}
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+          
+jobs:
+  lint_python-job:
+    runs-on: [self-hosted, ias-cuda01]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+      - name: Lint python
+        shell: bash
+        run: |
+          source /usr/share/Modules/init/bash
+          module load rh/devtoolset/8 cuda/9.2 cudatoolkit/11.7
+          python3 -m pip install --user flake8 numpy
+          cd ${{ github.workspace }}
+          echo "Running flake8..."
+          python3 -m flake8 2>&1 | tee ${{ github.workspace }}/tst/lint_python_log.txt
+      - name: Upload python lint log
+        uses: actions/upload-artifact@v4
+        with:
+          name:  lint_python_log.txt
+          path:  tst/lint_python_log.txt
+
+  lint_cplusplus-job:
+    runs-on: [self-hosted, ias-cuda01]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+      - name: lint c++
+        shell: bash
+        run: |
+          source /usr/share/Modules/init/bash
+          module load rh/devtoolset/8 cuda/9.2 cudatoolkit/11.7
+          python3 -m pip install --user flake8 numpy
+          cd ${{ github.workspace }}/tst/scripts/style
+          echo "Running Google C++ linter..."
+          bash check_athena_cpp_style.sh 2>&1 | tee ${{ github.workspace }}/tst/lint_c++_log.txt
+      - name: Upload c++ lint log
+        uses: actions/upload-artifact@v4
+        with:
+          name: lint_c++_log.txt
+          path: tst/lint_c++_log.txt
+
+  regression_cpu-job:
+    needs: [lint_python-job, lint_cplusplus-job]
+    runs-on: [self-hosted, ias-cuda01]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+      - name: cpu regression test
+        shell: bash
+        run: |
+          source /usr/share/Modules/init/bash
+          module load rh/devtoolset/8 cuda/9.2 cudatoolkit/11.7
+          python3 -m pip install --user flake8 numpy
+          cd ${{ github.workspace }}/tst
+          echo "Running regression script on GPU..."
+          python3 run_tests.py hydro mhd radiation --log_file=log_file_cpu.txt
+      - name: Archive log_file_cpu
+        uses: actions/upload-artifact@v4
+        with:
+          name: log_file_cpu.txt
+          path: tst/log_file_cpu.txt
+
+  regression_gpu-job:
+    needs: [lint_python-job, lint_cplusplus-job]
+    runs-on: [self-hosted, ias-cuda01]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+      - name: gpu regression test
+        shell: bash
+        run: |
+          source /usr/share/Modules/init/bash
+          module load rh/devtoolset/8 cuda/9.2 cudatoolkit/11.7
+          python3 -m pip install --user flake8 numpy
+          cd ${{ github.workspace }}/tst
+          export CUDA_VISIBLE_DEVICES=1
+          echo "Running regressions script on GPU..."
+          python3 run_tests.py --log_file=log_file_gpu.txt --cmake=-DKokkos_ENABLE_CUDA=On --cmake=-DKokkos_ARCH_VOLTA70=On --cmake=-DCMAKE_CXX_COMPILER=${{ github.workspace }}/kokkos/bin/nvcc_wrapper
+      - name: Archive log_file_gpu
+        uses: actions/upload-artifact@v4
+        with:
+          name: log_file_gpu.txt
+          path: tst/log_file_gpu.txt

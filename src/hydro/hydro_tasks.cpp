@@ -178,7 +178,7 @@ TaskStatus Hydro::Fluxes(Driver *pdrive, int stage) {
 
   // Add viscous, heat-flux, etc fluxes
   if (pvisc != nullptr) {
-    pvisc->IsotropicViscousFlux(w0, pvisc->nu, peos->eos_data, uflx);
+    pvisc->IsotropicViscousFlux(w0, pvisc->nu_iso, peos->eos_data, uflx);
   }
   if (pcond != nullptr) {
     pcond->AddHeatFlux(w0, peos->eos_data, uflx);

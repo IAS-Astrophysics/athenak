@@ -301,7 +301,7 @@ std::size_t IOWrapper::Write_any_type(const void *buf, IOWrapperSizeT cnt,
   return nwrite;
 #else
   // set appropriate datasize
-  std:size_t datasize;
+  std::size_t datasize;
   if (datatype.compare("byte") == 0) {
     datasize = sizeof(char);
   } else if (datatype.compare("int") == 0) {
@@ -364,7 +364,7 @@ std::size_t IOWrapper::Write_any_type_at(const void *buf, IOWrapperSizeT cnt,
   return nwrite;
 #else
   // set appropriate datasize
-  std:size_t datasize;
+  std::size_t datasize;
   if (datatype.compare("byte") == 0) {
     datasize = sizeof(char);
   } else if (datatype.compare("int") == 0) {
@@ -428,7 +428,7 @@ std::size_t IOWrapper::Write_any_type_at_all(const void *buf, IOWrapperSizeT cnt
   return nwrite;
 #else
   // set appropriate datasize
-  std:size_t datasize;
+  std::size_t datasize;
   if (datatype.compare("byte") == 0) {
     datasize = sizeof(char);
   } else if (datatype.compare("int") == 0) {

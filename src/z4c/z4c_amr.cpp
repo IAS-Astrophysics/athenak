@@ -4,87 +4,82 @@
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
 
+#include <algorithm>
 #include <cstdio>
 #include <iostream>
 #include <limits>
-#include <sstream>
+#include <string>
+#include <vector>
+
 #include "z4c/z4c_amr.hpp"
 #include "athena.hpp"
 #include "globals.hpp"
 #include "mesh/mesh.hpp"
 #include "parameter_input.hpp"
+#include "z4c/compact_object_tracker.hpp"
 #include "z4c/z4c.hpp"
-#include "z4c/z4c_puncture_tracker.hpp"
 
-#if 0
-#define PR(x)                                                                  \
-  {                                                                            \
-    Real c_[3] = {/* box center */                                             \
-                  0.5 * (x1min + x1max), 0.5 * (x2min + x2max),                \
-                  0.5 * (x2min + x2max)};                                      \
-    int pn_    = 1; /* punck. number */                                        \
-    for (auto ptracker : pmbp->pz4c_ptracker) {                                \
-      {                                                                        \
-        Real p_[3] = {                                                         \
-          ptracker->GetPos(0), ptracker->GetPos(1), ptracker->GetPos(2)};      \
-        Real r_ = sqrt(                                                        \
-          pow(p_[0] - c_[0], 2.) + pow(p_[1] - c_[1], 2.)                      \
-          + pow(p_[2] - c_[2], 2.));                                           \
-        printf("%s: r[%d] = %g\n", x, pn_, r_);                                \
-        fflush(stdout);                                                        \
-        pn_++;                                                                 \
-      }                                                                        \
-    }                                                                          \
-  }
-
-#else
-#define PR(x)
-#endif
+#define SQ(X) ((X)*(X))
 
 namespace z4c {
 
 // set some parameters
-Z4c_AMR::Z4c_AMR(Z4c *z4c, ParameterInput *pin): pz4c(z4c), pin(pin) {
-  // available methods: "Linf_box_in_box", "L2_sphere_in_sphere", and
-  // "chi_min"
-  ref_method = pin->GetOrAddString("z4c_amr", "method", "L2_sphere_in_sphere");
-  chi_thresh = pin->GetOrAddReal("z4c_amr", "chi_min", 0.2);
-  dchi_thresh = pin->GetOrAddReal("z4c_amr", "dchi_max", 0.1);
-  x1max      = pin->GetReal("mesh", "x1max");
-  x1min      = pin->GetReal("mesh", "x1min");
-  half_initial_d = pin->GetOrAddReal("problem", "par_b", 1.);
+Z4c_AMR::Z4c_AMR(ParameterInput *pin) {
+  std::string ref_method = pin->GetOrAddString("z4c_amr", "method", "trivial");
+  if (ref_method == "trivial") {
+    method = Trivial;
+  } else if (ref_method == "tracker") {
+    method = Tracker;
+  } else if (ref_method == "chi") {
+    method = Chi;
+    chi_thresh = pin->GetOrAddReal("z4c_amr", "chi_min", 0.2);
+  } else if (ref_method == "dchi") {
+    method = dChi;
+    dchi_thresh = pin->GetOrAddReal("z4c_amr", "dchi_max", 0.1);
+  } else {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line "
+              << __LINE__ << std::endl;
+    std::cout << "Unknown refinement strategy: " << ref_method << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+
+  for (int nr = 0; nr < 16; ++nr) {
+    std::string name = "radius_" + std::to_string(nr) + "_rad";
+    if (pin->DoesParameterExist("z4c_amr", name)) {
+      radius.push_back(pin->GetReal("z4c_amr", name));
+      reflevel.push_back(pin->GetOrAddInteger(
+          "z4c_amr", "radius_" + std::to_string(nr) + "_reflevel", -1));
+    } else {
+      break;
+    }
+  }
 }
 
 // 1: refines, -1: de-refines, 0: does nothing
 void Z4c_AMR::Refine(MeshBlockPack *pmy_pack) {
-  // use box in box method
-  if (ref_method == "Linf_box_in_box") {
-    LinfBoxInBox(pmy_pack);
-    // use L-2 norm as a criteria for refinement
-  } else if (ref_method == "L2_sphere_in_sphere") {
-    L2SphereInSphere(pmy_pack);
-  } else if (ref_method == "chi_min") {
-    ChiMin(pmy_pack);
-  } else if (ref_method == "dchi_max") {
-    DchiMax(pmy_pack);
-  } else {
-    std::stringstream msg;
-    msg << "No such option for z4c/refinement" << std::endl;
-    std::exit(EXIT_FAILURE);
+  if (method == Tracker) {
+    RefineTracker(pmy_pack);
+  } else if (method == Chi) {
+    RefineChiMin(pmy_pack);
+  } else if (method == dChi) {
+    RefineDchiMax(pmy_pack);
   }
+  RefineRadii(pmy_pack);
 }
 
-// Mimicking box in box refinement with Linf
-void Z4c_AMR::LinfBoxInBox(MeshBlockPack *pmbp) {
+// refine region within a certain distance from each compact object
+void Z4c_AMR::RefineTracker(MeshBlockPack *pmbp) {
   Mesh *pmesh       = pmbp->pmesh;
   auto &refine_flag = pmesh->pmr->refine_flag;
   auto &size        = pmbp->pmb->mb_size;
   int nmb           = pmbp->nmb_thispack;
   int mbs           = pmesh->gids_eachrank[global_variable::my_rank];
-  Real L            = (x1max - x1min) / 2. - half_initial_d;
+
+  std::vector<int> flag;
+  flag.reserve(pmbp->pz4c->ptracker.size());
 
   for (int m = 0; m < nmb; ++m) {
-    // level
+    // current refinement level
     int level = pmesh->lloc_eachmb[m + mbs].level - pmesh->root_level;
 
     // extract MeshBlock bounds
@@ -94,213 +89,39 @@ void Z4c_AMR::LinfBoxInBox(MeshBlockPack *pmbp) {
     Real &x2max = size.h_view(m).x2max;
     Real &x3min = size.h_view(m).x3min;
     Real &x3max = size.h_view(m).x3max;
-    Real xv[24];
 
-    // Needed to calculate coordinates of vertices of a block with same center
-    // but edge of 1/4th of the original size
-    Real x1sum_sup = (5 * x1max + 3 * x1min) / 8.;
-    Real x1sum_inf = (3 * x1max + 5 * x1min) / 8.;
-    Real x2sum_sup = (5 * x2max + 3 * x2min) / 8.;
-    Real x2sum_inf = (3 * x2max + 5 * x2min) / 8.;
-    Real x3sum_sup = (5 * x3max + 3 * x3min) / 8.;
-    Real x3sum_inf = (3 * x3max + 5 * x3min) / 8.;
+    flag.clear();
+    for (auto & pt : pmbp->pz4c->ptracker) {
+      Real d2[8] = {
+        SQ(x1min - pt.GetPos(0)) + SQ(x2min - pt.GetPos(1)) + SQ(x3min - pt.GetPos(2)),
+        SQ(x1max - pt.GetPos(0)) + SQ(x2min - pt.GetPos(1)) + SQ(x3min - pt.GetPos(2)),
+        SQ(x1min - pt.GetPos(0)) + SQ(x2max - pt.GetPos(1)) + SQ(x3min - pt.GetPos(2)),
+        SQ(x1max - pt.GetPos(0)) + SQ(x2max - pt.GetPos(1)) + SQ(x3min - pt.GetPos(2)),
+        SQ(x1min - pt.GetPos(0)) + SQ(x2min - pt.GetPos(1)) + SQ(x3max - pt.GetPos(2)),
+        SQ(x1max - pt.GetPos(0)) + SQ(x2min - pt.GetPos(1)) + SQ(x3max - pt.GetPos(2)),
+        SQ(x1min - pt.GetPos(0)) + SQ(x2max - pt.GetPos(1)) + SQ(x3max - pt.GetPos(2)),
+        SQ(x1max - pt.GetPos(0)) + SQ(x2max - pt.GetPos(1)) + SQ(x3max - pt.GetPos(2)),
+      };
+      Real dmin2 = *std::min_element(&d2[0], &d2[8]);
+      bool iscontained =
+        (pt.GetPos(0) >= x1min && pt.GetPos(0) <= x1max) &&
+        (pt.GetPos(1) >= x2min && pt.GetPos(1) <= x2max) &&
+        (pt.GetPos(2) >= x3min && pt.GetPos(2) <= x3max);
 
-    xv[0] = x1sum_sup;
-    xv[1] = x2sum_sup;
-    xv[2] = x3sum_sup;
-
-    xv[3] = x1sum_sup;
-    xv[4] = x2sum_sup;
-    xv[5] = x3sum_inf;
-
-    xv[6] = x1sum_sup;
-    xv[7] = x2sum_inf;
-    xv[8] = x3sum_sup;
-
-    xv[9]  = x1sum_sup;
-    xv[10] = x2sum_inf;
-    xv[11] = x3sum_inf;
-
-    xv[12] = x1sum_inf;
-    xv[13] = x2sum_sup;
-    xv[14] = x3sum_sup;
-
-    xv[15] = x1sum_inf;
-    xv[16] = x2sum_sup;
-    xv[17] = x3sum_inf;
-
-    xv[18] = x1sum_inf;
-    xv[19] = x2sum_inf;
-    xv[20] = x3sum_sup;
-
-    xv[21] = x1sum_inf;
-    xv[22] = x2sum_inf;
-    xv[23] = x3sum_inf;
-
-    // Min distance between the two punctures
-    Real d = std::numeric_limits<Real>::max();
-    for (auto ptracker : pmbp->pz4c_ptracker) {
-      // abs difference
-      Real diff;
-      // Max norm_inf
-      Real dmin_punct = std::numeric_limits<Real>::max();
-
-      for (int i_vert = 0; i_vert < 8; ++i_vert) {
-        // Norm_inf
-        Real norm_inf = -1;
-        for (int i_diff = 0; i_diff < 3; ++i_diff) {
-          diff = std::abs(ptracker->GetPos(i_diff) - xv[i_vert * 3 + i_diff]);
-          if (diff > norm_inf) {
-            norm_inf = diff;
-          }
+      if (dmin2 < SQ(pt.GetRadius()) || iscontained) {
+        if (pt.GetReflevel() < 0 || level < pt.GetReflevel()) {
+          flag.push_back(1);
+        } else if (level == pt.GetReflevel()) {
+          flag.push_back(0);
+        } else {
+          flag.push_back(-1);
         }
-        // Calculate minimum of the distances of the 8 vertices above
-        if (dmin_punct > norm_inf) {
-          dmin_punct = norm_inf;
-        }
-      }
-      // Calculate minimum of the closest between the n punctures
-      if (d > dmin_punct) {
-        d = dmin_punct;
+      } else {
+        flag.push_back(-1);
       }
     }
-    Real ratio = L / d;
-    // Calculate level that the block should be in, given a box-in-box
-    // theoretical structure of the grid
-    Real th_level = std::floor(std::log2(ratio));
-
-    if (ratio < 1) {
-      PR("coarse.")
-      refine_flag.h_view(m + mbs) = -1;
-    } else if (th_level > level) {
-      PR("refine.")
-      refine_flag.h_view(m + mbs) = 1;
-    } else if (th_level < level) {
-      PR("coarse.")
-      refine_flag.h_view(m + mbs) = -1;
-    } else {
-      // do nothing if th_level == level
-      PR("nothing.")
-      refine_flag.h_view(m + mbs) = 0;
-    }
-  } // for (int m=0; m < nmb; ++m)
-
-  // sync host and device
-  refine_flag.template modify<HostMemSpace>();
-  refine_flag.template sync<DevExeSpace>();
-}
-
-// L-2 norm for refinement kind of like sphere in sphere
-void Z4c_AMR::L2SphereInSphere(MeshBlockPack *pmbp) {
-  Mesh *pmesh       = pmbp->pmesh;
-  auto &refine_flag = pmesh->pmr->refine_flag;
-  auto &size        = pmbp->pmb->mb_size;
-  int nmb           = pmbp->nmb_thispack;
-  int mbs           = pmesh->gids_eachrank[global_variable::my_rank];
-  Real L            = (x1max - x1min) / 2. - half_initial_d;
-
-  for (int m = 0; m < nmb; ++m) {
-    // level
-    int level = pmesh->lloc_eachmb[m + mbs].level - pmesh->root_level;
-
-    // extract MeshBlock bounds
-    Real &x1min = size.h_view(m).x1min;
-    Real &x1max = size.h_view(m).x1max;
-    Real &x2min = size.h_view(m).x2min;
-    Real &x2max = size.h_view(m).x2max;
-    Real &x3min = size.h_view(m).x3min;
-    Real &x3max = size.h_view(m).x3max;
-    Real xv[24];
-
-    // Needed to calculate coordinates of vertices of a block with same center
-    // but edge of 1/4th of the original size
-    Real x1sum_sup = (5 * x1max + 3 * x1min) / 8.;
-    Real x1sum_inf = (3 * x1max + 5 * x1min) / 8.;
-    Real x2sum_sup = (5 * x2max + 3 * x2min) / 8.;
-    Real x2sum_inf = (3 * x2max + 5 * x2min) / 8.;
-    Real x3sum_sup = (5 * x3max + 3 * x3min) / 8.;
-    Real x3sum_inf = (3 * x3max + 5 * x3min) / 8.;
-
-    xv[0] = x1sum_sup;
-    xv[1] = x2sum_sup;
-    xv[2] = x3sum_sup;
-
-    xv[3] = x1sum_sup;
-    xv[4] = x2sum_sup;
-    xv[5] = x3sum_inf;
-
-    xv[6] = x1sum_sup;
-    xv[7] = x2sum_inf;
-    xv[8] = x3sum_sup;
-
-    xv[9]  = x1sum_sup;
-    xv[10] = x2sum_inf;
-    xv[11] = x3sum_inf;
-
-    xv[12] = x1sum_inf;
-    xv[13] = x2sum_sup;
-    xv[14] = x3sum_sup;
-
-    xv[15] = x1sum_inf;
-    xv[16] = x2sum_sup;
-    xv[17] = x3sum_inf;
-
-    xv[18] = x1sum_inf;
-    xv[19] = x2sum_inf;
-    xv[20] = x3sum_sup;
-
-    xv[21] = x1sum_inf;
-    xv[22] = x2sum_inf;
-    xv[23] = x3sum_inf;
-
-    // Min distance between the two punctures
-    Real d = std::numeric_limits<Real>::max();
-    for (auto ptracker : pmbp->pz4c_ptracker) {
-      // square difference
-      Real diff;
-
-      Real dmin_punct = std::numeric_limits<Real>::max();
-      for (int i_vert = 0; i_vert < 8; ++i_vert) {
-        // Norm_L-2
-        Real norm_L2 = 0;
-        for (int i_diff = 0; i_diff < 3; ++i_diff) {
-          diff = (ptracker->GetPos(i_diff) - xv[i_vert * 3 + i_diff])
-            * (ptracker->GetPos(i_diff) - xv[i_vert * 3 + i_diff]);
-          norm_L2 += diff;
-        }
-        // Compute the L-2 norm
-        norm_L2 = std::sqrt(norm_L2);
-
-        // Calculate minimum of the distances of the 8 vertices above
-        if (dmin_punct > norm_L2) {
-          dmin_punct = norm_L2;
-        }
-      }
-      // Calculate minimum of the closest between the n punctures
-      if (d > dmin_punct) {
-        d = dmin_punct;
-      }
-    }
-    Real ratio = L / d;
-    // Calculate level that the block should be in, given a box-in-box
-    // theoretical structure of the grid
-    Real th_level = std::floor(std::log2(ratio));
-
-    if (ratio < 1) {
-      PR("coarse.")
-      refine_flag.h_view(m + mbs) = -1;
-    } else if (th_level > level) {
-      PR("refine.")
-      refine_flag.h_view(m + mbs) = 1;
-    } else if (th_level < level) {
-      PR("coarse.")
-      refine_flag.h_view(m + mbs) = -1;
-    } else {
-      // do nothing if th_level == level
-      PR("nothing.")
-      refine_flag.h_view(m + mbs) = 0;
-    }
-  } // for (int m=0; m < nmb; ++m)
+    refine_flag.h_view(m + mbs) = *std::max_element(flag.begin(), flag.end());
+  }
 
   // sync host and device
   refine_flag.template modify<HostMemSpace>();
@@ -308,7 +129,7 @@ void Z4c_AMR::L2SphereInSphere(MeshBlockPack *pmbp) {
 }
 
 // refine based on min{chi}
-void Z4c_AMR::ChiMin(MeshBlockPack *pmbp) {
+void Z4c_AMR::RefineChiMin(MeshBlockPack *pmbp) {
   Mesh *pmesh       = pmbp->pmesh;
   int nmb           = pmbp->nmb_thispack;
   int mbs           = pmesh->gids_eachrank[global_variable::my_rank];
@@ -347,10 +168,14 @@ void Z4c_AMR::ChiMin(MeshBlockPack *pmbp) {
         refine_flag.d_view(m + mbs) = -1;
       }
     });
+
+  // sync host and device
+  refine_flag.template modify<DevExeSpace>();
+  refine_flag.template sync<HostMemSpace>();
 }
 
 // refine based on max{dchi}
-void Z4c_AMR::DchiMax(MeshBlockPack *pmbp) {
+void Z4c_AMR::RefineDchiMax(MeshBlockPack *pmbp) {
   Mesh *pmesh       = pmbp->pmesh;
   int nmb           = pmbp->nmb_thispack;
   int mbs           = pmesh->gids_eachrank[global_variable::my_rank];
@@ -392,6 +217,58 @@ void Z4c_AMR::DchiMax(MeshBlockPack *pmbp) {
         refine_flag.d_view(m + mbs) = -1;
       }
     });
+
+  // sync host and device
+  refine_flag.template modify<DevExeSpace>();
+  refine_flag.template sync<HostMemSpace>();
+}
+
+// Enforce some minimum resolution within a certain spherical region
+void Z4c_AMR::RefineRadii(MeshBlockPack *pmbp) {
+  Mesh *pmesh       = pmbp->pmesh;
+  auto &refine_flag = pmesh->pmr->refine_flag;
+  auto &size        = pmbp->pmb->mb_size;
+  int nmb           = pmbp->nmb_thispack;
+  int mbs           = pmesh->gids_eachrank[global_variable::my_rank];
+
+  for (int m = 0; m < nmb; ++m) {
+    // current refinement level
+    int level = pmesh->lloc_eachmb[m + mbs].level - pmesh->root_level;
+
+    // extract MeshBlock bounds
+    Real &x1min = size.h_view(m).x1min;
+    Real &x1max = size.h_view(m).x1max;
+    Real &x2min = size.h_view(m).x2min;
+    Real &x2max = size.h_view(m).x2max;
+    Real &x3min = size.h_view(m).x3min;
+    Real &x3max = size.h_view(m).x3max;
+
+    Real r2[8] = {
+      SQ(x1min) + SQ(x2min) + SQ(x3min),
+      SQ(x1max) + SQ(x2min) + SQ(x3min),
+      SQ(x1min) + SQ(x2max) + SQ(x3min),
+      SQ(x1max) + SQ(x2max) + SQ(x3min),
+      SQ(x1min) + SQ(x2min) + SQ(x3max),
+      SQ(x1max) + SQ(x2min) + SQ(x3max),
+      SQ(x1min) + SQ(x2max) + SQ(x3max),
+      SQ(x1max) + SQ(x2max) + SQ(x3max),
+    };
+    Real rmin2 = *std::min_element(&r2[0], &r2[8]);
+
+    for (int ir = 0; ir < radius.size(); ++ir) {
+      if (rmin2 < SQ(radius[ir])) {
+        if (level < reflevel[ir]) {
+          refine_flag.h_view(m + mbs) = 1;
+        } else if (level == reflevel[ir] && refine_flag.h_view(m + mbs) == -1) {
+          refine_flag.h_view(m + mbs) = 0;
+        }
+      }
+    }
+  }
+
+  // sync host and device
+  refine_flag.template modify<HostMemSpace>();
+  refine_flag.template sync<DevExeSpace>();
 }
 
 } // namespace z4c

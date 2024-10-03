@@ -31,7 +31,6 @@ namespace numrel {class NumericalRelativity;}
 class TurbulenceDriver;
 namespace radiation {class Radiation;}
 namespace z4c {class Z4c;}
-namespace z4c {class PunctureTracker;}
 namespace adm {class ADM;}
 namespace particles {class Particles;}
 namespace units {class Units;}
@@ -72,7 +71,6 @@ class MeshBlockPack {
   ion_neutral::IonNeutral *pionn=nullptr;
   TurbulenceDriver *pturb=nullptr;
   radiation::Radiation *prad=nullptr;
-  std::vector<z4c::PunctureTracker *> pz4c_ptracker;
   particles::Particles *ppart=nullptr;
 
   // units (needed to convert code units to cgs for, e.g., cooling or radiation)

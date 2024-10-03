@@ -7,9 +7,9 @@
 //! \brief Problem generator for RT instabilty.
 //!
 //! Note the gravitational acceleration is hardwired to be 0.1. Density difference is
-//! hardwired to be 2.0 in 2D, and is set by the input parameter `problem/rhoh` in 3D
-//! (default value is 3.0). This reproduces 2D results of Liska & Wendroff, 3D results of
-//! Dimonte et al.
+//! hardwired to be 3.0 and is set by the input parameter `problem/drat`.
+//! To reproduces 2D results of Liska & Wendroff set it to 2.0,
+//! while for the 3D results of Dimonte et al use 3.0.
 //!
 //! FOR 2D HYDRO:
 //! Problem domain should be -1/6 < x < 1/6; -0.5 < y < 0.5 with gamma=1.4 to match Liska
@@ -20,7 +20,7 @@
 //!    - iprob != 1 -- Perturb V2 using multiple mode
 //!
 //! FOR 3D:
-//! Problem domain should be -.05 < x < .05; -.05 < y < .05, -.1 < z < .1, gamma=5/3 to
+//! Problem domain should be -0.5 < x < 0.5; -0.5 < y < 0.5, -1. < z < 1., gamma=5/3 to
 //! match Dimonte et al.  Interface is at z=0; perturbation added to Vz. Gravity acts in
 //! z-dirn. Special reflecting boundary conditions added in x3.  A=1/2.  Options:
 //!    - iprob = 1 -- Perturb V3 using single mode
@@ -58,7 +58,6 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
               << "rti problem generator only works in 2D/3D" << std::endl;
     exit(EXIT_FAILURE);
   }
-  int64_t iseed = -1;
 
   Real kx = 2.0*(M_PI)/(pmy_mesh_->mesh_size.x1max - pmy_mesh_->mesh_size.x1min);
   Real ky = 2.0*(M_PI)/(pmy_mesh_->mesh_size.x2max - pmy_mesh_->mesh_size.x2min);
@@ -87,11 +86,20 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     u0_ = pmbp->phydro->u0;
     gm1 = (pmbp->phydro->peos->eos_data.gamma) - 1.0;
     p0 = 1.0/(pmbp->phydro->peos->eos_data.gamma);
+    p0 = pin->GetOrAddReal("problem", "p0", p0);
   } else if (pmbp->pmhd != nullptr) {
     grav_acc = pin->GetReal("mhd","const_accel_val");
     u0_ = pmbp->pmhd->u0;
     gm1 = (pmbp->pmhd->peos->eos_data.gamma) - 1.0;
     p0 = 1.0/(pmbp->pmhd->peos->eos_data.gamma);
+    p0 = pin->GetOrAddReal("problem", "p0", p0);
+  }
+
+  // Ensure that p0 is sufficiently large to avoid negative pressures
+  if (pmbp->pmesh->two_d) {
+    p0 -= grav_acc*pmy_mesh_->mesh_size.x2max;
+  } else {
+    p0 -= grav_acc*pmy_mesh_->mesh_size.x3max;
   }
 
   // 2D PROBLEM ----------------------------------------------------------------
@@ -153,7 +161,8 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   // 3D PROBLEM ----------------------------------------------------------------
 
   } else {
-    par_for("rt2d", DevExeSpace(), 0,(pmbp->nmb_thispack-1),ks,ke,js,je,is,ie,
+    Kokkos::Random_XorShift64_Pool<> rand_pool64(pmbp->gids);
+    par_for("rt3d", DevExeSpace(), 0,(pmbp->nmb_thispack-1),ks,ke,js,je,is,ie,
     KOKKOS_LAMBDA(int m, int k, int j, int i) {
       Real &x1min = size.d_view(m).x1min;
       Real &x1max = size.d_view(m).x1max;
@@ -176,8 +185,10 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
       if (iprob == 1) {
         u0_(m,IM3,k,j,i) = (1.0+cos(kx*x1v))*(1.0+cos(ky*x2v))*(1.0+cos(kz*x3v))/8.0;
       } else {
-        u0_(m,IM3,k,j,i) = (amp*(Ran2((int64_t*)iseed)-0.5) *  // NOLINT
-                           (1.0 + cos(kz*x3v)));
+        auto rand_gen = rand_pool64.get_state();  // get random number state this thread
+        Real r = 2.0*static_cast<Real>(rand_gen.frand()) - 1.0;
+        u0_(m,IM3,k,j,i) = r * (1.0 + cos(kz*x3v))/2.0;
+        rand_pool64.free_state(rand_gen);  // free state for use by other threads
       }
 
       u0_(m,IDN,k,j,i) = den;

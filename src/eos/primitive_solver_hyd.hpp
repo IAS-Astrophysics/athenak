@@ -27,6 +27,7 @@
 #include "eos/primitive-solver/piecewise_polytrope.hpp"
 #include "eos/primitive-solver/eos_compose.hpp"
 #include "eos/primitive-solver/reset_floor.hpp"
+#include "eos/primitive-solver/logs.hpp"
 
 // AthenaK headers
 #include "athena.hpp"
@@ -59,7 +60,8 @@ class PrimitiveSolverHydro {
       }
     }
     // Parameters for CompOSE EoS
-    if constexpr(std::is_same_v<Primitive::EOSCompOSE, EOSPolicy>) {
+    if constexpr(std::is_same_v<Primitive::EOSCompOSE<Primitive::NormalLogs>, EOSPolicy> || 
+                 std::is_same_v<Primitive::EOSCompOSE<Primitive::NQTLogs>, EOSPolicy>) {
       // Get and set number of scalars in table. This will currently fail if not 1.
       ps.GetEOSMutable().SetNSpecies(pin->GetOrAddInteger(block, "nscalars", 1));
       std::string units = pin->GetOrAddString(block, "units", "geometric_solar");
@@ -182,7 +184,6 @@ class PrimitiveSolverHydro {
                   DvceArray5D<Real> &cons,
                   const int il, const int iu, const int jl, const int ju,
                   const int kl, const int ku) {
-    auto &indcs = pmy_pack->pmesh->mb_indcs;
     //int &is = indcs.is, &js = indcs.js, &ks = indcs.ks;
     //auto &size = pmy_pack->pmb->mb_size;
     //auto &flat = pmy_pack->pcoord->coord_data.is_minkowski;
@@ -276,11 +277,6 @@ class PrimitiveSolverHydro {
                   DvceArray5D<Real> &temperature,
                   const int il, const int iu, const int jl, const int ju,
                   const int kl, const int ku, bool floors_only=false) {
-    auto &indcs = pmy_pack->pmesh->mb_indcs;
-    int &is = indcs.is, &js = indcs.js, &ks = indcs.ks;
-    int &ie = indcs.ie, &je = indcs.ie, &ke = indcs.ke;
-    auto &size = pmy_pack->pmb->mb_size;
-
     int &nhyd = pmy_pack->pmhd->nmhd;
     int &nscal = pmy_pack->pmhd->nscalars;
     int &nmb = pmy_pack->nmb_thispack;

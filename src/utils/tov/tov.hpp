@@ -11,6 +11,7 @@
 #include <math.h>
 
 #include <type_traits>
+#include <iostream>
 
 #include "athena.hpp"
 #include "globals.hpp"
@@ -48,7 +49,8 @@ class TOVStar {
     Real B = (m_pt + 4.0*M_PI*r*r*r*P_pt)/SQR(r);
     dP = -(e + P_pt)*A * B;
     dm = 4.0*M_PI*SQR(r)*e;
-    dalp = alp_pt*A * B;
+    //dalp = alp_pt*A * B;
+    dalp = A * B;
     dR = R_pt/r*sqrt(A);
   }
 
@@ -155,9 +157,11 @@ TOVStar TOVStar::ConstructTOV(ParameterInput *pin, TOVEOS& eos) {
   P(0) = eos.template GetPFromRho<LocationTag::Host>(tov.rhoc);
   // FIXME: Assumes ideal gas!
   //P(0) = tov.kappa*pow(tov.rhoc, tov.gamma);
-  alp(0) = 1.0;
+  //alp(0) = 1.0;
+  alp(0) = 0.0;
 
   // Integrate outward using RK4
+  tov.n_r = 0;
   for (int i = 0; i < npoints-1; i++) {
     Real r, P_pt, alp_pt, m_pt, R_pt;
 
@@ -210,6 +214,13 @@ TOVStar TOVStar::ConstructTOV(ParameterInput *pin, TOVEOS& eos) {
     }
   }
 
+  if (tov.n_r == 0) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+              << "TOV solver failed to find the edge of the star." << std::endl
+              << "Increase number of points, radial step, or rho_cut." << std::endl;
+    exit(EXIT_FAILURE);
+  }
+
   // Now we can do a linear interpolation to estimate the actual edge of the star.
   int n_r = tov.n_r;
   tov.R_edge = Interpolate(tov.pfloor, P(n_r-1), P(n_r), R(n_r-1), R(n_r));
@@ -221,6 +232,10 @@ TOVStar TOVStar::ConstructTOV(ParameterInput *pin, TOVEOS& eos) {
   alp(n_r) = Interpolate(tov.R_edge, R(n_r-1), R(n_r), alp(n_r-1), alp(n_r));
   R(n_r) = tov.R_edge;
   R_iso(n_r) = Interpolate(tov.R_edge, R(n_r-1), R(n_r), R_iso(n_r-1), R_iso(n_r));
+
+  for (int i = 0; i <= n_r; i++) {
+    alp(i) = exp(alp(i));
+  }
 
   // Rescale alpha so that it matches the Schwarzschild metric at the boundary.
   // We also need to rescale the isotropic radius to agree at the boundary.

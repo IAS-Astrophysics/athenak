@@ -40,8 +40,8 @@ void IonNeutral::AssembleIonNeutralTasks(
   id.n_irecv = tl["before_stagen"]->AddTask(&Hydro::InitRecv, phyd, none);
 
   // assemble "stagen_tl" task list
+  // FirstTwoImpRK task does CopyCons
   id.impl_2x = tl["stagen"]->AddTask(&IonNeutral::FirstTwoImpRK, this, none);
-  // above does CopyCons
 
   id.i_flux   = tl["stagen"]->AddTask(&MHD::Fluxes, pmhd, id.impl_2x);
   id.i_sendf  = tl["stagen"]->AddTask(&MHD::SendFlux, pmhd, id.i_flux);
@@ -63,7 +63,9 @@ void IonNeutral::AssembleIonNeutralTasks(
   id.n_recvu  = tl["stagen"]->AddTask(&Hydro::RecvU, phyd, id.n_sendu);
 
   id.efld     = tl["stagen"]->AddTask(&MHD::CornerE, pmhd, id.i_recvu);
-  id.ct       = tl["stagen"]->AddTask(&MHD::CT, pmhd, id.efld);
+  id.sende    = tl["stagen"]->AddTask(&MHD::SendE, pmhd, id.efld);
+  id.recve    = tl["stagen"]->AddTask(&MHD::RecvE, pmhd, id.sende);
+  id.ct       = tl["stagen"]->AddTask(&MHD::CT, pmhd, id.recve);
   id.restb    = tl["stagen"]->AddTask(&MHD::RestrictB, pmhd, id.ct);
   id.sendb    = tl["stagen"]->AddTask(&MHD::SendB, pmhd, id.restb);
   id.recvb    = tl["stagen"]->AddTask(&MHD::RecvB, pmhd, id.sendb);
