@@ -109,10 +109,14 @@ class NQTLogs : public LogPolicy {
 
     KOKKOS_FORCEINLINE_FUNCTION
     _Float64 log2_(const _Float64 x) const {
-      constexpr int64_t one_as_int = 4607182418800017408; // as_int(1.0) == 2^62 - 2^52
-      constexpr _Float64 scale_down = 2.220446049250313e-16; // 1/(as_int(2.0) - as_int(1.0)) == 2^-52
-      constexpr int64_t mantissa_mask = 4503599627370495;// 2^52 - 1
-      constexpr int64_t low_mask = 67108863; // 2^26 - 1
+      // as_int(1.0) == 2^62 - 2^52
+      constexpr int64_t one_as_int = 4607182418800017408;
+      // 1/(as_int(2.0) - as_int(1.0)) == 2^-52
+      constexpr _Float64 scale_down = 2.220446049250313e-16;
+      // 2^52 - 1
+      constexpr int64_t mantissa_mask = 4503599627370495;
+      // 2^26 - 1
+      constexpr int64_t low_mask = 67108863;
 
       const int64_t x_as_int = as_int(x) - one_as_int;
       const int64_t frac_as_int = x_as_int & mantissa_mask;
@@ -120,14 +124,17 @@ class NQTLogs : public LogPolicy {
       const int64_t frac_low  = frac_as_int & low_mask;
       const int64_t frac_squared = frac_high*frac_high + ((frac_high*frac_low)>>25);
       
-      // return static_cast<_Float64>(x_as_int + ((frac_as_int - frac_squared)/3)) * scale_down;
-      return static_cast<_Float64>(x_as_int) * scale_down;
+      return static_cast<_Float64>(x_as_int +
+                                    ((frac_as_int - frac_squared)/3)) * scale_down;
+      // return static_cast<_Float64>(x_as_int) * scale_down;
   }
 
     KOKKOS_FORCEINLINE_FUNCTION
     _Float64 exp2_(const _Float64 x) const {
-      constexpr int64_t one_as_int = 4607182418800017408; // as_int(1.0) == 2^62 - 2^52
-      constexpr _Float64 scale_up = 4503599627370496; // // as_int(2.0) - as_int(1.0) == 2^52
+      // as_int(1.0) == 2^62 - 2^52
+      constexpr int64_t one_as_int = 4607182418800017408;
+      // as_int(2.0) - as_int(1.0) == 2^52
+      constexpr _Float64 scale_up = 4503599627370496;
       constexpr int64_t mantissa_mask = 4503599627370495; // 2^52 - 1
       constexpr int64_t a = 9007199254740992; // 2 * 2^52
       constexpr _Float64 b = 67108864; // 2^26
@@ -135,10 +142,11 @@ class NQTLogs : public LogPolicy {
 
       const int64_t x_as_int = static_cast<int64_t>(x*scale_up);
       const int64_t frac_as_int = x_as_int & mantissa_mask;
-      const int64_t frac_sqrt = static_cast<int64_t>(b*Kokkos::sqrt(static_cast<_Float64>(c-3*frac_as_int)));
+      const int64_t frac_sqrt = static_cast<int64_t>(
+                                  b*Kokkos::sqrt(static_cast<_Float64>(c-3*frac_as_int)));
 
-      // return as_double(x_as_int + a - frac_sqrt - frac_as_int + one_as_int);
-      return as_double(x_as_int + one_as_int);
+      return as_double(x_as_int + a - frac_sqrt - frac_as_int + one_as_int);
+      // return as_double(x_as_int + one_as_int);
   }
 
   private:
