@@ -200,20 +200,11 @@ void MeshBlockPack::AddPhysics(ParameterInput *pin) {
     pz4c_cce.reserve(0);
 #if Z4C_CCE_ENABLED
     int ncce = pin->GetOrAddInteger("cce", "num_radii", 0);
-    pz4c_cce.reserve(10*ncce);// 10 different components for each radius
+    pz4c_cce.reserve(ncce);// 10 different components for each radius
     for(int n = 0; n < ncce; ++n)
     {
       // NOTE: these names are used for pittnull code, so DON'T change the convention
       pz4c_cce.push_back(new z4c::CCE(pmesh, pin, "gxx",n));
-      pz4c_cce.push_back(new z4c::CCE(pmesh, pin, "gxy",n));
-      pz4c_cce.push_back(new z4c::CCE(pmesh, pin, "gxz",n));
-      pz4c_cce.push_back(new z4c::CCE(pmesh, pin, "gyy",n));
-      pz4c_cce.push_back(new z4c::CCE(pmesh, pin, "gyz",n));
-      pz4c_cce.push_back(new z4c::CCE(pmesh, pin, "gzz",n));
-      pz4c_cce.push_back(new z4c::CCE(pmesh, pin, "betax",n));
-      pz4c_cce.push_back(new z4c::CCE(pmesh, pin, "betay",n));
-      pz4c_cce.push_back(new z4c::CCE(pmesh, pin, "betaz",n));
-      pz4c_cce.push_back(new z4c::CCE(pmesh, pin, "alp",n));
     }
 #endif
     nphysics++;
