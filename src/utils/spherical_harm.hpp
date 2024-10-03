@@ -1,3 +1,6 @@
+#ifndef UTILS_SPHERICAL_HARM_HPP_
+#define UTILS_SPHERICAL_HARM_HPP_
+
 #include <cmath>
 #include <iostream>
 #include <list>
@@ -18,7 +21,7 @@ double fac(int i) {
 
 //Calculate spin-weighted spherical harmonics using Wigner-d matrix notation see e.g. Eq II.7, II.8 in 0709.0093
 KOKKOS_INLINE_FUNCTION
-std::pair<double,double> SWSphericalHarm(int l, int m, int s, Real theta, Real phi) {
+void SWSphericalHarm(Real * ylmR, Real * ylmI, int l, int m, int s, Real theta, Real phi) {
   Real wignerd = 0;
   int k1,k2,k;
   k1 = std::max(0, m-s);
@@ -28,9 +31,11 @@ std::pair<double,double> SWSphericalHarm(int l, int m, int s, Real theta, Real p
     wignerd += pow((-1),k)*pow(cos(theta/2.0),2*l+m-s-2*k)*pow(sin(theta/2.0),2*k+s-m)/(fac(l+m-k)*fac(l-s-k)*fac(k)*fac(k+s-m));
   }
   wignerd *= pow((-1),s)*sqrt((2*l+1)/(4*M_PI))*sqrt(fac(l+m))*sqrt(fac(l-m))*sqrt(fac(l+s))*sqrt(fac(l-s));
-  return std::make_pair(wignerd*cos(m*phi), wignerd*sin(m*phi));
+  *ylmR = wignerd*cos(m*phi);
+  *ylmI = wignerd*sin(m*phi);
 }
 
+/*
 // theta derivative of the s=0 spherical harmonics
 KOKKOS_INLINE_FUNCTION
 std::pair<double,double> SphericalHarm_dtheta(int l, int m, Real theta, Real phi) {
@@ -97,3 +102,6 @@ Real RealSphericalHarm_dphi(int l, int m, Real theta, Real phi) {
   }
   return value;
 }
+*/
+
+#endif // UTILS_SPHERICAL_HARM_HPP_

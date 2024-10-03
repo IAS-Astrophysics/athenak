@@ -32,7 +32,7 @@ GaussLegendreGrid::GaussLegendreGrid(MeshBlockPack *pmy_pack, int ntheta, Real r
   cart_pos("cart_pos",1,1),
   interp_indcs("interp_indcs",1,1),
   interp_wghts("interp_wghts",1,1,1),
-  interp_vals("interp_vals",1,1) {
+  interp_vals("interp_vals",1) {
   
   // reallocate and set interpolation coordinates, indices, and weights
   int &ng = pmy_pack->pmesh->mb_indcs.ng;
@@ -216,27 +216,32 @@ void GaussLegendreGrid::SetInterpolationWeights() {
 //! \fn void GaussLegendreGrid::InterpolateToSphere
 //! \brief interpolate Cartesian data to surface of sphere
 
-void GaussLegendreGrid::InterpolateToSphere(int nvars, DvceArray5D<Real> &val) {
+void GaussLegendreGrid::InterpolateToSphere(int var_ind, DvceArray5D<Real> &val) {
+  // reinitialize interpolation indices and weights if AMR
+  if (pmy_pack->pmesh->adaptive) {
+    SetInterpolationIndices();
+    SetInterpolationWeights();
+  }
   auto &indcs = pmy_pack->pmesh->mb_indcs;
   int &is = indcs.is; int &js = indcs.js; int &ks = indcs.ks;
   int &ng = indcs.ng;
   int nang1 = nangles - 1;
-  int nvar1 = nvars - 1;
+  int v = var_ind;
 
   // reallocate container
-  Kokkos::realloc(interp_vals,nangles,nvars);
+  Kokkos::realloc(interp_vals,nangles);
   auto &iindcs = interp_indcs;
   auto &iwghts = interp_wghts;
   auto &ivals = interp_vals;
-  par_for("int2sph",DevExeSpace(),0,nang1,0,nvar1,
-  KOKKOS_LAMBDA(int n, int v) {
+  par_for("int2sph",DevExeSpace(),0,nang1,
+  KOKKOS_LAMBDA(int n) {
     int &ii0 = iindcs.d_view(n,0);
     int &ii1 = iindcs.d_view(n,1);
     int &ii2 = iindcs.d_view(n,2);
     int &ii3 = iindcs.d_view(n,3);
 
     if (ii0==-1) {  // angle not on this rank
-      ivals.d_view(n,v) = 0.0;
+      ivals.d_view(n) = 0.0;
     } else {
       Real int_value = 0.0;
       for (int i=0; i<2*ng; i++) {
@@ -247,7 +252,7 @@ void GaussLegendreGrid::InterpolateToSphere(int nvars, DvceArray5D<Real> &val) {
           }
         }
       }
-      ivals.d_view(n,v) = int_value;
+      ivals.d_view(n) = int_value;
     }
   });
 

@@ -29,14 +29,16 @@ namespace z4c {
 class CCE
 {
   private:
-    int n;       // radius number/shell number
+    int index;       // radius number/shell number
     Real rin;  // inner radius of shell
     Real rout; // outer radius of shell
     std::string output_dir; // write output file in this directory
     Mesh *pm;             // mesh
+    MeshBlockPack *pmbp;  // meshblockpack
     ParameterInput *pin;  // param file
 
     int num_l_modes;    // number of l modes = n_theta (angular)
+    int num_angular_modes; // total number of angular modes
     int num_n_modes;    // number of n modes = n_radius (radial)
     int nlmmodes;       // total number of coefficients to store
 
@@ -47,15 +49,26 @@ class CCE
     int npoint;         // total number of points
 
     // sphere for storing the indices, etc.
-    std::vector<GaussLegendreGrid> grids;
+    std::vector<std::unique_ptr<GaussLegendreGrid>> grids;
+
+    // 3d array holding the spectral indices of all variable
+    // first index is variable
+    // second is radial
+    // last is angular
+    std::vector<std::vector<std::vector<Real>>> cnlm_real;
+    std::vector<std::vector<std::vector<Real>>> cnlm_imag;
+
+    std::vector<std::vector<std::vector<Real>>> data_real;
+    std::vector<std::vector<std::vector<Real>>> data_imag;
 
   public:
-    CCE(Mesh *const pm, ParameterInput *const pin, int n);
+    CCE(Mesh *const pm, ParameterInput *const pin, int index);
     ~CCE();
     void SetRadialCoords();
-    void Interpolate(MeshBlockPack *pmbp);
-    void ReduceInterpolation();
-    void DecomposeAndWrite(int iter, Real curr_time);
+    void InterpolateAndDecompose(MeshBlockPack *pmbp);
+
+    void ChebyshevDecomposition(std::vector<std::vector<std::vector<Real>>> data,
+                                std::vector<std::vector<std::vector<Real>>> cnlm);
 };
 
 } // end namespace z4c

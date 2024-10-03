@@ -27,7 +27,7 @@ class GaussLegendreGrid {
     DualArray1D<Real> int_weights;         // weights for quadrature integration
     DualArray2D<Real> cart_pos;             // coord position (cartesian) at gridpoints
     DualArray2D<Real> polar_pos;
-    DualArray2D<Real> interp_vals;   // container for data interpolated to sphere
+    DualArray1D<Real> interp_vals;   // container for data interpolated to sphere
 
     // functions
     void InitializeAngleAndWeights();
