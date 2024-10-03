@@ -22,6 +22,7 @@
 #include "globals.hpp"
 #include "hydro/hydro.hpp"
 #include "mhd/mhd.hpp"
+#include "dyn_grmhd/dyn_grmhd.hpp"
 #include "coordinates/adm.hpp"
 #include "z4c/tmunu.hpp"
 #include "z4c/z4c.hpp"
@@ -248,7 +249,11 @@ BaseTypeOutput::BaseTypeOutput(ParameterInput *pin, Mesh *pm, OutputParameters o
         variable.compare("rad_hydro_w_e") == 0 ||
         variable.compare("rad_hydro_w") == 0) {
       if (pm->pmb_pack->phydro->peos->eos_data.is_ideal) {
+        if (pm->pmb_pack->pdyngr != nullptr) {
+          outvars.emplace_back("press",4,&(pm->pmb_pack->phydro->w0));
+        } else {
         outvars.emplace_back("eint",4,&(pm->pmb_pack->phydro->w0));
+        }
       }
     }
 
@@ -378,7 +383,11 @@ BaseTypeOutput::BaseTypeOutput(ParameterInput *pin, Mesh *pm, OutputParameters o
         variable.compare("rad_mhd_w") == 0 ||
         variable.compare("rad_mhd_w_bcc") == 0) {
       if (pm->pmb_pack->pmhd->peos->eos_data.is_ideal) {
+        if (pm->pmb_pack->pdyngr != nullptr) {
+          outvars.emplace_back("press",4,&(pm->pmb_pack->pmhd->w0));
+        } else {
         outvars.emplace_back("eint",4,&(pm->pmb_pack->pmhd->w0));
+        }
       }
     }
 
