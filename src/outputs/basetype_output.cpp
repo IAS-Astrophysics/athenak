@@ -85,8 +85,7 @@ BaseTypeOutput::BaseTypeOutput(ParameterInput *pin, Mesh *pm, OutputParameters o
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
        << "Output of DynMHD variable requested in <output> block '"
        << out_params.block_name << "' but no DynMHD object has been constructed."
-       << std::endl << "Input file is likely missing a <adm> or <z4c>, and/or <mhd> block"
-       << std::endl;
+       << std::endl << "Input file is likely missing a <adm> or <z4c>, and/or <mhd> block" << std::endl;
     exit(EXIT_FAILURE);
   }
   if ((ivar==50) && (pm->pmb_pack->pturb == nullptr)) {
@@ -267,7 +266,7 @@ BaseTypeOutput::BaseTypeOutput(ParameterInput *pin, Mesh *pm, OutputParameters o
         if (pm->pmb_pack->pdyngr != nullptr) {
           outvars.emplace_back("press",4,&(pm->pmb_pack->phydro->w0));
         } else {
-        outvars.emplace_back("eint",4,&(pm->pmb_pack->phydro->w0));
+          outvars.emplace_back("eint",4,&(pm->pmb_pack->phydro->w0));
         }
       }
     }
@@ -401,7 +400,7 @@ BaseTypeOutput::BaseTypeOutput(ParameterInput *pin, Mesh *pm, OutputParameters o
         if (pm->pmb_pack->pdyngr != nullptr) {
           outvars.emplace_back("press",4,&(pm->pmb_pack->pmhd->w0));
         } else {
-        outvars.emplace_back("eint",4,&(pm->pmb_pack->pmhd->w0));
+          outvars.emplace_back("eint",4,&(pm->pmb_pack->pmhd->w0));
         }
       }
     }
@@ -478,7 +477,7 @@ BaseTypeOutput::BaseTypeOutput(ParameterInput *pin, Mesh *pm, OutputParameters o
 
     // MHD temperature
     if (variable.compare("mhd_t") == 0 ||
-        ((variable.compare("mhd_w") == 0 ||
+        ((variable.compare("hydro_w") == 0 ||
           variable.compare("mhd_w_bcc") == 0) && pm->pmb_pack->pdyngr !=nullptr)) {
       outvars.emplace_back("temperature",0,&(pm->pmb_pack->pdyngr->temperature));
     }
