@@ -22,9 +22,10 @@
 #include "hydro/hydro.hpp"
 #include "mesh/mesh.hpp"
 #include "mhd/mhd.hpp"
-#include "outputs.hpp"
-#include "parameter_input.hpp"
-#include "radiation_m1/radiation_m1.hpp"
+#include "dyn_grmhd/dyn_grmhd.hpp"
+#include "coordinates/adm.hpp"
+#include "z4c/tmunu.hpp"
+#include "z4c/z4c.hpp"
 #include "srcterms/srcterms.hpp"
 #include "srcterms/turb_driver.hpp"
 #include "z4c/tmunu.hpp"
@@ -266,7 +267,7 @@ BaseTypeOutput::BaseTypeOutput(ParameterInput *pin, Mesh *pm, OutputParameters o
         if (pm->pmb_pack->pdyngr != nullptr) {
           outvars.emplace_back("press",4,&(pm->pmb_pack->phydro->w0));
         } else {
-          outvars.emplace_back("eint",4,&(pm->pmb_pack->phydro->w0));
+        outvars.emplace_back("eint",4,&(pm->pmb_pack->phydro->w0));
         }
       }
     }
@@ -400,7 +401,7 @@ BaseTypeOutput::BaseTypeOutput(ParameterInput *pin, Mesh *pm, OutputParameters o
         if (pm->pmb_pack->pdyngr != nullptr) {
           outvars.emplace_back("press",4,&(pm->pmb_pack->pmhd->w0));
         } else {
-          outvars.emplace_back("eint",4,&(pm->pmb_pack->pmhd->w0));
+        outvars.emplace_back("eint",4,&(pm->pmb_pack->pmhd->w0));
         }
       }
     }
