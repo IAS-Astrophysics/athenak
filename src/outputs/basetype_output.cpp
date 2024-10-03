@@ -469,7 +469,7 @@ BaseTypeOutput::BaseTypeOutput(ParameterInput *pin, Mesh *pm, OutputParameters o
 
     // MHD temperature
     if (variable.compare("mhd_t") == 0 ||
-        ((variable.compare("hydro_w") == 0 ||
+        ((variable.compare("mhd_w") == 0 ||
           variable.compare("mhd_w_bcc") == 0) && pm->pmb_pack->pdyngr !=nullptr)) {
       outvars.emplace_back("temperature",0,&(pm->pmb_pack->pdyngr->temperature));
     }
