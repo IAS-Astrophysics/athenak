@@ -31,6 +31,7 @@
 // AthenaK headers
 #include "athena.hpp"
 #include "globals.hpp"
+#include "dyn_grmhd/dyn_grmhd.hpp"
 #include "mesh/mesh.hpp"
 #include "parameter_input.hpp"
 #include "coordinates/adm.hpp"
@@ -271,7 +272,8 @@ class PrimitiveSolverHydro {
   }
 
   void ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &bfc,
-                  DvceArray5D<Real> &bcc0, DvceArray5D<Real> &prim,
+                  DvceArray5D<Real> &bcc0, DvceArray5D<Real> &prim, 
+                  DvceArray5D<Real> &temperature,
                   const int il, const int iu, const int jl, const int ju,
                   const int kl, const int ku, bool floors_only=false) {
     auto &indcs = pmy_pack->pmesh->mb_indcs;
@@ -461,6 +463,8 @@ class PrimitiveSolverHydro {
         for (int n = 0; n < nscal; n++) {
           prim(m, nhyd + n, k, j, i) = prim_pt[PYF + n];
         }
+
+        temperature(m,0,k,j,i) = prim_pt[PTM];
 
         // If the conservative variables were floored or adjusted for consistency,
         // we need to copy the conserved variables, too.
