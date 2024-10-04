@@ -28,6 +28,8 @@ class TabulatedEOS {
   Real lP_min;
   Real lP_max;
 
+  Real ye_atmosphere;
+
   std::string fname;
   size_t m_nn;
 
@@ -93,6 +95,8 @@ class TabulatedEOS {
               << "  rho = [" << exp(lrho_min) << ", " << exp(lrho_max) << "]" << std::endl
               << "  P = [" << exp(lP_min) << ", " << exp(lP_max) << "]" << std::endl;
 
+    ye_atmosphere = pin->GetOrAddReal("mhd", "s1_atmosphere",0.5);
+
     // Sync the views to the GPU
     m_log_rho.template modify<HostMemSpace>();
     m_log_p.template modify<HostMemSpace>();
@@ -145,6 +149,9 @@ class TabulatedEOS {
   KOKKOS_INLINE_FUNCTION
   Real GetYeFromRho(Real rho) const {
     Real lrho = log(rho);
+    if (lrho < lrho_min) {
+      return ye_atmosphere;
+    }
     int lb = static_cast<int>((lrho-lrho_min)/dlrho);
     int ub = lb + 1;
     if constexpr (loc == LocationTag::Host) {
