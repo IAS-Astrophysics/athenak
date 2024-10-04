@@ -31,8 +31,6 @@
 #include "mhd/mhd.hpp"
 #include "dyn_grmhd/dyn_grmhd.hpp"
 #include "utils/tov/tov_utils.hpp"
-#include "utils/tov/tov_polytrope.hpp"
-#include "utils/tov/tov_piecewise_poly.hpp"
 #include "utils/tov/tov_tabulated.hpp"
 
 // Lorene
@@ -96,15 +94,13 @@ void SetupBNS(ParameterInput *pin, Mesh* pmy_mesh_) {
   Real *y_coords = new Real[width];
   Real *z_coords = new Real[width];
 
-  // Set up the 1D EOS
-  TOVEOS eos{pin};
-
-  // Enable ye if the EOS supports it.
-  constexpr bool use_ye = tov::UsesYe<TOVEOS>;
-
-  if (global_variable::my_rank == 0) {
-    std::cout << "Allocated coordinates of size " << width << std::endl;
+  // 1D EoS for setting scalars if using CompOSE EoS
+  tov::TabulatedEOS *p1Deos;
+  if (pmbp->pdyngr->eos_policy == DynGRMHD_EOS::eos_compose) {
+    p1Deos = new tov::TabulatedEOS(pin);
   }
+
+  std::cout << "Allocated coordinates of size " << width << std::endl;
 
   // Populate coordinates for LORENE
   int idx = 0;
@@ -223,6 +219,12 @@ void SetupBNS(ParameterInput *pin, Mesh* pmy_mesh_) {
           Real vu[3] = {bns->u_euler_x[idx] / vel_unit,
                         bns->u_euler_y[idx] / vel_unit,
                         bns->u_euler_z[idx] / vel_unit};
+          
+          //TODO Set scalars here
+          if ((pmbp->pdyngr->eos_policy == DynGRMHD_EOS::eos_compose) && (pmbp->pmhd->nscalars>=1)){
+            Real Ye = p1Deos->template GetYeFromRho<tov::LocationTag::Host>(bns->nbar[idx] / rho_unit);
+            host_w0(m, IYF, k, j, i) = Ye;
+          }
 
           // Check for garbage values thrown in by Lorene.
           if (rho <= rho_cut || !Kokkos::isfinite(rho)) {
@@ -279,6 +281,7 @@ void SetupBNS(ParameterInput *pin, Mesh* pmy_mesh_) {
 
   // Cleanup
   delete bns;
+  delete p1Deos;
 
   if (global_variable::my_rank == 0) {
     std::cout << "Lorene freed." << std::endl;
