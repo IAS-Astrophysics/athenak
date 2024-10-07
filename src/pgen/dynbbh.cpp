@@ -76,6 +76,8 @@ struct bbh_pgen {
   Real om;
   Real q;
   Real a1, a2;
+  Real th_a1, th_a2;
+  Real ph_a1, ph_a2;
   Real dfloor;
   Real pfloor;
   Real gamma_adi;
@@ -138,13 +140,17 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   bbh.q = pin->GetOrAddReal("problem", "q", 1.0);
   bbh.a1 = pin->GetOrAddReal("problem", "a1", 0.0);
   bbh.a2 = pin->GetOrAddReal("problem", "a2", 0.0);
+  bbh.th_a1 = pin->GetOrAddReal("problem", "th_a1", 0.0);
+  bbh.th_a2 = pin->GetOrAddReal("problem", "th_a2", 0.0);
+  bbh.ph_a1 = pin->GetOrAddReal("problem", "ph_a1", 0.0);
+  bbh.ph_a2 = pin->GetOrAddReal("problem", "ph_a2", 0.0);
   bbh.dfloor = pin->GetOrAddReal("problem", "dfloor", (FLT_MIN));
   bbh.pfloor = pin->GetOrAddReal("problem", "pfloor", (FLT_MIN));
   bbh.adjust_mass1 = pin->GetOrAddReal("problem", "adjust_mass1", 1.0);
   bbh.adjust_mass2 = pin->GetOrAddReal("problem", "adjust_mass2", 1.0);
-  bbh.a1_buffer = pin->GetOrAddReal("problem", "a1_buffer", 1e-2);
-  bbh.a2_buffer = pin->GetOrAddReal("problem", "a2_buffer", 1e-2);
-  bbh.cutoff_floor = pin->GetOrAddReal("problem", "cutoff_floor", 1e-4);
+  bbh.a1_buffer = pin->GetOrAddReal("problem", "a1_buffer", 0.0);
+  bbh.a2_buffer = pin->GetOrAddReal("problem", "a2_buffer", 0.0);
+  bbh.cutoff_floor = pin->GetOrAddReal("problem", "cutoff_floor", 1e-10);
   bbh.alpha_thr = pin->GetOrAddReal("problem", "alpha_thr", 0.6);
   bbh.radius_thr = pin->GetOrAddReal("problem", "radius_thr", 6.0);
 
@@ -573,26 +579,28 @@ int four_metric_to_three_metric(const struct four_metric &met,
 // Function to calculate the position and velocity of m1 and m2 at time t
 void find_traj_t(Real t, Real bbh_t[NTRAJ]) {
 
-  bbh_t[X1] = 0.5*bbh.sep*std::cos(bbh.om*t);
-  bbh_t[Y1] = 0.5*bbh.sep*std::sin(bbh.om*t);
+  Real const r_BH1_0 = bbh.q/(1.0+bbh.q)*bbh.sep;
+  Real const r_BH2_0 = -bbh.sep/(1.0+bbh.q);
+  bbh_t[X1] = r_BH1_0*std::cos(bbh.om*t);
+  bbh_t[Y1] = r_BH1_0*std::sin(bbh.om*t);
   bbh_t[Z1] = 0.0;
-  bbh_t[X2] = -bbh_t[X1];
-  bbh_t[Y2] = -bbh_t[Y1];
+  bbh_t[X2] = r_BH1_0*std::cos(bbh.om*t);
+  bbh_t[Y2] = r_BH2_0*std::sin(bbh.om*t);
   bbh_t[Z2] = 0.0;
-  bbh_t[VX1] = -0.5*bbh.om*bbh.sep*std::sin(bbh.om*t);
-  bbh_t[VY1] = 0.5*bbh.om*bbh.sep*std::cos(bbh.om*t);
+  bbh_t[VX1] = -r_BH1_0*bbh.om*std::sin(bbh.om*t);
+  bbh_t[VY1] = r_BH1_0*bbh.om*std::cos(bbh.om*t);
   bbh_t[VZ1] = 0.0;
-  bbh_t[VX2] = 0.5*bbh.om*bbh.sep*std::sin(bbh.om*t);
-  bbh_t[VY2] = -0.5*bbh.om*bbh.sep*std::cos(bbh.om*t);
+  bbh_t[VX2] = -r_BH2_0*bbh.om*std::sin(bbh.om*t);
+  bbh_t[VY2] = r_BH2_0*bbh.om*std::cos(bbh.om*t);
   bbh_t[VZ2] = 0.0;
-  bbh_t[AX1] = 0.0;
-  bbh_t[AY1] = 0.0;
-  bbh_t[AZ1] = 0.0;
-  bbh_t[AX2] = 0.0;
-  bbh_t[AY2] = 0.0;
-  bbh_t[AZ2] = 0.0;
-  bbh_t[M1T] = 0.5;
-  bbh_t[M2T] = 0.5;
+  bbh_t[AX1] = bbh.a1*std::sin(bbh.th_a1)*std::cos(bbh.ph_a1);
+  bbh_t[AY1] = bbh.a1*std::sin(bbh.th_a1)*std::sin(bbh.ph_a1);
+  bbh_t[AZ1] = bbh.a1*std::cos(bbh.th_a1);
+  bbh_t[AX2] = bbh.a1*std::sin(bbh.th_a2)*std::cos(bbh.ph_a2);
+  bbh_t[AY2] = bbh.a1*std::sin(bbh.th_a2)*std::sin(bbh.ph_a2);
+  bbh_t[AZ2] = bbh.a1*std::cos(bbh.th_a2);
+  bbh_t[M1T] = 1.0/(bbh.q+1.0);
+  bbh_t[M2T] = 1.0 - bbh_t[M1T];
 }
 
 KOKKOS_INLINE_FUNCTION
@@ -709,7 +717,6 @@ void SuperposedBBH(const Real time, const Real x, const Real y, const Real z,
   if ((rBH1) < rBH1_Cutoff) { if(x3BH1>0) {x3BH1 = rBH1_Cutoff;} else {x3BH1 = -1.0*rBH1_Cutoff;}}
   if ((rBH2) < rBH2_Cutoff) { if(x3BH2>0) {x3BH2 = rBH2_Cutoff;} else {x3BH2 = -1.0*rBH2_Cutoff;}}
  
-
   //=================//
   //     Metric      //
   //=================//
