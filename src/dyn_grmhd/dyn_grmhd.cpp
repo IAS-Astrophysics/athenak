@@ -254,7 +254,16 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::ConvertInternalEnergyToPressure(int is,
     for (int s = 0; s < nscal; s++) {
       Y[s] = prim(m, nmhd + s, k, j, i);
     }
-    Real T = eos_.GetTemperatureFromE(n, egas, Y);
+    Real T;
+    // Note that this is done explicitly rather than with a flooring policy because we
+    // don't have the temperature yet, and it's probable that the energy is bunk if the
+    // density is. There may be a cleaner way to do this elsewhere.
+    if (n < eos_.GetMinimumDensity()) {
+      n = eos_.GetMinimumDensity();
+      T = eos_.GetMinimumTemperature();
+    } else {
+      T = eos_.GetTemperatureFromE(n, egas, Y);
+    }
     prim(m, IPR, k, j, i) = eos_.GetPressure(n, T, Y);
   });
 }

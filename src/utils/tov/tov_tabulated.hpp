@@ -95,7 +95,7 @@ class TabulatedEOS {
               << "  rho = [" << exp(lrho_min) << ", " << exp(lrho_max) << "]" << std::endl
               << "  P = [" << exp(lP_min) << ", " << exp(lP_max) << "]" << std::endl;
 
-    ye_atmosphere = pin->GetOrAddReal("mhd", "s1_atmosphere",0.5);
+    ye_atmosphere = pin->GetOrAddReal("mhd", "s0_atmosphere",0.5);
 
     // Sync the views to the GPU
     m_log_rho.template modify<HostMemSpace>();

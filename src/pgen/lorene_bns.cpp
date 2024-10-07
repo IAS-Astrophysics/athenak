@@ -240,9 +240,18 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
                         bns->u_euler_y[idx] / vel_unit,
                         bns->u_euler_z[idx] / vel_unit};
           
+          // Check for garbage values thrown in Lorene.
+          if (host_w0(m, IDN, k, j, i) <= 0.) {
+            host_w0(m, IDN, k, j, i) = 0.0;
+            vu[0] = 0.0;
+            vu[1] = 0.0;
+            vu[2] = 0.0;
+            egas = 0.0;
+          }
+
           //TODO Set scalars here
           if ((pmbp->pdyngr->eos_policy == DynGRMHD_EOS::eos_compose) && (pmbp->pmhd->nscalars>=1)){
-            Real Ye = p1Deos->template GetYeFromRho<tov::LocationTag::Host>(bns->nbar[idx] / rho_unit);
+            Real Ye = p1Deos->template GetYeFromRho<tov::LocationTag::Host>(host_w0(m,IDN,k,j,i));
             host_w0(m, IYF, k, j, i) = Ye;
           }
 
