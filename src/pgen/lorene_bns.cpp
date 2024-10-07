@@ -3,7 +3,7 @@
 // Copyright(C) 2020 James M. Stone <jmstone@ias.edu> and the Athena code team
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
-//! \file elliptica_bns.cpp
+//! \file lorene_bns.cpp
 //  \brief Initial data reader for binary neutron star data with LORENE
 //
 //  LORENE is available at https://lorene.obspm.fr/index.html
@@ -29,6 +29,8 @@
 #include "hydro/hydro.hpp"
 #include "mhd/mhd.hpp"
 #include "dyn_grmhd/dyn_grmhd.hpp"
+#include "utils/tov/tov_utils.hpp"
+#include "utils/tov/tov_tabulated.hpp"
 
 // Lorene
 #include "bin_ns.h"
@@ -92,6 +94,12 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   Real *x_coords = new Real[width];
   Real *y_coords = new Real[width];
   Real *z_coords = new Real[width];
+
+  // 1D EoS for setting scalars if using CompOSE EoS
+  tov::TabulatedEOS *p1Deos;
+  if (pmbp->pdyngr->eos_policy == DynGRMHD_EOS::eos_compose) {
+    p1Deos = new tov::TabulatedEOS(pin);
+  }
 
   std::cout << "Allocated coordinates of size " << width << std::endl;
 
@@ -231,6 +239,12 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
           Real vu[3] = {bns->u_euler_x[idx] / vel_unit,
                         bns->u_euler_y[idx] / vel_unit,
                         bns->u_euler_z[idx] / vel_unit};
+          
+          //TODO Set scalars here
+          if ((pmbp->pdyngr->eos_policy == DynGRMHD_EOS::eos_compose) && (pmbp->pmhd->nscalars>=1)){
+            Real Ye = p1Deos->template GetYeFromRho<tov::LocationTag::Host>(bns->nbar[idx] / rho_unit);
+            host_w0(m, IYF, k, j, i) = Ye;
+          }
 
           // Before we store the velocity, we need to make sure it's physical and
           // calculate the Lorentz factor. If the velocity is superluminal, we make a
@@ -263,6 +277,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
 
   // Cleanup
   delete bns;
+  delete p1Deos;
 
   std::cout << "Lorene freed." << std::endl;
 
