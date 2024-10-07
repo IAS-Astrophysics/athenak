@@ -26,6 +26,14 @@
 #include "coordinates/adm.hpp"
 #include "coordinates/cell_locations.hpp"
 
+namespace {
+  Real R_max0;     // Maximum radius at t=t0.
+  Real v_max;      // Maximum speed.
+  Real t0;
+  Real fac;
+  void SetADMVariablesToFLRW(MeshBlockPack *pmbp);
+}
+
 KOKKOS_INLINE_FUNCTION
 Real GetCartesianFromSnake(Real w, Real y, Real A, Real k) {
   return w + A*sin(k*M_PI*y);
@@ -124,6 +132,17 @@ Real GetCartesianFromScrewball(Real u, Real a) {
 //! \brief Problem Generator for spherical blast problem
 
 void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
+
+  MeshBlockPack *pmbp = pmy_mesh_->pmb_pack;
+  bool is_expanding = pin->GetOrAddBoolean("problem", "flrw", false);
+  if (is_expanding) {
+    R_max0 = pin->GetOrAddReal("problem", "R_max0", 1.0);
+    v_max = pin->GetOrAddReal("problem", "v_max0", 1.0);
+    t0 = pin->GetOrAddReal("problem", "t0", 0.0);
+    fac = v_max / R_max0;
+    pmbp->padm->SetADMVariables = &SetADMVariablesToFLRW;
+  }
+
   if (restart) return;
 
   Real rout = pin->GetReal("problem", "outer_radius");
@@ -166,7 +185,6 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   int &is = indcs.is; int &ie = indcs.ie;
   int &js = indcs.js; int &je = indcs.je;
   int &ks = indcs.ks; int &ke = indcs.ke;
-  MeshBlockPack *pmbp = pmy_mesh_->pmb_pack;
   auto &size = pmbp->pmb->mb_size;
 
   // initialize Hydro variables ----------------------------------------------------------
@@ -382,4 +400,59 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   }
 
   return;
+}
+
+namespace {
+//----------------------------------------------------------------------------------------
+void SetADMVariablesToFLRW(MeshBlockPack *pmbp) {
+  
+  const Real t = pmbp->pmesh->time;
+  auto &adm = pmbp->padm->adm;
+  auto &size = pmbp->pmb->mb_size;
+  auto &indcs = pmbp->pmesh->mb_indcs;
+  int &ng = indcs.ng;
+  int is = indcs.is, js = indcs.js, ks = indcs.ks;
+  int ie = indcs.ie, je = indcs.je, ke = indcs.ke;
+  int nmb = pmbp->nmb_thispack;
+  int n1 = indcs.nx1 + 2*ng;
+  int n2 = (indcs.nx2 > 1) ? (indcs.nx2 + 2*ng) : 1;
+  int n3 = (indcs.nx3 > 1) ? (indcs.nx3 + 2*ng) : 1;
+
+  Real a = 1.0 + fac*(t-t0);
+  Real a2 = a*a;
+  par_for("update_adm_vars", DevExeSpace(), 0,nmb-1,0,(n3-1),0,(n2-1),0,(n1-1),
+  KOKKOS_LAMBDA(int m, int k, int j, int i) {
+    Real &x1min = size.d_view(m).x1min;
+    Real &x1max = size.d_view(m).x1max;
+    Real x1v = CellCenterX(i-is, indcs.nx1, x1min, x1max);
+
+    Real &x2min = size.d_view(m).x2min;
+    Real &x2max = size.d_view(m).x2max;
+    Real x2v = CellCenterX(j-js, indcs.nx2, x2min, x2max);
+
+    Real &x3min = size.d_view(m).x3min;
+    Real &x3max = size.d_view(m).x3max;
+    Real x3v = CellCenterX(k-ks, indcs.nx3, x3min, x3max);
+
+    adm.g_dd(m,0,0,k,j,i) = a2;
+    adm.g_dd(m,0,1,k,j,i) = 0.0;
+    adm.g_dd(m,0,2,k,j,i) = 0.0;
+    adm.g_dd(m,1,1,k,j,i) = a2;
+    adm.g_dd(m,1,2,k,j,i) = 0.0;
+    adm.g_dd(m,2,2,k,j,i) = a2;
+
+    adm.vK_dd(m,0,0,k,j,i) = -a*fac;
+    adm.vK_dd(m,0,1,k,j,i) = 0.0;
+    adm.vK_dd(m,0,2,k,j,i) = 0.0;
+    adm.vK_dd(m,1,1,k,j,i) = -a*fac;
+    adm.vK_dd(m,1,2,k,j,i) = 0.0;
+    adm.vK_dd(m,2,2,k,j,i) = -a*fac;
+
+    adm.alpha(m,k,j,i) = 1.0;
+    adm.beta_u(m,0,k,j,i) = 0.0;
+    adm.beta_u(m,1,k,j,i) = 0.0;
+    adm.beta_u(m,2,k,j,i) = 0.0;
+  });
+}
+
 }
