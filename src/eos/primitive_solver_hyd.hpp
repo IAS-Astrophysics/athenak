@@ -12,7 +12,6 @@
 // C headers
 #include <float.h>
 #include <math.h>
-#include <stdio.h>
 
 // C++ headers
 #include <string>
@@ -239,7 +238,7 @@ class PrimitiveSolverHydro {
 
       // Check for NaNs
       if (CheckForConservedNaNs(cons_pt)) {
-        printf("Error occurred in PrimToCons at (%d, %d, %d, %d)\n", m, k, j, i);
+        Kokkos::printf("Error occurred in PrimToCons at (%d, %d, %d, %d)\n", m, k, j, i);
         DumpPrimitiveVars(prim_pt);
       }
 
@@ -408,7 +407,7 @@ class PrimitiveSolverHydro {
         if (result.error != Primitive::Error::SUCCESS && (nerrs_ + sumerrs < errcap_)) {
           // TODO(JF): put in a proper error response here.
           sumerrs++;
-          printf("An error occurred during the primitive solve: %s\n"
+          Kokkos::printf("An error occurred during the primitive solve: %s\n"
                  "  Location: (%d, %d, %d, %d)\n"
                  "  Conserved vars: \n"
                  "    D   = %.17g\n"
@@ -441,7 +440,8 @@ class PrimitiveSolverHydro {
                  adm.vK_dd(m, 1, 1, k, j, i), adm.vK_dd(m, 1, 2, k, j, i),
                  adm.vK_dd(m, 2, 2, k, j, i));
           if (nerrs_ + sumerrs == errcap_) {
-            printf("%d C2P errors have been detected on rank %d. All future C2P errors\n"
+            Kokkos::printf("%d C2P errors have been detected on rank %d."
+                   "All future C2P errors\n"
                    "on this rank will be suppressed. Fix your code!\n",
                    nerrs_ + sumerrs,rank);
           }
@@ -581,23 +581,23 @@ class PrimitiveSolverHydro {
   static int CheckForConservedNaNs(const Real cons_pt[NCONS]) {
     int nans = 0;
     if (!isfinite(cons_pt[CDN])) {
-      printf("D is NaN!\n"); // NOLINT
+      Kokkos::printf("D is NaN!\n"); // NOLINT
       nans = 1;
     }
     if (!isfinite(cons_pt[CSX])) {
-      printf("Sx is NaN!\n"); // NOLINT
+      Kokkos::printf("Sx is NaN!\n"); // NOLINT
       nans = 1;
     }
     if (!isfinite(cons_pt[CSY])) {
-      printf("Sy is NaN!\n"); // NOLINT
+      Kokkos::printf("Sy is NaN!\n"); // NOLINT
       nans = 1;
     }
     if (!isfinite(cons_pt[CSZ])) {
-      printf("Sz is NaN!\n"); // NOLINT
+      Kokkos::printf("Sz is NaN!\n"); // NOLINT
       nans = 1;
     }
     if (!isfinite(cons_pt[CTA])) {
-      printf("Tau is NaN!\n"); // NOLINT
+      Kokkos::printf("Tau is NaN!\n"); // NOLINT
       nans = 1;
     }
 
@@ -606,7 +606,7 @@ class PrimitiveSolverHydro {
 
   KOKKOS_INLINE_FUNCTION
   static void DumpPrimitiveVars(const Real prim_pt[NPRIM]) {
-    printf("Primitive vars: \n" // NOLINT
+    Kokkos::printf("Primitive vars: \n" // NOLINT
            "  rho = %.17g\n"
            "  ux  = %.17g\n"
            "  uy  = %.17g\n"

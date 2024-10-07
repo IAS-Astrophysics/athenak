@@ -28,7 +28,7 @@ namespace z4c {
 //! \fn  void Z4c::QueueZ4cTasks
 //! \brief queue Z4c tasks into NumericalRelativity
 void Z4c::QueueZ4cTasks() {
-  printf("AssembleZ4cTasks\n");
+  Kokkos::printf("AssembleZ4cTasks\n");
   using namespace mhd;     // NOLINT(build/namespaces)
   using namespace numrel;  // NOLINT(build/namespaces)
   NumericalRelativity *pnr = pmy_pack->pnr;
