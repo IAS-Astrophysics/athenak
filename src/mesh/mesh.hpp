@@ -26,7 +26,6 @@ struct RegionSize {
   Real x1min, x2min, x3min;
   Real x1max, x2max, x3max;
   Real dx1, dx2, dx3;       // (uniform) grid spacing
-  Real idx1, idx2, idx3;
 };
 
 //----------------------------------------------------------------------------------------
