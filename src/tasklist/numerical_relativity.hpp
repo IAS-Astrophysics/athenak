@@ -49,6 +49,8 @@ enum TaskName {
   MHD_RecvB,
   MHD_BCS,
   MHD_Prolong,
+  MHD_SetADM,
+  MHD_Excise,
   MHD_C2P,
   MHD_Newdt,
   MHD_ClearS,

@@ -21,6 +21,7 @@
 #include "mesh/mesh.hpp"
 #include "coordinates/adm.hpp"
 #include "z4c/z4c.hpp"
+#include "z4c/z4c_amr.hpp"
 #include "coordinates/coordinates.hpp"
 #include "coordinates/cell_locations.hpp"
 #include "eos/eos.hpp"
@@ -29,16 +30,17 @@
 #include "dyn_grmhd/dyn_grmhd.hpp"
 #include "elliptica_id_reader_lib.h"
 
-void EllipticaHistory(HistoryData *pdata, Mesh *pm);
+void EllipticaBNSHistory(HistoryData *pdata, Mesh *pm);
+void EllipticaBNSRefinementCondition(MeshBlockPack *pmbp);
 
 //----------------------------------------------------------------------------------------
 //! \fn ProblemGenerator::UserProblem_()
 //! \brief Problem Generator for BNS with Elliptica
 void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
-  if (restart) return;
+  user_hist_func = &EllipticaBNSHistory;
+  user_ref_func = &EllipticaBNSRefinementCondition;
 
-  // Set the custom history function
-  user_hist_func = &EllipticaHistory;
+  if (restart) return;
 
   MeshBlockPack *pmbp = pmy_mesh_->pmb_pack;
   auto &indcs = pmy_mesh_->mb_indcs;
@@ -305,7 +307,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
 }
 
 // History function
-void EllipticaHistory(HistoryData *pdata, Mesh *pm) {
+void EllipticaBNSHistory(HistoryData *pdata, Mesh *pm) {
   // Select the number of outputs and create labels for them.
   int &nmhd = pm->pmb_pack->pmhd->nmhd;
   pdata->nhist = 2;
@@ -357,4 +359,8 @@ void EllipticaHistory(HistoryData *pdata, Mesh *pm) {
   // store data in hdata array
   pdata->hdata[0] = rho_max;
   pdata->hdata[1] = alpha_min;
+}
+
+void EllipticaBNSRefinementCondition(MeshBlockPack *pmbp) {
+  pmbp->pz4c->pamr->Refine(pmbp);
 }
