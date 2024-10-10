@@ -286,7 +286,9 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
 
   // Cleanup
   delete bns;
-  delete p1Deos;
+  if (pmbp->pdyngr->eos_policy == DynGRMHD_EOS::eos_compose) {
+    delete p1Deos;
+  }
 
   std::cout << "Lorene freed." << std::endl;
 
