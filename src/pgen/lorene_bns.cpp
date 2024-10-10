@@ -290,7 +290,9 @@ void SetupBNS(ParameterInput *pin, Mesh* pmy_mesh_) {
 
   // Cleanup
   delete bns;
-  delete p1Deos;
+  if (pmbp->pdyngr->eos_policy == DynGRMHD_EOS::eos_compose) {
+    delete p1Deos;
+  }
 
   if (global_variable::my_rank == 0) {
     std::cout << "Lorene freed." << std::endl;
