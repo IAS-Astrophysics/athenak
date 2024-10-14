@@ -132,7 +132,6 @@ Real GetCartesianFromScrewball(Real u, Real a) {
 //! \brief Problem Generator for spherical blast problem
 
 void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
-
   MeshBlockPack *pmbp = pmy_mesh_->pmb_pack;
   bool is_expanding = pin->GetOrAddBoolean("problem", "flrw", false);
   if (is_expanding) {
@@ -405,7 +404,6 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
 namespace {
 //----------------------------------------------------------------------------------------
 void SetADMVariablesToFLRW(MeshBlockPack *pmbp) {
-  
   const Real t = pmbp->pmesh->time;
   auto &adm = pmbp->padm->adm;
   auto &size = pmbp->pmb->mb_size;
@@ -455,4 +453,4 @@ void SetADMVariablesToFLRW(MeshBlockPack *pmbp) {
   });
 }
 
-}
+} // namespace
