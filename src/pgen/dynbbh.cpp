@@ -398,7 +398,7 @@ int four_metric_to_three_metric(const struct four_metric &met,
                                    gam.gyy, gam.gyz, gam.gzz);
 
   /* If determinant is not >0  something is wrong with the metric */
-  /* This could occur during the transition to merger at certain points 
+  /* This could occur during the transition to merger at certain points
      so here we restart to Minkowski */
   if (!(det > 0)) {
     //std::fprintf(stderr, "det < 0: %e\n", det);
@@ -941,7 +941,12 @@ void SuperposedBBH(const Real time, const Real x, const Real y, const Real z,
   J2[3][2] = o132;
   J2[3][3] = 1 + o129 * ((v2z * v2z) * o128);
   /* Initialize the flat part */
-  Real eta[4][4] = {{-1,0,0,0},{0,1,0,0},{0,0,1,0},{0,0,0,1}};
+  Real eta[4][4] = {
+    {-1,0,0,0},
+    {0,1,0,0},
+    {0,0,1,0},
+    {0,0,0,1}
+  };
   for (int i=0; i < 4; i++ ) {
     for (int j=0; j < 4; j++ ) {
       gcov[i][j] = eta[i][j];
