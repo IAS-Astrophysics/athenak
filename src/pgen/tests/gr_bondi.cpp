@@ -197,7 +197,7 @@ void ProblemGenerator::BondiAccretion(ParameterInput *pin, const bool restart) {
   if (pmbp->padm != nullptr) {
     pmbp->padm->SetADMVariables(pmbp);
   }
-    
+
   {
     auto &b0 = pmbp->pmhd->b0;
     auto &bcc_ = pmbp->pmhd->bcc0;
