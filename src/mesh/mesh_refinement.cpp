@@ -588,8 +588,7 @@ void MeshRefinement::RedistAndRefineMeshBlocks(ParameterInput *pin, int nnew, in
   }
   if (pz4c != nullptr) {
     CopyCC(pz4c->u0);
-  }
-  else if (padm != nullptr) {
+  } else if (padm != nullptr) {
     CopyCC(padm->u_adm);
   }
   // Step 7.

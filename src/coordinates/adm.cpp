@@ -27,12 +27,11 @@ char const * const ADM::ADM_names[ADM::nadm] = {
 //----------------------------------------------------------------------------------------
 // constructor: initializes data structures and parameters
 ADM::ADM(MeshBlockPack *ppack, ParameterInput *pin):
-  SetADMVariables(&ADM::SetADMVariablesToKerrSchild),
-  u_adm("u_adm",1,1,1,1,1),
-  pmy_pack(ppack) {
-
+    SetADMVariables(&ADM::SetADMVariablesToKerrSchild),
+    u_adm("u_adm",1,1,1,1,1),
+    pmy_pack(ppack) {
   is_dynamic = pin->GetOrAddBoolean("adm" , "dynamic", false);
-  
+
   int nmb = std::max((ppack->nmb_thispack), (ppack->pmesh->nmb_maxperrank));
   auto &indcs = pmy_pack->pmesh->mb_indcs;
   int ncells1 = indcs.nx1 + 2*(indcs.ng);
