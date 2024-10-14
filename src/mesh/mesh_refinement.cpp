@@ -520,9 +520,6 @@ void MeshRefinement::RedistAndRefineMeshBlocks(ParameterInput *pin, int nnew, in
   } else if (padm != nullptr) {
     CopyCC(padm->u_adm);
   }
-  else if (padm != nullptr) {
-    CopyCC(padm->u_adm);
-  }
   // Step 7.
   // Copy evolved physics variables for MBs flagged for refinement from source fine array
   // to target coarse array, when both are on same rank.
