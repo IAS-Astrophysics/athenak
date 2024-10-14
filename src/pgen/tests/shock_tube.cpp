@@ -377,4 +377,4 @@ void SetADMVariablesToSchwarzschild(MeshBlockPack *pmbp) {
   });
 }
 
-}
+} // namespace
