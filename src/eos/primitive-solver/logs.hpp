@@ -51,20 +51,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE
 
 namespace Primitive{
 
-class LogPolicy {
-  public:
-  LogPolicy() = default;
-  ~LogPolicy() = default;
-
-  KOKKOS_INLINE_FUNCTION Real log2_(const Real x) const {
-    return std::numeric_limits<Real>::quiet_NaN();
-  }
-  KOKKOS_INLINE_FUNCTION Real exp2_(const Real x) const {
-    return std::numeric_limits<Real>::quiet_NaN();
-  }
-};
-
-class NormalLogs : public LogPolicy {
+class NormalLogs {
   public:
     NormalLogs() = default;
     ~NormalLogs() = default;
@@ -79,7 +66,7 @@ class NormalLogs : public LogPolicy {
 
 };
 
-class NQTLogs : public LogPolicy {
+class NQTLogs {
   public:
     NQTLogs() = default;
     ~NQTLogs() = default;
