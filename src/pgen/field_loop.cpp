@@ -388,37 +388,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
 
   // Initialize the ADM variables if necessary
   if (pmbp->padm != nullptr) {
-    int n1 = indcs.nx1 + 2*indcs.ng;
-    int n2 = (indcs.nx2 > 1) ? (indcs.nx2 + 2*indcs.ng) : 1;
-    int n3 = (indcs.nx3 > 1) ? (indcs.nx3 + 2*indcs.ng) : 1;
-
-    auto adm = pmbp->padm->adm;
-
-    par_for("pgen_adm_vars", DevExeSpace(), 0,pmbp->nmb_thispack-1,
-    0, (n3-1), 0, (n2-1), 0, (n1-1),
-    KOKKOS_LAMBDA(int m, int k, int j, int i) {
-      adm.alpha(m, k, j, i) = 1.0;
-      adm.beta_u(m, 0, k, j, i) = 0.0;
-      adm.beta_u(m, 1, k, j, i) = 0.0;
-      adm.beta_u(m, 2, k, j, i) = 0.0;
-
-      adm.psi4(m, k, j, i) = 1.0;
-
-      adm.g_dd(m, 0, 0, k, j, i) = 1.0;
-      adm.g_dd(m, 0, 1, k, j, i) = 0.0;
-      adm.g_dd(m, 0, 2, k, j, i) = 0.0;
-      adm.g_dd(m, 1, 1, k, j, i) = 1.0;
-      adm.g_dd(m, 1, 2, k, j, i) = 0.0;
-      adm.g_dd(m, 2, 2, k, j, i) = 1.0;
-
-      adm.vK_dd(m, 0, 0, k, j, i) = 0.0;
-      adm.vK_dd(m, 0, 1, k, j, i) = 0.0;
-      adm.vK_dd(m, 0, 2, k, j, i) = 0.0;
-      adm.vK_dd(m, 1, 1, k, j, i) = 0.0;
-      adm.vK_dd(m, 1, 2, k, j, i) = 0.0;
-      adm.vK_dd(m, 2, 2, k, j, i) = 0.0;
-    });
-
+    pmbp->padm->SetADMVariables(pmbp);
     // For DynGRMHD, the conserved variables can't be initialized until the ADM variables
     // have been populated.
     pmbp->pdyngr->PrimToConInit(is, ie, js, je, ks, ke);

@@ -23,6 +23,7 @@
 #include "mesh/mesh.hpp"
 #include "coordinates/adm.hpp"
 #include "z4c/z4c.hpp"
+#include "z4c/z4c_amr.hpp"
 #include "coordinates/coordinates.hpp"
 #include "coordinates/cell_locations.hpp"
 #include "eos/eos.hpp"
@@ -36,12 +37,14 @@
 
 // Prototype for user-defined history function
 void BNSHistory(HistoryData *pdata, Mesh *pm);
+void LoreneBNSRefinementCondition(MeshBlockPack *pmbp);
 
 //----------------------------------------------------------------------------------------
 //! \fn ProblemGenerator::UserProblem_()
 //! \brief Problem Generator for BNS with LORENE
 void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   user_hist_func = &BNSHistory;
+  user_ref_func = &LoreneBNSRefinementCondition;
 
   if (restart) return;
 
@@ -380,4 +383,8 @@ void BNSHistory(HistoryData *pdata, Mesh *pm) {
   // store data in hdata array
   pdata->hdata[0] = rho_max;
   pdata->hdata[1] = alpha_min;
+}
+
+void LoreneBNSRefinementCondition(MeshBlockPack *pmbp) {
+  pmbp->pz4c->pamr->Refine(pmbp);
 }

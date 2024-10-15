@@ -192,35 +192,11 @@ void ProblemGenerator::BondiAccretion(ParameterInput *pin, const bool restart) {
   });
 
   // Initialize ADM variables
-  Real a = coord.bh_spin;
-  bool minkowski = coord.is_minkowski;
   if (pmbp->padm != nullptr) {
-    auto &adm = pmbp->padm->adm;
+    pmbp->padm->SetADMVariables(pmbp);
+
     auto &b0 = pmbp->pmhd->b0;
     auto &bcc_ = pmbp->pmhd->bcc0;
-    par_for("pgen_adm_vars", DevExeSpace(), 0,nmb-1,0,(n3-1),0,(n2-1),0,(n1-1),
-    KOKKOS_LAMBDA(int m, int k, int j, int i) {
-      Real &x1min = size.d_view(m).x1min;
-      Real &x1max = size.d_view(m).x1max;
-      Real x1v = CellCenterX(i-is, indcs.nx1, x1min, x1max);
-
-      Real &x2min = size.d_view(m).x2min;
-      Real &x2max = size.d_view(m).x2max;
-      Real x2v = CellCenterX(j-js, indcs.nx2, x2min, x2max);
-
-      Real &x3min = size.d_view(m).x3min;
-      Real &x3max = size.d_view(m).x3max;
-      Real x3v = CellCenterX(k-ks, indcs.nx3, x3min, x3max);
-
-      ComputeADMDecomposition(x1v, x2v, x3v, minkowski, a,
-        &adm.alpha(m,k,j,i),
-        &adm.beta_u(m,0,k,j,i), &adm.beta_u(m,1,k,j,i), &adm.beta_u(m,2,k,j,i),
-        &adm.psi4(m,k,j,i),
-        &adm.g_dd(m,0,0,k,j,i), &adm.g_dd(m,0,1,k,j,i), &adm.g_dd(m,0,2,k,j,i),
-        &adm.g_dd(m,1,1,k,j,i), &adm.g_dd(m,1,2,k,j,i), &adm.g_dd(m,2,2,k,j,i),
-        &adm.vK_dd(m,0,0,k,j,i), &adm.vK_dd(m,0,1,k,j,i), &adm.vK_dd(m,0,2,k,j,i),
-        &adm.vK_dd(m,1,1,k,j,i), &adm.vK_dd(m,1,2,k,j,i), &adm.vK_dd(m,2,2,k,j,i));
-    });
     int ie = indcs.ie;
     int je = indcs.je;
     int ke = indcs.ke;

@@ -131,8 +131,9 @@ template<class EOSPolicy, class ErrorPolicy>
 void DynGRMHDPS<EOSPolicy, ErrorPolicy>::QueueDynGRMHDTasks() {
   using namespace mhd;  // NOLINT(build/namespaces)
   using namespace z4c;  // NOLINT(build/namespaces)
-  using namespace numrel; // NOLINT(build/namespaces)
+  using namespace numrel; // NOLINT(build/namespaces))
   Z4c *pz4c = pmy_pack->pz4c;
+  adm::ADM *padm = pmy_pack->padm;
   MHD *pmhd = pmy_pack->pmhd;
   NumericalRelativity *pnr = pmy_pack->pnr;
 
@@ -188,8 +189,17 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::QueueDynGRMHDTasks() {
   //pnr->QueueTask(&DynGRMHD::ApplyPhysicalBCs, this, MHD_BCS, "MHD_BCS", Task_Run,
   //                 {MHD_RecvB});
   pnr->QueueTask(&MHD::Prolongate, pmhd, MHD_Prolong, "MHD_Prolong", Task_Run, {MHD_BCS});
-  pnr->QueueTask(&DynGRMHDPS<EOSPolicy, ErrorPolicy>::ConToPrim, this, MHD_C2P, "MHD_C2P",
-                 Task_Run, {MHD_Prolong}, {Z4c_Excise});
+  if (pz4c == nullptr && padm->is_dynamic == true) {
+    pnr->QueueTask(&DynGRMHD::SetADMVariables, this, MHD_SetADM, "MHD_SetADM", Task_Run,
+                    {MHD_ExplRK});
+    pnr->QueueTask(&DynGRMHDPS<EOSPolicy, ErrorPolicy>::ConToPrim, this, MHD_C2P,
+                   "MHD_C2P", Task_Run, {MHD_Prolong, MHD_SetADM}, {Z4c_Excise});
+    pnr->QueueTask(&DynGRMHD::UpdateExcisionMasks, this, MHD_Excise, "MHD_Excise",
+                   Task_Run, {MHD_SetADM});
+  } else {
+    pnr->QueueTask(&DynGRMHDPS<EOSPolicy, ErrorPolicy>::ConToPrim, this, MHD_C2P,
+                   "MHD_C2P", Task_Run, {MHD_Prolong}, {Z4c_Excise});
+  }
   pnr->QueueTask(&MHD::NewTimeStep, pmhd, MHD_Newdt, "MHD_Newdt", Task_Run, {MHD_C2P});
 
   // End task list
@@ -415,6 +425,26 @@ TaskStatus DynGRMHD::SetTmunu(Driver *pdrive, int stage) {
       }
     }
   });
+  return TaskStatus::complete;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void DynGRMHD::SetADMVariables
+//! \brief
+
+TaskStatus DynGRMHD::SetADMVariables(Driver *pdrive, int stage) {
+  pmy_pack->padm->SetADMVariables(pmy_pack);
+  return TaskStatus::complete;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void Z4c::UpdateExcisionMasks
+//! \brief
+
+TaskStatus DynGRMHD::UpdateExcisionMasks(Driver *pdrive, int stage) {
+  if (pmy_pack->pcoord->coord_data.bh_excise && stage == pdrive->nexp_stages) {
+    pmy_pack->pcoord->UpdateExcisionMasks();
+  }
   return TaskStatus::complete;
 }
 
