@@ -86,33 +86,33 @@ class NQTLogs : public LogPolicy {
     // Because we are using bit-hacks we are explicit/specific about types
     // These are left here because we could add an option to select the order
     KOKKOS_FORCEINLINE_FUNCTION
-    _Float64 log2_LANL(const _Float64 x) const {
+    double log2_LANL(const double x) const {
       // Magic numbers constexpr because C++ doesn't constexpr reinterpret casts
       // these are floating point numbers as reinterpreted as integers.
       // as_int(1.0)
       constexpr int64_t one_as_int = 4607182418800017408;
       // 1./static_cast<double>(as_int(2.0) - as_int(1.0))
-      constexpr _Float64 scale_down = 2.22044604925031e-16;
-      return static_cast<_Float64>(as_int(x) - one_as_int) * scale_down;
+      constexpr double scale_down = 2.22044604925031e-16;
+      return static_cast<double>(as_int(x) - one_as_int) * scale_down;
     }
 
     KOKKOS_FORCEINLINE_FUNCTION
-    _Float64 exp2_LANL(const _Float64 x) const {
+    double exp2_LANL(const double x) const {
       // Magic numbers constexpr because C++ doesn't constexpr reinterpret casts
       // these are floating point numbers as reinterpreted as integers.
       // as_int(1.0)
       constexpr int64_t one_as_int = 4607182418800017408;
       // as_int(2.0) - as_int(1.0)
-      constexpr _Float64 scale_up = 4503599627370496;
+      constexpr double scale_up = 4503599627370496;
       return as_double(static_cast<int64_t>(x*scale_up) + one_as_int);
     }
 
     KOKKOS_FORCEINLINE_FUNCTION
-    _Float64 log2_(const _Float64 x) const {
+    double log2_(const double x) const {
       // as_int(1.0) == 2^62 - 2^52
       constexpr int64_t one_as_int = 4607182418800017408;
       // 1/(as_int(2.0) - as_int(1.0)) == 2^-52
-      constexpr _Float64 scale_down = 2.220446049250313e-16;
+      constexpr double scale_down = 2.220446049250313e-16;
       // 2^52 - 1
       constexpr int64_t mantissa_mask = 4503599627370495;
       // 2^26 - 1
@@ -124,38 +124,38 @@ class NQTLogs : public LogPolicy {
       const int64_t frac_low  = frac_as_int & low_mask;
       const int64_t frac_squared = frac_high*frac_high + ((frac_high*frac_low)>>25);
       
-      return static_cast<_Float64>(x_as_int +
+      return static_cast<double>(x_as_int +
                                     ((frac_as_int - frac_squared)/3)) * scale_down;
-      // return static_cast<_Float64>(x_as_int) * scale_down;
+      // return static_cast<double>(x_as_int) * scale_down;
   }
 
     KOKKOS_FORCEINLINE_FUNCTION
-    _Float64 exp2_(const _Float64 x) const {
+    double exp2_(const double x) const {
       // as_int(1.0) == 2^62 - 2^52
       constexpr int64_t one_as_int = 4607182418800017408;
       // as_int(2.0) - as_int(1.0) == 2^52
-      constexpr _Float64 scale_up = 4503599627370496;
+      constexpr double scale_up = 4503599627370496;
       constexpr int64_t mantissa_mask = 4503599627370495; // 2^52 - 1
       constexpr int64_t a = 9007199254740992; // 2 * 2^52
-      constexpr _Float64 b = 67108864; // 2^26
+      constexpr double b = 67108864; // 2^26
       constexpr int64_t c = 18014398509481984; // 4 * 2^52
 
       const int64_t x_as_int = static_cast<int64_t>(x*scale_up);
       const int64_t frac_as_int = x_as_int & mantissa_mask;
       const int64_t frac_sqrt = static_cast<int64_t>(
-                                  b*Kokkos::sqrt(static_cast<_Float64>(c-3*frac_as_int)));
+                                  b*Kokkos::sqrt(static_cast<double>(c-3*frac_as_int)));
 
       return as_double(x_as_int + a - frac_sqrt - frac_as_int + one_as_int);
       // return as_double(x_as_int + one_as_int);
   }
 
   private:
-    KOKKOS_FORCEINLINE_FUNCTION int64_t as_int(_Float64 f) const {
+    KOKKOS_FORCEINLINE_FUNCTION int64_t as_int(double f) const {
       return *reinterpret_cast<int64_t*>(&f);
     }
 
-    KOKKOS_FORCEINLINE_FUNCTION _Float64 as_double(int64_t i) const {
-      return *reinterpret_cast<_Float64*>(&i);
+    KOKKOS_FORCEINLINE_FUNCTION double as_double(int64_t i) const {
+      return *reinterpret_cast<double*>(&i);
     }
 };
 
