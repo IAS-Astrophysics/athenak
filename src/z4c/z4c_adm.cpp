@@ -281,7 +281,7 @@ void Z4c::ADMConstraints(MeshBlockPack *pmbp) {
     AthenaScratchTensor<Real, TensorSymm::SYM2, 3, 2> g_uu;
     //AthenaScratchTensor<Real, TensorSymm::SYM2, 3, 2> g_uu_z4c;
     AthenaScratchTensor<Real, TensorSymm::SYM2, 3, 2> R_dd;
-    AthenaScratchTensor<Real, TensorSymm::SYM2, 3, 2> K_ud;
+    AthenaScratchTensor<Real, TensorSymm::NONE, 3, 2> K_ud;
 
     AthenaScratchTensor<Real, TensorSymm::SYM2, 3, 3> dg_ddd;
     AthenaScratchTensor<Real, TensorSymm::SYM2, 3, 3> dg_ddd_z4c;
@@ -430,7 +430,7 @@ void Z4c::ADMConstraints(MeshBlockPack *pmbp) {
     //
     Real K = 0.0;
     for(int a = 0; a < 3; ++a) {
-      for(int b = a; b < 3; ++b) {
+      for(int b = 0; b < 3; ++b) {
         K_ud(a,b) = 0.0;
         for(int c = 0; c < 3; ++c) {
           K_ud(a,b) += g_uu(a,c) * adm.vK_dd(m,c,b,k,j,i);

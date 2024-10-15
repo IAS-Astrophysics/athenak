@@ -11,8 +11,8 @@ Using Kokkos enables *performance-portability*.  AthenaK will run on any hardwar
 AthenaK is targeting challenging problems that require exascale resources, and as such it does not implement all of the features of Athena++.  Current code features are:
 - Block-based AMR with dynamical execution via a task list
 - Non-relativistic (Newtonian) hydrodynamics and MHD
-- Special relativistic hydrodynamics and MHD
-- General relativistic hydrodynamics and MHD in stationary spacetimes
+- Special relativistic (SR) hydrodynamics and MHD
+- General relativistic (GR) hydrodynamics and MHD in stationary spacetimes
 - Relativistic radiation transport
 - Lagrangian tracer particles, and charged test particles
 - Numerical relativity solver using the Z4c formalism
@@ -35,8 +35,8 @@ Since AthenaK is very similar to Athena++, the [Athena++ documention](https://gi
 ## Code papers
 
 For more details on the features and algorithms implemented in AthenaK, see the code papers:
-- Stone et al (2024): basic framework
-- [Zhu et al. (2024)](https://arxiv.org/abs/2409.10383)): numerical relativity solver
-- [Fields at al. (2024)](https://arxiv.org/abs/2409.10384): GR hydro and MHD solver in dynamical spacetimes
+- [Stone et al (2024)](https://ui.adsabs.harvard.edu/abs/2024arXiv240916053S/abstract): basic framework
+- [Zhu et al. (2024)](https://ui.adsabs.harvard.edu/abs/2024arXiv240910383Z/abstract): numerical relativity solver
+- [Fields at al. (2024)](https://ui.adsabs.harvard.edu/abs/2024arXiv240910384F/abstract): GR hydro and MHD solver in dynamical spacetimes
 
 Please reference these papers as appropriate for any publications that use AthenaK.
