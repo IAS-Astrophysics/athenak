@@ -6,8 +6,7 @@
 //! \file dyngr_tov.cpp
 //  \brief Problem generator for TOV star. Only works when ADM is enabled.
 
-#include <stdio.h>
-#include <math.h>
+#include <math.h>     // abs(), cos(), exp(), log(), NAN, pow(), sin(), sqrt()
 
 #include <algorithm>
 #include <iostream>
@@ -420,8 +419,147 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
 
 template<class TOVEOS>
 KOKKOS_INLINE_FUNCTION
-static Real A1(const tov::TOVStar& tov_, const TOVEOS& eos, bool isotropic, Real pcut,
-               Real magindex, Real x1, Real x2, Real x3) {
+static void GetPrimitivesAtPoint(const tov_pgen& tov, const TOVEOS& eos, Real r,
+                                 Real &rho, Real &p, Real &m, Real &alp) {
+  // Check if we're past the edge of the star.
+  // If so, we just return atmosphere with Schwarzschild.
+  if (r >= tov.R_edge) {
+    rho = 0.0;
+    p = 0.0;
+    m = tov.M_edge;
+    alp = sqrt(1.0 - 2.0*m/r);
+    return;
+  }
+  // Get the lower index for where our point must be located.
+  int idx = static_cast<int>(r/tov.dr);
+  const auto &R = tov.R.d_view;
+  const auto &Ps = tov.P.d_view;
+  const auto &alps = tov.alp.d_view;
+  const auto &Ms = tov.M.d_view;
+  // Interpolate to get the primitive.
+  p = Interpolate(r, R(idx), R(idx+1), Ps(idx), Ps(idx+1));
+  m = Interpolate(r, R(idx), R(idx+1), Ms(idx), Ms(idx+1));
+  alp = Interpolate(r, R(idx), R(idx+1), alps(idx), alps(idx+1));
+  // FIXME: Assumes ideal gas!
+  //rho = pow(p/tov.kappa, 1.0/tov.gamma);
+  rho = eos.template GetRhoFromP<LocationTag::Device>(p);
+}
+
+KOKKOS_INLINE_FUNCTION
+static int FindIsotropicIndex(const tov_pgen& tov, Real r_iso) {
+  // Perform a bisection search to find the closest index to the requested isotropic
+  // point.
+  const auto &R_iso = tov.R_iso.d_view;
+  int lb = 0;
+  int ub = tov.n_r;
+  int idx = lb;
+  while (R_iso(lb+1) < r_iso) {
+    idx = (lb + ub)/2;
+    if (R_iso(idx) < r_iso) {
+      lb = idx;
+    } else {
+      ub = idx;
+    }
+  }
+  return lb;
+}
+
+KOKKOS_INLINE_FUNCTION
+static Real FindSchwarzschildR(const tov_pgen& tov, Real r_iso, Real mass) {
+  if (r_iso > tov.R_edge_iso) {
+    Real psi = 1.0 + mass/(2.*r_iso);
+    return r_iso*psi*psi;
+  }
+
+  int idx = FindIsotropicIndex(tov, r_iso);
+  const auto &R_iso = tov.R_iso.d_view;
+  const auto &R = tov.R.d_view;
+  return Interpolate(r_iso, R_iso(idx), R_iso(idx+1), R(idx), R(idx+1));
+}
+
+template<class TOVEOS>
+KOKKOS_INLINE_FUNCTION
+static void GetPrimitivesAtIsoPoint(const tov_pgen& tov, const TOVEOS& eos, Real r_iso,
+                                    Real &rho, Real &p, Real &m, Real &alp) {
+  // Check if we're past the edge of the star.
+  // If so, we just return atmosphere with Schwarzschild.
+  if (r_iso >= tov.R_edge_iso) {
+    rho = 0.0;
+    p = 0.0;
+    m = tov.M_edge;
+    alp = (1. - m/(2.*r_iso))/(1. + m/(2.*r_iso));
+    return;
+  }
+  // Because the isotropic coordinates are not evenly spaced, we need to search to find
+  // the right index. We can set a lower bound because r_iso <= r, and then we choose the
+  // edge of the star as an upper bound.
+  const auto &R_iso = tov.R_iso.d_view;
+  int idx = FindIsotropicIndex(tov, r_iso);
+  const auto &Ps = tov.P.d_view;
+  const auto &alps = tov.alp.d_view;
+  const auto &Ms = tov.M.d_view;
+  if (idx >= tov.npoints || idx < 0) {
+    Kokkos::printf("There's a problem with the index!\n" // NOLINT
+           " idx = %d\n"
+           " r_iso = %g\n"
+           " dr = %g\n",idx,r_iso,tov.dr);
+  }
+  // Interpolate to get the primitive.
+  p = Interpolate(r_iso, R_iso(idx), R_iso(idx+1), Ps(idx), Ps(idx+1));
+  m = Interpolate(r_iso, R_iso(idx), R_iso(idx+1), Ms(idx), Ms(idx+1));
+  alp = Interpolate(r_iso, R_iso(idx), R_iso(idx+1), alps(idx), alps(idx+1));
+  // FIXME: Assumes ideal gas!
+  //rho = pow(p/tov.kappa, 1.0/tov.gamma);
+  rho = eos.template GetRhoFromP<LocationTag::Device>(fmax(p, tov.pfloor));
+  if (!isfinite(p)) {
+    Kokkos::printf("There's a problem with p!\n"); // NOLINT
+    assert(false);
+  }
+}
+
+template<class TOVEOS>
+KOKKOS_INLINE_FUNCTION
+static void GetPandRho(const tov_pgen& tov, const TOVEOS& eos,
+                       Real r, Real &rho, Real &p) {
+  if (r >= tov.R_edge) {
+    rho = 0.;
+    p   = 0.;
+    return;
+  }
+  // Get the lower index for where our point must be located.
+  int idx = static_cast<int>(r/tov.dr);
+  const auto &R = tov.R.d_view;
+  const auto &Ps = tov.P.d_view;
+  // Interpolate to get the pressure
+  p = Interpolate(r, R(idx), R(idx+1), Ps(idx), Ps(idx+1));
+  // FIXME: Assumes ideal gas!
+  //rho = pow(p/tov.kappa, 1.0/tov.gamma);
+  rho = eos.template GetRhoFromP<LocationTag::Device>(p);
+}
+
+template<class TOVEOS>
+KOKKOS_INLINE_FUNCTION
+static void GetPandRhoIso(const tov_pgen& tov, const TOVEOS& eos,
+                          Real r, Real &rho, Real &p) {
+  if (r >= tov.R_edge_iso) {
+    rho = 0.;
+    p   = 0.;
+    return;
+  }
+  // We need to search to find the right index because isotropic coordinates aren't
+  // evenly spaced.
+  int idx = FindIsotropicIndex(tov, r);
+  const auto R_iso = tov.R_iso.d_view;
+  const auto &Ps = tov.P.d_view;
+  p = Interpolate(r, R_iso(idx), R_iso(idx+1), Ps(idx), Ps(idx+1));
+  // FIXME: Assumes ideal gas!
+  //rho = pow(p/tov.kappa, 1.0/tov.gamma);
+  rho = eos.template GetRhoFromP<LocationTag::Device>(p);
+}
+
+template<class TOVEOS>
+KOKKOS_INLINE_FUNCTION
+static Real A1(const tov_pgen& tov, const TOVEOS& eos, Real x1, Real x2, Real x3) {
   Real r = sqrt(SQR(x1) + SQR(x2) + SQR(x3));
   Real p, rho;
   if (!isotropic) {
