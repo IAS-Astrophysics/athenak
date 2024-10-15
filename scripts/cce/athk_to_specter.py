@@ -37,7 +37,7 @@ def parse_cli():
     arg parser
     """
   p = argparse.ArgumentParser(
-      description="convert Athenak CCE dumps to Specter CCE")
+      description="convert Athenak CCE dumps to Spectre CCE")
   p.add_argument("-f_h5", type=str, required=True, help="/path/to/cce/h5/dumps")
   p.add_argument("-d_out", type=str, required=True, help="/path/to/output/dir")
   p.add_argument(
