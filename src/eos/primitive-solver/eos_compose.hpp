@@ -90,7 +90,7 @@ class EOSCompOSE : public EOSPolicyInterface, public LogPolicy {
   /// Calculate the temperature using.
   KOKKOS_INLINE_FUNCTION Real TemperatureFromP(Real n, Real p, Real *Y) const {
     assert (m_initialized);
-    if (n < min_n) {
+    if (n < min_n || p < MinimumPressure(n, Y)) {
       return min_T;
     }
     Real log_p = log2_(p);
