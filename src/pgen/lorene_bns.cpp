@@ -229,10 +229,17 @@ void SetupBNS(ParameterInput *pin, Mesh* pmy_mesh_) {
             egas = 0.0;
           }
 
-          //TODO Set scalars here
-          if ((pmbp->pdyngr->eos_policy == DynGRMHD_EOS::eos_compose) && (pmbp->pmhd->nscalars>=1)){
-            Real Ye = p1Deos->template GetYeFromRho<tov::LocationTag::Host>(host_w0(m,IDN,k,j,i));
-            host_w0(m, IYF, k, j, i) = Ye;
+          // If we're using a tabulated EOS, we need to get the pressure directly from
+          // the cold EOS because Lorene usually returns garbage. We also use this
+          // opportunity to get the electron fraction.
+          if (pmbp->pdyngr->eos_policy == DynGRMHD_EOS::eos_compose) {
+            host_w0(m, IPR, k, j, i) = p1Deos->template
+              GetPFromRho<tov::LocationTag::Host>(host_w0(m,IDN,k,j,i));
+            if (pmbp->pmhd->nscalars>=1) {
+              Real Ye = p1Deos->template
+                GetYeFromRho<tov::LocationTag::Host>(host_w0(m,IDN,k,j,i));
+              host_w0(m, IYF, k, j, i) = Ye;
+            }
           }
 
           // Check for garbage values thrown in by Lorene.
@@ -309,14 +316,14 @@ void SetupBNS(ParameterInput *pin, Mesh* pmy_mesh_) {
     std::cout << "Data copied." << std::endl;
   }
 
-  // compute vector potential over all faces
-  DvceArray4D<Real> a1, a2, a3;
-  Kokkos::realloc(a1, nmb,ncells3,ncells2,ncells1);
-  Kokkos::realloc(a2, nmb,ncells3,ncells2,ncells1);
-  Kokkos::realloc(a3, nmb,ncells3,ncells2,ncells1);
-
-  auto &nghbr = pmbp->pmb->nghbr;
-  auto &mblev = pmbp->pmb->mb_lev;
+  // Convert internal energy to pressure. This is NOT necessary if we use a tabulated
+  // EOS because we pull the energy straight from the cold EOS.
+  // TODO(JMF): This can be refactored to be EOS generic such that we no longer rely on
+  // Lorene's epsilon for any EOS.
+  if (pmbp->pdyngr->eos_policy != DynGRMHD_EOS::eos_compose) {
+    pmbp->pdyngr->ConvertInternalEnergyToPressure(0, (ncells1-1),
+                                                  0, (ncells2-1), 0, (ncells3-1));
+  }
 
   par_for("pgen_vector_potential", DevExeSpace(), 0,nmb-1,ks,ke+1,js,je+1,is,ie+1,
   KOKKOS_LAMBDA(int m, int k, int j, int i) {
