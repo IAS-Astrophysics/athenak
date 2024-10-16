@@ -249,10 +249,17 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
             egas = 0.0;
           }
 
-          //TODO Set scalars here
-          if ((pmbp->pdyngr->eos_policy == DynGRMHD_EOS::eos_compose) && (pmbp->pmhd->nscalars>=1)){
-            Real Ye = p1Deos->template GetYeFromRho<tov::LocationTag::Host>(host_w0(m,IDN,k,j,i));
-            host_w0(m, IYF, k, j, i) = Ye;
+          // If we're using a tabulated EOS, we need to get the pressure directly from
+          // the cold EOS because Lorene usually returns garbage. We also use this
+          // opportunity to get the electron fraction.
+          if (pmbp->pdyngr->eos_policy == DynGRMHD_EOS::eos_compose) {
+            host_w0(m, IPR, k, j, i) = p1Deos->template
+              GetPFromRho<tov::LocationTag::Host>(host_w0(m,IDN,k,j,i));
+            if (pmbp->pmhd->nscalars>=1) {
+              Real Ye = p1Deos->template
+                GetYeFromRho<tov::LocationTag::Host>(host_w0(m,IDN,k,j,i));
+              host_w0(m, IYF, k, j, i) = Ye;
+            }
           }
 
           // Before we store the velocity, we need to make sure it's physical and
@@ -301,11 +308,14 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
 
   std::cout << "Data copied." << std::endl;
 
-  // Convert internal energy to pressure.
-  pmbp->pdyngr->ConvertInternalEnergyToPressure(0, (ncells1-1),
-                                                0, (ncells2-1), 0, (ncells3-1));
-
-  // TODO(JMF): Read in scalars if necessary.
+  // Convert internal energy to pressure. This is NOT necessary if we use a tabulated
+  // EOS because we pull the energy straight from the cold EOS.
+  // TODO(JMF): This can be refactored to be EOS generic such that we no longer rely on
+  // Lorene's epsilon for any EOS.
+  if (pmbp->pdyngr->eos_policy != DynGRMHD_EOS::eos_compose) {
+    pmbp->pdyngr->ConvertInternalEnergyToPressure(0, (ncells1-1),
+                                                  0, (ncells2-1), 0, (ncells3-1));
+  }
 
   // TODO(JMF): Add magnetic fields
   auto &b0 = pmbp->pmhd->b0;
