@@ -79,9 +79,6 @@ void SetupBNS(ParameterInput *pin, Mesh* pmy_mesh_) {
 
   std::string fname = pin->GetString("problem", "initial_data_file");
   Real rho_cut = pin->GetOrAddReal("problem", "rho_cut", 1e-5);
-  Real b_max = pin->GetOrAddReal("problem", "b_max", 1e12) / 8.3519664583273e+19;
-  Real r_0 = pin->GetOrAddReal("problem", "r_0_current", 5.0);
-  Real I_0 = 4*r_0*b_max/(23.0*M_PI);
 
   int ncells1 = indcs.nx1 + 2*(indcs.ng);
   int ncells2 = indcs.nx2 + 2*(indcs.ng);
@@ -221,7 +218,7 @@ void SetupBNS(ParameterInput *pin, Mesh* pmy_mesh_) {
                         bns->u_euler_z[idx] / vel_unit};
           
           // Check for garbage values thrown in Lorene.
-          if (host_w0(m, IDN, k, j, i) <= 0.) {
+          if (host_w0(m, IDN, k, j, i) <= rho_cut) {
             host_w0(m, IDN, k, j, i) = 0.0;
             vu[0] = 0.0;
             vu[1] = 0.0;
