@@ -133,10 +133,11 @@ class PrimitiveSolver {
       // Now we can get an estimate of the temperature, and from that, the pressure and
       // enthalpy.
       Real That = peos->GetTemperatureFromE(nhat, ehat, Y);
-      peos->ApplyTemperatureLimits(That);
+      //peos->ApplyTemperatureLimits(That);
       //ehat = peos->GetEnergy(nhat, That, Y);
       Real Phat = peos->GetPressure(nhat, That, Y);
-      Real hhat = peos->GetEnthalpy(nhat, That, Y);
+      //Real hhat = peos->GetEnthalpy(nhat, That, Y);
+      Real hhat = (ehat + Phat)/(mb*nhat);
 
       // Now we can get two different estimates for nu = h/W.
       Real nu_a = hhat*iWhat;
