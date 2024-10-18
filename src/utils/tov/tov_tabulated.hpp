@@ -12,6 +12,7 @@
 #include "parameter_input.hpp"
 #include "utils/tr_table.hpp"
 #include "tov_utils.hpp"
+#include "eos/primitive-solver/unit_system.hpp"
 
 namespace tov {
 
@@ -48,6 +49,11 @@ class TabulatedEOS {
       std::cout << "TOV EOS table could not be read.\n";
       assert(false);
     }
+
+    // Unit conversions
+    Primitive::UnitSystem unit_geo = Primitive::MakeGeometricSolar();
+    Primitive::UnitSystem unit_nuc = Primitive::MakeNuclear();
+
     // TODO(JMF) Check that table has right fields and dimensions
     auto& table_scalars = table.GetScalars();
     Real mb = table_scalars.at("mn");
@@ -65,7 +71,9 @@ class TabulatedEOS {
     // Read rho
     Real * table_nb = table["nb"];
     for (size_t in = 0; in < m_nn; in++) {
-      m_log_rho.h_view(in) = log(table_nb[in]*mb*ener_to_geo);
+      //m_log_rho.h_view(in) = log(table_nb[in]*mb*ener_to_geo);
+      m_log_rho.h_view(in) = log(table_nb[in]*mb*
+                                 unit_nuc.MassDensityConversion(unit_geo));
     }
     dlrho = m_log_rho.h_view(1)-m_log_rho.h_view(0);
     lrho_min = m_log_rho.h_view(0);
@@ -74,7 +82,8 @@ class TabulatedEOS {
     // Read pressure
     Real * table_Q1 = table["Q1"];
     for (size_t in = 0; in < m_nn; in++) {
-      m_log_p.h_view(in) = log(table_Q1[in]*table_nb[in]*ener_to_geo);
+      m_log_p.h_view(in) = log(table_Q1[in]*table_nb[in]*
+                                unit_nuc.EnergyDensityConversion(unit_geo));
     }
     lP_min = m_log_p.h_view(0);
     lP_max = m_log_p.h_view(m_nn-1);
@@ -82,7 +91,8 @@ class TabulatedEOS {
     // Read energy
     Real * table_Q7 = table["Q7"];
     for (size_t in = 0; in < m_nn; in++) {
-      m_log_e.h_view(in) = log(mb*(table_Q7[in] + 1.)*table_nb[in]*ener_to_geo);
+      m_log_e.h_view(in) = log(mb*(table_Q7[in] + 1.)*table_nb[in]*
+                                    unit_nuc.EnergyDensityConversion(unit_geo));
     }
 
     // Read electron fraction
