@@ -104,7 +104,6 @@ class PrimitiveSolver {
       const Real rbarsq = x*(rsq*x + mu*(x + 1.0)*rbsq);
       //const Real qbar = q - 0.5*bsq - 0.5*musq*xsq*(bsq*rsq - rbsq);
       const Real qbar = q - 0.5*bsq - 0.5*musq*xsq*fma(bsq, rsq, -rbsq);
-      const Real mb = peos->GetBaryonMass();
 
       // Now we can estimate the velocity.
       //const Real v_max = peos->GetMaxVelocity();
@@ -121,6 +120,7 @@ class PrimitiveSolver {
 
       // Now estimate the number density.
       Real rhohat = D*iWhat;
+      const Real mb = peos->GetBaryonMass();
       Real nhat = rhohat/mb;
       peos->ApplyDensityLimits(nhat);
 
@@ -139,20 +139,20 @@ class PrimitiveSolver {
       //Real hhat = peos->GetEnthalpy(nhat, That, Y);
       Real hhat = (ehat + Phat)/(mb*nhat);
 
+      *n = nhat;
+      *T = That;
+      *P = Phat;
+
       // Now we can get two different estimates for nu = h/W.
+      Real nu_b = eoverD + Phat/D;
       Real nu_a = hhat*iWhat;
       //Real ahat = Phat / ehat;
-      Real nu_b = eoverD + Phat/D;
       //Real nu_b = (1.0 + ahat)*eoverD;
       //Real nu_b = (1.0 + ahat)*eoverD;
       Real nuhat = fmax(nu_a, nu_b);
 
       // Finally, we can get an estimate for muhat.
       Real muhat = 1.0/(nuhat + mu*rbarsq);
-
-      *n = nhat;
-      *T = That;
-      *P = Phat;
 
       // FIXME: Debug only!
       /*std::cout << "    D   = " << D << "\n";
@@ -225,7 +225,7 @@ class PrimitiveSolver {
   //  \return information about the solve
   KOKKOS_INLINE_FUNCTION
   SolverResult ConToPrim(Real prim[NPRIM], Real cons[NCONS], Real b[NMAG],
-                         Real g3d[NSPMETRIC], Real g3u[NSPMETRIC]) const;
+                         Real g3d[NSPMETRIC], Real g3u[NSPMETRIC], Real& mu_last) const;
 
   //! \brief Get the conserved variables from the primitive variables.
   //
@@ -365,7 +365,8 @@ Error PrimitiveSolver<EOSPolicy, ErrorPolicy>::CheckDensityValid(Real& mul, Real
 template<typename EOSPolicy, typename ErrorPolicy>
 KOKKOS_INLINE_FUNCTION
 SolverResult PrimitiveSolver<EOSPolicy, ErrorPolicy>::ConToPrim(Real prim[NPRIM],
-      Real cons[NCONS], Real b[NMAG], Real g3d[NSPMETRIC], Real g3u[NSPMETRIC]) const {
+      Real cons[NCONS], Real b[NMAG], Real g3d[NSPMETRIC], Real g3u[NSPMETRIC],
+      Real& mu_last) const {
   SolverResult solver_result{Error::SUCCESS, 0, false, false, false};
 
   // Extract the undensitized conserved variables.
@@ -524,7 +525,13 @@ SolverResult PrimitiveSolver<EOSPolicy, ErrorPolicy>::ConToPrim(Real prim[NPRIM]
 
   // Do the root solve.
   Real n, P, T, mu;
-  bool result = root.FalsePosition(RootFunction, mul, muh, mu, tol,
+  // Try to set an initial guess
+  bool use_guess = false;
+  if (mu_last >= mul && mu_last <= muh) {
+    mu = mu_last;
+    use_guess = true;
+  }
+  bool result = root.FalsePosition(RootFunction, mul, muh, mu, tol, use_guess,
                                    D, q, bsqr, rsqr, rbsqr, Y, &eos, &n, &T, &P);
   // WARNING: the reported number of iterations is not thread-safe and should only be
   // trusted on single-thread benchmarks.
@@ -536,6 +543,7 @@ SolverResult PrimitiveSolver<EOSPolicy, ErrorPolicy>::ConToPrim(Real prim[NPRIM]
   }
 
   // Retrieve the primitive variables.
+  mu_last = mu;
   Real rho = n*eos.GetBaryonMass();
   Real rbmu = rb*mu;
   Real W = D/rho;
