@@ -91,6 +91,21 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage) {
                       + Lg_dd(a,b);
     }
 
+    // *****************************
+    // RHS for lapse (alpha)
+    // *****************************
+
+    // Lie derivative of the lapse
+    Real Lalpha = 0.0;
+    for(int a = 0; a < 3; ++a) {
+      Lalpha += Lx<NGHOST>(a, idx, z4c.beta_u, z4c.alpha, m,a,k,j,i);
+    }
+    // lapse function
+    Real const f = opt.lapse_oplog * opt.lapse_harmonicf
+                 + opt.lapse_harmonic * z4c.alpha(m,k,j,i);
+    rhs.alpha(m,k,j,i) = opt.lapse_advect * Lalpha
+                       - f * z4c.alpha(m,k,j,i) * z4c.vKhat(m,k,j,i);
+
     // Define scratch arrays to be used in the following calculations
 
     // Gamma computed from the metric
@@ -146,9 +161,6 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage) {
     // shift 2nd drvts
     AthenaScratchTensor<Real, TensorSymm::ISYM2, 3, 3> ddbeta_ddu;
 
-    // metric 2nd drvts
-    AthenaScratchTensor<Real, TensorSymm::SYM22, 3, 4> ddg_dddd;
-
     // Lie derivative of Gamma
     AthenaScratchTensor<Real, TensorSymm::NONE, 3, 1> LGam_u;
     // Lie derivative of the shift
@@ -165,8 +177,7 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage) {
     // Scalars
 
     // auxiliary Lie derivatives along the shift vector
-    // Lie derivative of the lapse
-    Real Lalpha = 0.0;
+
     // Lie derivative of chi
     Real Lchi = 0.0;
     // Lie derivative of Khat
@@ -264,16 +275,6 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage) {
       }
     }
 
-    // Tensors
-    for(int c = 0; c < 3; ++c)
-    for(int d = c; d < 3; ++d)
-    for(int a = 0; a < 3; ++a) {
-      ddg_dddd(a,a,c,d) = Dxx<NGHOST>(a, idx, z4c.g_dd, m,c,d,k,j,i);
-      for(int b = a + 1; b < 3; ++b) {
-        ddg_dddd(a,b,c,d) = Dxy<NGHOST>(a, b, idx, z4c.g_dd, m,c,d,k,j,i);
-      }
-    }
-
     // -----------------------------------------------------------------------------------
     // Advective derivatives
     //
@@ -281,7 +282,6 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage) {
     //
     // Scalars
     for(int a = 0; a < 3; ++a) {
-      Lalpha += Lx<NGHOST>(a, idx, z4c.beta_u, z4c.alpha, m,a,k,j,i);
       Lchi   += Lx<NGHOST>(a, idx, z4c.beta_u, z4c.chi,   m,a,k,j,i);
       LKhat  += Lx<NGHOST>(a, idx, z4c.beta_u, z4c.vKhat,  m,a,k,j,i);
       LTheta += Lx<NGHOST>(a, idx, z4c.beta_u, z4c.vTheta, m,a,k,j,i);
@@ -341,6 +341,18 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage) {
       Gamma_u(a) += g_uu(b,c)*Gamma_udd(a,b,c);
     }
 
+    // metric second derivative
+    AthenaScratchTensor<Real, TensorSymm::SYM22, 3, 4> ddg_dddd;
+
+    for(int c = 0; c < 3; ++c)
+    for(int d = c; d < 3; ++d)
+    for(int a = 0; a < 3; ++a) {
+      ddg_dddd(a,a,c,d) = Dxx<NGHOST>(a, idx, z4c.g_dd, m,c,d,k,j,i);
+      for(int b = a + 1; b < 3; ++b) {
+        ddg_dddd(a,b,c,d) = Dxy<NGHOST>(a, b, idx, z4c.g_dd, m,c,d,k,j,i);
+      }
+    }
+
     // -----------------------------------------------------------------------------------
     // Curvature of conformal metric
     //
@@ -395,6 +407,15 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage) {
             2.*dphi_d(c)*dphi_d(d));
       }
     }
+  
+    // -----------------------------------------------------------------------------------
+    // Ricci scalar
+    //
+    for(int a = 0; a < 3; ++a)
+    for(int b = 0; b < 3; ++b) {
+      R += oopsi4 * g_uu(a,b) * (R_dd(a,b) + Rphi_dd(a,b));
+    }
+
 
     // TODO(JMF): Update with Tmunu terms.
     // -----------------------------------------------------------------------------------
@@ -469,13 +490,6 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage) {
       }
     }
 
-    // -----------------------------------------------------------------------------------
-    // Ricci scalar
-    //
-    for(int a = 0; a < 3; ++a)
-    for(int b = 0; b < 3; ++b) {
-      R += oopsi4 * g_uu(a,b) * (R_dd(a,b) + Rphi_dd(a,b));
-    }
 
     // -----------------------------------------------------------------------------------
     // Hamiltonian constraint
@@ -568,11 +582,7 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage) {
                 (oopsi4*tmunu.S_dd(m,a,b,k,j,i) - (1./3.)*S*z4c.g_dd(m,a,b,k,j,i));
       }
     }
-    // lapse function
-    Real const f = opt.lapse_oplog * opt.lapse_harmonicf
-                 + opt.lapse_harmonic * z4c.alpha(m,k,j,i);
-    rhs.alpha(m,k,j,i) = opt.lapse_advect * Lalpha
-                       - f * z4c.alpha(m,k,j,i) * z4c.vKhat(m,k,j,i);
+
 
     // shift vector
     for(int a = 0; a < 3; ++a) {
