@@ -106,6 +106,27 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage) {
     rhs.alpha(m,k,j,i) = opt.lapse_advect * Lalpha
                        - f * z4c.alpha(m,k,j,i) * z4c.vKhat(m,k,j,i);
 
+
+    // *****************************
+    // RHS for chi
+    // *****************************
+    // Lie derivative of chi
+    Real Lchi = 0.0;
+    for(int a = 0; a < 3; ++a) {
+      Lchi   += Lx<NGHOST>(a, idx, z4c.beta_u, z4c.chi,   m,a,k,j,i);
+    }
+    // bounded version of chi
+    Real chi_guarded = 0.0;
+    chi_guarded = (z4c.chi(m,k,j,i)>opt.chi_div_floor)
+                    ? z4c.chi(m,k,j,i) : opt.chi_div_floor;
+    // Finalize Lchi
+    Lchi += (1./6.) * opt.chi_psi_power * chi_guarded * dbeta;
+    // trace of extrinsic curvature
+
+    // Get K from Khat
+    Real K = z4c.vKhat(m,k,j,i) + 2.*z4c.vTheta(m,k,j,i);
+    rhs.chi(m,k,j,i) = Lchi - (1./6.) * opt.chi_psi_power *
+      chi_guarded * z4c.alpha(m,k,j,i) * K;
     // Define scratch arrays to be used in the following calculations
 
     // Gamma computed from the metric
@@ -178,8 +199,7 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage) {
 
     // auxiliary Lie derivatives along the shift vector
 
-    // Lie derivative of chi
-    Real Lchi = 0.0;
+
     // Lie derivative of Khat
     Real LKhat = 0.0;
     // Lie derivative of Theta
@@ -187,8 +207,7 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage) {
 
     // determinant of three metric
     Real detg = 0.0;
-    // bounded version of chi
-    Real chi_guarded = 0.0;
+
     // 1/psi4
     Real oopsi4 = 0.0;
     // trace of A
@@ -197,8 +216,7 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage) {
     Real R = 0.0;
     // tilde H
     Real Ht = 0.0;
-    // trace of extrinsic curvature
-    Real K = 0.0;
+
     // Trace of S_ik
     Real S = 0.0;
     // Trace of Ddalpha_dd
@@ -282,7 +300,6 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage) {
     //
     // Scalars
     for(int a = 0; a < 3; ++a) {
-      Lchi   += Lx<NGHOST>(a, idx, z4c.beta_u, z4c.chi,   m,a,k,j,i);
       LKhat  += Lx<NGHOST>(a, idx, z4c.beta_u, z4c.vKhat,  m,a,k,j,i);
       LTheta += Lx<NGHOST>(a, idx, z4c.beta_u, z4c.vTheta, m,a,k,j,i);
     }
@@ -303,10 +320,6 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage) {
       LA_dd(a,b) += Lx<NGHOST>(c, idx, z4c.beta_u, z4c.vA_dd, m,c,a,b,k,j,i);
     }
 
-    // -----------------------------------------------------------------------------------
-    // Get K from Khat
-    //
-    K = z4c.vKhat(m,k,j,i) + 2.*z4c.vTheta(m,k,j,i);
 
     // -----------------------------------------------------------------------------------
     // Inverse metric
@@ -380,8 +393,6 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage) {
     // -----------------------------------------------------------------------------------
     // Derivatives of conformal factor phi
     //
-    chi_guarded = (z4c.chi(m,k,j,i)>opt.chi_div_floor)
-                    ? z4c.chi(m,k,j,i) : opt.chi_div_floor;
     oopsi4 = pow(chi_guarded, -4./opt.chi_psi_power);
     for(int a = 0; a < 3; ++a) {
       dphi_d(a) = dchi_d(a)/(chi_guarded * opt.chi_psi_power);
@@ -505,9 +516,6 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage) {
       ddbeta_d(a) += (1./3.) * ddbeta_ddu(a,b,b);
     }
 
-    // Finalize Lchi
-    Lchi += (1./6.) * opt.chi_psi_power * chi_guarded * dbeta;
-
     // Finalize LGam_u (note that this is not a real Lie derivative)
     for(int a = 0; a < 3; ++a) {
       LGam_u(a) += (2./3.) * Gamma_u(a) * dbeta;
@@ -541,8 +549,7 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage) {
     if(!is_vacuum) {
       rhs.vKhat(m,k,j,i) += 4.*M_PI * z4c.alpha(m,k,j,i) * (S + tmunu.E(m,k,j,i));
     }
-    rhs.chi(m,k,j,i) = Lchi - (1./6.) * opt.chi_psi_power *
-      chi_guarded * z4c.alpha(m,k,j,i) * K;
+
     rhs.vTheta(m,k,j,i) = LTheta + z4c.alpha(m,k,j,i) * (
         0.5*Ht - (2. + opt.damp_kappa2) * opt.damp_kappa1 * z4c.vTheta(m,k,j,i));
     // Matter term
