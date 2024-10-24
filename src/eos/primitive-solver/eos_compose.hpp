@@ -308,8 +308,6 @@ class EOSCompOSE : public EOSPolicyInterface, public LogPolicy {
     int ihi = m_nt-1;
     Real flo = f(ilo);
     Real fhi = f(ihi);
-    Real fmin = flo;
-    Real fmax = fhi;
     while (flo*fhi>0) {
       if (ilo == ihi - 1) {
         break;
@@ -327,22 +325,6 @@ class EOSCompOSE : public EOSPolicyInterface, public LogPolicy {
       }
     }
     
-    /* DEBUG
-    if (!(flo*fhi <= 0)) {
-
-      Real flo_ = f(0);
-      Real fhi_ = f(m_nt-1);
-
-      std::cout<<"iv: "<<iv<<std::endl;
-      std::cout<<"var: "<<var<<std::endl;
-      std::cout<<"n: "<<n<<std::endl;
-      std::cout<<"Yq: "<<Yq<<std::endl;
-      std::cout<<"flo: "<<flo<<std::endl;
-      std::cout<<"fhi: "<<fhi<<std::endl;
-      std::cout<<"varlo: "<<var - flo<<std::endl;
-      std::cout<<"varhi: "<<var - fhi<<std::endl;
-    }
-    */
     assert(flo*fhi <= 0);
     while (ihi - ilo > 1) {
       int ip = ilo + (ihi - ilo)/2;
