@@ -523,7 +523,7 @@ class AthenaScratchTensor<T, sym, ndim, 3> {
     if constexpr (sym == TensorSymm::NONE) {
       return data_[c + ndim*(b + ndim*a)];
     } else if (sym == TensorSymm::SYM2) {
-      constexpr int ndof2_ = TensorDOF<sym, ndim, 2>;
+      constexpr int ndof2_ = TensorDOF<TensorSymm::SYM2, ndim, 2>;
       if (c < b) {
         return data_[c*(2*ndim - c + 1)/2 + b - c + ndof2_*a];
       } else {
@@ -543,7 +543,7 @@ class AthenaScratchTensor<T, sym, ndim, 3> {
     if constexpr (sym == TensorSymm::NONE) {
       return data_[c + ndim*(b + ndim*a)];
     } else if (sym == TensorSymm::SYM2) {
-      constexpr int ndof2_ = TensorDOF<sym, ndim, 2>;
+      constexpr int ndof2_ = TensorDOF<TensorSymm::SYM2, ndim, 2>;
       if (c < b) {
         return data_[c*(2*ndim - c + 1)/2 + b - c + ndof2_*a];
       } else {
@@ -621,41 +621,41 @@ class AthenaScratchTensor<T, sym, ndim, 4> {
   (AthenaScratchTensor<T, sym, ndim, 4> const &) = default;
 
   KOKKOS_INLINE_FUNCTION
-  Real operator()(int a, int b,
-                            int c, int d) const {
+  Real operator()(int a, int b, int c, int d) const {
     if constexpr (sym == TensorSymm::NONE) {
       return data_[ndim * ndim * ndim * a + ndim * ndim * b + ndim * c + d];
     } else if constexpr (sym == TensorSymm::SYM22) {
+      constexpr int ndof2_ = TensorDOF<TensorSymm::SYM2, ndim, 2>;
       if (a < b) {
         Kokkos::kokkos_swap(a, b);
       }
       if (c < d) {
         Kokkos::kokkos_swap(c, d);
       }
-      return data_[(b*( 2*ndim - b +1)/2 + a - b)*(ndim + 1)*ndim/2 + d*( 2*ndim - d +1)/2 + c - d];
+      return data_[(b*( 2*ndim - b +1)/2 + a - b)*ndof2_ + d*( 2*ndim - d +1)/2 + c - d];
     }
   }
 
 
   KOKKOS_INLINE_FUNCTION
-  Real & operator()(int a, int b,
-                            int c, int d) {
+  Real & operator()(int a, int b, int c, int d) {
     if constexpr (sym == TensorSymm::NONE) {
       return data_[ndim * ndim * ndim * a + ndim * ndim * b + ndim * c + d];
     } else if constexpr (sym == TensorSymm::SYM22) {
+      constexpr int ndof2_ = TensorDOF<TensorSymm::SYM2, ndim, 2>;
       if (a < b) {
         Kokkos::kokkos_swap(a, b);
       }
       if (c < d) {
         Kokkos::kokkos_swap(c, d);
       }
-      return data_[(b*( 2*ndim - b +1)/2 + a - b)*(ndim + 1)*ndim/2 + d*( 2*ndim - d +1)/2 + c - d];
+      return data_[(b*( 2*ndim - b +1)/2 + a - b)*ndof2_ + d*( 2*ndim - d +1)/2 + c - d];
     }
   }
 
   KOKKOS_INLINE_FUNCTION
   void ZeroClear() {
-    for (int i = 0; i < ndof_; ++i) {
+    for (int i = 0; i < TensorDOF<sym,ndim,4>; ++i) {
       data_[i] = 0.0;
     }
   }
