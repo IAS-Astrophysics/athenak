@@ -14,7 +14,9 @@ namespace tov {
 KOKKOS_INLINE_FUNCTION
 static Real Interpolate(Real x,
                         const Real x1, const Real x2, const Real y1, const Real y2) {
-  return ((y2 - y1)*x + (y1*x2 - y2*x1))/(x2 - x1);
+  //return ((y2 - y1)*x + (y1*x2 - y2*x1))/(x2 - x1);
+  Real t = (x - x1)/(x2 - x1);
+  return y1*(1. - t) + y2*t;
 }
 
 enum class LocationTag {Host, Device};
