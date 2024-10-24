@@ -320,44 +320,165 @@ class AthenaScratchTensor<T, sym, ndim, 1> {
 //----------------------------------------------------------------------------------------
 // rank 2 AthenaScratchTensor
 // This is a 0D AthenaScratchTensor
-template<typename T, TensorSymm sym, int ndim>
+/*template<typename T, TensorSymm sym, int ndim>
 class AthenaScratchTensor<T, sym, ndim, 2> {
  public:
   KOKKOS_INLINE_FUNCTION
-  AthenaScratchTensor();
-  // the default destructor/copy operators are sufficient
-  ~AthenaScratchTensor() = default;
-  AthenaScratchTensor(AthenaScratchTensor<T, sym, ndim, 2> const &) = default;
-  AthenaScratchTensor<T, sym, ndim, 2> & operator=
-  (AthenaScratchTensor<T, sym, ndim, 2> const &) = default;
+  AthenaScratchTensor() = delete;
+};
+
+template<typename T, int ndim>
+class AthenaScratchTensor<T, TensorSymm::NONE, ndim, 2> {
+ public:
   KOKKOS_INLINE_FUNCTION
-  int idxmap(int const a, int const b) const {
-    return idxmap_[a][b];
-  }
+  AthenaScratchTensor() = default;
+
   KOKKOS_INLINE_FUNCTION
   Real operator()(int const a, int const b) const {
-    return data_[idxmap_[a][b]];
+    return data_[b + ndim*a];
   }
+
   KOKKOS_INLINE_FUNCTION
-  Real & operator()(int const a, int const b) {
-    return data_[idxmap_[a][b]];
+  Real& operator()(int const a, int const b) {
+    return data_[b + ndim*a];
   }
+
   KOKKOS_INLINE_FUNCTION
   void ZeroClear() {
     for (int i = 0; i < ndim*ndim; ++i) {
       data_[i] = 0.0;
     }
   }
+ 
+ private:
+  Real data_[ndim*ndim];
+};
+
+template<typename T, int ndim>
+class AthenaScratchTensor<T, TensorSymm::SYM2, ndim, 2> {
+ public:
+  KOKKOS_INLINE_FUNCTION
+  AthenaScratchTensor() = default;
+
+  KOKKOS_INLINE_FUNCTION
+  Real operator()(int const a, int const b) const {
+    return data_[b * (2*ndim - b + 1)/2 + a - b];
+  }
+
+  KOKKOS_INLINE_FUNCTION
+  Real& operator()(int const a, int const b) {
+    return data_[b * (2*ndim - b + 1)/2 + a - b];
+  }
+
+  KOKKOS_INLINE_FUNCTION
+  void ZeroClear() {
+    for (int i = 0; i < ndim*(ndim + 1)/2; i++) {
+      data_[i] = 0.0;
+    }
+  }
 
  private:
-  Real data_[9];
-  int idxmap_[3][3];
-  int ndof_;
+  Real data_[ndim*(ndim+1)/2];
+};*/
+
+//----------------------------------------------------------------------------------------
+// Tensor degrees of freedom, base case assumes zero
+template<TensorSymm sym, int ndim, int rank>
+constexpr int TensorDOF = -1;
+
+//----------------------------------------------------------------------------------------
+// Rank 2 tensor degrees of freedom
+template<int ndim>
+constexpr int TensorDOF<TensorSymm::NONE, ndim, 2> = ndim*ndim;
+
+template<int ndim>
+constexpr int TensorDOF<TensorSymm::SYM2, ndim, 2> = ndim*(ndim+1)/2;
+
+//----------------------------------------------------------------------------------------
+// Rank 3 tensor degrees of freedom
+template<int ndim>
+constexpr int TensorDOF<TensorSymm::NONE, ndim, 3> = ndim*ndim*ndim;
+
+template<int ndim>
+constexpr int TensorDOF<TensorSymm::SYM2, ndim, 3> = ndim*ndim*(ndim+1)/2;
+
+template<int ndim>
+constexpr int TensorDOF<TensorSymm::ISYM2, ndim, 3> = ndim*ndim*(ndim+1)/2;
+
+//----------------------------------------------------------------------------------------
+// Rank 4 tensor degrees of freedom
+template<int ndim>
+constexpr int TensorDOF<TensorSymm::NONE, ndim, 4> = ndim*ndim*ndim*ndim;
+
+template<int ndim>
+constexpr int TensorDOF<TensorSymm::SYM2, ndim, 4> = ndim*ndim*ndim*(ndim+1)/2;
+
+template<int ndim>
+constexpr int TensorDOF<TensorSymm::ISYM2, ndim, 4> = ndim*ndim*ndim*(ndim+1)/2;
+
+template<int ndim>
+constexpr int TensorDOF<TensorSymm::SYM22, ndim, 4> = ndim*ndim*(ndim+1)*(ndim+1)/4;
+
+
+//----------------------------------------------------------------------------------------
+// rank 2 AthenaScratchTensor
+// This is a 0D AthenaScratchTensor
+template<typename T, TensorSymm sym, int ndim>
+class AthenaScratchTensor<T, sym, ndim, 2> {
+ public:
+  KOKKOS_INLINE_FUNCTION
+  AthenaScratchTensor() = default;
+  // the default destructor/copy operators are sufficient
+  ~AthenaScratchTensor() = default;
+  AthenaScratchTensor(AthenaScratchTensor<T, sym, ndim, 2> const &) = default;
+  AthenaScratchTensor<T, sym, ndim, 2> & operator=
+  (AthenaScratchTensor<T, sym, ndim, 2> const &) = default;
+  /*KOKKOS_INLINE_FUNCTION
+  int idxmap(int const a, int const b) const {
+    return idxmap_[a][b];
+  }*/
+  KOKKOS_INLINE_FUNCTION
+  Real operator()(int const a, int const b) const {
+    if constexpr (sym == TensorSymm::NONE) {
+      return data_[b + ndim*a];
+    } else if (sym == TensorSymm::SYM2) {
+      if (b < a) {
+        return data_[b*(2*ndim - b + 1)/2+a-b];
+      } else {
+        return data_[a*(2*ndim - a + 1)/2+b-a];
+      }
+    }
+    //return data_[idxmap_[a][b]];
+  }
+  KOKKOS_INLINE_FUNCTION
+  Real & operator()(int const a, int const b) {
+    if constexpr (sym == TensorSymm::NONE) {
+      return data_[b + ndim*a];
+    } else if (sym == TensorSymm::SYM2) {
+      if (b < a) {
+        return data_[b*(2*ndim - b + 1)/2+a-b];
+      } else {
+        return data_[a*(2*ndim - a + 1)/2+b-a];
+      }
+    }
+    //return data_[idxmap_[a][b]];
+  }
+  KOKKOS_INLINE_FUNCTION
+  void ZeroClear() {
+    for (int i = 0; i < TensorDOF<sym, ndim, 2>; ++i) {
+      data_[i] = 0.0;
+    }
+  }
+
+ private:
+  Real data_[TensorDOF<sym, ndim, 2>];
+  //int idxmap_[3][3];
+  //int ndof_;
 };
 
 //----------------------------------------------------------------------------------------
 // Implementation details
-template<typename T, TensorSymm sym, int ndim>
+/*template<typename T, TensorSymm sym, int ndim>
 KOKKOS_INLINE_FUNCTION
 AthenaScratchTensor<T, sym, ndim, 2>::AthenaScratchTensor() {
 switch(sym) {
@@ -378,7 +499,7 @@ switch(sym) {
       }
       break;
   }
-}
+}*/
 
 //----------------------------------------------------------------------------------------
 // rank 3 AthenaScratchTensor
@@ -387,40 +508,72 @@ template<typename T, TensorSymm sym, int ndim>
 class AthenaScratchTensor<T, sym, ndim, 3> {
  public:
   KOKKOS_INLINE_FUNCTION
-  AthenaScratchTensor();
+  AthenaScratchTensor() = default;
   // the default destructor/copy operators are sufficient
   ~AthenaScratchTensor() = default;
   AthenaScratchTensor(AthenaScratchTensor<T, sym, ndim, 3> const &) = default;
   AthenaScratchTensor<T, sym, ndim, 3> & operator=
   (AthenaScratchTensor<T, sym, ndim, 3> const &) = default;
-  KOKKOS_INLINE_FUNCTION
+  /*KOKKOS_INLINE_FUNCTION
   int idxmap(int const a, int const b, int const c) const {
     return idxmap_[a][b][c];
-  }
+  }*/
   KOKKOS_INLINE_FUNCTION
   Real operator()(int const a, int const b, int const c) const {
-    return data_[idxmap_[a][b][c]];
+    if constexpr (sym == TensorSymm::NONE) {
+      return data_[c + ndim*(b + ndim*a)];
+    } else if (sym == TensorSymm::SYM2) {
+      constexpr int ndof2_ = TensorDOF<sym, ndim, 2>;
+      if (c < b) {
+        return data_[c*(2*ndim - c + 1)/2 + b - c + ndof2_*a];
+      } else {
+        return data_[b*(2*ndim - b + 1)/2 + c - b + ndof2_*a];
+      }
+    } else if (sym == TensorSymm::ISYM2) {
+      if (b < a) {
+        return data_[c + ndim*(b*(2*ndim - b + 1)/2 + a - b)];
+      } else {
+        return data_[c + ndim*(a*(2*ndim - a + 1)/2 + b - a)];
+      }
+    }
+    //return data_[idxmap_[a][b][c]];
   }
   KOKKOS_INLINE_FUNCTION
   Real & operator()(int const a, int const b, int const c) {
-    return data_[idxmap_[a][b][c]];
+    if constexpr (sym == TensorSymm::NONE) {
+      return data_[c + ndim*(b + ndim*a)];
+    } else if (sym == TensorSymm::SYM2) {
+      constexpr int ndof2_ = TensorDOF<sym, ndim, 2>;
+      if (c < b) {
+        return data_[c*(2*ndim - c + 1)/2 + b - c + ndof2_*a];
+      } else {
+        return data_[b*(2*ndim - b + 1)/2 + c - b + ndof2_*a];
+      }
+    } else if (sym == TensorSymm::ISYM2) {
+      if (b < a) {
+        return data_[c + ndim*(b*(2*ndim - b + 1)/2 + a - b)];
+      } else {
+        return data_[c + ndim*(a*(2*ndim - a + 1)/2 + b - a)];
+      }
+    }
+    //return data_[idxmap_[a][b][c]];
   }
   KOKKOS_INLINE_FUNCTION
   void ZeroClear() {
-    for (int i = 0; i < ndim*ndim*ndim; ++i) {
+    for (int i = 0; i < TensorDOF<sym,ndim,3>; ++i) {
       data_[i] = 0.0;
     }
   }
 
  private:
-  Real data_[27];
-  int idxmap_[3][3][3];
-  int ndof_;
+  Real data_[TensorDOF<sym,ndim,3>];
+  //int idxmap_[3][3][3];
+  //int ndof_;
 };
 
 //----------------------------------------------------------------------------------------
 // Implementation details
-template<typename T, TensorSymm sym, int ndim>
+/*template<typename T, TensorSymm sym, int ndim>
 KOKKOS_INLINE_FUNCTION
 AthenaScratchTensor<T, sym, ndim, 3>::AthenaScratchTensor() {
   switch(sym) {
@@ -451,7 +604,7 @@ AthenaScratchTensor<T, sym, ndim, 3>::AthenaScratchTensor() {
       }
       break;
   }
-}
+}*/
 
 //----------------------------------------------------------------------------------------
 // rank 4 AthenaScratchTensor
@@ -482,13 +635,13 @@ class AthenaScratchTensor<T, sym, ndim, 4> {
   }
   KOKKOS_INLINE_FUNCTION
   void ZeroClear() {
-    for (int i = 0; i < ndim*ndim*ndim*ndim; ++i) {
+    for (int i = 0; i < ndof_; ++i) {
       data_[i] = 0.0;
     }
   }
 
  private:
-  Real data_[81];
+  Real data_[TensorDOF<sym,ndim,4>];
   int idxmap_[3][3][3][3];
   int ndof_;
 };
