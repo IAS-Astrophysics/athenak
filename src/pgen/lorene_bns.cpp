@@ -22,6 +22,7 @@
 #include "parameter_input.hpp"
 #include "mesh/mesh.hpp"
 #include "coordinates/adm.hpp"
+#include "z4c/z4c_amr.hpp"
 #include "z4c/z4c.hpp"
 #include "z4c/z4c_amr.hpp"
 #include "coordinates/coordinates.hpp"
