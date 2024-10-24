@@ -175,118 +175,16 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage) {
       }
     }
 
-    // *****************************
-    // RHS for vGam_u
-    // *****************************
-    // inverse of A
-    AthenaScratchTensor<Real, TensorSymm::SYM2, 3, 2> A_uu;
-    for (int a = 0; a < 3; ++a)
-    for (int b = a; b < 3; ++b) {
-      A_uu(a,b) = 0.0;
-    }
-    for(int a = 0; a < 3; ++a)
-    for(int b = a; b < 3; ++b)
-    for(int c = 0; c < 3; ++c)
-    for(int d = 0; d < 3; ++d) {
-      A_uu(a,b) += g_uu(a,c) * g_uu(b,d) * z4c.vA_dd(m,c,d,k,j,i);
-    }
-
-    // Covariant derivative of A
-    AthenaScratchTensor<Real, TensorSymm::NONE, 3, 1> DA_u;
-    // Khat 1st drvts
-    AthenaScratchTensor<Real, TensorSymm::NONE, 3, 1> dKhat_d;
-    // Theta 1st drvts
-    AthenaScratchTensor<Real, TensorSymm::NONE, 3, 1> dTheta_d;
-
-    for(int a = 0; a < 3; ++a) {
-      dKhat_d (a) = Dx<NGHOST>(a, idx, z4c.vKhat,  m,k,j,i);
-      dTheta_d(a) = Dx<NGHOST>(a, idx, z4c.vTheta, m,k,j,i);
-    }
-    for (int a = 0; a < 3; ++a) {
-      DA_u(a) = 0.0;
-    }
-
-
-    // Christoffel symbols of 1st kind
-    AthenaScratchTensor<Real, TensorSymm::SYM2, 3, 3> Gamma_ddd;
-    // Christoffel symbols of 2nd kind
-    AthenaScratchTensor<Real, TensorSymm::SYM2, 3, 3> Gamma_udd;
-    // metric 1st drvts
-    AthenaScratchTensor<Real, TensorSymm::SYM2,  3, 3> dg_ddd;
-
-    // Tensors
-    for(int a = 0; a < 3; ++a)
-    for(int b = a; b < 3; ++b)
-    for(int c = 0; c < 3; ++c) {
-      dg_ddd(c,a,b) = Dx<NGHOST>(c, idx, z4c.g_dd, m,a,b,k,j,i);
-    }
-
-    for(int c = 0; c < 3; ++c)
-    for(int a = 0; a < 3; ++a)
-    for(int b = a; b < 3; ++b) {
-      Gamma_ddd(c,a,b) = 0.5*(dg_ddd(a,b,c) + dg_ddd(b,a,c) - dg_ddd(c,a,b));
-    }
-    for(int c = 0; c < 3; ++c)
-    for(int a = 0; a < 3; ++a)
-    for(int b = a; b < 3; ++b) {
-      Gamma_udd(c,a,b) = 0.0;
-      for(int d = 0; d < 3; ++d) {
-        Gamma_udd(c,a,b) += g_uu(c,d)*Gamma_ddd(d,a,b);
-      }
-    }
-    // TODO(JMF): dchi_d/chi_guarded is opt.chi_psi_power * dphi_d.
-    for(int a = 0; a < 3; ++a) {
-      for(int b = 0; b < 3; ++b) {
-          DA_u(a) -= (3./2.) * A_uu(a,b) * dchi_d(b) / chi_guarded;
-          DA_u(a) -= (1./3.) * g_uu(a,b) * (2.*dKhat_d(b) + dTheta_d(b));
-      }
-      for(int b = 0; b < 3; ++b)
-      for(int c = 0; c < 3; ++c) {
-        DA_u(a) += Gamma_udd(a,b,c) * A_uu(b,c);
-      }
-    }
-
-    // Lie derivative of Gamma
-    AthenaScratchTensor<Real, TensorSymm::NONE, 3, 1> LGam_u;
-
-    for (int a = 0; a < 3; ++a) {
-      LGam_u(a) = 0.0;
-    }
-    for(int a = 0; a < 3; ++a)
-    for(int b = 0; b < 3; ++b) {
-      LGam_u(b)  += Lx<NGHOST>(a, idx, z4c.beta_u, z4c.vGam_u,  m,a,b,k,j,i);
-    }
-
-    // Finalize LGam_u (note that this is not a real Lie derivative)
-    for(int a = 0; a < 3; ++a) {
-      LGam_u(a) += (2./3.) * Gamma_u(a) * dbeta;
-      for(int b = 0; b < 3; ++b) {
-        LGam_u(a) += g_uu(a,b) * ddbeta_d(b) - Gamma_u(b) * dbeta_du(b,a);
-        for(int c = 0; c < 3; ++c) {
-          LGam_u(a) += g_uu(b,c) * ddbeta_ddu(b,c,a);
-        }
-      }
-    }
-
-    for(int a = 0; a < 3; ++a) {
-      rhs.vGam_u(m,a,k,j,i) = 2.*z4c.alpha(m,k,j,i)*DA_u(a) + LGam_u(a);
-      rhs.vGam_u(m,a,k,j,i) -= 2.*z4c.alpha(m,k,j,i) * opt.damp_kappa1 *
-          (z4c.vGam_u(m,a,k,j,i) - Gamma_u(a));
-      for(int b = 0; b < 3; ++b) {
-        rhs.vGam_u(m,a,k,j,i) -= 2. * A_uu(a,b) * dalpha_d(b);
-        // Matter term
-        if(!is_vacuum) {
-          rhs.vGam_u(m,a,k,j,i) -= 16.*M_PI * z4c.alpha(m,k,j,i)
-                              * g_uu(a,b) * tmunu.S_d(m,b,k,j,i);
-        }
-      }
-    }
 
     // Define scratch arrays to be used in the following calculations
 
     // Gamma computed from the metric
     AthenaScratchTensor<Real, TensorSymm::NONE, 3, 1> Gamma_u;
+    // Covariant derivative of A
+    AthenaScratchTensor<Real, TensorSymm::NONE, 3, 1> DA_u;
 
+    // inverse of A
+    AthenaScratchTensor<Real, TensorSymm::SYM2, 3, 2> A_uu;
     // g^cd A_ac A_db
     AthenaScratchTensor<Real, TensorSymm::SYM2, 3, 2> AA_dd;
     // Ricci tensor
@@ -298,7 +196,10 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage) {
     // 2nd differential of phi
     AthenaScratchTensor<Real, TensorSymm::SYM2, 3, 2> Ddphi_dd;
 
-
+    // Christoffel symbols of 1st kind
+    AthenaScratchTensor<Real, TensorSymm::SYM2, 3, 3> Gamma_ddd;
+    // Christoffel symbols of 2nd kind
+    AthenaScratchTensor<Real, TensorSymm::SYM2, 3, 3> Gamma_udd;
 
     // auxiliary derivatives
 
@@ -307,7 +208,10 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage) {
 
     // phi 1st drvts
     AthenaScratchTensor<Real, TensorSymm::NONE, 3, 1> dphi_d;
-
+    // Khat 1st drvts
+    AthenaScratchTensor<Real, TensorSymm::NONE, 3, 1> dKhat_d;
+    // Theta 1st drvts
+    AthenaScratchTensor<Real, TensorSymm::NONE, 3, 1> dTheta_d;
 
     // lapse 2nd drvts
     AthenaScratchTensor<Real, TensorSymm::SYM2, 3, 2> ddalpha_dd;
@@ -317,10 +221,13 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage) {
     // Gamma 1st drvts
     AthenaScratchTensor<Real, TensorSymm::NONE, 3, 2> dGam_du;
 
-
+    // metric 1st drvts
+    AthenaScratchTensor<Real, TensorSymm::SYM2,  3, 3> dg_ddd;
     // shift 2nd drvts
     AthenaScratchTensor<Real, TensorSymm::ISYM2, 3, 3> ddbeta_ddu;
 
+    // Lie derivative of Gamma
+    AthenaScratchTensor<Real, TensorSymm::NONE, 3, 1> LGam_u;
 
 
 
@@ -359,7 +266,9 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage) {
     //
     // Vectors
     for (int a = 0; a < 3; ++a) {
+      LGam_u(a) = 0.0;
       Gamma_u(a) = 0.0;
+      DA_u(a) = 0.0;
       ddbeta_d(a) = 0.0;
     }
 
@@ -370,18 +279,32 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage) {
       LA_dd(a,b) = 0.0;
       AA_dd(a,b) = 0.0;
       R_dd(a,b) = 0.0;
+      A_uu(a,b) = 0.0;
+      for (int c = 0; c < 3; ++c) {
+          Gamma_udd(c,a,b) = 0.0;
+      }
     }
 
     // -----------------------------------------------------------------------------------
     // 1st derivatives
     //
     // Scalars
-
+    for(int a = 0; a < 3; ++a) {
+      dKhat_d (a) = Dx<NGHOST>(a, idx, z4c.vKhat,  m,k,j,i);
+      dTheta_d(a) = Dx<NGHOST>(a, idx, z4c.vTheta, m,k,j,i);
+    }
 
     // Vectors
     for(int a = 0; a < 3; ++a)
     for(int b = 0; b < 3; ++b) {
       dGam_du(b,a) = Dx<NGHOST>(b, idx, z4c.vGam_u,  m,a,k,j,i);
+    }
+
+    // Tensors
+    for(int a = 0; a < 3; ++a)
+    for(int b = a; b < 3; ++b)
+    for(int c = 0; c < 3; ++c) {
+      dg_ddd(c,a,b) = Dx<NGHOST>(c, idx, z4c.g_dd, m,a,b,k,j,i);
     }
 
     // -----------------------------------------------------------------------------------
@@ -419,6 +342,13 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage) {
     }
 
     //
+    // Vectors
+    for(int a = 0; a < 3; ++a)
+    for(int b = 0; b < 3; ++b) {
+      LGam_u(b)  += Lx<NGHOST>(a, idx, z4c.beta_u, z4c.vGam_u,  m,a,b,k,j,i);
+    }
+
+    //
     // Tensors
     for(int a = 0; a < 3; ++a)
     for(int b = a; b < 3; ++b)
@@ -429,7 +359,17 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage) {
     // -----------------------------------------------------------------------------------
     // Christoffel symbols
 
-
+    for(int c = 0; c < 3; ++c)
+    for(int a = 0; a < 3; ++a)
+    for(int b = a; b < 3; ++b) {
+      Gamma_ddd(c,a,b) = 0.5*(dg_ddd(a,b,c) + dg_ddd(b,a,c) - dg_ddd(c,a,b));
+    }
+    for(int c = 0; c < 3; ++c)
+    for(int a = 0; a < 3; ++a)
+    for(int b = a; b < 3; ++b)
+    for(int d = 0; d < 3; ++d) {
+      Gamma_udd(c,a,b) += g_uu(c,d)*Gamma_ddd(d,a,b);
+    }
     // Gamma's computed from the conformal metric (not evolved)
     for(int a = 0; a < 3; ++a)
     for(int b = 0; b < 3; ++b)
@@ -566,7 +506,23 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage) {
     for(int b = 0; b < 3; ++b) {
       AA += g_uu(a,b) * AA_dd(a,b);
     }
-
+    for(int a = 0; a < 3; ++a)
+    for(int b = a; b < 3; ++b)
+    for(int c = 0; c < 3; ++c)
+    for(int d = 0; d < 3; ++d) {
+      A_uu(a,b) += g_uu(a,c) * g_uu(b,d) * z4c.vA_dd(m,c,d,k,j,i);
+    }
+    // TODO(JMF): dchi_d/chi_guarded is opt.chi_psi_power * dphi_d.
+    for(int a = 0; a < 3; ++a) {
+      for(int b = 0; b < 3; ++b) {
+          DA_u(a) -= (3./2.) * A_uu(a,b) * dchi_d(b) / chi_guarded;
+          DA_u(a) -= (1./3.) * g_uu(a,b) * (2.*dKhat_d(b) + dTheta_d(b));
+      }
+      for(int b = 0; b < 3; ++b)
+      for(int c = 0; c < 3; ++c) {
+        DA_u(a) += Gamma_udd(a,b,c) * A_uu(b,c);
+      }
+    }
 
 
     // -----------------------------------------------------------------------------------
@@ -581,6 +537,17 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage) {
     for(int a = 0; a < 3; ++a)
     for(int b = 0; b < 3; ++b) {
       ddbeta_d(a) += (1./3.) * ddbeta_ddu(a,b,b);
+    }
+
+    // Finalize LGam_u (note that this is not a real Lie derivative)
+    for(int a = 0; a < 3; ++a) {
+      LGam_u(a) += (2./3.) * Gamma_u(a) * dbeta;
+      for(int b = 0; b < 3; ++b) {
+        LGam_u(a) += g_uu(a,b) * ddbeta_d(b) - Gamma_u(b) * dbeta_du(b,a);
+        for(int c = 0; c < 3; ++c) {
+          LGam_u(a) += g_uu(b,c) * ddbeta_ddu(b,c,a);
+        }
+      }
     }
 
     // Finalize LA_dd
@@ -614,6 +581,20 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage) {
     }
     // If BSSN is enabled, theta is disabled.
     rhs.vTheta(m,k,j,i) *= opt.use_z4c;
+    // Gamma's
+    for(int a = 0; a < 3; ++a) {
+      rhs.vGam_u(m,a,k,j,i) = 2.*z4c.alpha(m,k,j,i)*DA_u(a) + LGam_u(a);
+      rhs.vGam_u(m,a,k,j,i) -= 2.*z4c.alpha(m,k,j,i) * opt.damp_kappa1 *
+          (z4c.vGam_u(m,a,k,j,i) - Gamma_u(a));
+      for(int b = 0; b < 3; ++b) {
+        rhs.vGam_u(m,a,k,j,i) -= 2. * A_uu(a,b) * dalpha_d(b);
+        // Matter term
+        if(!is_vacuum) {
+          rhs.vGam_u(m,a,k,j,i) -= 16.*M_PI * z4c.alpha(m,k,j,i)
+                              * g_uu(a,b) * tmunu.S_d(m,b,k,j,i);
+        }
+      }
+    }
 
     // g and A
     for(int a = 0; a < 3; ++a)
