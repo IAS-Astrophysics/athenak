@@ -679,4 +679,239 @@ AthenaPointTensor<T, sym, ndim, 4>::AthenaPointTensor() {
   }
 }
 
+// Here tensors are defined as static 1D arrays, with compile-time dimension calculated as
+// dim**rank
+// this is the abstract base class
+template<typename T, TensorSymm sym, int ndim, int rank>
+class AthenaScratchTensor;
+
+//----------------------------------------------------------------------------------------
+// rank 0 AthenaScratchTensor: spatially 0D vector and co-vector fields
+// This is a 1D AthenaScratchTensor
+template<typename T, TensorSymm sym, int ndim>
+class AthenaScratchTensor<T, sym, ndim, 0> {
+ public:
+  // the default constructor/destructor/copy operators are sufficient
+  AthenaScratchTensor() = default;
+  ~AthenaScratchTensor() = default;
+  AthenaScratchTensor(AthenaScratchTensor<T, sym, ndim, 0> const &) = default;
+  AthenaScratchTensor<T, sym, ndim, 0> & operator=
+  (AthenaScratchTensor<T, sym, ndim, 0> const &) = default;
+
+  KOKKOS_INLINE_FUNCTION
+  decltype(auto) operator()(int const i) const {
+    return data_(i);
+  }
+  KOKKOS_INLINE_FUNCTION
+  void NewAthenaScratchTensor(const TeamMember_t &member, int scr_level, int nx) {
+    data_ = ScrArray1D<T>(member.team_scratch(scr_level), nx);
+  }
+  KOKKOS_INLINE_FUNCTION
+  void ZeroClear() {
+    Kokkos::Experimental::local_deep_copy(data_, 0.);
+  }
+ private:
+  ScrArray1D<T> data_;
+};
+
+//----------------------------------------------------------------------------------------
+// rank 1 AthenaScratchTensor: spatially 0D vector and co-vector fields
+// This is a 1D AthenaScratchTensor
+template<typename T, TensorSymm sym, int ndim>
+class AthenaScratchTensor<T, sym, ndim, 1> {
+ public:
+  // the default constructor/destructor/copy operators are sufficient
+  AthenaScratchTensor() = default;
+  ~AthenaScratchTensor() = default;
+  AthenaScratchTensor(AthenaScratchTensor<T, sym, ndim, 1> const &) = default;
+  AthenaScratchTensor<T, sym, ndim, 1> & operator=
+  (AthenaScratchTensor<T, sym, ndim, 1> const &) = default;
+
+  KOKKOS_INLINE_FUNCTION
+  decltype(auto) operator()(int const a, int const i) const {
+    return data_(a, i);
+  }
+  KOKKOS_INLINE_FUNCTION
+  void NewAthenaScratchTensor(const TeamMember_t & member, int scr_level, int nx) {
+    data_ = ScrArray2D<T>(member.team_scratch(scr_level), ndim, nx);
+  }
+  KOKKOS_INLINE_FUNCTION
+  void ZeroClear() {
+    Kokkos::Experimental::local_deep_copy(data_, 0.);
+  }
+ private:
+  ScrArray2D<T> data_;
+};
+
+//----------------------------------------------------------------------------------------
+// rank 2 AthenaScratchTensor
+// This is a 1D AthenaScratchTensor
+template<typename T, TensorSymm sym, int ndim>
+class AthenaScratchTensor<T, sym, ndim, 2> {
+ public:
+  KOKKOS_INLINE_FUNCTION
+  AthenaScratchTensor();
+  // the default destructor/copy operators are sufficient
+  ~AthenaScratchTensor() = default;
+  AthenaScratchTensor(AthenaScratchTensor<T, sym, ndim, 2> const &) = default;
+  AthenaScratchTensor<T, sym, ndim, 2> & operator=
+  (AthenaScratchTensor<T, sym, ndim, 2> const &) = default;
+
+  KOKKOS_INLINE_FUNCTION
+  decltype(auto) operator()(int a, int b, int i) const {
+    if constexpr (sym == TensorSymm::NONE) {
+      return data_(ndim * a + b, i);
+    } else {
+      if (a < b) {
+        Kokkos::kokkos_swap(a, b);
+      }
+      return data_(b*( 2*ndim - b +1)/2 + a - b, i);
+    }
+  }
+  KOKKOS_INLINE_FUNCTION
+  void NewAthenaScratchTensor(const TeamMember_t & member, int scr_level, int nx) {
+    data_ = ScrArray2D<T>(member.team_scratch(scr_level), ndof_, nx);
+  }
+  KOKKOS_INLINE_FUNCTION
+  void ZeroClear() {
+    Kokkos::Experimental::local_deep_copy(data_, 0);
+  }
+
+ private:
+  ScrArray2D<T> data_;
+  int ndof_;
+};
+
+//----------------------------------------------------------------------------------------
+// Implementation details
+template<typename T, TensorSymm sym, int ndim>
+AthenaScratchTensor<T, sym, ndim, 2>::AthenaScratchTensor() {
+// change switch to if else const expr
+switch(sym) {
+    case TensorSymm::NONE:
+      ndof_ = ndim * ndim;
+      break;
+    case TensorSymm::SYM2:
+    case TensorSymm::ISYM2:
+      ndof_ = (ndim + 1)*ndim/2;
+      break;
+  }
+}
+
+//----------------------------------------------------------------------------------------
+// rank 3 AthenaScratchTensor
+// This is a 1D AthenaScratchTensor
+template<typename T, TensorSymm sym, int ndim>
+class AthenaScratchTensor<T, sym, ndim, 3> {
+ public:
+  KOKKOS_INLINE_FUNCTION
+  AthenaScratchTensor();
+  // the default destructor/copy operators are sufficient
+  ~AthenaScratchTensor() = default;
+  AthenaScratchTensor(AthenaScratchTensor<T, sym, ndim, 3> const &) = default;
+  AthenaScratchTensor<T, sym, ndim, 3> & operator=
+  (AthenaScratchTensor<T, sym, ndim, 3> const &) = default;
+
+  KOKKOS_INLINE_FUNCTION
+  decltype(auto) operator()(int a, int b, int c, int const i) const {
+    if constexpr (sym == TensorSymm::NONE) {
+      return data_(ndim * ndim * a + ndim * b + c, i);
+    } else if constexpr (sym == TensorSymm::SYM2) {
+      if (b < c) {
+        Kokkos::kokkos_swap(b, c);
+      }
+      return data_(a*(ndim + 1)*ndim/2 + c*( 2*ndim - c +1)/2 + b - c,i);
+    } else if constexpr (sym == TensorSymm::ISYM2) {
+      if (a < b) {
+        Kokkos::kokkos_swap(a, b);
+      }
+      return data_((b*(2*ndim - b +1)/2 + a - b)*ndim + c,i);
+    }
+  }
+  KOKKOS_INLINE_FUNCTION
+  void NewAthenaScratchTensor(const TeamMember_t & member, int scr_level, int nx) {
+    data_ = ScrArray2D<T>(member.team_scratch(scr_level), ndof_, nx);
+  }
+  KOKKOS_INLINE_FUNCTION
+  void ZeroClear() {
+    Kokkos::Experimental::local_deep_copy(data_, 0);
+  }
+
+ private:
+  ScrArray2D<T> data_;
+  int ndof_;
+};
+
+//----------------------------------------------------------------------------------------
+// Implementation details
+template<typename T, TensorSymm sym, int ndim>
+AthenaScratchTensor<T, sym, ndim, 3>::AthenaScratchTensor() {
+  switch(sym) {
+    case TensorSymm::NONE:
+      ndof_ = ndim * ndim * ndim;
+      break;
+    case TensorSymm::SYM2:
+    case TensorSymm::ISYM2:
+      ndof_ = ndim * (ndim + 1)*ndim/2;
+      break;
+  }
+}
+
+//----------------------------------------------------------------------------------------
+// rank 4 AthenaScratchTensor
+// This is a 1D AthenaScratchTensor
+template<typename T, TensorSymm sym, int ndim>
+class AthenaScratchTensor<T, sym, ndim, 4> {
+ public:
+  KOKKOS_INLINE_FUNCTION
+  AthenaScratchTensor();
+  // the default destructor/copy operators are sufficient
+  ~AthenaScratchTensor() = default;
+  AthenaScratchTensor(AthenaScratchTensor<T, sym, ndim, 4> const &) = default;
+  AthenaScratchTensor<T, sym, ndim, 4> & operator=
+  (AthenaScratchTensor<T, sym, ndim, 4> const &) = default;
+
+  KOKKOS_INLINE_FUNCTION
+  decltype(auto) operator()(int a, int b,
+                            int c, int d, int const i) const {
+    if constexpr (sym == TensorSymm::NONE) {
+      return data_(ndim * ndim * ndim * a + ndim * ndim * b + ndim * c + d, i);
+    } else if constexpr (sym == TensorSymm::SYM22) {
+      if (a < b) {
+        Kokkos::kokkos_swap(a, b);
+      }
+      if (c < d) {
+        Kokkos::kokkos_swap(c, d);
+      }
+      return data_((b*( 2*ndim - b +1)/2 + a - b)*(ndim + 1)*ndim/2 + d*( 2*ndim - d +1)/2 + c - d,i);
+    }
+  }
+
+  KOKKOS_INLINE_FUNCTION
+  void NewAthenaScratchTensor(const TeamMember_t & member, int scr_level, int nx) {
+    data_ = ScrArray2D<T>(member.team_scratch(scr_level), ndof_, nx);
+  }
+  KOKKOS_INLINE_FUNCTION
+  void ZeroClear() {
+    Kokkos::Experimental::local_deep_copy(data_, 0);
+  }
+
+ private:
+  ScrArray2D<T> data_;
+  int ndof_;
+};
+
+//----------------------------------------------------------------------------------------
+// Implementation details
+template<typename T, TensorSymm sym, int ndim>
+AthenaScratchTensor<T, sym, ndim, 4>::AthenaScratchTensor() {
+  switch(sym) {
+    case TensorSymm::NONE:
+      ndof_ = ndim*ndim*ndim*ndim;
+      break;
+    case TensorSymm::SYM22:
+      ndof_ = (ndim + 1)*ndim/2 * (ndim + 1)*ndim/2;
+      break;
+  }
+}
 #endif // ATHENA_TENSOR_HPP_
