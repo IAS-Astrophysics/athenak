@@ -61,8 +61,8 @@ void Z4c::ADMOnePuncture(MeshBlockPack *pmbp, ParameterInput *pin) {
     Real &x3max = size.d_view(m).x3max;
     int nx3 = indcs.nx3;
     Real x3v = CellCenterX(k-ks, nx3, x3min, x3max);
-    AthenaScratchTensor<Real, TensorSymm::NONE, 3, 0> r;
-    r.NewAthenaScratchTensor(member, scr_level, nx1);
+    AthenaPointTensor<Real, TensorSymm::NONE, 3, 0> r;
+    r.NewAthenaPointTensor(member, scr_level, nx1);
 
     par_for_inner(member, isg, ieg, [&](const int i) {
       Real x1v = CellCenterX(i-is, nx1, x1min, x1max);
