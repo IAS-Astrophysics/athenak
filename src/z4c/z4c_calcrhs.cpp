@@ -47,6 +47,50 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage) {
   //
   par_for("z4c rhs loop",DevExeSpace(),0,nmb-1,ks,ke,js,je,is,ie,
   KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
+    // inverse grid-spacing
+    Real idx[] = {1/size.d_view(m).dx1, 1/size.d_view(m).dx2, 1/size.d_view(m).dx3};
+
+    // *****************************
+    // RHS for g_dd
+    // *****************************
+
+    // shift 1st drvts
+    AthenaPointTensor<Real, TensorSymm::NONE, 3, 2> dbeta_du;
+    for(int a = 0; a < 3; ++a)
+    for(int b = 0; b < 3; ++b) {
+      dbeta_du(b,a) = Dx<NGHOST>(b, idx, z4c.beta_u, m,a,k,j,i);
+    }
+    // d_a beta^a
+    Real dbeta = 0.0;
+    // Shift vector contractions
+    for(int a = 0; a < 3; ++a) {
+      dbeta += dbeta_du(a,a);
+    }
+    // Lie derivative of conf. 3-metric
+    AthenaPointTensor<Real, TensorSymm::SYM2, 3, 2> Lg_dd;
+    for (int a = 0; a < 3; ++a)
+    for (int b = a; b < 3; ++b) {
+      Lg_dd(a,b) = 0.0;
+    }
+    for(int a = 0; a < 3; ++a)
+    for(int b = a; b < 3; ++b)
+    for(int c = 0; c < 3; ++c) {
+      Lg_dd(a,b) += Lx<NGHOST>(c, idx, z4c.beta_u, z4c.g_dd, m,c,a,b,k,j,i);
+    }
+    for(int a = 0; a < 3; ++a)
+    for(int b = a; b < 3; ++b) {
+      Lg_dd(a,b) -= (2./3.) * z4c.g_dd(m,a,b,k,j,i) * dbeta;
+      for(int c = 0; c < 3; ++c) {
+        Lg_dd(a,b) += dbeta_du(a,c) * z4c.g_dd(m,b,c,k,j,i);
+        Lg_dd(a,b) += dbeta_du(b,c) * z4c.g_dd(m,a,c,k,j,i);
+      }
+    }
+    for(int a = 0; a < 3; ++a)
+    for(int b = a; b < 3; ++b) {
+      rhs.g_dd(m,a,b,k,j,i) = - 2. * z4c.alpha(m,k,j,i) * z4c.vA_dd(m,a,b,k,j,i)
+                      + Lg_dd(a,b);
+    }
+
     // Define scratch arrays to be used in the following calculations
 
     // Gamma computed from the metric
@@ -91,8 +135,7 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage) {
 
     // lapse 2nd drvts
     AthenaPointTensor<Real, TensorSymm::SYM2, 3, 2> ddalpha_dd;
-    // shift 1st drvts
-    AthenaPointTensor<Real, TensorSymm::NONE, 3, 2> dbeta_du;
+
     // chi 2nd drvts
     AthenaPointTensor<Real, TensorSymm::SYM2, 3, 2> ddchi_dd;
     // Gamma 1st drvts
@@ -111,12 +154,10 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage) {
     // Lie derivative of the shift
     AthenaPointTensor<Real, TensorSymm::NONE, 3, 1> Lbeta_u;
 
-    // Lie derivative of conf. 3-metric
-    AthenaPointTensor<Real, TensorSymm::SYM2, 3, 2> Lg_dd;
+
     // Lie derivative of A
     AthenaPointTensor<Real, TensorSymm::SYM2, 3, 2> LA_dd;
 
-    Real idx[] = {1/size.d_view(m).dx1, 1/size.d_view(m).dx2, 1/size.d_view(m).dx3};
 
     // -----------------------------------------------------------------------------------
     // Initialize everything to zero
@@ -152,8 +193,6 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage) {
     // Trace of Ddalpha_dd
     Real Ddalpha = 0.0;
 
-    // d_a beta^a
-    Real dbeta = 0.0;
 
     //
     // Vectors
@@ -169,7 +208,6 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage) {
     // Symmetric tensors
     for (int a = 0; a < 3; ++a)
     for (int b = a; b < 3; ++b) {
-      Lg_dd(a,b) = 0.0;
       LA_dd(a,b) = 0.0;
       AA_dd(a,b) = 0.0;
       R_dd(a,b) = 0.0;
@@ -193,7 +231,6 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage) {
     // Vectors
     for(int a = 0; a < 3; ++a)
     for(int b = 0; b < 3; ++b) {
-      dbeta_du(b,a) = Dx<NGHOST>(b, idx, z4c.beta_u, m,a,k,j,i);
       dGam_du(b,a) = Dx<NGHOST>(b, idx, z4c.vGam_u,  m,a,k,j,i);
     }
 
@@ -263,7 +300,6 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage) {
     for(int a = 0; a < 3; ++a)
     for(int b = a; b < 3; ++b)
     for(int c = 0; c < 3; ++c) {
-      Lg_dd(a,b) += Lx<NGHOST>(c, idx, z4c.beta_u, z4c.g_dd, m,c,a,b,k,j,i);
       LA_dd(a,b) += Lx<NGHOST>(c, idx, z4c.beta_u, z4c.vA_dd, m,c,a,b,k,j,i);
     }
 
@@ -450,9 +486,6 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage) {
     // Finalize advective (Lie) derivatives
     //
     // Shift vector contractions
-    for(int a = 0; a < 3; ++a) {
-      dbeta += dbeta_du(a,a);
-    }
     for(int a = 0; a < 3; ++a)
     for(int b = 0; b < 3; ++b) {
       ddbeta_d(a) += (1./3.) * ddbeta_ddu(a,b,b);
@@ -472,15 +505,7 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage) {
       }
     }
 
-    // Finalize Lg_dd and LA_dd
-    for(int a = 0; a < 3; ++a)
-    for(int b = a; b < 3; ++b) {
-      Lg_dd(a,b) -= (2./3.) * z4c.g_dd(m,a,b,k,j,i) * dbeta;
-      for(int c = 0; c < 3; ++c) {
-        Lg_dd(a,b) += dbeta_du(a,c) * z4c.g_dd(m,b,c,k,j,i);
-        Lg_dd(a,b) += dbeta_du(b,c) * z4c.g_dd(m,a,c,k,j,i);
-      }
-    }
+    // Finalize LA_dd
     for(int a = 0; a < 3; ++a)
     for(int b = a; b < 3; ++b) {
       LA_dd(a,b) -= (2./3.) * z4c.vA_dd(m,a,b,k,j,i) * dbeta;
@@ -530,8 +555,6 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage) {
     // g and A
     for(int a = 0; a < 3; ++a)
     for(int b = a; b < 3; ++b) {
-      rhs.g_dd(m,a,b,k,j,i) = - 2. * z4c.alpha(m,k,j,i) * z4c.vA_dd(m,a,b,k,j,i)
-                      + Lg_dd(a,b);
       rhs.vA_dd(m,a,b,k,j,i) = oopsi4 *
           (-Ddalpha_dd(a,b) + z4c.alpha(m,k,j,i) * (R_dd(a,b) + Rphi_dd(a,b)));
       rhs.vA_dd(m,a,b,k,j,i) -= (1./3.) * z4c.g_dd(m,a,b,k,j,i)
