@@ -162,7 +162,6 @@ BaseTypeOutput::BaseTypeOutput(ParameterInput *pin, Mesh *pm, OutputParameters o
 
   // Now load STL vector of output variables
   outvars.clear();
-  int ndvars=0;
 
   // make a vector of out_params.variables
   std::vector<std::string> variables;

@@ -37,7 +37,6 @@ void Z4c::Z4cWeyl(MeshBlockPack *pmbp) {
   int &ks = indcs.ks; int &ke = indcs.ke;
   int nmb = pmbp->nmb_thispack;
 
-  auto &z4c = pmbp->pz4c->z4c;
   auto &adm = pmbp->padm->adm;
   auto &weyl = pmbp->pz4c->weyl;
   auto &u_weyl = pmbp->pz4c->u_weyl;
@@ -87,7 +86,7 @@ void Z4c::Z4cWeyl(MeshBlockPack *pmbp) {
     // inverse of conf. metric
     AthenaScratchTensor<Real, TensorSymm::SYM2, 3, 2> g_uu;
     AthenaScratchTensor<Real, TensorSymm::SYM2, 3, 2> R_dd;        // Ricci tensor
-    AthenaScratchTensor<Real, TensorSymm::SYM2, 3, 2> K_ud;        // extrinsic curvature
+    AthenaScratchTensor<Real, TensorSymm::NONE, 3, 2> K_ud;        // extrinsic curvature
 
     // Rank 3
     AthenaScratchTensor<Real, TensorSymm::SYM2,  3, 3> dg_ddd;      // metric 1st drvts
@@ -105,7 +104,6 @@ void Z4c::Z4cWeyl(MeshBlockPack *pmbp) {
     for (int b = a; b < 3; ++b) {
       g_uu(a,b) = 0.0;
       R_dd(a,b) = 0.0;
-      K_ud(a,b) = 0.0;
       for (int c = 0; c < 3; ++c) {
         dg_ddd(c,a,b) = 0.0;
         dK_ddd(c,a,b) = 0.0;
@@ -219,6 +217,7 @@ void Z4c::Z4cWeyl(MeshBlockPack *pmbp) {
 
     for(int a = 0; a < 3; ++a) {
       for(int b = 0; b < 3; ++b) {
+        K_ud(a,b) = 0.0;
         for(int c = 0; c < 3; ++c) {
           K_ud(a,b) += g_uu(a,c) * adm.vK_dd(m,c,b,k,j,i);
         }
@@ -412,4 +411,3 @@ template void Z4c::Z4cWeyl<2>(MeshBlockPack *pmbp);
 template void Z4c::Z4cWeyl<3>(MeshBlockPack *pmbp);
 template void Z4c::Z4cWeyl<4>(MeshBlockPack *pmbp);
 } // namespace z4c
-

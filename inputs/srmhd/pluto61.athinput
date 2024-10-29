@@ -1,0 +1,96 @@
+# AthenaK input file for SR MHD shocktube, test in sect 6.1 from Pluto paper
+
+<comment>
+problem   = SR MHD shocktube problem sect 6.1 in PLUTO code paper
+reference = Mignone et al., 2012, ApJSupp 198, 7
+
+<job>
+basename  = pluto61       # problem ID: basename of output filenames
+
+<mesh>
+nghost    = 4
+nx1       = 400      # Number of zones in X1-direction
+x1min     = 0.0      # minimum value of X1
+x1max     = 1.0       # maximum value of X1
+ix1_bc    = outflow   # Inner-X1 boundary condition flag
+ox1_bc    = outflow   # Outer-X1 boundary condition flag
+
+nx2       = 1         # Number of zones in X2-direction
+x2min     = -0.5      # minimum value of X2
+x2max     = 0.5       # maximum value of X2
+ix2_bc    = periodic  # Inner-X2 boundary condition flag
+ox2_bc    = periodic  # Outer-X2 boundary condition flag
+
+nx3       = 1         # Number of zones in X3-direction
+x3min     = -0.5      # minimum value of X3
+x3max     = 0.5       # maximum value of X3
+ix3_bc    = periodic  # Inner-X3 boundary condition flag
+ox3_bc    = periodic  # Outer-X3 boundary condition flag
+
+<meshblock>
+nx1       = 16        # Number of cells in each MeshBlock, X1-dir
+nx2       = 1         # Number of cells in each MeshBlock, X2-dir
+nx3       = 1         # Number of cells in each MeshBlock, X3-dir
+
+<refinement1>
+level = 6
+x1min = 0.49
+x1max = 0.51
+
+<mesh_refinement>
+refinement       = adaptive    # type of refinement
+max_nmb_per_rank = 2048
+num_levels       = 7
+
+<coord>
+special_rel = true
+
+<time>
+evolution  = dynamic  # dynamic/kinematic/static
+integrator  = rk3     # time integration algorithm
+cfl_number  = 0.3     # The Courant, Friedrichs, & Lewy (CFL) Number
+nlim        = -1      # cycle limit
+tlim        = 0.4     # time limit
+ndiag       = 10      # cycles between diagostic output
+
+<mhd>
+eos         = ideal
+reconstruct = wenoz
+rsolver     = hlle
+gamma       = 1.666667     # ratio of specific heats Gamma
+
+<problem>
+pgen_name  = shock_tube
+shock_dir  = 1     # Shock Direction -- (1,2,3) = (x1,x2,x3)
+xshock     = 0.5   # position of initial interface
+
+dl = 1.0           # density on left
+pl = 1000.0        # pressure
+ul = 0.0           # X-velocity
+vl = 0.0           # Y-velocity
+wl = 0.0           # Z-velocity
+bxl = 10.0         # left magnetic field B^x
+byl = 7.0          # left magnetic field B^y
+bzl = 7.0          # left magnetic field B^z
+
+dr = 1.0           # density on right
+pr = 0.1           # pressure
+ur = 0.0           # X-velocity
+vr = 0.0           # Y-velocity
+wr = 0.0           # Z-velocity
+bxr = 10.0         # right magnetic field B^x
+byr = 0.7          # right magnetic field B^y
+bzr = 0.7          # right magnetic field B^z
+
+<output1>
+file_type   = tab       # Tabular data dump
+variable    = mhd_w_bcc # variables to be output
+data_format = %12.5e    # Optional data format string
+dt          = 0.01      # time increment between outputs
+slice_x2    = 0.0       # slice in x2
+slice_x3    = 0.0       # slice in x3
+
+<output2>
+file_type   = hst      # history data dump
+data_format = %12.5e   # Optional data format string
+dt          = 0.01     # time increment between outputs

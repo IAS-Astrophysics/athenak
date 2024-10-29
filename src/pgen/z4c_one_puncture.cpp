@@ -134,5 +134,5 @@ void ADMOnePuncture(MeshBlockPack *pmbp, ParameterInput *pin) {
 
 // how decide the refinement
 void RefinementCondition(MeshBlockPack* pmbp) {
-  pmbp->pz4c->pz4c_amr->Refine(pmbp);
+  pmbp->pz4c->pamr->Refine(pmbp);
 }

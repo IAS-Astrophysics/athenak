@@ -158,5 +158,4 @@ void ProblemGenerator::SphericalCollapse(ParameterInput *pin, const bool restart
 }
 
 void AnalyticCollapse(MeshBlockPack* pmbp) {
-  Real time = pmbp->pmesh->time;
 }

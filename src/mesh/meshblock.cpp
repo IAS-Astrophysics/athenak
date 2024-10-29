@@ -116,9 +116,6 @@ MeshBlock::MeshBlock(MeshBlockPack* ppack, int igids, int nmb) :
                             static_cast<Real>(pm->mb_indcs.nx2);
     mb_size.h_view(m).dx3 = (mb_size.h_view(m).x3max - mb_size.h_view(m).x3min)/
                             static_cast<Real>(pm->mb_indcs.nx3);
-    mb_size.h_view(m).idx1 = 1./mb_size.h_view(m).dx1;
-    mb_size.h_view(m).idx2 = 1./mb_size.h_view(m).dx2;
-    mb_size.h_view(m).idx3 = 1./mb_size.h_view(m).dx3;
   }
 
   // For each DualArray: mark host views as modified, and then sync to device array
