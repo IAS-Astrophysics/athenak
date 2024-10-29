@@ -157,27 +157,20 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage) {
 
     //
     // Vectors
-    for (int a = 0; a < 3; ++a) {
-      Lbeta_u(a) = 0.0;
-      LGam_u(a) = 0.0;
-      Gamma_u(a) = 0.0;
-      DA_u(a) = 0.0;
-      ddbeta_d(a) = 0.0;
-    }
+    Lbeta_u.ZeroClear();
+    LGam_u.ZeroClear();
+    Gamma_u.ZeroClear();
+    DA_u.ZeroClear();
+    ddbeta_d.ZeroClear();
 
     //
     // Symmetric tensors
-    for (int a = 0; a < 3; ++a)
-    for (int b = a; b < 3; ++b) {
-      Lg_dd(a,b) = 0.0;
-      LA_dd(a,b) = 0.0;
-      AA_dd(a,b) = 0.0;
-      R_dd(a,b) = 0.0;
-      A_uu(a,b) = 0.0;
-      for (int c = 0; c < 3; ++c) {
-          Gamma_udd(c,a,b) = 0.0;
-      }
-    }
+    Lg_dd.ZeroClear();
+    LA_dd.ZeroClear();
+    AA_dd.ZeroClear();
+    R_dd.ZeroClear();
+    A_uu.ZeroClear();
+    Gamma_udd.ZeroClear();
 
     // -----------------------------------------------------------------------------------
     // 1st derivatives
