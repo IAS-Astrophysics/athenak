@@ -592,7 +592,7 @@ void Particles::BorisStep( const Real dt, const bool only_v ){
 	Real uE_beta[3] = {
 		uE[0]/g_Lor + gupper[0][1]/gupper[0][0],
 		uE[1]/g_Lor + gupper[0][2]/gupper[0][0],
-		uE[2]/g_Lor + gupper[0][3]/gupper[0][0],
+		uE[2]/g_Lor + gupper[0][3]/gupper[0][0]
 	};
 
 	// g_Lor = sqrt(1.0 + g_Lor)/sqrt(-gupper[0][0]);
@@ -608,15 +608,34 @@ void Particles::BorisStep( const Real dt, const bool only_v ){
 	}
 
 	// Save the vector product of u and t 
-	Real vec_ut[3] = {
+	// Vector product results in covariant vector
+	Real vec_ut_cov[3] = {
 	uE_beta[1]*t[2] - uE_beta[2]*t[1],
 	uE_beta[2]*t[0] - uE_beta[0]*t[2],
-	uE_beta[0]*t[1] - uE_beta[1]*t[0],
+	uE_beta[0]*t[1] - uE_beta[1]*t[0]
 	};
+	//Raise indeces to contravariant
+	Real vec_ut[3] = {0.0};
+	for (int i1 = 0; i1 < 3; ++i1 ){ 
+		for (int i2 = 0; i2 < 3; ++i2 ){ 
+		vec_ut[i1] += ADM_upper[i1][i2]*vec_ut_cov[i2];
+		}
+	}
+	// Re-use arrays
+	vec_ut_cov[0] = (uE_beta[1] + vec_ut[1])*t[2] - (uE_beta[2] + vec_ut[2])*t[1];
+	vec_ut_cov[1] = (uE_beta[2] + vec_ut[2])*t[0] - (uE_beta[0] + vec_ut[0])*t[2];
+	vec_ut_cov[2] = (uE_beta[0] + vec_ut[0])*t[1] - (uE_beta[1] + vec_ut[1])*t[0];
+	for (int i1 = 0; i1 < 3; ++i1 ){ 
+		vec_ut[i1] = 0.0;
+		for (int i2 = 0; i2 < 3; ++i2 ){ 
+		vec_ut[i1] += ADM_upper[i1][i2]*vec_ut_cov[i2];
+		}
+	}
+	
 
-	uB[0] = uE[0] + 2.0/(1.0+mod_t_sqr)*( (uE_beta[1] + vec_ut[1])*t[2] - (uE_beta[2] + vec_ut[2])*t[1] );
-        if (multi_d) { uB[1] = uE[1] + 2.0/(1.0+mod_t_sqr)*( (uE_beta[2] + vec_ut[2])*t[0] - (uE_beta[0] + vec_ut[0])*t[2] ); }
-        if (three_d) { uB[2] = uE[2] + 2.0/(1.0+mod_t_sqr)*( (uE_beta[0] + vec_ut[0])*t[1] - (uE_beta[1] + vec_ut[1])*t[0] ); }
+	uB[0] = uE[0] + 2.0/(1.0+mod_t_sqr)*( vec_ut[0] );
+        if (multi_d) { uB[1] = uE[1] + 2.0/(1.0+mod_t_sqr)*( vec_ut[1] ); }
+        if (three_d) { uB[2] = uE[2] + 2.0/(1.0+mod_t_sqr)*( vec_ut[2] ); }
 	
 	//Second half-step with electric field
 	uE[0] = uB[0] + dt*q_over_m/(2.0)*E[0];
