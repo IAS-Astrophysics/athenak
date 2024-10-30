@@ -349,7 +349,7 @@ class AthenaPointTensor<T, TensorSymm::NONE, ndim, 2> {
       data_[i] = 0.0;
     }
   }
- 
+
  private:
   Real data_[ndim*ndim];
 };
@@ -883,7 +883,8 @@ class AthenaScratchTensor<T, sym, ndim, 4> {
       if (c < d) {
         Kokkos::kokkos_swap(c, d);
       }
-      return data_((b*( 2*ndim - b +1)/2 + a - b)*(ndim + 1)*ndim/2 + d*( 2*ndim - d +1)/2 + c - d,i);
+      return data_((b*( 2*ndim - b +1)/2 + a - b)*(ndim + 1)*ndim/2 +
+                    d*( 2*ndim - d +1)/2 + c - d,i);
     }
   }
 
