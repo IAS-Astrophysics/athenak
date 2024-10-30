@@ -581,7 +581,6 @@ void Particles::BorisStep( const Real dt, const bool only_v ){
 		g_Lor += ADM_upper[i1][i2]*u_cov[i1]*u_cov[i2];
 		}
 	}
-	g_Lor = sqrt(1.0 + g_Lor)/sqrt(-gupper[0][0]);
         // Interpolate Magnetic Field at new particle location x1, x2, x3
 	// Store it in an array for convenience 
 	Real B[3] = {0.0, 0.0, 0.0};
@@ -589,23 +588,35 @@ void Particles::BorisStep( const Real dt, const bool only_v ){
 	B[1] = b0_.x2f(m, kp, jp, ip) + (x[1] - x2v)*(b0_.x2f(m, kp, jp+1, ip) - b0_.x2f(m, kp, jp, ip))/Dy;
 	B[2] = b0_.x3f(m, kp, jp, ip) + (x[2] - x3v)*(b0_.x3f(m, kp+1, jp, ip) - b0_.x3f(m, kp, jp, ip))/Dz;
 
+	// When operating with magnetic field in normal coordinate the velocity must be combined with the metric beta
+	Real uE_beta[3] = {
+		uE[0]/g_Lor + gupper[0][1]/gupper[0][0],
+		uE[1]/g_Lor + gupper[0][2]/gupper[0][0],
+		uE[2]/g_Lor + gupper[0][3]/gupper[0][0],
+	};
+
+	// g_Lor = sqrt(1.0 + g_Lor)/sqrt(-gupper[0][0]);
 	Real mod_t_sqr = 0.0;
 	Real t[3];
 	for (int i1 = 0; i1 < 3; ++i1 ){ 
 	t[i1] = B[i1]*q_over_m/(2.0*g_Lor)*dt;
-	mod_t_sqr += SQR(t[i1]);
+	}
+	for (int i1 = 0; i1 < 3; ++i1 ){ 
+		for (int i2 = 0; i2 < 3; ++i2 ){ 
+		mod_t_sqr += glower[i1+1][i2+1]*t[i1]*t[i2];
+		}
 	}
 
 	// Save the vector product of u and t 
 	Real vec_ut[3] = {
-	uE[1]*t[2] - uE[2]*t[1],
-	uE[2]*t[0] - uE[0]*t[2],
-	uE[0]*t[1] - uE[1]*t[0],
+	uE_beta[1]*t[2] - uE_beta[2]*t[1],
+	uE_beta[2]*t[0] - uE_beta[0]*t[2],
+	uE_beta[0]*t[1] - uE_beta[1]*t[0],
 	};
 
-	uB[0] = uE[0] + 2.0/(1.0+mod_t_sqr)*( (uE[1] + vec_ut[1])*t[2] - (uE[2] + vec_ut[2])*t[1] );
-        if (multi_d) { uB[1] = uE[1] + 2.0/(1.0+mod_t_sqr)*( (uE[2] + vec_ut[2])*t[0] - (uE[0] + vec_ut[0])*t[2] ); }
-        if (three_d) { uB[2] = uE[2] + 2.0/(1.0+mod_t_sqr)*( (uE[0] + vec_ut[0])*t[1] - (uE[1] + vec_ut[1])*t[0] ); }
+	uB[0] = uE[0] + 2.0/(1.0+mod_t_sqr)*( (uE_beta[1] + vec_ut[1])*t[2] - (uE_beta[2] + vec_ut[2])*t[1] );
+        if (multi_d) { uB[1] = uE[1] + 2.0/(1.0+mod_t_sqr)*( (uE_beta[2] + vec_ut[2])*t[0] - (uE_beta[0] + vec_ut[0])*t[2] ); }
+        if (three_d) { uB[2] = uE[2] + 2.0/(1.0+mod_t_sqr)*( (uE_beta[0] + vec_ut[0])*t[1] - (uE_beta[1] + vec_ut[1])*t[0] ); }
 	
 	//Second half-step with electric field
 	uE[0] = uB[0] + dt*q_over_m/(2.0)*E[0];
