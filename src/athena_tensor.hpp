@@ -318,70 +318,6 @@ class AthenaPointTensor<T, sym, ndim, 1> {
 };
 
 //----------------------------------------------------------------------------------------
-// rank 2 AthenaPointTensor
-// This is a 0D AthenaPointTensor
-/*template<typename T, TensorSymm sym, int ndim>
-class AthenaPointTensor<T, sym, ndim, 2> {
- public:
-  KOKKOS_INLINE_FUNCTION
-  AthenaPointTensor() = delete;
-};
-
-template<typename T, int ndim>
-class AthenaPointTensor<T, TensorSymm::NONE, ndim, 2> {
- public:
-  KOKKOS_INLINE_FUNCTION
-  AthenaPointTensor() = default;
-
-  KOKKOS_INLINE_FUNCTION
-  Real operator()(int const a, int const b) const {
-    return data_[b + ndim*a];
-  }
-
-  KOKKOS_INLINE_FUNCTION
-  Real& operator()(int const a, int const b) {
-    return data_[b + ndim*a];
-  }
-
-  KOKKOS_INLINE_FUNCTION
-  void ZeroClear() {
-    for (int i = 0; i < ndim*ndim; ++i) {
-      data_[i] = 0.0;
-    }
-  }
-
- private:
-  Real data_[ndim*ndim];
-};
-
-template<typename T, int ndim>
-class AthenaPointTensor<T, TensorSymm::SYM2, ndim, 2> {
- public:
-  KOKKOS_INLINE_FUNCTION
-  AthenaPointTensor() = default;
-
-  KOKKOS_INLINE_FUNCTION
-  Real operator()(int const a, int const b) const {
-    return data_[b * (2*ndim - b + 1)/2 + a - b];
-  }
-
-  KOKKOS_INLINE_FUNCTION
-  Real& operator()(int const a, int const b) {
-    return data_[b * (2*ndim - b + 1)/2 + a - b];
-  }
-
-  KOKKOS_INLINE_FUNCTION
-  void ZeroClear() {
-    for (int i = 0; i < ndim*(ndim + 1)/2; i++) {
-      data_[i] = 0.0;
-    }
-  }
-
- private:
-  Real data_[ndim*(ndim+1)/2];
-};*/
-
-//----------------------------------------------------------------------------------------
 // Tensor degrees of freedom, base case assumes zero
 template<TensorSymm sym, int ndim, int rank>
 constexpr int TensorDOF = -1;
@@ -433,10 +369,6 @@ class AthenaPointTensor<T, sym, ndim, 2> {
   AthenaPointTensor(AthenaPointTensor<T, sym, ndim, 2> const &) = default;
   AthenaPointTensor<T, sym, ndim, 2> & operator=
   (AthenaPointTensor<T, sym, ndim, 2> const &) = default;
-  /*KOKKOS_INLINE_FUNCTION
-  int idxmap(int const a, int const b) const {
-    return idxmap_[a][b];
-  }*/
   KOKKOS_INLINE_FUNCTION
   Real operator()(int const a, int const b) const {
     if constexpr (sym == TensorSymm::NONE) {
@@ -472,34 +404,7 @@ class AthenaPointTensor<T, sym, ndim, 2> {
 
  private:
   Real data_[TensorDOF<sym, ndim, 2>];
-  //int idxmap_[3][3];
-  //int ndof_;
 };
-
-//----------------------------------------------------------------------------------------
-// Implementation details
-/*template<typename T, TensorSymm sym, int ndim>
-KOKKOS_INLINE_FUNCTION
-AthenaPointTensor<T, sym, ndim, 2>::AthenaPointTensor() {
-switch(sym) {
-    case TensorSymm::NONE:
-      ndof_ = 0;
-      for(int a = 0; a < ndim; ++a)
-      for(int b = 0; b < ndim; ++b) {
-        idxmap_[a][b] = ndof_++;
-      }
-      break;
-    case TensorSymm::SYM2:
-    case TensorSymm::ISYM2:
-      ndof_ = 0;
-      for(int a = 0; a < ndim; ++a)
-      for(int b = a; b < ndim; ++b) {
-        idxmap_[a][b] = ndof_++;
-        idxmap_[b][a] = idxmap_[a][b];
-      }
-      break;
-  }
-}*/
 
 //----------------------------------------------------------------------------------------
 // rank 3 AthenaPointTensor
@@ -514,10 +419,6 @@ class AthenaPointTensor<T, sym, ndim, 3> {
   AthenaPointTensor(AthenaPointTensor<T, sym, ndim, 3> const &) = default;
   AthenaPointTensor<T, sym, ndim, 3> & operator=
   (AthenaPointTensor<T, sym, ndim, 3> const &) = default;
-  /*KOKKOS_INLINE_FUNCTION
-  int idxmap(int const a, int const b, int const c) const {
-    return idxmap_[a][b][c];
-  }*/
   KOKKOS_INLINE_FUNCTION
   Real operator()(int const a, int const b, int const c) const {
     if constexpr (sym == TensorSymm::NONE) {
@@ -536,7 +437,6 @@ class AthenaPointTensor<T, sym, ndim, 3> {
         return data_[c + ndim*(a*(2*ndim - a + 1)/2 + b - a)];
       }
     }
-    //return data_[idxmap_[a][b][c]];
   }
   KOKKOS_INLINE_FUNCTION
   Real & operator()(int const a, int const b, int const c) {
@@ -556,7 +456,6 @@ class AthenaPointTensor<T, sym, ndim, 3> {
         return data_[c + ndim*(a*(2*ndim - a + 1)/2 + b - a)];
       }
     }
-    //return data_[idxmap_[a][b][c]];
   }
   KOKKOS_INLINE_FUNCTION
   void ZeroClear() {
@@ -567,44 +466,7 @@ class AthenaPointTensor<T, sym, ndim, 3> {
 
  private:
   Real data_[TensorDOF<sym,ndim,3>];
-  //int idxmap_[3][3][3];
-  //int ndof_;
 };
-
-//----------------------------------------------------------------------------------------
-// Implementation details
-/*template<typename T, TensorSymm sym, int ndim>
-KOKKOS_INLINE_FUNCTION
-AthenaPointTensor<T, sym, ndim, 3>::AthenaPointTensor() {
-  switch(sym) {
-    case TensorSymm::NONE:
-      ndof_ = 0;
-      for(int a = 0; a < ndim; ++a)
-      for(int b = 0; b < ndim; ++b)
-      for(int c = 0; c < ndim; ++c) {
-        idxmap_[a][b][c] = ndof_++;
-      }
-      break;
-    case TensorSymm::SYM2:
-      ndof_ = 0;
-      for(int a = 0; a < ndim; ++a)
-      for(int b = 0; b < ndim; ++b)
-      for(int c = b; c < ndim; ++c) {
-        idxmap_[a][b][c] = ndof_++;
-        idxmap_[a][c][b] = idxmap_[a][b][c];
-      }
-      break;
-    case TensorSymm::ISYM2:
-      ndof_ = 0;
-      for(int a = 0; a < ndim; ++a)
-      for(int b = a; b < ndim; ++b)
-      for(int c = 0; c < ndim; ++c) {
-        idxmap_[a][b][c] = ndof_++;
-        idxmap_[b][a][c] = idxmap_[a][b][c];
-      }
-      break;
-  }
-}*/
 
 //----------------------------------------------------------------------------------------
 // rank 4 AthenaPointTensor
