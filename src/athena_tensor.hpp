@@ -403,7 +403,7 @@ class AthenaPointTensor<T, sym, ndim, 2> {
   }
 
  private:
-  Real data_[TensorDOF<sym, ndim, 2>];
+  Real data_[TensorDOF<sym, ndim, 2>]; // NOLINT
 };
 
 //----------------------------------------------------------------------------------------
