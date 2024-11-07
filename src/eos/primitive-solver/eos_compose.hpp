@@ -83,6 +83,9 @@ class EOSCompOSE : public EOSPolicyInterface, public LogPolicy {
   /// Temperature from energy density
   KOKKOS_INLINE_FUNCTION Real TemperatureFromE(Real n, Real e, Real *Y) const {
     assert (m_initialized);
+    if (n < min_n || e <= MinimumEnergy(n, Y)) {
+      return min_T;
+    }
     Real log_e = log2_(e);
     return temperature_from_var(ECLOGE, log_e, n, Y[0]);
   }
@@ -90,7 +93,7 @@ class EOSCompOSE : public EOSPolicyInterface, public LogPolicy {
   /// Calculate the temperature using.
   KOKKOS_INLINE_FUNCTION Real TemperatureFromP(Real n, Real p, Real *Y) const {
     assert (m_initialized);
-    if (n < min_n || p < MinimumPressure(n, Y)) {
+    if (n < min_n || p <= MinimumPressure(n, Y)) {
       return min_T;
     }
     Real log_p = log2_(p);
@@ -325,7 +328,18 @@ class EOSCompOSE : public EOSPolicyInterface, public LogPolicy {
       }
     }
     
-    assert(flo*fhi <= 0);
+    if (flo*fhi > 0) {
+      Kokkos::printf("There's a problem with temperature bracketing!\n"
+                     "  iv = %i\n"
+                     "  var = %20.15g\n"
+                     "  n = %20.15g\n"
+                     "  Yq = %20.15g\n"
+                     "  ilo = %i\n"
+                     "  ihi = %i\n"
+                     "  flo = %20.15g\n"
+                     "  fhigh = %20.15g\n", iv, var, n , Yq, ilo, ihi, flo, fhi);
+      assert(flo*fhi <= 0);
+    }
     while (ihi - ilo > 1) {
       int ip = ilo + (ihi - ilo)/2;
       Real fp = f(ip);
