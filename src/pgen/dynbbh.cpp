@@ -1,11 +1,3 @@
-//========================================================================================
-// Athena++ astrophysical MHD code, Kokkos version
-// Copyright(C) 2020 James M. Stone <jmstone@ias.edu> and the Athena code team
-// Licensed under the 3-clause BSD License (the "LICENSE")
-//========================================================================================
-//! \file dynbbh.cpp
-//! \brief Problem generator for superimposed Kerr-Schild black holes
-
 #include <math.h>
 
 #include <algorithm>
@@ -86,14 +78,15 @@ struct bbh_pgen {
   Real a1, a2;
   Real th_a1, th_a2;
   Real ph_a1, ph_a2;
-  Real dfloor;
-  Real pfloor;
+  Real d;
   Real gamma_adi;
   Real a1_buffer, a2_buffer;
   Real adjust_mass1, adjust_mass2;
   Real cutoff_floor;
   Real alpha_thr;
   Real radius_thr;
+  Real beta;
+  Real r_B;
 };
 
 struct bbh_pgen bbh;
@@ -104,14 +97,12 @@ void find_traj_t(Real tt, Real traj_array[NTRAJ]);
 KOKKOS_INLINE_FUNCTION
 void numerical_4metric(const Real t, const Real x, const Real y,
     const Real z, struct four_metric &outmet,
-    const Real nz_m1[NTRAJ], const Real nz_0[NTRAJ], const Real nz_p1[NTRAJ],
-    const bbh_pgen& bbh_);
+    const Real nz_m1[NTRAJ], const Real nz_0[NTRAJ], const Real nz_p1[NTRAJ], const bbh_pgen& bbh_);
 KOKKOS_INLINE_FUNCTION
 int four_metric_to_three_metric(const struct four_metric &met, struct three_metric &gam);
 KOKKOS_INLINE_FUNCTION
 void get_metric(const Real t, const Real x, const Real y, const Real z,
-                struct four_metric &met, const Real bbh_traj_loc[NTRAJ],
-                const bbh_pgen& bbh_);
+	       	        struct four_metric &met, const Real bbh_traj_loc[NTRAJ], const bbh_pgen& bbh_);
 KOKKOS_INLINE_FUNCTION
 void SuperposedBBH(const Real time, const Real x, const Real y, const Real z,
                    Real gcov[][NDIM], const Real traj_array[NTRAJ], const bbh_pgen& bbh_);
@@ -126,6 +117,7 @@ void RefineTracker(MeshBlockPack* pmbp);
 //! \brief Problem Generator for the shock tube (Riemann problem) tests
 
 void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
+
   MeshBlockPack *pmbp = pmy_mesh_->pmb_pack;
   if (!pmbp->pcoord->is_general_relativistic &&
       !pmbp->pcoord->is_dynamical_relativistic) {
@@ -144,7 +136,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
 
   if (restart) return;
 
-  bbh.sep = pin->GetOrAddReal("problem", "sep", 20.0);
+  bbh.sep = pin->GetOrAddReal("problem", "sep", 25.0);
   bbh.om = std::pow(bbh.sep, -1.5);
   bbh.q = pin->GetOrAddReal("problem", "q", 1.0);
   bbh.a1 = pin->GetOrAddReal("problem", "a1", 0.0);
@@ -153,16 +145,18 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   bbh.th_a2 = pin->GetOrAddReal("problem", "th_a2", 0.0);
   bbh.ph_a1 = pin->GetOrAddReal("problem", "ph_a1", 0.0);
   bbh.ph_a2 = pin->GetOrAddReal("problem", "ph_a2", 0.0);
-  bbh.dfloor = pin->GetOrAddReal("problem", "dfloor", (FLT_MIN));
-  bbh.pfloor = pin->GetOrAddReal("problem", "pfloor", (FLT_MIN));
+  bbh.d = pin->GetOrAddReal("problem", "duniform", 1.0);
+  bbh.gamma_adi = pin->GetOrAddReal("problem", "gamma_adi", 1.6666666);
   bbh.adjust_mass1 = pin->GetOrAddReal("problem", "adjust_mass1", 1.0);
   bbh.adjust_mass2 = pin->GetOrAddReal("problem", "adjust_mass2", 1.0);
-  bbh.a1_buffer = pin->GetOrAddReal("problem", "a1_buffer", 0.0);
-  bbh.a2_buffer = pin->GetOrAddReal("problem", "a2_buffer", 0.0);
-  bbh.cutoff_floor = pin->GetOrAddReal("problem", "cutoff_floor", 1e-10);
-  bbh.alpha_thr = pin->GetOrAddReal("problem", "alpha_thr", 0.6);
-  bbh.radius_thr = pin->GetOrAddReal("problem", "radius_thr", 6.0);
+  bbh.a1_buffer = pin->GetOrAddReal("problem", "a1_buffer", 0.01);
+  bbh.a2_buffer = pin->GetOrAddReal("problem", "a2_buffer", 0.01);
+  bbh.cutoff_floor = pin->GetOrAddReal("problem", "cutoff_floor", 1e-4);
+  bbh.alpha_thr = pin->GetOrAddReal("problem", "alpha_thr", 0.2);
+  bbh.radius_thr = pin->GetOrAddReal("problem", "radius_thr", 0.1);
 
+  bbh.beta = pin->GetOrAddReal("problem", "beta", 100.0);
+  bbh.r_B = pin->GetOrAddReal("problem", "r_B", 150.0);
   // capture variables for the kernel
   auto &indcs = pmy_mesh_->mb_indcs;
   int &is = indcs.is; int &ie = indcs.ie;
@@ -178,11 +172,11 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     auto &nscal = pmbp->phydro->nscalars;
     par_for("pgen_hydro", DevExeSpace(),0,(nmb-1),ks,ke,js,je,is,ie,
     KOKKOS_LAMBDA(int m, int k, int j, int i) {
-      w0(m,IDN,k,j,i) = bbh_.dfloor;
+      w0(m,IDN,k,j,i) = bbh_.d;
       w0(m,IVX,k,j,i) = 0.0;
       w0(m,IVY,k,j,i) = 0.0;
       w0(m,IVZ,k,j,i) = 0.0;
-      w0(m,IPR,k,j,i) = bbh_.pfloor; //bbh.fluid.pfloor;
+      w0(m,IPR,k,j,i) = 2.0/(bbh_.gamma_adi*bbh_.r_B); //bbh.fluid.pfloor;
       for (int r=0; r<nscal; ++r) {
         w0(m,IYF+r,k,j,i) = 0.0;
       }
@@ -204,20 +198,20 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     auto &nscal = pmbp->pmhd->nscalars;
     par_for("pgen_shock1", DevExeSpace(),0,(nmb-1),ks,ke,js,je,is,ie,
     KOKKOS_LAMBDA(int m, int k, int j, int i) {
-      w0(m,IDN,k,j,i) = bbh_.dfloor;
+      w0(m,IDN,k,j,i) = bbh_.d;
       w0(m,IVX,k,j,i) = 0.0;
       w0(m,IVY,k,j,i) = 0.0;
       w0(m,IVZ,k,j,i) = 0.0;
-      w0(m,IPR,k,j,i) = bbh_.pfloor; //bbh.fluid.pfloor;
+      w0(m,IPR,k,j,i) = 2.0/(bbh_.gamma_adi*bbh_.r_B);; //bbh.fluid.pfloor;
       for (int r=0; r<nscal; ++r) {
         w0(m,IYF+r,k,j,i) = 0.0;
       }
       b0.x1f(m,k,j,i) = 0.0;
       b0.x2f(m,k,j,i) = 0.0;
-      b0.x3f(m,k,j,i) = 0.0;
+      b0.x3f(m,k,j,i) = std::sqrt(2*w0(m,IPR,k,j,i)/bbh_.beta);
       bcc0(m,IBX,k,j,i) = 0.0;
       bcc0(m,IBY,k,j,i) = 0.0;
-      bcc0(m,IBZ,k,j,i) = 0.0;
+      bcc0(m,IBZ,k,j,i) = std::sqrt(2*w0(m,IPR,k,j,i)/bbh_.beta);
     });
     // Convert primitives to conserved
     auto &u0 = pmbp->pmhd->u0;
@@ -240,6 +234,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
 namespace {
 
 void SetADMVariablesToBBH(MeshBlockPack *pmbp) {
+
   const Real tt = pmbp->pmesh->time;
   auto &adm = pmbp->padm->adm;
   auto &size = pmbp->pmb->mb_size;
@@ -281,13 +276,13 @@ void SetADMVariablesToBBH(MeshBlockPack *pmbp) {
 
     struct four_metric met4;
     struct three_metric met3;
-    numerical_4metric(tt, x1v, x2v, x3v, met4, bbh_traj_m1, bbh_traj_0, bbh_traj_p1,
-                      bbh_);
-
+    numerical_4metric(tt, x1v, x2v, x3v, met4, bbh_traj_m1, bbh_traj_0, bbh_traj_p1, bbh_);
+  
     /* Transform 4D metric to 3+1 variables*/
     four_metric_to_three_metric(met4, met3);
 
     /* Load (Cartesian) components of the metric and curvature */
+    
     // g_ab
     adm.g_dd(m,0,0,k,j,i) = met3.gxx;
     adm.g_dd(m,0,1,k,j,i) = met3.gxy;
@@ -307,6 +302,7 @@ void SetADMVariablesToBBH(MeshBlockPack *pmbp) {
     adm.beta_u(m,0,k,j,i) = met3.betax;
     adm.beta_u(m,1,k,j,i) = met3.betay;
     adm.beta_u(m,2,k,j,i) = met3.betaz;
+
   });
   return;
 }
@@ -314,8 +310,8 @@ void SetADMVariablesToBBH(MeshBlockPack *pmbp) {
 KOKKOS_INLINE_FUNCTION
 void numerical_4metric(const Real t, const Real x, const Real y,
     const Real z, struct four_metric &outmet,
-    const Real nz_m1[NTRAJ], const Real nz_0[NTRAJ], const Real nz_p1[NTRAJ],
-    const bbh_pgen& bbh_) {
+    const Real nz_m1[NTRAJ], const Real nz_0[NTRAJ], const Real nz_p1[NTRAJ], const bbh_pgen& bbh_)
+{
   struct four_metric met_m1;
   struct four_metric met_p1;
 
@@ -381,34 +377,30 @@ void numerical_4metric(const Real t, const Real x, const Real y,
   outmet.g_z.zz = D2(zz, h);
 
   return;
-}
+} 
 
 KOKKOS_INLINE_FUNCTION
 int four_metric_to_three_metric(const struct four_metric &met,
-                                struct three_metric &gam) {
-  /* Check determinant first */
+                                struct three_metric &gam) 
+{   
+  /* Check determinant first */ 
   gam.gxx = met.g.xx;
   gam.gxy = met.g.xy;
   gam.gxz = met.g.xz;
   gam.gyy = met.g.yy;
   gam.gyz = met.g.yz;
   gam.gzz = met.g.zz;
-
+  
   Real det = adm::SpatialDet(gam.gxx, gam.gxy, gam.gxz,
                                    gam.gyy, gam.gyz, gam.gzz);
 
   /* If determinant is not >0  something is wrong with the metric */
-  /* This could occur during the transition to merger at certain points
-     so here we restart to Minkowski */
+  /* This could occur during the transition to merger at certain points so here we restart to Minkowski */
   if (!(det > 0)) {
     //std::fprintf(stderr, "det < 0: %e\n", det);
     //std::fprintf(stderr, "%e %e %e\n", gam.gxx, gam.gxy, gam.gxz);
     //std::fprintf(stderr, "%e %e %e\n", gam.gyy, gam.gyz, gam.gzz);
     //std::fflush(stderr);
-    Kokkos::printf("det < 0: %e\n" // NOLINT
-                   "%e %e %e\n"
-                   "%e %e %e\n",
-                   det, gam.gxx, gam.gxy, gam.gxz, gam.gyy, gam.gyz, gam.gzz);
     det = 1.0;
     gam.gxx = 1.0;
     gam.gxy = 0.0;
@@ -419,19 +411,19 @@ int four_metric_to_three_metric(const struct four_metric &met,
     Real betadownx = 0.0;
     Real betadowny = 0.0;
     Real betadownz = 0.0;
-
+  
     Real dbetadownxx = 0.0;
     Real dbetadownyx = 0.0;
     Real dbetadownzx = 0.0;
-
+  
     Real dbetadownxy = 0.0;
     Real dbetadownyy = 0.0;
     Real dbetadownzy = 0.0;
-
+  
     Real dbetadownxz = 0.0;
     Real dbetadownyz = 0.0;
     Real dbetadownzz = 0.0;
-
+  
     Real dtgxx = 0.0;
     Real dtgxy = 0.0;
     Real dtgxz = 0.0;
@@ -486,6 +478,7 @@ int four_metric_to_three_metric(const struct four_metric &met,
     gam.kzz = 0.0;
 
   } else {
+
     /* Compute components if detg is not <0 */
     Real betadownx = met.g.tx;
     Real betadowny = met.g.ty;
@@ -590,12 +583,13 @@ int four_metric_to_three_metric(const struct four_metric &met,
 
 // Function to calculate the position and velocity of m1 and m2 at time t
 void find_traj_t(Real t, Real bbh_t[NTRAJ]) {
+
   Real const r_BH1_0 = bbh.q/(1.0+bbh.q)*bbh.sep;
   Real const r_BH2_0 = -bbh.sep/(1.0+bbh.q);
   bbh_t[X1] = r_BH1_0*std::cos(bbh.om*t);
   bbh_t[Y1] = r_BH1_0*std::sin(bbh.om*t);
   bbh_t[Z1] = 0.0;
-  bbh_t[X2] = r_BH1_0*std::cos(bbh.om*t);
+  bbh_t[X2] = r_BH2_0*std::cos(bbh.om*t);
   bbh_t[Y2] = r_BH2_0*std::sin(bbh.om*t);
   bbh_t[Z2] = 0.0;
   bbh_t[VX1] = -r_BH1_0*bbh.om*std::sin(bbh.om*t);
@@ -616,7 +610,8 @@ void find_traj_t(Real t, Real bbh_t[NTRAJ]) {
 
 KOKKOS_INLINE_FUNCTION
 void SuperposedBBH(const Real time, const Real x, const Real y, const Real z,
-                  Real gcov[][NDIM], const Real traj_array[NTRAJ], const bbh_pgen& bbh_) {
+                    Real gcov[][NDIM], const Real traj_array[NTRAJ], const bbh_pgen& bbh_)
+{
   /* Superposition components*/
   Real KS1[NDIM][NDIM];
   Real KS2[NDIM][NDIM];
@@ -625,7 +620,7 @@ void SuperposedBBH(const Real time, const Real x, const Real y, const Real z,
 
   /* Load trajectories */
   Real xi1x = traj_array[X1];
-  Real xi1y = traj_array[Y1];
+  Real xi1y = traj_array[Y1]; 
   Real xi1z = traj_array[Z1];
   Real xi2x = traj_array[X2];
   Real xi2y = traj_array[Y2];
@@ -636,75 +631,73 @@ void SuperposedBBH(const Real time, const Real x, const Real y, const Real z,
   Real v2x =  traj_array[VX2] + 1e-40;
   Real v2y =  traj_array[VY2] + 1e-40;
   Real v2z =  traj_array[VZ2] + 1e-40;
-
+  
   Real v2  =  sqrt( v2x * v2x + v2y * v2y + v2z * v2z );
-  Real v1  =  sqrt( v1x * v1x + v1y * v1y + v1z * v1z );
-
+  Real v1  =  sqrt( v1x * v1x + v1y * v1y + v1z * v1z ); 
+  
   Real a1x  = traj_array[AX1];
   Real a1y  = traj_array[AY1];
   Real a1z  = traj_array[AZ1];
-
+  
   Real a2x =  traj_array[AX2];
   Real a2y =  traj_array[AY2];
   Real a2z =  traj_array[AZ2];
-
+  
   Real m1_t = traj_array[M1T];
   Real m2_t = traj_array[M2T];
 
-  Real a1_t = sqrt( a1x*a1x + a1y*a1y + a1z*a1z + 1e-40);
-  Real a2_t = sqrt( a2x*a2x + a2y*a2y + a2z*a2z + 1e-40);
+  Real a1_t = sqrt( a1x*a1x + a1y*a1y + a1z*a1z + 1e-40) ;
+  Real a2_t = sqrt( a2x*a2x + a2y*a2y + a2z*a2z + 1e-40) ;
+ 
+  /* Load coordinates */  
 
-  /* Load coordinates */
+   Real oo1 = v1 * v1;
+   Real oo2 = oo1 * -1;
+   Real oo3 = 1 + oo2;
+   Real oo4 = sqrt(oo3);
+   Real oo5 = 1 / oo4;
+   Real oo6 = x * -1;
+   Real oo7 = oo6 + xi1x;
+   Real oo8 = v1x * oo7;
+   Real oo9 = y * -1;
+   Real oo10 = z * -1;
+   Real oo11 = v2 * v2;
+   Real oo12 = oo11 * -1;
+   Real oo13 = 1 + oo12;
+   Real oo14 = sqrt(oo13);
+   Real oo15 = 1 / oo14;
+   Real oo16 = oo6 + xi2x;
+   Real oo17 = v2x * oo16;
+   Real oo18 = xi1x * -1;
+   Real oo19 = 1 / oo1;
+   Real oo20 = -1 + oo4;
+   Real oo21 = xi1y * -1;
+   Real oo22 = xi1z * -1;
+   Real oo23 = xi2x * -1;
+   Real oo24 = 1 / oo11;
+   Real oo25 = -1 + oo14;
+   Real oo26 = xi2y * -1;
+   Real oo27 = xi2z * -1;
+   Real oo28 = xi1y * v1y;
+   Real oo29 = xi1z * v1z;
+   Real oo30 = v1y * (y * -1);
+   Real oo31 = v1z * (z * -1);
+   Real oo32 = oo28 + (oo29 + (oo30 + (oo31 + oo8)));
+   Real oo33 = xi2y * v2y;
+   Real oo34 = xi2z * v2z;
+   Real oo35 = v2y * (y * -1);
+   Real oo36 = v2z * (z * -1);
+   Real oo37 = oo17 + (oo33 + (oo34 + (oo35 + oo36)));
+   //Real x0BH1 = (oo8 + ((oo9 + xi1y) * v1y + (oo10 + xi1z) * v1z)) * oo5;
+   //Real x0BH2 = (oo17 + ((oo9 + xi2y) * v2y + (oo10 + xi2z) * v2z)) * oo15;
+   Real x1BH1 = (oo18 + x) - oo20 * (oo5 * (v1x * (((oo18 + x) * v1x + ((oo21 + y) * v1y + (oo22 + z) * v1z)) * oo19)));
+   Real x1BH2 = (oo23 + x) - oo24 * (oo25 * (v2x * (((oo23 + x) * v2x + ((oo26 + y) * v2y + (oo27 + z) * v2z)) * oo15)));
+   Real x2BH1 = oo21 + (oo20 * (oo32 * (oo5 * (v1y * oo19))) + y);
+   Real x2BH2 = oo26 + (oo24 * (oo25 * (oo37 * (v2y * oo15))) + y);
+   Real x3BH1 = oo22 + (oo20 * (oo32 * (oo5 * (v1z * oo19))) + z);
+   Real x3BH2 = oo27 + (oo24 * (oo25 * (oo37 * (v2z * oo15))) + z);
 
-  Real oo1 = v1 * v1;
-  Real oo2 = oo1 * -1;
-  Real oo3 = 1 + oo2;
-  Real oo4 = sqrt(oo3);
-  Real oo5 = 1 / oo4;
-  Real oo6 = x * -1;
-  Real oo7 = oo6 + xi1x;
-  Real oo8 = v1x * oo7;
-  Real oo9 = y * -1;
-  Real oo10 = z * -1;
-  Real oo11 = v2 * v2;
-  Real oo12 = oo11 * -1;
-  Real oo13 = 1 + oo12;
-  Real oo14 = sqrt(oo13);
-  Real oo15 = 1 / oo14;
-  Real oo16 = oo6 + xi2x;
-  Real oo17 = v2x * oo16;
-  Real oo18 = xi1x * -1;
-  Real oo19 = 1 / oo1;
-  Real oo20 = -1 + oo4;
-  Real oo21 = xi1y * -1;
-  Real oo22 = xi1z * -1;
-  Real oo23 = xi2x * -1;
-  Real oo24 = 1 / oo11;
-  Real oo25 = -1 + oo14;
-  Real oo26 = xi2y * -1;
-  Real oo27 = xi2z * -1;
-  Real oo28 = xi1y * v1y;
-  Real oo29 = xi1z * v1z;
-  Real oo30 = v1y * (y * -1);
-  Real oo31 = v1z * (z * -1);
-  Real oo32 = oo28 + (oo29 + (oo30 + (oo31 + oo8)));
-  Real oo33 = xi2y * v2y;
-  Real oo34 = xi2z * v2z;
-  Real oo35 = v2y * (y * -1);
-  Real oo36 = v2z * (z * -1);
-  Real oo37 = oo17 + (oo33 + (oo34 + (oo35 + oo36)));
-  //Real x0BH1 = (oo8 + ((oo9 + xi1y) * v1y + (oo10 + xi1z) * v1z)) * oo5;
-  //Real x0BH2 = (oo17 + ((oo9 + xi2y) * v2y + (oo10 + xi2z) * v2z)) * oo15;
-  Real x1BH1 = (oo18 + x) - oo20 * (oo5 * (v1x * (((oo18 + x) * v1x + ((oo21 + y) * v1y +
-                                                   (oo22 + z) * v1z)) * oo19)));
-  Real x1BH2 = (oo23 + x) - oo24 * (oo25 * (v2x * (((oo23 + x) * v2x + ((oo26 + y) * v2y +
-                                                    (oo27 + z) * v2z)) * oo15)));
-  Real x2BH1 = oo21 + (oo20 * (oo32 * (oo5 * (v1y * oo19))) + y);
-  Real x2BH2 = oo26 + (oo24 * (oo25 * (oo37 * (v2y * oo15))) + y);
-  Real x3BH1 = oo22 + (oo20 * (oo32 * (oo5 * (v1z * oo19))) + z);
-  Real x3BH2 = oo27 + (oo24 * (oo25 * (oo37 * (v2z * oo15))) + z);
-
-
+ 
   /* Adjust mass */
   /* This is useful for reducing the effective mass of each BH */
   /* Adjust by hand to get the correct irreducible mass of the BH */
@@ -712,35 +705,23 @@ void SuperposedBBH(const Real time, const Real x, const Real y, const Real z,
   Real m1 = m1_t * bbh_.adjust_mass1;
   Real a2 = a2_t * bbh_.adjust_mass2;
   Real m2 = m2_t * bbh_.adjust_mass2;
-
-  //============================================//
+ 
+  //============================================// 
   // Regularize horizon and apply excision mask //
   //============================================//
 
   /* Define radius with respect to BH frame */
-  Real rBH1 = sqrt( x1BH1*x1BH1 + x2BH1*x2BH1 + x3BH1*x3BH1);
-  Real rBH2 = sqrt( x1BH2*x1BH2 + x2BH2*x2BH2 + x3BH2*x3BH2);
+  Real rBH1 = sqrt( x1BH1*x1BH1 + x2BH1*x2BH1 + x3BH1*x3BH1) ;
+  Real rBH2 = sqrt( x1BH2*x1BH2 + x2BH2*x2BH2 + x3BH2*x3BH2) ;
 
-  /* Define radius cutoff */
-  Real rBH1_Cutoff = fabs(a1) * ( 1.0 + bbh_.a1_buffer) + bbh_.cutoff_floor;
-  Real rBH2_Cutoff = fabs(a2) * ( 1.0 + bbh_.a2_buffer) + bbh_.cutoff_floor;
+   /* Define radius cutoff */
+  Real rBH1_Cutoff = fabs(a1) * ( 1.0 + bbh_.a1_buffer) + bbh_.cutoff_floor ;
+  Real rBH2_Cutoff = fabs(a2) * ( 1.0 + bbh_.a2_buffer) + bbh_.cutoff_floor ;
 
   /* Apply excision */
-  if ((rBH1) < rBH1_Cutoff) {
-    if(x3BH1>0) {
-      x3BH1 = rBH1_Cutoff;
-    } else {
-      x3BH1 = -1.0*rBH1_Cutoff;
-    }
-  }
-  if ((rBH2) < rBH2_Cutoff) {
-    if(x3BH2>0) {
-      x3BH2 = rBH2_Cutoff;
-    } else {
-      x3BH2 = -1.0*rBH2_Cutoff;
-    }
-  }
-
+  if ((rBH1) < rBH1_Cutoff) { if(x3BH1>0) {x3BH1 = rBH1_Cutoff;} else {x3BH1 = -1.0*rBH1_Cutoff;}}
+  if ((rBH2) < rBH2_Cutoff) { if(x3BH2>0) {x3BH2 = rBH2_Cutoff;} else {x3BH2 = -1.0*rBH2_Cutoff;}}
+ 
   //=================//
   //     Metric      //
   //=================//
@@ -941,36 +922,29 @@ void SuperposedBBH(const Real time, const Real x, const Real y, const Real z,
   J2[3][2] = o132;
   J2[3][3] = 1 + o129 * ((v2z * v2z) * o128);
   /* Initialize the flat part */
-  Real eta[4][4] = {
-    {-1,0,0,0},
-    {0,1,0,0},
-    {0,0,1,0},
-    {0,0,0,1}
-  };
-  for (int i=0; i < 4; i++ ) {
-    for (int j=0; j < 4; j++ ) {
-      gcov[i][j] = eta[i][j];
-    }
-  }
+  Real eta[4][4] = {{-1,0,0,0},{0,1,0,0},{0,0,1,0},{0,0,0,1}};
+  for (int i=0; i < 4; i++ ){ for (int j=0; j < 4; j++ ){ gcov[i][j] = eta[i][j]; }}
 
   /* Load symmetric gcov (from chatGPT3)*/
   for (int i = 0; i < 4; ++i) {
-    for (int j = i; j < 4; ++j) {
-      Real sum = 0.0;
-      for (int m = 0; m < 4; ++m) {
-        Real term1 = J2[m][i];
-        Real term2 = J1[m][i];
-        for (int n = 0; n < 4; ++n) {
-          Real term3 = J2[n][j];
-          Real term4 = J1[n][j];
-
-          sum += (term1 * term3 * KS2[m][n] + term2 * term4 * KS1[m][n]);
-        }
+      for (int j = i; j < 4; ++j) {
+  
+          Real sum = 0.0;
+          for (int m = 0; m < 4; ++m) {
+              Real term1 = J2[m][i];
+              Real term2 = J1[m][i];
+  
+              for (int n = 0; n < 4; ++n) {
+                  Real term3 = J2[n][j];
+                  Real term4 = J1[n][j];
+  
+                  sum += (term1 * term3 * KS2[m][n] + term2 * term4 * KS1[m][n]);
+              }
+          }
+  
+          gcov[i][j] += sum;
+          gcov[j][i] = gcov[i][j];
       }
-
-      gcov[i][j] += sum;
-      gcov[j][i] = gcov[i][j];
-    }
   }
 
   return;
@@ -978,12 +952,12 @@ void SuperposedBBH(const Real time, const Real x, const Real y, const Real z,
 
 KOKKOS_INLINE_FUNCTION
 void get_metric(const Real t,
-                const Real x,
-                const Real y,
-                const Real z,
-                struct four_metric &met,
-                const Real bbh_traj_loc[NTRAJ],
-                const bbh_pgen& bbh_) {
+	       	const Real x,
+	       	const Real y,
+	       	const Real z,
+	       	struct four_metric &met,
+          const Real bbh_traj_loc[NTRAJ], const bbh_pgen& bbh_)
+{
   Real gcov[NDIM][NDIM];
 
   SuperposedBBH(t, x, y, z, gcov, bbh_traj_loc, bbh_);
@@ -1016,6 +990,8 @@ void RefineAlphaMin(MeshBlockPack *pmbp) {
   const int nji  = nx2 * nx1;
   auto &u0       = pmbp->padm->u_adm;
   int I_ADM_ALPHA  = pmbp->padm->I_ADM_ALPHA;
+  // note: we need this to prevent capture by this in the lambda expr.
+
   // note: we need this to prevent capture by this in the lambda expr.
   auto &bbh_ = bbh;
 
@@ -1066,6 +1042,7 @@ void RefineTracker(MeshBlockPack *pmbp) {
   Real x2_BH2 = bbh_traj[Y2];
   Real x3_BH2 = bbh_traj[Z2];
   for (int m = 0; m < nmb; ++m) {
+
     // extract MeshBlock bounds
     Real &x1min = size.h_view(m).x1min;
     Real &x1max = size.h_view(m).x1max;
@@ -1119,4 +1096,5 @@ void RefineTracker(MeshBlockPack *pmbp) {
   refine_flag.template sync<DevExeSpace>();
 }
 
-} // namespace
+}
+
