@@ -11,6 +11,7 @@ import math
 import argparse
 import re
 import h5py
+#from itertools import product
 
 # import matplotlib.pyplot as plt
 # import glob
@@ -31,6 +32,9 @@ g_field_names = [
     "alp",
 ]
 
+## real/imag
+g_re = 0
+g_im = 1
 
 def parse_cli():
   """
@@ -55,51 +59,30 @@ def load(fpath: str, field_name: str, attr: dict) -> list:
   """
     read the field accroding to attr.
     return convention:
-      ret dict: {t = ...,
-                 re = ...,
-                 im = ...
-                }
-      e.g:
-      ret["t"][i] = dump_time_value at i,
-      ret["re"][i] = 2d_array_coeffs_for_given_time_real at i,
-      ret["im"][i] = 2d_array_coeffs_for_given_time_imag at i,
-      where i indicates the dump number.
+      ret[real/imag, time_level, n, lm], eg:
+      ret[g_re,3,2,:] = Re(C_2lm(t=3)) for all lm
+      ret[g_im,3,2,:] = Im(C_2lm(t=3)) for all lm
     """
-
-  ret = {}
-  ret["t"] = []
-  ret["re"] = []
-  ret["im"] = []
   
   if attr["file_type"] == "h5":
     lev_t = attr["lev_t"]
     max_n = attr["max_n"]
-    max_l = attr["max_l"]
+    max_lm = attr["max_lm"]
+    shape = (len([g_re,g_im]),lev_t,max_n,max_lm)
+    ret = np.empty(shape=shape,dtype=float)
     with h5py.File(fpath, "r") as h5f:
-      # get shape and dtype
-      key = f"{0}"
-      h5_re = h5f[f"{key}/{field_name}/re"]
-      h5_im = h5f[f"{key}/{field_name}/im"]
-      re = np.empty_like(h5_re)
-      im = np.empty_like(h5_im)
-
       # read & save
       for i in range(0, lev_t):
         key = f"{i}"
-        t = h5f[key].attrs["Time"][0]
         h5_re = h5f[f"{key}/{field_name}/re"]
         h5_im = h5f[f"{key}/{field_name}/im"]
-        re[:] = h5f[f"{key}/{field_name}/re"]
-        im[:] = h5f[f"{key}/{field_name}/im"]
-        # save
-        ret["t"].append(t)
-        ret["re"].append(re)
-        ret["im"].append(im)
-        
+        ret[g_re,i,:] = h5_re
+        ret[g_im,i,:] = h5_im
         
   else:
     raise ValueError("no such option")
 
+  #print(ret)
   return ret
 
 
@@ -115,7 +98,8 @@ def get_attribute(fpath: str,
                   type: str = "h5",
                   args=None) -> dict:
   """
-    find attributes such as num. of time level, and n,l,m in C_nlm
+    find attributes such as num. of time level, and n, lm in C_nlm
+    also saves the time value at each slice.
     """
   attr = {}
   if type == "h5":
@@ -123,40 +107,38 @@ def get_attribute(fpath: str,
     with h5py.File(fpath, "r") as h5f:
       # find attribute about num. of time level, and n,l,m in C_nlm
       attr["lev_t"] = len(h5f.keys()) - 1
-      attr["max_n"] = h5f["1/gxx/re"].shape[0]
-      attr["max_l"] = int(math.sqrt(h5f["1/gxx/re"].shape[1]))
+      attr["max_n"], attr["max_lm"] = h5f[f"1/{field_name}/re"].shape
+      # read & save time
+      time = []
+      for i in range(0, attr["lev_t"]):
+        key = f"{i}"
+        t = h5f[key].attrs["Time"][0]
+        time.append(t)
+      
+      attr["time"] = np.array(time)
 
   else:
     raise ValueError("no such option")
 
+  #print(attr)
   return attr
 
 
-def time_derivative_fourier(field_name: str, db: dict, args):
+def time_derivative_fourier(field: np.array, attr: dict, args) -> np.array:
   """
     return the time derivative of the given field using Fourier method
+    field(t,rel/img,n,lm)
     """
 
   # populate
-  # note field[i] = {time, re, im}
-  field = db[field_name]["value"]
-  # chose 0th one, as should be the same for other fields
-  len_all_n_modes = field["re"][0].shape[0]
-  len_all_lm_modes = field["re"][0].shape[1]
-  len_all_time = len(field["t"])
-  coeff = np.empty(shape=(len_all_time))
-  f_coeff = np.empty(shape=(len_all_n_modes*len_all_lm_mode, len_all_time))
-
-  ## it's 2d and not 1d ???
-  for n, lm in product(n,lm):
-    # fetch data along time axis for each nlm coeffs
-    for t in range(0, len_all_time):
-      print(field["re"][t][n,lm])
-      coeff[t] = complex(field["re"][t][n,lm], field["im"][t][n,lm])
-
-    # F. transform
-    f_coeff[n,lm][:] = np.fft.fft(coeff[i])
-
+  _, len_t, len_n, len_lm = field.shape
+  coeff = np.empty(shape=(len_t),dtype=complex)
+  for n in range(len_n):
+    for lm in range(len_lm):
+      coeff[:] = field[g_re,:,n,lm]+1j*field[g_im,:,n,lm]
+      # F. transform
+      fft_coeff = np.fft.fft(coeff)
+      
   # F. derivative
   wm = math.pi * 2.0 / (nmax * dt)
   for nlm in range(0, len_all_modes):
@@ -196,20 +178,18 @@ def main(args):
     """
 
   # find attribute for an arbitrary field
-  attr = get_attribute(args["f_h5"], "gxx", "h5")
+  attr = get_attribute(args["f_h5"])
 
   # for each field
   field_name = "gxx"
 
   # load data
-  db = {}
-  db[field_name] = {}
-  db[field_name]["value"] = load(args["f_h5"], field_name, attr)
+  field = load(args["f_h5"], field_name, attr)
 
   # print(dat)
 
   # time derivative
-  db[field_name]["Dt"] = time_derivative(field_name, db, args)
+  dfield_dt = time_derivative(field, attr, args)
 
   # radial derivative
 
