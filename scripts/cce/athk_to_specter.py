@@ -127,7 +127,8 @@ def get_attribute(fpath: str,
   return attr
 
 
-def time_derivative_fourier(field: np.array, attr: dict, args) -> np.array:
+def time_derivative_fourier(field: np.array, field_name: str, attr: dict,
+                            args) -> np.array:
   """
     return the time derivative of the given field using Fourier method
     field(t,rel/img,n,lm)
@@ -163,16 +164,25 @@ def time_derivative_fourier(field: np.array, attr: dict, args) -> np.array:
       dfield[g_re, :, n, lm] = np.real(coeff)
       dfield[g_im, :, n, lm] = np.imag(coeff)
 
-  print(dfield)
+  if args["debug"] == "y":
+    hfile = f"./d{field_name}_dt.txt"
+    write_data = np.column_stack((
+        range(len_t),
+        dfield[g_re, :, 2, lm_mode(2, 2)],
+        dfield[g_im, :, 2, lm_mode(2, 2)],
+    ))
+    np.savetxt(hfile, write_data, header="i re im")
+
+  return dfield
 
 
-def time_derivative(field_name: str, db: dict, args):
+def time_derivative(field: np.array, field_name: str, db: dict, args):
   """
     return the time derivative of the given field
     """
 
   if args["t_deriv"] == "Fourier":
-    return time_derivative_fourier(field_name, db, args)
+    return time_derivative_fourier(field, field_name, db, args)
   else:
     raise ValueError("no such option")
 
@@ -195,7 +205,7 @@ def main(args):
   # print(dat)
 
   # time derivative
-  dfield_dt = time_derivative(field, attr, args)
+  dfield_dt = time_derivative(field, field_name, attr, args)
 
   # radial derivative
 
