@@ -44,6 +44,7 @@ def parse_cli():
       description="convert Athenak CCE dumps to Spectre CCE")
   p.add_argument("-f_h5", type=str, required=True, help="/path/to/cce/h5/dumps")
   p.add_argument("-d_out", type=str, required=True, help="/path/to/output/dir")
+  p.add_argument("-debug", type=str, default='y', help="debug=[y,n]")
   p.add_argument(
       "-t_deriv",
       type=str,
@@ -130,34 +131,37 @@ def time_derivative_fourier(field: np.array, attr: dict, args) -> np.array:
     field(t,rel/img,n,lm)
     """
 
-  # populate
   _, len_t, len_n, len_lm = field.shape
-  coeff = np.empty(shape=(len_t),dtype=complex)
+  dt = attr["time"][2]-attr["time"][1]
+  wm = math.pi * 2.0 / (len_t * dt)
+  
+  dfield = np.empty_like(field)
   for n in range(len_n):
     for lm in range(len_lm):
-      coeff[:] = field[g_re,:,n,lm]+1j*field[g_im,:,n,lm]
+      coeff = field[g_re,:,n,lm]+1j*field[g_im,:,n,lm]
       # F. transform
       fft_coeff = np.fft.fft(coeff)
+      #if args["debug"] == 'y':
+      #  print("debug: normalization?",round(coeff[1],6) == round(np.fft.ifft(fft_coeff)[1],6))
       
-  # F. derivative
-  wm = math.pi * 2.0 / (nmax * dt)
-  for nlm in range(0, len_all_modes):
-    wm = math.pi * 2.0 / (nmax * dt)
-    f_coeff[nlm][0] = 0
-    for i in range(1, len_all_time // 2 + 1):
-      omega = i * wm
-      re = np.real(f_coeff[nlm][i])
-      im = np.imag(f_coeff[nlm][i])
+      # time derivative
+      fft_coeff[0] = complex(0)
+      for i in range(1, len_t // 2 + 1):
+        omega = i * wm
+        re = np.real(fft_coeff[i])
+        im = np.imag(fft_coeff[i])
+        re2 = np.real(fft_coeff[-i])
+        im2 = np.imag(fft_coeff[-i])
 
-      re2 = np.real(f_coeff[nlm][len_all_time - i])
-      im2 = np.imag(f_coeff[nlm][len_all_time - i])
+        fft_coeff[i] = complex(-im * omega, re * omega)
+        fft_coeff[-i] = complex(-im2 * omega, re2 * omega)
 
-      f_coeff[nlm][i] = np.complex(-im * omega, re * omega)
-      f_coeff[nlm][len_all_time - i] = np.complex(-im2 * omega, re2 * omega)
-
-  # F. inverse
-  for nlm in range(0, len_all_modes):
-    d_coeff[nlm] = np.fft.ifft(f_coeff[nlm])
+      # F. inverse
+      coeff = np.fft.ifft(fft_coeff)
+      dfield[g_re,:,n,lm]=np.real(coeff)
+      dfield[g_im,:,n,lm]=np.imag(coeff)
+  
+  print(dfield)
 
 
 def time_derivative(field_name: str, db: dict, args):
