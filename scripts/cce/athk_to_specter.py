@@ -165,7 +165,7 @@ def time_derivative_fourier(field: np.array, field_name: str, attr: dict,
       dfield[g_im, :, n, lm] = np.imag(coeff)
 
   if args["debug"] == "y":
-    hfile = f"./d{field_name}_dt.txt"
+    hfile = f"./debug_d{field_name}_dt.txt"
     write_data = np.column_stack((
         range(len_t),
         dfield[g_re, :, 2, lm_mode(2, 2)],
