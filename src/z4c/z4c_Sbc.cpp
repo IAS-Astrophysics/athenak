@@ -31,18 +31,18 @@ static void Z4cSommerfeld(const Z4c::Z4c_vars& z4c, const Z4c::Z4c_vars& rhs,
 
   // First derivatives
   // Scalars
-  AthenaScratchTensor<Real, TensorSymm::NONE, 3, 1> dKhat_d;
-  AthenaScratchTensor<Real, TensorSymm::NONE, 3, 1> dTheta_d;
+  AthenaPointTensor<Real, TensorSymm::NONE, 3, 1> dKhat_d;
+  AthenaPointTensor<Real, TensorSymm::NONE, 3, 1> dTheta_d;
 
   // Vectors
-  AthenaScratchTensor<Real, TensorSymm::NONE, 3, 2> dGam_du;
+  AthenaPointTensor<Real, TensorSymm::NONE, 3, 2> dGam_du;
 
   // Tensors
-  AthenaScratchTensor<Real, TensorSymm::SYM2, 3, 3> dA_ddd;
+  AthenaPointTensor<Real, TensorSymm::SYM2, 3, 3> dA_ddd;
 
 
   // Psuedoradial vector
-  AthenaScratchTensor<Real, TensorSymm::NONE, 3, 1> s_u;
+  AthenaPointTensor<Real, TensorSymm::NONE, 3, 1> s_u;
 
   Real idx[] = {1./size.d_view(m).dx1, 1./size.d_view(m).dx2, 1./size.d_view(m).dx3};
 
