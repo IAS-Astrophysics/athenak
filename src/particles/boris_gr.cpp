@@ -436,16 +436,26 @@ void HamiltonEquation_Velocity(const Real * x_0, const Real * x_1, const Real * 
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn  void ComputeInverseMatrix3
-//  \brief
+//! \fn  void ComputeDeterminant3
+//  \brief Compute the determinant of a 3x3 matrix
 KOKKOS_INLINE_FUNCTION
-void ComputeInverseMatrix3( const Real inputMat[][3], Real outputMat[][3] ){
+void ComputeDeterminant3( const Real inputMat[][3], Real &determinant ){
 
-	Real determinant = 0.0;
 	determinant = inputMat[0][0]*inputMat[1][1]*inputMat[2][2] + inputMat[0][1]*inputMat[1][2]*inputMat[2][0]
 		+ inputMat[1][0]*inputMat[2][1]*inputMat[0][2]
 		- inputMat[2][0]*inputMat[1][1]*inputMat[0][2] - inputMat[1][0]*inputMat[0][1]*inputMat[2][2]
 		- inputMat[2][1]*inputMat[1][2]*inputMat[1][1];
+
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn  void ComputeInverseMatrix3
+//  \brief Compute the inverse of a 3x3 matrix
+KOKKOS_INLINE_FUNCTION
+void ComputeInverseMatrix3( const Real inputMat[][3], Real outputMat[][3] ){
+
+	Real determinant = 0.0;
+	ComputeDeterminant3( inputMat, determinant );
 
 	// Transposition of Jacobian is skipped and indeces are inverted instead
 	outputMat[0][0] = (inputMat[1][1]*inputMat[2][2] - inputMat[2][1]*inputMat[1][2])/determinant;
@@ -556,8 +566,17 @@ void Particles::BorisStep( const Real dt, const bool only_v ){
 	// Store it in an array for convenience 
 	Real E[3] = {0.0, 0.0, 0.0};
 	E[0] = e0_.x1e(m, kp, jp, ip) + (x[0] - x1v)*(e0_.x1e(m, kp, jp, ip+1) - e0_.x1e(m, kp, jp, ip))/Dx;
-	E[1] = e0_.x2e(m, kp, jp, ip) + (x[1] - x2v)*(e0_.x2e(m, kp, jp+1, ip) - e0_.x2e(m, kp, jp, ip))/Dy;
-	E[2] = e0_.x3e(m, kp, jp, ip) + (x[2] - x3v)*(e0_.x3e(m, kp+1, jp, ip) - e0_.x3e(m, kp, jp, ip))/Dz;
+	E[0] += e0_.x1e(m, kp, jp, ip) + (x[1] - x2v)*(e0_.x1e(m, kp, jp+1, ip) - e0_.x1e(m, kp, jp, ip))/Dx;
+	E[0] += e0_.x1e(m, kp, jp, ip) + (x[2] - x3v)*(e0_.x1e(m, kp+1, jp, ip) - e0_.x1e(m, kp, jp, ip))/Dx;
+	E[0] /= 6.0;
+	E[1] = e0_.x2e(m, kp, jp, ip) + (x[0] - x1v)*(e0_.x2e(m, kp, jp, ip+1) - e0_.x2e(m, kp, jp, ip))/Dy;
+	E[1] += e0_.x2e(m, kp, jp, ip) + (x[1] - x2v)*(e0_.x2e(m, kp, jp+1, ip) - e0_.x2e(m, kp, jp, ip))/Dy;
+	E[1] += e0_.x2e(m, kp, jp, ip) + (x[2] - x3v)*(e0_.x2e(m, kp+1, jp, ip) - e0_.x2e(m, kp, jp, ip))/Dy;
+	E[1] /= 6.0;
+	E[2] = e0_.x3e(m, kp, jp, ip) + (x[0] - x1v)*(e0_.x3e(m, kp, jp, ip+1) - e0_.x3e(m, kp, jp, ip))/Dz;
+	E[2] += e0_.x3e(m, kp, jp, ip) + (x[1] - x2v)*(e0_.x3e(m, kp, jp+1, ip) - e0_.x3e(m, kp, jp, ip))/Dz;
+	E[2] += e0_.x3e(m, kp, jp, ip) + (x[2] - x3v)*(e0_.x3e(m, kp+1, jp, ip) - e0_.x3e(m, kp, jp, ip))/Dz;
+	E[2] /= 6.0;
 
 	uE[0] = u_con[0] + dt*q_over_m/(2.0)*E[0];
         if (multi_d) { uE[1] = u_con[1] + dt*q_over_m/(2.0)*E[1]; }
@@ -585,8 +604,17 @@ void Particles::BorisStep( const Real dt, const bool only_v ){
 	// Store it in an array for convenience 
 	Real B[3] = {0.0, 0.0, 0.0};
 	B[0] = b0_.x1f(m, kp, jp, ip) + (x[0] - x1v)*(b0_.x1f(m, kp, jp, ip+1) - b0_.x1f(m, kp, jp, ip))/Dx;
-	B[1] = b0_.x2f(m, kp, jp, ip) + (x[1] - x2v)*(b0_.x2f(m, kp, jp+1, ip) - b0_.x2f(m, kp, jp, ip))/Dy;
-	B[2] = b0_.x3f(m, kp, jp, ip) + (x[2] - x3v)*(b0_.x3f(m, kp+1, jp, ip) - b0_.x3f(m, kp, jp, ip))/Dz;
+	B[0] += b0_.x1f(m, kp, jp, ip) + (x[1] - x2v)*(b0_.x1f(m, kp, jp+1, ip) - b0_.x1f(m, kp, jp, ip))/Dx;
+	B[0] += b0_.x1f(m, kp, jp, ip) + (x[2] - x3v)*(b0_.x1f(m, kp+1, jp, ip) - b0_.x1f(m, kp, jp, ip))/Dx;
+	B[0] /= 6.0;
+	B[1] = b0_.x2f(m, kp, jp, ip) + (x[0] - x1v)*(b0_.x2f(m, kp, jp, ip+1) - b0_.x2f(m, kp, jp, ip))/Dy;
+	B[1] += b0_.x2f(m, kp, jp, ip) + (x[1] - x2v)*(b0_.x2f(m, kp, jp+1, ip) - b0_.x2f(m, kp, jp, ip))/Dy;
+	B[1] += b0_.x2f(m, kp, jp, ip) + (x[2] - x3v)*(b0_.x2f(m, kp+1, jp, ip) - b0_.x2f(m, kp, jp, ip))/Dy;
+	B[1] /= 6.0;
+	B[2] += b0_.x3f(m, kp, jp, ip) + (x[0] - x1v)*(b0_.x3f(m, kp, jp, ip+1) - b0_.x3f(m, kp, jp, ip))/Dz;
+	B[2] += b0_.x3f(m, kp, jp, ip) + (x[1] - x2v)*(b0_.x3f(m, kp, jp+1, ip) - b0_.x3f(m, kp, jp, ip))/Dz;
+	B[2] += b0_.x3f(m, kp, jp, ip) + (x[2] - x3v)*(b0_.x3f(m, kp+1, jp, ip) - b0_.x3f(m, kp, jp, ip))/Dz;
+	B[2] /= 6.0;
 
 	// When operating with magnetic field in normal coordinate the velocity must be combined with the metric beta
 	Real uE_beta[3] = {
@@ -607,6 +635,8 @@ void Particles::BorisStep( const Real dt, const bool only_v ){
 		}
 	}
 
+	Real adm_det; 
+	ComputeDeterminant3( ADM_upper, adm_det );
 	// Save the vector product of u and t 
 	// Vector product results in covariant vector
 	Real vec_ut_cov[3] = {
@@ -621,6 +651,10 @@ void Particles::BorisStep( const Real dt, const bool only_v ){
 		vec_ut[i1] += ADM_upper[i1][i2]*vec_ut_cov[i2];
 		}
 	}
+	// Used a vector product, correct for volume
+	for (int i = 0; i < 3; ++i ){ 
+		vec_ut[i] = vec_ut[i] * adm_det;
+	}
 	// Re-use arrays
 	vec_ut_cov[0] = (uE_beta[1] + vec_ut[1])*t[2] - (uE_beta[2] + vec_ut[2])*t[1];
 	vec_ut_cov[1] = (uE_beta[2] + vec_ut[2])*t[0] - (uE_beta[0] + vec_ut[0])*t[2];
@@ -630,6 +664,9 @@ void Particles::BorisStep( const Real dt, const bool only_v ){
 		for (int i2 = 0; i2 < 3; ++i2 ){ 
 		vec_ut[i1] += ADM_upper[i1][i2]*vec_ut_cov[i2];
 		}
+	}
+	for (int i = 0; i < 3; ++i ){ 
+		vec_ut[i] = vec_ut[i] * adm_det;
 	}
 	
 
