@@ -9,14 +9,14 @@ import os
 import numpy as np
 import math
 import argparse
-import re
 import h5py
 
 # from itertools import product
-
 # import matplotlib.pyplot as plt
 # import glob
 # import sympy
+# import re
+
 ## ---------------------------------------------------------------------- ##
 
 ## field names
@@ -38,7 +38,7 @@ g_re = 0
 g_im = 1
 
 ## debug
-g_debug_max_l = 5
+g_debug_max_l = 2
 
 
 def parse_cli():
@@ -152,33 +152,50 @@ def time_derivative_fourier(field: np.array, field_name: str, attr: dict,
       #  print("debug: normalization?",round(coeff[1],6) == round(np.fft.ifft(fft_coeff)[1],6))
 
       # time derivative
-      fft_coeff[0] = complex(0)
-      for i in range(1, len_t // 2 + 1):
+      half = len_t // 2 + 1
+      omega = np.empty(shape=half)
+      for i in range(0, half):
+        omega[i] = i * wm
+
+      dfft_coeff = np.empty_like(fft_coeff)
+      dfft_coeff[0] = 0
+      dfft_coeff[1:half] = (-np.imag(fft_coeff[1:half]) +
+                            1j * np.real(fft_coeff[1:half])) * omega[1:]
+      dfft_coeff[half:] = (np.imag(fft_coeff[half:]) -
+                           1j * np.real(fft_coeff[half:])) * omega[::-1][1:]
+
+      # not optimized version
+      """
+      dfft_coeff[0] = 0
+      for i in range(1, half):
         omega = i * wm
         re = np.real(fft_coeff[i])
         im = np.imag(fft_coeff[i])
         re2 = np.real(fft_coeff[-i])
         im2 = np.imag(fft_coeff[-i])
 
-        fft_coeff[i] = complex(-im * omega, re * omega)
-        fft_coeff[-i] = complex(im2 * omega, -re2 * omega)
+        dfft_coeff[i] = omega*complex(-im, re)
+        dfft_coeff[-i] = omega*complex(im2, -re2)
 
+      """
       # F. inverse
-      coeff = np.fft.ifft(fft_coeff)
+      coeff = np.fft.ifft(dfft_coeff)
       dfield[g_re, :, n, lm] = np.real(coeff)
       dfield[g_im, :, n, lm] = np.imag(coeff)
 
   if args["debug"] == "y":
     for n in range(len_n):
-      for l in range(2, g_debug_max_l):
+      for l in range(2, g_debug_max_l + 1):
         for m in range(-l, l + 1):
-          hfile = f"./debug_d{field_name}_dt_n{n}l{l}m{m}.txt"
+          hfile = (f"{args['d_out']}/debug_{field_name}_n{n}l{l}m{m}.txt")
           write_data = np.column_stack((
               attr["time"],
               dfield[g_re, :, n, lm_mode(l, m)],
               dfield[g_im, :, n, lm_mode(l, m)],
+              field[g_re, :, n, lm_mode(l, m)],
+              field[g_im, :, n, lm_mode(l, m)],
           ))
-          np.savetxt(hfile, write_data, header="t re im")
+          np.savetxt(hfile, write_data, header="t dre/dt dim/dt re im")
 
   return dfield
 
