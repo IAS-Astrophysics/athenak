@@ -568,15 +568,15 @@ void Particles::BorisStep( const Real dt, const bool only_v ){
 	E[0] = e0_.x1e(m, kp, jp, ip) + (x[0] - x1v)*(e0_.x1e(m, kp, jp, ip+1) - e0_.x1e(m, kp, jp, ip))/Dx;
 	E[0] += e0_.x1e(m, kp, jp, ip) + (x[1] - x2v)*(e0_.x1e(m, kp, jp+1, ip) - e0_.x1e(m, kp, jp, ip))/Dx;
 	E[0] += e0_.x1e(m, kp, jp, ip) + (x[2] - x3v)*(e0_.x1e(m, kp+1, jp, ip) - e0_.x1e(m, kp, jp, ip))/Dx;
-	E[0] /= 6.0;
+	E[0] /= 3.0;
 	E[1] = e0_.x2e(m, kp, jp, ip) + (x[0] - x1v)*(e0_.x2e(m, kp, jp, ip+1) - e0_.x2e(m, kp, jp, ip))/Dy;
 	E[1] += e0_.x2e(m, kp, jp, ip) + (x[1] - x2v)*(e0_.x2e(m, kp, jp+1, ip) - e0_.x2e(m, kp, jp, ip))/Dy;
 	E[1] += e0_.x2e(m, kp, jp, ip) + (x[2] - x3v)*(e0_.x2e(m, kp+1, jp, ip) - e0_.x2e(m, kp, jp, ip))/Dy;
-	E[1] /= 6.0;
+	E[1] /= 3.0;
 	E[2] = e0_.x3e(m, kp, jp, ip) + (x[0] - x1v)*(e0_.x3e(m, kp, jp, ip+1) - e0_.x3e(m, kp, jp, ip))/Dz;
 	E[2] += e0_.x3e(m, kp, jp, ip) + (x[1] - x2v)*(e0_.x3e(m, kp, jp+1, ip) - e0_.x3e(m, kp, jp, ip))/Dz;
 	E[2] += e0_.x3e(m, kp, jp, ip) + (x[2] - x3v)*(e0_.x3e(m, kp+1, jp, ip) - e0_.x3e(m, kp, jp, ip))/Dz;
-	E[2] /= 6.0;
+	E[2] /= 3.0;
 
 	uE[0] = u_con[0] + dt*q_over_m/(2.0)*E[0];
         if (multi_d) { uE[1] = u_con[1] + dt*q_over_m/(2.0)*E[1]; }
@@ -606,15 +606,15 @@ void Particles::BorisStep( const Real dt, const bool only_v ){
 	B[0] = b0_.x1f(m, kp, jp, ip) + (x[0] - x1v)*(b0_.x1f(m, kp, jp, ip+1) - b0_.x1f(m, kp, jp, ip))/Dx;
 	B[0] += b0_.x1f(m, kp, jp, ip) + (x[1] - x2v)*(b0_.x1f(m, kp, jp+1, ip) - b0_.x1f(m, kp, jp, ip))/Dx;
 	B[0] += b0_.x1f(m, kp, jp, ip) + (x[2] - x3v)*(b0_.x1f(m, kp+1, jp, ip) - b0_.x1f(m, kp, jp, ip))/Dx;
-	B[0] /= 6.0;
+	B[0] /= 3.0;
 	B[1] = b0_.x2f(m, kp, jp, ip) + (x[0] - x1v)*(b0_.x2f(m, kp, jp, ip+1) - b0_.x2f(m, kp, jp, ip))/Dy;
 	B[1] += b0_.x2f(m, kp, jp, ip) + (x[1] - x2v)*(b0_.x2f(m, kp, jp+1, ip) - b0_.x2f(m, kp, jp, ip))/Dy;
 	B[1] += b0_.x2f(m, kp, jp, ip) + (x[2] - x3v)*(b0_.x2f(m, kp+1, jp, ip) - b0_.x2f(m, kp, jp, ip))/Dy;
-	B[1] /= 6.0;
-	B[2] += b0_.x3f(m, kp, jp, ip) + (x[0] - x1v)*(b0_.x3f(m, kp, jp, ip+1) - b0_.x3f(m, kp, jp, ip))/Dz;
+	B[1] /= 3.0;
+	B[2] = b0_.x3f(m, kp, jp, ip) + (x[0] - x1v)*(b0_.x3f(m, kp, jp, ip+1) - b0_.x3f(m, kp, jp, ip))/Dz;
 	B[2] += b0_.x3f(m, kp, jp, ip) + (x[1] - x2v)*(b0_.x3f(m, kp, jp+1, ip) - b0_.x3f(m, kp, jp, ip))/Dz;
 	B[2] += b0_.x3f(m, kp, jp, ip) + (x[2] - x3v)*(b0_.x3f(m, kp+1, jp, ip) - b0_.x3f(m, kp, jp, ip))/Dz;
-	B[2] /= 6.0;
+	B[2] /= 3.0;
 
 	// When operating with magnetic field in normal coordinate the velocity must be combined with the metric beta
 	Real uE_beta[3] = {
