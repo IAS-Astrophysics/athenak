@@ -475,7 +475,16 @@ template<typename T, TensorSymm sym, int ndim>
 class AthenaPointTensor<T, sym, ndim, 4> {
  public:
   KOKKOS_INLINE_FUNCTION
-  AthenaPointTensor();
+  AthenaPointTensor() {
+    switch(sym) {
+      case TensorSymm::NONE:
+        ndof_ = ndim*ndim*ndim*ndim;
+        break;
+      case TensorSymm::SYM22:
+        ndof_ = (ndim + 1)*ndim/2 * (ndim + 1)*ndim/2;
+        break;
+    }
+  }
   // the default destructor/copy operators are sufficient
   ~AthenaPointTensor() = default;
   AthenaPointTensor(AthenaPointTensor<T, sym, ndim, 4> const &) = default;
@@ -526,20 +535,6 @@ class AthenaPointTensor<T, sym, ndim, 4> {
   Real data_[TensorDOF<sym,ndim,4>];
   int ndof_;
 };
-
-//----------------------------------------------------------------------------------------
-// Implementation details
-template<typename T, TensorSymm sym, int ndim>
-AthenaPointTensor<T, sym, ndim, 4>::AthenaPointTensor() {
-  switch(sym) {
-    case TensorSymm::NONE:
-      ndof_ = ndim*ndim*ndim*ndim;
-      break;
-    case TensorSymm::SYM22:
-      ndof_ = (ndim + 1)*ndim/2 * (ndim + 1)*ndim/2;
-      break;
-  }
-}
 
 // Here tensors are defined as static 1D arrays, with compile-time dimension calculated as
 // dim**rank
@@ -612,7 +607,17 @@ template<typename T, TensorSymm sym, int ndim>
 class AthenaScratchTensor<T, sym, ndim, 2> {
  public:
   KOKKOS_INLINE_FUNCTION
-  AthenaScratchTensor();
+  AthenaScratchTensor() {
+    switch(sym) {
+      case TensorSymm::NONE:
+        ndof_ = ndim * ndim;
+        break;
+      case TensorSymm::SYM2:
+      case TensorSymm::ISYM2:
+        ndof_ = (ndim + 1)*ndim/2;
+        break;
+    }
+  }
   // the default destructor/copy operators are sufficient
   ~AthenaScratchTensor() = default;
   AthenaScratchTensor(AthenaScratchTensor<T, sym, ndim, 2> const &) = default;
@@ -645,29 +650,23 @@ class AthenaScratchTensor<T, sym, ndim, 2> {
 };
 
 //----------------------------------------------------------------------------------------
-// Implementation details
-template<typename T, TensorSymm sym, int ndim>
-AthenaScratchTensor<T, sym, ndim, 2>::AthenaScratchTensor() {
-// change switch to if else const expr
-switch(sym) {
-    case TensorSymm::NONE:
-      ndof_ = ndim * ndim;
-      break;
-    case TensorSymm::SYM2:
-    case TensorSymm::ISYM2:
-      ndof_ = (ndim + 1)*ndim/2;
-      break;
-  }
-}
-
-//----------------------------------------------------------------------------------------
 // rank 3 AthenaScratchTensor
 // This is a 1D AthenaScratchTensor
 template<typename T, TensorSymm sym, int ndim>
 class AthenaScratchTensor<T, sym, ndim, 3> {
  public:
   KOKKOS_INLINE_FUNCTION
-  AthenaScratchTensor();
+  AthenaScratchTensor() {
+    switch(sym) {
+      case TensorSymm::NONE:
+        ndof_ = ndim * ndim * ndim;
+        break;
+      case TensorSymm::SYM2:
+      case TensorSymm::ISYM2:
+        ndof_ = ndim * (ndim + 1)*ndim/2;
+        break;
+    }
+  }
   // the default destructor/copy operators are sufficient
   ~AthenaScratchTensor() = default;
   AthenaScratchTensor(AthenaScratchTensor<T, sym, ndim, 3> const &) = default;
@@ -705,28 +704,22 @@ class AthenaScratchTensor<T, sym, ndim, 3> {
 };
 
 //----------------------------------------------------------------------------------------
-// Implementation details
-template<typename T, TensorSymm sym, int ndim>
-AthenaScratchTensor<T, sym, ndim, 3>::AthenaScratchTensor() {
-  switch(sym) {
-    case TensorSymm::NONE:
-      ndof_ = ndim * ndim * ndim;
-      break;
-    case TensorSymm::SYM2:
-    case TensorSymm::ISYM2:
-      ndof_ = ndim * (ndim + 1)*ndim/2;
-      break;
-  }
-}
-
-//----------------------------------------------------------------------------------------
 // rank 4 AthenaScratchTensor
 // This is a 1D AthenaScratchTensor
 template<typename T, TensorSymm sym, int ndim>
 class AthenaScratchTensor<T, sym, ndim, 4> {
  public:
   KOKKOS_INLINE_FUNCTION
-  AthenaScratchTensor();
+  AthenaScratchTensor() {
+    switch(sym) {
+      case TensorSymm::NONE:
+        ndof_ = ndim*ndim*ndim*ndim;
+        break;
+      case TensorSymm::SYM22:
+        ndof_ = (ndim + 1)*ndim/2 * (ndim + 1)*ndim/2;
+        break;
+    }
+  }
   // the default destructor/copy operators are sufficient
   ~AthenaScratchTensor() = default;
   AthenaScratchTensor(AthenaScratchTensor<T, sym, ndim, 4> const &) = default;
@@ -764,17 +757,4 @@ class AthenaScratchTensor<T, sym, ndim, 4> {
   int ndof_;
 };
 
-//----------------------------------------------------------------------------------------
-// Implementation details
-template<typename T, TensorSymm sym, int ndim>
-AthenaScratchTensor<T, sym, ndim, 4>::AthenaScratchTensor() {
-  switch(sym) {
-    case TensorSymm::NONE:
-      ndof_ = ndim*ndim*ndim*ndim;
-      break;
-    case TensorSymm::SYM22:
-      ndof_ = (ndim + 1)*ndim/2 * (ndim + 1)*ndim/2;
-      break;
-  }
-}
 #endif // ATHENA_TENSOR_HPP_
