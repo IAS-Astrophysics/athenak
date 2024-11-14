@@ -37,6 +37,9 @@ g_field_names = [
 g_re = 0
 g_im = 1
 
+## debug
+g_debug_max_l = 5
+
 
 def parse_cli():
   """
@@ -134,6 +137,7 @@ def time_derivative_fourier(field: np.array, field_name: str, attr: dict,
     field(t,rel/img,n,lm)
     """
 
+  print(f"Fourier time derivative: {field_name}", flush=True)
   _, len_t, len_n, len_lm = field.shape
   dt = attr["time"][2] - attr["time"][1]
   wm = math.pi * 2.0 / (len_t * dt)
@@ -157,7 +161,7 @@ def time_derivative_fourier(field: np.array, field_name: str, attr: dict,
         im2 = np.imag(fft_coeff[-i])
 
         fft_coeff[i] = complex(-im * omega, re * omega)
-        fft_coeff[-i] = complex(-im2 * omega, re2 * omega)
+        fft_coeff[-i] = complex(im2 * omega, -re2 * omega)
 
       # F. inverse
       coeff = np.fft.ifft(fft_coeff)
@@ -165,13 +169,16 @@ def time_derivative_fourier(field: np.array, field_name: str, attr: dict,
       dfield[g_im, :, n, lm] = np.imag(coeff)
 
   if args["debug"] == "y":
-    hfile = f"./debug_d{field_name}_dt.txt"
-    write_data = np.column_stack((
-        range(len_t),
-        dfield[g_re, :, 2, lm_mode(2, 2)],
-        dfield[g_im, :, 2, lm_mode(2, 2)],
-    ))
-    np.savetxt(hfile, write_data, header="i re im")
+    for n in range(len_n):
+      for l in range(2, g_debug_max_l):
+        for m in range(-l, l + 1):
+          hfile = f"./debug_d{field_name}_dt_n{n}l{l}m{m}.txt"
+          write_data = np.column_stack((
+              attr["time"],
+              dfield[g_re, :, n, lm_mode(l, m)],
+              dfield[g_im, :, n, lm_mode(l, m)],
+          ))
+          np.savetxt(hfile, write_data, header="t re im")
 
   return dfield
 
