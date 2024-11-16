@@ -55,11 +55,11 @@ class CompactObjectTracker {
   inline Real GetRadius() const {
     return radius;
   }
+  Real pos[NDIM];
 
  private:
   bool owns_compact_object;
   CompactObjectType type;
-  Real pos[NDIM];
   Real vel[NDIM];
   int reflevel;         // requested minimum refinement level (-1 for infinity)
   Real radius;          // nominal radius of the object (for the AMR driver)
