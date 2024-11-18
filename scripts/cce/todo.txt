@@ -1,6 +1,8 @@
 ## todo:
 
-- [] test time derivative with pitnull method
 - [] odd reflection for the time derivies
-- [] chebyshev radial derivs
+- [] test and proof read chebyshev radial derivs
+- [x] chebyshev radial derivs
+- [x] test time derivative with pitnull method
+
 
