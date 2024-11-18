@@ -40,7 +40,7 @@ class Root {
 
   template<class Functor, class ... Types>
   KOKKOS_INLINE_FUNCTION
-  bool FalsePosition(Functor&& f, Real &lb, Real &ub, Real& x, Real tol, bool use_guess,
+  bool FalsePosition(Functor&& f, Real &lb, Real &ub, Real& x, Real tol,
                      Types ... args) const {
     int side = 0;
     Real ftest;
@@ -50,9 +50,7 @@ class Root {
     Real flb = f(lb, args...);
     Real fub = f(ub, args...);
     Real xold;
-    if (!use_guess) {
-      x = lb;
-    }
+    x = lb;
     // If one of the bounds is already within tolerance of the root, we have the root.
     if (fabs(flb) <= tol) {
       x = lb;
@@ -67,11 +65,7 @@ class Root {
     do {
       xold = x;
       // Calculate the new root position.
-      if (!use_guess) {
-        x = (fub*lb - flb*ub)/(fub - flb);
-      } else {
-        use_guess = false;
-      }
+      x = (fub*lb - flb*ub)/(fub - flb);
       count++;
       // Calculate f at the prospective root.
       ftest = f(x,args...);

@@ -95,11 +95,10 @@ class PrimitiveSolverHydro {
   MeshBlockPack* pmy_pack;
   unsigned int nerrs;
   unsigned int errcap;
-  DvceArray4D<Real> mu_last;
 
   PrimitiveSolverHydro(std::string block, MeshBlockPack *pp, ParameterInput *pin) :
 //        pmy_pack(pp), ps{&eos} {
-        pmy_pack(pp), nerrs(0), mu_last("mu_last", 1, 1, 1, 1) {
+        pmy_pack(pp), nerrs(0) {
     SetPolicyParams(block, pin);
     Real mb = ps.GetEOS().GetBaryonMass();
     ps.GetEOSMutable().SetDensityFloor(pin->GetOrAddReal(block, "dfloor", (FLT_MIN))/mb);
@@ -123,13 +122,6 @@ class PrimitiveSolverHydro {
       ps.GetEOSMutable().SetSpeciesAtmosphere(
           pin->GetOrAddReal(block, spec_name.str(), 0.0), n);
     }
-
-    int nmb = std::max((pp->nmb_thispack), (pp->pmesh->nmb_maxperrank));
-    auto &indcs = pp->pmesh->mb_indcs;
-    int ncells1 = indcs.nx1 + 2*(indcs.ng);
-    int ncells2 = (indcs.nx2 > 1)? (indcs.nx2 + 2*(indcs.ng)) : 1;
-    int ncells3 = (indcs.nx3 > 1)? (indcs.nx3 + 2*(indcs.ng)) : 1;
-    Kokkos::realloc(mu_last, nmb, ncells3, ncells2, ncells1);
   }
 
   // The prim to con function used on the reconstructed states inside the Riemann solver.
@@ -301,7 +293,6 @@ class PrimitiveSolverHydro {
     auto &adm  = pmy_pack->padm->adm;
     auto &eos_ = ps.GetEOS();
     auto &ps_  = ps;
-    auto &mu_last_ = mu_last;
 
     const int ni = (iu - il + 1);
     const int nji = (ju - jl + 1)*ni;
@@ -328,10 +319,10 @@ class PrimitiveSolverHydro {
     int count_errs=0;
     Kokkos::parallel_reduce("pshyd_c2p",Kokkos::RangePolicy<>(DevExeSpace(), 0, nmkji),
     KOKKOS_LAMBDA(const int &idx, int &sumerrs) {
-      const int m = (idx)/nkji;
+      int m = (idx)/nkji;
       int k = (idx - m*nkji)/nji;
       int j = (idx - m*nkji - k*nji)/ni;
-      const int i = (idx - m*nkji - k*nji - j*ni) + il;
+      int i = (idx - m*nkji - k*nji - j*ni) + il;
       j += jl;
       k += kl;
 
@@ -410,10 +401,10 @@ class PrimitiveSolverHydro {
           result.cons_adjusted = true;
           ps_.PrimToCon(prim_pt, cons_pt, b3u, g3d);
         } else {
-          result = ps_.ConToPrim(prim_pt, cons_pt, b3u, g3d, g3u, mu_last_(m,k,j,i));
+          result = ps_.ConToPrim(prim_pt, cons_pt, b3u, g3d, g3u);
         }
       } else {
-        result = ps_.ConToPrim(prim_pt, cons_pt, b3u, g3d, g3u, mu_last_(m,k,j,i));
+        result = ps_.ConToPrim(prim_pt, cons_pt, b3u, g3d, g3u);
       }
 
       if (result.error != Primitive::Error::SUCCESS && floors_only) {
