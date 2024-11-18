@@ -56,6 +56,13 @@ def parse_cli():
       default="Fourier",
       help="method to take the time derivative of fields:{Fourier}",
   )
+  p.add_argument(
+      "-r_deriv",
+      type=str,
+      default="ChebU",
+      help=
+      "method to take the radial derivative of fields:{ChebU:Chebyshev of second kind}",
+  )
 
   args = p.parse_args()
   return args
@@ -114,6 +121,8 @@ def get_attribute(fpath: str,
       # find attribute about num. of time level, and n,l,m in C_nlm
       attr["lev_t"] = len(h5f.keys()) - 1
       attr["max_n"], attr["max_lm"] = h5f[f"1/{field_name}/re"].shape
+      attr["r_in"] = h5f["metadata"].attrs["Rin"]
+      attr["r_out"] = h5f["metadata"].attrs["Rout"]
       # read & save time
       time = []
       for i in range(0, attr["lev_t"]):
@@ -200,6 +209,90 @@ def time_derivative_fourier(field: np.array, field_name: str, attr: dict,
   return dfield
 
 
+def radial_derivative_chebu(field: np.array, field_name: str, attr: dict,
+                            args) -> np.array:
+  """
+    return the radial derivative of the given field using Chebyshev of
+    2nd kind method.
+
+    f(x) = sum_{i=0}^{N-1} C_i U_i(x), U_i(x) Chebyshev of 2nd kind
+    collocation points (roots of U_i): x_i = cos(pi*(i+1)/(N+1))
+    x = (2*r - r_1 - r_2)/(r_2 - r_1)
+
+    field(t,rel/img,n,lm)
+    """
+
+  print(f"ChebyU radial derivative: {field_name}", flush=True)
+  _, len_t, len_n, len_lm = field.shape
+
+  r_1 = attr["r_in"][0]
+  r_2 = attr["r_out"][0]
+
+  # populate collocation points, roots of U_i
+  x_i = np.empty(shape=len_n, dtype=float)
+  for i in range(len_n):
+    x_i[i] = math.cos(math.pi * (i + 1) / (len_n + 1))
+
+  exit()
+
+  dfield = np.empty_like(field)
+  for n in range(len_n):
+    for lm in range(len_lm):
+      coeff = field[g_re, :, n, lm] + 1j * field[g_im, :, n, lm]
+      # F. transform
+      fft_coeff = np.fft.fft(coeff)
+      # if args["debug"] == 'y':
+      #  print("debug: normalization?",round(coeff[1],6) == round(np.fft.ifft(fft_coeff)[1],6))
+
+      # time derivative
+      half = len_t // 2 + 1
+      omega = np.empty(shape=half)
+      for i in range(0, half):
+        omega[i] = i * wm
+
+      dfft_coeff = np.empty_like(fft_coeff)
+      dfft_coeff[0] = 0
+      dfft_coeff[1:half] = (-np.imag(fft_coeff[1:half]) +
+                            1j * np.real(fft_coeff[1:half])) * omega[1:]
+      dfft_coeff[half:] = (np.imag(fft_coeff[half:]) -
+                           1j * np.real(fft_coeff[half:])) * omega[::-1][1:]
+
+      # not optimized version
+      """
+      dfft_coeff[0] = 0
+      for i in range(1, half):
+        omega = i * wm
+        re = np.real(fft_coeff[i])
+        im = np.imag(fft_coeff[i])
+        re2 = np.real(fft_coeff[-i])
+        im2 = np.imag(fft_coeff[-i])
+
+        dfft_coeff[i] = omega*complex(-im, re)
+        dfft_coeff[-i] = omega*complex(im2, -re2)
+
+      """
+      # F. inverse
+      coeff = np.fft.ifft(dfft_coeff)
+      dfield[g_re, :, n, lm] = np.real(coeff)
+      dfield[g_im, :, n, lm] = np.imag(coeff)
+
+  if args["debug"] == "y":
+    for n in range(len_n):
+      for l in range(2, g_debug_max_l + 1):
+        for m in range(-l, l + 1):
+          hfile = (f"{args['d_out']}/debug_{field_name}_n{n}l{l}m{m}.txt")
+          write_data = np.column_stack((
+              attr["time"],
+              dfield[g_re, :, n, lm_mode(l, m)],
+              dfield[g_im, :, n, lm_mode(l, m)],
+              field[g_re, :, n, lm_mode(l, m)],
+              field[g_im, :, n, lm_mode(l, m)],
+          ))
+          np.savetxt(hfile, write_data, header="t dre/dt dim/dt re im")
+
+  return dfield
+
+
 def time_derivative(field: np.array, field_name: str, db: dict, args):
   """
     return the time derivative of the given field
@@ -207,6 +300,17 @@ def time_derivative(field: np.array, field_name: str, db: dict, args):
 
   if args["t_deriv"] == "Fourier":
     return time_derivative_fourier(field, field_name, db, args)
+  else:
+    raise ValueError("no such option")
+
+
+def radial_derivative(field: np.array, field_name: str, db: dict, args):
+  """
+    return the radial derivative of the given field
+    """
+
+  if args["r_deriv"] == "ChebU":
+    return radial_derivative_chebu(field, field_name, db, args)
   else:
     raise ValueError("no such option")
 
@@ -229,9 +333,10 @@ def main(args):
   # print(dat)
 
   # time derivative
-  dfield_dt = time_derivative(field, field_name, attr, args)
+  #dfield_dt = time_derivative(field, field_name, attr, args)
 
   # radial derivative
+  dfield_dt = radial_derivative(field, field_name, attr, args)
 
   # save
 
