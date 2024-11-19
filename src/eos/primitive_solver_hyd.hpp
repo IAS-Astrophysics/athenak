@@ -130,6 +130,7 @@ class PrimitiveSolverHydro {
     int ncells2 = (indcs.nx2 > 1)? (indcs.nx2 + 2*(indcs.ng)) : 1;
     int ncells3 = (indcs.nx3 > 1)? (indcs.nx3 + 2*(indcs.ng)) : 1;
     Kokkos::realloc(mu_last, nmb, ncells3, ncells2, ncells1);
+    Kokkos::deep_copy(mu_last, -1.0);
   }
 
   // The prim to con function used on the reconstructed states inside the Riemann solver.

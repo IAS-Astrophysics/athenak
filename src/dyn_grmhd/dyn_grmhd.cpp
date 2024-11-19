@@ -299,6 +299,14 @@ TaskStatus DynGRMHDPS<EOSPolicy, ErrorPolicy>::ConToPrim(Driver *pdrive, int sta
 }
 
 //----------------------------------------------------------------------------------------
+//! \fn void DynGRMHDPS::ResetC2PGuess()
+//  \brief
+template<class EOSPolicy, class ErrorPolicy>
+void DynGRMHDPS<EOSPolicy, ErrorPolicy>::ResetC2PGuess() {
+  Kokkos::deep_copy(eos.mu_last, -1.0);
+}
+
+//----------------------------------------------------------------------------------------
 //! \fn void DynGRMHDPS::ConToPrimBC(int is, int ie, int js, int je, int ks, int ke)
 //  \brief
 template<class EOSPolicy, class ErrorPolicy>
