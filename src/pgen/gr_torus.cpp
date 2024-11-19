@@ -371,6 +371,9 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
                   pr(IPVX,p) = gl[1][1]*u[0] + gl[1][2]*u[1] + gl[1][3]*u[2];
                   pr(IPVY,p) = gl[2][1]*u[0] + gl[2][2]*u[1] + gl[2][3]*u[2];
                   pr(IPVZ,p) = gl[3][1]*u[0] + gl[3][2]*u[1] + gl[3][3]*u[2];
+                  pr(IPX,p) = x1v;
+                  pr(IPY,p) = x2v;
+                  pr(IPZ,p) = x3v;
                 } else if (prtcl_init_blob){
                   x1v = (x1min + x1max)/2.0;
                   x2v = (x2min + x2max)/2.0;
