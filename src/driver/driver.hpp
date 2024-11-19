@@ -44,6 +44,7 @@ class Driver {
   Real delta[4];                   // weights for updating the intermediate stage (u1)
   Real a_twid[4][4], a_impl;       // matrix elements for implicit stages in ImEx
   Real cfl_limit;                  // maximum CFL number for integrator
+  Real gamma;                      // gamma value for the IMEX_new integrator
   Kokkos::Timer* pwall_clock_;     // timer for tracking the wall clock
   Real wall_time;
 
