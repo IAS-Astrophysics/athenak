@@ -11,6 +11,7 @@ from scipy import special
 import math
 import argparse
 import h5py
+from multiprocessing import Pool
 
 # from itertools import product
 # import matplotlib.pyplot as plt
@@ -37,6 +38,10 @@ g_field_names = [
 ## real/imag
 g_re = 0
 g_im = 1
+
+## args
+g_args = None
+g_attr = None
 
 ## debug
 g_debug_max_l = 2
@@ -361,7 +366,7 @@ class Interpolate_at_r:
     return self.interp(field, field_name)
 
 
-def process_field(field_name: str, attr: dict, args: dict) -> dict:
+def process_field(field_name: str) -> dict:
   """
     - read data
     - find time derives
@@ -370,6 +375,8 @@ def process_field(field_name: str, attr: dict, args: dict) -> dict:
     """
 
   # return
+  attr = g_attr
+  args = g_args
   db = {}
 
   # load data
@@ -401,12 +408,19 @@ def main(args):
     """
 
   # find attribute for an arbitrary field
-  attr = get_attribute(args["f_h5"])
+  global g_attr
+  global g_args
+
+  g_args = args
+  g_attr = get_attribute(args["f_h5"])
 
   # for each field
-  field_name = "gxx"
+  with Pool as p:
+    results = p.map(process_field, g_field_names)
 
-  process_field(field_name, attr, args)
+  print(results)
+
+  # process_field(field_name, attr, args)
 
 
 if __name__ == "__main__":
