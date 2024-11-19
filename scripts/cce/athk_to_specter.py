@@ -350,7 +350,7 @@ class Interpolate_at_r:
         interpolate at R=r using Cheb U.
         """
     print(f"Interpolating at R={self.r}: {field_name}", flush=True)
-    
+
     dfield = np.zeros(shape=(len([g_re, g_im]), self.len_t, self.len_lm))
     for k in range(self.len_n):
       dfield[:, :, :] += field[:, :, k, :] * self.Uk[k]
@@ -359,6 +359,39 @@ class Interpolate_at_r:
 
   def interpolate(self, field: np.array, field_name: str):
     return self.interp(field, field_name)
+
+
+def process_field(field_name: str, attr: dict, args: dict) -> dict:
+  """
+    - read data
+    - find time derives
+    - find radial derives
+    - interpolate at R=r
+    """
+
+  # return
+  db = {}
+
+  # load data
+  field = load(args["f_h5"], field_name, attr)
+  db[f"{field_name}"] = field
+
+  # time derivative
+  dfield_dt = time_derivative(field, field_name, attr, args)
+
+  # interpolate at a specific radii
+  interpolate = Interpolate_at_r(attr, args)
+  field_at_r = interpolate.interpolate(field, field_name)
+  db[f"{field_name}|r"] = field_at_r
+
+  dfield_dt_at_r = interpolate.interpolate(dfield_dt, f"d{field_name}/dt")
+  db[f"d{field_name}/dt|r"] = dfield_dt_at_r
+
+  # radial derivative at R=r
+  dfield_dr_at_r = radial_derivative_at_r(field, field_name, attr, args)
+  db[f"d{field_name}/dr|r"] = dfield_dr_at_r
+
+  return db
 
 
 def main(args):
@@ -373,19 +406,7 @@ def main(args):
   # for each field
   field_name = "gxx"
 
-  # load data
-  field = load(args["f_h5"], field_name, attr)
-
-  # time derivative
-  dfield_dt = time_derivative(field, field_name, attr, args)
-
-  # radial derivative at R=r
-  dfield_dr_at_r = radial_derivative_at_r(field, field_name, attr, args)
-
-  # interpolate at a specific radii
-  interpolate = Interpolate_at_r(attr, args)
-  field_at_r = interpolate.interpolate(field, field_name)
-  dfield_dt_at_r = interpolate.interpolate(dfield_dt, "d/dt " + field_name)
+  process_field(field_name, attr, args)
 
 
 if __name__ == "__main__":
