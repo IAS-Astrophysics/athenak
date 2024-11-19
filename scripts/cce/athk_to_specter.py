@@ -41,7 +41,7 @@ g_im = 1
 
 ## args
 g_args = None
-g_attr = None
+g_attrs = None
 
 ## debug
 g_debug_max_l = 2
@@ -87,19 +87,19 @@ def parse_cli():
   return args
 
 
-def load(fpath: str, field_name: str, attr: dict) -> list:
+def load(fpath: str, field_name: str, attrs: dict) -> list:
   """
-    read the field accroding to attr.
+    read the field accroding to attrs.
     return convention:
       ret[real/imag, time_level, n, lm], eg:
       ret[g_re,3,2,:] = Re(C_2lm(t=3)) for all lm
       ret[g_im,3,2,:] = Im(C_2lm(t=3)) for all lm
     """
 
-  if attr["file_type"] == "h5":
-    lev_t = attr["lev_t"]
-    max_n = attr["max_n"]
-    max_lm = attr["max_lm"]
+  if attrs["file_type"] == "h5":
+    lev_t = attrs["lev_t"]
+    max_n = attrs["max_n"]
+    max_lm = attrs["max_lm"]
     shape = (len([g_re, g_im]), lev_t, max_n, max_lm)
     ret = np.empty(shape=shape, dtype=float)
     with h5py.File(fpath, "r") as h5f:
@@ -133,32 +133,32 @@ def get_attribute(fpath: str,
     find attributes such as num. of time level, and n, lm in C_nlm
     also saves the time value at each slice.
     """
-  attr = {}
+  attrs = {}
   if type == "h5":
-    attr["file_type"] = "h5"
+    attrs["file_type"] = "h5"
     with h5py.File(fpath, "r") as h5f:
       # find attribute about num. of time level, and n,l,m in C_nlm
-      attr["lev_t"] = len(h5f.keys()) - 1
-      attr["max_n"], attr["max_lm"] = h5f[f"1/{field_name}/re"].shape
-      attr["r_in"] = h5f["metadata"].attrs["Rin"]
-      attr["r_out"] = h5f["metadata"].attrs["Rout"]
+      attrs["lev_t"] = len(h5f.keys()) - 1
+      attrs["max_n"], attrs["max_lm"] = h5f[f"1/{field_name}/re"].shape
+      attrs["r_in"] = h5f["metadata"].attrs["Rin"]
+      attrs["r_out"] = h5f["metadata"].attrs["Rout"]
       # read & save time
       time = []
-      for i in range(0, attr["lev_t"]):
+      for i in range(0, attrs["lev_t"]):
         key = f"{i}"
         t = h5f[key].attrs["Time"][0]
         time.append(t)
 
-      attr["time"] = np.array(time)
+      attrs["time"] = np.array(time)
 
   else:
     raise ValueError("no such option")
 
-  # print(attr)
-  return attr
+  # print(attrs)
+  return attrs
 
 
-def time_derivative_fourier(field: np.array, field_name: str, attr: dict,
+def time_derivative_fourier(field: np.array, field_name: str, attrs: dict,
                             args) -> np.array:
   """
     return the time derivative of the given field using Fourier method
@@ -167,7 +167,7 @@ def time_derivative_fourier(field: np.array, field_name: str, attr: dict,
 
   print(f"Fourier time derivative: {field_name}", flush=True)
   _, len_t, len_n, len_lm = field.shape
-  dt = attr["time"][2] - attr["time"][1]
+  dt = attrs["time"][2] - attrs["time"][1]
   wm = math.pi * 2.0 / (len_t * dt)
 
   dfield = np.empty_like(field)
@@ -217,7 +217,7 @@ def time_derivative_fourier(field: np.array, field_name: str, attr: dict,
         for m in range(-l, l + 1):
           hfile = (f"{args['d_out']}/debug_{field_name}_n{n}l{l}m{m}.txt")
           write_data = np.column_stack((
-              attr["time"],
+              attrs["time"],
               dfield[g_re, :, n, lm_mode(l, m)],
               dfield[g_im, :, n, lm_mode(l, m)],
               field[g_re, :, n, lm_mode(l, m)],
@@ -243,7 +243,7 @@ def dUk_dx(order: int, x: float) -> float:
 
 def radial_derivative_at_r_chebu(field: np.array,
                                  field_name: str,
-                                 attr: dict,
+                                 attrs: dict,
                                  args) -> np.array:
   """
     return the radial derivative of the given field using Chebyshev of
@@ -259,8 +259,8 @@ def radial_derivative_at_r_chebu(field: np.array,
   print(f"ChebyU radial derivative: {field_name}", flush=True)
   _, len_t, len_n, len_lm = field.shape
 
-  r_1 = attr["r_in"][0]
-  r_2 = attr["r_out"][0]
+  r_1 = attrs["r_in"][0]
+  r_2 = attrs["r_out"][0]
   assert r_1 != r_2
   dx_dr = 2 / (r_2 - r_1)
 
@@ -304,41 +304,41 @@ def radial_derivative_at_r_chebu(field: np.array,
   return dfield * dx_dr
 
 
-def time_derivative(field: np.array, field_name: str, attr: dict, args):
+def time_derivative(field: np.array, field_name: str, attrs: dict, args):
   """
     return the time derivative of the given field
     """
 
   if args["t_deriv"] == "Fourier":
-    return time_derivative_fourier(field, field_name, attr, args)
+    return time_derivative_fourier(field, field_name, attrs, args)
   else:
     raise ValueError("no such option")
 
 
-def radial_derivative_at_r(field: np.array, field_name: str, attr: dict, args):
+def radial_derivative_at_r(field: np.array, field_name: str, attrs: dict, args):
   """
     return the radial derivative of the given field at R=r
     """
 
   if args["r_deriv"] == "ChebU":
-    return radial_derivative_at_r_chebu(field, field_name, attr, args)
+    return radial_derivative_at_r_chebu(field, field_name, attrs, args)
   else:
     raise ValueError("no such option")
 
 
 class Interpolate_at_r:
 
-  def __init__(self, attr: dict, args: dict):
+  def __init__(self, attrs: dict, args: dict):
     """
         interpolate the given field at R=r
         """
-    self.attr = attr
+    self.attrs = attrs
     self.args = args
-    self.len_t = attr["lev_t"]
-    self.len_n = attr["max_n"]
-    self.len_lm = attr["max_lm"]
-    r_1 = attr["r_in"][0]
-    r_2 = attr["r_out"][0]
+    self.len_t = attrs["lev_t"]
+    self.len_n = attrs["max_n"]
+    self.len_lm = attrs["max_lm"]
+    r_1 = attrs["r_in"][0]
+    r_2 = attrs["r_out"][0]
     self.r = r = args["radius"]
     self.x = (2 * r - r_1 - r_2) / (r_2 - r_1)
 
@@ -375,19 +375,19 @@ def process_field(field_name: str) -> dict:
     """
 
   # return
-  attr = g_attr
+  attrs = g_attrs
   args = g_args
   db = {}
 
   # load data
-  field = load(args["f_h5"], field_name, attr)
+  field = load(args["f_h5"], field_name, attrs)
   db[f"{field_name}"] = field
 
   # time derivative
-  dfield_dt = time_derivative(field, field_name, attr, args)
+  dfield_dt = time_derivative(field, field_name, attrs, args)
 
   # interpolate at a specific radii
-  interpolate = Interpolate_at_r(attr, args)
+  interpolate = Interpolate_at_r(attrs, args)
   field_at_r = interpolate.interpolate(field, field_name)
   db[f"{field_name}|r"] = field_at_r
 
@@ -395,7 +395,7 @@ def process_field(field_name: str) -> dict:
   db[f"d{field_name}/dt|r"] = dfield_dt_at_r
 
   # radial derivative at R=r
-  dfield_dr_at_r = radial_derivative_at_r(field, field_name, attr, args)
+  dfield_dr_at_r = radial_derivative_at_r(field, field_name, attrs, args)
   db[f"d{field_name}/dr|r"] = dfield_dr_at_r
 
   return db
@@ -408,11 +408,11 @@ def main(args):
     """
 
   # find attribute for an arbitrary field
-  global g_attr
+  global g_attrs
   global g_args
 
   g_args = args
-  g_attr = get_attribute(args["f_h5"])
+  g_attrs = get_attribute(args["f_h5"])
 
   # for each field
   with Pool as p:
@@ -420,7 +420,7 @@ def main(args):
 
   print(results)
 
-  # process_field(field_name, attr, args)
+  # process_field(field_name, attrs, args)
 
 
 if __name__ == "__main__":
