@@ -19,7 +19,10 @@
 //! \fn void MeshBlock::Turb_()
 //  \brief Problem Generator for turbulence
 
-void ProblemGenerator::UserProblem(MeshBlockPack *pmbp, ParameterInput *pin) {
+void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
+  if (restart) return;
+
+  MeshBlockPack *pmbp = pmy_mesh_->pmb_pack;
   if (pmbp->phydro == nullptr && pmbp->pmhd == nullptr) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
        << "Turbulence problem generator can only be run with Hydro and/or MHD, but no "

@@ -1,0 +1,170 @@
+# AthenaK input file for Elliptica BNS data
+
+<comment>
+problem   = SGRID BNS data
+
+<job>
+basename  = bns
+
+<mesh>
+nghost     = 4        # Number of ghost cells
+nx1        = 192      # Number of zones in X1-direction
+x1min      = -1536    # minimum value of X1
+x1max      =  1536    # maximum value of X1
+ix1_bc     = outflow  # Inner-X1 boundary condition flag
+ox1_bc     = outflow  # Outer-X1 boundary condition flag
+
+nx2        = 192      # Number of zones in X2-direction
+x2min      = -1536    # minimum value of X2
+x2max      =  1536    # maximum value of X2
+ix2_bc     = outflow  # Inner-X2 boundary condition flag
+ox2_bc     = outflow  # Outer-X2 boundary condition flag
+
+nx3        = 192      # Number of zones in X3-direction
+x3min      = -1536    # minimum value of X3
+x3max      =  1536    # maximum value of X3
+ix3_bc     = outflow  # Inner-X3 boundary condition flag
+ox3_bc     = outflow  # Outer-X3 boundary condition flag
+
+<meshblock>
+nx1        = 32       # Number of cells in each MeshBlock, X1-dir
+nx2        = 32       # Number of cells in each MeshBlock, X2-dir
+nx3        = 32       # Number of cells in each MeshBlock, X3-dir
+
+<mesh_refinement>
+refinement = adaptive
+max_nmb_per_rank = 100
+num_levels = 7
+refinement_interval = 1
+
+<z4c_amr>
+method = tracker
+
+<refinement1>
+level = 6
+x1min = 6
+x1max = 26
+x2min = -10
+x2max = 10
+x3min = -10
+x3max = 10
+
+<refinement2>
+level = 6
+x1min = -26
+x1max = -6
+x2min = -10
+x2max = 10
+x3min = -10
+x3max = 10
+
+<time>
+evolution  = dynamic  # dynamic/kinematic/static
+integrator = rk3      # time integration algorithm
+cfl_number = 0.25     # The Courant, Friedrics, & Lewy (CFL) number
+nlim       = -1       # cycle limit
+tlim       = 5000     # time limit
+ndiag      = 1        # cycles between diagnostic output
+
+<coord>
+general_rel = true
+excise      = false
+m           = 0.0
+a           = 0.0
+
+<mhd>
+eos         = ideal          # UNUSED but needed
+gamma       = 2.0            # UNUSED but needed
+
+dyn_eos     = piecewise_poly # PrimitiveSolver EOSPolicy
+dyn_error   = reset_floor    # PrimitiveSolver ErrorPolicy
+reconstruct = wenoz          # spatial reconstruction method
+rsolver     = llf            # Riemann solver to be used
+dfloor      = 1.28e-21       # floor on density rho
+tfloor      = 1.58255e-19    # floor on temperature
+dthreshold  = 1.0
+dyn_scratch = 0
+fofc        = false
+c2p_tol     = 2.49e-13
+gamma_max   = 20.025         # Ceiling on Lorentz factor
+
+pwp_poly_rmd = 5.340089573220712e+23
+pwp_density_pieces_0 = 0.000000000000000e+00
+pwp_density_pieces_1 = 1.136499842827129e+17
+pwp_density_pieces_2 = 5.011872336272714e+17
+pwp_density_pieces_3 = 9.999999999999999e+17
+pwp_gamma_pieces_0 = 1.356920000000000e+00
+pwp_gamma_pieces_1 = 3.456000000000000e+00
+pwp_gamma_pieces_2 = 3.011000000000000e+00
+pwp_gamma_pieces_3 = 1.425000000000000e+00
+pwp_gamma_thermal = 1.7
+
+<adm>
+
+<z4c>
+# Gauge parameters
+lapse_oplog     = 2.0
+lapse_harmonicf = 1.0
+lapse_harmonic  = 0.0
+lapse_advect    = 1.0
+shift_eta       = 0.3
+shift_advect    = 1.0
+
+# Dissipation parameters
+diss            = 0.5
+chi_div_floor   = 1e-05
+# Constraint damping
+damp_kappa1     = 0.02
+damp_kappa2     = 0.0
+
+# Wave extraction
+nrad_wave_extraction = 3
+extraction_radius_1 = 200
+extraction_radius_2 = 400
+extraction_radius_3 = 600
+waveform_dt = 2.5
+
+# Neutron star tracker
+nco = 2
+co_0_type = NS
+co_0_x = 16.01964596658804041
+co_0_radius = 8.2
+co_1_type = NS
+co_1_x = -16.01964596658804041
+co_1_radius = 8.2
+
+<problem>
+datadir           = sgrid_26_26_26
+user_hist         = true
+
+<output1>
+file_type   = hst         # History data dump
+dt          = 0.375       # time increment between outputs
+
+<output2>
+file_type   = bin         # Binary data dump
+variable    = mhd_w       # Primitive variables
+dt          = 1.5
+slice_x3    = 0.0
+
+<output3>
+file_type   = bin         # Binary data dump
+variable    = mhd_u       # Conserved variables
+dt          = 1.5
+slice_x3    = 0.0
+
+<output4>
+file_type   = bin         # Binary data dump
+variable    = z4c         # Z4c variables
+dt          = 1.5
+slice_x3    = 0.0
+
+<output5>
+file_type   = bin         # Binary data dump
+variable    = adm         # ADM variables
+dt          = 1.5
+slice_x3    = 0.0
+
+<output6>
+file_type   = rst         # Restart file
+dt          = 375.0
