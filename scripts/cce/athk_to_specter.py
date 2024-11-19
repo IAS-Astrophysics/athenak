@@ -52,6 +52,12 @@ def parse_cli():
   p.add_argument("-d_out", type=str, required=True, help="/path/to/output/dir")
   p.add_argument("-debug", type=str, default="y", help="debug=[y,n]")
   p.add_argument(
+      "-radius",
+      type=float,
+      required=True,
+      help="interpolate all fields and their derivatives at this radius.",
+  )
+  p.add_argument(
       "-t_deriv",
       type=str,
       default="Fourier",
@@ -63,6 +69,13 @@ def parse_cli():
       default="ChebU",
       help=
       "method to take the radial derivative of fields:{ChebU:Chebyshev of second kind}",
+  )
+  p.add_argument(
+      "-interpolation",
+      type=str,
+      default="ChebU",
+      help=
+      "method to interpolate fields at a given r:{ChebU:Chebyshev of second kind}",
   )
 
   args = p.parse_args()
@@ -210,11 +223,26 @@ def time_derivative_fourier(field: np.array, field_name: str, attr: dict,
   return dfield
 
 
-def radial_derivative_chebu(field: np.array, field_name: str, attr: dict,
-                            args) -> np.array:
+def dUk_dx(order: int, x: float) -> float:
+  """
+    d(Chebyshev of second kind)/dx
+    """
+  assert x != 1 and x != -1
+  t = special.chebyt(order + 1)(x)
+  u = special.chebyu(order)(x)
+  duk_dx = (order + 1) * t - x * u
+  duk_dx /= x**2 - 1
+
+  return duk_dx
+
+
+def radial_derivative_at_r_chebu(field: np.array,
+                                 field_name: str,
+                                 attr: dict,
+                                 args) -> np.array:
   """
     return the radial derivative of the given field using Chebyshev of
-    2nd kind method.
+    2nd kind method at the radius of interest.
 
     f(x) = sum_{i=0}^{N-1} C_i U_i(x), U_i(x) Chebyshev of 2nd kind
     collocation points (roots of U_i): x_i = cos(pi*(i+1)/(N+1))
@@ -231,22 +259,22 @@ def radial_derivative_chebu(field: np.array, field_name: str, attr: dict,
   assert r_1 != r_2
   dx_dr = 2 / (r_2 - r_1)
 
-  # populate collocation points, roots of U_i
-  x_i = np.empty(shape=len_n, dtype=float)
-  for i in range(len_n):
-    x_i[i] = math.cos(math.pi * (i + 1) / (len_n + 1))
-
-  # dU_k/dx|x=x_i
-  duk_dx = np.empty(shape=(len_n, len_n), dtype=float)
-  for k in range(len_n):
-    for i in range(len_n):
-      t = special.chebyt(k + 1)(x_i[i])
-      u = special.chebyu(k)(x_i[i])
-      duk_dx[k, i] = (k + 1) * t - x_i[i] * u
-
-  duk_dx /= np.square(x_i) - 1
-
   if args["debug"] == "y":
+    # populate collocation points, roots of U_i
+    x_i = np.empty(shape=len_n, dtype=float)
+    for i in range(len_n):
+      x_i[i] = math.cos(math.pi * (i + 1) / (len_n + 1))
+
+    # dU_k/dx|x=x_i
+    duk_dx = np.empty(shape=(len_n, len_n), dtype=float)
+    for k in range(len_n):
+      for i in range(len_n):
+        t = special.chebyt(k + 1)(x_i[i])
+        u = special.chebyu(k)(x_i[i])
+        duk_dx[k, i] = (k + 1) * t - x_i[i] * u
+
+    duk_dx /= np.square(x_i) - 1
+
     uk = np.empty(shape=len_n, dtype=float)
     tk = np.empty(shape=len_n, dtype=float)
     for k in range(len_n):
@@ -262,34 +290,75 @@ def radial_derivative_chebu(field: np.array, field_name: str, attr: dict,
           header=f"x_i uk{k}(x_i) tk{k}(x_i) duk{k}(x_i)/dx",
       )
 
-  dfield = np.zeros_like(field)
-  for i in range(len_n):
-    for k in range(len_n):
-      dfield[:, :, i, :] += field[:, :, k, :] * duk_dx[k, i]
+  dfield = np.zeros(shape=(len([g_re, g_im]), len_t, len_lm))
+  r = args["radius"]
+  x = (2 * r - r_1 - r_2) / (r_2 - r_1)
+  for k in range(len_n):
+    dfield[:, :, :] += field[:, :, k, :] * dUk_dx(k, x)
 
   return dfield * dx_dr
 
 
-def time_derivative(field: np.array, field_name: str, db: dict, args):
+def time_derivative(field: np.array, field_name: str, attr: dict, args):
   """
     return the time derivative of the given field
     """
 
   if args["t_deriv"] == "Fourier":
-    return time_derivative_fourier(field, field_name, db, args)
+    return time_derivative_fourier(field, field_name, attr, args)
   else:
     raise ValueError("no such option")
 
 
-def radial_derivative(field: np.array, field_name: str, db: dict, args):
+def radial_derivative_at_r(field: np.array, field_name: str, attr: dict, args):
   """
-    return the radial derivative of the given field
+    return the radial derivative of the given field at R=r
     """
 
   if args["r_deriv"] == "ChebU":
-    return radial_derivative_chebu(field, field_name, db, args)
+    return radial_derivative_at_r_chebu(field, field_name, attr, args)
   else:
     raise ValueError("no such option")
+
+
+class Interpolate_at_r:
+
+  def __init__(self, attr: dict, args: dict):
+    """
+        interpolate the given field at R=r
+        """
+    self.attr = attr
+    self.args = args
+    self.len_t = attr["lev_t"]
+    self.len_n = attr["max_n"]
+    self.len_lm = attr["max_lm"]
+    r_1 = attr["r_in"][0]
+    r_2 = attr["r_out"][0]
+    self.r = r = args["radius"]
+    self.x = (2 * r - r_1 - r_2) / (r_2 - r_1)
+
+    if args["interpolation"] == "ChebU":
+      self.Uk = np.empty(shape=self.len_n)
+      for k in range(self.len_n):
+        self.Uk[k] = dUk_dx(k, self.x)
+      self.interp = self.interpolate_at_r_chebu
+    else:
+      raise ValueError("no such option")
+
+  def interpolate_at_r_chebu(self, field: np.array, field_name: str):
+    """
+        interpolate at R=r using Cheb U.
+        """
+    print(f"Interpolating at R={self.r}: {field_name}", flush=True)
+    
+    dfield = np.zeros(shape=(len([g_re, g_im]), self.len_t, self.len_lm))
+    for k in range(self.len_n):
+      dfield[:, :, :] += field[:, :, k, :] * self.Uk[k]
+
+    return dfield
+
+  def interpolate(self, field: np.array, field_name: str):
+    return self.interp(field, field_name)
 
 
 def main(args):
@@ -307,15 +376,16 @@ def main(args):
   # load data
   field = load(args["f_h5"], field_name, attr)
 
-  # print(dat)
-
   # time derivative
-  # dfield_dt = time_derivative(field, field_name, attr, args)
+  dfield_dt = time_derivative(field, field_name, attr, args)
 
-  # radial derivative
-  dfield_dt = radial_derivative(field, field_name, attr, args)
+  # radial derivative at R=r
+  dfield_dr_at_r = radial_derivative_at_r(field, field_name, attr, args)
 
-  # save
+  # interpolate at a specific radii
+  interpolate = Interpolate_at_r(attr, args)
+  field_at_r = interpolate.interpolate(field, field_name)
+  dfield_dt_at_r = interpolate.interpolate(dfield_dt, "d/dt " + field_name)
 
 
 if __name__ == "__main__":
