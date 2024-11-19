@@ -11,7 +11,6 @@ from scipy import special
 import math
 import argparse
 import h5py
-from multiprocessing import Pool
 
 # from itertools import product
 # import matplotlib.pyplot as plt
@@ -34,6 +33,19 @@ g_field_names = [
     "betaz",
     "alp",
 ]
+
+g_name_map = {
+    "gxx": "gxx",
+    "gxy": "gxy",
+    "gxz": "gxz",
+    "gyy": "gyy",
+    "gyz": "gyz",
+    "gzz": "gzz",
+    "betax": "Shiftx",
+    "betay": "Shifty",
+    "betaz": "Shiftz",
+    "alp": "Lapse",
+}
 
 ## real/imag
 g_re = 0
@@ -382,7 +394,7 @@ def process_field(field_name: str) -> dict:
 
   # load data
   field = load(args["f_h5"], field_name, attrs)
-  db[f"{field_name}"] = field
+  # db[f"{field_name}"] = field
 
   # time derivative
   dfield_dt = time_derivative(field, field_name, attrs, args)
@@ -402,6 +414,41 @@ def process_field(field_name: str) -> dict:
   return db
 
 
+def write(f: str, db: dict, attrs: dict, args: dict):
+  """
+    write on data on disk
+    """
+  dataset_conf = dict(
+      shape=db[f"{f}|r"].shape,
+      dtype=float,
+      chunks=True,
+      compression="gzip",
+      shuffle=True,
+  )
+
+  field_name = g_name_map[f"{f}"]
+  field_name_key = f"{field_name}.dat"
+  dfield_name_dr_key = f"Dr{field_name}.dat"
+  dfield_name_dt_key = f"Dt{field_name}.dat"
+
+  r = args["radius"]
+  file_name = os.path.join(args["d_out"], f"CceR{r:07.2f}.h5")
+  with h5py.File(file_name, "w") as h5file:
+    h5group = h5file.create_group("test")
+
+    name = field_name_key
+    data = db[f"{f}|r"]
+    h5group.create_dataset(data=data, name=name, **dataset_conf)
+
+    name = dfield_name_dr_key
+    data = db[f"d{f}/dr|r"]
+    h5group.create_dataset(data=data, name=name, **dataset_conf)
+
+    name = dfield_name_dt_key
+    data = db[f"d{f}/dt|r"]
+    h5group.create_dataset(data=data, name=name, **dataset_conf)
+
+
 def main(args):
   """
     create output required by Specter code
@@ -416,11 +463,15 @@ def main(args):
   g_attrs = get_attribute(args["f_h5"])
 
   # for each field
-  with Pool(processes=len(g_field_names)) as p:
-    results = p.map(process_field, g_field_names)
+  # I'm afraid this method takes too much memory
+  # from multiprocessing import Pool
+  # with Pool(processes=len(g_field_names)) as p:
+  #  db = p.map(process_field, g_field_names)
 
-  # write on disk
-  #print(results)
+  for f in g_field_names:
+    db = process_field(f)
+    # write on disk
+    write(f, db, g_attrs, g_args)
 
 
 if __name__ == "__main__":
