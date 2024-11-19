@@ -41,6 +41,7 @@ g_im = 1
 
 ## args
 g_args = None
+## various attrs
 g_attrs = None
 
 ## debug
@@ -407,20 +408,19 @@ def main(args):
     ref: https://spectre-code.org/tutorial_cce.html
     """
 
-  # find attribute for an arbitrary field
   global g_attrs
   global g_args
 
   g_args = args
+  # find attribute for an arbitrary field
   g_attrs = get_attribute(args["f_h5"])
 
   # for each field
-  with Pool as p:
+  with Pool(processes=len(g_field_names)) as p:
     results = p.map(process_field, g_field_names)
 
-  print(results)
-
-  # process_field(field_name, attrs, args)
+  # write on disk
+  #print(results)
 
 
 if __name__ == "__main__":
