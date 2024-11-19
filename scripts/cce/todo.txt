@@ -1,5 +1,5 @@
 ## todo:
-
+- [] I need example files of specter h5 files
 - [] odd reflection for the time derivies
 - [] test and proof read chebyshev radial derivs
 - [x] chebyshev radial derivs

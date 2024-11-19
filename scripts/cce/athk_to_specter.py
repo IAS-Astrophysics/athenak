@@ -418,6 +418,7 @@ def write(f: str, db: dict, attrs: dict, args: dict):
   """
     write on data on disk
     """
+  print(f"writing: {f}", flush=True)
   dataset_conf = dict(
       shape=db[f"{f}|r"].shape,
       dtype=float,
@@ -433,8 +434,14 @@ def write(f: str, db: dict, attrs: dict, args: dict):
 
   r = args["radius"]
   file_name = os.path.join(args["d_out"], f"CceR{r:07.2f}.h5")
-  with h5py.File(file_name, "w") as h5file:
-    h5group = h5file.create_group("test")
+  with h5py.File(file_name, "a") as h5file:
+
+    group_name = "test"
+    # create group if not exists
+    if h5file.get(group_name, default=None) == None:
+      h5group = h5file.create_group(group_name)
+    else:
+      h5group = h5file.require_group(group_name)
 
     name = field_name_key
     data = db[f"{f}|r"]
