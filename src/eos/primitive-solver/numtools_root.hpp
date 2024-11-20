@@ -65,11 +65,12 @@ class Root {
       return false;
     }
     do {
-      xold = x;
       // Calculate the new root position.
       if (!use_guess) {
+        xold = x;
         x = (fub*lb - flb*ub)/(fub - flb);
       } else {
+        xold = lb;
         use_guess = false;
       }
       count++;
