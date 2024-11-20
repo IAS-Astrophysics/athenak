@@ -202,6 +202,7 @@ class PrimitiveSolver {
 
  public:
   Real tol;
+  bool use_caching;
 
   /// Constructor
   //PrimitiveSolver(EOS<EOSPolicy, ErrorPolicy> *eos) : peos(eos) {
@@ -209,6 +210,7 @@ class PrimitiveSolver {
     //root = NumTools::Root();
     tol = 1e-15;
     root.iterations = 30;
+    use_caching = false;
   }
 
   /// Destructor
@@ -527,7 +529,7 @@ SolverResult PrimitiveSolver<EOSPolicy, ErrorPolicy>::ConToPrim(Real prim[NPRIM]
   Real n, P, T, mu;
   // Try to set an initial guess
   bool use_guess = false;
-  if (mu_last >= mul && mu_last <= muh) {
+  if (mu_last >= mul && mu_last <= muh && use_caching) {
     mu = mu_last;
     use_guess = true;
   }
@@ -543,7 +545,9 @@ SolverResult PrimitiveSolver<EOSPolicy, ErrorPolicy>::ConToPrim(Real prim[NPRIM]
   }
 
   // Retrieve the primitive variables.
-  mu_last = mu;
+  if (use_caching) {
+    mu_last = mu;
+  }
   Real rho = n*eos.GetBaryonMass();
   Real rbmu = rb*mu;
   Real W = D/rho;

@@ -77,6 +77,8 @@ class DynGRMHD {
   DynGRMHDTaskIDs id;
 
   TaskStatus SetTmunu(Driver *d, int stage);
+  TaskStatus SetADMVariables(Driver *d, int stage);
+  TaskStatus UpdateExcisionMasks(Driver *d, int stage);
   TaskStatus ApplyPhysicalBCs(Driver *d, int stage);
 
   // functions
@@ -88,6 +90,8 @@ class DynGRMHD {
   virtual void PrimToConInit(int is, int ie, int js, int je, int ks, int ke) = 0;
   virtual void ConvertInternalEnergyToPressure(int is, int ie,
                                                int js, int je, int ks, int ke) = 0;
+
+  virtual void ResetC2PGuess() = 0;
 
   virtual void AddCoordTerms(const DvceArray5D<Real> &w0, const DvceArray5D<Real> &bcc0,
                              const Real dt, DvceArray5D<Real> &u0, int nghost) = 0;
@@ -134,6 +138,8 @@ class DynGRMHDPS : public DynGRMHD {
   virtual void PrimToConInit(int is, int ie, int js, int je, int ks, int ke);
   virtual void ConvertInternalEnergyToPressure(int is, int ie,
                                                int js, int je, int ks, int ke);
+
+  virtual void ResetC2PGuess();
 
   virtual void AddCoordTerms(const DvceArray5D<Real> &w0, const DvceArray5D<Real> &bcc0,
                              const Real dt, DvceArray5D<Real> &u0, int nghost);

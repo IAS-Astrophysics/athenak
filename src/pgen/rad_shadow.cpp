@@ -39,6 +39,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   // set inflow state in BoundaryValues, sync to device
   auto &u_in = pmbp->phydro->pbval_u->u_in;
   auto &i_in = pmbp->prad->pbval_i->i_in;
+  int nang1 = (pmbp->prad->prgeo->nangles-1);
   u_in.h_view(IDN,BoundaryFace::inner_x1) = 1.0;
   u_in.h_view(IM1,BoundaryFace::inner_x1) = 0.0;
   u_in.h_view(IM2,BoundaryFace::inner_x1) = 0.0;
@@ -79,7 +80,6 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   int &ks = indcs.ks;
   auto &size = pmbp->pmb->mb_size;
   int nmb1 = (pmbp->nmb_thispack-1);
-  int nang1 = (pmbp->prad->prgeo->nangles-1);
 
   // set intensity
   auto &i0 = pmbp->prad->i0;
