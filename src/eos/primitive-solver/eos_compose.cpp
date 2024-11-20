@@ -212,3 +212,5 @@ void EOSCompOSE<LogPolicy>::ReadTableFromFile(std::string fname) {
 
 template class EOSCompOSE<NormalLogs>;
 template class EOSCompOSE<NQTLogs>;
+
+} // namespace Primitive
