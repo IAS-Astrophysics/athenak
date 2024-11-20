@@ -303,7 +303,9 @@ TaskStatus DynGRMHDPS<EOSPolicy, ErrorPolicy>::ConToPrim(Driver *pdrive, int sta
 //  \brief
 template<class EOSPolicy, class ErrorPolicy>
 void DynGRMHDPS<EOSPolicy, ErrorPolicy>::ResetC2PGuess() {
-  Kokkos::deep_copy(eos.mu_last, -1.0);
+  if (eos.ps.use_caching) {
+    Kokkos::deep_copy(eos.mu_last, -1.0);
+  }
 }
 
 //----------------------------------------------------------------------------------------

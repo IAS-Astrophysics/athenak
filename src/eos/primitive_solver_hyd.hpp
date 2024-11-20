@@ -129,8 +129,11 @@ class PrimitiveSolverHydro {
     int ncells1 = indcs.nx1 + 2*(indcs.ng);
     int ncells2 = (indcs.nx2 > 1)? (indcs.nx2 + 2*(indcs.ng)) : 1;
     int ncells3 = (indcs.nx3 > 1)? (indcs.nx3 + 2*(indcs.ng)) : 1;
-    Kokkos::realloc(mu_last, nmb, ncells3, ncells2, ncells1);
-    Kokkos::deep_copy(mu_last, -1.0);
+    ps.use_caching = pin->GetOrAddBoolean(block, "c2p_caching", false);
+    if (ps.use_caching) {
+      Kokkos::realloc(mu_last, nmb, ncells3, ncells2, ncells1);
+      Kokkos::deep_copy(mu_last, -1.0);
+    }
   }
 
   // The prim to con function used on the reconstructed states inside the Riemann solver.
@@ -312,6 +315,7 @@ class PrimitiveSolverHydro {
     const int rank = global_variable::my_rank;
     const int nerrs_ = nerrs;
     const int errcap_ = errcap;
+    const bool use_caching = ps.use_caching;
 
     Real mb = eos_.GetBaryonMass();
 
@@ -411,10 +415,12 @@ class PrimitiveSolverHydro {
           result.cons_adjusted = true;
           ps_.PrimToCon(prim_pt, cons_pt, b3u, g3d);
         } else {
-          result = ps_.ConToPrim(prim_pt, cons_pt, b3u, g3d, g3u, mu_last_(m,k,j,i));
+          Real& guess = use_caching ? mu_last_(m,k,j,i) : mu_last_(0,0,0,0);
+          result = ps_.ConToPrim(prim_pt, cons_pt, b3u, g3d, g3u, guess);
         }
       } else {
-        result = ps_.ConToPrim(prim_pt, cons_pt, b3u, g3d, g3u, mu_last_(m,k,j,i));
+        Real& guess = use_caching ? mu_last_(m,k,j,i) : mu_last_(0,0,0,0);
+        result = ps_.ConToPrim(prim_pt, cons_pt, b3u, g3d, g3u, guess);
       }
 
       if (result.error != Primitive::Error::SUCCESS && floors_only) {
