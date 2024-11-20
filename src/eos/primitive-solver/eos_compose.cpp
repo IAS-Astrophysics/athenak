@@ -22,7 +22,7 @@
 #include "utils/tr_table.hpp"
 #include "logs.hpp"
 
-using namespace Primitive; // NOLINT
+namespace Primitive {
 
 template<typename LogPolicy>
 void EOSCompOSE<LogPolicy>::ReadTableFromFile(std::string fname) {
@@ -211,3 +211,5 @@ void EOSCompOSE<LogPolicy>::ReadTableFromFile(std::string fname) {
 
 template class EOSCompOSE<NormalLogs>;
 template class EOSCompOSE<NQTLogs>;
+
+} // namespace Primitive
