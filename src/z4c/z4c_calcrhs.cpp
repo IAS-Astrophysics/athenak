@@ -50,71 +50,71 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage) {
     // Define scratch arrays to be used in the following calculations
 
     // Gamma computed from the metric
-    AthenaScratchTensor<Real, TensorSymm::NONE, 3, 1> Gamma_u;
+    AthenaPointTensor<Real, TensorSymm::NONE, 3, 1> Gamma_u;
     // Covariant derivative of A
-    AthenaScratchTensor<Real, TensorSymm::NONE, 3, 1> DA_u;
+    AthenaPointTensor<Real, TensorSymm::NONE, 3, 1> DA_u;
 
     // inverse of conf. metric
-    AthenaScratchTensor<Real, TensorSymm::SYM2, 3, 2> g_uu;
+    AthenaPointTensor<Real, TensorSymm::SYM2, 3, 2> g_uu;
     // inverse of A
-    AthenaScratchTensor<Real, TensorSymm::SYM2, 3, 2> A_uu;
+    AthenaPointTensor<Real, TensorSymm::SYM2, 3, 2> A_uu;
     // g^cd A_ac A_db
-    AthenaScratchTensor<Real, TensorSymm::SYM2, 3, 2> AA_dd;
+    AthenaPointTensor<Real, TensorSymm::SYM2, 3, 2> AA_dd;
     // Ricci tensor
-    AthenaScratchTensor<Real, TensorSymm::SYM2, 3, 2> R_dd;
+    AthenaPointTensor<Real, TensorSymm::SYM2, 3, 2> R_dd;
     // Ricci tensor, conformal contribution
-    AthenaScratchTensor<Real, TensorSymm::SYM2, 3, 2> Rphi_dd;
+    AthenaPointTensor<Real, TensorSymm::SYM2, 3, 2> Rphi_dd;
     // 2nd differential of the lapse
-    AthenaScratchTensor<Real, TensorSymm::SYM2, 3, 2> Ddalpha_dd;
+    AthenaPointTensor<Real, TensorSymm::SYM2, 3, 2> Ddalpha_dd;
     // 2nd differential of phi
-    AthenaScratchTensor<Real, TensorSymm::SYM2, 3, 2> Ddphi_dd;
+    AthenaPointTensor<Real, TensorSymm::SYM2, 3, 2> Ddphi_dd;
 
     // Christoffel symbols of 1st kind
-    AthenaScratchTensor<Real, TensorSymm::SYM2, 3, 3> Gamma_ddd;
+    AthenaPointTensor<Real, TensorSymm::SYM2, 3, 3> Gamma_ddd;
     // Christoffel symbols of 2nd kind
-    AthenaScratchTensor<Real, TensorSymm::SYM2, 3, 3> Gamma_udd;
+    AthenaPointTensor<Real, TensorSymm::SYM2, 3, 3> Gamma_udd;
 
     // auxiliary derivatives
 
     // lapse 1st drvts
-    AthenaScratchTensor<Real, TensorSymm::NONE, 3, 1> dalpha_d;
+    AthenaPointTensor<Real, TensorSymm::NONE, 3, 1> dalpha_d;
     // 2nd "divergence" of beta
-    AthenaScratchTensor<Real, TensorSymm::NONE, 3, 1> ddbeta_d;
+    AthenaPointTensor<Real, TensorSymm::NONE, 3, 1> ddbeta_d;
     // chi 1st drvts
-    AthenaScratchTensor<Real, TensorSymm::NONE, 3, 1> dchi_d;
+    AthenaPointTensor<Real, TensorSymm::NONE, 3, 1> dchi_d;
     // phi 1st drvts
-    AthenaScratchTensor<Real, TensorSymm::NONE, 3, 1> dphi_d;
+    AthenaPointTensor<Real, TensorSymm::NONE, 3, 1> dphi_d;
     // Khat 1st drvts
-    AthenaScratchTensor<Real, TensorSymm::NONE, 3, 1> dKhat_d;
+    AthenaPointTensor<Real, TensorSymm::NONE, 3, 1> dKhat_d;
     // Theta 1st drvts
-    AthenaScratchTensor<Real, TensorSymm::NONE, 3, 1> dTheta_d;
+    AthenaPointTensor<Real, TensorSymm::NONE, 3, 1> dTheta_d;
 
     // lapse 2nd drvts
-    AthenaScratchTensor<Real, TensorSymm::SYM2, 3, 2> ddalpha_dd;
+    AthenaPointTensor<Real, TensorSymm::SYM2, 3, 2> ddalpha_dd;
     // shift 1st drvts
-    AthenaScratchTensor<Real, TensorSymm::NONE, 3, 2> dbeta_du;
+    AthenaPointTensor<Real, TensorSymm::NONE, 3, 2> dbeta_du;
     // chi 2nd drvts
-    AthenaScratchTensor<Real, TensorSymm::SYM2, 3, 2> ddchi_dd;
+    AthenaPointTensor<Real, TensorSymm::SYM2, 3, 2> ddchi_dd;
     // Gamma 1st drvts
-    AthenaScratchTensor<Real, TensorSymm::NONE, 3, 2> dGam_du;
+    AthenaPointTensor<Real, TensorSymm::NONE, 3, 2> dGam_du;
 
     // metric 1st drvts
-    AthenaScratchTensor<Real, TensorSymm::SYM2,  3, 3> dg_ddd;
+    AthenaPointTensor<Real, TensorSymm::SYM2,  3, 3> dg_ddd;
     // shift 2nd drvts
-    AthenaScratchTensor<Real, TensorSymm::ISYM2, 3, 3> ddbeta_ddu;
+    AthenaPointTensor<Real, TensorSymm::ISYM2, 3, 3> ddbeta_ddu;
 
     // metric 2nd drvts
-    AthenaScratchTensor<Real, TensorSymm::SYM22, 3, 4> ddg_dddd;
+    AthenaPointTensor<Real, TensorSymm::SYM22, 3, 4> ddg_dddd;
 
     // Lie derivative of Gamma
-    AthenaScratchTensor<Real, TensorSymm::NONE, 3, 1> LGam_u;
+    AthenaPointTensor<Real, TensorSymm::NONE, 3, 1> LGam_u;
     // Lie derivative of the shift
-    AthenaScratchTensor<Real, TensorSymm::NONE, 3, 1> Lbeta_u;
+    AthenaPointTensor<Real, TensorSymm::NONE, 3, 1> Lbeta_u;
 
     // Lie derivative of conf. 3-metric
-    AthenaScratchTensor<Real, TensorSymm::SYM2, 3, 2> Lg_dd;
+    AthenaPointTensor<Real, TensorSymm::SYM2, 3, 2> Lg_dd;
     // Lie derivative of A
-    AthenaScratchTensor<Real, TensorSymm::SYM2, 3, 2> LA_dd;
+    AthenaPointTensor<Real, TensorSymm::SYM2, 3, 2> LA_dd;
 
     Real idx[] = {1/size.d_view(m).dx1, 1/size.d_view(m).dx2, 1/size.d_view(m).dx3};
 
@@ -157,27 +157,20 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage) {
 
     //
     // Vectors
-    for (int a = 0; a < 3; ++a) {
-      Lbeta_u(a) = 0.0;
-      LGam_u(a) = 0.0;
-      Gamma_u(a) = 0.0;
-      DA_u(a) = 0.0;
-      ddbeta_d(a) = 0.0;
-    }
+    Lbeta_u.ZeroClear();
+    LGam_u.ZeroClear();
+    Gamma_u.ZeroClear();
+    DA_u.ZeroClear();
+    ddbeta_d.ZeroClear();
 
     //
     // Symmetric tensors
-    for (int a = 0; a < 3; ++a)
-    for (int b = a; b < 3; ++b) {
-      Lg_dd(a,b) = 0.0;
-      LA_dd(a,b) = 0.0;
-      AA_dd(a,b) = 0.0;
-      R_dd(a,b) = 0.0;
-      A_uu(a,b) = 0.0;
-      for (int c = 0; c < 3; ++c) {
-          Gamma_udd(c,a,b) = 0.0;
-      }
-    }
+    Lg_dd.ZeroClear();
+    LA_dd.ZeroClear();
+    AA_dd.ZeroClear();
+    R_dd.ZeroClear();
+    A_uu.ZeroClear();
+    Gamma_udd.ZeroClear();
 
     // -----------------------------------------------------------------------------------
     // 1st derivatives

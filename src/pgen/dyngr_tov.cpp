@@ -6,8 +6,7 @@
 //! \file dyngr_tov.cpp
 //  \brief Problem generator for TOV star. Only works when ADM is enabled.
 
-#include <stdio.h>
-#include <math.h>
+#include <math.h>     // abs(), cos(), exp(), log(), NAN, pow(), sin(), sqrt()
 
 #include <algorithm>
 #include <iostream>
