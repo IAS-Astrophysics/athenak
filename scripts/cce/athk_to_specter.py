@@ -68,7 +68,7 @@ def parse_cli():
       description="convert Athenak CCE dumps to Spectre CCE")
   p.add_argument("-f_h5", type=str, required=True, help="/path/to/cce/h5/dumps")
   p.add_argument("-d_out", type=str, required=True, help="/path/to/output/dir")
-  p.add_argument("-debug", type=str, default="y", help="debug=[y,n]")
+  p.add_argument("-debug", type=str, default="n", help="debug=[y,n]")
   p.add_argument(
       "-radius",
       type=float,
@@ -417,6 +417,17 @@ def process_field(field_name: str) -> dict:
 def write(f: str, db: dict, attrs: dict, args: dict):
   """
     write on data on disk
+    syntax, eg:
+    
+    h5["gxx.dat"] = 
+      [time_level, ['time', 'gxx_Re(0,0)', 'gxx_Im(0,0)', 'gxx_Re(1,1)', 'gxx_Im(1,1)', ...] ]
+    
+    h5["gxx.dat"].attrs['Legend'] = the associated column = 
+      array(['time', 'gxx_Re(0,0)', 'gxx_Im(0,0)', 'gxx_Re(1,1)', 'gxx_Im(1,1)', ...])
+    
+    # => h5["gxx.dat"][3,0] = value of time at the dump level 3
+    # => h5["gxx.dat"][4,1] = value of gxx_Re(0,0) at the dump level 4
+    
     """
   print(f"writing: {f}", flush=True)
   dataset_conf = dict(
