@@ -55,7 +55,6 @@ class CompactObjectTracker {
   inline Real GetRadius() const {
     return radius;
   }
-  Real pos[NDIM];
 
  private:
   bool owns_compact_object;
@@ -66,6 +65,7 @@ class CompactObjectTracker {
   Mesh const *pmesh;
   int out_every;
   std::ofstream ofile;
+  Real pos[NDIM];
 };
 
 #endif // Z4C_COMPACT_OBJECT_TRACKER_HPP_

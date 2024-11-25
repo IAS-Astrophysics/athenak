@@ -108,9 +108,9 @@ void CartesianGrid::SetInterpolationIndices() {
         Real x2 = min_x2 + ny * d_x2;
         Real x3 = min_x3 + nz * d_x3;
         if (is_cheby) {
-          x1 = center_x1 + extend_x1*std::cos((2*nx+1)*M_PI/(2*nx1));
-          x2 = center_x2 + extend_x2*std::cos((2*ny+1)*M_PI/(2*nx2));
-          x3 = center_x3 + extend_x3*std::cos((2*nz+1)*M_PI/(2*nx3));
+          x1 = center_x1 + extend_x1*std::cos(nx*M_PI/(nx1-1));
+          x2 = center_x2 + extend_x2*std::cos(ny*M_PI/(nx2-1));
+          x3 = center_x3 + extend_x3*std::cos(nz*M_PI/(nx3-1));
         }
         // indices default to -1 if point does not reside in this MeshBlockPack
         iindcs.h_view(nx,ny,nz,0) = -1;

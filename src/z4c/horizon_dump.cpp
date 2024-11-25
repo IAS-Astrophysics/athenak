@@ -43,8 +43,9 @@ HorizonDump::HorizonDump(MeshBlockPack *pmbp, ParameterInput *pin, int n, int is
 
   horizon_extent = pin->GetOrAddReal("z4c", "co_" + nstr + "_dump_radius", 2.0);
   horizon_nx = pin->GetOrAddInteger("z4c", "horizon_"
-                              + std::to_string(n)+"_Nx",10);
+                              + nstr+"_Nx",10);
   horizon_dt = pin->GetOrAddReal("z4c", "horizon_dt", 1.0);
+  r_guess = pin->GetOrAddReal("z4c", "horizon" + nstr + "r_guess", 0.5);
   output_count = 0;
 
   Real extend[3] = {horizon_extent,horizon_extent,horizon_extent};
@@ -146,15 +147,15 @@ void HorizonDump::SetGridAndInterpolate(Real center[NDIM]) {
     // Close the file
     fclose(etk_output_file);
 
-    char parfilename[100];
-    ETK_setup_parfile(0.5, parfilename);
+    // Write input script for Einstein Toolkit
+    ETK_setup_parfile();
     output_count++;
     // delete dataout
     delete[] data_out;
   }
 }
 
-void HorizonDump::ETK_setup_parfile(const Real BH_radius_guess, char parfilename[100]) {
+void HorizonDump::ETK_setup_parfile() {
   std::string foldername;
   if (common_horizon == 0) {
     foldername = "horizon_"+std::to_string(horizon_ind)+
@@ -164,9 +165,7 @@ void HorizonDump::ETK_setup_parfile(const Real BH_radius_guess, char parfilename
   }
   std::string fname = foldername + "/ET_analyze_BHaH_data_horizon.par";
 
-  sprintf(parfilename, "%s", fname.c_str()); // NOLINT
-
-  FILE *etk_parfile = fopen(parfilename, "w");
+  FILE *etk_parfile = fopen(fname.c_str(), "w");
   fprintf(etk_parfile,
           "ActiveThorns = \"PUGH SymBase CartGrid3D\"\n"
           "cactus::cctk_itlast = 0\n"
@@ -269,7 +268,7 @@ void HorizonDump::ETK_setup_parfile(const Real BH_radius_guess, char parfilename
             "AHFinderDirect::initial_guess_method[1]"
             "                = \"coordinate sphere\"\n"
             "AHFinderDirect::initial_guess__coord_sphere__radius[1] = %e\n",
-            BH_radius_guess);
+            r_guess);
   /*} else {
     if(BH==LESSMASSIVE_BH_PREMERGER)
       fprintf(etk_parfile,

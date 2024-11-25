@@ -471,7 +471,7 @@ TaskStatus Z4c::DumpHorizons(Driver *pdrive, int stage) {
       int i = 0;
       for (auto & hd : phorizon_dump) {
         hd->horizon_last_output_time = time_32;
-        hd->SetGridAndInterpolate(pmy_pack->pz4c->ptracker[i]->pos);
+        hd->SetGridAndInterpolate(pmy_pack->pz4c->ptracker[i]->GetPos());
         i++;
       }
     }

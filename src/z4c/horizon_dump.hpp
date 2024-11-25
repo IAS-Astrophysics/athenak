@@ -36,7 +36,7 @@ class HorizonDump {
   void SetGridAndInterpolate(Real center[NDIM]);
 
   //! Write parameter file for Einstein Toolkit
-  void ETK_setup_parfile(const Real BH_radius_guess, char parfilename[100]);
+  void ETK_setup_parfile();
 
   int horizon_nx;  // number of points in each direction
   int common_horizon; // common horizon or not, triggering when to start dumping data
@@ -49,11 +49,10 @@ class HorizonDump {
   Real horizon_extent; // radius for dumping data in a cube
   CartesianGrid *pcat_grid=nullptr; // pointer to cartesian grid
   Real pos[NDIM]; // position of the puncture
-  // Real data[horizon_nx][horizon_nx][horizon_nx][16];
+  Real r_guess;  // nominal radius of the object (for the AMR driver)
 
  private:
   MeshBlockPack const *pmbp;
-  Real radius;          // nominal radius of the object (for the AMR driver)
   // first element store variable index second
   // store whether from z4c (true) or adm (false) array
   std::vector<std::pair<int, bool>> variable_to_dump;
