@@ -429,36 +429,16 @@ def h5_create_group(h5file, group_name: str):
   return h5group
 
 
-def h5_write_data(h5file, data: np.array, data_name, attrs: dict, args: dict):
+def h5_write_data(h5file,
+                  data: np.array,
+                  data_name: str,
+                  attrs: dict,
+                  args: dict):
   """
-    syntax:
+    reminder:
       data[real/imag, time_level, lm]
-    """
-  dataset_conf = dict(
-      shape=data.shape,
-      dtype=float,
-      chunks=True,
-      compression="gzip",
-      shuffle=True,
-  )
-
-  data_attrs = ["time"]
-
-  for l in range(0, int(math.sqrt(attrs["max_lm"]))):
-    for m in range(-l, l + 1):
-      data_attrs.append(f"{data_name[:-4]}_Re({l},{m})")
-      data_attrs.append(f"{data_name[:-4]}_Im({l},{m})")
-  
-  h5[f"{data_name}"].attrs['Legend'] = data_attrs
-  
-  print(data_attrs)
-  exit()
-
-
-def write(f: str, db: dict, attrs: dict, args: dict):
-  """
-    write on data on disk
-    syntax, eg:
+      
+    write syntax, eg:
 
     h5["gxx.dat"] =
       [time_level, ['time', 'gxx_Re(0,0)', 'gxx_Im(0,0)', 'gxx_Re(1,1)', 'gxx_Im(1,1)', ...] ]
@@ -469,6 +449,40 @@ def write(f: str, db: dict, attrs: dict, args: dict):
     # => h5["gxx.dat"][3,0] = value of time at the dump level 3
     # => h5["gxx.dat"][4,1] = value of gxx_Re(0,0) at the dump level 4
 
+    """
+
+  dataset_conf = dict(
+      name=f"{data_name}",
+      shape=(attrs["lev_t"], len([g_re,g_im]) * attrs["max_lm"]),
+      dtype=float,
+      chunks=True,
+      compression="gzip",
+      shuffle=True,
+  )
+
+  data_attrs = ["time"]
+
+  print(dataset_conf, flush=True)
+
+  h5file.create_dataset(**dataset_conf)
+
+  flat = 0
+  h5file[f"{data_name}"][:, flat] = attrs["time"]
+  flat += 1
+  for l in range(0, int(math.sqrt(attrs["max_lm"])) - 1):
+    for m in range(-l, l + 1):
+      data_attrs.append(f"{data_name[:-4]}_Re({l},{m})")
+      data_attrs.append(f"{data_name[:-4]}_Im({l},{m})")
+      h5file[f"{data_name}"][:, flat] = data[g_re, :, lm_mode(l, m)]
+      h5file[f"{data_name}"][:, flat + 1] = data[g_im, :, lm_mode(l, m)]
+      flat += 2
+
+  h5file[f"{data_name}"].attrs["Legend"] = data_attrs
+
+
+def write(f: str, db: dict, attrs: dict, args: dict):
+  """
+    write data on disk
     """
   print(f"writing: {f}", flush=True)
 
