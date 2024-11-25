@@ -172,6 +172,25 @@ def get_attribute(fpath: str,
   return attrs
 
 
+def time_derivative_findiff(field: np.array, field_name: str, attrs: dict,
+                            args) -> np.array:
+  """
+    return the time derivative of the given field using finite diff. 2nd order
+    field(t,rel/img,n,lm)
+    """
+
+  print(f"Fourier time derivative: {field_name}", flush=True)
+  _, len_t, len_n, len_lm = field.shape
+  time = attrs["time"]
+  dt = np.gradient(time, 2)
+  dfield = np.empty_like(field)
+
+  for n in range(len_n):
+    for lm in range(len_lm):
+      dfield[g_re, :, n, lm] = np.gradient(field[g_re, :, n, lm], 2) / dt
+      dfield[g_im, :, n, lm] = np.gradient(field[g_im, :, n, lm], 2) / dt
+
+
 def time_derivative_fourier(field: np.array, field_name: str, attrs: dict,
                             args) -> np.array:
   """
@@ -325,6 +344,8 @@ def time_derivative(field: np.array, field_name: str, attrs: dict, args):
 
   if args["t_deriv"] == "Fourier":
     return time_derivative_fourier(field, field_name, attrs, args)
+  elif args["t_deriv"] == "fin.diff":
+    return time_derivative_findiff(field, field_name, attrs, args)
   else:
     raise ValueError("no such option")
 
@@ -456,8 +477,8 @@ def h5_write_data(h5file,
       name=f"{data_name}",
       shape=(attrs["lev_t"], len([g_re, g_im]) * (attrs["max_l"]**2 + 1)),
       dtype=float, # chunks=True,
- # compression="gzip",
- # shuffle=True,
+      # compression="gzip",
+      # shuffle=True,
   )
 
   data_attrs = ["time"]
