@@ -414,29 +414,63 @@ def process_field(field_name: str) -> dict:
   return db
 
 
-def write(f: str, db: dict, attrs: dict, args: dict):
+def h5_create_group(h5file, group_name: str):
   """
-    write on data on disk
-    syntax, eg:
-    
-    h5["gxx.dat"] = 
-      [time_level, ['time', 'gxx_Re(0,0)', 'gxx_Im(0,0)', 'gxx_Re(1,1)', 'gxx_Im(1,1)', ...] ]
-    
-    h5["gxx.dat"].attrs['Legend'] = the associated column = 
-      array(['time', 'gxx_Re(0,0)', 'gxx_Im(0,0)', 'gxx_Re(1,1)', 'gxx_Im(1,1)', ...])
-    
-    # => h5["gxx.dat"][3,0] = value of time at the dump level 3
-    # => h5["gxx.dat"][4,1] = value of gxx_Re(0,0) at the dump level 4
-    
+    create a group for h5
     """
-  print(f"writing: {f}", flush=True)
+  h5group = None
+
+  # create group if not exists
+  if h5file.get(group_name, default=None) == None:
+    h5group = h5file.create_group(group_name)
+  else:
+    raise ValueError("this group {group_name} is already exists.")
+
+  return h5group
+
+
+def h5_write_data(h5file, data: np.array, data_name, attrs: dict, args: dict):
+  """
+    syntax:
+      data[real/imag, time_level, lm]
+    """
   dataset_conf = dict(
-      shape=db[f"{f}|r"].shape,
+      shape=data.shape,
       dtype=float,
       chunks=True,
       compression="gzip",
       shuffle=True,
   )
+
+  data_attrs = ["time"]
+
+  for l in range(0, int(math.sqrt(attrs["max_lm"]))):
+    for m in range(-l, l + 1):
+      data_attrs.append(f"{data_name[:-4]}_Re({l},{m})")
+      data_attrs.append(f"{data_name[:-4]}_Im({l},{m})")
+  
+  h5[f"{data_name}"].attrs['Legend'] = data_attrs
+  
+  print(data_attrs)
+  exit()
+
+
+def write(f: str, db: dict, attrs: dict, args: dict):
+  """
+    write on data on disk
+    syntax, eg:
+
+    h5["gxx.dat"] =
+      [time_level, ['time', 'gxx_Re(0,0)', 'gxx_Im(0,0)', 'gxx_Re(1,1)', 'gxx_Im(1,1)', ...] ]
+
+    h5["gxx.dat"].attrs['Legend'] = the associated column =
+      array(['time', 'gxx_Re(0,0)', 'gxx_Im(0,0)', 'gxx_Re(1,1)', 'gxx_Im(1,1)', ...])
+
+    # => h5["gxx.dat"][3,0] = value of time at the dump level 3
+    # => h5["gxx.dat"][4,1] = value of gxx_Re(0,0) at the dump level 4
+
+    """
+  print(f"writing: {f}", flush=True)
 
   field_name = g_name_map[f"{f}"]
   field_name_key = f"{field_name}.dat"
@@ -447,24 +481,17 @@ def write(f: str, db: dict, attrs: dict, args: dict):
   file_name = os.path.join(args["d_out"], f"CceR{r:07.2f}.h5")
   with h5py.File(file_name, "a") as h5file:
 
-    group_name = "test"
-    # create group if not exists
-    if h5file.get(group_name, default=None) == None:
-      h5group = h5file.create_group(group_name)
-    else:
-      h5group = h5file.require_group(group_name)
-
     name = field_name_key
     data = db[f"{f}|r"]
-    h5group.create_dataset(data=data, name=name, **dataset_conf)
+    h5_write_data(h5file, data, name, attrs, args)
 
     name = dfield_name_dr_key
     data = db[f"d{f}/dr|r"]
-    h5group.create_dataset(data=data, name=name, **dataset_conf)
+    h5_write_data(h5file, data, name, attrs, args)
 
     name = dfield_name_dt_key
     data = db[f"d{f}/dt|r"]
-    h5group.create_dataset(data=data, name=name, **dataset_conf)
+    h5_write_data(h5file, data, name, attrs, args)
 
 
 def main(args):
