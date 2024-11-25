@@ -153,6 +153,7 @@ def get_attribute(fpath: str,
       # find attribute about num. of time level, and n,l,m in C_nlm
       attrs["lev_t"] = len(h5f.keys()) - 1
       attrs["max_n"], attrs["max_lm"] = h5f[f"1/{field_name}/re"].shape
+      attrs["max_l"] = int(math.sqrt(attrs["max_lm"])) - 1
       attrs["r_in"] = h5f["metadata"].attrs["Rin"]
       attrs["r_out"] = h5f["metadata"].attrs["Rout"]
       # read & save time
@@ -358,7 +359,7 @@ class Interpolate_at_r:
     if args["interpolation"] == "ChebU":
       self.Uk = np.empty(shape=self.len_n)
       for k in range(self.len_n):
-        self.Uk[k] = dUk_dx(k, self.x)
+        self.Uk[k] = special.chebyu(k)(self.x)
       self.interp = self.interpolate_at_r_chebu
     else:
       raise ValueError("no such option")
@@ -437,7 +438,7 @@ def h5_write_data(h5file,
   """
     reminder:
       data[real/imag, time_level, lm]
-      
+
     write syntax, eg:
 
     h5["gxx.dat"] =
@@ -453,23 +454,23 @@ def h5_write_data(h5file,
 
   dataset_conf = dict(
       name=f"{data_name}",
-      shape=(attrs["lev_t"], len([g_re,g_im]) * attrs["max_lm"]),
-      dtype=float,
-      chunks=True,
-      compression="gzip",
-      shuffle=True,
+      shape=(attrs["lev_t"], len([g_re, g_im]) * (attrs["max_l"]**2 + 1)),
+      dtype=float, # chunks=True,
+ # compression="gzip",
+ # shuffle=True,
   )
 
   data_attrs = ["time"]
 
-  print(dataset_conf, flush=True)
+  if args["debug"] == "y":
+    print(dataset_conf, flush=True)
 
   h5file.create_dataset(**dataset_conf)
 
   flat = 0
   h5file[f"{data_name}"][:, flat] = attrs["time"]
   flat += 1
-  for l in range(0, int(math.sqrt(attrs["max_lm"])) - 1):
+  for l in range(0, attrs["max_l"]):
     for m in range(-l, l + 1):
       data_attrs.append(f"{data_name[:-4]}_Re({l},{m})")
       data_attrs.append(f"{data_name[:-4]}_Im({l},{m})")
