@@ -636,7 +636,13 @@ void Particles::BorisStep( const Real dt, const bool only_v ){
 	}
 
 	Real adm_det; 
-	ComputeDeterminant3( ADM_upper, adm_det );
+	Real ADM_lower[3][3]; // Metric 
+	for ( int l1 = 0; l1 < 3; ++l1 ){
+		for ( int l2 = 0; l2 < 3; ++l2 ){
+			ADM_lower[l1][l2] = glower[l1+1][l2+1];
+		}
+	}
+	ComputeDeterminant3( ADM_lower, adm_det );
 	// Save the vector product of u and t 
 	// Vector product results in covariant vector
 	Real vec_ut_cov[3] = {
