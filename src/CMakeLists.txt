@@ -148,8 +148,10 @@ add_executable(
         utils/show_config.cpp
         utils/lagrange_interpolator.cpp
         utils/tr_table.cpp
+        utils/cart_grid.cpp
 
         z4c/compact_object_tracker.cpp
+        z4c/horizon_dump.cpp
         z4c/tmunu.cpp
         z4c/z4c.cpp
         z4c/z4c_adm.cpp

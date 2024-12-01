@@ -19,6 +19,7 @@
 #include "mesh/mesh.hpp"
 #include "bvals/bvals.hpp"
 #include "z4c/compact_object_tracker.hpp"
+#include "z4c/horizon_dump.hpp"
 #include "z4c/z4c.hpp"
 #include "tasklist/numerical_relativity.hpp"
 #include "z4c/cce/cce.hpp"
@@ -97,6 +98,8 @@ void Z4c::QueueZ4cTasks() {
                  {Z4c_ClearRW});
   pnr->QueueTask(&Z4c::TrackCompactObjects, this, Z4c_PT, "Z4c_PT", Task_End, {Z4c_Wave});
   pnr->QueueTask(&Z4c::CCEDump, this, Z4c_CCE, "CCEDump", Task_End, {Z4c_PT});
+  pnr->QueueTask(&Z4c::DumpHorizons, this, Z4c_DumpHorizon, "Z4c_DumpHorizon",
+                Task_End, {Z4c_CCE});
 }
 //----------------------------------------------------------------------------------------
 //! \fn  void Wave::InitRecv
@@ -282,9 +285,9 @@ TaskStatus Z4c::ApplyPhysicalBCs(Driver *pdrive, int stage) {
 TaskStatus Z4c::TrackCompactObjects(Driver *pdrive, int stage) {
   if (stage == pdrive->nexp_stages) {
     for (auto & pt : ptracker) {
-      pt.InterpolateVelocity(pmy_pack);
-      pt.EvolveTracker();
-      pt.WriteTracker();
+      pt->InterpolateVelocity(pmy_pack);
+      pt->EvolveTracker();
+      pt->WriteTracker();
     }
   }
   return TaskStatus::complete;
@@ -477,6 +480,28 @@ TaskStatus Z4c::ClearSendWeyl(Driver *pdrive, int stage) {
       return TaskStatus::complete;
     }
   }
+}
+
+TaskStatus Z4c::DumpHorizons(Driver *pdrive, int stage) {
+  if (pmy_pack->pz4c->phorizon_dump.size() == 0 || stage != pdrive->nexp_stages) {
+    return TaskStatus::complete;
+  } else {
+    float time_32 = static_cast<float>(pmy_pack->pmesh->time);
+    float next_32 = static_cast<float>(pmy_pack->pz4c->phorizon_dump[0]
+                                    ->horizon_last_output_time
+                                    +pmy_pack->pz4c->phorizon_dump[0]->horizon_dt);
+    if (((time_32 >= next_32) || (time_32 == 0))) {
+      int i = 0;
+      for (auto & hd : phorizon_dump) {
+        hd->horizon_last_output_time = time_32;
+        hd->SetGridAndInterpolate(pmy_pack->pz4c->ptracker[i]->GetPos());
+        i++;
+      }
+    }
+    return TaskStatus::complete;
+  }
+
+  return TaskStatus::complete;
 }
 
 } // namespace z4c
