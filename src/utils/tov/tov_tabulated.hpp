@@ -7,6 +7,8 @@
 //========================================================================================
 //! \file tov_tabulated.hpp
 //  \brief Tabulated EOS for use with TOVStar
+#include <stdexcept>
+#include <sstream>
 
 #include "athena.hpp"
 #include "parameter_input.hpp"
@@ -54,8 +56,19 @@ class TabulatedEOS {
     Primitive::UnitSystem unit_geo = Primitive::MakeGeometricSolar();
     Primitive::UnitSystem unit_nuc = Primitive::MakeNuclear();
 
+    auto test_field = [](bool test, const std::string name) -> void {
+      if (test) {
+        return;
+      } else {
+        std::stringstream ss;
+        ss << "Table is missing key '" << name << "'\n";
+        throw std::runtime_error(ss.str());
+      }
+    };
+
     // TODO(JMF) Check that table has right fields and dimensions
     auto& table_scalars = table.GetScalars();
+    test_field(table_scalars.count("mn") > 0, "mn");
     Real mb = table_scalars.at("mn");
 
     // Get table dimensions
@@ -69,6 +82,7 @@ class TabulatedEOS {
     Kokkos::realloc(m_ye, m_nn);
 
     // Read rho
+    test_field(table.HasField("nb"), "nb");
     Real * table_nb = table["nb"];
     for (size_t in = 0; in < m_nn; in++) {
       //m_log_rho.h_view(in) = log(table_nb[in]*mb*ener_to_geo);
@@ -80,6 +94,7 @@ class TabulatedEOS {
     lrho_max = m_log_rho.h_view(m_nn-1);
 
     // Read pressure
+    test_field(table.HasField("Q1"), "Q1");
     Real * table_Q1 = table["Q1"];
     for (size_t in = 0; in < m_nn; in++) {
       m_log_p.h_view(in) = log(table_Q1[in]*table_nb[in]*
@@ -89,6 +104,7 @@ class TabulatedEOS {
     lP_max = m_log_p.h_view(m_nn-1);
 
     // Read energy
+    test_field(table.HasField("Q7"), "Q7");
     Real * table_Q7 = table["Q7"];
     for (size_t in = 0; in < m_nn; in++) {
       m_log_e.h_view(in) = log(mb*(table_Q7[in] + 1.)*table_nb[in]*
@@ -96,6 +112,7 @@ class TabulatedEOS {
     }
 
     // Read electron fraction
+    test_field(table.HasField("Y[e]"), "Y[e]");
     Real * table_ye = table["Y[e]"];
     for (size_t in = 0; in < m_nn; in++) {
       m_ye.h_view(in) = table_ye[in];
