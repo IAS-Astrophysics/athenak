@@ -306,6 +306,15 @@ class PrimitiveSolverHydro {
     auto &ps_  = ps;
     auto &mu_last_ = mu_last;
 
+    auto &indcs = pmy_pack->pmesh->mb_indcs;
+    int &is = indcs.is;
+    int &ie = indcs.ie;
+    int &js = indcs.js;
+    int &je = indcs.je;
+    int &ks = indcs.ks;
+    int &ke = indcs.ke;
+    auto &size = pmy_pack->pmb->mb_size;
+
     const int ni = (iu - il + 1);
     const int nji = (ju - jl + 1)*ni;
     const int nkji = (ku - kl + 1)*nji;
@@ -426,10 +435,23 @@ class PrimitiveSolverHydro {
         fofc_(m,k,j,i) = true;
       } else if (!floors_only) {
         if (result.error != Primitive::Error::SUCCESS && (nerrs_ + sumerrs < errcap_)) {
-          // TODO(JF): put in a proper error response here.
           sumerrs++;
+          // Find out where the point went bad and report a bunch of information about it.
+          Real &x1min = size.d_view(m).x1min;
+          Real &x1max = size.d_view(m).x1max;
+          Real x1v = CellCenterX(i-is, indcs.nx1, x1min, x1max);
+
+          Real &x2min = size.d_view(m).x2min;
+          Real &x2max = size.d_view(m).x2max;
+          Real x2v = CellCenterX(j-js, indcs.nx2, x2min, x2max);
+
+          Real &x3min = size.d_view(m).x3min;
+          Real &x3max = size.d_view(m).x3max;
+          Real x3v = CellCenterX(k-ks, indcs.nx3, x3min, x3max);
+
           Kokkos::printf("An error occurred during the primitive solve: %s\n"
                  "  Location: (%d, %d, %d, %d)\n"
+                 "            (%.17g, %.17g, %.17g)\n"
                  "  Conserved vars: \n"
                  "    D   = %.17g\n"
                  "    Sx  = %.17g\n"
@@ -449,6 +471,7 @@ class PrimitiveSolverHydro {
                  "    K_dd = {%.17g, %.17g, %.17g, %.17g, %.17g, %.17g}\n",
                  ErrorToString(result.error),
                  m, k, j, i,
+                 x1v, x2v, x3v,
                  cons_pt_old[CDN], cons_pt_old[CSX], cons_pt_old[CSY], cons_pt_old[CSZ],
                  cons_pt_old[CTA], cons_pt_old[CYD], b3u[IBX], b3u[IBY], b3u[IBZ], detg,
                  g3d[S11], g3d[S12], g3d[S13], g3d[S22], g3d[S23], g3d[S33],
