@@ -455,7 +455,7 @@ std::size_t IOWrapper::Write_any_type_at(const void *buf, IOWrapperSizeT cnt,
                                          IOWrapperSizeT offset, std::string datatype,
                                          bool single_file_per_rank) {
 #if MPI_PARALLEL_ENABLED
-  if (single_file_per_rank){
+  if (single_file_per_rank) {
     // set appropriate datasize
     std::size_t datasize;
     if (datatype.compare("byte") == 0) {
@@ -552,7 +552,6 @@ std::size_t IOWrapper::Write_any_type_at(const void *buf, IOWrapperSizeT cnt,
 std::size_t IOWrapper::Write_any_type_at_all(const void *buf, IOWrapperSizeT cnt,
                                             IOWrapperSizeT offset, std::string datatype,
                                             bool single_file_per_rank) {
-
 #if MPI_PARALLEL_ENABLED
   if (single_file_per_rank) {
     // set appropriate datasize
@@ -685,11 +684,11 @@ IOWrapperSizeT IOWrapper::GetPosition(bool single_file_per_rank) {
     MPI_File_get_position(fh_, &position);
     return position;
   } else {
-    long pos = ftell(reinterpret_cast<FILE*>(fh_));
+    int64_t pos = ftell(reinterpret_cast<FILE*>(fh_));
     return pos;
   }
 #else
-  long pos = ftell(fh_);
+  int64_t pos = ftell(fh_);
   return pos;
 #endif
 }

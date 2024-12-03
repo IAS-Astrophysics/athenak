@@ -235,7 +235,7 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resf
   // root process reads size of CC and FC data arrays from restart file
   IOWrapperSizeT variablesize = sizeof(IOWrapperSizeT);
   char *variabledata = new char[variablesize];
-  if (global_variable::my_rank == 0 || single_file_per_rank) { // the master process reads the variables data
+  if (global_variable::my_rank == 0 || single_file_per_rank) {
     if (resfile.Read_bytes(variabledata, 1, variablesize, single_file_per_rank)
         != variablesize) {
       std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__

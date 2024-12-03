@@ -404,7 +404,8 @@ void Mesh::BuildTreeFromRestart(ParameterInput *pin, IOWrapper &resfile,
   // allocate idlist buffer and read list of logical locations and cost
   IOWrapperSizeT listsize = sizeof(LogicalLocation) + sizeof(float);
   char *idlist = new char[listsize*nmb_total];
-  if (global_variable::my_rank == 0 || single_file_per_rank) { // only the master process reads the ID list
+  // only the master process reads the ID list
+  if (global_variable::my_rank == 0 || single_file_per_rank) {
     if (resfile.Read_bytes(idlist,listsize,nmb_total,single_file_per_rank) !=
         static_cast<unsigned int>(nmb_total)) {
       std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
@@ -456,7 +457,8 @@ void Mesh::BuildTreeFromRestart(ParameterInput *pin, IOWrapper &resfile,
   // check there is at least one MeshBlock per MPI rank
   if (!single_file_per_rank) {
     if (nmb_total < global_variable::nranks) {
-      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line "
+        << __LINE__ << std::endl
         << "Fewer MeshBlocks (nmb_total=" << nmb_total << ") than MPI ranks (nranks="
         << global_variable::nranks << ")" << std::endl;
       std::exit(EXIT_FAILURE);

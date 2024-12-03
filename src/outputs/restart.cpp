@@ -175,10 +175,12 @@ void RestartOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
     char number[7];
     std::snprintf(number, sizeof(number), ".%05d", out_params.file_number);
     std::snprintf(rank_dir, sizeof(rank_dir), "rank_%08d/", global_variable::my_rank);
-    fname = std::string("rst/") + std::string(rank_dir) + out_params.file_basename + number + ".rst";
+    fname = std::string("rst/") + std::string(rank_dir) + out_params.file_basename
+      + number + ".rst";
 
     // Debugging output to check directory and filename
-    // std::cout << "Rank " << global_variable::my_rank << " generated filename: " << fname << std::endl;
+    // std::cout << "Rank " << global_variable::my_rank << " generated filename: "
+    //           << fname << std::endl;
   } else {
     // Existing behavior: single restart file
     // create filename: "rst/file_basename" + "." + XXXXX + ".rst"
