@@ -140,7 +140,7 @@ struct OutputParameters {
   Real bin2_min, bin2_max;
   int nbin=0, nbin2=0;
   bool logscale=true, logscale2=true;
-  bool mass_weighted=false;
+  bool single_file_per_rank=false; // DBF: parameter for single file per rank
 };
 
 //----------------------------------------------------------------------------------------

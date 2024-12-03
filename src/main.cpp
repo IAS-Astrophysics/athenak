@@ -29,6 +29,7 @@
 #include <string>
 #include <memory>
 #include <cstdio> // sscanf
+#include <fstream>  // Include this for std::ifstream
 
 // Athena headers
 #include "athena.hpp"
@@ -231,10 +232,38 @@ int main(int argc, char *argv[]) {
   ParameterInput* pinput = new ParameterInput;
   IOWrapper infile, restartfile;
   // read parameters from restart file
+  bool single_file_per_rank = false; // DBF: flag for single_file_per_rank for rst files
   if (res_flag) {
-    restartfile.Open(restart_file.c_str(), IOWrapper::FileMode::read);
-    pinput->LoadFromFile(restartfile);
+    // Check if the path contains "rank_" directory
+    size_t rank_pos = restart_file.find("/rank_");
+    single_file_per_rank = (rank_pos != std::string::npos);
+
+    // If single_file_per_rank is true, modify the path for the current rank
+    if (single_file_per_rank) {
+        // Extract the base directory and file name
+        size_t last_slash = restart_file.rfind('/');
+        std::string base_dir = restart_file.substr(0, rank_pos);
+        std::string file_name = restart_file.substr(last_slash + 1);
+
+        // Construct the path for the current rank
+        char rank_dir[20];
+        std::snprintf(rank_dir, sizeof(rank_dir), "rank_%08d", global_variable::my_rank);
+        restart_file = base_dir + "/" + rank_dir + "/" + file_name;
+    }
+
+    // Now use restart_file for opening the file
+    std::ifstream file_check(restart_file);
+    if (!file_check.good()) {
+        std::cerr << "Error: Unable to open restart file: " << restart_file << std::endl;
+        // Handle the error (e.g., exit the program or use a default configuration)
+    }
+
+    // read parameters from restart file
+    restartfile.Open(restart_file.c_str(),IOWrapper::FileMode::read,single_file_per_rank);
+    pinput->LoadFromFile(restartfile, single_file_per_rank);
+    IOWrapperSizeT headeroffset = restartfile.GetPosition(single_file_per_rank);
   }
+
   // read parameters from input file.  If both -r and -i are specified, this will
   // override parameters from the restart file
   if (iarg_flag) {
@@ -247,7 +276,7 @@ int main(int argc, char *argv[]) {
   // Dump input parameters and quit if code was run with -n option.
   if (narg_flag) {
     if (global_variable::my_rank == 0) pinput->ParameterDump(std::cout);
-    if (res_flag) restartfile.Close();
+    if (res_flag) restartfile.Close(single_file_per_rank);
     delete pinput;
     Kokkos::finalize();
 #if MPI_PARALLEL_ENABLED
@@ -265,13 +294,13 @@ int main(int argc, char *argv[]) {
   if (!res_flag) {
     pmesh->BuildTreeFromScratch(pinput);
   } else {
-    pmesh->BuildTreeFromRestart(pinput, restartfile);
+    pmesh->BuildTreeFromRestart(pinput, restartfile, single_file_per_rank);
   }
 
   //  If code was run with -m option, write mesh structure to file and quit.
   if (marg_flag) {
     if (global_variable::my_rank == 0) {pmesh->WriteMeshStructure();}
-    if (res_flag) {restartfile.Close();}
+    if (res_flag) {restartfile.Close(single_file_per_rank);}
     delete pmesh;
     delete pinput;
     Kokkos::finalize();
@@ -292,10 +321,12 @@ int main(int argc, char *argv[]) {
     pmesh->pgen = std::make_unique<ProblemGenerator>(pinput, pmesh);
   } else {
     // read ICs from restart file using ProblemGenerator constructor for restarts
-    pmesh->pgen = std::make_unique<ProblemGenerator>(pinput, pmesh, restartfile);
-    restartfile.Close();
+    pmesh->pgen = std::make_unique<ProblemGenerator>(pinput,
+                                                     pmesh,
+                                                     restartfile,
+                                                     single_file_per_rank);
+    restartfile.Close(single_file_per_rank);
   }
-
   //--- Step 6. --------------------------------------------------------------------------
   // Construct Driver and Outputs. Actual outputs (including initial conditions) are made
   // in Driver.Initialize(). Add wall clock timer to Driver if necessary.
@@ -303,6 +334,8 @@ int main(int argc, char *argv[]) {
   ChangeRunDir(run_dir);
   Driver* pdriver = new Driver(pinput, pmesh, wtlim, &timer);
   Outputs* pout = new Outputs(pinput, pmesh);
+
+
 
   //--- Step 7. --------------------------------------------------------------------------
   // Execute Driver.

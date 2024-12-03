@@ -29,7 +29,8 @@ class ProblemGenerator {
   // constructor for new problems
   ProblemGenerator(ParameterInput *pin, Mesh *pmesh);
   // constructor for restarts
-  ProblemGenerator(ParameterInput *pin, Mesh *pmesh, IOWrapper resfile);
+  ProblemGenerator(ParameterInput *pin, Mesh *pmesh, IOWrapper resfile,
+                   bool single_file_per_rank=false);
   ~ProblemGenerator() = default;
 
   // true if user BCs are specified on any face
@@ -73,6 +74,7 @@ class ProblemGenerator {
   void UserProblem(ParameterInput *pin, const bool restart);
 
  private:
+  bool single_file_per_rank; // for restart file naming
   Mesh* pmy_mesh_;
 };
 
