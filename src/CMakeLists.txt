@@ -5,6 +5,8 @@
 #=========================================================================================
 
 # list of files to be compiled into executable name
+file(GLOB_RECURSE NURATESSOURCES "bns_nurates/*.cpp" "bns_nurates/*.hpp") 
+
 add_executable(
     athena
         main.cpp
@@ -161,7 +163,13 @@ add_executable(
         z4c/z4c_calculate_weyl_scalars.cpp
         z4c/z4c_wave_extr.cpp
         z4c/z4c_amr.cpp
+        
+        ${NURATESSOURCES}
+        pgen/tests/bns_nurates_calc_opacities.cpp
 )
+
+# Set bns_nurates to compile with Kokkos enabled
+target_compile_definitions(athena PRIVATE KOKKOS_FLAG=1)
 
 # custom problem generator to be included in compile
 # specify on command line using '-D PROBLEM=file' where 'file' is name of file in

@@ -68,7 +68,7 @@ class ProblemGenerator {
   void Z4cLinearWave(ParameterInput *pin, const bool restart);
   void SphericalCollapse(ParameterInput *pin, const bool restart);
   void Diffusion(ParameterInput *pin, const bool restart);
-
+  void CalcM1Opacities(ParameterInput *pin, const bool restart);
   // template for user-specified problem generator
   void UserProblem(ParameterInput *pin, const bool restart);
 
