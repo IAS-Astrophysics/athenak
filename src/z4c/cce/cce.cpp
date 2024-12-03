@@ -13,7 +13,7 @@
 #include <sstream>
 #include <unistd.h> // for F_OK
 #include <fstream> 
-
+#include <iomanip>
 
 #ifdef MPI_PARALLEL
 #include <mpi.h>
@@ -46,34 +46,15 @@ CCE::CCE(Mesh *const pm, ParameterInput *const pin, int index):
 
   rin  = pin->GetOrAddReal("cce", "rin_"  + std::to_string(index),20.);
   rout = pin->GetOrAddReal("cce", "rout_" + std::to_string(index),40.);
-  num_l_modes    = pin->GetOrAddInteger("cce","num_l_modes",7);
+  num_l_modes    = pin->GetOrAddInteger("cce","num_l_modes",16);
   num_n_modes    = pin->GetOrAddInteger("cce","num_radial_modes",7);
   num_angular_modes = (num_l_modes + 1) * (num_l_modes + 1);
 
-  ntheta = num_l_modes;
+  ntheta = num_l_modes + 1;
   nphi   = 2*num_l_modes;
   nr     = num_n_modes;
   nangle = ntheta*nphi;
   npoint = nangle*nr;
-
-  // set appropriate size for the coefficients for all fields
-  // 10 fields we need to interpolate
-  cnlm_real.resize(10);
-  cnlm_imag.resize(10);
-  data_real.resize(10);
-  data_imag.resize(10);
-  for (int i = 0; i < 10; ++i) {
-    cnlm_real[i].resize(nr);
-    cnlm_imag[i].resize(nr);
-    data_real[i].resize(nr);
-    data_imag[i].resize(nr);
-    for (int j = 0; j < nr; ++j) {
-      cnlm_real[i][j].resize(num_angular_modes);
-      cnlm_imag[i][j].resize(num_angular_modes);
-      data_real[i][j].resize(num_angular_modes);
-      data_imag[i][j].resize(num_angular_modes);
-    }
-  }
 
   // Calculate radius for the Gauss Legendre Spheres 
   // and initialize them in a vector
@@ -98,9 +79,6 @@ CCE::~CCE() {}
 
 // Interpolate all fields to Gauss-Legendre Sphere
 void CCE::InterpolateAndDecompose(MeshBlockPack *pmbp) {
-  auto &u_adm = pmbp->padm->u_adm;
-  // outer loop over the number of variables
-  // inner loop over the number of spheres
   Real ylmR,ylmI;
 
   // raveled shape of array & counts for mpi
@@ -108,10 +86,6 @@ void CCE::InterpolateAndDecompose(MeshBlockPack *pmbp) {
   // Dynamically allocate memory for the 4D array flattened into 1D
   Real* data_real = new Real[count];
   Real* data_imag = new Real[count];
-
-  Real dat_real[10][nr][num_angular_modes];
-  Real dat_imag[10][nr][num_angular_modes];
-
   for(int nvar=0; nvar<10; nvar++) {
     for (int k = 0; k < nr; ++k) {
       // Interpolate here
@@ -120,7 +94,7 @@ void CCE::InterpolateAndDecompose(MeshBlockPack *pmbp) {
       } else {
         grids[k]->InterpolateToSphere(variable_to_dump[nvar].first,pmbp->padm->u_adm);
       }
-      for (int l = 1; l < num_l_modes+1; ++l) {
+      for (int l = 0; l < num_l_modes+1; ++l) {
         for (int m = -l; m < l+1 ; ++m) {
           Real psilmR = 0.0;
           Real psilmI = 0.0;
@@ -132,7 +106,7 @@ void CCE::InterpolateAndDecompose(MeshBlockPack *pmbp) {
             // calculate spherical harmonics
             SWSphericalHarm(&ylmR,&ylmI, l, m, 0, theta, phi);
             psilmR += weight*data*ylmR;
-            psilmI += weight*data*ylmI;
+	    psilmI += weight*data*ylmI;
           }
           data_real[k * 10 * num_angular_modes // first over the different radii
                     + nvar * num_angular_modes // then over the variables
@@ -193,5 +167,7 @@ void CCE::InterpolateAndDecompose(MeshBlockPack *pmbp) {
     // Close the file
     fclose(cce_file);
   }
+  delete[] data_real;
+  delete[] data_imag;
 }
 } // end namespace z4c

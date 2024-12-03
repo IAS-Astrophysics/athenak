@@ -53,16 +53,6 @@ class CCE
     // sphere for storing the indices, etc.
     std::vector<std::unique_ptr<GaussLegendreGrid>> grids;
 
-    // 3d array holding the spectral indices of all variable
-    // first index is variable
-    // second is radial
-    // last is angular
-    std::vector<std::vector<std::vector<Real>>> cnlm_real;
-    std::vector<std::vector<std::vector<Real>>> cnlm_imag;
-
-    std::vector<std::vector<std::vector<Real>>> data_real;
-    std::vector<std::vector<std::vector<Real>>> data_imag;
-
   public:
     CCE(Mesh *const pm, ParameterInput *const pin, int index);
     ~CCE();
