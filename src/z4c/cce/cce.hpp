@@ -32,7 +32,6 @@ class CCE
     int index;       // radius number/shell number
     Real rin;  // inner radius of shell
     Real rout; // outer radius of shell
-    std::string output_dir; // write output file in this directory
     Mesh *pm;             // mesh
     MeshBlockPack *pmbp;  // meshblockpack
     ParameterInput *pin;  // param file
@@ -47,6 +46,9 @@ class CCE
     int nr;             // number of collocation points in radius
     int nangle;         // number of theta and phi points
     int npoint;         // total number of points
+
+    // variables to dump
+    std::vector<std::pair<int, bool>> variable_to_dump;
 
     // sphere for storing the indices, etc.
     std::vector<std::unique_ptr<GaussLegendreGrid>> grids;

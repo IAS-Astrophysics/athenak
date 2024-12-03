@@ -3,11 +3,18 @@
 
 #include "athena.hpp"
 #include "globals.hpp"
-// TODO (HZ): Add function to compute the collocation points for Chebyshev polynomials of the second kind
 
+// kth collocation point for chebyshev polynomials of the second kind
+KOKKOS_INLINE_FUNCTION
+Real ChebyshevSecondKindCollocationPoints(Real xmin, Real xmax, int N, int k) {
+  // over the interval of -1 to 1
+  Real x_k = std::cos( M_PI * (k + 1) / (N + 2));
+  return  0.5 * ( (xmin - xmax) * x_k + (xmin + xmax));
+}
 
 // Function to compute Chebyshev polynomials of the second kind recursively
-Real chebyshevSecondKindPolynomial(int k, Real x) {
+KOKKOS_INLINE_FUNCTION
+Real ChebyshevSecondKindPolynomial(int k, Real x) {
   if (k == 0) return 1.0;
   if (k == 1) return 2.0 * x;
   Real Uk_2 = 1.0;           // U_0(x)
