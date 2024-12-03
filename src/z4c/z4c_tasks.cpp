@@ -303,9 +303,6 @@ TaskStatus Z4c::CCEDump(Driver *pdrive, int stage) {
   if ((time_32 >= next_32)) {
     if (stage == pdrive->nexp_stages) {
       //printf("%s:(ctime,dt)=(%f,%f)",__func__,pmy_pack->pmesh->time,cce_dump_dt);
-      int cce_iter = 0;
-      
-      Kokkos::Timer timer;
       for (auto cce : pmy_pack->pz4c_cce) {
         cce->InterpolateAndDecompose(pmy_pack);
       }
