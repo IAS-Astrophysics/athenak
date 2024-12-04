@@ -24,10 +24,10 @@ NumericalRelativity::NumericalRelativity(MeshBlockPack *ppack, ParameterInput *p
   }
 }
 
-PhysicsDependency NumericalRelativity::NeedsPhysics(TaskName task) {
-  if (task < MHD_NTASKS) {
+PhysicsDependency NumericalRelativity::NeedsPhysics(std::string& task) {
+  if (task.compare(0,3,"MHD") == 0) {
     return Phys_MHD;
-  } else if (task < Z4c_NTASKS) {
+  } else if (task.compare(0,3,"Z4c") == 0) {
     return Phys_Z4c;
   } else {
     return Phys_None;
@@ -48,7 +48,7 @@ bool NumericalRelativity::DependencyAvailable(PhysicsDependency dep) {
   return false;
 }
 
-bool NumericalRelativity::DependenciesMet(std::vector<TaskName>& tasks) {
+bool NumericalRelativity::DependenciesMet(std::vector<std::string>& tasks) {
   for (auto& task : tasks) {
     PhysicsDependency phys = NeedsPhysics(task);
     if (!DependencyAvailable(phys)) {
@@ -69,7 +69,7 @@ bool NumericalRelativity::DependenciesMet(QueuedTask& task,
   for (auto& dep : task.dependencies) {
     bool found = false;
     for (auto &test_task : queue) {
-      if (test_task.name == dep) {
+      if (test_task.name_string == dep) {
         found = true;
         if (!test_task.added) {
           return false;
@@ -86,8 +86,8 @@ bool NumericalRelativity::DependenciesMet(QueuedTask& task,
   return true;
 }
 
-void NumericalRelativity::AddExtraDependencies(std::vector<TaskName>& required,
-                                               std::vector<TaskName>& optional) {
+void NumericalRelativity::AddExtraDependencies(std::vector<std::string>& required,
+                                               std::vector<std::string>& optional) {
   for (auto& task : optional) {
     PhysicsDependency phys = NeedsPhysics(task);
     if (DependencyAvailable(phys)) {
