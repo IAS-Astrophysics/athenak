@@ -130,6 +130,10 @@ template <typename T>
 using DualArray2D = Kokkos::DualView<T **, LayoutWrapper, DevMemSpace>;
 template <typename T>
 using DualArray3D = Kokkos::DualView<T ***, LayoutWrapper, DevMemSpace>;
+template <typename T>
+using DualArray4D = Kokkos::DualView<T ****, LayoutWrapper, DevMemSpace>;
+template <typename T>
+using DualArray5D = Kokkos::DualView<T *****, LayoutWrapper, DevMemSpace>;
 
 // template declarations for construction of Kokkos::View in scratch memory
 template <typename T>
@@ -477,4 +481,3 @@ struct reduction_identity< array_sum::GlobalSum > {
 }
 
 #endif // ATHENA_HPP_
-
