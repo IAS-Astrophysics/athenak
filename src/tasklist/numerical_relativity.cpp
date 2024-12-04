@@ -19,22 +19,9 @@ namespace numrel {
 
 NumericalRelativity::NumericalRelativity(MeshBlockPack *ppack, ParameterInput *pin) {
   pmy_pack = ppack;
-}
-
-std::vector<QueuedTask>& NumericalRelativity::SelectQueue(TaskLocation loc) {
-  switch(loc) {
-    case Task_Start:
-      return start_queue;
-    case Task_Run:
-      return run_queue;
-    case Task_End:
-      return end_queue;
-    default:
-      std::cout << "NumericalRelativity: Unknown task queue requested!\n";
-      abort();
+  for (const auto& [key, value] : pmy_pack->tl_map) {
+    queue_map[key] = std::vector<QueuedTask>();
   }
-
-  return end_queue;
 }
 
 PhysicsDependency NumericalRelativity::NeedsPhysics(TaskName task) {
@@ -162,28 +149,14 @@ void NumericalRelativity::AssembleNumericalRelativityTasks(
     pmy_pack->pz4c->QueueZ4cTasks();
   }
 
-  bool success = AssembleNumericalRelativityTasks(tl["before_stagen"], start_queue);
-  if (!success) {
-    std::cout << "NumericalRelativity: Failed to construct start TaskList!\n"
-              << "  Check that there are no cyclical dependencies or missing tasks.\n";
-    PrintMissingTasks(start_queue);
-    abort();
-  }
-
-  success = AssembleNumericalRelativityTasks(tl["stagen"], run_queue);
-  if (!success) {
-    std::cout << "NumericalRelativity: Failed to construct run TaskList!\n"
-              << "  Check that there are no cyclical dependencies or missing tasks.\n";
-    PrintMissingTasks(run_queue);
-    abort();
-  }
-
-  success = AssembleNumericalRelativityTasks(tl["after_stagen"], end_queue);
-  if (!success) {
-    std::cout << "NumericalRelativity: Failed to construct end TaskList!\n"
-              << "  Check that there are no cyclical dependencies or missing tasks.\n";
-    PrintMissingTasks(end_queue);
-    abort();
+  for (auto& [key, queue] : queue_map) {
+    bool success = AssembleNumericalRelativityTasks(tl[key], queue);
+    if (!success) {
+      std::cout << "NumericalRelativity: Failed to construct " << key << "TaskList!\n"
+                << "  Check that there are no cyclical dependencies or missing tasks.\n";
+      PrintMissingTasks(queue);
+      abort();
+    }
   }
 }
 

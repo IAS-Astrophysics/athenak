@@ -91,11 +91,11 @@ enum PhysicsDependency {
   Phys_Z4c
 };
 
-enum TaskLocation {
+/*enum TaskLocation {
   Task_Start,
   Task_Run,
   Task_End
-};
+};*/
 
 struct QueuedTask {
   QueuedTask(TaskName n, const std::string s, bool a, TaskID i, std::vector<TaskName>& d,
@@ -118,7 +118,7 @@ class NumericalRelativity {
   // Task function must have arguments (Driver*, int).
   template <class F>
   void QueueTask(F func, TaskName name, const std::string name_string,
-                 TaskLocation loc, std::vector<TaskName> dependencies = {},
+                 const std::string queue, std::vector<TaskName> dependencies = {},
                  std::vector<TaskName> optional = {}) {
     // Don't add this task if its physics dependencies aren't met, e.g,
     // don't add Z4c matter source terms if Z4c is disabled.
@@ -129,7 +129,7 @@ class NumericalRelativity {
     AddExtraDependencies(dependencies, optional);
     // Add a new task to the queue.
     //std::cout << "Queuing " << name_string << "...\n";
-    SelectQueue(loc).push_back(QueuedTask(name, name_string, false, TaskID(),
+    queue_map[queue].push_back(QueuedTask(name, name_string, false, TaskID(),
       dependencies, [=](Driver *d, int s) mutable -> TaskStatus {return func(d,s);}));
   }
 
@@ -138,7 +138,7 @@ class NumericalRelativity {
   // function of class T.
   template <class F, class T>
   void QueueTask(F func, T *obj, TaskName name, const std::string name_string,
-                 TaskLocation loc, std::vector<TaskName> dependencies = {},
+                 const std::string queue, std::vector<TaskName> dependencies = {},
                  std::vector<TaskName> optional = {}) {
     // Don't add this task if its physics dependencies aren't met, e.g.,
     // don't add Z4c matter source terms if Z4c is disabled.
@@ -149,8 +149,7 @@ class NumericalRelativity {
     AddExtraDependencies(dependencies, optional);
     // Add a new task to the queue.
     //std::cout << "Queuing " << name_string << "...\n";
-    auto& queue = SelectQueue(loc);
-    SelectQueue(loc).push_back(QueuedTask(name, name_string, false, TaskID(),
+    queue_map[queue].push_back(QueuedTask(name, name_string, false, TaskID(),
       dependencies,
       [=](Driver *d, int s) mutable -> TaskStatus {return (obj->*func)(d,s);}));
   }
@@ -160,11 +159,8 @@ class NumericalRelativity {
 
  private:
   MeshBlockPack *pmy_pack;
-  std::vector<QueuedTask> start_queue;
-  std::vector<QueuedTask> run_queue;
-  std::vector<QueuedTask> end_queue;
+  std::map<std::string, std::vector<QueuedTask>> queue_map;
 
-  std::vector<QueuedTask>& SelectQueue(TaskLocation loc);
   PhysicsDependency NeedsPhysics(TaskName task);
   bool DependencyAvailable(PhysicsDependency dep);
 
