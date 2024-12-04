@@ -91,12 +91,6 @@ enum PhysicsDependency {
   Phys_Z4c
 };
 
-/*enum TaskLocation {
-  Task_Start,
-  Task_Run,
-  Task_End
-};*/
-
 struct QueuedTask {
   QueuedTask(TaskName n, const std::string s, bool a, TaskID i, std::vector<TaskName>& d,
              std::function<TaskStatus(Driver *, int)> func) :
