@@ -316,7 +316,8 @@ void Mesh::BuildTreeFromScratch(ParameterInput *pin) {
 //! divides grid into MeshBlock(s) for restart runs, using parameters and data read from
 //! restart file.
 
-void Mesh::BuildTreeFromRestart(ParameterInput *pin, IOWrapper &resfile) {
+void Mesh::BuildTreeFromRestart(ParameterInput *pin, IOWrapper &resfile,
+                                                     bool single_file_per_rank) {
   // At this point, the restartfile is already open and the ParameterInput (input file)
   // data has already been read in main(). Thus the file pointer is set to after <par_end>
   IOWrapperSizeT headeroffset = resfile.GetPosition();
@@ -327,18 +328,30 @@ void Mesh::BuildTreeFromRestart(ParameterInput *pin, IOWrapper &resfile) {
     + sizeof(RegionSize) + 2*sizeof(RegionIndcs);
   char *headerdata = new char[headersize];
 
-  if (global_variable::my_rank == 0) { // the master process reads the header data
-    if (resfile.Read_bytes(headerdata, 1, headersize) != headersize) {
+  // the master process reads the header data if single_file_per_rank is false
+  if (global_variable::my_rank == 0 || single_file_per_rank) {
+    IOWrapperSizeT read_size = resfile.Read_bytes(headerdata, 1, headersize,
+                                                  single_file_per_rank);
+    if (read_size != headersize) {
       std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                 << std::endl << "Header size read from restart file is incorrect, "
-                << "restart file is broken." << std::endl;
+                << "expected " << headersize << ", got " << read_size << std::endl;
       exit(EXIT_FAILURE);
     }
   }
 
 #if MPI_PARALLEL_ENABLED
   // then broadcast the header data
-  MPI_Bcast(headerdata, headersize, MPI_CHAR, 0, MPI_COMM_WORLD);
+  if (!single_file_per_rank) {
+    int mpi_err = MPI_Bcast(headerdata, headersize, MPI_CHAR, 0, MPI_COMM_WORLD);
+    if (mpi_err != MPI_SUCCESS) {
+      char error_string[1024];
+      int length_of_error_string;
+      MPI_Error_string(mpi_err, error_string, &length_of_error_string);
+      std::cout << "MPI_Bcast failed with error: " << error_string << std::endl;
+      exit(EXIT_FAILURE);
+    }
+  }
 #endif
 
   // Now copy mesh data read from restart file into Mesh variables. Order of variables
@@ -391,8 +404,9 @@ void Mesh::BuildTreeFromRestart(ParameterInput *pin, IOWrapper &resfile) {
   // allocate idlist buffer and read list of logical locations and cost
   IOWrapperSizeT listsize = sizeof(LogicalLocation) + sizeof(float);
   char *idlist = new char[listsize*nmb_total];
-  if (global_variable::my_rank == 0) { // only the master process reads the ID list
-    if (resfile.Read_bytes(idlist,listsize,nmb_total) !=
+  // only the master process reads the ID list
+  if (global_variable::my_rank == 0 || single_file_per_rank) {
+    if (resfile.Read_bytes(idlist,listsize,nmb_total,single_file_per_rank) !=
         static_cast<unsigned int>(nmb_total)) {
       std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                 << std::endl << "Incorrect number of MeshBlocks in restart file; "
@@ -402,7 +416,9 @@ void Mesh::BuildTreeFromRestart(ParameterInput *pin, IOWrapper &resfile) {
   }
 #if MPI_PARALLEL_ENABLED
   // then broadcast the ID list
-  MPI_Bcast(idlist, listsize*nmb_total, MPI_CHAR, 0, MPI_COMM_WORLD);
+  if (!single_file_per_rank) {
+    MPI_Bcast(idlist, listsize*nmb_total, MPI_CHAR, 0, MPI_COMM_WORLD);
+  }
 #endif
 
   // everyone sets the logical location and cost lists based on bradcasted data
@@ -439,11 +455,14 @@ void Mesh::BuildTreeFromRestart(ParameterInput *pin, IOWrapper &resfile) {
 
 #ifdef MPI_PARALLEL_ENABLED
   // check there is at least one MeshBlock per MPI rank
-  if (nmb_total < global_variable::nranks) {
-    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+  if (!single_file_per_rank) {
+    if (nmb_total < global_variable::nranks) {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line "
+        << __LINE__ << std::endl
         << "Fewer MeshBlocks (nmb_total=" << nmb_total << ") than MPI ranks (nranks="
         << global_variable::nranks << ")" << std::endl;
-    std::exit(EXIT_FAILURE);
+      std::exit(EXIT_FAILURE);
+    }
   }
 #endif
 
