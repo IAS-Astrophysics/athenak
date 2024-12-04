@@ -24,6 +24,7 @@
 #include "coordinates/adm.hpp"
 #include "z4c/z4c_amr.hpp"
 #include "z4c/z4c.hpp"
+#include "z4c/z4c_amr.hpp"
 #include "coordinates/coordinates.hpp"
 #include "coordinates/cell_locations.hpp"
 #include "eos/eos.hpp"

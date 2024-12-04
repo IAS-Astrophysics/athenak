@@ -24,6 +24,7 @@
 #include "hydro/hydro.hpp"
 #include "mhd/mhd.hpp"
 #include "radiation/radiation.hpp"
+#include "coordinates/adm.hpp"
 #include "z4c/z4c.hpp"
 #include "z4c/z4c_amr.hpp"
 #include "prolongation.hpp"
@@ -560,6 +561,7 @@ void MeshRefinement::RedistAndRefineMeshBlocks(ParameterInput *pin, int nnew, in
   hydro::Hydro* phydro = pm->pmb_pack->phydro;
   mhd::MHD* pmhd = pm->pmb_pack->pmhd;
   z4c::Z4c* pz4c = pm->pmb_pack->pz4c;
+  adm::ADM* padm = pm->pmb_pack->padm;
   // derefine (if needed)
   if (ndel > 0) {
     if (phydro != nullptr) {
@@ -586,6 +588,8 @@ void MeshRefinement::RedistAndRefineMeshBlocks(ParameterInput *pin, int nnew, in
   }
   if (pz4c != nullptr) {
     CopyCC(pz4c->u0);
+  } else if (padm != nullptr) {
+    CopyCC(padm->u_adm);
   }
   // Step 7.
   // Copy evolved physics variables for MBs flagged for refinement from source fine array
@@ -676,6 +680,13 @@ void MeshRefinement::RedistAndRefineMeshBlocks(ParameterInput *pin, int nnew, in
   // clean-up and return
   delete [] newtoold;
   delete [] oldtonew;
+
+  // Step 11.
+  // Recalculate ADM variables if necessary.
+  if ((pz4c == nullptr) && (padm != nullptr) && (nnew > 0 || ndel > 0)) {
+    padm->SetADMVariables(pm->pmb_pack);
+  }
+
   return;
 }
 
