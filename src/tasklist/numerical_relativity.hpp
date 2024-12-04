@@ -28,12 +28,6 @@ class MeshBlockPack;
 
 namespace numrel {
 
-enum PhysicsDependency {
-  Phys_None,
-  Phys_MHD,
-  Phys_Z4c
-};
-
 struct QueuedTask {
   QueuedTask(const std::string s, bool a, TaskID i, std::vector<std::string>& d,
              std::function<TaskStatus(Driver *, int)> func) :
@@ -97,8 +91,7 @@ class NumericalRelativity {
   MeshBlockPack *pmy_pack;
   std::map<std::string, std::vector<QueuedTask>> queue_map;
 
-  PhysicsDependency NeedsPhysics(std::string& task);
-  bool DependencyAvailable(PhysicsDependency dep);
+  bool DependencyAvailable(std::string& task);
 
   bool DependenciesMet(std::vector<std::string>& tasks);
   bool DependenciesMet(QueuedTask& task, std::vector<QueuedTask>& queue,
