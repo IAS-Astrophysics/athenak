@@ -345,29 +345,35 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
                     jp = (x2v - x2min)/size.d_view(m).dx2 + js;
                     kp = (x3v - x3min)/size.d_view(m).dx3 + ks;                  
                   }
-                  u[0] = w0_(m,IVX,kp,jp,ip)*this_en;
-                  u[1] = w0_(m,IVY,kp,jp,ip)*this_en;
-                  u[2] = w0_(m,IVZ,kp,jp,ip)*this_en;
-                  // Check you haven't exceeded speed of light
+                  u[0] = w0_(m,IVX,kp,jp,ip);
+                  u[1] = w0_(m,IVY,kp,jp,ip);
+                  u[2] = w0_(m,IVZ,kp,jp,ip);
+                  Real gu[4][4], gl[4][4];
+                  ComputeMetricAndInverse(x1v,x2v,x3v,coord.is_minkowski,coord.bh_spin,gl,gu); 
+                  Real u_0 = gl[1][1]*SQR(u[0]) + gl[2][2]*SQR(u[1]) + gl[3][3]*SQR(u[2])
+                        + 2.0*gl[1][2]*u[0]*u[1] + 2.0*gl[1][3]*u[0]*u[2]
+                        + 2.0*gl[3][2]*u[2]*u[1];
+                  u_0 = sqrt(u_0 + massive); 
+                  // Compute particle's 3-velocity in normal frame
+                  u[0] *= this_en/u_0;
+                  u[1] *= this_en/u_0;
+                  u[2] *= this_en/u_0;
+                  // Check you haven't exceeded speed of light on the 3-velocity
                   if ( SQR(u[0]) + SQR(u[1]) + SQR(u[2]) >= 1.0 ) {
-                      Real aux_fac = SQR(u[0]) + SQR(u[1]) + SQR(u[2]);
+                      Real aux_fac = 1.01*( SQR(u[0]) + SQR(u[1]) + SQR(u[2]) );
                       u[0] /= aux_fac;
                       u[1] /= aux_fac;
                       u[2] /= aux_fac;
                   }
-                  // Here max_en and min_en act as multiplication factors
-                  Real gu[4][4], gl[4][4];
-                  ComputeMetricAndInverse(x1v,x2v,x3v,coord.is_minkowski,coord.bh_spin,gl,gu); 
-                  Real u_0 = 0.0;
-                  for (int i1 = 0; i1 < 3; ++i1 ){ 
-                    for (int i2 = 0; i2 < 3; ++i2 ){
-                      u_0 += gl[i1+1][i2+1]*u[i1]*u[i2];
-                    }
-                  }
-                  u_0 = sqrt(u_0 + massive); 
-                  u[0] += gu[0][1]*u_0/sqrt(-gu[0][0]);
-                  u[1] += gu[0][2]*u_0/sqrt(-gu[0][0]);
-                  u[2] += gu[0][3]*u_0/sqrt(-gu[0][0]);
+                  // Now u is a 3-velocity: compute gamma factor as usual
+                  u_0 = gl[1][1]*SQR(u[0]) + gl[2][2]*SQR(u[1]) + gl[3][3]*SQR(u[2])
+                        + 2.0*gl[1][2]*u[0]*u[1] + 2.0*gl[1][3]*u[0]*u[2]
+                        + 2.0*gl[3][2]*u[2]*u[1];
+                  u_0 = 1.0/sqrt(1.0 - u_0); 
+                  // Reconvert to 4-velocity, but now accelerated
+                  u[0] *= u_0;
+                  u[1] *= u_0;
+                  u[2] *= u_0;
                   pr(IPVX,p) = gl[1][1]*u[0] + gl[1][2]*u[1] + gl[1][3]*u[2];
                   pr(IPVY,p) = gl[2][1]*u[0] + gl[2][2]*u[1] + gl[2][3]*u[2];
                   pr(IPVZ,p) = gl[3][1]*u[0] + gl[3][2]*u[1] + gl[3][3]*u[2];
