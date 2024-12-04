@@ -77,6 +77,8 @@ class DynGRMHD {
   DynGRMHDTaskIDs id;
 
   TaskStatus SetTmunu(Driver *d, int stage);
+  TaskStatus SetADMVariables(Driver *d, int stage);
+  TaskStatus UpdateExcisionMasks(Driver *d, int stage);
   TaskStatus ApplyPhysicalBCs(Driver *d, int stage);
 
   // functions
