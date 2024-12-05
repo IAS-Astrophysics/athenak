@@ -167,7 +167,7 @@ void Radiation::QueueRadTasks() {
   pnr->QueueTask(&Radiation::RecvI, this, "Rad_RecvI", "stagen", {"Rad_SendI"});
   pnr->QueueTask(&Radiation::ApplyPhysicalBCs, this, "Rad_ApplyBCs", "stagen",
                  {"Rad_RecvI"},{"Hyd_RecvU"});
-  pnr->QueueTask(&Radiation::Prolongate, this, "Rad_Prolong", "stagen", {"Rad_RecvI"});
+  pnr->QueueTask(&Radiation::Prolongate, this, "Rad_Prolong", "stagen", {"Rad_ApplyBCs"});
   
   pnr->QueueTask(&Radiation::ClearSend, this, "Rad_ClearS", "after_stagen");
   pnr->QueueTask(&Radiation::ClearRecv, this, "Rad_ClearR", "after_stagen",
