@@ -29,7 +29,6 @@
 #include "parameter_input.hpp"
 #include "geodesic-grid/gauss_legendre.hpp"
 #include "utils/spherical_harm.hpp"
-#include "utils/write_vector.hpp"
 #include "utils/chebyshev.hpp"
 
 #define BUFFSIZE  (1024)
