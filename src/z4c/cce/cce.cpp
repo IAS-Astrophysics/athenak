@@ -4,16 +4,17 @@
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
 
-#include "athena.hpp"
-#include "globals.hpp"
-
+#include <unistd.h> // for F_OK
 #include <algorithm> // for fill
-#include <cmath>     // for NAN
+#include <cmath>
 #include <stdexcept>
 #include <sstream>
-#include <unistd.h> // for F_OK
-#include <fstream> 
+#include <fstream>
 #include <iomanip>
+#include <memory>
+#include <utility>
+#include <string>
+#include <cstdio>
 
 #ifdef MPI_PARALLEL
 #include <mpi.h>
@@ -56,7 +57,7 @@ CCE::CCE(Mesh *const pm, ParameterInput *const pin, int index):
   nangle = ntheta*nphi;
   npoint = nangle*nr;
 
-  // Calculate radius for the Gauss Legendre Spheres 
+  // Calculate radius for the Gauss Legendre Spheres
   // and initialize them in a vector
   for (int k = 0; k < nr; ++k) {
     Real rad = ChebyshevSecondKindCollocationPoints(rin,rout,nr,k);
@@ -106,7 +107,7 @@ void CCE::InterpolateAndDecompose(MeshBlockPack *pmbp) {
             // calculate spherical harmonics
             SWSphericalHarm(&ylmR,&ylmI, l, m, 0, theta, phi);
             psilmR += weight*data*ylmR;
-	    psilmI += weight*data*ylmI;
+            psilmI += weight*data*ylmI;
           }
           data_real[k * 10 * num_angular_modes // first over the different radii
                     + nvar * num_angular_modes // then over the variables
@@ -124,8 +125,10 @@ void CCE::InterpolateAndDecompose(MeshBlockPack *pmbp) {
   // Reduction to the master rank for cnlm_real and cnlm_imag
   #if MPI_PARALLEL_ENABLED
   if (0 == global_variable::my_rank) {
-    MPI_Reduce(MPI_IN_PLACE, data_real, count, MPI_ATHENA_REAL, MPI_SUM, 0, MPI_COMM_WORLD);
-    MPI_Reduce(MPI_IN_PLACE, data_imag, count, MPI_ATHENA_REAL, MPI_SUM, 0, MPI_COMM_WORLD);
+    MPI_Reduce(MPI_IN_PLACE, data_real, count, MPI_ATHENA_REAL,
+              MPI_SUM, 0, MPI_COMM_WORLD);
+    MPI_Reduce(MPI_IN_PLACE, data_imag, count, MPI_ATHENA_REAL,
+              MPI_SUM, 0, MPI_COMM_WORLD);
   } else {
     MPI_Reduce(data_real, data_real, count, MPI_ATHENA_REAL, MPI_SUM, 0, MPI_COMM_WORLD);
     MPI_Reduce(data_imag, data_imag, count, MPI_ATHENA_REAL, MPI_SUM, 0, MPI_COMM_WORLD);

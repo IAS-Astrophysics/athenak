@@ -426,7 +426,7 @@ TaskStatus ParticlesBoundaryValues::RecvAndUnpackPrtcls() {
 #if MPI_PARALLEL_ENABLED
   // Sort sendlist on host by index in particle array
   namespace KE = Kokkos::Experimental;
-  
+
   // Custom operators to sort ParticleLocationData array by dest_rank or prtcl_indx
   struct {
   bool operator()(ParticleLocationData a, ParticleLocationData b)

@@ -1,5 +1,5 @@
-#ifndef GEODESIC_GRID_GAUSSLEGENDRA_GRID_HPP_
-#define GEODESIC_GRID_GAUSSLEGENDRA_GRID_HPP_
+#ifndef GEODESIC_GRID_GAUSS_LEGENDRE_HPP_
+#define GEODESIC_GRID_GAUSS_LEGENDRE_HPP_
 //========================================================================================
 // AthenaXXX astrophysical plasma code
 // Copyright(C) 2020 James M. Stone <jmstone@ias.edu> and the Athena code team
@@ -33,7 +33,8 @@ class GaussLegendreGrid {
     void InitializeAngleAndWeights();
     void InitializeRadius();
 
-    void InterpolateToSphere(int nvars, DvceArray5D<Real> &val);  // interpolate scalar field to sphere
+    // interpolate scalar field to sphere
+    void InterpolateToSphere(int nvars, DvceArray5D<Real> &val);
     DualArray2D<int> interp_indcs;   // indices of MeshBlock and zones therein for interp
     DualArray3D<Real> interp_wghts;  // weights for interpolation
 
@@ -44,5 +45,4 @@ class GaussLegendreGrid {
  private:
     MeshBlockPack* pmy_pack;  // ptr to MeshBlockPack containing this Hydro
 };
-
-#endif // GEODESIC_GRID_GAUSSLEGENDRA_GRID_HPP_
+#endif // GEODESIC_GRID_GAUSS_LEGENDRE_HPP_
