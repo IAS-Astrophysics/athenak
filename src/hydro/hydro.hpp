@@ -109,6 +109,7 @@ class Hydro {
 
   // functions...
   void AssembleHydroTasks(std::map<std::string, std::shared_ptr<TaskList>> tl);
+  void QueueHydroTasks();
   // ...in "before_stagen_tl" list
   TaskStatus InitRecv(Driver *d, int stage);
   // ...in "stagen_tl" list

@@ -95,6 +95,8 @@ void MeshBlockPack::AddPhysics(ParameterInput *pin) {
   int nphysics = 0;
   TaskID none(0);
 
+  pnr = new numrel::NumericalRelativity(this, pin);
+
   // (1) Units.  Create first so that they can be used in other physics constructors
   // Default units are simply code units
   if (pin->DoesBlockExist("units")) {
@@ -111,7 +113,7 @@ void MeshBlockPack::AddPhysics(ParameterInput *pin) {
     nphysics++;
     if (!(pin->DoesBlockExist("mhd")) && !(pin->DoesBlockExist("radiation")) &&
         !(pin->DoesBlockExist("adm")) && !(pin->DoesBlockExist("z4c")) ) {
-      phydro->AssembleHydroTasks(tl_map);
+      //phydro->AssembleHydroTasks(tl_map);
     }
   } else {
     phydro = nullptr;
@@ -161,7 +163,7 @@ void MeshBlockPack::AddPhysics(ParameterInput *pin) {
   if (pin->DoesBlockExist("radiation")) {
     prad = new radiation::Radiation(this, pin);
     nphysics++;
-    prad->AssembleRadTasks(tl_map);
+    //prad->AssembleRadTasks(tl_map);
   } else {
     prad = nullptr;
   }
@@ -185,7 +187,6 @@ void MeshBlockPack::AddPhysics(ParameterInput *pin) {
   if (pin->DoesBlockExist("z4c")) {
     pz4c = new z4c::Z4c(this, pin);
     padm = new adm::ADM(this, pin);
-    ptmunu = nullptr;
     nphysics++;
   } else {
     pz4c = nullptr;
@@ -196,7 +197,7 @@ void MeshBlockPack::AddPhysics(ParameterInput *pin) {
     }
   }
 
-  // (8) Dynamical Spacetime and Matter (MHD TODO)
+  // (8) Dynamical Spacetime and Matter
   if ((pin->DoesBlockExist("z4c") || pin->DoesBlockExist("adm")) &&
       (pin->DoesBlockExist("hydro")) ) {
     std::cout << "Dynamical metric and hydro not compatible; use MHD instead  "
@@ -209,12 +210,7 @@ void MeshBlockPack::AddPhysics(ParameterInput *pin) {
     ptmunu = new Tmunu(this, pin);
   }
 
-  if (pz4c != nullptr || padm != nullptr) {
-    pnr = new numrel::NumericalRelativity(this, pin);
-    pnr->AssembleNumericalRelativityTasks(tl_map);
-  }
-
-  // (8) PARTICLES
+  // (9) PARTICLES
   // Create particles module.  Create tasklist.
   if (pin->DoesBlockExist("particles")) {
     ppart = new particles::Particles(this, pin);
@@ -223,6 +219,8 @@ void MeshBlockPack::AddPhysics(ParameterInput *pin) {
   } else {
     ppart = nullptr;
   }
+
+  pnr->AssembleNumericalRelativityTasks(tl_map);
 
   // Check that at least ONE is requested and initialized.
   // Error if there are no physics blocks in the input file.

@@ -16,6 +16,7 @@
 #include "parameter_input.hpp"
 #include "geodesic-grid/geodesic_grid.hpp"
 #include "tasklist/task_list.hpp"
+#include "tasklist/numerical_relativity.hpp"
 #include "mesh/mesh.hpp"
 #include "eos/eos.hpp"
 #include "bvals/bvals.hpp"
@@ -146,6 +147,31 @@ void Radiation::AssembleRadTasks(std::map<std::string, std::shared_ptr<TaskList>
   }
 
   return;
+}
+
+void Radiation::QueueRadTasks() {
+  numrel::NumericalRelativity *pnr = pmy_pack->pnr;
+
+  pnr->QueueTask(&Radiation::InitRecv, this, "Rad_InitRecv", "before_stagen");
+  
+  pnr->QueueTask(&Radiation::CopyCons, this, "Rad_CopyCons", "stagen");
+  pnr->QueueTask(&Radiation::CalculateFluxes, this, "Rad_CalcFlux", "stagen",
+                 {"Rad_CopyCons"});
+  pnr->QueueTask(&Radiation::SendFlux, this, "Rad_SendFlux", "stagen", {"Rad_CalcFlux"});
+  pnr->QueueTask(&Radiation::RecvFlux, this, "Rad_RecvFlux", "stagen", {"Rad_SendFlux"});
+  pnr->QueueTask(&Radiation::RKUpdate, this, "Rad_RKUpdate", "stagen", {"Rad_RecvFlux"});
+  pnr->QueueTask(&Radiation::AddRadiationSourceTerm, this, "Rad_SrcTerm", "stagen",
+                 {"Rad_RKUpdate"});
+  pnr->QueueTask(&Radiation::RestrictI, this, "Rad_RestI", "stagen", {"Rad_SrcTerm"});
+  pnr->QueueTask(&Radiation::SendI, this, "Rad_SendI", "stagen", {"Rad_RestI"});
+  pnr->QueueTask(&Radiation::RecvI, this, "Rad_RecvI", "stagen", {"Rad_SendI"});
+  pnr->QueueTask(&Radiation::ApplyPhysicalBCs, this, "Rad_ApplyBCs", "stagen",
+                 {"Rad_RecvI"});
+  pnr->QueueTask(&Radiation::Prolongate, this, "Rad_Prolong", "stagen", {"Rad_RecvI"});
+  
+  pnr->QueueTask(&Radiation::ClearSend, this, "Rad_ClearS", "after_stagen");
+  pnr->QueueTask(&Radiation::ClearRecv, this, "Rad_ClearR", "after_stagen",
+                 {"Rad_ClearS"});
 }
 
 //----------------------------------------------------------------------------------------

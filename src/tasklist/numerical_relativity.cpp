@@ -12,8 +12,10 @@
 #include <vector>
 
 #include "numerical_relativity.hpp"
+#include "hydro/hydro.hpp"
 #include "z4c/z4c.hpp"
 #include "dyn_grmhd/dyn_grmhd.hpp"
+#include "radiation/radiation.hpp"
 
 namespace numrel {
 
@@ -25,10 +27,14 @@ NumericalRelativity::NumericalRelativity(MeshBlockPack *ppack, ParameterInput *p
 }
 
 bool NumericalRelativity::DependencyAvailable(std::string& task) {
-  if (task.compare(0,3,"MHD") == 0) {
-    return pmy_pack->pdyngr != nullptr;
+  if (task.compare(0,2, "Hyd") == 0) {
+    return pmy_pack->phydro != nullptr;
+  } else if (task.compare(0,3,"MHD") == 0) {
+    return pmy_pack->pmhd != nullptr;
   } else if (task.compare(0,3,"Z4c") == 0) {
     return pmy_pack->pz4c != nullptr;
+  } else if (task.compare(0,3,"Rad") == 0) {
+    return pmy_pack->prad != nullptr;
   }
 
   return true;
@@ -93,6 +99,7 @@ bool NumericalRelativity::AssembleNumericalRelativityTasks(
         task.id = list->AddTask(task.func_, dep);
         cycle_added++;
         added++;
+        std::cout << task.name_string << "\n";
         /*std::cout << "Successfully added " << task.name_string << " to task list!\n"
                   << "  ID: ";
         task.id.PrintID();
@@ -126,14 +133,21 @@ void NumericalRelativity::PrintMissingTasks(std::vector<QueuedTask> &queue) {
 void NumericalRelativity::AssembleNumericalRelativityTasks(
        std::map<std::string, std::shared_ptr<TaskList>>& tl) {
   // Assemble the task lists for all physics modules
+  if (pmy_pack->phydro != nullptr) {
+    pmy_pack->phydro->QueueHydroTasks();
+  }
   if (pmy_pack->pdyngr != nullptr) {
     pmy_pack->pdyngr->QueueDynGRMHDTasks();
   }
   if (pmy_pack->pz4c != nullptr) {
     pmy_pack->pz4c->QueueZ4cTasks();
   }
+  if (pmy_pack->prad != nullptr) {
+    pmy_pack->prad->QueueRadTasks();
+  }
 
   for (auto& [key, queue] : queue_map) {
+    std::cout << key << "\n";
     bool success = AssembleNumericalRelativityTasks(tl[key], queue);
     if (!success) {
       std::cout << "NumericalRelativity: Failed to construct " << key << "TaskList!\n"
@@ -141,6 +155,7 @@ void NumericalRelativity::AssembleNumericalRelativityTasks(
       PrintMissingTasks(queue);
       abort();
     }
+    std::cout << "\n";
   }
 }
 

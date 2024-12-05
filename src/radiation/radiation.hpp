@@ -146,6 +146,7 @@ class Radiation {
 
   // functions...
   void AssembleRadTasks(std::map<std::string, std::shared_ptr<TaskList>> tl);
+  void QueueRadTasks();
   // ...in "before_stagen_tl" task list
   TaskStatus InitRecv(Driver *d, int stage);
   // ...in "stagen_tl" task list
