@@ -1,12 +1,13 @@
-#ifndef TASKLIST_NUMERICAL_RELATIVITY_HPP_
-#define TASKLIST_NUMERICAL_RELATIVITY_HPP_
+#ifndef TASKLIST_TASK_LIST_ORCHESTRATOR_HPP_
+#define TASKLIST_TASK_LIST_ORCHESTRATOR_HPP_
 //========================================================================================
 // AthenaXXX astrophysical plasma code
 // Copyright(C) 2020 James M. Stone <jmstone@ias.edu> and the Athena code team
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
-//! \file numerical_relativity.hpp
-//  \brief NumericalRelativity handles the creation of a TaskList for NR modules.
+//! \file task_list_orchestrator.hpp
+//  \brief TaskListOrchestrator handles the creation of TaskList objects with complex
+//         dependencies between physics modules.
 
 #include <vector>
 #include <map>
@@ -26,7 +27,7 @@ class ADM;
 class Tmunu;
 class MeshBlockPack;
 
-namespace numrel {
+namespace tasks {
 
 struct QueuedTask {
   QueuedTask(const std::string s, bool a, TaskID i, std::vector<std::string>& d,
@@ -40,9 +41,9 @@ struct QueuedTask {
   std::function<TaskStatus(Driver*, int)> func_;
 };
 
-class NumericalRelativity {
+class TaskListOrchestrator {
  public:
-  NumericalRelativity(MeshBlockPack *ppack, ParameterInput *pin);
+  TaskListOrchestrator(MeshBlockPack *ppack, ParameterInput *pin);
 
   // Queue a task to be added to the task list. Filter for dependencies.
   // Task function must have arguments (Driver*, int).
@@ -84,8 +85,7 @@ class NumericalRelativity {
       [=](Driver *d, int s) mutable -> TaskStatus {return (obj->*func)(d,s);}));
   }
 
-  void AssembleNumericalRelativityTasks(
-         std::map<std::string, std::shared_ptr<TaskList>>& tl);
+  void AssembleTasks(std::map<std::string, std::shared_ptr<TaskList>>& tl);
 
  private:
   MeshBlockPack *pmy_pack;
@@ -102,10 +102,9 @@ class NumericalRelativity {
 
   void PrintMissingTasks(std::vector<QueuedTask> &queue);
 
-  bool AssembleNumericalRelativityTasks(std::shared_ptr<TaskList>& list,
-         std::vector<QueuedTask> &queue);
+  bool AssembleTasks(std::shared_ptr<TaskList>& list, std::vector<QueuedTask> &queue);
 };
 
-} // namespace numrel
+} // namespace tasks
 
-#endif  // TASKLIST_NUMERICAL_RELATIVITY_HPP_
+#endif  // TASKLIST_TASK_LIST_ORCHESTRATOR_HPP_

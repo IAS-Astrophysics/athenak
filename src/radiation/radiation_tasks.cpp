@@ -16,7 +16,7 @@
 #include "parameter_input.hpp"
 #include "geodesic-grid/geodesic_grid.hpp"
 #include "tasklist/task_list.hpp"
-#include "tasklist/numerical_relativity.hpp"
+#include "tasklist/task_list_orchestrator.hpp"
 #include "mesh/mesh.hpp"
 #include "eos/eos.hpp"
 #include "bvals/bvals.hpp"
@@ -150,27 +150,27 @@ void Radiation::AssembleRadTasks(std::map<std::string, std::shared_ptr<TaskList>
 }
 
 void Radiation::QueueRadTasks() {
-  numrel::NumericalRelativity *pnr = pmy_pack->pnr;
+  tasks::TaskListOrchestrator *ptlo = pmy_pack->ptlo;
 
-  pnr->QueueTask(&Radiation::InitRecv, this, "Rad_InitRecv", "before_stagen");
+  ptlo->QueueTask(&Radiation::InitRecv, this, "Rad_InitRecv", "before_stagen");
   
-  pnr->QueueTask(&Radiation::CopyCons, this, "Rad_CopyCons", "stagen");
-  pnr->QueueTask(&Radiation::CalculateFluxes, this, "Rad_CalcFlux", "stagen",
+  ptlo->QueueTask(&Radiation::CopyCons, this, "Rad_CopyCons", "stagen");
+  ptlo->QueueTask(&Radiation::CalculateFluxes, this, "Rad_CalcFlux", "stagen",
                  {"Rad_CopyCons"});
-  pnr->QueueTask(&Radiation::SendFlux, this, "Rad_SendFlux", "stagen", {"Rad_CalcFlux"});
-  pnr->QueueTask(&Radiation::RecvFlux, this, "Rad_RecvFlux", "stagen", {"Rad_SendFlux"});
-  pnr->QueueTask(&Radiation::RKUpdate, this, "Rad_RKUpdate", "stagen", {"Rad_RecvFlux"});
-  pnr->QueueTask(&Radiation::AddRadiationSourceTerm, this, "Rad_SrcTerm", "stagen",
+  ptlo->QueueTask(&Radiation::SendFlux, this, "Rad_SendFlux", "stagen", {"Rad_CalcFlux"});
+  ptlo->QueueTask(&Radiation::RecvFlux, this, "Rad_RecvFlux", "stagen", {"Rad_SendFlux"});
+  ptlo->QueueTask(&Radiation::RKUpdate, this, "Rad_RKUpdate", "stagen", {"Rad_RecvFlux"});
+  ptlo->QueueTask(&Radiation::AddRadiationSourceTerm, this, "Rad_SrcTerm", "stagen",
                  {"Rad_RKUpdate"},{"Hyd_RKUpdate"});
-  pnr->QueueTask(&Radiation::RestrictI, this, "Rad_RestI", "stagen", {"Rad_SrcTerm"});
-  pnr->QueueTask(&Radiation::SendI, this, "Rad_SendI", "stagen", {"Rad_RestI"});
-  pnr->QueueTask(&Radiation::RecvI, this, "Rad_RecvI", "stagen", {"Rad_SendI"});
-  pnr->QueueTask(&Radiation::ApplyPhysicalBCs, this, "Rad_ApplyBCs", "stagen",
+  ptlo->QueueTask(&Radiation::RestrictI, this, "Rad_RestI", "stagen", {"Rad_SrcTerm"});
+  ptlo->QueueTask(&Radiation::SendI, this, "Rad_SendI", "stagen", {"Rad_RestI"});
+  ptlo->QueueTask(&Radiation::RecvI, this, "Rad_RecvI", "stagen", {"Rad_SendI"});
+  ptlo->QueueTask(&Radiation::ApplyPhysicalBCs, this, "Rad_ApplyBCs", "stagen",
                  {"Rad_RecvI"},{"Hyd_RecvU"});
-  pnr->QueueTask(&Radiation::Prolongate, this, "Rad_Prolong", "stagen", {"Rad_ApplyBCs"});
+  ptlo->QueueTask(&Radiation::Prolongate, this, "Rad_Prolong", "stagen",{"Rad_ApplyBCs"});
   
-  pnr->QueueTask(&Radiation::ClearSend, this, "Rad_ClearS", "after_stagen");
-  pnr->QueueTask(&Radiation::ClearRecv, this, "Rad_ClearR", "after_stagen",
+  ptlo->QueueTask(&Radiation::ClearSend, this, "Rad_ClearS", "after_stagen");
+  ptlo->QueueTask(&Radiation::ClearRecv, this, "Rad_ClearR", "after_stagen",
                  {"Rad_ClearS"});
 }
 

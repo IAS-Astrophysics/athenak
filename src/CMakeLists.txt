@@ -140,7 +140,7 @@ add_executable(
         srcterms/srcterms_newdt.cpp
         srcterms/turb_driver.cpp
 
-        tasklist/numerical_relativity.cpp
+        tasklist/task_list_orchestrator.cpp
 
         units/units.cpp
         utils/change_rundir.cpp

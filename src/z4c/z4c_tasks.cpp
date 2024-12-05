@@ -21,7 +21,7 @@
 #include "z4c/compact_object_tracker.hpp"
 #include "z4c/horizon_dump.hpp"
 #include "z4c/z4c.hpp"
-#include "tasklist/numerical_relativity.hpp"
+#include "tasklist/task_list_orchestrator.hpp"
 
 namespace z4c {
 
@@ -31,78 +31,79 @@ namespace z4c {
 void Z4c::QueueZ4cTasks() {
   printf("AssembleZ4cTasks\n");
   using namespace mhd;     // NOLINT(build/namespaces)
-  using namespace numrel;  // NOLINT(build/namespaces)
-  NumericalRelativity *pnr = pmy_pack->pnr;
+  using namespace tasks;  // NOLINT(build/namespaces)
+  TaskListOrchestrator *ptlo = pmy_pack->ptlo;
   auto &indcs = pmy_pack->pmesh->mb_indcs;
 
   // Start task list
-  pnr->QueueTask(&Z4c::InitRecv, this, "Z4c_Recv", "before_stagen");
-  pnr->QueueTask(&Z4c::InitRecvWeyl, this, "Z4c_IRecvW", "before_stagen");
+  ptlo->QueueTask(&Z4c::InitRecv, this, "Z4c_Recv", "before_stagen");
+  ptlo->QueueTask(&Z4c::InitRecvWeyl, this, "Z4c_IRecvW", "before_stagen");
 
   // Run task list
-  pnr->QueueTask(&Z4c::CopyU, this, "Z4c_CopyU", "stagen");
+  ptlo->QueueTask(&Z4c::CopyU, this, "Z4c_CopyU", "stagen");
   switch (indcs.ng) {
     case 2:
-      pnr->QueueTask(&Z4c::CalcRHS<2>, this, "Z4c_CalcRHS",
+      ptlo->QueueTask(&Z4c::CalcRHS<2>, this, "Z4c_CalcRHS",
                      "stagen", {"Z4c_CopyU"}, {"MHD_SetTmunu"});
       break;
     case 3:
-      pnr->QueueTask(&Z4c::CalcRHS<3>, this, "Z4c_CalcRHS",
+      ptlo->QueueTask(&Z4c::CalcRHS<3>, this, "Z4c_CalcRHS",
                      "stagen", {"Z4c_CopyU"}, {"MHD_SetTmunu"});
       break;
     case 4:
-      pnr->QueueTask(&Z4c::CalcRHS<4>, this, "Z4c_CalcRHS",
+      ptlo->QueueTask(&Z4c::CalcRHS<4>, this, "Z4c_CalcRHS",
                      "stagen", {"Z4c_CopyU"}, {"MHD_SetTmunu"});
       break;
   }
-  pnr->QueueTask(&Z4c::Z4cBoundaryRHS, this, "Z4c_SomBC", "stagen",
+  ptlo->QueueTask(&Z4c::Z4cBoundaryRHS, this, "Z4c_SomBC", "stagen",
                  {"Z4c_CalcRHS"});
-  pnr->QueueTask(&Z4c::ExpRKUpdate, this, "Z4c_ExplRK", "stagen",
+  ptlo->QueueTask(&Z4c::ExpRKUpdate, this, "Z4c_ExplRK", "stagen",
                  {"Z4c_SomBC"},{"MHD_EField"});
-  pnr->QueueTask(&Z4c::RestrictU, this, "Z4c_RestU", "stagen", {"Z4c_ExplRK"});
-  pnr->QueueTask(&Z4c::SendU, this, "Z4c_SendU", "stagen", {"Z4c_RestU"});
-  pnr->QueueTask(&Z4c::RecvU, this, "Z4c_RecvU", "stagen", {"Z4c_SendU"});
-  pnr->QueueTask(&Z4c::ApplyPhysicalBCs, this, "Z4c_BCS", "stagen", {"Z4c_RecvU"});
-  pnr->QueueTask(&Z4c::Prolongate, this, "Z4c_Prolong", "stagen", {"Z4c_BCS"});
-  pnr->QueueTask(&Z4c::EnforceAlgConstr, this, "Z4c_AlgC", "stagen",
+  ptlo->QueueTask(&Z4c::RestrictU, this, "Z4c_RestU", "stagen", {"Z4c_ExplRK"});
+  ptlo->QueueTask(&Z4c::SendU, this, "Z4c_SendU", "stagen", {"Z4c_RestU"});
+  ptlo->QueueTask(&Z4c::RecvU, this, "Z4c_RecvU", "stagen", {"Z4c_SendU"});
+  ptlo->QueueTask(&Z4c::ApplyPhysicalBCs, this, "Z4c_BCS", "stagen", {"Z4c_RecvU"});
+  ptlo->QueueTask(&Z4c::Prolongate, this, "Z4c_Prolong", "stagen", {"Z4c_BCS"});
+  ptlo->QueueTask(&Z4c::EnforceAlgConstr, this, "Z4c_AlgC", "stagen",
                  {"Z4c_Prolong"});
-  pnr->QueueTask(&Z4c::ConvertZ4cToADM, this, "Z4c_Z4c2ADM",
+  ptlo->QueueTask(&Z4c::ConvertZ4cToADM, this, "Z4c_Z4c2ADM",
                  "stagen", {"Z4c_AlgC"});
   if (pmy_pack->pdyngr != nullptr) {
-    pnr->QueueTask(&Z4c::UpdateExcisionMasks, this, "Z4c_Excise", "stagen",
+    ptlo->QueueTask(&Z4c::UpdateExcisionMasks, this, "Z4c_Excise", "stagen",
                    {"Z4c_Z4c2ADM"});
   }
-  pnr->QueueTask(&Z4c::NewTimeStep, this, "Z4c_Newdt", "stagen",
+  ptlo->QueueTask(&Z4c::NewTimeStep, this, "Z4c_Newdt", "stagen",
                  {"Z4c_Z4c2ADM"});
 
   // End task list
-  pnr->QueueTask(&Z4c::ClearSend, this, "Z4c_ClearS", "after_stagen");
-  pnr->QueueTask(&Z4c::ClearRecv, this, "Z4c_ClearR", "after_stagen",
+  ptlo->QueueTask(&Z4c::ClearSend, this, "Z4c_ClearS", "after_stagen");
+  ptlo->QueueTask(&Z4c::ClearRecv, this, "Z4c_ClearR", "after_stagen",
                  {"Z4c_ClearS"});
-  /*pnr->QueueTask(&Z4c::Z4cToADM, this, Z4c_Z4c2ADM, "Z4c_Z4c2ADM", "after_stagen",
+  /*ptlo->QueueTask(&Z4c::Z4cToADM, this, Z4c_Z4c2ADM, "Z4c_Z4c2ADM", "after_stagen",
                  {Z4c_ClearR});*/
-  pnr->QueueTask(&Z4c::ADMConstraints_, this, "Z4c_ADMC", "after_stagen",
+  ptlo->QueueTask(&Z4c::ADMConstraints_, this, "Z4c_ADMC", "after_stagen",
   //               {Z4c_Z4c2ADM});
                  {"Z4c_ClearR"});
-  pnr->QueueTask(&Z4c::CalcWeylScalar, this, "Z4c_Weyl", "after_stagen",
+  ptlo->QueueTask(&Z4c::CalcWeylScalar, this, "Z4c_Weyl", "after_stagen",
                  {"Z4c_ADMC"});
-  pnr->QueueTask(&Z4c::RestrictWeyl, this, "Z4c_RestW", "after_stagen",
+  ptlo->QueueTask(&Z4c::RestrictWeyl, this, "Z4c_RestW", "after_stagen",
                  {"Z4c_Weyl"});
-  pnr->QueueTask(&Z4c::SendWeyl, this, "Z4c_SendW", "after_stagen",
+  ptlo->QueueTask(&Z4c::SendWeyl, this, "Z4c_SendW", "after_stagen",
                  {"Z4c_RestW"});
-  pnr->QueueTask(&Z4c::RecvWeyl, this, "Z4c_RecvW", "after_stagen",
+  ptlo->QueueTask(&Z4c::RecvWeyl, this, "Z4c_RecvW", "after_stagen",
                  {"Z4c_SendW"});
-  pnr->QueueTask(&Z4c::ProlongateWeyl, this, "Z4c_ProlW", "after_stagen",
+  ptlo->QueueTask(&Z4c::ProlongateWeyl, this, "Z4c_ProlW", "after_stagen",
                  {"Z4c_RecvW"});
-  pnr->QueueTask(&Z4c::ClearSendWeyl, this, "Z4c_ClearSW", "after_stagen",
+  ptlo->QueueTask(&Z4c::ClearSendWeyl, this, "Z4c_ClearSW", "after_stagen",
                  {"Z4c_ProlW"});
-  pnr->QueueTask(&Z4c::ClearRecvWeyl, this, "Z4c_ClearRW", "after_stagen",
+  ptlo->QueueTask(&Z4c::ClearRecvWeyl, this, "Z4c_ClearRW", "after_stagen",
                  {"Z4c_ClearSW"});
-  pnr->QueueTask(&Z4c::CalcWaveForm, this, "Z4c_Wave", "after_stagen",
+  ptlo->QueueTask(&Z4c::CalcWaveForm, this, "Z4c_Wave", "after_stagen",
                  {"Z4c_ClearRW"});
-  pnr->QueueTask(&Z4c::TrackCompactObjects, this, "Z4c_PT", "after_stagen",
+  ptlo->QueueTask(&Z4c::TrackCompactObjects, this, "Z4c_PT", "after_stagen",
                  {"Z4c_Wave"});
-  pnr->QueueTask(&Z4c::DumpHorizons, this, "Z4c_DumpHorizon", "after_stagen", {"Z4c_PT"});
+  ptlo->QueueTask(&Z4c::DumpHorizons, this, "Z4c_DumpHorizon", "after_stagen",
+                 {"Z4c_PT"});
 }
 
 //----------------------------------------------------------------------------------------

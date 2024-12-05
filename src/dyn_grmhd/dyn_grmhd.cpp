@@ -25,7 +25,7 @@
 #include "coordinates/adm.hpp"
 #include "z4c/tmunu.hpp"
 #include "dyn_grmhd.hpp"
-#include "tasklist/numerical_relativity.hpp"
+#include "tasklist/task_list_orchestrator.hpp"
 
 #include "eos/primitive_solver_hyd.hpp"
 #include "eos/primitive-solver/idealgas.hpp"
@@ -131,26 +131,26 @@ template<class EOSPolicy, class ErrorPolicy>
 void DynGRMHDPS<EOSPolicy, ErrorPolicy>::QueueDynGRMHDTasks() {
   using namespace mhd;  // NOLINT(build/namespaces)
   using namespace z4c;  // NOLINT(build/namespaces)
-  using namespace numrel; // NOLINT(build/namespaces))
+  using namespace tasks; // NOLINT(build/namespaces))
   Z4c *pz4c = pmy_pack->pz4c;
   adm::ADM *padm = pmy_pack->padm;
   MHD *pmhd = pmy_pack->pmhd;
-  NumericalRelativity *pnr = pmy_pack->pnr;
+  TaskListOrchestrator *ptlo = pmy_pack->ptlo;
 
   // Start task list
-  pnr->QueueTask(&MHD::InitRecv, pmhd, "MHD_Recv", "before_stagen");
+  ptlo->QueueTask(&MHD::InitRecv, pmhd, "MHD_Recv", "before_stagen");
 
   // Run task list
-  pnr->QueueTask(&MHD::CopyCons, pmhd, "MHD_CopyU", "stagen");
+  ptlo->QueueTask(&MHD::CopyCons, pmhd, "MHD_CopyU", "stagen");
 
   // Select which CalculateFlux function to add based on rsolver_method.
   // CalcFlux requires metric in flux - must happen before z4ctoadm updates the metric
   if (rsolver_method == DynGRMHD_RSolver::llf_dyngr) {
-    pnr->QueueTask(
+    ptlo->QueueTask(
            &DynGRMHDPS<EOSPolicy, ErrorPolicy>::CalcFluxes<DynGRMHD_RSolver::llf_dyngr>,
            this, "MHD_Flux", "stagen", {"MHD_CopyU"});
   } else if (rsolver_method == DynGRMHD_RSolver::hlle_dyngr) {
-    pnr->QueueTask(
+    ptlo->QueueTask(
            &DynGRMHDPS<EOSPolicy, ErrorPolicy>::CalcFluxes<DynGRMHD_RSolver::hlle_dyngr>,
            this, "MHD_Flux", "stagen", {"MHD_CopyU"});
   } else { // put more rsolvers here
@@ -159,52 +159,52 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::QueueDynGRMHDTasks() {
 
   // Now the rest of the MHD run tasks
   if (pz4c != nullptr) {
-    pnr->QueueTask(&DynGRMHD::SetTmunu, this, "MHD_SetTmunu",
+    ptlo->QueueTask(&DynGRMHD::SetTmunu, this, "MHD_SetTmunu",
                    "stagen", {"MHD_CopyU"});
   }
-  pnr->QueueTask(&MHD::SendFlux, pmhd, "MHD_SendFlux",
+  ptlo->QueueTask(&MHD::SendFlux, pmhd, "MHD_SendFlux",
                  "stagen", {"MHD_Flux"});
-  pnr->QueueTask(&MHD::RecvFlux, pmhd, "MHD_RecvFlux",
+  ptlo->QueueTask(&MHD::RecvFlux, pmhd, "MHD_RecvFlux",
                  "stagen", {"MHD_SendFlux"});
   if (pz4c != nullptr) {
-    pnr->QueueTask(&MHD::RKUpdate, pmhd, "MHD_ExplRK", "stagen",
+    ptlo->QueueTask(&MHD::RKUpdate, pmhd, "MHD_ExplRK", "stagen",
                    {"MHD_RecvFlux", "MHD_SetTmunu"});
   } else {
-    pnr->QueueTask(&MHD::RKUpdate, pmhd, "MHD_ExplRK", "stagen",
+    ptlo->QueueTask(&MHD::RKUpdate, pmhd, "MHD_ExplRK", "stagen",
                    {"MHD_RecvFlux"});
   }
-  pnr->QueueTask(&MHD::MHDSrcTerms, pmhd, "MHD_AddSrc", "stagen",
+  ptlo->QueueTask(&MHD::MHDSrcTerms, pmhd, "MHD_AddSrc", "stagen",
                  {"MHD_ExplRK"});
-  pnr->QueueTask(&MHD::RestrictU, pmhd, "MHD_RestU", "stagen", {"MHD_AddSrc"});
-  pnr->QueueTask(&MHD::SendU, pmhd, "MHD_SendU", "stagen", {"MHD_RestU"});
-  pnr->QueueTask(&MHD::RecvU, pmhd, "MHD_RecvU", "stagen", {"MHD_SendU"});
-  pnr->QueueTask(&MHD::CornerE, pmhd, "MHD_EField", "stagen", {"MHD_RecvU"});
-  pnr->QueueTask(&MHD::SendE, pmhd, "MHD_SendE", "stagen", {"MHD_EField"});
-  pnr->QueueTask(&MHD::RecvE, pmhd, "MHD_RecvE", "stagen", {"MHD_SendE"});
-  pnr->QueueTask(&MHD::CT, pmhd, "MHD_CT", "stagen", {"MHD_RecvE"});
-  pnr->QueueTask(&MHD::RestrictB, pmhd, "MHD_RestB", "stagen", {"MHD_CT"});
-  pnr->QueueTask(&MHD::SendB, pmhd, "MHD_SendB", "stagen", {"MHD_RestB"});
-  pnr->QueueTask(&MHD::RecvB, pmhd, "MHD_RecvB", "stagen", {"MHD_SendB"});
-  pnr->QueueTask(&MHD::ApplyPhysicalBCs, pmhd, "MHD_BCS", "stagen", {"MHD_RecvB"});
-  //pnr->QueueTask(&DynGRMHD::ApplyPhysicalBCs, this, MHD_BCS, "MHD_BCS", "stagen",
+  ptlo->QueueTask(&MHD::RestrictU, pmhd, "MHD_RestU", "stagen", {"MHD_AddSrc"});
+  ptlo->QueueTask(&MHD::SendU, pmhd, "MHD_SendU", "stagen", {"MHD_RestU"});
+  ptlo->QueueTask(&MHD::RecvU, pmhd, "MHD_RecvU", "stagen", {"MHD_SendU"});
+  ptlo->QueueTask(&MHD::CornerE, pmhd, "MHD_EField", "stagen", {"MHD_RecvU"});
+  ptlo->QueueTask(&MHD::SendE, pmhd, "MHD_SendE", "stagen", {"MHD_EField"});
+  ptlo->QueueTask(&MHD::RecvE, pmhd, "MHD_RecvE", "stagen", {"MHD_SendE"});
+  ptlo->QueueTask(&MHD::CT, pmhd, "MHD_CT", "stagen", {"MHD_RecvE"});
+  ptlo->QueueTask(&MHD::RestrictB, pmhd, "MHD_RestB", "stagen", {"MHD_CT"});
+  ptlo->QueueTask(&MHD::SendB, pmhd, "MHD_SendB", "stagen", {"MHD_RestB"});
+  ptlo->QueueTask(&MHD::RecvB, pmhd, "MHD_RecvB", "stagen", {"MHD_SendB"});
+  ptlo->QueueTask(&MHD::ApplyPhysicalBCs, pmhd, "MHD_BCS", "stagen", {"MHD_RecvB"});
+  //ptlo->QueueTask(&DynGRMHD::ApplyPhysicalBCs, this, MHD_BCS, "MHD_BCS", "stagen",
   //                 {MHD_RecvB});
-  pnr->QueueTask(&MHD::Prolongate, pmhd, "MHD_Prolong", "stagen", {"MHD_BCS"});
+  ptlo->QueueTask(&MHD::Prolongate, pmhd, "MHD_Prolong", "stagen", {"MHD_BCS"});
   if (pz4c == nullptr && padm->is_dynamic == true) {
-    pnr->QueueTask(&DynGRMHD::SetADMVariables, this, "MHD_SetADM", "stagen",
+    ptlo->QueueTask(&DynGRMHD::SetADMVariables, this, "MHD_SetADM", "stagen",
                    {"MHD_ExplRK"});
-    pnr->QueueTask(&DynGRMHD::UpdateExcisionMasks, this, "MHD_Excise", "stagen",
+    ptlo->QueueTask(&DynGRMHD::UpdateExcisionMasks, this, "MHD_Excise", "stagen",
                    {"MHD_SetADM"});
-    pnr->QueueTask(&DynGRMHDPS<EOSPolicy, ErrorPolicy>::ConToPrim, this, "MHD_C2P",
+    ptlo->QueueTask(&DynGRMHDPS<EOSPolicy, ErrorPolicy>::ConToPrim, this, "MHD_C2P",
                    "stagen", {"MHD_Excise"});
   } else {
-    pnr->QueueTask(&DynGRMHDPS<EOSPolicy, ErrorPolicy>::ConToPrim, this, "MHD_C2P",
+    ptlo->QueueTask(&DynGRMHDPS<EOSPolicy, ErrorPolicy>::ConToPrim, this, "MHD_C2P",
                    "stagen", {"MHD_Prolong"}, {"Z4c_Excise"});
   }
-  pnr->QueueTask(&MHD::NewTimeStep, pmhd, "MHD_Newdt", "stagen", {"MHD_C2P"});
+  ptlo->QueueTask(&MHD::NewTimeStep, pmhd, "MHD_Newdt", "stagen", {"MHD_C2P"});
 
   // End task list
-  pnr->QueueTask(&MHD::ClearSend, pmhd, "MHD_ClearS", "after_stagen");
-  pnr->QueueTask(&MHD::ClearRecv, pmhd, "MHD_ClearR", "after_stagen");
+  ptlo->QueueTask(&MHD::ClearSend, pmhd, "MHD_ClearS", "after_stagen");
+  ptlo->QueueTask(&MHD::ClearRecv, pmhd, "MHD_ClearR", "after_stagen");
 }
 
 //----------------------------------------------------------------------------------------

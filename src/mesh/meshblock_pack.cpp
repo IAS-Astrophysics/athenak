@@ -20,7 +20,7 @@
 #include "ion-neutral/ion-neutral.hpp"
 #include "coordinates/adm.hpp"
 #include "z4c/tmunu.hpp"
-#include "tasklist/numerical_relativity.hpp"
+#include "tasklist/task_list_orchestrator.hpp"
 #include "z4c/z4c.hpp"
 #include "dyn_grmhd/dyn_grmhd.hpp"
 #include "diffusion/viscosity.hpp"
@@ -58,7 +58,7 @@ MeshBlockPack::~MeshBlockPack() {
   if (ptmunu != nullptr) {delete ptmunu;}
   if (prad   != nullptr) {delete prad;}
   if (pdyngr != nullptr) {delete pdyngr;}
-  if (pnr    != nullptr) {delete pnr;}
+  if (ptlo   != nullptr) {delete ptlo;}
   if (pturb  != nullptr) {delete pturb;}
   if (punit  != nullptr) {delete punit;}
   if (pz4c   != nullptr) {delete pz4c;}
@@ -95,7 +95,7 @@ void MeshBlockPack::AddPhysics(ParameterInput *pin) {
   int nphysics = 0;
   TaskID none(0);
 
-  pnr = new numrel::NumericalRelativity(this, pin);
+  ptlo = new tasks::TaskListOrchestrator(this, pin);
 
   // (1) Units.  Create first so that they can be used in other physics constructors
   // Default units are simply code units
@@ -220,7 +220,7 @@ void MeshBlockPack::AddPhysics(ParameterInput *pin) {
     ppart = nullptr;
   }
 
-  pnr->AssembleNumericalRelativityTasks(tl_map);
+  ptlo->AssembleTasks(tl_map);
 
   // Check that at least ONE is requested and initialized.
   // Error if there are no physics blocks in the input file.

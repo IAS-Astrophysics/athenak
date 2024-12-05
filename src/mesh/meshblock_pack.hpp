@@ -27,7 +27,7 @@ namespace mhd {class MHD;}
 namespace ion_neutral {class IonNeutral;}
 namespace radiation {class Radiation;}
 namespace dyngr {class DynGRMHD;}
-namespace numrel {class NumericalRelativity;}
+namespace tasks {class TaskListOrchestrator;}
 class TurbulenceDriver;
 namespace radiation {class Radiation;}
 namespace z4c {class Z4c;}
@@ -67,7 +67,7 @@ class MeshBlockPack {
   Tmunu *ptmunu=nullptr;
   z4c::Z4c *pz4c=nullptr;
   dyngr::DynGRMHD *pdyngr=nullptr;
-  numrel::NumericalRelativity *pnr=nullptr;
+  tasks::TaskListOrchestrator *ptlo=nullptr;
   ion_neutral::IonNeutral *pionn=nullptr;
   TurbulenceDriver *pturb=nullptr;
   radiation::Radiation *prad=nullptr;

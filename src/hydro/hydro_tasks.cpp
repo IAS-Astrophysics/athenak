@@ -15,7 +15,7 @@
 #include "globals.hpp"
 #include "parameter_input.hpp"
 #include "tasklist/task_list.hpp"
-#include "tasklist/numerical_relativity.hpp"
+#include "tasklist/task_list_orchestrator.hpp"
 #include "mesh/mesh.hpp"
 #include "coordinates/coordinates.hpp"
 #include "eos/eos.hpp"
@@ -80,47 +80,46 @@ void Hydro::AssembleHydroTasks(std::map<std::string, std::shared_ptr<TaskList>> 
 }
 
 void Hydro::QueueHydroTasks() {
-  numrel::NumericalRelativity *pnr = pmy_pack->pnr;
+  tasks::TaskListOrchestrator *ptlo = pmy_pack->ptlo;
 
-  pnr->QueueTask(&Hydro::InitRecv, this, "Hyd_InitRecv", "before_stagen");
+  ptlo->QueueTask(&Hydro::InitRecv, this, "Hyd_InitRecv", "before_stagen");
 
-  // FIXME(JMF): CopyCons needs to be handled differently for rad-hydro.
   if (pmy_pack->prad == nullptr) {
-    pnr->QueueTask(&Hydro::CopyCons, this, "Hyd_CopyCons", "stagen");
-    pnr->QueueTask(&Hydro::Fluxes, this, "Hyd_Fluxes", "stagen", {"Hyd_CopyCons"});
+    ptlo->QueueTask(&Hydro::CopyCons, this, "Hyd_CopyCons", "stagen");
+    ptlo->QueueTask(&Hydro::Fluxes, this, "Hyd_Fluxes", "stagen", {"Hyd_CopyCons"});
   } else {
-    pnr->QueueTask(&Hydro::Fluxes, this, "Hyd_Fluxes", "stagen", {"Rad_RKUpdate"});
+    ptlo->QueueTask(&Hydro::Fluxes, this, "Hyd_Fluxes", "stagen", {"Rad_RKUpdate"});
   }
-  pnr->QueueTask(&Hydro::SendFlux, this, "Hyd_SendFlux", "stagen", {"Hyd_Fluxes"});
-  pnr->QueueTask(&Hydro::RecvFlux, this, "Hyd_RecvFlux", "stagen", {"Hyd_SendFlux"});
-  pnr->QueueTask(&Hydro::RKUpdate, this, "Hyd_RKUpdate", "stagen", {"Hyd_RecvFlux"});
+  ptlo->QueueTask(&Hydro::SendFlux, this, "Hyd_SendFlux", "stagen", {"Hyd_Fluxes"});
+  ptlo->QueueTask(&Hydro::RecvFlux, this, "Hyd_RecvFlux", "stagen", {"Hyd_SendFlux"});
+  ptlo->QueueTask(&Hydro::RKUpdate, this, "Hyd_RKUpdate", "stagen", {"Hyd_RecvFlux"});
   if (pmy_pack->prad == nullptr) {
-    pnr->QueueTask(&Hydro::HydroSrcTerms, this, "Hyd_SrcTerms", "stagen", {"Hyd_RKUpdate"});
-    pnr->QueueTask(&Hydro::SendU_OA, this, "Hyd_SendU_OA", "stagen", {"Hyd_SrcTerms"});
+    ptlo->QueueTask(&Hydro::HydroSrcTerms, this, "Hyd_SrcTerms", "stagen",
+                    {"Hyd_RKUpdate"});
+    ptlo->QueueTask(&Hydro::SendU_OA, this, "Hyd_SendU_OA", "stagen", {"Hyd_SrcTerms"});
   } else {
-    pnr->QueueTask(&Hydro::SendU_OA, this, "Hyd_SendU_OA", "stagen", {"Rad_SrcTerm"});
+    ptlo->QueueTask(&Hydro::SendU_OA, this, "Hyd_SendU_OA", "stagen", {"Rad_SrcTerm"});
   }
-  pnr->QueueTask(&Hydro::RecvU_OA, this, "Hyd_RecvU_OA", "stagen", {"Hyd_SendU_OA"});
-  pnr->QueueTask(&Hydro::RestrictU, this, "Hyd_RestU", "stagen", {"Hyd_RecvU_OA"},
+  ptlo->QueueTask(&Hydro::RecvU_OA, this, "Hyd_RecvU_OA", "stagen", {"Hyd_SendU_OA"});
+  ptlo->QueueTask(&Hydro::RestrictU, this, "Hyd_RestU", "stagen", {"Hyd_RecvU_OA"},
                  {"Rad_RecvI"});
-  pnr->QueueTask(&Hydro::SendU, this, "Hyd_SendU", "stagen", {"Hyd_RestU"});
-  pnr->QueueTask(&Hydro::RecvU, this, "Hyd_RecvU", "stagen", {"Hyd_SendU"});
-  pnr->QueueTask(&Hydro::SendU_Shr, this, "Hyd_SendU_Shr", "stagen", {"Hyd_RecvU"});
-  pnr->QueueTask(&Hydro::RecvU_Shr, this, "Hyd_RecvU_Shr", "stagen", {"Hyd_SendU_Shr"});
-  // FIXME(JMF): BCs need to be handled differently for rad-hydro.
+  ptlo->QueueTask(&Hydro::SendU, this, "Hyd_SendU", "stagen", {"Hyd_RestU"});
+  ptlo->QueueTask(&Hydro::RecvU, this, "Hyd_RecvU", "stagen", {"Hyd_SendU"});
+  ptlo->QueueTask(&Hydro::SendU_Shr, this, "Hyd_SendU_Shr", "stagen", {"Hyd_RecvU"});
+  ptlo->QueueTask(&Hydro::RecvU_Shr, this, "Hyd_RecvU_Shr", "stagen", {"Hyd_SendU_Shr"});
   if (pmy_pack->prad == nullptr) {
-    pnr->QueueTask(&Hydro::ApplyPhysicalBCs, this, "Hyd_ApplyBCs", "stagen",
+    ptlo->QueueTask(&Hydro::ApplyPhysicalBCs, this, "Hyd_ApplyBCs", "stagen",
                    {"Hyd_RecvU_Shr"});
-    pnr->QueueTask(&Hydro::Prolongate, this, "Hyd_Prolong", "stagen", {"Hyd_ApplyBCs"},
+    ptlo->QueueTask(&Hydro::Prolongate, this, "Hyd_Prolong", "stagen", {"Hyd_ApplyBCs"},
                    {"Rad_Prolong"});
   } else {
-    pnr->QueueTask(&Hydro::Prolongate, this, "Hyd_Prolong", "stagen", {"Rad_Prolong"});
+    ptlo->QueueTask(&Hydro::Prolongate, this, "Hyd_Prolong", "stagen", {"Rad_Prolong"});
   }
-  pnr->QueueTask(&Hydro::ConToPrim, this, "Hyd_C2P", "stagen", {"Hyd_Prolong"});
-  pnr->QueueTask(&Hydro::NewTimeStep, this, "Hyd_Newdt", "stagen", {"Hyd_C2P"});
+  ptlo->QueueTask(&Hydro::ConToPrim, this, "Hyd_C2P", "stagen", {"Hyd_Prolong"});
+  ptlo->QueueTask(&Hydro::NewTimeStep, this, "Hyd_Newdt", "stagen", {"Hyd_C2P"});
 
-  pnr->QueueTask(&Hydro::ClearSend, this, "Hyd_ClearS", "after_stagen");
-  pnr->QueueTask(&Hydro::ClearRecv, this, "Hyd_ClearR", "after_stagen", {"Hyd_ClearS"});
+  ptlo->QueueTask(&Hydro::ClearSend, this, "Hyd_ClearS", "after_stagen");
+  ptlo->QueueTask(&Hydro::ClearRecv, this, "Hyd_ClearR", "after_stagen", {"Hyd_ClearS"});
 }
 
 //----------------------------------------------------------------------------------------
