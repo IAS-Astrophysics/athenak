@@ -161,12 +161,12 @@ void Radiation::QueueRadTasks() {
   pnr->QueueTask(&Radiation::RecvFlux, this, "Rad_RecvFlux", "stagen", {"Rad_SendFlux"});
   pnr->QueueTask(&Radiation::RKUpdate, this, "Rad_RKUpdate", "stagen", {"Rad_RecvFlux"});
   pnr->QueueTask(&Radiation::AddRadiationSourceTerm, this, "Rad_SrcTerm", "stagen",
-                 {"Rad_RKUpdate"});
+                 {"Rad_RKUpdate"},{"Hyd_RKUpdate"});
   pnr->QueueTask(&Radiation::RestrictI, this, "Rad_RestI", "stagen", {"Rad_SrcTerm"});
   pnr->QueueTask(&Radiation::SendI, this, "Rad_SendI", "stagen", {"Rad_RestI"});
   pnr->QueueTask(&Radiation::RecvI, this, "Rad_RecvI", "stagen", {"Rad_SendI"});
   pnr->QueueTask(&Radiation::ApplyPhysicalBCs, this, "Rad_ApplyBCs", "stagen",
-                 {"Rad_RecvI"});
+                 {"Rad_RecvI"},{"Hyd_RecvU"});
   pnr->QueueTask(&Radiation::Prolongate, this, "Rad_Prolong", "stagen", {"Rad_RecvI"});
   
   pnr->QueueTask(&Radiation::ClearSend, this, "Rad_ClearS", "after_stagen");

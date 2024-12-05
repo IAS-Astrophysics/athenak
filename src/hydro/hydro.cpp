@@ -121,6 +121,12 @@ Hydro::Hydro(MeshBlockPack *ppack, ParameterInput *pin) :
 
   // Orbital advection and shearing box BCs (if requested in input file)
   if (pin->DoesBlockExist("shearing_box")) {
+    if (pin->DoesBlockExist("radiation")) {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                << std::endl << "Shearing box is not compatible with radiation"
+                << std::endl;
+      std::exit(EXIT_FAILURE);
+    }
     porb_u = new OrbitalAdvectionCC(ppack, pin, (nhydro+nscalars));
     psbox_u = new ShearingBoxBoundaryCC(ppack, pin, (nhydro+nscalars));
   } else {
