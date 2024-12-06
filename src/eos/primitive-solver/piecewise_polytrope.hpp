@@ -130,6 +130,34 @@ class PiecewisePolytrope : public EOSPolicyInterface {
     return eps_cold + T/(mb*(gamma_thermal - 1.0));
   }
 
+  /// Calculate the baryon chemical potential
+  KOKKOS_INLINE_FUNCTION Real BaryonChemicalPotential(Real n, Real T, Real *Y) const {
+    // FIXME: implement or force to abort
+    return 0.0;
+  }
+
+  /// Calculate the charge chemical potential
+  KOKKOS_INLINE_FUNCTION Real ChargeChemicalPotential(Real n, Real T, Real *Y) const {
+    // FIXME: implement or force to abort
+    return 0.0;
+  }
+
+  /// Calculate the electron-lepton chemical potential
+  KOKKOS_INLINE_FUNCTION Real ElectronLeptonChemicalPotential(Real n, Real T, Real *Y) const {
+    // FIXME: implement or force to abort
+    return 0.0;
+  }
+
+  KOKKOS_INLINE_FUNCTION int BetaEquilibriumTrapped(Real n, Real e, Real *Yl, Real &T_eq, Real *Y_eq, Real T_guess, Real *Y_guess) const {
+    // FIXME: implement or force to abort
+    return 1;
+  }
+
+  KOKKOS_INLINE_FUNCTION void TrappedNeutrinos(Real n, Real T, Real *Y, Real n_nu[3], Real e_nu[3]) const {
+    // FIXME: implement or force to abort
+    return;
+  }
+
   /// Calculate the minimum pressure at a given density and composition
   KOKKOS_INLINE_FUNCTION Real MinimumPressure(Real n, Real *Y) const {
     int p = FindPiece(n);

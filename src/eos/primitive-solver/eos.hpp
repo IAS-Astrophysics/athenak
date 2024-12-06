@@ -75,6 +75,11 @@ class EOS : public EOSPolicy, public ErrorPolicy {
   using EOSPolicy::Enthalpy;
   using EOSPolicy::SoundSpeed;
   using EOSPolicy::SpecificInternalEnergy;
+  using EOSPolicy::BaryonChemicalPotential;
+  using EOSPolicy::ChargeChemicalPotential;
+  using EOSPolicy::ElectronLeptonChemicalPotential;
+  using EOSPolicy::BetaEquilibriumTrapped;
+  using EOSPolicy::TrappedNeutrinos;
   using EOSPolicy::MinimumEnthalpy;
   using EOSPolicy::MinimumPressure;
   using EOSPolicy::MaximumPressure;
@@ -253,6 +258,105 @@ class EOS : public EOSPolicy, public ErrorPolicy {
   KOKKOS_INLINE_FUNCTION Real GetSpecificInternalEnergy(Real n, Real T, Real *Y) const {
     return SpecificInternalEnergy(n, T*code_units.TemperatureConversion(eos_units), Y) *
            eos_units.EnergyConversion(code_units)/eos_units.MassConversion(code_units);
+  }
+
+  //! \fn Real GetBaryonChemicalPotential(Real n, Real T, Real *Y)
+  //  \brief Get the baryon chemical potential from the number density, temperature,
+  //         and particle fractions.
+  //
+  //  \param[in] n  The number density
+  //  \param[in] T  The temperature
+  //  \param[in] Y  An array of size n_species of the particle fractions.
+  //  \return The baryon chemical potential for the EOS.
+  KOKKOS_INLINE_FUNCTION Real GetBaryonChemicalPotential(Real n, Real T, Real *Y) const {
+    return BaryonChemicalPotential(n, T*code_units->TemperatureConversion(*eos_units), Y) *
+            eos_units->ChemicalPotentialConversion(*code_units);
+  }
+  
+    //! \fn Real GetChargeChemicalPotential(Real n, Real T, Real *Y)
+  //  \brief Get the charge chemical potential from the number density, temperature,
+  //         and particle fractions.
+  //
+  //  \param[in] n  The number density
+  //  \param[in] T  The temperature
+  //  \param[in] Y  An array of size n_species of the particle fractions.
+  //  \return The charge chemical potential for the EOS.
+  KOKKOS_INLINE_FUNCTION Real GetChargeChemicalPotential(Real n, Real T, Real *Y) const {
+    return ChargeChemicalPotential(n, T*code_units->TemperatureConversion(*eos_units), Y) *
+            eos_units->ChemicalPotentialConversion(*code_units);
+  }
+  
+    //! \fn Real GetElectronLeptonChemicalPotential(Real n, Real T, Real *Y)
+  //  \brief Get the electron-lepton chemical potential from the number density, temperature,
+  //         and particle fractions.
+  //
+  //  \param[in] n  The number density
+  //  \param[in] T  The temperature
+  //  \param[in] Y  An array of size n_species of the particle fractions.
+  //  \return The electron-lepton chemical potential for the EOS.
+  KOKKOS_INLINE_FUNCTION Real GetElectronLeptonChemicalPotential(Real n, Real T, Real *Y) const {
+    return ElectronLeptonChemicalPotential(n, T*code_units->TemperatureConversion(*eos_units), Y) *
+            eos_units->ChemicalPotentialConversion(*code_units);
+  }
+
+    //! \fn Real GetBetaEquilibriumTrapped(Real n, Real e, Real *Yl, Real &T_eq, Real *Y_eq, Real T_guess, Real *Y_guess) 
+  // \brief Get the equilibrium temperature and species fractions from the energy and total lepton fractions
+  //
+  //  \param[in]    n       The number density
+  //  \param[in]    e       The temperature
+  //  \param[in]    Yl      An array of size n_species of the total lepton fractions.
+  //  \param[inout] T_eq    The equilibrium temperature.
+  //  \param[inout] Y_eq    The equilibrium particle fractions.
+  //  \param[in]    T_guess Initial guess for the temperature.
+  //  \param[in]    Y_guess Initial guesses for the particle fractions.
+  //  \return Whether the equilibrium was successfully found.
+  KOKKOS_INLINE_FUNCTION bool GetBetaEquilibriumTrapped(Real n, Real e, Real *Yl, Real &T_eq, Real *Y_eq, Real T_guess, Real *Y_guess) {
+    int ierr = BetaEquilibriumTrapped(n, e*code_units->PressureConversion(*eos_units), Yl, 
+                                      T_eq, Y_eq, 
+                                      T_guess*code_units->TemperatureConversion(*eos_units), Y_guess);
+
+    T_eq = T_eq*eos_units->TemperatureConversion(*code_units);
+    
+    return ierr==0;
+  }
+
+    //! \fn Real GetTrappedNeutrinos(Real n, Real T, Real *Y, Real n_nu[3], Real e_nu[3]) 
+  // \brief Get the trapped neutrino net number and energy densities.
+  //
+  //  \param[in]    n    The number density
+  //  \param[in]    e    The temperature
+  //  \param[in]    Y    An array of size n_species of the particle fractions.
+  //  \param[inout] n_nu The net number densities for each neutrino generation.
+  //  \param[inout] e_nu The total energy densities for each neutrino generation.
+  inline void GetTrappedNeutrinos(Real n, Real T, Real *Y, Real n_nu[3], Real e_nu[3]) {
+    TrappedNeutrinos(n, T*code_units->TemperatureConversion(*eos_units), Y, n_nu, e_nu);
+
+    Real n_units = eos_units->DensityConversion(*code_units);
+    Real e_units = eos_units->PressureConversion(*code_units);
+
+    for (int i=0; i<3; ++i) {
+      n_nu[i] = n_nu[i]*n_units;
+      e_nu[i] = e_nu[i]*e_units;
+    }
+
+    return;
+  }
+
+    //! \fn Real GetLeptonFractions(Real n, Real *Y, Real n_nu[6], Real *Yl) 
+  // \brief Get the total lepton fractions for each generation of matter from the species fractions and the neutrino number densities.
+  //
+  //  \param[in]    n    The number density
+  //  \param[in]    Y    The particle fractions.
+  //  \param[in]    n_nu The number densities for each neutrino species (e, ae, m, am, t, at).
+  //  \param[inout] Yl   The total lepton fractions.
+  inline void GetLeptonFractions(Real n, Real *Y, Real n_nu[6], Real *Yl) {
+    Real n_units = code_units->DensityConversion(*eos_units);
+
+    for (int i=0; i<3; ++i) {
+      Yl[i] = Y[i] + (n_nu[2*i] - n_nu[2*i+1])/n;
+    }
+
+    return;
   }
 
   //! \fn int GetNSpecies() const
