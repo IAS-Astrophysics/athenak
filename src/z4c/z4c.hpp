@@ -195,6 +195,9 @@ class Z4c {
   Real last_output_time;
   int nrad; // number of radii to perform wave extraction
 
+  // CCE
+  Real cce_dump_dt;
+  Real cce_dump_last_output_time;
   // dump data cube at horizon
 
   // functions
@@ -223,6 +226,7 @@ class Z4c {
   TaskStatus Z4cBoundaryRHS(Driver *d, int stage);
   TaskStatus RestrictU(Driver *d, int stage);
   TaskStatus RestrictWeyl(Driver *d, int stage);
+  TaskStatus CCEDump(Driver *pdrive, int stage);
   TaskStatus TrackCompactObjects(Driver *d, int stage);
   TaskStatus CalcWeylScalar(Driver *d, int stage);
   TaskStatus CalcWaveForm(Driver *d, int stage);

@@ -23,6 +23,7 @@
 #include "tasklist/numerical_relativity.hpp"
 #include "z4c/z4c.hpp"
 #include "dyn_grmhd/dyn_grmhd.hpp"
+#include "z4c/cce/cce.hpp"
 #include "diffusion/viscosity.hpp"
 #include "diffusion/resistivity.hpp"
 #include "radiation/radiation.hpp"
@@ -61,7 +62,14 @@ MeshBlockPack::~MeshBlockPack() {
   if (pnr    != nullptr) {delete pnr;}
   if (pturb  != nullptr) {delete pturb;}
   if (punit  != nullptr) {delete punit;}
-  if (pz4c   != nullptr) {delete pz4c;}
+  if (pz4c   != nullptr) {
+    delete pz4c;
+    // cce dump
+    for (auto cce : pz4c_cce) {
+      delete cce;
+    }
+    pz4c_cce.resize(0);
+  }
   if (ppart  != nullptr) {delete ppart;}
   // must be last, since it calls ~BoundaryValues() which (MPI) uses pmy_pack->pmb->nnghbr
   delete pmb;
@@ -186,6 +194,14 @@ void MeshBlockPack::AddPhysics(ParameterInput *pin) {
     pz4c = new z4c::Z4c(this, pin);
     padm = new adm::ADM(this, pin);
     ptmunu = nullptr;
+    // init cce dump
+    pz4c_cce.reserve(0);
+    int ncce = pin->GetOrAddInteger("cce", "num_radii", 0);
+    pz4c_cce.reserve(ncce);// 10 different components for each radius
+    for(int n = 0; n < ncce; ++n) {
+      // NOTE: these names are used for pittnull code, so DON'T change the convention
+      pz4c_cce.push_back(new z4c::CCE(pmesh, pin,n));
+    }
     nphysics++;
   } else {
     pz4c = nullptr;
