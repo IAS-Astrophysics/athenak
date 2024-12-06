@@ -84,6 +84,7 @@ enum TaskName {
   Z4c_ClearRW,
   Z4c_Wave,
   Z4c_PT,
+  Z4c_CCE,
   Z4c_DumpHorizon,
   Z4c_NTASKS
 };

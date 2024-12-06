@@ -188,6 +188,10 @@ Z4c::Z4c(MeshBlockPack *ppack, ParameterInput *pin) :
   mkdir("waveforms",0775);
   waveform_dt = pin->GetOrAddReal("z4c", "waveform_dt", 1);
   last_output_time = 0;
+  // CCE
+  cce_dump_dt = pin->GetOrAddReal("cce", "cce_dt", 1);
+  mkdir("cce",0775);
+  cce_dump_last_output_time = -100;
 
   // Construct the compact object trackers
   int n = 0;
