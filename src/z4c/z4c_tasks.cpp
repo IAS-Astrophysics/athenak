@@ -22,6 +22,7 @@
 #include "z4c/horizon_dump.hpp"
 #include "z4c/z4c.hpp"
 #include "tasklist/numerical_relativity.hpp"
+#include "z4c/cce/cce.hpp"
 
 namespace z4c {
 
@@ -96,10 +97,10 @@ void Z4c::QueueZ4cTasks() {
   pnr->QueueTask(&Z4c::CalcWaveForm, this, Z4c_Wave, "Z4c_Wave", Task_End,
                  {Z4c_ClearRW});
   pnr->QueueTask(&Z4c::TrackCompactObjects, this, Z4c_PT, "Z4c_PT", Task_End, {Z4c_Wave});
+  pnr->QueueTask(&Z4c::CCEDump, this, Z4c_CCE, "CCEDump", Task_End, {Z4c_PT});
   pnr->QueueTask(&Z4c::DumpHorizons, this, Z4c_DumpHorizon, "Z4c_DumpHorizon",
-                Task_End, {Z4c_PT});
+                Task_End, {Z4c_CCE});
 }
-
 //----------------------------------------------------------------------------------------
 //! \fn  void Wave::InitRecv
 //! \brief function to post non-blocking receives (with MPI), and initialize all boundary
@@ -287,6 +288,25 @@ TaskStatus Z4c::TrackCompactObjects(Driver *pdrive, int stage) {
       pt->InterpolateVelocity(pmy_pack);
       pt->EvolveTracker();
       pt->WriteTracker();
+    }
+  }
+  return TaskStatus::complete;
+}
+
+//----------------------------------------------------------------------------------------
+// ! \fn TaskList CCEDump
+// ! \brief CCE initial data for Pittnull code (cce dumps for Pittnull).
+
+TaskStatus Z4c::CCEDump(Driver *pdrive, int stage) {
+  float time_32 = static_cast<float>(pmy_pack->pmesh->time);
+  float next_32 = static_cast<float>(cce_dump_last_output_time+cce_dump_dt);
+  if ((time_32 >= next_32)) {
+    if (stage == pdrive->nexp_stages) {
+      //printf("%s:(ctime,dt)=(%f,%f)",__func__,pmy_pack->pmesh->time,cce_dump_dt);
+      for (auto cce : pmy_pack->pz4c_cce) {
+        cce->InterpolateAndDecompose(pmy_pack);
+      }
+      cce_dump_last_output_time = time_32;
     }
   }
   return TaskStatus::complete;
