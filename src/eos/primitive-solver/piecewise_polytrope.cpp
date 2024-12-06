@@ -42,7 +42,7 @@ bool Primitive::PiecewisePolytrope::ReadParametersFromInput(std::string block,
     }
   }
 
-  Real P0 = densities[1]*pow(densities[1]/poly_rmd, gammas[0] - 1.0);
+  double P0 = densities[1]*pow(densities[1]/poly_rmd, gammas[0] - 1.0);
 
   // Initialize the EOS
   InitializeFromData(densities, gammas, P0, 1.0, np);

@@ -173,8 +173,8 @@ class PiecewisePolytrope : public EOSPolicyInterface {
   //  \param[in] P0        The pressure at the first polytrope division
   //  \param[in] m         The baryon mass
   //  \param[in] n         The number of pieces in the EOS
-  KOKKOS_INLINE_FUNCTION bool InitializeFromData(Real *densities, Real *gammas,
-                          Real P0, Real m, int n) {
+  KOKKOS_INLINE_FUNCTION bool InitializeFromData(double *densities, double *gammas,
+                          double P0, Real m, int n) {
     // Make sure that we actually *have* polytropes
     if (n <= 1) {
       Kokkos::printf("PiecewisePolytrope: Invalid number of polytropes requested.");

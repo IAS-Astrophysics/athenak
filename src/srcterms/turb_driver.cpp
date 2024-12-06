@@ -786,8 +786,8 @@ TaskStatus TurbulenceDriver::InitializeModes(Driver *pdrive, int stage) {
   t0 = gm[0]; t1 = gm[1];
 #endif
 
-  t0 = std::max(t0, 1.0e-20);
-  t1 = std::max(t1, 1.0e-20);
+  t0 = std::max(t0, static_cast<Real>(1.0e-20));
+  t1 = std::max(t1, static_cast<Real>(1.0e-20));
 
   Real m0 = t0, m1 = t1;
   Real dt = pm->dt;

@@ -59,9 +59,12 @@ GeodesicGrid::GeodesicGrid(int nlev, bool rotate, bool fluxes) :
     Real cos_ang = 1.0/sqrt(5.0);
     Real p1[3] = {0.0, 0.0, 1.0};
     Real p2[3] = {sin_ang, 0.0, cos_ang};
-    Real p3[3] = {sin_ang*cos( 0.2*M_PI), sin_ang*sin( 0.2*M_PI), -cos_ang};
-    Real p4[3] = {sin_ang*cos(-0.4*M_PI), sin_ang*sin(-0.4*M_PI),  cos_ang};
-    Real p5[3] = {sin_ang*cos(-0.2*M_PI), sin_ang*sin(-0.2*M_PI), -cos_ang};
+    Real p3[3] = {static_cast<Real>(sin_ang*cos( 0.2*M_PI)),
+                  static_cast<Real>(sin_ang*sin( 0.2*M_PI)), -cos_ang};
+    Real p4[3] = {static_cast<Real>(sin_ang*cos(-0.4*M_PI)),
+                  static_cast<Real>(sin_ang*sin(-0.4*M_PI)),  cos_ang};
+    Real p5[3] = {static_cast<Real>(sin_ang*cos(-0.2*M_PI)),
+                  static_cast<Real>(sin_ang*sin(-0.2*M_PI)), -cos_ang};
     Real p6[3] = {0.0, 0.0, -1.0};
 
     // set pole normal components explicitly
