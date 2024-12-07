@@ -462,4 +462,35 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
                     dv(m, 2, k, j, i) = Kokkos::sqrt(4. * M_PI / 3.0) * f0_(m, 2, k, j, i);
                   });
   }
+
+  if (name.compare("rad_femn_divf_s") == 0) {
+    auto& num_points = pm->pmb_pack->pradfemn->num_points;
+    Kokkos::realloc(derived_var, nmb, num_points, n3, n2, n1);
+    auto dv = derived_var;
+    auto& flx1 = pm->pmb_pack->pradfemn->iflx.x1f;
+    auto& flx2 = pm->pmb_pack->pradfemn->iflx.x2f;
+    auto& flx3 = pm->pmb_pack->pradfemn->iflx.x3f;
+    auto& mbsize = pm->pmb_pack->pmb->mb_size;
+
+    int scr_level = 0;
+    int scr_size = 1;
+    // only works for a single energy bin and single species
+    par_for_outer("rad_femn_E_compute_flux_m1", DevExeSpace(), scr_size, scr_level, 0, nmb - 1, 0, num_points - 1, ks, ke, js, je, is, ie,
+                  KOKKOS_LAMBDA(TeamMember_t member, const int m, const int nuenangidx, const int k, const int j, const int i)
+                  {
+                    Real divf_s =
+                      flx1(m, nuenangidx, k, j, i) / (2. * mbsize.d_view(m).dx1);
+                    if (multi_d)
+                    {
+                      divf_s +=
+                        flx2(m, nuenangidx, k, j, i) / (2. * mbsize.d_view(m).dx2);
+                    }
+                    if (three_d)
+                    {
+                      divf_s +=
+                        flx3(m, nuenangidx, k, j, i) / (2. * mbsize.d_view(m).dx3);
+                    }
+                    dv(m, nuenangidx, k, j, i) = divf_s;
+                  });
+  }
 }

@@ -578,6 +578,16 @@ BaseTypeOutput::BaseTypeOutput(OutputParameters opar, Mesh *pm) :
     outvars.emplace_back("Fz", 2, &(derived_var));
   }
 
+  if (out_params.variable.compare("rad_femn_divf_s") == 0) {
+    out_params.contains_derived = true;
+    auto& num_points = pm->pmb_pack->pradfemn->num_points;
+
+    for (int i = 0; i < num_points; i++)
+    {
+      outvars.emplace_back("divf_s" + std::to_string(i), i, &(derived_var));
+    }
+  }
+
   // initialize vector containing number of output MBs per rank
   noutmbs.assign(global_variable::nranks, 0);
 }

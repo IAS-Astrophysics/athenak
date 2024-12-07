@@ -29,7 +29,7 @@ KOKKOS_INLINE_FUNCTION Real B(Real en, Real T) {
   Real cspeed = 1.;
   Real kb = 1.;
 
-  return ((2. * en * en * en)/(h*h*cspeed*cspeed)) /(Kokkos::exp(en/(kb*T)) - 1.);
+  return 1;
 }
 
 void ProblemGenerator::RadiationFEMNDopplertest(ParameterInput *pin, const bool restart) {

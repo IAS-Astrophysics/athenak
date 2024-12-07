@@ -77,7 +77,7 @@ void ProblemGenerator::RadiationFEMNDiffusiontestErf(ParameterInput *pin, const 
   auto &kappa_s_ = pmbp->pradfemn->kappa_s;
   auto vx = pin->GetOrAddReal("radiation-femn", "fluid_velocity_x", 0.87);
   auto shock = pin->GetOrAddBoolean("problem", "shock", false);
-  auto steepness_par = pin->GetOrAddReal("problem", "tanh_par", 50.);
+  auto steepness_par = pin->GetOrAddReal("problem", "tanh_par", 1.);
   auto lorentz_w = 1. / sqrt(1 - vx * vx);
 
   if(shock) {
@@ -146,8 +146,9 @@ void ProblemGenerator::RadiationFEMNDiffusiontestErf(ParameterInput *pin, const 
 
             adm.alpha(m, k, j, i) = 1.;
 
-            //Real velocity = -Kokkos::abs(vx) * Kokkos::tanh(steepness_par * x1);
-            Real velocity = vx;
+            Real velocity = -Kokkos::abs(vx) * Kokkos::tanh(steepness_par * x1);
+            //Real velocity = 0.5 - Kokkos::sin(x1)/5.;
+            //Real velocity = vx;
             Real lorentz_factor = 1. / sqrt(1 - velocity * velocity);
 
             u_mu_(m, 0, k, j, i) = lorentz_factor;

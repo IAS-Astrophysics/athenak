@@ -339,7 +339,7 @@ TaskStatus RadiationFEMN::ExpRKUpdate(Driver *pdriver, int stage) {
                         int index_a_united = IndicesUnited(nu, en, index_a, num_species_,
                                                            num_energy_bins_, num_points_);
                         sum_terms +=
-                            (g_gam(index_a, index_b))
+                            (g_gam(index_a, index_b) - (1.5)*f_gam(index_a, index_b))
                                 * f0_(m, index_a_united, k, j, i);
                         K += f_gam(index_a, index_b) * f_gam(index_a, index_b);
                       }
@@ -349,7 +349,7 @@ TaskStatus RadiationFEMN::ExpRKUpdate(Driver *pdriver, int stage) {
                     K = sqrt(K);
 
                     // terms for multi-energy
-                    if (num_energy_bins_ > 1) {
+                    if (num_energy_bins_ > 1) { /*
                       ScrArray1D<Real> energy_terms =
                           ScrArray1D<Real>(member.team_scratch(scr_level), num_points_);
 
@@ -429,7 +429,7 @@ TaskStatus RadiationFEMN::ExpRKUpdate(Driver *pdriver, int stage) {
                       member.team_barrier();
                       for (int idx = 0; idx < num_points_; idx++) {
                         g_rhs_scratch(idx) += energy_terms(idx);
-                      }
+                      } */
                     }
 
                     ScrArray2D<Real> Q_matrix =
