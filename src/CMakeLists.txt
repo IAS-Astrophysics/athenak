@@ -160,6 +160,8 @@ add_executable(
 		pgen/tests/rad_femn_spharms.cpp
 		pgen/tests/rad_femn_gaussian_nonflat.cpp
 		radiation_femn/radiation_femn_bcs.cpp
+		radiation_femn/radiation_femn_energy_grid_integrate.cpp
+		radiation_femn/radiation_femn_energy_grid.hpp
 )
 
 # custom problem generator to be included in compile
