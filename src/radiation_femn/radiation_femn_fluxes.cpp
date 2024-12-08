@@ -73,11 +73,11 @@ TaskStatus RadiationFEMN::CalculateFluxes(Driver *pdriver, int stage) {
                     auto f0_scratch_m2 =
                         ScrArray2D<Real>(member.team_scratch(scr_level), num_energy_bins_,
                                          num_points_);
-                    //ApplyClosureX(member, num_species_, num_energy_bins_, num_points_,
-                    //              m, nuidx, enidx, kk, jj, ii,
-                    //              f0_, f0_scratch, f0_scratch_p1, f0_scratch_p2,
-                    //              f0_scratch_p3, f0_scratch_m1, f0_scratch_m2,
-                    //              m1_flag_, m1_closure_, m1_closure_fun_);
+                    ApplyClosure(1, member, num_species_, num_energy_bins_, num_points_,
+                                  m, nuidx, kk, jj, ii,
+                                  f0_, f0_scratch, f0_scratch_p1, f0_scratch_p2,
+                                  f0_scratch_p3, f0_scratch_m1, f0_scratch_m2,
+                                  m1_flag_, m1_closure_, m1_closure_fun_);
                     member.team_barrier();
 
                     par_for_inner(member, 0, num_energy_bins_*num_points_ - 1, [&](const int ennB) {
@@ -185,12 +185,12 @@ TaskStatus RadiationFEMN::CalculateFluxes(Driver *pdriver, int stage) {
                             ScrArray2D<Real>(member.team_scratch(scr_level),
                                              num_energy_bins_,
                                              num_points_);
-                        //ApplyClosureY(member, num_species_, num_energy_bins_, num_points_,
-                      //              m, nuidx, enidx, kk, jj, ii,
-                      //              f0_, f0_scratch, f0_scratch_p1, f0_scratch_p2,
-                      //              f0_scratch_p3, f0_scratch_m1, f0_scratch_m2,
-                      //              m1_flag_, m1_closure_, m1_closure_fun_);
-                      member.team_barrier();
+                        ApplyClosure(2, member, num_species_, num_energy_bins_,
+                                     num_points_, m, nuidx, kk, jj, ii,
+                                     f0_, f0_scratch, f0_scratch_p1, f0_scratch_p2,
+                                     f0_scratch_p3, f0_scratch_m1, f0_scratch_m2,
+                                     m1_flag_, m1_closure_, m1_closure_fun_);
+                        member.team_barrier();
 
                       par_for_inner(member, 0, num_energy_bins_*num_points_ - 1,
                           [&](const int ennB) {
@@ -301,11 +301,11 @@ TaskStatus RadiationFEMN::CalculateFluxes(Driver *pdriver, int stage) {
                           ScrArray2D<Real>(member.team_scratch(scr_level),
                                            num_energy_bins_,
                                            num_points_);
-                      //ApplyClosureZ(member, num_species_, num_energy_bins_, num_points_,
-                      //              m, nuidx, enidx, kk, jj, ii,
-                      //              f0_, f0_scratch, f0_scratch_p1, f0_scratch_p2,
-                      //              f0_scratch_p3, f0_scratch_m1, f0_scratch_m2,
-                      //              m1_flag_, m1_closure_, m1_closure_fun_);
+                        ApplyClosure(3, member, num_species_, num_energy_bins_,
+                                     num_points_, m, nuidx, kk, jj, ii,
+                                     f0_, f0_scratch, f0_scratch_p1, f0_scratch_p2,
+                                     f0_scratch_p3, f0_scratch_m1, f0_scratch_m2,
+                                     m1_flag_, m1_closure_, m1_closure_fun_);
                       member.team_barrier();
 
                       par_for_inner(member, 0, num_energy_bins_*num_points_ - 1,
