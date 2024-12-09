@@ -60,20 +60,22 @@ enum LimiterDG {
   minmod2
 };
 
+//! \enum M1Closure
+// hold form of radiation pressure
 enum M1Closure {
   Charon,
   Shibata,
   Simple
 };
 
+//! \enum ClosureFunc
+// hold form of closure function
 enum ClosureFunc {
   Eddington,
   Kershaw,
   Minerbo,
   Thin
 };
-
-
 
 namespace radiationfemn {
 
@@ -123,9 +125,6 @@ class RadiationFEMN {
   DvceArray1D<Real> beam_source_1_vals;
   DvceArray1D<Real> beam_source_2_vals;
 
-  // @TODO: delete
-  Real energy_par = 1.;
-
   // quadratures on unit sphere
   HostArray2D<Real> scheme_points;
   HostArray1D<Real> scheme_weights;
@@ -153,7 +152,7 @@ class RadiationFEMN {
   DvceArray5D<Real> G_matrix;                // Gmat on device
   HostArray5D<Real> F_mat_host;              // F^nuhat^muhat_ihat_A^B
   DvceArray5D<Real> F_matrix;                // Fmat on device
-  DvceArray2D<Real> Q_matrix;                // Q^muhat_A
+  DvceArray2D<Real> Q_matrix;                // Q^muhat_A (needed for number density calc)
 
   // energy grid matrices
   DvceArray1D<Real> energy_grid;             // energy grid array
@@ -161,7 +160,6 @@ class RadiationFEMN {
   DvceArray2D<Real> Veninv_matrix;           // Invese of V
   DvceArray1D<Real> VV_array;                // integral of epsilon^2 xi
   DvceArray2D<Real> Wen_matrix;              // W_m^m matrix (containing energy basis derivatives)
-
 
   // distribution function, flux and other arrays
   DvceArray5D<Real> f0;             // distribution function
@@ -220,7 +218,6 @@ class RadiationFEMN {
   // other functions
   void LoadFEMNMatrices();
   void LoadFPNMatrices();
-  void LoadEnergyGridMatricesGLag();
   void ComputeMassInverse();
   void ComputePMatrices();
   void ComputeSourceMatrices();
@@ -236,8 +233,8 @@ class RadiationFEMN {
 void ApplyBeamSourcesFEMN(Mesh *pmesh);
 void ApplyBeamSourcesFEMN1D(Mesh *pmesh);
 void ApplyBeamSourcesBlackHoleM1(Mesh *pmesh);
-void RadiationFEMNBCs(MeshBlockPack *ppack, DualArray2D<Real> i_in,
-                                     DvceArray5D<Real> i0);
+void RadiationFEMNBCs(MeshBlockPack *ppack, DualArray2D<Real> i_in, DvceArray5D<Real> i0);
+
 KOKKOS_INLINE_FUNCTION
 Real Sgn(Real x) { return (x >= 0) ? +1. : -1.; }
 
@@ -255,15 +252,6 @@ KOKKOS_INLINE_FUNCTION
 int IndicesUnited(int nuidx, int enidx, int angidx, int num_species, int num_energy_bins, int num_points) {
   int combinedidx = angidx + nuidx * num_energy_bins * num_points + enidx * num_points;
   return combinedidx;
-}
-
-KOKKOS_INLINE_FUNCTION
-RadiationFEMNPhaseIndices NuEnIndicesComponent(int n, int num_species, int num_energy_bins) {
-  RadiationFEMNPhaseIndices idcs = {.combinedidx = n,
-      .nuidx = int(n / num_energy_bins),
-      .enidx = n - int(n / num_energy_bins) * num_energy_bins,
-      .angidx = -42};
-  return idcs;
 }
 
 } // namespace radiationfemn

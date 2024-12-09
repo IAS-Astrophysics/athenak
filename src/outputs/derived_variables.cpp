@@ -343,7 +343,6 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
 
   // radiation number density
   if (name.compare("rad_femn_N") == 0) {
-    auto dv = derived_var;
     auto &f0_ = pm->pmb_pack->pradfemn->f0;
     auto &L_mu_muhat_ = pm->pmb_pack->pradfemn->L_mu_muhat0;
     auto &Q_matrix_ = pm->pmb_pack->pradfemn->Q_matrix;
@@ -353,6 +352,7 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
     auto &num_energy_bins_ = pm->pmb_pack->pradfemn->num_energy_bins;
     auto &num_species_ = pm->pmb_pack->pradfemn->num_species;
     Kokkos::realloc(derived_var, nmb, num_species_*num_energy_bins_, n3, n2, n1);
+    auto dv = derived_var;
 
     par_for("rad_femn_N_compute", DevExeSpace(), 0, nmb - 1, 0, num_species_-1,
             ks, ke, js, je, is, ie,

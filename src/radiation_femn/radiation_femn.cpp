@@ -12,7 +12,6 @@
 #include "mesh/mesh.hpp"
 #include "eos/eos.hpp"
 #include "bvals/bvals.hpp"
-#include "units/units.hpp"
 #include "radiation_femn/radiation_femn.hpp"
 #include "radiation_femn/radiation_femn_linalg.hpp"
 #include "radiation_femn/radiation_femn_geodesic_grid.hpp"
@@ -59,13 +58,18 @@ RadiationFEMN::RadiationFEMN(MeshBlockPack *ppack, ParameterInput *pin) :
     eta("eta", 1, 1, 1, 1),
     kappa_a("kappa_a", 1, 1, 1, 1),
     kappa_s("kappa_s", 1, 1, 1, 1) {
+
   mass_lumping = pin->GetOrAddInteger("radiation-femn", "mass_lumping", 1) == 1;
+  multiply_massinv = pin->GetOrAddBoolean("radiation-femn", "multiply_massinv", false);
   limiter_dg = pin->GetOrAddString("radiation-femn", "limiter_dg", "minmod2");
+  limiter_theta = pin->GetOrAddBoolean("radiation-femn", "limiter_theta", false);
   fpn = pin->GetOrAddInteger("radiation-femn", "fpn", 0) == 1;
+  num_species = pin->GetOrAddInteger("radiation-femn", "num_species", 1);
   num_energy_bins = pin->GetOrAddInteger("radiation-femn", "num_energy_bins", 1);
   energy_max = pin->GetOrAddReal("radiation-femn", "energy_max", 1);
-  num_species = pin->GetOrAddInteger("radiation-femn", "num_species", 1);
   m1_flag = pin->GetOrAddBoolean("radiation-femn", "m1", false);
+  rad_E_floor = pin->GetOrAddReal("radiation-femn", "rad_E_floor", 1e-15);
+  rad_eps = pin->GetOrAddReal("radiation-femn", "rad_eps", 1e-5);
   rad_source = pin->GetOrAddBoolean("radiation-femn", "source_terms", false);
   num_beams = pin->GetOrAddInteger("radiation-femn", "num_beam_sources", 0);
   beam_source = pin->GetOrAddBoolean("radiation-femn", "beam_sources", false);
@@ -77,10 +81,6 @@ RadiationFEMN::RadiationFEMN(MeshBlockPack *ppack, ParameterInput *pin) :
   beam_source_2_y2 = pin->GetOrAddReal("radiation-femn", "beam_source_2_y2", -42.);
   beam_source_2_phi = pin->GetOrAddReal("radiation-femn", "beam_source_2_phi", -42.);
   beam_source_2_theta = pin->GetOrAddReal("radiation-femn", "beam_source_2_theta", -42.);
-  rad_E_floor = pin->GetOrAddReal("radiation-femn", "rad_E_floor", 1e-15);
-  rad_eps = pin->GetOrAddReal("radiation-femn", "rad_eps", 1e-5);
-  multiply_massinv = pin->GetOrAddBoolean("radiation-femn", "multiply_massinv", false);
-  limiter_theta = pin->GetOrAddBoolean("radiation-femn", "limiter_theta", false);
 
   limiter_dg_minmod_type = LimiterDG::none;
   if (limiter_dg == "minmod") {
@@ -228,17 +228,14 @@ RadiationFEMN::RadiationFEMN(MeshBlockPack *ppack, ParameterInput *pin) :
   this->ComputePMatrices();
   this->ComputeSourceMatrices();
 
-  // compute the matrices for energy (change this @TODO)
+  // compute the matrices for energy (@TODO: generalize this later)
   Kokkos::realloc(Ven_matrix, num_energy_bins, num_energy_bins);
   Kokkos::realloc(Veninv_matrix, num_energy_bins, num_energy_bins);
   Kokkos::realloc(Wen_matrix, num_energy_bins, num_energy_bins);
-  Ven_matrix(0,0) = -2.;
-  VV_array(0) = -42.; //@TODO: fixme
-  Veninv_matrix(0,0) = -1./2.;
-  Wen_matrix(0,0) = 3.;
-
-  // --------------------------------------------------------------------------------------------------------------------------
-  // allocate memory for all other variables
+  Ven_matrix(0,0) = 1.26521030312932; // Fermi-Dirac basis eta = 0, T = 2
+  VV_array(0) = 14.42468283791513;
+  Veninv_matrix(0,0) = 0.7903824348621258;
+  Wen_matrix(0,0) = -1.89781545469398;
 
   int nmb = ppack->nmb_thispack;
   auto &indcs = pmy_pack->pmesh->mb_indcs;
