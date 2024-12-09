@@ -535,34 +535,50 @@ BaseTypeOutput::BaseTypeOutput(OutputParameters opar, Mesh *pm) :
 
   // radiation femn evolved variables
   if (out_params.variable.compare("rad_femn_F") == 0) {
-    for (int i = 0; i < pm->pmb_pack->pradfemn->num_points_total; i++) {
-      outvars.emplace_back("F" + std::to_string(i), i, &(pm->pmb_pack->pradfemn->f0));
+    for (int nu = 0; nu < pm->pmb_pack->pradfemn->num_species; nu++) {
+      for (int en = 0; en < pm->pmb_pack->pradfemn->num_energy_bins; en++) {
+        for (int ang = 0; ang < pm->pmb_pack->pradfemn->num_points; ang++) {
+          int idx = radiationfemn::IndicesUnited(nu, en, ang,
+                                                  pm->pmb_pack->pradfemn->num_species,
+                                                  pm->pmb_pack->pradfemn->num_energy_bins,
+                                                  pm->pmb_pack->pradfemn->num_points);
+          outvars.emplace_back(
+            "F" + std::to_string(nu) + "_" + std::to_string(en) + "_" +
+            std::to_string(ang),
+            idx, &(pm->pmb_pack->pradfemn->f0));
+        }
+      }
     }
   }
 
   // radiation femn tetrad
   if (out_params.variable.compare("rad_femn_tetrad") == 0) {
     for (int v = 0; v < 16; ++v) {
-        int muval = int(v/4);
-        int muhatval = v - muval * 4;
-        outvars.emplace_back("L_mu_muhat" + std::to_string(muval) + "_" + std::to_string(muhatval), v, &(pm->pmb_pack->pradfemn->L_mu_muhat0_data));
+      int muval = static_cast<int>(v / 4);
+      int muhatval = v - muval * 4;
+      outvars.emplace_back(
+        "L_mu_muhat" + std::to_string(muval) + "_" + std::to_string(muhatval),
+        v, &(pm->pmb_pack->pradfemn->L_mu_muhat0_data));
     }
   }
 
   // radiation femn fluid velocity
   if (out_params.variable.compare("rad_femn_fluid_vel") == 0) {
     for (int v = 0; v < 4; ++v) {
-      outvars.emplace_back("u_mu_" + std::to_string(v), v, &(pm->pmb_pack->pradfemn->u_mu_data));
+      outvars.emplace_back("u_mu_" + std::to_string(v),
+                            v, &(pm->pmb_pack->pradfemn->u_mu_data));
     }
   }
 
   // radiation femn number density
   if (out_params.variable.compare("rad_femn_N") == 0) {
     out_params.contains_derived = true;
-    outvars.emplace_back("N", 0, &(derived_var));
+    for (int nu = 0; nu < pm->pmb_pack->pradfemn->num_species; nu++) {
+      outvars.emplace_back("N" + std::to_string(nu), nu, &(derived_var));
+    }
   }
 
-  // radiation femn energy density
+  // radiation energy density for M1
   if (out_params.variable.compare("rad_femn_E") == 0) {
     out_params.contains_derived = true;
     for (int var = 0; var < pm->pmb_pack->pradfemn->num_energy_bins; var++) {

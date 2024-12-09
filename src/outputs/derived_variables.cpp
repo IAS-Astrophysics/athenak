@@ -343,40 +343,37 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
 
   // radiation number density
   if (name.compare("rad_femn_N") == 0) {
-    Kokkos::realloc(derived_var, nmb, 1, n3, n2, n1);
     auto dv = derived_var;
     auto &f0_ = pm->pmb_pack->pradfemn->f0;
     auto &L_mu_muhat_ = pm->pmb_pack->pradfemn->L_mu_muhat0;
     auto &Q_matrix_ = pm->pmb_pack->pradfemn->Q_matrix;
-    auto &e_source_nominv_ = pm->pmb_pack->pradfemn->e_source_nominv;
+    auto &VV_array_ = pm->pmb_pack->pradfemn->VV_array;
     auto &energy_grid_ = pm->pmb_pack->pradfemn->energy_grid;
     auto &num_points_ = pm->pmb_pack->pradfemn->num_points;
     auto &num_energy_bins_ = pm->pmb_pack->pradfemn->num_energy_bins;
     auto &num_species_ = pm->pmb_pack->pradfemn->num_species;
+    Kokkos::realloc(derived_var, nmb, num_species_*num_energy_bins_, n3, n2, n1);
 
-    // Compute sum_{B} S_n F^nA M_AB where S_n = (e_{n+1}^4 - e_{n}^4)/4
-    // @TODO: currently only works for one species of neutrino -- generalize!
-    int scr_level = 0;
-    int scr_size = 1;
-    int species = 0;
-    par_for_outer("rad_femn_N_compute", DevExeSpace(), scr_size, scr_level, 0, nmb - 1, ks, ke, js, je, is, ie,
-                  KOKKOS_LAMBDA(TeamMember_t member, const int m, const int k, const int j, const int i) {
-                    Real temp_sum = 0.;
-                    Kokkos::parallel_reduce(Kokkos::TeamVectorRange(member, 0, num_energy_bins_ * num_points_), [=](const int enA, Real &partial_sum) {
-                      int en = int(enA / num_points_);
-                      int A = enA - en * num_points_;
+    par_for("rad_femn_N_compute", DevExeSpace(), 0, nmb - 1, 0, num_species_-1,
+            ks, ke, js, je, is, ie,
+            KOKKOS_LAMBDA(const int m, const int nu,
+                                  const int k, const int j, const int i) {
 
-                      int nuenang = radiationfemn::IndicesUnited(species, en, A, num_species_, num_energy_bins_, num_points_);
-                      Real Ven = (num_energy_bins_ > 1) ? (pow(energy_grid_(en + 1), 3) - pow(energy_grid_(en), 3)) / 3.0 : 1.;
-
-                      Real ql_term = 0;
-                      for (int idx = 0; idx < 4; idx++){
-                        ql_term += Q_matrix_(idx, A) * L_mu_muhat_(m, 0, idx, k, j, i);
-                      }
-                      partial_sum += Ven * f0_(m, nuenang, k, j, i) * ql_term;
-                    }, temp_sum);
-                    dv(m, 0, k, j, i) = temp_sum;
-                  });
+      Real partial_sum = 0.;
+      for (int enidx = 0; enidx < num_energy_bins_; enidx++) {
+        for (int angidx = 0; angidx < num_points_; angidx++) {
+          for (int muhat = 0; muhat < 4; muhat++) {
+            int nuenang = radiationfemn::IndicesUnited(nu, enidx, angidx,
+                                                        num_species_, num_energy_bins_, num_points_);
+              partial_sum += L_mu_muhat_(m, 0, muhat, k, j, i)
+                            * Q_matrix_(muhat, angidx)
+                            * VV_array_(enidx)
+                            * f0_(m, nuenang, k, j, i);
+            }
+          }
+      }
+      dv(m, nu, k, j, i) = partial_sum;
+    });
   }
 
   // radiation energy density for FEM_N (multi energy, single species)
