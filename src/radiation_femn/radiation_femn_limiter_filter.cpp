@@ -182,19 +182,19 @@ TaskStatus RadiationFEMN::ApplyLimiterDG(Driver *pdriver, int stage) {
 
   if (one_d) {
     par_for("radiation_femn_limiter_dg1d", DevExeSpace(), 0, nmb1, 0, npts1, ks, ke, js, je, is, int(ie / 2) + 1,
-            KOKKOS_LAMBDA(const int m, const int enang, const int k, const int j, const int i) {
+            KOKKOS_LAMBDA(const int m, const int nuenang, const int k, const int j, const int i) {
 
               auto kk = k;
               auto jj = j;
               auto ii = 2 * i - 2;
 
-              auto f0_cellavg = (0.5) * (f0_(m, enang, kk, jj, ii) + f0_(m, enang, kk, jj, ii + 1));
-              auto f0_cellavg_mx = (0.5) * (f0_(m, enang, kk, jj, ii - 2) + f0_(m, enang, kk, jj, ii - 1));
-              auto f0_cellavg_px = (0.5) * (f0_(m, enang, kk, jj, ii + 2) + f0_(m, enang, kk, jj, ii + 3));
+              auto f0_cellavg = (0.5) * (f0_(m, nuenang, kk, jj, ii) + f0_(m, nuenang, kk, jj, ii + 1));
+              auto f0_cellavg_mx = (0.5) * (f0_(m, nuenang, kk, jj, ii - 2) + f0_(m, nuenang, kk, jj, ii - 1));
+              auto f0_cellavg_px = (0.5) * (f0_(m, nuenang, kk, jj, ii + 2) + f0_(m, nuenang, kk, jj, ii + 3));
 
               auto dminusx = (f0_cellavg - f0_cellavg_mx) / (2.0 * mbsize.d_view(m).dx1);
               auto dplusx = (f0_cellavg_px - f0_cellavg) / (2.0 * mbsize.d_view(m).dx1);
-              auto islopex = 2.0 * (f0_(m, enang, kk, jj, ii + 1) - f0_(m, enang, kk, jj, ii)) / (2.0 * mbsize.d_view(m).dx1);
+              auto islopex = 2.0 * (f0_(m, nuenang, kk, jj, ii + 1) - f0_(m, nuenang, kk, jj, ii)) / (2.0 * mbsize.d_view(m).dx1);
 
               auto sigmax = slope_limiter(islopex, dminusx, dplusx, limiter_dg_minmod_type_);
 
@@ -206,38 +206,38 @@ TaskStatus RadiationFEMN::ApplyLimiterDG(Driver *pdriver, int stage) {
 
               auto xmean = 0.5 * (xii + xiip1);
 
-              ftemp_(m, enang, kk, jj, ii) = f0_cellavg + sigmax * (xii - xmean);
-              ftemp_(m, enang, kk, jj, ii + 1) = f0_cellavg + sigmax * (xiip1 - xmean);
+              ftemp_(m, nuenang, kk, jj, ii) = f0_cellavg + sigmax * (xii - xmean);
+              ftemp_(m, nuenang, kk, jj, ii + 1) = f0_cellavg + sigmax * (xiip1 - xmean);
 
             });
   }
 
   if (two_d) {
     par_for("radiation_femn_limiter_dg2d", DevExeSpace(), 0, nmb1, 0, npts1, ks, ke, js, int(je / 2) + 1, is, int(ie / 2) + 1,
-            KOKKOS_LAMBDA(const int m, const int enang, const int k, const int j, const int i) {
+            KOKKOS_LAMBDA(const int m, const int nuenang, const int k, const int j, const int i) {
 
               auto kk = k;
               auto jj = 2 * j - 2;
               auto ii = 2 * i - 2;
 
-              auto f0_cellavg = (0.25) * (f0_(m, enang, kk, jj, ii) + f0_(m, enang, kk, jj, ii + 1) + f0_(m, enang, kk, jj + 1, ii) + f0_(m, enang, kk, jj + 1, ii + 1));
+              auto f0_cellavg = (0.25) * (f0_(m, nuenang, kk, jj, ii) + f0_(m, nuenang, kk, jj, ii + 1) + f0_(m, nuenang, kk, jj + 1, ii) + f0_(m, nuenang, kk, jj + 1, ii + 1));
               auto f0_cellavg_mx =
-                  (0.25) * (f0_(m, enang, kk, jj, ii - 2) + f0_(m, enang, kk, jj, ii - 1) + f0_(m, enang, kk, jj + 1, ii - 2) + f0_(m, enang, kk, jj + 1, ii - 1));
+                  (0.25) * (f0_(m, nuenang, kk, jj, ii - 2) + f0_(m, nuenang, kk, jj, ii - 1) + f0_(m, nuenang, kk, jj + 1, ii - 2) + f0_(m, nuenang, kk, jj + 1, ii - 1));
               auto f0_cellavg_px =
-                  (0.25) * (f0_(m, enang, kk, jj, ii + 2) + f0_(m, enang, kk, jj, ii + 3) + f0_(m, enang, kk, jj + 1, ii + 2) + f0_(m, enang, kk, jj + 1, ii + 3));
+                  (0.25) * (f0_(m, nuenang, kk, jj, ii + 2) + f0_(m, nuenang, kk, jj, ii + 3) + f0_(m, nuenang, kk, jj + 1, ii + 2) + f0_(m, nuenang, kk, jj + 1, ii + 3));
               auto f0_cellavg_my =
-                  (0.25) * (f0_(m, enang, kk, jj - 2, ii) + f0_(m, enang, kk, jj - 2, ii + 1) + f0_(m, enang, kk, jj - 1, ii) + f0_(m, enang, kk, jj - 1, ii + 1));
+                  (0.25) * (f0_(m, nuenang, kk, jj - 2, ii) + f0_(m, nuenang, kk, jj - 2, ii + 1) + f0_(m, nuenang, kk, jj - 1, ii) + f0_(m, nuenang, kk, jj - 1, ii + 1));
               auto f0_cellavg_py =
-                  (0.25) * (f0_(m, enang, kk, jj + 2, ii) + f0_(m, enang, kk, jj + 2, ii + 1) + f0_(m, enang, kk, jj + 3, ii) + f0_(m, enang, kk, jj + 3, ii + 1));
+                  (0.25) * (f0_(m, nuenang, kk, jj + 2, ii) + f0_(m, nuenang, kk, jj + 2, ii + 1) + f0_(m, nuenang, kk, jj + 3, ii) + f0_(m, nuenang, kk, jj + 3, ii + 1));
 
               auto dminusx = (f0_cellavg - f0_cellavg_mx) / (2.0 * mbsize.d_view(m).dx1);
               auto dplusx = (f0_cellavg_px - f0_cellavg) / (2.0 * mbsize.d_view(m).dx1);
-              auto islopex = 2.0 * (f0_(m, enang, kk, jj, ii + 1) - f0_(m, enang, kk, jj, ii) + f0_(m, enang, kk, jj + 1, ii + 1) - f0_(m, enang, kk, jj + 1, ii))
+              auto islopex = 2.0 * (f0_(m, nuenang, kk, jj, ii + 1) - f0_(m, nuenang, kk, jj, ii) + f0_(m, nuenang, kk, jj + 1, ii + 1) - f0_(m, nuenang, kk, jj + 1, ii))
                              / (2.0 * 2.0 * mbsize.d_view(m).dx1);
 
               auto dminusy = (f0_cellavg - f0_cellavg_my) / (2.0 * mbsize.d_view(m).dx2);
               auto dplusy = (f0_cellavg_py - f0_cellavg) / (2.0 * mbsize.d_view(m).dx2);
-              auto islopey = 2.0 * (f0_(m, enang, kk, jj + 1, ii) - f0_(m, enang, kk, jj, ii) + f0_(m, enang, kk, jj + 1, ii + 1) - f0_(m, enang, kk, jj, ii + 1))
+              auto islopey = 2.0 * (f0_(m, nuenang, kk, jj + 1, ii) - f0_(m, nuenang, kk, jj, ii) + f0_(m, nuenang, kk, jj + 1, ii + 1) - f0_(m, nuenang, kk, jj, ii + 1))
                              / (2.0 * 2.0 * mbsize.d_view(m).dx2);
 
               auto sigmax = slope_limiter(islopex, dminusx, dplusx, limiter_dg_minmod_type_);
@@ -258,66 +258,66 @@ TaskStatus RadiationFEMN::ApplyLimiterDG(Driver *pdriver, int stage) {
               auto xmean = 0.5 * (xii + xiip1);
               auto ymean = 0.5 * (xjj + xjjp1);
 
-              ftemp_(m, enang, kk, jj, ii) = f0_cellavg + sigmax * (xii - xmean) + sigmay * (xjj - ymean);
-              ftemp_(m, enang, kk, jj, ii + 1) = f0_cellavg + sigmax * (xiip1 - xmean) + sigmay * (xjj - ymean);
-              ftemp_(m, enang, kk, jj + 1, ii) = f0_cellavg + sigmax * (xii - xmean) + sigmay * (xjjp1 - ymean);
-              ftemp_(m, enang, kk, jj + 1, ii + 1) = f0_cellavg + sigmax * (xiip1 - xmean) + sigmay * (xjjp1 - ymean);
+              ftemp_(m, nuenang, kk, jj, ii) = f0_cellavg + sigmax * (xii - xmean) + sigmay * (xjj - ymean);
+              ftemp_(m, nuenang, kk, jj, ii + 1) = f0_cellavg + sigmax * (xiip1 - xmean) + sigmay * (xjj - ymean);
+              ftemp_(m, nuenang, kk, jj + 1, ii) = f0_cellavg + sigmax * (xii - xmean) + sigmay * (xjjp1 - ymean);
+              ftemp_(m, nuenang, kk, jj + 1, ii + 1) = f0_cellavg + sigmax * (xiip1 - xmean) + sigmay * (xjjp1 - ymean);
             });
   }
 
   if (three_d) {
     par_for("radiation_femn_limiter_dg3d", DevExeSpace(), 0, nmb1, 0, npts1, ks, int(ke / 2) + 1, js, int(je / 2) + 1, is, int(ie / 2) + 1,
-            KOKKOS_LAMBDA(const int m, const int enang, const int k, const int j, const int i) {
+            KOKKOS_LAMBDA(const int m, const int nuenang, const int k, const int j, const int i) {
 
               auto kk = 2 * k - 2;
               auto jj = 2 * j - 2;
               auto ii = 2 * i - 2;
 
               auto f0_cellavg = (1.0 / 8.0)
-                                * (f0_(m, enang, kk, jj, ii) + f0_(m, enang, kk, jj, ii + 1) + f0_(m, enang, kk, jj + 1, ii) + f0_(m, enang, kk, jj + 1, ii + 1)
-                                   + f0_(m, enang, kk + 1, jj, ii)
-                                   + f0_(m, enang, kk + 1, jj, ii + 1) + f0_(m, enang, kk + 1, jj + 1, ii) + f0_(m, enang, kk + 1, jj + 1, ii + 1));
+                                * (f0_(m, nuenang, kk, jj, ii) + f0_(m, nuenang, kk, jj, ii + 1) + f0_(m, nuenang, kk, jj + 1, ii) + f0_(m, nuenang, kk, jj + 1, ii + 1)
+                                   + f0_(m, nuenang, kk + 1, jj, ii)
+                                   + f0_(m, nuenang, kk + 1, jj, ii + 1) + f0_(m, nuenang, kk + 1, jj + 1, ii) + f0_(m, nuenang, kk + 1, jj + 1, ii + 1));
               auto f0_cellavg_mx =
-                  (1.0 / 8.0) * (f0_(m, enang, kk, jj, ii - 2) + f0_(m, enang, kk, jj, ii - 1) + f0_(m, enang, kk, jj + 1, ii - 2) + f0_(m, enang, kk, jj + 1, ii - 1)
-                                 + f0_(m, enang, kk + 1, jj, ii - 2) + f0_(m, enang, kk + 1, jj, ii - 1) + f0_(m, enang, kk + 1, jj + 1, ii - 2)
-                                 + f0_(m, enang, kk + 1, jj + 1, ii - 1));
+                  (1.0 / 8.0) * (f0_(m, nuenang, kk, jj, ii - 2) + f0_(m, nuenang, kk, jj, ii - 1) + f0_(m, nuenang, kk, jj + 1, ii - 2) + f0_(m, nuenang, kk, jj + 1, ii - 1)
+                                 + f0_(m, nuenang, kk + 1, jj, ii - 2) + f0_(m, nuenang, kk + 1, jj, ii - 1) + f0_(m, nuenang, kk + 1, jj + 1, ii - 2)
+                                 + f0_(m, nuenang, kk + 1, jj + 1, ii - 1));
               auto f0_cellavg_px = (1.0 / 8.0)
-                                   * (f0_(m, enang, kk, jj, ii + 2) + f0_(m, enang, kk, jj, ii + 3) + f0_(m, enang, kk, jj + 1, ii + 2) + f0_(m, enang, kk, jj + 1, ii + 3)
-                                      + f0_(m, enang, kk + 1, jj, ii + 2) + f0_(m, enang, kk + 1, jj, ii + 3) + f0_(m, enang, kk + 1, jj + 1, ii + 2)
-                                      + f0_(m, enang, kk + 1, jj + 1, ii + 3));
+                                   * (f0_(m, nuenang, kk, jj, ii + 2) + f0_(m, nuenang, kk, jj, ii + 3) + f0_(m, nuenang, kk, jj + 1, ii + 2) + f0_(m, nuenang, kk, jj + 1, ii + 3)
+                                      + f0_(m, nuenang, kk + 1, jj, ii + 2) + f0_(m, nuenang, kk + 1, jj, ii + 3) + f0_(m, nuenang, kk + 1, jj + 1, ii + 2)
+                                      + f0_(m, nuenang, kk + 1, jj + 1, ii + 3));
               auto f0_cellavg_my = (1.0 / 8.0)
-                                   * (f0_(m, enang, kk, jj - 2, ii) + f0_(m, enang, kk, jj - 2, ii + 1) + f0_(m, enang, kk, jj - 1, ii) + f0_(m, enang, kk, jj - 1, ii + 1)
-                                      + f0_(m, enang, kk + 1, jj - 2, ii) + f0_(m, enang, kk + 1, jj - 2, ii + 1) + f0_(m, enang, kk + 1, jj - 1, ii)
-                                      + f0_(m, enang, kk + 1, jj - 1, ii + 1));
+                                   * (f0_(m, nuenang, kk, jj - 2, ii) + f0_(m, nuenang, kk, jj - 2, ii + 1) + f0_(m, nuenang, kk, jj - 1, ii) + f0_(m, nuenang, kk, jj - 1, ii + 1)
+                                      + f0_(m, nuenang, kk + 1, jj - 2, ii) + f0_(m, nuenang, kk + 1, jj - 2, ii + 1) + f0_(m, nuenang, kk + 1, jj - 1, ii)
+                                      + f0_(m, nuenang, kk + 1, jj - 1, ii + 1));
               auto f0_cellavg_py = (1.0 / 8.0)
-                                   * (f0_(m, enang, kk, jj + 2, ii) + f0_(m, enang, kk, jj + 2, ii + 1) + f0_(m, enang, kk, jj + 3, ii) + f0_(m, enang, kk, jj + 3, ii + 1)
-                                      + f0_(m, enang, kk + 1, jj + 2, ii) + f0_(m, enang, kk + 1, jj + 2, ii + 1) + f0_(m, enang, kk + 1, jj + 3, ii)
-                                      + f0_(m, enang, kk + 1, jj + 3, ii + 1));
+                                   * (f0_(m, nuenang, kk, jj + 2, ii) + f0_(m, nuenang, kk, jj + 2, ii + 1) + f0_(m, nuenang, kk, jj + 3, ii) + f0_(m, nuenang, kk, jj + 3, ii + 1)
+                                      + f0_(m, nuenang, kk + 1, jj + 2, ii) + f0_(m, nuenang, kk + 1, jj + 2, ii + 1) + f0_(m, nuenang, kk + 1, jj + 3, ii)
+                                      + f0_(m, nuenang, kk + 1, jj + 3, ii + 1));
               auto f0_cellavg_mz = (1.0 / 8.0)
-                                   * (f0_(m, enang, kk - 2, jj, ii) + f0_(m, enang, kk - 2, jj, ii + 1) + f0_(m, enang, kk - 2, jj + 1, ii) + f0_(m, enang, kk - 2, jj + 1, ii + 1)
-                                      + f0_(m, enang, kk - 1, jj, ii) + f0_(m, enang, kk - 1, jj, ii + 1) + f0_(m, enang, kk - 1, jj + 1, ii) +
-                                      f0_(m, enang, kk - 1, jj + 1, ii + 1));
+                                   * (f0_(m, nuenang, kk - 2, jj, ii) + f0_(m, nuenang, kk - 2, jj, ii + 1) + f0_(m, nuenang, kk - 2, jj + 1, ii) + f0_(m, nuenang, kk - 2, jj + 1, ii + 1)
+                                      + f0_(m, nuenang, kk - 1, jj, ii) + f0_(m, nuenang, kk - 1, jj, ii + 1) + f0_(m, nuenang, kk - 1, jj + 1, ii) +
+                                      f0_(m, nuenang, kk - 1, jj + 1, ii + 1));
               auto f0_cellavg_pz = (1.0 / 8.0)
-                                   * (f0_(m, enang, kk + 2, jj, ii) + f0_(m, enang, kk + 2, jj, ii + 1) + f0_(m, enang, kk + 2, jj + 1, ii) + f0_(m, enang, kk + 2, jj + 1, ii + 1)
-                                      + f0_(m, enang, kk + 3, jj, ii) + f0_(m, enang, kk + 3, jj, ii + 1) + f0_(m, enang, kk + 3, jj + 1, ii) +
-                                      f0_(m, enang, kk + 3, jj + 1, ii + 1));
+                                   * (f0_(m, nuenang, kk + 2, jj, ii) + f0_(m, nuenang, kk + 2, jj, ii + 1) + f0_(m, nuenang, kk + 2, jj + 1, ii) + f0_(m, nuenang, kk + 2, jj + 1, ii + 1)
+                                      + f0_(m, nuenang, kk + 3, jj, ii) + f0_(m, nuenang, kk + 3, jj, ii + 1) + f0_(m, nuenang, kk + 3, jj + 1, ii) +
+                                      f0_(m, nuenang, kk + 3, jj + 1, ii + 1));
 
               auto dminusx = (f0_cellavg - f0_cellavg_mx) / (2.0 * mbsize.d_view(m).dx1);
               auto dplusx = (f0_cellavg_px - f0_cellavg) / (2.0 * mbsize.d_view(m).dx1);
-              auto islopex = 2.0 * (f0_(m, enang, kk, jj, ii + 1) - f0_(m, enang, kk, jj, ii) + f0_(m, enang, kk, jj + 1, ii + 1) - f0_(m, enang, kk, jj + 1, ii)
-                                    + f0_(m, enang, kk + 1, jj, ii + 1) - f0_(m, enang, kk + 1, jj, ii) + f0_(m, enang, kk + 1, jj + 1, ii + 1) - f0_(m, enang, kk + 1, jj + 1, ii))
+              auto islopex = 2.0 * (f0_(m, nuenang, kk, jj, ii + 1) - f0_(m, nuenang, kk, jj, ii) + f0_(m, nuenang, kk, jj + 1, ii + 1) - f0_(m, nuenang, kk, jj + 1, ii)
+                                    + f0_(m, nuenang, kk + 1, jj, ii + 1) - f0_(m, nuenang, kk + 1, jj, ii) + f0_(m, nuenang, kk + 1, jj + 1, ii + 1) - f0_(m, nuenang, kk + 1, jj + 1, ii))
                              / (2.0 * 2.0 * 2.0 * mbsize.d_view(m).dx1);
 
               auto dminusy = (f0_cellavg - f0_cellavg_my) / (2.0 * mbsize.d_view(m).dx2);
               auto dplusy = (f0_cellavg_py - f0_cellavg) / (2.0 * mbsize.d_view(m).dx2);
-              auto islopey = 2.0 * (f0_(m, enang, kk, jj + 1, ii) - f0_(m, enang, kk, jj, ii) + f0_(m, enang, kk, jj + 1, ii + 1) - f0_(m, enang, kk, jj, ii + 1)
-                                    + f0_(m, enang, kk + 1, jj + 1, ii) - f0_(m, enang, kk + 1, jj, ii) + f0_(m, enang, kk + 1, jj + 1, ii + 1) - f0_(m, enang, kk + 1, jj, ii + 1))
+              auto islopey = 2.0 * (f0_(m, nuenang, kk, jj + 1, ii) - f0_(m, nuenang, kk, jj, ii) + f0_(m, nuenang, kk, jj + 1, ii + 1) - f0_(m, nuenang, kk, jj, ii + 1)
+                                    + f0_(m, nuenang, kk + 1, jj + 1, ii) - f0_(m, nuenang, kk + 1, jj, ii) + f0_(m, nuenang, kk + 1, jj + 1, ii + 1) - f0_(m, nuenang, kk + 1, jj, ii + 1))
                              / (2.0 * 2.0 * 2.0 * mbsize.d_view(m).dx2);
 
               auto dminusz = (f0_cellavg - f0_cellavg_mz) / (2.0 * mbsize.d_view(m).dx3);
               auto dplusz = (f0_cellavg_pz - f0_cellavg) / (2.0 * mbsize.d_view(m).dx3);
-              auto islopez = 2.0 * (f0_(m, enang, kk + 1, jj, ii) - f0_(m, enang, kk, jj, ii) + f0_(m, enang, kk + 1, jj, ii + 1) - f0_(m, enang, kk, jj, ii + 1)
-                                    + f0_(m, enang, kk + 1, jj + 1, ii) - f0_(m, enang, kk, jj + 1, ii) + f0_(m, enang, kk + 1, jj + 1, ii + 1) - f0_(m, enang, kk, jj, ii + 1))
+              auto islopez = 2.0 * (f0_(m, nuenang, kk + 1, jj, ii) - f0_(m, nuenang, kk, jj, ii) + f0_(m, nuenang, kk + 1, jj, ii + 1) - f0_(m, nuenang, kk, jj, ii + 1)
+                                    + f0_(m, nuenang, kk + 1, jj + 1, ii) - f0_(m, nuenang, kk, jj + 1, ii) + f0_(m, nuenang, kk + 1, jj + 1, ii + 1) - f0_(m, nuenang, kk, jj, ii + 1))
                              / (2.0 * 2.0 * 2.0 * mbsize.d_view(m).dx3);
 
               auto sigmax = slope_limiter(islopex, dminusx, dplusx, limiter_dg_minmod_type_);
@@ -346,14 +346,14 @@ TaskStatus RadiationFEMN::ApplyLimiterDG(Driver *pdriver, int stage) {
               auto ymean = 0.5 * (xjj + xjjp1);
               auto zmean = 0.5 * (xkk + xkkp1);
 
-              ftemp_(m, enang, kk, jj, ii) = f0_cellavg + sigmax * (xii - xmean) + sigmay * (xjj - ymean) + sigmaz * (xkk - zmean);
-              ftemp_(m, enang, kk, jj, ii + 1) = f0_cellavg + sigmax * (xiip1 - xmean) + sigmay * (xjj - ymean) + sigmaz * (xkk - zmean);
-              ftemp_(m, enang, kk, jj + 1, ii) = f0_cellavg + sigmax * (xii - xmean) + sigmay * (xjjp1 - ymean) + sigmaz * (xkk - zmean);
-              ftemp_(m, enang, kk, jj + 1, ii + 1) = f0_cellavg + sigmax * (xiip1 - xmean) + sigmay * (xjjp1 - ymean) + sigmaz * (xkk - zmean);
-              ftemp_(m, enang, kk + 1, jj, ii) = f0_cellavg + sigmax * (xii - xmean) + sigmay * (xjj - ymean) + sigmaz * (xkkp1 - zmean);
-              ftemp_(m, enang, kk + 1, jj, ii + 1) = f0_cellavg + sigmax * (xiip1 - xmean) + sigmay * (xjj - ymean) + sigmaz * (xkkp1 - zmean);
-              ftemp_(m, enang, kk + 1, jj + 1, ii) = f0_cellavg + sigmax * (xii - xmean) + sigmay * (xjjp1 - ymean) + sigmaz * (xkkp1 - zmean);
-              ftemp_(m, enang, kk + 1, jj + 1, ii + 1) = f0_cellavg + sigmax * (xiip1 - xmean) + sigmay * (xjjp1 - ymean) + sigmaz * (xkkp1 - zmean);
+              ftemp_(m, nuenang, kk, jj, ii) = f0_cellavg + sigmax * (xii - xmean) + sigmay * (xjj - ymean) + sigmaz * (xkk - zmean);
+              ftemp_(m, nuenang, kk, jj, ii + 1) = f0_cellavg + sigmax * (xiip1 - xmean) + sigmay * (xjj - ymean) + sigmaz * (xkk - zmean);
+              ftemp_(m, nuenang, kk, jj + 1, ii) = f0_cellavg + sigmax * (xii - xmean) + sigmay * (xjjp1 - ymean) + sigmaz * (xkk - zmean);
+              ftemp_(m, nuenang, kk, jj + 1, ii + 1) = f0_cellavg + sigmax * (xiip1 - xmean) + sigmay * (xjjp1 - ymean) + sigmaz * (xkk - zmean);
+              ftemp_(m, nuenang, kk + 1, jj, ii) = f0_cellavg + sigmax * (xii - xmean) + sigmay * (xjj - ymean) + sigmaz * (xkkp1 - zmean);
+              ftemp_(m, nuenang, kk + 1, jj, ii + 1) = f0_cellavg + sigmax * (xiip1 - xmean) + sigmay * (xjj - ymean) + sigmaz * (xkkp1 - zmean);
+              ftemp_(m, nuenang, kk + 1, jj + 1, ii) = f0_cellavg + sigmax * (xii - xmean) + sigmay * (xjjp1 - ymean) + sigmaz * (xkkp1 - zmean);
+              ftemp_(m, nuenang, kk + 1, jj + 1, ii + 1) = f0_cellavg + sigmax * (xiip1 - xmean) + sigmay * (xjjp1 - ymean) + sigmaz * (xkkp1 - zmean);
             });
   }
 

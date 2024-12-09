@@ -47,6 +47,7 @@ RadiationFEMN::RadiationFEMN(MeshBlockPack *ppack, ParameterInput *pin) :
     F_matrix("FnumuihatAB", 1, 1, 1, 1, 1),
     Q_matrix("QmuhatA", 1, 1),
     Ven_matrix("Venmatrix", 1, 1),
+    Veninv_matrix("Veninvmatrix", 1, 1),
     Wen_matrix("Wenmatrix", 1, 1),
     beam_source_1_vals("beam_source_1_vals", 1),
     beam_source_2_vals("beam_source_2_vals", 1),
@@ -228,8 +229,10 @@ RadiationFEMN::RadiationFEMN(MeshBlockPack *ppack, ParameterInput *pin) :
 
   // compute the matrices for energy (change this @TODO)
   Kokkos::realloc(Ven_matrix, num_energy_bins, num_energy_bins);
+  Kokkos::realloc(Veninv_matrix, num_energy_bins, num_energy_bins);
   Kokkos::realloc(Wen_matrix, num_energy_bins, num_energy_bins);
   Ven_matrix(0,0) = -2.;
+  Veninv_matrix(0,0) = -1./2.;
   Wen_matrix(0,0) = 3.;
 
   // --------------------------------------------------------------------------------------------------------------------------

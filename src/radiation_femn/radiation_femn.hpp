@@ -158,6 +158,7 @@ class RadiationFEMN {
   // energy grid matrices
   DvceArray1D<Real> energy_grid;             // energy grid array
   DvceArray2D<Real> Ven_matrix;              // V_m^n matrix
+  DvceArray2D<Real> Veninv_matrix;           // Invese of V
   DvceArray2D<Real> Wen_matrix;              // W_m^m matrix (containing energy basis derivatives)
 
 

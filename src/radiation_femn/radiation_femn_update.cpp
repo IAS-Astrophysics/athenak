@@ -38,7 +38,7 @@ TaskStatus RadiationFEMN::ExpRKUpdate(Driver *pdriver, int stage) {
   int &num_points_ = pmy_pack->pradfemn->num_points;
   int &num_energy_bins_ = pmy_pack->pradfemn->num_energy_bins;
   int &num_species_ = pmy_pack->pradfemn->num_species;
-  int num_species_energy = num_species_ * num_energy_bins_;
+  int nnu1 = num_species_ - 1;
   Real &rad_E_floor_ = pmy_pack->pradfemn->rad_E_floor;
   Real &rad_eps_ = pmy_pack->pradfemn->rad_eps;
 
@@ -68,6 +68,323 @@ TaskStatus RadiationFEMN::ExpRKUpdate(Driver *pdriver, int stage) {
       + ScrArray1D<Real>::shmem_size(num_points_) * 8
       + ScrArray1D<Real>::shmem_size(4 * 4 * 4) * 2;
   int scr_level = 0;
+  par_for_outer("radiation_femn_update", DevExeSpace(), scr_size, scr_level,
+                0, nmb1, 0, nnu1, ks, ke, js, je, is, ie,
+                KOKKOS_LAMBDA(TeamMember_t member, int m, int nu, int k, int j, int i) {
+
+                  if (rad_mask_array_(m, k, j, i)) {
+                    // rhs array
+                    auto g_rhs_scratch =
+                        ScrArray2D<Real>(member.team_scratch(scr_level), num_energy_bins_, num_points_);
+
+                    // compute metric, its inverse and sqrt(-determinant)
+                    Real g_dd[16];
+                    Real g_uu[16];
+                    adm::SpacetimeMetric(adm.alpha(m, k, j, i),
+                                         adm.beta_u(m, 0, k, j, i),
+                                         adm.beta_u(m, 1, k, j, i),
+                                         adm.beta_u(m, 2, k, j, i),
+                                         adm.g_dd(m, 0, 0, k, j, i),
+                                         adm.g_dd(m, 0, 1, k, j, i),
+                                         adm.g_dd(m, 0, 2, k, j, i),
+                                         adm.g_dd(m, 1, 1, k, j, i),
+                                         adm.g_dd(m, 1, 2, k, j, i),
+                                         adm.g_dd(m, 2, 2, k, j, i),
+                                         g_dd);
+                    adm::SpacetimeUpperMetric(adm.alpha(m, k, j, i),
+                                              adm.beta_u(m, 0, k, j, i),
+                                              adm.beta_u(m, 1, k, j, i),
+                                              adm.beta_u(m, 2, k, j, i),
+                                              adm.g_dd(m, 0, 0, k, j, i),
+                                              adm.g_dd(m, 0, 1, k, j, i),
+                                              adm.g_dd(m, 0, 2, k, j, i),
+                                              adm.g_dd(m, 1, 1, k, j, i),
+                                              adm.g_dd(m, 1, 2, k, j, i),
+                                              adm.g_dd(m, 2, 2, k, j, i),
+                                              g_uu);
+                    Real sqrt_det_g_ijk = adm.alpha(m, k, j, i)
+                        * Kokkos::sqrt(adm::SpatialDet(adm.g_dd(m, 0, 0, k, j, i),
+                                                       adm.g_dd(m, 0, 1, k, j, i),
+                                                       adm.g_dd(m, 0, 2, k, j, i),
+                                                       adm.g_dd(m, 1, 1, k, j, i),
+                                                       adm.g_dd(m, 1, 2, k, j, i),
+                                                       adm.g_dd(m, 2, 2, k, j, i)));
+
+                    Real deltax[3] = {1 / mbsize.d_view(m).dx1, 1 / mbsize.d_view(m).dx2,
+                                      1 / mbsize.d_view(m).dx3};
+
+                    // lapse derivatives (\p_mu alpha)
+                    Real dtalpha_d = 0.; // time derivatives, get from z4c
+                    AthenaScratchTensor<Real, TensorSymm::NONE, 3, 1> dalpha_d;
+                    dalpha_d(0) = Dx<NGHOST>(0, deltax, adm.alpha, m, k, j, i);
+                    dalpha_d(1) =
+                        (multi_d) ? Dx<NGHOST>(1, deltax, adm.alpha, m, k, j, i) : 0.;
+                    dalpha_d(2) =
+                        (three_d) ? Dx<NGHOST>(2, deltax, adm.alpha, m, k, j, i) : 0.;
+
+                    // shift derivatives (\p_mu beta^i)
+                    Real dtbetax_du = 0.; // time derivatives, get from z4c
+                    Real dtbetay_du = 0.;
+                    Real dtbetaz_du = 0.;
+                    Real dtbeta_du[3] = {dtbetax_du, dtbetay_du, dtbetaz_du};
+                    AthenaScratchTensor<Real, TensorSymm::NONE, 3, 2>
+                        dbeta_du; // spatial derivatives
+                    for (int a = 0; a < 3; ++a) {
+                      dbeta_du(0, a) = Dx<NGHOST>(0, deltax, adm.beta_u, m, a, k, j, i);
+                      dbeta_du(1, a) =
+                          (multi_d) ? Dx<NGHOST>(1, deltax, adm.beta_u, m, a, k, j, i)
+                                    : 0.;
+                      dbeta_du(2, a) =
+                          (three_d) ? Dx<NGHOST>(2, deltax, adm.beta_u, m, a, k, j, i)
+                                    : 0.;
+                    }
+
+                    // covariant shift (beta_i)
+                    Real betax_d = 0;
+                    Real betay_d = 0;
+                    Real betaz_d = 0;
+                    for (int a = 0; a < 3; ++a) {
+                      betax_d += adm.g_dd(m, 0, a, k, j, i) * adm.beta_u(m, a, k, j, i);
+                      betay_d += adm.g_dd(m, 1, a, k, j, i) * adm.beta_u(m, a, k, j, i);
+                      betaz_d += adm.g_dd(m, 2, a, k, j, i) * adm.beta_u(m, a, k, j, i);
+                    }
+                    Real beta_d[3] = {betax_d, betay_d, betaz_d};
+
+                    // derivatives of spatial metric (\p_mu g_ij)
+                    AthenaScratchTensor<Real, TensorSymm::SYM2, 3, 2> dtg_dd;
+                    AthenaScratchTensor<Real, TensorSymm::SYM2, 3, 3> dg_ddd;
+                    for (int a = 0; a < 3; ++a) {
+                      for (int b = 0; b < 3; ++b) {
+                        dtg_dd(a, b) = 0.; // time derivatives, get from z4c
+                        dg_ddd(0, a, b) =
+                            Dx<NGHOST>(0, deltax, adm.g_dd, m, a, b, k, j, i);
+                        dg_ddd(1, a, b) =
+                            (multi_d) ? Dx<NGHOST>(1, deltax, adm.g_dd, m, a, b, k, j, i)
+                                      : 0.;
+                        dg_ddd(2, a, b) =
+                            (three_d) ? Dx<NGHOST>(2, deltax, adm.g_dd, m, a, b, k, j, i)
+                                      : 0.;
+                      }
+                    }
+
+                    // derivatives of the 4-metric: time derivatives
+                    AthenaScratchTensor4d<Real, TensorSymm::SYM2, 4, 3> dg4_ddd;
+                    dg4_ddd(0, 0, 0) = -2. * adm.alpha(m, k, j, i) * dtalpha_d;
+                    for (int a = 0; a < 3; ++a) {
+                      dg4_ddd(0, 0, 0) += 2. * beta_d[a] * dtbeta_du[a];
+                      dg4_ddd(0, a + 1, 0) = 0;
+                      for (int b = 0; b < 3; ++b) {
+                        dg4_ddd(0, 0, 0) += dtg_dd(a, b)
+                            * adm.beta_u(m, a, k, j, i)
+                            * adm.beta_u(m, b, k, j, i);
+                        dg4_ddd(0, a + 1, 0) += dtg_dd(a, b) * adm.beta_u(m, b, k, j, i)
+                            + adm.g_dd(m, a, b, k, j, i) * dtbeta_du[b];
+                        dg4_ddd(0, a + 1, b + 1) = dtg_dd(a, b);
+                      }
+                    }
+
+                    // derivatives of the 4-metric: spatial derivatives
+                    for (int c = 0; c < 3; c++) {
+                      dg4_ddd(c + 1, 0, 0) = -2. * adm.alpha(m, k, j, i) * dalpha_d(c);
+                      for (int a = 0; a < 3; ++a) {
+                        dg4_ddd(c + 1, 0, 0) += 2. * beta_d[a] * dbeta_du(c, a);
+                        dg4_ddd(c + 1, a + 1, 0) = 0;
+                        for (int b = 0; b < 3; ++b) {
+                          dg4_ddd(c + 1, 0, 0) += dg_ddd(c, a, b)
+                              * adm.beta_u(m, a, k, j, i)
+                              * adm.beta_u(m, b, k, j, i);
+                          dg4_ddd(c + 1, a + 1, 0) +=
+                              dg_ddd(c, a, b) * adm.beta_u(m, b, k, j, i)
+                                  + adm.g_dd(m, a, b, k, j, i) * dbeta_du(c, b);
+                          dg4_ddd(c + 1, a + 1, b + 1) = dg_ddd(c, a, b);
+                        }
+                      }
+                    }
+
+                    // 4-Christoeffel symbols
+                    AthenaScratchTensor4d<Real, TensorSymm::SYM2, 4, 3> Gamma_udd;
+                    for (int a = 0; a < 4; ++a) {
+                      for (int b = 0; b < 4; ++b) {
+                        for (int c = 0; c < 4; ++c) {
+                          Gamma_udd(a, b, c) = 0.0;
+                          for (int d = 0; d < 4; ++d) {
+                            Gamma_udd(a, b, c) += 0.5 * g_uu[a + 4 * d]
+                                * (dg4_ddd(b, d, c)
+                                    + dg4_ddd(c, b, d)
+                                    - dg4_ddd(d, b, c));
+                          }
+                        }
+                      }
+                    }
+
+                    // Ricci rotation coefficients
+                    AthenaScratchTensor4d<Real, TensorSymm::NONE, 4, 3> Gamma_fluid_udd;
+                    for (int a = 0; a < 4; ++a) {
+                      for (int b = 0; b < 4; ++b) {
+                        for (int c = 0; c < 4; ++c) {
+                          Gamma_fluid_udd(a, b, c) = 0.0;
+                          for (int ac_idx = 0; ac_idx < 4 * 4; ++ac_idx) {
+                            const int a_idx = static_cast<int>(ac_idx / 4);
+                            const int c_idx = ac_idx - a_idx * 4;
+
+                            // compute inverse tetrad
+                            Real sign_factor = (a == 0) ? -1. : +1.;
+                            Real tetr_a_aidx = 0;
+                            for (int d_idx = 0; d_idx < 4; ++d_idx) {
+                              tetr_a_aidx += sign_factor * g_dd[a_idx + 4 * d_idx]
+                                  * tetr_mu_muhat0_(m, d_idx, a, k, j, i);
+                            }
+
+                            for (int b_idx = 0; b_idx < 4; ++b_idx) {
+                              Gamma_fluid_udd(a, b, c) += tetr_a_aidx
+                                  * tetr_mu_muhat0_(m, c_idx, c, k, j, i)
+                                  * tetr_mu_muhat0_(m, b_idx, b, k, j, i)
+                                  * Gamma_udd(a_idx, b_idx, c_idx);
+                            }
+
+                            Real dtetr_mu_muhat_d[4];
+                            dtetr_mu_muhat_d[0] = 0.; // no time derivatives currently
+                            dtetr_mu_muhat_d[1] =
+                                Dx<NGHOST>(0, deltax, tetr_mu_muhat0_, m, a_idx, b,
+                                           k, j, i);
+                            dtetr_mu_muhat_d[2] =
+                                (multi_d) ? Dx<NGHOST>(1, deltax, tetr_mu_muhat0_, m,
+                                                       a_idx, b, k, j, i) : 0.;
+                            dtetr_mu_muhat_d[3] =
+                                (three_d) ? Dx<NGHOST>(2, deltax, tetr_mu_muhat0_,
+                                                       m, a_idx, b, k, j, i) : 0.;
+                            Gamma_fluid_udd(a, b, c) += tetr_a_aidx
+                                * tetr_mu_muhat0_(m, c_idx, c, k, j, i)
+                                * dtetr_mu_muhat_d[c_idx];
+                          }
+                        }
+                      }
+                    }
+                    member.team_barrier();
+
+                    // Compute F Gam and G Gam matrices
+                    ScrArray2D<Real> f_gam =
+                        ScrArray2D<Real>(member.team_scratch(scr_level), num_points_,
+                                         num_points_);
+                    ScrArray2D<Real> g_gam =
+                        ScrArray2D<Real>(member.team_scratch(scr_level), num_points_,
+                                         num_points_);
+
+                    par_for_inner(member, 0, num_points_ * num_points_ - 1,
+                                  [&](const int idx) {
+                                    const int row = static_cast<int>(idx / num_points_);
+                                    const int col = idx - row * num_points_;
+
+                                    Real sum_fgam = 0.;
+                                    Real sum_ggam = 0.;
+                                    for (int inumu = 0; inumu < 48; inumu++) {
+                                      RadiationFEMNPhaseIndices idx_numui =
+                                          IndicesComponent(inumu, 4, 4, 3);
+                                      int id_i = idx_numui.nuidx;
+                                      int id_nu = idx_numui.enidx;
+                                      int id_mu = idx_numui.angidx;
+
+                                      sum_fgam +=
+                                          f_matrix(id_nu, id_mu, id_i, row, col)
+                                              * Gamma_fluid_udd(id_i + 1, id_nu, id_mu);
+                                      sum_ggam +=
+                                          g_matrix(id_nu, id_mu, id_i, row, col)
+                                              * Gamma_fluid_udd(id_i + 1, id_nu, id_mu);
+                                    }
+                                    f_gam(row, col) = sum_fgam;
+                                    g_gam(row, col) = sum_ggam;
+                                  });
+                    member.team_barrier();
+
+                    // calculate spatial derivative term
+                    par_for_inner(member, 0, num_energy_bins_*num_points_ - 1,
+                      [&](const int ennB){
+                        const int enn = static_cast<int>(ennB / num_points_);
+                        const int B = ennB - enn * num_points_;
+
+                        const int nuenangidx = IndicesUnited(nu, enn, B,
+                                                              num_species_, num_energy_bins_, num_points_);
+
+                        Real divf_s = flx1(m, nuenangidx, k, j, i) / (2. * mbsize.d_view(m).dx1);
+                        if (multi_d) {
+                          divf_s += flx2(m, nuenangidx, k, j, i) / (2. * mbsize.d_view(m).dx2);
+                        }
+                        if (three_d) {
+                          divf_s += flx3(m, nuenangidx, k, j, i) / (2. * mbsize.d_view(m).dx3);
+                        }
+
+                        Real fval = 0;
+                        for (int idx_a = 0; idx_a < num_points_; idx_a++) {
+                          for (int idx_m = 0; idx_m < num_species_; idx_m++) {
+                            for (int idx_muhat = 0; idx_muhat < 4; idx_muhat++) {
+                              const int nuenangidx_a =
+                                IndicesUnited(nu, idx_m, idx_a, num_species_,
+                                              num_energy_bins_, num_points_);
+                                fval += Ven_matrix(idx_m, enn)
+                                        * tetr_mu_muhat0_(m, 0, idx_muhat, k, j, i)
+                                        * p_matrix(idx_muhat, idx_a, B)
+                                        * f1_(m, nuenangidx_a, k, j, i);
+                            }
+                          }
+                        }
+
+                        Real momentum_term = 0.;
+                        for (int idx_a = 0; idx_a < num_points_; idx_a++) {
+                          for (int idx_m = 0; idx_m < num_energy_bins_; idx_m++) {
+                            int idxunited_am = IndicesUnited(nu, idx_m, idx_a,
+                                                              num_species_,
+                                                              num_energy_bins_, num_points_);
+                            momentum_term += - g_gam(idx_a, B) * Ven_matrix(idx_m, enn) * f0_(m, idxunited_am, k, j, i)
+                                             - f_gam(idx_a, B) * Wen_matrix(idx_m, enn) * f0_(m, idxunited_am, k, j, i);
+                          }
+                        }
+
+                        g_rhs_scratch(enn, B) = fval + beta_dt * divf_s
+                                                + beta_dt * momentum_term
+                                                + sqrt_det_g_ijk * beta_dt * eta_(m, k, j, i) * e_source_(B);
+                    });
+                    member.team_barrier();
+
+                    for (int idx_n=0; idx_n < num_energy_bins_; idx_n++) {
+                      auto Q_matrix =
+                        ScrArray2D<Real>(member.team_scratch(scr_level), num_points_,
+                                         num_points_);
+                      auto lu_matrix =
+                        ScrArray2D<Real>(member.team_scratch(scr_level), num_points_,
+                                         num_points_);
+                      auto x_array =
+                          ScrArray1D<Real>(member.team_scratch(scr_level), num_points_);
+                      auto pivots =
+                        ScrArray1D<int>(member.team_scratch(scr_level), num_points_ - 1);
+
+                      // @TODO: fix from here
+                      /*
+                      par_for_inner(member, 0, num_points_ * num_points_ - 1,
+                                    [&](const int idx)
+                                    {
+                                      int row = int(idx / num_points_);
+                                      int col = idx - row * num_points_;
+
+                                      Real sum_val = 0;
+                                      for (int id_i = 0; id_i < 4; ++id_i) {
+                                        sum_val += tetr_mu_muhat0_(m, 0, id_i, k, j, i)
+                                          * p_matrix(id_i, row, col);
+                                      }
+                                      Q_matrix(row, col) = sum_val
+                                        + beta_dt
+                                        * (kappa_s_(m, k, j, i)
+                                          + kappa_a_(m, k, j, i))
+                                        * p_matrix(0, row, col) / Ven
+                                        - beta_dt
+                                        * (1. / (4. * M_PI))
+                                        * kappa_s_(m, k, j, i)
+                                        * s_source(row, col) / Ven;
+                                      lu_matrix(row, col) = Q_matrix(row, col);
+                                    });*/
+                    }
+                  }
+                });
+  /*
   par_for_outer("radiation_femn_update", DevExeSpace(), scr_size, scr_level,
                 0, nmb1, 0, num_species_energy - 1, ks, ke, js, je, is, ie,
                 KOKKOS_LAMBDA(TeamMember_t member, int m, int nuen, int k, int j, int i) {
@@ -348,88 +665,6 @@ TaskStatus RadiationFEMN::ExpRKUpdate(Driver *pdriver, int stage) {
                     member.team_barrier();
                     K = sqrt(K);
 
-                    // terms for multi-energy
-                    if (num_energy_bins_ > 1) { /*
-                      ScrArray1D<Real> energy_terms =
-                          ScrArray1D<Real>(member.team_scratch(scr_level), num_points_);
-
-                      par_for_inner(member, 0, num_points_ - 1, [&](const int idx) {
-                        Real part_sum_idx = 0.;
-                        for (int A = 0; A < num_points_; A++) {
-                          int idx_n = IndicesUnited(nu, en, A, num_species_, num_energy_bins_, num_points_);
-                          Real fn = f0_(m, idx_n, k, j, i);
-
-                          int idx_nm1 = IndicesUnited(nu, en - 1, A, num_species_, num_energy_bins_, num_points_);
-                          Real fnm1 = (en - 1 >= 0 && en - 1 < num_energy_bins_) ?
-                                      f0_(m, idx_nm1, k, j, i) : 0.;
-
-                          int idx_nm2 = IndicesUnited(nu, en - 2, A, num_species_, num_energy_bins_, num_points_);
-                          Real fnm2 = (en - 2 >= 0 && en - 2 < num_energy_bins_) ?
-                                      f0_(m, idx_nm2, k, j, i) : 0.;
-
-                          int idx_np1 = IndicesUnited(nu, en + 1, A, num_species_, num_energy_bins_, num_points_);
-                          Real fnp1 = (en + 1 >= 0 && en + 1 < num_energy_bins_) ?
-                                      f0_(m, idx_np1, k, j, i) : 0.;
-
-                          int idx_np2 = IndicesUnited(nu, en + 2, A, num_species_, num_energy_bins_, num_points_);
-                          Real fnp2 = (en + 2 >= 0 && en + 2 < num_energy_bins_) ?
-                                      f0_(m, idx_np2, k, j, i) : 0.;
-
-                          // {F^A} for n and n+1 th bin
-                          Real f_term1_np1 = 0.5 * (fnp1 + fn);
-                          Real f_term1_n = 0.5 * (fn + fnm1);
-
-                          // [[F^A]] for n and n+1 th bin
-                          Real f_term2_np1 = fn - fnp1;
-                          Real f_term2_n = (fnm1 - fn);
-
-                          // width of energy bin (uniform grid)
-                          Real delta_energy = energy_grid_(1) - energy_grid_(0);
-
-                          Real Dmfn = (fn - fnm1) / delta_energy;
-                          Real Dpfn = (fnp1 - fn) / delta_energy;
-                          Real Dfn = (fnp1 - fnm1) / (2. * delta_energy);
-
-                          Real Dmfnm1 = (fnm1 - fnm2) / delta_energy;
-                          Real Dpfnm1 = (fn - fnm1) / delta_energy;
-                          Real Dfnm1 = (fn - fnm2) / (2. * delta_energy);
-
-                          Real Dmfnp1 = (fnp1 - fn) / delta_energy;
-                          Real Dpfnp1 = (fnp2 - fnp1) / delta_energy;
-                          Real Dfnp1 = (fnp2 - fn) / (2. * delta_energy);
-
-                          Real theta_np12 =
-                              (Dfn < energy_par_ * delta_energy || Dmfn * Dpfn > 0.) ?
-                              0. : 1.;
-                          Real theta_nm12 =
-                              (Dfnm1 < energy_par_ * delta_energy || Dmfnm1 * Dpfnm1 > 0.)
-                              ?
-                              0. : 1.;
-                          Real theta_np32 =
-                              (Dfnp1 < energy_par_ * delta_energy || Dmfnp1 * Dpfnp1 > 0.)
-                              ? 0. : 1.;
-
-                          Real theta_n = (theta_nm12 > theta_np12) ?
-                                         theta_nm12 : theta_np12;
-                          Real theta_np1 = (theta_np12 > theta_np32) ?
-                                           theta_np12 : theta_np32;
-
-                          part_sum_idx +=
-                              (energy_grid(en + 1) * energy_grid(en + 1)
-                                  * energy_grid(en + 1) * (f_gam(A, idx) * f_term1_np1
-                                  + theta_np1 * K * f_term2_np1 / 2.)
-                                  * (en + 1 >= 0 && en + 1 < num_energy_bins_)
-                                  - energy_grid(en) * energy_grid(en) * energy_grid(en)
-                                      * (f_gam(A, idx) * f_term1_n
-                                          + theta_n * K * f_term2_n / 2.))
-                                          * (en >= 0 && en < num_energy_bins_);
-                        }
-                        energy_terms(idx) = part_sum_idx / Ven;
-                      });
-                      member.team_barrier();
-                      for (int idx = 0; idx < num_points_; idx++) {
-                        g_rhs_scratch(idx) += energy_terms(idx);
-                      } */
                     }
 
                     ScrArray2D<Real> Q_matrix =
@@ -488,9 +723,8 @@ TaskStatus RadiationFEMN::ExpRKUpdate(Driver *pdriver, int stage) {
                     member.team_barrier();
                   }
                 }
-  );
+  ); */
 
-  return
-      TaskStatus::complete;
+  return TaskStatus::complete;
 }
 } // namespace radiationfemn
