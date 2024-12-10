@@ -185,9 +185,9 @@ void TurbulenceDriver::Initialize() {
   Real lx = pm->mesh_size.x1max - pm->mesh_size.x1min;
   Real ly = pm->mesh_size.x2max - pm->mesh_size.x2min;
   Real lz = pm->mesh_size.x3max - pm->mesh_size.x3min;
-  dkx = 2.0*M_PI/lx;
-  dky = 2.0*M_PI/ly;
-  dkz = 2.0*M_PI/lz;
+  dkx = 2.0*M_PI_REAL/lx;
+  dky = 2.0*M_PI_REAL/ly;
+  dkz = 2.0*M_PI_REAL/lz;
 
   int nmode = 0;
   int nkx, nky, nkz;
@@ -377,9 +377,9 @@ TaskStatus TurbulenceDriver::InitializeModes(Driver *pdrive, int stage) {
   Real lx = pm->mesh_size.x1max - pm->mesh_size.x1min;
   Real ly = pm->mesh_size.x2max - pm->mesh_size.x2min;
   Real lz = pm->mesh_size.x3max - pm->mesh_size.x3min;
-  dkx = 2.0*M_PI/lx;
-  dky = 2.0*M_PI/ly;
-  dkz = 2.0*M_PI/lz;
+  dkx = 2.0*M_PI_REAL/lx;
+  dky = 2.0*M_PI_REAL/ly;
+  dkz = 2.0*M_PI_REAL/lz;
 
   Real &ex = expo;
   Real &ex_prp = exp_prp;

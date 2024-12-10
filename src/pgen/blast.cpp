@@ -36,7 +36,7 @@ namespace {
 
 KOKKOS_INLINE_FUNCTION
 Real GetCartesianFromSnake(Real w, Real y, Real A, Real k) {
-  return w + A*sin(k*M_PI*y);
+  return w + A*sin(k*M_PI_REAL*y);
 }
 
 KOKKOS_INLINE_FUNCTION
@@ -53,14 +53,14 @@ void GetCartesianFromRipple(Real &x, Real &y, Real w, Real v, Real A, Real k) {
   x = w;
   y = v;
 
-  Real fx = x - w - A*sin(k*M_PI*y);
-  Real fy = y - v - A*sin(k*M_PI*x);
+  Real fx = x - w - A*sin(k*M_PI_REAL*y);
+  Real fy = y - v - A*sin(k*M_PI_REAL*x);
   int its = 0;
   int max_its = 30;
   while ((fabs(fx) > tol || fabs(fy) > tol) && its < max_its) {
     // Auxiliary quantities needed for the root solve.
-    Real delx = A*k*M_PI*cos(k*M_PI*x);
-    Real dely = A*k*M_PI*cos(k*M_PI*y);
+    Real delx = A*k*M_PI_REAL*cos(k*M_PI_REAL*x);
+    Real dely = A*k*M_PI_REAL*cos(k*M_PI_REAL*y);
     Real idet = 1.0/(1.0 - delx*dely);
 
     // Estimate the updated roots (J^-1 f)
@@ -73,8 +73,8 @@ void GetCartesianFromRipple(Real &x, Real &y, Real w, Real v, Real A, Real k) {
     y = (y > yub) ? yub : y;
 
     // Update the function values
-    fx = x - w - A*sin(k*M_PI*y);
-    fy = y - v - A*sin(k*M_PI*x);
+    fx = x - w - A*sin(k*M_PI_REAL*y);
+    fy = y - v - A*sin(k*M_PI_REAL*x);
   }
 }
 

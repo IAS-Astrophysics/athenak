@@ -107,9 +107,9 @@ void ProblemGenerator::Diffusion(ParameterInput *pin, const bool restart) {
       u1(m,IDN,k,j,i) = d0_;
       u1(m,IM1,k,j,i) = 0.0;
       u1(m,IM2,k,j,i) = d0_*amp_*exp(SQR(x1v-x10_)/(-4.0*nu_iso*t1))
-                        /sqrt(4.*M_PI*nu_iso*t1);
+                        /sqrt(4.*M_PI_REAL*nu_iso*t1);
       u1(m,IM3,k,j,i) = d0_*amp_*exp(SQR(x1v-x10_)/(-4.0*nu_iso*t1))
-                        /sqrt(4.*M_PI*nu_iso*t1);
+                        /sqrt(4.*M_PI_REAL*nu_iso*t1);
       if (eos.is_ideal) {
         u1(m,IEN,k,j,i) = p0/gm1 + 0.5*(SQR(u1(m,IM2,k,j,i)) + SQR(u1(m,IM3,k,j,i)))/d0_;
       }
@@ -302,9 +302,9 @@ void GaussianProfile(Mesh *pm) {
         u0(m,IDN,k,j,is-i-1) = d0_;
         u0(m,IM1,k,j,is-i-1) = 0.0;
         u0(m,IM2,k,j,is-i-1) = d0_*amp_*exp(SQR(x1v-x10_)/(-4.0*nu_iso*t1))
-                          /sqrt(4.*M_PI*nu_iso*t1);
+                          /sqrt(4.*M_PI_REAL*nu_iso*t1);
         u0(m,IM3,k,j,is-i-1) = d0_*amp_*exp(SQR(x1v-x10_)/(-4.0*nu_iso*t1))
-                          /sqrt(4.*M_PI*nu_iso*t1);
+                          /sqrt(4.*M_PI_REAL*nu_iso*t1);
         if (eos.is_ideal) {
           u0(m,IEN,k,j,is-i-1) = p0/gm1 +
                                  0.5*(SQR(u0(m,IM2,k,j,i)) + SQR(u0(m,IM3,k,j,i)))/d0_;
@@ -321,9 +321,9 @@ void GaussianProfile(Mesh *pm) {
         u0(m,IDN,k,j,ie+i+1) = d0_;
         u0(m,IM1,k,j,ie+i+1) = 0.0;
         u0(m,IM2,k,j,ie+i+1) = d0_*amp_*exp(SQR(x1v-x10_)/(-4.0*nu_iso*t1))
-                          /sqrt(4.*M_PI*nu_iso*t1);
+                          /sqrt(4.*M_PI_REAL*nu_iso*t1);
         u0(m,IM3,k,j,ie+i+1) = d0_*amp_*exp(SQR(x1v-x10_)/(-4.0*nu_iso*t1))
-                          /sqrt(4.*M_PI*nu_iso*t1);
+                          /sqrt(4.*M_PI_REAL*nu_iso*t1);
         if (eos.is_ideal) {
           u0(m,IEN,k,j,ie+i+1) = p0/gm1 +
                                  0.5*(SQR(u0(m,IM2,k,j,i)) + SQR(u0(m,IM3,k,j,i)))/d0_;

@@ -15,7 +15,7 @@
 KOKKOS_INLINE_FUNCTION
 Real ChebyshevSecondKindCollocationPoints(Real xmin, Real xmax, int N, int k) {
   // over the interval of -1 to 1
-  Real x_k = std::cos( M_PI * (k + 1) / (N + 2));
+  Real x_k = std::cos( M_PI_REAL * (k + 1) / (N + 2));
   return  0.5 * ( (xmin - xmax) * x_k + (xmin + xmax));
 }
 

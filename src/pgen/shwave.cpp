@@ -68,14 +68,14 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     kz = 0.0;
   } else if (ipert == 2) {
     beta = 0.0;
-    kx = (2.0*M_PI/Lx)*static_cast<Real>(pin->GetInteger("problem", "nwx"));
-    ky = (2.0*M_PI/Ly)*static_cast<Real>(pin->GetInteger("problem", "nwy"));
+    kx = (2.0*M_PI_REAL/Lx)*static_cast<Real>(pin->GetInteger("problem", "nwx"));
+    ky = (2.0*M_PI_REAL/Ly)*static_cast<Real>(pin->GetInteger("problem", "nwy"));
     kz = 0.0;
   } else if (ipert == 3) {
     beta = pin->GetReal("problem", "beta");
-    kx = (2.0*M_PI/Lx)*static_cast<Real>(pin->GetInteger("problem", "nwx"));
-    ky = (2.0*M_PI/Ly)*static_cast<Real>(pin->GetInteger("problem", "nwy"));
-    kz = (2.0*M_PI/Lz)*static_cast<Real>(pin->GetInteger("problem", "nwz"));
+    kx = (2.0*M_PI_REAL/Lx)*static_cast<Real>(pin->GetInteger("problem", "nwx"));
+    ky = (2.0*M_PI_REAL/Ly)*static_cast<Real>(pin->GetInteger("problem", "nwy"));
+    kz = (2.0*M_PI_REAL/Lz)*static_cast<Real>(pin->GetInteger("problem", "nwz"));
   }
   int error_output_flag = pin->GetInteger("problem", "error_output");
 

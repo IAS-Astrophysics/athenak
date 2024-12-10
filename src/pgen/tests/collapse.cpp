@@ -53,7 +53,7 @@ void ProblemGenerator::SphericalCollapse(ParameterInput *pin, const bool restart
   collapse.R0   = R0;
 
   // Calculate the base density
-  Real rho0 = mass/(4./3.*M_PI*R0*R0*R0);
+  Real rho0 = mass/(4./3.*M_PI_REAL*R0*R0*R0);
 
   // capture variables for the kernel
   auto &indcs = pmy_mesh_->mb_indcs;
@@ -95,7 +95,7 @@ void ProblemGenerator::SphericalCollapse(ParameterInput *pin, const bool restart
 
     // MHD variables
     if (r < R0) {
-      M = 4./3.*M_PI*r*r*r*rho0;
+      M = 4./3.*M_PI_REAL*r*r*r*rho0;
       w0(m, IDN, k, j, i) = rho0;
     } else {
       w0(m, IDN, k, j, i) = 0.0;

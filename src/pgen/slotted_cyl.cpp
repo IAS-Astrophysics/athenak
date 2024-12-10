@@ -106,8 +106,8 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
 
     // background fluid:
     u0(m,IDN,k,j,i) = d0;
-    u0(m,IM1,k,j,i) = -d0*2.0*M_PI*omega*(x2v - omega_x2)*u0(m,IDN,k,j,i);
-    u0(m,IM2,k,j,i) = d0*2.0*M_PI*omega*(x1v - omega_x1)*u0(m,IDN,k,j,i);
+    u0(m,IM1,k,j,i) = -d0*2.0*M_PI_REAL*omega*(x2v - omega_x2)*u0(m,IDN,k,j,i);
+    u0(m,IM2,k,j,i) = d0*2.0*M_PI_REAL*omega*(x1v - omega_x1)*u0(m,IDN,k,j,i);
     u0(m,IM3,k,j,i) = 0.0;
 
     // Use standard midpoint approximation with cell centered coords:

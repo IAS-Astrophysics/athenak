@@ -30,7 +30,7 @@
 
 KOKKOS_INLINE_FUNCTION
 Real A3(const Real x1, const Real x2, const Real B0) {
-  return (B0/(4.0*M_PI))*(std::cos(4.0*M_PI*x1) - 2.0*std::cos(2.0*M_PI*x2));
+  return (B0/(4.0*M_PI_REAL))*(std::cos(4.0*M_PI_REAL*x1) - 2.0*std::cos(2.0*M_PI_REAL*x2));
 }
 
 //----------------------------------------------------------------------------------------
@@ -50,10 +50,10 @@ void ProblemGenerator::OrszagTang(ParameterInput *pin, const bool restart) {
     exit(EXIT_FAILURE);
   }
 
-  Real B0 = 1.0/std::sqrt(4.0*M_PI);
-  Real d0 = 25.0/(36.0*M_PI);
+  Real B0 = 1.0/std::sqrt(4.0*M_PI_REAL);
+  Real d0 = 25.0/(36.0*M_PI_REAL);
   Real v0 = 1.0;
-  Real p0 = 5.0/(12.0*M_PI);
+  Real p0 = 5.0/(12.0*M_PI_REAL);
 
   // capture variables for kernel
   auto &indcs = pmy_mesh_->mb_indcs;
@@ -81,8 +81,8 @@ void ProblemGenerator::OrszagTang(ParameterInput *pin, const bool restart) {
 
     // compute cell-centered conserved variables
     u0(m,IDN,k,j,i) = d0;
-    u0(m,IM1,k,j,i) =  d0*v0*std::sin(2.0*M_PI*x2v);
-    u0(m,IM2,k,j,i) = -d0*v0*std::sin(2.0*M_PI*x1v);
+    u0(m,IM1,k,j,i) =  d0*v0*std::sin(2.0*M_PI_REAL*x2v);
+    u0(m,IM2,k,j,i) = -d0*v0*std::sin(2.0*M_PI_REAL*x1v);
     u0(m,IM3,k,j,i) = 0.0;
 
     // Compute face-centered fields from curl(A).

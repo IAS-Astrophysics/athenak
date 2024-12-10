@@ -181,7 +181,7 @@ void ProblemGenerator::AlfvenWave(ParameterInput *pin, const bool restart) {
   if (awv.sin_a2 > 0.0) lambda = std::min(lambda, x3size*awv.sin_a2);
 
   // Initialize k_parallel
-  awv.k_par = 2.0*(M_PI)/lambda;
+  awv.k_par = 2.0*(M_PI_REAL)/lambda;
 
   bool right_pol = pin->GetOrAddBoolean("problem","right_polar",true);
   if (right_pol) { // right polarization

@@ -59,9 +59,9 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     exit(EXIT_FAILURE);
   }
 
-  Real kx = 2.0*(M_PI)/(pmy_mesh_->mesh_size.x1max - pmy_mesh_->mesh_size.x1min);
-  Real ky = 2.0*(M_PI)/(pmy_mesh_->mesh_size.x2max - pmy_mesh_->mesh_size.x2min);
-  Real kz = 2.0*(M_PI)/(pmy_mesh_->mesh_size.x3max - pmy_mesh_->mesh_size.x3min);
+  Real kx = 2.0*(M_PI_REAL)/(pmy_mesh_->mesh_size.x1max - pmy_mesh_->mesh_size.x1min);
+  Real ky = 2.0*(M_PI_REAL)/(pmy_mesh_->mesh_size.x2max - pmy_mesh_->mesh_size.x2min);
+  Real kz = 2.0*(M_PI_REAL)/(pmy_mesh_->mesh_size.x3max - pmy_mesh_->mesh_size.x3min);
 
   // Read perturbation amplitude, problem switch, density ratio
   Real amp = pin->GetReal("problem","amp");

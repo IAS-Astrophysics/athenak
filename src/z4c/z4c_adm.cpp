@@ -473,7 +473,7 @@ void Z4c::ADMConstraints(MeshBlockPack *pmbp) {
     //
     con.H(m,k,j,i) = R + SQR(K) - KK;
     if(!is_vacuum) {
-      con.H(m,k,j,i) -= 16*M_PI * tmunu.E(m,k,j,i);
+      con.H(m,k,j,i) -= 16*M_PI_REAL * tmunu.E(m,k,j,i);
     }
     // Momentum constraint (contravariant)
     //
@@ -481,7 +481,7 @@ void Z4c::ADMConstraints(MeshBlockPack *pmbp) {
       M_u(a) = 0.0;
       for(int b = 0; b < 3; ++b) {
         if(!is_vacuum) {
-          M_u(a) -= 8*M_PI * g_uu(a,b) * tmunu.S_d(m,b,k,j,i);
+          M_u(a) -= 8*M_PI_REAL * g_uu(a,b) * tmunu.S_d(m,b,k,j,i);
         }
         for(int c = 0; c < 3; ++c) {
           M_u(a) += g_uu(a,b) * DK_udd(c,b,c);

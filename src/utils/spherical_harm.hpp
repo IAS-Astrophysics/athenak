@@ -42,7 +42,7 @@ void SWSphericalHarm(Real * ylmR, Real * ylmI, int l, int m, int s,
     wignerd += pow((-1),k)*pow(cos(theta/2.0),2*l+m-s-2*k)*pow(sin(theta/2.0),2*k+s-m)
                 /(fac(l+m-k)*fac(l-s-k)*fac(k)*fac(k+s-m));
   }
-  wignerd *= pow((-1),s)*sqrt((2*l+1)/(4*M_PI))*sqrt(fac(l+m))*sqrt(fac(l-m))
+  wignerd *= pow((-1),s)*sqrt((2*l+1)/(4*M_PI_REAL))*sqrt(fac(l+m))*sqrt(fac(l-m))
               *sqrt(fac(l+s))*sqrt(fac(l-s));
   *ylmR = wignerd*cos(m*phi);
   *ylmI = wignerd*sin(m*phi);

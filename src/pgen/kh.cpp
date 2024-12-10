@@ -107,7 +107,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
       pres = 20.0;
       dens = 1.0;
       vx = -vshear*tanh(x2v/sigma);
-      vy = -amp*vshear*sin(2.*M_PI*x1v)*exp( -SQR(x2v/sigma) );
+      vy = -amp*vshear*sin(2.*M_PI_REAL*x1v)*exp( -SQR(x2v/sigma) );
       vz = 0.0;
       scal = 0.0;
       if (x2v > 0.0) scal = 1.0;
@@ -118,7 +118,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
       if(x2v <= 0.0) {
         dens = rho0 - rho1*tanh((x2v+0.5)/a_char);
         vx = -vshear*tanh((x2v+0.5)/a_char);
-        vy = -amp*vshear*sin(2.*M_PI*x1v)*exp( -SQR((x2v+0.5)/sigma) );
+        vy = -amp*vshear*sin(2.*M_PI_REAL*x1v)*exp( -SQR((x2v+0.5)/sigma) );
         if (is_relativistic) {
           u00 = 1.0/sqrt(1.0 - vx*vx - vy*vy);
         }
@@ -128,7 +128,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
       } else {
         dens = rho0 + rho1*tanh((x2v-0.5)/a_char);
         vx = vshear*tanh((x2v-0.5)/a_char);
-        vy = amp*vshear*sin(2.*M_PI*x1v)*exp( -SQR((x2v-0.5)/sigma) );
+        vy = amp*vshear*sin(2.*M_PI_REAL*x1v)*exp( -SQR((x2v-0.5)/sigma) );
         if (is_relativistic) {
           u00 = 1.0/sqrt(1.0 - vx*vx - vy*vy);
         }
@@ -142,11 +142,11 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
       Real a = 0.05;
       dens = 1.0 + 0.5*drho_rho0*(tanh((x2v + 0.5)/a) - tanh((x2v - 0.5)/a));
       vx = vshear*(tanh((x2v + 0.5)/a) - tanh((x2v - 0.5)/a) - 1.0);
-      Real ave_sine = sin(2.*M_PI*x1v);
+      Real ave_sine = sin(2.*M_PI_REAL*x1v);
       if (x1v > 0.0) {
-        ave_sine -= sin(2.*M_PI*(-0.5 + x1v));
+        ave_sine -= sin(2.*M_PI_REAL*(-0.5 + x1v));
       } else {
-        ave_sine -= sin(2.*M_PI*(0.5 + x1v));
+        ave_sine -= sin(2.*M_PI_REAL*(0.5 + x1v));
       }
       ave_sine /= 2.0;
 

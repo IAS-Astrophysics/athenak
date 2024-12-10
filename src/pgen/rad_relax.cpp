@@ -102,7 +102,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
                    nh_c_.d_view(n,3));
 
       // Calculate intensity in fluid frame
-      Real ii_f =  erad/(4.0*M_PI);
+      Real ii_f =  erad/(4.0*M_PI_REAL);
 
       // Calculate intensity in tetrad frame
       Real n0 = tet_c_(m,0,0,k,j,i); Real n_0 = 0.0;

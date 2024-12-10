@@ -153,9 +153,9 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
       Real fn_f = f1_f*n1_f + f2_f*n2_f + f3_f*n3_f;
       Real ii_f = 0.0;
       if (f_f <= 1.0/3.0) {
-        ii_f = ee_f/(4.0*M_PI)*(1.0 + 3.0*f_f*fn_f);
+        ii_f = ee_f/(4.0*M_PI_REAL)*(1.0 + 3.0*f_f*fn_f);
       } else {
-        ii_f = ee_f/(9.0*M_PI)*(fn_f - 3.0*f_f + 2.0)/SQR(1.0 - f_f);
+        ii_f = ee_f/(9.0*M_PI_REAL)*(fn_f - 3.0*f_f + 2.0)/SQR(1.0 - f_f);
       }
 
       // Calculate intensity in tetrad frame

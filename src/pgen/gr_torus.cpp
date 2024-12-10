@@ -224,7 +224,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   torus.rho_pow = pin->GetReal("problem", "rho_pow");
   torus.pgas_min = pin->GetReal("problem", "pgas_min");
   torus.pgas_pow = pin->GetReal("problem", "pgas_pow");
-  torus.psi = pin->GetOrAddReal("problem", "tilt_angle", 0.0) * (M_PI/180.0);
+  torus.psi = pin->GetOrAddReal("problem", "tilt_angle", 0.0) * (M_PI_REAL/180.0);
   torus.sin_psi = sin(torus.psi);
   torus.cos_psi = cos(torus.psi);
   torus.rho_max = pin->GetReal("problem", "rho_max");
@@ -453,7 +453,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
         // Calculate intensity in tetrad frame
         Real n0 = tet_c_(m,0,0,k,j,i); Real n_0 = 0.0;
         for (int d=0; d<4; ++d) {  n_0 += tetcov_c_(m,d,0,k,j,i)*nh_c_.d_view(n,d);  }
-        i0_(m,n,k,j,i) = n0*n_0*(urad/(4.0*M_PI))/SQR(SQR(n0_f));
+        i0_(m,n,k,j,i) = n0*n_0*(urad/(4.0*M_PI_REAL))/SQR(SQR(n0_f));
       }
     }
 
@@ -1109,7 +1109,7 @@ static void CalculateVelocityInTiltedTorus(struct torus_pgen pgen,
   } else {
     sin_vartheta = fabs(sin_theta);
     cos_vartheta = cos_theta;
-    varphi = (sin_theta < 0.0) ? (phi - M_PI) : phi;
+    varphi = (sin_theta < 0.0) ? (phi - M_PI_REAL) : phi;
   }
   Real sin_varphi = sin(varphi);
   Real cos_varphi = cos(varphi);

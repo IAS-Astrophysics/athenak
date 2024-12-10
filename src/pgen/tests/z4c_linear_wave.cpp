@@ -124,8 +124,8 @@ void ProblemGenerator::Z4cLinearWave(ParameterInput *pin, const bool restart) {
         Real x1v = CellCenterX(i - is, nx1, x1min, x1max);
         Real x2v = CellCenterX(j - js, nx2, x2min, x2max);
         Real x3v = CellCenterX(k - ks, nx3, x3min, x3max);
-        Real sinkx = sin(2 * M_PI * (kx1 * x1v + kx2 * x2v + kx3 * x3v));
-        Real coskx = knorm * M_PI * cos(2 * M_PI * (kx1 * x1v + kx2 * x2v + kx3 * x3v));
+        Real sinkx = sin(2 * M_PI_REAL * (kx1 * x1v + kx2 * x2v + kx3 * x3v));
+        Real coskx = knorm * M_PI_REAL * cos(2 * M_PI_REAL * (kx1 * x1v + kx2 * x2v + kx3 * x3v));
 
         u1(m,pz4c->I_Z4C_GXX,k,j,i) = 1 + axx * amp * sinkx;
         u1(m,pz4c->I_Z4C_GXY,k,j,i) = axy * amp * sinkx;

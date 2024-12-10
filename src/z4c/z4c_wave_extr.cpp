@@ -54,8 +54,8 @@ void swsh(Real * ylmR, Real * ylmI, int l, int m, Real theta, Real phi) {
       *pow(std::cos(theta/2.0),2*l+m-2-2*k)*pow(std::sin(theta/2.0),2*k+2-m)
       /(fac(l+m-k)*fac(l-2-k)*fac(k)*fac(k+2-m));
   }
-  *ylmR = sqrt((2*l+1)/(4*M_PI))*wignerd*std::cos(m*phi);
-  *ylmI = sqrt((2*l+1)/(4*M_PI))*wignerd*std::sin(m*phi);
+  *ylmR = sqrt((2*l+1)/(4*M_PI_REAL))*wignerd*std::cos(m*phi);
+  *ylmI = sqrt((2*l+1)/(4*M_PI_REAL))*wignerd*std::sin(m*phi);
 }
 int LmIndex(int l,int m) {
     return l*l+m+l-4;
@@ -101,7 +101,7 @@ void Z4c::WaveExtr(MeshBlockPack *pmbp) {
             // With bitant, under reflection the imaginary part of
             // the weyl scalar should pick a - sign,
             // which is accounted for here.
-            // Real bitant_z_fac = (bitant && theta > M_PI/2) ? -1 : 1;
+            // Real bitant_z_fac = (bitant && theta > M_PI_REAL/2) ? -1 : 1;
             psilmR += weight*(datareal*ylmR + dataim*ylmI);
             psilmI += weight*(dataim*ylmR - datareal*ylmI);
           }

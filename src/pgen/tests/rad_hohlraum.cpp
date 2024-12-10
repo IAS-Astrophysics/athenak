@@ -34,11 +34,11 @@ void ProblemGenerator::Hohlraum(ParameterInput *pin, const bool restart) {
   // set inflow state in BoundaryValues, sync to device
   auto &i_in = pmbp->prad->pbval_i->i_in;
   for (int n=0; n<=nang1; ++n) {
-    i_in.h_view(n,BoundaryFace::inner_x1) = (-1.0/(4.0*M_PI));
+    i_in.h_view(n,BoundaryFace::inner_x1) = (-1.0/(4.0*M_PI_REAL));
   }
   if (n2 > 1) {
     for (int n=0; n<=nang1; ++n) {
-      i_in.h_view(n,BoundaryFace::inner_x2) = (-1.0/(4.0*M_PI));
+      i_in.h_view(n,BoundaryFace::inner_x2) = (-1.0/(4.0*M_PI_REAL));
     }
   }
   i_in.template modify<HostMemSpace>();

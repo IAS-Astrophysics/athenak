@@ -784,9 +784,9 @@ static void RHS(Real r, Real P, Real m, Real alp, Real R, TOVEOS& eos,
   Real e = eos.template GetEFromRho<LocationTag::Host>(rho);
 
   Real A = 1.0/(1.0 - 2.0*m/r);
-  Real B = (m + 4.0*M_PI*r*r*r*P)/SQR(r);
+  Real B = (m + 4.0*M_PI_REAL*r*r*r*P)/SQR(r);
   dP   = -(e + P)*A * B;
-  dm   = 4.0*M_PI*SQR(r)*e;
+  dm   = 4.0*M_PI_REAL*SQR(r)*e;
   dalp = alp*A * B;
   dR   = R/r*sqrt(A);
 }

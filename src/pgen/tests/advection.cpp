@@ -106,7 +106,7 @@ void ProblemGenerator::Advection(ParameterInput *pin, const bool restart) {
 
       // iprob=1: sine wave
       if (iprob == 1) {
-        f = 1.0 + amp*sin(2.0*(M_PI)*r);
+        f = 1.0 + amp*sin(2.0*(M_PI_REAL)*r);
 
       // iprob=2: square wave in second quarter of domain
       } else if (iprob == 2) {
@@ -183,7 +183,7 @@ void ProblemGenerator::Advection(ParameterInput *pin, const bool restart) {
 
       // iprob=1: sine wave
       if (iprob == 1) {
-        f = 1.0 + amp*sin(2.0*(M_PI)*r);
+        f = 1.0 + amp*sin(2.0*(M_PI_REAL)*r);
 
       // iprob=2: square wave in second quarter of domain
       } else if (iprob == 2) {

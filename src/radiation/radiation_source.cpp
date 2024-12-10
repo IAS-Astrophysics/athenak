@@ -195,7 +195,7 @@ TaskStatus Radiation::AddRadiationSourceTerm(Driver *pdriver, int stage) {
       Real n0_cm = (u_tet[0]*nh_c_.d_view(n,0) - u_tet[1]*nh_c_.d_view(n,1) -
                     u_tet[2]*nh_c_.d_view(n,2) - u_tet[3]*nh_c_.d_view(n,3));
       Real omega_cm = solid_angles_.d_view(n)/SQR(n0_cm);
-      Real intensity_cm = 4.0*M_PI*(i0_(m,n,k,j,i)/(n0*n_0))*SQR(SQR(n0_cm));
+      Real intensity_cm = 4.0*M_PI_REAL*(i0_(m,n,k,j,i)/(n0*n_0))*SQR(SQR(n0_cm));
       Real vncsigma = 1.0/(n0 + (dtcsiga + dtcsigs)*n0_cm);
       Real vncsigma2 = n0_cm*vncsigma;
       Real ir_weight = intensity_cm*omega_cm;
@@ -252,14 +252,14 @@ TaskStatus Radiation::AddRadiationSourceTerm(Driver *pdriver, int stage) {
         // update intensity
         Real n0_cm = (u_tet[0]*nh_c_.d_view(n,0) - u_tet[1]*nh_c_.d_view(n,1) -
                       u_tet[2]*nh_c_.d_view(n,2) - u_tet[3]*nh_c_.d_view(n,3));
-        Real intensity_cm = 4.0*M_PI*(i0_(m,n,k,j,i)/(n0*n_0))*SQR(SQR(n0_cm));
+        Real intensity_cm = 4.0*M_PI_REAL*(i0_(m,n,k,j,i)/(n0*n_0))*SQR(SQR(n0_cm));
         Real vncsigma = 1.0/(n0 + (dtcsiga + dtcsigs)*n0_cm);
         Real vncsigma2 = n0_cm*vncsigma;
         Real di_cm = ( ((dtcsigs-dtcsigp)*jr_cm
                       + (dtcsiga+dtcsigp)*emission
                       - (dtcsigs+dtcsiga)*intensity_cm)*vncsigma2 );
         i0_(m,n,k,j,i) = n0*n_0*fmax(i0_(m,n,k,j,i)/(n0*n_0) +
-                                     di_cm/(4.0*M_PI*SQR(SQR(n0_cm))), 0.0);
+                                     di_cm/(4.0*M_PI_REAL*SQR(SQR(n0_cm))), 0.0);
 
         // compute moments after coupling
         m_new[0] += (    i0_(m,n,k,j,i)    *solid_angles_.d_view(n));
@@ -301,7 +301,7 @@ TaskStatus Radiation::AddRadiationSourceTerm(Driver *pdriver, int stage) {
         Real n0_cm = (u_tet[0]*nh_c_.d_view(n,0) - u_tet[1]*nh_c_.d_view(n,1) -
                       u_tet[2]*nh_c_.d_view(n,2) - u_tet[3]*nh_c_.d_view(n,3));
         Real wght_cm = solid_angles_.d_view(n)/SQR(n0_cm)/wght_sum;
-        Real intensity_cm = 4.0*M_PI*(i0_(m,n,k,j,i)/(n0*n_0))*SQR(SQR(n0_cm));
+        Real intensity_cm = 4.0*M_PI_REAL*(i0_(m,n,k,j,i)/(n0*n_0))*SQR(SQR(n0_cm));
         Real ir_weight = intensity_cm*wght_cm;
         jr_cm += ir_weight;
         suma1 += (n0_cm/n0)*4.0*dtcsigs*inv_t_electron_*wght_cm;
@@ -351,7 +351,7 @@ TaskStatus Radiation::AddRadiationSourceTerm(Driver *pdriver, int stage) {
                         u_tet[2]*nh_c_.d_view(n,2) - u_tet[3]*nh_c_.d_view(n,3));
           Real di_cm = (n0_cm/n0)*dtcsigs*4.0*jr_cm*inv_t_electron_*(tgasnew - tradnew);
           i0_(m,n,k,j,i) = n0*n_0*fmax(i0_(m,n,k,j,i)/(n0*n_0) +
-                                       di_cm/(4.0*M_PI*SQR(SQR(n0_cm))), 0.0);
+                                       di_cm/(4.0*M_PI_REAL*SQR(SQR(n0_cm))), 0.0);
 
           // compute moments after coupling
           m_new[0] += (    i0_(m,n,k,j,i)    *solid_angles_.d_view(n));

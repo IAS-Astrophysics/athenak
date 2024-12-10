@@ -220,11 +220,11 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     Real dx_sq = glower[1][1]*dx1*dx1+2.0*glower[1][2]*dx1*dx2+2.0*glower[1][3]*dx1*dx3
                + glower[2][2]*dx2*dx2+2.0*glower[2][3]*dx2*dx3
                + glower[3][3]*dx3*dx3;
-    Real mu_min = cos(spread_/2.0*M_PI/180.0);
+    Real mu_min = cos(spread_/2.0*M_PI_REAL/180.0);
 
     // Calculate contravariant time component of direction
-    Real dmag = sqrt(1.0 + SQR(mag*kym*M_PI*cos(kym*M_PI*x2v)));
-    Real d1 = (-mag*kym*M_PI*cos(kym*M_PI*x2v))/dmag;
+    Real dmag = sqrt(1.0 + SQR(mag*kym*M_PI_REAL*cos(kym*M_PI_REAL*x2v)));
+    Real d1 = (-mag*kym*M_PI_REAL*cos(kym*M_PI_REAL*x2v))/dmag;
     Real d2 = 1.0/dmag;
     Real d3 = 0.0/dmag;
     Real temp_a = glower[0][0];
@@ -272,8 +272,8 @@ void ComputeSnakeMetricAndTetrad(Real x, Real y, Real z,
                                  Real g[][4], Real gi[][4],
                                  Real e[][4], Real ecov[][4], Real omega[][4][4]) {
   // terms appearing in snake metric/tetrads
-  Real cos_term = -mag*kym*M_PI*cos(kym*M_PI*y);
-  Real sin_term =  mag*SQR(kym*M_PI)*sin(kym*M_PI*y);
+  Real cos_term = -mag*kym*M_PI_REAL*cos(kym*M_PI_REAL*y);
+  Real sin_term =  mag*SQR(kym*M_PI_REAL)*sin(kym*M_PI_REAL*y);
 
   // covariant metric
   g[0][0] = -1.0;

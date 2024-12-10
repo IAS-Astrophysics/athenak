@@ -59,12 +59,12 @@ GeodesicGrid::GeodesicGrid(int nlev, bool rotate, bool fluxes) :
     Real cos_ang = 1.0/sqrt(5.0);
     Real p1[3] = {0.0, 0.0, 1.0};
     Real p2[3] = {sin_ang, 0.0, cos_ang};
-    Real p3[3] = {static_cast<Real>(sin_ang*cos( 0.2*M_PI)),
-                  static_cast<Real>(sin_ang*sin( 0.2*M_PI)), -cos_ang};
-    Real p4[3] = {static_cast<Real>(sin_ang*cos(-0.4*M_PI)),
-                  static_cast<Real>(sin_ang*sin(-0.4*M_PI)),  cos_ang};
-    Real p5[3] = {static_cast<Real>(sin_ang*cos(-0.2*M_PI)),
-                  static_cast<Real>(sin_ang*sin(-0.2*M_PI)), -cos_ang};
+    Real p3[3] = {static_cast<Real>(sin_ang*cos( 0.2*M_PI_REAL)),
+                  static_cast<Real>(sin_ang*sin( 0.2*M_PI_REAL)), -cos_ang};
+    Real p4[3] = {static_cast<Real>(sin_ang*cos(-0.4*M_PI_REAL)),
+                  static_cast<Real>(sin_ang*sin(-0.4*M_PI_REAL)),  cos_ang};
+    Real p5[3] = {static_cast<Real>(sin_ang*cos(-0.2*M_PI_REAL)),
+                  static_cast<Real>(sin_ang*sin(-0.2*M_PI_REAL)), -cos_ang};
     Real p6[3] = {0.0, 0.0, -1.0};
 
     // set pole normal components explicitly
@@ -132,8 +132,8 @@ GeodesicGrid::GeodesicGrid(int nlev, bool rotate, bool fluxes) :
           Real x0 = anorm(0,l,m,0);
           Real y0 = anorm(0,l,m,1);
           Real z0 = anorm(0,l,m,2);
-          anorm(ptch,l,m,0) = (x0*cos(ptch*0.4*M_PI)+y0*sin(ptch*0.4*M_PI));
-          anorm(ptch,l,m,1) = (y0*cos(ptch*0.4*M_PI)-x0*sin(ptch*0.4*M_PI));
+          anorm(ptch,l,m,0) = (x0*cos(ptch*0.4*M_PI_REAL)+y0*sin(ptch*0.4*M_PI_REAL));
+          anorm(ptch,l,m,1) = (y0*cos(ptch*0.4*M_PI_REAL)-x0*sin(ptch*0.4*M_PI_REAL));
           anorm(ptch,l,m,2) = z0;
         }
       }
@@ -361,11 +361,11 @@ GeodesicGrid::GeodesicGrid(int nlev, bool rotate, bool fluxes) :
     Kokkos::realloc(cart_pos, nangles, 3);
 
     // set solid angles and cartesian positions
-    Real zetav[2] = {M_PI/4.0, 3.0*M_PI/4.0};
-    Real psiv[4] = {M_PI/4.0, 3.0*M_PI/4.0, 5.0*M_PI/4.0, 7.0*M_PI/4.0};
+    Real zetav[2] = {M_PI_REAL/4.0, 3.0*M_PI_REAL/4.0};
+    Real psiv[4] = {M_PI_REAL/4.0, 3.0*M_PI_REAL/4.0, 5.0*M_PI_REAL/4.0, 7.0*M_PI_REAL/4.0};
     for (int z=0, n=0; z<2; ++z) {
       for (int p=0; p<4; ++p, ++n) {
-        solid_angles.h_view(n) = 4.0*M_PI/nangles;
+        solid_angles.h_view(n) = 4.0*M_PI_REAL/nangles;
         cart_pos.h_view(n,0) = sin(zetav[z])*cos(psiv[p])*sqrt(4.0/3.0);
         cart_pos.h_view(n,1) = sin(zetav[z])*sin(psiv[p])*sqrt(4.0/3.0);
         cart_pos.h_view(n,2) = cos(zetav[z])*sqrt(2.0/3.0);
@@ -554,7 +554,7 @@ void GeodesicGrid::OptimalAngles(Real ang[2]) {
   int npsi  = 200;  // npsi  val inherited from Viktoriya Giryanskaya
   Real maxangle = ArcLength(0,1);
   Real deltazeta = maxangle/nzeta;
-  Real deltapsi = M_PI/npsi;
+  Real deltapsi = M_PI_REAL/npsi;
   Real vmax = 0.0;
   for (int l=0; l<nzeta; ++l) {
     Real zeta = (l+1)*deltazeta;
@@ -652,7 +652,7 @@ void GeodesicGrid::UnitFluxDir(Real zetav, Real psiv, Real zetaf, Real psif,
     Real zeta_deriv = (a_par*sin(psif-p_par)
                        / (1.0+SQR(a_par)*cos(psif-p_par)*cos(psif-p_par)));
     Real denom = 1.0/sqrt(SQR(zeta_deriv)+SQR(sin(zetaf)));
-    Real signfactor = copysign(1.0,psif-psiv)*copysign(1.0,M_PI-fabs(psif-psiv));
+    Real signfactor = copysign(1.0,psif-psiv)*copysign(1.0,M_PI_REAL-fabs(psif-psiv));
     dzeta = signfactor*zeta_deriv*denom;
     dpsi  = signfactor*denom;
   }

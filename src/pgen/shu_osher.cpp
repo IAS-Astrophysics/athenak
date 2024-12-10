@@ -68,7 +68,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
       u0(m,IM3,k,j,i) = wl*dl;
       u0(m,IEN,k,j,i) = pl/gm1 + 0.5*dl*(ul*ul + vl*vl + wl*wl);
     } else {
-      u0(m,IDN,k,j,i) = 1.0 + 0.2*std::sin(5.0*M_PI*(x1v));
+      u0(m,IDN,k,j,i) = 1.0 + 0.2*std::sin(5.0*M_PI_REAL*(x1v));
       u0(m,IM1,k,j,i) = 0.0;
       u0(m,IM2,k,j,i) = 0.0;
       u0(m,IM3,k,j,i) = 0.0;

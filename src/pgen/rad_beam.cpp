@@ -90,7 +90,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     Real dx_sq = glower[1][1]*dx1*dx1 +2.0*glower[1][2]*dx1*dx2 + 2.0*glower[1][3]*dx1*dx3
                + glower[2][2]*dx2*dx2 +2.0*glower[2][3]*dx2*dx3
                + glower[3][3]*dx3*dx3;
-    Real mu_min = cos(spread_/2.0*M_PI/180.0);
+    Real mu_min = cos(spread_/2.0*M_PI_REAL/180.0);
 
     // Calculate contravariant time component of direction
     Real temp_a = glower[0][0];

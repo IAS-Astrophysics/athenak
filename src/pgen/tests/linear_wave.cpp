@@ -183,7 +183,7 @@ void ProblemGenerator::LinearWave(ParameterInput *pin, const bool restart) {
   if (lwv.sin_a2 > 0.0) lambda = std::min(lambda, x3size*lwv.sin_a2);
 
   // Initialize k_parallel
-  lwv.k_par = 2.0*(M_PI)/lambda;
+  lwv.k_par = 2.0*(M_PI_REAL)/lambda;
 
   // Set background state: v1_0 is parallel to wavevector.
   // Similarly, for MHD:   b1_0 is parallel to wavevector, b2_0/b3_0 are perpendicular

@@ -59,7 +59,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   Real binit = std::sqrt(2.0*p0/beta);
 
   Real x1size = pmy_mesh_->mesh_size.x1max - pmy_mesh_->mesh_size.x1min;
-  Real kx = 2.0*(M_PI/x1size)*(static_cast<Real>(nwx));
+  Real kx = 2.0*(M_PI_REAL/x1size)*(static_cast<Real>(nwx));
 
   // capture variables for kernel
   auto &indcs = pmy_mesh_->mb_indcs;

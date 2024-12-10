@@ -446,7 +446,7 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
           const Real dgF3 = (three_d) ? (gF3p - gF3m) / (2 * size.d_view(m).dx3) : 0.;
 
           const Real detg = 1.;
-          jcon(m,mu,k,j,i) = 1. / (detg * sqrt(4. * M_PI)) * (dgF0 + dgF1 + dgF2 + dgF3);
+          jcon(m,mu,k,j,i) = 1. / (detg * sqrt(4. * M_PI_REAL)) * (dgF0 + dgF1 + dgF2 + dgF3);
         } else {
           // zero current if dtold == 0 (e.g., when we don't have a previous step)
           jcon(m,mu,k,j,i) = 0.;

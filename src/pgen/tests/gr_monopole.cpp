@@ -380,7 +380,7 @@ Real A1(Real a_norm, Real spin, Real x1, Real x2, Real x3) {
 
   // multiply by ramp function that goes to zero at r = 0
   if (r < 1.0) {
-    a1_val *= sin(0.5*M_PI*SQR(r));
+    a1_val *= sin(0.5*M_PI_REAL*SQR(r));
   }
 
   //dphi/dx =  partial phi/partial x + partial phi/partial r partial r/partial x
@@ -406,7 +406,7 @@ Real A2(Real a_norm, Real spin, Real x1, Real x2, Real x3) {
 
   // multiply by ramp function that goes to zero at r = 0
   if (r < 1.0) {
-    a2_val *= sin(0.5*M_PI*SQR(r));
+    a2_val *= sin(0.5*M_PI_REAL*SQR(r));
   }
 
   //dphi/dx =  partial phi/partial y + partial phi/partial r partial r/partial y
@@ -432,7 +432,7 @@ Real A3(Real a_norm, Real spin, Real x1, Real x2, Real x3) {
 
   // multiply by ramp function that goes to zero at r = 0
   if (r < 1.0) {
-    a3_val *= sin(0.5*M_PI*SQR(r));
+    a3_val *= sin(0.5*M_PI_REAL*SQR(r));
   }
 
   //dphi/dx =   partial phi/partial r partial r/partial z

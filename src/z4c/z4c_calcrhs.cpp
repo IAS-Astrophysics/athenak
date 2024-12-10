@@ -437,7 +437,7 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage) {
     // -----------------------------------------------------------------------------------
     // Hamiltonian constraint
     //
-    Ht = R + (2./3.)*SQR(K) - AA;// - 16.*M_PI*tmunu.E(m,k,j,i);
+    Ht = R + (2./3.)*SQR(K) - AA;// - 16.*M_PI_REAL*tmunu.E(m,k,j,i);
 
     // -----------------------------------------------------------------------------------
     // Finalize advective (Lie) derivatives
@@ -493,7 +493,7 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage) {
       * z4c.alpha(m,k,j,i) * z4c.vTheta(m,k,j,i);
     // Matter term
     if(!is_vacuum) {
-      rhs.vKhat(m,k,j,i) += 4.*M_PI * z4c.alpha(m,k,j,i) * (S + tmunu.E(m,k,j,i));
+      rhs.vKhat(m,k,j,i) += 4.*M_PI_REAL * z4c.alpha(m,k,j,i) * (S + tmunu.E(m,k,j,i));
     }
     rhs.chi(m,k,j,i) = Lchi - (1./6.) * opt.chi_psi_power *
       chi_guarded * z4c.alpha(m,k,j,i) * K;
@@ -501,7 +501,7 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage) {
         0.5*Ht - (2. + opt.damp_kappa2) * opt.damp_kappa1 * z4c.vTheta(m,k,j,i));
     // Matter term
     if(!is_vacuum) {
-      rhs.vTheta(m,k,j,i) -= 8.*M_PI * z4c.alpha(m,k,j,i) * tmunu.E(m,k,j,i);
+      rhs.vTheta(m,k,j,i) -= 8.*M_PI_REAL * z4c.alpha(m,k,j,i) * tmunu.E(m,k,j,i);
     }
     // If BSSN is enabled, theta is disabled.
     rhs.vTheta(m,k,j,i) *= opt.use_z4c;
@@ -514,7 +514,7 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage) {
         rhs.vGam_u(m,a,k,j,i) -= 2. * A_uu(a,b) * dalpha_d(b);
         // Matter term
         if(!is_vacuum) {
-          rhs.vGam_u(m,a,k,j,i) -= 16.*M_PI * z4c.alpha(m,k,j,i)
+          rhs.vGam_u(m,a,k,j,i) -= 16.*M_PI_REAL * z4c.alpha(m,k,j,i)
                               * g_uu(a,b) * tmunu.S_d(m,b,k,j,i);
         }
       }
@@ -534,7 +534,7 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage) {
       rhs.vA_dd(m,a,b,k,j,i) += LA_dd(a,b);
       // Matter term
       if(!is_vacuum) {
-        rhs.vA_dd(m,a,b,k,j,i) -= 8.*M_PI * z4c.alpha(m,k,j,i) *
+        rhs.vA_dd(m,a,b,k,j,i) -= 8.*M_PI_REAL * z4c.alpha(m,k,j,i) *
                 (oopsi4*tmunu.S_dd(m,a,b,k,j,i) - (1./3.)*S*z4c.g_dd(m,a,b,k,j,i));
       }
     }

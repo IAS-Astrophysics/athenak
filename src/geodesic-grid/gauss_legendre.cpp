@@ -63,11 +63,11 @@ void GaussLegendreGrid::InitializeAngleAndWeights() {
   // order for storing angle, first theta, then phi
   for (int n=0; n<nangles; ++n) {
     // save the weights
-    int_weights.h_view(n) =  roots_and_weights[1][n%ntheta]*M_PI/ntheta;
+    int_weights.h_view(n) =  roots_and_weights[1][n%ntheta]*M_PI_REAL/ntheta;
     // calculate theta
     polar_pos.h_view(n,0) = acos(roots_and_weights[0][n%ntheta]);
     // calculate phi
-    polar_pos.h_view(n,1) = 2*M_PI/(2*ntheta)*(n/ntheta);
+    polar_pos.h_view(n,1) = 2*M_PI_REAL/(2*ntheta)*(n/ntheta);
   }
 
   // sync to device

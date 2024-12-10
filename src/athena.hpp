@@ -7,7 +7,7 @@
 //========================================================================================
 //! \file athena.hpp
 //  \brief contains Athena++ general purpose types, structures, enums, etc.
-
+#include <math.h>
 #include <string>
 
 #include <Kokkos_Core.hpp>
@@ -33,6 +33,7 @@ using Real = double;
 #endif
 
 #endif // SINGLE_PRECISION_ENABLED
+#define M_PI_REAL static_cast<Real>(M_PI)
 
 //----------------------------------------------------------------------------------------
 // general purpose macros (never modified)
