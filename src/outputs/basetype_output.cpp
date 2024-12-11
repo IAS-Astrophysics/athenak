@@ -617,6 +617,25 @@ BaseTypeOutput::BaseTypeOutput(OutputParameters opar, Mesh *pm) :
     }
   }
 
+  if (out_params.variable.compare("rad_femn_momterm_f") == 0) {
+    out_params.contains_derived = true;
+    auto& num_points = pm->pmb_pack->pradfemn->num_points;
+
+    for (int i = 0; i < num_points; i++)
+    {
+      outvars.emplace_back("momterm_f_" + std::to_string(i), i, &(derived_var));
+    }
+  }
+
+  if (out_params.variable.compare("rad_femn_momterm_g") == 0) {
+    out_params.contains_derived = true;
+    auto& num_points = pm->pmb_pack->pradfemn->num_points;
+
+    for (int i = 0; i < num_points; i++)
+    {
+      outvars.emplace_back("momterm_g_" + std::to_string(i), i, &(derived_var));
+    }
+  }
   // initialize vector containing number of output MBs per rank
   noutmbs.assign(global_variable::nranks, 0);
 }
