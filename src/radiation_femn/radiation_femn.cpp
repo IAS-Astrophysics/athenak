@@ -232,10 +232,14 @@ RadiationFEMN::RadiationFEMN(MeshBlockPack *ppack, ParameterInput *pin) :
   Kokkos::realloc(Ven_matrix, num_energy_bins, num_energy_bins);
   Kokkos::realloc(Veninv_matrix, num_energy_bins, num_energy_bins);
   Kokkos::realloc(Wen_matrix, num_energy_bins, num_energy_bins);
-  Ven_matrix(0,0) = 1.26521030312932; // Fermi-Dirac basis eta = 0, T = 2
-  VV_array(0) = 14.42468283791513;
-  Veninv_matrix(0,0) = 0.7903824348621258;
-  Wen_matrix(0,0) = -1.89781545469398;
+  //Ven_matrix(0,0) = 1.26521030312932; // Fermi-Dirac basis eta = 0, T = 2
+  //VV_array(0) = 14.42468283791513;
+  //Veninv_matrix(0,0) = 0.7903824348621258;
+  //Wen_matrix(0,0) = -1.89781545469398;
+  Ven_matrix(0,0) = 1.; //@TODO: fix this!
+  VV_array(0) = 1.;
+  Veninv_matrix(0,0) = 1.;
+  Wen_matrix(0,0) = -1.5;
 
   int nmb = ppack->nmb_thispack;
   auto &indcs = pmy_pack->pmesh->mb_indcs;

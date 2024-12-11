@@ -254,6 +254,17 @@ int IndicesUnited(int nuidx, int enidx, int angidx, int num_species, int num_ene
   return combinedidx;
 }
 
+KOKKOS_INLINE_FUNCTION
+RadiationFEMNPhaseIndices NuEnIndicesComponent(int n, int num_species,
+                                               int num_energy_bins) {
+  RadiationFEMNPhaseIndices idcs = {
+    .combinedidx = n,
+    .nuidx = int(n / num_energy_bins),
+    .enidx = n - int(n / num_energy_bins) * num_energy_bins,
+    .angidx = -42
+  };
+  return idcs;
+}
 } // namespace radiationfemn
 
 #endif //ATHENA_RADIATION_FEMN_HPP
