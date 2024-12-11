@@ -586,19 +586,6 @@ BaseTypeOutput::BaseTypeOutput(OutputParameters opar, Mesh *pm) :
     }
   }
 
-  // Ricci rotation coefficients
-  if (out_params.variable.compare("rad_femn_ricci_rot") == 0) {
-    out_params.contains_derived = true;
-    for (int var = 0; var < 4*4*4; var++) {
-      int rhohat = int(var / (4 * 4));
-      int nuhat = int((var - int(var / (4 * 4)) * 4 * 4) / 4);
-      int muhat = var - int(var / (4 * 4)) * 4 * 4
-          - int((var - int(var / (4 * 4)) * 4 * 4) / 4) * 4;
-
-      outvars.emplace_back("Ricci_rot_" + std::to_string(rhohat) + "_"
-        + std::to_string(nuhat) + "_" + std::to_string(muhat), var, &(derived_var));
-    }
-  }
   // radiation flux for M1
   if (out_params.variable.compare("rad_femn_flux") == 0) {
     out_params.contains_derived = true;

@@ -19,7 +19,7 @@
     #error NHISTORY > NREDUCTION in outputs.hpp
 #endif
 
-#define NOUTPUT_CHOICES 149
+#define NOUTPUT_CHOICES 148
 // choices for output variables used in <ouput> blocks in input file
 // TO ADD MORE CHOICES:
 //   - add more strings to array below, change NOUTPUT_CHOICES above appropriately
@@ -75,8 +75,7 @@ static const char *var_choice[NOUTPUT_CHOICES] = {
   "mat",
 
   "rad_femn_F", "rad_femn_tetrad", "rad_femn_fluid_vel", "rad_femn_E", "rad_femn_flux",
-  "rad_femn_N", "rad_femn_divf_s", "rad_femn_momterm_f", "rad_femn_momterm_g",
-  "rad_femn_ricci_rot"
+  "rad_femn_N", "rad_femn_divf_s", "rad_femn_momterm_f", "rad_femn_momterm_g"
 };
 
 // forward declarations
