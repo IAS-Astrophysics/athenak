@@ -368,7 +368,7 @@ TaskStatus RadiationFEMN::ExpRKUpdate(Driver *pdriver, int stage) {
                                     Real sum_val = 0;
                                     for (int id_i = 0; id_i < 4; ++id_i) {
                                       sum_val += tetr_mu_muhat0_(m, 0, id_i, k, j, i)
-                                        * p_matrix(id_i, row, col);
+                                        * p_matrix(id_i, row, col) * Ven_matrix(0,0);
                                     }
                                     Q_matrix(row, col) = sum_val;
                                     lu_matrix(row, col) = Q_matrix(row, col);

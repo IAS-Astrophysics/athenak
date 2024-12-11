@@ -14,6 +14,8 @@
 
 #include <sstream>
 #include <string>   // std::string, to_string()
+#include <adm/adm.hpp>
+#include <utils/finite_diff.hpp>
 
 #include "athena.hpp"
 #include "parameter_input.hpp"
@@ -408,6 +410,217 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
                       dv(m, en, k, j, i) = partial_sum;
                     });
                   });
+  }
+
+  // radiation femn Ricci rotation coefficients
+  if (name.compare("rad_femn_ricci_rot") == 0) {
+    const int NGHOST = 2;
+    Kokkos::realloc(derived_var, nmb, 4*4*4, n3, n2, n1);
+    auto dv = derived_var;
+    auto &mbsize = pm->pmb_pack->pmb->mb_size;
+    adm::ADM::ADM_vars &adm = pm->pmb_pack->padm->adm;
+    auto &tetr_mu_muhat0_ = pm->pmb_pack->pradfemn->L_mu_muhat0;
+
+    size_t scr_size = ScrArray1D<Real>::shmem_size(4 * 4 * 4) * 2;
+    int scr_level = 0;
+    par_for_outer("radiation_femn_update", DevExeSpace(), scr_size, scr_level,
+                0, nmb - 1, ks, ke, js, je, is, ie,
+                KOKKOS_LAMBDA(TeamMember_t member, const int m, const int k, const int j, const int i) {
+
+                    // compute metric, its inverse and sqrt(-determinant)
+                    Real g_dd[16];
+                    Real g_uu[16];
+                    adm::SpacetimeMetric(adm.alpha(m, k, j, i),
+                                         adm.beta_u(m, 0, k, j, i),
+                                         adm.beta_u(m, 1, k, j, i),
+                                         adm.beta_u(m, 2, k, j, i),
+                                         adm.g_dd(m, 0, 0, k, j, i),
+                                         adm.g_dd(m, 0, 1, k, j, i),
+                                         adm.g_dd(m, 0, 2, k, j, i),
+                                         adm.g_dd(m, 1, 1, k, j, i),
+                                         adm.g_dd(m, 1, 2, k, j, i),
+                                         adm.g_dd(m, 2, 2, k, j, i),
+                                         g_dd);
+                    adm::SpacetimeUpperMetric(adm.alpha(m, k, j, i),
+                                              adm.beta_u(m, 0, k, j, i),
+                                              adm.beta_u(m, 1, k, j, i),
+                                              adm.beta_u(m, 2, k, j, i),
+                                              adm.g_dd(m, 0, 0, k, j, i),
+                                              adm.g_dd(m, 0, 1, k, j, i),
+                                              adm.g_dd(m, 0, 2, k, j, i),
+                                              adm.g_dd(m, 1, 1, k, j, i),
+                                              adm.g_dd(m, 1, 2, k, j, i),
+                                              adm.g_dd(m, 2, 2, k, j, i),
+                                              g_uu);
+                    Real sqrt_det_g_ijk = adm.alpha(m, k, j, i)
+                        * Kokkos::sqrt(adm::SpatialDet(adm.g_dd(m, 0, 0, k, j, i),
+                                                       adm.g_dd(m, 0, 1, k, j, i),
+                                                       adm.g_dd(m, 0, 2, k, j, i),
+                                                       adm.g_dd(m, 1, 1, k, j, i),
+                                                       adm.g_dd(m, 1, 2, k, j, i),
+                                                       adm.g_dd(m, 2, 2, k, j, i)));
+
+                    Real deltax[3] = {1 / mbsize.d_view(m).dx1, 1 / mbsize.d_view(m).dx2,
+                                      1 / mbsize.d_view(m).dx3};
+
+                    // lapse derivatives (\p_mu alpha)
+                    Real dtalpha_d = 0.; // time derivatives, get from z4c
+                    AthenaScratchTensor<Real, TensorSymm::NONE, 3, 1> dalpha_d;
+                    dalpha_d(0) = Dx<NGHOST>(0, deltax, adm.alpha, m, k, j, i);
+                    dalpha_d(1) =
+                        (multi_d) ? Dx<NGHOST>(1, deltax, adm.alpha, m, k, j, i) : 0.;
+                    dalpha_d(2) =
+                        (three_d) ? Dx<NGHOST>(2, deltax, adm.alpha, m, k, j, i) : 0.;
+
+                    // shift derivatives (\p_mu beta^i)
+                    Real dtbetax_du = 0.; // time derivatives, get from z4c
+                    Real dtbetay_du = 0.;
+                    Real dtbetaz_du = 0.;
+                    Real dtbeta_du[3] = {dtbetax_du, dtbetay_du, dtbetaz_du};
+                    AthenaScratchTensor<Real, TensorSymm::NONE, 3, 2>
+                        dbeta_du; // spatial derivatives
+                    for (int a = 0; a < 3; ++a) {
+                      dbeta_du(0, a) = Dx<NGHOST>(0, deltax, adm.beta_u, m, a, k, j, i);
+                      dbeta_du(1, a) =
+                          (multi_d) ? Dx<NGHOST>(1, deltax, adm.beta_u, m, a, k, j, i)
+                                    : 0.;
+                      dbeta_du(2, a) =
+                          (three_d) ? Dx<NGHOST>(2, deltax, adm.beta_u, m, a, k, j, i)
+                                    : 0.;
+                    }
+
+                    // covariant shift (beta_i)
+                    Real betax_d = 0;
+                    Real betay_d = 0;
+                    Real betaz_d = 0;
+                    for (int a = 0; a < 3; ++a) {
+                      betax_d += adm.g_dd(m, 0, a, k, j, i) * adm.beta_u(m, a, k, j, i);
+                      betay_d += adm.g_dd(m, 1, a, k, j, i) * adm.beta_u(m, a, k, j, i);
+                      betaz_d += adm.g_dd(m, 2, a, k, j, i) * adm.beta_u(m, a, k, j, i);
+                    }
+                    Real beta_d[3] = {betax_d, betay_d, betaz_d};
+
+                    // derivatives of spatial metric (\p_mu g_ij)
+                    AthenaScratchTensor<Real, TensorSymm::SYM2, 3, 2> dtg_dd;
+                    AthenaScratchTensor<Real, TensorSymm::SYM2, 3, 3> dg_ddd;
+                    for (int a = 0; a < 3; ++a) {
+                      for (int b = 0; b < 3; ++b) {
+                        dtg_dd(a, b) = 0.; // time derivatives, get from z4c
+                        dg_ddd(0, a, b) =
+                            Dx<NGHOST>(0, deltax, adm.g_dd, m, a, b, k, j, i);
+                        dg_ddd(1, a, b) =
+                            (multi_d) ? Dx<NGHOST>(1, deltax, adm.g_dd, m, a, b, k, j, i)
+                                      : 0.;
+                        dg_ddd(2, a, b) =
+                            (three_d) ? Dx<NGHOST>(2, deltax, adm.g_dd, m, a, b, k, j, i)
+                                      : 0.;
+                      }
+                    }
+
+                    // derivatives of the 4-metric: time derivatives
+                    AthenaScratchTensor4d<Real, TensorSymm::SYM2, 4, 3> dg4_ddd;
+                    dg4_ddd(0, 0, 0) = -2. * adm.alpha(m, k, j, i) * dtalpha_d;
+                    for (int a = 0; a < 3; ++a) {
+                      dg4_ddd(0, 0, 0) += 2. * beta_d[a] * dtbeta_du[a];
+                      dg4_ddd(0, a + 1, 0) = 0;
+                      for (int b = 0; b < 3; ++b) {
+                        dg4_ddd(0, 0, 0) += dtg_dd(a, b)
+                            * adm.beta_u(m, a, k, j, i)
+                            * adm.beta_u(m, b, k, j, i);
+                        dg4_ddd(0, a + 1, 0) += dtg_dd(a, b) * adm.beta_u(m, b, k, j, i)
+                            + adm.g_dd(m, a, b, k, j, i) * dtbeta_du[b];
+                        dg4_ddd(0, a + 1, b + 1) = dtg_dd(a, b);
+                      }
+                    }
+
+                    // derivatives of the 4-metric: spatial derivatives
+                    for (int c = 0; c < 3; c++) {
+                      dg4_ddd(c + 1, 0, 0) = -2. * adm.alpha(m, k, j, i) * dalpha_d(c);
+                      for (int a = 0; a < 3; ++a) {
+                        dg4_ddd(c + 1, 0, 0) += 2. * beta_d[a] * dbeta_du(c, a);
+                        dg4_ddd(c + 1, a + 1, 0) = 0;
+                        for (int b = 0; b < 3; ++b) {
+                          dg4_ddd(c + 1, 0, 0) += dg_ddd(c, a, b)
+                              * adm.beta_u(m, a, k, j, i)
+                              * adm.beta_u(m, b, k, j, i);
+                          dg4_ddd(c + 1, a + 1, 0) +=
+                              dg_ddd(c, a, b) * adm.beta_u(m, b, k, j, i)
+                                  + adm.g_dd(m, a, b, k, j, i) * dbeta_du(c, b);
+                          dg4_ddd(c + 1, a + 1, b + 1) = dg_ddd(c, a, b);
+                        }
+                      }
+                    }
+
+                    // 4-Christoeffel symbols
+                    AthenaScratchTensor4d<Real, TensorSymm::SYM2, 4, 3> Gamma_udd;
+                    for (int a = 0; a < 4; ++a) {
+                      for (int b = 0; b < 4; ++b) {
+                        for (int c = 0; c < 4; ++c) {
+                          Gamma_udd(a, b, c) = 0.0;
+                          for (int d = 0; d < 4; ++d) {
+                            Gamma_udd(a, b, c) += 0.5 * g_uu[a + 4 * d]
+                                * (dg4_ddd(b, d, c)
+                                    + dg4_ddd(c, b, d)
+                                    - dg4_ddd(d, b, c));
+                          }
+                        }
+                      }
+                    }
+
+                    // Ricci rotation coefficients
+                    AthenaScratchTensor4d<Real, TensorSymm::NONE, 4, 3> Gamma_fluid_udd;
+                    for (int a = 0; a < 4; ++a) {
+                      for (int b = 0; b < 4; ++b) {
+                        for (int c = 0; c < 4; ++c) {
+                          Gamma_fluid_udd(a, b, c) = 0.0;
+                          for (int ac_idx = 0; ac_idx < 4 * 4; ++ac_idx) {
+                            const int a_idx = static_cast<int>(ac_idx / 4);
+                            const int c_idx = ac_idx - a_idx * 4;
+
+                            // compute inverse tetrad
+                            Real sign_factor = (a == 0) ? -1. : +1.;
+                            Real tetr_a_aidx = 0;
+                            for (int d_idx = 0; d_idx < 4; ++d_idx) {
+                              tetr_a_aidx += sign_factor * g_dd[a_idx + 4 * d_idx]
+                                  * tetr_mu_muhat0_(m, d_idx, a, k, j, i);
+                            }
+
+                            for (int b_idx = 0; b_idx < 4; ++b_idx) {
+                              Gamma_fluid_udd(a, b, c) += tetr_a_aidx
+                                  * tetr_mu_muhat0_(m, c_idx, c, k, j, i)
+                                  * tetr_mu_muhat0_(m, b_idx, b, k, j, i)
+                                  * Gamma_udd(a_idx, b_idx, c_idx);
+                            }
+
+                            Real dtetr_mu_muhat_d[4];
+                            dtetr_mu_muhat_d[0] = 0.; // no time derivatives currently
+                            dtetr_mu_muhat_d[1] =
+                                Dx<NGHOST>(0, deltax, tetr_mu_muhat0_, m, a_idx, b,
+                                           k, j, i);
+                            dtetr_mu_muhat_d[2] =
+                                (multi_d) ? Dx<NGHOST>(1, deltax, tetr_mu_muhat0_, m,
+                                                       a_idx, b, k, j, i) : 0.;
+                            dtetr_mu_muhat_d[3] =
+                                (three_d) ? Dx<NGHOST>(2, deltax, tetr_mu_muhat0_,
+                                                       m, a_idx, b, k, j, i) : 0.;
+                            Gamma_fluid_udd(a, b, c) += tetr_a_aidx
+                                * tetr_mu_muhat0_(m, c_idx, c, k, j, i)
+                                * dtetr_mu_muhat_d[c_idx];
+                          }
+                        }
+                      }
+                    }
+
+                    par_for_inner(member, 0, 4 * 4 * 4 - 1, [&](const int idx)
+                    {
+                      int rhohat = int(idx / (4 * 4));
+                      int nuhat = int((idx - int(idx / (4 * 4)) * 4 * 4) / 4);
+                      int muhat = idx - int(idx / (4 * 4)) * 4 * 4
+                        - int((idx - int(idx / (4 * 4)) * 4 * 4) / 4) * 4;
+
+                      dv(m, idx, k, j, i) = Gamma_fluid_udd(rhohat, nuhat, muhat);
+                    });
+                });
   }
 
   // radiation energy density for FP_N (multi energy, single species)
