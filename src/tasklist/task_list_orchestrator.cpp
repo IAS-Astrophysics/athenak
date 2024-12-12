@@ -138,6 +138,8 @@ void TaskListOrchestrator::AssembleTasks(
   }
   if (pmy_pack->pdyngr != nullptr) {
     pmy_pack->pdyngr->QueueDynGRMHDTasks();
+  } else if (pmy_pack->pmhd != nullptr) {
+    pmy_pack->pmhd->QueueMHDTasks();
   }
   if (pmy_pack->pz4c != nullptr) {
     pmy_pack->pz4c->QueueZ4cTasks();

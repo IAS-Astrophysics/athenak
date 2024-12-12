@@ -15,6 +15,7 @@
 #include "globals.hpp"
 #include "parameter_input.hpp"
 #include "tasklist/task_list.hpp"
+#include "tasklist/task_list_orchestrator.hpp"
 #include "mesh/mesh.hpp"
 #include "coordinates/coordinates.hpp"
 #include "eos/eos.hpp"
@@ -79,6 +80,50 @@ void MHD::AssembleMHDTasks(std::map<std::string, std::shared_ptr<TaskList>> tl) 
   // although RecvFlux/U/E/B functions check that all recvs complete, add ClearRecv to
   // task list anyways to catch potential bugs in MPI communication logic
   id.crecv = tl["after_stagen"]->AddTask(&MHD::ClearRecv, this, id.csend);
+
+  return;
+}
+
+void MHD::QueueMHDTasks() {
+  tasks::TaskListOrchestrator *ptlo = pmy_pack->ptlo;
+
+  ptlo->QueueTask(&MHD::SaveMHDState, this, "MHD_SaveState", "before_timeintegrator");
+  
+  ptlo->QueueTask(&MHD::InitRecv, this, "MHD_InitRecv", "before_stagen");
+
+  ptlo->QueueTask(&MHD::CopyCons, this, "MHD_CopyU", "stagen");
+  ptlo->QueueTask(&MHD::Fluxes, this, "MHD_Fluxes", "stagen", {"MHD_CopyU"});
+  ptlo->QueueTask(&MHD::SendFlux, this, "MHD_SendFlux", "stagen", {"MHD_Fluxes"});
+  ptlo->QueueTask(&MHD::RecvFlux, this, "MHD_RecvFlux", "stagen", {"MHD_SendFlux"});
+  ptlo->QueueTask(&MHD::RKUpdate, this, "MHD_RKUpdate", "stagen", {"MHD_RecvFlux"});
+  ptlo->QueueTask(&MHD::MHDSrcTerms, this, "MHD_SrcTerms", "stagen", {"MHD_RKUpdate"});
+  ptlo->QueueTask(&MHD::SendU_OA, this, "MHD_SendU_OA", "stagen", {"MHD_SrcTerms"});
+  ptlo->QueueTask(&MHD::RecvU_OA, this, "MHD_RecvU_OA", "stagen", {"MHD_SendU_OA"});
+  ptlo->QueueTask(&MHD::RestrictU, this, "MHD_RestrictU", "stagen", {"MHD_RecvU_OA"});
+  ptlo->QueueTask(&MHD::SendU, this, "MHD_SendU", "stagen", {"MHD_RestrictU"});
+  ptlo->QueueTask(&MHD::RecvU, this, "MHD_RecvU", "stagen", {"MHD_SendU"});
+  ptlo->QueueTask(&MHD::SendU_Shr, this, "MHD_SendU_Shr", "stagen", {"MHD_RecvU"});
+  ptlo->QueueTask(&MHD::RecvU_Shr, this, "MHD_RecvU_Shr", "stagen", {"MHD_SendU_Shr"});
+  ptlo->QueueTask(&MHD::CornerE, this, "MHD_CornerE", "stagen", {"MHD_RecvU_Shr"});
+  ptlo->QueueTask(&MHD::EFieldSrc, this, "MHD_EFieldSrc", "stagen", {"MHD_CornerE"});
+  ptlo->QueueTask(&MHD::SendE, this, "MHD_SendE", "stagen", {"MHD_EFieldSrc"});
+  ptlo->QueueTask(&MHD::RecvE, this, "MHD_RecvE", "stagen", {"MHD_SendE"});
+  ptlo->QueueTask(&MHD::CT, this, "MHD_CT", "stagen", {"MHD_RecvE"});
+  ptlo->QueueTask(&MHD::SendB_OA, this, "MHD_SendB_OA", "stagen", {"MHD_CT"});
+  ptlo->QueueTask(&MHD::RecvB_OA, this, "MHD_RecvB_OA", "stagen", {"MHD_SendB_OA"});
+  ptlo->QueueTask(&MHD::RestrictB, this, "MHD_RestrictB", "stagen", {"MHD_RecvB_OA"});
+  ptlo->QueueTask(&MHD::SendB, this, "MHD_SendB", "stagen", {"MHD_RestrictB"});
+  ptlo->QueueTask(&MHD::RecvB, this, "MHD_RecvB", "stagen", {"MHD_SendB"});
+  ptlo->QueueTask(&MHD::SendB_Shr, this, "MHD_SendB_Shr", "stagen", {"MHD_RecvB"});
+  ptlo->QueueTask(&MHD::RecvB_Shr, this, "MHD_RecvB_Shr", "stagen", {"MHD_SendB_Shr"});
+  ptlo->QueueTask(&MHD::ApplyPhysicalBCs, this, "MHD_ApplyBCs", "stagen",
+                  {"MHD_RecvB_Shr"});
+  ptlo->QueueTask(&MHD::Prolongate, this, "MHD_Prolong", "stagen", {"MHD_ApplyBCs"});
+  ptlo->QueueTask(&MHD::ConToPrim, this, "MHD_C2P", "stagen", {"MHD_Prolong"});
+  ptlo->QueueTask(&MHD::NewTimeStep, this, "MHD_Newdt", "stagen", {"MHD_C2P"});
+
+  ptlo->QueueTask(&MHD::ClearSend, this, "MHD_ClearS", "after_stagen");
+  ptlo->QueueTask(&MHD::ClearRecv, this, "MHD_ClearR", "after_stagen", {"MHD_ClearS"});
 
   return;
 }

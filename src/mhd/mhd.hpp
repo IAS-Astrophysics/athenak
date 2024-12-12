@@ -149,6 +149,7 @@ class MHD {
   // functions...
   void SetSaveWBcc();
   void AssembleMHDTasks(std::map<std::string, std::shared_ptr<TaskList>> tl);
+  void QueueMHDTasks();
   // ...in "before_timeintegrator" task list
   TaskStatus SaveMHDState(Driver *d, int stage);
   // ...in "before_stagen_tl" task list

@@ -126,7 +126,7 @@ void MeshBlockPack::AddPhysics(ParameterInput *pin) {
     nphysics++;
     if (!(pin->DoesBlockExist("hydro")) && !(pin->DoesBlockExist("radiation")) &&
         !(pin->DoesBlockExist("adm")) && !(pin->DoesBlockExist("z4c")) ) {
-      pmhd->AssembleMHDTasks(tl_map);
+      //pmhd->AssembleMHDTasks(tl_map);
     }
   } else {
     pmhd = nullptr;
