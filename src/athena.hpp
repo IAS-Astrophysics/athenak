@@ -24,16 +24,19 @@ using Real = float;
 #if MPI_PARALLEL_ENABLED
 #define MPI_ATHENA_REAL MPI_FLOAT
 #endif
+#define M_PI_REAL 3.14159265358979323846264338328f
 
 #else
 
 using Real = double;
+#define M_PI_REAL 3.14159265358979323846264338328
+
 #if MPI_PARALLEL_ENABLED
 #define MPI_ATHENA_REAL MPI_DOUBLE
 #endif
 
 #endif // SINGLE_PRECISION_ENABLED
-#define M_PI_REAL static_cast<Real>(M_PI)
+
 
 //----------------------------------------------------------------------------------------
 // general purpose macros (never modified)
