@@ -127,9 +127,9 @@ TaskStatus RadiationFEMN::CalculateFluxes(Driver *pdriver, int stage) {
                       const int nuenang = IndicesUnited(nuidx, enidx, B, num_species_,
                                                         num_energy_bins_, num_points_);
                       flx1(m, nuenang, kk, jj, ii) =
-                          ((1.5) * fminus - favg - (0.5) * fplus);
+                          ((1.5) * fminus - favg - (0.5) * fplus) * Ven_matrix(0,0); //@TODO: fix later!
                       flx1(m, nuenang, kk, jj, ii + 1) =
-                          ((0.5) * fminus + favg - (1.5) * fplus);
+                          ((0.5) * fminus + favg - (1.5) * fplus) * Ven_matrix(0,0);
                     });
                   }
                 });
@@ -220,9 +220,9 @@ TaskStatus RadiationFEMN::CalculateFluxes(Driver *pdriver, int stage) {
                         const int nuenang = IndicesUnited(nuidx, enidx, B, num_species_,
                                                           num_energy_bins_, num_points_);
                         flx2(m, nuenang, kk, jj, ii) =
-                            ((1.5) * fminus - favg - (0.5) * fplus);
+                            ((1.5) * fminus - favg - (0.5) * fplus) * Ven_matrix(0,0); //@TODO: fix later!
                         flx2(m, nuenang, kk, jj + 1, ii) =
-                            ((0.5) * fminus + favg - (1.5) * fplus);
+                            ((0.5) * fminus + favg - (1.5) * fplus) * Ven_matrix(0,0);
                       });
                     }
                   });
@@ -316,9 +316,9 @@ TaskStatus RadiationFEMN::CalculateFluxes(Driver *pdriver, int stage) {
                         const int nuenang = IndicesUnited(nuidx, enidx, B, num_species_,
                                                           num_energy_bins_, num_points_);
                         flx3(m, nuenang, kk, jj, ii) =
-                            ((1.5) * fminus - favg - (0.5) * fplus);
+                            ((1.5) * fminus - favg - (0.5) * fplus)  * Ven_matrix(0,0); // @TODO: fix later!
                         flx3(m, nuenang, kk + 1, jj, ii) =
-                            ((0.5) * fminus + favg - (1.5) * fplus);
+                            ((0.5) * fminus + favg - (1.5) * fplus)  * Ven_matrix(0,0);
                       });
                     }
                   });
