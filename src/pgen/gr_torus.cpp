@@ -175,248 +175,251 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   auto aux_trs = torus;
 
   const bool has_particles = (pmbp->ppart != nullptr);
-  const bool inject_particles = pin->GetOrAddBoolean("particles", "inject", false);
-  if (has_particles && inject_particles){
-    auto &indcs = pmbp->pmesh->mb_indcs;
-    int &ng = indcs.ng;
-    int n1 = indcs.nx1 + 2*ng;
-    int n2 = (indcs.nx2 > 1)? (indcs.nx2 + 2*ng) : 1;
-    int n3 = (indcs.nx3 > 1)? (indcs.nx3 + 2*ng) : 1;
-    const int is = indcs.is;
-    const int js = indcs.js;
-    const int ks = indcs.ks;
-    auto &gids = pmbp->gids;
-    auto &gide = pmbp->gide;
+  // Need to split checks, otherwise a "particles" block will get initialized and written to the restart file
+  // Then when trying to restart the mhd part this gives error because it looks for necessary particles parameters
+  if (has_particles) {
+    const bool inject_particles = pin->GetOrAddBoolean("particles", "inject", false);
     auto &size = pmbp->pmb->mb_size;
-    auto &coord = pmbp->pcoord->coord_data;
-    int &npart = pmbp->ppart->nprtcl_thispack;
-    auto &pr = pmbp->ppart->prtcl_rdata;
-    auto &pi = pmbp->ppart->prtcl_idata;
-    Real massive = 1.0; //This should be based on ptype, not hard-coded
-    const Real min_rad = pmbp->ppart->min_radius;
-    Real min_en = pin->GetOrAddReal("problem", "prtcl_energy_min", 0.005);
-    Real max_en = pin->GetOrAddReal("problem", "prtcl_energy_max", 0.5);
-    std::string prtcl_init_type = pin->GetString("particles","init_type");
-    // Need these booleans on device, can't use std::string
-    // .compare() returns 0 for successful comparison, which is opposite of usual boolean
-    const bool prtcl_init_rnd = !(prtcl_init_type.compare("random"));
-    const bool prtcl_init_flow = !(prtcl_init_type.compare("flow_align"));
-    const bool prtcl_init_blob = !(prtcl_init_type.compare("blob"));
-    // Check initialization type has been set
-    if ( prtcl_init_rnd && prtcl_init_flow && prtcl_init_blob ) {
-      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
-        << "Particle initialization type missing or not recognized." << std::endl;
-      std::exit(EXIT_FAILURE);
-    }
-
-    DvceArray5D<Real> u0_, w0_;
-    if (pmbp->phydro != nullptr) {
-      u0_ = pmbp->phydro->u0;
-      w0_ = pmbp->phydro->w0;
-    } else if (pmbp->pmhd != nullptr) {
-      u0_ = pmbp->pmhd->u0;
-      w0_ = pmbp->pmhd->w0;
-      auto &bcc_ = pmbp->pmhd->bcc0;
-      auto &bface_ = pmbp->pmhd->b0;
-      if (prtcl_init_flow) {
-        pmbp->pmhd->peos->ConsToPrim(u0_,bface_,w0_,bcc_,false,is-ng,is,0,(n2-1),0,(n3-1));
+    if (inject_particles) {
+      auto &indcs = pmbp->pmesh->mb_indcs;
+      int &ng = indcs.ng;
+      int n1 = indcs.nx1 + 2*ng;
+      int n2 = (indcs.nx2 > 1)? (indcs.nx2 + 2*ng) : 1;
+      int n3 = (indcs.nx3 > 1)? (indcs.nx3 + 2*ng) : 1;
+      const int is = indcs.is;
+      const int js = indcs.js;
+      const int ks = indcs.ks;
+      auto &gids = pmbp->gids;
+      auto &gide = pmbp->gide;
+      auto &coord = pmbp->pcoord->coord_data;
+      int &npart = pmbp->ppart->nprtcl_thispack;
+      auto &pr = pmbp->ppart->prtcl_rdata;
+      auto &pi = pmbp->ppart->prtcl_idata;
+      Real massive = 1.0; //This should be based on ptype, not hard-coded
+      const Real min_rad = pmbp->ppart->min_radius;
+      Real min_en = pin->GetOrAddReal("problem", "prtcl_energy_min", 0.005);
+      Real max_en = pin->GetOrAddReal("problem", "prtcl_energy_max", 0.5);
+      std::string prtcl_init_type = pin->GetString("particles","init_type");
+      // Need these booleans on device, can't use std::string
+      // .compare() returns 0 for successful comparison, which is opposite of usual boolean
+      const bool prtcl_init_rnd = !(prtcl_init_type.compare("random"));
+      const bool prtcl_init_flow = !(prtcl_init_type.compare("flow_align"));
+      const bool prtcl_init_blob = !(prtcl_init_type.compare("blob"));
+      // Check initialization type has been set
+      if ( prtcl_init_rnd && prtcl_init_flow && prtcl_init_blob ) {
+        std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+          << "Particle initialization type missing or not recognized." << std::endl;
+        std::exit(EXIT_FAILURE);
       }
-    }
 
-    // Array stores whether or not the Meshblock intersects the disk and is viable for particle injection
-    DvceArray1D<bool> mb_in_disk;
+      DvceArray5D<Real> u0_, w0_;
+      if (pmbp->phydro != nullptr) {
+        u0_ = pmbp->phydro->u0;
+        w0_ = pmbp->phydro->w0;
+      } else if (pmbp->pmhd != nullptr) {
+        u0_ = pmbp->pmhd->u0;
+        w0_ = pmbp->pmhd->w0;
+        auto &bcc_ = pmbp->pmhd->bcc0;
+        auto &bface_ = pmbp->pmhd->b0;
+        if (prtcl_init_flow) {
+          pmbp->pmhd->peos->ConsToPrim(u0_,bface_,w0_,bcc_,false,is-ng,is,0,(n2-1),0,(n3-1));
+        }
+      }
 
-    // Check if the meshblockpack crosses the disk for flow-aligned initialization
-    // Otherwise remove all particles from this meshblockpack
-    //if (prtcl_init_flow) {
-    int nmb = (pmbp->nmb_thispack);
-    Kokkos::realloc(mb_in_disk, nmb);
-    par_for("init_mb_in_disk", DevExeSpace(), 0, nmb-1,
-        KOKKOS_LAMBDA( const int &im ) {
-        mb_in_disk[im] = false;
-    });
+      // Array stores whether or not the Meshblock intersects the disk and is viable for particle injection
+      DvceArray1D<bool> mb_in_disk;
 
-    // If the density in this meshblock pack is everywhere smaller than 0.1 times
-    // the rho_min value you're not in the disk
-    // Using a parallel_reduce allows you to skip the whole meshblockpack
-    // without having to copy the device arrays to host to check if
-    // all mb_in_disk is false,
-    // otherwise you have stored to proceed with initialization of particles
-    Real dens_crit = pin->GetReal("problem", "rho_min")*pin->GetOrAddReal("particles", "rho_condition", 1.0);
-    Real dens_max = std::numeric_limits<float>::min();
-    const int nmkji = nmb*indcs.nx3*indcs.nx2*indcs.nx1;
-    const int nkji = indcs.nx3*indcs.nx2*indcs.nx1;
-    const int nji  = indcs.nx2*indcs.nx1;
+      // Check if the meshblockpack crosses the disk for flow-aligned initialization
+      // Otherwise remove all particles from this meshblockpack
+      int nmb = (pmbp->nmb_thispack);
+      Kokkos::realloc(mb_in_disk, nmb);
+      par_for("init_mb_in_disk", DevExeSpace(), 0, nmb-1,
+          KOKKOS_LAMBDA( const int &im ) {
+          mb_in_disk[im] = false;
+      });
 
-    Kokkos::parallel_reduce("pgen_mbp_checkdisk", Kokkos::RangePolicy<>(DevExeSpace(), 0, nmkji),
-    KOKKOS_LAMBDA(const int &idx, Real &max_d) {
-      // compute m,k,j,i indices of thread and call function
-      int m = (idx)/nkji;
-      int k = (idx - m*nkji)/nji;
-      int j = (idx - m*nkji - k*nji)/indcs.nx1;
-      int i = (idx - m*nkji - k*nji - j*indcs.nx1) + is;
-      k += ks;
-      j += js;
-      //Determine whether the meshblock with index m intersects the disk
-      mb_in_disk[m] = ( mb_in_disk[m] || ( u0_(m,IDN,k,j,i) > dens_crit ) );
+      // If the density in this meshblock pack is everywhere smaller than 0.1 times
+      // the rho_min value you're not in the disk
+      // Using a parallel_reduce allows you to skip the whole meshblockpack
+      // without having to copy the device arrays to host to check if
+      // all mb_in_disk is false,
+      // otherwise you have stored to proceed with initialization of particles
+      Real dens_crit = pin->GetReal("problem", "rho_min")*pin->GetOrAddReal("particles", "rho_condition", 1.0);
+      Real dens_max = std::numeric_limits<float>::min();
+      const int nmkji = nmb*indcs.nx3*indcs.nx2*indcs.nx1;
+      const int nkji = indcs.nx3*indcs.nx2*indcs.nx1;
+      const int nji  = indcs.nx2*indcs.nx1;
 
-      //Find maximum density in this meshblockpack
-      max_d = fmax( u0_(m,IDN,k,j,i), max_d );
-    }, Kokkos::Max<Real>(dens_max) );
-    
-    //std::cout << "d_max: " << dens_max << " d_crit: " << dens_crit << std::endl;
-    bool outside_disk = ( dens_max < dens_crit );
+      Kokkos::parallel_reduce("pgen_mbp_checkdisk", Kokkos::RangePolicy<>(DevExeSpace(), 0, nmkji),
+      KOKKOS_LAMBDA(const int &idx, Real &max_d) {
+        // compute m,k,j,i indices of thread and call function
+        int m = (idx)/nkji;
+        int k = (idx - m*nkji)/nji;
+        int j = (idx - m*nkji - k*nji)/indcs.nx1;
+        int i = (idx - m*nkji - k*nji - j*indcs.nx1) + is;
+        k += ks;
+        j += js;
+        //Determine whether the meshblock with index m intersects the disk
+        mb_in_disk[m] = ( mb_in_disk[m] || ( u0_(m,IDN,k,j,i) > dens_crit ) );
 
-    if (outside_disk) {
-      npart = 0;
-      Kokkos::realloc(pr, pmbp->ppart->nrdata, 0);
-      Kokkos::realloc(pi, pmbp->ppart->nidata, 0);
-      std::cout << "This rank does not intersect the disk. Deleted particles."<< std::endl;
-    } else {
+        //Find maximum density in this meshblockpack
+        max_d = fmax( u0_(m,IDN,k,j,i), max_d );
+      }, Kokkos::Max<Real>(dens_max) );
+      
+      //std::cout << "d_max: " << dens_max << " d_crit: " << dens_crit << std::endl;
+      bool outside_disk = ( dens_max < dens_crit );
 
-      Kokkos::Random_XorShift64_Pool<> prtcl_rand(gids);
-      par_for("part_init", DevExeSpace(),0,(npart-1),
-          KOKKOS_LAMBDA(const int p){
-            bool found_mb = false;
-            auto prtcl_gen = prtcl_rand.get_state();
-            while(!found_mb){
-              int m = static_cast<int>(prtcl_gen.frand()*(gide-gids+1.0));
-              // First check that the meshblock is within the disk, and then outside the horizon
-              while ( !mb_in_disk[m] ) {
-                m = static_cast<int>(prtcl_gen.frand()*(gide-gids+1.0));
-              }
-              Real &x1min = size.d_view(m).x1min;
-              Real &x1max = size.d_view(m).x1max;
-              Real x1v = x1min + prtcl_gen.frand()*(x1max - x1min);
-              Real &x2min = size.d_view(m).x2min;
-              Real &x2max = size.d_view(m).x2max;
-              Real x2v = x2min + prtcl_gen.frand()*(x2max - x2min); 
-              Real &x3min = size.d_view(m).x3min;
-              Real &x3max = size.d_view(m).x3max;
-              Real x3v = x3min + prtcl_gen.frand()*(x3max - x3min);
-              Real r, th, phi;
-              GetBoyerLindquistCoordinates(aux_trs, x1v, x2v, x3v, &r, &th, &phi);
-              if (r >= min_rad){
-                found_mb = true;
-                //Actually initialize the particle
-                pi(PGID,p) = gids+m;
-                pr(IPX,p) = x1v;
-                pr(IPY,p) = x2v;
-                pr(IPZ,p) = x3v;
-                
-                Real u[3];
-                Real this_en = min_en + prtcl_gen.frand()*(max_en - min_en);
-               // std::cout << this_en << std::endl;
-                if (prtcl_init_rnd){
-                  Real gu[4][4], gl[4][4];
-                  ComputeMetricAndInverse(x1v,x2v,x3v,coord.is_minkowski,coord.bh_spin,gl,gu); 
-                  int prograde = prtcl_gen.frand() > 0.5 ? -1 : 1;
-                  int updown = prtcl_gen.frand() > 0.5 ? -1 : 1;
-                  u[0] = prograde*sqrt(2.0/3.0*this_en);
-                  u[1] = prograde*sqrt(2.0/3.0*this_en);
-                  // Distribution centered on init_en
-                  u[2] = updown*sqrt(2.0/3.0*this_en);
-                  Real u_0 = 0.0;
-                  for (int i1 = 0; i1 < 3; ++i1 ){ 
-                    for (int i2 = 0; i2 < 3; ++i2 ){
-                      u_0 += gl[i1+1][i2+1]*u[i1]*u[i2];
-                    }
-                  }
-                  u_0 = sqrt(u_0 + massive); 
-                  u[0] += gu[0][1]*u_0/sqrt(-gu[0][0]);
-                  u[1] += gu[0][2]*u_0/sqrt(-gu[0][0]);
-                  u[2] += gu[0][3]*u_0/sqrt(-gu[0][0]);
-                  pr(IPVX,p) = gl[1][1]*u[0] + gl[1][2]*u[1] + gl[1][3]*u[2];
-                  pr(IPVY,p) = gl[2][1]*u[0] + gl[2][2]*u[1] + gl[2][3]*u[2];
-                  pr(IPVZ,p) = gl[3][1]*u[0] + gl[3][2]*u[1] + gl[3][3]*u[2];
-                  // TODO Currently the "flow_align" initialization assumes that the fluid already has velocity defined
-                  // Meaning this initialization only makes sense for restarts. One should move particle initialization
-                  // later in the code if particles have to be present from the beginning
-                } else if (prtcl_init_flow){
-                  int ip = (x1v - x1min)/size.d_view(m).dx1 + is;
-                  int jp = (x2v - x2min)/size.d_view(m).dx2 + js;
-                  int kp = (x3v - x3min)/size.d_view(m).dx3 + ks;
-                  //Check cell has sufficiently high density
-                  while ( u0_(m,IDN,kp,jp,ip) < dens_crit ){
-                    x1v = x1min + prtcl_gen.frand()*(x1max - x1min);
-                    x2v = x2min + prtcl_gen.frand()*(x2max - x2min);
-                    x3v = x3min + prtcl_gen.frand()*(x3max - x3min);
-                    ip = (x1v - x1min)/size.d_view(m).dx1 + is;
-                    jp = (x2v - x2min)/size.d_view(m).dx2 + js;
-                    kp = (x3v - x3min)/size.d_view(m).dx3 + ks;                  
-                  }
-                  u[0] = w0_(m,IVX,kp,jp,ip);
-                  u[1] = w0_(m,IVY,kp,jp,ip);
-                  u[2] = w0_(m,IVZ,kp,jp,ip);
-                  Real gu[4][4], gl[4][4];
-                  ComputeMetricAndInverse(x1v,x2v,x3v,coord.is_minkowski,coord.bh_spin,gl,gu); 
-                  Real u_0 = gl[1][1]*SQR(u[0]) + gl[2][2]*SQR(u[1]) + gl[3][3]*SQR(u[2])
-                        + 2.0*gl[1][2]*u[0]*u[1] + 2.0*gl[1][3]*u[0]*u[2]
-                        + 2.0*gl[3][2]*u[2]*u[1];
-                  u_0 = sqrt(u_0 + massive); 
-                  // // Compute particle's 3-velocity in normal frame
-                  // u[0] *= this_en/u_0;
-                  // u[1] *= this_en/u_0;
-                  // u[2] *= this_en/u_0;
-                  // // Check you haven't exceeded speed of light on the 3-velocity
-                  // if ( SQR(u[0]) + SQR(u[1]) + SQR(u[2]) >= 1.0 ) {
-                  //     Real aux_fac = 1.01*( SQR(u[0]) + SQR(u[1]) + SQR(u[2]) );
-                  //     u[0] /= aux_fac;
-                  //     u[1] /= aux_fac;
-                  //     u[2] /= aux_fac;
-                  // }
-                  // // Now u is a 3-velocity: compute gamma factor as usual
-                  // u_0 = gl[1][1]*SQR(u[0]) + gl[2][2]*SQR(u[1]) + gl[3][3]*SQR(u[2])
-                  //       + 2.0*gl[1][2]*u[0]*u[1] + 2.0*gl[1][3]*u[0]*u[2]
-                  //       + 2.0*gl[3][2]*u[2]*u[1];
-                  // u_0 = 1.0/sqrt(1.0 - u_0); 
-                  // // Reconvert to 4-velocity, but now accelerated
-                  u[0] *= this_en/u_0;
-                  u[1] *= this_en/u_0;
-                  u[2] *= this_en/u_0;
-                  pr(IPVX,p) = gl[1][1]*u[0] + gl[1][2]*u[1] + gl[1][3]*u[2];
-                  pr(IPVY,p) = gl[2][1]*u[0] + gl[2][2]*u[1] + gl[2][3]*u[2];
-                  pr(IPVZ,p) = gl[3][1]*u[0] + gl[3][2]*u[1] + gl[3][3]*u[2];
-                  pr(IPX,p) = x1v;
-                  pr(IPY,p) = x2v;
-                  pr(IPZ,p) = x3v;
-                } else if (prtcl_init_blob){
-                  x1v = (x1min + x1max)/2.0;
-                  x2v = (x2min + x2max)/2.0;
-                  x3v = (x3min + x3max)/2.0;
+      if (outside_disk) {
+        npart = 0;
+        Kokkos::realloc(pr, pmbp->ppart->nrdata, 0);
+        Kokkos::realloc(pi, pmbp->ppart->nidata, 0);
+        std::cout << "This rank does not intersect the disk. Deleted particles."<< std::endl;
+      } else {
+
+        Kokkos::Random_XorShift64_Pool<> prtcl_rand(gids);
+        par_for("part_init", DevExeSpace(),0,(npart-1),
+            KOKKOS_LAMBDA(const int p){
+              bool found_mb = false;
+              auto prtcl_gen = prtcl_rand.get_state();
+              while(!found_mb){
+                int m = static_cast<int>(prtcl_gen.frand()*(gide-gids+1.0));
+                // First check that the meshblock is within the disk, and then outside the horizon
+                while ( !mb_in_disk[m] ) {
+                  m = static_cast<int>(prtcl_gen.frand()*(gide-gids+1.0));
+                }
+                Real &x1min = size.d_view(m).x1min;
+                Real &x1max = size.d_view(m).x1max;
+                Real x1v = x1min + prtcl_gen.frand()*(x1max - x1min);
+                Real &x2min = size.d_view(m).x2min;
+                Real &x2max = size.d_view(m).x2max;
+                Real x2v = x2min + prtcl_gen.frand()*(x2max - x2min); 
+                Real &x3min = size.d_view(m).x3min;
+                Real &x3max = size.d_view(m).x3max;
+                Real x3v = x3min + prtcl_gen.frand()*(x3max - x3min);
+                Real r, th, phi;
+                GetBoyerLindquistCoordinates(aux_trs, x1v, x2v, x3v, &r, &th, &phi);
+                if (r >= min_rad){
+                  found_mb = true;
+                  //Actually initialize the particle
                   pi(PGID,p) = gids+m;
                   pr(IPX,p) = x1v;
                   pr(IPY,p) = x2v;
                   pr(IPZ,p) = x3v;
-                    
-                  int prograde = prtcl_gen.frand() > 0.5 ? -1 : 1;
-                  int updown = prtcl_gen.frand() > 0.5 ? -1 : 1;
-                  u[0] = prograde*sqrt(2.0/3.0*this_en);
-                  u[1] = prograde*sqrt(2.0/3.0*this_en);
-                  // Distribution centered on init_en
-                  u[2] = updown*sqrt(2.0/3.0*this_en);
-                  Real gu[4][4], gl[4][4];
-                  ComputeMetricAndInverse(x1v,x2v,x3v,coord.is_minkowski,coord.bh_spin,gl,gu); 
-                  Real u_0 = 0.0;
-                  for (int i1 = 0; i1 < 3; ++i1 ){ 
-                    for (int i2 = 0; i2 < 3; ++i2 ){
-                      u_0 += gl[i1+1][i2+1]*u[i1]*u[i2];
+                  
+                  Real u[3];
+                  Real this_en = min_en + prtcl_gen.frand()*(max_en - min_en);
+                 // std::cout << this_en << std::endl;
+                  if (prtcl_init_rnd){
+                    Real gu[4][4], gl[4][4];
+                    ComputeMetricAndInverse(x1v,x2v,x3v,coord.is_minkowski,coord.bh_spin,gl,gu); 
+                    int prograde = prtcl_gen.frand() > 0.5 ? -1 : 1;
+                    int updown = prtcl_gen.frand() > 0.5 ? -1 : 1;
+                    u[0] = prograde*sqrt(2.0/3.0*this_en);
+                    u[1] = prograde*sqrt(2.0/3.0*this_en);
+                    // Distribution centered on init_en
+                    u[2] = updown*sqrt(2.0/3.0*this_en);
+                    Real u_0 = 0.0;
+                    for (int i1 = 0; i1 < 3; ++i1 ){ 
+                      for (int i2 = 0; i2 < 3; ++i2 ){
+                        u_0 += gl[i1+1][i2+1]*u[i1]*u[i2];
+                      }
                     }
+                    u_0 = sqrt(u_0 + massive); 
+                    u[0] += gu[0][1]*u_0/sqrt(-gu[0][0]);
+                    u[1] += gu[0][2]*u_0/sqrt(-gu[0][0]);
+                    u[2] += gu[0][3]*u_0/sqrt(-gu[0][0]);
+                    pr(IPVX,p) = gl[1][1]*u[0] + gl[1][2]*u[1] + gl[1][3]*u[2];
+                    pr(IPVY,p) = gl[2][1]*u[0] + gl[2][2]*u[1] + gl[2][3]*u[2];
+                    pr(IPVZ,p) = gl[3][1]*u[0] + gl[3][2]*u[1] + gl[3][3]*u[2];
+                    // TODO Currently the "flow_align" initialization assumes that the fluid already has velocity defined
+                    // Meaning this initialization only makes sense for restarts. One should move particle initialization
+                    // later in the code if particles have to be present from the beginning
+                  } else if (prtcl_init_flow){
+                    int ip = (x1v - x1min)/size.d_view(m).dx1 + is;
+                    int jp = (x2v - x2min)/size.d_view(m).dx2 + js;
+                    int kp = (x3v - x3min)/size.d_view(m).dx3 + ks;
+                    //Check cell has sufficiently high density
+                    while ( u0_(m,IDN,kp,jp,ip) < dens_crit ){
+                      x1v = x1min + prtcl_gen.frand()*(x1max - x1min);
+                      x2v = x2min + prtcl_gen.frand()*(x2max - x2min);
+                      x3v = x3min + prtcl_gen.frand()*(x3max - x3min);
+                      ip = (x1v - x1min)/size.d_view(m).dx1 + is;
+                      jp = (x2v - x2min)/size.d_view(m).dx2 + js;
+                      kp = (x3v - x3min)/size.d_view(m).dx3 + ks;                  
+                    }
+                    u[0] = w0_(m,IVX,kp,jp,ip);
+                    u[1] = w0_(m,IVY,kp,jp,ip);
+                    u[2] = w0_(m,IVZ,kp,jp,ip);
+                    Real gu[4][4], gl[4][4];
+                    ComputeMetricAndInverse(x1v,x2v,x3v,coord.is_minkowski,coord.bh_spin,gl,gu); 
+                    Real u_0 = gl[1][1]*SQR(u[0]) + gl[2][2]*SQR(u[1]) + gl[3][3]*SQR(u[2])
+                          + 2.0*gl[1][2]*u[0]*u[1] + 2.0*gl[1][3]*u[0]*u[2]
+                          + 2.0*gl[3][2]*u[2]*u[1];
+                    u_0 = sqrt(u_0 + massive); 
+                    // // Compute particle's 3-velocity in normal frame
+                    // u[0] *= this_en/u_0;
+                    // u[1] *= this_en/u_0;
+                    // u[2] *= this_en/u_0;
+                    // // Check you haven't exceeded speed of light on the 3-velocity
+                    // if ( SQR(u[0]) + SQR(u[1]) + SQR(u[2]) >= 1.0 ) {
+                    //     Real aux_fac = 1.01*( SQR(u[0]) + SQR(u[1]) + SQR(u[2]) );
+                    //     u[0] /= aux_fac;
+                    //     u[1] /= aux_fac;
+                    //     u[2] /= aux_fac;
+                    // }
+                    // // Now u is a 3-velocity: compute gamma factor as usual
+                    // u_0 = gl[1][1]*SQR(u[0]) + gl[2][2]*SQR(u[1]) + gl[3][3]*SQR(u[2])
+                    //       + 2.0*gl[1][2]*u[0]*u[1] + 2.0*gl[1][3]*u[0]*u[2]
+                    //       + 2.0*gl[3][2]*u[2]*u[1];
+                    // u_0 = 1.0/sqrt(1.0 - u_0); 
+                    // // Reconvert to 4-velocity, but now accelerated
+                    u[0] *= this_en/u_0;
+                    u[1] *= this_en/u_0;
+                    u[2] *= this_en/u_0;
+                    pr(IPVX,p) = gl[1][1]*u[0] + gl[1][2]*u[1] + gl[1][3]*u[2];
+                    pr(IPVY,p) = gl[2][1]*u[0] + gl[2][2]*u[1] + gl[2][3]*u[2];
+                    pr(IPVZ,p) = gl[3][1]*u[0] + gl[3][2]*u[1] + gl[3][3]*u[2];
+                    pr(IPX,p) = x1v;
+                    pr(IPY,p) = x2v;
+                    pr(IPZ,p) = x3v;
+                  } else if (prtcl_init_blob){
+                    x1v = (x1min + x1max)/2.0;
+                    x2v = (x2min + x2max)/2.0;
+                    x3v = (x3min + x3max)/2.0;
+                    pi(PGID,p) = gids+m;
+                    pr(IPX,p) = x1v;
+                    pr(IPY,p) = x2v;
+                    pr(IPZ,p) = x3v;
+                      
+                    int prograde = prtcl_gen.frand() > 0.5 ? -1 : 1;
+                    int updown = prtcl_gen.frand() > 0.5 ? -1 : 1;
+                    u[0] = prograde*sqrt(2.0/3.0*this_en);
+                    u[1] = prograde*sqrt(2.0/3.0*this_en);
+                    // Distribution centered on init_en
+                    u[2] = updown*sqrt(2.0/3.0*this_en);
+                    Real gu[4][4], gl[4][4];
+                    ComputeMetricAndInverse(x1v,x2v,x3v,coord.is_minkowski,coord.bh_spin,gl,gu); 
+                    Real u_0 = 0.0;
+                    for (int i1 = 0; i1 < 3; ++i1 ){ 
+                      for (int i2 = 0; i2 < 3; ++i2 ){
+                        u_0 += gl[i1+1][i2+1]*u[i1]*u[i2];
+                      }
+                    }
+                    u_0 = sqrt(u_0 + massive); 
+                    u[0] += gu[0][1]*u_0/sqrt(-gu[0][0]);
+                    u[1] += gu[0][2]*u_0/sqrt(-gu[0][0]);
+                    u[2] += gu[0][3]*u_0/sqrt(-gu[0][0]);
+                    pr(IPVX,p) = gl[1][1]*u[0] + gl[1][2]*u[1] + gl[1][3]*u[2];
+                    pr(IPVY,p) = gl[2][1]*u[0] + gl[2][2]*u[1] + gl[2][3]*u[2];
+                    pr(IPVZ,p) = gl[3][1]*u[0] + gl[3][2]*u[1] + gl[3][3]*u[2];
                   }
-                  u_0 = sqrt(u_0 + massive); 
-                  u[0] += gu[0][1]*u_0/sqrt(-gu[0][0]);
-                  u[1] += gu[0][2]*u_0/sqrt(-gu[0][0]);
-                  u[2] += gu[0][3]*u_0/sqrt(-gu[0][0]);
-                  pr(IPVX,p) = gl[1][1]*u[0] + gl[1][2]*u[1] + gl[1][3]*u[2];
-                  pr(IPVY,p) = gl[2][1]*u[0] + gl[2][2]*u[1] + gl[2][3]*u[2];
-                  pr(IPVZ,p) = gl[3][1]*u[0] + gl[3][2]*u[1] + gl[3][3]*u[2];
+                  //std::cout << "p: " << pi(PTAG,p) << " " << pr(IPVX,p) << " " << pr(IPVY,p) << " " << pr(IPVZ,p) << std::endl;
                 }
-                //std::cout << "p: " << pi(PTAG,p) << " " << pr(IPVX,p) << " " << pr(IPVY,p) << " " << pr(IPVZ,p) << std::endl;
               }
-            }
-            prtcl_rand.free_state(prtcl_gen);
-      });
-      std::cout << "Injected " << npart << " particles." << std::endl;
+              prtcl_rand.free_state(prtcl_gen);
+        });
+        std::cout << "Injected " << npart << " particles." << std::endl;
+      }
     }
     // set timestep (which will remain constant for entire run
     // Assumes uniform mesh (no SMR or AMR)
@@ -425,7 +428,6 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     dtnew_ = std::min(size.h_view(0).dx1, size.h_view(0).dx2);
     dtnew_ = std::min(dtnew_, size.h_view(0).dx3);
     dtnew_ *= pin->GetOrAddReal("time", "cfl_number", 0.8);
-
   }
 
   // return if restart
