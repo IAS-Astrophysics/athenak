@@ -101,6 +101,8 @@ struct bbh_pgen {
   Real alpha_thr;
   Real radius_thr;
 
+  Real spin;
+
   Real dexcise, pexcise;                      // excision parameters
   Real arad;                                  // radiation constant
   Real r_edge, r_peak, l, rho_max;            // fixed torus parameters
@@ -180,6 +182,12 @@ static void TransformVector(struct bbh_pgen pgen,
                             Real a0_bl, Real a1_bl, Real a2_bl, Real a3_bl,
                             Real x1, Real x2, Real x3,
                             Real *pa0, Real *pa1, Real *pa2, Real *pa3);
+
+KOKKOS_INLINE_FUNCTION
+static void CalculateVectorPotentialInTiltedTorus(struct bbh_pgen pgen,
+                                                  Real r, Real theta, Real phi,
+                                                  Real *patheta, Real *paphi);
+
 
 KOKKOS_INLINE_FUNCTION
 static void GetBoyerLindquistCoordinates(struct bbh_pgen pgen,
@@ -290,6 +298,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   bbh.r_peak = pin->GetReal("problem", "r_peak");
   bbh.n_param = pin->GetOrAddReal("problem", "n_param",0.0);
 
+  bbh.spin = 0.0; //delete eventually?
 
   bbh.sep = pin->GetOrAddReal("problem", "sep", 25.0);
   bbh.om = std::pow(bbh.sep, -1.5);
@@ -498,9 +507,9 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     } else {
       w0_(m,IPR,k,j,i) = fmax(pgas, pgas_bg) * (1.0 + perturbation);
     }
-    w0_(m,IVX,k,j,i) = 0.0; //uu1;
-    w0_(m,IVY,k,j,i) = 0.0; //uu2;
-    w0_(m,IVZ,k,j,i) = 0.0; //uu3;
+    w0_(m,IVX,k,j,i) = uu1;
+    w0_(m,IVY,k,j,i) = uu2;
+    w0_(m,IVZ,k,j,i) = uu3;
 
     // Set coordinate frame intensity (if radiation enabled)
     if (is_radiation_enabled) {
@@ -541,8 +550,6 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     if (is_radiation_enabled) ptot += urad/3.0;
     max_ptot = fmax(ptot, max_ptot);
   }, Kokkos::Max<Real>(ptotmax));
-
-
 
   // Initialize ADM variables -------------------------------
   if (pmbp->padm != nullptr) {
@@ -1844,7 +1851,7 @@ static Real LogHAux(struct bbh_pgen pgen, Real r, Real sin_theta) {
     hh *= (pow(fabs(1.0 - pow(pgen.c_param, pow_c)*pow(l   , pow_l)), pow_abs) *
           pow(fabs(1.0 - pow(pgen.c_param, pow_c)*pow(l_edge, pow_l)), -1.0*pow_abs));
   }
-  if (isfinite(hh) && h >= 1.0) {
+  if (isfinite(hh) && hh >= 1.0) {
     logh = log(hh);
   } else {
     logh = -1.0;
@@ -1961,12 +1968,135 @@ static Real CalculateL(struct bbh_pgen pgen, Real r, Real sin_theta) {
 }
 
 KOKKOS_INLINE_FUNCTION
+static void CalculateVectorPotentialInTiltedTorus(struct bbh_pgen pgen,
+                                                  Real r, Real theta, Real phi,
+                                                  Real *patheta, Real *paphi) {
+  // Find vector potential components, accounting for tilt
+  Real atheta = 0.0, aphi = 0.0;
+
+  Real sin_theta = sin(theta);
+  Real cos_theta = cos(theta);
+  Real sin_phi = sin(phi);
+  Real cos_phi = cos(phi);
+  Real sin_vartheta;
+
+  if (pgen.psi != 0.0) {
+    Real x = sin_theta * cos_phi;
+    Real y = sin_theta * sin_phi;
+    Real z = cos_theta;
+    Real varx = pgen.cos_psi * x - pgen.sin_psi * z;
+    Real vary = y;
+    sin_vartheta = sqrt(SQR(varx) + SQR(vary));
+  } else {
+    sin_vartheta = fabs(sin(theta));
+  }
+
+  if (pgen.is_vertical_field) {
+    // Determine if we are in the torus
+    Real rho;
+    Real gm1 = pgen.gamma_adi - 1.0;
+    bool in_torus = false;
+    Real log_h = LogHAux(pgen, r, sin_vartheta) - pgen.log_h_edge;  // (FM 3.6)
+    if (log_h >= 0.0) {
+      in_torus = true;
+      Real ptot_over_rho = gm1/pgen.gamma_adi * (exp(log_h) - 1.0);
+      rho = pow(ptot_over_rho, 1.0/gm1) / pgen.rho_peak;
+    }
+
+    // more-or-less vertical geometry but falling to zero on edges
+    Real cyl_radius = r * sin_vartheta;
+    Real rcyl_in = pgen.r_edge;
+    Real rcyl_falloff = pgen.potential_falloff;
+
+    Real aphi_tilt = pow(cyl_radius/rcyl_in, pgen.potential_r_pow);
+    if (pgen.potential_falloff != 0) {
+      aphi_tilt *= exp(-cyl_radius/rcyl_falloff);
+    }
+
+    Real aphi_offset = exp(-rcyl_in/rcyl_falloff);
+    if (cyl_radius < rcyl_in) {
+      aphi_tilt = 0.0;
+    } else {
+      aphi_tilt -= aphi_offset;
+    }
+
+    if (pgen.potential_rho_pow != 0) {
+      if (in_torus) {
+        aphi_tilt *= pow(rho/pgen.rho_max, pgen.potential_rho_pow);
+      } else {
+        aphi_tilt = 0.0;
+      }
+    }
+    if (pgen.psi != 0.0) {
+      Real dvarphi_dtheta = -pgen.sin_psi * sin_phi / SQR(sin_vartheta);
+      Real dvarphi_dphi = sin_theta / SQR(sin_vartheta)
+          * (pgen.cos_psi * sin_theta - pgen.sin_psi * cos_theta * cos_phi);
+      atheta = dvarphi_dtheta * aphi_tilt;
+      aphi = dvarphi_dphi * aphi_tilt;
+    } else {
+      atheta = 0.0;
+      aphi = aphi_tilt;
+    }
+
+  } else {
+    if (r >= pgen.r_edge) {
+      // Determine if we are in the torus
+      Real rho;
+      Real gm1 = pgen.gamma_adi-1.0;
+      bool in_torus = false;
+      Real log_h = LogHAux(pgen, r, sin_vartheta) - pgen.log_h_edge;  // (FM 3.6)
+      if (log_h >= 0.0) {
+        in_torus = true;
+        Real ptot_over_rho = gm1/pgen.gamma_adi * (exp(log_h) - 1.0);
+        rho = pow(ptot_over_rho, 1.0/gm1) / pgen.rho_peak;
+      }
+
+      Real aphi_tilt = 0.0;
+      if (in_torus) {
+        Real scaling_param = pow((r/pgen.r_edge)*sin_vartheta, pgen.potential_r_pow);
+        if (pgen.potential_falloff != 0) {
+          scaling_param *= exp(-r/pgen.potential_falloff);
+        }
+	aphi_tilt = pow(rho/pgen.rho_max, pgen.potential_rho_pow)*scaling_param;
+        aphi_tilt -= pgen.potential_cutoff;
+        aphi_tilt = fmax(aphi_tilt, 0.0);
+        if (pgen.psi != 0.0) {
+          Real dvarphi_dtheta = -pgen.sin_psi * sin_phi / SQR(sin_vartheta);
+          Real dvarphi_dphi = sin_theta / SQR(sin_vartheta)
+              * (pgen.cos_psi * sin_theta - pgen.sin_psi * cos_theta * cos_phi);
+          atheta = dvarphi_dtheta * aphi_tilt;
+          aphi = dvarphi_dphi * aphi_tilt;
+        } else {
+          atheta = 0.0;
+          aphi = aphi_tilt;
+        }
+      }
+    }
+  }
+
+  *patheta = atheta;
+  *paphi = aphi;
+
+  return;
+}
+
+KOKKOS_INLINE_FUNCTION
 Real A1(struct bbh_pgen pgen, Real x1, Real x2, Real x3) {
   // BL coordinates
-  //Real r, theta, phi;
-  //GetBoyerLindquistCoordinates(pgen, x1, x2, x3, &r, &theta, &phi);
+  Real r, theta, phi;
+  GetBoyerLindquistCoordinates(pgen, x1, x2, x3, &r, &theta, &phi);
 
-  return -0.5*x2;
+  // calculate vector potential in spherical KS
+  Real atheta, aphi;
+  CalculateVectorPotentialInTiltedTorus(pgen, r, theta, phi, &atheta, &aphi);
+
+  Real big_r = sqrt( SQR(x1) + SQR(x2) + SQR(x3) );
+  Real sqrt_term =  2.0*SQR(r) - SQR(big_r) + SQR(pgen.spin);
+  Real isin_term = sqrt((SQR(pgen.spin)+SQR(r))/fmax(SQR(x1)+SQR(x2),1.0e-12));
+
+  return atheta*(x1*x3*isin_term/(r*sqrt_term)) +
+         aphi*(-x2/(SQR(x1)+SQR(x2))+pgen.spin*x1*r/((SQR(pgen.spin)+SQR(r))*sqrt_term));
+  //return -0.5*x2;
 }
 
 //----------------------------------------------------------------------------------------
@@ -1977,8 +2107,21 @@ Real A2(struct bbh_pgen pgen, Real x1, Real x2, Real x3) {
   // BL coordinates
   //Real r, theta, phi;
   //GetBoyerLindquistCoordinates(pgen, x1, x2, x3, &r, &theta, &phi);
+  // BL coordinates
+  Real r, theta, phi;
+  GetBoyerLindquistCoordinates(pgen, x1, x2, x3, &r, &theta, &phi);
 
-  return 0.5*x1;
+  // calculate vector potential in spherical KS
+  Real atheta, aphi;
+  CalculateVectorPotentialInTiltedTorus(pgen, r, theta, phi, &atheta, &aphi);
+
+  Real big_r = sqrt( SQR(x1) + SQR(x2) + SQR(x3) );
+  Real sqrt_term =  2.0*SQR(r) - SQR(big_r) + SQR(pgen.spin);
+  Real isin_term = sqrt((SQR(pgen.spin)+SQR(r))/fmax(SQR(x1)+SQR(x2),1.0e-12));
+
+  return atheta*(x2*x3*isin_term/(r*sqrt_term)) +
+         aphi*(x1/(SQR(x1)+SQR(x2))+pgen.spin*x2*r/((SQR(pgen.spin)+SQR(r))*sqrt_term));
+  //return 0.5*x1;
 }
 
 //----------------------------------------------------------------------------------------
@@ -1987,8 +2130,20 @@ Real A2(struct bbh_pgen pgen, Real x1, Real x2, Real x3) {
 KOKKOS_INLINE_FUNCTION
 Real A3(struct bbh_pgen pgen, Real x1, Real x2, Real x3) {
   // BL coordinates
-  //Real r, theta, phi;
-  //GetBoyerLindquistCoordinates(pgen, x1, x2, x3, &r, &theta, &phi);
+  Real r, theta, phi;
+  GetBoyerLindquistCoordinates(pgen, x1, x2, x3, &r, &theta, &phi);
+
+  // calculate vector potential in spherical KS
+  Real atheta, aphi;
+  CalculateVectorPotentialInTiltedTorus(pgen, r, theta, phi, &atheta, &aphi);
+
+  Real big_r = sqrt( SQR(x1) + SQR(x2) + SQR(x3) );
+  Real sqrt_term =  2.0*SQR(r) - SQR(big_r) + SQR(pgen.spin);
+  Real isin_term = sqrt((SQR(pgen.spin)+SQR(r))/fmax(SQR(x1)+SQR(x2),1.0e-12));
+
+  return atheta*(((1.0+SQR(pgen.spin/r))*SQR(x3)-sqrt_term)*isin_term/(r*sqrt_term)) +
+         aphi*(pgen.spin*x3/(r*sqrt_term));
+
 
   return 0.0;
 }
