@@ -91,7 +91,25 @@ class NQTLogs {
       constexpr int64_t one_as_int = 4607182418800017408;
       // as_int(2.0) - as_int(1.0)
       constexpr double scale_up = 4503599627370496;
-      return as_double(static_cast<int64_t>(x*scale_up) + one_as_int);
+      return as_real(static_cast<int64_t>(x*scale_up) + one_as_int);
+    }
+
+    KOKKOS_FORCEINLINE_FUNCTION
+    float log2_LANL(const float x) const {
+      // as_int(1.0)
+      constexpr int32_t one_as_int = 1065353216;
+      // 1./static_cast<double>(as_int(2.0) - as_int(1.0))
+      constexpr float scale_down = 1.f/8388608.f;
+      return static_cast<float>(as_int(x) - one_as_int) * scale_down;
+    }
+
+    KOKKOS_FORCEINLINE_FUNCTION
+    float exp2_LANL(const float x) const {
+      // as_int(1.0)
+      constexpr int32_t one_as_int = 1065353216;
+      // as_int(2.0) - as_int(1.0)
+      constexpr float scale_up = 8388608.f;
+      return as_real(static_cast<int32_t>(x*scale_up) + one_as_int);
     }
 
     KOKKOS_FORCEINLINE_FUNCTION
@@ -121,19 +139,59 @@ class NQTLogs {
       // as_int(1.0) == 2^62 - 2^52
       constexpr int64_t one_as_int = 4607182418800017408;
       // as_int(2.0) - as_int(1.0) == 2^52
-      constexpr double scale_up = 4503599627370496;
+      constexpr double scale_up = 4503599627370496.;
       constexpr int64_t mantissa_mask = 4503599627370495; // 2^52 - 1
       constexpr int64_t a = 9007199254740992; // 2 * 2^52
-      constexpr double b = 67108864; // 2^26
+      // constexpr double b = 67108864; // 2^26
       constexpr int64_t c = 18014398509481984; // 4 * 2^52
 
       const int64_t x_as_int = static_cast<int64_t>(x*scale_up);
       const int64_t frac_as_int = x_as_int & mantissa_mask;
       const int64_t frac_sqrt = static_cast<int64_t>(
-                                  b*Kokkos::sqrt(static_cast<double>(c-3*frac_as_int)));
+                                  Kokkos::sqrt(scale_up*static_cast<double>(c-3*frac_as_int)));
 
-      return as_double(x_as_int + a - frac_sqrt - frac_as_int + one_as_int);
-      // return as_double(x_as_int + one_as_int);
+      return as_real(x_as_int + a - frac_sqrt - frac_as_int + one_as_int);
+      // return as_float(x_as_int + one_as_int);
+  }
+    KOKKOS_FORCEINLINE_FUNCTION
+    float log2_(const float x) const {
+      // as_int(1.0) == 2^30 - 2^23
+      constexpr int32_t one_as_int = 1065353216;
+      // 1/(as_int(2.0) - as_int(1.0)) == 2^-23
+      constexpr float scale_down = 1.f/8388608.f;
+      // 2^23 - 1
+      constexpr int32_t mantissa_mask = 8388607;
+      // 2^11 - 1
+      constexpr int32_t low_mask = 2047;
+
+      const int32_t x_as_int = as_int(x) - one_as_int;
+      const int32_t frac_as_int = x_as_int & mantissa_mask;
+      const int32_t frac_high = frac_as_int>>11;
+      const int32_t frac_low  = frac_as_int & low_mask;
+      const int32_t frac_squared = (frac_high*frac_high + 
+                                         ((frac_high*frac_low)>>10))>>1;
+      
+      return static_cast<float>(x_as_int +
+                                    ((frac_as_int - frac_squared)/3)) * scale_down;
+  }
+
+    KOKKOS_FORCEINLINE_FUNCTION
+    float exp2_(const float x) const {
+      // as_int(1.0) == 2^30 - 2^23
+      constexpr int32_t one_as_int = 1065353216;
+      // as_int(2.0) - as_int(1.0) == 2^23
+      constexpr float scale_up = 8388608.f;
+      constexpr int32_t mantissa_mask = 8388607; // 2^23 - 1
+      constexpr int32_t a = 16777216; // 2 * 2^23
+      // constexpr float b = 2896.309375740099f; // 2^(23/2)
+      constexpr int32_t c = 33554432; // 4 * 2^23
+
+      const int32_t x_as_int = static_cast<int32_t>(x*scale_up);
+      const int32_t frac_as_int = x_as_int & mantissa_mask;
+      const int32_t frac_sqrt = static_cast<int32_t>(
+                                  Kokkos::sqrt(scale_up*static_cast<float>(c-3*frac_as_int)));
+
+      return as_real(x_as_int + a - frac_sqrt - frac_as_int + one_as_int);
   }
 
   private:
@@ -141,8 +199,16 @@ class NQTLogs {
       return *reinterpret_cast<int64_t*>(&f);
     }
 
-    KOKKOS_FORCEINLINE_FUNCTION double as_double(int64_t i) const {
+    KOKKOS_FORCEINLINE_FUNCTION double as_real(int64_t i) const {
       return *reinterpret_cast<double*>(&i);
+    }
+
+    KOKKOS_FORCEINLINE_FUNCTION int32_t as_int(float f) const {
+      return *reinterpret_cast<int32_t*>(&f);
+    }
+
+    KOKKOS_FORCEINLINE_FUNCTION float as_real(int32_t i) const {
+      return *reinterpret_cast<float*>(&i);
     }
 };
 
