@@ -334,7 +334,7 @@ TaskStatus RadiationFEMN::ExpRKUpdate(Driver *pdriver, int stage) {
                                                               num_species_,
                                                               num_energy_bins_, num_points_);
                             momentum_term += - g_gam(idx_a, B) * Ven_matrix(idx_m, enn) * f0_(m, idxunited_am, k, j, i)
-                                             - f_gam(idx_a, B) * Wen_matrix(idx_m, enn) * f0_(m, idxunited_am, k, j, i);
+                                             - 0 * f_gam(idx_a, B) * Wen_matrix(idx_m, enn) * f0_(m, idxunited_am, k, j, i);
                           }
                         }
 
