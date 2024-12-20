@@ -36,6 +36,7 @@ TaskStatus RadiationFEMN::CalculateFluxes(Driver *pdriver, int stage) {
 
   auto &rad_mask_array_ = pmy_pack->pradfemn->radiation_mask;
   auto &f0_ = pmy_pack->pradfemn->f0;
+  auto &u_mu_ = pmy_pack->pradfemn->u_mu;
   auto &energy_grid_ = pmy_pack->pradfemn->energy_grid;
   auto &p_matrix = pmy_pack->pradfemn->P_matrix;
   auto &pmod_matrix = pmy_pack->pradfemn->Pmod_matrix;
@@ -75,7 +76,7 @@ TaskStatus RadiationFEMN::CalculateFluxes(Driver *pdriver, int stage) {
                     ScrArray1D<Real> f0_scratch_m2 =
                         ScrArray1D<Real>(member.team_scratch(scr_level), num_points_);
                     ApplyClosureX(member, num_species_, num_energy_bins_, num_points_,
-                                  m, nuidx, enidx, kk, jj, ii,
+                                  m, nuidx, enidx, kk, jj, ii, adm, tetr_mu_muhat0_, u_mu_,
                                   f0_, f0_scratch, f0_scratch_p1, f0_scratch_p2,
                                   f0_scratch_p3, f0_scratch_m1, f0_scratch_m2,
                                   m1_flag_, m1_closure_, m1_closure_fun_);
