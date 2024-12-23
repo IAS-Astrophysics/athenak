@@ -10,6 +10,7 @@
 #define RADIATION_FEMN_RADIATION_FEMN_CLOSURE_HPP_
 
 #include "athena.hpp"
+#include "radiation_femn_geodesic_grid.hpp"
 #include "radiation_femn/radiation_femn.hpp"
 #include "radiation_femn/radiation_femn_closure.hpp"
 #include "adm/adm.hpp"
@@ -238,6 +239,75 @@ void ApplyM1ClosureThin(TeamMember_t member, int num_points, int m, int nuen,
   f(m, nuen + 7, kk, jj, ii) = f_scratch(7);
   f(m, nuen + 8, kk, jj, ii) = f_scratch(8);
 }
+
+  // Apply M1 closure in the thin limit
+KOKKOS_INLINE_FUNCTION
+void ApplyM1ClosureThinAlternate(TeamMember_t member, int num_points, int m, int nuen,
+                    int kk, int jj, int ii,
+                    adm::ADM::ADM_vars adm,
+                    AthenaTensor4d<Real, TensorSymm::NONE, 4, 2> tetr_mu_muhat0,
+                    AthenaTensor4d<Real, TensorSymm::NONE, 4, 1> u_mu,
+                    DvceArray5D<Real> f,
+                    ScrArray1D<Real> f_scratch,
+                    M1Closure m1_closure, ClosureFunc m1_closure_fun,
+                    Real rad_E_floor = 1e-15, Real rad_eps = 1e-5) {
+
+  Real g_dd[16];
+  adm::SpacetimeMetric(adm.alpha(m, kk, jj, ii),
+                                         adm.beta_u(m, 0, kk, jj, ii),
+                                         adm.beta_u(m, 1, kk, jj, ii),
+                                         adm.beta_u(m, 2, kk, jj, ii),
+                                         adm.g_dd(m, 0, 0, kk, jj, ii),
+                                         adm.g_dd(m, 0, 1, kk, jj, ii),
+                                         adm.g_dd(m, 0, 2, kk, jj, ii),
+                                         adm.g_dd(m, 1, 1, kk, jj, ii),
+                                         adm.g_dd(m, 1, 2, kk, jj, ii),
+                                         adm.g_dd(m, 2, 2, kk, jj, ii),
+                                         g_dd);
+
+  Real J = Kokkos::sqrt(4. * M_PI) * f(m, nuen + 0, kk, jj, ii); // 00
+  Real Hx_u = -Kokkos::sqrt(4. * M_PI / 3.0) * f(m, nuen + 3, kk, jj, ii); // 11
+  Real Hy_u = -Kokkos::sqrt(4. * M_PI / 3.0) * f(m, nuen + 1, kk, jj, ii); // 1-1
+  Real Hz_u = Kokkos::sqrt(4. * M_PI / 3.0) * f(m, nuen + 2, kk, jj, ii); // 10
+  Real H2 = Hx_u * Hx_u + Hy_u * Hy_u + Hz_u * Hz_u;
+  Real u_tetr_u[4] = {1, 0, 0, 0};
+
+  J = Kokkos::fmax(J, rad_E_floor);
+  Real lim = J * J * (1. - rad_eps);
+  if (H2 > lim) {
+    Real fac = lim / H2;
+    Hx_u = fac * Hx_u;
+    Hy_u = fac * Hy_u;
+    Hz_u = fac * Hz_u;
+  }
+  H2 = Hx_u * Hx_u + Hy_u * Hy_u + Hz_u * Hz_u;
+  Real Hnorm = Kokkos::sqrt(H2);
+  Real h_u[4] = {0, (Hnorm > 0) ? Hx_u/Hnorm: 0, (Hnorm > 0) ? Hy_u/Hnorm: 0, (Hnorm > 0) ? Hz_u/Hnorm: 0};
+
+  Real phi = Kokkos::acos(h_u[3]);
+  Real theta = Kokkos::atan2(h_u[2], h_u[1]);
+
+  f_scratch(0) = J / Kokkos::sqrt(4. * M_PI);                             // (0,0)
+  f_scratch(1) = -Hy_u / Kokkos::sqrt(4. * M_PI / 3.0);                     // (1,-1)
+  f_scratch(2) = Hz_u / Kokkos::sqrt(4. * M_PI / 3.0);                      // (1,0)
+  f_scratch(3) = -Hx_u / Kokkos::sqrt(4. * M_PI / 3.0);                     // (1,1)
+  f_scratch(4) = fpn_basis_lm(2, -2, phi, theta);                       // (2, -2)
+  f_scratch(5) = fpn_basis_lm(2, -1, phi, theta);                       // (2, -1)
+  f_scratch(6) = fpn_basis_lm(2, 0, phi, theta);                          // (2, 0)
+  f_scratch(7) = fpn_basis_lm(2, 1, phi, theta);                          // (2, 1)
+  f_scratch(8) = fpn_basis_lm(2, 2, phi, theta);    // (2, 2)
+
+  f(m, nuen + 0, kk, jj, ii) = f_scratch(0);
+  f(m, nuen + 1, kk, jj, ii) = f_scratch(1);
+  f(m, nuen + 2, kk, jj, ii) = f_scratch(2);
+  f(m, nuen + 3, kk, jj, ii) = f_scratch(3);
+  f(m, nuen + 4, kk, jj, ii) = f_scratch(4);
+  f(m, nuen + 5, kk, jj, ii) = f_scratch(5);
+  f(m, nuen + 6, kk, jj, ii) = f_scratch(6);
+  f(m, nuen + 7, kk, jj, ii) = f_scratch(7);
+  f(m, nuen + 8, kk, jj, ii) = f_scratch(8);
+}
+
 // Apply closure along the x direction
 KOKKOS_INLINE_FUNCTION
 void ApplyClosureX(TeamMember_t member, int num_species, int num_energy_bins,
@@ -267,17 +337,17 @@ void ApplyClosureX(TeamMember_t member, int num_species, int num_energy_bins,
                    m1_closure, m1_closure_fun);
   } else if (m1_flag && m1_closure_fun == ClosureFunc::Thin){
     const int nuen = nuidx * num_energy_bins * num_points + enidx * num_points;
-    ApplyM1ClosureThin(member, num_points, m, nuen, kk, jj, ii, adm, tetr_mu_muhat0,
+    ApplyM1ClosureThinAlternate(member, num_points, m, nuen, kk, jj, ii, adm, tetr_mu_muhat0,
                        u_mu, f, f0_scratch, m1_closure, m1_closure_fun);
-    ApplyM1ClosureThin(member, num_points, m, nuen, kk, jj, ii + 1, adm, tetr_mu_muhat0,
+    ApplyM1ClosureThinAlternate(member, num_points, m, nuen, kk, jj, ii + 1, adm, tetr_mu_muhat0,
                        u_mu, f, f0_scratch_p1, m1_closure, m1_closure_fun);
-    ApplyM1ClosureThin(member, num_points, m, nuen, kk, jj, ii + 2, adm, tetr_mu_muhat0,
+    ApplyM1ClosureThinAlternate(member, num_points, m, nuen, kk, jj, ii + 2, adm, tetr_mu_muhat0,
                        u_mu, f, f0_scratch_p2, m1_closure, m1_closure_fun);
-    ApplyM1ClosureThin(member, num_points, m, nuen, kk, jj, ii + 3, adm, tetr_mu_muhat0,
+    ApplyM1ClosureThinAlternate(member, num_points, m, nuen, kk, jj, ii + 3, adm, tetr_mu_muhat0,
                        u_mu, f, f0_scratch_p3, m1_closure, m1_closure_fun);
-    ApplyM1ClosureThin(member, num_points, m, nuen, kk, jj, ii - 1, adm, tetr_mu_muhat0,
+    ApplyM1ClosureThinAlternate(member, num_points, m, nuen, kk, jj, ii - 1, adm, tetr_mu_muhat0,
                        u_mu, f, f0_scratch_m1, m1_closure, m1_closure_fun);
-    ApplyM1ClosureThin(member, num_points, m, nuen, kk, jj, ii - 2, adm, tetr_mu_muhat0,
+    ApplyM1ClosureThinAlternate(member, num_points, m, nuen, kk, jj, ii - 2, adm, tetr_mu_muhat0,
                        u_mu, f, f0_scratch_m2, m1_closure, m1_closure_fun);
   } else {
     const int nang1 = num_points - 1;
@@ -293,7 +363,6 @@ void ApplyClosureX(TeamMember_t member, int num_species, int num_energy_bins,
     });
   }
 }
-
 // Apply closure along the y direction
 KOKKOS_INLINE_FUNCTION
 void ApplyClosureY(TeamMember_t member, int num_species, int num_energy_bins,
