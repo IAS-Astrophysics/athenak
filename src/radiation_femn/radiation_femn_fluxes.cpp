@@ -97,33 +97,39 @@ TaskStatus RadiationFEMN::CalculateFluxes(Driver *pdriver, int stage) {
                                 * tetr_mu_muhat0_(m, 1, muhat, kk, jj, ii + 1)
                                 * f0_scratch_p1(A));
 
-                        const Real tetr_mu_muhat0_L =
-                            0.5 * (tetr_mu_muhat0_(m, 1, muhat, kk, jj, ii - 1)
-                                + tetr_mu_muhat0_(m, 1, muhat, kk, jj, ii));
-                        fminus += (0.5) * (tetr_mu_muhat0_L)
-                            * (p_matrix(muhat, B, A) * ((1.5) * f0_scratch(A)
-                                - (0.5) * f0_scratch_p1(A)
-                                + (1.5) * f0_scratch_m1(A)
-                                - (0.5) * f0_scratch_m2(A))
-                                - Sgn(tetr_mu_muhat0_L) * pmod_matrix(muhat, B, A)
-                                    * (-(1.5) * f0_scratch_m1(A)
-                                        + (0.5) * f0_scratch_m2(A)
-                                        + (1.5) * f0_scratch(A)
-                                        - (0.5) * f0_scratch_p1(A)));
+                        const Real tetr_mu_muhat0_im12 = 0.25 *
+                            (tetr_mu_muhat0_(m, 1, muhat, kk, jj, ii - 2)
+                            + tetr_mu_muhat0_(m, 1, muhat, kk, jj, ii - 1)
+                            + tetr_mu_muhat0_(m, 1, muhat, kk, jj, ii)
+                            + tetr_mu_muhat0_(m, 1, muhat, kk, jj, ii + 1));
 
-                        const Real tetr_mu_muhat0_R =
-                            0.5 * (tetr_mu_muhat0_(m, 1, muhat, kk, jj, ii + 1)
-                                + tetr_mu_muhat0_(m, 1, muhat, kk, jj, ii + 2));
-                        fplus += (0.5) * (tetr_mu_muhat0_R)
-                            * (p_matrix(muhat, B, A) * ((1.5) * f0_scratch_p2(A)
-                                - (0.5) * f0_scratch_p3(A)
-                                + (1.5) * f0_scratch_p1(A)
-                                - (0.5) * f0_scratch(A))
-                                - Sgn(tetr_mu_muhat0_R) * pmod_matrix(muhat, B, A)
-                                    * (-(1.5) * f0_scratch_p1(A)
-                                        + (0.5) * f0_scratch(A)
-                                        + (1.5) * f0_scratch_p2(A)
-                                        - (0.5) * f0_scratch_p3(A)));
+                        Real tetr_F_im12_R = ((1.5) * f0_scratch(A) - (0.5) * f0_scratch_p1(A))
+                            * ((1.5) * tetr_mu_muhat0_(m, 1, muhat, kk, jj, ii)
+                                - (0.5) * tetr_mu_muhat0_(m, 1, muhat, kk, jj, ii + 1));
+                        Real tetr_F_im12_L = ((1.5) * f0_scratch_m1(A) - (0.5) * f0_scratch_m2(A))
+                            * ((1.5) * tetr_mu_muhat0_(m, 1, muhat, kk, jj, ii - 1)
+                                - (0.5) * tetr_mu_muhat0_(m, 1, muhat, kk, jj, ii - 2));
+
+                        fminus += (0.5) * (p_matrix(muhat, B, A) * (tetr_F_im12_R + tetr_F_im12_L)
+                            - Sgn(tetr_mu_muhat0_im12) * pmod_matrix(muhat, B, A)
+                            * (tetr_F_im12_R - tetr_F_im12_L));
+
+                        const Real tetr_mu_muhat0_ip32 = 0.25
+                          * (tetr_mu_muhat0_(m, 1, muhat, kk, jj, ii)
+                          + tetr_mu_muhat0_(m, 1, muhat, kk, jj, ii + 1)
+                          + tetr_mu_muhat0_(m, 1, muhat, kk, jj, ii + 2)
+                          + tetr_mu_muhat0_(m, 1, muhat, kk, jj, ii + 3));
+
+                        Real tetr_F_ip32_R = ((1.5) * f0_scratch_p2(A) - (0.5) * f0_scratch_p3(A))
+                          * ((1.5) * tetr_mu_muhat0_(m, 1, muhat, kk, jj, ii + 2)
+                              - (0.5) * tetr_mu_muhat0_(m, 1, muhat, kk, jj, ii + 3));
+                        Real tetr_F_ip32_L = ((1.5) * f0_scratch_p1(A) - (0.5) * f0_scratch(A))
+                          * ((1.5) * tetr_mu_muhat0_(m, 1, muhat, kk, jj, ii + 1)
+                              - (0.5) * tetr_mu_muhat0_(m, 1, muhat, kk, jj, ii));
+
+                        fplus += (0.5) * (p_matrix(muhat, B, A) * (tetr_F_ip32_R + tetr_F_ip32_L)
+                                - Sgn(tetr_mu_muhat0_ip32) * pmod_matrix(muhat, B, A)
+                                    * (tetr_F_ip32_R - tetr_F_ip32_L));
                       }
                       const int nuenang = IndicesUnited(nuidx, enidx, B, num_species_,
                                                         num_energy_bins_, num_points_);
