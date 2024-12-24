@@ -241,17 +241,24 @@ TaskStatus RadiationFEMN::ExpRKUpdate(Driver *pdriver, int stage) {
                                   * Gamma_udd(a_idx, b_idx, c_idx);
                             }
 
-                            Real dtetr_mu_muhat_d[4];
+                            Real dtetr_mu_muhat_d[4] = {0, 0, 0, 0};
                             dtetr_mu_muhat_d[0] = 0.; // no time derivatives currently
-                            dtetr_mu_muhat_d[1] =
-                                Dx<NGHOST>(0, deltax, tetr_mu_muhat0_, m, a_idx, b,
-                                           k, j, i);
+                            //dtetr_mu_muhat_d[1] =
+                            //    Dx<NGHOST>(0, deltax, tetr_mu_muhat0_, m, a_idx, b,
+                            //               k, j, i);
+                            dtetr_mu_muhat_d[1] = (i % 2 == 0)
+                                                    ? (1. / deltax[0]) * (tetr_mu_muhat0_(m, a_idx, b, k, j, i + 1)
+                                                      - tetr_mu_muhat0_(m, a_idx, b, k, j, i))
+                                                    : (1. / deltax[0]) * (tetr_mu_muhat0_(m, a_idx, b, k, j, i)
+                                                      - tetr_mu_muhat0_(m, a_idx, b, k, j, i - 1));
+                            /*
                             dtetr_mu_muhat_d[2] =
                                 (multi_d) ? Dx<NGHOST>(1, deltax, tetr_mu_muhat0_, m,
                                                        a_idx, b, k, j, i) : 0.;
                             dtetr_mu_muhat_d[3] =
                                 (three_d) ? Dx<NGHOST>(2, deltax, tetr_mu_muhat0_,
                                                        m, a_idx, b, k, j, i) : 0.;
+                            */
                             Gamma_fluid_udd(a, b, c) += tetr_a_aidx
                                 * tetr_mu_muhat0_(m, c_idx, c, k, j, i)
                                 * dtetr_mu_muhat_d[c_idx];
