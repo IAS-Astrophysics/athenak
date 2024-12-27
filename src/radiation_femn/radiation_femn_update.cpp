@@ -249,7 +249,7 @@ TaskStatus RadiationFEMN::ExpRKUpdate(Driver *pdriver, int stage) {
                             dtetr_mu_muhat_d[1] = (i % 2 == 0)
                                                     ? (1. / deltax[0]) * (tetr_mu_muhat0_(m, a_idx, b, k, j, i + 1)
                                                       - tetr_mu_muhat0_(m, a_idx, b, k, j, i))
-                                                    : (1. / deltax[0]) * (tetr_mu_muhat0_(m, a_idx, b, k, j, i)
+                                                    : (1. / deltax[0]) * (tetr_mu_muhat0_(m, a_idx, c, k, j, i)
                                                       - tetr_mu_muhat0_(m, a_idx, b, k, j, i - 1));
                             /*
                             dtetr_mu_muhat_d[2] =
@@ -260,7 +260,7 @@ TaskStatus RadiationFEMN::ExpRKUpdate(Driver *pdriver, int stage) {
                                                        m, a_idx, b, k, j, i) : 0.;
                             */
                             Gamma_fluid_udd(a, b, c) += tetr_a_aidx
-                                * tetr_mu_muhat0_(m, c_idx, c, k, j, i)
+                                * tetr_mu_muhat0_(m, c_idx, b, k, j, i)
                                 * dtetr_mu_muhat_d[c_idx];
                           }
                         }
