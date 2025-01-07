@@ -222,7 +222,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
         auto &bcc_ = pmbp->pmhd->bcc0;
         auto &bface_ = pmbp->pmhd->b0;
         if (prtcl_init_flow) {
-          pmbp->pmhd->peos->ConsToPrim(u0_,bface_,w0_,bcc_,false,is-ng,is,0,(n2-1),0,(n3-1));
+          pmbp->pmhd->peos->ConsToPrim(u0_,bface_,w0_,bcc_,false,0,(n1-1),0,(n2-1),0,(n3-1));
         }
       }
 
