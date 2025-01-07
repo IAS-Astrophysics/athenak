@@ -15,6 +15,7 @@ build/
 
 # Cluster log files
 slurm*.out
+*.dat
 
 # editor temp files
 *~
