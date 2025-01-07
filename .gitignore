@@ -13,6 +13,10 @@ build/
 .DS_Store
 .vscode
 
+# Cluster log files
+slurm*.out
+
 # editor temp files
 *~
 *.swp
+setup_problem.txt
