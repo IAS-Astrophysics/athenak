@@ -14,7 +14,7 @@ source envs.sh #load modules needed to build athenak
 export LD_PRELOAD=/mnt/sw/fi/cephtweaks/lib/libcephtweaks.so
 export CEPHTWEAKS_LAZYIO=1
 
-srun athena -i inputs/mhd/blast_mhd_amr.athinput
+srun athena -i inputs/tests/bondi.athinput
 
 # --cpus-per-task=$SLURM_CPUS_PER_TASK \
 #    --cpu-bind=cores --gpu-bind=single:2 \
