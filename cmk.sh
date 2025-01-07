@@ -6,6 +6,7 @@ export LD_PRELOAD=/mnt/sw/fi/cephtweaks/lib/libcephtweaks.so
 export CEPHTWEAKS_LAZYIO=1
 
 #for 'make clean' (doesn't exist in cmake), probably have to delete everything in build directory \
+# Compile with '-D PROBLEM=gr_bondi' (for example) to enroll as user-specific problem generator
 
 cmake \
   -D CMAKE_CXX_COMPILER=$athenak/kokkos/bin/nvcc_wrapper \
