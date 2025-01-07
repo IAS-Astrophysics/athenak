@@ -172,25 +172,29 @@ void CompactObjectTracker::EvolveTracker(MeshBlockPack *pmbp) {
           int jc = std::round((pos[1] - (x2min + 0.5 * dx2)) / dx2);
           int kc = std::round((pos[2] - (x3min + 0.5 * dx3)) / dx3);
 
-          Kokkos::View<Real[3][3][3], Kokkos::HostSpace> alp("lapse");
-          auto alp_dvc = Kokkos::subview(padm->u_adm, m,
-                                         static_cast<int>(padm->I_ADM_ALPHA),
-                                         Kokkos::make_pair(ic - 1, ic + 2),
-                                         Kokkos::make_pair(jc - 1, jc + 2),
-                                         Kokkos::make_pair(kc - 1, kc + 2));
-          Kokkos::deep_copy(alp, alp_dvc);
+          DualArray3D<Real> alp("lapse", 3, 3, 3);
+          auto& adm = padm->adm;
+          par_for("Copy lapse neighborhood", DevExeSpace(), 0, 2, 0, 2, 0, 2,
+          KOKKOS_LAMBDA(const int k, const int j, const int i){
+            alp.d_view(k,j,i) = adm.alpha(m,kc + indcs.ks + k - 1,
+                                            jc + indcs.js + j - 1,
+                                            ic + indcs.is + i - 1);
+          });
+
+          alp.template modify<DevMemSpace>();
+          alp.template sync<typename DualArray3D<Real>::host_mirror_space>();
 
           Real alp_min = std::numeric_limits<Real>::max();
-          for (int i = 0; i < 3; ++i) {
+          for (int k = 0; k < 3; ++k) {
             for (int j = 0; j < 3; ++j) {
-              for (int k = 0; k < 3; ++k) {
-                if (alp(i, j, k) < alp_min) {
-                  alp_min = alp(i, j, k);
-                  pos[0] = CellCenterX(ic + (i - 1) - indcs.is, indcs.nx1,
+              for (int i = 0; i < 3; ++i) {
+                if (alp.h_view(k, j, i) < alp_min) {
+                  alp_min = alp.h_view(k, j, i);
+                  pos[0] = CellCenterX(ic + (i - 1), indcs.nx1,
                                        x1min, x1max);
-                  pos[1] = CellCenterX(jc + (j - 1) - indcs.js, indcs.nx2,
+                  pos[1] = CellCenterX(jc + (j - 1), indcs.nx2,
                                        x2min, x2max);
-                  pos[2] = CellCenterX(kc + (k - 1) - indcs.ks, indcs.nx3,
+                  pos[2] = CellCenterX(kc + (k - 1), indcs.nx3,
                                        x3min, x3max);
                 }
               }
