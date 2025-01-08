@@ -79,7 +79,7 @@ void KerrSchild(MeshBlockPack *pmbp, ParameterInput *pin) {
   Real center_x1 = pin->GetOrAddReal("problem", "punc_center_x1", 0.);
   Real center_x2 = pin->GetOrAddReal("problem", "punc_center_x2", 0.);
   Real center_x3 = pin->GetOrAddReal("problem", "punc_center_x3", 0.);
-  Real a = 0;
+  Real a = pin->GetOrAddReal("problem", "punc_spin", 0.);
   bool minkowski = false;
 
   // capture variables for the kernel
