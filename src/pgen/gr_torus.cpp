@@ -373,9 +373,15 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
                     //       + 2.0*gl[3][2]*u[2]*u[1];
                     // u_0 = 1.0/sqrt(1.0 - u_0); 
                     // // Reconvert to 4-velocity, but now accelerated
-                    u[0] *= this_en/u_0;
-                    u[1] *= this_en/u_0;
-                    u[2] *= this_en/u_0;
+                    while (u_0 < this_en){
+                      u[0] *= 2.0;
+                      u[1] *= 2.0;
+                      u[2] *= 2.0;
+                      u_0 = gl[1][1]*SQR(u[0]) + gl[2][2]*SQR(u[1]) + gl[3][3]*SQR(u[2])
+                            + 2.0*gl[1][2]*u[0]*u[1] + 2.0*gl[1][3]*u[0]*u[2]
+                            + 2.0*gl[3][2]*u[2]*u[1];
+                      u_0 = sqrt(u_0 + massive); 
+                    }
                     pr(IPVX,p) = gl[1][1]*u[0] + gl[1][2]*u[1] + gl[1][3]*u[2];
                     pr(IPVY,p) = gl[2][1]*u[0] + gl[2][2]*u[1] + gl[2][3]*u[2];
                     pr(IPVZ,p) = gl[3][1]*u[0] + gl[3][2]*u[1] + gl[3][3]*u[2];
