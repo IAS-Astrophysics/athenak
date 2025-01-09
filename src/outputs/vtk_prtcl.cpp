@@ -21,6 +21,7 @@
 
 #include "athena.hpp"
 #include "coordinates/cell_locations.hpp"
+#include "coordinates/cartesian_ks.hpp"
 #include "globals.hpp"
 #include "mesh/mesh.hpp"
 #include "particles/particles.hpp"
@@ -128,6 +129,8 @@ void ParticleVTKOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
   }
   // allocate 1D vector of floats used to convert and output particle data
   float *data = new float[3*npout_thisrank];
+  const Real spin = pm->pmb_pack->pcoord->coord_data.bh_spin;
+  const bool flat = pm->pmb_pack->pcoord->coord_data.is_minkowski;
   // Loop over particles, load positions into data[]
   for (int p=0; p<npout_thisrank; ++p) {
     data[3*p] = static_cast<float>(outpart_rdata(IPX,p));
@@ -183,7 +186,7 @@ void ParticleVTKOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
 
   // Write Part 6: scalar particle data
   // Write gid of points
-  for (int n=0; n<(pm->pmb_pack->ppart->nidata); ++n) {
+  for (int n=0; n<(pm->pmb_pack->ppart->nidata)+1; ++n) {
     std::stringstream msg;
     if (n == static_cast<int>(PGID)) {
       msg << std::endl << std::endl << "POINT_DATA " << npout_total << std::endl
@@ -191,16 +194,50 @@ void ParticleVTKOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
     } else if (n == static_cast<int>(PTAG)) {
       //msg << std::endl << std::endl << "POINT_DATA " << npout_total << std::endl
       msg << "SCALARS ptag float" << std::endl << "LOOKUP_TABLE default" << std::endl;
+    } else if (n == 2) { //NOTE Currently I'm saving the gamma factor in the normal frame, not the kinetic energy
+      msg << "SCALARS e_kin float" << std::endl << "LOOKUP_TABLE default" << std::endl;
     }
+
     if (global_variable::my_rank == 0) {
       partfile.Write_any_type_at(msg.str().c_str(),msg.str().size(),header_offset,"byte");
     }
     header_offset += msg.str().size();
 
     // Loop over particles, load gid into data[]
-    for (int p=0; p<npout_thisrank; ++p) {
-      data[p] = static_cast<float>(outpart_idata(n,p));
+    if (n < 2) {
+      for (int p=0; p<npout_thisrank; ++p) {
+        data[p] = static_cast<float>(outpart_idata(n,p));
+      }
+    } else if ( n == 2 ) {
+
+      // TODO Ideally you'd want to compute gamma factor in the inertial/free-falling frame
+      // Based on what is done for the radiation
+      // Need to compute matrix from the normal frame to the inertial frame
+      // For work work in ZAMO/FIDO frame
+
+      for (int p=0; p<npout_thisrank; ++p) {
+        Real u_norm[4] = {0.0,outpart_rdata(IPVX,p),outpart_rdata(IPVY,p),outpart_rdata(IPVZ,p)};
+        Real gamma_lor = 0;
+        Real massive = 1.0;
+        Real gu[4][4], gl[4][4], adm;
+        ComputeMetricAndInverse(
+            outpart_rdata(IPX,p), outpart_rdata(IPY,p), outpart_rdata(IPZ,p),
+            flat, spin, gl, gu
+        );
+
+        for (int gi1=1;gi1<4;++gi1) {
+          for (int gi2=1;gi2<4;++gi2) {
+            adm = gu[gi1][gi2] - gu[0][gi2]*gu[gi1][0]/gu[0][0];
+            gamma_lor += adm*u_norm[gi1]*u_norm[gi2];
+          }
+        }
+	gamma_lor = sqrt( massive + gamma_lor );
+
+        // u_kin *= 0.5;
+        data[p] = static_cast<float>( gamma_lor );
+      }
     }
+
     // swap data for this variable into big endian order
     if (!big_end) {
       for (int i=0; i<npout_thisrank; ++i) { Swap4Bytes(&data[i]); }
