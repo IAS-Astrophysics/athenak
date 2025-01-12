@@ -80,7 +80,6 @@ void ProblemGenerator::Z4cStability(ParameterInput *pin, const bool restart) {
   // perturbation amplitude 1e-10 dx^2
   Real rho = pin->GetOrAddReal("problem", "rho", 1);
   Real amp = 1e-10/rho/rho;
-  std::cout << amp << std::endl;
 
   // random number
   Kokkos::Random_XorShift64_Pool<> rand_pool64(pmbp->gids);
@@ -98,7 +97,6 @@ void ProblemGenerator::Z4cStability(ParameterInput *pin, const bool restart) {
     ScrArray1D<Real> rnum(member.team_scratch(scr_level), 12);
     for(int a = 0; a < 12; ++a) {
       rnum(a) = amp*2*(rand_gen.drand() - 0.5);
-      std::cout << k << "\t" << rnum(a) << std::endl;
     }
 
     par_for_inner(member, 0, ncell12-1, [&](const int ij) {
@@ -126,7 +124,6 @@ void ProblemGenerator::Z4cStability(ParameterInput *pin, const bool restart) {
         adm.vK_dd(m,a,b,k,j,i) += rnum(c);
         c++;
       }
-      //std::cout << j << "\t" << i << "\t" << c << std::endl;
 
       rand_pool64.free_state(rand_gen);  // free state for use by other threads
 
@@ -136,34 +133,7 @@ void ProblemGenerator::Z4cStability(ParameterInput *pin, const bool restart) {
       z4c.vTheta(m,k,j,i) = 0;
     });
   });
-  /*
-  par_for("pgen_stability",
-  DevExeSpace(),0,nmb-1,ksg,keg,jsg,jeg,isg,ieg,
-  KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
-    // Minkowski spacetime
-    for(int a = 0; a < 3; ++a)
-    for(int b = a; b < 3; ++b) {
-      adm.g_dd(m,a,b,k,j,i) = (a == b ? 1. : 0.);
-    }
-    adm.alpha(m,k,j,i) = 1.0;
-    auto rand_gen = rand_pool64.get_state();  // get random number state this thread
-    // g_ab
-    for(int a = 0; a < 3; ++a)
-    for(int b = a; b < 3; ++b) {
-      adm.g_dd(m,a,b,k,j,i) += amp*2*(rand_gen.drand() - 0.5);
-    }
-    // K_ab
-    for(int a = 0; a < 3; ++a)
-    for(int b = a; b < 3; ++b) {
-      adm.vK_dd(m,a,b,k,j,i) += amp*2*(rand_gen.drand() - 0.5);
-    }
-    rand_pool64.free_state(rand_gen);  // free state for use by other threads
-    z4c.alpha(m,k,j,i) = 1;
-    z4c.chi(m,k,j,i) = 1;
-    z4c.vKhat(m,k,j,i) = 0;
-    z4c.vTheta(m,k,j,i) = 0;
-  });
-  */
+
   switch (indcs.ng) {
     case 2: pmbp->pz4c->ADMToZ4c<2>(pmbp, pin);
             break;
@@ -183,8 +153,8 @@ void ProblemGenerator::Z4cStability(ParameterInput *pin, const bool restart) {
   }
   return;
 }
-void Z4cStabilityErrors(HistoryData *pdata, Mesh *pm) {
 
+void Z4cStabilityErrors(HistoryData *pdata, Mesh *pm) {
   pdata->nhist = 12;
   pdata->label[0] = "LINF-Err";
   pdata->label[1] = "RMS-Err";
