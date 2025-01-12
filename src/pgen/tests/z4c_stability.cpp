@@ -33,11 +33,6 @@
 // history function to output error as a function of time
 void Z4cStabilityErrors(HistoryData *pdata, Mesh *pm);
 
-namespace {
-// global variable to control computation of initial conditions versus errors
-bool set_initial_conditions = true;
-} // end anonymous namespace
-
 //----------------------------------------------------------------------------------------
 //! \fn void ProblemGenerator::Z4cStability()
 //! \brief Sets initial conditions for robust stability test
@@ -59,21 +54,16 @@ void ProblemGenerator::Z4cStability(ParameterInput *pin, const bool restart) {
 
   // capture variables for the kernel
   auto &indcs = pmbp->pmesh->mb_indcs;
-  auto &size = pmbp->pmesh->mesh_size;
   int &is = indcs.is; int &ie = indcs.ie;
   int &js = indcs.js; int &je = indcs.je;
   int &ks = indcs.ks; int &ke = indcs.ke;
   // For GLOOPS
-  int isg = is-indcs.ng; int ieg = ie+indcs.ng;
-  int jsg = js-indcs.ng; int jeg = je+indcs.ng;
   int ksg = ks-indcs.ng; int keg = ke+indcs.ng;
   int nmb = pmbp->nmb_thispack;
   int ncell1 = 2*indcs.ng + indcs.nx1;
   int ncell2 = 2*indcs.ng + indcs.nx2;
-  int ncell3 = 2*indcs.ng + indcs.nx3;
   int ncell12 = ncell1 * ncell2;
 
-  auto &pz4c = pmbp->pz4c;
   auto &adm = pmbp->padm->adm;
   auto &z4c = pmbp->pz4c->z4c;
 
@@ -179,7 +169,6 @@ void Z4cStabilityErrors(HistoryData *pdata, Mesh *pm) {
     nvars = 6; // 6 metric components
     auto &pz4c = pmbp->pz4c;
     auto &u0_ = pmbp->pz4c->u0;
-    auto &u1_ = pmbp->pz4c->u1;
 
     const int nmkji = (pmbp->nmb_thispack)*nx3*nx2*nx1;
     const int nkji = nx3*nx2*nx1;
