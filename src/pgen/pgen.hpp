@@ -66,6 +66,7 @@ class ProblemGenerator {
   void ShockTube(ParameterInput *pin, const bool restart);
   void RadiationLinearWave(ParameterInput *pin, const bool restart);
   void Z4cLinearWave(ParameterInput *pin, const bool restart);
+  void Z4cGaugeWave(ParameterInput *pin, const bool restart);
   void SphericalCollapse(ParameterInput *pin, const bool restart);
   void Diffusion(ParameterInput *pin, const bool restart);
   void Z4cStability(ParameterInput *pin, const bool restart);
