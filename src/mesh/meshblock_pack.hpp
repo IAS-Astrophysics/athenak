@@ -13,9 +13,10 @@
 #include <string>
 #include <vector>
 
-#include "parameter_input.hpp"
 #include "coordinates/coordinates.hpp"
 #include "driver/driver.hpp"
+#include "parameter_input.hpp"
+#include "radiation_m1/radiation_m1.hpp"
 #include "tasklist/task_list.hpp"
 
 // Forward declarations
@@ -72,6 +73,7 @@ class MeshBlockPack {
   ion_neutral::IonNeutral *pionn=nullptr;
   TurbulenceDriver *pturb=nullptr;
   radiation::Radiation *prad=nullptr;
+  radiationm1::RadiationM1 *pradm1=nullptr;
   std::vector<z4c::CCE *> pz4c_cce;
   particles::Particles *ppart=nullptr;
 
