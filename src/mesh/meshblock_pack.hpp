@@ -16,7 +16,6 @@
 #include "coordinates/coordinates.hpp"
 #include "driver/driver.hpp"
 #include "parameter_input.hpp"
-#include "radiation_m1/radiation_m1.hpp"
 #include "tasklist/task_list.hpp"
 
 // Forward declarations
@@ -36,6 +35,7 @@ namespace z4c {class CCE;}
 namespace adm {class ADM;}
 namespace particles {class Particles;}
 namespace units {class Units;}
+namespace radiationm1 {class RadiationM1;}
 
 //----------------------------------------------------------------------------------------
 //! \class MeshBlockPack
