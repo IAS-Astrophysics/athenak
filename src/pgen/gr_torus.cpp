@@ -327,10 +327,6 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
 
         Kokkos::Random_XorShift64_Pool<> prtcl_rand(gids);
 
-				const int nmkji = nmb*indcs.nx3*indcs.nx2*indcs.nx1;
-				const int nkji = indcs.nx3*indcs.nx2*indcs.nx1;
-				const int nji  = indcs.nx2*indcs.nx1;
-
         par_for("part_init", DevExeSpace(),0,(npart-1),
             KOKKOS_LAMBDA(const int p){
               bool found_mb = false;
