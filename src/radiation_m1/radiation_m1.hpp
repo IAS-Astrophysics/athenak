@@ -12,11 +12,11 @@
 #include <memory>
 #include <string>
 
-//#include "athena.hpp"
-//#include "athena_tensor.hpp"
+#include "athena.hpp"
+#include "athena_tensor.hpp"
+#include "parameter_input.hpp"
+#include "tasklist/task_list.hpp"
 #include "bvals/bvals.hpp"
-//#include "parameter_input.hpp"
-//#include "tasklist/task_list.hpp"
 
 namespace radiationm1 {
 
@@ -47,11 +47,15 @@ struct RadiationM1TaskIDs {
   TaskID crecv;
 };
 
+//----------------------------------------------------------------------------------------
+//! \struct RadiationM1Params
+//  \brief essential parameters for the Grey M1 class
 struct RadiationM1Params {
   Real rad_E_floor;
   Real rad_eps;
 };
 
+// dot products
 template <typename T>
 T tensor_dot(const AthenaPointTensor<T, TensorSymm::SYM2, 4, 2> g_uu,
              const AthenaPointTensor<T, TensorSymm::NONE, 4, 1> F_d,
@@ -71,24 +75,20 @@ T tensor_dot(const AthenaPointTensor<T, TensorSymm::NONE, 4, 1> F_d,
 }
 
 class RadiationM1 {
-
 public:
   RadiationM1(MeshBlockPack *ppack, ParameterInput *pin);
   ~RadiationM1();
 
-  int nvars;
-  DvceArray5D<Real> u0; // conserved variables
-  DvceArray5D<Real>
-      coarse_u0; // conserved variables on 2x coarser grid (for SMR/AMR)
-  Real rad_E_floor;
+  int nvars{};
+  DvceArray5D<Real> u0;        // evolved variables
+  DvceArray5D<Real> coarse_u0; // evolved variables on 2x coarser grid
 
   // Boundary communication buffers and functions for u
   MeshBoundaryValuesCC *pbval_u;
 
-  // following only used for time-evolving flow
-  DvceArray5D<Real> u1;     // conserved variables at intermediate step
-  DvceFaceFld5D<Real> uflx; // fluxes of conserved quantities on cell faces
-  Real dtnew;
+  DvceArray5D<Real> u1;     // evolved variables at intermediate step
+  DvceFaceFld5D<Real> uflx; // fluxes of evolved quantities on cell faces
+  Real dtnew{};
 
   // container to hold names of TaskIDs
   RadiationM1TaskIDs id;
