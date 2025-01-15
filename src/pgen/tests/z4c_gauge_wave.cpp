@@ -96,7 +96,7 @@ void ProblemGenerator::Z4cGaugeWave(ParameterInput *pin, const bool restart) {
     adm.vK_dd(m,1,2,k,j,i) = 0;
     adm.vK_dd(m,2,2,k,j,i) = 0;
 
-    adm.alpha(m,k,j,i) = 1;
+    adm.alpha(m,k,j,i) = sqrt(1 - H);
   });
   switch (indcs.ng) {
     case 2: pmbp->pz4c->ADMToZ4c<2>(pmbp, pin);
