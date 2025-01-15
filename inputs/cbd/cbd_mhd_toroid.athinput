@@ -12,22 +12,24 @@ nghost    = 2      # Number of ghost cells
 nx1       = 48     # Number of zones in X1-direction
 x1min     = -10.0  # minimum value of X1
 x1max     = 10.0   # maximum value of X1
-ix1_bc    = user   # inner-X1 boundary flag
-ox1_bc    = user   # outer-X1 boundary flag
+ix1_bc    = outflow   # inner-X1 boundary flag
+ox1_bc    = outflow   # outer-X1 boundary flag
 
 nx2       = 48     # Number of zones in X2-direction
 x2min     = -10.0  # minimum value of X2
 x2max     = 10.0   # maximum value of X2
-ix2_bc    = user   # inner-X2 boundary flag
-ox2_bc    = user   # outer-X2 boundary flag
+ix2_bc    = outflow   # inner-X2 boundary flag
+ox2_bc    = outflow   # outer-X2 boundary flag
 
 nx3       = 48     # Number of zones in X3-direction
 x3min     = -10.0  # minimum value of X3
 x3max     = 10.0   # maximum value of X3
-ix3_bc    = user   # inner-X3 boundary flag
-ox3_bc    = user   # outer-X3 boundary flag
+ix3_bc    = outflow   # inner-X3 boundary flag
+ox3_bc    = outflow   # outer-X3 boundary flag
 
 <meshblock>
+# By excluding the <meshblock> block from the input file, 
+# we can implicitly designate only a single MeshBlock in the MeshBlockPack in cbd.cpp
 nx1 = 16
 nx2 = 16
 nx3 = 16
@@ -57,6 +59,13 @@ gamma       = 1.3333333333333  # gamma = C_p/C_v
 pgen_name  = cbd
 k_adi      = 1.0       # adiabat K, p_gas = K rho^Gamma
 r_crit     = 8.0       # sonic point radius, in units of mass
+
+<binary>
+mb         = 1.0       # binary mass (central mass)
+ab         = 1.0       # binary semi-major axis
+eb         = 0.0       # binary eccentricity
+qb         = 1.0       # binary mass ratio
+
 
 <output1>
 file_type  = hdf5      # Binary data dump
