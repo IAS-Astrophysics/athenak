@@ -613,6 +613,10 @@ def h5_write_data(h5file,
   flat += 1
   for l in range(0, attrs["max_l"]):
     for m in range(l, -l - 1,-1):
+      if args["debug"] == "y":
+        assert all(data[g_re, :, lm_mode(l, m)] != np.nan)
+        assert all(data[g_im, :, lm_mode(l, m)] != np.nan)
+      
       data_attrs.append(f"{data_name[:-4]}_Re({l},{m})")
       data_attrs.append(f"{data_name[:-4]}_Im({l},{m})")
       h5file[f"{data_name}"][:, flat] = data[g_re, :, lm_mode(l, m)]
