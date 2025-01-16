@@ -48,6 +48,12 @@ def parse_cli():
       help="path/to/output/athk_to_spectre.py/h5",
   )
   p.add_argument(
+      "-dout",
+      type=str,
+      default="./",
+      help="path/to/output/dir",
+  )
+  p.add_argument(
       "-field_name",
       type=str,
       default="gxx",
@@ -69,7 +75,7 @@ def find_h5_mode(h5f, field_name, mode_name, args):
   flag = False
   for m in h5f[field_name].attrs["Legend"]:
     if m.find(mode_name) != -1:
-      print("found mode for", field_name, m,mode_name)
+      print("found mode for", field_name, m, mode_name)
       flag = True
       break
     mode += 1
@@ -102,12 +108,12 @@ def read_h5_mode_and_derivs(args):
 def plot_simple_v_t(dat, args):
   """
     plot value vs time
-  """
+    """
   fig, axes = plt.subplots(3, 1, sharex=True)
-  
+
   # f
   ax = axes[0]
-  label=args["field_name"]
+  label = args["field_name"]
   conf = dict(ls="-", label=label, color="k")
   ax.plot(dat[-1], dat[0], **conf)
   ax.set_ylabel(label)
@@ -115,7 +121,7 @@ def plot_simple_v_t(dat, args):
 
   # drf
   ax = axes[1]
-  label="d"+args["field_name"] + "/dr"
+  label = "d" + args["field_name"] + "/dr"
   conf = dict(ls="-", label=label, color="k")
   ax.plot(dat[-1], dat[1], **conf)
   ax.set_ylabel(label)
@@ -123,33 +129,29 @@ def plot_simple_v_t(dat, args):
 
   # dtf
   ax = axes[2]
-  label="d"+args["field_name"] + "/dt"
+  label = "d" + args["field_name"] + "/dt"
   conf = dict(ls="-", label=label, color="k")
   ax.plot(dat[-1], dat[2], **conf)
   ax.grid(True)
   ax.set_ylabel(label)
   ax.set_xlabel("t/M")
-  
+
   plt.tight_layout()
-  plt.show()
+  # plt.show()
 
-  """ 
-  file_out = args["o"]
-  if args["debug"] == "y":
-    plt.show()
-  else:
-    plt.savefig(file_out)
-    os.system("pdfcrop " + file_out + " " + file_out)
-  """
+  mode = args["field_mode"][3:-1]
+  lm = mode.split(",")
+  file_out = os.path.join(
+      args["dout"],
+      args["field_name"] + "_" + f"l{lm[0]}m{lm[1]}" + "_vs_time.png",
+  )
+  plt.savefig(file_out, dpi=200)
 
-
-  
-
-  
 
 def debug_plot_simple(args):
   dat = read_h5_mode_and_derivs(args)
   plot_simple_v_t(dat, args)
+
 
 def main(args):
   """
