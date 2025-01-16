@@ -8,5 +8,34 @@ then
 -fpath ./dat/bin/cce_bbh/
 fi
 
+file="./debug/CceR0030.00.h5"
 # plot fig
-./debug_athk_to_spectre.py -debug plot_simple -fpath ./debug/CceR0030.00.h5 -dout ./debug
+fname="gxx"
+mode="Re(0,0)"
+./debug_athk_to_spectre.py -debug plot_simple -dout ./debug \
+	-fpath $file  -field_name $fname -field_mode $mode
+
+mode="Re(2,2)"
+./debug_athk_to_spectre.py -debug plot_simple -dout ./debug \
+	-fpath $file  -field_name $fname -field_mode $mode
+
+
+fname="alp"
+mode="Re(0,0)"
+./debug_athk_to_spectre.py -debug plot_simple -dout ./debug \
+	-fpath $file  -field_name $fname -field_mode $mode
+
+mode="Re(2,2)"
+./debug_athk_to_spectre.py -debug plot_simple -dout ./debug \
+	-fpath $file  -field_name $fname -field_mode $mode
+
+
+fname="betax"
+mode="Re(0,0)"
+./debug_athk_to_spectre.py -debug plot_simple -dout ./debug \
+	-fpath $file  -field_name $fname -field_mode $mode
+
+mode="Re(2,2)"
+./debug_athk_to_spectre.py -debug plot_simple -dout ./debug \
+	-fpath $file  -field_name $fname -field_mode $mode
+
