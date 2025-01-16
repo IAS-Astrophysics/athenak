@@ -10,10 +10,10 @@
 #include <algorithm>
 #include <cmath>
 #include <iostream>
-#include <Kokkos_Timer.hpp>
 #include <sstream>
 #include <string>
 #include <vector>
+#include <Kokkos_Timer.hpp>
 
 #include "athena.hpp"
 #include "coordinates/cell_locations.hpp"
