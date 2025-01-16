@@ -56,8 +56,8 @@ def parse_cli():
   p.add_argument(
       "-field_mode",
       type=str,
-      default="Re_(2,2)",
-      help="plot this mode[Re_(l,m),Im_(l,m)]",
+      default="Re(2,2)",
+      help="plot this mode[Re(l,m),Im(l,m)]",
   )
 
   args = p.parse_args()
@@ -69,6 +69,7 @@ def find_h5_mode(h5f, field_name, mode_name, args):
   flag = False
   for m in h5f[field_name].attrs["Legend"]:
     if m.find(mode_name) != -1:
+      print("found mode for", field_name, m,mode_name)
       flag = True
       break
     mode += 1
@@ -79,14 +80,12 @@ def find_h5_mode(h5f, field_name, mode_name, args):
 
 def read_h5_mode_and_derivs(args):
 
-  field_name = g_name_map[f"{field_name}"]
+  field_name = g_name_map[args["field_name"]]
   field_name_key = f"{field_name}.dat"
   dfield_name_dr_key = f"Dr{field_name}.dat"
   dfield_name_dt_key = f"Dt{field_name}.dat"
 
   with h5py.File(args["fpath"], "r") as h5f:
-    h5file[f"{data_name}"].attrs["Legend"] = Legend
-
     mode = find_h5_mode(h5f, f"{field_name_key}", args["field_mode"], args)
     f = h5f[f"{field_name_key}"][:, mode]
 
