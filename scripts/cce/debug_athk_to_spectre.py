@@ -10,8 +10,8 @@ import numpy as np
 import math as m
 import argparse
 import h5py
+import matplotlib.pyplot as plt
 
-# import matplotlib.pyplot as plt
 # import glob
 # import sympy
 ## ---------------------------------------------------------------------- ##
@@ -87,6 +87,7 @@ def read_h5_mode_and_derivs(args):
 
   with h5py.File(args["fpath"], "r") as h5f:
     mode = find_h5_mode(h5f, f"{field_name_key}", args["field_mode"], args)
+    t = h5f[f"{field_name_key}"][:, 0]
     f = h5f[f"{field_name_key}"][:, mode]
 
     mode = find_h5_mode(h5f, f"{dfield_name_dr_key}", args["field_mode"], args)
@@ -95,13 +96,60 @@ def read_h5_mode_and_derivs(args):
     mode = find_h5_mode(h5f, f"{dfield_name_dt_key}", args["field_mode"], args)
     dtf = h5f[f"{dfield_name_dt_key}"][:, mode]
 
-  return f, drf, dtf
+  return (f, drf, dtf, t)
 
+
+def plot_simple_v_t(dat, args):
+  """
+    plot value vs time
+  """
+  fig, axes = plt.subplots(3, 1, sharex=True)
+  
+  # f
+  ax = axes[0]
+  label=args["field_name"]
+  conf = dict(ls="-", label=label, color="k")
+  ax.plot(dat[-1], dat[0], **conf)
+  ax.set_ylabel(label)
+  ax.grid(True)
+
+  # drf
+  ax = axes[1]
+  label="d"+args["field_name"] + "/dr"
+  conf = dict(ls="-", label=label, color="k")
+  ax.plot(dat[-1], dat[1], **conf)
+  ax.set_ylabel(label)
+  ax.grid(True)
+
+  # dtf
+  ax = axes[2]
+  label="d"+args["field_name"] + "/dt"
+  conf = dict(ls="-", label=label, color="k")
+  ax.plot(dat[-1], dat[2], **conf)
+  ax.grid(True)
+  ax.set_ylabel(label)
+  ax.set_xlabel("t/M")
+  
+  plt.tight_layout()
+  plt.show()
+
+  """ 
+  file_out = args["o"]
+  if args["debug"] == "y":
+    plt.show()
+  else:
+    plt.savefig(file_out)
+    os.system("pdfcrop " + file_out + " " + file_out)
+  """
+
+
+  
+
+  
 
 def debug_plot_simple(args):
   dat = read_h5_mode_and_derivs(args)
-  plot_simple_live(dat, args)
-
+  plot_simple_v_t(dat, args)
 
 def main(args):
   """
