@@ -93,16 +93,16 @@ def find_h5_1mode(h5f, field_name, mode_name, args):
 
 def find_h5_all_modes(h5f, field_name, mode_name, args):
   modes = []
-  names = []
+  # names = []
   re_or_im = mode_name[0:2] ## Re(...)
-  print(re_or_im)
+  # print(re_or_im)
   assert re_or_im == "Re" or re_or_im == "Im"
 
   legends = h5f[field_name].attrs["Legend"]
   for i in range(len(legends)):
     m = legends[i]
     if m.find(re_or_im) != -1:
-      names.append(m)
+      # names.append(m)
       modes.append(i)
 
   assert len(modes)
@@ -137,13 +137,14 @@ def read_h5_1mode(args):
   return (f, drf, dtf, t)
 
 
-def read_h5_all_modes(args):
+def read_h5_all_modes(args) -> dict:
   """
     return t, f(mode)|t, df(mode)/dr|t, df(mode)/dt|t
 
     f[t_i,modes] = at t_i what are the modes
     """
 
+  dat = {}
   field_name = g_name_map[args["field_name"]]
   field_name_key = f"{field_name}.dat"
   dfield_name_dr_key = f"Dr{field_name}.dat"
@@ -187,13 +188,21 @@ def read_h5_all_modes(args):
         dtf[k, j] = h5f[f"{dfield_name_dt_key}"][i, modes[j]]
       k += 1
 
-  return (f, drf, dtf, t)
+  dat["t"] = t
+  dat["f"] = f
+  dat["drf"] = drf
+  dat["dtf"] = dtf
+  dat["n_dumps"] = n_dumps
+
+  return dat
 
 
 def plot_simple_v_t(dat, args):
   """
     plot value vs time
     """
+
+  print("plot value vs time ...")
   fig, axes = plt.subplots(3, 1, sharex=True)
 
   # f
@@ -233,14 +242,74 @@ def plot_simple_v_t(dat, args):
   plt.savefig(file_out, dpi=200)
 
 
+def plot_simple_modes(dat, args):
+  """
+    plot modes for different times
+    """
+
+  print("plot modes for different times ...")
+
+  t = dat["t"]
+  f = dat["f"]
+  drf = dat["drf"]
+  dtf = dat["dtf"]
+  n_dumps = dat["n_dumps"]
+  x = np.arange(0, len(f[0,:]), dtype=int)
+  p = 0
+  for i in range(0, len(t), args["time_dump"]):
+    title = f"t_{t[i]}"
+
+    fig, axes = plt.subplots(3, 1, sharex=True)
+
+    # f
+    ax = axes[0]
+    ax.set_title(title)
+    label = args["field_name"]
+    conf = dict(ls="-", label=label, color="k")
+    ax.plot(x, np.abs(f[p, :]), **conf)
+    ax.set_ylabel(label)
+    ax.set_yscale('log')
+    ax.grid(True)
+
+    # drf
+    ax = axes[1]
+    label = "d" + args["field_name"] + "/dr"
+    conf = dict(ls="-", label=label, color="k")
+    ax.plot(x, np.abs(drf[p,:]), **conf)
+    ax.set_ylabel(label)
+    ax.set_yscale('log')
+    ax.grid(True)
+
+    # dtf
+    ax = axes[2]
+    label = "d" + args["field_name"] + "/dt"
+    conf = dict(ls="-", label=label, color="k")
+    ax.plot(x, np.abs(dtf[p,:]), **conf)
+    ax.grid(True)
+    ax.set_ylabel(label)
+    ax.set_yscale('log')
+    ax.set_xlabel("modes")
+
+    plt.tight_layout()
+    # plt.show()
+
+    file_out = os.path.join(
+        args["dout"],
+        args["field_name"] + "_" + "modes_" + f"{title}.png",
+    )
+    plt.savefig(file_out, dpi=200)
+
+    p += 1
+
+
 def debug_plot_simple(args):
   # value vs time
-  # dat = read_h5_1mode(args)
-  # plot_simple_v_t(dat, args)
+  dat = read_h5_1mode(args)
+  plot_simple_v_t(dat, args)
 
   # conv test
   dat = read_h5_all_modes(args)
-  # plot_simple_mode(dat, args)
+  plot_simple_modes(dat, args)
 
 
 def main(args):
