@@ -15,20 +15,20 @@
 #include <vector>
 
 #include "athena.hpp"
-#include "parameter_input.hpp"
+#include "coordinates/adm.hpp"
 #include "coordinates/cell_locations.hpp"
-#include "mesh/mesh.hpp"
 #include "eos/eos.hpp"
 #include "globals.hpp"
 #include "hydro/hydro.hpp"
+#include "mesh/mesh.hpp"
 #include "mhd/mhd.hpp"
-#include "dyn_grmhd/dyn_grmhd.hpp"
-#include "coordinates/adm.hpp"
-#include "z4c/tmunu.hpp"
-#include "z4c/z4c.hpp"
+#include "outputs.hpp"
+#include "parameter_input.hpp"
+#include "radiation_m1/radiation_m1.hpp"
 #include "srcterms/srcterms.hpp"
 #include "srcterms/turb_driver.hpp"
-#include "outputs.hpp"
+#include "z4c/tmunu.hpp"
+#include "z4c/z4c.hpp"
 
 #if MPI_PARALLEL_ENABLED
 #include <mpi.h>
@@ -162,6 +162,13 @@ BaseTypeOutput::BaseTypeOutput(ParameterInput *pin, Mesh *pm, OutputParameters o
        << std::endl << "Input file is likely missing a <adm> block" << std::endl;
   }
   if ((ivar>=151) && (ivar<153) && (pm->pmb_pack->ppart == nullptr)) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+       << "Output of particles requested in <output> block '"
+       << out_params.block_name << "' but particle object not constructed."
+       << std::endl << "Input file is likely missing corresponding block" << std::endl;
+    exit(EXIT_FAILURE);
+  }
+  if ((ivar>=152) && (ivar<154) && (pm->pmb_pack->pradm1 == nullptr)) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
        << "Output of particles requested in <output> block '"
        << out_params.block_name << "' but particle object not constructed."
@@ -702,6 +709,34 @@ BaseTypeOutput::BaseTypeOutput(ParameterInput *pin, Mesh *pm, OutputParameters o
     out_params.contains_derived = true;
     out_params.n_derived += 1;
     outvars.emplace_back("pdens",0,&(derived_var));
+  }
+
+  // radiation m1 lab energy density
+  if (out_params.variable.compare("rad_m1_E") == 0) {
+    for (int nuidx = 0; nuidx < pm->pmb_pack->pradm1->nspecies; ++nuidx) {
+      outvars.emplace_back(
+          "E:" + std::to_string(nuidx),
+          radiationm1::CombinedIdx(nuidx, 0, pm->pmb_pack->pradm1->nvars),
+          &(pm->pmb_pack->pradm1->u0));
+    }
+  }
+
+  // radiation m1 lab energy density
+  if (out_params.variable.compare("rad_m1_F") == 0) {
+    for (int nuidx = 0; nuidx < pm->pmb_pack->pradm1->nspecies; ++nuidx) {
+      outvars.emplace_back(
+          "Fx:" + std::to_string(nuidx),
+          radiationm1::CombinedIdx(nuidx, 1, pm->pmb_pack->pradm1->nvars),
+          &(pm->pmb_pack->pradm1->u0));
+      outvars.emplace_back(
+          "Fy:" + std::to_string(nuidx),
+          radiationm1::CombinedIdx(nuidx, 2, pm->pmb_pack->pradm1->nvars),
+          &(pm->pmb_pack->pradm1->u0));
+      outvars.emplace_back(
+          "Fz:" + std::to_string(nuidx),
+          radiationm1::CombinedIdx(nuidx, 3, pm->pmb_pack->pradm1->nvars),
+          &(pm->pmb_pack->pradm1->u0));
+    }
   }
 
   // initialize vector containing number of output MBs per rank

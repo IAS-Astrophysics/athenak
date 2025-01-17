@@ -52,10 +52,12 @@ void RadiationM1::AssembleRadiationM1Tasks(
 
   // assemble "stagen" task list
   id.copyu = tl["stagen"]->AddTask(&RadiationM1::CopyCons, this, none);
-  id.flux = tl["stagen"]->AddTask(&RadiationM1::Fluxes, this, id.copyu);
+  id.calcclosure =
+      tl["stagen"]->AddTask(&RadiationM1::CalcClosure, this, id.copyu);
+  id.flux = tl["stagen"]->AddTask(&RadiationM1::Fluxes, this, id.calcclosure);
   id.sendf = tl["stagen"]->AddTask(&RadiationM1::SendFlux, this, id.flux);
   id.recvf = tl["stagen"]->AddTask(&RadiationM1::RecvFlux, this, id.sendf);
-  id.rkupdt = tl["stagen"]->AddTask(&RadiationM1::RKUpdate, this, id.recvf);
+  id.rkupdt = tl["stagen"]->AddTask(&RadiationM1::TimeUpdate, this, id.recvf);
   id.srctrms =
       tl["stagen"]->AddTask(&RadiationM1::RadiationM1SrcTerms, this, id.rkupdt);
   id.restu = tl["stagen"]->AddTask(&RadiationM1::RestrictU, this, id.srctrms);
@@ -69,7 +71,7 @@ void RadiationM1::AssembleRadiationM1Tasks(
   // assemble "after_stagen" task list
   id.csend = tl["after_stagen"]->AddTask(&RadiationM1::ClearSend, this, none);
   // although RecvFlux/U functions check that all recvs complete, add ClearRecv
-  // to task list anyways to catch potential bugs in MPI communication logic
+  // to task list anyway to catch potential bugs in MPI communication logic
   id.crecv =
       tl["after_stagen"]->AddTask(&RadiationM1::ClearRecv, this, id.csend);
 
@@ -102,41 +104,10 @@ TaskStatus RadiationM1::InitRecv(Driver *pdrive, int stage) {
 //----------------------------------------------------------------------------------------
 //! \fn  void RadiationM1::CopyCons
 //! \brief Simple task list function that copies u0 --> u1 in first stage.
-//! Extended to
-//!  handle RK register logic at given stage
-
 TaskStatus RadiationM1::CopyCons(Driver *pdrive, int stage) {
   if (stage == 1) {
     Kokkos::deep_copy(DevExeSpace(), u1, u0);
-  } else {
-    if (pdrive->integrator == "rk4") {
-      // parallel loop to update u1 with u0 at later stages, only for rk4
-      auto &indcs = pmy_pack->pmesh->mb_indcs;
-      int is = indcs.is, ie = indcs.ie;
-      int js = indcs.js, je = indcs.je;
-      int ks = indcs.ks, ke = indcs.ke;
-      int nmb1 = pmy_pack->nmb_thispack - 1;
-      int nvar = nvars;
-      auto &u0 = pmy_pack->pradm1->u0;
-      auto &u1 = pmy_pack->pradm1->u1;
-      Real &delta = pdrive->delta[stage - 1];
-      par_for(
-          "rk4_copy_cons", DevExeSpace(), 0, nmb1, 0, nvar - 1, ks, ke, js, je,
-          is, ie, KOKKOS_LAMBDA(int m, int n, int k, int j, int i) {
-            u1(m, n, k, j, i) += delta * u0(m, n, k, j, i);
-          });
-    }
   }
-  return TaskStatus::complete;
-}
-
-//----------------------------------------------------------------------------------------
-//! \fn TaskStatus RadiationM1::Fluxes
-//! \brief Wrapper task list function that calls everything necessary to compute
-//! fluxes of conserved variables
-
-TaskStatus RadiationM1::Fluxes(Driver *pdrive, int stage) {
-  // compute fluxes
   return TaskStatus::complete;
 }
 
@@ -144,7 +115,6 @@ TaskStatus RadiationM1::Fluxes(Driver *pdrive, int stage) {
 //! \fn TaskList RadiationM1::SendFlux
 //! \brief Wrapper task list function to pack/send restricted values of fluxes
 //! of conserved variables at fine/coarse boundaries
-
 TaskStatus RadiationM1::SendFlux(Driver *pdrive, int stage) {
   TaskStatus tstat = TaskStatus::complete;
   // Only execute BoundaryVaLUES function with SMR/SMR
@@ -158,7 +128,6 @@ TaskStatus RadiationM1::SendFlux(Driver *pdrive, int stage) {
 //! \fn TaskList RadiationM1::RecvFlux
 //! \brief Wrapper task list function to recv/unpack restricted values of fluxes
 //! of conserved variables at fine/coarse boundaries
-
 TaskStatus RadiationM1::RecvFlux(Driver *pdrive, int stage) {
   TaskStatus tstat = TaskStatus::complete;
   // Only execute BoundaryValues function with SMR/SMR
@@ -174,7 +143,6 @@ TaskStatus RadiationM1::RecvFlux(Driver *pdrive, int stage) {
 //! Note source terms must be computed using only primitives (w0), as the
 //! conserved variables (u0) have already been partially updated when this fn
 //! called.
-
 TaskStatus RadiationM1::RadiationM1SrcTerms(Driver *pdrive, int stage) {
   Real beta_dt = (pdrive->beta[stage - 1]) * (pmy_pack->pmesh->dt);
 
@@ -191,7 +159,6 @@ TaskStatus RadiationM1::RadiationM1SrcTerms(Driver *pdrive, int stage) {
 //----------------------------------------------------------------------------------------
 //! \fn TaskList RadiationM1::RestrictU
 //! \brief Wrapper task list function to restrict conserved vars
-
 TaskStatus RadiationM1::RestrictU(Driver *pdrive, int stage) {
   // Only execute Mesh function with SMR/SMR
   if (pmy_pack->pmesh->multilevel) {
@@ -204,7 +171,6 @@ TaskStatus RadiationM1::RestrictU(Driver *pdrive, int stage) {
 //! \fn TaskList RadiationM1::SendU
 //! \brief Wrapper task list function to pack/send cell-centered conserved
 //! variables
-
 TaskStatus RadiationM1::SendU(Driver *pdrive, int stage) {
   TaskStatus tstat = pbval_u->PackAndSendCC(u0, coarse_u0);
   return tstat;
@@ -214,7 +180,6 @@ TaskStatus RadiationM1::SendU(Driver *pdrive, int stage) {
 //! \fn TaskList RadiationM1::RecvU
 //! \brief Wrapper task list function to receive/unpack cell-centered conserved
 //! variables
-
 TaskStatus RadiationM1::RecvU(Driver *pdrive, int stage) {
   TaskStatus tstat = pbval_u->RecvAndUnpackCC(u0, coarse_u0);
   return tstat;
@@ -224,15 +189,13 @@ TaskStatus RadiationM1::RecvU(Driver *pdrive, int stage) {
 //! \fn TaskList RadiationM1::ApplyPhysicalBCs
 //! \brief Wrapper task list function to call funtions that set physical and
 //! user BCs,
-
 TaskStatus RadiationM1::ApplyPhysicalBCs(Driver *pdrive, int stage) {
   // do not apply BCs if domain is strictly periodic
   if (pmy_pack->pmesh->strictly_periodic)
     return TaskStatus::complete;
 
   // physical BCs
-  // add radiation M1 BCs
-  // pbval_u->HydroBCs((pmy_pack), (pbval_u->u_in), u0);
+  pbval_u->RadiationM1BCs((pmy_pack), (pbval_u->u_in), u0);
 
   // user BCs
   if (pmy_pack->pmesh->pgen->user_bcs) {
@@ -245,7 +208,6 @@ TaskStatus RadiationM1::ApplyPhysicalBCs(Driver *pdrive, int stage) {
 //! \fn TaskList RadiationM1::Prolongate
 //! \brief Wrapper task list function to prolongate conserved (or primitive)
 //! variables at fine/coarse boundaries with SMR/AMR
-
 TaskStatus RadiationM1::Prolongate(Driver *pdrive, int stage) {
   if (pmy_pack->pmesh->multilevel) { // only prolongate with SMR/AMR
     pbval_u->FillCoarseInBndryCC(u0, coarse_u0);
@@ -261,7 +223,6 @@ TaskStatus RadiationM1::Prolongate(Driver *pdrive, int stage) {
 //! stage=(last stage):      clears sends of U, Flx_U, U_OA, U_Shr If (last
 //! stage)>stage>=(0): clears sends of U, Flx_U,       U_Shr If stage=(-1):
 //! clears sends of U If stage=(-4):              clears sends of U_Shr
-
 TaskStatus RadiationM1::ClearSend(Driver *pdrive, int stage) {
   TaskStatus tstat;
   // check sends of U complete
@@ -290,7 +251,6 @@ TaskStatus RadiationM1::ClearSend(Driver *pdrive, int stage) {
 //! If (last stage)>stage>=(0): clears recvs of U, Flx_U,       U_Shr
 //! If stage=(-1):              clears recvs of U
 //! If stage=(-4):              clears recvs of                 U_Shr
-
 TaskStatus RadiationM1::ClearRecv(Driver *pdrive, int stage) {
   TaskStatus tstat;
   // check receives of U complete

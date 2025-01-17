@@ -189,6 +189,10 @@ add_executable(
         radiation_m1/radiation_m1_macro.hpp
         radiation_m1/radiation_m1_sources.hpp
         radiation_m1/radiation_m1_setmask.hpp
+        radiation_m1/radiation_m1_roots.hpp
+        radiation_m1/radiation_m1_calc_closure.cpp
+        bvals/physics/radiation_m1_bcs.cpp
+        radiation_m1/radiation_m1_beams.cpp
 )
 
 # custom problem generator to be included in compile
