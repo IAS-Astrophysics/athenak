@@ -66,11 +66,18 @@ def parse_cli():
       help="plot this mode[Re(l,m),Im(l,m)]",
   )
 
+  p.add_argument(
+      "-time_dump",
+      type=int,
+      default=100,
+      help="how often dump for mode convergence",
+  )
+
   args = p.parse_args()
   return args
 
 
-def find_h5_mode(h5f, field_name, mode_name, args):
+def find_h5_1mode(h5f, field_name, mode_name, args):
   mode = 0
   flag = False
   for m in h5f[field_name].attrs["Legend"]:
@@ -84,7 +91,32 @@ def find_h5_mode(h5f, field_name, mode_name, args):
   return mode
 
 
-def read_h5_mode_and_derivs(args):
+def find_h5_all_modes(h5f, field_name, mode_name, args):
+  modes = []
+  names = []
+  re_or_im = mode_name[0:2] ## Re(...)
+  print(re_or_im)
+  assert re_or_im == "Re" or re_or_im == "Im"
+
+  legends = h5f[field_name].attrs["Legend"]
+  for i in range(len(legends)):
+    m = legends[i]
+    if m.find(re_or_im) != -1:
+      names.append(m)
+      modes.append(i)
+
+  assert len(modes)
+
+  # print(modes)
+  # print(names)
+
+  return modes
+
+
+def read_h5_1mode(args):
+  """
+    return t, f(t)|mode, df(t)/dr|mod, df(t)/dt|mode
+    """
 
   field_name = g_name_map[args["field_name"]]
   field_name_key = f"{field_name}.dat"
@@ -92,15 +124,68 @@ def read_h5_mode_and_derivs(args):
   dfield_name_dt_key = f"Dt{field_name}.dat"
 
   with h5py.File(args["fpath"], "r") as h5f:
-    mode = find_h5_mode(h5f, f"{field_name_key}", args["field_mode"], args)
+    mode = find_h5_1mode(h5f, f"{field_name_key}", args["field_mode"], args)
     t = h5f[f"{field_name_key}"][:, 0]
     f = h5f[f"{field_name_key}"][:, mode]
 
-    mode = find_h5_mode(h5f, f"{dfield_name_dr_key}", args["field_mode"], args)
+    mode = find_h5_1mode(h5f, f"{dfield_name_dr_key}", args["field_mode"], args)
     drf = h5f[f"{dfield_name_dr_key}"][:, mode]
 
-    mode = find_h5_mode(h5f, f"{dfield_name_dt_key}", args["field_mode"], args)
+    mode = find_h5_1mode(h5f, f"{dfield_name_dt_key}", args["field_mode"], args)
     dtf = h5f[f"{dfield_name_dt_key}"][:, mode]
+
+  return (f, drf, dtf, t)
+
+
+def read_h5_all_modes(args):
+  """
+    return t, f(mode)|t, df(mode)/dr|t, df(mode)/dt|t
+
+    f[t_i,modes] = at t_i what are the modes
+    """
+
+  field_name = g_name_map[args["field_name"]]
+  field_name_key = f"{field_name}.dat"
+  dfield_name_dr_key = f"Dr{field_name}.dat"
+  dfield_name_dt_key = f"Dt{field_name}.dat"
+
+  with h5py.File(args["fpath"], "r") as h5f:
+    t = h5f[f"{field_name_key}"][:, 0]
+    n_dumps = len(t) // args["time_dump"]
+    n_dumps = n_dumps + 1 if len(t) % args["time_dump"] else n_dumps
+
+    modes = find_h5_all_modes(h5f,
+                              f"{field_name_key}",
+                              args["field_mode"],
+                              args)
+    f = np.empty(shape=(n_dumps, len(modes)))
+    k = 0 # note: f[k,.] is 0,1,... but i jumps
+    for i in range(0, len(t), args["time_dump"]):
+      for j in range(len(modes)):
+        f[k, j] = h5f[f"{field_name_key}"][i, modes[j]]
+      k += 1
+
+    modes = find_h5_all_modes(h5f,
+                              f"{dfield_name_dr_key}",
+                              args["field_mode"],
+                              args)
+    drf = np.empty(shape=(n_dumps, len(modes)))
+    k = 0
+    for i in range(0, len(t), args["time_dump"]):
+      for j in range(len(modes)):
+        drf[k, j] = h5f[f"{dfield_name_dr_key}"][i, modes[j]]
+      k += 1
+
+    modes = find_h5_all_modes(h5f,
+                              f"{dfield_name_dt_key}",
+                              args["field_mode"],
+                              args)
+    dtf = np.empty(shape=(n_dumps, len(modes)))
+    k = 0
+    for i in range(0, len(t), args["time_dump"]):
+      for j in range(len(modes)):
+        dtf[k, j] = h5f[f"{dfield_name_dt_key}"][i, modes[j]]
+      k += 1
 
   return (f, drf, dtf, t)
 
@@ -149,8 +234,13 @@ def plot_simple_v_t(dat, args):
 
 
 def debug_plot_simple(args):
-  dat = read_h5_mode_and_derivs(args)
-  plot_simple_v_t(dat, args)
+  # value vs time
+  # dat = read_h5_1mode(args)
+  # plot_simple_v_t(dat, args)
+
+  # conv test
+  dat = read_h5_all_modes(args)
+  # plot_simple_mode(dat, args)
 
 
 def main(args):
