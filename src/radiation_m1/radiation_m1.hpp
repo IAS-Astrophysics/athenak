@@ -80,6 +80,18 @@ public:
   ~RadiationM1();
 
   int nvars{};
+  DvceArray5D<Real> rN0; // evolved variables--radiation number density
+  DvceArray5D<Real> rE0; // evolved variables--radiation energy density
+  DvceArray5D<Real> rFx0; // evolved variables--radiation flux density on x dir.
+  DvceArray5D<Real> rFy0; // evolved variables--radiation flux density on y dir.
+  DvceArray5D<Real> rFz0; // evolved variables--radiation flux density on z dir.
+
+  DvceArray5D<Real> rN1; // evolved variables--radiation number density at intermediate step
+  DvceArray5D<Real> rE1; // evolved variables--radiation energy density at intermediate step
+  DvceArray5D<Real> rFx1; // evolved variables--radiation flux density on x dir. at intermediate step
+  DvceArray5D<Real> rFy1; // evolved variables--radiation flux density on y dir. at intermediate step
+  DvceArray5D<Real> rFz1; // evolved variables--radiation flux density on z dir. at intermediate step
+
   DvceArray5D<Real> u0;        // evolved variables
   DvceArray5D<Real> coarse_u0; // evolved variables on 2x coarser grid
 

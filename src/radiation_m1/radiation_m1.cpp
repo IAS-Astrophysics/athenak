@@ -18,8 +18,20 @@
 namespace radiationm1 {
 
 RadiationM1::RadiationM1(MeshBlockPack *ppack, ParameterInput *pin)
-    : pmy_pack(ppack), u0("cons", 1, 1, 1, 1, 1),
-      coarse_u0("ccons", 1, 1, 1, 1, 1), u1("cons1", 1, 1, 1, 1, 1),
+    : pmy_pack(ppack),
+      rN0("cons", 1, 1, 1, 1, 1), 
+      rE0("cons", 1, 1, 1, 1, 1),
+      rFx0("cons", 1, 1, 1, 1, 1),
+      rFy0("cons", 1, 1, 1, 1, 1),
+      rFz0("cons", 1, 1, 1, 1, 1),
+      rN1("cons", 1, 1, 1, 1, 1),
+      rE1("cons", 1, 1, 1, 1, 1),
+      rFx1("cons", 1, 1, 1, 1, 1),
+      rFy1("cons", 1, 1, 1, 1, 1),
+      rFz1("cons", 1, 1, 1, 1, 1),
+      u0("cons", 1, 1, 1, 1, 1),
+      coarse_u0("ccons", 1, 1, 1, 1, 1), 
+      u1("cons1", 1, 1, 1, 1, 1),
       uflx("uflx", 1, 1, 1, 1, 1) {
 
   // Total number of MeshBlocks on this rank to be used in array dimensioning
