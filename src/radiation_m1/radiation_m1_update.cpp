@@ -12,7 +12,7 @@
 
 namespace radiationm1 {
 
-TaskStatus RadiationM1::RKUpdate(Driver *d, int stage) {
+TaskStatus RadiationM1::TimeUpdate(Driver *d, int stage) {
   // all semi-implicit updates go here
   return TaskStatus::complete;
 }

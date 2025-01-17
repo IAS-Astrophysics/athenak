@@ -56,7 +56,7 @@ add_executable(
 
         geodesic-grid/geodesic_grid.cpp
         geodesic-grid/spherical_grid.cpp
-	geodesic-grid/gauss_legendre.cpp
+	    geodesic-grid/gauss_legendre.cpp
 
         hydro/hydro.cpp
         hydro/hydro_fluxes.cpp
@@ -177,6 +177,10 @@ add_executable(
         radiation_m1/radiation_m1_macro.hpp
         radiation_m1/radiation_m1_sources.hpp
         radiation_m1/radiation_m1_setmask.hpp
+        radiation_m1/radiation_m1_roots.hpp
+        radiation_m1/radiation_m1_calc_closure.cpp
+        bvals/physics/radiation_m1_bcs.cpp
+        radiation_m1/radiation_m1_beams.cpp
 )
 
 # custom problem generator to be included in compile
