@@ -69,6 +69,7 @@ public:
 
   int nvars;                        // no. of evolved variables per species
   int nspecies;                     // no. of species
+  int source_limiter;               // Limit the source terms to avoid nonphysical states
   int nvarstot;                     // total no. of evolved variables
   RadiationM1Params params;         // user parameters for grey M1
   DvceArray5D<Real> u0;             // evolved variables
