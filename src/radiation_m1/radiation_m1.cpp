@@ -24,6 +24,7 @@ RadiationM1::RadiationM1(MeshBlockPack *ppack, ParameterInput *pin)
 
   // parameters
   nspecies = pin->GetOrAddInteger("radiation_m1", "num_species", 1);
+  source_limiter = pin->GetOrAddInteger("radiation_m1", "source_limiter", 0.5);
   params.rad_E_floor = pin->GetOrAddReal("radiation_m1", "rad_E_floor", 1e-14);
   params.rad_eps = pin->GetOrAddReal("radiation_m1", "rad_eps", 1e-14);
   std::string closure_fun =
