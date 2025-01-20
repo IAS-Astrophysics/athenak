@@ -280,7 +280,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
 				}, Kokkos::Max<Real>(dens_max) );
 				
 				//std::cout << "d_max: " << dens_max << " d_crit: " << crit << std::endl;
-				is_crit_satisfied = ( dens_max < crit );
+				is_crit_satisfied = ( dens_max > crit );
       } else if ( prtcl_init_rad ) {
 				// Initialize particles within a specific spherical shell
 				if ( ! pin->DoesParameterExist("particles", "r_init_max") ) {
