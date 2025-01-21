@@ -14,10 +14,17 @@
 
 #include "athena.hpp"
 #include "athena_tensor.hpp"
-#include "radiation_m1_tensors.hpp"
 #include "bvals/bvals.hpp"
 #include "parameter_input.hpp"
+#include "radiation_m1_tensors.hpp"
 #include "tasklist/task_list.hpp"
+
+
+#define M1_E_IDX 0
+#define M1_FX_IDX 1
+#define M1_FY_IDX 2
+#define M1_FZ_IDX 3
+#define M1_N_IDX 4
 
 namespace radiationm1 {
 
@@ -58,6 +65,7 @@ enum RadiationM1Closure {
 //  \brief parameters for the Grey M1 class
 struct RadiationM1Params {
   Real rad_E_floor;
+  Real rad_N_floor;
   Real rad_eps;
   Real minmod_theta;
   RadiationM1Closure closure_fun;
@@ -68,11 +76,12 @@ public:
   RadiationM1(MeshBlockPack *ppack, ParameterInput *pin);
   ~RadiationM1();
 
-  int nvars;                        // no. of evolved variables per species
-  int nspecies;                     // no. of species
-  int source_limiter;               // Limit the source terms to avoid nonphysical states
-  int nvarstot;                     // total no. of evolved variables
-  RadiationM1Params params;         // user parameters for grey M1
+  int nvars;                // no. of evolved variables per species
+  int nspecies;             // no. of species
+  int source_limiter;       // src limiter param to avoid non-physical states
+  int nvarstot;             // total no. of evolved variables
+  RadiationM1Params params; // user parameters for grey M1
+
   DvceArray5D<Real> u0;             // evolved variables
   DvceArray5D<Real> coarse_u0;      // evolved variables on 2x coarser grid
   DvceArray5D<Real> P_dd;           // lab radiation pressure
