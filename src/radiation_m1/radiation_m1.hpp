@@ -14,6 +14,7 @@
 
 #include "athena.hpp"
 #include "athena_tensor.hpp"
+#include "radiation_m1_tensors.hpp"
 #include "bvals/bvals.hpp"
 #include "parameter_input.hpp"
 #include "tasklist/task_list.hpp"
@@ -38,7 +39,6 @@ struct RadiationM1TaskIDs {
   TaskID recvu;
   TaskID bcs;
   TaskID prol;
-  TaskID c2p;
   TaskID newdt;
   TaskID csend;
   TaskID crecv;
@@ -59,6 +59,7 @@ enum RadiationM1Closure {
 struct RadiationM1Params {
   Real rad_E_floor;
   Real rad_eps;
+  Real minmod_theta;
   RadiationM1Closure closure_fun;
 };
 
@@ -114,45 +115,6 @@ private:
   MeshBlockPack *pmy_pack; // ptr to MeshBlockPack
 };
 
-//----------------------------------------------------------------------------------------
-//! \fn radiationm1::tensor_dot
-//  \brief function to compute g^ab F_a G_b
-template <typename T>
-T tensor_dot(const AthenaPointTensor<T, TensorSymm::SYM2, 4, 2> g_uu,
-             const AthenaPointTensor<T, TensorSymm::NONE, 4, 1> F_d,
-             const AthenaPointTensor<T, TensorSymm::NONE, 4, 1> G_d) {
-  T F2 = 0.;
-  for (int a = 0; a < 4; ++a) {
-    for (int b = 0; b < 4; ++b) {
-      F2 += g_uu(a, b) * F_d(a) * G_d(b);
-    }
-  }
-  return F2;
-}
-
-//----------------------------------------------------------------------------------------
-//! \fn radiationm1::tensor_dot
-//  \brief function to compute eta^ab F_a G_b
-template <typename T>
-T tensor_dot(const AthenaPointTensor<T, TensorSymm::NONE, 4, 1> F_d,
-             const AthenaPointTensor<T, TensorSymm::NONE, 4, 1> G_d) {
-  return -F_d(0) * G_d(0) + F_d(1) * G_d(1) + F_d(2) * G_d(2) + F_d(3) * G_d(3);
-}
-
-//----------------------------------------------------------------------------------------
-//! \fn radiationm1::tensor_contract
-//  \brief find F_a = g_ab F^b
-template <typename T>
-void tensor_contract(const AthenaPointTensor<T, TensorSymm::SYM2, 4, 2> g_dd,
-                     const AthenaPointTensor<T, TensorSymm::NONE, 4, 1> F_u,
-                     AthenaPointTensor<T, TensorSymm::NONE, 4, 1> F_d) {
-  for (int a = 0; a < 4; ++a) {
-    F_d(a) = 0;
-    for (int b = 0; b < 4; ++b) {
-      F_d(a) += g_dd(a, b) * F_u(b);
-    }
-  }
-}
 //----------------------------------------------------------------------------------------
 //! \fn radiationm1::minmod2
 //  \brief double minmod

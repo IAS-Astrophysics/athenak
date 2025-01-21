@@ -13,6 +13,129 @@
 #include "radiation_m1_closure.hpp"
 
 namespace radiationm1 {
+
+KOKKOS_INLINE_FUNCTION
+void CalcFlux(const int m, const int k, const int j, const int i,
+              const int nuidx, const int dir, const DvceArray5D<Real> &u0_,
+              const DvceArray5D<Real> &P_dd_,
+              const AthenaTensor<Real, TensorSymm::NONE, 4, 1> &u_mu_,
+              const adm::ADM::ADM_vars &adm, const RadiationM1Params params_,
+              const int nvars_, const int nspecies_, Real flux[5], Real &cmax) {
+  // load 4-metric, 3-metric inverse, shift, normal
+  Real garr_dd[16];
+  Real garr_uu[16];
+  AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> g_uu{};
+  AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> g_dd{};
+  AthenaPointTensor<Real, TensorSymm::SYM2, 3, 2> gamma_uu{};
+  AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> beta_u{};
+  AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> beta_d{};
+  AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> n_d{};
+  pack_n_d(adm.alpha(m, k, j, i), n_d);
+  adm::SpacetimeMetric(adm.alpha(m, k, j, i), adm.beta_u(m, 0, k, j, i),
+                       adm.beta_u(m, 1, k, j, i), adm.beta_u(m, 2, k, j, i),
+                       adm.g_dd(m, 0, 0, k, j, i), adm.g_dd(m, 0, 1, k, j, i),
+                       adm.g_dd(m, 0, 2, k, j, i), adm.g_dd(m, 1, 1, k, j, i),
+                       adm.g_dd(m, 1, 2, k, j, i), adm.g_dd(m, 2, 2, k, j, i),
+                       garr_dd);
+  adm::SpacetimeUpperMetric(
+      adm.alpha(m, k, j, i), adm.beta_u(m, 0, k, j, i),
+      adm.beta_u(m, 1, k, j, i), adm.beta_u(m, 2, k, j, i),
+      adm.g_dd(m, 0, 0, k, j, i), adm.g_dd(m, 0, 1, k, j, i),
+      adm.g_dd(m, 0, 2, k, j, i), adm.g_dd(m, 1, 1, k, j, i),
+      adm.g_dd(m, 1, 2, k, j, i), adm.g_dd(m, 2, 2, k, j, i), garr_uu);
+  pack_beta_u(adm.beta_u(m, 0, k, j, i), adm.beta_u(m, 1, k, j, i),
+              adm.beta_u(m, 2, k, j, i), beta_u);
+  tensor_contract(g_dd, beta_u, beta_d);
+  for (int a = 0; a < 4; ++a) {
+    for (int b = 0; b < 4; ++b) {
+      g_dd(a, b) = garr_dd[a + b * 4];
+      g_uu(a, b) = garr_uu[a + b * 4];
+    }
+  }
+  for (int a = 1; a < 4; ++a) {
+    for (int b = 1; b < 4; ++b) {
+      gamma_uu(a - 1, b - 1) = garr_uu[a + b * 4] - beta_u(a) * beta_u(b) /
+                                                        (adm.alpha(m, k, j, i) *
+                                                         adm.alpha(m, k, j, i));
+    }
+  }
+
+  // load Lorentz factor, four velocity, three velocity, projection
+  AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> u_u{};
+  AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> u_d{};
+  AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> v_u{};
+  AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> v_d{};
+  AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> proj_ud{};
+  Real w_lorentz = u_mu_(m, 0, k, j, i);
+  pack_u_u(u_mu_(m, 0, k, j, i), u_mu_(m, 1, k, j, i), u_mu_(m, 2, k, j, i),
+           u_mu_(m, 3, k, j, i), u_u);
+  tensor_contract(g_dd, u_u, u_d);
+  pack_v_u(u_mu_(m, 0, k, j, i), u_mu_(m, 1, k, j, i), u_mu_(m, 2, k, j, i),
+           u_mu_(m, 3, k, j, i), v_u);
+  tensor_contract(g_dd, v_u, v_d);
+  calc_proj(u_d, u_u, proj_ud);
+
+  AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> F_d{};
+  AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> F_u{};
+  pack_F_d(beta_d(1), beta_d(2), beta_d(3),
+           u0_(m, CombinedIdx(nuidx, 1, nvars_), k, j, i),
+           u0_(m, CombinedIdx(nuidx, 2, nvars_), k, j, i),
+           u0_(m, CombinedIdx(nuidx, 1, nvars_), k, j, i), F_d);
+  tensor_contract(g_uu, F_d, F_u);
+
+  // lab frame pressure
+  AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> P_dd{};
+  AthenaPointTensor<Real, TensorSymm::NONE, 4, 2> P_ud{};
+  pack_P_dd(adm.beta_u(m, 0, k, j, i), adm.beta_u(m, 1, k, j, i),
+            adm.beta_u(m, 2, k, j, i),
+            P_dd_(m, CombinedIdx(nuidx, 0, 6), k, j, i),
+            P_dd_(m, CombinedIdx(nuidx, 1, 6), k, j, i),
+            P_dd_(m, CombinedIdx(nuidx, 2, 6), k, j, i),
+            P_dd_(m, CombinedIdx(nuidx, 3, 6), k, j, i),
+            P_dd_(m, CombinedIdx(nuidx, 4, 6), k, j, i),
+            P_dd_(m, CombinedIdx(nuidx, 5, 6), k, j, i), P_dd);
+  tensor_contract(g_uu, P_dd, P_ud);
+  const Real E = u0_(m, CombinedIdx(nuidx, 0, nvars_), k, j, i);
+
+  // compute fluid frame quantities
+  AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> T_dd{};
+  assemble_rT(n_d, E, F_d, P_dd, T_dd);
+  AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> H_d{};
+  AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> H_u{};
+  AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> fnu_u{};
+
+  Real J = calc_J_from_rT(T_dd, u_u);
+  calc_H_from_rT(T_dd, u_u, proj_ud, H_d);
+  tensor_contract(g_uu, H_d, H_u);
+
+  Real N = u0_(m, CombinedIdx(nuidx, 4, nvars_), k, j, i);
+  assemble_fnu(u_u, J, H_u, fnu_u, params_);
+  const Real Gamma = compute_Gamma(w_lorentz, v_u, J, E, F_d, params_);
+
+  // Note that nnu is densitized here
+  Real nnu{};
+  if (nspecies_ > 1) {
+    nnu = N / Gamma;
+  }
+
+  flux[0] = calc_E_flux(adm.alpha(m, k, j, i), beta_u, E, F_u, dir + 1);
+  flux[1] = calc_F_flux(adm.alpha(m, k, j, i), beta_u, F_d, P_ud, dir + 1, 1);
+  flux[2] = calc_F_flux(adm.alpha(m, k, j, i), beta_u, F_d, P_ud, dir + 1, 2);
+  flux[3] = calc_F_flux(adm.alpha(m, k, j, i), beta_u, F_d, P_ud, dir + 1, 3);
+  if (nspecies_ > 1) {
+    flux[4] = adm.alpha(m, k, j, i) * nnu * fnu_u(dir + 1);
+  } else {
+    flux[4] = 0;
+  }
+
+  // Speed of light -- note that gamma_uu has NDIM=3
+  const Real clam[2] = {
+      adm.alpha(m, k, j, i) * std::sqrt(gamma_uu(dir, dir)) - beta_u(dir + 1),
+      -adm.alpha(m, k, j, i) * std::sqrt(gamma_uu(dir, dir)) - beta_u(dir + 1)};
+  const Real clight = Kokkos::max(Kokkos::abs(clam[0]), Kokkos::abs(clam[1]));
+  cmax = clight;
+}
+
 TaskStatus RadiationM1::Fluxes(Driver *pdrive, int stage) {
   RegionIndcs &indcs = pmy_pack->pmesh->mb_indcs;
   int &is = indcs.is, &ie = indcs.ie;
@@ -20,6 +143,7 @@ TaskStatus RadiationM1::Fluxes(Driver *pdrive, int stage) {
   int &ks = indcs.ks, &ke = indcs.ke;
 
   auto nmb1 = pmy_pack->nmb_thispack - 1;
+  auto &mbsize = pmy_pack->pmb->mb_size;
   auto &nspecies_ = pmy_pack->pradm1->nspecies;
   auto nvarstotm1 = pmy_pack->pradm1->nvarstot - 1;
   auto nvars_ = pmy_pack->pradm1->nvars;
@@ -35,134 +159,67 @@ TaskStatus RadiationM1::Fluxes(Driver *pdrive, int stage) {
   //--------------------------------------------------------------------------------------
   // i-direction
 
-  size_t scr_size = 2;
+  size_t scr_size = 1;
   int scr_level = 0;
   auto &flx1_ = uflx.x1f;
 
-  int il = is, iu = ie + 1, jl = js, ju = je, kl = ks, ku = ke;
+  int il = is - 1, iu = ie, jl = js, ju = je, kl = ks, ku = ke;
 
-  par_for_outer(
-      "radiation_m1_flux_x1", DevExeSpace(), scr_size, scr_level, 0, nmb1, kl,
-      ku, jl, ju, il, iu,
-      KOKKOS_LAMBDA(TeamMember_t member, const int m, const int k, const int j,
-                    const int i) {
-        AthenaPointTensor<Real, TensorSymm::SYM2, 3, 2> gamma_uu;
-        AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> g_uu;
-        AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> beta_u;
-        beta_u(0) = 0;
-        beta_u(1) = adm.beta_u(m, 0, k, j, i);
-        beta_u(2) = adm.beta_u(m, 1, k, j, i);
-        beta_u(3) = adm.beta_u(m, 2, k, j, i);
-        AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> v_u;
-        AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> u_u;
-        u_u(0) = u_mu_(m, 0, k, j, i);
-        u_u(1) = u_mu_(m, 1, k, j, i);
-        u_u(2) = u_mu_(m, 2, k, j, i);
-        u_u(3) = u_mu_(m, 3, k, j, i);
-        Real lorentz_w = u_u(0);
-        v_u(0) = 0;
-        v_u(1) = u_u(1) / lorentz_w;
-        v_u(2) = u_u(2) / lorentz_w;
-        v_u(3) = u_u(3) / lorentz_w;
+  par_for(
+      "radiation_m1_flux_x1", DevExeSpace(), 0, nmb1, kl, ku, jl, ju, il, iu, 0,
+      nspecies_ - 1,
+      KOKKOS_LAMBDA(const int m, const int k, const int j, const int i,
+                    const int nuidx) {
+        int dir = 1;
+        Real flux_i[5]{};
+        Real flux_ip1[5]{};
+        Real cmax_i, cmax_ip1;
+        CalcFlux(m, k, j, i, nuidx, dir, u0_, P_dd_, u_mu_, adm, params_,
+                 nvars_, nspecies_, flux_i, cmax_i);
+        CalcFlux(m, k, j, i + 1, nuidx, dir, u0_, P_dd_, u_mu_, adm, params_,
+                 nvars_, nspecies_, flux_ip1, cmax_ip1);
 
-        AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> H_d;
-        AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> H_u;
-        AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> F_d;
-        AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> F_u;
-        AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> P_dd;
-        AthenaPointTensor<Real, TensorSymm::NONE, 4, 2> P_ud;
-        AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> fnu_u;
+        Real flux_ip12_lo[5]{};
+        Real flux_ip12_ho[5]{};
 
-        for (int nuidx = 0; nuidx < nspecies_; ++nuidx) {
-          P_dd(0, 0) = 0;
-          P_dd(0, 1) = adm.beta_u(m, 0, k, j, i);
-          P_dd(0, 2) = adm.beta_u(m, 1, k, j, i);
-          P_dd(0, 3) = adm.beta_u(m, 2, k, j, i);
-          P_dd(1, 1) = P_dd_(m, CombinedIdx(nuidx, 0, 6), k, j, i);
-          P_dd(1, 2) = P_dd_(m, CombinedIdx(nuidx, 1, 6), k, j, i);
-          P_dd(1, 3) = P_dd_(m, CombinedIdx(nuidx, 2, 6), k, j, i);
-          P_dd(2, 2) = P_dd_(m, CombinedIdx(nuidx, 3, 6), k, j, i);
-          P_dd(2, 3) = P_dd_(m, CombinedIdx(nuidx, 4, 6), k, j, i);
-          P_dd(3, 3) = P_dd_(m, CombinedIdx(nuidx, 5, 6), k, j, i);
+        Real cmax_ip12 = Kokkos::max(cmax_i, cmax_ip1);
+        Real kappa_ave = 0; //@TODO: fix this!
+        Real A_ip12 = Kokkos::min(1., 1. / mbsize.d_view(m).dx1);
 
-          Real J = 0; //@TODO
-          Real E = u0_(m, CombinedIdx(nuidx, 0, nvars_), k, j, i);
-          Real N = u0_(m, CombinedIdx(nuidx, 4, nvars_), k, j, i);
-          assemble_fnu(u_u, J, H_u, fnu_u, params_);
-          const Real Gamma = compute_Gamma(lorentz_w, v_u, J, E, F_d, params_);
+        for (int var = 0; var < nvars_; ++var) {
+          const Real ujm = (i - 1) < 0 ? 0
+                                       : u0_(m, CombinedIdx(nuidx, var, nvars_),
+                                             k, j, i - 1);
+          const Real uj = u0_(m, CombinedIdx(nuidx, var, nvars_), k, j, i);
+          const Real ujp = u0_(m, CombinedIdx(nuidx, var, nvars_), k, j, i + 1);
+          const Real ujpp =
+              (i + 2) > ie
+                  ? 0
+                  : u0_(m, CombinedIdx(nuidx, var, nvars_), k, j, i + 2);
 
-          // Note that nnu is densitized here
-          Real nnu{};
-          if (nspecies_ > 1) {
-            nnu = N / Gamma;
-          }
-
-          Real flux[4];
-          int dir = 0;
-          flux[0] =
-              calc_F_flux(adm.alpha(m, k, j, i), beta_u, F_d, P_ud, dir + 1, 1);
-          flux[1] =
-              calc_F_flux(adm.alpha(m, k, j, i), beta_u, F_d, P_ud, dir + 1, 2);
-          flux[2] =
-              calc_F_flux(adm.alpha(m, k, j, i), beta_u, F_d, P_ud, dir + 1, 3);
-          if (nspecies_ > 1) {
-            flux[3] = adm.alpha(m, k, j, i) * nnu * fnu_u(dir + 1);
-          }
-
-          // Speed of light -- note that gamma_uu has NDIM=3
-          const Real clam[2] = {
-              adm.alpha(m, k, j, i) * std::sqrt(gamma_uu(dir, dir)) -
-                  beta_u(dir + 1),
-              -adm.alpha(m, k, j, i) * std::sqrt(gamma_uu(dir, dir)) -
-                  beta_u(dir + 1)};
-          const Real clight =
-              Kokkos::max(Kokkos::abs(clam[0]), Kokkos::abs(clam[1]));
-
-          // In some cases the eigenvalues in the thin limit
-          // overestimate the actual characteristic speed and can
-          // become larger than c
-          Real cmax = clight;
-
-          // Remove dissipation at high Peclet numbers
-          /*
-          const Real kapa = 0.5 * (abs_1[i4D] + abs_1[i4Dp] + scat_1[i4D] + scat_1[i4Dp]);
-          Real A = 1.0;
-          if (kapa * delta[dir] > 1.0) {
-            A = Kokkos::min(1.0, 1.0 / (delta[dir] * kapa));
-            A = max(A, mindiss);
-          }
-
-          CCTK_REAL const ujm = cons[GFINDEX1D(__k - 1, ig, iv)];
-          CCTK_REAL const uj = cons[GFINDEX1D(__k, ig, iv)];
-          CCTK_REAL const ujp = cons[GFINDEX1D(__k + 1, ig, iv)];
-          CCTK_REAL const ujpp = cons[GFINDEX1D(__k + 2, ig, iv)];
-
-          CCTK_REAL const fj = flux[GFINDEX1D(__k, ig, iv)];
-          CCTK_REAL const fjp = flux[GFINDEX1D(__k + 1, ig, iv)];
-
-          CCTK_REAL const cc = cmax[GFINDEX1D(__k, ig, 0)];
-          CCTK_REAL const ccp = cmax[GFINDEX1D(__k + 1, ig, 0)];
-          CCTK_REAL const cmx = std::max(cc, ccp);
-
-          CCTK_REAL const dup = ujpp - ujp;
-          CCTK_REAL const duc = ujp - uj;
-          CCTK_REAL const dum = uj - ujm;
+          const Real dup = ujpp - ujp;
+          const Real duc = ujp - uj;
+          const Real dum = uj - ujm;
 
           bool sawtooth = false;
-          CCTK_REAL phi = 0;
+          Real phi_ip12 = 0;
           if (dup * duc > 0 && dum * duc > 0) {
-            phi = minmod2(dum / duc, dup / duc, minmod_theta);
+            phi_ip12 = minmod2(dum / duc, dup / duc, params_.minmod_theta);
           } else if (dup * duc < 0 && dum * duc < 0) {
             sawtooth = true;
           }
-          assert(isfinite(phi));
 
-          CCTK_REAL const flux_low = 0.5 * (fj + fjp - cmx * (ujp - uj));
-          CCTK_REAL const flux_high = 0.5 * (fj + fjp);
+          flux_ip12_lo[var] = (flux_i[var] + flux_ip1[var]) / 2.;
+          flux_ip12_ho[var] =
+              (flux_i[var] + flux_ip1[var]) / 2. -
+              cmax_ip12 *
+                  (u0_(m, CombinedIdx(nuidx, var, nvars_), k, j, i + 1) -
+                   u0_(m, CombinedIdx(nuidx, var, nvars_), k, j, i)) /
+                  2.;
 
-          CCTK_REAL flux_num = flux_high - (sawtooth ? 1 : A) * (1 - phi) *
-                                               (flux_high - flux_low);
-          flux_jp[PINDEX1D(ig, iv)] = flux_num; */
+          flx1_(m, var, k, j, i) =
+              flux_ip12_ho[var] - (sawtooth ? 1 : A_ip12) * (1 - phi_ip12) *
+                                      (flux_ip12_ho[var] - flux_ip12_lo[var]);
         }
       });
   return TaskStatus::complete;
