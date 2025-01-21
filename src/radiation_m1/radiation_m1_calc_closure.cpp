@@ -47,12 +47,12 @@ TaskStatus RadiationM1::CalcClosure(Driver *pdrive, int stage) {
                     const int i) {
         if (radiation_mask_(m, k, j, i)) {
           par_for_inner(member, 0, nspecies_ - 1, [&](const int nuidx) {
-            u0_(m, CombinedIdx(nuidx, 0, nvars_), k, j, i) = 0;
-            u0_(m, CombinedIdx(nuidx, 1, nvars_), k, j, i) = 0;
-            u0_(m, CombinedIdx(nuidx, 2, nvars_), k, j, i) = 0;
-            u0_(m, CombinedIdx(nuidx, 3, nvars_), k, j, i) = 0;
+            u0_(m, CombinedIdx(nuidx, M1_E_IDX, nvars_), k, j, i) = 0;
+            u0_(m, CombinedIdx(nuidx, M1_FX_IDX, nvars_), k, j, i) = 0;
+            u0_(m, CombinedIdx(nuidx, M1_FY_IDX, nvars_), k, j, i) = 0;
+            u0_(m, CombinedIdx(nuidx, M1_FZ_IDX, nvars_), k, j, i) = 0;
             if (nspecies_ > 1) {
-              u0_(m, CombinedIdx(nuidx, 4, nvars_), k, j, i) = 0;
+              u0_(m, CombinedIdx(nuidx, M1_N_IDX, nvars_), k, j, i) = 0;
             }
             P_dd_(m, CombinedIdx(nuidx, 0, 6), k, j, i) = 0;
             P_dd_(m, CombinedIdx(nuidx, 1, 6), k, j, i) = 0;
@@ -112,9 +112,10 @@ TaskStatus RadiationM1::CalcClosure(Driver *pdrive, int stage) {
             const Real E = u0_(m, CombinedIdx(nuidx, 0, nvars_), k, j, i);
             AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> F_d{};
             pack_F_d(beta_u(1), beta_u(2), beta_u(3),
-                     u0_(m, CombinedIdx(nuidx, 1, nvars_), k, j, i),
-                     u0_(m, CombinedIdx(nuidx, 2, nvars_), k, j, i),
-                     u0_(m, CombinedIdx(nuidx, 3, nvars_), k, j, i), F_d);
+                     u0_(m, CombinedIdx(nuidx, M1_FX_IDX, nvars_), k, j, i),
+                     u0_(m, CombinedIdx(nuidx, M1_FY_IDX, nvars_), k, j, i),
+                     u0_(m, CombinedIdx(nuidx, M1_FZ_IDX, nvars_), k, j, i),
+                     F_d);
             Real chi{};
             AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> Ptemp_dd{};
             calc_closure(g_dd, g_uu, n_d, w_lorentz, u_u, v_d, proj_ud, E, F_d,

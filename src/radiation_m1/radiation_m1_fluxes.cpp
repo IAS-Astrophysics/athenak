@@ -78,9 +78,9 @@ void CalcFlux(const int m, const int k, const int j, const int i,
   AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> F_d{};
   AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> F_u{};
   pack_F_d(beta_u(1), beta_u(2), beta_u(3),
-           u0_(m, CombinedIdx(nuidx, 1, nvars_), k, j, i),
-           u0_(m, CombinedIdx(nuidx, 2, nvars_), k, j, i),
-           u0_(m, CombinedIdx(nuidx, 1, nvars_), k, j, i), F_d);
+           u0_(m, CombinedIdx(nuidx, M1_FX_IDX, nvars_), k, j, i),
+           u0_(m, CombinedIdx(nuidx, M1_FY_IDX, nvars_), k, j, i),
+           u0_(m, CombinedIdx(nuidx, M1_FZ_IDX, nvars_), k, j, i), F_d);
   tensor_contract(g_uu, F_d, F_u);
 
   // lab frame pressure
@@ -108,7 +108,10 @@ void CalcFlux(const int m, const int k, const int j, const int i,
   calc_H_from_rT(T_dd, u_u, proj_ud, H_d);
   tensor_contract(g_uu, H_d, H_u);
 
-  Real N = u0_(m, CombinedIdx(nuidx, 4, nvars_), k, j, i);
+  Real N{};
+  if (nspecies_ > 1) {
+    N = u0_(m, CombinedIdx(nuidx, M1_N_IDX, nvars_), k, j, i);
+  }
   assemble_fnu(u_u, J, H_u, fnu_u, params_);
   const Real Gamma = compute_Gamma(w_lorentz, v_u, J, E, F_d, params_);
 
