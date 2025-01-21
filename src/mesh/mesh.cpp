@@ -25,6 +25,7 @@
 #include "diffusion/resistivity.hpp"
 #include "diffusion/conduction.hpp"
 #include "radiation/radiation.hpp"
+#include "radiation_m1/radiation_m1.hpp"
 #include "particles/particles.hpp"
 #include "srcterms/srcterms.hpp"
 #include "outputs/io_wrapper.hpp"
@@ -621,6 +622,10 @@ void Mesh::NewTimeStep(const Real tlim) {
     dt = std::min(dt, (pmb_pack->ppart->dtnew) );
   }
 
+  // Radiation M1 timestep
+  if (pmb_pack->pradm1 != nullptr) {
+    dt = std::min(dt, (cfl_no)*(pmb_pack->pradm1->dtnew) );
+  }
 #if MPI_PARALLEL_ENABLED
   // get minimum dt over all MPI ranks
   MPI_Allreduce(MPI_IN_PLACE, &dt, 1, MPI_ATHENA_REAL, MPI_MIN, MPI_COMM_WORLD);
