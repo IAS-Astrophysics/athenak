@@ -27,6 +27,7 @@
 #include "diffusion/viscosity.hpp"
 #include "diffusion/resistivity.hpp"
 #include "radiation/radiation.hpp"
+#include "radiation_m1/radiation_m1.hpp"
 #include "srcterms/turb_driver.hpp"
 #include "particles/particles.hpp"
 #include "units/units.hpp"
@@ -52,7 +53,14 @@ MeshBlockPack::MeshBlockPack(Mesh *pm, int igids, int igide) :
 // MeshBlock destructor
 
 MeshBlockPack::~MeshBlockPack() {
-  if (ppart  != nullptr) {delete ppart;}
+  delete pcoord;
+  if (phydro != nullptr) {delete phydro;}
+  if (pmhd   != nullptr) {delete pmhd;}
+  if (padm   != nullptr) {delete padm;}
+  if (ptmunu != nullptr) {delete ptmunu;}
+  if (prad   != nullptr) {delete prad;}
+  if (pradm1   != nullptr) {delete pradm1;}
+  if (pdyngr != nullptr) {delete pdyngr;}
   if (pnr    != nullptr) {delete pnr;}
   if (pdyngr != nullptr) {delete pdyngr;}
   if (ptmunu != nullptr) {delete ptmunu;}
@@ -239,6 +247,15 @@ void MeshBlockPack::AddPhysics(ParameterInput *pin) {
     ppart = nullptr;
   }
 
+  // (5) RADIATION M1
+  // Create gray M1 physics module.  Create tasklist.
+  if (pin->DoesBlockExist("radiation_m1")) {
+    pradm1 = new radiationm1::RadiationM1(this, pin);
+    nphysics++;
+    pradm1->AssembleRadiationM1Tasks(tl_map);
+  } else {
+    pradm1 = nullptr;
+  }
   // Check that at least ONE is requested and initialized.
   // Error if there are no physics blocks in the input file.
   if (nphysics == 0) {
