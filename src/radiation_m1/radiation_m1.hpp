@@ -87,7 +87,7 @@ public:
 
   MeshBoundaryValuesCC *pbval_u; // Communication buffers and functions for u
   RadiationM1TaskIDs id;         // container to hold names of TaskIDs
-  Real dtnew{};
+  Real dtnew;
 
   DvceArray1D<Real> beam_source_vals; // values of 1d beams
 
