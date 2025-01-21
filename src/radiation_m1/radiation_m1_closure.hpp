@@ -81,7 +81,7 @@ void calc_Pthick(const AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> g_dd,
                  const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> F_d,
                  AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> P_dd) {
 
-  const Real v_dot_F = tensor_dot<Real>(g_uu, v_d, F_d);
+  const Real v_dot_F = tensor_dot(g_uu, v_d, F_d);
   const Real W2 = W * W;
   const Real coef = 1. / (2. * W2 + 1.);
 
@@ -116,7 +116,7 @@ void calc_Kthin(const AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> g_uu,
                 AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> K_dd,
                 const Real rad_E_floor) {
   // H_mu n^mu
-  const Real H_dot_n = W * tensor_dot<Real>(g_uu, n_d, H_d);
+  const Real H_dot_n = W * tensor_dot(g_uu, n_d, H_d);
 
   // J
   const Real E = Kokkos::max(rad_E_floor, SQ(H_dot_n - J * W) / J);
@@ -164,7 +164,7 @@ Real flux_factor(const AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> g_uu,
                  AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> H_d,
                  const Real rad_E_floor) {
   const Real xi =
-      (J > rad_E_floor ? tensor_dot<Real>(g_uu, H_d, H_d) / SQ(J) : 0);
+      (J > rad_E_floor ? tensor_dot(g_uu, H_d, H_d) / SQ(J) : 0);
   return Kokkos::max(0.0, Kokkos::min(xi, 1.0));
 }
 
@@ -361,7 +361,7 @@ Real compute_Gamma(const Real W,
                    const RadiationM1Params params) {
   if (E > params.rad_E_floor && J > params.rad_E_floor) {
     const Real f_dot_v =
-        Kokkos::min(tensor_dot<Real>(F_d, v_u) / E, 1 - params.rad_eps);
+        Kokkos::min(tensor_dot(F_d, v_u) / E, 1 - params.rad_eps);
     return W * (E / J) * (1 - f_dot_v);
   }
   return 1;
@@ -386,7 +386,7 @@ void assemble_rT(const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> u_d,
 KOKKOS_INLINE_FUNCTION
 Real calc_J_from_rT(const AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> rT_dd,
                     const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> u_u) {
-  return tensor_dot<Real>(rT_dd, u_u, u_u);
+  return tensor_dot(rT_dd, u_u, u_u);
 }
 
 // Project out the radiation fluxes (in any frame)
@@ -445,7 +445,7 @@ KOKKOS_INLINE_FUNCTION
 Real calc_rE_source(const Real alp,
                     const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> n_u,
                     const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> S_d) {
-  return -alp * tensor_dot<Real>(n_u, S_d);
+  return -alp * tensor_dot(n_u, S_d);
 }
 
 // Computes the source term for F_a: alp gamma^b_a S_b
