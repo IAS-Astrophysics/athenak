@@ -18,13 +18,7 @@
 #include "parameter_input.hpp"
 #include "radiation_m1_tensors.hpp"
 #include "tasklist/task_list.hpp"
-
-
-#define M1_E_IDX 0
-#define M1_FX_IDX 1
-#define M1_FY_IDX 2
-#define M1_FZ_IDX 3
-#define M1_N_IDX 4
+#include "tasklist/task_list.hpp"
 
 namespace radiationm1 {
 
