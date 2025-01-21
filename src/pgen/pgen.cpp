@@ -48,8 +48,55 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm) :
   user_srcs = pin->GetOrAddBoolean("problem","user_srcs",false);
   user_hist = pin->GetOrAddBoolean("problem","user_hist",false);
 
-  // second argument false since this IS NOT a restart
-  CallProblemGenerator(pin, false);
+#if USER_PROBLEM_ENABLED
+  // call user-defined problem generator
+  UserProblem(pin, false);
+#else
+  // else read name of built-in pgen from <problem> block in input file, and call
+  std::string pgen_fun_name = pin->GetOrAddString("problem", "pgen_name", "none");
+
+  if (pgen_fun_name.compare("advection") == 0) {
+    Advection(pin, false);
+  } else if (pgen_fun_name.compare("cpaw") == 0) {
+    AlfvenWave(pin, false);
+  } else if (pgen_fun_name.compare("gr_bondi") == 0) {
+    BondiAccretion(pin, false);
+  } else if (pgen_fun_name.compare("tetrad") == 0) {
+    CheckOrthonormalTetrad(pin, false);
+  } else if (pgen_fun_name.compare("hohlraum") == 0) {
+    Hohlraum(pin, false);
+  } else if (pgen_fun_name.compare("linear_wave") == 0) {
+    LinearWave(pin, false);
+  } else if (pgen_fun_name.compare("implode") == 0) {
+    LWImplode(pin, false);
+  } else if (pgen_fun_name.compare("gr_monopole") == 0) {
+    Monopole(pin, false);
+  } else if (pgen_fun_name.compare("orszag_tang") == 0) {
+    OrszagTang(pin, false);
+  } else if (pgen_fun_name.compare("rad_linear_wave") == 0) {
+    RadiationLinearWave(pin, false);
+  } else if (pgen_fun_name.compare("shock_tube") == 0) {
+    ShockTube(pin, false);
+  } else if (pgen_fun_name.compare("z4c_linear_wave") == 0) {
+    Z4cLinearWave(pin, false);
+  } else if (pgen_fun_name.compare("spherical_collapse") == 0) {
+    SphericalCollapse(pin, false);
+  } else if (pgen_fun_name.compare("diffusion") == 0) {
+    Diffusion(pin, false);
+  } else if (pgen_fun_name.compare("rad_m1_beamtest") == 0) {
+    RadiationM1BeamTest(pin, false);
+    // else, name not set on command line or input file, print warning and quit
+  } else {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+        << "Problem generator name could not be found in <problem> block in input file"
+        << std::endl
+        << "and it was not set by -D PROBLEM option on cmake command line during build"
+        << std::endl
+        << "Rerun cmake with -D PROBLEM=file to specify custom problem generator file"
+        << std::endl;;
+    std::exit(EXIT_FAILURE);
+  }
+#endif
 
   // Check that user defined BCs were enrolled if needed
   if (user_bcs) {
