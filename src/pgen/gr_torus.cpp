@@ -196,7 +196,6 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
       auto &pr = pmbp->ppart->prtcl_rdata;
       auto &pi = pmbp->ppart->prtcl_idata;
       Real massive = 1.0; //This should be based on ptype, not hard-coded
-      const Real min_rad = pmbp->ppart->min_radius;
       Real min_en = pin->GetOrAddReal("problem", "prtcl_energy_min", 1.005);
       Real max_en = pin->GetOrAddReal("problem", "prtcl_energy_max", 1.5);
       std::string prtcl_init_type = pin->GetString("particles","init_type");
@@ -207,7 +206,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
       const bool prtcl_init_blob = !(prtcl_init_type.compare("blob"));
       const bool prtcl_init_rad = !(prtcl_init_type.compare("shell"));
       // Check initialization type has been set
-      if ( prtcl_init_rnd && prtcl_init_flow && prtcl_init_blob && prtcl_init_rad ) {
+      if ( !(prtcl_init_rnd || prtcl_init_flow || prtcl_init_blob || prtcl_init_rad) ) {
         std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
           << "Particle initialization type missing or not recognized." << std::endl;
         std::exit(EXIT_FAILURE);
@@ -228,94 +227,97 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
       }
 
       // Define criterium for how to initialize particles
+      Real min_rad = pmbp->ppart->min_radius;
       Real crit, crit_min;
       bool is_crit_satisfied;
-			int nmb = (pmbp->nmb_thispack);
+      int nmb = (pmbp->nmb_thispack);
       // Array stores whether or not the Meshblock is viable for particle injection
       // based on criterium
-			DvceArray1D<bool> mb_for_injection;
+      DvceArray1D<bool> mb_for_injection;
       Kokkos::realloc(mb_for_injection, nmb);
+      par_for("init_mb_for_injection", DevExeSpace(), 0, nmb-1,
+          KOKKOS_LAMBDA( const int &im ) {
+          mb_for_injection[im] = false;
+        });
 
       if ( prtcl_init_flow ){
-				if ( ! pin->DoesParameterExist("particles", "rho_condition") ) {
-					std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
-						<< "Particle initialization type " << prtcl_init_type <<" missing required parameter: " << "rho_condition" << std::endl;
-					std::exit(EXIT_FAILURE);
-				}
+        if ( ! pin->DoesParameterExist("particles", "rho_condition") ) {
+          std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+            << "Particle initialization type " << prtcl_init_type <<" missing required parameter: " << "rho_condition" << std::endl;
+          std::exit(EXIT_FAILURE);
+        }
 
         // Check if the meshblockpack crosses the disk for flow-aligned initialization
         // Otherwise remove all particles from this meshblockpack
-        par_for("init_mb_for_injection", DevExeSpace(), 0, nmb-1,
-            KOKKOS_LAMBDA( const int &im ) {
-            mb_for_injection[im] = false;
-					});
-				// Define the critical condition for this initialization 
-				// If the density in this meshblock pack is everywhere smaller than rho_condition times
-				// the rho_min value you're not in the disk
-				// Using a parallel_reduce allows you to skip the whole meshblockpack
-				// without having to copy the device arrays to host to check if
-				// all mb_for_injection is false,
-				// otherwise you have stored to proceed with initialization of particles
-				crit = pin->GetReal("problem", "rho_min")*pin->GetReal("particles", "rho_condition");
+        // Define the critical condition for this initialization 
+        // If the density in this meshblock pack is everywhere smaller than rho_condition times
+        // the rho_min value you're not in the disk
+        // Using a parallel_reduce allows you to skip the whole meshblockpack
+        // without having to copy the device arrays to host to check if
+        // all mb_for_injection is false,
+        // otherwise you have stored to proceed with initialization of particles
+        crit = pin->GetReal("problem", "rho_min")*pin->GetReal("particles", "rho_condition");
 
-				Real dens_max = std::numeric_limits<float>::min();
-				const int nmkji = nmb*indcs.nx3*indcs.nx2*indcs.nx1;
-				const int nkji = indcs.nx3*indcs.nx2*indcs.nx1;
-				const int nji  = indcs.nx2*indcs.nx1;
+        Real dens_max = std::numeric_limits<float>::min();
+        const int nmkji = nmb*indcs.nx3*indcs.nx2*indcs.nx1;
+        const int nkji = indcs.nx3*indcs.nx2*indcs.nx1;
+        const int nji  = indcs.nx2*indcs.nx1;
 
-				Kokkos::parallel_reduce("pgen_mbp_checkcondition", Kokkos::RangePolicy<>(DevExeSpace(), 0, nmkji),
-				KOKKOS_LAMBDA(const int &idx, Real &max_d) {
-					// compute m,k,j,i indices of thread and call function
-					int m = (idx)/nkji;
-					int k = (idx - m*nkji)/nji;
-					int j = (idx - m*nkji - k*nji)/indcs.nx1;
-					int i = (idx - m*nkji - k*nji - j*indcs.nx1) + is;
-					k += ks;
-					j += js;
-					//Determine whether the meshblock with index m intersects the disk
-					mb_for_injection[m] = ( mb_for_injection[m] || ( u0_(m,IDN,k,j,i) > crit ) );
+        Kokkos::parallel_reduce("pgen_mbp_checkcondition", Kokkos::RangePolicy<>(DevExeSpace(), 0, nmkji),
+        KOKKOS_LAMBDA(const int &idx, Real &max_d) {
+          // compute m,k,j,i indices of thread and call function
+          int m = (idx)/nkji;
+          int k = (idx - m*nkji)/nji;
+          int j = (idx - m*nkji - k*nji)/indcs.nx1;
+          int i = (idx - m*nkji - k*nji - j*indcs.nx1) + is;
+          k += ks;
+          j += js;
+          //Determine whether the meshblock with index m intersects the disk
+          mb_for_injection[m] = ( mb_for_injection[m] || ( u0_(m,IDN,k,j,i) > crit ) );
 
-					//Find maximum density in this meshblockpack
-					max_d = fmax( u0_(m,IDN,k,j,i), max_d );
-				}, Kokkos::Max<Real>(dens_max) );
-				
-				//std::cout << "d_max: " << dens_max << " d_crit: " << crit << std::endl;
-				is_crit_satisfied = ( dens_max > crit );
+          //Find maximum density in this meshblockpack
+          max_d = fmax( u0_(m,IDN,k,j,i), max_d );
+        }, Kokkos::Max<Real>(dens_max) );
+        
+        //std::cout << "d_max: " << dens_max << " d_crit: " << crit << std::endl;
+        is_crit_satisfied = ( dens_max < crit );
       } else if ( prtcl_init_rad ) {
-				// Initialize particles within a specific spherical shell
-				if ( ! pin->DoesParameterExist("particles", "r_init_max") ) {
-					std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
-						<< "Particle initialization type " << prtcl_init_type <<" missing required parameter: " << "r_init_max" << std::endl;
-					std::exit(EXIT_FAILURE);
-				}
+        // Initialize particles within a specific spherical shell
+        if ( ! pin->DoesParameterExist("particles", "r_init_max") ) {
+          std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+            << "Particle initialization type " << prtcl_init_type <<" missing required parameter: " << "r_init_max" << std::endl;
+          std::exit(EXIT_FAILURE);
+        }
         crit = pin->GetReal("particles", "r_init_max");
-				crit_min = pin->GetOrAddReal("particles", "r_init_min", 0.0); 
-				int mbs_in_shell = 0;
+        crit_min = pin->GetOrAddReal("particles", "r_init_min", 0.0); 
+        int mbs_in_shell = 0;
+        min_rad = fmax( min_rad, crit_min );
 
-				Kokkos::parallel_reduce("pgen_mbp_checkcondition", Kokkos::RangePolicy<>(DevExeSpace(), 0, nmb),
-				KOKKOS_LAMBDA(const int &m, int &mb_count ) {
-					// Notice the absolute value
-					Real x1min = fabs(size.d_view(m).x1min);
-					Real x1max = fabs(size.d_view(m).x1max);
-					Real x1i = fmin( x1min, x1max );
-					Real x1o = fmax( x1min, x1max );
-					Real x2min = fabs(size.d_view(m).x2min);
-					Real x2max = fabs(size.d_view(m).x2max);
-					Real x2i = fmin( x2min, x2max );
-					Real x2o = fmax( x2min, x2max );
-					Real x3min = fabs(size.d_view(m).x3min);
-					Real x3max = fabs(size.d_view(m).x3max);
-					Real x3i = fmin( x3min, x3max );
-					Real x3o = fmax( x3min, x3max );
-					Real r_i, r_o, th, phi;
-					GetBoyerLindquistCoordinates(aux_trs, x1i, x2i, x3i, &r_i, &th, &phi);
-					GetBoyerLindquistCoordinates(aux_trs, x1o, x2o, x3o, &r_o, &th, &phi);
-					//Determine whether the meshblock with index m has cells within the spherical shell
-					mb_for_injection[m] = ( mb_for_injection[m] || ( r_o >= crit_min && r_i <= crit ) );
-					if ( mb_for_injection[m] ) { ++mb_count; }
-				}, Kokkos::Sum<int>(mbs_in_shell) );
-				
-				is_crit_satisfied = ( mbs_in_shell > 0 );
+        Kokkos::parallel_reduce("pgen_mbp_checkcondition", Kokkos::RangePolicy<>(DevExeSpace(), 0, nmb),
+        KOKKOS_LAMBDA(const int &m, int &mb_count ) {
+          // Notice the absolute value
+          Real x1min = fabs(size.d_view(m).x1min);
+          Real x1max = fabs(size.d_view(m).x1max);
+          Real x1i = fmin( x1min, x1max );
+          Real x1o = fmax( x1min, x1max );
+          Real x2min = fabs(size.d_view(m).x2min);
+          Real x2max = fabs(size.d_view(m).x2max);
+          Real x2i = fmin( x2min, x2max );
+          Real x2o = fmax( x2min, x2max );
+          Real x3min = fabs(size.d_view(m).x3min);
+          Real x3max = fabs(size.d_view(m).x3max);
+          Real x3i = fmin( x3min, x3max );
+          Real x3o = fmax( x3min, x3max );
+          Real r_i, r_o, th, phi;
+          GetBoyerLindquistCoordinates(aux_trs, x1i, x2i, x3i, &r_i, &th, &phi);
+          GetBoyerLindquistCoordinates(aux_trs, x1o, x2o, x3o, &r_o, &th, &phi);
+          //Determine whether the meshblock with index m has cells within the spherical shell
+          mb_for_injection[m] = ( mb_for_injection[m] || ( r_o > min_rad && r_i < crit ) );
+          if ( mb_for_injection[m] ) { ++mb_count; }
+        }, Kokkos::Sum<int>(mbs_in_shell) );
+        
+        is_crit_satisfied = ( mbs_in_shell > 0 );
+        std::cout << "MBs in shell: " << mbs_in_shell << std::endl;
       }
 
       if ( ! is_crit_satisfied ) {
@@ -348,9 +350,8 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
                 Real x3v = x3min + prtcl_gen.frand()*(x3max - x3min);
                 Real r, th, phi;
                 GetBoyerLindquistCoordinates(aux_trs, x1v, x2v, x3v, &r, &th, &phi);
-								// This potentially overwrites spherical shell initialization, but it's good to prevent particles inside the horizon
+                // This potentially overwrites spherical shell initialization, but it's good to prevent particles inside the horizon
                 if (r >= min_rad){
-                  found_mb = true;
                   //Actually initialize the particle
                   pi(PGID,p) = gids+m;
                   pr(IPX,p) = x1v;
@@ -361,6 +362,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
                   Real this_en = min_en + prtcl_gen.frand()*(max_en - min_en);
                  // std::cout << this_en << std::endl;
                   if (prtcl_init_rnd){
+                    found_mb = true;
                     Real gu[4][4], gl[4][4];
                     ComputeMetricAndInverse(x1v,x2v,x3v,coord.is_minkowski,coord.bh_spin,gl,gu); 
                     int prograde = prtcl_gen.frand() > 0.5 ? -1 : 1;
@@ -386,6 +388,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
                     // Meaning this initialization only makes sense for restarts. One should move particle initialization
                     // later in the code if particles have to be present from the beginning
                   } else if (prtcl_init_flow){
+                    found_mb = true;
                     int ip = (x1v - x1min)/size.d_view(m).dx1 + is;
                     int jp = (x2v - x2min)/size.d_view(m).dx2 + js;
                     int kp = (x3v - x3min)/size.d_view(m).dx3 + ks;
@@ -423,6 +426,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
                     pr(IPY,p) = x2v;
                     pr(IPZ,p) = x3v;
                   } else if (prtcl_init_blob){
+                    found_mb = true;
                     x1v = (x1min + x1max)/2.0;
                     x2v = (x2min + x2max)/2.0;
                     x3v = (x3min + x3max)/2.0;
@@ -453,21 +457,32 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
                     pr(IPVY,p) = gl[2][1]*u[0] + gl[2][2]*u[1] + gl[2][3]*u[2];
                     pr(IPVZ,p) = gl[3][1]*u[0] + gl[3][2]*u[1] + gl[3][3]*u[2];
                   } else if (prtcl_init_rad){
-										// Find cell within spherical shell
-										// Also satisfy "absolute minimum" during iteration
-										// Would probably be more optimal to start from radius and get xyz 
-                    while ( r < min_rad || r < crit_min || r > crit ){
+                    // Find cell within spherical shell
+                    // Would probably be more optimal to start from radius and get xyz 
+                    int try_this_mb = 0;
+                    const int try_lim = 15;
+                    while ( r < min_rad || r > crit && try_this_mb <= try_lim ) {
                       x1v = x1min + prtcl_gen.frand()*(x1max - x1min);
                       x2v = x2min + prtcl_gen.frand()*(x2max - x2min);
                       x3v = x3min + prtcl_gen.frand()*(x3max - x3min);
-											GetBoyerLindquistCoordinates(aux_trs, x1v, x2v, x3v, &r, &th, &phi);
+                      GetBoyerLindquistCoordinates(aux_trs, x1v, x2v, x3v, &r, &th, &phi);
+                      ++try_this_mb;
                     }
+                    if (try_this_mb == try_lim) {
+                      continue;
+                    }
+                    found_mb = true;
                     int ip = (x1v - x1min)/size.d_view(m).dx1 + is;
                     int jp = (x2v - x2min)/size.d_view(m).dx2 + js;
                     int kp = (x3v - x3min)/size.d_view(m).dx3 + ks;
                     u[0] = w0_(m,IVX,kp,jp,ip);
                     u[1] = w0_(m,IVY,kp,jp,ip);
                     u[2] = w0_(m,IVZ,kp,jp,ip);
+                    if ( u[0]*u[1]*u[2] < 1.0E-10 ) {
+                      u[0] = 0.1*(0.5 - prtcl_gen.frand());
+                      u[1] = 0.1*(0.5 - prtcl_gen.frand());
+                      u[2] = 0.1*(0.5 - prtcl_gen.frand());
+                    }
                     Real gu[4][4], gl[4][4];
                     ComputeMetricAndInverse(x1v,x2v,x3v,coord.is_minkowski,coord.bh_spin,gl,gu); 
                     Real u_0 = gl[1][1]*SQR(u[0]) + gl[2][2]*SQR(u[1]) + gl[3][3]*SQR(u[2])
