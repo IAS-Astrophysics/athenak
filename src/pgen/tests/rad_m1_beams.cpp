@@ -15,6 +15,7 @@
 #include "parameter_input.hpp"
 #include "pgen/pgen.hpp"
 #include "radiation_m1/radiation_m1.hpp"
+#include "radiation_m1/radiation_m1_closure.hpp"
 
 //----------------------------------------------------------------------------------------
 //! \fn void MeshBlock::UserProblem(ParameterInput *pin)
@@ -81,11 +82,23 @@ void ProblemGenerator::RadiationM1BeamTest(ParameterInput *pin,
   Kokkos::realloc(beam_vals, 4);
   HostArray1D<Real> beam_vals_host;
   Kokkos::realloc(beam_vals_host, 4);
-  beam_vals_host(0) = 1.0;
-  beam_vals_host(1) = 1.0;
-  beam_vals_host(2) = 0;
-  beam_vals_host(3) = 0;
-
+  Real E = 1;
+  AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> F_d{};
+  AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> g_uu{};
+  g_uu(0, 0) = -1;
+  g_uu(1, 1) = g_uu(2, 2) = g_uu(3, 3) = 1;
+  Real Fx = E;
+  Real Fy = 0;
+  Real Fz = 0;
+  pack_F_d(0, 0, 0, Fx, Fy, Fz, F_d);
+  apply_floor(g_uu, E, F_d, pmbp->pradm1->params);
+  beam_vals_host(M1_E_IDX) = E;
+  beam_vals_host(M1_FX_IDX) = F_d(1);
+  beam_vals_host(M1_FY_IDX) = F_d(2);
+  beam_vals_host(M1_FZ_IDX) = F_d(3);
+  printf("Beam values initialized: E = %lf, F = [%lf, %lf, %lf]\n",
+         beam_vals_host(M1_E_IDX), beam_vals_host(M1_FX_IDX),
+         beam_vals_host(M1_FY_IDX), beam_vals_host(M1_FZ_IDX));
   Kokkos::deep_copy(beam_vals, beam_vals_host);
 
   // set metric to minkowski, initialize velocity to zero
