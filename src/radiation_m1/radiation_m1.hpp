@@ -115,6 +115,7 @@ private:
   MeshBlockPack *pmy_pack; // ptr to MeshBlockPack
 };
 
+void ApplyBeamSources1D(Mesh *pmesh);
 //----------------------------------------------------------------------------------------
 //! \fn radiationm1::minmod2
 //  \brief double minmod
