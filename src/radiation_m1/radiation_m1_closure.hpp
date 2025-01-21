@@ -17,9 +17,9 @@
 namespace radiationm1 {
 // Fluid projector: delta^a_b + u^a u_b
 KOKKOS_INLINE_FUNCTION
-void calc_proj(const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> u_d,
-               const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> u_u,
-               AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> proj_ud) {
+void calc_proj(const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &u_d,
+               const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &u_u,
+               AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> &proj_ud) {
   for (int a = 0; a < 4; ++a) {
     for (int b = 0; b < 4; ++b) {
       proj_ud(a, b) = (a == b) + u_u(a) * u_d(b);
@@ -30,9 +30,9 @@ void calc_proj(const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> u_d,
 // Project out the radiation pressure tensor (in any frame)
 KOKKOS_INLINE_FUNCTION
 void calc_K_from_rT(
-    const AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> rT_dd,
-    const AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> proj_ud,
-    AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> K_dd) {
+    const AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> &rT_dd,
+    const AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> &proj_ud,
+    AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> &K_dd) {
   for (int a = 0; a < 4; ++a) {
     for (int b = a; b < 4; ++b) {
       K_dd(a, b) = 0.;
@@ -47,11 +47,11 @@ void calc_K_from_rT(
 
 // Compute the closure in the thin limit
 KOKKOS_INLINE_FUNCTION
-void calc_Pthin(const AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> g_uu,
-                const Real E,
-                const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> F_d,
-                AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> P_dd,
-                RadiationM1Params params) {
+void calc_Pthin(const AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> &g_uu,
+                const Real &E,
+                const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &F_d,
+                AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> &P_dd,
+                const RadiationM1Params &params) {
 
   const Real F2 = tensor_dot(g_uu, F_d, F_d);
 #if (RADIATION_M1_CLS_METHOD == RADIATION_M1_CLS_SHIBATA)
@@ -72,14 +72,14 @@ void calc_Pthin(const AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> g_uu,
 
 // Compute the closure in the thick limit
 KOKKOS_INLINE_FUNCTION
-void calc_Pthick(const AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> g_dd,
-                 const AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> g_uu,
-                 const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> n_d,
-                 const Real W,
-                 const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> v_d,
-                 const Real E,
-                 const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> F_d,
-                 AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> P_dd) {
+void calc_Pthick(const AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> &g_dd,
+                 const AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> &g_uu,
+                 const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &n_d,
+                 const Real &W,
+                 const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &v_d,
+                 const Real &E,
+                 const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &F_d,
+                 AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> &P_dd) {
 
   const Real v_dot_F = tensor_dot(g_uu, v_d, F_d);
   const Real W2 = W * W;
@@ -106,15 +106,15 @@ void calc_Pthick(const AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> g_dd,
 
 // Compute the closure in the thin limit (fluid frame)
 KOKKOS_INLINE_FUNCTION
-void calc_Kthin(const AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> g_uu,
-                const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> n_d,
-                const Real W,
-                const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> u_d,
-                const AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> proj_ud,
-                const Real J,
-                const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> H_d,
-                AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> K_dd,
-                const Real rad_E_floor) {
+void calc_Kthin(const AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> &g_uu,
+                const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &n_d,
+                const Real &W,
+                const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &u_d,
+                const AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> &proj_ud,
+                const Real &J,
+                const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &H_d,
+                AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> &K_dd,
+                const Real &rad_E_floor) {
   // H_mu n^mu
   const Real H_dot_n = W * tensor_dot(g_uu, n_d, H_d);
 
@@ -145,11 +145,11 @@ void calc_Kthin(const AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> g_uu,
 
 // Compute the closure in the thick limit (fluid frame)
 KOKKOS_INLINE_FUNCTION
-void calc_Kthick(const AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> g_dd,
-                 const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> u_d,
-                 const Real J,
-                 const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> H_d,
-                 AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> K_dd) {
+void calc_Kthick(const AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> &g_dd,
+                 const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &u_d,
+                 const Real &J,
+                 const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &H_d,
+                 AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> &K_dd) {
   for (int a = 0; a < 4; ++a) {
     for (int b = a; b < 4; ++b) {
       K_dd(a, b) = (1.0 / 3.0) * J * (g_dd(a, b) + u_d(a) * u_d(b));
@@ -159,12 +159,11 @@ void calc_Kthick(const AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> g_dd,
 
 // Computes the flux factor xi = H_a H^a / J^2
 KOKKOS_INLINE_FUNCTION
-Real flux_factor(const AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> g_uu,
-                 const Real J,
-                 AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> H_d,
-                 const Real rad_E_floor) {
-  const Real xi =
-      (J > rad_E_floor ? tensor_dot(g_uu, H_d, H_d) / SQ(J) : 0);
+Real flux_factor(const AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> &g_uu,
+                 const Real &J,
+                 AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &H_d,
+                 const Real &rad_E_floor) {
+  const Real xi = (J > rad_E_floor ? tensor_dot(g_uu, H_d, H_d) / SQ(J) : 0);
   return Kokkos::max(0.0, Kokkos::min(xi, 1.0));
 }
 
@@ -181,16 +180,16 @@ KOKKOS_INLINE_FUNCTION Real thin(const Real xi) { return 1.0; }
 // Computes the closure in the lab frame given the Eddington factor chi
 KOKKOS_INLINE_FUNCTION
 void apply_closure(
-    const AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> g_dd,
-    const AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> g_uu,
-    const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> n_d,
-    const Real w_lorentz,
-    const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> u_u,
-    const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> v_d,
-    const AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> proj_ud, const Real E,
-    const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> F_d, const Real chi,
-    AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> P_dd,
-    const RadiationM1Params params) {
+    const AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> &g_dd,
+    const AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> &g_uu,
+    const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &n_d,
+    const Real &w_lorentz,
+    const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &u_u,
+    const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &v_d,
+    const AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> &proj_ud,
+    const Real &E, const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &F_d,
+    const Real &chi, AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> &P_dd,
+    const RadiationM1Params &params) {
 
   AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> Pthin_dd{};
   AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> Pthick_dd{};
@@ -211,18 +210,17 @@ void apply_closure(
 // Computes the closure in the lab frame with a rootfinding procedure
 
 KOKKOS_INLINE_FUNCTION
-void calc_closure(const AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> g_dd,
-                  const AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> g_uu,
-                  const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> n_d,
-                  const Real w_lorentz,
-                  const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> u_u,
-                  const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> v_d,
-                  const AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> proj_ud,
-                  const Real E,
-                  const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> F_d,
-                  Real &chi,
-                  AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> P_dd,
-                  const RadiationM1Params params) {
+void calc_closure(
+    const AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> &g_dd,
+    const AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> &g_uu,
+    const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &n_d,
+    const Real &w_lorentz,
+    const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &u_u,
+    const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &v_d,
+    const AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> &proj_ud,
+    const Real &E, const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &F_d,
+    Real &chi, AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> &P_dd,
+    const RadiationM1Params &params) {
 
   // These are special cases for which no root finding is needed
   if (params.closure_fun == RadiationM1Closure::Eddington) {
@@ -306,14 +304,14 @@ void calc_closure(const AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> g_dd,
 // Computes the closure in the fluid frame with a rootfinding procedure
 KOKKOS_INLINE_FUNCTION
 void apply_inv_closure(
-    const Real dthick,
-    const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> n_u,
-    const AthenaPointTensor<Real, TensorSymm::NONE, 4, 2> gamma_ud,
-    const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> u_d, const Real J,
-    const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> H_d,
-    const AthenaPointTensor<Real, TensorSymm::SYM2, 4, 1> K_thick_dd,
-    const AthenaPointTensor<Real, TensorSymm::SYM2, 4, 1> K_thin_dd, Real E,
-    AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> F_d) {}
+    const Real &dthick,
+    const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &n_u,
+    const AthenaPointTensor<Real, TensorSymm::NONE, 4, 2> &gamma_ud,
+    const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &u_d, const Real &J,
+    const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &H_d,
+    const AthenaPointTensor<Real, TensorSymm::SYM2, 4, 1> &K_thick_dd,
+    const AthenaPointTensor<Real, TensorSymm::SYM2, 4, 1> &K_thin_dd, Real &E,
+    AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &F_d) {}
 
 // Computes the closure in the fluid frame with a rootfinding procedure
 /*
@@ -342,11 +340,11 @@ void calc_inv_closure(
 
 // Assemble the unit-norm radiation number current
 KOKKOS_INLINE_FUNCTION
-void assemble_fnu(const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> u_u,
-                  const Real J,
-                  const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> H_u,
-                  AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> fnu_u,
-                  const RadiationM1Params params) {
+void assemble_fnu(const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &u_u,
+                  const Real &J,
+                  const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &H_u,
+                  AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &fnu_u,
+                  const RadiationM1Params &params) {
   for (int a = 0; a < 4; ++a) {
     fnu_u(a) = u_u(a) + (J > params.rad_E_floor ? H_u(a) / J : 0);
   }
@@ -354,11 +352,11 @@ void assemble_fnu(const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> u_u,
 
 // Compute the ratio of neutrino number densities in the lab and fluid frame
 KOKKOS_INLINE_FUNCTION
-Real compute_Gamma(const Real W,
-                   const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> v_u,
-                   const Real J, const Real E,
-                   const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> F_d,
-                   const RadiationM1Params params) {
+Real compute_Gamma(const Real &W,
+                   const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &v_u,
+                   const Real &J, const Real &E,
+                   const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &F_d,
+                   const RadiationM1Params &params) {
   if (E > params.rad_E_floor && J > params.rad_E_floor) {
     const Real f_dot_v =
         Kokkos::min(tensor_dot(F_d, v_u) / E, 1 - params.rad_eps);
@@ -369,11 +367,11 @@ Real compute_Gamma(const Real W,
 
 // Assemble the radiation stress tensor in any frame
 KOKKOS_INLINE_FUNCTION
-void assemble_rT(const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> u_d,
-                 const Real J,
-                 const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> H_d,
-                 const AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> K_dd,
-                 AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> rT_dd) {
+void assemble_rT(const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &u_d,
+                 const Real &J,
+                 const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &H_d,
+                 const AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> &K_dd,
+                 AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> &rT_dd) {
   for (int a = 0; a < 4; ++a) {
     for (int b = a; b < 4; ++b) {
       rT_dd(a, b) =
@@ -384,18 +382,19 @@ void assemble_rT(const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> u_d,
 
 // Project out the radiation energy (in any frame)
 KOKKOS_INLINE_FUNCTION
-Real calc_J_from_rT(const AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> rT_dd,
-                    const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> u_u) {
+Real calc_J_from_rT(
+    const AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> &rT_dd,
+    const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &u_u) {
   return tensor_dot(rT_dd, u_u, u_u);
 }
 
 // Project out the radiation fluxes (in any frame)
 KOKKOS_INLINE_FUNCTION
 void calc_H_from_rT(
-    const AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> rT_dd,
-    const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> u_u,
-    const AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> proj_ud,
-    AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> H_d) {
+    const AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> &rT_dd,
+    const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &u_u,
+    const AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> &proj_ud,
+    AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &H_d) {
   for (int a = 0; a < 4; ++a) {
     H_d(a) = 0.;
     for (int b = 0; b < 4; ++b) {
@@ -408,33 +407,33 @@ void calc_H_from_rT(
 
 // Compute the radiation energy flux
 KOKKOS_INLINE_FUNCTION
-Real calc_E_flux(const Real alp,
-                 const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> beta_u,
-                 const Real E,
-                 const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> F_u,
-                 const int direction) { // 1:x 2:y 3:z
+Real calc_E_flux(const Real &alp,
+                 const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &beta_u,
+                 const Real &E,
+                 const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &F_u,
+                 const int &direction) { // 1:x 2:y 3:z
   return alp * F_u(direction) - beta_u(direction) * E;
 }
 
 // Compute the flux of neutrino energy flux
 KOKKOS_INLINE_FUNCTION
-Real calc_F_flux(const Real alp,
-                 const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> beta_u,
-                 const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> F_d,
-                 const AthenaPointTensor<Real, TensorSymm::NONE, 4, 2> P_ud,
-                 const int direction,   // 1:x 2:y 3:z
-                 const int component) { // 1:x 2:y 3:z
+Real calc_F_flux(const Real &alp,
+                 const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &beta_u,
+                 const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &F_d,
+                 const AthenaPointTensor<Real, TensorSymm::NONE, 4, 2> &P_ud,
+                 const int &direction,   // 1:x 2:y 3:z
+                 const int &component) { // 1:x 2:y 3:z
   return alp * P_ud(direction, component) - beta_u(direction) * F_d(component);
 }
 
 // Computes the sources S_a = [eta - k_abs J] u_a - [k_abs + k_scat] H_a
 // WARNING: be consistent with the densitization of eta, J, and H_d
 KOKKOS_INLINE_FUNCTION
-void calc_rad_sources(const Real eta, const Real kabs, const Real kscat,
-                      const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> u_d,
-                      const Real J,
-                      const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> H_d,
-                      AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> S_d) {
+void calc_rad_sources(
+    const Real &eta, const Real &kabs, const Real &kscat,
+    const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &u_d, const Real &J,
+    const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &H_d,
+    AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &S_d) {
   for (int a = 0; a < 4; ++a) {
     S_d(a) = (eta - kabs * J) * u_d(a) - (kabs + kscat) * H_d(a);
   }
@@ -442,19 +441,19 @@ void calc_rad_sources(const Real eta, const Real kabs, const Real kscat,
 
 // Computes the source term for E: -alp n^a S_a
 KOKKOS_INLINE_FUNCTION
-Real calc_rE_source(const Real alp,
-                    const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> n_u,
-                    const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> S_d) {
+Real calc_rE_source(
+    const Real &alp, const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &n_u,
+    const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &S_d) {
   return -alp * tensor_dot(n_u, S_d);
 }
 
 // Computes the source term for F_a: alp gamma^b_a S_b
 KOKKOS_INLINE_FUNCTION
 void calc_rF_source(
-    const Real alp,
-    const AthenaPointTensor<Real, TensorSymm::NONE, 4, 2> gamma_ud,
-    const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> S_d,
-    AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> tS_d) {
+    const Real &alp,
+    const AthenaPointTensor<Real, TensorSymm::NONE, 4, 2> &gamma_ud,
+    const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &S_d,
+    AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &tS_d) {
   for (int a = 0; a < 4; ++a) {
     tS_d(a) = 0.0;
     for (int b = 0; b < 4; ++b) {
@@ -465,9 +464,9 @@ void calc_rF_source(
 
 // Enforce that E > rad_E_floor and F_a F^a < (1 - rad_eps) E^2
 KOKKOS_INLINE_FUNCTION
-void apply_floor(const AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> g_uu,
-                 Real &E, AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> F_d,
-                 const RadiationM1Params params) {
+void apply_floor(const AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> &g_uu,
+                 Real &E, AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &F_d,
+                 const RadiationM1Params &params) {
   E = Kokkos::max(params.rad_E_floor, E);
 
   const Real F2 = tensor_dot(g_uu, F_d, F_d);
