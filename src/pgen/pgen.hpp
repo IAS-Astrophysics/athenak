@@ -69,13 +69,8 @@ class ProblemGenerator {
   void ShockTube(ParameterInput *pin, const bool restart);
   void Shwave(ParameterInput *pin, const bool restart);
   void SphericalCollapse(ParameterInput *pin, const bool restart);
-  void RadiationLinearWave(ParameterInput *pin, const bool restart);
-  void RadiationBeam(ParameterInput *pin, const bool restart);
-  void Z4cBoostedPuncture(ParameterInput *pin, const bool restart);
-  void Z4cLinearWave(ParameterInput *pin, const bool restart);
-
-  // Generic error output function (using difference u0-u1)
-  void OutputErrors(ParameterInput *pin, Mesh *pm);
+  void Diffusion(ParameterInput *pin, const bool restart);
+  void RadiationM1BeamTest(ParameterInput *pin, const bool restart);
 
   // template for user-specified problem generator
   void UserProblem(ParameterInput *pin, const bool restart);
