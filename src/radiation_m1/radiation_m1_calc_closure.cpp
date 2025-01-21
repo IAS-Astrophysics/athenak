@@ -38,8 +38,7 @@ TaskStatus RadiationM1::CalcClosure(Driver *pdrive, int stage) {
   int ksg = (indcs.nx3 > 1) ? ks - indcs.ng : ks;
   int keg = (indcs.nx3 > 1) ? ke + indcs.ng : ke;
 
-  size_t scr_size = ScrArray2D<Real>::shmem_size(4, 4) * 4 +
-                    ScrArray1D<Real>::shmem_size(4) * 4;
+  size_t scr_size = 1;
   int scr_level = 0;
   par_for_outer(
       "radiation_m1_calc_closure", DevExeSpace(), scr_size, scr_level, 0, nmb1,
@@ -47,7 +46,7 @@ TaskStatus RadiationM1::CalcClosure(Driver *pdrive, int stage) {
       KOKKOS_LAMBDA(TeamMember_t member, const int m, const int k, const int j,
                     const int i) {
         if (radiation_mask_(m, k, j, i)) {
-          for (int nuidx = 0; nuidx < nspecies_; ++nuidx) {
+          par_for_inner(member, 0, nspecies_ - 1, [&](const int nuidx) {
             u0_(m, CombinedIdx(nuidx, 0, nvars_), k, j, i) = 0;
             u0_(m, CombinedIdx(nuidx, 1, nvars_), k, j, i) = 0;
             u0_(m, CombinedIdx(nuidx, 2, nvars_), k, j, i) = 0;
@@ -61,8 +60,9 @@ TaskStatus RadiationM1::CalcClosure(Driver *pdrive, int stage) {
             P_dd_(m, CombinedIdx(nuidx, 3, 6), k, j, i) = 0;
             P_dd_(m, CombinedIdx(nuidx, 4, 6), k, j, i) = 0;
             P_dd_(m, CombinedIdx(nuidx, 5, 6), k, j, i) = 0;
-          }
+          });
         } else {
+          // calculate metric and inverse metric
           Real garr_dd[16];
           Real garr_uu[16];
           AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> g_dd{};
@@ -85,53 +85,47 @@ TaskStatus RadiationM1::CalcClosure(Driver *pdrive, int stage) {
               g_uu(a, b) = garr_uu[a + b * 4];
             }
           }
+          // store normal, shift
           AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> n_d{};
-          n_d(0) = -adm.alpha(m, k, j, i);
-          n_d(1) = 0;
-          n_d(2) = 0;
-          n_d(3) = 0;
-
-          Real w_lorentz = u_mu_(m, 0, k, j, i);
+          AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> beta_u{};
+          AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> beta_d{};
+          pack_n_d(adm.alpha(m, k, j, i), n_d);
+          pack_beta_u(adm.beta_u(m, 0, k, j, i), adm.beta_u(m, 1, k, j, i),
+                      adm.beta_u(m, 2, k, j, i), beta_u);
+          tensor_contract(g_dd, beta_u, beta_d);
+          // store Lorentz factor, four velocity, three velocity, projection
           AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> u_u{};
           AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> u_d{};
-          AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> proj_ud{};
-          u_u(0) = u_mu_(m, 0, k, j, i);
-          u_u(1) = u_mu_(m, 1, k, j, i);
-          u_u(2) = u_mu_(m, 2, k, j, i);
-          u_u(3) = u_mu_(m, 3, k, j, i);
-          tensor_contract(g_dd, u_u, u_d);
-          calc_proj(u_d, u_u, proj_ud);
-
           AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> v_u{};
           AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> v_d{};
-          v_u(0) = u_u(0) / w_lorentz;
-          v_u(1) = u_u(1) / w_lorentz;
-          v_u(2) = u_u(2) / w_lorentz;
-          v_u(3) = u_u(3) / w_lorentz;
+          AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> proj_ud{};
+          Real w_lorentz = u_mu_(m, 0, k, j, i);
+          pack_u_u(u_mu_(m, 0, k, j, i), u_mu_(m, 1, k, j, i),
+                   u_mu_(m, 2, k, j, i), u_mu_(m, 3, k, j, i), u_u);
+          tensor_contract(g_dd, u_u, u_d);
+          pack_v_u(u_mu_(m, 0, k, j, i), u_mu_(m, 1, k, j, i),
+                   u_mu_(m, 2, k, j, i), u_mu_(m, 3, k, j, i), v_u);
           tensor_contract(g_dd, v_u, v_d);
+          calc_proj(u_d, u_u, proj_ud);
 
-          AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> T_dd{};
-
-          for (int nuidx = 0; nuidx < nspecies_; ++nuidx) {
-            Real E = u0_(m, CombinedIdx(nuidx, 0, nvars_), k, j, i);
+          par_for_inner(member, 0, nspecies_ - 1, [&](const int nuidx) {
+            const Real E = u0_(m, CombinedIdx(nuidx, 0, nvars_), k, j, i);
             AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> F_d{};
-            F_d(0) = 0; // @TODO: checkme!
-            F_d(1) = u0_(m, CombinedIdx(nuidx, 1, nvars_), k, j, i);
-            F_d(2) = u0_(m, CombinedIdx(nuidx, 2, nvars_), k, j, i);
-            F_d(3) = u0_(m, CombinedIdx(nuidx, 3, nvars_), k, j, i);
+            pack_F_d(beta_d(1), beta_d(2), beta_d(3),
+                     u0_(m, CombinedIdx(nuidx, 1, nvars_), k, j, i),
+                     u0_(m, CombinedIdx(nuidx, 2, nvars_), k, j, i),
+                     u0_(m, CombinedIdx(nuidx, 3, nvars_), k, j, i), F_d);
             Real chi{};
             AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> Ptemp_dd{};
-
             calc_closure(g_dd, g_uu, n_d, w_lorentz, u_u, v_d, proj_ud, E, F_d,
                          chi, Ptemp_dd, params_);
-
             P_dd_(m, CombinedIdx(nuidx, 0, 6), k, j, i) = Ptemp_dd(0, 0); // Pxx
             P_dd_(m, CombinedIdx(nuidx, 1, 6), k, j, i) = Ptemp_dd(0, 1); // Pxy
             P_dd_(m, CombinedIdx(nuidx, 2, 6), k, j, i) = Ptemp_dd(0, 2); // Pxz
             P_dd_(m, CombinedIdx(nuidx, 3, 6), k, j, i) = Ptemp_dd(1, 1); // Pyy
             P_dd_(m, CombinedIdx(nuidx, 4, 6), k, j, i) = Ptemp_dd(1, 2); // Pyz
             P_dd_(m, CombinedIdx(nuidx, 5, 6), k, j, i) = Ptemp_dd(2, 2); // Pzz
-          }
+          });
         }
       });
   return TaskStatus::complete;
