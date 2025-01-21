@@ -479,5 +479,6 @@ void apply_floor(const AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> g_uu,
     }
   }
 }
+
 } // namespace radiationm1
 #endif // RADIATION_M1_CLOSURE_HPP
