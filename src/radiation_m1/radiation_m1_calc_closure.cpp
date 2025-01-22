@@ -120,12 +120,12 @@ TaskStatus RadiationM1::CalcClosure(Driver *pdrive, int stage) {
             AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> Ptemp_dd{};
             calc_closure(g_dd, g_uu, n_d, w_lorentz, u_u, v_d, proj_ud, E, F_d,
                          chi, Ptemp_dd, params_);
-            P_dd_(m, CombinedIdx(nuidx, 0, 6), k, j, i) = Ptemp_dd(0, 0); // Pxx
-            P_dd_(m, CombinedIdx(nuidx, 1, 6), k, j, i) = Ptemp_dd(0, 1); // Pxy
-            P_dd_(m, CombinedIdx(nuidx, 2, 6), k, j, i) = Ptemp_dd(0, 2); // Pxz
-            P_dd_(m, CombinedIdx(nuidx, 3, 6), k, j, i) = Ptemp_dd(1, 1); // Pyy
-            P_dd_(m, CombinedIdx(nuidx, 4, 6), k, j, i) = Ptemp_dd(1, 2); // Pyz
-            P_dd_(m, CombinedIdx(nuidx, 5, 6), k, j, i) = Ptemp_dd(2, 2); // Pzz
+            P_dd_(m, CombinedIdx(nuidx, 0, 6), k, j, i) = Ptemp_dd(1, 1); // Pxx
+            P_dd_(m, CombinedIdx(nuidx, 1, 6), k, j, i) = Ptemp_dd(1, 2); // Pxy
+            P_dd_(m, CombinedIdx(nuidx, 2, 6), k, j, i) = Ptemp_dd(1, 3); // Pxz
+            P_dd_(m, CombinedIdx(nuidx, 3, 6), k, j, i) = Ptemp_dd(2, 2); // Pyy
+            P_dd_(m, CombinedIdx(nuidx, 4, 6), k, j, i) = Ptemp_dd(2, 3); // Pyz
+            P_dd_(m, CombinedIdx(nuidx, 5, 6), k, j, i) = Ptemp_dd(3, 3); // Pzz
           });
         }
       });
