@@ -22,7 +22,8 @@ def parse_cli():
   """
     arg parser
     """
-  p = argparse.ArgumentParser(description="plotting cce spectre output")
+  p = argparse.ArgumentParser(
+      description="extract cce spectre output in a txt file.")
   p.add_argument("-f",
                  type=str,
                  required=True,
@@ -68,9 +69,9 @@ def read_save_to_txt(args):
     keys = h5f.keys()
     group = [k for k in keys if k.find("Spectre") != -1][0]
     group = "/" + group + "/"
-    dataset = group+args["field"]
-    mode_re = find_h5_1mode(h5f, dataset, "Real "+args["mode"], args)
-    mode_im = find_h5_1mode(h5f, dataset, "Imag "+args["mode"], args)
+    dataset = group + args["field"]
+    mode_re = find_h5_1mode(h5f, dataset, "Real " + args["mode"], args)
+    mode_im = find_h5_1mode(h5f, dataset, "Imag " + args["mode"], args)
     t = h5f[dataset][:, 0]
     re = h5f[dataset][:, mode_re]
     im = h5f[dataset][:, mode_im]
@@ -78,12 +79,15 @@ def read_save_to_txt(args):
   mode_txt = args["mode"].replace(",", "_")
   mode_txt = mode_txt.replace(" ", "")
   out = os.path.join(args["dout"], args["field"] + "_" + mode_txt + ".txt")
-  #print(out)
+  # print(out)
   stack = np.column_stack((t, re, im))
-  np.savetxt(out,
-             stack,
-             header=f'# t re{args["mode"]} im{args["mode"]}',
-             fmt="%.16e %.16e %.16e")
+  np.savetxt(
+      out,
+      stack,
+      header=f'# t re{args["mode"]} im{args["mode"]}',
+      fmt="%.16e %.16e %.16e",
+  )
+
 
 def main(args):
   """
