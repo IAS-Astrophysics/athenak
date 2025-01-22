@@ -6,7 +6,7 @@ basename  = bbh      # problem ID: basename of output filenames
 
 <problem>
 pgen_name = z4c_spectre_bbh
-id_filename_glob = BbhVolume*.h5
+id_filename_glob = /home/nilsvu/2024-09-bbh-athenak/ID/BbhVolume*.h5
 id_subfile_name = VolumeData
 id_observation_step = -1
 
@@ -41,7 +41,7 @@ integrator = rk4        # time integration algorithm
 cfl_number = 0.1        # The Courant, Friedrichs, & Lewy (CFL) Number
 nlim       = 50          # cycle limit
 tlim       = 50        # time limit
-ndiag      = 1          # cycles between diagostic output
+ndiag      = 1          # cycles between diagnostic output
 
 <mesh_refinement>
 refinement       = static #adaptive    # type of refinement
@@ -52,7 +52,7 @@ refinement_interval = 1
 
 # amr chi method
 <z4c_amr>
-method = chi_min
+method = chi
 chi_min = 0.2
 
 <refinement1>
