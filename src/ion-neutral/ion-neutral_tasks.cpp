@@ -47,13 +47,15 @@ void IonNeutral::AssembleIonNeutralTasks(
   id.i_sendf  = tl["stagen"]->AddTask(&MHD::SendFlux, pmhd, id.i_flux);
   id.i_recvf  = tl["stagen"]->AddTask(&MHD::RecvFlux, pmhd, id.i_sendf);
   id.i_rkupdt = tl["stagen"]->AddTask(&MHD::RKUpdate, pmhd, id.i_recvf);
+  id.i_srctrms   = tl["stagen"]->AddTask(&MHD::MHDSrcTerms, pmhd, id.i_rkupdt);
 
-  id.n_flux   = tl["stagen"]->AddTask(&Hydro::Fluxes, phyd, id.i_rkupdt);
+  id.n_flux   = tl["stagen"]->AddTask(&Hydro::Fluxes, phyd, id.i_srctrms);
   id.n_sendf  = tl["stagen"]->AddTask(&Hydro::SendFlux, phyd, id.n_flux);
   id.n_recvf  = tl["stagen"]->AddTask(&Hydro::RecvFlux, phyd, id.n_sendf);
   id.n_rkupdt = tl["stagen"]->AddTask(&Hydro::RKUpdate, phyd, id.n_recvf);
+  id.n_srctrms   = tl["stagen"]->AddTask(&Hydro::HydroSrcTerms, phyd, id.n_rkupdt);
 
-  id.impl     = tl["stagen"]->AddTask(&IonNeutral::ImpRKUpdate, this, id.n_rkupdt);
+  id.impl     = tl["stagen"]->AddTask(&IonNeutral::ImpRKUpdate, this, id.n_srctrms);
   id.i_restu  = tl["stagen"]->AddTask(&MHD::RestrictU, pmhd, id.impl);
   id.n_restu  = tl["stagen"]->AddTask(&Hydro::RestrictU, phyd, id.i_restu);
 
