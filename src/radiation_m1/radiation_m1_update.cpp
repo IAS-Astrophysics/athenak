@@ -100,21 +100,21 @@ TaskStatus RadiationM1::TimeUpdate(Driver *d, int stage) {
           Real rEFN[5]{};
           for (int var = 0; var < nspecies_; ++var) {
             rEFN[var] =
-                (flx1(m, CombinedIdx(nuidx, var, nvars_), k, j, i) -
-                 flx1(m, CombinedIdx(nuidx, var, nvars_), k, j, i - 1)) /
+                (flx1(m, CombinedIdx(nuidx, var, nvars_), k, j, i + 1) -
+                 flx1(m, CombinedIdx(nuidx, var, nvars_), k, j, i)) /
                 mbsize.d_view(m).dx1;
 
             if (multi_d) {
               rEFN[var] +=
-                  (flx2(m, CombinedIdx(nuidx, var, nvars_), k, j, i) -
-                   flx2(m, CombinedIdx(nuidx, var, nvars_), k, j - 1, i)) /
+                  (flx2(m, CombinedIdx(nuidx, var, nvars_), k, j + 1, i) -
+                   flx2(m, CombinedIdx(nuidx, var, nvars_), k, j, i)) /
                   mbsize.d_view(m).dx2;
             }
 
             if (three_d) {
               rEFN[var] +=
-                  (flx3(m, CombinedIdx(nuidx, var, nvars_), k, j, i) -
-                   flx3(m, CombinedIdx(nuidx, var, nvars_), k - 1, j, i)) /
+                  (flx3(m, CombinedIdx(nuidx, var, nvars_), k + 1, j, i) -
+                   flx3(m, CombinedIdx(nuidx, var, nvars_), k, j, i)) /
                   mbsize.d_view(m).dx3;
             }
           }
