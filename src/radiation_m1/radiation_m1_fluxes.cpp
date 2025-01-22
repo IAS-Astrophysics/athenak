@@ -121,10 +121,10 @@ void CalcFlux(const int m, const int k, const int j, const int i,
     nnu = N / Gamma;
   }
 
-  flux[0] = calc_E_flux(adm.alpha(m, k, j, i), beta_u, E, F_u, dir + 1);
-  flux[1] = calc_F_flux(adm.alpha(m, k, j, i), beta_u, F_d, P_ud, dir + 1, 1);
-  flux[2] = calc_F_flux(adm.alpha(m, k, j, i), beta_u, F_d, P_ud, dir + 1, 2);
-  flux[3] = calc_F_flux(adm.alpha(m, k, j, i), beta_u, F_d, P_ud, dir + 1, 3);
+  flux[0] = calc_E_flux(adm.alpha(m, k, j, i), beta_u, E, F_u, dir);
+  flux[1] = calc_F_flux(adm.alpha(m, k, j, i), beta_u, F_d, P_ud, dir, 1);
+  flux[2] = calc_F_flux(adm.alpha(m, k, j, i), beta_u, F_d, P_ud, dir, 2);
+  flux[3] = calc_F_flux(adm.alpha(m, k, j, i), beta_u, F_d, P_ud, dir, 3);
   if (nspecies_ > 1) {
     flux[4] = adm.alpha(m, k, j, i) * nnu * fnu_u(dir + 1);
   } else {
