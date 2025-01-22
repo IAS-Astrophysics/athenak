@@ -21,9 +21,11 @@
 #include "mesh/mesh.hpp"
 #include "bvals/bvals.hpp"
 #include "z4c/compact_object_tracker.hpp"
+#include "z4c/horizon_dump.hpp"
 #include "z4c/z4c.hpp"
 #include "z4c/z4c_amr.hpp"
 #include "coordinates/adm.hpp"
+#include "utils/cart_grid.hpp"
 
 namespace z4c {
 
@@ -120,6 +122,7 @@ Z4c::Z4c(MeshBlockPack *ppack, ParameterInput *pin) :
 
   opt.chi_psi_power = pin->GetOrAddReal("z4c", "chi_psi_power", -4.0);
   opt.chi_div_floor = pin->GetOrAddReal("z4c", "chi_div_floor", -1000.0);
+  opt.chi_min_floor = pin->GetOrAddReal("z4c", "chi_min_floor", 1e-12);
   opt.diss = pin->GetOrAddReal("z4c", "diss", 0.0);
   opt.eps_floor = pin->GetOrAddReal("z4c", "eps_floor", 1e-12);
   opt.damp_kappa1 = pin->GetOrAddReal("z4c", "damp_kappa1", 0.0);
@@ -129,9 +132,13 @@ Z4c::Z4c(MeshBlockPack *ppack, ParameterInput *pin) :
   opt.lapse_harmonic = pin->GetOrAddReal("z4c", "lapse_harmonic", 0.0);
   opt.lapse_oplog = pin->GetOrAddReal("z4c", "lapse_oplog", 2.0);
   opt.lapse_advect = pin->GetOrAddReal("z4c", "lapse_advect", 1.0);
+  opt.slow_start_lapse = pin->GetOrAddBoolean("z4c", "slow_start_lapse", false);
+  opt.ssl_damping_amp = pin->GetOrAddReal("z4c", "ssl_damping_amp", 0.6);
+  opt.ssl_damping_time = pin->GetOrAddReal("z4c", "ssl_damping_time", 20.0);
+  opt.ssl_damping_index = pin->GetOrAddInteger("z4c", "ssl_damping_index", 1);
+
   opt.shift_ggamma = pin->GetOrAddReal("z4c", "shift_Gamma", 1.0);
   opt.shift_advect = pin->GetOrAddReal("z4c", "shift_advect", 1.0);
-
   opt.shift_alpha2ggamma = pin->GetOrAddReal("z4c", "shift_alpha2Gamma", 0.0);
   opt.shift_hh = pin->GetOrAddReal("z4c", "shift_H", 0.0);
 
@@ -181,17 +188,51 @@ Z4c::Z4c(MeshBlockPack *ppack, ParameterInput *pin) :
   mkdir("waveforms",0775);
   waveform_dt = pin->GetOrAddReal("z4c", "waveform_dt", 1);
   last_output_time = 0;
+  // CCE
+  cce_dump_dt = pin->GetOrAddReal("cce", "cce_dt", 1);
+  mkdir("cce",0775);
+  cce_dump_last_output_time = -100;
 
   // Construct the compact object trackers
   int n = 0;
   while (true) {
     if (pin->DoesParameterExist("z4c", "co_" + std::to_string(n) + "_type")) {
-      ptracker.emplace_back(pmy_pack->pmesh, pin, n);
+      ptracker.push_back(std::make_unique<CompactObjectTracker>(pmy_pack->pmesh, pin, n));
       n++;
     } else {
       break;
     }
   }
+  // Construct the Cartesian data grid for dumping horizon data
+  n = 0;
+  while (true) {
+    if (pin->GetOrAddBoolean("z4c", "dump_horizon_" + std::to_string(n),false)) {
+      // phorizon_dump.emplace_back(pmy_pack, pin, n,false);
+      phorizon_dump.push_back(std::make_unique<HorizonDump>(pmy_pack, pin, n, 0));
+      std::string foldername = "horizon_"+std::to_string(n);
+      mkdir(foldername.c_str(),0775);
+      n++;
+    } else {
+      break;
+    }
+  }
+  /*
+  horizon_dt = pin->GetOrAddReal("z4c", "horizon_dt", 1);
+  horizon_last_output_time = 0;
+  n = 0;
+  for (auto & pt : ptracker) {
+    if (pin->GetOrAddBoolean("z4c", "dump_horizon_" + std::to_string(n),false)) {
+      horizon_extent.push_back(pin->GetOrAddReal("z4c", "horizon_"
+                              + std::to_string(n)+"_radius",3));
+      Real extend[3] = {horizon_extent[n],horizon_extent[n],horizon_extent[n]};
+      horizon_nx.push_back(pin->GetOrAddInteger("z4c", "horizon_"
+                              + std::to_string(n)+"_Nx",100));
+      int Nx[3] = {horizon_nx[n],horizon_nx[n],horizon_nx[n]};
+      horizon_dump.emplace_back(pmy_pack, pt.pos, extend, Nx);
+      n++;
+    }
+  }
+  */
 }
 
 //----------------------------------------------------------------------------------------

@@ -69,7 +69,7 @@ void Z4c::ADMToZ4c(MeshBlockPack *pmbp, ParameterInput *pin) {
   par_for("initialize z4c fields",DevExeSpace(),
   0,nmb-1,ksg,keg,jsg,jeg,isg,ieg,
   KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
-    AthenaScratchTensor<Real, TensorSymm::SYM2, 3, 2> Kt_dd;
+    AthenaPointTensor<Real, TensorSymm::SYM2, 3, 2> Kt_dd;
     Real detg = adm::SpatialDet(adm.g_dd(m,0,0,k,j,i), adm.g_dd(m,0,1,k,j,i),
                                 adm.g_dd(m,0,2,k,j,i), adm.g_dd(m,1,1,k,j,i),
                                 adm.g_dd(m,1,2,k,j,i), adm.g_dd(m,2,2,k,j,i));
@@ -141,9 +141,9 @@ void Z4c::ADMToZ4c(MeshBlockPack *pmbp, ParameterInput *pin) {
   KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
     // Usage of Dx: pmbp->pz4c->Dx(blockn, posvar, k,j,i, dir, nghost, dx, quantity);
     Real idx[] = {1/size.d_view(m).dx1, 1/size.d_view(m).dx2, 1/size.d_view(m).dx3};
-    /*AthenaScratchTensor<Real, TensorSymm::SYM2, 3, 2> g_uu;
-    AthenaScratchTensor<Real, TensorSymm::SYM2, 3, 3> Gamma_udd;
-    AthenaScratchTensor<Real, TensorSymm::SYM2, 3, 3> dg_ddd;
+    /*AthenaPointTensor<Real, TensorSymm::SYM2, 3, 2> g_uu;
+    AthenaPointTensor<Real, TensorSymm::SYM2, 3, 3> Gamma_udd;
+    AthenaPointTensor<Real, TensorSymm::SYM2, 3, 3> dg_ddd;
     Real detg = adm::SpatialDet(z4c.g_dd(m,0,0,k,j,i), z4c.g_dd(m,0,1,k,j,i),
                                 z4c.g_dd(m,0,2,k,j,i), z4c.g_dd(m,1,1,k,j,i),
                                 z4c.g_dd(m,1,2,k,j,i), z4c.g_dd(m,2,2,k,j,i));
@@ -273,27 +273,27 @@ void Z4c::ADMConstraints(MeshBlockPack *pmbp) {
   par_for("ADM constraints loop",DevExeSpace(),
   0,nmb-1,ks,ke,js,je,is,ie,
   KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
-    AthenaScratchTensor<Real, TensorSymm::NONE, 3, 1> Gamma_u;
-    AthenaScratchTensor<Real, TensorSymm::NONE, 3, 1> Gamma_u_z4c;
-    AthenaScratchTensor<Real, TensorSymm::NONE, 3, 1> M_u;
-    AthenaScratchTensor<Real, TensorSymm::NONE, 3, 1> dpsi4_d;
+    AthenaPointTensor<Real, TensorSymm::NONE, 3, 1> Gamma_u;
+    AthenaPointTensor<Real, TensorSymm::NONE, 3, 1> Gamma_u_z4c;
+    AthenaPointTensor<Real, TensorSymm::NONE, 3, 1> M_u;
+    AthenaPointTensor<Real, TensorSymm::NONE, 3, 1> dpsi4_d;
 
-    AthenaScratchTensor<Real, TensorSymm::SYM2, 3, 2> g_uu;
-    //AthenaScratchTensor<Real, TensorSymm::SYM2, 3, 2> g_uu_z4c;
-    AthenaScratchTensor<Real, TensorSymm::SYM2, 3, 2> R_dd;
-    AthenaScratchTensor<Real, TensorSymm::NONE, 3, 2> K_ud;
+    AthenaPointTensor<Real, TensorSymm::SYM2, 3, 2> g_uu;
+    //AthenaPointTensor<Real, TensorSymm::SYM2, 3, 2> g_uu_z4c;
+    AthenaPointTensor<Real, TensorSymm::SYM2, 3, 2> R_dd;
+    AthenaPointTensor<Real, TensorSymm::NONE, 3, 2> K_ud;
 
-    AthenaScratchTensor<Real, TensorSymm::SYM2, 3, 3> dg_ddd;
-    AthenaScratchTensor<Real, TensorSymm::SYM2, 3, 3> dg_ddd_z4c;
-    AthenaScratchTensor<Real, TensorSymm::SYM2, 3, 3> dK_ddd;
-    AthenaScratchTensor<Real, TensorSymm::SYM2, 3, 3> Gamma_ddd;
-    //AthenaScratchTensor<Real, TensorSymm::SYM2, 3, 3> Gamma_ddd_z4c;
-    AthenaScratchTensor<Real, TensorSymm::SYM2, 3, 3> Gamma_udd;
-    //AthenaScratchTensor<Real, TensorSymm::SYM2, 3, 3> Gamma_udd_z4c;
-    AthenaScratchTensor<Real, TensorSymm::SYM2, 3, 3> DK_ddd;
-    AthenaScratchTensor<Real, TensorSymm::SYM2, 3, 3> DK_udd;
+    AthenaPointTensor<Real, TensorSymm::SYM2, 3, 3> dg_ddd;
+    AthenaPointTensor<Real, TensorSymm::SYM2, 3, 3> dg_ddd_z4c;
+    AthenaPointTensor<Real, TensorSymm::SYM2, 3, 3> dK_ddd;
+    AthenaPointTensor<Real, TensorSymm::SYM2, 3, 3> Gamma_ddd;
+    //AthenaPointTensor<Real, TensorSymm::SYM2, 3, 3> Gamma_ddd_z4c;
+    AthenaPointTensor<Real, TensorSymm::SYM2, 3, 3> Gamma_udd;
+    //AthenaPointTensor<Real, TensorSymm::SYM2, 3, 3> Gamma_udd_z4c;
+    AthenaPointTensor<Real, TensorSymm::SYM2, 3, 3> DK_ddd;
+    AthenaPointTensor<Real, TensorSymm::SYM2, 3, 3> DK_udd;
 
-    AthenaScratchTensor<Real, TensorSymm::SYM22, 3, 4> ddg_dddd;
+    AthenaPointTensor<Real, TensorSymm::SYM22, 3, 4> ddg_dddd;
 
     Real idx[] = {1/size.d_view(m).dx1, 1/size.d_view(m).dx2, 1/size.d_view(m).dx3};
 
@@ -422,6 +422,10 @@ void Z4c::ADMConstraints(MeshBlockPack *pmbp) {
             - ddg_dddd(c,d,a,b) - ddg_dddd(a,b,c,d) +
               ddg_dddd(a,c,b,d) + ddg_dddd(b,c,a,d));
       }
+    }
+
+    for(int a = 0; a < 3; ++a)
+    for(int b = 0; b < 3; ++b) {
       R += g_uu(a,b) * R_dd(a,b);
     }
 

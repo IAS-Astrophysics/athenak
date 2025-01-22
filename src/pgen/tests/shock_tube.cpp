@@ -26,6 +26,13 @@
 #include "coordinates/adm.hpp"
 #include "pgen/pgen.hpp"
 
+namespace {
+
+int shk_dir;
+void SetADMVariablesToSchwarzschild(MeshBlockPack *pmbp);
+
+}
+
 //----------------------------------------------------------------------------------------
 //! \fn ProblemGenerator::ShockTube_()
 //! \brief Problem Generator for the shock tube (Riemann problem) tests
@@ -33,7 +40,7 @@
 void ProblemGenerator::ShockTube(ParameterInput *pin, const bool restart) {
   if (restart) return;
   // parse shock direction: {1,2,3} -> {x1,x2,x3}
-  int shk_dir = pin->GetInteger("problem","shock_dir");
+  shk_dir = pin->GetInteger("problem","shock_dir");
   if (shk_dir < 1 || shk_dir > 3) {
     // Invaild input value for shk_dir
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
@@ -115,15 +122,16 @@ void ProblemGenerator::ShockTube(ParameterInput *pin, const bool restart) {
 
     auto &w0 = pmbp->phydro->w0;
     auto &nscal = pmbp->phydro->nscalars;
+    auto shk_dir_ = shk_dir;
     par_for("pgen_shock1", DevExeSpace(),0,(pmbp->nmb_thispack-1),ks,ke,js,je,is,ie,
     KOKKOS_LAMBDA(int m,int k, int j, int i) {
       Real x;
-      if (shk_dir == 1) {
+      if (shk_dir_ == 1) {
         Real &x1min = size.d_view(m).x1min;
         Real &x1max = size.d_view(m).x1max;
         int nx1 = indcs.nx1;
         x = CellCenterX(i-is, nx1, x1min, x1max);
-      } else if (shk_dir == 2) {
+      } else if (shk_dir_ == 2) {
         Real &x2min = size.d_view(m).x2min;
         Real &x2max = size.d_view(m).x2max;
         int nx2 = indcs.nx2;
@@ -212,17 +220,18 @@ void ProblemGenerator::ShockTube(ParameterInput *pin, const bool restart) {
     auto &b0 = pmbp->pmhd->b0;
     auto &bcc0 = pmbp->pmhd->bcc0;
     auto &nscal = pmbp->pmhd->nscalars;
+    auto shk_dir_ = shk_dir;
     par_for("pgen_shock1", DevExeSpace(),0,(pmbp->nmb_thispack-1),ks,ke,js,je,is,ie,
     KOKKOS_LAMBDA(int m,int k, int j, int i) {
       Real x,bxl,byl,bzl,bxr,byr,bzr;
-      if (shk_dir == 1) {
+      if (shk_dir_ == 1) {
         Real &x1min = size.d_view(m).x1min;
         Real &x1max = size.d_view(m).x1max;
         int nx1 = indcs.nx1;
         x = CellCenterX(i-is, nx1, x1min, x1max);
         bxl = bx_l; byl = wl.by; bzl = wl.bz;
         bxr = bx_r; byr = wr.by; bzr = wr.bz;
-      } else if (shk_dir == 2) {
+      } else if (shk_dir_ == 2) {
         Real &x2min = size.d_view(m).x2min;
         Real &x2max = size.d_view(m).x2max;
         int nx2 = indcs.nx2;
@@ -288,105 +297,10 @@ void ProblemGenerator::ShockTube(ParameterInput *pin, const bool restart) {
   if (pmbp->padm != nullptr) {
     // Assume Minkowski space for now
     bool schwarzschild = pin->GetOrAddBoolean("problem", "schwarzschild", false);
-    auto &adm = pmbp->padm->adm;
-    auto &size = pmbp->pmb->mb_size;
-    int nmb1 = pmbp->nmb_thispack - 1;
-    int ng = indcs.ng;
-    int n1 = indcs.nx1 + 2*ng;
-    int n2 = (indcs.nx2 > 1) ? (indcs.nx2 + 2*ng) : 1;
-    int n3 = (indcs.nx3 > 1) ? (indcs.nx3 + 2*ng) : 1;
-    if (!schwarzschild) {
-      Real lapse_pow = pin->GetOrAddReal("problem", "lapse_pow", 0.0);
-      Real lapse     = pin->GetOrAddReal("problem", "lapse", 1.0);
-      Real gshock    = pin->GetOrAddReal("problem", "gshock", 1.0);
-      Real gshock_pow= pin->GetOrAddReal("problem", "gshock_pow", 0.0);
-      par_for("pgen_adm_vars", DevExeSpace(), 0,nmb1,0,(n3-1),0,(n2-1),0,(n1-1),
-      KOKKOS_LAMBDA(int m, int k, int j, int i) {
-        Real r[3] = {0.,0.,0.};
-        Real &x1min = size.d_view(m).x1min;
-        Real &x1max = size.d_view(m).x1max;
-        r[0] = CellCenterX(i-is, indcs.nx1, x1min, x1max);
-
-        Real &x2min = size.d_view(m).x2min;
-        Real &x2max = size.d_view(m).x2max;
-        r[1] = CellCenterX(j-js, indcs.nx2, x2min, x2max);
-
-        Real &x3min = size.d_view(m).x3min;
-        Real &x3max = size.d_view(m).x3max;
-        r[2] = CellCenterX(k-ks, indcs.nx3, x3min, x3max);
-
-        // Set ADM to flat space
-        adm.alpha(m, k, j, i) = pow(r[shk_dir-1],lapse_pow)*lapse;
-        adm.beta_u(m, 0, k, j, i) = 0.0;
-        adm.beta_u(m, 1, k, j, i) = 0.0;
-        adm.beta_u(m, 2, k, j, i) = 0.0;
-
-        adm.psi4(m, k, j, i) = 1.0/sqrt(adm.alpha(m, k, j, i));
-
-        adm.g_dd(m, 0, 0, k, j, i) = 1.0;
-        adm.g_dd(m, 0, 1, k, j, i) = 0.0;
-        adm.g_dd(m, 0, 2, k, j, i) = 0.0;
-        adm.g_dd(m, 1, 1, k, j, i) = 1.0;
-        adm.g_dd(m, 1, 2, k, j, i) = 0.0;
-        adm.g_dd(m, 2, 2, k, j, i) = 1.0;
-
-        adm.g_dd(m, shk_dir-1, shk_dir-1, k, j, i) = gshock*pow(r[shk_dir-1],gshock_pow);
-
-        adm.vK_dd(m, 0, 0, k, j, i) = 0.0;
-        adm.vK_dd(m, 0, 1, k, j, i) = 0.0;
-        adm.vK_dd(m, 0, 2, k, j, i) = 0.0;
-        adm.vK_dd(m, 1, 1, k, j, i) = 0.0;
-        adm.vK_dd(m, 1, 2, k, j, i) = 0.0;
-        adm.vK_dd(m, 2, 2, k, j, i) = 0.0;
-      });
-    } else {
-      par_for("pgen_adm_vars", DevExeSpace(), 0,nmb1,0,(n3-1),0,(n2-1),0,(n1-1),
-      KOKKOS_LAMBDA(int m, int k, int j, int i) {
-        Real &x1min = size.d_view(m).x1min;
-        Real &x1max = size.d_view(m).x1max;
-        Real x1v = CellCenterX(i-is, indcs.nx1, x1min, x1max);
-
-        Real &x2min = size.d_view(m).x2min;
-        Real &x2max = size.d_view(m).x2max;
-        Real x2v = CellCenterX(j-js, indcs.nx2, x2min, x2max);
-
-        Real &x3min = size.d_view(m).x3min;
-        Real &x3max = size.d_view(m).x3max;
-        Real x3v = CellCenterX(k-ks, indcs.nx3, x3min, x3max);
-
-        // Set ADM to Schwarzschild coordinates
-        Real r = 0;
-        if (shk_dir == 1) {
-          r = x1v;
-        } else if (shk_dir == 2) {
-          r = x2v;
-        } else if (shk_dir == 3) {
-          r = x3v;
-        }
-        Real fac = 1. - 2./r;
-
-        adm.alpha(m, k, j, i) = sqrt(fac);
-        adm.beta_u(m, 0, k, j, i) = 0.0;
-        adm.beta_u(m, 1, k, j, i) = 0.0;
-        adm.beta_u(m, 2, k, j, i) = 0.0;
-
-        adm.psi4(m, k, j, i) = 1.0/sqrt(adm.alpha(m, k, j, i));
-
-        adm.g_dd(m, ivx-IVX, ivx-IVX, k, j, i) = 1.0/fac;
-        adm.g_dd(m, ivy-IVX, ivy-IVX, k, j, i) = r*r;
-        adm.g_dd(m, ivz-IVX, ivz-IVX, k, j, i) = r*r;
-        adm.g_dd(m, 0, 1, k, j, i) = 0.0;
-        adm.g_dd(m, 0, 2, k, j, i) = 0.0;
-        adm.g_dd(m, 1, 2, k, j, i) = 0.0;
-
-        adm.vK_dd(m, 0, 0, k, j, i) = 0.0;
-        adm.vK_dd(m, 0, 1, k, j, i) = 0.0;
-        adm.vK_dd(m, 0, 2, k, j, i) = 0.0;
-        adm.vK_dd(m, 1, 1, k, j, i) = 0.0;
-        adm.vK_dd(m, 1, 2, k, j, i) = 0.0;
-        adm.vK_dd(m, 2, 2, k, j, i) = 0.0;
-      });
+    if (schwarzschild) {
+      pmbp->padm->SetADMVariables = &SetADMVariablesToSchwarzschild;
     }
+    pmbp->padm->SetADMVariables(pmbp);
 
     // If we're using the ADM variables, then we've got dynamic GR enabled.
     // Because we need the metric, we can't initialize the conserved variables
@@ -397,3 +311,70 @@ void ProblemGenerator::ShockTube(ParameterInput *pin, const bool restart) {
 
   return;
 }
+
+namespace {
+
+void SetADMVariablesToSchwarzschild(MeshBlockPack *pmbp) {
+  auto &adm = pmbp->padm->adm;
+  auto &size = pmbp->pmb->mb_size;
+  auto &indcs = pmbp->pmesh->mb_indcs;
+  int ivx = shk_dir;
+  int ivy = IVX + ((ivx - IVX) + 1)%3;
+  int ivz = IVX + ((ivx - IVX) + 2)%3;
+  int is = indcs.is, js = indcs.js, ks = indcs.ks;
+  int ie = indcs.ie, je = indcs.je, ke = indcs.ke;
+  int nmb1 = pmbp->nmb_thispack - 1;
+  int ng = indcs.ng;
+  int n1 = indcs.nx1 + 2*ng;
+  int n2 = (indcs.nx2 > 1) ? (indcs.nx2 + 2*ng) : 1;
+  int n3 = (indcs.nx3 > 1) ? (indcs.nx3 + 2*ng) : 1;
+  auto shk_dir_ = shk_dir;
+  par_for("pgen_adm_vars", DevExeSpace(), 0,nmb1,0,(n3-1),0,(n2-1),0,(n1-1),
+  KOKKOS_LAMBDA(int m, int k, int j, int i) {
+    Real &x1min = size.d_view(m).x1min;
+    Real &x1max = size.d_view(m).x1max;
+    Real x1v = CellCenterX(i-is, indcs.nx1, x1min, x1max);
+
+    Real &x2min = size.d_view(m).x2min;
+    Real &x2max = size.d_view(m).x2max;
+    Real x2v = CellCenterX(j-js, indcs.nx2, x2min, x2max);
+
+    Real &x3min = size.d_view(m).x3min;
+    Real &x3max = size.d_view(m).x3max;
+    Real x3v = CellCenterX(k-ks, indcs.nx3, x3min, x3max);
+
+    // Set ADM to Schwarzschild coordinates
+    Real r = 0;
+    if (shk_dir_ == 1) {
+      r = x1v;
+    } else if (shk_dir_ == 2) {
+      r = x2v;
+    } else if (shk_dir_ == 3) {
+      r = x3v;
+    }
+    Real fac = 1. - 2./r;
+
+    adm.alpha(m, k, j, i) = sqrt(fac);
+    adm.beta_u(m, 0, k, j, i) = 0.0;
+    adm.beta_u(m, 1, k, j, i) = 0.0;
+    adm.beta_u(m, 2, k, j, i) = 0.0;
+
+    adm.psi4(m, k, j, i) = 1.0/sqrt(adm.alpha(m, k, j, i));
+
+    adm.g_dd(m, ivx-IVX, ivx-IVX, k, j, i) = 1.0/fac;
+    adm.g_dd(m, ivy-IVX, ivy-IVX, k, j, i) = r*r;
+    adm.g_dd(m, ivz-IVX, ivz-IVX, k, j, i) = r*r;
+    adm.g_dd(m, 0, 1, k, j, i) = 0.0;
+    adm.g_dd(m, 0, 2, k, j, i) = 0.0;
+    adm.g_dd(m, 1, 2, k, j, i) = 0.0;
+
+    adm.vK_dd(m, 0, 0, k, j, i) = 0.0;
+    adm.vK_dd(m, 0, 1, k, j, i) = 0.0;
+    adm.vK_dd(m, 0, 2, k, j, i) = 0.0;
+    adm.vK_dd(m, 1, 1, k, j, i) = 0.0;
+    adm.vK_dd(m, 1, 2, k, j, i) = 0.0;
+    adm.vK_dd(m, 2, 2, k, j, i) = 0.0;
+  });
+}
+
+} // namespace

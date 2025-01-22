@@ -70,10 +70,10 @@ void Z4c::Z4cWeyl(MeshBlockPack *pmbp) {
     Real KK = 0.0;           // K^a_b K^b_a
 
     // Vectors
-    AthenaScratchTensor<Real, TensorSymm::NONE, 3, 1> Gamma_u;
-    AthenaScratchTensor<Real, TensorSymm::NONE, 3, 1> uvec;
-    AthenaScratchTensor<Real, TensorSymm::NONE, 3, 1> vvec;
-    AthenaScratchTensor<Real, TensorSymm::NONE, 3, 1> wvec;
+    AthenaPointTensor<Real, TensorSymm::NONE, 3, 1> Gamma_u;
+    AthenaPointTensor<Real, TensorSymm::NONE, 3, 1> uvec;
+    AthenaPointTensor<Real, TensorSymm::NONE, 3, 1> vvec;
+    AthenaPointTensor<Real, TensorSymm::NONE, 3, 1> wvec;
     for (int a = 0; a < 3; ++a) {
       Gamma_u(a) = 0.0;
       uvec(a) = 0.0;
@@ -84,22 +84,22 @@ void Z4c::Z4cWeyl(MeshBlockPack *pmbp) {
     // Symmetric tensors
     // Rank 2
     // inverse of conf. metric
-    AthenaScratchTensor<Real, TensorSymm::SYM2, 3, 2> g_uu;
-    AthenaScratchTensor<Real, TensorSymm::SYM2, 3, 2> R_dd;        // Ricci tensor
-    AthenaScratchTensor<Real, TensorSymm::NONE, 3, 2> K_ud;        // extrinsic curvature
+    AthenaPointTensor<Real, TensorSymm::SYM2, 3, 2> g_uu;
+    AthenaPointTensor<Real, TensorSymm::SYM2, 3, 2> R_dd;        // Ricci tensor
+    AthenaPointTensor<Real, TensorSymm::NONE, 3, 2> K_ud;        // extrinsic curvature
 
     // Rank 3
-    AthenaScratchTensor<Real, TensorSymm::SYM2,  3, 3> dg_ddd;      // metric 1st drvts
-    AthenaScratchTensor<Real, TensorSymm::SYM2,  3, 3> dK_ddd;      // K 1st drvts
+    AthenaPointTensor<Real, TensorSymm::SYM2,  3, 3> dg_ddd;      // metric 1st drvts
+    AthenaPointTensor<Real, TensorSymm::SYM2,  3, 3> dK_ddd;      // K 1st drvts
     // Christoffel symbols of 1st kind
-    AthenaScratchTensor<Real, TensorSymm::SYM2, 3, 3> Gamma_ddd;
+    AthenaPointTensor<Real, TensorSymm::SYM2, 3, 3> Gamma_ddd;
     // Christoffel symbols of 2nd kind
-    AthenaScratchTensor<Real, TensorSymm::SYM2, 3, 3> Gamma_udd;
-    AthenaScratchTensor<Real, TensorSymm::SYM2, 3, 3> DK_ddd;      // differential of K
-    AthenaScratchTensor<Real, TensorSymm::SYM2, 3, 3> DK_udd;      // differential of K
+    AthenaPointTensor<Real, TensorSymm::SYM2, 3, 3> Gamma_udd;
+    AthenaPointTensor<Real, TensorSymm::SYM2, 3, 3> DK_ddd;      // differential of K
+    AthenaPointTensor<Real, TensorSymm::SYM2, 3, 3> DK_udd;      // differential of K
 
     // Rank 4
-    AthenaScratchTensor<Real, TensorSymm::SYM22, 3, 4> ddg_dddd;   // metric 2nd drvts
+    AthenaPointTensor<Real, TensorSymm::SYM22, 3, 4> ddg_dddd;   // metric 2nd drvts
     for (int a = 0; a < 3; ++a)
     for (int b = a; b < 3; ++b) {
       g_uu(a,b) = 0.0;
@@ -118,10 +118,10 @@ void Z4c::Z4cWeyl(MeshBlockPack *pmbp) {
     }
 
     // Generic tensors
-    AthenaScratchTensor<Real, TensorSymm::NONE, 3, 2> Riemm4_dd;   // 4D Riemann *n^a*n^c
-    AthenaScratchTensor<Real, TensorSymm::NONE, 3, 3> Riemm4_ddd;  // 4D Riemann * n^a
-    AthenaScratchTensor<Real, TensorSymm::NONE, 3, 4> Riem3_dddd;  // 3D Riemann tensor
-    AthenaScratchTensor<Real, TensorSymm::NONE, 3, 4> Riemm4_dddd; // 4D Riemann tensor
+    AthenaPointTensor<Real, TensorSymm::NONE, 3, 2> Riemm4_dd;   // 4D Riemann *n^a*n^c
+    AthenaPointTensor<Real, TensorSymm::NONE, 3, 3> Riemm4_ddd;  // 4D Riemann * n^a
+    AthenaPointTensor<Real, TensorSymm::NONE, 3, 4> Riem3_dddd;  // 3D Riemann tensor
+    AthenaPointTensor<Real, TensorSymm::NONE, 3, 4> Riemm4_dddd; // 4D Riemann tensor
     for (int a = 0; a < 3; ++a)
     for (int b = 0; b < 3; ++b) {
       Riemm4_dd(a,b) = 0.0;
@@ -208,7 +208,11 @@ void Z4c::Z4cWeyl(MeshBlockPack *pmbp) {
             - ddg_dddd(c,d,a,b) - ddg_dddd(a,b,c,d) +
               ddg_dddd(a,c,b,d) + ddg_dddd(b,c,a,d));
       }
-        R += g_uu(a,b) * R_dd(a,b);
+    }
+
+    for(int a = 0; a < 3; ++a)
+    for(int b = 0; b < 3; ++b) {
+      R += g_uu(a,b) * R_dd(a,b);
     }
 
     // -----------------------------------------------------------------------------------
