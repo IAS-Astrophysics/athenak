@@ -46,7 +46,8 @@ TaskStatus RadiationM1::TimeUpdate(Driver *d, int stage) {
 
   Real &gam0 = d->gam0[stage - 1];
   Real &gam1 = d->gam1[stage - 1];
-  Real beta_dt = (d->beta[stage - 1]) * (pmy_pack->pmesh->dt);
+  Real beta[2] = {0.5, 1.};
+  Real beta_dt = (beta[stage - 1]) * (pmy_pack->pmesh->dt);
   adm::ADM::ADM_vars &adm = pmy_pack->padm->adm;
 
   int scr_level = 0;
@@ -80,19 +81,18 @@ TaskStatus RadiationM1::TimeUpdate(Driver *d, int stage) {
             g_uu(a, b) = garr_uu[a + b * 4];
           }
         }
-        // call bns_nurates in outer loop!
 
         // Step 1 -- compute the sources
         par_for_inner(member, 0, nspecies_ - 1, [&](const int nuidx) {
           // Source RHS are stored here
           Real DrEFN[5]{};
-#if (THC_M1_SRC_METHOD == THC_M1_SRC_EXPL)
-          // add sources later
+          // #if (THC_M1_SRC_METHOD == THC_M1_SRC_EXPL)
+          //  add sources later
           for (int var = 0; var < nspecies_; ++var) {
             DrEFN[var] = 0;
           }
-#endif // (THC_M1_SRC_METHOD == THC_M1_SRC_EXPL)
-       // Step 2 -- limit the sources
+          // #endif // (THC_M1_SRC_METHOD == THC_M1_SRC_EXPL)
+          //  Step 2 -- limit the sources
           Real theta = 1.0;
 
           // Step 3 -- update fields
@@ -120,14 +120,14 @@ TaskStatus RadiationM1::TimeUpdate(Driver *d, int stage) {
           }
 
           // Update radiation quantities
-          Real E = u0_(m, CombinedIdx(nuidx, M1_E_IDX, nvars_), k, j, i) +
+          Real E = u0_(m, CombinedIdx(nuidx, M1_E_IDX, nvars_), k, j, i) -
                    beta_dt * rEFN[M1_E_IDX] + theta * DrEFN[M1_E_IDX];
           AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> F_d{};
-          Real Fx = u0_(m, CombinedIdx(nuidx, M1_FX_IDX, nvars_), k, j, i) +
+          Real Fx = u0_(m, CombinedIdx(nuidx, M1_FX_IDX, nvars_), k, j, i) -
                     beta_dt * rEFN[M1_FX_IDX] + theta * DrEFN[M1_FX_IDX];
-          Real Fy = u0_(m, CombinedIdx(nuidx, M1_FY_IDX, nvars_), k, j, i) +
+          Real Fy = u0_(m, CombinedIdx(nuidx, M1_FY_IDX, nvars_), k, j, i) -
                     beta_dt * rEFN[M1_FY_IDX] + theta * DrEFN[M1_FY_IDX];
-          Real Fz = u0_(m, CombinedIdx(nuidx, M1_FZ_IDX, nvars_), k, j, i) +
+          Real Fz = u0_(m, CombinedIdx(nuidx, M1_FZ_IDX, nvars_), k, j, i) -
                     beta_dt * rEFN[M1_FZ_IDX] + theta * DrEFN[M1_FZ_IDX];
           pack_F_d(adm.beta_u(m, 0, k, j, i), adm.beta_u(m, 1, k, j, i),
                    adm.beta_u(m, 2, k, j, i), Fx, Fy, Fz, F_d);
