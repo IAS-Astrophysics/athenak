@@ -298,7 +298,7 @@ def plot_simple_modes(dat, args):
         args["field_name"] + "_" + "modes_" + f"{title}.png",
     )
     plt.savefig(file_out, dpi=200)
-
+    plt.close()
     p += 1
 
 
