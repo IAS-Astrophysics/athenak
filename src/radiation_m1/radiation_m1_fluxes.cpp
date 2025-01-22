@@ -166,7 +166,7 @@ TaskStatus RadiationM1::Fluxes(Driver *pdrive, int stage) {
   int scr_level = 0;
   auto &flx1_ = uflx.x1f;
 
-  int il = is - 1, iu = ie, jl = js, ju = je, kl = ks, ku = ke;
+  int il = is, iu = ie + 1, jl = js, ju = je, kl = ks, ku = ke;
 
   par_for(
       "radiation_m1_flux_x1", DevExeSpace(), 0, nmb1, kl, ku, jl, ju, il, iu, 0,
@@ -177,9 +177,9 @@ TaskStatus RadiationM1::Fluxes(Driver *pdrive, int stage) {
         Real flux_i[5]{};
         Real flux_ip1[5]{};
         Real cmax_i, cmax_ip1;
-        CalcFlux(m, k, j, i, nuidx, dir, u0_, P_dd_, u_mu_, adm, params_,
+        CalcFlux(m, k, j, i - 1, nuidx, dir, u0_, P_dd_, u_mu_, adm, params_,
                  nvars_, nspecies_, flux_i, cmax_i);
-        CalcFlux(m, k, j, i + 1, nuidx, dir, u0_, P_dd_, u_mu_, adm, params_,
+        CalcFlux(m, k, j, i, nuidx, dir, u0_, P_dd_, u_mu_, adm, params_,
                  nvars_, nspecies_, flux_ip1, cmax_ip1);
 
         Real flux_ip12_lo[5]{};
@@ -190,15 +190,11 @@ TaskStatus RadiationM1::Fluxes(Driver *pdrive, int stage) {
         Real A_ip12 = Kokkos::min(1., 1. / mbsize.d_view(m).dx1);
 
         for (int var = 0; var < nvars_; ++var) {
-          const Real ujm = (i - 1) < 0 ? 0
-                                       : u0_(m, CombinedIdx(nuidx, var, nvars_),
-                                             k, j, i - 1);
-          const Real uj = u0_(m, CombinedIdx(nuidx, var, nvars_), k, j, i);
-          const Real ujp = u0_(m, CombinedIdx(nuidx, var, nvars_), k, j, i + 1);
+          const Real ujm = u0_(m, CombinedIdx(nuidx, var, nvars_), k, j, i - 2);
+          const Real uj = u0_(m, CombinedIdx(nuidx, var, nvars_), k, j, i - 1);
+          const Real ujp = u0_(m, CombinedIdx(nuidx, var, nvars_), k, j, i);
           const Real ujpp =
-              (i + 2) > ie
-                  ? 0
-                  : u0_(m, CombinedIdx(nuidx, var, nvars_), k, j, i + 2);
+              u0_(m, CombinedIdx(nuidx, var, nvars_), k, j, i + 1);
 
           const Real dup = ujpp - ujp;
           const Real duc = ujp - uj;
