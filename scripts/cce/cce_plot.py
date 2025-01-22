@@ -34,14 +34,14 @@ def parse_cli():
   p.add_argument(
       "-field",
       type=str,
-      default="Strain",
+      default="Psi4",
       help="field names:[News,Psi0,Psi1,Psi2,Psi3,Psi4,Strain]",
   )
   p.add_argument(
       "-mode",
       type=str,
-      default="Real Y_2,2",
-      help='field modes:["Real Y_2,-2","Imag Y_2,-2", ...]',
+      default="Y_2,2",
+      help='field modes:["Y_2,-2","Y_2,-2", ...]',
   )
   args = p.parse_args()
   return args
@@ -69,20 +69,21 @@ def read_save_to_txt(args):
     group = [k for k in keys if k.find("Spectre") != -1][0]
     group = "/" + group + "/"
     dataset = group+args["field"]
-    mode = find_h5_1mode(h5f, dataset, args["mode"], args)
+    mode_re = find_h5_1mode(h5f, dataset, "Real "+args["mode"], args)
+    mode_im = find_h5_1mode(h5f, dataset, "Imag "+args["mode"], args)
     t = h5f[dataset][:, 0]
-    f = h5f[dataset][:, mode]
+    re = h5f[dataset][:, mode_re]
+    im = h5f[dataset][:, mode_im]
 
   mode_txt = args["mode"].replace(",", "_")
   mode_txt = mode_txt.replace(" ", "")
   out = os.path.join(args["dout"], args["field"] + "_" + mode_txt + ".txt")
   #print(out)
-  stack = np.column_stack((t, f))
+  stack = np.column_stack((t, re, im))
   np.savetxt(out,
              stack,
-             header=f'# t {args["mode"]}',
-             fmt="%.16e %.16e")
-
+             header=f'# t re{args["mode"]} im{args["mode"]}',
+             fmt="%.16e %.16e %.16e")
 
 def main(args):
   """
