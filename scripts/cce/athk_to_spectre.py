@@ -95,7 +95,7 @@ def parse_cli():
   p.add_argument(
       "-t_deriv",
       type=str,
-      default="Fourier",
+      default="fin_diff",
       help="method to take the time derivative of fields:{Fourier,fin_diff}",
   )
   p.add_argument(
