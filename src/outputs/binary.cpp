@@ -247,7 +247,8 @@ void MeshBinaryOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
         std::size_t myoffset=header_offset+data_size*ns_mbs+data_size*m;
         // every rank has a MB to write, so write collectively
         if (m < noutmbs_min) {
-          if (binfile.Write_any_type_at_all(pdata,(data_size),myoffset,"byte") != 1) {
+          if (binfile.Write_any_type_at_all(pdata,(data_size),myoffset,"byte")
+              != data_size) {
             std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                 << std::endl << "binary data not written correctly to binary file, "
                 << "binary file is broken." << std::endl;
@@ -255,7 +256,7 @@ void MeshBinaryOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
           }
         // some ranks are finished writing, so use non-collective write
         } else if (m < pm->nmb_thisrank) {
-          if (binfile.Write_any_type_at(pdata,(data_size),myoffset,"byte") != 1) {
+          if (binfile.Write_any_type_at(pdata,(data_size),myoffset,"byte") != data_size) {
             std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                  << std::endl << "binary data not written correctly to binary file, "
                  << "binary file is broken." << std::endl;
