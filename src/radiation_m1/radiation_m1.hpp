@@ -99,7 +99,7 @@ public:
   // ...in "stagen_tl" list
   TaskStatus CopyCons(Driver *d, int stage);
   TaskStatus CalcClosure(Driver *d, int stage);
-  TaskStatus Fluxes(Driver *d, int stage);
+  TaskStatus CalculateFluxes(Driver *d, int stage);
   TaskStatus SendFlux(Driver *d, int stage);
   TaskStatus RecvFlux(Driver *d, int stage);
   TaskStatus TimeUpdate(Driver *d, int stage);

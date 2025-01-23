@@ -133,13 +133,15 @@ void CalcFlux(const int m, const int k, const int j, const int i,
 
   // Speed of light -- note that gamma_uu has NDIM=3
   const Real clam[2] = {
-      adm.alpha(m, k, j, i) * std::sqrt(gamma_uu(dir, dir)) - beta_u(dir + 1),
-      -adm.alpha(m, k, j, i) * std::sqrt(gamma_uu(dir, dir)) - beta_u(dir + 1)};
+      adm.alpha(m, k, j, i) * std::sqrt(gamma_uu(dir - 1, dir - 1)) -
+          beta_u(dir),
+      -adm.alpha(m, k, j, i) * std::sqrt(gamma_uu(dir - 1, dir - 1)) -
+          beta_u(dir)};
   const Real clight = Kokkos::max(Kokkos::abs(clam[0]), Kokkos::abs(clam[1]));
   cmax = clight;
 }
 
-TaskStatus RadiationM1::Fluxes(Driver *pdrive, int stage) {
+TaskStatus RadiationM1::CalculateFluxes(Driver *pdrive, int stage) {
   RegionIndcs &indcs = pmy_pack->pmesh->mb_indcs;
   int &is = indcs.is, &ie = indcs.ie;
   int &js = indcs.js, &je = indcs.je;
@@ -174,13 +176,13 @@ TaskStatus RadiationM1::Fluxes(Driver *pdrive, int stage) {
       KOKKOS_LAMBDA(const int m, const int k, const int j, const int i,
                     const int nuidx) {
         int dir = 1;
+        Real flux_im1[5]{};
         Real flux_i[5]{};
-        Real flux_ip1[5]{};
         Real cmax_i, cmax_ip1;
         CalcFlux(m, k, j, i - 1, nuidx, dir, u0_, P_dd_, u_mu_, adm, params_,
-                 nvars_, nspecies_, flux_i, cmax_i);
+                 nvars_, nspecies_, flux_im1, cmax_i);
         CalcFlux(m, k, j, i, nuidx, dir, u0_, P_dd_, u_mu_, adm, params_,
-                 nvars_, nspecies_, flux_ip1, cmax_ip1);
+                 nvars_, nspecies_, flux_i, cmax_ip1);
 
         Real flux_ip12_lo[5]{};
         Real flux_ip12_ho[5]{};
@@ -208,12 +210,12 @@ TaskStatus RadiationM1::Fluxes(Driver *pdrive, int stage) {
             sawtooth = true;
           }
 
-          flux_ip12_lo[var] = (flux_i[var] + flux_ip1[var]) / 2.;
+          flux_ip12_lo[var] = (flux_im1[var] + flux_i[var]) / 2.;
           flux_ip12_ho[var] =
-              (flux_i[var] + flux_ip1[var]) / 2. -
+              (flux_im1[var] + flux_i[var]) / 2. -
               cmax_ip12 *
-                  (u0_(m, CombinedIdx(nuidx, var, nvars_), k, j, i + 1) -
-                   u0_(m, CombinedIdx(nuidx, var, nvars_), k, j, i)) /
+                  (u0_(m, CombinedIdx(nuidx, var, nvars_), k, j, i) -
+                   u0_(m, CombinedIdx(nuidx, var, nvars_), k, j, i - 1)) /
                   2.;
 
           flx1_(m, var, k, j, i) =
