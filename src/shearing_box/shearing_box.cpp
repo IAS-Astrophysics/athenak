@@ -107,6 +107,7 @@ void ShearingBoxBoundary::FindTargetMB(const int igid, const int jshift, int &gi
   std::int32_t nmbx2 = pm->nmb_rootx2 << (lloc.level - pm->root_level);
   // apply shift by input number of blocks
   lloc.lx2 = static_cast<std::int32_t>((lloc.lx2 + jshift) % nmbx2);
+  if (lloc.lx2 < 0) lloc.lx2 += nmbx2;
   // find target GID and rank
   gid = (pm->ptree->FindMeshBlock(lloc))->GetGID();
   rank = pm->rank_eachmb[gid];
