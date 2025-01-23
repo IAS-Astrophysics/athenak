@@ -24,7 +24,7 @@ class MHD;
 class EquationOfState;
 
 // constants that enumerate ParticlesPusher options
-enum class ParticlesPusher {drift, leap_frog, lagrangian_tracer, lagrangian_mc, boris, only_gr, full_gr};
+enum class ParticlesPusher {drift, leap_frog, lagrangian_tracer, lagrangian_mc, boris, only_gr, full_gr, GCA};
 
 // constants that enumerate ParticleTypes
 enum class ParticleType {cosmic_ray};
@@ -91,8 +91,10 @@ class Particles {
   TaskStatus ClearSend(Driver *pdriver, int stage);
   TaskStatus ClearRecv(Driver *pdriver, int stage);
 
+	void InterpolateFields( const Real * prtcl_x, const int p, Real * E, Real * B );
   void BorisStep( const Real dt, const bool only_v );
   void GeodesicIterations( const Real dt );
+//  void GCAIterations( const Real dt );
 
  private:
   MeshBlockPack* pmy_pack;  // ptr to MeshBlockPack containing this Particles
