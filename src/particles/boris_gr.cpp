@@ -616,7 +616,7 @@ void Particles::BorisStep( const Real dt, const bool only_v ){
 			vec_ut[i1] += ADM_upper[i1][i2]*E_beta[i2];
 			}
 		}
-		for (int i = 0; i < 3; ++i ){ E[i] -= E_beta[i]; }
+		for (int i = 0; i < 3; ++i ){ E[i] -= vec_ut[i]; }
 
 		// Push 4-velocity with electric field in normal frame
 		uE[0] = u_con[0] + dt*q_over_m/(2.0)*E[0];
@@ -668,13 +668,13 @@ void Particles::BorisStep( const Real dt, const bool only_v ){
 
 		// Finalize roation
 		uB[0] = uE[0] + 2.0/(1.0+mod_t_sqr)*( vec_ut[0] );
-					if (multi_d) { uB[1] = uE[1] + 2.0/(1.0+mod_t_sqr)*( vec_ut[1] ); }
-					if (three_d) { uB[2] = uE[2] + 2.0/(1.0+mod_t_sqr)*( vec_ut[2] ); }
+		if (multi_d) { uB[1] = uE[1] + 2.0/(1.0+mod_t_sqr)*( vec_ut[1] ); }
+		if (three_d) { uB[2] = uE[2] + 2.0/(1.0+mod_t_sqr)*( vec_ut[2] ); }
 
 		//Second half-step with shifted electric field
 		uE[0] = uB[0] + dt*q_over_m/(2.0)*E[0];
-					if (multi_d) { uE[1] = uB[1] + dt*q_over_m/(2.0)*E[1]; }
-					if (three_d) { uE[2] = uB[2] + dt*q_over_m/(2.0)*E[2]; }
+		if (multi_d) { uE[1] = uB[1] + dt*q_over_m/(2.0)*E[1]; }
+		if (three_d) { uE[2] = uB[2] + dt*q_over_m/(2.0)*E[2]; }
 
 		for (int i1 = 0; i1 < 3; ++i1 ){ 
 			u_cov[i1] = 0.0;
