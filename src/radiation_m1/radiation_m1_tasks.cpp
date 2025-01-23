@@ -54,7 +54,7 @@ void RadiationM1::AssembleRadiationM1Tasks(
   id.copyu = tl["stagen"]->AddTask(&RadiationM1::CopyCons, this, none);
   id.calcclosure =
       tl["stagen"]->AddTask(&RadiationM1::CalcClosure, this, id.copyu);
-  id.flux = tl["stagen"]->AddTask(&RadiationM1::Fluxes, this, id.calcclosure);
+  id.flux = tl["stagen"]->AddTask(&RadiationM1::CalculateFluxes, this, id.calcclosure);
   id.sendf = tl["stagen"]->AddTask(&RadiationM1::SendFlux, this, id.flux);
   id.recvf = tl["stagen"]->AddTask(&RadiationM1::RecvFlux, this, id.sendf);
   id.rkupdt = tl["stagen"]->AddTask(&RadiationM1::TimeUpdate, this, id.recvf);
