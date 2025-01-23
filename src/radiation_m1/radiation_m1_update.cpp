@@ -98,11 +98,10 @@ TaskStatus RadiationM1::TimeUpdate(Driver *d, int stage) {
           // Step 3 -- update fields
           // compute dF1/dx1
           Real rEFN[5]{};
-          for (int var = 0; var < nspecies_; ++var) {
-            rEFN[var] =
-                (flx1(m, CombinedIdx(nuidx, var, nvars_), k, j, i + 1) -
-                 flx1(m, CombinedIdx(nuidx, var, nvars_), k, j, i)) /
-                mbsize.d_view(m).dx1;
+          for (int var = 0; var < nvars_; ++var) {
+            rEFN[var] = (flx1(m, CombinedIdx(nuidx, var, nvars_), k, j, i + 1) -
+                         flx1(m, CombinedIdx(nuidx, var, nvars_), k, j, i)) /
+                        mbsize.d_view(m).dx1;
 
             if (multi_d) {
               rEFN[var] +=
@@ -120,14 +119,14 @@ TaskStatus RadiationM1::TimeUpdate(Driver *d, int stage) {
           }
 
           // Update radiation quantities
-          Real E = u0_(m, CombinedIdx(nuidx, M1_E_IDX, nvars_), k, j, i) -
+          Real E = u1_(m, CombinedIdx(nuidx, M1_E_IDX, nvars_), k, j, i) -
                    beta_dt * rEFN[M1_E_IDX] + theta * DrEFN[M1_E_IDX];
           AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> F_d{};
-          Real Fx = u0_(m, CombinedIdx(nuidx, M1_FX_IDX, nvars_), k, j, i) -
+          Real Fx = u1_(m, CombinedIdx(nuidx, M1_FX_IDX, nvars_), k, j, i) -
                     beta_dt * rEFN[M1_FX_IDX] + theta * DrEFN[M1_FX_IDX];
-          Real Fy = u0_(m, CombinedIdx(nuidx, M1_FY_IDX, nvars_), k, j, i) -
+          Real Fy = u1_(m, CombinedIdx(nuidx, M1_FY_IDX, nvars_), k, j, i) -
                     beta_dt * rEFN[M1_FY_IDX] + theta * DrEFN[M1_FY_IDX];
-          Real Fz = u0_(m, CombinedIdx(nuidx, M1_FZ_IDX, nvars_), k, j, i) -
+          Real Fz = u1_(m, CombinedIdx(nuidx, M1_FZ_IDX, nvars_), k, j, i) -
                     beta_dt * rEFN[M1_FZ_IDX] + theta * DrEFN[M1_FZ_IDX];
           pack_F_d(adm.beta_u(m, 0, k, j, i), adm.beta_u(m, 1, k, j, i),
                    adm.beta_u(m, 2, k, j, i), Fx, Fy, Fz, F_d);
@@ -138,7 +137,7 @@ TaskStatus RadiationM1::TimeUpdate(Driver *d, int stage) {
           u0_(m, CombinedIdx(nuidx, M1_FZ_IDX, nvars_), k, j, i) = Fz;
 
           if (nspecies_ > 1) {
-            Real N = u0_(m, CombinedIdx(nuidx, M1_N_IDX, nvars_), k, j, i) +
+            Real N = u1_(m, CombinedIdx(nuidx, M1_N_IDX, nvars_), k, j, i) -
                      beta_dt * rEFN[M1_N_IDX] + theta * DrEFN[M1_N_IDX];
             N = Kokkos::max(N, params_.rad_N_floor);
             u0_(m, CombinedIdx(nuidx, M1_N_IDX, nvars_), k, j, i) = N;
