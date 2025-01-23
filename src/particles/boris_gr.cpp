@@ -470,7 +470,71 @@ void ComputeInverseMatrix3( const Real inputMat[][3], Real outputMat[][3] ){
 
 }
 
+
 namespace particles {
+//----------------------------------------------------------------------------------------
+//! \fn  void InterpolateFields
+//  \brief Interpolate cell field to particle location, Has to be member function to have access to mhd objects.
+void Particles::InterpolateFields( const Real * prtcl_x, const int p, Real * E, Real * B ){
+	auto &pi = prtcl_idata;
+	auto &b0_ = pmy_pack->pmhd->b0;
+	auto &e0_ = pmy_pack->pmhd->efld;
+	auto &indcs = pmy_pack->pmesh->mb_indcs;
+	const int is = indcs.is;
+	const int js = indcs.js;
+	const int ks = indcs.ks;
+	auto &mbsize = pmy_pack->pmb->mb_size;
+	auto gids = pmy_pack->gids;
+
+	int m = pi(PGID,p) - gids;
+	int ip = (prtcl_x[0] - mbsize.d_view(m).x1min)/mbsize.d_view(m).dx1 + is;
+	int jp = (prtcl_x[1] - mbsize.d_view(m).x2min)/mbsize.d_view(m).dx2 + js;
+	int kp = (prtcl_x[2] - mbsize.d_view(m).x3min)/mbsize.d_view(m).dx3 + ks;
+
+	Real &x1min = mbsize.d_view(m).x1min;
+	Real &x2min = mbsize.d_view(m).x2min;
+	Real &x3min = mbsize.d_view(m).x3min;
+	Real &x1max = mbsize.d_view(m).x1max;
+	Real &x2max = mbsize.d_view(m).x2max;
+	Real &x3max = mbsize.d_view(m).x3max;
+	Real x1v,x2v,x3v;
+	x1v = LeftEdgeX(ip, indcs.nx1, x1min, x1max);
+	x2v = LeftEdgeX(jp, indcs.nx2, x2min, x2max);
+	x3v = LeftEdgeX(kp, indcs.nx3, x3min, x3max);
+	Real Dx,Dy,Dz;
+	Dx = (x1max - x1min)/indcs.nx1;
+	Dy = (x2max - x2min)/indcs.nx2;
+	Dz = (x3max - x3min)/indcs.nx3;
+	// Interpolate Electric Field at new particle location x1, x2, x3
+	E[0] = e0_.x1e(m, kp, jp, ip) + (prtcl_x[0] - x1v)*(e0_.x1e(m, kp, jp, ip+1) - e0_.x1e(m, kp, jp, ip))/Dx;
+	E[0] += e0_.x1e(m, kp, jp, ip) + (prtcl_x[1] - x2v)*(e0_.x1e(m, kp, jp+1, ip) - e0_.x1e(m, kp, jp, ip))/Dx;
+	E[0] += e0_.x1e(m, kp, jp, ip) + (prtcl_x[2] - x3v)*(e0_.x1e(m, kp+1, jp, ip) - e0_.x1e(m, kp, jp, ip))/Dx;
+	E[0] /= 3.0;
+	E[1] = e0_.x2e(m, kp, jp, ip) + (prtcl_x[0] - x1v)*(e0_.x2e(m, kp, jp, ip+1) - e0_.x2e(m, kp, jp, ip))/Dy;
+	E[1] += e0_.x2e(m, kp, jp, ip) + (prtcl_x[1] - x2v)*(e0_.x2e(m, kp, jp+1, ip) - e0_.x2e(m, kp, jp, ip))/Dy;
+	E[1] += e0_.x2e(m, kp, jp, ip) + (prtcl_x[2] - x3v)*(e0_.x2e(m, kp+1, jp, ip) - e0_.x2e(m, kp, jp, ip))/Dy;
+	E[1] /= 3.0;
+	E[2] = e0_.x3e(m, kp, jp, ip) + (prtcl_x[0] - x1v)*(e0_.x3e(m, kp, jp, ip+1) - e0_.x3e(m, kp, jp, ip))/Dz;
+	E[2] += e0_.x3e(m, kp, jp, ip) + (prtcl_x[1] - x2v)*(e0_.x3e(m, kp, jp+1, ip) - e0_.x3e(m, kp, jp, ip))/Dz;
+	E[2] += e0_.x3e(m, kp, jp, ip) + (prtcl_x[2] - x3v)*(e0_.x3e(m, kp+1, jp, ip) - e0_.x3e(m, kp, jp, ip))/Dz;
+	E[2] /= 3.0;
+
+	// Interpolate Magnetic Field at new particle location x1, x2, x3
+	B[0] = b0_.x1f(m, kp, jp, ip) + (prtcl_x[0] - x1v)*(b0_.x1f(m, kp, jp, ip+1) - b0_.x1f(m, kp, jp, ip))/Dx;
+	B[0] += b0_.x1f(m, kp, jp, ip) + (prtcl_x[1] - x2v)*(b0_.x1f(m, kp, jp+1, ip) - b0_.x1f(m, kp, jp, ip))/Dx;
+	B[0] += b0_.x1f(m, kp, jp, ip) + (prtcl_x[2] - x3v)*(b0_.x1f(m, kp+1, jp, ip) - b0_.x1f(m, kp, jp, ip))/Dx;
+	B[0] /= 3.0;
+	B[1] = b0_.x2f(m, kp, jp, ip) + (prtcl_x[0] - x1v)*(b0_.x2f(m, kp, jp, ip+1) - b0_.x2f(m, kp, jp, ip))/Dy;
+	B[1] += b0_.x2f(m, kp, jp, ip) + (prtcl_x[1] - x2v)*(b0_.x2f(m, kp, jp+1, ip) - b0_.x2f(m, kp, jp, ip))/Dy;
+	B[1] += b0_.x2f(m, kp, jp, ip) + (prtcl_x[2] - x3v)*(b0_.x2f(m, kp+1, jp, ip) - b0_.x2f(m, kp, jp, ip))/Dy;
+	B[1] /= 3.0;
+	B[2] = b0_.x3f(m, kp, jp, ip) + (prtcl_x[0] - x1v)*(b0_.x3f(m, kp, jp, ip+1) - b0_.x3f(m, kp, jp, ip))/Dz;
+	B[2] += b0_.x3f(m, kp, jp, ip) + (prtcl_x[1] - x2v)*(b0_.x3f(m, kp, jp+1, ip) - b0_.x3f(m, kp, jp, ip))/Dz;
+	B[2] += b0_.x3f(m, kp, jp, ip) + (prtcl_x[2] - x3v)*(b0_.x3f(m, kp+1, jp, ip) - b0_.x3f(m, kp, jp, ip))/Dz;
+	B[2] /= 3.0;
+
+}
+
 //----------------------------------------------------------------------------------------
 //! \fn  void Particles::BorisStep
 //  \brief
@@ -480,16 +544,7 @@ namespace particles {
 void Particles::BorisStep( const Real dt, const bool only_v ){
 	
 	auto &npart = nprtcl_thispack;
-	auto &pi = prtcl_idata;
 	auto &pr = prtcl_rdata;
-	auto &b0_ = pmy_pack->pmhd->b0;
-	auto &e0_ = pmy_pack->pmhd->efld;
-	auto &indcs = pmy_pack->pmesh->mb_indcs;
-	const int is = indcs.is;
-	const int js = indcs.js;
-	const int ks = indcs.ks;
-	auto &mbsize = pmy_pack->pmb->mb_size;
-	auto gids = pmy_pack->gids;
 	const bool is_minkowski = pmy_pack->pcoord->coord_data.is_minkowski;
 	const Real spin = pmy_pack->pcoord->coord_data.bh_spin;
 	const bool &multi_d = pmy_pack->pmesh->multi_d;
@@ -534,57 +589,8 @@ void Particles::BorisStep( const Real dt, const bool only_v ){
 
 		Real uE[3]; //Evolution of the velocity due to the electric field (first half).
 		Real uB[3]; //Evolution of the velocity due to the magnetic field.
-
-		int m = pi(PGID,p) - gids;
-		int ip = (x[0] - mbsize.d_view(m).x1min)/mbsize.d_view(m).dx1 + is;
-		int jp = (x[1] - mbsize.d_view(m).x2min)/mbsize.d_view(m).dx2 + js;
-		int kp = (x[2] - mbsize.d_view(m).x3min)/mbsize.d_view(m).dx3 + ks;
-
-		Real &x1min = mbsize.d_view(m).x1min;
-		Real &x2min = mbsize.d_view(m).x2min;
-		Real &x3min = mbsize.d_view(m).x3min;
-		Real &x1max = mbsize.d_view(m).x1max;
-		Real &x2max = mbsize.d_view(m).x2max;
-		Real &x3max = mbsize.d_view(m).x3max;
-		Real x1v,x2v,x3v;
-		x1v = LeftEdgeX(ip, indcs.nx1, x1min, x1max);
-		x2v = LeftEdgeX(jp, indcs.nx2, x2min, x2max);
-		x3v = LeftEdgeX(kp, indcs.nx3, x3min, x3max);
-		Real Dx,Dy,Dz;
-		Dx = (x1max - x1min)/indcs.nx1;
-		Dy = (x2max - x2min)/indcs.nx2;
-		Dz = (x3max - x3min)/indcs.nx3;
-					// Interpolate Electric Field at new particle location x1, x2, x3
-		// Store it in an array for convenience 
-		Real E[3] = {0.0, 0.0, 0.0};
-		E[0] = e0_.x1e(m, kp, jp, ip) + (x[0] - x1v)*(e0_.x1e(m, kp, jp, ip+1) - e0_.x1e(m, kp, jp, ip))/Dx;
-		E[0] += e0_.x1e(m, kp, jp, ip) + (x[1] - x2v)*(e0_.x1e(m, kp, jp+1, ip) - e0_.x1e(m, kp, jp, ip))/Dx;
-		E[0] += e0_.x1e(m, kp, jp, ip) + (x[2] - x3v)*(e0_.x1e(m, kp+1, jp, ip) - e0_.x1e(m, kp, jp, ip))/Dx;
-		E[0] /= 3.0;
-		E[1] = e0_.x2e(m, kp, jp, ip) + (x[0] - x1v)*(e0_.x2e(m, kp, jp, ip+1) - e0_.x2e(m, kp, jp, ip))/Dy;
-		E[1] += e0_.x2e(m, kp, jp, ip) + (x[1] - x2v)*(e0_.x2e(m, kp, jp+1, ip) - e0_.x2e(m, kp, jp, ip))/Dy;
-		E[1] += e0_.x2e(m, kp, jp, ip) + (x[2] - x3v)*(e0_.x2e(m, kp+1, jp, ip) - e0_.x2e(m, kp, jp, ip))/Dy;
-		E[1] /= 3.0;
-		E[2] = e0_.x3e(m, kp, jp, ip) + (x[0] - x1v)*(e0_.x3e(m, kp, jp, ip+1) - e0_.x3e(m, kp, jp, ip))/Dz;
-		E[2] += e0_.x3e(m, kp, jp, ip) + (x[1] - x2v)*(e0_.x3e(m, kp, jp+1, ip) - e0_.x3e(m, kp, jp, ip))/Dz;
-		E[2] += e0_.x3e(m, kp, jp, ip) + (x[2] - x3v)*(e0_.x3e(m, kp+1, jp, ip) - e0_.x3e(m, kp, jp, ip))/Dz;
-		E[2] /= 3.0;
-
-					// Interpolate Magnetic Field at new particle location x1, x2, x3
-		// Store it in an array for convenience 
-		Real B[3] = {0.0, 0.0, 0.0};
-		B[0] = b0_.x1f(m, kp, jp, ip) + (x[0] - x1v)*(b0_.x1f(m, kp, jp, ip+1) - b0_.x1f(m, kp, jp, ip))/Dx;
-		B[0] += b0_.x1f(m, kp, jp, ip) + (x[1] - x2v)*(b0_.x1f(m, kp, jp+1, ip) - b0_.x1f(m, kp, jp, ip))/Dx;
-		B[0] += b0_.x1f(m, kp, jp, ip) + (x[2] - x3v)*(b0_.x1f(m, kp+1, jp, ip) - b0_.x1f(m, kp, jp, ip))/Dx;
-		B[0] /= 3.0;
-		B[1] = b0_.x2f(m, kp, jp, ip) + (x[0] - x1v)*(b0_.x2f(m, kp, jp, ip+1) - b0_.x2f(m, kp, jp, ip))/Dy;
-		B[1] += b0_.x2f(m, kp, jp, ip) + (x[1] - x2v)*(b0_.x2f(m, kp, jp+1, ip) - b0_.x2f(m, kp, jp, ip))/Dy;
-		B[1] += b0_.x2f(m, kp, jp, ip) + (x[2] - x3v)*(b0_.x2f(m, kp+1, jp, ip) - b0_.x2f(m, kp, jp, ip))/Dy;
-		B[1] /= 3.0;
-		B[2] = b0_.x3f(m, kp, jp, ip) + (x[0] - x1v)*(b0_.x3f(m, kp, jp, ip+1) - b0_.x3f(m, kp, jp, ip))/Dz;
-		B[2] += b0_.x3f(m, kp, jp, ip) + (x[1] - x2v)*(b0_.x3f(m, kp, jp+1, ip) - b0_.x3f(m, kp, jp, ip))/Dz;
-		B[2] += b0_.x3f(m, kp, jp, ip) + (x[2] - x3v)*(b0_.x3f(m, kp+1, jp, ip) - b0_.x3f(m, kp, jp, ip))/Dz;
-		B[2] /= 3.0;
+		Real E[3], B[3];
+		InterpolateFields( x, p, E, B );
 
 		// Get metric components at new location x
 		ComputeMetricAndInverse(x[0],x[1],x[2], is_minkowski, spin, glower, gupper); 
