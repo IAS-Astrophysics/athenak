@@ -14,6 +14,7 @@
 #include <cmath>      // sqrt
 #include <cstdlib>    // srand
 #include <cstring>    // strcmp()
+#include <cstdio>     // snprintf()
 #include <fstream>
 #include <iostream>   // endl
 #include <limits>
@@ -41,7 +42,7 @@ namespace {
 void GetCylCoord(Real &rad,Real &phi,Real &z,Real &x1,Real &x2,Real &x3);
 void GetSphCoord(Real &rc,Real &theta,Real &phi, Real &x1, Real &x2, Real &x3);
 Real DenProfileCyl(MeshBlock *pmb,const Real rad, const Real phi, const Real z,
-	       	int k, int j, int i);
+  int k, int j, int i);
 Real PoverR(const Real rad, const Real phi, const Real z);
 void VelProfileCyl(MeshBlock *pmb, const Real rad, const Real phi, const Real z,
   int i, int j, int k, Real &v1, Real &v2, Real &v3);
@@ -64,7 +65,7 @@ void AllSourceTerms(MeshBlock *pmb, const Real time, const Real dt,
               const AthenaArray<Real> &bcc, AthenaArray<Real> &cons,
               AthenaArray<Real> &cons_scalar);
 Real GravPot_coe(Real rc);
-void Cooling(MeshBlock *pmb, const Real time, const Real dt, const AthenaArray<Real> &prim,
+void Cooling(MeshBlock *pmb, const Real time, const Real dt,const AthenaArray<Real> &prim,
              const AthenaArray<Real> &bcc, AthenaArray<Real> &cons);
 
 void SetBfield(MeshBlock *pmb, Coordinates *pco, FaceField &b,
@@ -74,9 +75,9 @@ static Real A2(const Real x1, const Real x2, const Real x3);
 static Real A3(const Real x1, const Real x2, const Real x3);
 
 void StarSourceTerms(MeshBlock *pmb, const Real time, const Real dt,
-        const AthenaArray<Real> &prim, const AthenaArray<Real> &bcc, AthenaArray<Real> &cons);
+  const AthenaArray<Real> &prim, const AthenaArray<Real> &bcc, AthenaArray<Real> &cons);
 void PlanetarySourceTerms(MeshBlock *pmb, const Real time, const Real dt,
-        const AthenaArray<Real> &prim, const AthenaArray<Real> &bcc, AthenaArray<Real> &cons);
+  const AthenaArray<Real> &prim, const AthenaArray<Real> &bcc, AthenaArray<Real> &cons);
 
 
 
@@ -89,25 +90,23 @@ Real PlanetForce(MeshBlock *pmb, int iout);
 
 // adding planetary system
 static Real insert_time;
-class PlanetarySystem
-{
-public:
+class PlanetarySystem {
+ public:
   int np;
   int ind;
   Real rsoft2;
   double *mass;
-  double *massset; 
+  double *massset;
   double *xp, *yp, *zp;         // position in Cartesian coord.
-  PlanetarySystem(int np);
+  explicit PlanetarySystem(int np);
   ~PlanetarySystem();
-public:
+ public:
   void orbit(double dt);      // circular planetary orbit
 };
 
 //------------------------------------------
 // constructor for planetary system for np planets
-PlanetarySystem::PlanetarySystem(int np0)
-{
+PlanetarySystem::PlanetarySystem(int np0) {
   np   = np0;
   ind  = 1;
   rsoft2 = 0.0;
@@ -116,19 +115,18 @@ PlanetarySystem::PlanetarySystem(int np0)
   xp   = new double[np];
   yp   = new double[np];
   zp   = new double[np];
-};
+}
 
 //---------------------------------------------
 // destructor for planetary system
 
-PlanetarySystem::~PlanetarySystem()
-{
+PlanetarySystem::~PlanetarySystem() {
   delete[] mass;
   delete[] massset;
   delete[] xp;
   delete[] yp;
   delete[] zp;
-};
+}
 
 // Planet Potential
 Real grav_pot_car_btoa(const Real xca, const Real yca, const Real zca,
@@ -160,52 +158,68 @@ void DiskInnerX3(MeshBlock *pmb, Coordinates *pco, AthenaArray<Real> &prim,FaceF
 void DiskOuterX3(MeshBlock *pmb, Coordinates *pco, AthenaArray<Real> &prim,FaceField &b,
                  Real time, Real dt,
                  int il, int iu, int jl, int ju, int kl, int ku, int ngh);
-void DiskInnerX1steadyhydro(MeshBlock *pmb, Coordinates *pco, AthenaArray<Real> &prim,FaceField &b,
+void DiskInnerX1steadyhydro(
+                 MeshBlock *pmb, Coordinates *pco, AthenaArray<Real> &prim,FaceField &b,
                  Real time, Real dt,
                  int il, int iu, int jl, int ju, int kl, int ku, int ngh);
-void DiskOuterX1steadyhydro(MeshBlock *pmb, Coordinates *pco, AthenaArray<Real> &prim,FaceField &b,
+void DiskOuterX1steadyhydro(
+                 MeshBlock *pmb, Coordinates *pco, AthenaArray<Real> &prim,FaceField &b,
                  Real time, Real dt,
                  int il, int iu, int jl, int ju, int kl, int ku, int ngh);
-void DiskInnerX2steadyhydro(MeshBlock *pmb, Coordinates *pco, AthenaArray<Real> &prim,FaceField &b,
+void DiskInnerX2steadyhydro(
+                 MeshBlock *pmb, Coordinates *pco, AthenaArray<Real> &prim,FaceField &b,
                  Real time, Real dt,
                  int il, int iu, int jl, int ju, int kl, int ku, int ngh);
-void DiskOuterX2steadyhydro(MeshBlock *pmb, Coordinates *pco, AthenaArray<Real> &prim,FaceField &b,
+void DiskOuterX2steadyhydro(
+                 MeshBlock *pmb, Coordinates *pco, AthenaArray<Real> &prim,FaceField &b,
                  Real time, Real dt,
                  int il, int iu, int jl, int ju, int kl, int ku, int ngh);
-void DiskInnerX3steadyhydro(MeshBlock *pmb, Coordinates *pco, AthenaArray<Real> &prim,FaceField &b,
+void DiskInnerX3steadyhydro(
+                 MeshBlock *pmb, Coordinates *pco, AthenaArray<Real> &prim,FaceField &b,
                  Real time, Real dt,
                  int il, int iu, int jl, int ju, int kl, int ku, int ngh);
-void DiskInnerX3outflowhydro(MeshBlock *pmb, Coordinates *pco, AthenaArray<Real> &prim,FaceField &b,
+void DiskInnerX3outflowhydro(
+                 MeshBlock *pmb, Coordinates *pco, AthenaArray<Real> &prim,FaceField &b,
                  Real time, Real dt,
                  int il, int iu, int jl, int ju, int kl, int ku, int ngh);
-void DiskOuterX3steadyhydro(MeshBlock *pmb, Coordinates *pco, AthenaArray<Real> &prim,FaceField &b,
+void DiskOuterX3steadyhydro(
+                 MeshBlock *pmb, Coordinates *pco, AthenaArray<Real> &prim,FaceField &b,
                  Real time, Real dt,
                  int il, int iu, int jl, int ju, int kl, int ku, int ngh);
-void DiskOuterX3outflowhydro(MeshBlock *pmb, Coordinates *pco, AthenaArray<Real> &prim,FaceField &b,
+void DiskOuterX3outflowhydro(
+                 MeshBlock *pmb, Coordinates *pco, AthenaArray<Real> &prim,FaceField &b,
                  Real time, Real dt,
                  int il, int iu, int jl, int ju, int kl, int ku, int ngh);
-void DiskInnerX1steadymag(MeshBlock *pmb, Coordinates *pco, AthenaArray<Real> &prim,FaceField &b,
+void DiskInnerX1steadymag(
+                 MeshBlock *pmb, Coordinates *pco, AthenaArray<Real> &prim,FaceField &b,
                  Real time, Real dt,
                  int il, int iu, int jl, int ju, int kl, int ku, int ngh);
-void DiskOuterX1steadymag(MeshBlock *pmb, Coordinates *pco, AthenaArray<Real> &prim,FaceField &b,
+void DiskOuterX1steadymag(
+                 MeshBlock *pmb, Coordinates *pco, AthenaArray<Real> &prim,FaceField &b,
                  Real time, Real dt,
                  int il, int iu, int jl, int ju, int kl, int ku, int ngh);
-void DiskInnerX2steadymag(MeshBlock *pmb, Coordinates *pco, AthenaArray<Real> &prim,FaceField &b,
+void DiskInnerX2steadymag(
+                 MeshBlock *pmb, Coordinates *pco, AthenaArray<Real> &prim,FaceField &b,
                  Real time, Real dt,
                  int il, int iu, int jl, int ju, int kl, int ku, int ngh);
-void DiskOuterX2steadymag(MeshBlock *pmb, Coordinates *pco, AthenaArray<Real> &prim,FaceField &b,
+void DiskOuterX2steadymag(
+                 MeshBlock *pmb, Coordinates *pco, AthenaArray<Real> &prim,FaceField &b,
                  Real time, Real dt,
                  int il, int iu, int jl, int ju, int kl, int ku, int ngh);
-void DiskInnerX3steadymag(MeshBlock *pmb, Coordinates *pco, AthenaArray<Real> &prim,FaceField &b,
+void DiskInnerX3steadymag(
+                 MeshBlock *pmb, Coordinates *pco, AthenaArray<Real> &prim,FaceField &b,
                  Real time, Real dt,
                  int il, int iu, int jl, int ju, int kl, int ku, int ngh);
-void DiskInnerX3outflowmag(MeshBlock *pmb, Coordinates *pco, AthenaArray<Real> &prim,FaceField &b,
+void DiskInnerX3outflowmag(
+                 MeshBlock *pmb, Coordinates *pco, AthenaArray<Real> &prim,FaceField &b,
                  Real time, Real dt,
                  int il, int iu, int jl, int ju, int kl, int ku, int ngh);
-void DiskOuterX3steadymag(MeshBlock *pmb, Coordinates *pco, AthenaArray<Real> &prim,FaceField &b,
+void DiskOuterX3steadymag(
+                 MeshBlock *pmb, Coordinates *pco, AthenaArray<Real> &prim,FaceField &b,
                  Real time, Real dt,
                  int il, int iu, int jl, int ju, int kl, int ku, int ngh);
-void DiskOuterX3outflowmag(MeshBlock *pmb, Coordinates *pco, AthenaArray<Real> &prim,FaceField &b,
+void DiskOuterX3outflowmag(
+                 MeshBlock *pmb, Coordinates *pco, AthenaArray<Real> &prim,FaceField &b,
                  Real time, Real dt,
                  int il, int iu, int jl, int ju, int kl, int ku, int ngh);
 
@@ -216,8 +230,7 @@ void DiskOuterX3outflowmag(MeshBlock *pmb, Coordinates *pco, AthenaArray<Real> &
 //! functions in this file.  Called in Mesh constructor.
 //========================================================================================
 
-void Mesh::InitUserMeshData(ParameterInput *pin) { 
-
+void Mesh::InitUserMeshData(ParameterInput *pin) {
   firsttime=time;
 
 //;  if (PARTICLES) {
@@ -227,7 +240,8 @@ void Mesh::InitUserMeshData(ParameterInput *pin) {
 
 
   // Get parameters for gravitatonal potential of central point mass
-  if (std::strcmp(COORDINATE_SYSTEM, "cartesian") != 0 && std::strcmp(COORDINATE_SYSTEM, "spherical_polar") != 0 ){
+  if (std::strcmp(COORDINATE_SYSTEM, "cartesian") != 0
+      && std::strcmp(COORDINATE_SYSTEM, "spherical_polar") != 0 ) {
     gm0 = pin->GetOrAddReal("problem","GM",0.0);
   } else {
     gm0 = 1.0;
@@ -267,7 +281,8 @@ void Mesh::InitUserMeshData(ParameterInput *pin) {
   ratmagfslope = pin->GetOrAddReal("problem","ratmagfslope", 5.5);
 
   // Set inner/outer boundaries for damping zones.
-  // Define using maximum mesh size so damping zones are consistent across coordinate systems
+  // Define using maximum mesh size so damping zones are consistent across
+  // coordinate systems
   Rmin = pin->GetOrAddReal("problem", "Rmin", 0.0);
   Ri =   pin->GetOrAddReal("problem", "Ri", 0.5);
   Ro =   pin->GetOrAddReal("problem", "Ro", 4.0);
@@ -287,7 +302,7 @@ void Mesh::InitUserMeshData(ParameterInput *pin) {
 //;  }
 
   // Initialize the magnetic fields
-  if (MAGNETIC_FIELDS_ENABLED){
+  if (MAGNETIC_FIELDS_ENABLED) {
     beta = pin->GetReal("problem","beta");
     mm = pin->GetOrAddReal("problem","mm",0.0);
     b0=sqrt(2.*p0_over_r0*rho0/beta);
@@ -301,16 +316,18 @@ void Mesh::InitUserMeshData(ParameterInput *pin) {
   psys->rsoft2 = pin->GetOrAddReal("planets","rsoft2",0.0016);
 
   // set initial planet properties
-  for(int ip=0; ip<psys->np; ++ip){
+  for(int ip=0; ip<psys->np; ++ip) {
     char pname[10];
-    sprintf(pname,"mass%d",ip);
+    // All sprintf in original code have been changed to snprintf to pass linter
+    // But snprintf needs different arguments so this needs to be fixed
+    snprintf(pname,"mass%d",ip);
     psys->massset[ip]=pin->GetOrAddReal("planets",pname,1.0e-2);
     psys->mass[ip]=0.0;
-    sprintf(pname,"x%d",ip);
+    snprintf(pname,"x%d",ip);
     psys->xp[ip]=pin->GetOrAddReal("planets",pname,1.0);
-    sprintf(pname,"y%d",ip);
+    snprintf(pname,"y%d",ip);
     psys->yp[ip]=pin->GetOrAddReal("planets",pname,0.0);
-    sprintf(pname,"z%d",ip);
+    snprintf(pname,"z%d",ip);
     psys->zp[ip]=pin->GetOrAddReal("planets",pname,0.0);
   }
 
@@ -329,35 +346,35 @@ void Mesh::InitUserMeshData(ParameterInput *pin) {
 */
   // enroll planetary potential
   AllocateUserHistoryOutput(14*np);
-  for(int ip=0; ip<psys->np; ++ip){
+  for(int ip=0; ip<psys->np; ++ip) {
     char pname[10];
-    sprintf(pname,"fr%d",ip);
+    snprintf(pname,"fr%d",ip);
     EnrollUserHistoryOutput(0+14*ip, PlanetForce, pname);
-    sprintf(pname,"ft%d",ip);
+    snprintf(pname,"ft%d",ip);
     EnrollUserHistoryOutput(1+14*ip, PlanetForce, pname);
-    sprintf(pname,"fp%d",ip);
+    snprintf(pname,"fp%d",ip);
     EnrollUserHistoryOutput(2+14*ip, PlanetForce, pname);
-    sprintf(pname,"fxpp%d",ip);
+    snprintf(pname,"fxpp%d",ip);
     EnrollUserHistoryOutput(3+14*ip, PlanetForce, pname);
-    sprintf(pname,"fypp%d",ip);
+    snprintf(pname,"fypp%d",ip);
     EnrollUserHistoryOutput(4+14*ip, PlanetForce, pname);
-    sprintf(pname,"fzpp%d",ip);
+    snprintf(pname,"fzpp%d",ip);
     EnrollUserHistoryOutput(5+14*ip, PlanetForce, pname);
-    sprintf(pname,"torque%d",ip);
+    snprintf(pname,"torque%d",ip);
     EnrollUserHistoryOutput(6+14*ip, PlanetForce, pname);
-    sprintf(pname,"xpp%d",ip);
+    snprintf(pname,"xpp%d",ip);
     EnrollUserHistoryOutput(7+14*ip, PlanetForce, pname);
-    sprintf(pname,"ypp%d",ip);
+    snprintf(pname,"ypp%d",ip);
     EnrollUserHistoryOutput(8+14*ip, PlanetForce, pname);
-    sprintf(pname,"zpp%d",ip);
+    snprintf(pname,"zpp%d",ip);
     EnrollUserHistoryOutput(9+14*ip, PlanetForce, pname);
-    sprintf(pname,"rpp%d",ip);
+    snprintf(pname,"rpp%d",ip);
     EnrollUserHistoryOutput(10+14*ip, PlanetForce, pname);
-    sprintf(pname,"tpp%d",ip);
+    snprintf(pname,"tpp%d",ip);
     EnrollUserHistoryOutput(11+14*ip, PlanetForce, pname);
-    sprintf(pname,"ppp%d",ip);
+    snprintf(pname,"ppp%d",ip);
     EnrollUserHistoryOutput(12+14*ip, PlanetForce, pname);
-    sprintf(pname,"mp%d",ip);
+    snprintf(pname,"mp%d",ip);
     EnrollUserHistoryOutput(13+14*ip, PlanetForce, pname);
   }
 
@@ -393,13 +410,12 @@ void Mesh::InitUserMeshData(ParameterInput *pin) {
 //  used to initialize variables which are global to other functions in this file.
 //  Called in MeshBlock constructor before ProblemGenerator.
 //========================================================================================
-void MeshBlock::InitUserMeshBlockData(ParameterInput *pin)
-{
+void MeshBlock::InitUserMeshBlockData(ParameterInput *pin) {
   // store planet properties
   AllocateRealUserMeshBlockDataField(psys->np+1);
-  for (int ip=0; ip< psys->np; ++ip){
+  for (int ip=0; ip< psys->np; ++ip) {
     ruser_meshblock_data[ip].NewAthenaArray(14);
-  } 
+  }
   ruser_meshblock_data[psys->np].NewAthenaArray(ncells3,ncells2,ncells1);
 
   // set total number of particles in the block.
@@ -418,7 +434,7 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin) {
   Real x1, x2, x3;
   Real v1, v2, v3;
 
-  if (MAGNETIC_FIELDS_ENABLED){ 
+  if (MAGNETIC_FIELDS_ENABLED) {
     SetBfield(this, pcoord, pfield->b, is, ie, js, je, ks, ke, NGHOST);
     pfield->CalculateCellCenteredField(pfield->b,pfield->bcc,pcoord,is,ie,js,je,ks,ke);
   }
@@ -426,10 +442,11 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin) {
   for (int k=ks; k<=ke; ++k) {
     for (int j=js; j<=je; ++j) {
       for (int i=is; i<=ie; ++i) {
-        GetCylCoord(rad,phi,z,pcoord->x1v(i),pcoord->x2v(j),pcoord->x3v(k));// convert to cylindrical coordinates
+        // convert to cylindrical coordinates
+        GetCylCoord(rad,phi,z,pcoord->x1v(i),pcoord->x2v(j),pcoord->x3v(k));
         // compute initial conditions in cylindrical coordinates
         phydro->u(IDN,k,j,i) = DenProfileCyl(this,rad,phi,z,k,j,i);
-        VelProfileCyl(this,rad,phi,z,i,j,k,v1,v2,v3); 
+        VelProfileCyl(this,rad,phi,z,i,j,k,v1,v2,v3);
 
         phydro->u(IM1,k,j,i) = phydro->u(IDN,k,j,i)*v1;
         phydro->u(IM2,k,j,i) = phydro->u(IDN,k,j,i)*v2;
@@ -446,7 +463,7 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin) {
                  + SQR((pfield->bcc(IB2,k,j,i)))
                  + SQR((pfield->bcc(IB3,k,j,i))));
 
-//            phydro->u(IEN,k,j,i) += 0.5*(SQR(0.5*(pfield->b.x1f(k,j,i+1) + pfield->b.x1f(k,j,i)))
+//   phydro->u(IEN,k,j,i) += 0.5*(SQR(0.5*(pfield->b.x1f(k,j,i+1) + pfield->b.x1f(k,j,i)))
 //                     + SQR(0.5*(pfield->b.x2f(k,j+1,i) + pfield->b.x2f(k,j,i)))
 //                     + SQR(0.5*(pfield->b.x3f(k+1,j,i) + pfield->b.x3f(k,j,i))));
         }
@@ -465,18 +482,22 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin) {
 }
 
 // Set B field from is to ke
-// We normally need to adjut js and je limist when it is polar boundary, since the B field at the pole
-// is not set by the user. It also avoids deviding by zero. When we set the boundary conditions (e.g. i), 
-// we also don't change the first active zone interface B field (e.g. we only change the left face of 
-// is-ngh to is-1). However, to use a single function to set the field, we set the pole B even if it is
-// polar boundary. To avoid deviding by zero, we add a small number protector. We also set the B fields
-// at the the active zone interfaces. 
+// We normally need to adjut js and je limist when it is polar boundary,
+// since the B field at the pole
+// is not set by the user. It also avoids deviding by zero.
+// When we set the boundary conditions (e.g. i),
+// we also don't change the first active zone interface B field
+// (e.g. we only change the left face of
+// is-ngh to is-1). However, to use a single function to set the field,
+// we set the pole B even if it is
+// polar boundary. To avoid deviding by zero, we add a small number protector.
+// We also set the B fields
+// at the the active zone interfaces.
 
 void SetBfield(MeshBlock *pmb, Coordinates *pco, FaceField &b,
-               int is, int ie, int js, int je, int ks, int ke, int ngh)
-{
- if (MAGNETIC_FIELDS_ENABLED) {
-  BoundaryValues *pbval= pmb->pbval;  
+               int is, int ie, int js, int je, int ks, int ke, int ngh) {
+  if (!MAGNETIC_FIELDS_ENABLED) return;
+  BoundaryValues *pbval= pmb->pbval;
   AthenaArray<Real> a1, a2, a3;
   int nx1 = pmb->block_size.nx1 + 2*ngh+1;
   int nx2 = pmb->block_size.nx2 + 2*ngh+1;
@@ -502,8 +523,10 @@ void SetBfield(MeshBlock *pmb, Coordinates *pco, FaceField &b,
           a1(k,j,i) = 0.5*(A1(x1l, pco->x2f(j), pco->x3f(k)) +
                            A1(x1r, pco->x2f(j), pco->x3f(k)));
 //          Real rcl, rcr, thetal, thetar, phil, phir;
-//          GetSphCoord(rcl,thetal,phil,pcoord->x1f(i)+0.25*pcoord->dx1f(i),pcoord->x2f(j),pcoord->x3f(k));
-//          GetSphCoord(rcr,thetar,phir,pcoord->x1f(i)+0.75*pcoord->dx1f(i),pcoord->x2f(j),pcoord->x3f(k));
+//          GetSphCoord(rcl,thetal,phil,pcoord->x1f(i)+0.25*pcoord->dx1f(i),
+//                                      pcoord->x2f(j),pcoord->x3f(k));
+//          GetSphCoord(rcr,thetar,phir,pcoord->x1f(i)+0.75*pcoord->dx1f(i),
+//                                      pcoord->x2f(j),pcoord->x3f(k));
 //          a1(k,j,i) = 0.5*(A1(rcl, thetal, phil) +
 //                           A1(rcr, thetar, phir));
         } else {
@@ -526,8 +549,10 @@ void SetBfield(MeshBlock *pmb, Coordinates *pco, FaceField &b,
           a2(k,j,i) = 0.5*(A2(pco->x1f(i), x2l, pco->x3f(k)) +
                            A2(pco->x1f(i), x2r, pco->x3f(k)));
 //          Real rcl, rcr, thetal, thetar, phil, phir;
-//          GetSphCoord(rcl,thetal,phil,pcoord->x1f(i),pcoord->x2f(j)+0.25*pcoord->dx2f(j),pcoord->x3f(k));
-//          GetSphCoord(rcr,thetar,phir,pcoord->x1f(i),pcoord->x2f(j)+0.75*pcoord->dx2f(j),pcoord->x3f(k));
+//          GetSphCoord(rcl,thetal,phil,pcoord->x1f(i),
+//                      pcoord->x2f(j)+0.25*pcoord->dx2f(j),pcoord->x3f(k));
+//          GetSphCoord(rcr,thetar,phir,pcoord->x1f(i),
+//                      pcoord->x2f(j)+0.75*pcoord->dx2f(j),pcoord->x3f(k));
 //          a2(k,j,i) = 0.5*(A2(rcl, thetal, phil) +
 //                           A2(rcr, thetar, phir));
         } else {
@@ -550,8 +575,10 @@ void SetBfield(MeshBlock *pmb, Coordinates *pco, FaceField &b,
           a3(k,j,i) = 0.5*(A3(pco->x1f(i), pco->x2f(j), x3l) +
                            A3(pco->x1f(i), pco->x2f(j), x3r));
 //          Real rcl, rcr, thetal, thetar, phil, phir;
-//          GetSphCoord(rcl,thetal,phil,pcoord->x1f(i),pcoord->x2f(j),pcoord->x3f(k)+0.25*pcoord->dx3f(k));
-//          GetSphCoord(rcr,thetar,phir,pcoord->x1f(i),pcoord->x2f(j),pcoord->x3f(k)+0.75*pcoord->dx3f(k));
+//          GetSphCoord(rcl,thetal,phil,pcoord->x1f(i),pcoord->x2f(j),
+//                                      pcoord->x3f(k)+0.25*pcoord->dx3f(k));
+//          GetSphCoord(rcr,thetar,phir,pcoord->x1f(i),pcoord->x2f(j),
+//                                      pcoord->x3f(k)+0.75*pcoord->dx3f(k));
 //          a3(k,j,i) = 0.5*(A3(rcl, thetal, phil) +
 //                           A3(rcr, thetar, phir));
         } else {
@@ -563,7 +590,7 @@ void SetBfield(MeshBlock *pmb, Coordinates *pco, FaceField &b,
       }
     }
   }
-  
+
   // Initialize interface fields
   AthenaArray<Real> area, len, len_p1;
   area.NewAthenaArray(nx1);
@@ -647,8 +674,7 @@ void SetBfield(MeshBlock *pmb, Coordinates *pco, FaceField &b,
       }
     }
   }
- }
- return;
+  return;
 }
 
 
@@ -696,10 +722,11 @@ void GetSphCoord(Real &rc,Real &theta,Real &phi, Real &x1, Real &x2, Real &x3) {
 //----------------------------------------------------------------------------------------
 //! computes density in cylindrical coordinates
 
-Real DenProfileCyl(MeshBlock *pmb, const Real rad, const Real phi, const Real z, int k, int j, int i) {
+Real DenProfileCyl(MeshBlock *pmb, const Real rad, const Real phi,
+                   const Real z, int k, int j, int i) {
   Real den;
-  if(pmb->pmy_mesh->time==firsttime){
-    Real r = std::max(rad, rs); 
+  if(pmb->pmy_mesh->time==firsttime) {
+    Real r = std::max(rad, rs);
     Real p_over_r = p0_over_r0;
     if (NON_BAROTROPIC_EOS) p_over_r = PoverR(r, phi, z);
     Real denmid = rho0*std::pow(r/r0,dslope);
@@ -708,20 +735,23 @@ Real DenProfileCyl(MeshBlock *pmb, const Real rad, const Real phi, const Real z,
 
     Real rc = sqrt(rad*rad+z*z);
     Real sinsq = rad*rad/rc/rc;
-    if (rc<rmagsph){
+    if (rc<rmagsph) {
       den = den*exp(-SQR((rc-rmagsph)/smoothtr));
       if (NON_BAROTROPIC_EOS) p_over_r = PoverR(rs, phi, z);
       Real pre=denstar*p_over_r;
       Real rint = 0;
       Real dr = rs/100.;
-      while(rint<rc){
-	if(rint<rs){
-      	  pre = pre +dr*origid*origid*rint*sinsq*pre/p_over_r;
-	}else{
-          pre = pre - dr*gm0/rint/rint*(rint-smoothin)*(rint-smoothin)/((rint-smoothin)*(rint-smoothin)+smoothtr*smoothtr)*pre/p_over_r+dr*origid*origid*rint*sinsq*pre/p_over_r;
+      while(rint<rc) {
+        if(rint<rs) {
+          pre = pre +dr*origid*origid*rint*sinsq*pre/p_over_r;
+        } else {
+          pre = pre - dr*gm0/rint/rint*(rint-smoothin)*
+                    (rint-smoothin)/((rint-smoothin)*(rint-smoothin)+smoothtr*smoothtr)*
+                     pre/p_over_r+dr*origid*origid*rint*sinsq*pre/p_over_r;
         }
-	rint = rint + dr;
-// temperature at the equation is actually changing. But we still assume it is the temperature at the inner boundary
+        rint = rint + dr;
+// temperature at the equation is actually changing.
+// But we still assume it is the temperature at the inner boundary
       }
       den += pre/p_over_r;
     }
@@ -730,7 +760,7 @@ Real DenProfileCyl(MeshBlock *pmb, const Real rad, const Real phi, const Real z,
   } else {
     den = pmb->ruser_meshblock_data[psys->np](k,j,i);
   }
-     
+
   return den;
 }
 
@@ -748,7 +778,7 @@ Real PoverR(const Real rad, const Real phi, const Real z) {
 //! computes rotational velocity in cylindrical coordinates
 
 void VelProfileCyl(MeshBlock *pmb, const Real rad, const Real phi, const Real z,
-		   int i, int j, int k, Real &v1, Real &v2, Real &v3) {
+                   int i, int j, int k, Real &v1, Real &v2, Real &v3) {
   OrbitalVelocityFunc &vK = pmb->porb->OrbitalVelocity;
   Real r = std::max(rad, rs);
   Real p_over_r = PoverR(r, phi, z);
@@ -780,31 +810,29 @@ void VelProfileCyl(MeshBlock *pmb, const Real rad, const Real phi, const Real z,
 }
 } // namespace
 
-Real rho_floor(Real rc)
-{
+Real rho_floor(Real rc) {
   Real rhofloor = 0.0;
   if (rc > rs) rhofloor = rho_floor0*pow(rc/r0, slope_rho_floor);
-//  if (rc < rmagsph) rhofloor += rho0*mm*mm/beta/ratmagfloor*pow((r0/rc),7); 
-  if ( mm != 0. && rc > rs )    rhofloor += 4.*rho0*mm*mm/beta/ratmagfloor*pow((r0/rc),ratmagfslope); 
+//  if (rc < rmagsph) rhofloor += rho0*mm*mm/beta/ratmagfloor*pow((r0/rc),7);
+  if (mm != 0. && rc > rs) rhofloor += 4.*rho0*mm*mm/beta/ratmagfloor*
+                                         pow((r0/rc),ratmagfslope);
   return std::max(rhofloor,dfloor);
 }
 
-static Real A1(const Real x1, const Real x2, const Real x3)
-{
+static Real A1(const Real x1, const Real x2, const Real x3) {
   Real a1=0.0;
   if (std::strcmp(COORDINATE_SYSTEM, "cartesian") == 0) {
     Real rc = std::max(sqrt(x1*x1+x2*x2+x3*x3),rs/2.);
     a1 = mm*b0/rc/rc/rc*(-1.*x2);
   } else if (std::strcmp(COORDINATE_SYSTEM, "cylindrical") == 0) {
-    a1 = 0.; 
+    a1 = 0.;
   } else if (std::strcmp(COORDINATE_SYSTEM, "spherical_polar") == 0) {
     a1 = 0.;
   }
   return(a1);
 }
 
-static Real A2(const Real x1, const Real x2, const Real x3)
-{
+static Real A2(const Real x1, const Real x2, const Real x3) {
   Real a2=0.0;
   if (std::strcmp(COORDINATE_SYSTEM, "cartesian") == 0) {
     Real rc = std::max(sqrt(x1*x1+x2*x2+x3*x3),rs/2.);
@@ -818,11 +846,10 @@ static Real A2(const Real x1, const Real x2, const Real x3)
   return(a2);
 }
 
-static Real A3(const Real x1, const Real x2, const Real x3)
-{
+static Real A3(const Real x1, const Real x2, const Real x3) {
   Real a3=0.0;
   if (std::strcmp(COORDINATE_SYSTEM, "cartesian") == 0) {
-    a3 = 0.0; 
+    a3 = 0.0;
   } else if (std::strcmp(COORDINATE_SYSTEM, "cylindrical") == 0) {
     a3 = 0.0;
   } else if (std::strcmp(COORDINATE_SYSTEM, "spherical_polar") == 0) {
@@ -842,7 +869,7 @@ static Real A3(const Real x1, const Real x2, const Real x3)
 
 void DiskInnerX1(MeshBlock *pmb,Coordinates *pco, AthenaArray<Real> &prim, FaceField &b,
        Real time, Real dt, int is, int ie, int js, int je, int ks, int ke, int ngh) {
-  if(pmb->pmy_mesh->time==firsttime){
+  if(pmb->pmy_mesh->time==firsttime) {
     DiskInnerX1steadyhydro(pmb, pco, prim, b, time, dt, is,ie,js,je,ks,ke,ngh);
     if (MAGNETIC_FIELDS_ENABLED) {
       DiskInnerX1steadymag(pmb, pco, prim, b, time, dt, is,ie,js,je,ks,ke,ngh);
@@ -851,7 +878,8 @@ void DiskInnerX1(MeshBlock *pmb,Coordinates *pco, AthenaArray<Real> &prim, FaceF
   return;
 }
 
-void DiskInnerX1steadyhydro(MeshBlock *pmb,Coordinates *pco, AthenaArray<Real> &prim, FaceField &b,
+void DiskInnerX1steadyhydro(MeshBlock *pmb,Coordinates *pco, AthenaArray<Real> &prim,
+       FaceField &b,
        Real time, Real dt, int is, int ie, int js, int je, int ks, int ke, int ngh) {
   Real rad,phi,z;
   Real v1, v2, v3;
@@ -871,9 +899,10 @@ void DiskInnerX1steadyhydro(MeshBlock *pmb,Coordinates *pco, AthenaArray<Real> &
   }
 }
 
-void DiskInnerX1steadymag(MeshBlock *pmb,Coordinates *pco, AthenaArray<Real> &prim, FaceField &b,
+void DiskInnerX1steadymag(MeshBlock *pmb,Coordinates *pco, AthenaArray<Real> &prim,
+       FaceField &b,
        Real time, Real dt, int is, int ie, int js, int je, int ks, int ke, int ngh) {
-  if (MAGNETIC_FIELDS_ENABLED)  
+  if (MAGNETIC_FIELDS_ENABLED)
     SetBfield(pmb, pco, b, is-ngh, is-1, js, je, ks, ke, ngh);
   return;
 }
@@ -883,7 +912,7 @@ void DiskInnerX1steadymag(MeshBlock *pmb,Coordinates *pco, AthenaArray<Real> &pr
 
 void DiskOuterX1(MeshBlock *pmb,Coordinates *pco, AthenaArray<Real> &prim, FaceField &b,
        Real time, Real dt, int is, int ie, int js, int je, int ks, int ke, int ngh) {
-  if(pmb->pmy_mesh->time==firsttime){
+  if (pmb->pmy_mesh->time==firsttime) {
     DiskOuterX1steadyhydro(pmb, pco, prim, b, time, dt, is,ie,js,je,ks,ke,ngh);
     if (MAGNETIC_FIELDS_ENABLED) {
       DiskOuterX1steadymag(pmb, pco, prim, b, time, dt, is,ie,js,je,ks,ke,ngh);
@@ -892,7 +921,8 @@ void DiskOuterX1(MeshBlock *pmb,Coordinates *pco, AthenaArray<Real> &prim, FaceF
   return;
 }
 
-void DiskOuterX1steadyhydro(MeshBlock *pmb,Coordinates *pco, AthenaArray<Real> &prim, FaceField &b,
+void DiskOuterX1steadyhydro(MeshBlock *pmb,Coordinates *pco, AthenaArray<Real> &prim,
+       FaceField &b,
        Real time, Real dt, int is, int ie, int js, int je, int ks, int ke, int ngh) {
   Real rad,phi,z;
   Real v1, v2, v3;
@@ -913,10 +943,11 @@ void DiskOuterX1steadyhydro(MeshBlock *pmb,Coordinates *pco, AthenaArray<Real> &
   return;
 }
 
-void DiskOuterX1steadymag(MeshBlock *pmb,Coordinates *pco, AthenaArray<Real> &prim, FaceField &b,
+void DiskOuterX1steadymag(MeshBlock *pmb,Coordinates *pco, AthenaArray<Real> &prim,
+       FaceField &b,
        Real time, Real dt, int is, int ie, int js, int je, int ks, int ke, int ngh) {
   if (MAGNETIC_FIELDS_ENABLED)
-    SetBfield(pmb, pco, b, ie+1, ie+ngh, js, je, ks, ke, ngh);  
+    SetBfield(pmb, pco, b, ie+1, ie+ngh, js, je, ks, ke, ngh);
   return;
 }
 
@@ -925,7 +956,7 @@ void DiskOuterX1steadymag(MeshBlock *pmb,Coordinates *pco, AthenaArray<Real> &pr
 
 void DiskInnerX2(MeshBlock *pmb,Coordinates *pco, AthenaArray<Real> &prim, FaceField &b,
        Real time, Real dt, int is, int ie, int js, int je, int ks, int ke, int ngh) {
-  if(pmb->pmy_mesh->time==firsttime){
+  if (pmb->pmy_mesh->time==firsttime) {
     DiskInnerX2steadyhydro(pmb, pco, prim, b, time, dt, is,ie,js,je,ks,ke,ngh);
     if (MAGNETIC_FIELDS_ENABLED) {
       DiskInnerX2steadymag(pmb, pco, prim, b, time, dt, is,ie,js,je,ks,ke,ngh);
@@ -934,7 +965,8 @@ void DiskInnerX2(MeshBlock *pmb,Coordinates *pco, AthenaArray<Real> &prim, FaceF
   return;
 }
 
-void DiskInnerX2steadyhydro(MeshBlock *pmb,Coordinates *pco, AthenaArray<Real> &prim, FaceField &b,
+void DiskInnerX2steadyhydro(MeshBlock *pmb,Coordinates *pco, AthenaArray<Real> &prim,
+       FaceField &b,
        Real time, Real dt, int is, int ie, int js, int je, int ks, int ke, int ngh) {
   Real rad,phi,z;
   Real v1, v2, v3;
@@ -955,7 +987,8 @@ void DiskInnerX2steadyhydro(MeshBlock *pmb,Coordinates *pco, AthenaArray<Real> &
   return;
 }
 
-void DiskInnerX2steadymag(MeshBlock *pmb,Coordinates *pco, AthenaArray<Real> &prim, FaceField &b,
+void DiskInnerX2steadymag(MeshBlock *pmb,Coordinates *pco, AthenaArray<Real> &prim,
+       FaceField &b,
        Real time, Real dt, int is, int ie, int js, int je, int ks, int ke, int ngh) {
   if (MAGNETIC_FIELDS_ENABLED)
     SetBfield(pmb, pco, b, is, ie, js-ngh, js-1, ks, ke, ngh);
@@ -967,7 +1000,7 @@ void DiskInnerX2steadymag(MeshBlock *pmb,Coordinates *pco, AthenaArray<Real> &pr
 
 void DiskOuterX2(MeshBlock *pmb,Coordinates *pco, AthenaArray<Real> &prim, FaceField &b,
        Real time, Real dt, int is, int ie, int js, int je, int ks, int ke, int ngh) {
-  if(pmb->pmy_mesh->time==firsttime){
+  if(pmb->pmy_mesh->time==firsttime) {
     DiskOuterX2steadyhydro(pmb, pco, prim, b, time, dt, is,ie,js,je,ks,ke,ngh);
     if (MAGNETIC_FIELDS_ENABLED) {
       DiskOuterX2steadymag(pmb, pco, prim, b, time, dt, is,ie,js,je,ks,ke,ngh);
@@ -976,7 +1009,8 @@ void DiskOuterX2(MeshBlock *pmb,Coordinates *pco, AthenaArray<Real> &prim, FaceF
   return;
 }
 
-void DiskOuterX2steadyhydro(MeshBlock *pmb,Coordinates *pco, AthenaArray<Real> &prim, FaceField &b,
+void DiskOuterX2steadyhydro(MeshBlock *pmb,Coordinates *pco, AthenaArray<Real> &prim,
+       FaceField &b,
        Real time, Real dt, int is, int ie, int js, int je, int ks, int ke, int ngh) {
   Real rad,phi,z;
   Real v1, v2, v3;
@@ -997,7 +1031,8 @@ void DiskOuterX2steadyhydro(MeshBlock *pmb,Coordinates *pco, AthenaArray<Real> &
   return;
 }
 
-void DiskOuterX2steadymag(MeshBlock *pmb,Coordinates *pco, AthenaArray<Real> &prim, FaceField &b,
+void DiskOuterX2steadymag(MeshBlock *pmb,Coordinates *pco, AthenaArray<Real> &prim,
+       FaceField &b,
        Real time, Real dt, int is, int ie, int js, int je, int ks, int ke, int ngh) {
   if (MAGNETIC_FIELDS_ENABLED)
     SetBfield(pmb, pco, b, is, ie, je+1, je+ngh, ks, ke, ngh);
@@ -1009,21 +1044,24 @@ void DiskOuterX2steadymag(MeshBlock *pmb,Coordinates *pco, AthenaArray<Real> &pr
 
 void DiskInnerX3(MeshBlock *pmb,Coordinates *pco, AthenaArray<Real> &prim, FaceField &b,
        Real time, Real dt, int is, int ie, int js, int je, int ks, int ke, int ngh) {
-  if(bc_ix3 == 0) {
-    if(pmb->pmy_mesh->time==firsttime){
+  if (bc_ix3 == 0) {
+    if(pmb->pmy_mesh->time==firsttime) {
       DiskInnerX3steadyhydro(pmb, pco, prim, b, time, dt, is,ie,js,je,ks,ke,ngh);
       if (MAGNETIC_FIELDS_ENABLED) {
         DiskInnerX3steadymag(pmb, pco, prim, b, time, dt, is,ie,js,je,ks,ke,ngh);
       }
     }
-  }else if(bc_ix3==1){
+  } else if (bc_ix3==1) {
     DiskInnerX3outflowhydro(pmb, pco, prim, b, time, dt, is,ie,js,je,ks,ke,ngh);
-    if (MAGNETIC_FIELDS_ENABLED)  DiskInnerX3outflowmag(pmb, pco, prim, b, time, dt, is,ie,js,je,ks,ke,ngh);
+    if (MAGNETIC_FIELDS_ENABLED) {
+      DiskInnerX3outflowmag(pmb, pco, prim, b, time, dt, is,ie,js,je,ks,ke,ngh);
+    }
   }
   return;
 }
 
-void DiskInnerX3steadyhydro(MeshBlock *pmb,Coordinates *pco, AthenaArray<Real> &prim, FaceField &b,
+void DiskInnerX3steadyhydro(MeshBlock *pmb,Coordinates *pco, AthenaArray<Real> &prim,
+       FaceField &b,
        Real time, Real dt, int is, int ie, int js, int je, int ks, int ke, int ngh) {
   Real rad,phi,z;
   Real v1, v2, v3;
@@ -1044,7 +1082,8 @@ void DiskInnerX3steadyhydro(MeshBlock *pmb,Coordinates *pco, AthenaArray<Real> &
   return;
 }
 
-void DiskInnerX3outflowhydro(MeshBlock *pmb,Coordinates *pco, AthenaArray<Real> &prim, FaceField &b,
+void DiskInnerX3outflowhydro(MeshBlock *pmb,Coordinates *pco, AthenaArray<Real> &prim,
+       FaceField &b,
        Real time, Real dt, int is, int ie, int js, int je, int ks, int ke, int ngh) {
   for (int n=0; n<(NHYDRO); ++n) {
     for (int k=1; k<=ngh; ++k) {
@@ -1060,16 +1099,18 @@ void DiskInnerX3outflowhydro(MeshBlock *pmb,Coordinates *pco, AthenaArray<Real> 
 }
 
 
-void DiskInnerX3steadymag(MeshBlock *pmb,Coordinates *pco, AthenaArray<Real> &prim, FaceField &b,
+void DiskInnerX3steadymag(MeshBlock *pmb,Coordinates *pco, AthenaArray<Real> &prim,
+       FaceField &b,
        Real time, Real dt, int is, int ie, int js, int je, int ks, int ke, int ngh) {
   if (MAGNETIC_FIELDS_ENABLED)
     SetBfield(pmb, pco, b, is, ie, js, je, ks-ngh, ks-1, ngh);
   return;
 }
 
-void DiskInnerX3outflowmag(MeshBlock *pmb,Coordinates *pco, AthenaArray<Real> &prim, FaceField &b,
+void DiskInnerX3outflowmag(MeshBlock *pmb,Coordinates *pco, AthenaArray<Real> &prim,
+       FaceField &b,
        Real time, Real dt, int is, int ie, int js, int je, int ks, int ke, int ngh) {
-  if (MAGNETIC_FIELDS_ENABLED){
+  if (MAGNETIC_FIELDS_ENABLED) {
     for (int k=1; k<=ngh; ++k) {
       for (int j=js; j<=je; ++j) {
 #pragma omp simd
@@ -1104,21 +1145,23 @@ void DiskInnerX3outflowmag(MeshBlock *pmb,Coordinates *pco, AthenaArray<Real> &p
 
 void DiskOuterX3(MeshBlock *pmb,Coordinates *pco, AthenaArray<Real> &prim, FaceField &b,
        Real time, Real dt, int is, int ie, int js, int je, int ks, int ke, int ngh) {
-  if(bc_ox3==0){
-    if(pmb->pmy_mesh->time==firsttime){
+  if (bc_ox3==0) {
+    if (pmb->pmy_mesh->time==firsttime) {
       DiskOuterX3steadyhydro(pmb, pco, prim, b, time, dt, is,ie,js,je,ks,ke,ngh);
       if (MAGNETIC_FIELDS_ENABLED) {
         DiskOuterX3steadymag(pmb, pco, prim, b, time, dt, is,ie,js,je,ks,ke,ngh);
       }
     }
-  }else if(bc_ox3==1){
+  } else if (bc_ox3==1) {
     DiskOuterX3outflowhydro(pmb, pco, prim, b, time, dt, is,ie,js,je,ks,ke,ngh);
-    if (MAGNETIC_FIELDS_ENABLED) DiskOuterX3outflowmag(pmb, pco, prim, b, time, dt, is,ie,js,je,ks,ke,ngh);
+    if (MAGNETIC_FIELDS_ENABLED)
+      DiskOuterX3outflowmag(pmb, pco, prim, b, time, dt, is,ie,js,je,ks,ke,ngh);
   }
   return;
 }
 
-void DiskOuterX3steadyhydro(MeshBlock *pmb,Coordinates *pco, AthenaArray<Real> &prim, FaceField &b,
+void DiskOuterX3steadyhydro(MeshBlock *pmb,Coordinates *pco, AthenaArray<Real> &prim,
+       FaceField &b,
        Real time, Real dt, int is, int ie, int js, int je, int ks, int ke, int ngh) {
   Real rad,phi,z;
   Real v1, v2, v3;
@@ -1139,15 +1182,16 @@ void DiskOuterX3steadyhydro(MeshBlock *pmb,Coordinates *pco, AthenaArray<Real> &
   return;
 }
 
-void DiskOuterX3outflowhydro(MeshBlock *pmb,Coordinates *pco, AthenaArray<Real> &prim, FaceField &b,
+void DiskOuterX3outflowhydro(MeshBlock *pmb,Coordinates *pco, AthenaArray<Real> &prim,
+       FaceField &b,
        Real time, Real dt, int is, int ie, int js, int je, int ks, int ke, int ngh) {
   for (int n=0; n<(NHYDRO); ++n) {
     for (int k=1; k<=ngh; ++k) {
       for (int j=js; j<=je; ++j) {
         for (int i=is; i<=ie; ++i) {
           prim(n,ke+k,j,i) = prim(n,ke,j,i);
-          if(n==IVZ && prim(n,ke+k,j,i)<0.0) prim(n,ke+k,j,i)=0.0;
-        }  
+          if (n==IVZ && prim(n,ke+k,j,i)<0.0) prim(n,ke+k,j,i)=0.0;
+        }
       }
     }
   }
@@ -1155,16 +1199,18 @@ void DiskOuterX3outflowhydro(MeshBlock *pmb,Coordinates *pco, AthenaArray<Real> 
 }
 
 
-void DiskOuterX3steadymag(MeshBlock *pmb,Coordinates *pco, AthenaArray<Real> &prim, FaceField &b,
+void DiskOuterX3steadymag(MeshBlock *pmb,Coordinates *pco, AthenaArray<Real> &prim,
+       FaceField &b,
        Real time, Real dt, int is, int ie, int js, int je, int ks, int ke, int ngh) {
   if (MAGNETIC_FIELDS_ENABLED)
     SetBfield(pmb, pco, b, is, ie, js, je, ke+1, ke+ngh, ngh);
   return;
 }
 
-void DiskOuterX3outflowmag(MeshBlock *pmb,Coordinates *pco, AthenaArray<Real> &prim, FaceField &b,
+void DiskOuterX3outflowmag(MeshBlock *pmb,Coordinates *pco, AthenaArray<Real> &prim,
+       FaceField &b,
        Real time, Real dt, int is, int ie, int js, int je, int ks, int ke, int ngh) {
-  if (MAGNETIC_FIELDS_ENABLED){
+  if (MAGNETIC_FIELDS_ENABLED) {
     for (int k=1; k<=ngh; ++k) {
       for (int j=js; j<=je; ++j) {
 #pragma omp simd
@@ -1189,14 +1235,14 @@ void DiskOuterX3outflowmag(MeshBlock *pmb,Coordinates *pco, AthenaArray<Real> &p
         }
       }
     }
-  }  
+  }
   return;
 }
 
 
-void AllSourceTerms(MeshBlock *pmb, const Real time, const Real dt, const AthenaArray<Real> &prim, const AthenaArray<Real> &prim_scalar,
-  const AthenaArray<Real> &bcc, AthenaArray<Real> &cons, AthenaArray<Real> &cons_scalar)
-{
+void AllSourceTerms(MeshBlock *pmb, const Real time, const Real dt,
+  const AthenaArray<Real> &prim, const AthenaArray<Real> &prim_scalar,
+  const AthenaArray<Real> &bcc, AthenaArray<Real> &cons, AthenaArray<Real> &cons_scalar) {
   StarSourceTerms(pmb,time,dt,prim,bcc,cons);
   if(psys->np>0) PlanetarySourceTerms(pmb,time,dt,prim,bcc,cons);
   if(NON_BAROTROPIC_EOS&&tcool>0.0) Cooling(pmb,time,dt,prim,bcc,cons);
@@ -1206,8 +1252,7 @@ void AllSourceTerms(MeshBlock *pmb, const Real time, const Real dt, const Athena
 
 void StarSourceTerms(MeshBlock *pmb, const Real time, const Real dt,
               const AthenaArray<Real> &prim,
-              const AthenaArray<Real> &bcc, AthenaArray<Real> &cons)
-{
+              const AthenaArray<Real> &bcc, AthenaArray<Real> &cons) {
   Real src[NHYDRO];
   Coordinates *pco = pmb->pcoord;
   Real f_x1=0.0, f_x2=0.0, f_x3=0.0, rc, rm;
@@ -1217,14 +1262,15 @@ void StarSourceTerms(MeshBlock *pmb, const Real time, const Real dt,
     for (int j=pmb->js; j<=pmb->je; ++j) {
       for (int i=pmb->is; i<=pmb->ie; ++i) {
         if (std::strcmp(COORDINATE_SYSTEM, "cartesian") == 0) {
-          rc = sqrt(pco->x1v(i)*pco->x1v(i)+pco->x2v(j)*pco->x2v(j)+pco->x3v(k)*pco->x3v(k));
+          rc = sqrt(pco->x1v(i)*pco->x1v(i)+pco->x2v(j)*pco->x2v(j)+
+               pco->x3v(k)*pco->x3v(k));
           fcoe=GravPot_coe(rc);
           f_x1 = fcoe*pco->x1v(i);
           f_x2 = fcoe*pco->x2v(j);
           f_x3 = fcoe*pco->x3v(k);
         } else if (std::strcmp(COORDINATE_SYSTEM, "spherical_polar") == 0) {
-          f_x1 = fcoe*pco->x1v(i); 
-        } 
+          f_x1 = fcoe*pco->x1v(i);
+        }
         Real rcv2 = (rc-smoothin)*(rc-smoothin);
         fsmooth = rcv2/(rcv2+smoothtr*smoothtr);
         if (rc<smoothin) fsmooth=0.;
@@ -1237,43 +1283,45 @@ void StarSourceTerms(MeshBlock *pmb, const Real time, const Real dt,
         cons(IM2,k,j,i) += src[IM2];
         cons(IM3,k,j,i) += src[IM3];
         if(NON_BAROTROPIC_EOS) {
-          cons(IEN,k,j,i) += src[IM1]*prim(IM1,k,j,i) + src[IM2]*prim(IM2,k,j,i) + src[IM3]*prim(IM3,k,j,i);
+          cons(IEN,k,j,i) += src[IM1]*prim(IM1,k,j,i) +
+                             src[IM2]*prim(IM2,k,j,i) + src[IM3]*prim(IM3,k,j,i);
         }
 
         if (std::strcmp(COORDINATE_SYSTEM, "cartesian") == 0) {
           GetCylCoord(rad,phi,z,pco->x1v(i),pco->x2v(j),pco->x3v(k));
-          Real rsph=sqrt(pco->x1v(i)*pco->x1v(i)+pco->x2v(j)*pco->x2v(j)+pco->x3v(k)*pco->x3v(k));
-          if(rsph<rfix){
+          Real rsph=sqrt(pco->x1v(i)*pco->x1v(i)+pco->x2v(j)*pco->x2v(j)+
+                        pco->x3v(k)*pco->x3v(k));
+          if (rsph<rfix) {
             cons(IDN,k,j,i) = DenProfileCyl(pmb,rad,phi,z,k,j,i);
             VelProfileCyl(pmb,rad,phi,z,i,j,k,v1,v2,v3);
             cons(IM1,k,j,i) = v1*cons(IDN,k,j,i);
             cons(IM2,k,j,i) = v2*cons(IDN,k,j,i);
             cons(IM3,k,j,i) = v3*cons(IDN,k,j,i);
-            if (NON_BAROTROPIC_EOS){
-              cons(IEN,k,j,i) = PoverR(rad, phi, z)*cons(IDN,k,j,i)/(gamma_gas - 1.0)+0.5*(SQR(v1)+SQR(v2)+SQR(v3))*cons(IDN,k,j,i);
-              if (MAGNETIC_FIELDS_ENABLED){
-                cons(IEN,k,j,i) = cons(IEN,k,j,i)+0.5*(SQR(bcc(IB1,k,j,i))+SQR(bcc(IB2,k,j,i))+SQR(bcc(IB3,k,j,i)));
+            if (NON_BAROTROPIC_EOS) {
+              cons(IEN,k,j,i) = PoverR(rad, phi, z)*cons(IDN,k,j,i)/(gamma_gas - 1.0)+
+                                0.5*(SQR(v1)+SQR(v2)+SQR(v3))*cons(IDN,k,j,i);
+              if (MAGNETIC_FIELDS_ENABLED) {
+                cons(IEN,k,j,i) = cons(IEN,k,j,i)+0.5*(SQR(bcc(IB1,k,j,i))+
+                                  SQR(bcc(IB2,k,j,i))+SQR(bcc(IB3,k,j,i)));
               }
             }
           }
         }
-        cons(IDN,k,j,i) = std::max(cons(IDN,k,j,i),rho_floor(rc)) ;
+        cons(IDN,k,j,i) = std::max(cons(IDN,k,j,i),rho_floor(rc));
       }
     }
-  } 
+  }
 }
 
 // stellar force coefficient Fstar=coe*vec(r)
 
-Real GravPot_coe(Real rc)
-{  
+Real GravPot_coe(Real rc) {
   return(-gm0/rc/rc/rc);
 }
 
 // Set planetary source term
 void PlanetarySourceTerms(MeshBlock *pmb, const Real time, const Real dt,
-  const AthenaArray<Real> &prim, const AthenaArray<Real> &bcc, AthenaArray<Real> &cons)
-{
+  const AthenaArray<Real> &prim, const AthenaArray<Real> &bcc, AthenaArray<Real> &cons) {
   Real cosx3, sinx3, x3, cosx2, sinx2, x2;
   Real xcar, ycar, zcar, coeind, coeba;
   Coordinates *pco = pmb->pcoord;
@@ -1283,7 +1331,7 @@ void PlanetarySourceTerms(MeshBlock *pmb, const Real time, const Real dt,
   psys->orbit(time);
 
   Real src[NHYDRO];
-  for (int ip=0; ip< psys->np; ++ip){
+  for (int ip=0; ip< psys->np; ++ip) {
     Real xpp=psys->xp[ip];
     Real ypp=psys->yp[ip];
     Real zpp=psys->zp[ip];
@@ -1294,27 +1342,28 @@ void PlanetarySourceTerms(MeshBlock *pmb, const Real time, const Real dt,
     Real rsoft2=psys->rsoft2;
     Real f_xpp=0., f_ypp=0., f_zpp=0.;
     Real dens = 0.;
-    coeind = force_car_ind_coe(xpp,ypp,zpp,mp); 
+    coeind = force_car_ind_coe(xpp,ypp,zpp,mp);
     for (int k=pmb->ks; k<=pmb->ke; ++k) {
       x3=pco->x3v(k);
-      if(std::strcmp(COORDINATE_SYSTEM, "spherical_polar") == 0){
+      if(std::strcmp(COORDINATE_SYSTEM, "spherical_polar") == 0) {
         cosx3=cos(x3);
         sinx3=sin(x3);
       }
       for (int j=pmb->js; j<=pmb->je; ++j) {
         pco->CellVolume(k,j,pmb->is,pmb->ie,vol);
         x2=pco->x2v(j);
-        if(std::strcmp(COORDINATE_SYSTEM, "spherical_polar") == 0||std::strcmp(COORDINATE_SYSTEM, "cylindrical") == 0){
+        if(std::strcmp(COORDINATE_SYSTEM, "spherical_polar") == 0 ||
+           std::strcmp(COORDINATE_SYSTEM, "cylindrical") == 0) {
           cosx2=cos(x2);
           sinx2=sin(x2);
         }
         for (int i=pmb->is; i<=pmb->ie; ++i) {
-          if(std::strcmp(COORDINATE_SYSTEM, "spherical_polar") == 0){
+          if(std::strcmp(COORDINATE_SYSTEM, "spherical_polar") == 0) {
             xcar = pco->x1v(i)*sinx2*cosx3;
             ycar = pco->x1v(i)*sinx2*sinx3;
             zcar = pco->x1v(i)*cosx2;
           }
-          if(std::strcmp(COORDINATE_SYSTEM, "cylindrical") == 0){
+          if(std::strcmp(COORDINATE_SYSTEM, "cylindrical") == 0) {
             xcar = pco->x1v(i)*cosx2;
             ycar = pco->x1v(i)*sinx2;
             zcar = x3;
@@ -1328,35 +1377,37 @@ void PlanetarySourceTerms(MeshBlock *pmb, const Real time, const Real dt,
           Real f_x1 = 0.0;
           Real f_x2 = 0.0;
           Real f_x3 = 0.0;
-          Real f_xca = coeba*(xcar-xpp); 
+          Real f_xca = coeba*(xcar-xpp);
           Real f_yca = coeba*(ycar-ypp);
           Real f_zca = coeba*(zcar-zpp);
 
           // Masking the Hill sphere around the planet
-	  Real rpfram = sqrt((xcar-xpp)*(xcar-xpp) + (ycar-ypp)*(ycar-ypp) + (zcar-zpp)*(zcar-zpp));
+          Real rpfram = sqrt((xcar-xpp)*(xcar-xpp) + (ycar-ypp)*(ycar-ypp) +
+                         (zcar-zpp)*(zcar-zpp));
           Real distst = sqrt(xcar*xcar+ycar*ycar+zcar*zcar);
-	  Real rH = rpp*pow(mp/3./gm0,1./3.);
-         
+          Real rH = rpp*pow(mp/3./gm0,1./3.);
+
           dens = pmb->phydro->u(IDN,k,j,i);
-          if (rpfram < rH || distst< 2.5*rs){
+
+          if (rpfram < rH || distst< 2.5*rs) {
             dens = 0.;
           }
           // end masking
 
-	  f_xpp += f_xca*vol(i)*dens;
+          f_xpp += f_xca*vol(i)*dens;
           f_ypp += f_yca*vol(i)*dens;
           f_zpp += f_zca*vol(i)*dens;
-          if(psys->ind!=0){
-            f_xca += coeind*xpp; 
+          if(psys->ind!=0) {
+            f_xca += coeind*xpp;
             f_yca += coeind*ypp;
             f_zca += coeind*zpp;
           }
-          if(std::strcmp(COORDINATE_SYSTEM, "spherical_polar") == 0){
+          if(std::strcmp(COORDINATE_SYSTEM, "spherical_polar") == 0) {
             f_x1 += f_xca*sinx2*cosx3+f_yca*sinx2*sinx3+f_zca*cosx2;
             f_x2 += f_xca*cosx2*cosx3+f_yca*cosx2*sinx3-f_zca*sinx2;
             f_x3 += f_xca*(-sinx3) + f_yca*cosx3;
           }
-          if(std::strcmp(COORDINATE_SYSTEM, "cylindrical") == 0){
+          if(std::strcmp(COORDINATE_SYSTEM, "cylindrical") == 0) {
             f_x1 += f_xca*cosx2 + f_yca*sinx2;
             f_x2 += -f_xca*sinx2 + f_yca*cosx2;
             f_x3 += f_zca;
@@ -1366,7 +1417,7 @@ void PlanetarySourceTerms(MeshBlock *pmb, const Real time, const Real dt,
             f_x2 += f_yca;
             f_x3 += f_zca;
           }
-    
+
           src[IM1] = dt*prim(IDN,k,j,i)*f_x1;
           src[IM2] = dt*prim(IDN,k,j,i)*f_x2;
           src[IM3] = dt*prim(IDN,k,j,i)*f_x3;
@@ -1375,15 +1426,16 @@ void PlanetarySourceTerms(MeshBlock *pmb, const Real time, const Real dt,
           cons(IM2,k,j,i) += src[IM2];
           cons(IM3,k,j,i) += src[IM3];
           if(NON_BAROTROPIC_EOS) {
-            src[IEN] = src[IM1]*prim(IM1,k,j,i)+ src[IM2]*prim(IM2,k,j,i) + src[IM3]*prim(IM3,k,j,i);
+            src[IEN] = src[IM1]*prim(IM1,k,j,i)+ src[IM2]*prim(IM2,k,j,i)
+                        + src[IM3]*prim(IM3,k,j,i);
             cons(IEN,k,j,i) += src[IEN];
           }
         } // i
       } // j
     } // k
-    Real f_r = f_xpp*sin(thepp)*cos(phipp) + f_ypp*sin(thepp)*sin(phipp) + f_zpp*cos(thepp);
-    Real f_t = f_xpp*cos(thepp)*cos(phipp) + f_ypp*cos(thepp)*sin(phipp) - f_zpp*sin(thepp);
-    Real f_p = f_xpp*(-sin(phipp)) + f_ypp*cos(phipp);
+    Real f_r=f_xpp*sin(thepp)*cos(phipp) + f_ypp*sin(thepp)*sin(phipp) + f_zpp*cos(thepp);
+    Real f_t=f_xpp*cos(thepp)*cos(phipp) + f_ypp*cos(thepp)*sin(phipp) - f_zpp*sin(thepp);
+    Real f_p=f_xpp*(-sin(phipp)) + f_ypp*cos(phipp);
 
     pmb->ruser_meshblock_data[ip](0)= f_r;
     pmb->ruser_meshblock_data[ip](1)= f_t;
@@ -1402,13 +1454,12 @@ void PlanetarySourceTerms(MeshBlock *pmb, const Real time, const Real dt,
   } // ip
 }
 
-Real PlanetForce(MeshBlock *pmb, int iout)
-{
+Real PlanetForce(MeshBlock *pmb, int iout) {
   Real x1, x2, x3, cosx2, sinx2, cosx3, sinx3, xcar, ycar, zcar;
   if (psys->np > 0) {
     int ip= iout/14; // integer for the planet
     int re=iout%14;
-    return pmb->ruser_meshblock_data[ip](re); 
+    return pmb->ruser_meshblock_data[ip](re);
   }
   return 0;
 }
@@ -1418,25 +1469,23 @@ Real PlanetForce(MeshBlock *pmb, int iout)
 //
 
 Real force_car_btoa_coe(const Real xca, const Real yca, const Real zca,
-        const Real xcb, const Real ycb, const Real zcb, const Real gb, const Real rsoft2)
-{
+     const Real xcb, const Real ycb, const Real zcb, const Real gb, const Real rsoft2) {
   Real dist=sqrt((xca-xcb)*(xca-xcb) + (yca-ycb)*(yca-ycb) + (zca-zcb)*(zca-zcb));
   Real rsoft=sqrt(rsoft2);
   Real coe;
-  if(dist>=rsoft){
+  if (dist>=rsoft) {
      coe=-gb/dist/dist/dist;
-  }else{
+  } else {
      coe=gb/rsoft/rsoft/rsoft*(3*dist/rsoft-4);
   }
   return(coe);
 }
 
 //----------------------------------------------------------------------------------------
-//!\f: calculate indirect forces coefficient due to gmp (Find=coe*vec(xpp)) 
+//!\f: calculate indirect forces coefficient due to gmp (Find=coe*vec(xpp))
 //
 
-Real force_car_ind_coe(const Real xpp, const Real ypp, const Real zpp, const Real gmp)
-{
+Real force_car_ind_coe(const Real xpp, const Real ypp, const Real zpp, const Real gmp) {
   Real pdist=sqrt(xpp*xpp+ypp*ypp+zpp*zpp);
   Real coe = -gmp/pdist/pdist/pdist;
   return(coe);
@@ -1445,13 +1494,12 @@ Real force_car_ind_coe(const Real xpp, const Real ypp, const Real zpp, const Rea
 //----------------------------------------------------------------------------------------
 //!\f: Fix planetary orbit
 //
-void PlanetarySystem::orbit(double time)
-{
+void PlanetarySystem::orbit(double time) {
   int i;
-  for(i=0; i<np; ++i){
-    if(time<insert_time*2.*PI) {
+  for (i=0; i<np; ++i) {
+    if (time<insert_time*2.*PI) {
       mass[i]=massset[i]*sin(time/insert_time/4.)*sin(time/insert_time/4.);
-    }else{
+    } else {
       mass[i]=massset[i];
     }
     double dis=sqrt(xp[i]*xp[i]+yp[i]*yp[i]);
@@ -1467,30 +1515,29 @@ void PlanetarySystem::orbit(double time)
 
 // Set cooling
 
-void Cooling(MeshBlock *pmb, const Real time, const Real dt, const AthenaArray<Real> &prim,
-             const AthenaArray<Real> &bcc, AthenaArray<Real> &cons)
-{
- Real rad, phi, z;
- if(tcool>0.0) {
-   Coordinates *pco = pmb->pcoord;
-   for(int k=pmb->ks; k<=pmb->ke; ++k){
-     for (int j=pmb->js; j<=pmb->je; ++j) {
-       for (int i=pmb->is; i<=pmb->ie; ++i) {
-         Real eint = cons(IEN,k,j,i)-0.5*(SQR(cons(IM1,k,j,i))+SQR(cons(IM2,k,j,i))
+void Cooling(MeshBlock *pmb, const Real time, const Real dt,const AthenaArray<Real> &prim,
+             const AthenaArray<Real> &bcc, AthenaArray<Real> &cons) {
+  Real rad, phi, z;
+  if (tcool>0.0) {
+    Coordinates *pco = pmb->pcoord;
+    for(int k=pmb->ks; k<=pmb->ke; ++k) {
+      for (int j=pmb->js; j<=pmb->je; ++j) {
+        for (int i=pmb->is; i<=pmb->ie; ++i) {
+          Real eint = cons(IEN,k,j,i)-0.5*(SQR(cons(IM1,k,j,i))+SQR(cons(IM2,k,j,i))
                                           +SQR(cons(IM3,k,j,i)))/cons(IDN,k,j,i);
-         if (MAGNETIC_FIELDS_ENABLED){
-           eint = eint-0.5*(SQR(bcc(IB1,k,j,i))+SQR(bcc(IB2,k,j,i))+SQR(bcc(IB3,k,j,i)));
-         }
-         GetCylCoord(rad,phi,z,pco->x1v(i),pco->x2v(j),pco->x3v(k));
-         Real p_over_r = PoverR(rad,phi,z);
-         Real dtr = std::max(tcool*2.*PI/sqrt(gm0/rad/rad/rad),dt);
-         Real dfrac=dt/dtr;
-         Real dE=eint-p_over_r/(gamma_gas-1.0)*cons(IDN,k,j,i);
-         cons(IEN,k,j,i) -= dE*dfrac;
-       }
-     }
-   }
- }
+          if (MAGNETIC_FIELDS_ENABLED) {
+            eint = eint-0.5*(SQR(bcc(IB1,k,j,i))+SQR(bcc(IB2,k,j,i))+SQR(bcc(IB3,k,j,i)));
+          }
+          GetCylCoord(rad,phi,z,pco->x1v(i),pco->x2v(j),pco->x3v(k));
+          Real p_over_r = PoverR(rad,phi,z);
+          Real dtr = std::max(tcool*2.*PI/sqrt(gm0/rad/rad/rad),dt);
+          Real dfrac=dt/dtr;
+          Real dE=eint-p_over_r/(gamma_gas-1.0)*cons(IDN,k,j,i);
+          cons(IEN,k,j,i) -= dE*dfrac;
+        }
+      }
+    }
+  }
 }
 
 //======================================================================================
@@ -1499,14 +1546,13 @@ void Cooling(MeshBlock *pmb, const Real time, const Real dt, const AthenaArray<R
 //  \brief Adds source terms to the particles.
 //======================================================================================
 
-//; void DustParticles::UserSourceTerms(Real t, Real dt, const AthenaArray<Real>& meshsrc) {
-  // Nothing to do for tracer particles.
+// void DustParticles::UserSourceTerms(Real t,Real dt,const AthenaArray<Real>& meshsrc) {
+// Nothing to do for tracer particles.
 //;  if (taus == 0.0) return;
 
   // Add central gravity from the star.
 //;  const Real a0 = dt ;
 //;  for (int k = 0; k < npar; ++k) {
-    // TODO: This is a temporary hack.
 //;    Real a = a0 * std::pow(std::pow(xp0(k), 2) +
 //;                           std::pow(yp0(k), 2) +
 //;                           std::pow(zp0(k), 2), -1.5);
