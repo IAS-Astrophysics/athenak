@@ -29,6 +29,8 @@
 
 #include "eos/primitive_solver_hyd.hpp"
 #include "eos/primitive-solver/idealgas.hpp"
+#include "eos/primitive-solver/eos_compose.hpp"
+#include "eos/primitive-solver/eos_hybrid.hpp"
 #include "eos/primitive-solver/piecewise_polytrope.hpp"
 #include "eos/primitive-solver/reset_floor.hpp"
 
@@ -56,6 +58,16 @@ DynGRMHD* SelectDynGRMHDEOS(MeshBlockPack *ppack, ParameterInput *pin,
                                 ErrorPolicy>(ppack, pin);
       }
       break;
+    case DynGRMHD_EOS::eos_hybrid:
+      bool use_NQT = pin->GetOrAddBoolean("mhd", "use_NQT",false);
+      if (use_NQT) {
+        dyn_gr = new DynGRMHDPS<Primitive::EOSHybrid<Primitive::NQTLogs>,
+                                ErrorPolicy>(ppack, pin);
+      } else {
+        dyn_gr = new DynGRMHDPS<Primitive::EOSHybrid<Primitive::NormalLogs>,
+                                ErrorPolicy>(ppack, pin);
+      }
+      break;
   }
   return dyn_gr;
 }
@@ -72,6 +84,8 @@ DynGRMHD* BuildDynGRMHD(MeshBlockPack *ppack, ParameterInput *pin) {
     eos_policy = DynGRMHD_EOS::eos_piecewise_poly;
   } else if (eos_string.compare("compose") == 0) {
     eos_policy = DynGRMHD_EOS::eos_compose;
+  } else if (eos_string.compare("hybrid") == 0) {
+    eos_policy = DynGRMHD_EOS::eos_hybrid;
   } else {
     std::cout << "### FATAL ERROR in " <<__FILE__ << " at line " << __LINE__
               << std::endl << "<mhd> dyn_eos = '" << eos_string
@@ -651,6 +665,10 @@ template class DynGRMHDPS<Primitive::EOSCompOSE<Primitive::NormalLogs>,
                           Primitive::ResetFloor>;
 template class DynGRMHDPS<Primitive::EOSCompOSE<Primitive::NQTLogs>,
                           Primitive::ResetFloor>;
+template class DynGRMHDPS<Primitive::EOSHybrid<Primitive::NormalLogs>,
+                          Primitive::ResetFloor>;
+template class DynGRMHDPS<Primitive::EOSHybrid<Primitive::NQTLogs>,
+                          Primitive::ResetFloor>;
 
 // Macro for defining CoordTerms templates
 #define INSTANTIATE_COORD_TERMS(EOSPolicy, ErrorPolicy) \
@@ -672,6 +690,9 @@ INSTANTIATE_COORD_TERMS(Primitive::PiecewisePolytrope, Primitive::ResetFloor);
 INSTANTIATE_COORD_TERMS(Primitive::EOSCompOSE<Primitive::NormalLogs>,
                         Primitive::ResetFloor);
 INSTANTIATE_COORD_TERMS(Primitive::EOSCompOSE<Primitive::NQTLogs>, Primitive::ResetFloor);
+INSTANTIATE_COORD_TERMS(Primitive::EOSHybrid<Primitive::NormalLogs>,
+                        Primitive::ResetFloor);
+INSTANTIATE_COORD_TERMS(Primitive::EOSHybrid<Primitive::NQTLogs>, Primitive::ResetFloor);
 
 #undef INSTANTIATE_COORD_TERMS
 
