@@ -55,6 +55,24 @@ enum RadiationM1Closure {
 };
 
 //----------------------------------------------------------------------------------------
+//! \enum RadiationM1OpacityType
+//  \brief choice of neutrino opacity library
+enum RadiationM1OpacityType {
+  Toy,
+  Weakrates,
+  BnsNurates,
+};
+
+//----------------------------------------------------------------------------------------
+//! \enum RadiationM1SrcUpdate
+//  \brief method to treat radiation sources
+enum RadiationM1SrcUpdate {
+  Explicit,
+  Implicit,
+  Boost,
+};
+
+//----------------------------------------------------------------------------------------
 //! \struct RadiationM1Params
 //  \brief parameters for the Grey M1 class
 struct RadiationM1Params {
@@ -63,6 +81,8 @@ struct RadiationM1Params {
   Real rad_eps;
   Real minmod_theta;
   RadiationM1Closure closure_fun;
+  RadiationM1OpacityType opacity_type;
+  RadiationM1SrcUpdate src_update;
 };
 
 class RadiationM1 {

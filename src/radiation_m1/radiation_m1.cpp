@@ -36,6 +36,15 @@ RadiationM1::RadiationM1(MeshBlockPack *ppack, ParameterInput *pin)
   } else {
     params.closure_fun = Thin;
   }
+  std::string src_update =
+      pin->GetOrAddString("radiation_m1", "src_update", "explicit");
+  if (src_update == "explicit") {
+    params.src_update = Explicit;
+  } else if (src_update == "implicit") {
+    params.src_update = Implicit;
+  } else {
+    params.src_update = Boost;
+  }
 
   // Total number of MeshBlocks on this rank to be used in array dimensioning
   int nmb = std::max((ppack->nmb_thispack), (ppack->pmesh->nmb_maxperrank));
