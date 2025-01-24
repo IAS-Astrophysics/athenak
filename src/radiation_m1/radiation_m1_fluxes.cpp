@@ -210,8 +210,8 @@ TaskStatus RadiationM1::CalculateFluxes(Driver *pdrive, int stage) {
             sawtooth = true;
           }
 
-          flux_ip12_lo[var] = (flux_im1[var] + flux_i[var]) / 2.;
-          flux_ip12_ho[var] =
+          flux_ip12_ho[var] = (flux_im1[var] + flux_i[var]) / 2.;
+          flux_ip12_lo[var] =
               (flux_im1[var] + flux_i[var]) / 2. -
               cmax_ip12 *
                   (u0_(m, CombinedIdx(nuidx, var, nvars_), k, j, i) -
