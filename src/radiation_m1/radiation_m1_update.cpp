@@ -112,7 +112,7 @@ TaskStatus RadiationM1::TimeUpdate(Driver *d, int stage) {
         K_dd(0, 2) = adm.vK_dd(m, 0, 2, k, j, i);
         K_dd(1, 1) = adm.vK_dd(m, 1, 1, k, j, i);
         K_dd(1, 2) = adm.vK_dd(m, 1, 2, k, j, i);
-        K_dd(3, 3) = adm.vK_dd(m, 3, 3, k, j, i);
+        K_dd(3, 3) = adm.vK_dd(m, 2, 2, k, j, i);
 
         // Lorentz factor, four velocity, three velocity, projection
         AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> u_u{};
