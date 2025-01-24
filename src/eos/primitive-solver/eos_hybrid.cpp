@@ -30,8 +30,8 @@ void EOSHybrid<LogPolicy>::ReadTableFromFile(std::string fname) {
     TableReader::Table table;
     auto read_result = table.ReadTable(fname);
     if (read_result.error != TableReader::ReadResult::SUCCESS) {
-      std::cout << "Table could not be read.\n" << std::flush;
-      abort();
+      std::cout << "Table could not be read.\n";
+      assert (false);
     }
     // Make sure table has correct dimentions
     assert(table.GetNDimensions()==1);
@@ -55,7 +55,7 @@ void EOSHybrid<LogPolicy>::ReadTableFromFile(std::string fname) {
 
     { // read nb
       Real * table_nb = table["nb"];
-
+      
       for (size_t in=0; in<m_nn; ++in) {
         host_log_nb(in) = log2_(table_nb[in]);
       }
