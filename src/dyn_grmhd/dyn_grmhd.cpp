@@ -51,7 +51,7 @@ DynGRMHD* SelectDynGRMHDEOS(MeshBlockPack *ppack, ParameterInput *pin,
       dyn_gr = new DynGRMHDPS<Primitive::PiecewisePolytrope, ErrorPolicy>(ppack, pin);
       break;
     case DynGRMHD_EOS::eos_compose:
-      bool use_NQT = pin->GetOrAddBoolean("mhd", "use_NQT",false);
+      use_NQT = pin->GetOrAddBoolean("mhd", "use_NQT",false);
       if (use_NQT) {
         dyn_gr = new DynGRMHDPS<Primitive::EOSCompOSE<Primitive::NQTLogs>,
                                 ErrorPolicy>(ppack, pin);
@@ -61,7 +61,7 @@ DynGRMHD* SelectDynGRMHDEOS(MeshBlockPack *ppack, ParameterInput *pin,
       }
       break;
     case DynGRMHD_EOS::eos_hybrid:
-      bool use_NQT = pin->GetOrAddBoolean("mhd", "use_NQT",false);
+      use_NQT = pin->GetOrAddBoolean("mhd", "use_NQT",false);
       if (use_NQT) {
         dyn_gr = new DynGRMHDPS<Primitive::EOSHybrid<Primitive::NQTLogs>,
                                 ErrorPolicy>(ppack, pin);
