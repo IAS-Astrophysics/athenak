@@ -261,9 +261,6 @@ class EOSHybrid : public EOSPolicyInterface, public LogPolicy {
     // Number of species must be within limits
     assert (n<=MAX_SPECIES && n>=0);
 
-    // Only 0 species is implemented for hybrid
-    assert (n == 0);
-
     n_species = n;
     return;
   }
