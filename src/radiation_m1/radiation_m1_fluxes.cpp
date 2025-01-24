@@ -135,7 +135,7 @@ void CalcFlux(const int m, const int k, const int j, const int i,
   const Real clam[2] = {
       adm.alpha(m, k, j, i) * std::sqrt(gamma_uu(dir - 1, dir - 1)) -
           beta_u(dir),
-      -adm.alpha(m, k, j, i) * std::sqrt(gamma_uu(dir - 1, dir - 1)) -
+      adm.alpha(m, k, j, i) * std::sqrt(gamma_uu(dir - 1, dir - 1)) +
           beta_u(dir)};
   const Real clight = Kokkos::max(Kokkos::abs(clam[0]), Kokkos::abs(clam[1]));
   cmax = clight;
@@ -189,7 +189,7 @@ TaskStatus RadiationM1::CalculateFluxes(Driver *pdrive, int stage) {
 
         Real cmax_ip12 = Kokkos::max(cmax_i, cmax_ip1);
         Real kappa_ave = 0; //@TODO: fix this!
-        Real A_ip12 = Kokkos::min(1., 1. / mbsize.d_view(m).dx1);
+        Real A_ip12 = Kokkos::min(1., 1. / (kappa_ave * mbsize.d_view(m).dx1));
 
         for (int var = 0; var < nvars_; ++var) {
           const Real ujm = u0_(m, CombinedIdx(nuidx, var, nvars_), k, j, i - 2);
