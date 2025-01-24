@@ -136,10 +136,12 @@ void MeshRefinement::InitRecvAMR(int nleaf) {
   // count number of cell- and face-centered variables communicated depending on physics
   int ncc_tosend=0, nfc_tosend=0;
   if (pmy_mesh->pmb_pack->phydro != nullptr) {
-    ncc_tosend += (pmy_mesh->pmb_pack->phydro->nhydro);
+    ncc_tosend += (pmy_mesh->pmb_pack->phydro->nhydro +
+                   pmy_mesh->pmb_pack->phydro->nscalars);
   }
   if (pmy_mesh->pmb_pack->pmhd != nullptr) {
-    ncc_tosend += (pmy_mesh->pmb_pack->pmhd->nmhd);
+    ncc_tosend += (pmy_mesh->pmb_pack->pmhd->nmhd +
+                   pmy_mesh->pmb_pack->pmhd->nscalars);
     nfc_tosend += 1;
   }
   if (pmy_mesh->pmb_pack->pz4c != nullptr) {
@@ -386,10 +388,12 @@ void MeshRefinement::PackAndSendAMR(int nleaf) {
   // count number of cell- and face-centered variables communicated depending on physics
   int ncc_tosend=0, nfc_tosend=0;
   if (pmy_mesh->pmb_pack->phydro != nullptr) {
-    ncc_tosend += (pmy_mesh->pmb_pack->phydro->nhydro);
+    ncc_tosend += (pmy_mesh->pmb_pack->phydro->nhydro +
+                   pmy_mesh->pmb_pack->phydro->nscalars);
   }
   if (pmy_mesh->pmb_pack->pmhd != nullptr) {
-    ncc_tosend += (pmy_mesh->pmb_pack->pmhd->nmhd);
+    ncc_tosend += (pmy_mesh->pmb_pack->pmhd->nmhd +
+                   pmy_mesh->pmb_pack->pmhd->nscalars);
     nfc_tosend += 1;
   }
   if (pmy_mesh->pmb_pack->pz4c != nullptr) {
@@ -807,11 +811,11 @@ void MeshRefinement::ClearRecvAndUnpackAMR() {
 
   if (phydro != nullptr) {
     UnpackAMRBuffersCC(phydro->u0, phydro->coarse_u0, ncc_recv, nfc_recv);
-    ncc_recv += phydro->nhydro;
+    ncc_recv += phydro->nhydro + phydro->nscalars;
   }
   if (pmhd != nullptr) {
     UnpackAMRBuffersCC(pmhd->u0, pmhd->coarse_u0, ncc_recv, nfc_recv);
-    ncc_recv += pmhd->nmhd;
+    ncc_recv += pmhd->nmhd + pmhd->nscalars;
     UnpackAMRBuffersFC(pmhd->b0, pmhd->coarse_b0, ncc_recv, nfc_recv);
     nfc_recv += 1;
   }
