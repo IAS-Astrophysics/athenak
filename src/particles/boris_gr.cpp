@@ -29,6 +29,7 @@ void GetUpperAdmMetric( const Real inputMat[][4], Real outputMat[][3] ){
 //! \fn  void SingleTermHelper_Position
 //! \brief
 //! Helper function to reduce amount of repetition in HamiltonEquation_Position
+//! Notice that beta has opposite sign to "correct" one
 KOKKOS_INLINE_FUNCTION
 void SingleTermHelper_Position(const Real * u_0, const Real * u_1, const Real alpha, const Real beta, const Real ADM[][3], const int dir, Real * H){
 
@@ -470,27 +471,17 @@ void ComputeInverseMatrix3( const Real inputMat[][3], Real outputMat[][3] ){
 
 }
 
-
-namespace particles {
 //----------------------------------------------------------------------------------------
 //! \fn  void InterpolateFields
-//  \brief Interpolate cell field to particle location, Has to be member function to have access to mhd objects.
-void Particles::InterpolateFields( const Real * prtcl_x, const int p, Real * E, Real * B ){
-	auto &pi = prtcl_idata;
-	auto &b0_ = pmy_pack->pmhd->b0;
-	auto &e0_ = pmy_pack->pmhd->efld;
-	auto &indcs = pmy_pack->pmesh->mb_indcs;
-	const int is = indcs.is;
-	const int js = indcs.js;
-	const int ks = indcs.ks;
-	auto &mbsize = pmy_pack->pmb->mb_size;
-	auto gids = pmy_pack->gids;
+//  \brief Interpolate cell field to particle location,
+KOKKOS_INLINE_FUNCTION
+void InterpolateFields( const Real * prtcl_x, const DvceFaceFld4D<Real> &b0_, const DvceEdgeFld4D<Real> &e0_,
+				const DualArray1D<RegionSize> &mbsize, const RegionIndcs &indcs, const int m,
+			  Real * E, Real * B ){
 
-	int m = pi(PGID,p) - gids;
-	int ip = (prtcl_x[0] - mbsize.d_view(m).x1min)/mbsize.d_view(m).dx1 + is;
-	int jp = (prtcl_x[1] - mbsize.d_view(m).x2min)/mbsize.d_view(m).dx2 + js;
-	int kp = (prtcl_x[2] - mbsize.d_view(m).x3min)/mbsize.d_view(m).dx3 + ks;
-
+	int ip = (prtcl_x[0] - mbsize.d_view(m).x1min)/mbsize.d_view(m).dx1 + indcs.is;
+	int jp = (prtcl_x[1] - mbsize.d_view(m).x2min)/mbsize.d_view(m).dx2 + indcs.js;
+	int kp = (prtcl_x[2] - mbsize.d_view(m).x3min)/mbsize.d_view(m).dx3 + indcs.ks;
 	Real &x1min = mbsize.d_view(m).x1min;
 	Real &x2min = mbsize.d_view(m).x2min;
 	Real &x3min = mbsize.d_view(m).x3min;
@@ -535,6 +526,7 @@ void Particles::InterpolateFields( const Real * prtcl_x, const int p, Real * E, 
 
 }
 
+namespace particles {
 //----------------------------------------------------------------------------------------
 //! \fn  void Particles::BorisStep
 //  \brief
@@ -544,12 +536,18 @@ void Particles::InterpolateFields( const Real * prtcl_x, const int p, Real * E, 
 void Particles::BorisStep( const Real dt, const bool only_v ){
 	
 	auto &npart = nprtcl_thispack;
+	auto &pi = prtcl_idata;
 	auto &pr = prtcl_rdata;
+	auto &b0_ = pmy_pack->pmhd->b0;
+	auto &e0_ = pmy_pack->pmhd->efld;
 	const bool is_minkowski = pmy_pack->pcoord->coord_data.is_minkowski;
 	const Real spin = pmy_pack->pcoord->coord_data.bh_spin;
 	const bool &multi_d = pmy_pack->pmesh->multi_d;
 	const bool &three_d = pmy_pack->pmesh->three_d;
 	const Real &q_over_m = charge_over_mass;
+	auto gids = pmy_pack->gids;
+	auto &indcs = pmy_pack->pmesh->mb_indcs;
+	auto &mbsize = pmy_pack->pmb->mb_size;
 
 	// First half-step in space
 	par_for("part_boris",DevExeSpace(),0,(npart-1),
@@ -584,13 +582,14 @@ void Particles::BorisStep( const Real dt, const bool only_v ){
 		g_Lor = sqrt(1.0 + g_Lor)*sqrt(-gupper[0][0]);
 
 		x[0] = pr(IPX,p) + dt/(2.0)*(u_con[0]/g_Lor + gupper[0][1]/gupper[0][0]) ;
-					if (multi_d) { x[1] = pr(IPY,p) + dt/(2.0)*(u_con[1]/g_Lor + gupper[0][2]/gupper[0][0]) ; }
-					if (three_d) { x[2] = pr(IPZ,p) + dt/(2.0)*(u_con[2]/g_Lor + gupper[0][3]/gupper[0][0]) ; }
+		if (multi_d) { x[1] = pr(IPY,p) + dt/(2.0)*(u_con[1]/g_Lor + gupper[0][2]/gupper[0][0]) ; }
+		if (three_d) { x[2] = pr(IPZ,p) + dt/(2.0)*(u_con[2]/g_Lor + gupper[0][3]/gupper[0][0]) ; }
 
+		int m = pi(PGID,p) - gids;
 		Real uE[3]; //Evolution of the velocity due to the electric field (first half).
 		Real uB[3]; //Evolution of the velocity due to the magnetic field.
 		Real E[3], B[3];
-		InterpolateFields( x, p, E, B );
+		InterpolateFields( x, b0_, e0_, mbsize, indcs, m, E, B );
 
 		// Get metric components at new location x
 		ComputeMetricAndInverse(x[0],x[1],x[2], is_minkowski, spin, glower, gupper); 
