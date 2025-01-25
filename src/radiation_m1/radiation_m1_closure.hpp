@@ -12,7 +12,7 @@
 #include "athena_tensor.hpp"
 #include "radiation_m1/radiation_m1.hpp"
 #include "radiation_m1_macro.hpp"
-#include "radiation_m1_roots.hpp"
+//#include "radiation_m1_roots.hpp"
 
 namespace radiationm1 {
 // Fluid projector: delta^a_b + u^a u_b
