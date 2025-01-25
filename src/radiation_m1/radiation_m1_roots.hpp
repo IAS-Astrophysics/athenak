@@ -1,6 +1,10 @@
 #ifndef RADIATION_M1_ROOTS_HPP
 #define RADIATION_M1_ROOTS_HPP
 
+#include "athena.hpp"
+#include "athena_tensor.hpp"
+#include "radiation_m1/radiation_m1_closure.hpp"
+
 namespace radiationm1 {
 
 struct BrentFunctionParams {
@@ -18,8 +22,25 @@ struct BrentFunctionParams {
 
 struct BrentFunction {
   BrentFunctionParams p;
-  KOKKOS_INLINE_FUNCTION Real M1ClosureBrentFunc(Real xi,
-                                                 BrentFunctionParams &p);
+  Real M1ClosureBrentFunc(Real xi, BrentFunctionParams &p) {
+
+    Real chi = minerbo(xi);
+
+    AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> P_dd{};
+    apply_closure(p.g_dd, p.g_uu, p.n_d, p.w_lorentz, p.u_u, p.v_d, p.proj_ud,
+                  p.E, p.F_d, chi, P_dd, p.params);
+
+    AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> rT_dd{};
+    assemble_rT(p.n_d, p.E, p.F_d, P_dd, rT_dd);
+
+    const Real J = calc_J_from_rT(rT_dd, p.u_u);
+
+    AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> H_d{};
+    calc_H_from_rT(rT_dd, p.u_u, p.proj_ud, H_d);
+
+    const Real H2 = tensor_dot(p.g_uu, H_d, H_d);
+    return SQ(J * xi) - H2;
+  }
 };
 
 //----------------------------------------------------------------------------------------
