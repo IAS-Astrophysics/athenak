@@ -21,8 +21,7 @@ class CartesianGrid {
  public:
   // Creates a geodesic grid with refinement level nlev and radius rad
   CartesianGrid(MeshBlockPack *pmy_pack, Real center[3],
-                    Real extend[3], int numpoints[3], bool is_cheb = false);
-  ~CartesianGrid();
+                Real extend[3], int numpoints[3], bool is_cheb = false);
 
   // parameters for the grid
   Real center_x1, center_x2, center_x3;   // grid centers
