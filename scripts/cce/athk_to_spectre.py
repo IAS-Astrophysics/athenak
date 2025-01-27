@@ -185,7 +185,12 @@ def load(fpath: str, field_name: str, attrs: dict) -> list:
     attrs["r_out"] = np.array([rout])
     attrs["time"] = np.linspace(t.min(), t.max(), t.shape[0])
 
-    shape = (len([g_re, g_im]), attrs["lev_t"], attrs["max_n"], attrs["max_lm"])
+    shape = (
+        len([g_re, g_im]),
+        attrs["lev_t"],
+        attrs["max_n"],
+        attrs["max_lm"],
+    )
     ret = np.empty(shape=shape, dtype=float)
     ## NOTE: is it fine that we do interpolation?
     ret[g_re, :] = f_real(attrs["time"])
@@ -279,6 +284,9 @@ def get_attribute(fpath: str,
     with h5py.File(fpath, "r") as h5f:
       # find attribute about num. of time level, and n,l,m in C_nlm
       attrs["lev_t"] = len(h5f.keys()) - 1
+      if attrs["lev_t"] % 2 == 0: # for fourier transformation
+        attrs["lev_t"] -= 1
+
       attrs["max_n"], attrs["max_lm"] = h5f[f"1/{field_name}/re"].shape
       attrs["max_l"] = int(math.sqrt(attrs["max_lm"])) - 1
       attrs["r_in"] = h5f["metadata"].attrs["Rin"]
@@ -349,10 +357,11 @@ def time_derivative_fourier(field: np.array, field_name: str, attrs: dict,
 
       dfft_coeff = np.empty_like(fft_coeff)
       dfft_coeff[0] = 0
+
       dfft_coeff[1:half] = (-np.imag(fft_coeff[1:half]) +
                             1j * np.real(fft_coeff[1:half])) * omega[1:]
       dfft_coeff[half:] = (np.imag(fft_coeff[half:]) -
-                           1j * np.real(fft_coeff[half:])) * omega[::-1][1:]
+                           1j * np.real(fft_coeff[half:])) * (omega[::-1][1:])
 
       # not optimized version
       """
