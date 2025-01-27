@@ -40,25 +40,25 @@ void RadiationM1::calc_closure(
     return;
   }
   if (params.closure_fun == Minerbo) {
-    Real x_lo = 0.;
+    Real x_lo = 0.0;
     Real x_md = 0.5;
-    Real x_hi = 1.;
+    Real x_hi = 1.0;
     Real root{};
     BrentState state{};
 
     // Initialize rootfinder
-    int closure_maxiter = 100;
-    Real closure_epsilon = 1e-6;
-    Real tol = 1e-10;
+    int closure_maxiter = 64;
+    Real closure_epsilon = 1e-15;
     BrentSignal ierr =
-        BrentInitialize(BrentFunc, x_lo, x_hi, root, state, tol, g_dd, g_uu,
-                        n_d, w_lorentz, u_u, v_d, proj_ud, E, F_d, params);
+        BrentInitialize(BrentFunc, x_lo, x_hi, root, state, g_dd, g_uu, n_d,
+                        w_lorentz, u_u, v_d, proj_ud, E, F_d, params);
 
+    // no root, most likely due to high velocities, use simple approximation
     if (ierr == BRENT_EINVAL) {
-      double const z_ed = BrentFunc(0., g_dd, g_uu, n_d, w_lorentz, u_u, v_d,
-                                    proj_ud, E, F_d, params);
-      double const z_th = BrentFunc(1., g_dd, g_uu, n_d, w_lorentz, u_u, v_d,
-                                    proj_ud, E, F_d, params);
+      const Real z_ed = BrentFunc(0., g_dd, g_uu, n_d, w_lorentz, u_u, v_d,
+                                  proj_ud, E, F_d, params);
+      const Real z_th = BrentFunc(1., g_dd, g_uu, n_d, w_lorentz, u_u, v_d,
+                                  proj_ud, E, F_d, params);
       if (Kokkos::abs(z_th) < Kokkos::abs(z_ed)) {
         chi = 1.0;
       } else {
@@ -68,17 +68,13 @@ void RadiationM1::calc_closure(
                     P_dd, params);
       return;
     }
-    if (ierr != BRENT_SUCCESS) {
-      printf("Unexpected error in BrentInitialize.\n");
-      exit(EXIT_FAILURE);
-    }
 
     // Rootfinding
     int iter = 0;
     do {
       ++iter;
-      ierr = BrentIterate(BrentFunc, x_lo, x_hi, root, state, tol, g_dd, g_uu,
-                          n_d, w_lorentz, u_u, v_d, proj_ud, E, F_d, params);
+      ierr = BrentIterate(BrentFunc, x_lo, x_hi, root, state, g_dd, g_uu, n_d,
+                          w_lorentz, u_u, v_d, proj_ud, E, F_d, params);
 
       // Some nans in the evaluation. This should not happen.
       if (ierr != BRENT_SUCCESS) {
@@ -90,6 +86,7 @@ void RadiationM1::calc_closure(
     } while (ierr == BRENT_CONTINUE && iter < closure_maxiter);
 
     chi = minerbo(x_md);
+    printf("root = %.14e, chi = %.14e\n", x_md, chi);
 
     if (ierr != BRENT_SUCCESS) {
       printf("Maximum number of iterations exceeded when computing the M1 "
@@ -99,5 +96,4 @@ void RadiationM1::calc_closure(
 }
 
 } // namespace radiationm1
-// namespace radiationm1
 #endif // RADIATION_M1_CALC_CLOSURE_HPP

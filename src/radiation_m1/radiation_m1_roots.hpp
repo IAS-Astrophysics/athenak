@@ -70,9 +70,10 @@ template <class Functor, class... Types>
 KOKKOS_INLINE_FUNCTION BrentSignal BrentInitialize(Functor &&f, Real x_lower,
                                                    Real x_upper, Real &root,
                                                    BrentState &brent_state,
-                                                   Real &tol, Types... args) {
+                                                   Types... args) {
   if (x_lower > x_upper) {
-    return BRENT_INVALID;
+    printf("BrentInit: %.14e must be less than %.14e\n", x_lower, x_upper);
+    return BRENT_EINVAL;
   }
 
   root = 0.5 * (x_lower + x_upper);
@@ -91,7 +92,9 @@ KOKKOS_INLINE_FUNCTION BrentSignal BrentInitialize(Functor &&f, Real x_lower,
   brent_state.f_c = f_upper;
 
   if ((f_lower < 0.0 && f_upper < 0.0) || (f_lower > 0.0 && f_upper > 0.0)) {
-    printf("Endpoints should be of opposite signs!\n");
+    printf("BrentInit: Function at endpoints should be of opposite signs! "
+           "f_l = %.14e, f_h = %.14e\n",
+           f_lower, f_upper);
     return BRENT_EINVAL;
   }
   return BRENT_SUCCESS;
@@ -104,7 +107,7 @@ template <class Functor, class... Types>
 KOKKOS_INLINE_FUNCTION BrentSignal BrentIterate(Functor &&f, Real &x_lower,
                                                 Real &x_upper, Real &root,
                                                 BrentState &brent_state,
-                                                Real &tol, Types... args) {
+                                                Types... args) {
   int ac_equal = 0;
 
   Real m{};
@@ -136,6 +139,7 @@ KOKKOS_INLINE_FUNCTION BrentSignal BrentIterate(Functor &&f, Real &x_lower,
     f_c = f_a;
   }
 
+  Real tol = 0.5 * DBL_EPSILON * fabs(b);
   m = 0.5 * (c - b);
 
   if (f_b == 0) {
@@ -234,7 +238,7 @@ KOKKOS_INLINE_FUNCTION BrentSignal BrentIterate(Functor &&f, Real &x_lower,
 
 //----------------------------------------------------------------------------------------
 //! \fn BrentSignal radiationm1::BrentTestInterval
-//  \brief check if BrentIterate should continue
+//  \brief test convergence of interval to check if BrentIterate should continue
 KOKKOS_INLINE_FUNCTION
 BrentSignal BrentTestInterval(Real x_lower, Real x_upper, Real epsabs,
                               Real epsrel) {
