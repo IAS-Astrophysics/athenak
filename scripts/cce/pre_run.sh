@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 # bin
-if true
+if false
 then
 # create
 dout='./debug/dev'
@@ -57,5 +57,23 @@ mode="Re(2,2)"
 #mode="Re(2,2)"
 #./debug_athk_to_spectre.py -debug plot_simple -dout "${dout}" \
 #	-fpath $file  -field_name $fname -field_mode $mode
+
+# h5 bbh, q=2, fourier time derivatives
+elif true
+then
+file="./debug/q2_t_fourier/CceR0100.00.h5"
+dout='./debug/q2_t_fourier'
+mkdir -p ${dout}
+
+./athk_to_spectre.py -fpath dat/bbh_q2.0_chizp0.0_chizm0.0_d10.0_lev13_n128_fixed_cce_decomp_shell_3.h5 \
+-ftype h5 -d_out "$dout" -radius 100 -t_deriv "Fourier"
+
+
+# plot fig:
+fname="gxx"
+mode="Re(2,2)"
+./debug_athk_to_spectre.py -debug plot_simple -dout "${dout}" \
+	-fpath $file  -field_name $fname -field_mode $mode
+
 fi
 
