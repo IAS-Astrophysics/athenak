@@ -16,8 +16,11 @@
 #include "athena_tensor.hpp"
 #include "bvals/bvals.hpp"
 #include "parameter_input.hpp"
-#include "radiation_m1_tensors.hpp"
-#include "tasklist/task_list.hpp"
+#include "radiation_m1/radiation_m1_calc_closure.hpp"
+#include "radiation_m1/radiation_m1_macro.hpp"
+#include "radiation_m1/radiation_m1_roots.hpp"
+#include "radiation_m1/radiation_m1_tensors.hpp"
+#include "radiation_m1/radiation_m1_params.hpp"
 #include "tasklist/task_list.hpp"
 
 namespace radiationm1 {
@@ -45,48 +48,40 @@ struct RadiationM1TaskIDs {
   TaskID crecv;
 };
 
-//----------------------------------------------------------------------------------------
-//! \enum RadiationM1Closure
-//  \brief choice of M1 closure
-enum RadiationM1Closure {
-  Minerbo,
-  Eddington,
-  Thin,
-};
+class BrentFunctor {
+public:
+  KOKKOS_INLINE_FUNCTION
+  Real operator()(
+      Real xi, const AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> &g_dd,
+      const AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> &g_uu,
+      const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &n_d,
+      const Real &w_lorentz,
+      const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &u_u,
+      const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &v_d,
+      const AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> &proj_ud,
+      const Real &E, const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &F_d,
+      const RadiationM1Params &params) {
+    AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> P_dd;
+    apply_closure(g_dd, g_uu, n_d, w_lorentz, u_u, v_d, proj_ud, E, F_d,
+                  minerbo(xi), P_dd, params);
 
-//----------------------------------------------------------------------------------------
-//! \enum RadiationM1OpacityType
-//  \brief choice of neutrino opacity library
-enum RadiationM1OpacityType {
-  Toy,
-  Weakrates,
-  BnsNurates,
-};
+    AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> rT_dd;
+    assemble_rT(n_d, E, F_d, P_dd, rT_dd);
 
-//----------------------------------------------------------------------------------------
-//! \enum RadiationM1SrcUpdate
-//  \brief method to treat radiation sources
-enum RadiationM1SrcUpdate {
-  Explicit,
-  Implicit,
-  Boost,
-};
+    const Real J = calc_J_from_rT(rT_dd, u_u);
 
-//----------------------------------------------------------------------------------------
-//! \struct RadiationM1Params
-//  \brief parameters for the Grey M1 class
-struct RadiationM1Params {
-  Real rad_E_floor;
-  Real rad_N_floor;
-  Real rad_eps;
-  Real minmod_theta;
-  RadiationM1Closure closure_fun;
-  RadiationM1OpacityType opacity_type;
-  RadiationM1SrcUpdate src_update;
+    AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> H_d;
+    calc_H_from_rT(rT_dd, u_u, proj_ud, H_d);
+
+    const Real H2 = tensor_dot(g_uu, H_d, H_d);
+    return SQ(J * xi) - H2;
+  }
 };
 
 class RadiationM1 {
 public:
+  BrentFunctor BrentFunc;
+
   RadiationM1(MeshBlockPack *ppack, ParameterInput *pin);
   ~RadiationM1();
 
@@ -134,6 +129,19 @@ public:
   TaskStatus ClearSend(Driver *d, int stage);
   TaskStatus ClearRecv(Driver *d, int stage); // also in Driver::Initialize
 
+  void
+  calc_closure(const AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> &g_dd,
+               const AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> &g_uu,
+               const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &n_d,
+               const Real &w_lorentz,
+               const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &u_u,
+               const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &v_d,
+               const AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> &proj_ud,
+               const Real &E,
+               const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &F_d,
+               Real &chi, AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> &P_dd,
+               const RadiationM1Params &params);
+
 private:
   MeshBlockPack *pmy_pack; // ptr to MeshBlockPack
 };
@@ -154,6 +162,92 @@ Real minmod2(Real rl, Real rp, Real th) {
 KOKKOS_INLINE_FUNCTION
 int CombinedIdx(int nuidx, int varidx, int nvars) {
   return varidx + nuidx * nvars;
+}
+
+// Computes the closure in the lab frame with a rootfinding procedure
+KOKKOS_INLINE_FUNCTION
+void RadiationM1::calc_closure(
+    const AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> &g_dd,
+    const AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> &g_uu,
+    const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &n_d,
+    const Real &w_lorentz,
+    const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &u_u,
+    const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &v_d,
+    const AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> &proj_ud,
+    const Real &E, const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &F_d,
+    Real &chi, AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> &P_dd,
+    const RadiationM1Params &params) {
+  // These are special cases for which no root finding is needed
+  if (params.closure_fun == Eddington) {
+    chi = 1. / 3.;
+    apply_closure(g_dd, g_uu, n_d, w_lorentz, u_u, v_d, proj_ud, E, F_d, chi,
+                  P_dd, params);
+    return;
+  }
+  if (params.closure_fun == Thin) {
+    chi = 1.0;
+    apply_closure(g_dd, g_uu, n_d, w_lorentz, u_u, v_d, proj_ud, E, F_d, chi,
+                  P_dd, params);
+    return;
+  }
+  if (params.closure_fun == Minerbo) {
+    Real x_lo = 0.;
+    Real x_md = 0.5;
+    Real x_hi = 1.;
+    Real root{};
+    BrentState state{};
+
+    // Initialize rootfinder
+    BrentDekkerRoot brent_dekker;
+    int closure_maxiter = 100;
+    Real closure_epsilon = 1e-6;
+    BrentSignal ierr = brent_dekker.BrentInitialize(
+        BrentFunc, x_lo, x_hi, root, state, g_dd, g_uu, n_d, w_lorentz, u_u,
+        v_d, proj_ud, E, F_d, params);
+
+    if (ierr == BRENT_EINVAL) {
+      double const z_ed = BrentFunc(0., g_dd, g_uu, n_d, w_lorentz, u_u, v_d,
+                                    proj_ud, E, F_d, params);
+      double const z_th = BrentFunc(1., g_dd, g_uu, n_d, w_lorentz, u_u, v_d,
+                                    proj_ud, E, F_d, params);
+      if (Kokkos::abs(z_th) < Kokkos::abs(z_ed)) {
+        chi = 1.0;
+      } else {
+        chi = 1. / 3.;
+      }
+      apply_closure(g_dd, g_uu, n_d, w_lorentz, u_u, v_d, proj_ud, E, F_d, chi,
+                    P_dd, params);
+      return;
+    }
+    if (ierr != BRENT_SUCCESS) {
+      printf("Unexpected error in BrentInitialize.\n");
+      exit(EXIT_FAILURE);
+    }
+
+    // Rootfinding
+    int iter = 0;
+    do {
+      ++iter;
+      ierr = brent_dekker.BrentIterate(BrentFunc, x_lo, x_hi, root, state, g_dd,
+                                       g_uu, n_d, w_lorentz, u_u, v_d, proj_ud,
+                                       E, F_d, params);
+
+      // Some nans in the evaluation. This should not happen.
+      if (ierr != BRENT_SUCCESS) {
+        printf("Unexpected error in BrentIterate.\n");
+        exit(EXIT_FAILURE);
+      }
+      x_md = root;
+      ierr = BrentTestInterval(x_lo, x_hi, closure_epsilon, 0);
+    } while (ierr == BRENT_CONTINUE && iter < closure_maxiter);
+
+    chi = minerbo(x_md);
+
+    if (ierr != BRENT_SUCCESS) {
+      printf("Maximum number of iterations exceeded when computing the M1 "
+             "closure\n");
+    }
+  }
 }
 
 } // namespace radiationm1
