@@ -10,11 +10,12 @@
 
 #include "athena.hpp"
 #include "athena_tensor.hpp"
-#include "radiation_m1/radiation_m1.hpp"
-#include "radiation_m1_macro.hpp"
-//#include "radiation_m1_roots.hpp"
+#include "radiation_m1/radiation_m1_tensors.hpp"
+#include "radiation_m1/radiation_m1_params.hpp"
+#include "radiation_m1/radiation_m1_macro.hpp"
 
 namespace radiationm1 {
+
 // Fluid projector: delta^a_b + u^a u_b
 KOKKOS_INLINE_FUNCTION
 void calc_proj(const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &u_d,
@@ -177,167 +178,6 @@ KOKKOS_INLINE_FUNCTION Real minerbo(const Real xi) {
 }
 KOKKOS_INLINE_FUNCTION Real thin(const Real xi) { return 1.0; }
 
-// Computes the closure in the lab frame given the Eddington factor chi
-KOKKOS_INLINE_FUNCTION
-void apply_closure(
-    const AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> &g_dd,
-    const AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> &g_uu,
-    const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &n_d,
-    const Real &w_lorentz,
-    const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &u_u,
-    const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &v_d,
-    const AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> &proj_ud,
-    const Real &E, const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &F_d,
-    const Real &chi, AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> &P_dd,
-    const RadiationM1Params &params) {
-
-  AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> Pthin_dd{};
-  AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> Pthick_dd{};
-
-  calc_Pthin(g_uu, E, F_d, Pthin_dd, params);
-  calc_Pthick(g_dd, g_uu, n_d, w_lorentz, v_d, E, F_d, Pthick_dd);
-
-  const Real dthick = 3. * (1 - chi) / 2.;
-  const Real dthin = 1. - dthick;
-
-  for (int a = 0; a < 4; ++a) {
-    for (int b = a; b < 4; ++b) {
-      P_dd(a, b) = dthick * Pthick_dd(a, b) + dthin * Pthin_dd(a, b);
-    }
-  }
-}
-
-// Computes the closure in the lab frame with a rootfinding procedure
-
-KOKKOS_INLINE_FUNCTION
-void calc_closure(
-    const AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> &g_dd,
-    const AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> &g_uu,
-    const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &n_d,
-    const Real &w_lorentz,
-    const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &u_u,
-    const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &v_d,
-    const AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> &proj_ud,
-    const Real &E, const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &F_d,
-    Real &chi, AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> &P_dd,
-    const RadiationM1Params &params) {
-
-  // These are special cases for which no root finding is needed
-  if (params.closure_fun == RadiationM1Closure::Eddington) {
-    chi = 1. / 3.;
-    apply_closure(g_dd, g_uu, n_d, w_lorentz, u_u, v_d, proj_ud, E, F_d, chi,
-                  P_dd, params);
-    return;
-  }
-  if (params.closure_fun == RadiationM1Closure::Thin) {
-    chi = 1.0;
-    apply_closure(g_dd, g_uu, n_d, w_lorentz, u_u, v_d, proj_ud, E, F_d, chi,
-                  P_dd, params);
-    return;
-  }
-  /*
-  Parameters params(closure_fun, g_dd, g_uu, n_d, w_lorentz, u_u, v_d, proj_ud,
-                    E, F_d);
-  gsl_function F;
-  F.function = &zFunction;
-  F.params = reinterpret_cast<void *>(&params);
-
-  Real x_lo = 0.0;
-  Real x_md = 0.5;
-  Real x_hi = 1.0;
-
-  RootsCode ierr = gsl_root_fsolver_set(fsolver, &F, x_lo, x_hi);
-
-  // No root, most likely because of high velocities in the fluid
-  // We use very simple approximation in this case
-  if (ierr == RootsCode::EINVAL) {
-    double const z_ed = zFunction(0., F.params);
-    double const z_th = zFunction(1., F.params);
-    if (abs(z_th) < abs(z_ed)) {
-      chi = 1.0;
-    } else {
-      chi = 1.0 / 3.0;
-    }
-    apply_closure(g_dd, g_uu, n_d, w_lorentz, u_u, v_d, proj_ud, E, F_d, chi,
-                  P_dd);
-    return;
-  } else if (ierr == RootsCode::EBADFUNC) {
-    printf("NaN or Inf found in closure!\n");
-  } else if (ierr != 0) {
-    printf("Unexpected error in root_fsolver_set\n");
-  }
-
-  // Rootfinding
-  int iter = 0;
-  do {
-    ++iter;
-    ierr = gsl_root_fsolver_iterate(fsolver);
-    // Some nans in the evaluation. This should not happen.
-    if (ierr == GSL_EBADFUNC) {
-      printf("NaNs or Infs found when computing the closure!\n");
-    } else if (ierr != 0) {
-      ostringstream ss;
-      ss << "Unexpected error in gsl_root_fsolver_iterate,  error code \""
-         << ierr << "\"\n";
-      print_stuff(cctkGH, i, j, k, ig, &params, ss);
-      Printer::print_err(ss.str());
-#pragma omp critical
-      CCTK_ERROR("Unexpected error in gsl_root_fsolver_iterate");
-    }
-    x_lo = gsl_root_fsolver_x_lower(fsolver);
-    x_md = gsl_root_fsolver_root(fsolver);
-    x_hi = gsl_root_fsolver_x_upper(fsolver);
-    ierr = gsl_root_test_interval(x_lo, x_hi, closure_epsilon, 0);
-  } while (ierr == GSL_CONTINUE && iter < closure_maxiter);
-  chi = closure_fun(x_md);
-
-  if (ierr != GSL_SUCCESS) {
-    printf("Maximum number of iterations exceeded when computing the M1 "
-           "closure\n");
-  }
-
-  // We are done, update the closure with the newly found chi
-  apply_closure(g_dd, g_uu, n_d, w_lorentz, u_u, v_d, proj_ud, E, F_d, chi,
-                P_dd); */
-}
-
-// Computes the closure in the fluid frame with a rootfinding procedure
-KOKKOS_INLINE_FUNCTION
-void apply_inv_closure(
-    const Real &dthick,
-    const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &n_u,
-    const AthenaPointTensor<Real, TensorSymm::NONE, 4, 2> &gamma_ud,
-    const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &u_d, const Real &J,
-    const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &H_d,
-    const AthenaPointTensor<Real, TensorSymm::SYM2, 4, 1> &K_thick_dd,
-    const AthenaPointTensor<Real, TensorSymm::SYM2, 4, 1> &K_thin_dd, Real &E,
-    AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &F_d) {}
-
-// Computes the closure in the fluid frame with a rootfinding procedure
-/*
-KOKKOS_INLINE_FUNCTION
-void calc_inv_closure(
-        cGH const * cctkGH,
-        int const i, int const j, int const k,
-        int const ig,
-        gsl_root_fsolver * fsolver,
-        tensor::inv_metric<4> const & g_uu,
-        tensor::metric<4> const & g_dd,
-        const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> n_u,
-        const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> n_d,
-        const AthenaPointTensor<Real, TensorSymm::NONE, 4, 2> gamma_ud,
-        const Real w_lorentz,
-        const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> u_u,
-        const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> u_d,
-        const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> v_d,
-        const AthenaPointTensor<Real, TensorSymm::NONE, 4, 2> proj_ud,
-        const Real chi,
-        const Real J,
-        const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> H_d,
-        CCTK_REAL * E,
-        AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> F_d);
-}*/
-
 // Assemble the unit-norm radiation number current
 KOKKOS_INLINE_FUNCTION
 void assemble_fnu(const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &u_u,
@@ -404,6 +244,73 @@ void calc_H_from_rT(
     }
   }
 }
+
+// Computes the closure in the lab frame given the Eddington factor chi
+KOKKOS_INLINE_FUNCTION
+void apply_closure(
+    const AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> &g_dd,
+    const AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> &g_uu,
+    const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &n_d,
+    const Real &w_lorentz,
+    const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &u_u,
+    const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &v_d,
+    const AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> &proj_ud,
+    const Real &E, const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &F_d,
+    const Real &chi, AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> &P_dd,
+    const RadiationM1Params &params) {
+
+  AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> Pthin_dd{};
+  AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> Pthick_dd{};
+
+  calc_Pthin(g_uu, E, F_d, Pthin_dd, params);
+  calc_Pthick(g_dd, g_uu, n_d, w_lorentz, v_d, E, F_d, Pthick_dd);
+
+  const Real dthick = 3. * (1 - chi) / 2.;
+  const Real dthin = 1. - dthick;
+
+  for (int a = 0; a < 4; ++a) {
+    for (int b = a; b < 4; ++b) {
+      P_dd(a, b) = dthick * Pthick_dd(a, b) + dthin * Pthin_dd(a, b);
+    }
+  }
+}
+
+// Computes the closure in the fluid frame with a rootfinding procedure
+KOKKOS_INLINE_FUNCTION
+void apply_inv_closure(
+    const Real &dthick,
+    const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &n_u,
+    const AthenaPointTensor<Real, TensorSymm::NONE, 4, 2> &gamma_ud,
+    const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &u_d, const Real &J,
+    const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &H_d,
+    const AthenaPointTensor<Real, TensorSymm::SYM2, 4, 1> &K_thick_dd,
+    const AthenaPointTensor<Real, TensorSymm::SYM2, 4, 1> &K_thin_dd, Real &E,
+    AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &F_d) {}
+
+// Computes the closure in the fluid frame with a rootfinding procedure
+/*
+KOKKOS_INLINE_FUNCTION
+void calc_inv_closure(
+        cGH const * cctkGH,
+        int const i, int const j, int const k,
+        int const ig,
+        gsl_root_fsolver * fsolver,
+        tensor::inv_metric<4> const & g_uu,
+        tensor::metric<4> const & g_dd,
+        const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> n_u,
+        const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> n_d,
+        const AthenaPointTensor<Real, TensorSymm::NONE, 4, 2> gamma_ud,
+        const Real w_lorentz,
+        const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> u_u,
+        const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> u_d,
+        const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> v_d,
+        const AthenaPointTensor<Real, TensorSymm::NONE, 4, 2> proj_ud,
+        const Real chi,
+        const Real J,
+        const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> H_d,
+        CCTK_REAL * E,
+        AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> F_d);
+}*/
 
 // Compute the radiation energy flux
 KOKKOS_INLINE_FUNCTION

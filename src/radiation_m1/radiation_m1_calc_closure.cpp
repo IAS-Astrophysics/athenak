@@ -11,6 +11,7 @@
 #include "coordinates/adm.hpp"
 #include "radiation_m1.hpp"
 #include "radiation_m1_closure.hpp"
+#include "radiation_m1_calc_closure.hpp"
 
 namespace radiationm1 {
 TaskStatus RadiationM1::CalcClosure(Driver *pdrive, int stage) {
