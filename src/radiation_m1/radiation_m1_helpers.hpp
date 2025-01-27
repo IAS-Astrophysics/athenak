@@ -5,18 +5,37 @@
 // Copyright(C) 2020 James M. Stone <jmstone@ias.edu> and the Athena code team
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
-//! \file radiation_m1_closure.hpp
-//  \brief functions to calculate M1 closure
+//! \file radiation_m1_helpers.hpp
+//  \brief helper functions for grey M1
 
 #include "athena.hpp"
 #include "athena_tensor.hpp"
-#include "radiation_m1/radiation_m1_tensors.hpp"
-#include "radiation_m1/radiation_m1_params.hpp"
 #include "radiation_m1/radiation_m1_macro.hpp"
+#include "radiation_m1/radiation_m1_params.hpp"
+#include "radiation_m1/radiation_m1_tensors.hpp"
 
 namespace radiationm1 {
 
-// Fluid projector: delta^a_b + u^a u_b
+//----------------------------------------------------------------------------------------
+//! \fn Real radiationm1::minmod2
+//  \brief double minmod
+KOKKOS_INLINE_FUNCTION
+Real minmod2(Real rl, Real rp, Real th) {
+  return Kokkos::min(1.0, Kokkos::min(th * rl, th * rp));
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn int radiationm1::CombinedIdx
+//  \brief given flavor index, variable index and total no. of vars compute
+//  combined idx
+KOKKOS_INLINE_FUNCTION
+int CombinedIdx(int nuidx, int varidx, int nvars) {
+  return varidx + nuidx * nvars;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void radiationm1::calc_proj
+//  \brief Fluid projector: delta^a_b + u^a u_b
 KOKKOS_INLINE_FUNCTION
 void calc_proj(const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &u_d,
                const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &u_u,
@@ -28,7 +47,9 @@ void calc_proj(const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &u_d,
   }
 }
 
-// Project out the radiation pressure tensor (in any frame)
+//----------------------------------------------------------------------------------------
+//! \fn void radiationm1::calc_K_from_rT
+//  \brief Project out the radiation pressure tensor (in any frame)
 KOKKOS_INLINE_FUNCTION
 void calc_K_from_rT(
     const AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> &rT_dd,
@@ -46,7 +67,9 @@ void calc_K_from_rT(
   }
 }
 
-// Compute the closure in the thin limit
+//----------------------------------------------------------------------------------------
+//! \fn void radiationm1::calc_Pthin
+//  \brief Compute lab radiation pressure in the thin limit
 KOKKOS_INLINE_FUNCTION
 void calc_Pthin(const AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> &g_uu,
                 const Real &E,
@@ -71,7 +94,9 @@ void calc_Pthin(const AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> &g_uu,
   }
 }
 
-// Compute the closure in the thick limit
+//----------------------------------------------------------------------------------------
+//! \fn void radiationm1::calc_Pthick
+//  \brief Compute radiation pressure in the thick limit
 KOKKOS_INLINE_FUNCTION
 void calc_Pthick(const AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> &g_dd,
                  const AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> &g_uu,
@@ -105,7 +130,9 @@ void calc_Pthick(const AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> &g_dd,
   }
 }
 
-// Compute the closure in the thin limit (fluid frame)
+//----------------------------------------------------------------------------------------
+//! \fn void radiationm1::calc_Kthin
+//  \brief Compute fluid frame pressure in the thin limit
 KOKKOS_INLINE_FUNCTION
 void calc_Kthin(const AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> &g_uu,
                 const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &n_d,
@@ -144,7 +171,9 @@ void calc_Kthin(const AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> &g_uu,
   calc_K_from_rT(T_dd, proj_ud, K_dd);
 }
 
-// Compute the closure in the thick limit (fluid frame)
+//----------------------------------------------------------------------------------------
+//! \fn void radiationm1::calc_Kthick
+//  \brief Compute fluid frame pressure in the thick limit
 KOKKOS_INLINE_FUNCTION
 void calc_Kthick(const AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> &g_dd,
                  const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &u_d,
@@ -158,7 +187,9 @@ void calc_Kthick(const AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> &g_dd,
   }
 }
 
-// Computes the flux factor xi = H_a H^a / J^2
+//----------------------------------------------------------------------------------------
+//! \fn Real radiationm1::flux_factor
+//  \brief Compute the flux factor xi = H_a H^a / J^2
 KOKKOS_INLINE_FUNCTION
 Real flux_factor(const AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> &g_uu,
                  const Real &J,
@@ -178,7 +209,9 @@ KOKKOS_INLINE_FUNCTION Real minerbo(const Real xi) {
 }
 KOKKOS_INLINE_FUNCTION Real thin(const Real xi) { return 1.0; }
 
-// Assemble the unit-norm radiation number current
+//----------------------------------------------------------------------------------------
+//! \fn void radiationm1::assemble_fnu
+//  \brief Assemble the unit-norm radiation number current
 KOKKOS_INLINE_FUNCTION
 void assemble_fnu(const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &u_u,
                   const Real &J,
@@ -190,7 +223,10 @@ void assemble_fnu(const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &u_u,
   }
 }
 
-// Compute the ratio of neutrino number densities in the lab and fluid frame
+//----------------------------------------------------------------------------------------
+//! \fn Real radiationm1::compute_Gamma
+//  \brief Compute the ratio of neutrino number densities in the lab and fluid
+//  frame
 KOKKOS_INLINE_FUNCTION
 Real compute_Gamma(const Real &W,
                    const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &v_u,
@@ -205,7 +241,9 @@ Real compute_Gamma(const Real &W,
   return 1;
 }
 
-// Assemble the radiation stress tensor in any frame
+//----------------------------------------------------------------------------------------
+//! \fn void radiationm1::assemble_rT
+//  \brief Assemble the radiation stress tensor in any frame
 KOKKOS_INLINE_FUNCTION
 void assemble_rT(const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &u_d,
                  const Real &J,
@@ -220,7 +258,9 @@ void assemble_rT(const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &u_d,
   }
 }
 
-// Project out the radiation energy (in any frame)
+//----------------------------------------------------------------------------------------
+//! \fn Real radiationm1::calc_J_from_rT
+//  \brief Project out the radiation energy (in any frame)
 KOKKOS_INLINE_FUNCTION
 Real calc_J_from_rT(
     const AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> &rT_dd,
@@ -228,7 +268,9 @@ Real calc_J_from_rT(
   return tensor_dot(rT_dd, u_u, u_u);
 }
 
-// Project out the radiation fluxes (in any frame)
+//----------------------------------------------------------------------------------------
+//! \fn void radiationm1::calc_H_from_rT
+//  \brief Project out the radiation fluxes (in any frame)
 KOKKOS_INLINE_FUNCTION
 void calc_H_from_rT(
     const AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> &rT_dd,
@@ -245,7 +287,9 @@ void calc_H_from_rT(
   }
 }
 
-// Computes the closure in the lab frame given the Eddington factor chi
+//----------------------------------------------------------------------------------------
+//! \fn void radiationm1::apply_closure
+//  \brief Computes the closure in the lab frame given the Eddington factor chi
 KOKKOS_INLINE_FUNCTION
 void apply_closure(
     const AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> &g_dd,
@@ -275,7 +319,9 @@ void apply_closure(
   }
 }
 
-// Computes the closure in the fluid frame with a rootfinding procedure
+//----------------------------------------------------------------------------------------
+//! \fn void radiationm1::apply_inv_closure
+//  \brief Computes the closure in the fluid frame with a rootfinding procedure
 KOKKOS_INLINE_FUNCTION
 void apply_inv_closure(
     const Real &dthick,
@@ -312,7 +358,9 @@ void calc_inv_closure(
         AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> F_d);
 }*/
 
-// Compute the radiation energy flux
+//----------------------------------------------------------------------------------------
+//! \fn Real radiationm1::calc_E_flux
+//  \brief Compute the radiation energy flux
 KOKKOS_INLINE_FUNCTION
 Real calc_E_flux(const Real &alp,
                  const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &beta_u,
@@ -322,7 +370,9 @@ Real calc_E_flux(const Real &alp,
   return alp * F_u(direction) - beta_u(direction) * E;
 }
 
-// Compute the flux of neutrino energy flux
+//----------------------------------------------------------------------------------------
+//! \fn Real radiationm1::calc_F_flux
+//  \brief Compute the flux of neutrino energy flux
 KOKKOS_INLINE_FUNCTION
 Real calc_F_flux(const Real &alp,
                  const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &beta_u,
@@ -333,8 +383,10 @@ Real calc_F_flux(const Real &alp,
   return alp * P_ud(direction, component) - beta_u(direction) * F_d(component);
 }
 
-// Computes the sources S_a = [eta - k_abs J] u_a - [k_abs + k_scat] H_a
-// WARNING: be consistent with the densitization of eta, J, and H_d
+//----------------------------------------------------------------------------------------
+//! \fn void radiationm1::calc_rad_sources
+//  \brief Computes the sources S_a = [eta - k_abs J] u_a - [k_abs + k_scat] H_a
+//  WARNING: be consistent with the densitization of eta, J, and H_d
 KOKKOS_INLINE_FUNCTION
 void calc_rad_sources(
     const Real &eta, const Real &kabs, const Real &kscat,
@@ -346,7 +398,9 @@ void calc_rad_sources(
   }
 }
 
-// Computes the source term for E: -alp n^a S_a
+//----------------------------------------------------------------------------------------
+//! \fn Real radiationm1::calc_rE_source
+//  \brief Computes the source term for E: -alp n^a S_a
 KOKKOS_INLINE_FUNCTION
 Real calc_rE_source(
     const Real &alp, const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &n_u,
@@ -354,7 +408,9 @@ Real calc_rE_source(
   return -alp * tensor_dot(n_u, S_d);
 }
 
-// Computes the source term for F_a: alp gamma^b_a S_b
+//----------------------------------------------------------------------------------------
+//! \fn void radiationm1::calc_rF_source
+//  \brief Computes the source term for F_a: alp gamma^b_a S_b
 KOKKOS_INLINE_FUNCTION
 void calc_rF_source(
     const Real &alp,
@@ -369,7 +425,9 @@ void calc_rF_source(
   }
 }
 
-// Enforce that E > rad_E_floor and F_a F^a < (1 - rad_eps) E^2
+//----------------------------------------------------------------------------------------
+//! \fn void radiationm1::apply_floor
+//  \brief Enforce that E > rad_E_floor and F_a F^a < (1 - rad_eps) E^2
 KOKKOS_INLINE_FUNCTION
 void apply_floor(const AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> &g_uu,
                  Real &E, AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &F_d,

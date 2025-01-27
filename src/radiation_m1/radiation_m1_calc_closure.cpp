@@ -6,12 +6,12 @@
 //! \file radiation_m1_calc_closure.cpp
 //! \brief calculate lab frame pressure
 
+#include "radiation_m1_calc_closure.hpp"
 #include "athena.hpp"
 #include "athena_tensor.hpp"
 #include "coordinates/adm.hpp"
 #include "radiation_m1.hpp"
-#include "radiation_m1_closure.hpp"
-#include "radiation_m1_calc_closure.hpp"
+#include "radiation_m1_helpers.hpp"
 
 namespace radiationm1 {
 TaskStatus RadiationM1::CalcClosure(Driver *pdrive, int stage) {
