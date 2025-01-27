@@ -20,7 +20,9 @@
 class BrentFunc {
 public:
   KOKKOS_INLINE_FUNCTION
-  Real operator()(const Real x, const Real a) { return x * x + 3. * x + 2; }
+  Real operator()(const Real x) {
+    return 3. * x * x - 7. * x - 5;
+  }
 };
 
 //----------------------------------------------------------------------------------------
@@ -32,38 +34,45 @@ void ProblemGenerator::RadiationM1BrentTest(ParameterInput *pin,
     return;
 
   BrentFunc f;
-  Real x_lo = -1.9;
-  Real x_md = -3.;
-  Real x_hi = 0.1;
-  Real root{};
-  radiationm1::BrentState state{};
+  const Real x_lo_arr[2] = {-20, 1.1};
+  const Real x_hi_arr[2] = {-0.1, 6.3};
 
-  // Initialize rootfinder
-  int closure_maxiter = 64;
-  Real closure_epsilon = 1e-15;
-  radiationm1::BrentSignal ierr =
-      BrentInitialize(f, x_lo, x_hi, root, state, 1);
+  for (int i = 0; i < 2; ++i) {
+        Real x_lo = x_lo_arr[i];
+        Real x_md = 0.1;
+        Real x_hi = x_hi_arr[i];
 
-  // Rootfinding
-  int iter = 0;
-  do {
-    ++iter;
-    ierr = BrentIterate(f, x_lo, x_hi, root, state, 1);
+        Real root{};
+        radiationm1::BrentState state{};
 
-    // Some nans in the evaluation. This should not happen.
-    if (ierr != radiationm1::BRENT_SUCCESS) {
-      printf("Unexpected error in BrentIterate.\n");
-      exit(EXIT_FAILURE);
-    }
-    x_md = root;
-    ierr = radiationm1::BrentTestInterval(x_lo, x_hi, closure_epsilon, 0);
-  } while (ierr == radiationm1::BRENT_CONTINUE && iter < closure_maxiter);
+        // Initialize rootfinder
+        int closure_maxiter = 64;
+        Real closure_epsilon = 1e-15;
+        radiationm1::BrentSignal ierr =
+            BrentInitialize(f, x_lo, x_hi, root, state);
 
-  printf("root = %.14e\n", x_md);
+        // Rootfinding
+        int iter = 0;
+        do {
+          ++iter;
+          ierr = BrentIterate(f, x_lo, x_hi, root, state);
 
-  if (ierr != radiationm1::BRENT_SUCCESS) {
-    printf("Maximum number of iterations exceeded when computing the M1 "
-           "closure\n");
-  }
+          // Some nans in the evaluation. This should not happen.
+          if (ierr != radiationm1::BRENT_SUCCESS) {
+            printf("Unexpected error in BrentIterate.\n");
+            exit(EXIT_FAILURE);
+          }
+          x_md = root;
+          ierr = radiationm1::BrentTestInterval(x_lo, x_hi, closure_epsilon, 0);
+        } while (ierr == radiationm1::BRENT_CONTINUE && iter < closure_maxiter);
+
+        printf("[%d] root = %.14e\n", i, x_md);
+
+        if (ierr != radiationm1::BRENT_SUCCESS) {
+          printf("Maximum number of iterations exceeded\n");
+        }
+      }
+
+      printf("Answer: -0.573384418151758, 2.90671775148509\n");
   return;
 }
