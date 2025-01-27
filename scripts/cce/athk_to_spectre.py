@@ -334,7 +334,8 @@ def time_derivative_fourier(field: np.array, field_name: str, attrs: dict,
     return the time derivative of the given field using Fourier method
     field(t,rel/img,n,lm)
     """
-
+  
+  ## TODO: Fourier time derives not tested!
   print(f"Fourier time derivative: {field_name}", flush=True)
   _, len_t, len_n, len_lm = field.shape
   dt = attrs["time"][2] - attrs["time"][1]
