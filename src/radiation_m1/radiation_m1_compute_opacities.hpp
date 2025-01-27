@@ -15,12 +15,12 @@ namespace radiationm1 {
 
 struct M1Opacities {
 
-  Real eta_0[RADIATION_M1_TOTAL_NUM_SPECIES];
-  Real abs_0[RADIATION_M1_TOTAL_NUM_SPECIES];
+  Real eta_0[M1_TOTAL_NUM_SPECIES];
+  Real abs_0[M1_TOTAL_NUM_SPECIES];
 
-  Real eta_1[RADIATION_M1_TOTAL_NUM_SPECIES];
-  Real abs_1[RADIATION_M1_TOTAL_NUM_SPECIES];
-  Real scat_1[RADIATION_M1_TOTAL_NUM_SPECIES];
+  Real eta_1[M1_TOTAL_NUM_SPECIES];
+  Real abs_1[M1_TOTAL_NUM_SPECIES];
+  Real scat_1[M1_TOTAL_NUM_SPECIES];
 };
 typedef struct M1Opacities M1Opacities;
 

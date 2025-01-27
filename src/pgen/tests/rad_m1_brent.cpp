@@ -20,9 +20,7 @@
 class BrentFunc {
 public:
   KOKKOS_INLINE_FUNCTION
-  Real operator()(const Real x) {
-    return 3. * x * x - 7. * x - 5;
-  }
+  Real operator()(const Real x) { return 3. * x * x - 7. * x - 5; }
 };
 
 //----------------------------------------------------------------------------------------
@@ -33,11 +31,14 @@ void ProblemGenerator::RadiationM1BrentTest(ParameterInput *pin,
   if (restart)
     return;
 
-  BrentFunc f;
   const Real x_lo_arr[2] = {-20, 1.1};
   const Real x_hi_arr[2] = {-0.1, 6.3};
 
-  for (int i = 0; i < 2; ++i) {
+  par_for(
+      "pgen_diffusiontest_metric_initialize", DevExeSpace(), 0, 1,
+      KOKKOS_LAMBDA(const int i) {
+        BrentFunc f;
+
         Real x_lo = x_lo_arr[i];
         Real x_md = 0.1;
         Real x_hi = x_hi_arr[i];
@@ -71,8 +72,8 @@ void ProblemGenerator::RadiationM1BrentTest(ParameterInput *pin,
         if (ierr != radiationm1::BRENT_SUCCESS) {
           printf("Maximum number of iterations exceeded\n");
         }
-      }
+      });
 
-      printf("Answer: -0.573384418151758, 2.90671775148509\n");
+  printf("Answer: -0.573384418151758, 2.90671775148509\n");
   return;
 }

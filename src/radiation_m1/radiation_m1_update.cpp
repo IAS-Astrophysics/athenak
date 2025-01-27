@@ -170,7 +170,7 @@ TaskStatus RadiationM1::TimeUpdate(Driver *d, int stage) {
         M1Opacities opacities = ComputeM1Opacities(params_);
 
         // [1] Compute contribution from flux and geometric sources
-        Real rEFN[nspecies_][5];
+        Real rEFN[M1_TOTAL_NUM_SPECIES][5];
         par_for_inner(member, 0, nspecies_ - 1, [&](const int nuidx) {
           // [1.A: fluxes]
           for (int var = 0; var < nvars_; ++var) {
@@ -232,7 +232,7 @@ TaskStatus RadiationM1::TimeUpdate(Driver *d, int stage) {
         member.team_barrier();
 
         // [2] Compute sources
-        Real DrEFN[nspecies_][5]{};
+        Real DrEFN[M1_TOTAL_NUM_SPECIES][5]{};
         par_for_inner(member, 0, nspecies_ - 1, [&](const int nuidx) {
           AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> F_d{};
           AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> S_d{};
@@ -291,7 +291,7 @@ TaskStatus RadiationM1::TimeUpdate(Driver *d, int stage) {
 
         // [3] Limit sources
         Real tau;
-        Real DDxp[nspecies_];
+        Real DDxp[M1_TOTAL_NUM_SPECIES];
         Real dens{};
         Real source_Ye_max{};
         Real source_Ye_min{};
@@ -329,16 +329,16 @@ TaskStatus RadiationM1::TimeUpdate(Driver *d, int stage) {
             }
             const Real DYe = DDxp_sum / dens;
             if (DYe > 0) {
-              theta = Kokkos::min(
+              theta = Kokkos::min<Real>(
                   source_limiter * Kokkos::max(source_Ye_max - Y_e, 0.0) / DYe,
                   theta);
             } else if (DYe < 0) {
-              theta = Kokkos::min(
+              theta = Kokkos::min<Real>(
                   source_limiter * Kokkos::min(source_Ye_min - Y_e, 0.0) / DYe,
                   theta);
             }
           }
-          theta = Kokkos::max(0.0, theta);
+          theta = Kokkos::max<Real>(0.0, theta);
         }
 
         // [4] update fields
@@ -368,7 +368,7 @@ TaskStatus RadiationM1::TimeUpdate(Driver *d, int stage) {
             Real Nf = u1_(m, CombinedIdx(nuidx, M1_N_IDX, nvars_), k, j, i) -
                       beta_dt * rEFN[nuidx][M1_N_IDX] +
                       theta * DrEFN[nuidx][M1_N_IDX];
-            Nf = Kokkos::max(Nf, params_.rad_N_floor);
+            Nf = Kokkos::max<Real>(Nf, params_.rad_N_floor);
             u0_(m, CombinedIdx(nuidx, M1_N_IDX, nvars_), k, j, i) = Nf;
           }
         });
