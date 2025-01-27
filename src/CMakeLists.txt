@@ -171,9 +171,8 @@ add_executable(
         radiation_m1/radiation_m1_tasks.cpp
         radiation_m1/radiation_m1_update.cpp
         radiation_m1/radiation_m1_fluxes.cpp
-        radiation_m1/radiation_m1_closure.hpp
+        radiation_m1/radiation_m1_helpers.hpp
         radiation_m1/radiation_m1_newdt.cpp
-        radiation_m1/radiation_m1_calc_grsources.hpp
         radiation_m1/radiation_m1_macro.hpp
         radiation_m1/radiation_m1_sources.hpp
         radiation_m1/radiation_m1_setmask.hpp
