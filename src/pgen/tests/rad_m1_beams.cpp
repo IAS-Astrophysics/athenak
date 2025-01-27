@@ -15,7 +15,7 @@
 #include "parameter_input.hpp"
 #include "pgen/pgen.hpp"
 #include "radiation_m1/radiation_m1.hpp"
-#include "radiation_m1/radiation_m1_closure.hpp"
+#include "radiation_m1/radiation_m1_helpers.hpp"
 
 //----------------------------------------------------------------------------------------
 //! \fn void MeshBlock::UserProblem(ParameterInput *pin)

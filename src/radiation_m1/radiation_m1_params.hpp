@@ -1,7 +1,15 @@
 #ifndef RADIATION_M1_PARAMS_HPP
 #define RADIATION_M1_PARAMS_HPP
+//========================================================================================
+// AthenaXXX astrophysical plasma code
+// Copyright(C) 2020 James M. Stone <jmstone@ias.edu> and the Athena code team
+// Licensed under the 3-clause BSD License (the "LICENSE")
+//========================================================================================
+//! \file radiation_m1_params.hpp
+//  \brief enums/structs for various params of Grey M1
 
 namespace radiationm1 {
+
 //----------------------------------------------------------------------------------------
 //! \enum RadiationM1Closure
 //  \brief choice of M1 closure
@@ -41,5 +49,6 @@ struct RadiationM1Params {
   RadiationM1OpacityType opacity_type;
   RadiationM1SrcUpdate src_update;
 };
+
 } // namespace radiationm1
 #endif // RADIATION_M1_PARAMS_HPP

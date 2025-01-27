@@ -10,7 +10,7 @@
 #include "athena_tensor.hpp"
 #include "coordinates/adm.hpp"
 #include "radiation_m1.hpp"
-#include "radiation_m1_closure.hpp"
+#include "radiation_m1_helpers.hpp"
 
 namespace radiationm1 {
 
