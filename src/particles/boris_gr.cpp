@@ -721,7 +721,7 @@ void Particles::GeodesicIterations( const Real dt ){
 	const bool &three_d = pmy_pack->pmesh->three_d;
 	const Real x_step = 1.0E-07;
 	const Real v_step = 1.0E-07;
-				Real avg_iter = 0.0;
+	Real avg_iter = 0.0;
 
 	Kokkos::parallel_reduce("part_fullgr",Kokkos::RangePolicy<>(DevExeSpace(),0,(nprtcl_thispack-1)),
 		KOKKOS_LAMBDA(const int p, Real &aux_n_iter) {
@@ -749,9 +749,7 @@ void Particles::GeodesicIterations( const Real dt ){
 		do{
 			
 		++n_iter;
-		if (n_iter > 5){
-			step_fac = 1E+3;
-		}
+		if (n_iter > 5){ step_fac = 1E+3; }
 
 		HamiltonEquation_Position(x_init, x_eval, v_init, v_eval, spin, RHS_eval_x);
 		HamiltonEquation_Velocity(x_init, x_eval, v_init, v_eval, x_step, spin, it_tol, RHS_eval_v);
