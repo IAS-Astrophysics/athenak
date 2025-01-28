@@ -120,7 +120,7 @@ void GCAEquation_Position( const Real * x_in,  const DvceFaceFld4D<Real> &b0_, c
 
 	// Push gyro-center position (hence no u_perp)
 	for (int i=0; i<3; ++i) {
-		H[i] = sqrt(-1.0/gupper[0][0])*(v_par*b[i]/Gamma + v_drift[i]) + gupper[0][i+1]/gupper[0][0];
+		H[i] = sqrt(-1.0/gupper[0][0])*(v_par*b[i]/Gamma + vup_drift[i]) + gupper[0][i+1]/gupper[0][0];
 	}
 
 	return;
@@ -185,7 +185,9 @@ void GCAEquation_Velocity( const Real * x_init, const Real * x_eval, const Real 
 	Real E[3], B[3];
 	InterpolateFields( x_eval, b0_, e0_, mbsize, indcs, m, E, B );
 
+	// HamiltonEquation_Velocity sets H[i] = 0 internally, no need to do this before hand
 	HamiltonEquation_Velocity( x_init, x_eval, v_init, v_eval, x_step, spin, it_tol, H );
+	// Following directly adds to H
 	GCAElectricPush( x_eval, E, B, spin, q_o_m, H );
 
 	return;
@@ -347,13 +349,6 @@ void Particles::GCAIterations( const Real dt ){
 		for (int i = 0; i<3; ++i){ v_eval[i] = v_par_eval*b[i] + v_perp_mod*perp_up[i] + v_drift[i]*Gamma; }
 		//printf("v_ev %d %f %f %f \n ", pi(PTAG,p), v_eval[0],v_eval[1],v_eval[2]);
 		//printf("x_ev 1 %d %f %f %f \n ", pi(PTAG,p), x_eval[0],x_eval[1],x_eval[2]);
-
-		for (int i=0; i<3; ++i) {
-			RHS_eval_v[i] = 0.0;
-			RHS_eval_x[i] = 0.0;
-			RHS_grad_1[i] = 0.0;
-			RHS_grad_2[i] = 0.0;
-		}
 
 		GCAEquation_Position(x_eval, b0_, e0_, mbsize, indcs, m, mag_mom, v_eval, spin, RHS_eval_x);
 		GCAEquation_Velocity(x_init, x_eval, v_init, v_eval, x_step, spin, it_tol, q_over_m,
