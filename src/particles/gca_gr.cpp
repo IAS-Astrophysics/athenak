@@ -86,7 +86,8 @@ void GCAEquation_Position( const Real * x_in,  const DvceFaceFld4D<Real> &b0_, c
 		for (int i2 = 0; i2<3; ++i2) {
 			B_norm += glower[i1+1][i2+1]*B[i1]*B[i2];
 		}
-  }	
+  }
+	B_norm = sqrt(B_norm);	
 	for (int i = 0; i < 3; ++i ){
 		b[i] = B[i]/B_norm; 
 		e[i] = E[i]/B_norm; 
@@ -95,11 +96,13 @@ void GCAEquation_Position( const Real * x_in,  const DvceFaceFld4D<Real> &b0_, c
 	Real v_drift[3];
 	// Following returns covariant 3-velocity
 	GCAComputeDrifts( gupper, ADM_upper, adm_det, e, b, v_drift );
+	//printf("v_d %f %f %f \n", v_drift[0], v_drift[1], v_drift[2]);
 	// Raise indeces on v_drift
   Real vup_drift[3] = {0.0};
 	vup_drift[0] = ADM_upper[0][0]*v_drift[0] + ADM_upper[0][1]*v_drift[1] + ADM_upper[0][2]*v_drift[2];
 	vup_drift[1] = ADM_upper[1][0]*v_drift[0] + ADM_upper[1][1]*v_drift[1] + ADM_upper[1][2]*v_drift[2];
 	vup_drift[2] = ADM_upper[2][0]*v_drift[0] + ADM_upper[2][1]*v_drift[1] + ADM_upper[2][2]*v_drift[2];
+	//printf("vup_d %f %f %f \n", vup_drift[0], vup_drift[1], vup_drift[2]);
 
 	// Compute Gamma
 	Real drift_g = 0.0;
@@ -113,6 +116,7 @@ void GCAEquation_Position( const Real * x_in,  const DvceFaceFld4D<Real> &b0_, c
 	for (int i = 0; i < 3; ++i ){ v_par += v[i]*b[i]; }
 
 	Real Gamma = drift_g*sqrt( 1 + SQR(v_par) + 2.0*mag_mom*B_norm*drift_g/prtcl_mass );
+	//printf("Lor %f %f %f \n", drift_g, v_par, Gamma);
 
 	// Push gyro-center position (hence no u_perp)
 	for (int i=0; i<3; ++i) {
@@ -235,7 +239,7 @@ void Particles::GCAIterations( const Real dt ){
 		//u is always contravariant. Iteration variables
 		Real RHS_eval_v[3], RHS_eval_x[3]; // parallel velocity is now scalar quantity
 		Real Jacob[3][3], inv_Jacob[3][3];
-		Real x_grad[3], v_grad;
+		Real x_grad[3];
 		Real RHS_grad_1[3], RHS_grad_2[3];
 		int n_iter = 0;
 		Real step_fac = 1.0;
@@ -277,9 +281,9 @@ void Particles::GCAIterations( const Real dt ){
 			}	
 		}	
 		drift_g = 1/sqrt(1-drift_g);
-		Real Gamma = drift_g*sqrt( 1 + SQR(v_par_eval) + 2.0*mag_mom*B_norm*drift_g/prtcl_mass );
 		// Get perpendicular velocity
 		Real v_perp_mod = sqrt( 2.0*B_norm*drift_g*mag_mom/prtcl_mass );
+		Real Gamma = drift_g*sqrt( 1 + SQR(v_par_eval) + v_perp_mod );
 		// Get perpendicular vector
 		Real perp_low[3], perp_up[3];
 		perp_low[0] = cos(gphase);
@@ -300,12 +304,10 @@ void Particles::GCAIterations( const Real dt ){
 		do{
 			
 		++n_iter;
-		if (n_iter > 5){ step_fac = 1E+3; }
+		if (n_iter > 3){ step_fac = 1E+3; }
 		
 		//Construct a ``full velocity vector'' starting from the parallel velocity and the magnetic momentum
 		ComputeMetricAndInverse(x_eval[0],x_eval[1],x_eval[2], false, spin, glower, gupper); 
-		GetUpperAdmMetric( gupper, ADM_upper );
-		ComputeDeterminant3( ADM_upper, adm_det );
 		InterpolateFields( x_eval, b0_, e0_, mbsize, indcs, m, E, B );
 		//Compute B norm
 		B_norm = 0.0;
@@ -314,11 +316,14 @@ void Particles::GCAIterations( const Real dt ){
 				B_norm += glower[i1+1][i2+1]*B[i1]*B[i2];
 			}
 		}	
+		B_norm = sqrt(B_norm);
 		for (int i = 0; i < 3; ++i ){
 			b[i] = B[i]/B_norm;
 			e[i] = E[i]/B_norm;
 		}
 		// Get drifts at this position
+		GetUpperAdmMetric( gupper, ADM_upper );
+		ComputeDeterminant3( ADM_upper, adm_det );
 		GCAComputeDrifts( gupper, ADM_upper, adm_det, e, b, v_drift );
 		drift_g = 0.0;
 		for (int i1 = 0; i1<3; ++i1) {
@@ -337,35 +342,48 @@ void Particles::GCAIterations( const Real dt ){
 		for (int i = 0; i<3; ++i){ perp_norm += perp_low[i]*perp_up[i]; }
 		for (int i = 0; i<3; ++i){ perp_up[i] /= sqrt( perp_norm ); }
 		v_perp_mod = sqrt( 2.0*B_norm*drift_g*mag_mom/prtcl_mass );
+		//printf("perp_up %d %f %f %f \n ", pi(PTAG,p), perp_up[0], perp_up[1], perp_up[2]);
+		//printf("v_comp %d %f %f %f %f %f %f \n ", pi(PTAG,p), v_par_eval, v_perp_mod, v_drift[0], v_drift[1], v_drift[2], Gamma);
 		for (int i = 0; i<3; ++i){ v_eval[i] = v_par_eval*b[i] + v_perp_mod*perp_up[i] + v_drift[i]*Gamma; }
+		//printf("v_ev %d %f %f %f \n ", pi(PTAG,p), v_eval[0],v_eval[1],v_eval[2]);
+		//printf("x_ev 1 %d %f %f %f \n ", pi(PTAG,p), x_eval[0],x_eval[1],x_eval[2]);
+
+		for (int i=0; i<3; ++i) {
+			RHS_eval_v[i] = 0.0;
+			RHS_eval_x[i] = 0.0;
+			RHS_grad_1[i] = 0.0;
+			RHS_grad_2[i] = 0.0;
+		}
 
 		GCAEquation_Position(x_eval, b0_, e0_, mbsize, indcs, m, mag_mom, v_eval, spin, RHS_eval_x);
 		GCAEquation_Velocity(x_init, x_eval, v_init, v_eval, x_step, spin, it_tol, q_over_m,
 						 b0_, e0_, mbsize, indcs, m, RHS_eval_v);
+		//printf("%d %d %f %f %f \n ", pi(PTAG,p), n_iter, RHS_eval_x[0],RHS_eval_x[1],RHS_eval_x[2]);
+		//printf("%d %d %f %f %f \n ", pi(PTAG,p), n_iter, RHS_eval_v[0],RHS_eval_v[1],RHS_eval_v[2]);
 
 		// First Jacobian for position
 		// Variation along x
 		x_grad[0] = x_eval[0] + x_step/step_fac;
 		x_grad[1] = x_eval[1]; x_grad[2] = x_eval[2];
-		GCAEquation_Position(x_eval, b0_, e0_, mbsize, indcs, m, mag_mom, v_eval, spin, RHS_grad_1);
+		GCAEquation_Position(x_grad, b0_, e0_, mbsize, indcs, m, mag_mom, v_eval, spin, RHS_grad_1);
 		x_grad[0] = x_eval[0] - x_step/step_fac;
-		GCAEquation_Position(x_eval, b0_, e0_, mbsize, indcs, m, mag_mom, v_eval, spin, RHS_grad_2);
+		GCAEquation_Position(x_grad, b0_, e0_, mbsize, indcs, m, mag_mom, v_eval, spin, RHS_grad_2);
 		for (int i=0; i<3; ++i) { Jacob[0][i] = - (RHS_grad_1[i] - RHS_grad_2[i])*dt/(2.0*x_step/step_fac); }
 		Jacob[0][0] += 1.0; // Diagonal terms
 		// Variation along y
 		x_grad[1] = x_eval[1] + x_step/step_fac;
 		x_grad[0] = x_eval[0]; x_grad[2] = x_eval[2];
-		GCAEquation_Position(x_eval, b0_, e0_, mbsize, indcs, m, mag_mom, v_eval, spin, RHS_grad_1);
+		GCAEquation_Position(x_grad, b0_, e0_, mbsize, indcs, m, mag_mom, v_eval, spin, RHS_grad_1);
 		x_grad[1] = x_eval[1] - x_step/step_fac;
-		GCAEquation_Position(x_eval, b0_, e0_, mbsize, indcs, m, mag_mom, v_eval, spin, RHS_grad_2);
+		GCAEquation_Position(x_grad, b0_, e0_, mbsize, indcs, m, mag_mom, v_eval, spin, RHS_grad_2);
 		for (int i=0; i<3; ++i) { Jacob[1][i] = - (RHS_grad_1[i] - RHS_grad_2[i])*dt/(2.0*x_step/step_fac); }
 		Jacob[1][1] += 1.0; // Diagonal terms
 		// Variation along z
 		x_grad[2] = x_eval[2] + x_step/step_fac;
 		x_grad[0] = x_eval[0]; x_grad[1] = x_eval[1];
-		GCAEquation_Position(x_eval, b0_, e0_, mbsize, indcs, m, mag_mom, v_eval, spin, RHS_grad_1);
+		GCAEquation_Position(x_grad, b0_, e0_, mbsize, indcs, m, mag_mom, v_eval, spin, RHS_grad_1);
 		x_grad[2] = x_eval[2] - x_step/step_fac;
-		GCAEquation_Position(x_eval, b0_, e0_, mbsize, indcs, m, mag_mom, v_eval, spin, RHS_grad_2);
+		GCAEquation_Position(x_grad, b0_, e0_, mbsize, indcs, m, mag_mom, v_eval, spin, RHS_grad_2);
 		for (int i=0; i<3; ++i) { Jacob[2][i] = - (RHS_grad_1[i] - RHS_grad_2[i])*dt/(2.0*x_step/step_fac); }
 		Jacob[2][2] += 1.0; // Diagonal terms
 		ComputeInverseMatrix3( Jacob, inv_Jacob );
@@ -376,6 +394,7 @@ void Particles::GCAIterations( const Real dt ){
 		for (int i=0; i<3; ++i){
 			for (int j=0; j<3; ++j){ x_eval[i] -= inv_Jacob[j][i]*(x_grad[j] - x_init[j] - RHS_eval_x[j]*dt); }
 		}
+		//printf("x_ev 2 %d %f %f %f \n ", pi(PTAG,p), x_eval[0],x_eval[1],x_eval[2]);
 
 		// Then Jacobian for velocity
 		// Variation along the parallel velocity only because the magnetic momentum is fixed
@@ -383,10 +402,12 @@ void Particles::GCAIterations( const Real dt ){
 		// a given velocity direction result in "upper" indeces
 		// and the lower indeces are provided by the rest function itself
 		for (int i = 0; i < 3; ++i ){ v_eval[i] = (v_par_eval + v_step/step_fac)*b[i] + v_perp_mod*perp_up[i] + v_drift[i]*Gamma; }
-		GCAEquation_Velocity(x_init, x_eval, v_init, v_eval, x_step, spin, it_tol, q_over_m,
+		//printf("v_ev 2 %d %f %f %f \n ", pi(PTAG,p), v_eval[0],v_eval[1],v_eval[2]);
+		GCAEquation_Velocity(x_init, x_grad, v_init, v_eval, x_step, spin, it_tol, q_over_m,
 						 b0_, e0_, mbsize, indcs, m, RHS_grad_1);
 		for (int i = 0; i < 3; ++i ){ v_eval[i] = (v_par_eval - v_step/step_fac)*b[i] + v_perp_mod*perp_up[i] + v_drift[i]*Gamma; }
-		GCAEquation_Velocity(x_init, x_eval, v_init, v_eval, x_step, spin, it_tol, q_over_m,
+		//printf("v_ev 3 %d %f %f %f \n ", pi(PTAG,p), v_eval[0],v_eval[1],v_eval[2]);
+		GCAEquation_Velocity(x_init, x_grad, v_init, v_eval, x_step, spin, it_tol, q_over_m,
 						 b0_, e0_, mbsize, indcs, m, RHS_grad_2);
 		Real vg_1 = 0.0;
 		Real vg_2 = 0.0;
@@ -396,15 +417,14 @@ void Particles::GCAIterations( const Real dt ){
 			vg_2 += RHS_grad_2[i]*b[i];
 			vg_v += RHS_eval_v[i]*b[i];
 		}
-		Real J = - (vg_1 - vg_2)*dt/(2.0*v_step/step_fac);
-		J = 1.0/J;
+		//printf("vg %d %f %f %f \n ", pi(PTAG,p), vg_1, vg_2, vg_v);
+		Real J = (vg_1 - vg_2)*dt/(2.0*v_step/step_fac);
+		//printf("J %d %f\n ", pi(PTAG,p), J);
 
-		v_par_grad = 0.0;
-		for (int i = 0; i < 3; ++i ){ v_par_grad += v_eval[i]*b[i]; }
-
-		for (int i=0; i<3; ++i){
-			for (int j=0; j<3; ++j){ v_par_eval -= J*(v_par_grad - v_par_init - vg_v*dt); }
-		}
+		v_par_grad = v_par_eval;
+		
+		//printf("v_par %f %f %f %f \n", v_par_init, v_par_grad, v_par_eval, vg_v*dt);
+		if ( fabs(J) > 1.0E-3 ) { v_par_eval -= (v_par_grad - v_par_init - vg_v*dt)/J; }
 
 		// Store for next iteration
 		for (int i=0; i<3; ++i) { x_prev[i] = x_grad[i]; }
@@ -417,7 +437,7 @@ void Particles::GCAIterations( const Real dt ){
 				 );
 
 		// Done with iterations, update ``true'' values
-		pr(IPVX,p) = v_eval[0];
+		pr(IPVX,p) = v_par_eval;
 		pr(IPX,p) = x_eval[0];
 		if (multi_d) { pr(IPY,p) = x_eval[1]; }
 		if (three_d) { pr(IPZ,p) = x_eval[2]; }
