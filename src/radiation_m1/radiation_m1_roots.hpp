@@ -267,7 +267,7 @@ BrentSignal BrentTestInterval(Real x_lower, Real x_upper, Real epsabs,
   tolerance = epsabs + epsrel * min_abs;
 
   if (Kokkos::fabs(x_upper - x_lower) < tolerance) {
-    return BRENT_CONTINUE;
+    return BRENT_SUCCESS;
   }
   return BRENT_CONTINUE;
 }
