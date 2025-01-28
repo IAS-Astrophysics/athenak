@@ -78,7 +78,7 @@ add_executable(
         mhd/mhd_tasks.cpp
         mhd/mhd_update.cpp
 
-	outputs/io_wrapper.cpp
+				outputs/io_wrapper.cpp
         outputs/outputs.cpp
         outputs/basetype_output.cpp
         outputs/derived_variables.cpp
@@ -92,6 +92,8 @@ add_executable(
         outputs/vtk_mesh.cpp
         outputs/vtk_prtcl.cpp
 
+        particles/hamiltonian_gr.hpp
+        particles/gca_gr.cpp
         particles/boris_gr.cpp
         particles/particles.cpp
         particles/particles_pushers.cpp
