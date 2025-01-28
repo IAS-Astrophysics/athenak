@@ -206,7 +206,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
       const bool prtcl_init_flow = !(prtcl_init_type.compare("flow_align"));
       const bool prtcl_init_blob = !(prtcl_init_type.compare("blob"));
       const bool prtcl_init_rad = !(prtcl_init_type.compare("shell"));
-      const bool is_gca = !(pin->GetString("particles","pusher").compare("gca_gr"));
+      const bool is_gca = pmbp->ppart->is_gca;
       // Check initialization type has been set
       if ( !(prtcl_init_rnd || prtcl_init_flow || prtcl_init_blob || prtcl_init_rad) ) {
         std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
@@ -438,7 +438,6 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
 														+ 2.0*gl[3][2]*b[2]*b[1];
 											b_norm = sqrt(b_norm);
 											Real r_larmor = u_perp/q_over_m/b_norm; // Larmor radius computed with perpendicular 4-velocity
-											printf("%d %f %f %f \n", pi(PTAG,p), u_perp, r_larmor, this_en );
 											while ( r_larmor > max_en || r_larmor < min_en ){
 												u[0] *= this_en/r_larmor;
 												u[1] *= this_en/r_larmor;
@@ -450,7 +449,6 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
 												u_perp = sqrt(0.666*u_perp); // Assume isotropy, then 2/3 of the norm of u is perpendicular velocity
 												r_larmor = u_perp/q_over_m/b_norm; // Larmor radius computed with perpendicular 4-velocity
 											}
-											printf("%d %f %f %f \n", pi(PTAG,p), u_perp, r_larmor, this_en );
 											u0 = gl[1][1]*SQR(u[0]) + gl[2][2]*SQR(u[1]) + gl[3][3]*SQR(u[2])
 														+ 2.0*gl[1][2]*u[0]*u[1] + 2.0*gl[1][3]*u[0]*u[2]
 														+ 2.0*gl[3][2]*u[2]*u[1];

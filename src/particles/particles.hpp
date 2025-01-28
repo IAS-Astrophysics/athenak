@@ -24,7 +24,7 @@ class MHD;
 class EquationOfState;
 
 // constants that enumerate ParticlesPusher options
-enum class ParticlesPusher {drift, leap_frog, lagrangian_tracer, lagrangian_mc, boris, only_gr, full_gr, gr_gca};
+enum class ParticlesPusher {drift, leap_frog, lagrangian_tracer, lagrangian_mc, boris, only_gr, full_gr, gca_gr};
 
 // constants that enumerate ParticleTypes
 enum class ParticleType {cosmic_ray};
@@ -70,6 +70,7 @@ class Particles {
   int max_iter;
   Real min_radius; // This radius is used to destroy particles before they may reach the horizon
   Real charge_over_mass; //Store charge over mass ratio
+	bool is_gca; // Store if the system in question has only two velocity components
 
   ParticlesPusher pusher;
 
