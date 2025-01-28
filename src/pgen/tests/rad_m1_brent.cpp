@@ -34,6 +34,9 @@ void ProblemGenerator::RadiationM1BrentTest(ParameterInput *pin,
   const Real x_lo_arr[2] = {-20, 1.1};
   const Real x_hi_arr[2] = {-0.1, 6.3};
 
+  int closure_maxiter = 64;
+  Real closure_epsilon = 1e-15;
+
   par_for(
       "pgen_diffusiontest_metric_initialize", DevExeSpace(), 0, 1,
       KOKKOS_LAMBDA(const int i) {
@@ -47,8 +50,6 @@ void ProblemGenerator::RadiationM1BrentTest(ParameterInput *pin,
         radiationm1::BrentState state{};
 
         // Initialize rootfinder
-        int closure_maxiter = 64;
-        Real closure_epsilon = 1e-15;
         radiationm1::BrentSignal ierr =
             BrentInitialize(f, x_lo, x_hi, root, state);
 
@@ -71,6 +72,8 @@ void ProblemGenerator::RadiationM1BrentTest(ParameterInput *pin,
 
         if (ierr != radiationm1::BRENT_SUCCESS) {
           printf("Maximum number of iterations exceeded\n");
+        } else {
+          printf("[%d] num iter: %d\n", i, iter);
         }
       });
 
