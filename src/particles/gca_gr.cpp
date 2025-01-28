@@ -260,7 +260,7 @@ void Particles::GCAIterations( const Real dt ){
 		ComputeDeterminant3( ADM_upper, adm_det );
 
 		int m = pi(PGID,p) - gids;
-		Real E[3], B[3], b[3], e[3];
+		Real E[3], B[3], b[3], e[3], b_low[3];
 		InterpolateFields( x_init, b0_, e0_, mbsize, indcs, m, E, B );
 		//Compute B norm
 		Real B_norm = 0.0;
@@ -291,14 +291,19 @@ void Particles::GCAIterations( const Real dt ){
 		perp_low[0] = cos(gphase);
 		perp_low[1] = sin(gphase);
 		perp_low[2] = - ( (b[0]*perp_low[0] + b[1]*perp_low[1])/b[2] );
-		perp_up[0] = ADM_upper[0][0]*perp_low[0] + ADM_upper[0][1]*perp_low[1] + ADM_upper[0][2]*perp_low[2];
-		perp_up[1] = ADM_upper[1][0]*perp_low[0] + ADM_upper[1][1]*perp_low[1] + ADM_upper[1][2]*perp_low[2];
-		perp_up[2] = ADM_upper[2][0]*perp_low[0] + ADM_upper[2][1]*perp_low[1] + ADM_upper[2][2]*perp_low[2];
 		Real perp_norm = 0.0;
-		for (int i = 0; i<3; ++i){ perp_norm += perp_low[i]*perp_up[i]; }
-		for (int i = 0; i<3; ++i){ perp_up[i] /= sqrt( perp_norm ); }
+		for (int i = 0; i<3; ++i){
+			for (int j = 0; j<3; ++j){ perp_norm += ADM_upper[i][j]*perp_low[i]*perp_low[j]; }
+		}
+		for (int i = 0; i<3; ++i){ perp_low[i] /= sqrt( perp_norm ); }
+		v_perp_mod = sqrt( 2.0*B_norm*drift_g*mag_mom/prtcl_mass );
+		//printf("perp_up %d %f %f %f \n ", pi(PTAG,p), perp_up[0], perp_up[1], perp_up[2]);
+		//printf("v_comp %d %f %f %f %f %f %f \n ", pi(PTAG,p), v_par_eval, v_perp_mod, v_drift[0], v_drift[1], v_drift[2], Gamma);
+		b_low[0] = glower[1][1]*b[0] + glower[1][2]*b[1] + glower[1][3]*b[2];
+		b_low[1] = glower[2][1]*b[0] + glower[2][2]*b[1] + glower[2][3]*b[2];
+		b_low[2] = glower[3][1]*b[0] + glower[3][2]*b[1] + glower[3][3]*b[2];
 		
-		for (int i = 0; i < 3; ++i ){ v_init[i] = v_par_init*b[i] + v_perp_mod*perp_up[i] + v_drift[i]*Gamma; }
+		for (int i = 0; i < 3; ++i ){ v_init[i] = v_par_init*b_low[i] + v_perp_mod*perp_low[i] + v_drift[i]*Gamma; }
 		Real x_eval[3] = {pr(IPX,p)+v_init[0]*dt, pr(IPY,p)+v_init[1]*dt, pr(IPZ,p)+v_init[2]*dt};
 		
 		// Start iterating
@@ -326,6 +331,7 @@ void Particles::GCAIterations( const Real dt ){
 		// Get drifts at this position
 		GetUpperAdmMetric( gupper, ADM_upper );
 		ComputeDeterminant3( ADM_upper, adm_det );
+		// Drifts are returned as covariant
 		GCAComputeDrifts( gupper, ADM_upper, adm_det, e, b, v_drift );
 		drift_g = 0.0;
 		for (int i1 = 0; i1<3; ++i1) {
@@ -337,16 +343,18 @@ void Particles::GCAIterations( const Real dt ){
 		Gamma = drift_g*sqrt( 1 + SQR(v_par_eval) + 2.0*mag_mom*B_norm*drift_g/prtcl_mass );
 		// Get perpendicular velocity at this position
 		perp_low[2] = - ( (b[0]*perp_low[0] + b[1]*perp_low[1])/b[2] ); //Keep the random phase constant throughout iterations
-		perp_up[0] = ADM_upper[0][0]*perp_low[0] + ADM_upper[0][1]*perp_low[1] + ADM_upper[0][2]*perp_low[2];
-		perp_up[1] = ADM_upper[1][0]*perp_low[0] + ADM_upper[1][1]*perp_low[1] + ADM_upper[1][2]*perp_low[2];
-		perp_up[2] = ADM_upper[2][0]*perp_low[0] + ADM_upper[2][1]*perp_low[1] + ADM_upper[2][2]*perp_low[2];
 		perp_norm = 0.0;
-		for (int i = 0; i<3; ++i){ perp_norm += perp_low[i]*perp_up[i]; }
-		for (int i = 0; i<3; ++i){ perp_up[i] /= sqrt( perp_norm ); }
+		for (int i = 0; i<3; ++i){
+			for (int j = 0; j<3; ++j){ perp_norm += ADM_upper[i][j]*perp_low[i]*perp_low[j]; }
+		}
+		for (int i = 0; i<3; ++i){ perp_low[i] /= sqrt( perp_norm ); }
 		v_perp_mod = sqrt( 2.0*B_norm*drift_g*mag_mom/prtcl_mass );
 		//printf("perp_up %d %f %f %f \n ", pi(PTAG,p), perp_up[0], perp_up[1], perp_up[2]);
 		//printf("v_comp %d %f %f %f %f %f %f \n ", pi(PTAG,p), v_par_eval, v_perp_mod, v_drift[0], v_drift[1], v_drift[2], Gamma);
-		for (int i = 0; i<3; ++i){ v_eval[i] = v_par_eval*b[i] + v_perp_mod*perp_up[i] + v_drift[i]*Gamma; }
+		b_low[0] = glower[1][1]*b[0] + glower[1][2]*b[1] + glower[1][3]*b[2];
+		b_low[1] = glower[2][1]*b[0] + glower[2][2]*b[1] + glower[2][3]*b[2];
+		b_low[2] = glower[3][1]*b[0] + glower[3][2]*b[1] + glower[3][3]*b[2];
+		for (int i = 0; i<3; ++i){ v_eval[i] = v_par_eval*b_low[i] + v_perp_mod*perp_low[i] + v_drift[i]*Gamma; }
 		//printf("v_ev %d %f %f %f \n ", pi(PTAG,p), v_eval[0],v_eval[1],v_eval[2]);
 		//printf("x_ev 1 %d %f %f %f \n ", pi(PTAG,p), x_eval[0],x_eval[1],x_eval[2]);
 
@@ -396,11 +404,11 @@ void Particles::GCAIterations( const Real dt ){
 		// Note that the velocity here is covariant, thus derivatives along 
 		// a given velocity direction result in "upper" indeces
 		// and the lower indeces are provided by the rest function itself
-		for (int i = 0; i < 3; ++i ){ v_eval[i] = (v_par_eval + v_step/step_fac)*b[i] + v_perp_mod*perp_up[i] + v_drift[i]*Gamma; }
+		for (int i = 0; i < 3; ++i ){ v_eval[i] = (v_par_eval + v_step/step_fac)*b_low[i] + v_perp_mod*perp_low[i] + v_drift[i]*Gamma; }
 		//printf("v_ev 2 %d %f %f %f \n ", pi(PTAG,p), v_eval[0],v_eval[1],v_eval[2]);
 		GCAEquation_Velocity(x_init, x_grad, v_init, v_eval, x_step, spin, it_tol, q_over_m,
 						 b0_, e0_, mbsize, indcs, m, RHS_grad_1);
-		for (int i = 0; i < 3; ++i ){ v_eval[i] = (v_par_eval - v_step/step_fac)*b[i] + v_perp_mod*perp_up[i] + v_drift[i]*Gamma; }
+		for (int i = 0; i < 3; ++i ){ v_eval[i] = (v_par_eval - v_step/step_fac)*b_low[i] + v_perp_mod*perp_low[i] + v_drift[i]*Gamma; }
 		//printf("v_ev 3 %d %f %f %f \n ", pi(PTAG,p), v_eval[0],v_eval[1],v_eval[2]);
 		GCAEquation_Velocity(x_init, x_grad, v_init, v_eval, x_step, spin, it_tol, q_over_m,
 						 b0_, e0_, mbsize, indcs, m, RHS_grad_2);
