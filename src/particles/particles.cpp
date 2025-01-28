@@ -55,6 +55,7 @@ Particles::Particles(MeshBlockPack *ppack, ParameterInput *pin) :
   }
 
   // select pusher algorithm
+	bool is_gca = false;
   std::string ppush = pin->GetString("particles","pusher");
   if (ppush.compare("drift") == 0) {
     pusher = ParticlesPusher::drift;
@@ -73,6 +74,13 @@ Particles::Particles(MeshBlockPack *ppack, ParameterInput *pin) :
     min_radius = pin->GetOrAddReal("particles", "min_radius", 3.0);
     charge_over_mass = pin->GetOrAddReal("particles", "charge_over_mass", 1.0);
     pusher = ParticlesPusher::full_gr;
+  } else if (ppush.compare("gr_gca") == 0) {
+		is_gca = true;
+    max_iter = pin->GetOrAddInteger("particles", "max_iter", 10);
+    iter_tolerance = pin->GetOrAddReal("particles", "iter_tolerance", 1.0E-7);
+    min_radius = pin->GetOrAddReal("particles", "min_radius", 3.0);
+    charge_over_mass = pin->GetOrAddReal("particles", "charge_over_mass", 1.0);
+    pusher = ParticlesPusher::gr_gca;
   } else {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
               << "Particle pusher must be specified in <particles> block" <<std::endl;
@@ -90,6 +98,7 @@ Particles::Particles(MeshBlockPack *ppack, ParameterInput *pin) :
       {
         int ndim=4;
         if (pmy_pack->pmesh->three_d) {ndim+=2;}
+				if (is_gca) {ndim-=1;} // GCA only has 2 velocity coordinates IPVX is used for parallel component, IPVY for magnetic momentum
         nrdata = ndim;
         nidata = 2;
         break;

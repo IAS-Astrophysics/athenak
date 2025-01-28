@@ -65,6 +65,10 @@ TaskStatus Particles::Push(Driver *pdriver, int stage) {
       BorisStep(dt_/2.0, true);
     break;
 
+    case ParticlesPusher::gr_gca:
+      GCAIterations(dt_);
+    break;
+
     default:
     break;
   }
