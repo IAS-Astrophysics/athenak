@@ -431,11 +431,17 @@ def radial_derivative_at_r_chebu(field: np.array,
     field(rel/img,t,n,lm)
     """
 
-  print(f"ChebyU radial derivative: {field_name}", flush=True)
-  _, len_t, len_n, len_lm = field.shape
-
   r_1 = attrs["r_in"][0]
   r_2 = attrs["r_out"][0]
+  r = args["radius"]
+
+  print(
+      f"ChebyU radial derivative: {field_name}, at r={r} in [{r_1},{r_2}]",
+      flush=True,
+  )
+
+  _, len_t, len_n, len_lm = field.shape
+
   assert r_1 != r_2
   dx_dr = 2 / (r_2 - r_1)
 
