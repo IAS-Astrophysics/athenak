@@ -89,10 +89,12 @@ def parse_cli():
                  type=str,
                  required=True,
                  help="/path/to/cce/dir/or/file/dumps")
-  p.add_argument("-ftype",
-                 type=str,
-                 required=True,
-                 help="input file type:{h5,bin}")
+  p.add_argument(
+      "-ftype",
+      type=str,
+      required=True,
+      help="input file type:{h5:for pitnull,bin: for athenak}",
+  )
   p.add_argument("-d_out", type=str, required=True, help="/path/to/output/dir")
   p.add_argument("-debug", type=str, default="n", help="debug=[y,n]")
   p.add_argument(
@@ -158,6 +160,7 @@ def load(fpath: str, field_name: str, attrs: dict) -> list:
     dat_imag = []
     t = []
     for f in flist:
+      ##TODO: it reads all field and only use one of them. it's inefficient
       (
           nr,
           num_l_modes,
@@ -311,7 +314,7 @@ def time_derivative_findiff(field: np.array, field_name: str, attrs: dict,
                             args) -> np.array:
   """
     return the time derivative of the given field using finite diff. 2nd order
-    field(t,rel/img,n,lm)
+    field(rel/img,t,n,lm)
     """
 
   print(f"finite difference time derivative: {field_name}", flush=True)
@@ -332,9 +335,9 @@ def time_derivative_fourier(field: np.array, field_name: str, attrs: dict,
                             args) -> np.array:
   """
     return the time derivative of the given field using Fourier method
-    field(t,rel/img,n,lm)
+    field(rel/img,t, n,lm)
     """
-  
+
   ## TODO: Fourier time derives not tested!
   print(f"Fourier time derivative: {field_name}", flush=True)
   _, len_t, len_n, len_lm = field.shape
@@ -425,7 +428,7 @@ def radial_derivative_at_r_chebu(field: np.array,
     collocation points (roots of U_i): x_i = cos(pi*(i+1)/(N+1))
     x = (2*r - r_1 - r_2)/(r_2 - r_1), notes: x != {1 or -1}
 
-    field(t,rel/img,n,lm)
+    field(rel/img,t,n,lm)
     """
 
   print(f"ChebyU radial derivative: {field_name}", flush=True)
@@ -485,6 +488,97 @@ def time_derivative(field: np.array, field_name: str, attrs: dict, args):
     return time_derivative_fourier(field, field_name, attrs, args)
   elif args["t_deriv"] == "fin_diff":
     return time_derivative_findiff(field, field_name, attrs, args)
+  else:
+    raise ValueError("no such option")
+
+
+class ChebUExpansion:
+  """
+    f(x) = sum_{i=0}^{N-1} C_i U_i(x), U_i(x) Chebyshev of 2nd kind
+    collocation points (roots of U_i): x_i = cos(pi*(i+1)/(N+1))
+    """
+
+  def __init__(self, attrs: dict, args: dict):
+    self.N = N = attrs["max_n"] # num. of coeffs or num of collocation pnts
+
+    # roots:
+    x_i = np.empty(shape=(N), dtype=float)
+    for i in range(N):
+      x_i[i] = cos(pi * (i + 1) / (N + 1))
+    self.x_i = x_i
+
+    # weights:
+    w_i = np.empty(shape=(N), dtype=float)
+    for i in range(N):
+      w_i[i] = sin(pi * (i + 1) / (N + 1))
+      w_i = np.square(w_i)
+      w_i *= pi / (N + 1)
+    self.w_i = w_i
+
+    # ChebU_j(x_i):
+    Uj_xi = np.empty(shape=(N, N), dtype=float)
+    for j in range(N):
+      for i in range(N):
+        x_i = cos(pi * (i + 1) / (N + 1))
+        Uj_xi[j, i] = special.chebyu(j)(x_i)
+    self.Uj_xi = Uj_xi
+
+  def Coefficients(self, field: np.array) -> np.array:
+    """
+        use Gauss Quadrature to expand the given field in ChebU
+        f(x) = sum_{i=0}^{N-1} C_i U_i(x), U_i(x) Chebyshev of 2nd kind
+        collocation points (roots of U_i): x_i = cos(pi*(i+1)/(N+1))
+        x = (2*r - r_1 - r_2)/(r_2 - r_1), notes: x != {1 or -1}
+
+        """
+
+    coeffs = np.zeros(shape=(N), dtype=float)
+
+    w_i = self.w_i
+    x_i = self.w_i
+    Uji = self.Uj_xi
+
+    for j in range(self.N):
+      tmp = 0.0
+      for i in range(self.N):
+        tmp += w_i * field[i] * Uji[j, i]
+      coeffs[j] = tmp
+
+    return coeffs
+
+
+def radial_expansion_chebu(field: np.array, field_name: str, attrs: dict, args):
+  """
+    expands field in the radial direction using chebyshev of second kind
+    and returns the expansion coefficients. we have
+
+    f(x) = sum_{i=0}^{N-1} C_i U_i(x), U_i(x) Chebyshev of 2nd kind
+    collocation points (roots of U_i): x_i = cos(pi*(i+1)/(N+1))
+    x = (2*r - r_1 - r_2)/(r_2 - r_1), notes: x != {1 or -1}
+
+    field(rel/img,t,n,lm)
+
+    """
+
+  print(f"ChebU expansion {field_name}", flush=True)
+  expand = ChebUExpansion(attrs, args)
+  _, len_t, _, len_lm = field.shape
+
+  for t in range(len_t):
+    for lm in range(len_lm):
+      field[g_re, t, :, lm] = expand.Coefficients(field[g_re, t, :, lm])
+      field[g_im, t, :, lm] = expand.Coefficients(field[g_im, t, :, lm])
+
+
+def radial_expansion(field: np.array, field_name: str, attrs: dict, args):
+  """
+    expands field in the radial direction(if needed) and returns
+    """
+
+  if args["ftype"] == "bin":
+    return radial_expansion_chebu(field, field_name, attrs, args)
+  elif args["ftype"] == "h5":
+    return field
   else:
     raise ValueError("no such option")
 
@@ -556,6 +650,9 @@ def process_field(field_name: str) -> dict:
   # load data
   field = load(args["fpath"], field_name, attrs)
   # db[f"{field_name}"] = field
+
+  # radial expansion
+  field = radial_expansion(field, field_name, attrs, args)
 
   # time derivative
   dfield_dt = time_derivative(field, field_name, attrs, args)
