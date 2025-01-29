@@ -500,17 +500,18 @@ class ChebUExpansion:
 
   def __init__(self, attrs: dict, args: dict):
     self.N = N = attrs["max_n"] # num. of coeffs or num of collocation pnts
+    pi = math.pi
 
     # roots:
     x_i = np.empty(shape=(N), dtype=float)
     for i in range(N):
-      x_i[i] = cos(pi * (i + 1) / (N + 1))
+      x_i[i] = math.cos(pi * (i + 1) / (N + 1))
     self.x_i = x_i
 
     # weights:
     w_i = np.empty(shape=(N), dtype=float)
     for i in range(N):
-      w_i[i] = sin(pi * (i + 1) / (N + 1))
+      w_i[i] = math.sin(pi * (i + 1) / (N + 1))
       w_i = np.square(w_i)
       w_i *= pi / (N + 1)
     self.w_i = w_i
@@ -519,7 +520,7 @@ class ChebUExpansion:
     Uj_xi = np.empty(shape=(N, N), dtype=float)
     for j in range(N):
       for i in range(N):
-        x_i = cos(pi * (i + 1) / (N + 1))
+        x_i = math.cos(pi * (i + 1) / (N + 1))
         Uj_xi[j, i] = special.chebyu(j)(x_i)
     self.Uj_xi = Uj_xi
 
@@ -532,7 +533,7 @@ class ChebUExpansion:
 
         """
 
-    coeffs = np.zeros(shape=(N), dtype=float)
+    coeffs = np.zeros(shape=(self.N), dtype=float)
 
     w_i = self.w_i
     x_i = self.w_i
@@ -541,13 +542,14 @@ class ChebUExpansion:
     for j in range(self.N):
       tmp = 0.0
       for i in range(self.N):
-        tmp += w_i * field[i] * Uji[j, i]
+        tmp += w_i[i] * field[i] * Uji[j, i]
       coeffs[j] = tmp
 
-    return coeffs
+    return coeffs * (2.0 / math.pi)
 
 
-def radial_expansion_chebu(field: np.array, field_name: str, attrs: dict, args):
+def radial_expansion_chebu(field: np.array, field_name: str, attrs: dict,
+                           args) -> np.array:
   """
     expands field in the radial direction using chebyshev of second kind
     and returns the expansion coefficients. we have
@@ -568,6 +570,8 @@ def radial_expansion_chebu(field: np.array, field_name: str, attrs: dict, args):
     for lm in range(len_lm):
       field[g_re, t, :, lm] = expand.Coefficients(field[g_re, t, :, lm])
       field[g_im, t, :, lm] = expand.Coefficients(field[g_im, t, :, lm])
+
+  return field
 
 
 def radial_expansion(field: np.array, field_name: str, attrs: dict, args):
