@@ -156,9 +156,12 @@ void GCAElectricPush(const Real * x_0, const Real * E, const Real * B, const Rea
 	E_low[0] = glower[1][1]*E[0] + glower[1][2]*E[1] + glower[1][3]*E[2];
 	E_low[1] = glower[2][1]*E[0] + glower[2][2]*E[1] + glower[2][3]*E[2];
 	E_low[2] = glower[3][1]*E[0] + glower[3][2]*E[1] + glower[3][3]*E[2];
+	Real B_low[3] = {0.0};
+	B_low[0] = glower[1][1]*B[0] + glower[1][2]*B[1] + glower[1][3]*B[2];
+	B_low[1] = glower[2][1]*B[0] + glower[2][2]*B[1] + glower[2][3]*B[2];
+	B_low[2] = glower[3][1]*B[0] + glower[3][2]*B[1] + glower[3][3]*B[2];
 	for (int i = 0; i<3; ++i) { E_low[i] -= E_beta[i]; }
 	// Compute scalar product of magnetic field and electric field in normal frame
-	Real E_par = 0.0;
 	Real B_norm = 0.0;
 	for (int i1 = 0; i1<3; ++i1) {
 		for (int i2 = 0; i2<3; ++i2) {
@@ -166,8 +169,10 @@ void GCAElectricPush(const Real * x_0, const Real * E, const Real * B, const Rea
 		}
 	}	
 	B_norm = sqrt(B_norm);
+	Real E_par = 0.0;
 	for (int i =0; i<3; ++i) { E_par += E_low[i]*B[i]/B_norm; }
-	for (int i =0; i<3; ++i) { H[i] += q_o_m*E_par*B[i]/B_norm; }
+	// Need to update covariant covector
+	for (int i =0; i<3; ++i) { H[i] += q_o_m*E_par*B_low[i]/B_norm; }
 
 	return;
 }
