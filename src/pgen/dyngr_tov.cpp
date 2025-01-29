@@ -381,6 +381,8 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     SetupTOV<tov::PolytropeEOS>(pin, pmy_mesh_);
   } else if (pmbp->pdyngr->eos_policy == DynGRMHD_EOS::eos_compose) {
     SetupTOV<tov::TabulatedEOS>(pin, pmy_mesh_);
+  } else if (pmbp->pdyngr->eos_policy == DynGRMHD_EOS::eos_hybrid) {
+    SetupTOV<tov::TabulatedEOS>(pin, pmy_mesh_);
   } else if (pmbp->pdyngr->eos_policy == DynGRMHD_EOS::eos_piecewise_poly) {
     SetupTOV<tov::PiecewisePolytropeEOS>(pin, pmy_mesh_);
   } else {
