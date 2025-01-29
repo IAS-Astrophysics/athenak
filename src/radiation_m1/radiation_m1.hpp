@@ -18,9 +18,9 @@
 #include "parameter_input.hpp"
 #include "radiation_m1/radiation_m1_helpers.hpp"
 #include "radiation_m1/radiation_m1_macro.hpp"
-#include "radiation_m1/radiation_m1_roots.hpp"
-#include "radiation_m1/radiation_m1_tensors.hpp"
 #include "radiation_m1/radiation_m1_params.hpp"
+#include "radiation_m1/radiation_m1_roots_brent.hpp"
+#include "radiation_m1/radiation_m1_tensors.hpp"
 #include "tasklist/task_list.hpp"
 
 namespace radiationm1 {
