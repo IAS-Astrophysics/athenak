@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 # bin
-if false
+if true
 then
 # create
 dout='./debug/dev'
@@ -59,7 +59,7 @@ mode="Re(2,2)"
 #	-fpath $file  -field_name $fname -field_mode $mode
 
 # h5 bbh, q=2, fourier time derivatives
-elif true
+elif false
 then
 file="./debug/q2_t_fourier/CceR0100.00.h5"
 dout='./debug/q2_t_fourier'
