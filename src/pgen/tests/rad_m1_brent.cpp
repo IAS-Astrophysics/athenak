@@ -15,7 +15,7 @@
 #include "parameter_input.hpp"
 #include "pgen/pgen.hpp"
 #include "radiation_m1/radiation_m1.hpp"
-#include "radiation_m1/radiation_m1_roots.hpp"
+#include "radiation_m1/radiation_m1_roots_brent.hpp"
 
 class BrentFunc {
 public:
