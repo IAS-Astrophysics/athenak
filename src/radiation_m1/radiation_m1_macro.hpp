@@ -19,6 +19,7 @@
 #define M1_N_IDX 4
 
 #define M1_TOTAL_NUM_SPECIES 1
+#define M1_MULTIROOTS_DIM 4
 #define RADIATION_M1_SRC_EXPL 1  // explicit RHS
 #define RADIATION_M1_SRC_IMPL 2  // implicit RHS (default)
 #define RADIATION_M1_SRC_BOOST 3 // boost to fluid frame (approximate!)
