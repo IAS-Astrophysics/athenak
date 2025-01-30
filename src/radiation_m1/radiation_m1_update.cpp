@@ -11,9 +11,9 @@
 #include "coordinates/adm.hpp"
 #include "globals.hpp"
 #include "radiation_m1.hpp"
+#include "radiation_m1_calc_closure.hpp"
 #include "radiation_m1_compute_opacities.hpp"
 #include "radiation_m1_helpers.hpp"
-#include "radiation_m1_calc_closure.hpp"
 #include "radiation_m1_sources.hpp"
 #include "z4c/z4c.hpp"
 
@@ -66,10 +66,8 @@ TaskStatus RadiationM1::TimeUpdate(Driver *d, int stage) {
       ke, js, je, is, ie,
       KOKKOS_LAMBDA(TeamMember_t member, const int m, const int k, const int j,
                     const int i) {
-        Real volform = 1; //@TODO: fix this!
-        Real mb{};        // @TODO: average baryon mass
-
-        // 4-metric, 3-metric inverse, shift, normal, extrinsic curvature
+        // Compute: 4-metric, inverse metric, extrinsic curvature, shift, normal
+        // vector
         Real garr_dd[16];
         Real garr_uu[16];
         AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> g_uu{};
@@ -92,11 +90,6 @@ TaskStatus RadiationM1::TimeUpdate(Driver *d, int stage) {
             adm.g_dd(m, 0, 0, k, j, i), adm.g_dd(m, 0, 1, k, j, i),
             adm.g_dd(m, 0, 2, k, j, i), adm.g_dd(m, 1, 1, k, j, i),
             adm.g_dd(m, 1, 2, k, j, i), adm.g_dd(m, 2, 2, k, j, i), garr_uu);
-        pack_n_d(adm.alpha(m, k, j, i), n_d);
-        tensor_contract(g_uu, n_d, n_u);
-        pack_beta_u(adm.beta_u(m, 0, k, j, i), adm.beta_u(m, 1, k, j, i),
-                    adm.beta_u(m, 2, k, j, i), beta_u);
-        tensor_contract(g_dd, beta_u, beta_d);
         for (int a = 0; a < 4; ++a) {
           for (int b = 0; b < 4; ++b) {
             g_dd(a, b) = garr_dd[a + b * 4];
@@ -108,6 +101,14 @@ TaskStatus RadiationM1::TimeUpdate(Driver *d, int stage) {
             gamma_ud(a, b) = (a == b) + n_u(a) * n_d(b);
           }
         }
+
+        pack_n_d(adm.alpha(m, k, j, i), n_d);
+        tensor_contract(g_uu, n_d, n_u);
+
+        pack_beta_u(adm.beta_u(m, 0, k, j, i), adm.beta_u(m, 1, k, j, i),
+                    adm.beta_u(m, 2, k, j, i), beta_u);
+        tensor_contract(g_dd, beta_u, beta_d);
+
         K_dd(0, 0) = adm.vK_dd(m, 0, 0, k, j, i);
         K_dd(0, 1) = adm.vK_dd(m, 0, 1, k, j, i);
         K_dd(0, 2) = adm.vK_dd(m, 0, 2, k, j, i);
@@ -115,12 +116,19 @@ TaskStatus RadiationM1::TimeUpdate(Driver *d, int stage) {
         K_dd(1, 2) = adm.vK_dd(m, 1, 2, k, j, i);
         K_dd(3, 3) = adm.vK_dd(m, 2, 2, k, j, i);
 
-        // Lorentz factor, four velocity, three velocity, projection
+        Real gam = adm::SpatialDet(
+            adm.g_dd(m, 0, 0, k, j, i), adm.g_dd(m, 0, 1, k, j, i),
+            adm.g_dd(m, 0, 2, k, j, i), adm.g_dd(m, 1, 1, k, j, i),
+            adm.g_dd(m, 1, 2, k, j, i), adm.g_dd(m, 2, 2, k, j, i));
+        Real volform = Kokkos::sqrt(gam);
+
+        // Compute: lorentz factor, projection operator, velocities
         AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> u_u{};
         AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> u_d{};
         AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> v_u{};
         AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> v_d{};
         AthenaPointTensor<Real, TensorSymm::NONE, 4, 2> proj_ud{};
+
         Real w_lorentz = u_mu_(m, 0, k, j, i);
         pack_u_u(u_mu_(m, 0, k, j, i), u_mu_(m, 1, k, j, i),
                  u_mu_(m, 2, k, j, i), u_mu_(m, 3, k, j, i), u_u);
@@ -130,7 +138,7 @@ TaskStatus RadiationM1::TimeUpdate(Driver *d, int stage) {
         tensor_contract(g_dd, v_u, v_d);
         calc_proj(u_d, u_u, proj_ud);
 
-        // derivatives of lapse
+        // Compute: derivatives of lapse
         Real ideltax[3] = {1 / mbsize.d_view(m).dx1, 1 / mbsize.d_view(m).dx2,
                            1 / mbsize.d_view(m).dx3};
         AthenaPointTensor<Real, TensorSymm::NONE, 3, 1> dalpha_d{};
@@ -140,8 +148,8 @@ TaskStatus RadiationM1::TimeUpdate(Driver *d, int stage) {
         dalpha_d(2) =
             (three_d) ? Dx<M1_NGHOST>(2, ideltax, adm.alpha, m, k, j, i) : 0.;
 
-        // derivatives of shift (\p_i beta_u(j))
-        AthenaPointTensor<Real, TensorSymm::NONE, 3, 2> dbeta_du;
+        // Compute: derivatives of shift (\p_i beta_u(j))
+        AthenaPointTensor<Real, TensorSymm::NONE, 3, 2> dbeta_du{};
         for (int a = 0; a < 3; ++a) {
           dbeta_du(0, a) = Dx<M1_NGHOST>(0, ideltax, adm.beta_u, m, a, k, j, i);
           dbeta_du(1, a) =
@@ -152,8 +160,8 @@ TaskStatus RadiationM1::TimeUpdate(Driver *d, int stage) {
                         : 0.;
         }
 
-        // derivatives of spatial metric (\p_k gamma_ij)
-        AthenaPointTensor<Real, TensorSymm::SYM2, 3, 3> dg_ddd;
+        // Compute: derivatives of spatial metric (\p_k gamma_ij)
+        AthenaPointTensor<Real, TensorSymm::SYM2, 3, 3> dg_ddd{};
         for (int a = 0; a < 3; ++a) {
           for (int b = 0; b < 3; ++b) {
             dg_ddd(0, a, b) =
@@ -171,6 +179,7 @@ TaskStatus RadiationM1::TimeUpdate(Driver *d, int stage) {
         M1Opacities opacities = ComputeM1Opacities(params_);
         Real nueave{};
         Real DDxp[M1_TOTAL_NUM_SPECIES];
+        Real mb{}; // @TODO: average baryon mass
 
         // [1] Compute contribution from flux and geometric sources
         Real rEFN[M1_TOTAL_NUM_SPECIES][5];
