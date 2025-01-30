@@ -12,6 +12,8 @@
 // #ifndef WARN_FOR_SRC_FIX
 // #define WARN_FOR_SRC_FIX
 // #endif
+#define M1_NGHOST 2
+
 #define M1_E_IDX 0
 #define M1_FX_IDX 1
 #define M1_FY_IDX 2
@@ -27,7 +29,7 @@
 #define RADIATION_M1_SRC_METHOD RADIATION_M1_SRC_IMPL
 #endif
 
-#define RADIATION_M1_NGHOST 2
+
 
 #define RADIATION_M1_CLS_SHIBATA 1 // optically thin limit from Shibata 2011
 #define RADIATION_M1_CLS_SIMPLE                                                \

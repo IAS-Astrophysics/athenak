@@ -25,8 +25,6 @@ namespace radiationm1 {
 //!     F = F^* + cdt S[F]
 //!  Where F^* = F^k + cdt A
 TaskStatus RadiationM1::TimeUpdate(Driver *d, int stage) {
-  const int NGHOST = 2;
-
   auto &indcs = pmy_pack->pmesh->mb_indcs;
   int &is = indcs.is, &ie = indcs.ie;
   int &js = indcs.js, &je = indcs.je;
@@ -67,6 +65,7 @@ TaskStatus RadiationM1::TimeUpdate(Driver *d, int stage) {
       KOKKOS_LAMBDA(TeamMember_t member, const int m, const int k, const int j,
                     const int i) {
         Real volform = 1; //@TODO: fix this!
+        Real mb{};        // @TODO: average baryon mass
 
         // 4-metric, 3-metric inverse, shift, normal, extrinsic curvature
         Real garr_dd[16];
@@ -119,7 +118,7 @@ TaskStatus RadiationM1::TimeUpdate(Driver *d, int stage) {
         AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> u_d{};
         AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> v_u{};
         AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> v_d{};
-        AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> proj_ud{};
+        AthenaPointTensor<Real, TensorSymm::NONE, 4, 2> proj_ud{};
         Real w_lorentz = u_mu_(m, 0, k, j, i);
         pack_u_u(u_mu_(m, 0, k, j, i), u_mu_(m, 1, k, j, i),
                  u_mu_(m, 2, k, j, i), u_mu_(m, 3, k, j, i), u_u);
@@ -132,22 +131,22 @@ TaskStatus RadiationM1::TimeUpdate(Driver *d, int stage) {
         // derivatives of lapse
         Real ideltax[3] = {1 / mbsize.d_view(m).dx1, 1 / mbsize.d_view(m).dx2,
                            1 / mbsize.d_view(m).dx3};
-        AthenaPointTensor<Real, TensorSymm::NONE, 3, 1> dalpha_d;
-        dalpha_d(0) = Dx<NGHOST>(0, ideltax, adm.alpha, m, k, j, i);
+        AthenaPointTensor<Real, TensorSymm::NONE, 3, 1> dalpha_d{};
+        dalpha_d(0) = Dx<M1_NGHOST>(0, ideltax, adm.alpha, m, k, j, i);
         dalpha_d(1) =
-            (multi_d) ? Dx<NGHOST>(1, ideltax, adm.alpha, m, k, j, i) : 0.;
+            (multi_d) ? Dx<M1_NGHOST>(1, ideltax, adm.alpha, m, k, j, i) : 0.;
         dalpha_d(2) =
-            (three_d) ? Dx<NGHOST>(2, ideltax, adm.alpha, m, k, j, i) : 0.;
+            (three_d) ? Dx<M1_NGHOST>(2, ideltax, adm.alpha, m, k, j, i) : 0.;
 
         // derivatives of shift (\p_i beta_u(j))
         AthenaPointTensor<Real, TensorSymm::NONE, 3, 2> dbeta_du;
         for (int a = 0; a < 3; ++a) {
-          dbeta_du(0, a) = Dx<NGHOST>(0, ideltax, adm.beta_u, m, a, k, j, i);
+          dbeta_du(0, a) = Dx<M1_NGHOST>(0, ideltax, adm.beta_u, m, a, k, j, i);
           dbeta_du(1, a) =
-              (multi_d) ? Dx<NGHOST>(1, ideltax, adm.beta_u, m, a, k, j, i)
+              (multi_d) ? Dx<M1_NGHOST>(1, ideltax, adm.beta_u, m, a, k, j, i)
                         : 0.;
           dbeta_du(2, a) =
-              (three_d) ? Dx<NGHOST>(2, ideltax, adm.beta_u, m, a, k, j, i)
+              (three_d) ? Dx<M1_NGHOST>(2, ideltax, adm.beta_u, m, a, k, j, i)
                         : 0.;
         }
 
@@ -156,13 +155,13 @@ TaskStatus RadiationM1::TimeUpdate(Driver *d, int stage) {
         for (int a = 0; a < 3; ++a) {
           for (int b = 0; b < 3; ++b) {
             dg_ddd(0, a, b) =
-                Dx<NGHOST>(0, ideltax, adm.g_dd, m, a, b, k, j, i);
-            dg_ddd(1, a, b) =
-                (multi_d) ? Dx<NGHOST>(1, ideltax, adm.g_dd, m, a, b, k, j, i)
-                          : 0.;
-            dg_ddd(2, a, b) =
-                (three_d) ? Dx<NGHOST>(2, ideltax, adm.g_dd, m, a, b, k, j, i)
-                          : 0.;
+                Dx<M1_NGHOST>(0, ideltax, adm.g_dd, m, a, b, k, j, i);
+            dg_ddd(1, a, b) = (multi_d) ? Dx<M1_NGHOST>(1, ideltax, adm.g_dd, m,
+                                                        a, b, k, j, i)
+                                        : 0.;
+            dg_ddd(2, a, b) = (three_d) ? Dx<M1_NGHOST>(2, ideltax, adm.g_dd, m,
+                                                        a, b, k, j, i)
+                                        : 0.;
           }
         }
 
@@ -227,7 +226,8 @@ TaskStatus RadiationM1::TimeUpdate(Driver *d, int stage) {
 
         // [2] Compute sources
         Real DrEFN[M1_TOTAL_NUM_SPECIES][5]{};
-        par_for_inner(member, 0, nspecies_ - 1, [&](const int nuidx) {
+        for (int nuidx = 0; nuidx < nspecies_; nuidx++) {
+          // radiation fields
           AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> F_d{};
           AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> S_d{};
           AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> tS_d{};
@@ -241,7 +241,7 @@ TaskStatus RadiationM1::TimeUpdate(Driver *d, int stage) {
                         chi_(m, nuidx, k, j, i), P_dd, params_);
 
           if (params_.src_update == Explicit) {
-            // Compute fluid radiation quantities
+            // compute radiation quantities in fluid frame
             AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> T_dd{};
             assemble_rT(n_d, E, F_d, P_dd, T_dd);
             AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> H_d{};
@@ -273,9 +273,81 @@ TaskStatus RadiationM1::TimeUpdate(Driver *d, int stage) {
                                         opacities.abs_0[nuidx] * N / Gamma);
             }
           }
-          // semi-implicit solver here
-        });
-        member.team_barrier();
+
+          if (params_.src_update == Implicit) {
+            // boost to the fluid frame, compute fluid matter interaction and
+            // boost back. These values are used as initial data for implicit
+            // solve
+
+            // advect radiation
+            Real Estar = 0; //@TODO: fix!
+            Real Nstar = 0; //@TODO: fix!
+            AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> Fstar_d{};
+            apply_floor(g_uu, Estar, F_d, params_);
+            if (nspecies_ > 1) {
+              Nstar = Kokkos::max<Real>(Nstar + dt * rEFN[nuidx][M1_N_IDX],
+                                        params_.rad_N_floor);
+            }
+            Real Enew;
+
+            // Compute quantities in the fluid frame
+            Real chival{};
+            //calc_closure(g_dd, g_uu, n_d, w_lorentz, u_u, v_d, proj_ud, Estar,
+            //             Fstar_d, chival, P_dd, params_);
+
+            AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> rT_dd{};
+
+            assemble_rT(n_d, Estar, Fstar_d, P_dd, rT_dd);
+
+            const Real Jstar = calc_J_from_rT(rT_dd, u_u);
+
+            AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> Hstar_d{};
+            calc_H_from_rT(rT_dd, u_u, proj_ud, Hstar_d);
+
+            // Estimate interaction with matter
+            const Real dtau = dt * (adm.alpha(m, k, j, i) / w_lorentz);
+            Real Jnew = (Jstar + dtau * opacities.eta_1[nuidx] * volform) /
+                        (1 + dtau * opacities.abs_1[nuidx]);
+
+            // Only three components of H^a are independent H^0 is found by
+            // requiring H^a u_a = 0
+            const Real khat =
+                (opacities.abs_1[nuidx] + opacities.scat_1[nuidx]);
+            AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> Hnew_d{};
+            for (int a = 1; a < 4; ++a) {
+              Hnew_d(a) = Hstar_d(a) / (1 + dtau * khat);
+            }
+            Hnew_d(0) = 0.0;
+            for (int a = 1; a < 4; ++a) {
+              Hnew_d(0) -= Hnew_d(a) * (u_u(a) / u_u(0));
+            }
+
+            // Update Tmunu
+            const Real H2 = tensor_dot(g_uu, Hnew_d, Hnew_d);
+            const Real xi =
+                Kokkos::sqrt(H2) * (Jnew > params_.rad_E_floor ? 1 / Jnew : 0);
+            chival = minerbo(xi);
+            /*
+            calc_inv_closure(cctkGH, i, j, k, ig, gsl_solver_1d, g_uu, g_dd,
+                             n_u, n_d, gamma_ud, fidu_w_lorentz[ijk], u_u, u_d,
+                             v_d, proj_ud, chi[i4D], Jnew, Hnew_d, &Enew,
+                             &Fnew_d);
+
+            const Real dthick = 3. * (1. - chival) / 2.;
+            const Real dthin = 1. - dthick;
+
+            AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> K_thin_dd{};
+            calc_Kthin(g_uu, n_d, w_lorentz, u_d, proj_ud, Jnew, Hnew_d,
+                       K_thin_dd, params_.rad_E_floor);
+
+            for (int a = 0; a < 4; ++a)
+              for (int b = a; b < 4; ++b) {
+                rT_dd(a, b) = Jnew * u_d(a) * u_d(b) + Hnew_d(a) * u_d(b) +
+                              Hnew_d(b) * u_d(a) + dthin * K_thin_dd(a, b) +
+                              dthick * K_thick_dd(a, b);
+              } */
+          }
+        }
 
         // [3] Limit sources
         Real tau;

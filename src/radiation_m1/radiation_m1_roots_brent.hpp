@@ -43,7 +43,7 @@ public:
       const Real &w_lorentz,
       const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &u_u,
       const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &v_d,
-      const AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> &proj_ud,
+      const AthenaPointTensor<Real, TensorSymm::NONE, 4, 2> &proj_ud,
       const Real &E, const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &F_d,
       const RadiationM1Params &params) {
     AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> P_dd{};
