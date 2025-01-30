@@ -13,6 +13,8 @@
 #include "radiation_m1.hpp"
 #include "radiation_m1_compute_opacities.hpp"
 #include "radiation_m1_helpers.hpp"
+#include "radiation_m1_calc_closure.hpp"
+#include "radiation_m1_sources.hpp"
 #include "z4c/z4c.hpp"
 
 namespace radiationm1 {
@@ -167,6 +169,8 @@ TaskStatus RadiationM1::TimeUpdate(Driver *d, int stage) {
 
         // @TODO: call opacities here
         M1Opacities opacities = ComputeM1Opacities(params_);
+        Real nueave{};
+        Real DDxp[M1_TOTAL_NUM_SPECIES];
 
         // [1] Compute contribution from flux and geometric sources
         Real rEFN[M1_TOTAL_NUM_SPECIES][5];
@@ -292,8 +296,9 @@ TaskStatus RadiationM1::TimeUpdate(Driver *d, int stage) {
 
             // Compute quantities in the fluid frame
             Real chival{};
-            //calc_closure(g_dd, g_uu, n_d, w_lorentz, u_u, v_d, proj_ud, Estar,
-            //             Fstar_d, chival, P_dd, params_);
+            // calc_closure(g_dd, g_uu, n_d, w_lorentz, u_u, v_d, proj_ud,
+            // Estar,
+            //              Fstar_d, chival, P_dd, params_);
 
             AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> rT_dd{};
 
@@ -323,15 +328,15 @@ TaskStatus RadiationM1::TimeUpdate(Driver *d, int stage) {
             }
 
             // Update Tmunu
+            AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> Fnew_d{};
             const Real H2 = tensor_dot(g_uu, Hnew_d, Hnew_d);
             const Real xi =
                 Kokkos::sqrt(H2) * (Jnew > params_.rad_E_floor ? 1 / Jnew : 0);
             chival = minerbo(xi);
-            /*
-            calc_inv_closure(cctkGH, i, j, k, ig, gsl_solver_1d, g_uu, g_dd,
-                             n_u, n_d, gamma_ud, fidu_w_lorentz[ijk], u_u, u_d,
-                             v_d, proj_ud, chi[i4D], Jnew, Hnew_d, &Enew,
-                             &Fnew_d);
+
+            calc_inv_closure(g_uu, g_dd, n_u, n_d, gamma_ud, w_lorentz, u_u,
+                             u_d, v_d, proj_ud, chival, Jnew, Hnew_d, Enew,
+                             Fnew_d, params_);
 
             const Real dthick = 3. * (1. - chival) / 2.;
             const Real dthin = 1. - dthick;
@@ -340,18 +345,77 @@ TaskStatus RadiationM1::TimeUpdate(Driver *d, int stage) {
             calc_Kthin(g_uu, n_d, w_lorentz, u_d, proj_ud, Jnew, Hnew_d,
                        K_thin_dd, params_.rad_E_floor);
 
-            for (int a = 0; a < 4; ++a)
+            AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> K_thick_dd{};
+            calc_Kthick(g_dd, u_d, Jnew, Hnew_d, K_thick_dd);
+
+            for (int a = 0; a < 4; ++a) {
               for (int b = a; b < 4; ++b) {
                 rT_dd(a, b) = Jnew * u_d(a) * u_d(b) + Hnew_d(a) * u_d(b) +
                               Hnew_d(b) * u_d(a) + dthin * K_thin_dd(a, b) +
                               dthick * K_thick_dd(a, b);
-              } */
+              }
+            }
+
+            // Boost back to the lab frame
+            Enew = calc_J_from_rT(rT_dd, n_u);
+            calc_H_from_rT(rT_dd, n_u, gamma_ud, Fnew_d);
+            apply_floor(g_uu, Enew, Fnew_d, params_);
+
+            source_update(dt, adm.alpha(m, k, j, i), g_dd, g_uu, n_d, n_u,
+                          gamma_ud, u_d, u_u, v_d, v_u, proj_ud, w_lorentz,
+                          Estar, Fstar_d, Estar, Fstar_d,
+                          volform * opacities.eta_1[nuidx],
+                          opacities.abs_1[nuidx], opacities.scat_1[nuidx],
+                          chival, Enew, Fnew_d);
+            apply_floor(g_uu, Enew, Fnew_d, params_);
+
+            // Update closure
+            apply_closure(g_dd, g_uu, n_d, w_lorentz, u_u, v_d, proj_ud, Enew,
+                          Fnew_d, chival, P_dd, params_);
+
+            // Compute new radiation energy density in the fluid frame
+            AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> T_dd{};
+            assemble_rT(n_d, Enew, Fnew_d, P_dd, T_dd);
+            Jnew = calc_J_from_rT(T_dd, u_u);
+
+            // Compute changes in radiation energy and momentum
+            DrEFN[nuidx][M1_E_IDX] = Enew - Estar;
+            DrEFN[nuidx][M1_FX_IDX] = Fnew_d(1) - Fstar_d(1);
+            DrEFN[nuidx][M1_FY_IDX] = Fnew_d(2) - Fstar_d(2);
+            DrEFN[nuidx][M1_FZ_IDX] = Fnew_d(3) - Fstar_d(3);
+
+            if (nspecies_ > 1) {
+              // Compute updated Gamma
+              const Real Gamma =
+                  compute_Gamma(w_lorentz, v_u, Jnew, Enew, Fnew_d, params_);
+
+              // N^k+1 = N^* + dt ( eta - abs N^k+1 )
+              if (params_.source_therm_limit < 0 ||
+                  dt * opacities.abs_0[nuidx] < params_.source_therm_limit) {
+                DrEFN[nuidx][M1_N_IDX] =
+                    (Nstar + dt * adm.alpha(m, k, j, i) * volform *
+                                 opacities.eta_0[nuidx]) /
+                        (1 + dt * adm.alpha(m, k, j, i) *
+                                 opacities.abs_0[nuidx] / Gamma) -
+                    Nstar;
+              }
+              // The neutrino number density is updated assuming the neutrino
+              // average energies are those of the equilibrium
+              else {
+                DrEFN[nuidx][M1_N_IDX] =
+                    (nueave > 0 ? Gamma * Jnew / nueave - Nstar : 0.0);
+              }
+            }
+
+            if (nspecies_ > 1) {
+              DDxp[nuidx] = -mb * (DrEFN[nuidx][M1_N_IDX] * (nuidx == 0) -
+                                   DrEFN[nuidx][M1_N_IDX] * (nuidx == 1));
+            }
           }
         }
 
         // [3] Limit sources
         Real tau;
-        Real DDxp[M1_TOTAL_NUM_SPECIES];
         Real dens{};
         Real source_Ye_max{};
         Real source_Ye_min{};

@@ -18,8 +18,8 @@
 // The source term is S^a = (eta - ka J) u^a - (ka + ks) H^a and includes
 // also emission.
 int source_update(
-    const int i, const int j, const int k, const int ig, const Real cdt,
-    const Real alp, const AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> g_dd,
+    const Real cdt, const Real alp,
+    const AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> g_dd,
     const AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> g_uu,
     const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> n_d,
     const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> n_u,
@@ -34,6 +34,8 @@ int source_update(
     const Real Estar,
     const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> Fstar_d,
     const Real eta, const Real kabs, const Real kscat, Real chi, Real Enew,
-    AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> Fnew_d) {}
+    AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> Fnew_d) {
+    return 0;
+}
 
 #endif // RADIATION_M1_SOURCES_HPP
