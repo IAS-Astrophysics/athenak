@@ -17,7 +17,7 @@ namespace radiationm1 {
 KOKKOS_INLINE_FUNCTION
 void CalcFlux(const int m, const int k, const int j, const int i,
               const int nuidx, const int dir, const DvceArray5D<Real> &u0_,
-              const DvceArray5D<Real> &P_dd_,
+              const DvceArray5D<Real> &chi_,
               const AthenaTensor<Real, TensorSymm::NONE, 4, 1> &u_mu_,
               const adm::ADM::ADM_vars &adm, const RadiationM1Params params_,
               const int nvars_, const int nspecies_, Real flux[5], Real &cmax) {
@@ -75,6 +75,7 @@ void CalcFlux(const int m, const int k, const int j, const int i,
   tensor_contract(g_dd, v_u, v_d);
   calc_proj(u_d, u_u, proj_ud);
 
+  const Real E = u0_(m, CombinedIdx(nuidx, M1_E_IDX, nvars_), k, j, i);
   AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> F_d{};
   AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> F_u{};
   pack_F_d(beta_u(1), beta_u(2), beta_u(3),
@@ -86,16 +87,9 @@ void CalcFlux(const int m, const int k, const int j, const int i,
   // lab frame pressure
   AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> P_dd{};
   AthenaPointTensor<Real, TensorSymm::NONE, 4, 2> P_ud{};
-  pack_P_dd(adm.beta_u(m, 0, k, j, i), adm.beta_u(m, 1, k, j, i),
-            adm.beta_u(m, 2, k, j, i),
-            P_dd_(m, CombinedIdx(nuidx, 0, 6), k, j, i),
-            P_dd_(m, CombinedIdx(nuidx, 1, 6), k, j, i),
-            P_dd_(m, CombinedIdx(nuidx, 2, 6), k, j, i),
-            P_dd_(m, CombinedIdx(nuidx, 3, 6), k, j, i),
-            P_dd_(m, CombinedIdx(nuidx, 4, 6), k, j, i),
-            P_dd_(m, CombinedIdx(nuidx, 5, 6), k, j, i), P_dd);
+  apply_closure(g_dd, g_uu, n_d, w_lorentz, u_u, v_d, proj_ud, E, F_d,
+                chi_(m, nuidx, k, j, i), P_dd, params_);
   tensor_contract(g_uu, P_dd, P_ud);
-  const Real E = u0_(m, CombinedIdx(nuidx, 0, nvars_), k, j, i);
 
   // compute fluid frame quantities
   AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> T_dd{};
@@ -158,7 +152,7 @@ TaskStatus RadiationM1::CalculateFluxes(Driver *pdrive, int stage) {
 
   auto &u_mu_ = pmy_pack->pradm1->u_mu;
   auto &u0_ = pmy_pack->pradm1->u0;
-  auto &P_dd_ = pmy_pack->pradm1->P_dd;
+  auto &chi_ = pmy_pack->pradm1->chi;
   adm::ADM::ADM_vars &adm = pmy_pack->padm->adm;
 
   //--------------------------------------------------------------------------------------
@@ -179,10 +173,10 @@ TaskStatus RadiationM1::CalculateFluxes(Driver *pdrive, int stage) {
         Real flux_im1[5]{};
         Real flux_i[5]{};
         Real cmax_i, cmax_ip1;
-        CalcFlux(m, k, j, i - 1, nuidx, dir, u0_, P_dd_, u_mu_, adm, params_,
+        CalcFlux(m, k, j, i - 1, nuidx, dir, u0_, chi_, u_mu_, adm, params_,
                  nvars_, nspecies_, flux_im1, cmax_i);
-        CalcFlux(m, k, j, i, nuidx, dir, u0_, P_dd_, u_mu_, adm, params_,
-                 nvars_, nspecies_, flux_i, cmax_ip1);
+        CalcFlux(m, k, j, i, nuidx, dir, u0_, chi_, u_mu_, adm, params_, nvars_,
+                 nspecies_, flux_i, cmax_ip1);
 
         Real flux_ip12_lo[5]{};
         Real flux_ip12_ho[5]{};
