@@ -47,8 +47,8 @@ void RadiationM1::calc_closure(
     BrentState state{};
 
     // Initialize rootfinder
-    int closure_maxiter = 64;
-    Real closure_epsilon = 1e-15;
+    const int closure_maxiter = 64;
+    const Real closure_epsilon = 1e-15;
     BrentSignal ierr =
         BrentInitialize(BrentFunc, x_lo, x_hi, root, state, g_dd, g_uu, n_d,
                         w_lorentz, u_u, v_d, proj_ud, E, F_d, params);
@@ -127,8 +127,8 @@ void RadiationM1::calc_inv_closure(
   BrentState state{};
 
   // Initialize rootfinder
-  int inv_closure_maxiter = 64;
-  Real inv_closure_epsilon = 1e-15;
+  const int inv_closure_maxiter = 64;
+  const Real inv_closure_epsilon = 1e-15;
   BrentSignal ierr =
       BrentInitialize(BrentFunc, x_lo, x_hi, root, state, g_dd, g_uu, n_d,
                       w_lorentz, u_u, v_d, proj_ud, E, F_d, params);
@@ -154,7 +154,7 @@ void RadiationM1::calc_inv_closure(
       exit(EXIT_FAILURE);
     }
     x_md = root;
-    ierr = BrentTestInterval(x_lo, x_hi, inv_closure_epsilon, 0);
+    ierr = BrentTestInterval(x_lo, x_hi, 0.0, inv_closure_epsilon);
   } while (ierr == BRENT_CONTINUE && iter < inv_closure_maxiter);
 
   apply_inv_closure(x_md, n_u, gamma_ud, u_d, J, H_d, K_thick_dd, K_thin_dd, E,
