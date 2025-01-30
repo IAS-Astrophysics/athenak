@@ -546,7 +546,7 @@ class ChebUExpansion:
         test if the expansion works for different known functions
         """
 
-    N = self.N
+    N = self.N+1 # +1 to see the roots of U_N
     x_i = self.x_i
 
     # populate funcs using bases themselves
