@@ -526,9 +526,11 @@ class ChebUExpansion:
     Uj_xi = np.empty(shape=(N, N), dtype=float)
     for j in range(N):
       for i in range(N):
-        x_i = math.cos(pi * (i + 1) / (N + 1))
-        Uj_xi[j, i] = special.chebyu(j)(x_i)
+        Uj_xi[j, i] = special.chebyu(j)(x_i[i])
     self.Uj_xi = Uj_xi
+
+    if True:
+      self.__Debug()
 
   def Coefficients(self, field: np.array) -> np.array:
     """
@@ -539,19 +541,40 @@ class ChebUExpansion:
 
         """
 
-    coeffs = np.zeros(shape=(self.N), dtype=float)
-
     w_i = self.w_i
-    x_i = self.w_i
+    x_i = self.x_i
     Uji = self.Uj_xi
 
-    for j in range(self.N):
-      tmp = 0.0
-      for i in range(self.N):
-        tmp += w_i[i] * field[i] * Uji[j, i]
-      coeffs[j] = tmp
+    coeffs = Uji @ (w_i * field)
+    coeffs *= 2.0 / math.pi
 
-    return coeffs * (2.0 / math.pi)
+    return coeffs
+
+  def __Debug(self):
+    """
+        test if the expansion works for different known functions
+        """
+
+    N = self.N
+    x_i = self.x_i
+
+    # populate funcs:
+    fs = []
+    for n in range(N):
+      f = special.chebyu(n)(x_i)
+      fs.append((f, n))
+
+    # find coeffs
+    cs = []
+    for n in range(N):
+      c = self.Coefficients(fs[n][0])
+      cs.append((c, fs[n][1]))
+
+    for n in range(N):
+      order = cs[n][1]
+      print(f"chebyu_{order}, coeffs = {cs[n][0]}\n", flush=True)
+
+    exit(1)
 
 
 def radial_expansion_chebu(field: np.array, field_name: str, attrs: dict,
