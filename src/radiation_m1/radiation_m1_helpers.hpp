@@ -358,31 +358,6 @@ void apply_inv_closure(
   calc_H_from_rT(rT_dd, n_u, gamma_ud, F_d);
 }
 
-// Computes the closure in the fluid frame with a rootfinding procedure
-/*
-KOKKOS_INLINE_FUNCTION
-void calc_inv_closure(
-        cGH const * cctkGH,
-        int const i, int const j, int const k,
-        int const ig,
-        gsl_root_fsolver * fsolver,
-        tensor::inv_metric<4> const & g_uu,
-        tensor::metric<4> const & g_dd,
-        const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> n_u,
-        const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> n_d,
-        const AthenaPointTensor<Real, TensorSymm::NONE, 4, 2> gamma_ud,
-        const Real w_lorentz,
-        const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> u_u,
-        const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> u_d,
-        const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> v_d,
-        const AthenaPointTensor<Real, TensorSymm::NONE, 4, 2> proj_ud,
-        const Real chi,
-        const Real J,
-        const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> H_d,
-        CCTK_REAL * E,
-        AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> F_d);
-}*/
-
 //----------------------------------------------------------------------------------------
 //! \fn Real radiationm1::calc_E_flux
 //  \brief Compute the radiation energy flux
