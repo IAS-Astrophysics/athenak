@@ -75,6 +75,9 @@ g_args = None
 ## various attrs
 g_attrs = None
 
+## sign convention
+g_sign = None
+
 ## debug
 g_debug_max_l = 2
 
@@ -443,7 +446,7 @@ def radial_derivative_at_r_chebu(field: np.array,
   _, len_t, len_n, len_lm = field.shape
 
   assert r_1 != r_2
-  dx_dr = 2 / (r_2 - r_1)
+  dx_dr = g_sign * 2 / (r_2 - r_1)
 
   if args["debug"] == "y":
     # populate collocation points, roots of U_i
@@ -478,7 +481,7 @@ def radial_derivative_at_r_chebu(field: np.array,
 
   dfield = np.zeros(shape=(len([g_re, g_im]), len_t, len_lm))
   r = args["radius"]
-  x = (2 * r - r_1 - r_2) / (r_2 - r_1)
+  x = g_sign * (2 * r - r_1 - r_2) / (r_2 - r_1)
   for k in range(len_n):
     dfield[:, :, :] += field[:, :, k, :] * dUk_dx(k, x)
 
@@ -536,7 +539,7 @@ class ChebUExpansion:
     x_i = self.x_i
     Uji = self.Uj_xi
 
-    coeffs = Uji @ (w_i * field)
+    coeffs = Uji @ (w_i * field[::-g_sign])
     coeffs *= 2.0 / math.pi
 
     return coeffs
@@ -546,7 +549,7 @@ class ChebUExpansion:
         test if the expansion works for different known functions
         """
 
-    N = self.N+1 # +1 to see the roots of U_N
+    N = self.N + 1 # +1 to see the roots of U_N
     x_i = self.x_i
 
     # populate funcs using bases themselves
@@ -631,7 +634,7 @@ class Interpolate_at_r:
     r_1 = attrs["r_in"][0]
     r_2 = attrs["r_out"][0]
     self.r = r = args["radius"]
-    self.x = (2 * r - r_1 - r_2) / (r_2 - r_1)
+    self.x = g_sign * (2 * r - r_1 - r_2) / (r_2 - r_1)
 
     if args["interpolation"] == "ChebU":
       self.Uk = np.empty(shape=self.len_n)
@@ -801,8 +804,23 @@ def main(args):
 
   global g_attrs
   global g_args
+  global g_sign
 
   g_args = args
+  """
+    note:
+    in Pitnull:
+    r = 0.5[(r_2 - r_1)*x + (r_2 + r_1)], r_2 > r_1 & x = [-1,1]
+    => x = -1 -> r = r_1
+    => x = +1 -> r = r_2
+
+    in AthenaK:
+    r = 0.5[(r_1 - r_2)*x + (r_2 + r_1)], r_2 > r_1 & x = [1,-1]
+    => x = -1 -> r = r_2
+    => x = +1 -> r = r_1
+
+  """
+  g_sign = int(-1) if args["ftype"] == "bin" else int(1)
 
   # check if output dir exist, if not, mkdir
   if not os.path.exists(g_args["d_out"]):
