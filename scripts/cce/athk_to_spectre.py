@@ -636,10 +636,13 @@ class Interpolate_at_r:
     self.r = r = args["radius"]
     self.x = g_sign * (2 * r - r_1 - r_2) / (r_2 - r_1)
 
+    assert -1 < self.x < 1
+
     if args["interpolation"] == "ChebU":
       self.Uk = np.empty(shape=self.len_n)
       for k in range(self.len_n):
         self.Uk[k] = special.chebyu(k)(self.x)
+      # print("x,Uk",self.x,self.Uk)
       self.interp = self.interpolate_at_r_chebu
     else:
       raise ValueError("no such option")
