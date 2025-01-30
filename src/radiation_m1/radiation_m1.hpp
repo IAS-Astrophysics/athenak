@@ -53,6 +53,7 @@ struct RadiationM1TaskIDs {
 class RadiationM1 {
 public:
   BrentFunctor BrentFunc;
+  BrentFunctorInv BrentFuncInv;
 
   RadiationM1(MeshBlockPack *ppack, ParameterInput *pin);
   ~RadiationM1();
