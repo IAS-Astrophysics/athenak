@@ -11,7 +11,6 @@
 
 namespace radiationm1 {
 
-void
 
 }
 #endif //RADIATION_M1_LINALG_HPP
