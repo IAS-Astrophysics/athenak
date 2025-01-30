@@ -429,7 +429,7 @@ def radial_derivative_at_r_chebu(field: np.array,
 
     f(x) = sum_{i=0}^{N-1} C_i U_i(x), U_i(x) Chebyshev of 2nd kind
     collocation points (roots of U_i): x_i = cos(pi*(i+1)/(N+1))
-    x = (2*r - r_1 - r_2)/(r_2 - r_1), notes: x != {1 or -1}
+    x = g_sign*(2*r - r_1 - r_2)/(r_2 - r_1), notes: x != {1 or -1}
 
     field(rel/img,t,n,lm)
     """
@@ -524,14 +524,14 @@ class ChebUExpansion:
     self.Uj_xi = Uj_xi
 
     if args["debug"] == "y":
-      self.__Debug()
+      self.__debug()
 
-  def Coefficients(self, field: np.array) -> np.array:
+  def coefficients(self, field: np.array) -> np.array:
     """
         use Gauss Quadrature to expand the given field in ChebU
         f(x) = sum_{i=0}^{N-1} C_i U_i(x), U_i(x) Chebyshev of 2nd kind
         collocation points (roots of U_i): x_i = cos(pi*(i+1)/(N+1))
-        x = (2*r - r_1 - r_2)/(r_2 - r_1), notes: x != {1 or -1}
+        x = g_sign*(2*r - r_1 - r_2)/(r_2 - r_1), notes: x != {1 or -1}
 
         """
 
@@ -544,7 +544,7 @@ class ChebUExpansion:
 
     return coeffs
 
-  def __Debug(self):
+  def __debug(self):
     """
         test if the expansion works for different known functions
         """
@@ -561,7 +561,7 @@ class ChebUExpansion:
     # find coeffs
     cs = []
     for n in range(N):
-      c = self.Coefficients(fs[n][0])
+      c = self.coefficients(fs[n][0])
       cs.append((c, fs[n][1]))
 
     # expect to see only the n-th entry is 1 for the chebyu(n) of order n
@@ -578,7 +578,7 @@ def radial_expansion_chebu(field: np.array, field_name: str, attrs: dict,
 
     f(x) = sum_{i=0}^{N-1} C_i U_i(x), U_i(x) Chebyshev of 2nd kind
     collocation points (roots of U_i): x_i = cos(pi*(i+1)/(N+1))
-    x = (2*r - r_1 - r_2)/(r_2 - r_1), notes: x != {1 or -1}
+    x = g_sign*(2*r - r_1 - r_2)/(r_2 - r_1), notes: x != {1 or -1}
 
     field(rel/img,t,n,lm)
 
@@ -590,8 +590,8 @@ def radial_expansion_chebu(field: np.array, field_name: str, attrs: dict,
 
   for t in range(len_t):
     for lm in range(len_lm):
-      field[g_re, t, :, lm] = expand.Coefficients(field[g_re, t, :, lm])
-      field[g_im, t, :, lm] = expand.Coefficients(field[g_im, t, :, lm])
+      field[g_re, t, :, lm] = expand.coefficients(field[g_re, t, :, lm])
+      field[g_im, t, :, lm] = expand.coefficients(field[g_im, t, :, lm])
 
   return field
 
