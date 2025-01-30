@@ -20,6 +20,7 @@ namespace radiationm1 {
 RadiationM1::RadiationM1(MeshBlockPack *ppack, ParameterInput *pin)
     : pmy_pack(ppack), u0("cons", 1, 1, 1, 1, 1),
       coarse_u0("ccons", 1, 1, 1, 1, 1), u1("cons1", 1, 1, 1, 1, 1),
+      chi("chi",  1, 1, 1, 1, 1),
       uflx("uflx", 1, 1, 1, 1, 1), beam_source_vals("beam_vals", 1) {
 
   // parameters
@@ -74,11 +75,11 @@ RadiationM1::RadiationM1(MeshBlockPack *ppack, ParameterInput *pin)
   Kokkos::realloc(uflx.x2f, nmb, nvarstot, ncells3, ncells2, ncells1);
   Kokkos::realloc(uflx.x3f, nmb, nvarstot, ncells3, ncells2, ncells1);
 
-  // allocate velocity and lab radiation pressure
+  // allocate velocity and Eddington factor
   Kokkos::realloc(u_mu_data, nmb, 4, ncells3, ncells2, ncells1);
   u_mu.InitWithShallowSlice(u_mu_data, 0, 3);
-  Kokkos::realloc(P_dd, nmb, 6 * nspecies, ncells3, ncells2,
-                  ncells1); // stores Pxx, Pxy, Pxz, Pyy, Pyz, Pzz
+  Kokkos::realloc(chi, nmb, nspecies, ncells3, ncells2, ncells1);
+
   // radiation mask
   Kokkos::realloc(radiation_mask, nmb, ncells3, ncells2, ncells1);
   Kokkos::deep_copy(radiation_mask, false);
