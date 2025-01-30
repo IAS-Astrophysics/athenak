@@ -15,6 +15,7 @@
 
 namespace radiationm1 {
 TaskStatus RadiationM1::CalcClosure(Driver *pdrive, int stage) {
+  auto &size = pmy_pack->pmb->mb_size;
   RegionIndcs &indcs = pmy_pack->pmesh->mb_indcs;
   int &is = indcs.is, &ie = indcs.ie;
   int &js = indcs.js, &je = indcs.je;
@@ -22,7 +23,7 @@ TaskStatus RadiationM1::CalcClosure(Driver *pdrive, int stage) {
 
   auto &u0_ = pmy_pack->pradm1->u0;
   auto &u_mu_ = pmy_pack->pradm1->u_mu;
-  auto &P_dd_ = pmy_pack->pradm1->P_dd;
+  auto &chi_ = pmy_pack->pradm1->chi;
   auto nmb1 = pmy_pack->nmb_thispack - 1;
   auto &nvars_ = pmy_pack->pradm1->nvars;
   auto &nspecies_ = pmy_pack->pradm1->nspecies;
@@ -55,12 +56,7 @@ TaskStatus RadiationM1::CalcClosure(Driver *pdrive, int stage) {
             if (nspecies_ > 1) {
               u0_(m, CombinedIdx(nuidx, M1_N_IDX, nvars_), k, j, i) = 0;
             }
-            P_dd_(m, CombinedIdx(nuidx, 0, 6), k, j, i) = 0;
-            P_dd_(m, CombinedIdx(nuidx, 1, 6), k, j, i) = 0;
-            P_dd_(m, CombinedIdx(nuidx, 2, 6), k, j, i) = 0;
-            P_dd_(m, CombinedIdx(nuidx, 3, 6), k, j, i) = 0;
-            P_dd_(m, CombinedIdx(nuidx, 4, 6), k, j, i) = 0;
-            P_dd_(m, CombinedIdx(nuidx, 5, 6), k, j, i) = 0;
+            chi_(m, nuidx, k, j, i) = 0;
           });
         } else {
           // calculate metric and inverse metric
@@ -121,12 +117,7 @@ TaskStatus RadiationM1::CalcClosure(Driver *pdrive, int stage) {
             AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> Ptemp_dd{};
             calc_closure(g_dd, g_uu, n_d, w_lorentz, u_u, v_d, proj_ud, E, F_d,
                          chi, Ptemp_dd, params_);
-            P_dd_(m, CombinedIdx(nuidx, 0, 6), k, j, i) = Ptemp_dd(1, 1); // Pxx
-            P_dd_(m, CombinedIdx(nuidx, 1, 6), k, j, i) = Ptemp_dd(1, 2); // Pxy
-            P_dd_(m, CombinedIdx(nuidx, 2, 6), k, j, i) = Ptemp_dd(1, 3); // Pxz
-            P_dd_(m, CombinedIdx(nuidx, 3, 6), k, j, i) = Ptemp_dd(2, 2); // Pyy
-            P_dd_(m, CombinedIdx(nuidx, 4, 6), k, j, i) = Ptemp_dd(2, 3); // Pyz
-            P_dd_(m, CombinedIdx(nuidx, 5, 6), k, j, i) = Ptemp_dd(3, 3); // Pzz
+            chi_(m, nuidx, k, j, i) = chi;
           });
         }
       });
