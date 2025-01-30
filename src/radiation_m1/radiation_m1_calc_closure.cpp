@@ -95,7 +95,7 @@ TaskStatus RadiationM1::CalcClosure(Driver *pdrive, int stage) {
           AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> u_d{};
           AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> v_u{};
           AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> v_d{};
-          AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> proj_ud{};
+          AthenaPointTensor<Real, TensorSymm::NONE, 4, 2> proj_ud{};
           Real w_lorentz = u_mu_(m, 0, k, j, i);
           pack_u_u(u_mu_(m, 0, k, j, i), u_mu_(m, 1, k, j, i),
                    u_mu_(m, 2, k, j, i), u_mu_(m, 3, k, j, i), u_u);
