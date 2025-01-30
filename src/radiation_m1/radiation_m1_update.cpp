@@ -34,7 +34,7 @@ TaskStatus RadiationM1::TimeUpdate(Driver *d, int stage) {
   int ncells1 = indcs.nx1 + 2 * (indcs.ng);
   int nmb1 = pmy_pack->nmb_thispack - 1;
   auto &u0_ = u0;
-  auto &P_dd_ = pmy_pack->pradm1->P_dd;
+  auto &chi_ = pmy_pack->pradm1->chi;
   auto &u1_ = u1;
   auto &u_mu_ = pmy_pack->pradm1->u_mu;
   auto flx1 = uflx.x1f;
@@ -195,6 +195,7 @@ TaskStatus RadiationM1::TimeUpdate(Driver *d, int stage) {
           // Load lab radiation quantities
           AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> F_d{};
           AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> F_u{};
+          const Real E = u0_(m, CombinedIdx(nuidx, 0, nvars_), k, j, i);
           pack_F_d(beta_u(1), beta_u(2), beta_u(3),
                    u0_(m, CombinedIdx(nuidx, M1_FX_IDX, nvars_), k, j, i),
                    u0_(m, CombinedIdx(nuidx, M1_FY_IDX, nvars_), k, j, i),
@@ -203,15 +204,8 @@ TaskStatus RadiationM1::TimeUpdate(Driver *d, int stage) {
 
           AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> P_dd{};
           AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> P_uu{};
-          pack_P_dd(adm.beta_u(m, 0, k, j, i), adm.beta_u(m, 1, k, j, i),
-                    adm.beta_u(m, 2, k, j, i),
-                    P_dd_(m, CombinedIdx(nuidx, 0, 6), k, j, i),
-                    P_dd_(m, CombinedIdx(nuidx, 1, 6), k, j, i),
-                    P_dd_(m, CombinedIdx(nuidx, 2, 6), k, j, i),
-                    P_dd_(m, CombinedIdx(nuidx, 3, 6), k, j, i),
-                    P_dd_(m, CombinedIdx(nuidx, 4, 6), k, j, i),
-                    P_dd_(m, CombinedIdx(nuidx, 5, 6), k, j, i), P_dd);
-          const Real E = u0_(m, CombinedIdx(nuidx, 0, nvars_), k, j, i);
+          apply_closure(g_dd, g_uu, n_d, w_lorentz, u_u, v_d, proj_ud, E, F_d,
+                        chi_(m, nuidx, k, j, i), P_dd, params_);
 
           // geometric sources
           // rEFN[M1_E_IDX] +=
@@ -243,14 +237,8 @@ TaskStatus RadiationM1::TimeUpdate(Driver *d, int stage) {
                    u0_(m, CombinedIdx(nuidx, M1_FZ_IDX, nvars_), k, j, i), F_d);
           const Real E = u0_(m, CombinedIdx(nuidx, 0, nvars_), k, j, i);
           AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> P_dd{};
-          pack_P_dd(adm.beta_u(m, 0, k, j, i), adm.beta_u(m, 1, k, j, i),
-                    adm.beta_u(m, 2, k, j, i),
-                    P_dd_(m, CombinedIdx(nuidx, 0, 6), k, j, i),
-                    P_dd_(m, CombinedIdx(nuidx, 1, 6), k, j, i),
-                    P_dd_(m, CombinedIdx(nuidx, 2, 6), k, j, i),
-                    P_dd_(m, CombinedIdx(nuidx, 3, 6), k, j, i),
-                    P_dd_(m, CombinedIdx(nuidx, 4, 6), k, j, i),
-                    P_dd_(m, CombinedIdx(nuidx, 5, 6), k, j, i), P_dd);
+          apply_closure(g_dd, g_uu, n_d, w_lorentz, u_u, v_d, proj_ud, E, F_d,
+                        chi_(m, nuidx, k, j, i), P_dd, params_);
 
           if (params_.src_update == Explicit) {
             // Compute fluid radiation quantities

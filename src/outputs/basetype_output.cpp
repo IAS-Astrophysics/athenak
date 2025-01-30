@@ -160,9 +160,9 @@ BaseTypeOutput::BaseTypeOutput(ParameterInput *pin, Mesh *pm, OutputParameters o
        << std::endl << "Input file is likely missing corresponding block" << std::endl;
     exit(EXIT_FAILURE);
   }
-  if ((ivar>=152) && (ivar<154) && (pm->pmb_pack->pradm1 == nullptr)) {
+  if ((ivar>=152) && (ivar<155) && (pm->pmb_pack->pradm1 == nullptr)) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
-       << "Output of particles requested in <output> block '"
+       << "Output of radiation m1 variables requested in <output> block '"
        << out_params.block_name << "' but particle object not constructed."
        << std::endl << "Input file is likely missing corresponding block" << std::endl;
     exit(EXIT_FAILURE);
@@ -715,6 +715,13 @@ BaseTypeOutput::BaseTypeOutput(ParameterInput *pin, Mesh *pm, OutputParameters o
     }
   }
 
+  // radiation m1 Eddington factor
+  if (out_params.variable.compare("rad_m1_chi") == 0) {
+    for (int nuidx = 0; nuidx < pm->pmb_pack->pradm1->nspecies; ++nuidx) {
+      outvars.emplace_back("chi:" + std::to_string(nuidx), nuidx,
+                           &(pm->pmb_pack->pradm1->chi));
+    }
+  }
   // initialize vector containing number of output MBs per rank
   noutmbs.assign(global_variable::nranks, 0);
 }
