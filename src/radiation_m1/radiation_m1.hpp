@@ -108,11 +108,27 @@ public:
                const Real &w_lorentz,
                const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &u_u,
                const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &v_d,
-               const AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> &proj_ud,
+               const AthenaPointTensor<Real, TensorSymm::NONE, 4, 2> &proj_ud,
                const Real &E,
                const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &F_d,
                Real &chi, AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> &P_dd,
                const RadiationM1Params &params);
+
+  void calc_inv_closure(
+      const AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> &g_uu,
+      const AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> &g_dd,
+      const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &n_u,
+      const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &n_d,
+      const AthenaPointTensor<Real, TensorSymm::NONE, 4, 2> &gamma_ud,
+      const Real &w_lorentz,
+      const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &u_u,
+      const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &u_d,
+      const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &v_d,
+      const AthenaPointTensor<Real, TensorSymm::NONE, 4, 2> &proj_ud,
+      const Real &chi, const Real &J,
+      const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &H_d, Real &E,
+      AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &F_d,
+      const RadiationM1Params &params);
 
 private:
   MeshBlockPack *pmy_pack; // ptr to MeshBlockPack
