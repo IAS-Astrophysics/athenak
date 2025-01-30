@@ -508,28 +508,19 @@ class ChebUExpansion:
     self.N = N = attrs["max_n"] # num. of coeffs or num of collocation pnts
     pi = math.pi
 
-    # roots:
-    x_i = np.empty(shape=(N), dtype=float)
-    for i in range(N):
-      x_i[i] = math.cos(pi * (i + 1) / (N + 1))
-    self.x_i = x_i
-
-    # weights:
-    w_i = np.empty(shape=(N), dtype=float)
-    for i in range(N):
-      w_i[i] = math.sin(pi * (i + 1) / (N + 1))
-      w_i = np.square(w_i)
-      w_i *= pi / (N + 1)
-    self.w_i = w_i
+    # U_N roots:
+    a_i = np.arange(0, N, dtype=int) + 1
+    self.x_i = x_i = np.cos(math.pi * a_i / (N + 1))
+    # quadrature weights
+    self.w_i = (1 - np.square(x_i)) * pi / (N + 1)
 
     # ChebU_j(x_i):
     Uj_xi = np.empty(shape=(N, N), dtype=float)
     for j in range(N):
-      for i in range(N):
-        Uj_xi[j, i] = special.chebyu(j)(x_i[i])
+      Uj_xi[j, :] = special.chebyu(j)(x_i)
     self.Uj_xi = Uj_xi
 
-    if True:
+    if args["debug"] == "y":
       self.__Debug()
 
   def Coefficients(self, field: np.array) -> np.array:
@@ -558,7 +549,7 @@ class ChebUExpansion:
     N = self.N
     x_i = self.x_i
 
-    # populate funcs:
+    # populate funcs using bases themselves
     fs = []
     for n in range(N):
       f = special.chebyu(n)(x_i)
@@ -570,11 +561,10 @@ class ChebUExpansion:
       c = self.Coefficients(fs[n][0])
       cs.append((c, fs[n][1]))
 
+    # expect to see only the n-th entry is 1 for the chebyu(n) of order n
     for n in range(N):
       order = cs[n][1]
-      print(f"chebyu_{order}, coeffs = {cs[n][0]}\n", flush=True)
-
-    exit(1)
+      print(f"chebyu{order}, coeffs = {cs[n][0]}\n", flush=True)
 
 
 def radial_expansion_chebu(field: np.array, field_name: str, attrs: dict,
