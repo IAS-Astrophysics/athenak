@@ -122,7 +122,7 @@ TaskStatus RadiationM1::TimeUpdate(Driver *d, int stage) {
             adm.g_dd(m, 1, 2, k, j, i), adm.g_dd(m, 2, 2, k, j, i));
         Real volform = Kokkos::sqrt(gam);
 
-        // Compute: lorentz factor, projection operator, velocities
+        // Compute: Lorentz factor, projection operator, velocities
         AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> u_u{};
         AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> u_d{};
         AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> v_u{};
@@ -175,15 +175,15 @@ TaskStatus RadiationM1::TimeUpdate(Driver *d, int stage) {
           }
         }
 
-        // @TODO: call opacities here
+        // @TODO: get fluid quantities, call opacities
         M1Opacities opacities = ComputeM1Opacities(params_);
         Real nueave{};
         Real DDxp[M1_TOTAL_NUM_SPECIES];
-        Real mb{}; // @TODO: average baryon mass
+        Real mb{}; // average baryon mass
 
         // [1] Compute contribution from flux and geometric sources
         Real rEFN[M1_TOTAL_NUM_SPECIES][5];
-        par_for_inner(member, 0, nspecies_ - 1, [&](const int nuidx) {
+        for (int nuidx = 0; nuidx < nspecies_; nuidx++) {
           // [1.A: fluxes]
           for (int var = 0; var < nvars_; ++var) {
             rEFN[nuidx][var] =
@@ -220,9 +220,9 @@ TaskStatus RadiationM1::TimeUpdate(Driver *d, int stage) {
                         chi_(m, nuidx, k, j, i), P_dd, params_);
 
           // geometric sources
-          // rEFN[M1_E_IDX] +=
-          //    adm.alpha(m, k, j, i) * tensor_dot(g_uu, P_dd, K_dd) -
-          //    tensor_dot(g_uu, F_d, dalpha_d); @TODO: fix this!
+          rEFN[nuidx][M1_E_IDX] +=
+              adm.alpha(m, k, j, i) * tensor_dot(g_uu, P_dd, K_dd) -
+              tensor_dot(g_uu, F_d, dalpha_d);
           for (int a = 0; a < 3; ++a) {
             rEFN[nuidx][a + 1] -= E * dalpha_d(a);
             for (int b = 0; b < 3; ++b) {
@@ -234,8 +234,7 @@ TaskStatus RadiationM1::TimeUpdate(Driver *d, int stage) {
                     adm.alpha(m, k, j, i) / 2. * P_uu(b, c) * dg_ddd(a, b, c);
               }
           }
-        });
-        member.team_barrier();
+        }
 
         // [2] Compute sources
         Real DrEFN[M1_TOTAL_NUM_SPECIES][5]{};
