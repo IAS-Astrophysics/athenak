@@ -1,0 +1,76 @@
+# AthenaXXX input file for Z4c linear wave tests
+
+<comment>
+problem   = z4c linear waves
+reference = e.g. Daverio et al. arxiv:1810.12346 (2018)
+
+<job>
+basename  = gauge    # problem ID: basename of output filenames
+
+<mesh>
+nghost    = 2          # Number of ghost cells
+nx1       = 50         # Number of zones in X1-direction
+x1min     = 0.0        # minimum value of X1
+x1max     = 1.0        # maximum value of X1
+ix1_bc    = periodic   # inner-X1 boundary flag
+ox1_bc    = periodic   # outer-X1 boundary flag
+
+nx2       = 4         # Number of zones in X2-direction
+x2min     = 0.0        # minimum value of X2
+x2max     = 1.0        # maximum value of X2
+ix2_bc    = periodic   # inner-X2 boundary flag
+ox2_bc    = periodic   # outer-X2 boundary flag
+
+nx3       = 4         # Number of zones in X3-direction
+x3min     = 0.0        # minimum value of X3
+x3max     = 1.0        # maximum value of X3
+ix3_bc    = periodic   # inner-X3 boundary flag
+ox3_bc    = periodic   # outer-X3 boundary flag
+
+<meshblock>
+nx1       = 50         # Number of cells in each MeshBlock, X1-dir
+nx2       = 4         # Number of cells in each MeshBlock, X2-dir
+nx3       = 4         # Number of cells in each MeshBlock, X3-dir
+
+<time>
+evolution  = dynamic   # dynamic/kinematic/static
+integrator = rk4       # time integration algorithm
+cfl_number = 0.5       # The Courant, Friedrichs, & Lewy (CFL) Number
+nlim       = -1        # cycle limit (no limit if <0)
+tlim       = 1000.0       # time limit
+ndiag      = 1         # cycles between diagostic output
+
+<z4c>
+lapse_harmonic  = 0.0       # Harmonic lapse parameter mu_L
+lapse_oplog     = 2.0       # 1+log lapse parameter
+shift_eta       = 2.0       # Shift damping term
+diss            = 0.02       # Kreiss-Oliger dissipation parameter
+chi_div_floor   = 0.00001   # Floor on the conformal factor
+damp_kappa1     = 0.02       # Constraint damping factor 1
+damp_kappa2     = 0.0       # Constraint damping factor 2
+
+<problem>
+pgen_name = z4c_gauge_wave # problem generator name
+amp = 0.01
+
+<output1>
+file_type   = tab       # legacy VTK output
+variable    = z4c   # variables to be output
+dt          = 1      # time increment between outputs
+slice_x2    = 0.5
+slice_x3    = 0.5
+ghost_zones = true     # switch to output ghost cells
+
+<output2>
+file_type   = hst       # history data dump
+user_hist   = false
+data_format = %12.5e    # Optional data format string
+dt          = 1       # time increment between outputs
+
+#<output3>
+#file_type   = tab       # legacy VTK output
+#variable    = z4c   # variables to be output
+#dt          = 0.025      # time increment between outputs
+#slice_x2    = 0.5
+#slice_x3    = 0.5
+#ghost_zones = true     # switch to output ghost cells
