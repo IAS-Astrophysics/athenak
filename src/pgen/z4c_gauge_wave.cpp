@@ -31,10 +31,10 @@
 void Z4cGaugeWaveErrors(ParameterInput *pin, Mesh *pm);
 
 //----------------------------------------------------------------------------------------
-//! \fn void ProblemGenerator::Z4cGaugeWave()
+//! \fn void ProblemGenerator::UserProblem()
 //! \brief Sets initial conditions for gw linear wave tests
 
-void ProblemGenerator::Z4cGaugeWave(ParameterInput *pin, const bool restart) {
+void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   if (restart)
     return;
 

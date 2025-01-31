@@ -34,10 +34,10 @@
 void Z4cStabilityErrors(HistoryData *pdata, Mesh *pm);
 
 //----------------------------------------------------------------------------------------
-//! \fn void ProblemGenerator::Z4cStability()
+//! \fn void ProblemGenerator::UserProblem()
 //! \brief Sets initial conditions for robust stability test
 
-void ProblemGenerator::Z4cStability(ParameterInput *pin, const bool restart) {
+void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   user_hist_func = &Z4cStabilityErrors;
   if (restart)
     return;
