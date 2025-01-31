@@ -104,7 +104,7 @@ Real scaled_enorm(const Real (&d)[M1_MULTIROOTS_DIM],
 
 //----------------------------------------------------------------------------------------
 //! \fn Real radiationm1::compute_diag
-//  \brief store column norms of J in diag
+//  \brief store columnwise L2 norm of J in diag
 KOKKOS_INLINE_FUNCTION
 void compute_diag(const Real (&J)[M1_MULTIROOTS_DIM][M1_MULTIROOTS_DIM],
                   Real (&diag)[M1_MULTIROOTS_DIM]) {
@@ -135,9 +135,9 @@ void update_diag(const Real (&J)[M1_MULTIROOTS_DIM][M1_MULTIROOTS_DIM],
       sum = 1.0;
     }
     cnorm = Kokkos::sqrt(sum);
-
-    if (cnorm > diag[j])
+    if (cnorm > diag[j]) {
       diag[j] = cnorm;
+    }
   }
 }
 
@@ -160,6 +160,7 @@ void minimum_step(const Real gnorm, const Real (&diag)[M1_MULTIROOTS_DIM],
     g[i] = (g[i] / gnorm) / diag[i];
   }
 }
+
 KOKKOS_INLINE_FUNCTION
 void compute_qtf(const Real (&q)[M1_MULTIROOTS_DIM][M1_MULTIROOTS_DIM],
                  const Real (&f)[M1_MULTIROOTS_DIM],
@@ -174,19 +175,15 @@ void compute_qtf(const Real (&q)[M1_MULTIROOTS_DIM][M1_MULTIROOTS_DIM],
 }
 
 KOKKOS_INLINE_FUNCTION
-int newton_direction(const Real r[M1_MULTIROOTS_DIM][M1_MULTIROOTS_DIM],
-                     const Real qtf[M1_MULTIROOTS_DIM],
-                     Real p[M1_MULTIROOTS_DIM]) {
-  int status;
+void newton_direction(const Real (&r)[M1_MULTIROOTS_DIM][M1_MULTIROOTS_DIM],
+                      const Real (&qtf)[M1_MULTIROOTS_DIM],
+                      Real (&p)[M1_MULTIROOTS_DIM]) {
+  qr_R_solve(r, qtf, p);
 
-  status = gsl_linalg_R_solve(r, qtf, p);
-
-  for (int i = 0; i < M1_MULTIROOTS_DIM; i++) {
-    Real pi = p[i];
-    p[i] = -pi;
+  for (double &i : p) {
+    Real pi = i;
+    i = -pi;
   }
-
-  return status;
 }
 
 KOKKOS_INLINE_FUNCTION void
@@ -196,12 +193,10 @@ gradient_direction(const Real r[M1_MULTIROOTS_DIM][M1_MULTIROOTS_DIM],
                    Real g[M1_MULTIROOTS_DIM]) {
   for (int j = 0; j < M1_MULTIROOTS_DIM; j++) {
     Real sum = 0;
-    Real dj;
     for (int i = 0; i < M1_MULTIROOTS_DIM; i++) {
       sum += r[i][j] * qtf[i];
     }
-    dj = diag[j];
-    g[j] = -sum / dj;
+    g[j] = -sum / diag[j];
   }
 }
 
@@ -230,7 +225,7 @@ void compute_Rg(const Real (&r)[M1_MULTIROOTS_DIM][M1_MULTIROOTS_DIM],
                 const Real (&gradient)[M1_MULTIROOTS_DIM],
                 Real (&Rg)[M1_MULTIROOTS_DIM]) {
   for (int i = 0; i < M1_MULTIROOTS_DIM; i++) {
-    double sum = 0;
+    Real sum = 0;
     for (int j = i; j < M1_MULTIROOTS_DIM; j++) {
       sum += r[i][j] * gradient[j];
     }
@@ -291,21 +286,18 @@ HybridsjSignal dogleg(const Real (&r)[M1_MULTIROOTS_DIM][M1_MULTIROOTS_DIM],
                       Real (&newton)[M1_MULTIROOTS_DIM],
                       Real (&gradient)[M1_MULTIROOTS_DIM],
                       Real (&p)[M1_MULTIROOTS_DIM]) {
-  Real qnorm, gnorm, sgnorm, bnorm, temp;
-
   newton_direction(r, qtf, newton);
-
-  qnorm = scaled_enorm(diag, newton);
+  Real qnorm = scaled_enorm(diag, newton);
   if (qnorm <= delta) {
     copy_vector(p, newton);
     return HYBRIDSJ_SUCCESS;
   }
 
   gradient_direction(r, qtf, diag, gradient);
-  gnorm = enorm(gradient);
+  Real gnorm = enorm(gradient);
   if (gnorm == 0) {
-    double alpha = delta / qnorm;
-    double beta = 0;
+    Real alpha = delta / qnorm;
+    Real beta = 0;
     scaled_addition(alpha, newton, beta, gradient, p);
     return HYBRIDSJ_SUCCESS;
   }
@@ -315,35 +307,33 @@ HybridsjSignal dogleg(const Real (&r)[M1_MULTIROOTS_DIM][M1_MULTIROOTS_DIM],
   // compute Rg and store it temporarily in p
   compute_Rg(r, gradient, p);
 
-  temp = enorm(p);
-  sgnorm = (gnorm / temp) / temp;
+  Real temp = enorm(p);
+  Real sgnorm = (gnorm / temp) / temp;
 
   if (sgnorm > delta) {
-    double alpha = 0;
-    double beta = delta;
+    Real alpha = 0;
+    Real beta = delta;
     scaled_addition(alpha, newton, beta, gradient, p);
     return HYBRIDSJ_SUCCESS;
   }
 
-  bnorm = enorm(qtf);
+  Real bnorm = enorm(qtf);
 
-  {
-    Real bg = bnorm / gnorm;
-    Real bq = bnorm / qnorm;
-    Real dq = delta / qnorm;
-    Real dq2 = dq * dq;
-    Real sd = sgnorm / delta;
-    Real sd2 = sd * sd;
+  Real bg = bnorm / gnorm;
+  Real bq = bnorm / qnorm;
+  Real dq = delta / qnorm;
+  Real dq2 = dq * dq;
+  Real sd = sgnorm / delta;
+  Real sd2 = sd * sd;
 
-    Real t1 = bg * bq * sd;
-    Real u = t1 - dq;
-    Real t2 = t1 - dq * sd2 + sqrt(u * u + (1 - dq2) * (1 - sd2));
+  Real t1 = bg * bq * sd;
+  Real u = t1 - dq;
+  Real t2 = t1 - dq * sd2 + Kokkos::sqrt(u * u + (1 - dq2) * (1 - sd2));
 
-    Real alpha = dq * (1 - sd2) / t2;
-    Real beta = (1 - alpha) * sgnorm;
+  Real alpha = dq * (1 - sd2) / t2;
+  Real beta = (1 - alpha) * sgnorm;
 
-    scaled_addition(alpha, newton, beta, gradient, p);
-  }
+  scaled_addition(alpha, newton, beta, gradient, p);
 
   return HYBRIDSJ_SUCCESS;
 }
@@ -397,8 +387,8 @@ KOKKOS_INLINE_FUNCTION HybridsjSignal HybridsjIterate(Functor &&fdf,
 
   // Q^T f & dogleg
   compute_qtf(state.q, pars.f, state.qtf);
-  dogleg(state.r, state.qtf, state.diag, state.delta, state.newton,
-         state.gradient, pars.dx);
+  HybridsjState dl = dogleg(state.r, state.qtf, state.diag, state.delta,
+                            state.newton, state.gradient, pars.dx);
 
   // compute trial step
   compute_trial_step(pars.x, pars.dx, state.x_trial);

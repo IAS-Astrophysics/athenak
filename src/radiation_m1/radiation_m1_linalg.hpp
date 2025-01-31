@@ -25,9 +25,24 @@ void qr_factorize(const Real (&J)[M1_MULTIROOTS_DIM][M1_MULTIROOTS_DIM],
 
 KOKKOS_INLINE_FUNCTION
 void qr_update(Real (&Q)[M1_MULTIROOTS_DIM][M1_MULTIROOTS_DIM],
-               Real (&R)[M1_MULTIROOTS_DIM][M1_MULTIROOTS_DIM],  Real (&W)[M1_MULTIROOTS_DIM],
-                Real (&V)[M1_MULTIROOTS_DIM]) {
+               Real (&R)[M1_MULTIROOTS_DIM][M1_MULTIROOTS_DIM],
+               Real (&W)[M1_MULTIROOTS_DIM], Real (&V)[M1_MULTIROOTS_DIM]) {}
 
+KOKKOS_INLINE_FUNCTION
+void qr_R_solve(const Real (&r)[M1_MULTIROOTS_DIM][M1_MULTIROOTS_DIM],
+                const Real (&qtf)[M1_MULTIROOTS_DIM],
+                Real (&p)[M1_MULTIROOTS_DIM]) {
+  for (int i = 0; i < M1_MULTIROOTS_DIM; i++) {
+    p[i] = qtf[i];
+  }
+  p[M1_MULTIROOTS_DIM - 1] = qtf[M1_MULTIROOTS_DIM - 1] /
+                             r[M1_MULTIROOTS_DIM - 1][M1_MULTIROOTS_DIM - 1];
+  for (int k = M1_MULTIROOTS_DIM - 2; k >= 0; k--) {
+    for (int j = k + 1; j < M1_MULTIROOTS_DIM; j++) {
+      p[k] = p[k] - r[k][j] * p[j];
+    }
+    p[k] = p[k] / r[k][k];
+  }
 }
 } // namespace radiationm1
 #endif // RADIATION_M1_LINALG_HPP
