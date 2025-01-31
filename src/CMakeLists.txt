@@ -93,6 +93,7 @@ add_executable(
         outputs/formatted_table.cpp
         outputs/history.cpp
         outputs/restart.cpp
+        outputs/spherical_surface.cpp
         outputs/coarsened_binary.cpp
         outputs/track_prtcl.cpp
         outputs/vtk_mesh.cpp
@@ -148,6 +149,8 @@ add_executable(
         utils/lagrange_interpolator.cpp
         utils/tov/tov.cpp
         utils/tr_table.cpp
+        utils/cart_grid.cpp
+        utils/spherical_surface.cpp
 
         z4c/compact_object_tracker.cpp
         z4c/tmunu.cpp
