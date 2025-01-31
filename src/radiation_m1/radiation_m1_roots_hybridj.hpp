@@ -9,6 +9,7 @@
 //  \brief functions for Powell's multiroot solver
 
 #include "athena.hpp"
+#include "radiation_m1_linalg.hpp"
 #include "radiation_m1_macro.hpp"
 
 namespace radiationm1 {
@@ -23,7 +24,6 @@ struct HybridsjState {
   Real delta;
   Real q[M1_MULTIROOTS_DIM][M1_MULTIROOTS_DIM];
   Real r[M1_MULTIROOTS_DIM][M1_MULTIROOTS_DIM];
-  Real tau[M1_MULTIROOTS_DIM];
   Real diag[M1_MULTIROOTS_DIM];
   Real qtf[M1_MULTIROOTS_DIM];
   Real newton[M1_MULTIROOTS_DIM];
@@ -35,11 +35,14 @@ struct HybridsjState {
   Real rdx[M1_MULTIROOTS_DIM];
   Real w[M1_MULTIROOTS_DIM];
   Real v[M1_MULTIROOTS_DIM];
+};
 
-  Real x[M1_MULTIROOTS_DIM];
-  Real f[M1_MULTIROOTS_DIM];
-  Real J[M1_MULTIROOTS_DIM][M1_MULTIROOTS_DIM];
-  Real dx[M1_MULTIROOTS_DIM];
+struct HybridsjParams {
+  Real x[M1_MULTIROOTS_DIM]; // current solution {x_i} in N dimensional space
+  Real f[M1_MULTIROOTS_DIM]; // N function values f_i({x_i})
+  Real J[M1_MULTIROOTS_DIM]
+        [M1_MULTIROOTS_DIM];  // Jacobian values J_ij = \p f_i/\p x_j at {x_i}
+  Real dx[M1_MULTIROOTS_DIM]; // stores the dogleg step J dx = - f
 };
 
 enum HybridsjSignal {
@@ -61,8 +64,6 @@ void copy_vector(Real (&dest)[M1_MULTIROOTS_DIM],
   }
 }
 
-KOKKOS_INLINE_FUNCTION
-void
 //----------------------------------------------------------------------------------------
 //! \fn Real radiationm1::enorm
 //  \brief computes the L2 norm of a vector f
@@ -103,9 +104,9 @@ Real scaled_enorm(const Real (&d)[M1_MULTIROOTS_DIM],
 
 //----------------------------------------------------------------------------------------
 //! \fn Real radiationm1::compute_diag
-//  \brief computes the columnwise L2 norm of a matrix J
+//  \brief store column norms of J in diag
 KOKKOS_INLINE_FUNCTION
-void compute_diag(Real (&J)[M1_MULTIROOTS_DIM][M1_MULTIROOTS_DIM],
+void compute_diag(const Real (&J)[M1_MULTIROOTS_DIM][M1_MULTIROOTS_DIM],
                   Real (&diag)[M1_MULTIROOTS_DIM]) {
   for (int i = 0; i < M1_MULTIROOTS_DIM; i++) {
     Real sum = 0;
@@ -361,9 +362,10 @@ void compute_trial_step(const Real x[M1_MULTIROOTS_DIM],
 //  \brief Initialize the solver state for Powell's hybrid method
 template <class Functor, class... Types>
 KOKKOS_INLINE_FUNCTION HybridsjSignal HybridsjInitialize(Functor &&fdf,
-                                                         HybridsjState &state) {
-  // @TODO: call function multiroot
-  // GSL_MULTIROOT_FN_EVAL_F_DF(fdf, x, f, J);
+                                                         HybridsjState &state,
+                                                         HybridsjParams &pars) {
+  // populate f, J for a given x
+  fdf(pars.x, pars.f, pars.J);
 
   state.iter = 1;
   state.fnorm = enorm(state.f);
@@ -372,92 +374,58 @@ KOKKOS_INLINE_FUNCTION HybridsjSignal HybridsjInitialize(Functor &&fdf,
   state.nslow1 = 0;
   state.nslow2 = 0;
 
-  for (int i = 0; i < M1_MULTIROOTS_DIM; i++) {
-    state.df[i] = 0;
+  for (double &i : state.df) {
+    i = 0;
   }
 
-  // store column norms in diag
-  compute_diag(state.J, state.diag);
-
-  // Set delta to factor |D x| or to factor if |D x| is zero
-  state.delta = compute_delta(state.diag, state.x);
-
-  // QR factorization of J
-  // gsl_linalg_QR_decomp(J, state.tau);
-  // gsl_linalg_QR_unpack(J, state.tau, state.q, state.r);
+  // store column norms, set delta and QR factorize J
+  compute_diag(pars.J, state.diag);
+  state.delta = compute_delta(state.diag, pars.x);
+  qr_factorize(pars.J, state.q, state.r);
 
   return HYBRIDSJ_SUCCESS;
 }
 
 //----------------------------------------------------------------------------------------
 //! \fn HybridsjSignal radiationm1::HybridsjIterate
-//  \brief Iterate the solver state for Powell's hybrid method
+//  \brief Iterate the solver state once for Powell's hybrid method
 template <class Functor, class... Types>
 KOKKOS_INLINE_FUNCTION HybridsjSignal HybridsjIterate(Functor &&fdf,
-                                                      HybridsjState &state) {
-  Real prered{}, actred{};
-  Real pnorm{}, fnorm1{}, fnorm1p{};
-  Real ratio{};
+                                                      HybridsjState &state,
+                                                      HybridsjParams &pars) {
   Real p1 = 0.1, p5 = 0.5, p001 = 0.001, p0001 = 0.0001;
 
-  // Compute qtf = Q^T f
-  compute_qtf(state.q, state.f, state.qtf);
-
-  // Compute dogleg step
+  // Q^T f & dogleg
+  compute_qtf(state.q, pars.f, state.qtf);
   dogleg(state.r, state.qtf, state.diag, state.delta, state.newton,
-         state.gradient, state.dx);
+         state.gradient, pars.dx);
 
-  /* Take a trial step */
-  compute_trial_step(state.x, state.dx, state.x_trial);
-
-  pnorm = scaled_enorm(state.diag, state.dx);
-
+  // compute trial step
+  compute_trial_step(pars.x, pars.dx, state.x_trial);
+  Real pnorm = scaled_enorm(state.diag, pars.dx);
   if (state.iter == 1) {
     if (pnorm < state.delta) {
       state.delta = pnorm;
     }
   }
 
-  /* Evaluate function at x + p */
+  // evaluate f at x + p
+  fdf(state.x_trial, state.f_trial, state);
 
-  {
-    int status = GSL_MULTIROOT_FN_EVAL_F(fdf, x_trial, f_trial);
+  // df = f_trial - f
+  compute_df(state.f_trial, pars.f, state.df);
+  // scaled actual reduction
+  Real fnorm1 = enorm(state.f_trial);
+  Real actred = compute_actual_reduction(state.fnorm, fnorm1);
+  // rdx = R dx
+  compute_rdx(state.r, pars.dx, state.rdx);
+  // scaled predicted reduction
+  Real fnorm1p = enorm_sum(state.qtf, state.rdx);
+  Real prered = compute_predicted_reduction(state.fnorm, fnorm1p);
+  // Ratio actual/predicted reduction
+  Real ratio = (prered > 0) ? actred / prered : 0;
 
-    if (status != HYBRIDSJ_SUCCESS) {
-      return HYBRIDSJ_EBADFUNC;
-    }
-  }
-
-  /* Set df = f_trial - f */
-
-  compute_df(f_trial, f, df);
-
-  /* Compute the scaled actual reduction */
-
-  fnorm1 = enorm(f_trial);
-
-  actred = compute_actual_reduction(fnorm, fnorm1);
-
-  /* Compute rdx = R dx */
-
-  compute_rdx(r, dx, rdx);
-
-  /* Compute the scaled predicted reduction phi1p = |Q^T f + R dx| */
-
-  fnorm1p = enorm_sum(qtf, rdx);
-
-  prered = compute_predicted_reduction(fnorm, fnorm1p);
-
-  /* Compute the ratio of the actual to predicted reduction */
-
-  if (prered > 0) {
-    ratio = actred / prered;
-  } else {
-    ratio = 0;
-  }
-
-  /* Update the step bound */
-
+  // update step bound
   if (ratio < p1) {
     state.ncsuc = 0;
     state.ncfail++;
@@ -466,75 +434,58 @@ KOKKOS_INLINE_FUNCTION HybridsjSignal HybridsjIterate(Functor &&fdf,
     state.ncfail = 0;
     state.ncsuc++;
 
-    if (ratio >= p5 || state.ncsuc > 1)
-      state.delta = GSL_MAX(state.delta, pnorm / p5);
-    if (fabs(ratio - 1) <= p1)
-      state->delta = pnorm / p5;
+    if (ratio >= p5 || state.ncsuc > 1) {
+      state.delta = Kokkos::max<Real>(state.delta, pnorm / p5);
+    }
+    if (Kokkos::fabs(ratio - 1) <= p1) {
+      state.delta = pnorm / p5;
+    }
   }
 
-  /* Test for successful iteration */
-
+  // test if iteration successful
   if (ratio >= p0001) {
-    gsl_vector_memcpy(x, x_trial);
-    gsl_vector_memcpy(f, f_trial);
-    state->fnorm = fnorm1;
-    state->iter++;
+    copy_vector(pars.x, state.x_trial);
+    copy_vector(pars.f, state.f_trial);
+    state.fnorm = fnorm1;
+    state.iter++;
   }
 
-  /* Determine the progress of the iteration */
-
-  state->nslow1++;
-  if (actred >= p001)
-    state->nslow1 = 0;
-
-  if (actred >= p1)
-    state->nslow2 = 0;
-
-  if (state->ncfail == 2) {
+  // determine iteration progress
+  state.nslow1++;
+  if (actred >= p001) {
+    state.nslow1 = 0;
+  }
+  if (actred >= p1) {
+    state.nslow2 = 0;
+  }
+  if (state.ncfail == 2) {
     {
-      int status = GSL_MULTIROOT_FN_EVAL_DF(fdf, x, J);
-
-      if (status != GSL_SUCCESS) {
-        return GSL_EBADFUNC;
-      }
+      fdf(pars.x, pars.J, state);
     }
 
-    state->nslow2++;
+    state.nslow2++;
 
-    if (state->iter == 1) {
-      if (scale)
-        compute_diag(J, diag);
-      state->delta = compute_delta(diag, x);
+    if (state.iter == 1) {
+      compute_diag(pars.J, state.diag);
+      state.delta = compute_delta(state.diag, pars.x);
     } else {
-      if (scale)
-        update_diag(J, diag);
+      update_diag(pars.J, state.diag);
     }
 
-    /* Factorize J into QR decomposition */
-
-    gsl_linalg_QR_decomp(J, tau);
-    gsl_linalg_QR_unpack(J, tau, q, r);
-    return GSL_SUCCESS;
+    // QR factorization
+    qr_factorize(pars.J, state.q, state.r);
+    return HYBRIDSJ_SUCCESS;
   }
 
-  /* Compute qtdf = Q^T df, w = (Q^T df - R dx)/|dx|,  v = D^2 dx/|dx| */
+  compute_qtf(state.q, state.df, state.qtdf);
+  compute_wv(state.qtdf, state.rdx, pars.dx, state.diag, pnorm, state.w,
+             state.v);
 
-  compute_qtf(q, df, qtdf);
+  qr_update(state.q, state.r, state.w, state.v);
 
-  compute_wv(qtdf, rdx, dx, diag, pnorm, w, v);
-
-  /* Rank-1 update of the jacobian Q'R' = Q(R + w v^T) */
-
-  // gsl_linalg_QR_update(q, r, w, v); @TODO: implement this
-
-  // No progress as measured by jacobian evaluations
-  if (state.nslow2 == 5) {
-    return GSL_ENOPROGJ;
-  }
-
-  // No progress as measured by function evaluations
-  if (state.nslow1 == 10) {
-    return HYBRIDSJ_ENOPROG;
+  // No progress conditions
+  if (state.nslow2 == 5 || state.nslow1 == 10) {
+    return HYBRIDSJ_ENOPROGJ;
   }
   return HYBRIDSJ_SUCCESS;
 }
