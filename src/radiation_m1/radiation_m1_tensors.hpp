@@ -28,6 +28,43 @@ Real tensor_dot(const AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> &g_uu,
 }
 
 //----------------------------------------------------------------------------------------
+//! \fn radiationm1::tensor_dot (special)
+//  \brief function to compute g^ab F_a G_b (or g_ab F^a G^b)
+KOKKOS_INLINE_FUNCTION
+Real tensor_dot(const AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> &g_uu,
+                const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &F_d,
+                const AthenaPointTensor<Real, TensorSymm::NONE, 3, 1> &G_d) {
+  Real G4d_d[4] = {0, G_d(0), G_d(1), G_d(2)};
+  Real F2 = 0.;
+  for (int a = 0; a < 4; ++a) {
+    for (int b = 0; b < 4; ++b) {
+      F2 += g_uu(a, b) * F_d(a) * G4d_d[b];
+    }
+  }
+  return F2;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn radiationm1::tensor_dot
+//  \brief function to compute P^ab K_ab
+KOKKOS_INLINE_FUNCTION
+Real tensor_dot(const AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> &g_uu,
+                const AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> &P_dd,
+                const AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> &K_dd) {
+  Real F2 = 0.;
+  for (int a = 0; a < 4; ++a) {
+    for (int b = 0; b < 4; ++b) {
+      for (int c = 0; c < 4; ++c) {
+        for (int d = 0; d < 4; ++d) {
+          F2 += g_uu(a, c) * g_uu(b, d) * P_dd(c, d) * K_dd(a, b);
+        }
+      }
+    }
+  }
+  return F2;
+}
+
+//----------------------------------------------------------------------------------------
 //! \fn radiationm1::tensor_dot
 //  \brief function to compute eta^ab F_a G_b (or eta_ab F^a G^b)
 KOKKOS_INLINE_FUNCTION
