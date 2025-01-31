@@ -654,14 +654,10 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resf
     ShockTube(pin, true);
   } else if (pgen_fun_name.compare("z4c_linear_wave") == 0) {
     Z4cLinearWave(pin, true);
-  } else if (pgen_fun_name.compare("z4c_gauge_wave") == 0) {
-    Z4cGaugeWave(pin, true);
   } else if (pgen_fun_name.compare("spherical_collapse") == 0) {
     SphericalCollapse(pin, true);
   } else if (pgen_fun_name.compare("diffusion") == 0) {
     Diffusion(pin, true);
-  } else if (pgen_fun_name.compare("z4c_stability") == 0) {
-    Z4cStability(pin, false);
   } else {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
         << "Problem generator name could not be found in <problem> block in input file"
