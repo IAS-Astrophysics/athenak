@@ -53,6 +53,12 @@ CartesianGridOutput::CartesianGridOutput(ParameterInput *pin, Mesh *pm,
 CartesianGridOutput::~CartesianGridOutput() { delete pcart; }
 
 void CartesianGridOutput::LoadOutputData(Mesh *pm) {
+  // If AMR is enabled we need to reset the CartesianGrid
+  if (pm->adaptive) {
+    pcart->SetInterpolationIndices();
+    pcart->SetInterpolationWeights();
+  }
+
   int nout_vars = outvars.size();
   Kokkos::realloc(outarray, nout_vars, 1, md.numpoints[0], md.numpoints[1],
                   md.numpoints[2]);
