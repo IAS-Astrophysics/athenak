@@ -56,6 +56,12 @@ void CartesianGridOutput::LoadOutputData(Mesh *pm) {
   int nout_vars = outvars.size();
   Kokkos::realloc(outarray, nout_vars, 1, md.numpoints[0], md.numpoints[1],
                   md.numpoints[2]);
+
+  // Calculate derived variables, if required
+  if (out_params.contains_derived) {
+    ComputeDerivedVariable(out_params.variable, pm);
+  }
+
   for (int n = 0; n < nout_vars; ++n) {
     pcart->InterpolateToGrid(outvars[n].data_index, *(outvars[n].data_ptr));
     auto v_slice =
