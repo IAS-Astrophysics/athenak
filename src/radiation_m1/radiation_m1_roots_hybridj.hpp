@@ -154,7 +154,7 @@ Real compute_delta(const Real (&diag)[M1_MULTIROOTS_DIM],
 }
 
 KOKKOS_INLINE_FUNCTION
-void minimum_step(const Real gnorm, const Real (&diag)[M1_MULTIROOTS_DIM],
+void minimum_step(const Real &gnorm, const Real (&diag)[M1_MULTIROOTS_DIM],
                   Real (&g)[M1_MULTIROOTS_DIM]) {
   for (int i = 0; i < M1_MULTIROOTS_DIM; i++) {
     g[i] = (g[i] / gnorm) / diag[i];
@@ -187,10 +187,10 @@ void newton_direction(const Real (&r)[M1_MULTIROOTS_DIM][M1_MULTIROOTS_DIM],
 }
 
 KOKKOS_INLINE_FUNCTION void
-gradient_direction(const Real r[M1_MULTIROOTS_DIM][M1_MULTIROOTS_DIM],
-                   const Real qtf[M1_MULTIROOTS_DIM],
-                   const Real diag[M1_MULTIROOTS_DIM],
-                   Real g[M1_MULTIROOTS_DIM]) {
+gradient_direction(const Real (&r)[M1_MULTIROOTS_DIM][M1_MULTIROOTS_DIM],
+                   const Real (&qtf)[M1_MULTIROOTS_DIM],
+                   const Real (&diag)[M1_MULTIROOTS_DIM],
+                   Real (&g)[M1_MULTIROOTS_DIM]) {
   for (int j = 0; j < M1_MULTIROOTS_DIM; j++) {
     Real sum = 0;
     for (int i = 0; i < M1_MULTIROOTS_DIM; i++) {
@@ -200,20 +200,20 @@ gradient_direction(const Real r[M1_MULTIROOTS_DIM][M1_MULTIROOTS_DIM],
   }
 }
 
-KOKKOS_INLINE_FUNCTION void compute_df(const Real f_trial[M1_MULTIROOTS_DIM],
-                                       const Real f[M1_MULTIROOTS_DIM],
-                                       Real df[M1_MULTIROOTS_DIM]) {
+KOKKOS_INLINE_FUNCTION void compute_df(const Real (&f_trial)[M1_MULTIROOTS_DIM],
+                                       const Real (&f)[M1_MULTIROOTS_DIM],
+                                       Real (&df)[M1_MULTIROOTS_DIM]) {
   for (int i = 0; i < M1_MULTIROOTS_DIM; i++) {
     df[i] = f_trial[i] - f[i];
   }
 }
 
 KOKKOS_INLINE_FUNCTION
-void compute_wv(const Real qtdf[M1_MULTIROOTS_DIM],
-                const Real rdx[M1_MULTIROOTS_DIM],
-                const Real dx[M1_MULTIROOTS_DIM],
-                const Real diag[M1_MULTIROOTS_DIM], Real pnorm,
-                Real w[M1_MULTIROOTS_DIM], Real v[M1_MULTIROOTS_DIM]) {
+void compute_wv(const Real (&qtdf)[M1_MULTIROOTS_DIM],
+                const Real (&rdx)[M1_MULTIROOTS_DIM],
+                const Real (&dx)[M1_MULTIROOTS_DIM],
+                const Real (&diag)[M1_MULTIROOTS_DIM], Real &pnorm,
+                Real (&w)[M1_MULTIROOTS_DIM], Real (&v)[M1_MULTIROOTS_DIM]) {
   for (int i = 0; i < M1_MULTIROOTS_DIM; i++) {
     w[i] = (qtdf[i] - rdx[i]) / pnorm;
     v[i] = diag[i] * diag[i] * dx[i] / pnorm;
@@ -234,7 +234,7 @@ void compute_Rg(const Real (&r)[M1_MULTIROOTS_DIM][M1_MULTIROOTS_DIM],
 }
 
 KOKKOS_INLINE_FUNCTION
-Real compute_actual_reduction(const Real fnorm, const Real fnorm1) {
+Real compute_actual_reduction(const Real &fnorm, const Real &fnorm1) {
   Real actred{};
   if (fnorm1 < fnorm) {
     Real u = fnorm1 / fnorm;
@@ -246,7 +246,7 @@ Real compute_actual_reduction(const Real fnorm, const Real fnorm1) {
 }
 
 KOKKOS_INLINE_FUNCTION
-Real compute_predicted_reduction(const Real fnorm, const Real fnorm1) {
+Real compute_predicted_reduction(const Real &fnorm, const Real &fnorm1) {
   Real prered{};
   if (fnorm1 < fnorm) {
     Real u = fnorm1 / fnorm;
@@ -258,9 +258,9 @@ Real compute_predicted_reduction(const Real fnorm, const Real fnorm1) {
 }
 
 KOKKOS_INLINE_FUNCTION
-void compute_rdx(const Real r[M1_MULTIROOTS_DIM][M1_MULTIROOTS_DIM],
-                 const Real dx[M1_MULTIROOTS_DIM],
-                 Real rdx[M1_MULTIROOTS_DIM]) {
+void compute_rdx(const Real (&r)[M1_MULTIROOTS_DIM][M1_MULTIROOTS_DIM],
+                 const Real (&dx)[M1_MULTIROOTS_DIM],
+                 Real (&rdx)[M1_MULTIROOTS_DIM]) {
   for (int i = 0; i < M1_MULTIROOTS_DIM; i++) {
     Real sum = 0;
     for (int j = i; j < M1_MULTIROOTS_DIM; j++) {
@@ -271,9 +271,9 @@ void compute_rdx(const Real r[M1_MULTIROOTS_DIM][M1_MULTIROOTS_DIM],
 }
 
 KOKKOS_INLINE_FUNCTION
-void scaled_addition(Real alpha, const Real newton[M1_MULTIROOTS_DIM],
-                     Real beta, const Real gradient[M1_MULTIROOTS_DIM],
-                     Real p[M1_MULTIROOTS_DIM]) {
+void scaled_addition(Real &alpha, const Real (&newton)[M1_MULTIROOTS_DIM],
+                     Real &beta, const Real (&gradient)[M1_MULTIROOTS_DIM],
+                     Real (&p)[M1_MULTIROOTS_DIM]) {
   for (int i = 0; i < M1_MULTIROOTS_DIM; i++) {
     p[i] = alpha * newton[i] + beta * gradient[i];
   }
@@ -339,9 +339,9 @@ HybridsjSignal dogleg(const Real (&r)[M1_MULTIROOTS_DIM][M1_MULTIROOTS_DIM],
 }
 
 KOKKOS_INLINE_FUNCTION
-void compute_trial_step(const Real x[M1_MULTIROOTS_DIM],
-                        const Real dx[M1_MULTIROOTS_DIM],
-                        Real x_trial[M1_MULTIROOTS_DIM]) {
+void compute_trial_step(const Real (&x)[M1_MULTIROOTS_DIM],
+                        const Real (&dx)[M1_MULTIROOTS_DIM],
+                        Real (&x_trial)[M1_MULTIROOTS_DIM]) {
   for (int i = 0; i < M1_MULTIROOTS_DIM; i++) {
     x_trial[i] = x[i] + dx[i];
   }
@@ -358,7 +358,7 @@ KOKKOS_INLINE_FUNCTION HybridsjSignal HybridsjInitialize(Functor &&fdf,
   fdf(pars.x, pars.f, pars.J);
 
   state.iter = 1;
-  state.fnorm = enorm(state.f);
+  state.fnorm = enorm(pars.f);
   state.ncfail = 0;
   state.ncsuc = 0;
   state.nslow1 = 0;
@@ -387,7 +387,7 @@ KOKKOS_INLINE_FUNCTION HybridsjSignal HybridsjIterate(Functor &&fdf,
 
   // Q^T f & dogleg
   compute_qtf(state.q, pars.f, state.qtf);
-  HybridsjState dl = dogleg(state.r, state.qtf, state.diag, state.delta,
+  HybridsjSignal dl = dogleg(state.r, state.qtf, state.diag, state.delta,
                             state.newton, state.gradient, pars.dx);
 
   // compute trial step

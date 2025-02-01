@@ -2,7 +2,8 @@
 #define RADIATION_M1_SOURCES_HPP
 
 #include "athena.hpp"
-#include "radiation_m1/radiation_m1.hpp"
+#include "radiation_m1_roots_brent.hpp"
+#include "radiation_m1_roots_hybridj.hpp"
 #include <athena_tensor.hpp>
 
 //========================================================================================
