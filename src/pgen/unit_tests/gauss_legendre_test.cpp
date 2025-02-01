@@ -29,8 +29,6 @@
 using u32    = uint_least32_t;
 using engine = std::mt19937;
 
-// void ADMOnePuncture(MeshBlockPack *pmbp, ParameterInput *pin);
-
 //----------------------------------------------------------------------------------------
 //! \fn ProblemGenerator::UserProblem_()
 //! \brief Problem Generator for single puncture
