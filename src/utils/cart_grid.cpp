@@ -74,8 +74,6 @@ CartesianGrid::CartesianGrid(MeshBlockPack *pmy_pack, Real center[3],
   return;
 }
 
-CartesianGrid::~CartesianGrid() {}
-
 void CartesianGrid::ResetCenter(Real center[3]) {
   // grid center
   center_x1 = center[0];
@@ -210,6 +208,11 @@ void CartesianGrid::SetInterpolationWeights() {
       Real x0 = min_x1 + nx * d_x1;
       Real y0 = min_x2 + ny * d_x2;
       Real z0 = min_x3 + nz * d_x3;
+      if (is_cheby) {
+        x0 = center_x1 + extent_x1*std::cos(nx*M_PI/(nx1-1));
+        y0 = center_x2 + extent_x2*std::cos(ny*M_PI/(nx2-1));
+        z0 = center_x3 + extent_x3*std::cos(nz*M_PI/(nx3-1));
+      }
       // extract MeshBlock bounds
       Real &x1min = size.h_view(ii0).x1min;
       Real &x1max = size.h_view(ii0).x1max;
