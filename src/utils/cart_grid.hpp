@@ -29,7 +29,7 @@ class CartesianGrid {
   Real max_x1, max_x2, max_x3;            // max value for xyz
   Real d_x1, d_x2, d_x3;                     // resolution
   int nx1, nx2, nx3;                      // number of points
-  Real extend_x1, extend_x2, extend_x3;
+  Real extent_x1, extent_x2, extent_x3;
 
   // dump on chebyshev or uniform grid, default is uniform
   bool is_cheby;
@@ -40,6 +40,7 @@ class CartesianGrid {
   void ResetCenter(Real center[3]);  // set indexing for interpolation
   void SetInterpolationIndices();      // set indexing for interpolation
   void SetInterpolationWeights();      // set weights for interpolation
+  void ResetCenterAndExtent(Real center[3], Real extent[3]);
 
  private:
   MeshBlockPack* pmy_pack;  // ptr to MeshBlockPack containing this Hydro
