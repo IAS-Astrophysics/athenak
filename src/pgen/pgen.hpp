@@ -16,16 +16,16 @@
 #include "parameter_input.hpp"
 
 using ProblemFinalizeFnPtr = void (*)(ParameterInput *pin, Mesh *pm);
-using UserBoundaryFnPtr = void (*)(Mesh* pm);
-using UserSrctermFnPtr = void (*)(Mesh* pm, const Real bdt);
-using UserRefinementFnPtr = void (*)(MeshBlockPack* pmbp);
+using UserBoundaryFnPtr = void (*)(Mesh *pm);
+using UserSrctermFnPtr = void (*)(Mesh *pm, const Real bdt);
+using UserRefinementFnPtr = void (*)(MeshBlockPack *pmbp);
 using UserHistoryFnPtr = void (*)(HistoryData *pdata, Mesh *pm);
 
 //----------------------------------------------------------------------------------------
 //! \class ProblemGenerator
 
 class ProblemGenerator {
- public:
+public:
   // constructor for new problems
   ProblemGenerator(ParameterInput *pin, Mesh *pmesh);
   // constructor for restarts
@@ -44,14 +44,15 @@ class ProblemGenerator {
   // vector of SphericalGrid objects for analysis
   std::vector<std::unique_ptr<SphericalGrid>> spherical_grids;
 
-  // function pointer for final work after main loop (e.g. compute errors).  Called by
-  // Driver::Finalize()
-  ProblemFinalizeFnPtr pgen_final_func=nullptr;
-  // function pointer for user-enrolled BCs.  Called in ApplyPhysicalBCs in task list
-  UserBoundaryFnPtr user_bcs_func=nullptr;
-  UserSrctermFnPtr user_srcs_func=nullptr;
-  UserRefinementFnPtr user_ref_func=nullptr;
-  UserHistoryFnPtr user_hist_func=nullptr;
+  // function pointer for final work after main loop (e.g. compute errors).
+  // Called by Driver::Finalize()
+  ProblemFinalizeFnPtr pgen_final_func = nullptr;
+  // function pointer for user-enrolled BCs.  Called in ApplyPhysicalBCs in task
+  // list
+  UserBoundaryFnPtr user_bcs_func = nullptr;
+  UserSrctermFnPtr user_srcs_func = nullptr;
+  UserRefinementFnPtr user_ref_func = nullptr;
+  UserHistoryFnPtr user_hist_func = nullptr;
 
   // predefined problem generator functions (default test suite)
   void Advection(ParameterInput *pin, const bool restart);
@@ -70,11 +71,12 @@ class ProblemGenerator {
   void Diffusion(ParameterInput *pin, const bool restart);
   void RadiationM1BeamTest(ParameterInput *pin, const bool restart);
   void RadiationM1BrentTest(ParameterInput *pin, const bool restart);
+  void RadiationM1HybridsjTest(ParameterInput *pin, const bool restart);
   // template for user-specified problem generator
   void UserProblem(ParameterInput *pin, const bool restart);
 
- private:
-  Mesh* pmy_mesh_;
+private:
+  Mesh *pmy_mesh_;
 };
 
 #endif // PGEN_PGEN_HPP_
