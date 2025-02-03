@@ -49,13 +49,18 @@ MeshRefinement::MeshRefinement(Mesh *pm, ParameterInput *pin) :
   nmb_sent_thisrank(0),
   ncyc_check_amr(1),
   refinement_interval(5),
+  prolong_prims(false),
+  d_threshold_(0.0),
+  dd_threshold_(0.0),
+  dp_threshold_(0.0),
+  dv_threshold_(0.0),
 #if MPI_PARALLEL_ENABLED
   sendbuf("lb send buff",1),
   recvbuf("lb recv buff",1),
   send_data("lb send data",1),
   recv_data("lb recv data",1),
 #endif
-  prolong_prims(false) {
+  check_cons_(false) {
   if (pin->DoesBlockExist("mesh_refinement")) {
     // read interval (in cycles) between check of AMR and derefinement
     ncyc_check_amr = pin->GetOrAddReal("mesh_refinement", "ncycle_check", 1);
