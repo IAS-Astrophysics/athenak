@@ -9,151 +9,114 @@
 //! \file legendre_roots.hpp
 //! \brief find roots of legendre polynomial using Newton–Raphson with Chebyshev guesses
 
-#include <iostream>
+#include <algorithm>
 #include <cmath>
 #include <vector>
+#include <iostream>
+#include <limits> // for std::numeric_limits
+#include <utility>
 
 #include "athena.hpp"
 
-//-------------------------------------------------------------------------
-// 1. Basic Legendre polynomials
-//-------------------------------------------------------------------------
-/* P0(x) */
-inline double P0(double x) {
-  return 1.0;
-}
 
-/* P1(x) */
-inline double P1(double x) {
-  return x;
-}
+//----------------------------------------------------------------------------
+// 1. Legendre polynomial Pn(x) via recurrence
+//----------------------------------------------------------------------------
+inline double Pn(int n, double x) {
+  if (n == 0) return 1.0;
+  if (n == 1) return x;
 
-/* Nth Legendre Polynomial, Pn(x) */
-double Pn(int n, double x) {
-  if (n == 0) {
-    return P0(x);
-  } else if (n == 1) {
-    return P1(x);
-  } else {
-    //Use the recurrence relation:
-    //   P_n(x) = ( (2n-1)*x*P_{n-1}(x) - (n-1)*P_{n-2}(x) ) / n
-    return ((2.0*n - 1.0)*x*Pn(n - 1, x) - (n - 1.0)*Pn(n - 2, x))/n;
+  double pnm2 = 1.0; // P0
+  double pnm1 = x;   // P1
+  double p     = 0.0;
+
+  for(int k = 2; k <= n; ++k) {
+    p = ((2.0 * k - 1.0) * x * pnm1 - (k - 1.0) * pnm2) / static_cast<double>(k);
+    pnm2 = pnm1;
+    pnm1 = p;
   }
+  return p;
 }
 
-//-------------------------------------------------------------------------
-// 2. Derivative of the Legendre polynomial, Pn'(x)
-//
-// A known useful identity is:
-//   (1 - x^2) * Pn'(x) = n * [ P_{n-1}(x) - x * Pn(x) ]
-//   => Pn'(x) = n/(1-x^2) * [P_{n-1}(x) - x*Pn(x)]
-//-------------------------------------------------------------------------
-double PnPrime(int n, double x) {
-  if (n == 0) {
+//----------------------------------------------------------------------------
+// 2. Derivative Pn'(x):
+//    (1 - x^2) Pn'(x) = n [P_{n-1}(x) - x Pn(x)]
+//----------------------------------------------------------------------------
+inline double PnPrime(int n, double x) {
+  if (n == 0) return 0.0;
+  double denom = 1.0 - x*x;
+  if (std::fabs(denom) < 1.0e-30) {
     return 0.0;
-  } else {
-    return (n/(1.0 - x*x)) * (Pn(n - 1, x) - x*Pn(n, x));
   }
+  double numerator = n * (Pn(n - 1, x) - x * Pn(n, x));
+  return numerator / denom;
 }
 
-//-------------------------------------------------------------------------
-// 3. Newton–Raphson iteration for root of Pn(x)
-//
-//    x_{k+1} = x_k - Pn(n,x_k) / Pn'(n,x_k)
-//-------------------------------------------------------------------------
-double NewtonLegendreRoot(int n, double x0, double tol, int max_iter) {
-  for (int i = 0; i < max_iter; ++i) {
+//----------------------------------------------------------------------------
+// 3. Newton–Raphson iteration
+//    x_{k+1} = x_k - Pn(x_k)/Pn'(x_k)
+//    - Tolerance set to machine epsilon by default
+//    - Max iteration ~20 is typically plenty (typically uses 2 or 3 iter)
+//----------------------------------------------------------------------------
+inline double NewtonLegendreRoot(
+    int n,
+    double x0,
+    double tol = std::numeric_limits<double>::epsilon(),
+    int max_iter = 20
+) {
+  for(int i = 0; i < max_iter; ++i) {
     double f  = Pn(n, x0);
     double df = PnPrime(n, x0);
 
-    // Avoid division by very small derivative
-    if (std::fabs(df) < 1.0e-30) {
-      break;  // or return x0 as is
-    }
+    // avoid division by nearly zero
+    if(std::fabs(df) < 1.0e-30) break;
 
-    double dx = f/df;
+    double dx = f / df;
     x0 -= dx;
 
-    if (std::fabs(dx) < tol) {
+    if(std::fabs(dx) < tol) {
       break;
     }
   }
   return x0;
 }
 
-//-------------------------------------------------------------------------
-// 4. Lagrange terms
-//-------------------------------------------------------------------------
-double Li(int n, const std::vector<double> &x, int i, double X) {
-  double prod = 1.0;
-  for (int j = 0; j <= n; j++) {
-    if (j != i) {
-      prod *= (X - x[j])/(x[i] - x[j]);
-    }
-  }
-  return prod;
-}
-
-//-------------------------------------------------------------------------
-// 5. Simpson's rule to compute the integral for weights via Lagrange
-//    polynomials
-//-------------------------------------------------------------------------
-double Ci(int i, int n, const std::vector<double> &x,
-          double a, double b, int N) {
-  double h = (b - a) / N;
-  double sum = 0.0;
-  // Evaluate interior points
-  for (int j = 1; j < N; j++) {
-    double X = a + j * h;
-    if (j % 2 == 0) {
-      sum += 2.0 * Li(n - 1, x, i, X);
-    } else {
-      sum += 4.0 * Li(n - 1, x, i, X);
-    }
-  }
-  // Endpoints
-  double Fa = Li(n - 1, x, i, a);
-  double Fb = Li(n - 1, x, i, b);
-
-  return (h / 3.0) * (Fa + Fb + sum);
-}
-
-//-------------------------------------------------------------------------
-// 6. Main routine: find roots & weights of the Legendre polynomial
-//    using Newton–Raphson with Chebyshev initial guesses
-//-------------------------------------------------------------------------
+//----------------------------------------------------------------------------
+// 4. Main routine: compute n roots & weights for the Legendre polynomial
+//
+//    * Chebyshev initial guesses: x0_i = cos( (π*(i + 0.75)) / (n + 0.5) )
+//    * Newton–Raphson to refine each guess
+//    * Gauss–Legendre weight formula:  w_i = 2 / ( (1 - x_i^2) [Pn'(x_i)]^2 )
+//    * Returns a 2D array [2][n]:  row 0 => roots, row 1 => weights
+//----------------------------------------------------------------------------
 std::vector<std::vector<Real>> RootsAndWeights(int n) {
-  // Storage: [0] = roots, [1] = weights
-  std::vector<std::vector<Real>> roots_weights(2, std::vector<Real>(n));
-  std::vector<double> xi(n);
+  // temporary pair array for sorting by root
+  std::vector<std::pair<double,double>> rw_pairs(n);
 
-  // Parameters for Newton iteration
-  double tol      = 1e-14;
-  int    max_iter = 100000;
+  for(int i = 0; i < n; ++i) {
+    // Chebyshev guess
+    double guess = std::cos(M_PI * (i + 0.75) / (n + 0.5));
+    // Newton iteration
+    double root = NewtonLegendreRoot(n, guess);
 
-  // Chebyshev-type initial guesses for the i-th root
-  // Common choice:
-  //    x0_i = cos( (pi*(i + 0.75)) / (n + 0.5) )
-  // for i = 0..n-1
-  for (int i = 0; i < n; ++i) {
-    double guess = std::cos( M_PI * ( i + 0.75 ) / (n + 0.5) );
-    double root  = NewtonLegendreRoot(n, guess, tol, max_iter);
+    // weight
+    double dp = PnPrime(n, root);
+    double weight = 2.0 / ((1.0 - root*root)*(dp*dp));
 
-    xi[i] = root;
-    roots_weights[0][i] = root;
+    rw_pairs[i] = std::make_pair(root, weight);
   }
 
-  // Compute weights (using the original Lagrange-based Ci or direct formula).
-  // Here we keep your original Lagrange-based approach:
-  for (int i = 0; i < n; i++) {
-    // Adjust N for integration as you see fit.
-    // For a large n, you might not need extremely large N
-    // if the function is well-behaved.
-    // But here we keep your original 60000 intervals.
-    roots_weights[1][i] = Ci(i, n, xi, -1.0, 1.0, 60000);
+  // Sort by ascending root
+  std::sort(rw_pairs.begin(), rw_pairs.end(),
+            [](auto &a, auto &b){ return a.first < b.first; });
+
+  // Prepare return structure
+  std::vector<std::vector<Real>> roots_weights(2, std::vector<Real>(n));
+  for(int i = 0; i < n; ++i) {
+    roots_weights[0][i] = rw_pairs[i].first;
+    roots_weights[1][i] = rw_pairs[i].second;
   }
 
   return roots_weights;
 }
-
 #endif // UTILS_LEGENDRE_ROOTS_HPP_
