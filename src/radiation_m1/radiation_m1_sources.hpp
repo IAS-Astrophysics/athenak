@@ -3,7 +3,7 @@
 
 #include "athena.hpp"
 #include "radiation_m1_roots_brent.hpp"
-#include "radiation_m1_roots_hybridj.hpp"
+#include "radiation_m1_roots_hybridsj.hpp"
 #include <athena_tensor.hpp>
 
 //========================================================================================
