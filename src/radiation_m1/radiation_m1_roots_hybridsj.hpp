@@ -52,6 +52,7 @@ enum HybridsjSignal {
   HYBRIDSJ_EINVAL,
   HYBRIDSJ_SUCCESS,
   HYBRIDSJ_CONTINUE,
+  HYBRIDSJ_EBADTOL,
 };
 
 //----------------------------------------------------------------------------------------
@@ -389,7 +390,7 @@ KOKKOS_INLINE_FUNCTION HybridsjSignal HybridsjIterate(Functor &&fdf,
   // Q^T f & dogleg
   compute_qtf(state.q, pars.f, state.qtf);
   HybridsjSignal dl = dogleg(state.r, state.qtf, state.diag, state.delta,
-                            state.newton, state.gradient, pars.dx);
+                             state.newton, state.gradient, pars.dx);
 
   // compute trial step
   compute_trial_step(pars.x, pars.dx, state.x_trial);
@@ -480,5 +481,33 @@ KOKKOS_INLINE_FUNCTION HybridsjSignal HybridsjIterate(Functor &&fdf,
   }
   return HYBRIDSJ_SUCCESS;
 }
+
+KOKKOS_INLINE_FUNCTION
+HybridsjSignal HybridsjTestDelta(const Real (&dx)[M1_MULTIROOTS_DIM],
+                                const Real (&x)[M1_MULTIROOTS_DIM], Real epsabs,
+                                Real epsrel) {
+  int ok = 1;
+
+  if (epsrel < 0.0) {
+    return HYBRIDSJ_EBADTOL;
+  }
+
+  for (int i = 0; i < M1_MULTIROOTS_DIM; i++) {
+    double tolerance = epsabs + epsrel * Kokkos::fabs(x[i]);
+
+    if (Kokkos::fabs(dx[i]) < tolerance || dx[i] == 0) {
+      ok = 1;
+    } else {
+      ok = 0;
+      break;
+    }
+  }
+
+  if (ok) {
+    return HYBRIDSJ_SUCCESS;
+  }
+  return HYBRIDSJ_CONTINUE;
+}
+
 } // namespace radiationm1
 #endif // RADIATION_M1_ROOTS_HYBRIDJ_HPP
