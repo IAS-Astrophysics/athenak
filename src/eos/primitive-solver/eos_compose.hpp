@@ -29,7 +29,7 @@
 namespace Primitive {
 
 template<typename LogPolicy>
-class EOSCompOSE : public EOSPolicyInterface, public LogPolicy {
+class EOSCompOSE : public EOSPolicyInterface, public LogPolicy, public SupportsEntropy, public SupportsChemicalPotentials {
  private:
   using LogPolicy::log2_;
   using LogPolicy::exp2_;
@@ -73,6 +73,11 @@ class EOSCompOSE : public EOSPolicyInterface, public LogPolicy {
       min_Y[i] = std::numeric_limits<Real>::quiet_NaN();
       max_Y[i] = std::numeric_limits<Real>::quiet_NaN();
     }
+
+    // Defaults for neutrino equilibrium solver
+    nu_2DNR_eps_lim  = 1.e-7;
+    nu_2DNR_n_max    = 100;
+    nu_bis_n_cut_max = 8;
   }
 
 /*
@@ -142,7 +147,6 @@ class EOSCompOSE : public EOSPolicyInterface, public LogPolicy {
     return Energy(n, T, Y)/(mb*n) - 1;
   }
 
-/* Not needed until neutrinos are added
   /// Calculate the baryon chemical potential
   KOKKOS_INLINE_FUNCTION Real BaryonChemicalPotential(Real n, Real T, Real *Y) const {
     assert (m_initialized);
@@ -160,7 +164,81 @@ class EOSCompOSE : public EOSPolicyInterface, public LogPolicy {
     assert (m_initialized);
     return eval_at_nty(ECMUL, n, T, Y[0]);
   }
-*/
+
+  /// Calculate hot (neutrino trapped) beta equilibrium T_eq and Y_eq given n, e, and Yl
+  KOKKOS_INLINE_FUNCTION int BetaEquilibriumTrapped(Real n, Real e, Real *Yl, Real &T_eq, Real *Y_eq, Real T_guess, Real *Y_guess) const {
+    const int n_at = 16;
+    Real vec_guess[n_at][2] = { 
+      {1.00e0, 1.00e0},
+      {0.90e0, 1.25e0},
+      {0.90e0, 1.10e0},
+      {0.90e0, 1.00e0},
+      {0.90e0, 0.90e0},
+      {0.90e0, 0.75e0},
+      {0.75e0, 1.25e0},
+      {0.75e0, 1.10e0},
+      {0.75e0, 1.00e0},
+      {0.75e0, 0.90e0},
+      {0.75e0, 0.75e0},
+      {0.50e0, 1.25e0},
+      {0.50e0, 1.10e0},
+      {0.50e0, 1.00e0},
+      {0.50e0, 0.90e0},
+      {0.50e0, 0.75e0},
+    };
+
+    // ierr = 0    Equilibrium found
+    // ierr = 1    Equilibrium not found
+    int ierr = 1;
+    int na = 0; // counter for the number of attempts
+
+    Real x0[2], x1[2]; // T,Ye guess and T,Ye result
+
+    while (ierr!=0 && na<n_at) {
+      x0[0] = vec_guess[na][0] * T_guess;
+      x0[1] = vec_guess[na][1] * Y_guess[0];
+
+      ierr = trapped_equilibrium_2DNR(n, e, Yl[0], x0, x1);
+
+      na += 1;
+    }
+
+    if (ierr==0){ // Success
+      T_eq = x1[0];
+      Y_eq[0] = x1[1];
+    } else {      // Failure
+      T_eq = T_guess;       // Set results to guesses
+      Y_eq[0] = Y_guess[0];
+    }
+
+    return ierr;
+  }
+
+  /// Calculate trapped neutrino net number and energy densities
+  KOKKOS_INLINE_FUNCTION void TrappedNeutrinos(Real n, Real T, Real *Y, Real n_nu[3], Real e_nu[3]) const {
+    Real mu_le = ElectronLeptonChemicalPotential(n, T, Y);
+    Real eta_e = mu_le/T;
+    Real eta_e2 = eta_e*eta_e;
+
+    Real eta_m = 0.0;
+    Real eta_m2 = 0.0;
+
+    Real eta_t = 0.0;
+    Real eta_t2 = 0.0;
+
+    Real T3 = T*T*T;
+    Real T4 = T3*T;
+
+    n_nu[0] = nu_n_prefactor * T3 * (eta_e * (pi2 + eta_e2)); // n_nu_e   - n_anu_e   [fm^-3]
+    n_nu[1] = nu_n_prefactor * T3 * (eta_m * (pi2 + eta_m2)); // n_nu_mu  - n_anu_mu  [fm^-3]
+    n_nu[2] = nu_n_prefactor * T3 * (eta_t * (pi2 + eta_t2)); // n_nu_tau - n_anu_tau [fm^-3]
+
+    e_nu[0] = nu_e_prefactor * T4 * (nu_7pi4_60 + 0.5*eta_e2*(pi2 + 0.5*eta_e2)); // e_nu_e   + e_anu_e   [MeV fm^-3]
+    e_nu[1] = nu_e_prefactor * T4 * (nu_7pi4_60 + 0.5*eta_m2*(pi2 + 0.5*eta_m2)); // e_nu_mu  + e_anu_mu  [MeV fm^-3]
+    e_nu[2] = nu_e_prefactor * T4 * (nu_7pi4_60 + 0.5*eta_t2*(pi2 + 0.5*eta_t2)); // e_nu_tau + e_anu_tau [MeV fm^-3]
+
+    return;
+  }
 
   /// Get the minimum enthalpy per baryon.
   KOKKOS_INLINE_FUNCTION Real MinimumEnthalpy() const {
@@ -363,6 +441,248 @@ class EOSCompOSE : public EOSPolicyInterface, public LogPolicy {
     return exp2_(lt);
   }
 
+  /// Low level functions for neutrino equilibrium, not intended for outside use
+  KOKKOS_INLINE_FUNCTION int trapped_equilibrium_2DNR(Real n, Real e, Real Yle, Real x0[2], Real x1[2]) const {
+    int ierr = 1;
+
+    // initialize the solution
+    x1[0] = x0[0];
+    x1[1] = x0[1];
+    bool KKT = false;
+
+    //compute the initial residuals
+    Real y[2] = {0.0};
+    func_eq_weak(n,e,Yle,x1,y);
+
+    // compute the error from the residuals
+    Real err = error_func_eq_weak(Yle,e,y);
+
+    // initialize the iteration variables
+    int n_iter = 0;
+    Real J[2][2] = {0.0};
+    Real invJ[2][2] = {0.0};
+    Real dx1[2] = {0.0};
+    Real dxa[2] = {0.0};
+    Real norm[2] = {0.0};
+    Real x1_tmp[2] = {0.0};
+
+    // loop until a low enough residual is found or until  a too
+    // large number of steps has been performed
+    while (err>nu_2DNR_eps_lim && n_iter<=nu_2DNR_n_max && !KKT) {
+      // compute the Jacobian
+      ierr = jacobi_eq_weak(n,e,Yle,x1,J);
+      if (ierr != 0) {
+        return ierr;
+      }
+
+      // compute and check the determinant of the Jacobian
+      Real det = J[0][0]*J[1][1] - J[0][1]*J[1][0];
+      if (det==0.0) {
+        ierr = 1;
+        return ierr;
+      }
+
+      // invert the Jacobian
+      inv_jacobi(det,J,invJ);
+
+      // compute the next step
+      dx1[0] = - (invJ[0][0]*y[0] + invJ[0][1]*y[1]);
+      dx1[1] = - (invJ[1][0]*y[0] + invJ[1][1]*y[1]);
+
+      // check if we are the boundary of the table
+      if (x1[0] == min_T) {
+        norm[0] = -1.0;
+      } else if (x1[0] == max_T) {
+        norm[0] = 1.0;
+      } else { 
+        norm[0] = 0.0;
+      }
+
+      if (x1[1] == min_Y[0]) {
+        norm[1] = -1.0;
+      } else if (x1[1] == max_Y[0]) {
+        norm[1] = 1.0;
+      } else {
+        norm[1] = 0.0;
+      }
+
+      // Take the part of the gradient that is active (pointing within the eos domain)
+      Real scal = norm[0]*norm[0] + norm[1]*norm[1];
+      if (scal <= 0.5) { // this can only happen if norm = (0, 0)
+        scal = 1.0;
+      }
+      dxa[0] = dx1[0] - (dx1[0]*norm[0] + dx1[1]*norm[1])*norm[0]/scal;
+      dxa[1] = dx1[1] - (dx1[0]*norm[0] + dx1[1]*norm[1])*norm[1]/scal;
+
+      if ((dxa[0]*dxa[0] + dxa[1]*dxa[1]) < (nu_2DNR_eps_lim*nu_2DNR_eps_lim * (dx1[0]*dx1[0] + dx1[1]*dx1[1]))) {
+        KKT = true;
+        ierr = 2;
+        return ierr;
+      }
+
+      int n_cut = 0;
+      Real fac_cut = 1.0;
+      Real err_old = err;
+
+      while (n_cut <= nu_bis_n_cut_max && err >= err_old) {
+        // the variation of x1 is divided by an powers of 2 if the
+        // error is not decreasing along the gradient direction
+        
+        x1_tmp[0] = x1[0] + (dx1[0]*fac_cut);
+        x1_tmp[1] = x1[1] + (dx1[1]*fac_cut);
+
+        // check if the next step calculation had problems
+        if (isnan(x1_tmp[0])) {
+          ierr = 1;
+          return ierr;
+        }
+
+        // tabBoundsFlag = enforceTableBounds(rho, x1_tmp[0], x1_tmp[1]);
+        x1_tmp[0] = fmin(fmax(x1_tmp[0],min_T),max_T);
+        x1_tmp[1] = fmin(fmax(x1_tmp[1],min_Y[0]),max_Y[0]);
+
+        // assign the new point
+        x1[0] = x1_tmp[0];
+        x1[1] = x1_tmp[1];
+
+        // compute the residuals for the new point
+        func_eq_weak(n,e,Yle,x1,y);
+
+        // compute the error
+        err = error_func_eq_weak(Yle,e,y);
+
+        // update the bisection cut along the gradient
+        n_cut += 1;
+        fac_cut *= 0.5;
+      }
+
+      // update the iteration
+      n_iter += 1;
+    }
+      
+    if (n_iter <= nu_2DNR_n_max) {
+      ierr = 0;
+    } else {
+      ierr = 1;
+    }
+    
+    return ierr;
+  }
+
+  KOKKOS_INLINE_FUNCTION void func_eq_weak(Real n, Real e_eq, Real Yle, Real x[2], Real y[2]) const {
+    Real T = x[0];
+
+    Real Y[MAX_SPECIES] = {0.0};
+    Y[0] = x[1];
+
+    Real mu_l = ElectronLeptonChemicalPotential(n, T, Y);
+    Real e = Energy(n, T, Y);
+    Real eta = mu_l/T;
+    Real eta2 = eta*eta;
+
+    Real t3 = T*T*T;
+    Real t4 = t3*T;
+    y[0] = Y[0] + nu_n_prefactor*t3*eta*(pi2 + eta2)/n - Yle;
+    y[1] = (e+nu_e_prefactor*t4*((nu_7pi4_60+0.5*eta2*(pi2+0.5*eta2))+nu_7pi4_30))/e_eq - 1.0;
+
+    return;
+  }
+
+  KOKKOS_INLINE_FUNCTION Real error_func_eq_weak(Real Yle, Real e_eq, Real y[2]) const {
+    Real err = abs(y[0]/Yle) + abs(y[1]/1.0);
+    return err;
+  }
+
+  KOKKOS_INLINE_FUNCTION int jacobi_eq_weak(Real n, Real e_eq, Real Yle, Real x[2], Real J[2][2]) const {
+    int ierr = 0;
+
+    Real T = x[0];
+    Real Y[MAX_SPECIES] = {0.0};
+    Y[0] = x[1];
+
+    if (isnan(T)) {
+      ierr = 1;
+      return ierr;
+    }
+
+    Real mu_l = ElectronLeptonChemicalPotential(n, T, Y);
+    Real eta = mu_l/T;
+    Real eta2 = eta*eta;
+
+    if (isnan(eta)) {
+      ierr = 1;
+      return ierr;
+    }
+
+    Real detadt,detadye,dedt,dedye;
+    ierr = eta_e_gradient(n,T,Y,eta,detadt,detadye,dedt,dedye);
+    if (ierr != 0){
+      return ierr;
+    }
+
+    Real T2 = T*T;
+    Real T3 = T2*T;
+    // Real T4 = T3*T;
+
+    J[0][0] = nu_n_prefactor/n*T2*(3.e0*eta*(pi2+eta2)+T*(pi2+3.e0*eta2)*detadt);
+    J[0][1] = 1.e0+nu_n_prefactor/n*T3*(pi2+3.e0*eta2)*detadye;
+
+    J[1][0] = (dedt+nu_e_prefactor*T3*(nu_7pi4_15+nu_14pi4_15+2.e0*eta2*(pi2+0.5*eta2)+eta*T*(pi2+eta2)*detadt))/e_eq;
+    J[1][1] = (dedye+nu_e_prefactor*T3*eta*(pi2+eta2)*detadye)/e_eq;
+
+    return ierr;
+  }
+
+  KOKKOS_INLINE_FUNCTION int eta_e_gradient(Real n, Real T, Real *Y, Real eta, Real &deta_dT, Real &deta_dYe, Real &de_dT, Real &de_dYe) const {
+    int ierr=1;
+
+    const Real Ye_delta = 0.005;
+    const Real T_delta = 0.01;
+
+    Real Y1[MAX_SPECIES] = {0.0};
+    Real Y2[MAX_SPECIES] = {0.0};
+
+    Y1[0] = fmax(Y[0] - Ye_delta, min_Y[0]);
+    Real mu_l1 = ElectronLeptonChemicalPotential(n, T, Y1);
+    Real e1 = Energy(n, T, Y1);
+    
+    Y2[0] = fmin(Y[0] + Ye_delta, max_Y[0]);
+    Real mu_l2 = ElectronLeptonChemicalPotential(n, T, Y2);
+    Real e2 = Energy(n, T, Y2);
+
+    Real dmu_l_dYe = (mu_l2-mu_l1)/(Y2[0] - Y1[0]);
+    de_dYe         = (e2-e1)/(Y2[0] - Y1[0]);
+
+    Real T1 = fmax(T - T_delta, min_T);
+    mu_l1 = ElectronLeptonChemicalPotential(n, T1, Y);
+    e1 = Energy(n, T1, Y);
+
+    Real T2 = fmin(T + T_delta, max_T);
+    mu_l2 = ElectronLeptonChemicalPotential(n, T2, Y);
+    e2 = Energy(n, T2, Y);
+
+    Real dmu_l_dT   = (mu_l2 - mu_l1)/(T2 - T1);
+    de_dT          = (e2 - e1)/(T2 - T1);
+    
+    deta_dT  = (dmu_l_dT - eta )/T; // [1/MeV] TODO: Check
+    deta_dYe = dmu_l_dYe/T;      // [-]
+
+    if (isnan(deta_dT)||isnan(deta_dYe)||isnan(de_dT)||isnan(de_dYe)) {
+      ierr = 1;
+    } else {
+      ierr = 0;
+    }
+
+    return ierr;
+  }
+
+  KOKKOS_INLINE_FUNCTION void inv_jacobi(Real det, Real J[2][2], Real invJ[2][2]) const {
+    Real inv_det = 1.0/det;
+    invJ[0][0] =  J[1][1]*inv_det;
+    invJ[1][1] =  J[0][0]*inv_det;
+    invJ[0][1] = -J[0][1]*inv_det;
+    invJ[1][0] = -J[1][0]*inv_det;
+  }
 
  private:
   // Inverse of table spacing
@@ -381,6 +701,28 @@ class EOSCompOSE : public EOSPolicyInterface, public LogPolicy {
   DvceArray1D<Real> m_yq;
   DvceArray1D<Real> m_log_t;
   DvceArray4D<Real> m_table;
+
+ private:
+  // Neutrino equilibrium parameters
+  Real nu_2DNR_eps_lim; // tolerance in 2D NR (required for 1e-12 err in T)
+  int nu_2DNR_n_max;    // Newton-Raphson max number of iterations
+  int nu_bis_n_cut_max; // Bisection max number of iterations
+
+  // Neutrino equilibrium physical constants
+  const Real hc_mevfm = 1.23984172e3;           // hc    [MeV fm] (not reduced)
+  const Real pi       = 3.14159265358979323846; // pi    [-]
+  const Real pi2      = pi*pi;                  // pi**2 [-]
+  const Real pi4      = pi2*pi2;                // pi**4 [-]
+
+  const Real nu_n_prefactor = 4.0/3.0*pi/(hc_mevfm*hc_mevfm*hc_mevfm); // 4/3 *pi/(hc)**3 [1/MeV^3/fm^3]
+  const Real nu_e_prefactor = 4.0*pi/(hc_mevfm*hc_mevfm*hc_mevfm);     // 4*pi/(hc)**3    [1/MeV^3 fm^3]
+
+  const Real nu_7pi4_60 = 7.0*pi4/60.0;  // 7*pi**4/60  [-]
+  const Real nu_7pi4_30 = 7.0*pi4/30.0;  // 7*pi**4/30  [-]
+  const Real nu_7pi4_15 = 7.0*pi4/15.0;  // 7*pi**4/15  [-]
+  const Real nu_14pi4_15 = 14.0*pi4/15.0; // 14*pi**4/15 [-]
+
+
 };
 
 }; // namespace Primitive
