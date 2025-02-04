@@ -43,6 +43,7 @@ public:
   }
 };
 
+KOKKOS_INLINE_FUNCTION
 void print_fdf(Real (&x)[M1_MULTIROOTS_DIM], Real (&f)[M1_MULTIROOTS_DIM],
                Real (&J)[M1_MULTIROOTS_DIM][M1_MULTIROOTS_DIM]) {
   std::cout << "x: " << std::endl;
@@ -65,6 +66,19 @@ void print_fdf(Real (&x)[M1_MULTIROOTS_DIM], Real (&f)[M1_MULTIROOTS_DIM],
     std::cout << std::endl;
   }
 }
+
+KOKKOS_INLINE_FUNCTION
+void print_f(Real (&x)[M1_MULTIROOTS_DIM], Real (&f)[M1_MULTIROOTS_DIM],
+             Real (&J)[M1_MULTIROOTS_DIM][M1_MULTIROOTS_DIM]) {
+  for (int i = 0; i < M1_MULTIROOTS_DIM; ++i) {
+    std::cout << x[i] << " ";
+  }
+  for (int i = 0; i < M1_MULTIROOTS_DIM; ++i) {
+    std::cout << f[i] << " ";
+  }
+  std::cout << std::endl;
+}
+
 //----------------------------------------------------------------------------------------
 //! \fn void MeshBlock::UserProblem(ParameterInput *pin)
 //  \brief Sets initial conditions for radiation M1 beams test
@@ -122,7 +136,7 @@ void ProblemGenerator::RadiationM1HybridsjTest(ParameterInput *pin,
   pars.x[1] = 0;
   radiationm1::HybridsjSignal ierr =
       radiationm1::HybridsjInitialize(func, state, pars);
-  print_fdf(pars.x, pars.f, pars.J);
+  print_f(pars.x, pars.f, pars.J);
 
   int iter = 0;
   int maxiter = 200;
@@ -130,7 +144,7 @@ void ProblemGenerator::RadiationM1HybridsjTest(ParameterInput *pin,
   Real epsrel = 1e-5;
   do {
     ierr = radiationm1::HybridsjIterate(func, state, pars);
-    print_fdf(pars.x, pars.f, pars.J);
+    print_f(pars.x, pars.f, pars.J);
     iter++;
 
     ierr = radiationm1::HybridsjTestDelta(pars.dx, pars.x, epsabs, epsrel);
