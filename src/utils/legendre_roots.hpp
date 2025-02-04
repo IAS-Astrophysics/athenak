@@ -1,127 +1,127 @@
 #ifndef UTILS_LEGENDRE_ROOTS_HPP_
 #define UTILS_LEGENDRE_ROOTS_HPP_
+
 //========================================================================================
 // AthenaXXX astrophysical plasma code
 // Copyright(C) 2020 James M. Stone <jmstone@ias.edu> and the Athena code team
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
 //! \file legendre_roots.hpp
-//! \brief find roots of legendre polynomial
+//! \brief find roots of legendre polynomial using Newton–Raphson with Chebyshev guesses
 
-#include <iostream>
+#include <algorithm>
 #include <cmath>
-#include <list>
 #include <vector>
+#include <iostream>
+#include <limits> // for std::numeric_limits
+#include <utility>
 
 #include "athena.hpp"
 
-/*Legendre Polynomial P0(x)*/
-double P0(double x) {
-  return 1;
-}
 
-/*Legendre Polynomial P1(x)*/
-double P1(double x) {
-  return x;
-}
+//----------------------------------------------------------------------------
+// 1. Legendre polynomial Pn(x) via recurrence
+//----------------------------------------------------------------------------
+inline double Pn(int n, double x) {
+  if (n == 0) return 1.0;
+  if (n == 1) return x;
 
-/*Nth Legendre Polynomial Pn(x)*/
-double Pn(int n, double x) {
-  if(n==0) {
-    return P0(x);
-  } else if(n==1) {
-    return P1(x);
-  } else {
-    //Use the recurrence relation
-    return (double )((2*n-1)*x*Pn(n-1,x)-(n-1)*Pn(n-2,x))/n;
+  double pnm2 = 1.0; // P0
+  double pnm1 = x;   // P1
+  double p     = 0.0;
+
+  for (int k = 2; k <= n; ++k) {
+    p = ((2.0 * k - 1.0) * x * pnm1 - (k - 1.0) * pnm2) / static_cast<double>(k);
+    pnm2 = pnm1;
+    pnm1 = p;
   }
+  return p;
 }
 
-/*Lagrange terms*/
-double Li(int n, std::vector<double> x, int i, double X) {
-  int j;
-  double prod=1;
-  for(j=0; j<=n; j++) {
-    if (j!=i) {
-      prod=prod*(X-x[j])/(x[i]-x[j]);
+//----------------------------------------------------------------------------
+// 2. Derivative Pn'(x):
+//    (1 - x^2) Pn'(x) = n [P_{n-1}(x) - x Pn(x)]
+//----------------------------------------------------------------------------
+inline double PnPrime(int n, double x) {
+  if (n == 0) return 0.0;
+  double denom = 1.0 - x*x;
+  if (std::fabs(denom) < 1.0e-30) {
+    return 0.0;
+  }
+  double numerator = n * (Pn(n - 1, x) - x * Pn(n, x));
+  return numerator / denom;
+}
+
+//----------------------------------------------------------------------------
+// 3. Newton–Raphson iteration
+//    x_{k+1} = x_k - Pn(x_k)/Pn'(x_k)
+//    - Tolerance set to machine epsilon by default
+//    - Max iteration ~20 is typically plenty (typically uses 2 or 3 iter)
+//----------------------------------------------------------------------------
+inline double NewtonLegendreRoot(
+    int n,
+    double x0,
+    double tol = std::numeric_limits<double>::epsilon(),
+    int max_iter = 20
+) {
+  for (int i = 0; i < max_iter; ++i) {
+    double f  = Pn(n, x0);
+    double df = PnPrime(n, x0);
+
+    // avoid division by nearly zero
+    if (std::fabs(df) < 1.0e-30) break;
+
+    double dx = f / df;
+    x0 -= dx;
+
+    if (std::fabs(dx) < tol) {
+      break;
+    }
+
+    if (i == max_iter-1) {
+      std::cout << "Failed to Initialize the Gauss-Legendre Grid"<< std::endl;
+      exit(EXIT_FAILURE);
     }
   }
-  return prod;
+  return x0;
 }
 
-/*Function definition to perform integration by Simpson's 1/3rd Rule */
-double Ci(int i, int n, std::vector<double> x, double a, double b, int N) {
-  double h,integral,X,sum=0;
-  int j,k;
-  h=(b-a)/N;
-  for(j=1; j<N; j++) {
-    X=a+j*h;
-    if(j%2==0) {
-      sum=sum+2*Li(n-1,x,i,X);
-    } else {
-      sum=sum+4*Li(n-1,x,i,X);
-    }
-  }
-  double Fa=Li(n-1,x,i,a);
-  double Fb=Li(n-1,x,i,b);
-  integral=(h/3.0)*(Fa+Fb+sum);
-  return integral;
-}
-
-/*Function definition for bisection procedure[Returns the root if found
-or 999 for failure]*/
-double Bisection(int n,double f(int n,double x),double a, double b,
-                double eps, int maxSteps) {
-  double c;
-  if(f(n,a)*f(n,b)<=0) {
-    int iter=1;
-    /*Bisection Method begins that tabulates the various values at each iteration*/
-    do {
-      c=(a+b)/2;
-      if(f(n,a)*f(n,c)>0) {
-        a=c;
-      } else if(f(n,a)*f(n,c)<0) {
-        b=c;
-      } else if(f(n,c)==0) {
-          return c;
-      }
-        iter++;
-    } while(fabs(a-b)>=eps&&iter<=maxSteps);
-    return c;
-  } else {
-    return 999;
-  }
-}
-
+//----------------------------------------------------------------------------
+// 4. Main routine: compute n roots & weights for the Legendre polynomial
+//
+//    * Chebyshev initial guesses: x0_i = cos( (π*(i + 0.75)) / (n + 0.5) )
+//    * Newton–Raphson to refine each guess
+//    * Gauss–Legendre weight formula:  w_i = 2 / ( (1 - x_i^2) [Pn'(x_i)]^2 )
+//    * Returns a 2D array [2][n]:  row 0 => roots, row 1 => weights
+//----------------------------------------------------------------------------
 std::vector<std::vector<Real>> RootsAndWeights(int n) {
-  //Array to store the roots and weights of Legendre polynomials
+  // temporary pair array for sorting by root
+  std::vector<std::pair<double,double>> rw_pairs(n);
+
+  for(int i = 0; i < n; ++i) {
+    // Chebyshev guess
+    double guess = std::cos(M_PI * (i + 0.75) / (n + 0.5));
+    // Newton iteration
+    double root = NewtonLegendreRoot(n, guess);
+
+    // weight
+    double dp = PnPrime(n, root);
+    double weight = 2.0 / ((1.0 - root*root)*(dp*dp));
+
+    rw_pairs[i] = std::make_pair(root, weight);
+  }
+
+  // Sort by ascending root
+  std::sort(rw_pairs.begin(), rw_pairs.end(),
+            [](auto &a, auto &b){ return a.first < b.first; });
+
+  // Prepare return structure
   std::vector<std::vector<Real>> roots_weights(2, std::vector<Real>(n));
-  std::vector<double> xi;
-
-  //window(Step-size) for bisection method
-  double h=0.01;
-  //dummy variable for bisection method
-  double x;
-  //dummy variable where the root is returned after bisection routine
-  double root;
-  int i=0;
-
-  for(x=-1.0; x<=1.0; x=x+h) {
-    //set the accuracy to approx. 10^-15 but there is also a limit on maxSteps.
-    // (Modify these acc. to your needs)
-    root=Bisection(n,Pn,x,x+h,1e-14,1000000);
-
-    if(root!=999) {
-      xi.push_back(root);
-      roots_weights[0][i]=root;
-      i++;
-    }
+  for(int i = 0; i < n; ++i) {
+    roots_weights[0][i] = rw_pairs[i].first;
+    roots_weights[1][i] = rw_pairs[i].second;
   }
 
-  for(i=0; i<n; i++) {
-      //(Modify the number of sub-intervals according to your needs)
-      roots_weights[1][i]=Ci(i,n,xi,-1,1,1000000);
-  }
   return roots_weights;
 }
 #endif // UTILS_LEGENDRE_ROOTS_HPP_
