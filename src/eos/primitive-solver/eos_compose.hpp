@@ -29,7 +29,7 @@
 namespace Primitive {
 
 template<typename LogPolicy>
-class EOSCompOSE : public EOSPolicyInterface, public LogPolicy {
+class EOSCompOSE : public EOSPolicyInterface, public LogPolicy, public SupportsEntropy, public SupportsChemicalPotentials {
  private:
   using LogPolicy::log2_;
   using LogPolicy::exp2_;
