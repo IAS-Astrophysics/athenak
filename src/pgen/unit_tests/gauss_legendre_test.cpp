@@ -105,12 +105,12 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
       std::cout << "Gauss Legendre Integral Test Failed"<< std::endl;
       std::cout << "l1=" << ls[n1] << '\t' << "m1=" << ms[n1]<< std::endl;
       std::cout << "l2=" << ls[n2] << '\t' << "m2=" << ms[n2]<< std::endl;
-      std::cout << "value is " << int_r << "+1j*" << int_i << std::endl;
+      std::cout << "Maximum Error is " << max_err << std::endl;
       std::cout << std::endl;
       exit(EXIT_FAILURE);
     }
   }
-  std::cout << "Test Passed with Maximum Error = " << max_err << std::endl;
+  std::cout << "Test Passed with Maximum Error is " << max_err << std::endl;
 
   return;
 }

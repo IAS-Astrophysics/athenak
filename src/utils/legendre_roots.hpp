@@ -30,7 +30,7 @@ inline double Pn(int n, double x) {
   double pnm1 = x;   // P1
   double p     = 0.0;
 
-  for(int k = 2; k <= n; ++k) {
+  for (int k = 2; k <= n; ++k) {
     p = ((2.0 * k - 1.0) * x * pnm1 - (k - 1.0) * pnm2) / static_cast<double>(k);
     pnm2 = pnm1;
     pnm1 = p;
@@ -64,18 +64,23 @@ inline double NewtonLegendreRoot(
     double tol = std::numeric_limits<double>::epsilon(),
     int max_iter = 20
 ) {
-  for(int i = 0; i < max_iter; ++i) {
+  for (int i = 0; i < max_iter; ++i) {
     double f  = Pn(n, x0);
     double df = PnPrime(n, x0);
 
     // avoid division by nearly zero
-    if(std::fabs(df) < 1.0e-30) break;
+    if (std::fabs(df) < 1.0e-30) break;
 
     double dx = f / df;
     x0 -= dx;
 
-    if(std::fabs(dx) < tol) {
+    if (std::fabs(dx) < tol) {
       break;
+    }
+
+    if (i == max_iter-1) {
+      std::cout << "Failed to Initialize the Gauss-Legendre Grid"<< std::endl;
+      exit(EXIT_FAILURE);
     }
   }
   return x0;
