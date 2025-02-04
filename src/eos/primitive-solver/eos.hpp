@@ -71,15 +71,9 @@ class EOS : public EOSPolicy, public ErrorPolicy {
   using EOSPolicy::TemperatureFromP;
   using EOSPolicy::Energy;
   using EOSPolicy::Pressure;
-  using EOSPolicy::Entropy;
   using EOSPolicy::Enthalpy;
   using EOSPolicy::SoundSpeed;
   using EOSPolicy::SpecificInternalEnergy;
-  using EOSPolicy::BaryonChemicalPotential;
-  using EOSPolicy::ChargeChemicalPotential;
-  using EOSPolicy::ElectronLeptonChemicalPotential;
-  using EOSPolicy::BetaEquilibriumTrapped;
-  using EOSPolicy::TrappedNeutrinos;
   using EOSPolicy::MinimumEnthalpy;
   using EOSPolicy::MinimumPressure;
   using EOSPolicy::MaximumPressure;
@@ -129,6 +123,9 @@ class EOS : public EOSPolicy, public ErrorPolicy {
   using ErrorPolicy::fail_primitive_floor;
   using ErrorPolicy::adjust_conserved;
   using ErrorPolicy::max_bsq;
+
+  static constexpr bool supports_entropy = std::is_base_of_v<SupportsEntropy, EOSPolicy>;
+  static constexpr bool supports_potentials = std::is_base_of_v<SupportsChemicalPotentials, EOSPolicy>;
 
  public:
   //! \fn EOS()
@@ -208,8 +205,12 @@ class EOS : public EOSPolicy, public ErrorPolicy {
   //  \param[in] Y  An array of size n_species of the particle fractions.
   //  \return The entropy per baryon for this EOS.
   KOKKOS_INLINE_FUNCTION Real GetEntropy(Real n, Real T, Real *Y) const {
-    return Entropy(n, T*code_units.TemperatureConversion(eos_units), Y)/mb *
+   if constexpr (supports_entropy) {
+    return EOSPolicy::Entropy(n, T*code_units.TemperatureConversion(eos_units), Y)/mb *
            eos_units.EntropyConversion(code_units)/eos_units.MassConversion(code_units);
+   } else {
+    return std::numeric_limits<Real>::quiet_NaN();
+   }
   }
 
   //! \fn Real GetEnthalpy(Real n, Real T, Real *Y)
@@ -269,8 +270,12 @@ class EOS : public EOSPolicy, public ErrorPolicy {
   //  \param[in] Y  An array of size n_species of the particle fractions.
   //  \return The baryon chemical potential for the EOS.
   KOKKOS_INLINE_FUNCTION Real GetBaryonChemicalPotential(Real n, Real T, Real *Y) const {
-    return BaryonChemicalPotential(n, T*code_units->TemperatureConversion(*eos_units), Y) *
+   if constexpr (supports_potentials) {
+    return EOSPolicy::BaryonChemicalPotential(n, T*code_units->TemperatureConversion(*eos_units), Y) *
             eos_units->ChemicalPotentialConversion(*code_units);
+   } else {
+    return std::numeric_limits<Real>::quiet_NaN();
+   }
   }
   
     //! \fn Real GetChargeChemicalPotential(Real n, Real T, Real *Y)
@@ -282,8 +287,12 @@ class EOS : public EOSPolicy, public ErrorPolicy {
   //  \param[in] Y  An array of size n_species of the particle fractions.
   //  \return The charge chemical potential for the EOS.
   KOKKOS_INLINE_FUNCTION Real GetChargeChemicalPotential(Real n, Real T, Real *Y) const {
-    return ChargeChemicalPotential(n, T*code_units->TemperatureConversion(*eos_units), Y) *
+   if constexpr (supports_potentials) {
+    return EOSPolicy::ChargeChemicalPotential(n, T*code_units->TemperatureConversion(*eos_units), Y) *
             eos_units->ChemicalPotentialConversion(*code_units);
+   } else {
+    return std::numeric_limits<Real>::quiet_NaN();
+   }
   }
   
     //! \fn Real GetElectronLeptonChemicalPotential(Real n, Real T, Real *Y)
@@ -295,8 +304,12 @@ class EOS : public EOSPolicy, public ErrorPolicy {
   //  \param[in] Y  An array of size n_species of the particle fractions.
   //  \return The electron-lepton chemical potential for the EOS.
   KOKKOS_INLINE_FUNCTION Real GetElectronLeptonChemicalPotential(Real n, Real T, Real *Y) const {
-    return ElectronLeptonChemicalPotential(n, T*code_units->TemperatureConversion(*eos_units), Y) *
+   if constexpr (supports_potentials) {
+    return EOSPolicy::ElectronLeptonChemicalPotential(n, T*code_units->TemperatureConversion(*eos_units), Y) *
             eos_units->ChemicalPotentialConversion(*code_units);
+   } else {
+    return std::numeric_limits<Real>::quiet_NaN();
+   }
   }
 
     //! \fn Real GetBetaEquilibriumTrapped(Real n, Real e, Real *Yl, Real &T_eq, Real *Y_eq, Real T_guess, Real *Y_guess) 
@@ -311,13 +324,17 @@ class EOS : public EOSPolicy, public ErrorPolicy {
   //  \param[in]    Y_guess Initial guesses for the particle fractions.
   //  \return Whether the equilibrium was successfully found.
   KOKKOS_INLINE_FUNCTION bool GetBetaEquilibriumTrapped(Real n, Real e, Real *Yl, Real &T_eq, Real *Y_eq, Real T_guess, Real *Y_guess) {
-    int ierr = BetaEquilibriumTrapped(n, e*code_units->PressureConversion(*eos_units), Yl, 
+   if constexpr (supports_potentials) {
+    int ierr = EOSPolicy::BetaEquilibriumTrapped(n, e*code_units->PressureConversion(*eos_units), Yl, 
                                       T_eq, Y_eq, 
                                       T_guess*code_units->TemperatureConversion(*eos_units), Y_guess);
 
     T_eq = T_eq*eos_units->TemperatureConversion(*code_units);
     
     return ierr==0;
+   } else {
+    return false;
+   }
   }
 
     //! \fn Real GetTrappedNeutrinos(Real n, Real T, Real *Y, Real n_nu[3], Real e_nu[3]) 
@@ -329,7 +346,8 @@ class EOS : public EOSPolicy, public ErrorPolicy {
   //  \param[inout] n_nu The net number densities for each neutrino generation.
   //  \param[inout] e_nu The total energy densities for each neutrino generation.
   inline void GetTrappedNeutrinos(Real n, Real T, Real *Y, Real n_nu[3], Real e_nu[3]) {
-    TrappedNeutrinos(n, T*code_units->TemperatureConversion(*eos_units), Y, n_nu, e_nu);
+   if constexpr (supports_potentials) {
+    EOSPolicy::TrappedNeutrinos(n, T*code_units->TemperatureConversion(*eos_units), Y, n_nu, e_nu);
 
     Real n_units = eos_units->DensityConversion(*code_units);
     Real e_units = eos_units->PressureConversion(*code_units);
@@ -338,8 +356,8 @@ class EOS : public EOSPolicy, public ErrorPolicy {
       n_nu[i] = n_nu[i]*n_units;
       e_nu[i] = e_nu[i]*e_units;
     }
-
-    return;
+   }
+   return;
   }
 
     //! \fn Real GetLeptonFractions(Real n, Real *Y, Real n_nu[6], Real *Yl) 

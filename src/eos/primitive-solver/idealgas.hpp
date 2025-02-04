@@ -68,12 +68,6 @@ class IdealGas : public EOSPolicyInterface {
     return n*T;
   }
 
-  /// Calculate the entropy per baryon using the ideal gas law.
-  KOKKOS_INLINE_FUNCTION Real Entropy(Real n, Real T, Real *Y) const {
-    // FIXME: implement or force to abort
-    return 0;
-  }
-
   /// Calculate the enthalpy per baryon using the ideal gas law.
   KOKKOS_INLINE_FUNCTION Real Enthalpy(Real n, Real T, Real *Y) const {
     return mb + gamma/gammam1*T;
@@ -92,34 +86,6 @@ class IdealGas : public EOSPolicyInterface {
   /// Calculate the internal energy per mass
   KOKKOS_INLINE_FUNCTION Real SpecificInternalEnergy(Real n, Real T, Real *Y) const {
     return T/(mb*gammam1);
-  }
-
-  /// Calculate the baryon chemical potential
-  KOKKOS_INLINE_FUNCTION Real BaryonChemicalPotential(Real n, Real T, Real *Y) const {
-    // FIXME: implement or force to abort
-    return 0.0;
-  }
-
-  /// Calculate the charge chemical potential
-  KOKKOS_INLINE_FUNCTION Real ChargeChemicalPotential(Real n, Real T, Real *Y) const {
-    // FIXME: implement or force to abort
-    return 0.0;
-  }
-
-  /// Calculate the electron-lepton chemical potential
-  KOKKOS_INLINE_FUNCTION Real ElectronLeptonChemicalPotential(Real n, Real T, Real *Y) const {
-    // FIXME: implement or force to abort
-    return 0.0;
-  }
-
-  KOKKOS_INLINE_FUNCTION int BetaEquilibriumTrapped(Real n, Real e, Real *Yl, Real &T_eq, Real *Y_eq, Real T_guess, Real *Y_guess) const {
-    // FIXME: implement or force to abort
-    return 1;
-  }
-
-  KOKKOS_INLINE_FUNCTION void TrappedNeutrinos(Real n, Real T, Real *Y, Real n_nu[3], Real e_nu[3]) const {
-    // FIXME: implement or force to abort
-    return;
   }
 
   /// Calculate the minimum pressure at a given density and composition

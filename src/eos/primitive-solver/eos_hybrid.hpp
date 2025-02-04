@@ -117,12 +117,6 @@ class EOSHybrid : public EOSPolicyInterface, public LogPolicy {
     return p_cold + p_th;
   }
 
-  /// Calculate the entropy per baryon using.
-  KOKKOS_INLINE_FUNCTION Real Entropy(Real n, Real T, Real *Y) const {
-    // FIXME: implement or force to abort
-    return 0;
-  }
-
   /// Calculate the enthalpy per baryon using. 
   KOKKOS_INLINE_FUNCTION Real Enthalpy(Real n, Real T, Real *Y) const {
     Real const P = Pressure(n, T, Y);
@@ -171,36 +165,6 @@ class EOSHybrid : public EOSPolicyInterface, public LogPolicy {
   KOKKOS_INLINE_FUNCTION Real ColdSoundSpeed(Real n) const {
     assert (m_initialized);
     return eval_at_n(ECCS, n);
-  }
-
-  /// Calculate the baryon chemical potential.
-  KOKKOS_INLINE_FUNCTION Real BaryonChemicalPotential(Real n, Real T, Real *Y) const {
-    // FIXME: implement or force to abort
-    return 0.0;
-  }
-
-  /// Calculate the charge chemical potential.
-  KOKKOS_INLINE_FUNCTION Real ChargeChemicalPotential(Real n, Real T, Real *Y) const {
-    // FIXME: implement or force to abort
-    return 0.0;
-  }
-
-  /// Calculate the electron-lepton chemical potential.
-  KOKKOS_INLINE_FUNCTION Real ElectronLeptonChemicalPotential(Real n, Real T, Real *Y) const {
-    // FIXME: implement or force to abort
-    return 0.0;
-  }
-
-  /// Calculate hot (neutrino trapped) beta equilibrium T_eq and Y_eq given n, e, and Yl.
-  KOKKOS_INLINE_FUNCTION int BetaEquilibriumTrapped(Real n, Real e, Real *Yl, Real &T_eq, Real *Y_eq, Real T_guess, Real *Y_guess) const {
-    // FIXME: implement or force to abort
-    return 1;
-  }
-
-  /// Calculate trapped neutrino net number and energy densities.
-  KOKKOS_INLINE_FUNCTION void TrappedNeutrinos(Real n, Real T, Real *Y, Real n_nu[3], Real e_nu[3]) const {
-    // FIXME: implement or force to abort
-    return;
   }
 
   /// Get the minimum enthalpy per baryon.
