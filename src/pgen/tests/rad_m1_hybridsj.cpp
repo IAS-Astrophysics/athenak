@@ -72,7 +72,7 @@ void ProblemGenerator::RadiationM1HybridsjTest(ParameterInput *pin,
                                                const bool restart) {
   if (restart)
     return;
-
+  /*
   Real A[M1_MULTIROOTS_DIM][M1_MULTIROOTS_DIM] = {
       {0.42274137, 0.22774634, 0.51149515, 0.83359161},
       {0.31137829, 0.93582124, 0.54958705, 0.64094763},
@@ -112,21 +112,31 @@ void ProblemGenerator::RadiationM1HybridsjTest(ParameterInput *pin,
     }
     std::cout << std::endl;
   }
-  std::cout << std::endl;
-  /*
+  std::cout << std::endl; */
+
   std::cout << "Testing Powell's Hybrid method:" << std::endl;
   HybridsjFunc func;
   radiationm1::HybridsjState state{};
   radiationm1::HybridsjParams pars{};
   pars.x[0] = 1;
   pars.x[1] = 0;
-  // pars.x[2] = 0;
-  // pars.x[3] = 0;
-  radiationm1::HybridsjInitialize(func, state, pars);
+  radiationm1::HybridsjSignal ierr =
+      radiationm1::HybridsjInitialize(func, state, pars);
   print_fdf(pars.x, pars.f, pars.J);
-  for (int i = 0; i < 200; ++i) {
-    radiationm1::HybridsjIterate(func, state, pars);
+
+  int iter = 0;
+  int maxiter = 200;
+  Real epsabs = 1e-15;
+  Real epsrel = 1e-5;
+  do {
+    ierr = radiationm1::HybridsjIterate(func, state, pars);
     print_fdf(pars.x, pars.f, pars.J);
-  } */
+    iter++;
+
+    ierr = radiationm1::HybridsjTestDelta(pars.dx, pars.x, epsabs, epsrel);
+  } while (ierr == radiationm1::HYBRIDSJ_CONTINUE && iter < maxiter);
+
+  printf("Iters: %d\n", iter);
+
   return;
 }
