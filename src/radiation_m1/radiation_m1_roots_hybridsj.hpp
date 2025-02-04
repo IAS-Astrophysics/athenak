@@ -30,6 +30,7 @@ struct HybridsjState {
   Real gradient[M1_MULTIROOTS_DIM];
   Real x_trial[M1_MULTIROOTS_DIM];
   Real f_trial[M1_MULTIROOTS_DIM];
+  Real J_trial[M1_MULTIROOTS_DIM][M1_MULTIROOTS_DIM];
   Real df[M1_MULTIROOTS_DIM];
   Real qtdf[M1_MULTIROOTS_DIM];
   Real rdx[M1_MULTIROOTS_DIM];
@@ -355,7 +356,7 @@ KOKKOS_INLINE_FUNCTION HybridsjSignal HybridsjInitialize(Functor &&fdf,
                                                          HybridsjState &state,
                                                          HybridsjParams &pars) {
   // populate f, J for a given x
-  fdf(pars.x, pars.f, pars.J);
+  fdf(pars.x, pars.f, pars.J, state, pars);
 
   state.iter = 1;
   state.fnorm = enorm(pars.f);
@@ -400,7 +401,7 @@ KOKKOS_INLINE_FUNCTION HybridsjSignal HybridsjIterate(Functor &&fdf,
   }
 
   // evaluate f at x + p
-  fdf(state.x_trial, state.f_trial, state);
+  fdf(state.x_trial, state.f_trial, state.J_trial, state, pars);
 
   // df = f_trial - f
   compute_df(state.f_trial, pars.f, state.df);
@@ -450,7 +451,7 @@ KOKKOS_INLINE_FUNCTION HybridsjSignal HybridsjIterate(Functor &&fdf,
   }
   if (state.ncfail == 2) {
     {
-      fdf(pars.x, pars.J, state);
+      fdf(pars.x, pars.f, pars.J, state, pars);
     }
 
     state.nslow2++;

@@ -16,6 +16,55 @@
 #include "pgen/pgen.hpp"
 #include "radiation_m1/radiation_m1_roots_hybridsj.hpp"
 
+class HybridsjFunc {
+public:
+  KOKKOS_INLINE_FUNCTION
+  void operator()(const Real (&x)[M1_MULTIROOTS_DIM],
+                  Real (&f)[M1_MULTIROOTS_DIM],
+                  Real (&J)[M1_MULTIROOTS_DIM][M1_MULTIROOTS_DIM],
+                  radiationm1::HybridsjState &state,
+                  radiationm1::HybridsjParams &pars) {
+    Real A = Kokkos::pow(10, 4);
+
+    for (int i = 0; i < M1_MULTIROOTS_DIM; i++) {
+      f[i] = 0;
+      for (int j = 0; j < M1_MULTIROOTS_DIM; j++) {
+        J[i][j] = 0;
+      }
+    }
+
+    f[0] = A * x[0] * x[1] - 1;
+    f[1] = Kokkos::exp(-x[0]) + Kokkos::exp(-x[1]) - (1. + 1. / A);
+
+    J[0][0] = A * x[1];
+    J[0][1] = A * x[0];
+    J[1][0] = -Kokkos::exp(-x[0]);
+    J[1][1] = -Kokkos::exp(-x[1]);
+  }
+};
+
+void print_fdf(Real (&x)[M1_MULTIROOTS_DIM], Real (&f)[M1_MULTIROOTS_DIM],
+               Real (&J)[M1_MULTIROOTS_DIM][M1_MULTIROOTS_DIM]) {
+  std::cout << "x: " << std::endl;
+  for (int i = 0; i < M1_MULTIROOTS_DIM; ++i) {
+    std::cout << x[i] << " ";
+  }
+  std::cout << std::endl;
+  std::cout << std::endl;
+  std::cout << "f: " << std::endl;
+  for (int i = 0; i < M1_MULTIROOTS_DIM; ++i) {
+    std::cout << f[i] << " ";
+  }
+  std::cout << std::endl;
+  std::cout << std::endl;
+  std::cout << "J: " << std::endl;
+  for (int i = 0; i < M1_MULTIROOTS_DIM; ++i) {
+    for (int j = 0; j < M1_MULTIROOTS_DIM; ++j) {
+      std::cout << J[i][j] << " ";
+    }
+    std::cout << std::endl;
+  }
+}
 //----------------------------------------------------------------------------------------
 //! \fn void MeshBlock::UserProblem(ParameterInput *pin)
 //  \brief Sets initial conditions for radiation M1 beams test
@@ -63,6 +112,21 @@ void ProblemGenerator::RadiationM1HybridsjTest(ParameterInput *pin,
     }
     std::cout << std::endl;
   }
-
+  std::cout << std::endl;
+  /*
+  std::cout << "Testing Powell's Hybrid method:" << std::endl;
+  HybridsjFunc func;
+  radiationm1::HybridsjState state{};
+  radiationm1::HybridsjParams pars{};
+  pars.x[0] = 1;
+  pars.x[1] = 0;
+  // pars.x[2] = 0;
+  // pars.x[3] = 0;
+  radiationm1::HybridsjInitialize(func, state, pars);
+  print_fdf(pars.x, pars.f, pars.J);
+  for (int i = 0; i < 200; ++i) {
+    radiationm1::HybridsjIterate(func, state, pars);
+    print_fdf(pars.x, pars.f, pars.J);
+  } */
   return;
 }
