@@ -14,14 +14,28 @@
 namespace radiationm1 {
 
 KOKKOS_INLINE_FUNCTION
-void ComputeToyOpacities(const Real x, const Real y, const Real z,
-                         const Real nuidx, Real &eta_0, Real &abs_0,
-                         Real &eta_1, Real &abs_1, Real &scat_1) {
-  eta_0 = 0;
-  abs_0 = 0;
-  eta_1 = 0;
-  abs_1 = 0;
-  scat_1 = 0;
+M1Opacities ComputeM1Opacities(const int i, const int j, const int k,
+                               const RadiationM1Params &params) {
+  M1Opacities opacities{};
+
+  switch (params.opacity_type) {
+  case RadiationM1OpacityType::Toy:
+    for (int nuidx = 0; nuidx < M1_TOTAL_NUM_SPECIES; nuidx++) {
+      opacities.eta_0[nuidx] = Toy_eta_0(i, j, k, nuidx);
+      opacities.abs_0[nuidx] = Toy_abs_0(i, j, k, nuidx);
+      opacities.eta_1[nuidx] = Toy_eta_1(i, j, k, nuidx);
+      opacities.abs_1[nuidx] = Toy_abs_1(i, j, k, nuidx);
+      opacities.scat_1[nuidx] = Toy_scat_1(i, j, k, nuidx);
+    }
+    break;
+  case RadiationM1OpacityType::Weakrates:
+    break;
+  case RadiationM1OpacityType::BnsNurates:
+    break;
+  default:
+    break;
+  }
+  return opacities;
 }
 
 }  // namespace radiationm1

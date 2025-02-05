@@ -9,6 +9,7 @@
 #include "athena.hpp"
 #include "athena_tensor.hpp"
 #include "coordinates/adm.hpp"
+#include "coordinates/cell_locations.hpp"
 #include "globals.hpp"
 #include "radiation_m1.hpp"
 #include "radiation_m1_calc_closure.hpp"
@@ -183,7 +184,41 @@ TaskStatus RadiationM1::TimeUpdate(Driver *d, int stage) {
         Real dens{};
         Real Y_e{};
 
-        // [E] Compute contribution from flux and geometric sources
+        // Compute: derivatives of shift (\p_i beta_u(j))
+        AthenaPointTensor<Real, TensorSymm::NONE, 3, 2> dbeta_du{};
+        for (int a = 0; a < 3; ++a) {
+          dbeta_du(0, a) = Dx<M1_NGHOST>(0, ideltax, adm.beta_u, m, a, k, j, i);
+          dbeta_du(1, a) =
+              (multi_d) ? Dx<M1_NGHOST>(1, ideltax, adm.beta_u, m, a, k, j, i)
+                        : 0.;
+          dbeta_du(2, a) =
+              (three_d) ? Dx<M1_NGHOST>(2, ideltax, adm.beta_u, m, a, k, j, i)
+                        : 0.;
+        }
+
+        // Compute: derivatives of spatial metric (\p_k gamma_ij)
+        AthenaPointTensor<Real, TensorSymm::SYM2, 3, 3> dg_ddd{};
+        for (int a = 0; a < 3; ++a) {
+          for (int b = 0; b < 3; ++b) {
+            dg_ddd(0, a, b) =
+                Dx<M1_NGHOST>(0, ideltax, adm.g_dd, m, a, b, k, j, i);
+            dg_ddd(1, a, b) = (multi_d) ? Dx<M1_NGHOST>(1, ideltax, adm.g_dd, m,
+                                                        a, b, k, j, i)
+                                        : 0.;
+            dg_ddd(2, a, b) = (three_d) ? Dx<M1_NGHOST>(2, ideltax, adm.g_dd, m,
+                                                        a, b, k, j, i)
+                                        : 0.;
+          }
+        }
+
+        // @TODO: get fluid quantities, call opacities
+
+        M1Opacities opacities = ComputeM1Opacities(i, j, k, params_);
+        Real nueave{};
+        Real DDxp[M1_TOTAL_NUM_SPECIES];
+        Real mb{}; // average baryon mass
+
+        // [1] Compute contribution from flux and geometric sources
         Real rEFN[M1_TOTAL_NUM_SPECIES][5];
         Real DDxp[M1_TOTAL_NUM_SPECIES];
         for (int nuidx = 0; nuidx < nspecies_; nuidx++) {
