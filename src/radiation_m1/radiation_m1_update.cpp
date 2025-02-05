@@ -9,6 +9,7 @@
 #include "athena.hpp"
 #include "athena_tensor.hpp"
 #include "coordinates/adm.hpp"
+#include "coordinates/cell_locations.hpp"
 #include "globals.hpp"
 #include "radiation_m1.hpp"
 #include "radiation_m1_calc_closure.hpp"
@@ -176,7 +177,8 @@ TaskStatus RadiationM1::TimeUpdate(Driver *d, int stage) {
         }
 
         // @TODO: get fluid quantities, call opacities
-        M1Opacities opacities = ComputeM1Opacities(params_);
+
+        M1Opacities opacities = ComputeM1Opacities(i, j, k, params_);
         Real nueave{};
         Real DDxp[M1_TOTAL_NUM_SPECIES];
         Real mb{}; // average baryon mass

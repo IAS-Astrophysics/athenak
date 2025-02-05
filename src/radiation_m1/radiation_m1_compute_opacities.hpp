@@ -25,11 +25,19 @@ struct M1Opacities {
 typedef struct M1Opacities M1Opacities;
 
 KOKKOS_INLINE_FUNCTION
-M1Opacities ComputeM1Opacities(const RadiationM1Params &params) {
+M1Opacities ComputeM1Opacities(const int i, const int j, const int k,
+                               const RadiationM1Params &params) {
   M1Opacities opacities{};
 
   switch (params.opacity_type) {
   case RadiationM1OpacityType::Toy:
+    for (int nuidx = 0; nuidx < M1_TOTAL_NUM_SPECIES; nuidx++) {
+      opacities.eta_0[nuidx] = Toy_eta_0(i, j, k, nuidx);
+      opacities.abs_0[nuidx] = Toy_abs_0(i, j, k, nuidx);
+      opacities.eta_1[nuidx] = Toy_eta_1(i, j, k, nuidx);
+      opacities.abs_1[nuidx] = Toy_abs_1(i, j, k, nuidx);
+      opacities.scat_1[nuidx] = Toy_scat_1(i, j, k, nuidx);
+    }
     break;
   case RadiationM1OpacityType::Weakrates:
     break;
