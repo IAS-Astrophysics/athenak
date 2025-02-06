@@ -26,6 +26,15 @@ Real norm_l2(const Real (&V)[M1_MULTIROOTS_DIM]) {
   return Kokkos::sqrt(result);
 }
 
+KOKKOS_INLINE_FUNCTION
+Real norm_l2(const Real (&V)[M1_MULTIROOTS_DIM - 1]) {
+  Real result = 0;
+  for (double i : V) {
+    result += i * i;
+  }
+  return Kokkos::sqrt(result);
+}
+
 //----------------------------------------------------------------------------------------
 //! \fn Real radiationm1::dot
 //  \brief computes the dot product of two vectors
@@ -37,6 +46,86 @@ Real dot(const Real (&U)[M1_MULTIROOTS_DIM],
     result += U[i] * V[i];
   }
   return result;
+}
+
+KOKKOS_INLINE_FUNCTION
+Real sign(Real a) { return (a >= 0) ? +1 : -1; }
+
+KOKKOS_INLINE_FUNCTION
+void dscal(Real a, Real (&v)[M1_MULTIROOTS_DIM - 1]) {
+  for (double &i : v) {
+    i = a * i;
+  }
+}
+
+KOKKOS_INLINE_FUNCTION
+Real householder_transform(Real (&v)[M1_MULTIROOTS_DIM]) {
+
+  if (M1_MULTIROOTS_DIM == 1) {
+    return 0.;
+  } else {
+    Real x[M1_MULTIROOTS_DIM - 1];
+    for (int i = 0; i < M1_MULTIROOTS_DIM - 1; i++) {
+      x[i] = v[i + 1];
+    }
+
+    double xnorm = norm_l2(x);
+
+    if (xnorm == 0) {
+      return 0.;
+    }
+
+    Real alpha = v[0];
+    Real beta = -sign(alpha) * Kokkos::hypot(alpha, xnorm);
+    Real tau = (beta - alpha) / beta;
+
+    {
+      Real s = (alpha - beta);
+
+      if (Kokkos::fabs(s) > DBL_MIN) {
+        dscal(1.0 / s, x);
+        v[0] = beta;
+      } else {
+        dscal(DBL_EPSILON / s, x);
+        dscal(1.0 / DBL_EPSILON, x);
+        v[0] = beta;
+      }
+    }
+    return tau;
+  }
+}
+
+KOKKOS_INLINE_FUNCTION
+void gsl_linalg_QR_decomp(Real (&A)[M1_MULTIROOTS_DIM][M1_MULTIROOTS_DIM],
+                          Real (&tau)[M1_MULTIROOTS_DIM]) {
+    /*
+    for (int i = 0; i < M1_MULTIROOTS_DIM; i++) {
+      /* Compute the Householder transformation to reduce the j-th
+         column of the matrix to a multiple of the j-th unit vector */
+      /*
+      gsl_vector_view c = gsl_matrix_subcolumn(A, i, i, M - i);
+      double tau_i = gsl_linalg_householder_transform(&(c.vector));
+      double *ptr = gsl_vector_ptr(&(c.vector), 0);
+
+      gsl_vector_set(tau, i, tau_i);
+
+      /* Apply the transformation to the remaining columns and
+         update the norms */
+    /*
+      if (i + 1 < N) {
+        gsl_matrix_view m = gsl_matrix_submatrix(A, i, i + 1, M - i, N - i - 1);
+        gsl_vector_view work = gsl_vector_subvector(tau, i + 1, N - i - 1);
+        double tmp = *ptr;
+
+        *ptr = 1.0;
+        gsl_linalg_householder_left(tau_i, &(c.vector), &(m.matrix),
+                                    &(work.vector));
+        *ptr = tmp;
+      }
+    }
+
+    return GSL_SUCCESS; */
+
 }
 
 //----------------------------------------------------------------------------------------

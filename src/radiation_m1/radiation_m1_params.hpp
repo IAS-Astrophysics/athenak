@@ -46,6 +46,7 @@ struct RadiationM1Params {
   Real rad_eps;
   Real minmod_theta;
   Real source_therm_limit;
+  bool gr_sources;
   RadiationM1Closure closure_fun;
   RadiationM1OpacityType opacity_type;
   RadiationM1SrcUpdate src_update;
