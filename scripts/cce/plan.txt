@@ -1,0 +1,66 @@
+#define Max(a_,b_) ((a_)>(b_)? (a_):(b_))
+#define Min(a_,b_) ((a_)<(b_)? (a_):(b_))
+#define FourPi 12.566370614359172953850573533118
+#define ABS(x_) ((x_)>0 ? (x_) : (-(x_)))
+
+static long double fact(int i)
+{
+  int j;
+  long double temp = 1;
+
+  myassert(i>-1);
+
+  for (j=2; j <=i; j++)
+  {
+    temp *=j;
+  }
+  return temp;
+}
+
+double sPlm(int s, int l, int m, double theta)
+{
+  int k;
+  double temp = 0;
+  s= -s;  /* oops below is really the definition for
+            -s not s */
+
+  myassert(l>=ABS(s));
+  myassert(l>=ABS(m));
+
+  const double sc = (1-2*(ABS(s)%2))*
+        sqrt((2*l+1)/(FourPi)*fact(l+m)*fact(l-m)*fact(l+s)*fact(l-s));
+
+  for (k= Max(0, m-s); k <= Min(l+m, l-s); k++)
+  {
+    double t = sc;
+
+    t/= fact(l+m-k);
+    t/= fact(l-s-k);
+    t/= fact(k);
+    t/= fact(k+s-m);
+
+    temp += (1-2*(ABS(k)%2))*t*
+       pow(cos(0.5*theta),(double)(2*l+m-s-2*k))*
+       pow(sin(0.5*theta),(double)(2*k+s-m));
+  }
+
+  return temp;
+}
+
+complex <double> sYlm (int s, int l, int m, double theta, double phi)
+{
+  const complex<double> I(0,1);
+  return sPlm(s,l,m,theta)*exp(I*(complex<double>)(m*phi));
+}
+
+
+
+## notes:
+. cheb recons: for n 0...nmax-1
+  tmp[time][angle] += reall[]*U[n];
+
+. reconstrict g(th,ph) at Gauss-Legendre in the and equally spaced in ph:
+SHRE_gij(th,phi) |_r=r_0 += (RC(lm) * reYN(th,ph,lm) - IC(lm) * imYN(th,ph,lm))
+
+. don't forget about factor in your paper
+see also: pittnullcode/SphericalHarmonicReconGen/src/get.cc, line 51
