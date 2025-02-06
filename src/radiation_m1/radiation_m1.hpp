@@ -71,6 +71,11 @@ public:
   DvceArray5D<Real> u1;             // evolved variables at intermediate step
   DvceFaceFld5D<Real> uflx;         // fluxes of evo. quantities on cell faces
   DvceArray5D<Real> u_mu_data;      // fluid velocity
+  DvceArray5D<Real> eta_0;
+  DvceArray5D<Real> abs_0;
+  DvceArray5D<Real> eta_1;
+  DvceArray5D<Real> abs_1;
+  DvceArray5D<Real> scat_1;
   AthenaTensor<Real, TensorSymm::NONE, 4, 1> u_mu;
 
   MeshBoundaryValuesCC *pbval_u; // Communication buffers and functions for u

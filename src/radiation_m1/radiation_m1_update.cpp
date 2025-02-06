@@ -41,6 +41,12 @@ TaskStatus RadiationM1::TimeUpdate(Driver *d, int stage) {
   auto flx2 = uflx.x2f;
   auto flx3 = uflx.x3f;
 
+  auto &eta_0_ = pmy_pack->pradm1->eta_0;
+  auto &abs_0_ = pmy_pack->pradm1->abs_0;
+  auto &eta_1_ = pmy_pack->pradm1->eta_1;
+  auto &abs_1_ = pmy_pack->pradm1->abs_1;
+  auto &scat_1_ = pmy_pack->pradm1->scat_1;
+
   auto &mbsize = pmy_pack->pmb->mb_size;
   auto nvars_ = pmy_pack->pradm1->nvars;
   auto &nspecies_ = pmy_pack->pradm1->nspecies;
@@ -176,9 +182,10 @@ TaskStatus RadiationM1::TimeUpdate(Driver *d, int stage) {
         calc_proj(u_d, u_u, proj_ud);
 
         // [D] Compute opacities and other associated things
-        M1Opacities opacities = ComputeM1Opacities(params_);
-        Real nueave{};
+        // M1Opacities opacities = ComputeM1Opacities(params_);
         Real mb{};  // average baryon mass
+        Real dens{};
+        Real Y_e{};
 
         // [E] Compute contribution from flux and geometric sources
         Real rEFN[M1_TOTAL_NUM_SPECIES][5];
@@ -270,9 +277,9 @@ TaskStatus RadiationM1::TimeUpdate(Driver *d, int stage) {
                 compute_Gamma(w_lorentz, v_u, J, E, F_d, params_);
 
             // Compute radiation sources
-            calc_rad_sources(opacities.eta_1[nuidx] * volform,
-                             opacities.abs_1[nuidx], opacities.scat_1[nuidx],
-                             u_d, J, H_d, S_d);
+            calc_rad_sources(eta_1_(m, nuidx, k, j, i) * volform,
+                             abs_1_(m, nuidx, k, j, i),
+                             scat_1_(m, nuidx, k, j, i), u_d, J, H_d, S_d);
             DrEFN[nuidx][M1_E_IDX] =
                 dt * calc_rE_source(adm.alpha(m, k, j, i), n_u, S_d);
 
@@ -285,8 +292,8 @@ TaskStatus RadiationM1::TimeUpdate(Driver *d, int stage) {
               const Real N =
                   u0_(m, CombinedIdx(nuidx, M1_N_IDX, nvars_), k, j, i);
               DrEFN[nuidx][M1_N_IDX] = dt * adm.alpha(m, k, j, i) *
-                                       (volform * opacities.eta_0[nuidx] -
-                                        opacities.abs_0[nuidx] * N / Gamma);
+                                       (volform * eta_0_(m, nuidx, k, j, i) -
+                                        abs_0_(m, nuidx, k, j, i) * N / Gamma);
             }
           }
 
@@ -330,13 +337,13 @@ TaskStatus RadiationM1::TimeUpdate(Driver *d, int stage) {
 
             // Estimate interaction with matter
             const Real dtau = beta_dt * (adm.alpha(m, k, j, i) / w_lorentz);
-            Real Jnew = (Jstar + dtau * opacities.eta_1[nuidx] * volform) /
-                        (1 + dtau * opacities.abs_1[nuidx]);
+            Real Jnew = (Jstar + dtau * eta_1_(m, nuidx, k, j, i) * volform) /
+                        (1 + dtau * abs_1_(m, nuidx, k, j, i));
 
             // Only three components of H^a are independent H^0 is found by
             // requiring H^a u_a = 0
             const Real khat =
-                (opacities.abs_1[nuidx] + opacities.scat_1[nuidx]);
+                (abs_1_(m, nuidx, k, j, i) + scat_1_(m, nuidx, k, j, i));
             AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> Hnew_d{};
             for (int a = 1; a < 4; ++a) {
               Hnew_d(a) = Hstar_d(a) / (1 + dtau * khat);
@@ -383,8 +390,8 @@ TaskStatus RadiationM1::TimeUpdate(Driver *d, int stage) {
             source_update(beta_dt, adm.alpha(m, k, j, i), g_dd, g_uu, n_d, n_u,
                           gamma_ud, u_d, u_u, v_d, v_u, proj_ud, w_lorentz,
                           Estar, Fstar_d, Estar, Fstar_d,
-                          volform * opacities.eta_1[nuidx],
-                          opacities.abs_1[nuidx], opacities.scat_1[nuidx],
+                          volform * eta_1_(m, nuidx, k, j, i),
+                          abs_1_(m, nuidx, k, j, i), scat_1_(m, nuidx, k, j, i),
                           chival, Enew, Fnew_d);
             apply_floor(g_uu, Enew, Fnew_d, params_);
 
@@ -409,21 +416,12 @@ TaskStatus RadiationM1::TimeUpdate(Driver *d, int stage) {
                   compute_Gamma(w_lorentz, v_u, Jnew, Enew, Fnew_d, params_);
 
               // N^k+1 = N^* + dt ( eta - abs N^k+1 )
-              if (params_.source_therm_limit < 0 ||
-                  beta_dt * opacities.abs_0[nuidx] < params_.source_therm_limit) {
-                DrEFN[nuidx][M1_N_IDX] =
-                    (Nstar + beta_dt * adm.alpha(m, k, j, i) * volform *
-                                 opacities.eta_0[nuidx]) /
-                        (1 + beta_dt * adm.alpha(m, k, j, i) *
-                                 opacities.abs_0[nuidx] / Gamma) -
-                    Nstar;
-              }
-              // The neutrino number density is updated assuming the neutrino
-              // average energies are those of the equilibrium
-              else {
-                DrEFN[nuidx][M1_N_IDX] =
-                    (nueave > 0 ? Gamma * Jnew / nueave - Nstar : 0.0);
-              }
+              DrEFN[nuidx][M1_N_IDX] =
+                  (Nstar + beta_dt * adm.alpha(m, k, j, i) * volform *
+                               eta_0_(m, nuidx, k, j, i)) /
+                      (1 + beta_dt * adm.alpha(m, k, j, i) *
+                               abs_0_(m, nuidx, k, j, i) / Gamma) -
+                  Nstar;
             }
           }
           // fluid lepton sources
@@ -435,10 +433,6 @@ TaskStatus RadiationM1::TimeUpdate(Driver *d, int stage) {
 
         // [G] Limit sources
         Real tau;
-        Real dens{};
-        Real source_Ye_max{};
-        Real source_Ye_min{};
-        Real Y_e{};
         Real theta = 1.0;
         if (source_limiter_ >= 0) {
           theta = 1.0;
@@ -474,11 +468,13 @@ TaskStatus RadiationM1::TimeUpdate(Driver *d, int stage) {
             const Real DYe = DDxp_sum / dens;
             if (DYe > 0) {
               theta = Kokkos::min<Real>(
-                  source_limiter * Kokkos::max(source_Ye_max - Y_e, 0.0) / DYe,
+                  source_limiter *
+                      Kokkos::max(params_.source_Ye_max - Y_e, 0.0) / DYe,
                   theta);
             } else if (DYe < 0) {
               theta = Kokkos::min<Real>(
-                  source_limiter * Kokkos::min(source_Ye_min - Y_e, 0.0) / DYe,
+                  source_limiter *
+                      Kokkos::min(params_.source_Ye_min - Y_e, 0.0) / DYe,
                   theta);
             }
           }
