@@ -21,7 +21,7 @@ class CartesianGrid {
  public:
   // Creates a geodesic grid with refinement level nlev and radius rad
   CartesianGrid(MeshBlockPack *pmy_pack, Real center[3],
-                    Real extend[3], int numpoints[3], bool is_cheb = false);
+                    Real extent[3], int numpoints[3], bool is_cheb = false);
   ~CartesianGrid();
 
   // parameters for the grid
@@ -30,7 +30,7 @@ class CartesianGrid {
   Real max_x1, max_x2, max_x3;            // max value for xyz
   Real d_x1, d_x2, d_x3;                     // resolution
   int nx1, nx2, nx3;                      // number of points
-  Real extend_x1, extend_x2, extend_x3;
+  Real extent_x1, extent_x2, extent_x3;
 
   // dump on chebyshev or uniform grid, default is uniform
   bool is_cheby;
@@ -39,6 +39,7 @@ class CartesianGrid {
   DualArray3D<Real> interp_vals;   // container for data interpolated to sphere
   void InterpolateToGrid(int nvars, DvceArray5D<Real> &val);  // interpolate to sphere
   void ResetCenter(Real center[3]);  // set indexing for interpolation
+  void ResetCenterAndExtent(Real center[3], Real extent[3]);
 
  private:
   MeshBlockPack* pmy_pack;  // ptr to MeshBlockPack containing this Hydro
