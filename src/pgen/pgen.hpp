@@ -25,7 +25,7 @@ using UserHistoryFnPtr = void (*)(HistoryData *pdata, Mesh *pm);
 //! \class ProblemGenerator
 
 class ProblemGenerator {
-public:
+ public:
   // constructor for new problems
   ProblemGenerator(ParameterInput *pin, Mesh *pmesh);
   // constructor for restarts
@@ -74,9 +74,10 @@ public:
   void RadiationM1HybridsjTest(ParameterInput *pin, const bool restart);
   // template for user-specified problem generator
   void UserProblem(ParameterInput *pin, const bool restart);
+  void RadiationM1LatticeTest(ParameterInput *pin, const bool restart);
 
-private:
+ private:
   Mesh *pmy_mesh_;
 };
 
-#endif // PGEN_PGEN_HPP_
+#endif  // PGEN_PGEN_HPP_

@@ -25,6 +25,10 @@
 
 namespace radiationm1 {
 
+using ToyOpacityFn = void (*)(Real x1, Real x2, Real x3, Real nuidx,
+                              Real &eta_0, Real &abs_0, Real &eta_1,
+                              Real &abs_1, Real &scat_1);
+
 //----------------------------------------------------------------------------------------
 //! \struct RadiationTaskIDs
 //  \brief container to hold TaskIDs of all radiation M1 tasks
@@ -54,6 +58,7 @@ class RadiationM1 {
  public:
   BrentFunctor BrentFunc;
   BrentFunctorInv BrentFuncInv;
+  ToyOpacityFn toy_opacity_fn = nullptr;
 
   RadiationM1(MeshBlockPack *ppack, ParameterInput *pin);
   ~RadiationM1();

@@ -82,6 +82,8 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm) :
     Diffusion(pin, false);
   } else if (pgen_fun_name.compare("rad_m1_beamtest") == 0) {
     RadiationM1BeamTest(pin, false);
+  } else if (pgen_fun_name.compare("rad_m1_latticetest") == 0) {
+    RadiationM1LatticeTest(pin, false);
   } else if (pgen_fun_name.compare("rad_m1_brenttest") == 0) {
     RadiationM1BrentTest(pin, false);
   } else if (pgen_fun_name.compare("rad_m1_hybridsjtest") == 0) {
