@@ -52,15 +52,26 @@ void RadiationM1::AssembleRadiationM1Tasks(
 
   // assemble "stagen" task list
   id.copyu = tl["stagen"]->AddTask(&RadiationM1::CopyCons, this, none);
-  id.calcclosure =
+  id.closure =
       tl["stagen"]->AddTask(&RadiationM1::CalcClosure, this, id.copyu);
-  id.flux = tl["stagen"]->AddTask(&RadiationM1::CalculateFluxes, this, id.calcclosure);
+
+  // decide what type of opacities to compute
+  if (!params.matter_sources) {
+    id.mattersrc = id.closure;
+  } else if (params.opacity_type == BnsNurates) {
+    id.mattersrc = tl["stagen"]->AddTask(&RadiationM1::CalcOpacityNurates, this,
+                                       id.closure);
+  } else {
+    id.mattersrc = tl["stagen"]->AddTask(&RadiationM1::CalcOpacityToy, this,
+                                       id.closure);
+  }
+
+  id.flux =
+      tl["stagen"]->AddTask(&RadiationM1::CalculateFluxes, this, id.mattersrc);
   id.sendf = tl["stagen"]->AddTask(&RadiationM1::SendFlux, this, id.flux);
   id.recvf = tl["stagen"]->AddTask(&RadiationM1::RecvFlux, this, id.sendf);
   id.rkupdt = tl["stagen"]->AddTask(&RadiationM1::TimeUpdate, this, id.recvf);
-  id.srctrms =
-      tl["stagen"]->AddTask(&RadiationM1::RadiationM1SrcTerms, this, id.rkupdt);
-  id.restu = tl["stagen"]->AddTask(&RadiationM1::RestrictU, this, id.srctrms);
+  id.restu = tl["stagen"]->AddTask(&RadiationM1::RestrictU, this, id.rkupdt);
   id.sendu = tl["stagen"]->AddTask(&RadiationM1::SendU, this, id.restu);
   id.recvu = tl["stagen"]->AddTask(&RadiationM1::RecvU, this, id.sendu);
   id.bcs =
@@ -87,16 +98,14 @@ void RadiationM1::AssembleRadiationM1Tasks(
 TaskStatus RadiationM1::InitRecv(Driver *pdrive, int stage) {
   // post receives for U
   TaskStatus tstat = pbval_u->InitRecv(nvars);
-  if (tstat != TaskStatus::complete)
-    return tstat;
+  if (tstat != TaskStatus::complete) return tstat;
 
   // with SMR/AMR post receives for fluxes of U
   // do not post receives for fluxes when stage < 0 (i.e. ICs)
   if (pmy_pack->pmesh->multilevel && (stage >= 0)) {
     tstat = pbval_u->InitFluxRecv(nvars);
   }
-  if (tstat != TaskStatus::complete)
-    return tstat;
+  if (tstat != TaskStatus::complete) return tstat;
 
   return tstat;
 }
@@ -138,25 +147,6 @@ TaskStatus RadiationM1::RecvFlux(Driver *pdrive, int stage) {
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn TaskList RadiationM1::RadiationM1SrcTerms
-//! \brief Wrapper task list function to apply source terms to conservative vars
-//! Note source terms must be computed using only primitives (w0), as the
-//! conserved variables (u0) have already been partially updated when this fn
-//! called.
-TaskStatus RadiationM1::RadiationM1SrcTerms(Driver *pdrive, int stage) {
-  Real beta_dt = (pdrive->beta[stage - 1]) * (pmy_pack->pmesh->dt);
-
-  // Add source terms
-
-  // Add user source terms
-  if (pmy_pack->pmesh->pgen->user_srcs) {
-    (pmy_pack->pmesh->pgen->user_srcs_func)(pmy_pack->pmesh, beta_dt);
-  }
-
-  return TaskStatus::complete;
-}
-
-//----------------------------------------------------------------------------------------
 //! \fn TaskList RadiationM1::RestrictU
 //! \brief Wrapper task list function to restrict conserved vars
 TaskStatus RadiationM1::RestrictU(Driver *pdrive, int stage) {
@@ -191,8 +181,7 @@ TaskStatus RadiationM1::RecvU(Driver *pdrive, int stage) {
 //! user BCs,
 TaskStatus RadiationM1::ApplyPhysicalBCs(Driver *pdrive, int stage) {
   // do not apply BCs if domain is strictly periodic
-  if (pmy_pack->pmesh->strictly_periodic)
-    return TaskStatus::complete;
+  if (pmy_pack->pmesh->strictly_periodic) return TaskStatus::complete;
 
   // physical BCs
   pbval_u->RadiationM1BCs((pmy_pack), (pbval_u->u_in), u0);
@@ -209,7 +198,7 @@ TaskStatus RadiationM1::ApplyPhysicalBCs(Driver *pdrive, int stage) {
 //! \brief Wrapper task list function to prolongate conserved (or primitive)
 //! variables at fine/coarse boundaries with SMR/AMR
 TaskStatus RadiationM1::Prolongate(Driver *pdrive, int stage) {
-  if (pmy_pack->pmesh->multilevel) { // only prolongate with SMR/AMR
+  if (pmy_pack->pmesh->multilevel) {  // only prolongate with SMR/AMR
     pbval_u->FillCoarseInBndryCC(u0, coarse_u0);
     pbval_u->ProlongateCC(u0, coarse_u0);
   }
@@ -228,16 +217,14 @@ TaskStatus RadiationM1::ClearSend(Driver *pdrive, int stage) {
   // check sends of U complete
   if ((stage >= 0) || (stage == -1)) {
     tstat = pbval_u->ClearSend();
-    if (tstat != TaskStatus::complete)
-      return tstat;
+    if (tstat != TaskStatus::complete) return tstat;
   }
 
   // with SMR/AMR check sends of restricted fluxes of U complete
   // do not check flux send for ICs (stage < 0)
   if (pmy_pack->pmesh->multilevel && (stage >= 0)) {
     tstat = pbval_u->ClearFluxSend();
-    if (tstat != TaskStatus::complete)
-      return tstat;
+    if (tstat != TaskStatus::complete) return tstat;
   }
 
   return tstat;
@@ -256,19 +243,17 @@ TaskStatus RadiationM1::ClearRecv(Driver *pdrive, int stage) {
   // check receives of U complete
   if ((stage >= 0) || (stage == -1)) {
     tstat = pbval_u->ClearRecv();
-    if (tstat != TaskStatus::complete)
-      return tstat;
+    if (tstat != TaskStatus::complete) return tstat;
   }
 
   // with SMR/AMR check receives of restricted fluxes of U complete
   // do not check flux receives when stage < 0 (i.e. ICs)
   if (pmy_pack->pmesh->multilevel && (stage >= 0)) {
     tstat = pbval_u->ClearFluxRecv();
-    if (tstat != TaskStatus::complete)
-      return tstat;
+    if (tstat != TaskStatus::complete) return tstat;
   }
 
   return tstat;
 }
 
-} // namespace radiationm1
+}  // namespace radiationm1

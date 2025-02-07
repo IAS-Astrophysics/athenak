@@ -182,13 +182,14 @@ add_executable(
         radiation_m1/radiation_m1_beams.cpp
         radiation_m1/radiation_m1_tensors.hpp
         pgen/tests/rad_m1_beams.cpp
-        radiation_m1/radiation_m1_compute_opacities.hpp
+        radiation_m1/radiation_m1_opacities.hpp
         radiation_m1/radiation_m1_calc_closure.hpp
         radiation_m1/radiation_m1_params.hpp
         pgen/tests/rad_m1_brent.cpp
         radiation_m1/radiation_m1_roots_hybridsj.hpp
         radiation_m1/radiation_m1_linalg.hpp
         pgen/tests/rad_m1_hybridsj.cpp
+        radiation_m1/radiation_m1_calc_opacities.cpp
 )
 
 # custom problem generator to be included in compile
