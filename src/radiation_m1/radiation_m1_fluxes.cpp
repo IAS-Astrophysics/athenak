@@ -155,13 +155,16 @@ TaskStatus RadiationM1::CalculateFluxes(Driver *pdrive, int stage) {
   auto &chi_ = pmy_pack->pradm1->chi;
   adm::ADM::ADM_vars &adm = pmy_pack->padm->adm;
 
+  auto &eta_0_ = pmy_pack->pradm1->eta_0;
+  auto &abs_0_ = pmy_pack->pradm1->abs_0;
+  auto &eta_1_ = pmy_pack->pradm1->eta_1;
+  auto &abs_1_ = pmy_pack->pradm1->abs_1;
+  auto &scat_1_ = pmy_pack->pradm1->scat_1;
+
   //--------------------------------------------------------------------------------------
   // i-direction
 
-  size_t scr_size = 1;
-  int scr_level = 0;
   auto &flx1_ = uflx.x1f;
-
   int il = is, iu = ie + 1, jl = js, ju = je, kl = ks, ku = ke;
 
   par_for(
@@ -170,53 +173,208 @@ TaskStatus RadiationM1::CalculateFluxes(Driver *pdrive, int stage) {
       KOKKOS_LAMBDA(const int m, const int k, const int j, const int i,
                     const int nuidx) {
         int dir = 1;
-        Real flux_im1[5]{};
-        Real flux_i[5]{};
-        Real cmax_i, cmax_ip1;
+        Real flux_j[5]{};
+        Real flux_jp1[5]{};
+        Real cmax_j, cmax_jp1;
         CalcFlux(m, k, j, i - 1, nuidx, dir, u0_, chi_, u_mu_, adm, params_,
-                 nvars_, nspecies_, flux_im1, cmax_i);
+                 nvars_, nspecies_, flux_j, cmax_j);
         CalcFlux(m, k, j, i, nuidx, dir, u0_, chi_, u_mu_, adm, params_, nvars_,
-                 nspecies_, flux_i, cmax_ip1);
+                 nspecies_, flux_jp1, cmax_jp1);
 
-        Real flux_ip12_lo[5]{};
-        Real flux_ip12_ho[5]{};
+        Real flux_jp12_lo[5]{};
+        Real flux_jp12_ho[5]{};
+        Real cmax_jp12 = Kokkos::max(cmax_j, cmax_jp1);
 
-        Real cmax_ip12 = Kokkos::max(cmax_i, cmax_ip1);
-        Real kappa_ave = 0; //@TODO: fix this!
-        Real A_ip12 = Kokkos::min(1., 1. / (kappa_ave * mbsize.d_view(m).dx1));
+        Real kappa_ave = 0;
+        if (params_.matter_sources) {
+          kappa_ave =
+              0.5 *
+              (abs_1_(m, nuidx, k, j, i - 1) + abs_1_(m, nuidx, k, j, i) +
+               scat_1_(m, nuidx, k, j, i - 1) + scat_1_(m, nuidx, k, j, i));
+        }
+        Real A_jp12 = Kokkos::min(1., 1. / (kappa_ave * mbsize.d_view(m).dx1));
 
-        for (int var = 0; var < nvars_; ++var) {
-          const Real ujm = u0_(m, CombinedIdx(nuidx, var, nvars_), k, j, i - 2);
-          const Real uj = u0_(m, CombinedIdx(nuidx, var, nvars_), k, j, i - 1);
-          const Real ujp = u0_(m, CombinedIdx(nuidx, var, nvars_), k, j, i);
+        for (int momidx = 0; momidx < nvars_; ++momidx) {
+          const Real ujm =
+              u0_(m, CombinedIdx(nuidx, momidx, nvars_), k, j, i - 2);
+          const Real uj =
+              u0_(m, CombinedIdx(nuidx, momidx, nvars_), k, j, i - 1);
+          const Real ujp = u0_(m, CombinedIdx(nuidx, momidx, nvars_), k, j, i);
           const Real ujpp =
-              u0_(m, CombinedIdx(nuidx, var, nvars_), k, j, i + 1);
+              u0_(m, CombinedIdx(nuidx, momidx, nvars_), k, j, i + 1);
 
           const Real dup = ujpp - ujp;
           const Real duc = ujp - uj;
           const Real dum = uj - ujm;
 
           bool sawtooth = false;
-          Real phi_ip12 = 0;
+          Real phi_jp12 = 0;
           if (dup * duc > 0 && dum * duc > 0) {
-            phi_ip12 = minmod2(dum / duc, dup / duc, params_.minmod_theta);
+            phi_jp12 = minmod2(dum / duc, dup / duc, params_.minmod_theta);
           } else if (dup * duc < 0 && dum * duc < 0) {
             sawtooth = true;
           }
 
-          flux_ip12_ho[var] = (flux_im1[var] + flux_i[var]) / 2.;
-          flux_ip12_lo[var] =
-              (flux_im1[var] + flux_i[var]) / 2. -
-              cmax_ip12 *
-                  (u0_(m, CombinedIdx(nuidx, var, nvars_), k, j, i) -
-                   u0_(m, CombinedIdx(nuidx, var, nvars_), k, j, i - 1)) /
+          flux_jp12_ho[momidx] = (flux_j[momidx] + flux_jp1[momidx]) / 2.;
+          flux_jp12_lo[momidx] =
+              (flux_j[momidx] + flux_jp1[momidx]) / 2. -
+              cmax_jp12 *
+                  (u0_(m, CombinedIdx(nuidx, momidx, nvars_), k, j, i) -
+                   u0_(m, CombinedIdx(nuidx, momidx, nvars_), k, j, i - 1)) /
                   2.;
 
-          flx1_(m, var, k, j, i) =
-              flux_ip12_ho[var] - (sawtooth ? 1 : A_ip12) * (1 - phi_ip12) *
-                                      (flux_ip12_ho[var] - flux_ip12_lo[var]);
+          flx1_(m, momidx, k, j, i) =
+              flux_jp12_ho[momidx] -
+              (sawtooth ? 1 : A_jp12) * (1 - phi_jp12) *
+                  (flux_jp12_ho[momidx] - flux_jp12_lo[momidx]);
         }
       });
+
+  //--------------------------------------------------------------------------------------
+  // j-direction
+
+  if (multi_d) {
+    auto &flx2_ = uflx.x2f;
+    il = is, iu = ie, jl = js, ju = je + 1, kl = ks, ku = ke;
+
+    par_for(
+        "radiation_m1_flux_x2", DevExeSpace(), 0, nmb1, kl, ku, jl, ju, il, iu,
+        0, nspecies_ - 1,
+        KOKKOS_LAMBDA(const int m, const int k, const int j, const int i,
+                      const int nuidx) {
+          int dir = 2;
+          Real flux_j[5]{};
+          Real flux_jp1[5]{};
+          Real cmax_j, cmax_jp1;
+          CalcFlux(m, k, j - 1, i, nuidx, dir, u0_, chi_, u_mu_, adm, params_,
+                   nvars_, nspecies_, flux_j, cmax_j);
+          CalcFlux(m, k, j, i, nuidx, dir, u0_, chi_, u_mu_, adm, params_,
+                   nvars_, nspecies_, flux_jp1, cmax_jp1);
+
+          Real flux_jp12_lo[5]{};
+          Real flux_jp12_ho[5]{};
+          Real cmax_jp12 = Kokkos::max(cmax_j, cmax_jp1);
+
+          Real kappa_ave = 0;
+          if (params_.matter_sources) {
+            kappa_ave =
+                0.5 *
+                (abs_1_(m, nuidx, k, j - 1, i) + abs_1_(m, nuidx, k, j, i) +
+                 scat_1_(m, nuidx, k, j - 1, i) + scat_1_(m, nuidx, k, j, i));
+          }
+          Real A_jp12 =
+              Kokkos::min(1., 1. / (kappa_ave * mbsize.d_view(m).dx1));
+
+          for (int momidx = 0; momidx < nvars_; ++momidx) {
+            const Real ujm =
+                u0_(m, CombinedIdx(nuidx, momidx, nvars_), k, j - 2, i);
+            const Real uj =
+                u0_(m, CombinedIdx(nuidx, momidx, nvars_), k, j - 1, i);
+            const Real ujp =
+                u0_(m, CombinedIdx(nuidx, momidx, nvars_), k, j, i);
+            const Real ujpp =
+                u0_(m, CombinedIdx(nuidx, momidx, nvars_), k, j + 1, i);
+
+            const Real dup = ujpp - ujp;
+            const Real duc = ujp - uj;
+            const Real dum = uj - ujm;
+
+            bool sawtooth = false;
+            Real phi_jp12 = 0;
+            if (dup * duc > 0 && dum * duc > 0) {
+              phi_jp12 = minmod2(dum / duc, dup / duc, params_.minmod_theta);
+            } else if (dup * duc < 0 && dum * duc < 0) {
+              sawtooth = true;
+            }
+
+            flux_jp12_ho[momidx] = (flux_j[momidx] + flux_jp1[momidx]) / 2.;
+            flux_jp12_lo[momidx] =
+                (flux_j[momidx] + flux_jp1[momidx]) / 2. -
+                cmax_jp12 *
+                    (u0_(m, CombinedIdx(nuidx, momidx, nvars_), k, j, i) -
+                     u0_(m, CombinedIdx(nuidx, momidx, nvars_), k, j - 1, i)) /
+                    2.;
+
+            flx2_(m, momidx, k, j, i) =
+                flux_jp12_ho[momidx] -
+                (sawtooth ? 1 : A_jp12) * (1 - phi_jp12) *
+                    (flux_jp12_ho[momidx] - flux_jp12_lo[momidx]);
+          }
+        });
+  }
+
+  //--------------------------------------------------------------------------------------
+  // k-direction
+
+  if (three_d) {
+    auto &flx3_ = uflx.x3f;
+    il = is, iu = ie, jl = js, ju = je, kl = ks, ku = ke + 1;
+
+    par_for(
+        "radiation_m1_flux_x3", DevExeSpace(), 0, nmb1, kl, ku, jl, ju, il, iu,
+        0, nspecies_ - 1,
+        KOKKOS_LAMBDA(const int m, const int k, const int j, const int i,
+                      const int nuidx) {
+          int dir = 3;
+          Real flux_j[5]{};
+          Real flux_jp1[5]{};
+          Real cmax_j, cmax_jp1;
+          CalcFlux(m, k - 1, j, i, nuidx, dir, u0_, chi_, u_mu_, adm, params_,
+                   nvars_, nspecies_, flux_j, cmax_j);
+          CalcFlux(m, k, j, i, nuidx, dir, u0_, chi_, u_mu_, adm, params_,
+                   nvars_, nspecies_, flux_jp1, cmax_jp1);
+
+          Real flux_jp12_lo[5]{};
+          Real flux_jp12_ho[5]{};
+          Real cmax_jp12 = Kokkos::max(cmax_j, cmax_jp1);
+
+          Real kappa_ave = 0;
+          if (params_.matter_sources) {
+            kappa_ave =
+                0.5 *
+                (abs_1_(m, nuidx, k - 1, j, i) + abs_1_(m, nuidx, k, j, i) +
+                 scat_1_(m, nuidx, k - 1, j, i) + scat_1_(m, nuidx, k, j, i));
+          }
+          Real A_jp12 =
+              Kokkos::min(1., 1. / (kappa_ave * mbsize.d_view(m).dx1));
+
+          for (int momidx = 0; momidx < nvars_; ++momidx) {
+            const Real ujm =
+                u0_(m, CombinedIdx(nuidx, momidx, nvars_), k - 2, j, i);
+            const Real uj =
+                u0_(m, CombinedIdx(nuidx, momidx, nvars_), k - 1, j, i);
+            const Real ujp =
+                u0_(m, CombinedIdx(nuidx, momidx, nvars_), k, j, i);
+            const Real ujpp =
+                u0_(m, CombinedIdx(nuidx, momidx, nvars_), k + 1, j, i);
+
+            const Real dup = ujpp - ujp;
+            const Real duc = ujp - uj;
+            const Real dum = uj - ujm;
+
+            bool sawtooth = false;
+            Real phi_jp12 = 0;
+            if (dup * duc > 0 && dum * duc > 0) {
+              phi_jp12 = minmod2(dum / duc, dup / duc, params_.minmod_theta);
+            } else if (dup * duc < 0 && dum * duc < 0) {
+              sawtooth = true;
+            }
+
+            flux_jp12_ho[momidx] = (flux_j[momidx] + flux_jp1[momidx]) / 2.;
+            flux_jp12_lo[momidx] =
+                (flux_j[momidx] + flux_jp1[momidx]) / 2. -
+                cmax_jp12 *
+                    (u0_(m, CombinedIdx(nuidx, momidx, nvars_), k, j, i) -
+                     u0_(m, CombinedIdx(nuidx, momidx, nvars_), k - 1, j, i)) /
+                    2.;
+
+            flx3_(m, momidx, k, j, i) =
+                flux_jp12_ho[momidx] -
+                (sawtooth ? 1 : A_jp12) * (1 - phi_jp12) *
+                    (flux_jp12_ho[momidx] - flux_jp12_lo[momidx]);
+          }
+        });
+  }
   return TaskStatus::complete;
 }
-} // namespace radiationm1
+}  // namespace radiationm1

@@ -13,33 +13,16 @@
 
 namespace radiationm1 {
 
-struct M1Opacities {
-
-  Real eta_0[M1_TOTAL_NUM_SPECIES];
-  Real abs_0[M1_TOTAL_NUM_SPECIES];
-
-  Real eta_1[M1_TOTAL_NUM_SPECIES];
-  Real abs_1[M1_TOTAL_NUM_SPECIES];
-  Real scat_1[M1_TOTAL_NUM_SPECIES];
-};
-typedef struct M1Opacities M1Opacities;
-
 KOKKOS_INLINE_FUNCTION
-M1Opacities ComputeM1Opacities(const RadiationM1Params &params) {
-  M1Opacities opacities{};
-
-  switch (params.opacity_type) {
-  case RadiationM1OpacityType::Toy:
-    break;
-  case RadiationM1OpacityType::Weakrates:
-    break;
-  case RadiationM1OpacityType::BnsNurates:
-    break;
-  default:
-    break;
-  }
-  return opacities;
+void ComputeToyOpacities(const Real x, const Real y, const Real z,
+                         const Real nuidx, Real &eta_0, Real &abs_0,
+                         Real &eta_1, Real &abs_1, Real &scat_1) {
+  eta_0 = 0;
+  abs_0 = 0;
+  eta_1 = 0;
+  abs_1 = 0;
+  scat_1 = 0;
 }
 
-} // namespace radiationm1
-#endif // RADIATION_M1_COMPUTE_OPACITIES_HPP
+}  // namespace radiationm1
+#endif  // RADIATION_M1_COMPUTE_OPACITIES_HPP

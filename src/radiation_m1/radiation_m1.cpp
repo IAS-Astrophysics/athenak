@@ -35,11 +35,12 @@ RadiationM1::RadiationM1(MeshBlockPack *ppack, ParameterInput *pin)
   nspecies = pin->GetOrAddInteger("radiation_m1", "num_species", 1);
   source_limiter = pin->GetOrAddInteger("radiation_m1", "source_limiter", 0.5);
   params.rad_E_floor = pin->GetOrAddReal("radiation_m1", "rad_E_floor", 1e-14);
-  params.rad_eps = pin->GetOrAddReal("radiation_m1", "rad_eps", 1e-3);
+  params.rad_eps = pin->GetOrAddReal("radiation_m1", "rad_eps", 1e-14);
   params.gr_sources = pin->GetOrAddBoolean("radiation_m1", "gr_sources", true);
   params.source_Ye_min = pin->GetOrAddReal("radiation_m1", "source_Ye_min", 0);
   params.source_Ye_max =
       pin->GetOrAddReal("radiation_m1", "source_Ye_max", 0.6);
+
   std::string closure_fun =
       pin->GetOrAddString("radiation_m1", "closure_fun", "minerbo");
   if (closure_fun == "minerbo") {
@@ -49,14 +50,13 @@ RadiationM1::RadiationM1(MeshBlockPack *ppack, ParameterInput *pin)
   } else {
     params.closure_fun = Thin;
   }
+
   std::string src_update =
       pin->GetOrAddString("radiation_m1", "src_update", "explicit");
   if (src_update == "explicit") {
     params.src_update = Explicit;
-  } else if (src_update == "implicit") {
-    params.src_update = Implicit;
   } else {
-    params.src_update = Boost;
+    params.src_update = Implicit;
   }
 
   // Total number of MeshBlocks on this rank to be used in array dimensioning
