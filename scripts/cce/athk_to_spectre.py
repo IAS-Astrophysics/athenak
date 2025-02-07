@@ -265,27 +265,94 @@ class AngularTransform:
     """
         reconstruct field on gauss lengendre collocation pnts from coeffs of pittnull
         """
-    rylm = self.ylm[g_re]
-    iylm = self.ylm[g_im]
+    rylm = self.ylm_pit[g_re]
+    iylm = self.ylm_pit[g_im]
 
-    shape = (self.attrs["lev_t"], self.attrs["max_n"], self.attrs["max_lm"])
-    field = np.empty(shape=shape, dtype=float)
-    for lm in range(self.attrs["max_lm"]):
-      # TODO: broadcast
-      field[:, :, lm] = (coeff[g_im, :, :, lm] * rylm[lm] -
-                         coeff[g_re, :, :, lm] * iylm[lm])
+    shape = (
+        self.attrs["lev_t"],
+        self.attrs["max_n"],
+        self.npnts,
+        self.npnts,
+    )
+    field = np.zeros(shape=shape, dtype=float)
+    for i in range(self.npnts):
+      for j in range(self.npnts):
+        for lm in range(self.attrs["max_lm"]):
+          # TODO: broadcast
+          field[:, :, i, j] += (coeff[g_im, :, :, lm] * rylm[i, j, lm] -
+                                coeff[g_re, :, :, lm] * iylm[i, j, lm])
 
     return field
+
+  def _sp_expansion(self, f, L_max, N_theta, N_phi):
+    """
+        Expands function f(theta, phi) in spherical harmonics up to degree L_max
+        using Gauss-Legendre quadrature in theta and uniform quadrature in phi.
+
+        Parameters:
+            f : function [theta, phi] -> float
+                Function to expand.
+            L_max : int
+                Maximum degree of spherical harmonics.
+            N_theta : int
+                Number of Gauss-Legendre points in theta.
+            N_phi : int
+                Number of equispaced points in phi.
+
+        Returns:
+            coeff :Expansion coefficients.
+        """
+
+    # Gauss-Legendre quadrature points and weights for theta
+    x, w_theta = np.polynomial.legendre.leggauss(N_theta)
+    theta = np.arccos(-x) # Convert from [-1,1] to [0,pi]
+
+    # Uniform quadrature points for phi
+    phi = np.linspace(0, 2 * np.pi, N_phi, endpoint=False)
+
+    # Initialize coefficients
+    coeff = np.zeros(shape=(self.attrs["max_lm"]), dtype=complex)
+    dphi = 2 * np.pi / N_phi
+
+    # Compute expansion coefficients
+    for l in range(L_max + 1):
+      for m in range(-l, l + 1):
+        integral = 0.0
+        for i, t in enumerate(theta):
+          for j, p in enumerate(phi):
+            # NOTE: there are some convention difference for theta and phi in scipy
+            Ylm = special.sph_harm(m, l, p, t)
+            integral += f[i, j] * np.conj(Ylm) * w_theta[i] * dphi
+        coeff[lm_mode(l, m)] = integral # Store coefficient
+
+    return coeff
 
   def transform_field_to_coeff_gl(self, field: np.array):
     """
         transformation of the given field on gauss legendre points to
         spherical harmonics basis on gauss legendre points.
+        field[time,radius,theta,phi]
         """
 
-    coeff = np.emptylike(field)
-    ...
-
+    shape = (
+        len([g_re, g_im]),
+        self.attrs["lev_t"],
+        self.attrs["max_n"],
+        self.attrs["max_lm"],
+    )
+    coeff = np.empty(shape=shape, dtype=float)
+    # TODO: broadcast
+    for t in range(self.attrs["lev_t"]):
+      for r in range(self.attrs["max_n"]):
+        c = self._sp_expansion(field[t, r],
+                               self.attrs["max_l"],
+                               self.npnts,
+                               self.npnts)
+        
+        #print(c,c.real,c.imag)
+        coeff[g_re, t, r, :] = c.real
+        coeff[g_im, t, r, :] = c.imag
+        
     return coeff
 
   def transform_pit_coeffs_to_spec_coeffs(self, coeff: np.array):
@@ -295,7 +362,7 @@ class AngularTransform:
         """
 
     # first reconstruct field on gl collocation points
-    field = self.reconstruct_pit_on_gl(coeffs)
+    field = self.reconstruct_pit_on_gl(coeff)
 
     return self.transform_field_to_coeff_gl(field)
 
