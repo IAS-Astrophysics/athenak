@@ -447,7 +447,8 @@ TaskStatus RadiationM1::TimeUpdate(Driver *d, int stage) {
                   u1_(m, CombinedIdx(nuidx, M1_E_IDX, nvars_), k, j, i) +
                   beta_dt * rEFN[nuidx][M1_E_IDX];
               if (DrEFN[nuidx][M1_E_IDX] < 0) {
-                theta = Kokkos::min(-source_limiter * Kokkos::max(Estar, 0.0) /
+                theta = Kokkos::min(-source_limiter *
+                                        Kokkos::max<Real>(Estar, 0.0) /
                                         DrEFN[nuidx][M1_E_IDX],
                                     theta);
               }
@@ -455,7 +456,8 @@ TaskStatus RadiationM1::TimeUpdate(Driver *d, int stage) {
             }
             if (DTau_sum < 0) {
               theta = Kokkos::min(
-                  -source_limiter * Kokkos::max(tau, 0.0) / DTau_sum, theta);
+                  -source_limiter * Kokkos::max<Real>(tau, 0.0) / DTau_sum,
+                  theta);
             }
 
             if (nspecies_ > 1) {
@@ -465,10 +467,10 @@ TaskStatus RadiationM1::TimeUpdate(Driver *d, int stage) {
                     u1_(m, CombinedIdx(nuidx, M1_N_IDX, nvars_), k, j, i) +
                     beta_dt * rEFN[nuidx][M1_N_IDX];
                 if (DrEFN[nuidx][M1_N_IDX] < 0) {
-                  theta =
-                      Kokkos::min(-source_limiter * Kokkos::max(Nstar, 0.0) /
-                                      DrEFN[nuidx][M1_N_IDX],
-                                  theta);
+                  theta = Kokkos::min(-source_limiter *
+                                          Kokkos::max<Real>(Nstar, 0.0) /
+                                          DrEFN[nuidx][M1_N_IDX],
+                                      theta);
                 }
                 DDxp_sum += DDxp[nuidx];
               }
@@ -476,7 +478,8 @@ TaskStatus RadiationM1::TimeUpdate(Driver *d, int stage) {
               if (DYe > 0) {
                 theta = Kokkos::min<Real>(
                     source_limiter *
-                        Kokkos::max(params_.source_Ye_max - Y_e, 0.0) / DYe,
+                        Kokkos::max<Real>(params_.source_Ye_max - Y_e, 0.0) /
+                        DYe,
                     theta);
               } else if (DYe < 0) {
                 theta = Kokkos::min<Real>(
