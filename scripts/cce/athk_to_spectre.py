@@ -141,12 +141,12 @@ class AngularTransform:
     self.attrs = attrs
     # no. of collocation pnts
     self.npnts = 2 * self.attrs["max_l"] + 1
+    self.l_root = self._legendre_root()
     # theta collocation coords
     self.th = self._theta_gauss_legendre()
     # phi collocation coords
     self.ph = self._phi_equispace()
     # legendre roots
-    self.l_root = self._legendre_root()
     # ylm(real/imag,th,ph,lm) on collocation coords
     self.ylm_pit = self._ylm_pit()
 
@@ -155,14 +155,14 @@ class AngularTransform:
         creating gl collocation pnts for theta
         """
     th = np.empty(shape=(self.npnts), dtype=float)
-    for i in range(nth):
-      th[i] = m.acos(-self.l_root[i])
+    for i in range(self.npnts):
+      th[i] = math.acos(-self.l_root[i])
 
     return th
 
-  def _legendre_root(self, i_th_root: int, l_order: int):
+  def _legendre_root(self):
     from sympy.solvers import solve
-    from sympy import legendre, re, N
+    from sympy import legendre, re, N, symbols
 
     nth = self.npnts
     precision = 18 # numerical precision
@@ -175,7 +175,7 @@ class AngularTransform:
       roots.append(re(N(root[j], precision)))
     roots.sort()
 
-    return self._legendre_root_tab[l_order][i_th_root]
+    return roots
 
   def _phi_equispace(self):
     """
@@ -183,8 +183,8 @@ class AngularTransform:
         """
     phi = np.empty(shape=(self.npnts), dtype=float)
 
-    for i in range(nphi):
-      phi[i] = 2 * i * m.pi / self.npnts
+    for i in range(self.npnts):
+      phi[i] = 2 * i * math.pi / self.npnts
 
     return phi
 
@@ -192,11 +192,12 @@ class AngularTransform:
     """
         compute ylm on gauss legnedre for theta, and equispace for phi
         we use the ylm defined in pittnull code
+        ylm[real/imag, theta, phi, lm]
         """
 
     ylms = np.empty(
         shape=(
-            len[g_re, g_im],
+            len([g_re, g_im]),
             self.npnts,
             self.npnts,
             self.attrs["max_lm"],
@@ -204,19 +205,19 @@ class AngularTransform:
         dtype=float,
     )
     for i in range(self.npnts):
-      th = self._th[i]
+      th = self.th[i]
       for j in range(self.npnts):
-        ph = self._ph[j]
-        for l in range(0, attrs["max_l"]):
+        ph = self.ph[j]
+        for l in range(0, self.attrs["max_l"]):
           for m in range(l, -l - 1, -1):
             lm = lm_mode(l, m)
             y = self.__sYlm_pit(0, l, m, th, ph)
-            ylms[g_re, i, j, lm] = y.real()
-            ylms[g_re, i, j, lm] = y.imag()
+            ylms[g_re, i, j, lm] = y.real
+            ylms[g_im, i, j, lm] = y.imag
 
     return ylms
 
-  def __fact(i):
+  def __fact(self, i):
     """
         factorial in pittnull
         """
@@ -226,7 +227,7 @@ class AngularTransform:
       temp *= j
     return temp
 
-  def __sPlm(s, l, m, theta):
+  def __sPlm(self, s, l, m, theta):
     """
         sPlm in pitnull
         """
@@ -253,7 +254,7 @@ class AngularTransform:
 
     return temp
 
-  def __sYlm_pit(s, l, m, theta, phi):
+  def __sYlm_pit(self, s, l, m, theta, phi):
     """
         sYlm in pittnull
         """
