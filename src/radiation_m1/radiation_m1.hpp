@@ -31,12 +31,12 @@ namespace radiationm1 {
 struct RadiationM1TaskIDs {
   TaskID irecv;
   TaskID copyu;
-  TaskID calcclosure;
+  TaskID closure;
   TaskID flux;
   TaskID sendf;
   TaskID recvf;
   TaskID rkupdt;
-  TaskID srctrms;
+  TaskID mattersrc;
   TaskID restu;
   TaskID sendu;
   TaskID recvu;
@@ -51,42 +51,42 @@ struct RadiationM1TaskIDs {
 //! \class RadiationM1
 //  \brief class for grey M1
 class RadiationM1 {
-public:
+ public:
   BrentFunctor BrentFunc;
   BrentFunctorInv BrentFuncInv;
 
   RadiationM1(MeshBlockPack *ppack, ParameterInput *pin);
   ~RadiationM1();
 
-  int nvars;                // no. of evolved variables per species
-  int nspecies;             // no. of species
-  int source_limiter;       // src limiter param to avoid non-physical states
-  int nvarstot;             // total no. of evolved variables
-  RadiationM1Params params; // user parameters for grey M1
+  int nvars;                 // no. of evolved variables per species
+  int nspecies;              // no. of species
+  int source_limiter;        // src limiter param to avoid non-physical states
+  int nvarstot;              // total no. of evolved variables
+  RadiationM1Params params;  // user parameters for grey M1
 
-  DvceArray5D<Real> u0;             // evolved variables
-  DvceArray5D<Real> coarse_u0;      // evolved variables on 2x coarser grid
-  DvceArray5D<Real> chi;            // Eddington factor
-  DvceArray4D<bool> radiation_mask; // radiation mask
-  DvceArray5D<Real> u1;             // evolved variables at intermediate step
-  DvceFaceFld5D<Real> uflx;         // fluxes of evo. quantities on cell faces
-  DvceArray5D<Real> u_mu_data;      // fluid velocity
-  DvceArray5D<Real> eta_0;
-  DvceArray5D<Real> abs_0;
-  DvceArray5D<Real> eta_1;
-  DvceArray5D<Real> abs_1;
-  DvceArray5D<Real> scat_1;
-  AthenaTensor<Real, TensorSymm::NONE, 4, 1> u_mu;
+  DvceArray5D<Real> u0;              // evolved variables
+  DvceArray5D<Real> coarse_u0;       // evolved variables on 2x coarser grid
+  DvceArray5D<Real> chi;             // Eddington factor
+  DvceArray4D<bool> radiation_mask;  // radiation mask
+  DvceArray5D<Real> u1;              // evolved variables at intermediate step
+  DvceFaceFld5D<Real> uflx;          // fluxes of evo. quantities on cell faces
+  DvceArray5D<Real> u_mu_data;       // fluid velocity
+  DvceArray5D<Real> eta_0;           // number emissivity coefficient
+  DvceArray5D<Real> abs_0;           // number absorptivity coefficient
+  DvceArray5D<Real> eta_1;           // energy emissivity coefficient
+  DvceArray5D<Real> abs_1;           // energy absorptivity coefficient
+  DvceArray5D<Real> scat_1;          // energy scattering coefficient
+  AthenaTensor<Real, TensorSymm::NONE, 4, 1> u_mu;  // fluid 4-velocity
 
-  MeshBoundaryValuesCC *pbval_u; // Communication buffers and functions for u
-  RadiationM1TaskIDs id;         // container to hold names of TaskIDs
+  MeshBoundaryValuesCC *pbval_u;  // Communication buffers and functions for u
+  RadiationM1TaskIDs id;          // container to hold names of TaskIDs
   Real dtnew;
 
-  DvceArray1D<Real> beam_source_vals; // values of 1d beams
+  DvceArray1D<Real> beam_source_vals;  // values of 1d beams
 
   // functions...
-  void
-  AssembleRadiationM1Tasks(std::map<std::string, std::shared_ptr<TaskList>> tl);
+  void AssembleRadiationM1Tasks(
+      std::map<std::string, std::shared_ptr<TaskList>> tl);
   // ...in "before_stagen_tl" list
   TaskStatus InitRecv(Driver *d, int stage);
   // ...in "stagen_tl" list
@@ -96,7 +96,8 @@ public:
   TaskStatus SendFlux(Driver *d, int stage);
   TaskStatus RecvFlux(Driver *d, int stage);
   TaskStatus TimeUpdate(Driver *d, int stage);
-  TaskStatus RadiationM1SrcTerms(Driver *d, int stage);
+  TaskStatus CalcOpacityNurates(Driver *pdrive, int stage);
+  TaskStatus CalcOpacityToy(Driver *pdrive, int stage);
   TaskStatus RestrictU(Driver *d, int stage);
   TaskStatus SendU(Driver *d, int stage);
   TaskStatus RecvU(Driver *d, int stage);
@@ -105,20 +106,19 @@ public:
   TaskStatus NewTimeStep(Driver *d, int stage);
   // ...in "after_stagen_tl" list
   TaskStatus ClearSend(Driver *d, int stage);
-  TaskStatus ClearRecv(Driver *d, int stage); // also in Driver::Initialize
+  TaskStatus ClearRecv(Driver *d, int stage);  // also in Driver::Initialize
 
-  void
-  calc_closure(const AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> &g_dd,
-               const AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> &g_uu,
-               const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &n_d,
-               const Real &w_lorentz,
-               const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &u_u,
-               const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &v_d,
-               const AthenaPointTensor<Real, TensorSymm::NONE, 4, 2> &proj_ud,
-               const Real &E,
-               const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &F_d,
-               Real &chi, AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> &P_dd,
-               const RadiationM1Params &params);
+  void calc_closure(
+      const AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> &g_dd,
+      const AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> &g_uu,
+      const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &n_d,
+      const Real &w_lorentz,
+      const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &u_u,
+      const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &v_d,
+      const AthenaPointTensor<Real, TensorSymm::NONE, 4, 2> &proj_ud,
+      const Real &E, const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &F_d,
+      Real &chi, AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> &P_dd,
+      const RadiationM1Params &params);
 
   void calc_inv_closure(
       const AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> &g_uu,
@@ -136,13 +136,13 @@ public:
       AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &F_d,
       const RadiationM1Params &params);
 
-private:
-  MeshBlockPack *pmy_pack; // ptr to MeshBlockPack
+ private:
+  MeshBlockPack *pmy_pack;  // ptr to MeshBlockPack
 };
 
 // 1d beam boundary conditions
 void ApplyBeamSources1D(Mesh *pmesh);
 
-} // namespace radiationm1
+}  // namespace radiationm1
 
-#endif // RADIATION_M1_HPP
+#endif  // RADIATION_M1_HPP
