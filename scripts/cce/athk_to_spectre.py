@@ -12,6 +12,7 @@ import os
 import numpy as np
 from scipy import special
 import math
+import cmath
 import argparse
 import h5py
 import struct
@@ -138,19 +139,22 @@ class AngularTransform:
 
   def __init__(self, attrs: dict):
     self.attrs = attrs
+    # no. of collocation pnts
+    self.npnts = 2 * self.attrs["max_l"] + 1
+    # theta collocation coords
     self.th = self._theta_gauss_legendre()
+    # phi collocation coords
     self.ph = self._phi_equispace()
+    # legendre roots
     self.l_root = self._legendre_root()
-    self.ylm = self._ylm()
+    # ylm(real/imag,th,ph,lm) on collocation coords
+    self.ylm_pit = self._ylm_pit()
 
   def _theta_gauss_legendre(self):
     """
         creating gl collocation pnts for theta
         """
-    max_l = self.attrs["max_l"]
-    nth = 2 * max_l + 1
-    th = np.empty(shape=(nth), dtype=float)
-
+    th = np.empty(shape=(self.npnts), dtype=float)
     for i in range(nth):
       th[i] = m.acos(-self.l_root[i])
 
@@ -160,8 +164,7 @@ class AngularTransform:
     from sympy.solvers import solve
     from sympy import legendre, re, N
 
-    max_l = self.attrs["max_l"]
-    nth = 2 * max_l + 1
+    nth = self.npnts
     precision = 18 # numerical precision
     x = symbols("x")
 
@@ -178,14 +181,84 @@ class AngularTransform:
     """
         create equispace collocation pnts on phi
         """
-    max_l = self.attrs["max_l"]
-    nphi = 2 * max_l + 1
-    phi = np.empty(shape=(nphi), dtype=float)
+    phi = np.empty(shape=(self.npnts), dtype=float)
 
     for i in range(nphi):
-      phi[i] = 2 * i * m.pi / nphi
+      phi[i] = 2 * i * m.pi / self.npnts
 
     return phi
+
+  def _ylm_pit(self):
+    """
+        compute ylm on gauss legnedre for theta, and equispace for phi
+        we use the ylm defined in pittnull code
+        """
+
+    ylms = np.empty(
+        shape=(
+            len[g_re, g_im],
+            self.npnts,
+            self.npnts,
+            self.attrs["max_lm"],
+        ),
+        dtype=float,
+    )
+    for i in range(self.npnts):
+      th = self._th[i]
+      for j in range(self.npnts):
+        ph = self._ph[j]
+        for l in range(0, attrs["max_l"]):
+          for m in range(l, -l - 1, -1):
+            lm = lm_mode(l, m)
+            y = self.__sYlm_pit(0, l, m, th, ph)
+            ylms[g_re, i, j, lm] = y.real()
+            ylms[g_re, i, j, lm] = y.imag()
+
+    return ylms
+
+  def __fact(i):
+    """
+        factorial in pittnull
+        """
+    assert i > -1
+    temp = 1
+    for j in range(2, i + 1):
+      temp *= j
+    return temp
+
+  def __sPlm(s, l, m, theta):
+    """
+        sPlm in pitnull
+        """
+    temp = 0
+    s = -s # oops below is really the definition for -s not s
+
+    assert l >= abs(s)
+    assert l >= abs(m)
+
+    sc = (1 - 2 * (abs(s) % 2)) * math.sqrt(
+        (2 * l + 1) / (4 * math.pi) * self.__fact(l + m) * self.__fact(l - m) *
+        self.__fact(l + s) * self.__fact(l - s))
+
+    for k in range(max(0, m - s), min(l + m, l - s) + 1):
+      t = sc
+      t /= self.__fact(l + m - k)
+      t /= self.__fact(l - s - k)
+      t /= self.__fact(k)
+      t /= self.__fact(k + s - m)
+
+      temp += ((1 - 2 * (abs(k) % 2)) * t * math.pow(math.cos(0.5 * theta),
+                                                     (2 * l + m - s - 2 * k)) *
+               math.pow(math.sin(0.5 * theta), (2 * k + s - m)))
+
+    return temp
+
+  def __sYlm_pit(s, l, m, theta, phi):
+    """
+        sYlm in pittnull
+        """
+    I = complex(0, 1)
+    return self.__sPlm(s, l, m, theta) * cmath.exp(I * (m * phi))
 
   def reconstruct_pit_on_gl(self, coeff: np.array):
     """
