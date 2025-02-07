@@ -151,7 +151,7 @@ TaskStatus RadiationM1::TimeUpdate(Driver *d, int stage) {
         }
 
         // [B.3] Derivatives of spatial metric (\p_k gamma_ij)
-        AthenaPointTensor<Real, TensorSymm::SYM2, 3, 3> dg_ddd{};
+        AthenaPointTensor<Real, TensorSymm::SYM2, 3, 3> dg_ddd{}; //@TODO: fix warning
         for (int a = 0; a < 3; ++a) {
           for (int b = 0; b < 3; ++b) {
             dg_ddd(0, a, b) =

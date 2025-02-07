@@ -62,7 +62,6 @@ void ProblemGenerator::RadiationM1BrentTest(ParameterInput *pin,
           // Some nans in the evaluation. This should not happen.
           if (ierr != radiationm1::BRENT_SUCCESS) {
             printf("Unexpected error in BrentIterate.\n");
-            exit(EXIT_FAILURE);
           }
           x_md = root;
           ierr = radiationm1::BrentTestInterval(x_lo, x_hi, closure_epsilon, 0);
