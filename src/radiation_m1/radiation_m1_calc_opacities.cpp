@@ -39,7 +39,7 @@ TaskStatus RadiationM1::CalcOpacityToy(Driver *pdrive, int stage) {
   auto &eta_1_ = pmy_pack->pradm1->eta_1;
   auto &abs_1_ = pmy_pack->pradm1->abs_1;
   auto &scat_1_ = pmy_pack->pradm1->scat_1;
-
+  auto &toy_opacity_fn_ = pmy_pack->pradm1->toy_opacity_fn;
   auto &chi_ = pmy_pack->pradm1->chi;
   adm::ADM::ADM_vars &adm = pmy_pack->padm->adm;
 
@@ -62,7 +62,7 @@ TaskStatus RadiationM1::CalcOpacityToy(Driver *pdrive, int stage) {
         Real &x3max = mbsize.d_view(m).x3max;
         int nx3 = indcs.nx3;
         Real x3 = CellCenterX(k - ks, nx3, x3min, x3max);
-        toy_opacity_fn(x1, x2, x3, nuidx, eta_0_(m, nuidx, k, j, i),
+        toy_opacity_fn_(x1, x2, x3, nuidx, eta_0_(m, nuidx, k, j, i),
                        abs_0_(m, nuidx, k, j, i), eta_1_(m, nuidx, k, j, i),
                        abs_1_(m, nuidx, k, j, i), scat_1_(m, nuidx, k, j, i));
       });

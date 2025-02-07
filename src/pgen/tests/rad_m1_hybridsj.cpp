@@ -46,6 +46,7 @@ public:
 KOKKOS_INLINE_FUNCTION
 void print_fdf(Real (&x)[M1_MULTIROOTS_DIM], Real (&f)[M1_MULTIROOTS_DIM],
                Real (&J)[M1_MULTIROOTS_DIM][M1_MULTIROOTS_DIM]) {
+  /*
   std::cout << "x: " << std::endl;
   for (int i = 0; i < M1_MULTIROOTS_DIM; ++i) {
     std::cout << x[i] << " ";
@@ -65,11 +66,13 @@ void print_fdf(Real (&x)[M1_MULTIROOTS_DIM], Real (&f)[M1_MULTIROOTS_DIM],
     }
     std::cout << std::endl;
   }
+  */
 }
 
 KOKKOS_INLINE_FUNCTION
 void print_f(Real (&x)[M1_MULTIROOTS_DIM], Real (&f)[M1_MULTIROOTS_DIM],
              Real (&J)[M1_MULTIROOTS_DIM][M1_MULTIROOTS_DIM]) {
+  /*
   for (int i = 0; i < M1_MULTIROOTS_DIM; ++i) {
     std::cout << x[i] << " ";
   }
@@ -77,6 +80,7 @@ void print_f(Real (&x)[M1_MULTIROOTS_DIM], Real (&f)[M1_MULTIROOTS_DIM],
     std::cout << f[i] << " ";
   }
   std::cout << std::endl;
+  */
 }
 
 //----------------------------------------------------------------------------------------
