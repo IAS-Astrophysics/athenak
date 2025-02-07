@@ -138,9 +138,22 @@ class AngularTransform:
 
   def __init__(self, attrs: dict):
     self.attrs = attrs
-    self.th = self._theta_guass_legendre()
+    self.th = self._theta_gauss_legendre()
     self.ph = self._phi_equispace()
     self.ylm = self._ylm()
+
+  def _phi_equispace(self):
+    """
+        create equispace collocation pnts on phi
+        """
+    max_l = attrs["max_l"]
+    nphi = 2 * max_l + 1
+    phi = np.empty(shape=(nphi), dtype=float)
+
+    for i in range(nphi):
+      phi[i] = 2 * i * m.pi / nphi
+
+    return phi
 
   def reconstruct_pit_on_gl(self, coeff: np.array):
     """
@@ -160,7 +173,7 @@ class AngularTransform:
 
   def transform_field_to_coeff_gl(self, field: np.array):
     """
-        transformation of the given field on guass legendre points to
+        transformation of the given field on gauss legendre points to
         spherical harmonics basis on gauss legendre points.
         """
 
@@ -172,7 +185,7 @@ class AngularTransform:
   def transform_pit_coeffs_to_spec_coeffs(self, coeff: np.array):
     """
         transform pit coeffs which are on equispace theta and phi to spectre coeffs
-        which are equispace on phi and guass legendre on theta.
+        which are equispace on phi and gauss legendre on theta.
         """
 
     # first reconstruct field on gl collocation points
