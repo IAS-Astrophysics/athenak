@@ -131,6 +131,56 @@ def parse_cli():
   return args
 
 
+class AngularTransform:
+  """
+    angular coordinate transformation from pittnull to spectre
+    """
+
+  def __init__(self, attrs: dict):
+    self.attrs = attrs
+    self.th = self._theta_guass_legendre()
+    self.ph = self._phi_equispace()
+    self.ylm = self._ylm()
+
+  def reconstruct_pit_on_gl(self, coeff: np.array):
+    """
+        reconstruct field on gauss lengendre collocation pnts from coeffs of pittnull
+        """
+    rylm = self.ylm[g_re]
+    iylm = self.ylm[g_im]
+
+    shape = (self.attrs["lev_t"], self.attrs["max_n"], self.attrs["max_lm"])
+    field = np.empty(shape=shape, dtype=float)
+    for lm in range(self.attrs["max_lm"]):
+      # TODO: broadcast
+      field[:, :, lm] = (coeff[g_im, :, :, lm] * rylm[lm] -
+                         coeff[g_re, :, :, lm] * iylm[lm])
+
+    return field
+
+  def transform_field_to_coeff_gl(self, field: np.array):
+    """
+        transformation of the given field on guass legendre points to
+        spherical harmonics basis on gauss legendre points.
+        """
+
+    coeff = np.emptylike(field)
+    ...
+
+    return coeff
+
+  def transform_pit_coeffs_to_spec_coeffs(self, coeff: np.array):
+    """
+        transform pit coeffs which are on equispace theta and phi to spectre coeffs
+        which are equispace on phi and guass legendre on theta.
+        """
+
+    # first reconstruct field on gl collocation points
+    field = self.reconstruct_pit_on_gl(coeffs)
+
+    return self.transform_field_to_coeff_gl(field)
+
+
 def load(fpath: str, field_name: str, attrs: dict) -> list:
   """
     read the field accroding to attrs.
@@ -146,6 +196,8 @@ def load(fpath: str, field_name: str, attrs: dict) -> list:
     max_lm = attrs["max_lm"]
     shape = (len([g_re, g_im]), lev_t, max_n, max_lm)
     ret = np.empty(shape=shape, dtype=float)
+
+    coords = AngularTransform(attrs)
     with h5py.File(fpath, "r") as h5f:
       # read & save
       for i in range(0, lev_t):
@@ -154,6 +206,10 @@ def load(fpath: str, field_name: str, attrs: dict) -> list:
         h5_im = h5f[f"{key}/{field_name}/im"]
         ret[g_re, i, :] = h5_re
         ret[g_im, i, :] = h5_im
+
+      # transform from PITTNull coordinates to Spectre coordinates
+      ret = coords.transform_pit_coeffs_to_spec_coeffs(ret)
+
   elif attrs["file_type"] == "bin":
     # Load the list of files
     ##TODO: this depends on file name
