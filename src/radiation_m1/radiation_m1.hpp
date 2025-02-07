@@ -113,6 +113,7 @@ class RadiationM1 {
   TaskStatus ClearSend(Driver *d, int stage);
   TaskStatus ClearRecv(Driver *d, int stage);  // also in Driver::Initialize
 
+  KOKKOS_INLINE_FUNCTION
   void calc_closure(
       const AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> &g_dd,
       const AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> &g_uu,
@@ -125,6 +126,7 @@ class RadiationM1 {
       Real &chi, AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> &P_dd,
       const RadiationM1Params &params);
 
+  KOKKOS_INLINE_FUNCTION
   void calc_inv_closure(
       const AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> &g_uu,
       const AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> &g_dd,
