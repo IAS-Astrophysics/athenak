@@ -149,7 +149,7 @@ KOKKOS_INLINE_FUNCTION void source_jacobian(
 // .  q^new = q^star + dt S[q^new]
 // The source term is S^a = (eta - ka J) u^a - (ka + ks) H^a and includes
 // also emission.
-int source_update(
+KOKKOS_INLINE_FUNCTION void source_update(
     const Real &cdt, const Real &alp,
     const AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> &g_dd,
     const AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> &g_uu,
@@ -166,8 +166,6 @@ int source_update(
     const Real &Estar,
     const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &Fstar_d,
     const Real &eta, const Real &kabs, const Real &kscat, Real &chi, Real &Enew,
-    AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &Fnew_d) {
-  return 0;
-}
+    AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &Fnew_d) {}
 
 #endif  // RADIATION_M1_SOURCES_HPP
