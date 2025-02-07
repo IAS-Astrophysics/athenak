@@ -140,13 +140,45 @@ class AngularTransform:
     self.attrs = attrs
     self.th = self._theta_gauss_legendre()
     self.ph = self._phi_equispace()
+    self.l_root = self._legendre_root()
     self.ylm = self._ylm()
+
+  def _theta_gauss_legendre(self):
+    """
+        creating gl collocation pnts for theta
+        """
+    max_l = self.attrs["max_l"]
+    nth = 2 * max_l + 1
+    th = np.empty(shape=(nth), dtype=float)
+
+    for i in range(nth):
+      th[i] = m.acos(-self.l_root[i])
+
+    return th
+
+  def _legendre_root(self, i_th_root: int, l_order: int):
+    from sympy.solvers import solve
+    from sympy import legendre, re, N
+
+    max_l = self.attrs["max_l"]
+    nth = 2 * max_l + 1
+    precision = 18 # numerical precision
+    x = symbols("x")
+
+    root = solve(legendre(nth, x), x, minimal=True, quick=True, warn=True)
+    roots = []
+    nroot = len(root)
+    for j in range(nroot): # make it real, some of the roots has 10^-17 I part
+      roots.append(re(N(root[j], precision)))
+    roots.sort()
+
+    return self._legendre_root_tab[l_order][i_th_root]
 
   def _phi_equispace(self):
     """
         create equispace collocation pnts on phi
         """
-    max_l = attrs["max_l"]
+    max_l = self.attrs["max_l"]
     nphi = 2 * max_l + 1
     phi = np.empty(shape=(nphi), dtype=float)
 
