@@ -97,14 +97,14 @@ TaskStatus RadiationM1::TimeUpdate(Driver *d, int stage) {
             g_uu(a, b) = garr_uu[a + b * 4];
           }
         }
+
+        pack_n_d(adm.alpha(m, k, j, i), n_d);
+        tensor_contract(g_uu, n_d, n_u);
         for (int a = 0; a < 4; ++a) {
           for (int b = 0; b < 4; ++b) {
             gamma_ud(a, b) = (a == b) + n_u(a) * n_d(b);
           }
         }
-
-        pack_n_d(adm.alpha(m, k, j, i), n_d);
-        tensor_contract(g_uu, n_d, n_u);
 
         pack_beta_u(adm.beta_u(m, 0, k, j, i), adm.beta_u(m, 1, k, j, i),
                     adm.beta_u(m, 2, k, j, i), beta_u);
@@ -177,8 +177,24 @@ TaskStatus RadiationM1::TimeUpdate(Driver *d, int stage) {
         }
 
         // @TODO: get fluid quantities, call opacities
+        Real &x1min = mbsize.d_view(m).x1min;
+        Real &x1max = mbsize.d_view(m).x1max;
+        int nx1 = indcs.nx1;
+        Real dx = (x1max - x1min) / static_cast<Real>(nx1);
+        Real &x2min = mbsize.d_view(m).x2min;
+        Real &x2max = mbsize.d_view(m).x2max;
+        int nx2 = indcs.nx2;
+        Real dy = (x2max - x2min) / static_cast<Real>(nx2);
+        Real &x3min = mbsize.d_view(m).x3min;
+        Real &x3max = mbsize.d_view(m).x3max;
+        int nx3 = indcs.nx3;
+        Real dz = (x3max - x3min) / static_cast<Real>(nx3);
+        Real x1 = CellCenterX(i - is, nx1, x1min, x1max);
 
-        M1Opacities opacities = ComputeM1Opacities(i, j, k, params_);
+        Real x2 = CellCenterX(j - js, nx2, x2min, x2max);
+
+        Real x3 = CellCenterX(k - ks, nx3, x3min, x3max);
+        M1Opacities opacities = ComputeM1Opacities(x1, x2, x3, params_);
         Real nueave{};
         Real DDxp[M1_TOTAL_NUM_SPECIES];
         Real mb{}; // average baryon mass

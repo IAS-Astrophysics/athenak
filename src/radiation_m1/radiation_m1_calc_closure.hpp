@@ -86,7 +86,7 @@ void RadiationM1::calc_closure(
     } while (ierr == BRENT_CONTINUE && iter < closure_maxiter);
 
     chi = minerbo(x_md);
-    printf("root = %.14e, chi = %.14e\n", x_md, chi);
+    // printf("root = %.14e, chi = %.14e\n", x_md, chi);
 
     if (ierr != BRENT_SUCCESS) {
       printf("Maximum number of iterations exceeded when computing the M1 "

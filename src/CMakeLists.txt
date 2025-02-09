@@ -189,6 +189,7 @@ add_executable(
         radiation_m1/radiation_m1_roots_hybridsj.hpp
         radiation_m1/radiation_m1_linalg.hpp
         pgen/tests/rad_m1_hybridsj.cpp
+        pgen/tests/rad_m1_sphere.cpp
 )
 
 # custom problem generator to be included in compile

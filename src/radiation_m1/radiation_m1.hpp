@@ -60,7 +60,7 @@ public:
 
   int nvars;                // no. of evolved variables per species
   int nspecies;             // no. of species
-  int source_limiter;       // src limiter param to avoid non-physical states
+  Real source_limiter;       // src limiter param to avoid non-physical states
   int nvarstot;             // total no. of evolved variables
   RadiationM1Params params; // user parameters for grey M1
 
@@ -130,6 +130,11 @@ public:
       const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &H_d, Real &E,
       AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &F_d,
       const RadiationM1Params &params);
+  static Real Toy_eta_0(const Real x1, const Real x2, const Real x3, const int index);
+  static Real Toy_eta_1(const Real x1, const Real x2, const Real x3, const int index);
+  static Real Toy_abs_0(const Real x1, const Real x2, const Real x3, const int index);
+  static Real Toy_abs_1(const Real x1, const Real x2, const Real x3, const int index);
+  static Real Toy_scat_1(const Real x1, const Real x2, const Real x3, const int index);
 
 private:
   MeshBlockPack *pmy_pack; // ptr to MeshBlockPack

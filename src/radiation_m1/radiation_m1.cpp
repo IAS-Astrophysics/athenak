@@ -46,7 +46,11 @@ RadiationM1::RadiationM1(MeshBlockPack *ppack, ParameterInput *pin)
   } else {
     params.src_update = Boost;
   }
-
+  std::string opacity_type =
+      pin->GetOrAddString("radiation_m1", "opacity_type", "toy");
+  if (closure_fun == "toy") {
+    params.opacity_type = RadiationM1OpacityType::Toy;
+  } 
   // Total number of MeshBlocks on this rank to be used in array dimensioning
   int nmb = std::max((ppack->nmb_thispack), (ppack->pmesh->nmb_maxperrank));
 
