@@ -1,0 +1,61 @@
+<comment>
+problem   = Line2D-radiation-femn
+reference = Radice et. al.
+
+<job>
+basename  = line2d          # problem ID: basename of output filenames
+
+<mesh>
+nghost    = 2           # Number of ghost cells
+nx1       = 500         # Number of zones in X1-direction
+x1min     = 0.0        # minimum value of X1
+x1max     = 5.0        # maximum value of X1
+ix1_bc    = outflow     # inner-X1 boundary flag
+ox1_bc    = outflow     # outer-X1 boundary flag
+
+nx2       = 1       # Number of zones in X2-direction
+x2min     = 0.0        # minimum value of X2
+x2max     = 5.0       # maximum value of X2
+ix2_bc    = outflow     # inner-X2 boundary flag
+ox2_bc    = outflow     # outer-X2 boundary flag
+
+nx3       = 1           # Number of zones in X3-direction
+x3min     = -0.5        # minimum value of X3
+x3max     = 0.5        # maximum value of X3
+ix3_bc    = periodic    # inner-X3 boundary flag
+ox3_bc    = periodic    # outer-X3 boundary flag
+
+<meshblock>
+nx1       = 50          # Number of cells in each MeshBlock, X1-dir
+nx2       = 1            # Number of cells in each MeshBlock, X2-dir
+nx3       = 1           # Number of cells in each MeshBlock, X3-dir
+
+<time>
+evolution  = dynamic     # dynamic/kinematic/static
+integrator = rk2         # time integration algorithm
+cfl_number = 0.4         # The Courant, Friedrichs, & Lewy (CFL) Number
+tlim       = 10.0         # time limit
+ndiag      = 1           # cycles between diagostic output
+
+<adm>
+
+<radiation_m1>
+closure_fun = minerbo
+
+<problem>
+pgen_name = rad_m1_beamtest
+
+<output1>
+file_type   = vtk        # output format
+variable    = rad_m1_E    # choice of variables to output
+dt          = 0.02        # output cadence
+
+<output2>
+file_type   = vtk        # output format
+variable    = rad_m1_F    # choice of variables to output
+dt          = 0.02        # output cadence
+
+<output3>
+file_type   = vtk        # output format
+variable    = rad_m1_chi    # choice of variables to output
+dt          = 0.02        # output cadence

@@ -74,6 +74,7 @@ class ProblemGenerator {
   void RadiationM1BeamTest(ParameterInput *pin, const bool restart);
   void RadiationM1BrentTest(ParameterInput *pin, const bool restart);
   void RadiationM1HybridsjTest(ParameterInput *pin, const bool restart);
+  void RadiationM1SphereTest(ParameterInput *pin, const bool restart);
   // template for user-specified problem generator
   void UserProblem(ParameterInput *pin, const bool restart);
   void RadiationM1LatticeTest(ParameterInput *pin, const bool restart);

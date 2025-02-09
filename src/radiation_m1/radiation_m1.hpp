@@ -63,11 +63,11 @@ class RadiationM1 {
   RadiationM1(MeshBlockPack *ppack, ParameterInput *pin);
   ~RadiationM1();
 
-  int nvars;                 // no. of evolved variables per species
-  int nspecies;              // no. of species
-  int source_limiter;        // src limiter param to avoid non-physical states
-  int nvarstot;              // total no. of evolved variables
-  RadiationM1Params params;  // user parameters for grey M1
+  int nvars;                // no. of evolved variables per species
+  int nspecies;             // no. of species
+  Real source_limiter;       // src limiter param to avoid non-physical states
+  int nvarstot;             // total no. of evolved variables
+  RadiationM1Params params; // user parameters for grey M1
 
   DvceArray5D<Real> u0;              // evolved variables
   DvceArray5D<Real> coarse_u0;       // evolved variables on 2x coarser grid
@@ -142,6 +142,11 @@ class RadiationM1 {
       const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &H_d, Real &E,
       AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &F_d,
       const RadiationM1Params &params);
+  static Real Toy_eta_0(const Real x1, const Real x2, const Real x3, const int index);
+  static Real Toy_eta_1(const Real x1, const Real x2, const Real x3, const int index);
+  static Real Toy_abs_0(const Real x1, const Real x2, const Real x3, const int index);
+  static Real Toy_abs_1(const Real x1, const Real x2, const Real x3, const int index);
+  static Real Toy_scat_1(const Real x1, const Real x2, const Real x3, const int index);
 
  private:
   MeshBlockPack *pmy_pack;  // ptr to MeshBlockPack
