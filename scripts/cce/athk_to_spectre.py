@@ -218,7 +218,7 @@ class AngularTransform:
 
     return field[:, :, :, :, 0, 0]
 
-  def _sp_expansion(self, f, L_max, N_theta, N_phi):
+  def _sp_expansion(self, f):
     """
         Expands function f(theta, phi) in spherical harmonics up to degree L_max
         using Gauss-Legendre quadrature in theta and uniform quadrature in phi.
@@ -226,39 +226,18 @@ class AngularTransform:
         Parameters:
             f : function [theta, phi] -> float
                 Function to expand.
-            L_max : int
-                Maximum degree of spherical harmonics.
-            N_theta : int
-                Number of Gauss-Legendre points in theta.
-            N_phi : int
-                Number of equispaced points in phi.
-
         Returns:
             coeff :Expansion coefficients.
         """
 
     # Gauss-Legendre quadrature points and weights for theta
-    x, w_theta = np.polynomial.legendre.leggauss(N_theta)
-    theta = np.arccos(-x) # Convert from [-1,1] to [0,pi]
-
-    # Uniform quadrature points for phi
-    phi = np.linspace(0, 2 * np.pi, N_phi, endpoint=False)
-
-    # Initialize coefficients
-    coeff = np.zeros(shape=(self.attrs["max_lm"]), dtype=complex)
+    _, w_theta = np.polynomial.legendre.leggauss(N_theta)
     dphi = 2 * np.pi / N_phi
-
-    # Compute expansion coefficients
-    for l in range(L_max + 1):
-      for m in range(-l, l + 1):
-        integral = 0.0
-        for i, t in enumerate(theta):
-          for j, p in enumerate(phi):
-            # NOTE: there are some convention difference for theta and phi in scipy
-            Ylm = special.sph_harm(m, l, p, t)
-            integral += f[i, j] * np.conj(Ylm) * w_theta[i] * dphi
-        coeff[lm_mode(l, m)] = integral # Store coefficient
-
+    Ylm = self.ylm_pit[g_re,...] + 1j*self.ylm_pit[g_im,...]
+    
+    coeff = np.einsum('ij,ijk,i',f,np.conj(Ylm),w_theta)
+    coeff *= dphi
+    
     return coeff
 
   def transform_field_to_coeff_gl(self, field: np.array):
@@ -278,7 +257,7 @@ class AngularTransform:
     # TODO: broadcast
     for t in range(self.attrs["lev_t"]):
       for r in range(self.attrs["max_n"]):
-        c = self._sp_expansion(field[t, r],
+        c = self._sp_expansion(field[t, r])
                                self.attrs["max_l"],
                                self.npnts,
                                self.npnts)
