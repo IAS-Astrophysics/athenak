@@ -161,21 +161,13 @@ class AngularTransform:
     return th
 
   def _legendre_root(self):
-    from sympy.solvers import solve
-    from sympy import legendre, re, N, symbols
-
+    """
+      legendre roots
+    """
     nth = self.npnts
-    precision = 18 # numerical precision
-    x = symbols("x")
-
-    root = solve(legendre(nth, x), x, minimal=True, quick=True, warn=True)
-    roots = []
-    nroot = len(root)
-    for j in range(nroot): # make it real, some of the roots has 10^-17 I part
-      roots.append(re(N(root[j], precision)))
-    roots.sort()
-
-    return roots
+    x, _ = np.polynomial.legendre.leggauss(nth)
+    x.sort()
+    return x
 
   def _phi_equispace(self):
     """
