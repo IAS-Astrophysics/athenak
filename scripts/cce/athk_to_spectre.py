@@ -173,11 +173,8 @@ class AngularTransform:
     """
         create equispace collocation pnts on phi
         """
-    phi = np.empty(shape=(self.npnts), dtype=float)
-
-    for i in range(self.npnts):
-      phi[i] = 2 * i * math.pi / self.npnts
-
+    phi = np.linspace(0, 2 * np.pi, self.npnts, endpoint=False)
+    
     return phi
 
   def _ylm_pit(self):
