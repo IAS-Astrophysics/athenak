@@ -148,7 +148,7 @@ class AngularTransform:
     self.ph = self._phi_equispace()
     # legendre roots
     # ylm(real/imag,th,ph,lm) on collocation coords
-    self.ylm_pit = self._ylm_pit()
+    self.ylm_pit = self._ylm_on_gl()
 
   def _theta_gauss_legendre(self):
     """
@@ -177,10 +177,9 @@ class AngularTransform:
     
     return phi
 
-  def _ylm_pit(self):
+  def _ylm_on_gl(self):
     """
         compute ylm on gauss legnedre for theta, and equispace for phi
-        we use the ylm defined in pittnull code
         ylm[real/imag, theta, phi, lm]
         """
 
@@ -200,55 +199,11 @@ class AngularTransform:
         for l in range(0, self.attrs["max_l"]):
           for m in range(l, -l - 1, -1):
             lm = lm_mode(l, m)
-            y = self.__sYlm_pit(0, l, m, th, ph)
+            y = special.sph_harm(m, l, ph, th)
             ylms[g_re, i, j, lm] = y.real
             ylms[g_im, i, j, lm] = y.imag
 
     return ylms
-
-  def __fact(self, i):
-    """
-        factorial in pittnull
-        """
-    assert i > -1
-    temp = 1
-    for j in range(2, i + 1):
-      temp *= j
-    return temp
-
-  def __sPlm(self, s, l, m, theta):
-    """
-        sPlm in pitnull
-        """
-    temp = 0
-    s = -s # oops below is really the definition for -s not s
-
-    assert l >= abs(s)
-    assert l >= abs(m)
-
-    sc = (1 - 2 * (abs(s) % 2)) * math.sqrt(
-        (2 * l + 1) / (4 * math.pi) * self.__fact(l + m) * self.__fact(l - m) *
-        self.__fact(l + s) * self.__fact(l - s))
-
-    for k in range(max(0, m - s), min(l + m, l - s) + 1):
-      t = sc
-      t /= self.__fact(l + m - k)
-      t /= self.__fact(l - s - k)
-      t /= self.__fact(k)
-      t /= self.__fact(k + s - m)
-
-      temp += ((1 - 2 * (abs(k) % 2)) * t * math.pow(math.cos(0.5 * theta),
-                                                     (2 * l + m - s - 2 * k)) *
-               math.pow(math.sin(0.5 * theta), (2 * k + s - m)))
-
-    return temp
-
-  def __sYlm_pit(self, s, l, m, theta, phi):
-    """
-        sYlm in pittnull
-        """
-    I = complex(0, 1)
-    return self.__sPlm(s, l, m, theta) * cmath.exp(I * (m * phi))
 
   def reconstruct_pit_on_gl(self, coeff: np.array):
     """
