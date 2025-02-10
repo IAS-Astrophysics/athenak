@@ -223,8 +223,8 @@ class AngularTransform:
       for j in range(self.npnts):
         for lm in range(self.attrs["max_lm"]):
           # TODO: broadcast
-          field[:, :, i, j] += (coeff[g_im, :, :, lm] * rylm[i, j, lm] -
-                                coeff[g_re, :, :, lm] * iylm[i, j, lm])
+          field[:, :, i, j] += (coeff[g_re, :, :, lm] * rylm[i, j, lm] -
+                                coeff[g_im, :, :, lm] * iylm[i, j, lm])
 
     return field
 
