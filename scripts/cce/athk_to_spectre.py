@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/ usr / bin / env python3
 ## Alireza Rashti - Oct 2024 (C)
 ## usage:
 ## $ ./me -h
@@ -19,11 +19,11 @@ import struct
 import glob
 from scipy.interpolate import interp1d
 
-# from itertools import product
-# import matplotlib.pyplot as plt
-# import glob
-# import sympy
-# import re
+#from itertools import product
+#import matplotlib.pyplot as plt
+#import glob
+#import sympy
+#import re
 
 ## ---------------------------------------------------------------------- ##
 
@@ -139,15 +139,15 @@ class AngularTransform:
 
   def __init__(self, attrs: dict):
     self.attrs = attrs
-    # no. of collocation pnts
+#no.of collocation pnts
     self.npnts = 2 * self.attrs["max_l"] + 1
     self.l_root = self._legendre_root()
-    # theta collocation coords
+#theta collocation coords
     self.th = self._theta_gauss_legendre()
-    # phi collocation coords
+#phi collocation coords
     self.ph = self._phi_equispace()
-    # legendre roots
-    # ylm(real/imag,th,ph,lm) on collocation coords
+#legendre roots
+#ylm(real / imag, th, ph, lm) on collocation coords
     self.ylm_pit = self._ylm_on_gl()
 
   def _theta_gauss_legendre(self):
@@ -218,15 +218,10 @@ class AngularTransform:
         self.npnts,
         self.npnts,
     )
-    field = np.zeros(shape=shape, dtype=float)
-    for i in range(self.npnts):
-      for j in range(self.npnts):
-        for lm in range(self.attrs["max_lm"]):
-          # TODO: broadcast
-          field[:, :, i, j] += (coeff[g_re, :, :, lm] * rylm[i, j, lm] -
-                                coeff[g_im, :, :, lm] * iylm[i, j, lm])
-
-    return field
+    field = (np.dot(coeff[g_re, :, :, :],rylm[:, :, np.newaxis, :, np.newaxis]) -
+             np.dot(coeff[g_im, :, :, :],iylm[:, :, np.newaxis, :, np.newaxis]))
+            
+    return field[:,:,:,:,0,0]
 
   def _sp_expansion(self, f, L_max, N_theta, N_phi):
     """
@@ -247,24 +242,24 @@ class AngularTransform:
             coeff :Expansion coefficients.
         """
 
-    # Gauss-Legendre quadrature points and weights for theta
+#Gauss - Legendre quadrature points and weights for theta
     x, w_theta = np.polynomial.legendre.leggauss(N_theta)
     theta = np.arccos(-x) # Convert from [-1,1] to [0,pi]
 
-    # Uniform quadrature points for phi
+#Uniform quadrature points for phi
     phi = np.linspace(0, 2 * np.pi, N_phi, endpoint=False)
 
-    # Initialize coefficients
+#Initialize coefficients
     coeff = np.zeros(shape=(self.attrs["max_lm"]), dtype=complex)
     dphi = 2 * np.pi / N_phi
 
-    # Compute expansion coefficients
+#Compute expansion coefficients
     for l in range(L_max + 1):
       for m in range(-l, l + 1):
         integral = 0.0
         for i, t in enumerate(theta):
           for j, p in enumerate(phi):
-            # NOTE: there are some convention difference for theta and phi in scipy
+#NOTE : there are some convention difference for theta and phi in scipy
             Ylm = special.sph_harm(m, l, p, t)
             integral += f[i, j] * np.conj(Ylm) * w_theta[i] * dphi
         coeff[lm_mode(l, m)] = integral # Store coefficient
@@ -285,15 +280,15 @@ class AngularTransform:
         self.attrs["max_lm"],
     )
     coeff = np.empty(shape=shape, dtype=float)
-    # TODO: broadcast
+#TODO : broadcast
     for t in range(self.attrs["lev_t"]):
       for r in range(self.attrs["max_n"]):
         c = self._sp_expansion(field[t, r],
                                self.attrs["max_l"],
                                self.npnts,
                                self.npnts)
-        
-        #print(c,c.real,c.imag)
+
+#print(c, c.real, c.imag)
         coeff[g_re, t, r, :] = c.real
         coeff[g_im, t, r, :] = c.imag
         
@@ -305,7 +300,7 @@ class AngularTransform:
         which are equispace on phi and gauss legendre on theta.
         """
 
-    # first reconstruct field on gl collocation points
+#first reconstruct field on gl collocation points
     field = self.reconstruct_pit_on_gl(coeff)
 
     return self.transform_field_to_coeff_gl(field)
@@ -329,7 +324,7 @@ def load(fpath: str, field_name: str, attrs: dict) -> list:
 
     coords = AngularTransform(attrs)
     with h5py.File(fpath, "r") as h5f:
-      # read & save
+#read &save
       for i in range(0, lev_t):
         key = f"{i}"
         h5_re = h5f[f"{key}/{field_name}/re"]
@@ -337,11 +332,11 @@ def load(fpath: str, field_name: str, attrs: dict) -> list:
         ret[g_re, i, :] = h5_re
         ret[g_im, i, :] = h5_im
 
-      # transform from PITTNull coordinates to Spectre coordinates
+#transform from PITTNull coordinates to Spectre coordinates
       ret = coords.transform_pit_coeffs_to_spec_coeffs(ret)
 
   elif attrs["file_type"] == "bin":
-    # Load the list of files
+#Load the list of files
     ##TODO: this depends on file name
     flist = sorted(glob.glob(fpath + "/cce_*.bin"))
     data = []
@@ -390,7 +385,7 @@ def load(fpath: str, field_name: str, attrs: dict) -> list:
   else:
     raise ValueError("no such option")
 
-  # print(ret)
+#print(ret)
   return ret
 
 
@@ -419,41 +414,42 @@ def read_cce_file(filename):
         index_to_lm (dict): Mapping from data index to (l, m) values.
     """
   with open(filename, "rb") as f:
-    # Read number of radial points (nr)
+#Read number of radial points(nr)
     nr_bytes = f.read(4)
     nr = struct.unpack("<i", nr_bytes)[0] # little-endian integer
 
-    # Read number of l modes (num_l_modes)
+#Read number of l modes(num_l_modes)
     num_l_modes_bytes = f.read(4)
     num_l_modes = struct.unpack("<i", num_l_modes_bytes)[0]
 
-    # Read time
+#Read time
     time_bytes = f.read(8)
     time = struct.unpack("<d", time_bytes)[0] # little-endian double
 
-    # Read inner and outer radial boundaries (rin and rout)
+#Read inner and outer radial boundaries(rin and rout)
     rin_bytes = f.read(8)
     rin = struct.unpack("<d", rin_bytes)[0]
 
     rout_bytes = f.read(8)
     rout = struct.unpack("<d", rout_bytes)[0]
 
-    # Calculate the number of angular modes
+#Calculate the number of angular modes
     num_angular_modes = (num_l_modes + 1) * (num_l_modes + 1)
 
-    # Total number of data points
+#Total number of data points
     count = 10 * nr * num_angular_modes
 
-    # Read data_real array
+#Read data_real array
     data_real = np.fromfile(f, dtype="<d", count=count) # little-endian double
     data_real = data_real.reshape((nr, 10, num_angular_modes))
 
-    # Read data_imag array
+#Read data_imag array
     data_imag = np.fromfile(f, dtype="<d", count=count)
     data_imag = data_imag.reshape((nr, 10, num_angular_modes))
 
-    # Create a mapping from index to (l, m)
-    index_to_lm = {}
+#Create a mapping from index to(l, m)
+    index_to_lm =
+{}
     for l in range(1, num_l_modes + 1):
       for m in range(-l, l + 1):
         index = l * l + l + m
@@ -474,7 +470,7 @@ def get_attribute(fpath: str,
   if type == "h5":
     attrs["file_type"] = "h5"
     with h5py.File(fpath, "r") as h5f:
-      # find attribute about num. of time level, and n,l,m in C_nlm
+#find attribute about num.of time level, and n, l, m in C_nlm
       attrs["lev_t"] = len(h5f.keys()) - 1
       if attrs["lev_t"] % 2 == 0: # for fourier transformation
         attrs["lev_t"] -= 1
@@ -483,7 +479,7 @@ def get_attribute(fpath: str,
       attrs["max_l"] = int(math.sqrt(attrs["max_lm"])) - 1
       attrs["r_in"] = h5f["metadata"].attrs["Rin"]
       attrs["r_out"] = h5f["metadata"].attrs["Rout"]
-      # read & save time
+#read &save time
       time = []
       for i in range(0, attrs["lev_t"]):
         key = f"{i}"
@@ -495,7 +491,7 @@ def get_attribute(fpath: str,
   else:
     raise ValueError("no such option")
 
-  # print(attrs)
+#print(attrs)
   return attrs
 
 
@@ -537,12 +533,14 @@ def time_derivative_fourier(field: np.array, field_name: str, attrs: dict,
   for n in range(len_n):
     for lm in range(len_lm):
       coeff = field[g_re, :, n, lm] + 1j * field[g_im, :, n, lm]
-      # F. transform
+#F.transform
       fft_coeff = np.fft.fft(coeff)
-      # if args["debug"] == 'y':
-      #  print("debug: normalization?",round(coeff[1],6) == round(np.fft.ifft(fft_coeff)[1],6))
+#if args["debug"] == 'y':
+#print(                                                                        \
+  "debug: normalization?",                                                     \
+  round(coeff[1], 6) == round(np.fft.ifft(fft_coeff)[1], 6))
 
-      # time derivative
+#time derivative
       half = len_t // 2 + 1
       omega = np.empty(shape=half)
       for i in range(0, half):
@@ -556,7 +554,7 @@ def time_derivative_fourier(field: np.array, field_name: str, attrs: dict,
       dfft_coeff[half:] = (np.imag(fft_coeff[half:]) -
                            1j * np.real(fft_coeff[half:])) * (omega[::-1][1:])
 
-      # not optimized version
+#not optimized version
       """
       dfft_coeff[0] = 0
       for i in range(1, half):
@@ -570,7 +568,7 @@ def time_derivative_fourier(field: np.array, field_name: str, attrs: dict,
         dfft_coeff[-i] = omega*complex(im2, -re2)
 
       """
-      # F. inverse
+#F.inverse
       coeff = np.fft.ifft(dfft_coeff)
       dfield[g_re, :, n, lm] = np.real(coeff)
       dfield[g_im, :, n, lm] = np.imag(coeff)
@@ -635,12 +633,12 @@ def radial_derivative_at_r_chebu(field: np.array,
   dx_dr = g_sign * 2 / (r_2 - r_1)
 
   if args["debug"] == "y":
-    # populate collocation points, roots of U_i
+#populate collocation points, roots of U_i
     x_i = np.empty(shape=len_n, dtype=float)
     for i in range(len_n):
       x_i[i] = math.cos(math.pi * (i + 1) / (len_n + 1))
 
-    # dU_k/dx|x=x_i
+#dU_k / dx | x = x_i
     duk_dx = np.empty(shape=(len_n, len_n), dtype=float)
     for k in range(len_n):
       for i in range(len_n):
@@ -697,13 +695,13 @@ class ChebUExpansion:
     self.N = N = attrs["max_n"] # num. of coeffs or num of collocation pnts
     pi = math.pi
 
-    # U_N roots:
+#U_N roots:
     a_i = np.arange(0, N, dtype=int) + 1
     self.x_i = x_i = np.cos(math.pi * a_i / (N + 1))
-    # quadrature weights
+#quadrature weights
     self.w_i = (1 - np.square(x_i)) * pi / (N + 1)
 
-    # ChebU_j(x_i):
+#ChebU_j(x_i):
     Uj_xi = np.empty(shape=(N, N), dtype=float)
     for j in range(N):
       Uj_xi[j, :] = special.chebyu(j)(x_i)
@@ -717,7 +715,9 @@ class ChebUExpansion:
         use Gauss Quadrature to expand the given field in ChebU
         f(x) = sum_{i=0}^{N-1} C_i U_i(x), U_i(x) Chebyshev of 2nd kind
         collocation points (roots of U_i): x_i = cos(pi*(i+1)/(N+1))
-        x = g_sign*(2*r - r_1 - r_2)/(r_2 - r_1), notes: x != {1 or -1}
+        x = g_sign*(2*r - r_1 - r_2)/(r_2 - r_1), notes: x !=
+{
+    1 or -1}
 
         """
 
@@ -738,19 +738,19 @@ class ChebUExpansion:
     N = self.N + 1 # +1 to see the roots of U_N
     x_i = self.x_i
 
-    # populate funcs using bases themselves
+#populate funcs using bases themselves
     fs = []
     for n in range(N):
       f = special.chebyu(n)(x_i)
       fs.append((f, n))
 
-    # find coeffs
+#find coeffs
     cs = []
     for n in range(N):
       c = self.coefficients(fs[n][0])
       cs.append((c, fs[n][1]))
 
-    # expect to see only the n-th entry is 1 for the chebyu(n) of order n
+#expect to see only the n - th entry is 1 for the chebyu(n) of order n
     for n in range(N):
       order = cs[n][1]
       print(f"chebyu{order}, coeffs = {cs[n][0]}\n", flush=True)
@@ -828,7 +828,7 @@ class Interpolate_at_r:
       self.Uk = np.empty(shape=self.len_n)
       for k in range(self.len_n):
         self.Uk[k] = special.chebyu(k)(self.x)
-      # print("x,Uk",self.x,self.Uk)
+#print("x,Uk", self.x, self.Uk)
       self.interp = self.interpolate_at_r_chebu
     else:
       raise ValueError("no such option")
@@ -857,22 +857,22 @@ def process_field(field_name: str) -> dict:
     - interpolate at R=r
     """
 
-  # return
+#return
   attrs = g_attrs
   args = g_args
   db = {}
 
-  # load data
+#load data
   field = load(args["fpath"], field_name, attrs)
-  # db[f"{field_name}"] = field
+#db[f "{field_name}"] = field
 
-  # radial expansion
+#radial expansion
   field = radial_expansion(field, field_name, attrs, args)
 
-  # time derivative
+#time derivative
   dfield_dt = time_derivative(field, field_name, attrs, args)
 
-  # interpolate at a specific radii
+#interpolate at a specific radii
   interpolate = Interpolate_at_r(attrs, args)
   field_at_r = interpolate.interpolate(field, field_name)
   db[f"{field_name}|r"] = field_at_r
@@ -880,7 +880,7 @@ def process_field(field_name: str) -> dict:
   dfield_dt_at_r = interpolate.interpolate(dfield_dt, f"d{field_name}/dt")
   db[f"d{field_name}/dt|r"] = dfield_dt_at_r
 
-  # radial derivative at R=r
+#radial derivative at R = r
   dfield_dr_at_r = radial_derivative_at_r(field, field_name, attrs, args)
   db[f"d{field_name}/dr|r"] = dfield_dr_at_r
 
@@ -893,7 +893,7 @@ def h5_create_group(h5file, group_name: str):
     """
   h5group = None
 
-  # create group if not exists
+#create group if not exists
   if h5file.get(group_name, default=None) == None:
     h5group = h5file.create_group(group_name)
   else:
@@ -919,8 +919,8 @@ def h5_write_data(h5file,
     h5["gxx.dat"].attrs['Legend'] = the associated column =
       array(['time', 'gxx_Re(0,0)', 'gxx_Im(0,0)', 'gxx_Re(1,1)', 'gxx_Im(1,1)', ...])
 
-    # => h5["gxx.dat"][3,0] = value of time at the dump level 3
-    # => h5["gxx.dat"][4,1] = value of gxx_Re(0,0) at the dump level 4
+#=> h5["gxx.dat"][3, 0] = value of time at the dump level 3
+#=> h5["gxx.dat"][4, 1] = value of gxx_Re(0, 0) at the dump level 4
 
     """
 
@@ -928,8 +928,8 @@ def h5_write_data(h5file,
       name=f"{data_name}",
       shape=(attrs["lev_t"], len([g_re, g_im]) * (attrs["max_l"]**2) + 1),
       dtype=float, # chunks=True,
-      # compression="gzip",
-      # shuffle=True,
+#compression = "gzip",
+#shuffle     = True,
   )
 
   data_attrs = ["time"]
@@ -1011,21 +1011,21 @@ def main(args):
   """
   g_sign = int(-1) if args["ftype"] == "bin" else int(1)
 
-  # check if output dir exist, if not, mkdir
+#check if output dir exist, if not, mkdir
   if not os.path.exists(g_args["d_out"]):
     os.makedirs(g_args["d_out"])
-  # find attribute for an arbitrary field
+#find attribute for an arbitrary field
   g_attrs = get_attribute(args["fpath"], type=args["ftype"])
 
-  # for each field
-  # I'm afraid this method takes too much memory
-  # from multiprocessing import Pool
-  # with Pool(processes=len(g_field_names)) as p:
-  #  db = p.map(process_field, g_field_names)
+#for each field
+#I'm afraid this method takes too much memory
+#from multiprocessing import Pool
+#with Pool(processes = len(g_field_names)) as p:
+#db = p.map(process_field, g_field_names)
 
   for f in g_field_names:
     db = process_field(f)
-    # write on disk
+#write on disk
     write(f, db, g_attrs, g_args)
 
 
