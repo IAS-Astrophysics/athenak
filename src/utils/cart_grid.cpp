@@ -22,7 +22,8 @@
 // constructor, initializes data structures and parameters
 
 CartesianGrid::CartesianGrid(MeshBlockPack *pmy_pack, Real center[3],
-                                    Real extent[3], int numpoints[3], bool is_cheb):
+                                    Real extent[3], int numpoints[3],
+                                    bool is_cheb, int rpow):
     pmy_pack(pmy_pack),
     interp_indcs("interp_indcs",1,1,1,1),
     interp_wghts("interp_wghts",1,1,1,1,1),
@@ -30,6 +31,7 @@ CartesianGrid::CartesianGrid(MeshBlockPack *pmy_pack, Real center[3],
   // initialize parameters for the grid
   // uniform grid or spectral grid
   is_cheby = is_cheb;
+  r_pow = rpow;
 
   // grid center
   center_x1 = center[0];
@@ -255,19 +257,34 @@ void CartesianGrid::SetInterpolationWeights() {
 
 void CartesianGrid::InterpolateToGrid(int ind, DvceArray5D<Real> &val) {
   // reinitialize interpolation indices and weights if AMR
-  //if (pmy_pack->pmesh->adaptive) {
-  //  SetInterpolationIndices();
-  //  SetInterpolationWeights();
-  //}
+  if (pmy_pack->pmesh->adaptive) {
+    SetInterpolationIndices();
+    SetInterpolationWeights();
+  }
 
   // capturing variables for kernel
   auto &indcs = pmy_pack->pmesh->mb_indcs;
+  auto &size = pmy_pack->pmb->mb_size;
   int &is = indcs.is; int &js = indcs.js; int &ks = indcs.ks;
   int &ng = indcs.ng;
   int n_x1 = nx1 - 1;
   int n_x2 = nx2 - 1;
   int n_x3 = nx3 - 1;
   int index = ind;
+
+  Real mx1 = min_x1;
+  Real mx2 = min_x2;
+  Real mx3 = min_x3;
+
+  Real cx1 = center_x1;
+  Real cx2 = center_x2;
+  Real cx3 = center_x3;
+
+  Real dx1 = d_x1;
+  Real dx2 = d_x2;
+  Real dx3 = d_x3;
+
+  int rpow = r_pow;
 
   // reallocate container
   Kokkos::realloc(interp_vals,nx1,nx2,nx3);
@@ -290,12 +307,36 @@ void CartesianGrid::InterpolateToGrid(int ind, DvceArray5D<Real> &val) {
           for (int k=0; k<2*ng; k++) {
             Real iwght = iwghts.d_view(nx,ny,nz,i,0)*
                   iwghts.d_view(nx,ny,nz,j,1)*iwghts.d_view(nx,ny,nz,k,2);
+            
+            // Extract MB bounds
+            Real &x1min = size.d_view(ii0).x1min;
+            Real &x1max = size.d_view(ii0).x1max;
+            Real &x2min = size.d_view(ii0).x2min;
+            Real &x2max = size.d_view(ii0).x2max;
+            Real &x3min = size.d_view(ii0).x3min;
+            Real &x3max = size.d_view(ii0).x3max;
+            Real x1v = CellCenterX(ii1-(ng-i-is)+1, indcs.nx1, x1min, x1max);
+            Real x2v = CellCenterX(ii2-(ng-j-js)+1, indcs.nx2, x2min, x2max);
+            Real x3v = CellCenterX(ii3-(ng-k-ks)+1, indcs.nx3, x3min, x3max);
+
+            x1v -= cx1;
+            x2v -= cx2;
+            x3v -= cx3;
+            std::cout << x1v << std::endl;
+            Real r = sqrt(pow(x1v,2) + pow(x2v, 2) + pow(x3v, 2));
+
             int_value += iwght*val(ii0,index,ii3-(ng-k-ks)+1,
-                                  ii2-(ng-j-js)+1,ii1-(ng-i-is)+1);
+                                  ii2-(ng-j-js)+1,ii1-(ng-i-is)+1) * x1v ;//* pow(r,rpow);
           }
         }
       }
-      ivals.d_view(nx,ny,nz) = int_value;
+      // extract cartesian grid positions relative to grid center
+      Real x0 = mx1 + nx * dx1; //  - cx1;
+      Real y0 = mx2 + ny * dx2; // - cx2;
+      Real z0 = mx3 + nz * dx3; // - cx3;
+
+      Real r0 = sqrt(pow(x0,2) + pow(y0, 2) + pow(z0, 2));
+      ivals.d_view(nx,ny,nz) = int_value; // / pow(r0,rpow);
     }
   });
 

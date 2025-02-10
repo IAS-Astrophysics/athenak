@@ -50,6 +50,7 @@ class HorizonDump {
   CartesianGrid *pcat_grid=nullptr; // pointer to cartesian grid
   Real pos[NDIM]; // position of the puncture
   Real r_guess;  // nominal radius of the object (for the AMR driver)
+  bool is_cheb;  // dump data on chebyshev grid
 
  private:
   MeshBlockPack const *pmbp;
