@@ -231,13 +231,15 @@ class AngularTransform:
         """
 
     # Gauss-Legendre quadrature points and weights for theta
-    _, w_theta = np.polynomial.legendre.leggauss(N_theta)
-    dphi = 2 * np.pi / N_phi
-    Ylm = self.ylm_pit[g_re,...] + 1j*self.ylm_pit[g_im,...]
-    
-    coeff = np.einsum('ij,ijk,i',f,np.conj(Ylm),w_theta)
+    _, w_theta = np.polynomial.legendre.leggauss(self.npnts)
+    dphi = 2 * np.pi / self.npnts
+    Ylm = self.ylm_pit[g_re, ...] + 1j * self.ylm_pit[g_im, ...]
+
+    coeff = np.einsum("trij,ijk,i", f, np.conj(Ylm), w_theta)
     coeff *= dphi
-    
+
+    coeff = np.transpose(coeff, (2, 1, 0))
+
     return coeff
 
   def transform_field_to_coeff_gl(self, field: np.array):
@@ -254,17 +256,14 @@ class AngularTransform:
         self.attrs["max_lm"],
     )
     coeff = np.empty(shape=shape, dtype=float)
-    # TODO: broadcast
-    for t in range(self.attrs["lev_t"]):
-      for r in range(self.attrs["max_n"]):
-        c = self._sp_expansion(field[t, r])
-                               self.attrs["max_l"],
-                               self.npnts,
-                               self.npnts)
+    c = self._sp_expansion(field)
 
-        # print(c,c.real,c.imag)
-        coeff[g_re, t, r, :] = c.real
-        coeff[g_im, t, r, :] = c.imag
+    # print(c,c.real,c.imag)
+    print("c.shape = ", c.shape)
+    print("coeff.shape = ", coeff.shape)
+
+    coeff[g_re, ...] = c.real
+    coeff[g_im, ...] = c.imag
 
     return coeff
 
@@ -791,7 +790,7 @@ class Interpolate_at_r:
     self.r = r = args["radius"]
     self.x = g_sign * (2 * r - r_1 - r_2) / (r_2 - r_1)
 
-    assert -1 < self.x < 1
+    assert -1 < self.x < 1, f"x = {self.x}"
 
     if args["interpolation"] == "ChebU":
       self.Uk = np.empty(shape=self.len_n)
