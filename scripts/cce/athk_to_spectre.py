@@ -235,10 +235,10 @@ class AngularTransform:
     dphi = 2 * np.pi / self.npnts
     Ylm = self.ylm_pit[g_re, ...] + 1j * self.ylm_pit[g_im, ...]
 
-    coeff = np.einsum("trij,ijk,i", f, np.conj(Ylm), w_theta)
+    coeff = np.einsum("trij,ijk,i->trk", f, np.conj(Ylm), w_theta, optimize=True)
     coeff *= dphi
 
-    coeff = np.transpose(coeff, (2, 1, 0))
+    #coeff = np.transpose(coeff, (2, 1, 0))
 
     return coeff
 
@@ -257,10 +257,6 @@ class AngularTransform:
     )
     coeff = np.empty(shape=shape, dtype=float)
     c = self._sp_expansion(field)
-
-    # print(c,c.real,c.imag)
-    print("c.shape = ", c.shape)
-    print("coeff.shape = ", coeff.shape)
 
     coeff[g_re, ...] = c.real
     coeff[g_im, ...] = c.imag
@@ -306,6 +302,7 @@ def load(fpath: str, field_name: str, attrs: dict) -> list:
         ret[g_im, i, :] = h5_im
 
       # transform from PITTNull coordinates to Spectre coordinates
+      print(f"transforming {field_name} from pitt to spectre",flush=True)
       ret = coords.transform_pit_coeffs_to_spec_coeffs(ret)
 
   elif attrs["file_type"] == "bin":
