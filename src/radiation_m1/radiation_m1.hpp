@@ -25,7 +25,8 @@
 
 namespace radiationm1 {
 
-using ToyOpacityFn = void (*)(Real x1, Real x2, Real x3, Real nuidx,
+using ToyOpacityFn = void (*)(Real x1, Real x2, Real x3, Real dx,
+                              Real dy, Real dz, Real nuidx,
                               Real &eta_0, Real &abs_0, Real &eta_1,
                               Real &abs_1, Real &scat_1);
 
@@ -142,11 +143,6 @@ class RadiationM1 {
       const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &H_d, Real &E,
       AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &F_d,
       const RadiationM1Params &params);
-  static Real Toy_eta_0(const Real x1, const Real x2, const Real x3, const int index);
-  static Real Toy_eta_1(const Real x1, const Real x2, const Real x3, const int index);
-  static Real Toy_abs_0(const Real x1, const Real x2, const Real x3, const int index);
-  static Real Toy_abs_1(const Real x1, const Real x2, const Real x3, const int index);
-  static Real Toy_scat_1(const Real x1, const Real x2, const Real x3, const int index);
 
  private:
   MeshBlockPack *pmy_pack;  // ptr to MeshBlockPack
