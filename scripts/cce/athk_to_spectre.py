@@ -304,6 +304,7 @@ def load(fpath: str, field_name: str, attrs: dict) -> list:
       # transform from PITTNull coordinates to Spectre coordinates
       print(f"transforming {field_name} from pitt to spectre",flush=True)
       ret = coords.transform_pit_coeffs_to_spec_coeffs(ret)
+      assert not np.any(np.isnan(ret)), f"{field_name} got nan!"
 
   elif attrs["file_type"] == "bin":
     # Load the list of files
