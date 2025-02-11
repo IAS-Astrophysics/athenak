@@ -18,7 +18,8 @@
 #include "radiation_m1/radiation_m1_helpers.hpp"
 
 KOKKOS_INLINE_FUNCTION
-void SphereOpacities(Real x1, Real x2, Real x3, Real nuidx, Real &eta_0,
+void SphereOpacities(Real x1, Real x2, Real x3, 
+                      Real dx, Real dy, Real dz, Real nuidx, Real &eta_0,
                       Real &abs_0, Real &eta_1, Real &abs_1, Real &scat_1) {
   eta_0 = 0;
   abs_0 = 0;
@@ -35,6 +36,28 @@ void SphereOpacities(Real x1, Real x2, Real x3, Real nuidx, Real &eta_0,
   } else {
     abs_0 = 0;  // Outside the sphere
   }
+  int const NPOINTS = 10;
+  int inside = 0;
+  int count = 0;
+  for (int ii = 0; ii < NPOINTS; ++ii) {
+      Real const myx = (x1 - dx/2.) + (ii + 0.5)*(dx/NPOINTS);
+      for (int jj = 0; jj < NPOINTS; ++jj) {
+          Real const myy = (x2 - dy/2.) + (jj + 0.5)*(dy/NPOINTS);
+          for (int kk = 0; kk < NPOINTS; ++kk) {
+              Real const myz = (x3 - dz/2.) + (kk + 0.5)*(dz/NPOINTS);
+              count++;
+              if (myx*myx + myy*myy + myz*myz <= R*R) {
+                  inside++;
+              }
+          }
+      }
+  }
+
+  Real fraction_inside_sphere = static_cast<Real>(inside) / static_cast<Real>(count);
+
+  // Apply the coefficient to kappa_a and eta
+  abs_1 = fraction_inside_sphere * 10.0;
+  eta_1 = fraction_inside_sphere * 10.0;
 }
 //----------------------------------------------------------------------------------------
 //! \fn void MeshBlock::UserProblem(ParameterInput *pin)

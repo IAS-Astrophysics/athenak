@@ -15,6 +15,7 @@ namespace radiationm1 {
 
 KOKKOS_INLINE_FUNCTION
 void ComputeToyOpacities(const Real x, const Real y, const Real z,
+                         const Real dx, const Real dy, const Real dz,
                          const Real nuidx, Real &eta_0, Real &abs_0,
                          Real &eta_1, Real &abs_1, Real &scat_1) {
   eta_0 = 0;

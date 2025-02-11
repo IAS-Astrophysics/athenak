@@ -18,7 +18,8 @@
 #include "radiation_m1/radiation_m1_helpers.hpp"
 
 KOKKOS_INLINE_FUNCTION
-void LatticeOpacities(Real x1, Real x2, Real x3, Real nuidx, Real &eta_0,
+void LatticeOpacities(Real x1, Real x2, Real x3,
+                      Real dx, Real dy, Real dz, Real nuidx, Real &eta_0,
                       Real &abs_0, Real &eta_1, Real &abs_1, Real &scat_1) {
   eta_0 = 0;
   abs_0 = 0;
