@@ -456,7 +456,7 @@ def get_attribute(fpath: str,
         attrs["lev_t"] -= 1
 
       attrs["max_n"], attrs["max_lm"] = h5f[f"1/{field_name}/re"].shape
-      attrs["max_l"] = int(math.sqrt(attrs["max_lm"])) - 1 # inclusive l
+      attrs["max_l"] = int(math.sqrt(attrs["max_lm"])) - 1 # NOTE:l must be inclusive in loops
       attrs["r_in"] = h5f["metadata"].attrs["Rin"]
       attrs["r_out"] = h5f["metadata"].attrs["Rout"]
       # read & save time
@@ -904,7 +904,7 @@ def h5_write_data(h5file,
       name=f"{data_name}",
       shape=(
           attrs["lev_t"],
-          len([g_re, g_im]) * (attrs["max_l"] + 1)**2 + 1,
+          len([g_re, g_im]) * (attrs["max_l"] + 1)**2 + 1, ## the last +1 for time
       ),
       dtype=float, # chunks=True,
       # compression="gzip",
