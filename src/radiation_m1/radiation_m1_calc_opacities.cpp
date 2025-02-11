@@ -51,18 +51,21 @@ TaskStatus RadiationM1::CalcOpacityToy(Driver *pdrive, int stage) {
         Real &x1min = mbsize.d_view(m).x1min;
         Real &x1max = mbsize.d_view(m).x1max;
         int nx1 = indcs.nx1;
+        Real dx = (x1max - x1min) / static_cast<Real>(nx1);
         Real x1 = CellCenterX(i - is, nx1, x1min, x1max);
 
         Real &x2min = mbsize.d_view(m).x2min;
         Real &x2max = mbsize.d_view(m).x2max;
         int nx2 = indcs.nx2;
+        Real dy = (x2max - x2min) / static_cast<Real>(nx2);
         Real x2 = CellCenterX(j - js, nx2, x2min, x2max);
 
         Real &x3min = mbsize.d_view(m).x3min;
         Real &x3max = mbsize.d_view(m).x3max;
         int nx3 = indcs.nx3;
+        Real dz = (x3max - x3min) / static_cast<Real>(nx3);
         Real x3 = CellCenterX(k - ks, nx3, x3min, x3max);
-        toy_opacity_fn_(x1, x2, x3, nuidx, eta_0_(m, nuidx, k, j, i),
+        toy_opacity_fn_(x1, x2, x3, dx, dy, dz, nuidx, eta_0_(m, nuidx, k, j, i),
                        abs_0_(m, nuidx, k, j, i), eta_1_(m, nuidx, k, j, i),
                        abs_1_(m, nuidx, k, j, i), scat_1_(m, nuidx, k, j, i));
       });

@@ -23,77 +23,15 @@
 namespace radiationm1 {
 
 KOKKOS_INLINE_FUNCTION
-Real RadiationM1::Toy_eta_0(const Real x1, const Real x2, const Real x3, const int index) {
-
-  Real const R = 1.0;  // Sphere radius
-  if (x1 * x1 + x2 * x2 + x3 * x3 <= R*R) { // Inside the sphere
-      return 10.0;
-  } else {
-      return 0;  // Outside the sphere
-  }  
-}
-
-KOKKOS_INLINE_FUNCTION
-Real RadiationM1::Toy_abs_0(const Real x1, const Real x2, const Real x3, const int index) {
-
-  Real const R = 1.0;  // Sphere radius
-  if (x1 * x1 + x2 * x2 + x3 * x3 <= R*R) { // Inside the sphere
-      return 10.0;
-  } else {
-      return 0;  // Outside the sphere
-  }  
-}
-
-KOKKOS_INLINE_FUNCTION
-Real RadiationM1::Toy_eta_1(const Real x1, const Real x2, const Real x3, const int index) {
-
-  Real const R = 1.0;  // Sphere radius
-  if (x1 * x1 + x2 * x2 + x3 * x3 <= R*R) { // Inside the sphere
-      return 10.0;
-  } else {
-      return 0;  // Outside the sphere
-  }  
-}
-
-KOKKOS_INLINE_FUNCTION
-Real RadiationM1::Toy_abs_1(const Real x1, const Real x2, const Real x3, const int index) {
-
-  Real const R = 1.0;  // Sphere radius
-  if (x1 * x1 + x2 * x2 + x3 * x3 <= R*R) { // Inside the sphere
-      return 10.0;
-  } else {
-      return 0;  // Outside the sphere
-  }  
-}
-
-KOKKOS_INLINE_FUNCTION
-Real RadiationM1::Toy_scat_1(const Real x1, const Real x2, const Real x3, const int index) {
-  return 0.0;
-}
-
-KOKKOS_INLINE_FUNCTION
-M1Opacities ComputeM1Opacities(const Real x1, const Real x2, const Real x3,
-                               const RadiationM1Params &params) {
-  M1Opacities opacities{};
-
-  switch (params.opacity_type) {
-  case RadiationM1OpacityType::Toy:
-    for (int nuidx = 0; nuidx < M1_TOTAL_NUM_SPECIES; nuidx++) {
-      opacities.eta_0[nuidx] = RadiationM1::Toy_eta_0(x1, x2, x3, nuidx);
-      opacities.abs_0[nuidx] = RadiationM1::Toy_abs_0(x1, x2, x3, nuidx);
-      opacities.eta_1[nuidx] = RadiationM1::Toy_eta_1(x1, x2, x3, nuidx);
-      opacities.abs_1[nuidx] = RadiationM1::Toy_abs_1(x1, x2, x3, nuidx);
-      opacities.scat_1[nuidx] = RadiationM1::Toy_scat_1(x1, x2, x3, nuidx);
-    }
-    break;
-  case RadiationM1OpacityType::Weakrates:
-    break;
-  case RadiationM1OpacityType::BnsNurates:
-    break;
-  default:
-    break;
-  }
-  return opacities;
+void ComputeToyOpacities(const Real x, const Real y, const Real z,
+                         const Real dx, const Real dy, const Real dz,
+                         const Real nuidx, Real &eta_0, Real &abs_0,
+                         Real &eta_1, Real &abs_1, Real &scat_1) {
+  eta_0 = 0;
+  abs_0 = 0;
+  eta_1 = 0;
+  abs_1 = 0;
+  scat_1 = 0;
 }
 
 }  // namespace radiationm1
