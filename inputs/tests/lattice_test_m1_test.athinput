@@ -8,27 +8,27 @@ basename  = sphere3d          # problem ID: basename of output filenames
 <mesh>
 nghost    = 2           # Number of ghost cells
 nx1       = 50         # Number of zones in X1-direction
-x1min     = -2.5        # minimum value of X1
-x1max     = 2.5        # maximum value of X1
+x1min     = 0.0        # minimum value of X1
+x1max     = 7.0        # maximum value of X1
 ix1_bc    = outflow     # inner-X1 boundary flag
 ox1_bc    = outflow     # outer-X1 boundary flag
 
 nx2       = 50       # Number of zones in X2-direction
-x2min     = -2.5        # minimum value of X2
-x2max     = 2.5       # maximum value of X2
+x2min     = 0.0        # minimum value of X2
+x2max     = 7.0       # maximum value of X2
 ix2_bc    = outflow     # inner-X2 boundary flag
 ox2_bc    = outflow     # outer-X2 boundary flag
 
-nx3       = 50           # Number of zones in X3-direction
-x3min     = -2.5       # minimum value of X3
-x3max     = 2.5        # maximum value of X3
+nx3       = 1           # Number of zones in X3-direction
+x3min     = -0.5       # minimum value of X3
+x3max     = 0.5        # maximum value of X3
 ix3_bc    = outflow    # inner-X3 boundary flag
 ox3_bc    = outflow    # outer-X3 boundary flag
 
 <meshblock>
 nx1       = 50          # Number of cells in each MeshBlock, X1-dir
 nx2       = 50            # Number of cells in each MeshBlock, X2-dir
-nx3       = 50           # Number of cells in each MeshBlock, X3-dir
+nx3       = 1           # Number of cells in each MeshBlock, X3-dir
 
 <time>
 evolution  = dynamic     # dynamic/kinematic/static
@@ -47,7 +47,7 @@ opacity_type = toy
 <adm>
 
 <problem>
-pgen_name = rad_m1_spheretest
+pgen_name = rad_m1_latticetest
 
 <output1> 
 file_type = vtk        # output format

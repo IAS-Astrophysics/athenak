@@ -13,7 +13,7 @@
 namespace radiationm1 {
 
 // Computes the closure in the lab frame with a rootfinding procedure
-KOKKOS_INLINE_FUNCTION
+//KOKKOS_INLINE_FUNCTION
 void RadiationM1::calc_closure(
     const AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> &g_dd,
     const AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> &g_uu,
@@ -79,7 +79,6 @@ void RadiationM1::calc_closure(
       // Some nans in the evaluation. This should not happen.
       if (ierr != BRENT_SUCCESS) {
         printf("Unexpected error in BrentIterate.\n");
-        exit(EXIT_FAILURE);
       }
       x_md = root;
       ierr = BrentTestInterval(x_lo, x_hi, closure_epsilon, 0);
@@ -96,7 +95,7 @@ void RadiationM1::calc_closure(
 }
 
 // compute the inverse closure
-KOKKOS_INLINE_FUNCTION
+//KOKKOS_INLINE_FUNCTION
 void RadiationM1::calc_inv_closure(
     const AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> &g_uu,
     const AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> &g_dd,
@@ -151,7 +150,6 @@ void RadiationM1::calc_inv_closure(
     // Some nans in the evaluation. This should not happen.
     if (ierr != BRENT_SUCCESS) {
       printf("Unexpected error in BrentIterate.\n");
-      exit(EXIT_FAILURE);
     }
     x_md = root;
     ierr = BrentTestInterval(x_lo, x_hi, 0.0, inv_closure_epsilon);
