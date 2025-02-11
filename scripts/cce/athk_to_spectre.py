@@ -149,6 +149,10 @@ class AngularTransform:
     # legendre roots
     # ylm(real/imag,th,ph,lm) on collocation coords
     self.ylm_pit = self._ylm_on_gl()
+    # assert not np.any(np.isnan(self.th))
+    # assert not np.any(np.isnan(self.ph))
+    # assert not np.any(np.isnan(self.ylm_pit))
+    # assert not np.any(np.isnan(self.l_root))
 
   def _theta_gauss_legendre(self):
     """
@@ -196,10 +200,11 @@ class AngularTransform:
       th = self.th[i]
       for j in range(self.npnts):
         ph = self.ph[j]
-        for l in range(0, self.attrs["max_l"]):
+        for l in range(0, self.attrs["max_l"] + 1):
           for m in range(l, -l - 1, -1):
             lm = lm_mode(l, m)
             y = special.sph_harm(m, l, ph, th)
+            # assert not np.isnan(y)
             ylms[g_re, i, j, lm] = y.real
             ylms[g_im, i, j, lm] = y.imag
 
@@ -235,10 +240,14 @@ class AngularTransform:
     dphi = 2 * np.pi / self.npnts
     Ylm = self.ylm_pit[g_re, ...] + 1j * self.ylm_pit[g_im, ...]
 
-    coeff = np.einsum("trij,ijk,i->trk", f, np.conj(Ylm), w_theta, optimize=True)
+    coeff = np.einsum("trij,ijk,i->trk",
+                      f,
+                      np.conj(Ylm),
+                      w_theta,
+                      optimize=True)
     coeff *= dphi
 
-    #coeff = np.transpose(coeff, (2, 1, 0))
+    # coeff = np.transpose(coeff, (2, 1, 0))
 
     return coeff
 
@@ -291,8 +300,8 @@ def load(fpath: str, field_name: str, attrs: dict) -> list:
     shape = (len([g_re, g_im]), lev_t, max_n, max_lm)
     ret = np.empty(shape=shape, dtype=float)
 
-    coords = AngularTransform(attrs)
     with h5py.File(fpath, "r") as h5f:
+      coords = AngularTransform(attrs)
       # read & save
       for i in range(0, lev_t):
         key = f"{i}"
@@ -302,9 +311,10 @@ def load(fpath: str, field_name: str, attrs: dict) -> list:
         ret[g_im, i, :] = h5_im
 
       # transform from PITTNull coordinates to Spectre coordinates
-      print(f"transforming {field_name} from pitt to spectre",flush=True)
+      # assert not np.any(np.isnan(ret)), f"{field_name} has nans before transf.!"
+      print(f"transforming {field_name} from pitt to spectre", flush=True)
       ret = coords.transform_pit_coeffs_to_spec_coeffs(ret)
-      assert not np.any(np.isnan(ret)), f"{field_name} got nan!"
+      # assert not np.any(np.isnan(ret)), f"{field_name} got nans after transf.!"
 
   elif attrs["file_type"] == "bin":
     # Load the list of files
@@ -446,7 +456,7 @@ def get_attribute(fpath: str,
         attrs["lev_t"] -= 1
 
       attrs["max_n"], attrs["max_lm"] = h5f[f"1/{field_name}/re"].shape
-      attrs["max_l"] = int(math.sqrt(attrs["max_lm"])) - 1
+      attrs["max_l"] = int(math.sqrt(attrs["max_lm"])) - 1 # inclusive l
       attrs["r_in"] = h5f["metadata"].attrs["Rin"]
       attrs["r_out"] = h5f["metadata"].attrs["Rout"]
       # read & save time
@@ -892,7 +902,10 @@ def h5_write_data(h5file,
 
   dataset_conf = dict(
       name=f"{data_name}",
-      shape=(attrs["lev_t"], len([g_re, g_im]) * (attrs["max_l"]**2) + 1),
+      shape=(
+          attrs["lev_t"],
+          len([g_re, g_im]) * (attrs["max_l"] + 1)**2 + 1,
+      ),
       dtype=float, # chunks=True,
       # compression="gzip",
       # shuffle=True,
@@ -908,11 +921,10 @@ def h5_write_data(h5file,
   flat = 0
   h5file[f"{data_name}"][:, flat] = attrs["time"]
   flat += 1
-  for l in range(0, attrs["max_l"]):
+  for l in range(0, attrs["max_l"] + 1):
     for m in range(l, -l - 1, -1):
-      if args["debug"] == "y":
-        assert all(data[g_re, :, lm_mode(l, m)] != np.nan)
-        assert all(data[g_im, :, lm_mode(l, m)] != np.nan)
+      assert not np.any(np.isnan(data[g_re, :, lm_mode(l, m)]))
+      assert not np.any(np.isnan(data[g_im, :, lm_mode(l, m)]))
 
       data_attrs.append(f"{data_name[:-4]}_Re({l},{m})")
       data_attrs.append(f"{data_name[:-4]}_Im({l},{m})")
