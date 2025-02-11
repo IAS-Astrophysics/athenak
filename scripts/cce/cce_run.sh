@@ -10,8 +10,8 @@ echo "-------------------------"
 echo "running CCE..."
 ./CharacteristicExtract --input-file cce_par_bin.yaml
 
-# h5 test
-elif false
+# h5 quick dev
+elif true
 then
 cd runs
 echo "running preproc...\n"
@@ -21,7 +21,7 @@ echo "running CCE..."
 ./CharacteristicExtract --input-file cce_par_h5.yaml
 
 # q2
-elif true
+elif false
 then
 cd runs
 echo "running preproc...\n"

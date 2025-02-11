@@ -24,7 +24,7 @@ mode="Re(2,2)"
 	-fpath $fdebug  -field_name $fname -field_mode $mode
 
 # h5 bbh, q=2
-elif true
+elif false
 then
 file="./debug/q2/CceR0100.00.h5"
 dout='./debug/q2'
@@ -98,9 +98,10 @@ mode="Re(2,2)"
 	-fpath $file  -field_name $fname -field_mode $mode
 
 # h5 quick development
-elif false
+elif true
 then
-dout='./debug/quick_dev/'
+dout='./debug/quick_dev'
+rm -rfv "${dout}"
 mkdir -p ${dout}
 
 ./athk_to_spectre.py -fpath dat/backup_dilute_d32_fixed_cce_decomp_shell_4.h5 \
