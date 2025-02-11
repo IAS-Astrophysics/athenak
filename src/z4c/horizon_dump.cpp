@@ -47,11 +47,13 @@ HorizonDump::HorizonDump(MeshBlockPack *pmbp, ParameterInput *pin, int n, int is
   horizon_dt = pin->GetOrAddReal("z4c", "horizon_dt", 1.0);
   r_guess = pin->GetOrAddReal("z4c", "horizon" + nstr + "r_guess", 0.5);
   is_cheb = pin->GetOrAddBoolean("z4c", "co_" + nstr + "_dump_cheb", false);
+  regularize_order = pin->GetOrAddInteger("z4c", "horizon_"
+                              + nstr+"_rn",4);
   output_count = 0;
 
   Real extend[3] = {horizon_extent,horizon_extent,horizon_extent};
   int Nx[3] = {horizon_nx,horizon_nx,horizon_nx};
-  pcat_grid = new CartesianGrid(pmbp, pos, extend, Nx, is_cheb, 4);
+  pcat_grid = new CartesianGrid(pmbp, pos, extend, Nx, is_cheb, regularize_order);
 
   // Initializing variables that will be dumped
   // The order is alpha, betax, betay, betaz,

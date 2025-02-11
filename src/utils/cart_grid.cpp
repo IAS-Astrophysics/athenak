@@ -315,28 +315,28 @@ void CartesianGrid::InterpolateToGrid(int ind, DvceArray5D<Real> &val) {
             Real &x2max = size.d_view(ii0).x2max;
             Real &x3min = size.d_view(ii0).x3min;
             Real &x3max = size.d_view(ii0).x3max;
-            Real x1v = CellCenterX(ii1-(ng-i-is)+1, indcs.nx1, x1min, x1max);
-            Real x2v = CellCenterX(ii2-(ng-j-js)+1, indcs.nx2, x2min, x2max);
-            Real x3v = CellCenterX(ii3-(ng-k-ks)+1, indcs.nx3, x3min, x3max);
+
+            Real x1v = CellCenterX(ii1-(ng-i)+1, indcs.nx1, x1min, x1max);
+            Real x2v = CellCenterX(ii2-(ng-j)+1, indcs.nx2, x2min, x2max);
+            Real x3v = CellCenterX(ii3-(ng-k)+1, indcs.nx3, x3min, x3max);
 
             x1v -= cx1;
             x2v -= cx2;
             x3v -= cx3;
-            std::cout << x1v << std::endl;
             Real r = sqrt(pow(x1v,2) + pow(x2v, 2) + pow(x3v, 2));
 
             int_value += iwght*val(ii0,index,ii3-(ng-k-ks)+1,
-                                  ii2-(ng-j-js)+1,ii1-(ng-i-is)+1) * x1v ;//* pow(r,rpow);
+                                  ii2-(ng-j-js)+1,ii1-(ng-i-is)+1) * pow(r,rpow);
           }
         }
       }
       // extract cartesian grid positions relative to grid center
-      Real x0 = mx1 + nx * dx1; //  - cx1;
-      Real y0 = mx2 + ny * dx2; // - cx2;
-      Real z0 = mx3 + nz * dx3; // - cx3;
+      Real x0 = mx1 + nx * dx1  - cx1;
+      Real y0 = mx2 + ny * dx2 - cx2;
+      Real z0 = mx3 + nz * dx3 - cx3;
 
       Real r0 = sqrt(pow(x0,2) + pow(y0, 2) + pow(z0, 2));
-      ivals.d_view(nx,ny,nz) = int_value; // / pow(r0,rpow);
+      ivals.d_view(nx,ny,nz) = int_value / pow(r0,rpow);
     }
   });
 
