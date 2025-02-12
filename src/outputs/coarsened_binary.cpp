@@ -538,7 +538,7 @@ void CoarsenedBinaryOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
         // every rank has a MB to write, so write collectively
         if (m < noutmbs_min) {
           if (cbinfile.Write_any_type_at_all(pdata,(data_size),myoffset,"byte",
-                                              single_file_per_rank) != 1) {
+                                              single_file_per_rank) != data_size) {
             std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                 << std::endl << "binary data not written correctly to binary file, "
                 << "binary file is broken." << std::endl;
@@ -547,7 +547,7 @@ void CoarsenedBinaryOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
         // some ranks are finished writing, so use non-collective write
         } else if (m < pm->nmb_thisrank) {
           if (cbinfile.Write_any_type_at(pdata,(data_size),myoffset,"byte",
-                                          single_file_per_rank) != 1) {
+                                          single_file_per_rank) != data_size) {
             std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                  << std::endl << "binary data not written correctly to binary file, "
                  << "binary file is broken." << std::endl;
