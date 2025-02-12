@@ -307,8 +307,8 @@ def load(fpath: str, field_name: str, attrs: dict) -> list:
         key = f"{i}"
         h5_re = h5f[f"{key}/{field_name}/re"]
         h5_im = h5f[f"{key}/{field_name}/im"]
-        ret[g_re, i, :] = h5_re
-        ret[g_im, i, :] = h5_im
+        ret[g_re, i, ...] = h5_re[:, 0:max_lm]
+        ret[g_im, i, ...] = h5_im[:, 0:max_lm]
 
       # transform from PITTNull coordinates to Spectre coordinates
       # assert not np.any(np.isnan(ret)), f"{field_name} has nans before transf.!"
@@ -348,7 +348,7 @@ def load(fpath: str, field_name: str, attrs: dict) -> list:
     attrs["lev_t"] = len(flist)
     attrs["max_n"] = nr
     attrs["max_l"] = num_l_modes
-    attrs["max_lm"] = (num_l_modes + 1)**2
+    attrs["max_lm"] = int((num_l_modes + 1)**2)
     attrs["r_in"] = np.array([rin])
     attrs["r_out"] = np.array([rout])
     attrs["time"] = np.linspace(t.min(), t.max(), t.shape[0])
@@ -456,7 +456,9 @@ def get_attribute(fpath: str,
         attrs["lev_t"] -= 1
 
       attrs["max_n"], attrs["max_lm"] = h5f[f"1/{field_name}/re"].shape
-      attrs["max_l"] = int(math.sqrt(attrs["max_lm"])) - 1 # NOTE:l must be inclusive in loops
+      attrs["max_l"] = (int(math.sqrt(attrs["max_lm"])) - 1
+                        ) # NOTE:l must be inclusive in loops
+      attrs["max_lm"] = int((attrs["max_l"] + 1)**2)
       attrs["r_in"] = h5f["metadata"].attrs["Rin"]
       attrs["r_out"] = h5f["metadata"].attrs["Rout"]
       # read & save time
@@ -904,7 +906,8 @@ def h5_write_data(h5file,
       name=f"{data_name}",
       shape=(
           attrs["lev_t"],
-          len([g_re, g_im]) * (attrs["max_l"] + 1)**2 + 1, ## the last +1 for time
+          len([g_re, g_im]) * (attrs["max_l"] + 1)**2 +
+          1, ## the last +1 for time
       ),
       dtype=float, # chunks=True,
       # compression="gzip",
