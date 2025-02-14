@@ -125,5 +125,18 @@ void SourceTerms::NewTimeStep(const DvceArray5D<Real> &w0, const EOS_Data &eos_d
     }, Kokkos::Min<Real>(dtnew));
   }
 
+  // For turbulence driver
+  // we make sure that the code time is within dt_turb_thresh of an integer multiple of dt_turb_update
+  // if(pmy_pack->pturb != nullptr){
+  //   Real current_time = pmy_pack->pmesh->time;
+  //   Real dt_turb_update = pmy_pack->pturb->dt_turb_update;
+  //   Real dt_turb_thresh = pmy_pack->pturb->dt_turb_thresh;
+
+  //   long int n_turb_updates_yet = (int)(current_time/dt_turb_update);
+  //   Real next_update_time = dt_turb_update*((Real)(n_turb_updates_yet+1));
+  //   Real dtnew_turb = fmax(dt_turb_thresh,fmin(dt_turb_update, next_update_time-current_time));
+  //   dtnew = fmin(dtnew,dtnew_turb);
+  // }
+
   return;
 }
