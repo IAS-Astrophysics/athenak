@@ -88,6 +88,8 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm) :
     RadiationM1BrentTest(pin, false);
   } else if (pgen_fun_name.compare("rad_m1_hybridsjtest") == 0) {
     RadiationM1HybridsjTest(pin, false);
+  } else if (pgen_fun_name.compare("rad_m1_spheretest") == 0) {
+    RadiationM1SphereTest(pin, false);
     // else, name not set on command line or input file, print warning and quit
   } else {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl

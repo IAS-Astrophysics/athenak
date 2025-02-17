@@ -9,6 +9,7 @@
 #include "athena.hpp"
 #include "athena_tensor.hpp"
 #include "coordinates/adm.hpp"
+#include "coordinates/cell_locations.hpp"
 #include "globals.hpp"
 #include "radiation_m1.hpp"
 #include "radiation_m1_calc_closure.hpp"
@@ -98,14 +99,14 @@ TaskStatus RadiationM1::TimeUpdate(Driver *d, int stage) {
             g_uu(a, b) = garr_uu[a + b * 4];
           }
         }
+
+        pack_n_d(adm.alpha(m, k, j, i), n_d);
+        tensor_contract(g_uu, n_d, n_u);
         for (int a = 0; a < 4; ++a) {
           for (int b = 0; b < 4; ++b) {
             gamma_ud(a, b) = (a == b) + n_u(a) * n_d(b);
           }
         }
-
-        pack_n_d(adm.alpha(m, k, j, i), n_d);
-        tensor_contract(g_uu, n_d, n_u);
 
         pack_beta_u(adm.beta_u(m, 0, k, j, i), adm.beta_u(m, 1, k, j, i),
                     adm.beta_u(m, 2, k, j, i), beta_u);

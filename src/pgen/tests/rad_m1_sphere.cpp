@@ -18,7 +18,7 @@
 #include "radiation_m1/radiation_m1_helpers.hpp"
 
 KOKKOS_INLINE_FUNCTION
-void LatticeOpacities(Real x1, Real x2, Real x3,
+void SphereOpacities(Real x1, Real x2, Real x3, 
                       Real dx, Real dy, Real dz, Real nuidx, Real &eta_0,
                       Real &abs_0, Real &eta_1, Real &abs_1, Real &scat_1) {
   eta_0 = 0;
@@ -27,31 +27,43 @@ void LatticeOpacities(Real x1, Real x2, Real x3,
   abs_1 = 0;
   scat_1 = 0;
 
-  if (x1 >= 3 && x1 <= 4 && x2 >= 3 && x2 <= 4) {
-    eta_1 = 1.;
+  Real const R = 1.0;  // Sphere radius
+  if (x1 * x1 + x2 * x2 + x3 * x3 <= R*R) { // Inside the sphere
+    // eta_0 = 10.0;
+    // abs_0 = 10.0;
+    eta_1 = 10.0;
+    abs_1 = 10.0;
+  } else {
+    abs_0 = 0;  // Outside the sphere
+  }
+  int const NPOINTS = 10;
+  int inside = 0;
+  int count = 0;
+  for (int ii = 0; ii < NPOINTS; ++ii) {
+      Real const myx = (x1 - dx/2.) + (ii + 0.5)*(dx/NPOINTS);
+      for (int jj = 0; jj < NPOINTS; ++jj) {
+          Real const myy = (x2 - dy/2.) + (jj + 0.5)*(dy/NPOINTS);
+          for (int kk = 0; kk < NPOINTS; ++kk) {
+              Real const myz = (x3 - dz/2.) + (kk + 0.5)*(dz/NPOINTS);
+              count++;
+              if (myx*myx + myy*myy + myz*myz <= R*R) {
+                  inside++;
+              }
+          }
+      }
   }
 
-  if ((x1 >= 1 && x1 <= 2 && x2 >= 1 && x2 <= 2) ||
-      (x1 >= 3 && x1 <= 4 && x2 >= 1 && x2 <= 2) ||
-      (x1 >= 5 && x1 <= 6 && x2 >= 1 && x2 <= 2) ||
-      (x1 >= 2 && x1 <= 3 && x2 >= 2 && x2 <= 3) ||
-      (x1 >= 4 && x1 <= 5 && x2 >= 2 && x2 <= 3) ||
-      (x1 >= 1 && x1 <= 2 && x2 >= 3 && x2 <= 4) ||
-      (x1 >= 5 && x1 <= 6 && x2 >= 3 && x2 <= 4) ||
-      (x1 >= 2 && x1 <= 3 && x2 >= 4 && x2 <= 5) ||
-      (x1 >= 4 && x1 <= 5 && x2 >= 4 && x2 <= 5) ||
-      (x1 >= 1 && x1 <= 2 && x2 >= 5 && x2 <= 6) ||
-      (x1 >= 5 && x1 <= 6 && x2 >= 5 && x2 <= 6)) {
-    abs_1 = 10.;
-  } else {
-    abs_1 = 1.;
-  }
+  Real fraction_inside_sphere = static_cast<Real>(inside) / static_cast<Real>(count);
+
+  // Apply the coefficient to kappa_a and eta
+  abs_1 = fraction_inside_sphere * 10.0;
+  eta_1 = fraction_inside_sphere * 10.0;
 }
 //----------------------------------------------------------------------------------------
 //! \fn void MeshBlock::UserProblem(ParameterInput *pin)
 //  \brief Sets initial conditions for radiation M1 beams test
 
-void ProblemGenerator::RadiationM1LatticeTest(ParameterInput *pin,
+void ProblemGenerator::RadiationM1SphereTest(ParameterInput *pin,
                                               const bool restart) {
   if (restart) return;
 
@@ -60,30 +72,22 @@ void ProblemGenerator::RadiationM1LatticeTest(ParameterInput *pin,
   if (pmbp->pradm1 == nullptr) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
               << std::endl
-              << "The 2d lattice problem generator can only be run with "
+              << "The sphere test problem generator can only be run with "
                  "radiation-m1, but no "
               << "<radiation_m1> block in input file" << std::endl;
     exit(EXIT_FAILURE);
   }
-  if (!pmbp->pmesh->two_d) {
-    std::cout
-        << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-        << std::endl
-        << "The 2d lattice test problem generator can only be run with one "
-           "dimension, but parfile"
-        << "grid setup is not in 1d" << std::endl;
-    exit(EXIT_FAILURE);
-  }
+
   if (pmbp->pradm1->nspecies != 1) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
               << std::endl
-              << "The 2d lattice test problem generator can only be run with "
+              << "The sphere test problem generator can only be run with "
                  "one neutrino species only!"
               << std::endl;
     exit(EXIT_FAILURE);
   }
 
-  pmbp->pradm1->toy_opacity_fn = LatticeOpacities;
+  pmbp->pradm1->toy_opacity_fn = SphereOpacities;
 
   // capture variables for kernel
   auto &indcs = pmy_mesh_->mb_indcs;
@@ -104,37 +108,10 @@ void ProblemGenerator::RadiationM1LatticeTest(ParameterInput *pin,
   int nmb = pmbp->nmb_thispack;
   auto &u_mu_ = pmbp->pradm1->u_mu;
   adm::ADM::ADM_vars &adm = pmbp->padm->adm;
-  auto &beam_vals = pmbp->pradm1->beam_source_vals;
-
-  // set user boundary conditions to true (needed for beams)
-  user_bcs = true;
-  user_bcs_func = radiationm1::ApplyBeamSources1D;
-
-  Kokkos::realloc(beam_vals, 4);
-  HostArray1D<Real> beam_vals_host;
-  Kokkos::realloc(beam_vals_host, 4);
-  Real E = 1;
-  AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> F_d{};
-  AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> g_uu{};
-  g_uu(0, 0) = -1;
-  g_uu(1, 1) = g_uu(2, 2) = g_uu(3, 3) = 1;
-  Real Fx = E;
-  Real Fy = 0;
-  Real Fz = 0;
-  pack_F_d(0, 0, 0, Fx, Fy, Fz, F_d);
-  apply_floor(g_uu, E, F_d, pmbp->pradm1->params);
-  beam_vals_host(M1_E_IDX) = E;
-  beam_vals_host(M1_FX_IDX) = F_d(1);
-  beam_vals_host(M1_FY_IDX) = F_d(2);
-  beam_vals_host(M1_FZ_IDX) = F_d(3);
-  printf("Beam values initialized: E = %lf, F = [%lf, %lf, %lf]\n",
-         beam_vals_host(M1_E_IDX), beam_vals_host(M1_FX_IDX),
-         beam_vals_host(M1_FY_IDX), beam_vals_host(M1_FZ_IDX));
-  Kokkos::deep_copy(beam_vals, beam_vals_host);
 
   // set metric to minkowski, initialize velocity to zero
   par_for(
-      "pgen_diffusiontest_metric_initialize", DevExeSpace(), 0, nmb - 1, ksg,
+      "pgen_metric_initialize", DevExeSpace(), 0, nmb - 1, ksg,
       keg, jsg, jeg, isg, ieg,
       KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
         for (int a = 0; a < 3; ++a)

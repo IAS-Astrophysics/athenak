@@ -25,7 +25,8 @@
 
 namespace radiationm1 {
 
-using ToyOpacityFn = void (*)(Real x1, Real x2, Real x3, Real nuidx,
+using ToyOpacityFn = void (*)(Real x1, Real x2, Real x3, Real dx,
+                              Real dy, Real dz, Real nuidx,
                               Real &eta_0, Real &abs_0, Real &eta_1,
                               Real &abs_1, Real &scat_1);
 
@@ -63,11 +64,11 @@ class RadiationM1 {
   RadiationM1(MeshBlockPack *ppack, ParameterInput *pin);
   ~RadiationM1();
 
-  int nvars;                 // no. of evolved variables per species
-  int nspecies;              // no. of species
-  int source_limiter;        // src limiter param to avoid non-physical states
-  int nvarstot;              // total no. of evolved variables
-  RadiationM1Params params;  // user parameters for grey M1
+  int nvars;                // no. of evolved variables per species
+  int nspecies;             // no. of species
+  Real source_limiter;       // src limiter param to avoid non-physical states
+  int nvarstot;             // total no. of evolved variables
+  RadiationM1Params params; // user parameters for grey M1
 
   DvceArray5D<Real> u0;              // evolved variables
   DvceArray5D<Real> coarse_u0;       // evolved variables on 2x coarser grid
