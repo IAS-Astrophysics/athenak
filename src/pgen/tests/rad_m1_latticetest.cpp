@@ -27,7 +27,7 @@ void LatticeOpacities(Real x1, Real x2, Real x3, Real nuidx, Real &eta_0,
   scat_1 = 0;
 
   if (x1 >= 3 && x1 <= 4 && x2 >= 3 && x2 <= 4) {
-    eta_1 = 1. / (4. * M_PI);
+    eta_1 = 1.;
   }
 
   if ((x1 >= 1 && x1 <= 2 && x2 >= 1 && x2 <= 2) ||
