@@ -33,8 +33,9 @@ RadiationM1::RadiationM1(MeshBlockPack *ppack, ParameterInput *pin)
       beam_source_vals("beam_vals", 1) {
   // parameters
   nspecies = pin->GetOrAddInteger("radiation_m1", "num_species", 1);
-  source_limiter = pin->GetOrAddInteger("radiation_m1", "source_limiter", 0.5);
+  source_limiter = pin->GetOrAddReal("radiation_m1", "source_limiter", 0.5);
   params.matter_sources = pin->GetOrAddBoolean("radiation_m1", "matter_sources", false);
+  params.theta_limiter = pin->GetOrAddBoolean("radiation_m1", "theta_limiter", true);
   params.rad_E_floor = pin->GetOrAddReal("radiation_m1", "rad_E_floor", 1e-14);
   params.rad_eps = pin->GetOrAddReal("radiation_m1", "rad_eps", 1e-14);
   params.gr_sources = pin->GetOrAddBoolean("radiation_m1", "gr_sources", true);
@@ -48,22 +49,37 @@ RadiationM1::RadiationM1(MeshBlockPack *ppack, ParameterInput *pin)
     params.closure_fun = Minerbo;
   } else if (closure_fun == "eddington") {
     params.closure_fun = Eddington;
-  } else {
+  } else if (closure_fun == "thin") {
     params.closure_fun = Thin;
+  } else {
+    std::cerr << "Error: Unknown choice for closure: " << closure_fun << std::endl;
+    exit(EXIT_FAILURE);
   }
 
   std::string src_update =
       pin->GetOrAddString("radiation_m1", "src_update", "explicit");
   if (src_update == "explicit") {
     params.src_update = Explicit;
-  } else {
+  } else if (src_update == "implicit") {
     params.src_update = Implicit;
+  } else {
+    std::cerr << "Error: Unknown src_update: " << src_update << std::endl;
+    exit(EXIT_FAILURE);
   }
+
   std::string opacity_type =
     pin->GetOrAddString("radiation_m1", "opacity_type", "toy");
   if (opacity_type == "toy") {
-    params.opacity_type = RadiationM1OpacityType::Toy;
-  } 
+    params.opacity_type = Toy;
+  } else if (opacity_type == "bns-nurates") {
+    params.opacity_type = BnsNurates;
+  } else if (opacity_type == "none") {
+    params.opacity_type = None;
+  } else {
+    std::cerr << "Error: Unknown opacity_type: " << opacity_type << std::endl;
+    exit(EXIT_FAILURE);
+  }
+
   // Total number of MeshBlocks on this rank to be used in array dimensioning
   int nmb = std::max((ppack->nmb_thispack), (ppack->pmesh->nmb_maxperrank));
 
