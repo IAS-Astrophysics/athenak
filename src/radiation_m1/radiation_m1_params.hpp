@@ -23,6 +23,7 @@ enum RadiationM1Closure {
 //! \enum RadiationM1OpacityType
 //  \brief choice of neutrino opacity library
 enum RadiationM1OpacityType {
+  None,
   Toy,
   BnsNurates,
 };
@@ -41,6 +42,7 @@ enum RadiationM1SrcUpdate {
 struct RadiationM1Params {
   bool gr_sources;
   bool matter_sources;
+  bool theta_limiter;
 
   RadiationM1Closure closure_fun;
   RadiationM1OpacityType opacity_type;
