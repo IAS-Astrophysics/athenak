@@ -66,11 +66,11 @@ Real tensor_dot(const AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> &g_uu,
 
 //----------------------------------------------------------------------------------------
 //! \fn radiationm1::tensor_dot
-//  \brief function to compute eta^ab F_a G_b (or eta_ab F^a G^b)
+//  \brief function to Euclidean dot product
 KOKKOS_INLINE_FUNCTION
 Real tensor_dot(const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &F_d,
                 const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &G_d) {
-  return -F_d(0) * G_d(0) + F_d(1) * G_d(1) + F_d(2) * G_d(2) + F_d(3) * G_d(3);
+  return F_d(0) * G_d(0) + F_d(1) * G_d(1) + F_d(2) * G_d(2) + F_d(3) * G_d(3);
 }
 
 //----------------------------------------------------------------------------------------

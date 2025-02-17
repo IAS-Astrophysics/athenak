@@ -51,7 +51,7 @@ TaskStatus RadiationM1::TimeUpdate(Driver *d, int stage) {
   auto &mbsize = pmy_pack->pmb->mb_size;
   auto nvars_ = pmy_pack->pradm1->nvars;
   auto &nspecies_ = pmy_pack->pradm1->nspecies;
-  auto &source_limiter_ = source_limiter;
+  auto &source_limiter_ = pmy_pack->pradm1->source_limiter;
 
   bool &multi_d = pmy_pack->pmesh->multi_d;
   bool &three_d = pmy_pack->pmesh->three_d;
@@ -99,7 +99,6 @@ TaskStatus RadiationM1::TimeUpdate(Driver *d, int stage) {
             g_uu(a, b) = garr_uu[a + b * 4];
           }
         }
-
         pack_n_d(adm.alpha(m, k, j, i), n_d);
         tensor_contract(g_uu, n_d, n_u);
         for (int a = 0; a < 4; ++a) {
@@ -183,6 +182,7 @@ TaskStatus RadiationM1::TimeUpdate(Driver *d, int stage) {
         Real mb{};
         Real dens{};
         Real Y_e{};
+        Real tau{};
 
         // Compute: derivatives of shift (\p_i beta_u(j))
         AthenaPointTensor<Real, TensorSymm::NONE, 3, 2> dbeta_du{};
@@ -331,7 +331,7 @@ TaskStatus RadiationM1::TimeUpdate(Driver *d, int stage) {
                                abs_1_(m, nuidx, k, j, i),
                                scat_1_(m, nuidx, k, j, i), u_d, J, H_d, S_d);
               DrEFN[nuidx][M1_E_IDX] =
-                  beta_dt * calc_rE_source(adm.alpha(m, k, j, i), n_u, S_d);
+                  beta_dt * calc_rE_source(adm.alpha(m, k, j, i), n_u, S_d); // @maitraya: what is the dot product computed with ? Is it g or eta ?
 
               calc_rF_source(adm.alpha(m, k, j, i), gamma_ud, S_d, tS_d);
               DrEFN[nuidx][M1_FX_IDX] = beta_dt * tS_d(1);
@@ -485,9 +485,8 @@ TaskStatus RadiationM1::TimeUpdate(Driver *d, int stage) {
           }
 
           // [G] Limit sources
-          Real tau;
           theta = 1.0;
-          if (source_limiter_ >= 0) {
+          if (params_.theta_limiter && source_limiter_ >= 0) {
             theta = 1.0;
             Real DTau_sum = 0.0;
             for (int nuidx = 0; nuidx < nspecies_; ++nuidx) {
@@ -541,7 +540,7 @@ TaskStatus RadiationM1::TimeUpdate(Driver *d, int stage) {
         } else {
           theta = 0;
         }
-theta = -1;
+
         // [H] Update fields
         for (int nuidx = 0; nuidx < nspecies_; nuidx++) {
           Real Ef = u1_(m, CombinedIdx(nuidx, M1_E_IDX, nvars_), k, j, i) +
