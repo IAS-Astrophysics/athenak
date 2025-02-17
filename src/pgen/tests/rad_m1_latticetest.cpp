@@ -106,10 +106,6 @@ void ProblemGenerator::RadiationM1LatticeTest(ParameterInput *pin,
   adm::ADM::ADM_vars &adm = pmbp->padm->adm;
   auto &beam_vals = pmbp->pradm1->beam_source_vals;
 
-  // set user boundary conditions to true (needed for beams)
-  user_bcs = true;
-  user_bcs_func = radiationm1::ApplyBeamSources1D;
-
   Kokkos::realloc(beam_vals, 4);
   HostArray1D<Real> beam_vals_host;
   Kokkos::realloc(beam_vals_host, 4);
