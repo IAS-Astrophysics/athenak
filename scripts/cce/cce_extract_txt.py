@@ -42,7 +42,7 @@ def parse_cli():
       "-mode",
       type=str,
       default="Y_2,2",
-      help='field modes:["Y_2,-2","Y_2,-2", ...]',
+      help='field modes:["Y_2,2","Y_2,-2", ...]',
   )
   args = p.parse_args()
   return args

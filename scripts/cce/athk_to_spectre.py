@@ -12,6 +12,7 @@ import os
 import numpy as np
 from scipy import special
 import math
+import cmath
 import argparse
 import h5py
 import struct
@@ -131,6 +132,158 @@ def parse_cli():
   return args
 
 
+class AngularTransform:
+  """
+    angular coordinate transformation from pittnull to spectre
+    """
+
+  def __init__(self, attrs: dict):
+    self.attrs = attrs
+    # no. of collocation pnts
+    self.npnts = 2 * self.attrs["max_l"] + 1
+    self.l_root = self._legendre_root()
+    # theta collocation coords
+    self.th = self._theta_gauss_legendre()
+    # phi collocation coords
+    self.ph = self._phi_equispace()
+    # legendre roots
+    # ylm(real/imag,th,ph,lm) on collocation coords
+    self.ylm_pit = self._ylm_on_gl()
+    # assert not np.any(np.isnan(self.th))
+    # assert not np.any(np.isnan(self.ph))
+    # assert not np.any(np.isnan(self.ylm_pit))
+    # assert not np.any(np.isnan(self.l_root))
+
+  def _theta_gauss_legendre(self):
+    """
+        creating gl collocation pnts for theta
+        """
+    th = np.empty(shape=(self.npnts), dtype=float)
+    for i in range(self.npnts):
+      th[i] = math.acos(-self.l_root[i])
+
+    return th
+
+  def _legendre_root(self):
+    """
+        legendre roots
+        """
+    nth = self.npnts
+    x, _ = np.polynomial.legendre.leggauss(nth)
+    x.sort()
+    return x
+
+  def _phi_equispace(self):
+    """
+        create equispace collocation pnts on phi
+        """
+    phi = np.linspace(0, 2 * np.pi, self.npnts, endpoint=False)
+
+    return phi
+
+  def _ylm_on_gl(self):
+    """
+        compute ylm on gauss legnedre for theta, and equispace for phi
+        ylm[real/imag, theta, phi, lm]
+        """
+
+    ylms = np.empty(
+        shape=(
+            len([g_re, g_im]),
+            self.npnts,
+            self.npnts,
+            self.attrs["max_lm"],
+        ),
+        dtype=float,
+    )
+    for i in range(self.npnts):
+      th = self.th[i]
+      for j in range(self.npnts):
+        ph = self.ph[j]
+        for l in range(0, self.attrs["max_l"] + 1):
+          for m in range(l, -l - 1, -1):
+            lm = lm_mode(l, m)
+            y = special.sph_harm(m, l, ph, th)
+            # assert not np.isnan(y)
+            ylms[g_re, i, j, lm] = y.real
+            ylms[g_im, i, j, lm] = y.imag
+
+    return ylms
+
+  def reconstruct_pit_on_gl(self, coeff: np.array):
+    """
+        reconstruct field on gauss lengendre collocation pnts from coeffs of pittnull
+        """
+    rylm = self.ylm_pit[g_re]
+    iylm = self.ylm_pit[g_im]
+
+    field = np.dot(
+        coeff[g_re, :, :, :], rylm[:, :, np.newaxis, :, np.newaxis]) - np.dot(
+            coeff[g_im, :, :, :], iylm[:, :, np.newaxis, :, np.newaxis])
+
+    return field[:, :, :, :, 0, 0]
+
+  def _sp_expansion(self, f):
+    """
+        Expands function f(theta, phi) in spherical harmonics up to degree L_max
+        using Gauss-Legendre quadrature in theta and uniform quadrature in phi.
+
+        Parameters:
+            f : function [theta, phi] -> float
+                Function to expand.
+        Returns:
+            coeff :Expansion coefficients.
+        """
+
+    # Gauss-Legendre quadrature points and weights for theta
+    _, w_theta = np.polynomial.legendre.leggauss(self.npnts)
+    dphi = 2 * np.pi / self.npnts
+    Ylm = self.ylm_pit[g_re, ...] + 1j * self.ylm_pit[g_im, ...]
+
+    coeff = np.einsum("trij,ijk,i->trk",
+                      f,
+                      np.conj(Ylm),
+                      w_theta,
+                      optimize=True)
+    coeff *= dphi
+
+    # coeff = np.transpose(coeff, (2, 1, 0))
+
+    return coeff
+
+  def transform_field_to_coeff_gl(self, field: np.array):
+    """
+        transformation of the given field on gauss legendre points to
+        spherical harmonics basis on gauss legendre points.
+        field[time,radius,theta,phi]
+        """
+
+    shape = (
+        len([g_re, g_im]),
+        self.attrs["lev_t"],
+        self.attrs["max_n"],
+        self.attrs["max_lm"],
+    )
+    coeff = np.empty(shape=shape, dtype=float)
+    c = self._sp_expansion(field)
+
+    coeff[g_re, ...] = c.real
+    coeff[g_im, ...] = c.imag
+
+    return coeff
+
+  def transform_pit_coeffs_to_spec_coeffs(self, coeff: np.array):
+    """
+        transform pit coeffs which are on equispace theta and phi to spectre coeffs
+        which are equispace on phi and gauss legendre on theta.
+        """
+
+    # first reconstruct field on gl collocation points
+    field = self.reconstruct_pit_on_gl(coeff)
+
+    return self.transform_field_to_coeff_gl(field)
+
+
 def load(fpath: str, field_name: str, attrs: dict) -> list:
   """
     read the field accroding to attrs.
@@ -146,14 +299,23 @@ def load(fpath: str, field_name: str, attrs: dict) -> list:
     max_lm = attrs["max_lm"]
     shape = (len([g_re, g_im]), lev_t, max_n, max_lm)
     ret = np.empty(shape=shape, dtype=float)
+
     with h5py.File(fpath, "r") as h5f:
+      coords = AngularTransform(attrs)
       # read & save
       for i in range(0, lev_t):
         key = f"{i}"
         h5_re = h5f[f"{key}/{field_name}/re"]
         h5_im = h5f[f"{key}/{field_name}/im"]
-        ret[g_re, i, :] = h5_re
-        ret[g_im, i, :] = h5_im
+        ret[g_re, i, ...] = h5_re[:, 0:max_lm]
+        ret[g_im, i, ...] = h5_im[:, 0:max_lm]
+
+      # transform from PITTNull coordinates to Spectre coordinates
+      # assert not np.any(np.isnan(ret)), f"{field_name} has nans before transf.!"
+      print(f"transforming {field_name} from pitt to spectre", flush=True)
+      ret = coords.transform_pit_coeffs_to_spec_coeffs(ret)
+      # assert not np.any(np.isnan(ret)), f"{field_name} got nans after transf.!"
+
   elif attrs["file_type"] == "bin":
     # Load the list of files
     ##TODO: this depends on file name
@@ -186,7 +348,7 @@ def load(fpath: str, field_name: str, attrs: dict) -> list:
     attrs["lev_t"] = len(flist)
     attrs["max_n"] = nr
     attrs["max_l"] = num_l_modes
-    attrs["max_lm"] = (num_l_modes + 1)**2
+    attrs["max_lm"] = int((num_l_modes + 1)**2)
     attrs["r_in"] = np.array([rin])
     attrs["r_out"] = np.array([rout])
     attrs["time"] = np.linspace(t.min(), t.max(), t.shape[0])
@@ -294,7 +456,9 @@ def get_attribute(fpath: str,
         attrs["lev_t"] -= 1
 
       attrs["max_n"], attrs["max_lm"] = h5f[f"1/{field_name}/re"].shape
-      attrs["max_l"] = int(math.sqrt(attrs["max_lm"])) - 1
+      attrs["max_l"] = (int(math.sqrt(attrs["max_lm"])) - 1
+                        ) # NOTE:l must be inclusive in loops
+      attrs["max_lm"] = int((attrs["max_l"] + 1)**2)
       attrs["r_in"] = h5f["metadata"].attrs["Rin"]
       attrs["r_out"] = h5f["metadata"].attrs["Rout"]
       # read & save time
@@ -636,7 +800,7 @@ class Interpolate_at_r:
     self.r = r = args["radius"]
     self.x = g_sign * (2 * r - r_1 - r_2) / (r_2 - r_1)
 
-    assert -1 < self.x < 1
+    assert -1 < self.x < 1, f"x = {self.x}"
 
     if args["interpolation"] == "ChebU":
       self.Uk = np.empty(shape=self.len_n)
@@ -740,7 +904,11 @@ def h5_write_data(h5file,
 
   dataset_conf = dict(
       name=f"{data_name}",
-      shape=(attrs["lev_t"], len([g_re, g_im]) * (attrs["max_l"]**2) + 1),
+      shape=(
+          attrs["lev_t"],
+          len([g_re, g_im]) * (attrs["max_l"] + 1)**2 +
+          1, ## the last +1 for time
+      ),
       dtype=float, # chunks=True,
       # compression="gzip",
       # shuffle=True,
@@ -756,11 +924,10 @@ def h5_write_data(h5file,
   flat = 0
   h5file[f"{data_name}"][:, flat] = attrs["time"]
   flat += 1
-  for l in range(0, attrs["max_l"]):
+  for l in range(0, attrs["max_l"] + 1):
     for m in range(l, -l - 1, -1):
-      if args["debug"] == "y":
-        assert all(data[g_re, :, lm_mode(l, m)] != np.nan)
-        assert all(data[g_im, :, lm_mode(l, m)] != np.nan)
+      assert not np.any(np.isnan(data[g_re, :, lm_mode(l, m)]))
+      assert not np.any(np.isnan(data[g_im, :, lm_mode(l, m)]))
 
       data_attrs.append(f"{data_name[:-4]}_Re({l},{m})")
       data_attrs.append(f"{data_name[:-4]}_Im({l},{m})")

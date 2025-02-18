@@ -69,7 +69,7 @@ def parse_cli():
   p.add_argument(
       "-time_dump",
       type=int,
-      default=100,
+      default=1000,
       help="how often dump for mode convergence",
   )
 
