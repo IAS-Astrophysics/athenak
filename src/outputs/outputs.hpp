@@ -384,6 +384,34 @@ class RestartOutput : public BaseTypeOutput {
   void WriteOutputFile(Mesh *pm, ParameterInput *pin) override;
 };
 
+// Forward declaration
+class CartesianGrid;
+
+//----------------------------------------------------------------------------------------
+//! \class CartesianGridOutput
+//  \brief derived BaseTypeOutput class for output on a Cartesian grid
+class CartesianGridOutput : public BaseTypeOutput {
+  struct MetaData {
+    int cycle;
+    float time;
+    float center[3];
+    float extent[3];
+    int numpoints[3];
+    bool is_cheb;
+    int noutvars;
+  };
+ public:
+  CartesianGridOutput(ParameterInput *pin, Mesh *pm, OutputParameters oparams);
+  ~CartesianGridOutput();
+  //! Interpolate the data on the Cartesian grid and handle MPI communication
+  void LoadOutputData(Mesh *pm) override;
+  //! Write the data to file
+  void WriteOutputFile(Mesh *pm, ParameterInput *pin) override;
+ private:
+  CartesianGrid *pcart;
+  MetaData md;
+};
+
 //----------------------------------------------------------------------------------------
 //! \class EventLogOutput
 //  \brief derived BaseTypeOutput class for event counter data

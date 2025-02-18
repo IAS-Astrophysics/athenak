@@ -88,6 +88,7 @@ add_executable(
         outputs/io_wrapper.cpp
         outputs/outputs.cpp
         outputs/basetype_output.cpp
+        outputs/cartgrid.cpp
         outputs/derived_variables.cpp
         outputs/binary.cpp
         outputs/eventlog.cpp
