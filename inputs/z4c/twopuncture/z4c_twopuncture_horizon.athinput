@@ -76,7 +76,7 @@ x3max = 1
 
 <z4c>
 lapse_harmonic  = 0.0                 # Harmonic lapse parameter mu_L
-lapse_oplog     = 1.0                 # 1+log lapse parameter
+lapse_oplog     = 2.0                 # 1+log lapse parameter
 shift_eta       = 2.0                 # Shift damping term
 diss            = 0.5                 # Kreiss-Oliger dissipation parameter
 chi_div_floor   = 0.00001
