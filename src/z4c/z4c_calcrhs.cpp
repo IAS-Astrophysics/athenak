@@ -543,7 +543,13 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage) {
                  + opt.lapse_harmonic * z4c.alpha(m,k,j,i);
     rhs.alpha(m,k,j,i) = opt.lapse_advect * Lalpha
                        - f * z4c.alpha(m,k,j,i) * z4c.vKhat(m,k,j,i);
-
+    if (opt.slow_start_lapse) {
+      Real W2 = (z4c.chi(m,k,j,i)>opt.chi_min_floor)
+                    ? z4c.chi(m,k,j,i) : opt.chi_min_floor;
+      Real W = pow(W2,0.5);
+      rhs.alpha(m,k,j,i) += opt.ssl_damping_amp*(W-z4c.alpha(m,k,j,i))*pow(W,opt.ssl_damping_index)*exp(-0.5*pow(time/                      
+      			    (opt.ssl_damping_time),2));
+    }
     // shift vector
     for(int a = 0; a < 3; ++a) {
       rhs.beta_u(m,a,k,j,i) = opt.shift_ggamma * z4c.vGam_u(m,a,k,j,i)
