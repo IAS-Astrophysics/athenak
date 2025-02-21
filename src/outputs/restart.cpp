@@ -221,6 +221,7 @@ void RestartOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
     // store z4c information
     if (pz4c != nullptr) {
       resfile.Write_any_type(&(pz4c->last_output_time), sizeof(Real), "byte");
+      resfile.Write_any_type(&(pz4c->cce_dump_last_output_time), sizeof(Real), "byte");
     }
     // output puncture tracker data
     if (nco > 0) {
