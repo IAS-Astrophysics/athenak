@@ -253,7 +253,7 @@ void RestartOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
     // output puncture tracker data
     if (nco > 0) {
       for (auto & pt : pz4c->ptracker) {
-        resfile.Write_any_type(pt.GetPos(), 3*sizeof(Real), "byte",
+        resfile.Write_any_type(pt->GetPos(), 3*sizeof(Real), "byte",
                                single_file_per_rank);
       }
     }
