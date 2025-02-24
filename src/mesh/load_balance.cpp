@@ -282,7 +282,7 @@ void MeshRefinement::InitRecvAMR(int nleaf) {
           int ox2 = ((lloc.lx2 & 1) == 1);
           int ox3 = ((lloc.lx3 & 1) == 1);
           int vs = recvbuf.h_view(rb_idx).offset;
-          int ve = vs + recvbuf.h_view(rb_idx).cnt + 1;
+          int ve = vs + recvbuf.h_view(rb_idx).cnt;
           auto pdata = Kokkos::subview(recv_data, std::make_pair(vs,ve));
           // create tag using local ID of *receiving* MeshBlock, post receive
           int tag = CreateAMR_MPI_Tag(newm-nmbs, ox1, ox2, ox3);
@@ -297,7 +297,7 @@ void MeshRefinement::InitRecvAMR(int nleaf) {
     } else if (old_lloc.level == new_lloc.level) {   // old MB at same level
       if (pmy_mesh->rank_eachmb[oldm] != global_variable::my_rank) {
         int vs = recvbuf.h_view(rb_idx).offset;
-        int ve = vs + recvbuf.h_view(rb_idx).cnt + 1;
+        int ve = vs + recvbuf.h_view(rb_idx).cnt;
         auto pdata = Kokkos::subview(recv_data, std::make_pair(vs,ve));
         // create tag using local ID of *receiving* MeshBlock, post receive
         int tag = CreateAMR_MPI_Tag(newm-nmbs, 0, 0, 0);
@@ -313,7 +313,7 @@ void MeshRefinement::InitRecvAMR(int nleaf) {
       if ((new_rank_eachmb[oldtonew[oldm]] != global_variable::my_rank) ||
           (pmy_mesh->rank_eachmb[oldm] != global_variable::my_rank)) {
         int vs = recvbuf.h_view(rb_idx).offset;
-        int ve = vs + recvbuf.h_view(rb_idx).cnt + 1;
+        int ve = vs + recvbuf.h_view(rb_idx).cnt;
         auto pdata = Kokkos::subview(recv_data, std::make_pair(vs,ve));
         // create tag using local ID of *receiving* MeshBlock, post receive
         int tag = CreateAMR_MPI_Tag(newm-nmbs, 0, 0, 0);
@@ -526,11 +526,11 @@ void MeshRefinement::PackAndSendAMR(int nleaf) {
   int ncc_sent = 0, nfc_sent = 0;
   if (phydro != nullptr) {
     PackAMRBuffersCC(phydro->u0, phydro->coarse_u0, ncc_sent, nfc_sent);
-    ncc_sent += phydro->nhydro;
+    ncc_sent += phydro->nhydro + phydro->nscalars;
   }
   if (pmhd != nullptr) {
     PackAMRBuffersCC(pmhd->u0, pmhd->coarse_u0, ncc_sent, nfc_sent);
-    ncc_sent += pmhd->nmhd;
+    ncc_sent += pmhd->nmhd + pmhd->nscalars;
     PackAMRBuffersFC(pmhd->b0, pmhd->coarse_b0, ncc_sent, nfc_sent);
     nfc_sent += 1;
   }
@@ -555,7 +555,7 @@ void MeshRefinement::PackAndSendAMR(int nleaf) {
         if ((new_rank_eachmb[newm] != global_variable::my_rank) ||
             (new_rank_eachmb[newm + l] != global_variable::my_rank)) {
           int vs = sendbuf.h_view(sb_idx).offset;
-          int ve = vs + sendbuf.h_view(sb_idx).cnt + 1;
+          int ve = vs + sendbuf.h_view(sb_idx).cnt;
           auto pdata = Kokkos::subview(send_data, std::make_pair(vs,ve));
           // create tag using local ID of *receiving* MeshBlock
           int lid = (newm + l) - new_gids_eachrank[new_rank_eachmb[newm+l]];
@@ -572,7 +572,7 @@ void MeshRefinement::PackAndSendAMR(int nleaf) {
       if (old_lloc.level == new_lloc.level) {   // old MB at same level
         if (new_rank_eachmb[newm] != global_variable::my_rank) {
           int vs = sendbuf.h_view(sb_idx).offset;
-          int ve = vs + sendbuf.h_view(sb_idx).cnt + 1;
+          int ve = vs + sendbuf.h_view(sb_idx).cnt;
           auto pdata = Kokkos::subview(send_data, std::make_pair(vs,ve));
           // create tag using local ID of *receiving* MeshBlock
           int lid = newm - new_gids_eachrank[new_rank_eachmb[newm]];
@@ -589,7 +589,7 @@ void MeshRefinement::PackAndSendAMR(int nleaf) {
         if ((pmy_mesh->rank_eachmb[newtoold[newm]] != global_variable::my_rank) ||
             (new_rank_eachmb[newm] != global_variable::my_rank)) {
           int vs = sendbuf.h_view(sb_idx).offset;
-          int ve = vs + sendbuf.h_view(sb_idx).cnt + 1;
+          int ve = vs + sendbuf.h_view(sb_idx).cnt;
           auto pdata = Kokkos::subview(send_data, std::make_pair(vs,ve));
           // create tag using local ID of *receiving* MeshBlock
           int ox1 = ((old_lloc.lx1 & 1) == 1);
