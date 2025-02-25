@@ -148,7 +148,8 @@ class Mesh {
 
   // functions
   void BuildTreeFromScratch(ParameterInput *pin);
-  void BuildTreeFromRestart(ParameterInput *pin, IOWrapper &resfile);
+  void BuildTreeFromRestart(ParameterInput *pin, IOWrapper &resfile,
+                            bool single_file_per_rank=false);
   void PrintMeshDiagnostics();
   void WriteMeshStructure();
   void NewTimeStep(const Real tlim);
