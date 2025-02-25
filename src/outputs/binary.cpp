@@ -35,6 +35,12 @@ MeshBinaryOutput::MeshBinaryOutput(ParameterInput *pin, Mesh *pm, OutputParamete
   // set different stripe counts depending on whether mpiio is used in order to
   // achieve the best performance and not to crash the filesystem
   mkdir("bin",0775);
+  bool single_file_per_rank = op.single_file_per_rank;
+  if (single_file_per_rank) {
+    char rank_dir[20];
+    std::snprintf(rank_dir, sizeof(rank_dir), "bin/rank_%08d/", global_variable::my_rank);
+    mkdir(rank_dir, 0775);
+  }
 }
 
 //----------------------------------------------------------------------------------------
@@ -48,21 +54,28 @@ void MeshBinaryOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
 
   // create filename: "bin/file_basename" + "." + "file_id" + "." + XXXXX + ".bin"
   // where XXXXX = 5-digit file_number
-  std::string fname;
-  char number[6];
-  std::snprintf(number, sizeof(number), "%05d", out_params.file_number);
 
-  fname.assign("bin/");
-  fname.append(out_params.file_basename);
-  fname.append(".");
-  fname.append(out_params.file_id);
-  fname.append(".");
-  fname.append(number);
-  fname.append(".bin");
+  bool single_file_per_rank = out_params.single_file_per_rank;
+  std::string fname;
+  if (single_file_per_rank) {
+    // Generate a directory and filename for each rank
+    char rank_dir[20];
+    char number[7];
+    std::snprintf(number, sizeof(number), ".%05d", out_params.file_number);
+    std::snprintf(rank_dir, sizeof(rank_dir), "rank_%08d/", global_variable::my_rank);
+    fname = std::string("bin/") + std::string(rank_dir) + out_params.file_basename
+          + "." + out_params.file_id + number + ".bin";
+  } else {
+    // Existing behavior: single restart file
+    char number[7];
+    std::snprintf(number, sizeof(number), ".%05d", out_params.file_number);
+    fname = std::string("bin/") + out_params.file_basename
+          + "." + out_params.file_id + number + ".bin";
+  }
 
   IOWrapper binfile;
   std::size_t header_offset=0;
-  binfile.Open(fname.c_str(), IOWrapper::FileMode::write);
+  binfile.Open(fname.c_str(), IOWrapper::FileMode::write, single_file_per_rank);
 
   // Basic parts of the format:
   // 1. Size of the header
@@ -84,8 +97,9 @@ void MeshBinaryOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
       msg << outvars[n].label.c_str() << "  ";
     }
     msg << std::endl;
-    if (global_variable::my_rank == 0) {
-      binfile.Write_any_type(msg.str().c_str(),msg.str().size(),"byte");
+    if (global_variable::my_rank == 0 || single_file_per_rank) {
+      binfile.Write_any_type(msg.str().c_str(),msg.str().size(),"byte",
+                             single_file_per_rank);
     }
     header_offset += msg.str().size();
   }
@@ -96,9 +110,10 @@ void MeshBinaryOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
     pin->ParameterDump(ost);
     std::string sbuf=ost.str();
     msg << "  header offset=" << sbuf.size()*sizeof(char)  << std::endl;
-    if (global_variable::my_rank == 0) {
-      binfile.Write_any_type(msg.str().c_str(),msg.str().size(),"byte");
-      binfile.Write_any_type(sbuf.c_str(),sbuf.size(),"byte");
+    if (global_variable::my_rank == 0 || single_file_per_rank) {
+      binfile.Write_any_type(msg.str().c_str(),msg.str().size(),"byte",
+                             single_file_per_rank);
+      binfile.Write_any_type(sbuf.c_str(),sbuf.size(),"byte", single_file_per_rank);
     }
     header_offset += sbuf.size()*sizeof(char);
     header_offset += msg.str().size();
@@ -219,20 +234,31 @@ void MeshBinaryOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
     std::vector<int> rank_offset(global_variable::nranks, 0);
     std::partial_sum(noutmbs.begin(),std::prev(noutmbs.end()),
                      std::next(rank_offset.begin()));
-    std::size_t myoffset=header_offset+data_size*rank_offset[global_variable::my_rank];
+    std::size_t myoffset = header_offset+data_size*rank_offset[global_variable::my_rank];
+
+    if (single_file_per_rank) {
+      myoffset = header_offset;  // Reset offset for individual files
+    }
+
     if (noutmbs_min > 0) {
-      binfile.Write_any_type_at_all(data,(data_size*nout_mbs),myoffset,"byte");
+      binfile.Write_any_type_at_all(data,(data_size*nout_mbs),myoffset,"byte",
+                                    single_file_per_rank);
     } else {
       if (nout_mbs > 0) {
-        binfile.Write_any_type_at(data,(data_size*nout_mbs),myoffset,"byte");
+        binfile.Write_any_type_at(data,(data_size*nout_mbs),myoffset,"byte",
+                                    single_file_per_rank);
       }
     }
   } else {
     // check if elements larger than 2^31
     if (data_size*nb_mbs<=2147483648) {
       // now write binary data in parallel
-      std::size_t myoffset=header_offset+data_size*ns_mbs;
-      binfile.Write_any_type_at_all(data,(data_size*nb_mbs),myoffset,"byte");
+      std::size_t myoffset = header_offset;
+      if (!single_file_per_rank) {
+        myoffset += data_size*ns_mbs;
+      }
+      binfile.Write_any_type_at_all(data,(data_size*nb_mbs),myoffset,"byte",
+                                    single_file_per_rank);
     } else {
       // write data over each MeshBlock sequentially and in parallel
       // calculate max/min number of MeshBlocks across all ranks
@@ -244,10 +270,14 @@ void MeshBinaryOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
       }
       for (int m=0;  m<noutmbs_max; ++m) {
         char *pdata=&(data[m*data_size]);
-        std::size_t myoffset=header_offset+data_size*ns_mbs+data_size*m;
+        std::size_t myoffset = header_offset + data_size*m;
+        if (!single_file_per_rank) {
+          myoffset += data_size*ns_mbs;
+        }
         // every rank has a MB to write, so write collectively
         if (m < noutmbs_min) {
-          if (binfile.Write_any_type_at_all(pdata,(data_size),myoffset,"byte") != 1) {
+          if (binfile.Write_any_type_at_all(pdata,(data_size),myoffset,"byte",
+                                              single_file_per_rank) != data_size) {
             std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                 << std::endl << "binary data not written correctly to binary file, "
                 << "binary file is broken." << std::endl;
@@ -255,7 +285,8 @@ void MeshBinaryOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
           }
         // some ranks are finished writing, so use non-collective write
         } else if (m < pm->nmb_thisrank) {
-          if (binfile.Write_any_type_at(pdata,(data_size),myoffset,"byte") != 1) {
+          if (binfile.Write_any_type_at(pdata,(data_size),myoffset,"byte",
+                                          single_file_per_rank) != data_size) {
             std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                  << std::endl << "binary data not written correctly to binary file, "
                  << "binary file is broken." << std::endl;
@@ -267,7 +298,7 @@ void MeshBinaryOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
   }
 
   // close the output file and clean up ptrs to data
-  binfile.Close();
+  binfile.Close(single_file_per_rank);
   delete [] data;
   delete [] single_data;
 
