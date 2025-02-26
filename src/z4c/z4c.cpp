@@ -86,7 +86,7 @@ Z4c::Z4c(MeshBlockPack *ppack, ParameterInput *pin) :
   Kokkos::realloc(u0,    nmb, (nz4c), ncells3, ncells2, ncells1);
   Kokkos::realloc(u1,    nmb, (nz4c), ncells3, ncells2, ncells1);
   Kokkos::realloc(u_rhs, nmb, (nz4c), ncells3, ncells2, ncells1);
-  Kokkos::realloc(u_weyl,    nmb, (2), ncells3, ncells2, ncells1);
+  Kokkos::realloc(u_weyl,    nmb, (9), ncells3, ncells2, ncells1);
 
   con.C.InitWithShallowSlice(u_con, I_CON_C);
   con.H.InitWithShallowSlice(u_con, I_CON_H);
@@ -119,6 +119,13 @@ Z4c::Z4c(MeshBlockPack *ppack, ParameterInput *pin) :
 
   weyl.rpsi4.InitWithShallowSlice (u_weyl, 0);
   weyl.ipsi4.InitWithShallowSlice (u_weyl, 1);
+  weyl.adm_mass.InitWithShallowSlice (u_weyl, 2);
+  weyl.adm_mx.InitWithShallowSlice (u_weyl, 3);
+  weyl.adm_my.InitWithShallowSlice (u_weyl, 4);
+  weyl.adm_mz.InitWithShallowSlice (u_weyl, 5);
+  weyl.adm_jx.InitWithShallowSlice (u_weyl, 6);
+  weyl.adm_jy.InitWithShallowSlice (u_weyl, 7);
+  weyl.adm_jz.InitWithShallowSlice (u_weyl, 8);
 
   opt.chi_psi_power = pin->GetOrAddReal("z4c", "chi_psi_power", -4.0);
   opt.chi_div_floor = pin->GetOrAddReal("z4c", "chi_div_floor", -1000.0);
@@ -161,7 +168,7 @@ Z4c::Z4c(MeshBlockPack *ppack, ParameterInput *pin) :
     int nccells2 = (indcs.cnx2 > 1)? (indcs.cnx2 + 2*(indcs.ng)) : 1;
     int nccells3 = (indcs.cnx3 > 1)? (indcs.cnx3 + 2*(indcs.ng)) : 1;
     Kokkos::realloc(coarse_u0, nmb, (nz4c), nccells3, nccells2, nccells1);
-    Kokkos::realloc(coarse_u_weyl, nmb, (2), nccells3, nccells2, nccells1);
+    Kokkos::realloc(coarse_u_weyl, nmb, (9), nccells3, nccells2, nccells1);
   }
   Kokkos::Profiling::popRegion();
 
@@ -185,7 +192,9 @@ Z4c::Z4c(MeshBlockPack *ppack, ParameterInput *pin) :
   }
   // TODO(@dur566): Why is the size of psi_out hardcoded?
   psi_out = new Real[nrad*77*2];
+  adm_out = new Real[nrad*9];
   mkdir("waveforms",0775);
+  mkdir("adm",0775);
   waveform_dt = pin->GetOrAddReal("z4c", "waveform_dt", 1);
   last_output_time = 0;
   // CCE
@@ -286,10 +295,12 @@ void Z4c::AlgConstr(MeshBlockPack *pmbp) {
     }
   });
 }
+
 //----------------------------------------------------------------------------------------
 // destructor
 Z4c::~Z4c() {
   delete[] psi_out;
+  delete[] adm_out;
   delete pbval_u;
   delete pbval_weyl;
   delete pamr;

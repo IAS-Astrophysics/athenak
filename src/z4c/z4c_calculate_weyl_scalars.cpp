@@ -408,6 +408,64 @@ void Z4c::Z4cWeyl(MeshBlockPack *pmbp) {
     Real r = std::sqrt(SQR(x1v) +  SQR(x2v) + SQR(x3v));
     weyl.rpsi4(m,k,j,i) *= r;
     weyl.ipsi4(m,k,j,i) *= r;
+
+    //----------------------------------------------------------------------------------
+    // New: Evaluate the integrands for ADM mass, linear momentum, and angular momentum.
+    //
+    // (1) ADM Mass integrand: (∂_j g_{ij} - ∂_i g_{jj}) n^i
+    Real adm_mass_integrand = 0.0;
+    for (int a = 0; a < 3; ++a) {
+      Real diff = 0.0;
+      for (int b = 0; b < 3; ++b) {
+        diff += dg_ddd(b, a, b) - dg_ddd(a, b, b);
+      }
+      adm_mass_integrand += uvec(a) * diff;
+    }
+    weyl.adm_mass(m,k,j,i) = adm_mass_integrand;
+
+    // (2) ADM Linear Momentum integrands with upper indices:
+    // First compute the lower-index momentum: (K_{ij} - K g_{ij}) n^j
+    Real P_lower[3] = {0.0, 0.0, 0.0};
+    for (int p = 0; p < 3; ++p) {
+      for (int q = 0; q < 3; ++q) {
+        P_lower[p] += (adm.vK_dd(m, p, q, k, j, i) - K * adm.g_dd(m, p, q, k, j, i)) * uvec(q);
+      }
+    }
+    // Raise the index using the inverse metric g_uu to obtain momentum with upper indices
+    Real P_upper[3] = {0.0, 0.0, 0.0};
+    for (int p = 0; p < 3; ++p) {
+      for (int q = 0; q < 3; ++q) {
+        P_upper[p] += g_uu(p, q) * P_lower[q];
+      }
+    }
+    weyl.adm_mx(m,k,j,i) = P_upper[0];
+    weyl.adm_my(m,k,j,i) = P_upper[1];
+    weyl.adm_mz(m,k,j,i) = P_upper[2];
+
+    // (3) ADM Angular Momentum integrands: ε_{ijk} x^j (K^k_l - K δ^k_l) n^l
+    // Here we use the already computed K_ud = K^k_l and the coordinate positions.
+    Real pos[3] = { x1v, x2v, x3v };
+    const int eps[3][3][3] = {
+      { {0,  0,  0}, {0,  0,  1}, {0, -1,  0} },
+      { {0,  0, -1}, {0,  0,  0}, {1,  0,  0} },
+      { {0,  1,  0}, {-1, 0,  0}, {0,  0,  0} }
+    };
+    Real J[3] = {0.0, 0.0, 0.0};
+    for (int i_ang = 0; i_ang < 3; ++i_ang) {
+      for (int j_ang = 0; j_ang < 3; ++j_ang) {
+        for (int k_ang = 0; k_ang < 3; ++k_ang) {
+          Real temp = 0.0;
+          for (int l = 0; l < 3; ++l) {
+            temp += (K_ud(k_ang, l) - K * ((k_ang==l) ? 1.0 : 0.0)) * uvec(l);
+          }
+          J[i_ang] += eps[i_ang][j_ang][k_ang] * pos[j_ang] * temp;
+        }
+      }
+    }
+    weyl.adm_jx(m,k,j,i) = J[0];
+    weyl.adm_jy(m,k,j,i) = J[1];
+    weyl.adm_jz(m,k,j,i) = J[2];
+
   });
 }
 

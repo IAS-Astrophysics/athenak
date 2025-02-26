@@ -103,6 +103,13 @@ class Z4c {
   struct Wave_Extr_vars {
     AthenaTensor<Real, TensorSymm::NONE, 3, 0> rpsi4;
     AthenaTensor<Real, TensorSymm::NONE, 3, 0> ipsi4;
+    AthenaTensor<Real, TensorSymm::NONE, 3, 0> adm_mass;
+    AthenaTensor<Real, TensorSymm::NONE, 3, 0> adm_mx;
+    AthenaTensor<Real, TensorSymm::NONE, 3, 0> adm_my;
+    AthenaTensor<Real, TensorSymm::NONE, 3, 0> adm_mz;
+    AthenaTensor<Real, TensorSymm::NONE, 3, 0> adm_jx;
+    AthenaTensor<Real, TensorSymm::NONE, 3, 0> adm_jy;
+    AthenaTensor<Real, TensorSymm::NONE, 3, 0> adm_jz;
   };
   Wave_Extr_vars weyl;
 
@@ -191,6 +198,7 @@ class Z4c {
   std::vector<std::unique_ptr<SphericalGrid>> spherical_grids;
   // array storing waveform at each radii
   Real * psi_out;
+  Real * adm_out;
   Real waveform_dt;
   Real last_output_time;
   int nrad; // number of radii to perform wave extraction
