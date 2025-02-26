@@ -21,8 +21,7 @@ class CartesianGrid {
  public:
   // Creates a geodesic grid with refinement level nlev and radius rad
   CartesianGrid(MeshBlockPack *pmy_pack, Real center[3],
-                    Real extent[3], int numpoints[3], bool is_cheb = false);
-  ~CartesianGrid();
+                Real extend[3], int numpoints[3], bool is_cheb = false);
 
   // parameters for the grid
   Real center_x1, center_x2, center_x3;   // grid centers
@@ -39,14 +38,14 @@ class CartesianGrid {
   DualArray3D<Real> interp_vals;   // container for data interpolated to sphere
   void InterpolateToGrid(int nvars, DvceArray5D<Real> &val);  // interpolate to sphere
   void ResetCenter(Real center[3]);  // set indexing for interpolation
+  void SetInterpolationIndices();      // set indexing for interpolation
+  void SetInterpolationWeights();      // set weights for interpolation
   void ResetCenterAndExtent(Real center[3], Real extent[3]);
 
  private:
   MeshBlockPack* pmy_pack;  // ptr to MeshBlockPack containing this Hydro
   DualArray4D<int> interp_indcs;   // indices of MeshBlock and zones therein for interp
   DualArray5D<Real> interp_wghts;  // weights for interpolation
-  void SetInterpolationIndices();      // set indexing for interpolation
-  void SetInterpolationWeights();      // set weights for interpolation
 };
 
 #endif // UTILS_CART_GRID_HPP_
