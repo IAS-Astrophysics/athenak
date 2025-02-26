@@ -40,21 +40,31 @@ enum RadiationM1SrcUpdate {
 //! \struct RadiationM1Params
 //  \brief parameters for the Grey M1 class
 struct RadiationM1Params {
-  bool gr_sources;
-  bool matter_sources;
-  bool theta_limiter;
+  RadiationM1Closure closure_fun;       // choice of closure
+  RadiationM1OpacityType opacity_type;  // choice of opacity library
+  RadiationM1SrcUpdate src_update;      // choice of source update
 
-  RadiationM1Closure closure_fun;
-  RadiationM1OpacityType opacity_type;
-  RadiationM1SrcUpdate src_update;
+  bool gr_sources;      // include GR sources
+  bool matter_sources;  // include matter sources
+  bool theta_limiter;   // activate theta limiter
 
-  Real rad_E_floor;
-  Real rad_N_floor;
-  Real rad_eps;
-  Real minmod_theta;
-  Real source_therm_limit;
-  Real source_Ye_max;
-  Real source_Ye_min;
+  int nspecies;              // number of neutrino species
+  Real closure_epsilon;      // precision with which to find closure
+  int closure_maxiter;       // maximum number of iterations in closure root finder
+  Real inv_closure_epsilon;  // precision with which to find inverse closure
+  int inv_closure_maxiter;  // maximum number of iterations in inverse closure root finder
+
+  Real minmod_theta;    // value of theta for minmod limiter
+  Real rad_E_floor;     // radiation energy density floor
+  Real rad_N_floor;     // radiation number density floor
+  Real rad_eps;         // Impose F_a F^a < (1 - rad_E_eps) E2
+  Real source_Ye_max;   // maximum allowed Ye for matter
+  Real source_Ye_min;   // minimum allowed Ye for matter
+  Real source_limiter;  // limiter for matter source (0: sources disabled, 1: sources
+                        // limited to avoid negative energies)
+  Real source_epsabs;   // target absolute precision for non-linear solver
+  Real source_epsrel;   // target relative precision for non-linear solver
+  int source_maxiter;   // maximum number of iterations for non-linear solver
 };
 
 }  // namespace radiationm1

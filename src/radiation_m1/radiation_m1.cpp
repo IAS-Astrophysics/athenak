@@ -4,7 +4,7 @@
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
 //! \file radiation_m1.cpp
-//  \brief implementation for Grey M1 radiation class
+//  \brief implementation of Grey M1 radiation class
 
 #include "radiation_m1/radiation_m1.hpp"
 
@@ -32,19 +32,28 @@ RadiationM1::RadiationM1(MeshBlockPack *ppack, ParameterInput *pin)
       uflx("uflx", 1, 1, 1, 1, 1),
       beam_source_vals("beam_vals", 1) {
   // parameters
-  nspecies = pin->GetOrAddInteger("radiation_m1", "num_species", 1);
-  source_limiter = pin->GetOrAddReal("radiation_m1", "source_limiter", 0.5);
+  params.gr_sources = pin->GetOrAddBoolean("radiation_m1", "gr_sources", true);
   params.matter_sources = pin->GetOrAddBoolean("radiation_m1", "matter_sources", false);
   params.theta_limiter = pin->GetOrAddBoolean("radiation_m1", "theta_limiter", true);
-  params.rad_E_floor = pin->GetOrAddReal("radiation_m1", "rad_E_floor", 1e-14);
-  params.rad_eps = pin->GetOrAddReal("radiation_m1", "rad_eps", 1e-14);
-  params.gr_sources = pin->GetOrAddBoolean("radiation_m1", "gr_sources", true);
+  params.closure_epsilon = pin->GetOrAddReal("radiation_m1", "closure_epsilon", 1e-5);
+  params.closure_maxiter = pin->GetOrAddInteger("radiation_m1", "closure_maxiter", 64);
+  params.inv_closure_epsilon =
+      pin->GetOrAddReal("radiation_m1", "inv_closure_epsilon", 1e-15);
+  params.inv_closure_maxiter =
+      pin->GetOrAddInteger("radiation_m1", "inv_closure_maxiter", 64);
+  params.rad_N_floor = pin->GetOrAddReal("radiation_m1", "rad_E_floor", 1e-20);
+  params.rad_E_floor = pin->GetOrAddReal("radiation_m1", "rad_E_floor", 1e-30);
+  params.rad_eps = pin->GetOrAddReal("radiation_m1", "rad_eps", 1e-5);
+  params.source_epsabs = pin->GetOrAddReal("radiation_m1", "source_epsabs", 1e-15);
+  params.source_epsrel = pin->GetOrAddReal("radiation_m1", "source_epsrel", 1e-5);
+  params.source_maxiter = pin->GetOrAddInteger("radiation_m1", "source_maxiter", 64);
   params.source_Ye_min = pin->GetOrAddReal("radiation_m1", "source_Ye_min", 0);
-  params.source_Ye_max =
-      pin->GetOrAddReal("radiation_m1", "source_Ye_max", 0.6);
+  params.source_Ye_max = pin->GetOrAddReal("radiation_m1", "source_Ye_max", 0.6);
 
-  std::string closure_fun =
-      pin->GetOrAddString("radiation_m1", "closure_fun", "minerbo");
+  nspecies = pin->GetOrAddInteger("radiation_m1", "num_species", 1);
+  params.source_limiter = pin->GetOrAddReal("radiation_m1", "source_limiter", 0.5);
+
+  std::string closure_fun = pin->GetOrAddString("radiation_m1", "closure_fun", "minerbo");
   if (closure_fun == "minerbo") {
     params.closure_fun = Minerbo;
   } else if (closure_fun == "eddington") {
@@ -56,8 +65,7 @@ RadiationM1::RadiationM1(MeshBlockPack *ppack, ParameterInput *pin)
     exit(EXIT_FAILURE);
   }
 
-  std::string src_update =
-      pin->GetOrAddString("radiation_m1", "src_update", "explicit");
+  std::string src_update = pin->GetOrAddString("radiation_m1", "src_update", "explicit");
   if (src_update == "explicit") {
     params.src_update = Explicit;
   } else if (src_update == "implicit") {
@@ -67,8 +75,7 @@ RadiationM1::RadiationM1(MeshBlockPack *ppack, ParameterInput *pin)
     exit(EXIT_FAILURE);
   }
 
-  std::string opacity_type =
-    pin->GetOrAddString("radiation_m1", "opacity_type", "toy");
+  std::string opacity_type = pin->GetOrAddString("radiation_m1", "opacity_type", "toy");
   if (opacity_type == "toy") {
     params.opacity_type = Toy;
   } else if (opacity_type == "bns-nurates") {

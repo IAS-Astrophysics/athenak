@@ -7,10 +7,8 @@
 //! \brief beam initial data for grey M1
 
 #include "athena.hpp"
-#include "athena_tensor.hpp"
 #include "coordinates/adm.hpp"
 #include "radiation_m1.hpp"
-#include "radiation_m1_helpers.hpp"
 
 namespace radiationm1 {
 
