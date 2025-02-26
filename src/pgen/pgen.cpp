@@ -187,8 +187,8 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resf
       }
       if (resfile.Read_Reals(&cce_dump_last_output_time, 1,single_file_per_rank) != 1) {
         std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-                  << std::endl << "z4c::cce_dump_last_output_time data size read from restart "
-                  << "file is incorrect, restart file is broken." << std::endl;
+          << std::endl << "z4c::cce_dump_last_output_time data size read from restart "
+          << "file is incorrect, restart file is broken." << std::endl;
         exit(EXIT_FAILURE);
       }
     }
