@@ -51,7 +51,6 @@ TaskStatus RadiationM1::TimeUpdate(Driver *d, int stage) {
   auto &mbsize = pmy_pack->pmb->mb_size;
   auto nvars_ = pmy_pack->pradm1->nvars;
   auto &nspecies_ = pmy_pack->pradm1->nspecies;
-  auto &source_limiter_ = pmy_pack->pradm1->source_limiter;
 
   bool &multi_d = pmy_pack->pmesh->multi_d;
   bool &three_d = pmy_pack->pmesh->three_d;
@@ -436,7 +435,7 @@ TaskStatus RadiationM1::TimeUpdate(Driver *d, int stage) {
 
           // [G] Limit sources
           theta = 1.0;
-          if (params_.theta_limiter && source_limiter_ >= 0) {
+          if (params_.theta_limiter && params_.source_limiter >= 0) {
             theta = 1.0;
             Real DTau_sum = 0.0;
             for (int nuidx = 0; nuidx < nspecies_; ++nuidx) {
@@ -444,7 +443,7 @@ TaskStatus RadiationM1::TimeUpdate(Driver *d, int stage) {
                   u1_(m, CombinedIdx(nuidx, M1_E_IDX, nvars_), k, j, i) +
                   beta_dt * rEFN[nuidx][M1_E_IDX];
               if (DrEFN[nuidx][M1_E_IDX] < 0) {
-                theta = Kokkos::min<Real>(-source_limiter *
+                theta = Kokkos::min<Real>(-params_.source_limiter *
                                         Kokkos::max<Real>(Estar, 0.0) /
                                         DrEFN[nuidx][M1_E_IDX],
                                     theta);
@@ -453,7 +452,7 @@ TaskStatus RadiationM1::TimeUpdate(Driver *d, int stage) {
             }
             if (DTau_sum < 0) {
               theta = Kokkos::min(
-                  -source_limiter * Kokkos::max<Real>(tau, 0.0) / DTau_sum,
+                  -params_.source_limiter * Kokkos::max<Real>(tau, 0.0) / DTau_sum,
                   theta);
             }
 
@@ -464,7 +463,7 @@ TaskStatus RadiationM1::TimeUpdate(Driver *d, int stage) {
                     u1_(m, CombinedIdx(nuidx, M1_N_IDX, nvars_), k, j, i) +
                     beta_dt * rEFN[nuidx][M1_N_IDX];
                 if (DrEFN[nuidx][M1_N_IDX] < 0) {
-                  theta = Kokkos::min(-source_limiter *
+                  theta = Kokkos::min(-params_.source_limiter *
                                           Kokkos::max<Real>(Nstar, 0.0) /
                                           DrEFN[nuidx][M1_N_IDX],
                                       theta);
@@ -474,13 +473,13 @@ TaskStatus RadiationM1::TimeUpdate(Driver *d, int stage) {
               const Real DYe = DDxp_sum / dens;
               if (DYe > 0) {
                 theta = Kokkos::min<Real>(
-                    source_limiter *
+                    params_.source_limiter *
                         Kokkos::max<Real>(params_.source_Ye_max - Y_e, 0.0) /
                         DYe,
                     theta);
               } else if (DYe < 0) {
                 theta = Kokkos::min<Real>(
-                    source_limiter *
+                    params_.source_limiter *
                         Kokkos::min(params_.source_Ye_min - Y_e, 0.0) / DYe,
                     theta);
               }
