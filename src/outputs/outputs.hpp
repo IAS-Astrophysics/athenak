@@ -141,6 +141,7 @@ struct OutputParameters {
   int nbin=0, nbin2=0;
   bool logscale=true, logscale2=true;
   bool mass_weighted=false;
+  bool single_file_per_rank=false; // DBF: parameter for single file per rank
 };
 
 //----------------------------------------------------------------------------------------
@@ -382,6 +383,34 @@ class RestartOutput : public BaseTypeOutput {
   RestartOutput(ParameterInput *pin, Mesh *pm, OutputParameters oparams);
   void LoadOutputData(Mesh *pm) override;
   void WriteOutputFile(Mesh *pm, ParameterInput *pin) override;
+};
+
+// Forward declaration
+class CartesianGrid;
+
+//----------------------------------------------------------------------------------------
+//! \class CartesianGridOutput
+//  \brief derived BaseTypeOutput class for output on a Cartesian grid
+class CartesianGridOutput : public BaseTypeOutput {
+  struct MetaData {
+    int cycle;
+    float time;
+    float center[3];
+    float extent[3];
+    int numpoints[3];
+    bool is_cheb;
+    int noutvars;
+  };
+ public:
+  CartesianGridOutput(ParameterInput *pin, Mesh *pm, OutputParameters oparams);
+  ~CartesianGridOutput();
+  //! Interpolate the data on the Cartesian grid and handle MPI communication
+  void LoadOutputData(Mesh *pm) override;
+  //! Write the data to file
+  void WriteOutputFile(Mesh *pm, ParameterInput *pin) override;
+ private:
+  CartesianGrid *pcart;
+  MetaData md;
 };
 
 //----------------------------------------------------------------------------------------
