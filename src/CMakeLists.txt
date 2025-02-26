@@ -4,6 +4,14 @@
 # Licensed under the 3-clause BSD License (the "LICENSE")
 #=========================================================================================
 
+file(GLOB_RECURSE NURATESSOURCES "bns_nurates/include/*.hpp")
+
+if(ENABLE_NURATES)
+    set(ENABLE_NURATES_SOURCES ${NURATESSOURCES})
+else()
+    set(ENABLE_NURATES_SOURCES "")
+endif()
+
 # list of files to be compiled into executable name
 add_executable(
     athena
@@ -192,6 +200,8 @@ add_executable(
         radiation_m1/radiation_m1_calc_opacities.cpp
         pgen/tests/rad_m1_latticetest.cpp
         pgen/tests/rad_m1_spheretest.cpp
+
+        ${ENABLE_NURATES_SOURCES}
 )
 
 # custom problem generator to be included in compile

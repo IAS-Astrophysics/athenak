@@ -1,3 +1,6 @@
 [submodule "kokkos"]
 	path = kokkos
 	url = https://github.com/kokkos/kokkos.git
+[submodule "src/bns_nurates"]
+	path = src/bns_nurates
+	url = https://github.com/RelNucAs/bns_nurates.git

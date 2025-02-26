@@ -34,6 +34,7 @@ endif()
 option(Athena_SINGLE_PRECISION "Compile for single precision" OFF)
 option(Athena_ENABLE_MPI "Compile with MPI parallelism enabled" OFF)
 option(Athena_ENABLE_OPENMP "Compile with OpenMP parallelism enabled" OFF)
+option(Athena_ENABLE_NURATES "Compile with bns-nurates enabled" OFF)
 set(PROBLEM built_in_pgens CACHE STRING "Name of problem generator function")
 
 #------ set macros exported to config.hpp ------------------------------------------------
@@ -76,6 +77,15 @@ if (ENABLE_OPENMP)
 else()
   set(OPENMP_PARALLEL_ENABLED 0)
 endif()
+
+# set nurates macro (true/false)
+set(ENABLE_NURATES OFF)
+if(Athena_ENABLE_NURATES)
+  set(ENABLE_NURATES ON)
+  message(STATUS "Compiling with bns-nurates")
+else()
+  message(STATUS "Not compiling with bns-nurates")
+endif ()
 
 #set user problem generator flag
 if (NOT ${PROBLEM} STREQUAL "built_in_pgens")
