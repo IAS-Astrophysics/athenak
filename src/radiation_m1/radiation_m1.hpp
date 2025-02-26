@@ -24,11 +24,9 @@
 #include "tasklist/task_list.hpp"
 
 namespace radiationm1 {
-
-using ToyOpacityFn = void (*)(Real x1, Real x2, Real x3, Real dx,
-                              Real dy, Real dz, Real nuidx,
-                              Real &eta_0, Real &abs_0, Real &eta_1,
-                              Real &abs_1, Real &scat_1);
+using ToyOpacityFn = void (*)(Real x1, Real x2, Real x3, Real dx, Real dy, Real dz,
+                              Real nuidx, Real& eta_0, Real& abs_0, Real& eta_1,
+                              Real& abs_1, Real& scat_1);
 
 //----------------------------------------------------------------------------------------
 //! \struct RadiationTaskIDs
@@ -57,18 +55,17 @@ struct RadiationM1TaskIDs {
 //  \brief class for grey M1
 class RadiationM1 {
  public:
+  RadiationM1(MeshBlockPack* ppack, ParameterInput* pin);
+  ~RadiationM1();
+
   BrentFunctor BrentFunc;
   BrentFunctorInv BrentFuncInv;
   ToyOpacityFn toy_opacity_fn = nullptr;
 
-  RadiationM1(MeshBlockPack *ppack, ParameterInput *pin);
-  ~RadiationM1();
-
-  int nvars;                // no. of evolved variables per species
-  int nspecies;             // no. of species
-  Real source_limiter;       // src limiter param to avoid non-physical states
-  int nvarstot;             // total no. of evolved variables
-  RadiationM1Params params; // user parameters for grey M1
+  int nvars;                 // no. of evolved variables per species
+  int nspecies;              // no. of species
+  int nvarstot;              // total no. of evolved variables
+  RadiationM1Params params;  // user parameters for grey M1
 
   DvceArray5D<Real> u0;              // evolved variables
   DvceArray5D<Real> coarse_u0;       // evolved variables on 2x coarser grid
@@ -84,73 +81,66 @@ class RadiationM1 {
   DvceArray5D<Real> scat_1;          // energy scattering coefficient
   AthenaTensor<Real, TensorSymm::NONE, 4, 1> u_mu;  // fluid 4-velocity
 
-  MeshBoundaryValuesCC *pbval_u;  // Communication buffers and functions for u
+  MeshBoundaryValuesCC* pbval_u;  // Communication buffers and functions for u
   RadiationM1TaskIDs id;          // container to hold names of TaskIDs
-  Real dtnew;
+  Real dtnew{};
 
   DvceArray1D<Real> beam_source_vals;  // values of 1d beams
 
   // functions...
-  void AssembleRadiationM1Tasks(
-      std::map<std::string, std::shared_ptr<TaskList>> tl);
+  void AssembleRadiationM1Tasks(std::map<std::string, std::shared_ptr<TaskList>> tl);
   // ...in "before_stagen_tl" list
-  TaskStatus InitRecv(Driver *d, int stage);
+  TaskStatus InitRecv(Driver* d, int stage);
   // ...in "stagen_tl" list
-  TaskStatus CopyCons(Driver *d, int stage);
-  TaskStatus CalcClosure(Driver *d, int stage);
-  TaskStatus CalculateFluxes(Driver *d, int stage);
-  TaskStatus SendFlux(Driver *d, int stage);
-  TaskStatus RecvFlux(Driver *d, int stage);
-  TaskStatus TimeUpdate(Driver *d, int stage);
-  TaskStatus CalcOpacityNurates(Driver *pdrive, int stage);
-  TaskStatus CalcOpacityToy(Driver *pdrive, int stage);
-  TaskStatus RestrictU(Driver *d, int stage);
-  TaskStatus SendU(Driver *d, int stage);
-  TaskStatus RecvU(Driver *d, int stage);
-  TaskStatus ApplyPhysicalBCs(Driver *pdrive, int stage);
-  TaskStatus Prolongate(Driver *pdrive, int stage);
-  TaskStatus NewTimeStep(Driver *d, int stage);
+  TaskStatus CopyCons(Driver* d, int stage);
+  TaskStatus CalcClosure(Driver* d, int stage);
+  TaskStatus CalculateFluxes(Driver* d, int stage);
+  TaskStatus SendFlux(Driver* d, int stage);
+  TaskStatus RecvFlux(Driver* d, int stage);
+  TaskStatus TimeUpdate(Driver* d, int stage);
+  TaskStatus CalcOpacityNurates(Driver* pdrive, int stage);
+  TaskStatus CalcOpacityToy(Driver* pdrive, int stage);
+  TaskStatus RestrictU(Driver* d, int stage);
+  TaskStatus SendU(Driver* d, int stage);
+  TaskStatus RecvU(Driver* d, int stage);
+  TaskStatus ApplyPhysicalBCs(Driver* pdrive, int stage);
+  TaskStatus Prolongate(Driver* pdrive, int stage);
+  TaskStatus NewTimeStep(Driver* d, int stage);
   // ...in "after_stagen_tl" list
-  TaskStatus ClearSend(Driver *d, int stage);
-  TaskStatus ClearRecv(Driver *d, int stage);  // also in Driver::Initialize
+  TaskStatus ClearSend(Driver* d, int stage);
+  TaskStatus ClearRecv(Driver* d, int stage);  // also in Driver::Initialize
 
-  KOKKOS_INLINE_FUNCTION
-  void calc_closure(
-      const AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> &g_dd,
-      const AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> &g_uu,
-      const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &n_d,
-      const Real &w_lorentz,
-      const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &u_u,
-      const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &v_d,
-      const AthenaPointTensor<Real, TensorSymm::NONE, 4, 2> &proj_ud,
-      const Real &E, const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &F_d,
-      Real &chi, AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> &P_dd,
-      const RadiationM1Params &params);
+  KOKKOS_INLINE_FUNCTION void calc_closure(
+      const AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2>& g_dd,
+      const AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2>& g_uu,
+      const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1>& n_d, const Real& w_lorentz,
+      const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1>& u_u,
+      const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1>& v_d,
+      const AthenaPointTensor<Real, TensorSymm::NONE, 4, 2>& proj_ud, const Real& E,
+      const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1>& F_d, Real& chi,
+      AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2>& P_dd,
+      const RadiationM1Params& params);
 
-  KOKKOS_INLINE_FUNCTION
-  void calc_inv_closure(
-      const AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> &g_uu,
-      const AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> &g_dd,
-      const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &n_u,
-      const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &n_d,
-      const AthenaPointTensor<Real, TensorSymm::NONE, 4, 2> &gamma_ud,
-      const Real &w_lorentz,
-      const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &u_u,
-      const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &u_d,
-      const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &v_d,
-      const AthenaPointTensor<Real, TensorSymm::NONE, 4, 2> &proj_ud,
-      const Real &chi, const Real &J,
-      const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &H_d, Real &E,
-      AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &F_d,
-      const RadiationM1Params &params);
+  KOKKOS_INLINE_FUNCTION void calc_inv_closure(
+      const AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2>& g_uu,
+      const AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2>& g_dd,
+      const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1>& n_u,
+      const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1>& n_d,
+      const AthenaPointTensor<Real, TensorSymm::NONE, 4, 2>& gamma_ud,
+      const Real& w_lorentz, const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1>& u_u,
+      const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1>& u_d,
+      const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1>& v_d,
+      const AthenaPointTensor<Real, TensorSymm::NONE, 4, 2>& proj_ud, const Real& chi,
+      const Real& J, const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1>& H_d, Real& E,
+      AthenaPointTensor<Real, TensorSymm::NONE, 4, 1>& F_d,
+      const RadiationM1Params& params);
 
  private:
-  MeshBlockPack *pmy_pack;  // ptr to MeshBlockPack
+  MeshBlockPack* pmy_pack;  // ptr to MeshBlockPack
 };
 
 // 1d beam boundary conditions
-void ApplyBeamSources1D(Mesh *pmesh);
-
+void ApplyBeamSources1D(Mesh* pmesh);
 }  // namespace radiationm1
 
 #endif  // RADIATION_M1_HPP
