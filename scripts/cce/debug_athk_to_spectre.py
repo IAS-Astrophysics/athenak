@@ -1,20 +1,18 @@
 #!/usr/bin/env python3
-## Alireza Rashti - Jan 2025 (C)
-## usage:
-## $ ./me -h
-##
+# Alireza Rashti - Jan 2025 (C)
+# usage:
+# $ ./me -h
+#
 
-import sys
 import os
 import numpy as np
-import math as m
 import argparse
 import h5py
 import matplotlib.pyplot as plt
 
 # import glob
 # import sympy
-## ---------------------------------------------------------------------- ##
+# ---------------------------------------------------------------------- #
 
 g_name_map = {
     "gxx": "gxx",
@@ -87,14 +85,14 @@ def find_h5_1mode(h5f, field_name, mode_name, args):
             break
         mode += 1
 
-    assert flag == True
+    assert flag is True
     return mode
 
 
 def find_h5_all_modes(h5f, field_name, mode_name, args):
     modes = []
     # names = []
-    re_or_im = mode_name[0:2]  ## Re(...)
+    re_or_im = mode_name[0:2]  # Re(...)
     # print(re_or_im)
     assert re_or_im == "Re" or re_or_im == "Im"
 
@@ -248,7 +246,6 @@ def plot_simple_modes(dat, args):
     f = dat["f"]
     drf = dat["drf"]
     dtf = dat["dtf"]
-    n_dumps = dat["n_dumps"]
     x = np.arange(0, len(f[0, :]), dtype=int)
     p = 0
     for i in range(0, len(t), args["time_dump"]):

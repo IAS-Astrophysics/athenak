@@ -247,9 +247,9 @@ void RestartOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
   if (global_variable::my_rank == 0 || single_file_per_rank) {
     // store z4c information
     if (pz4c != nullptr) {
-      resfile.Write_any_type(&(pz4c->last_output_time), sizeof(Real), "byte"),
+      resfile.Write_any_type(&(pz4c->last_output_time), sizeof(Real), "byte",
                              single_file_per_rank);
-      resfile.Write_any_type(&(pz4c->cce_dump_last_output_time), sizeof(Real), "byte"),
+      resfile.Write_any_type(&(pz4c->cce_dump_last_output_time), sizeof(Real), "byte",
                              single_file_per_rank);
     }
     // output puncture tracker data

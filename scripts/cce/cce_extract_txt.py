@@ -1,21 +1,18 @@
 #!/usr/bin/env python3
-## Alireza Rashti - Jan 2025 (C)
-## usage:
-## $ ./me -h
-##
+# Alireza Rashti - Jan 2025 (C)
+# usage:
+# $ ./me -h
+#
 
-import sys
 import os
 import numpy as np
-import math as m
 import argparse
-import re
 import h5py
 
 # import matplotlib.pyplot as plt
 # import glob
 # import sympy
-## ---------------------------------------------------------------------- ##
+# ---------------------------------------------------------------------- #
 
 
 def parse_cli():
@@ -51,7 +48,7 @@ def find_h5_1mode(h5f, field_name, mode_name, args):
             break
         mode += 1
 
-    assert flag == True
+    assert flag is True
     return mode
 
 

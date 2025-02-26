@@ -1,18 +1,16 @@
 #!/usr/bin/env python3
-## Alireza Rashti - Oct 2024 (C)
-## usage:
-## $ ./me -h
-##
-## BUG:
-## -[] see TODOs
-## -[] see NOTEs
+# Alireza Rashti - Oct 2024 (C)
+# usage:
+# $ ./me -h
+#
+# BUG:
+# -[] see TODOs
+# -[] see NOTEs
 
-import sys
 import os
 import numpy as np
 from scipy import special
 import math
-import cmath
 import argparse
 import h5py
 import struct
@@ -25,9 +23,9 @@ from scipy.interpolate import interp1d
 # import sympy
 # import re
 
-## ---------------------------------------------------------------------- ##
+# ---------------------------------------------------------------------- #
 
-## field names
+# field names
 g_field_names = [
     "gxx",
     "gxy",
@@ -67,19 +65,19 @@ g_name_index = {
     "alp": 0,
 }
 
-## real/imag
+# real/imag
 g_re = 0
 g_im = 1
 
-## args
+# args
 g_args = None
-## various attrs
+# various attrs
 g_attrs = None
 
-## sign convention
+# sign convention
 g_sign = None
 
-## debug
+# debug
 g_debug_max_l = 2
 
 
@@ -115,7 +113,8 @@ def parse_cli():
         "-r_deriv",
         type=str,
         default="ChebU",
-        help="method to take the radial derivative of fields:{ChebU:Chebyshev of second kind}",
+        help="method to take the radial derivative of \
+            fields:{ChebU:Chebyshev of second kind}",
     )
     p.add_argument(
         "-interpolation",
@@ -196,10 +195,10 @@ class AngularTransform:
             th = self.th[i]
             for j in range(self.npnts):
                 ph = self.ph[j]
-                for l in range(0, self.attrs["max_l"] + 1):
-                    for m in range(l, -l - 1, -1):
-                        lm = lm_mode(l, m)
-                        y = special.sph_harm(m, l, ph, th)
+                for ll in range(0, self.attrs["max_l"] + 1):
+                    for m in range(ll, -ll - 1, -1):
+                        lm = lm_mode(ll, m)
+                        y = special.sph_harm(m, ll, ph, th)
                         # assert not np.isnan(y)
                         ylms[g_re, i, j, lm] = y.real
                         ylms[g_im, i, j, lm] = y.imag
@@ -310,14 +309,13 @@ def load(fpath: str, field_name: str, attrs: dict) -> list:
 
     elif attrs["file_type"] == "bin":
         # Load the list of files
-        ##TODO: this depends on file name
+        # TODO: this depends on file name
         flist = sorted(glob.glob(fpath + "/cce_*.bin"))
-        data = []
         dat_real = []
         dat_imag = []
         t = []
         for f in flist:
-            ##TODO: it reads all field and only use one of them. it's inefficient
+            # TODO: it reads all field and only use one of them. it's inefficient
             (
                 nr,
                 num_l_modes,
@@ -352,7 +350,7 @@ def load(fpath: str, field_name: str, attrs: dict) -> list:
             attrs["max_lm"],
         )
         ret = np.empty(shape=shape, dtype=float)
-        ## NOTE: is it fine that we do interpolation?
+        # NOTE: is it fine that we do interpolation?
         ret[g_re, :] = f_real(attrs["time"])
         ret[g_im, :] = f_imag(attrs["time"])
     else:
@@ -362,11 +360,11 @@ def load(fpath: str, field_name: str, attrs: dict) -> list:
     return ret
 
 
-def lm_mode(l, m):
+def lm_mode(ll, m):
     """
-    l and m mode convention
+    ll and m mode convention
     """
-    return l * l + l + m
+    return ll * ll + ll + m
 
 
 def read_cce_file(filename):
@@ -378,20 +376,22 @@ def read_cce_file(filename):
 
     Returns:
         nr (int): Number of radial points.
-        num_l_modes (int): Number of l modes.
+        num_l_modes (int): Number of ll modes.
         time (float): Time value from the simulation.
         rin (float): Inner radial boundary.
         rout (float): Outer radial boundary.
-        data_real (numpy.ndarray): Real part of the data, shape (nr, 10, num_angular_modes).
-        data_imag (numpy.ndarray): Imaginary part of the data, shape (nr, 10, num_angular_modes).
-        index_to_lm (dict): Mapping from data index to (l, m) values.
+        data_real (numpy.ndarray): Real part of the data, shape
+                (nr, 10, num_angular_modes).
+        data_imag (numpy.ndarray): Imaginary part of the data, shape
+                (nr, 10, num_angular_modes).
+        index_to_lm (dict): Mapping from data index to (ll, m) values.
     """
     with open(filename, "rb") as f:
         # Read number of radial points (nr)
         nr_bytes = f.read(4)
         nr = struct.unpack("<i", nr_bytes)[0]  # little-endian integer
 
-        # Read number of l modes (num_l_modes)
+        # Read number of ll modes (num_l_modes)
         num_l_modes_bytes = f.read(4)
         num_l_modes = struct.unpack("<i", num_l_modes_bytes)[0]
 
@@ -420,12 +420,12 @@ def read_cce_file(filename):
         data_imag = np.fromfile(f, dtype="<d", count=count)
         data_imag = data_imag.reshape((nr, 10, num_angular_modes))
 
-        # Create a mapping from index to (l, m)
+        # Create a mapping from index to (ll, m)
         index_to_lm = {}
-        for l in range(1, num_l_modes + 1):
-            for m in range(-l, l + 1):
-                index = l * l + l + m
-                index_to_lm[index] = (l, m)
+        for ll in range(1, num_l_modes + 1):
+            for m in range(-ll, ll + 1):
+                index = ll * ll + ll + m
+                index_to_lm[index] = (ll, m)
 
     return nr, num_l_modes, time, rin, rout, data_real, data_imag, index_to_lm
 
@@ -441,7 +441,7 @@ def get_attribute(
     if type == "h5":
         attrs["file_type"] = "h5"
         with h5py.File(fpath, "r") as h5f:
-            # find attribute about num. of time level, and n,l,m in C_nlm
+            # find attribute about num. of time level, and n,ll,m in C_nlm
             attrs["lev_t"] = len(h5f.keys()) - 1
             if attrs["lev_t"] % 2 == 0:  # for fourier transformation
                 attrs["lev_t"] -= 1
@@ -449,7 +449,7 @@ def get_attribute(
             attrs["max_n"], attrs["max_lm"] = h5f[f"1/{field_name}/re"].shape
             attrs["max_l"] = (
                 int(math.sqrt(attrs["max_lm"])) - 1
-            )  # NOTE:l must be inclusive in loops
+            )  # NOTE:ll must be inclusive in loops
             attrs["max_lm"] = int((attrs["max_l"] + 1) ** 2)
             attrs["r_in"] = h5f["metadata"].attrs["Rin"]
             attrs["r_out"] = h5f["metadata"].attrs["Rout"]
@@ -499,7 +499,7 @@ def time_derivative_fourier(
     field(rel/img,t, n,lm)
     """
 
-    ## TODO: Fourier time derives not tested!
+    # TODO: Fourier time derives not tested!
     print(f"Fourier time derivative: {field_name}", flush=True)
     _, len_t, len_n, len_lm = field.shape
     dt = attrs["time"][2] - attrs["time"][1]
@@ -511,8 +511,6 @@ def time_derivative_fourier(
             coeff = field[g_re, :, n, lm] + 1j * field[g_im, :, n, lm]
             # F. transform
             fft_coeff = np.fft.fft(coeff)
-            # if args["debug"] == 'y':
-            #  print("debug: normalization?",round(coeff[1],6) == round(np.fft.ifft(fft_coeff)[1],6))
 
             # time derivative
             half = len_t // 2 + 1
@@ -551,16 +549,16 @@ def time_derivative_fourier(
 
     if args["debug"] == "y":
         for n in range(len_n):
-            for l in range(2, g_debug_max_l + 1):
-                for m in range(-l, l + 1):
-                    hfile = f"{args['d_out']}/debug_{field_name}_n{n}l{l}m{m}.txt"
+            for ll in range(2, g_debug_max_l + 1):
+                for m in range(-ll, ll + 1):
+                    hfile = f"{args['d_out']}/debug_{field_name}_n{n}ll{ll}m{m}.txt"
                     write_data = np.column_stack(
                         (
                             attrs["time"],
-                            dfield[g_re, :, n, lm_mode(l, m)],
-                            dfield[g_im, :, n, lm_mode(l, m)],
-                            field[g_re, :, n, lm_mode(l, m)],
-                            field[g_im, :, n, lm_mode(l, m)],
+                            dfield[g_re, :, n, lm_mode(ll, m)],
+                            dfield[g_im, :, n, lm_mode(ll, m)],
+                            field[g_re, :, n, lm_mode(ll, m)],
+                            field[g_im, :, n, lm_mode(ll, m)],
                         )
                     )
                     np.savetxt(hfile, write_data, header="t dre/dt dim/dt re im")
@@ -697,7 +695,6 @@ class ChebUExpansion:
         """
 
         w_i = self.w_i
-        x_i = self.x_i
         Uji = self.Uj_xi
 
         coeffs = Uji @ (w_i * field[::-g_sign])
@@ -869,7 +866,7 @@ def h5_create_group(h5file, group_name: str):
     h5group = None
 
     # create group if not exists
-    if h5file.get(group_name, default=None) == None:
+    if h5file.get(group_name, default=None) is None:
         h5group = h5file.create_group(group_name)
     else:
         raise ValueError("this group {group_name} is already exists.")
@@ -885,7 +882,8 @@ def h5_write_data(h5file, data: np.array, data_name: str, attrs: dict, args: dic
     write syntax, eg:
 
     h5["gxx.dat"] =
-      [time_level, ['time', 'gxx_Re(0,0)', 'gxx_Im(0,0)', 'gxx_Re(1,1)', 'gxx_Im(1,1)', ...] ]
+      [time_level, ['time', 'gxx_Re(0,0)', 'gxx_Im(0,0)',
+      'gxx_Re(1,1)', 'gxx_Im(1,1)', ...] ]
 
     h5["gxx.dat"].attrs['Legend'] = the associated column =
       array(['time', 'gxx_Re(0,0)', 'gxx_Im(0,0)', 'gxx_Re(1,1)', 'gxx_Im(1,1)', ...])
@@ -899,7 +897,7 @@ def h5_write_data(h5file, data: np.array, data_name: str, attrs: dict, args: dic
         name=f"{data_name}",
         shape=(
             attrs["lev_t"],
-            len([g_re, g_im]) * (attrs["max_l"] + 1) ** 2 + 1,  ## the last +1 for time
+            len([g_re, g_im]) * (attrs["max_l"] + 1) ** 2 + 1,  # the last +1 for time
         ),
         dtype=float,  # chunks=True,
         # compression="gzip",
@@ -916,15 +914,15 @@ def h5_write_data(h5file, data: np.array, data_name: str, attrs: dict, args: dic
     flat = 0
     h5file[f"{data_name}"][:, flat] = attrs["time"]
     flat += 1
-    for l in range(0, attrs["max_l"] + 1):
-        for m in range(l, -l - 1, -1):
-            assert not np.any(np.isnan(data[g_re, :, lm_mode(l, m)]))
-            assert not np.any(np.isnan(data[g_im, :, lm_mode(l, m)]))
+    for ll in range(0, attrs["max_l"] + 1):
+        for m in range(ll, -ll - 1, -1):
+            assert not np.any(np.isnan(data[g_re, :, lm_mode(ll, m)]))
+            assert not np.any(np.isnan(data[g_im, :, lm_mode(ll, m)]))
 
-            data_attrs.append(f"{data_name[:-4]}_Re({l},{m})")
-            data_attrs.append(f"{data_name[:-4]}_Im({l},{m})")
-            h5file[f"{data_name}"][:, flat] = data[g_re, :, lm_mode(l, m)]
-            h5file[f"{data_name}"][:, flat + 1] = data[g_im, :, lm_mode(l, m)]
+            data_attrs.append(f"{data_name[:-4]}_Re({ll},{m})")
+            data_attrs.append(f"{data_name[:-4]}_Im({ll},{m})")
+            h5file[f"{data_name}"][:, flat] = data[g_re, :, lm_mode(ll, m)]
+            h5file[f"{data_name}"][:, flat + 1] = data[g_im, :, lm_mode(ll, m)]
             flat += 2
     Legend = [s.encode("ascii", "ignore") for s in data_attrs]
     h5file[f"{data_name}"].attrs["Legend"] = Legend
