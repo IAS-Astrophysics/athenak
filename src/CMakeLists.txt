@@ -9,7 +9,8 @@ file(GLOB_RECURSE NURATESSOURCES "bns_nurates/include/*.hpp")
 if(ENABLE_NURATES)
     set(ENABLE_NURATES_SOURCES ${NURATESSOURCES})
 else()
-    set(ENABLE_NURATES_SOURCES "")
+    set(ENABLE_NURATES_SOURCES ""
+            radiation_m1/radiation_m1_roots_fns.hpp)
 endif()
 
 # list of files to be compiled into executable name

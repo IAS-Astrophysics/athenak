@@ -22,7 +22,8 @@
 #include "radiation_m1/radiation_m1_roots_brent.hpp"
 #include "radiation_m1/radiation_m1_tensors.hpp"
 #include "radiation_m1_roots_hybridsj.hpp"
-//#include "radiation_m1_sources.hpp"
+// #include "radiation_m1_sources.hpp"
+#include "radiation_m1_roots_fns.hpp"
 #include "tasklist/task_list.hpp"
 
 namespace radiationm1 {
@@ -61,9 +62,9 @@ class RadiationM1 {
   RadiationM1(MeshBlockPack* ppack, ParameterInput* pin);
   ~RadiationM1();
 
-  BrentFunctor BrentFunc;
-  HybridsjFunctor HybridsjFunc;
-  BrentFunctorInv BrentFuncInv;
+  static BrentFunctor BrentFunc;
+  static HybridsjFunctor HybridsjFunc;
+  static BrentFunctorInv BrentFuncInv;
   ToyOpacityFn toy_opacity_fn = nullptr;
 
   int nvars;                 // no. of evolved variables per species
@@ -114,7 +115,7 @@ class RadiationM1 {
   TaskStatus ClearSend(Driver* d, int stage);
   TaskStatus ClearRecv(Driver* d, int stage);  // also in Driver::Initialize
 
-  KOKKOS_INLINE_FUNCTION void calc_closure(
+  KOKKOS_INLINE_FUNCTION static void calc_closure(
       const AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2>& g_dd,
       const AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2>& g_uu,
       const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1>& n_d, const Real& w_lorentz,
@@ -140,14 +141,14 @@ class RadiationM1 {
       const RadiationM1Params& params);
 
   KOKKOS_INLINE_FUNCTION
-  HybridsjSignal prepare_closure(const Real q[4], SrcParams& p,
+  static HybridsjSignal prepare_closure(const Real q[4], SrcParams& p,
                                  const RadiationM1Params& param);
 
   KOKKOS_INLINE_FUNCTION
-  HybridsjSignal prepare_sources(const Real q[4], SrcParams& p);
+  static HybridsjSignal prepare_sources(const Real q[4], SrcParams& p);
 
   KOKKOS_INLINE_FUNCTION
-  HybridsjSignal prepare(const Real q[4], SrcParams& p, const RadiationM1Params& params);
+  static HybridsjSignal prepare(const Real q[4], SrcParams& p, const RadiationM1Params& params);
 
   KOKKOS_INLINE_FUNCTION SrcSignal source_update(
     const Real &cdt, const Real &alp,
