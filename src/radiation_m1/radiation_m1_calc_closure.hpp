@@ -102,22 +102,18 @@ void RadiationM1::calc_inv_closure(
     const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &n_u,
     const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &n_d,
     const AthenaPointTensor<Real, TensorSymm::NONE, 4, 2> &gamma_ud,
-    const Real &w_lorentz,
-    const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &u_u,
+    const Real &w_lorentz, const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &u_u,
     const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &u_d,
     const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &v_d,
-    const AthenaPointTensor<Real, TensorSymm::NONE, 4, 2> &proj_ud,
-    const Real &chi, const Real &J,
-    const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &H_d, Real &E,
+    const AthenaPointTensor<Real, TensorSymm::NONE, 4, 2> &proj_ud, const Real &chi,
+    const Real &J, const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &H_d, Real &E,
     AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &F_d,
     const RadiationM1Params &params) {
-
   AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> K_thick_dd{};
   calc_Kthick(g_dd, u_d, J, H_d, K_thick_dd);
 
   AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> K_thin_dd{};
-  calc_Kthin(g_uu, n_d, w_lorentz, u_d, proj_ud, J, H_d, K_thin_dd,
-             params.rad_E_floor);
+  calc_Kthin(g_uu, n_d, w_lorentz, u_d, proj_ud, J, H_d, K_thin_dd, params.rad_E_floor);
 
   Real x_lo = 0.0;
   Real x_md = 0.5;
@@ -128,15 +124,13 @@ void RadiationM1::calc_inv_closure(
   // Initialize rootfinder
   const int inv_closure_maxiter = 64;
   const Real inv_closure_epsilon = 1e-15;
-  BrentSignal ierr =
-      BrentInitialize(BrentFunc, x_lo, x_hi, root, state, g_dd, g_uu, n_d,
-                      w_lorentz, u_u, v_d, proj_ud, E, F_d, params);
+  BrentSignal ierr = BrentInitialize(BrentFunc, x_lo, x_hi, root, state, g_dd, g_uu, n_d,
+                                     w_lorentz, u_u, v_d, proj_ud, E, F_d, params);
 
   // no root, most likely due to truncation errors
   if (ierr == BRENT_EINVAL) {
     x_md = 3. * (1. - chi) / 2.;
-    apply_inv_closure(x_md, n_u, gamma_ud, u_d, J, H_d, K_thick_dd, K_thin_dd,
-                      E, F_d);
+    apply_inv_closure(x_md, n_u, gamma_ud, u_d, J, H_d, K_thick_dd, K_thin_dd, E, F_d);
     return;
   }
 
@@ -144,8 +138,8 @@ void RadiationM1::calc_inv_closure(
   int iter = 0;
   do {
     ++iter;
-    ierr = BrentIterate(BrentFunc, x_lo, x_hi, root, state, g_dd, g_uu, n_d,
-                        w_lorentz, u_u, v_d, proj_ud, E, F_d, params);
+    ierr = BrentIterate(BrentFunc, x_lo, x_hi, root, state, g_dd, g_uu, n_d, w_lorentz,
+                        u_u, v_d, proj_ud, E, F_d, params);
 
     // Some nans in the evaluation. This should not happen.
     if (ierr != BRENT_SUCCESS) {
@@ -155,8 +149,8 @@ void RadiationM1::calc_inv_closure(
     ierr = BrentTestInterval(x_lo, x_hi, 0.0, inv_closure_epsilon);
   } while (ierr == BRENT_CONTINUE && iter < inv_closure_maxiter);
 
-  apply_inv_closure(x_md, n_u, gamma_ud, u_d, J, H_d, K_thick_dd, K_thin_dd, E,
-                    F_d);
+  apply_inv_closure(x_md, n_u, gamma_ud, u_d, J, H_d, K_thick_dd, K_thin_dd, E, F_d);
 }
+
 } // namespace radiationm1
 #endif // RADIATION_M1_CALC_CLOSURE_HPP
