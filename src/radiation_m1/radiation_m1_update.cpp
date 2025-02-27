@@ -389,12 +389,12 @@ TaskStatus RadiationM1::TimeUpdate(Driver *d, int stage) {
               calc_H_from_rT(rT_dd, n_u, gamma_ud, Fnew_d);
               apply_floor(g_uu, Enew, Fnew_d, params_);
 
-              source_update(beta_dt, adm.alpha(m, k, j, i), g_dd, g_uu, n_d,
-                            n_u, gamma_ud, u_d, u_u, v_d, v_u, proj_ud,
-                            w_lorentz, Estar, Fstar_d, Estar, Fstar_d,
-                            volform * eta_1_(m, nuidx, k, j, i),
-                            abs_1_(m, nuidx, k, j, i),
-                            scat_1_(m, nuidx, k, j, i), chival, Enew, Fnew_d);
+              //source_update(beta_dt, adm.alpha(m, k, j, i), g_dd, g_uu, n_d,
+              //              n_u, gamma_ud, u_d, u_u, v_d, v_u, proj_ud,
+               ///             w_lorentz, Estar, Fstar_d, Estar, Fstar_d,
+               //             volform * eta_1_(m, nuidx, k, j, i),
+               //             abs_1_(m, nuidx, k, j, i),
+              //              scat_1_(m, nuidx, k, j, i), chival, Enew, Fnew_d);
               apply_floor(g_uu, Enew, Fnew_d, params_);
 
               // Update closure

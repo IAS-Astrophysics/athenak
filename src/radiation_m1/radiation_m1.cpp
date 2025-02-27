@@ -49,6 +49,11 @@ RadiationM1::RadiationM1(MeshBlockPack *ppack, ParameterInput *pin)
   params.source_maxiter = pin->GetOrAddInteger("radiation_m1", "source_maxiter", 64);
   params.source_Ye_min = pin->GetOrAddReal("radiation_m1", "source_Ye_min", 0);
   params.source_Ye_max = pin->GetOrAddReal("radiation_m1", "source_Ye_max", 0.6);
+  params.source_thick_limit =
+      pin->GetOrAddReal("radiation_m1", "source_thick_limit", 20.);
+  params.source_therm_limit =
+      pin->GetOrAddReal("radiation_m1", "source_therm_limit", -1.);
+  params.source_scat_limit = pin->GetOrAddReal("radiation_m1", "source_scat_limit", -1.);
 
   nspecies = pin->GetOrAddInteger("radiation_m1", "num_species", 1);
   params.source_limiter = pin->GetOrAddReal("radiation_m1", "source_limiter", 0.5);
