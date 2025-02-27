@@ -65,7 +65,19 @@ struct RadiationM1Params {
   Real source_epsabs;   // target absolute precision for non-linear solver
   Real source_epsrel;   // target relative precision for non-linear solver
   int source_maxiter;   // maximum number of iterations for non-linear solver
+
+  Real source_thick_limit;  // Use the optically thick limit if the equilibration time is
+                            // less than the timestep over this factor
+  Real source_therm_limit;  // Assume neutrinos to be thermalized above this optical depth
+  Real source_scat_limit;   // Use the scattering limit if the isotropization time is less
+                            // than the timestep over this factor
 };
 
+enum SrcSignal {
+  SrcThin,
+  SrcEquil,
+  SrcScat,
+  SrcOk,
+};
 }  // namespace radiationm1
 #endif  // RADIATION_M1_PARAMS_HPP
