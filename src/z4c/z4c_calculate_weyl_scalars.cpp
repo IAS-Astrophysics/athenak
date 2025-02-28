@@ -416,12 +416,13 @@ void Z4c::Z4cWeyl(MeshBlockPack *pmbp) {
     Real adm_mass_integrand = 0.0;
     for (int a = 0; a < 3; ++a) {
       Real diff = 0.0;
-      for (int b = 0; b < 3; ++b) {
-        diff += dg_ddd(b, a, b) - dg_ddd(a, b, b);
+      for (int b = 0; b < 3; ++b) 
+      for (int c = 0; c < 3; ++c) {
+        diff += g_uu(c,b) * (dg_ddd(c,a,b) - dg_ddd(a,c,b));
       }
       adm_mass_integrand += uvec(a) * diff;
     }
-    weyl.adm_mass(m,k,j,i) = adm_mass_integrand;
+    weyl.adm_mass(m,k,j,i) = adm_mass_integrand/16/M_PI;
 
     // (2) ADM Linear Momentum integrands with upper indices:
     // First compute the lower-index momentum: (K_{ij} - K g_{ij}) n^j
@@ -438,9 +439,9 @@ void Z4c::Z4cWeyl(MeshBlockPack *pmbp) {
         P_upper[p] += g_uu(p, q) * P_lower[q];
       }
     }
-    weyl.adm_mx(m,k,j,i) = P_upper[0];
-    weyl.adm_my(m,k,j,i) = P_upper[1];
-    weyl.adm_mz(m,k,j,i) = P_upper[2];
+    weyl.adm_mx(m,k,j,i) = P_upper[0]/8/M_PI;
+    weyl.adm_my(m,k,j,i) = P_upper[1]/8/M_PI;
+    weyl.adm_mz(m,k,j,i) = P_upper[2]/8/M_PI;
 
     // (3) ADM Angular Momentum integrands: ε_{ijk} x^j (K^k_l - K δ^k_l) n^l
     // Here we use the already computed K_ud = K^k_l and the coordinate positions.
@@ -462,10 +463,9 @@ void Z4c::Z4cWeyl(MeshBlockPack *pmbp) {
         }
       }
     }
-    weyl.adm_jx(m,k,j,i) = J[0];
-    weyl.adm_jy(m,k,j,i) = J[1];
-    weyl.adm_jz(m,k,j,i) = J[2];
-
+    weyl.adm_jx(m,k,j,i) = J[0]/8/M_PI;
+    weyl.adm_jy(m,k,j,i) = J[1]/8/M_PI;
+    weyl.adm_jz(m,k,j,i) = J[2]/8/M_PI;
   });
 }
 

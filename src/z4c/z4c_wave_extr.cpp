@@ -111,14 +111,14 @@ void Z4c::WaveExtr(MeshBlockPack *pmbp) {
         psi_out[count++] = psilmI;
       }
     }
-    Real adm_integrand = 0.0;
     for (int var = 2; var <= 8; ++var) {
+      Real adm_integrand = 0.0;
       for (int ip = 0; ip < grids[g]->nangles; ++ip) {
         Real data = grids[g]->interp_vals.h_view(ip,var);
         Real weight = grids[g]->solid_angles.h_view(ip);
         adm_integrand += data*weight;
       }
-      adm_out[var-2] = adm_integrand;
+      adm_out[count_adm++] = adm_integrand*SQR(grids[g]->radius);
     }
   }
 
@@ -136,6 +136,7 @@ void Z4c::WaveExtr(MeshBlockPack *pmbp) {
 
   if (0 == global_variable::my_rank) {
     int idx = 0;
+    int idx_adm = 0;
     for (int g=0; g<nradii; ++g) {
       // Output file names
       std::string filename = "waveforms/rpsi4_real_";
@@ -251,7 +252,7 @@ void Z4c::WaveExtr(MeshBlockPack *pmbp) {
 
       // append adm quantities
       for (int var = 0; var <= 6; ++var) {
-        outFile3 << std::setprecision(15) << adm_out[var] << '\t';
+        outFile3 << std::setprecision(15) << adm_out[idx_adm++] << '\t';
       }
 
       outFile << '\n';
@@ -261,9 +262,9 @@ void Z4c::WaveExtr(MeshBlockPack *pmbp) {
       // Close the file stream
       outFile.close();
       outFile2.close();
+      outFile3.close();
     }
   }
 }
-
 
 }  // namespace z4c

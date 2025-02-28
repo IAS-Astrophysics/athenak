@@ -192,7 +192,7 @@ Z4c::Z4c(MeshBlockPack *ppack, ParameterInput *pin) :
   }
   // TODO(@dur566): Why is the size of psi_out hardcoded?
   psi_out = new Real[nrad*77*2];
-  adm_out = new Real[nrad*9];
+  adm_out = new Real[nrad*7];
   mkdir("waveforms",0775);
   mkdir("adm",0775);
   waveform_dt = pin->GetOrAddReal("z4c", "waveform_dt", 1);
