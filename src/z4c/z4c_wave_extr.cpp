@@ -126,11 +126,11 @@ void Z4c::WaveExtr(MeshBlockPack *pmbp) {
   #if MPI_PARALLEL_ENABLED
   if (0 == global_variable::my_rank) {
     MPI_Reduce(MPI_IN_PLACE, psi_out, count, MPI_ATHENA_REAL, MPI_SUM, 0, MPI_COMM_WORLD);
-    MPI_Reduce(MPI_IN_PLACE, adm_out, count, MPI_ATHENA_REAL, MPI_SUM, 0, MPI_COMM_WORLD);
+    MPI_Reduce(MPI_IN_PLACE, adm_out, count_adm, MPI_ATHENA_REAL, MPI_SUM, 0, MPI_COMM_WORLD);
 
   } else {
     MPI_Reduce(psi_out, psi_out, count, MPI_ATHENA_REAL, MPI_SUM, 0, MPI_COMM_WORLD);
-    MPI_Reduce(adm_out, adm_out, count, MPI_ATHENA_REAL, MPI_SUM, 0, MPI_COMM_WORLD);
+    MPI_Reduce(adm_out, adm_out, count_adm, MPI_ATHENA_REAL, MPI_SUM, 0, MPI_COMM_WORLD);
   }
   #endif
 
