@@ -1,12 +1,9 @@
 #ifndef RADIATION_M1_SOURCES_HPP
 #define RADIATION_M1_SOURCES_HPP
 
-#include <athena_tensor.hpp>
-
 #include "athena.hpp"
-#include "radiation_m1_params.hpp"
-#include "radiation_m1_roots_brent.hpp"
-#include "radiation_m1_roots_hybridsj.hpp"
+#include "athena_tensor.hpp"
+#include "radiation_m1/radiation_m1.hpp"
 
 //========================================================================================
 // AthenaXXX astrophysical plasma code
@@ -18,71 +15,84 @@
 
 namespace radiationm1 {
 
-
-
-HybridsjSignal RadiationM1::prepare_closure(const Real q[4], SrcParams &p,
-                                            const RadiationM1Params &params) {
-  p.E = Kokkos::max(q[0], 0.);
-  if (p.E < 0) {
+//----------------------------------------------------------------------------------------
+//! \fn HybridsjSignal radiationm1::RadiationM1::prepare_closure
+//  \brief Sets F_d, F_u, E and computes chi, P_dd in src_params
+KOKKOS_INLINE_FUNCTION
+HybridsjSignal RadiationM1::prepare_closure(ClosureFn closure_fn, const Real q[4], SrcParams &src_params,
+                                            const RadiationM1Params &m1_params) {
+  src_params.E = Kokkos::max(q[0], 0.);
+  if (src_params.E < 0) {
     return HYBRIDSJ_EBADFUNC;
   }
-  pack_F_d(-p.alp * p.n_u(1), -p.alp * p.n_u(2), -p.alp * p.n_u(3), q[1], q[2], q[3],
-           p.F_d);
+  pack_F_d(-src_params.alp * src_params.n_u(1), -src_params.alp * src_params.n_u(2),
+           -src_params.alp * src_params.n_u(3), q[1], q[2], q[3], src_params.F_d);
 
-  AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> F_u{};
-  tensor_contract(p.g_uu, p.F_d, F_u);
+  tensor_contract(src_params.g_uu, src_params.F_d, src_params.F_u);
 
-  calc_closure(p.g_dd, p.g_uu, p.n_d, p.W, p.u_u, p.v_d, p.proj_ud, p.E, p.F_d, p.chi,
-               p.P_dd, params);
-
+  calc_closure(closure_fn, src_params.g_dd, src_params.g_uu, src_params.n_d, src_params.W,
+               src_params.u_u, src_params.v_d, src_params.proj_ud, src_params.E,
+               src_params.F_d, src_params.chi, src_params.P_dd, m1_params);
   return HYBRIDSJ_SUCCESS;
 }
 
-HybridsjSignal RadiationM1::prepare_sources(const Real q[4], SrcParams &p) {
-  assemble_rT(p.n_d, p.E, p.F_d, p.P_dd, p.T_dd);
-
-  p.J = calc_J_from_rT(p.T_dd, p.u_u);
-  calc_H_from_rT(p.T_dd, p.u_u, p.proj_ud, p.H_d);
-
-  calc_rad_sources(p.eta, p.kabs, p.kscat, p.u_d, p.J, p.H_d, p.S_d);
-
-  p.Edot = calc_rE_source(p.alp, p.n_u, p.S_d);
-  calc_rF_source(p.alp, p.gamma_ud, p.S_d, p.tS_d);
-
-  return HYBRIDSJ_SUCCESS;
-}
-
-HybridsjSignal RadiationM1::prepare(const Real q[4], SrcParams &p,
-                                    const RadiationM1Params &params) {
-  auto ierr = prepare_closure(q, p, params);
-  if (ierr != HYBRIDSJ_SUCCESS) {
-    return ierr;
-  }
-
-  ierr = prepare_sources(q, p);
-  if (ierr != HYBRIDSJ_SUCCESS) {
-    return ierr;
-  }
-  return HYBRIDSJ_SUCCESS;
-}
-
+//----------------------------------------------------------------------------------------
+//! \fn HybridsjSignal radiationm1::RadiationM1::prepare_sources
+//  \brief Sets T_dd, J, H_d, S_d, Edot and tS_d in src_params
 KOKKOS_INLINE_FUNCTION
-void explicit_update(SrcParams &p, Real &Enew,
+HybridsjSignal RadiationM1::prepare_sources(const Real q[4], SrcParams &src_params) {
+  assemble_rT(src_params.n_d, src_params.E, src_params.F_d, src_params.P_dd,
+              src_params.T_dd);
+
+  src_params.J = calc_J_from_rT(src_params.T_dd, src_params.u_u);
+  calc_H_from_rT(src_params.T_dd, src_params.u_u, src_params.proj_ud, src_params.H_d);
+
+  calc_rad_sources(src_params.eta, src_params.kabs, src_params.kscat, src_params.u_d,
+                   src_params.J, src_params.H_d, src_params.S_d);
+
+  src_params.Edot = calc_rE_source(src_params.alp, src_params.n_u, src_params.S_d);
+  calc_rF_source(src_params.alp, src_params.gamma_ud, src_params.S_d, src_params.tS_d);
+
+  return HYBRIDSJ_SUCCESS;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn HybridsjSignal radiationm1::RadiationM1::prepare
+//  \brief Calls prepare_closure and prepare_sources
+HybridsjSignal RadiationM1::prepare(ClosureFn closure_fn, const Real q[4], SrcParams &src_params,
+                                    const RadiationM1Params &params) {
+  auto ierr = prepare_closure(closure_fn, q, src_params, params);
+  if (ierr != HYBRIDSJ_SUCCESS) {
+    return ierr;
+  }
+  ierr = prepare_sources(q, src_params);
+  if (ierr != HYBRIDSJ_SUCCESS) {
+    return ierr;
+  }
+  return HYBRIDSJ_SUCCESS;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn HybridsjSignal radiationm1::explicit_update
+//  \brief Computes (E/F)_new = (E/F)* + cdt * tS_d[E/F]
+KOKKOS_INLINE_FUNCTION
+void explicit_update(const SrcParams &src_params, Real &Enew,
                      AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &Fnew_d) {
-  Enew = p.Estar + p.cdt * p.Edot;
-  Fnew_d(1) = p.Fstar_d(1) + p.cdt * p.tS_d(1);
-  Fnew_d(2) = p.Fstar_d(2) + p.cdt * p.tS_d(2);
-  Fnew_d(3) = p.Fstar_d(3) + p.cdt * p.tS_d(3);
+  Enew = src_params.Estar + src_params.cdt * src_params.Edot;
+  Fnew_d(1) = src_params.Fstar_d(1) + src_params.cdt * src_params.tS_d(1);
+  Fnew_d(2) = src_params.Fstar_d(2) + src_params.cdt * src_params.tS_d(2);
+  Fnew_d(3) = src_params.Fstar_d(3) + src_params.cdt * src_params.tS_d(3);
   // F_0 = g_0i F^i = beta_i F^i = beta^i F_i
-  Fnew_d(0) = -p.alp * p.n_u(1) * Fnew_d(1) - p.alp * p.n_u(2) * Fnew_d(2) -
-              p.alp * p.n_u(3) * Fnew_d(3);
+  Fnew_d(0) = -src_params.alp * src_params.n_u(1) * Fnew_d(1) -
+              src_params.alp * src_params.n_u(2) * Fnew_d(2) -
+              src_params.alp * src_params.n_u(3) * Fnew_d(3);
 }
 
 // Solves the implicit problem
 // .  q^new = q^star + dt S[q^new]
 // The source term is S^a = (eta - ka J) u^a - (ka + ks) H^a and includes
 // also emission.
-SrcSignal RadiationM1::source_update(
+SrcSignal RadiationM1::source_update(ClosureFn closure_fn,
     const Real &cdt, const Real &alp,
     const AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> &g_dd,
     const AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> &g_uu,
@@ -98,20 +108,20 @@ SrcSignal RadiationM1::source_update(
     const Real &Estar, const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &Fstar_d,
     const Real &eta, const Real &kabs, const Real &kscat, Real &chi, Real &Enew,
     AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &Fnew_d,
-    const RadiationM1Params &params_) {
-  SrcParams p(cdt, alp, g_dd, g_uu, n_d, n_u, gamma_ud, u_d, u_u, v_d, v_u, proj_ud, W,
-              Estar, Fstar_d, chi, eta, kabs, kscat);
-  // Old solution
+    const RadiationM1Params &m1_params) {
+  SrcParams src_params(cdt, alp, g_dd, g_uu, n_d, n_u, gamma_ud, u_d, u_u, v_d, v_u,
+                       proj_ud, W, Estar, Fstar_d, chi, eta, kabs, kscat);
+  // old solution
   Real qold[] = {Eold, Fold_d(1), Fold_d(2), Fold_d(3)};
   Real xold[4];
   for (int i = 0; i < 4; i++) {
     xold[i] = qold[i];
   }
 
-  // Non stiff limit, use explicit update
+  // non stiff limit, explicit update
   if (cdt * kabs < 1 && cdt * kscat < 1) {
-    prepare(xold, p, params_);
-    explicit_update(p, Enew, Fnew_d);
+    prepare(closure_fn, xold, src_params, m1_params);
+    explicit_update(src_params, Enew, Fnew_d);
 
     Real q[4] = {Enew, Fnew_d(1), Fnew_d(2), Fnew_d(3)};
     Real x[4];
@@ -119,101 +129,75 @@ SrcSignal RadiationM1::source_update(
       x[i] = q[i];
     }
 
-    prepare_closure(x, p, params_);
-    chi = p.chi;
-
+    prepare_closure(closure_fn, x, src_params, m1_params);
+    chi = src_params.chi;
     return SrcThin;
   }
 
-  // Our scheme cannot capture this dynamics (tau << dt), so we go
-  // directly to the equilibrium
-  if (params_.source_thick_limit > 0 &&
-      SQ(cdt) * (kabs * (kabs + kscat)) > SQ(params_.source_thick_limit)) {
+  // cannot capture case tau << dt, go to equilibrium
+  if (m1_params.source_thick_limit > 0 &&
+      SQ(cdt) * (kabs * (kabs + kscat)) > SQ(m1_params.source_thick_limit)) {
     return SrcEquil;
   }
 
-  // This handles the scattering dominated limit
-  if (params_.source_scat_limit > 0 && cdt * kscat > params_.source_scat_limit) {
+  // scattering dominated limit
+  if (m1_params.source_scat_limit > 0 && cdt * kscat > m1_params.source_scat_limit) {
     return SrcScat;
   }
 
-  // Initial guess for the solution
-  HybridsjState state{};
-  HybridsjParams pars{};
+  // begin multiroots solve
+  HybridsjState hybridsj_state{};
+  HybridsjParams hybridsj_params{};
+
+  // initial guess
   Real q[4] = {Enew, Fnew_d(1), Fnew_d(2), Fnew_d(3)};
   Real x[4];
   for (int i = 0; i < 4; i++) {
     x[i] = q[i];
-    pars.x[i] = x[i];
+    hybridsj_params.x[i] = x[i];
   }
+  auto ierr =
+      HybridsjInitialize(HybridsjFunc, hybridsj_state, hybridsj_params, src_params);
 
-  int ierr = HybridsjInitialize(HybridsjFunc, state, pars);
   int iter = 0;
-  /*
   do {
-    ierr = radiationm1::HybridsjIterate(func, state, pars);
-    print_f(pars.x, pars.f, pars.J);
-    iter++;
-
-    ierr = radiationm1::HybridsjTestDelta(pars.dx, pars.x, epsabs, epsrel);
-  } while (ierr == radiationm1::HYBRIDSJ_CONTINUE && iter < maxiter); */
-
-  do {
-    if (iter < params_.source_maxiter) {
-      ierr = HybridsjIterate();
+    if (iter < m1_params.source_maxiter) {
+      ierr = HybridsjIterate(HybridsjFunc, hybridsj_state, hybridsj_params, src_params);
       iter++;
     }
-    // The nonlinear solver is stuck.
-    if (ierr == HYBRIDSJ_ENOPROGJ || ierr == HYBRIDSJ_EBADFUNC || iter >= params_.source_maxiter) {
-      // If we are here, then we are in trouble
 
-      // We are optically thick, suggest to retry with Eddington closure
-      if (closure_fun != eddington) {
-#ifdef WARN_FOR_SRC_FIX
-        ss << "Eddington closure\n";
-        print_stuff(cctkGH, i, j, k, ig, &p, ss);
-        Printer::print_warn(ss.str());
-#endif
-        ierr = source_update(cctkGH, i, j, k, ig, eddington, gsl_solver_1d, gsl_solver_nd,
-                             cdt, alp, g_dd, g_uu, n_d, n_u, gamma_ud, u_d, u_u, v_d, v_u,
+    // the solver is stuck!
+    if (ierr == HYBRIDSJ_ENOPROGJ || ierr == HYBRIDSJ_EBADFUNC ||
+        iter >= m1_params.source_maxiter) {
+      if (m1_params.closure_fun != Eddington) {
+        // Eddington closure
+        auto signal = source_update(eddington, cdt, alp, g_dd, g_uu, n_d, n_u, gamma_ud, u_d, u_u, v_d, v_u,
                              proj_ud, W, Eold, Fold_d, Estar, Fstar_d, eta, kabs, kscat,
-                             chi, Enew, Fnew_d);
-        if (ierr == THC_M1_SOURCE_OK) {
-          return THC_M1_SOURCE_EDDINGTON;
+                             chi, Enew, Fnew_d, m1_params);
+        if (signal == SrcOk) {
+          return SrcEddington;
         } else {
-          return ierr;
+          return signal;
         }
-      } else {
-#ifdef WARN_FOR_SRC_FIX
-        ss << "using initial guess\n";
-        print_stuff(cctkGH, i, j, k, ig, &p, ss);
-        Printer::print_warn(ss.str());
-#endif
-        return THC_M1_SOURCE_FAIL;
       }
-    } else if (ierr != GSL_SUCCESS) {
-      char msg[BUFSIZ];
-      snprintf(msg, BUFSIZ,
-               "Unexpected error in "
-               "gsl_multirootroot_fdfsolver_iterate, error code \"%d\"",
-               ierr);
-#pragma omp critical
-      CCTK_ERROR(msg);
+    } else {
+      // solver has failed
+      return SrcFail;
     }
-    ierr = gsl_multiroot_test_delta(gsl_solver_nd->dx, gsl_solver_nd->x, source_epsabs,
-                                    source_epsrel);
-  } while (ierr == GSL_CONTINUE);
+    ierr = HybridsjTestDelta(hybridsj_params.dx, hybridsj_params.x,
+                             m1_params.source_epsabs, m1_params.source_epsrel);
+  } while (ierr == HYBRIDSJ_CONTINUE);
 
-  *Enew = gsl_vector_get(gsl_solver_nd->x, 0);
-  Fnew_d->at(1) = gsl_vector_get(gsl_solver_nd->x, 1);
-  Fnew_d->at(2) = gsl_vector_get(gsl_solver_nd->x, 2);
-  Fnew_d->at(3) = gsl_vector_get(gsl_solver_nd->x, 3);
+  Enew = hybridsj_params.x[0];
+  Fnew_d(1) = hybridsj_params.x[1];
+  Fnew_d(2) = hybridsj_params.x[2];
+  Fnew_d(3) = hybridsj_params.x[3];
   // F_0 = g_0i F^i = beta_i F^i = beta^i F_i
-  Fnew_d->at(0) = -alp * n_u(1) * Fnew_d->at(1) - alp * n_u(2) * Fnew_d->at(2) -
-                  alp * n_u(3) * Fnew_d->at(3);
+  Fnew_d(0) =
+      -alp * n_u(1) * Fnew_d(1) - alp * n_u(2) * Fnew_d(2) - alp * n_u(3) * Fnew_d(3);
 
-  prepare_closure(gsl_solver_nd->x, &p);
-  *chi = p.chi;
+  prepare_closure(closure_fn, hybridsj_params.x, src_params, m1_params);
+  chi = src_params.chi;
 
   return SrcOk;
 }
