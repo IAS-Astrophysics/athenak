@@ -78,6 +78,8 @@ enum SrcSignal {
   SrcEquil,
   SrcScat,
   SrcOk,
+  SrcEddington,
+  SrcFail,
 };
 
 struct SrcParams {

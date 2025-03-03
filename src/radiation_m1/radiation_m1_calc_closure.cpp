@@ -28,7 +28,7 @@ TaskStatus RadiationM1::CalcClosure(Driver *pdrive, int stage) {
   auto &nvars_ = pmy_pack->pradm1->nvars;
   auto &nspecies_ = pmy_pack->pradm1->nspecies;
   auto &radiation_mask_ = pmy_pack->pradm1->radiation_mask;
-
+  auto &closure_ = pmy_pack->pradm1->closure;
   adm::ADM::ADM_vars &adm = pmy_pack->padm->adm;
   RadiationM1Params &params_ = pmy_pack->pradm1->params;
 
@@ -115,7 +115,7 @@ TaskStatus RadiationM1::CalcClosure(Driver *pdrive, int stage) {
                      F_d);
             Real chi{};
             AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> Ptemp_dd{};
-            calc_closure(g_dd, g_uu, n_d, w_lorentz, u_u, v_d, proj_ud, E, F_d,
+            calc_closure(closure_, g_dd, g_uu, n_d, w_lorentz, u_u, v_d, proj_ud, E, F_d,
                          chi, Ptemp_dd, params_);
             chi_(m, nuidx, k, j, i) = chi;
           });
