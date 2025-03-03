@@ -12,12 +12,12 @@
 #include <iostream>
 #include <string>
 
+#include "Kokkos_SIMD_Common_Math.hpp"
 #include "athena.hpp"
 #include "mesh/mesh.hpp"
 #include "parameter_input.hpp"
 
 namespace radiationm1 {
-
 RadiationM1::RadiationM1(MeshBlockPack *ppack, ParameterInput *pin)
     : pmy_pack(ppack),
       u0("cons", 1, 1, 1, 1, 1),
@@ -61,11 +61,15 @@ RadiationM1::RadiationM1(MeshBlockPack *ppack, ParameterInput *pin)
   std::string closure_fun = pin->GetOrAddString("radiation_m1", "closure_fun", "minerbo");
   if (closure_fun == "minerbo") {
     params.closure_fun = Minerbo;
+    closure = minerbo;
   } else if (closure_fun == "eddington") {
     params.closure_fun = Eddington;
+    closure = eddington;
   } else if (closure_fun == "thin") {
     params.closure_fun = Thin;
+    closure = thin;
   } else {
+    closure = minerbo;
     std::cerr << "Error: Unknown choice for closure: " << closure_fun << std::endl;
     exit(EXIT_FAILURE);
   }

@@ -14,7 +14,7 @@ namespace radiationm1 {
 
 // Computes the closure in the lab frame with a rootfinding procedure
 //KOKKOS_INLINE_FUNCTION
-void RadiationM1::calc_closure(
+void RadiationM1::calc_closure(ClosureFn closure,
     const AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> &g_dd,
     const AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> &g_uu,
     const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &n_d,
@@ -84,8 +84,7 @@ void RadiationM1::calc_closure(
       ierr = BrentTestInterval(x_lo, x_hi, closure_epsilon, 0);
     } while (ierr == BRENT_CONTINUE && iter < closure_maxiter);
 
-    chi = minerbo(x_md);
-    // printf("root = %.14e, chi = %.14e\n", x_md, chi);
+    chi = closure(x_md);
 
     if (ierr != BRENT_SUCCESS) {
       printf("Maximum number of iterations exceeded when computing the M1 "

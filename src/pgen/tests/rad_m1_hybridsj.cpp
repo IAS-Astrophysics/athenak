@@ -14,6 +14,7 @@
 #include "mesh/mesh.hpp"
 #include "parameter_input.hpp"
 #include "pgen/pgen.hpp"
+#include "radiation_m1/radiation_m1_params.hpp"
 #include "radiation_m1/radiation_m1_roots_hybridsj.hpp"
 
 class HybridsjFunc {
@@ -22,8 +23,7 @@ public:
   void operator()(const Real (&x)[M1_MULTIROOTS_DIM],
                   Real (&f)[M1_MULTIROOTS_DIM],
                   Real (&J)[M1_MULTIROOTS_DIM][M1_MULTIROOTS_DIM],
-                  radiationm1::HybridsjState &state,
-                  radiationm1::HybridsjParams &pars) {
+                  radiationm1::SrcParams &pars) {
     Real A = Kokkos::pow(10, 4);
 
     for (int i = 0; i < M1_MULTIROOTS_DIM; i++) {
@@ -131,15 +131,16 @@ void ProblemGenerator::RadiationM1HybridsjTest(ParameterInput *pin,
     std::cout << std::endl;
   }
   std::cout << std::endl; */
-
+  /*
   std::cout << "Testing Powell's Hybrid method:" << std::endl;
   HybridsjFunc func;
   radiationm1::HybridsjState state{};
   radiationm1::HybridsjParams pars{};
+  radiationm1::SrcParams src_params;
   pars.x[0] = 1;
   pars.x[1] = 0;
   radiationm1::HybridsjSignal ierr =
-      radiationm1::HybridsjInitialize(func, state, pars);
+      radiationm1::HybridsjInitialize(func, state, src_params);
   print_f(pars.x, pars.f, pars.J);
 
   int iter = 0;
@@ -147,14 +148,14 @@ void ProblemGenerator::RadiationM1HybridsjTest(ParameterInput *pin,
   Real epsabs = 1e-15;
   Real epsrel = 1e-5;
   do {
-    ierr = radiationm1::HybridsjIterate(func, state, pars);
+    ierr = radiationm1::HybridsjIterate(func, state, src_params);
     print_f(pars.x, pars.f, pars.J);
     iter++;
 
     ierr = radiationm1::HybridsjTestDelta(pars.dx, pars.x, epsabs, epsrel);
   } while (ierr == radiationm1::HYBRIDSJ_CONTINUE && iter < maxiter);
 
-  printf("Iters: %d\n", iter);
+  printf("Iters: %d\n", iter); */
 
   return;
 }

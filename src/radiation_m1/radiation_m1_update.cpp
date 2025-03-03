@@ -65,8 +65,8 @@ TaskStatus RadiationM1::TimeUpdate(Driver *d, int stage) {
   size_t scr_size = 1;
 
   par_for_outer(
-      "radiation_m1_update", DevExeSpace(), scr_size, scr_level, 0, nmb1, ks,
-      ke, js, je, is, ie,
+      "radiation_m1_update", DevExeSpace(), scr_size, scr_level, 0, nmb1, ks, ke, js, je,
+      is, ie,
       KOKKOS_LAMBDA(TeamMember_t member, const int m, const int k, const int j,
                     const int i) {
         // [A] Compute gr quantities: metric, shift, extrinsic curvature, etc.
@@ -80,18 +80,18 @@ TaskStatus RadiationM1::TimeUpdate(Driver *d, int stage) {
         AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> beta_d{};
         AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> n_d{};
         AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> n_u{};
-        adm::SpacetimeMetric(
-            adm.alpha(m, k, j, i), adm.beta_u(m, 0, k, j, i),
-            adm.beta_u(m, 1, k, j, i), adm.beta_u(m, 2, k, j, i),
-            adm.g_dd(m, 0, 0, k, j, i), adm.g_dd(m, 0, 1, k, j, i),
-            adm.g_dd(m, 0, 2, k, j, i), adm.g_dd(m, 1, 1, k, j, i),
-            adm.g_dd(m, 1, 2, k, j, i), adm.g_dd(m, 2, 2, k, j, i), garr_dd);
-        adm::SpacetimeUpperMetric(
-            adm.alpha(m, k, j, i), adm.beta_u(m, 0, k, j, i),
-            adm.beta_u(m, 1, k, j, i), adm.beta_u(m, 2, k, j, i),
-            adm.g_dd(m, 0, 0, k, j, i), adm.g_dd(m, 0, 1, k, j, i),
-            adm.g_dd(m, 0, 2, k, j, i), adm.g_dd(m, 1, 1, k, j, i),
-            adm.g_dd(m, 1, 2, k, j, i), adm.g_dd(m, 2, 2, k, j, i), garr_uu);
+        adm::SpacetimeMetric(adm.alpha(m, k, j, i), adm.beta_u(m, 0, k, j, i),
+                             adm.beta_u(m, 1, k, j, i), adm.beta_u(m, 2, k, j, i),
+                             adm.g_dd(m, 0, 0, k, j, i), adm.g_dd(m, 0, 1, k, j, i),
+                             adm.g_dd(m, 0, 2, k, j, i), adm.g_dd(m, 1, 1, k, j, i),
+                             adm.g_dd(m, 1, 2, k, j, i), adm.g_dd(m, 2, 2, k, j, i),
+                             garr_dd);
+        adm::SpacetimeUpperMetric(adm.alpha(m, k, j, i), adm.beta_u(m, 0, k, j, i),
+                                  adm.beta_u(m, 1, k, j, i), adm.beta_u(m, 2, k, j, i),
+                                  adm.g_dd(m, 0, 0, k, j, i), adm.g_dd(m, 0, 1, k, j, i),
+                                  adm.g_dd(m, 0, 2, k, j, i), adm.g_dd(m, 1, 1, k, j, i),
+                                  adm.g_dd(m, 1, 2, k, j, i), adm.g_dd(m, 2, 2, k, j, i),
+                                  garr_uu);
         for (int a = 0; a < 4; ++a) {
           for (int b = 0; b < 4; ++b) {
             g_dd(a, b) = garr_dd[a + b * 4];
@@ -117,10 +117,10 @@ TaskStatus RadiationM1::TimeUpdate(Driver *d, int stage) {
         K_dd(1, 2) = adm.vK_dd(m, 1, 2, k, j, i);
         K_dd(3, 3) = adm.vK_dd(m, 2, 2, k, j, i);
 
-        Real gam = adm::SpatialDet(
-            adm.g_dd(m, 0, 0, k, j, i), adm.g_dd(m, 0, 1, k, j, i),
-            adm.g_dd(m, 0, 2, k, j, i), adm.g_dd(m, 1, 1, k, j, i),
-            adm.g_dd(m, 1, 2, k, j, i), adm.g_dd(m, 2, 2, k, j, i));
+        Real gam =
+            adm::SpatialDet(adm.g_dd(m, 0, 0, k, j, i), adm.g_dd(m, 0, 1, k, j, i),
+                            adm.g_dd(m, 0, 2, k, j, i), adm.g_dd(m, 1, 1, k, j, i),
+                            adm.g_dd(m, 1, 2, k, j, i), adm.g_dd(m, 2, 2, k, j, i));
         Real volform = Kokkos::sqrt(gam);
 
         // [B] Compute derivatives of gr quantities (note: 3-arrays, no \p_t!)
@@ -129,35 +129,28 @@ TaskStatus RadiationM1::TimeUpdate(Driver *d, int stage) {
                            1 / mbsize.d_view(m).dx3};
         AthenaPointTensor<Real, TensorSymm::NONE, 3, 1> dalpha_d{};
         dalpha_d(0) = Dx<M1_NGHOST>(0, ideltax, adm.alpha, m, k, j, i);
-        dalpha_d(1) =
-            (multi_d) ? Dx<M1_NGHOST>(1, ideltax, adm.alpha, m, k, j, i) : 0.;
-        dalpha_d(2) =
-            (three_d) ? Dx<M1_NGHOST>(2, ideltax, adm.alpha, m, k, j, i) : 0.;
+        dalpha_d(1) = (multi_d) ? Dx<M1_NGHOST>(1, ideltax, adm.alpha, m, k, j, i) : 0.;
+        dalpha_d(2) = (three_d) ? Dx<M1_NGHOST>(2, ideltax, adm.alpha, m, k, j, i) : 0.;
 
         // [B.2] Derivatives of shift (\p_i beta_u(j))
         AthenaPointTensor<Real, TensorSymm::NONE, 3, 2> dbeta_du{};
         for (int a = 0; a < 3; ++a) {
           dbeta_du(0, a) = Dx<M1_NGHOST>(0, ideltax, adm.beta_u, m, a, k, j, i);
           dbeta_du(1, a) =
-              (multi_d) ? Dx<M1_NGHOST>(1, ideltax, adm.beta_u, m, a, k, j, i)
-                        : 0.;
+              (multi_d) ? Dx<M1_NGHOST>(1, ideltax, adm.beta_u, m, a, k, j, i) : 0.;
           dbeta_du(2, a) =
-              (three_d) ? Dx<M1_NGHOST>(2, ideltax, adm.beta_u, m, a, k, j, i)
-                        : 0.;
+              (three_d) ? Dx<M1_NGHOST>(2, ideltax, adm.beta_u, m, a, k, j, i) : 0.;
         }
 
         // [B.3] Derivatives of spatial metric (\p_k gamma_ij)
         AthenaPointTensor<Real, TensorSymm::SYM2, 3, 3> dg_ddd{};
         for (int a = 0; a < 3; ++a) {
           for (int b = 0; b < 3; ++b) {
-            dg_ddd(0, a, b) =
-                Dx<M1_NGHOST>(0, ideltax, adm.g_dd, m, a, b, k, j, i);
-            dg_ddd(1, a, b) = (multi_d) ? Dx<M1_NGHOST>(1, ideltax, adm.g_dd, m,
-                                                        a, b, k, j, i)
-                                        : 0.;
-            dg_ddd(2, a, b) = (three_d) ? Dx<M1_NGHOST>(2, ideltax, adm.g_dd, m,
-                                                        a, b, k, j, i)
-                                        : 0.;
+            dg_ddd(0, a, b) = Dx<M1_NGHOST>(0, ideltax, adm.g_dd, m, a, b, k, j, i);
+            dg_ddd(1, a, b) =
+                (multi_d) ? Dx<M1_NGHOST>(1, ideltax, adm.g_dd, m, a, b, k, j, i) : 0.;
+            dg_ddd(2, a, b) =
+                (three_d) ? Dx<M1_NGHOST>(2, ideltax, adm.g_dd, m, a, b, k, j, i) : 0.;
           }
         }
 
@@ -169,11 +162,11 @@ TaskStatus RadiationM1::TimeUpdate(Driver *d, int stage) {
         AthenaPointTensor<Real, TensorSymm::NONE, 4, 2> proj_ud{};
 
         Real w_lorentz = u_mu_(m, 0, k, j, i);
-        pack_u_u(u_mu_(m, 0, k, j, i), u_mu_(m, 1, k, j, i),
-                 u_mu_(m, 2, k, j, i), u_mu_(m, 3, k, j, i), u_u);
+        pack_u_u(u_mu_(m, 0, k, j, i), u_mu_(m, 1, k, j, i), u_mu_(m, 2, k, j, i),
+                 u_mu_(m, 3, k, j, i), u_u);
         tensor_contract(g_dd, u_u, u_d);
-        pack_v_u(u_mu_(m, 0, k, j, i), u_mu_(m, 1, k, j, i),
-                 u_mu_(m, 2, k, j, i), u_mu_(m, 3, k, j, i), v_u);
+        pack_v_u(u_mu_(m, 0, k, j, i), u_mu_(m, 1, k, j, i), u_mu_(m, 2, k, j, i),
+                 u_mu_(m, 3, k, j, i), v_u);
         tensor_contract(g_dd, v_u, v_d);
         calc_proj(u_d, u_u, proj_ud);
 
@@ -189,20 +182,19 @@ TaskStatus RadiationM1::TimeUpdate(Driver *d, int stage) {
         for (int nuidx = 0; nuidx < nspecies_; nuidx++) {
           // [E.1: Contribution from fluxes]
           for (int var = 0; var < nvars_; ++var) {
-            rEFN[nuidx][var] =
-                -(flx1(m, CombinedIdx(nuidx, var, nvars_), k, j, i + 1) -
-                 flx1(m, CombinedIdx(nuidx, var, nvars_), k, j, i)) *
-                ideltax[0];
+            rEFN[nuidx][var] = -(flx1(m, CombinedIdx(nuidx, var, nvars_), k, j, i + 1) -
+                                 flx1(m, CombinedIdx(nuidx, var, nvars_), k, j, i)) *
+                               ideltax[0];
             if (multi_d) {
               rEFN[nuidx][var] +=
                   -(flx2(m, CombinedIdx(nuidx, var, nvars_), k, j + 1, i) -
-                   flx2(m, CombinedIdx(nuidx, var, nvars_), k, j, i)) *
+                    flx2(m, CombinedIdx(nuidx, var, nvars_), k, j, i)) *
                   ideltax[1];
             }
             if (three_d) {
               rEFN[nuidx][var] +=
                   -(flx3(m, CombinedIdx(nuidx, var, nvars_), k + 1, j, i) -
-                   flx3(m, CombinedIdx(nuidx, var, nvars_), k, j, i)) *
+                    flx3(m, CombinedIdx(nuidx, var, nvars_), k, j, i)) *
                   ideltax[2];
             }
           }
@@ -215,8 +207,7 @@ TaskStatus RadiationM1::TimeUpdate(Driver *d, int stage) {
             pack_F_d(beta_u(1), beta_u(2), beta_u(3),
                      u0_(m, CombinedIdx(nuidx, M1_FX_IDX, nvars_), k, j, i),
                      u0_(m, CombinedIdx(nuidx, M1_FY_IDX, nvars_), k, j, i),
-                     u0_(m, CombinedIdx(nuidx, M1_FZ_IDX, nvars_), k, j, i),
-                     F_d);
+                     u0_(m, CombinedIdx(nuidx, M1_FZ_IDX, nvars_), k, j, i), F_d);
             tensor_contract(g_uu, F_d, F_u);
 
             AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> P_dd{};
@@ -255,8 +246,7 @@ TaskStatus RadiationM1::TimeUpdate(Driver *d, int stage) {
             pack_F_d(beta_u(1), beta_u(2), beta_u(3),
                      u0_(m, CombinedIdx(nuidx, M1_FX_IDX, nvars_), k, j, i),
                      u0_(m, CombinedIdx(nuidx, M1_FY_IDX, nvars_), k, j, i),
-                     u0_(m, CombinedIdx(nuidx, M1_FZ_IDX, nvars_), k, j, i),
-                     F_d);
+                     u0_(m, CombinedIdx(nuidx, M1_FZ_IDX, nvars_), k, j, i), F_d);
             const Real E = u0_(m, CombinedIdx(nuidx, M1_E_IDX, nvars_), k, j, i);
             AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> P_dd{};
             apply_closure(g_dd, g_uu, n_d, w_lorentz, u_u, v_d, proj_ud, E, F_d,
@@ -272,15 +262,16 @@ TaskStatus RadiationM1::TimeUpdate(Driver *d, int stage) {
               Real J = calc_J_from_rT(T_dd, u_u);
               calc_H_from_rT(T_dd, u_u, proj_ud, H_d);
               tensor_contract(g_uu, H_d, H_u);
-              const Real Gamma =
-                  compute_Gamma(w_lorentz, v_u, J, E, F_d, params_);
+              const Real Gamma = compute_Gamma(w_lorentz, v_u, J, E, F_d, params_);
 
               // Compute radiation sources
               calc_rad_sources(eta_1_(m, nuidx, k, j, i) * volform,
-                               abs_1_(m, nuidx, k, j, i),
-                               scat_1_(m, nuidx, k, j, i), u_d, J, H_d, S_d);
+                               abs_1_(m, nuidx, k, j, i), scat_1_(m, nuidx, k, j, i), u_d,
+                               J, H_d, S_d);
               DrEFN[nuidx][M1_E_IDX] =
-                  beta_dt * calc_rE_source(adm.alpha(m, k, j, i), n_u, S_d); // @maitraya: what is the dot product computed with ? Is it g or eta ?
+                  beta_dt * calc_rE_source(adm.alpha(m, k, j, i), n_u,
+                                           S_d);  // @maitraya: what is the dot product
+                                                  // computed with ? Is it g or eta ?
 
               calc_rF_source(adm.alpha(m, k, j, i), gamma_ud, S_d, tS_d);
               DrEFN[nuidx][M1_FX_IDX] = beta_dt * tS_d(1);
@@ -288,12 +279,10 @@ TaskStatus RadiationM1::TimeUpdate(Driver *d, int stage) {
               DrEFN[nuidx][M1_FZ_IDX] = beta_dt * tS_d(3);
 
               if (nspecies_ > 1) {
-                const Real N =
-                    u0_(m, CombinedIdx(nuidx, M1_N_IDX, nvars_), k, j, i);
-                DrEFN[nuidx][M1_N_IDX] =
-                    beta_dt * adm.alpha(m, k, j, i) *
-                    (volform * eta_0_(m, nuidx, k, j, i) -
-                     abs_0_(m, nuidx, k, j, i) * N / Gamma);
+                const Real N = u0_(m, CombinedIdx(nuidx, M1_N_IDX, nvars_), k, j, i);
+                DrEFN[nuidx][M1_N_IDX] = beta_dt * adm.alpha(m, k, j, i) *
+                                         (volform * eta_0_(m, nuidx, k, j, i) -
+                                          abs_0_(m, nuidx, k, j, i) * N / Gamma);
               }
             }
 
@@ -302,9 +291,8 @@ TaskStatus RadiationM1::TimeUpdate(Driver *d, int stage) {
               // boost back. Use these values for implicit solve
 
               // advect radiation
-              Real Estar =
-                  u1_(m, CombinedIdx(nuidx, M1_E_IDX, nvars_), k, j, i) +
-                  beta_dt * rEFN[nuidx][M1_E_IDX];
+              Real Estar = u1_(m, CombinedIdx(nuidx, M1_E_IDX, nvars_), k, j, i) +
+                           beta_dt * rEFN[nuidx][M1_E_IDX];
               AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> Fstar_d{};
               pack_F_d(beta_u(1), beta_u(2), beta_u(3),
                        u1_(m, CombinedIdx(nuidx, M1_FX_IDX, nvars_), k, j, i) +
@@ -314,22 +302,19 @@ TaskStatus RadiationM1::TimeUpdate(Driver *d, int stage) {
                        u1_(m, CombinedIdx(nuidx, M1_FZ_IDX, nvars_), k, j, i) +
                            beta_dt * rEFN[nuidx][M1_FZ_IDX],
                        Fstar_d);
+              apply_floor(g_uu, Estar, Fstar_d, params_);
               Real Nstar{};
               if (nspecies_ > 1) {
-                Nstar = u1_(m, CombinedIdx(nuidx, M1_N_IDX, nvars_), k, j, i) +
-                        beta_dt * rEFN[nuidx][M1_N_IDX];
-              }
-              apply_floor(g_uu, Estar, Fstar_d, params_);
-              if (nspecies_ > 1) {
-                Nstar =
-                    Kokkos::max<Real>(Nstar + beta_dt * rEFN[nuidx][M1_N_IDX],
-                                      params_.rad_N_floor);
+                Nstar = Kokkos::max<Real>(
+                    u1_(m, CombinedIdx(nuidx, M1_N_IDX, nvars_), k, j, i) +
+                        beta_dt * rEFN[nuidx][M1_N_IDX],
+                    params_.rad_N_floor);
               }
 
               // Compute quantities in the fluid frame
               Real Enew{};
               Real chival{};
-              calc_closure(g_dd, g_uu, n_d, w_lorentz, u_u, v_d, proj_ud, Estar,
+              calc_closure(closure, g_dd, g_uu, n_d, w_lorentz, u_u, v_d, proj_ud, Estar,
                            Fstar_d, chival, P_dd, params_);
               AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> rT_dd{};
               assemble_rT(n_d, Estar, Fstar_d, P_dd, rT_dd);
@@ -344,8 +329,7 @@ TaskStatus RadiationM1::TimeUpdate(Driver *d, int stage) {
 
               // Only three components of H^a are independent H^0 is found by
               // requiring H^a u_a = 0
-              const Real khat =
-                  (abs_1_(m, nuidx, k, j, i) + scat_1_(m, nuidx, k, j, i));
+              const Real khat = (abs_1_(m, nuidx, k, j, i) + scat_1_(m, nuidx, k, j, i));
               AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> Hnew_d{};
               for (int a = 1; a < 4; ++a) {
                 Hnew_d(a) = Hstar_d(a) / (1 + dtau * khat);
@@ -358,20 +342,19 @@ TaskStatus RadiationM1::TimeUpdate(Driver *d, int stage) {
               // Update Tmunu
               AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> Fnew_d{};
               const Real H2 = tensor_dot(g_uu, Hnew_d, Hnew_d);
-              const Real xi = Kokkos::sqrt(H2) *
-                              (Jnew > params_.rad_E_floor ? 1 / Jnew : 0);
-              chival = minerbo(xi);
+              const Real xi =
+                  Kokkos::sqrt(H2) * (Jnew > params_.rad_E_floor ? 1 / Jnew : 0);
+              chival = closure(xi);
 
-              calc_inv_closure(g_uu, g_dd, n_u, n_d, gamma_ud, w_lorentz, u_u,
-                               u_d, v_d, proj_ud, chival, Jnew, Hnew_d, Enew,
-                               Fnew_d, params_);
+              calc_inv_closure(g_uu, g_dd, n_u, n_d, gamma_ud, w_lorentz, u_u, u_d, v_d,
+                               proj_ud, chival, Jnew, Hnew_d, Enew, Fnew_d, params_);
 
               const Real dthick = 3. * (1. - chival) / 2.;
               const Real dthin = 1. - dthick;
 
               AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> K_thin_dd{};
-              calc_Kthin(g_uu, n_d, w_lorentz, u_d, proj_ud, Jnew, Hnew_d,
-                         K_thin_dd, params_.rad_E_floor);
+              calc_Kthin(g_uu, n_d, w_lorentz, u_d, proj_ud, Jnew, Hnew_d, K_thin_dd,
+                         params_.rad_E_floor);
 
               AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> K_thick_dd{};
               calc_Kthick(g_dd, u_d, Jnew, Hnew_d, K_thick_dd);
@@ -389,17 +372,18 @@ TaskStatus RadiationM1::TimeUpdate(Driver *d, int stage) {
               calc_H_from_rT(rT_dd, n_u, gamma_ud, Fnew_d);
               apply_floor(g_uu, Enew, Fnew_d, params_);
 
-              //source_update(beta_dt, adm.alpha(m, k, j, i), g_dd, g_uu, n_d,
-              //              n_u, gamma_ud, u_d, u_u, v_d, v_u, proj_ud,
-               ///             w_lorentz, Estar, Fstar_d, Estar, Fstar_d,
-               //             volform * eta_1_(m, nuidx, k, j, i),
-               //             abs_1_(m, nuidx, k, j, i),
+              // @TODO: this is the main deal, uncomment later
+              // source_update(beta_dt, adm.alpha(m, k, j, i), g_dd, g_uu, n_d,
+              //               n_u, gamma_ud, u_d, u_u, v_d, v_u, proj_ud,
+              ///             w_lorentz, Estar, Fstar_d, Estar, Fstar_d,
+              //             volform * eta_1_(m, nuidx, k, j, i),
+              //             abs_1_(m, nuidx, k, j, i),
               //              scat_1_(m, nuidx, k, j, i), chival, Enew, Fnew_d);
               apply_floor(g_uu, Enew, Fnew_d, params_);
 
               // Update closure
-              apply_closure(g_dd, g_uu, n_d, w_lorentz, u_u, v_d, proj_ud, Enew,
-                            Fnew_d, chival, P_dd, params_);
+              apply_closure(g_dd, g_uu, n_d, w_lorentz, u_u, v_d, proj_ud, Enew, Fnew_d,
+                            chival, P_dd, params_);
 
               // Compute new radiation energy density in the fluid frame
               AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> T_dd{};
@@ -421,8 +405,8 @@ TaskStatus RadiationM1::TimeUpdate(Driver *d, int stage) {
                 DrEFN[nuidx][M1_N_IDX] =
                     (Nstar + beta_dt * adm.alpha(m, k, j, i) * volform *
                                  eta_0_(m, nuidx, k, j, i)) /
-                        (1 + beta_dt * adm.alpha(m, k, j, i) *
-                                 abs_0_(m, nuidx, k, j, i) / Gamma) -
+                        (1 + beta_dt * adm.alpha(m, k, j, i) * abs_0_(m, nuidx, k, j, i) /
+                                 Gamma) -
                     Nstar;
               }
             }
@@ -439,14 +423,13 @@ TaskStatus RadiationM1::TimeUpdate(Driver *d, int stage) {
             theta = 1.0;
             Real DTau_sum = 0.0;
             for (int nuidx = 0; nuidx < nspecies_; ++nuidx) {
-              Real Estar =
-                  u1_(m, CombinedIdx(nuidx, M1_E_IDX, nvars_), k, j, i) +
-                  beta_dt * rEFN[nuidx][M1_E_IDX];
+              Real Estar = u1_(m, CombinedIdx(nuidx, M1_E_IDX, nvars_), k, j, i) +
+                           beta_dt * rEFN[nuidx][M1_E_IDX];
               if (DrEFN[nuidx][M1_E_IDX] < 0) {
                 theta = Kokkos::min<Real>(-params_.source_limiter *
-                                        Kokkos::max<Real>(Estar, 0.0) /
-                                        DrEFN[nuidx][M1_E_IDX],
-                                    theta);
+                                              Kokkos::max<Real>(Estar, 0.0) /
+                                              DrEFN[nuidx][M1_E_IDX],
+                                          theta);
               }
               DTau_sum -= DrEFN[nuidx][M1_E_IDX];
             }
@@ -459,9 +442,8 @@ TaskStatus RadiationM1::TimeUpdate(Driver *d, int stage) {
             if (nspecies_ > 1) {
               Real DDxp_sum = 0.0;
               for (int nuidx = 0; nuidx < nspecies_; ++nuidx) {
-                Real Nstar =
-                    u1_(m, CombinedIdx(nuidx, M1_N_IDX, nvars_), k, j, i) +
-                    beta_dt * rEFN[nuidx][M1_N_IDX];
+                Real Nstar = u1_(m, CombinedIdx(nuidx, M1_N_IDX, nvars_), k, j, i) +
+                             beta_dt * rEFN[nuidx][M1_N_IDX];
                 if (DrEFN[nuidx][M1_N_IDX] < 0) {
                   theta = Kokkos::min(-params_.source_limiter *
                                           Kokkos::max<Real>(Nstar, 0.0) /
@@ -474,8 +456,7 @@ TaskStatus RadiationM1::TimeUpdate(Driver *d, int stage) {
               if (DYe > 0) {
                 theta = Kokkos::min<Real>(
                     params_.source_limiter *
-                        Kokkos::max<Real>(params_.source_Ye_max - Y_e, 0.0) /
-                        DYe,
+                        Kokkos::max<Real>(params_.source_Ye_max - Y_e, 0.0) / DYe,
                     theta);
               } else if (DYe < 0) {
                 theta = Kokkos::min<Real>(
@@ -493,18 +474,14 @@ TaskStatus RadiationM1::TimeUpdate(Driver *d, int stage) {
         // [H] Update fields
         for (int nuidx = 0; nuidx < nspecies_; nuidx++) {
           Real Ef = u1_(m, CombinedIdx(nuidx, M1_E_IDX, nvars_), k, j, i) +
-                    beta_dt * rEFN[nuidx][M1_E_IDX] +
-                    theta * DrEFN[nuidx][M1_E_IDX];
+                    beta_dt * rEFN[nuidx][M1_E_IDX] + theta * DrEFN[nuidx][M1_E_IDX];
           AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> Ff_d{};
           Real Fxf = u1_(m, CombinedIdx(nuidx, M1_FX_IDX, nvars_), k, j, i) +
-                     beta_dt * rEFN[nuidx][M1_FX_IDX] +
-                     theta * DrEFN[nuidx][M1_FX_IDX];
+                     beta_dt * rEFN[nuidx][M1_FX_IDX] + theta * DrEFN[nuidx][M1_FX_IDX];
           Real Fyf = u1_(m, CombinedIdx(nuidx, M1_FY_IDX, nvars_), k, j, i) +
-                     beta_dt * rEFN[nuidx][M1_FY_IDX] +
-                     theta * DrEFN[nuidx][M1_FY_IDX];
+                     beta_dt * rEFN[nuidx][M1_FY_IDX] + theta * DrEFN[nuidx][M1_FY_IDX];
           Real Fzf = u1_(m, CombinedIdx(nuidx, M1_FZ_IDX, nvars_), k, j, i) +
-                     beta_dt * rEFN[nuidx][M1_FZ_IDX] +
-                     theta * DrEFN[nuidx][M1_FZ_IDX];
+                     beta_dt * rEFN[nuidx][M1_FZ_IDX] + theta * DrEFN[nuidx][M1_FZ_IDX];
           pack_F_d(adm.beta_u(m, 0, k, j, i), adm.beta_u(m, 1, k, j, i),
                    adm.beta_u(m, 2, k, j, i), Fxf, Fyf, Fzf, Ff_d);
           apply_floor(g_uu, Ef, Ff_d, params_);
@@ -515,8 +492,7 @@ TaskStatus RadiationM1::TimeUpdate(Driver *d, int stage) {
 
           if (nspecies_ > 1) {
             Real Nf = u1_(m, CombinedIdx(nuidx, M1_N_IDX, nvars_), k, j, i) -
-                      beta_dt * rEFN[nuidx][M1_N_IDX] +
-                      theta * DrEFN[nuidx][M1_N_IDX];
+                      beta_dt * rEFN[nuidx][M1_N_IDX] + theta * DrEFN[nuidx][M1_N_IDX];
             Nf = Kokkos::max<Real>(Nf, params_.rad_N_floor);
             u0_(m, CombinedIdx(nuidx, M1_N_IDX, nvars_), k, j, i) = Nf;
           }

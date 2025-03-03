@@ -1,16 +1,19 @@
 #ifndef RADIATION_M1_ROOTS_FNS_H
 #define RADIATION_M1_ROOTS_FNS_H
+
 #include "athena.hpp"
 #include "athena_tensor.hpp"
-#include "radiation_m1_helpers.hpp"
-#include "radiation_m1_params.hpp"
+#include "radiation_m1/radiation_m1_helpers.hpp"
+#include "radiation_m1/radiation_m1_params.hpp"
 
 namespace radiationm1 {
+
+//class RadiationM1;
 //----------------------------------------------------------------------------------------
 //! \class BrentFunctor
 //  \brief Function to rootfind in order to determine the closure
 class BrentFunctor {
-public:
+ public:
   KOKKOS_INLINE_FUNCTION
   Real operator()(Real xi, const AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> &g_dd,
                   const AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> &g_uu,
@@ -40,7 +43,7 @@ public:
 };
 
 class BrentFunctorInv {
-public:
+ public:
   KOKKOS_INLINE_FUNCTION
   Real operator()(Real dthick,
                   const AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> &g_uu,
@@ -210,28 +213,29 @@ KOKKOS_INLINE_FUNCTION void source_jacobian(
 }
 
 class HybridsjFunctor {
-public:
+ public:
   KOKKOS_INLINE_FUNCTION
   void operator()(const Real (&x)[M1_MULTIROOTS_DIM], Real (&f)[M1_MULTIROOTS_DIM],
-                  Real (&J)[M1_MULTIROOTS_DIM][M1_MULTIROOTS_DIM], HybridsjState &state,
-                  HybridsjParams &pars, SrcParams &p, const RadiationM1Params &params_) {
+                  Real (&J)[M1_MULTIROOTS_DIM][M1_MULTIROOTS_DIM], SrcParams &src_params) {
     // Function to rootfind for
     //    f(q) = q - q^* - dt S[q]
-    //auto ierr = RadiationM1::prepare(x, p);
-    f[0] = x[0] - p.Estar - p.cdt * p.Edot;
-    f[1] = x[1] - p.Fstar_d(1) - p.cdt * p.tS_d(1);
-    f[2] = x[2] - p.Fstar_d(2) - p.cdt * p.tS_d(2);
-    f[3] = x[3] - p.Fstar_d(3) - p.cdt * p.tS_d(3);
+    //auto ierr = RadiationM1::prepare(x, src_params);
+    f[0] = x[0] - src_params.Estar - src_params.cdt * src_params.Edot;
+    f[1] = x[1] - src_params.Fstar_d(1) - src_params.cdt * src_params.tS_d(1);
+    f[2] = x[2] - src_params.Fstar_d(2) - src_params.cdt * src_params.tS_d(2);
+    f[3] = x[3] - src_params.Fstar_d(3) - src_params.cdt * src_params.tS_d(3);
 
-    Real m_q[] = {p.E, p.F_d(1), p.F_d(2), p.F_d(3)};
-    Real m_F2 = tensor_dot(p.F_u, p.F_d);
-    Real m_v2 = tensor_dot(p.v_u, p.v_d);
-    Real m_qstar[] = {p.Estar, p.Fstar_d(1), p.Fstar_d(2), p.Fstar_d(3)};
+    Real m_q[] = {src_params.E, src_params.F_d(1), src_params.F_d(2), src_params.F_d(3)};
+    Real m_F2 = tensor_dot(src_params.F_u, src_params.F_d);
+    Real m_v2 = tensor_dot(src_params.v_u, src_params.v_d);
+    Real m_qstar[] = {src_params.Estar, src_params.Fstar_d(1), src_params.Fstar_d(2),
+                      src_params.Fstar_d(3)};
 
-    source_jacobian(m_q, p.F_u, m_F2, p.chi, p.kscat, p.kabs, p.v_u, p.v_d, m_v2, p.W,
-                    p.alp, p.cdt, m_qstar, J);
+    source_jacobian(m_q, src_params.F_u, m_F2, src_params.chi, src_params.kscat,
+                    src_params.kabs, src_params.v_u, src_params.v_d, m_v2, src_params.W,
+                    src_params.alp, src_params.cdt, m_qstar, J);
   }
 };
 
-}
+}  // namespace radiationm1
 #endif  // RADIATION_M1_ROOTS_FNS_H
