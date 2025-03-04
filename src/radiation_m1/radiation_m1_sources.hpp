@@ -20,12 +20,12 @@ namespace radiationm1 {
 //! \fn HybridsjSignal radiationm1::RadiationM1::prepare_closure
 //  \brief Sets F_d, F_u, E and computes chi, P_dd in src_params
 KOKKOS_INLINE_FUNCTION
-HybridsjSignal prepare_closure(const BrentFunctor &BrentFunc, const Real q[4],
+MathSignal prepare_closure(const BrentFunctor &BrentFunc, const Real q[4],
                                SrcParams &src_params, const RadiationM1Params &m1_params,
                                const RadiationM1Closure &closure_type) {
   src_params.E = Kokkos::max(q[0], 0.);
   if (src_params.E < 0) {
-    return HYBRIDSJ_EBADFUNC;
+    return LinalgEbadfunc;
   }
   pack_F_d(-src_params.alp * src_params.n_u(1), -src_params.alp * src_params.n_u(2),
            -src_params.alp * src_params.n_u(3), q[1], q[2], q[3], src_params.F_d);
@@ -35,14 +35,14 @@ HybridsjSignal prepare_closure(const BrentFunctor &BrentFunc, const Real q[4],
   calc_closure(BrentFunc, src_params.g_dd, src_params.g_uu, src_params.n_d, src_params.W,
                src_params.u_u, src_params.v_d, src_params.proj_ud, src_params.E,
                src_params.F_d, src_params.chi, src_params.P_dd, m1_params, closure_type);
-  return HYBRIDSJ_SUCCESS;
+  return LinalgSuccess;
 }
 
 //----------------------------------------------------------------------------------------
 //! \fn HybridsjSignal radiationm1::RadiationM1::prepare_sources
 //  \brief Sets T_dd, J, H_d, S_d, Edot and tS_d in src_params
 KOKKOS_INLINE_FUNCTION
-HybridsjSignal prepare_sources(const Real q[4], SrcParams &src_params) {
+MathSignal prepare_sources(const Real q[4], SrcParams &src_params) {
   assemble_rT(src_params.n_d, src_params.E, src_params.F_d, src_params.P_dd,
               src_params.T_dd);
 
@@ -55,25 +55,25 @@ HybridsjSignal prepare_sources(const Real q[4], SrcParams &src_params) {
   src_params.Edot = calc_rE_source(src_params.alp, src_params.n_u, src_params.S_d);
   calc_rF_source(src_params.alp, src_params.gamma_ud, src_params.S_d, src_params.tS_d);
 
-  return HYBRIDSJ_SUCCESS;
+  return LinalgSuccess;
 }
 
 //----------------------------------------------------------------------------------------
 //! \fn HybridsjSignal radiationm1::RadiationM1::prepare
 //  \brief Calls prepare_closure and prepare_sources
 KOKKOS_INLINE_FUNCTION
-HybridsjSignal prepare(const BrentFunctor &BrentFunc, const Real q[4],
+MathSignal prepare(const BrentFunctor &BrentFunc, const Real q[4],
                        SrcParams &src_params, const RadiationM1Params &m1_params,
                        const RadiationM1Closure &closure_type) {
   auto ierr = prepare_closure(BrentFunc, q, src_params, m1_params, closure_type);
-  if (ierr != HYBRIDSJ_SUCCESS) {
+  if (ierr != LinalgSuccess) {
     return ierr;
   }
   ierr = prepare_sources(q, src_params);
-  if (ierr != HYBRIDSJ_SUCCESS) {
+  if (ierr != LinalgSuccess) {
     return ierr;
   }
-  return HYBRIDSJ_SUCCESS;
+  return LinalgSuccess;
 }
 
 //----------------------------------------------------------------------------------------
@@ -172,7 +172,7 @@ SrcSignal source_update(
     }
 
     // the solver is stuck!
-    if (ierr == HYBRIDSJ_ENOPROGJ || ierr == HYBRIDSJ_EBADFUNC ||
+    if (ierr == LinalgEnoprogj || ierr == LinalgEbadfunc ||
         iter >= m1_params.source_maxiter) {
       if (m1_params.closure_type != Eddington) {
         // Eddington closure
@@ -192,7 +192,7 @@ SrcSignal source_update(
     }
     ierr = HybridsjTestDelta(hybridsj_params.dx, hybridsj_params.x,
                              m1_params.source_epsabs, m1_params.source_epsrel);
-  } while (ierr == HYBRIDSJ_CONTINUE);
+  } while (ierr == LinalgContinue);
 
   Enew = hybridsj_params.x[0];
   Fnew_d(1) = hybridsj_params.x[1];
