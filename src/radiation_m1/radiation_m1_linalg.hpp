@@ -95,39 +95,6 @@ Real householder_transform(Real (&v)[M1_MULTIROOTS_DIM]) {
   }
 }
 
-KOKKOS_INLINE_FUNCTION
-void gsl_linalg_QR_decomp(Real (&A)[M1_MULTIROOTS_DIM][M1_MULTIROOTS_DIM],
-                          Real (&tau)[M1_MULTIROOTS_DIM]) {
-    /*
-    for (int i = 0; i < M1_MULTIROOTS_DIM; i++) {
-      /* Compute the Householder transformation to reduce the j-th
-         column of the matrix to a multiple of the j-th unit vector */
-      /*
-      gsl_vector_view c = gsl_matrix_subcolumn(A, i, i, M - i);
-      double tau_i = gsl_linalg_householder_transform(&(c.vector));
-      double *ptr = gsl_vector_ptr(&(c.vector), 0);
-
-      gsl_vector_set(tau, i, tau_i);
-
-      /* Apply the transformation to the remaining columns and
-         update the norms */
-    /*
-      if (i + 1 < N) {
-        gsl_matrix_view m = gsl_matrix_submatrix(A, i, i + 1, M - i, N - i - 1);
-        gsl_vector_view work = gsl_vector_subvector(tau, i + 1, N - i - 1);
-        double tmp = *ptr;
-
-        *ptr = 1.0;
-        gsl_linalg_householder_left(tau_i, &(c.vector), &(m.matrix),
-                                    &(work.vector));
-        *ptr = tmp;
-      }
-    }
-
-    return GSL_SUCCESS; */
-
-}
-
 //----------------------------------------------------------------------------------------
 //! \fn void radiationm1::qr_factorize
 //  \brief computes the QR decomposition of a square matrix

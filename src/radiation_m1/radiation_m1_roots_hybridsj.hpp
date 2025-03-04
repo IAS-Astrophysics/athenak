@@ -346,11 +346,12 @@ void compute_trial_step(const Real (&x)[M1_MULTIROOTS_DIM],
 //! \fn HybridsjSignal radiationm1::HybridsjInitialize
 //  \brief Initialize the solver state for Powell's hybrid method
 template <class Functor, class... Types>
-KOKKOS_INLINE_FUNCTION HybridsjSignal
-HybridsjInitialize(Functor &&fdf, HybridsjState &state, HybridsjParams &pars,
-                   SrcParams &src_params) {
+KOKKOS_INLINE_FUNCTION HybridsjSignal HybridsjInitialize(Functor &&fdf,
+                                                         HybridsjState &state,
+                                                         HybridsjParams &pars,
+                                                         Types... args) {
   // populate f, J for a given x
-  fdf(pars.x, pars.f, pars.J, src_params);
+  fdf(pars.x, pars.f, pars.J, args...);
 
   state.iter = 1;
   state.fnorm = enorm(pars.f);
@@ -376,7 +377,8 @@ HybridsjInitialize(Functor &&fdf, HybridsjState &state, HybridsjParams &pars,
 //  \brief Iterate the solver state once for Powell's hybrid method
 template <class Functor, class... Types>
 KOKKOS_INLINE_FUNCTION HybridsjSignal HybridsjIterate(Functor &&fdf, HybridsjState &state,
-                                                      HybridsjParams &pars, SrcParams &src_params) {
+                                                      HybridsjParams &pars,
+                                                      Types... args) {
   Real p1 = 0.1, p5 = 0.5, p001 = 0.001, p0001 = 0.0001;
 
   // Q^T f & dogleg
@@ -394,7 +396,7 @@ KOKKOS_INLINE_FUNCTION HybridsjSignal HybridsjIterate(Functor &&fdf, HybridsjSta
   }
 
   // evaluate f at x + p
-  fdf(state.x_trial, state.f_trial, state.J_trial, src_params);
+  fdf(state.x_trial, state.f_trial, state.J_trial, args...);
 
   // df = f_trial - f
   compute_df(state.f_trial, pars.f, state.df);
@@ -444,7 +446,7 @@ KOKKOS_INLINE_FUNCTION HybridsjSignal HybridsjIterate(Functor &&fdf, HybridsjSta
   }
   if (state.ncfail == 2) {
     {
-      fdf(pars.x, pars.f, pars.J, src_params);
+      fdf(pars.x, pars.f, pars.J, args...);
     }
 
     state.nslow2++;
