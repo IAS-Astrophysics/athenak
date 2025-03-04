@@ -149,8 +149,6 @@ void ADMOnePunctureBoosted(MeshBlockPack *pmbp, ParameterInput *pin) {
     adm.beta_u(m,0,k,j,i) = (std::pow(alpha0,2)-std::pow(psi0,4))
                           /(std::pow(psi0,4)-std::pow(alpha0,2)*std::pow(vel,2))*vel;
 
-
-
     // extrinsic curvature
     Real alpha0p = 4*m0/std::pow(m0+2*r0,2);
     Real second_term =
