@@ -324,7 +324,8 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
           w_fix.vy = w.vy;
           w_fix.vz = w.vz;
           w_fix.e  = w.e;
-          Real &s_tot = cons(m,entropyIdx,k,j,i);
+          Real alpha = sqrt(-1.0/gupper[0][0]);
+          Real &s_tot = cons(m,entropyIdx,k,j,i)*alpha;
           SingleC2P_IdealSRMHD_EntropyFix(u_sr, s_tot, eos, s2, b2, rpar, w_fix, w_old,
                                           dfloor_used_in_fix, efloor_used_in_fix,
                                           c2p_failure_in_fix, iter_used_in_fix);
