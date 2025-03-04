@@ -9,6 +9,7 @@
 //  \brief functions for Brent-Dekker rootfinder
 
 #include "athena.hpp"
+#include "radiation_m1/radiation_m1_linalg.hpp"
 
 namespace radiationm1 {
 
@@ -20,27 +21,18 @@ struct BrentState {
   Real f_a, f_b, f_c;
 };
 
-//----------------------------------------------------------------------------------------
-//! \enum BrentSignal
-//  \brief signal codes for the Brent-Dekker rootfinder
-enum BrentSignal {
-  BRENT_INVALID,
-  BRENT_EINVAL,
-  BRENT_SUCCESS,
-  BRENT_CONTINUE,
-};
 
 //----------------------------------------------------------------------------------------
 //! \fn BrentSignal radiationm1::BrentInitialize
 //  \brief Initialize the Brent-Dekker rootfinder
 template <class Functor, class... Types>
-KOKKOS_INLINE_FUNCTION BrentSignal BrentInitialize(Functor &&f, Real x_lower,
+KOKKOS_INLINE_FUNCTION MathSignal BrentInitialize(Functor &&f, Real x_lower,
                                                    Real x_upper, Real &root,
                                                    BrentState &brent_state,
                                                    Types... args) {
   if (x_lower > x_upper) {
     printf("BrentInit: %.14e must be less than %.14e\n", x_lower, x_upper);
-    return BRENT_EINVAL;
+    return LinalgEinval;
   }
 
   root = 0.5 * (x_lower + x_upper);
@@ -62,16 +54,16 @@ KOKKOS_INLINE_FUNCTION BrentSignal BrentInitialize(Functor &&f, Real x_lower,
     printf("BrentInit: Function at endpoints should be of opposite signs! "
            "f_l = %.14e, f_h = %.14e\n",
            f_lower, f_upper);
-    return BRENT_EINVAL;
+    return LinalgEinval;
   }
-  return BRENT_SUCCESS;
+  return LinalgSuccess;
 }
 
 //----------------------------------------------------------------------------------------
 //! \fn BrentSignal radiationm1::BrentIterate
 //  \brief Single iteration of the Brent-Dekker rootfinder
 template <class Functor, class... Types>
-KOKKOS_INLINE_FUNCTION BrentSignal BrentIterate(Functor &&f, Real &x_lower,
+KOKKOS_INLINE_FUNCTION MathSignal BrentIterate(Functor &&f, Real &x_lower,
                                                 Real &x_upper, Real &root,
                                                 BrentState &brent_state,
                                                 Types... args) {
@@ -113,7 +105,7 @@ KOKKOS_INLINE_FUNCTION BrentSignal BrentIterate(Functor &&f, Real &x_lower,
     root = b;
     x_lower = b;
     x_upper = b;
-    return BRENT_SUCCESS;
+    return LinalgSuccess;
   }
 
   if (Kokkos::fabs(m) <= tol) {
@@ -126,7 +118,7 @@ KOKKOS_INLINE_FUNCTION BrentSignal BrentIterate(Functor &&f, Real &x_lower,
       x_lower = c;
       x_upper = b;
     }
-    return BRENT_SUCCESS;
+    return LinalgSuccess;
   }
 
   if (Kokkos::fabs(e) < tol || Kokkos::fabs(f_a) <= Kokkos::fabs(f_b)) {
@@ -200,14 +192,14 @@ KOKKOS_INLINE_FUNCTION BrentSignal BrentIterate(Functor &&f, Real &x_lower,
     x_lower = c;
     x_upper = b;
   }
-  return BRENT_SUCCESS;
+  return LinalgSuccess;
 }
 
 //----------------------------------------------------------------------------------------
 //! \fn BrentSignal radiationm1::BrentTestInterval
 //  \brief test convergence of interval to check if BrentIterate should continue
 KOKKOS_INLINE_FUNCTION
-BrentSignal BrentTestInterval(Real x_lower, Real x_upper, Real epsabs,
+MathSignal BrentTestInterval(Real x_lower, Real x_upper, Real epsabs,
                               Real epsrel) {
 
   const Real abs_lower = Kokkos::fabs(x_lower);
@@ -216,13 +208,13 @@ BrentSignal BrentTestInterval(Real x_lower, Real x_upper, Real epsabs,
   Real min_abs{}, tolerance{};
 
   if (epsrel < 0.0) {
-    return BRENT_INVALID;
+    return LinalgInvalid;
   }
   if (epsabs < 0.0) {
-    return BRENT_INVALID;
+    return LinalgInvalid;
   }
   if (x_lower > x_upper) {
-    return BRENT_INVALID;
+    return LinalgInvalid;
   }
 
   if ((x_lower > 0.0 && x_upper > 0.0) || (x_lower < 0.0 && x_upper < 0.0)) {
@@ -234,9 +226,9 @@ BrentSignal BrentTestInterval(Real x_lower, Real x_upper, Real epsabs,
   tolerance = epsabs + epsrel * min_abs;
 
   if (Kokkos::fabs(x_upper - x_lower) < tolerance) {
-    return BRENT_SUCCESS;
+    return LinalgSuccess;
   }
-  return BRENT_CONTINUE;
+  return LinalgContinue;
 }
 
 } // namespace radiationm1

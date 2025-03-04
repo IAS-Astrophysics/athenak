@@ -47,12 +47,12 @@ KOKKOS_INLINE_FUNCTION void calc_closure(
     // Initialize rootfinder
     const int closure_maxiter = 64;
     const Real closure_epsilon = 1e-15;
-    BrentSignal ierr =
+    MathSignal ierr =
         BrentInitialize(BrentFunc, x_lo, x_hi, root, state, g_dd, g_uu, n_d, w_lorentz,
                         u_u, v_d, proj_ud, E, F_d, m1_params, m1_params.closure_type);
 
     // no root, most likely due to high velocities, use simple approximation
-    if (ierr == BRENT_EINVAL) {
+    if (ierr == LinalgEinval) {
       const Real z_ed = BrentFunc(0., g_dd, g_uu, n_d, w_lorentz, u_u, v_d, proj_ud, E,
                                   F_d, m1_params, closure_type);
       const Real z_th = BrentFunc(1., g_dd, g_uu, n_d, w_lorentz, u_u, v_d, proj_ud, E,
@@ -75,16 +75,16 @@ KOKKOS_INLINE_FUNCTION void calc_closure(
                           u_u, v_d, proj_ud, E, F_d, m1_params, m1_params.closure_type);
 
       // Some nans in the evaluation. This should not happen.
-      if (ierr != BRENT_SUCCESS) {
+      if (ierr != LinalgSuccess) {
         printf("Unexpected error in BrentIterate.\n");
       }
       x_md = root;
       ierr = BrentTestInterval(x_lo, x_hi, closure_epsilon, 0);
-    } while (ierr == BRENT_CONTINUE && iter < closure_maxiter);
+    } while (ierr == LinalgContinue && iter < closure_maxiter);
 
     chi = closure_fun(x_md, closure_type);
 
-    if (ierr != BRENT_SUCCESS) {
+    if (ierr != LinalgSuccess) {
       printf(
           "Maximum number of iterations exceeded when computing the M1 "
           "closure\n");
@@ -121,12 +121,12 @@ KOKKOS_INLINE_FUNCTION void calc_inv_closure(
   BrentState state{};
 
   // Initialize rootfinder
-  BrentSignal ierr = BrentInitialize(
+  MathSignal ierr = BrentInitialize(
       BrentFuncInv, x_lo, x_hi, root, state, g_uu, g_dd, n_u, n_d, gamma_ud, w_lorentz,
       u_u, u_d, v_d, proj_ud, chi, J, H_d, K_thick_dd, K_thin_dd, m1_params);
 
   // no root, most likely due to truncation errors
-  if (ierr == BRENT_EINVAL) {
+  if (ierr == LinalgEinval) {
     x_md = 3. * (1. - chi) / 2.;
     apply_inv_closure(x_md, n_u, gamma_ud, u_d, J, H_d, K_thick_dd, K_thin_dd, E, F_d);
     return;
@@ -141,12 +141,12 @@ KOKKOS_INLINE_FUNCTION void calc_inv_closure(
                         K_thick_dd, K_thin_dd, m1_params);
 
     // Some nans in the evaluation. This should not happen.
-    if (ierr != BRENT_SUCCESS) {
+    if (ierr != LinalgSuccess) {
       printf("Unexpected error in BrentIterate.\n");
     }
     x_md = root;
     ierr = BrentTestInterval(x_lo, x_hi, 0.0, m1_params.inv_closure_epsilon);
-  } while (ierr == BRENT_CONTINUE && iter < m1_params.inv_closure_maxiter);
+  } while (ierr == LinalgContinue && iter < m1_params.inv_closure_maxiter);
 
   apply_inv_closure(x_md, n_u, gamma_ud, u_d, J, H_d, K_thick_dd, K_thin_dd, E, F_d);
 }
