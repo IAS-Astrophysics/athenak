@@ -110,6 +110,8 @@ template <typename T>
 using DvceArray5D = Kokkos::View<T *****, LayoutWrapper, DevMemSpace>;
 template <typename T>
 using DvceArray6D = Kokkos::View<T ******, LayoutWrapper, DevMemSpace>;
+template <typename T>
+using DvceArray7D = Kokkos::View<T *******, LayoutWrapper, DevMemSpace>; // LZ add
 
 // template declarations for construction of Kokkos::View on host
 template <typename T>
