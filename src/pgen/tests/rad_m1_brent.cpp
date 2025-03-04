@@ -50,7 +50,7 @@ void ProblemGenerator::RadiationM1BrentTest(ParameterInput *pin,
         radiationm1::BrentState state{};
 
         // Initialize rootfinder
-        radiationm1::BrentSignal ierr =
+        radiationm1::MathSignal ierr =
             BrentInitialize(f, x_lo, x_hi, root, state);
 
         // Rootfinding
@@ -60,16 +60,16 @@ void ProblemGenerator::RadiationM1BrentTest(ParameterInput *pin,
           ierr = BrentIterate(f, x_lo, x_hi, root, state);
 
           // Some nans in the evaluation. This should not happen.
-          if (ierr != radiationm1::BRENT_SUCCESS) {
+          if (ierr != radiationm1::LinalgSuccess) {
             printf("Unexpected error in BrentIterate.\n");
           }
           x_md = root;
           ierr = radiationm1::BrentTestInterval(x_lo, x_hi, closure_epsilon, 0);
-        } while (ierr == radiationm1::BRENT_CONTINUE && iter < closure_maxiter);
+        } while (ierr == radiationm1::LinalgContinue && iter < closure_maxiter);
 
         printf("[%d] root = %.14e\n", i, x_md);
 
-        if (ierr != radiationm1::BRENT_SUCCESS) {
+        if (ierr != radiationm1::LinalgSuccess) {
           printf("Maximum number of iterations exceeded\n");
         } else {
           printf("[%d] num iter: %d\n", i, iter);

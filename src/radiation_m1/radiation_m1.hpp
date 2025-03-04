@@ -22,6 +22,9 @@
 
 namespace radiationm1 {
 
+//----------------------------------------------------------------------------------------
+//! \typedef ToyOpacityFn
+//! \brief Function pointer type for toy opacity functions, set function in pgen
 using ToyOpacityFn = void (*)(Real x1, Real x2, Real x3, Real dx, Real dy, Real dz,
                               Real nuidx, Real& eta_0, Real& abs_0, Real& eta_1,
                               Real& abs_1, Real& scat_1);

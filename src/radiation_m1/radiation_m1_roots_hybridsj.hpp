@@ -46,15 +46,6 @@ struct HybridsjParams {
   Real dx[M1_MULTIROOTS_DIM];  // stores the dogleg step J dx = - f
 };
 
-enum HybridsjSignal {
-  HYBRIDSJ_ENOPROGJ,
-  HYBRIDSJ_EBADFUNC,
-  HYBRIDSJ_EINVAL,
-  HYBRIDSJ_SUCCESS,
-  HYBRIDSJ_CONTINUE,
-  HYBRIDSJ_EBADTOL,
-};
-
 //----------------------------------------------------------------------------------------
 //! \fn Real radiationm1::copy_vector
 //  \brief copy a vector from src to dest
@@ -276,16 +267,17 @@ void scaled_addition(Real &alpha, const Real (&newton)[M1_MULTIROOTS_DIM], Real 
 }
 
 KOKKOS_INLINE_FUNCTION
-HybridsjSignal dogleg(const Real (&r)[M1_MULTIROOTS_DIM][M1_MULTIROOTS_DIM],
-                      const Real (&qtf)[M1_MULTIROOTS_DIM],
-                      const Real (&diag)[M1_MULTIROOTS_DIM], const Real &delta,
-                      Real (&newton)[M1_MULTIROOTS_DIM],
-                      Real (&gradient)[M1_MULTIROOTS_DIM], Real (&p)[M1_MULTIROOTS_DIM]) {
+MathSignal dogleg(const Real (&r)[M1_MULTIROOTS_DIM][M1_MULTIROOTS_DIM],
+                               const Real (&qtf)[M1_MULTIROOTS_DIM],
+                               const Real (&diag)[M1_MULTIROOTS_DIM], const Real &delta,
+                               Real (&newton)[M1_MULTIROOTS_DIM],
+                               Real (&gradient)[M1_MULTIROOTS_DIM],
+                               Real (&p)[M1_MULTIROOTS_DIM]) {
   newton_direction(r, qtf, newton);
   Real qnorm = scaled_enorm(diag, newton);
   if (qnorm <= delta) {
     copy_vector(p, newton);
-    return HYBRIDSJ_SUCCESS;
+    return LinalgSuccess;
   }
 
   gradient_direction(r, qtf, diag, gradient);
@@ -294,7 +286,7 @@ HybridsjSignal dogleg(const Real (&r)[M1_MULTIROOTS_DIM][M1_MULTIROOTS_DIM],
     Real alpha = delta / qnorm;
     Real beta = 0;
     scaled_addition(alpha, newton, beta, gradient, p);
-    return HYBRIDSJ_SUCCESS;
+    return LinalgSuccess;
   }
 
   minimum_step(gnorm, diag, gradient);
@@ -309,7 +301,7 @@ HybridsjSignal dogleg(const Real (&r)[M1_MULTIROOTS_DIM][M1_MULTIROOTS_DIM],
     Real alpha = 0;
     Real beta = delta;
     scaled_addition(alpha, newton, beta, gradient, p);
-    return HYBRIDSJ_SUCCESS;
+    return LinalgSuccess;
   }
 
   Real bnorm = enorm(qtf);
@@ -330,7 +322,7 @@ HybridsjSignal dogleg(const Real (&r)[M1_MULTIROOTS_DIM][M1_MULTIROOTS_DIM],
 
   scaled_addition(alpha, newton, beta, gradient, p);
 
-  return HYBRIDSJ_SUCCESS;
+  return LinalgSuccess;
 }
 
 KOKKOS_INLINE_FUNCTION
@@ -346,10 +338,10 @@ void compute_trial_step(const Real (&x)[M1_MULTIROOTS_DIM],
 //! \fn HybridsjSignal radiationm1::HybridsjInitialize
 //  \brief Initialize the solver state for Powell's hybrid method
 template <class Functor, class... Types>
-KOKKOS_INLINE_FUNCTION HybridsjSignal HybridsjInitialize(Functor &&fdf,
-                                                         HybridsjState &state,
-                                                         HybridsjParams &pars,
-                                                         Types... args) {
+KOKKOS_INLINE_FUNCTION MathSignal HybridsjInitialize(Functor &&fdf,
+                                                                  HybridsjState &state,
+                                                                  HybridsjParams &pars,
+                                                                  Types... args) {
   // populate f, J for a given x
   fdf(pars.x, pars.f, pars.J, args...);
 
@@ -369,22 +361,23 @@ KOKKOS_INLINE_FUNCTION HybridsjSignal HybridsjInitialize(Functor &&fdf,
   state.delta = compute_delta(state.diag, pars.x);
   qr_factorize(pars.J, state.q, state.r);
 
-  return HYBRIDSJ_SUCCESS;
+  return LinalgSuccess;
 }
 
 //----------------------------------------------------------------------------------------
 //! \fn HybridsjSignal radiationm1::HybridsjIterate
 //  \brief Iterate the solver state once for Powell's hybrid method
 template <class Functor, class... Types>
-KOKKOS_INLINE_FUNCTION HybridsjSignal HybridsjIterate(Functor &&fdf, HybridsjState &state,
-                                                      HybridsjParams &pars,
-                                                      Types... args) {
+KOKKOS_INLINE_FUNCTION MathSignal HybridsjIterate(Functor &&fdf,
+                                                               HybridsjState &state,
+                                                               HybridsjParams &pars,
+                                                               Types... args) {
   Real p1 = 0.1, p5 = 0.5, p001 = 0.001, p0001 = 0.0001;
 
   // Q^T f & dogleg
   compute_qtf(state.q, pars.f, state.qtf);
-  HybridsjSignal dl = dogleg(state.r, state.qtf, state.diag, state.delta, state.newton,
-                             state.gradient, pars.dx);
+  MathSignal dl = dogleg(state.r, state.qtf, state.diag, state.delta,
+                                      state.newton, state.gradient, pars.dx);
 
   // compute trial step
   compute_trial_step(pars.x, pars.dx, state.x_trial);
@@ -460,7 +453,7 @@ KOKKOS_INLINE_FUNCTION HybridsjSignal HybridsjIterate(Functor &&fdf, HybridsjSta
 
     // QR factorization
     qr_factorize(pars.J, state.q, state.r);
-    return HYBRIDSJ_SUCCESS;
+    return LinalgSuccess;
   }
 
   compute_qtf(state.q, state.df, state.qtdf);
@@ -470,19 +463,19 @@ KOKKOS_INLINE_FUNCTION HybridsjSignal HybridsjIterate(Functor &&fdf, HybridsjSta
 
   // No progress conditions
   if (state.nslow2 == 5 || state.nslow1 == 10) {
-    return HYBRIDSJ_ENOPROGJ;
+    return LinalgEnoprogj;
   }
-  return HYBRIDSJ_SUCCESS;
+  return LinalgSuccess;
 }
 
 KOKKOS_INLINE_FUNCTION
-HybridsjSignal HybridsjTestDelta(const Real (&dx)[M1_MULTIROOTS_DIM],
-                                 const Real (&x)[M1_MULTIROOTS_DIM], Real epsabs,
-                                 Real epsrel) {
+MathSignal HybridsjTestDelta(const Real (&dx)[M1_MULTIROOTS_DIM],
+                                          const Real (&x)[M1_MULTIROOTS_DIM], Real epsabs,
+                                          Real epsrel) {
   int ok = 1;
 
   if (epsrel < 0.0) {
-    return HYBRIDSJ_EBADTOL;
+    return LinalgEbadtol;
   }
 
   for (int i = 0; i < M1_MULTIROOTS_DIM; i++) {
@@ -497,9 +490,9 @@ HybridsjSignal HybridsjTestDelta(const Real (&dx)[M1_MULTIROOTS_DIM],
   }
 
   if (ok) {
-    return HYBRIDSJ_SUCCESS;
+    return LinalgSuccess;
   }
-  return HYBRIDSJ_CONTINUE;
+  return LinalgContinue;
 }
 
 }  // namespace radiationm1

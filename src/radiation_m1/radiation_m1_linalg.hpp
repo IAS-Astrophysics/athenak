@@ -14,6 +14,16 @@
 
 namespace radiationm1 {
 
+enum MathSignal {
+  LinalgInvalid,
+  LinalgEinval,
+  LinalgSuccess,
+  LinalgContinue,
+  LinalgEnoprogj,
+  LinalgEbadfunc,
+  LinalgEbadtol,
+};
+
 //----------------------------------------------------------------------------------------
 //! \fn Real radiationm1::norm_l2
 //  \brief computes the L2 norm of a vector
@@ -39,8 +49,7 @@ Real norm_l2(const Real (&V)[M1_MULTIROOTS_DIM - 1]) {
 //! \fn Real radiationm1::dot
 //  \brief computes the dot product of two vectors
 KOKKOS_INLINE_FUNCTION
-Real dot(const Real (&U)[M1_MULTIROOTS_DIM],
-         const Real (&V)[M1_MULTIROOTS_DIM]) {
+Real dot(const Real (&U)[M1_MULTIROOTS_DIM], const Real (&V)[M1_MULTIROOTS_DIM]) {
   Real result = 0;
   for (int i = 0; i < M1_MULTIROOTS_DIM; i++) {
     result += U[i] * V[i];
@@ -60,7 +69,6 @@ void dscal(Real a, Real (&v)[M1_MULTIROOTS_DIM - 1]) {
 
 KOKKOS_INLINE_FUNCTION
 Real householder_transform(Real (&v)[M1_MULTIROOTS_DIM]) {
-
   if (M1_MULTIROOTS_DIM == 1) {
     return 0.;
   } else {
@@ -176,8 +184,8 @@ void givens_apply_gv(Real (&v)[M1_MULTIROOTS_DIM], const int &i, const int &j,
 //  \brief applies rotation Q' = Q G
 KOKKOS_INLINE_FUNCTION
 void givens_apply_qr(Real (&Q)[M1_MULTIROOTS_DIM][M1_MULTIROOTS_DIM],
-                     Real (&R)[M1_MULTIROOTS_DIM][M1_MULTIROOTS_DIM],
-                     const int &i, const int &j, const Real &c, const Real &s) {
+                     Real (&R)[M1_MULTIROOTS_DIM][M1_MULTIROOTS_DIM], const int &i,
+                     const int &j, const Real &c, const Real &s) {
   // Apply rotation Q' = Q G
   for (int k = 0; k < M1_MULTIROOTS_DIM; k++) {
     Real qki = Q[k][i];
@@ -202,7 +210,6 @@ KOKKOS_INLINE_FUNCTION
 void qr_update(Real (&Q)[M1_MULTIROOTS_DIM][M1_MULTIROOTS_DIM],
                Real (&R)[M1_MULTIROOTS_DIM][M1_MULTIROOTS_DIM],
                Real (&W)[M1_MULTIROOTS_DIM], Real (&V)[M1_MULTIROOTS_DIM]) {
-
   // apply Given's rotation to W
   for (int k = M1_MULTIROOTS_DIM - 1; k > 0; k--) {
     Real c, s;
@@ -240,13 +247,12 @@ void qr_update(Real (&Q)[M1_MULTIROOTS_DIM][M1_MULTIROOTS_DIM],
 //  matrix
 KOKKOS_INLINE_FUNCTION
 void qr_R_solve(const Real (&r)[M1_MULTIROOTS_DIM][M1_MULTIROOTS_DIM],
-                const Real (&qtf)[M1_MULTIROOTS_DIM],
-                Real (&p)[M1_MULTIROOTS_DIM]) {
+                const Real (&qtf)[M1_MULTIROOTS_DIM], Real (&p)[M1_MULTIROOTS_DIM]) {
   for (int i = 0; i < M1_MULTIROOTS_DIM; i++) {
     p[i] = qtf[i];
   }
-  p[M1_MULTIROOTS_DIM - 1] = qtf[M1_MULTIROOTS_DIM - 1] /
-                             r[M1_MULTIROOTS_DIM - 1][M1_MULTIROOTS_DIM - 1];
+  p[M1_MULTIROOTS_DIM - 1] =
+      qtf[M1_MULTIROOTS_DIM - 1] / r[M1_MULTIROOTS_DIM - 1][M1_MULTIROOTS_DIM - 1];
   for (int k = M1_MULTIROOTS_DIM - 2; k >= 0; k--) {
     for (int j = k + 1; j < M1_MULTIROOTS_DIM; j++) {
       p[k] = p[k] - r[k][j] * p[j];
@@ -254,5 +260,5 @@ void qr_R_solve(const Real (&r)[M1_MULTIROOTS_DIM][M1_MULTIROOTS_DIM],
     p[k] = p[k] / r[k][k];
   }
 }
-} // namespace radiationm1
-#endif // RADIATION_M1_LINALG_HPP
+}  // namespace radiationm1
+#endif  // RADIATION_M1_LINALG_HPP
