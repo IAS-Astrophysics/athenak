@@ -1,5 +1,12 @@
 #ifndef RADIATION_M1_CLOSURE_H
 #define RADIATION_M1_CLOSURE_H
+//========================================================================================
+// AthenaK astrophysical fluid dynamics and numerical relativity code
+// Copyright(C) 2020 James M. Stone <jmstone@ias.edu> and the Athena code team
+// Licensed under the 3-clause BSD License (the "LICENSE")
+//========================================================================================
+//! \file radiation_m1_closure.hpp
+//! \brief defines the closure function
 
 #include "athena.hpp"
 #include "radiation_m1/radiation_m1_params.hpp"

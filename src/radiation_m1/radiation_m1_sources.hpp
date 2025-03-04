@@ -4,6 +4,7 @@
 #include "athena.hpp"
 #include "athena_tensor.hpp"
 #include "radiation_m1/radiation_m1.hpp"
+#include "radiation_m1/radiation_m1_roots_hybridsj.hpp"
 
 //========================================================================================
 // AthenaXXX astrophysical plasma code
@@ -15,7 +16,6 @@
 
 namespace radiationm1 {
 
-class RadiationM1;
 //----------------------------------------------------------------------------------------
 //! \fn HybridsjSignal radiationm1::RadiationM1::prepare_closure
 //  \brief Sets F_d, F_u, E and computes chi, P_dd in src_params
@@ -61,10 +61,11 @@ HybridsjSignal prepare_sources(const Real q[4], SrcParams &src_params) {
 //----------------------------------------------------------------------------------------
 //! \fn HybridsjSignal radiationm1::RadiationM1::prepare
 //  \brief Calls prepare_closure and prepare_sources
-HybridsjSignal prepare(const BrentFunctor &BrentFunc, const Real q[4], SrcParams &src_params,
-                                    const RadiationM1Params &params,
-                                    const RadiationM1Closure &closure_type) {
-  auto ierr = prepare_closure(BrentFunc, q, src_params, params, closure_type);
+KOKKOS_INLINE_FUNCTION
+HybridsjSignal prepare(const BrentFunctor &BrentFunc, const Real q[4],
+                       SrcParams &src_params, const RadiationM1Params &m1_params,
+                       const RadiationM1Closure &closure_type) {
+  auto ierr = prepare_closure(BrentFunc, q, src_params, m1_params, closure_type);
   if (ierr != HYBRIDSJ_SUCCESS) {
     return ierr;
   }
@@ -95,9 +96,10 @@ void explicit_update(const SrcParams &src_params, Real &Enew,
 // .  q^new = q^star + dt S[q^new]
 // The source term is S^a = (eta - ka J) u^a - (ka + ks) H^a and includes
 // also emission.
-SrcSignal source_update(const BrentFunctor &BrentFunc, const HybridsjFunctor &HybridsjFunc,
-    const Real &cdt, const Real &alp,
-    const AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> &g_dd,
+KOKKOS_INLINE_FUNCTION
+SrcSignal source_update(
+    const BrentFunctor &BrentFunc, const HybridsjFunctor &HybridsjFunc, const Real &cdt,
+    const Real &alp, const AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> &g_dd,
     const AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> &g_uu,
     const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &n_d,
     const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &n_u,
@@ -160,12 +162,12 @@ SrcSignal source_update(const BrentFunctor &BrentFunc, const HybridsjFunctor &Hy
     hybridsj_params.x[i] = x[i];
   }
   auto ierr =
-      HybridsjInitialize(HybridsjFunc, hybridsj_state, hybridsj_params, src_params);
+      HybridsjInitialize(HybridsjFunc, hybridsj_state, hybridsj_params, BrentFunc, src_params, m1_params);
 
   int iter = 0;
   do {
     if (iter < m1_params.source_maxiter) {
-      ierr = HybridsjIterate(HybridsjFunc, hybridsj_state, hybridsj_params, src_params);
+      ierr = HybridsjIterate(HybridsjFunc, hybridsj_state, hybridsj_params, BrentFunc, src_params, m1_params);
       iter++;
     }
 
@@ -174,10 +176,10 @@ SrcSignal source_update(const BrentFunctor &BrentFunc, const HybridsjFunctor &Hy
         iter >= m1_params.source_maxiter) {
       if (m1_params.closure_type != Eddington) {
         // Eddington closure
-        auto signal =
-            source_update(BrentFunc, HybridsjFunc, cdt, alp, g_dd, g_uu, n_d, n_u, gamma_ud, u_d, u_u, v_d, v_u,
-                          proj_ud, W, Eold, Fold_d, Estar, Fstar_d, eta, kabs, kscat, chi,
-                          Enew, Fnew_d, m1_params, Eddington);
+        auto signal = source_update(BrentFunc, HybridsjFunc, cdt, alp, g_dd, g_uu, n_d,
+                                    n_u, gamma_ud, u_d, u_u, v_d, v_u, proj_ud, W, Eold,
+                                    Fold_d, Estar, Fstar_d, eta, kabs, kscat, chi, Enew,
+                                    Fnew_d, m1_params, Eddington);
         if (signal == SrcOk) {
           return SrcEddington;
         } else {

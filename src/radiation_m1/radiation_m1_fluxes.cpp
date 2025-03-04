@@ -4,13 +4,13 @@
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
 //! \file radiation_m1_fluxes.cpp
-//! \brief calculate 3D fluxes for M1
+//! \brief calculate 3D fluxes for grey M1
 
 #include "athena.hpp"
 #include "athena_tensor.hpp"
 #include "coordinates/adm.hpp"
-#include "radiation_m1.hpp"
-#include "radiation_m1_helpers.hpp"
+#include "radiation_m1/radiation_m1.hpp"
+#include "radiation_m1/radiation_m1_helpers.hpp"
 
 namespace radiationm1 {
 
