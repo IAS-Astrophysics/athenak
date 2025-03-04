@@ -435,7 +435,7 @@ TaskStatus Z4c::InitRecvWeyl(Driver *pdrive, int stage) {
     float next_32 = static_cast<float>(last_output_time+waveform_dt);
     if (((time_32 >= next_32) || (time_32 == 0)) && stage == pdrive->nexp_stages) {
       last_output_time = time_32;
-      TaskStatus tstat = pbval_weyl->InitRecv(2);
+      TaskStatus tstat = pbval_weyl->InitRecv(9);
       return tstat;
     } else {
       return TaskStatus::complete;
