@@ -3,13 +3,18 @@
 
 #include "athena.hpp"
 #include "athena_tensor.hpp"
+#include "radiation_m1/radiation_m1_closure.hpp"
 #include "radiation_m1/radiation_m1_helpers.hpp"
 #include "radiation_m1/radiation_m1_params.hpp"
-#include "radiation_m1/radiation_m1_closure.hpp"
+#include "radiation_m1_roots_hybridsj.hpp"
 
 namespace radiationm1 {
+class BrentFunctor;
 
-// class RadiationM1;
+KOKKOS_INLINE_FUNCTION
+HybridsjSignal prepare(const BrentFunctor &BrentFunc, const Real q[4],
+                       SrcParams &src_params, const RadiationM1Params &m1_params,
+                       const RadiationM1Closure &closure_type);
 //----------------------------------------------------------------------------------------
 //! \class BrentFunctor
 //  \brief Function to rootfind in order to determine the closure
@@ -218,11 +223,11 @@ class HybridsjFunctor {
  public:
   KOKKOS_INLINE_FUNCTION
   void operator()(const Real x[M1_MULTIROOTS_DIM], Real f[M1_MULTIROOTS_DIM],
-                  Real J[M1_MULTIROOTS_DIM][M1_MULTIROOTS_DIM],
-                  SrcParams &src_params) const {
+                  Real J[M1_MULTIROOTS_DIM][M1_MULTIROOTS_DIM], BrentFunctor BrentFunc,
+                  SrcParams &src_params, RadiationM1Params &m1_params) const {
     // Function to rootfind for
     //    f(q) = q - q^* - dt S[q]
-    //auto ierr = RadiationM1::prepare(x, src_params);
+    auto ierr = prepare(BrentFunc, x, src_params, m1_params, m1_params.closure_type);
     f[0] = x[0] - src_params.Estar - src_params.cdt * src_params.Edot;
     f[1] = x[1] - src_params.Fstar_d(1) - src_params.cdt * src_params.tS_d(1);
     f[2] = x[2] - src_params.Fstar_d(2) - src_params.cdt * src_params.tS_d(2);
