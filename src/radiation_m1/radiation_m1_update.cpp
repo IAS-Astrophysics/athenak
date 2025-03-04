@@ -317,8 +317,8 @@ TaskStatus RadiationM1::TimeUpdate(Driver *d, int stage) {
               // Compute quantities in the fluid frame
               Real Enew{};
               Real chival{};
-              calc_closure(BrentFunc_, g_dd, g_uu, n_d, w_lorentz, u_u, v_d, proj_ud, Estar,
-                           Fstar_d, chival, P_dd, params_, params_.closure_type);
+              calc_closure(BrentFunc_, g_dd, g_uu, n_d, w_lorentz, u_u, v_d, proj_ud,
+                           Estar, Fstar_d, chival, P_dd, params_, params_.closure_type);
               AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> rT_dd{};
               assemble_rT(n_d, Estar, Fstar_d, P_dd, rT_dd);
               const Real Jstar = calc_J_from_rT(rT_dd, u_u);
@@ -349,8 +349,9 @@ TaskStatus RadiationM1::TimeUpdate(Driver *d, int stage) {
                   Kokkos::sqrt(H2) * (Jnew > params_.rad_E_floor ? 1 / Jnew : 0);
               chival = closure_fun(xi, params_.closure_type);
 
-              calc_inv_closure(BrentFuncInv_, g_uu, g_dd, n_u, n_d, gamma_ud, w_lorentz, u_u, u_d, v_d,
-                               proj_ud, chival, Jnew, Hnew_d, Enew, Fnew_d, params_);
+              calc_inv_closure(BrentFuncInv_, g_uu, g_dd, n_u, n_d, gamma_ud, w_lorentz,
+                               u_u, u_d, v_d, proj_ud, chival, Jnew, Hnew_d, Enew, Fnew_d,
+                               params_);
 
               const Real dthick = 3. * (1. - chival) / 2.;
               const Real dthin = 1. - dthick;
@@ -375,13 +376,12 @@ TaskStatus RadiationM1::TimeUpdate(Driver *d, int stage) {
               calc_H_from_rT(rT_dd, n_u, gamma_ud, Fnew_d);
               apply_floor(g_uu, Enew, Fnew_d, params_);
 
-              // @TODO: this is the main deal, uncomment later
-              // source_update(beta_dt, adm.alpha(m, k, j, i), g_dd, g_uu, n_d,
-              //               n_u, gamma_ud, u_d, u_u, v_d, v_u, proj_ud,
-              ///             w_lorentz, Estar, Fstar_d, Estar, Fstar_d,
-              //             volform * eta_1_(m, nuidx, k, j, i),
-              //             abs_1_(m, nuidx, k, j, i),
-              //              scat_1_(m, nuidx, k, j, i), chival, Enew, Fnew_d);
+              auto src_signal = source_update(
+                  BrentFunc_, HybridsjFunc_, beta_dt, adm.alpha(m, k, j, i), g_dd, g_uu,
+                  n_d, n_u, gamma_ud, u_d, u_u, v_d, v_u, proj_ud, w_lorentz, Estar,
+                  Fstar_d, Estar, Fstar_d, volform * eta_1_(m, nuidx, k, j, i),
+                  abs_1_(m, nuidx, k, j, i), scat_1_(m, nuidx, k, j, i), chival, Enew,
+                  Fnew_d, params_, params_.closure_type);
               apply_floor(g_uu, Enew, Fnew_d, params_);
 
               // Update closure
