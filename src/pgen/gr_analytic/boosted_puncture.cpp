@@ -146,8 +146,8 @@ void ADMOnePunctureBoosted(MeshBlockPack *pmbp, ParameterInput *pin) {
 
     // Gauge variables in the code frame
     // adm.alpha(m,k,j,i) = alpha0/B0;
-    adm.beta_u(m,0,k,j,i) = (std::pow(alpha0,2)-std::pow(psi0,4))
-                          /(std::pow(psi0,4)-std::pow(alpha0,2)*std::pow(vel,2))*vel;
+    // adm.beta_u(m,0,k,j,i) = (std::pow(alpha0,2)-std::pow(psi0,4))
+    //                      /(std::pow(psi0,4)-std::pow(alpha0,2)*std::pow(vel,2))*vel;
 
 
 

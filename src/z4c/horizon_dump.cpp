@@ -48,7 +48,7 @@ HorizonDump::HorizonDump(MeshBlockPack *pmbp, ParameterInput *pin, int n, int is
   r_guess = pin->GetOrAddReal("z4c", "horizon" + nstr + "r_guess", 0.5);
   is_cheb = pin->GetOrAddBoolean("z4c", "co_" + nstr + "_dump_cheb", false);
   regularize_order = pin->GetOrAddInteger("z4c", "horizon_"
-                              + nstr+"_rn",4);
+                              + nstr+"_rn",6);
   output_count = 0;
 
   Real extend[3] = {horizon_extent,horizon_extent,horizon_extent};
