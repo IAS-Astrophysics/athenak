@@ -56,6 +56,10 @@ TaskStatus RadiationM1::TimeUpdate(Driver *d, int stage) {
   bool &three_d = pmy_pack->pmesh->three_d;
   auto &params_ = pmy_pack->pradm1->params;
 
+  auto &BrentFunc_ = pmy_pack->pradm1->BrentFunc;
+  auto &BrentFuncInv_ = pmy_pack->pradm1->BrentFuncInv;
+  auto &HybridsjFunc_ = pmy_pack->pradm1->HybridsjFunc;
+
   Real beta[2] = {0.5, 1.};
   Real beta_dt = (beta[stage - 1]) * (pmy_pack->pmesh->dt);
 
@@ -314,8 +318,8 @@ TaskStatus RadiationM1::TimeUpdate(Driver *d, int stage) {
               // Compute quantities in the fluid frame
               Real Enew{};
               Real chival{};
-              calc_closure(closure, g_dd, g_uu, n_d, w_lorentz, u_u, v_d, proj_ud, Estar,
-                           Fstar_d, chival, P_dd, params_);
+              calc_closure(BrentFunc_, g_dd, g_uu, n_d, w_lorentz, u_u, v_d, proj_ud, Estar,
+                           Fstar_d, chival, P_dd, params_, params_.closure_type);
               AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> rT_dd{};
               assemble_rT(n_d, Estar, Fstar_d, P_dd, rT_dd);
               const Real Jstar = calc_J_from_rT(rT_dd, u_u);
@@ -344,9 +348,9 @@ TaskStatus RadiationM1::TimeUpdate(Driver *d, int stage) {
               const Real H2 = tensor_dot(g_uu, Hnew_d, Hnew_d);
               const Real xi =
                   Kokkos::sqrt(H2) * (Jnew > params_.rad_E_floor ? 1 / Jnew : 0);
-              chival = closure(xi);
+              chival = closure_fun(xi, params_.closure_type);
 
-              calc_inv_closure(g_uu, g_dd, n_u, n_d, gamma_ud, w_lorentz, u_u, u_d, v_d,
+              calc_inv_closure(BrentFuncInv_, g_uu, g_dd, n_u, n_d, gamma_ud, w_lorentz, u_u, u_d, v_d,
                                proj_ud, chival, Jnew, Hnew_d, Enew, Fnew_d, params_);
 
               const Real dthick = 3. * (1. - chival) / 2.;

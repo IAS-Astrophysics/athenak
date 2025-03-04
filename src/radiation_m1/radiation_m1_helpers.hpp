@@ -199,16 +199,6 @@ Real flux_factor(const AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> &g_uu,
   return Kokkos::max(0.0, Kokkos::min(xi, 1.0));
 }
 
-// Closures
-KOKKOS_INLINE_FUNCTION Real eddington(const Real xi) { return 1.0 / 3.0; }
-KOKKOS_INLINE_FUNCTION Real kershaw(const Real xi) {
-  return 1.0 / 3.0 + 2.0 / 3.0 * xi * xi;
-}
-KOKKOS_INLINE_FUNCTION Real minerbo(const Real xi) {
-  return 1.0 / 3.0 + xi * xi * (6.0 - 2.0 * xi + 6.0 * xi * xi) / 15.0;
-}
-KOKKOS_INLINE_FUNCTION Real thin(const Real xi) { return 1.0; }
-
 //----------------------------------------------------------------------------------------
 //! \fn void radiationm1::assemble_fnu
 //  \brief Assemble the unit-norm radiation number current

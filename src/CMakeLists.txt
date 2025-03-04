@@ -10,7 +10,8 @@ if(ENABLE_NURATES)
     set(ENABLE_NURATES_SOURCES ${NURATESSOURCES})
 else()
     set(ENABLE_NURATES_SOURCES ""
-            radiation_m1/radiation_m1_roots_fns.hpp)
+            radiation_m1/radiation_m1_roots_fns.hpp
+            radiation_m1/radiation_m1_closure.hpp)
 endif()
 
 # list of files to be compiled into executable name
