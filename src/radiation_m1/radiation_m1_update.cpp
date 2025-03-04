@@ -14,7 +14,6 @@
 #include "radiation_m1.hpp"
 #include "radiation_m1_calc_closure.hpp"
 #include "radiation_m1_helpers.hpp"
-#include "radiation_m1_opacities.hpp"
 #include "radiation_m1_sources.hpp"
 #include "z4c/z4c.hpp"
 
