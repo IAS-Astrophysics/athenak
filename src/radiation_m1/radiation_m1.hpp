@@ -16,13 +16,8 @@
 #include "athena_tensor.hpp"
 #include "bvals/bvals.hpp"
 #include "parameter_input.hpp"
-#include "radiation_m1/radiation_m1_helpers.hpp"
-#include "radiation_m1/radiation_m1_macro.hpp"
 #include "radiation_m1/radiation_m1_params.hpp"
-#include "radiation_m1/radiation_m1_roots_brent.hpp"
 #include "radiation_m1/radiation_m1_roots_fns.hpp"
-#include "radiation_m1/radiation_m1_roots_hybridsj.hpp"
-#include "radiation_m1/radiation_m1_tensors.hpp"
 #include "tasklist/task_list.hpp"
 
 namespace radiationm1 {
@@ -61,11 +56,11 @@ class RadiationM1 {
   RadiationM1(MeshBlockPack* ppack, ParameterInput* pin);
   ~RadiationM1();
 
-  static BrentFunctor BrentFunc;
-  static HybridsjFunctor HybridsjFunc;
-  static BrentFunctorInv BrentFuncInv;
+  static BrentFunctor BrentFunc;        // function to minimize for closure
+  static BrentFunctorInv BrentFuncInv;  // function to minimize for inv. closure
+  static HybridsjFunctor HybridsjFunc;  // function to minimize for multiroots solver
 
-  ToyOpacityFn toy_opacity_fn = nullptr;
+  ToyOpacityFn toy_opacity_fn = nullptr;  // use only if toy opacities enabled
 
   int nvars;                 // no. of evolved variables per species
   int nspecies;              // no. of species

@@ -6,7 +6,7 @@
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
 //! \file radiation_m1_calc_closure.hpp
-//! \brief function which finds closure using Brent-Dekker routines
+//! \brief compute closure and inv. closure using Brent-Dekker routines
 
 #include "radiation_m1/radiation_m1_roots_brent.hpp"
 #include "radiation_m1/radiation_m1_roots_fns.hpp"
