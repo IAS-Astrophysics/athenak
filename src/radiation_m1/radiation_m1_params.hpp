@@ -17,6 +17,7 @@ enum RadiationM1Closure {
   Minerbo,
   Eddington,
   Thin,
+  Kershaw,
 };
 
 //----------------------------------------------------------------------------------------
@@ -40,7 +41,7 @@ enum RadiationM1SrcUpdate {
 //! \struct RadiationM1Params
 //  \brief parameters for the Grey M1 class
 struct RadiationM1Params {
-  RadiationM1Closure closure_fun;       // choice of closure
+  RadiationM1Closure closure_type;      // choice of closure
   RadiationM1OpacityType opacity_type;  // choice of opacity library
   RadiationM1SrcUpdate src_update;      // choice of source update
 

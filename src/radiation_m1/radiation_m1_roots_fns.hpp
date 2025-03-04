@@ -5,10 +5,11 @@
 #include "athena_tensor.hpp"
 #include "radiation_m1/radiation_m1_helpers.hpp"
 #include "radiation_m1/radiation_m1_params.hpp"
+#include "radiation_m1/radiation_m1_closure.hpp"
 
 namespace radiationm1 {
 
-//class RadiationM1;
+// class RadiationM1;
 //----------------------------------------------------------------------------------------
 //! \class BrentFunctor
 //  \brief Function to rootfind in order to determine the closure
@@ -24,10 +25,11 @@ class BrentFunctor {
                   const AthenaPointTensor<Real, TensorSymm::NONE, 4, 2> &proj_ud,
                   const Real &E,
                   const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &F_d,
-                  const radiationm1::RadiationM1Params &params) {
+                  const RadiationM1Params &params,
+                  const RadiationM1Closure &closure_type) {
     AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> P_dd{};
-    apply_closure(g_dd, g_uu, n_d, w_lorentz, u_u, v_d, proj_ud, E, F_d, minerbo(xi),
-                  P_dd, params);
+    apply_closure(g_dd, g_uu, n_d, w_lorentz, u_u, v_d, proj_ud, E, F_d,
+                  closure_fun(xi, closure_type), P_dd, params);
 
     AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> rT_dd{};
     assemble_rT(n_d, E, F_d, P_dd, rT_dd);
@@ -88,12 +90,12 @@ KOKKOS_INLINE_FUNCTION Real set_dthick(Real chi) { return 1.5 * (1 - chi); }
 //! \fn Real radiationm1::source_jacobian
 //  \brief low level kernel computing the Jacobian matrix
 KOKKOS_INLINE_FUNCTION void source_jacobian(
-    const Real qpre[4], AthenaPointTensor<Real, TensorSymm::NONE, 4, 1>(&F_u), Real &F2,
+    const Real qpre[4], AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &F_u, Real &F2,
     const Real &chi, const Real &kapa, const Real &kaps,
-    const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1>(&v_u),
-    const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1>(&v_d), const Real &v2,
+    const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &v_u,
+    const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &v_d, const Real &v2,
     const Real &W, const Real &alpha, const Real &cdt, const Real qstar[4],
-    Real (&J)[4][4]) {
+    Real J[4][4]) {
   const Real kapas = kapa + kaps;
   const Real alpW = alpha * W;
 
@@ -215,8 +217,9 @@ KOKKOS_INLINE_FUNCTION void source_jacobian(
 class HybridsjFunctor {
  public:
   KOKKOS_INLINE_FUNCTION
-  void operator()(const Real (&x)[M1_MULTIROOTS_DIM], Real (&f)[M1_MULTIROOTS_DIM],
-                  Real (&J)[M1_MULTIROOTS_DIM][M1_MULTIROOTS_DIM], SrcParams &src_params) {
+  void operator()(const Real x[M1_MULTIROOTS_DIM], Real f[M1_MULTIROOTS_DIM],
+                  Real J[M1_MULTIROOTS_DIM][M1_MULTIROOTS_DIM],
+                  SrcParams &src_params) const {
     // Function to rootfind for
     //    f(q) = q - q^* - dt S[q]
     //auto ierr = RadiationM1::prepare(x, src_params);

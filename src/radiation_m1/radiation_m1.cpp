@@ -60,16 +60,12 @@ RadiationM1::RadiationM1(MeshBlockPack *ppack, ParameterInput *pin)
 
   std::string closure_fun = pin->GetOrAddString("radiation_m1", "closure_fun", "minerbo");
   if (closure_fun == "minerbo") {
-    params.closure_fun = Minerbo;
-    closure = minerbo;
+    params.closure_type = Minerbo;
   } else if (closure_fun == "eddington") {
-    params.closure_fun = Eddington;
-    closure = eddington;
+    params.closure_type = Eddington;
   } else if (closure_fun == "thin") {
-    params.closure_fun = Thin;
-    closure = thin;
+    params.closure_type = Thin;
   } else {
-    closure = minerbo;
     std::cerr << "Error: Unknown choice for closure: " << closure_fun << std::endl;
     exit(EXIT_FAILURE);
   }
