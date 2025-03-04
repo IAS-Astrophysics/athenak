@@ -30,7 +30,6 @@ namespace radiationm1 {
 using ToyOpacityFn = void (*)(Real x1, Real x2, Real x3, Real dx, Real dy, Real dz,
                               Real nuidx, Real& eta_0, Real& abs_0, Real& eta_1,
                               Real& abs_1, Real& scat_1);
-using ClosureFn = Real (*)(Real);
 
 //----------------------------------------------------------------------------------------
 //! \struct RadiationTaskIDs
@@ -65,7 +64,6 @@ class RadiationM1 {
   static BrentFunctor BrentFunc;
   static HybridsjFunctor HybridsjFunc;
   static BrentFunctorInv BrentFuncInv;
-  static ClosureFn closure;
 
   ToyOpacityFn toy_opacity_fn = nullptr;
 
@@ -116,61 +114,6 @@ class RadiationM1 {
   // ...in "after_stagen_tl" list
   TaskStatus ClearSend(Driver* d, int stage);
   TaskStatus ClearRecv(Driver* d, int stage);  // also in Driver::Initialize
-
-  KOKKOS_INLINE_FUNCTION static void calc_closure(
-      ClosureFn closure, const AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2>& g_dd,
-      const AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2>& g_uu,
-      const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1>& n_d, const Real& w_lorentz,
-      const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1>& u_u,
-      const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1>& v_d,
-      const AthenaPointTensor<Real, TensorSymm::NONE, 4, 2>& proj_ud, const Real& E,
-      const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1>& F_d, Real& chi,
-      AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2>& P_dd,
-      const RadiationM1Params& params);
-
-  KOKKOS_INLINE_FUNCTION void calc_inv_closure(
-      const AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2>& g_uu,
-      const AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2>& g_dd,
-      const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1>& n_u,
-      const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1>& n_d,
-      const AthenaPointTensor<Real, TensorSymm::NONE, 4, 2>& gamma_ud,
-      const Real& w_lorentz, const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1>& u_u,
-      const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1>& u_d,
-      const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1>& v_d,
-      const AthenaPointTensor<Real, TensorSymm::NONE, 4, 2>& proj_ud, const Real& chi,
-      const Real& J, const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1>& H_d, Real& E,
-      AthenaPointTensor<Real, TensorSymm::NONE, 4, 1>& F_d,
-      const RadiationM1Params& params);
-
-  KOKKOS_INLINE_FUNCTION
-  static HybridsjSignal prepare_closure(ClosureFn closure_fn, const Real q[4],
-                                        SrcParams& src_params,
-                                        const RadiationM1Params& param);
-
-  KOKKOS_INLINE_FUNCTION
-  static HybridsjSignal prepare_sources(const Real q[4], SrcParams& src_params);
-
-  KOKKOS_INLINE_FUNCTION
-  static HybridsjSignal prepare(ClosureFn closure_fn, const Real q[4],
-                                SrcParams& src_params, const RadiationM1Params& params);
-
-  KOKKOS_INLINE_FUNCTION SrcSignal source_update(
-      ClosureFn closure_fn, const Real& cdt, const Real& alp,
-      const AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2>& g_dd,
-      const AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2>& g_uu,
-      const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1>& n_d,
-      const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1>& n_u,
-      const AthenaPointTensor<Real, TensorSymm::NONE, 4, 2>& gamma_ud,
-      const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1>& u_d,
-      const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1>& u_u,
-      const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1>& v_d,
-      const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1>& v_u,
-      const AthenaPointTensor<Real, TensorSymm::NONE, 4, 2>& proj_ud, const Real& W,
-      const Real& Eold, const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1>& Fold_d,
-      const Real& Estar, const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1>& Fstar_d,
-      const Real& eta, const Real& kabs, const Real& kscat, Real& chi, Real& Enew,
-      AthenaPointTensor<Real, TensorSymm::NONE, 4, 1>& Fnew_d,
-      const RadiationM1Params& m1_params);
 
  private:
   MeshBlockPack* pmy_pack;  // ptr to MeshBlockPack
