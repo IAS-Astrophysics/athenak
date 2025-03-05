@@ -196,6 +196,7 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resf
     if (!single_file_per_rank) {
       MPI_Bcast(&last_output_time, sizeof(Real), MPI_CHAR, 0, MPI_COMM_WORLD);
       MPI_Bcast(&cce_dump_last_output_time, sizeof(Real), MPI_CHAR, 0, MPI_COMM_WORLD);
+    }
 #endif
     pz4c->last_output_time = last_output_time;
     pz4c->cce_dump_last_output_time = cce_dump_last_output_time;
