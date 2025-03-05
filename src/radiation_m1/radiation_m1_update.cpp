@@ -272,9 +272,7 @@ TaskStatus RadiationM1::TimeUpdate(Driver *d, int stage) {
                                abs_1_(m, nuidx, k, j, i), scat_1_(m, nuidx, k, j, i), u_d,
                                J, H_d, S_d);
               DrEFN[nuidx][M1_E_IDX] =
-                  beta_dt * calc_rE_source(adm.alpha(m, k, j, i), n_u,
-                                           S_d);  // @maitraya: what is the dot product
-                                                  // computed with ? Is it g or eta ?
+                  beta_dt * calc_rE_source(adm.alpha(m, k, j, i), n_u, S_d);
 
               calc_rF_source(adm.alpha(m, k, j, i), gamma_ud, S_d, tS_d);
               DrEFN[nuidx][M1_FX_IDX] = beta_dt * tS_d(1);
