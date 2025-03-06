@@ -429,10 +429,22 @@ class EOSCompOSE : public EOSPolicyInterface, public LogPolicy {
       }
     }
     
-    if (flo*fhi>0.0 && iv==ECLOGP || iv==ECLOGE) {
-      if (var <= eval_at_nty(iv,n,min_T,Yq)) {
+    if (flo*fhi>0.0 && (iv==ECLOGP || iv==ECLOGE)) {
+      /*if (iv == ECLOGE) {
+        Real vlo = eval_at_nty(iv,n,min_T,Yq);
+        Real vhi = eval_at_nty(iv,n,max_T,Yq);
+        Kokkos::printf("Testing maxima and minima:\n"
+                       "  iv = %i\n"
+                       "  var = %20.17g\n"
+                       "  minimum: %20.17g\n"
+                       "  maximum: %20.17g\n",
+                       iv, var, vlo, vhi);
+      }*/
+      //if (var <= eval_at_nty(iv,n,min_T,Yq)) {
+      if (f(0) <= 0) {
         return min_T;
-      } else if (var >= eval_at_nty(iv,n,max_T,Yq)) {
+      } //else if (var >= eval_at_nty(iv,n,max_T,Yq)) {
+      else if (f(m_nt-1) >= 0) {
         return max_T;
       }
     }
@@ -440,13 +452,13 @@ class EOSCompOSE : public EOSPolicyInterface, public LogPolicy {
     if (flo*fhi > 0) {
       Kokkos::printf("There's a problem with temperature bracketing!\n"
                      "  iv = %i\n"
-                     "  var = %20.15g\n"
-                     "  n = %20.15g\n"
-                     "  Yq = %20.15g\n"
+                     "  var = %20.17g\n"
+                     "  n = %20.17g\n"
+                     "  Yq = %20.17g\n"
                      "  ilo = %i\n"
                      "  ihi = %i\n"
-                     "  flo = %20.15g\n"
-                     "  fhigh = %20.15g\n", iv, var, n , Yq, ilo, ihi, flo, fhi);
+                     "  flo = %20.17g\n"
+                     "  fhigh = %20.17g\n", iv, var, n , Yq, ilo, ihi, flo, fhi);
       assert(flo*fhi <= 0);
     }
     while (ihi - ilo > 1) {
