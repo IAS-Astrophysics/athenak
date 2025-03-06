@@ -635,16 +635,13 @@ void Mesh::AddCoordinatesAndPhysics(ParameterInput *pinput) {
     }
   }
 }
-
 //----------------------------------------------------------------------------------------
 // \fn Mesh::UpdatePrtclInfo
 
 void Mesh::UpdatePrtclInfo() {
   // Determine total number of particles across all ranks
   particles::Particles *ppart = pmb_pack->ppart;
-  for (int n=0; n<nmb_packs_thisrank; ++n) {
-    nprtcl_thisrank = 0.0;
-  }
+  nprtcl_thisrank = 0.0;
   for (int n=0; n<nmb_packs_thisrank; ++n) {
     nprtcl_thisrank += pmb_pack->ppart->nprtcl_thispack;
   }
