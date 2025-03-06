@@ -14,7 +14,7 @@
 // Athena++ headers
 #include "parameter_input.hpp"
 #include "athena.hpp"
-#include "adm/adm.hpp"
+#include "coordinates/adm.hpp"
 #include "mesh/mesh.hpp"
 #include "z4c/z4c.hpp"
 #include "coordinates/cell_locations.hpp"
@@ -34,7 +34,6 @@ void Z4c::GaugePreCollapsedLapse(MeshBlockPack *pmbp, ParameterInput *pin) {
   int isg = is-indcs.ng; int ieg = ie+indcs.ng;
   int jsg = js-indcs.ng; int jeg = je+indcs.ng;
   int ksg = ks-indcs.ng; int keg = ke+indcs.ng;
-  int ncells1 = indcs.nx1 + 2*(indcs.ng);
   int nmb = pmbp->nmb_thispack;
   auto &z4c = pmbp->pz4c->z4c;
   auto &adm = pmbp->padm->adm;

@@ -13,7 +13,7 @@
 #include <string>
 
 #include "TwoPunctures.h"
-#include "adm/adm.hpp"
+#include "coordinates/adm.hpp"
 #include "athena.hpp"
 #include "coordinates/cell_locations.hpp"
 #include "globals.hpp"
@@ -21,7 +21,6 @@
 #include "parameter_input.hpp"
 #include "z4c/z4c.hpp"
 #include "z4c/z4c_amr.hpp"
-#include "z4c/z4c_puncture_tracker.hpp"
 
 static ini_data *data;
 
@@ -371,5 +370,5 @@ void ADMTwoPunctures(MeshBlockPack *pmbp, ini_data *data) {
 
 // how decide the refinement
 void RefinementCondition(MeshBlockPack* pmbp) {
-  pmbp->pz4c->pz4c_amr->Refine(pmbp);
+  pmbp->pz4c->pamr->Refine(pmbp);
 }

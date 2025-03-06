@@ -1,0 +1,98 @@
+# Athena++ (Kokkos version) input file for TOV star
+
+<comment>
+problem  = Magnetized TOV star
+
+<job>
+basename = tov
+
+<mesh>
+nghost = 4       # Number of ghost cells
+nx1    = 128     # number of cells in x1-direction
+x1min  = -20.0   # minimum x1
+x1max  = 20.0    # maximum x1
+ix1_bc = diode   # inner boundary
+ox1_bc = diode   # outer boundary
+
+nx2    = 128     # number of cells in x2-direction
+x2min  = -20.0   # minimum x2
+x2max  = 20.0    # maximum x2
+ix2_bc = diode   # inner boundary
+ox2_bc = diode   # outer boundary
+
+nx3    = 128     # number of cells in x3-direction
+x3min  = -20.0   # minimum x3
+x3max  = 20.0    # maximum x3
+ix3_bc = diode   # inner boundary
+ox3_bc = diode   # outer boundary
+
+<meshblock>
+nx1  = 64        # Number of cells in each MeshBlock, X1-dir
+nx2  = 64        # Number of cells in each MeshBlock, X2-dir
+nx3  = 64        # Number of cells in each MeshBlock, X3-dir
+
+<time>
+evolution  = dynamic    # dynamic/kinematic/static
+integrator = rk3        # time integration algorithm
+cfl_number = 0.1
+nlim       = -1
+tlim       = 10000
+ndiag      = 1          # cycles between diagnostic output
+
+<coord>
+general_rel = true      # general relativity
+m           = 1.0
+a           = 0.0
+excise      = false
+
+<mhd>
+eos         = ideal     # EOS type
+dyn_eos     = ideal     # EOS type
+dyn_error   = reset_floor # error policy
+reconstruct = ppmx      # spatial reconstruction method
+rsolver     = hlle      # Riemann solver to be used
+dfloor      = 1.0e-16   # floor on density rho
+tfloor      = 1.0e-14 
+dthreshold  = 1.02      # Threshold for flooring
+gamma       = 2.0       # ratio of specific heats Gamma
+dyn_scratch = 1
+fofc        = true
+enforce_maximum = false
+
+<adm>
+
+<problem>
+rhoc        = 1.28e-3 # Central density
+kappa       = 100.0    # P = kappa*rho^gamma
+npoints     = 10000.0  # buffer points for TOV calculation
+dr          = 1e-3     # radial step for TOV calculation
+b_norm      = 1.0 
+pcut        = 1e-6
+magindex    = 1
+user_hist   = true
+
+<output1>
+file_type   = hst      # History data dump
+dt          = 0.00001  # time increment between outputs
+data_format = %20.15e
+
+<output2>
+file_type   = bin      # Binary data dump
+variable    = mhd_w_bcc  # variables to be output
+dt          = 1.0      # time increment between outputs
+
+<output4>
+file_type   = bin
+variable    = mhd_divb
+dt          = 1.0
+
+<output5>
+file_type   = tab
+variable    = mhd_w_bcc
+dt          = 0.00001
+slice_x2    = 0.0
+slice_x3    = 0.0
+
+<output6>
+file_type   = rst
+dt          = 1000.0

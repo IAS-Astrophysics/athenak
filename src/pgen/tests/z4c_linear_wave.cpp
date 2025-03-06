@@ -88,12 +88,15 @@ void ProblemGenerator::Z4cLinearWave(ParameterInput *pin, const bool restart) {
   Real theta = std::atan2(sqrt(kx2 * kx2 + kx1 * kx1), kx3);
   Real phi = std::atan2(kx1, kx2);
 
+  // Find wavelength
+  Real lambda = 1/knorm;
+
   // set new time limit in ParameterInput (to be read by Driver constructor) based on
   // wave speed of selected mode.
-  // input tlim is interpreted asnumber of wave periods for evolution
+  // input tlim is interpreted as number of wave periods for evolution
   if (set_initial_conditions) {
     Real tlim = pin->GetReal("time", "tlim");
-    pin->SetReal("time", "tlim", tlim*knorm);
+    pin->SetReal("time", "tlim", tlim*lambda);
   }
 
   // rotated weight for each tensor element

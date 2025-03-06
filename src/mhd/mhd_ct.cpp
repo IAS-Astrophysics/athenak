@@ -27,10 +27,6 @@ TaskStatus MHD::CT(Driver *pdriver, int stage) {
   int ks = indcs.ks, ke = indcs.ke;
   int nmb1 = pmy_pack->nmb_thispack - 1;
 
-  // impose 2D shearing box (r-z) src on efld
-  if (psrc->shearing_box && !psrc->shearing_box_r_phi)
-    psrc->AddSBoxEField(b0, efld);
-
   // capture class variables for the kernels
   Real &gam0 = pdriver->gam0[stage-1];
   Real &gam1 = pdriver->gam1[stage-1];

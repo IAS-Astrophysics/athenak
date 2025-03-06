@@ -28,12 +28,12 @@ struct IonNeutralTaskIDs {
   TaskID i_flux;
   TaskID i_sendf;
   TaskID i_recvf;
-  TaskID i_expl;
+  TaskID i_rkupdt;
   TaskID i_restu;
   TaskID n_flux;
   TaskID n_sendf;
   TaskID n_recvf;
-  TaskID n_expl;
+  TaskID n_rkupdt;
   TaskID n_restu;
   TaskID impl;
   TaskID i_sendu;
@@ -41,6 +41,8 @@ struct IonNeutralTaskIDs {
   TaskID n_sendu;
   TaskID n_recvu;
   TaskID efld;
+  TaskID sende;
+  TaskID recve;
   TaskID ct;
   TaskID restb;
   TaskID sendb;
@@ -55,6 +57,8 @@ struct IonNeutralTaskIDs {
   TaskID n_newdt;
   TaskID i_clear;
   TaskID n_clear;
+  TaskID i_srctrms;
+  TaskID n_srctrms;
 };
 
 namespace ion_neutral {

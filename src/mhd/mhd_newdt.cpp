@@ -46,6 +46,7 @@ TaskStatus MHD::NewTimeStep(Driver *pdriver, int stage) {
   auto &mbsize = pmy_pack->pmb->mb_size;
   auto &is_special_relativistic_ = pmy_pack->pcoord->is_special_relativistic;
   auto &is_general_relativistic_ = pmy_pack->pcoord->is_general_relativistic;
+  auto &is_dynamical_relativistic_ = pmy_pack->pcoord->is_dynamical_relativistic;
   const int nmkji = (pmy_pack->nmb_thispack)*nx3*nx2*nx1;
   const int nkji = nx3*nx2*nx1;
   const int nji  = nx2*nx1;
@@ -82,7 +83,7 @@ TaskStatus MHD::NewTimeStep(Driver *pdriver, int stage) {
       Real max_dv1 = 0.0, max_dv2 = 0.0, max_dv3 = 0.0;
 
       // timestep in GR MHD
-      if (is_general_relativistic_) {
+      if (is_general_relativistic_ || is_dynamical_relativistic_) {
         max_dv1 = 1.0;
         max_dv2 = 1.0;
         max_dv3 = 1.0;
@@ -162,9 +163,7 @@ TaskStatus MHD::NewTimeStep(Driver *pdriver, int stage) {
     pcond->NewTimeStep(w0, peos->eos_data);
   }
   // compute source terms timestep
-  if (psrc->source_terms_enabled) {
-    psrc->NewTimeStep(w0, peos->eos_data);
-  }
+  psrc->NewTimeStep(w0, peos->eos_data);
 
   return TaskStatus::complete;
 }

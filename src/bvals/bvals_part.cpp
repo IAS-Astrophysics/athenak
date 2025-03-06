@@ -732,6 +732,7 @@ TaskStatus ParticlesBoundaryValues::RecvAndUnpackPrtcls() {
   }
   pmy_part->nprtcl_thispack = new_npart;
   pmy_part->pmy_pack->pmesh->nprtcl_thisrank = new_npart;
+  pmy_part->pmy_pack->pmesh->UpdatePrtclInfo();
   return TaskStatus::complete;
 }
 

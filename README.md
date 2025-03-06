@@ -1,108 +1,42 @@
 # AthenaK
 
-Experimental version of Athena++ with Kokkos.
+Block-based AMR framework with fluid, particle and numerical relativity solvers in Kokkos.
 
-## How to clone
+## Overview
 
-The code resides in a private GitLab repo and can only be accessed with two-factor authentication. So first you must create a personal access token for your GitLab account, and then clone recursively:
-```
-git clone --recursive https://TOKEN_NAME:TOKEN@gitlab.com/theias/hpc/jmstone/athena-parthenon/athenak.git
-```
-The recursive option clones the Kokkos repository along with Athena. If you clone the code without Kokkos, you must get Kokkos manually in the root directory containing the code:
-```
-git submodule init
-git submodule update
-```
+AthenaK is a complete rewrite of the AMR framework and fluid solvers in the [Athena++](https://github.com/PrincetonUniversity/athena) astrophysical MHD code using the [Kokkos](https://kokkos.org/) programming model.
 
-## How to build
+Using Kokkos enables *performance-portability*.  AthenaK will run on any hardware supported by Kokkos, including CPU, GPUs from various vendors, and ARM processors.
 
-The code uses cmake to manage builds.  In-source builds are not allowed; you must create a new build directory:
-```
-mkdir build
-cd build
-```
+AthenaK is targeting challenging problems that require exascale resources, and as such it does not implement all of the features of Athena++.  Current code features are:
+- Block-based AMR with dynamical execution via a task list
+- Non-relativistic (Newtonian) hydrodynamics and MHD
+- Special relativistic (SR) hydrodynamics and MHD
+- General relativistic (GR) hydrodynamics and MHD in stationary spacetimes
+- Relativistic radiation transport
+- Lagrangian tracer particles, and charged test particles
+- Numerical relativity solver using the Z4c formalism
+- GR hydrodynamics and MHD in dynamical spacetimes
 
-Then run `cmake` (version 3.0 or later) for the specific target architecture in the build subdirectory as follows:
+The numerical algorithms implemented in AthenaK are all based on higher-order finite volume methods with a variety of reconstruction algorithms, Riemann solvers, and time integration methods.
 
-### Default build for CPU
-```
-cmake3 ../
-```
+## Getting Started
 
-### Build for CPU with custom problem generator (located in `/src/pgen/name.cpp`)
-```
-cmake3 -D PROBLEM=name ../
-```
+The code is designed to be user-friendly with as few external dependencies as possible.
 
-### To build in debug mode, add
-```
-cmake3 -D CMAKE_BUILD_TYPE=Debug ../
-```
+Documention is permanently under construction on the [wiki](https://github.com/IAS-Astrophysics/athenak/wiki) pages.
 
-### Default build for CPU with MPI
-```
-cmake3 -D Athena_ENABLE_MPI=ON ../
-```
+In particular, see the complete list of [requirements](https://github.com/IAS-Astrophysics/athenak/wikis/Requirements), or
+instructions on how to [download](https://github.com/IAS-Astrophysics/athenak/wikis/Download) and [build](https://github.com/IAS-Astrophysics/athenak/wikis/Build) the code for various devices.
+Other pages give instructions for running the code.
 
-### Default build for Intel Broadwell CPU with Intel C++ compiler and GCC C compiler 
-```
-cmake3 -DCMAKE_CXX_COMPILER=icpc -D Kokkos_ARCH_BDW=On -D Kokkos_ENABLE_OPENMP=ON \
-   -D CMAKE_CXX_FLAGS="-O3 -inline-forceinline -qopenmp-simd -qopt-prefetch=4 -diag-disable 3180 " \
-   -D CMAKE_C_FLAGS="-O3 -finline-functions" ../
-```
+Since AthenaK is very similar to Athena++, the [Athena++ documention](https://github.com/PrincetonUniversity/athena/wiki) may also be helpful.
 
-### Default build for NVIDIA V100 GPU (requires GCC and CUDA Toolkit)
-E.g. `cuda` at IAS:
-```
-cmake3 -DKokkos_ENABLE_CUDA=On -DKokkos_ARCH_VOLTA70=On -DCMAKE_CXX_COMPILER=${path_to_code}/athenak/kokkos/bin/nvcc_wrapper ../
-```
+## Code papers
 
+For more details on the features and algorithms implemented in AthenaK, see the code papers:
+- [Stone et al (2024)](https://ui.adsabs.harvard.edu/abs/2024arXiv240916053S/abstract): basic framework
+- [Zhu et al. (2024)](https://ui.adsabs.harvard.edu/abs/2024arXiv240910383Z/abstract): numerical relativity solver
+- [Fields at al. (2024)](https://ui.adsabs.harvard.edu/abs/2024arXiv240910384F/abstract): GR hydro and MHD solver in dynamical spacetimes
 
-   $  cmake3 -DKokkos_ENABLE_CUDA=On -DKokkos_ARCH_AMPERE80=On -DCMAKE_CXX_COMPILER=${path_to_code}/kokkos/bin/nvcc_wrapper ../
-
-### Build One Puncture problem for cpu
-
-   $ cmake ../ -DPROBLEM=z4c_one_puncture 
-
-### Build Two Punctures problem for cpu
-For this you need first to install two external libraries, i.e. `gsl` and `twopuncturesc` initial data solver (in this order)
-#### gsl:
-```
-cd $HOME && mkdir -p usr/gsl && mkdir codes && cd codes
-# grab source
-wget ftp://ftp.gnu.org/gnu/gsl/gsl-2.5.tar.gz
-
-# extract and configure for local install
-tar -zxvf gsl-2.5.tar.gz
-
-cd gsl-2.5
-
-./configure --prefix=--prefix=/installation/path/usr/gsl
-
-make -j8
-# make check
-make install
-
-# link gsl into athenak
-ln -s /installation/path/usr/gsl ${path_to_code}
-```
-#### twopuncturesc:
-```
-cd $HOME && cd usr
-git clone git@bitbucket.org:bernuzzi/twopuncturesc.git
-cd twopuncturesc
-make -j8
-
-# link twopuncturesc into athenak
-ln -s /installation/path/usr/twopunctures ${path_to_code}
-```
-Now create build directory and configure with cmake
-
-```mkdir build_z4c_twopunc && cd build_z4c_twopunc```
-
-   $ cmake ../ -DPROBLEM=z4c_two_puncture
-### Debug build for NVIDIA A100 GPU (requires GCC and CUDA Toolkit)
-E.g. `apollo` at IAS:
-```
-cmake3 -DKokkos_ENABLE_CUDA=On -DKokkos_ARCH_AMPERE80=On -DCMAKE_CXX_COMPILER=${path_to_code}/athenak/kokkos/bin/nvcc_wrapper -D CMAKE_BUILD_TYPE=DEBUG ../
-```
+Please reference these papers as appropriate for any publications that use AthenaK.

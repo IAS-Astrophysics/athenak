@@ -17,7 +17,7 @@
 #include "bvals.hpp"
 
 //----------------------------------------------------------------------------------------
-//! \fn void BoundaryValuesFC::PackAndSendFluxFC()
+//! \fn void MeshBoundaryValuesFC::PackAndSendFluxFC()
 //! \brief Pack restricted fluxes of face-centered fields at fine/coarse boundaries
 //! into boundary buffers and send to neighbors for flux-correction step. These fluxes
 //! (e.g. EMFs) live at cell edges.
@@ -26,7 +26,7 @@
 //! MeshBlocks. Buffer data are then sent (via MPI) or copied directly for periodic or
 //! block boundaries.
 
-TaskStatus BoundaryValuesFC::PackAndSendFluxFC(DvceEdgeFld4D<Real> &flx) {
+TaskStatus MeshBoundaryValuesFC::PackAndSendFluxFC(DvceEdgeFld4D<Real> &flx) {
   // create local references for variables in kernel
   int nmb = pmy_pack->nmb_thispack;
   int nnghbr = pmy_pack->pmb->nnghbr;
@@ -39,8 +39,8 @@ TaskStatus BoundaryValuesFC::PackAndSendFluxFC(DvceEdgeFld4D<Real> &flx) {
   auto &nghbr = pmy_pack->pmb->nghbr;
   auto &mbgid = pmy_pack->pmb->mb_gid;
   auto &mblev = pmy_pack->pmb->mb_lev;
-  auto &sbuf = send_buf;
-  auto &rbuf = recv_buf;
+  auto &sbuf = sendbuf;
+  auto &rbuf = recvbuf;
   auto &one_d = pmy_pack->pmesh->one_d;
   auto &two_d = pmy_pack->pmesh->two_d;
 
@@ -347,14 +347,14 @@ TaskStatus BoundaryValuesFC::PackAndSendFluxFC(DvceEdgeFld4D<Real> &flx) {
           // get ptr to send buffer for fluxes
           int data_size = 3;
           if ( nghbr.h_view(m,n).lev < pmy_pack->pmb->mb_lev.h_view(m) ) {
-            data_size *= send_buf[n].iflxc_ndat;
+            data_size *= sendbuf[n].iflxc_ndat;
           } else if ( nghbr.h_view(m,n).lev == pmy_pack->pmb->mb_lev.h_view(m) ) {
-            data_size *= send_buf[n].iflxs_ndat;
+            data_size *= sendbuf[n].iflxs_ndat;
           }
-          auto send_ptr = Kokkos::subview(send_buf[n].flux, m, Kokkos::ALL);
+          auto send_ptr = Kokkos::subview(sendbuf[n].flux, m, Kokkos::ALL);
 
           int ierr = MPI_Isend(send_ptr.data(), data_size, MPI_ATHENA_REAL, drank, tag,
-                               flux_comm, &(send_buf[n].flux_req[m]));
+                               comm_flux, &(sendbuf[n].flux_req[m]));
           if (ierr != MPI_SUCCESS) {no_errors=false;}
         }
       }
@@ -376,13 +376,13 @@ TaskStatus BoundaryValuesFC::PackAndSendFluxFC(DvceEdgeFld4D<Real> &flx) {
 //! averaging together fluxes from MeshBlocks at the same level, or replacing the fluxes
 //! with the average from MeshBlocks at finer levels.
 
-TaskStatus BoundaryValuesFC::RecvAndUnpackFluxFC(DvceEdgeFld4D<Real> &flx) {
+TaskStatus MeshBoundaryValuesFC::RecvAndUnpackFluxFC(DvceEdgeFld4D<Real> &flx) {
   // create local references for variables in kernel
   int nmb = pmy_pack->nmb_thispack;
 #if MPI_PARALLEL_ENABLED
   int nnghbr = pmy_pack->pmb->nnghbr;
   auto &nghbr = pmy_pack->pmb->nghbr;
-  auto &rbuf = recv_buf;
+  auto &rbuf = recvbuf;
   auto &mblev = pmy_pack->pmb->mb_lev;
   //----- STEP 1: check that recv boundary buffer communications have all completed
   // receives only occur for neighbors on faces and edges at FINER or SAME level
@@ -442,18 +442,19 @@ TaskStatus BoundaryValuesFC::RecvAndUnpackFluxFC(DvceEdgeFld4D<Real> &flx) {
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn  void BoundaryValuesFC::SumBoundaryFluxes
+//! \fn  void MeshBoundaryValuesFC::SumBoundaryFluxes
 //! \brief Sums boundary buffer fluxes from neighboring MeshBlocks at the same level into
 //! flux (e.g. EMF) array if input argument 'same_level=true', or sums boundary buffer
 //! fluxes from neighboring MeshBlocks at a finer level into flux array otherwise.
 
-void BoundaryValuesFC::SumBoundaryFluxes(DvceEdgeFld4D<Real> &flx, const bool same_level,
-                                         DvceArray2D<int> &nflx) {
+void MeshBoundaryValuesFC::SumBoundaryFluxes(DvceEdgeFld4D<Real> &flx,
+                                             const bool same_level,
+                                             DvceArray2D<int> &nflx) {
   // create local references for variables in kernel
   int nmb = pmy_pack->nmb_thispack;
   int nnghbr = pmy_pack->pmb->nnghbr;
   auto &nghbr = pmy_pack->pmb->nghbr;
-  auto &rbuf = recv_buf;
+  auto &rbuf = recvbuf;
   auto &mblev = pmy_pack->pmb->mb_lev;
 
   // Sum recieve buffers into EMFs stored on MeshBlocks
@@ -643,18 +644,18 @@ void BoundaryValuesFC::SumBoundaryFluxes(DvceEdgeFld4D<Real> &flx, const bool sa
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn  void BoundaryValuesFC::ZeroFluxesAtBoundaryWithFiner
+//! \fn  void MeshBoundaryValuesFC::ZeroFluxesAtBoundaryWithFiner
 //! \brief Zeroes out fluxes of face-centered variables (e.g. EMFs) at boundaries with
 //! MeshBlocks at a finer level, so that boundary buffer fluxes from finer level can be
 //! summed (averaged) in place.
 
-void BoundaryValuesFC::ZeroFluxesAtBoundaryWithFiner(DvceEdgeFld4D<Real> &flx,
-                                                     DvceArray2D<int> &nflx) {
+void MeshBoundaryValuesFC::ZeroFluxesAtBoundaryWithFiner(DvceEdgeFld4D<Real> &flx,
+                                                         DvceArray2D<int> &nflx) {
   // create local references for variables in kernel
   int nmb = pmy_pack->nmb_thispack;
   int nnghbr = pmy_pack->pmb->nnghbr;
   auto &nghbr = pmy_pack->pmb->nghbr;
-  auto &rbuf = recv_buf;
+  auto &rbuf = recvbuf;
   auto &mblev = pmy_pack->pmb->mb_lev;
 
   // Outer loop over (# of MeshBlocks)*(# of neighbors)*(3 field components)
@@ -798,17 +799,17 @@ void BoundaryValuesFC::ZeroFluxesAtBoundaryWithFiner(DvceEdgeFld4D<Real> &flx,
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn  void BoundaryValuesFC::AverageBoundaryFluxes
+//! \fn  void MeshBoundaryValuesFC::AverageBoundaryFluxes
 //! \brief Applies appropriate average to summed boundary fluxes, depending on number of
 //! elements being averaged together.
 
-void BoundaryValuesFC::AverageBoundaryFluxes(DvceEdgeFld4D<Real> &flx,
-                                             DvceArray2D<int> &nflx) {
+void MeshBoundaryValuesFC::AverageBoundaryFluxes(DvceEdgeFld4D<Real> &flx,
+                                                 DvceArray2D<int> &nflx) {
   // create local references for variables in kernel
   int nmb = pmy_pack->nmb_thispack;
   int nnghbr = pmy_pack->pmb->nnghbr;
   auto &nghbr = pmy_pack->pmb->nghbr;
-  auto &rbuf = recv_buf;
+  auto &rbuf = recvbuf;
   auto &mblev = pmy_pack->pmb->mb_lev;
   bool &multi_d = pmy_pack->pmesh->multi_d;
   bool &three_d = pmy_pack->pmesh->three_d;
@@ -1033,12 +1034,12 @@ void BoundaryValuesFC::AverageBoundaryFluxes(DvceEdgeFld4D<Real> &flx,
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn  void BoundaryValuesFC::InitRecvFlux
+//! \fn  void MeshBoundaryValuesFC::InitRecvFlux
 //! \brief Posts non-blocking receives (with MPI) for boundary communication of fluxes of
 //! face-centered variables, which are communicated at FACES and EDGES of MeshBlocks at
 //! the SAME or FINER levels.  This is different than for fluxes of cell-centered vars.
 
-TaskStatus BoundaryValuesFC::InitFluxRecv(const int nvars) {
+TaskStatus MeshBoundaryValuesFC::InitFluxRecv(const int nvars) {
 #if MPI_PARALLEL_ENABLED
   int &nmb = pmy_pack->nmb_thispack;
   int &nnghbr = pmy_pack->pmb->nnghbr;
@@ -1064,15 +1065,15 @@ TaskStatus BoundaryValuesFC::InitFluxRecv(const int nvars) {
           // calculate amount of data to be passed, get pointer to variables
           int data_size = nvars;
           if ( nghbr.h_view(m,n).lev > pmy_pack->pmb->mb_lev.h_view(m) ) {
-            data_size *= recv_buf[n].iflxc_ndat;
+            data_size *= recvbuf[n].iflxc_ndat;
           } else if ( nghbr.h_view(m,n).lev == pmy_pack->pmb->mb_lev.h_view(m) ) {
-            data_size *= recv_buf[n].iflxs_ndat;
+            data_size *= recvbuf[n].iflxs_ndat;
           }
-          auto recv_ptr = Kokkos::subview(recv_buf[n].flux, m, Kokkos::ALL);
+          auto recv_ptr = Kokkos::subview(recvbuf[n].flux, m, Kokkos::ALL);
 
           // Post non-blocking receive for this buffer on this MeshBlock
           int ierr = MPI_Irecv(recv_ptr.data(), data_size, MPI_ATHENA_REAL, drank, tag,
-                               flux_comm, &(recv_buf[n].flux_req[m]));
+                               comm_flux, &(recvbuf[n].flux_req[m]));
           if (ierr != MPI_SUCCESS) {no_errors=false;}
         }
       }

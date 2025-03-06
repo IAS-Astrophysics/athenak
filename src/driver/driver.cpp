@@ -19,9 +19,10 @@
 #include "outputs/outputs.hpp"
 #include "hydro/hydro.hpp"
 #include "mhd/mhd.hpp"
+#include "z4c/z4c.hpp"
+#include "dyn_grmhd/dyn_grmhd.hpp"
 #include "ion-neutral/ion-neutral.hpp"
 #include "radiation/radiation.hpp"
-#include "z4c/z4c.hpp"
 #include "driver.hpp"
 
 #if MPI_PARALLEL_ENABLED
@@ -164,8 +165,8 @@ Driver::Driver(ParameterInput *pin, Mesh *pmesh, Real wtlim, Kokkos::Timer* ptim
       nimp_stages = 3;
       nexp_stages = 2;
       cfl_limit = 1.0;
-      gam0[0] = 0.0;
-      gam1[0] = 1.0;
+      gam0[0] = 1.0;
+      gam1[0] = 0.0;
       beta[0] = 1.0;
 
       gam0[1] = 0.5;
@@ -184,6 +185,48 @@ Driver::Driver(ParameterInput *pin, Mesh *pmesh, Real wtlim, Kokkos::Timer* ptim
       a_twid[2][1] = 0.25;
       a_twid[2][2] = 0.25;
       a_impl = 0.5;
+    } else if (integrator == "imex2+") {
+      // IMEX(4,3,2): Krapp et al. (2024, arXiv:2310.04435), Eq.30.
+      // three-stage explicit, four-stage implicit, second-order ImEx
+      // two implicit stages added, adapting Athenak's overall architecture
+      // Note explicit steps may not reduce to RK2 based on the parameters chosen
+      nimp_stages = 4;
+      nexp_stages = 3;
+      cfl_limit = 1.0;
+      gamma = 1.707106781186547;   //1+1/sqrt(2)
+      gam0[0] = 1.0;
+      gam1[0] = 0.0;
+      beta[0] = gamma;
+
+      gam0[1] = (2.0*gamma-1.0)/(2.0*gamma*gamma);
+      gam1[1] = (1.0-(2.0*gamma-1.0)/(2.0*gamma*gamma));
+      beta[1] = 1.0/(2.0*gamma);
+
+      gam0[2] = 1.0;
+      gam1[2] = 0.0;
+      beta[2] = 0.0;
+
+      a_twid[0][0] = 0.0;
+      a_twid[0][1] = 0.0;
+      a_twid[0][2] = 0.0;
+      a_twid[0][3] = 0.0;
+
+      a_twid[1][0] = 0.0;
+      a_twid[1][1] = 0.0;
+      a_twid[1][2] = 0.0;
+      a_twid[1][3] = 0.0;
+
+      a_twid[2][0] = 0.0;
+      a_twid[2][1] = 0.0;
+      a_twid[2][2] = (1.0-2.0*gamma*gamma)/2.0/gamma;
+      a_twid[2][3] = 0.0;
+
+      a_twid[3][0] = 0.0;
+      a_twid[3][1] = 0.0;
+      a_twid[3][2] = 0.0;
+      a_twid[3][3] = 0.0;
+
+      a_impl = gamma;
     } else if (integrator == "imex3") {
       // IMEX-SSP3(4,3,3): Pareschi & Russo (2005) Table VI.
       // three-stage explicit, four-stage implicit, third-order ImEx
@@ -230,7 +273,7 @@ Driver::Driver(ParameterInput *pin, Mesh *pmesh, Real wtlim, Kokkos::Timer* ptim
     } else {
       std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
          << std::endl << "integrator=" << integrator << " not implemented. "
-         << "Valid choices are [rk1,rk2,rk3,imex2,imex3]." << std::endl;
+         << "Valid choices are [rk1,rk2,rk3,rk4,imex2,imex3]." << std::endl;
       exit(EXIT_FAILURE);
     }
   }
@@ -342,7 +385,7 @@ void Driver::Execute(Mesh *pmesh, ParameterInput *pin, Outputs *pout) {
   } else {
     Real elapsed_time = -1.;
     if (wall_time > 0.) {
-      elapsed_time = pwall_clock_->seconds();
+      elapsed_time = UpdateWallClock();
     }
     while ((pmesh->time < tlim) && (pmesh->ncycle < nlim || nlim < 0) &&
            (elapsed_time < wall_time)) {
@@ -400,7 +443,7 @@ void Driver::Execute(Mesh *pmesh, ParameterInput *pin, Outputs *pout) {
 
       // Update wall clock time if needed.
       if (wall_time > 0.) {
-        elapsed_time = pwall_clock_->seconds();
+        elapsed_time = UpdateWallClock();
       }
     }  // end while
   }    // end of (time_evolution != tstatic) clause
@@ -483,10 +526,31 @@ void Driver::OutputCycleDiagnostics(Mesh *pm) {
 //  const int dtprcsn = std::numeric_limits<Real>::max_digits10 - 1;
   const int dtprcsn = 6;
   if (pm->ncycle % ndiag == 0) {
-    std::cout << "cycle=" << pm->ncycle << std::scientific << std::setprecision(dtprcsn)
+    Real elapsed = pwall_clock_->seconds();
+    std::cout << "elapsed=" << std::scientific << std::setprecision(dtprcsn) << elapsed
+              << " cycle=" << pm->ncycle
               << " time=" << pm->time << " dt=" << pm->dt << std::endl;
   }
   return;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn Driver::UpdateWallClock()
+//! \brief Update and sync the wall clock across all MPI ranks. This is necessary because
+//! the different MPI ranks may 1) initialize their timers at slightly different times,
+//! and 2) may reach the end of a loop to update their timers at slightly different times.
+//! This may result in a weird problem where one or more ranks have timers that fall
+//! slightly below the wall clock time while others determine that it's time to quit.
+
+Real Driver::UpdateWallClock() {
+  Real tnow;
+  if (global_variable::my_rank == 0) {
+    tnow = pwall_clock_->seconds();
+  }
+#if MPI_PARALLEL_ENABLED
+  MPI_Bcast(&tnow, 1, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+#endif
+  return tnow;
 }
 
 //----------------------------------------------------------------------------------------
@@ -496,52 +560,6 @@ void Driver::OutputCycleDiagnostics(Mesh *pm) {
 
 void Driver::InitBoundaryValuesAndPrimitives(Mesh *pm) {
   // Note: with MPI, sends on ALL MBs must be complete before receives execute
-
-  // Initialize HYDRO: ghost zones and primitive variables (everywhere)
-  hydro::Hydro *phydro = pm->pmb_pack->phydro;
-  if (phydro != nullptr) {
-    // following functions return a TaskStatus, but it is ignored so cast to (void)
-    (void) phydro->RestrictU(this, 0);
-    (void) phydro->InitRecv(this, -1);  // stage < 0 suppresses InitFluxRecv
-    (void) phydro->SendU(this, 0);
-    (void) phydro->ClearSend(this, -1);
-    (void) phydro->ClearRecv(this, -1);
-    (void) phydro->RecvU(this, 0);
-    (void) phydro->ApplyPhysicalBCs(this, 0);
-    (void) phydro->Prolongate(this, 0);
-    (void) phydro->ConToPrim(this, 0);
-  }
-
-  // Initialize MHD: ghost zones and primitive variables (everywhere)
-  // Note this requires communicating BOTH u and B
-  mhd::MHD *pmhd = pm->pmb_pack->pmhd;
-  if (pmhd != nullptr) {
-    (void) pmhd->RestrictU(this, 0);
-    (void) pmhd->RestrictB(this, 0);
-    (void) pmhd->InitRecv(this, -1);  // stage < 0 suppresses InitFluxRecv
-    (void) pmhd->SendU(this, 0);
-    (void) pmhd->SendB(this, 0);
-    (void) pmhd->ClearSend(this, -1);
-    (void) pmhd->ClearRecv(this, -1);
-    (void) pmhd->RecvU(this, 0);
-    (void) pmhd->RecvB(this, 0);
-    (void) pmhd->ApplyPhysicalBCs(this, 0);
-    (void) pmhd->Prolongate(this, 0);
-    (void) pmhd->ConToPrim(this, 0);
-  }
-
-  // Initialize radiation: ghost zones and intensity (everywhere)
-  radiation::Radiation *prad = pm->pmb_pack->prad;
-  if (prad != nullptr) {
-    (void) prad->RestrictI(this, 0);
-    (void) prad->InitRecv(this, -1);  // stage < 0 suppresses InitFluxRecv
-    (void) prad->SendI(this, 0);
-    (void) prad->ClearSend(this, -1);
-    (void) prad->ClearRecv(this, -1);
-    (void) prad->RecvI(this, 0);
-    (void) prad->ApplyPhysicalBCs(this, 0);
-    (void) prad->Prolongate(this, 0);
-  }
 
   // Initialize Z4c
   z4c::Z4c *pz4c = pm->pmb_pack->pz4c;
@@ -555,6 +573,72 @@ void Driver::InitBoundaryValuesAndPrimitives(Mesh *pm) {
     (void) pz4c->Z4cBoundaryRHS(this, 0);
     (void) pz4c->ApplyPhysicalBCs(this, 0);
     (void) pz4c->Prolongate(this, 0);
+  }
+
+  // Initialize HYDRO: ghost zones and primitive variables (everywhere)
+  // includes communications for shearing box boundaries
+  hydro::Hydro *phydro = pm->pmb_pack->phydro;
+  if (phydro != nullptr) {
+    // following functions return a TaskStatus, but it is ignored so cast to (void)
+    (void) phydro->RestrictU(this, 0);
+    (void) phydro->InitRecv(this, -1);  // stage < 0 suppresses InitFluxRecv
+    (void) phydro->SendU(this, 0);
+    (void) phydro->ClearSend(this, -1); // stage = -1 only clear SendU
+    (void) phydro->ClearRecv(this, -1); // stage = -1 only clear RecvU
+    (void) phydro->RecvU(this, 0);
+    (void) phydro->SendU_Shr(this, 0);
+    (void) phydro->ClearSend(this, -4); // stage = -4 only clear SendU_Shr
+    (void) phydro->ClearRecv(this, -4); // stage = -4 only clear RecvU_Shr
+    (void) phydro->RecvU_Shr(this, 0);
+    (void) phydro->ApplyPhysicalBCs(this, 0);
+    (void) phydro->Prolongate(this, 0);
+    (void) phydro->ConToPrim(this, 0);
+  }
+
+  // Initialize MHD: ghost zones and primitive variables (everywhere)
+  // includes communications for shearing box boundaries
+  mhd::MHD *pmhd = pm->pmb_pack->pmhd;
+  dyngr::DynGRMHD *pdyngr = pm->pmb_pack->pdyngr;
+  if (pmhd != nullptr) {
+    (void) pmhd->RestrictU(this, 0);
+    (void) pmhd->RestrictB(this, 0);
+    (void) pmhd->InitRecv(this, -1);  // stage < 0 suppresses InitFluxRecv
+    (void) pmhd->SendU(this, 0);
+    (void) pmhd->SendB(this, 0);
+    (void) pmhd->ClearSend(this, -1); // stage = -1 only clear SendU, SendB
+    (void) pmhd->ClearRecv(this, -1); // stage = -1 only clear RecvU, RecvB
+    (void) pmhd->RecvU(this, 0);
+    (void) pmhd->RecvB(this, 0);
+    (void) pmhd->SendU_Shr(this, 0);
+    (void) pmhd->SendB_Shr(this, 0);
+    (void) pmhd->ClearSend(this, -4); // stage = -4 only clear SendU_Shr, SendB_Shr
+    (void) pmhd->ClearRecv(this, -4); // stage = -4 only clear RecvU_Shr, SendB_Shr
+    (void) pmhd->RecvU_Shr(this, 0);
+    (void) pmhd->RecvB_Shr(this, 0);
+    (void) pmhd->ApplyPhysicalBCs(this, 0);
+    (void) pmhd->Prolongate(this, 0);
+    if (pdyngr == nullptr) {
+      (void) pmhd->ConToPrim(this, 0);
+    } else {
+      if (pz4c != nullptr) {
+        (void) pz4c->ConvertZ4cToADM(this, 0);
+      }
+      (void) pdyngr->ConToPrim(this, 0);
+    }
+  }
+
+  // Initialize radiation: ghost zones and intensity (everywhere)
+  // DOES NOT include communications for shearing box boundaries
+  radiation::Radiation *prad = pm->pmb_pack->prad;
+  if (prad != nullptr) {
+    (void) prad->RestrictI(this, 0);
+    (void) prad->InitRecv(this, -1);  // stage < 0 suppresses InitFluxRecv
+    (void) prad->SendI(this, 0);
+    (void) prad->ClearSend(this, -1);
+    (void) prad->ClearRecv(this, -1);
+    (void) prad->RecvI(this, 0);
+    (void) prad->ApplyPhysicalBCs(this, 0);
+    (void) prad->Prolongate(this, 0);
   }
 
   return;

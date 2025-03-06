@@ -27,7 +27,7 @@ class Viscosity {
 
   // data
   Real dtnew;
-  Real nu;     // coefficient of isotropic kinematic shear viscosity
+  Real nu_iso;     // coefficient of isotropic kinematic shear viscosity
 
   // function to add viscous fluxes to Hydro and/or MHD fluxes
   void IsotropicViscousFlux(const DvceArray5D<Real> &w, const Real nu,

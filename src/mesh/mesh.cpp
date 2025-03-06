@@ -635,3 +635,27 @@ void Mesh::AddCoordinatesAndPhysics(ParameterInput *pinput) {
     }
   }
 }
+
+//----------------------------------------------------------------------------------------
+// \fn Mesh::UpdatePrtclInfo
+
+void Mesh::UpdatePrtclInfo() {
+  // Determine total number of particles across all ranks
+  particles::Particles *ppart = pmb_pack->ppart;
+  for (int n=0; n<nmb_packs_thisrank; ++n) {
+    nprtcl_thisrank = 0.0;
+  }
+  for (int n=0; n<nmb_packs_thisrank; ++n) {
+    nprtcl_thisrank += pmb_pack->ppart->nprtcl_thispack;
+  }
+  nprtcl_eachrank = new int[global_variable::nranks];
+  nprtcl_eachrank[global_variable::my_rank] = nprtcl_thisrank;
+#if MPI_PARALLEL_ENABLED
+  // Share number of particles on each rank with all ranks
+  MPI_Allgather(&nprtcl_thisrank,1,MPI_INT,nprtcl_eachrank,1,MPI_INT,MPI_COMM_WORLD);
+#endif
+  nprtcl_total = 0;
+  for (int n=0; n<global_variable::nranks; ++n) {
+    nprtcl_total += nprtcl_eachrank[n];
+  }
+}

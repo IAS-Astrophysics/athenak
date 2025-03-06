@@ -36,50 +36,54 @@ void IonNeutral::AssembleIonNeutralTasks(
   Hydro *phyd = pmy_pack->phydro;
 
   // assemble "before_stagen_tl" task list
-  id.i_irecv = tl["before_stagen_tl"]->AddTask(&MHD::InitRecv, pmhd, none);
-  id.n_irecv = tl["before_stagen_tl"]->AddTask(&Hydro::InitRecv, phyd, none);
+  id.i_irecv = tl["before_stagen"]->AddTask(&MHD::InitRecv, pmhd, none);
+  id.n_irecv = tl["before_stagen"]->AddTask(&Hydro::InitRecv, phyd, none);
 
   // assemble "stagen_tl" task list
-  id.impl_2x = tl["stagen_tl"]->AddTask(&IonNeutral::FirstTwoImpRK, this, none);
-  // above does CopyCons
+  // FirstTwoImpRK task does CopyCons
+  id.impl_2x = tl["stagen"]->AddTask(&IonNeutral::FirstTwoImpRK, this, none);
 
-  id.i_flux  = tl["stagen_tl"]->AddTask(&MHD::Fluxes, pmhd, id.impl_2x);
-  id.i_sendf = tl["stagen_tl"]->AddTask(&MHD::SendFlux, pmhd, id.i_flux);
-  id.i_recvf = tl["stagen_tl"]->AddTask(&MHD::RecvFlux, pmhd, id.i_sendf);
-  id.i_expl  = tl["stagen_tl"]->AddTask(&MHD::ExpRKUpdate, pmhd, id.i_recvf);
+  id.i_flux   = tl["stagen"]->AddTask(&MHD::Fluxes, pmhd, id.impl_2x);
+  id.i_sendf  = tl["stagen"]->AddTask(&MHD::SendFlux, pmhd, id.i_flux);
+  id.i_recvf  = tl["stagen"]->AddTask(&MHD::RecvFlux, pmhd, id.i_sendf);
+  id.i_rkupdt = tl["stagen"]->AddTask(&MHD::RKUpdate, pmhd, id.i_recvf);
+  id.i_srctrms   = tl["stagen"]->AddTask(&MHD::MHDSrcTerms, pmhd, id.i_rkupdt);
 
-  id.n_flux  = tl["stagen_tl"]->AddTask(&Hydro::Fluxes, phyd, id.i_expl);
-  id.n_sendf = tl["stagen_tl"]->AddTask(&Hydro::SendFlux, phyd, id.n_flux);
-  id.n_recvf = tl["stagen_tl"]->AddTask(&Hydro::RecvFlux, phyd, id.n_sendf);
-  id.n_expl  = tl["stagen_tl"]->AddTask(&Hydro::ExpRKUpdate, phyd, id.n_recvf);
+  id.n_flux   = tl["stagen"]->AddTask(&Hydro::Fluxes, phyd, id.i_srctrms);
+  id.n_sendf  = tl["stagen"]->AddTask(&Hydro::SendFlux, phyd, id.n_flux);
+  id.n_recvf  = tl["stagen"]->AddTask(&Hydro::RecvFlux, phyd, id.n_sendf);
+  id.n_rkupdt = tl["stagen"]->AddTask(&Hydro::RKUpdate, phyd, id.n_recvf);
+  id.n_srctrms   = tl["stagen"]->AddTask(&Hydro::HydroSrcTerms, phyd, id.n_rkupdt);
 
-  id.impl = tl["stagen_tl"]->AddTask(&IonNeutral::ImpRKUpdate, this, id.n_expl);
-  id.i_restu = tl["stagen_tl"]->AddTask(&MHD::RestrictU, pmhd, id.impl);
-  id.n_restu = tl["stagen_tl"]->AddTask(&Hydro::RestrictU, phyd, id.i_restu);
+  id.impl     = tl["stagen"]->AddTask(&IonNeutral::ImpRKUpdate, this, id.n_srctrms);
+  id.i_restu  = tl["stagen"]->AddTask(&MHD::RestrictU, pmhd, id.impl);
+  id.n_restu  = tl["stagen"]->AddTask(&Hydro::RestrictU, phyd, id.i_restu);
 
-  id.i_sendu = tl["stagen_tl"]->AddTask(&MHD::SendU, pmhd, id.n_restu);
-  id.n_sendu = tl["stagen_tl"]->AddTask(&Hydro::SendU, phyd, id.n_restu);
-  id.i_recvu = tl["stagen_tl"]->AddTask(&MHD::RecvU, pmhd, id.i_sendu);
-  id.n_recvu = tl["stagen_tl"]->AddTask(&Hydro::RecvU, phyd, id.n_sendu);
+  id.i_sendu  = tl["stagen"]->AddTask(&MHD::SendU, pmhd, id.n_restu);
+  id.n_sendu  = tl["stagen"]->AddTask(&Hydro::SendU, phyd, id.n_restu);
+  id.i_recvu  = tl["stagen"]->AddTask(&MHD::RecvU, pmhd, id.i_sendu);
+  id.n_recvu  = tl["stagen"]->AddTask(&Hydro::RecvU, phyd, id.n_sendu);
 
-  id.efld  = tl["stagen_tl"]->AddTask(&MHD::CornerE, pmhd, id.i_recvu);
-  id.ct    = tl["stagen_tl"]->AddTask(&MHD::CT, pmhd, id.efld);
-  id.restb = tl["stagen_tl"]->AddTask(&MHD::RestrictB, pmhd, id.ct);
-  id.sendb = tl["stagen_tl"]->AddTask(&MHD::SendB, pmhd, id.restb);
-  id.recvb = tl["stagen_tl"]->AddTask(&MHD::RecvB, pmhd, id.sendb);
+  id.efld     = tl["stagen"]->AddTask(&MHD::CornerE, pmhd, id.i_recvu);
+  id.sende    = tl["stagen"]->AddTask(&MHD::SendE, pmhd, id.efld);
+  id.recve    = tl["stagen"]->AddTask(&MHD::RecvE, pmhd, id.sende);
+  id.ct       = tl["stagen"]->AddTask(&MHD::CT, pmhd, id.recve);
+  id.restb    = tl["stagen"]->AddTask(&MHD::RestrictB, pmhd, id.ct);
+  id.sendb    = tl["stagen"]->AddTask(&MHD::SendB, pmhd, id.restb);
+  id.recvb    = tl["stagen"]->AddTask(&MHD::RecvB, pmhd, id.sendb);
 
-  id.i_bcs   = tl["stagen_tl"]->AddTask(&MHD::ApplyPhysicalBCs, pmhd, id.recvb);
-  id.n_bcs   = tl["stagen_tl"]->AddTask(&Hydro::ApplyPhysicalBCs, phyd, id.n_recvu);
-  id.i_prol  = tl["stagen_tl"]->AddTask(&MHD::Prolongate, pmhd, id.i_bcs);
-  id.n_prol  = tl["stagen_tl"]->AddTask(&Hydro::Prolongate, phyd, id.n_bcs);
-  id.i_c2p   = tl["stagen_tl"]->AddTask(&MHD::ConToPrim, pmhd, id.i_prol);
-  id.n_c2p   = tl["stagen_tl"]->AddTask(&Hydro::ConToPrim, phyd, id.n_prol);
-  id.i_newdt = tl["stagen_tl"]->AddTask(&MHD::NewTimeStep, pmhd, id.i_c2p);
-  id.n_newdt = tl["stagen_tl"]->AddTask(&Hydro::NewTimeStep, phyd, id.n_c2p);
+  id.i_bcs    = tl["stagen"]->AddTask(&MHD::ApplyPhysicalBCs, pmhd, id.recvb);
+  id.n_bcs    = tl["stagen"]->AddTask(&Hydro::ApplyPhysicalBCs, phyd, id.n_recvu);
+  id.i_prol   = tl["stagen"]->AddTask(&MHD::Prolongate, pmhd, id.i_bcs);
+  id.n_prol   = tl["stagen"]->AddTask(&Hydro::Prolongate, phyd, id.n_bcs);
+  id.i_c2p    = tl["stagen"]->AddTask(&MHD::ConToPrim, pmhd, id.i_prol);
+  id.n_c2p    = tl["stagen"]->AddTask(&Hydro::ConToPrim, phyd, id.n_prol);
+  id.i_newdt  = tl["stagen"]->AddTask(&MHD::NewTimeStep, pmhd, id.i_c2p);
+  id.n_newdt  = tl["stagen"]->AddTask(&Hydro::NewTimeStep, phyd, id.n_c2p);
 
   // assemble "after_stagen_tl" task list
-  id.i_clear = tl["after_stagen_tl"]->AddTask(&MHD::ClearSend, pmhd, none);
-  id.n_clear = tl["after_stagen_tl"]->AddTask(&Hydro::ClearSend, phyd, none);
+  id.i_clear = tl["after_stagen"]->AddTask(&MHD::ClearSend, pmhd, none);
+  id.n_clear = tl["after_stagen"]->AddTask(&Hydro::ClearSend, phyd, none);
 
   return;
 }
@@ -183,9 +187,24 @@ TaskStatus IonNeutral::ImpRKUpdate(Driver *pdriver, int estage) {
   // equations for ion-neutral drag.
   // Only required for istage = (1,2,3,[4])
   if (estage < pdriver->nexp_stages) {
-    Real gamma_adt = drag_coeff*(pdriver->a_impl)*(pmy_pack->pmesh->dt);
-    Real xi_adt = ionization_coeff*(pdriver->a_impl)*(pmy_pack->pmesh->dt);
-    Real alpha_adt = recombination_coeff*(pdriver->a_impl)*(pmy_pack->pmesh->dt);
+    Real gamma_adt;
+    Real xi_adt;
+    Real alpha_adt;
+
+    // Condition to set gamma_adt, xi_adt, and alpha_adt to zero
+    if (istage < 3 && pdriver->integrator == "imex2+") {
+      gamma_adt = 0.0;
+      xi_adt = 0.0;
+      alpha_adt = 0.0;
+    } else {
+      gamma_adt = drag_coeff * (pdriver->a_impl) * (pmy_pack->pmesh->dt);
+      xi_adt = ionization_coeff * (pdriver->a_impl) * (pmy_pack->pmesh->dt);
+      alpha_adt = recombination_coeff * (pdriver->a_impl) * (pmy_pack->pmesh->dt);
+    }
+
+    //Real gamma_adt = drag_coeff*(pdriver->a_impl)*(pmy_pack->pmesh->dt);
+    //Real xi_adt = ionization_coeff*(pdriver->a_impl)*(pmy_pack->pmesh->dt);
+    //Real alpha_adt = recombination_coeff*(pdriver->a_impl)*(pmy_pack->pmesh->dt)
     auto ui = pmhd->u0;
     auto un = phyd->u0;
     par_for("imex_imp",DevExeSpace(),0,nmb1,0,(n3-1),0,(n2-1),0,(n1-1),

@@ -18,61 +18,89 @@
 #include "tasklist/task_list.hpp"
 #include "mesh/mesh.hpp"
 #include "bvals/bvals.hpp"
+#include "z4c/compact_object_tracker.hpp"
+#include "z4c/horizon_dump.hpp"
 #include "z4c/z4c.hpp"
-#include "z4c/z4c_puncture_tracker.hpp"
+#include "tasklist/numerical_relativity.hpp"
+#include "z4c/cce/cce.hpp"
 
 namespace z4c {
+
 //----------------------------------------------------------------------------------------
-//! \fn  void Z4c::AssembleZ4cTasks
-//! \brief Adds z4c tasks to appropriate task lists used by time integrators.
-//  Called by MeshBlockPack::AddPhysics() function directly after Z4c constrctor
-
-void Z4c::AssembleZ4cTasks(std::map<std::string, std::shared_ptr<TaskList>> tl) {
-  TaskID none(0);
+//! \fn  void Z4c::QueueZ4cTasks
+//! \brief queue Z4c tasks into NumericalRelativity
+void Z4c::QueueZ4cTasks() {
   printf("AssembleZ4cTasks\n");
+  using namespace mhd;     // NOLINT(build/namespaces)
+  using namespace numrel;  // NOLINT(build/namespaces)
+  NumericalRelativity *pnr = pmy_pack->pnr;
   auto &indcs = pmy_pack->pmesh->mb_indcs;
-  // "before_stagen" task list
-  id.irecv = tl["before_stagen"]->AddTask(&Z4c::InitRecv, this, none);
-  id.irecvweyl = tl["before_stagen"]->AddTask(&Z4c::InitRecvWeyl, this, none);
 
-  // "stagen" task list
-  // id.ptrack = tl["stagen"]->AddTask(&Z4c::PunctureTracker, this, none);
-  id.copyu = tl["stagen"]->AddTask(&Z4c::CopyU, this, none); // id.ptrack);
+  // Start task list
+  pnr->QueueTask(&Z4c::InitRecv, this, Z4c_Recv, "Z4c_Recv", Task_Start);
+  pnr->QueueTask(&Z4c::InitRecvWeyl, this, Z4c_IRecvW, "Z4c_IRecvW", Task_Start);
 
+  // Run task list
+  pnr->QueueTask(&Z4c::CopyU, this, Z4c_CopyU, "Z4c_CopyU", Task_Run);
   switch (indcs.ng) {
-      case 2: id.crhs  = tl["stagen"]->AddTask(&Z4c::CalcRHS<2>, this, id.copyu);
-              break;
-      case 3: id.crhs  = tl["stagen"]->AddTask(&Z4c::CalcRHS<3>, this, id.copyu);
-              break;
-      case 4: id.crhs  = tl["stagen"]->AddTask(&Z4c::CalcRHS<4>, this, id.copyu);
-              break;
+    case 2:
+      pnr->QueueTask(&Z4c::CalcRHS<2>, this, Z4c_CalcRHS, "Z4c_CalcRHS",
+                     Task_Run, {Z4c_CopyU}, {MHD_SetTmunu});
+      break;
+    case 3:
+      pnr->QueueTask(&Z4c::CalcRHS<3>, this, Z4c_CalcRHS, "Z4c_CalcRHS",
+                     Task_Run, {Z4c_CopyU}, {MHD_SetTmunu});
+      break;
+    case 4:
+      pnr->QueueTask(&Z4c::CalcRHS<4>, this, Z4c_CalcRHS, "Z4c_CalcRHS",
+                     Task_Run, {Z4c_CopyU}, {MHD_SetTmunu});
+      break;
   }
-  id.sombc = tl["stagen"]->AddTask(&Z4c::Z4cBoundaryRHS, this, id.crhs);
-  id.expl  = tl["stagen"]->AddTask(&Z4c::ExpRKUpdate, this, id.sombc);
-  id.restu = tl["stagen"]->AddTask(&Z4c::RestrictU, this, id.expl);
-  id.sendu = tl["stagen"]->AddTask(&Z4c::SendU, this, id.restu);
-  id.recvu = tl["stagen"]->AddTask(&Z4c::RecvU, this, id.sendu);
-  id.bcs   = tl["stagen"]->AddTask(&Z4c::ApplyPhysicalBCs, this, id.recvu);
-  id.prol  = tl["stagen"]->AddTask(&Z4c::Prolongate, this, id.bcs);
-  id.algc  = tl["stagen"]->AddTask(&Z4c::EnforceAlgConstr, this, id.prol);
-  id.newdt = tl["stagen"]->AddTask(&Z4c::NewTimeStep, this, id.algc);
-  // "after_stagen" task list
-  id.csend = tl["after_stagen"]->AddTask(&Z4c::ClearSend, this, none);
-  id.crecv = tl["after_stagen"]->AddTask(&Z4c::ClearRecv, this, id.csend);
-  id.z4tad = tl["after_stagen"]->AddTask(&Z4c::Z4cToADM_, this, id.crecv);
-  id.admc  = tl["after_stagen"]->AddTask(&Z4c::ADMConstraints_, this, id.z4tad);
-  id.weyl_scalar  = tl["after_stagen"]->AddTask(&Z4c::CalcWeylScalar, this, id.z4tad);
-  id.weyl_rest = tl["after_stagen"]->AddTask(&Z4c::RestrictWeyl, this, id.weyl_scalar);
-  id.weyl_send = tl["after_stagen"]->AddTask(&Z4c::SendWeyl, this, id.weyl_rest);
-  id.weyl_recv = tl["after_stagen"]->AddTask(&Z4c::RecvWeyl, this, id.weyl_send);
-  id.weyl_prol  = tl["after_stagen"]->AddTask(&Z4c::ProlongateWeyl, this, id.weyl_recv);
-  id.csendweyl = tl["after_stagen"]->AddTask(&Z4c::ClearSendWeyl, this, id.weyl_prol);
-  id.crecvweyl = tl["after_stagen"]->AddTask(&Z4c::ClearRecvWeyl, this, id.csendweyl);
-  id.wave_extr = tl["after_stagen"]->AddTask(&Z4c::CalcWaveForm, this, id.crecvweyl);
-  id.ptrck = tl["after_stagen"]->AddTask(&Z4c::PunctureTracker, this, id.z4tad);
-  return;
-}
+  pnr->QueueTask(&Z4c::Z4cBoundaryRHS, this, Z4c_SomBC, "Z4c_SomBC", Task_Run,
+                 {Z4c_CalcRHS});
+  pnr->QueueTask(&Z4c::ExpRKUpdate, this, Z4c_ExplRK, "Z4c_ExplRK", Task_Run,
+                 {Z4c_SomBC},{MHD_EField});
+  pnr->QueueTask(&Z4c::RestrictU, this, Z4c_RestU, "Z4c_RestU", Task_Run, {Z4c_ExplRK});
+  pnr->QueueTask(&Z4c::SendU, this, Z4c_SendU, "Z4c_SendU", Task_Run, {Z4c_RestU});
+  pnr->QueueTask(&Z4c::RecvU, this, Z4c_RecvU, "Z4c_RecvU", Task_Run, {Z4c_SendU});
+  pnr->QueueTask(&Z4c::ApplyPhysicalBCs, this, Z4c_BCS, "Z4c_BCS", Task_Run, {Z4c_RecvU});
+  pnr->QueueTask(&Z4c::Prolongate, this, Z4c_Prolong, "Z4c_Prolong", Task_Run, {Z4c_BCS});
+  pnr->QueueTask(&Z4c::EnforceAlgConstr, this, Z4c_AlgC, "Z4c_AlgC", Task_Run,
+                 {Z4c_Prolong});
+  pnr->QueueTask(&Z4c::ConvertZ4cToADM, this, Z4c_Z4c2ADM, "Z4c_Z4c2ADM",
+                 Task_Run, {Z4c_AlgC});
+  if (pmy_pack->pdyngr != nullptr) {
+    pnr->QueueTask(&Z4c::UpdateExcisionMasks, this, Z4c_Excise, "Z4c_Excise", Task_Run,
+                   {Z4c_Z4c2ADM});
+  }
+  pnr->QueueTask(&Z4c::NewTimeStep, this, Z4c_Newdt, "Z4c_Newdt", Task_Run,
+                 {Z4c_Z4c2ADM});
 
+  // End task list
+  pnr->QueueTask(&Z4c::ClearSend, this, Z4c_ClearS, "Z4c_ClearS", Task_End);
+  pnr->QueueTask(&Z4c::ClearRecv, this, Z4c_ClearR, "Z4c_ClearR", Task_End, {Z4c_ClearS});
+  /*pnr->QueueTask(&Z4c::Z4cToADM, this, Z4c_Z4c2ADM, "Z4c_Z4c2ADM", Task_End,
+                 {Z4c_ClearR});*/
+  pnr->QueueTask(&Z4c::ADMConstraints_, this, Z4c_ADMC, "Z4c_ADMC", Task_End,
+  //               {Z4c_Z4c2ADM});
+                 {Z4c_ClearR});
+  pnr->QueueTask(&Z4c::CalcWeylScalar, this, Z4c_Weyl, "Z4c_Weyl", Task_End, {Z4c_ADMC});
+  pnr->QueueTask(&Z4c::RestrictWeyl, this, Z4c_RestW, "Z4c_RestW", Task_End, {Z4c_Weyl});
+  pnr->QueueTask(&Z4c::SendWeyl, this, Z4c_SendW, "Z4c_SendW", Task_End, {Z4c_RestW});
+  pnr->QueueTask(&Z4c::RecvWeyl, this, Z4c_RecvW, "Z4c_RecvW", Task_End, {Z4c_SendW});
+  pnr->QueueTask(&Z4c::ProlongateWeyl, this, Z4c_ProlW, "Z4c_ProlW", Task_End,
+                 {Z4c_RecvW});
+  pnr->QueueTask(&Z4c::ClearSendWeyl, this, Z4c_ClearSW, "Z4c_ClearS2", Task_End,
+                 {Z4c_ProlW});
+  pnr->QueueTask(&Z4c::ClearRecvWeyl, this, Z4c_ClearRW, "Z4c_ClearR2", Task_End,
+                 {Z4c_ClearSW});
+  pnr->QueueTask(&Z4c::CalcWaveForm, this, Z4c_Wave, "Z4c_Wave", Task_End,
+                 {Z4c_ClearRW});
+  pnr->QueueTask(&Z4c::TrackCompactObjects, this, Z4c_PT, "Z4c_PT", Task_End, {Z4c_Wave});
+  pnr->QueueTask(&Z4c::CCEDump, this, Z4c_CCE, "CCEDump", Task_End, {Z4c_PT});
+  pnr->QueueTask(&Z4c::DumpHorizons, this, Z4c_DumpHorizon, "Z4c_DumpHorizon",
+                Task_End, {Z4c_CCE});
+}
 //----------------------------------------------------------------------------------------
 //! \fn  void Wave::InitRecv
 //! \brief function to post non-blocking receives (with MPI), and initialize all boundary
@@ -164,7 +192,7 @@ TaskStatus Z4c::RecvU(Driver *pdrive, int stage) {
 //! \brief
 
 TaskStatus Z4c::EnforceAlgConstr(Driver *pdrive, int stage) {
-  if (stage == pdrive->nexp_stages) {
+  if (pmy_pack->pdyngr != nullptr || stage == pdrive->nexp_stages) {
     AlgConstr(pmy_pack);
   }
   return TaskStatus::complete;
@@ -174,9 +202,20 @@ TaskStatus Z4c::EnforceAlgConstr(Driver *pdrive, int stage) {
 //! \fn  void Z4c::ADMToZ4c_
 //! \brief
 
-TaskStatus Z4c::Z4cToADM_(Driver *pdrive, int stage) {
-  if (stage == pdrive->nexp_stages) {
+TaskStatus Z4c::ConvertZ4cToADM(Driver *pdrive, int stage) {
+  if (pmy_pack->pdyngr != nullptr || stage == pdrive->nexp_stages) {
     Z4cToADM(pmy_pack);
+  }
+  return TaskStatus::complete;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void Z4c::UpdateExcisionMasks
+//! \brief
+
+TaskStatus Z4c::UpdateExcisionMasks(Driver *pdrive, int stage) {
+  if (pmy_pack->pcoord->coord_data.bh_excise && stage == pdrive->nexp_stages) {
+    pmy_pack->pcoord->UpdateExcisionMasks();
   }
   return TaskStatus::complete;
 }
@@ -207,7 +246,7 @@ TaskStatus Z4c::ADMConstraints_(Driver *pdrive, int stage) {
 TaskStatus Z4c::RestrictU(Driver *pdrive, int stage) {
   // Only execute Mesh function with SMR/SMR
   if (pmy_pack->pmesh->multilevel) {
-    pmy_pack->pmesh->pmr->RestrictCC(u0, coarse_u0);
+    pmy_pack->pmesh->pmr->RestrictCC(u0, coarse_u0, true);
   }
   return TaskStatus::complete;
 }
@@ -220,7 +259,7 @@ TaskStatus Z4c::RestrictU(Driver *pdrive, int stage) {
 TaskStatus Z4c::Prolongate(Driver *pdrive, int stage) {
   if (pmy_pack->pmesh->multilevel) {  // only prolongate with SMR/AMR
 //    pbval_u->FillCoarseInBndryCC(u0, coarse_u0);
-    pbval_u->ProlongateCC(u0, coarse_u0);
+    pbval_u->ProlongateCC(u0, coarse_u0, true);
   }
   return TaskStatus::complete;
 }
@@ -243,12 +282,31 @@ TaskStatus Z4c::ApplyPhysicalBCs(Driver *pdrive, int stage) {
   return TaskStatus::complete;
 }
 
-TaskStatus Z4c::PunctureTracker(Driver *pdrive, int stage) {
+TaskStatus Z4c::TrackCompactObjects(Driver *pdrive, int stage) {
   if (stage == pdrive->nexp_stages) {
-    for (auto ptracker : pmy_pack->pz4c_ptracker) {
-      ptracker->InterpolateShift(pmy_pack);
-      ptracker->EvolveTracker();
-      ptracker->WriteTracker();
+    for (auto & pt : ptracker) {
+      pt->InterpolateVelocity(pmy_pack);
+      pt->EvolveTracker();
+      pt->WriteTracker();
+    }
+  }
+  return TaskStatus::complete;
+}
+
+//----------------------------------------------------------------------------------------
+// ! \fn TaskList CCEDump
+// ! \brief CCE initial data for Pittnull code (cce dumps for Pittnull).
+
+TaskStatus Z4c::CCEDump(Driver *pdrive, int stage) {
+  float time_32 = static_cast<float>(pmy_pack->pmesh->time);
+  float next_32 = static_cast<float>(cce_dump_last_output_time+cce_dump_dt);
+  if ((time_32 >= next_32)) {
+    if (stage == pdrive->nexp_stages) {
+      //printf("%s:(ctime,dt)=(%f,%f)",__func__,pmy_pack->pmesh->time,cce_dump_dt);
+      for (auto cce : pmy_pack->pz4c_cce) {
+        cce->InterpolateAndDecompose(pmy_pack);
+      }
+      cce_dump_last_output_time = time_32;
     }
   }
   return TaskStatus::complete;
@@ -338,7 +396,7 @@ TaskStatus Z4c::RestrictWeyl(Driver *pdrive, int stage) {
     float time_32 = static_cast<float>(pmy_pack->pmesh->time);
     if ((last_output_time==time_32) && (stage == pdrive->nexp_stages)) {
       if (pmy_pack->pmesh->multilevel) {
-        pmy_pack->pmesh->pmr->RestrictCC(u_weyl, coarse_u_weyl);
+        pmy_pack->pmesh->pmr->RestrictCC(u_weyl, coarse_u_weyl, true);
       }
     }
     return TaskStatus::complete;
@@ -396,7 +454,6 @@ TaskStatus Z4c::ClearRecvWeyl(Driver *pdrive, int stage) {
     float time_32 = static_cast<float>(pmy_pack->pmesh->time);
     if ((last_output_time==time_32) && (stage == pdrive->nexp_stages)) {
       TaskStatus tstat = pbval_weyl->ClearRecv();
-      if (tstat != TaskStatus::complete) return tstat;
       return tstat;
     } else {
       return TaskStatus::complete;
@@ -415,12 +472,33 @@ TaskStatus Z4c::ClearSendWeyl(Driver *pdrive, int stage) {
     float time_32 = static_cast<float>(pmy_pack->pmesh->time);
     if ((last_output_time==time_32) && (stage == pdrive->nexp_stages)) {
       TaskStatus tstat = pbval_weyl->ClearSend();
-      if (tstat != TaskStatus::complete) return tstat;
       return tstat;
     } else {
       return TaskStatus::complete;
     }
   }
+}
+
+TaskStatus Z4c::DumpHorizons(Driver *pdrive, int stage) {
+  if (pmy_pack->pz4c->phorizon_dump.size() == 0 || stage != pdrive->nexp_stages) {
+    return TaskStatus::complete;
+  } else {
+    float time_32 = static_cast<float>(pmy_pack->pmesh->time);
+    float next_32 = static_cast<float>(pmy_pack->pz4c->phorizon_dump[0]
+                                    ->horizon_last_output_time
+                                    +pmy_pack->pz4c->phorizon_dump[0]->horizon_dt);
+    if (((time_32 >= next_32) || (time_32 == 0))) {
+      int i = 0;
+      for (auto & hd : phorizon_dump) {
+        hd->horizon_last_output_time = time_32;
+        hd->SetGridAndInterpolate(pmy_pack->pz4c->ptracker[i]->GetPos());
+        i++;
+      }
+    }
+    return TaskStatus::complete;
+  }
+
+  return TaskStatus::complete;
 }
 
 } // namespace z4c

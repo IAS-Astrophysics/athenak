@@ -6,7 +6,9 @@
 //! \file z4c.cpp
 //! \brief implementation of Z4c class constructor and assorted other functions
 
+#include <math.h>
 #include <sys/stat.h>  // mkdir
+
 #include <iostream>
 #include <string>
 #include <algorithm>
@@ -18,9 +20,12 @@
 #include "parameter_input.hpp"
 #include "mesh/mesh.hpp"
 #include "bvals/bvals.hpp"
+#include "z4c/compact_object_tracker.hpp"
+#include "z4c/horizon_dump.hpp"
 #include "z4c/z4c.hpp"
 #include "z4c/z4c_amr.hpp"
-#include "adm/adm.hpp"
+#include "coordinates/adm.hpp"
+#include "utils/cart_grid.hpp"
 
 namespace z4c {
 
@@ -43,11 +48,11 @@ char const * const Z4c::Constraint_names[Z4c::ncon] = {
   "con_Mx", "con_My", "con_Mz",
 };
 
-char const * const Z4c::Matter_names[Z4c::nmat] = {
+/*char const * const Z4c::Matter_names[Z4c::nmat] = {
   "mat_rho",
   "mat_Sx", "mat_Sy", "mat_Sz",
   "mat_Sxx", "mat_Sxy", "mat_Sxz", "mat_Syy", "mat_Syz", "mat_Szz",
-};
+};*/
 
 //----------------------------------------------------------------------------------------
 // constructor, initializes data structures and parameters
@@ -55,15 +60,14 @@ char const * const Z4c::Matter_names[Z4c::nmat] = {
 Z4c::Z4c(MeshBlockPack *ppack, ParameterInput *pin) :
   pmy_pack(ppack),
   u_con("u_con",1,1,1,1,1),
-  u_mat("u_mat",1,1,1,1,1),
+  //u_mat("u_mat",1,1,1,1,1),
   u0("u0 z4c",1,1,1,1,1),
   coarse_u0("coarse u0 z4c",1,1,1,1,1),
   u1("u1 z4c",1,1,1,1,1),
   u_rhs("u_rhs z4c",1,1,1,1,1),
   u_weyl("u_weyl",1,1,1,1,1),
   coarse_u_weyl("coarse_u_weyl",1,1,1,1,1),
-  psi_out("psi_out",1,1,1),
-  pz4c_amr(new Z4c_AMR(this,pin)) {
+  pamr(new Z4c_AMR(pin)) {
   // (1) read time-evolution option [already error checked in driver constructor]
   // Then initialize memory and algorithms for reconstruction and Riemann solvers
   std::string evolution_t = pin->GetString("time","evolution");
@@ -118,6 +122,7 @@ Z4c::Z4c(MeshBlockPack *ppack, ParameterInput *pin) :
 
   opt.chi_psi_power = pin->GetOrAddReal("z4c", "chi_psi_power", -4.0);
   opt.chi_div_floor = pin->GetOrAddReal("z4c", "chi_div_floor", -1000.0);
+  opt.chi_min_floor = pin->GetOrAddReal("z4c", "chi_min_floor", 1e-12);
   opt.diss = pin->GetOrAddReal("z4c", "diss", 0.0);
   opt.eps_floor = pin->GetOrAddReal("z4c", "eps_floor", 1e-12);
   opt.damp_kappa1 = pin->GetOrAddReal("z4c", "damp_kappa1", 0.0);
@@ -127,13 +132,21 @@ Z4c::Z4c(MeshBlockPack *ppack, ParameterInput *pin) :
   opt.lapse_harmonic = pin->GetOrAddReal("z4c", "lapse_harmonic", 0.0);
   opt.lapse_oplog = pin->GetOrAddReal("z4c", "lapse_oplog", 2.0);
   opt.lapse_advect = pin->GetOrAddReal("z4c", "lapse_advect", 1.0);
+  opt.slow_start_lapse = pin->GetOrAddBoolean("z4c", "slow_start_lapse", false);
+  opt.ssl_damping_amp = pin->GetOrAddReal("z4c", "ssl_damping_amp", 0.6);
+  opt.ssl_damping_time = pin->GetOrAddReal("z4c", "ssl_damping_time", 20.0);
+  opt.ssl_damping_index = pin->GetOrAddInteger("z4c", "ssl_damping_index", 1);
+
   opt.shift_ggamma = pin->GetOrAddReal("z4c", "shift_Gamma", 1.0);
   opt.shift_advect = pin->GetOrAddReal("z4c", "shift_advect", 1.0);
-
   opt.shift_alpha2ggamma = pin->GetOrAddReal("z4c", "shift_alpha2Gamma", 0.0);
   opt.shift_hh = pin->GetOrAddReal("z4c", "shift_H", 0.0);
 
   opt.shift_eta = pin->GetOrAddReal("z4c", "shift_eta", 2.0);
+
+  opt.use_z4c = pin->GetOrAddBoolean("z4c", "use_z4c", true);
+
+  opt.user_Sbc = pin->GetOrAddBoolean("z4c", "user_Sbc", false);
 
   opt.extrap_order = fmax(2,fmin(indcs.ng,fmin(4,
       pin->GetOrAddInteger("z4c", "extrap_order", 2))));
@@ -154,9 +167,9 @@ Z4c::Z4c(MeshBlockPack *ppack, ParameterInput *pin) :
 
   // allocate boundary buffers for conserved (cell-centered) variables
   Kokkos::Profiling::pushRegion("Buffers");
-  pbval_u = new BoundaryValuesCC(ppack, pin, true);
+  pbval_u = new MeshBoundaryValuesCC(ppack, pin, true);
   pbval_u->InitializeBuffers((nz4c));
-  pbval_weyl = new BoundaryValuesCC(ppack, pin, true);
+  pbval_weyl = new MeshBoundaryValuesCC(ppack, pin, true);
   pbval_weyl->InitializeBuffers((2));
   Kokkos::Profiling::popRegion();
 
@@ -170,10 +183,56 @@ Z4c::Z4c(MeshBlockPack *ppack, ParameterInput *pin) :
     Real rad = pin->GetOrAddReal("z4c", "extraction_radius_"+std::to_string(i), 10);
     grids.push_back(std::make_unique<SphericalGrid>(ppack, nlev, rad));
   }
-  Kokkos::realloc(psi_out,nrad,77,2);
+  // TODO(@dur566): Why is the size of psi_out hardcoded?
+  psi_out = new Real[nrad*77*2];
   mkdir("waveforms",0775);
   waveform_dt = pin->GetOrAddReal("z4c", "waveform_dt", 1);
   last_output_time = 0;
+  // CCE
+  cce_dump_dt = pin->GetOrAddReal("cce", "cce_dt", 1);
+  mkdir("cce",0775);
+  cce_dump_last_output_time = -100;
+
+  // Construct the compact object trackers
+  int n = 0;
+  while (true) {
+    if (pin->DoesParameterExist("z4c", "co_" + std::to_string(n) + "_type")) {
+      ptracker.push_back(std::make_unique<CompactObjectTracker>(pmy_pack->pmesh, pin, n));
+      n++;
+    } else {
+      break;
+    }
+  }
+  // Construct the Cartesian data grid for dumping horizon data
+  n = 0;
+  while (true) {
+    if (pin->GetOrAddBoolean("z4c", "dump_horizon_" + std::to_string(n),false)) {
+      // phorizon_dump.emplace_back(pmy_pack, pin, n,false);
+      phorizon_dump.push_back(std::make_unique<HorizonDump>(pmy_pack, pin, n, 0));
+      std::string foldername = "horizon_"+std::to_string(n);
+      mkdir(foldername.c_str(),0775);
+      n++;
+    } else {
+      break;
+    }
+  }
+  /*
+  horizon_dt = pin->GetOrAddReal("z4c", "horizon_dt", 1);
+  horizon_last_output_time = 0;
+  n = 0;
+  for (auto & pt : ptracker) {
+    if (pin->GetOrAddBoolean("z4c", "dump_horizon_" + std::to_string(n),false)) {
+      horizon_extent.push_back(pin->GetOrAddReal("z4c", "horizon_"
+                              + std::to_string(n)+"_radius",3));
+      Real extend[3] = {horizon_extent[n],horizon_extent[n],horizon_extent[n]};
+      horizon_nx.push_back(pin->GetOrAddInteger("z4c", "horizon_"
+                              + std::to_string(n)+"_Nx",100));
+      int Nx[3] = {horizon_nx[n],horizon_nx[n],horizon_nx[n]};
+      horizon_dump.emplace_back(pmy_pack, pt.pos, extend, Nx);
+      n++;
+    }
+  }
+  */
 }
 
 //----------------------------------------------------------------------------------------
@@ -195,7 +254,6 @@ void Z4c::AlgConstr(MeshBlockPack *pmbp) {
   int nmb = pmbp->nmb_thispack;
 
   auto &z4c = pmbp->pz4c->z4c;
-  auto &opt = pmbp->pz4c->opt;
   par_for("Alg constr loop",DevExeSpace(),
   0,nmb-1,ksg,keg,jsg,jeg,isg,ieg,
   KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
@@ -231,9 +289,10 @@ void Z4c::AlgConstr(MeshBlockPack *pmbp) {
 //----------------------------------------------------------------------------------------
 // destructor
 Z4c::~Z4c() {
+  delete[] psi_out;
   delete pbval_u;
   delete pbval_weyl;
-  delete pz4c_amr;
+  delete pamr;
 }
 
 } // namespace z4c

@@ -22,7 +22,7 @@
 #include "mesh/mesh.hpp"
 #include "z4c/z4c.hpp"
 #include "z4c/z4c_amr.hpp"
-#include "adm/adm.hpp"
+#include "coordinates/adm.hpp"
 #include "coordinates/cell_locations.hpp"
 
 
@@ -134,5 +134,5 @@ void ADMOnePuncture(MeshBlockPack *pmbp, ParameterInput *pin) {
 
 // how decide the refinement
 void RefinementCondition(MeshBlockPack* pmbp) {
-  pmbp->pz4c->pz4c_amr->Refine(pmbp);
+  pmbp->pz4c->pamr->Refine(pmbp);
 }

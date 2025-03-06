@@ -134,6 +134,71 @@ else()
 	set(TWO_PUNCTURES 0)
 endif()
 
+if (${PROBLEM} STREQUAL "z4c_spectre_bbh")
+  # Load binary black hole initial data from the SpECTRE code:
+  # https://spectre-code.org
+  #
+  # Uses the `BundledExporter` library from SpECTRE to read the initial data.
+  # You can help CMake find the library by setting
+  # `-D SPECTRE_ROOT=path/to/spectre/build` to the path where SpECTRE is
+  # installed.
+  find_library(
+    SPECTRE_EXPORTER_LIB
+    NAMES BundledExporter
+    PATH_SUFFIXES lib
+    PATHS ${SPECTRE_ROOT})
+  find_path(
+    SPECTRE_EXPORTER_INCLUDE_DIR
+    NAMES spectre/Exporter.hpp
+    PATH_SUFFIXES include
+    PATHS ${SPECTRE_ROOT})
+  add_library(spectre::Exporter UNKNOWN IMPORTED)
+  set_target_properties(
+    spectre::Exporter
+    PROPERTIES IMPORTED_LOCATION ${SPECTRE_EXPORTER_LIB}
+               INTERFACE_INCLUDE_DIRECTORIES ${SPECTRE_EXPORTER_INCLUDE_DIR})
+  target_link_libraries(athena PRIVATE spectre::Exporter)
+endif()
+
+if (${PROBLEM} STREQUAL "elliptica_bns")
+  target_include_directories(athena PRIVATE
+      ${CMAKE_SOURCE_DIR}/Elliptica_ID_Reader/include)
+  target_link_libraries(athena PUBLIC
+      ${CMAKE_SOURCE_DIR}/Elliptica_ID_Reader/lib/libelliptica_id_reader.a)
+  if (Athena_ENABLE_OPENMP)
+  else ()
+    find_package(OpenMP COMPONENTS CXX)
+    target_link_libraries(athena PUBLIC OpenMP::OpenMP_CXX)
+  endif()
+endif()
+
+if (${PROBLEM} STREQUAL "sgrid_bns")
+  target_link_libraries(athena PUBLIC
+      ${CMAKE_SOURCE_DIR}/sgrid/lib/libsgrid.a)
+endif()
+
+if (${PROBLEM} STREQUAL "lorene_bns")
+  # FIXME(user): The way the Fortran libraries here are linked is not great. Because these
+  # are implicit libraries, we shouldn't have to add them manually, but at least on some
+  # machines this seems to be necessary. We should find out if there's a better way to
+  # do this.
+  enable_language(Fortran)
+  include(FortranCInterface)
+  FortranCInterface_VERIFY(CXX)
+  find_package(BLAS REQUIRED)
+  find_package(LAPACK REQUIRED)
+  find_package(GSL REQUIRED)
+  target_include_directories(athena PRIVATE
+      ${CMAKE_SOURCE_DIR}/Lorene/Export/C++/Include
+      ${CMAKE_SOURCE_DIR}/Lorene/C++/Include)
+  target_link_libraries(athena PUBLIC
+      ${CMAKE_SOURCE_DIR}/Lorene/Lib/liblorene_export.a
+      ${CMAKE_SOURCE_DIR}/Lorene/Lib/liblorene.a
+      ${CMAKE_SOURCE_DIR}/Lorene/Lib/liblorenef77.a
+      ${BLAS_LIBRARIES} ${LAPACK_LIBRARIES}
+      GSL::gsl ${CMAKE_Fortran_IMPLICIT_LINK_LIBRARIES})
+endif()
+
 # enable include of header files created in build directories
 target_include_directories(athena PUBLIC
   ${CMAKE_CURRENT_SOURCE_DIR}
@@ -141,3 +206,6 @@ target_include_directories(athena PUBLIC
 )
 
 configure_file(config.hpp.in config.hpp)
+
+install( TARGETS athena DESTINATION bin )
+

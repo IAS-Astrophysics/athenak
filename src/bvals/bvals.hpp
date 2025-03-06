@@ -17,7 +17,7 @@ enum BoundaryFace {undef=-1, inner_x1, outer_x1, inner_x2, outer_x2, inner_x3, o
 
 // identifiers for boundary conditions
 enum class BoundaryFlag {undef=-1,block, reflect, inflow, outflow, diode, user, periodic,
-                         shear_periodic};
+                         shear_periodic, vacuum};
 
 #include <algorithm>
 #include <vector>
@@ -79,8 +79,8 @@ struct MeshBoundaryBuffer {
   DvceArray2D<Real> vars, flux;
 
 #if MPI_PARALLEL_ENABLED
-  // Using STL vector causes problems with some GPU compilers, even those these vectors
-  // are only ever accessed on host, so just use plain C array
+  // vectors of length (number of MBs) to hold MPI requests
+  // Using STL vector causes problems with some GPU compilers, so just use plain C array
   MPI_Request *vars_req, *flux_req;
 #endif
 
@@ -115,14 +115,14 @@ class MeshBoundaryValues {
   // data for all 56 buffers in most general 3D case. Not all elements used in most cases.
   // However each MeshBoundaryBuffer is lightweight, so the convenience of fixed array
   // sizes and index values for array elements outweighs cost of extra memory.
-  MeshBoundaryBuffer send_buf[56], recv_buf[56];
+  MeshBoundaryBuffer sendbuf[56], recvbuf[56];
 
   // constant inflow states at each face, initialized in problem generator
   DualArray2D<Real> u_in, b_in, i_in;
 
 #if MPI_PARALLEL_ENABLED
-  // unique MPI communicators for variables and fluxes
-  MPI_Comm vars_comm, flux_comm;
+  // unique MPI communicators for each case (variables/fluxes)
+  MPI_Comm comm_vars, comm_flux;
 #endif
 
   //functions
@@ -153,39 +153,43 @@ class MeshBoundaryValues {
 
 //----------------------------------------------------------------------------------------
 //! \class BoundaryValuesCC
-//  \brief boundary values for cell-centered variables
+//  \brief Derived class implementing boundary values for cell-centered variables
 
-class BoundaryValuesCC : public MeshBoundaryValues {
+class MeshBoundaryValuesCC : public MeshBoundaryValues {
  public:
-  BoundaryValuesCC(MeshBlockPack *ppack, ParameterInput *pin, bool z4c);
+  MeshBoundaryValuesCC(MeshBlockPack *ppack, ParameterInput *pin, bool z4c);
 
   //functions
   void InitSendIndices(MeshBoundaryBuffer &b,int o1,int o2,int o3,int f1,int f2) override;
   void InitRecvIndices(MeshBoundaryBuffer &b,int o1,int o2,int o3,int f1,int f2) override;
   TaskStatus InitFluxRecv(const int nvar) override;
 
+  // functions to communicate CC data
   TaskStatus PackAndSendCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca);
   TaskStatus RecvAndUnpackCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca);
-  void FillCoarseInBndryCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca);
-  void ProlongateCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca);
+  // functions to communicate fluxes of CC data
+  TaskStatus PackAndSendFluxCC(DvceFaceFld5D<Real> &flx);
+  TaskStatus RecvAndUnpackFluxCC(DvceFaceFld5D<Real> &flx);
+
+  // functions to prolongate conserved and primitive CC variables
+  void FillCoarseInBndryCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca,
+       bool is_z4c=false);
+  void ProlongateCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca, bool is_z4c=false);
   void ConsToPrimCoarseBndry(const DvceArray5D<Real> &cons, DvceArray5D<Real> &prim);
   void PrimToConsFineBndry(const DvceArray5D<Real> &prim, DvceArray5D<Real> &cons);
   void ConsToPrimCoarseBndry(const DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &b,
                              DvceArray5D<Real> &prim);
   void PrimToConsFineBndry(const DvceArray5D<Real> &prim, const DvceFaceFld4D<Real> &b,
                            DvceArray5D<Real> &cons);
-
-  TaskStatus PackAndSendFluxCC(DvceFaceFld5D<Real> &flx);
-  TaskStatus RecvAndUnpackFluxCC(DvceFaceFld5D<Real> &flx);
 };
 
 //----------------------------------------------------------------------------------------
 //! \class BoundaryValuesFC
-//  \brief boundary values for face-centered vector fields
+//  \brief Derived class implementing boundary values for face-centered vector fields
 
-class BoundaryValuesFC : public MeshBoundaryValues {
+class MeshBoundaryValuesFC : public MeshBoundaryValues {
  public:
-  BoundaryValuesFC(MeshBlockPack *ppack, ParameterInput *pin);
+  MeshBoundaryValuesFC(MeshBlockPack *ppack, ParameterInput *pin);
 
   //functions
   void InitSendIndices(MeshBoundaryBuffer &b,int o1,int o2,int o3,int f1,int f2) override;

@@ -10,10 +10,12 @@
 
 #include <map>
 #include <memory>    // make_unique, unique_ptr
+#include <list>
 #include <string>
 #include <vector>
 #include "athena.hpp"
 #include "utils/finite_diff.hpp"
+#include "utils/cart_grid.hpp"
 #include "parameter_input.hpp"
 #include "tasklist/task_list.hpp"
 #include "bvals/bvals.hpp"
@@ -24,39 +26,8 @@
 // forward declarations
 class Coordinates;
 class Driver;
-
-//----------------------------------------------------------------------------------------
-//! \struct Z4cTaskIDs
-//  \brief container to hold TaskIDs of all z4c tasks
-
-struct Z4cTaskIDs {
-  TaskID irecv;
-  TaskID irecvweyl;
-  TaskID copyu;
-  TaskID crhs;
-  TaskID sombc;
-  TaskID expl;
-  TaskID sendu;
-  TaskID recvu;
-  TaskID newdt;
-  TaskID bcs;
-  TaskID prol;
-  TaskID algc;
-  TaskID z4tad;
-  TaskID admc;
-  TaskID csend;
-  TaskID crecv;
-  TaskID restu;
-  TaskID ptrck;
-  TaskID weyl_scalar;
-  TaskID wave_extr;
-  TaskID weyl_rest;
-  TaskID weyl_send;
-  TaskID weyl_prol;
-  TaskID weyl_recv;
-  TaskID csendweyl;
-  TaskID crecvweyl;
-};
+class CompactObjectTracker;
+class HorizonDump;
 
 namespace z4c {
 class Z4c_AMR;
@@ -96,14 +67,14 @@ class Z4c {
   // Names of costraint variables
   static char const * const Constraint_names[ncon];
   // Indices of matter fields
-  enum {
+  /*enum {
     I_MAT_RHO,
     I_MAT_SX, I_MAT_SY, I_MAT_SZ,
     I_MAT_SXX, I_MAT_SXY, I_MAT_SXZ, I_MAT_SYY, I_MAT_SYZ, I_MAT_SZZ,
     nmat
   };
   // Names of matter variables
-  static char const * const Matter_names[nmat];
+  static char const * const Matter_names[nmat];*/
 
   // data
   // flags to denote relativistic dynamics
@@ -116,12 +87,6 @@ class Z4c {
   DvceArray5D<Real> u_weyl; // weyl scalars
   DvceArray5D<Real> coarse_u_weyl; // coarse representation of weyl scalars
 
-  // puncture location
-  Real ppos[3] = {0.,0.,0.}; // later on initiate from input file
-#if TWO_PUNCTURES
-  // second puncture location
-  Real ppos2[3] = {0.,0.,0.}; // later on initiate from input file
-#endif
   struct ADM_vars {
     AthenaTensor<Real, TensorSymm::NONE, 3, 0> psi4;
     AthenaTensor<Real, TensorSymm::SYM2, 3, 2> g_dd;
@@ -165,18 +130,20 @@ class Z4c {
   Constraint_vars con;
 
   // aliases for the matter variables
-  struct Matter_vars {
+  /*struct Matter_vars {
     AthenaTensor<Real, TensorSymm::NONE, 3, 0> rho;       // matter energy density
     AthenaTensor<Real, TensorSymm::NONE, 3, 1> vS_d;       // matter momentum density
     AthenaTensor<Real, TensorSymm::SYM2, 3, 2> vS_dd;      // matter stress tensor
   };
-  Matter_vars mat;
+  Matter_vars mat;*/
 
   struct Options {
     Real chi_psi_power;   // chi = psi^N, N = chi_psi_power
     // puncture's floor value for chi, use max(chi, chi_div_floor)
     // in non-differentiated chi
     Real chi_div_floor;
+    Real chi_min_floor;   // minimum of chi, only used in slow-start-lapse
+    // where a square root is necessary.
     Real diss;            // amount of numerical dissipation
     Real eps_floor;       // a small number O(10^-12)
     // Constraint damping parameters
@@ -187,12 +154,24 @@ class Z4c {
     Real lapse_harmonicf;
     Real lapse_harmonic;
     Real lapse_advect;
+    // slow start lapse condition
+    bool slow_start_lapse;
+    Real ssl_damping_amp;
+    Real ssl_damping_time;
+    Real ssl_damping_index;
     // Gauge condition for the shift
     Real shift_ggamma;
     Real shift_alpha2ggamma;
     Real shift_hh;
     Real shift_advect;
     Real shift_eta;
+    // turn on shift damping smoothly
+    bool slow_roll_eta;
+    Real turn_on_time;
+    // Enable BSSN if false (disable theta)
+    bool use_z4c;
+    // Apply the Sommerfeld condition for user BCs.
+    bool user_Sbc;
     // Boundary extrapolation order
     int extrap_order;
   };
@@ -200,26 +179,29 @@ class Z4c {
   Real diss;              // Dissipation parameter
 
   // Boundary communication buffers and functions for u
-  BoundaryValuesCC *pbval_u;
+  MeshBoundaryValuesCC *pbval_u;
 
   // Boundary communication buffers for the weyl scalar
-  BoundaryValuesCC *pbval_weyl;
+  MeshBoundaryValuesCC *pbval_weyl;
 
   // following only used for time-evolving flow
   Real dtnew;
-  // container to hold names of TaskIDs
-  Z4cTaskIDs id;
 
   // geodesic grid for wave extr
   std::vector<std::unique_ptr<SphericalGrid>> spherical_grids;
   // array storing waveform at each radii
-  HostArray3D<Real> psi_out;
+  Real * psi_out;
   Real waveform_dt;
   Real last_output_time;
   int nrad; // number of radii to perform wave extraction
 
+  // CCE
+  Real cce_dump_dt;
+  Real cce_dump_last_output_time;
+  // dump data cube at horizon
+
   // functions
-  void AssembleZ4cTasks(std::map<std::string, std::shared_ptr<TaskList>> tl);
+  void QueueZ4cTasks();
   TaskStatus InitRecv(Driver *d, int stage);
   TaskStatus ClearRecv(Driver *d, int stage);
   TaskStatus ClearSend(Driver *d, int stage);
@@ -238,14 +220,17 @@ class Z4c {
   TaskStatus ApplyPhysicalBCs(Driver *d, int stage);
   TaskStatus EnforceAlgConstr(Driver *d, int stage);
 
-  TaskStatus Z4cToADM_(Driver *d, int stage);
+  TaskStatus ConvertZ4cToADM(Driver *d, int stage);
+  TaskStatus UpdateExcisionMasks(Driver *d, int stage);
   TaskStatus ADMConstraints_(Driver *d, int stage);
   TaskStatus Z4cBoundaryRHS(Driver *d, int stage);
   TaskStatus RestrictU(Driver *d, int stage);
   TaskStatus RestrictWeyl(Driver *d, int stage);
-  TaskStatus PunctureTracker(Driver *d, int stage);
+  TaskStatus CCEDump(Driver *pdrive, int stage);
+  TaskStatus TrackCompactObjects(Driver *d, int stage);
   TaskStatus CalcWeylScalar(Driver *d, int stage);
   TaskStatus CalcWaveForm(Driver *d, int stage);
+  TaskStatus DumpHorizons(Driver *d, int stage);
 
   template <int NGHOST>
   TaskStatus CalcRHS(Driver *d, int stage);
@@ -260,14 +245,23 @@ class Z4c {
   void WaveExtr(MeshBlockPack *pmbp);
   void AlgConstr(MeshBlockPack *pmbp);
 
-  // amr criteria
-  Z4c_AMR *pz4c_amr{nullptr};
+  Z4c_AMR *pamr;
+  std::vector<std::unique_ptr<CompactObjectTracker>> ptracker;
+  std::vector<std::unique_ptr<HorizonDump>> phorizon_dump;
 
+  /*
+  std::list<CartesianGrid> horizon_dump;
+  Real horizon_dt;
+  Real horizon_last_output_time;
+  std::vector<Real> horizon_extent; // radius for dumping data in a cube
+  std::vector<int> horizon_nx;  // number of points in each direction
+  */
+  // TODO(@hzhu): think about how to automatically trigger common horizon
+  // maybe have a horizon dump object to save all the space here
+  // same for the waveform.
  private:
   MeshBlockPack* pmy_pack;  // ptr to MeshBlockPack containing this Z4c
 };
-
-
 
 } // namespace z4c
 #endif //Z4C_Z4C_HPP_

@@ -11,8 +11,6 @@ add_executable(
         globals.cpp
         parameter_input.cpp
 
-        adm/adm.cpp
-
         bvals/bvals.cpp
         bvals/buffs_cc.cpp
         bvals/buffs_fc.cpp
@@ -29,6 +27,7 @@ add_executable(
         bvals/physics/radiation_bcs.cpp
         bvals/physics/z4c_bcs.cpp
 
+        coordinates/adm.cpp
         coordinates/coordinates.cpp
         coordinates/excision.cpp
 
@@ -37,6 +36,10 @@ add_executable(
         diffusion/viscosity.cpp
 
         driver/driver.cpp
+
+        dyn_grmhd/dyn_grmhd.cpp
+        dyn_grmhd/dyn_grmhd_fluxes.cpp
+        dyn_grmhd/dyn_grmhd_fofc.cpp
 
         eos/eos.cpp
         eos/ideal_hyd.cpp
@@ -47,9 +50,13 @@ add_executable(
         eos/ideal_grhyd.cpp
         eos/ideal_srmhd.cpp
         eos/ideal_grmhd.cpp
+        eos/primitive-solver/eos_compose.cpp
+        eos/primitive-solver/piecewise_polytrope.cpp
+        eos/primitive-solver/unit_system.cpp
 
         geodesic-grid/geodesic_grid.cpp
         geodesic-grid/spherical_grid.cpp
+	geodesic-grid/gauss_legendre.cpp
 
         hydro/hydro.cpp
         hydro/hydro_fluxes.cpp
@@ -81,6 +88,7 @@ add_executable(
 				outputs/io_wrapper.cpp
         outputs/outputs.cpp
         outputs/basetype_output.cpp
+        outputs/cartgrid.cpp
         outputs/derived_variables.cpp
         outputs/binary.cpp
         outputs/eventlog.cpp
@@ -102,7 +110,9 @@ add_executable(
 
         pgen/pgen.cpp
         pgen/tests/advection.cpp
+        pgen/tests/collapse.cpp
         pgen/tests/cpaw.cpp
+        pgen/tests/diffusion.cpp
         pgen/tests/gr_bondi.cpp
         pgen/tests/gr_monopole.cpp
         pgen/tests/linear_wave.cpp
@@ -122,15 +132,31 @@ add_executable(
         radiation/radiation_tetrad.cpp
         radiation/radiation_update.cpp
 
+        shearing_box/orbital_advection.cpp
+        shearing_box/orbital_advection_cc.cpp
+        shearing_box/orbital_advection_fc.cpp
+        shearing_box/shearing_box.cpp
+        shearing_box/shearing_box_cc.cpp
+        shearing_box/shearing_box_fc.cpp
+        shearing_box/shearing_box_srcterms.cpp
+        shearing_box/shearing_box_tasks.cpp
+
         srcterms/srcterms.cpp
         srcterms/srcterms_newdt.cpp
         srcterms/turb_driver.cpp
+
+        tasklist/numerical_relativity.cpp
 
         units/units.cpp
         utils/change_rundir.cpp
         utils/show_config.cpp
         utils/lagrange_interpolator.cpp
+        utils/tr_table.cpp
+        utils/cart_grid.cpp
 
+        z4c/compact_object_tracker.cpp
+        z4c/horizon_dump.cpp
+        z4c/tmunu.cpp
         z4c/z4c.cpp
         z4c/z4c_adm.cpp
         z4c/z4c_calcrhs.cpp
@@ -141,8 +167,8 @@ add_executable(
         z4c/z4c_Sbc.cpp
         z4c/z4c_calculate_weyl_scalars.cpp
         z4c/z4c_wave_extr.cpp
-        z4c/z4c_puncture_tracker.cpp
         z4c/z4c_amr.cpp
+        z4c/cce/cce.cpp
 )
 
 # custom problem generator to be included in compile

@@ -20,7 +20,8 @@
 #include "mesh/mesh.hpp"
 #include "hydro/hydro.hpp"
 #include "mhd/mhd.hpp"
-#include "adm/adm.hpp"
+#include "coordinates/adm.hpp"
+#include "z4c/compact_object_tracker.hpp"
 #include "z4c/z4c.hpp"
 #include "radiation/radiation.hpp"
 #include "srcterms/turb_driver.hpp"
@@ -75,6 +76,10 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm) :
     ShockTube(pin, false);
   } else if (pgen_fun_name.compare("z4c_linear_wave") == 0) {
     Z4cLinearWave(pin, false);
+  } else if (pgen_fun_name.compare("spherical_collapse") == 0) {
+    SphericalCollapse(pin, false);
+  } else if (pgen_fun_name.compare("diffusion") == 0) {
+    Diffusion(pin, false);
   // else, name not set on command line or input file, print warning and quit
   } else {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
@@ -125,7 +130,8 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm) :
 // also calls ProblemGenerator::SetProblemData() function to set any user-defined BCs,
 // and any data necessary for restart runs to continue correctly.
 
-ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resfile) :
+ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resfile,
+                                   bool single_file_per_rank) :
     user_bcs(false),
     user_srcs(false),
     user_hist(false),
@@ -168,11 +174,71 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resf
     nadm = padm->nadm;
   }
 
+  // root process reads z4c last_output_time and tracker data
+  if (pz4c != nullptr) {
+    Real last_output_time;
+    if (global_variable::my_rank == 0 || single_file_per_rank) {
+      if (resfile.Read_Reals(&last_output_time, 1,single_file_per_rank) != 1) {
+        std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                  << std::endl << "z4c::last_output_time data size read from restart "
+                  << "file is incorrect, restart file is broken." << std::endl;
+        exit(EXIT_FAILURE);
+      }
+    }
+#if MPI_PARALLEL_ENABLED
+    if (!single_file_per_rank) {
+      MPI_Bcast(&last_output_time, sizeof(Real), MPI_CHAR, 0, MPI_COMM_WORLD);
+    }
+#endif
+    pz4c->last_output_time = last_output_time;
+
+    for (auto &pt : pz4c->ptracker) {
+      Real pos[3];
+      if (global_variable::my_rank == 0 || single_file_per_rank) {
+        if (resfile.Read_Reals(&pos[0], 3, single_file_per_rank) != 3) {
+          std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                    << std::endl << "compact object tracker data size read from restart "
+                    << "file is incorrect, restart file is broken." << std::endl;
+          exit(EXIT_FAILURE);
+        }
+      }
+#if MPI_PARALLEL_ENABLED
+      if (!single_file_per_rank) {
+        MPI_Bcast(&pos[0], 3*sizeof(Real), MPI_CHAR, 0, MPI_COMM_WORLD);
+      }
+#endif
+      pt->SetPos(&pos[0]);
+    }
+  }
+
+  if (pturb != nullptr) {
+    // root process reads size the random seed
+    char *rng_data = new char[sizeof(RNG_State)];
+    // the master process reads the variables data
+    if (global_variable::my_rank == 0 || single_file_per_rank) {
+      if (resfile.Read_bytes(rng_data, 1, sizeof(RNG_State), single_file_per_rank)
+          != sizeof(RNG_State)) {
+        std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                  << std::endl << "RNG data size read from restart file is incorrect, "
+                  << "restart file is broken." << std::endl;
+        exit(EXIT_FAILURE);
+      }
+    }
+#if MPI_PARALLEL_ENABLED
+    if (!single_file_per_rank) {
+      // then broadcast the RNG information
+      MPI_Bcast(rng_data, sizeof(RNG_State), MPI_CHAR, 0, MPI_COMM_WORLD);
+    }
+#endif
+    std::memcpy(&(pturb->rstate), &(rng_data[0]), sizeof(RNG_State));
+  }
+
   // root process reads size of CC and FC data arrays from restart file
   IOWrapperSizeT variablesize = sizeof(IOWrapperSizeT);
   char *variabledata = new char[variablesize];
-  if (global_variable::my_rank == 0) { // the master process reads the variables data
-    if (resfile.Read_bytes(variabledata, 1, variablesize) != variablesize) {
+  if (global_variable::my_rank == 0 || single_file_per_rank) {
+    if (resfile.Read_bytes(variabledata, 1, variablesize, single_file_per_rank)
+        != variablesize) {
       std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                 << std::endl << "Variable data size read from restart file is incorrect, "
                 << "restart file is broken." << std::endl;
@@ -181,41 +247,24 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resf
   }
 #if MPI_PARALLEL_ENABLED
   // then broadcast the datasize information
-  MPI_Bcast(variabledata, variablesize, MPI_CHAR, 0, MPI_COMM_WORLD);
+  if (!single_file_per_rank) {
+    MPI_Bcast(variabledata, variablesize, MPI_CHAR, 0, MPI_COMM_WORLD);
+  }
 #endif
-
   IOWrapperSizeT data_size;
   std::memcpy(&data_size, &(variabledata[0]), sizeof(IOWrapperSizeT));
+
   // calculate total number of CC variables
-
-  if (pturb != nullptr) {
-    // root process reads size the random seed
-    char *rng_data = new char[sizeof(RNG_State)];
-
-    if (global_variable::my_rank == 0) { // the master process reads the variables data
-      if (resfile.Read_bytes(rng_data, 1, sizeof(RNG_State)) != sizeof(RNG_State)) {
-        std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-                  << std::endl << "RNG data size read from restart file is incorrect, "
-                  << "restart file is broken." << std::endl;
-        exit(EXIT_FAILURE);
-      }
-    }
-
-#if MPI_PARALLEL_ENABLED
-    // then broadcast the RNG information
-    MPI_Bcast(rng_data, sizeof(RNG_State), MPI_CHAR, 0, MPI_COMM_WORLD);
-#endif
-    std::memcpy(&(pturb->rstate), &(rng_data[0]), sizeof(RNG_State));
-  }
-
   IOWrapperSizeT headeroffset;
   // master process gets file offset
-  if (global_variable::my_rank == 0) {
-    headeroffset = resfile.GetPosition();
+  if (global_variable::my_rank == 0 || single_file_per_rank) {
+    headeroffset = resfile.GetPosition(single_file_per_rank);
   }
 #if MPI_PARALLEL_ENABLED
   // then broadcasts it
-  MPI_Bcast(&headeroffset, sizeof(IOWrapperSizeT), MPI_CHAR, 0, MPI_COMM_WORLD);
+  if (!single_file_per_rank) {
+    MPI_Bcast(&headeroffset, sizeof(IOWrapperSizeT), MPI_CHAR, 0, MPI_COMM_WORLD);
+  }
 #endif
 
   IOWrapperSizeT data_size_ = 0;
@@ -250,7 +299,10 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resf
 
   // read CC data into host array
   int mygids = pm->gids_eachrank[global_variable::my_rank];
-  IOWrapperSizeT offset_myrank = headeroffset + data_size_*mygids;
+  IOWrapperSizeT offset_myrank = headeroffset;
+  if (!single_file_per_rank) {
+    offset_myrank += data_size_ * pm->gids_eachrank[global_variable::my_rank];
+  }
   IOWrapperSizeT myoffset = offset_myrank;
 
   HostArray5D<Real> ccin("rst-cc-in", 1, 1, 1, 1, 1);
@@ -273,7 +325,8 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resf
         auto mbptr = Kokkos::subview(ccin, m, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL,
                                      Kokkos::ALL);
         int mbcnt = mbptr.size();
-        if (resfile.Read_Reals_at_all(mbptr.data(), mbcnt, myoffset) != mbcnt) {
+        if (resfile.Read_Reals_at_all(mbptr.data(), mbcnt, myoffset, single_file_per_rank)
+            != mbcnt) {
           std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                     << std::endl << "CC hydro data not read correctly from rst file, "
                     << "restart file is broken." << std::endl;
@@ -287,7 +340,8 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resf
         auto mbptr = Kokkos::subview(ccin, m, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL,
                                      Kokkos::ALL);
         int mbcnt = mbptr.size();
-        if (resfile.Read_Reals_at(mbptr.data(), mbcnt, myoffset) != mbcnt) {
+        if (resfile.Read_Reals_at(mbptr.data(), mbcnt, myoffset, single_file_per_rank)
+            != mbcnt) {
           std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                     << std::endl << "CC hydro data not read correctly from rst file, "
                     << "restart file is broken." << std::endl;
@@ -311,7 +365,8 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resf
         auto mbptr = Kokkos::subview(ccin, m, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL,
                                    Kokkos::ALL);
         int mbcnt = mbptr.size();
-        if (resfile.Read_Reals_at_all(mbptr.data(), mbcnt, myoffset) != mbcnt) {
+        if (resfile.Read_Reals_at_all(mbptr.data(), mbcnt, myoffset, single_file_per_rank)
+            != mbcnt) {
           std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                     << std::endl << "CC mhd data not read correctly from rst file, "
                     << "restart file is broken." << std::endl;
@@ -324,7 +379,8 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resf
         auto mbptr = Kokkos::subview(ccin, m, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL,
                                      Kokkos::ALL);
         int mbcnt = mbptr.size();
-        if (resfile.Read_Reals_at(mbptr.data(), mbcnt, myoffset) != mbcnt) {
+        if (resfile.Read_Reals_at(mbptr.data(), mbcnt, myoffset, single_file_per_rank)
+            != mbcnt) {
           std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                     << std::endl << "CC mhd data not read correctly from rst file, "
                     << "restart file is broken." << std::endl;
@@ -349,7 +405,8 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resf
         auto x1fptr = Kokkos::subview(fcin.x1f, m, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL);
         int fldcnt = x1fptr.size();
 
-        if (resfile.Read_Reals_at_all(x1fptr.data(), fldcnt, myoffset) != fldcnt) {
+        if (resfile.Read_Reals_at_all(x1fptr.data(), fldcnt, myoffset,
+                                      single_file_per_rank) != fldcnt) {
           std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                 << std::endl << "Input b0.x1f field not read correctly from rst file, "
                 << "restart file is broken." << std::endl;
@@ -361,7 +418,8 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resf
         auto x2fptr = Kokkos::subview(fcin.x2f, m, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL);
         fldcnt = x2fptr.size();
 
-        if (resfile.Read_Reals_at_all(x2fptr.data(), fldcnt, myoffset) != fldcnt) {
+        if (resfile.Read_Reals_at_all(x2fptr.data(), fldcnt, myoffset,
+                                      single_file_per_rank) != fldcnt) {
           std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                 << std::endl << "Input b0.x2f field not read correctly from rst file, "
                 << "restart file is broken." << std::endl;
@@ -373,7 +431,8 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resf
         auto x3fptr = Kokkos::subview(fcin.x3f, m, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL);
         fldcnt = x3fptr.size();
 
-        if (resfile.Read_Reals_at_all(x3fptr.data(), fldcnt, myoffset) != fldcnt) {
+        if (resfile.Read_Reals_at_all(x3fptr.data(), fldcnt, myoffset,
+                                      single_file_per_rank) != fldcnt) {
           std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                 << std::endl << "Input b0.x3f field not read correctly from rst file, "
                 << "restart file is broken." << std::endl;
@@ -387,7 +446,8 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resf
         auto x1fptr = Kokkos::subview(fcin.x1f, m, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL);
         int fldcnt = x1fptr.size();
 
-        if (resfile.Read_Reals_at(x1fptr.data(), fldcnt, myoffset) != fldcnt) {
+        if (resfile.Read_Reals_at(x1fptr.data(), fldcnt, myoffset,
+                                      single_file_per_rank) != fldcnt) {
           std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                 << std::endl << "Input b0.x1f field not read correctly from rst file, "
                 << "restart file is broken." << std::endl;
@@ -399,7 +459,8 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resf
         auto x2fptr = Kokkos::subview(fcin.x2f, m, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL);
         fldcnt = x2fptr.size();
 
-        if (resfile.Read_Reals_at(x2fptr.data(), fldcnt, myoffset) != fldcnt) {
+        if (resfile.Read_Reals_at(x2fptr.data(), fldcnt, myoffset,
+                                      single_file_per_rank) != fldcnt) {
           std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                 << std::endl << "Input b0.x2f field not read correctly from rst file, "
                 << "restart file is broken." << std::endl;
@@ -411,7 +472,8 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resf
         auto x3fptr = Kokkos::subview(fcin.x3f, m, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL);
         fldcnt = x3fptr.size();
 
-        if (resfile.Read_Reals_at(x3fptr.data(), fldcnt, myoffset) != fldcnt) {
+        if (resfile.Read_Reals_at(x3fptr.data(), fldcnt, myoffset,
+                                      single_file_per_rank) != fldcnt) {
           std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                 << std::endl << "Input b0.x3f field not read correctly from rst file, "
                 << "restart file is broken." << std::endl;
@@ -443,7 +505,8 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resf
         auto mbptr = Kokkos::subview(ccin, m, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL,
                                      Kokkos::ALL);
         int mbcnt = mbptr.size();
-        if (resfile.Read_Reals_at_all(mbptr.data(), mbcnt, myoffset) != mbcnt) {
+        if (resfile.Read_Reals_at_all(mbptr.data(), mbcnt, myoffset,
+                                      single_file_per_rank) != mbcnt) {
           std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                     << std::endl << "CC rad data not read correctly from rst file, "
                     << "restart file is broken." << std::endl;
@@ -457,7 +520,8 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resf
         auto mbptr = Kokkos::subview(ccin, m, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL,
                                      Kokkos::ALL);
         int mbcnt = mbptr.size();
-        if (resfile.Read_Reals_at(mbptr.data(), mbcnt, myoffset) != mbcnt) {
+        if (resfile.Read_Reals_at(mbptr.data(), mbcnt, myoffset,
+                                      single_file_per_rank) != mbcnt) {
           std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                     << std::endl << "CC rad data not read correctly from rst file, "
                     << "restart file is broken." << std::endl;
@@ -481,7 +545,8 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resf
         auto mbptr = Kokkos::subview(ccin, m, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL,
                                      Kokkos::ALL);
         int mbcnt = mbptr.size();
-        if (resfile.Read_Reals_at_all(mbptr.data(), mbcnt, myoffset) != mbcnt) {
+        if (resfile.Read_Reals_at_all(mbptr.data(), mbcnt, myoffset,
+                                      single_file_per_rank) != mbcnt) {
           std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                     << std::endl << "CC turb data not read correctly from rst file, "
                     << "restart file is broken." << std::endl;
@@ -495,7 +560,8 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resf
         auto mbptr = Kokkos::subview(ccin, m, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL,
                                      Kokkos::ALL);
         int mbcnt = mbptr.size();
-        if (resfile.Read_Reals_at(mbptr.data(), mbcnt, myoffset) != mbcnt) {
+        if (resfile.Read_Reals_at(mbptr.data(), mbcnt, myoffset,
+                                      single_file_per_rank) != mbcnt) {
           std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                     << std::endl << "CC turb data not read correctly from rst file, "
                     << "restart file is broken." << std::endl;
@@ -519,7 +585,8 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resf
         auto mbptr = Kokkos::subview(ccin, m, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL,
                                      Kokkos::ALL);
         int mbcnt = mbptr.size();
-        if (resfile.Read_Reals_at_all(mbptr.data(), mbcnt, myoffset) != mbcnt) {
+        if (resfile.Read_Reals_at_all(mbptr.data(), mbcnt, myoffset,
+                                      single_file_per_rank) != mbcnt) {
           std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                     << std::endl << "CC z4c data not read correctly from rst file, "
                     << "restart file is broken." << std::endl;
@@ -533,7 +600,8 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resf
         auto mbptr = Kokkos::subview(ccin, m, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL,
                                      Kokkos::ALL);
         int mbcnt = mbptr.size();
-        if (resfile.Read_Reals_at(mbptr.data(), mbcnt, myoffset) != mbcnt) {
+        if (resfile.Read_Reals_at(mbptr.data(), mbcnt, myoffset,
+                                      single_file_per_rank) != mbcnt) {
           std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                     << std::endl << "CC z4c data not read correctly from rst file, "
                     << "restart file is broken." << std::endl;
@@ -546,6 +614,9 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resf
                       Kokkos::ALL, Kokkos::ALL, Kokkos::ALL), ccin);
     offset_myrank += nout1*nout2*nout3*nz4c*sizeof(Real);   // z4c u0
     myoffset = offset_myrank;
+
+    // We also need to reinitialize the ADM data.
+    pz4c->Z4cToADM(pmy_mesh_->pmb_pack);
   } else if (padm != nullptr) {
     Kokkos::realloc(ccin, nmb, nadm, nout3, nout2, nout1);
     for (int m=0;  m<noutmbs_max; ++m) {
@@ -555,7 +626,8 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resf
         auto mbptr = Kokkos::subview(ccin, m, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL,
                                      Kokkos::ALL);
         int mbcnt = mbptr.size();
-        if (resfile.Read_Reals_at_all(mbptr.data(), mbcnt, myoffset) != mbcnt) {
+        if (resfile.Read_Reals_at_all(mbptr.data(), mbcnt, myoffset,
+                                      single_file_per_rank) != mbcnt) {
           std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                     << std::endl << "CC adm data not read correctly from rst file, "
                     << "restart file is broken." << std::endl;
@@ -569,7 +641,8 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resf
         auto mbptr = Kokkos::subview(ccin, m, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL,
                                      Kokkos::ALL);
         int mbcnt = mbptr.size();
-        if (resfile.Read_Reals_at(mbptr.data(), mbcnt, myoffset) != mbcnt) {
+        if (resfile.Read_Reals_at(mbptr.data(), mbcnt, myoffset,
+                                      single_file_per_rank) != mbcnt) {
           std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                     << std::endl << "CC adm data not read correctly from rst file, "
                     << "restart file is broken." << std::endl;
@@ -614,6 +687,10 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resf
     ShockTube(pin, true);
   } else if (pgen_fun_name.compare("z4c_linear_wave") == 0) {
     Z4cLinearWave(pin, true);
+  } else if (pgen_fun_name.compare("spherical_collapse") == 0) {
+    SphericalCollapse(pin, true);
+  } else if (pgen_fun_name.compare("diffusion") == 0) {
+    Diffusion(pin, true);
   } else {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
         << "Problem generator name could not be found in <problem> block in input file"
