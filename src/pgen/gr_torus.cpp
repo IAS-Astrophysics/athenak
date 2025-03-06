@@ -503,14 +503,14 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
                     // Would probably be more optimal to start from radius and get xyz 
                     int try_this_mb = 0;
                     const int try_lim = 15;
-                    while ( r < min_rad || r > crit && try_this_mb <= try_lim ) {
+                    while ( (r < min_rad || r > crit) && try_this_mb <= try_lim ) {
                       x1v = x1min + prtcl_gen.frand()*(x1max - x1min);
                       x2v = x2min + prtcl_gen.frand()*(x2max - x2min);
                       x3v = x3min + prtcl_gen.frand()*(x3max - x3min);
                       GetBoyerLindquistCoordinates(aux_trs, x1v, x2v, x3v, &r, &th, &phi);
                       ++try_this_mb;
                     }
-                    if (try_this_mb == try_lim) {
+                    if (try_this_mb >= try_lim) {
                       continue;
                     }
                     found_mb = true;
