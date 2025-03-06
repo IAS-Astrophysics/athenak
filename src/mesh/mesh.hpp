@@ -96,6 +96,8 @@ class Mesh {
   friend class MeshBlockPack;
   friend class MeshBlockTree;
   friend class MeshRefinement;
+  // needs to access tree to find target MB offset by shear
+  friend class ShearingBoxBoundary;
 
  public:
   explicit Mesh(ParameterInput *pin);
@@ -146,7 +148,8 @@ class Mesh {
 
   // functions
   void BuildTreeFromScratch(ParameterInput *pin);
-  void BuildTreeFromRestart(ParameterInput *pin, IOWrapper &resfile);
+  void BuildTreeFromRestart(ParameterInput *pin, IOWrapper &resfile,
+                            bool single_file_per_rank=false);
   void PrintMeshDiagnostics();
   void WriteMeshStructure();
   void NewTimeStep(const Real tlim);

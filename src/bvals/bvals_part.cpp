@@ -694,9 +694,6 @@ TaskStatus ParticlesBoundaryValues::RecvAndUnpackPrtcls() {
     }
   }
 
-  // Update nparticles_thisrank.  Update cost array (use npart_thismb[nmb]?)
-  MPI_Allgather(&new_npart,1,MPI_INT,(pmy_part->pmy_pack->pmesh->nprtcl_eachrank),1,
-                MPI_INT,MPI_COMM_WORLD);
 #endif
   // If there are still holes due to particle destruction
   //Destroy particles by moving remaining particles in their places
@@ -732,6 +729,8 @@ TaskStatus ParticlesBoundaryValues::RecvAndUnpackPrtcls() {
   }
   pmy_part->nprtcl_thispack = new_npart;
   pmy_part->pmy_pack->pmesh->nprtcl_thisrank = new_npart;
+#if MPI_PARALLEL_ENABLED
+  // Update nparticles_thisrank after destruction.  Update cost array (use npart_thismb[nmb]?)
   MPI_Allgather(&new_npart,1,MPI_INT,(pmy_part->pmy_pack->pmesh->nprtcl_eachrank),1,
                 MPI_INT,MPI_COMM_WORLD);
 #endif

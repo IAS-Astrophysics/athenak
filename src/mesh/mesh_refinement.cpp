@@ -24,6 +24,7 @@
 #include "hydro/hydro.hpp"
 #include "mhd/mhd.hpp"
 #include "radiation/radiation.hpp"
+#include "coordinates/adm.hpp"
 #include "z4c/z4c.hpp"
 #include "z4c/z4c_amr.hpp"
 #include "prolongation.hpp"
@@ -560,6 +561,7 @@ void MeshRefinement::RedistAndRefineMeshBlocks(ParameterInput *pin, int nnew, in
   hydro::Hydro* phydro = pm->pmb_pack->phydro;
   mhd::MHD* pmhd = pm->pmb_pack->pmhd;
   z4c::Z4c* pz4c = pm->pmb_pack->pz4c;
+  adm::ADM* padm = pm->pmb_pack->padm;
   // derefine (if needed)
   if (ndel > 0) {
     if (phydro != nullptr) {
@@ -586,6 +588,8 @@ void MeshRefinement::RedistAndRefineMeshBlocks(ParameterInput *pin, int nnew, in
   }
   if (pz4c != nullptr) {
     CopyCC(pz4c->u0);
+  } else if (padm != nullptr) {
+    CopyCC(padm->u_adm);
   }
   // Step 7.
   // Copy evolved physics variables for MBs flagged for refinement from source fine array
@@ -631,7 +635,7 @@ void MeshRefinement::RedistAndRefineMeshBlocks(ParameterInput *pin, int nnew, in
       RefineFC(new_to_old, pmhd->b0, pmhd->coarse_b0);
     }
     if (pz4c != nullptr) {
-      RefineCC(new_to_old, pz4c->u0, pz4c->coarse_u0);
+      RefineCC(new_to_old, pz4c->u0, pz4c->coarse_u0, true);
     }
   }
 
@@ -676,6 +680,13 @@ void MeshRefinement::RedistAndRefineMeshBlocks(ParameterInput *pin, int nnew, in
   // clean-up and return
   delete [] newtoold;
   delete [] oldtonew;
+
+  // Step 11.
+  // Recalculate ADM variables if necessary.
+  if ((pz4c == nullptr) && (padm != nullptr) && (nnew > 0 || ndel > 0)) {
+    padm->SetADMVariables(pm->pmb_pack);
+  }
+
   return;
 }
 
@@ -1027,11 +1038,9 @@ void MeshRefinement::CopyForRefinementFC(DvceFaceFld4D<Real> &b,DvceFaceFld4D<Re
 //! copied to another location or sent to another rank via MPI.
 
 void MeshRefinement::RefineCC(DualArray1D<int> &n2o, DvceArray5D<Real> &a,
-                              DvceArray5D<Real> &ca) {
+                              DvceArray5D<Real> &ca, bool is_z4c) {
   int nvar = a.extent_int(1);  // TODO(@user): 2nd index from L of in array must be NVAR
   auto &new_nmb = new_nmb_eachrank[global_variable::my_rank];
-  MeshBlockPack* pmbp = pmy_mesh->pmb_pack;
-  bool not_z4c = (pmbp->pz4c == nullptr)? true : false;
   auto &indcs = pmy_mesh->mb_indcs;
   auto &cis = indcs.cis, &cie = indcs.cie;
   auto &cjs = indcs.cjs, &cje = indcs.cje;
@@ -1074,7 +1083,7 @@ void MeshRefinement::RefineCC(DualArray1D<int> &n2o, DvceArray5D<Real> &a,
         int fk = 2*k - cks;  // correct when cks=ks
 
         // call inlined prolongation operator for CC variables
-        if (not_z4c) {
+        if (!is_z4c) {
           ProlongCC(m,v,k,j,i,fk,fj,fi,multi_d,three_d,ca,a);
         } else {
           switch (indcs.ng) {
@@ -1178,12 +1187,11 @@ void MeshRefinement::RefineFC(DualArray1D<int> &n2o, DvceFaceFld4D<Real> &b,
 //! \fn void MeshRefinement::RestrictCC
 //!  \brief Restricts cell-centered variables to coarse mesh
 
-void MeshRefinement::RestrictCC(DvceArray5D<Real> &u, DvceArray5D<Real> &cu) {
+void MeshRefinement::RestrictCC(DvceArray5D<Real> &u, DvceArray5D<Real> &cu,
+    bool is_z4c) {
   int nmb  = u.extent_int(0);  // TODO(@user): 1st index from L of in array must be NMB
   int nvar = u.extent_int(1);  // TODO(@user): 2nd index from L of in array must be NVAR
 
-  MeshBlockPack* pmbp = pmy_mesh->pmb_pack;
-  bool not_z4c = (pmbp->pz4c == nullptr)? true : false;
   auto &indcs = pmy_mesh->mb_indcs;
   auto &cis = indcs.cis, &cie = indcs.cie;
   auto &cjs = indcs.cjs, &cje = indcs.cje;
@@ -1218,7 +1226,7 @@ void MeshRefinement::RestrictCC(DvceArray5D<Real> &u, DvceArray5D<Real> &cu) {
       int finei = 2*i - cis;  // correct when cis=is
       int finej = 2*j - cjs;  // correct when cjs=js
       int finek = 2*k - cks;  // correct when cks=ks
-      if (not_z4c) {
+      if (!is_z4c) {
         cu(m,n,k,j,i) =
             0.125*(u(m,n,finek  ,finej  ,finei) + u(m,n,finek  ,finej  ,finei+1)
                 + u(m,n,finek  ,finej+1,finei) + u(m,n,finek  ,finej+1,finei+1)
