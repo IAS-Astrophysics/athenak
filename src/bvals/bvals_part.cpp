@@ -520,6 +520,7 @@ TaskStatus ParticlesBoundaryValues::RecvAndUnpackPrtcls() {
   MPI_Allgather(&new_npart,1,MPI_INT,(pmy_part->pmy_pack->pmesh->nprtcl_eachrank),1,
                 MPI_INT,MPI_COMM_WORLD);
 #endif
+  pmy_part->pmy_pack->pmesh->UpdatePrtclInfo();
   return TaskStatus::complete;
 }
 
