@@ -64,7 +64,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
 template<class LogPolicy>
 void PerformTests(Mesh *pmesh, ParameterInput *pin) {
   MeshBlockPack *pmbp = pmesh->pmb_pack;
-
+  
   // Commit a crime against humanity to get access to the EOS
   Primitive::EOS<Primitive::EOSCompOSE<LogPolicy>, Primitive::ResetFloor>& eos =
     static_cast<
@@ -76,18 +76,12 @@ void PerformTests(Mesh *pmesh, ParameterInput *pin) {
 
   // Get the range of the table
   LogPolicy logs;
-  Real nmin = eos.GetMinimumDensity();
-  Real nmax = eos.GetMaximumDensity();
-  Real lnmin = logs.log2_(nmin);
-  Real lnmax = logs.log2_(nmax);
-
+  Real lnmin = logs.log2_(eos.GetMinimumDensity());
+  Real lnmax = logs.log2_(eos.GetMaximumDensity());
   Real Ymin = eos.GetMinimumSpeciesFraction(0);
   Real Ymax = eos.GetMaximumSpeciesFraction(0);
-
-  Real Tmin = eos.GetMinimumTemperature();
-  Real Tmax = eos.GetMaximumTemperature();
-  Real lTmin = logs.log2_(Tmin);
-  Real lTmax = logs.log2_(Tmax);
+  Real lTmin = logs.log2_(eos.GetMinimumTemperature());
+  Real lTmax = logs.log2_(eos.GetMaximumTemperature());
 
   int nn = pin->GetOrAddInteger("problem", "nn", 100);
   int nY = pin->GetOrAddInteger("problem", "nY", 100);
@@ -118,8 +112,8 @@ void PerformTests(Mesh *pmesh, ParameterInput *pin) {
   Kokkos::parallel_reduce("pgen_test", Kokkos::RangePolicy<>(DevExeSpace(), 0, nkji),
   KOKKOS_LAMBDA(const int &idx, bool &success) {
     int in = idx/nji;
-    int iY = (idx - in*nji)/ni;
-    const int iT = (idx - in*nji - iY*ni) + iTlo;
+    int iY = (idx - in*nji)/nji;
+    const int iT = (idx - in*nji - iY*ni)/ni + iTlo;
     iY += iYlo;
     in += inlo;
 
@@ -148,9 +142,9 @@ void PerformTests(Mesh *pmesh, ParameterInput *pin) {
     Real error = T_test/T - 1.;
     if (Kokkos::fabs(error) > tol) {
       // Check if the failure was because we were outside the table.
-      if (!(n < nmin || n > nmax ||
+      if (!(ln < lnmin || ln > lnmax ||
           Y[0] < Ymin || Y[0] > Ymax ||
-          T < Tmin || T > Tmax)) {
+          lT < lTmin || lT > lTmax)) {
         Kokkos::printf("The following point was recovered poorly:\n"
                        "  n = %20.17g\n"
                        "  Y = %20.17g\n"
@@ -188,7 +182,7 @@ void PerformTests(Mesh *pmesh, ParameterInput *pin) {
   Kokkos::parallel_reduce("pgen_test", Kokkos::RangePolicy<>(DevExeSpace(), 0, nkj),
   KOKKOS_LAMBDA(const int &idx, bool &success) {
     int in = idx/nj;
-    const int iY = (idx - in*nj) + iYlo;
+    const int iY = (idx - in*nj)/nj + iYlo;
     in += inlo;
 
     Real Y[MAX_SPECIES] = {0.0};
@@ -215,7 +209,7 @@ void PerformTests(Mesh *pmesh, ParameterInput *pin) {
     Real error_p = T_p/T - 1.;
     Real error_e = T_e/T - 1.;
     if (Kokkos::fabs(error_p) > tol) {
-      Kokkos::printf("The temperature was not recovered correctly from pressure:\n" // NOLINT
+      Kokkos::printf("The temperature was not recovered correctly from pressure:\n"
                      "  n = %20.17g\n"
                      "  Y = %20.17g\n"
                      "  T = %20.17g\n"
@@ -226,7 +220,7 @@ void PerformTests(Mesh *pmesh, ParameterInput *pin) {
       success = false;
     }
     if (Kokkos::fabs(error_e) > tol) {
-      Kokkos::printf("The temperature was not recovered correctly from energy:\n" // NOLINT
+      Kokkos::printf("The temperature was not recovered correctly from energy:\n"
                      "  n = %20.17g\n"
                      "  Y = %20.17g\n"
                      "  T = %20.17g\n"
@@ -235,6 +229,7 @@ void PerformTests(Mesh *pmesh, ParameterInput *pin) {
                      "  error = %20.17g\n",
                      n, Y[0], T, T_e, error_e);
       success = false;
+
     }
   }, Kokkos::LAnd<bool>(pert_success));
 
