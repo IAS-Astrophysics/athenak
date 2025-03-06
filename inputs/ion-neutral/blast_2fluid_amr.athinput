@@ -36,7 +36,7 @@ nx3       = 1           # Number of cells in each MeshBlock, X3-dir
 refinement = adaptive
 num_levels = 2
 dpres_max  = 0.25
-refine_interval = 1
+refinement_interval = 1
 max_nmb_per_rank = 1024
 
 <time>
