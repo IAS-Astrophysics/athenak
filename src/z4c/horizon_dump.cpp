@@ -34,7 +34,7 @@
 //----------------------------------------------------------------------------------------
 HorizonDump::HorizonDump(MeshBlockPack *pmbp, ParameterInput *pin, int n, int is_common):
               common_horizon{is_common}, pos{NAN, NAN, NAN},
-              pmbp{pmbp}, horizon_ind{n} {
+              pmbp{pmbp}, horizon_ind{n}, horizon_last_output_time{0.0} {
   std::string nstr = std::to_string(n);
 
   pos[0] = pin->GetOrAddReal("z4c", "co_" + nstr + "_x", 0.0);
