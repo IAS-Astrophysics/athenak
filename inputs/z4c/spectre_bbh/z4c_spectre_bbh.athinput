@@ -40,7 +40,7 @@ evolution  = dynamic    # dynamic/kinematic/static
 integrator = rk4        # time integration algorithm
 cfl_number = 0.4        # The Courant, Friedrichs, & Lewy (CFL) Number
 nlim       = -1          # cycle limit
-tlim       = 50        # time limit
+tlim       = 5600        # time limit
 ndiag      = 1          # cycles between diagnostic output
 
 <mesh_refinement>
@@ -84,22 +84,22 @@ damp_kappa2     = 0.00
 ## Wave extraction
 nrad_wave_extraction = 4
 extraction_radius_1 = 50
-extraction_radius_2 = 100
-extraction_radius_3 = 200
-extraction_radius_4 = 25
+extraction_radius_2 = 300
+extraction_radius_3 = 400
+extraction_radius_4 = 500
 extraction_nlev = 80
 waveform_dt     = 1
 
 ## Compact Object Tracker
 nco             = 2
 co_0_x          = -7.683
-co_0_reflevel = -1          # wanted resolution at the CO 0 (use -1 for maximum refinement)
-co_0_radius = 0.5
-co_0_type = BH
+co_0_reflevel   = -1          # wanted resolution at the CO 0 (use -1 for maximum refinement)
+co_0_radius     = 0.5
+co_0_type       = BH
 co_1_x          = -7.683
-co_1_reflevel = -1
-co_1_radius = 0.5
-co_1_type = BH
+co_1_reflevel   = -1
+co_1_radius     = 0.5
+co_1_type       = BH
 
 ## Horizon Finder
 dump_horizon_0  = true
@@ -115,21 +115,21 @@ ssl_damping_amp = 0.6
 <cce>
 num_radii  = 1
 cce_dt     = 0.1
-rin_0      = 48
-rout_0     = 52
+rin_0      = 49
+rout_0     = 51
 num_radial_modes = 6
 num_l_modes = 12
 
 <output1>
 file_type  = bin    # Binary data dump
 variable   = z4c    # variables to be output
-dt         = 1      # time increment between outputs
+dt         = 10      # time increment between outputs
 slice_x3   = 0
 
 <output2>
 file_type  = bin
 variable   = con
-dt         = 1
+dt         = 10
 slice_x3   = 0
 
 <output3>
@@ -139,10 +139,13 @@ dt         = 1      # time increment between outputs
 slice_x3   = 0
 slice_x2   = 0
 
-<output3>
+<output4>
 file_type  = tab    # Binary data dump
 variable   = z4c    # variables to be output
 dt         = 1      # time increment between outputs
 slice_x3   = 0
 slice_x2   = 0
 
+<output5>
+file_type  = rst
+dt         = 500
