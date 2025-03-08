@@ -225,23 +225,6 @@ Z4c::Z4c(MeshBlockPack *ppack, ParameterInput *pin) :
       break;
     }
   }
-  /*
-  horizon_dt = pin->GetOrAddReal("z4c", "horizon_dt", 1);
-  horizon_last_output_time = 0;
-  n = 0;
-  for (auto & pt : ptracker) {
-    if (pin->GetOrAddBoolean("z4c", "dump_horizon_" + std::to_string(n),false)) {
-      horizon_extent.push_back(pin->GetOrAddReal("z4c", "horizon_"
-                              + std::to_string(n)+"_radius",3));
-      Real extend[3] = {horizon_extent[n],horizon_extent[n],horizon_extent[n]};
-      horizon_nx.push_back(pin->GetOrAddInteger("z4c", "horizon_"
-                              + std::to_string(n)+"_Nx",100));
-      int Nx[3] = {horizon_nx[n],horizon_nx[n],horizon_nx[n]};
-      horizon_dump.emplace_back(pmy_pack, pt.pos, extend, Nx);
-      n++;
-    }
-  }
-  */
 }
 
 //----------------------------------------------------------------------------------------

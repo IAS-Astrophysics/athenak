@@ -257,13 +257,6 @@ class Z4c {
   std::vector<std::unique_ptr<CompactObjectTracker>> ptracker;
   std::vector<std::unique_ptr<HorizonDump>> phorizon_dump;
 
-  /*
-  std::list<CartesianGrid> horizon_dump;
-  Real horizon_dt;
-  Real horizon_last_output_time;
-  std::vector<Real> horizon_extent; // radius for dumping data in a cube
-  std::vector<int> horizon_nx;  // number of points in each direction
-  */
   // TODO(@hzhu): think about how to automatically trigger common horizon
   // maybe have a horizon dump object to save all the space here
   // same for the waveform.
