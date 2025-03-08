@@ -1,0 +1,191 @@
+# Athena++ (Kokkos version) input file for z4c two puncture
+
+<comment>
+problem   = z4c two puncture
+reference = e.g. Cook. Living Rev. Relativ. 3, 5 (2000)
+
+<job>
+basename  = z4c      # problem ID: basename of output filenames
+
+<mesh>
+nghost    = 4          # Number of ghost cells
+nx1       = 128        # Number of zones in X1-direction
+x1min     = -1024       # minimum value of X1
+x1max     = 1024       # maximum value of X1
+ix1_bc    = outflow   # inner-X1 boundary flag
+ox1_bc    = outflow   # outer-X1 boundary flag
+
+nx2       = 128        # Number of zones in X2-direction
+x2min     = -1024      # minimum value of X2
+x2max     = 1024       # maximum value of X2
+ix2_bc    = outflow   # inner-X2 boundary flag
+ox2_bc    = outflow   # outer-X2 boundary flag
+
+nx3       = 128        # Number of zones in X3-direction
+x3min     = -1024       # minimum value of X3
+x3max     = 1024        # maximum value of X3
+ix3_bc    = outflow   # inner-X3 boundary flag
+ox3_bc    = outflow   # outer-X3 boundary flag
+
+<meshblock>
+nx1       = 32         # Number of cells in each MeshBlock, X1-dir
+nx2       = 32         # Number of cells in each MeshBlock, X2-dir
+nx3       = 32         # Number of cells in each MeshBlock, X3-dir
+
+<time>
+evolution  = dynamic    # dynamic/kinematic/static
+integrator = rk4        # time integration algorithm
+cfl_number = 0.4        # The Courant, Friedrichs, & Lewy (CFL) Number
+nlim       = -1         # cycle limit
+tlim       = 500        # time limit
+ndiag      = 1          # cycles between diagostic output
+
+<mesh_refinement>
+refinement       = adaptive    # type of refinement
+max_nmb_per_rank = 600
+num_levels       = 10
+refinement_interval   = 1
+
+# amr dchi method
+<z4c_amr>
+#method = dchi
+#dchi_max = 0.05
+#method = tracker
+method = chi
+chi_min = 0.2
+
+
+<refinement1>
+level = 9
+x1min = -4.257
+x1max = -2.257
+x2min = -1.0
+x2max = 1.0
+x3min = -1.0
+x3max = 1.0
+
+<refinement2>
+level = 9
+x1min = 2.257
+x1max = 4.257
+x2min = -1.0
+x2max = 1.0
+x3min = -1.0
+x3max = 1.0
+
+<z4c>
+lapse_harmonic  = 0.0                 # Harmonic lapse parameter mu_L
+lapse_oplog     = 1.0                 # 1+log lapse parameter
+shift_eta       = 2.0                 # Shift damping term
+diss            = 0.5                 # Kreiss-Oliger dissipation parameter
+chi_div_floor   = 0.00001
+damp_kappa1     = 0.02      # Constraint damping factor 1
+damp_kappa2     = 0.00
+## Wave extraction
+nrad_wave_extraction = 4
+extraction_radius_1 = 50
+extraction_radius_2 = 100
+extraction_radius_3 = 200
+extraction_radius_4 = 25
+extraction_nlev = 80
+waveform_dt     = 1
+nco             = 2
+co_0_x          = 3.257
+co_0_reflevel = -1          # wanted resolution at the CO 0 (use -1 for maximum refinement)
+co_0_radius = 0.5
+co_0_type = BH
+
+co_1_x          = -3.257
+co_1_reflevel = -1
+co_1_radius = 0.5
+co_1_type = BH
+
+# Horizon Finder
+dump_horizon_0  = true
+co_0_dump_radius = 2
+horizon_0_Nx     = 40
+horizon_dt = 1
+dump_horizon_1  = true
+co_1_dump_radius = 2
+horizon_1_Nx     = 40
+
+
+<cce>
+num_radii  = 1
+cce_dt     = 0.1
+rin_0      = 45
+rout_0     = 55
+num_radial_modes = 12
+num_l_modes = 17
+
+<problem>
+pgen_name = z4c_two_puncture
+# the following are defaults and descriptions
+verbose = true
+par_b = 3.257                            # x coordinate of the m+ puncture
+par_m_plus = 0.483                       # mass of the m+ puncture
+par_m_minus = 0.483                      # mass of the m- puncture
+target_M_plus = 0.505                    # target ADM mass for m+
+target_M_minus = 0.505                   # target ADM mass for m-
+par_P_plus1 = 0                      # momentum of the m+ puncture
+par_P_plus2 = -0.133
+par_P_plus3 = 0.0
+par_P_minus1 = 0.0                     # momentum of the m- puncture
+par_P_minus2 = 0.133
+par_P_minus3 = 0.0
+par_S_plus1 = 0.0                      # spin of the m+ puncture
+par_S_plus2 = 0.0
+par_S_plus3 = 0.0
+par_S_minus1 = 0.0                     # spin of the m- puncture
+par_S_minus2 = 0.0
+par_S_minus3 = 0.0
+center_offset1 = 0.0                   # offset b=0 to position (x,y,z)
+center_offset2 = 0.0
+center_offset3 = 0.0
+give_bare_mass = true                  # User provides bare masses not target M_ADM
+npoints_A = 30                         # No. coeff in the compactified radial dir.
+npoints_B = 30                         # No. coeff in the angular dir.
+npoints_phi = 16                       # no. coeff in the phi dir.
+Newton_tol = 1e-10                     # Tolerance for Newton solver
+Newton_maxit = 5                       # Maximum number of Newton iterations
+# A small number to smooth out singularities at the puncture locations
+TP_epsilon = 0.0
+# Tiny number to avoid nans near or at the pucture locations
+TP_Tiny = 0.0
+# Radius of an extended spacetime instead of the puncture
+TP_Extend_Radius = 0
+# Tolerance of ADM masses when give_bare_mass=no
+adm_tol = 1e-10
+# Output debug information about the residuum
+do_residuum_debug_output = false
+# Output debug information about initial guess
+do_initial_debug_output = false
+# Solve for momentum constraint?
+solve_momentum_constraint = false
+# Interpolation
+# Exponent n for psi^-n initial lapse profile (<0)
+initial_lapse_psi_exponent = -2.0
+# Swap x and z coordinates when interpolating,
+# so that the black holes are separated in the z direction
+swap_xz = false
+
+<output1>
+file_type  = bin        # Binary data dump
+variable   = z4c    # variables to be output
+slice_x2   = 0
+dt         = 5       # time increment between outputs
+
+<output2>
+file_type  = bin        # Binary data dump
+variable   = con    # variables to be output
+slice_x2   = 0
+dt         = 5       # time increment between outputs
+
+<output3>         
+file_type  = rst    # Binary data dump
+dt         = 50.  # time increment between outputs
+
+<output4>
+file_type = hst
+dt        = 2
+
