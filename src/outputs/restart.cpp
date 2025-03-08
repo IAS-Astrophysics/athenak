@@ -301,7 +301,7 @@ void RestartOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
   IOWrapperSizeT step2size = (pm->nmb_total)*(sizeof(LogicalLocation) + sizeof(float));
 
   IOWrapperSizeT step3size = 3*nco*sizeof(Real);
-  if (pz4c != nullptr) step3size += sizeof(Real);
+  if (pz4c != nullptr) step3size += 2*sizeof(Real);
   if (pturb != nullptr) step3size += sizeof(RNG_State);
 
   // write cell-centered variables in parallel
