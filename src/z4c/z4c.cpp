@@ -152,8 +152,13 @@ Z4c::Z4c(MeshBlockPack *ppack, ParameterInput *pin) :
   opt.shift_alpha2ggamma = pin->GetOrAddReal("z4c", "shift_alpha2Gamma", 0.0);
   opt.shift_hh = pin->GetOrAddReal("z4c", "shift_H", 0.0);
   opt.first_order_shift = pin->GetOrAddBoolean("z4c", "first_order_shift", true);
-
-  opt.shift_eta = pin->GetOrAddReal("z4c", "shift_eta", 2.0);
+  
+  // default shift damping to 1 if we use 2nd order shift
+  if (opt.first_order_shift) {
+    opt.shift_eta = pin->GetOrAddReal("z4c", "shift_eta", 2.0);
+  } else {
+    opt.shift_eta = pin->GetOrAddReal("z4c", "shift_eta", 1.0);
+  }
 
   opt.use_z4c = pin->GetOrAddBoolean("z4c", "use_z4c", true);
 
