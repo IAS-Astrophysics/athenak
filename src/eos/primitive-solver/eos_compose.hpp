@@ -432,15 +432,19 @@ class EOSCompOSE : public EOSPolicyInterface, public LogPolicy, public SupportsE
     }
     
     if (flo*fhi > 0) {
+      int imin = 0;
+      Real fmin = f(imin);
       Kokkos::printf("There's a problem with temperature bracketing!\n"
                      "  iv = %i\n"
                      "  var = %20.17g\n"
                      "  n = %20.17g\n"
                      "  Yq = %20.17g\n"
+                     "  imin = %i\n"
                      "  ilo = %i\n"
                      "  ihi = %i\n"
+                     "  fmin = %20.17g\n"
                      "  flo = %20.17g\n"
-                     "  fhigh = %20.17g\n", iv, var, n , Yq, ilo, ihi, flo, fhi);
+                     "  fhigh = %20.17g\n", iv, var, n , Yq, imin, ilo, ihi, fmin, flo, fhi);
       assert(flo*fhi <= 0);
     }
     while (ihi - ilo > 1) {
