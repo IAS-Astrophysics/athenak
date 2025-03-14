@@ -151,7 +151,7 @@ class Mesh {
   void WriteMeshStructure();
   void NewTimeStep(const Real tlim);
   void AddCoordinatesAndPhysics(ParameterInput *pinput);
-  void UpdatePrtclInfo();
+  void CountParticles();
   BoundaryFlag GetBoundaryFlag(const std::string& input_string);
   std::string GetBoundaryString(BoundaryFlag input_flag);
 
