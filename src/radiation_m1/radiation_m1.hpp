@@ -59,9 +59,9 @@ class RadiationM1 {
   RadiationM1(MeshBlockPack* ppack, ParameterInput* pin);
   ~RadiationM1();
 
-  static BrentFunctor BrentFunc;        // function to minimize for closure
-  static BrentFunctorInv BrentFuncInv;  // function to minimize for inv. closure
-  static HybridsjFunctor HybridsjFunc;  // function to minimize for multiroots solver
+  BrentFunctor BrentFunc;        // function to minimize for closure
+  BrentFunctorInv BrentFuncInv;  // function to minimize for inv. closure
+  HybridsjFunctor HybridsjFunc;  // function to minimize for multiroots solver
 
   ToyOpacityFn toy_opacity_fn = nullptr;  // use only if toy opacities enabled
 
