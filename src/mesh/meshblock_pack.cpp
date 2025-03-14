@@ -18,9 +18,12 @@
 #include "hydro/hydro.hpp"
 #include "mhd/mhd.hpp"
 #include "ion-neutral/ion-neutral.hpp"
-#include "adm/adm.hpp"
+#include "coordinates/adm.hpp"
+#include "z4c/tmunu.hpp"
+#include "tasklist/numerical_relativity.hpp"
 #include "z4c/z4c.hpp"
-#include "z4c/z4c_puncture_tracker.hpp"
+#include "dyn_grmhd/dyn_grmhd.hpp"
+#include "z4c/cce/cce.hpp"
 #include "diffusion/viscosity.hpp"
 #include "diffusion/resistivity.hpp"
 #include "radiation/radiation.hpp"
@@ -53,15 +56,19 @@ MeshBlockPack::~MeshBlockPack() {
   if (phydro != nullptr) {delete phydro;}
   if (pmhd   != nullptr) {delete pmhd;}
   if (padm   != nullptr) {delete padm;}
+  if (ptmunu != nullptr) {delete ptmunu;}
   if (prad   != nullptr) {delete prad;}
+  if (pdyngr != nullptr) {delete pdyngr;}
+  if (pnr    != nullptr) {delete pnr;}
   if (pturb  != nullptr) {delete pturb;}
   if (punit  != nullptr) {delete punit;}
   if (pz4c   != nullptr) {
     delete pz4c;
-    for (auto ptracker : pz4c_ptracker) {
-      delete ptracker;
+    // cce dump
+    for (auto cce : pz4c_cce) {
+      delete cce;
     }
-    pz4c_ptracker.resize(0);
+    pz4c_cce.resize(0);
   }
   if (ppart  != nullptr) {delete ppart;}
   // must be last, since it calls ~BoundaryValues() which (MPI) uses pmy_pack->pmb->nnghbr
@@ -110,7 +117,8 @@ void MeshBlockPack::AddPhysics(ParameterInput *pin) {
   if (pin->DoesBlockExist("hydro")) {
     phydro = new hydro::Hydro(this, pin);
     nphysics++;
-    if (!(pin->DoesBlockExist("mhd")) && !(pin->DoesBlockExist("radiation"))) {
+    if (!(pin->DoesBlockExist("mhd")) && !(pin->DoesBlockExist("radiation")) &&
+        !(pin->DoesBlockExist("adm")) && !(pin->DoesBlockExist("z4c")) ) {
       phydro->AssembleHydroTasks(tl_map);
     }
   } else {
@@ -122,7 +130,8 @@ void MeshBlockPack::AddPhysics(ParameterInput *pin) {
   if (pin->DoesBlockExist("mhd")) {
     pmhd = new mhd::MHD(this, pin);
     nphysics++;
-    if (!(pin->DoesBlockExist("hydro")) && !(pin->DoesBlockExist("radiation"))) {
+    if (!(pin->DoesBlockExist("hydro")) && !(pin->DoesBlockExist("radiation")) &&
+        !(pin->DoesBlockExist("adm")) && !(pin->DoesBlockExist("z4c")) ) {
       pmhd->AssembleMHDTasks(tl_map);
     }
   } else {
@@ -134,7 +143,8 @@ void MeshBlockPack::AddPhysics(ParameterInput *pin) {
   // both defined as well.
   if (pin->DoesBlockExist("ion-neutral")) {
     pionn = new ion_neutral::IonNeutral(this, pin);   // construct new MHD object
-    if (pin->DoesBlockExist("hydro") && pin->DoesBlockExist("mhd")) {
+    if (pin->DoesBlockExist("hydro") && pin->DoesBlockExist("mhd") &&
+        !(pin->DoesBlockExist("adm")) && !(pin->DoesBlockExist("z4c")) ) {
       pionn->AssembleIonNeutralTasks(tl_map);
       nphysics++;
     } else {
@@ -182,17 +192,16 @@ void MeshBlockPack::AddPhysics(ParameterInput *pin) {
   // Create Z4c and ADM physics module.
   if (pin->DoesBlockExist("z4c")) {
     pz4c = new z4c::Z4c(this, pin);
-    pz4c->AssembleZ4cTasks(tl_map);
     padm = new adm::ADM(this, pin);
-    // init puncture tracker
-    int npunct = pin->GetOrAddInteger("z4c", "npunct", 0);
-    if (npunct > 0) {
-      pz4c_ptracker.reserve(npunct);
-      for (int n = 0; n < npunct; ++n) {
-        pz4c_ptracker.push_back(new z4c::PunctureTracker(pmesh, pin, n));
-      }
+    ptmunu = nullptr;
+    // init cce dump
+    pz4c_cce.reserve(0);
+    int ncce = pin->GetOrAddInteger("cce", "num_radii", 0);
+    pz4c_cce.reserve(ncce);// 10 different components for each radius
+    for(int n = 0; n < ncce; ++n) {
+      // NOTE: these names are used for pittnull code, so DON'T change the convention
+      pz4c_cce.push_back(new z4c::CCE(pmesh, pin,n));
     }
-
     nphysics++;
   } else {
     pz4c = nullptr;
@@ -201,6 +210,24 @@ void MeshBlockPack::AddPhysics(ParameterInput *pin) {
     } else {
       padm = nullptr;
     }
+  }
+
+  // (8) Dynamical Spacetime and Matter (MHD TODO)
+  if ((pin->DoesBlockExist("z4c") || pin->DoesBlockExist("adm")) &&
+      (pin->DoesBlockExist("hydro")) ) {
+    std::cout << "Dynamical metric and hydro not compatible; use MHD instead  "
+              << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+  if ((pin->DoesBlockExist("z4c") || pin->DoesBlockExist("adm")) &&
+      (pin->DoesBlockExist("mhd")) ) {
+    pdyngr = dyngr::BuildDynGRMHD(this, pin);
+    ptmunu = new Tmunu(this, pin);
+  }
+
+  if (pz4c != nullptr || padm != nullptr) {
+    pnr = new numrel::NumericalRelativity(this, pin);
+    pnr->AssembleNumericalRelativityTasks(tl_map);
   }
 
   // (8) PARTICLES
