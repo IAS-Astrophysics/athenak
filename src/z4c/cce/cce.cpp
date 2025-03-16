@@ -51,7 +51,7 @@ CCE::CCE(Mesh *const pm, ParameterInput *const pin, int index):
   num_angular_modes = (num_l_modes + 1) * (num_l_modes + 1);
 
   ntheta = num_l_modes + 1;
-  nphi   = 2*num_l_modes;
+  nphi   = 2*ntheta;
   nr     = num_n_modes;
   nangle = ntheta*nphi;
   npoint = nangle*nr;
