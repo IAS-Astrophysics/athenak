@@ -16,7 +16,7 @@
 #include <string>
 #include <cstdio>
 
-#ifdef MPI_PARALLEL
+#ifdef MPI_PARALLEL_ENABLED
 #include <mpi.h>
 #endif
 
@@ -81,6 +81,14 @@ CCE::~CCE() {}
 void CCE::InterpolateAndDecompose(MeshBlockPack *pmbp) {
   Real ylmR,ylmI;
 
+
+  std::ofstream nodefile("lapse_interp_points.tab");
+  if (!nodefile.is_open()) {
+    std::cerr << "Error: Could not open 'lapse_interp_points.tab' for writing." << std::endl;
+    exit(EXIT_FAILURE);
+  }
+  nodefile << std::scientific << std::setprecision(15);
+  nodefile << "# node_index\ttheta\tphi\tweight\tlapse_interp\tlapse_analytical\tresidual" << std::endl;
   // raveled shape of array & counts for mpi
   int count = 10*nr*num_angular_modes;
   // Dynamically allocate memory for the 4D array flattened into 1D
@@ -106,7 +114,11 @@ void CCE::InterpolateAndDecompose(MeshBlockPack *pmbp) {
             // calculate spherical harmonics
             SWSphericalHarm(&ylmR,&ylmI, l, m, 0, theta, phi);
             psilmR += weight*data*ylmR;
-            psilmI += weight*data*ylmI;
+            psilmI += -weight*data*ylmI;
+	    if (l==0 && nvar==0) {
+              nodefile << ip << "\t" << theta << "\t" << phi << "\t" 
+             << weight << "\t" << data << std::endl;
+	    }
           }
           data_real[k * 10 * num_angular_modes // first over the different radii
                     + nvar * num_angular_modes // then over the variables
@@ -120,7 +132,7 @@ void CCE::InterpolateAndDecompose(MeshBlockPack *pmbp) {
       }
     }
   }
-
+  nodefile.close();
   // Reduction to the master rank for cnlm_real and cnlm_imag
   #if MPI_PARALLEL_ENABLED
   if (0 == global_variable::my_rank) {
