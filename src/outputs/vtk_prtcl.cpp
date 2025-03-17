@@ -240,12 +240,13 @@ void ParticleVTKOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
 							gamma_lor += adm*u_norm[gi1]*u_norm[gi2];
 						}
 					}
-					gamma_lor = sqrt( massive + gamma_lor );
+					// gamma_lor = sqrt( massive + gamma_lor );
 					data[p] = static_cast<float>( gamma_lor );
 				}
 			} else {
 				for (int p=0; p<npout_thisrank; ++p) {
-					gamma_lor = sqrt(massive + SQR(outpart_rdata(IPVX,p)));
+					gamma_lor = SQR(outpart_rdata(IPVX,p));
+					//gamma_lor = sqrt(massive + SQR(outpart_rdata(IPVX,p)));
 					data[p] = static_cast<float>( gamma_lor );
 				}
 			}
