@@ -257,6 +257,18 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
                     << " for GR dynamics" << std::endl;
           std::exit(EXIT_FAILURE);
         }
+      } else if (evolution_t.compare("static") == 0) {
+        if (rsolver.compare("llf") == 0) {
+          rsolver_method = MHD_RSolver::llf_gr;
+        } else if (rsolver.compare("hlle") == 0) {
+          rsolver_method = MHD_RSolver::hlle_gr;
+        // Error for anything else
+        } else {
+          std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                    << std::endl << "<mhd> rsolver = '" << rsolver << "' not implemented"
+                    << " for GR dynamics" << std::endl;
+          std::exit(EXIT_FAILURE);
+        }
       } else {
         std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                   << std::endl << "kinematic dynamics not implemented for GR" <<std::endl;
