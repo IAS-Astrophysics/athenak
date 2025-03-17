@@ -57,9 +57,16 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   }
 
   std::string fname = pin->GetString("problem", "initial_data_file");
+  std::string tab_path = pin->GetorAddString("problem", "initial_data_table","__na__");
 
   // Initialize the data reader
   Elliptica_ID_Reader_T *idr = elliptica_id_reader_init(fname.c_str(),"generic");
+
+  if (id_tab != "__na__")
+  {
+    idr->set_param("NS1_EoS_table_path",tab_path.c_str(),idr);
+    idr->set_param("NS2_EoS_table_path",tab_path.c_str(),idr);
+  }
 
   // Fields to interpolate
   idr->ifields = "alpha,betax,betay,betaz,"
