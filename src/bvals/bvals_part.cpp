@@ -729,8 +729,8 @@ TaskStatus ParticlesBoundaryValues::RecvAndUnpackPrtcls() {
   }
   pmy_part->nprtcl_thispack = new_npart;
   pmy_part->pmy_pack->pmesh->nprtcl_thisrank = new_npart;
-#if MPI_PARALLEL_ENABLED
   // Update nparticles_thisrank after destruction.  Update cost array (use npart_thismb[nmb]?)
+#if MPI_PARALLEL_ENABLED
   MPI_Allgather(&new_npart,1,MPI_INT,(pmy_part->pmy_pack->pmesh->nprtcl_eachrank),1,
                 MPI_INT,MPI_COMM_WORLD);
 #endif
