@@ -76,7 +76,7 @@ class ProblemGenerator {
   void UserProblem(ParameterInput *pin, const bool restart);
   void RadiationM1LatticeTest(ParameterInput *pin, const bool restart);
   void RadiationM1SphereTest(ParameterInput *pin, const bool restart);
-
+  void RadiationM1DiffusionTest(ParameterInput *pin, const bool restart);
  private:
   Mesh *pmy_mesh_;
 };
