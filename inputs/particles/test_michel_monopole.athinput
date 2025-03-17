@@ -1,0 +1,118 @@
+# AthenaXXX input file for random particle drift
+
+<comment>
+problem   = test_michel_monopole 
+
+<job>
+basename  = monopole_test       # problem ID: basename of output filenames
+
+<mesh>
+nghost    = 4         # Number of ghost cells
+nx1       = 64       # Number of zones in X1-direction
+x1max     = 64      # maximum value of X1
+x1min     = -64       # maximum value of X1
+ix1_bc    = periodic  # Inner-X1 boundary condition flag
+ox1_bc    = periodic  # Outer-X1 boundary condition flag
+
+nx2       = 64       # Number of zones in X2-direction
+x2max     = 64      # maximum value of X2
+x2min     = -64       # maximum value of X2
+ix2_bc    = periodic  # Inner-X2 boundary condition flag
+ox2_bc    = periodic  # Outer-X2 boundary condition flag
+
+nx3       = 64       # Number of zones in X3-direction
+x3max     = 64      # maximum value of X3
+x3min     = -64       # maximum value of X3
+ix3_bc    = periodic  # Inner-X3 boundary condition flag
+ox3_bc    = periodic  # Outer-X3 boundary condition flag
+
+<meshblock>
+nx1       = 16       # Number of cells in each MeshBlock, X1-dir
+nx2       = 16       # Number of cells in each MeshBlock, X2-dir
+nx3       = 16       # Number of cells in each MeshBlock, X3-dir
+
+<mesh_refinement>
+refinement = static    # type of refinement
+
+<refinement1>
+level = 1
+x1min = -32.0
+x1max = 32.0
+x2min = -32.0
+x2max = 32.0
+x3min = -32.0
+x3max = 32.0
+
+<refinement2>
+level = 2
+x1min = -16.0
+x1max = 16.0
+x2min = -16.0
+x2max = 16.0
+x3min = -16.0
+x3max = 16.0
+
+<refinement3>
+level = 3
+x1min = -8.0
+x1max = 8.0
+x2min = -8.0
+x2max = 8.0
+x3min = -8.0
+x3max = 8.0
+
+<time>
+evolution  = static   # dynamic/kinematic/static
+integrator = rk2       # time integration algorithm
+cfl_number = 0.25       # The Courant, Friedrichs, & Lewy (CFL) Number
+nlim       = -1        # cycle limit
+tlim       = 200.0      # time limit
+ndiag      = 50        # cycles between diagostic output
+
+<coord>
+general_rel = true       # general relativity
+a           = 0.0     # black hole spin a (0 <= a/M < 1)
+excise      = true       # excise r_ks <= 1.0
+dexcise     = 1.0e-10    # density inside excision
+pexcise     = 0.333e-12  # pressure inside excision
+
+<mhd>
+eos         = ideal      # EOS type
+reconstruct = ppm4       # spatial reconstruction method
+rsolver     = hlle       # Riemann-solver to be used
+dfloor      = 1.0e-10    # floor on density rho
+pfloor      = 0.333e-12  # floor on gas pressure p_gas
+gamma       = 1.3333333333333333  # ratio of specific heats Gamma
+fofc        = true       # Enable first order flux correction
+gamma_max   = 20.0       # Enable ceiling on Lorentz factor
+
+<particles>
+ppc    = 0.0001
+pusher = full_gr
+iter_tolerance = 1.0E-10
+max_iter = 15
+particle_type = cosmic_ray
+charge_over_mass = 1.0
+inject = true
+init_type = test_monopole
+r_init_min = 4.3
+r_init_max = 4.5
+
+<problem>
+rho_min   = 1.0e-5    # background on rho given by rho_min ...
+rho_pow   = -1.5      # ... * r^rho_pow
+pgas_min  = 0.333e-7  # background on p_gas given by pgas_min ...
+pgas_pow  = -2.5      # ... * r^pgas_pow
+b0_strength = 5.0
+prtcl_energy_min = 0.0001
+prtcl_energy_max = 1.5
+
+<output1>
+file_type   = pvtk      # Particle VTK data dump
+variable    = prtcl_all
+dt          = 1.0     # time increment between outputs
+
+<output2>
+file_type   = bin      # Particle VTK data dump
+variable    = mhd_w_bcc
+dt          = 1.0E+1     # time increment between outputs
