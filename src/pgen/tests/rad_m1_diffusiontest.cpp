@@ -20,9 +20,20 @@
 #include "radiation_m1/radiation_m1_helpers.hpp"
 
 KOKKOS_INLINE_FUNCTION
-void DiffusionOpacities(Real x1, Real x2, Real x3, Real dx, Real dy, Real dz, Real nuidx,
-                        Real &eta_0, Real &abs_0, Real &eta_1, Real &abs_1,
-                        Real &scat_1) {
+void DiffusionOpacitiesExplicit(Real x1, Real x2, Real x3, Real dx, Real dy, Real dz,
+                                Real nuidx, Real &eta_0, Real &abs_0, Real &eta_1,
+                                Real &abs_1, Real &scat_1) {
+  eta_0 = 0;
+  abs_0 = 0;
+  eta_1 = 0;
+  abs_1 = 0;
+  scat_1 = 10;
+}
+
+KOKKOS_INLINE_FUNCTION
+void DiffusionOpacitiesImplicit(Real x1, Real x2, Real x3, Real dx, Real dy, Real dz,
+                                Real nuidx, Real &eta_0, Real &abs_0, Real &eta_1,
+                                Real &abs_1, Real &scat_1) {
   eta_0 = 0;
   abs_0 = 0;
   eta_1 = 0;
@@ -61,7 +72,12 @@ void ProblemGenerator::RadiationM1DiffusionTest(ParameterInput *pin, const bool 
     exit(EXIT_FAILURE);
   }
 
-  pmbp->pradm1->toy_opacity_fn = DiffusionOpacities;
+  if (pmbp->pradm1->params.src_update == radiationm1::Explicit) {
+    pmbp->pradm1->toy_opacity_fn = DiffusionOpacitiesExplicit;
+  }
+  if (pmbp->pradm1->params.src_update == radiationm1::Implicit) {
+    pmbp->pradm1->toy_opacity_fn = DiffusionOpacitiesImplicit;
+  }
 
   // capture variables for kernel
   auto &indcs = pmy_mesh_->mb_indcs;
