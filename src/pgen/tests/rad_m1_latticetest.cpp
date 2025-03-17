@@ -104,7 +104,7 @@ void ProblemGenerator::RadiationM1LatticeTest(ParameterInput *pin,
   int nmb = pmbp->nmb_thispack;
   auto &u_mu_ = pmbp->pradm1->u_mu;
   adm::ADM::ADM_vars &adm = pmbp->padm->adm;
-  auto &beam_vals = pmbp->pradm1->beam_source_vals;
+  auto &beam_vals = pmbp->pradm1->rad_m1_beam.beam_source_vals;
 
   Kokkos::realloc(beam_vals, 4);
   HostArray1D<Real> beam_vals_host;

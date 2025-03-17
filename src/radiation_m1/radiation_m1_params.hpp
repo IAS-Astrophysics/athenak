@@ -48,6 +48,7 @@ struct RadiationM1Params {
   bool gr_sources;      // include GR sources
   bool matter_sources;  // include matter sources
   bool theta_limiter;   // activate theta limiter
+  bool beam_sources;    // include beam sources
 
   int nspecies;              // number of neutrino species
   Real closure_epsilon;      // precision with which to find closure
@@ -81,6 +82,12 @@ enum SrcSignal {
   SrcOk,
   SrcEddington,
   SrcFail,
+};
+
+struct RadiationM1Beam {
+  DvceArray1D<Real> beam_source_vals;
+  Real beam_ymin;
+  Real beam_ymax;
 };
 
 struct SrcParams {
