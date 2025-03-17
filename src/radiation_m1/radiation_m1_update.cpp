@@ -487,9 +487,9 @@ TaskStatus RadiationM1::TimeUpdate(Driver *d, int stage) {
                    adm.beta_u(m, 2, k, j, i), Fxf, Fyf, Fzf, Ff_d);
           apply_floor(g_uu, Ef, Ff_d, params_);
           u0_(m, CombinedIdx(nuidx, M1_E_IDX, nvars_), k, j, i) = Ef;
-          u0_(m, CombinedIdx(nuidx, M1_FX_IDX, nvars_), k, j, i) = Fxf; //@TODO: fix this with floored value
-          u0_(m, CombinedIdx(nuidx, M1_FY_IDX, nvars_), k, j, i) = Fyf;
-          u0_(m, CombinedIdx(nuidx, M1_FZ_IDX, nvars_), k, j, i) = Fzf;
+          u0_(m, CombinedIdx(nuidx, M1_FX_IDX, nvars_), k, j, i) = Ff_d(1); //@TODO: fix this with floored value
+          u0_(m, CombinedIdx(nuidx, M1_FY_IDX, nvars_), k, j, i) = Ff_d(2);
+          u0_(m, CombinedIdx(nuidx, M1_FZ_IDX, nvars_), k, j, i) = Ff_d(3);
 
           if (nspecies_ > 1) {
             Real Nf = u1_(m, CombinedIdx(nuidx, M1_N_IDX, nvars_), k, j, i) -
