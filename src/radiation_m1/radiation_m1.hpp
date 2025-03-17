@@ -88,7 +88,8 @@ class RadiationM1 {
   RadiationM1TaskIDs id;          // container to hold names of TaskIDs
   Real dtnew{};
 
-  DvceArray1D<Real> beam_source_vals;  // values of 1d beams
+  //DvceArray1D<Real> beam_source_vals;  // values of 1d beams
+  RadiationM1Beam rad_m1_beam;
 
   // functions...
   void AssembleRadiationM1Tasks(std::map<std::string, std::shared_ptr<TaskList>> tl);
@@ -117,8 +118,10 @@ class RadiationM1 {
   MeshBlockPack* pmy_pack;  // ptr to MeshBlockPack
 };
 
-// 1d beam boundary conditions
+// beam boundary conditions
 void ApplyBeamSources1D(Mesh* pmesh);
+void ApplyBeamSources2D(Mesh *pmesh);
+
 }  // namespace radiationm1
 
 #endif  // RADIATION_M1_HPP

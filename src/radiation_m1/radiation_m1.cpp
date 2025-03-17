@@ -29,8 +29,7 @@ RadiationM1::RadiationM1(MeshBlockPack *ppack, ParameterInput *pin)
       abs_1("abs_1", 1, 1, 1, 1, 1),
       scat_1("scat_1", 1, 1, 1, 1, 1),
       chi("chi", 1, 1, 1, 1, 1),
-      uflx("uflx", 1, 1, 1, 1, 1),
-      beam_source_vals("beam_vals", 1) {
+      uflx("uflx", 1, 1, 1, 1, 1) {
   // parameters
   params.gr_sources = pin->GetOrAddBoolean("radiation_m1", "gr_sources", true);
   params.matter_sources = pin->GetOrAddBoolean("radiation_m1", "matter_sources", false);
@@ -57,6 +56,7 @@ RadiationM1::RadiationM1(MeshBlockPack *ppack, ParameterInput *pin)
 
   nspecies = pin->GetOrAddInteger("radiation_m1", "num_species", 1);
   params.source_limiter = pin->GetOrAddReal("radiation_m1", "source_limiter", 0.5);
+  params.beam_sources = pin->GetOrAddBoolean("radiation_m1", "beam_sources", false);
 
   std::string closure_fun = pin->GetOrAddString("radiation_m1", "closure_fun", "minerbo");
   if (closure_fun == "minerbo") {

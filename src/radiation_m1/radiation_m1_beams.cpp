@@ -24,7 +24,7 @@ void ApplyBeamSources1D(Mesh *pmesh) {
 
   int &ng = indcs.ng;
   auto &u0_ = pmesh->pmb_pack->pradm1->u0;
-  auto &beam_source_1_vals_ = pmesh->pmb_pack->pradm1->beam_source_vals;
+  auto &beam_source_1_vals_ = pmesh->pmb_pack->pradm1->rad_m1_beam.beam_source_vals;
 
   par_for(
       "radiation_femn_beams_populate_1d", DevExeSpace(), 0, nmb1, 0, nvarstotm1,
@@ -57,10 +57,10 @@ void ApplyBeamSources2D(Mesh *pmesh) {
   int n3 = (indcs.nx3 > 1) ? (indcs.nx3 + 2 * ng) : 1;
 
   auto &u0_ = pmesh->pmb_pack->pradm1->u0;
-  auto &beam_source_1_vals_ = pmesh->pmb_pack->pradm1->beam_source_vals;
-  //auto &beam_source_1_y1_ = pmesh->pmb_pack->pradm1->beam_source_1_y1;
-  //auto &beam_source_1_y2_ = pmesh->pmb_pack->pradm1->beam_source_1_y2;
-  /*
+  auto &beam_source_1_vals_ = pmesh->pmb_pack->pradm1->rad_m1_beam.beam_source_vals;
+  auto &beam_source_1_y1_ = pmesh->pmb_pack->pradm1->rad_m1_beam.beam_ymin;
+  auto &beam_source_1_y2_ = pmesh->pmb_pack->pradm1->rad_m1_beam.beam_ymax;
+
   par_for(
       "radiation_femn_beams_populate_2d", DevExeSpace(), 0, nmb1, 0, nvarstotm1, 0,
       (n3 - 1), 0, (n2 - 1), KOKKOS_LAMBDA(int m, int n, int k, int j) {
@@ -80,6 +80,6 @@ void ApplyBeamSources2D(Mesh *pmesh) {
           default:
             break;
         }
-      }); */
+      });
 }
 }  // namespace radiationm1
