@@ -56,7 +56,6 @@ TaskStatus RadiationM1::TimeUpdate(Driver *d, int stage) {
   auto &params_ = pmy_pack->pradm1->params;
 
   auto &BrentFunc_ = pmy_pack->pradm1->BrentFunc;
-  auto &BrentFuncInv_ = pmy_pack->pradm1->BrentFuncInv;
   auto &HybridsjFunc_ = pmy_pack->pradm1->HybridsjFunc;
 
   Real beta[2] = {0.5, 1.};
@@ -341,15 +340,10 @@ TaskStatus RadiationM1::TimeUpdate(Driver *d, int stage) {
               }
 
               // Update Tmunu
-              AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> Fnew_d{};
               const Real H2 = tensor_dot(g_uu, Hnew_d, Hnew_d);
               const Real xi =
                   Kokkos::sqrt(H2) * (Jnew > params_.rad_E_floor ? 1 / Jnew : 0);
-              chival = closure_fun(xi, params_.closure_type);
-
-              calc_inv_closure(BrentFuncInv_, g_uu, g_dd, n_u, n_d, gamma_ud, w_lorentz,
-                               u_u, u_d, v_d, proj_ud, chival, Jnew, Hnew_d, Enew, Fnew_d,
-                               params_);
+              chival = 1./3.;
 
               const Real dthick = 3. * (1. - chival) / 2.;
               const Real dthin = 1. - dthick;
@@ -370,6 +364,7 @@ TaskStatus RadiationM1::TimeUpdate(Driver *d, int stage) {
               }
 
               // Boost back to the lab frame
+              AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> Fnew_d{};
               Enew = calc_J_from_rT(rT_dd, n_u);
               calc_H_from_rT(rT_dd, n_u, gamma_ud, Fnew_d);
               apply_floor(g_uu, Enew, Fnew_d, params_);

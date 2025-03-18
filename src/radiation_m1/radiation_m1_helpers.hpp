@@ -329,26 +329,6 @@ void apply_closure(
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn void radiationm1::apply_inv_closure
-//  \brief Computes the closure in the fluid frame with a rootfinding procedure
-KOKKOS_INLINE_FUNCTION
-void apply_inv_closure(
-    const Real &dthick,
-    const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &n_u,
-    const AthenaPointTensor<Real, TensorSymm::NONE, 4, 2> &gamma_ud,
-    const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &u_d, const Real &J,
-    const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &H_d,
-    const AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> &K_thick_dd,
-    const AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> &K_thin_dd, Real &E,
-    AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &F_d) {
-  AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> rT_dd{};
-  assemble_rT_fluid(dthick, u_d, J, H_d, K_thick_dd, K_thin_dd, rT_dd);
-
-  E = calc_J_from_rT(rT_dd, n_u);
-  calc_H_from_rT(rT_dd, n_u, gamma_ud, F_d);
-}
-
-//----------------------------------------------------------------------------------------
 //! \fn Real radiationm1::calc_E_flux
 //  \brief Compute the radiation energy flux
 KOKKOS_INLINE_FUNCTION
