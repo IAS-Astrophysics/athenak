@@ -27,7 +27,7 @@ void DiffusionOpacitiesExplicit(Real x1, Real x2, Real x3, Real dx, Real dy, Rea
   abs_0 = 0;
   eta_1 = 0;
   abs_1 = 0;
-  scat_1 = 10;
+  scat_1 = 100;
 }
 
 KOKKOS_INLINE_FUNCTION
