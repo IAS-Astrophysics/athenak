@@ -343,7 +343,8 @@ TaskStatus RadiationM1::TimeUpdate(Driver *d, int stage) {
               const Real H2 = tensor_dot(g_uu, Hnew_d, Hnew_d);
               const Real xi =
                   Kokkos::sqrt(H2) * (Jnew > params_.rad_E_floor ? 1 / Jnew : 0);
-              chival = 1./3.;
+              chival = closure_fun(xi, params_.closure_type);
+              // chival = 1. / 3.;
 
               const Real dthick = 3. * (1. - chival) / 2.;
               const Real dthin = 1. - dthick;
@@ -357,9 +358,10 @@ TaskStatus RadiationM1::TimeUpdate(Driver *d, int stage) {
 
               for (int a = 0; a < 4; ++a) {
                 for (int b = a; b < 4; ++b) {
-                  rT_dd(a, b) = Jnew * u_d(a) * u_d(b) + Hnew_d(a) * u_d(b) +
-                                Hnew_d(b) * u_d(a) + dthin * K_thin_dd(a, b) +
-                                dthick * K_thick_dd(a, b);
+                  rT_dd(a, b) =
+                      Jnew * u_d(a) * u_d(b) + Hnew_d(a) * u_d(b) + Hnew_d(b) * u_d(a) +
+                      dthin * Jnew * (Hnew_d(a) * Hnew_d(b) * (H2 > 0 ? 1 / H2 : 0)) +
+                      dthick * Jnew * (g_dd(a, b) + u_d(a) * u_d(b)) / 3;
                 }
               }
 
@@ -482,7 +484,8 @@ TaskStatus RadiationM1::TimeUpdate(Driver *d, int stage) {
                    adm.beta_u(m, 2, k, j, i), Fxf, Fyf, Fzf, Ff_d);
           apply_floor(g_uu, Ef, Ff_d, params_);
           u0_(m, CombinedIdx(nuidx, M1_E_IDX, nvars_), k, j, i) = Ef;
-          u0_(m, CombinedIdx(nuidx, M1_FX_IDX, nvars_), k, j, i) = Ff_d(1); //@TODO: fix this with floored value
+          u0_(m, CombinedIdx(nuidx, M1_FX_IDX, nvars_), k, j, i) =
+              Ff_d(1);  //@TODO: fix this with floored value
           u0_(m, CombinedIdx(nuidx, M1_FY_IDX, nvars_), k, j, i) = Ff_d(2);
           u0_(m, CombinedIdx(nuidx, M1_FZ_IDX, nvars_), k, j, i) = Ff_d(3);
 
