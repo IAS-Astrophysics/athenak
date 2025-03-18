@@ -420,7 +420,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
 											u[2] = w0_(m,IVZ,kp,jp,ip);
 											Real gu[4][4], gl[4][4];
 											ComputeMetricAndInverse(x1v,x2v,x3v,coord.is_minkowski,coord.bh_spin,gl,gu); 
-											if ( u[0]*u[1]*u[2] < 1.0E-10 ) {
+											if ( fabs(u[0]*u[1]*u[2]) < 1.0E-10 ) {
 												u[0] = 0.1*(0.5 - prtcl_gen.frand());
 												u[1] = 0.1*(0.5 - prtcl_gen.frand());
 												u[2] = 0.1*(0.5 - prtcl_gen.frand());
@@ -539,7 +539,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
 														+ 2.0*gl[1][2]*b[0]*b[1] + 2.0*gl[1][3]*b[0]*b[2]
 														+ 2.0*gl[3][2]*b[2]*b[1];
 											b_norm = sqrt(b_norm);
-											if ( u[0]*u[1]*u[2] < 1.0E-10 ) {
+											if ( fabs(u[0]*u[1]*u[2]) < 1.0E-10 ) {
 												u[0] = 0.1*(0.5 - prtcl_gen.frand());
 												u[1] = 0.1*(0.5 - prtcl_gen.frand());
 												u[2] = 0.1*(0.5 - prtcl_gen.frand());
