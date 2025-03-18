@@ -60,7 +60,6 @@ class RadiationM1 {
   ~RadiationM1();
 
   BrentFunctor BrentFunc;        // function to minimize for closure
-  BrentFunctorInv BrentFuncInv;  // function to minimize for inv. closure
   HybridsjFunctor HybridsjFunc;  // function to minimize for multiroots solver
 
   ToyOpacityFn toy_opacity_fn = nullptr;  // use only if toy opacities enabled

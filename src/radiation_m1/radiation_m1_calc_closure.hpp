@@ -45,7 +45,7 @@ KOKKOS_INLINE_FUNCTION void calc_closure(
     BrentState state{};
 
     // Initialize rootfinder
-    const int closure_maxiter = 64;
+    const int closure_maxiter = 164;
     const Real closure_epsilon = 1e-15;
     MathSignal ierr =
         BrentInitialize(BrentFunc, x_lo, x_hi, root, state, g_dd, g_uu, n_d, w_lorentz,
@@ -90,65 +90,6 @@ KOKKOS_INLINE_FUNCTION void calc_closure(
           "closure\n");
     }
   }
-}
-
-// compute the inverse closure
-KOKKOS_INLINE_FUNCTION void calc_inv_closure(
-    BrentFunctorInv BrentFuncInv,
-    const AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> &g_uu,
-    const AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> &g_dd,
-    const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &n_u,
-    const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &n_d,
-    const AthenaPointTensor<Real, TensorSymm::NONE, 4, 2> &gamma_ud,
-    const Real &w_lorentz, const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &u_u,
-    const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &u_d,
-    const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &v_d,
-    const AthenaPointTensor<Real, TensorSymm::NONE, 4, 2> &proj_ud, const Real &chi,
-    const Real &J, const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &H_d, Real &E,
-    AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &F_d,
-    const RadiationM1Params &m1_params) {
-  AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> K_thick_dd{};
-  calc_Kthick(g_dd, u_d, J, H_d, K_thick_dd);
-
-  AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> K_thin_dd{};
-  calc_Kthin(g_uu, n_d, w_lorentz, u_d, proj_ud, J, H_d, K_thin_dd,
-             m1_params.rad_E_floor);
-
-  Real x_lo = 0.0;
-  Real x_md = 0.5;
-  Real x_hi = 1.0;
-  Real root{};
-  BrentState state{};
-
-  // Initialize rootfinder
-  MathSignal ierr = BrentInitialize(
-      BrentFuncInv, x_lo, x_hi, root, state, g_uu, g_dd, n_u, n_d, gamma_ud, w_lorentz,
-      u_u, u_d, v_d, proj_ud, chi, J, H_d, K_thick_dd, K_thin_dd, m1_params);
-
-  // no root, most likely due to truncation errors
-  if (ierr == LinalgEinval) {
-    x_md = 3. * (1. - chi) / 2.;
-    apply_inv_closure(x_md, n_u, gamma_ud, u_d, J, H_d, K_thick_dd, K_thin_dd, E, F_d);
-    return;
-  }
-
-  // Rootfinding
-  int iter = 0;
-  do {
-    ++iter;
-    ierr = BrentIterate(BrentFuncInv, x_lo, x_hi, root, state, g_uu, g_dd, n_u, n_d,
-                        gamma_ud, w_lorentz, u_u, u_d, v_d, proj_ud, chi, J, H_d,
-                        K_thick_dd, K_thin_dd, m1_params);
-
-    // Some nans in the evaluation. This should not happen.
-    if (ierr != LinalgSuccess) {
-      printf("Unexpected error in BrentIterate.\n");
-    }
-    x_md = root;
-    ierr = BrentTestInterval(x_lo, x_hi, 0.0, m1_params.inv_closure_epsilon);
-  } while (ierr == LinalgContinue && iter < m1_params.inv_closure_maxiter);
-
-  apply_inv_closure(x_md, n_u, gamma_ud, u_d, J, H_d, K_thick_dd, K_thin_dd, E, F_d);
 }
 
 }  // namespace radiationm1
