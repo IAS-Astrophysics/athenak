@@ -34,13 +34,13 @@ RadiationM1::RadiationM1(MeshBlockPack *ppack, ParameterInput *pin)
   params.gr_sources = pin->GetOrAddBoolean("radiation_m1", "gr_sources", true);
   params.matter_sources = pin->GetOrAddBoolean("radiation_m1", "matter_sources", false);
   params.theta_limiter = pin->GetOrAddBoolean("radiation_m1", "theta_limiter", true);
-  params.closure_epsilon = pin->GetOrAddReal("radiation_m1", "closure_epsilon", 1e-5);
-  params.closure_maxiter = pin->GetOrAddInteger("radiation_m1", "closure_maxiter", 64);
+  params.closure_epsilon = pin->GetOrAddReal("radiation_m1", "closure_epsilon", 1e-14);
+  params.closure_maxiter = pin->GetOrAddInteger("radiation_m1", "closure_maxiter", 164);
   params.inv_closure_epsilon =
       pin->GetOrAddReal("radiation_m1", "inv_closure_epsilon", 1e-15);
   params.inv_closure_maxiter =
       pin->GetOrAddInteger("radiation_m1", "inv_closure_maxiter", 64);
-  params.rad_N_floor = pin->GetOrAddReal("radiation_m1", "rad_E_floor", 1e-20);
+  params.rad_N_floor = pin->GetOrAddReal("radiation_m1", "rad_N_floor", 1e-20);
   params.rad_E_floor = pin->GetOrAddReal("radiation_m1", "rad_E_floor", 1e-30);
   params.rad_eps = pin->GetOrAddReal("radiation_m1", "rad_eps", 1e-5);
   params.source_epsabs = pin->GetOrAddReal("radiation_m1", "source_epsabs", 1e-15);
@@ -53,7 +53,7 @@ RadiationM1::RadiationM1(MeshBlockPack *ppack, ParameterInput *pin)
   params.source_therm_limit =
       pin->GetOrAddReal("radiation_m1", "source_therm_limit", -1.);
   params.source_scat_limit = pin->GetOrAddReal("radiation_m1", "source_scat_limit", -1.);
-
+  params.minmod_theta = pin->GetOrAddReal("radiation_m1", "minmod_theta", 1);
   nspecies = pin->GetOrAddInteger("radiation_m1", "num_species", 1);
   params.source_limiter = pin->GetOrAddReal("radiation_m1", "source_limiter", 0.5);
   params.beam_sources = pin->GetOrAddBoolean("radiation_m1", "beam_sources", false);
