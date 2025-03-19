@@ -45,8 +45,6 @@ KOKKOS_INLINE_FUNCTION void calc_closure(
     BrentState state{};
 
     // Initialize rootfinder
-    const int closure_maxiter = 164;
-    const Real closure_epsilon = 1e-15;
     MathSignal ierr =
         BrentInitialize(BrentFunc, x_lo, x_hi, root, state, g_dd, g_uu, n_d, w_lorentz,
                         u_u, v_d, proj_ud, E, F_d, m1_params, m1_params.closure_type);
@@ -58,8 +56,10 @@ KOKKOS_INLINE_FUNCTION void calc_closure(
       const Real z_th = BrentFunc(1., g_dd, g_uu, n_d, w_lorentz, u_u, v_d, proj_ud, E,
                                   F_d, m1_params, closure_type);
       if (Kokkos::abs(z_th) < Kokkos::abs(z_ed)) {
+        printf("LinalgEinval: set chi = 1\n");
         chi = 1.0;
       } else {
+        printf("LinalgEinval: set chi = 1/3\n");
         chi = 1. / 3.;
       }
       apply_closure(g_dd, g_uu, n_d, w_lorentz, u_u, v_d, proj_ud, E, F_d, chi, P_dd,
@@ -79,11 +79,11 @@ KOKKOS_INLINE_FUNCTION void calc_closure(
         printf("Unexpected error in BrentIterate.\n");
       }
       x_md = root;
-      ierr = BrentTestInterval(x_lo, x_hi, closure_epsilon, 0);
-    } while (ierr == LinalgContinue && iter < closure_maxiter);
+      ierr = BrentTestInterval(x_lo, x_hi, m1_params.closure_epsilon, 0);
+    } while (ierr == LinalgContinue && iter < m1_params.closure_maxiter);
 
     chi = closure_fun(x_md, closure_type);
-
+    printf("Chival: %lf\n", chi);
     if (ierr != LinalgSuccess) {
       printf(
           "Maximum number of iterations exceeded when computing the M1 "
