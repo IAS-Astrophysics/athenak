@@ -112,11 +112,15 @@ TaskStatus RadiationM1::TimeUpdate(Driver *d, int stage) {
                     adm.beta_u(m, 2, k, j, i), beta_u);
         tensor_contract(g_dd, beta_u, beta_d);
 
-        K_dd(0, 0) = adm.vK_dd(m, 0, 0, k, j, i);
-        K_dd(0, 1) = adm.vK_dd(m, 0, 1, k, j, i);
-        K_dd(0, 2) = adm.vK_dd(m, 0, 2, k, j, i);
-        K_dd(1, 1) = adm.vK_dd(m, 1, 1, k, j, i);
-        K_dd(1, 2) = adm.vK_dd(m, 1, 2, k, j, i);
+        K_dd(0, 0) = 0.;
+        K_dd(0, 1) = 0.;
+        K_dd(0, 2) = 0.;
+        K_dd(0, 3) = 0.;
+        K_dd(1, 1) = adm.vK_dd(m, 0, 0, k, j, i);
+        K_dd(1, 2) = adm.vK_dd(m, 0, 1, k, j, i);
+        K_dd(1, 3) = adm.vK_dd(m, 0, 2, k, j, i);
+        K_dd(2, 2) = adm.vK_dd(m, 1, 1, k, j, i);
+        K_dd(2, 3) = adm.vK_dd(m, 1, 2, k, j, i);
         K_dd(3, 3) = adm.vK_dd(m, 2, 2, k, j, i);
 
         Real gam =
