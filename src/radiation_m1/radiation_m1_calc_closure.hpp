@@ -83,7 +83,7 @@ KOKKOS_INLINE_FUNCTION void calc_closure(
     } while (ierr == LinalgContinue && iter < m1_params.closure_maxiter);
 
     chi = closure_fun(x_md, closure_type);
-    printf("Chival: %lf\n", chi);
+    //printf("Chival: %lf\n", chi);
     if (ierr != LinalgSuccess) {
       printf(
           "Maximum number of iterations exceeded when computing the M1 "
