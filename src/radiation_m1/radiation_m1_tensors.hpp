@@ -31,14 +31,13 @@ Real tensor_dot(const AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> &g_uu,
 //! \fn radiationm1::tensor_dot (special)
 //  \brief function to compute g^ab F_a G_b (or g_ab F^a G^b)
 KOKKOS_INLINE_FUNCTION
-Real tensor_dot(const AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> &g_uu,
-                const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &F_d,
-                const AthenaPointTensor<Real, TensorSymm::NONE, 3, 1> &G_d) {
-  Real G4d_d[4] = {0, G_d(0), G_d(1), G_d(2)};
+Real tensor_dot(const AthenaPointTensor<Real, TensorSymm::SYM2, 3, 2> &g3_uu,
+                const AthenaPointTensor<Real, TensorSymm::NONE, 3, 1> &F3_d,
+                const AthenaPointTensor<Real, TensorSymm::NONE, 3, 1> &G3_d) {
   Real F2 = 0.;
-  for (int a = 0; a < 4; ++a) {
-    for (int b = 0; b < 4; ++b) {
-      F2 += g_uu(a, b) * F_d(a) * G4d_d[b];
+  for (int a = 0; a < 3; ++a) {
+    for (int b = 0; b < 3; ++b) {
+      F2 += g3_uu(a, b) * F3_d(a) * G3_d(b);
     }
   }
   return F2;
@@ -73,14 +72,26 @@ Real tensor_dot(const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &F_d,
   return F_d(0) * G_d(0) + F_d(1) * G_d(1) + F_d(2) * G_d(2) + F_d(3) * G_d(3);
 }
 
+KOKKOS_INLINE_FUNCTION
+Real tensor_dot(const AthenaPointTensor<Real, TensorSymm::SYM2, 3, 2> &F_uu,
+                const AthenaPointTensor<Real, TensorSymm::SYM2, 3, 2> &G_dd) {
+  Real result = 0;
+  for (int a = 0; a < 3; ++a) {
+    for (int b = 0; b < 3; ++b) {
+      result += F_uu(a, b) * G_dd(a, b);
+    }
+  }
+
+  return result;
+}
+
 //----------------------------------------------------------------------------------------
 //! \fn radiationm1::tensor_contract
 //  \brief find F_a = g_ab F^b or F^a = g^ab F_b
 KOKKOS_INLINE_FUNCTION
-void tensor_contract(
-    const AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> &g_dd,
-    const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &F_u,
-    AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &F_d) {
+void tensor_contract(const AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> &g_dd,
+                     const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &F_u,
+                     AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &F_d) {
   for (int a = 0; a < 4; ++a) {
     F_d(a) = 0;
     for (int b = 0; b < 4; ++b) {
@@ -93,10 +104,9 @@ void tensor_contract(
 //! \fn radiationm1::tensor_contract
 //  \brief find P^a_b = g^ac P^cb
 KOKKOS_INLINE_FUNCTION
-void tensor_contract(
-    const AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> &g_uu,
-    const AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> &P_dd,
-    AthenaPointTensor<Real, TensorSymm::NONE, 4, 2> &P_ud) {
+void tensor_contract(const AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> &g_uu,
+                     const AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> &P_dd,
+                     AthenaPointTensor<Real, TensorSymm::NONE, 4, 2> &P_ud) {
   for (int a = 0; a < 4; ++a) {
     for (int b = 0; b < 4; ++b) {
       P_ud(a, b) = 0;
@@ -108,11 +118,29 @@ void tensor_contract(
 }
 
 //----------------------------------------------------------------------------------------
+//! \fn radiationm1::tensor_contract2
+//  \brief find P^ab = g^ac g^bd P^cd
+KOKKOS_INLINE_FUNCTION
+void tensor_contract2(const AthenaPointTensor<Real, TensorSymm::SYM2, 3, 2> &g3_uu,
+                      const AthenaPointTensor<Real, TensorSymm::SYM2, 3, 2> &P3_dd,
+                      AthenaPointTensor<Real, TensorSymm::SYM2, 3, 2> &P3_uu) {
+  for (int a = 0; a < 3; ++a) {
+    for (int b = 0; b < 3; ++b) {
+      P3_uu(a, b) = 0;
+      for (int c = 0; c < 3; ++c) {
+        for (int d = 0; d < 3; ++d) {
+          P3_uu(a, b) += g3_uu(a, c) * g3_uu(b, d) * P3_dd(c, d);
+        }
+      }
+    }
+  }
+}
+
+//----------------------------------------------------------------------------------------
 //! \fn radiationm1::pack_n_d
 //  \brief populate normal vector
 KOKKOS_INLINE_FUNCTION
-void pack_n_d(const Real &alpha,
-              AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &n_d) {
+void pack_n_d(const Real &alpha, AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &n_d) {
   n_d(0) = -alpha;
   n_d(1) = 0;
   n_d(2) = 0;
@@ -136,8 +164,7 @@ void pack_beta_u(const Real &betax_u, const Real &betay_u, const Real &betaz_u,
 //  \brief populate u_u
 KOKKOS_INLINE_FUNCTION
 void pack_u_u(const Real &u_mu_0, const Real &u_mu_1, const Real &u_mu_2,
-              const Real &u_mu_3,
-              AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &u_u) {
+              const Real &u_mu_3, AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &u_u) {
   u_u(0) = u_mu_0;
   u_u(1) = u_mu_1;
   u_u(2) = u_mu_2;
@@ -149,8 +176,7 @@ void pack_u_u(const Real &u_mu_0, const Real &u_mu_1, const Real &u_mu_2,
 //  \brief populate v_u
 KOKKOS_INLINE_FUNCTION
 void pack_v_u(const Real &u_mu_0, const Real &u_mu_1, const Real &u_mu_2,
-              const Real &u_mu_3,
-              AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &v_u) {
+              const Real &u_mu_3, AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &v_u) {
   v_u(0) = 0;
   v_u(1) = u_mu_1 / u_mu_0;
   v_u(2) = u_mu_2 / u_mu_0;
@@ -169,6 +195,14 @@ void pack_F_d(const Real &betax_u, const Real &betay_u, const Real &betaz_u,
   F_d(1) = Fx;
   F_d(2) = Fy;
   F_d(3) = Fz;
+}
+
+KOKKOS_INLINE_FUNCTION
+void pack_F_d(const Real &Fx, const Real &Fy, const Real &Fz,
+              AthenaPointTensor<Real, TensorSymm::NONE, 3, 1> &F_d) {
+  F_d(0) = Fx;
+  F_d(1) = Fy;
+  F_d(2) = Fz;
 }
 
 //----------------------------------------------------------------------------------------
@@ -199,4 +233,4 @@ void pack_P_dd(const Real &betax_u, const Real &betay_u, const Real &betaz_u,
   P_dd(3, 3) = Pzz_dd;
 }
 
-#endif // RADIATION_M1_TENSORS_HPP
+#endif  // RADIATION_M1_TENSORS_HPP

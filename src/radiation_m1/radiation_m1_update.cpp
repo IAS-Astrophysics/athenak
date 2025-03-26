@@ -75,7 +75,8 @@ TaskStatus RadiationM1::TimeUpdate(Driver *d, int stage) {
         Real garr_dd[16];
         Real garr_uu[16];
         AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> g_uu{};
-        AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> K_dd{};
+        AthenaPointTensor<Real, TensorSymm::SYM2, 3, 2> g3_uu{};
+        AthenaPointTensor<Real, TensorSymm::SYM2, 3, 2> K_dd{};
         AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> g_dd{};
         AthenaPointTensor<Real, TensorSymm::NONE, 4, 2> gamma_ud{};
         AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> beta_u{};
@@ -100,6 +101,14 @@ TaskStatus RadiationM1::TimeUpdate(Driver *d, int stage) {
             g_uu(a, b) = garr_uu[a + b * 4];
           }
         }
+        for (int a = 0; a < 3; ++a) {
+          for (int b = 0; b < 3; ++b) {
+            g3_uu(a, b) = g_uu(a + 1, b + 1) +
+                          adm.beta_u(m, a, k, j, i) * adm.beta_u(m, b, k, j, i) /
+                              (adm.alpha(m, k, j, i) * adm.alpha(m, k, j, i));
+            K_dd(a, b) = adm.vK_dd(m, a, b, k, j, i);
+          }
+        }
         pack_n_d(adm.alpha(m, k, j, i), n_d);
         tensor_contract(g_uu, n_d, n_u);
         for (int a = 0; a < 4; ++a) {
@@ -111,17 +120,6 @@ TaskStatus RadiationM1::TimeUpdate(Driver *d, int stage) {
         pack_beta_u(adm.beta_u(m, 0, k, j, i), adm.beta_u(m, 1, k, j, i),
                     adm.beta_u(m, 2, k, j, i), beta_u);
         tensor_contract(g_dd, beta_u, beta_d);
-
-        K_dd(0, 0) = 0.;
-        K_dd(0, 1) = 0.;
-        K_dd(0, 2) = 0.;
-        K_dd(0, 3) = 0.;
-        K_dd(1, 1) = adm.vK_dd(m, 0, 0, k, j, i);
-        K_dd(1, 2) = adm.vK_dd(m, 0, 1, k, j, i);
-        K_dd(1, 3) = adm.vK_dd(m, 0, 2, k, j, i);
-        K_dd(2, 2) = adm.vK_dd(m, 1, 1, k, j, i);
-        K_dd(2, 3) = adm.vK_dd(m, 1, 2, k, j, i);
-        K_dd(3, 3) = adm.vK_dd(m, 2, 2, k, j, i);
 
         Real gam =
             adm::SpatialDet(adm.g_dd(m, 0, 0, k, j, i), adm.g_dd(m, 0, 1, k, j, i),
@@ -208,32 +206,41 @@ TaskStatus RadiationM1::TimeUpdate(Driver *d, int stage) {
           // Load lab radiation quantities
           if (params_.gr_sources) {
             AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> F_d{};
-            AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> F_u{};
             const Real E = u0_(m, CombinedIdx(nuidx, 0, nvars_), k, j, i);
             pack_F_d(beta_u(1), beta_u(2), beta_u(3),
                      u0_(m, CombinedIdx(nuidx, M1_FX_IDX, nvars_), k, j, i),
                      u0_(m, CombinedIdx(nuidx, M1_FY_IDX, nvars_), k, j, i),
                      u0_(m, CombinedIdx(nuidx, M1_FZ_IDX, nvars_), k, j, i), F_d);
-            tensor_contract(g_uu, F_d, F_u);
+            AthenaPointTensor<Real, TensorSymm::NONE, 3, 1> F3_d{};
+            F3_d(0) = F_d(1);
+            F3_d(1) = F_d(2);
+            F3_d(2) = F_d(3);
 
             AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> P_dd{};
-            AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> P_uu{};
             apply_closure(g_dd, g_uu, n_d, w_lorentz, u_u, v_d, proj_ud, E, F_d,
                           chi_(m, nuidx, k, j, i), P_dd, params_);
+            AthenaPointTensor<Real, TensorSymm::SYM2, 3, 2> P3_dd{};
+            for (int a = 0; a < 3; ++a) {
+              for (int b = 0; b < 3; ++b) {
+                P3_dd(a, b) = P_dd(a + 1, b + 1);
+              }
+            }
+            AthenaPointTensor<Real, TensorSymm::SYM2, 3, 2> P3_uu{};
+            tensor_contract2(g3_uu, P3_dd, P3_uu);
 
             // geometric sources
-            rEFN[nuidx][M1_E_IDX] +=
-                adm.alpha(m, k, j, i) * tensor_dot(g_uu, P_dd, K_dd) -
-                tensor_dot(g_uu, F_d, dalpha_d);
+            rEFN[nuidx][M1_E_IDX] += adm.alpha(m, k, j, i) * tensor_dot(P3_uu, K_dd) -
+                                     tensor_dot(g3_uu, F3_d, dalpha_d);
+
             for (int a = 0; a < 3; ++a) {
               rEFN[nuidx][a + 1] -= E * dalpha_d(a);
               for (int b = 0; b < 3; ++b) {
-                rEFN[nuidx][a + 1] += F_d(b) * dbeta_du(a, b);
+                rEFN[nuidx][a + 1] += F3_d(b) * dbeta_du(a, b);
               }
               for (int b = 0; b < 3; ++b) {
                 for (int c = 0; c < 3; ++c) {
                   rEFN[nuidx][a + 1] +=
-                      adm.alpha(m, k, j, i) / 2. * P_uu(b, c) * dg_ddd(a, b, c);
+                      adm.alpha(m, k, j, i) / 2. * P3_uu(b, c) * dg_ddd(a, b, c);
                 }
               }
             }
