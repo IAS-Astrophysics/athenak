@@ -120,6 +120,7 @@ class RadiationM1 {
 // beam boundary conditions
 void ApplyBeamSources1D(Mesh* pmesh);
 void ApplyBeamSources2D(Mesh *pmesh);
+void ApplyBeamSourcesBlackHole(Mesh *pmesh);
 
 }  // namespace radiationm1
 
