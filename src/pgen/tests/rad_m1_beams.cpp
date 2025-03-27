@@ -82,7 +82,7 @@ void ProblemGenerator::RadiationM1BeamTest(ParameterInput *pin, const bool resta
     user_bcs_func = radiationm1::ApplyBeamSources1D;
   }
   if (pmbp->pmesh->two_d) {
-    user_bcs_func = radiationm1::ApplyBeamSources2D;
+    user_bcs_func = radiationm1::ApplyBeamSourcesBlackHole;
     if (pmbp->pradm1->params.beam_sources) {
       pmbp->pradm1->rad_m1_beam.beam_ymin =
           pin->GetOrAddReal("problem", "beam_ymin", 3.0);
@@ -189,26 +189,7 @@ void ProblemGenerator::RadiationM1BeamTest(ParameterInput *pin, const bool resta
   Kokkos::realloc(beam_vals, 4);
   HostArray1D<Real> beam_vals_host;
   Kokkos::realloc(beam_vals_host, 4);
-  if (metric == "minkowski") {
-    Real E = 1;
-    AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> F_d{};
-    AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> g_uu{};
-    g_uu(0, 0) = -1;
-    g_uu(1, 1) = g_uu(2, 2) = g_uu(3, 3) = 1;
-    Real Fx = E;
-    Real Fy = 0;
-    Real Fz = 0;
-    pack_F_d(0, 0, 0, Fx, Fy, Fz, F_d);
-    apply_floor(g_uu, E, F_d, pmbp->pradm1->params);
-    beam_vals_host(M1_E_IDX) = E;
-    beam_vals_host(M1_FX_IDX) = F_d(1);
-    beam_vals_host(M1_FY_IDX) = F_d(2);
-    beam_vals_host(M1_FZ_IDX) = F_d(3);
-    printf("Beam values initialized: E = %lf, F = [%lf, %lf, %lf]\n",
-           beam_vals_host(M1_E_IDX), beam_vals_host(M1_FX_IDX), beam_vals_host(M1_FY_IDX),
-           beam_vals_host(M1_FZ_IDX));
-    Kokkos::deep_copy(beam_vals, beam_vals_host);
-  } else {
+  if (pmbp->pmesh->one_d) {
     Real E = 1;
     AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> F_d{};
     AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> g_uu{};
