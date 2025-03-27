@@ -120,7 +120,7 @@ TaskStatus BoundaryValuesFC::PackAndSendFC(DvceFaceFld4D<Real> &b,
                 rbuf[dn].vars(dm,ndat*v + i-il + ni*(j-jl + nj*(k-kl))) = b.x3f(m,k,j,i);
               }
             });
-            tmember.team_barrier();
+            // tmember.team_barrier();
           // if neighbor is at coarser level, load data from coarse_b0
           } else {
             Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember, nkji),
@@ -138,7 +138,7 @@ TaskStatus BoundaryValuesFC::PackAndSendFC(DvceFaceFld4D<Real> &b,
                 rbuf[dn].vars(dm,ndat*v + i-il + ni*(j-jl + nj*(k-kl))) = cb.x3f(m,k,j,i);
               }
             });
-            tmember.team_barrier();
+            // tmember.team_barrier();
           }
 
         // else copy field components into send buffer for MPI communication below
@@ -160,7 +160,7 @@ TaskStatus BoundaryValuesFC::PackAndSendFC(DvceFaceFld4D<Real> &b,
                 sbuf[n].vars(m,ndat*v + i-il + ni*(j-jl + nj*(k-kl))) = b.x3f(m,k,j,i);
               }
             });
-            tmember.team_barrier();
+            // tmember.team_barrier();
           // if neighbor is at coarser level, load data from coarse_b0
           } else {
             Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember, nkji),
@@ -178,7 +178,7 @@ TaskStatus BoundaryValuesFC::PackAndSendFC(DvceFaceFld4D<Real> &b,
                 sbuf[n].vars(m,ndat*v + i-il + ni*(j-jl + nj*(k-kl))) = cb.x3f(m,k,j,i);
               }
             });
-            tmember.team_barrier();
+            // tmember.team_barrier();
           }
         }
       } // end if-neighbor-exists block
@@ -337,7 +337,7 @@ TaskStatus BoundaryValuesFC::RecvAndUnpackFC(DvceFaceFld4D<Real> &b,
               b.x3f(m,k,j,i) = rbuf[n].vars(m,ndat*v + i-il + ni*(j-jl + nj*(k-kl)));
             }
           });
-          tmember.team_barrier();
+          // tmember.team_barrier();
         // if neighbor is at coarser level, load data into coarse_b0
         } else {
           Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember, nkji),
@@ -355,7 +355,7 @@ TaskStatus BoundaryValuesFC::RecvAndUnpackFC(DvceFaceFld4D<Real> &b,
               cb.x3f(m,k,j,i) = rbuf[n].vars(m,ndat*v + i-il + ni*(j-jl + nj*(k-kl)));
             }
           });
-          tmember.team_barrier();
+          // tmember.team_barrier();
         }
       }  // end if-neighbor-exists block
     }

@@ -100,7 +100,7 @@ TaskStatus BoundaryValuesCC::PackAndSendFluxCC(DvceFaceFld5D<Real> &flx) {
             sbuf[n].flux(m, (j-jl + nj*(k-kl + nk*v)) ) = rflx;
           }
         });
-        tmember.team_barrier();
+        // tmember.team_barrier();
 
       // x2faces
       } else if (n<16) {
@@ -127,7 +127,7 @@ TaskStatus BoundaryValuesCC::PackAndSendFluxCC(DvceFaceFld5D<Real> &flx) {
             sbuf[n].flux(m, (i-il + ni*(k-kl + nk*v)) ) = rflx;
           }
         });
-        tmember.team_barrier();
+        // tmember.team_barrier();
 
       // x3faces
       } else if ((n>=24) && (n<32)) {
@@ -149,7 +149,7 @@ TaskStatus BoundaryValuesCC::PackAndSendFluxCC(DvceFaceFld5D<Real> &flx) {
             sbuf[n].flux(m, (i-il + ni*(j-jl + nj*v)) ) = rflx;
           }
         });
-        tmember.team_barrier();
+        // tmember.team_barrier();
       }
     }  // end if-neighbor-exists block
   });  // end par_for_outer
@@ -273,7 +273,7 @@ TaskStatus BoundaryValuesCC::RecvAndUnpackFluxCC(DvceFaceFld5D<Real> &flx) {
           k += kl;
           flx.x1f(m,v,k,j,il) = rbuf[n].flux(m,(j-jl + nj*(k-kl + nk*v)));
         });
-        tmember.team_barrier();
+        // tmember.team_barrier();
       // x2faces
       } else if (n<16) {
         Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember, nki), [&](const int idx) {
@@ -282,7 +282,7 @@ TaskStatus BoundaryValuesCC::RecvAndUnpackFluxCC(DvceFaceFld5D<Real> &flx) {
           k += kl;
           flx.x2f(m,v,k,jl,i) = rbuf[n].flux(m,(i-il + ni*(k-kl + nk*v)));
         });
-        tmember.team_barrier();
+        // tmember.team_barrier();
       // x3faces
       } else if ((n>=24) && (n<32)) {
         Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember, nji), [&](const int idx) {
@@ -291,7 +291,7 @@ TaskStatus BoundaryValuesCC::RecvAndUnpackFluxCC(DvceFaceFld5D<Real> &flx) {
           j += jl;
           flx.x3f(m,v,kl,j,i) = rbuf[n].flux(m,(i-il + ni*(j-jl + nj*v)));
         });
-        tmember.team_barrier();
+        // tmember.team_barrier();
       }
     }  // end if-neighbor-exists block
   });  // end par_for_outer

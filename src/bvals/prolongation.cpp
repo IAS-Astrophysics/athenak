@@ -117,7 +117,7 @@ void BoundaryValuesCC::FillCoarseInBndryCC(DvceArray5D<Real> &a, DvceArray5D<Rea
             }
           }
         });
-        tmember.team_barrier();
+        // tmember.team_barrier();
       }
     });
   }
@@ -201,7 +201,7 @@ void BoundaryValuesCC::ProlongateCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca)
           }
         }
       });
-      tmember.team_barrier();
+      // tmember.team_barrier();
     }
   });
   return;
@@ -299,7 +299,7 @@ void BoundaryValuesFC::FillCoarseInBndryFC(DvceFaceFld4D<Real> &b,
             }
           }
         });
-        tmember.team_barrier();
+        // tmember.team_barrier();
       }
     });
   }
@@ -370,7 +370,7 @@ void BoundaryValuesFC::ProlongateFC(DvceFaceFld4D<Real> &b, DvceFaceFld4D<Real> 
           ProlongFCSharedX3Face(m,k,j,i,fk,fj,fi,multi_d,cb.x3f,b.x3f);
         }
       });
-      tmember.team_barrier();
+      // tmember.team_barrier();
     }
   });}
 
@@ -423,7 +423,7 @@ void BoundaryValuesFC::ProlongateFC(DvceFaceFld4D<Real> &b, DvceFaceFld4D<Real> 
           ProlongFCInternal(m,fk,fj,fi,three_d,b);
         }
       });
-      tmember.team_barrier();
+      // tmember.team_barrier();
     }
   });}
 
