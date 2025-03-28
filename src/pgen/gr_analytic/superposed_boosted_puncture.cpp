@@ -41,6 +41,10 @@ void LorentzBoost(Real vx1, Real vx2, Real vx3, AthenaScratchTensor<Real, Tensor
 //! \brief Problem Generator for single puncture
 void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   user_ref_func  = RefinementCondition;
+
+  if (restart)
+    return;
+
   MeshBlockPack *pmbp = pmy_mesh_->pmb_pack;
   auto &indcs = pmy_mesh_->mb_indcs;
 
