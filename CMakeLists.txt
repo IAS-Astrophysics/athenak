@@ -109,6 +109,7 @@ endif()
 
 # If this is a debug build, set kokkos debug on
 if (${CMAKE_BUILD_TYPE} STREQUAL "Debug")
+  add_definitions(-DDEBUG_BUILD)
   message(STATUS "Enabling Kokkos debug mode")
   set(Kokkos_ENABLE_DEBUG ON CACHE BOOL "Most general debug settings")
   set(Kokkos_ENABLE_DEBUG_BOUNDS_CHECK ON CACHE BOOL
