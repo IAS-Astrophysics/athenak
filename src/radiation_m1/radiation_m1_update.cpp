@@ -329,6 +329,7 @@ TaskStatus RadiationM1::TimeUpdate(Driver *d, int stage) {
                            Estar, Fstar_d, chival, P_dd, params_, params_.closure_type);
               AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> rT_dd{};
               assemble_rT(n_d, Estar, Fstar_d, P_dd, rT_dd);
+
               const Real Jstar = calc_J_from_rT(rT_dd, u_u);
               AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> Hstar_d{};
               calc_H_from_rT(rT_dd, u_u, proj_ud, Hstar_d);
@@ -355,17 +356,9 @@ TaskStatus RadiationM1::TimeUpdate(Driver *d, int stage) {
               const Real xi =
                   Kokkos::sqrt(H2) * (Jnew > params_.rad_E_floor ? 1 / Jnew : 0);
               chival = closure_fun(xi, params_.closure_type);
-              // chival = 1. / 3.;
 
               const Real dthick = 3. * (1. - chival) / 2.;
               const Real dthin = 1. - dthick;
-
-              AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> K_thin_dd{};
-              calc_Kthin(g_uu, n_d, w_lorentz, u_d, proj_ud, Jnew, Hnew_d, K_thin_dd,
-                         params_.rad_E_floor);
-
-              AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> K_thick_dd{};
-              calc_Kthick(g_dd, u_d, Jnew, Hnew_d, K_thick_dd);
 
               for (int a = 0; a < 4; ++a) {
                 for (int b = a; b < 4; ++b) {
@@ -411,6 +404,7 @@ TaskStatus RadiationM1::TimeUpdate(Driver *d, int stage) {
                     compute_Gamma(w_lorentz, v_u, Jnew, Enew, Fnew_d, params_);
 
                 // N^k+1 = N^* + dt ( eta - abs N^k+1 )
+                // @TODO: this needs to be fixed later from prod/cb or not (?) ask David
                 DrEFN[nuidx][M1_N_IDX] =
                     (Nstar + beta_dt * adm.alpha(m, k, j, i) * volform *
                                  eta_0_(m, nuidx, k, j, i)) /

@@ -21,8 +21,8 @@ namespace radiationm1 {
 //  \brief Sets F_d, F_u, E and computes chi, P_dd in src_params
 KOKKOS_INLINE_FUNCTION
 MathSignal prepare_closure(const BrentFunctor &BrentFunc, const Real q[4],
-                               SrcParams &src_params, const RadiationM1Params &m1_params,
-                               const RadiationM1Closure &closure_type) {
+                           SrcParams &src_params, const RadiationM1Params &m1_params,
+                           const RadiationM1Closure &closure_type) {
   src_params.E = Kokkos::max(q[0], 0.);
   if (src_params.E < 0) {
     return LinalgEbadfunc;
@@ -62,9 +62,9 @@ MathSignal prepare_sources(const Real q[4], SrcParams &src_params) {
 //! \fn HybridsjSignal radiationm1::RadiationM1::prepare
 //  \brief Calls prepare_closure and prepare_sources
 KOKKOS_INLINE_FUNCTION
-MathSignal prepare(const BrentFunctor &BrentFunc, const Real q[4],
-                       SrcParams &src_params, const RadiationM1Params &m1_params,
-                       const RadiationM1Closure &closure_type) {
+MathSignal prepare(const BrentFunctor &BrentFunc, const Real q[4], SrcParams &src_params,
+                   const RadiationM1Params &m1_params,
+                   const RadiationM1Closure &closure_type) {
   auto ierr = prepare_closure(BrentFunc, q, src_params, m1_params, closure_type);
   if (ierr != LinalgSuccess) {
     return ierr;
@@ -161,19 +161,30 @@ SrcSignal source_update(
     x[i] = q[i];
     hybridsj_params.x[i] = x[i];
   }
-  auto ierr =
-      HybridsjInitialize(HybridsjFunc, hybridsj_state, hybridsj_params, BrentFunc, src_params, m1_params);
+  auto ierr = HybridsjInitialize(HybridsjFunc, hybridsj_state, hybridsj_params, BrentFunc,
+                                 src_params, m1_params);
 
   int iter = 0;
   do {
     if (iter < m1_params.source_maxiter) {
-      ierr = HybridsjIterate(HybridsjFunc, hybridsj_state, hybridsj_params, BrentFunc, src_params, m1_params);
+      ierr = HybridsjIterate(HybridsjFunc, hybridsj_state, hybridsj_params, BrentFunc,
+                             src_params, m1_params);
       iter++;
     }
 
     // the solver is stuck!
     if (ierr == LinalgEnoprogj || ierr == LinalgEbadfunc ||
         iter >= m1_params.source_maxiter) {
+#ifdef DEBUG_BUILD
+      if (ierr == LinalgEbadfunc) {
+        printf("source_update: NaNs/Infs found in implicit solve.\n");
+      } else if (iter > m1_params.source_maxiter) {
+        printf("source_update: Exceeded maximum number of iterations of Hybridsj.\n");
+      } else {
+        printf("source_update: Non-linear solver is stuck.\n");
+      }
+      printf("source_update: Retrying with Eddington closure.\n");
+#endif
       if (m1_params.closure_type != Eddington) {
         // Eddington closure
         auto signal = source_update(BrentFunc, HybridsjFunc, cdt, alp, g_dd, g_uu, n_d,
@@ -185,10 +196,17 @@ SrcSignal source_update(
         } else {
           return signal;
         }
+      } else {
+        // solver has failed
+#ifdef DEBUG_BUILD
+        printf("source_update: The source solver has failed!\n");
+#endif
+        return SrcFail;
       }
-    } else {
-      // solver has failed
-      return SrcFail;
+    } else if (ierr != LinalgSuccess) {
+#ifdef DEBUG_BUILD
+      printf("source_update: Unexpected error in source solver!\n");
+#endif
     }
     ierr = HybridsjTestDelta(hybridsj_params.dx, hybridsj_params.x,
                              m1_params.source_epsabs, m1_params.source_epsrel);

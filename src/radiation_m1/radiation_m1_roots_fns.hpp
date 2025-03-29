@@ -12,9 +12,9 @@ namespace radiationm1 {
 class BrentFunctor;
 
 KOKKOS_INLINE_FUNCTION
-MathSignal prepare(const BrentFunctor &BrentFunc, const Real q[4],
-                       SrcParams &src_params, const RadiationM1Params &m1_params,
-                       const RadiationM1Closure &closure_type);
+MathSignal prepare(const BrentFunctor &BrentFunc, const Real q[4], SrcParams &src_params,
+                   const RadiationM1Params &m1_params,
+                   const RadiationM1Closure &closure_type);
 //----------------------------------------------------------------------------------------
 //! \class BrentFunctor
 //  \brief Function to rootfind in order to determine the closure
@@ -86,8 +86,7 @@ KOKKOS_INLINE_FUNCTION void source_jacobian(
   const Real hatfupy = F_u(2) * inormF;
   const Real hatfupz = F_u(3) * inormF;
   const Real e = qpre[0];
-  const Real eonormF = Kokkos::min<Real>(e * inormF, 1.0);
-  // with factor dthin ...
+  const Real eonormF = Kokkos::min<Real>(e * inormF, 1.0);  // with factor dthin
 
   // drvts of J
   Real JdE =
