@@ -209,28 +209,33 @@ TaskStatus Radiation::CalculateFluxes(Driver *pdriver, int stage) {
 
   //--------------------------------------------------------------------------------------
   // Angular Fluxes
-
   if (angular_fluxes) {
     auto &numn = prgeo->num_neighbors;
     auto &indn = prgeo->ind_neighbors;
     auto &arcl = prgeo->arc_lengths;
     auto &solid_angles_ = prgeo->solid_angles;
-
     auto &na_ = na;
     auto &divfa_ = divfa;
 
     par_for("rflux_angular",DevExeSpace(),0,nmb1,0,nang1,ks,ke,js,je,is,ie,
     KOKKOS_LAMBDA(int m, int n, int k, int j, int i) {
-      divfa_(m,n,k,j,i) = 0.0;
+      Real divfa_tmp = 0.0;
+      Real tet_c_tmp = tet_c_(m,0,0,k,j,i);
+      Real solid_angles_tmp = solid_angles_.d_view(n);
+      Real i0_n = i0_(m,n,k,j,i);
       for (int nb=0; nb<numn.d_view(n); ++nb) {
-        Real flx_edge = na_(m,n,k,j,i,nb) *
-                        ((na_(m,n,k,j,i,nb) < 0.0) ?
-                         i0_(m,indn.d_view(n,nb),k,j,i)/tet_c_(m,0,0,k,j,i) :
-                         i0_(m,n,k,j,i)/tet_c_(m,0,0,k,j,i));
-        divfa_(m,n,k,j,i) += (arcl.d_view(n,nb)*flx_edge/solid_angles_.d_view(n));
+        Real na_tmp = na_(m,n,k,j,i,nb);
+        Real flx_edge = na_tmp/tet_c_tmp;
+        if (na_tmp < 0.0) {
+          flx_edge *= i0_(m,indn.d_view(n,nb),k,j,i);
+        } else {
+          flx_edge *= i0_n;
+        }
+        divfa_tmp += (arcl.d_view(n,nb)*flx_edge/solid_angles_tmp);
       }
+      divfa_(m,n,k,j,i) = divfa_tmp;
     });
-  }
+  } // endif angular_fluxes
 
   return TaskStatus::complete;
 }
