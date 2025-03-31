@@ -163,6 +163,7 @@ class Z4c {
     Real lapse_harmonicf;
     Real lapse_harmonic;
     Real lapse_advect;
+    bool approx_shock_avoid;
     // slow start lapse condition
     bool slow_start_lapse;
     Real ssl_damping_amp;
