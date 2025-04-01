@@ -19,6 +19,7 @@ def main(**kwargs):
     # Extract inputs
     input_file = kwargs['input']
     output_file = kwargs['output']
+    slice_plot = kwargs['slice']
 
     # Load Python plotting modules
     if output_file != 'show':
@@ -29,7 +30,10 @@ def main(**kwargs):
     from mpl_toolkits.mplot3d import Axes3D  # noqa
 
     # Read and plot block edges
-    fig, ax = plt.subplots(1, 1, subplot_kw={'projection': '3d'})
+    if slice_plot:
+        fig, ax = plt.subplots(1, 1)
+    else:
+        fig, ax = plt.subplots(1, 1, subplot_kw={'projection': '3d'})
     x = []
     y = []
     z = []
@@ -45,7 +49,10 @@ def main(**kwargs):
                 else:
                     z.append(0.0)
             if line[0] == '\n' and len(x) != 0:
-                ax.plot(x, y, z, 'k-')
+                if slice_plot:
+                    ax.plot(x, y, 'k-')
+                else:
+                    ax.plot(x, y, z, 'k-')
                 x = []
                 y = []
                 z = []
@@ -61,6 +68,9 @@ if __name__ == '__main__':
     parser.add_argument('-i', '--input',
                         default='mesh_structure.dat',
                         help='name of input (mesh structure) file')
+    parser.add_argument("--slice", type=bool, default=False,
+                        action=argparse.BooleanOptionalAction,
+                        help="Show only the grid at z=0")
     parser.add_argument('-o',
                         '--output',
                         default='show',
