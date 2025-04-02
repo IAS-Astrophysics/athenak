@@ -47,6 +47,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
 
   MeshBlockPack *pmbp = pmy_mesh_->pmb_pack;
   auto &indcs = pmy_mesh_->mb_indcs;
+  bool precollapse_lapse = pin->GetOrAddBoolean("problem", "precollapse_lapse", false);
 
   if (pmbp->pz4c == nullptr) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
@@ -67,8 +68,15 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     case 4: pmbp->pz4c->ADMToZ4c<4>(pmbp, pin);
             break;
   }
+
   pmbp->pz4c->Z4cToADM(pmbp);
-  pmbp->pz4c->GaugePreCollapsedLapse(pmbp, pin);
+
+  if (precollapse_lapse) {
+    pmbp->pz4c->GaugePreCollapsedLapse(pmbp, pin);
+  } else {
+    pmbp->pz4c->GaugeHighBoostLapse(pmbp, pin);
+  }
+
   switch (indcs.ng) {
     case 2: pmbp->pz4c->ADMConstraints<2>(pmbp);
             break;

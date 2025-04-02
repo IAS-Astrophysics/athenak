@@ -249,6 +249,7 @@ class Z4c {
   template <int NGHOST>
   void ADMToZ4c(MeshBlockPack *pmbp, ParameterInput *pin);
   void GaugePreCollapsedLapse(MeshBlockPack *pmbp, ParameterInput *pin);
+  void GaugeHighBoostLapse(MeshBlockPack *pmbp, ParameterInput *pin);
   void Z4cToADM(MeshBlockPack *pmbp);
   template <int NGHOST>
   void ADMConstraints(MeshBlockPack *pmbp);

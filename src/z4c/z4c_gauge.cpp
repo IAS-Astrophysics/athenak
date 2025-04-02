@@ -47,4 +47,30 @@ void Z4c::GaugePreCollapsedLapse(MeshBlockPack *pmbp, ParameterInput *pin) {
   });
 }
 
+//----------------------------------------------------------------------------------------
+//! \fn void Z4c::GaugeHighBoostLapse(MeshBlockPack *pmbp, ParameterInput *pin)
+//! \brief another initial lapse more suited for high boost and high spin evolution
+
+void Z4c::GaugeHighBoostLapse(MeshBlockPack *pmbp, ParameterInput *pin) {
+  // capture variables for the kernel
+  auto &indcs = pmbp->pmesh->mb_indcs;
+  int &is = indcs.is; int &ie = indcs.ie;
+  int &js = indcs.js; int &je = indcs.je;
+  int &ks = indcs.ks; int &ke = indcs.ke;
+  int isg = is-indcs.ng; int ieg = ie+indcs.ng;
+  int jsg = js-indcs.ng; int jeg = je+indcs.ng;
+  int ksg = ks-indcs.ng; int keg = ke+indcs.ng;
+  int nmb = pmbp->nmb_thispack;
+  auto &z4c = pmbp->pz4c->z4c;
+  auto &adm = pmbp->padm->adm;
+
+  par_for("GaugeHighBoostLapse",
+  DevExeSpace(),0,nmb-1,ksg,keg,jsg,jeg,isg,ieg,
+  KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
+    z4c.alpha(m,k,j,i) = 1/(2*std::pow(adm.psi4(m,k,j,i),0.25)-1.0); // setting z4c.alpha,
+                                                           // which is 0th component
+                                                           // of z4c
+  });
+}
+
 } // end namespace z4c
