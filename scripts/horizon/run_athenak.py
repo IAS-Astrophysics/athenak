@@ -44,7 +44,7 @@ def load_horizon_dump(filename, nx=10, extent=2.0, center=(0.0, 0.0, 0.0)):
     
     # Reshape to a (16, nx, nx, nx) array.
     data_array = data_flat.reshape((16, nx, nx, nx))
-    
+    data_array = np.swapaxes(data_array,1,3)
     # Create coordinate arrays from (center - extent) to (center + extent)
     x = np.linspace(center[0] - extent, center[0] + extent, nx)
     y = np.linspace(center[1] - extent, center[1] + extent, nx)
@@ -138,7 +138,7 @@ def main():
         if 'AHFpy' in sys.modules:
             from AHFpy import AHF
         else:
-            sys.path.insert(0, os.path.abspath('/home/hz0693/ahfpy/AHFpy'))
+            sys.path.insert(0, os.path.abspath('/global/homes/h/hzhu/ahfpy/AHFpy'))
             from AHF import AHF
 
         initial_radius = [2]
@@ -149,7 +149,7 @@ def main():
         ahf = AHF(initial_radius=initial_radius,
                 central_points=[center],
                 outputdir='horizon_output',
-                hmean_target=1e-4)
+                hrms_target=1e-4)
         
         # Run the horizon finder on the temporary HDF5 file.
         # The run() method expects a list of filenames.
