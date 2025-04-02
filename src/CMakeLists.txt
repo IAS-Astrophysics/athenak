@@ -163,6 +163,7 @@ add_executable(
         utils/tov/tov.cpp
         utils/tr_table.cpp
         utils/cart_grid.cpp
+        utils/watchdog.cpp
         utils/spherical_surface.cpp
 
         z4c/compact_object_tracker.cpp
