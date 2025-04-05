@@ -3,10 +3,8 @@
 // Copyright(C) 2020 James M. Stone <jmstone@ias.edu> and the Athena code team
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
-//! \file lorene_bns.cpp
-//  \brief Initial data reader for binary neutron star data with LORENE
-//
-//  LORENE is available at https://lorene.obspm.fr/index.html
+//! \file grmhd_zoomin.cpp
+//  \brief pgen for a zoom-in GRMHD simulation
 
 #include <algorithm>
 #include <cassert>
@@ -34,13 +32,15 @@
 #include "z4c/z4c.hpp"
 #include "z4c/z4c_amr.hpp"
 
+#define DEBUG_PGEN
+
 //! A class representing Chebyshev polynomials
 template <int N>
 class ChebyshevBasis {
  public:
   //! evaluates the Chebyshev basis
   KOKKOS_INLINE_FUNCTION
-  void Eval(Real x, bool calcdiff = false) {
+  void Eval(Real x) {
     t[0] = 1;
     t[1] = x;
     for (int n = 1; n < N; ++n) {
@@ -56,7 +56,9 @@ class ChebyshevInterpolation {
  public:
   static KOKKOS_INLINE_FUNCTION Real MapToCollocation(Real xmin, Real xmax,
                                                       Real x) {
-    return 2.0 * (x - xmin) / (xmax - xmin) - 1.0;
+    Real xi = 2.0 * (x - xmin) / (xmax - xmin) - 1.0;
+    assert(fabs(xi) <= 1.0);
+    return xi;
   }
 
  public:
@@ -65,7 +67,7 @@ class ChebyshevInterpolation {
     for (int j = 0; j <= N; ++j) {
       Real x = cos((M_PI * j) / N);
       mbasis.Eval(x);
-      memcpy(&mt[j][0], mbasis.t, (N + 1) * sizeof(Real));
+      memcpy(&mt[j][0], &mbasis.t[0], (N + 1) * sizeof(Real));
     }
   }
 
@@ -80,6 +82,7 @@ class ChebyshevInterpolation {
         Real tmx = mbasis.t[m];
         w[j] += 2.0 / (pm * pj * N) * mt[j][m] * tmx;
       }
+      assert(isfinite(w[j]));
     }
   }
 
@@ -103,6 +106,7 @@ class ChebyshevInterpolation {
         }
       }
     }
+    assert(isfinite(out));
     return out;
   }
 
@@ -153,6 +157,7 @@ class CartesianDumpReader {
     assert(len < BUFSIZ);
     char msg[BUFSIZ];
     sread = fread(&msg[0], 1, len, fp);
+    msg[len] = '\0';
 
     // Now read all variables
     char *token = strtok(msg, " ");
@@ -208,9 +213,9 @@ class BackgroundData {
     NVARS = 28
   };
   constexpr static char const *const vnames[] = {
-      "dens",      "velx",      "vely",      "velz",      "press",   "s00",
+      "dens",      "velx",      "vely",      "velz",      "press",   "s_00",
       "bcc1",      "bcc2",      "bcc3",      "avec1",     "avec2",   "avec3",
-      "adm_alpha", "adm_betax", "adm_betay", "adm_betaz", "adm_gxx", "adm_gxy",
+      "z4c_alpha", "z4c_betax", "z4c_betay", "z4c_betaz", "adm_gxx", "adm_gxy",
       "adm_gxz",   "adm_gyy",   "adm_gyz",   "adm_gzz",   "adm_Kxx", "adm_Kxy",
       "adm_Kxz",   "adm_Kyy",   "adm_Kyz",   "adm_Kzz"};
 
@@ -219,6 +224,14 @@ class BackgroundData {
     fnmin = pin->GetInteger("problem", "fnmin");
     fnmax = pin->GetInteger("problem", "fnmax");
     Kokkos::realloc(cheb_data, NVARS, N + 1, N + 1, N + 1);
+#ifdef DEBUG_PGEN
+    printf("Reading cart data...");
+    fflush(stdout);
+#endif
+    ReadData();
+#ifdef DEBUG_PGEN
+    printf("done!\n");
+#endif
   }
   void ReadData() {
     Real center[3], extent[3];
@@ -230,7 +243,7 @@ class BackgroundData {
         char fname[BUFSIZ];
         {
           snprintf(fname, BUFSIZ, "%s.%s.%05d.bin", file_basename.c_str(),
-                   "mhd_w", n);
+                   "mhd_w_bcc", n);
           CartesianDumpReader cart(fname);
           mtimes[n - fnmin] = cart.mdata.time;
           // Read grid extent (assumed to be the same for all files)
@@ -247,7 +260,7 @@ class BackgroundData {
   for (int k = 0; k <= N; ++k) {                                         \
     for (int j = 0; j <= N; ++j) {                                       \
       for (int i = 0; i <= N; ++i) {                                     \
-        m_raw_data(n - fnmin, XX, k, j, i) = var[ijk++];                \
+        m_raw_data(n - fnmin, XX, k, j, i) = static_cast<Real>(var[ijk++]); \
       }                                                                  \
     }                                                                    \
   }
@@ -264,7 +277,7 @@ class BackgroundData {
         }
         {
           snprintf(fname, BUFSIZ, "%s.%s.%05d.bin", file_basename.c_str(),
-                   "adm_alpha", n);
+                   "z4c_alpha", n);
           CartesianDumpReader cart(fname);
           for (int vi = IALP; vi <= IALP; ++vi) {
             BACKGROUND_DATA_READ_VARIABLE_FROM_FILE(vi);
@@ -272,11 +285,21 @@ class BackgroundData {
         }
         {
           snprintf(fname, BUFSIZ, "%s.%s.%05d.bin", file_basename.c_str(),
-                   "adm_beta", n);
+                   "z4c_betax", n);
           CartesianDumpReader cart(fname);
-          for (int vi = IBETAX; vi <= IBETAZ; ++vi) {
-            BACKGROUND_DATA_READ_VARIABLE_FROM_FILE(vi);
-          }
+          BACKGROUND_DATA_READ_VARIABLE_FROM_FILE(IBETAX);
+        }
+        {
+          snprintf(fname, BUFSIZ, "%s.%s.%05d.bin", file_basename.c_str(),
+                   "z4c_betay", n);
+          CartesianDumpReader cart(fname);
+          BACKGROUND_DATA_READ_VARIABLE_FROM_FILE(IBETAY);
+        }
+        {
+          snprintf(fname, BUFSIZ, "%s.%s.%05d.bin", file_basename.c_str(),
+                   "z4c_betaz", n);
+          CartesianDumpReader cart(fname);
+          BACKGROUND_DATA_READ_VARIABLE_FROM_FILE(IBETAZ);
         }
         {
           snprintf(fname, BUFSIZ, "%s.%s.%05d.bin", file_basename.c_str(),
@@ -289,15 +312,15 @@ class BackgroundData {
 #undef BACKGROUND_DATA_READ_VARIABLE_FROM_FILE
       }
     }
-#if MPI_PARALLEL_ENABLED
-    MPI_Bcast(&center[0], 3, MPI_ATHENA_REAL, 0, MPI_COMM_WORLD);
-    MPI_Bcast(&extent[0], 3, MPI_ATHENA_REAL, 0, MPI_COMM_WORLD);
     xmin = center[0] - extent[0];
     xmax = center[0] + extent[0];
     ymin = center[1] - extent[1];
     ymax = center[1] + extent[1];
     zmin = center[2] - extent[2];
     zmax = center[2] + extent[2];
+#if MPI_PARALLEL_ENABLED
+    MPI_Bcast(&center[0], 3, MPI_ATHENA_REAL, 0, MPI_COMM_WORLD);
+    MPI_Bcast(&extent[0], 3, MPI_ATHENA_REAL, 0, MPI_COMM_WORLD);
     MPI_Bcast(mtimes.data(), mtimes.size(), MPI_ATHENA_REAL, 0,
               MPI_COMM_WORLD);
     MPI_Bcast(m_raw_data.data(), m_raw_data.size(), MPI_ATHENA_REAL, 0,
@@ -411,12 +434,16 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   Real box_x3min = pmy_data->zmin;
   Real box_x3max = pmy_data->zmax;
 
-  auto &w0_ = pmbp->pmhd->w0;
-  auto &adm = pmbp->padm->adm;
+  auto w0_ = pmbp->pmhd->w0;
+  auto adm = pmbp->padm->adm;
 
   pmy_data->ExtractSlice(0);
   auto &cheb_data = pmy_data->cheb_data;
 
+#ifdef DEBUG_PGEN
+  printf("Interpolating grid data...");
+  fflush(stdout);
+#endif
   // initialize all fields, apart from magnetic field -------------------------
   par_for("pgen_data", DevExeSpace(), 0, (nmb-1), 0, (n3-1), 0, (n2-1), 0, (n2-1),
   KOKKOS_LAMBDA(int m, int k, int j, int i) {
@@ -465,6 +492,9 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     adm.vK_dd(m,1,2,k,j,i) = interp.Eval(cheb_data.view_device(), BackgroundData<NCHEBY>::IKYZ);
     adm.vK_dd(m,2,2,k,j,i) = interp.Eval(cheb_data.view_device(), BackgroundData<NCHEBY>::IKZZ);
   });
+#ifdef DEBUG_PGEN
+  printf("done!\n");
+#endif
 
   // initialize magnetic field -----------------------------------------------
   // compute vector potential over all faces
@@ -475,6 +505,10 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   Kokkos::realloc(a1, nmb,ncells3,ncells2,ncells1);
   Kokkos::realloc(a2, nmb,ncells3,ncells2,ncells1);
   Kokkos::realloc(a3, nmb,ncells3,ncells2,ncells1);
+#ifdef DEBUG_PGEN
+  printf("Interpolating vector potential...");
+  fflush(stdout);
+#endif
   par_for("pgen_vector_potential", DevExeSpace(), 0,nmb-1,ks,ke+1,js,je+1,is,ie+1,
   KOKKOS_LAMBDA(int m, int k, int j, int i) {
     ChebyshevInterpolation<NCHEBY> interp;
@@ -521,9 +555,16 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
 
     // TODO(dur566): add averaging of A for AMR runs
   });
+#ifdef DEBUG_PGEN
+  printf("done!\n");
+#endif
 
   // Compute face-centered fields from curl(A).
   auto &b0 = pmbp->pmhd->b0;
+#ifdef DEBUG_PGEN
+  printf("Computing face centered field...");
+  fflush(stdout);
+#endif
   par_for("pgen_b0", DevExeSpace(), 0,nmb-1,ks,ke,js,je,is,ie,
   KOKKOS_LAMBDA(int m, int k, int j, int i) {
     Real dx1 = size.d_view(m).dx1;
@@ -551,21 +592,35 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
                            (a1(m,k+1,j+1,i) - a1(m,k+1,j,i))/dx2);
     }
   });
+#ifdef DEBUG_PGEN
+  printf("done!\n");
+#endif
 
   // Compute cell-centered fields
   auto &bcc_ = pmbp->pmhd->bcc0;
+#ifdef DEBUG_PGEN
+  printf("Computing cell centered field...");
+  fflush(stdout);
+#endif
   par_for("pgen_bcc", DevExeSpace(), 0,nmb-1,ks,ke,js,je,is,ie,
   KOKKOS_LAMBDA(int m, int k, int j, int i) {
     // cell-centered fields are simple linear average of face-centered fields
-    Real& w_bx = bcc_(m,IBX,k,j,i);
-    Real& w_by = bcc_(m,IBY,k,j,i);
-    Real& w_bz = bcc_(m,IBZ,k,j,i);
-    w_bx = 0.5*(b0.x1f(m,k,j,i) + b0.x1f(m,k,j,i+1));
-    w_by = 0.5*(b0.x2f(m,k,j,i) + b0.x2f(m,k,j+1,i));
-    w_bz = 0.5*(b0.x3f(m,k,j,i) + b0.x3f(m,k+1,j,i));
+    bcc_(m,IBX,k,j,i) = 0.5*(b0.x1f(m,k,j,i) + b0.x1f(m,k,j,i+1));
+    bcc_(m,IBY,k,j,i) = 0.5*(b0.x2f(m,k,j,i) + b0.x2f(m,k,j+1,i));
+    bcc_(m,IBZ,k,j,i) = 0.5*(b0.x3f(m,k,j,i) + b0.x3f(m,k+1,j,i));
   });
+#ifdef DEBUG_PGEN
+  printf("done!\n");
+#endif
   
+#ifdef DEBUG_PGEN
+  printf("Computing conservative variables...");
+  fflush(stdout);
+#endif
   pmbp->pdyngr->PrimToConInit(0, (ncells1-1), 0, (ncells2-1), 0, (ncells3-1));
+#ifdef DEBUG_PGEN
+  printf("done!\n");
+#endif
 
   return;
 }
@@ -610,6 +665,11 @@ void TurbulenceBC(Mesh *pm) {
               << std::endl;
     exit(EXIT_FAILURE);
   }
+
+#ifdef DEBUG_PGEN
+  printf("Apply boundary conditions...");
+  fflush(stdout);
+#endif
   
   pmy_data->InterpToTime(pm->time);
   auto &cheb_data = pmy_data->cheb_data;
@@ -705,45 +765,53 @@ void TurbulenceBC(Mesh *pm) {
     ChebyshevInterpolation<NCHEBY> interp;
     if (mb_bcs.d_view(m,BoundaryFace::inner_x1) == BoundaryFlag::user) {
       for (int i=is-ng; i<is; ++i) {
-#define TURBULENCE_BC_INTERPOLATE_FC_DATA                                \
-  Real &x1min = size.d_view(m).x1min;                                    \
-  Real &x1max = size.d_view(m).x1max;                                    \
-  int nx1 = indcs.nx1;                                                   \
-  Real x1v = CellCenterX(i - is, nx1, x1min, x1max);                     \
-  Real x1f = LeftEdgeX(i - is, nx1, x1min, x1max);                       \
-                                                                         \
-  Real &x2min = size.d_view(m).x2min;                                    \
-  Real &x2max = size.d_view(m).x2max;                                    \
-  int nx2 = indcs.nx2;                                                   \
-  Real x2v = CellCenterX(j - js, nx2, x2min, x2max);                     \
-  Real x2f = LeftEdgeX(j - js, nx2, x2min, x2max);                       \
-                                                                         \
-  Real &x3min = size.d_view(m).x3min;                                    \
-  Real &x3max = size.d_view(m).x3max;                                    \
-  int nx3 = indcs.nx3;                                                   \
-  Real x3v = CellCenterX(k - ks, nx3, x3min, x3max);                     \
-  Real x3f = LeftEdgeX(k - ks, nx3, x3min, x3max);                       \
-                                                                         \
-  Real xi1 = interp.MapToCollocation(box_x1min, box_x1max, x1f);         \
-  Real xi2 = interp.MapToCollocation(box_x2min, box_x2max, x2v);         \
-  Real xi3 = interp.MapToCollocation(box_x3min, box_x3max, x3v);         \
-  interp.SetInterpolationPoint(xi1, xi2, xi3);                           \
-  b0.x1f(m, k, j, i) =                                                   \
-      interp.Eval(cheb_data.view_device(), BackgroundData<NCHEBY>::IBX); \
-                                                                         \
-  xi1 = interp.MapToCollocation(box_x1min, box_x1max, x1v);              \
-  xi2 = interp.MapToCollocation(box_x2min, box_x2max, x2f);              \
-  xi3 = interp.MapToCollocation(box_x3min, box_x3max, x3v);              \
-  interp.SetInterpolationPoint(xi1, xi2, xi3);                           \
-  b0.x2f(m, k, j, i) =                                                   \
-      interp.Eval(cheb_data.view_device(), BackgroundData<NCHEBY>::IBY); \
-                                                                         \
-  xi1 = interp.MapToCollocation(box_x1min, box_x1max, x1v);              \
-  xi2 = interp.MapToCollocation(box_x2min, box_x2max, x2v);              \
-  xi3 = interp.MapToCollocation(box_x3min, box_x3max, x3f);              \
-  interp.SetInterpolationPoint(xi1, xi2, xi3);                           \
-  b0.x3f(m, k, j, i) =                                                   \
-      interp.Eval(cheb_data.view_device(), BackgroundData<NCHEBY>::IBZ)
+#define TURBULENCE_BC_INTERPOLATE_FC_DATA                                  \
+  Real &x1min = size.d_view(m).x1min;                                      \
+  Real &x1max = size.d_view(m).x1max;                                      \
+  int nx1 = indcs.nx1;                                                     \
+  Real x1v = CellCenterX(i - is, nx1, x1min, x1max);                       \
+  Real x1f = LeftEdgeX(i - is, nx1, x1min, x1max);                         \
+                                                                           \
+  Real &x2min = size.d_view(m).x2min;                                      \
+  Real &x2max = size.d_view(m).x2max;                                      \
+  int nx2 = indcs.nx2;                                                     \
+  Real x2v = CellCenterX(j - js, nx2, x2min, x2max);                       \
+  Real x2f = LeftEdgeX(j - js, nx2, x2min, x2max);                         \
+                                                                           \
+  Real &x3min = size.d_view(m).x3min;                                      \
+  Real &x3max = size.d_view(m).x3max;                                      \
+  int nx3 = indcs.nx3;                                                     \
+  Real x3v = CellCenterX(k - ks, nx3, x3min, x3max);                       \
+  Real x3f = LeftEdgeX(k - ks, nx3, x3min, x3max);                         \
+                                                                           \
+  Real xi1, xi2, xi3;                                                      \
+                                                                           \
+  if (j < n2 && k < n3) {                                                  \
+    xi1 = interp.MapToCollocation(box_x1min, box_x1max, x1f);              \
+    xi2 = interp.MapToCollocation(box_x2min, box_x2max, x2v);              \
+    xi3 = interp.MapToCollocation(box_x3min, box_x3max, x3v);              \
+    interp.SetInterpolationPoint(xi1, xi2, xi3);                           \
+    b0.x1f(m, k, j, i) =                                                   \
+        interp.Eval(cheb_data.view_device(), BackgroundData<NCHEBY>::IBX); \
+  }                                                                        \
+                                                                           \
+  if (i < n1 && k < n3) {                                                  \
+    xi1 = interp.MapToCollocation(box_x1min, box_x1max, x1v);              \
+    xi2 = interp.MapToCollocation(box_x2min, box_x2max, x2f);              \
+    xi3 = interp.MapToCollocation(box_x3min, box_x3max, x3v);              \
+    interp.SetInterpolationPoint(xi1, xi2, xi3);                           \
+    b0.x2f(m, k, j, i) =                                                   \
+        interp.Eval(cheb_data.view_device(), BackgroundData<NCHEBY>::IBY); \
+  }                                                                        \
+                                                                           \
+  if (i < n1 && j < n2) {                                                  \
+    xi1 = interp.MapToCollocation(box_x1min, box_x1max, x1v);              \
+    xi2 = interp.MapToCollocation(box_x2min, box_x2max, x2v);              \
+    xi3 = interp.MapToCollocation(box_x3min, box_x3max, x3f);              \
+    interp.SetInterpolationPoint(xi1, xi2, xi3);                           \
+    b0.x3f(m, k, j, i) =                                                   \
+        interp.Eval(cheb_data.view_device(), BackgroundData<NCHEBY>::IBZ); \
+  }
 
         TURBULENCE_BC_INTERPOLATE_FC_DATA;
 
@@ -857,6 +925,10 @@ void TurbulenceBC(Mesh *pm) {
   });
   pm->pmb_pack->pdyngr->PrimToConInit(0, (n1-1), 0, (n2-1), ke+1, ke+ng);
 
+#ifdef DEBUG_PGEN
+  printf("done!\n");
+#endif
+
 #undef TURBULENCE_BC_INTERPOLATE_CC_DATA
 #undef TURBULENCE_BC_INTERPOLATE_FC_DATA
 }
@@ -884,6 +956,11 @@ void SetADMVariables(MeshBlockPack *pmbp) {
   Real box_x3max = pmy_data->zmax;
 
   auto &adm = pmbp->padm->adm;
+
+#ifdef DEBUG_PGEN
+  printf("Update metric fields...");
+  fflush(stdout);
+#endif
 
   pmy_data->InterpToTime(pmbp->pmesh->time);
   auto &cheb_data = pmy_data->cheb_data;
@@ -929,4 +1006,7 @@ void SetADMVariables(MeshBlockPack *pmbp) {
     adm.vK_dd(m,2,2,k,j,i) = interp.Eval(cheb_data.view_device(), BackgroundData<NCHEBY>::IKZZ);
   });
 
+#ifdef DEBUG_PGEN
+  printf("done!\n");
+#endif
 }
