@@ -32,7 +32,7 @@
 #include "z4c/z4c.hpp"
 #include "z4c/z4c_amr.hpp"
 
-#define DEBUG_PGEN
+//#define DEBUG_PGEN
 
 //! A class representing Chebyshev polynomials
 template <int N>
@@ -667,7 +667,7 @@ void TurbulenceBC(Mesh *pm) {
   }
 
 #ifdef DEBUG_PGEN
-  printf("Apply boundary conditions...");
+  printf("Apply boundary conditions at time %f...", pm->time);
   fflush(stdout);
 #endif
   
@@ -834,7 +834,7 @@ void TurbulenceBC(Mesh *pm) {
   KOKKOS_LAMBDA(int m, int k, int j) {
     ChebyshevInterpolation<NCHEBY> interp;
     if (mb_bcs.d_view(m,BoundaryFace::outer_x1) == BoundaryFlag::user) {
-      for (int i = ie+1; i <= ie+ng; ++i) {
+      for (int i = ie+2; i <= ie+ng+1; ++i) {
         TURBULENCE_BC_INTERPOLATE_FC_DATA;
       }
     }
@@ -876,7 +876,7 @@ void TurbulenceBC(Mesh *pm) {
   KOKKOS_LAMBDA(int m, int k, int i) {
     ChebyshevInterpolation<NCHEBY> interp;
     if (mb_bcs.d_view(m,BoundaryFace::outer_x2) == BoundaryFlag::user) {
-      for (int j = je+1; j <= je+ng; ++j) {
+      for (int j = je+2; j <= je+ng+1; ++j) {
         TURBULENCE_BC_INTERPOLATE_FC_DATA;
       }
     }
@@ -918,7 +918,7 @@ void TurbulenceBC(Mesh *pm) {
   KOKKOS_LAMBDA(int m, int j, int i) {
     ChebyshevInterpolation<NCHEBY> interp;
     if (mb_bcs.d_view(m,BoundaryFace::outer_x3) == BoundaryFlag::user) {
-      for (int k = ke+1; k <= ke+ng; ++k) {
+      for (int k = ke+2; k <= ke+ng+1; ++k) {
         TURBULENCE_BC_INTERPOLATE_FC_DATA;
       }
     }
@@ -958,7 +958,7 @@ void SetADMVariables(MeshBlockPack *pmbp) {
   auto &adm = pmbp->padm->adm;
 
 #ifdef DEBUG_PGEN
-  printf("Update metric fields...");
+  printf("Update metric fields at time %f...", pmbp->pmesh->time);
   fflush(stdout);
 #endif
 
