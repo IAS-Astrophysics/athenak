@@ -8,6 +8,7 @@
 
 #include <algorithm>
 #include <cassert>
+#include <cmath>
 #include <cstdio>
 #include <cstring>
 #include <iostream>
@@ -34,24 +35,16 @@
 
 //#define DEBUG_PGEN
 
-//! A class representing Chebyshev polynomials
-template <int N>
-class ChebyshevBasis {
- public:
-  //! evaluates the Chebyshev basis
-  KOKKOS_INLINE_FUNCTION
-  void Eval(Real x) {
-    t[0] = 1;
-    t[1] = x;
-    for (int n = 1; n < N; ++n) {
-      t[n + 1] = 2 * x * t[n] - t[n - 1];
-    }
-  }
-  Real t[N + 1];  //! Chebyshev polynomials of the first kind at x
-};
+#ifndef NCHEBY
+#define NCHEBY 15
+#endif
 
-// From Boyd, Chebyshev and Fourier Spectral Methods
-template <int N>
+#ifndef NSTENCIL
+#define NSTENCIL 1
+#endif
+
+// Lagrange interpolation on the Chebyshev grid
+template <int NB, int NS>
 class ChebyshevInterpolation {
  public:
   static KOKKOS_INLINE_FUNCTION Real MapToCollocation(Real xmin, Real xmax,
@@ -64,63 +57,74 @@ class ChebyshevInterpolation {
  public:
   KOKKOS_INLINE_FUNCTION
   ChebyshevInterpolation() {
-    for (int j = 0; j <= N; ++j) {
-      Real x = cos((M_PI * j) / N);
-      mbasis.Eval(x);
-      memcpy(&mt[j][0], &mbasis.t[0], (N + 1) * sizeof(Real));
+    static_assert(NS < NB/2);
+    for (int j = 0; j <= NB; ++j) {
+      xp[j] = cos((M_PI * j) / NB);
     }
   }
 
   KOKKOS_INLINE_FUNCTION
-  void ComputeInterpolationWeights(Real *w, Real x) {
-    mbasis.Eval(x);
-    for (int j = 0; j <= N; ++j) {
-      w[j] = 0.0;
-      Real pj = (j == 0 || j == N ? 2.0 : 1.0);
-      for (int m = 0; m <= N; ++m) {
-        Real pm = (m == 0 || m == N ? 2.0 : 1.0);
-        Real tmx = mbasis.t[m];
-        w[j] += 2.0 / (pm * pj * N) * mt[j][m] * tmx;
+  void ComputeInterpolationWeights(Real *w, int & xs, int & xe, Real x) {
+    int j0 = 0;
+    while (xp[j0 + 1] > x && j0 < NB) {
+      j0++;
+    }
+
+    xs = j0 - NS;
+    xe = j0 + NS + 1;
+    while (xs < 0) {
+      xs++; xe++;
+    }
+    while (xe > NB) {
+      xe--; xs--;
+    }
+    assert (xs >= 0);
+    assert (xe <= NB);
+
+    for (int j = xs; j <= xe; ++j) {
+      Real num = 1.0;
+      Real den = 1.0;
+      for (int k = xs; k <= xe; ++k) {
+        if (k != j) {
+          num = num*(x - xp[k]);
+          den = den*(xp[j] - xp[k]);
+        }
       }
-      assert(isfinite(w[j]));
+      w[j-xs] = num/den;
     }
   }
 
   KOKKOS_INLINE_FUNCTION
   void SetInterpolationPoint(Real x, Real y, Real z) {
-    xp[0] = x;
-    xp[1] = y;
-    xp[2] = z;
-    ComputeInterpolationWeights(&wx[0], x);
-    ComputeInterpolationWeights(&wy[0], y);
-    ComputeInterpolationWeights(&wz[0], z);
+    ComputeInterpolationWeights(&wx[0], is, ie, x);
+    ComputeInterpolationWeights(&wy[0], js, je, y);
+    ComputeInterpolationWeights(&wz[0], ks, ke, z);
   }
 
   KOKKOS_INLINE_FUNCTION
   Real Eval(DvceArray4D<Real> const &var, int vidx) {
     Real out = 0.0;
-    for (int k = 0; k <= N; ++k) {
-      for (int j = 0; j <= N; ++j) {
-        for (int i = 0; i <= N; ++i) {
-          out += wx[i] * wy[j] * wz[k] * var(vidx, k, j, i);
+    for (int k = ks; k <= ke; ++k) {
+      for (int j = js; j <= je; ++j) {
+        for (int i = is; i <= ie; ++i) {
+          out += wx[i-is] * wy[j-js] * wz[k-ks] * var(vidx, k, j, i);
         }
       }
     }
-    assert(isfinite(out));
     return out;
   }
 
  public:
-  // Interpolation point
-  Real xp[3];
+  // Quadrature points
+  Real xp[NB + 1];
   // Interpolation weights
-  Real wx[N + 1];
-  Real wy[N + 1];
-  Real wz[N + 1];
-
- private:
-  ChebyshevBasis<N> mbasis;
-  Real mt[N + 1][N + 1];
+  Real wx[2*NS + 2];
+  Real wy[2*NS + 2];
+  Real wz[2*NS + 2];
+  // Interpolation stencil
+  int is, ie;
+  int js, je;
+  int ks, ke;
 };
 
 class CartesianDumpReader {
@@ -384,10 +388,6 @@ class BackgroundData {
                                   // on the Chebyshev grid
 };
 
-#ifndef NCHEBY
-#define NCHEBY 15
-#endif
-
 static BackgroundData<NCHEBY> *pmy_data;
 
 // User defined BC
@@ -447,7 +447,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   // initialize all fields, apart from magnetic field -------------------------
   par_for("pgen_data", DevExeSpace(), 0, (nmb-1), 0, (n3-1), 0, (n2-1), 0, (n2-1),
   KOKKOS_LAMBDA(int m, int k, int j, int i) {
-    ChebyshevInterpolation<NCHEBY> interp;
+    ChebyshevInterpolation<NCHEBY, NSTENCIL> interp;
 
     Real &x1min = size.d_view(m).x1min;
     Real &x1max = size.d_view(m).x1max;
@@ -511,7 +511,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
 #endif
   par_for("pgen_vector_potential", DevExeSpace(), 0,nmb-1,ks,ke+1,js,je+1,is,ie+1,
   KOKKOS_LAMBDA(int m, int k, int j, int i) {
-    ChebyshevInterpolation<NCHEBY> interp;
+    ChebyshevInterpolation<NCHEBY, NSTENCIL> interp;
 
     Real &x1min = size.d_view(m).x1min;
     Real &x1max = size.d_view(m).x1max;
@@ -677,7 +677,7 @@ void TurbulenceBC(Mesh *pm) {
   // X1-inner boundary -------------------------------------------------------
   par_for("zoomin_inner_x1", DevExeSpace(),0,(nmb-1),0,(n3-1),0,(n2-1),
   KOKKOS_LAMBDA(int m, int k, int j) {
-    ChebyshevInterpolation<NCHEBY> interp;
+    ChebyshevInterpolation<NCHEBY, NSTENCIL> interp;
     if (mb_bcs.d_view(m,BoundaryFace::inner_x1) == BoundaryFlag::user) {
       for (int i=is-ng; i<is; ++i) {
 #define TURBULENCE_BC_INTERPOLATE_CC_DATA                                   \
@@ -762,7 +762,7 @@ void TurbulenceBC(Mesh *pm) {
   });
   par_for("zoomin_inner_field_x1", DevExeSpace(),0,(nmb-1),0,(n3),0,(n2),
   KOKKOS_LAMBDA(int m, int k, int j) {
-    ChebyshevInterpolation<NCHEBY> interp;
+    ChebyshevInterpolation<NCHEBY, NSTENCIL> interp;
     if (mb_bcs.d_view(m,BoundaryFace::inner_x1) == BoundaryFlag::user) {
       for (int i=is-ng; i<is; ++i) {
 #define TURBULENCE_BC_INTERPOLATE_FC_DATA                                  \
@@ -823,7 +823,7 @@ void TurbulenceBC(Mesh *pm) {
   // X1-outer boundary -------------------------------------------------------
   par_for("zoomin_outer_x1", DevExeSpace(),0,(nmb-1),0,(n3-1),0,(n2-1),
   KOKKOS_LAMBDA(int m, int k, int j) {
-    ChebyshevInterpolation<NCHEBY> interp;
+    ChebyshevInterpolation<NCHEBY, NSTENCIL> interp;
     if (mb_bcs.d_view(m,BoundaryFace::outer_x1) == BoundaryFlag::user) {
       for (int i = ie+1; i <= ie+ng; ++i) {
         TURBULENCE_BC_INTERPOLATE_CC_DATA;
@@ -832,7 +832,7 @@ void TurbulenceBC(Mesh *pm) {
   });
   par_for("zoomin_outer_field_x1", DevExeSpace(),0,(nmb-1),0,(n3),0,(n2),
   KOKKOS_LAMBDA(int m, int k, int j) {
-    ChebyshevInterpolation<NCHEBY> interp;
+    ChebyshevInterpolation<NCHEBY, NSTENCIL> interp;
     if (mb_bcs.d_view(m,BoundaryFace::outer_x1) == BoundaryFlag::user) {
       for (int i = ie+2; i <= ie+ng+1; ++i) {
         TURBULENCE_BC_INTERPOLATE_FC_DATA;
@@ -844,7 +844,7 @@ void TurbulenceBC(Mesh *pm) {
   // X2-inner boundary -------------------------------------------------------
   par_for("zoomin_inner_x2", DevExeSpace(),0,(nmb-1),0,(n3-1),0,(n1-1),
   KOKKOS_LAMBDA(int m, int k, int i) {
-    ChebyshevInterpolation<NCHEBY> interp;
+    ChebyshevInterpolation<NCHEBY, NSTENCIL> interp;
     if (mb_bcs.d_view(m,BoundaryFace::inner_x2) == BoundaryFlag::user) {
       for (int j = js-ng; j < js; ++j) {
         TURBULENCE_BC_INTERPOLATE_CC_DATA;
@@ -853,7 +853,7 @@ void TurbulenceBC(Mesh *pm) {
   });
   par_for("zoomin_inner_field_x2", DevExeSpace(),0,(nmb-1),0,(n3),0,(n1),
   KOKKOS_LAMBDA(int m, int k, int i) {
-    ChebyshevInterpolation<NCHEBY> interp;
+    ChebyshevInterpolation<NCHEBY, NSTENCIL> interp;
     if (mb_bcs.d_view(m,BoundaryFace::inner_x2) == BoundaryFlag::user) {
       for (int j = js-ng; j < js; ++j) {
         TURBULENCE_BC_INTERPOLATE_FC_DATA;
@@ -865,7 +865,7 @@ void TurbulenceBC(Mesh *pm) {
   // X2-outer boundary -------------------------------------------------------
   par_for("zoomin_outer_x2", DevExeSpace(),0,(nmb-1),0,(n3-1),0,(n1-1),
   KOKKOS_LAMBDA(int m, int k, int i) {
-    ChebyshevInterpolation<NCHEBY> interp;
+    ChebyshevInterpolation<NCHEBY, NSTENCIL> interp;
     if (mb_bcs.d_view(m,BoundaryFace::outer_x2) == BoundaryFlag::user) {
       for (int j = je+1; j <= je+ng; ++j) {
         TURBULENCE_BC_INTERPOLATE_CC_DATA;
@@ -874,7 +874,7 @@ void TurbulenceBC(Mesh *pm) {
   });
   par_for("zoomin_outer_field_x2", DevExeSpace(),0,(nmb-1),0,(n3),0,(n1),
   KOKKOS_LAMBDA(int m, int k, int i) {
-    ChebyshevInterpolation<NCHEBY> interp;
+    ChebyshevInterpolation<NCHEBY, NSTENCIL> interp;
     if (mb_bcs.d_view(m,BoundaryFace::outer_x2) == BoundaryFlag::user) {
       for (int j = je+2; j <= je+ng+1; ++j) {
         TURBULENCE_BC_INTERPOLATE_FC_DATA;
@@ -886,7 +886,7 @@ void TurbulenceBC(Mesh *pm) {
   // X3-inner boundary -------------------------------------------------------
   par_for("zoomin_inner_x3", DevExeSpace(),0,(nmb-1),0,(n2-1),0,(n1-1),
   KOKKOS_LAMBDA(int m, int j, int i) {
-    ChebyshevInterpolation<NCHEBY> interp;
+    ChebyshevInterpolation<NCHEBY, NSTENCIL> interp;
     if (mb_bcs.d_view(m,BoundaryFace::inner_x3) == BoundaryFlag::user) {
       for (int k = ks-ng; k < ks; ++k) {
         TURBULENCE_BC_INTERPOLATE_CC_DATA;
@@ -895,7 +895,7 @@ void TurbulenceBC(Mesh *pm) {
   });
   par_for("zoomin_inner_field_x3", DevExeSpace(),0,(nmb-1),0,(n2),0,(n1),
   KOKKOS_LAMBDA(int m, int j, int i) {
-    ChebyshevInterpolation<NCHEBY> interp;
+    ChebyshevInterpolation<NCHEBY, NSTENCIL> interp;
     if (mb_bcs.d_view(m,BoundaryFace::inner_x3) == BoundaryFlag::user) {
       for (int k = ks-ng; k < ks; ++k) {
         TURBULENCE_BC_INTERPOLATE_FC_DATA;
@@ -907,7 +907,7 @@ void TurbulenceBC(Mesh *pm) {
   // X3-outer boundary -------------------------------------------------------
   par_for("zoomin_outer_x3", DevExeSpace(),0,(nmb-1),0,(n2-1),0,(n1-1),
   KOKKOS_LAMBDA(int m, int j, int i) {
-    ChebyshevInterpolation<NCHEBY> interp;
+    ChebyshevInterpolation<NCHEBY, NSTENCIL> interp;
     if (mb_bcs.d_view(m,BoundaryFace::outer_x3) == BoundaryFlag::user) {
       for (int k = ke+1; k <= ke+ng; ++k) {
         TURBULENCE_BC_INTERPOLATE_CC_DATA;
@@ -916,7 +916,7 @@ void TurbulenceBC(Mesh *pm) {
   });
   par_for("zoomin_outer_field_x3", DevExeSpace(),0,(nmb-1),0,(n2),0,(n1),
   KOKKOS_LAMBDA(int m, int j, int i) {
-    ChebyshevInterpolation<NCHEBY> interp;
+    ChebyshevInterpolation<NCHEBY, NSTENCIL> interp;
     if (mb_bcs.d_view(m,BoundaryFace::outer_x3) == BoundaryFlag::user) {
       for (int k = ke+2; k <= ke+ng+1; ++k) {
         TURBULENCE_BC_INTERPOLATE_FC_DATA;
@@ -967,7 +967,7 @@ void SetADMVariables(MeshBlockPack *pmbp) {
 
   par_for("update_adm_vars", DevExeSpace(), 0, (nmb-1), 0, (n3-1), 0, (n2-1), 0, (n2-1),
   KOKKOS_LAMBDA(int m, int k, int j, int i) {
-    ChebyshevInterpolation<NCHEBY> interp;
+    ChebyshevInterpolation<NCHEBY, NSTENCIL> interp;
 
     Real &x1min = size.d_view(m).x1min;
     Real &x1max = size.d_view(m).x1max;
