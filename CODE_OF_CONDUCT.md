@@ -1,5 +1,12 @@
 # Contributor Covenant Code of Conduct
 
+## Executive Summary
+
+By engaging with the AthenaK developer's community, you agree to abide to this
+code of conduct. In particular, you agree to engage in a professional and
+courteous way with fellow community members. Please, review the rest of this
+document for more details, reporting, and enforcement mechanisms.
+
 ## Our Pledge
 
 We as members, contributors, and leaders pledge to make participation in our
@@ -60,7 +67,7 @@ representative at an online or offline event.
 
 Instances of abusive, harassing, or otherwise unacceptable behavior may be
 reported to the community leaders responsible for enforcement at
-jmstone@ias.edu.
+ATHENAK-REPORTING@LISTS.PSU.EDU.
 All complaints will be reviewed and investigated promptly and fairly.
 
 All community leaders are obligated to respect the privacy and security of the
