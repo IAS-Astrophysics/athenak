@@ -65,6 +65,8 @@ RadiationM1::RadiationM1(MeshBlockPack *ppack, ParameterInput *pin)
     params.closure_type = Eddington;
   } else if (closure_fun == "thin") {
     params.closure_type = Thin;
+  } else if (closure_fun == "kershaw") {
+    params.closure_type = Kershaw;
   } else {
     std::cerr << "Error: Unknown choice for closure: " << closure_fun << std::endl;
     exit(EXIT_FAILURE);

@@ -32,6 +32,8 @@ MathSignal prepare_closure(const BrentFunctor &BrentFunc, const Real q[4],
 
   tensor_contract(src_params.g_uu, src_params.F_d, src_params.F_u);
 
+  //apply_closure(src_params.g_dd, src_params.g_uu, src_params.n_d, src_params.W, src_params.u_u, src_params.v_d, src_params.proj_ud, src_params.E, src_params.F_d,
+  //                          src_params.chi, src_params.P_dd, m1_params);
   calc_closure(BrentFunc, src_params.g_dd, src_params.g_uu, src_params.n_d, src_params.W,
                src_params.u_u, src_params.v_d, src_params.proj_ud, src_params.E,
                src_params.F_d, src_params.chi, src_params.P_dd, m1_params, closure_type);

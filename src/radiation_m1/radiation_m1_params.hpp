@@ -1,5 +1,6 @@
 #ifndef RADIATION_M1_PARAMS_HPP
 #define RADIATION_M1_PARAMS_HPP
+#include <bns_nurates/include/bns_nurates.hpp>
 //========================================================================================
 // AthenaXXX astrophysical plasma code
 // Copyright(C) 2020 James M. Stone <jmstone@ias.edu> and the Athena code team
@@ -155,5 +156,20 @@ struct SrcParams {
   Real Edot{};
   AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> tS_d{};
 };
+
+struct NuratesParams {
+  bool use_abs_em;
+  bool use_pair;
+  bool use_brem;
+  bool use_iso_scat;
+  bool use_WM_ab;
+  bool use_WM_sc;
+  bool use_dU;
+  bool use_equilibrium_distribution;
+
+  MyQuadrature my_quadrature_1d;
+  MyQuadrature my_quadrature_2d;
+};
+
 }  // namespace radiationm1
 #endif  // RADIATION_M1_PARAMS_HPP
