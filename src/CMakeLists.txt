@@ -12,7 +12,8 @@ else()
     set(ENABLE_NURATES_SOURCES ""
             radiation_m1/radiation_m1_roots_fns.hpp
             radiation_m1/radiation_m1_closure.hpp
-            pgen/tests/rad_m1_diffusiontest.cpp)
+            pgen/tests/rad_m1_diffusiontest.cpp
+            radiation_m1/radiation_m1_nurates.cpp)
 endif()
 
 # list of files to be compiled into executable name

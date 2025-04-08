@@ -108,17 +108,21 @@ TaskStatus RadiationM1::CalcClosure(Driver *pdrive, int stage) {
           calc_proj(u_d, u_u, proj_ud);
 
           par_for_inner(member, 0, nspecies_ - 1, [&](const int nuidx) {
-            const Real E = u0_(m, CombinedIdx(nuidx, 0, nvars_), k, j, i);
+            Real E = u0_(m, CombinedIdx(nuidx, 0, nvars_), k, j, i);
             AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> F_d{};
             pack_F_d(beta_u(1), beta_u(2), beta_u(3),
                      u0_(m, CombinedIdx(nuidx, M1_FX_IDX, nvars_), k, j, i),
                      u0_(m, CombinedIdx(nuidx, M1_FY_IDX, nvars_), k, j, i),
                      u0_(m, CombinedIdx(nuidx, M1_FZ_IDX, nvars_), k, j, i),
                      F_d);
+            //apply_floor(g_uu, E, F_d, params_);
             Real chi{};
             AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> Ptemp_dd{};
             calc_closure(BrentFunc_, g_dd, g_uu, n_d, w_lorentz, u_u, v_d, proj_ud, E, F_d,
                          chi, Ptemp_dd, params_, params_.closure_type);
+            if (E > 1e-4) {
+              printf("[radiation_m1_calc_closure] chi = %.10e\n", chi);
+            }
             chi_(m, nuidx, k, j, i) = chi;
           });
         }
