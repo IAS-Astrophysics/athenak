@@ -113,11 +113,13 @@ class TabulatedEOS {
                                     unit_nuc.EnergyDensityConversion(unit_geo));
     }
 
-    // Read electron fraction
-    test_field(table.HasField("Y[e]"), "Y[e]");
-    Real * table_ye = table["Y[e]"];
-    for (size_t in = 0; in < m_nn; in++) {
-      m_ye.h_view(in) = table_ye[in];
+
+    // Read electron fraction (optional)
+    if (has_ye) {
+      Real * table_ye = table["Y[e]"];
+      for (size_t in = 0; in < m_nn; in++) {
+        m_ye.h_view(in) = table_ye[in];
+      }
     }
 
     std::cout << "Loaded table " << fname << std::endl
