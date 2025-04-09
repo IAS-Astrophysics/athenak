@@ -111,8 +111,9 @@ void Particles::BorisStep( const Real dt, const bool only_v ){
 					if (three_d) { uE[2] = u_con[2] + dt*q_over_m/(2.0)*E[2]; }
 
 		//Intermediate Lorentz gamma factor in normal frame
-		g_Lor = ADM_upper[0][0]*SQR(uE[0]) + ADM_upper[1][1]*SQR(uE[1]) + ADM_upper[2][2]*SQR(uE[2])
-			+ 2.0*ADM_upper[0][1]*uE[0]*uE[1] + 2.0*ADM_upper[0][2]*uE[0]*uE[2] + 2.0*ADM_upper[1][2]*uE[1]*uE[2];
+		g_Lor = glower[1][1]*SQR(uE[0]) + glower[2][2]*SQR(uE[1]) + glower[3][3]*SQR(uE[2])
+			+ 2.0*glower[1][2]*uE[0]*uE[1] + 2.0*glower[1][3]*uE[0]*uE[2] + 2.0*glower[2][3]*uE[1]*uE[2];
+		g_Lor = sqrt(1.0 + g_Lor);
 
 		// Rotation of velocity due to magnetic field done in 2 steps
 		// i.e. Boris algorithm
