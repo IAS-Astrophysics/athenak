@@ -66,7 +66,7 @@ void CalcFlux(const int m, const int k, const int j, const int i,
   AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> v_u{};
   AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> v_d{};
   AthenaPointTensor<Real, TensorSymm::NONE, 4, 2> proj_ud{};
-  Real w_lorentz = u_mu_(m, 0, k, j, i);
+  Real w_lorentz = u_mu_(m, 0, k, j, i);  //@TODO: check if this is true for GR
   pack_u_u(u_mu_(m, 0, k, j, i), u_mu_(m, 1, k, j, i), u_mu_(m, 2, k, j, i),
            u_mu_(m, 3, k, j, i), u_u);
   tensor_contract(g_dd, u_u, u_d);
@@ -100,6 +100,7 @@ void CalcFlux(const int m, const int k, const int j, const int i,
 
   Real J = calc_J_from_rT(T_dd, u_u);
   calc_H_from_rT(T_dd, u_u, proj_ud, H_d);
+  apply_floor(g_uu, J, H_d, params_);
   tensor_contract(g_uu, H_d, H_u);
 
   Real N{};
@@ -155,9 +156,6 @@ TaskStatus RadiationM1::CalculateFluxes(Driver *pdrive, int stage) {
   auto &chi_ = pmy_pack->pradm1->chi;
   adm::ADM::ADM_vars &adm = pmy_pack->padm->adm;
 
-  auto &eta_0_ = pmy_pack->pradm1->eta_0;
-  auto &abs_0_ = pmy_pack->pradm1->abs_0;
-  auto &eta_1_ = pmy_pack->pradm1->eta_1;
   auto &abs_1_ = pmy_pack->pradm1->abs_1;
   auto &scat_1_ = pmy_pack->pradm1->scat_1;
 
