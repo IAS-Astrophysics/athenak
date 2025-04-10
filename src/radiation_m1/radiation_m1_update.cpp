@@ -175,7 +175,10 @@ TaskStatus RadiationM1::TimeUpdate(Driver *d, int stage) {
         calc_proj(u_d, u_u, proj_ud);
 
         // [D] Capture quantities from EOS
-        Real mb{};
+        Real mb = 0.;
+        if (nspecies_ > 1) {
+          //mb = AverageBaryonMass();
+        }
         Real dens{};
         Real Y_e{};
         Real tau{};
@@ -274,6 +277,8 @@ TaskStatus RadiationM1::TimeUpdate(Driver *d, int stage) {
 
               Real J = calc_J_from_rT(T_dd, u_u);
               calc_H_from_rT(T_dd, u_u, proj_ud, H_d);
+              apply_floor(g_uu, J, H_d, params_);
+
               tensor_contract(g_uu, H_d, H_u);
               const Real Gamma = compute_Gamma(w_lorentz, v_u, J, E, F_d, params_);
 
@@ -330,7 +335,6 @@ TaskStatus RadiationM1::TimeUpdate(Driver *d, int stage) {
 
               // Compute quantities in the fluid frame
               AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> P_dd{};
-              //Real chival{};
               calc_closure(BrentFunc_, g_dd, g_uu, n_d, w_lorentz, u_u, v_d, proj_ud,
                            Estar, Fstar_d, chi_(m, nuidx, k, j, i), P_dd, params_, params_.closure_type);
               AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> rT_dd{};
@@ -338,9 +342,10 @@ TaskStatus RadiationM1::TimeUpdate(Driver *d, int stage) {
               if (Estar > 1e-4) {
               printf("[radiation_m1_update] chi star = %.10e\n", chi_(m, nuidx, k, j, i));
               }
-              const Real Jstar = calc_J_from_rT(rT_dd, u_u);
+              Real Jstar = calc_J_from_rT(rT_dd, u_u);
               AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> Hstar_d{};
               calc_H_from_rT(rT_dd, u_u, proj_ud, Hstar_d);
+              apply_floor(g_uu, Jstar, Hstar_d, params_); //@TODO: do we need this
 
               // Estimate interaction with matter
               const Real dtau = beta_dt / w_lorentz;
@@ -495,8 +500,7 @@ TaskStatus RadiationM1::TimeUpdate(Driver *d, int stage) {
                    adm.beta_u(m, 2, k, j, i), Fxf, Fyf, Fzf, Ff_d);
           apply_floor(g_uu, Ef, Ff_d, params_);
           u0_(m, CombinedIdx(nuidx, M1_E_IDX, nvars_), k, j, i) = Ef;
-          u0_(m, CombinedIdx(nuidx, M1_FX_IDX, nvars_), k, j, i) =
-              Ff_d(1);  //@TODO: fix this with floored value
+          u0_(m, CombinedIdx(nuidx, M1_FX_IDX, nvars_), k, j, i) = Ff_d(1);
           u0_(m, CombinedIdx(nuidx, M1_FY_IDX, nvars_), k, j, i) = Ff_d(2);
           u0_(m, CombinedIdx(nuidx, M1_FZ_IDX, nvars_), k, j, i) = Ff_d(3);
 

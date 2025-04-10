@@ -70,8 +70,7 @@ void calc_K_from_rT(const AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> &rT_dd
 KOKKOS_INLINE_FUNCTION
 void calc_Pthin(const AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> &g_uu,
                 const Real &E, const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &F_d,
-                AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> &P_dd,
-                const RadiationM1Params &params) {
+                AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> &P_dd) {
   const Real F2 = tensor_dot(g_uu, F_d, F_d);
   Real fac = (F2 > 0 ? E / F2 : 0);
   for (int a = 0; a < 4; ++a) {
@@ -110,61 +109,6 @@ void calc_Pthick(const AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> &g_dd,
     for (int b = a; b < 4; ++b) {
       P_dd(a, b) = Jo3 * (4. * W2 * v_d(a) * v_d(b) + g_dd(a, b) + n_d(a) * n_d(b));
       P_dd(a, b) += W * (tH_d(a) * v_d(b) + tH_d(b) * v_d(a));
-    }
-  }
-}
-
-//----------------------------------------------------------------------------------------
-//! \fn void radiationm1::calc_Kthin
-//  \brief Compute fluid frame pressure in the thin limit
-KOKKOS_INLINE_FUNCTION
-void calc_Kthin(const AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> &g_uu,
-                const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &n_d, const Real &W,
-                const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &u_d,
-                const AthenaPointTensor<Real, TensorSymm::NONE, 4, 2> &proj_ud,
-                const Real &J, const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &H_d,
-                AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> &K_dd,
-                const Real &rad_E_floor) {
-  // H_mu n^mu
-  const Real H_dot_n = W * tensor_dot(g_uu, n_d, H_d);
-
-  // J
-  const Real E = Kokkos::max(rad_E_floor, SQ(H_dot_n - J * W) / J);
-
-  // F_mu u^mu
-  const Real F_dot_u = H_dot_n + W * (E - J);
-
-  // Compute F_mu
-  AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> F_d{};
-  const Real coef = 1.0 / (W - F_dot_u / E);
-  for (int a = 0; a < 4; ++a) {
-    F_d(a) =
-        coef * (H_d(a) + E * W * (W * u_d(a) - n_d(a)) +
-                F_dot_u * (n_d(a) - 2 * W * u_d(a)) + (1.0 / E) * SQ(F_dot_u) * u_d(a));
-  }
-  AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> T_dd{};
-  for (int a = 0; a < 4; ++a) {
-    for (int b = 0; b < 4; ++b) {
-      T_dd(a, b) =
-          E * n_d(a) * n_d(b) + F_d(a) * n_d(b) + n_d(a) * F_d(b) + (F_d(a) * F_d(b)) / E;
-    }
-  }
-  // Project radiation tensor to obtain radiation pressure
-  calc_K_from_rT(T_dd, proj_ud, K_dd);
-}
-
-//----------------------------------------------------------------------------------------
-//! \fn void radiationm1::calc_Kthick
-//  \brief Compute fluid frame pressure in the thick limit
-KOKKOS_INLINE_FUNCTION
-void calc_Kthick(const AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> &g_dd,
-                 const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &u_d,
-                 const Real &J,
-                 const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &H_d,
-                 AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> &K_dd) {
-  for (int a = 0; a < 4; ++a) {
-    for (int b = a; b < 4; ++b) {
-      K_dd(a, b) = (1.0 / 3.0) * J * (g_dd(a, b) + u_d(a) * u_d(b));
     }
   }
 }
@@ -228,25 +172,6 @@ void assemble_rT(const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &u_d,
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn void radiationm1::assemble_rT_fluid
-//  \brief Assemble radiation stress tensor in fluid frame
-KOKKOS_INLINE_FUNCTION
-void assemble_rT_fluid(const Real &dthick,
-                       const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &u_d,
-                       const Real J,
-                       const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &H_d,
-                       const AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> &K_thick_dd,
-                       const AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> &K_thin_dd,
-                       AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> &rT_dd) {
-  const Real dthin = 1. - dthick;
-  for (int a = 0; a < 4; ++a)
-    for (int b = a; b < 4; ++b) {
-      rT_dd(a, b) = J * u_d(a) * u_d(b) + H_d(a) * u_d(b) + H_d(b) * u_d(a) +
-                    dthick * K_thick_dd(a, b) + dthin * K_thin_dd(a, b);
-    }
-}
-
-//----------------------------------------------------------------------------------------
 //! \fn Real radiationm1::calc_J_from_rT
 //  \brief Project out the radiation energy (in any frame)
 KOKKOS_INLINE_FUNCTION
@@ -291,7 +216,7 @@ void apply_closure(const AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> &g_dd,
   AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> Pthin_dd{};
   AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> Pthick_dd{};
 
-  calc_Pthin(g_uu, E, F_d, Pthin_dd, params);
+  calc_Pthin(g_uu, E, F_d, Pthin_dd);
   calc_Pthick(g_dd, g_uu, n_d, w_lorentz, v_d, E, F_d, Pthick_dd);
 
   const Real dthick = 3. * (1 - chi) / 2.;
