@@ -44,12 +44,13 @@ MathSignal prepare_closure(const BrentFunctor &BrentFunc, const Real q[4],
 //! \fn HybridsjSignal radiationm1::RadiationM1::prepare_sources
 //  \brief Sets T_dd, J, H_d, S_d, Edot and tS_d in src_params
 KOKKOS_INLINE_FUNCTION
-MathSignal prepare_sources(const Real q[4], SrcParams &src_params) {
+MathSignal prepare_sources(const Real q[4], SrcParams &src_params, const RadiationM1Params &params_) {
   assemble_rT(src_params.n_d, src_params.E, src_params.F_d, src_params.P_dd,
               src_params.T_dd);
 
   src_params.J = calc_J_from_rT(src_params.T_dd, src_params.u_u);
   calc_H_from_rT(src_params.T_dd, src_params.u_u, src_params.proj_ud, src_params.H_d);
+  apply_floor(src_params.g_uu, src_params.J, src_params.H_d, params_);
 
   calc_rad_sources(src_params.eta, src_params.kabs, src_params.kscat, src_params.u_d,
                    src_params.J, src_params.H_d, src_params.S_d);
@@ -71,7 +72,7 @@ MathSignal prepare(const BrentFunctor &BrentFunc, const Real q[4], SrcParams &sr
   if (ierr != LinalgSuccess) {
     return ierr;
   }
-  ierr = prepare_sources(q, src_params);
+  ierr = prepare_sources(q, src_params, m1_params);
   if (ierr != LinalgSuccess) {
     return ierr;
   }
