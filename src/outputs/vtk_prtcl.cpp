@@ -223,33 +223,34 @@ void ParticleVTKOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
       // Need to compute matrix from the normal frame to the inertial frame
       // For work work in ZAMO/FIDO frame
 
-			Real gamma_lor = 0;
-			Real massive = 1.0;
-			if (!is_gca) {
-				for (int p=0; p<npout_thisrank; ++p) {
-					Real u_norm[4] = {0.0,outpart_rdata(IPVX,p),outpart_rdata(IPVY,p),outpart_rdata(IPVZ,p)};
-					Real gu[4][4], gl[4][4], adm;
-					ComputeMetricAndInverse(
-							outpart_rdata(IPX,p), outpart_rdata(IPY,p), outpart_rdata(IPZ,p),
-							flat, spin, gl, gu
-					);
+      Real gamma_lor = 0;
+      Real massive = 1.0;
+      if (!is_gca) {
+        for (int p=0; p<npout_thisrank; ++p) {
+          Real u_norm[4] = {0.0,outpart_rdata(IPVX,p),outpart_rdata(IPVY,p),outpart_rdata(IPVZ,p)};
+          Real gu[4][4], gl[4][4], adm;
+          ComputeMetricAndInverse(
+              outpart_rdata(IPX,p), outpart_rdata(IPY,p), outpart_rdata(IPZ,p),
+              flat, spin, gl, gu
+          );
 
-					for (int gi1=1;gi1<4;++gi1) {
-						for (int gi2=1;gi2<4;++gi2) {
-							adm = gu[gi1][gi2] - gu[0][gi2]*gu[gi1][0]/gu[0][0];
-							gamma_lor += adm*u_norm[gi1]*u_norm[gi2];
-						}
-					}
-					// gamma_lor = sqrt( massive + gamma_lor );
-					data[p] = static_cast<float>( gamma_lor );
-				}
-			} else {
-				for (int p=0; p<npout_thisrank; ++p) {
-					gamma_lor = SQR(outpart_rdata(IPVX,p));
-					//gamma_lor = sqrt(massive + SQR(outpart_rdata(IPVX,p)));
-					data[p] = static_cast<float>( gamma_lor );
-				}
-			}
+          gamma_lor = 0;
+          for (int gi1=1;gi1<4;++gi1) {
+            for (int gi2=1;gi2<4;++gi2) {
+              adm = gu[gi1][gi2] - gu[0][gi2]*gu[gi1][0]/gu[0][0];
+              gamma_lor += adm*u_norm[gi1]*u_norm[gi2];
+            }
+          }
+          // gamma_lor = sqrt( massive + gamma_lor );
+          data[p] = static_cast<float>( gamma_lor );
+        }
+      } else {
+        for (int p=0; p<npout_thisrank; ++p) {
+          gamma_lor = SQR(outpart_rdata(IPVX,p));
+          //gamma_lor = sqrt(massive + SQR(outpart_rdata(IPVX,p)));
+          data[p] = static_cast<float>( gamma_lor );
+        }
+      }
     }
 
     // swap data for this variable into big endian order
