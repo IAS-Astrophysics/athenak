@@ -179,7 +179,7 @@ void Particles::GCAIterations( const Real dt ){
 		Real v_par_grad = pr(IPVX,p);
 		Real v_par_prev = pr(IPVX,p);
 		//u is always contravariant. Iteration variables
-		Real RHS_eval_v, RHS_eval_x[3]; // parallel velocity is now scalar quantity
+		Real RHS_eval_vpar, RHS_eval_v[3], RHS_eval_x[3]; // parallel velocity is now scalar quantity
 		Real Jacob[3][3], inv_Jacob[3][3];
 		Real x_grad[3];
 		Real RHS_grad_1[3], RHS_grad_2[3];
@@ -218,6 +218,7 @@ void Particles::GCAIterations( const Real dt ){
 		Real v_perp_mod = sqrt( 2.0*B_norm*drift_g*mag_mom/prtcl_mass );
 		Real Gamma = drift_g*sqrt( 1 + SQR(v_par_init) + SQR(v_perp_mod) );
 		// Get perpendicular vector
+    // phase kept constant throughout iteration
 		Real perp_low[3], perp_up[3];
 		auto prtcl_phase_rnd = prtcl_rand.get_state();
 		Real gphase = prtcl_phase_rnd.frand();
@@ -244,21 +245,14 @@ void Particles::GCAIterations( const Real dt ){
 		Real x_eval[3] = {pr(IPX,p)+v_init[0]/Gamma*dt, pr(IPY,p)+v_init[1]/Gamma*dt, pr(IPZ,p)+v_init[2]/Gamma*dt};
 
 		// First half-push with the electric field
-		GCAElectricPush( x_init, E, B, B_norm, spin, q_over_m, &RHS_eval_v );
-		v_par_eval += RHS_eval_v*dt/2.0;
+		GCAElectricPush( x_init, E, B, B_norm, spin, q_over_m, &RHS_eval_vpar );
+		v_par_eval += RHS_eval_vpar*dt/2.0;
 		
 		// Start iterating
 		// Using Newton method, thus computing the Jacobian at each iteration
 		do{
 			
 		++n_iter;
-		// if (pi(PTAG,p) == 11) {
-		// 	printf("%d %d %f %f %f %f \n ", pi(PTAG,p), m, v_par_eval, x_eval[0], x_eval[1], x_eval[2]);
-		// 	int ip = (x_eval[0] - mbsize.d_view(m).x1min)/mbsize.d_view(m).dx1 + indcs.is;
-		// 	int jp = (x_eval[1] - mbsize.d_view(m).x2min)/mbsize.d_view(m).dx2 + indcs.js;
-		// 	int kp = (x_eval[2] - mbsize.d_view(m).x3min)/mbsize.d_view(m).dx3 + indcs.ks;
-		// 	printf("%d %d %d %d %d %d\n ", ip, jp, kp, indcs.ie, indcs.je, indcs.ke);
-		// }                                   
 		                                    
 		for (int i = 0; i<3; ++i){ x_grad[i] = (x_eval[i] + x_init[i])/2.0; }
 		v_par_grad = (v_par_eval + v_par_init)/2.0;
@@ -278,9 +272,6 @@ void Particles::GCAIterations( const Real dt ){
 		GetUpperAdmMetric( gupper, ADM_upper );
 		// Drifts are returned as covariant
 		GCAComputeDrifts( gupper, ADM_upper, E, B, B_norm, v_drift );
-		// if (pi(PTAG,p) == 11) {
-		// 	printf("%f %f %f %f %f %f %f \n ", E[0], E[1], E[2], B_norm, B[0], B[1], B[2]);
-		// }
 		drift_g = 0.0;
 		for (int i1 = 0; i1<3; ++i1) {
 			for (int i2 = 0; i2<3; ++i2) {
@@ -302,22 +293,18 @@ void Particles::GCAIterations( const Real dt ){
 		b_low[1] = glower[2][1]*b[0] + glower[2][2]*b[1] + glower[2][3]*b[2];
 		b_low[2] = glower[3][1]*b[0] + glower[3][2]*b[1] + glower[3][3]*b[2];
 
-		// if (pi(PTAG,p) == 11) {
-		// 	printf("%d %f %f %f %f %f %f \n ", pi(PTAG,p), v_par_grad, Gamma, drift_g, v_drift[0], v_drift[1], v_drift[2]);
-		// }
 		GCAEquation_Position(gupper, v_par_grad, v_drift, b, Gamma, RHS_eval_x);
 		for (int i = 0; i<3; ++i){ v_grad[i] = v_par_grad*b_low[i] + v_perp_mod*perp_low[i] + v_drift[i]*Gamma; }
-		GCAEquation_Velocity(x_init, x_grad, v_init, v_grad, x_step, spin, it_tol, &RHS_eval_v);
-
-		// if (pi(PTAG,p) == 11) {
-		// 	printf("%d %d %f %f %f %f \n ", pi(PTAG,p), n_iter, RHS_eval_v, RHS_eval_x[0], RHS_eval_x[1], RHS_eval_x[2]);
-		// }
+		GCAEquation_Velocity(x_init, x_grad, v_init, v_grad, x_step, spin, it_tol, RHS_eval_v);
+    // Project 3D co-variant RHS for geodesic push onto the magnetic field
+    RHS_eval_vpar = 0.0;
+    for (int i = 0; i < 3; ++i ) { RHS_eval_vpar += b[i]*RHS_eval_v[i]; } 
 
 		// Store for next iteration
 		for (int i=0; i<3; ++i) { x_prev[i] = x_eval[i]; }
 		v_par_prev = v_par_eval;
 		for (int i=0; i<3; ++i) { x_eval[i] = x_init[i] + RHS_eval_x[i]*dt; }
-		v_par_eval = v_par_init + RHS_eval_v*dt;
+		v_par_eval = v_par_init + RHS_eval_vpar*dt;
 
 		}while(
 			n_iter < it_max
@@ -335,8 +322,8 @@ void Particles::GCAIterations( const Real dt ){
 		}	
 		B_norm = sqrt(B_norm);
 		// Second half-push with the electric field
-		GCAElectricPush( x_eval, E, B, B_norm, spin, q_over_m, &RHS_eval_v );
-		v_par_eval += RHS_eval_v*dt/2.0;
+		GCAElectricPush( x_eval, E, B, B_norm, spin, q_over_m, &RHS_eval_vpar );
+		v_par_eval += RHS_eval_vpar*dt/2.0;
 
 		// Done with iterations, update ``true'' values
 		pr(IPVX,p) = v_par_eval;
