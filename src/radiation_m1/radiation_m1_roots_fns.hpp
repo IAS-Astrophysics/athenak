@@ -39,10 +39,10 @@ class BrentFunctor {
     AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> rT_dd{};
     assemble_rT(n_d, E, F_d, P_dd, rT_dd);
 
-    const Real J = calc_J_from_rT(rT_dd, u_u);
-
+    Real J = calc_J_from_rT(rT_dd, u_u);
     AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> H_d{};
     calc_H_from_rT(rT_dd, u_u, proj_ud, H_d);
+    apply_floor(g_uu, J, H_d, params);
 
     const Real H2 = tensor_dot(g_uu, H_d, H_d);
     return SQ(J * xi) - H2;
@@ -193,10 +193,10 @@ class HybridsjFunctor {
     f[2] = x[2] - src_params.Fstar_d(2) - src_params.cdt * src_params.tS_d(2);
     f[3] = x[3] - src_params.Fstar_d(3) - src_params.cdt * src_params.tS_d(3);
 
-    Real m_q[] = {src_params.E, src_params.F_d(1), src_params.F_d(2), src_params.F_d(3)};
+    Real m_q[4] = {src_params.E, src_params.F_d(1), src_params.F_d(2), src_params.F_d(3)};
     Real m_F2 = tensor_dot(src_params.F_u, src_params.F_d);
     Real m_v2 = tensor_dot(src_params.v_u, src_params.v_d);
-    Real m_qstar[] = {src_params.Estar, src_params.Fstar_d(1), src_params.Fstar_d(2),
+    Real m_qstar[4] = {src_params.Estar, src_params.Fstar_d(1), src_params.Fstar_d(2),
                       src_params.Fstar_d(3)};
 
     source_jacobian(m_q, src_params.F_u, m_F2, src_params.chi, src_params.kscat,
