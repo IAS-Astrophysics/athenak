@@ -383,7 +383,7 @@ class BackgroundData {
  private:
   std::vector<Real> mtimes;     // time of all the frames
   HostArray5D<Real> m_raw_data;  // data as a function of time for all fields
-                                  // on the Chebyshev grid
+                                 // on the Chebyshev grid
 };
 
 static BackgroundData<NCHEBY> *pmy_data;
@@ -636,12 +636,11 @@ void TurbulenceBC(Mesh *pm) {
   auto &mb_bcs = pm->pmb_pack->pmb->mb_bcs;
   auto &size = pm->pmb_pack->pmb->mb_size;
 
-  DvceArray5D<Real> u0_, w0_;
-  u0_ = pm->pmb_pack->pmhd->u0;
-  w0_ = pm->pmb_pack->pmhd->w0;
+  auto &u0 = pm->pmb_pack->pmhd->u0;
+  auto &w0 = pm->pmb_pack->pmhd->w0;
   auto &adm = pm->pmb_pack->padm->adm;
   auto &b0 = pm->pmb_pack->pmhd->b0;
-  auto &bcc_ = pm->pmb_pack->pmhd->bcc0;
+  auto &bcc = pm->pmb_pack->pmhd->bcc0;
   int nmb = pm->pmb_pack->nmb_thispack;
 
   Real box_x1min = pmy_data->xmin;
@@ -651,18 +650,7 @@ void TurbulenceBC(Mesh *pm) {
   Real box_x3min = pmy_data->zmin;
   Real box_x3max = pmy_data->zmax;
 
-  // This BC should be applied to all boundaries 
-  if (pm->mesh_bcs[BoundaryFace::inner_x1] != BoundaryFlag::user ||
-      pm->mesh_bcs[BoundaryFace::outer_x1] != BoundaryFlag::user ||
-      pm->mesh_bcs[BoundaryFace::inner_x2] != BoundaryFlag::user ||
-      pm->mesh_bcs[BoundaryFace::outer_x2] != BoundaryFlag::user ||
-      pm->mesh_bcs[BoundaryFace::inner_x3] != BoundaryFlag::user ||
-      pm->mesh_bcs[BoundaryFace::outer_x3] != BoundaryFlag::user) {
-    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
-              << "Turbulence BC should be applied to all boundaries"
-              << std::endl;
-    exit(EXIT_FAILURE);
-  }
+  auto &pdyngr = pm->pmb_pack->pdyngr;
 
 #ifdef DEBUG_PGEN
   printf("Apply boundary conditions at time %f...", pm->time);
@@ -672,9 +660,15 @@ void TurbulenceBC(Mesh *pm) {
   pmy_data->InterpToTime(pm->time);
   auto &cheb_data = pmy_data->cheb_data;
 
+  // Compute primitives in the boundary region -------------------------------
+  pdyngr->ConToPrimBC(is-ng, is-1, 0, (n2-1), 0, (n3-1));
+  pdyngr->ConToPrimBC(ie+1, ie+ng, 0, (n2-1), 0, (n3-1));
+  pdyngr->ConToPrimBC(0, (n1-1), js-ng, js-1, 0, (n3-1));
+  pdyngr->ConToPrimBC(0, (n1-1), je+1, je+ng, 0, (n3-1));
+  pdyngr->ConToPrimBC(0, (n1-1), 0, (n2-1), ks-ng, ks-1);
+  pdyngr->ConToPrimBC(0, (n1-1), 0, (n2-1), ke+1, ke+ng);
+
   // X1-inner boundary -------------------------------------------------------
-  pm->pmb_pack->pmhd->peos->ConsToPrim(u0_, b0, w0_, bcc_, false,
-                                       is-ng, is-1, 0, (n2-1), 0, (n3-1));
   par_for("zoomin_inner_x1", DevExeSpace(),0,(nmb-1),0,(n3-1),0,(n2-1),
   KOKKOS_LAMBDA(int m, int k, int j) {
     ChebyshevInterpolation<NCHEBY, NSTENCIL> interp;
@@ -701,17 +695,17 @@ void TurbulenceBC(Mesh *pm) {
   Real xi3 = interp.MapToCollocation(box_x3min, box_x3max, x3v);            \
   interp.SetInterpolationPoint(xi1, xi2, xi3);                              \
                                                                             \
-  w0_(m, IDN, k, j, i) =                                                    \
+  w0(m, IDN, k, j, i) =                                                     \
       interp.Eval(cheb_data.view_device(), BackgroundData<NCHEBY>::IDN);    \
-  w0_(m, IPR, k, j, i) =                                                    \
+  w0(m, IPR, k, j, i) =                                                     \
       interp.Eval(cheb_data.view_device(), BackgroundData<NCHEBY>::IPR);    \
-  w0_(m, IVX, k, j, i) =                                                    \
+  w0(m, IVX, k, j, i) =                                                     \
       interp.Eval(cheb_data.view_device(), BackgroundData<NCHEBY>::IVX);    \
-  w0_(m, IVY, k, j, i) =                                                    \
+  w0(m, IVY, k, j, i) =                                                     \
       interp.Eval(cheb_data.view_device(), BackgroundData<NCHEBY>::IVY);    \
-  w0_(m, IVZ, k, j, i) =                                                    \
+  w0(m, IVZ, k, j, i) =                                                     \
       interp.Eval(cheb_data.view_device(), BackgroundData<NCHEBY>::IVZ);    \
-  w0_(m, IYF, k, j, i) =                                                    \
+  w0(m, IYF, k, j, i) =                                                     \
       interp.Eval(cheb_data.view_device(), BackgroundData<NCHEBY>::IYF);    \
                                                                             \
   adm.alpha(m, k, j, i) =                                                   \
@@ -749,18 +743,18 @@ void TurbulenceBC(Mesh *pm) {
   adm.vK_dd(m, 2, 2, k, j, i) =                                             \
       interp.Eval(cheb_data.view_device(), BackgroundData<NCHEBY>::IKZZ);   \
                                                                             \
-  bcc_(m, IBX, k, j, i) =                                                   \
+  bcc(m, IBX, k, j, i) =                                                    \
       interp.Eval(cheb_data.view_device(), BackgroundData<NCHEBY>::IBX);    \
-  bcc_(m, IBY, k, j, i) =                                                   \
+  bcc(m, IBY, k, j, i) =                                                    \
       interp.Eval(cheb_data.view_device(), BackgroundData<NCHEBY>::IBY);    \
-  bcc_(m, IBZ, k, j, i) =                                                   \
+  bcc(m, IBZ, k, j, i) =                                                    \
       interp.Eval(cheb_data.view_device(), BackgroundData<NCHEBY>::IBZ)
 
         TURBULENCE_BC_INTERPOLATE_CC_DATA;
       }
     }
   });
-  par_for("zoomin_inner_field_x1", DevExeSpace(),0,(nmb-1),0,(n3),0,(n2),
+  par_for("zoomin_inner_bfc_x1", DevExeSpace(),0,(nmb-1),0,(n3),0,(n2),
   KOKKOS_LAMBDA(int m, int k, int j) {
     ChebyshevInterpolation<NCHEBY, NSTENCIL> interp;
     if (mb_bcs.d_view(m,BoundaryFace::inner_x1) == BoundaryFlag::user) {
@@ -814,15 +808,25 @@ void TurbulenceBC(Mesh *pm) {
   }
 
         TURBULENCE_BC_INTERPOLATE_FC_DATA;
-
       }
     }
   });
-  pm->pmb_pack->pdyngr->PrimToConInit(is-ng, is-1, 0, (n2-1), 0, (n3-1));
+  par_for("zoomin_inner_bcc_x1", DevExeSpace(),0,(nmb-1),0,(n3-1),0,(n2-1),
+  KOKKOS_LAMBDA(int m, int k, int j) {
+    ChebyshevInterpolation<NCHEBY, NSTENCIL> interp;
+    if (mb_bcs.d_view(m,BoundaryFace::inner_x1) == BoundaryFlag::user) {
+      for (int i = is-ng; i < is; ++i) {
+#define TURBULENCE_BC_COMPUTE_BCC_FROM_BFC                                    \
+  bcc(m, IBX, k, j, i) = 0.5 * (b0.x1f(m, k, j, i) + b0.x1f(m, k, j, i + 1)); \
+  bcc(m, IBY, k, j, i) = 0.5 * (b0.x2f(m, k, j, i) + b0.x2f(m, k, j + 1, i)); \
+  bcc(m, IBZ, k, j, i) = 0.5 * (b0.x3f(m, k, j, i) + b0.x3f(m, k + 1, j, i))
+
+        TURBULENCE_BC_COMPUTE_BCC_FROM_BFC;
+      }
+    }
+  });
 
   // X1-outer boundary -------------------------------------------------------
-  pm->pmb_pack->pmhd->peos->ConsToPrim(u0_, b0, w0_, bcc_, false,
-                                       ie+1, ie+ng, 0, (n2-1), 0, (n3-1));
   par_for("zoomin_outer_x1", DevExeSpace(),0,(nmb-1),0,(n3-1),0,(n2-1),
   KOKKOS_LAMBDA(int m, int k, int j) {
     ChebyshevInterpolation<NCHEBY, NSTENCIL> interp;
@@ -832,7 +836,7 @@ void TurbulenceBC(Mesh *pm) {
       }
     }
   });
-  par_for("zoomin_outer_field_x1", DevExeSpace(),0,(nmb-1),0,(n3),0,(n2),
+  par_for("zoomin_outer_bfc_x1", DevExeSpace(),0,(nmb-1),0,(n3),0,(n2),
   KOKKOS_LAMBDA(int m, int k, int j) {
     ChebyshevInterpolation<NCHEBY, NSTENCIL> interp;
     if (mb_bcs.d_view(m,BoundaryFace::outer_x1) == BoundaryFlag::user) {
@@ -841,11 +845,17 @@ void TurbulenceBC(Mesh *pm) {
       }
     }
   });
-  pm->pmb_pack->pdyngr->PrimToConInit(ie+1, ie+ng, 0, (n2-1), 0, (n3-1));
+  par_for("zoomin_outer_bcc_x1", DevExeSpace(),0,(nmb-1),0,(n3-1),0,(n2-1),
+  KOKKOS_LAMBDA(int m, int k, int j) {
+    ChebyshevInterpolation<NCHEBY, NSTENCIL> interp;
+    if (mb_bcs.d_view(m,BoundaryFace::outer_x1) == BoundaryFlag::user) {
+      for (int i = ie+1; i <= ie+ng; ++i) {
+        TURBULENCE_BC_COMPUTE_BCC_FROM_BFC;
+      }
+    }
+  });
 
   // X2-inner boundary -------------------------------------------------------
-  pm->pmb_pack->pmhd->peos->ConsToPrim(u0_, b0, w0_, bcc_, false,
-                                       0, (n1-1), js-ng, js-1, 0, (n3-1));
   par_for("zoomin_inner_x2", DevExeSpace(),0,(nmb-1),0,(n3-1),0,(n1-1),
   KOKKOS_LAMBDA(int m, int k, int i) {
     ChebyshevInterpolation<NCHEBY, NSTENCIL> interp;
@@ -855,7 +865,7 @@ void TurbulenceBC(Mesh *pm) {
       }
     }
   });
-  par_for("zoomin_inner_field_x2", DevExeSpace(),0,(nmb-1),0,(n3),0,(n1),
+  par_for("zoomin_inner_bfc_x2", DevExeSpace(),0,(nmb-1),0,(n3),0,(n1),
   KOKKOS_LAMBDA(int m, int k, int i) {
     ChebyshevInterpolation<NCHEBY, NSTENCIL> interp;
     if (mb_bcs.d_view(m,BoundaryFace::inner_x2) == BoundaryFlag::user) {
@@ -864,11 +874,17 @@ void TurbulenceBC(Mesh *pm) {
       }
     }
   });
-  pm->pmb_pack->pdyngr->PrimToConInit(0, (n1-1), js-ng, js-1, 0, (n3-1));
+  par_for("zoomin_inner_bcc_x2", DevExeSpace(),0,(nmb-1),0,(n3-1),0,(n1-1),
+  KOKKOS_LAMBDA(int m, int k, int i) {
+    ChebyshevInterpolation<NCHEBY, NSTENCIL> interp;
+    if (mb_bcs.d_view(m,BoundaryFace::inner_x2) == BoundaryFlag::user) {
+      for (int j = js-ng; j < js; ++j) {
+        TURBULENCE_BC_COMPUTE_BCC_FROM_BFC;
+      }
+    }
+  });
 
   // X2-outer boundary -------------------------------------------------------
-  pm->pmb_pack->pmhd->peos->ConsToPrim(u0_, b0, w0_, bcc_, false,
-                                       0, (n1-1), je+1, je+ng, 0, (n3-1));
   par_for("zoomin_outer_x2", DevExeSpace(),0,(nmb-1),0,(n3-1),0,(n1-1),
   KOKKOS_LAMBDA(int m, int k, int i) {
     ChebyshevInterpolation<NCHEBY, NSTENCIL> interp;
@@ -878,7 +894,7 @@ void TurbulenceBC(Mesh *pm) {
       }
     }
   });
-  par_for("zoomin_outer_field_x2", DevExeSpace(),0,(nmb-1),0,(n3),0,(n1),
+  par_for("zoomin_outer_bfc_x2", DevExeSpace(),0,(nmb-1),0,(n3),0,(n1),
   KOKKOS_LAMBDA(int m, int k, int i) {
     ChebyshevInterpolation<NCHEBY, NSTENCIL> interp;
     if (mb_bcs.d_view(m,BoundaryFace::outer_x2) == BoundaryFlag::user) {
@@ -887,11 +903,17 @@ void TurbulenceBC(Mesh *pm) {
       }
     }
   });
-  pm->pmb_pack->pdyngr->PrimToConInit(0, (n1-1), je+1, je+ng, 0, (n3-1));
+  par_for("zoomin_outer_bcc_x2", DevExeSpace(),0,(nmb-1),0,(n3-1),0,(n1-1),
+  KOKKOS_LAMBDA(int m, int k, int i) {
+    ChebyshevInterpolation<NCHEBY, NSTENCIL> interp;
+    if (mb_bcs.d_view(m,BoundaryFace::outer_x2) == BoundaryFlag::user) {
+      for (int j = je+1; j <= je+ng; ++j) {
+        TURBULENCE_BC_COMPUTE_BCC_FROM_BFC;
+      }
+    }
+  });
 
   // X3-inner boundary -------------------------------------------------------
-  pm->pmb_pack->pmhd->peos->ConsToPrim(u0_, b0, w0_, bcc_, false,
-                                       0, (n1-1), 0, (n2-1), ks-ng, ks-1);
   par_for("zoomin_inner_x3", DevExeSpace(),0,(nmb-1),0,(n2-1),0,(n1-1),
   KOKKOS_LAMBDA(int m, int j, int i) {
     ChebyshevInterpolation<NCHEBY, NSTENCIL> interp;
@@ -901,7 +923,7 @@ void TurbulenceBC(Mesh *pm) {
       }
     }
   });
-  par_for("zoomin_inner_field_x3", DevExeSpace(),0,(nmb-1),0,(n2),0,(n1),
+  par_for("zoomin_inner_bfc_x3", DevExeSpace(),0,(nmb-1),0,(n2),0,(n1),
   KOKKOS_LAMBDA(int m, int j, int i) {
     ChebyshevInterpolation<NCHEBY, NSTENCIL> interp;
     if (mb_bcs.d_view(m,BoundaryFace::inner_x3) == BoundaryFlag::user) {
@@ -910,11 +932,17 @@ void TurbulenceBC(Mesh *pm) {
       }
     }
   });
-  pm->pmb_pack->pdyngr->PrimToConInit(0, (n1-1), 0, (n2-1), ks-ng, ks-1);
+  par_for("zoomin_inner_bcc_x3", DevExeSpace(),0,(nmb-1),0,(n2-1),0,(n1-1),
+  KOKKOS_LAMBDA(int m, int j, int i) {
+    ChebyshevInterpolation<NCHEBY, NSTENCIL> interp;
+    if (mb_bcs.d_view(m,BoundaryFace::inner_x3) == BoundaryFlag::user) {
+      for (int k = ks-ng; k < ks; ++k) {
+        TURBULENCE_BC_COMPUTE_BCC_FROM_BFC;
+      }
+    }
+  });
 
   // X3-outer boundary -------------------------------------------------------
-  pm->pmb_pack->pmhd->peos->ConsToPrim(u0_, b0, w0_, bcc_, false,
-                                       0, (n1-1), 0, (n2-1), ke+1, ke+ng);
   par_for("zoomin_outer_x3", DevExeSpace(),0,(nmb-1),0,(n2-1),0,(n1-1),
   KOKKOS_LAMBDA(int m, int j, int i) {
     ChebyshevInterpolation<NCHEBY, NSTENCIL> interp;
@@ -924,7 +952,7 @@ void TurbulenceBC(Mesh *pm) {
       }
     }
   });
-  par_for("zoomin_outer_field_x3", DevExeSpace(),0,(nmb-1),0,(n2),0,(n1),
+  par_for("zoomin_outer_bfc_x3", DevExeSpace(),0,(nmb-1),0,(n2),0,(n1),
   KOKKOS_LAMBDA(int m, int j, int i) {
     ChebyshevInterpolation<NCHEBY, NSTENCIL> interp;
     if (mb_bcs.d_view(m,BoundaryFace::outer_x3) == BoundaryFlag::user) {
@@ -933,7 +961,23 @@ void TurbulenceBC(Mesh *pm) {
       }
     }
   });
-  pm->pmb_pack->pdyngr->PrimToConInit(0, (n1-1), 0, (n2-1), ke+1, ke+ng);
+  par_for("zoomin_outer_bcc_x3", DevExeSpace(),0,(nmb-1),0,(n2-1),0,(n1-1),
+  KOKKOS_LAMBDA(int m, int j, int i) {
+    ChebyshevInterpolation<NCHEBY, NSTENCIL> interp;
+    if (mb_bcs.d_view(m,BoundaryFace::outer_x3) == BoundaryFlag::user) {
+      for (int k = ke+1; k <= ke+ng; ++k) {
+        TURBULENCE_BC_COMPUTE_BCC_FROM_BFC;
+      }
+    }
+  });
+
+  // Convert primitives to conservative --------------------------------------
+  pdyngr->PrimToConInit(is-ng, is-1, 0, (n2-1), 0, (n3-1));
+  pdyngr->PrimToConInit(ie+1, ie+ng, 0, (n2-1), 0, (n3-1));
+  pdyngr->PrimToConInit(0, (n1-1), js-ng, js-1, 0, (n3-1));
+  pdyngr->PrimToConInit(0, (n1-1), je+1, je+ng, 0, (n3-1));
+  pdyngr->PrimToConInit(0, (n1-1), 0, (n2-1), ks-ng, ks-1);
+  pdyngr->PrimToConInit(0, (n1-1), 0, (n2-1), ke+1, ke+ng);
 
 #ifdef DEBUG_PGEN
   printf("done!\n");
@@ -941,6 +985,7 @@ void TurbulenceBC(Mesh *pm) {
 
 #undef TURBULENCE_BC_INTERPOLATE_CC_DATA
 #undef TURBULENCE_BC_INTERPOLATE_FC_DATA
+#undef TURBULENCE_BC_COMPUTE_BCC_FROM_BFC
 }
 
 void SetADMVariables(MeshBlockPack *pmbp) {
