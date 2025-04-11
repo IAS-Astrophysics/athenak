@@ -78,8 +78,6 @@ class ChebyshevInterpolation {
     while (xe > NB) {
       xe--; xs--;
     }
-    assert (xs >= 0);
-    assert (xe <= NB);
 
     for (int j = xs; j <= xe; ++j) {
       Real num = 1.0;
@@ -675,6 +673,8 @@ void TurbulenceBC(Mesh *pm) {
   auto &cheb_data = pmy_data->cheb_data;
 
   // X1-inner boundary -------------------------------------------------------
+  pm->pmb_pack->pmhd->peos->ConsToPrim(u0_, b0, w0_, bcc_, false,
+                                       is-ng, is-1, 0, (n2-1), 0, (n3-1));
   par_for("zoomin_inner_x1", DevExeSpace(),0,(nmb-1),0,(n3-1),0,(n2-1),
   KOKKOS_LAMBDA(int m, int k, int j) {
     ChebyshevInterpolation<NCHEBY, NSTENCIL> interp;
@@ -821,6 +821,8 @@ void TurbulenceBC(Mesh *pm) {
   pm->pmb_pack->pdyngr->PrimToConInit(is-ng, is-1, 0, (n2-1), 0, (n3-1));
 
   // X1-outer boundary -------------------------------------------------------
+  pm->pmb_pack->pmhd->peos->ConsToPrim(u0_, b0, w0_, bcc_, false,
+                                       ie+1, ie+ng, 0, (n2-1), 0, (n3-1));
   par_for("zoomin_outer_x1", DevExeSpace(),0,(nmb-1),0,(n3-1),0,(n2-1),
   KOKKOS_LAMBDA(int m, int k, int j) {
     ChebyshevInterpolation<NCHEBY, NSTENCIL> interp;
@@ -842,6 +844,8 @@ void TurbulenceBC(Mesh *pm) {
   pm->pmb_pack->pdyngr->PrimToConInit(ie+1, ie+ng, 0, (n2-1), 0, (n3-1));
 
   // X2-inner boundary -------------------------------------------------------
+  pm->pmb_pack->pmhd->peos->ConsToPrim(u0_, b0, w0_, bcc_, false,
+                                       0, (n1-1), js-ng, js-1, 0, (n3-1));
   par_for("zoomin_inner_x2", DevExeSpace(),0,(nmb-1),0,(n3-1),0,(n1-1),
   KOKKOS_LAMBDA(int m, int k, int i) {
     ChebyshevInterpolation<NCHEBY, NSTENCIL> interp;
@@ -863,6 +867,8 @@ void TurbulenceBC(Mesh *pm) {
   pm->pmb_pack->pdyngr->PrimToConInit(0, (n1-1), js-ng, js-1, 0, (n3-1));
 
   // X2-outer boundary -------------------------------------------------------
+  pm->pmb_pack->pmhd->peos->ConsToPrim(u0_, b0, w0_, bcc_, false,
+                                       0, (n1-1), je+1, je+ng, 0, (n3-1));
   par_for("zoomin_outer_x2", DevExeSpace(),0,(nmb-1),0,(n3-1),0,(n1-1),
   KOKKOS_LAMBDA(int m, int k, int i) {
     ChebyshevInterpolation<NCHEBY, NSTENCIL> interp;
@@ -884,6 +890,8 @@ void TurbulenceBC(Mesh *pm) {
   pm->pmb_pack->pdyngr->PrimToConInit(0, (n1-1), je+1, je+ng, 0, (n3-1));
 
   // X3-inner boundary -------------------------------------------------------
+  pm->pmb_pack->pmhd->peos->ConsToPrim(u0_, b0, w0_, bcc_, false,
+                                       0, (n1-1), 0, (n2-1), ks-ng, ks-1);
   par_for("zoomin_inner_x3", DevExeSpace(),0,(nmb-1),0,(n2-1),0,(n1-1),
   KOKKOS_LAMBDA(int m, int j, int i) {
     ChebyshevInterpolation<NCHEBY, NSTENCIL> interp;
@@ -905,6 +913,8 @@ void TurbulenceBC(Mesh *pm) {
   pm->pmb_pack->pdyngr->PrimToConInit(0, (n1-1), 0, (n2-1), ks-ng, ks-1);
 
   // X3-outer boundary -------------------------------------------------------
+  pm->pmb_pack->pmhd->peos->ConsToPrim(u0_, b0, w0_, bcc_, false,
+                                       0, (n1-1), 0, (n2-1), ke+1, ke+ng);
   par_for("zoomin_outer_x3", DevExeSpace(),0,(nmb-1),0,(n2-1),0,(n1-1),
   KOKKOS_LAMBDA(int m, int j, int i) {
     ChebyshevInterpolation<NCHEBY, NSTENCIL> interp;
