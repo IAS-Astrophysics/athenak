@@ -115,7 +115,7 @@ TaskStatus RadiationM1::CalcClosure(Driver *pdrive, int stage) {
                      u0_(m, CombinedIdx(nuidx, M1_FY_IDX, nvars_), k, j, i),
                      u0_(m, CombinedIdx(nuidx, M1_FZ_IDX, nvars_), k, j, i),
                      F_d);
-            //apply_floor(g_uu, E, F_d, params_);
+            apply_floor(g_uu, E, F_d, params_);
             Real chi{};
             AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> Ptemp_dd{};
             calc_closure(BrentFunc_, g_dd, g_uu, n_d, w_lorentz, u_u, v_d, proj_ud, E, F_d,

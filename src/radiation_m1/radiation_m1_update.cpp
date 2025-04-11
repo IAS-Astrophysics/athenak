@@ -74,10 +74,10 @@ TaskStatus RadiationM1::TimeUpdate(Driver *d, int stage) {
         // [A] Compute gr quantities: metric, shift, extrinsic curvature, etc.
         Real garr_dd[16];
         Real garr_uu[16];
-        AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> g_uu{};
-        AthenaPointTensor<Real, TensorSymm::SYM2, 3, 2> g3_uu{};
-        AthenaPointTensor<Real, TensorSymm::SYM2, 3, 2> K_dd{};
         AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> g_dd{};
+        AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> g_uu{};
+        AthenaPointTensor<Real, TensorSymm::SYM2, 3, 2> gamma_uu{};
+        AthenaPointTensor<Real, TensorSymm::SYM2, 3, 2> K_dd{};
         AthenaPointTensor<Real, TensorSymm::NONE, 4, 2> gamma_ud{};
         AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> beta_u{};
         AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> beta_d{};
@@ -103,7 +103,7 @@ TaskStatus RadiationM1::TimeUpdate(Driver *d, int stage) {
         }
         for (int a = 0; a < 3; ++a) {
           for (int b = 0; b < 3; ++b) {
-            g3_uu(a, b) = g_uu(a + 1, b + 1) +
+            gamma_uu(a, b) = g_uu(a + 1, b + 1) +
                           adm.beta_u(m, a, k, j, i) * adm.beta_u(m, b, k, j, i) /
                               (adm.alpha(m, k, j, i) * adm.alpha(m, k, j, i));
             K_dd(a, b) = adm.vK_dd(m, a, b, k, j, i);
@@ -177,7 +177,7 @@ TaskStatus RadiationM1::TimeUpdate(Driver *d, int stage) {
         // [D] Capture quantities from EOS
         Real mb = 0.;
         if (nspecies_ > 1) {
-          //mb = AverageBaryonMass();
+          // mb = AverageBaryonMass();
         }
         Real dens{};
         Real Y_e{};
@@ -229,11 +229,11 @@ TaskStatus RadiationM1::TimeUpdate(Driver *d, int stage) {
               }
             }
             AthenaPointTensor<Real, TensorSymm::SYM2, 3, 2> P3_uu{};
-            tensor_contract2(g3_uu, P3_dd, P3_uu);
+            tensor_contract2(gamma_uu, P3_dd, P3_uu);
 
             // geometric sources
             rEFN[nuidx][M1_E_IDX] += adm.alpha(m, k, j, i) * tensor_dot(P3_uu, K_dd) -
-                                     tensor_dot(g3_uu, F3_d, dalpha_d);
+                                     tensor_dot(gamma_uu, F3_d, dalpha_d);
 
             for (int a = 0; a < 3; ++a) {
               rEFN[nuidx][a + 1] -= E * dalpha_d(a);
@@ -303,12 +303,6 @@ TaskStatus RadiationM1::TimeUpdate(Driver *d, int stage) {
             }
 
             if (params_.src_update == Implicit) {
-              AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> F_d{};
-              pack_F_d(beta_u(1), beta_u(2), beta_u(3),
-                       u0_(m, CombinedIdx(nuidx, M1_FX_IDX, nvars_), k, j, i),
-                       u0_(m, CombinedIdx(nuidx, M1_FY_IDX, nvars_), k, j, i),
-                       u0_(m, CombinedIdx(nuidx, M1_FZ_IDX, nvars_), k, j, i), F_d);
-              const Real E = u0_(m, CombinedIdx(nuidx, M1_E_IDX, nvars_), k, j, i);
               // Boost to the fluid frame, compute fluid matter interaction and
               // boost back. Use these values for implicit solve
 
@@ -336,16 +330,17 @@ TaskStatus RadiationM1::TimeUpdate(Driver *d, int stage) {
               // Compute quantities in the fluid frame
               AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> P_dd{};
               calc_closure(BrentFunc_, g_dd, g_uu, n_d, w_lorentz, u_u, v_d, proj_ud,
-                           Estar, Fstar_d, chi_(m, nuidx, k, j, i), P_dd, params_, params_.closure_type);
+                           Estar, Fstar_d, chi_(m, nuidx, k, j, i), P_dd, params_,
+                           params_.closure_type);
               AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> rT_dd{};
               assemble_rT(n_d, Estar, Fstar_d, P_dd, rT_dd);
               if (Estar > 1e-4) {
-              printf("[radiation_m1_update] chi star = %.10e\n", chi_(m, nuidx, k, j, i));
+                printf("[radiation_m1_update] chi star = %.10e\n",
+                       chi_(m, nuidx, k, j, i));
               }
               Real Jstar = calc_J_from_rT(rT_dd, u_u);
               AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> Hstar_d{};
               calc_H_from_rT(rT_dd, u_u, proj_ud, Hstar_d);
-              apply_floor(g_uu, Jstar, Hstar_d, params_); //@TODO: do we need this
 
               // Estimate interaction with matter
               const Real dtau = beta_dt / w_lorentz;
@@ -366,7 +361,7 @@ TaskStatus RadiationM1::TimeUpdate(Driver *d, int stage) {
 
               // Update Tmunu
               const Real H2 = tensor_dot(g_uu, Hnew_d, Hnew_d);
-              chi_(m, nuidx, k, j, i) = 1./3.;
+              chi_(m, nuidx, k, j, i) = 1. / 3.;
 
               const Real dthick = 3. * (1. - chi_(m, nuidx, k, j, i)) / 2.;
               const Real dthin = 1. - dthick;
@@ -390,8 +385,8 @@ TaskStatus RadiationM1::TimeUpdate(Driver *d, int stage) {
                   BrentFunc_, HybridsjFunc_, beta_dt, adm.alpha(m, k, j, i), g_dd, g_uu,
                   n_d, n_u, gamma_ud, u_d, u_u, v_d, v_u, proj_ud, w_lorentz, Estar,
                   Fstar_d, Estar, Fstar_d, volform * eta_1_(m, nuidx, k, j, i),
-                  abs_1_(m, nuidx, k, j, i), scat_1_(m, nuidx, k, j, i), chi_(m, nuidx, k, j, i), Enew,
-                  Fnew_d, params_, params_.closure_type);
+                  abs_1_(m, nuidx, k, j, i), scat_1_(m, nuidx, k, j, i),
+                  chi_(m, nuidx, k, j, i), Enew, Fnew_d, params_, params_.closure_type);
               apply_floor(g_uu, Enew, Fnew_d, params_);
 
               // Update closure
