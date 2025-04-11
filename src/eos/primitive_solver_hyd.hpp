@@ -324,6 +324,15 @@ class PrimitiveSolverHydro {
     auto &eos_ = ps.GetEOS();
     auto &ps_  = ps;
 
+    auto &indcs = pmy_pack->pmesh->mb_indcs;
+    int &is = indcs.is;
+    int &ie = indcs.ie;
+    int &js = indcs.js;
+    int &je = indcs.je;
+    int &ks = indcs.ks;
+    int &ke = indcs.ke;
+    auto &size = pmy_pack->pmb->mb_size;
+
     const int ni = (iu - il + 1);
     const int nji = (ju - jl + 1)*ni;
     const int nkji = (ku - kl + 1)*nji;

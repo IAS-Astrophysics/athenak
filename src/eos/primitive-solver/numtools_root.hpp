@@ -64,6 +64,7 @@ class Root {
     }
     do {
       // Calculate the new root position.
+      xold = x;
       x = (fub*lb - flb*ub)/(fub - flb);
       count++;
       // Calculate f at the prospective root.

@@ -89,7 +89,7 @@ add_executable(
         outputs/outputs.cpp
         outputs/basetype_output.cpp
         outputs/cartgrid.cpp
-	outputs/derived_variables.cpp
+        outputs/derived_variables.cpp
         outputs/binary.cpp
         outputs/eventlog.cpp
         outputs/formatted_table.cpp

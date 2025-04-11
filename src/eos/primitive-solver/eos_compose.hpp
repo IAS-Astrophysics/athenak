@@ -421,12 +421,12 @@ class EOSCompOSE : public EOSPolicyInterface, public LogPolicy, public SupportsE
       }
     }
     
-    if (flo*fhi>0.0 && iv==ECLOGP || iv==ECLOGE) {
+    if (flo*fhi>0.0 && (iv==ECLOGP || iv==ECLOGE)) {
       //if (var <= eval_at_nty(iv,n,min_T,Yq)) {
-      if (f(0) <= 0.) {
+      if (f(0) <= 0.0) {
         return min_T;
       //} else if (var >= eval_at_nty(iv,n,max_T,Yq)) {
-      } else if (f(m_nt-1) >= 0) {
+      } else if (f(m_nt-1) >= 0.0) {
         return max_T;
       }
     }
