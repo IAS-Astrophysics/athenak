@@ -54,7 +54,7 @@ void CalcFlux(const int m, const int k, const int j, const int i,
   }
   for (int a = 1; a < 4; ++a) {
     for (int b = 1; b < 4; ++b) {
-      gamma_uu(a - 1, b - 1) = garr_uu[a + b * 4] - beta_u(a) * beta_u(b) /
+      gamma_uu(a - 1, b - 1) = garr_uu[a + b * 4] + beta_u(a) * beta_u(b) /
                                                         (adm.alpha(m, k, j, i) *
                                                          adm.alpha(m, k, j, i));
     }
@@ -121,7 +121,7 @@ void CalcFlux(const int m, const int k, const int j, const int i,
   flux[2] = calc_F_flux(adm.alpha(m, k, j, i), beta_u, F_d, P_ud, dir, 2);
   flux[3] = calc_F_flux(adm.alpha(m, k, j, i), beta_u, F_d, P_ud, dir, 3);
   if (nspecies_ > 1) {
-    flux[4] = adm.alpha(m, k, j, i) * nnu * fnu_u(dir + 1);
+    flux[4] = adm.alpha(m, k, j, i) * nnu * fnu_u(dir);
   } else {
     flux[4] = 0;
   }
