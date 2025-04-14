@@ -1827,9 +1827,15 @@ static void InjectKineticPrtcls( Real x1, Real x2, Real x3, Real * u, Real * b,
       u_aux[2] = u[2] - gu[0][3]*u0*alpha; 	
     } else {
       while ( u0 > max_en || u0 < min_en ){
-        u[0] *= this_en/u0;
-        u[1] *= this_en/u0;
-        u[2] *= this_en/u0;
+        if (u0 > max_en) {
+          u[0] /= 1.5;
+          u[1] /= 1.5;
+          u[2] /= 1.5;
+        } else if (u0 < min_en){
+          u[0] *= 1.5;
+          u[1] *= 1.5;
+          u[2] *= 1.5;
+        }
         u0 = gl[1][1]*SQR(u[0]) + gl[2][2]*SQR(u[1]) + gl[3][3]*SQR(u[2])
               + 2.0*gl[1][2]*u[0]*u[1] + 2.0*gl[1][3]*u[0]*u[2]
               + 2.0*gl[3][2]*u[2]*u[1];
