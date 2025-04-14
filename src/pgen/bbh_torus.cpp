@@ -129,15 +129,15 @@ void find_traj_t(Real tt, Real traj_array[NTRAJ]);
 KOKKOS_INLINE_FUNCTION
 void numerical_4metric(const Real t, const Real x, const Real y,
     const Real z, struct four_metric &outmet,
-    const Real nz_m1[NTRAJ], const Real nz_0[NTRAJ], const Real nz_p1[NTRAJ], const bbh_pgen& bbh_);
+    const Real nz_m1[NTRAJ], const Real nz_0[NTRAJ], const Real nz_p1[NTRAJ], const bbh_pgen bbh_);
 KOKKOS_INLINE_FUNCTION
 int four_metric_to_three_metric(const struct four_metric &met, struct three_metric &gam);
 KOKKOS_INLINE_FUNCTION
 void get_metric(const Real t, const Real x, const Real y, const Real z,
-	       	        struct four_metric &met, const Real bbh_traj_loc[NTRAJ], const bbh_pgen& bbh_);
+	       	        struct four_metric &met, const Real bbh_traj_loc[NTRAJ], const bbh_pgen bbh_);
 KOKKOS_INLINE_FUNCTION
 void SuperposedBBH(const Real time, const Real x, const Real y, const Real z,
-                   Real gcov[][NDIM], const Real traj_array[NTRAJ], const bbh_pgen& bbh_);
+                   Real gcov[][NDIM], const Real traj_array[NTRAJ], const bbh_pgen bbh_);
 void SetADMVariablesToBBH(MeshBlockPack *pmbp);
 void RefineAlphaMin(MeshBlockPack* pmbp);
 void RefineTracker(MeshBlockPack* pmbp);
@@ -147,7 +147,7 @@ KOKKOS_INLINE_FUNCTION
 static void GetSuperposedAndInverse(const Real t, 
                             const Real x, const Real y, const Real z, 
                             Real gcov[][NDIM], Real gcon[][NDIM], const Real bbh_traj_loc[NTRAJ], 
-                            const bbh_pgen& bbh_);
+                            const bbh_pgen bbh_);
 
 
 
@@ -237,7 +237,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   int &ks = indcs.ks; int &ke = indcs.ke;
   auto &size = pmbp->pmb->mb_size;
   int nmb = pmbp->nmb_thispack;
-  auto &bbh_ = bbh;
+  //auto bbh_ = bbh;
   auto &coord = pmbp->pcoord->coord_data;
   bool use_dyngr = (pmbp->pdyngr != nullptr);
 
@@ -373,7 +373,6 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   find_traj_t(0.0, bbh_traj_t0);
   auto& bbh_traj_ = bbh_traj_t0;
 
-
   Kokkos::parallel_reduce("pgen_torus1", Kokkos::RangePolicy<>(DevExeSpace(), 0, nmkji),
   KOKKOS_LAMBDA(const int &idx, Real &max_ptot) {
     // compute m,k,j,i indices of thread and call function
@@ -402,9 +401,6 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
 
     // Extract metric and inverse -- presumably should get actual metric?????
     Real glower[4][4], gupper[4][4];
-    //ComputeMetricAndInverse(x1v, x2v, x3v, coord.is_minkowski, coord.bh_spin,
-    //                        glower, gupper);
-
     GetSuperposedAndInverse(0.0, x1v, x2v, x3v, glower, gupper, bbh_traj_, trs);
 
     // Calculate Boyer-Lindquist coordinates of cell
@@ -491,8 +487,6 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
                       x1v, x2v, x3v, &u0, &u1, &u2, &u3);
 
       Real glower[4][4], gupper[4][4];
-      //ComputeMetricAndInverse(x1v, x2v, x3v, coord.is_minkowski, coord.bh_spin,
-      //                        glower, gupper);
       GetSuperposedAndInverse(0.0, x1v, x2v, x3v, glower, gupper, bbh_traj_, trs);
 
       uu1 = u1 - gupper[0][1]/gupper[0][0] * u0;
@@ -779,8 +773,6 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
       Real &x3max = size.d_view(m).x3max;
       Real x3v = CellCenterX(k-ks, indcs.nx3, x3min, x3max);
       Real glower[4][4], gupper[4][4];
-      //ComputeMetricAndInverse(x1v, x2v, x3v, coord.is_minkowski, coord.bh_spin,
-      //                        glower, gupper);
       GetSuperposedAndInverse(0.0, x1v, x2v, x3v, glower, gupper, bbh_traj_, trs);
 
       // Calculate Boyer-Lindquist coordinates of cell
@@ -929,7 +921,7 @@ void SetADMVariablesToBBH(MeshBlockPack *pmbp) {
   Real bbh_traj_p1[NTRAJ];
   Real bbh_traj_0[NTRAJ];
   Real bbh_traj_m1[NTRAJ];
-  auto& bbh_ = bbh;
+  auto bbh_ = bbh;
 
   /* Load trajectories */
 
@@ -989,7 +981,7 @@ void SetADMVariablesToBBH(MeshBlockPack *pmbp) {
 KOKKOS_INLINE_FUNCTION
 void numerical_4metric(const Real t, const Real x, const Real y,
     const Real z, struct four_metric &outmet,
-    const Real nz_m1[NTRAJ], const Real nz_0[NTRAJ], const Real nz_p1[NTRAJ], const bbh_pgen& bbh_)
+    const Real nz_m1[NTRAJ], const Real nz_0[NTRAJ], const Real nz_p1[NTRAJ], const bbh_pgen bbh_)
 {
   struct four_metric met_m1;
   struct four_metric met_p1;
@@ -1076,10 +1068,6 @@ int four_metric_to_three_metric(const struct four_metric &met,
   /* If determinant is not >0  something is wrong with the metric */
   /* This could occur during the transition to merger at certain points so here we restart to Minkowski */
   if (!(det > 0)) {
-    //std::fprintf(stderr, "det < 0: %e\n", det);
-    //std::fprintf(stderr, "%e %e %e\n", gam.gxx, gam.gxy, gam.gxz);
-    //std::fprintf(stderr, "%e %e %e\n", gam.gyy, gam.gyz, gam.gzz);
-    //std::fflush(stderr);
     det = 1.0;
     gam.gxx = 1.0;
     gam.gxy = 0.0;
@@ -1289,7 +1277,7 @@ void find_traj_t(Real t, Real bbh_t[NTRAJ]) {
 
 KOKKOS_INLINE_FUNCTION
 void SuperposedBBH(const Real time, const Real x, const Real y, const Real z,
-                    Real gcov[][NDIM], const Real traj_array[NTRAJ], const bbh_pgen& bbh_)
+                    Real gcov[][NDIM], const Real traj_array[NTRAJ], const bbh_pgen bbh_)
 {
   /* Superposition components*/
   Real KS1[NDIM][NDIM];
@@ -1635,7 +1623,7 @@ void get_metric(const Real t,
 	       	const Real y,
 	       	const Real z,
 	       	struct four_metric &met,
-          const Real bbh_traj_loc[NTRAJ], const bbh_pgen& bbh_)
+          const Real bbh_traj_loc[NTRAJ], const bbh_pgen bbh_)
 {
   Real gcov[NDIM][NDIM];
 
@@ -1672,7 +1660,7 @@ void RefineAlphaMin(MeshBlockPack *pmbp) {
   // note: we need this to prevent capture by this in the lambda expr.
 
   // note: we need this to prevent capture by this in the lambda expr.
-  auto &bbh_ = bbh;
+  auto bbh_ = bbh;
 
   par_for_outer(
   "AMR::ChiMin", DevExeSpace(), 0, 0, 0, (nmb - 1),
@@ -2271,7 +2259,7 @@ KOKKOS_INLINE_FUNCTION
 static void GetSuperposedAndInverse(const Real t, 
                             const Real x, const Real y, const Real z, 
                             Real gcov[][NDIM], Real gcon[][NDIM], const Real bbh_traj_loc[NTRAJ], 
-                            const bbh_pgen& bbh_){
+                            const bbh_pgen bbh_){
   //Real gcov[NDIM][NDIM];
   //Real gcon[NDIM][NDIM];
   SuperposedBBH(t, x, y, z, gcov, bbh_traj_loc, bbh_);
