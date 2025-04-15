@@ -11,6 +11,7 @@
 #include "athena.hpp"
 #include "coordinates/adm.hpp"
 #include "radiation_m1.hpp"
+#include "radiation_m1_nurates.hpp"
 
 namespace radiationm1 {
 
@@ -43,10 +44,9 @@ TaskStatus RadiationM1::CalcOpacityToy(Driver *pdrive, int stage) {
   adm::ADM::ADM_vars &adm = pmy_pack->padm->adm;
 
   par_for(
-      "radiation_m1_calc_toy_opacity", DevExeSpace(), 0, nmb1, ks, ke, js, je,
-      is, ie, 0, nspecies_ - 1,
-      KOKKOS_LAMBDA(const int m, const int k, const int j, const int i,
-                    const int nuidx) {
+      "radiation_m1_calc_toy_opacity", DevExeSpace(), 0, nmb1, ks, ke, js, je, is, ie, 0,
+      nspecies_ - 1,
+      KOKKOS_LAMBDA(const int m, const int k, const int j, const int i, const int nuidx) {
         Real &x1min = mbsize.d_view(m).x1min;
         Real &x1max = mbsize.d_view(m).x1max;
         int nx1 = indcs.nx1;
@@ -65,14 +65,75 @@ TaskStatus RadiationM1::CalcOpacityToy(Driver *pdrive, int stage) {
         Real dz = (x3max - x3min) / static_cast<Real>(nx3);
         Real x3 = CellCenterX(k - ks, nx3, x3min, x3max);
         toy_opacity_fn_(x1, x2, x3, dx, dy, dz, nuidx, eta_0_(m, nuidx, k, j, i),
-                       abs_0_(m, nuidx, k, j, i), eta_1_(m, nuidx, k, j, i),
-                       abs_1_(m, nuidx, k, j, i), scat_1_(m, nuidx, k, j, i));
+                        abs_0_(m, nuidx, k, j, i), eta_1_(m, nuidx, k, j, i),
+                        abs_1_(m, nuidx, k, j, i), scat_1_(m, nuidx, k, j, i));
       });
 
   return TaskStatus::complete;
 }
 
 TaskStatus RadiationM1::CalcOpacityNurates(Driver *pdrive, int stage) {
+  RegionIndcs &indcs = pmy_pack->pmesh->mb_indcs;
+  int &is = indcs.is, &ie = indcs.ie;
+  int &js = indcs.js, &je = indcs.je;
+  int &ks = indcs.ks, &ke = indcs.ke;
+  int &ng = indcs.ng;
+
+  auto nmb1 = pmy_pack->nmb_thispack - 1;
+  auto &mbsize = pmy_pack->pmb->mb_size;
+  auto &nspecies_ = pmy_pack->pradm1->nspecies;
+  auto nvarstotm1 = pmy_pack->pradm1->nvarstot - 1;
+  auto nvars_ = pmy_pack->pradm1->nvars;
+  auto &params_ = pmy_pack->pradm1->params;
+  bool &multi_d = pmy_pack->pmesh->multi_d;
+  bool &three_d = pmy_pack->pmesh->three_d;
+
+  auto &u_mu_ = pmy_pack->pradm1->u_mu;
+  auto &u0_ = pmy_pack->pradm1->u0;
+
+  auto &eta_0_ = pmy_pack->pradm1->eta_0;
+  auto &abs_0_ = pmy_pack->pradm1->abs_0;
+  auto &eta_1_ = pmy_pack->pradm1->eta_1;
+  auto &abs_1_ = pmy_pack->pradm1->abs_1;
+  auto &scat_1_ = pmy_pack->pradm1->scat_1;
+  auto &toy_opacity_fn_ = pmy_pack->pradm1->toy_opacity_fn;
+  auto &chi_ = pmy_pack->pradm1->chi;
+  auto &nurates_params_ = pmy_pack->pradm1->nurates_params;
+  auto &adm = pmy_pack->padm->adm;
+
+  par_for(
+      "radiation_m1_calc_nurates_opacity", DevExeSpace(), 0, nmb1, ks, ke, js, je, is, ie,
+      KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
+        Real nb{};
+        Real temp{};
+        Real ye{};
+        Real mu_n{};
+        Real mu_p{};
+        Real mu_e{};
+
+        // These are fluid frame quantities
+        Real n_nue{};
+        Real j_nue{};
+        Real chi_nue{};
+        Real n_nua{};
+        Real j_nua{};
+        Real chi_nua{};
+        Real n_nux{};
+        Real j_nux{};
+        Real chi_nux{};
+        /*
+        bns_nurates(&nb, &temp, &ye, &mu_n, &mu_p, &mu_e, &n_nue, &j_nue, &chi_nue,
+                    &n_nua, &j_nua, &chi_nua, &n_nux, &j_nux, &chi_nux,
+                    eta_0_(m, id_nue, k, j, i), eta_0_(m, id_anue, k, j, i),
+                    eta_0_(m, id_nux, k, j, i), eta_1_(m, id_nue, k, j, i),
+                    eta_1_(m, id_anue, k, j, i), eta_1_(m, id_nux, k, j, i), &sigma_0_nue,
+                    Real & sigma_0_nua, Real & sigma_0_nux, Real & sigma_1_nue,
+                    Real & sigma_1_nua, Real & sigma_1_nux, Real & scat_0_nue,
+                    Real & scat_0_nua, Real & scat_0_nux, scat_1_(m, id_nue, k, j, i),
+                    scat_1_(m, id_anue, k, j, i), scat_1_(m, id_nux, k, j, i),
+                    nurates_params_); */
+      });
+
   return TaskStatus::complete;
 }
 }  // namespace radiationm1

@@ -763,6 +763,14 @@ BaseTypeOutput::BaseTypeOutput(ParameterInput *pin, Mesh *pm, OutputParameters o
     }
   }
 
+  // radiation m1 scat 1
+  if (out_params.variable.compare("rad_m1_vel") == 0) {
+    for (int idx = 0; idx < 4; ++idx) {
+      outvars.emplace_back("u" + std::to_string(idx), idx,
+                           &(pm->pmb_pack->pradm1->u_mu_data));
+    }
+  }
+
   // initialize vector containing number of output MBs per rank
   noutmbs.assign(global_variable::nranks, 0);
 }

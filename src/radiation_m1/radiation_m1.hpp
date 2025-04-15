@@ -19,6 +19,7 @@
 #include "radiation_m1/radiation_m1_params.hpp"
 #include "radiation_m1/radiation_m1_roots_fns.hpp"
 #include "tasklist/task_list.hpp"
+#include "bns_nurates/include/bns_nurates.hpp"
 
 namespace radiationm1 {
 
@@ -62,11 +63,13 @@ class RadiationM1 {
   BrentFunctor BrentFunc;        // function to minimize for closure
   HybridsjFunctor HybridsjFunc;  // function to minimize for multiroots solver
 
+  NuratesParams nurates_params;  // pars for nurates (choice of reactions, quadratures)
+
   ToyOpacityFn toy_opacity_fn = nullptr;  // use only if toy opacities enabled
 
-  int nvars;                 // no. of evolved variables per species
-  int nspecies;              // no. of species
-  int nvarstot;              // total no. of evolved variables
+  int nvars;                   // no. of evolved variables per species
+  int nspecies;                // no. of species
+  int nvarstot;                // total no. of evolved variables
   RadiationM1Params params{};  // user parameters for grey M1
 
   DvceArray5D<Real> u0;              // evolved variables
@@ -87,7 +90,7 @@ class RadiationM1 {
   RadiationM1TaskIDs id;          // container to hold names of TaskIDs
   Real dtnew{};
 
-  //DvceArray1D<Real> beam_source_vals;  // values of 1d beams
+  // DvceArray1D<Real> beam_source_vals;  // values of 1d beams
   RadiationM1Beam rad_m1_beam;
 
   // functions...
@@ -119,8 +122,8 @@ class RadiationM1 {
 
 // beam boundary conditions
 void ApplyBeamSources1D(Mesh* pmesh);
-void ApplyBeamSources2D(Mesh *pmesh);
-void ApplyBeamSourcesBlackHole(Mesh *pmesh);
+void ApplyBeamSources2D(Mesh* pmesh);
+void ApplyBeamSourcesBlackHole(Mesh* pmesh);
 
 }  // namespace radiationm1
 

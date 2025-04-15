@@ -14,6 +14,7 @@
 #include "radiation_m1.hpp"
 #include "radiation_m1_calc_closure.hpp"
 #include "radiation_m1_helpers.hpp"
+#include "radiation_m1_nurates.hpp"
 #include "radiation_m1_sources.hpp"
 #include "z4c/z4c.hpp"
 
@@ -177,7 +178,7 @@ TaskStatus RadiationM1::TimeUpdate(Driver *d, int stage) {
         // [D] Capture quantities from EOS
         Real mb = 0.;
         if (nspecies_ > 1) {
-          // mb = AverageBaryonMass();
+          mb = AverageBaryonMass();
         }
         Real dens{};
         Real Y_e{};

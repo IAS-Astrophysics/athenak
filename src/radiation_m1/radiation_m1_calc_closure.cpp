@@ -120,9 +120,9 @@ TaskStatus RadiationM1::CalcClosure(Driver *pdrive, int stage) {
             AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> Ptemp_dd{};
             calc_closure(BrentFunc_, g_dd, g_uu, n_d, w_lorentz, u_u, v_d, proj_ud, E, F_d,
                          chi, Ptemp_dd, params_, params_.closure_type);
-            if (E > 1e-4) {
-              printf("[radiation_m1_calc_closure] chi = %.10e\n", chi);
-            }
+            //if (E > 1e-4) {
+            //  printf("[radiation_m1_calc_closure] chi = %.10e\n", chi);
+            //}
             chi_(m, nuidx, k, j, i) = chi;
           });
         }

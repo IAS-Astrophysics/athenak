@@ -7,13 +7,17 @@
 file(GLOB_RECURSE NURATESSOURCES "bns_nurates/include/*.hpp")
 
 if(ENABLE_NURATES)
-    set(ENABLE_NURATES_SOURCES ${NURATESSOURCES})
+    set(ENABLE_NURATES_SOURCES ${NURATESSOURCES}
+            radiation_m1/radiation_m1_nurates.hpp
+            radiation_m1/radiation_m1_photon_opacities.hpp)
 else()
     set(ENABLE_NURATES_SOURCES ""
             radiation_m1/radiation_m1_roots_fns.hpp
             radiation_m1/radiation_m1_closure.hpp
             pgen/tests/rad_m1_diffusiontest.cpp
-            radiation_m1/radiation_m1_nurates.cpp)
+            radiation_m1/radiation_m1_nurates.hpp
+            radiation_m1/radiation_m1_photon_opacities.hpp
+            pgen/tests/rad_m1_velocityjump.cpp)
 endif()
 
 # list of files to be compiled into executable name
@@ -205,6 +209,8 @@ add_executable(
         pgen/tests/rad_m1_spheretest.cpp
 
         ${ENABLE_NURATES_SOURCES}
+        radiation_m1/radiation_m1_nurates.hpp
+        radiation_m1/radiation_m1_photon_opacities.hpp
 )
 
 # custom problem generator to be included in compile

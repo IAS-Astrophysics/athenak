@@ -42,5 +42,8 @@
   (1.619100425158886e-18) // Multiply to convert density from CGS to Cactus
 
 #define SQ(X) ((X) * (X))
+//#define POW2(X) ((X)*(X))
+//#define POW3(X) ((X)*POW2(X))
+//#define POW4(X) (POW2(X)*POW2(X))
 
 #endif // RADIATION_M1_MACRO_HPP
