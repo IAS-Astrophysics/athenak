@@ -1,6 +1,7 @@
 #ifndef RADIATION_M1_PARAMS_HPP
 #define RADIATION_M1_PARAMS_HPP
-#include <bns_nurates/include/bns_nurates.hpp>
+
+#include "bns_nurates/include/bns_nurates.hpp"
 //========================================================================================
 // AthenaXXX astrophysical plasma code
 // Copyright(C) 2020 James M. Stone <jmstone@ias.edu> and the Athena code team
@@ -74,6 +75,9 @@ struct RadiationM1Params {
   Real source_therm_limit;  // Assume neutrinos to be thermalized above this optical depth
   Real source_scat_limit;   // Use the scattering limit if the isotropization time is less
                             // than the timestep over this factor
+
+  int nurates_quad_nx;  // no. of quadrature points for 1d integration (bns_nurates)
+  int nurates_quad_ny;  // no. of quadrature points for 2d integration (bns_nurates)
 };
 
 enum SrcSignal {
