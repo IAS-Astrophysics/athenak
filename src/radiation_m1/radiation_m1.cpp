@@ -16,6 +16,7 @@
 #include "athena.hpp"
 #include "mesh/mesh.hpp"
 #include "parameter_input.hpp"
+#include "bns_nurates/include/integration.hpp"
 
 namespace radiationm1 {
 RadiationM1::RadiationM1(MeshBlockPack *ppack, ParameterInput *pin)
@@ -87,6 +88,25 @@ RadiationM1::RadiationM1(MeshBlockPack *ppack, ParameterInput *pin)
     params.opacity_type = Toy;
   } else if (opacity_type == "bns-nurates") {
     params.opacity_type = BnsNurates;
+    params.nurates_quad_nx = pin->GetOrAddInteger("radiation_m1", "nurates_quad_nx", 10);
+    params.nurates_quad_ny = pin->GetOrAddInteger("radiation_m1", "nurates_quad_ny", 10);
+
+    nurates_params.my_quadrature_1d.nx = params.nurates_quad_nx;
+    nurates_params.my_quadrature_1d.dim = 1;
+    nurates_params.my_quadrature_1d.type = kGauleg;
+    nurates_params.my_quadrature_1d.x1 = 0.;
+    nurates_params.my_quadrature_1d.x2 = 1.;
+    //GaussLegendreMultiD(&nurates_params.my_quadrature_1d);
+
+    nurates_params.my_quadrature_2d.nx = params.nurates_quad_nx;
+    nurates_params.my_quadrature_2d.ny = params.nurates_quad_ny;
+    nurates_params.my_quadrature_2d.dim = 2;
+    nurates_params.my_quadrature_2d.type = kGauleg;
+    nurates_params.my_quadrature_2d.x1 = 0.;
+    nurates_params.my_quadrature_2d.x2 = 1.;
+    nurates_params.my_quadrature_2d.y1 = 0.;
+    nurates_params.my_quadrature_2d.y2 = 1.;
+    //GaussLegendreMultiD(&nurates_params.my_quadrature_2d);
   } else if (opacity_type == "none") {
     params.opacity_type = None;
   } else {
