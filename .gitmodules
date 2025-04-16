@@ -1,3 +1,6 @@
 [submodule "kokkos"]
 	path = kokkos
 	url = https://github.com/kokkos/kokkos.git
+[submodule "Elliptica_ID_Reader"]
+	path = Elliptica_ID_Reader
+	url = https://github.com/rashti-alireza/Elliptica_ID_Reader.git
