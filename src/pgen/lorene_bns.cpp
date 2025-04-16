@@ -513,13 +513,17 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
 void BNSHistory(HistoryData *pdata, Mesh *pm) {
   // Select the number of outputs and create labels for them.
   int &nmhd = pm->pmb_pack->pmhd->nmhd;
-  pdata->nhist = 2;
+  pdata->nhist = 3;
   pdata->label[0] = "rho-max";
   pdata->label[1] = "alpha-min";
+  pdata->label[2] = "b2";
 
   // Capture class variables for kernel
   auto &w0_ = pm->pmb_pack->pmhd->w0;
   auto &adm = pm->pmb_pack->padm->adm;
+  auto &bcc = pm->pmb_pack->pmhd->bcc0;
+  auto &nhist_ = pdata->nhist;
+  auto &size = pm->pmb_pack->pmb->mb_size; 
 
   // Loop over all MeshBlocks in this pack
   auto &indcs = pm->pmb_pack->pmesh->mb_indcs;
@@ -531,8 +535,9 @@ void BNSHistory(HistoryData *pdata, Mesh *pm) {
   const int nji = nx2*nx1;
   Real rho_max = std::numeric_limits<Real>::max();
   Real alpha_min = -rho_max;
+  array_sum::GlobalSum sum_this_mb;
   Kokkos::parallel_reduce("TOVHistSums",Kokkos::RangePolicy<>(DevExeSpace(), 0, nmkji),
-  KOKKOS_LAMBDA(const int &idx, Real &mb_max, Real &mb_alp_min) {
+  KOKKOS_LAMBDA(const int &idx, Real &mb_max, Real &mb_alp_min, array_sum::GlobalSum &mb_sum) {
     // coompute n,k,j,i indices of thread
     int m = (idx)/nkji;
     int k = (idx - m*nkji)/nji;
@@ -541,9 +546,50 @@ void BNSHistory(HistoryData *pdata, Mesh *pm) {
     k += ks;
     j += js;
 
+    Real vol = size.d_view(m).dx1*size.d_view(m).dx2*size.d_view(m).dx3;
+
+    array_sum::GlobalSum hvars;
+
+    Real alpha = adm.alpha(m, k, j, i); 
+    Real gxx = adm.g_dd(m, 0, 0, k, j, i);
+    Real gxy = adm.g_dd(m, 0, 1, k, j, i);
+    Real gxz = adm.g_dd(m, 0, 2, k, j, i);
+    Real gyy = adm.g_dd(m, 1, 1, k, j, i);
+    Real gyz = adm.g_dd(m, 1, 2, k, j, i);
+    Real gzz = adm.g_dd(m, 2, 2, k, j, i); 
+
+    Real sqrtdetg = std::sqrt(adm::SpatialDet(gxx, gxy, gxz, gyy, gyz, gzz));
+    
+    Real Bx = bcc(m, IBX, k, j, i) / sqrtdetg;
+    Real By = bcc(m, IBY, k, j, i) / sqrtdetg;
+    Real Bz = bcc(m, IBZ, k, j, i) / sqrtdetg;
+
+    Real B2 = gxx*SQR(Bx) + gyy*SQR(By) + gzz*SQR(Bz) + 
+	    2.0 * (gxy*Bx*By + gxz*Bx*Bz + gyz*By*Bz);
+    Real Wvx = w0_(m, IVX, k, j, i);
+    Real Wvy = w0_(m, IVY, k, j, i);
+    Real Wvz = w0_(m, IVZ, k, j, i);
+
+    Real W2 = 1.0 + gxx*SQR(Wvx) + gyy*SQR(Wvy) + gzz*SQR(Wvz) + 
+	    	2.0 * (gxy*Wvx*Wvy + gxz*Wvx*Wvz + gyz*Wvy*Wvz);
+    Real W = std::sqrt(W2);
+
+    Real b0 = (gxx*Bx*Wvx + gyy*By*Wvy + gzz*Bz*Wvz + gxy*(Bx*Wvy+By*Wvx) +
+	    	gxz*(Bx*Wvz+Bz*Wvx) + gyz*(By*Wvz+Bz*Wvy))/alpha;
+
+    Real b2 = (SQR(alpha*b0) + B2)/W2;
+    hvars.the_array[0] = b2*sqrtdetg*W*vol;
+    
     mb_max = fmax(mb_max, w0_(m,IDN,k,j,i));
     mb_alp_min = fmin(mb_alp_min, adm.alpha(m, k, j, i));
-  }, Kokkos::Max<Real>(rho_max), Kokkos::Min<Real>(alpha_min));
+
+    for (int n=nhist_; n<NHISTORY_VARIABLES; ++n) {
+      hvars.the_array[n] = 0.0;
+    }
+
+    mb_sum += hvars;
+  }, Kokkos::Max<Real>(rho_max), Kokkos::Min<Real>(alpha_min), Kokkos::Sum<array_sum::GlobalSum>(sum_this_mb));
+  Kokkos::fence();
 
   // Currently AthenaK only supports MPI_SUM operations between ranks, but we need MPI_MAX
   // and MPI_MIN operations instead. This is a cheap hack to make it work as intended.
@@ -562,6 +608,7 @@ void BNSHistory(HistoryData *pdata, Mesh *pm) {
   // store data in hdata array
   pdata->hdata[0] = rho_max;
   pdata->hdata[1] = alpha_min;
+  pdata->hdata[2] = sum_this_mb.the_array[0];
 }
 
 void BNSRefinementCondition(MeshBlockPack *pmbp) {
