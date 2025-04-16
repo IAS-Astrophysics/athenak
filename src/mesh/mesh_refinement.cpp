@@ -23,6 +23,7 @@
 
 #include "hydro/hydro.hpp"
 #include "mhd/mhd.hpp"
+#include "dyn_grmhd/dyn_grmhd.hpp"
 #include "radiation/radiation.hpp"
 #include "coordinates/adm.hpp"
 #include "z4c/z4c.hpp"
@@ -52,6 +53,12 @@ MeshRefinement::MeshRefinement(Mesh *pm, ParameterInput *pin) :
   dd_threshold_(0.0),
   dp_threshold_(0.0),
   dv_threshold_(0.0),
+#if MPI_PARALLEL_ENABLED
+  sendbuf("lb send buff",1),
+  recvbuf("lb recv buff",1),
+  send_data("lb send data",1),
+  recv_data("lb recv data",1),
+#endif
   check_cons_(false) {
   if (pin->DoesBlockExist("mesh_refinement")) {
     // read interval (in cycles) between check of AMR and derefinement
@@ -682,9 +689,11 @@ void MeshRefinement::RedistAndRefineMeshBlocks(ParameterInput *pin, int nnew, in
   delete [] oldtonew;
 
   // Step 11.
-  // Recalculate ADM variables if necessary.
+  // Recalculate ADM variables if necessary. Reset the C2P guess for mu.
   if ((pz4c == nullptr) && (padm != nullptr) && (nnew > 0 || ndel > 0)) {
     padm->SetADMVariables(pm->pmb_pack);
+    pm->pmb_pack->pdyngr->ResetC2PGuess();
+>>>>>>> athenak_peterfork/tov-refactor
   }
 
   return;

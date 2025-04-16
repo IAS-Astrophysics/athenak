@@ -285,28 +285,9 @@ TaskStatus Z4c::ApplyPhysicalBCs(Driver *pdrive, int stage) {
 TaskStatus Z4c::TrackCompactObjects(Driver *pdrive, int stage) {
   if (stage == pdrive->nexp_stages) {
     for (auto & pt : ptracker) {
-      pt->InterpolateVelocity(pmy_pack);
-      pt->EvolveTracker();
-      pt->WriteTracker();
-    }
-  }
-  return TaskStatus::complete;
-}
-
-//----------------------------------------------------------------------------------------
-// ! \fn TaskList CCEDump
-// ! \brief CCE initial data for Pittnull code (cce dumps for Pittnull).
-
-TaskStatus Z4c::CCEDump(Driver *pdrive, int stage) {
-  float time_32 = static_cast<float>(pmy_pack->pmesh->time);
-  float next_32 = static_cast<float>(cce_dump_last_output_time+cce_dump_dt);
-  if ((time_32 >= next_32)) {
-    if (stage == pdrive->nexp_stages) {
-      //printf("%s:(ctime,dt)=(%f,%f)",__func__,pmy_pack->pmesh->time,cce_dump_dt);
-      for (auto cce : pmy_pack->pz4c_cce) {
-        cce->InterpolateAndDecompose(pmy_pack);
-      }
-      cce_dump_last_output_time = time_32;
+      pt.InterpolateVelocity(pmy_pack);
+      pt.EvolveTracker(pmy_pack);
+      pt.WriteTracker();
     }
   }
   return TaskStatus::complete;
