@@ -314,12 +314,6 @@ class BackgroundData {
 #undef BACKGROUND_DATA_READ_VARIABLE_FROM_FILE
       }
     }
-    xmin = center[0] - extent[0];
-    xmax = center[0] + extent[0];
-    ymin = center[1] - extent[1];
-    ymax = center[1] + extent[1];
-    zmin = center[2] - extent[2];
-    zmax = center[2] + extent[2];
 #if MPI_PARALLEL_ENABLED
     MPI_Bcast(&center[0], 3, MPI_ATHENA_REAL, 0, MPI_COMM_WORLD);
     MPI_Bcast(&extent[0], 3, MPI_ATHENA_REAL, 0, MPI_COMM_WORLD);
@@ -328,6 +322,12 @@ class BackgroundData {
     MPI_Bcast(m_raw_data.data(), m_raw_data.size(), MPI_ATHENA_REAL, 0,
               MPI_COMM_WORLD);
 #endif
+    xmin = center[0] - extent[0];
+    xmax = center[0] + extent[0];
+    ymin = center[1] - extent[1];
+    ymax = center[1] + extent[1];
+    zmin = center[2] - extent[2];
+    zmax = center[2] + extent[2];
   }
   void ExtractSlice(int idx) {
     for (int vi = 0; vi < NVARS; ++vi) {
