@@ -168,10 +168,12 @@ struct NuratesParams {
   bool use_abs_em;
   bool use_pair;
   bool use_brem;
-  bool use_iso_scat;
+  bool use_iso;
+  bool use_inelastic_scatt;
   bool use_WM_ab;
   bool use_WM_sc;
   bool use_dU;
+  bool use_dm_eff;
   bool use_equilibrium_distribution;
 
   MyQuadrature my_quadrature_1d;
