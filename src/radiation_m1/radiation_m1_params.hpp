@@ -76,8 +76,11 @@ struct RadiationM1Params {
   Real source_scat_limit;   // Use the scattering limit if the isotropization time is less
                             // than the timestep over this factor
 
-  int nurates_quad_nx;  // no. of quadrature points for 1d integration (bns_nurates)
-  int nurates_quad_ny;  // no. of quadrature points for 2d integration (bns_nurates)
+  int nurates_quad_nx;     // no. of quadrature points for 1d integration (bns_nurates)
+  int nurates_quad_ny;     // no. of quadrature points for 2d integration (bns_nurates)
+  Real opacity_tau_trap;   // incl. effects of neutrino trapping above this optical depth
+  Real opacity_tau_delta;  // range of optical depths over which trapping is introduced
+  Real opacity_corr_fac_max;  // maximum correction factor for optically thin regime
 };
 
 enum SrcSignal {
