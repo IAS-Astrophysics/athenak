@@ -178,7 +178,7 @@ TaskStatus RadiationM1::TimeUpdate(Driver *d, int stage) {
         // [D] Capture quantities from EOS
         Real mb = 0.;
         if (nspecies_ > 1) {
-          mb = AverageBaryonMass();
+          mb = 1; //@TODO: fix!
         }
         Real dens{};
         Real Y_e{};
