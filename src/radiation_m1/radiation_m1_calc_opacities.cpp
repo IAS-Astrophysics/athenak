@@ -99,39 +99,114 @@ TaskStatus RadiationM1::CalcOpacityNurates(Driver *pdrive, int stage) {
   auto &toy_opacity_fn_ = pmy_pack->pradm1->toy_opacity_fn;
   auto &chi_ = pmy_pack->pradm1->chi;
   auto &nurates_params_ = pmy_pack->pradm1->nurates_params;
+  auto &radiation_mask_ = pmy_pack->pradm1->radiation_mask;
   auto &adm = pmy_pack->padm->adm;
+
+  Real beta[2] = {0.5, 1.};
+  Real beta_dt = (beta[stage - 1]) * (pmy_pack->pmesh->dt);
 
   par_for(
       "radiation_m1_calc_nurates_opacity", DevExeSpace(), 0, nmb1, ks, ke, js, je, is, ie,
       KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
-        Real nb{};
-        Real temp{};
-        Real ye{};
-        Real mu_n{};
-        Real mu_p{};
-        Real mu_e{};
+        if (radiation_mask(m, k, j, i)) {
+          for (int nuidx = 0; nuidx < nspecies_; nuidx++) {
+            if (nspecies_ != 1) {
+              abs_0_(m, nuidx, k, j, i) = 0;
+              eta_0_(m, nuidx, k, j, i) = 0;
+            }
+            abs_1_(m, nuidx, k, j, i) = 0;
+            eta_1_(m, nuidx, k, j, i) = 0;
+            scat_1_(m, nuidx, k, j, i) = 0;
+          }
+        } else {
+          const Real nux_weight = (nspecies_ == 3) ? 1.0 : 0.5;
 
-        // These are fluid frame quantities
-        Real n_nue{};
-        Real j_nue{};
-        Real chi_nue{};
-        Real n_nua{};
-        Real j_nua{};
-        Real chi_nua{};
-        Real n_nux{};
-        Real j_nux{};
-        Real chi_nux{};
-        /*
-        bns_nurates(&nb, &temp, &ye, &mu_n, &mu_p, &mu_e, &n_nue, &j_nue, &chi_nue,
-                    &n_nua, &j_nua, &chi_nua, &n_nux, &j_nux, &chi_nux,
-                    eta_0_(m, id_nue, k, j, i), eta_0_(m, id_anue, k, j, i),
-                    eta_0_(m, id_nux, k, j, i), eta_1_(m, id_nue, k, j, i),
-                    eta_1_(m, id_anue, k, j, i), eta_1_(m, id_nux, k, j, i), &sigma_0_nue,
-                    Real & sigma_0_nua, Real & sigma_0_nux, Real & sigma_1_nue,
-                    Real & sigma_1_nua, Real & sigma_1_nux, Real & scat_0_nue,
-                    Real & scat_0_nua, Real & scat_0_nux, scat_1_(m, id_nue, k, j, i),
-                    scat_1_(m, id_anue, k, j, i), scat_1_(m, id_nux, k, j, i),
-                    nurates_params_); */
+          Real rho{};
+          Real temperature{};
+          Real Y_e{};
+
+          Real kappa_0_loc[4], kappa_1_loc[4];
+          Real abs_0_loc[4], abs_1_loc[4];
+          Real eta_0_loc[4], eta_1_loc[4];
+
+          // Calculate opacities
+
+          const Real tau = Kokkos::min(Kokkos::sqrt(abs_1_loc[0] * kappa_1_loc[0]),
+                                       Kokkos::sqrt(abs_1_loc[1] * kappa_1_loc[1])) *
+                           beta_dt;
+          /*
+          // Compute neutrino black body function assuming trapped neutrinos
+          Real nudens_0_trap[4], nudens_1_trap[4];
+          if (params_.opacity_tau_trap >= 0 && tau > params_.opacity_tau_trap) {
+            Real temperature_trap{}, Y_e_trap{};
+            Real rnnu[4]{};
+            Real rJ[4]{};
+            Real volform{};
+
+            // Compute local neutrino densities (undensitized)
+            Real nudens_0[3] = {
+                rnnu[0] / volform,
+                rnnu[1] / volform,
+                rnnu[2] / volform,
+            };
+            Real nudens_1[3] = {
+                rJ[0] / volform,
+                rJ[1] / volform,
+                rJ[2] / volform,
+            };
+            if (nspecies == 4) {
+              nudens_0[2] += rnnu[3] / volform;
+              nudens_1[2] += rJ[3] / volform;
+            }
+
+            Real rho{}, temperature{}, Y_e{};
+            auto ierr = WeakEquilibrium(
+                rho, temperature, Y_e, nudens_0[0], nudens_0[1], nudens_0[2], nudens_1[0],
+                nudens_1[1], nudens_1[2], &temperature_trap, &Y_e_trap, &nudens_0_trap[0],
+                &nudens_0_trap[1], &nudens_0_trap[2], &nudens_1_trap[0],
+                &nudens_1_trap[1], &nudens_1_trap[2]);
+            if (ierr) {
+              // Try to recompute the weak equilibrium using neglecting
+              // current neutrino data
+              ierr = WeakEquilibrium(
+                  rho, temperature, Y_e, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, &temperature_trap,
+                  &Y_e_trap, &nudens_0_trap[0], &nudens_0_trap[1], &nudens_0_trap[2],
+                  &nudens_1_trap[0], &nudens_1_trap[1], &nudens_1_trap[2]);
+            }
+          }
+          nudens_0_trap[2] = nux_weight * nudens_0_trap[2];
+          nudens_1_trap[2] = nux_weight * nudens_1_trap[2];
+          nudens_0_trap[3] = nudens_0_trap[2];
+          nudens_1_trap[3] = nudens_1_trap[2];
+
+          Real nb{};
+          Real temp{};
+          Real ye{};
+          Real mu_n{};
+          Real mu_p{};
+          Real mu_e{};
+
+          // These are fluid frame quantities
+          Real n_nue{};
+          Real j_nue{};
+          Real chi_nue{};
+          Real n_nua{};
+          Real j_nua{};
+          Real chi_nua{};
+          Real n_nux{};
+          Real j_nux{};
+          Real chi_nux{}; */
+          /*
+          bns_nurates(&nb, &temp, &ye, &mu_n, &mu_p, &mu_e, &n_nue, &j_nue, &chi_nue,
+                      &n_nua, &j_nua, &chi_nua, &n_nux, &j_nux, &chi_nux,
+                      eta_0_(m, id_nue, k, j, i), eta_0_(m, id_anue, k, j, i),
+                      eta_0_(m, id_nux, k, j, i), eta_1_(m, id_nue, k, j, i),
+                      eta_1_(m, id_anue, k, j, i), eta_1_(m, id_nux, k, j, i),
+          &sigma_0_nue, Real & sigma_0_nua, Real & sigma_0_nux, Real & sigma_1_nue, Real &
+          sigma_1_nua, Real & sigma_1_nux, Real & scat_0_nue, Real & scat_0_nua, Real &
+          scat_0_nux, scat_1_(m, id_nue, k, j, i), scat_1_(m, id_anue, k, j, i),
+          scat_1_(m, id_nux, k, j, i), nurates_params_); */
+        }
       });
 
   return TaskStatus::complete;

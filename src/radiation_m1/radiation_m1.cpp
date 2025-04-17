@@ -58,6 +58,9 @@ RadiationM1::RadiationM1(MeshBlockPack *ppack, ParameterInput *pin)
   nspecies = pin->GetOrAddInteger("radiation_m1", "num_species", 1);
   params.source_limiter = pin->GetOrAddReal("radiation_m1", "source_limiter", 0.5);
   params.beam_sources = pin->GetOrAddBoolean("radiation_m1", "beam_sources", false);
+  params.opacity_tau_trap = pin->GetOrAddReal("radiation_m1", "opacity_tau_trap", 1.0);
+  params.opacity_tau_delta = pin->GetOrAddReal("radiation_m1", "opacity_tau_delta", 1.0);
+  params.opacity_corr_fac_max = pin->GetOrAddReal("radiation_m1","opacity_corr_fac_max", 3.0);
 
   std::string closure_fun = pin->GetOrAddString("radiation_m1", "closure_fun", "minerbo");
   if (closure_fun == "minerbo") {
