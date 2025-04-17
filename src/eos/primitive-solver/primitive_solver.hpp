@@ -104,7 +104,6 @@ class PrimitiveSolver {
       const Real rbarsq = x*(rsq*x + mu*(x + 1.0)*rbsq);
       //const Real qbar = q - 0.5*bsq - 0.5*musq*xsq*(bsq*rsq - rbsq);
       const Real qbar = q - 0.5*bsq - 0.5*musq*xsq*fma(bsq, rsq, -rbsq);
-      const Real mb = peos->GetBaryonMass();
 
       // Now we can estimate the velocity.
       //const Real v_max = peos->GetMaxVelocity();
@@ -121,6 +120,7 @@ class PrimitiveSolver {
 
       // Now estimate the number density.
       Real rhohat = D*iWhat;
+      const Real mb = peos->GetBaryonMass();
       Real nhat = rhohat/mb;
       peos->ApplyDensityLimits(nhat);
 
@@ -133,25 +133,26 @@ class PrimitiveSolver {
       // Now we can get an estimate of the temperature, and from that, the pressure and
       // enthalpy.
       Real That = peos->GetTemperatureFromE(nhat, ehat, Y);
-      peos->ApplyTemperatureLimits(That);
+      //peos->ApplyTemperatureLimits(That);
       //ehat = peos->GetEnergy(nhat, That, Y);
       Real Phat = peos->GetPressure(nhat, That, Y);
-      Real hhat = peos->GetEnthalpy(nhat, That, Y);
+      //Real hhat = peos->GetEnthalpy(nhat, That, Y);
+      Real hhat = (ehat + Phat)/(mb*nhat);
+
+      *n = nhat;
+      *T = That;
+      *P = Phat;
 
       // Now we can get two different estimates for nu = h/W.
+      Real nu_b = eoverD + Phat/D;
       Real nu_a = hhat*iWhat;
       //Real ahat = Phat / ehat;
-      Real nu_b = eoverD + Phat/D;
       //Real nu_b = (1.0 + ahat)*eoverD;
       //Real nu_b = (1.0 + ahat)*eoverD;
       Real nuhat = fmax(nu_a, nu_b);
 
       // Finally, we can get an estimate for muhat.
       Real muhat = 1.0/(nuhat + mu*rbarsq);
-
-      *n = nhat;
-      *T = That;
-      *P = Phat;
 
       // FIXME: Debug only!
       /*std::cout << "    D   = " << D << "\n";
@@ -201,6 +202,7 @@ class PrimitiveSolver {
 
  public:
   Real tol;
+  bool use_caching;
 
   /// Constructor
   //PrimitiveSolver(EOS<EOSPolicy, ErrorPolicy> *eos) : peos(eos) {
@@ -208,6 +210,7 @@ class PrimitiveSolver {
     //root = NumTools::Root();
     tol = 1e-15;
     root.iterations = 30;
+    use_caching = false;
   }
 
   /// Destructor
@@ -224,7 +227,7 @@ class PrimitiveSolver {
   //  \return information about the solve
   KOKKOS_INLINE_FUNCTION
   SolverResult ConToPrim(Real prim[NPRIM], Real cons[NCONS], Real b[NMAG],
-                         Real g3d[NSPMETRIC], Real g3u[NSPMETRIC]) const;
+                         Real g3d[NSPMETRIC], Real g3u[NSPMETRIC], Real& mu_last) const;
 
   //! \brief Get the conserved variables from the primitive variables.
   //
@@ -364,7 +367,8 @@ Error PrimitiveSolver<EOSPolicy, ErrorPolicy>::CheckDensityValid(Real& mul, Real
 template<typename EOSPolicy, typename ErrorPolicy>
 KOKKOS_INLINE_FUNCTION
 SolverResult PrimitiveSolver<EOSPolicy, ErrorPolicy>::ConToPrim(Real prim[NPRIM],
-      Real cons[NCONS], Real b[NMAG], Real g3d[NSPMETRIC], Real g3u[NSPMETRIC]) const {
+      Real cons[NCONS], Real b[NMAG], Real g3d[NSPMETRIC], Real g3u[NSPMETRIC],
+      Real& mu_last) const {
   SolverResult solver_result{Error::SUCCESS, 0, false, false, false};
 
   // Extract the undensitized conserved variables.
@@ -375,11 +379,14 @@ SolverResult PrimitiveSolver<EOSPolicy, ErrorPolicy>::ConToPrim(Real prim[NPRIM]
   // Extract the particle fractions.
   const int n_species = eos.GetNSpecies();
   Real Y[MAX_SPECIES] = {0.0};
-  for (int s = 0; s < n_species; s++) {
-    Y[s] = cons[CYD + s]/cons[CDN];
+  // Avoid division by zero.
+  if (cons[CDN] > 0 ) {
+    for (int s = 0; s < n_species; s++) {
+      Y[s] = cons[CYD + s]/cons[CDN];
+    }
   }
   // Apply limits to Y to ensure a physical state
-  eos.ApplySpeciesLimits(Y);
+  bool Y_adjusted = eos.ApplySpeciesLimits(Y);
 
   // Check the conserved variables for consistency and do whatever
   // the EOSPolicy wants us to.
@@ -389,6 +396,12 @@ SolverResult PrimitiveSolver<EOSPolicy, ErrorPolicy>::ConToPrim(Real prim[NPRIM]
     HandleFailure(prim, cons, b, g3d);
     solver_result.error = Error::CONS_FLOOR;
     return solver_result;
+  }
+  // If a floor is applied or Y is adjusted, we need to propagate the changes back to DYe.
+  if (floored || Y_adjusted) {
+    for (int s = 0; s < n_species; s++) {
+      cons[CYD + s] = D*Y[s];
+    }
   }
 
   // Calculate some utility quantities.
@@ -514,7 +527,13 @@ SolverResult PrimitiveSolver<EOSPolicy, ErrorPolicy>::ConToPrim(Real prim[NPRIM]
 
   // Do the root solve.
   Real n, P, T, mu;
-  bool result = root.FalsePosition(RootFunction, mul, muh, mu, tol,
+  // Try to set an initial guess
+  bool use_guess = false;
+  if (mu_last >= mul && mu_last <= muh && use_caching) {
+    mu = mu_last;
+    use_guess = true;
+  }
+  bool result = root.FalsePosition(RootFunction, mul, muh, mu, tol, use_guess,
                                    D, q, bsqr, rsqr, rbsqr, Y, &eos, &n, &T, &P);
   // WARNING: the reported number of iterations is not thread-safe and should only be
   // trusted on single-thread benchmarks.
@@ -526,6 +545,9 @@ SolverResult PrimitiveSolver<EOSPolicy, ErrorPolicy>::ConToPrim(Real prim[NPRIM]
   }
 
   // Retrieve the primitive variables.
+  if (use_caching) {
+    mu_last = mu;
+  }
   Real rho = n*eos.GetBaryonMass();
   Real rbmu = rb*mu;
   Real W = D/rho;
@@ -548,7 +570,7 @@ SolverResult PrimitiveSolver<EOSPolicy, ErrorPolicy>::ConToPrim(Real prim[NPRIM]
     return solver_result;
   }
   solver_result.cons_adjusted = solver_result.cons_adjusted || floored ||
-                                solver_result.cons_floor;
+                                solver_result.cons_floor || Y_adjusted;
 
   prim[PRH] = n;
   prim[PPR] = P;
