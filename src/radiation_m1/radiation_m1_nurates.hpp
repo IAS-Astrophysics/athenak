@@ -10,114 +10,18 @@
 #include "bns_nurates/include/m1_opacities.hpp"
 
 namespace radiationm1 {
-KOKKOS_INLINE_FUNCTION
-Real AverageBaryonMass() { return 1; }
 
 KOKKOS_INLINE_FUNCTION
-Real NeutrinoDens2_cgs(Real rho, Real temp, Real ye, Real &n_nue, Real n_nua, Real n_nux,
-                       Real en_nue, Real en_nua, Real en_nux) {
-  /*
-  int NeuDens_cgs = 0;
-
-  Real lrho  = Kokkos::log10(rho);
-  Real ltemp = Kokkos::log10(temp);
-
-  Real mass_fact_cgs = mass_fact * mev_to_erg / (clight*clight);
-  Real nb = rho / mass_fact_cgs;
-
-  Real mu_n = wkLinearInterpolation3d(lrho, ltemp, ye, MU_N);
-  Real mu_p = wkLinearInterpolation3d(lrho, ltemp, ye, MU_P);
-  Real mu_e = wkLinearInterpolation3d(lrho, ltemp, ye, MU_E);
-
-  Real eta_nue = (mu_p + mu_e - mu_n) / temp;
-  Real eta_nua = -eta_nue;
-  Real eta_nux = 0.0;
-
-  Real n_nue = 4.0 * Kokkos::numbers::pi / hc_mevcm**3 * temp**3 * FERMI2(eta_nue);
-  Real n_nua = 4.0 * Kokkos::numbers::pi / hc_mevcm**3 * temp**3 * FERMI2(eta_nua);
-  Real n_nux = 16.0 * Kokkos::numbers::pi / hc_mevcm**3 * temp**3 * FERMI2(eta_nux);
-
-  Real en_nue = 4.0 * Kokkos::numbers::pi / hc_mevcm**3 * temp**4 * FERMI3(eta_nue);
-  Real en_nua = 4.0 * Kokkos::numbers::pi / hc_mevcm**3 * temp**4 * FERMI3(eta_nua);
-  Real en_nux = 16.0 * Kokkos::numbers::pi / hc_mevcm**3 * temp**4 * FERMI3(eta_nux);
-
-  return NeuDens_cgs; */
-}
-KOKKOS_INLINE_FUNCTION
-Real NeutrinoDensity(Real rho, Real temp, Real ye, Real &num_nue, Real &num_nua,
-                     Real &num_nux, Real &ene_nue, Real &ene_nua, Real &ene_nux) {
-  int NuDens = 0;
-
-  Real rho_cgs = rho * 1;  // fix conversion factor
-  Real temp0 = temp;
-  Real ye0 = ye;
-
-  if ((rho_cgs < 1) || (temp0 < 1)) {
-    num_nue = 0;
-    num_nua = 0;
-    num_nux = 0;
-    ene_nue = 0;
-    ene_nua = 0;
-    ene_nux = 0;
-    return NuDens;
-  }
-  /*
-  auto boundsErr = enforceTableBounds(rho_cgs, temp0, ye0);
-
-  if (boundsErr == -1) {
-    NuDens = -1;
-    return NuDens;
-  }
-
-  auto ierr = NeutrinoDens_cgs(rho_cgs, temp0, ye0, &num_nue, num_nua, num_nux, &ene_nue,
-                               ene_nua, ene_nux);
-
-  if (ierr != 0) {
-    NuDens = -1;
-  }
-
-  num_nue = num_nue / (cgs2cactusLength * *3 * normfact);
-  num_nua = num_nua / (cgs2cactusLength * *3 * normfact);
-  num_nux = num_nux / (cgs2cactusLength * *3 * normfact);
-
-  ene_nue = ene_nue * (mev_to_erg * cgs2cactusEnergy / cgs2cactusLength * *3);
-  ene_nua = ene_nua * (mev_to_erg * cgs2cactusEnergy / cgs2cactusLength * *3);
-  ene_nux = ene_nux * (mev_to_erg * cgs2cactusEnergy / cgs2cactusLength * *3);
-
-  return NuDens; */
-}
-
-KOKKOS_INLINE_FUNCTION
-Real NucleiAbar(Real rho, Real temp, Real ye, Real &abar) {
-  int NucleiAbar = 0;
-  /*
-  Real rho_cgs = rho * 1; //fix this factor
-  Real temp0 = temp;
-  Real ye0 = ye;
-
-  auto boundsErr = enforceTableBounds(rho_cgs, temp0, ye0);
-
-  if (boundsErr == 1) {
-    NucleiAbar = 1;
-  }
-
-  Real lrho0 = Kokkos::log10(rho_cgs);
-  Real ltemp0 = Kokkos::log10(temp0);
-
-  abar = wkLinearInterpolation3d(lrho,ltem0,ye0,ABAR?);
-  return NucleiAbar;*/
-}
-
-KOKKOS_INLINE_FUNCTION
-void bns_nurates(const Real &nb, const Real &temp, const Real &ye, const Real &mu_n,
-                 const Real &mu_p, const Real &mu_e, const Real &n_nue, const Real &j_nue,
-                 const Real &chi_nue, const Real &n_nua, const Real &j_nua,
-                 const Real &chi_nua, const Real &n_nux, const Real &j_nux,
-                 const Real &chi_nux, Real &R_nue, Real &R_nua, Real &R_nux, Real &Q_nue,
-                 Real &Q_nua, Real &Q_nux, Real &sigma_0_nue, Real &sigma_0_nua,
-                 Real &sigma_0_nux, Real &sigma_1_nue, Real &sigma_1_nua,
-                 Real &sigma_1_nux, Real &scat_0_nue, Real &scat_0_nua, Real &scat_0_nux,
-                 Real &scat_1_nue, Real &scat_1_nua, Real &scat_1_nux,
+void bns_nurates(Real &nb, Real &temp, Real &ye, Real &mu_n, Real &mu_p, Real &mu_e,
+                 Real &n_nue, Real &j_nue, Real &chi_nue, Real &n_anue, Real &j_anue,
+                 Real &chi_anue, Real &n_nux, Real &j_nux, Real &chi_nux, Real &n_anux,
+                 Real &j_anux, Real &chi_anux, Real &R_nue, Real &R_anue, Real &R_nux,
+                 Real &R_anux, Real &Q_nue, Real &Q_anue, Real &Q_nux, Real &Q_anux,
+                 Real &sigma_0_nue, Real &sigma_0_anue, Real &sigma_0_nux,
+                 Real &sigma_0_anux, Real &sigma_1_nue, Real &sigma_1_anue,
+                 Real &sigma_1_nux, Real &sigma_1_anux, Real &scat_0_nue,
+                 Real &scat_0_anue, Real &scat_0_nux, Real &scat_0_anux, Real &scat_1_nue,
+                 Real &scat_1_anue, Real &scat_1_nux, Real &scat_1_anux,
                  const NuratesParams nurates_params) {
   // opacity params structure
   GreyOpacityParams my_grey_opacity_params = {0};
@@ -127,12 +31,16 @@ void bns_nurates(const Real &nb, const Real &temp, const Real &ye, const Real &m
   my_grey_opacity_params.opacity_flags.use_abs_em = nurates_params.use_abs_em;
   my_grey_opacity_params.opacity_flags.use_brem = nurates_params.use_brem;
   my_grey_opacity_params.opacity_flags.use_pair = nurates_params.use_pair;
-  my_grey_opacity_params.opacity_flags.use_iso = nurates_params.use_iso_scat;
+  my_grey_opacity_params.opacity_flags.use_iso = nurates_params.use_iso;
+  my_grey_opacity_params.opacity_flags.use_inelastic_scatt =
+      nurates_params.use_inelastic_scatt;
 
   // other flags
+  my_grey_opacity_params.opacity_pars = opacity_params_default_none;
   my_grey_opacity_params.opacity_pars.use_WM_ab = nurates_params.use_WM_ab;
   my_grey_opacity_params.opacity_pars.use_WM_sc = nurates_params.use_WM_sc;
   my_grey_opacity_params.opacity_pars.use_dU = nurates_params.use_dU;
+  my_grey_opacity_params.opacity_pars.use_dm_eff = nurates_params.use_dm_eff;
 
   // populate EOS quantities
   my_grey_opacity_params.eos_pars.mu_e = mu_e;
@@ -144,88 +52,115 @@ void bns_nurates(const Real &nb, const Real &temp, const Real &ye, const Real &m
   my_grey_opacity_params.eos_pars.nb = nb;
 
   // populate M1 quantities
+  // The factors of 1/2 come from the fact that bns_nurates and THC weight the
+  // heavy neutrinos differently. THC weights them with a factor of 2 (because
+  // "nux" means "mu AND tau"), bns_nurates with a factor of 1 (because "nux"
+  // means "mu OR tau").
   my_grey_opacity_params.m1_pars.n[id_nue] = n_nue;
   my_grey_opacity_params.m1_pars.J[id_nue] = j_nue;
   my_grey_opacity_params.m1_pars.chi[id_nue] = chi_nue;
-  my_grey_opacity_params.m1_pars.n[id_anue] = n_nua;
-  my_grey_opacity_params.m1_pars.J[id_anue] = j_nua;
-  my_grey_opacity_params.m1_pars.chi[id_anue] = chi_nua;
-  // note that bns_nurates take nux to be one of the nux's
-  my_grey_opacity_params.m1_pars.n[id_nux] = n_nux / 4;
-  my_grey_opacity_params.m1_pars.J[id_nux] = j_nux / 4;
+  my_grey_opacity_params.m1_pars.n[id_anue] = n_anue;
+  my_grey_opacity_params.m1_pars.J[id_anue] = j_anue;
+  my_grey_opacity_params.m1_pars.chi[id_anue] = chi_anue;
+  my_grey_opacity_params.m1_pars.n[id_nux] = n_nux * 0.5;
+  my_grey_opacity_params.m1_pars.J[id_nux] = j_nux * 0.5;
   my_grey_opacity_params.m1_pars.chi[id_nux] = chi_nux;
+  my_grey_opacity_params.m1_pars.n[id_anux] = n_anux * 0.5;
+  my_grey_opacity_params.m1_pars.J[id_anux] = j_anux * 0.5;
+  my_grey_opacity_params.m1_pars.chi[id_anux] = chi_anux;
 
   // reconstruct distribution function
   if (!nurates_params.use_equilibrium_distribution) {
     my_grey_opacity_params.distr_pars = CalculateDistrParamsFromM1(
         &my_grey_opacity_params.m1_pars, &my_grey_opacity_params.eos_pars);
   } else {
-    // equilibrium parameters
     my_grey_opacity_params.distr_pars =
         NuEquilibriumParams(&my_grey_opacity_params.eos_pars);
 
-    // compute n and j
+    // compute neutrino number and energy densities
     ComputeM1DensitiesEq(&my_grey_opacity_params.eos_pars,
                          &my_grey_opacity_params.distr_pars,
                          &my_grey_opacity_params.m1_pars);
 
-    for (int idx = 0; idx < total_num_species; idx++) {
-      my_grey_opacity_params.m1_pars.chi[idx] = 1. / 3.;
-      my_grey_opacity_params.m1_pars.J[idx] =
-          my_grey_opacity_params.m1_pars.J[idx] *
-          kBS_MeV;  //@TODO: check that this is sensible
-    }
-  }
+    // populate M1 quantities
+    my_grey_opacity_params.m1_pars.chi[id_nue] = 0.333333333333333333333333333;
+    my_grey_opacity_params.m1_pars.chi[id_anue] = 0.333333333333333333333333333;
+    my_grey_opacity_params.m1_pars.chi[id_nux] = 0.333333333333333333333333333;
+    my_grey_opacity_params.m1_pars.chi[id_anux] = 0.333333333333333333333333333;
 
+    // convert neutrino energy density to mixed MeV and cgs as requested by bns_nurates
+    my_grey_opacity_params.m1_pars.J[id_nue] *= kBS_MeV;
+    my_grey_opacity_params.m1_pars.J[id_anue] *= kBS_MeV;
+    my_grey_opacity_params.m1_pars.J[id_nux] *= kBS_MeV;
+    my_grey_opacity_params.m1_pars.J[id_anux] *= kBS_MeV;
+  }
   // compute opacities
   M1Opacities opacities =
       ComputeM1Opacities(&nurates_params.my_quadrature_1d,
-                         &nurates_params.my_quadrature_2d, &my_grey_opacity_params);
+                         &nurates_params.my_quadrature_1d, &my_grey_opacity_params);
+
+  // Similar to the comment above, the factors of 2 come from the fact that
+  // bns_nurates and THC weight the heavy neutrinos differently. THC weights
+  // them with a factor of 2 (because "nux" means "mu AND tau"), bns_nurates
+  // with a factor of 1 (because "nux" means "mu OR tau").
 
   // extract emissivities
   R_nue = opacities.eta_0[id_nue];
-  R_nua = opacities.eta_0[id_anue];
-  R_nux = 4.0 * opacities.eta_0[id_nux];
+  R_anue = opacities.eta_0[id_anue];
+  R_nux = opacities.eta_0[id_nux] * 2.;
+  R_anux = opacities.eta_0[id_anux] * 2.;
   Q_nue = opacities.eta[id_nue];
-  Q_nua = opacities.eta[id_anue];
-  Q_nux = 4.0 * opacities.eta[id_nux];
+  Q_anue = opacities.eta[id_anue];
+  Q_nux = opacities.eta[id_nux] * 2.;
+  Q_anux = opacities.eta[id_anux] * 2.;
 
   // extract absorption inverse mean-free path
   sigma_0_nue = opacities.kappa_0_a[id_nue];
-  sigma_0_nua = opacities.kappa_0_a[id_anue];
-  sigma_0_nux = opacities.kappa_0_a[id_nux];
+  sigma_0_anue = opacities.kappa_0_a[id_anue];
+  sigma_0_nux = opacities.kappa_0_a[id_nux] * 2.;
+  sigma_0_anux = opacities.kappa_0_a[id_anux] * 2.;
   sigma_1_nue = opacities.kappa_a[id_nue];
-  sigma_1_nua = opacities.kappa_a[id_anue];
-  sigma_1_nux = opacities.kappa_a[id_nux];
+  sigma_1_anue = opacities.kappa_a[id_anue];
+  sigma_1_nux = opacities.kappa_a[id_nux] * 2.;
+  sigma_1_anux = opacities.kappa_a[id_anux] * 2.;
 
   // extract scattering inverse mean-free path
   scat_0_nue = 0;
-  scat_0_nua = 0;
+  scat_0_anue = 0;
   scat_0_nux = 0;
+  scat_0_anux = 0;
   scat_1_nue = opacities.kappa_s[id_nue];
-  scat_1_nua = opacities.kappa_s[id_anue];
-  scat_1_nux = opacities.kappa_s[id_nux];
+  scat_1_anue = opacities.kappa_s[id_anue];
+  scat_1_nux = opacities.kappa_s[id_nux] * 2.;
+  scat_1_anux = opacities.kappa_s[id_anux] * 2.;
 
-  // check for Infs/NaNs
-  assert(Kokkos::isfinite(R_nue));
-  assert(Kokkos::isfinite(R_nua));
-  assert(Kokkos::isfinite(R_nux));
-  assert(Kokkos::isfinite(Q_nue));
-  assert(Kokkos::isfinite(Q_nua));
-  assert(Kokkos::isfinite(Q_nux));
-  assert(Kokkos::isfinite(sigma_0_nue));
-  assert(Kokkos::isfinite(sigma_0_nua));
-  assert(Kokkos::isfinite(sigma_0_nux));
-  assert(Kokkos::isfinite(sigma_1_nue));
-  assert(Kokkos::isfinite(sigma_1_nua));
-  assert(Kokkos::isfinite(sigma_1_nux));
-  assert(Kokkos::isfinite(scat_0_nue));
-  assert(Kokkos::isfinite(scat_0_nua));
-  assert(Kokkos::isfinite(scat_0_nux));
-  assert(Kokkos::isfinite(scat_1_nue));
-  assert(Kokkos::isfinite(scat_1_nua));
-  assert(Kokkos::isfinite(scat_1_nux));
+  // Check for NaNs/Infs
+  assert(isfinite(R_nue));
+  assert(isfinite(R_anue));
+  assert(isfinite(R_nux));
+  assert(isfinite(R_anux));
+  assert(isfinite(Q_nue));
+  assert(isfinite(Q_anue));
+  assert(isfinite(Q_nux));
+  assert(isfinite(Q_anux));
+  assert(isfinite(sigma_0_nue));
+  assert(isfinite(sigma_0_anue));
+  assert(isfinite(sigma_0_nux));
+  assert(isfinite(sigma_0_anux));
+  assert(isfinite(sigma_1_nue));
+  assert(isfinite(sigma_1_anue));
+  assert(isfinite(sigma_1_nux));
+  assert(isfinite(sigma_1_anux));
+  assert(isfinite(scat_0_nue));
+  assert(isfinite(scat_0_anue));
+  assert(isfinite(scat_0_nux));
+  assert(isfinite(scat_0_anux));
+  assert(isfinite(scat_1_nue));
+  assert(isfinite(scat_1_anue));
+  assert(isfinite(scat_1_nux));
+  assert(isfinite(scat_1_anux));
 }
+
 }  // namespace radiationm1
 
 #endif  // RADIATION_M1_NURATES_HPP
