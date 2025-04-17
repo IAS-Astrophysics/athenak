@@ -14,33 +14,34 @@ KOKKOS_INLINE_FUNCTION
 Real AverageBaryonMass() { return 1; }
 
 KOKKOS_INLINE_FUNCTION
-Real NeutrinoDens2_cgs(Real rho, Real temp, Real ye, Real &n_nue, Real n_nua, Real n_nux, Real en_nue, Real en_nua, Real en_nux){
-    /*
-    int NeuDens_cgs = 0;
+Real NeutrinoDens2_cgs(Real rho, Real temp, Real ye, Real &n_nue, Real n_nua, Real n_nux,
+                       Real en_nue, Real en_nua, Real en_nux) {
+  /*
+  int NeuDens_cgs = 0;
 
-    Real lrho  = Kokkos::log10(rho);
-    Real ltemp = Kokkos::log10(temp);
+  Real lrho  = Kokkos::log10(rho);
+  Real ltemp = Kokkos::log10(temp);
 
-    Real mass_fact_cgs = mass_fact * mev_to_erg / (clight*clight);
-    Real nb = rho / mass_fact_cgs;
+  Real mass_fact_cgs = mass_fact * mev_to_erg / (clight*clight);
+  Real nb = rho / mass_fact_cgs;
 
-    Real mu_n = wkLinearInterpolation3d(lrho, ltemp, ye, MU_N);
-    Real mu_p = wkLinearInterpolation3d(lrho, ltemp, ye, MU_P);
-    Real mu_e = wkLinearInterpolation3d(lrho, ltemp, ye, MU_E);
+  Real mu_n = wkLinearInterpolation3d(lrho, ltemp, ye, MU_N);
+  Real mu_p = wkLinearInterpolation3d(lrho, ltemp, ye, MU_P);
+  Real mu_e = wkLinearInterpolation3d(lrho, ltemp, ye, MU_E);
 
-    Real eta_nue = (mu_p + mu_e - mu_n) / temp;
-    Real eta_nua = -eta_nue;
-    Real eta_nux = 0.0;
+  Real eta_nue = (mu_p + mu_e - mu_n) / temp;
+  Real eta_nua = -eta_nue;
+  Real eta_nux = 0.0;
 
-    Real n_nue = 4.0 * Kokkos::numbers::pi / hc_mevcm**3 * temp**3 * FERMI2(eta_nue);
-    Real n_nua = 4.0 * Kokkos::numbers::pi / hc_mevcm**3 * temp**3 * FERMI2(eta_nua);
-    Real n_nux = 16.0 * Kokkos::numbers::pi / hc_mevcm**3 * temp**3 * FERMI2(eta_nux);
+  Real n_nue = 4.0 * Kokkos::numbers::pi / hc_mevcm**3 * temp**3 * FERMI2(eta_nue);
+  Real n_nua = 4.0 * Kokkos::numbers::pi / hc_mevcm**3 * temp**3 * FERMI2(eta_nua);
+  Real n_nux = 16.0 * Kokkos::numbers::pi / hc_mevcm**3 * temp**3 * FERMI2(eta_nux);
 
-    Real en_nue = 4.0 * Kokkos::numbers::pi / hc_mevcm**3 * temp**4 * FERMI3(eta_nue);
-    Real en_nua = 4.0 * Kokkos::numbers::pi / hc_mevcm**3 * temp**4 * FERMI3(eta_nua);
-    Real en_nux = 16.0 * Kokkos::numbers::pi / hc_mevcm**3 * temp**4 * FERMI3(eta_nux);
+  Real en_nue = 4.0 * Kokkos::numbers::pi / hc_mevcm**3 * temp**4 * FERMI3(eta_nue);
+  Real en_nua = 4.0 * Kokkos::numbers::pi / hc_mevcm**3 * temp**4 * FERMI3(eta_nua);
+  Real en_nux = 16.0 * Kokkos::numbers::pi / hc_mevcm**3 * temp**4 * FERMI3(eta_nux);
 
-    return NeuDens_cgs; */
+  return NeuDens_cgs; */
 }
 KOKKOS_INLINE_FUNCTION
 Real NeutrinoDensity(Real rho, Real temp, Real ye, Real &num_nue, Real &num_nua,
@@ -154,12 +155,12 @@ void bns_nurates(const Real &nb, const Real &temp, const Real &ye, const Real &m
   my_grey_opacity_params.m1_pars.J[id_nux] = j_nux / 4;
   my_grey_opacity_params.m1_pars.chi[id_nux] = chi_nux;
 
+  // reconstruct distribution function
   if (!nurates_params.use_equilibrium_distribution) {
-    // reconstruct distribution function
     my_grey_opacity_params.distr_pars = CalculateDistrParamsFromM1(
         &my_grey_opacity_params.m1_pars, &my_grey_opacity_params.eos_pars);
   } else {
-    // reconstruct distribution function
+    // equilibrium parameters
     my_grey_opacity_params.distr_pars =
         NuEquilibriumParams(&my_grey_opacity_params.eos_pars);
 
@@ -204,6 +205,26 @@ void bns_nurates(const Real &nb, const Real &temp, const Real &ye, const Real &m
   scat_1_nue = opacities.kappa_s[id_nue];
   scat_1_nua = opacities.kappa_s[id_anue];
   scat_1_nux = opacities.kappa_s[id_nux];
+
+  // check for Infs/NaNs
+  assert(Kokkos::isfinite(R_nue));
+  assert(Kokkos::isfinite(R_nua));
+  assert(Kokkos::isfinite(R_nux));
+  assert(Kokkos::isfinite(Q_nue));
+  assert(Kokkos::isfinite(Q_nua));
+  assert(Kokkos::isfinite(Q_nux));
+  assert(Kokkos::isfinite(sigma_0_nue));
+  assert(Kokkos::isfinite(sigma_0_nua));
+  assert(Kokkos::isfinite(sigma_0_nux));
+  assert(Kokkos::isfinite(sigma_1_nue));
+  assert(Kokkos::isfinite(sigma_1_nua));
+  assert(Kokkos::isfinite(sigma_1_nux));
+  assert(Kokkos::isfinite(scat_0_nue));
+  assert(Kokkos::isfinite(scat_0_nua));
+  assert(Kokkos::isfinite(scat_0_nux));
+  assert(Kokkos::isfinite(scat_1_nue));
+  assert(Kokkos::isfinite(scat_1_nua));
+  assert(Kokkos::isfinite(scat_1_nux));
 }
 }  // namespace radiationm1
 
