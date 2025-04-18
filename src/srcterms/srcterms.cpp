@@ -172,7 +172,6 @@ void SourceTerms::RelCooling(const DvceArray5D<Real> &w0, const EOS_Data &eos_da
 
   par_for("cooling", DevExeSpace(), 0, nmb1, ks, ke, js, je, is, ie,
   KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
-
     Real &x1min = size.d_view(m).x1min;
     Real &x1max = size.d_view(m).x1max;
     Real x1v = CellCenterX(i-is, indcs.nx1, x1min, x1max);
