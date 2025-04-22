@@ -134,6 +134,21 @@ else()
 	set(TWO_PUNCTURES 0)
 endif()
 
+if (${PROBLEM} STREQUAL "z4c_id_solve")
+  # --- HDF5 I/O (dynamic by default, static optional) --------------------------
+  #   • Set STATIC_HDF5=ON at CMake configure time to bake every HDF5 object
+  #     into the executable for easy archival or clusters that disallow .so’s.
+  #   • Leave it OFF (default) to keep the binary small and enable VOL/plugins.
+  #find_package(hdf5 COMPONENTS C HL REQUIRED)
+  #target_include_directories(athena PRIVATE
+  #    ${CMAKE_SOURCE_DIR}/hdf5/include)
+  find_package(HDF5 REQUIRED COMPONENTS C HL)
+  target_link_libraries(athena PUBLIC
+    hdf5::hdf5
+    hdf5::hdf5_hl)
+endif()
+
+
 if (${PROBLEM} STREQUAL "z4c_spectre_bbh")
   # Load binary black hole initial data from the SpECTRE code:
   # https://spectre-code.org
