@@ -175,7 +175,9 @@ struct NuratesParams {
   bool use_dU;
   bool use_dm_eff;
   bool use_equilibrium_distribution;
+  bool use_kirchhoff_law;
 
+  Real opacity_tau_trap;
   MyQuadrature my_quadrature_1d;
   MyQuadrature my_quadrature_2d;
 };

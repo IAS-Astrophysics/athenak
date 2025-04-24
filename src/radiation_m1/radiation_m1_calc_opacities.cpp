@@ -10,6 +10,7 @@
 
 #include "athena.hpp"
 #include "coordinates/adm.hpp"
+#include "eos/primitive-solver/eos.hpp"
 #include "radiation_m1.hpp"
 #include "radiation_m1_nurates.hpp"
 
@@ -119,116 +120,136 @@ TaskStatus RadiationM1::CalcOpacityNurates(Driver *pdrive, int stage) {
             scat_1_(m, nuidx, k, j, i) = 0;
           }
         } else {
-          const Real nux_weight = (nspecies_ == 3) ? 1.0 : 0.5;
+          Real gam =
+              adm::SpatialDet(adm.g_dd(m, 0, 0, k, j, i), adm.g_dd(m, 0, 1, k, j, i),
+                              adm.g_dd(m, 0, 2, k, j, i), adm.g_dd(m, 1, 1, k, j, i),
+                              adm.g_dd(m, 1, 2, k, j, i), adm.g_dd(m, 2, 2, k, j, i));
+          Real volform = Kokkos::sqrt(gam);
 
+          // compute from state vector
+          Real rnnu[4]{};
+          Real J[4]{};
+
+          // get from fluid
           Real rho{};
-          Real temperature{};
-          Real Y_e{};
+          Real temp{};
+          Real ye{};
 
-          Real kappa_0_loc[4]{}, kappa_1_loc[4]{}, abs_0_loc[4]{}, abs_1_loc[4]{},
-              eta_0_loc[4]{}, eta_1_loc[4]{};
-
-          // Calculate opacities
-          // get the transport absorption and scattering opacities here
-
-          const Real tau = Kokkos::min(Kokkos::sqrt(abs_1_loc[0] * kappa_1_loc[0]),
-                                       Kokkos::sqrt(abs_1_loc[1] * kappa_1_loc[1])) *
-                           beta_dt;
-
-          // Compute neutrino black body function assuming trapped neutrinos
-          Real nudens_0_trap[4]{}, nudens_1_trap[4]{};
-
-          if (params_.opacity_tau_trap >= 0 && tau > params_.opacity_tau_trap) {
-            // compute or get these things
-            Real rJ[4]{};
-            Real nb{};
-            Real temp{};
-            Real ye{};
-            Real mu_n{};
-            Real mu_p{};
-            Real mu_e{};
-
-            Real temperature_trap{}, Y_e_trap{};
-
-            Real gam =
-                adm::SpatialDet(adm.g_dd(m, 0, 0, k, j, i), adm.g_dd(m, 0, 1, k, j, i),
-                                adm.g_dd(m, 0, 2, k, j, i), adm.g_dd(m, 1, 1, k, j, i),
-                                adm.g_dd(m, 1, 2, k, j, i), adm.g_dd(m, 2, 2, k, j, i));
-            Real volform = Kokkos::sqrt(gam);
-
-            AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> u_u{};
-            AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> v_u{};
-            Real w_lorentz = u_mu_(m, 0, k, j, i);
-            pack_u_u(u_mu_(m, 0, k, j, i), u_mu_(m, 1, k, j, i), u_mu_(m, 2, k, j, i),
-                     u_mu_(m, 3, k, j, i), u_u);
-            pack_v_u(u_mu_(m, 0, k, j, i), u_mu_(m, 1, k, j, i), u_mu_(m, 2, k, j, i),
-                     u_mu_(m, 3, k, j, i), v_u);
-
-            Real rnnu[4]{};
-            for (int nuidx = 0; nuidx < nspecies_; nuidx++) {
-              AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> F_d{};
-              pack_F_d(adm.beta_u(m, 0, k, j, i), adm.beta_u(m, 1, k, j, i),
-                       adm.beta_u(m, 2, k, j, i),
-                       u0_(m, CombinedIdx(nuidx, M1_FX_IDX, nvars_), k, j, i),
-                       u0_(m, CombinedIdx(nuidx, M1_FY_IDX, nvars_), k, j, i),
-                       u0_(m, CombinedIdx(nuidx, M1_FZ_IDX, nvars_), k, j, i), F_d);
-              const Real E = u0_(m, CombinedIdx(nuidx, M1_E_IDX, nvars_), k, j, i);
-
-              //const Real Gamma = compute_Gamma(w_lorentz, v_u, J, E, F_d, params_);
-              //rnnu[nuidx] = u0_(m, CombinedIdx(nuidx, M1_N_IDX, nvars_), k, j, i) / Gamma;
-            }
-
-            // Compute undensitized local neutrino densities
-            Real nudens_0[3] = {rnnu[0] / volform, rnnu[1] / volform, rnnu[2] / volform};
-            Real nudens_1[3] = {rJ[0] / volform, rJ[1] / volform, rJ[2] / volform};
-
-            if (nspecies_ == 4) {
-              nudens_0[2] += rnnu[3] / volform;
-              nudens_1[2] += rJ[3] / volform;
-            }
-
-            /*
-            auto ierr = WeakEquilibrium(
-                rho, temp, ye, nudens_0[0], nudens_0[1], nudens_0[2], nudens_1[0],
-                nudens_1[1], nudens_1[2], &temperature_trap, &Y_e_trap, &nudens_0_trap[0],
-                &nudens_0_trap[1], &nudens_0_trap[2], &nudens_1_trap[0],
-                &nudens_1_trap[1], &nudens_1_trap[2]);
-
-            if (ierr) {
-              // Try to recompute the weak equilibrium using neglecting
-              // current neutrino data
-              ierr = WeakEquilibrium(
-                  rho, temp, ye, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, &temperature_trap,
-                  &Y_e_trap, &nudens_0_trap[0], &nudens_0_trap[1], &nudens_0_trap[2],
-                  &nudens_1_trap[0], &nudens_1_trap[1], &nudens_1_trap[2]);
-            }*/
+          // Local neutrino quantities (undesitized)
+          Real nudens_0[4], nudens_1[4], chi_loc[4];
+          for (int nuidx = 0; nuidx < nspecies_; ++nuidx) {
+            nudens_0[nuidx] = rnnu[nuidx] / volform;
+            nudens_1[nuidx] = J[nuidx] / volform;
+            chi_loc[nuidx] = chi_(m, nuidx, k, j, i);
           }
-          nudens_0_trap[2] = nux_weight * nudens_0_trap[2];
-          nudens_1_trap[2] = nux_weight * nudens_1_trap[2];
-          nudens_0_trap[3] = nudens_0_trap[2];
-          nudens_1_trap[3] = nudens_1_trap[2];
 
-          // These are fluid frame quantities
-          Real n_nue{};
-          Real j_nue{};
-          Real chi_nue{};
-          Real n_nua{};
-          Real j_nua{};
-          Real chi_nua{};
-          Real n_nux{};
-          Real j_nux{};
-          Real chi_nux{};
+          // Get emissivities and opacities
+          Real eta_0_loc[4]{}, eta_1_loc[4]{};
+          Real abs_0_loc[4]{}, abs_1_loc[4]{};
+          Real scat_0_loc[4]{}, scat_1_loc[4]{};
+
           /*
-          bns_nurates(&nb, &temp, &ye, &mu_n, &mu_p, &mu_e, &n_nue, &j_nue, &chi_nue,
-                      &n_nua, &j_nua, &chi_nua, &n_nux, &j_nux, &chi_nux,
-                      eta_0_(m, id_nue, k, j, i), eta_0_(m, id_anue, k, j, i),
-                      eta_0_(m, id_nux, k, j, i), eta_1_(m, id_nue, k, j, i),
-                      eta_1_(m, id_anue, k, j, i), eta_1_(m, id_nux, k, j, i),
-                      &sigma_0_nue, Real & sigma_0_nua, Real & sigma_0_nux,
-                      Real & sigma_1_nue, Real & sigma_1_nua, Real & sigma_1_nux,
-                      Real & scat_0_nue, Real & scat_0_nua, Real & scat_0_nux,
-                      scat_1_(m, id_nue, k, j, i), scat_1_(m, id_anue, k, j, i),
-                      scat_1_(m, id_nux, k, j, i), nurates_params_);*/
+          if (assume_equilibrium_distribution_function) {
+            ierr = Neutrino_BNSRates_eq(
+                rho[ijk], temperature[ijk], Y_e[ijk], &eta_0_loc[0], &eta_0_loc[1],
+                &eta_0_loc[2], &eta_0_loc[3], &eta_1_loc[0], &eta_1_loc[1], &eta_1_loc[2],
+                &eta_1_loc[3], &abs_0_loc[0], &abs_0_loc[1], &abs_0_loc[2], &abs_0_loc[3],
+                &abs_1_loc[0], &abs_1_loc[1], &abs_1_loc[2], &abs_1_loc[3],
+                &scat_0_loc[0], &scat_0_loc[1], &scat_0_loc[2], &scat_0_loc[3],
+                &scat_1_loc[0], &scat_1_loc[1], &scat_1_loc[2], &scat_1_loc[3]);
+          } else {
+            ierr = Neutrino_BNSRates(
+                rho[ijk], temperature[ijk], Y_e[ijk], nudens_0[0], nudens_1[0],
+                chi_loc[0], nudens_0[1], nudens_1[1], chi_loc[1], nudens_0[2],
+                nudens_1[2], chi_loc[2], nudens_0[3], nudens_1[3], chi_loc[3],
+                &eta_0_loc[0], &eta_0_loc[1], &eta_0_loc[2], &eta_0_loc[3], &eta_1_loc[0],
+                &eta_1_loc[1], &eta_1_loc[2], &eta_1_loc[3], &abs_0_loc[0], &abs_0_loc[1],
+                &abs_0_loc[2], &abs_0_loc[3], &abs_1_loc[0], &abs_1_loc[1], &abs_1_loc[2],
+                &abs_1_loc[3], &scat_0_loc[0], &scat_0_loc[1], &scat_0_loc[2],
+                &scat_0_loc[3], &scat_1_loc[0], &scat_1_loc[1], &scat_1_loc[2],
+                &scat_1_loc[3]);
+          }*/
+
+          assert(Kokkos::isfinite(eta_0_loc[0]));
+          assert(Kokkos::isfinite(eta_0_loc[1]));
+          assert(Kokkos::isfinite(eta_0_loc[2]));
+          assert(Kokkos::isfinite(eta_0_loc[3]));
+          assert(Kokkos::isfinite(eta_1_loc[0]));
+          assert(Kokkos::isfinite(eta_1_loc[1]));
+          assert(Kokkos::isfinite(eta_1_loc[2]));
+          assert(Kokkos::isfinite(eta_1_loc[3]));
+          assert(Kokkos::isfinite(abs_0_loc[0]));
+          assert(Kokkos::isfinite(abs_0_loc[1]));
+          assert(Kokkos::isfinite(abs_0_loc[2]));
+          assert(Kokkos::isfinite(abs_0_loc[3]));
+          assert(Kokkos::isfinite(abs_1_loc[0]));
+          assert(Kokkos::isfinite(abs_1_loc[1]));
+          assert(Kokkos::isfinite(abs_1_loc[2]));
+          assert(Kokkos::isfinite(abs_1_loc[3]));
+          assert(Kokkos::isfinite(scat_1_loc[0]));
+          assert(Kokkos::isfinite(scat_1_loc[1]));
+          assert(Kokkos::isfinite(scat_1_loc[2]));
+          assert(Kokkos::isfinite(scat_1_loc[3]));
+
+          Real tau;
+          Real nudens_0_trap[4], nudens_1_trap[4];
+          Real nudens_0_thin[4], nudens_1_thin[4];
+
+          if (nurates_params_.use_kirchhoff_law) {
+            // An effective optical depth used to decide whether to compute
+            // the black body function for neutrinos assuming neutrino trapping
+            // or at a fixed temperature and Ye
+            tau =
+                Kokkos::min(Kokkos::sqrt(abs_1_loc[0] * (abs_1_loc[0] + scat_1_loc[0])),
+                            Kokkos::sqrt(abs_1_loc[1] * (abs_1_loc[1] + scat_1_loc[1]))) *
+                beta_dt;
+
+            // Compute the neutrino black body functions assuming trapped neutrinos
+            if (nurates_params_.opacity_tau_trap >= 0 &&
+                tau > nurates_params_.opacity_tau_trap) {
+              Real temperature_trap{}, Y_trap{};
+
+              //auto ierr = Primitive::GetBetaEquilibriumTrapped(
+              //    rho, temp, [ 1, 1, 1, 1 ], &temperature_trap, Y_trap, Real T_guess,
+              //    Real * Y_guess);
+              /*
+              auto ierr = WeakEquilibrium(
+                  rho, temp, ye, nudens_0[0], nudens_0[1], nudens_0[2], nudens_1[0],
+                  nudens_1[1], nudens_1[2], &temperature_trap, &Y_e_trap,
+                  &nudens_0_trap[0], &nudens_0_trap[1], &nudens_0_trap[2],
+                  &nudens_1_trap[0], &nudens_1_trap[1], &nudens_1_trap[2]);
+                  */
+              //if (ierr) {
+                // Try to recompute the weak equilibrium using neglecting
+                // current neutrino data
+                //ierr = WeakEquilibrium(rho[ijk], temperature[ijk], Y_e[ijk], 0.0, 0.0,
+                //                       0.0, 0.0, 0.0, 0.0, &temperature_trap, &Y_e_trap,
+                //                       &nudens_0_trap[0], &nudens_0_trap[1],
+                //                       &nudens_0_trap[2], &nudens_1_trap[0],
+                //                       &nudens_1_trap[1], &nudens_1_trap[2]);
+              //}
+              assert(Kokkos::isfinite(nudens_0_trap[0]));
+              assert(Kokkos::isfinite(nudens_0_trap[1]));
+              assert(Kokkos::isfinite(nudens_0_trap[2]));
+              assert(Kokkos::isfinite(nudens_1_trap[0]));
+              assert(Kokkos::isfinite(nudens_1_trap[1]));
+              assert(Kokkos::isfinite(nudens_1_trap[2]));
+
+              nudens_0_trap[2] *= 0.5;
+              nudens_1_trap[2] *= 0.5;
+              nudens_0_trap[3] = nudens_0_trap[2];
+              nudens_1_trap[3] = nudens_1_trap[2];
+            }
+            // Compute the neutrino black body function assuming fixed temperature and Y_e
+            auto ierr = NeutrinoDensity(rho, temp, ye, nudens_0_thin[0], nudens_0_thin[1],
+                                        nudens_0_thin[2], nudens_1_thin[0],
+                                        nudens_1_thin[1], nudens_1_thin[2]);
+            assert(!ierr);
+            nudens_0_thin[2] *= 0.5;
+            nudens_1_thin[2] *= 0.5;
+            nudens_0_thin[3] = nudens_0_thin[2];
+            nudens_1_thin[3] = nudens_1_thin[2];
+          }
         }
       });
 
