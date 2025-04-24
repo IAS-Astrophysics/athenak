@@ -11,7 +11,6 @@
 namespace radiationm1 {
 class BrentFunctor;
 
-KOKKOS_INLINE_FUNCTION
 MathSignal prepare(const BrentFunctor &BrentFunc, const Real q[4], SrcParams &src_params,
                    const RadiationM1Params &m1_params,
                    const RadiationM1Closure &closure_type);
