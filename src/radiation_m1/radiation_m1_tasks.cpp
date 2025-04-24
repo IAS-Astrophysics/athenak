@@ -84,16 +84,6 @@ void RadiationM1::AssembleRadiationM1Tasks(
   // to task list anyway to catch potential bugs in MPI communication logic
   id.crecv = tl["opsplit_after_stagen"]->AddTask(&RadiationM1::ClearRecv, this, id.csend);
 
-  /*
-  if (pmy_pack->pmhd != nullptr) {
-    id.mhd_restu = tl["opsplit_after_timeintegrator"]->AddTask(&mhd::MHD::RestrictU, this, id.crecv);
-    id.mhd_sendu = tl["opsplit_after_timeintegrator"]->AddTask(&mhd::MHD::SendU, this, id.mhd_restu);
-    id.mhd_recvu = tl["opsplit_after_timeintegrator"]->AddTask(&mhd::MHD::RecvU, this, id.mhd_sendu);
-    id.mhd_bcs = tl["opsplit_after_timeintegrator"]->AddTask(&mhd::MHD::ApplyPhysicalBCs, this, id.mhd_recvu);
-    id.mhd_prol = tl["opsplit_after_timeintegrator"]->AddTask(&mhd::MHD::Prolongate, this, id.mhd_bcs);
-    id.mhd_c2p = tl["opsplit_after_timeintegrator"]->AddTask(&mhd::MHD::ConToPrim, this, id.mhd_prol);
-  }*/
-
   return;
 }
 

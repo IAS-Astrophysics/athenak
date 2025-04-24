@@ -78,6 +78,13 @@ struct MHDTaskIDs {
   TaskID newdt;
   TaskID csend;
   TaskID crecv;
+
+  TaskID postrad_restu;
+  TaskID postrad_sendu;
+  TaskID postrad_recvu;
+  TaskID postrad_bcs;
+  TaskID postrad_prol;
+  TaskID postrad_c2p;
 };
 
 namespace mhd {
