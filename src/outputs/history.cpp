@@ -170,6 +170,7 @@ void HistoryOutput::LoadZ4cHistoryData(HistoryData *pdata, Mesh *pm) {
   pdata->label[5] = "My-norm2";
   pdata->label[6] = "Mz-norm2";
   pdata->label[7] = "Theta-norm2";
+  pdata->label[8] = "Volume";
 
   // capture class variabels for kernel
   auto &u0_ = pm->pmb_pack->pz4c->u0;
@@ -208,7 +209,7 @@ void HistoryOutput::LoadZ4cHistoryData(HistoryData *pdata, Mesh *pm) {
 
     // Excise the punctures based on chi
     array_sum::GlobalSum hvars;
-    if (z4c.chi(m,k,j,i)>=0.2) {
+    if (z4c.chi(m,k,j,i)>=0.0625) {
       hvars.the_array[0] = vol*u_con_(m,0,k,j,i); // ||C||^2 (comes already squared)
       hvars.the_array[1] = vol*SQR(u_con_(m,1,k,j,i)); //||H||^2
       hvars.the_array[2] = vol*u_con_(m,2,k,j,i); // ||M||^2 (comes already squared)
@@ -217,6 +218,7 @@ void HistoryOutput::LoadZ4cHistoryData(HistoryData *pdata, Mesh *pm) {
       hvars.the_array[5] = vol*SQR(u_con_(m,5,k,j,i));      // ||My||^2
       hvars.the_array[6] = vol*SQR(u_con_(m,6,k,j,i));      // ||Mz||^2
       hvars.the_array[7] = vol*SQR(u0_(m,I_Z4c_Theta_,k,j,i)); // ||Theta||^2
+      hvars.the_array[8] = vol;
     } else {
       hvars.the_array[0] = 0;
       hvars.the_array[1] = 0;
@@ -226,6 +228,7 @@ void HistoryOutput::LoadZ4cHistoryData(HistoryData *pdata, Mesh *pm) {
       hvars.the_array[5] = 0;
       hvars.the_array[6] = 0;
       hvars.the_array[7] = 0;
+      hvars.the_array[8] = 0;
     }
 
     // fill rest of the_array with zeros, if nhist < NHISTORY_VARIABLES
