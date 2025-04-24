@@ -14,12 +14,12 @@
 
 #include "athena.hpp"
 #include "athena_tensor.hpp"
+#include "bns_nurates/include/bns_nurates.hpp"
 #include "bvals/bvals.hpp"
 #include "parameter_input.hpp"
 #include "radiation_m1/radiation_m1_params.hpp"
 #include "radiation_m1/radiation_m1_roots_fns.hpp"
 #include "tasklist/task_list.hpp"
-#include "bns_nurates/include/bns_nurates.hpp"
 
 namespace radiationm1 {
 
@@ -50,6 +50,13 @@ struct RadiationM1TaskIDs {
   TaskID newdt;
   TaskID csend;
   TaskID crecv;
+
+  TaskID mhd_restu;
+  TaskID mhd_sendu;
+  TaskID mhd_recvu;
+  TaskID mhd_bcs;
+  TaskID mhd_c2p;
+  TaskID mhd_prol;
 };
 
 //----------------------------------------------------------------------------------------

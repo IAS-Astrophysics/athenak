@@ -394,6 +394,15 @@ void Driver::Execute(Mesh *pmesh, ParameterInput *pin, Outputs *pout) {
       // Work after time integrator indicated by "1" in stage
       ExecuteTaskList(pmesh, "after_timeintegrator", 1);
 
+      if (opsplit) {
+        for (int stage=1; stage<=(nopsplit_stages); ++stage) {
+          ExecuteTaskList(pmesh, "opsplit_before_stagen", stage);
+          ExecuteTaskList(pmesh, "opsplit_stagen", stage);
+          ExecuteTaskList(pmesh, "opsplit_after_stagen", stage);
+        }
+        ExecuteTaskList(pmesh, "opsplit_after_timeintegrator", 1);
+      }
+
       // Work outside of TaskLists:
       // increment time, ncycle, etc.
       pmesh->time = pmesh->time + pmesh->dt;
