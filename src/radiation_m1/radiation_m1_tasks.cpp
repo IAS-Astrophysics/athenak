@@ -9,6 +9,7 @@
 #include <iostream>
 #include <map>
 #include <memory>
+#include <mhd/mhd.hpp>
 #include <string>
 
 #include "athena.hpp"
@@ -48,43 +49,50 @@ void RadiationM1::AssembleRadiationM1Tasks(
   TaskID none(0);
 
   // assemble "before_stagen" task list
-  id.irecv = tl["before_stagen"]->AddTask(&RadiationM1::InitRecv, this, none);
+  id.irecv = tl["opsplit_before_stagen"]->AddTask(&RadiationM1::InitRecv, this, none);
 
   // assemble "stagen" task list
-  id.copyu = tl["stagen"]->AddTask(&RadiationM1::CopyCons, this, none);
-  id.closure =
-      tl["stagen"]->AddTask(&RadiationM1::CalcClosure, this, id.copyu);
+  id.copyu = tl["opsplit_stagen"]->AddTask(&RadiationM1::CopyCons, this, none);
+  id.closure = tl["opsplit_stagen"]->AddTask(&RadiationM1::CalcClosure, this, id.copyu);
 
   // decide what type of opacities to compute
   if (!params.matter_sources) {
     id.mattersrc = id.closure;
   } else if (params.opacity_type == BnsNurates) {
-    id.mattersrc = tl["stagen"]->AddTask(&RadiationM1::CalcOpacityNurates, this,
-                                       id.closure);
+    id.mattersrc =
+        tl["opsplit_stagen"]->AddTask(&RadiationM1::CalcOpacityNurates, this, id.closure);
   } else {
-    id.mattersrc = tl["stagen"]->AddTask(&RadiationM1::CalcOpacityToy, this,
-                                       id.closure);
+    id.mattersrc =
+        tl["opsplit_stagen"]->AddTask(&RadiationM1::CalcOpacityToy, this, id.closure);
   }
 
   id.flux =
-      tl["stagen"]->AddTask(&RadiationM1::CalculateFluxes, this, id.mattersrc);
-  id.sendf = tl["stagen"]->AddTask(&RadiationM1::SendFlux, this, id.flux);
-  id.recvf = tl["stagen"]->AddTask(&RadiationM1::RecvFlux, this, id.sendf);
-  id.rkupdt = tl["stagen"]->AddTask(&RadiationM1::TimeUpdate, this, id.recvf);
-  id.restu = tl["stagen"]->AddTask(&RadiationM1::RestrictU, this, id.rkupdt);
-  id.sendu = tl["stagen"]->AddTask(&RadiationM1::SendU, this, id.restu);
-  id.recvu = tl["stagen"]->AddTask(&RadiationM1::RecvU, this, id.sendu);
-  id.bcs =
-      tl["stagen"]->AddTask(&RadiationM1::ApplyPhysicalBCs, this, id.recvu);
-  id.prol = tl["stagen"]->AddTask(&RadiationM1::Prolongate, this, id.bcs);
-  id.newdt = tl["stagen"]->AddTask(&RadiationM1::NewTimeStep, this, id.prol);
+      tl["opsplit_stagen"]->AddTask(&RadiationM1::CalculateFluxes, this, id.mattersrc);
+  id.sendf = tl["opsplit_stagen"]->AddTask(&RadiationM1::SendFlux, this, id.flux);
+  id.recvf = tl["opsplit_stagen"]->AddTask(&RadiationM1::RecvFlux, this, id.sendf);
+  id.rkupdt = tl["opsplit_stagen"]->AddTask(&RadiationM1::TimeUpdate, this, id.recvf);
+  id.restu = tl["opsplit_stagen"]->AddTask(&RadiationM1::RestrictU, this, id.rkupdt);
+  id.sendu = tl["opsplit_stagen"]->AddTask(&RadiationM1::SendU, this, id.restu);
+  id.recvu = tl["opsplit_stagen"]->AddTask(&RadiationM1::RecvU, this, id.sendu);
+  id.bcs = tl["opsplit_stagen"]->AddTask(&RadiationM1::ApplyPhysicalBCs, this, id.recvu);
+  id.prol = tl["opsplit_stagen"]->AddTask(&RadiationM1::Prolongate, this, id.bcs);
+  id.newdt = tl["opsplit_stagen"]->AddTask(&RadiationM1::NewTimeStep, this, id.prol);
 
   // assemble "after_stagen" task list
-  id.csend = tl["after_stagen"]->AddTask(&RadiationM1::ClearSend, this, none);
+  id.csend = tl["opsplit_after_stagen"]->AddTask(&RadiationM1::ClearSend, this, none);
   // although RecvFlux/U functions check that all recvs complete, add ClearRecv
   // to task list anyway to catch potential bugs in MPI communication logic
-  id.crecv =
-      tl["after_stagen"]->AddTask(&RadiationM1::ClearRecv, this, id.csend);
+  id.crecv = tl["opsplit_after_stagen"]->AddTask(&RadiationM1::ClearRecv, this, id.csend);
+
+  /*
+  if (pmy_pack->pmhd != nullptr) {
+    id.mhd_restu = tl["opsplit_after_timeintegrator"]->AddTask(&mhd::MHD::RestrictU, this, id.crecv);
+    id.mhd_sendu = tl["opsplit_after_timeintegrator"]->AddTask(&mhd::MHD::SendU, this, id.mhd_restu);
+    id.mhd_recvu = tl["opsplit_after_timeintegrator"]->AddTask(&mhd::MHD::RecvU, this, id.mhd_sendu);
+    id.mhd_bcs = tl["opsplit_after_timeintegrator"]->AddTask(&mhd::MHD::ApplyPhysicalBCs, this, id.mhd_recvu);
+    id.mhd_prol = tl["opsplit_after_timeintegrator"]->AddTask(&mhd::MHD::Prolongate, this, id.mhd_bcs);
+    id.mhd_c2p = tl["opsplit_after_timeintegrator"]->AddTask(&mhd::MHD::ConToPrim, this, id.mhd_prol);
+  }*/
 
   return;
 }
