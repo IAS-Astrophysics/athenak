@@ -1,6 +1,9 @@
 #ifndef RADIATION_M1_PARAMS_HPP
 #define RADIATION_M1_PARAMS_HPP
 
+#include "athena.hpp"
+#include "athena_tensor.hpp"
+
 #include "bns_nurates/include/bns_nurates.hpp"
 //========================================================================================
 // AthenaXXX astrophysical plasma code

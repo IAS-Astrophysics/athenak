@@ -34,7 +34,7 @@ endif()
 option(Athena_SINGLE_PRECISION "Compile for single precision" OFF)
 option(Athena_ENABLE_MPI "Compile with MPI parallelism enabled" OFF)
 option(Athena_ENABLE_OPENMP "Compile with OpenMP parallelism enabled" OFF)
-option(Athena_ENABLE_NURATES "Compile with bns-nurates enabled" OFF)
+option(Athena_ENABLE_NURATES "Compile with bns_nurates enabled" OFF)
 option(Athena_ENABLE_RNS "Compile with RNS support enabled" OFF)
 set(PROBLEM built_in_pgens CACHE STRING "Name of problem generator function")
 
@@ -144,6 +144,11 @@ if (${PROBLEM} STREQUAL "z4c_two_puncture")
 	set(TWO_PUNCTURES 1)
 else()
 	set(TWO_PUNCTURES 0)
+endif()
+
+# Optionally include bns_nurates headers
+if (ENABLE_NURATES)
+  target_include_directories(athena PRIVATE ${CMAKE_SOURCE_DIR})
 endif()
 
 if (${PROBLEM} STREQUAL "z4c_spectre_bbh")
