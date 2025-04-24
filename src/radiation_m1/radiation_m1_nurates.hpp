@@ -2,6 +2,9 @@
 #define RADIATION_M1_NURATES_HPP
 
 #include "athena.hpp"
+
+#include "radiation_m1_params.hpp"
+
 #include "bns_nurates/include/bns_nurates.hpp"
 #include "bns_nurates/include/constants.hpp"
 #include "bns_nurates/include/distribution.hpp"
