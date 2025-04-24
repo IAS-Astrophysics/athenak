@@ -50,13 +50,6 @@ struct RadiationM1TaskIDs {
   TaskID newdt;
   TaskID csend;
   TaskID crecv;
-
-  TaskID mhd_restu;
-  TaskID mhd_sendu;
-  TaskID mhd_recvu;
-  TaskID mhd_bcs;
-  TaskID mhd_c2p;
-  TaskID mhd_prol;
 };
 
 //----------------------------------------------------------------------------------------
