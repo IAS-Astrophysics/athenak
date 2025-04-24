@@ -12,6 +12,16 @@
 namespace radiationm1 {
 
 KOKKOS_INLINE_FUNCTION
+Real AverageBaryonMass() {
+  return 1;  //@TODO: fix
+}
+
+KOKKOS_INLINE_FUNCTION
+bool NeutrinoDensity(Real &rho, Real &temp, Real &ye, Real &num_nue, Real &num_anue,
+                     Real &num_nux, Real &ene_nue, Real &ene_anue, Real &ene_nux) {
+  return true;
+}
+KOKKOS_INLINE_FUNCTION
 void bns_nurates(Real &nb, Real &temp, Real &ye, Real &mu_n, Real &mu_p, Real &mu_e,
                  Real &n_nue, Real &j_nue, Real &chi_nue, Real &n_anue, Real &j_anue,
                  Real &chi_anue, Real &n_nux, Real &j_nux, Real &chi_nux, Real &n_anux,
