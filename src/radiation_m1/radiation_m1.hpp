@@ -118,6 +118,9 @@ class RadiationM1 {
 
  private:
   MeshBlockPack* pmy_pack;  // ptr to MeshBlockPack
+
+  template<class EOSPolicy, class ErrorPolicy>
+  TaskStatus CalcOpacityNurates_(Driver* pdrive, int stage);
 };
 
 // beam boundary conditions

@@ -2,8 +2,9 @@
 #define RADIATION_M1_NURATES_HPP
 
 #include "athena.hpp"
-
 #include "radiation_m1_params.hpp"
+
+#include "eos/primitive-solver/eos.hpp"
 
 #include "bns_nurates/include/bns_nurates.hpp"
 #include "bns_nurates/include/constants.hpp"
@@ -15,27 +16,21 @@
 namespace radiationm1 {
 
 KOKKOS_INLINE_FUNCTION
-Real AverageBaryonMass() {
-  return 1;  //@TODO: fix
-}
-
-KOKKOS_INLINE_FUNCTION
-bool NeutrinoDensity(Real &rho, Real &temp, Real &ye, Real &num_nue, Real &num_anue,
-                     Real &num_nux, Real &ene_nue, Real &ene_anue, Real &ene_nux) {
-  return true;
-}
-KOKKOS_INLINE_FUNCTION
 void bns_nurates(Real &nb, Real &temp, Real &ye, Real &mu_n, Real &mu_p, Real &mu_e,
-                 Real &n_nue, Real &j_nue, Real &chi_nue, Real &n_anue, Real &j_anue,
-                 Real &chi_anue, Real &n_nux, Real &j_nux, Real &chi_nux, Real &n_anux,
-                 Real &j_anux, Real &chi_anux, Real &R_nue, Real &R_anue, Real &R_nux,
-                 Real &R_anux, Real &Q_nue, Real &Q_anue, Real &Q_nux, Real &Q_anux,
-                 Real &sigma_0_nue, Real &sigma_0_anue, Real &sigma_0_nux,
-                 Real &sigma_0_anux, Real &sigma_1_nue, Real &sigma_1_anue,
-                 Real &sigma_1_nux, Real &sigma_1_anux, Real &scat_0_nue,
-                 Real &scat_0_anue, Real &scat_0_nux, Real &scat_0_anux, Real &scat_1_nue,
-                 Real &scat_1_anue, Real &scat_1_nux, Real &scat_1_anux,
+                 Real &n_nue, Real &j_nue, Real &chi_nue,
+                 Real &n_anue, Real &j_anue, Real &chi_anue,
+                 Real &n_nux, Real &j_nux, Real &chi_nux,
+                 Real &n_anux, Real &j_anux, Real &chi_anux, 
+                 Real &R_nue, Real &R_anue, Real &R_nux, Real &R_anux,
+                 Real &Q_nue, Real &Q_anue, Real &Q_nux, Real &Q_anux,
+                 Real &sigma_0_nue, Real &sigma_0_anue, Real &sigma_0_nux, Real &sigma_0_anux,
+                 Real &sigma_1_nue, Real &sigma_1_anue, Real &sigma_1_nux, Real &sigma_1_anux,
+                 Real &scat_0_nue, Real &scat_0_anue, Real &scat_0_nux, Real &scat_0_anux,
+                 Real &scat_1_nue, Real &scat_1_anue, Real &scat_1_nux, Real &scat_1_anux,
                  const NuratesParams nurates_params) {
+
+  // TODO convert units
+    
   // opacity params structure
   GreyOpacityParams my_grey_opacity_params = {0};
 
@@ -146,6 +141,8 @@ void bns_nurates(Real &nb, Real &temp, Real &ye, Real &mu_n, Real &mu_p, Real &m
   scat_1_anue = opacities.kappa_s[id_anue];
   scat_1_nux = opacities.kappa_s[id_nux] * 2.;
   scat_1_anux = opacities.kappa_s[id_anux] * 2.;
+
+  // TODO: convert units
 
   // Check for NaNs/Infs
   assert(isfinite(R_nue));
