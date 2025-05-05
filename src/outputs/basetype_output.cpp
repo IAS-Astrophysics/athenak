@@ -23,6 +23,7 @@
 #include "hydro/hydro.hpp"
 #include "mhd/mhd.hpp"
 #include "coordinates/adm.hpp"
+#include "radiation/radiation.hpp"
 #include "z4c/tmunu.hpp"
 #include "z4c/z4c.hpp"
 #include "srcterms/srcterms.hpp"
@@ -41,6 +42,8 @@ BaseTypeOutput::BaseTypeOutput(ParameterInput *pin, Mesh *pm, OutputParameters o
     derived_var("derived-var",1,1,1,1,1),
     outarray("cc_outvar",1,1,1,1,1),
     outfield("fc_outvar",1,1,1,1),
+    derived_var6d("radnu-var",1,1,1,1,1,1),
+    outarray_6d("cc_outvar_radnu",1,1,1,1,1,1),
     out_params(opar) {
   // exit for history, restart, or event log files
   if (out_params.file_type.compare("hst") == 0 ||
@@ -159,9 +162,33 @@ BaseTypeOutput::BaseTypeOutput(ParameterInput *pin, Mesh *pm, OutputParameters o
        << std::endl << "Input file is likely missing corresponding block" << std::endl;
     exit(EXIT_FAILURE);
   }
+  if (ivar==152 && (pm->pmb_pack->prad == nullptr)) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+       << "Output of Multi-Frequency Radiation moments requested in <output> block '"
+       << out_params.block_name << "' but no Radiation object has been constructed."
+       << std::endl << "Input file is likely missing a <radiation> block" << std::endl;
+    exit(EXIT_FAILURE);
+  }
+  if ((ivar==153 || ivar==154) &&
+      ((pm->pmb_pack->prad == nullptr) ||
+       (pm->pmb_pack->phydro == nullptr && pm->pmb_pack->pmhd == nullptr))) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+       << "Output of Multi-Frequency Fluid-Frame Radiation moments requested in <output> block '"
+       << out_params.block_name << "' but either Radiation object has not been "
+       << " constructed, or corresponding Hydro or MHD object missing" << std::endl;
+    exit(EXIT_FAILURE);
+  }
+  if ((ivar>=152) && (ivar<155) && (!pm->pmb_pack->prad->multi_freq)) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+       << "Output of Multi-Frequency Radiation moments requested in <output> block '"
+       << out_params.block_name << "' but Multi-Frequency Radiation is not turned on."
+       << std::endl << "Set multi_freq=true in <radiation> block to enable it" << std::endl;
+    exit(EXIT_FAILURE);
+  }
 
   // Now load STL vector of output variables
   outvars.clear();
+  outvars_6d.clear(); // use for multi-frequency radiation
 
   // make a vector of out_params.variables
   std::vector<std::string> variables;
@@ -671,7 +698,43 @@ BaseTypeOutput::BaseTypeOutput(ParameterInput *pin, Mesh *pm, OutputParameters o
       outvars.emplace_back("r23_ff",moments_offset+8,&(derived_var));
       outvars.emplace_back("r33_ff",moments_offset+9,&(derived_var));
     }
-  }
+
+    // multi-frequency radiation moments
+    // note: always make multi-frequency outputs appended last for data extraction
+    if (variable.compare(0, 11, "radnu_coord") == 0) {
+      out_params.contains_derived = true;
+      out_params.n_derived_6d += 10;
+      outvars_6d.emplace_back("rnu00",0,&(derived_var6d));
+      outvars_6d.emplace_back("rnu01",1,&(derived_var6d));
+      outvars_6d.emplace_back("rnu02",2,&(derived_var6d));
+      outvars_6d.emplace_back("rnu03",3,&(derived_var6d));
+      outvars_6d.emplace_back("rnu11",4,&(derived_var6d));
+      outvars_6d.emplace_back("rnu12",5,&(derived_var6d));
+      outvars_6d.emplace_back("rnu13",6,&(derived_var6d));
+      outvars_6d.emplace_back("rnu22",7,&(derived_var6d));
+      outvars_6d.emplace_back("rnu23",8,&(derived_var6d));
+      outvars_6d.emplace_back("rnu33",9,&(derived_var6d));
+    }
+
+    if (variable.compare("radnu_fluid") == 0 ||
+        variable.compare("radnu_coord_fluid") == 0) {
+      bool needs_fluid_only = (variable.compare("radnu_fluid") == 0);
+      int moments_offset = !(needs_fluid_only) ? 10 : 0;
+      out_params.contains_derived = true;
+      out_params.n_derived_6d += 10;
+      outvars_6d.emplace_back("rnu00_ff",moments_offset+0,&(derived_var6d));
+      outvars_6d.emplace_back("rnu01_ff",moments_offset+1,&(derived_var6d));
+      outvars_6d.emplace_back("rnu02_ff",moments_offset+2,&(derived_var6d));
+      outvars_6d.emplace_back("rnu03_ff",moments_offset+3,&(derived_var6d));
+      outvars_6d.emplace_back("rnu11_ff",moments_offset+4,&(derived_var6d));
+      outvars_6d.emplace_back("rnu12_ff",moments_offset+5,&(derived_var6d));
+      outvars_6d.emplace_back("rnu13_ff",moments_offset+6,&(derived_var6d));
+      outvars_6d.emplace_back("rnu22_ff",moments_offset+7,&(derived_var6d));
+      outvars_6d.emplace_back("rnu23_ff",moments_offset+8,&(derived_var6d));
+      outvars_6d.emplace_back("rnu33_ff",moments_offset+9,&(derived_var6d));
+    }
+
+  } // endfor variable
 
   // particle density binned to mesh
   if (out_params.variable.compare("prtcl_d") == 0) {
@@ -788,6 +851,11 @@ void BaseTypeOutput::LoadOutputData(Mesh *pm) {
     int nout3 = (outmbs[0].oke - outmbs[0].oks + 1);
     // NB: outarray stores all output data on Host
     Kokkos::realloc(outarray, nout_vars, nout_mbs, nout3, nout2, nout1);
+    if (out_params.n_derived_6d > 0) { // multi-frequency radiation
+      int nout_ = out_params.n_derived_6d;
+      int nfreq_ = pm->pmb_pack->prad->nfreq;
+      Kokkos::realloc(outarray_6d, nout_, nout_mbs, nfreq_, nout3, nout2, nout1);
+    } // endif (out_params.n_derived_6d > 0)
   }
 
   // Calculate derived variables, if required
@@ -821,4 +889,38 @@ void BaseTypeOutput::LoadOutputData(Mesh *pm) {
       Kokkos::deep_copy(h_slice,h_output_var);
     }
   }
+
+  // Now copy multi-frequency data to host (outarray_6d) and MeshBlocks
+  // note: data extraction for multi-frequency radiation has to be the last
+  if (out_params.n_derived_6d > 0) {
+    int nfreq_ = pm->pmb_pack->prad->nfreq;
+    // extract multi-frequency data
+    for (int n=0; n<outvars_6d.size(); ++n) {
+      for (int m=0; m<nout_mbs; ++m) {
+        int mbi = pm->FindMeshBlockIndex(outmbs[m].mb_gid);
+        std::pair<int,int> frange = std::make_pair(0, nfreq_);
+        std::pair<int,int> irange = std::make_pair(outmbs[m].ois, outmbs[m].oie+1);
+        std::pair<int,int> jrange = std::make_pair(outmbs[m].ojs, outmbs[m].oje+1);
+        std::pair<int,int> krange = std::make_pair(outmbs[m].oks, outmbs[m].oke+1);
+        int nout1 = (outmbs[0].oie - outmbs[0].ois + 1);
+        int nout2 = (outmbs[0].oje - outmbs[0].ojs + 1);
+        int nout3 = (outmbs[0].oke - outmbs[0].oks + 1);
+
+        // copy output variable to new device View
+        DvceArray4D<Real> d_output_6d("d_output_6d",nfreq_,nout3,nout2,nout1);
+        auto d_slice = Kokkos::subview(*(outvars_6d[n].data6d_ptr), mbi, outvars_6d[n].data_index,
+                                       frange,krange,jrange,irange);
+        Kokkos::deep_copy(d_output_6d,d_slice);
+
+        // copy new device View to host mirror View
+        DvceArray4D<Real>::HostMirror h_output_6d = Kokkos::create_mirror(d_output_6d);
+        Kokkos::deep_copy(h_output_6d,d_output_6d);
+
+        // copy host mirror to 6D host View containing all output variables
+        auto h_slice = Kokkos::subview(outarray_6d,n,m,Kokkos::ALL,Kokkos::ALL,Kokkos::ALL,Kokkos::ALL);
+        Kokkos::deep_copy(h_slice,h_output_6d);
+      }
+    } // endfor n
+  } // endif (out_params.n_6d_derived>0)
+
 }

@@ -112,6 +112,18 @@ class Radiation {
   Real n_0_floor;                     // floor on n_0
   GeodesicGrid *prgeo = nullptr;      // pointer to radiation angular mesh
 
+  // Multi-frequency radiation
+  bool multi_freq = false;
+  int nfreq = 1;
+  int flag_fscale; // 0: linear, 1: log, 2: customize
+  Real nu_max, nu_min;
+  DvceArray1D<Real> freq_grid;
+  DvceArray2D<Real> matrix_imap;
+  Real kappa_r_multi_freq; // constant Rosseland mean absoprtion coefficient
+  Real kappa_s_multi_freq; // constant scattering coefficient
+  Real kappa_p_multi_freq; // Planck mean coefficient
+  void SetFrequencyGrid();
+
   // Tetrad arrays and functions
   DualArray2D<Real> nh_c;             // normal vector computed at face center
   DualArray3D<Real> nh_f;             // normal vector computed at face edges
@@ -164,6 +176,9 @@ class Radiation {
   // ...in "after_stagen_tl" task list
   TaskStatus ClearSend(Driver *d, int stage);
   TaskStatus ClearRecv(Driver *d, int stage);
+
+  // Multi-frequency radiation
+  // TaskStatus AddMultiFreqRadiationSourceTerm(Driver *d, int stage);
 
  private:
   MeshBlockPack* pmy_pack;  // ptr to MeshBlockPack containing this Radiation

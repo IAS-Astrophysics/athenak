@@ -29,7 +29,9 @@ TaskStatus Radiation::CalculateFluxes(Driver *pdriver, int stage) {
   int &is = indcs.is, &ie = indcs.ie;
   int &js = indcs.js, &je = indcs.je;
   int &ks = indcs.ks, &ke = indcs.ke;
-  int nang1 = prgeo->nangles - 1;
+  int &nfreq_ = nfreq;
+  int &nang_  = prgeo->nangles;
+  int nfr_ang1 = nfreq_*nang_ - 1;
   int nmb1 = pmy_pack->nmb_thispack - 1;
 
   const auto &recon_method_ = recon_method;
@@ -43,11 +45,15 @@ TaskStatus Radiation::CalculateFluxes(Driver *pdriver, int stage) {
 
   auto &t1d1 = tet_d1_x1f;
   auto &flx1 = iflx.x1f;
-  par_for("rflux_x1",DevExeSpace(),0,nmb1,0,nang1,ks,ke,js,je,is,ie+1,
+  par_for("rflux_x1",DevExeSpace(),0,nmb1,0,nfr_ang1,ks,ke,js,je,is,ie+1,
   KOKKOS_LAMBDA(int m, int n, int k, int j, int i) {
+    // compute frequency and angle indices
+    int ifr  = n / nang_;
+    int iang = n - ifr*nang_;
+
     // calculate n^1 (hence determining upwinding direction)
-    Real n1 = t1d1(m,0,k,j,i)*nh_c_.d_view(n,0) + t1d1(m,1,k,j,i)*nh_c_.d_view(n,1)
-            + t1d1(m,2,k,j,i)*nh_c_.d_view(n,2) + t1d1(m,3,k,j,i)*nh_c_.d_view(n,3);
+    Real n1 = t1d1(m,0,k,j,i)*nh_c_.d_view(iang,0) + t1d1(m,1,k,j,i)*nh_c_.d_view(iang,1)
+            + t1d1(m,2,k,j,i)*nh_c_.d_view(iang,2) + t1d1(m,3,k,j,i)*nh_c_.d_view(iang,3);
 
     // convert to primitive n_0 I
     Real iim1, iicc, iim2, iip1, iim3, iip2;
@@ -99,11 +105,15 @@ TaskStatus Radiation::CalculateFluxes(Driver *pdriver, int stage) {
   if (pmy_pack->pmesh->multi_d) {
     auto &t2d2 = tet_d2_x2f;
     auto &flx2 = iflx.x2f;
-    par_for("rflux_x2",DevExeSpace(),0,nmb1,0,nang1,ks,ke,js,je+1,is,ie,
+    par_for("rflux_x2",DevExeSpace(),0,nmb1,0,nfr_ang1,ks,ke,js,je+1,is,ie,
     KOKKOS_LAMBDA(int m, int n, int k, int j, int i) {
+      // compute frequency and angle indices
+      int ifr  = n / nang_;
+      int iang = n - ifr*nang_;
+
       // calculate n^2 (hence determining upwinding direction)
-      Real n2 = t2d2(m,0,k,j,i)*nh_c_.d_view(n,0) + t2d2(m,1,k,j,i)*nh_c_.d_view(n,1)
-              + t2d2(m,2,k,j,i)*nh_c_.d_view(n,2) + t2d2(m,3,k,j,i)*nh_c_.d_view(n,3);
+      Real n2 = t2d2(m,0,k,j,i)*nh_c_.d_view(iang,0) + t2d2(m,1,k,j,i)*nh_c_.d_view(iang,1)
+              + t2d2(m,2,k,j,i)*nh_c_.d_view(iang,2) + t2d2(m,3,k,j,i)*nh_c_.d_view(iang,3);
 
       // convert to primitive n_0 I
       Real iim1, iicc, iim2, iip1, iim3, iip2;
@@ -156,11 +166,15 @@ TaskStatus Radiation::CalculateFluxes(Driver *pdriver, int stage) {
   if (pmy_pack->pmesh->three_d) {
     auto &t3d3 = tet_d3_x3f;
     auto &flx3 = iflx.x3f;
-    par_for("rflux_x3",DevExeSpace(),0,nmb1,0,nang1,ks,ke+1,js,je,is,ie,
+    par_for("rflux_x3",DevExeSpace(),0,nmb1,0,nfr_ang1,ks,ke+1,js,je,is,ie,
     KOKKOS_LAMBDA(int m, int n, int k, int j, int i) {
+      // compute frequency and angle indices
+      int ifr  = n / nang_;
+      int iang = n - ifr*nang_;
+
       // calculate n^3 (hence determining upwinding direction)
-      Real n3 = t3d3(m,0,k,j,i)*nh_c_.d_view(n,0) + t3d3(m,1,k,j,i)*nh_c_.d_view(n,1)
-              + t3d3(m,2,k,j,i)*nh_c_.d_view(n,2) + t3d3(m,3,k,j,i)*nh_c_.d_view(n,3);
+      Real n3 = t3d3(m,0,k,j,i)*nh_c_.d_view(iang,0) + t3d3(m,1,k,j,i)*nh_c_.d_view(iang,1)
+              + t3d3(m,2,k,j,i)*nh_c_.d_view(iang,2) + t3d3(m,3,k,j,i)*nh_c_.d_view(iang,3);
 
       // convert to primitive n_0 I
       Real iim1, iicc, iim2, iip1, iim3, iip2;
@@ -211,6 +225,7 @@ TaskStatus Radiation::CalculateFluxes(Driver *pdriver, int stage) {
   // Angular Fluxes
 
   if (angular_fluxes) {
+    // TODO: add frequency dependence
     auto &numn = prgeo->num_neighbors;
     auto &indn = prgeo->ind_neighbors;
     auto &arcl = prgeo->arc_lengths;
@@ -219,21 +234,26 @@ TaskStatus Radiation::CalculateFluxes(Driver *pdriver, int stage) {
     auto &na_ = na;
     auto &divfa_ = divfa;
 
-    par_for("rflux_angular",DevExeSpace(),0,nmb1,0,nang1,ks,ke,js,je,is,ie,
+    par_for("rflux_angular",DevExeSpace(),0,nmb1,0,nfr_ang1,ks,ke,js,je,is,ie,
     KOKKOS_LAMBDA(int m, int n, int k, int j, int i) {
+      // compute frequency and angle indices
+      int ifr  = n / nang_;
+      int iang = n - ifr*nang_;
+      // compute angular fluxes
       Real divfa_tmp = 0.0;
       Real tet_c_tmp = tet_c_(m,0,0,k,j,i);
-      Real solid_angles_tmp = solid_angles_.d_view(n);
+      Real solid_angles_tmp = solid_angles_.d_view(iang);
       Real i0_n = i0_(m,n,k,j,i);
-      for (int nb=0; nb<numn.d_view(n); ++nb) {
-        Real na_tmp = na_(m,n,k,j,i,nb);
+      for (int nb=0; nb<numn.d_view(iang); ++nb) {
+        Real na_tmp = na_(m,iang,k,j,i,nb);
         Real flx_edge = na_tmp/tet_c_tmp;
         if (na_tmp < 0.0) {
-          flx_edge *= i0_(m,indn.d_view(n,nb),k,j,i);
+          int ifr_ang = indn.d_view(iang,nb) + ifr*nang_;
+          flx_edge *= i0_(m,ifr_ang,k,j,i);
         } else {
           flx_edge *= i0_n;
         }
-        divfa_tmp += (arcl.d_view(n,nb)*flx_edge/solid_angles_tmp);
+        divfa_tmp += (arcl.d_view(iang,nb)*flx_edge/solid_angles_tmp);
       }
       divfa_(m,n,k,j,i) = divfa_tmp;
     });

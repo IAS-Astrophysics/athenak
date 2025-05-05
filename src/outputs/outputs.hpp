@@ -21,7 +21,7 @@
     #error NHISTORY > NREDUCTION in outputs.hpp
 #endif
 
-#define NOUTPUT_CHOICES 152
+#define NOUTPUT_CHOICES 155
 // choices for output variables used in <ouput> blocks in input file
 // TO ADD MORE CHOICES:
 //   - add more strings to array below, change NOUTPUT_CHOICES above appropriately
@@ -96,7 +96,11 @@ static const char *var_choice[NOUTPUT_CHOICES] = {
   "tmunu",
 
   // Particles (150-151)
-  "prtcl_all", "prtcl_d"
+  "prtcl_all", "prtcl_d",
+
+  // Multi-frequency radiation (152-154)
+  "radnu_coord", "radnu_fluid", "radnu_coord_fluid"
+
 };
 
 
@@ -135,6 +139,7 @@ struct OutputParameters {
   // DBF parameters for PDF:
   // number of derived variables, index of current derived variable
   int n_derived=0, i_derived=0;
+  int n_derived_6d=0; // multi-frequency radiation
   std::string variable_2; // DBF: for 2d PDFs
   Real bin_min, bin_max;
   Real bin2_min, bin2_max;
@@ -151,9 +156,12 @@ struct OutputVariableInfo {
   std::string label;             // "name" of variable
   int data_index;                // index of variable in device array
   DvceArray5D<Real> *data_ptr;   // ptr to device array containing variable
+  DvceArray6D<Real> *data6d_ptr; // ptr to 6D device array containing variable of multi-frequency radiation
   // constructor(s)
   OutputVariableInfo(std::string lab, int indx, DvceArray5D<Real> *ptr) :
-    label(lab), data_index(indx), data_ptr(ptr) {}
+    label(lab), data_index(indx), data_ptr(ptr), data6d_ptr(nullptr) {}
+  OutputVariableInfo(std::string lab, int indx, DvceArray6D<Real> *ptr) :
+    label(lab), data_index(indx), data_ptr(nullptr), data6d_ptr(ptr) {}
 };
 
 //----------------------------------------------------------------------------------------
@@ -215,6 +223,7 @@ class BaseTypeOutput {
   // data
   OutputParameters out_params;   // params read from <output> block for this type
   DvceArray5D<Real> derived_var; // array to store output variables computed from u0/b0
+  DvceArray6D<Real> derived_var6d;   // array to store output variables computed from multi-frequency radiation;
 
   // function which computes derived output variables like vorticity and current density
   void ComputeDerivedVariable(std::string name, Mesh *pm);
@@ -253,6 +262,11 @@ class BaseTypeOutput {
 
   // Following vector will be of length (# output variables)
   std::vector<OutputVariableInfo> outvars;
+
+  // multi-frequency radiation
+  HostArray6D<Real> outarray_6d;
+  std::vector<OutputVariableInfo> outvars_6d;
+
 };
 
 

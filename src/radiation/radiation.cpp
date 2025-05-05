@@ -41,6 +41,7 @@ Radiation::Radiation(MeshBlockPack *ppack, ParameterInput *pin) :
     tet_d3_x3f("tet_d3_x3f",1,1,1,1,1),
     na("na",1,1,1,1,1,1),
     norm_to_tet("norm_to_tet",1,1,1,1,1,1),
+    freq_grid("freq_grid",1), 
     beam_mask("beam_mask",1,1,1,1,1) {
   // Check for general relativity
   if (!(pmy_pack->pcoord->is_general_relativistic)) {
@@ -67,6 +68,51 @@ Radiation::Radiation(MeshBlockPack *ppack, ParameterInput *pin) :
     std::exit(EXIT_FAILURE);
   }
   are_units_enabled = pin->DoesBlockExist("units");
+
+  // Check for multi-frequency radiation
+  nfreq = 1;
+  multi_freq = pin->GetOrAddBoolean("radiation","multi_freq",false);
+  if (multi_freq) {
+
+    // number of frequency groups
+    nfreq = pin->GetOrAddInteger("radiation","nfreq",2);
+
+    if (nfreq < 2) {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+        << std::endl << "Number of frequency groups must be >= 2 for multi-frequency radiation" << std::endl;
+      std::exit(EXIT_FAILURE);
+    }
+
+    // frequency grid
+    nu_min = pin->GetReal("radiation", "nu_min");
+    nu_max = pin->GetReal("radiation", "nu_max");
+    std::string freq_scale = pin->GetOrAddString("radiation", "freq_scale", "log");
+    if (freq_scale.compare("linear"))
+      flag_fscale = 0;
+    else if (freq_scale.compare("customize"))
+      flag_fscale = 2;
+    else // log frequency grid
+      flag_fscale = 1;
+
+    if (nu_max < nu_min) {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+        << std::endl << "Frequency maximum cannot be less than frequency minumum for multi-frequency radiation" << std::endl;
+      std::exit(EXIT_FAILURE);
+    } else if ((nu_max == nu_min) && (nfreq > 2)) {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+        << std::endl << "Only 2 frequency groups are allowed when frequency maximum is equal to frequency minumum" << std::endl;
+      std::exit(EXIT_FAILURE);
+    } else if ((nu_max > nu_min) && (nfreq == 2)) {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+        << std::endl << "Frequency maximum must be equal to frequency minumum for only 2 frequency groups" << std::endl;
+      std::exit(EXIT_FAILURE);
+    }
+
+    // auxiliary quantities
+    Kokkos::realloc(freq_grid,nfreq-1);
+    SetFrequencyGrid();
+    // Kokkos::realloc(matrix_imap,nfreq,nfreq);
+  } // endif (multi_freq)
 
   // Enable radiation source term (radiation+(M)HD) by default if hydro or mhd enabled
   // Otherwise, disable radiation source term.  The former can be overriden by
@@ -100,7 +146,15 @@ Radiation::Radiation(MeshBlockPack *ppack, ParameterInput *pin) :
       arad = pin->GetReal("radiation","arad");
     }
     affect_fluid = pin->GetOrAddBoolean("radiation","affect_fluid",true);
-  }
+
+    // multi-frequency radiation
+    if (multi_freq && !are_units_enabled) {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+        << std::endl << "Units must be specified for multi-frequency radiation" << std::endl;
+      std::exit(EXIT_FAILURE);
+    }
+
+  } // endif rad_source
 
   // Check for fluid evolution
   fixed_fluid = pin->GetOrAddBoolean("radiation","fixed_fluid",false);
@@ -145,7 +199,7 @@ Radiation::Radiation(MeshBlockPack *ppack, ParameterInput *pin) :
   int ncells1 = indcs.nx1 + 2*(indcs.ng);
   int ncells2 = (indcs.nx2 > 1)? (indcs.nx2 + 2*(indcs.ng)) : 1;
   int ncells3 = (indcs.nx3 > 1)? (indcs.nx3 + 2*(indcs.ng)) : 1;
-  Kokkos::realloc(i0,nmb,prgeo->nangles,ncells3,ncells2,ncells1);
+  Kokkos::realloc(i0,nmb,nfreq*prgeo->nangles,ncells3,ncells2,ncells1);
   }
 
   // allocate memory for conserved variables on coarse mesh
@@ -154,12 +208,12 @@ Radiation::Radiation(MeshBlockPack *ppack, ParameterInput *pin) :
     int nccells1 = indcs.cnx1 + 2*(indcs.ng);
     int nccells2 = (indcs.cnx2 > 1)? (indcs.cnx2 + 2*(indcs.ng)) : 1;
     int nccells3 = (indcs.cnx3 > 1)? (indcs.cnx3 + 2*(indcs.ng)) : 1;
-    Kokkos::realloc(coarse_i0,nmb,prgeo->nangles,nccells3,nccells2,nccells1);
+    Kokkos::realloc(coarse_i0,nmb,nfreq*prgeo->nangles,nccells3,nccells2,nccells1);
   }
 
   // allocate boundary buffers for conserved (cell-centered) variables
   pbval_i = new MeshBoundaryValuesCC(ppack, pin, false);
-  pbval_i->InitializeBuffers(prgeo->nangles);
+  pbval_i->InitializeBuffers(nfreq*prgeo->nangles);
 
   // for time-evolving problems, continue to construct methods, allocate arrays
   if (evolution_t.compare("stationary") != 0) {
@@ -198,15 +252,15 @@ Radiation::Radiation(MeshBlockPack *ppack, ParameterInput *pin) :
     int ncells1 = indcs.nx1 + 2*(indcs.ng);
     int ncells2 = (indcs.nx2 > 1)? (indcs.nx2 + 2*(indcs.ng)) : 1;
     int ncells3 = (indcs.nx3 > 1)? (indcs.nx3 + 2*(indcs.ng)) : 1;
-    Kokkos::realloc(i1,      nmb,prgeo->nangles,ncells3,ncells2,ncells1);
-    Kokkos::realloc(iflx.x1f,nmb,prgeo->nangles,ncells3,ncells2,ncells1);
-    Kokkos::realloc(iflx.x2f,nmb,prgeo->nangles,ncells3,ncells2,ncells1);
-    Kokkos::realloc(iflx.x3f,nmb,prgeo->nangles,ncells3,ncells2,ncells1);
+    Kokkos::realloc(i1,      nmb,nfreq*prgeo->nangles,ncells3,ncells2,ncells1);
+    Kokkos::realloc(iflx.x1f,nmb,nfreq*prgeo->nangles,ncells3,ncells2,ncells1);
+    Kokkos::realloc(iflx.x2f,nmb,nfreq*prgeo->nangles,ncells3,ncells2,ncells1);
+    Kokkos::realloc(iflx.x3f,nmb,nfreq*prgeo->nangles,ncells3,ncells2,ncells1);
     if (angular_fluxes) {
-      Kokkos::realloc(divfa,nmb,prgeo->nangles,ncells3,ncells2,ncells1);
+      Kokkos::realloc(divfa,nmb,nfreq*prgeo->nangles,ncells3,ncells2,ncells1);
     }
     if (beam_source) {
-      Kokkos::realloc(beam_mask,nmb,prgeo->nangles,ncells3,ncells2,ncells1);
+      Kokkos::realloc(beam_mask,nmb,nfreq*prgeo->nangles,ncells3,ncells2,ncells1);
     }
   }
 }

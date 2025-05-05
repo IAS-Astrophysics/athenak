@@ -30,8 +30,11 @@ TaskStatus Radiation::RKUpdate(Driver *pdriver, int stage) {
   int &is = indcs.is, &ie = indcs.ie;
   int &js = indcs.js, &je = indcs.je;
   int &ks = indcs.ks, &ke = indcs.ke;
-  int nang1 = prgeo->nangles - 1;
-  int nmb1 = pmy_pack->nmb_thispack - 1;
+
+  int &nfreq_ = nfreq;
+  int &nang_  = prgeo->nangles;
+  int nfr_ang1 = nfreq_*nang_ - 1;
+  int nmb1  = pmy_pack->nmb_thispack - 1;
 
   auto &mbsize  = pmy_pack->pmb->mb_size;
 
@@ -59,8 +62,12 @@ TaskStatus Radiation::RKUpdate(Driver *pdriver, int stage) {
   auto &rad_mask_ = pmy_pack->pcoord->excision_floor;
   Real &n_0_floor_ = n_0_floor;
 
-  par_for("r_update",DevExeSpace(),0,nmb1,0,nang1,ks,ke,js,je,is,ie,
+  par_for("r_update",DevExeSpace(),0,nmb1,0,nfr_ang1,ks,ke,js,je,is,ie,
   KOKKOS_LAMBDA(int m, int n, int k, int j, int i) {
+    // compute frequency and angle indices
+    int ifr  = n / nang_;
+    int iang = n - ifr*nang_;
+
     // spatial fluxes
     Real divf_s = (flx1(m,n,k,j,i+1) - flx1(m,n,k,j,i))/mbsize.d_view(m).dx1;
     if (multi_d) {
@@ -76,8 +83,8 @@ TaskStatus Radiation::RKUpdate(Driver *pdriver, int stage) {
 
     // zero intensity if negative
     Real n0  = tt(m,0,0,k,j,i);
-    Real n_0 = tc(m,0,0,k,j,i)*nh_c_.d_view(n,0) + tc(m,1,0,k,j,i)*nh_c_.d_view(n,1) +
-               tc(m,2,0,k,j,i)*nh_c_.d_view(n,2) + tc(m,3,0,k,j,i)*nh_c_.d_view(n,3);
+    Real n_0 = tc(m,0,0,k,j,i)*nh_c_.d_view(iang,0) + tc(m,1,0,k,j,i)*nh_c_.d_view(iang,1) +
+               tc(m,2,0,k,j,i)*nh_c_.d_view(iang,2) + tc(m,3,0,k,j,i)*nh_c_.d_view(iang,3);
     i0_(m,n,k,j,i) = n0*n_0*fmax((i0_(m,n,k,j,i)/(n0*n_0)), 0.0);
 
     // handle excision

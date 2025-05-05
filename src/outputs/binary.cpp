@@ -23,6 +23,7 @@
 #include "globals.hpp"
 #include "coordinates/cell_locations.hpp"
 #include "mesh/mesh.hpp"
+#include "radiation/radiation.hpp"
 #include "outputs.hpp"
 
 //----------------------------------------------------------------------------------------
@@ -78,10 +79,15 @@ void MeshBinaryOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
         << "  cycle=" << pm->ncycle << std::endl
         << "  size of location=" << sizeof(Real) << std::endl
         << "  size of variable=" << sizeof(float) << std::endl
-        << "  number of variables=" << outvars.size() << std::endl
+        << "  number of variables=" << outvars.size()+outvars_6d.size() << std::endl
         << "  variables:  ";
     for (int n=0; n<outvars.size(); n++) {
       msg << outvars[n].label.c_str() << "  ";
+    }
+    if (out_params.n_derived_6d > 0) {
+      for (int n=0; n<outvars_6d.size(); n++) {
+        msg << outvars_6d[n].label.c_str() << "  ";
+      }
     }
     msg << std::endl;
     if (global_variable::my_rank == 0) {
@@ -115,6 +121,15 @@ void MeshBinaryOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
     int nout2 = outmbs[0].oje - outmbs[0].ojs + 1;
     int nout3 = outmbs[0].oke - outmbs[0].oks + 1;
     cells = nout1*nout2*nout3;
+  }
+
+  // modification for multi-frequency radiation
+  int n_freq_ = 1;
+  bool save_radnu = (out_params.n_derived_6d > 0);
+  if (save_radnu) {
+    n_freq_ = pm->pmb_pack->prad->nfreq;
+    nout_vars = outvars_6d.size();
+    cells *= n_freq_;
   }
 
   // ois, oie, ojs, oje, oks, oke + il1, il2, il3, level +
@@ -200,19 +215,33 @@ void MeshBinaryOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
     float tmp_data;
     for (int n=0; n<nout_vars; n++) {
       int cnt=0;
-      for (int k=oks; k<=oke; k++) {
-        for (int j=ojs; j<=oje; j++) {
-          for (int i=ois; i<=oie; i++) {
-            tmp_data = static_cast<float>(outarray(n,m,k-oks,j-ojs,i-ois));
-            single_data[cnt] = tmp_data;
-            cnt++;
-          }
-        }
-      }
+      if (!save_radnu) {
+        for (int k=oks; k<=oke; k++) {
+          for (int j=ojs; j<=oje; j++) {
+            for (int i=ois; i<=oie; i++) {
+              tmp_data = static_cast<float>(outarray(n,m,k-oks,j-ojs,i-ois));
+              single_data[cnt] = tmp_data;
+              cnt++;
+            } // endfor i
+          } // endfor j
+        } // endfor k
+      } else { // for multi-frequency radiation
+        for (int f=0; f<n_freq_; f++) {
+          for (int k=oks; k<=oke; k++) {
+            for (int j=ojs; j<=oje; j++) {
+              for (int i=ois; i<=oie; i++) {
+                tmp_data = static_cast<float>(outarray_6d(n,m,f,k-oks,j-ojs,i-ois));
+                single_data[cnt] = tmp_data;
+                cnt++;
+              } // endfor i
+            } // endfor j
+          } // endfor k
+        } // endfor f
+      } // endelse for multi-frequency radiation
       memcpy(pdata,single_data,cells*sizeof(float));
       pdata+=cells*sizeof(float);
     }
-  }
+  } // endfor m
 
   // now write binary data
   if (bin_slice) {

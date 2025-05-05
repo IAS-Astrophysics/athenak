@@ -154,15 +154,16 @@ void Radiation::AssembleRadTasks(std::map<std::string, std::shared_ptr<TaskList>
 //  receive status flags to waiting (with or without MPI) for Radiation variables.
 
 TaskStatus Radiation::InitRecv(Driver *pdrive, int stage) {
+  int &nfreq_ = nfreq;
   // post receives for I
-  TaskStatus tstat = pbval_i->InitRecv(prgeo->nangles);
+  TaskStatus tstat = pbval_i->InitRecv(nfreq_*prgeo->nangles);
   if (tstat != TaskStatus::complete) return tstat;
 
   // do not post receives for fluxes when stage < 0 (i.e. ICs)
   if (stage >= 0) {
     // with SMR/AMR, post receives for fluxes of I
     if (pmy_pack->pmesh->multilevel) {
-      tstat = pbval_i->InitFluxRecv(prgeo->nangles);
+      tstat = pbval_i->InitFluxRecv(nfreq_*prgeo->nangles);
       if (tstat != TaskStatus::complete) return tstat;
     }
   }

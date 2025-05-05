@@ -1017,7 +1017,8 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
     Real &spin = coord.bh_spin;
 
     // Radiation
-    int nang1 = pm->pmb_pack->prad->prgeo->nangles - 1;
+    int nang = pm->pmb_pack->prad->prgeo->nangles;
+    int nang1 = nang - 1;
     auto nh_c_ = pm->pmb_pack->prad->nh_c;
     auto tet_c_ = pm->pmb_pack->prad->tet_c;
     auto tetcov_c_ = pm->pmb_pack->prad->tetcov_c;
@@ -1032,6 +1033,18 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
     } else if (pm->pmb_pack->pmhd != nullptr) {
       w0_ = pm->pmb_pack->pmhd->w0;
     }
+
+    // multi-frequency radiation
+    bool multi_freq = pm->pmb_pack->prad->multi_freq;
+    int nfreq_ = pm->pmb_pack->prad->nfreq;
+    bool needs_radnu_coord = (name.compare("radnu_coord") == 0);
+    bool needs_radnu_fluid = (name.compare("radnu_fluid") == 0);
+    bool needs_radnu_both  = (needs_radnu_coord && needs_radnu_fluid);
+    if (multi_freq) {
+      int var6d_size = (needs_radnu_both) ? 20 : 10;
+      Kokkos::realloc(derived_var6d, nmb, var6d_size, nfreq_, n3, n2, n1);
+    }
+    auto dv6d = derived_var6d;
 
     par_for("moments",DevExeSpace(),0,(nmb-1),0,(n3-1),0,(n2-1),0,(n1-1),
     KOKKOS_LAMBDA(int m, int k, int j, int i) {
@@ -1057,21 +1070,47 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
       // set coordinate frame components
       for (int n1=0, n12=0; n1<4; ++n1) {
         for (int n2=n1; n2<4; ++n2, ++n12) {
-          dv(m,n12,k,j,i) = 0.0;
-          for (int n=0; n<=nang1; ++n) {
-            Real nmun1 = 0.0; Real nmun2 = 0.0; Real n_0 = 0.0;
-            for (int d=0; d<4; ++d) {
-              nmun1 += tet_c_   (m,d,n1,k,j,i)*nh_c_.d_view(n,d);
-              nmun2 += tet_c_   (m,d,n2,k,j,i)*nh_c_.d_view(n,d);
-              n_0   += tetcov_c_(m,d,0, k,j,i)*nh_c_.d_view(n,d);
-            }
-            dv(m,n12,k,j,i) += (nmun1*nmun2*(i0_(m,n,k,j,i)/(n0*n_0))*
-                                solid_angles_.d_view(n));
-          }
-        }
-      }
+          if (!multi_freq) {
+            dv(m,n12,k,j,i) = 0.0;
+            for (int n=0; n<=nang1; ++n) {
+              Real nmun1 = 0.0; Real nmun2 = 0.0; Real n_0 = 0.0;
+              for (int d=0; d<4; ++d) {
+                nmun1 += tet_c_   (m,d,n1,k,j,i)*nh_c_.d_view(n,d);
+                nmun2 += tet_c_   (m,d,n2,k,j,i)*nh_c_.d_view(n,d);
+                n_0   += tetcov_c_(m,d,0, k,j,i)*nh_c_.d_view(n,d);
+              }
+              dv(m,n12,k,j,i) += (nmun1*nmun2*(i0_(m,n,k,j,i)/(n0*n_0))*
+                                  solid_angles_.d_view(n));
+            } // endfor n
+          } else { // multi_freq
+            dv(m,n12,k,j,i) = 0.0; // frequency-integrated moments
+            for (int ifr=0; ifr<nfreq_; ++ifr) {
+              dv6d(m,n12,ifr,k,j,i) = 0.0; // each frequency group
+              for (int n=0; n<=nang1; ++n) {
+                Real nmun1 = 0.0; Real nmun2 = 0.0; Real n_0 = 0.0;
+                for (int d=0; d<4; ++d) {
+                  nmun1 += tet_c_   (m,d,n1,k,j,i)*nh_c_.d_view(n,d);
+                  nmun2 += tet_c_   (m,d,n2,k,j,i)*nh_c_.d_view(n,d);
+                  n_0   += tetcov_c_(m,d,0, k,j,i)*nh_c_.d_view(n,d);
+                }
+                int i_fr_ang = n + ifr*nang;
+                dv6d(m,n12,ifr,k,j,i) += (nmun1*nmun2*(i0_(m,i_fr_ang,k,j,i)/(n0*n_0))*solid_angles_.d_view(n));
+              } // endfor n
+              dv(m,n12,k,j,i) += dv6d(m,n12,ifr,k,j,i);
+            } // endfor ifr
+          } // endelse (!multi_freq)
+        } // endfor n2
+      } // endfor n1
 
-      if (needs_fluid_only || needs_both) {
+      // if (needs_fluid_only || needs_both) {
+      if ((needs_fluid_only || needs_both) && (!needs_radnu_coord && !needs_radnu_fluid)) {
+
+
+
+        // TODO: multi-frequency radiation
+
+
+
         // stash coordinate frame moments
         Real moments_coord[4][4];
         moments_coord[0][0] = dv(m,0,k,j,i);

@@ -126,6 +126,7 @@ add_executable(
         radiation/radiation_source.cpp
         radiation/radiation_tasks.cpp
         radiation/radiation_tetrad.cpp
+	radiation/radiation_multi_freq.cpp
         radiation/radiation_update.cpp
 
         shearing_box/orbital_advection.cpp

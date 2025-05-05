@@ -204,7 +204,10 @@ void SourceTerms::BeamSource(DvceArray5D<Real> &i0, const Real bdt) {
   int js = indcs.js, je = indcs.je;
   int ks = indcs.ks, ke = indcs.ke;
   int nmb1 = (pmy_pack->nmb_thispack-1);
-  int nang1 = (pmy_pack->prad->prgeo->nangles-1);
+  int nfreq_ = pmy_pack->prad->nfreq;
+  int nang_ = pmy_pack->prad->prgeo->nangles;
+  int nang1 = nang_ - 1;
+  int nfr_ang1 = nfreq_*nang_ - 1;
 
   auto &nh_c_ = pmy_pack->prad->nh_c;
   auto &tt = pmy_pack->prad->tet_c;
@@ -216,22 +219,48 @@ void SourceTerms::BeamSource(DvceArray5D<Real> &i0, const Real bdt) {
 
   auto &beam_mask_ = pmy_pack->prad->beam_mask;
   Real &dii_dt_ = dii_dt;
-  par_for("beam_source",DevExeSpace(),0,nmb1,0,nang1,ks,ke,js,je,is,ie,
-  KOKKOS_LAMBDA(int m, int n, int k, int j, int i) {
-    if (beam_mask_(m,n,k,j,i)) {
-      Real n0 = tt(m,0,0,k,j,i);
-      Real n_0 = tc(m,0,0,k,j,i)*nh_c_.d_view(n,0) + tc(m,1,0,k,j,i)*nh_c_.d_view(n,1)
-               + tc(m,2,0,k,j,i)*nh_c_.d_view(n,2) + tc(m,3,0,k,j,i)*nh_c_.d_view(n,3);
-      i0(m,n,k,j,i) += n0*n_0*dii_dt_*bdt;
-      // handle excision
-      // NOTE(@pdmullen): exicision criterion are not finalized.  The below zeroes all
-      // intensities within rks <= 1.0 and zeroes intensities within angles where n_0
-      // is about zero.  This needs future attention.
-      if (excise) {
-        if (rad_mask_(m,k,j,i) || fabs(n_0) < n_0_floor_) { i0(m,n,k,j,i) = 0.0; }
+
+  if (!pmy_pack->prad->multi_freq) {
+    par_for("beam_source",DevExeSpace(),0,nmb1,0,nang1,ks,ke,js,je,is,ie,
+    KOKKOS_LAMBDA(int m, int n, int k, int j, int i) {
+      if (beam_mask_(m,n,k,j,i)) {
+        Real n0 = tt(m,0,0,k,j,i);
+        Real n_0 = tc(m,0,0,k,j,i)*nh_c_.d_view(n,0) + tc(m,1,0,k,j,i)*nh_c_.d_view(n,1)
+                 + tc(m,2,0,k,j,i)*nh_c_.d_view(n,2) + tc(m,3,0,k,j,i)*nh_c_.d_view(n,3);
+        i0(m,n,k,j,i) += n0*n_0*dii_dt_*bdt;
+        // handle excision
+        // NOTE(@pdmullen): exicision criterion are not finalized.  The below zeroes all
+        // intensities within rks <= 1.0 and zeroes intensities within angles where n_0
+        // is about zero.  This needs future attention.
+        if (excise) {
+          if (rad_mask_(m,k,j,i) || fabs(n_0) < n_0_floor_) { i0(m,n,k,j,i) = 0.0; }
+        }
       }
-    }
-  });
+    });
+  } else {
+    par_for("beam_source_multi_freq",DevExeSpace(),0,nmb1,0,nfr_ang1,ks,ke,js,je,is,ie,
+    KOKKOS_LAMBDA(int m, int n, int k, int j, int i) {
+      // compute frequency and angle indices
+      int ifr  = n / nang_;
+      int iang = n - ifr*nang_;
+      if (beam_mask_(m,iang,k,j,i)) {
+        Real n0 = tt(m,0,0,k,j,i);
+        Real n_0 = tc(m,0,0,k,j,i)*nh_c_.d_view(iang,0) + tc(m,1,0,k,j,i)*nh_c_.d_view(iang,1)
+                 + tc(m,2,0,k,j,i)*nh_c_.d_view(iang,2) + tc(m,3,0,k,j,i)*nh_c_.d_view(iang,3);
+        // Real fac = 1. + (ifr+1.)/10;
+        Real fac = ifr + 1.;
+        i0(m,n,k,j,i) += fac*n0*n_0*dii_dt_*bdt;
+        // handle excision
+        // NOTE(@pdmullen): exicision criterion are not finalized.  The below zeroes all
+        // intensities within rks <= 1.0 and zeroes intensities within angles where n_0
+        // is about zero.  This needs future attention.
+        if (excise) {
+          if (rad_mask_(m,k,j,i) || fabs(n_0) < n_0_floor_) { i0(m,n,k,j,i) = 0.0; }
+        }
+      }
+    });
+  } // endelse for multi-frequency radiation
+
 
   return;
 }
