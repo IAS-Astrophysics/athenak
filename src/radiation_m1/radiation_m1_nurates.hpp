@@ -2,35 +2,32 @@
 #define RADIATION_M1_NURATES_HPP
 
 #include "athena.hpp"
-#include "radiation_m1_params.hpp"
-
-#include "eos/primitive-solver/eos.hpp"
-
 #include "bns_nurates/include/bns_nurates.hpp"
 #include "bns_nurates/include/constants.hpp"
 #include "bns_nurates/include/distribution.hpp"
 #include "bns_nurates/include/functions.hpp"
 #include "bns_nurates/include/integration.hpp"
 #include "bns_nurates/include/m1_opacities.hpp"
+#include "eos/primitive-solver/eos.hpp"
+#include "radiation_m1_params.hpp"
 
 namespace radiationm1 {
 
+// computes rates given M1 quantities, assumes quantities are in cgs units
 KOKKOS_INLINE_FUNCTION
 void bns_nurates(Real &nb, Real &temp, Real &ye, Real &mu_n, Real &mu_p, Real &mu_e,
-                 Real &n_nue, Real &j_nue, Real &chi_nue,
-                 Real &n_anue, Real &j_anue, Real &chi_anue,
-                 Real &n_nux, Real &j_nux, Real &chi_nux,
-                 Real &n_anux, Real &j_anux, Real &chi_anux, 
-                 Real &R_nue, Real &R_anue, Real &R_nux, Real &R_anux,
-                 Real &Q_nue, Real &Q_anue, Real &Q_nux, Real &Q_anux,
-                 Real &sigma_0_nue, Real &sigma_0_anue, Real &sigma_0_nux, Real &sigma_0_anux,
-                 Real &sigma_1_nue, Real &sigma_1_anue, Real &sigma_1_nux, Real &sigma_1_anux,
-                 Real &scat_0_nue, Real &scat_0_anue, Real &scat_0_nux, Real &scat_0_anux,
-                 Real &scat_1_nue, Real &scat_1_anue, Real &scat_1_nux, Real &scat_1_anux,
+                 Real &n_nue, Real &j_nue, Real &chi_nue, Real &n_anue, Real &j_anue,
+                 Real &chi_anue, Real &n_nux, Real &j_nux, Real &chi_nux, Real &n_anux,
+                 Real &j_anux, Real &chi_anux, Real &R_nue, Real &R_anue, Real &R_nux,
+                 Real &R_anux, Real &Q_nue, Real &Q_anue, Real &Q_nux, Real &Q_anux,
+                 Real &sigma_0_nue, Real &sigma_0_anue, Real &sigma_0_nux,
+                 Real &sigma_0_anux, Real &sigma_1_nue, Real &sigma_1_anue,
+                 Real &sigma_1_nux, Real &sigma_1_anux, Real &scat_0_nue,
+                 Real &scat_0_anue, Real &scat_0_nux, Real &scat_0_anux, Real &scat_1_nue,
+                 Real &scat_1_anue, Real &scat_1_nux, Real &scat_1_anux,
                  const NuratesParams nurates_params) {
+  Real dU = 0.;
 
-  // TODO convert units
-    
   // opacity params structure
   GreyOpacityParams my_grey_opacity_params = {0};
 
@@ -49,6 +46,11 @@ void bns_nurates(Real &nb, Real &temp, Real &ye, Real &mu_n, Real &mu_p, Real &m
   my_grey_opacity_params.opacity_pars.use_WM_sc = nurates_params.use_WM_sc;
   my_grey_opacity_params.opacity_pars.use_dU = nurates_params.use_dU;
   my_grey_opacity_params.opacity_pars.use_dm_eff = nurates_params.use_dm_eff;
+
+  //@TODO: this logic in Weakrates2 uses dU_table! Not implemented!
+  if (nurates_params.use_dU) {
+  } else {
+  }
 
   // populate EOS quantities
   my_grey_opacity_params.eos_pars.mu_e = mu_e;
@@ -142,8 +144,6 @@ void bns_nurates(Real &nb, Real &temp, Real &ye, Real &mu_n, Real &mu_p, Real &m
   scat_1_nux = opacities.kappa_s[id_nux] * 2.;
   scat_1_anux = opacities.kappa_s[id_anux] * 2.;
 
-  // TODO: convert units
-
   // Check for NaNs/Infs
   assert(isfinite(R_nue));
   assert(isfinite(R_anue));
@@ -169,6 +169,52 @@ void bns_nurates(Real &nb, Real &temp, Real &ye, Real &mu_n, Real &mu_p, Real &m
   assert(isfinite(scat_1_anue));
   assert(isfinite(scat_1_nux));
   assert(isfinite(scat_1_anux));
+}
+
+Real NeutrinoDensity2(const Real &rho, const Real &temp, const Real &ye,Real &n_nue, Real &n_nua, Real &n_nux, Real &en_nue, Real &en_nua, Real &en_nux) {
+
+  int NeutrinoDensity2 = 0
+
+  // @TODO: convert from code to cgs units
+  Real rho_cgs = rho;
+  Real temp0 = temp;
+  Real ye0   = ye;
+
+  if ((rho_cgs < rho_min_cgs)||(temp0 < temp_min_mev)) {
+    n_nue = 0.;
+    n_nua = 0.;
+    n_nux = 0.;
+    en_nue = 0.;
+    en_nua = 0.;
+    en_nux = 0.;
+    return NeutrinoDensity2;
+  }
+
+  boundsErr = enforceTableBounds(rho_cgs,temp0,ye0)
+
+  if (boundsErr.eq.-1) then
+      NeutrinoDensity2 = -1
+      return
+  end if
+
+  ! Call CGS backend
+  ierr = NeutrinoDens2_cgs(rho_cgs, temp0, ye0, &
+                           n_nue, n_nua, n_nux, &
+                           en_nue, en_nua, en_nux)
+  if (ierr.ne.0) then
+      NeutrinoDensity2 = -1
+  end if
+
+  // @TODO: convert from cgs to code units
+  n_nue = n_nue;
+  n_nua = n_nua;
+  n_nux = n_nux;
+
+  en_nue = en_nue;
+  en_nua = en_nua;
+  en_nux = en_nux;
+
+  return
 }
 
 }  // namespace radiationm1
