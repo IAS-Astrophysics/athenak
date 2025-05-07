@@ -181,6 +181,9 @@ struct NuratesParams {
   bool use_kirchhoff_law;
 
   Real opacity_tau_trap;
+  Real opacity_tau_delta;
+  Real opacity_corr_fac_max;
+
   MyQuadrature my_quadrature_1d;
   MyQuadrature my_quadrature_2d;
 };
