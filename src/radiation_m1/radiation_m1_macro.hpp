@@ -40,6 +40,8 @@
 
 #define CGS_GCC                                                                \
   (1.619100425158886e-18) // Multiply to convert density from CGS to Cactus
+#define HC_MEVCM 1.23984172e-10 // hc in units of MeV*cm
+#define MASS_FACT_CGS 1
 
 #define SQ(X) ((X) * (X))
 //#define POW2(X) ((X)*(X))
