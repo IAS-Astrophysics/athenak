@@ -183,6 +183,8 @@ struct NuratesParams {
   Real opacity_tau_trap;
   Real opacity_tau_delta;
   Real opacity_corr_fac_max;
+  Real rho_min_cgs;
+  Real temp_min_mev;
 
   MyQuadrature my_quadrature_1d;
   MyQuadrature my_quadrature_2d;
