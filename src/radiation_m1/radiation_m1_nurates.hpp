@@ -9,6 +9,7 @@
 #include "bns_nurates/include/integration.hpp"
 #include "bns_nurates/include/m1_opacities.hpp"
 #include "eos/primitive-solver/eos.hpp"
+#include "radiation_m1_fermi.hpp"
 #include "radiation_m1_params.hpp"
 
 namespace radiationm1 {
@@ -171,50 +172,66 @@ void bns_nurates(Real &nb, Real &temp, Real &ye, Real &mu_n, Real &mu_p, Real &m
   assert(isfinite(scat_1_anux));
 }
 
-Real NeutrinoDensity2(const Real &rho, const Real &temp, const Real &ye,Real &n_nue, Real &n_nua, Real &n_nux, Real &en_nue, Real &en_nua, Real &en_nux) {
+// Note: everything in and out in code units (except Y ?)
+template <class EOSPolicy, class ErrorPolicy>
+void NeutrinoDens(Primitive::EOS<EOSPolicy, ErrorPolicy> &eos, Real rho, Real temp,
+                       Real *Y, Real &n_nue, Real &n_nua, Real &n_nux, Real &en_nue,
+                       Real &en_nua, Real &en_nux, NuratesParams nurates_params) {
 
-  int NeutrinoDensity2 = 0
+  // conversion from code to cgs units, temperature in MeV
+  rho = rho * 1;
+  temp = temp * 1;
 
-  // @TODO: convert from code to cgs units
-  Real rho_cgs = rho;
-  Real temp0 = temp;
-  Real ye0   = ye;
-
-  if ((rho_cgs < rho_min_cgs)||(temp0 < temp_min_mev)) {
+  if ((rho < nurates_params.rho_min_cgs) || (temp < nurates_params.temp_min_mev)) {
     n_nue = 0.;
     n_nua = 0.;
     n_nux = 0.;
     en_nue = 0.;
     en_nua = 0.;
     en_nux = 0.;
-    return NeutrinoDensity2;
+    return;
   }
 
-  boundsErr = enforceTableBounds(rho_cgs,temp0,ye0)
+  Real nb = rho / MASS_FACT_CGS;
+  Real mu_b = eos.GetBaryonChemicalPotential(nb, temp, &Y);
+  Real mu_q = eos.GetChargeChemicalPotential(nb, temp, &Y);
+  Real mu_le = eos.GetElectronLeptonChemicalPotential(nb, temp, &Y);
 
-  if (boundsErr.eq.-1) then
-      NeutrinoDensity2 = -1
-      return
-  end if
+  Real mu_n = mu_b;
+  Real mu_p = mu_b + mu_q;
+  Real mu_e = mu_le - mu_q;
 
-  ! Call CGS backend
-  ierr = NeutrinoDens2_cgs(rho_cgs, temp0, ye0, &
-                           n_nue, n_nua, n_nux, &
-                           en_nue, en_nua, en_nux)
-  if (ierr.ne.0) then
-      NeutrinoDensity2 = -1
-  end if
+  Real eta_nue = (mu_p + mu_e - mu_n) / temp;
+  Real eta_nua = -eta_nue;
+  Real eta_nux = 0.0;
 
-  // @TODO: convert from cgs to code units
-  n_nue = n_nue;
-  n_nua = n_nua;
-  n_nux = n_nux;
+  n_nue = 4.0 * M_PI / Kokkos::pow(HC_MEVCM, 3) * Kokkos::pow(temp, 3) *
+          Fermi::fermi2(eta_nue);
+  n_nua = 4.0 * M_PI / Kokkos::pow(HC_MEVCM, 3) * Kokkos::pow(temp, 3) *
+          Fermi::fermi2(eta_nua);
+  n_nux = 16.0 * M_PI / Kokkos::pow(HC_MEVCM, 3) * Kokkos::pow(temp, 3) *
+          Fermi::fermi2(eta_nux);
 
-  en_nue = en_nue;
-  en_nua = en_nua;
-  en_nux = en_nux;
+  en_nue = 4.0 * M_PI / Kokkos::pow(HC_MEVCM, 3) * Kokkos::pow(temp, 4) *
+           Fermi::fermi3(eta_nue);
+  en_nua = 4.0 * M_PI / Kokkos::pow(HC_MEVCM, 3) * Kokkos::pow(temp, 4) *
+           Fermi::fermi3(eta_nua);
+  en_nux = 16.0 * M_PI / Kokkos::pow(HC_MEVCM, 3) * Kokkos::pow(temp, 4) *
+           Fermi::fermi3(eta_nux);
 
-  return
+  assert(isfinite(n_nue));
+  assert(isfinite(n_nua));
+  assert(isfinite(n_nux));
+  assert(isfinite(en_nue));
+  assert(isfinite(en_nua));
+  assert(isfinite(en_nux));
+
+  n_nue = 1 * n_nue;
+  n_nua = 1 * n_nua;
+  n_nux = 1 * n_nux;
+  en_nue = 1 * en_nue;
+  en_nua = 1 * en_nua;
+  en_nux = 1 * en_nux;
 }
 
 }  // namespace radiationm1

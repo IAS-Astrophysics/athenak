@@ -199,6 +199,7 @@ add_executable(
         ${ENABLE_NURATES_SOURCES}
         radiation_m1/radiation_m1_nurates.hpp
         radiation_m1/radiation_m1_photon_opacities.hpp
+        radiation_m1/radiation_m1_fermi.hpp
 )
 
 # custom problem generator to be included in compile
