@@ -9,6 +9,7 @@
 #include "athena.hpp"
 #include "athena_tensor.hpp"
 #include "coordinates/adm.hpp"
+#include "dyn_grmhd/dyn_grmhd.hpp"
 #include "radiation_m1/radiation_m1.hpp"
 #include "radiation_m1/radiation_m1_helpers.hpp"
 
@@ -17,6 +18,7 @@ namespace radiationm1 {
 KOKKOS_INLINE_FUNCTION
 void CalcFlux(const int m, const int k, const int j, const int i,
               const int nuidx, const int dir, const DvceArray5D<Real> &u0_,
+              const DvceArray5D<Real> &w0_,
               const DvceArray5D<Real> &chi_,
               const AthenaTensor<Real, TensorSymm::NONE, 4, 1> &u_mu_,
               const adm::ADM::ADM_vars &adm, const RadiationM1Params params_,
@@ -66,12 +68,23 @@ void CalcFlux(const int m, const int k, const int j, const int i,
   AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> v_u{};
   AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> v_d{};
   AthenaPointTensor<Real, TensorSymm::NONE, 4, 2> proj_ud{};
-  Real w_lorentz = u_mu_(m, 0, k, j, i);  //@TODO: check if this is true for GR
-  pack_u_u(u_mu_(m, 0, k, j, i), u_mu_(m, 1, k, j, i), u_mu_(m, 2, k, j, i),
-           u_mu_(m, 3, k, j, i), u_u);
+  Real w_lorentz{};
+  if (nspecies_ > 1) {
+    w_lorentz = Kokkos::sqrt(1. + w0_(m, IVX, k, j, i) * w0_(m, IVX, k, j, i) +
+                             w0_(m, IVY, k, j, i) * w0_(m, IVY, k, j, i) +
+                             w0_(m, IVZ, k, j, i) * w0_(m, IVZ, k, j, i));
+    pack_u_u(w_lorentz, w0_(m, IVX, k, j, i), w0_(m, IVY, k, j, i),
+             w0_(m, IVZ, k, j, i), u_u);
+    pack_v_u(w_lorentz, w0_(m, IVX, k, j, i), w0_(m, IVY, k, j, i),
+             w0_(m, IVZ, k, j, i), v_u);
+  } else {
+    w_lorentz = u_mu_(m, 0, k, j, i);
+    pack_u_u(u_mu_(m, 0, k, j, i), u_mu_(m, 1, k, j, i), u_mu_(m, 2, k, j, i),
+             u_mu_(m, 3, k, j, i), u_u);
+    pack_v_u(u_mu_(m, 0, k, j, i), u_mu_(m, 1, k, j, i), u_mu_(m, 2, k, j, i),
+             u_mu_(m, 3, k, j, i), v_u);
+  }
   tensor_contract(g_dd, u_u, u_d);
-  pack_v_u(u_mu_(m, 0, k, j, i), u_mu_(m, 1, k, j, i), u_mu_(m, 2, k, j, i),
-           u_mu_(m, 3, k, j, i), v_u);
   tensor_contract(g_dd, v_u, v_d);
   calc_proj(u_d, u_u, proj_ud);
 
@@ -152,6 +165,7 @@ TaskStatus RadiationM1::CalculateFluxes(Driver *pdrive, int stage) {
   bool &three_d = pmy_pack->pmesh->three_d;
 
   auto &u_mu_ = pmy_pack->pradm1->u_mu;
+  auto &w0_ = pmy_pack->pmhd->w0;
   auto &u0_ = pmy_pack->pradm1->u0;
   auto &chi_ = pmy_pack->pradm1->chi;
   adm::ADM::ADM_vars &adm = pmy_pack->padm->adm;
@@ -174,9 +188,9 @@ TaskStatus RadiationM1::CalculateFluxes(Driver *pdrive, int stage) {
         Real flux_j[5]{};
         Real flux_jp1[5]{};
         Real cmax_j, cmax_jp1;
-        CalcFlux(m, k, j, i - 1, nuidx, dir, u0_, chi_, u_mu_, adm, params_,
+        CalcFlux(m, k, j, i - 1, nuidx, dir, u0_, w0_, chi_, u_mu_, adm, params_,
                  nvars_, nspecies_, flux_j, cmax_j);
-        CalcFlux(m, k, j, i, nuidx, dir, u0_, chi_, u_mu_, adm, params_, nvars_,
+        CalcFlux(m, k, j, i, nuidx, dir, u0_, w0_, chi_, u_mu_, adm, params_, nvars_,
                  nspecies_, flux_jp1, cmax_jp1);
 
         Real flux_jp12_lo[5]{};
@@ -244,9 +258,9 @@ TaskStatus RadiationM1::CalculateFluxes(Driver *pdrive, int stage) {
           Real flux_j[5]{};
           Real flux_jp1[5]{};
           Real cmax_j, cmax_jp1;
-          CalcFlux(m, k, j - 1, i, nuidx, dir, u0_, chi_, u_mu_, adm, params_,
+          CalcFlux(m, k, j - 1, i, nuidx, dir, u0_, w0_, chi_, u_mu_, adm, params_,
                    nvars_, nspecies_, flux_j, cmax_j);
-          CalcFlux(m, k, j, i, nuidx, dir, u0_, chi_, u_mu_, adm, params_,
+          CalcFlux(m, k, j, i, nuidx, dir, u0_, w0_, chi_, u_mu_, adm, params_,
                    nvars_, nspecies_, flux_jp1, cmax_jp1);
 
           Real flux_jp12_lo[5]{};
@@ -317,9 +331,9 @@ TaskStatus RadiationM1::CalculateFluxes(Driver *pdrive, int stage) {
           Real flux_j[5]{};
           Real flux_jp1[5]{};
           Real cmax_j, cmax_jp1;
-          CalcFlux(m, k - 1, j, i, nuidx, dir, u0_, chi_, u_mu_, adm, params_,
+          CalcFlux(m, k - 1, j, i, nuidx, dir, u0_, w0_, chi_, u_mu_, adm, params_,
                    nvars_, nspecies_, flux_j, cmax_j);
-          CalcFlux(m, k, j, i, nuidx, dir, u0_, chi_, u_mu_, adm, params_,
+          CalcFlux(m, k, j, i, nuidx, dir, u0_, w0_, chi_, u_mu_, adm, params_,
                    nvars_, nspecies_, flux_jp1, cmax_jp1);
 
           Real flux_jp12_lo[5]{};
