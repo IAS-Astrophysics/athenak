@@ -40,7 +40,7 @@
 #endif
 
 #ifndef NSTENCIL
-#define NSTENCIL 1
+#define NSTENCIL 2
 #endif
 
 // Lagrange interpolation on the Chebyshev grid
