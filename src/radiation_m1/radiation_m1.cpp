@@ -4,7 +4,7 @@
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
 //! \file radiation_m1.cpp
-//  \brief implementation of Grey M1 radiation class
+//  \brief implementation of grey M1 radiation class
 
 #include "radiation_m1/radiation_m1.hpp"
 
@@ -14,9 +14,9 @@
 
 #include "Kokkos_SIMD_Common_Math.hpp"
 #include "athena.hpp"
+#include "bns_nurates/include/integration.hpp"
 #include "mesh/mesh.hpp"
 #include "parameter_input.hpp"
-#include "bns_nurates/include/integration.hpp"
 
 namespace radiationm1 {
 RadiationM1::RadiationM1(MeshBlockPack *ppack, ParameterInput *pin)
@@ -58,9 +58,6 @@ RadiationM1::RadiationM1(MeshBlockPack *ppack, ParameterInput *pin)
   nspecies = pin->GetOrAddInteger("radiation_m1", "num_species", 1);
   params.source_limiter = pin->GetOrAddReal("radiation_m1", "source_limiter", 0.5);
   params.beam_sources = pin->GetOrAddBoolean("radiation_m1", "beam_sources", false);
-  params.opacity_tau_trap = pin->GetOrAddReal("radiation_m1", "opacity_tau_trap", 1.0);
-  params.opacity_tau_delta = pin->GetOrAddReal("radiation_m1", "opacity_tau_delta", 1.0);
-  params.opacity_corr_fac_max = pin->GetOrAddReal("radiation_m1","opacity_corr_fac_max", 3.0);
 
   std::string closure_fun = pin->GetOrAddString("radiation_m1", "closure_fun", "minerbo");
   if (closure_fun == "minerbo") {
@@ -91,25 +88,53 @@ RadiationM1::RadiationM1(MeshBlockPack *ppack, ParameterInput *pin)
     params.opacity_type = Toy;
   } else if (opacity_type == "bns-nurates") {
     params.opacity_type = BnsNurates;
-    params.nurates_quad_nx = pin->GetOrAddInteger("radiation_m1", "nurates_quad_nx", 10);
-    params.nurates_quad_ny = pin->GetOrAddInteger("radiation_m1", "nurates_quad_ny", 10);
 
-    nurates_params.my_quadrature_1d.nx = params.nurates_quad_nx;
+    nurates_params.nurates_quad_nx =
+        pin->GetOrAddInteger("bns_nurates", "nurates_quad_nx", 10);
+    nurates_params.nurates_quad_ny =
+        pin->GetOrAddInteger("bns_nurates", "nurates_quad_ny", 10);
+    nurates_params.opacity_tau_trap =
+        pin->GetOrAddReal("bns_nurates", "opacity_tau_trap", 1.0);
+    nurates_params.opacity_tau_delta =
+        pin->GetOrAddReal("bns_nurate", "opacity_tau_delta", 1.0);
+    nurates_params.opacity_corr_fac_max =
+        pin->GetOrAddReal("bns_nurates", "opacity_corr_fac_max", 3.0);
+    nurates_params.rho_min_cgs = pin->GetOrAddReal("bns_nurates", "rho_min_cgs", 0.);
+    nurates_params.temp_min_mev = pin->GetOrAddReal("bns_nurates", "temp_min_mev", 0.);
+
+    nurates_params.use_abs_em = pin->GetOrAddBoolean("bns_nurates", "use_abs_em", true);
+    nurates_params.use_pair = pin->GetOrAddBoolean("bns_nurates", "use_pair", true);
+    nurates_params.use_brem = pin->GetOrAddBoolean("bns_nurates", "use_brem", true);
+    nurates_params.use_iso = pin->GetOrAddBoolean("bns_nurates", "use_iso", true);
+    nurates_params.use_inelastic_scatt =
+        pin->GetOrAddBoolean("bns_nurates", "use_inelastic_scatt", true);
+    nurates_params.use_WM_ab = pin->GetOrAddBoolean("bns_nurates", "use_WM_ab", true);
+    nurates_params.use_WM_sc = pin->GetOrAddBoolean("bns_nurates", "use_WM_sc", true);
+    nurates_params.use_dU = pin->GetOrAddBoolean("bns_nurates", "use_dU", true);
+    nurates_params.use_dm_eff = pin->GetOrAddBoolean("bns_nurates", "use_dm_eff", true);
+    nurates_params.use_equilibrium_distribution =
+        pin->GetOrAddBoolean("bns_nurates", "use_equilibrium_distribution", false);
+    nurates_params.use_kirchhoff_law =
+        pin->GetOrAddBoolean("bns_nurates", "use_kirchoff_law", false);
+
+    nurates_params.my_quadrature_1d.nx = nurates_params.nurates_quad_nx;
     nurates_params.my_quadrature_1d.dim = 1;
     nurates_params.my_quadrature_1d.type = kGauleg;
     nurates_params.my_quadrature_1d.x1 = 0.;
     nurates_params.my_quadrature_1d.x2 = 1.;
+    //@TODO: fix this!
     //GaussLegendreMultiD(&nurates_params.my_quadrature_1d);
 
-    nurates_params.my_quadrature_2d.nx = params.nurates_quad_nx;
-    nurates_params.my_quadrature_2d.ny = params.nurates_quad_ny;
+    nurates_params.my_quadrature_2d.nx = nurates_params.nurates_quad_nx;
+    nurates_params.my_quadrature_2d.ny = nurates_params.nurates_quad_ny;
     nurates_params.my_quadrature_2d.dim = 2;
     nurates_params.my_quadrature_2d.type = kGauleg;
     nurates_params.my_quadrature_2d.x1 = 0.;
     nurates_params.my_quadrature_2d.x2 = 1.;
     nurates_params.my_quadrature_2d.y1 = 0.;
     nurates_params.my_quadrature_2d.y2 = 1.;
-    //GaussLegendreMultiD(&nurates_params.my_quadrature_2d);
+    //@TODO: fix this!
+    // GaussLegendreMultiD(&nurates_params.my_quadrature_2d);
   } else if (opacity_type == "none") {
     params.opacity_type = None;
   } else {
@@ -146,8 +171,10 @@ RadiationM1::RadiationM1(MeshBlockPack *ppack, ParameterInput *pin)
   Kokkos::realloc(uflx.x3f, nmb, nvarstot, ncells3, ncells2, ncells1);
 
   // allocate velocity and Eddington factor
-  Kokkos::realloc(u_mu_data, nmb, 4, ncells3, ncells2, ncells1);
-  u_mu.InitWithShallowSlice(u_mu_data, 0, 3);
+  if (nspecies == 1) {
+    Kokkos::realloc(u_mu_data, nmb, 4, ncells3, ncells2, ncells1);
+    u_mu.InitWithShallowSlice(u_mu_data, 0, 3);
+  }
   Kokkos::realloc(chi, nmb, nspecies, ncells3, ncells2, ncells1);
 
   // allocate opacities

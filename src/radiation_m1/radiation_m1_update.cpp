@@ -10,6 +10,7 @@
 #include "athena_tensor.hpp"
 #include "coordinates/adm.hpp"
 #include "coordinates/cell_locations.hpp"
+#include "dyn_grmhd/dyn_grmhd.hpp"
 #include "globals.hpp"
 #include "radiation_m1.hpp"
 #include "radiation_m1_calc_closure.hpp"
@@ -20,6 +21,29 @@
 
 namespace radiationm1 {
 
+TaskStatus RadiationM1::TimeUpdate(Driver *pdrive, int stage) {
+  // Here we are using dynamic_cast to infer which derived type pdyngr is
+  auto *ptest_nqt =
+      dynamic_cast<dyngr::DynGRMHDPS<Primitive::EOSCompOSE<Primitive::NQTLogs>,
+                                     Primitive::ResetFloor> *>(pmy_pack->pdyngr);
+  if (ptest_nqt != nullptr) {
+    return TimeUpdate_<Primitive::EOSCompOSE<Primitive::NQTLogs>, Primitive::ResetFloor>(
+        pdrive, stage);
+  }
+
+  auto *ptest_nlog =
+      dynamic_cast<dyngr::DynGRMHDPS<Primitive::EOSCompOSE<Primitive::NormalLogs>,
+                                     Primitive::ResetFloor> *>(pmy_pack->pdyngr);
+  if (ptest_nlog != nullptr) {
+    return TimeUpdate_<Primitive::EOSCompOSE<Primitive::NormalLogs>,
+                       Primitive::ResetFloor>(pdrive, stage);
+  }
+
+  std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl;
+  std::cout << "Unsupported EOS type!\n";
+  abort();
+}
+
 //! \file radiation_m1_update.cpp
 //! \brief perform update for M1 Steps
 //!  1. F^m   = F^k + dt/2 [ A[F^k] + S[F^m]   ]
@@ -27,7 +51,8 @@ namespace radiationm1 {
 //!  At each step we solve an implicit problem in the form
 //!     F = F^* + cdt S[F]
 //!  Where F^* = F^k + cdt A
-TaskStatus RadiationM1::TimeUpdate(Driver *d, int stage) {
+template <class EOSPolicy, class ErrorPolicy>
+TaskStatus RadiationM1::TimeUpdate_(Driver *d, int stage) {
   auto &indcs = pmy_pack->pmesh->mb_indcs;
   int &is = indcs.is, &ie = indcs.ie;
   int &js = indcs.js, &je = indcs.je;
@@ -56,8 +81,19 @@ TaskStatus RadiationM1::TimeUpdate(Driver *d, int stage) {
   bool &three_d = pmy_pack->pmesh->three_d;
   auto &params_ = pmy_pack->pradm1->params;
 
+  auto &w0_ = pmy_pack->pmhd->w0;
+
   auto &BrentFunc_ = pmy_pack->pradm1->BrentFunc;
   auto &HybridsjFunc_ = pmy_pack->pradm1->HybridsjFunc;
+
+  // This is a ugly hack stolen from eos_compose_test.cpp
+  Real mb{};
+  if (nspecies_ > 1) {
+    Primitive::EOS<EOSPolicy, ErrorPolicy> &eos =
+        static_cast<dyngr::DynGRMHDPS<EOSPolicy, ErrorPolicy> *>(pmy_pack->pdyngr)
+            ->eos.ps.GetEOSMutable();
+    mb = eos.GetBaryonMass();
+  }
 
   Real beta[2] = {0.5, 1.};
   Real beta_dt = (beta[stage - 1]) * (pmy_pack->pmesh->dt);
@@ -105,8 +141,8 @@ TaskStatus RadiationM1::TimeUpdate(Driver *d, int stage) {
         for (int a = 0; a < 3; ++a) {
           for (int b = 0; b < 3; ++b) {
             gamma_uu(a, b) = g_uu(a + 1, b + 1) +
-                          adm.beta_u(m, a, k, j, i) * adm.beta_u(m, b, k, j, i) /
-                              (adm.alpha(m, k, j, i) * adm.alpha(m, k, j, i));
+                             adm.beta_u(m, a, k, j, i) * adm.beta_u(m, b, k, j, i) /
+                                 (adm.alpha(m, k, j, i) * adm.alpha(m, k, j, i));
             K_dd(a, b) = adm.vK_dd(m, a, b, k, j, i);
           }
         }
@@ -174,15 +210,6 @@ TaskStatus RadiationM1::TimeUpdate(Driver *d, int stage) {
                  u_mu_(m, 3, k, j, i), v_u);
         tensor_contract(g_dd, v_u, v_d);
         calc_proj(u_d, u_u, proj_ud);
-
-        // [D] Capture quantities from EOS
-        Real mb = 0.;
-        if (nspecies_ > 1) {
-          //mb = AverageBaryonMass();
-        }
-        Real dens{};
-        Real Y_e{};
-        Real tau{};
 
         // [E] Compute contribution from flux and geometric sources
         Real rEFN[M1_TOTAL_NUM_SPECIES][5];
@@ -430,6 +457,7 @@ TaskStatus RadiationM1::TimeUpdate(Driver *d, int stage) {
           // [G] Limit sources
           theta = 1.0;
           if (params_.theta_limiter && params_.source_limiter >= 0) {
+            Real tau{};
             theta = 1.0;
             Real DTau_sum = 0.0;
             for (int nuidx = 0; nuidx < nspecies_; ++nuidx) {
@@ -450,6 +478,9 @@ TaskStatus RadiationM1::TimeUpdate(Driver *d, int stage) {
             }
 
             if (nspecies_ > 1) {
+              Real dens = w0_(m, IDN, k, j, i);
+              Real Y_e = w0_(m, IYF, k, j, i);
+
               Real DDxp_sum = 0.0;
               for (int nuidx = 0; nuidx < nspecies_; ++nuidx) {
                 Real Nstar = u1_(m, CombinedIdx(nuidx, M1_N_IDX, nvars_), k, j, i) +

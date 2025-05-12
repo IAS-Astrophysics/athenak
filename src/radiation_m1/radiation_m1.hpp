@@ -121,6 +121,8 @@ class RadiationM1 {
 
   template<class EOSPolicy, class ErrorPolicy>
   TaskStatus CalcOpacityNurates_(Driver* pdrive, int stage);
+  template <class EOSPolicy, class ErrorPolicy>
+  TaskStatus TimeUpdate_(Driver* d, int stage);
 };
 
 // beam boundary conditions

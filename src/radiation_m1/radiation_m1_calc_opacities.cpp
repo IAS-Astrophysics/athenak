@@ -113,7 +113,6 @@ TaskStatus RadiationM1::CalcOpacityNurates_(Driver *pdrive, int stage) {
   bool &multi_d = pmy_pack->pmesh->multi_d;
   bool &three_d = pmy_pack->pmesh->three_d;
 
-  auto &m1_ = pmy_pack->pradm1->u0;
   auto &w0_ = pmy_pack->pmhd->w0;
 
   auto &eta_0_ = pmy_pack->pradm1->eta_0;
@@ -192,12 +191,23 @@ TaskStatus RadiationM1::CalcOpacityNurates_(Driver *pdrive, int stage) {
           AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> v_d{};
           AthenaPointTensor<Real, TensorSymm::NONE, 4, 2> proj_ud{};
 
-          Real w_lorentz = u_mu_(m, 0, k, j, i);
-          pack_u_u(u_mu_(m, 0, k, j, i), u_mu_(m, 1, k, j, i), u_mu_(m, 2, k, j, i),
-                   u_mu_(m, 3, k, j, i), u_u);
+          Real w_lorentz{};
+          if (nspecies_ > 1) {
+            w_lorentz = Kokkos::sqrt(1. + w0_(m, IVX, k, j, i) * w0_(m, IVX, k, j, i) +
+                                     w0_(m, IVY, k, j, i) * w0_(m, IVY, k, j, i) +
+                                     w0_(m, IVZ, k, j, i) * w0_(m, IVZ, k, j, i));
+            pack_u_u(w_lorentz, w0_(m, IVX, k, j, i), w0_(m, IVY, k, j, i),
+                     w0_(m, IVZ, k, j, i), u_u);
+            pack_v_u(w_lorentz, w0_(m, IVX, k, j, i), w0_(m, IVY, k, j, i),
+                     w0_(m, IVZ, k, j, i), v_u);
+          } else {
+            w_lorentz = u_mu_(m, 0, k, j, i);
+            pack_u_u(u_mu_(m, 0, k, j, i), u_mu_(m, 1, k, j, i), u_mu_(m, 2, k, j, i),
+                     u_mu_(m, 3, k, j, i), u_u);
+            pack_v_u(u_mu_(m, 0, k, j, i), u_mu_(m, 1, k, j, i), u_mu_(m, 2, k, j, i),
+                     u_mu_(m, 3, k, j, i), v_u);
+          }
           tensor_contract(g_dd, u_u, u_d);
-          pack_v_u(u_mu_(m, 0, k, j, i), u_mu_(m, 1, k, j, i), u_mu_(m, 2, k, j, i),
-                   u_mu_(m, 3, k, j, i), v_u);
           tensor_contract(g_dd, v_u, v_d);
           calc_proj(u_d, u_u, proj_ud);
 
@@ -225,7 +235,7 @@ TaskStatus RadiationM1::CalcOpacityNurates_(Driver *pdrive, int stage) {
           }
 
           // fluid quantities
-          Real nb = w0_(m, IDN, k, j, i) / mb;
+          Real nb = w0_(m, IDN, k, j, i) / mb; //@TODO: Jacob mentioned that the density is not in code units
           Real p = w0_(m, IPR, k, j, i);
           Real Y = w0_(m, PYF, k, j, i);
           Real T = eos.GetTemperatureFromP(nb, p, &Y);
@@ -330,8 +340,9 @@ TaskStatus RadiationM1::CalcOpacityNurates_(Driver *pdrive, int stage) {
           }
 
           // Compute the neutrino black body function assuming fixed temperature and Y_e
-          // @TODO: call neutrino density
-          bool ierr{};
+          //NeutrinoDens(&eos, w0_(m,IDN,k,j,i), Real temp,
+          //             w0_(m,ID,k,j,i), Real &n_nue, Real &n_nua, Real &n_nux, Real &en_nue,
+          //             Real &en_nua, Real &en_nux, nurates_params_);
 
           nudens_0_thin[2] = nux_weight * nudens_0_thin[2];
           nudens_1_thin[2] = nux_weight * nudens_1_thin[2];
