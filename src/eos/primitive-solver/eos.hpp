@@ -271,8 +271,8 @@ class EOS : public EOSPolicy, public ErrorPolicy {
   //  \return The baryon chemical potential for the EOS.
   KOKKOS_INLINE_FUNCTION Real GetBaryonChemicalPotential(Real n, Real T, Real *Y) const {
    if constexpr (supports_potentials) {
-    return EOSPolicy::BaryonChemicalPotential(n, T*code_units->TemperatureConversion(*eos_units), Y) *
-            eos_units->ChemicalPotentialConversion(*code_units);
+    return EOSPolicy::BaryonChemicalPotential(n, T*code_units.TemperatureConversion(eos_units), Y) *
+            eos_units.ChemicalPotentialConversion(code_units);
    } else {
     return std::numeric_limits<Real>::quiet_NaN();
    }
@@ -288,8 +288,8 @@ class EOS : public EOSPolicy, public ErrorPolicy {
   //  \return The charge chemical potential for the EOS.
   KOKKOS_INLINE_FUNCTION Real GetChargeChemicalPotential(Real n, Real T, Real *Y) const {
    if constexpr (supports_potentials) {
-    return EOSPolicy::ChargeChemicalPotential(n, T*code_units->TemperatureConversion(*eos_units), Y) *
-            eos_units->ChemicalPotentialConversion(*code_units);
+    return EOSPolicy::ChargeChemicalPotential(n, T*code_units.TemperatureConversion(eos_units), Y) *
+            eos_units.ChemicalPotentialConversion(code_units);
    } else {
     return std::numeric_limits<Real>::quiet_NaN();
    }
@@ -305,8 +305,8 @@ class EOS : public EOSPolicy, public ErrorPolicy {
   //  \return The electron-lepton chemical potential for the EOS.
   KOKKOS_INLINE_FUNCTION Real GetElectronLeptonChemicalPotential(Real n, Real T, Real *Y) const {
    if constexpr (supports_potentials) {
-    return EOSPolicy::ElectronLeptonChemicalPotential(n, T*code_units->TemperatureConversion(*eos_units), Y) *
-            eos_units->ChemicalPotentialConversion(*code_units);
+    return EOSPolicy::ElectronLeptonChemicalPotential(n, T*code_units.TemperatureConversion(eos_units), Y) *
+            eos_units.ChemicalPotentialConversion(code_units);
    } else {
     return std::numeric_limits<Real>::quiet_NaN();
    }

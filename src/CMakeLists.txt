@@ -195,6 +195,7 @@ add_executable(
         radiation_m1/radiation_m1_calc_opacities.cpp
         pgen/tests/rad_m1_latticetest.cpp
         pgen/tests/rad_m1_spheretest.cpp
+        pgen/tests/rad_m1_singlezone.cpp
 
         ${ENABLE_NURATES_SOURCES}
         radiation_m1/radiation_m1_nurates.hpp

@@ -83,7 +83,7 @@ struct UnitSystem {
     return b.temperature/temperature;
   }
 
-  KOKKOS_INLINE_FUNCTION constexpr Real ChemicalPotentialConversion(UnitSystem& b) const {
+  KOKKOS_INLINE_FUNCTION constexpr Real ChemicalPotentialConversion(const UnitSystem& b) const {
     return b.chemicalPotential/chemicalPotential;
   }
   //! \}
