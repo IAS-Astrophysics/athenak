@@ -30,7 +30,7 @@ void ProblemGenerator::RadiationM1SingleZoneTest(ParameterInput *pin,
 
   MeshBlockPack *pmbp = pmy_mesh_->pmb_pack;
 
-  pmbp->pradm1->toy_opacity_fn = LatticeOpacities;
+  //pmbp->pradm1->toy_opacity_fn = LatticeOpacities;
 
   // capture variables for kernel
   auto &indcs = pmy_mesh_->mb_indcs;
@@ -57,7 +57,7 @@ void ProblemGenerator::RadiationM1SingleZoneTest(ParameterInput *pin,
   par_for("pgen_shadow1",DevExeSpace(),0,nmb1,0,(n3-1),0,(n2-1),0,(n1-1),
   KOKKOS_LAMBDA(int m, int k, int j, int i) {
     w0(m,IDN,k,j,i) = rho;
-    w0(m,IVX,k,j,i) = vx
+    w0(m,IVX,k,j,i) = vx;
     w0(m,IVY,k,j,i) = vy;
     w0(m,IVZ,k,j,i) = vz;
     w0(m,IEN,k,j,i) = temp;

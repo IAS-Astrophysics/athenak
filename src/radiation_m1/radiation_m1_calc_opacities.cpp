@@ -79,16 +79,16 @@ TaskStatus RadiationM1::CalcOpacityNurates(Driver *pdrive, int stage) {
       dynamic_cast<dyngr::DynGRMHDPS<Primitive::EOSCompOSE<Primitive::NQTLogs>,
                                      Primitive::ResetFloor> *>(pmy_pack->pdyngr);
   if (ptest_nqt != nullptr) {
-    return CalcOpacityNurates_<Primitive::EOSCompOSE<Primitive::NQTLogs>,
-                               Primitive::ResetFloor>(pdrive, stage);
+    //return CalcOpacityNurates_<Primitive::EOSCompOSE<Primitive::NQTLogs>,
+    //                           Primitive::ResetFloor>(pdrive, stage);
   }
 
   auto *ptest_nlog =
       dynamic_cast<dyngr::DynGRMHDPS<Primitive::EOSCompOSE<Primitive::NormalLogs>,
                                      Primitive::ResetFloor> *>(pmy_pack->pdyngr);
   if (ptest_nlog != nullptr) {
-    return CalcOpacityNurates_<Primitive::EOSCompOSE<Primitive::NormalLogs>,
-                               Primitive::ResetFloor>(pdrive, stage);
+    //return CalcOpacityNurates_<Primitive::EOSCompOSE<Primitive::NormalLogs>,
+    //                           Primitive::ResetFloor>(pdrive, stage);
   }
 
   std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl;
@@ -136,7 +136,7 @@ TaskStatus RadiationM1::CalcOpacityNurates_(Driver *pdrive, int stage) {
   Primitive::EOS<EOSPolicy, ErrorPolicy> &eos =
       static_cast<dyngr::DynGRMHDPS<EOSPolicy, ErrorPolicy> *>(pmy_pack->pdyngr)
           ->eos.ps.GetEOSMutable();
-  const Real mb = eos.ps.GetEOS().GetBaryonMass();
+  const Real mb = eos.GetBaryonMass();
 
   Real beta[2] = {0.5, 1.};
   Real beta_dt = (beta[stage - 1]) * (pmy_pack->pmesh->dt);
