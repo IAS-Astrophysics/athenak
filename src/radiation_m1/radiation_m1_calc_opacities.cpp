@@ -79,16 +79,16 @@ TaskStatus RadiationM1::CalcOpacityNurates(Driver *pdrive, int stage) {
       dynamic_cast<dyngr::DynGRMHDPS<Primitive::EOSCompOSE<Primitive::NQTLogs>,
                                      Primitive::ResetFloor> *>(pmy_pack->pdyngr);
   if (ptest_nqt != nullptr) {
-    //return CalcOpacityNurates_<Primitive::EOSCompOSE<Primitive::NQTLogs>,
-    //                           Primitive::ResetFloor>(pdrive, stage);
+    return CalcOpacityNurates_<Primitive::EOSCompOSE<Primitive::NQTLogs>,
+                               Primitive::ResetFloor>(pdrive, stage);
   }
 
   auto *ptest_nlog =
       dynamic_cast<dyngr::DynGRMHDPS<Primitive::EOSCompOSE<Primitive::NormalLogs>,
                                      Primitive::ResetFloor> *>(pmy_pack->pdyngr);
   if (ptest_nlog != nullptr) {
-    //return CalcOpacityNurates_<Primitive::EOSCompOSE<Primitive::NormalLogs>,
-    //                           Primitive::ResetFloor>(pdrive, stage);
+    return CalcOpacityNurates_<Primitive::EOSCompOSE<Primitive::NormalLogs>,
+                               Primitive::ResetFloor>(pdrive, stage);
   }
 
   std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl;
@@ -370,7 +370,7 @@ TaskStatus RadiationM1::CalcOpacityNurates_(Driver *pdrive, int stage) {
                             Kokkos::min(corr_fac, nurates_params_.opacity_corr_fac_max));
 
             // Extract scattering opacity
-            scat_1_(m, k, j, i) = corr_fac * (scat_1_loc[ig] - abs_1_loc[ig]);
+            scat_1_(m, 0, k, j, i) = corr_fac * (scat_1_loc[ig] - abs_1_loc[ig]);
 
             // Enforce Kirchhoff's laws.
             // . For the heavy lepton neutrinos this is implemented by
@@ -380,17 +380,17 @@ TaskStatus RadiationM1::CalcOpacityNurates_(Driver *pdrive, int stage) {
             // It would be better to have emissivities and absorptivities
             // that satisfy Kirchhoff's law.
             if (ig == 2 || ig == 3) {
-              eta_0_(m, k, j, i) = eta_0_loc[ig];
-              eta_1_(m, k, j, i) = eta_1_loc[ig];
-              abs_0_(m, k, j, i) =
-                  (nudens_0 > params_.rad_N_floor ? eta_0_(m, k, j, i) / nudens_0 : 0);
-              abs_1_(m, k, j, i) =
-                  (nudens_1 > params_.rad_E_floor ? eta_1_(m, k, j, i) / nudens_1 : 0);
+              eta_0_(m, 0, k, j, i) = eta_0_loc[ig];
+              eta_1_(m, 0, k, j, i) = eta_1_loc[ig];
+              abs_0_(m, 0, k, j, i) =
+                  (nudens_0 > params_.rad_N_floor ? eta_0_(m, 0, k, j, i) / nudens_0 : 0);
+              abs_1_(m, 0, k, j, i) =
+                  (nudens_1 > params_.rad_E_floor ? eta_1_(m, 0, k, j, i) / nudens_1 : 0);
             } else {
-              abs_0_(m, k, j, i) = corr_fac * abs_0_loc[ig];
-              abs_1_(m, k, j, i) = corr_fac * abs_1_loc[ig];
-              eta_0_(m, k, j, i) = abs_0_(m, k, j, i) * nudens_0;
-              eta_1_(m, k, j, i) = abs_1_(m, k, j, i) * nudens_1;
+              abs_0_(m, 0, k, j, i) = corr_fac * abs_0_loc[ig];
+              abs_1_(m, 0, k, j, i) = corr_fac * abs_1_loc[ig];
+              eta_0_(m, 0, k, j, i) = abs_0_(m, 0, k, j, i) * nudens_0;
+              eta_1_(m, 0, k, j, i) = abs_1_(m, 0, k, j, i) * nudens_1;
             }
           }
         }
