@@ -500,14 +500,14 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   int ncells2 = (indcs.nx2 > 1)? (indcs.nx2 + 2*(indcs.ng)) : 1;
   int ncells3 = (indcs.nx3 > 1)? (indcs.nx3 + 2*(indcs.ng)) : 1;
   DvceArray4D<Real> a1, a2, a3;
-  Kokkos::realloc(a1, nmb,ncells3,ncells2,ncells1);
-  Kokkos::realloc(a2, nmb,ncells3,ncells2,ncells1);
-  Kokkos::realloc(a3, nmb,ncells3,ncells2,ncells1);
+  Kokkos::realloc(a1, nmb, ncells3+1, ncells2+1, ncells1+1);
+  Kokkos::realloc(a2, nmb, ncells3+1, ncells2+1, ncells1+1);
+  Kokkos::realloc(a3, nmb, ncells3+1, ncells2+1, ncells1+1);
 #ifdef DEBUG_PGEN
   printf("Interpolating vector potential...");
   fflush(stdout);
 #endif
-  par_for("pgen_vector_potential", DevExeSpace(), 0,nmb-1,ks,ke+1,js,je+1,is,ie+1,
+  par_for("pgen_vector_potential", DevExeSpace(), 0,nmb-1,ks,ke+2,js,je+2,is,ie+2,
   KOKKOS_LAMBDA(int m, int k, int j, int i) {
     ChebyshevInterpolation<NCHEBY, NSTENCIL> interp;
 
