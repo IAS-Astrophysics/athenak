@@ -3,7 +3,6 @@
 
 #include "athena.hpp"
 #include "athena_tensor.hpp"
-
 #include "bns_nurates/include/bns_nurates.hpp"
 //========================================================================================
 // AthenaXXX astrophysical plasma code
@@ -78,12 +77,6 @@ struct RadiationM1Params {
   Real source_therm_limit;  // Assume neutrinos to be thermalized above this optical depth
   Real source_scat_limit;   // Use the scattering limit if the isotropization time is less
                             // than the timestep over this factor
-
-  int nurates_quad_nx;     // no. of quadrature points for 1d integration (bns_nurates)
-  int nurates_quad_ny;     // no. of quadrature points for 2d integration (bns_nurates)
-  Real opacity_tau_trap;   // incl. effects of neutrino trapping above this optical depth
-  Real opacity_tau_delta;  // range of optical depths over which trapping is introduced
-  Real opacity_corr_fac_max;  // maximum correction factor for optically thin regime
 };
 
 enum SrcSignal {
@@ -168,6 +161,14 @@ struct SrcParams {
 };
 
 struct NuratesParams {
+  int nurates_quad_nx;     // no. of quadrature points for 1d integration (bns_nurates)
+  int nurates_quad_ny;     // no. of quadrature points for 2d integration (bns_nurates)
+  Real opacity_tau_trap;   // incl. effects of neutrino trapping above this optical depth
+  Real opacity_tau_delta;  // range of optical depths over which trapping is introduced
+  Real opacity_corr_fac_max;  // maximum correction factor for optically thin regime
+  Real rho_min_cgs;
+  Real temp_min_mev;
+
   bool use_abs_em;
   bool use_pair;
   bool use_brem;
@@ -179,12 +180,6 @@ struct NuratesParams {
   bool use_dm_eff;
   bool use_equilibrium_distribution;
   bool use_kirchhoff_law;
-
-  Real opacity_tau_trap;
-  Real opacity_tau_delta;
-  Real opacity_corr_fac_max;
-  Real rho_min_cgs;
-  Real temp_min_mev;
 
   MyQuadrature my_quadrature_1d;
   MyQuadrature my_quadrature_2d;

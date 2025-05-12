@@ -172,7 +172,7 @@ void bns_nurates(Real &nb, Real &temp, Real &ye, Real &mu_n, Real &mu_p, Real &m
   assert(isfinite(scat_1_anux));
 }
 
-// Note: everything in and out in code units (except Y ?)
+// Note: everything in and out in code units
 template <class EOSPolicy, class ErrorPolicy>
 void NeutrinoDens(Primitive::EOS<EOSPolicy, ErrorPolicy> &eos, Real rho, Real temp,
                        Real *Y, Real &n_nue, Real &n_nua, Real &n_nux, Real &en_nue,
