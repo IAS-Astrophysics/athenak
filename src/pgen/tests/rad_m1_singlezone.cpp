@@ -30,8 +30,6 @@ void ProblemGenerator::RadiationM1SingleZoneTest(ParameterInput *pin,
 
   MeshBlockPack *pmbp = pmy_mesh_->pmb_pack;
 
-  //pmbp->pradm1->toy_opacity_fn = LatticeOpacities;
-
   // capture variables for kernel
   auto &indcs = pmy_mesh_->mb_indcs;
   int &ng = indcs.ng;
@@ -51,6 +49,21 @@ void ProblemGenerator::RadiationM1SingleZoneTest(ParameterInput *pin,
   Real vy = pin->GetReal("problem", "vy");
   Real vz = pin->GetReal("problem", "vz");
   Real ye = pin->GetReal("problem", "Y_e");
+
+  // Check required modules are called
+  if (pmbp->phydro == nullptr) {
+    std::cout <<"### FATAL ERROR in "<< __FILE__ <<" at line " << __LINE__ << std::endl
+            << "Hydro is required for the single zone equilibration test" << std::endl;
+    exit(EXIT_FAILURE);
+  }
+  if (pmbp->pradm1 == nullptr) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+              << std::endl
+              << "The single zone equilibration test problem generator requires "
+                 "radiation-m1, but no "
+              << "<radiation_m1> block in input file" << std::endl;
+    exit(EXIT_FAILURE);
+  }
 
   // set primitive variables
   auto &w0 = pmbp->phydro->w0;
