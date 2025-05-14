@@ -3,7 +3,9 @@
 
 #include "athena.hpp"
 #include "athena_tensor.hpp"
+#ifdef ENABLE_NURATES
 #include "bns_nurates/include/bns_nurates.hpp"
+#endif
 //========================================================================================
 // AthenaXXX astrophysical plasma code
 // Copyright(C) 2020 James M. Stone <jmstone@ias.edu> and the Athena code team
@@ -180,9 +182,10 @@ struct NuratesParams {
   bool use_dm_eff;
   bool use_equilibrium_distribution;
   bool use_kirchhoff_law;
-
+#ifdef ENABLE_NURATES
   MyQuadrature my_quadrature_1d;
   MyQuadrature my_quadrature_2d;
+#endif
 };
 
 }  // namespace radiationm1
