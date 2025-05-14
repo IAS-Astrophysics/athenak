@@ -14,12 +14,14 @@
 
 #include "athena.hpp"
 #include "athena_tensor.hpp"
-#include "bns_nurates/include/bns_nurates.hpp"
 #include "bvals/bvals.hpp"
 #include "parameter_input.hpp"
 #include "radiation_m1/radiation_m1_params.hpp"
 #include "radiation_m1/radiation_m1_roots_fns.hpp"
 #include "tasklist/task_list.hpp"
+#ifdef ENABLE_NURATES
+#include "bns_nurates/include/bns_nurates.hpp"
+#endif
 
 namespace radiationm1 {
 
