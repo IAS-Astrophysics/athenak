@@ -14,7 +14,68 @@
 
 namespace radiationm1 {
 
-// computes rates given M1 quantities, assumes quantities are in cgs units
+//! \fn void bns_nurates(Real &nb, Real &temp, Real &ye, Real &mu_n, Real &mu_p,
+//!                      Real &mu_e, Real &n_nue, Real &j_nue, Real &chi_nue,
+//!                      Real &n_anue, Real &j_anue, Real &chi_anue, Real &n_nux,
+//!                      Real &j_nux, Real &chi_nux, Real &n_anux, Real &j_anux,
+//!                      Real &chi_anux, Real &R_nue, Real &R_anue, Real &R_nux,
+//!                      Real &R_anux, Real &Q_nue, Real &Q_anue, Real &Q_nux,
+//!                      Real &Q_anux, Real &sigma_0_nue, Real &sigma_0_anue,
+//!                      Real &sigma_0_nux, Real &sigma_0_anux, Real &sigma_1_nue,
+//!                      Real &sigma_1_anue, Real &sigma_1_nux, Real &sigma_1_anux,
+//!                      Real &scat_0_nue, Real &scat_0_anue, Real &scat_0_nux,
+//!                      Real &scat_0_anux, Real &scat_1_nue, Real &scat_1_anue,
+//!                      Real &scat_1_nux, Real &scat_1_anux,
+//!                      const NuratesParams nurates_params)
+//   \brief Computes the rates given the M1 quantities
+//
+//   \note  All input and output quantities are in code units, except temperature (MeV)
+//
+//   \param[in] nb              baryon number density
+//   \param[in] temp            temperature (MeV)
+//   \param[in] ye              electron fraction
+//   \param[in] mu_n            neutron chemical potential
+//   \param[in] mu_p            proton chemical potential
+//   \param[in] mu_e            electron chemical potential
+//   \param[in] n_nue           number density electron neutrinos
+//   \param[in] j_nue           energy density electron neutrinos
+//   \param[in] chi_nue         eddington factor electron neutrinos
+//   \param[in] n_anue          number density electron anti-neutrinos
+//   \param[in] j_anue          energy density electron anti-neutrinos
+//   \param[in] chi_anue        eddington factor electron anti-neutrinos
+//   \param[in] n_nux           number density mu/tau neutrinos
+//   \param[in] j_nux           energy density mu/tau neutrinos
+//   \param[in] chi_nux         eddington factor mu/tau neutrinos
+//   \param[in] n_anux          number density mu/tau neutrinos
+//   \param[in] j_anux          energy density mu/tau neutrinos
+//   \param[in] chi_anux        eddington factor mu/tau neutrinos
+//
+//   \param[out] R_nue          number emissivity electron neutrinos
+//   \param[out] R_anue         number emissivity electron anti-neutrinos
+//   \param[out] R_nux          number emissivity mu/tau neutrinos
+//   \param[out] R_anux         number emissivity mu/tau anti-neutrinos
+//   \param[out] Q_nue          energy emissivity electron neutrinos
+//   \param[out] Q_anue         energy emissivity electron anti-neutrinos
+//   \param[out] Q_nux          energy emissivity mu/tau neutrinos
+//   \param[out] Q_anux         energy emissivity mu/tau anti-neutrinos
+//   \param[out] sigma_0_nue    number inv mean-free path electron neutrinos
+//   \param[out] sigma_0_anue   number inv mean-free path electron anti-neutrinos
+//   \param[out] sigma_0_nux    number inv mean-free path mu/tau neutrinos
+//   \param[out] sigma_0_anux   number inv mean-free path mu/tau anti-neutrinos
+//   \param[out] sigma_1_nue    energy inv mean-free path electron neutrinos
+//   \param[out] sigma_1_anue   energy inv mean-free path electron anti-neutrinos
+//   \param[out] sigma_1_nux    energy inv mean-free path mu/tau neutrinos
+//   \param[out] sigma_1_anux   energy inv mean-free path mu/tau neutrinos
+//   \param[out] scat_0_nue     number scatt coeff electron neutrinos
+//   \param[out] scat_0_anue    number scatt coeff electron anti-neutrinos
+//   \param[out] scat_0_nux     number scatt coeff mu/tau neutrinos
+//   \param[out] scat_0_anux    number scatt coeff mu/tau anti-neutrinos
+//   \param[out] scat_1_nue     energy scatt coeff electron neutrinos
+//   \param[out] scat_1_anue    energy scatt coeff electron ant-neutrinos
+//   \param[out] scat_1_nux     energy scatt coeff mu/tau neutrinos
+//   \param[out] scat_1_anux    energy scatt coeff mu/tau anti-neutrinos
+//   \param[in]  nurates_params params for nurates
+
 KOKKOS_INLINE_FUNCTION
 void bns_nurates(Real &nb, Real &temp, Real &ye, Real &mu_n, Real &mu_p, Real &mu_e,
                  Real &n_nue, Real &j_nue, Real &chi_nue, Real &n_anue, Real &j_anue,
@@ -27,10 +88,8 @@ void bns_nurates(Real &nb, Real &temp, Real &ye, Real &mu_n, Real &mu_p, Real &m
                  Real &scat_0_anue, Real &scat_0_nux, Real &scat_0_anux, Real &scat_1_nue,
                  Real &scat_1_anue, Real &scat_1_nux, Real &scat_1_anux,
                  const NuratesParams nurates_params) {
-  Real dU = 0.;
-
   // opacity params structure
-  GreyOpacityParams my_grey_opacity_params = {0};
+  GreyOpacityParams my_grey_opacity_params{};
 
   // reaction flags
   my_grey_opacity_params.opacity_flags = opacity_flags_default_none;
@@ -48,10 +107,7 @@ void bns_nurates(Real &nb, Real &temp, Real &ye, Real &mu_n, Real &mu_p, Real &m
   my_grey_opacity_params.opacity_pars.use_dU = nurates_params.use_dU;
   my_grey_opacity_params.opacity_pars.use_dm_eff = nurates_params.use_dm_eff;
 
-  //@TODO: this logic in Weakrates2 uses dU_table! Not implemented!
-  if (nurates_params.use_dU) {
-  } else {
-  }
+  //@TODO: logic for nurates_params.use_dU not implemented from bns_nurates_wrap.cpp
 
   // populate EOS quantities
   my_grey_opacity_params.eos_pars.mu_e = mu_e;
@@ -174,15 +230,10 @@ void bns_nurates(Real &nb, Real &temp, Real &ye, Real &mu_n, Real &mu_p, Real &m
 
 // Note: everything in and out in code units
 template <class EOSPolicy, class ErrorPolicy>
-void NeutrinoDens(Primitive::EOS<EOSPolicy, ErrorPolicy> &eos, Real rho, Real temp,
-                       Real *Y, Real &n_nue, Real &n_nua, Real &n_nux, Real &en_nue,
-                       Real &en_nua, Real &en_nux, NuratesParams nurates_params) {
-
-  // conversion from code to cgs units, temperature in MeV
-  rho = rho * 1;
-  temp = temp * 1;
-
-  if ((rho < nurates_params.rho_min_cgs) || (temp < nurates_params.temp_min_mev)) {
+void NeutrinoDens(Primitive::EOS<EOSPolicy, ErrorPolicy> &eos, Real nb, Real temp,
+                  Real *Y, Real &n_nue, Real &n_nua, Real &n_nux, Real &en_nue,
+                  Real &en_nua, Real &en_nux, NuratesParams nurates_params) {
+  if ((nb < nurates_params.rho_min_cgs) || (temp < nurates_params.temp_min_mev)) {
     n_nue = 0.;
     n_nua = 0.;
     n_nux = 0.;
@@ -192,7 +243,6 @@ void NeutrinoDens(Primitive::EOS<EOSPolicy, ErrorPolicy> &eos, Real rho, Real te
     return;
   }
 
-  Real nb = rho / MASS_FACT_CGS;
   Real mu_b = eos.GetBaryonChemicalPotential(nb, temp, &Y);
   Real mu_q = eos.GetChargeChemicalPotential(nb, temp, &Y);
   Real mu_le = eos.GetElectronLeptonChemicalPotential(nb, temp, &Y);
