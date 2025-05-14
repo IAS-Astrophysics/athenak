@@ -148,7 +148,7 @@ endif()
 
 # Optionally include bns_nurates headers
 if (ENABLE_NURATES)
-  target_include_directories(athena PRIVATE ${CMAKE_SOURCE_DIR})
+  target_include_directories(athena PRIVATE ${CMAKE_SOURCE_DIR}/bns_nurates/include)
 endif()
 
 if (${PROBLEM} STREQUAL "z4c_spectre_bbh")
