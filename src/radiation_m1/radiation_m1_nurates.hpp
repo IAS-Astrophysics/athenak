@@ -1,6 +1,6 @@
 #ifndef RADIATION_M1_NURATES_HPP
 #define RADIATION_M1_NURATES_HPP
-
+#ifdef ENABLE_NURATES
 #include "athena.hpp"
 #include "bns_nurates/include/bns_nurates.hpp"
 #include "bns_nurates/include/constants.hpp"
@@ -285,5 +285,5 @@ void NeutrinoDens(Primitive::EOS<EOSPolicy, ErrorPolicy> &eos, Real nb, Real tem
 }
 
 }  // namespace radiationm1
-
+#endif  // ENABLE_NURATES
 #endif  // RADIATION_M1_NURATES_HPP
