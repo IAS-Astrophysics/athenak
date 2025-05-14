@@ -14,10 +14,12 @@
 
 #include "Kokkos_SIMD_Common_Math.hpp"
 #include "athena.hpp"
-#include "bns_nurates/include/integration.hpp"
 #include "mesh/mesh.hpp"
 #include "parameter_input.hpp"
 
+#ifdef
+
+#endif
 namespace radiationm1 {
 RadiationM1::RadiationM1(MeshBlockPack *ppack, ParameterInput *pin)
     : pmy_pack(ppack),
