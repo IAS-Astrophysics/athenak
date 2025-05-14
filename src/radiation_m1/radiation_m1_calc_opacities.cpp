@@ -106,39 +106,37 @@ TaskStatus RadiationM1::CalcOpacityNurates_(Driver *pdrive, int stage) {
 
   auto nmb1 = pmy_pack->nmb_thispack - 1;
   auto &mbsize = pmy_pack->pmb->mb_size;
-  auto &nspecies_ = pmy_pack->pradm1->nspecies;
-  auto nvarstotm1 = pmy_pack->pradm1->nvarstot - 1;
-  auto nvars_ = pmy_pack->pradm1->nvars;
-  auto &params_ = pmy_pack->pradm1->params;
-  bool &multi_d = pmy_pack->pmesh->multi_d;
-  bool &three_d = pmy_pack->pmesh->three_d;
+  auto &nspecies_ = nspecies;
+  auto nvars_ = nvars;
 
-  auto &w0_ = pmy_pack->pmhd->w0;
+  auto &params_ = params;
+  auto &nurates_params_ = nurates_params;
 
-  auto &eta_0_ = pmy_pack->pradm1->eta_0;
-  auto &abs_0_ = pmy_pack->pradm1->abs_0;
-  auto &eta_1_ = pmy_pack->pradm1->eta_1;
-  auto &abs_1_ = pmy_pack->pradm1->abs_1;
-  auto &scat_1_ = pmy_pack->pradm1->scat_1;
-  auto &toy_opacity_fn_ = pmy_pack->pradm1->toy_opacity_fn;
-  auto &chi_ = pmy_pack->pradm1->chi;
-  auto &nurates_params_ = pmy_pack->pradm1->nurates_params;
-  auto &radiation_mask_ = pmy_pack->pradm1->radiation_mask;
-  auto &adm = pmy_pack->padm->adm;
-  auto &dyngr = pmy_pack->pdyngr;
+  auto &eta_0_ = eta_0;
+  auto &abs_0_ = abs_0;
+  auto &eta_1_ = eta_1;
+  auto &abs_1_ = abs_1;
+  auto &scat_1_ = scat_1;
+
+  auto &toy_opacity_fn_ = toy_opacity_fn;
+
+  auto &radiation_mask_ = radiation_mask;
   auto &u0_ = u0;
+  auto &w0_ = pmy_pack->pmhd->w0;
+  auto &chi_ = chi;
   auto &u_mu_ = u_mu;
+
+  auto &adm = pmy_pack->padm->adm;
 
   const Real nux_weight = (nspecies == 3 ? 1.0 : 0.5);
 
-  // This is a ugly hack stolen from eos_compose_test.cpp
+  Real beta[2] = {0.5, 1.};
+  Real beta_dt = (beta[stage - 1]) * (pmy_pack->pmesh->dt);
+
   Primitive::EOS<EOSPolicy, ErrorPolicy> &eos =
       static_cast<dyngr::DynGRMHDPS<EOSPolicy, ErrorPolicy> *>(pmy_pack->pdyngr)
           ->eos.ps.GetEOSMutable();
   const Real mb = eos.GetBaryonMass();
-
-  Real beta[2] = {0.5, 1.};
-  Real beta_dt = (beta[stage - 1]) * (pmy_pack->pmesh->dt);
 
   par_for(
       "radiation_m1_calc_nurates_opacity", DevExeSpace(), 0, nmb1, ks, ke, js, je, is, ie,
@@ -191,6 +189,7 @@ TaskStatus RadiationM1::CalcOpacityNurates_(Driver *pdrive, int stage) {
           AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> v_d{};
           AthenaPointTensor<Real, TensorSymm::NONE, 4, 2> proj_ud{};
 
+          //@TODO: velocity terms are broken!
           Real w_lorentz{};
           if (nspecies_ > 1) {
             w_lorentz = Kokkos::sqrt(1. + w0_(m, IVX, k, j, i) * w0_(m, IVX, k, j, i) +
@@ -235,7 +234,7 @@ TaskStatus RadiationM1::CalcOpacityNurates_(Driver *pdrive, int stage) {
           }
 
           // fluid quantities
-          Real nb = w0_(m, IDN, k, j, i) / mb; //@TODO: Jacob mentioned that the density is not in code units
+          Real nb = w0_(m, IDN, k, j, i) / mb;
           Real p = w0_(m, IPR, k, j, i);
           Real Y = w0_(m, PYF, k, j, i);
           Real T = eos.GetTemperatureFromP(nb, p, &Y);
@@ -325,7 +324,6 @@ TaskStatus RadiationM1::CalcOpacityNurates_(Driver *pdrive, int stage) {
             bool ierr{};
 
             if (ierr) {
-
             }
             assert(Kokkos::isfinite(nudens_0_trap[0]));
             assert(Kokkos::isfinite(nudens_0_trap[1]));
@@ -340,9 +338,9 @@ TaskStatus RadiationM1::CalcOpacityNurates_(Driver *pdrive, int stage) {
           }
 
           // Compute the neutrino black body function assuming fixed temperature and Y_e
-          //NeutrinoDens(&eos, w0_(m,IDN,k,j,i), Real temp,
-          //             w0_(m,ID,k,j,i), Real &n_nue, Real &n_nua, Real &n_nux, Real &en_nue,
-          //             Real &en_nua, Real &en_nux, nurates_params_);
+          // NeutrinoDens(&eos, w0_(m,IDN,k,j,i), Real temp,
+          //             w0_(m,ID,k,j,i), Real &n_nue, Real &n_nua, Real &n_nux, Real
+          //             &en_nue, Real &en_nua, Real &en_nux, nurates_params_);
 
           nudens_0_thin[2] = nux_weight * nudens_0_thin[2];
           nudens_1_thin[2] = nux_weight * nudens_1_thin[2];
@@ -391,17 +389,19 @@ TaskStatus RadiationM1::CalcOpacityNurates_(Driver *pdrive, int stage) {
             // It would be better to have emissivities and absorptivities
             // that satisfy Kirchhoff's law.
             if (ig == 2 || ig == 3) {
-              eta_0_(m, 0, k, j, i) = eta_0_loc[ig];
-              eta_1_(m, 0, k, j, i) = eta_1_loc[ig];
-              abs_0_(m, 0, k, j, i) =
-                  (nudens_0 > params_.rad_N_floor ? eta_0_(m, 0, k, j, i) / nudens_0 : 0);
+              eta_0_(m, ig, k, j, i) = eta_0_loc[ig];
+              eta_1_(m, ig, k, j, i) = eta_1_loc[ig];
+              abs_0_(m, ig, k, j, i) =
+                  (nudens_0 > params_.rad_N_floor ? eta_0_(m, ig, k, j, i) / nudens_0
+                                                  : 0);
               abs_1_(m, 0, k, j, i) =
-                  (nudens_1 > params_.rad_E_floor ? eta_1_(m, 0, k, j, i) / nudens_1 : 0);
+                  (nudens_1 > params_.rad_E_floor ? eta_1_(m, ig, k, j, i) / nudens_1
+                                                  : 0);
             } else {
-              abs_0_(m, 0, k, j, i) = corr_fac * abs_0_loc[ig];
-              abs_1_(m, 0, k, j, i) = corr_fac * abs_1_loc[ig];
-              eta_0_(m, 0, k, j, i) = abs_0_(m, 0, k, j, i) * nudens_0;
-              eta_1_(m, 0, k, j, i) = abs_1_(m, 0, k, j, i) * nudens_1;
+              abs_0_(m, ig, k, j, i) = corr_fac * abs_0_loc[ig];
+              abs_1_(m, ig, k, j, i) = corr_fac * abs_1_loc[ig];
+              eta_0_(m, ig, k, j, i) = abs_0_(m, ig, k, j, i) * nudens_0;
+              eta_1_(m, ig, k, j, i) = abs_1_(m, ig, k, j, i) * nudens_1;
             }
           }
         }
