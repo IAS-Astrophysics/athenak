@@ -16,10 +16,10 @@
 #include "athena.hpp"
 #include "mesh/mesh.hpp"
 #include "parameter_input.hpp"
-
-#ifdef
-
+#ifdef ENABLE_NURATES
+#include "bns_nurates/include/integration.hpp"
 #endif
+
 namespace radiationm1 {
 RadiationM1::RadiationM1(MeshBlockPack *ppack, ParameterInput *pin)
     : pmy_pack(ppack),
@@ -85,6 +85,7 @@ RadiationM1::RadiationM1(MeshBlockPack *ppack, ParameterInput *pin)
   if (opacity_type == "toy") {
     params.opacity_type = Toy;
   } else if (opacity_type == "bns-nurates") {
+#ifdef ENABLE_NURATES
     params.opacity_type = BnsNurates;
 
     nurates_params.nurates_quad_nx = pin->GetOrAddInteger("bns_nurates", "nurates_quad_nx", 10);
@@ -122,6 +123,10 @@ RadiationM1::RadiationM1(MeshBlockPack *ppack, ParameterInput *pin)
     nurates_params.my_quadrature_2d.y2 = 1.;
     //GaussLegendreMultiD(&nurates_params.my_quadrature_1d);
     // GaussLegendreMultiD(&nurates_params.my_quadrature_2d);
+#else
+    printf("Must compile executable with nurates flag!\n");
+    exit(EXIT_FAILURE);
+#endif
   } else if (opacity_type == "none") {
     params.opacity_type = None;
   } else {
