@@ -17,3 +17,6 @@ build*/
 *~
 *.swp
 Lorene
+
+# bns_nurates
+src/bns_nurates/

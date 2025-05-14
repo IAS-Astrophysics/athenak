@@ -59,8 +59,10 @@ void RadiationM1::AssembleRadiationM1Tasks(
   if (!params.matter_sources) {
     id.mattersrc = id.closure;
   } else if (params.opacity_type == BnsNurates) {
+#ifdef ENABLE_NURATES
     id.mattersrc =
         tl["opsplit_stagen"]->AddTask(&RadiationM1::CalcOpacityNurates, this, id.closure);
+#endif
   } else {
     id.mattersrc =
         tl["opsplit_stagen"]->AddTask(&RadiationM1::CalcOpacityToy, this, id.closure);
