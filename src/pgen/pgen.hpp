@@ -78,7 +78,9 @@ class ProblemGenerator {
   void RadiationM1SphereTest(ParameterInput *pin, const bool restart);
   void RadiationM1DiffusionTest(ParameterInput *pin, const bool restart);
   void RadiationM1VelocityJumpTest(ParameterInput *pin, const bool restart);
+#if ENABLE_NURATES
   void RadiationM1SingleZoneTest(ParameterInput *pin, const bool restart);
+#endif
  private:
   Mesh *pmy_mesh_;
 };
