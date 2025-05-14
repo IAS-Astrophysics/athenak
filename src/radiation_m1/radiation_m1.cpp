@@ -37,10 +37,8 @@ RadiationM1::RadiationM1(MeshBlockPack *ppack, ParameterInput *pin)
   params.theta_limiter = pin->GetOrAddBoolean("radiation_m1", "theta_limiter", true);
   params.closure_epsilon = pin->GetOrAddReal("radiation_m1", "closure_epsilon", 1e-14);
   params.closure_maxiter = pin->GetOrAddInteger("radiation_m1", "closure_maxiter", 164);
-  params.inv_closure_epsilon =
-      pin->GetOrAddReal("radiation_m1", "inv_closure_epsilon", 1e-15);
-  params.inv_closure_maxiter =
-      pin->GetOrAddInteger("radiation_m1", "inv_closure_maxiter", 64);
+  params.inv_closure_epsilon = pin->GetOrAddReal("radiation_m1", "inv_closure_epsilon", 1e-15);
+  params.inv_closure_maxiter = pin->GetOrAddInteger("radiation_m1", "inv_closure_maxiter", 64);
   params.rad_N_floor = pin->GetOrAddReal("radiation_m1", "rad_N_floor", 1e-14);
   params.rad_E_floor = pin->GetOrAddReal("radiation_m1", "rad_E_floor", 1e-14);
   params.rad_eps = pin->GetOrAddReal("radiation_m1", "rad_eps", 1e-14);
@@ -49,10 +47,8 @@ RadiationM1::RadiationM1(MeshBlockPack *ppack, ParameterInput *pin)
   params.source_maxiter = pin->GetOrAddInteger("radiation_m1", "source_maxiter", 164);
   params.source_Ye_min = pin->GetOrAddReal("radiation_m1", "source_Ye_min", 0);
   params.source_Ye_max = pin->GetOrAddReal("radiation_m1", "source_Ye_max", 0.6);
-  params.source_thick_limit =
-      pin->GetOrAddReal("radiation_m1", "source_thick_limit", 20.);
-  params.source_therm_limit =
-      pin->GetOrAddReal("radiation_m1", "source_therm_limit", -1.);
+  params.source_thick_limit = pin->GetOrAddReal("radiation_m1", "source_thick_limit", 20.);
+  params.source_therm_limit = pin->GetOrAddReal("radiation_m1", "source_therm_limit", -1.);
   params.source_scat_limit = pin->GetOrAddReal("radiation_m1", "source_scat_limit", -1.);
   params.minmod_theta = pin->GetOrAddReal("radiation_m1", "minmod_theta", 1);
   nspecies = pin->GetOrAddInteger("radiation_m1", "num_species", 1);
@@ -89,16 +85,11 @@ RadiationM1::RadiationM1(MeshBlockPack *ppack, ParameterInput *pin)
   } else if (opacity_type == "bns-nurates") {
     params.opacity_type = BnsNurates;
 
-    nurates_params.nurates_quad_nx =
-        pin->GetOrAddInteger("bns_nurates", "nurates_quad_nx", 10);
-    nurates_params.nurates_quad_ny =
-        pin->GetOrAddInteger("bns_nurates", "nurates_quad_ny", 10);
-    nurates_params.opacity_tau_trap =
-        pin->GetOrAddReal("bns_nurates", "opacity_tau_trap", 1.0);
-    nurates_params.opacity_tau_delta =
-        pin->GetOrAddReal("bns_nurate", "opacity_tau_delta", 1.0);
-    nurates_params.opacity_corr_fac_max =
-        pin->GetOrAddReal("bns_nurates", "opacity_corr_fac_max", 3.0);
+    nurates_params.nurates_quad_nx = pin->GetOrAddInteger("bns_nurates", "nurates_quad_nx", 10);
+    nurates_params.nurates_quad_ny = pin->GetOrAddInteger("bns_nurates", "nurates_quad_ny", 10);
+    nurates_params.opacity_tau_trap = pin->GetOrAddReal("bns_nurates", "opacity_tau_trap", 1.0);
+    nurates_params.opacity_tau_delta = pin->GetOrAddReal("bns_nurate", "opacity_tau_delta", 1.0);
+    nurates_params.opacity_corr_fac_max = pin->GetOrAddReal("bns_nurates", "opacity_corr_fac_max", 3.0);
     nurates_params.rho_min_cgs = pin->GetOrAddReal("bns_nurates", "rho_min_cgs", 0.);
     nurates_params.temp_min_mev = pin->GetOrAddReal("bns_nurates", "temp_min_mev", 0.);
 
@@ -106,25 +97,19 @@ RadiationM1::RadiationM1(MeshBlockPack *ppack, ParameterInput *pin)
     nurates_params.use_pair = pin->GetOrAddBoolean("bns_nurates", "use_pair", true);
     nurates_params.use_brem = pin->GetOrAddBoolean("bns_nurates", "use_brem", true);
     nurates_params.use_iso = pin->GetOrAddBoolean("bns_nurates", "use_iso", true);
-    nurates_params.use_inelastic_scatt =
-        pin->GetOrAddBoolean("bns_nurates", "use_inelastic_scatt", true);
+    nurates_params.use_inelastic_scatt = pin->GetOrAddBoolean("bns_nurates", "use_inelastic_scatt", true);
     nurates_params.use_WM_ab = pin->GetOrAddBoolean("bns_nurates", "use_WM_ab", true);
     nurates_params.use_WM_sc = pin->GetOrAddBoolean("bns_nurates", "use_WM_sc", true);
     nurates_params.use_dU = pin->GetOrAddBoolean("bns_nurates", "use_dU", true);
     nurates_params.use_dm_eff = pin->GetOrAddBoolean("bns_nurates", "use_dm_eff", true);
-    nurates_params.use_equilibrium_distribution =
-        pin->GetOrAddBoolean("bns_nurates", "use_equilibrium_distribution", false);
-    nurates_params.use_kirchhoff_law =
-        pin->GetOrAddBoolean("bns_nurates", "use_kirchoff_law", false);
+    nurates_params.use_equilibrium_distribution = pin->GetOrAddBoolean("bns_nurates", "use_equilibrium_distribution", false);
+    nurates_params.use_kirchhoff_law = pin->GetOrAddBoolean("bns_nurates", "use_kirchoff_law", false);
 
     nurates_params.my_quadrature_1d.nx = nurates_params.nurates_quad_nx;
     nurates_params.my_quadrature_1d.dim = 1;
     nurates_params.my_quadrature_1d.type = kGauleg;
     nurates_params.my_quadrature_1d.x1 = 0.;
     nurates_params.my_quadrature_1d.x2 = 1.;
-    //@TODO: fix this!
-    //GaussLegendreMultiD(&nurates_params.my_quadrature_1d);
-
     nurates_params.my_quadrature_2d.nx = nurates_params.nurates_quad_nx;
     nurates_params.my_quadrature_2d.ny = nurates_params.nurates_quad_ny;
     nurates_params.my_quadrature_2d.dim = 2;
@@ -133,7 +118,7 @@ RadiationM1::RadiationM1(MeshBlockPack *ppack, ParameterInput *pin)
     nurates_params.my_quadrature_2d.x2 = 1.;
     nurates_params.my_quadrature_2d.y1 = 0.;
     nurates_params.my_quadrature_2d.y2 = 1.;
-    //@TODO: fix this!
+    //GaussLegendreMultiD(&nurates_params.my_quadrature_1d);
     // GaussLegendreMultiD(&nurates_params.my_quadrature_2d);
   } else if (opacity_type == "none") {
     params.opacity_type = None;

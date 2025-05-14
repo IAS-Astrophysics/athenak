@@ -82,6 +82,7 @@ TaskStatus RadiationM1::TimeUpdate_(Driver *d, int stage) {
   auto &params_ = pmy_pack->pradm1->params;
 
   auto &w0_ = pmy_pack->pmhd->w0;
+  auto &umhd0_ = pmy_pack->pmhd->u0;
 
   auto &BrentFunc_ = pmy_pack->pradm1->BrentFunc;
   auto &HybridsjFunc_ = pmy_pack->pradm1->HybridsjFunc;
@@ -457,7 +458,7 @@ TaskStatus RadiationM1::TimeUpdate_(Driver *d, int stage) {
           // [G] Limit sources
           theta = 1.0;
           if (params_.theta_limiter && params_.source_limiter >= 0) {
-            Real tau{};
+            Real tau = umhd0_(m, IEN, k, j, i);
             theta = 1.0;
             Real DTau_sum = 0.0;
             for (int nuidx = 0; nuidx < nspecies_; ++nuidx) {
