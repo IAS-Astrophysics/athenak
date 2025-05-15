@@ -162,7 +162,7 @@ RadiationM1::RadiationM1(MeshBlockPack *ppack, ParameterInput *pin)
   Kokkos::realloc(uflx.x2f, nmb, nvarstot, ncells3, ncells2, ncells1);
   Kokkos::realloc(uflx.x3f, nmb, nvarstot, ncells3, ncells2, ncells1);
 
-  // allocate velocity and Eddington factor
+  // allocate 4-velocity and Eddington factor
   if (nspecies == 1) {
     Kokkos::realloc(u_mu_data, nmb, 4, ncells3, ncells2, ncells1);
     u_mu.InitWithShallowSlice(u_mu_data, 0, 3);

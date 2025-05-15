@@ -203,12 +203,24 @@ TaskStatus RadiationM1::TimeUpdate_(Driver *d, int stage) {
         AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> v_d{};
         AthenaPointTensor<Real, TensorSymm::NONE, 4, 2> proj_ud{};
 
-        Real w_lorentz = u_mu_(m, 0, k, j, i);
-        pack_u_u(u_mu_(m, 0, k, j, i), u_mu_(m, 1, k, j, i), u_mu_(m, 2, k, j, i),
-                 u_mu_(m, 3, k, j, i), u_u);
+        Real w_lorentz{};
+        if (nspecies_ > 1) {
+          w_lorentz = Kokkos::sqrt(1. + w0_(m, IVX, k, j, i) * w0_(m, IVX, k, j, i) +
+                                   w0_(m, IVY, k, j, i) * w0_(m, IVY, k, j, i) +
+                                   w0_(m, IVZ, k, j, i) * w0_(m, IVZ, k, j, i));
+          pack_u_u(w_lorentz / adm.alpha(m, k, j, i),
+                   w0_(m, IVX, k, j, i) - w_lorentz * beta_u(1) / adm.alpha(m, k, j, i),
+                   w0_(m, IVY, k, j, i) - w_lorentz * beta_u(2) / adm.alpha(m, k, j, i),
+                   w0_(m, IVZ, k, j, i) - w_lorentz * beta_u(3) / adm.alpha(m, k, j, i),
+                   u_u);
+        } else {
+          pack_u_u(u_mu_(m, 0, k, j, i), u_mu_(m, 1, k, j, i), u_mu_(m, 2, k, j, i),
+                   u_mu_(m, 3, k, j, i), u_u);
+        }
+        pack_v_u(u_u(0), u_u(1), u_u(2), u_u(3), adm.alpha(m, k, j, i),
+                 adm.beta_u(m, 0, k, j, i), adm.beta_u(m, 1, k, j, i),
+                 adm.beta_u(m, 2, k, j, i), v_u);
         tensor_contract(g_dd, u_u, u_d);
-        pack_v_u(u_mu_(m, 0, k, j, i), u_mu_(m, 1, k, j, i), u_mu_(m, 2, k, j, i),
-                 u_mu_(m, 3, k, j, i), v_u);
         tensor_contract(g_dd, v_u, v_d);
         calc_proj(u_d, u_u, proj_ud);
 

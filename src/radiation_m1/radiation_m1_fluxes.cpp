@@ -16,9 +16,8 @@
 namespace radiationm1 {
 
 KOKKOS_INLINE_FUNCTION
-void CalcFlux(const int m, const int k, const int j, const int i,
-              const int nuidx, const int dir, const DvceArray5D<Real> &u0_,
-              const DvceArray5D<Real> &w0_,
+void CalcFlux(const int m, const int k, const int j, const int i, const int nuidx,
+              const int dir, const DvceArray5D<Real> &u0_, const DvceArray5D<Real> &w0_,
               const DvceArray5D<Real> &chi_,
               const AthenaTensor<Real, TensorSymm::NONE, 4, 1> &u_mu_,
               const adm::ADM::ADM_vars &adm, const RadiationM1Params params_,
@@ -37,14 +36,12 @@ void CalcFlux(const int m, const int k, const int j, const int i,
                        adm.beta_u(m, 1, k, j, i), adm.beta_u(m, 2, k, j, i),
                        adm.g_dd(m, 0, 0, k, j, i), adm.g_dd(m, 0, 1, k, j, i),
                        adm.g_dd(m, 0, 2, k, j, i), adm.g_dd(m, 1, 1, k, j, i),
-                       adm.g_dd(m, 1, 2, k, j, i), adm.g_dd(m, 2, 2, k, j, i),
-                       garr_dd);
+                       adm.g_dd(m, 1, 2, k, j, i), adm.g_dd(m, 2, 2, k, j, i), garr_dd);
   adm::SpacetimeUpperMetric(
-      adm.alpha(m, k, j, i), adm.beta_u(m, 0, k, j, i),
-      adm.beta_u(m, 1, k, j, i), adm.beta_u(m, 2, k, j, i),
-      adm.g_dd(m, 0, 0, k, j, i), adm.g_dd(m, 0, 1, k, j, i),
-      adm.g_dd(m, 0, 2, k, j, i), adm.g_dd(m, 1, 1, k, j, i),
-      adm.g_dd(m, 1, 2, k, j, i), adm.g_dd(m, 2, 2, k, j, i), garr_uu);
+      adm.alpha(m, k, j, i), adm.beta_u(m, 0, k, j, i), adm.beta_u(m, 1, k, j, i),
+      adm.beta_u(m, 2, k, j, i), adm.g_dd(m, 0, 0, k, j, i), adm.g_dd(m, 0, 1, k, j, i),
+      adm.g_dd(m, 0, 2, k, j, i), adm.g_dd(m, 1, 1, k, j, i), adm.g_dd(m, 1, 2, k, j, i),
+      adm.g_dd(m, 2, 2, k, j, i), garr_uu);
   pack_beta_u(adm.beta_u(m, 0, k, j, i), adm.beta_u(m, 1, k, j, i),
               adm.beta_u(m, 2, k, j, i), beta_u);
   tensor_contract(g_dd, beta_u, beta_d);
@@ -56,9 +53,9 @@ void CalcFlux(const int m, const int k, const int j, const int i,
   }
   for (int a = 1; a < 4; ++a) {
     for (int b = 1; b < 4; ++b) {
-      gamma_uu(a - 1, b - 1) = garr_uu[a + b * 4] + beta_u(a) * beta_u(b) /
-                                                        (adm.alpha(m, k, j, i) *
-                                                         adm.alpha(m, k, j, i));
+      gamma_uu(a - 1, b - 1) =
+          garr_uu[a + b * 4] +
+          beta_u(a) * beta_u(b) / (adm.alpha(m, k, j, i) * adm.alpha(m, k, j, i));
     }
   }
 
@@ -73,17 +70,21 @@ void CalcFlux(const int m, const int k, const int j, const int i,
     w_lorentz = Kokkos::sqrt(1. + w0_(m, IVX, k, j, i) * w0_(m, IVX, k, j, i) +
                              w0_(m, IVY, k, j, i) * w0_(m, IVY, k, j, i) +
                              w0_(m, IVZ, k, j, i) * w0_(m, IVZ, k, j, i));
-    pack_u_u(w_lorentz, w0_(m, IVX, k, j, i), w0_(m, IVY, k, j, i),
-             w0_(m, IVZ, k, j, i), u_u);
-    pack_v_u(w_lorentz, w0_(m, IVX, k, j, i), w0_(m, IVY, k, j, i),
-             w0_(m, IVZ, k, j, i), v_u);
+    pack_u_u(w_lorentz / adm.alpha(m, k, j, i),
+             w0_(m, IVX, k, j, i) -
+                 w_lorentz * adm.beta_u(m, 0, k, j, i) / adm.alpha(m, k, j, i),
+             w0_(m, IVY, k, j, i) -
+                 w_lorentz * adm.beta_u(m, 1, k, j, i) / adm.alpha(m, k, j, i),
+             w0_(m, IVZ, k, j, i) -
+                 w_lorentz * adm.beta_u(m, 2, k, j, i) / adm.alpha(m, k, j, i),
+             u_u);
   } else {
-    w_lorentz = u_mu_(m, 0, k, j, i);
     pack_u_u(u_mu_(m, 0, k, j, i), u_mu_(m, 1, k, j, i), u_mu_(m, 2, k, j, i),
              u_mu_(m, 3, k, j, i), u_u);
-    pack_v_u(u_mu_(m, 0, k, j, i), u_mu_(m, 1, k, j, i), u_mu_(m, 2, k, j, i),
-             u_mu_(m, 3, k, j, i), v_u);
   }
+  pack_v_u(u_u(0), u_u(1), u_u(2), u_u(3), adm.alpha(m, k, j, i),
+           adm.beta_u(m, 0, k, j, i), adm.beta_u(m, 1, k, j, i),
+           adm.beta_u(m, 2, k, j, i), v_u);
   tensor_contract(g_dd, u_u, u_d);
   tensor_contract(g_dd, v_u, v_d);
   calc_proj(u_d, u_u, proj_ud);
@@ -141,10 +142,8 @@ void CalcFlux(const int m, const int k, const int j, const int i,
 
   // Speed of light -- note that gamma_uu has NDIM=3
   const Real clam[2] = {
-      adm.alpha(m, k, j, i) * std::sqrt(gamma_uu(dir - 1, dir - 1)) -
-          beta_u(dir),
-      adm.alpha(m, k, j, i) * std::sqrt(gamma_uu(dir - 1, dir - 1)) +
-          beta_u(dir)};
+      adm.alpha(m, k, j, i) * std::sqrt(gamma_uu(dir - 1, dir - 1)) - beta_u(dir),
+      adm.alpha(m, k, j, i) * std::sqrt(gamma_uu(dir - 1, dir - 1)) + beta_u(dir)};
   const Real clight = Kokkos::max(Kokkos::abs(clam[0]), Kokkos::abs(clam[1]));
   cmax = clight;
 }
@@ -182,14 +181,13 @@ TaskStatus RadiationM1::CalculateFluxes(Driver *pdrive, int stage) {
   par_for(
       "radiation_m1_flux_x1", DevExeSpace(), 0, nmb1, kl, ku, jl, ju, il, iu, 0,
       nspecies_ - 1,
-      KOKKOS_LAMBDA(const int m, const int k, const int j, const int i,
-                    const int nuidx) {
+      KOKKOS_LAMBDA(const int m, const int k, const int j, const int i, const int nuidx) {
         int dir = 1;
         Real flux_j[5]{};
         Real flux_jp1[5]{};
         Real cmax_j, cmax_jp1;
-        CalcFlux(m, k, j, i - 1, nuidx, dir, u0_, w0_, chi_, u_mu_, adm, params_,
-                 nvars_, nspecies_, flux_j, cmax_j);
+        CalcFlux(m, k, j, i - 1, nuidx, dir, u0_, w0_, chi_, u_mu_, adm, params_, nvars_,
+                 nspecies_, flux_j, cmax_j);
         CalcFlux(m, k, j, i, nuidx, dir, u0_, w0_, chi_, u_mu_, adm, params_, nvars_,
                  nspecies_, flux_jp1, cmax_jp1);
 
@@ -199,21 +197,16 @@ TaskStatus RadiationM1::CalculateFluxes(Driver *pdrive, int stage) {
 
         Real kappa_ave = 0;
         if (params_.matter_sources) {
-          kappa_ave =
-              0.5 *
-              (abs_1_(m, nuidx, k, j, i - 1) + abs_1_(m, nuidx, k, j, i) +
-               scat_1_(m, nuidx, k, j, i - 1) + scat_1_(m, nuidx, k, j, i));
+          kappa_ave = 0.5 * (abs_1_(m, nuidx, k, j, i - 1) + abs_1_(m, nuidx, k, j, i) +
+                             scat_1_(m, nuidx, k, j, i - 1) + scat_1_(m, nuidx, k, j, i));
         }
         Real A_jp12 = Kokkos::min(1., 1. / (kappa_ave * mbsize.d_view(m).dx1));
 
         for (int momidx = 0; momidx < nvars_; ++momidx) {
-          const Real ujm =
-              u0_(m, CombinedIdx(nuidx, momidx, nvars_), k, j, i - 2);
-          const Real uj =
-              u0_(m, CombinedIdx(nuidx, momidx, nvars_), k, j, i - 1);
+          const Real ujm = u0_(m, CombinedIdx(nuidx, momidx, nvars_), k, j, i - 2);
+          const Real uj = u0_(m, CombinedIdx(nuidx, momidx, nvars_), k, j, i - 1);
           const Real ujp = u0_(m, CombinedIdx(nuidx, momidx, nvars_), k, j, i);
-          const Real ujpp =
-              u0_(m, CombinedIdx(nuidx, momidx, nvars_), k, j, i + 1);
+          const Real ujpp = u0_(m, CombinedIdx(nuidx, momidx, nvars_), k, j, i + 1);
 
           const Real dup = ujpp - ujp;
           const Real duc = ujp - uj;
@@ -236,9 +229,8 @@ TaskStatus RadiationM1::CalculateFluxes(Driver *pdrive, int stage) {
                   2.;
 
           flx1_(m, momidx, k, j, i) =
-              flux_jp12_ho[momidx] -
-              (sawtooth ? 1 : A_jp12) * (1 - phi_jp12) *
-                  (flux_jp12_ho[momidx] - flux_jp12_lo[momidx]);
+              flux_jp12_ho[momidx] - (sawtooth ? 1 : A_jp12) * (1 - phi_jp12) *
+                                         (flux_jp12_ho[momidx] - flux_jp12_lo[momidx]);
         }
       });
 
@@ -250,8 +242,8 @@ TaskStatus RadiationM1::CalculateFluxes(Driver *pdrive, int stage) {
     il = is, iu = ie, jl = js, ju = je + 1, kl = ks, ku = ke;
 
     par_for(
-        "radiation_m1_flux_x2", DevExeSpace(), 0, nmb1, kl, ku, jl, ju, il, iu,
-        0, nspecies_ - 1,
+        "radiation_m1_flux_x2", DevExeSpace(), 0, nmb1, kl, ku, jl, ju, il, iu, 0,
+        nspecies_ - 1,
         KOKKOS_LAMBDA(const int m, const int k, const int j, const int i,
                       const int nuidx) {
           int dir = 2;
@@ -260,8 +252,8 @@ TaskStatus RadiationM1::CalculateFluxes(Driver *pdrive, int stage) {
           Real cmax_j, cmax_jp1;
           CalcFlux(m, k, j - 1, i, nuidx, dir, u0_, w0_, chi_, u_mu_, adm, params_,
                    nvars_, nspecies_, flux_j, cmax_j);
-          CalcFlux(m, k, j, i, nuidx, dir, u0_, w0_, chi_, u_mu_, adm, params_,
-                   nvars_, nspecies_, flux_jp1, cmax_jp1);
+          CalcFlux(m, k, j, i, nuidx, dir, u0_, w0_, chi_, u_mu_, adm, params_, nvars_,
+                   nspecies_, flux_jp1, cmax_jp1);
 
           Real flux_jp12_lo[5]{};
           Real flux_jp12_ho[5]{};
@@ -270,22 +262,16 @@ TaskStatus RadiationM1::CalculateFluxes(Driver *pdrive, int stage) {
           Real kappa_ave = 0;
           if (params_.matter_sources) {
             kappa_ave =
-                0.5 *
-                (abs_1_(m, nuidx, k, j - 1, i) + abs_1_(m, nuidx, k, j, i) +
-                 scat_1_(m, nuidx, k, j - 1, i) + scat_1_(m, nuidx, k, j, i));
+                0.5 * (abs_1_(m, nuidx, k, j - 1, i) + abs_1_(m, nuidx, k, j, i) +
+                       scat_1_(m, nuidx, k, j - 1, i) + scat_1_(m, nuidx, k, j, i));
           }
-          Real A_jp12 =
-              Kokkos::min(1., 1. / (kappa_ave * mbsize.d_view(m).dx1));
+          Real A_jp12 = Kokkos::min(1., 1. / (kappa_ave * mbsize.d_view(m).dx1));
 
           for (int momidx = 0; momidx < nvars_; ++momidx) {
-            const Real ujm =
-                u0_(m, CombinedIdx(nuidx, momidx, nvars_), k, j - 2, i);
-            const Real uj =
-                u0_(m, CombinedIdx(nuidx, momidx, nvars_), k, j - 1, i);
-            const Real ujp =
-                u0_(m, CombinedIdx(nuidx, momidx, nvars_), k, j, i);
-            const Real ujpp =
-                u0_(m, CombinedIdx(nuidx, momidx, nvars_), k, j + 1, i);
+            const Real ujm = u0_(m, CombinedIdx(nuidx, momidx, nvars_), k, j - 2, i);
+            const Real uj = u0_(m, CombinedIdx(nuidx, momidx, nvars_), k, j - 1, i);
+            const Real ujp = u0_(m, CombinedIdx(nuidx, momidx, nvars_), k, j, i);
+            const Real ujpp = u0_(m, CombinedIdx(nuidx, momidx, nvars_), k, j + 1, i);
 
             const Real dup = ujpp - ujp;
             const Real duc = ujp - uj;
@@ -308,9 +294,8 @@ TaskStatus RadiationM1::CalculateFluxes(Driver *pdrive, int stage) {
                     2.;
 
             flx2_(m, momidx, k, j, i) =
-                flux_jp12_ho[momidx] -
-                (sawtooth ? 1 : A_jp12) * (1 - phi_jp12) *
-                    (flux_jp12_ho[momidx] - flux_jp12_lo[momidx]);
+                flux_jp12_ho[momidx] - (sawtooth ? 1 : A_jp12) * (1 - phi_jp12) *
+                                           (flux_jp12_ho[momidx] - flux_jp12_lo[momidx]);
           }
         });
   }
@@ -323,8 +308,8 @@ TaskStatus RadiationM1::CalculateFluxes(Driver *pdrive, int stage) {
     il = is, iu = ie, jl = js, ju = je, kl = ks, ku = ke + 1;
 
     par_for(
-        "radiation_m1_flux_x3", DevExeSpace(), 0, nmb1, kl, ku, jl, ju, il, iu,
-        0, nspecies_ - 1,
+        "radiation_m1_flux_x3", DevExeSpace(), 0, nmb1, kl, ku, jl, ju, il, iu, 0,
+        nspecies_ - 1,
         KOKKOS_LAMBDA(const int m, const int k, const int j, const int i,
                       const int nuidx) {
           int dir = 3;
@@ -333,8 +318,8 @@ TaskStatus RadiationM1::CalculateFluxes(Driver *pdrive, int stage) {
           Real cmax_j, cmax_jp1;
           CalcFlux(m, k - 1, j, i, nuidx, dir, u0_, w0_, chi_, u_mu_, adm, params_,
                    nvars_, nspecies_, flux_j, cmax_j);
-          CalcFlux(m, k, j, i, nuidx, dir, u0_, w0_, chi_, u_mu_, adm, params_,
-                   nvars_, nspecies_, flux_jp1, cmax_jp1);
+          CalcFlux(m, k, j, i, nuidx, dir, u0_, w0_, chi_, u_mu_, adm, params_, nvars_,
+                   nspecies_, flux_jp1, cmax_jp1);
 
           Real flux_jp12_lo[5]{};
           Real flux_jp12_ho[5]{};
@@ -343,22 +328,16 @@ TaskStatus RadiationM1::CalculateFluxes(Driver *pdrive, int stage) {
           Real kappa_ave = 0;
           if (params_.matter_sources) {
             kappa_ave =
-                0.5 *
-                (abs_1_(m, nuidx, k - 1, j, i) + abs_1_(m, nuidx, k, j, i) +
-                 scat_1_(m, nuidx, k - 1, j, i) + scat_1_(m, nuidx, k, j, i));
+                0.5 * (abs_1_(m, nuidx, k - 1, j, i) + abs_1_(m, nuidx, k, j, i) +
+                       scat_1_(m, nuidx, k - 1, j, i) + scat_1_(m, nuidx, k, j, i));
           }
-          Real A_jp12 =
-              Kokkos::min(1., 1. / (kappa_ave * mbsize.d_view(m).dx1));
+          Real A_jp12 = Kokkos::min(1., 1. / (kappa_ave * mbsize.d_view(m).dx1));
 
           for (int momidx = 0; momidx < nvars_; ++momidx) {
-            const Real ujm =
-                u0_(m, CombinedIdx(nuidx, momidx, nvars_), k - 2, j, i);
-            const Real uj =
-                u0_(m, CombinedIdx(nuidx, momidx, nvars_), k - 1, j, i);
-            const Real ujp =
-                u0_(m, CombinedIdx(nuidx, momidx, nvars_), k, j, i);
-            const Real ujpp =
-                u0_(m, CombinedIdx(nuidx, momidx, nvars_), k + 1, j, i);
+            const Real ujm = u0_(m, CombinedIdx(nuidx, momidx, nvars_), k - 2, j, i);
+            const Real uj = u0_(m, CombinedIdx(nuidx, momidx, nvars_), k - 1, j, i);
+            const Real ujp = u0_(m, CombinedIdx(nuidx, momidx, nvars_), k, j, i);
+            const Real ujpp = u0_(m, CombinedIdx(nuidx, momidx, nvars_), k + 1, j, i);
 
             const Real dup = ujpp - ujp;
             const Real duc = ujp - uj;
@@ -381,9 +360,8 @@ TaskStatus RadiationM1::CalculateFluxes(Driver *pdrive, int stage) {
                     2.;
 
             flx3_(m, momidx, k, j, i) =
-                flux_jp12_ho[momidx] -
-                (sawtooth ? 1 : A_jp12) * (1 - phi_jp12) *
-                    (flux_jp12_ho[momidx] - flux_jp12_lo[momidx]);
+                flux_jp12_ho[momidx] - (sawtooth ? 1 : A_jp12) * (1 - phi_jp12) *
+                                           (flux_jp12_ho[momidx] - flux_jp12_lo[momidx]);
           }
         });
   }

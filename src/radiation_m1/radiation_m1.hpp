@@ -92,7 +92,6 @@ class RadiationM1 {
   RadiationM1TaskIDs id;          // container to hold names of TaskIDs
   Real dtnew{};
 
-  // DvceArray1D<Real> beam_source_vals;  // values of 1d beams
   RadiationM1Beam rad_m1_beam;
 
   // functions...
