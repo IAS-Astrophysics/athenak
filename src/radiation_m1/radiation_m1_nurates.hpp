@@ -1,6 +1,7 @@
 #ifndef RADIATION_M1_NURATES_HPP
 #define RADIATION_M1_NURATES_HPP
 #ifdef ENABLE_NURATES
+
 #include "athena.hpp"
 #include "bns_nurates/include/bns_nurates.hpp"
 #include "bns_nurates/include/constants.hpp"
@@ -10,9 +11,33 @@
 #include "bns_nurates/include/m1_opacities.hpp"
 #include "eos/primitive-solver/eos.hpp"
 #include "radiation_m1_fermi.hpp"
-#include "radiation_m1_params.hpp"
 
 namespace radiationm1 {
+
+struct NuratesParams {
+  int nurates_quad_nx;     // no. of quadrature points for 1d integration (bns_nurates)
+  int nurates_quad_ny;     // no. of quadrature points for 2d integration (bns_nurates)
+  Real opacity_tau_trap;   // incl. effects of neutrino trapping above this optical depth
+  Real opacity_tau_delta;  // range of optical depths over which trapping is introduced
+  Real opacity_corr_fac_max;  // maximum correction factor for optically thin regime
+  Real rho_min_cgs;
+  Real temp_min_mev;
+
+  bool use_abs_em;
+  bool use_pair;
+  bool use_brem;
+  bool use_iso;
+  bool use_inelastic_scatt;
+  bool use_WM_ab;
+  bool use_WM_sc;
+  bool use_dU;
+  bool use_dm_eff;
+  bool use_equilibrium_distribution;
+  bool use_kirchhoff_law;
+
+  MyQuadrature my_quadrature_1d;
+  MyQuadrature my_quadrature_2d;
+};
 
 //! \fn void bns_nurates(Real &nb, Real &temp, Real &ye, Real &mu_n, Real &mu_p,
 //!                      Real &mu_e, Real &n_nue, Real &j_nue, Real &chi_nue,

@@ -3,9 +3,7 @@
 
 #include "athena.hpp"
 #include "athena_tensor.hpp"
-#ifdef ENABLE_NURATES
-#include "bns_nurates/include/bns_nurates.hpp"
-#endif
+
 //========================================================================================
 // AthenaXXX astrophysical plasma code
 // Copyright(C) 2020 James M. Stone <jmstone@ias.edu> and the Athena code team
@@ -160,32 +158,6 @@ struct SrcParams {
   AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> S_d{};
   Real Edot{};
   AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> tS_d{};
-};
-
-struct NuratesParams {
-  int nurates_quad_nx;     // no. of quadrature points for 1d integration (bns_nurates)
-  int nurates_quad_ny;     // no. of quadrature points for 2d integration (bns_nurates)
-  Real opacity_tau_trap;   // incl. effects of neutrino trapping above this optical depth
-  Real opacity_tau_delta;  // range of optical depths over which trapping is introduced
-  Real opacity_corr_fac_max;  // maximum correction factor for optically thin regime
-  Real rho_min_cgs;
-  Real temp_min_mev;
-
-  bool use_abs_em;
-  bool use_pair;
-  bool use_brem;
-  bool use_iso;
-  bool use_inelastic_scatt;
-  bool use_WM_ab;
-  bool use_WM_sc;
-  bool use_dU;
-  bool use_dm_eff;
-  bool use_equilibrium_distribution;
-  bool use_kirchhoff_law;
-#ifdef ENABLE_NURATES
-  MyQuadrature my_quadrature_1d;
-  MyQuadrature my_quadrature_2d;
-#endif
 };
 
 }  // namespace radiationm1

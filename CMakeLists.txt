@@ -80,7 +80,6 @@ else()
 endif()
 
 # set nurates macro (true/false)
-message(STATUS "Value of Athena_ENABLE_NURATES: ${Athena_ENABLE_NURATES}")
 set(ENABLE_NURATES OFF)
 if(Athena_ENABLE_NURATES)
   set(ENABLE_NURATES ON)
