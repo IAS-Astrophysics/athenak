@@ -18,8 +18,10 @@
 #include "parameter_input.hpp"
 #include "radiation_m1/radiation_m1_params.hpp"
 #include "radiation_m1/radiation_m1_roots_fns.hpp"
+
 #include "tasklist/task_list.hpp"
 #ifdef ENABLE_NURATES
+#include "radiation_m1/radiation_m1_nurates.hpp"
 #include "bns_nurates/include/bns_nurates.hpp"
 #endif
 
@@ -65,8 +67,9 @@ class RadiationM1 {
   BrentFunctor BrentFunc;        // function to minimize for closure
   HybridsjFunctor HybridsjFunc;  // function to minimize for multiroots solver
 
+#ifdef ENABLE_NURATES
   NuratesParams nurates_params;  // pars for nurates (choice of reactions, quadratures)
-
+#endif
   ToyOpacityFn toy_opacity_fn = nullptr;  // use only if toy opacities enabled
 
   int nvars;                   // no. of evolved variables per species
