@@ -171,40 +171,29 @@ add_executable(
         z4c/cce/cce.cpp
 
         radiation_m1/radiation_m1.cpp
-        radiation_m1/radiation_m1.hpp
         radiation_m1/radiation_m1_tasks.cpp
         radiation_m1/radiation_m1_update.cpp
         radiation_m1/radiation_m1_fluxes.cpp
         radiation_m1/radiation_m1_helpers.hpp
         radiation_m1/radiation_m1_newdt.cpp
         radiation_m1/radiation_m1_macro.hpp
-        radiation_m1/radiation_m1_sources.hpp
-        radiation_m1/radiation_m1_setmask.hpp
-        radiation_m1/radiation_m1_roots_brent.hpp
         radiation_m1/radiation_m1_calc_closure.cpp
         bvals/physics/radiation_m1_bcs.cpp
         radiation_m1/radiation_m1_beams.cpp
-        radiation_m1/radiation_m1_tensors.hpp
         pgen/tests/rad_m1_beams.cpp
-        radiation_m1/radiation_m1_calc_closure.hpp
-        radiation_m1/radiation_m1_params.hpp
         pgen/tests/rad_m1_brent.cpp
-        radiation_m1/radiation_m1_roots_hybridsj.hpp
-        radiation_m1/radiation_m1_linalg.hpp
-        pgen/tests/rad_m1_hybridsj.cpp
         radiation_m1/radiation_m1_calc_opacities_toy.cpp
         pgen/tests/rad_m1_latticetest.cpp
         pgen/tests/rad_m1_spheretest.cpp
+        pgen/tests/rad_m1_hybridsj.cpp
 )
 
 # add bns_nurates
 if (ENABLE_NURATES)
+    target_compile_definitions(athena PUBLIC ENABLE_NURATES)
     target_sources(athena
         PRIVATE
-            radiation_m1/radiation_m1_nurates.hpp
             radiation_m1/radiation_m1_calc_opacities_nurates.cpp
-            radiation_m1/radiation_m1_photon_opacities.hpp
-            radiation_m1/radiation_m1_fermi.hpp
             pgen/tests/rad_m1_singlezone.cpp
     )
 endif()

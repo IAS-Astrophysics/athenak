@@ -121,11 +121,8 @@ RadiationM1::RadiationM1(MeshBlockPack *ppack, ParameterInput *pin)
     nurates_params.my_quadrature_2d.x2 = 1.;
     nurates_params.my_quadrature_2d.y1 = 0.;
     nurates_params.my_quadrature_2d.y2 = 1.;
-    GaussLegendreMultiD(&nurates_params.my_quadrature_1d);
-    GaussLegendreMultiD(&nurates_params.my_quadrature_2d);
-#else
-    printf("Must compile executable with nurates flag!\n");
-    exit(EXIT_FAILURE);
+    //GaussLegendreMultiD(&nurates_params.my_quadrature_1d);
+    //GaussLegendreMultiD(&nurates_params.my_quadrature_2d);
 #endif
   } else if (opacity_type == "none") {
     params.opacity_type = None;
