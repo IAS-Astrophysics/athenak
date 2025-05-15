@@ -176,11 +176,14 @@ void pack_u_u(const Real &u_mu_0, const Real &u_mu_1, const Real &u_mu_2,
 //  \brief populate v_u
 KOKKOS_INLINE_FUNCTION
 void pack_v_u(const Real &u_mu_0, const Real &u_mu_1, const Real &u_mu_2,
-              const Real &u_mu_3, AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &v_u) {
+              const Real &u_mu_3, const Real alpha, const Real betax_u,
+              const Real betay_u, const Real betaz_u,
+              AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &v_u) {
+  const Real w_lorentz = u_mu_0 * alpha;
   v_u(0) = 0;
-  v_u(1) = u_mu_1 / u_mu_0;
-  v_u(2) = u_mu_2 / u_mu_0;
-  v_u(3) = u_mu_3 / u_mu_0;
+  v_u(1) = u_mu_1 / w_lorentz + betax_u / alpha;
+  v_u(2) = u_mu_2 / w_lorentz + betay_u / alpha;
+  v_u(3) = u_mu_3 / w_lorentz + betaz_u / alpha;
 }
 
 //----------------------------------------------------------------------------------------
