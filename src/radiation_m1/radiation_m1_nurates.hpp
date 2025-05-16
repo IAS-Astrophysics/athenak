@@ -254,43 +254,35 @@ void bns_nurates(Real &nb, Real &temp, Real &ye, Real &mu_n, Real &mu_p, Real &m
 }
 
 // Note: everything in and out in code units
-template <class EOSPolicy, class ErrorPolicy>
-void NeutrinoDens(Primitive::EOS<EOSPolicy, ErrorPolicy> &eos, Real nb, Real temp,
-                  Real *Y, Real &n_nue, Real &n_nua, Real &n_nux, Real &en_nue,
-                  Real &en_nua, Real &en_nux, NuratesParams nurates_params) {
+KOKKOS_INLINE_FUNCTION
+void NeutrinoDens(Real mu_n, Real mu_p, Real mu_e, Real nb, Real temp, Real &n_nue,
+                  Real &n_anue, Real &n_nux, Real &en_nue, Real &en_anue, Real &en_nux,
+                  NuratesParams nurates_params) {
   if ((nb < nurates_params.rho_min_cgs) || (temp < nurates_params.temp_min_mev)) {
     n_nue = 0.;
-    n_nua = 0.;
+    n_anue = 0.;
     n_nux = 0.;
     en_nue = 0.;
-    en_nua = 0.;
+    en_anue = 0.;
     en_nux = 0.;
     return;
   }
 
-  Real mu_b = eos.GetBaryonChemicalPotential(nb, temp, &Y);
-  Real mu_q = eos.GetChargeChemicalPotential(nb, temp, &Y);
-  Real mu_le = eos.GetElectronLeptonChemicalPotential(nb, temp, &Y);
-
-  Real mu_n = mu_b;
-  Real mu_p = mu_b + mu_q;
-  Real mu_e = mu_le - mu_q;
-
   Real eta_nue = (mu_p + mu_e - mu_n) / temp;
-  Real eta_nua = -eta_nue;
+  Real eta_anue = -eta_nue;
   Real eta_nux = 0.0;
 
   n_nue = 4.0 * M_PI / Kokkos::pow(HC_MEVCM, 3) * Kokkos::pow(temp, 3) *
           Fermi::fermi2(eta_nue);
-  n_nua = 4.0 * M_PI / Kokkos::pow(HC_MEVCM, 3) * Kokkos::pow(temp, 3) *
-          Fermi::fermi2(eta_nua);
+  n_anue = 4.0 * M_PI / Kokkos::pow(HC_MEVCM, 3) * Kokkos::pow(temp, 3) *
+           Fermi::fermi2(eta_anue);
   n_nux = 16.0 * M_PI / Kokkos::pow(HC_MEVCM, 3) * Kokkos::pow(temp, 3) *
           Fermi::fermi2(eta_nux);
 
   en_nue = 4.0 * M_PI / Kokkos::pow(HC_MEVCM, 3) * Kokkos::pow(temp, 4) *
            Fermi::fermi3(eta_nue);
-  en_nua = 4.0 * M_PI / Kokkos::pow(HC_MEVCM, 3) * Kokkos::pow(temp, 4) *
-           Fermi::fermi3(eta_nua);
+  en_anue = 4.0 * M_PI / Kokkos::pow(HC_MEVCM, 3) * Kokkos::pow(temp, 4) *
+            Fermi::fermi3(eta_anue);
   en_nux = 16.0 * M_PI / Kokkos::pow(HC_MEVCM, 3) * Kokkos::pow(temp, 4) *
            Fermi::fermi3(eta_nux);
 
@@ -302,10 +294,10 @@ void NeutrinoDens(Primitive::EOS<EOSPolicy, ErrorPolicy> &eos, Real nb, Real tem
   assert(isfinite(en_nux));
 
   n_nue = 1 * n_nue;
-  n_nua = 1 * n_nua;
+  n_anue = 1 * n_anue;
   n_nux = 1 * n_nux;
   en_nue = 1 * en_nue;
-  en_nua = 1 * en_nua;
+  en_anue = 1 * en_anue;
   en_nux = 1 * en_nux;
 }
 
