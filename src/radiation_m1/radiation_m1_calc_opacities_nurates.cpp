@@ -55,6 +55,7 @@ TaskStatus RadiationM1::CalcOpacityNurates_(Driver *pdrive, int stage) {
   auto &radiation_mask_ = radiation_mask;
 
   auto &m1_params_ = params;
+  auto &units_ = units;
   auto &nurates_params_ = nurates_params;
 
   auto &eta_0_ = eta_0;
@@ -214,7 +215,7 @@ TaskStatus RadiationM1::CalcOpacityNurates_(Driver *pdrive, int stage) {
                       abs_0_loc[1], abs_0_loc[2], abs_0_loc[3], abs_1_loc[0],
                       abs_1_loc[1], abs_1_loc[2], abs_1_loc[3], scat_0_loc[0],
                       scat_0_loc[1], scat_0_loc[2], scat_0_loc[3], scat_1_loc[0],
-                      scat_1_loc[1], scat_1_loc[2], scat_1_loc[3], nurates_params_);
+                      scat_1_loc[1], scat_1_loc[2], scat_1_loc[3], nurates_params_, units_);
 
           assert(isfinite(eta_0_loc[0]));
           assert(isfinite(eta_0_loc[1]));
@@ -256,11 +257,11 @@ TaskStatus RadiationM1::CalcOpacityNurates_(Driver *pdrive, int stage) {
             if (nurates_params_.opacity_tau_trap >= 0 &&
                 tau > nurates_params_.opacity_tau_trap) {
               Real Yl[6]{};
-              eos.GetLeptonFractions(0, Y, &n_nu, &Yl);
-              bool ierr = eos.GetBetaEquilibriumTrapped();
-              if (!ierr) {
-                ierr = eos.GetBetaEquilibriumTrapped();
-              }
+              //eos.GetLeptonFractions(0, Y, &n_nu, &Yl);
+              //bool ierr = eos.GetBetaEquilibriumTrapped();
+              //if (!ierr) {
+                //ierr = eos.GetBetaEquilibriumTrapped();
+              //}
 
               assert(Kokkos::isfinite(nudens_0_trap[0]));
               assert(Kokkos::isfinite(nudens_0_trap[1]));
@@ -276,7 +277,7 @@ TaskStatus RadiationM1::CalcOpacityNurates_(Driver *pdrive, int stage) {
 
             // compute neutrino black body function assuming fixed temperature and Ye
             NeutrinoDens(mu_n, mu_p, mu_e, nb, T, n_nue, n_nua, n_nux, en_nue, en_nua,
-                         en_nux, nurates_params_);
+                         en_nux, nurates_params_, units_);
 
             nudens_0_thin[2] *= 0.5;
             nudens_1_thin[2] *= 0.5;

@@ -11,6 +11,7 @@
 #include "bns_nurates/include/m1_opacities.hpp"
 #include "eos/primitive-solver/eos.hpp"
 #include "radiation_m1_fermi.hpp"
+#include "radiation_m1_params.hpp"
 
 namespace radiationm1 {
 
@@ -112,7 +113,60 @@ void bns_nurates(Real &nb, Real &temp, Real &ye, Real &mu_n, Real &mu_p, Real &m
                  Real &sigma_1_nux, Real &sigma_1_anux, Real &scat_0_nue,
                  Real &scat_0_anue, Real &scat_0_nux, Real &scat_0_anux, Real &scat_1_nue,
                  Real &scat_1_anue, Real &scat_1_nux, Real &scat_1_anux,
-                 const NuratesParams nurates_params) {
+                 const NuratesParams nurates_params, const RadiationM1Units units) {
+  // unit conversion factors
+  // from cm^-3 to code
+  const Real n_cgs2code = 1. / Kokkos::pow(units.cgs2code_length, 3);
+  // from MeV cm^-3 to code
+  const Real j_cgs2code = units.cgs2code_energy / Kokkos::pow(units.cgs2code_length, 3);
+  // from cm^-3 s^-1 to code
+  const Real r_cgs2code =
+      1. / (units.cgs2code_time * Kokkos::pow(units.cgs2code_length, 3));
+  // from MeV cm^-3 s^-1 to code
+  const Real q_cgs2code = units.mev_to_erg * units.cgs2code_energy /
+                          (units.cgs2code_time * Kokkos::pow(units.cgs2code_length, 3));
+  // from cm^-1 to code
+  const Real kappa_cgs2code = 1. / (units.cgs2code_length);
+
+  if (nb < nurates_params.rho_min_cgs || temp < nurates_params.temp_min_mev) {
+    R_nue = 0.;
+    R_anue = 0.;
+    R_nux = 0.;
+    R_anux = 0.;
+    Q_nue = 0.;
+    Q_anue = 0.;
+    Q_nux = 0.;
+    Q_anux = 0.;
+    sigma_0_nue = 0.;
+    sigma_0_anue = 0.;
+    sigma_0_nux = 0.;
+    sigma_0_anux = 0.;
+    sigma_1_nue = 0.;
+    sigma_1_anue = 0.;
+    sigma_1_nux = 0.;
+    sigma_1_anux = 0.;
+    scat_0_nue = 0.;
+    scat_0_anue = 0.;
+    scat_0_nux = 0.;
+    scat_0_anux = 0.;
+    scat_1_nue = 0.;
+    scat_1_anue = 0.;
+    scat_1_nux = 0.;
+    scat_1_anux = 0.;
+    return;
+  }
+
+  // convert neutrino quantities to cgs
+  const Real n_nue_cgs = n_nue / (n_cgs2code/units.normfact) * 1e-21;
+  const Real n_anue_cgs = n_anue / (n_cgs2code/units.normfact) * 1e-21;
+  const Real n_nux_cgs = n_nux / (n_cgs2code/units.normfact) * 1e-21;
+  const Real n_anux_cgs = n_anux / (n_cgs2code/units.normfact) * 1e-21;
+  const Real j_nue_cgs = j_nue / j_cgs2code;
+  const Real j_anue_cgs = j_anue / j_cgs2code;
+  const Real j_nux_cgs = j_nux / j_cgs2code;
+  const Real j_anux_cgs = j_anux / j_cgs2code;
+  const Real nb_cgs = nb; //@TODO: fix!
+
   // opacity params structure
   GreyOpacityParams my_grey_opacity_params{};
 
@@ -141,24 +195,24 @@ void bns_nurates(Real &nb, Real &temp, Real &ye, Real &mu_n, Real &mu_p, Real &m
   my_grey_opacity_params.eos_pars.temp = temp;
   my_grey_opacity_params.eos_pars.yp = ye;
   my_grey_opacity_params.eos_pars.yn = 1 - ye;
-  my_grey_opacity_params.eos_pars.nb = nb;
+  my_grey_opacity_params.eos_pars.nb = nb_cgs;
 
   // populate M1 quantities
   // The factors of 1/2 come from the fact that bns_nurates and THC weight the
   // heavy neutrinos differently. THC weights them with a factor of 2 (because
   // "nux" means "mu AND tau"), bns_nurates with a factor of 1 (because "nux"
   // means "mu OR tau").
-  my_grey_opacity_params.m1_pars.n[id_nue] = n_nue;
-  my_grey_opacity_params.m1_pars.J[id_nue] = j_nue;
+  my_grey_opacity_params.m1_pars.n[id_nue] = n_nue_cgs;
+  my_grey_opacity_params.m1_pars.J[id_nue] = j_nue_cgs;
   my_grey_opacity_params.m1_pars.chi[id_nue] = chi_nue;
-  my_grey_opacity_params.m1_pars.n[id_anue] = n_anue;
-  my_grey_opacity_params.m1_pars.J[id_anue] = j_anue;
+  my_grey_opacity_params.m1_pars.n[id_anue] = n_anue_cgs;
+  my_grey_opacity_params.m1_pars.J[id_anue] = j_anue_cgs;
   my_grey_opacity_params.m1_pars.chi[id_anue] = chi_anue;
-  my_grey_opacity_params.m1_pars.n[id_nux] = n_nux * 0.5;
-  my_grey_opacity_params.m1_pars.J[id_nux] = j_nux * 0.5;
+  my_grey_opacity_params.m1_pars.n[id_nux] = n_nux_cgs * 0.5;
+  my_grey_opacity_params.m1_pars.J[id_nux] = j_nux_cgs * 0.5;
   my_grey_opacity_params.m1_pars.chi[id_nux] = chi_nux;
-  my_grey_opacity_params.m1_pars.n[id_anux] = n_anux * 0.5;
-  my_grey_opacity_params.m1_pars.J[id_anux] = j_anux * 0.5;
+  my_grey_opacity_params.m1_pars.n[id_anux] = n_anux_cgs * 0.5;
+  my_grey_opacity_params.m1_pars.J[id_anux] = j_anux_cgs * 0.5;
   my_grey_opacity_params.m1_pars.chi[id_anux] = chi_anux;
 
   // reconstruct distribution function
@@ -251,13 +305,58 @@ void bns_nurates(Real &nb, Real &temp, Real &ye, Real &mu_n, Real &mu_p, Real &m
   assert(isfinite(scat_1_anue));
   assert(isfinite(scat_1_nux));
   assert(isfinite(scat_1_anux));
+
+  // convert to code units
+   R_nue = R_nue * (r_cgs2code/units.normfact) * 1e21;
+   R_anue = R_anue * (r_cgs2code/units.normfact) * 1e21;
+   R_nux = R_nux * (r_cgs2code/units.normfact) * 1e21;
+   R_anux = R_anux * (r_cgs2code/units.normfact) * 1e21;
+   Q_nue = Q_nue * q_cgs2code * 1e21;
+   Q_anue = Q_anue * q_cgs2code * 1e21;
+   Q_nux = Q_nux * q_cgs2code * 1e21;
+   Q_anux = Q_anux * q_cgs2code * 1e21;
+   sigma_0_nue = sigma_0_nue * kappa_cgs2code * 1e7;
+   sigma_0_anue = sigma_0_anue * kappa_cgs2code * 1e7;
+   sigma_0_nux = sigma_0_nux * kappa_cgs2code * 1e7;
+   sigma_0_anux = sigma_0_anux * kappa_cgs2code * 1e7;
+   sigma_1_nue = sigma_1_nue * kappa_cgs2code * 1e7;
+   sigma_1_anue = sigma_1_anue * kappa_cgs2code * 1e7;
+   sigma_1_nux = sigma_1_nux * kappa_cgs2code * 1e7;
+   sigma_1_anux = sigma_1_anux * kappa_cgs2code * 1e7;
+   scat_0_nue = scat_0_nue * kappa_cgs2code * 1e7;
+   scat_0_anue = scat_0_anue * kappa_cgs2code * 1e7;
+   scat_0_nux = scat_0_nux * kappa_cgs2code * 1e7;
+   scat_0_anux = scat_0_anux * kappa_cgs2code * 1e7;
+   scat_1_nue = scat_1_nue * kappa_cgs2code * 1e7;
+   scat_1_anue = scat_1_anue * kappa_cgs2code * 1e7;
+   scat_1_nux = scat_1_nux * kappa_cgs2code * 1e7;
+   scat_1_anux = scat_1_anux * kappa_cgs2code * 1e7;
 }
 
-// Note: everything in and out in code units
+//! \fn void NeutrinoDens(Real mu_n, Real mu_p, Real mu_e, Real nb, Real temp,
+//!                       Real &n_nue, Real &n_anue, Real &n_nux, Real &en_nue,
+//!                       Real &en_anue, Real &en_nux, NuratesParams nurates_params)
+//
+//   \brief Computes the neutrino number and energy density
+//
+//   \note  All input and output quantities are in code units, except temperature (MeV)
+//
+//   \param[in]  mu_n            neutron chemical potential
+//   \param[in]  mu_p            proton chemical potential
+//   \param[in]  mu_e            electron chemical potential
+//   \param[in]  nb              baryon number density
+//   \param[in]  temp            temperature (MeV).
+//   \param[out] n_nue           number density electron neutrinos
+//   \param[out] n_anue          number density electron anti-neutrinos
+//   \param[out] n_nux           number density mu/tau neutrinos
+//   \param[out] en_nue          energy density electron neutrinos
+//   \param[out] en_anue         energy density electron anti-neutrinos
+//   \param[out] en_nux          energy density mu/tau neutrinos
+//   \param[in]  nurates_params  struct for nurates parameters
 KOKKOS_INLINE_FUNCTION
 void NeutrinoDens(Real mu_n, Real mu_p, Real mu_e, Real nb, Real temp, Real &n_nue,
                   Real &n_anue, Real &n_nux, Real &en_nue, Real &en_anue, Real &en_nux,
-                  NuratesParams nurates_params) {
+                  NuratesParams nurates_params, RadiationM1Units units) {
   if ((nb < nurates_params.rho_min_cgs) || (temp < nurates_params.temp_min_mev)) {
     n_nue = 0.;
     n_anue = 0.;
@@ -293,12 +392,16 @@ void NeutrinoDens(Real mu_n, Real mu_p, Real mu_e, Real nb, Real temp, Real &n_n
   assert(isfinite(en_nua));
   assert(isfinite(en_nux));
 
-  n_nue = 1 * n_nue;
-  n_anue = 1 * n_anue;
-  n_nux = 1 * n_nux;
-  en_nue = 1 * en_nue;
-  en_anue = 1 * en_anue;
-  en_nux = 1 * en_nux;
+  const Real fact1 = Kokkos::pow(units.cgs2code_length, 3) * units.normfact;
+  n_nue = n_nue / fact1;
+  n_anue = n_anue / fact1;
+  n_nux = n_nux / fact1;
+
+  const Real fact2 =
+      units.mev_to_erg * units.cgs2code_energy / Kokkos::pow(units.cgs2code_length, 3);
+  en_nue = en_nue / fact2;
+  en_anue = en_anue / fact2;
+  en_nux = en_nux / fact2;
 }
 
 }  // namespace radiationm1
