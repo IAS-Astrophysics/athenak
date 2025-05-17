@@ -205,7 +205,6 @@ TaskStatus RadiationM1::CalcOpacityNurates_(Driver *pdrive, int stage) {
           Real abs_0_loc[4]{}, abs_1_loc[4]{};
           Real scat_0_loc[4]{}, scat_1_loc[4]{};
 
-          //@TODO: check the signature of this function
           // Note: everything sent and received are in code units
           bns_nurates(nb, T, Y, mu_n, mu_p, mu_e, nudens_0[0], nudens_1[0], chi_loc[0],
                       nudens_0[1], nudens_1[1], chi_loc[1], nudens_0[2], nudens_1[2],
@@ -254,13 +253,16 @@ TaskStatus RadiationM1::CalcOpacityNurates_(Driver *pdrive, int stage) {
                 beta_dt;
 
             // compute neutrino black body function assuming trapped neutrinos
+            //@TODO: this needs to be fixed!
             if (nurates_params_.opacity_tau_trap >= 0 &&
                 tau > nurates_params_.opacity_tau_trap) {
-              Real Yl[6]{};
-              //eos.GetLeptonFractions(0, Y, &n_nu, &Yl);
-              //bool ierr = eos.GetBetaEquilibriumTrapped();
+              //Real temparature_trap{}, Yl_trap[6]{};
+              //Real Yl[6]{};
+              //eos.GetLeptonFractions(nb, 0, n_nu, &Yl);
+              //bool ierr = eos.GetBetaEquilibriumTrapped(nb, T, &Yl, &temparature_trap, &Yl_trap, T, &Yl);
               //if (!ierr) {
-                //ierr = eos.GetBetaEquilibriumTrapped();
+              //  eos.GetLeptonFractions(nb, 0, n_nu, &Yl);
+              //  ierr = eos.GetBetaEquilibriumTrapped(nb, T, &Yl, &temparature_trap, &Yl_trap, T, &Yl);
               //}
 
               assert(Kokkos::isfinite(nudens_0_trap[0]));
