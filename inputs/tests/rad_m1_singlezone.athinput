@@ -30,9 +30,7 @@ x3max  = 0.5       # maximum value of X3
 ix3_bc = periodic  # inner-X3 boundary flag
 ox3_bc = periodic  # outer-X3 boundary flag
 
-<coord>
-general_rel = true  # w/ general relativity
-minkowski = true    # flat space
+<adm>
 
 <hydro>
 eos         = ideal  # EOS type
@@ -40,12 +38,11 @@ reconstruct = plm    # spatial reconstruction method
 rsolver     = hlle   # Riemann-solver to be used
 gamma       = 2.0    # adiabatic index
 
-<radiation>
-nlevel = 1     # number of levels for geodesic mesh
-arad = 1.0     # radiation constant
-kappa_s = 0.0  # scattering opacity
-kappa_a = 1.0  # absorption opacity
-kappa_p = 0.0  # planck minus rosseland opacity
+<radiation_m1>
+num_species = 1
+closure_fun = minerbo
+src_update = explicit
+opacity_type = toy
 
 <problem>
 erad = 1.0    # initial radiation energy density

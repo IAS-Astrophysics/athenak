@@ -67,7 +67,7 @@ void ProblemGenerator::RadiationM1SingleZoneTest(ParameterInput *pin,
 
   // set primitive variables
   auto &w0 = pmbp->phydro->w0;
-  par_for("pgen_shadow1",DevExeSpace(),0,nmb1,0,(n3-1),0,(n2-1),0,(n1-1),
+  par_for("pgen_singlezone",DevExeSpace(),0,nmb1,0,(n3-1),0,(n2-1),0,(n1-1),
   KOKKOS_LAMBDA(int m, int k, int j, int i) {
     w0(m,IDN,k,j,i) = rho;
     w0(m,IVX,k,j,i) = vx;
