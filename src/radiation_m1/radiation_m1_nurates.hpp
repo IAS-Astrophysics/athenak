@@ -386,10 +386,10 @@ void NeutrinoDens(Real mu_n, Real mu_p, Real mu_e, Real nb, Real temp, Real &n_n
            Fermi::fermi3(eta_nux);
 
   assert(isfinite(n_nue));
-  assert(isfinite(n_nua));
+  assert(isfinite(n_anue));
   assert(isfinite(n_nux));
   assert(isfinite(en_nue));
-  assert(isfinite(en_nua));
+  assert(isfinite(en_anue));
   assert(isfinite(en_nux));
 
   const Real fact1 = Kokkos::pow(units.cgs2code_length, 3) * units.normfact;
