@@ -47,7 +47,7 @@ class Driver {
   Real cfl_limit;                  // maximum CFL number for integrator
   Kokkos::Timer* pwall_clock_;     // timer for tracking the wall clock
   Real wall_time;
-  bool opsplit{false};                    // flag for operator split method (used in M1)
+  bool opsplit{true};                    // flag for operator split method (used in M1)
   // functions
   void ExecuteTaskList(Mesh *pm, std::string tl, int stage);
   void Initialize(Mesh *pmesh, ParameterInput *pin, Outputs *pout, bool rflag);
