@@ -39,6 +39,11 @@ TaskStatus RadiationM1::TimeUpdate(Driver *pdrive, int stage) {
                        Primitive::ResetFloor>(pdrive, stage);
   }
 
+  bool ismhd = pmy_pack->pmhd != nullptr;
+  if (ismhd == false) {
+    return TimeUpdate_<Primitive::EOSCompOSE<Primitive::NQTLogs>, Primitive::ResetFloor>(
+        pdrive, stage);
+  }
   std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl;
   std::cout << "Unsupported EOS type!\n";
   abort();
@@ -81,8 +86,13 @@ TaskStatus RadiationM1::TimeUpdate_(Driver *d, int stage) {
   bool &three_d = pmy_pack->pmesh->three_d;
   auto &params_ = pmy_pack->pradm1->params;
 
-  auto &w0_ = pmy_pack->pmhd->w0;
-  auto &umhd0_ = pmy_pack->pmhd->u0;
+  bool ismhd = pmy_pack->pmhd != nullptr;
+  DvceArray5D<Real> &w0_ = u_mu_data;
+  DvceArray5D<Real> &umhd0_ = u_mu_data;
+  if (ismhd) {
+    w0_ = pmy_pack->pmhd->w0;
+    umhd0_ = pmy_pack->pmhd->u0;
+  }
 
   auto &BrentFunc_ = pmy_pack->pradm1->BrentFunc;
   auto &HybridsjFunc_ = pmy_pack->pradm1->HybridsjFunc;

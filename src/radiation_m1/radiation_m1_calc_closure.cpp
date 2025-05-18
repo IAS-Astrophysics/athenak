@@ -24,13 +24,18 @@ TaskStatus RadiationM1::CalcClosure(Driver *pdrive, int stage) {
   int &ks = indcs.ks, &ke = indcs.ke;
 
   auto &u0_ = pmy_pack->pradm1->u0;
-  auto &w0_ = pmy_pack->pmhd->w0;
   auto &u_mu_ = pmy_pack->pradm1->u_mu;
   auto &chi_ = pmy_pack->pradm1->chi;
   auto nmb1 = pmy_pack->nmb_thispack - 1;
   auto &nvars_ = pmy_pack->pradm1->nvars;
   auto &nspecies_ = pmy_pack->pradm1->nspecies;
   auto &radiation_mask_ = pmy_pack->pradm1->radiation_mask;
+
+  bool ismhd = pmy_pack->pmhd != nullptr;
+  DvceArray5D<Real> &w0_ = u_mu_data;
+  if (ismhd) {
+    w0_ = pmy_pack->pmhd->w0;
+  }
 
   auto &BrentFunc_ = pmy_pack->pradm1->BrentFunc;
 
