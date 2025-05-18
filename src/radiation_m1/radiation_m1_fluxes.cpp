@@ -164,10 +164,15 @@ TaskStatus RadiationM1::CalculateFluxes(Driver *pdrive, int stage) {
   bool &three_d = pmy_pack->pmesh->three_d;
 
   auto &u_mu_ = pmy_pack->pradm1->u_mu;
-  auto &w0_ = pmy_pack->pmhd->w0;
   auto &u0_ = pmy_pack->pradm1->u0;
   auto &chi_ = pmy_pack->pradm1->chi;
   adm::ADM::ADM_vars &adm = pmy_pack->padm->adm;
+
+  bool ismhd = pmy_pack->pmhd != nullptr;
+  DvceArray5D<Real> &w0_ = u_mu_data;
+  if (ismhd) {
+    w0_ = pmy_pack->pmhd->w0;
+  }
 
   auto &abs_1_ = pmy_pack->pradm1->abs_1;
   auto &scat_1_ = pmy_pack->pradm1->scat_1;
