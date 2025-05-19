@@ -76,7 +76,6 @@ class RadiationM1 {
   int nspecies;                // no. of species
   int nvarstot;                // total no. of evolved variables
   RadiationM1Params params{};  // user parameters for grey M1
-  RadiationM1Units units{};
 
   DvceArray5D<Real> u0;              // evolved variables
   DvceArray5D<Real> coarse_u0;       // evolved variables on 2x coarser grid
