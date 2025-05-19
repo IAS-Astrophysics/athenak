@@ -323,13 +323,13 @@ class EOS : public EOSPolicy, public ErrorPolicy {
   //  \param[in]    T_guess Initial guess for the temperature.
   //  \param[in]    Y_guess Initial guesses for the particle fractions.
   //  \return Whether the equilibrium was successfully found.
-  KOKKOS_INLINE_FUNCTION bool GetBetaEquilibriumTrapped(Real n, Real e, Real *Yl, Real &T_eq, Real *Y_eq, Real T_guess, Real *Y_guess) {
+  KOKKOS_INLINE_FUNCTION bool GetBetaEquilibriumTrapped(Real n, Real e, Real *Yl, Real &T_eq, Real *Y_eq, Real T_guess, Real *Y_guess) const {
    if constexpr (supports_potentials) {
-    int ierr = EOSPolicy::BetaEquilibriumTrapped(n, e*code_units->PressureConversion(*eos_units), Yl, 
+    int ierr = EOSPolicy::BetaEquilibriumTrapped(n, e*code_units.PressureConversion(eos_units), Yl,
                                       T_eq, Y_eq, 
-                                      T_guess*code_units->TemperatureConversion(*eos_units), Y_guess);
+                                      T_guess*code_units.TemperatureConversion(eos_units), Y_guess);
 
-    T_eq = T_eq*eos_units->TemperatureConversion(*code_units);
+    T_eq = T_eq*eos_units.TemperatureConversion(code_units);
     
     return ierr==0;
    } else {
@@ -345,12 +345,12 @@ class EOS : public EOSPolicy, public ErrorPolicy {
   //  \param[in]    Y    An array of size n_species of the particle fractions.
   //  \param[inout] n_nu The net number densities for each neutrino generation.
   //  \param[inout] e_nu The total energy densities for each neutrino generation.
-  inline void GetTrappedNeutrinos(Real n, Real T, Real *Y, Real n_nu[3], Real e_nu[3]) {
+  inline void GetTrappedNeutrinos(Real n, Real T, Real *Y, Real n_nu[3], Real e_nu[3]) const {
    if constexpr (supports_potentials) {
-    EOSPolicy::TrappedNeutrinos(n, T*code_units->TemperatureConversion(*eos_units), Y, n_nu, e_nu);
+    EOSPolicy::TrappedNeutrinos(n, T*code_units.TemperatureConversion(eos_units), Y, n_nu, e_nu);
 
-    Real n_units = eos_units->DensityConversion(*code_units);
-    Real e_units = eos_units->PressureConversion(*code_units);
+    Real n_units = eos_units.DensityConversion(code_units);
+    Real e_units = eos_units.PressureConversion(code_units);
 
     for (int i=0; i<3; ++i) {
       n_nu[i] = n_nu[i]*n_units;
@@ -367,8 +367,8 @@ class EOS : public EOSPolicy, public ErrorPolicy {
   //  \param[in]    Y    The particle fractions.
   //  \param[in]    n_nu The number densities for each neutrino species (e, ae, m, am, t, at).
   //  \param[inout] Yl   The total lepton fractions.
-  inline void GetLeptonFractions(Real n, Real *Y, Real n_nu[6], Real *Yl) {
-    Real n_units = code_units->DensityConversion(*eos_units);
+  inline void GetLeptonFractions(Real n, Real *Y, Real n_nu[6], Real *Yl) const {
+    Real n_units = code_units.DensityConversion(eos_units);
 
     for (int i=0; i<3; ++i) {
       Yl[i] = Y[i] + (n_nu[2*i] - n_nu[2*i+1])/n;
