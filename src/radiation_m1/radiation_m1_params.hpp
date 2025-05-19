@@ -165,8 +165,7 @@ struct RadiationM1Units {
   Real cgs2code_time;
   Real cgs2code_rho;
   Real cgs2code_energy;
-  Real normfact;
-  Real mev_to_erg;
 };
+
 }  // namespace radiationm1
 #endif  // RADIATION_M1_PARAMS_HPP
