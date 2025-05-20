@@ -81,7 +81,7 @@ RadiationM1::RadiationM1(MeshBlockPack *ppack, ParameterInput *pin)
     exit(EXIT_FAILURE);
   }
 
-  std::string opacity_type = pin->GetOrAddString("radiation_m1", "opacity_type", "toy");
+  std::string opacity_type = pin->GetOrAddString("radiation_m1", "opacity_type", "none");
   if (opacity_type == "toy") {
     params.opacity_type = Toy;
   } else if (opacity_type == "bns-nurates") {
