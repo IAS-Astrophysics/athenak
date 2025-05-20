@@ -42,7 +42,9 @@ ndiag      = 1           # cycles between diagostic output
 num_species = 1
 closure_fun = minerbo
 src_update = explicit
+matter_sources = true
 opacity_type = toy
+theta_limiter = false
 
 <adm>
 
@@ -50,6 +52,11 @@ opacity_type = toy
 pgen_name = rad_m1_latticetest
 
 <output1> 
+file_type = vtk        # output format
+variable  = rad_m1_abs_0    # choice of variables to output
+dt        = 0.1        # output cadence
+
+<output2> 
 file_type = vtk        # output format
 variable  = rad_m1_E    # choice of variables to output
 dt        = 0.1        # output cadence

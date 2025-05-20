@@ -17,7 +17,7 @@
 #include "radiation_m1/radiation_m1.hpp"
 #include "radiation_m1/radiation_m1_helpers.hpp"
 #include "eos/eos.hpp"
-#include "hydro/hydro.hpp"
+#include "dyn_grmhd/dyn_grmhd.hpp"
 #include "driver/driver.hpp"
 
 //----------------------------------------------------------------------------------------
@@ -27,6 +27,21 @@
 void ProblemGenerator::RadiationM1SingleZoneTest(ParameterInput *pin,
                                               const bool restart) {
   if (restart) return;
+
+  // Check required modules are called
+  if (pmbp->pmhd == nullptr) {
+    std::cout <<"### FATAL ERROR in "<< __FILE__ <<" at line " << __LINE__ << std::endl
+            << "DyHydro is required for the single zone equilibration test" << std::endl;
+    exit(EXIT_FAILURE);
+  }
+  if (pmbp->pradm1 == nullptr) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+              << std::endl
+              << "The single zone equilibration test problem generator requires "
+                 "radiation-m1, but no "
+              << "<radiation_m1> block in input file" << std::endl;
+    exit(EXIT_FAILURE);
+  }
 
   MeshBlockPack *pmbp = pmy_mesh_->pmb_pack;
 
@@ -50,36 +65,21 @@ void ProblemGenerator::RadiationM1SingleZoneTest(ParameterInput *pin,
   Real vz = pin->GetReal("problem", "vz");
   Real ye = pin->GetReal("problem", "Y_e");
 
-  // Check required modules are called
-  if (pmbp->phydro == nullptr) {
-    std::cout <<"### FATAL ERROR in "<< __FILE__ <<" at line " << __LINE__ << std::endl
-            << "Hydro is required for the single zone equilibration test" << std::endl;
-    exit(EXIT_FAILURE);
-  }
-  if (pmbp->pradm1 == nullptr) {
-    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-              << std::endl
-              << "The single zone equilibration test problem generator requires "
-                 "radiation-m1, but no "
-              << "<radiation_m1> block in input file" << std::endl;
-    exit(EXIT_FAILURE);
-  }
-
   // set primitive variables
-  auto &w0 = pmbp->phydro->w0;
+  auto &w0_ = pmbp->pmhd->w0;
   par_for("pgen_singlezone",DevExeSpace(),0,nmb1,0,(n3-1),0,(n2-1),0,(n1-1),
   KOKKOS_LAMBDA(int m, int k, int j, int i) {
-    w0(m,IDN,k,j,i) = rho;
-    w0(m,IVX,k,j,i) = vx;
-    w0(m,IVY,k,j,i) = vy;
-    w0(m,IVZ,k,j,i) = vz;
-    w0(m,IEN,k,j,i) = temp;
-    w0(m,IYF,k,j,i) = ye;
+    w0_(m,IDN,k,j,i) = rho;
+    w0_(m,IVX,k,j,i) = vx;
+    w0_(m,IVY,k,j,i) = vy;
+    w0_(m,IVZ,k,j,i) = vz;
+    w0_(m,IEN,k,j,i) = temp;
+    w0_(m,IYF,k,j,i) = ye;
   });
 
   // Convert primitives to conserved
-  auto &u0 = pmbp->phydro->u0;
-  pmbp->phydro->peos->PrimToCons(w0, u0, 0, (n1-1), 0, (n2-1), 0, (n3-1));
+  // auto &u0 = pmbp->pmhd->u0;
+  pmbp->pdyngr->PrimToConInit(0, (n1-1), 0, (n2-1), 0, (n3-1));
   
   // initialize ADM variables
   if (pmbp->padm != nullptr) {
