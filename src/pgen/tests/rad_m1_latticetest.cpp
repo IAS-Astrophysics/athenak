@@ -123,7 +123,7 @@ void ProblemGenerator::RadiationM1LatticeTest(ParameterInput *pin,
   beam_vals_host(M1_FX_IDX) = F_d(1);
   beam_vals_host(M1_FY_IDX) = F_d(2);
   beam_vals_host(M1_FZ_IDX) = F_d(3);
-  printf("Beam values initialized: E = %lf, F = [%lf, %lf, %lf]\n",
+  Kokkos::printf("Beam values initialized: E = %lf, F = [%lf, %lf, %lf]\n",
          beam_vals_host(M1_E_IDX), beam_vals_host(M1_FX_IDX),
          beam_vals_host(M1_FY_IDX), beam_vals_host(M1_FZ_IDX));
   Kokkos::deep_copy(beam_vals, beam_vals_host);

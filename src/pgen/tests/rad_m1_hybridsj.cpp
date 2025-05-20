@@ -155,7 +155,7 @@ void ProblemGenerator::RadiationM1HybridsjTest(ParameterInput *pin,
     ierr = radiationm1::HybridsjTestDelta(pars.dx, pars.x, epsabs, epsrel);
   } while (ierr == radiationm1::HYBRIDSJ_CONTINUE && iter < maxiter);
 
-  printf("Iters: %d\n", iter); */
+  Kokkos::printf("Iters: %d\n", iter); */
 
   return;
 }
