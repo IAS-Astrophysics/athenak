@@ -21,7 +21,7 @@ struct NuratesParams {
   Real opacity_tau_trap;   // incl. effects of neutrino trapping above this optical depth
   Real opacity_tau_delta;  // range of optical depths over which trapping is introduced
   Real opacity_corr_fac_max;  // maximum correction factor for optically thin regime
-  Real rho_min_cgs;
+  Real nb_min_cgs;
   Real temp_min_mev;
 
   bool use_abs_em;
@@ -128,7 +128,7 @@ void bns_nurates(Real &nb, Real &temp, Real &ye, Real &mu_n, Real &mu_p, Real &m
   // from cm^-1 to code
   const Real kappa_cgs2code = 1. / (units.cgs2code_length);
 
-  if (nb * (1. / units.cgs2code_energy) < nurates_params.rho_min_cgs ||
+  if (nb * (1. / units.cgs2code_energy) < nurates_params.nb_min_cgs ||
       temp < nurates_params.temp_min_mev) {
     R_nue = 0.;
     R_anue = 0.;
@@ -340,13 +340,13 @@ void bns_nurates(Real &nb, Real &temp, Real &ye, Real &mu_n, Real &mu_p, Real &m
 //
 //   \brief Computes the neutrino number and energy density
 //
-//   \note  All input and output quantities are in code units, except temperature (MeV)
+//   \note  Unless specified, all input and output quantities are in code units
 //
-//   \param[in]  mu_n            neutron chemical potential
-//   \param[in]  mu_p            proton chemical potential
-//   \param[in]  mu_e            electron chemical potential
+//   \param[in]  mu_n            neutron chemical potential (MeV)
+//   \param[in]  mu_p            proton chemical potential (MeV)
+//   \param[in]  mu_e            electron chemical potential (Mev)
 //   \param[in]  nb              baryon number density
-//   \param[in]  temp            temperature (MeV).
+//   \param[in]  temp            temperature (MeV)
 //   \param[out] n_nue           number density electron neutrinos
 //   \param[out] n_anue          number density electron anti-neutrinos
 //   \param[out] n_nux           number density mu/tau neutrinos
@@ -358,7 +358,8 @@ KOKKOS_INLINE_FUNCTION
 void NeutrinoDens(Real mu_n, Real mu_p, Real mu_e, Real nb, Real temp, Real &n_nue,
                   Real &n_anue, Real &n_nux, Real &en_nue, Real &en_anue, Real &en_nux,
                   NuratesParams nurates_params, RadiationM1Units units) {
-  if ((nb < nurates_params.rho_min_cgs) || (temp < nurates_params.temp_min_mev)) {
+  const Real nb_cgs = nb / units.cgs2code_rho;
+  if ((nb_cgs < nurates_params.nb_min_cgs) || (temp < nurates_params.temp_min_mev)) {
     n_nue = 0.;
     n_anue = 0.;
     n_nux = 0.;
@@ -372,19 +373,17 @@ void NeutrinoDens(Real mu_n, Real mu_p, Real mu_e, Real nb, Real temp, Real &n_n
   Real eta_anue = -eta_nue;
   Real eta_nux = 0.0;
 
-  n_nue = 4.0 * M_PI / Kokkos::pow(HC_MEVCM, 3) * Kokkos::pow(temp, 3) *
-          Fermi::fermi2(eta_nue);
-  n_anue = 4.0 * M_PI / Kokkos::pow(HC_MEVCM, 3) * Kokkos::pow(temp, 3) *
-           Fermi::fermi2(eta_anue);
-  n_nux = 16.0 * M_PI / Kokkos::pow(HC_MEVCM, 3) * Kokkos::pow(temp, 3) *
-          Fermi::fermi2(eta_nux);
+  const Real hc_mevcm3 = HC_MEVCM * HC_MEVCM * HC_MEVCM;
+  const Real temp3 = temp * temp * temp;
+  const Real temp4 = temp3 * temp;
 
-  en_nue = 4.0 * M_PI / Kokkos::pow(HC_MEVCM, 3) * Kokkos::pow(temp, 4) *
-           Fermi::fermi3(eta_nue);
-  en_anue = 4.0 * M_PI / Kokkos::pow(HC_MEVCM, 3) * Kokkos::pow(temp, 4) *
-            Fermi::fermi3(eta_anue);
-  en_nux = 16.0 * M_PI / Kokkos::pow(HC_MEVCM, 3) * Kokkos::pow(temp, 4) *
-           Fermi::fermi3(eta_nux);
+  n_nue = 4.0 * M_PI / hc_mevcm3 * temp3 * Fermi::fermi2(eta_nue);
+  n_anue = 4.0 * M_PI / hc_mevcm3 * temp3 * Fermi::fermi2(eta_anue);
+  n_nux = 16.0 * M_PI / hc_mevcm3 * temp3 * Fermi::fermi2(eta_nux);
+
+  en_nue = 4.0 * M_PI / hc_mevcm3 * temp4 * Fermi::fermi3(eta_nue);
+  en_anue = 4.0 * M_PI / hc_mevcm3 * temp4 * Fermi::fermi3(eta_anue);
+  en_nux = 16.0 * M_PI / hc_mevcm3 * temp4 * Fermi::fermi3(eta_nux);
 
   assert(isfinite(n_nue));
   assert(isfinite(n_anue));
@@ -393,16 +392,18 @@ void NeutrinoDens(Real mu_n, Real mu_p, Real mu_e, Real nb, Real temp, Real &n_n
   assert(isfinite(en_anue));
   assert(isfinite(en_nux));
 
-  const Real fact1 = Kokkos::pow(units.cgs2code_length, 3) * NORMFACT;
-  n_nue = n_nue / fact1;
-  n_anue = n_anue / fact1;
-  n_nux = n_nux / fact1;
+  const Real nfactor =
+      units.cgs2code_length * units.cgs2code_length * units.cgs2code_length * NORMFACT;
+  n_nue = n_nue / nfactor;
+  n_anue = n_anue / nfactor;
+  n_nux = n_nux / nfactor;
 
-  const Real fact2 =
-      MEV_TO_ERG * units.cgs2code_energy / Kokkos::pow(units.cgs2code_length, 3);
-  en_nue = en_nue / fact2;
-  en_anue = en_anue / fact2;
-  en_nux = en_nux / fact2;
+  const Real enfactor =
+      MEV_TO_ERG * units.cgs2code_energy /
+      (units.cgs2code_length * units.cgs2code_length * units.cgs2code_length);
+  en_nue = en_nue / enfactor;
+  en_anue = en_anue / enfactor;
+  en_nux = en_nux / enfactor;
 }
 
 }  // namespace radiationm1
