@@ -118,6 +118,7 @@ TaskStatus RadiationM1::CalcClosure(Driver *pdrive, int stage) {
                      w0_(m, IVZ, k, j, i) - w_lorentz * beta_u(3) / adm.alpha(m, k, j, i),
                      u_u);
           } else {
+            w_lorentz = adm.alpha(m,k,j,i) * u_mu_(m, 0, k, j, i);
             pack_u_u(u_mu_(m, 0, k, j, i), u_mu_(m, 1, k, j, i), u_mu_(m, 2, k, j, i),
                      u_mu_(m, 3, k, j, i), u_u);
           }
