@@ -79,6 +79,7 @@ void CalcFlux(const int m, const int k, const int j, const int i, const int nuid
                  w_lorentz * adm.beta_u(m, 2, k, j, i) / adm.alpha(m, k, j, i),
              u_u);
   } else {
+    w_lorentz = adm.alpha(m,k,j,i) * u_mu_(m, 0, k, j, i);
     pack_u_u(u_mu_(m, 0, k, j, i), u_mu_(m, 1, k, j, i), u_mu_(m, 2, k, j, i),
              u_mu_(m, 3, k, j, i), u_u);
   }
