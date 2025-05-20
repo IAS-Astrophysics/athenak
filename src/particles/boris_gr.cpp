@@ -91,9 +91,9 @@ void Particles::BorisStep( const Real dt, const bool only_v ){
 		// Electric field is stored in coordinate frame, need to combine with B to operate on velocity in normal frame
 		// Vector product results in covariant vector
 		Real E_beta[3] = {
-			gupper[0][2]/gupper[0][0]*B[2] - B[1]*gupper[0][3]/gupper[0][0],
-			gupper[0][3]/gupper[0][0]*B[0] - B[2]*gupper[0][1]/gupper[0][0],
-			gupper[0][1]/gupper[0][0]*B[1] - B[0]*gupper[0][2]/gupper[0][0]
+			- gupper[0][2]/gupper[0][0]*B[2] + B[1]*gupper[0][3]/gupper[0][0],
+			- gupper[0][3]/gupper[0][0]*B[0] + B[2]*gupper[0][1]/gupper[0][0],
+			- gupper[0][1]/gupper[0][0]*B[1] + B[0]*gupper[0][2]/gupper[0][0]
 		};
 		for (int i = 0; i < 3; ++i ){ E_beta[i] *= adm_det; }
 		Real vec_ut[3] = {0.0};
