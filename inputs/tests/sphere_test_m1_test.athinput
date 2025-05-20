@@ -41,8 +41,9 @@ ndiag      = 1           # cycles between diagostic output
 <radiation_m1>
 num_species = 1
 src_update = explicit
+matter_sources = true
 opacity_type = toy
-source_limiter = -1.0
+theta_limiter = false
 
 <adm>
 
@@ -50,6 +51,11 @@ source_limiter = -1.0
 pgen_name = rad_m1_spheretest
 
 <output1> 
+file_type = vtk        # output format
+variable  = rad_m1_abs_0    # choice of variables to output
+dt        = 0.1        # output cadence
+
+<output2> 
 file_type = vtk        # output format
 variable  = rad_m1_E    # choice of variables to output
 dt        = 0.1        # output cadence
