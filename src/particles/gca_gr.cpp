@@ -29,9 +29,9 @@ void GCAComputeDrifts( const Real gupper[4][4], const Real ADM_upper[3][3], cons
   // First need to convert electric field to normal frame
 	// Vector product results in covariant vector
 	Real E_beta[3] = {
-		gupper[0][2]/gupper[0][0]*B[2] - B[1]*gupper[0][3]/gupper[0][0],
-		gupper[0][3]/gupper[0][0]*B[0] - B[2]*gupper[0][1]/gupper[0][0],
-		gupper[0][1]/gupper[0][0]*B[1] - B[0]*gupper[0][2]/gupper[0][0]
+		- gupper[0][2]/gupper[0][0]*B[2] + B[1]*gupper[0][3]/gupper[0][0],
+		- gupper[0][3]/gupper[0][0]*B[0] + B[2]*gupper[0][1]/gupper[0][0],
+		- gupper[0][1]/gupper[0][0]*B[1] + B[0]*gupper[0][2]/gupper[0][0]
 	};
 	for (int i = 0; i < 3; ++i ){ E_beta[i] /= adm_det; }
 	Real E_aux[3] = {0.0};
