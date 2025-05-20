@@ -480,7 +480,8 @@ TaskStatus RadiationM1::TimeUpdate_(Driver *d, int stage) {
           // [G] Limit sources
           theta = 1.0;
           if (params_.theta_limiter && params_.source_limiter >= 0) {
-            Real tau = umhd0_(m, IEN, k, j, i);
+            Real tau = (ismhd) ? umhd0_(m, IEN, k, j, i) : 0.;
+
             theta = 1.0;
             Real DTau_sum = 0.0;
             for (int nuidx = 0; nuidx < nspecies_; ++nuidx) {
@@ -500,7 +501,7 @@ TaskStatus RadiationM1::TimeUpdate_(Driver *d, int stage) {
                   theta);
             }
 
-            if (nspecies_ > 1) {
+            if (ismhd) {
               Real dens = w0_(m, IDN, k, j, i);
               Real Y_e = w0_(m, IYF, k, j, i);
 
