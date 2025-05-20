@@ -180,13 +180,13 @@ SrcSignal source_update(
         iter >= m1_params.source_maxiter) {
 #ifdef DEBUG_BUILD
       if (ierr == LinalgEbadfunc) {
-        printf("source_update: NaNs/Infs found in implicit solve.\n");
+        Kokkos::printf("source_update: NaNs/Infs found in implicit solve.\n");
       } else if (iter > m1_params.source_maxiter) {
-        printf("source_update: Exceeded maximum number of iterations of Hybridsj.\n");
+        Kokkos::printf("source_update: Exceeded maximum number of iterations of Hybridsj.\n");
       } else {
-        printf("source_update: Non-linear solver is stuck.\n");
+        Kokkos::printf("source_update: Non-linear solver is stuck.\n");
       }
-      printf("source_update: Retrying with Eddington closure.\n");
+      Kokkos::printf("source_update: Retrying with Eddington closure.\n");
 #endif
       if (m1_params.closure_type != Eddington) {
         // Eddington closure
@@ -202,13 +202,13 @@ SrcSignal source_update(
       } else {
         // solver has failed
 #ifdef DEBUG_BUILD
-        printf("source_update: The source solver has failed!\n");
+        Kokkos::printf("source_update: The source solver has failed!\n");
 #endif
         return SrcFail;
       }
     } else if (ierr != LinalgSuccess) {
 #ifdef DEBUG_BUILD
-      printf("source_update: Unexpected error in source solver!\n");
+      Kokkos::printf("source_update: Unexpected error in source solver!\n");
 #endif
     }
     ierr = HybridsjTestDelta(hybridsj_params.dx, hybridsj_params.x,
