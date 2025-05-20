@@ -28,6 +28,8 @@ void ProblemGenerator::RadiationM1SingleZoneTest(ParameterInput *pin,
                                               const bool restart) {
   if (restart) return;
 
+  MeshBlockPack *pmbp = pmy_mesh_->pmb_pack;
+
   // Check required modules are called
   if (pmbp->pmhd == nullptr) {
     std::cout <<"### FATAL ERROR in "<< __FILE__ <<" at line " << __LINE__ << std::endl
@@ -42,8 +44,6 @@ void ProblemGenerator::RadiationM1SingleZoneTest(ParameterInput *pin,
               << "<radiation_m1> block in input file" << std::endl;
     exit(EXIT_FAILURE);
   }
-
-  MeshBlockPack *pmbp = pmy_mesh_->pmb_pack;
 
   // capture variables for kernel
   auto &indcs = pmy_mesh_->mb_indcs;
