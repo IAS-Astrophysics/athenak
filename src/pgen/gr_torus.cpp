@@ -1795,9 +1795,9 @@ static void InjectKineticPrtcls( Real x1, Real x2, Real x3, Real * u, Real * b,
     if (set_radius) {
       u0 = sqrt(u0 + massive); 
       Real alpha = sqrt(-1.0/gu[0][0]);
-      u[0] = u[0] + gu[0][1]*u0*alpha; 	
-      u[1] = u[1] + gu[0][2]*u0*alpha; 	
-      u[2] = u[2] + gu[0][3]*u0*alpha; 	
+      u[0] = u[0] - gu[0][1]*u0*alpha; 	
+      u[1] = u[1] - gu[0][2]*u0*alpha; 	
+      u[2] = u[2] - gu[0][3]*u0*alpha; 	
       Real u_perp = gl[1][1]*SQR(u[0]) + gl[2][2]*SQR(u[1]) + gl[3][3]*SQR(u[2])
             + 2.0*gl[1][2]*u[0]*u[1] + 2.0*gl[1][3]*u[0]*u[2]
             + 2.0*gl[3][2]*u[2]*u[1];
@@ -1822,9 +1822,9 @@ static void InjectKineticPrtcls( Real x1, Real x2, Real x3, Real * u, Real * b,
             + 2.0*gl[1][2]*u[0]*u[1] + 2.0*gl[1][3]*u[0]*u[2]
             + 2.0*gl[3][2]*u[2]*u[1];
       u0 = sqrt(u0 + massive); 
-      u_aux[0] = u[0] - gu[0][1]*u0*alpha; 	
-      u_aux[1] = u[1] - gu[0][2]*u0*alpha; 	
-      u_aux[2] = u[2] - gu[0][3]*u0*alpha; 	
+      u_aux[0] = u[0] + gu[0][1]*u0*alpha; 	
+      u_aux[1] = u[1] + gu[0][2]*u0*alpha; 	
+      u_aux[2] = u[2] + gu[0][3]*u0*alpha; 	
     } else {
       while ( u0 > max_en || u0 < min_en ){
         if (u0 > max_en) {
