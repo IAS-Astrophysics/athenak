@@ -224,7 +224,7 @@ TaskStatus RadiationM1::TimeUpdate_(Driver *d, int stage) {
                    w0_(m, IVZ, k, j, i) - w_lorentz * beta_u(3) / adm.alpha(m, k, j, i),
                    u_u);
         } else {
-          w_lorentz = adm.alpha(m,k,j,i) * u_mu_(m, 0, k, j, i);
+          w_lorentz = adm.alpha(m, k, j, i) * u_mu_(m, 0, k, j, i);
           pack_u_u(u_mu_(m, 0, k, j, i), u_mu_(m, 1, k, j, i), u_mu_(m, 2, k, j, i),
                    u_mu_(m, 3, k, j, i), u_u);
         }
@@ -386,10 +386,6 @@ TaskStatus RadiationM1::TimeUpdate_(Driver *d, int stage) {
                            params_.closure_type);
               AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> rT_dd{};
               assemble_rT(n_d, Estar, Fstar_d, P_dd, rT_dd);
-              if (Estar > 1e-4) {
-                printf("[radiation_m1_update] chi star = %.10e\n",
-                       chi_(m, nuidx, k, j, i));
-              }
               Real Jstar = calc_J_from_rT(rT_dd, u_u);
               AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> Hstar_d{};
               calc_H_from_rT(rT_dd, u_u, proj_ud, Hstar_d);
@@ -561,6 +557,16 @@ TaskStatus RadiationM1::TimeUpdate_(Driver *d, int stage) {
                       beta_dt * rEFN[nuidx][M1_N_IDX] + theta * DrEFN[nuidx][M1_N_IDX];
             Nf = Kokkos::max<Real>(Nf, params_.rad_N_floor);
             u0_(m, CombinedIdx(nuidx, M1_N_IDX, nvars_), k, j, i) = Nf;
+          }
+
+          if (params_.backreact && stage == 1 && ismhd) {
+            umhd0_(m, IEN, k, j, i) -= theta * DrEFN[nuidx][M1_E_IDX];
+            umhd0_(m, IM1, k, j, i) -= theta * DrEFN[nuidx][M1_FX_IDX];
+            umhd0_(m, IM2, k, j, i) -= theta * DrEFN[nuidx][M1_FY_IDX];
+            umhd0_(m, IM3, k, j, i) -= theta * DrEFN[nuidx][M1_FZ_IDX];
+            if (nspecies_ > 1) {
+              umhd0_(m, IYF, k, j, i) += theta * DDxp[nuidx];
+            }
           }
         }
       });

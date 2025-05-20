@@ -53,6 +53,7 @@ struct RadiationM1Params {
   bool matter_sources;  // include matter sources
   bool theta_limiter;   // activate theta limiter
   bool beam_sources;    // include beam sources
+  bool backreact;
 
   int nspecies;              // number of neutrino species
   Real closure_epsilon;      // precision with which to find closure
