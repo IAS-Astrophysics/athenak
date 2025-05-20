@@ -764,7 +764,7 @@ BaseTypeOutput::BaseTypeOutput(ParameterInput *pin, Mesh *pm, OutputParameters o
   }
 
   // radiation m1 eta 1
-  if (out_params.variable.compare("rad_m1_eta_0") == 1) {
+  if (out_params.variable.compare("rad_m1_eta_1") == 1) {
     for (int nuidx = 0; nuidx < pm->pmb_pack->pradm1->nspecies; ++nuidx) {
       outvars.emplace_back("eta_1:" + std::to_string(nuidx), nuidx,
                            &(pm->pmb_pack->pradm1->eta_1));
