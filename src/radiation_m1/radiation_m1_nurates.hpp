@@ -123,12 +123,13 @@ void bns_nurates(Real &nb, Real &temp, Real &ye, Real &mu_n, Real &mu_p, Real &m
   const Real r_cgs2code =
       1. / (units.cgs2code_time * Kokkos::pow(units.cgs2code_length, 3));
   // from MeV cm^-3 s^-1 to code
-  const Real q_cgs2code = units.mev_to_erg * units.cgs2code_energy /
+  const Real q_cgs2code = MEV_TO_ERG * units.cgs2code_energy /
                           (units.cgs2code_time * Kokkos::pow(units.cgs2code_length, 3));
   // from cm^-1 to code
   const Real kappa_cgs2code = 1. / (units.cgs2code_length);
 
-  if (nb < nurates_params.rho_min_cgs || temp < nurates_params.temp_min_mev) {
+  if (nb * (1. / units.cgs2code_energy) < nurates_params.rho_min_cgs ||
+      temp < nurates_params.temp_min_mev) {
     R_nue = 0.;
     R_anue = 0.;
     R_nux = 0.;
@@ -157,15 +158,15 @@ void bns_nurates(Real &nb, Real &temp, Real &ye, Real &mu_n, Real &mu_p, Real &m
   }
 
   // convert neutrino quantities to cgs
-  const Real n_nue_cgs = n_nue / (n_cgs2code/units.normfact) * 1e-21;
-  const Real n_anue_cgs = n_anue / (n_cgs2code/units.normfact) * 1e-21;
-  const Real n_nux_cgs = n_nux / (n_cgs2code/units.normfact) * 1e-21;
-  const Real n_anux_cgs = n_anux / (n_cgs2code/units.normfact) * 1e-21;
+  const Real n_nue_cgs = n_nue / (n_cgs2code / NORMFACT) * 1e-21;
+  const Real n_anue_cgs = n_anue / (n_cgs2code / NORMFACT) * 1e-21;
+  const Real n_nux_cgs = n_nux / (n_cgs2code / NORMFACT) * 1e-21;
+  const Real n_anux_cgs = n_anux / (n_cgs2code / NORMFACT) * 1e-21;
   const Real j_nue_cgs = j_nue / j_cgs2code;
   const Real j_anue_cgs = j_anue / j_cgs2code;
   const Real j_nux_cgs = j_nux / j_cgs2code;
   const Real j_anux_cgs = j_anux / j_cgs2code;
-  const Real nb_cgs = nb; //@TODO: fix!
+  const Real nb_cgs = nb;  //@TODO: fix!
 
   // opacity params structure
   GreyOpacityParams my_grey_opacity_params{};
@@ -307,30 +308,30 @@ void bns_nurates(Real &nb, Real &temp, Real &ye, Real &mu_n, Real &mu_p, Real &m
   assert(isfinite(scat_1_anux));
 
   // convert to code units
-   R_nue = R_nue * (r_cgs2code/units.normfact) * 1e21;
-   R_anue = R_anue * (r_cgs2code/units.normfact) * 1e21;
-   R_nux = R_nux * (r_cgs2code/units.normfact) * 1e21;
-   R_anux = R_anux * (r_cgs2code/units.normfact) * 1e21;
-   Q_nue = Q_nue * q_cgs2code * 1e21;
-   Q_anue = Q_anue * q_cgs2code * 1e21;
-   Q_nux = Q_nux * q_cgs2code * 1e21;
-   Q_anux = Q_anux * q_cgs2code * 1e21;
-   sigma_0_nue = sigma_0_nue * kappa_cgs2code * 1e7;
-   sigma_0_anue = sigma_0_anue * kappa_cgs2code * 1e7;
-   sigma_0_nux = sigma_0_nux * kappa_cgs2code * 1e7;
-   sigma_0_anux = sigma_0_anux * kappa_cgs2code * 1e7;
-   sigma_1_nue = sigma_1_nue * kappa_cgs2code * 1e7;
-   sigma_1_anue = sigma_1_anue * kappa_cgs2code * 1e7;
-   sigma_1_nux = sigma_1_nux * kappa_cgs2code * 1e7;
-   sigma_1_anux = sigma_1_anux * kappa_cgs2code * 1e7;
-   scat_0_nue = scat_0_nue * kappa_cgs2code * 1e7;
-   scat_0_anue = scat_0_anue * kappa_cgs2code * 1e7;
-   scat_0_nux = scat_0_nux * kappa_cgs2code * 1e7;
-   scat_0_anux = scat_0_anux * kappa_cgs2code * 1e7;
-   scat_1_nue = scat_1_nue * kappa_cgs2code * 1e7;
-   scat_1_anue = scat_1_anue * kappa_cgs2code * 1e7;
-   scat_1_nux = scat_1_nux * kappa_cgs2code * 1e7;
-   scat_1_anux = scat_1_anux * kappa_cgs2code * 1e7;
+  R_nue = R_nue * (r_cgs2code / NORMFACT) * 1e21;
+  R_anue = R_anue * (r_cgs2code / NORMFACT) * 1e21;
+  R_nux = R_nux * (r_cgs2code / NORMFACT) * 1e21;
+  R_anux = R_anux * (r_cgs2code / NORMFACT) * 1e21;
+  Q_nue = Q_nue * q_cgs2code * 1e21;
+  Q_anue = Q_anue * q_cgs2code * 1e21;
+  Q_nux = Q_nux * q_cgs2code * 1e21;
+  Q_anux = Q_anux * q_cgs2code * 1e21;
+  sigma_0_nue = sigma_0_nue * kappa_cgs2code * 1e7;
+  sigma_0_anue = sigma_0_anue * kappa_cgs2code * 1e7;
+  sigma_0_nux = sigma_0_nux * kappa_cgs2code * 1e7;
+  sigma_0_anux = sigma_0_anux * kappa_cgs2code * 1e7;
+  sigma_1_nue = sigma_1_nue * kappa_cgs2code * 1e7;
+  sigma_1_anue = sigma_1_anue * kappa_cgs2code * 1e7;
+  sigma_1_nux = sigma_1_nux * kappa_cgs2code * 1e7;
+  sigma_1_anux = sigma_1_anux * kappa_cgs2code * 1e7;
+  scat_0_nue = scat_0_nue * kappa_cgs2code * 1e7;
+  scat_0_anue = scat_0_anue * kappa_cgs2code * 1e7;
+  scat_0_nux = scat_0_nux * kappa_cgs2code * 1e7;
+  scat_0_anux = scat_0_anux * kappa_cgs2code * 1e7;
+  scat_1_nue = scat_1_nue * kappa_cgs2code * 1e7;
+  scat_1_anue = scat_1_anue * kappa_cgs2code * 1e7;
+  scat_1_nux = scat_1_nux * kappa_cgs2code * 1e7;
+  scat_1_anux = scat_1_anux * kappa_cgs2code * 1e7;
 }
 
 //! \fn void NeutrinoDens(Real mu_n, Real mu_p, Real mu_e, Real nb, Real temp,
@@ -392,13 +393,13 @@ void NeutrinoDens(Real mu_n, Real mu_p, Real mu_e, Real nb, Real temp, Real &n_n
   assert(isfinite(en_anue));
   assert(isfinite(en_nux));
 
-  const Real fact1 = Kokkos::pow(units.cgs2code_length, 3) * units.normfact;
+  const Real fact1 = Kokkos::pow(units.cgs2code_length, 3) * NORMFACT;
   n_nue = n_nue / fact1;
   n_anue = n_anue / fact1;
   n_nux = n_nux / fact1;
 
   const Real fact2 =
-      units.mev_to_erg * units.cgs2code_energy / Kokkos::pow(units.cgs2code_length, 3);
+      MEV_TO_ERG * units.cgs2code_energy / Kokkos::pow(units.cgs2code_length, 3);
   en_nue = en_nue / fact2;
   en_anue = en_anue / fact2;
   en_nux = en_nux / fact2;
