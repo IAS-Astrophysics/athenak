@@ -31,7 +31,7 @@ KOKKOS_INLINE_FUNCTION MathSignal BrentInitialize(Functor &&f, Real x_lower,
                                                    BrentState &brent_state,
                                                    Types... args) {
   if (x_lower > x_upper) {
-    printf("BrentInit: %.14e must be less than %.14e\n", x_lower, x_upper);
+    Kokkos::printf("BrentInit: %.14e must be less than %.14e\n", x_lower, x_upper);
     return LinalgEinval;
   }
 
@@ -51,7 +51,7 @@ KOKKOS_INLINE_FUNCTION MathSignal BrentInitialize(Functor &&f, Real x_lower,
   brent_state.f_c = f_upper;
 
   if ((f_lower < 0.0 && f_upper < 0.0) || (f_lower > 0.0 && f_upper > 0.0)) {
-    printf("BrentInit: Function at endpoints should be of opposite signs! "
+    Kokkos::printf("BrentInit: Function at endpoints should be of opposite signs! "
            "f_l = %.14e, f_h = %.14e\n",
            f_lower, f_upper);
     return LinalgEinval;
