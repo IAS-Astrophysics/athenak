@@ -61,21 +61,21 @@ void ProblemGenerator::RadiationM1BrentTest(ParameterInput *pin,
 
           // Some nans in the evaluation. This should not happen.
           if (ierr != radiationm1::LinalgSuccess) {
-            printf("Unexpected error in BrentIterate.\n");
+            Kokkos::printf("Unexpected error in BrentIterate.\n");
           }
           x_md = root;
           ierr = radiationm1::BrentTestInterval(x_lo, x_hi, closure_epsilon, 0);
         } while (ierr == radiationm1::LinalgContinue && iter < closure_maxiter);
 
-        printf("[%d] root = %.14e\n", i, x_md);
+        Kokkos::printf("[%d] root = %.14e\n", i, x_md);
 
         if (ierr != radiationm1::LinalgSuccess) {
-          printf("Maximum number of iterations exceeded\n");
+          Kokkos::printf("Maximum number of iterations exceeded\n");
         } else {
-          printf("[%d] num iter: %d\n", i, iter);
+          Kokkos::printf("[%d] num iter: %d\n", i, iter);
         }
       });
 
-  printf("Answer: -0.573384418151758, 2.90671775148509\n");
+  Kokkos::printf("Answer: -0.573384418151758, 2.90671775148509\n");
   return;
 }
