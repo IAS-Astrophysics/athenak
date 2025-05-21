@@ -11,14 +11,14 @@
 // Athena++ headers
 #include "athena.hpp"
 #include "coordinates/adm.hpp"
+#include "driver/driver.hpp"
+#include "dyn_grmhd/dyn_grmhd.hpp"
+#include "eos/eos.hpp"
 #include "mesh/mesh.hpp"
 #include "parameter_input.hpp"
 #include "pgen/pgen.hpp"
 #include "radiation_m1/radiation_m1.hpp"
 #include "radiation_m1/radiation_m1_helpers.hpp"
-#include "eos/eos.hpp"
-#include "dyn_grmhd/dyn_grmhd.hpp"
-#include "driver/driver.hpp"
 
 //----------------------------------------------------------------------------------------
 //! \fn void MeshBlock::UserProblem(ParameterInput *pin)
@@ -63,32 +63,32 @@ void ProblemGenerator::RadiationM1SingleZoneTest_(ParameterInput *pin,
 
   // Check required modules are called
   if (pmbp->pmhd == nullptr) {
-    std::cout <<"### FATAL ERROR in "<< __FILE__ <<" at line " << __LINE__ << std::endl
-            << "DyHydro is required for the single zone equilibration test" << std::endl;
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+              << "DyHydro is required for the single zone equilibration test"
+              << std::endl;
     exit(EXIT_FAILURE);
   }
   if (pmbp->pradm1 == nullptr) {
-    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-              << std::endl
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
               << "The single zone equilibration test problem generator requires "
                  "radiation-m1, but no "
               << "<radiation_m1> block in input file" << std::endl;
     exit(EXIT_FAILURE);
   }
   if (pmbp->pradm1->params.opacity_type != radiationm1::BnsNurates) {
-    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-              << std::endl
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
               << "The single zone equilibration test problem generator requires "
-                 "bns-nurates" << std::endl;
+                 "bns-nurates"
+              << std::endl;
     exit(EXIT_FAILURE);
-  }  
+  }
 
   // capture variables for kernel
   auto &indcs = pmy_mesh_->mb_indcs;
   int &ng = indcs.ng;
-  int n1 = indcs.nx1 + 2*ng;
-  int n2 = (indcs.nx2 > 1)? (indcs.nx2 + 2*ng) : 1;
-  int n3 = (indcs.nx3 > 1)? (indcs.nx3 + 2*ng) : 1;
+  int n1 = indcs.nx1 + 2 * ng;
+  int n2 = (indcs.nx2 > 1) ? (indcs.nx2 + 2 * ng) : 1;
+  int n3 = (indcs.nx3 > 1) ? (indcs.nx3 + 2 * ng) : 1;
   int &is = indcs.is;
   int &js = indcs.js;
   int &ks = indcs.ks;
@@ -132,7 +132,7 @@ void ProblemGenerator::RadiationM1SingleZoneTest_(ParameterInput *pin,
 
   // Convert primitives to conserved
   // auto &u0 = pmbp->pmhd->u0;
-  pmbp->pdyngr->PrimToConInit(0, (n1-1), 0, (n2-1), 0, (n3-1));
+  pmbp->pdyngr->PrimToConInit(0, (n1 - 1), 0, (n2 - 1), 0, (n3 - 1));
 
   // initialize ADM variables
   adm::ADM::ADM_vars &adm = pmbp->padm->adm;

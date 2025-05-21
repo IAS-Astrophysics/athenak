@@ -244,7 +244,6 @@ TaskStatus RadiationM1::CalcOpacityNurates_(Driver *pdrive, int stage) {
           Real tau{};
           Real nudens_0_trap[4]{}, nudens_1_trap[4]{};
           Real nudens_0_thin[4]{}, nudens_1_thin[4]{};
-          Real n_nu_trap[3]{}, e_nu_trap[3]{};
 
           if (nurates_params_.use_kirchhoff_law) {
             // effective optical depth to decide whether to compute black body function
@@ -263,19 +262,21 @@ TaskStatus RadiationM1::CalcOpacityNurates_(Driver *pdrive, int stage) {
               Real n_nu[6] = {n_nue,      n_anue,    n_nux / 4., n_nux / 4.,
                               n_nux / 4., n_nux / 4.};  // neutrino number densities
                                                         // (e, ae, m, am, t, at)
-              Real Y_lep[3];   // total lepton fraction: [0] electron, [1] mu, [3] tau
-              eos.GetLeptonFractions(nb, &Y, n_nu, Y_lep);
-              Real temp_trap{}, Y_trap[6]{};
+              Real Y_part[3] = {Y, 0., 0.}; // particle fractions (currently on Y_e is used)
+              Real Y_lep[3]{};   // total lepton fraction: [0] electron, [1] mu, [3] tau
+              eos.GetLeptonFractions(nb, Y_part, n_nu, Y_lep);
+              Real temp_trap{}, Y_part_trap[3]{};
               bool ierr = eos.GetBetaEquilibriumTrapped(nb, T, Y_lep, temp_trap,
-                                                        Y_trap, T, &Y);
+                                                        Y_part_trap, T, Y_part);
               if (!ierr) {
                 Real n_nu0[6]{};
-                eos.GetLeptonFractions(nb, &Y, n_nu0, Y_lep);
-                ierr = eos.GetBetaEquilibriumTrapped(nb, T, Y_lep, temp_trap, Y_trap,
-                                                     T, &Y);
+                eos.GetLeptonFractions(nb, Y_part, n_nu0, Y_lep);
+                ierr = eos.GetBetaEquilibriumTrapped(nb, T, Y_lep, temp_trap, Y_part_trap,
+                                                     T, Y_part);
               }
-              eos.GetTrappedNeutrinos(nb, temp_trap, Y_trap, n_nu_trap,
-                                      e_nu_trap);
+              Real n_nu_trap[3]{}, e_nu_trap[3]{};
+              eos.GetTrappedNeutrinos(nb, temp_trap, Y_part_trap, n_nu_trap, e_nu_trap);
+
               nudens_0_trap[0] = n_nu_trap[0];
               nudens_0_trap[1] = n_nu_trap[1];
               nudens_0_trap[2] = n_nu_trap[2];
@@ -291,6 +292,7 @@ TaskStatus RadiationM1::CalcOpacityNurates_(Driver *pdrive, int stage) {
               assert(Kokkos::isfinite(nudens_1_trap[0]));
               assert(Kokkos::isfinite(nudens_1_trap[1]));
               assert(Kokkos::isfinite(nudens_1_trap[2]));
+
               nudens_0_trap[2] *= 0.5;
               nudens_1_trap[2] *= 0.5;
               nudens_0_trap[3] = nudens_0_trap[2];
