@@ -267,12 +267,12 @@ TaskStatus RadiationM1::CalcOpacityNurates_(Driver *pdrive, int stage) {
               eos.GetLeptonFractions(nb, &Y, n_nu, Y_lep);
               Real temp_trap{}, Y_trap[6]{};
               bool ierr = eos.GetBetaEquilibriumTrapped(nb, T, Y_lep, temp_trap,
-                                                        Y_trap, T, Y);
+                                                        Y_trap, T, &Y);
               if (!ierr) {
                 Real n_nu0[6]{};
                 eos.GetLeptonFractions(nb, &Y, n_nu0, Y_lep);
                 ierr = eos.GetBetaEquilibriumTrapped(nb, T, Y_lep, temp_trap, Y_trap,
-                                                     T, Y);
+                                                     T, &Y);
               }
               eos.GetTrappedNeutrinos(nb, temp_trap, Y_trap, n_nu_trap,
                                       e_nu_trap);
