@@ -34,7 +34,7 @@ nx3       = 40           # Number of cells in each MeshBlock, X3-dir
 evolution  = dynamic     # dynamic/kinematic/static
 integrator = rk2         # time integration algorithm
 cfl_number = 0.12         # The Courant, Friedrichs, & Lewy (CFL) Number
-tlim       = 15.0        # time limit
+tlim       = 0.5        # time limit
 ndiag      = 1           # cycles between diagostic output
 
 <adm>
