@@ -16,9 +16,9 @@
 #include "parameter_input.hpp"
 
 using ProblemFinalizeFnPtr = void (*)(ParameterInput *pin, Mesh *pm);
-using UserBoundaryFnPtr = void (*)(Mesh *pm);
-using UserSrctermFnPtr = void (*)(Mesh *pm, const Real bdt);
-using UserRefinementFnPtr = void (*)(MeshBlockPack *pmbp);
+using UserBoundaryFnPtr = void (*)(Mesh* pm);
+using UserSrctermFnPtr = void (*)(Mesh* pm, const Real bdt);
+using UserRefinementFnPtr = void (*)(MeshBlockPack* pmbp);
 using UserHistoryFnPtr = void (*)(HistoryData *pdata, Mesh *pm);
 
 //----------------------------------------------------------------------------------------
@@ -29,7 +29,8 @@ class ProblemGenerator {
   // constructor for new problems
   ProblemGenerator(ParameterInput *pin, Mesh *pmesh);
   // constructor for restarts
-  ProblemGenerator(ParameterInput *pin, Mesh *pmesh, IOWrapper resfile);
+  ProblemGenerator(ParameterInput *pin, Mesh *pmesh, IOWrapper resfile,
+                   bool single_file_per_rank=false);
   ~ProblemGenerator() = default;
 
   // true if user BCs are specified on any face
@@ -44,15 +45,14 @@ class ProblemGenerator {
   // vector of SphericalGrid objects for analysis
   std::vector<std::unique_ptr<SphericalGrid>> spherical_grids;
 
-  // function pointer for final work after main loop (e.g. compute errors).
-  // Called by Driver::Finalize()
-  ProblemFinalizeFnPtr pgen_final_func = nullptr;
-  // function pointer for user-enrolled BCs.  Called in ApplyPhysicalBCs in task
-  // list
-  UserBoundaryFnPtr user_bcs_func = nullptr;
-  UserSrctermFnPtr user_srcs_func = nullptr;
-  UserRefinementFnPtr user_ref_func = nullptr;
-  UserHistoryFnPtr user_hist_func = nullptr;
+  // function pointer for final work after main loop (e.g. compute errors).  Called by
+  // Driver::Finalize()
+  ProblemFinalizeFnPtr pgen_final_func=nullptr;
+  // function pointer for user-enrolled BCs.  Called in ApplyPhysicalBCs in task list
+  UserBoundaryFnPtr user_bcs_func=nullptr;
+  UserSrctermFnPtr user_srcs_func=nullptr;
+  UserRefinementFnPtr user_ref_func=nullptr;
+  UserHistoryFnPtr user_hist_func=nullptr;
 
   // predefined problem generator functions (default test suite)
   void Advection(ParameterInput *pin, const bool restart);
@@ -81,9 +81,10 @@ class ProblemGenerator {
   void RadiationM1SingleZoneTest(ParameterInput *pin, const bool restart);
 
  private:
-  Mesh *pmy_mesh_;
+  bool single_file_per_rank; // for restart file naming
+  Mesh* pmy_mesh_;
   template <class EOSPolicy, class ErrorPolicy>
   void RadiationM1SingleZoneTest_(ParameterInput *pin, const bool restart);
 };
 
-#endif  // PGEN_PGEN_HPP_
+#endif // PGEN_PGEN_HPP_
