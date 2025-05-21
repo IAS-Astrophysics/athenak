@@ -693,7 +693,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
               << "<radiation_m1> block in input file" << std::endl;
     exit(EXIT_FAILURE);
   }
-  if (pmbp->pradm1.opacity_type != "bns-nurates") {
+  if (pmbp->pradm1->params.opacity_type != radiationm1::BnsNurates) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
               << std::endl
               << "The radiation m1 tov test problem generator requires "
