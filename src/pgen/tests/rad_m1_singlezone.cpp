@@ -89,7 +89,18 @@ void ProblemGenerator::RadiationM1SingleZoneTest(ParameterInput *pin,
   pmbp->pdyngr->PrimToConInit(0, (n1-1), 0, (n2-1), 0, (n3-1));
 
   // initialize ADM variables
-  if (pmbp->padm != nullptr) {
-    pmbp->padm->SetADMVariables(pmbp);
-  }
+  adm::ADM::ADM_vars &adm = pmbp->padm->adm;
+  // set metric to minkowski
+  par_for(
+      "pgen_metric_initialize", DevExeSpace(),0,nmb1,0,(n3-1),0,(n2-1),0,(n1-1)
+      KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
+        for (int a = 0; a < 3; ++a)
+          for (int b = a; b < 3; ++b) {
+            adm.g_dd(m, a, b, k, j, i) = (a == b ? 1. : 0.);
+          }
+
+        adm.psi4(m, k, j, i) = 1.;  // adm.psi4
+
+        adm.alpha(m, k, j, i) = 1.;
+      });
 }
