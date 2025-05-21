@@ -89,8 +89,7 @@ RadiationM1::RadiationM1(MeshBlockPack *ppack, ParameterInput *pin)
 #ifdef ENABLE_NURATES
     params.opacity_type = BnsNurates;
 
-    nurates_params.nurates_quad_nx = pin->GetOrAddInteger("bns_nurates", "nurates_quad_nx", 10);
-    nurates_params.nurates_quad_ny = pin->GetOrAddInteger("bns_nurates", "nurates_quad_ny", 10);
+    nurates_params.quad_nx = pin->GetOrAddInteger("bns_nurates", "nurates_quad_nx", 10);
     nurates_params.opacity_tau_trap = pin->GetOrAddReal("bns_nurates", "opacity_tau_trap", 1.0);
     nurates_params.opacity_tau_delta = pin->GetOrAddReal("bns_nurate", "opacity_tau_delta", 1.0);
     nurates_params.opacity_corr_fac_max = pin->GetOrAddReal("bns_nurates", "opacity_corr_fac_max", 3.0);
@@ -108,22 +107,14 @@ RadiationM1::RadiationM1(MeshBlockPack *ppack, ParameterInput *pin)
     nurates_params.use_dm_eff = pin->GetOrAddBoolean("bns_nurates", "use_dm_eff", true);
     nurates_params.use_equilibrium_distribution = pin->GetOrAddBoolean("bns_nurates", "use_equilibrium_distribution", false);
     nurates_params.use_kirchhoff_law = pin->GetOrAddBoolean("bns_nurates", "use_kirchoff_law", false);
+    nurates_params.use_NN_medium_corr = pin->GetOrAddBoolean("bns_nurates", "use_NN_medium_corr", true);
 
-    nurates_params.my_quadrature_1d.nx = nurates_params.nurates_quad_nx;
-    nurates_params.my_quadrature_1d.dim = 1;
-    nurates_params.my_quadrature_1d.type = kGauleg;
-    nurates_params.my_quadrature_1d.x1 = 0.;
-    nurates_params.my_quadrature_1d.x2 = 1.;
-    nurates_params.my_quadrature_2d.nx = nurates_params.nurates_quad_nx;
-    nurates_params.my_quadrature_2d.ny = nurates_params.nurates_quad_ny;
-    nurates_params.my_quadrature_2d.dim = 2;
-    nurates_params.my_quadrature_2d.type = kGauleg;
-    nurates_params.my_quadrature_2d.x1 = 0.;
-    nurates_params.my_quadrature_2d.x2 = 1.;
-    nurates_params.my_quadrature_2d.y1 = 0.;
-    nurates_params.my_quadrature_2d.y2 = 1.;
-    //GaussLegendreMultiD(&nurates_params.my_quadrature_1d);
-    //GaussLegendreMultiD(&nurates_params.my_quadrature_2d);
+    nurates_params.quadrature.nx = nurates_params.quad_nx;
+    nurates_params.quadrature.dim = 1;
+    nurates_params.quadrature.type = kGauleg;
+    nurates_params.quadrature.x1 = 0.;
+    nurates_params.quadrature.x2 = 1.;
+    GaussLegendre(&nurates_params.quadrature);
 #endif
   } else if (opacity_type == "none") {
     params.opacity_type = None;
