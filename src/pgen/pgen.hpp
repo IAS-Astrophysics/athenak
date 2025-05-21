@@ -82,6 +82,8 @@ class ProblemGenerator {
 
  private:
   Mesh *pmy_mesh_;
+  template <class EOSPolicy, class ErrorPolicy>
+  void RadiationM1SingleZoneTest_(ParameterInput *pin, const bool restart);
 };
 
 #endif  // PGEN_PGEN_HPP_

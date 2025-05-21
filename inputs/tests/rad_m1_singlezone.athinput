@@ -42,7 +42,7 @@ nx3       = 1           # Number of cells in each MeshBlock, X3-dir
 nscalars    = 1
 eos         = ideal     # EOS type
 dyn_eos     = compose     # EOS type
-table       = /Users/qe/Desktop/athenaK/athenak/DD2.athtab
+table       = /home/yiqiu0714/athenak/build/DD2.athtab
 dyn_error   = reset_floor # error policy
 reconstruct = dc      # spatial reconstruction method
 rsolver     = hlle      # Riemann solver to be used
@@ -68,11 +68,11 @@ opacity_type = bns-nurates
 
 <problem>
 pgen_name = rad_m1_singlezonetest
-rho = 1.0    # initial radiation energy density
-temp = 100.0  # initial temperature
-vx = 0.0 # x velocity
-vy = 0.0 # y velocity
-vz = 0.0 # z velocity
+rho = 1.0e11   # initial density
+temp = 50.0 # initial temperature
+vx = 0.0    # x velocity
+vy = 0.0    # y velocity
+vz = 0.0    # z velocity
 Y_e = 0.1   # electron fraction
 
 <output1>
