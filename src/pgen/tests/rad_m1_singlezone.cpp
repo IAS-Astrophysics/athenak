@@ -25,12 +25,38 @@
 //  \brief Sets initial conditions for radiation M1 single zone equilibratioon test
 void ProblemGenerator::RadiationM1SingleZoneTest(ParameterInput *pin,
                                                  const bool restart) {
+  MeshBlockPack *pmbp = pmy_mesh_->pmb_pack;
+  // Here we are using dynamic_cast to infer which derived type pdyngr is
+  auto *ptest_nqt =
+      dynamic_cast<dyngr::DynGRMHDPS<Primitive::EOSCompOSE<Primitive::NQTLogs>,
+                                     Primitive::ResetFloor> *>(pmbp->pdyngr);
+  if (ptest_nqt != nullptr) {
+    return RadiationM1SingleZoneTest_<Primitive::EOSCompOSE<Primitive::NQTLogs>,
+                                      Primitive::ResetFloor>(pin, restart);
+  }
+
+  auto *ptest_nlog =
+      dynamic_cast<dyngr::DynGRMHDPS<Primitive::EOSCompOSE<Primitive::NormalLogs>,
+                                     Primitive::ResetFloor> *>(pmbp->pdyngr);
+  if (ptest_nlog != nullptr) {
+    return RadiationM1SingleZoneTest_<Primitive::EOSCompOSE<Primitive::NormalLogs>,
+                                      Primitive::ResetFloor>(pin, restart);
+  }
+
+  std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl;
+  std::cout << "Unsupported EOS type!\n";
+  abort();
+}
+
+template <class EOSPolicy, class ErrorPolicy>
+void ProblemGenerator::RadiationM1SingleZoneTest_(ParameterInput *pin,
+                                                  const bool restart) {
   if (restart) return;
 
   MeshBlockPack *pmbp = pmy_mesh_->pmb_pack;
 
   // Check required modules are called
-  if (pmbp->pmhd == nullptr) {
+  if (pmbp->pdyngr == nullptr) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
               << "DyHydro is required for the single zone equilibration test"
               << std::endl;
@@ -63,6 +89,7 @@ void ProblemGenerator::RadiationM1SingleZoneTest(ParameterInput *pin,
   auto &size = pmbp->pmb->mb_size;
   auto &coord = pmbp->pcoord->coord_data;
   int nmb1 = (pmbp->nmb_thispack - 1);
+
   // get problem parameters
   Real rho = pin->GetReal("problem", "rho");
   Real temp = pin->GetReal("problem", "temp");
@@ -71,40 +98,38 @@ void ProblemGenerator::RadiationM1SingleZoneTest(ParameterInput *pin,
   Real vz = pin->GetReal("problem", "vz");
   Real ye = pin->GetReal("problem", "Y_e");
 
-  // This is a ugly hack stolen from eos_compose_test.cpp
   Real mb{};
   Primitive::EOS<EOSPolicy, ErrorPolicy> &eos =
       static_cast<dyngr::DynGRMHDPS<EOSPolicy, ErrorPolicy> *>(pmbp->pdyngr)
           ->eos.ps.GetEOSMutable();
   mb = eos.GetBaryonMass();
-  Real n = rho/mb/code_units.DensityConversion(cgs_units);
-  // Hack for Y_e for now, note that EOS can, in principle, access up to MAX_SPECIES different scalars
-  Real P = eos.GetPressure(n, temp, &ye);
-  // conversion factors from cgs to code units
+
   auto cgs_units = Primitive::MakeCGS();
   auto code_units = eos.GetCodeUnitSystem();
-  Real lorentz_w = 1. / Kokkos::sqrt(1. - vx*vx - vy*vy - vz*vz);
+
+  Real nb = (rho / mb) * cgs_units.DensityConversion(code_units);
+  Real P = eos.GetPressure(nb, temp, &ye);
+
+  Real w_lorentz = 1. / Kokkos::sqrt(1. - vx * vx - vy * vy - vz * vz);
 
   // set primitive variables
   auto &w0_ = pmbp->pmhd->w0;
   par_for(
       "pgen_singlezone", DevExeSpace(), 0, nmb1, 0, (n3 - 1), 0, (n2 - 1), 0, (n1 - 1),
       KOKKOS_LAMBDA(int m, int k, int j, int i) {
-        w0_(m, IDN, k, j, i) = rho;
-        w0_(m, IVX, k, j, i) = vx;
-        w0_(m, IVY, k, j, i) = vy;
-        w0_(m, IVZ, k, j, i) = vz;
-        w0_(m, IEN, k, j, i) = temp;
+        w0_(m, IDN, k, j, i) = rho * cgs_units.DensityConversion(code_units);
+        w0_(m, IVX, k, j, i) = vx * w_lorentz;
+        w0_(m, IVY, k, j, i) = vy * w_lorentz;
+        w0_(m, IVZ, k, j, i) = vz * w_lorentz;
+        w0_(m, IPR, k, j, i) = P;
         w0_(m, IYF, k, j, i) = ye;
       });
 
-  // Convert primitives to conserved
-  // auto &u0 = pmbp->pmhd->u0;
+  // Convert primitives to conserved vars
   pmbp->pdyngr->PrimToConInit(0, (n1 - 1), 0, (n2 - 1), 0, (n3 - 1));
 
   // initialize ADM variables
   adm::ADM::ADM_vars &adm = pmbp->padm->adm;
-  // set metric to minkowski
   par_for(
       "pgen_metric_initialize", DevExeSpace(), 0, nmb1, 0, (n3 - 1), 0, (n2 - 1), 0,
       (n1 - 1), KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
