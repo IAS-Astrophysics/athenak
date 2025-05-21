@@ -7,28 +7,28 @@ basename  = sphere3d          # problem ID: basename of output filenames
 
 <mesh>
 nghost    = 2           # Number of ghost cells
-nx1       = 80         # Number of zones in X1-direction
+nx1       = 1280         # Number of zones in X1-direction
 x1min     = -4        # minimum value of X1
 x1max     = 4        # maximum value of X1
 ix1_bc    = outflow     # inner-X1 boundary flag
 ox1_bc    = outflow     # outer-X1 boundary flag
 
-nx2       = 80       # Number of zones in X2-direction
+nx2       = 1280       # Number of zones in X2-direction
 x2min     = -4        # minimum value of X2
 x2max     = 4       # maximum value of X2
 ix2_bc    = outflow     # inner-X2 boundary flag
 ox2_bc    = outflow     # outer-X2 boundary flag
 
-nx3       = 80           # Number of zones in X3-direction
+nx3       = 1280           # Number of zones in X3-direction
 x3min     = -4       # minimum value of X3
 x3max     = 4        # maximum value of X3
 ix3_bc    = outflow    # inner-X3 boundary flag
 ox3_bc    = outflow    # outer-X3 boundary flag
 
 <meshblock>
-nx1       = 40          # Number of cells in each MeshBlock, X1-dir
-nx2       = 40            # Number of cells in each MeshBlock, X2-dir
-nx3       = 40           # Number of cells in each MeshBlock, X3-dir
+nx1       = 128          # Number of cells in each MeshBlock, X1-dir
+nx2       = 128            # Number of cells in each MeshBlock, X2-dir
+nx3       = 128           # Number of cells in each MeshBlock, X3-dir
 
 <time>
 evolution  = dynamic     # dynamic/kinematic/static
