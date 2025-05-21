@@ -188,17 +188,17 @@ SrcSignal source_update(
       }
       Kokkos::printf("source_update: Retrying with Eddington closure.\n");
 #endif
-      if (m1_params.closure_type != Eddington) {
+      if (m1_params.closure_type != Eddington) { //@TODO: SYCL does not support recursive functions
         // Eddington closure
-        auto signal = source_update(BrentFunc, HybridsjFunc, cdt, alp, g_dd, g_uu, n_d,
-                                    n_u, gamma_ud, u_d, u_u, v_d, v_u, proj_ud, W, Eold,
-                                    Fold_d, Estar, Fstar_d, eta, kabs, kscat, chi, Enew,
-                                    Fnew_d, m1_params, Eddington);
-        if (signal == SrcOk) {
-          return SrcEddington;
-        } else {
-          return signal;
-        }
+        //auto signal = source_update(BrentFunc, HybridsjFunc, cdt, alp, g_dd, g_uu, n_d,
+        //                            n_u, gamma_ud, u_d, u_u, v_d, v_u, proj_ud, W, Eold,
+        //                           Fold_d, Estar, Fstar_d, eta, kabs, kscat, chi, Enew,
+        //                            Fnew_d, m1_params, Eddington);
+        //if (signal == SrcOk) {
+        //  return SrcEddington;
+        //} else {
+        //  return signal;
+        //}
       } else {
         // solver has failed
 #ifdef DEBUG_BUILD
