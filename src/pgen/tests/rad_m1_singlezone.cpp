@@ -44,6 +44,13 @@ void ProblemGenerator::RadiationM1SingleZoneTest(ParameterInput *pin,
               << "<radiation_m1> block in input file" << std::endl;
     exit(EXIT_FAILURE);
   }
+  if (pmbp->pradm1.opacity_type != "bns-nurates") {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+              << std::endl
+              << "The single zone equilibration test problem generator requires "
+                 "bns-nurates" << std::endl;
+    exit(EXIT_FAILURE);
+  }  
 
   // capture variables for kernel
   auto &indcs = pmy_mesh_->mb_indcs;
@@ -80,7 +87,7 @@ void ProblemGenerator::RadiationM1SingleZoneTest(ParameterInput *pin,
   // Convert primitives to conserved
   // auto &u0 = pmbp->pmhd->u0;
   pmbp->pdyngr->PrimToConInit(0, (n1-1), 0, (n2-1), 0, (n3-1));
-  
+
   // initialize ADM variables
   if (pmbp->padm != nullptr) {
     pmbp->padm->SetADMVariables(pmbp);
