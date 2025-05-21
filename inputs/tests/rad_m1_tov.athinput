@@ -52,8 +52,10 @@ src_update = implicit
 opacity_type = bns-nurates
 
 <mhd>
+nscalars    = 1
 eos         = ideal     # EOS type
-dyn_eos     = ideal     # EOS type
+dyn_eos     = compose     # EOS type
+table       = /home/yiqiu0714/athenak/build/DD2.athtab
 dyn_error   = reset_floor # error policy
 reconstruct = ppmx      # spatial reconstruction method
 rsolver     = hlle      # Riemann solver to be used
@@ -68,6 +70,7 @@ enforce_maximum = false
 <adm>
 
 <problem>
+table       = /home/yiqiu0714/athenak/build/DD2.athtab
 rhoc        = 1.28e-3 # Central density
 kappa       = 100.0    # P = kappa*rho^gamma
 npoints     = 10000.0  # buffer points for TOV calculation
