@@ -55,14 +55,14 @@ struct NuratesParams {
 //!                      const NuratesParams nurates_params)
 //   \brief Computes the rates given the M1 quantities
 //
-//   \note  All input and output quantities are in code units, except temperature (MeV)
+//   \note  Unless specified, all input and output quantities are in code units
 //
 //   \param[in] nb              baryon number density
 //   \param[in] temp            temperature (MeV)
 //   \param[in] ye              electron fraction
-//   \param[in] mu_n            neutron chemical potential
-//   \param[in] mu_p            proton chemical potential
-//   \param[in] mu_e            electron chemical potential
+//   \param[in] mu_n            neutron chemical potential (MeV)
+//   \param[in] mu_p            proton chemical potential (MeV)
+//   \param[in] mu_e            electron chemical potential (MeV)
 //   \param[in] n_nue           number density electron neutrinos
 //   \param[in] j_nue           energy density electron neutrinos
 //   \param[in] chi_nue         eddington factor electron neutrinos
@@ -114,22 +114,24 @@ void bns_nurates(Real &nb, Real &temp, Real &ye, Real &mu_n, Real &mu_p, Real &m
                  Real &scat_0_anue, Real &scat_0_nux, Real &scat_0_anux, Real &scat_1_nue,
                  Real &scat_1_anue, Real &scat_1_nux, Real &scat_1_anux,
                  const NuratesParams nurates_params, const RadiationM1Units units) {
-  // unit conversion factors
-  // from cm^-3 to code
-  const Real n_cgs2code = 1. / Kokkos::pow(units.cgs2code_length, 3);
-  // from MeV cm^-3 to code
-  const Real j_cgs2code = units.cgs2code_energy / Kokkos::pow(units.cgs2code_length, 3);
-  // from cm^-3 s^-1 to code
-  const Real r_cgs2code =
-      1. / (units.cgs2code_time * Kokkos::pow(units.cgs2code_length, 3));
-  // from MeV cm^-3 s^-1 to code
-  const Real q_cgs2code = MEV_TO_ERG * units.cgs2code_energy /
-                          (units.cgs2code_time * Kokkos::pow(units.cgs2code_length, 3));
-  // from cm^-1 to code
-  const Real kappa_cgs2code = 1. / (units.cgs2code_length);
+  // conversion factors (in order)
+  // 1. n: cm^-3 --> code units
+  // 2. j: MeV cm^-3 --> code units
+  // 3. R: cm^-3 s^-1 --> code units
+  // 4. Q: MeV cm^-3 s^-1 --> code units
+  // 5. kappa: cm^-1 --> code units
+  const Real cgs2code_length3 =
+      units.cgs2code_length * units.cgs2code_length * units.cgs2code_length;
 
-  if (nb * (1. / units.cgs2code_energy) < nurates_params.nb_min_cgs ||
-      temp < nurates_params.temp_min_mev) {
+  const Real cgs2code_n = 1. / cgs2code_length3;
+  const Real cgs2code_j = units.cgs2code_energy / cgs2code_length3;
+  const Real cgs2code_R = 1. / (units.cgs2code_time * cgs2code_length3);
+  const Real cgs2code_Q =
+      MEV_TO_ERG * units.cgs2code_energy / (units.cgs2code_time * cgs2code_length3);
+  const Real cgs2code_kappa = 1. / (units.cgs2code_length);
+
+  if (((nb / units.cgs2code_rho) < nurates_params.nb_min_cgs) ||
+      (temp < nurates_params.temp_min_mev)) {
     R_nue = 0.;
     R_anue = 0.;
     R_nux = 0.;
@@ -158,15 +160,15 @@ void bns_nurates(Real &nb, Real &temp, Real &ye, Real &mu_n, Real &mu_p, Real &m
   }
 
   // convert neutrino quantities to cgs
-  const Real n_nue_cgs = n_nue / (n_cgs2code / NORMFACT) * 1e-21;
-  const Real n_anue_cgs = n_anue / (n_cgs2code / NORMFACT) * 1e-21;
-  const Real n_nux_cgs = n_nux / (n_cgs2code / NORMFACT) * 1e-21;
-  const Real n_anux_cgs = n_anux / (n_cgs2code / NORMFACT) * 1e-21;
-  const Real j_nue_cgs = j_nue / j_cgs2code;
-  const Real j_anue_cgs = j_anue / j_cgs2code;
-  const Real j_nux_cgs = j_nux / j_cgs2code;
-  const Real j_anux_cgs = j_anux / j_cgs2code;
-  const Real nb_cgs = nb;  //@TODO: fix!
+  const Real n_nue_cgs = n_nue / (cgs2code_n / NORMFACT) * 1e-21;
+  const Real n_anue_cgs = n_anue / (cgs2code_n / NORMFACT) * 1e-21;
+  const Real n_nux_cgs = n_nux / (cgs2code_n / NORMFACT) * 1e-21;
+  const Real n_anux_cgs = n_anux / (cgs2code_n / NORMFACT) * 1e-21;
+  const Real j_nue_cgs = j_nue / cgs2code_j;
+  const Real j_anue_cgs = j_anue / cgs2code_j;
+  const Real j_nux_cgs = j_nux / cgs2code_j;
+  const Real j_anux_cgs = j_anux / cgs2code_j;
+  const Real nb_cgs = nb / units.cgs2code_rho * 1e-21;
 
   // opacity params structure
   GreyOpacityParams my_grey_opacity_params{};
@@ -308,30 +310,30 @@ void bns_nurates(Real &nb, Real &temp, Real &ye, Real &mu_n, Real &mu_p, Real &m
   assert(isfinite(scat_1_anux));
 
   // convert to code units
-  R_nue = R_nue * (r_cgs2code / NORMFACT) * 1e21;
-  R_anue = R_anue * (r_cgs2code / NORMFACT) * 1e21;
-  R_nux = R_nux * (r_cgs2code / NORMFACT) * 1e21;
-  R_anux = R_anux * (r_cgs2code / NORMFACT) * 1e21;
-  Q_nue = Q_nue * q_cgs2code * 1e21;
-  Q_anue = Q_anue * q_cgs2code * 1e21;
-  Q_nux = Q_nux * q_cgs2code * 1e21;
-  Q_anux = Q_anux * q_cgs2code * 1e21;
-  sigma_0_nue = sigma_0_nue * kappa_cgs2code * 1e7;
-  sigma_0_anue = sigma_0_anue * kappa_cgs2code * 1e7;
-  sigma_0_nux = sigma_0_nux * kappa_cgs2code * 1e7;
-  sigma_0_anux = sigma_0_anux * kappa_cgs2code * 1e7;
-  sigma_1_nue = sigma_1_nue * kappa_cgs2code * 1e7;
-  sigma_1_anue = sigma_1_anue * kappa_cgs2code * 1e7;
-  sigma_1_nux = sigma_1_nux * kappa_cgs2code * 1e7;
-  sigma_1_anux = sigma_1_anux * kappa_cgs2code * 1e7;
-  scat_0_nue = scat_0_nue * kappa_cgs2code * 1e7;
-  scat_0_anue = scat_0_anue * kappa_cgs2code * 1e7;
-  scat_0_nux = scat_0_nux * kappa_cgs2code * 1e7;
-  scat_0_anux = scat_0_anux * kappa_cgs2code * 1e7;
-  scat_1_nue = scat_1_nue * kappa_cgs2code * 1e7;
-  scat_1_anue = scat_1_anue * kappa_cgs2code * 1e7;
-  scat_1_nux = scat_1_nux * kappa_cgs2code * 1e7;
-  scat_1_anux = scat_1_anux * kappa_cgs2code * 1e7;
+  R_nue = R_nue * (cgs2code_R / NORMFACT) * 1e21;
+  R_anue = R_anue * (cgs2code_R / NORMFACT) * 1e21;
+  R_nux = R_nux * (cgs2code_R / NORMFACT) * 1e21;
+  R_anux = R_anux * (cgs2code_R / NORMFACT) * 1e21;
+  Q_nue = Q_nue * cgs2code_Q * 1e21;
+  Q_anue = Q_anue * cgs2code_Q * 1e21;
+  Q_nux = Q_nux * cgs2code_Q * 1e21;
+  Q_anux = Q_anux * cgs2code_Q * 1e21;
+  sigma_0_nue = sigma_0_nue * cgs2code_kappa * 1e7;
+  sigma_0_anue = sigma_0_anue * cgs2code_kappa * 1e7;
+  sigma_0_nux = sigma_0_nux * cgs2code_kappa * 1e7;
+  sigma_0_anux = sigma_0_anux * cgs2code_kappa * 1e7;
+  sigma_1_nue = sigma_1_nue * cgs2code_kappa * 1e7;
+  sigma_1_anue = sigma_1_anue * cgs2code_kappa * 1e7;
+  sigma_1_nux = sigma_1_nux * cgs2code_kappa * 1e7;
+  sigma_1_anux = sigma_1_anux * cgs2code_kappa * 1e7;
+  scat_0_nue = scat_0_nue * cgs2code_kappa * 1e7;
+  scat_0_anue = scat_0_anue * cgs2code_kappa * 1e7;
+  scat_0_nux = scat_0_nux * cgs2code_kappa * 1e7;
+  scat_0_anux = scat_0_anux * cgs2code_kappa * 1e7;
+  scat_1_nue = scat_1_nue * cgs2code_kappa * 1e7;
+  scat_1_anue = scat_1_anue * cgs2code_kappa * 1e7;
+  scat_1_nux = scat_1_nux * cgs2code_kappa * 1e7;
+  scat_1_anux = scat_1_anux * cgs2code_kappa * 1e7;
 }
 
 //! \fn void NeutrinoDens(Real mu_n, Real mu_p, Real mu_e, Real nb, Real temp,
