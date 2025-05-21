@@ -118,7 +118,8 @@ void bns_nurates(Real &nb, Real &temp, Real &ye, Real &mu_n, Real &mu_p, Real &m
   // 2. j: MeV cm^-3 --> code units
   // 3. R: cm^-3 s^-1 --> code units
   // 4. Q: MeV cm^-3 s^-1 --> code units
-  // 5. kappa0: MeV cm^-1 s^-1 --> code units
+  // 5. kappa0: cm^-1 s^-1 --> code units
+  // 6. kappa1: MeV cm^-1 s^-1 --> code units
   const Real cgs2code_length3 =
       units.cgs2code_length * units.cgs2code_length * units.cgs2code_length;
 
