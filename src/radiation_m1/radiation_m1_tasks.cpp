@@ -56,7 +56,7 @@ void RadiationM1::AssembleRadiationM1Tasks(
   id.closure = tl["opsplit_stagen"]->AddTask(&RadiationM1::CalcClosure, this, id.copyu);
 
   // decide what type of opacities to compute
-  if (!params.matter_sources == None) {
+  if (!params.matter_sources) {
     id.mattersrc = id.closure;
   } else if (params.opacity_type == BnsNurates) {
 #ifdef ENABLE_NURATES

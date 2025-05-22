@@ -187,6 +187,7 @@ add_executable(
         pgen/tests/rad_m1_latticetest.cpp
         pgen/tests/rad_m1_spheretest.cpp
         pgen/tests/rad_m1_hybridsj.cpp
+        radiation_m1/radiation_m1_toy.hpp
 )
 
 # add bns_nurates

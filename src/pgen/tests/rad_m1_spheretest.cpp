@@ -15,40 +15,8 @@
 #include "parameter_input.hpp"
 #include "pgen/pgen.hpp"
 #include "radiation_m1/radiation_m1.hpp"
-#include "radiation_m1/radiation_m1_helpers.hpp"
+#include "radiation_m1/radiation_m1_toy.hpp"
 
-KOKKOS_INLINE_FUNCTION
-void SphereOpacities(Real x1, Real x2, Real x3, Real dx, Real dy, Real dz,
-                     Real nuidx, Real &eta_0, Real &abs_0, Real &eta_1,
-                     Real &abs_1, Real &scat_1) {
-  eta_0 = 0;
-  abs_0 = 0;
-  eta_1 = 0;
-  abs_1 = 0;
-  scat_1 = 0;
-
-  const Real R = 1.;
-  const int npoints = 10;
-  int inside = 0;
-  int count = 0;
-  for (int ii = 0; ii < npoints; ++ii) {
-    Real const myx = (x1 - dx / 2.) + (ii + 0.5) * (dx / npoints);
-    for (int jj = 0; jj < npoints; ++jj) {
-      Real const myy = (x2 - dy / 2.) + (jj + 0.5) * (dy / npoints);
-      for (int kk = 0; kk < npoints; ++kk) {
-        Real const myz = (x3 - dz / 2.) + (kk + 0.5) * (dz / npoints);
-        count++;
-        if (myx * myx + myy * myy + myz * myz <= R * R) {
-          inside++;
-        }
-      }
-    }
-  }
-  Real fraction_inside_sphere =
-      static_cast<Real>(inside) / static_cast<Real>(count);
-  abs_1 = fraction_inside_sphere * 10.0;
-  eta_1 = fraction_inside_sphere * 10.0;
-}
 //----------------------------------------------------------------------------------------
 //! \fn void MeshBlock::UserProblem(ParameterInput *pin)
 //  \brief Sets initial conditions for radiation M1 beams test
@@ -77,7 +45,7 @@ void ProblemGenerator::RadiationM1SphereTest(ParameterInput *pin,
     exit(EXIT_FAILURE);
   }
 
-  pmbp->pradm1->toy_opacity_fn = SphereOpacities;
+  pmbp->pradm1->toy_opacity_fn = radiationm1::ToyOpacity{radiationm1::ToyOpacityModel::Sphere};
 
   // capture variables for kernel
   auto &indcs = pmy_mesh_->mb_indcs;

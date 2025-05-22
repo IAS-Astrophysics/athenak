@@ -40,7 +40,7 @@ TaskStatus RadiationM1::CalcOpacityToy(Driver *pdrive, int stage) {
   auto &eta_1_ = pmy_pack->pradm1->eta_1;
   auto &abs_1_ = pmy_pack->pradm1->abs_1;
   auto &scat_1_ = pmy_pack->pradm1->scat_1;
-  auto &toy_opacity_fn_ = pmy_pack->pradm1->toy_opacity_fn;
+  auto &toy_opacity_fn_ = toy_opacity_fn;
   auto &chi_ = pmy_pack->pradm1->chi;
   adm::ADM::ADM_vars &adm = pmy_pack->padm->adm;
 
