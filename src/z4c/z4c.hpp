@@ -15,6 +15,7 @@
 #include <vector>
 #include "athena.hpp"
 #include "utils/finite_diff.hpp"
+#include "utils/cart_grid.hpp"
 #include "parameter_input.hpp"
 #include "tasklist/task_list.hpp"
 #include "bvals/bvals.hpp"
@@ -26,39 +27,7 @@
 class Coordinates;
 class Driver;
 class CompactObjectTracker;
-
-//----------------------------------------------------------------------------------------
-//! \struct Z4cTaskIDs
-//  \brief container to hold TaskIDs of all z4c tasks
-
-struct Z4cTaskIDs {
-  TaskID irecv;
-  TaskID irecvweyl;
-  TaskID copyu;
-  TaskID crhs;
-  TaskID sombc;
-  TaskID expl;
-  TaskID sendu;
-  TaskID recvu;
-  TaskID newdt;
-  TaskID bcs;
-  TaskID prol;
-  TaskID algc;
-  TaskID z4tad;
-  TaskID admc;
-  TaskID csend;
-  TaskID crecv;
-  TaskID restu;
-  TaskID ptrck;
-  TaskID weyl_scalar;
-  TaskID wave_extr;
-  TaskID weyl_rest;
-  TaskID weyl_send;
-  TaskID weyl_prol;
-  TaskID weyl_recv;
-  TaskID csendweyl;
-  TaskID crecvweyl;
-};
+class HorizonDump;
 
 namespace z4c {
 class Z4c_AMR;
@@ -173,6 +142,8 @@ class Z4c {
     // puncture's floor value for chi, use max(chi, chi_div_floor)
     // in non-differentiated chi
     Real chi_div_floor;
+    Real chi_min_floor;   // minimum of chi, only used in slow-start-lapse
+    // where a square root is necessary.
     Real diss;            // amount of numerical dissipation
     Real eps_floor;       // a small number O(10^-12)
     // Constraint damping parameters
@@ -183,12 +154,20 @@ class Z4c {
     Real lapse_harmonicf;
     Real lapse_harmonic;
     Real lapse_advect;
+    // slow start lapse condition
+    bool slow_start_lapse;
+    Real ssl_damping_amp;
+    Real ssl_damping_time;
+    Real ssl_damping_index;
     // Gauge condition for the shift
     Real shift_ggamma;
     Real shift_alpha2ggamma;
     Real shift_hh;
     Real shift_advect;
     Real shift_eta;
+    // turn on shift damping smoothly
+    bool slow_roll_eta;
+    Real turn_on_time;
     // Enable BSSN if false (disable theta)
     bool use_z4c;
     // Apply the Sommerfeld condition for user BCs.
@@ -207,8 +186,6 @@ class Z4c {
 
   // following only used for time-evolving flow
   Real dtnew;
-  // container to hold names of TaskIDs
-  Z4cTaskIDs id;
 
   // geodesic grid for wave extr
   std::vector<std::unique_ptr<SphericalGrid>> spherical_grids;
@@ -217,6 +194,11 @@ class Z4c {
   Real waveform_dt;
   Real last_output_time;
   int nrad; // number of radii to perform wave extraction
+
+  // CCE
+  Real cce_dump_dt;
+  Real cce_dump_last_output_time;
+  // dump data cube at horizon
 
   // functions
   void QueueZ4cTasks();
@@ -244,9 +226,11 @@ class Z4c {
   TaskStatus Z4cBoundaryRHS(Driver *d, int stage);
   TaskStatus RestrictU(Driver *d, int stage);
   TaskStatus RestrictWeyl(Driver *d, int stage);
+  TaskStatus CCEDump(Driver *pdrive, int stage);
   TaskStatus TrackCompactObjects(Driver *d, int stage);
   TaskStatus CalcWeylScalar(Driver *d, int stage);
   TaskStatus CalcWaveForm(Driver *d, int stage);
+  TaskStatus DumpHorizons(Driver *d, int stage);
 
   template <int NGHOST>
   TaskStatus CalcRHS(Driver *d, int stage);
@@ -262,8 +246,19 @@ class Z4c {
   void AlgConstr(MeshBlockPack *pmbp);
 
   Z4c_AMR *pamr;
-  std::list<CompactObjectTracker> ptracker;
+  std::vector<std::unique_ptr<CompactObjectTracker>> ptracker;
+  std::vector<std::unique_ptr<HorizonDump>> phorizon_dump;
 
+  /*
+  std::list<CartesianGrid> horizon_dump;
+  Real horizon_dt;
+  Real horizon_last_output_time;
+  std::vector<Real> horizon_extent; // radius for dumping data in a cube
+  std::vector<int> horizon_nx;  // number of points in each direction
+  */
+  // TODO(@hzhu): think about how to automatically trigger common horizon
+  // maybe have a horizon dump object to save all the space here
+  // same for the waveform.
  private:
   MeshBlockPack* pmy_pack;  // ptr to MeshBlockPack containing this Z4c
 };

@@ -26,7 +26,6 @@ struct RegionSize {
   Real x1min, x2min, x3min;
   Real x1max, x2max, x3max;
   Real dx1, dx2, dx3;       // (uniform) grid spacing
-  Real idx1, idx2, idx3;
 };
 
 //----------------------------------------------------------------------------------------
@@ -149,7 +148,8 @@ class Mesh {
 
   // functions
   void BuildTreeFromScratch(ParameterInput *pin);
-  void BuildTreeFromRestart(ParameterInput *pin, IOWrapper &resfile);
+  void BuildTreeFromRestart(ParameterInput *pin, IOWrapper &resfile,
+                            bool single_file_per_rank=false);
   void PrintMeshDiagnostics();
   void WriteMeshStructure();
   void NewTimeStep(const Real tlim);

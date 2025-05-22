@@ -165,8 +165,8 @@ Driver::Driver(ParameterInput *pin, Mesh *pmesh, Real wtlim, Kokkos::Timer* ptim
       nimp_stages = 3;
       nexp_stages = 2;
       cfl_limit = 1.0;
-      gam0[0] = 0.0;
-      gam1[0] = 1.0;
+      gam0[0] = 1.0;
+      gam1[0] = 0.0;
       beta[0] = 1.0;
 
       gam0[1] = 0.5;
@@ -185,6 +185,48 @@ Driver::Driver(ParameterInput *pin, Mesh *pmesh, Real wtlim, Kokkos::Timer* ptim
       a_twid[2][1] = 0.25;
       a_twid[2][2] = 0.25;
       a_impl = 0.5;
+    } else if (integrator == "imex2+") {
+      // IMEX(4,3,2): Krapp et al. (2024, arXiv:2310.04435), Eq.30.
+      // three-stage explicit, four-stage implicit, second-order ImEx
+      // two implicit stages added, adapting Athenak's overall architecture
+      // Note explicit steps may not reduce to RK2 based on the parameters chosen
+      nimp_stages = 4;
+      nexp_stages = 3;
+      cfl_limit = 1.0;
+      gamma = 1.707106781186547;   //1+1/sqrt(2)
+      gam0[0] = 1.0;
+      gam1[0] = 0.0;
+      beta[0] = gamma;
+
+      gam0[1] = (2.0*gamma-1.0)/(2.0*gamma*gamma);
+      gam1[1] = (1.0-(2.0*gamma-1.0)/(2.0*gamma*gamma));
+      beta[1] = 1.0/(2.0*gamma);
+
+      gam0[2] = 1.0;
+      gam1[2] = 0.0;
+      beta[2] = 0.0;
+
+      a_twid[0][0] = 0.0;
+      a_twid[0][1] = 0.0;
+      a_twid[0][2] = 0.0;
+      a_twid[0][3] = 0.0;
+
+      a_twid[1][0] = 0.0;
+      a_twid[1][1] = 0.0;
+      a_twid[1][2] = 0.0;
+      a_twid[1][3] = 0.0;
+
+      a_twid[2][0] = 0.0;
+      a_twid[2][1] = 0.0;
+      a_twid[2][2] = (1.0-2.0*gamma*gamma)/2.0/gamma;
+      a_twid[2][3] = 0.0;
+
+      a_twid[3][0] = 0.0;
+      a_twid[3][1] = 0.0;
+      a_twid[3][2] = 0.0;
+      a_twid[3][3] = 0.0;
+
+      a_impl = gamma;
     } else if (integrator == "imex3") {
       // IMEX-SSP3(4,3,3): Pareschi & Russo (2005) Table VI.
       // three-stage explicit, four-stage implicit, third-order ImEx
@@ -227,38 +269,11 @@ Driver::Driver(ParameterInput *pin, Mesh *pmesh, Real wtlim, Kokkos::Timer* ptim
       a_twid[3][2] = (4.0*(b + e + a) - 1.0)/6.0;
       a_twid[3][3] = 2.0*(1.0 - a)/3.0;
       a_impl = a;
-    } else if (integrator == "imex+") {
-      // IMEX(2,3,2): Krapp et al. (2024, arXiv:2310.04435), Eq.30.
-      // three-stage explicit, two-stage implicit, second-order ImEx
-      // Note explicit steps may not reduce to RK2 based on the parameters chosen
-      nimp_stages = 2;
-      nexp_stages = 3;
-      cfl_limit = 1.0;
-      Real gamma = 1.7071067811865475;   // 1 + 1/sqrt(2)
-      gam0[0] = 0.0;
-      gam1[0] = 1.0;
-      beta[0] = gamma;
-
-      gam0[1] = (2.0*gamma-1.0)/(2.0*gamma*gamma);
-      gam1[1] = 1.0-(2.0*gamma-1.0)/(2.0*gamma*gamma);
-      beta[1] = 1.0/(2.0*gamma);
-
-      gam0[2] = 1.0;
-      gam1[2] = 0.0;
-      beta[2] = 0.0;
-
-      a_twid[0][0] = (1.0-2*gamma*gamma)/(2.0*gamma);
-      a_twid[0][1] = 0.0;
-
-      a_twid[1][0] = 0.0;
-      a_twid[1][1] = 0.0;
-
-      a_impl = gamma;
     // Error, unrecognized integrator name.
     } else {
       std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
          << std::endl << "integrator=" << integrator << " not implemented. "
-         << "Valid choices are [rk1,rk2,rk3,imex2,imex3]." << std::endl;
+         << "Valid choices are [rk1,rk2,rk3,rk4,imex2,imex3]." << std::endl;
       exit(EXIT_FAILURE);
     }
   }
