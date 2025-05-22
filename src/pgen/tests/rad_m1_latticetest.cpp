@@ -17,36 +17,6 @@
 #include "radiation_m1/radiation_m1.hpp"
 #include "radiation_m1/radiation_m1_helpers.hpp"
 
-KOKKOS_INLINE_FUNCTION
-void LatticeOpacities(Real x1, Real x2, Real x3,
-                      Real dx, Real dy, Real dz, Real nuidx, Real &eta_0,
-                      Real &abs_0, Real &eta_1, Real &abs_1, Real &scat_1) {
-  eta_0 = 0;
-  abs_0 = 0;
-  eta_1 = 0;
-  abs_1 = 0;
-  scat_1 = 0;
-
-  if (x1 >= 3 && x1 <= 4 && x2 >= 3 && x2 <= 4) {
-    eta_1 = 1.;
-  }
-
-  if ((x1 >= 1 && x1 <= 2 && x2 >= 1 && x2 <= 2) ||
-      (x1 >= 3 && x1 <= 4 && x2 >= 1 && x2 <= 2) ||
-      (x1 >= 5 && x1 <= 6 && x2 >= 1 && x2 <= 2) ||
-      (x1 >= 2 && x1 <= 3 && x2 >= 2 && x2 <= 3) ||
-      (x1 >= 4 && x1 <= 5 && x2 >= 2 && x2 <= 3) ||
-      (x1 >= 1 && x1 <= 2 && x2 >= 3 && x2 <= 4) ||
-      (x1 >= 5 && x1 <= 6 && x2 >= 3 && x2 <= 4) ||
-      (x1 >= 2 && x1 <= 3 && x2 >= 4 && x2 <= 5) ||
-      (x1 >= 4 && x1 <= 5 && x2 >= 4 && x2 <= 5) ||
-      (x1 >= 1 && x1 <= 2 && x2 >= 5 && x2 <= 6) ||
-      (x1 >= 5 && x1 <= 6 && x2 >= 5 && x2 <= 6)) {
-    abs_1 = 10.;
-  } else {
-    abs_1 = 1.;
-  }
-}
 //----------------------------------------------------------------------------------------
 //! \fn void MeshBlock::UserProblem(ParameterInput *pin)
 //  \brief Sets initial conditions for radiation M1 beams test
@@ -83,7 +53,7 @@ void ProblemGenerator::RadiationM1LatticeTest(ParameterInput *pin,
     exit(EXIT_FAILURE);
   }
 
-  pmbp->pradm1->toy_opacity_fn = LatticeOpacities;
+  pmbp->pradm1->toy_opacity_fn = radiationm1::ToyOpacity{radiationm1::ToyOpacityModel::Lattice};
 
   // capture variables for kernel
   auto &indcs = pmy_mesh_->mb_indcs;

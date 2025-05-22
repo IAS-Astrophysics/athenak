@@ -19,28 +19,6 @@
 #include "radiation_m1/radiation_m1.hpp"
 #include "radiation_m1/radiation_m1_helpers.hpp"
 
-KOKKOS_INLINE_FUNCTION
-void DiffusionOpacitiesExplicit(Real x1, Real x2, Real x3, Real dx, Real dy, Real dz,
-                                Real nuidx, Real &eta_0, Real &abs_0, Real &eta_1,
-                                Real &abs_1, Real &scat_1) {
-  eta_0 = 0;
-  abs_0 = 0;
-  eta_1 = 0;
-  abs_1 = 0;
-  scat_1 = 100;
-}
-
-KOKKOS_INLINE_FUNCTION
-void DiffusionOpacitiesImplicit(Real x1, Real x2, Real x3, Real dx, Real dy, Real dz,
-                                Real nuidx, Real &eta_0, Real &abs_0, Real &eta_1,
-                                Real &abs_1, Real &scat_1) {
-  eta_0 = 0;
-  abs_0 = 0;
-  eta_1 = 0;
-  abs_1 = 0;
-  scat_1 = 1000;
-}
-
 //----------------------------------------------------------------------------------------
 //! \fn void MeshBlock::UserProblem(ParameterInput *pin)
 //  \brief Sets initial conditions for radiation M1 beams test
@@ -73,10 +51,10 @@ void ProblemGenerator::RadiationM1DiffusionTest(ParameterInput *pin, const bool 
   }
 
   if (pmbp->pradm1->params.src_update == radiationm1::Explicit) {
-    pmbp->pradm1->toy_opacity_fn = DiffusionOpacitiesExplicit;
+    pmbp->pradm1->toy_opacity_fn = radiationm1::ToyOpacity{radiationm1::ToyOpacityModel::DiffusionExplicit};
   }
   if (pmbp->pradm1->params.src_update == radiationm1::Implicit) {
-    pmbp->pradm1->toy_opacity_fn = DiffusionOpacitiesImplicit;
+    pmbp->pradm1->toy_opacity_fn = radiationm1::ToyOpacity{radiationm1::ToyOpacityModel::DiffusionImplicit};
   }
 
   // capture variables for kernel
