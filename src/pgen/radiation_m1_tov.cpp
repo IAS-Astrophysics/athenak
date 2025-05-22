@@ -418,7 +418,7 @@ void SetupTOV(ParameterInput* pin, Mesh* pmy_mesh_, tov_pgen& tov) {
     Real p_pert = 0.;
     Real ye = 0.5;
     auto &use_ye_ = use_ye;
-    //printf("Grabbing primitives!\n");
+    //Kokkos::printf("Grabbing primitives!\n");
     if (!tov.isotropic) {
       GetPrimitivesAtPoint(tov_, eos_, r, rho, p, mass, alp);
       if (r <= tov.R_edge) {
@@ -445,7 +445,7 @@ void SetupTOV(ParameterInput* pin, Mesh* pmy_mesh_, tov_pgen& tov) {
         }
       }
     }
-    //printf("Primitives retrieved!\n");
+    //Kokkos::printf("Primitives retrieved!\n");
 
 
     // FIXME: assumes ideal gas!
@@ -1024,7 +1024,7 @@ static void GetPrimitivesAtIsoPoint(const tov_pgen& tov, const TOVEOS& eos, Real
   const auto &alps = tov.alp.d_view;
   const auto &Ms = tov.M.d_view;
   if (idx >= tov.npoints || idx < 0) {
-    printf("There's a problem with the index!\n" // NOLINT
+    Kokkos::printf("There's a problem with the index!\n" // NOLINT
            " idx = %d\n"
            " r_iso = %g\n"
            " dr = %g\n",idx,r_iso,tov.dr);
@@ -1037,7 +1037,7 @@ static void GetPrimitivesAtIsoPoint(const tov_pgen& tov, const TOVEOS& eos, Real
   //rho = pow(p/tov.kappa, 1.0/tov.gamma);
   rho = eos.template GetRhoFromP<LocationTag::Device>(fmax(p, tov.pfloor));
   if (!isfinite(p)) {
-    printf("There's a problem with p!\n"); // NOLINT
+    Kokkos::printf("There's a problem with p!\n"); // NOLINT
     assert(false);
   }
 }
