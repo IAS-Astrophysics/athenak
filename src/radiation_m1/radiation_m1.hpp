@@ -120,13 +120,12 @@ class RadiationM1 {
   TaskStatus ClearSend(Driver* d, int stage);
   TaskStatus ClearRecv(Driver* d, int stage);  // also in Driver::Initialize
 
- private:
-  MeshBlockPack* pmy_pack;  // ptr to MeshBlockPack
-
   template<class EOSPolicy, class ErrorPolicy>
   TaskStatus CalcOpacityNurates_(Driver* pdrive, int stage);
   template <class EOSPolicy, class ErrorPolicy>
   TaskStatus TimeUpdate_(Driver* d, int stage);
+ private:
+  MeshBlockPack* pmy_pack;  // ptr to MeshBlockPack
 };
 
 // beam boundary conditions
