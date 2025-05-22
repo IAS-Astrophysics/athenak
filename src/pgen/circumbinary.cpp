@@ -380,8 +380,8 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   Real pert_amp = pin->GetOrAddReal("problem", "pert_amp", 0.0);
 
   // excision parameters
-  torus.dexcise = coord.dexcise;
-  torus.pexcise = coord.pexcise;
+  // torus.dexcise = coord.dexcise;
+  // torus.pexcise = coord.pexcise;
 
   // Compute angular momentum and prepare constants describing primitives
   if (torus.fm_torus) {
