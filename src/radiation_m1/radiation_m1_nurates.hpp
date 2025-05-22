@@ -178,7 +178,6 @@ void bns_nurates(Real &nb, Real &temp, Real &ye, Real &mu_n, Real &mu_p, Real &m
   GreyOpacityParams grey_op_params = {0};
 
   // reaction flags
-  grey_op_params.opacity_flags = opacity_flags_default_none;
   grey_op_params.opacity_flags.use_abs_em = nurates_params.use_abs_em;
   grey_op_params.opacity_flags.use_brem = nurates_params.use_brem;
   grey_op_params.opacity_flags.use_pair = nurates_params.use_pair;
@@ -186,12 +185,14 @@ void bns_nurates(Real &nb, Real &temp, Real &ye, Real &mu_n, Real &mu_p, Real &m
   grey_op_params.opacity_flags.use_inelastic_scatt = nurates_params.use_inelastic_scatt;
 
   // other flags
-  grey_op_params.opacity_pars = opacity_params_default_none;
   grey_op_params.opacity_pars.use_WM_ab = nurates_params.use_WM_ab;
   grey_op_params.opacity_pars.use_WM_sc = nurates_params.use_WM_sc;
   grey_op_params.opacity_pars.use_dU = nurates_params.use_dU;
   grey_op_params.opacity_pars.use_dm_eff = nurates_params.use_dm_eff;
   grey_op_params.opacity_pars.use_NN_medium_corr = nurates_params.use_NN_medium_corr;
+  grey_op_params.opacity_pars.neglect_blocking = false; //@TODO: add these to options if needed
+  grey_op_params.opacity_pars.use_decay = false;
+  grey_op_params.opacity_pars.use_BRT_brem = false;
 
   // populate EOS quantities
   grey_op_params.eos_pars.nb = nb_nmunits;  // [baryon/nm^3]
