@@ -197,6 +197,7 @@ if (ENABLE_NURATES)
         PRIVATE
             radiation_m1/radiation_m1_calc_opacities_nurates.cpp
             pgen/tests/rad_m1_singlezone.cpp
+            pgen/radiation_m1_tov.cpp
     )
 endif()
 
