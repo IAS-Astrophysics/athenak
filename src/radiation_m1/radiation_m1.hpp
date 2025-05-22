@@ -18,6 +18,7 @@
 #include "parameter_input.hpp"
 #include "radiation_m1/radiation_m1_params.hpp"
 #include "radiation_m1/radiation_m1_roots_fns.hpp"
+#include "radiation_m1/radiation_m1_toy.hpp"
 
 #include "tasklist/task_list.hpp"
 #ifdef ENABLE_NURATES
@@ -26,13 +27,6 @@
 #endif
 
 namespace radiationm1 {
-
-//----------------------------------------------------------------------------------------
-//! \typedef ToyOpacityFn
-//! \brief Function pointer type for toy opacity functions, set function in pgen
-using ToyOpacityFn = void (*)(Real x1, Real x2, Real x3, Real dx, Real dy, Real dz,
-                              Real nuidx, Real& eta_0, Real& abs_0, Real& eta_1,
-                              Real& abs_1, Real& scat_1);
 
 //----------------------------------------------------------------------------------------
 //! \struct RadiationTaskIDs
@@ -70,7 +64,7 @@ class RadiationM1 {
 #ifdef ENABLE_NURATES
   NuratesParams nurates_params;  // pars for nurates (choice of reactions, quadratures)
 #endif
-  ToyOpacityFn toy_opacity_fn = nullptr;  // use only if toy opacities enabled
+  ToyOpacity toy_opacity_fn;  // use only if toy opacities enabled
 
   int nvars;                   // no. of evolved variables per species
   int nspecies;                // no. of species
