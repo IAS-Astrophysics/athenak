@@ -12,7 +12,6 @@
 #include <iostream>
 #include <string>
 
-#include "Kokkos_SIMD_Common_Math.hpp"
 #include "athena.hpp"
 #include "mesh/mesh.hpp"
 #include "parameter_input.hpp"
