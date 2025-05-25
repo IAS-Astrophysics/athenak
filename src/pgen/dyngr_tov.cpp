@@ -48,7 +48,7 @@ template<class TOVEOS>
 void SetupTOV(ParameterInput *pin, Mesh* pmy_mesh_) {
   Real v_pert = pin->GetOrAddReal("problem", "v_pert", 0.0);
   Real p_pert = pin->GetOrAddReal("problem", "p_pert", 0.0);
-  bool isotropic = pin->GetOrAddReal("problem", "isotropic", false);
+  bool isotropic = pin->GetOrAddBoolean("problem", "isotropic", false);
 
   bool minkowski = pin->GetOrAddBoolean("problem", "minkowski", false);
 
