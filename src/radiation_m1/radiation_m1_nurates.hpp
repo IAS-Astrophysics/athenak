@@ -34,6 +34,9 @@ struct NuratesParams {
   bool use_equilibrium_distribution;
   bool use_kirchhoff_law;
   bool use_NN_medium_corr;
+  bool neglect_blocking;
+  bool use_decay;
+  bool use_BRT_brem;
 
   int quad_nx;  // no. of quadrature points for 1d integration (bns_nurates)
   MyQuadrature quadrature;
@@ -52,53 +55,52 @@ struct NuratesParams {
 //!                      Real &scat_0_anux, Real &scat_1_nue, Real &scat_1_anue,
 //!                      Real &scat_1_nux, Real &scat_1_anux,
 //!                      const NuratesParams nurates_params)
+//
 //   \brief Computes the rates given the M1 quantities
 //
-//   \note  Unless specified, all input and output quantities are in code units
-//
-//   \param[in] nb              baryon number density
+//   \param[in] nb              baryon number density (code units)
 //   \param[in] temp            temperature (MeV)
-//   \param[in] ye              electron fraction
+//   \param[in] ye              electron fraction (dimensionless)
 //   \param[in] mu_n            neutron chemical potential (MeV)
 //   \param[in] mu_p            proton chemical potential (MeV)
 //   \param[in] mu_e            electron chemical potential (MeV)
-//   \param[in] n_nue           number density electron neutrinos
-//   \param[in] j_nue           energy density electron neutrinos
-//   \param[in] chi_nue         eddington factor electron neutrinos
-//   \param[in] n_anue          number density electron anti-neutrinos
-//   \param[in] j_anue          energy density electron anti-neutrinos
-//   \param[in] chi_anue        eddington factor electron anti-neutrinos
-//   \param[in] n_nux           number density mu/tau neutrinos
-//   \param[in] j_nux           energy density mu/tau neutrinos
-//   \param[in] chi_nux         eddington factor mu/tau neutrinos
-//   \param[in] n_anux          number density mu/tau neutrinos
-//   \param[in] j_anux          energy density mu/tau neutrinos
-//   \param[in] chi_anux        eddington factor mu/tau neutrinos
+//   \param[in] n_nue           number density e- neutrinos (code units)
+//   \param[in] j_nue           energy density e- neutrinos (code units)
+//   \param[in] chi_nue         eddington factor e- neutrinos (dimensionless)
+//   \param[in] n_anue          number density e- anti-neutrinos (code units)
+//   \param[in] j_anue          energy density e- anti-neutrinos (code units)
+//   \param[in] chi_anue        eddington factor e- anti-neutrinos (dimensionless)
+//   \param[in] n_nux           number density mu/tau neutrinos (code units)
+//   \param[in] j_nux           energy density mu/tau neutrinos (code units)
+//   \param[in] chi_nux         eddington factor mu/tau neutrinos (dimensionless)
+//   \param[in] n_anux          number density mu/tau neutrinos (code units)
+//   \param[in] j_anux          energy density mu/tau neutrinos (code units)
+//   \param[in] chi_anux        eddington factor mu/tau neutrinos (dimensionless)
 //
-//   \param[out] R_nue          number emissivity electron neutrinos
-//   \param[out] R_anue         number emissivity electron anti-neutrinos
-//   \param[out] R_nux          number emissivity mu/tau neutrinos
-//   \param[out] R_anux         number emissivity mu/tau anti-neutrinos
-//   \param[out] Q_nue          energy emissivity electron neutrinos
-//   \param[out] Q_anue         energy emissivity electron anti-neutrinos
-//   \param[out] Q_nux          energy emissivity mu/tau neutrinos
-//   \param[out] Q_anux         energy emissivity mu/tau anti-neutrinos
-//   \param[out] sigma_0_nue    number inv mean-free path electron neutrinos
-//   \param[out] sigma_0_anue   number inv mean-free path electron anti-neutrinos
-//   \param[out] sigma_0_nux    number inv mean-free path mu/tau neutrinos
-//   \param[out] sigma_0_anux   number inv mean-free path mu/tau anti-neutrinos
-//   \param[out] sigma_1_nue    energy inv mean-free path electron neutrinos
-//   \param[out] sigma_1_anue   energy inv mean-free path electron anti-neutrinos
-//   \param[out] sigma_1_nux    energy inv mean-free path mu/tau neutrinos
-//   \param[out] sigma_1_anux   energy inv mean-free path mu/tau neutrinos
-//   \param[out] scat_0_nue     number scatt coeff electron neutrinos
-//   \param[out] scat_0_anue    number scatt coeff electron anti-neutrinos
-//   \param[out] scat_0_nux     number scatt coeff mu/tau neutrinos
-//   \param[out] scat_0_anux    number scatt coeff mu/tau anti-neutrinos
-//   \param[out] scat_1_nue     energy scatt coeff electron neutrinos
-//   \param[out] scat_1_anue    energy scatt coeff electron ant-neutrinos
-//   \param[out] scat_1_nux     energy scatt coeff mu/tau neutrinos
-//   \param[out] scat_1_anux    energy scatt coeff mu/tau anti-neutrinos
+//   \param[out] R_nue          number emissivity e- neutrinos (code units)
+//   \param[out] R_anue         number emissivity e- anti-neutrinos (code units)
+//   \param[out] R_nux          number emissivity mu/tau neutrinos (code units)
+//   \param[out] R_anux         number emissivity mu/tau anti-neutrinos (code units)
+//   \param[out] Q_nue          energy emissivity e- neutrinos (code units)
+//   \param[out] Q_anue         energy emissivity e- anti-neutrinos (code units)
+//   \param[out] Q_nux          energy emissivity mu/tau neutrinos (code units)
+//   \param[out] Q_anux         energy emissivity mu/tau anti-neutrinos (code units)
+//   \param[out] sigma_0_nue    number inv mean-free path e- neutrinos (code units)
+//   \param[out] sigma_0_anue   number inv mean-free path e- anti-neutrinos (code units)
+//   \param[out] sigma_0_nux    number inv mean-free path mu/tau neutrinos (code units)
+//   \param[out] sigma_0_anux   num inv mean-free path mu/tau anti-neutrinos (code units)
+//   \param[out] sigma_1_nue    energy inv mean-free path e- neutrinos (code units)
+//   \param[out] sigma_1_anue   energy inv mean-free path e- anti-neutrinos (code units)
+//   \param[out] sigma_1_nux    energy inv mean-free path mu/tau neutrinos (code units)
+//   \param[out] sigma_1_anux   energy inv mean-free path mu/tau neutrinos (code units)
+//   \param[out] scat_0_nue     number scatt coeff e- neutrinos (code units)
+//   \param[out] scat_0_anue    number scatt coeff e- anti-neutrinos (code units)
+//   \param[out] scat_0_nux     number scatt coeff mu/tau neutrinos (code units)
+//   \param[out] scat_0_anux    number scatt coeff mu/tau anti-neutrinos (code units)
+//   \param[out] scat_1_nue     energy scatt coeff e- neutrinos (code units)
+//   \param[out] scat_1_anue    energy scatt coeff e- ant-neutrinos (code units)
+//   \param[out] scat_1_nux     energy scatt coeff mu/tau neutrinos (code units)
+//   \param[out] scat_1_anux    energy scatt coeff mu/tau anti-neutrinos (code units)
 //   \param[in]  nurates_params params for nurates
 
 KOKKOS_INLINE_FUNCTION
@@ -113,28 +115,25 @@ void bns_nurates(Real &nb, Real &temp, Real &ye, Real &mu_n, Real &mu_p, Real &m
                  Real &scat_0_anue, Real &scat_0_nux, Real &scat_0_anux, Real &scat_1_nue,
                  Real &scat_1_anue, Real &scat_1_nux, Real &scat_1_anux,
                  const NuratesParams nurates_params, const RadiationM1Units units) {
-  // conversion factors (in order)
-  // 1. n: cm^-3 --> code units
-  // 2. j: MeV cm^-3 --> code units
-  // 3. R: cm^-3 s^-1 --> code units
-  // 4. Q: MeV cm^-3 s^-1 --> code units
-  // 5. kappa0: cm^-1 s^-1 --> code units
-  // 6. kappa1: MeV cm^-1 s^-1 --> code units
+  // compute conversion factors
   const Real cgs2code_length3 =
       units.cgs2code_length * units.cgs2code_length * units.cgs2code_length;
-
-  const Real cgs2code_n = 1. / cgs2code_length3;
-  const Real cgs2code_j = units.cgs2code_energy / cgs2code_length3;
-  const Real cgs2code_R = 1. / (units.cgs2code_time * cgs2code_length3);
+  const Real cgs2code_n = 1. / cgs2code_length3;  // cm^-3 --> code units
+  const Real cgs2code_j =
+      units.cgs2code_energy / cgs2code_length3;  // MeV cm^-3 --> code units
+  const Real cgs2code_R =
+      1. / (units.cgs2code_time * cgs2code_length3);  // cm^-3 s^-1 --> code units
   const Real cgs2code_Q =
-      MEV_TO_ERG * units.cgs2code_energy /
-      (units.cgs2code_time * cgs2code_length3);  // TODO: why is MEV_TO_ERG needed ?
-  const Real cgs2code_kappa0 = 1. / (units.cgs2code_length * units.cgs2code_time);
+      units.cgs2code_energy /
+      (units.cgs2code_time * cgs2code_length3);  // MeV cm^-3 s^-1 --> code units
+  const Real cgs2code_kappa0 =
+      1. / (units.cgs2code_length * units.cgs2code_time);  // cm^-1 s^-1 --> code units
   const Real cgs2code_kappa1 =
-      units.cgs2code_energy / (units.cgs2code_length * units.cgs2code_time);
+      units.cgs2code_energy /
+      (units.cgs2code_length * units.cgs2code_time);  // MeV cm^-1 s^-1 --> code units
 
-  if (((nb / units.cgs2code_rho) < nurates_params.nb_min_cgs) ||
-      (temp < nurates_params.temp_min_mev)) {
+  const Real nb_cgs = nb / units.cgs2code_rho;  // [baryon/cm^-3]
+  if ((nb_cgs < nurates_params.nb_min_cgs) || (temp < nurates_params.temp_min_mev)) {
     R_nue = 0.;
     R_anue = 0.;
     R_nux = 0.;
@@ -162,7 +161,7 @@ void bns_nurates(Real &nb, Real &temp, Real &ye, Real &mu_n, Real &mu_p, Real &m
     return;
   }
 
-  // convert neutrino quantities from code units to CGS/nm units
+  // convert neutrino quantities from code units to CGS/nm units (adjust for NORMFACT)
   const Real nb_nmunits = nb / units.cgs2code_rho * 1e-21;               // [baryon/nm^-3]
   const Real n_nue_nmunits = n_nue / (cgs2code_n / NORMFACT) * 1e-21;    // [nm^-3]
   const Real n_anue_nmunits = n_anue / (cgs2code_n / NORMFACT) * 1e-21;  // [nm^-3]
@@ -190,24 +189,26 @@ void bns_nurates(Real &nb, Real &temp, Real &ye, Real &mu_n, Real &mu_p, Real &m
   grey_op_params.opacity_pars.use_dU = nurates_params.use_dU;
   grey_op_params.opacity_pars.use_dm_eff = nurates_params.use_dm_eff;
   grey_op_params.opacity_pars.use_NN_medium_corr = nurates_params.use_NN_medium_corr;
-  grey_op_params.opacity_pars.neglect_blocking = false; //@TODO: add these to options if needed
-  grey_op_params.opacity_pars.use_decay = false;
-  grey_op_params.opacity_pars.use_BRT_brem = false;
+  grey_op_params.opacity_pars.neglect_blocking = nurates_params.neglect_blocking;
+  grey_op_params.opacity_pars.use_decay = nurates_params.use_decay;
+  grey_op_params.opacity_pars.use_BRT_brem = nurates_params.use_BRT_brem;
 
   // populate EOS quantities
   grey_op_params.eos_pars.nb = nb_nmunits;  // [baryon/nm^3]
   grey_op_params.eos_pars.temp = temp;      // [MeV]
-  grey_op_params.eos_pars.yp = ye;
-  grey_op_params.eos_pars.yn = 1 - ye;
-  grey_op_params.eos_pars.mu_e = mu_e;  // [MeV]
-  grey_op_params.eos_pars.mu_p = mu_p;  // [MeV]
-  grey_op_params.eos_pars.mu_n = mu_n;  // [MeV]
-  grey_op_params.eos_pars.dU = 0;       // [MeV] @TODO: fix this!
-  grey_op_params.eos_pars.dm_eff = 0;   // [MeV] @TODO: fix this!
+  grey_op_params.eos_pars.yp = ye;          // [dimensionless]
+  grey_op_params.eos_pars.yn = 1 - ye;      // [dimensionless]
+  grey_op_params.eos_pars.mu_e = mu_e;      // [MeV]
+  grey_op_params.eos_pars.mu_p = mu_p;      // [MeV]
+  grey_op_params.eos_pars.mu_n = mu_n;      // [MeV]
+
+  // @TODO: add these quantities!
+  grey_op_params.eos_pars.dU = 0;      // [MeV]
+  grey_op_params.eos_pars.dm_eff = 0;  // [MeV]
 
   // populate M1 quantities
-  // (note: factor 1/2 comes because in M1 "nux" means "mu & tau" and in bns_nurates "nux"
-  // means "mu or tau")
+  // Note: factor 1/2 comes because in M1 "nux" means "mu & tau" and in bns_nurates "nux"
+  // means "mu or tau"
   grey_op_params.m1_pars.n[id_nue] = n_nue_nmunits;  // [nm^-3]
   grey_op_params.m1_pars.J[id_nue] = j_nue_nmunits;  // [g s^-2 nm^-1]
   grey_op_params.m1_pars.chi[id_nue] = chi_nue;
@@ -239,12 +240,6 @@ void bns_nurates(Real &nb, Real &temp, Real &ye, Real &mu_n, Real &mu_p, Real &m
     grey_op_params.m1_pars.chi[id_anue] = 0.333333333333333333333333333;
     grey_op_params.m1_pars.chi[id_nux] = 0.333333333333333333333333333;
     grey_op_params.m1_pars.chi[id_anux] = 0.333333333333333333333333333;
-
-    // convert from MeV nm^-3 to g s^-2 nm^-1
-    grey_op_params.m1_pars.J[id_nue] *= kBS_MeV;
-    grey_op_params.m1_pars.J[id_anue] *= kBS_MeV;
-    grey_op_params.m1_pars.J[id_nux] *= kBS_MeV;
-    grey_op_params.m1_pars.J[id_anux] *= kBS_MeV;
   }
   // compute opacities
   M1Opacities opacities = ComputeM1Opacities(&nurates_params.quadrature,
@@ -286,30 +281,30 @@ void bns_nurates(Real &nb, Real &temp, Real &ye, Real &mu_n, Real &mu_p, Real &m
   scat_1_anux = opacities.kappa_s[id_anux] * 2.;
 
   // Check for NaNs/Infs
-  assert(isfinite(R_nue));
-  assert(isfinite(R_anue));
-  assert(isfinite(R_nux));
-  assert(isfinite(R_anux));
-  assert(isfinite(Q_nue));
-  assert(isfinite(Q_anue));
-  assert(isfinite(Q_nux));
-  assert(isfinite(Q_anux));
-  assert(isfinite(sigma_0_nue));
-  assert(isfinite(sigma_0_anue));
-  assert(isfinite(sigma_0_nux));
-  assert(isfinite(sigma_0_anux));
-  assert(isfinite(sigma_1_nue));
-  assert(isfinite(sigma_1_anue));
-  assert(isfinite(sigma_1_nux));
-  assert(isfinite(sigma_1_anux));
-  assert(isfinite(scat_0_nue));
-  assert(isfinite(scat_0_anue));
-  assert(isfinite(scat_0_nux));
-  assert(isfinite(scat_0_anux));
-  assert(isfinite(scat_1_nue));
-  assert(isfinite(scat_1_anue));
-  assert(isfinite(scat_1_nux));
-  assert(isfinite(scat_1_anux));
+  assert(Kokkos::isfinite(R_nue));
+  assert(Kokkos::isfinite(R_anue));
+  assert(Kokkos::isfinite(R_nux));
+  assert(Kokkos::isfinite(R_anux));
+  assert(Kokkos::isfinite(Q_nue));
+  assert(Kokkos::isfinite(Q_anue));
+  assert(Kokkos::isfinite(Q_nux));
+  assert(Kokkos::isfinite(Q_anux));
+  assert(Kokkos::isfinite(sigma_0_nue));
+  assert(Kokkos::isfinite(sigma_0_anue));
+  assert(Kokkos::isfinite(sigma_0_nux));
+  assert(Kokkos::isfinite(sigma_0_anux));
+  assert(Kokkos::isfinite(sigma_1_nue));
+  assert(Kokkos::isfinite(sigma_1_anue));
+  assert(Kokkos::isfinite(sigma_1_nux));
+  assert(Kokkos::isfinite(sigma_1_anux));
+  assert(Kokkos::isfinite(scat_0_nue));
+  assert(Kokkos::isfinite(scat_0_anue));
+  assert(Kokkos::isfinite(scat_0_nux));
+  assert(Kokkos::isfinite(scat_0_anux));
+  assert(Kokkos::isfinite(scat_1_nue));
+  assert(Kokkos::isfinite(scat_1_anue));
+  assert(Kokkos::isfinite(scat_1_nux));
+  assert(Kokkos::isfinite(scat_1_anux));
 
   // convert to code units
   R_nue = R_nue * (cgs2code_R / NORMFACT) * 1e21;
@@ -344,25 +339,23 @@ void bns_nurates(Real &nb, Real &temp, Real &ye, Real &mu_n, Real &mu_p, Real &m
 //
 //   \brief Computes the neutrino number and energy density
 //
-//   \note  Unless specified, all input and output quantities are in code units
-//
 //   \param[in]  mu_n            neutron chemical potential (MeV)
 //   \param[in]  mu_p            proton chemical potential (MeV)
 //   \param[in]  mu_e            electron chemical potential (Mev)
-//   \param[in]  nb              baryon number density
+//   \param[in]  nb              baryon number density (code units)
 //   \param[in]  temp            temperature (MeV)
-//   \param[out] n_nue           number density electron neutrinos
-//   \param[out] n_anue          number density electron anti-neutrinos
-//   \param[out] n_nux           number density mu/tau neutrinos
-//   \param[out] en_nue          energy density electron neutrinos
-//   \param[out] en_anue         energy density electron anti-neutrinos
-//   \param[out] en_nux          energy density mu/tau neutrinos
+//   \param[out] n_nue           number density electron neutrinos (code units)
+//   \param[out] n_anue          number density electron anti-neutrinos (code units)
+//   \param[out] n_nux           number density mu/tau neutrinos (code units)
+//   \param[out] en_nue          energy density electron neutrinos (code units)
+//   \param[out] en_anue         energy density electron anti-neutrinos (code units)
+//   \param[out] en_nux          energy density mu/tau neutrinos (code units)
 //   \param[in]  nurates_params  struct for nurates parameters
 KOKKOS_INLINE_FUNCTION
 void NeutrinoDens(Real mu_n, Real mu_p, Real mu_e, Real nb, Real temp, Real &n_nue,
                   Real &n_anue, Real &n_nux, Real &en_nue, Real &en_anue, Real &en_nux,
                   NuratesParams nurates_params, RadiationM1Units units) {
-  const Real nb_cgs = nb / units.cgs2code_rho;
+  const Real nb_cgs = nb / units.cgs2code_rho;  // [baryon/cm^-3]
   if ((nb_cgs < nurates_params.nb_min_cgs) || (temp < nurates_params.temp_min_mev)) {
     n_nue = 0.;
     n_anue = 0.;
@@ -381,33 +374,34 @@ void NeutrinoDens(Real mu_n, Real mu_p, Real mu_e, Real nb, Real temp, Real &n_n
   const Real temp3 = temp * temp * temp;
   const Real temp4 = temp3 * temp;
 
-  n_nue = 4.0 * M_PI / hc_mevcm3 * temp3 * Fermi::fermi2(eta_nue);
-  n_anue = 4.0 * M_PI / hc_mevcm3 * temp3 * Fermi::fermi2(eta_anue);
-  n_nux = 16.0 * M_PI / hc_mevcm3 * temp3 * Fermi::fermi2(eta_nux);
+  n_nue = 4.0 * M_PI / hc_mevcm3 * temp3 * Fermi::fermi2(eta_nue);    // [cm^-3]
+  n_anue = 4.0 * M_PI / hc_mevcm3 * temp3 * Fermi::fermi2(eta_anue);  // [cm^-3]
+  n_nux = 16.0 * M_PI / hc_mevcm3 * temp3 * Fermi::fermi2(eta_nux);   // [cm^-3]
 
-  en_nue = 4.0 * M_PI / hc_mevcm3 * temp4 * Fermi::fermi3(eta_nue);
-  en_anue = 4.0 * M_PI / hc_mevcm3 * temp4 * Fermi::fermi3(eta_anue);
-  en_nux = 16.0 * M_PI / hc_mevcm3 * temp4 * Fermi::fermi3(eta_nux);
+  en_nue = 4.0 * M_PI / hc_mevcm3 * temp4 * Fermi::fermi3(eta_nue);    // [MeV cm^-3]
+  en_anue = 4.0 * M_PI / hc_mevcm3 * temp4 * Fermi::fermi3(eta_anue);  // [MeV cm^-3]
+  en_nux = 16.0 * M_PI / hc_mevcm3 * temp4 * Fermi::fermi3(eta_nux);   // [MeV cm^-3]
 
-  assert(isfinite(n_nue));
-  assert(isfinite(n_anue));
-  assert(isfinite(n_nux));
-  assert(isfinite(en_nue));
-  assert(isfinite(en_anue));
-  assert(isfinite(en_nux));
+  assert(Kokkos::isfinite(n_nue));
+  assert(Kokkos::isfinite(n_anue));
+  assert(Kokkos::isfinite(n_nux));
+  assert(Kokkos::isfinite(en_nue));
+  assert(Kokkos::isfinite(en_anue));
+  assert(Kokkos::isfinite(en_nux));
 
-  const Real nfactor =
-      units.cgs2code_length * units.cgs2code_length * units.cgs2code_length * NORMFACT;
-  n_nue = n_nue / nfactor;
-  n_anue = n_anue / nfactor;
-  n_nux = n_nux / nfactor;
+  // convert back to code units (adjusting for NORMFACT)
+  const Real n_factor =
+      NORMFACT * units.cgs2code_length * units.cgs2code_length * units.cgs2code_length;
+  n_nue = n_nue / n_factor;
+  n_anue = n_anue / n_factor;
+  n_nux = n_nux / n_factor;
 
-  const Real enfactor =
-      MEV_TO_ERG * units.cgs2code_energy /
+  const Real en_factor =
+      units.cgs2code_energy /
       (units.cgs2code_length * units.cgs2code_length * units.cgs2code_length);
-  en_nue = en_nue / enfactor;
-  en_anue = en_anue / enfactor;
-  en_nux = en_nux / enfactor;
+  en_nue = en_nue / en_factor;
+  en_anue = en_anue / en_factor;
+  en_nux = en_nux / en_factor;
 }
 
 }  // namespace radiationm1
