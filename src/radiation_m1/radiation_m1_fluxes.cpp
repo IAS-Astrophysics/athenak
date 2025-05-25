@@ -21,7 +21,8 @@ void CalcFlux(const int m, const int k, const int j, const int i, const int nuid
               const DvceArray5D<Real> &chi_,
               const AthenaTensor<Real, TensorSymm::NONE, 4, 1> &u_mu_,
               const adm::ADM::ADM_vars &adm, const RadiationM1Params params_,
-              const int nvars_, const int nspecies_, Real flux[5], Real &cmax) {
+              const int nvars_, const int nspecies_, const bool ismhd, Real flux[5],
+              Real &cmax) {
   // load 4-metric, 3-metric inverse, shift, normal
   Real garr_dd[16];
   Real garr_uu[16];
@@ -66,7 +67,7 @@ void CalcFlux(const int m, const int k, const int j, const int i, const int nuid
   AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> v_d{};
   AthenaPointTensor<Real, TensorSymm::NONE, 4, 2> proj_ud{};
   Real w_lorentz{};
-  if (nspecies_ > 1) {
+  if (ismhd) {
     w_lorentz = Kokkos::sqrt(1. + w0_(m, IVX, k, j, i) * w0_(m, IVX, k, j, i) +
                              w0_(m, IVY, k, j, i) * w0_(m, IVY, k, j, i) +
                              w0_(m, IVZ, k, j, i) * w0_(m, IVZ, k, j, i));
@@ -79,7 +80,7 @@ void CalcFlux(const int m, const int k, const int j, const int i, const int nuid
                  w_lorentz * adm.beta_u(m, 2, k, j, i) / adm.alpha(m, k, j, i),
              u_u);
   } else {
-    w_lorentz = adm.alpha(m,k,j,i) * u_mu_(m, 0, k, j, i);
+    w_lorentz = adm.alpha(m, k, j, i) * u_mu_(m, 0, k, j, i);
     pack_u_u(u_mu_(m, 0, k, j, i), u_mu_(m, 1, k, j, i), u_mu_(m, 2, k, j, i),
              u_mu_(m, 3, k, j, i), u_u);
   }
@@ -193,9 +194,9 @@ TaskStatus RadiationM1::CalculateFluxes(Driver *pdrive, int stage) {
         Real flux_jp1[5]{};
         Real cmax_j, cmax_jp1;
         CalcFlux(m, k, j, i - 1, nuidx, dir, u0_, w0_, chi_, u_mu_, adm, params_, nvars_,
-                 nspecies_, flux_j, cmax_j);
+                 nspecies_, ismhd, flux_j, cmax_j);
         CalcFlux(m, k, j, i, nuidx, dir, u0_, w0_, chi_, u_mu_, adm, params_, nvars_,
-                 nspecies_, flux_jp1, cmax_jp1);
+                 nspecies_, ismhd, flux_jp1, cmax_jp1);
 
         Real flux_jp12_lo[5]{};
         Real flux_jp12_ho[5]{};
@@ -257,9 +258,9 @@ TaskStatus RadiationM1::CalculateFluxes(Driver *pdrive, int stage) {
           Real flux_jp1[5]{};
           Real cmax_j, cmax_jp1;
           CalcFlux(m, k, j - 1, i, nuidx, dir, u0_, w0_, chi_, u_mu_, adm, params_,
-                   nvars_, nspecies_, flux_j, cmax_j);
+                   nvars_, nspecies_, ismhd, flux_j, cmax_j);
           CalcFlux(m, k, j, i, nuidx, dir, u0_, w0_, chi_, u_mu_, adm, params_, nvars_,
-                   nspecies_, flux_jp1, cmax_jp1);
+                   nspecies_, ismhd, flux_jp1, cmax_jp1);
 
           Real flux_jp12_lo[5]{};
           Real flux_jp12_ho[5]{};
@@ -323,9 +324,9 @@ TaskStatus RadiationM1::CalculateFluxes(Driver *pdrive, int stage) {
           Real flux_jp1[5]{};
           Real cmax_j, cmax_jp1;
           CalcFlux(m, k - 1, j, i, nuidx, dir, u0_, w0_, chi_, u_mu_, adm, params_,
-                   nvars_, nspecies_, flux_j, cmax_j);
+                   nvars_, nspecies_, ismhd, flux_j, cmax_j);
           CalcFlux(m, k, j, i, nuidx, dir, u0_, w0_, chi_, u_mu_, adm, params_, nvars_,
-                   nspecies_, flux_jp1, cmax_jp1);
+                   nspecies_, ismhd, flux_jp1, cmax_jp1);
 
           Real flux_jp12_lo[5]{};
           Real flux_jp12_ho[5]{};
