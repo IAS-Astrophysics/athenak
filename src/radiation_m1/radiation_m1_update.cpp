@@ -22,28 +22,67 @@
 namespace radiationm1 {
 
 TaskStatus RadiationM1::TimeUpdate(Driver *pdrive, int stage) {
+  auto &indcs = pmy_pack->pmesh->mb_indcs;
+
   // Here we are using dynamic_cast to infer which derived type pdyngr is
   auto *ptest_nqt =
       dynamic_cast<dyngr::DynGRMHDPS<Primitive::EOSCompOSE<Primitive::NQTLogs>,
                                      Primitive::ResetFloor> *>(pmy_pack->pdyngr);
   if (ptest_nqt != nullptr) {
-    return TimeUpdate_<Primitive::EOSCompOSE<Primitive::NQTLogs>, Primitive::ResetFloor>(
-        pdrive, stage);
+    switch (indcs.ng) {
+      case 2:
+        return TimeUpdate_<Primitive::EOSCompOSE<Primitive::NQTLogs>,
+                           Primitive::ResetFloor, 2>(pdrive, stage);
+        break;
+      case 3:
+        return TimeUpdate_<Primitive::EOSCompOSE<Primitive::NQTLogs>,
+                           Primitive::ResetFloor, 3>(pdrive, stage);
+        break;
+      case 4:
+        return TimeUpdate_<Primitive::EOSCompOSE<Primitive::NQTLogs>,
+                           Primitive::ResetFloor, 4>(pdrive, stage);
+        break;
+    }
   }
 
   auto *ptest_nlog =
       dynamic_cast<dyngr::DynGRMHDPS<Primitive::EOSCompOSE<Primitive::NormalLogs>,
                                      Primitive::ResetFloor> *>(pmy_pack->pdyngr);
   if (ptest_nlog != nullptr) {
-    return TimeUpdate_<Primitive::EOSCompOSE<Primitive::NormalLogs>,
-                       Primitive::ResetFloor>(pdrive, stage);
+    switch (indcs.ng) {
+      case 2:
+        return TimeUpdate_<Primitive::EOSCompOSE<Primitive::NormalLogs>,
+                           Primitive::ResetFloor, 2>(pdrive, stage);
+        break;
+      case 3:
+        return TimeUpdate_<Primitive::EOSCompOSE<Primitive::NormalLogs>,
+                           Primitive::ResetFloor, 3>(pdrive, stage);
+        break;
+      case 4:
+        return TimeUpdate_<Primitive::EOSCompOSE<Primitive::NormalLogs>,
+                           Primitive::ResetFloor, 4>(pdrive, stage);
+        break;
+    }
   }
 
   bool ismhd = pmy_pack->pmhd != nullptr;
-  if (ismhd == false) {
-    return TimeUpdate_<Primitive::EOSCompOSE<Primitive::NQTLogs>, Primitive::ResetFloor>(
-        pdrive, stage);
+  if (!ismhd) {
+    switch (indcs.ng) {
+      case 2:
+        return TimeUpdate_<Primitive::EOSCompOSE<Primitive::NQTLogs>,
+                           Primitive::ResetFloor, 2>(pdrive, stage);
+        break;
+      case 3:
+        return TimeUpdate_<Primitive::EOSCompOSE<Primitive::NQTLogs>,
+                           Primitive::ResetFloor, 3>(pdrive, stage);
+        break;
+      case 4:
+        return TimeUpdate_<Primitive::EOSCompOSE<Primitive::NQTLogs>,
+                           Primitive::ResetFloor, 4>(pdrive, stage);
+        break;
+    }
   }
+
   std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl;
   std::cout << "Unsupported EOS type!\n";
   abort();
@@ -56,7 +95,7 @@ TaskStatus RadiationM1::TimeUpdate(Driver *pdrive, int stage) {
 //!  At each step we solve an implicit problem in the form
 //!     F = F^* + cdt S[F]
 //!  Where F^* = F^k + cdt A
-template <class EOSPolicy, class ErrorPolicy>
+template <class EOSPolicy, class ErrorPolicy, int NGHOST>
 TaskStatus RadiationM1::TimeUpdate_(Driver *d, int stage) {
   auto &indcs = pmy_pack->pmesh->mb_indcs;
   int &is = indcs.is, &ie = indcs.ie;
@@ -65,28 +104,28 @@ TaskStatus RadiationM1::TimeUpdate_(Driver *d, int stage) {
   int ncells1 = indcs.nx1 + 2 * (indcs.ng);
   int nmb1 = pmy_pack->nmb_thispack - 1;
   auto &u0_ = u0;
-  auto &chi_ = pmy_pack->pradm1->chi;
+  auto &chi_ = chi;
   auto &u1_ = u1;
-  auto &u_mu_ = pmy_pack->pradm1->u_mu;
   auto flx1 = uflx.x1f;
   auto flx2 = uflx.x2f;
   auto flx3 = uflx.x3f;
 
-  auto &eta_0_ = pmy_pack->pradm1->eta_0;
-  auto &abs_0_ = pmy_pack->pradm1->abs_0;
-  auto &eta_1_ = pmy_pack->pradm1->eta_1;
-  auto &abs_1_ = pmy_pack->pradm1->abs_1;
-  auto &scat_1_ = pmy_pack->pradm1->scat_1;
+  auto &eta_0_ = eta_0;
+  auto &abs_0_ = abs_0;
+  auto &eta_1_ = eta_1;
+  auto &abs_1_ = abs_1;
+  auto &scat_1_ = scat_1;
 
   auto &mbsize = pmy_pack->pmb->mb_size;
-  auto nvars_ = pmy_pack->pradm1->nvars;
-  auto &nspecies_ = pmy_pack->pradm1->nspecies;
+  auto &nvars_ = nvars;
+  auto &nspecies_ = nspecies;
 
   bool &multi_d = pmy_pack->pmesh->multi_d;
   bool &three_d = pmy_pack->pmesh->three_d;
   auto &params_ = pmy_pack->pradm1->params;
 
   bool ismhd = pmy_pack->pmhd != nullptr;
+  auto &u_mu_ = u_mu;
   DvceArray5D<Real> &w0_ = u_mu_data;
   DvceArray5D<Real> &umhd0_ = u_mu_data;
   if (ismhd) {
@@ -97,9 +136,8 @@ TaskStatus RadiationM1::TimeUpdate_(Driver *d, int stage) {
   auto &BrentFunc_ = pmy_pack->pradm1->BrentFunc;
   auto &HybridsjFunc_ = pmy_pack->pradm1->HybridsjFunc;
 
-  // This is a ugly hack stolen from eos_compose_test.cpp
   Real mb{};
-  if (nspecies_ > 1) {
+  if (ismhd) {
     Primitive::EOS<EOSPolicy, ErrorPolicy> &eos =
         static_cast<dyngr::DynGRMHDPS<EOSPolicy, ErrorPolicy> *>(pmy_pack->pdyngr)
             ->eos.ps.GetEOSMutable();
@@ -111,14 +149,9 @@ TaskStatus RadiationM1::TimeUpdate_(Driver *d, int stage) {
 
   adm::ADM::ADM_vars &adm = pmy_pack->padm->adm;
 
-  int scr_level = 0;
-  size_t scr_size = 1;
-
-  par_for_outer(
-      "radiation_m1_update", DevExeSpace(), scr_size, scr_level, 0, nmb1, ks, ke, js, je,
-      is, ie,
-      KOKKOS_LAMBDA(TeamMember_t member, const int m, const int k, const int j,
-                    const int i) {
+  par_for(
+      "radiation_m1_update", DevExeSpace(), 0, nmb1, ks, ke, js, je, is, ie,
+      KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
         // [A] Compute gr quantities: metric, shift, extrinsic curvature, etc.
         Real garr_dd[16];
         Real garr_uu[16];
@@ -180,29 +213,29 @@ TaskStatus RadiationM1::TimeUpdate_(Driver *d, int stage) {
         Real ideltax[3] = {1 / mbsize.d_view(m).dx1, 1 / mbsize.d_view(m).dx2,
                            1 / mbsize.d_view(m).dx3};
         AthenaPointTensor<Real, TensorSymm::NONE, 3, 1> dalpha_d{};
-        dalpha_d(0) = Dx<M1_NGHOST>(0, ideltax, adm.alpha, m, k, j, i);
-        dalpha_d(1) = (multi_d) ? Dx<M1_NGHOST>(1, ideltax, adm.alpha, m, k, j, i) : 0.;
-        dalpha_d(2) = (three_d) ? Dx<M1_NGHOST>(2, ideltax, adm.alpha, m, k, j, i) : 0.;
+        dalpha_d(0) = Dx<NGHOST>(0, ideltax, adm.alpha, m, k, j, i);
+        dalpha_d(1) = (multi_d) ? Dx<NGHOST>(1, ideltax, adm.alpha, m, k, j, i) : 0.;
+        dalpha_d(2) = (three_d) ? Dx<NGHOST>(2, ideltax, adm.alpha, m, k, j, i) : 0.;
 
         // [B.2] Derivatives of shift (\p_i beta_u(j))
         AthenaPointTensor<Real, TensorSymm::NONE, 3, 2> dbeta_du{};
         for (int a = 0; a < 3; ++a) {
-          dbeta_du(0, a) = Dx<M1_NGHOST>(0, ideltax, adm.beta_u, m, a, k, j, i);
+          dbeta_du(0, a) = Dx<NGHOST>(0, ideltax, adm.beta_u, m, a, k, j, i);
           dbeta_du(1, a) =
-              (multi_d) ? Dx<M1_NGHOST>(1, ideltax, adm.beta_u, m, a, k, j, i) : 0.;
+              (multi_d) ? Dx<NGHOST>(1, ideltax, adm.beta_u, m, a, k, j, i) : 0.;
           dbeta_du(2, a) =
-              (three_d) ? Dx<M1_NGHOST>(2, ideltax, adm.beta_u, m, a, k, j, i) : 0.;
+              (three_d) ? Dx<NGHOST>(2, ideltax, adm.beta_u, m, a, k, j, i) : 0.;
         }
 
         // [B.3] Derivatives of spatial metric (\p_k gamma_ij)
         AthenaPointTensor<Real, TensorSymm::SYM2, 3, 3> dg_ddd{};
         for (int a = 0; a < 3; ++a) {
           for (int b = 0; b < 3; ++b) {
-            dg_ddd(0, a, b) = Dx<M1_NGHOST>(0, ideltax, adm.g_dd, m, a, b, k, j, i);
+            dg_ddd(0, a, b) = Dx<NGHOST>(0, ideltax, adm.g_dd, m, a, b, k, j, i);
             dg_ddd(1, a, b) =
-                (multi_d) ? Dx<M1_NGHOST>(1, ideltax, adm.g_dd, m, a, b, k, j, i) : 0.;
+                (multi_d) ? Dx<NGHOST>(1, ideltax, adm.g_dd, m, a, b, k, j, i) : 0.;
             dg_ddd(2, a, b) =
-                (three_d) ? Dx<M1_NGHOST>(2, ideltax, adm.g_dd, m, a, b, k, j, i) : 0.;
+                (three_d) ? Dx<NGHOST>(2, ideltax, adm.g_dd, m, a, b, k, j, i) : 0.;
           }
         }
 
@@ -214,7 +247,7 @@ TaskStatus RadiationM1::TimeUpdate_(Driver *d, int stage) {
         AthenaPointTensor<Real, TensorSymm::NONE, 4, 2> proj_ud{};
 
         Real w_lorentz{};
-        if (nspecies_ > 1) {
+        if (ismhd) {
           w_lorentz = Kokkos::sqrt(1. + w0_(m, IVX, k, j, i) * w0_(m, IVX, k, j, i) +
                                    w0_(m, IVY, k, j, i) * w0_(m, IVY, k, j, i) +
                                    w0_(m, IVZ, k, j, i) * w0_(m, IVZ, k, j, i));
