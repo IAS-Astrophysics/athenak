@@ -324,7 +324,7 @@ void TOVStar::GetPrimitivesAtIsoPoint(const TOVEOS& eos, Real r_iso,
   const auto &alps_l = alpha.d_view;
   const auto &Ms_l = M.d_view;
   if (idx >= npoints || idx < 0) {
-    printf("There's a problem with the index!\n" // NOLINT
+    Kokkos::printf("There's a problem with the index!\n" // NOLINT
            " idx = %d\n"
            " r_iso = %g\n"
            " dr = %g\n",idx,r_iso,dr);
@@ -335,7 +335,7 @@ void TOVStar::GetPrimitivesAtIsoPoint(const TOVEOS& eos, Real r_iso,
   alp = Interpolate(r_iso, R_iso_l(idx), R_iso_l(idx+1), alps_l(idx), alps_l(idx+1));
   rho = eos.template GetRhoFromP<LocationTag::Device>(p);
   if (!isfinite(p)) {
-    printf("There's a problem with p!\n"); // NOLINT
+    Kokkos::printf("There's a problem with p!\n"); // NOLINT
   }
 }
 
