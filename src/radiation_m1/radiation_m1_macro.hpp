@@ -9,8 +9,6 @@
 //! \file radiation_m1_macro.hpp
 //  \brief macros for Grey M1 radiation class
 
-#define M1_NGHOST 2
-
 #define M1_E_IDX 0
 #define M1_FX_IDX 1
 #define M1_FY_IDX 2

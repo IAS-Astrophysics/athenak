@@ -118,7 +118,7 @@ class RadiationM1 {
   // eos related quantites (only when mhd is on)
   template <class EOSPolicy, class ErrorPolicy>
   TaskStatus CalcOpacityNurates_(Driver* pdrive, int stage);
-  template <class EOSPolicy, class ErrorPolicy>
+  template <class EOSPolicy, class ErrorPolicy, int M1_NGHOST>
   TaskStatus TimeUpdate_(Driver* d, int stage);
 
  private:
