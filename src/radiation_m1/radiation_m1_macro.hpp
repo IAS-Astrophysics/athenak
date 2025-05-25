@@ -9,9 +9,6 @@
 //! \file radiation_m1_macro.hpp
 //  \brief macros for Grey M1 radiation class
 
-// #ifndef WARN_FOR_SRC_FIX
-// #define WARN_FOR_SRC_FIX
-// #endif
 #define M1_NGHOST 2
 
 #define M1_E_IDX 0
@@ -22,32 +19,11 @@
 
 #define M1_TOTAL_NUM_SPECIES 1
 #define M1_MULTIROOTS_DIM 4
-#define RADIATION_M1_SRC_EXPL 1  // explicit RHS
-#define RADIATION_M1_SRC_IMPL 2  // implicit RHS (default)
-#define RADIATION_M1_SRC_BOOST 3 // boost to fluid frame (approximate!)
-#ifndef RADIATION_M1_SRC_METHOD
-#define RADIATION_M1_SRC_METHOD RADIATION_M1_SRC_IMPL
-#endif
 
-
-
-#define RADIATION_M1_CLS_SHIBATA 1 // optically thin limit from Shibata 2011
-#define RADIATION_M1_CLS_SIMPLE                                                \
-  2 // simplified closure (needed for inv closure to work)
-#ifndef RADIATION_M1_CLS_METHOD
-#define RADIATION_M1_CLS_METHOD RADIATION_M1_CLS_SIMPLE
-#endif
-
-#define CGS_GCC                                                                \
-  (1.619100425158886e-18) // Multiply to convert density from CGS to Cactus
 #define HC_MEVCM 1.23984172e-10 // hc in units of MeV*cm
 #define MEV_TO_ERG 1.60217733e-6
 #define NORMFACT 1e50
-#define MASS_FACT_CGS 1
 
 #define SQ(X) ((X) * (X))
-//#define POW2(X) ((X)*(X))
-//#define POW3(X) ((X)*POW2(X))
-//#define POW4(X) (POW2(X)*POW2(X))
 
 #endif // RADIATION_M1_MACRO_HPP
