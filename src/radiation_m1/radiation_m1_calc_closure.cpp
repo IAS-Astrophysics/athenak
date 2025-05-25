@@ -6,7 +6,6 @@
 //! \file radiation_m1_calc_closure.cpp
 //! \brief calculate lab frame pressure
 
-#include "radiation_m1/radiation_m1_calc_closure.hpp"
 
 #include "athena.hpp"
 #include "athena_tensor.hpp"
@@ -14,6 +13,7 @@
 #include "dyn_grmhd/dyn_grmhd.hpp"
 #include "radiation_m1/radiation_m1.hpp"
 #include "radiation_m1/radiation_m1_helpers.hpp"
+#include "radiation_m1/radiation_m1_calc_closure.hpp"
 
 namespace radiationm1 {
 TaskStatus RadiationM1::CalcClosure(Driver *pdrive, int stage) {
@@ -108,7 +108,7 @@ TaskStatus RadiationM1::CalcClosure(Driver *pdrive, int stage) {
           AthenaPointTensor<Real, TensorSymm::NONE, 4, 2> proj_ud{};
 
           Real w_lorentz{};
-          if (nspecies_ > 1) {
+          if (ismhd) {
             w_lorentz = Kokkos::sqrt(1. + w0_(m, IVX, k, j, i) * w0_(m, IVX, k, j, i) +
                                      w0_(m, IVY, k, j, i) * w0_(m, IVY, k, j, i) +
                                      w0_(m, IVZ, k, j, i) * w0_(m, IVZ, k, j, i));

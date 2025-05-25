@@ -6,13 +6,11 @@
 //! \file radiation_m1_calc_opacity.cpp
 //! \brief calculate opacities for grey M1
 
-#include <coordinates/cell_locations.hpp>
-
 #include "athena.hpp"
 #include "coordinates/adm.hpp"
 #include "dyn_grmhd/dyn_grmhd.hpp"
 #include "eos/primitive-solver/unit_system.hpp"
-#include "radiation_m1.hpp"
+#include "radiation_m1/radiation_m1.hpp"
 #include "radiation_m1/radiation_m1_nurates.hpp"
 
 namespace radiationm1 {
@@ -67,7 +65,7 @@ TaskStatus RadiationM1::CalcOpacityNurates_(Driver *pdrive, int stage) {
   auto &u0_ = u0;
   auto &w0_ = pmy_pack->pmhd->w0;
   auto &chi_ = chi;
-  auto &u_mu_ = u_mu;
+  // auto &u_mu_ = u_mu;
 
   Real beta[2] = {0.5, 1.};
   Real beta_dt = (beta[stage - 1]) * (pmy_pack->pmesh->dt);
@@ -81,10 +79,10 @@ TaskStatus RadiationM1::CalcOpacityNurates_(Driver *pdrive, int stage) {
   auto cgs_units = Primitive::MakeCGS();
   auto code_units = eos.GetCodeUnitSystem();
   const RadiationM1Units cgs2codeunits = {
-      .cgs2code_length = 1. / code_units.LengthConversion(cgs_units),
-      .cgs2code_time = 1. / code_units.TimeConversion(cgs_units),
-      .cgs2code_rho = 1. / code_units.DensityConversion(cgs_units),
-      .cgs2code_energy = 1. / code_units.EnergyConversion(cgs_units),
+      .cgs2code_length = cgs_units.LengthConversion(code_units),
+      .cgs2code_time = cgs_units.TimeConversion(code_units),
+      .cgs2code_rho = cgs_units.DensityConversion(code_units),
+      .cgs2code_energy = cgs_units.EnergyConversion(code_units),
   };
 
   par_for(
@@ -157,9 +155,9 @@ TaskStatus RadiationM1::CalcOpacityNurates_(Driver *pdrive, int stage) {
           tensor_contract(g_dd, v_u, v_d);
           calc_proj(u_d, u_u, proj_ud);
 
-          Real J[4]{};
-          Real rnnu[4]{};
-          for (int nuidx = 0; nuidx < nspecies_; nuidx++) {
+          // Compute lab frame energy density and number density
+          Real J[4]{}, rnnu[4]{};
+          for (int nuidx = 0; nuidx < nspecies_; ++nuidx) {
             AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> F_d{};
             pack_F_d(adm.beta_u(m, 0, k, j, i), adm.beta_u(m, 1, k, j, i),
                      adm.beta_u(m, 2, k, j, i),
@@ -171,17 +169,16 @@ TaskStatus RadiationM1::CalcOpacityNurates_(Driver *pdrive, int stage) {
             apply_closure(g_dd, g_uu, n_d, w_lorentz, u_u, v_d, proj_ud, E, F_d,
                           chi_(m, nuidx, k, j, i), P_dd, m1_params_);
 
-            // compute radiation quantities in fluid frame
             AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> T_dd{};
             assemble_rT(n_d, E, F_d, P_dd, T_dd);
-            J[nuidx] = calc_J_from_rT(T_dd, u_u);
 
+            J[nuidx] = calc_J_from_rT(T_dd, u_u);
             Real Gamma = compute_Gamma(w_lorentz, v_u, J[nuidx], E, F_d, m1_params_);
             rnnu[nuidx] = u0_(m, CombinedIdx(nuidx, M1_N_IDX, nvars_), k, j, i) / Gamma;
           }
 
           // fluid quantities
-          Real nb = w0_(m, IDN, k, j, i) / mb;
+          Real nb = w0_(m, IDN, k, j, i) / mb;  // [eos units]
           Real p = w0_(m, IPR, k, j, i);
           Real Y = w0_(m, PYF, k, j, i);
           Real T = eos.GetTemperatureFromP(nb, p, &Y);
@@ -194,7 +191,7 @@ TaskStatus RadiationM1::CalcOpacityNurates_(Driver *pdrive, int stage) {
           Real mu_e = mu_le - mu_q;
 
           // local undensitized neutrino quantities
-          Real nudens_0[4], nudens_1[4], chi_loc[4];
+          Real nudens_0[4]{}, nudens_1[4]{}, chi_loc[4]{};
           for (int nuidx = 0; nuidx < nspecies_; ++nuidx) {
             nudens_0[nuidx] = rnnu[nuidx] / volform;
             nudens_1[nuidx] = J[nuidx] / volform;
@@ -217,41 +214,46 @@ TaskStatus RadiationM1::CalcOpacityNurates_(Driver *pdrive, int stage) {
               scat_0_loc[1], scat_0_loc[2], scat_0_loc[3], scat_1_loc[0], scat_1_loc[1],
               scat_1_loc[2], scat_1_loc[3], nurates_params_, cgs2codeunits);
 
-          assert(isfinite(eta_0_loc[0]));
-          assert(isfinite(eta_0_loc[1]));
-          assert(isfinite(eta_0_loc[2]));
+          assert(Kokkos::isfinite(eta_0_loc[0]));
+          assert(Kokkos::isfinite(eta_0_loc[1]));
+          assert(Kokkos::isfinite(eta_0_loc[2]));
+          assert(Kokkos::isfinite(eta_0_loc[3]));
 
-          assert(isfinite(eta_1_loc[0]));
-          assert(isfinite(eta_1_loc[1]));
-          assert(isfinite(eta_1_loc[2]));
+          assert(Kokkos::isfinite(eta_1_loc[0]));
+          assert(Kokkos::isfinite(eta_1_loc[1]));
+          assert(Kokkos::isfinite(eta_1_loc[2]));
+          assert(Kokkos::isfinite(eta_1_loc[3]));
 
-          assert(isfinite(abs_0_loc[0]));
-          assert(isfinite(abs_0_loc[1]));
-          assert(isfinite(abs_0_loc[2]));
+          assert(Kokkos::isfinite(abs_0_loc[0]));
+          assert(Kokkos::isfinite(abs_0_loc[1]));
+          assert(Kokkos::isfinite(abs_0_loc[2]));
+          assert(Kokkos::isfinite(abs_0_loc[3]));
 
-          assert(isfinite(abs_1_loc[0]));
-          assert(isfinite(abs_1_loc[1]));
-          assert(isfinite(abs_1_loc[2]));
+          assert(Kokkos::isfinite(abs_1_loc[0]));
+          assert(Kokkos::isfinite(abs_1_loc[1]));
+          assert(Kokkos::isfinite(abs_1_loc[2]));
+          assert(Kokkos::isfinite(abs_1_loc[3]));
 
-          assert(isfinite(scat_0_loc[0]));
-          assert(isfinite(scat_0_loc[1]));
-          assert(isfinite(scat_0_loc[2]));
+          assert(Kokkos::isfinite(scat_0_loc[0]));
+          assert(Kokkos::isfinite(scat_0_loc[1]));
+          assert(Kokkos::isfinite(scat_0_loc[2]));
+          assert(Kokkos::isfinite(scat_0_loc[3]));
 
-          assert(isfinite(scat_1_loc[0]));
-          assert(isfinite(scat_1_loc[1]));
-          assert(isfinite(scat_1_loc[2]));
+          assert(Kokkos::isfinite(scat_1_loc[0]));
+          assert(Kokkos::isfinite(scat_1_loc[1]));
+          assert(Kokkos::isfinite(scat_1_loc[2]));
+          assert(Kokkos::isfinite(scat_1_loc[3]));
 
-          Real tau{};
-          Real nudens_0_trap[4]{}, nudens_1_trap[4]{};
-          Real nudens_0_thin[4]{}, nudens_1_thin[4]{};
+          Real tau{}, nudens_0_trap[4]{}, nudens_1_trap[4]{}, nudens_0_thin[4]{},
+              nudens_1_thin[4]{};
 
           if (nurates_params_.use_kirchhoff_law) {
             // effective optical depth to decide whether to compute black body function
             // for neutrinos assuming neutrino tapping or at fixed temperature and Ye
             Real tau =
+                beta_dt *
                 Kokkos::min(Kokkos::sqrt(abs_1_loc[0] * (abs_1_loc[0] + scat_1_loc[0])),
-                            Kokkos::sqrt(abs_1_loc[1] * (abs_1_loc[1] + scat_1_loc[1]))) *
-                beta_dt;
+                            Kokkos::sqrt(abs_1_loc[1] * (abs_1_loc[1] + scat_1_loc[1])));
 
             // compute neutrino black body function assuming trapped neutrinos
             if (nurates_params_.opacity_tau_trap >= 0 &&
@@ -262,8 +264,9 @@ TaskStatus RadiationM1::CalcOpacityNurates_(Driver *pdrive, int stage) {
               Real n_nu[6] = {n_nue,      n_anue,    n_nux / 4., n_nux / 4.,
                               n_nux / 4., n_nux / 4.};  // neutrino number densities
                                                         // (e, ae, m, am, t, at)
-              Real Y_part[3] = {Y, 0., 0.}; // particle fractions (currently on Y_e is used)
-              Real Y_lep[3]{};   // total lepton fraction: [0] electron, [1] mu, [3] tau
+              Real Y_part[3] = {Y, 0.,
+                                0.};  // particle fractions (currently on Y_e is used)
+              Real Y_lep[3]{};  // total lepton fraction: [0] electron, [1] mu, [3] tau
               eos.GetLeptonFractions(nb, Y_part, n_nu, Y_lep);
               Real temp_trap{}, Y_part_trap[3]{};
               bool ierr = eos.GetBetaEquilibriumTrapped(nb, T, Y_lep, temp_trap,

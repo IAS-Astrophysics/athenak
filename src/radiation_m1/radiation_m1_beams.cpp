@@ -14,7 +14,7 @@
 
 namespace radiationm1 {
 
-// Beams from left wall of domain (1d only)
+// Beams from left wall of domain (1d, single species)
 void ApplyBeamSources1D(Mesh *pmesh) {
   auto &indcs = pmesh->mb_indcs;
   int &is = indcs.is;
@@ -25,6 +25,8 @@ void ApplyBeamSources1D(Mesh *pmesh) {
   int &ng = indcs.ng;
   auto &u0_ = pmesh->pmb_pack->pradm1->u0;
   auto &beam_source_1_vals_ = pmesh->pmb_pack->pradm1->rad_m1_beam.beam_source_vals;
+
+  assert(pmesh->pmb_pack->pradm1->nspecies == 1);
 
   par_for(
       "radiation_m1_beams_populate_1d", DevExeSpace(), 0, nmb1, 0, nvarstotm1,
@@ -41,7 +43,7 @@ void ApplyBeamSources1D(Mesh *pmesh) {
       });
 }
 
-// Beams from left wall of domain (2d only)
+// Beams from left wall of domain (2d, single species)
 void ApplyBeamSources2D(Mesh *pmesh) {
   auto &indcs = pmesh->mb_indcs;
   int &is = indcs.is;
@@ -60,6 +62,8 @@ void ApplyBeamSources2D(Mesh *pmesh) {
   auto &beam_source_1_vals_ = pmesh->pmb_pack->pradm1->rad_m1_beam.beam_source_vals;
   auto &beam_source_1_y1_ = pmesh->pmb_pack->pradm1->rad_m1_beam.beam_ymin;
   auto &beam_source_1_y2_ = pmesh->pmb_pack->pradm1->rad_m1_beam.beam_ymax;
+
+  assert(pmesh->pmb_pack->pradm1->nspecies == 1);
 
   par_for(
       "radiation_m1_beams_populate_2d", DevExeSpace(), 0, nmb1, 0, nvarstotm1, 0,
@@ -83,7 +87,7 @@ void ApplyBeamSources2D(Mesh *pmesh) {
       });
 }
 
-// Beam for the M1 beam test around black hole (2d only)
+// Beam for the M1 beam test around black hole (2d, single species)
 void ApplyBeamSourcesBlackHole(Mesh *pmesh) {
   auto &indcs = pmesh->mb_indcs;
   int &is = indcs.is;
@@ -103,6 +107,8 @@ void ApplyBeamSourcesBlackHole(Mesh *pmesh) {
 
   auto &beam_source_1_y1_ = pmesh->pmb_pack->pradm1->rad_m1_beam.beam_ymin;
   auto &beam_source_1_y2_ = pmesh->pmb_pack->pradm1->rad_m1_beam.beam_ymax;
+
+  assert(pmesh->pmb_pack->pradm1->nspecies == 1);
 
   par_for(
       "radiation_m1_beam_populate_black_hole", DevExeSpace(), 0, nmb1, 0, (n3 - 1), 0,
