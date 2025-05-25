@@ -122,6 +122,11 @@ RadiationM1::RadiationM1(MeshBlockPack *ppack, ParameterInput *pin)
         pin->GetOrAddBoolean("bns_nurates", "use_kirchoff_law", false);
     nurates_params.use_NN_medium_corr =
         pin->GetOrAddBoolean("bns_nurates", "use_NN_medium_corr", true);
+    nurates_params.neglect_blocking =
+        pin->GetOrAddBoolean("bns_nurates", "neglect_blocking", false);
+    nurates_params.use_decay = pin->GetOrAddBoolean("bns_nurates", "use_decay", false);
+    nurates_params.use_BRT_brem =
+        pin->GetOrAddBoolean("bns_nurates", "use_BRT_brem", false);
 
     nurates_params.quadrature.nx = nurates_params.quad_nx;
     nurates_params.quadrature.dim = 1;
