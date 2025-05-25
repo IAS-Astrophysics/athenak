@@ -314,6 +314,7 @@ TaskStatus RadiationM1::CalcOpacityNurates_(Driver *pdrive, int stage) {
           }
 
           for (int nuidx = 0; nuidx < nspecies_; ++nuidx) {
+            // store opacities and emissivities
             eta_0(m, nuidx, k, j, i) = eta_0_loc[nuidx];
             eta_1(m, nuidx, k, j, i) = eta_1_loc[nuidx];
             abs_0(m, nuidx, k, j, i) = abs_0_loc[nuidx];
