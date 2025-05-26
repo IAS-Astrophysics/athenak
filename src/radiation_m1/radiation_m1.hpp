@@ -66,6 +66,7 @@ class RadiationM1 {
   int nvars;                   // no. of evolved variables per species
   int nspecies;                // no. of species
   int nvarstot;                // total no. of evolved variables
+  bool ismhd;
   RadiationM1Params params{};  // user parameters for grey M1
 
   DvceArray5D<Real> u0;              // evolved variables
