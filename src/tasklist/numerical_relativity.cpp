@@ -14,6 +14,7 @@
 #include "numerical_relativity.hpp"
 #include "z4c/z4c.hpp"
 #include "dyn_grmhd/dyn_grmhd.hpp"
+#include "radiation_m1/radiation_m1.hpp"
 
 namespace numrel {
 
@@ -137,6 +138,23 @@ bool NumericalRelativity::AssembleNumericalRelativityTasks(
   return true;
 }
 
+bool NumericalRelativity::AssemblePostRadiationTasks(std::shared_ptr<TaskList>& list) {
+  auto &id = pmy_pack->pdyngr->id;
+  auto &idrad = pmy_pack->pradm1->id;
+
+  id.postrad_restu = list->AddTask(&mhd::MHD::RestrictU, pmy_pack->pmhd, idrad.M1_csend);
+  id.postrad_sendu = list->AddTask(&mhd::MHD::SendU, pmy_pack->pmhd, id.postrad_restu);
+  id.postrad_recvu = list->AddTask(&mhd::MHD::RecvU, pmy_pack->pmhd, id.postrad_sendu);
+  id.postrad_bcs = list->AddTask(&mhd::MHD::ApplyPhysicalBCs, pmy_pack->pmhd, id.postrad_recvu);
+  id.postrad_prol = list->AddTask(&mhd::MHD::Prolongate, pmy_pack->pmhd, id.postrad_bcs);
+  id.postrad_c2p = list->AddTask(&mhd::MHD::ConToPrim, pmy_pack->pmhd, id.postrad_prol);
+
+  if (pmy_pack->pradm1 == nullptr || pmy_pack->pdyngr == nullptr) {
+    return false;
+  }
+  return true;
+}
+
 void NumericalRelativity::PrintMissingTasks(std::vector<QueuedTask> &queue) {
   std::cout << "Successfully added the following tasks:\n";
   for (auto& task : queue) {
@@ -184,6 +202,16 @@ void NumericalRelativity::AssembleNumericalRelativityTasks(
               << "  Check that there are no cyclical dependencies or missing tasks.\n";
     PrintMissingTasks(end_queue);
     abort();
+  }
+
+  if (pmy_pack->pradm1 != nullptr && pmy_pack->pdyngr != nullptr) {
+    success = AssemblePostRadiationTasks(tl["opsplit_after_timeintegrator"]);
+    if (!success) {
+      std::cout << "NumericalRelativity: Failed to construct post-radiation TaskList!\n"
+                << "  Check that there are no cyclical dependencies or missing tasks.\n";
+      PrintMissingTasks(end_queue);
+      abort();
+    }
   }
 }
 
