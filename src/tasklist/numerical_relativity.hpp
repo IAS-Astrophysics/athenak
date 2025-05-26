@@ -161,7 +161,6 @@ class NumericalRelativity {
 
   void AssembleNumericalRelativityTasks(
          std::map<std::string, std::shared_ptr<TaskList>>& tl);
-
  private:
   MeshBlockPack *pmy_pack;
   std::vector<QueuedTask> start_queue;
@@ -183,6 +182,8 @@ class NumericalRelativity {
 
   bool AssembleNumericalRelativityTasks(std::shared_ptr<TaskList>& list,
          std::vector<QueuedTask> &queue);
+
+  bool AssemblePostRadiationTasks(std::shared_ptr<TaskList>& list);
 };
 
 } // namespace numrel
