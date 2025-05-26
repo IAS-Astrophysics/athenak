@@ -170,9 +170,9 @@ TaskStatus RadiationM1::CalculateFluxes(Driver *pdrive, int stage) {
   auto &chi_ = pmy_pack->pradm1->chi;
   adm::ADM::ADM_vars &adm = pmy_pack->padm->adm;
 
-  bool ismhd = pmy_pack->pmhd != nullptr;
+  bool &ismhd_ = ismhd;
   DvceArray5D<Real> &w0_ = u_mu_data;
-  if (ismhd) {
+  if (ismhd_) {
     w0_ = pmy_pack->pmhd->w0;
   }
 
@@ -194,9 +194,9 @@ TaskStatus RadiationM1::CalculateFluxes(Driver *pdrive, int stage) {
         Real flux_jp1[5]{};
         Real cmax_j, cmax_jp1;
         CalcFlux(m, k, j, i - 1, nuidx, dir, u0_, w0_, chi_, u_mu_, adm, params_, nvars_,
-                 nspecies_, ismhd, flux_j, cmax_j);
+                 nspecies_, ismhd_, flux_j, cmax_j);
         CalcFlux(m, k, j, i, nuidx, dir, u0_, w0_, chi_, u_mu_, adm, params_, nvars_,
-                 nspecies_, ismhd, flux_jp1, cmax_jp1);
+                 nspecies_, ismhd_, flux_jp1, cmax_jp1);
 
         Real flux_jp12_lo[5]{};
         Real flux_jp12_ho[5]{};
@@ -258,9 +258,9 @@ TaskStatus RadiationM1::CalculateFluxes(Driver *pdrive, int stage) {
           Real flux_jp1[5]{};
           Real cmax_j, cmax_jp1;
           CalcFlux(m, k, j - 1, i, nuidx, dir, u0_, w0_, chi_, u_mu_, adm, params_,
-                   nvars_, nspecies_, ismhd, flux_j, cmax_j);
+                   nvars_, nspecies_, ismhd_, flux_j, cmax_j);
           CalcFlux(m, k, j, i, nuidx, dir, u0_, w0_, chi_, u_mu_, adm, params_, nvars_,
-                   nspecies_, ismhd, flux_jp1, cmax_jp1);
+                   nspecies_, ismhd_, flux_jp1, cmax_jp1);
 
           Real flux_jp12_lo[5]{};
           Real flux_jp12_ho[5]{};
@@ -324,9 +324,9 @@ TaskStatus RadiationM1::CalculateFluxes(Driver *pdrive, int stage) {
           Real flux_jp1[5]{};
           Real cmax_j, cmax_jp1;
           CalcFlux(m, k - 1, j, i, nuidx, dir, u0_, w0_, chi_, u_mu_, adm, params_,
-                   nvars_, nspecies_, ismhd, flux_j, cmax_j);
+                   nvars_, nspecies_, ismhd_, flux_j, cmax_j);
           CalcFlux(m, k, j, i, nuidx, dir, u0_, w0_, chi_, u_mu_, adm, params_, nvars_,
-                   nspecies_, ismhd, flux_jp1, cmax_jp1);
+                   nspecies_, ismhd_, flux_jp1, cmax_jp1);
 
           Real flux_jp12_lo[5]{};
           Real flux_jp12_ho[5]{};
