@@ -500,7 +500,7 @@ TaskStatus RadiationM1::TimeUpdate_(Driver *d, int stage) {
               }
             }
             // fluid lepton sources
-            if (nspecies_ > 1) {
+            if (nspecies_ > 1) { // @TODO: check units of this one
               DDxp[nuidx] = -mb * (DrEFN[nuidx][M1_N_IDX] * (nuidx == 0) -
                                    DrEFN[nuidx][M1_N_IDX] * (nuidx == 1));
             }
