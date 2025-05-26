@@ -103,6 +103,7 @@ TaskStatus RadiationM1::TimeUpdate_(Driver *d, int stage) {
   int &ks = indcs.ks, &ke = indcs.ke;
   int ncells1 = indcs.nx1 + 2 * (indcs.ng);
   int nmb1 = pmy_pack->nmb_thispack - 1;
+
   auto &u0_ = u0;
   auto &chi_ = chi;
   auto &u1_ = u1;
@@ -491,7 +492,6 @@ TaskStatus RadiationM1::TimeUpdate_(Driver *d, int stage) {
                     compute_Gamma(w_lorentz, v_u, Jnew, Enew, Fnew_d, params_);
 
                 // N^k+1 = N^* + dt ( eta - abs N^k+1 )
-                // @TODO: this needs to be fixed later from prod/cb or not (?) ask David
                 DrEFN[nuidx][M1_N_IDX] =
                     (Nstar + beta_dt * adm.alpha(m, k, j, i) * volform *
                                  eta_0_(m, nuidx, k, j, i)) /
