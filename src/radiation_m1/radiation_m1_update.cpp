@@ -65,7 +65,6 @@ TaskStatus RadiationM1::TimeUpdate(Driver *pdrive, int stage) {
     }
   }
 
-  bool ismhd = pmy_pack->pmhd != nullptr;
   if (!ismhd) {
     switch (indcs.ng) {
       case 2:
@@ -125,11 +124,11 @@ TaskStatus RadiationM1::TimeUpdate_(Driver *d, int stage) {
   bool &three_d = pmy_pack->pmesh->three_d;
   auto &params_ = pmy_pack->pradm1->params;
 
-  bool ismhd = pmy_pack->pmhd != nullptr;
+  bool &ismhd_ = ismhd;
   auto &u_mu_ = u_mu;
   DvceArray5D<Real> &w0_ = u_mu_data;
   DvceArray5D<Real> &umhd0_ = u_mu_data;
-  if (ismhd) {
+  if (ismhd_) {
     w0_ = pmy_pack->pmhd->w0;
     umhd0_ = pmy_pack->pmhd->u0;
   }
@@ -138,7 +137,7 @@ TaskStatus RadiationM1::TimeUpdate_(Driver *d, int stage) {
   auto &HybridsjFunc_ = pmy_pack->pradm1->HybridsjFunc;
 
   Real mb{};
-  if (ismhd) {
+  if (ismhd_) {
     Primitive::EOS<EOSPolicy, ErrorPolicy> &eos =
         static_cast<dyngr::DynGRMHDPS<EOSPolicy, ErrorPolicy> *>(pmy_pack->pdyngr)
             ->eos.ps.GetEOSMutable();
@@ -248,7 +247,7 @@ TaskStatus RadiationM1::TimeUpdate_(Driver *d, int stage) {
         AthenaPointTensor<Real, TensorSymm::NONE, 4, 2> proj_ud{};
 
         Real w_lorentz{};
-        if (ismhd) {
+        if (ismhd_) {
           w_lorentz = Kokkos::sqrt(1. + w0_(m, IVX, k, j, i) * w0_(m, IVX, k, j, i) +
                                    w0_(m, IVY, k, j, i) * w0_(m, IVY, k, j, i) +
                                    w0_(m, IVZ, k, j, i) * w0_(m, IVZ, k, j, i));
@@ -510,7 +509,7 @@ TaskStatus RadiationM1::TimeUpdate_(Driver *d, int stage) {
           // [G] Limit sources
           theta = 1.0;
           if (params_.theta_limiter && params_.source_limiter >= 0) {
-            Real tau = (ismhd) ? umhd0_(m, IEN, k, j, i) : 0.;
+            Real tau = (ismhd_) ? umhd0_(m, IEN, k, j, i) : 0.;
 
             theta = 1.0;
             Real DTau_sum = 0.0;
@@ -531,7 +530,7 @@ TaskStatus RadiationM1::TimeUpdate_(Driver *d, int stage) {
                   theta);
             }
 
-            if (ismhd) {
+            if (ismhd_) {
               Real dens = w0_(m, IDN, k, j, i);
               Real Y_e = w0_(m, IYF, k, j, i);
 
@@ -592,7 +591,7 @@ TaskStatus RadiationM1::TimeUpdate_(Driver *d, int stage) {
             u0_(m, CombinedIdx(nuidx, M1_N_IDX, nvars_), k, j, i) = Nf;
           }
 
-          if (params_.backreact && stage == 1 && ismhd) {
+          if (params_.backreact && stage == 1 && ismhd_) {
             umhd0_(m, IEN, k, j, i) -= theta * DrEFN[nuidx][M1_E_IDX];
             umhd0_(m, IM1, k, j, i) -= theta * DrEFN[nuidx][M1_FX_IDX];
             umhd0_(m, IM2, k, j, i) -= theta * DrEFN[nuidx][M1_FY_IDX];
