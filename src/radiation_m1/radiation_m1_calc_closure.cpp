@@ -31,7 +31,6 @@ TaskStatus RadiationM1::CalcClosure(Driver *pdrive, int stage) {
   auto &nspecies_ = pmy_pack->pradm1->nspecies;
   auto &radiation_mask_ = pmy_pack->pradm1->radiation_mask;
 
-  bool ismhd = pmy_pack->pmhd != nullptr;
   DvceArray5D<Real> &w0_ = u_mu_data;
   if (ismhd) {
     w0_ = pmy_pack->pmhd->w0;
