@@ -78,12 +78,14 @@ TaskStatus RadiationM1::CalcOpacityNurates_(Driver *pdrive, int stage) {
   // conversion factors from cgs to code units
   auto cgs_units = Primitive::MakeCGS();
   auto code_units = eos.GetCodeUnitSystem();
+  auto eos_units = eos.GetEOSUnitSystem();
   const RadiationM1Units cgs2codeunits = {
       .cgs2code_length = cgs_units.LengthConversion(code_units),
       .cgs2code_time = cgs_units.TimeConversion(code_units),
       .cgs2code_rho = cgs_units.DensityConversion(code_units),
       .cgs2code_energy = cgs_units.EnergyConversion(code_units),
   };
+  Real eos2code_rho = eos_units.DensityConversion(code_units);
 
   par_for(
       "radiation_m1_calc_nurates_opacity", DevExeSpace(), 0, nmb1, ks, ke, js, je, is, ie,
@@ -179,6 +181,7 @@ TaskStatus RadiationM1::CalcOpacityNurates_(Driver *pdrive, int stage) {
 
           // fluid quantities
           Real nb = w0_(m, IDN, k, j, i) / mb;  // [eos units]
+          Real nb_code = nb * eos2code_rho;     // [code units]
           Real p = w0_(m, IPR, k, j, i);
           Real Y = w0_(m, PYF, k, j, i);
           Real T = eos.GetTemperatureFromP(nb, p, &Y);
@@ -205,7 +208,7 @@ TaskStatus RadiationM1::CalcOpacityNurates_(Driver *pdrive, int stage) {
 
           // Note: everything sent and received are in code units
           bns_nurates(
-              nb, T, Y, mu_n, mu_p, mu_e, nudens_0[0], nudens_1[0], chi_loc[0],
+              nb_code, T, Y, mu_n, mu_p, mu_e, nudens_0[0], nudens_1[0], chi_loc[0],
               nudens_0[1], nudens_1[1], chi_loc[1], nudens_0[2], nudens_1[2], chi_loc[2],
               nudens_0[3], nudens_1[3], chi_loc[3], eta_0_loc[0], eta_0_loc[1],
               eta_0_loc[2], eta_0_loc[3], eta_1_loc[0], eta_1_loc[1], eta_1_loc[2],
@@ -303,7 +306,7 @@ TaskStatus RadiationM1::CalcOpacityNurates_(Driver *pdrive, int stage) {
             }
 
             // compute neutrino black body function assuming fixed temperature and Ye
-            NeutrinoDens(mu_n, mu_p, mu_e, nb, T, nudens_0_thin[0], nudens_0_thin[1],
+            NeutrinoDens(mu_n, mu_p, mu_e, nb_code, T, nudens_0_thin[0], nudens_0_thin[1],
                          nudens_0_thin[2], nudens_1_thin[0], nudens_1_thin[1],
                          nudens_1_thin[2], nurates_params_, cgs2codeunits);
 
