@@ -117,6 +117,16 @@ void MeshBlockPack::AddPhysics(ParameterInput *pin) {
     punit = nullptr;
   }
 
+  // (1.5) RADIATION M1
+  // Create gray M1 physics module.  Create tasklist.
+  if (pin->DoesBlockExist("radiation_m1")) {
+    pradm1 = new radiationm1::RadiationM1(this, pin);
+    nphysics++;
+    pradm1->AssembleRadiationM1Tasks(tl_map);
+  } else {
+    pradm1 = nullptr;
+  }
+
   // (2) HYDRODYNAMICS
   // Create Hydro physics module.  Create TaskLists only for single-fluid hydro
   // (Note TaskLists stored in MeshBlockPack)
@@ -246,15 +256,6 @@ void MeshBlockPack::AddPhysics(ParameterInput *pin) {
     ppart = nullptr;
   }
 
-  // (5) RADIATION M1
-  // Create gray M1 physics module.  Create tasklist.
-  if (pin->DoesBlockExist("radiation_m1")) {
-    pradm1 = new radiationm1::RadiationM1(this, pin);
-    nphysics++;
-    pradm1->AssembleRadiationM1Tasks(tl_map);
-  } else {
-    pradm1 = nullptr;
-  }
   // Check that at least ONE is requested and initialized.
   // Error if there are no physics blocks in the input file.
   if (nphysics == 0) {

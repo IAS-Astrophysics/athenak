@@ -33,7 +33,8 @@ RadiationM1::RadiationM1(MeshBlockPack *ppack, ParameterInput *pin)
       scat_1("scat_1", 1, 1, 1, 1, 1),
       chi("chi", 1, 1, 1, 1, 1),
       uflx("uflx", 1, 1, 1, 1, 1) {
-  // set up parameters
+  // set up parameters and flags
+  ismhd = pin->DoesBlockExist("mhd");
   params.gr_sources = pin->GetOrAddBoolean("radiation_m1", "gr_sources", true);
   params.matter_sources = pin->GetOrAddBoolean("radiation_m1", "matter_sources", false);
   params.backreact = pin->GetOrAddBoolean("radiation_m1", "backreact", false);
@@ -190,7 +191,6 @@ RadiationM1::RadiationM1(MeshBlockPack *ppack, ParameterInput *pin)
   Kokkos::deep_copy(radiation_mask, false);
 
   // allocate 4-velocity if not using mhd
-  bool ismhd = ppack->pmhd != nullptr;
   if (!ismhd) {
     Kokkos::realloc(u_mu_data, nmb, 4, ncells3, ncells2, ncells1);
     u_mu.InitWithShallowSlice(u_mu_data, 0, 3);
