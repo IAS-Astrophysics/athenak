@@ -55,7 +55,6 @@ void ProblemGenerator::RadiationM1SingleZoneTest_(ParameterInput *pin,
 
   MeshBlockPack *pmbp = pmy_mesh_->pmb_pack;
 
-  // Check required modules are called
   if (pmbp->pdyngr == nullptr) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
               << "DyHydro is required for the single zone equilibration test"
@@ -89,6 +88,7 @@ void ProblemGenerator::RadiationM1SingleZoneTest_(ParameterInput *pin,
   auto &size = pmbp->pmb->mb_size;
   auto &coord = pmbp->pcoord->coord_data;
   int nmb1 = (pmbp->nmb_thispack - 1);
+  auto &w0_ = pmbp->pmhd->w0;
 
   // get problem parameters
   Real rho = pin->GetReal("problem", "rho");
@@ -107,26 +107,10 @@ void ProblemGenerator::RadiationM1SingleZoneTest_(ParameterInput *pin,
   auto cgs_units = Primitive::MakeCGS();
   auto code_units = eos.GetCodeUnitSystem();
 
-  Real nb = (rho / mb) * cgs_units.DensityConversion(code_units);
+  Real rho_code = rho;
+  Real nb = rho_code / mb;
   Real P = eos.GetPressure(nb, temp, &ye);
-
   Real w_lorentz = 1. / Kokkos::sqrt(1. - vx * vx - vy * vy - vz * vz);
-
-  // set primitive variables
-  auto &w0_ = pmbp->pmhd->w0;
-  par_for(
-      "pgen_singlezone", DevExeSpace(), 0, nmb1, 0, (n3 - 1), 0, (n2 - 1), 0, (n1 - 1),
-      KOKKOS_LAMBDA(int m, int k, int j, int i) {
-        w0_(m, IDN, k, j, i) = rho * cgs_units.DensityConversion(code_units);
-        w0_(m, IVX, k, j, i) = vx * w_lorentz;
-        w0_(m, IVY, k, j, i) = vy * w_lorentz;
-        w0_(m, IVZ, k, j, i) = vz * w_lorentz;
-        w0_(m, IPR, k, j, i) = P;
-        w0_(m, IYF, k, j, i) = ye;
-      });
-
-  // Convert primitives to conserved vars
-  pmbp->pdyngr->PrimToConInit(0, (n1 - 1), 0, (n2 - 1), 0, (n3 - 1));
 
   // initialize ADM variables
   adm::ADM::ADM_vars &adm = pmbp->padm->adm;
@@ -142,4 +126,19 @@ void ProblemGenerator::RadiationM1SingleZoneTest_(ParameterInput *pin,
 
         adm.alpha(m, k, j, i) = 1.;
       });
+
+  // set primitive variables
+  par_for(
+      "pgen_singlezone", DevExeSpace(), 0, nmb1, 0, (n3 - 1), 0, (n2 - 1), 0, (n1 - 1),
+      KOKKOS_LAMBDA(int m, int k, int j, int i) {
+        w0_(m, IDN, k, j, i) = rho_code;
+        w0_(m, IVX, k, j, i) = vx * w_lorentz;
+        w0_(m, IVY, k, j, i) = vy * w_lorentz;
+        w0_(m, IVZ, k, j, i) = vz * w_lorentz;
+        w0_(m, IPR, k, j, i) = P;
+        w0_(m, IYF, k, j, i) = ye;
+      });
+
+  // Convert primitives to conserved vars
+  pmbp->pdyngr->PrimToConInit(0, (n1 - 1), 0, (n2 - 1), 0, (n3 - 1));
 }
