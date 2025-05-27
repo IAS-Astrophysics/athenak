@@ -88,7 +88,7 @@ TaskStatus RadiationM1::CalcOpacityNurates_(Driver *pdrive, int stage) {
   Real eos2code_rho = eos_units.DensityConversion(code_units);
 
   par_for(
-      "radiation_m1_calc_nurates_opacity", DevExeSpace(), 0, nmb1, ks, ke, js, je, is, ie,
+      "radiation_m1_calc_opacity_nurates", DevExeSpace(), 0, nmb1, ks, ke, js, je, is, ie,
       KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
         if (radiation_mask(m, k, j, i)) {
           for (int nuidx = 0; nuidx < nspecies_; nuidx++) {
@@ -261,26 +261,32 @@ TaskStatus RadiationM1::CalcOpacityNurates_(Driver *pdrive, int stage) {
             // compute neutrino black body function assuming trapped neutrinos
             if (nurates_params_.opacity_tau_trap >= 0 &&
                 tau > nurates_params_.opacity_tau_trap) {
+              Real e = w0_(m, IEN, k, j, i) +
+                       u0_(m, CombinedIdx(id_nue, M1_E_IDX, nvars_), k, j, i) +
+                       u0_(m, CombinedIdx(id_anue, M1_E_IDX, nvars_), k, j, i) +
+                       2 * u0_(m, CombinedIdx(id_nux, M1_E_IDX, nvars_), k, j, i);
+
               Real n_nue = u0_(m, CombinedIdx(id_nue, M1_N_IDX, nvars_), k, j, i);
               Real n_anue = u0_(m, CombinedIdx(id_anue, M1_N_IDX, nvars_), k, j, i);
               Real n_nux = u0_(m, CombinedIdx(id_nux, M1_N_IDX, nvars_), k, j, i);
-              Real n_nu[6] = {n_nue,      n_anue,    n_nux / 4., n_nux / 4.,
-                              n_nux / 4., n_nux / 4.};  // neutrino number densities
-                                                        // (e, ae, m, am, t, at)
-              Real Y_part[3] = {Y, 0.,
-                                0.};  // particle fractions (currently on Y_e is used)
-              Real Y_lep[3]{};  // total lepton fraction: [0] electron, [1] mu, [3] tau
+              Real n_nu[6] = {n_nue,      n_anue,     n_nux / 4.,
+                              n_nux / 4., n_nux / 4., n_nux / 4.};
+              Real Y_part[3] = {Y, 0., 0.};  // only ye is used
+
+              Real Y_lep[3]{};
               eos.GetLeptonFractions(nb, Y_part, n_nu, Y_lep);
+
               Real temp_trap{}, Y_part_trap[3]{};
-              bool ierr = eos.GetBetaEquilibriumTrapped(nb, T, Y_lep, temp_trap,
+              bool ierr = eos.GetBetaEquilibriumTrapped(nb, e, Y_lep, temp_trap,
                                                         Y_part_trap, T, Y_part);
+
               if (!ierr) {
                 Real n_nu0[6]{};
                 eos.GetLeptonFractions(nb, Y_part, n_nu0, Y_lep);
-                ierr = eos.GetBetaEquilibriumTrapped(nb, T, Y_lep, temp_trap, Y_part_trap,
+                ierr = eos.GetBetaEquilibriumTrapped(nb, e, Y_lep, temp_trap, Y_part_trap,
                                                      T, Y_part);
               }
-              Real n_nu_trap[3]{}, e_nu_trap[3]{};
+              Real n_nu_trap[3]{}, e_nu_trap[3]{};  // [code units]
               eos.GetTrappedNeutrinos(nb, temp_trap, Y_part_trap, n_nu_trap, e_nu_trap);
 
               nudens_0_trap[0] = n_nu_trap[0];
