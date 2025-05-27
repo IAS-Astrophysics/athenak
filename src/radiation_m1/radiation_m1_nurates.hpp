@@ -126,11 +126,8 @@ void bns_nurates(Real &nb, Real &temp, Real &ye, Real &mu_n, Real &mu_p, Real &m
   const Real cgs2code_Q =
       units.cgs2code_energy /
       (units.cgs2code_time * cgs2code_length3);  // MeV cm^-3 s^-1 --> code units
-  const Real cgs2code_kappa0 =
-      1. / (units.cgs2code_length * units.cgs2code_time);  // cm^-1 s^-1 --> code units
-  const Real cgs2code_kappa1 =
-      units.cgs2code_energy /
-      (units.cgs2code_length * units.cgs2code_time);  // MeV cm^-1 s^-1 --> code units
+  const Real cgs2code_kappa =
+      1. / (units.cgs2code_length);  // cm^-1 --> code units
 
   const Real nb_cgs = nb / units.cgs2code_rho;  // [baryon/cm^-3]
   if ((nb_cgs < nurates_params.nb_min_cgs) || (temp < nurates_params.temp_min_mev)) {
@@ -315,22 +312,22 @@ void bns_nurates(Real &nb, Real &temp, Real &ye, Real &mu_n, Real &mu_p, Real &m
   Q_anue = Q_anue * cgs2code_Q * 1e21;
   Q_nux = Q_nux * cgs2code_Q * 1e21;
   Q_anux = Q_anux * cgs2code_Q * 1e21;
-  sigma_0_nue = sigma_0_nue * cgs2code_kappa0 * 1e7;
-  sigma_0_anue = sigma_0_anue * cgs2code_kappa0 * 1e7;
-  sigma_0_nux = sigma_0_nux * cgs2code_kappa0 * 1e7;
-  sigma_0_anux = sigma_0_anux * cgs2code_kappa0 * 1e7;
-  sigma_1_nue = sigma_1_nue * cgs2code_kappa1 * 1e7;
-  sigma_1_anue = sigma_1_anue * cgs2code_kappa1 * 1e7;
-  sigma_1_nux = sigma_1_nux * cgs2code_kappa1 * 1e7;
-  sigma_1_anux = sigma_1_anux * cgs2code_kappa1 * 1e7;
-  scat_0_nue = scat_0_nue * cgs2code_kappa0 * 1e7;
-  scat_0_anue = scat_0_anue * cgs2code_kappa0 * 1e7;
-  scat_0_nux = scat_0_nux * cgs2code_kappa0 * 1e7;
-  scat_0_anux = scat_0_anux * cgs2code_kappa0 * 1e7;
-  scat_1_nue = scat_1_nue * cgs2code_kappa1 * 1e7;
-  scat_1_anue = scat_1_anue * cgs2code_kappa1 * 1e7;
-  scat_1_nux = scat_1_nux * cgs2code_kappa1 * 1e7;
-  scat_1_anux = scat_1_anux * cgs2code_kappa1 * 1e7;
+  sigma_0_nue = sigma_0_nue * cgs2code_kappa * 1e7;
+  sigma_0_anue = sigma_0_anue * cgs2code_kappa * 1e7;
+  sigma_0_nux = sigma_0_nux * cgs2code_kappa * 1e7;
+  sigma_0_anux = sigma_0_anux * cgs2code_kappa * 1e7;
+  sigma_1_nue = sigma_1_nue * cgs2code_kappa * 1e7;
+  sigma_1_anue = sigma_1_anue * cgs2code_kappa * 1e7;
+  sigma_1_nux = sigma_1_nux * cgs2code_kappa * 1e7;
+  sigma_1_anux = sigma_1_anux * cgs2code_kappa * 1e7;
+  scat_0_nue = scat_0_nue * cgs2code_kappa * 1e7;
+  scat_0_anue = scat_0_anue * cgs2code_kappa * 1e7;
+  scat_0_nux = scat_0_nux * cgs2code_kappa * 1e7;
+  scat_0_anux = scat_0_anux * cgs2code_kappa * 1e7;
+  scat_1_nue = scat_1_nue * cgs2code_kappa * 1e7;
+  scat_1_anue = scat_1_anue * cgs2code_kappa * 1e7;
+  scat_1_nux = scat_1_nux * cgs2code_kappa * 1e7;
+  scat_1_anux = scat_1_anux * cgs2code_kappa * 1e7;
 }
 
 //! \fn void NeutrinoDens(Real mu_n, Real mu_p, Real mu_e, Real nb, Real temp,
