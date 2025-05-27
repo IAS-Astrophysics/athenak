@@ -360,7 +360,7 @@ class EOS : public EOSPolicy, public ErrorPolicy {
    return;
   }
 
-    //! \fn Real GetLeptonFractions(Real n, Real *Y, Real n_nu[6], Real *Yl) 
+    //! \fn Real GetLeptonFractions(Real n, Real *Y, Real n_nu[6], Real *Yl)
   // \brief Get the total lepton fractions for each generation of matter from the species fractions and the neutrino number densities.
   //
   //  \param[in]    n    The number density
@@ -371,7 +371,7 @@ class EOS : public EOSPolicy, public ErrorPolicy {
     Real n_units = code_units.DensityConversion(eos_units);
 
     for (int i=0; i<3; ++i) {
-      Yl[i] = Y[i] + (n_nu[2*i] - n_nu[2*i+1])/n;
+      Yl[i] = Y[i] + n_units*(n_nu[2*i] - n_nu[2*i+1])/n;
     }
 
     return;
