@@ -289,14 +289,14 @@ TaskStatus RadiationM1::CalcOpacityNurates_(Driver *pdrive, int stage) {
               Real n_nu_trap[3]{}, e_nu_trap[3]{};  // [code units]
               eos.GetTrappedNeutrinos(nb, temp_trap, Y_part_trap, n_nu_trap, e_nu_trap);
 
-              nudens_0_trap[0] = n_nu_trap[0];
-              nudens_0_trap[1] = n_nu_trap[1];
-              nudens_0_trap[2] = n_nu_trap[2];
-              nudens_0_trap[3] = n_nu_trap[2];
-              nudens_1_trap[0] = e_nu_trap[0];
-              nudens_1_trap[1] = e_nu_trap[1];
-              nudens_1_trap[2] = e_nu_trap[2];
-              nudens_1_trap[3] = e_nu_trap[2];
+              //nudens_0_trap[0] = n_nu_trap[0];
+              //nudens_0_trap[1] = n_nu_trap[1];
+              //nudens_0_trap[2] = n_nu_trap[2];
+              //nudens_0_trap[3] = n_nu_trap[2];
+              //nudens_1_trap[0] = e_nu_trap[0];
+              //nudens_1_trap[1] = e_nu_trap[1];
+              //nudens_1_trap[2] = e_nu_trap[2];
+              //nudens_1_trap[3] = e_nu_trap[2];
 
               assert(Kokkos::isfinite(nudens_0_trap[0]));
               assert(Kokkos::isfinite(nudens_0_trap[1]));
