@@ -625,7 +625,7 @@ class EOS : public EOSPolicy, public ErrorPolicy {
     return code_units;
   }
 
-  KOKKOS_INLINE_FUNCTION UnitSystem& GetEOSUnitSystem() const {
+  KOKKOS_INLINE_FUNCTION UnitSystem& GetEOSUnitSystem() {
     return eos_units;
   }
 };
