@@ -35,6 +35,8 @@ RadiationM1::RadiationM1(MeshBlockPack *ppack, ParameterInput *pin)
       uflx("uflx", 1, 1, 1, 1, 1) {
   // set up parameters and flags
   ismhd = pin->DoesBlockExist("mhd");
+  nspecies = pin->GetOrAddInteger("radiation_m1", "num_species", 1);
+
   params.gr_sources = pin->GetOrAddBoolean("radiation_m1", "gr_sources", true);
   params.matter_sources = pin->GetOrAddBoolean("radiation_m1", "matter_sources", false);
   params.backreact = pin->GetOrAddBoolean("radiation_m1", "backreact", false);
@@ -59,7 +61,6 @@ RadiationM1::RadiationM1(MeshBlockPack *ppack, ParameterInput *pin)
       pin->GetOrAddReal("radiation_m1", "source_therm_limit", -1.);
   params.source_scat_limit = pin->GetOrAddReal("radiation_m1", "source_scat_limit", -1.);
   params.minmod_theta = pin->GetOrAddReal("radiation_m1", "minmod_theta", 1);
-  nspecies = pin->GetOrAddInteger("radiation_m1", "num_species", 1);
   params.source_limiter = pin->GetOrAddReal("radiation_m1", "source_limiter", 0.5);
   params.beam_sources = pin->GetOrAddBoolean("radiation_m1", "beam_sources", false);
 
