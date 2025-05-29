@@ -199,7 +199,7 @@ RadiationM1::RadiationM1(MeshBlockPack *ppack, ParameterInput *pin)
 
   // allocate boundary buffers for evolved (cell-centered) variables
   pbval_u = new MeshBoundaryValuesCC(ppack, pin, false);
-  pbval_u->InitializeBuffers(nvars);
+  pbval_u->InitializeBuffers(nvarstot);
 }
 
 //----------------------------------------------------------------------------------------
