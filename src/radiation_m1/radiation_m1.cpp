@@ -23,16 +23,16 @@
 namespace radiationm1 {
 RadiationM1::RadiationM1(MeshBlockPack *ppack, ParameterInput *pin)
     : pmy_pack(ppack),
-      u0("cons", 1, 1, 1, 1, 1),
-      coarse_u0("ccons", 1, 1, 1, 1, 1),
-      u1("cons1", 1, 1, 1, 1, 1),
+      u0("rad_cons", 1, 1, 1, 1, 1),
+      coarse_u0("rad_ccons", 1, 1, 1, 1, 1),
+      u1("rad_cons1", 1, 1, 1, 1, 1),
       eta_0("eta_0", 1, 1, 1, 1, 1),
       abs_0("abs_0", 1, 1, 1, 1, 1),
       eta_1("eta_1", 1, 1, 1, 1, 1),
       abs_1("abs_1", 1, 1, 1, 1, 1),
       scat_1("scat_1", 1, 1, 1, 1, 1),
       chi("chi", 1, 1, 1, 1, 1),
-      uflx("uflx", 1, 1, 1, 1, 1) {
+      uflx("rad_uflx", 1, 1, 1, 1, 1) {
   // set up parameters and flags
   ismhd = pin->DoesBlockExist("mhd");
   nspecies = pin->GetOrAddInteger("radiation_m1", "num_species", 1);
