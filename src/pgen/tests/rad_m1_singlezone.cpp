@@ -89,6 +89,10 @@ void ProblemGenerator::RadiationM1SingleZoneTest_(ParameterInput *pin,
   auto &coord = pmbp->pcoord->coord_data;
   int nmb1 = (pmbp->nmb_thispack - 1);
   auto &w0_ = pmbp->pmhd->w0;
+  auto &uradm1_ = pmbp->pradm1->u0;
+  auto &nspecies_ = pmbp->pradm1->nspecies;
+  auto &m1_params_ = pmbp->pradm1->params;
+  auto &m1_nvars_ = pmbp->pradm1->nvars;
 
   // get problem parameters
   Real rho = pin->GetReal("problem", "rho");
@@ -137,6 +141,13 @@ void ProblemGenerator::RadiationM1SingleZoneTest_(ParameterInput *pin,
         w0_(m, IVZ, k, j, i) = vz * w_lorentz;
         w0_(m, IPR, k, j, i) = P;
         w0_(m, IYF, k, j, i) = ye;
+
+        for (int nuidx = 0; nuidx < nspecies_; ++nuidx) {
+          uradm1_(m, radiationm1::CombinedIdx(nuidx, M1_E_IDX, m1_nvars_), k, j, i) = m1_params_.rad_E_floor;
+          if (nspecies_ > 1) {
+            uradm1_(m, radiationm1::CombinedIdx(nuidx, M1_N_IDX, m1_nvars_), k, j, i) = m1_params_.rad_N_floor;
+          }
+        }
       });
 
   // Convert primitives to conserved vars
