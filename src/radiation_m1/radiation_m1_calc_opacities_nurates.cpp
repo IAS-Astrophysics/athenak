@@ -65,7 +65,6 @@ TaskStatus RadiationM1::CalcOpacityNurates_(Driver *pdrive, int stage) {
   auto &u0_ = u0;
   auto &w0_ = pmy_pack->pmhd->w0;
   auto &chi_ = chi;
-  // auto &u_mu_ = u_mu;
 
   Real beta[2] = {0.5, 1.};
   Real beta_dt = (beta[stage - 1]) * (pmy_pack->pmesh->dt);
@@ -183,7 +182,7 @@ TaskStatus RadiationM1::CalcOpacityNurates_(Driver *pdrive, int stage) {
           Real nb = w0_(m, IDN, k, j, i) / mb;  // [eos units]
           Real nb_code = nb * eos2code_rho;     // [code units]
           Real p = w0_(m, IPR, k, j, i);
-          Real Y = w0_(m, PYF, k, j, i);
+          Real Y = w0_(m, IYF, k, j, i);
           Real T = eos.GetTemperatureFromP(nb, p, &Y);
           Real mu_b = eos.GetBaryonChemicalPotential(nb, T, &Y);
           Real mu_q = eos.GetChargeChemicalPotential(nb, T, &Y);
