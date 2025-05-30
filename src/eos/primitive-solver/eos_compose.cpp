@@ -30,8 +30,9 @@ void EOSCompOSE<LogPolicy>::ReadTableFromFile(std::string fname) {
     TableReader::Table table;
     auto read_result = table.ReadTable(fname);
     if (read_result.error != TableReader::ReadResult::SUCCESS) {
-      std::cout << "Table could not be read.\n";
-      assert (false);
+      std::cout << read_result.message << "\n"
+                << "Table could not be read.\n";
+      std::exit(EXIT_FAILURE);
     }
     // Make sure table has correct dimentions
     assert(table.GetNDimensions()==3);
