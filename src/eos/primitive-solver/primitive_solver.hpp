@@ -331,8 +331,8 @@ Error PrimitiveSolver<EOSPolicy, ErrorPolicy>::CheckDensityValid(Real& mul, Real
           return Error::BRACKETING_FAILED;
         }
         mul = (mu > mul) ? mu : mul;
-      }*/
-    }
+      }
+    }*/
   }
   if (D < W_max*rho_min) {
     Real W = D/rho_min;
