@@ -437,6 +437,7 @@ class AthenaPointTensor<T, sym, ndim, 3> {
         return data_[c + ndim*(a*(2*ndim - a + 1)/2 + b - a)];
       }
     }
+    return data_[c + ndim*(b + ndim*a)]; // Default to NONE case
   }
   KOKKOS_INLINE_FUNCTION
   Real & operator()(int const a, int const b, int const c) {
@@ -456,6 +457,7 @@ class AthenaPointTensor<T, sym, ndim, 3> {
         return data_[c + ndim*(a*(2*ndim - a + 1)/2 + b - a)];
       }
     }
+    return data_[c + ndim*(b + ndim*a)]; // Default to NONE case
   }
   KOKKOS_INLINE_FUNCTION
   void ZeroClear() {
