@@ -71,7 +71,7 @@ class CartesianGridData:
         return np.meshgrid(x, y, z, indexing="ij")
 
     def __str__(self):
-        s  = f"CartesianGridData:  {self.fname}\n"
+        s = f"CartesianGridData:  {self.fname}\n"
         s += f"cycle:              {self.cycle}\n"
         s += f"time:               {self.time}\n"
         s += f"center:             {self.center}\n"
@@ -81,8 +81,10 @@ class CartesianGridData:
         s += f"variables:          {list(self.variables.keys())}"
         return s
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     import sys
+
     if len(sys.argv) != 2:
         print("Prints metadata from a Cartesian binary file")
         print(f"Usage: {sys.argv[0]} dump.bin")
