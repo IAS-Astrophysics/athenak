@@ -21,7 +21,8 @@ class CartesianGridData:
 
     def __init__(self, fname):
         mdata = Struct("i7f3i?2i")
-        with open(fname, "rb") as f:
+        self.fname = fname
+        with open(self.fname, "rb") as f:
             # Parse metadata
             blob = f.read(mdata.size)
             ncycle, time, cx, cy, cz, ex, ey, ez, nx, ny, nz, cheb, nout, nstr = (
@@ -68,3 +69,22 @@ class CartesianGridData:
         """Returns a mesh grid with all the coordinates"""
         x, y, z = self.coords()
         return np.meshgrid(x, y, z, indexing="ij")
+
+    def __str__(self):
+        s  = f"CartesianGridData:  {self.fname}\n"
+        s += f"cycle:              {self.cycle}\n"
+        s += f"time:               {self.time}\n"
+        s += f"center:             {self.center}\n"
+        s += f"extent:             {self.extent}\n"
+        s += f"numpoints           {self.numpoints}\n"
+        s += f"Chebyshev:          {self.is_cheb}\n"
+        s += f"variables:          {list(self.variables.keys())}"
+        return s
+
+if __name__ == '__main__':
+    import sys
+    if len(sys.argv) != 2:
+        print("Prints metadata from a Cartesian binary file")
+        print(f"Usage: {sys.argv[0]} dump.bin")
+        exit(0)
+    print(CartesianGridData(sys.argv[1]))
