@@ -392,6 +392,9 @@ static BackgroundData<NCHEBY> *pmy_data;
 void TurbulenceBC(Mesh *pm);
 void SetADMVariables(MeshBlockPack *pmbp);
 
+// Prototypes for user-defined BCs and history
+void ZoomHistory(HistoryData *pdata, Mesh *pm);
+
 //----------------------------------------------------------------------------------------
 //! \fn ProblemGenerator::UserProblem_()
 //! \brief Problem Generator for BNS with LORENE
@@ -406,6 +409,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
 
   user_bcs_func = TurbulenceBC;
   pmbp->padm->SetADMVariables = SetADMVariables;
+  user_hist_func = &ZoomHistory;
 
   pmy_data = new BackgroundData<NCHEBY>(pin);
   if (restart) return;
@@ -1064,4 +1068,94 @@ void SetADMVariables(MeshBlockPack *pmbp) {
 #ifdef DEBUG_PGEN
   printf("done!\n");
 #endif
+}
+
+// History function
+void ZoomHistory(HistoryData *pdata, Mesh *pm) {
+  // Select the number of outputs and create labels for them.
+  pdata->nhist = 2;
+  pdata->label[0] = "btor-max";
+  pdata->label[1] = "bpol-max";
+
+  // capture class variables for kernel
+  auto &w0_ = pm->pmb_pack->pmhd->w0;
+  auto &bcc0_ = pm->pmb_pack->pmhd->bcc0;
+  auto &adm = pm->pmb_pack->padm->adm;
+
+  // loop over all MeshBlocks in this pack
+  auto &indcs = pm->pmb_pack->pmesh->mb_indcs;
+  int is = indcs.is; int nx1 = indcs.nx1;
+  int js = indcs.js; int nx2 = indcs.nx2;
+  int ks = indcs.ks; int nx3 = indcs.nx3;
+  const int nmkji = (pm->pmb_pack->nmb_thispack)*nx3*nx2*nx1;
+  const int nkji = nx3*nx2*nx1;
+  const int nji = nx2*nx1;
+  auto &size = pm->pmb_pack->pmb->mb_size;
+  Real btor_max = 0.0;
+  Real bpol_max = 0.0;
+  Kokkos::parallel_reduce("ZoomHistSums",Kokkos::RangePolicy<>(DevExeSpace(), 0, nmkji),
+  KOKKOS_LAMBDA(const int &idx, Real &mb_btor_max, Real &mb_bpol_max) {
+    // coompute n,k,j,i indices of thread
+    int m = (idx)/nkji;
+    int k = (idx - m*nkji)/nji;
+    int j = (idx - m*nkji - k*nji)/nx1;
+    int i = (idx - m*nkji - k*nji - j*nx1) + is;
+    k += ks;
+    j += js;
+
+    // compute coordinate position
+    Real &x1min = size.d_view(m).x1min;
+    Real &x1max = size.d_view(m).x1max;
+    Real x1v = CellCenterX(i-is, indcs.nx1, x1min, x1max);
+
+    Real &x2min = size.d_view(m).x2min;
+    Real &x2max = size.d_view(m).x2max;
+    Real x2v = CellCenterX(j-js, indcs.nx2, x2min, x2max);
+
+    Real &x3min = size.d_view(m).x3min;
+    Real &x3max = size.d_view(m).x3max;
+    Real x3v = CellCenterX(k-ks, indcs.nx3, x3min, x3max);
+
+    Real rcyl = sqrt(x1v*x1v + x2v*x2v);
+
+    Real phivec[3] = {-x2v/rcyl, x1v/rcyl, 0.0};
+
+    Real gamma = sqrt(
+        adm::SpatialDet(adm.g_dd(m, 0, 0, k, j, i), adm.g_dd(m, 0, 1, k, j, i),
+                   adm.g_dd(m, 0, 2, k, j, i), adm.g_dd(m, 1, 1, k, j, i),
+                   adm.g_dd(m, 1, 2, k, j, i), adm.g_dd(m, 2, 2, k, j, i)));
+    Real bvec[3] = {bcc0_(m,IBX,k,j,i)/gamma, bcc0_(m,IBY,k,j,i)/gamma, bcc0_(m,IBZ,k,j,i)/gamma};
+
+    Real btor = 0.0;
+    Real bsqr = 0.0;
+    for (int a = 0; a < 3; ++a) {
+      for (int b = 0; b < 3; ++b) {
+        btor += adm.g_dd(m, a, b, k, j, i) * phivec[a] * bvec[b];
+        bsqr += adm.g_dd(m, a, b, k, j, i) * bvec[a] * bvec[b];
+      }
+    }
+    btor = fabs(btor);
+    Real bpol = sqrt(bsqr - btor*btor);
+
+    mb_btor_max = fmax(btor, mb_btor_max);
+    mb_bpol_max = fmax(bpol, mb_bpol_max);
+  }, Kokkos::Max<Real>(btor_max), Kokkos::Max<Real>(bpol_max));
+
+  // Currently AthenaK only supports MPI_SUM operations between ranks, but we need MPI_MAX
+  // and MPI_MIN operations instead. This is a cheap hack to make it work as intended.
+#if MPI_PARALLEL_ENABLED
+  if (global_variable::my_rank == 0) {
+    MPI_Reduce(MPI_IN_PLACE, &btor_max, 1, MPI_ATHENA_REAL, MPI_MAX, 0, MPI_COMM_WORLD);
+    MPI_Reduce(MPI_IN_PLACE, &bpol_max, 1, MPI_ATHENA_REAL, MPI_MAX, 0, MPI_COMM_WORLD);
+  } else {
+    MPI_Reduce(&btor_max, &btor_max, 1, MPI_ATHENA_REAL, MPI_MAX, 0, MPI_COMM_WORLD);
+    MPI_Reduce(&bpol_max, &bpol_max, 1, MPI_ATHENA_REAL, MPI_MAX, 0, MPI_COMM_WORLD);
+    btor_max = 0.0;
+    bpol_max = 0.0;
+  }
+#endif
+
+  // store data in hdata array
+  pdata->hdata[0] = btor_max;
+  pdata->hdata[1] = bpol_max;
 }
