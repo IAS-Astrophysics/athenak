@@ -426,7 +426,6 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   int &je = indcs.je;
   int &ks = indcs.ks;
   int &ke = indcs.ke;
-  int nmb1 = (pmbp->nmb_thispack - 1);
   auto &size = pmbp->pmb->mb_size;
   int &nmb = pmbp->nmb_thispack;
   Real box_x1min = pmy_data->xmin;
@@ -447,7 +446,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   fflush(stdout);
 #endif
   // initialize all fields, apart from magnetic field -------------------------
-  par_for("pgen_data", DevExeSpace(), 0, (nmb-1), 0, (n3-1), 0, (n2-1), 0, (n2-1),
+  par_for("pgen_data", DevExeSpace(), 0, (nmb-1), 0, (n3-1), 0, (n2-1), 0, (n1-1),
   KOKKOS_LAMBDA(int m, int k, int j, int i) {
     ChebyshevInterpolation<NCHEBY, NSTENCIL> interp;
 
@@ -513,7 +512,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
 #endif
   par_for("pgen_vector_potential", DevExeSpace(), 0,nmb-1,ks,ke+2,js,je+2,is,ie+2,
   KOKKOS_LAMBDA(int m, int k, int j, int i) {
-    ChebyshevInterpolation<NCHEBY, NSTENCIL> interp;
+    ChebyshevInterpolation<NCHEBY, NSTENCIL+1> interp;
 
     Real &x1min = size.d_view(m).x1min;
     Real &x1max = size.d_view(m).x1max;
@@ -640,7 +639,6 @@ void TurbulenceBC(Mesh *pm) {
   auto &mb_bcs = pm->pmb_pack->pmb->mb_bcs;
   auto &size = pm->pmb_pack->pmb->mb_size;
 
-  auto &u0 = pm->pmb_pack->pmhd->u0;
   auto &w0 = pm->pmb_pack->pmhd->w0;
   auto &adm = pm->pmb_pack->padm->adm;
   auto &b0 = pm->pmb_pack->pmhd->b0;
@@ -999,12 +997,8 @@ void SetADMVariables(MeshBlockPack *pmbp) {
   int n2 = (indcs.nx2 > 1) ? (indcs.nx2 + 2 * ng) : 1;
   int n3 = (indcs.nx3 > 1) ? (indcs.nx3 + 2 * ng) : 1;
   int &is = indcs.is;
-  int &ie = indcs.ie;
   int &js = indcs.js;
-  int &je = indcs.je;
   int &ks = indcs.ks;
-  int &ke = indcs.ke;
-  int nmb1 = (pmbp->nmb_thispack - 1);
   auto &size = pmbp->pmb->mb_size;
   int &nmb = pmbp->nmb_thispack;
   Real box_x1min = pmy_data->xmin;
@@ -1024,7 +1018,7 @@ void SetADMVariables(MeshBlockPack *pmbp) {
   pmy_data->InterpToTime(pmbp->pmesh->time);
   auto &cheb_data = pmy_data->cheb_data;
 
-  par_for("update_adm_vars", DevExeSpace(), 0, (nmb-1), 0, (n3-1), 0, (n2-1), 0, (n2-1),
+  par_for("update_adm_vars", DevExeSpace(), 0, (nmb-1), 0, (n3-1), 0, (n2-1), 0, (n1-1),
   KOKKOS_LAMBDA(int m, int k, int j, int i) {
     ChebyshevInterpolation<NCHEBY, NSTENCIL> interp;
 
@@ -1078,7 +1072,6 @@ void ZoomHistory(HistoryData *pdata, Mesh *pm) {
   pdata->label[1] = "bpol-max";
 
   // capture class variables for kernel
-  auto &w0_ = pm->pmb_pack->pmhd->w0;
   auto &bcc0_ = pm->pmb_pack->pmhd->bcc0;
   auto &adm = pm->pmb_pack->padm->adm;
 
