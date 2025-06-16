@@ -84,7 +84,7 @@ TaskStatus RadiationM1::CalcOpacityNurates_(Driver *pdrive, int stage) {
       .cgs2code_rho = cgs_units.DensityConversion(code_units),
       .cgs2code_energy = cgs_units.EnergyConversion(code_units),
   };
-  Real eos2code_rho = eos_units.DensityConversion(code_units);
+  Real eos2code_nb = eos_units.DensityConversion(code_units);
 
   par_for(
       "radiation_m1_calc_opacity_nurates", DevExeSpace(), 0, nmb1, ks, ke, js, je, is, ie,
@@ -180,7 +180,7 @@ TaskStatus RadiationM1::CalcOpacityNurates_(Driver *pdrive, int stage) {
 
           // fluid quantities
           Real nb = w0_(m, IDN, k, j, i) / mb;  // [eos units]
-          Real nb_code = nb * eos2code_rho;     // [code units]
+          Real nb_code = nb * eos2code_nb;     // [code units]
           Real p = w0_(m, IPR, k, j, i);
           Real Y = w0_(m, IYF, k, j, i);
           Real T = eos.GetTemperatureFromP(nb, p, &Y);
@@ -260,11 +260,6 @@ TaskStatus RadiationM1::CalcOpacityNurates_(Driver *pdrive, int stage) {
             // compute neutrino black body function assuming trapped neutrinos
             if (nurates_params_.opacity_tau_trap >= 0 &&
                 tau > nurates_params_.opacity_tau_trap) {
-              Real e = w0_(m, IEN, k, j, i) +
-                       u0_(m, CombinedIdx(id_nue, M1_E_IDX, nvars_), k, j, i) +
-                       u0_(m, CombinedIdx(id_anue, M1_E_IDX, nvars_), k, j, i) +
-                       2 * u0_(m, CombinedIdx(id_nux, M1_E_IDX, nvars_), k, j, i);
-
               Real n_nue = u0_(m, CombinedIdx(id_nue, M1_N_IDX, nvars_), k, j, i);
               Real n_anue = u0_(m, CombinedIdx(id_anue, M1_N_IDX, nvars_), k, j, i);
               Real n_nux = u0_(m, CombinedIdx(id_nux, M1_N_IDX, nvars_), k, j, i);
@@ -274,6 +269,11 @@ TaskStatus RadiationM1::CalcOpacityNurates_(Driver *pdrive, int stage) {
 
               Real Y_lep[3]{};
               eos.GetLeptonFractions(nb, Y_part, n_nu, Y_lep);
+
+              Real e = eos.GetEnergy(nb, T, Y_part) +
+                       u0_(m, CombinedIdx(id_nue, M1_E_IDX, nvars_), k, j, i) +
+                       u0_(m, CombinedIdx(id_anue, M1_E_IDX, nvars_), k, j, i) +
+                       2 * u0_(m, CombinedIdx(id_nux, M1_E_IDX, nvars_), k, j, i); //@TODO: ask david!
 
               Real temp_trap{}, Y_part_trap[3]{};
               bool ierr = eos.GetBetaEquilibriumTrapped(nb, e, Y_lep, temp_trap,
@@ -288,7 +288,7 @@ TaskStatus RadiationM1::CalcOpacityNurates_(Driver *pdrive, int stage) {
               Real n_nu_trap[3]{}, e_nu_trap[3]{};  // [code units]
               eos.GetTrappedNeutrinos(nb, temp_trap, Y_part_trap, n_nu_trap, e_nu_trap);
 
-              //nudens_0_trap[0] = n_nu_trap[0];
+              //nudens_0_trap[0] = n_nu_trap[0]; //@TODO: ask David!
               //nudens_0_trap[1] = n_nu_trap[1];
               //nudens_0_trap[2] = n_nu_trap[2];
               //nudens_0_trap[3] = n_nu_trap[2];

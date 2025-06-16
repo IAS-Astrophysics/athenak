@@ -509,7 +509,7 @@ TaskStatus RadiationM1::TimeUpdate_(Driver *d, int stage) {
           // [G] Limit sources
           theta = 1.0;
           if (params_.theta_limiter && params_.source_limiter >= 0) {
-            Real tau = (ismhd_) ? umhd0_(m, IEN, k, j, i) : 0.;
+            Real tau = (ismhd_) ? umhd0_(m, IEN, k, j, i) : 0.; //@TODO: ask david!
 
             theta = 1.0;
             Real DTau_sum = 0.0;
