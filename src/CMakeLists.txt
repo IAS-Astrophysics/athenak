@@ -201,6 +201,8 @@ if (ENABLE_NURATES)
     )
 endif()
 
+target_compile_definitions(athena PUBLIC M1_TOTAL_NUM_SPECIES=${Athena_M1_NUM_SPECIES})
+
 # custom problem generator to be included in compile
 # specify on command line using '-D PROBLEM=file' where 'file' is name of file in
 # pgen/ directory (not including .cpp extension)
