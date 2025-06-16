@@ -15,7 +15,6 @@
 #define M1_FZ_IDX 3
 #define M1_N_IDX 4
 
-#define M1_TOTAL_NUM_SPECIES 1
 #define M1_MULTIROOTS_DIM 4
 
 #define HC_MEVCM 1.23984172e-10 // hc in units of MeV*cm
