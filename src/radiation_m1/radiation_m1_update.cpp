@@ -126,8 +126,8 @@ TaskStatus RadiationM1::TimeUpdate_(Driver *d, int stage) {
 
   bool &ismhd_ = ismhd;
   auto &u_mu_ = u_mu;
-  DvceArray5D<Real> &w0_ = u_mu_data;
-  DvceArray5D<Real> &umhd0_ = u_mu_data;
+  DvceArray5D<Real> &w0_ = u_mu_data;     // just a hack to compile on SYCL
+  DvceArray5D<Real> &umhd0_ = u_mu_data;  // just a hack to compile on SYCL
   if (ismhd_) {
     w0_ = pmy_pack->pmhd->w0;
     umhd0_ = pmy_pack->pmhd->u0;
@@ -500,7 +500,7 @@ TaskStatus RadiationM1::TimeUpdate_(Driver *d, int stage) {
               }
             }
             // fluid lepton sources
-            if (nspecies_ > 1) { // @TODO: check units of this one
+            if (nspecies_ > 1) {  // @TODO: check units of this one
               DDxp[nuidx] = -mb * (DrEFN[nuidx][M1_N_IDX] * (nuidx == 0) -
                                    DrEFN[nuidx][M1_N_IDX] * (nuidx == 1));
             }
@@ -509,7 +509,7 @@ TaskStatus RadiationM1::TimeUpdate_(Driver *d, int stage) {
           // [G] Limit sources
           theta = 1.0;
           if (params_.theta_limiter && params_.source_limiter >= 0) {
-            Real tau = (ismhd_) ? umhd0_(m, IEN, k, j, i) : 0.; //@TODO: ask david!
+            Real tau = (ismhd_) ? umhd0_(m, IEN, k, j, i) : 0.;  //@TODO: ask david!
 
             theta = 1.0;
             Real DTau_sum = 0.0;
