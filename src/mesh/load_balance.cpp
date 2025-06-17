@@ -283,7 +283,7 @@ void MeshRefinement::InitRecvAMR(int nleaf) {
           int ox3 = ((lloc.lx3 & 1) == 1);
           int vs = recvbuf.h_view(rb_idx).offset;
           int ve = vs + recvbuf.h_view(rb_idx).cnt;
-          auto pdata = Kokkos::subview(recv_data, std::make_pair(vs,ve));
+          auto pdata = Kokkos::subview(recv_data.template view<HostMemSpace>(), std::make_pair(vs,ve));
           // create tag using local ID of *receiving* MeshBlock, post receive
           int tag = CreateAMR_MPI_Tag(newm-nmbs, ox1, ox2, ox3);
           // post non-blocking receive
@@ -298,7 +298,7 @@ void MeshRefinement::InitRecvAMR(int nleaf) {
       if (pmy_mesh->rank_eachmb[oldm] != global_variable::my_rank) {
         int vs = recvbuf.h_view(rb_idx).offset;
         int ve = vs + recvbuf.h_view(rb_idx).cnt;
-        auto pdata = Kokkos::subview(recv_data, std::make_pair(vs,ve));
+        auto pdata = Kokkos::subview(recv_data.template view<HostMemSpace>(), std::make_pair(vs,ve));
         // create tag using local ID of *receiving* MeshBlock, post receive
         int tag = CreateAMR_MPI_Tag(newm-nmbs, 0, 0, 0);
         // post non-blocking receive
@@ -314,7 +314,7 @@ void MeshRefinement::InitRecvAMR(int nleaf) {
           (pmy_mesh->rank_eachmb[oldm] != global_variable::my_rank)) {
         int vs = recvbuf.h_view(rb_idx).offset;
         int ve = vs + recvbuf.h_view(rb_idx).cnt;
-        auto pdata = Kokkos::subview(recv_data, std::make_pair(vs,ve));
+        auto pdata = Kokkos::subview(recv_data.template view<HostMemSpace>(), std::make_pair(vs,ve));
         // create tag using local ID of *receiving* MeshBlock, post receive
         int tag = CreateAMR_MPI_Tag(newm-nmbs, 0, 0, 0);
         // post non-blocking receive
@@ -556,7 +556,7 @@ void MeshRefinement::PackAndSendAMR(int nleaf) {
             (new_rank_eachmb[newm + l] != global_variable::my_rank)) {
           int vs = sendbuf.h_view(sb_idx).offset;
           int ve = vs + sendbuf.h_view(sb_idx).cnt;
-          auto pdata = Kokkos::subview(send_data, std::make_pair(vs,ve));
+          auto pdata = Kokkos::subview(send_data.template view<HostMemSpace>(), std::make_pair(vs,ve));
           // create tag using local ID of *receiving* MeshBlock
           int lid = (newm + l) - new_gids_eachrank[new_rank_eachmb[newm+l]];
           int tag = CreateAMR_MPI_Tag(lid, 0, 0, 0);
@@ -573,7 +573,7 @@ void MeshRefinement::PackAndSendAMR(int nleaf) {
         if (new_rank_eachmb[newm] != global_variable::my_rank) {
           int vs = sendbuf.h_view(sb_idx).offset;
           int ve = vs + sendbuf.h_view(sb_idx).cnt;
-          auto pdata = Kokkos::subview(send_data, std::make_pair(vs,ve));
+          auto pdata = Kokkos::subview(send_data.template view<HostMemSpace>(), std::make_pair(vs,ve));
           // create tag using local ID of *receiving* MeshBlock
           int lid = newm - new_gids_eachrank[new_rank_eachmb[newm]];
           int tag = CreateAMR_MPI_Tag(lid, 0, 0, 0);
@@ -590,7 +590,7 @@ void MeshRefinement::PackAndSendAMR(int nleaf) {
             (new_rank_eachmb[newm] != global_variable::my_rank)) {
           int vs = sendbuf.h_view(sb_idx).offset;
           int ve = vs + sendbuf.h_view(sb_idx).cnt;
-          auto pdata = Kokkos::subview(send_data, std::make_pair(vs,ve));
+          auto pdata = Kokkos::subview(send_data.template view<HostMemSpace>(), std::make_pair(vs,ve));
           // create tag using local ID of *receiving* MeshBlock
           int ox1 = ((old_lloc.lx1 & 1) == 1);
           int ox2 = ((old_lloc.lx2 & 1) == 1);
@@ -629,7 +629,7 @@ void MeshRefinement::PackAMRBuffersCC(DvceArray5D<Real> &a, DvceArray5D<Real> &c
                                       int ncc, int nfc) {
 #if MPI_PARALLEL_ENABLED
   auto &sbuf = sendbuf;
-  auto &sdata = send_data;
+  auto sdata = send_data.template view<DevExeSpace>();
   // Outer loop over (# of MeshBlocks sent)*(# of variables)
   int nvar = a.extent_int(1);  // TODO(@user): 2nd index from L of in array must be NVAR
   int nnv = nmb_send*nvar;
@@ -666,6 +666,8 @@ void MeshRefinement::PackAMRBuffersCC(DvceArray5D<Real> &a, DvceArray5D<Real> &c
       }
     });
   }); // end par_for_outer
+  send_data.template modify<DevExeSpace>();
+  send_data.template sync<HostMemSpace>();
 #endif
   return;
 }
@@ -678,7 +680,7 @@ void MeshRefinement::PackAMRBuffersFC(DvceFaceFld4D<Real> &b, DvceFaceFld4D<Real
                                       int ncc, int nfc) {
 #if MPI_PARALLEL_ENABLED
   auto &sbuf = sendbuf;
-  auto &sdata = send_data;
+  auto sdata = send_data.template view<DevExeSpace>();
   // Outer loop over (# of MeshBlocks sent)*(3 compnts of field)
   int nn = 3*nmb_send;
   Kokkos::TeamPolicy<> policy(DevExeSpace(), nn, Kokkos::AUTO);
@@ -775,6 +777,8 @@ void MeshRefinement::PackAMRBuffersFC(DvceFaceFld4D<Real> &b, DvceFaceFld4D<Real
       });
     }
   }); // end par_for_outer
+  send_data.template modify<DevExeSpace>();
+  send_data.template sync<HostMemSpace>();
 #endif
   return;
 }
@@ -803,6 +807,9 @@ void MeshRefinement::ClearRecvAndUnpackAMR() {
   delete [] recv_req;
 
   // Unpack data
+  recv_data.template modify<HostMemSpace>();
+  recv_data.template sync<DevExeSpace>();
+
   hydro::Hydro* phydro = pmy_mesh->pmb_pack->phydro;
   mhd::MHD* pmhd = pmy_mesh->pmb_pack->pmhd;
   z4c::Z4c* pz4c = pmy_mesh->pmb_pack->pz4c;
@@ -838,7 +845,7 @@ void MeshRefinement::UnpackAMRBuffersCC(DvceArray5D<Real> &a, DvceArray5D<Real> 
                                         int ncc, int nfc) {
 #if MPI_PARALLEL_ENABLED
   auto &rbuf = recvbuf;
-  auto &rdata = recv_data;
+  auto rdata = recv_data.template view<DevExeSpace>();
   // Outer loop over (# of MeshBlocks recv)*(# of variables)
   int nvar = a.extent_int(1);  // TODO(@user): 2nd index from L of in array must be NVAR
   int nnv = nmb_recv*nvar;
@@ -888,7 +895,7 @@ void MeshRefinement::UnpackAMRBuffersFC(DvceFaceFld4D<Real> &b, DvceFaceFld4D<Re
                                         int ncc, int nfc) {
 #if MPI_PARALLEL_ENABLED
   auto &rbuf = recvbuf;
-  auto &rdata = recv_data;
+  auto rdata = recv_data.template view<DevExeSpace>();
   // Outer loop over (# of MeshBlocks recv)*(3 compnts of field)
   int nnv = 3*nmb_recv;
   Kokkos::TeamPolicy<> policy(DevExeSpace(), nnv, Kokkos::AUTO);

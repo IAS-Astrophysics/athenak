@@ -24,6 +24,8 @@ static int CreateAMR_MPI_Tag(int lid, int ox1, int ox2, int ox3) {
 //! balancing.
 
 #if MPI_PARALLEL_ENABLED
+#include <mpi.h>
+
 struct AMRBuffer {
   int bis, bie, bjs, bje, bks, bke;  // start/end indices of data to be packed/unpacked
   int cntcc, cntfc;          // number of CC and FC array elements to be sent/recv per var
@@ -89,7 +91,7 @@ class MeshRefinement {
   MPI_Comm amr_comm;                         // unique communicator for AMR
   DualArray1D<AMRBuffer> sendbuf, recvbuf; // send/recv buffers
   MPI_Request *send_req, *recv_req;
-  DvceArray1D<Real> send_data, recv_data;    // send/recv device data
+  DualArray1D<Real> send_data, recv_data;    // send/recv device data
 #endif
 
   // functions
