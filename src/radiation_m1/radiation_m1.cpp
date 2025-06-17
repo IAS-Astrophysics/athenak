@@ -35,7 +35,7 @@ RadiationM1::RadiationM1(MeshBlockPack *ppack, ParameterInput *pin)
       uflx("rad_uflx", 1, 1, 1, 1, 1) {
   // set up parameters and flags
   ismhd = pin->DoesBlockExist("mhd");
-  nspecies = pin->GetOrAddInteger("radiation_m1", "num_species", 1);
+  nspecies = M1_TOTAL_NUM_SPECIES;
 
   params.gr_sources = pin->GetOrAddBoolean("radiation_m1", "gr_sources", true);
   params.matter_sources = pin->GetOrAddBoolean("radiation_m1", "matter_sources", false);
