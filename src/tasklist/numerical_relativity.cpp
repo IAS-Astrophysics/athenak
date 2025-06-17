@@ -139,10 +139,12 @@ bool NumericalRelativity::AssembleNumericalRelativityTasks(
 }
 
 bool NumericalRelativity::AssemblePostRadiationTasks(std::shared_ptr<TaskList>& list) {
+  TaskID none(0);
+
   auto &id = pmy_pack->pdyngr->id;
   auto &idrad = pmy_pack->pradm1->id;
 
-  id.postrad_restu = list->AddTask(&mhd::MHD::RestrictU, pmy_pack->pmhd, idrad.M1_csend);
+  id.postrad_restu = list->AddTask(&mhd::MHD::RestrictU, pmy_pack->pmhd, none);
   id.postrad_sendu = list->AddTask(&mhd::MHD::SendU, pmy_pack->pmhd, id.postrad_restu);
   id.postrad_recvu = list->AddTask(&mhd::MHD::RecvU, pmy_pack->pmhd, id.postrad_sendu);
   id.postrad_bcs = list->AddTask(&mhd::MHD::ApplyPhysicalBCs, pmy_pack->pmhd, id.postrad_recvu);
