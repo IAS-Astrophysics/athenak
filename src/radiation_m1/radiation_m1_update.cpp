@@ -136,12 +136,14 @@ TaskStatus RadiationM1::TimeUpdate_(Driver *d, int stage) {
   auto &BrentFunc_ = pmy_pack->pradm1->BrentFunc;
   auto &HybridsjFunc_ = pmy_pack->pradm1->HybridsjFunc;
 
-  Real mb{};
+  Real mb_code{};
   if (ismhd_) {
     Primitive::EOS<EOSPolicy, ErrorPolicy> &eos =
         static_cast<dyngr::DynGRMHDPS<EOSPolicy, ErrorPolicy> *>(pmy_pack->pdyngr)
             ->eos.ps.GetEOSMutable();
-    mb = eos.GetBaryonMass();
+    auto code_units = eos.GetCodeUnitSystem();
+    auto eos_units = eos.GetEOSUnitSystem();
+    mb_code = eos.GetBaryonMass() / eos_units.DensityConversion(code_units);
   }
 
   Real beta[2] = {0.5, 1.};
@@ -501,8 +503,8 @@ TaskStatus RadiationM1::TimeUpdate_(Driver *d, int stage) {
             }
             // fluid lepton sources
             if (nspecies_ > 1) {  // @TODO: check units of this one
-              DDxp[nuidx] = -mb * (DrEFN[nuidx][M1_N_IDX] * (nuidx == 0) -
-                                   DrEFN[nuidx][M1_N_IDX] * (nuidx == 1));
+              DDxp[nuidx] = -mb_code * (DrEFN[nuidx][M1_N_IDX] * (nuidx == 0) -
+                                        DrEFN[nuidx][M1_N_IDX] * (nuidx == 1));
             }
           }
 
