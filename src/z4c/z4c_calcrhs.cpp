@@ -589,6 +589,12 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage) {
             - opt.shift_eta * z4c.vB_u(m,a,k,j,i);
       }
     }
+    if (opt.freeze_gauge) {
+      rhs.alpha(m,k,j,i) = 0.0;
+      for(int a = 0; a < 3; ++a) {
+        rhs.beta_u(m,a,k,j,i) = 0.0;
+      }
+    }
   });
 
   // ===================================================================================

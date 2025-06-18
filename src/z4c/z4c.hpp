@@ -168,6 +168,7 @@ class Z4c {
     Real ssl_damping_amp;
     Real ssl_damping_time;
     Real ssl_damping_index;
+    bool freeze_gauge;
     // Gauge condition for the shift
     Real shift_ggamma;
     Real shift_alpha2ggamma;

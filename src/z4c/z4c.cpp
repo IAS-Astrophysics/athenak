@@ -146,6 +146,7 @@ Z4c::Z4c(MeshBlockPack *ppack, ParameterInput *pin) :
   opt.ssl_damping_amp = pin->GetOrAddReal("z4c", "ssl_damping_amp", 0.6);
   opt.ssl_damping_time = pin->GetOrAddReal("z4c", "ssl_damping_time", 20.0);
   opt.ssl_damping_index = pin->GetOrAddInteger("z4c", "ssl_damping_index", 1);
+  opt.freeze_gauge = pin->GetOrAddBoolean("z4c", "freeze_gauge", false);
 
   opt.shift_ggamma = pin->GetOrAddReal("z4c", "shift_Gamma", 1.0);
   opt.shift_advect = pin->GetOrAddReal("z4c", "shift_advect", 1.0);
