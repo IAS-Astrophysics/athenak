@@ -83,10 +83,12 @@ Real KSRX(const Real x1, const Real x2, const Real x3, const Real a) {
 void ADMKerrSchild(MeshBlockPack *pmbp, ParameterInput *pin) {
   // read bh spin
   Real a = pin->GetOrAddReal("problem", "bh_spin", 0.);
+  Real excise_ratio = pin->GetOrAddReal("problem", "excise_ratio", 0.5);
+
   // set transition radius
   // transit from Kerr-Schild to Minkolsky from 2rH/3 to rH/1
   Real rH = 1 + sqrt(1 - SQR(a));
-  Real rexci = 2*rH/3;
+  Real rexci = excise_ratio*rH;
   auto &adm = pmbp->padm->adm;
   auto &size = pmbp->pmb->mb_size;
   auto &indcs = pmbp->pmesh->mb_indcs;
