@@ -43,7 +43,7 @@ ndiag      = 1         # cycles between diagostic output
 <z4c>
 diss       = 0.02
 lapse_harmonic  = 0.0                 # Harmonic lapse parameter mu_L
-lapse_oplog     = 1.0                 # 1+log lapse parameter
+lapse_oplog     = 2.0                 # 1+log lapse parameter
 shift_eta       = 2.0                 # Shift damping term
 chi_div_floor   = 0.00001
 damp_kappa1     = 0.00      # Constraint damping factor 1

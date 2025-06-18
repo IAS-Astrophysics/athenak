@@ -190,7 +190,6 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     case 4: pmbp->pz4c->ADMConstraints<4>(pmbp);
             break;
   }
-  std::cout << "TwoPuncture initialized." << std::endl;
   return;
 }
 

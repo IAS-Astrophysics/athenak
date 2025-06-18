@@ -1,51 +1,62 @@
+# Athena++ (Kokkos version) input file for z4c two puncture
+
 <comment>
-problem   = a very low resolution bbh two punctures when puncture tracker is on
+problem   = z4c two puncture
+reference = e.g. Cook. Living Rev. Relativ. 3, 5 (2000)
 
 <job>
-basename  = bbh      # problem ID: basename of output filenames
+basename  = z4c      # problem ID: basename of output filenames
 
 <mesh>
 nghost    = 4          # Number of ghost cells
-nx1       = 64        # Number of zones in X1-direction
-x1min     = -201       # minimum value of X1
-x1max     = 201       # maximum value of X1
+nx1       = 128        # Number of zones in X1-direction
+x1min     = -1024       # minimum value of X1
+x1max     = 1024       # maximum value of X1
 ix1_bc    = outflow   # inner-X1 boundary flag
 ox1_bc    = outflow   # outer-X1 boundary flag
 
-nx2       = 64        # Number of zones in X2-direction
-x2min     = -201      # minimum value of X2
-x2max     = 201       # maximum value of X2
+nx2       = 128        # Number of zones in X2-direction
+x2min     = -1024      # minimum value of X2
+x2max     = 1024       # maximum value of X2
 ix2_bc    = outflow   # inner-X2 boundary flag
 ox2_bc    = outflow   # outer-X2 boundary flag
 
-nx3       = 64        # Number of zones in X3-direction
-x3min     = -201       # minimum value of X3
-x3max     = 201        # maximum value of X3
+nx3       = 128        # Number of zones in X3-direction
+x3min     = -1024       # minimum value of X3
+x3max     = 1024        # maximum value of X3
 ix3_bc    = outflow   # inner-X3 boundary flag
 ox3_bc    = outflow   # outer-X3 boundary flag
 
 <meshblock>
 nx1       = 32         # Number of cells in each MeshBlock, X1-dir
 nx2       = 32         # Number of cells in each MeshBlock, X2-dir
-nx3       = 32           # Number of cells in each MeshBlock, X3-dir
+nx3       = 32         # Number of cells in each MeshBlock, X3-dir
 
 <time>
 evolution  = dynamic    # dynamic/kinematic/static
 integrator = rk4        # time integration algorithm
-cfl_number = 0.5       # The Courant, Friedrichs, & Lewy (CFL) Number
+cfl_number = 0.4        # The Courant, Friedrichs, & Lewy (CFL) Number
 nlim       = -1         # cycle limit
-tlim       = 250        # time limit
+tlim       = 500        # time limit
 ndiag      = 1          # cycles between diagostic output
 
 <mesh_refinement>
 refinement       = adaptive    # type of refinement
-max_nmb_per_rank = 500
-num_levels       = 7
-refinement_interval = 1
-chi_min             = 0.2
+max_nmb_per_rank = 600
+num_levels       = 10
+refinement_interval   = 1
+
+# amr dchi method
+<z4c_amr>
+#method = dchi
+#dchi_max = 0.05
+#method = tracker
+method = chi
+chi_min = 0.2
+
 
 <refinement1>
-level = 6
+level = 9
 x1min = -4.257
 x1max = -2.257
 x2min = -1.0
@@ -54,7 +65,7 @@ x3min = -1.0
 x3max = 1.0
 
 <refinement2>
-level = 6
+level = 9
 x1min = 2.257
 x1max = 4.257
 x2min = -1.0
@@ -64,27 +75,53 @@ x3max = 1.0
 
 <z4c>
 lapse_harmonic  = 0.0                 # Harmonic lapse parameter mu_L
-lapse_oplog     = 2.0                 # 1+log lapse parameter
+lapse_oplog     = 1.0                 # 1+log lapse parameter
 shift_eta       = 2.0                 # Shift damping term
-diss            = 0.1                 # Kreiss-Oliger dissipation parameter
+diss            = 0.5                 # Kreiss-Oliger dissipation parameter
 chi_div_floor   = 0.00001
-damp_kappa1     = 0.00      # Constraint damping factor 1
-damp_kappa2     = 0.01
+damp_kappa1     = 0.02      # Constraint damping factor 1
+damp_kappa2     = 0.00
 ## Wave extraction
-nrad_wave_extraction = 0    # turn off GW
-extraction_radius_0 = 15
-extraction_radius_1 = 25
-extraction_radius_2 = 50
-extraction_nlev = 30
+nrad_wave_extraction = 4
+extraction_radius_1 = 50
+extraction_radius_2 = 100
+extraction_radius_3 = 200
+extraction_radius_4 = 25
+extraction_nlev = 80
+waveform_dt     = 1
+nco             = 2
+co_0_x          = 3.257
+co_0_reflevel = -1          # wanted resolution at the CO 0 (use -1 for maximum refinement)
+co_0_radius = 0.5
+co_0_type = BH
 
-npunct          = 2      # this truns on puncture tracker
-bh_0_x          = 3.257  # initial position of the puncture 0
-bh_1_x          = -3.257 # initial position of the puncture 1
+co_1_x          = -3.257
+co_1_reflevel = -1
+co_1_radius = 0.5
+co_1_type = BH
+
+# Horizon Finder
+dump_horizon_0  = true
+co_0_dump_radius = 2
+horizon_0_Nx     = 40
+horizon_dt = 1
+dump_horizon_1  = true
+co_1_dump_radius = 2
+horizon_1_Nx     = 40
+
+
+<cce>
+num_radii  = 1
+cce_dt     = 0.1
+rin_0      = 45
+rout_0     = 55
+num_radial_modes = 12
+num_l_modes = 17
 
 <problem>
 pgen_name = z4c_two_puncture
 # the following are defaults and descriptions
-verbose = false
+verbose = true
 par_b = 3.257                            # x coordinate of the m+ puncture
 par_m_plus = 0.483                       # mass of the m+ puncture
 par_m_minus = 0.483                      # mass of the m- puncture
@@ -132,11 +169,23 @@ initial_lapse_psi_exponent = -2.0
 # so that the black holes are separated in the z direction
 swap_xz = false
 
-#<output1>
-#file_type  = bin    # Binary data dump
-#variable   = z4c    # variables to be output
-#dt         = 1      # time increment between outputs
-#slice_x3   = 0
+<output1>
+file_type  = bin        # Binary data dump
+variable   = z4c    # variables to be output
+slice_x2   = 0
+dt         = 5       # time increment between outputs
 
+<output2>
+file_type  = bin        # Binary data dump
+variable   = con    # variables to be output
+slice_x2   = 0
+dt         = 5       # time increment between outputs
 
+<output3>         
+file_type  = rst    # Binary data dump
+dt         = 50.  # time increment between outputs
+
+<output4>
+file_type = hst
+dt        = 2
 

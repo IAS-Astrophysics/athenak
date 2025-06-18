@@ -70,6 +70,7 @@ void Z4c::WaveExtr(MeshBlockPack *pmbp) {
   auto &grids = pmbp->pz4c->spherical_grids;
   auto &u_weyl = pmbp->pz4c->u_weyl;
   auto &psi_out = pmbp->pz4c->psi_out;
+  auto &adm_out = pmbp->pz4c->adm_out;
 
   // number of radii
   int nradii = grids.size();
@@ -80,9 +81,10 @@ void Z4c::WaveExtr(MeshBlockPack *pmbp) {
 
   Real ylmR,ylmI;
   int count = 0;
+  int count_adm = 0;
   for (int g=0; g<nradii; ++g) {
     // Interpolate Weyl scalars to the surface
-    grids[g]->InterpolateToSphere(2, u_weyl);
+    grids[g]->InterpolateToSphere(9, u_weyl);
     for (int l = 2; l < lmax+1; ++l) {
       for (int m = -l; m < l+1 ; ++m) {
         Real psilmR = 0.0;
@@ -109,30 +111,47 @@ void Z4c::WaveExtr(MeshBlockPack *pmbp) {
         psi_out[count++] = psilmI;
       }
     }
+    for (int var = 2; var <= 8; ++var) {
+      Real adm_integrand = 0.0;
+      for (int ip = 0; ip < grids[g]->nangles; ++ip) {
+        Real data = grids[g]->interp_vals.h_view(ip,var);
+        Real weight = grids[g]->solid_angles.h_view(ip);
+        adm_integrand += data*weight;
+      }
+      adm_out[count_adm++] = adm_integrand*SQR(grids[g]->radius);
+    }
   }
 
   // write output
   #if MPI_PARALLEL_ENABLED
   if (0 == global_variable::my_rank) {
     MPI_Reduce(MPI_IN_PLACE, psi_out, count, MPI_ATHENA_REAL, MPI_SUM, 0, MPI_COMM_WORLD);
+    MPI_Reduce(MPI_IN_PLACE, adm_out, count_adm, MPI_ATHENA_REAL, MPI_SUM, 0, MPI_COMM_WORLD);
+
   } else {
     MPI_Reduce(psi_out, psi_out, count, MPI_ATHENA_REAL, MPI_SUM, 0, MPI_COMM_WORLD);
+    MPI_Reduce(adm_out, adm_out, count_adm, MPI_ATHENA_REAL, MPI_SUM, 0, MPI_COMM_WORLD);
   }
   #endif
 
   if (0 == global_variable::my_rank) {
     int idx = 0;
+    int idx_adm = 0;
     for (int g=0; g<nradii; ++g) {
       // Output file names
       std::string filename = "waveforms/rpsi4_real_";
       std::string filename2 = "waveforms/rpsi4_imag_";
+      std::string filename3 = "adm/adm_quantities_";
+
       std::stringstream strObj;
       strObj << std::setfill('0') << std::setw(4) << grids[g]->radius;
       filename += strObj.str();
       filename += ".txt";
       filename2 += strObj.str();
       filename2 += ".txt";
-
+      filename3 += strObj.str();
+      filename3 += ".txt";
+  
       // Check if the file already exists
       std::ifstream fileCheck(filename);
       bool fileExists = fileCheck.good();
@@ -140,7 +159,9 @@ void Z4c::WaveExtr(MeshBlockPack *pmbp) {
       std::ifstream fileCheck2(filename2);
       bool fileExists2 = fileCheck2.good();
       fileCheck2.close();
-
+      std::ifstream fileCheck3(filename3);
+      bool fileExists3 = fileCheck3.good();
+      fileCheck3.close();
 
       // If the file doesn't exist, create it
       if (!fileExists) {
@@ -189,17 +210,37 @@ void Z4c::WaveExtr(MeshBlockPack *pmbp) {
         // Close the file stream
         outFile.close();
       }
+      if (!fileExists3) {
+        std::ofstream createFile(filename3);
+        createFile.close();
+
+        // Open a file stream for writing header
+        std::ofstream outFile;
+        // append mode
+        outFile.open(filename3, std::ios::out | std::ios::app);
+        // first append time
+        outFile << "# 1:time" << "\t" << "2:adm_mass" << "\t" <<"3:adm_mx" << "\t"
+                                      << "4:adm_my" << "\t" <<"5:adm_mz" << "\t"
+              << "6:adm_jx" << "\t" <<"7:adm_jy" << "\t" <<"8:adm_jz" << "\t";
+        outFile << '\n';
+        // Close the file stream
+        outFile.close();
+      }
+
       // Open a file stream for writing header
       std::ofstream outFile;
       std::ofstream outFile2;
+      std::ofstream outFile3;
 
       // append mode
       outFile.open(filename, std::ios::out | std::ios::app);
       outFile2.open(filename2, std::ios::out | std::ios::app);
+      outFile3.open(filename3, std::ios::out | std::ios::app);
 
       // first append time
       outFile << pmbp->pmesh->time << "\t";
       outFile2 << pmbp->pmesh->time << "\t";
+      outFile3 << pmbp->pmesh->time << "\t";
 
       // append waveform
       for (int l = 2; l < lmax+1; ++l) {
@@ -208,15 +249,22 @@ void Z4c::WaveExtr(MeshBlockPack *pmbp) {
           outFile2 << std::setprecision(15) << psi_out[idx++] << '\t';
         }
       }
+
+      // append adm quantities
+      for (int var = 0; var <= 6; ++var) {
+        outFile3 << std::setprecision(15) << adm_out[idx_adm++] << '\t';
+      }
+
       outFile << '\n';
       outFile2 << '\n';
+      outFile3 << '\n';
 
       // Close the file stream
       outFile.close();
       outFile2.close();
+      outFile3.close();
     }
   }
 }
-
 
 }  // namespace z4c

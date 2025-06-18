@@ -31,13 +31,14 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage) {
   int &is = indcs.is; int &ie = indcs.ie;
   int &js = indcs.js; int &je = indcs.je;
   int &ks = indcs.ks; int &ke = indcs.ke;
-
   int nmb = pmy_pack->nmb_thispack;
 
   auto &z4c = pmy_pack->pz4c->z4c;
   auto &rhs = pmy_pack->pz4c->rhs;
   auto &opt = pmy_pack->pz4c->opt;
-
+  
+  Real time = pmy_pack->pmesh->time;
+  
   bool is_vacuum = (pmy_pack->ptmunu == nullptr) ? true : false;
   Tmunu::Tmunu_vars tmunu;
   if (!is_vacuum) tmunu = pmy_pack->ptmunu->tmunu;
@@ -108,8 +109,12 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage) {
 
     // Lie derivative of Gamma
     AthenaPointTensor<Real, TensorSymm::NONE, 3, 1> LGam_u;
+    AthenaPointTensor<Real, TensorSymm::NONE, 3, 1> LGam_u2;
+
     // Lie derivative of the shift
     AthenaPointTensor<Real, TensorSymm::NONE, 3, 1> Lbeta_u;
+    // Lie derivative of the advective derivative of shift
+    AthenaPointTensor<Real, TensorSymm::NONE, 3, 1> LB_u;
 
     // Lie derivative of conf. 3-metric
     AthenaPointTensor<Real, TensorSymm::SYM2, 3, 2> Lg_dd;
@@ -158,6 +163,7 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage) {
     //
     // Vectors
     Lbeta_u.ZeroClear();
+    LB_u.ZeroClear();
     LGam_u.ZeroClear();
     Gamma_u.ZeroClear();
     DA_u.ZeroClear();
@@ -249,6 +255,9 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage) {
     for(int b = 0; b < 3; ++b) {
       Lbeta_u(b) += Lx<NGHOST>(a, idx, z4c.beta_u, z4c.beta_u, m,a,b,k,j,i);
       LGam_u(b)  += Lx<NGHOST>(a, idx, z4c.beta_u, z4c.vGam_u,  m,a,b,k,j,i);
+      if (!opt.first_order_shift) {
+        LB_u(b) += Lx<NGHOST>(a, idx, z4c.beta_u, z4c.vB_u, m,a,b,k,j,i);
+      }
     }
 
     //
@@ -456,11 +465,11 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage) {
 
     // Finalize LGam_u (note that this is not a real Lie derivative)
     for(int a = 0; a < 3; ++a) {
-      LGam_u(a) += (2./3.) * Gamma_u(a) * dbeta;
+      LGam_u2(a) = LGam_u(a) + (2./3.) * Gamma_u(a) * dbeta;
       for(int b = 0; b < 3; ++b) {
-        LGam_u(a) += g_uu(a,b) * ddbeta_d(b) - Gamma_u(b) * dbeta_du(b,a);
+        LGam_u2(a) += g_uu(a,b) * ddbeta_d(b) - Gamma_u(b) * dbeta_du(b,a);
         for(int c = 0; c < 3; ++c) {
-          LGam_u(a) += g_uu(b,c) * ddbeta_ddu(b,c,a);
+          LGam_u2(a) += g_uu(b,c) * ddbeta_ddu(b,c,a);
         }
       }
     }
@@ -507,7 +516,7 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage) {
     rhs.vTheta(m,k,j,i) *= opt.use_z4c;
     // Gamma's
     for(int a = 0; a < 3; ++a) {
-      rhs.vGam_u(m,a,k,j,i) = 2.*z4c.alpha(m,k,j,i)*DA_u(a) + LGam_u(a);
+      rhs.vGam_u(m,a,k,j,i) = 2.*z4c.alpha(m,k,j,i)*DA_u(a) + LGam_u2(a);
       rhs.vGam_u(m,a,k,j,i) -= 2.*z4c.alpha(m,k,j,i) * opt.damp_kappa1 *
           (z4c.vGam_u(m,a,k,j,i) - Gamma_u(a));
       for(int b = 0; b < 3; ++b) {
@@ -543,23 +552,41 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage) {
                  + opt.lapse_harmonic * z4c.alpha(m,k,j,i);
     rhs.alpha(m,k,j,i) = opt.lapse_advect * Lalpha
                        - f * z4c.alpha(m,k,j,i) * z4c.vKhat(m,k,j,i);
-
-    // shift vector
-    for(int a = 0; a < 3; ++a) {
-      rhs.beta_u(m,a,k,j,i) = opt.shift_ggamma * z4c.vGam_u(m,a,k,j,i)
-                            + opt.shift_advect * Lbeta_u(a);
-      rhs.beta_u(m,a,k,j,i) -= opt.shift_eta * z4c.beta_u(m,a,k,j,i);
-      // FORCE beta = 0
-      //rhs.beta_u(m,a,k,j,i) = 0;
+    if (opt.slow_start_lapse) {
+      Real W2 = (z4c.chi(m,k,j,i)>opt.chi_min_floor)
+                    ? z4c.chi(m,k,j,i) : opt.chi_min_floor;
+      Real W = pow(W2,0.5);
+      rhs.alpha(m,k,j,i) += opt.ssl_damping_amp*(W-z4c.alpha(m,k,j,i))*pow(W,opt.ssl_damping_index)*exp(-0.5*pow(time/                      
+      			    (opt.ssl_damping_time),2));
     }
-
-    // harmonic gauge terms
-    for(int a = 0; a < 3; ++a) {
-      rhs.beta_u(m,a,k,j,i) += opt.shift_alpha2ggamma *
-                          SQR(z4c.alpha(m,k,j,i)) * z4c.vGam_u(m,a,k,j,i);
-      for(int b = 0; b < 3; ++b) {
-        rhs.beta_u(m,a,k,j,i) += opt.shift_hh * z4c.alpha(m,k,j,i) *
-          chi_guarded * (0.5 * z4c.alpha(m,k,j,i) * dchi_d(b) - dalpha_d(b)) * g_uu(a,b);
+    // shift vector
+    if (opt.first_order_shift) {
+      for(int a = 0; a < 3; ++a) {
+        rhs.beta_u(m,a,k,j,i) = opt.shift_ggamma * z4c.vGam_u(m,a,k,j,i)
+                              + opt.shift_advect * Lbeta_u(a);
+        rhs.beta_u(m,a,k,j,i) -= opt.shift_eta * z4c.beta_u(m,a,k,j,i);
+        // FORCE beta = 0
+        //rhs.beta_u(m,a,k,j,i) = 0;
+      }
+      // harmonic gauge terms
+      for(int a = 0; a < 3; ++a) {
+        rhs.beta_u(m,a,k,j,i) += opt.shift_alpha2ggamma *
+                            SQR(z4c.alpha(m,k,j,i)) * z4c.vGam_u(m,a,k,j,i);
+        for(int b = 0; b < 3; ++b) {
+          rhs.beta_u(m,a,k,j,i) += opt.shift_hh * z4c.alpha(m,k,j,i) *
+            chi_guarded * (0.5 * z4c.alpha(m,k,j,i) * dchi_d(b) - dalpha_d(b)) * g_uu(a,b);
+        }
+      }
+      // second order shift damping
+    } else {
+      for(int a = 0; a < 3; ++a) {
+        rhs.beta_u(m,a,k,j,i) = opt.shift_advect * Lbeta_u(a) + z4c.vB_u(m,a,k,j,i);
+      }
+      // advective derivative of shift
+      for(int a = 0; a < 3; ++a) {
+        rhs.vB_u(m,a,k,j,i) =  opt.shift_advect * LB_u(a)
+            + opt.shift_ggamma * (rhs.vGam_u(m,a,k,j,i) + opt.shift_advect * LGam_u(a))
+            - opt.shift_eta * z4c.vB_u(m,a,k,j,i);
       }
     }
   });

@@ -38,6 +38,7 @@ char const * const Z4c::Z4c_names[Z4c::nz4c] = {
   "z4c_Theta",
   "z4c_alpha",
   "z4c_betax", "z4c_betay", "z4c_betaz",
+  "z4c_Bx", "z4c_By", "z4c_Bz",
 };
 
 char const * const Z4c::Constraint_names[Z4c::ncon] = {
@@ -86,7 +87,7 @@ Z4c::Z4c(MeshBlockPack *ppack, ParameterInput *pin) :
   Kokkos::realloc(u0,    nmb, (nz4c), ncells3, ncells2, ncells1);
   Kokkos::realloc(u1,    nmb, (nz4c), ncells3, ncells2, ncells1);
   Kokkos::realloc(u_rhs, nmb, (nz4c), ncells3, ncells2, ncells1);
-  Kokkos::realloc(u_weyl,    nmb, (2), ncells3, ncells2, ncells1);
+  Kokkos::realloc(u_weyl,    nmb, (9), ncells3, ncells2, ncells1);
 
   con.C.InitWithShallowSlice(u_con, I_CON_C);
   con.H.InitWithShallowSlice(u_con, I_CON_H);
@@ -101,6 +102,7 @@ Z4c::Z4c(MeshBlockPack *ppack, ParameterInput *pin) :
 
   z4c.alpha.InitWithShallowSlice (u0, I_Z4C_ALPHA);
   z4c.beta_u.InitWithShallowSlice(u0, I_Z4C_BETAX, I_Z4C_BETAZ);
+  z4c.vB_u.InitWithShallowSlice(u0, I_Z4C_BX, I_Z4C_BZ);
   z4c.chi.InitWithShallowSlice   (u0, I_Z4C_CHI);
   z4c.vKhat.InitWithShallowSlice  (u0, I_Z4C_KHAT);
   z4c.vTheta.InitWithShallowSlice (u0, I_Z4C_THETA);
@@ -110,6 +112,7 @@ Z4c::Z4c(MeshBlockPack *ppack, ParameterInput *pin) :
 
   rhs.alpha.InitWithShallowSlice (u_rhs, I_Z4C_ALPHA);
   rhs.beta_u.InitWithShallowSlice(u_rhs, I_Z4C_BETAX, I_Z4C_BETAZ);
+  rhs.vB_u.InitWithShallowSlice  (u_rhs, I_Z4C_BX, I_Z4C_BZ);
   rhs.chi.InitWithShallowSlice   (u_rhs, I_Z4C_CHI);
   rhs.vKhat.InitWithShallowSlice  (u_rhs, I_Z4C_KHAT);
   rhs.vTheta.InitWithShallowSlice (u_rhs, I_Z4C_THETA);
@@ -119,6 +122,13 @@ Z4c::Z4c(MeshBlockPack *ppack, ParameterInput *pin) :
 
   weyl.rpsi4.InitWithShallowSlice (u_weyl, 0);
   weyl.ipsi4.InitWithShallowSlice (u_weyl, 1);
+  weyl.adm_mass.InitWithShallowSlice (u_weyl, 2);
+  weyl.adm_mx.InitWithShallowSlice (u_weyl, 3);
+  weyl.adm_my.InitWithShallowSlice (u_weyl, 4);
+  weyl.adm_mz.InitWithShallowSlice (u_weyl, 5);
+  weyl.adm_jx.InitWithShallowSlice (u_weyl, 6);
+  weyl.adm_jy.InitWithShallowSlice (u_weyl, 7);
+  weyl.adm_jz.InitWithShallowSlice (u_weyl, 8);
 
   opt.chi_psi_power = pin->GetOrAddReal("z4c", "chi_psi_power", -4.0);
   opt.chi_div_floor = pin->GetOrAddReal("z4c", "chi_div_floor", -1000.0);
@@ -141,8 +151,14 @@ Z4c::Z4c(MeshBlockPack *ppack, ParameterInput *pin) :
   opt.shift_advect = pin->GetOrAddReal("z4c", "shift_advect", 1.0);
   opt.shift_alpha2ggamma = pin->GetOrAddReal("z4c", "shift_alpha2Gamma", 0.0);
   opt.shift_hh = pin->GetOrAddReal("z4c", "shift_H", 0.0);
-
-  opt.shift_eta = pin->GetOrAddReal("z4c", "shift_eta", 2.0);
+  opt.first_order_shift = pin->GetOrAddBoolean("z4c", "first_order_shift", true);
+  
+  // default shift damping to 1 if we use 2nd order shift
+  if (opt.first_order_shift) {
+    opt.shift_eta = pin->GetOrAddReal("z4c", "shift_eta", 2.0);
+  } else {
+    opt.shift_eta = pin->GetOrAddReal("z4c", "shift_eta", 1.0);
+  }
 
   opt.use_z4c = pin->GetOrAddBoolean("z4c", "use_z4c", true);
 
@@ -161,7 +177,7 @@ Z4c::Z4c(MeshBlockPack *ppack, ParameterInput *pin) :
     int nccells2 = (indcs.cnx2 > 1)? (indcs.cnx2 + 2*(indcs.ng)) : 1;
     int nccells3 = (indcs.cnx3 > 1)? (indcs.cnx3 + 2*(indcs.ng)) : 1;
     Kokkos::realloc(coarse_u0, nmb, (nz4c), nccells3, nccells2, nccells1);
-    Kokkos::realloc(coarse_u_weyl, nmb, (2), nccells3, nccells2, nccells1);
+    Kokkos::realloc(coarse_u_weyl, nmb, (9), nccells3, nccells2, nccells1);
   }
   Kokkos::Profiling::popRegion();
 
@@ -170,7 +186,7 @@ Z4c::Z4c(MeshBlockPack *ppack, ParameterInput *pin) :
   pbval_u = new MeshBoundaryValuesCC(ppack, pin, true);
   pbval_u->InitializeBuffers((nz4c));
   pbval_weyl = new MeshBoundaryValuesCC(ppack, pin, true);
-  pbval_weyl->InitializeBuffers((2));
+  pbval_weyl->InitializeBuffers((9));
   Kokkos::Profiling::popRegion();
 
   // wave extraction spheres
@@ -185,7 +201,9 @@ Z4c::Z4c(MeshBlockPack *ppack, ParameterInput *pin) :
   }
   // TODO(@dur566): Why is the size of psi_out hardcoded?
   psi_out = new Real[nrad*77*2];
+  adm_out = new Real[nrad*7];
   mkdir("waveforms",0775);
+  mkdir("adm",0775);
   waveform_dt = pin->GetOrAddReal("z4c", "waveform_dt", 1);
   last_output_time = 0;
   // CCE
@@ -216,23 +234,6 @@ Z4c::Z4c(MeshBlockPack *ppack, ParameterInput *pin) :
       break;
     }
   }
-  /*
-  horizon_dt = pin->GetOrAddReal("z4c", "horizon_dt", 1);
-  horizon_last_output_time = 0;
-  n = 0;
-  for (auto & pt : ptracker) {
-    if (pin->GetOrAddBoolean("z4c", "dump_horizon_" + std::to_string(n),false)) {
-      horizon_extent.push_back(pin->GetOrAddReal("z4c", "horizon_"
-                              + std::to_string(n)+"_radius",3));
-      Real extend[3] = {horizon_extent[n],horizon_extent[n],horizon_extent[n]};
-      horizon_nx.push_back(pin->GetOrAddInteger("z4c", "horizon_"
-                              + std::to_string(n)+"_Nx",100));
-      int Nx[3] = {horizon_nx[n],horizon_nx[n],horizon_nx[n]};
-      horizon_dump.emplace_back(pmy_pack, pt.pos, extend, Nx);
-      n++;
-    }
-  }
-  */
 }
 
 //----------------------------------------------------------------------------------------
@@ -286,10 +287,12 @@ void Z4c::AlgConstr(MeshBlockPack *pmbp) {
     }
   });
 }
+
 //----------------------------------------------------------------------------------------
 // destructor
 Z4c::~Z4c() {
   delete[] psi_out;
+  delete[] adm_out;
   delete pbval_u;
   delete pbval_weyl;
   delete pamr;

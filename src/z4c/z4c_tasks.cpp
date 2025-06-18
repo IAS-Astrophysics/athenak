@@ -30,7 +30,6 @@ namespace z4c {
 //! \fn  void Z4c::QueueZ4cTasks
 //! \brief queue Z4c tasks into NumericalRelativity
 void Z4c::QueueZ4cTasks() {
-  printf("AssembleZ4cTasks\n");
   using namespace mhd;     // NOLINT(build/namespaces)
   using namespace numrel;  // NOLINT(build/namespaces)
   NumericalRelativity *pnr = pmy_pack->pnr;
@@ -435,7 +434,7 @@ TaskStatus Z4c::InitRecvWeyl(Driver *pdrive, int stage) {
     float next_32 = static_cast<float>(last_output_time+waveform_dt);
     if (((time_32 >= next_32) || (time_32 == 0)) && stage == pdrive->nexp_stages) {
       last_output_time = time_32;
-      TaskStatus tstat = pbval_weyl->InitRecv(2);
+      TaskStatus tstat = pbval_weyl->InitRecv(9);
       return tstat;
     } else {
       return TaskStatus::complete;

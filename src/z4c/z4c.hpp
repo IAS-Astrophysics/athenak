@@ -51,6 +51,7 @@ class Z4c {
     I_Z4C_THETA,
     I_Z4C_ALPHA,
     I_Z4C_BETAX, I_Z4C_BETAY, I_Z4C_BETAZ,
+    I_Z4C_BX, I_Z4C_BY, I_Z4C_BZ,
     nz4c
   };
   // Names of Z4c variables
@@ -103,6 +104,13 @@ class Z4c {
   struct Wave_Extr_vars {
     AthenaTensor<Real, TensorSymm::NONE, 3, 0> rpsi4;
     AthenaTensor<Real, TensorSymm::NONE, 3, 0> ipsi4;
+    AthenaTensor<Real, TensorSymm::NONE, 3, 0> adm_mass;
+    AthenaTensor<Real, TensorSymm::NONE, 3, 0> adm_mx;
+    AthenaTensor<Real, TensorSymm::NONE, 3, 0> adm_my;
+    AthenaTensor<Real, TensorSymm::NONE, 3, 0> adm_mz;
+    AthenaTensor<Real, TensorSymm::NONE, 3, 0> adm_jx;
+    AthenaTensor<Real, TensorSymm::NONE, 3, 0> adm_jy;
+    AthenaTensor<Real, TensorSymm::NONE, 3, 0> adm_jz;
   };
   Wave_Extr_vars weyl;
 
@@ -113,6 +121,7 @@ class Z4c {
     AthenaTensor<Real, TensorSymm::NONE, 3, 0> alpha;   // lapse
     AthenaTensor<Real, TensorSymm::NONE, 3, 1> vGam_u;  // Gamma functions (BSSN)
     AthenaTensor<Real, TensorSymm::NONE, 3, 1> beta_u;  // shift
+    AthenaTensor<Real, TensorSymm::NONE, 3, 1> vB_u;    // advective derivative of shift
     AthenaTensor<Real, TensorSymm::SYM2, 3, 2> g_dd;    // conf. 3-metric
     AthenaTensor<Real, TensorSymm::SYM2, 3, 2> vA_dd;   // conf. traceless extr. curvature
   };
@@ -165,6 +174,7 @@ class Z4c {
     Real shift_hh;
     Real shift_advect;
     Real shift_eta;
+    bool first_order_shift;
     // turn on shift damping smoothly
     bool slow_roll_eta;
     Real turn_on_time;
@@ -191,6 +201,7 @@ class Z4c {
   std::vector<std::unique_ptr<SphericalGrid>> spherical_grids;
   // array storing waveform at each radii
   Real * psi_out;
+  Real * adm_out;
   Real waveform_dt;
   Real last_output_time;
   int nrad; // number of radii to perform wave extraction
@@ -249,13 +260,6 @@ class Z4c {
   std::vector<std::unique_ptr<CompactObjectTracker>> ptracker;
   std::vector<std::unique_ptr<HorizonDump>> phorizon_dump;
 
-  /*
-  std::list<CartesianGrid> horizon_dump;
-  Real horizon_dt;
-  Real horizon_last_output_time;
-  std::vector<Real> horizon_extent; // radius for dumping data in a cube
-  std::vector<int> horizon_nx;  // number of points in each direction
-  */
   // TODO(@hzhu): think about how to automatically trigger common horizon
   // maybe have a horizon dump object to save all the space here
   // same for the waveform.
