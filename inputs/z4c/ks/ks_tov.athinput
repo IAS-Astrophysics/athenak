@@ -1,0 +1,109 @@
+# Athena++ (Kokkos version) input file for TOV star
+
+<comment>
+problem  = Magnetized TOV star
+
+<job>
+basename = tov
+
+<mesh>
+nghost = 4       # Number of ghost cells
+nx1    = 32     # number of cells in x1-direction
+x1min  = -5.0   # minimum x1
+x1max  = 5.0    # maximum x1
+ix1_bc = diode   # inner boundary
+ox1_bc = diode   # outer boundary
+
+nx2    = 32     # number of cells in x2-direction
+x2min  = -5.0   # minimum x2
+x2max  = 5.0    # maximum x2
+ix2_bc = diode   # inner boundary
+ox2_bc = diode   # outer boundary
+
+nx3    = 32     # number of cells in x3-direction
+x3min  = -5.0   # minimum x3
+x3max  = 5.0    # maximum x3
+ix3_bc = diode   # inner boundary
+ox3_bc = diode   # outer boundary
+
+<meshblock>
+nx1  = 32        # Number of cells in each MeshBlock, X1-dir
+nx2  = 32        # Number of cells in each MeshBlock, X2-dir
+nx3  = 32        # Number of cells in each MeshBlock, X3-dir
+
+<time>
+evolution  = dynamic    # dynamic/kinematic/static
+integrator = rk3        # time integration algorithm
+cfl_number = 0.25
+nlim       = 10
+tlim       = 10000
+ndiag      = 1          # cycles between diagnostic output
+
+#<coord>
+general_rel = true      # general relativity
+m           = 1.0
+a           = 0.0
+excise      = true
+excision_scheme = lapse
+excise_lapse = 0.2
+dexcise     = 1.28e-13
+pexcise     = 0.0
+
+#<mhd>
+eos         = ideal     # EOS type
+dyn_eos     = ideal     # EOS type
+dyn_error   = reset_floor # error policy
+reconstruct = ppmx      # spatial reconstruction method
+rsolver     = hlle      # Riemann solver to be used
+dfloor      = 1.0e-16   # floor on density rho
+tfloor      = 1.0e-14 
+dthreshold  = 1.02      # Threshold for flooring
+gamma       = 2.0       # ratio of specific heats Gamma
+dyn_scratch = 1
+fofc        = true
+enforce_maximum = false
+
+<z4c>
+
+<problem>
+rhoc        = 1.28e-3 # Central density
+kappa       = 100.0    # P = kappa*rho^gamma
+npoints     = 10000.0  # buffer points for TOV calculation
+dr          = 1e-3     # radial step for TOV calculation
+b_norm      = 0 
+pcut        = 1e-6
+magindex    = 1
+#user_hist   = true
+star_center_x1 = 100005
+star_center_x2 = 100005
+star_center_x3 = 0
+
+
+<output1>
+file_type   = hst      # History data dump
+dt          = 0.00001  # time increment between outputs
+data_format = %20.15e
+
+#<output2>
+#file_type   = vtk      # Binary data dump
+#variable    = mhd_w_bcc  # variables to be output
+#dt          = 1.0      # time increment between outputs
+
+<output2>
+file_type   = tab
+variable    = z4c
+dt          = 7.812500e-02
+data_format = %24.16e
+slice_x2    = 0.0
+slice_x3    = 0.0
+
+#<output5>
+#file_type   = tab
+#variable    = mhd_w_bcc
+#dt          = 0.00001
+#slice_x2    = 0.0
+#slice_x3    = 0.0
+
+#<output6>
+#file_type   = rst
+#dt          = 1000.0
