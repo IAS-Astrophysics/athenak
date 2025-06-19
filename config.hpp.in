@@ -25,6 +25,9 @@
 // use OpenMP parallelization? default=0 (false)
 #define OPENMP_PARALLEL_ENABLED @OPENMP_PARALLEL_ENABLED@
 
+// use bns_nurates
+#define ENABLE_NURATES @ENABLE_NURATES@
+
 // Kokkos tight loop layout
 //#define @PAR_LOOP_LAYOUT@
 
