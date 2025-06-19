@@ -80,11 +80,11 @@ else()
 endif()
 
 # set nurates macro (true/false)
-set(ENABLE_NURATES OFF)
 if(Athena_ENABLE_NURATES)
-  set(ENABLE_NURATES ON)
+  set(ENABLE_NURATES 1)
   message(STATUS "Compiling with bns-nurates")
 else()
+  set(ENABLE_NURATES 0)
   message(STATUS "Not compiling with bns-nurates")
 endif ()
 

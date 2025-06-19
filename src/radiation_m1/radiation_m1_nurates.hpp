@@ -1,6 +1,9 @@
 #ifndef RADIATION_M1_NURATES_HPP
 #define RADIATION_M1_NURATES_HPP
-#ifdef ENABLE_NURATES
+
+#include "config.hpp"
+
+#if ENABLE_NURATES
 
 #include "athena.hpp"
 #include "bns_nurates/include/bns_nurates.hpp"
