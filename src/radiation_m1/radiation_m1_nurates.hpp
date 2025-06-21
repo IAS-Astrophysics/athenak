@@ -106,6 +106,8 @@ struct NuratesParams {
 //   \param[out] scat_1_nux     energy scatt coeff mu/tau neutrinos (code units)
 //   \param[out] scat_1_anux    energy scatt coeff mu/tau anti-neutrinos (code units)
 //   \param[in]  nurates_params params for nurates
+//   \param[in]  code_units     code units
+//   \param[in]  eos_units      eos units
 
 KOKKOS_INLINE_FUNCTION
 void bns_nurates(Real &nb, Real &temp, Real &ye, Real &mu_n, Real &mu_p, Real &mu_e,
@@ -119,7 +121,8 @@ void bns_nurates(Real &nb, Real &temp, Real &ye, Real &mu_n, Real &mu_p, Real &m
                  Real &scat_0_anue, Real &scat_0_nux, Real &scat_0_anux, Real &scat_1_nue,
                  Real &scat_1_anue, Real &scat_1_nux, Real &scat_1_anux,
                  NuratesParams const & nurates_params,
-                 Primitive::UnitSystem const & code_units) {
+                 Primitive::UnitSystem const & code_units,
+                 Primitive::UnitSystem const & eos_units) {
 
   // compute unit conversion factors
   Primitive::UnitSystem nurates_units = Primitive::MakeNGS();
@@ -127,7 +130,8 @@ void bns_nurates(Real &nb, Real &temp, Real &ye, Real &mu_n, Real &mu_p, Real &m
   Real const unit_length = code_units.LengthConversion(nurates_units);
   Real const unit_time = code_units.VolumeConversion(nurates_units);
   Real const unit_volume = code_units.VolumeConversion(nurates_units);
-  Real const unit_num_dens = code_units.NumberDensityConversion(nurates_units);
+  // Note that the number densities are always in EOS units
+  Real const unit_num_dens = eos_units.NumberDensityConversion(nurates_units);
   Real const unit_ene_dens = code_units.EnergyDensityConversion(nurates_units);
 
   if ((nb < nurates_params.nb_min) || (temp < nurates_params.temp_min_mev)) {
@@ -339,11 +343,13 @@ void bns_nurates(Real &nb, Real &temp, Real &ye, Real &mu_n, Real &mu_p, Real &m
 //   \param[out] en_nux          energy density mu/tau neutrinos (code units)
 //   \param[in]  nurates_params  struct for nurates parameters
 //   \param[in]  code_units      code units
+//   \param[in]  eos_units       eos units
 KOKKOS_INLINE_FUNCTION
 void NeutrinoDens(Real mu_n, Real mu_p, Real mu_e, Real temp, Real &n_nue,
                   Real &n_anue, Real &n_nux, Real &en_nue, Real &en_anue, Real &en_nux,
                   NuratesParams const & nurates_params,
-                  Primitive::UnitSystem const & code_units) {
+                  Primitive::UnitSystem const & code_units,
+                  Primitive::UnitSystem const & eos_units) {
   Real eta_nue = (mu_p + mu_e - mu_n) / temp;
   Real eta_anue = -eta_nue;
   Real eta_nux = 0.0;
@@ -369,7 +375,8 @@ void NeutrinoDens(Real mu_n, Real mu_p, Real mu_e, Real temp, Real &n_nue,
 
   // convert to code units
   Primitive::UnitSystem cgs_units = Primitive::MakeCGS();
-  Real const unit_num_dens = cgs_units.NumberDensityConversion(code_units);
+  // Note that the number densities are always in EOS units
+  Real const unit_num_dens = cgs_units.NumberDensityConversion(eos_units);
   Real const unit_ene_dens =
       cgs_units.EnergyDensityConversion(code_units) / cgs_units.MeV;
 
