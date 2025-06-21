@@ -120,7 +120,7 @@ KOKKOS_INLINE_FUNCTION
 Real flux_factor(const AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> &g_uu,
                  const Real &J, AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &H_d,
                  const Real &rad_E_floor) {
-  const Real xi = (J > rad_E_floor ? tensor_dot(g_uu, H_d, H_d) / SQ(J) : 0);
+  const Real xi = (J > rad_E_floor ? tensor_dot(g_uu, H_d, H_d) / (J*J) : 0);
   return Kokkos::max(0.0, Kokkos::min(xi, 1.0));
 }
 
