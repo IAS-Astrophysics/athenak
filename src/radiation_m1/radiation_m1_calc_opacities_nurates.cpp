@@ -75,16 +75,7 @@ TaskStatus RadiationM1::CalcOpacityNurates_(Driver *pdrive, int stage) {
   const Real mb = eos.GetBaryonMass();
 
   // conversion factors from cgs to code units
-  auto cgs_units = Primitive::MakeCGS();
   auto code_units = eos.GetCodeUnitSystem();
-  auto eos_units = eos.GetEOSUnitSystem();
-  const RadiationM1Units cgs2codeunits = {
-      .cgs2code_length = cgs_units.LengthConversion(code_units),
-      .cgs2code_time = cgs_units.TimeConversion(code_units),
-      .cgs2code_rho = cgs_units.DensityConversion(code_units),
-      .cgs2code_energy = cgs_units.EnergyConversion(code_units),
-  };
-  Real eos2code_nb = eos_units.DensityConversion(code_units);
 
   par_for(
       "radiation_m1_calc_opacity_nurates", DevExeSpace(), 0, nmb1, ks, ke, js, je, is, ie,
@@ -179,8 +170,7 @@ TaskStatus RadiationM1::CalcOpacityNurates_(Driver *pdrive, int stage) {
           }
 
           // fluid quantities
-          Real nb = w0_(m, IDN, k, j, i) / mb;  // [eos units]
-          Real nb_code = nb * eos2code_nb;     // [code units]
+          Real nb = w0_(m, IDN, k, j, i) / mb;
           Real p = w0_(m, IPR, k, j, i);
           Real Y = w0_(m, IYF, k, j, i);
           Real T = eos.GetTemperatureFromP(nb, p, &Y);
@@ -207,14 +197,14 @@ TaskStatus RadiationM1::CalcOpacityNurates_(Driver *pdrive, int stage) {
 
           // Note: everything sent and received are in code units
           bns_nurates(
-              nb_code, T, Y, mu_n, mu_p, mu_e, nudens_0[0], nudens_1[0], chi_loc[0],
+              nb, T, Y, mu_n, mu_p, mu_e, nudens_0[0], nudens_1[0], chi_loc[0],
               nudens_0[1], nudens_1[1], chi_loc[1], nudens_0[2], nudens_1[2], chi_loc[2],
               nudens_0[3], nudens_1[3], chi_loc[3], eta_0_loc[0], eta_0_loc[1],
               eta_0_loc[2], eta_0_loc[3], eta_1_loc[0], eta_1_loc[1], eta_1_loc[2],
               eta_1_loc[3], abs_0_loc[0], abs_0_loc[1], abs_0_loc[2], abs_0_loc[3],
               abs_1_loc[0], abs_1_loc[1], abs_1_loc[2], abs_1_loc[3], scat_0_loc[0],
               scat_0_loc[1], scat_0_loc[2], scat_0_loc[3], scat_1_loc[0], scat_1_loc[1],
-              scat_1_loc[2], scat_1_loc[3], nurates_params_, cgs2codeunits);
+              scat_1_loc[2], scat_1_loc[3], nurates_params_, code_units);
 
           assert(Kokkos::isfinite(eta_0_loc[0]));
           assert(Kokkos::isfinite(eta_0_loc[1]));
@@ -311,9 +301,9 @@ TaskStatus RadiationM1::CalcOpacityNurates_(Driver *pdrive, int stage) {
             }
 
             // compute neutrino black body function assuming fixed temperature and Ye
-            NeutrinoDens(mu_n, mu_p, mu_e, nb_code, T, nudens_0_thin[0], nudens_0_thin[1],
+            NeutrinoDens(mu_n, mu_p, mu_e, T, nudens_0_thin[0], nudens_0_thin[1],
                          nudens_0_thin[2], nudens_1_thin[0], nudens_1_thin[1],
-                         nudens_1_thin[2], nurates_params_, cgs2codeunits);
+                         nudens_1_thin[2], nurates_params_, code_units);
 
             nudens_0_thin[2] *= 0.5;
             nudens_1_thin[2] *= 0.5;

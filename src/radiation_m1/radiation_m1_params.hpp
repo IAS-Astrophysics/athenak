@@ -161,12 +161,5 @@ struct SrcParams {
   AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> tS_d{};
 };
 
-struct RadiationM1Units {
-  Real cgs2code_length;
-  Real cgs2code_time;
-  Real cgs2code_rho;
-  Real cgs2code_energy;
-};
-
 }  // namespace radiationm1
 #endif  // RADIATION_M1_PARAMS_HPP
