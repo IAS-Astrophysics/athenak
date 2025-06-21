@@ -8,6 +8,8 @@
 #include "radiation_m1/radiation_m1_params.hpp"
 #include "radiation_m1_roots_hybridsj.hpp"
 
+#define SQ(X) ((X)*(X))
+
 namespace radiationm1 {
 class BrentFunctor;
 
@@ -205,4 +207,7 @@ class HybridsjFunctor {
 };
 
 }  // namespace radiationm1
+
+#undef SQ
+
 #endif  // RADIATION_M1_ROOTS_FNS_H
