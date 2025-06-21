@@ -20,7 +20,8 @@ Primitive::UnitSystem Primitive::MakeCGS() {
 
     1.0, // length, cm
     1.0, // time, s
-    1.0, // density, g cm^-3
+    1.0, // number density cm^-3
+    1.0, // volume in cm^3
     1.0, // mass, g
     1.0, // energy, erg
     1.0, // pressure, erg/cm^3
@@ -39,16 +40,19 @@ Primitive::UnitSystem Primitive::MakeGeometricKilometer() {
 
     1e-5, // length, km
     CGS.c * 1e-5, // time, km
-    1e15, // number density, km^-3
+    1e-39, // number density fm^-3
+    1e-15, // volume in km^3
     CGS.G/(CGS.c*CGS.c)*1e-5, // mass, km
     CGS.G/(CGS.c*CGS.c*CGS.c*CGS.c)*1e-5, // energy, km
     CGS.G/(CGS.c*CGS.c*CGS.c*CGS.c)*1e10, // pressure, km^-2
     CGS.kb*CGS.G/(CGS.c*CGS.c*CGS.c*CGS.c)*1e-5, // temperature, km
-    CGS.kb/CGS.MeV, // chemical potential, MeV
+    1.0/CGS.MeV, // chemical potential, MeV
   };
 }
 
 Primitive::UnitSystem Primitive::MakeGeometricSolar() {
+  // 1 cm in geometric units
+  Real const cm = (CGS.c*CGS.c)/(CGS.G * CGS.Msun);
   return UnitSystem{
     1.0, // c
     1.0, // G
@@ -56,15 +60,16 @@ Primitive::UnitSystem Primitive::MakeGeometricSolar() {
     1.0, // Msun
     CGS.MeV / (CGS.c*CGS.c), // MeV, Msun
 
-    (CGS.c*CGS.c)/(CGS.G * CGS.Msun), // length, Msun
+    cm, // length, Msun
     PS_CUBE( CGS.c)/(CGS.G * CGS.Msun), // time, Msun
-    PS_CUBE( (CGS.G * CGS.Msun)/(CGS.c*CGS.c) ), // number density, Msun^-3
+    1.0e-39, // number density in fm^-3
+    PS_CUBE( cm ), // volume in Msun^3
     1.0 / CGS.Msun, // mass, Msun
     1.0 / (CGS.Msun * CGS.c*CGS.c), // energy, Msun
     PS_CUBE( CGS.G/(CGS.c*CGS.c) ) * PS_SQR( CGS.Msun/(CGS.c) ), // pressure, Msun^-2
 //     CGS.kb / (CGS.Msun * CGS.c*CGS.c), // temperature, Msun
     CGS.kb/CGS.MeV, // temperature, MeV
-    CGS.kb/CGS.MeV, // chemical potential, MeV
+    1.0/CGS.MeV, // chemical potential, MeV
   };
 }
 
@@ -79,11 +84,12 @@ Primitive::UnitSystem Primitive::MakeNuclear() {
     1e13, // length, fm
     CGS.c * 1e13, // time, fm
     1e-39, // number density, fm^-3
+    1e39, // volume in fm^3
     (CGS.c*CGS.c) / CGS.MeV, // mass, MeV
     1.0/CGS.MeV, // energy, MeV
     1e-39/CGS.MeV, // pressure, MeV/fm^3
     CGS.kb/CGS.MeV, // temperature, MeV
-    CGS.kb/CGS.MeV, // chemical potential, MeV
+    1.0/CGS.MeV, // chemical potential, MeV
   };
 }
 
@@ -97,12 +103,34 @@ Primitive::UnitSystem Primitive::MakeMKS() {
 
     1e-2,             // 1 cm in m
     1.0,              // 1 s in s
-    1e6,              // 1 cm^-3 in m^-3
+    1e6,              // 1 cm^{-3} in m^{-3}
+    1e-6,             // 1 cm^3 in m^3
     1e-3,             // 1 g in kg
     1e-7,             // 1 erg in J
     0.1,              // 1 dyne/cm in Pa
     1.0,              // 1 K in K
     1e-7,             // 1 erg in J
+  };
+}
+
+// nm-g-sec, but energy in MeV
+Primitive::UnitSystem Primitive::MakeNGS() {
+  Real const cm = 1e7; // nm
+  Real const s = 1;
+  Real const g = 1;
+  Real const K = CGS.kb/CGS.MeV;  // 1 K in MeV
+
+  Real const erg = 1/CGS.MeV;
+  Real const dyn = g/PS_SQR(s);
+
+  Real const c = CGS.c*cm/s;
+  Real const G = CGS.G*PS_CUBE(cm)/g/PS_SQR(s);
+  Real const kb = CGS.kb*erg/K;
+  Real const Msun = CGS.Msun*g;
+  Real const MeV = 1.0;
+
+  return UnitSystem{
+    c, G, kb, Msun, MeV, cm, s, 1/PS_CUBE(cm), PS_CUBE(cm), g, erg, dyn, K, erg,
   };
 }
 
