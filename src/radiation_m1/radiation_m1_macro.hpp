@@ -17,10 +17,11 @@
 
 #define M1_MULTIROOTS_DIM 4
 
+// TODO: remove these, since they duplicate unit_system.hpp
 #define HC_MEVCM 1.23984172e-10 // hc in units of MeV*cm
 #define MEV_TO_ERG 1.60217733e-6
-#define NORMFACT 1e50
 
+// TODO: remove this
 #define SQ(X) ((X) * (X))
 
 #endif // RADIATION_M1_MACRO_HPP

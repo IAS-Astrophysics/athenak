@@ -16,7 +16,7 @@
 #include "mesh/mesh.hpp"
 #include "parameter_input.hpp"
 
-#ifdef ENABLE_NURATES
+#if ENABLE_NURATES
 #include "bns_nurates/include/integration.hpp"
 #endif
 
@@ -95,7 +95,7 @@ RadiationM1::RadiationM1(MeshBlockPack *ppack, ParameterInput *pin)
   if (opacity_type == "toy") {
     params.opacity_type = Toy;
   } else if (opacity_type == "bns-nurates") {
-#ifdef ENABLE_NURATES
+#if ENABLE_NURATES
     params.opacity_type = BnsNurates;
 
     nurates_params.quad_nx = pin->GetOrAddInteger("bns_nurates", "nurates_quad_nx", 10);
@@ -105,7 +105,7 @@ RadiationM1::RadiationM1(MeshBlockPack *ppack, ParameterInput *pin)
         pin->GetOrAddReal("bns_nurate", "opacity_tau_delta", 1.0);
     nurates_params.opacity_corr_fac_max =
         pin->GetOrAddReal("bns_nurates", "opacity_corr_fac_max", 3.0);
-    nurates_params.nb_min_cgs = pin->GetOrAddReal("bns_nurates", "rho_min_cgs", 0.);
+    nurates_params.nb_min = pin->GetOrAddReal("bns_nurates", "rho_min_cgs", 0.);
     nurates_params.temp_min_mev = pin->GetOrAddReal("bns_nurates", "temp_min_mev", 0.);
 
     nurates_params.use_abs_em = pin->GetOrAddBoolean("bns_nurates", "use_abs_em", true);

@@ -89,7 +89,7 @@ class RadiationM1 {
   DvceArray5D<Real> u_mu_data;                      // fluid velocity (when mhd is off)
   AthenaTensor<Real, TensorSymm::NONE, 4, 1> u_mu;  // fluid 4-velocity (when mhd is off)
   RadiationM1Beam rad_m1_beam;  // beam ID values (only needed when beams on)
-#ifdef ENABLE_NURATES
+#if ENABLE_NURATES
   NuratesParams nurates_params{};  // pars for nurates (choice of reactions, quadratures)
 #endif
 

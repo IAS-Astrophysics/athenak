@@ -21,15 +21,16 @@ struct UnitSystem {
   Real G;    //! Gravitational constant
   Real kb;   //! Boltzmann constant
   Real Msun; //! Solar mass
-  Real MeV;  // 10^6 electronvolt
+  Real MeV;  //! 10^6 electronvolt
 
-  Real length;      //! Length unit
-  Real time;        //! Time unit
-  Real density;     //! Number density unit
-  Real mass;        //! Mass unit
-  Real energy;      //! Energy unit
-  Real pressure;    //! Pressure unit
-  Real temperature; //! Temperature unit
+  Real length;            //! Length unit
+  Real time;              //! Time unit
+  Real numberDensity;     //! Number density unit
+  Real volume;            //! Volume unit
+  Real mass;              //! Mass unit
+  Real energy;            //! Energy unit
+  Real pressure;          //! Pressure unit
+  Real temperature;       //! Temperature unit
   Real chemicalPotential; //! Chemical potential unit
 
   //! \defgroup conversiongroup Conversion Methods
@@ -49,8 +50,12 @@ struct UnitSystem {
     return b.length/length * time/b.time;
   }
 
-  KOKKOS_INLINE_FUNCTION constexpr Real DensityConversion(const UnitSystem& b) const {
-    return b.density/density;
+  KOKKOS_INLINE_FUNCTION constexpr Real NumberDensityConversion(const UnitSystem& b) const {
+    return b.numberDensity/numberDensity;
+  }
+
+  KOKKOS_INLINE_FUNCTION constexpr Real VolumeConversion(const UnitSystem& b) const {
+    return b.volume/volume;
   }
 
   KOKKOS_INLINE_FUNCTION constexpr Real MassConversion(const UnitSystem& b) const {
@@ -59,7 +64,7 @@ struct UnitSystem {
 
   KOKKOS_INLINE_FUNCTION constexpr
   Real MassDensityConversion(const UnitSystem & b) const {
-    return (b.density/density)*(b.mass/mass);
+    return (volume/b.volume)*(b.mass/mass);
   }
 
   KOKKOS_INLINE_FUNCTION constexpr Real EnergyConversion(const UnitSystem& b) const {
@@ -68,7 +73,7 @@ struct UnitSystem {
 
   KOKKOS_INLINE_FUNCTION constexpr
   Real EnergyDensityConversion(const UnitSystem& b) const {
-    return (b.density/density)*(b.energy/energy);
+    return (volume/b.volume)*(b.energy/energy);
   }
 
   KOKKOS_INLINE_FUNCTION constexpr Real EntropyConversion(const UnitSystem& b) const {
@@ -108,7 +113,8 @@ static UnitSystem CGS{
 
   1.0, // length, cm
   1.0, // time, s
-  1.0, // density, cm^-3
+  1.0, // number density, cm^-3
+  1.0, // volume, cm^3
   1.0, // mass, g
   1.0, // energy, erg
   1.0, // pressure, erg/cm^3
@@ -124,10 +130,12 @@ UnitSystem MakeGeometricKilometer();
   1.0, // kb
   CGS.Msun * CGS.G/(CGS.c*CGS.c)*1e-5, // Msun, km
   CGS.MeV * CGS.G/(CGS.c*CGS.c*CGS.c*CGS.c)*1e-5, // MeV, km
+  1.0e54, // rescale so that number densities are in fm^-3
 
   1e-5, // length, km
   CGS.c * 1e-5, // time, km
-  1e15, // number density, km^-3
+  1e-39, // number density in fm^-3
+  1e-15, // volume in km^3 
   CGS.G/(CGS.c*CGS.c)*1e-5, // mass, km
   CGS.G/(CGS.c*CGS.c*CGS.c*CGS.c)*1e-5, // energy, km
   CGS.G/(CGS.c*CGS.c*CGS.c*CGS.c)*1e10, // pressure, km^-2
@@ -145,7 +153,8 @@ UnitSystem MakeGeometricSolar();
 
   (CGS.c*CGS.c)/(CGS.G * CGS.Msun), // length, Msun
   PS_CUBE( CGS.c)/(CGS.G * CGS.Msun), // time, Msun
-  PS_CUBE( (CGS.G * CGS.Msun)/(CGS.c*CGS.c) ), // number density, Msun^-3
+  1e-39, // rescale so that number densities are in fm^-3
+  PS_CUBE( (CGS.c*CGS.c)/(CGS.G * CGS.Msun) ), // volume Msun^3
   1.0 / CGS.Msun, // mass, Msun
   1.0 / (CGS.Msun * CGS.c*CGS.c), // energy, Msun
   PS_CUBE( CGS.G/(CGS.c*CGS.c) ) * PS_SQR( CGS.Msun/(CGS.c) ), // pressure, Msun^-2
@@ -164,6 +173,7 @@ UnitSystem MakeNuclear();
   1e13, // length, fm
   CGS.c * 1e13, // time, fm
   1e-39, // number density, fm^-3
+  1e39, // volume in fm^3
   (CGS.c*CGS.c) / CGS.MeV, // mass, MeV
   1.0/CGS.MeV, // energy, MeV
   1e-39/CGS.MeV, // pressure, MeV/fm^3
@@ -172,6 +182,9 @@ UnitSystem MakeNuclear();
 
 //! MKS unit systems
 UnitSystem MakeMKS();
+
+//! NGS unit system (nanometer, gram, second, used by the nurates library)
+UnitSystem MakeNGS();
 
 } // namespace Primitive
 

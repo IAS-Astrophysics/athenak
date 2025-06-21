@@ -349,7 +349,7 @@ class EOS : public EOSPolicy, public ErrorPolicy {
    if constexpr (supports_potentials) {
     EOSPolicy::TrappedNeutrinos(n, T*code_units.TemperatureConversion(eos_units), Y, n_nu, e_nu);
 
-    Real n_units = eos_units.DensityConversion(code_units);
+    Real n_units = eos_units.NumberDensityConversion(code_units);
     Real e_units = eos_units.PressureConversion(code_units);
 
     for (int i=0; i<3; ++i) {
@@ -368,10 +368,8 @@ class EOS : public EOSPolicy, public ErrorPolicy {
   //  \param[in]    n_nu The number densities for each neutrino species (e, ae, m, am, t, at).
   //  \param[inout] Yl   The total lepton fractions.
   inline void GetLeptonFractions(Real n, Real *Y, Real n_nu[6], Real *Yl) const {
-    Real n_units = code_units.DensityConversion(eos_units);
-
     for (int i=0; i<3; ++i) {
-      Yl[i] = Y[i] + n_units*(n_nu[2*i] - n_nu[2*i+1])/n;
+      Yl[i] = Y[i] + (n_nu[2*i] - n_nu[2*i+1])/n;
     }
 
     return;
@@ -384,11 +382,12 @@ class EOS : public EOSPolicy, public ErrorPolicy {
   }
 
   //! \fn Real GetBaryonMass() const
-  //  \brief Get the baryon mass used by this EOS. Note that
-  //         this factor also converts the density.
+  //  \brief Get the baryon mass used by this EOS. Note that this factor
+  //         also converts from number density in EOS unit to code unitss.
   KOKKOS_INLINE_FUNCTION Real GetBaryonMass() const {
-    return mb*eos_units.MassConversion(code_units) *
-              eos_units.DensityConversion(code_units);
+    return mb * eos_units.MassConversion(code_units) *
+           (eos_units.NumberDensityConversion(code_units) /
+            eos_units.VolumeConversion(code_units));
   }
 
   //! \fn bool ApplyPrimitiveFloor(Real& n, Real& vu[3], Real& p, Real& T)

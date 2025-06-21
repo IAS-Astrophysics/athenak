@@ -85,7 +85,6 @@ if(Athena_ENABLE_NURATES)
   message(STATUS "Compiling with bns-nurates")
 else()
   set(ENABLE_NURATES 0)
-  message(STATUS "Not compiling with bns-nurates")
 endif ()
 
 # set number of neutrino species

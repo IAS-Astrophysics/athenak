@@ -90,7 +90,7 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm) :
     RadiationM1HybridsjTest(pin, false);
   } else if (pgen_fun_name.compare("rad_m1_spheretest") == 0) {
     RadiationM1SphereTest(pin, false);
-#ifdef ENABLE_NURATES
+#if ENABLE_NURATES
   } else if (pgen_fun_name.compare("rad_m1_singlezonetest") == 0) {
     RadiationM1SingleZoneTest(pin, false);
 #endif
