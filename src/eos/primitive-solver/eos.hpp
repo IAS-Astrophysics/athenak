@@ -383,7 +383,7 @@ class EOS : public EOSPolicy, public ErrorPolicy {
 
   //! \fn Real GetBaryonMass() const
   //  \brief Get the baryon mass used by this EOS. Note that this factor
-  //         also converts from number density in EOS unit to code unitss.
+  //         also converts from number density in EOS unit to mass density in code units.
   KOKKOS_INLINE_FUNCTION Real GetBaryonMass() const {
     return mb * eos_units.MassConversion(code_units) *
            (eos_units.NumberDensityConversion(code_units) /
