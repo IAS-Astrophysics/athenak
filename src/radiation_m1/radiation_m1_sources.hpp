@@ -14,6 +14,8 @@
 //! \file radiation_m1_macro.hpp
 //  \brief macros for Grey M1 radiation class
 
+#define SQ(X) ((X)*(X))
+
 namespace radiationm1 {
 
 //----------------------------------------------------------------------------------------
@@ -228,5 +230,9 @@ SrcSignal source_update(
 
   return SrcOk;
 }
+
 }  // namespace radiationm1
+
+#undef SQ
+
 #endif  // RADIATION_M1_SOURCES_HPP
