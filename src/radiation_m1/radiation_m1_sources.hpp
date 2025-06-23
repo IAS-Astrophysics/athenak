@@ -14,8 +14,6 @@
 //! \file radiation_m1_macro.hpp
 //  \brief macros for Grey M1 radiation class
 
-#define SQ(X) ((X)*(X))
-
 namespace radiationm1 {
 
 //----------------------------------------------------------------------------------------
@@ -34,8 +32,9 @@ MathSignal prepare_closure(const BrentFunctor &BrentFunc, const Real q[4],
 
   tensor_contract(src_params.g_uu, src_params.F_d, src_params.F_u);
 
-  //apply_closure(src_params.g_dd, src_params.g_uu, src_params.n_d, src_params.W, src_params.u_u, src_params.v_d, src_params.proj_ud, src_params.E, src_params.F_d,
-  //                          src_params.chi, src_params.P_dd, m1_params);
+  // apply_closure(src_params.g_dd, src_params.g_uu, src_params.n_d, src_params.W,
+  // src_params.u_u, src_params.v_d, src_params.proj_ud, src_params.E, src_params.F_d,
+  //                           src_params.chi, src_params.P_dd, m1_params);
   calc_closure(BrentFunc, src_params.g_dd, src_params.g_uu, src_params.n_d, src_params.W,
                src_params.u_u, src_params.v_d, src_params.proj_ud, src_params.E,
                src_params.F_d, src_params.chi, src_params.P_dd, m1_params, closure_type);
@@ -46,7 +45,8 @@ MathSignal prepare_closure(const BrentFunctor &BrentFunc, const Real q[4],
 //! \fn HybridsjSignal radiationm1::RadiationM1::prepare_sources
 //  \brief Sets T_dd, J, H_d, S_d, Edot and tS_d in src_params
 KOKKOS_INLINE_FUNCTION
-MathSignal prepare_sources(const Real q[4], SrcParams &src_params, const RadiationM1Params &params_) {
+MathSignal prepare_sources(const Real q[4], SrcParams &src_params,
+                           const RadiationM1Params &params_) {
   assemble_rT(src_params.n_d, src_params.E, src_params.F_d, src_params.P_dd,
               src_params.T_dd);
 
@@ -146,7 +146,8 @@ SrcSignal source_update(
 
   // cannot capture case tau << dt, go to equilibrium
   if (m1_params.source_thick_limit > 0 &&
-      SQ(cdt) * (kabs * (kabs + kscat)) > SQ(m1_params.source_thick_limit)) {
+      cdt * cdt * (kabs * (kabs + kscat)) >
+          m1_params.source_thick_limit * m1_params.source_thick_limit) {
     return SrcEquil;
   }
 
@@ -184,19 +185,21 @@ SrcSignal source_update(
       if (ierr == LinalgEbadfunc) {
         Kokkos::printf("source_update: NaNs/Infs found in implicit solve.\n");
       } else if (iter > m1_params.source_maxiter) {
-        Kokkos::printf("source_update: Exceeded maximum number of iterations of Hybridsj.\n");
+        Kokkos::printf(
+            "source_update: Exceeded maximum number of iterations of Hybridsj.\n");
       } else {
         Kokkos::printf("source_update: Non-linear solver is stuck.\n");
       }
       Kokkos::printf("source_update: Retrying with Eddington closure.\n");
 #endif
-      if (m1_params.closure_type != Eddington) { //@TODO: SYCL does not support recursive functions
+      if (m1_params.closure_type !=
+          Eddington) {  //@TODO: SYCL does not support recursive functions
         // Eddington closure
-        //auto signal = source_update(BrentFunc, HybridsjFunc, cdt, alp, g_dd, g_uu, n_d,
+        // auto signal = source_update(BrentFunc, HybridsjFunc, cdt, alp, g_dd, g_uu, n_d,
         //                            n_u, gamma_ud, u_d, u_u, v_d, v_u, proj_ud, W, Eold,
         //                           Fold_d, Estar, Fstar_d, eta, kabs, kscat, chi, Enew,
         //                            Fnew_d, m1_params, Eddington);
-        //if (signal == SrcOk) {
+        // if (signal == SrcOk) {
         //  return SrcEddington;
         //} else {
         //  return signal;
@@ -232,7 +235,5 @@ SrcSignal source_update(
 }
 
 }  // namespace radiationm1
-
-#undef SQ
 
 #endif  // RADIATION_M1_SOURCES_HPP
