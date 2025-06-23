@@ -8,8 +8,6 @@
 #include "radiation_m1/radiation_m1_params.hpp"
 #include "radiation_m1_roots_hybridsj.hpp"
 
-#define SQ(X) ((X)*(X))
-
 namespace radiationm1 {
 class BrentFunctor;
 
@@ -46,7 +44,7 @@ class BrentFunctor {
     apply_floor(g_uu, J, H_d, params);
 
     const Real H2 = tensor_dot(g_uu, H_d, H_d);
-    return SQ(J * xi) - H2;
+    return J * J * xi * xi - H2;
   }
 };
 
@@ -72,14 +70,14 @@ KOKKOS_INLINE_FUNCTION void source_jacobian(
   const Real vx = v_d(1);
   const Real vy = v_d(2);
   const Real vz = v_d(3);
-  const Real W2 = SQ(W);
+  const Real W2 = W * W;
   const Real W3 = W2 * W;
 
   const Real vdotF = F_u(1) * v_d(1) + F_u(2) * v_d(2) + F_u(3) * v_d(3);
   const Real normF = Kokkos::sqrt(F2);
   const Real inormF = (normF > 0 ? 1 / normF : 0);
   const Real vdothatf = vdotF * inormF;
-  const Real vdothatf2 = SQ(vdothatf);
+  const Real vdothatf2 = vdothatf * vdothatf;
   const Real hatfx = qpre[1] * inormF;  // hatf_i
   const Real hatfy = qpre[2] * inormF;
   const Real hatfz = qpre[3] * inormF;
@@ -207,7 +205,5 @@ class HybridsjFunctor {
 };
 
 }  // namespace radiationm1
-
-#undef SQ
 
 #endif  // RADIATION_M1_ROOTS_FNS_H
