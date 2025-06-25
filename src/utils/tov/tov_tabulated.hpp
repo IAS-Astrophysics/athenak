@@ -49,8 +49,9 @@ class TabulatedEOS {
 
     auto read_result = table.ReadTable(fname);
     if (read_result.error != TableReader::ReadResult::SUCCESS) {
-      std::cout << "TOV EOS table could not be read.\n";
-      assert(false);
+      std::cout << read_result.message << std::endl
+                << "TOV EOS table could not be read.\n";
+      std::exit(EXIT_FAILURE);
     }
 
     // Unit conversions
