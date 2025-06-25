@@ -120,10 +120,9 @@ void bns_nurates(Real &nb, Real &temp, Real &ye, Real &mu_n, Real &mu_p, Real &m
                  Real &sigma_1_nux, Real &sigma_1_anux, Real &scat_0_nue,
                  Real &scat_0_anue, Real &scat_0_nux, Real &scat_0_anux, Real &scat_1_nue,
                  Real &scat_1_anue, Real &scat_1_nux, Real &scat_1_anux,
-                 NuratesParams const & nurates_params,
-                 Primitive::UnitSystem const & code_units,
-                 Primitive::UnitSystem const & eos_units) {
-
+                 NuratesParams const &nurates_params,
+                 Primitive::UnitSystem const &code_units,
+                 Primitive::UnitSystem const &eos_units) {
   // compute unit conversion factors
   Primitive::UnitSystem nurates_units = Primitive::MakeNGS();
 
@@ -182,36 +181,38 @@ void bns_nurates(Real &nb, Real &temp, Real &ye, Real &mu_n, Real &mu_p, Real &m
   grey_op_params.opacity_pars.use_BRT_brem = nurates_params.use_BRT_brem;
 
   // populate EOS quantities
-  grey_op_params.eos_pars.nb = nb*unit_num_dens;  // [baryon/nm^3]
-  grey_op_params.eos_pars.temp = temp;      // [MeV]
-  grey_op_params.eos_pars.yp = ye;          // [dimensionless]
-  grey_op_params.eos_pars.yn = 1 - ye;      // [dimensionless]
-  grey_op_params.eos_pars.mu_e = mu_e;      // [MeV]
-  grey_op_params.eos_pars.mu_p = mu_p;      // [MeV]
-  grey_op_params.eos_pars.mu_n = mu_n;      // [MeV]
+  grey_op_params.eos_pars.nb = nb * unit_num_dens;  // [baryon/nm^3]
+  grey_op_params.eos_pars.temp = temp;              // [MeV]
+  grey_op_params.eos_pars.yp = ye;                  // [dimensionless]
+  grey_op_params.eos_pars.yn = 1 - ye;              // [dimensionless]
+  grey_op_params.eos_pars.mu_e = mu_e;              // [MeV]
+  grey_op_params.eos_pars.mu_p = mu_p;              // [MeV]
+  grey_op_params.eos_pars.mu_n = mu_n;              // [MeV]
 
   // @TODO: add these quantities!
   grey_op_params.eos_pars.dU = 0;      // [MeV]
   grey_op_params.eos_pars.dm_eff = 0;  // [MeV]
 
-  // populate M1 quantities
-  // Note: factor 1/2 comes because in M1 "nux" means "mu & tau" and in bns_nurates "nux"
-  // means "mu or tau"
-  grey_op_params.m1_pars.n[id_nue] = n_nue * unit_num_dens;  // [nm^-3]
-  grey_op_params.m1_pars.J[id_nue] = j_nue * unit_ene_dens;  // [g s^-2 nm^-1]
-  grey_op_params.m1_pars.chi[id_nue] = chi_nue;
-  grey_op_params.m1_pars.n[id_anue] = n_anue * unit_num_dens;  // [nm^-3]
-  grey_op_params.m1_pars.J[id_anue] = j_anue * unit_ene_dens;  // [g s^-2 nm^-1]
-  grey_op_params.m1_pars.chi[id_anue] = chi_anue;
-  grey_op_params.m1_pars.n[id_nux] = 0.5 * n_nux * unit_num_dens;  // [nm^-3]
-  grey_op_params.m1_pars.J[id_nux] = 0.5 * j_nux * unit_ene_dens;  // [g s^-2 nm^-1]
-  grey_op_params.m1_pars.chi[id_nux] = chi_nux;
-  grey_op_params.m1_pars.n[id_anux] = 0.5 * n_anux * unit_num_dens;  // [nm^-3]
-  grey_op_params.m1_pars.J[id_anux] = 0.5 * j_anux * unit_ene_dens;  // [g s^-2 nm^-1]
-  grey_op_params.m1_pars.chi[id_anux] = chi_anux;
-
   // reconstruct distribution function
   if (!nurates_params.use_equilibrium_distribution) {
+    // populate M1 quantities
+    // Note: factor 1/2 comes because in M1 "nux" means "mu & tau" and in bns_nurates
+    // "nux" means "mu or tau"
+    grey_op_params.m1_pars.n[id_nue] = n_nue * unit_num_dens;          // [nm^-3]
+    grey_op_params.m1_pars.n[id_anue] = n_anue * unit_num_dens;        // [nm^-3]
+    grey_op_params.m1_pars.n[id_nux] = 0.5 * n_nux * unit_num_dens;    // [nm^-3]
+    grey_op_params.m1_pars.n[id_anux] = 0.5 * n_anux * unit_num_dens;  // [nm^-3]
+
+    grey_op_params.m1_pars.J[id_nue] = j_nue * unit_ene_dens * kBS_MeV;         // [g s^-2 nm^-1]
+    grey_op_params.m1_pars.J[id_anue] = j_anue * unit_ene_dens * kBS_MeV;       // [g s^-2 nm^-1]
+    grey_op_params.m1_pars.J[id_nux] = 0.5 * j_nux * unit_ene_dens * kBS_MeV;   // [g s^-2 nm^-1]
+    grey_op_params.m1_pars.J[id_anux] = 0.5 * j_anux * unit_ene_dens * kBS_MeV; // [g s^-2 nm^-1]
+
+    grey_op_params.m1_pars.chi[id_nue] = chi_nue;
+    grey_op_params.m1_pars.chi[id_anue] = chi_anue;
+    grey_op_params.m1_pars.chi[id_nux] = chi_nux;
+    grey_op_params.m1_pars.chi[id_anux] = chi_anux;
+
     grey_op_params.distr_pars =
         CalculateDistrParamsFromM1(&grey_op_params.m1_pars, &grey_op_params.eos_pars);
   } else {
@@ -222,8 +223,13 @@ void bns_nurates(Real &nb, Real &temp, Real &ye, Real &mu_n, Real &mu_p, Real &m
     // N.B.: required for normalization factor of energy-averaged opacities
     ComputeM1DensitiesEq(&grey_op_params.eos_pars, &grey_op_params.distr_pars,
                          &grey_op_params.m1_pars);
+    // Convert J into g s^-2 nm^-1 units since the above function does not do that
+    grey_op_params.m1_pars.J[id_nue] *= kBS_MeV;
+    grey_op_params.m1_pars.J[id_anue] *= kBS_MeV;
+    grey_op_params.m1_pars.J[id_nux] *= kBS_MeV;
+    grey_op_params.m1_pars.J[id_anux] *= kBS_MeV;
 
-    // populate M1 quantities
+    // populate eddington factor
     grey_op_params.m1_pars.chi[id_nue] = 0.333333333333333333333333333;
     grey_op_params.m1_pars.chi[id_anue] = 0.333333333333333333333333333;
     grey_op_params.m1_pars.chi[id_nux] = 0.333333333333333333333333333;
@@ -295,8 +301,8 @@ void bns_nurates(Real &nb, Real &temp, Real &ye, Real &mu_n, Real &mu_p, Real &m
   assert(Kokkos::isfinite(scat_1_anux));
 
   // convert to code units
-  Real const unit_num_dens_dot = unit_num_dens/unit_time;
-  Real const unit_ene_dens_dot = unit_ene_dens/unit_time;
+  Real const unit_num_dens_dot = unit_num_dens / unit_time;
+  Real const unit_ene_dens_dot = unit_ene_dens / unit_time;
 
   R_nue = R_nue / unit_num_dens_dot;
   R_anue = R_anue / unit_num_dens_dot;
@@ -344,11 +350,11 @@ void bns_nurates(Real &nb, Real &temp, Real &ye, Real &mu_n, Real &mu_p, Real &m
 //   \param[in]  code_units      code units
 //   \param[in]  eos_units       eos units
 KOKKOS_INLINE_FUNCTION
-void NeutrinoDens(Real mu_n, Real mu_p, Real mu_e, Real temp, Real &n_nue,
-                  Real &n_anue, Real &n_nux, Real &en_nue, Real &en_anue, Real &en_nux,
-                  NuratesParams const & nurates_params,
-                  Primitive::UnitSystem const & code_units,
-                  Primitive::UnitSystem const & eos_units) {
+void NeutrinoDens(Real mu_n, Real mu_p, Real mu_e, Real temp, Real &n_nue, Real &n_anue,
+                  Real &n_nux, Real &en_nue, Real &en_anue, Real &en_nux,
+                  NuratesParams const &nurates_params,
+                  Primitive::UnitSystem const &code_units,
+                  Primitive::UnitSystem const &eos_units) {
   Real eta_nue = (mu_p + mu_e - mu_n) / temp;
   Real eta_anue = -eta_nue;
   Real eta_nux = 0.0;
@@ -377,7 +383,7 @@ void NeutrinoDens(Real mu_n, Real mu_p, Real mu_e, Real temp, Real &n_nue,
   // Note that the number densities are always in EOS units
   Real const unit_num_dens = cgs_units.NumberDensityConversion(eos_units);
   Real const unit_ene_dens =
-      cgs_units.EnergyDensityConversion(code_units) * cgs_units.MeV;
+      cgs_units.EnergyDensityConversion(code_units) * cgs_units.MeV; //@TODO: check this!
 
   n_nue = n_nue * unit_num_dens;
   n_anue = n_anue * unit_num_dens;
