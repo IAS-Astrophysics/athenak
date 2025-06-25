@@ -129,7 +129,6 @@ void bns_nurates(Real &nb, Real &temp, Real &ye, Real &mu_n, Real &mu_p, Real &m
 
   Real const unit_length = code_units.LengthConversion(nurates_units);
   Real const unit_time = code_units.VolumeConversion(nurates_units);
-  Real const unit_volume = code_units.VolumeConversion(nurates_units);
   // Note that the number densities are always in EOS units
   Real const unit_num_dens = eos_units.NumberDensityConversion(nurates_units);
   Real const unit_ene_dens = code_units.EnergyDensityConversion(nurates_units);
@@ -199,16 +198,16 @@ void bns_nurates(Real &nb, Real &temp, Real &ye, Real &mu_n, Real &mu_p, Real &m
   // Note: factor 1/2 comes because in M1 "nux" means "mu & tau" and in bns_nurates "nux"
   // means "mu or tau"
   grey_op_params.m1_pars.n[id_nue] = n_nue * unit_num_dens;  // [nm^-3]
-  grey_op_params.m1_pars.J[id_nue] = j_nue * unit_ene_dens;  // [MeV nm^-3]
+  grey_op_params.m1_pars.J[id_nue] = j_nue * unit_ene_dens;  // [g s^-2 nm^-1]
   grey_op_params.m1_pars.chi[id_nue] = chi_nue;
   grey_op_params.m1_pars.n[id_anue] = n_anue * unit_num_dens;  // [nm^-3]
-  grey_op_params.m1_pars.J[id_anue] = j_anue * unit_ene_dens;  // [MeV nm^-3]
+  grey_op_params.m1_pars.J[id_anue] = j_anue * unit_ene_dens;  // [g s^-2 nm^-1]
   grey_op_params.m1_pars.chi[id_anue] = chi_anue;
   grey_op_params.m1_pars.n[id_nux] = 0.5 * n_nux * unit_num_dens;  // [nm^-3]
-  grey_op_params.m1_pars.J[id_nux] = 0.5 * j_nux * unit_ene_dens;  // [MeV nm^-3]
+  grey_op_params.m1_pars.J[id_nux] = 0.5 * j_nux * unit_ene_dens;  // [g s^-2 nm^-1]
   grey_op_params.m1_pars.chi[id_nux] = chi_nux;
   grey_op_params.m1_pars.n[id_anux] = 0.5 * n_anux * unit_num_dens;  // [nm^-3]
-  grey_op_params.m1_pars.J[id_anux] = 0.5 * j_anux * unit_ene_dens;  // [MeV nm^-3]
+  grey_op_params.m1_pars.J[id_anux] = 0.5 * j_anux * unit_ene_dens;  // [g s^-2 nm^-1]
   grey_op_params.m1_pars.chi[id_anux] = chi_anux;
 
   // reconstruct distribution function
@@ -378,7 +377,7 @@ void NeutrinoDens(Real mu_n, Real mu_p, Real mu_e, Real temp, Real &n_nue,
   // Note that the number densities are always in EOS units
   Real const unit_num_dens = cgs_units.NumberDensityConversion(eos_units);
   Real const unit_ene_dens =
-      cgs_units.EnergyDensityConversion(code_units) / cgs_units.MeV;
+      cgs_units.EnergyDensityConversion(code_units) * cgs_units.MeV;
 
   n_nue = n_nue * unit_num_dens;
   n_anue = n_anue * unit_num_dens;

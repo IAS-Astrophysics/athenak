@@ -113,24 +113,25 @@ Primitive::UnitSystem Primitive::MakeMKS() {
   };
 }
 
-// nm-g-sec, but energy in MeV
+// nm-g-sec, but energy in nm^2 g s^-2
 Primitive::UnitSystem Primitive::MakeNGS() {
-  Real const cm = 1e7; // nm
+  Real const cm = 1e7;  // nm
   Real const s = 1;
   Real const g = 1;
-  Real const K = CGS.kb/CGS.MeV;  // 1 K in MeV
+  Real const K = CGS.kb / CGS.MeV;  // 1 K in MeV
 
-  Real const erg = 1/CGS.MeV;
-  Real const dyn = g/PS_SQR(s);
+  Real const erg = g * PS_SQR(cm / s);
+  Real const dyn = g / PS_SQR(s);
 
-  Real const c = CGS.c*cm/s;
-  Real const G = CGS.G*PS_CUBE(cm)/g/PS_SQR(s);
-  Real const kb = CGS.kb*erg/K;
-  Real const Msun = CGS.Msun*g;
+  Real const c = CGS.c * cm / s;
+  Real const G = CGS.G * PS_CUBE(cm) / g / PS_SQR(s);
+  Real const kb = CGS.kb * erg / K;
+  Real const Msun = CGS.Msun * g;
   Real const MeV = 1.0;
 
   return UnitSystem{
-    c, G, kb, Msun, MeV, cm, s, 1/PS_CUBE(cm), PS_CUBE(cm), g, erg, dyn, K, erg,
+      c,   G, kb,  Msun, MeV, cm, s, 1 / PS_CUBE(cm), PS_CUBE(cm), g, erg,
+      dyn, K, MeV,
   };
 }
 
