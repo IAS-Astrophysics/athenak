@@ -316,7 +316,7 @@ class EOS : public EOSPolicy, public ErrorPolicy {
   // \brief Get the equilibrium temperature and species fractions from the energy and total lepton fractions
   //
   //  \param[in]    n       The number density
-  //  \param[in]    e       The temperature
+  //  \param[in]    e       The total energy density (fluid plus neutrinos)
   //  \param[in]    Yl      An array of size n_species of the total lepton fractions.
   //  \param[inout] T_eq    The equilibrium temperature.
   //  \param[inout] Y_eq    The equilibrium particle fractions.
@@ -341,7 +341,7 @@ class EOS : public EOSPolicy, public ErrorPolicy {
   // \brief Get the trapped neutrino net number and energy densities.
   //
   //  \param[in]    n    The number density
-  //  \param[in]    e    The temperature
+  //  \param[in]    T    The temperature
   //  \param[in]    Y    An array of size n_species of the particle fractions.
   //  \param[inout] n_nu The net number densities for each neutrino generation.
   //  \param[inout] e_nu The total energy densities for each neutrino generation.
@@ -363,15 +363,15 @@ class EOS : public EOSPolicy, public ErrorPolicy {
     //! \fn Real GetLeptonFractions(Real n, Real *Y, Real n_nu[6], Real *Yl) 
   // \brief Get the total lepton fractions for each generation of matter from the species fractions and the neutrino number densities.
   //
-  //  \param[in]    n    The number density
+  //  \param[in]    n    The number density (N.B this should already be in EoS units, via rho/GetBaryonMass())
   //  \param[in]    Y    The particle fractions.
-  //  \param[in]    n_nu The number densities for each neutrino species (e, ae, m, am, t, at).
+  //  \param[in]    n_nu The number densities for each neutrino species (e, ae, m, am, t, at) (N.B. these are expected to be in code units).
   //  \param[inout] Yl   The total lepton fractions.
   inline void GetLeptonFractions(Real n, Real *Y, Real n_nu[6], Real *Yl) {
     Real n_units = code_units->DensityConversion(*eos_units);
 
     for (int i=0; i<3; ++i) {
-      Yl[i] = Y[i] + (n_nu[2*i] - n_nu[2*i+1])/n;
+      Yl[i] = Y[i] + n_units*(n_nu[2*i] - n_nu[2*i+1])/n;
     }
 
     return;

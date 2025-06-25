@@ -31,6 +31,7 @@ class TabulatedEOS {
   Real lP_min;
   Real lP_max;
 
+  bool has_ye = false;
   Real ye_atmosphere;
 
   std::string fname;
@@ -75,12 +76,13 @@ class TabulatedEOS {
     // Get table dimensions
     auto& point_info = table.GetPointInfo();
     m_nn = point_info[0].second;
+    has_ye = table.HasField("Y[e]");
 
     // Allocate storage
     Kokkos::realloc(m_log_rho, m_nn);
     Kokkos::realloc(m_log_p, m_nn);
     Kokkos::realloc(m_log_e, m_nn);
-    Kokkos::realloc(m_ye, m_nn);
+    if (has_ye) {Kokkos::realloc(m_ye, m_nn);}
 
     // Read rho
     test_field(table.HasField("nb"), "nb");
@@ -112,11 +114,13 @@ class TabulatedEOS {
                                     unit_nuc.EnergyDensityConversion(unit_geo));
     }
 
-    // Read electron fraction
-    test_field(table.HasField("Y[e]"), "Y[e]");
-    Real * table_ye = table["Y[e]"];
-    for (size_t in = 0; in < m_nn; in++) {
-      m_ye.h_view(in) = table_ye[in];
+
+    // Read electron fraction (optional)
+    if (has_ye) {
+      Real * table_ye = table["Y[e]"];
+      for (size_t in = 0; in < m_nn; in++) {
+        m_ye.h_view(in) = table_ye[in];
+      }
     }
 
     std::cout << "Loaded table " << fname << std::endl
@@ -129,12 +133,12 @@ class TabulatedEOS {
     m_log_rho.template modify<HostMemSpace>();
     m_log_p.template modify<HostMemSpace>();
     m_log_e.template modify<HostMemSpace>();
-    m_ye.template modify<HostMemSpace>();
+    if (has_ye) {m_ye.template modify<HostMemSpace>();}
 
     m_log_rho.template sync<DevExeSpace>();
     m_log_p.template sync<DevExeSpace>();
     m_log_e.template sync<DevExeSpace>();
-    m_ye.template sync<DevExeSpace>();
+    if (has_ye) {m_ye.template sync<DevExeSpace>();}
   }
 
   template<LocationTag loc>
@@ -177,7 +181,7 @@ class TabulatedEOS {
   KOKKOS_INLINE_FUNCTION
   Real GetYeFromRho(Real rho) const {
     Real lrho = log(rho);
-    if (lrho < lrho_min) {
+    if (lrho < lrho_min || !has_ye) {
       return ye_atmosphere;
     }
     int lb = static_cast<int>((lrho-lrho_min)/dlrho);
