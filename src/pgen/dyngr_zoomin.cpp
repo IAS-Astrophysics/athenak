@@ -225,21 +225,29 @@ class BackgroundData {
     file_basename = pin->GetString("problem", "file_basename");
     fnmin = pin->GetInteger("problem", "fnmin");
     fnmax = pin->GetInteger("problem", "fnmax");
+    ncache = pin->GetOrAddInteger("problem", "ncache", 128);
+    if (ncache < 2) {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+                << "problem/ncache needs to be 2 or larger"
+                << std::endl;
+      exit(EXIT_FAILURE);
+    }
     Kokkos::realloc(cheb_data, NVARS, N + 1, N + 1, N + 1);
 #ifdef DEBUG_PGEN
     printf("Reading cart data...");
     fflush(stdout);
 #endif
-    ReadData();
+    ReadMetaData();
+    ReadData(fnmin);
 #ifdef DEBUG_PGEN
     printf("done!\n");
 #endif
   }
-  void ReadData() {
+
+  void ReadMetaData() {
     Real center[3], extent[3];
     int ndumps = fnmax - fnmin + 1;
     mtimes.resize(ndumps);
-    Kokkos::realloc(m_raw_data, ndumps, NVARS, N + 1, N + 1, N + 1);
     if (0 == global_variable::my_rank) {
       for (int n = fnmin; n <= fnmax; ++n) {
         char fname[BUFSIZ];
@@ -255,6 +263,32 @@ class BackgroundData {
               extent[d] = cart.mdata.extent[d];
             }
           }
+        }
+      }
+    }
+#if MPI_PARALLEL_ENABLED
+    MPI_Bcast(&center[0], 3, MPI_ATHENA_REAL, 0, MPI_COMM_WORLD);
+    MPI_Bcast(&extent[0], 3, MPI_ATHENA_REAL, 0, MPI_COMM_WORLD);
+    MPI_Bcast(mtimes.data(), mtimes.size(), MPI_ATHENA_REAL, 0, MPI_COMM_WORLD);
+#endif
+    xmin = center[0] - extent[0];
+    xmax = center[0] + extent[0];
+    ymin = center[1] - extent[1];
+    ymax = center[1] + extent[1];
+    zmin = center[2] - extent[2];
+    zmax = center[2] + extent[2];
+  }
+
+  void ReadData(int f0) {
+    m_fn_start = f0;
+    Kokkos::realloc(m_raw_data, ncache, NVARS, N + 1, N + 1, N + 1);
+    if (0 == global_variable::my_rank) {
+      for (int n = f0; n < f0 + ncache; ++n) {
+        char fname[BUFSIZ];
+        {
+          snprintf(fname, BUFSIZ, "%s.%s.%05d.bin", file_basename.c_str(),
+                   "mhd_w_bcc", n);
+          CartesianDumpReader cart(fname);
           for (int vi = IDN; vi <= IBZ; ++vi) {
 #define BACKGROUND_DATA_READ_VARIABLE_FROM_FILE(XX)                      \
   std::vector<float> const &var = cart.data.at(std::string(vnames[XX])); \
@@ -262,7 +296,7 @@ class BackgroundData {
   for (int k = 0; k <= N; ++k) {                                         \
     for (int j = 0; j <= N; ++j) {                                       \
       for (int i = 0; i <= N; ++i) {                                     \
-        m_raw_data(n - fnmin, XX, k, j, i) = var[ijk++];                 \
+        m_raw_data(n - f0, XX, k, j, i) = var[ijk++];                    \
       }                                                                  \
     }                                                                    \
   }
@@ -315,26 +349,24 @@ class BackgroundData {
       }
     }
 #if MPI_PARALLEL_ENABLED
-    MPI_Bcast(&center[0], 3, MPI_ATHENA_REAL, 0, MPI_COMM_WORLD);
-    MPI_Bcast(&extent[0], 3, MPI_ATHENA_REAL, 0, MPI_COMM_WORLD);
-    MPI_Bcast(mtimes.data(), mtimes.size(), MPI_ATHENA_REAL, 0,
-              MPI_COMM_WORLD);
     MPI_Bcast(m_raw_data.data(), m_raw_data.size(), MPI_FLOAT, 0,
               MPI_COMM_WORLD);
 #endif
-    xmin = center[0] - extent[0];
-    xmax = center[0] + extent[0];
-    ymin = center[1] - extent[1];
-    ymax = center[1] + extent[1];
-    zmin = center[2] - extent[2];
-    zmax = center[2] + extent[2];
   }
+
   void ExtractSlice(int idx) {
+    if (idx < m_fn_start) {
+      ReadData(idx);
+    }
+    if (idx >= m_fn_start + ncache) {
+      ReadData(idx);
+    }
+
     for (int vi = 0; vi < NVARS; ++vi) {
       for (int k = 0; k <= N; ++k) {
         for (int j = 0; j <= N; ++j) {
           for (int i = 0; i <= N; ++i) {
-            cheb_data.h_view(vi, k, j, i) = m_raw_data(idx, vi, k, j, i);
+            cheb_data.h_view(vi, k, j, i) = m_raw_data(idx - m_fn_start, vi, k, j, i);
           }
         }
       }
@@ -343,6 +375,7 @@ class BackgroundData {
       cheb_data.template sync<DevExeSpace>();
     }
   }
+
   void InterpToTime(Real time) {
     time += mtimes.front();
     if (time <= mtimes.front()) {
@@ -351,18 +384,23 @@ class BackgroundData {
       ExtractSlice(mtimes.size() - 1);
     } else {
       auto tp = std::lower_bound(mtimes.begin(), mtimes.end(), time);
-      int ioff = std::distance(mtimes.begin(), tp) - 1;
-      assert(ioff >= 0 && ioff < mtimes.size() - 1);
+      int idx = std::distance(mtimes.begin(), tp) + fnmin - 1;
+      assert(idx >= fnmin && idx <= fnmax);
 
-      Real w = (time - mtimes[ioff]) / (mtimes[ioff + 1] - mtimes[ioff]);
+      if (idx < m_fn_start || idx >= m_fn_start + ncache - 1) {
+        ReadData(idx);
+      }
+
+      Real w = (time - mtimes[idx - fnmin]) /
+               (mtimes[idx + 1 - fnmin] - mtimes[idx - fnmin]);
 
       for (int vi = 0; vi < NVARS; ++vi) {
         for (int k = 0; k <= N; ++k) {
           for (int j = 0; j <= N; ++j) {
             for (int i = 0; i <= N; ++i) {
               cheb_data.h_view(vi, k, j, i) =
-                  (1.0 - w) * m_raw_data(ioff, vi, k, j, i) +
-                  w * m_raw_data(ioff + 1, vi, k, j, i);
+                  (1.0 - w) * m_raw_data(idx - m_fn_start, vi, k, j, i) +
+                  w * m_raw_data(idx + 1 - m_fn_start, vi, k, j, i);
             }
           }
         }
@@ -379,9 +417,11 @@ class BackgroundData {
 
   std::string file_basename;
   int fnmin, fnmax;  // minimum/maximum file numbers to read
+  int ncache;  // number of snapshots to keep in memory
 
  private:
   std::vector<Real> mtimes;      // time of all the frames
+  int m_fn_start;                // index of first file actually read
   HostArray5D<float> m_raw_data; // data as a function of time for all fields
                                  // on the Chebyshev grid
 };
