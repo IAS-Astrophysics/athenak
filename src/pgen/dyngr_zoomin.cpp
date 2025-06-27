@@ -36,7 +36,7 @@
 //#define DEBUG_PGEN
 
 #ifndef NCHEBY
-#define NCHEBY 15
+#define NCHEBY 23
 #endif
 
 #ifndef NSTENCIL
@@ -262,7 +262,7 @@ class BackgroundData {
   for (int k = 0; k <= N; ++k) {                                         \
     for (int j = 0; j <= N; ++j) {                                       \
       for (int i = 0; i <= N; ++i) {                                     \
-        m_raw_data(n - fnmin, XX, k, j, i) = static_cast<Real>(var[ijk++]); \
+        m_raw_data(n - fnmin, XX, k, j, i) = var[ijk++];                 \
       }                                                                  \
     }                                                                    \
   }
@@ -319,7 +319,7 @@ class BackgroundData {
     MPI_Bcast(&extent[0], 3, MPI_ATHENA_REAL, 0, MPI_COMM_WORLD);
     MPI_Bcast(mtimes.data(), mtimes.size(), MPI_ATHENA_REAL, 0,
               MPI_COMM_WORLD);
-    MPI_Bcast(m_raw_data.data(), m_raw_data.size(), MPI_ATHENA_REAL, 0,
+    MPI_Bcast(m_raw_data.data(), m_raw_data.size(), MPI_FLOAT, 0,
               MPI_COMM_WORLD);
 #endif
     xmin = center[0] - extent[0];
@@ -381,8 +381,8 @@ class BackgroundData {
   int fnmin, fnmax;  // minimum/maximum file numbers to read
 
  private:
-  std::vector<Real> mtimes;     // time of all the frames
-  HostArray5D<Real> m_raw_data;  // data as a function of time for all fields
+  std::vector<Real> mtimes;      // time of all the frames
+  HostArray5D<float> m_raw_data; // data as a function of time for all fields
                                  // on the Chebyshev grid
 };
 
