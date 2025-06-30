@@ -203,10 +203,10 @@ void bns_nurates(Real &nb, Real &temp, Real &ye, Real &mu_n, Real &mu_p, Real &m
     grey_op_params.m1_pars.n[id_nux] = 0.5 * n_nux * unit_num_dens;    // [nm^-3]
     grey_op_params.m1_pars.n[id_anux] = 0.5 * n_anux * unit_num_dens;  // [nm^-3]
 
-    grey_op_params.m1_pars.J[id_nue] = j_nue * unit_ene_dens * kBS_MeV;         // [g s^-2 nm^-1]
-    grey_op_params.m1_pars.J[id_anue] = j_anue * unit_ene_dens * kBS_MeV;       // [g s^-2 nm^-1]
-    grey_op_params.m1_pars.J[id_nux] = 0.5 * j_nux * unit_ene_dens * kBS_MeV;   // [g s^-2 nm^-1]
-    grey_op_params.m1_pars.J[id_anux] = 0.5 * j_anux * unit_ene_dens * kBS_MeV; // [g s^-2 nm^-1]
+    grey_op_params.m1_pars.J[id_nue] = j_nue * unit_ene_dens;         // [MeV nm^-3]
+    grey_op_params.m1_pars.J[id_anue] = j_anue * unit_ene_dens;       // [MeV nm^-3]
+    grey_op_params.m1_pars.J[id_nux] = 0.5 * j_nux * unit_ene_dens;   // [MeV nm^-3]
+    grey_op_params.m1_pars.J[id_anux] = 0.5 * j_anux * unit_ene_dens; // [MeV nm^-3]
 
     grey_op_params.m1_pars.chi[id_nue] = chi_nue;
     grey_op_params.m1_pars.chi[id_anue] = chi_anue;
@@ -223,11 +223,6 @@ void bns_nurates(Real &nb, Real &temp, Real &ye, Real &mu_n, Real &mu_p, Real &m
     // N.B.: required for normalization factor of energy-averaged opacities
     ComputeM1DensitiesEq(&grey_op_params.eos_pars, &grey_op_params.distr_pars,
                          &grey_op_params.m1_pars);
-    // Convert J into g s^-2 nm^-1 units since the above function does not do that
-    grey_op_params.m1_pars.J[id_nue] *= kBS_MeV;
-    grey_op_params.m1_pars.J[id_anue] *= kBS_MeV;
-    grey_op_params.m1_pars.J[id_nux] *= kBS_MeV;
-    grey_op_params.m1_pars.J[id_anux] *= kBS_MeV;
 
     // populate eddington factor
     grey_op_params.m1_pars.chi[id_nue] = 0.333333333333333333333333333;

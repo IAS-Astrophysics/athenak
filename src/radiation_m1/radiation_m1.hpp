@@ -63,9 +63,9 @@ class RadiationM1 {
 
   ToyOpacity toy_opacity_fn{};  // use only if toy opacities enabled
 
-  int nvars;                   // no. of evolved variables per species
-  int nspecies;                // no. of species
-  int nvarstot;                // total no. of evolved variables
+  int nvars;     // no. of evolved variables per species
+  int nspecies;  // no. of species
+  int nvarstot;  // total no. of evolved variables
   bool ismhd;
   RadiationM1Params params{};  // user parameters for grey M1
 
@@ -105,6 +105,7 @@ class RadiationM1 {
   TaskStatus RecvFlux(Driver* d, int stage);
   TaskStatus TimeUpdate(Driver* d, int stage);
   TaskStatus CalcOpacityNurates(Driver* pdrive, int stage);
+  TaskStatus CalcOpacityPhotons(Driver* pdrive, int stage);
   TaskStatus CalcOpacityToy(Driver* pdrive, int stage);
   TaskStatus RestrictU(Driver* d, int stage);
   TaskStatus SendU(Driver* d, int stage);
@@ -119,6 +120,8 @@ class RadiationM1 {
   // eos related quantites (only when mhd is on)
   template <class EOSPolicy, class ErrorPolicy>
   TaskStatus CalcOpacityNurates_(Driver* pdrive, int stage);
+  template <class EOSPolicy, class ErrorPolicy>
+  TaskStatus CalcOpacityPhotons_(Driver* pdrive, int stage);
   template <class EOSPolicy, class ErrorPolicy, int M1_NGHOST>
   TaskStatus TimeUpdate_(Driver* d, int stage);
 
