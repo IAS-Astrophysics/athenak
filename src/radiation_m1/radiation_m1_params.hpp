@@ -31,6 +31,7 @@ enum RadiationM1OpacityType {
   None,
   Toy,
   BnsNurates,
+  Photons,
 };
 
 //----------------------------------------------------------------------------------------
