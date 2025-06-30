@@ -188,6 +188,7 @@ add_executable(
         pgen/tests/rad_m1_spheretest.cpp
         pgen/tests/rad_m1_hybridsj.cpp
         radiation_m1/radiation_m1_toy.hpp
+        radiation_m1/radiation_m1_calc_opacities_photons.cpp
 )
 
 # add bns_nurates

@@ -142,6 +142,8 @@ RadiationM1::RadiationM1(MeshBlockPack *ppack, ParameterInput *pin)
               << std::endl;
     exit(EXIT_FAILURE);
 #endif
+  } else if (opacity_type == "photons") {
+    params.opacity_type = Photons;
   } else if (opacity_type == "none") {
     params.opacity_type = None;
   } else {
