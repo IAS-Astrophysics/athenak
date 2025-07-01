@@ -17,6 +17,7 @@
 #include "bvals/bvals.hpp"
 #include "parameter_input.hpp"
 #include "radiation_m1/radiation_m1_params.hpp"
+#include "radiation_m1/radiation_m1_photon_opacities.hpp"
 #include "radiation_m1/radiation_m1_roots_fns.hpp"
 #include "radiation_m1/radiation_m1_toy.hpp"
 #include "tasklist/task_list.hpp"
@@ -63,11 +64,17 @@ class RadiationM1 {
 
   ToyOpacity toy_opacity_fn{};  // use only if toy opacities enabled
 
-  int nvars;     // no. of evolved variables per species
-  int nspecies;  // no. of species
-  int nvarstot;  // total no. of evolved variables
-  bool ismhd;
-  RadiationM1Params params{};  // user parameters for grey M1
+  int nvars;                               // no. of evolved variables per species
+  int nspecies;                            // no. of species
+  int nvarstot;                            // total no. of evolved variables
+  bool ismhd;                              // flag to check if <mhd> present
+  bool ishydro;                            // flag to check if <hydro> present
+  bool isunits;                            // flag to check if <units> present
+  RadiationM1Params params{};              // user parameters for grey M1
+  PhotonOpacityParams photon_op_params{};  // params for photon opacities
+#if ENABLE_NURATES
+  NuratesParams nurates_params{};  // params for nurates (reactions, quadratures, etc)
+#endif
 
   DvceArray5D<Real> u0;              // evolved variables
   DvceArray5D<Real> coarse_u0;       // evolved variables on 2x coarser grid
@@ -89,9 +96,6 @@ class RadiationM1 {
   DvceArray5D<Real> u_mu_data;                      // fluid velocity (when mhd is off)
   AthenaTensor<Real, TensorSymm::NONE, 4, 1> u_mu;  // fluid 4-velocity (when mhd is off)
   RadiationM1Beam rad_m1_beam;  // beam ID values (only needed when beams on)
-#if ENABLE_NURATES
-  NuratesParams nurates_params{};  // pars for nurates (choice of reactions, quadratures)
-#endif
 
   // functions...
   void AssembleRadiationM1Tasks(std::map<std::string, std::shared_ptr<TaskList>> tl);

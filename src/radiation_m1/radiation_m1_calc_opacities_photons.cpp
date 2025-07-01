@@ -10,9 +10,11 @@
 #include "coordinates/adm.hpp"
 #include "dyn_grmhd/dyn_grmhd.hpp"
 #include "eos/primitive-solver/unit_system.hpp"
-#include "radiation_m1/radiation_m1.hpp"
 #include "radiation/radiation_opacities.hpp"
+#include "radiation_m1/radiation_m1.hpp"
 #include "units/units.hpp"
+#include "eos/eos.hpp"
+#include "hydro/hydro.hpp"
 
 namespace radiationm1 {
 
@@ -59,8 +61,6 @@ TaskStatus RadiationM1::CalcOpacityPhotons_(Driver *pdrive, int stage) {
   auto &m1_params_ = params;
   auto &nurates_params_ = nurates_params;
 
-  auto &eta_0_ = eta_0;
-  auto &abs_0_ = abs_0;
   auto &eta_1_ = eta_1;
   auto &abs_1_ = abs_1;
   auto &scat_1_ = scat_1;
@@ -81,13 +81,31 @@ TaskStatus RadiationM1::CalcOpacityPhotons_(Driver *pdrive, int stage) {
   auto code_units = eos.GetCodeUnitSystem();
   auto eos_units = eos.GetEOSUnitSystem();
 
-  Real density_scale_ = pmy_pack->punit->density_cgs();
-  Real temperature_scale_ = pmy_pack->punit->temperature_cgs();
-  Real length_scale_ = pmy_pack->punit->length_cgs();
-  Real mean_mol_weight_ = pmy_pack->punit->mu();
-  Real rosseland_coef_ = pmy_pack->punit->rosseland_coef_cgs;
-  Real planck_minus_rosseland_coef_ = pmy_pack->punit->planck_minus_rosseland_coef_cgs;
-  Real inv_t_electron_ = temperature_scale_ / pmy_pack->punit->electron_rest_mass_energy_cgs;
+  // Extract radiation constant and units
+  Real &arad_ = photon_op_params.arad;
+  Real density_scale_ = 1.0, temperature_scale_ = 1.0, length_scale_ = 1.0;
+  Real mean_mol_weight_ = 1.0;
+  Real rosseland_coef_ = 1.0, planck_minus_rosseland_coef_ = 0.0;
+  if (isunits) {
+    density_scale_ = pmy_pack->punit->density_cgs();
+    temperature_scale_ = pmy_pack->punit->temperature_cgs();
+    length_scale_ = pmy_pack->punit->length_cgs();
+    mean_mol_weight_ = pmy_pack->punit->mu();
+    rosseland_coef_ = pmy_pack->punit->rosseland_coef_cgs;
+    planck_minus_rosseland_coef_ = pmy_pack->punit->planck_minus_rosseland_coef_cgs;
+  }
+
+  bool power_opacity_ = photon_op_params.is_power_opacity;
+  Real kappa_a_ = photon_op_params.kappa_a;
+  Real kappa_s_ = photon_op_params.kappa_s;
+  Real kappa_p_ = photon_op_params.kappa_p;
+
+  Real gm1{};
+  if (ishydro) {
+    gm1 = pmy_pack->phydro->peos->eos_data.gamma - 1.0;
+  } else if (ismhd) {
+    gm1 = pmy_pack->pmhd->peos->eos_data.gamma - 1.0;
+  }
 
   par_for(
       "radiation_m1_calc_opacity_photons", DevExeSpace(), 0, nmb1, ks, ke, js, je, is, ie,
@@ -171,10 +189,12 @@ TaskStatus RadiationM1::CalcOpacityPhotons_(Driver *pdrive, int stage) {
           Real J = calc_J_from_rT(T_dd, u_u);
 
           // fluid quantities
-          Real nb = w0_(m, IDN, k, j, i) / mb;
-          Real p = w0_(m, IPR, k, j, i);
-          Real Y = w0_(m, IYF, k, j, i);
-          Real T = eos.GetTemperatureFromP(nb, p, &Y);
+          Real &wdn = w0_(m,IDN,k,j,i);
+          Real &wen = w0_(m,IEN,k,j,i);
+
+          // derived quantities
+          Real pgas = gm1*wen;
+          Real tgas = pgas/wdn;
 
           // local undensitized photon quantities
           Real nudens_1 = J / volform;
@@ -185,10 +205,10 @@ TaskStatus RadiationM1::CalcOpacityPhotons_(Driver *pdrive, int stage) {
 
           // set photon opacities
           Real sigma_a, sigma_s, sigma_p;
-          //OpacityFunction(wdn, density_scale_, tgas, temperature_scale_, length_scale_,
-          //                gm1, mean_mol_weight_, power_opacity_, rosseland_coef_,
-          //                planck_minus_rosseland_coef_, kappa_a_, kappa_s_, kappa_p_,
-          //                sigma_a, sigma_s, sigma_p);
+          OpacityFunction(wdn, density_scale_, tgas, temperature_scale_, length_scale_,
+                          gm1, mean_mol_weight_, power_opacity_, rosseland_coef_,
+                         planck_minus_rosseland_coef_, kappa_a_, kappa_s_, kappa_p_,
+                          sigma_a, sigma_s, sigma_p);
 
           assert(Kokkos::isfinite(eta_1_loc));
           assert(Kokkos::isfinite(abs_1_loc));
