@@ -15,6 +15,7 @@
 #include "athena.hpp"
 #include "mesh/mesh.hpp"
 #include "parameter_input.hpp"
+#include "units/units.hpp"
 
 #if ENABLE_NURATES
 #include "bns_nurates/include/integration.hpp"
@@ -34,7 +35,10 @@ RadiationM1::RadiationM1(MeshBlockPack *ppack, ParameterInput *pin)
       chi("chi", 1, 1, 1, 1, 1),
       uflx("rad_uflx", 1, 1, 1, 1, 1) {
   // set up parameters and flags
+  ishydro = pin->DoesBlockExist("hydro");
+  isunits = pin->DoesBlockExist("units");
   ismhd = pin->DoesBlockExist("mhd");
+
   nspecies = M1_TOTAL_NUM_SPECIES;
 
   params.gr_sources = pin->GetOrAddBoolean("radiation_m1", "gr_sources", true);
@@ -47,8 +51,8 @@ RadiationM1::RadiationM1(MeshBlockPack *ppack, ParameterInput *pin)
       pin->GetOrAddReal("radiation_m1", "inv_closure_epsilon", 1e-15);
   params.inv_closure_maxiter =
       pin->GetOrAddInteger("radiation_m1", "inv_closure_maxiter", 64);
-  params.rad_N_floor = pin->GetOrAddReal("radiation_m1", "rad_N_floor", 1e-14);
-  params.rad_E_floor = pin->GetOrAddReal("radiation_m1", "rad_E_floor", 1e-14);
+  params.rad_N_floor = pin->GetOrAddReal("radiation_m1", "rad_N_floor", 1e-20);
+  params.rad_E_floor = pin->GetOrAddReal("radiation_m1", "rad_E_floor", 1e-20);
   params.rad_eps = pin->GetOrAddReal("radiation_m1", "rad_eps", 1e-14);
   params.source_epsabs = pin->GetOrAddReal("radiation_m1", "source_epsabs", 1e-15);
   params.source_epsrel = pin->GetOrAddReal("radiation_m1", "source_epsrel", 1e-15);
@@ -144,6 +148,28 @@ RadiationM1::RadiationM1(MeshBlockPack *ppack, ParameterInput *pin)
 #endif
   } else if (opacity_type == "photons") {
     params.opacity_type = Photons;
+
+    photon_op_params.kappa_s = pin->GetReal("photons", "kappa_s");
+    photon_op_params.is_power_opacity =
+        pin->GetOrAddBoolean("photons", "power_opacity", false);
+    if (!(photon_op_params.is_power_opacity)) {
+      photon_op_params.kappa_a = pin->GetReal("photons", "kappa_a");
+      photon_op_params.kappa_p = pin->GetReal("photons", "kappa_p");
+    }
+    photon_op_params.is_compton = pin->GetOrAddBoolean("photons", "compton", false);
+    if (photon_op_params.is_compton && !(isunits)) {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                << std::endl
+                << "Compton requires enabling units" << std::endl;
+      std::exit(EXIT_FAILURE);
+    }
+    if (isunits) {
+      photon_op_params.arad = (pmy_pack->punit->rad_constant_cgs *
+                               SQR(SQR(pmy_pack->punit->temperature_cgs())) /
+                               pmy_pack->punit->pressure_cgs());
+    } else {
+      photon_op_params.arad = pin->GetReal("photons", "arad");
+    }
   } else if (opacity_type == "none") {
     params.opacity_type = None;
   } else {
