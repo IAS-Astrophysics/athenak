@@ -1,6 +1,14 @@
 #ifndef RADIATION_M1_NURATES_HPP
 #define RADIATION_M1_NURATES_HPP
 
+//========================================================================================
+// AthenaXXX astrophysical plasma code
+// Copyright(C) 2020 James M. Stone <jmstone@ias.edu> and the Athena code team
+// Licensed under the 3-clause BSD License (the "LICENSE")
+//========================================================================================
+//! \file radiation_m1_nurates.hpp
+//  \brief structs and functions for bns_nurates
+
 #include "config.hpp"
 
 #if ENABLE_NURATES
@@ -203,10 +211,10 @@ void bns_nurates(Real &nb, Real &temp, Real &ye, Real &mu_n, Real &mu_p, Real &m
     grey_op_params.m1_pars.n[id_nux] = 0.5 * n_nux * unit_num_dens;    // [nm^-3]
     grey_op_params.m1_pars.n[id_anux] = 0.5 * n_anux * unit_num_dens;  // [nm^-3]
 
-    grey_op_params.m1_pars.J[id_nue] = j_nue * unit_ene_dens;         // [MeV nm^-3]
-    grey_op_params.m1_pars.J[id_anue] = j_anue * unit_ene_dens;       // [MeV nm^-3]
-    grey_op_params.m1_pars.J[id_nux] = 0.5 * j_nux * unit_ene_dens;   // [MeV nm^-3]
-    grey_op_params.m1_pars.J[id_anux] = 0.5 * j_anux * unit_ene_dens; // [MeV nm^-3]
+    grey_op_params.m1_pars.J[id_nue] = j_nue * unit_ene_dens;          // [MeV nm^-3]
+    grey_op_params.m1_pars.J[id_anue] = j_anue * unit_ene_dens;        // [MeV nm^-3]
+    grey_op_params.m1_pars.J[id_nux] = 0.5 * j_nux * unit_ene_dens;    // [MeV nm^-3]
+    grey_op_params.m1_pars.J[id_anux] = 0.5 * j_anux * unit_ene_dens;  // [MeV nm^-3]
 
     grey_op_params.m1_pars.chi[id_nue] = chi_nue;
     grey_op_params.m1_pars.chi[id_anue] = chi_anue;
@@ -378,7 +386,7 @@ void NeutrinoDens(Real mu_n, Real mu_p, Real mu_e, Real temp, Real &n_nue, Real 
   // Note that the number densities are always in EOS units
   Real const unit_num_dens = cgs_units.NumberDensityConversion(eos_units);
   Real const unit_ene_dens =
-      cgs_units.EnergyDensityConversion(code_units) * cgs_units.MeV; //@TODO: check this!
+      cgs_units.EnergyDensityConversion(code_units) * cgs_units.MeV;  //@TODO: check this!
 
   n_nue = n_nue * unit_num_dens;
   n_anue = n_anue * unit_num_dens;
