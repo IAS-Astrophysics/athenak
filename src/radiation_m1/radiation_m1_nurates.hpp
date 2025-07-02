@@ -135,7 +135,7 @@ void bns_nurates(Real &nb, Real &temp, Real &ye, Real &mu_n, Real &mu_p, Real &m
   Primitive::UnitSystem nurates_units = Primitive::MakeNGS();
 
   Real const unit_length = code_units.LengthConversion(nurates_units);
-  Real const unit_time = code_units.VolumeConversion(nurates_units);
+  Real const unit_time = code_units.TimeConversion(nurates_units);
   // Note that the number densities are always in EOS units
   Real const unit_num_dens = eos_units.NumberDensityConversion(nurates_units);
   Real const unit_ene_dens = code_units.EnergyDensityConversion(nurates_units);
