@@ -68,6 +68,7 @@ Z4c::Z4c(MeshBlockPack *ppack, ParameterInput *pin) :
   u_rhs("u_rhs z4c",1,1,1,1,1),
   u_weyl("u_weyl",1,1,1,1,1),
   coarse_u_weyl("coarse_u_weyl",1,1,1,1,1),
+  u_BEST("u_BEST",1,1,1,1,1),
   pamr(new Z4c_AMR(pin)) {
   // (1) read time-evolution option [already error checked in driver constructor]
   // Then initialize memory and algorithms for reconstruction and Riemann solvers
@@ -153,7 +154,14 @@ Z4c::Z4c(MeshBlockPack *ppack, ParameterInput *pin) :
   opt.shift_alpha2ggamma = pin->GetOrAddReal("z4c", "shift_alpha2Gamma", 0.0);
   opt.shift_hh = pin->GetOrAddReal("z4c", "shift_H", 0.0);
   opt.first_order_shift = pin->GetOrAddBoolean("z4c", "first_order_shift", true);
-  
+
+  opt.use_BEST = pin->GetOrAddBoolean("z4c", "use_BEST", false);
+  opt.write_BEST = pin->GetOrAddBoolean("z4c", "write_BEST", true);
+
+  if (opt.use_BEST) {
+    // allocate memory for the background truncation error
+    Kokkos::realloc(u_BEST, nmb, (nz4c), ncells3, ncells2, ncells1);
+  }
   // default shift damping to 1 if we use 2nd order shift
   if (opt.first_order_shift) {
     opt.shift_eta = pin->GetOrAddReal("z4c", "shift_eta", 2.0);
@@ -235,6 +243,7 @@ Z4c::Z4c(MeshBlockPack *ppack, ParameterInput *pin) :
       break;
     }
   }
+
 }
 
 //----------------------------------------------------------------------------------------

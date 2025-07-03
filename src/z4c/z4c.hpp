@@ -87,6 +87,7 @@ class Z4c {
   DvceArray5D<Real> coarse_u0; // coarse representation of z4c solution
   DvceArray5D<Real> u_weyl; // weyl scalars
   DvceArray5D<Real> coarse_u_weyl; // coarse representation of weyl scalars
+  DvceArray5D<Real> u_BEST; // array used for truncation error subtraction
 
   struct ADM_vars {
     AthenaTensor<Real, TensorSymm::NONE, 3, 0> psi4;
@@ -185,7 +186,12 @@ class Z4c {
     bool user_Sbc;
     // Boundary extrapolation order
     int extrap_order;
+    // Enable background subtraction or not
+    bool use_BEST;
+    // Write the truncation error or apply the truncation error
+    bool write_BEST;
   };
+
   Options opt;
   Real diss;              // Dissipation parameter
 
@@ -243,6 +249,7 @@ class Z4c {
   TaskStatus CalcWeylScalar(Driver *d, int stage);
   TaskStatus CalcWaveForm(Driver *d, int stage);
   TaskStatus DumpHorizons(Driver *d, int stage);
+  TaskStatus BEST(Driver *d, int stage); // background subtraction
 
   template <int NGHOST>
   TaskStatus CalcRHS(Driver *d, int stage);

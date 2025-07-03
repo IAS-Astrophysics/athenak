@@ -11,6 +11,7 @@
 #include <sstream>
 #include <iomanip>
 #include <iostream>   // endl
+#include <fstream>
 #include <limits>     // numeric_limits::max()
 #include <memory>
 #include <string>     // c_str(), string
@@ -63,6 +64,27 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
             break;
     case 4: pmbp->pz4c->ADMConstraints<4>(pmbp);
             break;
+  }
+  // BEST Stuff
+  auto &opt = pmbp->pz4c->opt;
+  auto &u0 = pmbp->pz4c->u0;
+  auto &u_BEST = pmbp->pz4c->u_BEST;  
+  if (opt.use_BEST) {
+    // write or use BEST
+    if (opt.write_BEST) {
+      Kokkos::deep_copy(u_BEST, u0);
+    } else {
+      auto data_host_in = Kokkos::create_mirror_view(u_BEST);
+      std::ostringstream fname;
+      fname << "data_rank" << global_variable::my_rank << ".bin";
+      std::ifstream ifs(fname.str(), std::ios::binary);
+      ifs.read(reinterpret_cast<char*>(data_host_in.data()),
+              sizeof(double) * data_host_in.size());
+      ifs.close();
+
+      // Copy back to the device
+      Kokkos::deep_copy(u_BEST, data_host_in);
+    }
   }
   std::cout<<"Kerr-Schild initialized."<<std::endl;
 

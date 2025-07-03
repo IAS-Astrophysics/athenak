@@ -86,6 +86,7 @@ enum TaskName {
   Z4c_PT,
   Z4c_CCE,
   Z4c_DumpHorizon,
+  Z4c_BEST,
   Z4c_NTASKS
 };
 

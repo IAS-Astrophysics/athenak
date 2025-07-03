@@ -99,6 +99,7 @@ void Z4c::QueueZ4cTasks() {
   pnr->QueueTask(&Z4c::CCEDump, this, Z4c_CCE, "CCEDump", Task_End, {Z4c_PT});
   pnr->QueueTask(&Z4c::DumpHorizons, this, Z4c_DumpHorizon, "Z4c_DumpHorizon",
                 Task_End, {Z4c_CCE});
+  pnr->QueueTask(&Z4c::BEST, this, Z4c_BEST, "Z4c_BEST", Task_End, {Z4c_DumpHorizon});
 }
 //----------------------------------------------------------------------------------------
 //! \fn  void Wave::InitRecv
@@ -306,6 +307,46 @@ TaskStatus Z4c::CCEDump(Driver *pdrive, int stage) {
         cce->InterpolateAndDecompose(pmy_pack);
       }
       cce_dump_last_output_time = time_32;
+    }
+  }
+  return TaskStatus::complete;
+}
+
+TaskStatus Z4c::BEST(Driver *pdrive, int stage) {
+  auto &indcs = pmy_pack->pmesh->mb_indcs;
+  int is = indcs.is, ie = indcs.ie;
+  int js = indcs.js, je = indcs.je;
+  int ks = indcs.ks, ke = indcs.ke;
+  int nmb1 = pmy_pack->nmb_thispack - 1;
+  int nvar = nz4c;
+  auto &u0 = pmy_pack->pz4c->u0;
+  auto &u_BEST = pmy_pack->pz4c->u_BEST;
+
+  if (opt.use_BEST && stage == pdrive->nexp_stages) {
+    // compute and write truncation error estimate
+    if (opt.write_BEST) {
+      // assume the original solution is already written in u_BEST
+      par_for("COMPUTE_BEST", DevExeSpace(),0, nmb1, 0, nvar-1, ks, ke, js, je, is, ie,
+      KOKKOS_LAMBDA(int m, int n, int k, int j, int i){
+        u_BEST(m,n,k,j,i) -= u0(m,n,k,j,i);
+      });
+      // Mirror to host and deep_copy
+      auto data_host = Kokkos::create_mirror_view(u_BEST);
+      Kokkos::deep_copy(data_host, u_BEST);
+
+      // Each rank writes its own file
+      std::ostringstream fname;
+      fname << "data_rank" << global_variable::my_rank << ".bin";
+      std::ofstream ofs(fname.str(), std::ios::binary);
+      ofs.write(reinterpret_cast<const char*>(data_host.data()),
+                sizeof(double) * data_host.size());
+      ofs.close();
+    } else { // apply truncation error estimate
+      // assuming that the truncation error estimate has already been read into u_BEST
+      par_for("APPLY_BEST", DevExeSpace(),0, nmb1, 0, nvar-1, ks, ke, js, je, is, ie,
+      KOKKOS_LAMBDA(int m, int n, int k, int j, int i){
+        u0(m,n,k,j,i) += u_BEST(m,n,k,j,i);
+      });
     }
   }
   return TaskStatus::complete;
