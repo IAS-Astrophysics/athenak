@@ -362,17 +362,18 @@ void NeutrinoDens(Real mu_n, Real mu_p, Real mu_e, Real temp, Real &n_nue, Real 
   Real eta_anue = -eta_nue;
   Real eta_nux = 0.0;
 
-  const Real hc_mevcm3 = HC_MEVCM * HC_MEVCM * HC_MEVCM;
+  const Real hc_mevnm = 1.23984172e-10 * 1e7; // hc in units of MeV*nm
+  const Real hc_mevnm3 = hc_mevnm * hc_mevnm * hc_mevnm;
   const Real temp3 = temp * temp * temp;
   const Real temp4 = temp3 * temp;
 
-  n_nue = 4.0 * M_PI / hc_mevcm3 * temp3 * Fermi::fermi2(eta_nue);    // [cm^-3]
-  n_anue = 4.0 * M_PI / hc_mevcm3 * temp3 * Fermi::fermi2(eta_anue);  // [cm^-3]
-  n_nux = 16.0 * M_PI / hc_mevcm3 * temp3 * Fermi::fermi2(eta_nux);   // [cm^-3]
+  n_nue = 4.0 * M_PI / hc_mevnm3 * temp3 * Fermi::fermi2(eta_nue);    // [nm^-3]
+  n_anue = 4.0 * M_PI / hc_mevnm3 * temp3 * Fermi::fermi2(eta_anue);  // [nm^-3]
+  n_nux = 16.0 * M_PI / hc_mevnm3 * temp3 * Fermi::fermi2(eta_nux);   // [nm^-3]
 
-  en_nue = 4.0 * M_PI / hc_mevcm3 * temp4 * Fermi::fermi3(eta_nue);    // [MeV cm^-3]
-  en_anue = 4.0 * M_PI / hc_mevcm3 * temp4 * Fermi::fermi3(eta_anue);  // [MeV cm^-3]
-  en_nux = 16.0 * M_PI / hc_mevcm3 * temp4 * Fermi::fermi3(eta_nux);   // [MeV cm^-3]
+  en_nue = 4.0 * M_PI / hc_mevnm3 * temp4 * Fermi::fermi3(eta_nue);    // [MeV nm^-3]
+  en_anue = 4.0 * M_PI / hc_mevnm3 * temp4 * Fermi::fermi3(eta_anue);  // [MeV nm^-3]
+  en_nux = 16.0 * M_PI / hc_mevnm3 * temp4 * Fermi::fermi3(eta_nux);   // [MeV nm^-3]
 
   assert(Kokkos::isfinite(n_nue));
   assert(Kokkos::isfinite(n_anue));
@@ -382,11 +383,11 @@ void NeutrinoDens(Real mu_n, Real mu_p, Real mu_e, Real temp, Real &n_nue, Real 
   assert(Kokkos::isfinite(en_nux));
 
   // convert to code units
-  Primitive::UnitSystem cgs_units = Primitive::MakeCGS();
+  Primitive::UnitSystem nurates_units = Primitive::MakeNGS();
+
   // Note that the number densities are always in EOS units
-  Real const unit_num_dens = cgs_units.NumberDensityConversion(eos_units);
-  Real const unit_ene_dens =
-      cgs_units.EnergyDensityConversion(code_units) * cgs_units.MeV;  //@TODO: check this!
+  Real const unit_num_dens = eos_units.NumberDensityConversion(nurates_units);
+  Real const unit_ene_dens = code_units.EnergyDensityConversion(nurates_units);
 
   n_nue = n_nue * unit_num_dens;
   n_anue = n_anue * unit_num_dens;
