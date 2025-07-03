@@ -17,6 +17,4 @@
 
 #define M1_MULTIROOTS_DIM 4
 
-#define HC_MEVCM 1.23984172e-10 // hc in units of MeV*cm
-
 #endif // RADIATION_M1_MACRO_HPP
