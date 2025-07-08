@@ -220,11 +220,11 @@ struct ParticleLocationData {
 };
 
 // Custom operators to sort ParticleLocationData array by dest_rank or prtcl_indx
-struct {
+inline struct {
   bool operator()(ParticleLocationData a, ParticleLocationData b)
     const { return a.dest_rank < b.dest_rank; }
 } SortByRank;
-struct {
+inline struct {
   bool operator()(ParticleLocationData a, ParticleLocationData b)
     const { return a.prtcl_indx < b.prtcl_indx; }
 } SortByIndex;
