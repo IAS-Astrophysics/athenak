@@ -251,28 +251,22 @@ TaskStatus RadiationM1::CalcOpacityNurates_(Driver *pdrive, int stage) {
             // compute neutrino black body function assuming trapped neutrinos
             if (nurates_params_.opacity_tau_trap >= 0 &&
                 tau > nurates_params_.opacity_tau_trap) {
-              //@TODO: this needs to use the fluid frame quantities
-              Real n_nue = u0_(m, CombinedIdx(id_nue, M1_N_IDX, nvars_), k, j, i);
-              Real n_anue = u0_(m, CombinedIdx(id_anue, M1_N_IDX, nvars_), k, j, i);
-              Real n_nux = u0_(m, CombinedIdx(id_nux, M1_N_IDX, nvars_), k, j, i);
-              Real n_nu[6] = {n_nue,      n_anue,     n_nux / 4.,
-                              n_nux / 4., n_nux / 4., n_nux / 4.};
+              // fluid frame number densities for nue, anue, numu, anumu, nutau, anutau
+              // factor of 1/2 appears because we evolve mu and tau species together
+              Real n_nu[6] = {rnnu[0],      rnnu[1],      rnnu[2] / 2.,
+                              rnnu[3] / 2., rnnu[2] / 2., rnnu[3] / 2.};
               Real Y_part[3] = {Y, 0., 0.};  // only ye is used
 
               Real Y_lep[3]{};
               eos.GetLeptonFractions(nb, Y_part, n_nu, Y_lep);
 
-              //@TODO: this needs to use the fluid frame quantities
-              Real e = eos.GetEnergy(nb, T, Y_part) +
-                       u0_(m, CombinedIdx(id_nue, M1_E_IDX, nvars_), k, j, i) +
-                       u0_(m, CombinedIdx(id_anue, M1_E_IDX, nvars_), k, j, i) +
-                       2 * u0_(m, CombinedIdx(id_nux, M1_E_IDX, nvars_), k, j, i); //@TODO: ask david!
+              Real e = eos.GetEnergy(nb, T, Y_part) + J[0] + J[1] + J[2] + J[3];
 
               // If the equilibrium is not found, we use the current values of T
               // and Y_e
               Real T_eq{}, Y_eq[3]{};
-              bool ierr = eos.GetBetaEquilibriumTrapped(nb, e, Y_lep, T_eq,
-                                                        &Y_eq[0], T, Y_part);
+              bool ierr =
+                  eos.GetBetaEquilibriumTrapped(nb, e, Y_lep, T_eq, &Y_eq[0], T, Y_part);
 
               Real mu_b_eq = eos.GetBaryonChemicalPotential(nb, T_eq, &Y_eq[0]);
               Real mu_q_eq = eos.GetChargeChemicalPotential(nb, T_eq, &Y_eq[0]);
