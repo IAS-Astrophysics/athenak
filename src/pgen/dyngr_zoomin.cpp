@@ -36,7 +36,7 @@
 //#define DEBUG_PGEN
 
 #ifndef NCHEBY
-#define NCHEBY 23
+#define NCHEBY 63
 #endif
 
 #ifndef NSTENCIL
@@ -252,7 +252,7 @@ class BackgroundData {
       for (int n = fnmin; n <= fnmax; ++n) {
         char fname[BUFSIZ];
         {
-          snprintf(fname, BUFSIZ, "%s.%s.%05d.bin", file_basename.c_str(),
+          snprintf(fname, BUFSIZ, "%s%s.%05d.bin", file_basename.c_str(),
                    "mhd_w_bcc", n);
           CartesianDumpReader cart(fname);
           mtimes[n - fnmin] = cart.mdata.time;
@@ -281,12 +281,13 @@ class BackgroundData {
 
   void ReadData(int f0) {
     m_fn_start = f0;
-    Kokkos::realloc(m_raw_data, ncache, NVARS, N + 1, N + 1, N + 1);
+    int nread = std::min(ncache, fnmax - f0 + 1);
+    Kokkos::realloc(m_raw_data, nread, NVARS, N + 1, N + 1, N + 1);
     if (0 == global_variable::my_rank) {
-      for (int n = f0; n < f0 + ncache; ++n) {
+      for (int n = f0; n < f0 + nread; ++n) {
         char fname[BUFSIZ];
         {
-          snprintf(fname, BUFSIZ, "%s.%s.%05d.bin", file_basename.c_str(),
+          snprintf(fname, BUFSIZ, "%s%s.%05d.bin", file_basename.c_str(),
                    "mhd_w_bcc", n);
           CartesianDumpReader cart(fname);
           for (int vi = IDN; vi <= IBZ; ++vi) {
@@ -304,7 +305,7 @@ class BackgroundData {
           }
         }
         {
-          snprintf(fname, BUFSIZ, "%s.%s.%05d.bin", file_basename.c_str(),
+          snprintf(fname, BUFSIZ, "%s%s.%05d.bin", file_basename.c_str(),
                    "avec", n);
           CartesianDumpReader cart(fname);
           for (int vi = IAVECX; vi <= IAVECZ; ++vi) {
@@ -312,7 +313,7 @@ class BackgroundData {
           }
         }
         {
-          snprintf(fname, BUFSIZ, "%s.%s.%05d.bin", file_basename.c_str(),
+          snprintf(fname, BUFSIZ, "%s%s.%05d.bin", file_basename.c_str(),
                    "z4c_alpha", n);
           CartesianDumpReader cart(fname);
           for (int vi = IALP; vi <= IALP; ++vi) {
@@ -320,25 +321,25 @@ class BackgroundData {
           }
         }
         {
-          snprintf(fname, BUFSIZ, "%s.%s.%05d.bin", file_basename.c_str(),
+          snprintf(fname, BUFSIZ, "%s%s.%05d.bin", file_basename.c_str(),
                    "z4c_betax", n);
           CartesianDumpReader cart(fname);
           BACKGROUND_DATA_READ_VARIABLE_FROM_FILE(IBETAX);
         }
         {
-          snprintf(fname, BUFSIZ, "%s.%s.%05d.bin", file_basename.c_str(),
+          snprintf(fname, BUFSIZ, "%s%s.%05d.bin", file_basename.c_str(),
                    "z4c_betay", n);
           CartesianDumpReader cart(fname);
           BACKGROUND_DATA_READ_VARIABLE_FROM_FILE(IBETAY);
         }
         {
-          snprintf(fname, BUFSIZ, "%s.%s.%05d.bin", file_basename.c_str(),
+          snprintf(fname, BUFSIZ, "%s%s.%05d.bin", file_basename.c_str(),
                    "z4c_betaz", n);
           CartesianDumpReader cart(fname);
           BACKGROUND_DATA_READ_VARIABLE_FROM_FILE(IBETAZ);
         }
         {
-          snprintf(fname, BUFSIZ, "%s.%s.%05d.bin", file_basename.c_str(),
+          snprintf(fname, BUFSIZ, "%s%s.%05d.bin", file_basename.c_str(),
                    "adm", n);
           CartesianDumpReader cart(fname);
           for (int vi = IGXX; vi <= IKZZ; ++vi) {
@@ -381,7 +382,7 @@ class BackgroundData {
     if (time <= mtimes.front()) {
       ExtractSlice(0);
     } else if (time > mtimes.back()) {
-      ExtractSlice(mtimes.size() - 1);
+      ExtractSlice(fnmax);
     } else {
       auto tp = std::lower_bound(mtimes.begin(), mtimes.end(), time);
       int idx = std::distance(mtimes.begin(), tp) + fnmin - 1;
