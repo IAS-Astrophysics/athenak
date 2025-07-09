@@ -83,10 +83,9 @@ TaskStatus RadiationM1::CalcOpacityNurates_(Driver *pdrive, int stage) {
       KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
         if (radiation_mask(m, k, j, i)) {
           for (int nuidx = 0; nuidx < nspecies_; nuidx++) {
-            if (nspecies_ != 1) {
-              abs_0_(m, nuidx, k, j, i) = 0;
-              eta_0_(m, nuidx, k, j, i) = 0;
-            }
+            abs_0_(m, nuidx, k, j, i) = 0;
+            eta_0_(m, nuidx, k, j, i) = 0;
+
             abs_1_(m, nuidx, k, j, i) = 0;
             eta_1_(m, nuidx, k, j, i) = 0;
             scat_1_(m, nuidx, k, j, i) = 0;
