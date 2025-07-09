@@ -317,6 +317,7 @@ TaskStatus Z4c::BEST(Driver *pdrive, int stage) {
   int is = indcs.is, ie = indcs.ie;
   int js = indcs.js, je = indcs.je;
   int ks = indcs.ks, ke = indcs.ke;
+  int ng = indcs.ng;
   int nmb1 = pmy_pack->nmb_thispack - 1;
   int nvar = nz4c;
   auto &u0 = pmy_pack->pz4c->u0;
@@ -326,7 +327,7 @@ TaskStatus Z4c::BEST(Driver *pdrive, int stage) {
     // compute and write truncation error estimate
     if (opt.write_BEST) {
       // assume the original solution is already written in u_BEST
-      par_for("COMPUTE_BEST", DevExeSpace(),0, nmb1, 0, nvar-1, ks, ke, js, je, is, ie,
+      par_for("COMPUTE_BEST", DevExeSpace(),0, nmb1, 0, nvar-1, ks-ng, ke+ng, js-ng, je+ng, is-ng, ie+ng,
       KOKKOS_LAMBDA(int m, int n, int k, int j, int i){
         u_BEST(m,n,k,j,i) -= u0(m,n,k,j,i);
       });
@@ -343,7 +344,7 @@ TaskStatus Z4c::BEST(Driver *pdrive, int stage) {
       ofs.close();
     } else { // apply truncation error estimate
       // assuming that the truncation error estimate has already been read into u_BEST
-      par_for("APPLY_BEST", DevExeSpace(),0, nmb1, 0, nvar-1, ks, ke, js, je, is, ie,
+      par_for("APPLY_BEST", DevExeSpace(),0, nmb1, 0, nvar-1, ks-ng, ke+ng, js-ng, je+ng, is-ng, ie+ng,
       KOKKOS_LAMBDA(int m, int n, int k, int j, int i){
         u0(m,n,k,j,i) += u_BEST(m,n,k,j,i);
       });
