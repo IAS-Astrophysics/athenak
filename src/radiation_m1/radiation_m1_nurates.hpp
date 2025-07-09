@@ -389,13 +389,13 @@ void NeutrinoDens(Real mu_n, Real mu_p, Real mu_e, Real temp, Real &n_nue, Real 
   Real const unit_num_dens = eos_units.NumberDensityConversion(nurates_units);
   Real const unit_ene_dens = code_units.EnergyDensityConversion(nurates_units);
 
-  n_nue = n_nue * unit_num_dens;
-  n_anue = n_anue * unit_num_dens;
-  n_nux = n_nux * unit_num_dens;
+  n_nue = n_nue / unit_num_dens;
+  n_anue = n_anue / unit_num_dens;
+  n_nux = n_nux / unit_num_dens;
 
-  en_nue = en_nue * unit_ene_dens;
-  en_anue = en_anue * unit_ene_dens;
-  en_nux = en_nux * unit_ene_dens;
+  en_nue = en_nue / unit_ene_dens;
+  en_anue = en_anue / unit_ene_dens;
+  en_nux = en_nux / unit_ene_dens;
 }
 
 }  // namespace radiationm1
