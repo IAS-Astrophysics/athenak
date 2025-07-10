@@ -72,7 +72,7 @@ def test_run(iv, fv, rv):
                             'problem/amp=1.0e-6',
                             'problem/wave_flag=' + wv,
                             'problem/vflow=' + repr(vflow)]
-                results = testutils.athenak_run("inputs/linear_wave_mhd.athinput", arguments, use_cmake=True, use_make=True)
+                results = testutils.athenak_run("inputs/linear_wave_mhd.athinput", arguments)
                 assert results, f"Test failed for iv={iv}, res={res}, fv={fv}, rv={rv}, wv={wv}./AthenaK run did not complete successfully."
 
             ri = _recon.index(rv)

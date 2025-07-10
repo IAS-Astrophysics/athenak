@@ -4,7 +4,7 @@ from typing import List
 
 # Constants and configurations
 ATHENAK_PATH = ".."
-ATHENAK_BUILD = ATHENAK_PATH+"/build/src"
+ATHENAK_BUILD = "build/src"
 
 import logging
 
@@ -22,8 +22,8 @@ def run_command(command: List[str], text: bool = False) -> bool:
     Returns:
         bool: True if the command executed successfully, False otherwise.
     """
-    if text:
-        logging.info(f"Executing command: {' '.join(command)}")
+    
+    logging.info(f"Executing command: {' '.join(command)}")
     process = Popen(command, stdout=PIPE, stderr=PIPE, text=text)
     output, errors = process.communicate()
     if text:
@@ -51,7 +51,8 @@ def cmake(flags: List[str] = [], **kwargs) -> bool:
     try:
         os.makedirs(os.path.join(ATHENAK_PATH, 'build'), exist_ok=True)
         os.chdir(ATHENAK_PATH)
-        command = ['cmake'] + flags + ["-B", "build"]
+        logging.info(f"Configuring CMake in {os.getcwd()}")
+        command = ['cmake'] + flags + ["-B", "tst/build"]
         if not run_command(command, **kwargs):
             raise RuntimeError("CMake configuration failed")
     finally:
@@ -133,3 +134,16 @@ def cleanup(text=False)-> None:
     Popen(["rm " + "*.dat"], shell=True, stdout=PIPE).communicate()
     if text:
         logging.info("Cleanup completed")
+
+def make_clean(threads=4) -> None:
+    """
+    Cleans the build directory and rebuilds the project.
+
+    This function is typically used to ensure that the build directory is clean before starting a new build.
+    It removes all files in the build directory and then runs CMake and Make to rebuild the project.
+    """
+    logging.info("Cleaning build directory")
+    Popen(["rm -rf " + ATHENAK_BUILD], shell=True, stdout=PIPE).communicate()
+    cmake()
+    make(threads=threads)
+    logging.info("Build directory cleaned and project rebuilt")
