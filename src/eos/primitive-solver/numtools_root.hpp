@@ -29,7 +29,7 @@ class Root {
   // Find the root of a generic functor taking at least one argument. The first
   // argument is assumed to be the quantity of interest. All other arguments are
   // assumed to be constant parameters for the function. The root-finding method
-  // is the Illinois variant of false position.
+  // is the Anderson-Bjorck variant of false position.
   //
   // \param[in]  f  The functor to find a root for. Its root function must take at
   //                least one argument.
@@ -54,10 +54,10 @@ class Root {
       x = lb;
     }
     // If one of the bounds is already within tolerance of the root, we have the root.
-    if (fabs(flb) <= tol) {
+    if (fabs(flb)/lb <= tol) {
       x = lb;
       return true;
-    } else if (fabs(fub) <= tol) {
+    } else if (fabs(fub)/ub <= tol) {
       x = ub;
       return true;
     }
@@ -88,14 +88,18 @@ class Root {
         flb = ftest;
         lb = x;
         if (side == 1) {
-          fub /= 2.0;
+          Real m = 1. - ftest/flb;
+          fub = (m > 0) ? fub*m : 0.5*fub;
+          //fub /= 2.0;
         }
         side = 1;
       } else {
         fub = ftest;
         ub = x;
         if (side == -1) {
-          flb /= 2.0;
+          Real m = 1. - ftest/fub;
+          flb = (m > 0) ? flb*m : 0.5*flb;
+          //flb /= 2.0;
         }
         side = -1;
       }
