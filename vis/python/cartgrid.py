@@ -19,7 +19,7 @@ class CartesianGridData:
     * variables           dictionary with all grid functions
     """
 
-    def __init__(self, fname):
+    def __init__(self, fname, read_data=True):
         mdata = Struct("i7f3i?2i")
         self.fname = fname
         with open(self.fname, "rb") as f:
@@ -44,11 +44,14 @@ class CartesianGridData:
 
             # Read variables
             for n in names:
-                self.variables[n] = (
-                    np.fromfile(f, dtype=np.float32, count=np.prod(self.numpoints))
-                    .reshape(self.numpoints)
-                    .transpose()
-                )
+                if read_data:
+                    self.variables[n] = (
+                        np.fromfile(f, dtype=np.float32, count=np.prod(self.numpoints))
+                        .reshape(self.numpoints)
+                        .transpose()
+                    )
+                else:
+                    self.variables[n] = None
 
     def coords(self, d=None):
         """Returns the coordinates"""
@@ -89,4 +92,4 @@ if __name__ == "__main__":
         print("Prints metadata from a Cartesian binary file")
         print(f"Usage: {sys.argv[0]} dump.bin")
         exit(0)
-    print(CartesianGridData(sys.argv[1]))
+    print(CartesianGridData(sys.argv[1], read_data=False))
