@@ -279,6 +279,9 @@ Outputs::Outputs(ParameterInput *pin, Mesh *pm) {
       } else if (opar.file_type.compare("cart") == 0) {
         pnode = new CartesianGridOutput(pin,pm,opar);
         pout_list.insert(pout_list.begin(),pnode);
+      } else if (opar.file_type.compare("sph") == 0) {
+        pnode = new SphericalSurfaceOutput(pin,pm,opar);
+        pout_list.insert(pout_list.begin(),pnode);
       } else if (opar.file_type.compare("rst") == 0) {
       // Add restarts to the tail end of BaseTypeOutput list, so file counters for other
       // output types are up-to-date in restart file
