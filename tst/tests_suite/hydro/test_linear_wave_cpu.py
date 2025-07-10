@@ -7,8 +7,8 @@
 # Modules
 
 import sys
-sys.path.insert(0, '../vis/python')
-sys.path.insert(0, '../tests_suite')
+sys.path.append('../vis/python')
+sys.path.append('../tst/tests_suite')
 import pytest
 import tests_suite.testutils as testutils
 import scripts.utils.athena as athena

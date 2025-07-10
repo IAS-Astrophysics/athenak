@@ -6,8 +6,8 @@
 
 # Modules
 import sys
-sys.path.insert(0, '../vis/python')
-sys.path.insert(0, '../tests_suite')
+sys.path.append('../vis/python')
+sys.path.append('../tst/tests_suite')
 import pytest
 import tests_suite.testutils as testutils
 import scripts.utils.athena as athena
@@ -47,7 +47,10 @@ _res = [32, 64]  # resolutions to test
 @pytest.mark.parametrize("fv" , _flux)
 def test_run(iv, fv, rv):
     """Run a single test with given parameters."""
-    testutils.cleanup()
+    try:
+        testutils.cleanup()
+    except:
+        next
     for wv in _wave:
         vflow = 1.0 if wv=='3' else 0.0
         try:
@@ -69,7 +72,7 @@ def test_run(iv, fv, rv):
                             'problem/amp=1.0e-6',
                             'problem/wave_flag=' + wv,
                             'problem/vflow=' + repr(vflow)]
-                results = testutils.athenak_run("inputs/linear_wave_mhd.athinput", arguments)
+                results = testutils.athenak_run("inputs/linear_wave_mhd.athinput", arguments, use_cmake=True, use_make=True)
                 assert results, f"Test failed for iv={iv}, res={res}, fv={fv}, rv={rv}, wv={wv}./AthenaK run did not complete successfully."
 
             ri = _recon.index(rv)
