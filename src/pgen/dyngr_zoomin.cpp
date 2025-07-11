@@ -371,10 +371,10 @@ class BackgroundData {
           }
         }
       }
-      // copy data to GPU
-      cheb_data.template modify<HostMemSpace>();
-      cheb_data.template sync<DevExeSpace>();
     }
+    // copy data to GPU
+    cheb_data.template modify<HostMemSpace>();
+    cheb_data.template sync<DevExeSpace>();
   }
 
   void InterpToTime(Real time) {
@@ -405,10 +405,10 @@ class BackgroundData {
             }
           }
         }
-        // copy data to GPU
-        cheb_data.template modify<HostMemSpace>();
-        cheb_data.template sync<DevExeSpace>();
       }
+      // copy data to GPU
+      cheb_data.template modify<HostMemSpace>();
+      cheb_data.template sync<DevExeSpace>();
     }
   }
 
