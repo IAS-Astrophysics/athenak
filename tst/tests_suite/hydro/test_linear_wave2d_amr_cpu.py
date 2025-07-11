@@ -33,12 +33,12 @@ _recon = ['plm','ppm4','ppmx','wenoz']  # do not change order
 _wave = ['0']                      # do not change order
 _flux = ['hllc']
 _res = [32, 64]                            # resolutions to test
-input_file = "inputs/linear_wave_hydro_smr.athinput"
+input_file = "inputs/linear_wave_hydro_amr.athinput"
 
 def arguments(iv, rv, fv, wv, res):
     """Run the Athena++ test with given parameters."""
     vflow = 1.0 if wv=='3' else 0.0
-    return ['job/basename=hydro_linwave2d_smr',
+    return ['job/basename=hydro_linwave2d_amr',
                             'time/tlim=1.0',
                             'time/integrator=' + iv,
                             'mesh/nghost=4',
@@ -68,7 +68,7 @@ def test_run(iv, fv, rv):
             # Check the errors in the output
             ri = _recon.index(rv)
             wi = _wave.index(wv)
-            data = athena_read.error_dat('hydro_linwave2d_smr-errs.dat')
+            data = athena_read.error_dat('hydro_linwave2d_amr-errs.dat')
             L1_RMS_INDEX = 4  # Index for L1 RMS error in data
             l1_rms_lr = data[0][L1_RMS_INDEX]
             l1_rms_hr = data[1][L1_RMS_INDEX]
