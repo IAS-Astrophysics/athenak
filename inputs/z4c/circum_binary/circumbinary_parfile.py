@@ -36,7 +36,7 @@ nx3       = {mbsize}   # Number of cells in each MeshBlock, X3-dir
 
 <time>
 evolution  = dynamic    # dynamic/kinematic/static
-integrator = rk4        # time integration algorithm
+integrator = rk3        # time integration algorithm
 cfl_number = {cfl}      # The Courant, Friedrichs, & Lewy (CFL) Number
 nlim       = -1         # cycle limit
 tlim       = 1000       # time limit
@@ -139,10 +139,9 @@ tfloor      = 1.0e-8  # floor on gas pressure p_gas
 gamma       = 1.44444444444 # ratio of specific heats Gamma
 fofc        = true	 # Enable first order flux correction
 gamma_max   = 20.0	 # Enable ceiling on Lorentz factor
-dyn_scratch = 1000
+dyn_scratch = 0
 enforce_maximum = false
 dmp_M       = 1.2
-
 
 <problem>
 ################ SPACETIME ############
@@ -197,7 +196,9 @@ initial_lapse_psi_exponent = -2.0
 swap_xz = false
 
 ########### TORUS ############
-chakrabarti_torus = true  # Chakrabarti
+chakrabarti_torus = false  # Chakrabarti
+fm_torus   = true  # Fishbone & Moncrief
+sane       = true  # vector potential for magnetic field (SANE or MAD config.)
 r_edge            = 20.0  # radius of inner edge of disk
 r_peak            = 30.2  # radius of pressure maximum; use l instead if negative
 tilt_angle        = 0.0   # angle (deg) to incl disk spin axis rel. to BH spin in dir of x
@@ -212,13 +213,6 @@ rho_max   = 1.0       # if > 0, rescale rho to have this peak; rescale pres by s
 l         = 0.0       # const. ang. mom. per unit mass u^t u_phi; only used if r_peak < 0
 pert_amp  = 2.0e-2    # perturbation amplitude
 user_hist = false      # enroll user-defined history function
-amr_condition = alpha_min
-radius_thr = 10.0
-alpha_thr = 0.2
-sep = 20.0
-q = 1.0
-a1 = 0.
-a2 = 0.
 
 <output1>
 file_type  = bin     # Binary data dump
@@ -233,10 +227,22 @@ slice_x3   = 0
 dt         = 5       # time increment between outputs
 
 <output3>
+file_type  = bin     # Binary data dump
+variable   = mhd_w_bcc     # variables to be output
+slice_x3   = 0
+dt         = 5       # time increment between outputs
+
+<output4>
+file_type  = bin     # Binary data dump
+variable   = mhd_w_bcc     # variables to be output
+slice_x2   = 0
+dt         = 5       # time increment between outputs
+
+<output5>
 file_type  = rst    # Binary data dump
 dt         = 50.    # time increment between outputs
 
-<output4>
+<output6>
 file_type = hst
 dt        = 2
 """
