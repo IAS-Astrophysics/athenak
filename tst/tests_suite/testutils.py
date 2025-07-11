@@ -150,7 +150,7 @@ def clean() -> None:
     This function is typically used to ensure that the build directory is clean
     """
     logging.info("Cleaning build directory")
-    Popen(["rm -rf " + ATHENAK_BUILD], shell=True, stdout=PIPE).communicate()
+    Popen(["rm -rf build/"], shell=True, stdout=PIPE).communicate()
 
 def clean_make(threads: int = os.cpu_count()) -> None:
     """
