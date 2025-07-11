@@ -106,6 +106,28 @@ def run(inputfile: str, flags=[], **kwargs)-> bool:
         raise RuntimeError(f"Failed to execute {inputfile} with flags {flags}")
     return True
 
+def mpi_run(inputfile: str, flags=[], threads: int = os.cpu_count(), **kwargs) -> bool:
+    """
+    Executes a test case using the AthenaK binary with MPI support.
+
+    Args:
+        inputfile (str): The path to the test case input file.
+        flags (list): Additional flags to pass to the AthenaK binary.
+        threads (int): The number of threads to use for MPI execution (default: number of CPU cores).
+        **kwargs: Additional keyword arguments for `run_command`.
+
+    Returns:
+        bool: True if the test case executed successfully, False otherwise.
+
+    Raises:
+        AssertionError: If the test case execution fails.
+    """
+    command = ['mpirun', '-np', str(threads), f"{ATHENAK_BUILD}/athena", '-i', inputfile] + flags
+    if not run_command(command, **kwargs):
+        logging.error(f"Failed to execute {inputfile} with flags {flags} using MPI")
+        raise RuntimeError(f"Failed to execute {inputfile} with flags {flags} using MPI")
+    return True
+
 def athenak_run(inputfile, flags, use_cmake=False, use_make=False, **kwargs):
     """
     Executes a full test workflow, including optional CMake and Make steps.
@@ -152,7 +174,7 @@ def clean() -> None:
     logging.info("Cleaning build directory")
     Popen(["rm -rf build/"], shell=True, stdout=PIPE).communicate()
 
-def clean_make(threads: int = os.cpu_count()) -> None:
+def clean_make(threads: int = os.cpu_count(),**kwargs) -> None:
     """
     Cleans the build directory and rebuilds the project.
 
@@ -160,6 +182,6 @@ def clean_make(threads: int = os.cpu_count()) -> None:
     It removes all files in the build directory and then runs CMake and Make to rebuild the project.
     """
     clean()
-    cmake() 
+    cmake(**kwargs) 
     make(threads=threads)  
     logging.info("Build directory cleaned and project rebuilt")
