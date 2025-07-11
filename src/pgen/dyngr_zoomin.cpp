@@ -428,10 +428,14 @@ class BackgroundData {
 };
 
 static BackgroundData<NCHEBY> *pmy_data;
+static int target_level;
 
 // User defined BC
 void TurbulenceBC(Mesh *pm);
 void SetADMVariables(MeshBlockPack *pmbp);
+
+// Refinement condition
+void RefinementCondition(MeshBlockPack* pmbp);
 
 // Prototypes for user-defined BCs and history
 void ZoomHistory(HistoryData *pdata, Mesh *pm);
@@ -451,6 +455,9 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   user_bcs_func = TurbulenceBC;
   pmbp->padm->SetADMVariables = SetADMVariables;
   user_hist_func = &ZoomHistory;
+  user_ref_func  = &RefinementCondition;
+
+  target_level = pin->GetOrAddInteger("problem", "target_level", 0);
 
   pmy_data = new BackgroundData<NCHEBY>(pin);
   if (restart) return;
@@ -1192,4 +1199,32 @@ void ZoomHistory(HistoryData *pdata, Mesh *pm) {
   // store data in hdata array
   pdata->hdata[0] = btor_max;
   pdata->hdata[1] = bpol_max;
+}
+
+// how decide the refinement
+void RefinementCondition(MeshBlockPack* pmbp) {
+  Mesh *pmesh       = pmbp->pmesh;
+  auto &refine_flag = pmesh->pmr->refine_flag;
+  auto &size        = pmbp->pmb->mb_size;
+  int nmb           = pmbp->nmb_thispack;
+  int mbs           = pmesh->gids_eachrank[global_variable::my_rank];
+  
+  for (int m = 0; m < nmb; ++m) {
+    // current refinement level
+    int level = pmesh->lloc_eachmb[m + mbs].level - pmesh->root_level;
+
+    if (level < target_level) {
+      refine_flag.h_view(m + mbs) = 1;
+    }
+    else if (level == target_level) {
+      refine_flag.h_view(m + mbs) = 0;
+    }
+    else {
+      refine_flag.h_view(m + mbs) = -1;
+    }
+  }
+
+  // sync host and device
+  refine_flag.template modify<HostMemSpace>();
+  refine_flag.template sync<DevExeSpace>();
 }
