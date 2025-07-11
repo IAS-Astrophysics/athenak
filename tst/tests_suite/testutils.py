@@ -1,6 +1,7 @@
 import os
 from subprocess import Popen, PIPE
 from typing import List
+import time
 
 # Constants and configurations
 ATHENAK_PATH = ".."
@@ -52,6 +53,7 @@ def cmake(flags: List[str] = [], **kwargs) -> bool:
         os.makedirs(os.path.join(ATHENAK_PATH, 'build'), exist_ok=True)
         os.chdir(ATHENAK_PATH)
         logging.info(f"Configuring CMake in {os.getcwd()}")
+        
         command = ['cmake'] + flags + ["-B", "tst/build"]
         if not run_command(command, **kwargs):
             raise RuntimeError("CMake configuration failed")
@@ -73,8 +75,13 @@ def make(threads: int = os.cpu_count(), **kwargs) -> bool:
     Raises:
         RuntimeError: If the Make command fails.
     """
-    command = ['make', '-C', ATHENAK_BUILD, f'-j{threads}']
-    if not run_command(command, **kwargs):
+    command = ['make', '-C', ATHENAK_BUILD, '-j', f'{threads}']
+    start_time = time.time()
+    status =  run_command(command, **kwargs)
+    end_time = time.time()
+    elapsed_time = end_time - start_time  # Calculate elapsed time
+    logging.info(f"make completed in {elapsed_time:.2f} seconds")
+    if not status:
         raise RuntimeError("Make command failed")
     return True
 
@@ -135,15 +142,24 @@ def cleanup(text=False)-> None:
     if text:
         logging.info("Cleanup completed")
 
-def make_clean(threads=4) -> None:
+
+def clean() -> None:
+    """
+    Cleans the build directoryt.
+
+    This function is typically used to ensure that the build directory is clean
+    """
+    logging.info("Cleaning build directory")
+    Popen(["rm -rf " + ATHENAK_BUILD], shell=True, stdout=PIPE).communicate()
+
+def clean_make(threads: int = os.cpu_count()) -> None:
     """
     Cleans the build directory and rebuilds the project.
 
     This function is typically used to ensure that the build directory is clean before starting a new build.
     It removes all files in the build directory and then runs CMake and Make to rebuild the project.
     """
-    logging.info("Cleaning build directory")
-    Popen(["rm -rf " + ATHENAK_BUILD], shell=True, stdout=PIPE).communicate()
-    cmake()
-    make(threads=threads)
+    clean()
+    cmake() 
+    make(threads=threads)  
     logging.info("Build directory cleaned and project rebuilt")
