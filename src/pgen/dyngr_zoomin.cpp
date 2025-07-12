@@ -1205,7 +1205,6 @@ void ZoomHistory(HistoryData *pdata, Mesh *pm) {
 void RefinementCondition(MeshBlockPack* pmbp) {
   Mesh *pmesh       = pmbp->pmesh;
   auto &refine_flag = pmesh->pmr->refine_flag;
-  auto &size        = pmbp->pmb->mb_size;
   int nmb           = pmbp->nmb_thispack;
   int mbs           = pmesh->gids_eachrank[global_variable::my_rank];
   
