@@ -34,19 +34,19 @@ _flux = ['hllc']
 _res = [32, 64]                            # resolutions to test
 input_file = "inputs/linear_wave_hydro_amr.athinput"
 
-def arguments(iv, rv, fv, wv, res):
+def arguments(iv, rv, fv, wv, res,dim=3):
     """Run the Athena++ test with given parameters."""
     vflow = 1.0 if wv=='3' else 0.0
-    return ['job/basename=hydro_linwave3d_amr',
+    return [f'job/basename=hydro_linwave{dim}d_amr',
                             'time/tlim=1.0',
                             'time/integrator=' + iv,
                             'mesh/nghost=' + repr(2 if rv=='plm' else 4),
                             'mesh/nx1=' + repr(res),
-                            'mesh/nx2=' + repr(res//2),
-                            'mesh/nx3=' + repr(res//2),
+                            'mesh/nx2=' + repr(res//2 if dim>1 else 1),
+                            'mesh/nx3=' + repr(res//2 if dim>2 else 1),
                             'meshblock/nx1=8',
-                            'meshblock/nx2=8',
-                            'meshblock/nx3=8',
+                            'meshblock/nx2=' + "8" if dim>1 else "1",
+                            'meshblock/nx3=' + "8" if dim>1 else "1",
                             'time/cfl_number=0.4',
                             'hydro/reconstruct=' + rv,
                             'hydro/rsolver=' + fv,
@@ -54,23 +54,24 @@ def arguments(iv, rv, fv, wv, res):
                             'problem/wave_flag=' + wv,
                             'problem/vflow=' + repr(vflow)]
 
+@pytest.mark.parametrize("dim," , np.arange(1,4))
 @pytest.mark.parametrize("rv" , _recon)
 @pytest.mark.parametrize("fv" , _flux)
-def test_run(fv, rv):
+def test_run(fv, rv, dim):
     """Run a single test with given parameters."""
     iv ="rk2" if rv=='plm' else "rk3"
     for wv in _wave:
         try:
             for res in _res:
                 results = testutils.mpi_run(input_file,
-                                    arguments(iv, rv, fv, wv, res),
+                                    arguments(iv, rv, fv, wv, res,dim=dim),
                                     threads=4,
                                         )
-                assert results, f"Test failed for iv={iv}, res={res}, fv={fv}, rv={rv}, wv={wv}./AthenaK run did not complete successfully."
+                assert results, f"Test in {dim}D failed for iv={iv}, res={res}, fv={fv}, rv={rv}, wv={wv}./AthenaK run did not complete successfully."
             # Check the errors in the output
             ri = _recon.index(rv)
             wi = _wave.index(wv)
-            data = athena_read.error_dat('hydro_linwave3d_amr-errs.dat')
+            data = athena_read.error_dat(f'hydro_linwave{dim}d_amr-errs.dat')
             L1_RMS_INDEX = 4  # Index for L1 RMS error in data
             l1_rms_lr = data[0][L1_RMS_INDEX]
             l1_rms_hr = data[1][L1_RMS_INDEX]
