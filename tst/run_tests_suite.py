@@ -6,6 +6,13 @@ import tests_suite.testutils as testutils
 import pytest
 import argparse
 
+def cmake_flags(args,flags):
+    """Process command line arguments and return cmake flags."""
+    if args:
+        for arg in args:
+            flags += (arg.split(" "))
+    return flags
+
 # Set up argument parser
 parser = argparse.ArgumentParser(description="Run AthenaK test suites.")
 parser.add_argument(
@@ -34,18 +41,12 @@ if  args.style:
     pytest.main(["tests_suite/style"])
 
 if args.cpu != None:
-    flags = []
-    for arg in args.cpu:
-        flags += (arg.split(" "))
-    testutils.clean_make(flags=flags)
+    testutils.clean_make(flags=cmake_flags(args.cpu, []))
     pytest.main(["tests_suite/hydro", "-k", "_cpu"])
     pytest.main(["tests_suite/mhd", "-k", "_cpu"])
 
 if args.mpicpu != None: 
-    flags = ["-D", "Athena_ENABLE_MPI=ON"]
-    for arg in args.mpicpu:
-        flags += (arg.split(" "))
-    testutils.clean_make(flags=flags,text=True)
+    testutils.clean_make(flags=cmake_flags(args.mpicpu, ["-D", "Athena_ENABLE_MPI=ON"]))
     pytest.main(["tests_suite/hydro", "-k", "_mpicpu"])
     pytest.main(["tests_suite/mhd", "-k", "_mpicpu"])
 
