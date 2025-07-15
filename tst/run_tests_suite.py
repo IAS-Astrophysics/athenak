@@ -34,12 +34,18 @@ if  args.style:
     pytest.main(["tests_suite/style"])
 
 if args.cpu != None:
-    testutils.clean_make(flags=args.cpu)
+    flags = []
+    for arg in args.cpu:
+        flags += (arg.split(" "))
+    testutils.clean_make(flags=flags)
     pytest.main(["tests_suite/hydro", "-k", "_cpu"])
     pytest.main(["tests_suite/mhd", "-k", "_cpu"])
 
 if args.mpicpu != None: 
-    testutils.clean_make(flags=["-D","Athena_ENABLE_MPI=ON"]+args.mpicpu)
+    flags = ["-D", "Athena_ENABLE_MPI=ON"]
+    for arg in args.mpicpu:
+        flags += (arg.split(" "))
+    testutils.clean_make(flags=flags,text=True)
     pytest.main(["tests_suite/hydro", "-k", "_mpicpu"])
     pytest.main(["tests_suite/mhd", "-k", "_mpicpu"])
 
