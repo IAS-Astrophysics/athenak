@@ -9,28 +9,37 @@ import argparse
 # Set up argument parser
 parser = argparse.ArgumentParser(description="Run AthenaK test suites.")
 parser.add_argument(
-    "--suite", 
-    choices=["style", "cpu", "mpicpu"], 
-    nargs="+", 
-    help="Specify which test suites to run."
+    "--style", 
+    help="Test code style."
+)
+parser.add_argument(
+    "--cpu", 
+    nargs="*", 
+    help="Add cmake arguments if needed."
+)
+parser.add_argument(
+    "--mpicpu", 
+    nargs="*", 
+    help="Add cmake arguments if needed."
 )
 args = parser.parse_args()
 
-if not args.suite:
-    print("No test suite specified. Use --suite to select one or more suites.")
+if args.style==None and args.cpu==None and args.mpicpu==None:
+    print("No test suite specified.")
+    print(parser.format_help())
     sys.exit(1)
 
 # Run tests based on arguments
-if "style" in args.suite:
+if  args.style:
     pytest.main(["tests_suite/style"])
 
-if "cpu" in args.suite:
-    testutils.clean_make()
+if args.cpu != None:
+    testutils.clean_make(flags=args.cpu)
     pytest.main(["tests_suite/hydro", "-k", "_cpu"])
     pytest.main(["tests_suite/mhd", "-k", "_cpu"])
 
-if "mpicpu" in args.suite:
-    testutils.clean_make(flags=["-D","Athena_ENABLE_MPI=ON"])
+if args.mpicpu != None: 
+    testutils.clean_make(flags=["-D","Athena_ENABLE_MPI=ON"]+args.mpicpu)
     pytest.main(["tests_suite/hydro", "-k", "_mpicpu"])
     pytest.main(["tests_suite/mhd", "-k", "_mpicpu"])
 
