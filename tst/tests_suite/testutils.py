@@ -160,6 +160,7 @@ def cleanup(text=False)-> None:
     """
     if text:
         logging.info("Cleaning up test environment")
+    Popen(["rm -rf tab/"], shell=True, stdout=PIPE).communicate()
     Popen(["rm " + "*.dat"], shell=True, stdout=PIPE).communicate()
     if text:
         logging.info("Cleanup completed")
