@@ -18,6 +18,7 @@
 #include "globals.hpp"
 #include "parameter_input.hpp"
 #include "mesh/mesh.hpp"
+#include "eos/eos.hpp"
 #include "hydro/hydro.hpp"
 #include "mhd/mhd.hpp"
 #include "coordinates/adm.hpp"
@@ -64,6 +65,8 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm) :
     Hohlraum(pin, false);
   } else if (pgen_fun_name.compare("linear_wave") == 0) {
     LinearWave(pin, false);
+  } else if (pgen_fun_name.compare("gr_linear_wave") == 0) {
+    GRLinearWave(pin, false);
   } else if (pgen_fun_name.compare("implode") == 0) {
     LWImplode(pin, false);
   } else if (pgen_fun_name.compare("gr_monopole") == 0) {
@@ -675,6 +678,8 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resf
     Hohlraum(pin, true);
   } else if (pgen_fun_name.compare("linear_wave") == 0) {
     LinearWave(pin, true);
+  } else if (pgen_fun_name.compare("gr_linear_wave") == 0) {
+    GRLinearWave(pin, true);
   } else if (pgen_fun_name.compare("implode") == 0) {
     LWImplode(pin, true);
   } else if (pgen_fun_name.compare("gr_monopole") == 0) {

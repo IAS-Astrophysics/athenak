@@ -27,6 +27,7 @@
 #include "athena.hpp"
 #include "globals.hpp"
 #include "parameter_input.hpp"
+#include "coordinates/cell_locations.hpp"
 #include "mesh/mesh.hpp"
 #include "eos/eos.hpp"
 #include "hydro/hydro.hpp"
@@ -296,7 +297,7 @@ void ProblemGenerator::GRLinearWave(ParameterInput *pin, const bool restart) {
         Real g_2 = 1.0/u[0] * (bz + lambda*vz / (1.0-lambda*vx) * bx);  // (A 61)
         Real f_1, f_2;
         if (g_1 == 0.0 && g_2 == 0.0) {
-          f_1 = f_2 = ONE_OVER_SQRT2;  // (A 67)
+          f_1 = f_2 = 1.0/sqrt(2.0);  // (A 67)
         } else {
           f_1 = g_1 / std::sqrt(SQR(g_1) + SQR(g_2));  // (A 66)
           f_2 = g_2 / std::sqrt(SQR(g_1) + SQR(g_2));  // (A 66)
@@ -407,7 +408,7 @@ void ProblemGenerator::GRLinearWave(ParameterInput *pin, const bool restart) {
         }
         Real f_1, f_2;
         if (g_1 == 0.0 && g_2 == 0.0) {
-          f_1 = f_2 = ONE_OVER_SQRT2;  // (A 67)
+          f_1 = f_2 = 1.0/sqrt(2.0);  // (A 67)
         } else {
           f_1 = g_1 / std::sqrt(SQR(g_1) + SQR(g_2));  // (A 66)
           f_2 = g_2 / std::sqrt(SQR(g_1) + SQR(g_2));  // (A 66)
@@ -551,17 +552,16 @@ void ProblemGenerator::GRLinearWave(ParameterInput *pin, const bool restart) {
 
   // Calculate wavenumber such that wave has single period over domain
   // For relativistic tests, wavevector always parallel to X-axis
-  wavenumber = TWO_PI / (pmy_mesh->mesh_size.x1max - pmy_mesh->mesh_size.x1min);
+  wavenumber = 2.0*M_PI / (pmy_mesh_->mesh_size.x1max - pmy_mesh_->mesh_size.x1min);
 
   // capture variables for kernel
   auto &indcs = pmy_mesh_->mb_indcs;
   int &is = indcs.is; int &ie = indcs.ie;
   int &js = indcs.js; int &je = indcs.je;
   int &ks = indcs.ks; int &ke = indcs.ke;
-  MeshBlockPack *pmbp = pmy_mesh_->pmb_pack;
   auto &size = pmbp->pmb->mb_size;
-  bool &is_sr = pmy_pack->pcoord->is_special_relativistic;
-  bool &is_gr = pmy_pack->pcoord->is_general_relativistic;
+  bool &is_sr = pmbp->pcoord->is_special_relativistic;
+  bool &is_gr = pmbp->pcoord->is_general_relativistic;
 
   // initialize Hydro variables ----------------------------------------------------------
   if (pmbp->phydro != nullptr) {
@@ -618,7 +618,7 @@ void ProblemGenerator::GRLinearWave(ParameterInput *pin, const bool restart) {
 
       // Set conserved hydro variables
       u1(m,IDN,k,j,i) = u_local[0] * rho_local;
-      if {is_gr) { // GR
+      if (is_gr) { // GR
         u1(m,IEN,k,j,i) = wtot_local*u_local[0]*u_local_low[0] + ptot_local;
         u1(m,IM1,k,j,i) = wtot_local*u_local[0]*u_local_low[1];
         u1(m,IM2,k,j,i) = wtot_local*u_local[0]*u_local_low[2];
@@ -633,7 +633,7 @@ void ProblemGenerator::GRLinearWave(ParameterInput *pin, const bool restart) {
   }  // End initialization Hydro variables
 
   // initialize MHD variables ------------------------------------------------------------
-  if (pmbp->mhd != nullptr) {
+  if (pmbp->pmhd != nullptr) {
 
     // compute solution in u1/b1 registers. For initial conditions, set u1/b1 -> u0/b0.
     auto &u1 = (set_initial_conditions)? pmbp->pmhd->u0 : pmbp->pmhd->u1;
@@ -692,7 +692,7 @@ void ProblemGenerator::GRLinearWave(ParameterInput *pin, const bool restart) {
 
       // Set conserved cell-centered variables
       u1(m,IDN,k,j,i) = u_local[0] * rho_local;
-      if {is_gr) { // GR
+      if (is_gr) { // GR
         u1(m,IEN,k,j,i) = wtot_local*u_local[0]*u_local_low[0]
                                - b_local[0]*b_local_low[0] + ptot_local;
         u1(m,IM1,k,j,i) = wtot_local*u_local[0]*u_local_low[1]
@@ -710,8 +710,6 @@ void ProblemGenerator::GRLinearWave(ParameterInput *pin, const bool restart) {
       }
 
       // Initialize face-centered magnetic fields
-      Real local_amp = amp * std::sin(wavenumber * x1v);
-      Real u_local[4], b_local[4];
       for (int mu = 0; mu < 4; ++mu) {
         u_local[mu] = u[mu] + local_amp * delta_u[mu];
         b_local[mu] = b[mu] + local_amp * delta_b[mu];
@@ -751,6 +749,6 @@ void GRLinearWaveErrors(ParameterInput *pin, Mesh *pm) {
   // register u1/b1 when flag is false.
   set_initial_conditions = false;
   pm->pgen->LinearWave(pin, false);
-  pm->pgen->OutputErrors(pin, false);
+  pm->pgen->OutputErrors(pin, pm);
   return;
 }

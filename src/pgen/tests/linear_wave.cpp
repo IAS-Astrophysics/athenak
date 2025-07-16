@@ -837,6 +837,6 @@ void LinearWaveErrors(ParameterInput *pin, Mesh *pm) {
   // register u1/b1 when flag is false.
   set_initial_conditions = false;
   pm->pgen->LinearWave(pin, false);
-  pm->pgen->OutputErrors(pin, false);
+  pm->pgen->OutputErrors(pin, pm);
   return;
 }
