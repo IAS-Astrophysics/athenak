@@ -70,6 +70,9 @@ class ProblemGenerator {
   void SphericalCollapse(ParameterInput *pin, const bool restart);
   void Diffusion(ParameterInput *pin, const bool restart);
 
+  // Generic error output function (using difference u0-u1)
+  void OutputErrors(ParameterInput *pin, Mesh *pm);
+
   // template for user-specified problem generator
   void UserProblem(ParameterInput *pin, const bool restart);
 
