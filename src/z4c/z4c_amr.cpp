@@ -35,7 +35,7 @@ Z4c_AMR::Z4c_AMR(ParameterInput *pin) {
     chi_thresh = pin->GetOrAddReal("z4c_amr", "chi_min", 0.2);
   } else if (ref_method == "dchi") {
     method = dChi;
-    dchi_thresh = pin->GetOrAddReal("z4c_amr", "dchi_max", 0.1);
+    dchi_thresh = pin->GetOrAddReal("z4c_amr", "dchi_max", 0.01);
   } else {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line "
               << __LINE__ << std::endl;
