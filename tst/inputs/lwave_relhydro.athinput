@@ -34,13 +34,15 @@ nx3       = 1         # Number of cells in each MeshBlock, X3-dir
 
 <coord>
 special_rel = true
+general_rel = false
+minkowski   = true
 
 <time>
 evolution  = dynamic   # dynamic/kinematic/static
 integrator = rk2       # time integration algorithm
 cfl_number = 0.3       # The Courant, Friedrichs, & Lewy (CFL) Number
 nlim       = -1        # cycle limit (no limit if <0)
-tlim       = 10.0      # time limit
+tlim       = 1.0      # time limit
 ndiag      = 1         # cycles between diagostic output
 
 <hydro>
@@ -52,10 +54,10 @@ gamma       = 1.333333 # gamma = C_p/C_v
 <problem>
 pgen_name = gr_linear_wave # problem generator name
 wave_flag = 1              # Wave family number ([0-4] for adiabatic hydro, [0-6] for MHD)
-amp       = 1.0e-3         # Wave Amplitude
-rho       = 1.0   # background density rho
-pgas      = 0.5   # background gas pressure p_gas
+amp       = 1.0e-6         # Wave Amplitude
+rho       = 4.0   # background density rho
+pgas      = 1.0   # background gas pressure p_gas
 vx        = 0.1   # background 3-velocity v^x
-vy        = 0.15  # background 3-velocity v^y
-vz        = 0.05  # background 3-velocity v^z
+vy        = 0.3   # background 3-velocity v^y
+vz        = -0.05 # background 3-velocity v^z
 

@@ -552,7 +552,16 @@ void ProblemGenerator::GRLinearWave(ParameterInput *pin, const bool restart) {
 
   // Calculate wavenumber such that wave has single period over domain
   // For relativistic tests, wavevector always parallel to X-axis
-  wavenumber = 2.0*M_PI / (pmy_mesh_->mesh_size.x1max - pmy_mesh_->mesh_size.x1min);
+  Real lx = (pmy_mesh_->mesh_size.x1max - pmy_mesh_->mesh_size.x1min);
+  wavenumber = 2.0*M_PI / lx;
+
+  // set new time limit in ParameterInput (to be read by Driver constructor) based on
+  // wave speed of selected mode.
+  // input tlim is interpreted asnumber of wave periods for evolution
+  if (set_initial_conditions) {
+    Real tlim = pin->GetReal("time", "tlim");
+    pin->SetReal("time", "tlim", tlim*(std::abs(lx/lambda)));
+  }
 
   // capture variables for kernel
   auto &indcs = pmy_mesh_->mb_indcs;
