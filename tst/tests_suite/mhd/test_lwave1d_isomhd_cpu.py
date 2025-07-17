@@ -27,10 +27,10 @@ convrates['rk3'] = np.array([[0.3, 0.3, 0.3, 0.3, 0.4, 0.4],
                             [0.3, 0.3, 0.07, 0.07, 0.07, 0.07],
                             [0.3, 0.3, 0.07, 0.07, 0.1, 0.1],])
 _int = ['rk3']
-_recon = ['plm', 'ppm4', 'ppmx', 'wenoz']# do not change order
-_wave = ['0','5','1','4','2','3']# do not chnage order
+_recon = ['plm', 'ppm4', 'ppmx', 'wenoz']  # do not change order
+_wave = ['0','5','1','4','2','3']          # do not chnage order
 _flux = ['llf', 'hlle', 'hlld']
-_res = [32, 64]  # resolutions to test
+_res = [32, 64]                            # resolutions to test
 
 @pytest.mark.parametrize("iv" , _int)
 @pytest.mark.parametrize("rv" , _recon)

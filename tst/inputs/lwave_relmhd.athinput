@@ -28,7 +28,7 @@ ix3_bc    = periodic   # inner-X3 boundary flag
 ox3_bc    = periodic   # outer-X3 boundary flag
 
 <meshblock>
-nx1       = 64        # Number of cells in each MeshBlock, X1-dir
+nx1       = 32        # Number of cells in each MeshBlock, X1-dir
 nx2       = 1         # Number of cells in each MeshBlock, X2-dir
 nx3       = 1         # Number of cells in each MeshBlock, X3-dir
 
@@ -45,7 +45,7 @@ nlim       = -1        # cycle limit (no limit if <0)
 tlim       = 1.0      # time limit
 ndiag      = 1         # cycles between diagostic output
 
-<hydro>
+<mhd>
 eos         = ideal    # EOS type
 reconstruct = plm      # spatial reconstruction method
 rsolver     = llf      # Riemann-solver to be used
@@ -60,4 +60,6 @@ pgas      = 1.0   # background gas pressure p_gas
 vx        = 0.1   # background 3-velocity v^x
 vy        = 0.3   # background 3-velocity v^y
 vz        = -0.05 # background 3-velocity v^z
-
+bx        = 2.5   # background magnetic field B^z
+by        = 1.8   # background magnetic field B^y
+bz        = -1.2  # background magnetic field B^z

@@ -225,9 +225,9 @@ void ProblemGenerator::GRLinearWave(ParameterInput *pin, const bool restart) {
   bx = 0.0;
   Real by = 0.0, bz = 0.0;
   if (pmbp->pmhd != nullptr) {
-    bx = pin->GetReal("problem", "Bx");
-    by = pin->GetReal("problem", "By");
-    bz = pin->GetReal("problem", "Bz");
+    bx = pin->GetReal("problem", "bx");
+    by = pin->GetReal("problem", "by");
+    bz = pin->GetReal("problem", "bz");
   }
 
   // Calculate background 4-vectors
@@ -574,9 +574,11 @@ void ProblemGenerator::GRLinearWave(ParameterInput *pin, const bool restart) {
 
   // initialize Hydro variables ----------------------------------------------------------
   if (pmbp->phydro != nullptr) {
+    Real gm1 = pmbp->phydro->peos->eos_data.gamma - 1.0;
 
     // compute solution in u1 register. For initial conditions, set u1 -> u0.
     auto &u1 = (set_initial_conditions)? pmbp->phydro->u0 : pmbp->phydro->u1;
+    auto &w0_ = pmbp->phydro->w0;
 
     par_for("pgen_linwave1", DevExeSpace(), 0,(pmbp->nmb_thispack-1),ks,ke,js,je,is,ie,
     KOKKOS_LAMBDA(int m, int k, int j, int i) {
@@ -625,28 +627,27 @@ void ProblemGenerator::GRLinearWave(ParameterInput *pin, const bool restart) {
       Real wtot_local = rho_local + gamma_adi_red * pgas_local;
       Real ptot_local = pgas_local;
 
-      // Set conserved hydro variables
-      u1(m,IDN,k,j,i) = u_local[0] * rho_local;
-      if (is_gr) { // GR
-        u1(m,IEN,k,j,i) = wtot_local*u_local[0]*u_local_low[0] + ptot_local;
-        u1(m,IM1,k,j,i) = wtot_local*u_local[0]*u_local_low[1];
-        u1(m,IM2,k,j,i) = wtot_local*u_local[0]*u_local_low[2];
-        u1(m,IM3,k,j,i) = wtot_local*u_local[0]*u_local_low[3];
-      } else {  // SR
-        u1(m,IEN,k,j,i) = wtot_local*u_local[0]*u_local[0] - ptot_local;
-        u1(m,IM1,k,j,i) = wtot_local*u_local[0]*u_local[1];
-        u1(m,IM2,k,j,i) = wtot_local*u_local[0]*u_local[2];
-        u1(m,IM3,k,j,i) = wtot_local*u_local[0]*u_local[3];
-      }
+      // Set primitive hydro variables
+      w0_(m,IDN,k,j,i) = rho_local;
+      w0_(m,IEN,k,j,i) = pgas_local/gm1;
+      w0_(m,IVX,k,j,i) = u_local[1];
+      w0_(m,IVY,k,j,i) = u_local[2];
+      w0_(m,IVZ,k,j,i) = u_local[3];
     });
+
+    // Convert primitive to conserved
+    pmbp->phydro->peos->PrimToCons(w0_, u1, is, ie, js, je, ks, ke);
   }  // End initialization Hydro variables
 
   // initialize MHD variables ------------------------------------------------------------
   if (pmbp->pmhd != nullptr) {
+    Real gm1 = pmbp->pmhd->peos->eos_data.gamma - 1.0;
 
     // compute solution in u1/b1 registers. For initial conditions, set u1/b1 -> u0/b0.
     auto &u1 = (set_initial_conditions)? pmbp->pmhd->u0 : pmbp->pmhd->u1;
     auto &b1 = (set_initial_conditions)? pmbp->pmhd->b0 : pmbp->pmhd->b1;
+    auto &w0_ = pmbp->pmhd->w0;
+    auto &bcc0_ = pmbp->pmhd->bcc0;
 
     par_for("pgen_linwave2", DevExeSpace(), 0,(pmbp->nmb_thispack-1),ks,ke,js,je,is,ie,
     KOKKOS_LAMBDA(int m, int k, int j, int i) {
@@ -699,26 +700,14 @@ void ProblemGenerator::GRLinearWave(ParameterInput *pin, const bool restart) {
       Real wtot_local = rho_local + gamma_adi_red * pgas_local + b_sq_local;
       Real ptot_local = pgas_local + 0.5*b_sq_local;
 
-      // Set conserved cell-centered variables
-      u1(m,IDN,k,j,i) = u_local[0] * rho_local;
-      if (is_gr) { // GR
-        u1(m,IEN,k,j,i) = wtot_local*u_local[0]*u_local_low[0]
-                               - b_local[0]*b_local_low[0] + ptot_local;
-        u1(m,IM1,k,j,i) = wtot_local*u_local[0]*u_local_low[1]
-                               - b_local[0]*b_local_low[1];
-        u1(m,IM2,k,j,i) = wtot_local*u_local[0]*u_local_low[2]
-                               - b_local[0]*b_local_low[2];
-        u1(m,IM3,k,j,i) = wtot_local*u_local[0]*u_local_low[3]
-                               - b_local[0]*b_local_low[3];
-      } else {  // SR
-        u1(m,IEN,k,j,i) = wtot_local*u_local[0]*u_local[0] - b_local[0]*b_local[0]
-                               - ptot_local;
-        u1(m,IM1,k,j,i) = wtot_local*u_local[0]*u_local[1] - b_local[0]*b_local[1];
-        u1(m,IM2,k,j,i) = wtot_local*u_local[0]*u_local[2] - b_local[0]*b_local[2];
-        u1(m,IM3,k,j,i) = wtot_local*u_local[0]*u_local[3] - b_local[0]*b_local[3];
-      }
+      // Set primitive cell-centered variables
+      w0_(m,IDN,k,j,i) = rho_local;
+      w0_(m,IEN,k,j,i) = pgas_local/gm1;
+      w0_(m,IVX,k,j,i) = u_local[1];
+      w0_(m,IVY,k,j,i) = u_local[2];
+      w0_(m,IVZ,k,j,i) = u_local[3];
 
-      // Initialize face-centered magnetic fields
+      // Initialize face-centered and cell-centered magnetic fields
       for (int mu = 0; mu < 4; ++mu) {
         u_local[mu] = u[mu] + local_amp * delta_u[mu];
         b_local[mu] = b[mu] + local_amp * delta_b[mu];
@@ -730,17 +719,23 @@ void ProblemGenerator::GRLinearWave(ParameterInput *pin, const bool restart) {
       if (i==ie) {
         b1.x1f(m,k,j,i+1) = bx;
       }
+      bcc0_(m,IBX,k,j,i) = bx;
 
       b1.x2f(m,k,j,i) = by_local;
       if (j==je) {
         b1.x2f(m,k,j+1,i) = by_local;
       }
+      bcc0_(m,IBY,k,j,i) = by_local;
 
       b1.x3f(m,k,j,i) = bz_local;
       if (k==ke) {
         b1.x3f(m,k+1,j,i) = bz_local;
       }
+      bcc0_(m,IBZ,k,j,i) = bz_local;
     });
+
+    // Convert primitive to conserved
+    pmbp->pmhd->peos->PrimToCons(w0_, bcc0_, u1, is, ie, js, je, ks, ke);
   }
 
   return;
@@ -757,7 +752,7 @@ void GRLinearWaveErrors(ParameterInput *pin, Mesh *pm) {
   // calculate reference solution by calling pgen again.  Solution stored in second
   // register u1/b1 when flag is false.
   set_initial_conditions = false;
-  pm->pgen->LinearWave(pin, false);
+  pm->pgen->GRLinearWave(pin, false);
   pm->pgen->OutputErrors(pin, pm);
   return;
 }
