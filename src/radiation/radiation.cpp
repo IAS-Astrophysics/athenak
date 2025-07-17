@@ -41,7 +41,7 @@ Radiation::Radiation(MeshBlockPack *ppack, ParameterInput *pin) :
     tet_d3_x3f("tet_d3_x3f",1,1,1,1,1),
     na("na",1,1,1,1,1,1),
     norm_to_tet("norm_to_tet",1,1,1,1,1,1),
-    freq_grid("freq_grid",1), 
+    freq_grid("freq_grid",1),
     beam_mask("beam_mask",1,1,1,1,1) {
   // Check for general relativity
   if (!(pmy_pack->pcoord->is_general_relativistic)) {
@@ -73,13 +73,12 @@ Radiation::Radiation(MeshBlockPack *ppack, ParameterInput *pin) :
   nfreq = 1;
   multi_freq = pin->GetOrAddBoolean("radiation","multi_freq",false);
   if (multi_freq) {
-
     // number of frequency groups
-    nfreq = pin->GetOrAddInteger("radiation","nfreq",2);
+    nfreq = pin->GetOrAddInteger("radiation","nfreq",3);
 
-    if (nfreq < 2) {
+    if (nfreq < 3) {
       std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-        << std::endl << "Number of frequency groups must be >= 2 for multi-frequency radiation" << std::endl;
+        << std::endl << "Number of frequency groups must be >= 3 for multi-frequency radiation" << std::endl;
       std::exit(EXIT_FAILURE);
     }
 
@@ -94,22 +93,14 @@ Radiation::Radiation(MeshBlockPack *ppack, ParameterInput *pin) :
     else // log frequency grid
       flag_fscale = 1;
 
-    if (nu_max < nu_min) {
+    if (nu_max <= nu_min) {
       std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-        << std::endl << "Frequency maximum cannot be less than frequency minumum for multi-frequency radiation" << std::endl;
-      std::exit(EXIT_FAILURE);
-    } else if ((nu_max == nu_min) && (nfreq > 2)) {
-      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-        << std::endl << "Only 2 frequency groups are allowed when frequency maximum is equal to frequency minumum" << std::endl;
-      std::exit(EXIT_FAILURE);
-    } else if ((nu_max > nu_min) && (nfreq == 2)) {
-      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-        << std::endl << "Frequency maximum must be equal to frequency minumum for only 2 frequency groups" << std::endl;
+        << std::endl << "Frequency maximum must be larger than frequency minumum for multi-frequency radiation" << std::endl;
       std::exit(EXIT_FAILURE);
     }
 
     // auxiliary quantities
-    Kokkos::realloc(freq_grid,nfreq-1);
+    Kokkos::realloc(freq_grid,nfreq);
     SetFrequencyGrid();
     // Kokkos::realloc(matrix_imap,nfreq,nfreq);
   } // endif (multi_freq)

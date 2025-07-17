@@ -114,11 +114,12 @@ class Radiation {
 
   // Multi-frequency radiation
   bool multi_freq = false;
-  int nfreq = 1;
+  int nfreq = 1; // for multi-frequency, nfreq >= 3
   int flag_fscale; // 0: linear, 1: log, 2: customize
-  Real nu_max, nu_min;
+  Real nu_max, nu_min; // minimum and maximum frequency (excluding zero and infinity)
   DvceArray1D<Real> freq_grid;
-  DvceArray2D<Real> matrix_imap;
+
+  // DvceArray2D<Real> matrix_imap;
   Real kappa_r_multi_freq; // constant Rosseland mean absoprtion coefficient
   Real kappa_s_multi_freq; // constant scattering coefficient
   Real kappa_p_multi_freq; // Planck mean coefficient
@@ -178,7 +179,7 @@ class Radiation {
   TaskStatus ClearRecv(Driver *d, int stage);
 
   // Multi-frequency radiation
-  // TaskStatus AddMultiFreqRadiationSourceTerm(Driver *d, int stage);
+  TaskStatus AddMultiFreqRadSrcTerm(Driver *d, int stage);
 
  private:
   MeshBlockPack* pmy_pack;  // ptr to MeshBlockPack containing this Radiation

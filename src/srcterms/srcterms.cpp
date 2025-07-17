@@ -24,6 +24,7 @@
 #include "mhd/mhd.hpp"
 #include "parameter_input.hpp"
 #include "radiation/radiation.hpp"
+#include "radiation/radiation_multi_freq.hpp"
 #include "turb_driver.hpp"
 #include "units/units.hpp"
 
@@ -241,8 +242,9 @@ void SourceTerms::BeamSource(DvceArray5D<Real> &i0, const Real bdt) {
     par_for("beam_source_multi_freq",DevExeSpace(),0,nmb1,0,nfr_ang1,ks,ke,js,je,is,ie,
     KOKKOS_LAMBDA(int m, int n, int k, int j, int i) {
       // compute frequency and angle indices
-      int ifr  = n / nang_;
-      int iang = n - ifr*nang_;
+      int ifr, iang;
+      getFreqAngIndices(n, nang_, ifr, iang);
+
       if (beam_mask_(m,iang,k,j,i)) {
         Real n0 = tt(m,0,0,k,j,i);
         Real n_0 = tc(m,0,0,k,j,i)*nh_c_.d_view(iang,0) + tc(m,1,0,k,j,i)*nh_c_.d_view(iang,1)

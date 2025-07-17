@@ -19,6 +19,7 @@
 #include "geodesic-grid/geodesic_grid.hpp"
 #include "srcterms/srcterms.hpp"
 #include "radiation.hpp"
+#include "radiation_multi_freq.hpp"
 
 namespace radiation {
 //----------------------------------------------------------------------------------------
@@ -65,8 +66,8 @@ TaskStatus Radiation::RKUpdate(Driver *pdriver, int stage) {
   par_for("r_update",DevExeSpace(),0,nmb1,0,nfr_ang1,ks,ke,js,je,is,ie,
   KOKKOS_LAMBDA(int m, int n, int k, int j, int i) {
     // compute frequency and angle indices
-    int ifr  = n / nang_;
-    int iang = n - ifr*nang_;
+    int ifr, iang;
+    getFreqAngIndices(n, nang_, ifr, iang);
 
     // spatial fluxes
     Real divf_s = (flx1(m,n,k,j,i+1) - flx1(m,n,k,j,i))/mbsize.d_view(m).dx1;
