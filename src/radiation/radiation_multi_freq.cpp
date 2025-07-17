@@ -238,8 +238,13 @@ TaskStatus Radiation::AddMultiFreqRadSrcTerm(Driver *pdriver, int stage) {
     }
 
     // compute frequency-dependent coefficients
-    Real sum_a[nfreq1+1], sum_b[nfreq1+1], jr_cm_old[nfreq1+1];
-    Real eps_em[nfreq1+1], chi_p[nfreq1+1], chi_r[nfreq1+1], chi_s[nfreq1+1];
+    Real sum_a[nfreq1+1];
+    Real sum_b[nfreq1+1];
+    Real jr_cm_old[nfreq1+1];
+    Real eps_em[nfreq1+1];
+    Real chi_p[nfreq1+1];
+    Real chi_r[nfreq1+1];
+    Real chi_s[nfreq1+1];
     for (int ifr=0; ifr<=nfreq1; ++ifr) {
       Real &nu_f = nu_tet(ifr);
 
@@ -249,7 +254,7 @@ TaskStatus Radiation::AddMultiFreqRadSrcTerm(Driver *pdriver, int stage) {
         Real &nu_fp1 = nu_tet(ifr+1);
         eps_f = 1./(4*M_PI) * BBIntegral(nu_f, nu_fp1, tgas, arad_);
       } else {
-        eps_f = 1./(4*M_PI) * arad_*SQR(SQR(teff)); // from 0 to inf
+        eps_f = 1./(4*M_PI) * arad_*SQR(SQR(tgas)); // from 0 to inf
         eps_f = eps_f - 1./(4*M_PI) * BBIntegral(0, nu_f, tgas, arad_);
       } // endelse
       eps_em[ifr] = fmax(0., eps_f);
@@ -265,9 +270,6 @@ TaskStatus Radiation::AddMultiFreqRadSrcTerm(Driver *pdriver, int stage) {
       jr_cm_old[ifr] = 0;
 
     } // endfor ifr
-
-
-
 
     // Step 1: map fluid-frame intensity into tetrad-frame frequency grid
     Real matrix_imap[nfreq1+1][nfreq1+1];
@@ -295,7 +297,7 @@ TaskStatus Radiation::AddMultiFreqRadSrcTerm(Driver *pdriver, int stage) {
       // get effective temperature at last frequency bin
       int ne = getFreqAngIndex(nfreq1, iang, nang);
       Real ir_cm_star_e = SQR(SQR(n0_cm))*i0_(m,ne,k,j,i)/(n0*n_0);
-      Real teff = GetEffTemperature(ir_cm_star_e, n0_cm*nu_e);
+      Real teff = GetEffTemperature(ir_cm_star_e, n0_cm*nu_e, arad_);
 
       // locate left & right fluid-frame frequency bins (if exist)
       // -1 <= idx_l   <= N-1

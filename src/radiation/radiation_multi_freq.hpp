@@ -142,7 +142,7 @@ Real BBIntegral(const Real &nu_min, const Real &nu_max, const Real &temp, const 
 
 
 KOKKOS_INLINE_FUNCTION
-Real GetEffTemperature(const Real &ir_cm_e, const Real &nu_e) {
+Real GetEffTemperature(const Real &ir_cm_e, const Real &nu_e, const Real &a_rad) {
 
   // estimate temp_old first;
   Real temp_old = 1; // TODO: estimate
@@ -156,7 +156,7 @@ Real GetEffTemperature(const Real &ir_cm_e, const Real &nu_e) {
     Real func = (1-holB) * a_rad*SQR(SQR(temp_old))/(4*M_PI) - ir_cm_e;
     Real dfunc = (4./temp_old * (1-holB) - dholB) * a_rad*SQR(SQR(temp_old))/(4*M_PI);
 
-    dtemp = -func/dfunc;
+    Real dtemp = -func/dfunc;
     temp_new = temp_old + dtemp;
   }
 
