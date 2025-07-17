@@ -29,9 +29,17 @@ parser.add_argument(
     nargs="*", 
     help="Add cmake arguments if needed."
 )
-args = parser.parse_args()
+parser.add_argument(
+    "--gpu", 
+    nargs="*", 
+    help="Add cmake arguments if needed."
+)
 
-if args.style==None and args.cpu==None and args.mpicpu==None:
+args = parser.parse_args()
+status=True
+for arg in vars(args):
+    status *= getattr(args,arg) == None
+if status:
     print("No test suite specified.")
     print(parser.format_help())
     sys.exit(1)
@@ -49,5 +57,10 @@ if args.mpicpu != None:
     testutils.clean_make(flags=cmake_flags(args.mpicpu, ["-D", "Athena_ENABLE_MPI=ON"]))
     pytest.main(["tests_suite/hydro", "-k", "_mpicpu"])
     pytest.main(["tests_suite/mhd", "-k", "_mpicpu"])
+
+if args.gpu != None: 
+    testutils.clean_make(flags=cmake_flags(args.gpu, ["-D", "Kokkos_ENABLE_CUDA=On"]),text=True)
+    pytest.main(["tests_suite/hydro", "-k", "_gpu"])
+    pytest.main(["tests_suite/mhd", "-k", "_gpu"])
 
 testutils.clean()
