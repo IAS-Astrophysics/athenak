@@ -163,19 +163,6 @@ void QuarticRoots(Real a3, Real a2, Real a1, Real a0, Real *px1, Real *px2,
   return;
 }
 
-// Global variables
-Real amp;                     // amplitude of wave
-bool compute_error;           // flag indicating L1 errors should be computed and saved
-Real gamma_adi_red;           // reduced adiabatic index \Gamma/(\Gamma-1)
-Real rho, pgas;               // thermodynamic quantities
-Real vx, vy, vz;              // 3-velocity components
-Real bx;                      // longitudinal magnetic field
-Real u[4], b[4];              // contravariant quantities
-Real delta_rho, delta_pgas;   // perturbations to thermodynamic quantities
-Real delta_u[4], delta_b[4];  // perturbations to contravariant quantities
-Real delta_v[4];              // perturbations to 3-velocity
-Real lambda;                  // wavespeed
-Real wavenumber;              // wavenumber
 // global variable to control computation of initial conditions versus errors
 bool set_initial_conditions = true;
 
@@ -204,7 +191,7 @@ void ProblemGenerator::GRLinearWave(ParameterInput *pin, const bool restart) {
 
   // Read information regarding desired wave
   int wave_flag = pin->GetInteger("problem", "wave_flag");
-  amp = pin->GetReal("problem", "amp");
+  Real amp = pin->GetReal("problem", "amp");
 
   // Get ratio of specific heats
   Real gamma_adi;
@@ -214,15 +201,15 @@ void ProblemGenerator::GRLinearWave(ParameterInput *pin, const bool restart) {
   if (pmbp->pmhd != nullptr) {
     gamma_adi = pin->GetReal("mhd", "gamma");
   }
-  gamma_adi_red = gamma_adi / (gamma_adi - 1.0);
+  Real gamma_adi_red = gamma_adi / (gamma_adi - 1.0);
 
   // Read background state
-  rho = pin->GetReal("problem", "rho");
-  pgas = pin->GetReal("problem", "pgas");
-  vx = pin->GetReal("problem", "vx");
-  vy = pin->GetReal("problem", "vy");
-  vz = pin->GetReal("problem", "vz");
-  bx = 0.0;
+  Real rho = pin->GetReal("problem", "rho");
+  Real pgas = pin->GetReal("problem", "pgas");
+  Real vx = pin->GetReal("problem", "vx");
+  Real vy = pin->GetReal("problem", "vy");
+  Real vz = pin->GetReal("problem", "vz");
+  Real bx = 0.0;
   Real by = 0.0, bz = 0.0;
   if (pmbp->pmhd != nullptr) {
     bx = pin->GetReal("problem", "bx");
@@ -232,6 +219,7 @@ void ProblemGenerator::GRLinearWave(ParameterInput *pin, const bool restart) {
 
   // Calculate background 4-vectors
   Real v_sq = SQR(vx) + SQR(vy) + SQR(vz);
+  Real u[4], b[4];              // contravariant quantities
   u[0] = 1.0 / std::sqrt(1.0 - v_sq);
   u[1] = u[0]*vx;
   u[2] = u[0]*vy;
@@ -248,6 +236,10 @@ void ProblemGenerator::GRLinearWave(ParameterInput *pin, const bool restart) {
   Real cs_sq = gamma_adi * pgas / wgas;
   Real cs = std::sqrt(cs_sq);
 
+  Real delta_rho, delta_pgas;   // perturbations to thermodynamic quantities
+  Real delta_u[4], delta_b[4];  // perturbations to contravariant quantities
+  Real delta_v[4];              // perturbations to 3-velocity
+  Real lambda;                  // wavespeed
   // Calculate desired perturbation in MHD
   if (pmbp->pmhd != nullptr) {
     switch (wave_flag) {
@@ -553,7 +545,7 @@ void ProblemGenerator::GRLinearWave(ParameterInput *pin, const bool restart) {
   // Calculate wavenumber such that wave has single period over domain
   // For relativistic tests, wavevector always parallel to X-axis
   Real lx = (pmy_mesh_->mesh_size.x1max - pmy_mesh_->mesh_size.x1min);
-  wavenumber = 2.0*M_PI / lx;
+  Real wavenumber = 2.0*M_PI / lx;
 
   // set new time limit in ParameterInput (to be read by Driver constructor) based on
   // wave speed of selected mode.
