@@ -68,8 +68,3 @@ gamma       = 1.3333333333333  # gamma = C_p/C_v
 pgen_name  = gr_bondi
 k_adi      = 1.0       # adiabat K, p_gas = K rho^Gamma
 r_crit     = 8.0       # sonic point radius, in units of mass
-
-<output1>
-file_type  = bin      # Binary data dump
-variable   = hydro_w  # variables to be output
-dt         = 1.0      # time increment between outputs

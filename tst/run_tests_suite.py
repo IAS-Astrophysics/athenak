@@ -57,6 +57,7 @@ if args.mpicpu != None:
     testutils.clean_make(flags=cmake_flags(args.mpicpu, ["-D", "Athena_ENABLE_MPI=ON"]))
     pytest.main(["tests_suite/hydro", "-k", "_mpicpu"])
     pytest.main(["tests_suite/mhd", "-k", "_mpicpu"])
+    pytest.main(["tests_suite/gr", "-k", "_mpicpu"])
 
 if args.gpu != None: 
     testutils.clean_make(flags=cmake_flags(args.gpu, ["-D", "Kokkos_ENABLE_CUDA=On"]),text=True)
