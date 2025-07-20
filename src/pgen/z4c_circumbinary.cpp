@@ -149,6 +149,11 @@ void TorusHistory(HistoryData *pdata, Mesh *pm);
 //!  assumes x3 is axisymmetric direction
 
 void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
+  // AMR strategy
+  user_ref_func  = RefinementCondition;
+
+  // return if restart
+  if (restart) return;
   MeshBlockPack *pmbp = pmy_mesh_->pmb_pack;
   auto &indcs         = pmy_mesh_->mb_indcs;
   if (!pmbp->pcoord->is_general_relativistic &&
@@ -313,9 +318,6 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   }
   std::cout << "TwoPuncture initialized. Now the fun (disk) starts. " << std::endl;
 
-  // AMR strategy
-  user_ref_func  = RefinementCondition;
-
   // User boundary function
   user_bcs_func = NoInflowTorus;
   //user_hist_func = &TorusHistory;
@@ -342,9 +344,6 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   grids.push_back(std::make_unique<SphericalGrid>(pmbp, 5, 12.0));
   grids.push_back(std::make_unique<SphericalGrid>(pmbp, 5, 24.0));
   user_hist_func = TorusFluxes;
-
-  // return if restart
-  if (restart) return;
 
   // Select either Hydro or MHD
   DvceArray5D<Real> u0_, w0_;
