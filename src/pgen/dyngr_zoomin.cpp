@@ -1115,9 +1115,11 @@ void SetADMVariables(MeshBlockPack *pmbp) {
 // History function
 void ZoomHistory(HistoryData *pdata, Mesh *pm) {
   // Select the number of outputs and create labels for them.
-  pdata->nhist = 2;
+  pdata->nhist = 4;
   pdata->label[0] = "btor-max";
   pdata->label[1] = "bpol-max";
+  pdata->label[2] = "btor-sum";
+  pdata->label[3] = "bpol-sum";
 
   // capture class variables for kernel
   auto &bcc0_ = pm->pmb_pack->pmhd->bcc0;
@@ -1134,8 +1136,10 @@ void ZoomHistory(HistoryData *pdata, Mesh *pm) {
   auto &size = pm->pmb_pack->pmb->mb_size;
   Real btor_max = 0.0;
   Real bpol_max = 0.0;
-  Kokkos::parallel_reduce("ZoomHistSums",Kokkos::RangePolicy<>(DevExeSpace(), 0, nmkji),
-  KOKKOS_LAMBDA(const int &idx, Real &mb_btor_max, Real &mb_bpol_max) {
+  Real btor_sum = 0.0;
+  Real bpol_sum = 0.0;
+  Kokkos::parallel_reduce("ZoomHistorySums",Kokkos::RangePolicy<>(DevExeSpace(), 0, nmkji),
+  KOKKOS_LAMBDA(const int &idx, Real &mb_btor_max, Real &mb_bpol_max, Real &mb_btor_sum, Real &mb_bpol_sum) {
     // coompute n,k,j,i indices of thread
     int m = (idx)/nkji;
     int k = (idx - m*nkji)/nji;
@@ -1180,7 +1184,10 @@ void ZoomHistory(HistoryData *pdata, Mesh *pm) {
 
     mb_btor_max = fmax(btor, mb_btor_max);
     mb_bpol_max = fmax(bpol, mb_bpol_max);
-  }, Kokkos::Max<Real>(btor_max), Kokkos::Max<Real>(bpol_max));
+    mb_btor_sum += btor*gamma;
+    mb_bpol_sum += bpol*gamma;
+  }, Kokkos::Max<Real>(btor_max), Kokkos::Max<Real>(bpol_max),
+     Kokkos::Sum<Real>(btor_sum), Kokkos::Sum<Real>(bpol_sum));
 
   // Currently AthenaK only supports MPI_SUM operations between ranks, but we need MPI_MAX
   // and MPI_MIN operations instead. This is a cheap hack to make it work as intended.
@@ -1199,6 +1206,8 @@ void ZoomHistory(HistoryData *pdata, Mesh *pm) {
   // store data in hdata array
   pdata->hdata[0] = btor_max;
   pdata->hdata[1] = bpol_max;
+  pdata->hdata[2] = btor_sum;
+  pdata->hdata[3] = bpol_sum;
 }
 
 // how decide the refinement
