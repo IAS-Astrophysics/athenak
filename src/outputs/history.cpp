@@ -205,7 +205,8 @@ void HistoryOutput::LoadZ4cHistoryData(HistoryData *pdata, Mesh *pm) {
                                 adm.g_dd(m,0,2,k,j,i), adm.g_dd(m,1,1,k,j,i),
                                 adm.g_dd(m,1,2,k,j,i), adm.g_dd(m,2,2,k,j,i));
 
-    Real vol = size.d_view(m).dx1*size.d_view(m).dx2*size.d_view(m).dx3 * std::pow(std::abs(detg),0.5);
+    Real vol = size.d_view(m).dx1*size.d_view(m).dx2*size.d_view(m).dx3
+               * std::pow(std::abs(detg),0.5);
 
     // Excise the punctures based on chi
     array_sum::GlobalSum hvars;
