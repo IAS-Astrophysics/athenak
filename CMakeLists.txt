@@ -121,6 +121,13 @@ endif()
 if (ENABLE_OPENMP)
   target_link_libraries(athena PUBLIC OpenMP::OpenMP_CXX)
 endif()
+
+# define the C99 ‘restrict’ keyword away under C++
+target_compile_definitions(athena PRIVATE restrict= )
+
+target_include_directories(athena PRIVATE ${CMAKE_SOURCE_DIR}/bhahaha)
+target_link_libraries(athena PUBLIC ${CMAKE_SOURCE_DIR}/bhahaha/libBHaHAHA.a)
+
 if (${PROBLEM} STREQUAL "z4c_two_puncture")
 	target_include_directories(athena PRIVATE ${CMAKE_SOURCE_DIR}/twopuncturesc/include)
 	target_link_libraries(athena PUBLIC ${CMAKE_SOURCE_DIR}/twopuncturesc/lib/libTwoPunctures.a)

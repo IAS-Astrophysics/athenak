@@ -17,6 +17,10 @@
 #include <cstdio>
 #include <utility>
 
+extern "C" {
+  #include "BHaHAHA.h"
+}
+
 #if MPI_PARALLEL_ENABLED
 #include <mpi.h>
 #endif
