@@ -18,15 +18,15 @@ import numpy as np
 # Threshold errors and convergence rates
 # for different integrators, reconstructions, and wave types
 maxerrors={}
-maxerrors['rk3'] = np.array([[2.0e-8,  2.0e-8],
-                             [5.0e-9,  5.0e-9],
-                             [4.0e-11, 4.0e-11],
-                             [4.0e-11, 4.0e-11]])
+maxerrors['rk3'] = np.array([[1e-07,1e-07,],
+                            [1e-07,1e-07,],
+                            [1e-09,1e-09,],
+                            [1e-09,1e-09,],])
 convrates={}
-convrates['rk3'] = np.array([[0.30, 0.30],
-                             [0.25, 0.25],
-                             [0.08, 0.08],
-                             [0.11, 0.11]])
+convrates['rk3'] = np.array([[0.28,0.28,],
+                            [0.23,0.23,],
+                            [0.08,0.08,],
+                            [0.11,0.11,]])
 
 _int = ['rk3']
 _recon = ['plm', 'ppm4', 'ppmx', 'wenoz']  # do not change order

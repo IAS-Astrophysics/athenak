@@ -17,15 +17,15 @@ import numpy as np
 # Threshold errors and convergence rates
 # for different integrators, reconstructions, and wave types
 maxerrors={}
-maxerrors['rk3'] = np.array([[8e-08, 8e-08, 6e-08, 6e-08, 9e-08, 9e-08],
-                            [3e-08, 3e-08, 3e-08, 3e-08, 4e-08, 4e-08],
-                            [3e-09, 3e-09, 3e-10, 3e-10, 4e-10, 4e-10],
-                            [3e-09, 3e-09, 7e-11, 7e-11, 2e-10, 2e-10],])
+maxerrors['rk3'] = np.array([[5e-08,5e-08,5e-08,5e-08,8e-08,8e-08,],
+                            [2e-08,2e-08,2e-08,2e-08,4e-08,4e-08,],
+                            [7e-10,7e-10,3e-10,3e-10,3e-10,3e-10,],
+                            [6e-10,6e-10,6e-11,6e-11,2e-10,2e-10,],])
 convrates={}
-convrates['rk3'] = np.array([[0.3, 0.3, 0.3, 0.3, 0.4, 0.4],
-                            [0.3, 0.3, 0.3, 0.3, 0.4, 0.4],
-                            [0.3, 0.3, 0.07, 0.07, 0.07, 0.07],
-                            [0.3, 0.3, 0.07, 0.07, 0.1, 0.1],])
+convrates['rk3'] = np.array([[0.28,0.28,0.29,0.29,0.32,0.32,],
+                            [0.3,0.3,0.26,0.26,0.28,0.28,],
+                            [0.23,0.23,0.07,0.07,0.07,0.07,],
+                            [0.25,0.25,0.07,0.07,0.06,0.06,]])
 _int = ['rk3']
 _recon = ['plm', 'ppm4', 'ppmx', 'wenoz']  # do not change order
 _wave = ['0','5','1','4','2','3']          # do not chnage order
