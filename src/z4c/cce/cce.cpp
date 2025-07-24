@@ -81,6 +81,14 @@ CCE::~CCE() {}
 void CCE::InterpolateAndDecompose(MeshBlockPack *pmbp) {
   Real ylmR,ylmI;
 
+  // reinitialize interpolation indices and weights if AMR
+  if(pmbp->pmesh->adaptive) {
+    for (int k = 0; k < nr; ++k) {
+      grids[k]->SetInterpolationIndices();
+      grids[k]->SetInterpolationWeights();
+    }
+  }
+
   // raveled shape of array & counts for mpi
   int count = 10*nr*num_angular_modes;
   // Dynamically allocate memory for the 4D array flattened into 1D
