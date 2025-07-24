@@ -85,22 +85,22 @@ class Root {
       // the sides to force the new root to fall on the other side. This allows us to
       // whittle down both sides at once and get better average convergence.
       if (ftest*flb >= 0) {
-        flb = ftest;
-        lb = x;
         if (side == 1) {
           Real m = 1. - ftest/flb;
           fub = (m > 0) ? fub*m : 0.5*fub;
           //fub /= 2.0;
         }
+        flb = ftest;
+        lb = x;
         side = 1;
       } else {
-        fub = ftest;
-        ub = x;
         if (side == -1) {
           Real m = 1. - ftest/fub;
           flb = (m > 0) ? flb*m : 0.5*flb;
           //flb /= 2.0;
         }
+        fub = ftest;
+        ub = x;
         side = -1;
       }
     } while (count < iterations);
