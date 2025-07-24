@@ -61,3 +61,9 @@ vx        = 0.1   # background 3-velocity v^x
 vy        = 0.3   # background 3-velocity v^y
 vz        = -0.05 # background 3-velocity v^z
 
+<mesh_refinement>
+refinement       = adaptive    # type of refinement
+max_nmb_per_rank = 512
+num_levels       = 2
+dens_max         = 1.0008
+

@@ -50,6 +50,7 @@ def arguments(iv, rv, fv, wv, res,soe):
                             'meshblock/nx1=16',
                             'meshblock/nx2=1',
                             'meshblock/nx3=1',
+                            'mesh_refinement/refinement=none',
                             'time/cfl_number=0.4',
                             'coord/special_rel=true',
                             'coord/general_rel=false',
@@ -93,8 +94,3 @@ def test_run(iv, fv, rv, soe):
                 l1_rms_r = l1_rms_n64
         finally:
             testutils.cleanup()
-    #if l1_rms_l != l1_rms_r and rv != 'ppmx':
-    #    # PPMX is known to have different errors for L/R-going waves
-    #    # so we skip the check
-    #    pytest.fail(f"Errors in L/R-going sound waves not equal for {iv}+{rv}+{fv} configuration, "
-    #            f"L: {l1_rms_l:g} R: {l1_rms_r:g}")

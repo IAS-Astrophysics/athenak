@@ -63,3 +63,9 @@ vz        = -0.05 # background 3-velocity v^z
 bx        = 2.5   # background magnetic field B^z
 by        = 1.8   # background magnetic field B^y
 bz        = -1.2  # background magnetic field B^z
+
+<mesh_refinement>
+refinement       = adaptive    # type of refinement
+max_nmb_per_rank = 512
+num_levels       = 2
+dens_max         = 1.0008
