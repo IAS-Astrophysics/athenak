@@ -50,18 +50,12 @@ if  args.style:
 
 if args.cpu != None:
     testutils.clean_make(flags=cmake_flags(args.cpu, []))
-    pytest.main(["tests_suite/hydro", "-k", "_cpu"])
-    pytest.main(["tests_suite/mhd", "-k", "_cpu"])
+    pytest.main(["tests_suite", "-k", "_cpu"])
 
 if args.mpicpu != None: 
     testutils.clean_make(flags=cmake_flags(args.mpicpu, ["-D", "Athena_ENABLE_MPI=ON"]))
-    pytest.main(["tests_suite/hydro", "-k", "_mpicpu"])
-    pytest.main(["tests_suite/mhd", "-k", "_mpicpu"])
-    pytest.main(["tests_suite/gr", "-k", "_mpicpu"])
-
+    pytest.main(["tests_suite", "-k", "_mpicpu"])
 if args.gpu != None: 
     testutils.clean_make(flags=cmake_flags(args.gpu, ["-D", "Kokkos_ENABLE_CUDA=On"]),text=True)
-    pytest.main(["tests_suite/hydro", "-k", "_gpu"])
-    pytest.main(["tests_suite/mhd", "-k", "_gpu"])
-
+    pytest.main(["tests_suite", "-k", "_gpu"])
 testutils.clean()
