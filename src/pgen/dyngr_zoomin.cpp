@@ -1180,7 +1180,7 @@ void ZoomHistory(HistoryData *pdata, Mesh *pm) {
       }
     }
     btor = fabs(btor);
-    Real bpol = sqrt(bsqr - btor*btor);
+    Real bpol = sqrt(fmax(0.0, bsqr - btor*btor));
 
     mb_btor_max = fmax(btor, mb_btor_max);
     mb_bpol_max = fmax(bpol, mb_bpol_max);
