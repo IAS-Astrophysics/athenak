@@ -26,12 +26,12 @@ _int = ['rk3']
 _recon = ['wenoz']  # do not change order
 _wave = ['0']                      # do not change order
 _flux = ['llf']
-_res = [32, 64]                            # resolutions to test
+_res = [16, 32]                            # resolutions to test
 _soe = ['hydro', 'mhd']  # system of equations to test
 
 test_name = 'sr_linwave3d'  # Name of the test
 
-def arguments(iv, rv, fv, wv, res,soe):
+def arguments(iv, rv, fv, wv, res, soe, dim):
     """Run the Athena++ test with given parameters."""
     vflow = 1.0 if wv=='3' else 0.0
     return  [f'job/basename={test_name}',
@@ -39,11 +39,11 @@ def arguments(iv, rv, fv, wv, res,soe):
                             'time/integrator=' + iv,
                             'mesh/nghost=4',
                             'mesh/nx1=' + repr(res),
-                            'mesh/nx2=' + repr(res//2),
-                            'mesh/nx3=' + repr(res//2),
-                            'meshblock/nx1=16',
-                            'meshblock/nx2=16',
-                            'meshblock/nx3=16',
+                            'mesh/nx2=' + repr(res//2 if dim > 1 else 1),
+                            'mesh/nx3=' + repr(res//4 if dim > 2 else 1),
+                            'meshblock/nx1=4',
+                            'meshblock/nx2='+ repr(4 if dim > 1 else 1),
+                            'meshblock/nx3='+ repr(4 if dim > 2 else 1),
                             'time/cfl_number=0.4',
                             'coord/special_rel=true',
                             'coord/general_rel=false',
@@ -53,15 +53,16 @@ def arguments(iv, rv, fv, wv, res,soe):
 
 
 @pytest.mark.parametrize("iv" , _int)
+@pytest.mark.parametrize("dim" , range(1,4))
 @pytest.mark.parametrize("rv" , _recon)
 @pytest.mark.parametrize("fv" , _flux)
 @pytest.mark.parametrize("soe" , _soe)
-def test_run(iv, fv, rv, soe):
+def test_run(iv, fv, rv, soe, dim):
     """Run a single test with given parameters."""
     for wv in _wave:
         try:
             for res in _res:
-                results = testutils.athenak_run(f"inputs/lwave_rel{soe}.athinput", arguments(iv, rv, fv, wv, res, soe))
+                results = testutils.athenak_run(f"inputs/lwave_rel{soe}.athinput", arguments(iv, rv, fv, wv, res, soe, dim))
                 assert results, f"Test failed for iv={iv}, res={res}, fv={fv}, rv={rv}, wv={wv}./AthenaK run did not complete successfully."
             # Check the errors in the output
             ri = _recon.index(rv)
