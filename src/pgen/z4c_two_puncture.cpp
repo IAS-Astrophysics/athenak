@@ -118,6 +118,9 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     pin->GetOrAddBoolean(set_name, "give_bare_mass", 1));
 
   TwoPunctures_params_set_Int(
+      const_cast<char *>("grid_setup_method"),
+      pin->GetOrAddInteger(set_name, "grid_setup_method", 0));
+  TwoPunctures_params_set_Int(
     const_cast<char *>("npoints_A"),
     pin->GetOrAddInteger(set_name, "npoints_A", 30));
   TwoPunctures_params_set_Int(
