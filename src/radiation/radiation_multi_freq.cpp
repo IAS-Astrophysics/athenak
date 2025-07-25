@@ -23,6 +23,7 @@
 #include "radiation/radiation_opacities.hpp"
 
 namespace radiation {
+
 //----------------------------------------------------------------------------------------
 //! \fn  void Radiation::SetFrequencyGrid()
 //! \brief Set frequency grid for radiation
@@ -92,9 +93,10 @@ TaskStatus Radiation::AddMultiFreqRadSrcTerm(Driver *pdriver, int stage) {
   int &ks = indcs.ks, &ke = indcs.ke;
   int nmb1 = pmy_pack->nmb_thispack - 1;
   int &nang = prgeo->nangles;
+  int &nfrq = nfreq;
   const int nang1 = nang - 1;
-  const int nfreq1 = nfreq - 1;
-  const int nfr_ang = nang*nfreq;
+  const int nfreq1 = nfrq - 1;
+  const int nfr_ang = nang*nfrq;
   auto &size  = pmy_pack->pmb->mb_size;
   auto &nu_tet = freq_grid;
   bool &is_hydro_enabled_ = is_hydro_enabled;
@@ -177,9 +179,33 @@ TaskStatus Radiation::AddMultiFreqRadSrcTerm(Driver *pdriver, int stage) {
     }
   }
 
+  // Scratch memory
+  size_t scr_size = ScrArray2D<Real>::shmem_size(nfrq, nfrq) * 2
+                  + ScrArray2D<Real>::shmem_size(nfrq, 2*nfrq)
+                  + ScrArray2D<Real>::shmem_size(nang, nfrq)
+                  + ScrArray1D<Real>::shmem_size(nfr_ang)
+                  + ScrArray1D<Real>::shmem_size(nang) * 3
+                  + ScrArray1D<Real>::shmem_size(nfrq) * 5;
+  int scr_level = 0;
+
   /********** Compute Implicit Source Term **********/
-  par_for("multi_freq_radsrc",DevExeSpace(),0,nmb1,ks,ke,js,je,is,ie,
-  KOKKOS_LAMBDA(int m, int k, int j, int i) {
+  par_for_outer("multi_freq_radsrc",DevExeSpace(),scr_size,scr_level,0,nmb1,ks,ke,js,je,is,ie,
+  KOKKOS_LAMBDA(TeamMember_t member, const int m, const int k, const int j, const int i) {
+    // temporary variables assigned on scratch memory
+    ScrArray2D<Real> matrix_map(member.team_scratch(scr_level), nfrq, nfrq);
+    ScrArray2D<Real> matrix_inv(member.team_scratch(scr_level), nfrq, nfrq);
+    ScrArray2D<Real> matrix_aug(member.team_scratch(scr_level), nfrq, 2*nfrq);
+    ScrArray2D<Real> ir_cm_update(member.team_scratch(scr_level), nang, nfrq);
+    ScrArray1D<Real> ir_cm_n(member.team_scratch(scr_level), nfr_ang);
+    ScrArray1D<Real> ir_cm_grey(member.team_scratch(scr_level), nang);
+    ScrArray1D<Real> n_0_iang(member.team_scratch(scr_level), nang);
+    ScrArray1D<Real> n0_cm_iang(member.team_scratch(scr_level), nang);
+    ScrArray1D<Real> jr_cm_old(member.team_scratch(scr_level), nfrq);
+    ScrArray1D<Real> chi_p(member.team_scratch(scr_level), nfrq);
+    ScrArray1D<Real> chi_r(member.team_scratch(scr_level), nfrq);
+    ScrArray1D<Real> sum_a(member.team_scratch(scr_level), nfrq);
+    ScrArray1D<Real> sum_b(member.team_scratch(scr_level), nfrq);
+
     // extract spatial position
     Real &x1min = size.d_view(m).x1min;
     Real &x1max = size.d_view(m).x1max;
@@ -228,51 +254,41 @@ TaskStatus Radiation::AddMultiFreqRadSrcTerm(Driver *pdriver, int stage) {
     // coordinate component n^0
     Real n0 = tt(m,0,0,k,j,i);
 
-    // compute solid angle weight sum
+    // angle-dependent coefficients and variables
     Real wght_sum = 0.0;
     for (int iang=0; iang<=nang1; ++iang) {
-      Real n0_cm = (u_tet[0]*nh_c_.d_view(iang,0) - u_tet[1]*nh_c_.d_view(iang,1) -
-                    u_tet[2]*nh_c_.d_view(iang,2) - u_tet[3]*nh_c_.d_view(iang,3));
+      // coordinate-frame normal components
+      Real n_0 = tc(m,0,0,k,j,i)*nh_c_.d_view(iang,0) + tc(m,1,0,k,j,i)*nh_c_.d_view(iang,1)
+               + tc(m,2,0,k,j,i)*nh_c_.d_view(iang,2) + tc(m,3,0,k,j,i)*nh_c_.d_view(iang,3);
+      n_0_iang(iang) = n_0;
+
+      // fluid-frame time component
+      Real n0_cm = (u_tet[0]*nh_c_.d_view(iang,0) - u_tet[1]*nh_c_.d_view(iang,1)
+                  - u_tet[2]*nh_c_.d_view(iang,2) - u_tet[3]*nh_c_.d_view(iang,3));
+      n0_cm_iang(iang) = n0_cm;
+
+      // fluid-frame angular weight sum
       Real domega_cm = solid_angles_.d_view(iang)/SQR(n0_cm);
       wght_sum += domega_cm;
-    }
 
-    // compute frequency-dependent coefficients
-    Real sum_a[nfreq1+1];
-    Real sum_b[nfreq1+1];
-    Real jr_cm_old[nfreq1+1];
-    Real eps_em[nfreq1+1];
-    Real chi_p[nfreq1+1];
-    Real chi_r[nfreq1+1];
-    Real chi_s[nfreq1+1];
+      // initialize variables for later use when guessing temperature update
+      ir_cm_grey(iang) = 0;
+    } // endfor iang
+
+    // frequency-dependent coefficients (TODO)
+    Real chi_s = 1; // TODO
     for (int ifr=0; ifr<=nfreq1; ++ifr) {
-      Real &nu_f = nu_tet(ifr);
-
-      // emissivity
-      Real eps_f = 0;
-      if (ifr < nfreq1) {
-        Real &nu_fp1 = nu_tet(ifr+1);
-        eps_f = 1./(4*M_PI) * BBIntegral(nu_f, nu_fp1, tgas, arad_);
-      } else {
-        eps_f = 1./(4*M_PI) * arad_*SQR(SQR(tgas)); // from 0 to inf
-        eps_f = eps_f - 1./(4*M_PI) * BBIntegral(0, nu_f, tgas, arad_);
-      } // endelse
-      eps_em[ifr] = fmax(0., eps_f);
-
       // opacities
-      chi_p[ifr] = 1; // TODO
-      chi_r[ifr] = 1; // TODO
-      chi_s[ifr] = 1; // TODO
+      chi_p(ifr) = 1; // TODO
+      chi_r(ifr) = 1; // TODO
 
-      // initialize coefficients for solving temperature update
-      sum_a[ifr] = 0;
-      sum_b[ifr] = 0;
-      jr_cm_old[ifr] = 0;
-
+      // initialize coefficients for later use when solving temperature update
+      sum_a(ifr) = 0;
+      sum_b(ifr) = 0;
+      jr_cm_old(ifr) = 0;
     } // endfor ifr
 
-    // Step 1: map fluid-frame intensity into tetrad-frame frequency grid
-    Real matrix_imap[nfreq1+1][nfreq1+1];
+    // Step 1: map intensity from coordinate frame to fluid frame
     Real &nu_e = nu_tet(nfreq1); // last tetrad-frame frequency
     for (int n=0; n<=nfr_ang-1; ++n) {
       // frequency and angle indices
@@ -280,281 +296,194 @@ TaskStatus Radiation::AddMultiFreqRadSrcTerm(Driver *pdriver, int stage) {
       getFreqAngIndices(n, nang, ifr, iang);
 
       // variables for frame transformation
-      Real n_0 = tc(m,0,0,k,j,i)*nh_c_.d_view(iang,0) + tc(m,1,0,k,j,i)*nh_c_.d_view(iang,1) +
-                 tc(m,2,0,k,j,i)*nh_c_.d_view(iang,2) + tc(m,3,0,k,j,i)*nh_c_.d_view(iang,3);
-      Real n0_cm = (u_tet[0]*nh_c_.d_view(iang,0) - u_tet[1]*nh_c_.d_view(iang,1) -
-                    u_tet[2]*nh_c_.d_view(iang,2) - u_tet[3]*nh_c_.d_view(iang,3));
+      Real &n_0 = n_0_iang(iang);
+      Real &n0_cm = n0_cm_iang(iang);
 
-      // define auxiliary variables for intensity mapping
-      Real nu0, nu1, nu2, nu3, nu1h, nu3h, nu5h;
-      Real inu1, inu2, inu1h, inu3h, inu5h;
-      Real ir_cm_star_1; int boundary;
-
-      // target frequency and intensity
-      Real &nu_f = nu_tet(ifr);
-      Real ir_cm_f = 0.0; // value to be assigned
-
-      // get effective temperature at last frequency bin
-      int ne = getFreqAngIndex(nfreq1, iang, nang);
-      Real ir_cm_star_e = SQR(SQR(n0_cm))*i0_(m,ne,k,j,i)/(n0*n_0);
-      Real teff = GetEffTemperature(ir_cm_star_e, n0_cm*nu_e, arad_);
-
-      // locate left & right fluid-frame frequency bins (if exist)
-      // -1 <= idx_l   <= N-1
-      //  0 <= idx_l+1 <= N
-      int idx_lp1=0;
-      while ((n0_cm*nu_tet(idx_lp1) < nu_f) && (idx_lp1 <= nfreq1+1)) idx_lp1++;
-      int idx_l = idx_lp1-1;
-      // -1 <= idx_r   <= N-1
-      //  0 <= idx_r+1 <= N
-      int idx_r=-1, idx_rp1=-1;
-      if (ifr+1 <= nfreq1) {
-        idx_rp1=fmax(idx_l,0);
-        Real &nu_fp1 = nu_tet(ifr+1);
-        while ((n0_cm*nu_tet(idx_rp1) <= nu_fp1) && (idx_rp1 <= nfreq1+1)) idx_rp1++;
-        idx_r = idx_rp1-1;
-      }
-
-      // get mapping coefficients
-      if (nu_f >= n0_cm*nu_e) { // only happen when (n0_cm < 1)
-        // This covers the rightmost corner case (f = N-1) && (n0_cm < 1)
-        //
-        // Corner Case 4: Rightmost (nu_tet[f] >= nu_cm[N-1] && n0_cm < 1)
-        //
-        // When f <= N-2,                        When f = N-1,
-        //       (nu_f)          (nu_fp1)               (nu_f)             (nu_fp1)
-        //     nu_tet[N-2]      nu_tet[N-1]           nu_tet[N-1]
-        // --------|----------------|---> inf     --------|----------------> inf
-        //         | (ir_cm_star_e) |                     | (ir_cm_star_e)
-        //         | I_cm_star[N-1] |                     | I_cm_star[N-1]
-        // -----|---================----> inf     -----|---================> inf
-        //  nu_cm[N-1]                             nu_cm[N-1]
-        //    (nu1)                                  (nu1)
-        Real integral_f = 0.0;
-        if (ifr+1 <= nfreq1) { // ifr <= N-2
-          Real &nu_fp1 = nu_tet(ifr+1);
-          integral_f = 1./(4*M_PI) * BBIntegral(nu_f, nu_fp1, teff, arad_);
-        } else { // ifr == N-1
-          integral_f = 1./(4*M_PI) * arad_*SQR(SQR(teff)); // from 0 to inf
-          integral_f = integral_f - 1./(4*M_PI) * BBIntegral(0, nu_f, teff, arad_);
-        }
-        Real frac_f = integral_f/ir_cm_star_e;
-        ir_cm_f += integral_f;
-        matrix_imap[ifr][nfreq1] = frac_f;
-
-      } else if ((ifr == nfreq1) && (n0_cm > 1)) { // (f = N-1) && (n0_cm > 1)
-        // (f = N-1) && (n0_cm < 1) is covered at the beginning of the if statement
-        //
-        // Corner Case 3: Rightmost (ifr=N-1 && n0_cm > 1)
-        //                          0 <= L <= N-2
-        //                           (nu_f)
-        //         nu_tet[N-2]     nu_tet[N-1]
-        // ------------|---------------|--------------------------------------------------------> inf
-        //           (inu1h)     (inu1)   (inu3h)     (inu2)   (inu5h)
-        //    |         *          |                    |                    |
-        //    |                    |         *          |         *          |
-        //    |                    |                    |                    |         *
-        //    |   I_cm_star[N-4]   |   I_cm_star[N-3]   |   I_cm_star[N-2]   |   I_cm_star[N-1]
-        // ---|--------------------|----================|====================|==================> inf
-        // nu_cm[N-4]           nu_cm[N-3]           nu_cm[N-2]           nu_cm[N-1]
-        //    nu0    (nu1h)      (nu1)    (nu3h)      (nu2)     (nu5h)      nu3
-
-        // prepare left frequency and intensity
-        bool left_bin_assigned = AssignFreqIntensity(idx_l, nu_tet, i0_, m, k, j, i, iang,
-                                                     nang, nfreq1, n0_cm, n0, n_0, arad_, teff,
-                                                     nu0, nu1, nu2, nu3, nu1h, nu3h, nu5h,
-                                                     inu1h, inu3h, inu5h, inu1, inu2,
-                                                     ir_cm_star_1, boundary);
-        // compute left fractional contribution
-        Real frac_l = 0;
-        if (left_bin_assigned) {
-          bool leftbin = true;
-          Real nu_fp1 = nu2 * 1e12; // set nu_fp1 in this way so it is not invoked in 'IntensityFraction'
-          frac_l = IntensityFraction(nu_f, nu_fp1,
-                                     nu1h, nu1, nu3h, nu2, nu5h,
-                                     inu1h, inu1, inu3h, inu2, inu5h,
-                                     order, limiter, boundary, leftbin);
-          ir_cm_f += frac_l * ir_cm_star_1;
-          matrix_imap[ifr][idx_l] = frac_l;
-        }
-
-        // add the rest intensity contribution
-        for (int f=idx_l+1; f<=nfreq1; ++f) {
-          int nf = getFreqAngIndex(f, iang, nang);
-          ir_cm_f += SQR(SQR(n0_cm))*i0_(m,nf,k,j,i)/(n0*n_0);
-          matrix_imap[ifr][f] = 1;
-        }
-
-      } else { // (f <= N-2)
-        Real &nu_fp1 = nu_tet(ifr+1);
-
-        // General Case:
-        // Given frequency bin [nu_tet(f), nu_tet(f+1)],
-        // we can always find nu_cm(L) <  nu_tet(f)   <= nu_cm(L+1)
-        //                and nu_cm(R) <= nu_tet(f+1) <  nu_cm(R+1)
-        //
-        //                               (nu_f)                                                                (nu_fp1)
-        //                              nu_tet[f]                                                             nu_tet[f+1]
-        // ............................ ---|----------------------------------------------------------------------|--- ............................ --->
-        //                            I_cm_star[L]    I_cm_star[L+1]    I_cm_star[...]    I_cm_star[R-1]    I_cm_star[R]
-        // ... ---|----------------|--------========|================|=== .......... ===|================|========--------|----------------|--- ... --->
-        //     nu_cm[L-1]       nu_cm[L]         nu_cm[L+1]       nu_cm[L+2]         nu_cm[R-1]       nu_cm[R]         nu_cm[R+1]       nu_cm[R+2]
-
-        // add the contribution from L+1 to R-1
-        for (int f=idx_l+1; f<=idx_r-1; ++f) {
-          int nf = getFreqAngIndex(f, iang, nang);
-          ir_cm_f += SQR(SQR(n0_cm))*i0_(m,nf,k,j,i)/(n0*n_0);
-          matrix_imap[ifr][f] = 1;
-        }
-
-        // Left:                            (nu_f)
-        //                                 nu_tet[f]
-        // ................................ ---|--- ......................... --->
-        //             (inu1h)   (inu1) (inu3h)|  (inu2) (inu5h)
-        //        |       *        |       *   |    |                |
-        //        |                |           |    |       *        |
-        //        | I_cm_star[L-1] |  I_cm_star[L]  | I_cm_star[L+1] |
-        // ... ---|----------------|------------====|----------------|--- ... --->
-        //     nu_cm[L-1]       nu_cm[L]         nu_cm[L+1]       nu_cm[L+2]
-        //       nu0   (nu1h)    (nu1)   (nu3h)   (nu2)   (nu5h)    nu3
-
-        // prepare left frequency and intensity
-        bool left_bin_assigned = AssignFreqIntensity(idx_l, nu_tet, i0_, m, k, j, i, iang,
-                                                     nang, nfreq1, n0_cm, n0, n_0, arad_, teff,
-                                                     nu0, nu1, nu2, nu3, nu1h, nu3h, nu5h,
-                                                     inu1h, inu3h, inu5h, inu1, inu2,
-                                                     ir_cm_star_1, boundary);
-        // compute left fractional contribution
-        Real frac_l = 0;
-        if (left_bin_assigned) {
-          bool leftbin = true;
-          frac_l = IntensityFraction(nu_f, nu_fp1,
-                                     nu1h, nu1, nu3h, nu2, nu5h,
-                                     inu1h, inu1, inu3h, inu2, inu5h,
-                                     order, limiter, boundary, leftbin);
-          ir_cm_f += frac_l * ir_cm_star_1;
-          matrix_imap[ifr][idx_l] = frac_l;
-        }
-
-        // Right:                          (nu_fp1)
-        //                                nu_tet[f+1]
-        // ................................ ---|--- ......................... --->
-        //             (inu1h)   (inu1) (inu3h)|  (inu2) (inu5h)
-        //        |       *        |       *   |    |                |
-        //        |                |           |    |       *        |
-        //        | I_cm_star[R-1] |  I_cm_star[R]  | I_cm_star[R+1] |
-        // ... ---|----------------|===========-----|----------------|--- ... --->
-        //     nu_cm[R-1]       nu_cm[R]         nu_cm[R+1]       nu_cm[R+2]
-        //             (nu1h)    (nu1)   (nu3h)   (nu2)   (nu5h)
-
-        // prepare right frequency and intensity
-        bool right_bin_assigned = AssignFreqIntensity(idx_r, nu_tet, i0_, m, k, j, i, iang,
-                                                      nang, nfreq1, n0_cm, n0, n_0, arad_, teff,
-                                                      nu0, nu1, nu2, nu3, nu1h, nu3h, nu5h,
-                                                      inu1h, inu3h, inu5h, inu1, inu2,
-                                                      ir_cm_star_1, boundary);
-        // compute right fractional contribution
-        Real frac_r = 0;
-        if (right_bin_assigned) {
-          bool leftbin = false;
-          frac_r = IntensityFraction(nu_f, nu_fp1,
-                                     nu1h, nu1, nu3h, nu2, nu5h,
-                                     inu1h, inu1, inu3h, inu2, inu5h,
-                                     order, limiter, boundary, leftbin);
-          ir_cm_f += frac_r * ir_cm_star_1;
-          matrix_imap[ifr][idx_r] = frac_r;
-        }
-
-        // Corner Case 4 (continue): Rightmost (nu_tet[f+1] >= nu_cm[N-1] >= nu_tet[f] && n0_cm < 1)
-        //    (nu_f)                 (nu_fp1)
-        //  nu_tet[N-2]           nu_tet[N-1]
-        // -----|------------------------|----> inf
-        //      |                        |
-        //      |       | I_cm_star[N-1] |
-        // -------------|================-----> inf
-        //          nu_cm[N-1]
-        //            (nu1)
-        // R = N-1 (right_bin_assigned==false):
-        if (idx_r == nfreq1) {
-          nu1 = n0_cm*nu_tet(idx_r);
-          int nr = getFreqAngIndex(idx_r, iang, nang);
-          Real ir_cm_star_r = SQR(SQR(n0_cm))*i0_(m,nr,k,j,i)/(n0*n_0);
-          Real integral_r = 1./(4*M_PI) * BBIntegral(nu1, nu_fp1, teff, arad_);
-          frac_r = integral_r/ir_cm_star_r;
-          ir_cm_f += integral_r;
-          matrix_imap[ifr][idx_r] = frac_r;
-        }
-
-        // Corner Case 1: Leftmost (ifr=0 && n0_cm > 1)
-        // (nu_f)    (nu_fp1)
-        //    0      nu_tet[1] nu_tet[2] nu_tet[3] nu_tet[4] nu_tet[5]
-        //    |---------|---------|---------|---------|---------|------> inf
-        //  (inu1)      (inu3h)       (inu2)      (inu5h)
-        //    |                         |            *            |
-        //    |            *            |                         |
-        //    |       I_cm_star[0]      |       I_cm_star[1]      |
-        //    |=========----------------|-------------------------|----> inf
-        // nu_cm[0]                  nu_cm[1]                  nu_cm[2]
-        //  (nu1)        (nu3h)       (nu2)        (nu5h)        nu3
-        // (L,L+1)=(-1,0) && (R,R+1)=(0,1)
-        // L = -1: left_bin_assigned=false
-        // R = 0: Do nothing. Algorithm is self-consistent.
-
-        // Corner Case 2: Leftmost (ifr=0 && n0_cm < 1)
-        // (nu_f)                                    (nu_fp1)
-        //    0                                      nu_tet[1]
-        //    |-----------------------------------------|------------------------------> inf
-        //                          (inu1h)   (inu1) (inu3h)   (inu2) (inu5h)
-        //    |                |       *        |       *        |       *        |
-        //    |       *        | ir_cm_star_rm1 |  ir_cm_star_r  | ir_cm_star_rp1 |
-        //    |  I_cm_star[0]  |  I_cm_star[1]  |  I_cm_star[2]  |  I_cm_star[3]  |
-        //    |================|================|=======---------|----------------|----> inf
-        // nu_cm[0]         nu_cm[1]         nu_cm[2]         nu_cm[3]         nu_cm[4]
-        //                    nu0   (nu1h)    (nu1)   (nu3h)   (nu2)   (nu5h)    nu3
-        // (L,L+1)=(-1,0) && R>=1 && R+1>=2
-        // L = -1: left_bin_assigned=false
-        // R <= N-1: Do nothing. Algorithm is self-consistent.
-
-      } // endelse
+      // compute mapped intensity
+      Real ir_cm_f = MapIntensity(ifr, nu_tet, i0_, m, k, j, i, iang,
+                                  n0_cm, n0, n_0, arad_, order, limiter,
+                                  matrix_map, false);
+      ir_cm_n(n) = ir_cm_f;
 
       // set coefficients for solving temperature update
-      Real &chf_p=chi_p[ifr], &chf_r=chi_r[ifr], &chf_s=chi_s[ifr];
+      Real &chf_p=chi_p(ifr), &chf_r=chi_r(ifr), &chf_s=chi_s;
       Real chf_f = chf_r + chf_s;
       Real domega_cm = solid_angles_.d_view(iang)/SQR(n0_cm);
       domega_cm /= wght_sum; // normalize fluid-frame weight
-      sum_a[ifr] += n0/(n0+n0_cm*chf_f*dt_)*ir_cm_f*domega_cm/(4*M_PI);
-      sum_b[ifr] += n0_cm*dt_/(n0+n0_cm*chf_f*dt_)*domega_cm/(4*M_PI);
-      jr_cm_old[ifr] += ir_cm_f*domega_cm/(4*M_PI);
+      sum_a(ifr) += n0/(n0+n0_cm*chf_f*dt_)*ir_cm_f*domega_cm/(4*M_PI);
+      sum_b(ifr) += n0_cm*dt_/(n0+n0_cm*chf_f*dt_)*domega_cm/(4*M_PI);
+      jr_cm_old(ifr) += ir_cm_f*domega_cm/(4*M_PI);
+      ir_cm_grey(iang) += ir_cm_f; // used in guessing gas temperature
 
     } // endfor n
 
     // Step 2: compute source terms and solve gas temperature update
+    bool guess_grey_tgas = true;
+    Real tgas_new = tgas;
 
-    // TODO: make initial guess of gas temperature
+    // make initial guess of gas temperature
+    if (guess_grey_tgas) {
+      Real jr_cm_old_grey=0, eps_sum=0;
+      Real chi_p_grey=0, chi_r_grey=0;
+      for (int ifr=0; ifr<=nfreq1; ++ifr) {
+        // compute coefficients
+        Real eps_f = ComputeEmissivity(nu_tet, ifr, tgas_new, arad_);
+        jr_cm_old_grey += jr_cm_old(ifr);
+        chi_p_grey += eps_f*chi_p(ifr);
+        chi_r_grey += eps_f/chi_r(ifr);
+        eps_sum += eps_f;
+      }
+      chi_p_grey = chi_p_grey/eps_sum;
+      chi_r_grey = eps_sum/chi_r_grey;
+      Real chi_f_grey = chi_r_grey + chi_s;
+
+      Real sum_a_grey=0, sum_b_grey=0;
+      for (int iang=0; iang<=nang1; ++iang) {
+        Real &n_0 = n_0_iang(iang);
+        Real &n0_cm = n0_cm_iang(iang);
+        Real domega_cm = solid_angles_.d_view(iang)/SQR(n0_cm);
+        domega_cm /= wght_sum; // normalize fluid-frame weight
+        sum_a_grey += n0/(n0+n0_cm*chi_f_grey*dt_)*ir_cm_grey(iang)*domega_cm/(4*M_PI);
+        sum_b_grey += n0_cm*dt_/(n0+n0_cm*chi_f_grey*dt_)*domega_cm/(4*M_PI);
+      }
+
+      Real denom_ = 1. - sum_b_grey*(chi_f_grey-chi_p_grey);
+      Real coeff4 = gm1/wdn*arad_ * sum_b_grey*chi_p_grey/denom_;
+      Real coeff0 = 4*M_PI*gm1/wdn * (sum_a_grey/denom_ - jr_cm_old_grey) - tgas;
+
+      // solve polynomial
+      if (fabs(coeff4) > 1.0e-20) {
+        bool flag = FourthPolyRoot(coeff4, coeff0, tgas_new);
+        if (!(flag) || !(isfinite(tgas_new))) {
+          tgas_new = tgas;
+        }
+      } else tgas_new = -coeff0;
+    } // endif guess_grey_tgas
 
     // iterate to find temperature update
-    for (int ifr=0; ifr<=nfreq1; ++ifr) {
-      // Real &nu_f = nu_tet(ifr);
-      Real &j0f_old = jr_cm_old[ifr];
-      Real &sum_fa = sum_a[ifr], &sum_fb = sum_b[ifr];
-      Real &eps_f=eps_em[ifr], &chf_p=chi_p[ifr];
-      Real &chf_r=chi_r[ifr],  &chf_s=chi_s[ifr];
-      Real chf_f = chf_r + chf_s;
+    int num_itr_max = 100; Real tol = 1e-12;
+    for (int m=1; m<=num_itr_max; ++m) {
+      // compute Newton-Raphson coefficients
+      Real f_tar=0, df_tar=0;
+      for (int ifr=0; ifr<=nfreq1; ++ifr) {
+        // compute coefficients
+        Real eps_f = ComputeEmissivity(nu_tet, ifr, tgas_new, arad_);
+        Real deps_f = ComputeEmDerivative(nu_tet, ifr, tgas_new, arad_);
+        Real &j0f_old = jr_cm_old(ifr);
+        Real &sum_fa = sum_a(ifr), &sum_fb = sum_b(ifr);
+        Real &chf_p=chi_p(ifr), &chf_r=chi_r(ifr), &chf_s=chi_s;
+        Real chf_f = chf_r + chf_s;
+        Real denom_ = 1.-sum_fb*(chf_f-chf_p);
+        f_tar += (sum_fa + sum_fb*chf_p*eps_f)/denom_ - j0f_old;
+        df_tar += sum_fb*chf_p/denom_ * deps_f;
+      } // endfor ifr
+      f_tar = wdn/gm1*(tgas_new-tgas) + 4*M_PI*f_tar;
+      df_tar = wdn/gm1 + 4*M_PI*df_tar;
+      Real diff_temp = -f_tar/df_tar;
 
+      // update temperature
+      tgas_new += diff_temp;
+      if (fabs(diff_temp/tgas_new) < tol) break;
 
+    } // endfor m
+    bool badcell=false;
+    if (!(isfinite(tgas_new)) || (tgas_new < 0)) badcell = true;
 
+    // Step 3: update intensity and fluid variables
+    if (!(badcell)) {
+      Real m_old[4] = {0.0}; Real m_new[4] = {0.0};
 
-    } // endfor ifr
+      // Step 4: update frequency-dependent intensity in the fluid frame
+      for (int n=0; n<=nfr_ang-1; ++n) {
+        // frequency and angle indices
+        int ifr, iang;
+        getFreqAngIndices(n, nang, ifr, iang);
 
+        // variables for frame transformation
+        Real &n_0 = n_0_iang(iang);
+        Real &n0_cm = n0_cm_iang(iang);
 
-    // Step 3: update frequency-dependent intensity
+        // compute coefficients
+        Real eps_f = ComputeEmissivity(nu_tet, ifr, tgas_new, arad_);
+        Real &sum_fa = sum_a(ifr), &sum_fb = sum_b(ifr);
+        Real &chf_p=chi_p(ifr), &chf_r=chi_r(ifr), &chf_s=chi_s;
+        Real chf_f = chf_r + chf_s;
+        Real denom_ = 1.-sum_fb*(chf_f-chf_p);
+        Real jr_cm_ = (sum_fa + sum_fb*chf_p*eps_f) / denom_;
 
-    // Step 4: update fluid variables
+        // update fluid-frame intensity
+        Real p1_ = n0/(n0+n0_cm*chf_f*dt_) * ir_cm_n(n);
+        Real p2_ = n0_cm*dt_/(n0+n0_cm*chf_f*dt_);
+        p2_ *= chf_p*eps_f + (chf_f-chf_p)*jr_cm_;
+        ir_cm_update(iang,ifr) = p1_+p2_;
 
+      } // endfor n
 
+      // Step 5: map fluid-frame intensity back to lab frame
+      for (int iang=0; iang<=nang1; ++iang) {
+        // variables for frame transformation
+        Real &n_0 = n_0_iang[iang];
+        Real &n0_cm = n0_cm_iang[iang];
 
+        // coordinate normal components
+        Real n_1 = tc(m,0,1,k,j,i)*nh_c_.d_view(iang,0) + tc(m,1,1,k,j,i)*nh_c_.d_view(iang,1)
+                 + tc(m,2,1,k,j,i)*nh_c_.d_view(iang,2) + tc(m,3,1,k,j,i)*nh_c_.d_view(iang,3);
+        Real n_2 = tc(m,0,2,k,j,i)*nh_c_.d_view(iang,0) + tc(m,1,2,k,j,i)*nh_c_.d_view(iang,1)
+                 + tc(m,2,2,k,j,i)*nh_c_.d_view(iang,2) + tc(m,3,2,k,j,i)*nh_c_.d_view(iang,3);
+        Real n_3 = tc(m,0,3,k,j,i)*nh_c_.d_view(iang,0) + tc(m,1,3,k,j,i)*nh_c_.d_view(iang,1)
+                 + tc(m,2,3,k,j,i)*nh_c_.d_view(iang,2) + tc(m,3,3,k,j,i)*nh_c_.d_view(iang,3);
+        Real &domega = solid_angles_.d_view(iang);
 
+        // compute mapping matrix
+        for (int ifr=0; ifr<=nfreq1; ++ifr) {
+          // compute ifr-th row of mapping matrix
+          Real _ = MapIntensity(ifr, nu_tet, i0_, m, k, j, i, iang,
+                                n0_cm, n0, n_0, arad_, order, limiter,
+                                matrix_map, true);
+        }
+        // inverse matrix
+        bool inv_success = InverseMatrix(nfrq, matrix_map, matrix_aug, matrix_inv);
 
+        // update intensity
+        for (int ifr=0; ifr<=nfreq1; ++ifr) {
+         int n = getFreqAngIndex(ifr, iang, nang);
+
+         // compute inverse-mapped intensity
+         Real ir_cm_star_update = 0.0;
+         if (inv_success) {
+           for (int f=0; f<=nfreq1; ++f) {
+             ir_cm_star_update += matrix_inv(ifr,f) * ir_cm_update(iang,f);
+           }
+         } else {
+           // piecewise linear reconstruct the intensity update
+           ir_cm_star_update = InvMapIntensity(ifr, nu_tet, ir_cm_update, iang, n0_cm, arad_, order, limiter);
+         } // endif !inverse_success
+
+         // compute moments before coupling
+         m_old[0] += (    i0_(m,n,k,j,i)    *domega);
+         m_old[1] += (n_1*i0_(m,n,k,j,i)/n_0*domega);
+         m_old[2] += (n_2*i0_(m,n,k,j,i)/n_0*domega);
+         m_old[3] += (n_3*i0_(m,n,k,j,i)/n_0*domega);
+
+         // update lab-frame intensity
+         i0_(m,n,k,j,i) = (n0*n_0)*fmax(ir_cm_star_update, 0.0)/SQR(SQR(n0_cm));
+
+         // compute moments after coupling
+         m_new[0] += (    i0_(m,n,k,j,i)    *domega);
+         m_new[1] += (n_1*i0_(m,n,k,j,i)/n_0*domega);
+         m_new[2] += (n_2*i0_(m,n,k,j,i)/n_0*domega);
+         m_new[3] += (n_3*i0_(m,n,k,j,i)/n_0*domega);
+        } // endfor ifr
+
+      } // endfor n
+
+      // Step 3.3: update fluid variables
+      u0_(m,IEN,k,j,i) += (m_old[0] - m_new[0]);
+      u0_(m,IM1,k,j,i) += (m_old[1] - m_new[1]);
+      u0_(m,IM2,k,j,i) += (m_old[2] - m_new[2]);
+      u0_(m,IM3,k,j,i) += (m_old[3] - m_new[3]);
+
+    } // endif (!(badcell))
 
 
 
@@ -562,9 +491,10 @@ TaskStatus Radiation::AddMultiFreqRadSrcTerm(Driver *pdriver, int stage) {
 
   });
 
-
   return TaskStatus::complete;
 }
+
+
 
 
 } // namespace radiation
