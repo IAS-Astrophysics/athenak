@@ -59,11 +59,21 @@ void RHS(TwoFluidVars init, Real v[4], Real alpha, Real cis, Real cns, Real dvdx
   return;
 }
 
-//----------------------------------------------------------------------------------------
-//! \fn ProblemGenerator::UserProblem()
-//! \brief Problem Generator for spherical blast problem
+// function to compute errors in solution at end of run
+void CShockErrors(ParameterInput *pin, Mesh *pm);
 
-void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
+namespace {
+// global variable to control computation of initial conditions versus errors
+bool set_initial_conditions = true;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn ProblemGenerator::CShock()
+//! \brief Problem Generator for steady C-shocks
+
+void ProblemGenerator::CShock(ParameterInput *pin, const bool restart) {
+  // set error function
+  pgen_final_func = CShockErrors;
   if (restart) return;
 
   // Check physics is set properly
@@ -244,9 +254,12 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   int &is = indcs.is; int &ie = indcs.ie;
   int &js = indcs.js; int &je = indcs.je;
   int &ks = indcs.ks; int &ke = indcs.ke;
-  auto &u0_hyd = pmbp->phydro->u0;
-  auto &u0_mhd = pmbp->pmhd->u0;
-  auto &b0 = pmbp->pmhd->b0;
+
+  // compute solution in u0 register when computing initial conditions
+  // compute solution in u1 register when computing errors
+  auto &u0_hyd = (set_initial_conditions)? pmbp->phydro->u0 : pmbp->phydro->u1;
+  auto &u0_mhd = (set_initial_conditions)? pmbp->pmhd->u0 : pmbp->pmhd->u1;
+  auto &b0 = (set_initial_conditions)? pmbp->pmhd->b0 : pmbp->pmhd->b1;
 
   // Initialize Hydro and MHD variables on device using precomputed C-shock solution
   // shksol indices refer to:  0=di, 1=dn, 2=vix, 3=vnx, 4=viy, 5=vny, 6=by
@@ -273,5 +286,21 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     if (k==ke) b0.x3f(m,k+1,j,i) = 0.0;
   });
 
+  return;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void CShockErrors_()
+//! \brief Computes errors in cshock solution by calling initialization function
+//! again to compute initial condictions, and then calling generic error output function
+//! that subtracts current solution from ICs, and outputs errors to file. Error will be
+//! small only if shock remains steady
+
+void CShockErrors(ParameterInput *pin, Mesh *pm) {
+  // calculate reference solution by calling pgen again.  Solution stored in second
+  // register u1/b1 when flag is false.
+  set_initial_conditions = false;
+  pm->pgen->CShock(pin, false);
+  pm->pgen->OutputErrors(pin, pm);
   return;
 }

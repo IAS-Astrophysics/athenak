@@ -61,6 +61,8 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm) :
     BondiAccretion(pin, false);
   } else if (pgen_fun_name.compare("tetrad") == 0) {
     CheckOrthonormalTetrad(pin, false);
+  } else if (pgen_fun_name.compare("cshock") == 0) {
+    CShock(pin, false);
   } else if (pgen_fun_name.compare("hohlraum") == 0) {
     Hohlraum(pin, false);
   } else if (pgen_fun_name.compare("linear_wave") == 0) {
@@ -674,6 +676,8 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resf
     BondiAccretion(pin, true);
   } else if (pgen_fun_name.compare("tetrad") == 0) {
     CheckOrthonormalTetrad(pin, true);
+  } else if (pgen_fun_name.compare("cshock") == 0) {
+    CShock(pin, true);
   } else if (pgen_fun_name.compare("hohlraum") == 0) {
     Hohlraum(pin, true);
   } else if (pgen_fun_name.compare("linear_wave") == 0) {
