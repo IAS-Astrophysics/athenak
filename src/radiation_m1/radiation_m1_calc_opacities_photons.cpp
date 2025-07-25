@@ -59,7 +59,6 @@ TaskStatus RadiationM1::CalcOpacityPhotons_(Driver *pdrive, int stage) {
   auto &radiation_mask_ = radiation_mask;
 
   auto &m1_params_ = params;
-  auto &nurates_params_ = nurates_params;
 
   auto &eta_1_ = eta_1;
   auto &abs_1_ = abs_1;
