@@ -5,8 +5,10 @@
 //========================================================================================
 //! \file cshock.cpp
 //! \brief problem generator for C-shock test of two-fluid MHD. Solves ODE on host to
-//! compute C-shock profile, then initializes this on the grid. Can then test whether
-//! cold holds this profile stably.
+//! compute C-shock profile, then initializes this on the grid. Error function calculates
+//! difference between final and initial solution to test whether code holds profile.
+//! Shocks may be initialized propagating in x1-, x2-, or x3-directions
+//! Works for both perpendicualr and oblique C-shocks
 
 // C headers
 
@@ -29,19 +31,31 @@
 #include "mhd/mhd.hpp"
 #include "ion-neutral/ion-neutral.hpp"
 
-struct UpstreamICs {
-  Real di0, dn0;
-  Real vix0, vnx0;
-  Real viy0, vny0;
-  Real by0;
+struct TwoFluidVars {
+  Real di, dn;
+  Real vix, vnx;
+  Real viy, vny;
+  Real bx, by;
 };
 
-void RHS(UpstreamICs ics, Real alpha, Real cis, Real cns, Real v[2], Real dvdx[2]) {
-  Real di = ics.di0*ics.vix0/v[0];
-  Real dn = ics.dn0*ics.vnx0/v[1];
-  Real by = ics.by0*di/ics.di0;
-  dvdx[0] = -alpha*dn*v[0]*(v[0]-v[1])/(SQR(v[0]) - SQR(by)/di - SQR(cis));
-  dvdx[1] =  alpha*di*v[1]*(v[0]-v[1])/(SQR(v[1])              - SQR(cns));
+// Function to compute RHS of ODEs
+// v[0]=vix, v[1]=vnx, v[2]=viy, v[3]=vny, derivative use same indexing
+void RHS(TwoFluidVars init, Real v[4], Real alpha, Real cis, Real cns, Real dvdx[4]) {
+  Real di = init.di*init.vix/v[0];
+  Real dn = init.dn*init.vnx/v[1];
+  Real bx = init.bx;
+  Real by;
+  if (bx==0.0) {  // perpendicular shock
+    by = init.by*di/init.di;
+  } else {        // oblique shock
+    by = init.bx*v[2]/v[0];
+  }
+// equations derived in S4 of ZEUS-2F workbook
+// See also Toth, ApJ 425, 171 (1994), eqs 4.2
+  dvdx[0] = -alpha*dn*v[0]*(v[0]-v[1])/(SQR(v[0]) - SQR(cis) - SQR(by)/di);
+  dvdx[1] =  alpha*di*v[1]*(v[0]-v[1])/(SQR(v[1]) - SQR(cns));
+  dvdx[2] = (alpha*dn*v[0]*(v[2]-v[3]) + (bx*by/di)*dvdx[0])/(SQR(v[0]) - SQR(bx)/di);
+  dvdx[3] = alpha*di*(v[2]-v[3])/v[1];
   return;
 }
 
@@ -52,6 +66,7 @@ void RHS(UpstreamICs ics, Real alpha, Real cis, Real cns, Real v[2], Real dvdx[2
 void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   if (restart) return;
 
+  // Check physics is set properly
   MeshBlockPack *pmbp = pmy_mesh_->pmb_pack;
   if (pmbp->phydro == nullptr || pmbp->pmhd == nullptr) {
     std::cout <<"### FATAL ERROR in "<< __FILE__ <<" at line " << __LINE__ << std::endl
@@ -69,15 +84,25 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     exit(EXIT_FAILURE);
   }
 
+  // parse shock direction: {1,2,3} -> {x1,x2,x3}
+  int shk_dir = pin->GetInteger("problem","shock_dir");
+  if (shk_dir < 1 || shk_dir > 3) {
+    // Invaild input value for shk_dir
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+      << std::endl << "shock_dir=" <<shk_dir<< " must be either 1,2, or 3" << std::endl;
+    exit(EXIT_FAILURE);
+  }
+
   // Read problem parameters
-  UpstreamICs ics;
-  ics.di0 = pin->GetReal("problem", "di0");
-  ics.dn0 = pin->GetReal("problem", "dn0");
-  ics.vix0 = pin->GetReal("problem", "vix0");
-  ics.vnx0 = pin->GetReal("problem", "vnx0");
-  ics.viy0 = pin->GetReal("problem", "viy0");
-  ics.vny0 = pin->GetReal("problem", "vny0");
-  ics.by0 = pin->GetReal("problem", "by0");
+  TwoFluidVars init;
+  init.di = pin->GetReal("problem", "di0");
+  init.dn = pin->GetReal("problem", "dn0");
+  init.vix = pin->GetReal("problem", "vix0");
+  init.vnx = pin->GetReal("problem", "vnx0");
+  init.viy = pin->GetReal("problem", "viy0");
+  init.vny = pin->GetReal("problem", "vny0");
+  init.bx = pin->GetReal("problem", "bx0");
+  init.by = pin->GetReal("problem", "by0");
   Real pert = pin->GetOrAddReal("problem", "pert", 1.0e-4);
 
   // Fluid properties
@@ -86,76 +111,127 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   Real cis   = pmbp->pmhd->peos->eos_data.iso_cs;
 
   // Use RK4 to integrate C-shock profile on host using 10x finer mesh
-  // v[0] = ion velocity
-  // v[1] = neutral velocity
-  Real v[2], dvdx[2];
+  // v[0] = ion x-velocity
+  // v[1] = neutral x-velocity
+  // v[2] = ion y-velocity
+  // v[3] = neutral y-velocity
+  Real dvixdx, dvnxdx, dviydx, dvnydx;
   int nxshk = 10*pmy_mesh_->mesh_indcs.nx1;
   Real dxshk = (pmy_mesh_->mesh_size.x1max - pmy_mesh_->mesh_size.x1min)/
                 static_cast<Real>(nxshk);
   HostArray1D<Real> xshk("xshk", nxshk);
-  HostArray2D<Real> vshk("vshk", 2, nxshk);
+  HostArray1D<TwoFluidVars> soln("soln", nxshk);
   xshk(0) = pmy_mesh_->mesh_size.x1min + (0.5*dxshk);
-  vshk(0,0) = ics.vix0 - pert;
-  vshk(1,0) = ics.vnx0;
+  soln(0).vix = init.vix - pert;
+  soln(0).vnx = init.vnx;
+  soln(0).viy = init.viy;
+  soln(0).vny = init.vny;
   for (int n=0; n<(nxshk-1); ++n) {
-    Real v[2], dvdx1[2], dvdx2[2], dvdx3[2], dvdx4[2];
-    v[0] = vshk(0,n);
-    v[1] = vshk(1,n);
-    RHS(ics, alpha, cis, cns, v, dvdx1);
+    Real v[4],dvdx1[4],dvdx2[4],dvdx3[4],dvdx4[4];
+    v[0] = soln(n).vix;
+    v[1] = soln(n).vnx;
+    v[2] = soln(n).viy;
+    v[3] = soln(n).vny;
+    RHS(init,v,alpha,cis,cns,dvdx1);
 
-    v[0] = vshk(0,n) + dvdx1[0]*dxshk/2.0;
-    v[1] = vshk(1,n) + dvdx1[1]*dxshk/2.0;
-    RHS(ics, alpha, cis, cns, v, dvdx2);
+    v[0] = soln(n).vix + dvdx1[0]*dxshk/2.0;
+    v[1] = soln(n).vnx + dvdx1[1]*dxshk/2.0;
+    v[2] = soln(n).viy + dvdx1[2]*dxshk/2.0;
+    v[3] = soln(n).vny + dvdx1[3]*dxshk/2.0;
+    RHS(init,v,alpha,cis,cns,dvdx2);
 
-    v[0] = vshk(0,n) +  dvdx2[0]*dxshk/2.0;
-    v[1] = vshk(1,n) +  dvdx2[1]*dxshk/2.0;
-    RHS(ics, alpha, cis, cns, v, dvdx3);
+    v[0] = soln(n).vix + dvdx2[0]*dxshk/2.0;
+    v[1] = soln(n).vnx + dvdx2[1]*dxshk/2.0;
+    v[2] = soln(n).viy + dvdx2[2]*dxshk/2.0;
+    v[3] = soln(n).vny + dvdx2[3]*dxshk/2.0;
+    RHS(init,v,alpha,cis,cns,dvdx3);
 
-    v[0] = vshk(0,n) +  dvdx3[0]*dxshk;
-    v[1] = vshk(1,n) +  dvdx3[1]*dxshk;
-    RHS(ics, alpha, cis, cns, v, dvdx4);
+    v[0] = soln(n).vix + dvdx3[0]*dxshk;
+    v[1] = soln(n).vnx + dvdx3[1]*dxshk;
+    v[2] = soln(n).viy + dvdx3[2]*dxshk;
+    v[3] = soln(n).vny + dvdx3[3]*dxshk;
+    RHS(init,v,alpha,cis,cns,dvdx4);
 
     xshk(n+1) = xshk(n) + dxshk;
-    vshk(0,n+1) = vshk(0,n) + dxshk*(dvdx1[0] + 2.*dvdx2[0] + 2.*dvdx3[0] + dvdx4[0])/6.0;
-    vshk(1,n+1) = vshk(1,n) + dxshk*(dvdx1[1] + 2.*dvdx2[1] + 2.*dvdx3[1] + dvdx4[1])/6.0;
+    soln(n+1).vix = soln(n).vix + dxshk*(dvdx1[0] +2.0*(dvdx2[0]+dvdx3[0]) +dvdx4[0])/6.0;
+    soln(n+1).vnx = soln(n).vnx + dxshk*(dvdx1[1] +2.0*(dvdx2[1]+dvdx3[1]) +dvdx4[1])/6.0;
+    soln(n+1).viy = soln(n).viy + dxshk*(dvdx1[2] +2.0*(dvdx2[2]+dvdx3[2]) +dvdx4[2])/6.0;
+    soln(n+1).vny = soln(n).vny + dxshk*(dvdx1[3] +2.0*(dvdx2[3]+dvdx3[3]) +dvdx4[3])/6.0;
   }
 
   // bin solution into DualArray at resolution of grid, sync to device
   // shksol indices refer to:  0=di, 1=dn, 2=vix, 3=vnx, 4=viy, 5=vny, 6=by
-  DualArray2D<Real> shksol("shksol",7,pmy_mesh_->mesh_indcs.nx1);
+  DualArray1D<TwoFluidVars> shksol("shksol",pmy_mesh_->mesh_indcs.nx1);
   for (int n=0; n<(pmy_mesh_->mesh_indcs.nx1); ++n) {
-    for (int m=0; m<7; ++m) {
-      shksol.h_view(m,n) = 0.0;
-    }
+    shksol.h_view(n).di  = 0.0;
+    shksol.h_view(n).dn  = 0.0;
+    shksol.h_view(n).vix = 0.0;
+    shksol.h_view(n).vnx = 0.0;
+    shksol.h_view(n).viy = 0.0;
+    shksol.h_view(n).vny = 0.0;
+    shksol.h_view(n).bx  = 0.0;
+    shksol.h_view(n).by  = 0.0;
     for (int m=0; m<10; ++m) {
-      shksol.h_view(0,n) += ics.di0*ics.vix0/vshk(0,(m + 10*n));
-      shksol.h_view(1,n) += ics.dn0*ics.vnx0/vshk(1,(m + 10*n));
-      shksol.h_view(2,n) += vshk(0,(m + 10*n));
-      shksol.h_view(3,n) += vshk(1,(m + 10*n));
-      shksol.h_view(4,n) += 0.0;
-      shksol.h_view(5,n) += 0.0;
-      shksol.h_view(6,n) += ics.by0*ics.vix0/vshk(0,(m + 10*n));
+      shksol.h_view(n).di  += init.di*init.vix/soln(m + 10*n).vix;
+      shksol.h_view(n).dn  += init.dn*init.vnx/soln(m + 10*n).vnx;
+      shksol.h_view(n).vix += soln(m + 10*n).vix;
+      shksol.h_view(n).vnx += soln(m + 10*n).vnx;
+      shksol.h_view(n).viy += soln(m + 10*n).viy;
+      shksol.h_view(n).vny += soln(m + 10*n).vny;
+      shksol.h_view(n).bx  += init.bx;
+      if (init.bx==0.0) {  // perpendicular shock
+        shksol.h_view(n).by  += init.by*init.vix/soln(m + 10*n).vix;
+      } else {             // oblique shock
+        shksol.h_view(n).by  += init.bx*soln(m + 10*n).viy/soln(m + 10*n).vix;
+      }
     }
-    for (int m=0; m<7; ++m) {
-      shksol.h_view(m,n) *= 0.1;
-    }
+    shksol.h_view(n).di  *= 0.1;
+    shksol.h_view(n).dn  *= 0.1;
+    shksol.h_view(n).vix *= 0.1;
+    shksol.h_view(n).vnx *= 0.1;
+    shksol.h_view(n).viy *= 0.1;
+    shksol.h_view(n).vny *= 0.1;
+    shksol.h_view(n).bx  *= 0.1;
+    shksol.h_view(n).by  *= 0.1;
   }
   shksol.template modify<HostMemSpace>();
   shksol.template sync<DevExeSpace>();
 
-  // set inflow state in BoundaryValues, sync to device
+  // set inflow state in BoundaryValues depending on shock direction, sync to device
   auto un_in = pmbp->phydro->pbval_u->u_in;
   auto ui_in = pmbp->pmhd->pbval_u->u_in;
   auto bi_in = pmbp->pmhd->pbval_b->b_in;
-  un_in.h_view(IDN,BoundaryFace::inner_x1) = ics.dn0;
-  ui_in.h_view(IDN,BoundaryFace::inner_x1) = ics.di0;
-  un_in.h_view(IM1,BoundaryFace::inner_x1) = ics.dn0*ics.vnx0;
-  ui_in.h_view(IM1,BoundaryFace::inner_x1) = ics.di0*ics.vix0;
-  un_in.h_view(IM2,BoundaryFace::inner_x1) = ics.dn0*ics.vny0;
-  ui_in.h_view(IM2,BoundaryFace::inner_x1) = ics.di0*ics.viy0;
-  bi_in.h_view(IBX,BoundaryFace::inner_x1) = 0.0;
-  bi_in.h_view(IBY,BoundaryFace::inner_x1) = ics.by0;
-  bi_in.h_view(IBZ,BoundaryFace::inner_x1) = 0.0;
+  if (shk_dir == 1) {
+    un_in.h_view(IDN,BoundaryFace::inner_x1) = init.dn;
+    ui_in.h_view(IDN,BoundaryFace::inner_x1) = init.di;
+    un_in.h_view(IM1,BoundaryFace::inner_x1) = init.dn*init.vnx;
+    ui_in.h_view(IM1,BoundaryFace::inner_x1) = init.di*init.vix;
+    un_in.h_view(IM2,BoundaryFace::inner_x1) = init.dn*init.vny;
+    ui_in.h_view(IM2,BoundaryFace::inner_x1) = init.di*init.viy;
+    bi_in.h_view(IBX,BoundaryFace::inner_x1) = init.bx;
+    bi_in.h_view(IBY,BoundaryFace::inner_x1) = init.by;
+    bi_in.h_view(IBZ,BoundaryFace::inner_x1) = 0.0;
+  } else if (shk_dir == 2) {
+    un_in.h_view(IDN,BoundaryFace::inner_x1) = init.dn;
+    ui_in.h_view(IDN,BoundaryFace::inner_x1) = init.di;
+    un_in.h_view(IM1,BoundaryFace::inner_x1) = init.dn*init.vnx;
+    ui_in.h_view(IM1,BoundaryFace::inner_x1) = init.di*init.vix;
+    un_in.h_view(IM2,BoundaryFace::inner_x1) = init.dn*init.vny;
+    ui_in.h_view(IM2,BoundaryFace::inner_x1) = init.di*init.viy;
+    bi_in.h_view(IBX,BoundaryFace::inner_x1) = init.bx;
+    bi_in.h_view(IBY,BoundaryFace::inner_x1) = init.by;
+    bi_in.h_view(IBZ,BoundaryFace::inner_x1) = 0.0;
+  } else {
+    un_in.h_view(IDN,BoundaryFace::inner_x1) = init.dn;
+    ui_in.h_view(IDN,BoundaryFace::inner_x1) = init.di;
+    un_in.h_view(IM1,BoundaryFace::inner_x1) = init.dn*init.vnx;
+    ui_in.h_view(IM1,BoundaryFace::inner_x1) = init.di*init.vix;
+    un_in.h_view(IM2,BoundaryFace::inner_x1) = init.dn*init.vny;
+    ui_in.h_view(IM2,BoundaryFace::inner_x1) = init.di*init.viy;
+    bi_in.h_view(IBX,BoundaryFace::inner_x1) = init.bx;
+    bi_in.h_view(IBY,BoundaryFace::inner_x1) = init.by;
+    bi_in.h_view(IBZ,BoundaryFace::inner_x1) = 0.0;
+  }
   un_in.template modify<HostMemSpace>();
   un_in.template sync<DevExeSpace>();
   ui_in.template modify<HostMemSpace>();
@@ -176,24 +252,24 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   // shksol indices refer to:  0=di, 1=dn, 2=vix, 3=vnx, 4=viy, 5=vny, 6=by
   par_for("pgen_cshock", DevExeSpace(),0,(pmbp->nmb_thispack-1),ks,ke,js,je,is,ie,
   KOKKOS_LAMBDA(int m,int k, int j, int i) {
-    u0_mhd(m,IDN,k,j,i) = shksol.d_view(0,i-is);
-    u0_hyd(m,IDN,k,j,i) = shksol.d_view(1,i-is);
+    u0_mhd(m,IDN,k,j,i) = shksol.d_view(i-is).di;
+    u0_hyd(m,IDN,k,j,i) = shksol.d_view(i-is).dn;
 
-    u0_mhd(m,IM1,k,j,i) = shksol.d_view(0,i-is)*shksol.d_view(2,i-is);
-    u0_hyd(m,IM1,k,j,i) = shksol.d_view(1,i-is)*shksol.d_view(3,i-is);
+    u0_mhd(m,IM1,k,j,i) = shksol.d_view(i-is).di*shksol.d_view(i-is).vix;
+    u0_hyd(m,IM1,k,j,i) = shksol.d_view(i-is).dn*shksol.d_view(i-is).vnx;
 
-    u0_mhd(m,IM2,k,j,i) = shksol.d_view(0,i-is)*shksol.d_view(4,i-is);
-    u0_hyd(m,IM2,k,j,i) = shksol.d_view(1,i-is)*shksol.d_view(5,i-is);
+    u0_mhd(m,IM2,k,j,i) = shksol.d_view(i-is).di*shksol.d_view(i-is).viy;
+    u0_hyd(m,IM2,k,j,i) = shksol.d_view(i-is).dn*shksol.d_view(i-is).vny;
 
     u0_hyd(m,IM3,k,j,i) = 0.0;
     u0_mhd(m,IM3,k,j,i) = 0.0;
 
-    b0.x1f(m,k,j,i) = 0.0;
-    b0.x2f(m,k,j,i) = shksol.d_view(6,i-is);
+    b0.x1f(m,k,j,i) = init.bx;
+    b0.x2f(m,k,j,i) = shksol.d_view(i-is).by;
     b0.x3f(m,k,j,i) = 0.0;
 
-    if (i==ie) b0.x1f(m,k,j,i+1) = 0.0;
-    if (j==je) b0.x2f(m,k,j+1,i) = shksol.d_view(6,i-is);
+    if (i==ie) b0.x1f(m,k,j,i+1) = init.bx;
+    if (j==je) b0.x2f(m,k,j+1,i) = shksol.d_view(i-is).by;
     if (k==ke) b0.x3f(m,k+1,j,i) = 0.0;
   });
 

@@ -56,14 +56,16 @@ rsolver     = llf      # Riemann-solver to be used
 iso_sound_speed = 1.0
 
 <problem>
+shock_dir = 1          # shock direction
 di0    = 1.0e-3        # upstream ion density
 dn0    = 1.0           # upstream neutral density
 vix0   = 30.0          # upstream ion X-velocity
 vnx0   = 30.0          # upstream neutral X-velocity
 viy0   = 0.0           # upstream ion Y-velocity
 vny0   = 0.0           # upstream neutral Y-velocity
-by0    = 10.0          # upstream transverse magnetic field
-pert   = 3.0e-2        # perturbation amplitude to ion velocity to start integration
+bx0    = 0.0           # upstream parallel magnetic field
+by0    = 10.0          # upstream perpendicular magnetic field
+pert   = 1.0e-2        # perturbation amplitude to ion velocity to start integration
 
 <output1>
 file_type  = hst        # History data dump
