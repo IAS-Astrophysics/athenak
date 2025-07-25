@@ -239,13 +239,14 @@ TaskStatus RadiationM1::CalcOpacityNurates_(Driver *pdrive, int stage) {
           Real tau{}, nudens_0_trap[4]{}, nudens_1_trap[4]{}, nudens_0_thin[4]{},
               nudens_1_thin[4]{};
 
-          if (nurates_params_.use_kirchhoff_law) {
+          if (nurates_params_.use_kirchhoff_law ||
+              nurates_params_.use_equilibrium_distribution) {
             // effective optical depth to decide whether to compute black body function
             // for neutrinos assuming neutrino tapping or at fixed temperature and Ye
             Real tau =
-                beta_dt *
                 Kokkos::min(Kokkos::sqrt(abs_1_loc[0] * (abs_1_loc[0] + scat_1_loc[0])),
-                            Kokkos::sqrt(abs_1_loc[1] * (abs_1_loc[1] + scat_1_loc[1])));
+                            Kokkos::sqrt(abs_1_loc[1] * (abs_1_loc[1] + scat_1_loc[1]))) *
+                beta_dt;
 
             // compute neutrino black body function assuming trapped neutrinos
             if (nurates_params_.opacity_tau_trap >= 0 &&
@@ -261,21 +262,31 @@ TaskStatus RadiationM1::CalcOpacityNurates_(Driver *pdrive, int stage) {
 
               Real e = eos.GetEnergy(nb, T, Y_part) + J[0] + J[1] + J[2] + J[3];
 
-              // If the equilibrium is not found, we use the current values of T
-              // and Y_e
-              Real T_eq{}, Y_eq[3]{};
-              bool ierr =
-                  eos.GetBetaEquilibriumTrapped(nb, e, Y_lep, T_eq, &Y_eq[0], T, Y_part);
+              Real temperature_trap{}, Y_e_trap[3]{};
+              bool res = eos.GetBetaEquilibriumTrapped(nb, e, Y_lep, temperature_trap,
+                                                       &Y_e_trap[0], T, Y_part);
 
-              Real mu_b_eq = eos.GetBaryonChemicalPotential(nb, T_eq, &Y_eq[0]);
-              Real mu_q_eq = eos.GetChargeChemicalPotential(nb, T_eq, &Y_eq[0]);
-              Real mu_le_eq = eos.GetElectronLeptonChemicalPotential(nb, T, &Y_eq[0]);
+              if (!res) {
+                // trying to recompute weak equilibrium neglecting current neutrino data
+                Real n_nu_zero[6]{};
+                Real Y_lep_zero[3]{};
+                eos.GetLeptonFractions(nb, Y_part, n_nu_zero, Y_lep_zero);
+                Real e_zero = eos.GetEnergy(nb, T, Y_part);
+                bool res = eos.GetBetaEquilibriumTrapped(
+                    nb, e_zero, Y_lep_zero, temperature_trap, &Y_e_trap[0], T, Y_part);
+              }
+
+              Real mu_b_eq =
+                  eos.GetBaryonChemicalPotential(nb, temperature_trap, &Y_e_trap[0]);
+              Real mu_q_eq =
+                  eos.GetChargeChemicalPotential(nb, temperature_trap, &Y_e_trap[0]);
+              Real mu_le_eq = eos.GetElectronLeptonChemicalPotential(nb, T, &Y_e_trap[0]);
 
               Real mu_n_eq = mu_b_eq;
               Real mu_p_eq = mu_b_eq + mu_q_eq;
               Real mu_e_eq = mu_le_eq - mu_q_eq;
 
-              NeutrinoDens(mu_n_eq, mu_p_eq, mu_e_eq, T_eq, nudens_0_trap[0],
+              NeutrinoDens(mu_n_eq, mu_p_eq, mu_e_eq, temperature_trap, nudens_0_trap[0],
                            nudens_0_trap[1], nudens_0_trap[2], nudens_1_trap[0],
                            nudens_1_trap[1], nudens_1_trap[2], nurates_params_,
                            code_units, eos_units);
@@ -312,7 +323,7 @@ TaskStatus RadiationM1::CalcOpacityNurates_(Driver *pdrive, int stage) {
             abs_1(m, nuidx, k, j, i) = abs_1_loc[nuidx];
             scat_1(m, nuidx, k, j, i) = scat_1_loc[nuidx];
 
-            Real my_nudens_0{}, my_nudens_1{}, corr_fac{};
+            Real my_nudens_0{}, my_nudens_1{}, corr_fac{1};
             if (nurates_params_.use_kirchhoff_law ||
                 nurates_params_.use_equilibrium_distribution) {
               // combine optically thin and optically thick limits
@@ -359,22 +370,6 @@ TaskStatus RadiationM1::CalcOpacityNurates_(Driver *pdrive, int stage) {
               if (nuidx == 0 || nuidx == 1) {
                 eta_0(m, nuidx, k, j, i) = abs_0(m, nuidx, k, j, i) * my_nudens_0;
                 eta_1(m, nuidx, k, j, i) = abs_1(m, nuidx, k, j, i) * my_nudens_1;
-              } else {
-                abs_0(m, nuidx, k, j, i) = (my_nudens_0 > m1_params_.rad_N_floor)
-                                               ? eta_0(m, nuidx, k, j, i) / my_nudens_0
-                                               : 0;
-                abs_1(m, nuidx, k, j, i) = (my_nudens_1 > m1_params_.rad_E_floor)
-                                               ? eta_1(m, nuidx, k, j, i) / my_nudens_1
-                                               : 0;
-              }
-            } else {
-              if (nuidx == 0 || nuidx == 1) {
-                if (nudens_0[nuidx] < m1_params_.rad_N_floor) {
-                  abs_0(m, nuidx, k, j, i) = 0.;
-                }
-                if (nudens_1[nuidx] < m1_params_.rad_E_floor) {
-                  abs_1(m, nuidx, k, j, i) = 0.;
-                }
               }
             }
           }
