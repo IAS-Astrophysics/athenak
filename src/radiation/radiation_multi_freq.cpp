@@ -101,8 +101,8 @@ TaskStatus Radiation::AddMultiFreqRadSrcTerm(Driver *pdriver, int stage) {
   auto &nu_tet = freq_grid;
   bool &is_hydro_enabled_ = is_hydro_enabled;
   bool &is_mhd_enabled_ = is_mhd_enabled;
-  // bool &are_units_enabled_ = are_units_enabled;
-  // bool &is_compton_enabled_ = is_compton_enabled;
+  bool &are_units_enabled_ = are_units_enabled;
+  bool &is_compton_enabled_ = is_compton_enabled;
   bool &fixed_fluid_ = fixed_fluid;
   // bool &affect_fluid_ = affect_fluid;
 
@@ -119,21 +119,19 @@ TaskStatus Radiation::AddMultiFreqRadSrcTerm(Driver *pdriver, int stage) {
   // Real &n_0_floor_ = n_0_floor;
 
   // Extract radiation constant and units
-  Real temp_unit = 1.0;
   Real &arad_ = arad;
-  // Real density_scale_ = 1.0, temperature_scale_ = 1.0, length_scale_ = 1.0;
-  // Real mean_mol_weight_ = 1.0;
-  // Real rosseland_coef_ = 1.0, planck_minus_rosseland_coef_ = 0.0;
-  // Real inv_t_electron_ = 1.0;
-  // if (are_units_enabled_) {
-  //   density_scale_ = pmy_pack->punit->density_cgs();
-  //   temperature_scale_ = pmy_pack->punit->temperature_cgs();
-  //   length_scale_ = pmy_pack->punit->length_cgs();
-  //   mean_mol_weight_ = pmy_pack->punit->mu();
-  //   rosseland_coef_ = pmy_pack->punit->rosseland_coef_cgs;
-  //   planck_minus_rosseland_coef_ = pmy_pack->punit->planck_minus_rosseland_coef_cgs;
-  //   inv_t_electron_ = temperature_scale_/pmy_pack->punit->electron_rest_mass_energy_cgs;
-  // }
+  Real den_unit = 1.0, temp_unit = 1.0, l_unit = 1.0;
+  Real mu_molecular = 1.0;
+  Real coeff_r = 1.0, coeff_pmr = 0.0; inv_t_elec = 1.0;
+  if (are_units_enabled_) {
+    den_unit  = pmy_pack->punit->density_cgs();
+    temp_unit = pmy_pack->punit->temperature_cgs();
+    l_unit    = pmy_pack->punit->length_cgs();
+    mu_molecular = pmy_pack->punit->mu();
+    coeff_r   = pmy_pack->punit->rosseland_coef_cgs;
+    coeff_pmr = pmy_pack->punit->planck_minus_rosseland_coef_cgs;
+    inv_t_elec = temperature_scale_/pmy_pack->punit->electron_rest_mass_energy_cgs;
+  }
 
   // Extract adiabatic index
   Real gm1;
@@ -150,10 +148,10 @@ TaskStatus Radiation::AddMultiFreqRadSrcTerm(Driver *pdriver, int stage) {
   auto &tc = tetcov_c;
   auto &norm_to_tet_ = norm_to_tet;
   auto &solid_angles_ = prgeo->solid_angles;
-  // Real &kappa_a_ = kappa_a;
-  // Real &kappa_s_ = kappa_s;
-  // Real &kappa_p_ = kappa_p;
-  // bool &power_opacity_ = power_opacity;
+  Real &kappa_a_ = kappa_a;
+  Real &kappa_s_ = kappa_s;
+  Real &kappa_p_ = kappa_p;
+  bool &power_opacity_ = power_opacity;
 
   // Extract hydro/mhd quantities
   DvceArray5D<Real> u0_, w0_;
@@ -275,12 +273,17 @@ TaskStatus Radiation::AddMultiFreqRadSrcTerm(Driver *pdriver, int stage) {
       ir_cm_grey(iang) = 0;
     } // endfor iang
 
-    // frequency-dependent coefficients (TODO)
-    Real chi_s = 1; // TODO
+    // frequency-dependent coefficients
+    // TODO: implement a better default opacity function for multi-frequency radiation
+    Real chi_abs, chi_s, chi_pmr;
+    OpacityFunction(wdn, den_unit, tgas, temp_unit, l_unit,
+                    gm1, mu_molecular, power_opacity_, coeff_r, coeff_pmr,
+                    kappa_a_, kappa_s_, kappa_p_, chi_abs, chi_s, chi_pmr);
     for (int ifr=0; ifr<=nfreq1; ++ifr) {
       // opacities
-      chi_p(ifr) = 1; // TODO
-      chi_r(ifr) = 1; // TODO
+      // TODO: interpolate frequency-dependent opacity table
+      chi_p(ifr) = chi_pmr + chi_abs;
+      chi_r(ifr) = chi_abs;
 
       // initialize coefficients for later use when solving temperature update
       sum_a(ifr) = 0;
@@ -487,7 +490,11 @@ TaskStatus Radiation::AddMultiFreqRadSrcTerm(Driver *pdriver, int stage) {
 
 
 
+    // Compton process
+    // TODO: implement solver for Kompaneets equation
+    if (is_compton_enabled_) {
 
+    } // endif is_compton_enabled_
 
   });
 
