@@ -367,10 +367,8 @@ TaskStatus RadiationM1::CalcOpacityNurates_(Driver *pdrive, int stage) {
 
             if (nurates_params_.use_kirchhoff_law) {
               // enforce Kirchhoff's laws.
-              if (nuidx == 0 || nuidx == 1) {
                 eta_0(m, nuidx, k, j, i) = abs_0(m, nuidx, k, j, i) * my_nudens_0;
                 eta_1(m, nuidx, k, j, i) = abs_1(m, nuidx, k, j, i) * my_nudens_1;
-              }
             }
           }
         }
