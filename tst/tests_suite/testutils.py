@@ -1,7 +1,11 @@
 import os
+import sys
 from subprocess import Popen, PIPE
 from typing import List
 import time
+sys.path.append('../vis/python')
+import pytest
+import athena_read
 
 # Constants and configurations
 ATHENAK_PATH = ".."
@@ -106,7 +110,7 @@ def run(inputfile: str, flags=[], **kwargs)-> bool:
         raise RuntimeError(f"Failed to execute {inputfile} with flags {flags}")
     return True
 
-def mpi_run(inputfile: str, flags=[], threads: int = os.cpu_count(), **kwargs) -> bool:
+def mpi_run(inputfile: str, flags=[], threads: int = 8, **kwargs) -> bool:
     """
     Executes a test case using the AthenaK binary with MPI support.
 
@@ -186,3 +190,84 @@ def clean_make(threads: int = os.cpu_count(),**kwargs) -> None:
     cmake(**kwargs) 
     make(threads=threads)  
     logging.info("Build directory cleaned and project rebuilt")
+
+def read_dictionary_from_file(file_path):
+    """
+    Reads a dictionary from a file where each line is in the format "key: value".
+
+    Args:
+        file_path: The path to the file.
+
+    Returns:
+        A dictionary, or None if an error occurred.
+    """
+    try:
+        my_dict = {}
+        with open(file_path, "r") as f:
+            for line in f:
+                line = line.strip()  # Remove leading/trailing whitespace
+                if line:  # Skip empty lines
+                    try:
+                        keys, values = line.split(": ", 1)  # Split at the first ": "
+                        values = values.strip("()")
+                        error, ratio = values.split(",")
+                        keys = keys.strip("()")
+                        keys = keys.split(",")
+                        keys = [key.strip(" '") for key in keys]
+                        my_dict[tuple(keys)] = (float(error),float(ratio))
+                    except ValueError:
+                        print(f"Warning: Skipping invalid line: {line}")
+        return my_dict
+    except FileNotFoundError:
+        print(f"Error: File not found: {file_path}")
+        return None  # Or raise the exception, depending on desired behavior
+    except Exception as e:
+        print(f"An error occurred while reading the file: {e}")
+        return None
+
+def test_error_convergence(input_file,
+                        test_name,
+                        arguments,
+                        _wave,
+                        _res,
+                        iv,
+                        rv,
+                        fv,
+                        left_wave='0',
+                        right_wave='0',
+                        rel="NR",
+                        soe="hydro",
+                        eos="ideal",
+                        refinement="none",
+                        dim=1,
+                        mpi=False):
+    run = mpi_run if mpi else athenak_run
+    for wv in _wave:                    
+        try:
+            for res in _res:
+                results = run(input_file, arguments(iv,rv,fv,wv,res,test_name))
+                assert results, f"Test failed for iv={iv}, res={res}, fv={fv}, rv={rv}, wv={wv}./AthenaK run did not complete successfully."
+            errors = read_dictionary_from_file("tests_suite/linwave1d_errors.txt")
+            assert errors!=None, "Couldn't open errors dictionary"
+            maxerror, errorratio = errors[(rel, soe, eos, iv, rv, wv, refinement, f"{dim}D")]
+            #maxerror, errorratio = errors[('NR', 'hydro', 'ideal', 'rk3', 'wenoz', '0', 'none', '1D')]
+            data = athena_read.error_dat(f'{test_name}-errs.dat')
+            L1_RMS_INDEX = 4  # Index for L1 RMS error in data
+            l1_rms_nLR = data[0][L1_RMS_INDEX]
+            l1_rms_nHR = data[1][L1_RMS_INDEX]
+            if l1_rms_nHR > maxerror and not(rv=="ppmx" and iv=="rk2"):
+                # PPMX with RK2 is known to have larger errors, so we skip the check
+                pytest.fail(f"{wv} wave error too large for {iv}+{rv}+{fv} configuration, "
+                    f"error: {l1_rms_nHR:g} threshold: {maxerror:g}")
+            if l1_rms_nHR / l1_rms_nLR > errorratio and not(rv=="ppmx" and iv=="rk2"):
+                # PPMX with RK2 is known to have larger errors, so we skip the check
+                # Note that the convergence rate is defined as the ratio of errors at different resolutions
+                pytest.fail(f"{wv} wave not converging for {iv}+{rv}+{fv}, "
+                        f"conv: {l1_rms_nHR / l1_rms_nLR:g} threshold: {errorratio:g}")
+            if wv == left_wave:  # Left wave
+                l1_rms_l = l1_rms_nHR
+            if wv == right_wave:  # Right wave
+                l1_rms_r = l1_rms_nHR
+        finally:
+            cleanup()
+    return l1_rms_l,l1_rms_r
