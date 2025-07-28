@@ -121,7 +121,8 @@ class Z4c {
     AthenaTensor<Real, TensorSymm::NONE, 3, 0> alpha;   // lapse
     AthenaTensor<Real, TensorSymm::NONE, 3, 1> vGam_u;  // Gamma functions (BSSN)
     AthenaTensor<Real, TensorSymm::NONE, 3, 1> beta_u;  // shift
-    AthenaTensor<Real, TensorSymm::NONE, 3, 1> vB_u;    // advective derivative of shift
+    // advective derivative of shift or heat flux for telegraph lapse
+    AthenaTensor<Real, TensorSymm::NONE, 3, 1> vB_d;
     AthenaTensor<Real, TensorSymm::SYM2, 3, 2> g_dd;    // conf. 3-metric
     AthenaTensor<Real, TensorSymm::SYM2, 3, 2> vA_dd;   // conf. traceless extr. curvature
   };
@@ -176,6 +177,9 @@ class Z4c {
     Real shift_advect;
     Real shift_eta;
     bool first_order_shift;
+    bool telegraph_lapse;
+    Real telegraph_tau;
+    Real telegraph_kappa;
     // turn on shift damping smoothly
     bool slow_roll_eta;
     Real turn_on_time;

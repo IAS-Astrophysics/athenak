@@ -102,7 +102,7 @@ Z4c::Z4c(MeshBlockPack *ppack, ParameterInput *pin) :
 
   z4c.alpha.InitWithShallowSlice (u0, I_Z4C_ALPHA);
   z4c.beta_u.InitWithShallowSlice(u0, I_Z4C_BETAX, I_Z4C_BETAZ);
-  z4c.vB_u.InitWithShallowSlice(u0, I_Z4C_BX, I_Z4C_BZ);
+  z4c.vB_d.InitWithShallowSlice(u0, I_Z4C_BX, I_Z4C_BZ);
   z4c.chi.InitWithShallowSlice   (u0, I_Z4C_CHI);
   z4c.vKhat.InitWithShallowSlice  (u0, I_Z4C_KHAT);
   z4c.vTheta.InitWithShallowSlice (u0, I_Z4C_THETA);
@@ -112,7 +112,7 @@ Z4c::Z4c(MeshBlockPack *ppack, ParameterInput *pin) :
 
   rhs.alpha.InitWithShallowSlice (u_rhs, I_Z4C_ALPHA);
   rhs.beta_u.InitWithShallowSlice(u_rhs, I_Z4C_BETAX, I_Z4C_BETAZ);
-  rhs.vB_u.InitWithShallowSlice  (u_rhs, I_Z4C_BX, I_Z4C_BZ);
+  rhs.vB_d.InitWithShallowSlice  (u_rhs, I_Z4C_BX, I_Z4C_BZ);
   rhs.chi.InitWithShallowSlice   (u_rhs, I_Z4C_CHI);
   rhs.vKhat.InitWithShallowSlice  (u_rhs, I_Z4C_KHAT);
   rhs.vTheta.InitWithShallowSlice (u_rhs, I_Z4C_THETA);
@@ -153,7 +153,15 @@ Z4c::Z4c(MeshBlockPack *ppack, ParameterInput *pin) :
   opt.shift_alpha2ggamma = pin->GetOrAddReal("z4c", "shift_alpha2Gamma", 0.0);
   opt.shift_hh = pin->GetOrAddReal("z4c", "shift_H", 0.0);
   opt.first_order_shift = pin->GetOrAddBoolean("z4c", "first_order_shift", true);
-  
+  opt.telegraph_lapse = pin->GetOrAddBoolean("z4c", "telegraph_lapse", false);
+  if (opt.telegraph_lapse==true && opt.first_order_shift==false) {
+    std::cout << "Cannot use telegraph lapse damping and second order shift \n"
+                  "simultaneously! \n" << std::endl;
+    exit(EXIT_FAILURE);
+  }
+  opt.telegraph_tau = pin->GetOrAddReal("z4c", "telegraph_tau", 20.0);
+  opt.telegraph_kappa = pin->GetOrAddReal("z4c", "telegraph_kappa", 20.0);
+
   // default shift damping to 1 if we use 2nd order shift
   if (opt.first_order_shift) {
     opt.shift_eta = pin->GetOrAddReal("z4c", "shift_eta", 2.0);
