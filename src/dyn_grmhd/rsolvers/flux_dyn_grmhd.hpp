@@ -109,6 +109,101 @@ void SingleStateFlux(const PrimitiveSolverHydro<EOSPolicy, ErrorPolicy>& eos,
                     Bu_r[ibx]*(prim_r[pvz]*iWr - beta_u[pvz - PVX]*ialpha));
 }
 
+//----------------------------------------------------------------------------------------
+//! \fn void ComputeOrthonormalTetrad
+//! \brief Calculate orthonormal tetrad to local Minkowski spacetime. Based on
+//         White et al. (1511.00943) but uses notation from Kiuchi et al. (2205.04487).
+template<int ivx, class arr2D>
+KOKKOS_INLINE_FUNCTION
+void ComputeOrthonormalTetrad(Real g3d[NSPMETRIC], Real beta_u[3], Real alpha, Real idetg,
+                              arr2D& e, arr2D& ie) {
+  // Index permutations
+  // 0, 1, 2 for spatial quantities
+  constexpr int ix = (ivx - IVX);
+  constexpr int iy = ((ivx - IVX) + 1) % 3;
+  constexpr int iz = ((ivx - IVX) + 2) % 3;
+
+  // 1, 2, 3 for space components of spacetime quantities
+  constexpr int sx = ix + 1;
+  constexpr int sy = iy + 1;
+  constexpr int sz = iz + 1;
+
+  // Indices for accessing metric
+  constexpr int diag[3] = {S11, S22, S33};
+  constexpr int nearoff[3] = {S12, S23, S13};
+  constexpr int faroff[3] = {S23, S13, S12};
+  constexpr int corner[3] = {S13, S12, S23};
+  constexpr int s11 = diag[ix];
+  constexpr int s22 = diag[iy];
+  constexpr int s33 = diag[iz];
+  constexpr int s12 = nearoff[ix];
+  constexpr int s13 = corner[ix];
+  constexpr int s23 = faroff[ix];
+
+  // Compute some necessary components of the spatial metric. "gab" is \gamma^{ab}, and
+  // "g_ab" is \gamma_{ab}.
+  Real g11 = (-g3d[s23]*g3d[s23] + g3d[s22]*g3d[s33])*idetg;
+  Real g12 = (g3d[s13]*g3d[s23] - g3d[s12]*g3d[s33])*idetg;
+  Real g13 = (g3d[s12]*g3d[s23] - g3d[s13]*g3d[s22])*idetg;
+
+  Real g_12 = g3d[s12];
+  Real g_13 = g3d[s13];
+  Real g_22 = g3d[s22];
+  Real g_23 = g3d[s23];
+  Real g_33 = g3d[s33];
+
+  Real beta_d[3];
+  Primitive::LowerVector(beta_d, beta_u, g3d);
+
+  // Compute utility quantities
+  Real A = -1.0/alpha;
+  Real B = 1.0/Kokkos::sqrt(g11);
+  Real C = 1.0/Kokkos::sqrt(g_33);
+  Real D = 1.0/Kokkos::sqrt(g_33*(g_22*g_33 - g_23*g_23));
+
+  // Fill in transformation for covariant vectors. This corresponds to e^\mu_{(\nu)}.
+  e[0][0] = -A;
+  e[sx][0] = A*beta_u[ix];
+  e[sy][0] = A*beta_u[iy];
+  e[sz][0] = A*beta_u[iz];
+
+  e[0 ][sx] = 0.0;
+  e[sx][sx] = B*g11;
+  e[sy][sx] = B*g12;
+  e[sz][sx] = B*g13;
+
+  e[0 ][sy] = 0.0;
+  e[sx][sy] = 0.0;
+  e[sy][sy] = D*g_33;
+  e[sz][sy] = -D*g_23;
+
+  e[0 ][sz] = 0.0;
+  e[sx][sz] = 0.0;
+  e[sy][sz] = 0.0;
+  e[sz][sz] = C;
+
+  // Fill in transformation for contravariant vectors. This corresponds to e_{(\mu)}_\nu
+  ie[0][0] = -alpha;
+  ie[0][1] = 0.0;
+  ie[0][2] = 0.0;
+  ie[0][3] = 0.0;
+
+  ie[sx][0 ] = B*beta_u[ix];
+  ie[sx][sx] = B;
+  ie[sx][sy] = 0.0;
+  ie[sx][sz] = 0.0;
+
+  ie[sy][0 ] = D*(beta_d[iy]*g_33 - beta_d[iz]*g_23);
+  ie[sy][sx] = D*(g_12*g_33 - g_13*g_23);
+  ie[sy][sy] = D*(g_22*g_33 - g_23*g_23);
+  ie[sy][sz] = 0.0;
+
+  ie[sz][0 ] = C*beta_d[iz];
+  ie[sz][sx] = C*g_13;
+  ie[sz][sy] = C*g_23;
+  ie[sz][sz] = C*g_33;
+}
+
 } // namespace dyngr
 
 #endif  // DYN_GRMHD_RSOLVERS_FLUX_DYN_GRMHD_HPP_
