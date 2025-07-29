@@ -110,6 +110,7 @@ add_executable(
         pgen/tests/advection.cpp
         pgen/tests/collapse.cpp
         pgen/tests/cpaw.cpp
+        pgen/tests/cshock.cpp
         pgen/tests/diffusion.cpp
         pgen/tests/gr_bondi.cpp
         pgen/tests/gr_linear_wave.cpp
