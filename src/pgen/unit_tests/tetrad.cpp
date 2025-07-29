@@ -230,6 +230,14 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
       g_dd[mu][nu] = eta_dd[mu][nu] + f*k_d[mu]*k_d[nu];
     }
   }
+  // Check that a four-vector is invariant under a tetrad transform
+  Real u_u[4] = {3.0, 0.5, 1.2, 0.2};
+  Real mag_g = 0;
+  for (int mu = 0; mu < 4; mu++) {
+    for (int nu = 0; nu < 4; nu++) {
+      mag_g += u_u[mu]*u_u[nu]*g_dd[mu][nu];
+    }
+  }
   
   ExtractADMMetric(g3d, alpha, beta_u, detg, g_dd);
 
@@ -239,11 +247,35 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     std::cout << "Kerr-Schild Tetrad Test, x-direction failed" << std::endl;
     exit(EXIT_FAILURE);
   }
+  // Transform the four-vector and check that the magnitude is the same.
+  Real u_t[4] = {0.0};
+  for (int a = 0; a < 4; a++) {
+    for (int mu = 0; mu < 4; mu++) {
+      u_t[a] += e_dd[a][mu]*u_u[mu];
+    }
+  }
+  Real mag_eta = -u_t[0]*u_t[0] + u_t[1]*u_t[1] + u_t[2]*u_t[2] + u_t[3]*u_t[3];
+  if (Kokkos::fabs((mag_eta - mag_g)/mag_g) > 1e-10) {
+    std::cout << "Kerr-Schild Four-Vector Test, x-direction failed" << std::endl;
+    exit(EXIT_FAILURE);
+  }
 
   dyngr::ComputeOrthonormalTetrad<2>(g3d, beta_u, alpha, 1.0/detg, e_ud, e_dd);
 
   if (!CheckConsistency(g_dd, eta_dd, e_ud, e_dd, -alpha*alpha*detg, 1e-10)) {
     std::cout << "Kerr-Schild Tetrad Test, y-direction failed" << std::endl;
+    exit(EXIT_FAILURE);
+  }
+  // Transform the four-vector and check that the magnitude is the same.
+  for (int a = 0; a < 4; a++) {
+    u_t[a] = 0.0;
+    for (int mu = 0; mu < 4; mu++) {
+      u_t[a] += e_dd[a][mu]*u_u[mu];
+    }
+  }
+  mag_eta = -u_t[0]*u_t[0] + u_t[1]*u_t[1] + u_t[2]*u_t[2] + u_t[3]*u_t[3];
+  if (Kokkos::fabs((mag_eta - mag_g)/mag_g) > 1e-10) {
+    std::cout << "Kerr-Schild Four-Vector Test, y-direction failed" << std::endl;
     exit(EXIT_FAILURE);
   }
 
@@ -253,6 +285,19 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     std::cout << "Kerr-Schild Tetrad Test, z-direction failed" << std::endl;
     exit(EXIT_FAILURE);
   }
+  // Transform the four-vector and check that the magnitude is the same.
+  for (int a = 0; a < 4; a++) {
+    u_t[a] = 0.0;
+    for (int mu = 0; mu < 4; mu++) {
+      u_t[a] += e_dd[a][mu]*u_u[mu];
+    }
+  }
+  mag_eta = -u_t[0]*u_t[0] + u_t[1]*u_t[1] + u_t[2]*u_t[2] + u_t[3]*u_t[3];
+  if (Kokkos::fabs((mag_eta - mag_g)/mag_g) > 1e-10) {
+    std::cout << "Kerr-Schild Four-Vector Test, z-direction failed" << std::endl;
+    exit(EXIT_FAILURE);
+  }
+
 
   std::cout << "All tetrad tests passed!\n";
 
