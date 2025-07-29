@@ -228,28 +228,24 @@ def read_dictionary_from_file(file_path):
 def test_error_convergence(input_file,
                         test_name,
                         arguments,
+                        errors,
                         _wave,
                         _res,
                         iv,
                         rv,
                         fv,
+                        soe,
                         left_wave='0',
                         right_wave='0',
-                        rel="NR",
-                        soe="hydro",
-                        eos="ideal",
-                        refinement="none",
                         dim=1,
                         mpi=False):
     run = mpi_run if mpi else athenak_run
     for wv in _wave:                    
         try:
             for res in _res:
-                results = run(input_file, arguments(iv,rv,fv,wv,res,test_name))
+                results = run(input_file, arguments(iv,rv,fv,wv,res,soe,test_name))
                 assert results, f"Test failed for iv={iv}, res={res}, fv={fv}, rv={rv}, wv={wv}./AthenaK run did not complete successfully."
-            errors = read_dictionary_from_file("tests_suite/linwave1d_errors.txt")
-            assert errors!=None, "Couldn't open errors dictionary"
-            maxerror, errorratio = errors[(rel, soe, eos, iv, rv, wv, refinement, f"{dim}D")]
+            maxerror, errorratio = errors[(soe, iv, rv, wv)]
             #maxerror, errorratio = errors[('NR', 'hydro', 'ideal', 'rk3', 'wenoz', '0', 'none', '1D')]
             data = athena_read.error_dat(f'{test_name}-errs.dat')
             L1_RMS_INDEX = 4  # Index for L1 RMS error in data
