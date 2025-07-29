@@ -18,57 +18,56 @@ import numpy as np
 # Threshold errors and convergence rates
 # for different integrators, reconstructions, and wave types
 maxerrors={
-    ('hydro', 'rk3', 'plm', '0'): (3.8e-09,0.25),
-    ('hydro', 'rk3', 'ppm4', '0'): (1.9e-09,0.23),
-    ('hydro', 'rk3', 'ppmx', '0'): (1.7e-09,0.33),
-    ('hydro', 'rk3', 'wenoz', '0'): (3.5e-10,0.22),
-    ('mhd', 'rk3', 'plm', '0'): (1.2e-08,0.24),
-    ('mhd', 'rk3', 'ppm4', '0'): (4.8e-09,0.22),
-    ('mhd', 'rk3', 'ppmx', '0'): (4e-09,0.33),
-    ('mhd', 'rk3', 'wenoz', '0'): (9.2e-10,0.24),}
+    ('hydro', 'rk3', 'plm', '0'): (1.5e-08,0.26),
+    ('hydro', 'rk3', 'ppm4', '0'): (7.8e-09,0.24),
+    ('hydro', 'rk3', 'ppmx', '0'): (4.7e-09,0.24),
+    ('hydro', 'rk3', 'wenoz', '0'): (1.5e-09,0.23),
+    ('mhd', 'rk3', 'plm', '0'): (4.6e-08,0.26),
+    ('mhd', 'rk3', 'ppm4', '0'): (2.3e-08,0.23),
+    ('mhd', 'rk3', 'ppmx', '0'): (1.3e-08,0.26),
+    ('mhd', 'rk3', 'wenoz', '0'): (3.9e-09,0.23),}
 
 _int = ['rk3']
 _recon = ['wenoz']  # do not change order
 _wave = ['0']                      # do not change order
 _flux = ['hlle']
-_res = [32, 64]                            # resolutions to test
+_res = [16, 32]                            # resolutions to test
 _soe = ['hydro', 'mhd']  # system of equations to test
 
-def arguments(iv, rv, fv, wv, res,soe,name):
-    vflow = 1.0 if wv=='3' else 0.0
+def arguments(iv, rv, fv, wv, res, soe, name, dim):
     return  [f'job/basename={name}',
             'time/tlim=1.0',
             'time/integrator=' + iv,
             'mesh/nghost=4',
             'mesh/nx1=' + repr(res),
-            'mesh/nx2=' + repr(res//2),
-            'mesh/nx3=1',
-            'meshblock/nx1=16',
-            'meshblock/nx2=16',
-            'meshblock/nx3=1',
+            'mesh/nx2=' + repr(res//2 if dim > 1 else 1),
+            'mesh/nx3=' + repr(res//4 if dim > 2 else 1),
+            'meshblock/nx1=4',
+            'meshblock/nx2='+ repr(4 if dim > 1 else 1),
+            'meshblock/nx3='+ repr(4 if dim > 2 else 1),
             'time/cfl_number=0.4',
-            'coord/special_rel=true',
-            'coord/general_rel=false',
+            'coord/special_rel=false',
+            'coord/general_rel=true',
             f'{soe}/reconstruct=' + rv,
             f'{soe}/rsolver=' + fv,
             'problem/wave_flag=' + wv]
 
 
 @pytest.mark.parametrize("iv" , _int)
+@pytest.mark.parametrize("dim" , [1,2,3])
 @pytest.mark.parametrize("rv" , _recon)
 @pytest.mark.parametrize("fv" , _flux)
 @pytest.mark.parametrize("soe" , _soe)
-def test_run(iv, fv, rv, soe):
+def test_run(iv, fv, rv, soe, dim):
     """Run a single test with given parameters."""
-    l1_rms_l,l1_rms_r = testutils.test_error_convergence(
-            f"inputs/lwave_rel{soe}.athinput",
-            f"sr_lwave_{soe}",
-            arguments,
-            maxerrors,
-            _wave,
-            _res,
-            iv,
-            rv,
-            fv,
-            soe,
-            )
+    _,_ = testutils.test_error_convergence(
+        f"inputs/lwave_rel{soe}.athinput",
+        f'SR_{soe}_linwave{dim}d_amr',
+        lambda iv, rv, fv, wv, res, soe, name : arguments(iv, rv, fv, wv, res, soe, name, dim=dim),
+        maxerrors,
+        _wave,
+        _res,
+        iv,
+        rv,
+        fv,
+        soe,)

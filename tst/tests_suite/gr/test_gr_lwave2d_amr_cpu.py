@@ -18,14 +18,14 @@ import numpy as np
 # Threshold errors and convergence rates
 # for different integrators, reconstructions, and wave types
 maxerrors={
-    ('hydro', 'rk3', 'plm', '0'): (3.8e-09,0.25),
-    ('hydro', 'rk3', 'ppm4', '0'): (1.9e-09,0.23),
-    ('hydro', 'rk3', 'ppmx', '0'): (1.7e-09,0.33),
-    ('hydro', 'rk3', 'wenoz', '0'): (3.5e-10,0.22),
-    ('mhd', 'rk3', 'plm', '0'): (1.2e-08,0.24),
-    ('mhd', 'rk3', 'ppm4', '0'): (4.8e-09,0.22),
-    ('mhd', 'rk3', 'ppmx', '0'): (4e-09,0.33),
-    ('mhd', 'rk3', 'wenoz', '0'): (9.2e-10,0.24),}
+    ('hydro', 'rk3', 'plm', '0'): (3.7e-09,0.25),
+    ('hydro', 'rk3', 'ppm4', '0'): (2e-09,0.25),
+    ('hydro', 'rk3', 'ppmx', '0'): (1.8e-09,0.39),
+    ('hydro', 'rk3', 'wenoz', '0'): (3.3e-10,0.24),
+    ('mhd', 'rk3', 'plm', '0'): (1.1e-08,0.24),
+    ('mhd', 'rk3', 'ppm4', '0'): (5e-09,0.22),
+    ('mhd', 'rk3', 'ppmx', '0'): (3.7e-09,0.3),
+    ('mhd', 'rk3', 'wenoz', '0'): (9.1e-10,0.24),}
 
 _int = ['rk3']
 _recon = ['wenoz']  # do not change order
@@ -47,8 +47,8 @@ def arguments(iv, rv, fv, wv, res,soe,name):
             'meshblock/nx2=16',
             'meshblock/nx3=1',
             'time/cfl_number=0.4',
-            'coord/special_rel=true',
-            'coord/general_rel=false',
+            'coord/special_rel=false',
+            'coord/general_rel=true',
             f'{soe}/reconstruct=' + rv,
             f'{soe}/rsolver=' + fv,
             'problem/wave_flag=' + wv]
