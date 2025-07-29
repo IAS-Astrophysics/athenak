@@ -576,11 +576,12 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage) {
       			    (opt.ssl_damping_time),2));
     }
     if (opt.telegraph_lapse) {
-      Real W2 = (z4c.chi(m,k,j,i)>opt.chi_min_floor)
-              ? z4c.chi(m,k,j,i) : opt.chi_min_floor;
-      rhs.alpha(m,k,j,i) += W2*dB;
+      Real W = (z4c.chi(m,k,j,i)>0)
+              ? z4c.chi(m,k,j,i) : 0;
+      Real W2 = W * W;
+      rhs.alpha(m,k,j,i) += W*dB;
       for(int a = 0; a < 3; ++a) {
-        rhs.vB_d(m,a,k,j,i) = opt.lapse_advect * LB_d(a) + (1.0/opt.telegraph_tau) * ( - z4c.vB_d(m,a,k,j,i) - opt.telegraph_kappa*dalpha_d(a));
+        rhs.vB_d(m,a,k,j,i) = opt.lapse_advect * LB_d(a) + (1.0/opt.telegraph_tau) * ( - z4c.vB_d(m,a,k,j,i) + opt.telegraph_kappa*dalpha_d(a));
       }
     }
     // shift vector
