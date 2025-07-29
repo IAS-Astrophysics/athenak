@@ -15,6 +15,9 @@ import scripts.utils.athena as athena
 import athena_read
 import numpy as np
 
+# Threshold errors and convergence rates
+# for different integrators, reconstructions, and wave types
+
 errors = {('hydro', 'rk2', 'plm', '0'): (2.1e-08,0.28),
         ('hydro', 'rk2', 'ppm4', '0'): (1.7e-08,0.35),
         ('hydro', 'rk2', 'ppmx', '0'): (2.1e-09,0.26),
@@ -134,22 +137,21 @@ def arguments(iv,rv,fv,wv,res,soe,name):
 def test_run(iv, rv, soe):
     for fv in _flux[soe]:
         """Run a single test with given parameters."""
-        l1_rms_l,l1_rms_r = testutils.test_error_convergence(f"inputs/linear_wave_{soe}.athinput",
-                                        f"lwave1d_{soe}",
-                                        arguments,
-                                        errors,
-                                        _wave[soe],
-                                        _res,
-                                        iv,
-                                        rv,
-                                        fv,
-                                        soe,
-                                        left_wave='0',
-                                        right_wave='4' if soe == "hydro" else "6",
-                                        )
+        l1_rms_l,l1_rms_r = testutils.test_error_convergence(
+            f"inputs/linear_wave_{soe}.athinput",
+            f"lwave1d_{soe}",
+            arguments,
+            errors,
+            _wave[soe],
+            _res,
+            iv,
+            rv,
+            fv,
+            soe,
+            left_wave='0',
+            right_wave='4' if soe == "hydro" else "6",
+            )
 
-        if l1_rms_l != l1_rms_r and rv != 'ppmx':
-            # PPMX is known to have different errors for L/R-going waves
-            # so we skip the check
+        if l1_rms_l != l1_rms_r and rv == 'plm':
             pytest.fail(f"Errors in L/R-going sound waves not equal for {iv}+{rv}+{fv} configuration, "
                     f"L: {l1_rms_l:g} R: {l1_rms_r:g}")

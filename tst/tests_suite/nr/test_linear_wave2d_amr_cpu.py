@@ -1,5 +1,5 @@
 
-# Automatic test based on linear wave convergence in 1D
+# Automatic test based on linear wave convergence in 2D
 # In hydro, both L-/R-going sound waves and the entropy wave are tested.
 # Note errors are very sensitive to the exact parameters (e.g. cfl_number, time limit)
 # used. For the hard-coded error limits to apply, run parameters must not be changed.
@@ -46,21 +46,21 @@ def arguments(iv,rv,fv,wv,res,soe,name):
     """Run the Athena++ test with given parameters."""
     vflow = 1.0 if wv=='3' else 0.0
     return [f'job/basename={name}',
-                            'time/tlim=1.0',
-                            'time/integrator=' + iv,
-                            'mesh/nghost=4',
-                            'mesh/nx1=' + repr(res),
-                            'mesh/nx2=' + repr(res//2),
-                            'mesh/nx3=1',
-                            'meshblock/nx1=16',
-                            'meshblock/nx2=4',
-                            'meshblock/nx3=1',
-                            'time/cfl_number=0.4',
-                            f'{soe}/reconstruct=' + rv,
-                            f'{soe}/rsolver=' + fv,
-                            'problem/amp=1.0e-6',
-                            'problem/wave_flag=' + wv,
-                            'problem/vflow=' + repr(vflow)]
+            'time/tlim=1.0',
+            'time/integrator=' + iv,
+            'mesh/nghost=4',
+            'mesh/nx1=' + repr(res),
+            'mesh/nx2=' + repr(res//2),
+            'mesh/nx3=1',
+            'meshblock/nx1=16',
+            'meshblock/nx2=4',
+            'meshblock/nx3=1',
+            'time/cfl_number=0.4',
+            f'{soe}/reconstruct=' + rv,
+            f'{soe}/rsolver=' + fv,
+            'problem/amp=1.0e-6',
+            'problem/wave_flag=' + wv,
+            'problem/vflow=' + repr(vflow)]
 
 @pytest.mark.parametrize("iv" , _int)
 @pytest.mark.parametrize("rv" , _recon)
@@ -68,13 +68,14 @@ def arguments(iv,rv,fv,wv,res,soe,name):
 def test_run(iv, rv, soe):
      for fv in _flux[soe]:
         """Run a single test with given parameters."""
-        _,_ = testutils.test_error_convergence(f"inputs/linear_wave_{soe}.athinput",
-                                                f"lwave2d_amr_{soe}",
-                                                arguments,
-                                                errors,
-                                                _wave,
-                                                _res,
-                                                iv,
-                                                rv,
-                                                fv,
-                                                soe,)
+        _,_ = testutils.test_error_convergence(
+            f"inputs/linear_wave_{soe}.athinput",
+            f"lwave2d_amr_{soe}",
+            arguments,
+            errors,
+            _wave,
+            _res,
+            iv,
+            rv,
+            fv,
+            soe,)

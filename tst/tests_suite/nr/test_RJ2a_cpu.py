@@ -50,7 +50,7 @@ def test_run(fv, rv):
     try:
         for res in _res:
             results = testutils.athenak_run(input_file,arguments(iv, rv, fv, res))
-            assert results, f"Sod test failed for iv={iv}, res={res}, fv={fv}, rv={rv}./AthenaK run did not complete successfully."
+            assert results, f"RJ2a test failed for iv={iv}, res={res}, fv={fv}, rv={rv}./AthenaK run did not complete successfully."
             data = athena_read.tab(f'tab/RJ2a.mhd_w.00001.tab')
             errors[res] = compute_error(data)
         # Check the errors in the output
