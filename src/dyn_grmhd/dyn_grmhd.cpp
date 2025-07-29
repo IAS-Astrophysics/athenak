@@ -100,6 +100,8 @@ DynGRMHD::DynGRMHD(MeshBlockPack *pp, ParameterInput *pin) : pmy_pack(pp) {
     rsolver_method = DynGRMHD_RSolver::llf_dyngr;
   } else if (rsolver.compare("hlle") == 0) {
     rsolver_method = DynGRMHD_RSolver::hlle_dyngr;
+  } else if (rsolver.compare("hlle_transform") == 0) {
+    rsolver_method = DynGRMHD_RSolver::hlle_transform;
   } else {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
               << std::endl << "<mhd> rsolver = '" << rsolver
@@ -152,6 +154,10 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::QueueDynGRMHDTasks() {
   } else if (rsolver_method == DynGRMHD_RSolver::hlle_dyngr) {
     pnr->QueueTask(
            &DynGRMHDPS<EOSPolicy, ErrorPolicy>::CalcFluxes<DynGRMHD_RSolver::hlle_dyngr>,
+           this, MHD_Flux, "MHD_Flux", Task_Run, {MHD_CopyU});
+  } else if (rsolver_method == DynGRMHD_RSolver::hlle_transform) {
+    pnr->QueueTask(
+           &DynGRMHDPS<EOSPolicy, ErrorPolicy>::CalcFluxes<DynGRMHD_RSolver::hlle_transform>,
            this, MHD_Flux, "MHD_Flux", Task_Run, {MHD_CopyU});
   } else { // put more rsolvers here
     abort();
