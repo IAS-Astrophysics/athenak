@@ -1,8 +1,7 @@
 """
 Linear wave convergence test for general-relativistic hydro/MHD in 3D with AMR.
-Runs tests in both hydro and MHD for RK3 integrator and different
-  - reconstruction algorithms
-Only tests "0" wave and HLLE Riemann solvers
+Runs tests in both hydro and MHD for RK2+PLM and RK3+WENOZ using HLLE Riemann solver.
+Only tests "0" wave
 """
 
 # Modules
@@ -18,20 +17,13 @@ import numpy as np
 # Threshold errors and error ratios for different integrators, reconstruction,
 # algorithms, and waves
 maxerrors={
-    ('hydro', 'rk3', 'plm', '0'): (1.5e-08,0.26),
-    ('hydro', 'rk3', 'ppm4', '0'): (7.8e-09,0.24),
-    ('hydro', 'rk3', 'ppmx', '0'): (4.7e-09,0.24),
+    ('hydro', 'rk2', 'plm', '0'): (1.5e-08,0.26),
     ('hydro', 'rk3', 'wenoz', '0'): (1.5e-09,0.23),
-    ('mhd', 'rk3', 'plm', '0'): (4.6e-08,0.26),
-    ('mhd', 'rk3', 'ppm4', '0'): (2.3e-08,0.23),
-    ('mhd', 'rk3', 'ppmx', '0'): (1.3e-08,0.26),
+    ('mhd', 'rk2', 'plm', '0'): (4.6e-08,0.26),
     ('mhd', 'rk3', 'wenoz', '0'): (3.9e-09,0.23),}
 
-_int = ['rk3']
-_recon = ['wenoz']  # do not change order
-_wave = ['0']       # do not change order
-_flux = ['hlle']
-_res = [16, 32]     # resolutions to test
+_wave = ['0']
+_res = [128, 256]        # resolutions to test.  Runs on GPU, so use higher res
 _soe = ['hydro', 'mhd']  # system of equations to test
 
 def arguments(iv, rv, fv, wv, res, soe, name, dim):
@@ -42,10 +34,10 @@ def arguments(iv, rv, fv, wv, res, soe, name, dim):
             'mesh/nghost=4',
             'mesh/nx1=' + repr(res),
             'mesh/nx2=' + repr(res//2),
-            'mesh/nx3=' + repr(res//4),
-            'meshblock/nx1=4',
-            'meshblock/nx2=4',
-            'meshblock/nx3=4',
+            'mesh/nx3=' + repr(res//2),
+            'meshblock/nx1=' + repr(res//16),
+            'meshblock/nx2=' + repr(res//16),
+            'meshblock/nx3=' + repr(res//16),
             'time/cfl_number=0.4',
             'coord/special_rel=false',
             'coord/general_rel=true',
@@ -63,7 +55,7 @@ def test_run(iv, fv, rv, soe, dim):
     # Ignore return arguments
     _,_ = testutils.test_error_convergence(
         f"inputs/lwave_rel{soe}.athinput",
-        f'SR_{soe}_linwave{dim}d_amr',
+        f'gr_{soe}_linwave{dim}d_amr',
         lambda iv,rv,fv,wv,res,soe,name : arguments(iv,rv,fv,wv,res,soe,name,dim=dim),
         maxerrors,
         _wave,
