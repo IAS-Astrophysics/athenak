@@ -167,10 +167,6 @@ def athenak_run(inputfile, flags, use_cmake=False, use_make=False, **kwargs):
 def cleanup(text=False)-> None:
     """
     Cleans up the test environment by removing generated files.
-
-    This function removes the output files generated during the test run.
-    It is typically called after a test case has completed to ensure a clean
-    state for subsequent tests.
     """
     if text:
         logging.info("Cleaning up test environment")
@@ -182,9 +178,7 @@ def cleanup(text=False)-> None:
 
 def clean() -> None:
     """
-    Cleans the build directoryt.
-
-    This function is typically used to ensure that the build directory is clean
+    Cleans the build directory.
     """
     logging.info("Cleaning build directory")
     Popen(["rm -rf build/"], shell=True, stdout=PIPE).communicate()
@@ -192,10 +186,7 @@ def clean() -> None:
 def clean_make(threads: int = os.cpu_count(),**kwargs) -> None:
     """
     Cleans the build directory and rebuilds the project.
-
-    This function is typically used to ensure that the build directory is clean before
-    starting a new build.  It removes all files in the build directory and then runs
-    CMake and Make to rebuild the project.
+    Removes all files in the build directory and then runs CMake and Make.
     """
     clean()
     cmake(**kwargs) 
@@ -255,25 +246,20 @@ def test_error_convergence(input_file,
         try:
             for res in _res:
                 results = run(input_file, arguments(iv,rv,fv,wv,res,soe,test_name))
-                assert results, f"Run failed for iv={iv}, res={res}, fv={fv}, rv={rv}, wv={wv}./AthenaK run did not complete successfully."
+                assert results, f"Run failed for {iv}+{res}+{fv}+{rv}+{wv}."
             maxerror, errorratio = errors[(soe, iv, rv, wv)]
-            #maxerror, errorratio = errors[('NR', 'hydro', 'ideal', 'rk3', 'wenoz', '0', 'none', '1D')]
             data = athena_read.error_dat(f'{test_name}-errs.dat')
             L1_RMS_INDEX = 4  # Index for L1 RMS error in data
             l1_rms_nLR = data[0][L1_RMS_INDEX]
             l1_rms_nHR = data[1][L1_RMS_INDEX]
             if l1_rms_nHR > maxerror and not(rv=="ppmx" and iv=="rk2"):
                 # PPMX with RK2 is known to have larger errors, so we skip the check
-                pytest.fail(f"{wv} wave error too large for {iv}+{rv}+{fv} configuration, "
-                    f"error: {l1_rms_nHR:g} threshold: {maxerror:g}")
-            if l1_rms_nHR / l1_rms_nLR > errorratio and not(rv=="ppmx" and iv=="rk2"):
-                # PPMX with RK2 is known to have larger errors, so we skip the check
-                # Note that the convergence rate is defined as the ratio of errors at different resolutions
-                pytest.fail(f"{wv} wave not converging for {iv}+{rv}+{fv}, "
-                        f"conv: {l1_rms_nHR / l1_rms_nLR:g} threshold: {errorratio:g}")
-            if wv == left_wave:  # Left wave
+                pytest.fail(f"{wv} wave error too large for {iv}+{rv}+{fv},"
+                            f"error: {l1_rms_nHR:g} threshold: {maxerror:g}")
+            # store errors for selected L/R-going waves
+            if wv == left_wave:
                 l1_rms_l = l1_rms_nHR
-            if wv == right_wave:  # Right wave
+            if wv == right_wave:
                 l1_rms_r = l1_rms_nHR
         finally:
             cleanup()
