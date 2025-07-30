@@ -4,11 +4,11 @@
 Script to run automatic test suite.
 
 Usage: From this directory, call this script with python:
-      python run_test_suite.py [ARGS]
+      python run_test_suite.py ARGS [ARGS]
 
 Notes:
-  - Arguments specify whether to run tests on CPU, CPU+MPI, or GPU
-  - May need to pass additional arguments for CMake (especially on GPUs)
+  - Mandatory arguments specify whether to run tests on CPU, CPU+MPI, or GPU
+  - Additional optional arguments for cmake can be supplied (e.g. to build on GPUs)
   - Requires Python 2.7+. (compliant with Python 3)
   - This file does not need to be modified when adding new scripts.
   - To add a new script, create a new .py file in a /test_suite/ subdirectory.
@@ -35,6 +35,7 @@ def cmake_flags(args,flags):
 parser = argparse.ArgumentParser(description="Run AthenaK test suite.")
 parser.add_argument(
     "--style", 
+    action="store_true",
     help="check source code conforms to style guide."
 )
 parser.add_argument(

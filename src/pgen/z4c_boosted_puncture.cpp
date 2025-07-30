@@ -138,7 +138,7 @@ void ADMOnePunctureBoosted(MeshBlockPack *pmbp, ParameterInput *pin) {
     Real alpha0 = (1 - 0.5*m0/r0)/psi0;
 
     // B0 as in equation 4 from arXiv:0810.4735
-    Real B0 = std::sqrt(std::pow(Gamma,2)*(1-std::pow(vel,2)*std::pow(alpha0,2)*std::pow(psi0,-4)));
+    Real B0 = std::sqrt(SQR(Gamma)*(1.0-SQR(vel)*SQR(alpha0)*std::pow(psi0,-4)));
 
     // adm metric in the code frame
     for(int a = 0; a < 3; ++a) {
@@ -158,13 +158,16 @@ void ADMOnePunctureBoosted(MeshBlockPack *pmbp, ParameterInput *pin) {
     Real second_term =
     ((4 * std::pow(vel, 2) * std::pow((m0 - 2 * r0), 2)) / std::pow((m0 + 2 * r0), 3) +
     (4 * std::pow(vel, 2) * (m0 - 2 * r0)) / std::pow((m0 + 2 * r0), 2) -
-    (m0 * std::pow((m0 + 2 * r0), 3)) / (4 * std::pow(r0, 5))) /
-    ((1 + m0 / (2 * r0)) * (1 + m0 / (2 * r0)) * (1 + m0 / (2 * r0)) * (1 + m0 / (2 * r0)) -
+    (m0 * std::pow((m0 + 2.0 * r0), 3)) / (4 * std::pow(r0, 5))) /
+    ((1 + m0 / (2 * r0)) * (1 + m0 / (2 * r0)) * (1 + m0 / (2 * r0))*(1 + m0 / (2 * r0)) -
     (std::pow(vel, 2) * std::pow((m0 - 2 * r0), 2)) / std::pow((m0 + 2 * r0), 2));
 
-    adm.vK_dd(m,0,0,k,j,i) = Gamma * Gamma * B0 * x1v * vel / r0 * (2 * alpha0p - alpha0 / 2 * second_term);
-    adm.vK_dd(m,1,1,k,j,i) = 2 * Gamma * Gamma * x1v * vel * alpha0 * (- m0 / (2 * r0 * r0)) / (psi0 * B0 * r0);
-    adm.vK_dd(m,2,2,k,j,i) = 2 * Gamma * Gamma * x1v * vel * alpha0 * (- m0 / (2 * r0 * r0)) / (psi0 * B0 * r0);
+    adm.vK_dd(m,0,0,k,j,i) = SQR(Gamma)*B0*x1v*vel/ r0 *
+                            (2.0 * alpha0p - alpha0 / 2 * second_term);
+    adm.vK_dd(m,1,1,k,j,i) = 2.0*SQR(Gamma)*x1v*vel*alpha0*
+                            (- m0 / (2 * r0 * r0)) / (psi0 * B0 * r0);
+    adm.vK_dd(m,2,2,k,j,i) = 2.0*SQR(Gamma)*x1v*vel*alpha0*
+                            (- m0 / (2 * r0 * r0)) / (psi0 * B0 * r0);
     adm.vK_dd(m,0,1,k,j,i) = B0 * x2v * vel / r0 * (alpha0p - alpha0 / 2 * second_term);
     adm.vK_dd(m,0,2,k,j,i) = B0 * x3v * vel / r0 * (alpha0p - alpha0 / 2 * second_term);
   });

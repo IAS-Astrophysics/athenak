@@ -12,6 +12,7 @@
 #include <string>
 #include <utility>
 #include <algorithm>
+#include <cstdio>
 
 #include "athena.hpp"
 #include "geodesic-grid/geodesic_grid.hpp"

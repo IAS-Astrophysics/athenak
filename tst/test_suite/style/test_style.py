@@ -1,3 +1,8 @@
+"""
+Checks source code style, based on Google style guide with some custom modifications.
+"""
+
+# Modules
 import sys
 import os
 import pytest
@@ -6,7 +11,7 @@ from subprocess import Popen, PIPE
 
 def test_style():
     """
-    This test the code style on the AthenaK source code to ensure it adheres to the coding standards.
+    Checks AthenaK source code to ensure it adheres to the coding standards.
     If any style violations are found, the test will fail.
     """
     original_dir = os.getcwd()
