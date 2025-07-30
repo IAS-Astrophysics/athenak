@@ -1,8 +1,9 @@
-
-# Automatic test using linear wave convergence for ISOTHERMAL HYDRO in 1D
-# In isothermal hydro, only L-/R-going sound waves are tested.
-# Note errors are very sensitive to the exact parameters (e.g. cfl_number, time limit)
-# used. For the hard-coded error limits to apply, run parameters must not be changed.
+"""
+Linear wave convergence test for non-relativistic isothermal hydro/MHD in 1D.
+Runs tests in both hydro and MHD using RK3 for different
+  - reconstruction algorithms
+  - Riemann solvers
+"""
 
 # Modules
 import sys
@@ -14,8 +15,8 @@ import scripts.utils.athena as athena
 import athena_read
 import numpy as np
 
-# Threshold errors and convergence rates
-# for different integrators, reconstructions, and wave types
+# Threshold errors and error ratios for different integrators, reconstruction,
+# algorithms, and waves
 errors = {
     ('hydro', 'rk3', 'plm', '0'): (1.3e-08,0.28),
     ('hydro', 'rk3', 'ppm4', '0'): (3.2e-09,0.23),
@@ -51,7 +52,6 @@ errors = {
     ('mhd', 'rk3', 'wenoz', '3'): (4e-12,0.056),
 }
 
-
 _int = ['rk3']
 _recon = ['plm', 'ppm4', 'ppmx', 'wenoz']
 _wave={}
@@ -60,9 +60,10 @@ _wave['mhd']  = ['0','5','1','4','2','3']
 _flux={}
 _flux['mhd'] = ['llf', 'hlle', 'hlld']
 _flux['hydro'] = ['llf', 'hlle', 'roe'] 
-_res = [32, 64]                          # resolutions to test
+_res = [32, 64]   # resolutions to test
 
 def arguments(iv,rv,fv,wv,res,soe,name):
+    """Assemble arguments for run command"""
     return [f'job/basename={name}',
             'time/tlim=1.0',
             'time/integrator=' + iv,
@@ -86,10 +87,11 @@ def arguments(iv,rv,fv,wv,res,soe,name):
 @pytest.mark.parametrize("rv" , _recon)
 @pytest.mark.parametrize("soe",["hydro","mhd"])
 def test_run(iv, rv, soe):
+    """Loop over Riemann solvers and run test with given integrator/resolution/physics."""
     for fv in _flux[soe]:
-        """Run a single test with given parameters."""
+        # returns error in L/R wave specified by 'left_wave'/'right_wave' arguments
         l1_rms_l,l1_rms_r = testutils.test_error_convergence(
-            f"inputs/linear_wave_{soe}.athinput",
+            f"inputs/lwave_{soe}.athinput",
             f"lwave1d_iso{soe}",
             arguments,
             errors,
@@ -102,6 +104,7 @@ def test_run(iv, rv, soe):
             left_wave='0',
             right_wave='3' if soe=="hydro" else "5",
             )
+        # Test that errors in L/R going waves are the same
         if l1_rms_l != l1_rms_r and rv == 'plm':
-            pytest.fail(f"Errors in L/R-going sound waves not equal for {iv}+{rv}+{fv} configuration, "
-                    f"L: {l1_rms_l:g} R: {l1_rms_r:g}")
+            pytest.fail(f"Errors in L/R-going waves not equal for {soe}+{iv}+{rv}+{fv}, "
+                        f"L: {l1_rms_l:g} R: {l1_rms_r:g}")

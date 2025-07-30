@@ -1,10 +1,12 @@
-# Automatic test based on linear wave convergence in 1D
-# In hydro, both L-/R-going sound waves and the entropy wave are tested.
-# Note errors are very sensitive to the exact parameters (e.g. cfl_number, time limit)
-# used. For the hard-coded error limits to apply, run parameters must not be changed.
+"""
+Linear wave convergence test for non-relativistic hydro/MHD in 3D with AMR and MPI.
+Runs tests in both hydro and MHD for different
+  - time integrators
+  - reconstruction algorithms
+Only tests "0" wave and HLLC/HLLD Riemann solvers
+"""
 
 # Modules
-
 import sys
 sys.path.insert(0, '../vis/python')
 sys.path.insert(0, '../test_suite')
@@ -14,8 +16,8 @@ import scripts.utils.athena as athena
 import athena_read
 import numpy as np
 
-# Threshold errors and convergence rates
-# for different integrators, reconstructions, and wave types
+# Threshold errors and error ratios for different integrators, reconstruction,
+# algorithms, and waves
 errors={
     ('hydro', 'rk2', 'plm', '0'): (8.6e-08,0.39),
     ('hydro', 'rk2', 'ppm4', '0'): (1.1e-07,0.46),
@@ -41,40 +43,42 @@ _flux = {'hydro': ['hllc'], 'mhd': ['hlld']}
 _res = [32, 64]                            
 
 def arguments(iv, rv, fv, wv, res, soe, name, dim=3):
-    """Run the Athena++ test with given parameters."""
+    """Assemble arguments for run command"""
     vflow = 1.0 if wv=='3' else 0.0
     return [f'job/basename={name}',
-                            'time/tlim=1.0',
-                            'time/integrator=' + iv,
-                            'mesh/nghost=' + repr(2 if rv=='plm' else 4),
-                            'mesh/nx1=' + repr(res),
-                            'mesh/nx2=' + repr(res//2 if dim>1 else 1),
-                            'mesh/nx3=' + repr(res//2 if dim>2 else 1),
-                            'meshblock/nx1=8',
-                            'meshblock/nx2=' + "8" if dim>1 else "1",
-                            'meshblock/nx3=' + "8" if dim>1 else "1",
-                            'time/cfl_number=0.4',
-                            f'{soe}/reconstruct=' + rv,
-                            f'{soe}/rsolver=' + fv,
-                            'problem/amp=1.0e-6',
-                            'problem/wave_flag=' + wv,
-                            'problem/vflow=' + repr(vflow)]
+            'time/tlim=1.0',
+            'time/integrator=' + iv,
+            'mesh/nghost=' + repr(2 if rv=='plm' else 4),
+            'mesh/nx1=' + repr(res),
+            'mesh/nx2=' + repr(res//2),
+            'mesh/nx3=' + repr(res//2),
+            'meshblock/nx1=8',
+            'meshblock/nx2=8',
+            'meshblock/nx3=8',
+            'time/cfl_number=0.4',
+            f'{soe}/reconstruct=' + rv,
+            f'{soe}/rsolver=' + fv,
+            'problem/amp=1.0e-6',
+            'problem/wave_flag=' + wv,
+            'problem/vflow=' + repr(vflow)]
 
 @pytest.mark.parametrize("dim," , np.arange(1,4))
 @pytest.mark.parametrize("rv" , _recon)
 @pytest.mark.parametrize("soe",["hydro","mhd"])
 def test_run(rv, soe, dim):
-    """Run a single test with given parameters."""
+    """Loop over Riemann solvers and run test with given integrator/resolution/physics."""
     iv ="rk2" if rv=='plm' else "rk3"
     for fv in _flux[soe]:
+        # Ignore return arguments
         _,_ = testutils.test_error_convergence(
-            f"inputs/linear_wave_{soe}.athinput",
+            f"inputs/lwave_{soe}.athinput",
             'soe_linwave{dim}d_amr',
-            lambda iv, rv, fv, wv, res, soe, name : arguments(iv, rv, fv, wv, res, soe, name, dim=dim),
+            lambda iv,rv,fv,wv,res,soe,name : arguments(iv,rv,fv,wv,res,soe,name,dim=dim),
             errors,
             _wave,
             _res,
             iv,
             rv,
             fv,
-            soe,)
+            soe,
+            mpi=True)
