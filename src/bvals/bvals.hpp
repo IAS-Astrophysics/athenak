@@ -23,6 +23,7 @@ enum class BoundaryFlag {undef=-1,block, reflect, inflow, outflow, diode, user, 
 #include <vector>
 
 #include "athena.hpp"
+#include "globals.hpp"
 #include "mesh/mesh.hpp"
 #include "coordinates/coordinates.hpp"
 #include "tasklist/task_list.hpp"
@@ -41,7 +42,9 @@ class Particles;
 //! The convention in Athena++ is lid and bufid are both for the *receiving* process.
 //! The MPI standard requires signed int tag, with MPI_TAG_UB>=2^15-1 = 32,767 (inclusive)
 static int CreateBvals_MPI_Tag(int lid, int bufid) {
-  return (bufid << (NUM_BITS_LID)) | lid;
+  int tag = (bufid << (NUM_BITS_LID)) | lid;
+  assert (tag >= 0 && tag < global_variable::mpi_tag_ub);
+  return tag;
 }
 
 //----------------------------------------------------------------------------------------
