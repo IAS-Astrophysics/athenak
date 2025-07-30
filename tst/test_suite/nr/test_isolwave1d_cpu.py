@@ -5,12 +5,11 @@
 # used. For the hard-coded error limits to apply, run parameters must not be changed.
 
 # Modules
-
 import sys
 sys.path.append('../vis/python')
-sys.path.append('../tst/tests_suite')
+sys.path.append('../tst/test_suite')
 import pytest
-import tests_suite.testutils as testutils
+import test_suite.testutils as testutils
 import scripts.utils.athena as athena
 import athena_read
 import numpy as np

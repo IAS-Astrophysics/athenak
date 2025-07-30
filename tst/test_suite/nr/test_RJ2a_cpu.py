@@ -1,41 +1,45 @@
 import sys
 sys.path.insert(0, '../vis/python')
-sys.path.insert(0, '../tests_suite')
+sys.path.insert(0, '../test_suite')
 import pytest
-import tests_suite.testutils as testutils
+import test_suite.testutils as testutils
 import scripts.utils.athena as athena
 import athena_read
 import numpy as np
 
 
 _recon = ['plm','ppm4','ppmx','wenoz']  # do not change order
-_flux = ['llf', 'hlle', 'hllc', 'roe']
-_res  = [128, 256]                            # resolutions to test
-input_file = "inputs/sod.athinput"
+_flux = ['llf', 'hlld']
+_res  = [128,256]                            # resolutions to test
+input_file = "inputs/rj2a.athinput"
 
-def compute_error(data,tlim=0.25):
-    #Positions of shock, contact, head and foot of rarefaction for Sod test
-    xs = 1.7522*tlim
-    xc = 0.92745*tlim
-    xf = -0.07027*tlim
-    xh = -1.1832*tlim
+def compute_error(data,tlim=0.2):
+    xfp = 2.2638*tlim
+    xrp = (0.53432 + 1.0/np.sqrt(np.pi*1.309))*tlim
+    xsp = (0.53432 + 0.48144/1.309)*tlim
+    xc  = 0.57538*tlim
+    xsm = (0.60588 - 0.51594/1.4903)*tlim
+    xrm = (0.60588 - 1.0/np.sqrt(np.pi*1.4903))*tlim
+    xfm = (1.2 - 2.3305/1.08)*tlim
     r = data[f'x1v'] 
-    dens = np.where( r > xs, 0.125,
-                    np.where(r > xc, 0.26557,
-                             np.where(r > xf, 0.42632,
-                              np.where(r > xh, 0.42632*(1.0+0.20046*(0.92745-(0.92745*(r-xh)/(xf-xh))))**5, 1.0))))
+    dens = np.where(r > xfp, 1.0,
+             np.where(r > xrp, 1.3090,
+              np.where(r > xsp, 1.3090,
+               np.where(r > xc, 1.4735,
+                np.where(r > xsm, 1.6343,
+                 np.where(r > xrm, 1.4903,
+                  np.where(r > xfm, 1.4903, 1.08)))))))
     return (np.abs(data['dens'] - dens)).mean()
 
 
 def arguments(iv, rv, fv, res):
-    return [f'job/basename=sod',
-            'mesh/nx1='+repr(res),
-            'meshblock/nx1=' + repr(128),
+    return ['mesh/nx1='+repr(res),
+            'meshblock/nx1=' + repr(np.min(_res)),
             'mesh/nghost=' + repr(2 if rv=='plm' else 3),
             'time/integrator=' + iv,
             'time/cfl_number=0.3',
-            'hydro/reconstruct=' + rv,
-            'hydro/rsolver=' + fv]
+            'mhd/reconstruct=' + rv,
+            'mhd/rsolver=' + fv]
 
 errors={}
 @pytest.mark.parametrize("rv" , _recon)
@@ -46,8 +50,8 @@ def test_run(fv, rv):
     try:
         for res in _res:
             results = testutils.athenak_run(input_file,arguments(iv, rv, fv, res))
-            assert results, f"Sod test failed for iv={iv}, res={res}, fv={fv}, rv={rv}./AthenaK run did not complete successfully."
-            data = athena_read.tab(f'tab/sod.hydro_w.00001.tab')
+            assert results, f"RJ2a test failed for iv={iv}, res={res}, fv={fv}, rv={rv}./AthenaK run did not complete successfully."
+            data = athena_read.tab(f'tab/RJ2a.mhd_w.00001.tab')
             errors[res] = compute_error(data)
         # Check the errors in the output
         L1_RMS_INDEX = 4  # Index for L1 RMS error in data
@@ -61,4 +65,3 @@ def test_run(fv, rv):
     finally:
         print("Cleaning up test files...")
         testutils.cleanup()
-

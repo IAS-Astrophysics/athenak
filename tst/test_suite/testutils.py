@@ -1,3 +1,11 @@
+"""
+Various utility functions used for automatic testing, including
+  - functions for building code on target device (CPU/GPU)
+  - functions for running code on target device
+  - functions to clean up run directories at end of testing
+"""
+
+# Modules
 import os
 import sys
 from subprocess import Popen, PIPE
@@ -14,7 +22,7 @@ ATHENAK_BUILD = "build/src"
 import logging
 
 # Configure logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(level=logging.INFO,format='%(asctime)s - %(levelname)s - %(message)s')
 
 def run_command(command: List[str], text: bool = False) -> bool:
     """
@@ -70,7 +78,7 @@ def make(threads: int = os.cpu_count(), **kwargs) -> bool:
     Runs the Make command to compile the project.
 
     Args:
-        threads (int): The number of threads to use for compilation (default: number of CPU cores).
+        threads (int): number of threads to use for compilation (default: num of cores).
         **kwargs: Additional keyword arguments for `run_command`.
 
     Returns:
@@ -117,7 +125,7 @@ def mpi_run(inputfile: str, flags=[], threads: int = 8, **kwargs) -> bool:
     Args:
         inputfile (str): The path to the test case input file.
         flags (list): Additional flags to pass to the AthenaK binary.
-        threads (int): The number of threads to use for MPI execution (default: number of CPU cores).
+        threads (int): Number of threads to use for MPI execution (default: num of cores).
         **kwargs: Additional keyword arguments for `run_command`.
 
     Returns:
@@ -126,7 +134,8 @@ def mpi_run(inputfile: str, flags=[], threads: int = 8, **kwargs) -> bool:
     Raises:
         AssertionError: If the test case execution fails.
     """
-    command = ['mpirun', '-np', str(threads), f"{ATHENAK_BUILD}/athena", '-i', inputfile] + flags
+    command = ['mpirun', '-np', str(threads),
+               f"{ATHENAK_BUILD}/athena", '-i', inputfile] + flags
     if not run_command(command, **kwargs):
         logging.error(f"Failed to execute {inputfile} with flags {flags} using MPI")
         raise RuntimeError(f"Failed to execute {inputfile} with flags {flags} using MPI")
@@ -160,7 +169,8 @@ def cleanup(text=False)-> None:
     Cleans up the test environment by removing generated files.
 
     This function removes the output files generated during the test run.
-    It is typically called after a test case has completed to ensure a clean state for subsequent tests.
+    It is typically called after a test case has completed to ensure a clean
+    state for subsequent tests.
     """
     if text:
         logging.info("Cleaning up test environment")
@@ -183,8 +193,9 @@ def clean_make(threads: int = os.cpu_count(),**kwargs) -> None:
     """
     Cleans the build directory and rebuilds the project.
 
-    This function is typically used to ensure that the build directory is clean before starting a new build.
-    It removes all files in the build directory and then runs CMake and Make to rebuild the project.
+    This function is typically used to ensure that the build directory is clean before
+    starting a new build.  It removes all files in the build directory and then runs
+    CMake and Make to rebuild the project.
     """
     clean()
     cmake(**kwargs) 
@@ -244,7 +255,7 @@ def test_error_convergence(input_file,
         try:
             for res in _res:
                 results = run(input_file, arguments(iv,rv,fv,wv,res,soe,test_name))
-                assert results, f"Test failed for iv={iv}, res={res}, fv={fv}, rv={rv}, wv={wv}./AthenaK run did not complete successfully."
+                assert results, f"Run failed for iv={iv}, res={res}, fv={fv}, rv={rv}, wv={wv}./AthenaK run did not complete successfully."
             maxerror, errorratio = errors[(soe, iv, rv, wv)]
             #maxerror, errorratio = errors[('NR', 'hydro', 'ideal', 'rk3', 'wenoz', '0', 'none', '1D')]
             data = athena_read.error_dat(f'{test_name}-errs.dat')

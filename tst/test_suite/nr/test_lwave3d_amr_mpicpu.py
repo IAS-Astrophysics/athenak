@@ -7,9 +7,9 @@
 
 import sys
 sys.path.insert(0, '../vis/python')
-sys.path.insert(0, '../tests_suite')
+sys.path.insert(0, '../test_suite')
 import pytest
-import tests_suite.testutils as testutils
+import test_suite.testutils as testutils
 import scripts.utils.athena as athena
 import athena_read
 import numpy as np
@@ -77,4 +77,5 @@ def test_run(rv, soe, dim):
             iv,
             rv,
             fv,
-            soe,)
+            soe,
+            mpi=True)

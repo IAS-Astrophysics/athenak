@@ -10,7 +10,7 @@ def test_style():
     If any style violations are found, the test will fail.
     """
     original_dir = os.getcwd()
-    os.chdir('tests_suite/style/')
+    os.chdir('test_suite/style/')
     try:
         command = ['bash', 'check_athena_cpp_style.sh']
         process = Popen(command, stdout=PIPE, stderr=PIPE)
