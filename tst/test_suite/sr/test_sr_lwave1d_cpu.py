@@ -1,11 +1,11 @@
-
-# Automatic test based on linear wave convergence in 1D
-# In hydro, both L-/R-going sound waves and the entropy wave are tested.
-# Note errors are very sensitive to the exact parameters (e.g. cfl_number, time limit)
-# used. For the hard-coded error limits to apply, run parameters must not be changed.
+"""
+Linear wave convergence test for special-relativistic hydro/MHD in 1D.
+Runs tests in both hydro and MHD using RK3 for different
+  - reconstruction algorithms
+  - Riemann solvers
+"""
 
 # Modules
-
 import sys
 sys.path.append('../vis/python')
 sys.path.append('../tst/test_suite')
@@ -15,8 +15,8 @@ import scripts.utils.athena as athena
 import athena_read
 import numpy as np
 
-# Threshold errors and convergence rates
-# for different integrators, reconstructions, and wave types
+# Threshold errors and error ratios for different integrators, reconstruction,
+# algorithms, and wave types
 maxerrors={
     ('hydro', 'rk3', 'plm', '0'): (1.7e-08,0.28),
     ('hydro', 'rk3', 'ppm4', '0'): (6.4e-09,0.31),
@@ -59,8 +59,6 @@ maxerrors={
     ('mhd', 'rk3', 'ppmx', '3'): (1.4e-11,0.063),
     ('mhd', 'rk3', 'wenoz', '3'): (5.7e-12,0.032),}
 
-
-_soe = ['hydro', 'mhd']  # system of equations to test
 _int   = ['rk3']
 _recon = ['plm', 'ppm4', 'ppmx', 'wenoz']
 _wave={}
@@ -72,6 +70,7 @@ _flux['hydro'] = ['llf', 'hlle', 'hllc']
 _res = [32, 64] # resolutions to test
 
 def arguments(iv, rv, fv, wv, res, soe, name):
+    """Assemble arguments for run command"""
     return  [f'job/basename={name}',
             'time/tlim=1.0',
             'time/integrator=' + iv,
@@ -92,11 +91,12 @@ def arguments(iv, rv, fv, wv, res, soe, name):
 
 @pytest.mark.parametrize("iv" , _int)
 @pytest.mark.parametrize("rv" , _recon)
-@pytest.mark.parametrize("soe" , _soe)
+@pytest.mark.parametrize("soe" , ["hydro","mhd"])  # system of eqns to test
 def test_run(iv, rv, soe):
-    """Run tests of SR hydro and mhd."""
+    """Loop over Riemann solvers and run test with given integrator/resolution/physics."""
     for fv in _flux[soe]:
-        l1_rms_l,l1_rms_r = testutils.test_error_convergence(
+        # Ignore return arguments
+        _,_ = testutils.test_error_convergence(
             f"inputs/lwave_rel{soe}.athinput",
             f"sr_lwave_{soe}",
             arguments,

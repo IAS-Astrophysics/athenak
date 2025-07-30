@@ -1,11 +1,11 @@
-
-# Automatic test based on linear wave convergence in 1D
-# In hydro, both L-/R-going sound waves and the entropy wave are tested.
-# Note errors are very sensitive to the exact parameters (e.g. cfl_number, time limit)
-# used. For the hard-coded error limits to apply, run parameters must not be changed.
+"""
+Linear wave convergence test for general-relativistic hydro/MHD in 3D with AMR.
+Runs tests in both hydro and MHD for RK3 integrator and different
+  - reconstruction algorithms
+Only tests "0" wave and HLLE Riemann solvers
+"""
 
 # Modules
-
 import sys
 sys.path.insert(0, '../vis/python')
 sys.path.insert(0, '../test_suite')
@@ -15,8 +15,8 @@ import scripts.utils.athena as athena
 import athena_read
 import numpy as np
 
-# Threshold errors and convergence rates
-# for different integrators, reconstructions, and wave types
+# Threshold errors and error ratios for different integrators, reconstruction,
+# algorithms, and waves
 maxerrors={
     ('hydro', 'rk3', 'plm', '0'): (1.5e-08,0.26),
     ('hydro', 'rk3', 'ppm4', '0'): (7.8e-09,0.24),
@@ -29,29 +29,29 @@ maxerrors={
 
 _int = ['rk3']
 _recon = ['wenoz']  # do not change order
-_wave = ['0']                      # do not change order
+_wave = ['0']       # do not change order
 _flux = ['hlle']
-_res = [16, 32]                            # resolutions to test
+_res = [16, 32]     # resolutions to test
 _soe = ['hydro', 'mhd']  # system of equations to test
 
 def arguments(iv, rv, fv, wv, res, soe, name, dim):
+    """Assemble arguments for run command"""
     return  [f'job/basename={name}',
             'time/tlim=1.0',
             'time/integrator=' + iv,
             'mesh/nghost=4',
             'mesh/nx1=' + repr(res),
-            'mesh/nx2=' + repr(res//2 if dim > 1 else 1),
-            'mesh/nx3=' + repr(res//4 if dim > 2 else 1),
+            'mesh/nx2=' + repr(res//2),
+            'mesh/nx3=' + repr(res//4),
             'meshblock/nx1=4',
-            'meshblock/nx2='+ repr(4 if dim > 1 else 1),
-            'meshblock/nx3='+ repr(4 if dim > 2 else 1),
+            'meshblock/nx2=4',
+            'meshblock/nx3=4',
             'time/cfl_number=0.4',
             'coord/special_rel=false',
             'coord/general_rel=true',
             f'{soe}/reconstruct=' + rv,
             f'{soe}/rsolver=' + fv,
             'problem/wave_flag=' + wv]
-
 
 @pytest.mark.parametrize("iv" , _int)
 @pytest.mark.parametrize("dim" , [1,2,3])
@@ -60,10 +60,11 @@ def arguments(iv, rv, fv, wv, res, soe, name, dim):
 @pytest.mark.parametrize("soe" , _soe)
 def test_run(iv, fv, rv, soe, dim):
     """Run a single test with given parameters."""
+    # Ignore return arguments
     _,_ = testutils.test_error_convergence(
         f"inputs/lwave_rel{soe}.athinput",
         f'SR_{soe}_linwave{dim}d_amr',
-        lambda iv, rv, fv, wv, res, soe, name : arguments(iv, rv, fv, wv, res, soe, name, dim=dim),
+        lambda iv,rv,fv,wv,res,soe,name : arguments(iv,rv,fv,wv,res,soe,name,dim=dim),
         maxerrors,
         _wave,
         _res,

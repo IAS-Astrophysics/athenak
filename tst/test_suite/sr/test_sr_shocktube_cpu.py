@@ -1,10 +1,17 @@
-# Automatic test based on linear wave convergence in 1D
-# In hydro, both L-/R-going sound waves and the entropy wave are tested.
-# Note errors are very sensitive to the exact parameters (e.g. cfl_number, time limit)
-# used. For the hard-coded error limits to apply, run parameters must not be changed.
+"""
+Relativistic shocktube tests for hydro/MHD
+Runs tests for different
+  - reconstruction algorithms
+  - Riemann solvers
+For hydrodynamics runs "test2" from Mignone & Bodo 2005, MNRAS 364 126 
+For MHD runs "test1" from Mignone, Ugliano, & Bodo 2009, MNRAS 393 1141 
+
+Since no analytic solutions are available, a reference solution computed using WENOZ
+is used for comparisons. If the reference solution itself is incorrect, this will still
+cause tests to fail unless test solutions are also wrong in the same way (unlikely).
+"""
 
 # Modules
-
 import sys
 import os
 sys.path.append('../vis/python')
@@ -15,23 +22,19 @@ import scripts.utils.athena as athena
 import athena_read
 import numpy as np
 
-# Ensure the Athena executable is built
-if not(os.path.isfile("build/src/athena")):
-    testutils.clean_make()
-
 _recon = ['plm','ppm4','ppmx','wenoz']  # do not change order
 _flux = ['llf', 'hlle', 'hllc']
-_res  = [256,512]                      # resolutions to test
-_soe = ['hydro', 'mhd']  # system of equations to test
+_res  = [256,512]                       # resolutions to test
+_soe = ['hydro', 'mhd']                 # system of equations to test
 name = {'hydro': 'mb2', 'mhd': 'mub1'}  # names of the tests
-# Reference keys for convergence tests
-ref_key = {
-    'hydro': ('hllc', 'wenoz'),
-    'mhd': ('hlle', 'wenoz')}
+# algorithmic choices for reference solution 
+ref_key = {'hydro': ('hllc', 'wenoz'),
+           'mhd': ('hlle', 'wenoz')}
 # convergence ratio threshold for failure
 ratio_threshold = {'hydro' : 0.6, 'mhd' : 0.8}  
 
 def arguments(iv, rv, fv, res, name, soe):
+    """Assemble arguments for run command"""
     return [f'job/basename={name}_{iv}_{rv}_{fv}_{res}',
             'mesh/nx1='+repr(res),
             'meshblock/nx1=' + repr(128),
@@ -42,13 +45,13 @@ def arguments(iv, rv, fv, res, name, soe):
             f'{soe}/rsolver=' + fv]
 
 def run_test(iv, rv, fv, res, name, soe):
-    """Run a single test with given parameters."""
+    """Run a single test with given parameters, return density at final time."""
     input_file = f"inputs/{name}.athinput" 
     testutils.athenak_run(input_file, arguments(iv, rv, fv, res, name, soe))
     data = athena_read.tab(f'tab/{name}_{iv}_{rv}_{fv}_{res}.{soe}_w.00001.tab')
     return data['dens']
 
-# Dictionary to store density data for convergence tests
+# Run suite of tests, storing density in results[] 
 results={}
 @pytest.mark.parametrize("rv" , _recon)
 @pytest.mark.parametrize("fv" , _flux)
@@ -62,9 +65,9 @@ def test_run(fv, rv, soe):
         for res in _res:
             results[(soe,fv,rv,res)] = run_test(iv, rv, fv, res, name[soe], soe)
     finally:
-        print("Cleaning up test files...")
         testutils.cleanup()
 
+# Check whether results converge over entire suite of tests
 @pytest.mark.parametrize("rv" , _recon)
 @pytest.mark.parametrize("fv" , _flux)
 @pytest.mark.parametrize("soe" , _soe)
@@ -85,4 +88,5 @@ def test_convergence(fv, rv, soe):
     # Check convergence
     ratio = error[_res[1]] / error[_res[0]]
     if ratio > ratio_threshold[soe]:
-        pytest.fail(f"Convergence ratio for {(soe,fv,rv)} between {_res[1]} and {_res[0]}: {ratio} with threshold {ratio_threshold[soe]}")
+        pytest.fail(f"Error for {(soe,fv,rv)} between {_res[1]} and {_res[0]} too large."
+                    f"Error ration: {ratio} threshold: {ratio_threshold[soe]}")

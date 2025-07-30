@@ -1,7 +1,6 @@
 """
 Linear wave convergence test for general-relativistic hydro/MHD in 1D.
-Runs tests in both hydro and MHD for different
-  - time integrators
+Runs tests in both hydro and MHD using RK3 for different
   - reconstruction algorithms
   - Riemann solvers
 """
@@ -96,8 +95,8 @@ def arguments(iv, rv, fv, wv, res, soe, name):
 def test_run(iv, rv, soe):
     """Loop over Riemann solvers and run test with given integrator/resolution/physics."""
     for fv in _flux[soe]:
-        # returns error in L/R wave specified by 'left_wave'/'right_wave' arguments
-        l1_rms_l,l1_rms_r = testutils.test_error_convergence(
+        # Ignore return arguments
+        _,_ = testutils.test_error_convergence(
             f"inputs/lwave_rel{soe}.athinput",
             f"gr_lwave_{soe}",
             arguments,
@@ -108,6 +107,4 @@ def test_run(iv, rv, soe):
             rv,
             fv,
             soe,
-            left_wave='0',
-            right_wave='4' if soe == "hydro" else "6",
             )

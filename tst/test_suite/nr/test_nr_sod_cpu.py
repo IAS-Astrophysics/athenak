@@ -15,7 +15,6 @@ import scripts.utils.athena as athena
 import athena_read
 import numpy as np
 
-
 _recon = ['plm','ppm4','ppmx','wenoz']  # do not change order
 _flux = ['llf', 'hlle', 'hllc', 'roe']
 _res  = [128, 256]                            # resolutions to test
