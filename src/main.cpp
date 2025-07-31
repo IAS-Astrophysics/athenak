@@ -116,14 +116,15 @@ int main(int argc, char *argv[]) {
   }
 
   // Get upper bound for MPI tags
-  int flag;
+  int *mpi_tag_ub, flag;
   if (MPI_SUCCESS != MPI_Comm_get_attr(MPI_COMM_WORLD, MPI_TAG_UB,
-                                       &(global_variable::mpi_tag_ub), &flag) || !flag) {
+                                       &(mpi_tag_ub), &flag) || !flag) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
               << "MPI_Comm_get_attr failed." << std::endl;
     MPI_Finalize();
     return(0);
   }
+  global_variable::mpi_tag_ub = *mpi_tag_ub;
 #else  // no MPI
   global_variable::my_rank = 0;
   global_variable::nranks  = 1;

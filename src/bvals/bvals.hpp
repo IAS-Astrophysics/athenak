@@ -43,6 +43,13 @@ class Particles;
 //! The MPI standard requires signed int tag, with MPI_TAG_UB>=2^15-1 = 32,767 (inclusive)
 static int CreateBvals_MPI_Tag(int lid, int bufid) {
   int tag = (bufid << (NUM_BITS_LID)) | lid;
+  if (tag < 0 || tag >= global_variable::mpi_tag_ub) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+              << "CreateBvals_MPI_Tag: tag out of bounds: " << tag << std::endl
+              << "lid = " << lid << ", bufid = " << bufid << std::endl;
+    std::cout << "MPI_TAG_UB = " << global_variable::mpi_tag_ub << std::endl << std::flush;
+    abort();
+  }
   assert (tag >= 0 && tag < global_variable::mpi_tag_ub);
   return tag;
 }
