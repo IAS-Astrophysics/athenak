@@ -1,5 +1,5 @@
 """
-Linear wave convergence test for special-relativistic hydro/MHD in 2D with AMR.
+Linear wave convergence test for special-relativistic hydro/MHD in 2D with AMR and MPI.
 Runs tests in both hydro and MHD for RK2+PLM and RK3+WENOZ using HLLE Riemann solver.
 Only tests "0" wave
 """
@@ -31,7 +31,7 @@ def arguments(iv, rv, fv, wv, res,soe,name):
     return  [f'job/basename={name}',
             'time/tlim=1.0',
             'time/integrator=' + iv,
-            'mesh/nghost=4',
+            'mesh/nghost=' + repr(2 if rv=='plm' else 4),
             'mesh/nx1=' + repr(res),
             'mesh/nx2=' + repr(res//2),
             'mesh/nx3=1',
@@ -43,6 +43,7 @@ def arguments(iv, rv, fv, wv, res,soe,name):
             'coord/general_rel=false',
             f'{soe}/reconstruct=' + rv,
             f'{soe}/rsolver=' + fv,
+            'problem/amp=1.0e-3',
             'problem/wave_flag=' + wv]
 
 @pytest.mark.parametrize("iv" , ['rk2'])
@@ -62,7 +63,8 @@ def test_run_plm(iv, fv, rv, soe):
             iv,
             rv,
             fv,
-            soe,)
+            soe,
+            mpi=True)
 
 @pytest.mark.parametrize("iv" , ['rk3'])
 @pytest.mark.parametrize("rv" , ['wenoz'])
@@ -81,4 +83,5 @@ def test_run_wenoz(iv, fv, rv, soe):
             iv,
             rv,
             fv,
-            soe,)
+            soe,
+            mpi=True)

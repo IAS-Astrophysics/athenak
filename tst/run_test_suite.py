@@ -69,12 +69,12 @@ if  args.style:
 
 if args.cpu != None:
     testutils.clean_make(flags=cmake_flags(args.cpu, []))
-    pytest.main(["test_suite", "-k", "_cpu"])
+    pytest.main(["test_suite", "-k", "_cpu"])     # run all scripts with _cpu in name
 
 if args.mpicpu != None: 
     testutils.clean_make(flags=cmake_flags(args.mpicpu, ["-D", "Athena_ENABLE_MPI=ON"]))
-    pytest.main(["test_suite", "-k", "_mpicpu"])
+    pytest.main(["test_suite", "-k", "_mpicpu"])  # run all scripts with _mpicpu in name
 if args.gpu != None: 
     testutils.clean_make(flags=cmake_flags(args.gpu, ["-D", "Kokkos_ENABLE_CUDA=On"]),text=True)
-    pytest.main(["test_suite", "-k", "_gpu"])
+    pytest.main(["test_suite", "-k", "_gpu"])     # run all scripts with _gpu in name
 testutils.clean()

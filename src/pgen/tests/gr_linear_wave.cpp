@@ -554,6 +554,11 @@ void ProblemGenerator::GRLinearWave(ParameterInput *pin, const bool restart) {
     Real tlim = pin->GetReal("time", "tlim");
     pin->SetReal("time", "tlim", tlim*(std::abs(lx/lambda)));
   }
+{
+Real tlim = pin->GetReal("time", "tlim");
+std::cout<<"new tlim = "<<tlim<<std::endl;
+}
+
 
   // capture variables for kernel
   auto &indcs = pmy_mesh_->mb_indcs;

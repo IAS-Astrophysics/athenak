@@ -32,6 +32,12 @@ nx1       = 64        # Number of cells in each MeshBlock, X1-dir
 nx2       = 1         # Number of cells in each MeshBlock, X2-dir
 nx3       = 1         # Number of cells in each MeshBlock, X3-dir
 
+<mesh_refinement>
+refinement       = adaptive    # type of refinement
+max_nmb_per_rank = 512
+num_levels       = 2
+dens_max         = 4.008
+
 <coord>
 special_rel = true
 general_rel = false
@@ -60,10 +66,3 @@ pgas      = 1.0   # background gas pressure p_gas
 vx        = 0.1   # background 3-velocity v^x
 vy        = 0.3   # background 3-velocity v^y
 vz        = -0.05 # background 3-velocity v^z
-
-<mesh_refinement>
-refinement       = adaptive    # type of refinement
-max_nmb_per_rank = 512
-num_levels       = 2
-dens_max = 4.0001
-

@@ -34,13 +34,14 @@ _wave = ['0']                      # do not change order
 _flux = {'hydro': ['hllc'], 'mhd': ['hlld']}
 _res = [64, 128]                            # resolutions to test
 
+# Important amp=1.0e-3 so that it is large enough to trigger AMR
+# Important to make sure there are enough MeshBlocks in root grid to enable AMR
 def arguments(iv,rv,fv,wv,res,soe,name):
     """Assemble arguments for run command"""
-    vflow = 1.0 if wv=='3' else 0.0
     return [f'job/basename={name}',
             'time/tlim=1.0',
             'time/integrator=' + iv,
-            'mesh/nghost=4',
+            'mesh/nghost=' + repr(2 if rv=='plm' else 4),
             'mesh/nx1=' + repr(res),
             'mesh/nx2=' + repr(res//2),
             'mesh/nx3=1',
@@ -50,9 +51,8 @@ def arguments(iv,rv,fv,wv,res,soe,name):
             'time/cfl_number=0.4',
             f'{soe}/reconstruct=' + rv,
             f'{soe}/rsolver=' + fv,
-            'problem/amp=1.0e-6',
-            'problem/wave_flag=' + wv,
-            'problem/vflow=' + repr(vflow)]
+            'problem/amp=1.0e-3',
+            'problem/wave_flag=' + wv]
 
 @pytest.mark.parametrize("iv" , ['rk2'])
 @pytest.mark.parametrize("rv" , ['plm'])

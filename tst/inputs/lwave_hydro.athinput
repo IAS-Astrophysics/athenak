@@ -1,4 +1,4 @@
-# AthenaXXX input file for HYDRO linear wave tests with SMR
+# AthenaK input file for HYDRO linear wave tests with AMR
 
 <comment>
 problem   = hydro linear waves
@@ -43,7 +43,7 @@ evolution  = dynamic   # dynamic/kinematic/static
 integrator = rk2       # time integration algorithm
 cfl_number = 0.3       # The Courant, Friedrichs, & Lewy (CFL) Number
 nlim       = -1        # cycle limit (no limit if <0)
-tlim       = 5.0       # time limit
+tlim       = 1.0       # time limit
 ndiag      = 1         # cycles between diagostic output
 
 <hydro>
