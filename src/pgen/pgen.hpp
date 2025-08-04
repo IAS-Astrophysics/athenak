@@ -55,6 +55,7 @@ class ProblemGenerator {
   UserHistoryFnPtr user_hist_func=nullptr;
 
   // predefined problem generator functions (default test suite)
+  void CallProblemGenerator(ParameterInput *pin, bool is_restart);
   void Advection(ParameterInput *pin, const bool restart);
   void AlfvenWave(ParameterInput *pin, const bool restart);
   void BondiAccretion(ParameterInput *pin, const bool restart);

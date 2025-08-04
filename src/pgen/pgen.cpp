@@ -29,6 +29,7 @@
 #include "srcterms/turb_driver.hpp"
 #include "pgen.hpp"
 
+
 //----------------------------------------------------------------------------------------
 // default constructor, calls pgen function.
 
@@ -47,57 +48,8 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm) :
   user_srcs = pin->GetOrAddBoolean("problem","user_srcs",false);
   user_hist = pin->GetOrAddBoolean("problem","user_hist",false);
 
-#if USER_PROBLEM_ENABLED
-  // call user-defined problem generator
-  UserProblem(pin, false);
-#else
-  // else read name of built-in pgen from <problem> block in input file, and call
-  std::string pgen_fun_name = pin->GetOrAddString("problem", "pgen_name", "none");
-
-  if (pgen_fun_name.compare("advection") == 0) {
-    Advection(pin, false);
-  } else if (pgen_fun_name.compare("cpaw") == 0) {
-    AlfvenWave(pin, false);
-  } else if (pgen_fun_name.compare("gr_bondi") == 0) {
-    BondiAccretion(pin, false);
-  } else if (pgen_fun_name.compare("tetrad") == 0) {
-    CheckOrthonormalTetrad(pin, false);
-  } else if (pgen_fun_name.compare("cshock") == 0) {
-    CShock(pin, false);
-  } else if (pgen_fun_name.compare("hohlraum") == 0) {
-    Hohlraum(pin, false);
-  } else if (pgen_fun_name.compare("linear_wave") == 0) {
-    LinearWave(pin, false);
-  } else if (pgen_fun_name.compare("gr_linear_wave") == 0) {
-    GRLinearWave(pin, false);
-  } else if (pgen_fun_name.compare("implode") == 0) {
-    LWImplode(pin, false);
-  } else if (pgen_fun_name.compare("gr_monopole") == 0) {
-    Monopole(pin, false);
-  } else if (pgen_fun_name.compare("orszag_tang") == 0) {
-    OrszagTang(pin, false);
-  } else if (pgen_fun_name.compare("rad_linear_wave") == 0) {
-    RadiationLinearWave(pin, false);
-  } else if (pgen_fun_name.compare("shock_tube") == 0) {
-    ShockTube(pin, false);
-  } else if (pgen_fun_name.compare("z4c_linear_wave") == 0) {
-    Z4cLinearWave(pin, false);
-  } else if (pgen_fun_name.compare("spherical_collapse") == 0) {
-    SphericalCollapse(pin, false);
-  } else if (pgen_fun_name.compare("diffusion") == 0) {
-    Diffusion(pin, false);
-  // else, name not set on command line or input file, print warning and quit
-  } else {
-    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
-        << "Problem generator name could not be found in <problem> block in input file"
-        << std::endl
-        << "and it was not set by -D PROBLEM option on cmake command line during build"
-        << std::endl
-        << "Rerun cmake with -D PROBLEM=file to specify custom problem generator file"
-        << std::endl;;
-    std::exit(EXIT_FAILURE);
-  }
-#endif
+  // second argument false since this IS NOT a restart
+  CallProblemGenerator(pin, false);
 
   // Check that user defined BCs were enrolled if needed
   if (user_bcs) {
@@ -664,54 +616,8 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resf
   }
 
   // call problem generator again to re-initialize data, fn ptrs, as needed
-#if USER_PROBLEM_ENABLED
-  UserProblem(pin, true);
-#else
-  std::string pgen_fun_name = pin->GetOrAddString("problem", "pgen_name", "none");
-
-  if (pgen_fun_name.compare("advection") == 0) {
-    Advection(pin, true);
-  } else if (pgen_fun_name.compare("cpaw") == 0) {
-    AlfvenWave(pin, true);
-  } else if (pgen_fun_name.compare("gr_bondi") == 0) {
-    BondiAccretion(pin, true);
-  } else if (pgen_fun_name.compare("tetrad") == 0) {
-    CheckOrthonormalTetrad(pin, true);
-  } else if (pgen_fun_name.compare("cshock") == 0) {
-    CShock(pin, true);
-  } else if (pgen_fun_name.compare("hohlraum") == 0) {
-    Hohlraum(pin, true);
-  } else if (pgen_fun_name.compare("linear_wave") == 0) {
-    LinearWave(pin, true);
-  } else if (pgen_fun_name.compare("gr_linear_wave") == 0) {
-    GRLinearWave(pin, true);
-  } else if (pgen_fun_name.compare("implode") == 0) {
-    LWImplode(pin, true);
-  } else if (pgen_fun_name.compare("gr_monopole") == 0) {
-    Monopole(pin, true);
-  } else if (pgen_fun_name.compare("orszag_tang") == 0) {
-    OrszagTang(pin, true);
-  } else if (pgen_fun_name.compare("rad_linear_wave") == 0) {
-    RadiationLinearWave(pin, true);
-  } else if (pgen_fun_name.compare("shock_tube") == 0) {
-    ShockTube(pin, true);
-  } else if (pgen_fun_name.compare("z4c_linear_wave") == 0) {
-    Z4cLinearWave(pin, true);
-  } else if (pgen_fun_name.compare("spherical_collapse") == 0) {
-    SphericalCollapse(pin, true);
-  } else if (pgen_fun_name.compare("diffusion") == 0) {
-    Diffusion(pin, true);
-  } else {
-    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
-        << "Problem generator name could not be found in <problem> block in input file"
-        << std::endl
-        << "and it was not set by -D PROBLEM option on cmake command line during build"
-        << std::endl
-        << "Rerun cmake with -D PROBLEM=file to specify custom problem generator file"
-        << std::endl;;
-    std::exit(EXIT_FAILURE);
-  }
-#endif
+  // second argument true since this IS a restart
+  CallProblemGenerator(pin, true);
 
   // Check that user defined BCs were enrolled if needed
   if (user_bcs) {
@@ -952,5 +858,64 @@ void ProblemGenerator::OutputErrors(ParameterInput *pin, Mesh *pm) {
     std::fclose(pfile);
   }
 
+  return;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn ProblemGenerator::CallProblemGenerator()
+//! \brief selects one of the default problem generators compiled automatically with
+//! the source code depending on input string in <problem> block ELSE selects a
+//! user-defined problem generator function compiled with the code.
+
+void ProblemGenerator::CallProblemGenerator(ParameterInput *pin, bool is_restart) {
+#if USER_PROBLEM_ENABLED
+  // call user-defined problem generator (if USER_PROBLEM_ENABLED macro defined at build)
+  UserProblem(pin, is_restart);
+#else
+  // else read name of built-in pgen from <problem> block in input file, and call
+  std::string pgen_fun_name = pin->GetOrAddString("problem", "pgen_name", "none");
+
+  if (pgen_fun_name.compare("advection") == 0) {
+    Advection(pin, is_restart);
+  } else if (pgen_fun_name.compare("cpaw") == 0) {
+    AlfvenWave(pin, is_restart);
+  } else if (pgen_fun_name.compare("gr_bondi") == 0) {
+    BondiAccretion(pin, is_restart);
+  } else if (pgen_fun_name.compare("tetrad") == 0) {
+    CheckOrthonormalTetrad(pin, is_restart);
+  } else if (pgen_fun_name.compare("cshock") == 0) {
+    CShock(pin, is_restart);
+  } else if (pgen_fun_name.compare("hohlraum") == 0) {
+    Hohlraum(pin, is_restart);
+  } else if (pgen_fun_name.compare("linear_wave") == 0) {
+    LinearWave(pin, is_restart);
+  } else if (pgen_fun_name.compare("implode") == 0) {
+    LWImplode(pin, is_restart);
+  } else if (pgen_fun_name.compare("gr_monopole") == 0) {
+    Monopole(pin, is_restart);
+  } else if (pgen_fun_name.compare("orszag_tang") == 0) {
+    OrszagTang(pin, is_restart);
+  } else if (pgen_fun_name.compare("rad_linear_wave") == 0) {
+    RadiationLinearWave(pin, is_restart);
+  } else if (pgen_fun_name.compare("shock_tube") == 0) {
+    ShockTube(pin, is_restart);
+  } else if (pgen_fun_name.compare("z4c_linear_wave") == 0) {
+    Z4cLinearWave(pin, is_restart);
+  } else if (pgen_fun_name.compare("spherical_collapse") == 0) {
+    SphericalCollapse(pin, is_restart);
+  } else if (pgen_fun_name.compare("diffusion") == 0) {
+    Diffusion(pin, is_restart);
+  // else, name not set on command line or input file, print warning and quit
+  } else {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+        << "Problem generator name could not be found in <problem> block in input file"
+        << std::endl
+        << "and it was not set by -D PROBLEM option on cmake command line during build"
+        << std::endl
+        << "Rerun cmake with -D PROBLEM=file to specify custom problem generator file"
+        << std::endl;;
+    std::exit(EXIT_FAILURE);
+  }
+#endif
   return;
 }
