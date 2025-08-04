@@ -21,7 +21,7 @@
 #include "mesh/mesh.hpp"
 #include "bvals/bvals.hpp"
 #include "z4c/compact_object_tracker.hpp"
-#include "z4c/horizon_dump.hpp"
+#include "z4c/BHaHAHA_horizon_finder.hpp"
 #include "z4c/z4c.hpp"
 #include "z4c/z4c_amr.hpp"
 #include "coordinates/adm.hpp"
@@ -194,45 +194,22 @@ Z4c::Z4c(MeshBlockPack *ppack, ParameterInput *pin) :
   cce_dump_last_output_time = -100;
 
   // Construct the compact object trackers
-  int n = 0;
+  nco = 0;
   while (true) {
-    if (pin->DoesParameterExist("z4c", "co_" + std::to_string(n) + "_type")) {
-      ptracker.push_back(std::make_unique<CompactObjectTracker>(pmy_pack->pmesh, pin, n));
-      n++;
+    if (pin->DoesParameterExist("z4c", "co_" + std::to_string(nco) + "_type")) {
+      ptracker.push_back(std::make_unique<CompactObjectTracker>(pmy_pack->pmesh, pin, nco));
+      nco++;
     } else {
       break;
     }
   }
-  // Construct the Cartesian data grid for dumping horizon data
-  n = 0;
-  while (true) {
-    if (pin->GetOrAddBoolean("z4c", "dump_horizon_" + std::to_string(n),false)) {
-      // phorizon_dump.emplace_back(pmy_pack, pin, n,false);
-      phorizon_dump.push_back(std::make_unique<HorizonDump>(pmy_pack, pin, n, 0));
-      std::string foldername = "horizon_"+std::to_string(n);
-      mkdir(foldername.c_str(),0775);
-      n++;
-    } else {
-      break;
-    }
+  pahfind = new BHAHAHorizonFinder(pmy_pack, pin);
+  
+  if (pahfind->max_num_horizons_!=nco || (nco==2 && pahfind->max_num_horizons_==3)) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+              << "The horizon finder requires puncture tracker to be initialized." << std::endl;
+    exit(EXIT_FAILURE);
   }
-  /*
-  horizon_dt = pin->GetOrAddReal("z4c", "horizon_dt", 1);
-  horizon_last_output_time = 0;
-  n = 0;
-  for (auto & pt : ptracker) {
-    if (pin->GetOrAddBoolean("z4c", "dump_horizon_" + std::to_string(n),false)) {
-      horizon_extent.push_back(pin->GetOrAddReal("z4c", "horizon_"
-                              + std::to_string(n)+"_radius",3));
-      Real extend[3] = {horizon_extent[n],horizon_extent[n],horizon_extent[n]};
-      horizon_nx.push_back(pin->GetOrAddInteger("z4c", "horizon_"
-                              + std::to_string(n)+"_Nx",100));
-      int Nx[3] = {horizon_nx[n],horizon_nx[n],horizon_nx[n]};
-      horizon_dump.emplace_back(pmy_pack, pt.pos, extend, Nx);
-      n++;
-    }
-  }
-  */
 }
 
 //----------------------------------------------------------------------------------------
@@ -293,6 +270,7 @@ Z4c::~Z4c() {
   delete pbval_u;
   delete pbval_weyl;
   delete pamr;
+  delete pahfind;
 }
 
 } // namespace z4c

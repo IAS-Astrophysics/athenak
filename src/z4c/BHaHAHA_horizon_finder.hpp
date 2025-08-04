@@ -9,6 +9,7 @@
 
 class MeshBlockPack;
 class ParameterInput;
+class ArbitraryGrid;
 
 class BHAHAHorizonFinder {
 public:
@@ -17,6 +18,7 @@ public:
 
   // Main entry point: find all active horizons at current timestep
   void FindHorizons();
+  int max_num_horizons_;
 
 private:
   // Initialization
@@ -49,7 +51,6 @@ private:
 
   // User-configurable parameters
   int find_every_;
-  int max_num_horizons_;
   int bah_num_resolutions_multigrid_;
   std::vector<int> bah_Ntheta_array_multigrid_;
   std::vector<int> bah_Nphi_array_multigrid_;
@@ -70,14 +71,14 @@ private:
   // Persistent historical data
   // center location for bh
   std::vector<double> x_center_m1_, y_center_m1_, z_center_m1_;
-  std::vector<double> x_center_m2_, y_center_m2_, z_center_m2_;
-  std::vector<double> x_center_m3_, y_center_m3_, z_center_m3_;
   // time at which previous horizon found
   std::vector<double> t_m1_, t_m2_, t_m3_;
   // range of radius to search for each hole
   std::vector<double> r_min_m1_, r_max_m1_, r_min_m2_, r_max_m2_, r_min_m3_, r_max_m3_;
   // location of the previous horizon, used to initialize the next finder
   std::vector<std::vector<double>> prev_horizon_m1_, prev_horizon_m2_, prev_horizon_m3_;
+  // guess for the mass of black hole
+  std::vector<double> m_guess;
 
   // Per-horizon parameters and data
   std::vector<bhahaha_params_and_data_struct> params_data_;
@@ -85,7 +86,7 @@ private:
   // Interpolation buffers
   std::vector<std::array<double,3>> cart_coords_;
   std::vector<double> radii_;
-  class ArbitraryGrid *agrid_;
+  ArbitraryGrid *agrid_;
 };
 
 #endif // BHAHAHA_HORIZON_FINDER_HPP

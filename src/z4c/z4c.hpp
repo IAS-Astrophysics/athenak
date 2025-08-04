@@ -27,7 +27,7 @@
 class Coordinates;
 class Driver;
 class CompactObjectTracker;
-class HorizonDump;
+class BHAHAHorizonFinder;
 
 namespace z4c {
 class Z4c_AMR;
@@ -198,7 +198,6 @@ class Z4c {
   // CCE
   Real cce_dump_dt;
   Real cce_dump_last_output_time;
-  // dump data cube at horizon
 
   // functions
   void QueueZ4cTasks();
@@ -230,7 +229,7 @@ class Z4c {
   TaskStatus TrackCompactObjects(Driver *d, int stage);
   TaskStatus CalcWeylScalar(Driver *d, int stage);
   TaskStatus CalcWaveForm(Driver *d, int stage);
-  TaskStatus DumpHorizons(Driver *d, int stage);
+  TaskStatus FindHorizons(Driver *d, int stage);
 
   template <int NGHOST>
   TaskStatus CalcRHS(Driver *d, int stage);
@@ -247,18 +246,9 @@ class Z4c {
 
   Z4c_AMR *pamr;
   std::vector<std::unique_ptr<CompactObjectTracker>> ptracker;
-  std::vector<std::unique_ptr<HorizonDump>> phorizon_dump;
+  int nco;
+  BHAHAHorizonFinder *pahfind;
 
-  /*
-  std::list<CartesianGrid> horizon_dump;
-  Real horizon_dt;
-  Real horizon_last_output_time;
-  std::vector<Real> horizon_extent; // radius for dumping data in a cube
-  std::vector<int> horizon_nx;  // number of points in each direction
-  */
-  // TODO(@hzhu): think about how to automatically trigger common horizon
-  // maybe have a horizon dump object to save all the space here
-  // same for the waveform.
  private:
   MeshBlockPack* pmy_pack;  // ptr to MeshBlockPack containing this Z4c
 };
