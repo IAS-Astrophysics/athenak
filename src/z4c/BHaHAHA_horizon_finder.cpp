@@ -331,21 +331,44 @@ void BHAHAHorizonFinder::InterpolateMetricData(int h) {
       pd.input_metric_data[gf*pts + i] = agrid_->interp_vals.h_view(i);
     }
   }
+  // MPI reduce here
+  // Reduction to the master rank for data_out
+  #if MPI_PARALLEL_ENABLED
+  if (0 == global_variable::my_rank) {
+    MPI_Reduce(MPI_IN_PLACE, pd.input_metric_data, total,
+              MPI_ATHENA_REAL, MPI_SUM, 0, MPI_COMM_WORLD);
+  } else {
+    MPI_Reduce(pd.input_metric_data, pd.input_metric_data, total, MPI_ATHENA_REAL, MPI_SUM, 0, MPI_COMM_WORLD);
+  }
+  #endif
 }
 
 void BHAHAHorizonFinder::SolveHorizon(int h) {
   auto &pd = params_data_[h];
   bhahaha_diagnostics_struct diags;
-  bah_poisoning_check_inputs(&pd);
-  int rc = bah_find_horizon(&pd, &diags);
-  if (rc == BHAHAHA_SUCCESS) {
-    bah_diagnostics_file_output(&diags, &pd, max_num_horizons_, pd.x_center_m1, pd.y_center_m1, pd.z_center_m1, ".");
-    pd.use_fixed_radius_guess_on_full_sphere = 0;
-  } else {
-    // ATHENA_ERROR("Horizon %d find failed rc=%d: %s", h+1, rc, bah_error_message((bhahaha_error_codes)rc));
-    pd.use_fixed_radius_guess_on_full_sphere = 1;
-    t_m1_[h] = -1.0;
+  if (0 == global_variable::my_rank) {
+    bah_poisoning_check_inputs(&pd);
+    int rc = bah_find_horizon(&pd, &diags);
+    if (rc == BHAHAHA_SUCCESS) {
+      bah_diagnostics_file_output(&diags, &pd, max_num_horizons_, pd.x_center_m1, pd.y_center_m1, pd.z_center_m1, ".");
+      pd.use_fixed_radius_guess_on_full_sphere = 0;
+    } else {
+      // ATHENA_ERROR("Horizon %d find failed rc=%d: %s", h+1, rc, bah_error_message((bhahaha_error_codes)rc));
+      pd.use_fixed_radius_guess_on_full_sphere = 1;
+      t_m1_[h] = -1.0;
+    }
   }
+
+  #if MPI_PARALLEL_ENABLED
+  // ---- broadcast the just-found horizon radius array to all ranks ----
+  // prev_horizon_m1_[h] is a std::vector<double> of length Ntheta_*Nphi_
+  MPI_Bcast(pd.prev_horizon_m1,
+            Ntheta_*Nphi_,
+            MPI_DOUBLE,        // or MPI_ATHENA_REAL if you prefer
+            0,                 // root rank
+            MPI_COMM_WORLD);
+  #endif
+
   free(pd.input_metric_data);
   pd.input_metric_data = nullptr;
 }
