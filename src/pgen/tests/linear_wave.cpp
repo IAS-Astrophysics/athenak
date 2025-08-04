@@ -1,11 +1,11 @@
 //========================================================================================
-// AthenaXXX astrophysical plasma code
-// Copyright(C) 2020 James M. Stone <jmstone@ias.edu> and the Athena code team
-// Licensed under the 3-clause BSD License (the "LICENSE")
+// AthenaK astrophysical fluid dynamics & numerical relativity code
+// Copyright(C) 2020 James M. Stone <jmstone@ias.edu> and the AthenaK collaboration
+// Licensed under the 3-clause BSD License, see LICENSE file for details
 //========================================================================================
 //! \file linear_wave.c
 //! \brief Linear wave problem generator for 1D/2D/3D problems. Initializes both hydro and
-//! MHD problems, and for non-relativistic and relativistic flows.
+//! MHD problems, and for non-relativistic and SR/GR relativistic flows.
 //!
 //! Direction of the wavevector is set to be along the x? axis by using the
 //! along_x? input flags, else it is automatically set along the grid diagonal in 2D/3D
@@ -49,7 +49,7 @@ struct LinWaveVariables {
 // function to compute errors in solution at end of run
 void LinearWaveErrors(ParameterInput *pin, Mesh *pm);
 
-// functions to compute eigenvectors of linearized eqns in PRIMITIVES for hydro and MHD
+// functions to compute eigenvectors of linearized eqns in PRIMITIVE variables
 void HydroEigensystemPrim(const Real d, const Real v1, const Real v2, const Real v3,
                           const Real p, const EOS_Data &eos,
                           Real eigenvalues[5], Real right_eigenmatrix[5][5]);
@@ -236,7 +236,7 @@ void QuarticRoots(Real a3, Real a2, Real a1, Real a0, Real *px1, Real *px2,
 } // end anonymous namespace
 
 //----------------------------------------------------------------------------------------
-//! \fn void ProblemGenerator::LinearWave_()
+//! \fn void ProblemGenerator::LinearWave()
 //! \brief Sets initial conditions for linear wave tests
 
 void ProblemGenerator::LinearWave(ParameterInput *pin, const bool restart) {
@@ -324,12 +324,13 @@ void ProblemGenerator::LinearWave(ParameterInput *pin, const bool restart) {
   Real amp      = pin->GetReal("problem", "amp");
   lwv.d0   = pin->GetReal("problem", "dens");
   lwv.p0   = pin->GetReal("problem", "pgas");
-  lwv.vx_0 = pin->GetOrAddReal("problem", "vx", 0.0);
-  lwv.vy_0 = pin->GetOrAddReal("problem", "vy", 0.0);
-  lwv.vz_0 = pin->GetOrAddReal("problem", "vz", 0.0);
-  lwv.bx_0 = pin->GetOrAddReal("problem", "bx", 0.0);
-  lwv.by_0 = pin->GetOrAddReal("problem", "by", 0.0);
-  lwv.bz_0 = pin->GetOrAddReal("problem", "bz", 0.0);
+  lwv.vx_0 = pin->GetOrAddReal("problem", "vx0", 0.0);
+  lwv.vy_0 = pin->GetOrAddReal("problem", "vy0", 0.0);
+  lwv.vz_0 = pin->GetOrAddReal("problem", "vz0", 0.0);
+  lwv.bx_0 = pin->GetOrAddReal("problem", "bx0", 0.0);
+  lwv.by_0 = pin->GetOrAddReal("problem", "by0", 0.0);
+  lwv.bz_0 = pin->GetOrAddReal("problem", "bz0", 0.0);
+// Legacy values that used to be hardwired into code
 //  lwv.b1_0 = 1.0;
 //  lwv.b2_0 = std::sqrt(2.0);
 //  lwv.b3_0 = 0.5;
@@ -353,11 +354,9 @@ void ProblemGenerator::LinearWave(ParameterInput *pin, const bool restart) {
     Real gm1 = eos.gamma - 1.0;
     Real gamma_adi_red = eos.gamma / (eos.gamma - 1.0);
 
-    auto &w0 = pmbp->phydro->w0;
-
+    // Calculate linear wave perturbations in hydro
     Real rem[5][5], ev[5];
     Real lambda, delta_rho, delta_pgas, delta_v[4];
-
     if (relativistic) {
       // Calculate background 4-vectors
       Real u[4];
@@ -387,6 +386,10 @@ void ProblemGenerator::LinearWave(ParameterInput *pin, const bool restart) {
         pin->SetReal("time", "tlim", tlim*(std::abs(lx/ev[lwv.wave_flag])));
       }
     }
+
+    // compute solution in u1 register. For initial conditions, set u1 -> u0.
+    auto &u1 = (set_initial_conditions)? pmbp->phydro->u0 : pmbp->phydro->u1;
+    auto &w0 = pmbp->phydro->w0;
 
     // Calculate cell-centered primitive variables
     par_for("pgen_linwave1", DevExeSpace(), 0,(pmbp->nmb_thispack-1),ks,ke,js,je,is,ie,
@@ -427,7 +430,7 @@ void ProblemGenerator::LinearWave(ParameterInput *pin, const bool restart) {
         vz   = lwv.vz_0 + amp*sn*rem[3][lwv.wave_flag];
         egas = (lwv.p0 + amp*sn*rem[4][lwv.wave_flag])/gm1;
       }
-      // compute cell-centered conserved variables
+      // set cell-centered conserved variables
       w0(m,IDN,k,j,i)=rho;
       w0(m,IVX,k,j,i)=vx*lwv.cos_a2*lwv.cos_a3 -vy*lwv.sin_a3 -vz*lwv.sin_a2*lwv.cos_a3;
       w0(m,IVY,k,j,i)=vx*lwv.cos_a2*lwv.sin_a3 +vy*lwv.cos_a3 -vz*lwv.sin_a2*lwv.sin_a3;
@@ -435,12 +438,8 @@ void ProblemGenerator::LinearWave(ParameterInput *pin, const bool restart) {
       if (eos.is_ideal) {
         w0(m,IEN,k,j,i) = egas;
       }
-
     });
-
     // Convert primitive to conserved
-    // compute solution in u1 register. For initial conditions, set u1 -> u0.
-    auto &u1 = (set_initial_conditions)? pmbp->phydro->u0 : pmbp->phydro->u1;
     pmbp->phydro->peos->PrimToCons(w0, u1, is, ie, js, je, ks, ke);
 
   }  // End initialization Hydro variables
@@ -454,8 +453,7 @@ void ProblemGenerator::LinearWave(ParameterInput *pin, const bool restart) {
     int nmb = pmbp->nmb_thispack;
     int nmhd_ = pmbp->pmhd->nmhd;
 
-    // Compute linear perturbations to background medium
-    // In non-relativistic dynamics, this uses the eigenvectors of the linearized sys
+    // Calculate linear wave perturbations in MHD
     Real rem[7][7], ev[7];
     Real lambda, delta_rho, delta_pgas,u[4],delta_u[4],delta_b[4];
     if (relativistic) {
@@ -474,7 +472,7 @@ void ProblemGenerator::LinearWave(ParameterInput *pin, const bool restart) {
       lwv.wgas = lwv.d0 + gamma_adi_red * lwv.p0;
       lwv.cs_sq = eos.gamma * lwv.p0 / lwv.wgas;
       RelMHDPerturbations(lwv,u,b,lambda,delta_rho,delta_pgas,delta_u,delta_b);
-      // Modify relativistic transverse magnetic fields and linear wave perturbations
+      // Modify relativistic transverse magnetic fields for linear wave perturbations
       lwv.by_0 = b[2]*u[0] - b[0]*u[2];
       lwv.bz_0 = b[3]*u[0] - b[0]*u[3];
       lwv.dby = amp*((b[2]*delta_u[0] - b[0]*delta_u[2])
@@ -731,7 +729,7 @@ void ProblemGenerator::LinearWave(ParameterInput *pin, const bool restart) {
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn void HydroEigensystem()
+//! \fn void HydroEigensystemPrim()
 //! \brief computes eigenvectors of linear waves in ideal gas/isothermal hydrodynamics
 //! for the linearized system in the PRIMITIVE variables, i.e. W,t = AW,x, where
 //! W=(d,vx,vy,vz,[P]).

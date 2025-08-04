@@ -87,6 +87,8 @@ def arguments(iv, rv, fv, wv, res, soe, name):
             'coord/general_rel=false',
             f'{soe}/reconstruct=' + rv,
             f'{soe}/rsolver=' + fv,
+            'problem/along_x1=true',
+            'problem/amp=1.0e-6',
             'problem/wave_flag=' + wv]
 
 @pytest.mark.parametrize("iv" , _int)

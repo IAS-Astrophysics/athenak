@@ -112,7 +112,7 @@ _res  = [32, 64]  # resolutions to test
 
 def arguments(iv,rv,fv,wv,res,soe,name):
     """Assemble arguments for run command"""
-    vflow = 1.0 if wv=='3' else 0.0
+    vx0 = 1.0 if wv=='3' else 0.0
     return [f'job/basename={name}',
             'time/tlim=1.0',
             'time/integrator=' + iv,
@@ -130,7 +130,7 @@ def arguments(iv,rv,fv,wv,res,soe,name):
             'problem/along_x1=true',
             'problem/amp=1.0e-6',
             'problem/wave_flag=' + wv,
-            'problem/vflow=' + repr(vflow)]
+            'problem/vx0=' + repr(vx0)]
 
 @pytest.mark.parametrize("iv" , _int)
 @pytest.mark.parametrize("rv" , _recon)
