@@ -3,8 +3,9 @@
 // Copyright(C) ...
 // Licensed under the 3-clause BSD License
 //========================================================================================
-//! \file z4c_one_puncture.cpp
-//  \brief Problem generator for a single puncture placed at the origin of the domain
+//! \file z4c_boosted_puncture.cpp
+//! \brief Problem generator for a single boosted puncture.  Used for testing by ensuring
+//! contraints are satisfied to error tolerances during evolution.
 
 #include <algorithm>
 #include <cmath>
@@ -29,16 +30,17 @@ void ADMOnePunctureBoosted(MeshBlockPack *pmbp, ParameterInput *pin);
 void BoostedPunctureRefinementCondition(MeshBlockPack* pmbp);
 
 //----------------------------------------------------------------------------------------
-//! \fn ProblemGenerator::UserProblem_()
-//! \brief Problem Generator for single puncture
-void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
+//! \fn ProblemGenerator::Z4cBoostedPuncture()
+//! \brief Problem Generator for single boosted puncture
+
+void ProblemGenerator::Z4cBoostedPuncture(ParameterInput *pin, const bool restart) {
   user_ref_func  = BoostedPunctureRefinementCondition;
   MeshBlockPack *pmbp = pmy_mesh_->pmb_pack;
   auto &indcs = pmy_mesh_->mb_indcs;
 
   if (pmbp->pz4c == nullptr) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
-              << "One Puncture test can only be run in Z4c, but no <z4c> block "
+              << "Boosted Puncture test can only be run in Z4c, but no <z4c> block "
               << "in input file" << std::endl;
     exit(EXIT_FAILURE);
   }
@@ -69,7 +71,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn void ADMOnePuncture(MeshBlockPack *pmbp, ParameterInput *pin)
+//! \fn void ADMOnePunctureBoosted(MeshBlockPack *pmbp, ParameterInput *pin)
 //! \brief Initialize ADM vars to single boosted puncture (no spin), based on 1909.02997
 
 void ADMOnePunctureBoosted(MeshBlockPack *pmbp, ParameterInput *pin) {
@@ -173,7 +175,10 @@ void ADMOnePunctureBoosted(MeshBlockPack *pmbp, ParameterInput *pin) {
   });
 }
 
-// how decide the refinement
+//----------------------------------------------------------------------------------------
+//! \fn void BoostedPunctureRefinementCondition()
+//! Sets refinement criteria for boosted puncture test
+
 void BoostedPunctureRefinementCondition(MeshBlockPack* pmbp) {
   pmbp->pz4c->pamr->Refine(pmbp);
 }

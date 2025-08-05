@@ -155,6 +155,11 @@ void ProblemGenerator::Z4cLinearWave(ParameterInput *pin, const bool restart) {
       });
   return;
 }
+
+//----------------------------------------------------------------------------------------
+//! \fn void Z4cLinearWaveErrors()
+//! Computes errors in selected variables
+
 void Z4cLinearWaveErrors(ParameterInput *pin, Mesh *pm) {
   // calculate reference solution by calling pgen again.
   set_initial_conditions = false;
@@ -175,7 +180,7 @@ void Z4cLinearWaveErrors(ParameterInput *pin, Mesh *pm) {
   MeshBlockPack *pmbp = pm->pmb_pack;
   auto &size = pmbp->pmb->mb_size;
 
-  // compute errors for Hydro  -----------------------------------------------------------
+  // compute errors
   if (pmbp->pz4c != nullptr) {
     nvars = 6; // 6 metric components
     auto &pz4c = pmbp->pz4c;
@@ -201,22 +206,22 @@ void Z4cLinearWaveErrors(ParameterInput *pin, Mesh *pm) {
       // g_ij's:
       array_sum::GlobalSum evars;
       evars.the_array[0] = vol*fabs(u0_(m,pz4c->I_Z4C_GXX,k,j,i)
-                          - u1_(m,pz4c->I_Z4C_GXX,k,j,i));
+                                  - u1_(m,pz4c->I_Z4C_GXX,k,j,i));
       max_err = fmax(max_err, evars.the_array[0]);
       evars.the_array[1] = vol*fabs(u0_(m,pz4c->I_Z4C_GXY,k,j,i)
-                          - u1_(m,pz4c->I_Z4C_GXY,k,j,i));
+                                  - u1_(m,pz4c->I_Z4C_GXY,k,j,i));
       max_err = fmax(max_err, evars.the_array[1]);
       evars.the_array[2] = vol*fabs(u0_(m,pz4c->I_Z4C_GXZ,k,j,i)
-                          - u1_(m,pz4c->I_Z4C_GXZ,k,j,i));
+                                  - u1_(m,pz4c->I_Z4C_GXZ,k,j,i));
       max_err = fmax(max_err, evars.the_array[2]);
       evars.the_array[3] = vol*fabs(u0_(m,pz4c->I_Z4C_GYY,k,j,i)
-                          - u1_(m,pz4c->I_Z4C_GYY,k,j,i));
+                                  - u1_(m,pz4c->I_Z4C_GYY,k,j,i));
       max_err = fmax(max_err, evars.the_array[3]);
       evars.the_array[4] = vol*fabs(u0_(m,pz4c->I_Z4C_GYZ,k,j,i)
-                          - u1_(m,pz4c->I_Z4C_GYZ,k,j,i));
+                                  - u1_(m,pz4c->I_Z4C_GYZ,k,j,i));
       max_err = fmax(max_err, evars.the_array[4]);
       evars.the_array[5] = vol*fabs(u0_(m,pz4c->I_Z4C_GZZ,k,j,i)
-                          - u1_(m,pz4c->I_Z4C_GZZ,k,j,i));
+                                  - u1_(m,pz4c->I_Z4C_GZZ,k,j,i));
       max_err = fmax(max_err, evars.the_array[5]);
 
       // fill rest of the_array with zeros, if narray < NREDUCTION_VARIABLES
@@ -275,7 +280,7 @@ void Z4cLinearWaveErrors(ParameterInput *pin, Mesh *pm) {
                   << std::endl << "Error output file could not be opened" <<std::endl;
         std::exit(EXIT_FAILURE);
       }
-      std::fprintf(pfile, "# Nx1    Nx2   Nx3   Ncycle    RMS-L1    L-infty   ");
+      std::fprintf(pfile, "# Nx1   Nx2   Nx3   Ncycle    RMS-L1    L-infty   ");
       std::fprintf(pfile, "gxx_L1   gxy_L1    gxz_L1    gyy_L1    ");
       std::fprintf(pfile, "gyz_L1   gzz_L1    \n");
     }
@@ -294,7 +299,11 @@ void Z4cLinearWaveErrors(ParameterInput *pin, Mesh *pm) {
 
   return;
 }
-// how decide the refinement
+
+//----------------------------------------------------------------------------------------
+//! \fn void RefinementCondition()
+//! Implements custom AMR refinement condition for linear gravitational waves
+
 void RefinementCondition(MeshBlockPack* pmbp) {
   auto &refine_flag = pmbp->pmesh->pmr->refine_flag;
   int I_Z4C_GXY  = pmbp->pz4c->I_Z4C_GXY;
@@ -308,28 +317,27 @@ void RefinementCondition(MeshBlockPack* pmbp) {
   int mbs           = pmbp->pmesh->gids_eachrank[global_variable::my_rank];
   auto &u0       = pmbp->pz4c->u0;
 
-    par_for_outer(
-    "Z4c_AMR::GXYMAX", DevExeSpace(), 0, 0, 0, (nmb - 1),
-    KOKKOS_LAMBDA(TeamMember_t tmember, const int m) {
-      Real team_dmax;
-      Kokkos::parallel_reduce(
-        Kokkos::TeamThreadRange(tmember, nkji),
-        [=](const int idx, Real &dmax) {
-          int k = (idx) / nji;
-          int j = (idx - k * nji) / nx1;
-          int i = (idx - k * nji - j * nx1) + is;
-          j += js;
-          k += ks;
-          dmax = fmax(u0(m, I_Z4C_GXY, k, j, i), dmax);
-        },
-        Kokkos::Max<Real>(team_dmax));
+  par_for_outer("Z4c_AMR::GXYMAX", DevExeSpace(), 0, 0, 0, (nmb - 1),
+  KOKKOS_LAMBDA(TeamMember_t tmember, const int m) {
+    Real team_dmax;
+    Kokkos::parallel_reduce(
+      Kokkos::TeamThreadRange(tmember, nkji),
+      [=](const int idx, Real &dmax) {
+        int k = (idx) / nji;
+        int j = (idx - k * nji) / nx1;
+        int i = (idx - k * nji - j * nx1) + is;
+        j += js;
+        k += ks;
+        dmax = fmax(u0(m, I_Z4C_GXY, k, j, i), dmax);
+      },
+      Kokkos::Max<Real>(team_dmax));
 
-      if (team_dmax > 0) {
-        refine_flag.d_view(m + mbs) = 1;
-      } else {
-        refine_flag.d_view(m + mbs) = -1;
-      }
-    });
+    if (team_dmax > 0) {
+      refine_flag.d_view(m + mbs) = 1;
+    } else {
+      refine_flag.d_view(m + mbs) = -1;
+    }
+  });
 
   // sync host and device
   refine_flag.template modify<DevExeSpace>();

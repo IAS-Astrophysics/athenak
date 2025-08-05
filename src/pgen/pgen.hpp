@@ -69,6 +69,7 @@ class ProblemGenerator {
   void OrszagTang(ParameterInput *pin, const bool restart);
   void ShockTube(ParameterInput *pin, const bool restart);
   void RadiationLinearWave(ParameterInput *pin, const bool restart);
+  void Z4cBoostedPuncture(ParameterInput *pin, const bool restart);
   void Z4cLinearWave(ParameterInput *pin, const bool restart);
   void SphericalCollapse(ParameterInput *pin, const bool restart);
   void Diffusion(ParameterInput *pin, const bool restart);
