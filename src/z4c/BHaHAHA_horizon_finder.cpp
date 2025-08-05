@@ -1,3 +1,5 @@
+#define OMPI_SKIP_MPICXX
+
 #include <assert.h>
 #include <unistd.h>
 #include <sys/stat.h>  // mkdir

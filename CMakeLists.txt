@@ -116,6 +116,7 @@ include_directories(${Kokkos_INCLUDE_DIRS_RET})
 
 target_link_libraries(athena PUBLIC Kokkos::kokkos)
 if (ENABLE_MPI)
+  target_compile_definitions(athena PUBLIC OMPI_SKIP_MPICXX)
   target_link_libraries(athena PUBLIC MPI::MPI_CXX)
 endif()
 if (ENABLE_OPENMP)
