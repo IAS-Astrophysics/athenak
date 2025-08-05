@@ -113,36 +113,21 @@ void HLLE_TRANSFORMING(TeamMember_t const &member,
 
     // Compute tetrad transformation
     Real e_cov[4][4], e_cont[4][4];
-    ComputeOrthonormalTetrad<ivx>(g3d, beta_u, alpha, isdetg, e_cov, e_cont);
+    ComputeOrthonormalTetrad<ivx>(g3d, beta_u, alpha, isdetg*isdetg, e_cov, e_cont);
     Real ialpha = e_cov[0][0]; // Save a division this way
 
-    // Compute the four-velocity in the tetrad frame -- note that this gives us the
-    // *covariant* four-velocity, e.g., u_\mu = {-W, Wvx, Wvy, Wvz}, so we then invert
-    // the 0 component.
-    Real ul[4];
-    Real Wl = Kokkos::sqrt(1.0 + Primitive::SquareVector(&prim_l[IVX], g3d));
-    ul[0] = Wl*ialpha;
-    ul[1] = prim_l[IVX] - Wl*beta_u[0]*ialpha;
-    ul[2] = prim_l[IVY] - Wl*beta_u[1]*ialpha;
-    ul[3] = prim_l[IVZ] - Wl*beta_u[2]*ialpha;
-
-    Real ur[4];
-    Real Wr = Kokkos::sqrt(1.0 + Primitive::SquareVector(&prim_r[IVX], g3d));
-    ur[0] = Wr*ialpha;
-    ur[1] = prim_r[IVX] - Wr*beta_u[0]*ialpha;
-    ur[2] = prim_r[IVY] - Wr*beta_u[1]*ialpha;
-    ur[3] = prim_r[IVZ] - Wr*beta_u[2]*ialpha;
-
-    Real ult_u[4] = {0.0};
-    Real urt_u[4] = {0.0};
-    for (int b = 0; b < 4; b++) {
-      for (int a = 0; a < 4; a++) {
-        ult_u[b] += e_cont[b][a]*ul[a];
-        urt_u[b] += e_cont[b][a]*ur[a];
+    // Transform the velocity to the tetrad frame -- this is a purely spatial vector with
+    // a null time component, so the raised and lowered forms are identical in the tetrad
+    // frame. One could do this from the true four-velocity, but it's more expensive and
+    // could lead to increased round-off error or catastrophic cancellation.
+    Real ult[3] = {0.0};
+    Real urt[3] = {0.0};
+    for (int b = 0; b < 3; b++) {
+      for (int a = 0; a < 3; a++) {
+        ult[b] += e_cont[b+1][a+1]*prim_l[PVX+a];
+        urt[b] += e_cont[b+1][a+1]*prim_r[PVX+a];
       }
     }
-    ult_u[0] = -ult_u[0];
-    urt_u[0] = -urt_u[0];
 
     // Compute the magnetic field in the tetrad frame -- this is a purely spatial vector
     // with a null time component, so the raised and lowered forms are identical in the
@@ -167,17 +152,18 @@ void HLLE_TRANSFORMING(TeamMember_t const &member,
 
     // Start by calculating the conserved variables.
     Real cons_l[NCONS];
-    Real iWl = 1.0/ult_u[0];
-    Real bl0 = (Blt[0]*ult_u[1] + Blt[1]*ult_u[2] + Blt[2]*ult_u[3]);
+    Real Wl = Kokkos::sqrt(ult[0]*ult[0] + ult[1]*ult[1] + ult[2]*ult[2] + 1.0);
+    Real iWl = 1.0/Wl;
+    Real bl0 = (Blt[0]*ult[0] + Blt[1]*ult[1] + Blt[2]*ult[2]);
     Real Bvl = bl0*iWl;
     Real Bsq_l = Blt[0]*Blt[0] + Blt[1]*Blt[1] + Blt[2]*Blt[2];
     Real bsq_l = Bsq_l*iWl*iWl + Bvl*Bvl;
     Real rhohB_l = (eos.ps.GetEOS().GetEnergy(prim_l[PRH], prim_l[PTM], &prim_l[PYF]) +
-                  prim_l[PPR])*ult_u[0]*ult_u[0] + Bsq_l;
-    cons_l[CDN] = mb*prim_l[PRH]*ult_u[0];
-    cons_l[CSX] = rhohB_l*ult_u[1]*iWl - Bvl*Blt[0];
-    cons_l[CSY] = rhohB_l*ult_u[2]*iWl - Bvl*Blt[1];
-    cons_l[CSZ] = rhohB_l*ult_u[3]*iWl - Bvl*Blt[2];
+                  prim_l[PPR])*Wl*Wl + Bsq_l;
+    cons_l[CDN] = mb*prim_l[PRH]*Wl;
+    cons_l[CSX] = rhohB_l*ult[0]*iWl - Bvl*Blt[0];
+    cons_l[CSY] = rhohB_l*ult[1]*iWl - Bvl*Blt[1];
+    cons_l[CSZ] = rhohB_l*ult[2]*iWl - Bvl*Blt[2];
     cons_l[CTA] = rhohB_l - prim_l[PPR] - 0.5*bsq_l - cons_l[CDN];
     /*for (int s = 0; s < nscal; s++) {
       cons_l[CYD + s] = cons_l[CDN]*prim_l[PYF + s];
@@ -185,10 +171,10 @@ void HLLE_TRANSFORMING(TeamMember_t const &member,
 
     // Now calculate the fluxes.
     Real flux_l[NCONS];
-    Real vx = ult_u[ivx]*iWl;
-    Real blu[3] = {(Blt[0] + bl0*ult_u[1])*iWl,
-                   (Blt[1] + bl0*ult_u[2])*iWl,
-                   (Blt[2] + bl0*ult_u[3])*iWl};
+    Real vx = ult[ibx]*iWl;
+    Real blu[3] = {(Blt[0] + bl0*ult[0])*iWl,
+                   (Blt[1] + bl0*ult[1])*iWl,
+                   (Blt[2] + bl0*ult[2])*iWl};
     flux_l[CDN] = cons_l[CDN]*vx;
     flux_l[CSX] = cons_l[CSX]*vx - blu[0]*Blt[ibx]*iWl;
     flux_l[CSY] = cons_l[CSY]*vx - blu[1]*Blt[ibx]*iWl;
@@ -198,25 +184,26 @@ void HLLE_TRANSFORMING(TeamMember_t const &member,
 
     Real bflux_l[NMAG];
     bflux_l[ibx] = 0.0;
-    bflux_l[iby] = (Blt[iby]*vx - Blt[ibx]*ult_u[ivy]*iWl);
-    bflux_l[ibz] = (Blt[ibz]*vx - Blt[ibx]*ult_u[ivz]*iWl);
+    bflux_l[iby] = (Blt[iby]*vx - Blt[ibx]*ult[iby]*iWl);
+    bflux_l[ibz] = (Blt[ibz]*vx - Blt[ibx]*ult[ibz]*iWl);
 
 
     // RIGHT STATE
 
     // Start by calculating the conserved variables.
     Real cons_r[NCONS];
-    Real iWr = 1.0/urt_u[0];
-    Real br0 = (Brt[0]*urt_u[1] + Brt[1]*urt_u[2] + Brt[2]*urt_u[3]);
+    Real Wr = Kokkos::sqrt(urt[0]*urt[0] + urt[1]*urt[1] + urt[2]*urt[2] + 1.0);
+    Real iWr = 1.0/Wr;
+    Real br0 = (Brt[0]*urt[0] + Brt[1]*urt[1] + Brt[2]*urt[2]);
     Real Bvr = br0*iWr;
     Real Bsq_r = Brt[0]*Brt[0] + Brt[1]*Brt[1] + Brt[2]*Brt[2];
     Real bsq_r = Bsq_r*iWr*iWr + Bvr*Bvr;
     Real rhohB_r = (eos.ps.GetEOS().GetEnergy(prim_r[PRH], prim_r[PTM], &prim_r[PYF]) +
-                  prim_r[PPR])*urt_u[0]*urt_u[0] + Bsq_r;
-    cons_r[CDN] = mb*prim_r[PRH]*urt_u[0];
-    cons_r[CSX] = rhohB_r*urt_u[1]*iWr - Bvr*Brt[0];
-    cons_r[CSY] = rhohB_r*urt_u[2]*iWr - Bvr*Brt[1];
-    cons_r[CSZ] = rhohB_r*urt_u[3]*iWr - Bvr*Brt[2];
+                  prim_r[PPR])*Wr*Wr + Bsq_r;
+    cons_r[CDN] = mb*prim_r[PRH]*Wr;
+    cons_r[CSX] = rhohB_r*urt[0]*iWr - Bvr*Brt[0];
+    cons_r[CSY] = rhohB_r*urt[1]*iWr - Bvr*Brt[1];
+    cons_r[CSZ] = rhohB_r*urt[2]*iWr - Bvr*Brt[2];
     cons_r[CTA] = rhohB_r - prim_r[PPR] - 0.5*bsq_r - cons_r[CDN];
     /*for (int s = 0; s < nscal; s++) {
       cons_r[CYD + s] = cons_r[CDN]*prim_r[PYF + s];
@@ -224,10 +211,10 @@ void HLLE_TRANSFORMING(TeamMember_t const &member,
 
     // Now calculate the fluxes.
     Real flux_r[NCONS];
-    vx = urt_u[ivx]*iWr;
-    Real bru[3] = {(Brt[0] + br0*urt_u[1])*iWr,
-                   (Brt[1] + br0*urt_u[2])*iWr,
-                   (Brt[2] + br0*urt_u[3])*iWr};
+    vx = urt[ibx]*iWr;
+    Real bru[3] = {(Brt[0] + br0*urt[0])*iWr,
+                   (Brt[1] + br0*urt[1])*iWr,
+                   (Brt[2] + br0*urt[2])*iWr};
     flux_r[CDN] = cons_r[CDN]*vx;
     flux_r[CSX] = cons_r[CSX]*vx - bru[0]*Brt[ibx]*iWr;
     flux_r[CSY] = cons_r[CSY]*vx - bru[1]*Brt[ibx]*iWr;
@@ -237,34 +224,30 @@ void HLLE_TRANSFORMING(TeamMember_t const &member,
 
     Real bflux_r[NMAG];
     bflux_r[ibx] = 0.0;
-    bflux_r[iby] = (Brt[iby]*vx - Brt[ibx]*urt_u[ivy]*iWr);
-    bflux_r[ibz] = (Brt[ibz]*vx - Brt[ibx]*urt_u[ivz]*iWr);
+    bflux_r[iby] = (Brt[iby]*vx - Brt[ibx]*urt[iby]*iWr);
+    bflux_r[ibz] = (Brt[ibz]*vx - Brt[ibx]*urt[ibz]*iWr);
 
 
     // Calculate the magnetosonic speeds for both states
-    Real flat[NSPMETRIC] = {0.0};
-    flat[S11] = 1.0;
-    flat[S22] = 1.0;
-    flat[S33] = 1.0;
-    Real zeros[3] = {0., 0., 0.};
     Real lambda_pl, lambda_pr, lambda_ml, lambda_mr;
     // Replace the velocity in the primitive variables
-    prim_l[PVX] = ult_u[1];
-    prim_l[PVY] = ult_u[2];
-    prim_l[PVZ] = ult_u[3];
-    prim_r[PVX] = urt_u[1];
-    prim_r[PVY] = urt_u[2];
-    prim_r[PVZ] = urt_u[3];
-    eos.GetGRFastMagnetosonicSpeeds(lambda_pl, lambda_ml, prim_l, bsq_l,
-                                    flat, zeros, 1.0, 1.0, pvx);
-    eos.GetGRFastMagnetosonicSpeeds(lambda_pr, lambda_mr, prim_r, bsq_r,
-                                    flat, zeros, 1.0, 1.0, pvx);
+    prim_l[PVX] = ult[0];
+    prim_l[PVY] = ult[1];
+    prim_l[PVZ] = ult[2];
+    prim_r[PVX] = urt[0];
+    prim_r[PVY] = urt[1];
+    prim_r[PVZ] = urt[2];
+    eos.GetSRFastMagnetosonicSpeeds(lambda_pl, lambda_ml, prim_l, bsq_l, pvx);
+    eos.GetSRFastMagnetosonicSpeeds(lambda_pr, lambda_mr, prim_r, bsq_r, pvx);
     
     // Get the extremal wavespeeds
     Real lambda_l = Kokkos::fmin(lambda_ml, lambda_mr);
     Real lambda_r = Kokkos::fmax(lambda_pl, lambda_pr);
 
-    // Calculate fluxes in HLL region
+    // Calculate fluxes in HLL region -- Note that even though we're in the tetrad frame,
+    // a factor of 1/\alpha is still needed to get the correct volume form because the
+    // flux is actually \alpha F, not F, and \alpha is a scalar that does not get
+    // transformed away in the tetrad frame.
     Real qa = lambda_r*lambda_l;
     Real qb = 1.0/(lambda_r - lambda_l);
     Real f_hll[NCONS], bf_hll[NMAG];
@@ -323,7 +306,7 @@ void HLLE_TRANSFORMING(TeamMember_t const &member,
       b_interface = &b_hll[0];
     }
 
-    Real vol = sdetg*alpha;
+    Real vol = alpha*sdetg;
 
     // Calculate the fluxes, transforming back into the lab frame
     flx(m, IDN, k, j, i) = vol * (e_cov[ivx][0]*cons_interface[CDN] +
