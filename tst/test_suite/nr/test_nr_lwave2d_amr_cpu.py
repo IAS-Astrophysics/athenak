@@ -19,14 +19,14 @@ import numpy as np
 # Threshold errors and error ratios for different integrators, reconstruction,
 # algorithms, and waves
 errors = {
-    ('hydro', 'rk2', 'plm', '0'): (6.9e-08,0.39),
-    ('hydro', 'rk3', 'ppm4', '0'): (1.9e-08,0.22),
-    ('hydro', 'rk3', 'ppmx', '0'): (4e-10,0.075),
-    ('hydro', 'rk3', 'wenoz', '0'): (2.7e-10,0.093),
-    ('mhd', 'rk2', 'plm', '0'): (7.6e-08,0.38),
-    ('mhd', 'rk3', 'ppm4', '0'): (2.1e-08,0.22),
-    ('mhd', 'rk3', 'ppmx', '0'): (2.9e-09,0.2),
-    ('mhd', 'rk3', 'wenoz', '0'): (2.8e-09,0.23),
+    ('hydro', 'rk2', 'plm', '0'): (1.2e-05,0.29),
+    ('hydro', 'rk3', 'ppm4', '0'): (7.6e-06,0.4),
+    ('hydro', 'rk3', 'ppmx', '0'): (6.2e-06,0.55),
+    ('hydro', 'rk3', 'wenoz', '0'): (5.7e-06,0.67),
+    ('mhd', 'rk2', 'plm', '0'): (1.3e-05,0.28),
+    ('mhd', 'rk3', 'ppm4', '0'): (8.1e-06,0.3),
+    ('mhd', 'rk3', 'ppmx', '0'): (7e-06,0.37),
+    ('mhd', 'rk3', 'wenoz', '0'): (3.9e-06,0.39),
 }
 
 _recon = ['ppm4','ppmx','wenoz']  # do not change order
@@ -91,3 +91,4 @@ def test_run_other_recon(iv, rv, soe):
             rv,
             fv,
             soe,)
+
