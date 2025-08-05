@@ -24,9 +24,10 @@ maxerrors={
 
 _wave = ['0']        # do not change order
 _res = [64, 128]     # resolutions to test
+_recon = ['plm','wenoz'] # spatial reconstruction
 _soe = ['hydro', 'mhd']  # system of equations to test
 
-def arguments(iv, rv, fv, wv, res,soe,name):
+def arguments(iv, rv, fv, wv, res, soe, name):
     """Assemble arguments for run command"""
     return  [f'job/basename={name}',
             'time/tlim=1.0',
@@ -46,32 +47,12 @@ def arguments(iv, rv, fv, wv, res,soe,name):
             'problem/amp=1.0e-3',
             'problem/wave_flag=' + wv]
 
-@pytest.mark.parametrize("iv" , ['rk2'])
-@pytest.mark.parametrize("rv" , ['plm'])
+@pytest.mark.parametrize("rv" , _recon)
 @pytest.mark.parametrize("fv" , ['hlle'])
 @pytest.mark.parametrize("soe" , _soe)
-def test_run_plm(iv, fv, rv, soe):
+def test_run( fv, rv, soe):
     """Run a single test with given parameters."""
-    # Ignore return arguments
-    _,_ = testutils.test_error_convergence(
-            f"inputs/lwave_rel{soe}.athinput",
-            f"sr_lwave_{soe}",
-            arguments,
-            maxerrors,
-            _wave,
-            _res,
-            iv,
-            rv,
-            fv,
-            soe,
-            mpi=True)
-
-@pytest.mark.parametrize("iv" , ['rk3'])
-@pytest.mark.parametrize("rv" , ['wenoz'])
-@pytest.mark.parametrize("fv" , ['hlle'])
-@pytest.mark.parametrize("soe" , _soe)
-def test_run_wenoz(iv, fv, rv, soe):
-    """Run a single test with given parameters."""
+    iv = 'rk2' if rv=="plm" else 'rk3'
     # Ignore return arguments
     _,_ = testutils.test_error_convergence(
             f"inputs/lwave_rel{soe}.athinput",

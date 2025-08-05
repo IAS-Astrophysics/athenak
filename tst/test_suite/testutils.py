@@ -247,15 +247,20 @@ def test_error_convergence(input_file,
             for res in _res:
                 results = run(input_file, arguments(iv,rv,fv,wv,res,soe,test_name))
                 assert results, f"Run failed for {iv}+{res}+{fv}+{rv}+{wv}."
-            maxerror, errorratio = errors[(soe, iv, rv, wv)]
+            maxerror, maxerrorratio = errors[(soe, iv, rv, wv)]
             data = athena_read.error_dat(f'{test_name}-errs.dat')
             L1_RMS_INDEX = 4  # Index for L1 RMS error in data
             l1_rms_nLR = data[0][L1_RMS_INDEX]
             l1_rms_nHR = data[1][L1_RMS_INDEX]
+            errorratio = l1_rms_nHR/l1_rms_nLR
             if l1_rms_nHR > maxerror and not(rv=="ppmx" and iv=="rk2"):
                 # PPMX with RK2 is known to have larger errors, so we skip the check
                 pytest.fail(f"{wv} wave error too large for {iv}+{rv}+{fv},"
                             f"error: {l1_rms_nHR:g} threshold: {maxerror:g}")
+            if  errorratio > maxerrorratio and not(rv=="ppmx" and iv=="rk2"):
+                # PPMX with RK2 is known to have larger errors, so we skip the check
+                pytest.fail(f"{wv} wave error too large for {iv}+{rv}+{fv},"
+                            f"error: {errorratio:g} threshold: {maxerrorratio:g}")
             # store errors for selected L/R-going waves
             if wv == left_wave:
                 l1_rms_l = l1_rms_nHR

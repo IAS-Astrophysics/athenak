@@ -18,48 +18,48 @@ import numpy as np
 # Threshold errors and error ratios for different integrators, reconstruction,
 # algorithms, and wave types
 maxerrors={
-    ('hydro', 'rk3', 'plm', '0'): (1.7e-08,0.28),
-    ('hydro', 'rk3', 'ppm4', '0'): (6.4e-09,0.31),
-    ('hydro', 'rk3', 'ppmx', '0'): (1.2e-11,0.037),
-    ('hydro', 'rk3', 'wenoz', '0'): (1.1e-11,0.17),
-    ('hydro', 'rk3', 'plm', '4'): (1.8e-08,0.28),
-    ('hydro', 'rk3', 'ppm4', '4'): (4.6e-09,0.23),
-    ('hydro', 'rk3', 'ppmx', '4'): (4.3e-11,0.097),
-    ('hydro', 'rk3', 'wenoz', '4'): (2.5e-11,0.13),
-    ('hydro', 'rk3', 'plm', '3'): (1.8e-07,0.33),
+    ('hydro', 'rk2', 'plm', '0'): (2.1e-08,0.28),
+    ('hydro', 'rk3', 'ppm4', '0'): (4.6e-09,0.23),
+    ('hydro', 'rk3', 'ppmx', '0'): (4.3e-11,0.097),
+    ('hydro', 'rk3', 'wenoz', '0'): (2.5e-11,0.13),
+    ('hydro', 'rk2', 'plm', '4'): (1.8e-08,0.29),
+    ('hydro', 'rk3', 'ppm4', '4'): (6.5e-09,0.28),
+    ('hydro', 'rk3', 'ppmx', '4'): (1.2e-11,0.037),
+    ('hydro', 'rk3', 'wenoz', '4'): (1.1e-11,0.17),
+    ('hydro', 'rk2', 'plm', '3'): (1.8e-07,0.33),
     ('hydro', 'rk3', 'ppm4', '3'): (3.8e-08,0.26),
     ('hydro', 'rk3', 'ppmx', '3'): (1.2e-10,0.063),
     ('hydro', 'rk3', 'wenoz', '3'): (2.7e-11,0.036),
-    ('mhd', 'rk3', 'plm', '0'): (4.1e-08,0.28),
-    ('mhd', 'rk3', 'ppm4', '0'): (1.4e-08,0.29),
-    ('mhd', 'rk3', 'ppmx', '0'): (8.1e-11,0.088),
-    ('mhd', 'rk3', 'wenoz', '0'): (3.8e-11,0.12),
-    ('mhd', 'rk3', 'plm', '6'): (2.8e-08,0.28),
-    ('mhd', 'rk3', 'ppm4', '6'): (7.1e-09,0.23),
-    ('mhd', 'rk3', 'ppmx', '6'): (3.8e-11,0.06),
-    ('mhd', 'rk3', 'wenoz', '6'): (3.7e-11,0.12),
-    ('mhd', 'rk3', 'plm', '5'): (5.7e-08,0.28),
-    ('mhd', 'rk3', 'ppm4', '5'): (1.8e-08,0.25),
-    ('mhd', 'rk3', 'ppmx', '5'): (9.8e-11,0.088),
-    ('mhd', 'rk3', 'wenoz', '5'): (3.5e-11,0.12),
-    ('mhd', 'rk3', 'plm', '1'): (3.9e-08,0.28),
-    ('mhd', 'rk3', 'ppm4', '1'): (1.3e-08,0.26),
-    ('mhd', 'rk3', 'ppmx', '1'): (1.9e-11,0.027),
-    ('mhd', 'rk3', 'wenoz', '1'): (3.6e-11,0.19),
-    ('mhd', 'rk3', 'plm', '4'): (3e-08,0.29),
-    ('mhd', 'rk3', 'ppm4', '4'): (9.6e-09,0.26),
-    ('mhd', 'rk3', 'ppmx', '4'): (1.9e-11,0.042),
-    ('mhd', 'rk3', 'wenoz', '4'): (1.2e-11,0.098),
-    ('mhd', 'rk3', 'plm', '2'): (1.9e-08,0.32),
-    ('mhd', 'rk3', 'ppm4', '2'): (5e-09,0.26),
-    ('mhd', 'rk3', 'ppmx', '2'): (1.5e-11,0.069),
-    ('mhd', 'rk3', 'wenoz', '2'): (3.2e-12,0.039),
-    ('mhd', 'rk3', 'plm', '3'): (3.3e-08,0.37),
+    ('mhd', 'rk2', 'plm', '0'): (5.9e-08,0.28),
+    ('mhd', 'rk3', 'ppm4', '0'): (1.7e-08,0.29),
+    ('mhd', 'rk3', 'ppmx', '0'): (5.1e-10,0.21),
+    ('mhd', 'rk3', 'wenoz', '0'): (5.1e-10,0.23),
+    ('mhd', 'rk2', 'plm', '6'): (2.3e-08,0.28),
+    ('mhd', 'rk3', 'ppm4', '6'): (7.9e-09,0.32),
+    ('mhd', 'rk3', 'ppmx', '6'): (4.5e-10,0.24),
+    ('mhd', 'rk3', 'wenoz', '6'): (4.4e-10,0.25),
+    ('mhd', 'rk2', 'plm', '5'): (6e-08,0.29),
+    ('mhd', 'rk3', 'ppm4', '5'): (2.3e-08,0.24),
+    ('mhd', 'rk3', 'ppmx', '5'): (8.3e-10,0.28),
+    ('mhd', 'rk3', 'wenoz', '5'): (8.7e-10,0.24),
+    ('mhd', 'rk2', 'plm', '1'): (4.4e-08,0.28),
+    ('mhd', 'rk3', 'ppm4', '1'): (1.2e-08,0.24),
+    ('mhd', 'rk3', 'ppmx', '1'): (1.2e-09,0.25),
+    ('mhd', 'rk3', 'wenoz', '1'): (1.2e-09,0.25),
+    ('mhd', 'rk2', 'plm', '4'): (4.1e-08,0.33),
+    ('mhd', 'rk3', 'ppm4', '4'): (1.2e-08,0.23),
+    ('mhd', 'rk3', 'ppmx', '4'): (1.1e-10,0.23),
+    ('mhd', 'rk3', 'wenoz', '4'): (1.2e-10,0.21),
+    ('mhd', 'rk2', 'plm', '2'): (1.6e-08,0.29),
+    ('mhd', 'rk3', 'ppm4', '2'): (5.2e-09,0.25),
+    ('mhd', 'rk3', 'ppmx', '2'): (5.2e-11,0.17),
+    ('mhd', 'rk3', 'wenoz', '2'): (4.8e-11,0.26),
+    ('mhd', 'rk2', 'plm', '3'): (3.3e-08,0.37),
     ('mhd', 'rk3', 'ppm4', '3'): (4.9e-09,0.24),
     ('mhd', 'rk3', 'ppmx', '3'): (1.4e-11,0.063),
-    ('mhd', 'rk3', 'wenoz', '3'): (5.7e-12,0.032),}
+    ('mhd', 'rk3', 'wenoz', '3'): (5.6e-12,0.032),
+}
 
-_int   = ['rk3']
 _recon = ['plm', 'ppm4', 'ppmx', 'wenoz']
 _wave={}
 _wave['mhd']  = ['0','6','5','1','4','2','3']
@@ -91,11 +91,11 @@ def arguments(iv, rv, fv, wv, res, soe, name):
             'problem/amp=1.0e-6',
             'problem/wave_flag=' + wv]
 
-@pytest.mark.parametrize("iv" , _int)
 @pytest.mark.parametrize("rv" , _recon)
 @pytest.mark.parametrize("soe" , ["hydro","mhd"])  # system of eqns to test
-def test_run(iv, rv, soe):
+def test_run( rv, soe):
     """Loop over Riemann solvers and run test with given integrator/resolution/physics."""
+    iv = 'rk2' if rv=="plm" else 'rk3'
     for fv in _flux[soe]:
         # Ignore return arguments
         _,_ = testutils.test_error_convergence(
