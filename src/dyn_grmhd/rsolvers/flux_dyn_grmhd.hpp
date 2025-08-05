@@ -110,6 +110,60 @@ void SingleStateFlux(const PrimitiveSolverHydro<EOSPolicy, ErrorPolicy>& eos,
 }
 
 //----------------------------------------------------------------------------------------
+//! \fn void SingleStateTetradFlux
+//! \brief inline function for calculating GRMHD fluxes in a tetrad frame
+template<int ivx, class EOSPolicy, class ErrorPolicy>
+KOKKOS_INLINE_FUNCTION
+void SingleStateTetradFlux(const PrimitiveSolverHydro<EOSPolicy, ErrorPolicy>& eos,
+    Real prim[NPRIM], Real Bt[NPRIM],
+    Real cons[NCONS],
+    Real flux[NCONS], Real bflux[NMAG], Real& bsq) {
+  constexpr int pvx = PVX + (ivx - IVX);
+  constexpr int pvy = PVX + ((ivx - IVX) + 1)%3;
+  constexpr int pvz = PVX + ((ivx - IVX) + 2)%3;
+
+  constexpr int csx = CSX + (ivx - IVX);
+
+  constexpr int ibx = ivx - IVX;
+  constexpr int iby = ((ivx - IVX) + 1)%3;
+  constexpr int ibz = ((ivx - IVX) + 2)%3;
+
+  // Auxiliary quantities
+  Real W = Kokkos::sqrt(prim[PVX]*prim[PVX] + prim[PVY]*prim[PVY] + prim[PVZ]*prim[PVZ]
+                         + 1.0);
+  Real iW = 1.0/W;
+  Real b0 = Bt[0]*prim[PVX] + Bt[1]*prim[PVY] + Bt[2]*prim[PVZ];
+  Real Bv = b0*iW;
+  Real Bsq = Bt[0]*Bt[0] + Bt[1]*Bt[1] + Bt[2]*Bt[2];
+  bsq = Bsq*iW*iW + Bv*Bv;
+  Real rhohB = (eos.ps.GetEOS().GetEnergy(prim[PRH], prim[PTM], &prim[PYF]) +
+                prim[PPR])*W*W + Bsq;
+
+  // Compute conserved variables
+  cons[CDN] = eos.ps.GetEOS().GetBaryonMass()*prim[PRH]*W;
+  cons[CSX] = rhohB*prim[PVX]*iW - Bv*Bt[0];
+  cons[CSY] = rhohB*prim[PVY]*iW - Bv*Bt[1];
+  cons[CSZ] = rhohB*prim[PVZ]*iW - Bv*Bt[2];
+  cons[CTA] = rhohB - prim[PPR] - 0.5*bsq - cons[CDN];
+
+  // Calculate the fluxes
+  Real vx = prim[pvx]*iW;
+  Real bu[3] = {(Bt[0] + b0*prim[PVX])*iW,
+                (Bt[1] + b0*prim[PVY])*iW,
+                (Bt[2] + b0*prim[PVZ])*iW};
+  flux[CDN] = cons[CDN]*vx;
+  flux[CSX] = cons[CSX]*vx - bu[0]*Bt[ibx]*iW;
+  flux[CSY] = cons[CSY]*vx - bu[1]*Bt[ibx]*iW;
+  flux[CSZ] = cons[CSZ]*vx - bu[2]*Bt[ibx]*iW;
+  flux[CTA] = (cons[CTA] + prim[PPR] + 0.5*bsq)*vx - b0*Bt[ibx]*iW;
+  flux[csx] += prim[PPR] + 0.5*bsq;
+
+  bflux[ibx] = 0.0;
+  bflux[iby] = (Bt[iby]*vx - Bt[ibx]*prim[pvy]*iW);
+  bflux[ibz] = (Bt[ibz]*vx - Bt[ibx]*prim[pvz]*iW);
+}
+
+//----------------------------------------------------------------------------------------
 //! \fn void ComputeOrthonormalTetrad
 //! \brief Calculate orthonormal tetrad to local Minkowski spacetime. Based on
 //         White et al. (1511.00943) but uses notation from Kiuchi et al. (2205.04487).
@@ -133,7 +187,6 @@ void ComputeOrthonormalTetrad(Real g3d[NSPMETRIC], Real beta_u[3], Real alpha, R
   constexpr int nearoff[3] = {S12, S23, S13};
   constexpr int faroff[3] = {S23, S13, S12};
   constexpr int corner[3] = {S13, S12, S23};
-  constexpr int s11 = diag[ix];
   constexpr int s22 = diag[iy];
   constexpr int s33 = diag[iz];
   constexpr int s12 = nearoff[ix];
