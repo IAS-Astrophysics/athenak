@@ -917,6 +917,8 @@ void ProblemGenerator::CallProblemGenerator(ParameterInput *pin, bool is_restart
     RadiationLinearWave(pin, is_restart);
   } else if (pgen_fun_name.compare("shock_tube") == 0) {
     ShockTube(pin, is_restart);
+  } else if (pgen_fun_name.compare("z4c_boosted_puncture") == 0) {
+    Z4cBoostedPuncture(pin, is_restart);
   } else if (pgen_fun_name.compare("z4c_linear_wave") == 0) {
     Z4cLinearWave(pin, is_restart);
   } else if (pgen_fun_name.compare("spherical_collapse") == 0) {
