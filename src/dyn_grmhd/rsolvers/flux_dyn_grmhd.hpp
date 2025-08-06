@@ -203,6 +203,85 @@ void SingleStateTetradFlux(const PrimitiveSolverHydro<EOSPolicy, ErrorPolicy>& e
 }
 
 //----------------------------------------------------------------------------------------
+//! \fn void TransformPrimitivesToTetrad
+//! \brief Transform primitive variables from global frame to tetrad frame
+template<class arr2D>
+KOKKOS_INLINE_FUNCTION
+void TransformPrimitivesToTetrad(Real prim[NPRIM], Real Bu[NMAG], arr2D& e_td) {
+  // We only need to transform the velocity and magnetic field because the other
+  // primitives are all scalars. In the Eulerian frame, these are both spatial vectors, so
+  // we don't need to worry about the time component of the transformation.
+
+  // Temporary arrays for the transformed vectors
+  Real ut[3] = {0.0};
+  Real Bt[3] = {0.0};
+
+  // Note that e_td is lower triangular, so we can save a few operations by restricting
+  // the loop on a.
+  for (int b = 0; b < 3; b++) {
+    for (int a = 0; a < 3; a++) {
+      ut[b] += e_td[b+1][a+1]*prim[PVX+a];
+      Bt[b] += e_td[b+1][a+1]*Bu[a];
+    }
+  }
+  // Substitute the transformed vectors back into the primitive arrays.
+  prim[PVX] = ut[0];
+  prim[PVY] = ut[1];
+  prim[PVZ] = ut[2];
+  Bu[0] = Bt[0];
+  Bu[1] = Bt[1];
+  Bu[2] = Bt[2];
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void TransformFluxesToGlobal
+//! \brief Transform fluxes from tetrad frame to global frame
+template<class arr2D>
+KOKKOS_INLINE_FUNCTION
+void TransformFluxesToGlobal(const Real cons[NCONS], const Real flux[NCONS],
+                     const Real b[NMAG], const Real bflux[NMAG], const arr2D& e_td,
+                     const arr2D& e_ut, DvceArray5D<Real>& flx, DvceArray4D<Real>& ey,
+                     DvceArray4D<Real>& ez, Real vol,
+                     const int m, const int k, const int j, const int i, const int ivx,
+                     const int ivy, const int ivz, const int ibx, const int iby,
+                     const int ibz, const int csx, const int csy, const int csz) {
+  // Calculate the fluxes, transforming back into the lab frame
+  flx(m, IDN, k, j, i) = vol * (e_ut[ivx][0]*cons[CDN] +
+                                e_ut[ivx][ivx]*flux[CDN]);
+  flx(m, IEN, k, j, i) = vol * (e_ut[ivx][0]*cons[CTA] +
+                                e_ut[ivx][ivx]*flux[CTA]);
+  flx(m, ivx, k, j, i) = vol * (e_ut[ivx][0]*(e_td[ivx][ivx]*cons[csx] +
+                                               e_td[ivy][ivx]*cons[csy] +
+                                               e_td[ivz][ivx]*cons[csz]) +
+                                e_ut[ivx][ivx]*(e_td[ivx][ivx]*flux[csx] +
+                                                 e_td[ivy][ivx]*flux[csy] +
+                                                 e_td[ivz][ivx]*flux[csz]));
+  flx(m, ivy, k, j, i) = vol * (e_ut[ivx][0]*(e_td[ivx][ivy]*cons[csx] +
+                                               e_td[ivy][ivy]*cons[csy] +
+                                               e_td[ivz][ivy]*cons[csz]) +
+                                e_ut[ivx][ivx]*(e_td[ivx][ivy]*flux[csx] +
+                                                 e_td[ivy][ivy]*flux[csy] +
+                                                 e_td[ivz][ivy]*flux[csz]));
+  flx(m, ivz, k, j, i) = vol * (e_ut[ivx][0]*e_td[ivz][ivz]*cons[csz] +
+                                e_ut[ivx][ivx]*e_td[ivz][ivz]*flux[csz]);
+  // The notation here is slightly misleading, as it suggests that Ey = -Fx(By) and
+  // Ez = Fx(Bz), rather than Ez = -Fx(By) and Ey = Fx(Bz). However, the appropriate
+  // containers for ey and ez for each direction are passed in as arguments to this
+  // function, ensuring that the result is entirely consistent.
+  ey(m, k, j, i) = -vol * (e_ut[ivx][0]*(e_ut[ivy][ivx]*b[ibx] +
+                                          e_ut[ivy][ivy]*b[iby] +
+                                          e_ut[ivy][ivz]*b[ibz]) -
+                           e_ut[ivx][ivx]*e_ut[ivy][0]*b[ibx] +
+                           e_ut[ivx][ivx]*e_ut[ivy][ivy]*bflux[iby]);
+  ez(m, k, j, i) = vol * (e_ut[ivx][0]*(e_ut[ivz][ivx]*b[ibx] +
+                                         e_ut[ivz][ivy]*b[iby] +
+                                         e_ut[ivz][ivz]*b[ibz]) -
+                           e_ut[ivx][ivx]*e_ut[ivz][0]*b[ibx] +
+                           e_ut[ivx][ivx]*(e_ut[ivz][ivy]*bflux[iby] +
+                                            e_ut[ivz][ivz]*bflux[ibz]));
+}
+
+//----------------------------------------------------------------------------------------
 //! \fn void ComputeOrthonormalTetrad
 //! \brief Calculate orthonormal tetrad to local Minkowski spacetime. Based on
 //         White et al. (1511.00943) but uses notation from Kiuchi et al. (2205.04487).

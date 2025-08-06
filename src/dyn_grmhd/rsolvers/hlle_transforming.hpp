@@ -74,48 +74,17 @@ void HLLE_TRANSFORMING(TeamMember_t const &member,
     Real e_cov[4][4], e_cont[4][4];
     ComputeOrthonormalTetrad<ivx>(g3d, beta_u, alpha, isdetg*isdetg, e_cov, e_cont);
     Real ialpha = e_cov[0][0]; // Save a division this way
-
-    // Transform the velocity to the tetrad frame -- this is a purely spatial vector with
-    // a null time component, so the raised and lowered forms are identical in the tetrad
-    // frame. One could do this from the true four-velocity, but it's more expensive and
-    // could lead to increased round-off error or catastrophic cancellation.
-    Real ult[3] = {0.0};
-    Real urt[3] = {0.0};
-    for (int b = 0; b < 3; b++) {
-      for (int a = 0; a < 3; a++) {
-        ult[b] += e_cont[b+1][a+1]*prim_l[PVX+a];
-        urt[b] += e_cont[b+1][a+1]*prim_r[PVX+a];
-      }
-    }
-
-    // Compute the magnetic field in the tetrad frame -- this is a purely spatial vector
-    // with a null time component, so the raised and lowered forms are identical in the
-    // tetrad frame.
-    Real Blt[3] = {0.0};
-    Real Brt[3] = {0.0};
-    for (int b = 0; b < 3; b++) {
-      for (int a = 0; a < 3; a++) {
-        Blt[b] += e_cont[b+1][a+1]*Bu_l[a];
-        Brt[b] += e_cont[b+1][a+1]*Bu_r[a];
-      }
-    }
-
-    // Replace the velocity in the primitive variables
-    prim_l[PVX] = ult[0];
-    prim_l[PVY] = ult[1];
-    prim_l[PVZ] = ult[2];
-    prim_r[PVX] = urt[0];
-    prim_r[PVY] = urt[1];
-    prim_r[PVZ] = urt[2];
+    TransformPrimitivesToTetrad(prim_l, Bu_l, e_cont);
+    TransformPrimitivesToTetrad(prim_r, Bu_r, e_cont);
 
     // LEFT STATE
     Real cons_l[NCONS], flux_l[NCONS], bflux_l[NMAG], bsq_l;
-    SingleStateTetradFlux<ivx>(eos, prim_l, Blt, cons_l, flux_l, bflux_l, bsq_l);
+    SingleStateTetradFlux<ivx>(eos, prim_l, Bu_l, cons_l, flux_l, bflux_l, bsq_l);
 
 
     // RIGHT STATE
     Real cons_r[NCONS], flux_r[NCONS], bflux_r[NMAG], bsq_r;
-    SingleStateTetradFlux<ivx>(eos, prim_r, Brt, cons_r, flux_r, bflux_r, bsq_r);
+    SingleStateTetradFlux<ivx>(eos, prim_r, Bu_r, cons_r, flux_r, bflux_r, bsq_r);
 
 
     // Calculate the magnetosonic speeds for both states
@@ -143,9 +112,9 @@ void HLLE_TRANSFORMING(TeamMember_t const &member,
                   qa*(cons_r[CTA] - cons_l[CTA])) * qb;
     bf_hll[ibx] = 0.0;
     bf_hll[iby] = ((lambda_r*bflux_l[iby] - lambda_l*bflux_r[iby]) +
-                   qa*(Brt[iby] - Blt[iby])) * qb;
+                   qa*(Bu_r[iby] - Bu_l[iby])) * qb;
     bf_hll[ibz] = ((lambda_r*bflux_l[ibz] - lambda_l*bflux_r[ibz]) +
-                   qa*(Brt[ibz] - Blt[ibz])) * qb;
+                   qa*(Bu_r[ibz] - Bu_l[ibz])) * qb;
 
     // Conserved state in the HLL region
     Real cons_hll[NCONS], b_hll[NMAG];
@@ -159,10 +128,10 @@ void HLLE_TRANSFORMING(TeamMember_t const &member,
                      (flux_l[CSZ] - flux_r[CSZ])) * qb;
     cons_hll[CTA] = ((lambda_r*cons_r[CTA] - lambda_l*cons_l[CTA]) +
                      (flux_l[CTA] - flux_r[CTA])) * qb;
-    b_hll[ibx] = Blt[ibx];
-    b_hll[iby] = ((lambda_r*Brt[iby] - lambda_l*Blt[iby]) +
+    b_hll[ibx] = Bu_l[ibx];
+    b_hll[iby] = ((lambda_r*Bu_r[iby] - lambda_l*Bu_l[iby]) +
                   (bflux_l[iby] - bflux_r[iby])) * qb;
-    b_hll[ibz] = ((lambda_r*Brt[ibz] - lambda_l*Blt[ibz]) +
+    b_hll[ibz] = ((lambda_r*Bu_r[ibz] - lambda_l*Bu_l[ibz]) +
                   (bflux_r[ibz] - bflux_r[ibz])) * qb;
 
     // Note that the interface is moving! e_cont[ivx][ivx] = 1/sqrt(g^{xx}), so we use it
@@ -173,12 +142,12 @@ void HLLE_TRANSFORMING(TeamMember_t const &member,
       f_interface = &flux_l[0];
       bf_interface = &bflux_l[0];
       cons_interface = &cons_l[0];
-      b_interface = &Blt[0];
+      b_interface = &Bu_l[0];
     } else if (lambda_r <= vint) {
       f_interface = &flux_r[0];
       bf_interface = &bflux_r[0];
       cons_interface = &cons_r[0];
-      b_interface = &Brt[0];
+      b_interface = &Bu_r[0];
     } else {
       f_interface = &f_hll[0];
       bf_interface = &bf_hll[0];
@@ -188,40 +157,10 @@ void HLLE_TRANSFORMING(TeamMember_t const &member,
 
     Real vol = alpha*sdetg;
 
-    // Calculate the fluxes, transforming back into the lab frame
-    flx(m, IDN, k, j, i) = vol * (e_cov[ivx][0]*cons_interface[CDN] +
-                                  e_cov[ivx][ivx]*f_interface[CDN]);
-    flx(m, IEN, k, j, i) = vol * (e_cov[ivx][0]*cons_interface[CTA] +
-                                  e_cov[ivx][ivx]*f_interface[CTA]);
-    flx(m, ivx, k, j, i) = vol * (e_cov[ivx][0]*(e_cont[ivx][ivx]*cons_interface[csx] +
-                                                 e_cont[ivy][ivx]*cons_interface[csy] +
-                                                 e_cont[ivz][ivx]*cons_interface[csz]) +
-                                  e_cov[ivx][ivx]*(e_cont[ivx][ivx]*f_interface[csx] +
-                                                   e_cont[ivy][ivx]*f_interface[csy] +
-                                                   e_cont[ivz][ivx]*f_interface[csz]));
-    flx(m, ivy, k, j, i) = vol * (e_cov[ivx][0]*(e_cont[ivx][ivy]*cons_interface[csx] +
-                                                 e_cont[ivy][ivy]*cons_interface[csy] +
-                                                 e_cont[ivz][ivy]*cons_interface[csz]) +
-                                  e_cov[ivx][ivx]*(e_cont[ivx][ivy]*f_interface[csx] +
-                                                   e_cont[ivy][ivy]*f_interface[csy] +
-                                                   e_cont[ivz][ivy]*f_interface[csz]));
-    flx(m, ivz, k, j, i) = vol * (e_cov[ivx][0]*e_cont[ivz][ivz]*cons_interface[csz] +
-                                  e_cov[ivx][ivx]*e_cont[ivz][ivz]*f_interface[csz]);
-    // The notation here is slightly misleading, as it suggests that Ey = -Fx(By) and
-    // Ez = Fx(Bz), rather than Ez = -Fx(By) and Ey = Fx(Bz). However, the appropriate
-    // containers for ey and ez for each direction are passed in as arguments to this
-    // function, ensuring that the result is entirely consistent.
-    ey(m, k, j, i) = -vol * (e_cov[ivx][0]*(e_cov[ivy][ivx]*b_interface[ibx] +
-                                            e_cov[ivy][ivy]*b_interface[iby] +
-                                            e_cov[ivy][ivz]*b_interface[ibz]) -
-                             e_cov[ivx][ivx]*e_cov[ivy][0]*b_interface[ibx] +
-                             e_cov[ivx][ivx]*e_cov[ivy][ivy]*bf_interface[iby]);
-    ez(m, k, j, i) = vol * (e_cov[ivx][0]*(e_cov[ivz][ivx]*b_interface[ibx] +
-                                           e_cov[ivz][ivy]*b_interface[iby] +
-                                           e_cov[ivz][ivz]*b_interface[ibz]) -
-                             e_cov[ivx][ivx]*e_cov[ivz][0]*b_interface[ibx] +
-                             e_cov[ivx][ivx]*(e_cov[ivz][ivy]*bf_interface[iby] +
-                                              e_cov[ivz][ivz]*bf_interface[ibz]));
+    // Transform the fluxes and store them in the global flux arrays.
+    TransformFluxesToGlobal(cons_interface, f_interface, b_interface, bf_interface,
+                    e_cont, e_cov, flx, ey, ez, vol, m, k, j, i, ivx, ivy, ivz,
+                    ibx, iby, ibz, csx, csy, csz);
   });
 }
 
