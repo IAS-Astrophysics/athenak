@@ -1,3 +1,7 @@
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #ifndef BHAHAHA_HEADER_H
 #define BHAHAHA_HEADER_H
 
@@ -275,3 +279,7 @@ const char *bah_error_message(const bhahaha_error_codes error_code);
 //===============================================
 
 #endif // BHAHAHA_HEADER_H
+
+#ifdef __cplusplus
+}
+#endif

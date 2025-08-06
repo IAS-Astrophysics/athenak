@@ -5,7 +5,7 @@
 #include <vector>
 #include <array>
 #include <sys/time.h>
-#include "BHaHAHA.h"
+#include "z4c/bhahaha/BHaHAHA.h"
 
 class MeshBlockPack;
 class ParameterInput;

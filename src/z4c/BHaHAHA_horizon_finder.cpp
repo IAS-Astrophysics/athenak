@@ -16,10 +16,6 @@
 #include <utility>
 #include <vector>
 
-extern "C" {
-  #include "BHaHAHA.h"
-}
-
 #if MPI_PARALLEL_ENABLED
 #include <mpi.h>
 #endif
@@ -27,6 +23,9 @@ extern "C" {
 #include "z4c/z4c.hpp"
 #include "z4c/BHaHAHA_horizon_finder.hpp"
 #include "z4c/compact_object_tracker.hpp"
+extern "C" {
+  #include "z4c/bhahaha/BHaHAHA.h"
+}
 #include "coordinates/adm.hpp"
 #include "athena.hpp"
 #include "globals.hpp"
