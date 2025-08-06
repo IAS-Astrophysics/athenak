@@ -34,11 +34,12 @@ def arguments(res):
             'problem/kx2=1',
             'problem/kx3=1']
 
+input_file = "inputs/lwave_z4c.athinput"
 def test_run():
     """Run a single test."""
     try:
         for res in _res:
-            results = run(input_file, arguments(res))
+            results = testutils.run(input_file, arguments(res))
             assert results, f"Z4c linear wave run failed for {res}."
         maxerror, errorratio = errors[('2nd-order')]
         data = athena_read.error_dat(f'z4c_lin_wave-errs.dat')
@@ -53,4 +54,4 @@ def test_run():
                         f"error ratio: {(l1_rms_err1/l1_rms_err0):g}"
                         f"  expected ratio: {errorratio:g}")
     finally:
-        cleanup()
+        testutils.cleanup()

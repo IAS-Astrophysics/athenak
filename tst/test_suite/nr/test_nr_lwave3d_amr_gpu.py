@@ -46,7 +46,7 @@ def arguments(iv, rv, fv, wv, res, soe, name):
             'meshblock/nx1=' + repr(res//8),
             'meshblock/nx2=' + repr(res//8),
             'meshblock/nx3=' + repr(res//8),
-            'time/cfl_number=0.4',
+            'time/cfl_number=0.3',
             f'{soe}/reconstruct=' + rv,
             f'{soe}/rsolver=' + fv,
             'problem/amp=1.0e-6',

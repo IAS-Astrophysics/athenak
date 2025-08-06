@@ -26,10 +26,10 @@ input_file = "inputs/cshock.athinput"
 # On CPU with MPI runs a 2D test
 def arguments(iv, rv, res):
     """Assemble arguments for run command"""
-    return ['mesh/nx1=' + repr(res),
-            'mesh/ix1_bc=periodicw',
+    return ['mesh/nx1=' + repr(res//4),
+            'mesh/ix1_bc=periodic',
             'mesh/ox1_bc=periodic',
-            'mesh/nx2=' + repr(res//4),
+            'mesh/nx2=' + repr(res),
             'mesh/ix2_bc=inflow',
             'mesh/ox2_bc=outflow',
             'mesh/nx3=1',

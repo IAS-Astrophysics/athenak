@@ -25,7 +25,7 @@ input_file = "inputs/gr_bondi.athinput"
 def test_run():
     """Run a single test with given arguments."""
     try:
-        results = testutils.mpi_run(input_file, arguments(), threads=4,)
+        results = testutils.mpi_run(input_file, arguments())
         assert results, f"GR Bondi test run failed."
         # Check the errors in the output
         data = athena_read.error_dat(f'gr_bondi-errs.dat')

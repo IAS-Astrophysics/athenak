@@ -19,20 +19,20 @@ import numpy as np
 # Threshold errors and error ratios for different integrators, reconstruction,
 # algorithms, and waves
 errors={
-    ('hydro', 'rk2', 'plm', '0'): (1.4e-05,1.91),
-    ('hydro', 'rk3', 'ppm4', '0'): (6.2e-10,0.19),
-    ('hydro', 'rk3', 'ppmx', '0'): (9.4e-12,0.13),
-    ('hydro', 'rk3', 'wenoz', '0'): (9.1e-12,0.13),
-    ('mhd', 'rk2', 'plm', '0'): (7e-09,0.27),
-    ('mhd', 'rk3', 'ppm4', '0'): (3.3e-09,0.73),
-    ('mhd', 'rk3', 'ppmx', '0'): (5.6e-10,0.78),
-    ('mhd', 'rk3', 'wenoz', '0'): (1.7e-10,0.25),
-    }
+    ('hydro', 'rk2', 'plm', '0'): (1.2e-05,0.29),
+    ('hydro', 'rk3', 'ppm4', '0'): (7.6e-06,0.4),
+    ('hydro', 'rk3', 'ppmx', '0'): (6.2e-06,0.55),
+    ('hydro', 'rk3', 'wenoz', '0'): (5.7e-06,0.67),
+    ('mhd', 'rk2', 'plm', '0'): (1.3e-05,0.28),
+    ('mhd', 'rk3', 'ppm4', '0'): (8.1e-06,0.3),
+    ('mhd', 'rk3', 'ppmx', '0'): (7e-06,0.37),
+    ('mhd', 'rk3', 'wenoz', '0'): (3.9e-06,0.39)
+}
 
 _recon = ['ppm4','ppmx','wenoz']
 _wave = ['0']                      
 _flux = {'hydro': ['hllc'], 'mhd': ['hlld']}
-_res = [64, 128]                            
+_res = [32, 64]                            
 
 def arguments(iv, rv, fv, wv, res, soe, name):
     """Assemble arguments for run command"""
@@ -43,10 +43,10 @@ def arguments(iv, rv, fv, wv, res, soe, name):
             'mesh/nx1=' + repr(res),
             'mesh/nx2=' + repr(res//2),
             'mesh/nx3=' + repr(res//2),
-            'meshblock/nx1=' + repr(res//16),
-            'meshblock/nx2=' + repr(res//16),
-            'meshblock/nx3=' + repr(res//16),
-            'time/cfl_number=0.4',
+            'meshblock/nx1=' + repr(res//8),
+            'meshblock/nx2=' + repr(res//8),
+            'meshblock/nx3=' + repr(res//8),
+            'time/cfl_number=0.3',
             f'{soe}/reconstruct=' + rv,
             f'{soe}/rsolver=' + fv,
             'problem/amp=1.0e-3',

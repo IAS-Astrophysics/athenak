@@ -38,7 +38,7 @@ def arguments(iv, rv, fv, wv, res, soe, name):
             'meshblock/nx1=' + repr(res//8),
             'meshblock/nx2=' + repr(res//8),
             'meshblock/nx3=' + repr(res//8),
-            'time/cfl_number=0.4',
+            'time/cfl_number=0.3',
             'coord/special_rel=true',
             'coord/general_rel=false',
             f'{soe}/reconstruct=' + rv,
