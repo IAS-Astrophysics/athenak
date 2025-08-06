@@ -34,7 +34,7 @@ def arguments(res):
             'problem/kx2=1',
             'problem/kx3=1']
 
-def test_run_plm():
+def test_run():
     """Run a single test."""
     try:
         for res in _res:

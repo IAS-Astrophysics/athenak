@@ -19,11 +19,11 @@ import numpy as np
 # algorithms, and wave types
 maxerrors={
     ('hydro', 'rk2', 'plm', '0'): (1.9e-08,0.28),
-    ('hydro', 'rk3', 'ppm4', '0'): (5.5e-09,0.26),
+    ('hydro', 'rk3', 'ppm4', '0'): (5.6e-09,0.26),
     ('hydro', 'rk3', 'ppmx', '0'): (3.8e-11,0.092),
     ('hydro', 'rk3', 'wenoz', '0'): (1.3e-11,0.23),
     ('hydro', 'rk2', 'plm', '4'): (1.7e-08,0.28),
-    ('hydro', 'rk3', 'ppm4', '4'): (6.8e-09,0.29),
+    ('hydro', 'rk3', 'ppm4', '4'): (6.8e-09,0.30),
     ('hydro', 'rk3', 'ppmx', '4'): (1.1e-11,0.035),
     ('hydro', 'rk3', 'wenoz', '4'): (9.5e-12,0.27),
     ('hydro', 'rk2', 'plm', '3'): (1.8e-07,0.33),

@@ -46,7 +46,8 @@ def arguments(iv, rv, res):
 
 @pytest.mark.parametrize("iv" , _int)
 @pytest.mark.parametrize("res" , _res)
-def run_test(iv, res):
+# Pytest requires run function name begin with test_
+def test_run(iv, res):
     """Run test with given integrator/reconstruction."""
     rv ="plm" if iv=='imex2' else "wenoz"
     try:

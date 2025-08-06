@@ -807,8 +807,8 @@ void HydroEigensystemPrim(const Real d, const Real v1, const Real v2, const Real
     right_eigenmatrix[2][2] = 0.0;
     right_eigenmatrix[3][2] = 1.0;
 
-    right_eigenmatrix[0][3] = 0.5;
-    right_eigenmatrix[1][3] = 0.5*d/eos.iso_cs;
+    right_eigenmatrix[0][3] = 1.0;
+    right_eigenmatrix[1][3] = eos.iso_cs/d;
     right_eigenmatrix[2][3] = 0.0;
     right_eigenmatrix[3][3] = 0.0;
   }
