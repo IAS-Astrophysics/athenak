@@ -5,7 +5,8 @@
 //========================================================================================
 //! \file linear_wave.c
 //! \brief Linear wave problem generator for 1D/2D/3D problems. Initializes both hydro and
-//! MHD problems, and for non-relativistic and SR/GR relativistic flows.
+//! MHD problems for non-relativistic and SR/GR relativistic flows, and for GRMHD in
+//! dynamical spacetimes (dynGR)..
 //!
 //! Direction of the wavevector is set to be along the x? axis by using the
 //! along_x? input flags, else it is automatically set along the grid diagonal in 2D/3D
@@ -32,6 +33,7 @@
 #include "eos/eos.hpp"
 #include "hydro/hydro.hpp"
 #include "mhd/mhd.hpp"
+#include "dyn_grmhd/dyn_grmhd.hpp"
 #include "driver/driver.hpp"
 #include "pgen/pgen.hpp"
 
@@ -343,9 +345,12 @@ void ProblemGenerator::LinearWave(ParameterInput *pin, const bool restart) {
   MeshBlockPack *pmbp = pmy_mesh_->pmb_pack;
   auto &size = pmbp->pmb->mb_size;
   bool relativistic = false;
-  if (pmbp->pcoord->is_general_relativistic || pmbp->pcoord->is_special_relativistic) {
+  if (pmbp->pcoord->is_general_relativistic ||
+      pmbp->pcoord->is_special_relativistic ||
+      pmbp->pcoord->is_dynamical_relativistic) {
     relativistic = true;
   }
+  bool &dynamical_relativistic = pmbp->pcoord->is_dynamical_relativistic;
 
   // initialize Hydro variables ----------------------------------------------------------
   if (pmbp->phydro != nullptr) {
@@ -387,11 +392,9 @@ void ProblemGenerator::LinearWave(ParameterInput *pin, const bool restart) {
       }
     }
 
-    // compute solution in u1 register. For initial conditions, set u1 -> u0.
-    auto &u1 = (set_initial_conditions)? pmbp->phydro->u0 : pmbp->phydro->u1;
-    auto &w0 = pmbp->phydro->w0;
 
     // Calculate cell-centered primitive variables
+    auto &w0 = pmbp->phydro->w0;
     par_for("pgen_linwave1", DevExeSpace(), 0,(pmbp->nmb_thispack-1),ks,ke,js,je,is,ie,
     KOKKOS_LAMBDA(int m, int k, int j, int i) {
       Real &x1min = size.d_view(m).x1min;
@@ -422,7 +425,11 @@ void ProblemGenerator::LinearWave(ParameterInput *pin, const bool restart) {
         vx = lor * vx_mink;
         vy = lor * vy_mink;
         vz = lor * vz_mink;
-        egas = (lwv.p0 + amp*sn * delta_pgas)/gm1;
+        if (dynamical_relativistic) {
+          egas = lwv.p0 + amp*sn * delta_pgas;        // set pressure
+        } else {
+          egas = (lwv.p0 + amp*sn * delta_pgas)/gm1;  // set internal energy
+        }
       } else {
         rho  = lwv.d0   + amp*sn*rem[0][lwv.wave_flag];
         vx   = lwv.vx_0 + amp*sn*rem[1][lwv.wave_flag];
@@ -439,8 +446,29 @@ void ProblemGenerator::LinearWave(ParameterInput *pin, const bool restart) {
         w0(m,IEN,k,j,i) = egas;
       }
     });
+
     // Convert primitive to conserved
-    pmbp->phydro->peos->PrimToCons(w0, u1, is, ie, js, je, ks, ke);
+    if (pmbp->padm != nullptr) {
+      // If we're using the ADM variables, then we've got dynamic GR enabled.
+      // Because we need the metric, we can't initialize the conserved variables
+      // until we've filled out the ADM variables.
+      pmbp->padm->SetADMVariables(pmbp);
+      if (set_initial_conditions) {
+        pmbp->pdyngr->PrimToConInit(is, ie, js, je, ks, ke);
+      } else {
+        // extremely ugly pointer cast to access PrimToCons function used in dynGR EOS
+        auto& eos = static_cast<dyngr::DynGRMHDPS
+                     <Primitive::IdealGas, Primitive::ResetFloor>*>(pmbp->pdyngr)->eos;
+        eos.PrimToCons(w0, pmbp->pmhd->bcc0, pmbp->pmhd->u1, is, ie, js, je, ks, ke);
+      }
+    } else {
+      // "regular" GRHydro in stationary spacetimes
+      if (set_initial_conditions) {
+        pmbp->phydro->peos->PrimToCons(w0, pmbp->phydro->u0, is, ie, js, je, ks, ke);
+      } else {
+        pmbp->phydro->peos->PrimToCons(w0, pmbp->phydro->u1, is, ie, js, je, ks, ke);
+      }
+    }
 
   }  // End initialization Hydro variables
 
@@ -636,12 +664,11 @@ void ProblemGenerator::LinearWave(ParameterInput *pin, const bool restart) {
       }
     });
 
-    // compute solution in u1/b1 registers. For initial conditions, set u1/b1 -> u0/b0.
-    auto &u1 = (set_initial_conditions)? pmbp->pmhd->u0 : pmbp->pmhd->u1;
+    // compute solution in b0/b1 registers depending on whether this is ICs
     auto &b1 = (set_initial_conditions)? pmbp->pmhd->b0 : pmbp->pmhd->b1;
-    auto &w0_ = pmbp->pmhd->w0;
 
     // now compute primitive quantities, as well as face- and cell-centered fields
+    auto &w0 = pmbp->pmhd->w0;
     par_for("pgen_linwave3", DevExeSpace(), 0,nmb-1,ks,ke,js,je,is,ie,
     KOKKOS_LAMBDA(int m, int k, int j, int i) {
       Real &x1min = size.d_view(m).x1min;
@@ -667,7 +694,11 @@ void ProblemGenerator::LinearWave(ParameterInput *pin, const bool restart) {
         vx  = u[1] + amp*sn * delta_u[1];
         vy  = u[2] + amp*sn * delta_u[2];
         vz  = u[3] + amp*sn * delta_u[3];
-        egas = (lwv.p0 + amp*sn * delta_pgas)/gm1;
+        if (dynamical_relativistic) {
+          egas = lwv.p0 + amp*sn * delta_pgas;        // set pressure
+        } else {
+          egas = (lwv.p0 + amp*sn * delta_pgas)/gm1;  // set internal energy
+        }
       } else {
         rho  = lwv.d0   + amp*sn*rem[0][lwv.wave_flag];
         vx   = lwv.vx_0 + amp*sn*rem[1][lwv.wave_flag];
@@ -676,12 +707,12 @@ void ProblemGenerator::LinearWave(ParameterInput *pin, const bool restart) {
         egas = (lwv.p0 + amp*sn*rem[4][lwv.wave_flag])/gm1;
       }
       // compute cell-centered primitive variables
-      w0_(m,IDN,k,j,i)=rho;
-      w0_(m,IVX,k,j,i)=vx*lwv.cos_a2*lwv.cos_a3 - vy*lwv.sin_a3 -vz*lwv.sin_a2*lwv.cos_a3;
-      w0_(m,IVY,k,j,i)=vx*lwv.cos_a2*lwv.sin_a3 + vy*lwv.cos_a3 -vz*lwv.sin_a2*lwv.sin_a3;
-      w0_(m,IVZ,k,j,i)=vx*lwv.sin_a2                            +vz*lwv.cos_a2;
+      w0(m,IDN,k,j,i)=rho;
+      w0(m,IVX,k,j,i)=vx*lwv.cos_a2*lwv.cos_a3 - vy*lwv.sin_a3 -vz*lwv.sin_a2*lwv.cos_a3;
+      w0(m,IVY,k,j,i)=vx*lwv.cos_a2*lwv.sin_a3 + vy*lwv.cos_a3 -vz*lwv.sin_a2*lwv.sin_a3;
+      w0(m,IVZ,k,j,i)=vx*lwv.sin_a2                            +vz*lwv.cos_a2;
       if (eos.is_ideal) {
-        w0_(m,IEN,k,j,i) = egas;
+        w0(m,IEN,k,j,i) = egas;
       }
 
       // Compute face-centered fields from curl(A).
@@ -712,16 +743,35 @@ void ProblemGenerator::LinearWave(ParameterInput *pin, const bool restart) {
     });
 
     // Compute cell-centered fields
-    auto &bcc0_ = pmbp->pmhd->bcc0;
+    auto &bcc0 = pmbp->pmhd->bcc0;
     par_for("pgen_bcc", DevExeSpace(), 0, nmb-1, ks, ke, js, je, is, ie,
     KOKKOS_LAMBDA(int m, int k, int j, int i) {
-      bcc0_(m, IBX, k, j, i) = 0.5*(b1.x1f(m, k, j, i) + b1.x1f(m, k, j, i+1));
-      bcc0_(m, IBY, k, j, i) = 0.5*(b1.x2f(m, k, j, i) + b1.x2f(m, k, j+1, i));
-      bcc0_(m, IBZ, k, j, i) = 0.5*(b1.x3f(m, k, j, i) + b1.x3f(m, k+1, j, i));
+      bcc0(m, IBX, k, j, i) = 0.5*(b1.x1f(m, k, j, i) + b1.x1f(m, k, j, i+1));
+      bcc0(m, IBY, k, j, i) = 0.5*(b1.x2f(m, k, j, i) + b1.x2f(m, k, j+1, i));
+      bcc0(m, IBZ, k, j, i) = 0.5*(b1.x3f(m, k, j, i) + b1.x3f(m, k+1, j, i));
     });
 
-    // Convert primitive to conserved
-    pmbp->pmhd->peos->PrimToCons(w0_, bcc0_, u1, is, ie, js, je, ks, ke);
+    if (pmbp->padm != nullptr) {
+      // If we're using the ADM variables, then we've got dynamic GR enabled.
+      // Because we need the metric, we can't initialize the conserved variables
+      // until we've filled out the ADM variables.
+      pmbp->padm->SetADMVariables(pmbp);
+      if (set_initial_conditions) {
+        pmbp->pdyngr->PrimToConInit(is, ie, js, je, ks, ke);
+      } else {
+        // extremely ugly pointer cast to access PrimToCons function used in dynGR EOS
+        auto& eos = static_cast<dyngr::DynGRMHDPS
+                     <Primitive::IdealGas, Primitive::ResetFloor>*>(pmbp->pdyngr)->eos;
+        eos.PrimToCons(w0, bcc0, pmbp->pmhd->u1, is, ie, js, je, ks, ke);
+      }
+    } else {
+      // "regular" GRMHD in stationary spacetimes
+      if (set_initial_conditions) {
+        pmbp->pmhd->peos->PrimToCons(w0, bcc0, pmbp->pmhd->u0, is, ie, js, je, ks, ke);
+      } else {
+        pmbp->pmhd->peos->PrimToCons(w0, bcc0, pmbp->pmhd->u1, is, ie, js, je, ks, ke);
+      }
+    }
 
   }  // End initialization MHD variables
 
