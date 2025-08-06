@@ -110,6 +110,45 @@ void SingleStateFlux(const PrimitiveSolverHydro<EOSPolicy, ErrorPolicy>& eos,
 }
 
 //----------------------------------------------------------------------------------------
+//! \fn void ExtractPrimitives
+//! \brief inline function for extracting primitive variables
+template<class EOSPolicy, class ErrorPolicy>
+KOKKOS_INLINE_FUNCTION
+void ExtractPrimitives(const PrimitiveSolverHydro<EOSPolicy, ErrorPolicy>& eos,
+    const ScrArray2D<Real>& w, const ScrArray2D<Real>& b, const DvceArray4D<Real>& bx,
+    const Real isdetg, Real prim[NPRIM], Real Bu[NMAG],
+    const int& nhyd, const int& nscal, const int m, const int k, const int j, const int i,
+    const int ibx, const int iby, const int ibz) {
+  Real mb = eos.ps.GetEOS().GetBaryonMass();
+
+  // Extract the reconstructed primitive variables into a point state for easy access.
+  prim[PRH] = w(IDN, i)/mb;
+  prim[PVX] = w(IVX, i);
+  prim[PVY] = w(IVY, i);
+  prim[PVZ] = w(IVZ, i);
+  for (int n = 0; n < nscal; n++) {
+    prim[PYF + n] = w(nhyd + n, i);
+  }
+  prim[PPR] = w(IPR, i);
+
+  // Force the density and particle fractions to be physical, then compute the
+  // temperature.
+  eos.ps.GetEOS().ApplyDensityLimits(prim[PRH]);
+  eos.ps.GetEOS().ApplySpeciesLimits(&prim[PYF]);
+  prim[PTM] = eos.ps.GetEOS().GetTemperatureFromP(prim[PRH], prim[PPR], &prim[PYF]);
+
+  // Extract the magnetic field, making sure to extract the face-centered field which
+  // corresponds to the interface.
+  Bu[ibx] = bx(m, k, j, i)*isdetg;
+  Bu[iby] = b(iby, i)*isdetg;
+  Bu[ibz] = b(ibz, i)*isdetg;
+  
+  // Force the primitive variables to be above the atmosphere.
+  eos.ps.GetEOS().ApplyPrimitiveFloor(prim[PRH], &prim[PVX], prim[PPR], prim[PTM],
+                                      &prim[PYF]);
+}
+
+//----------------------------------------------------------------------------------------
 //! \fn void SingleStateTetradFlux
 //! \brief inline function for calculating GRMHD fluxes in a tetrad frame
 template<int ivx, class EOSPolicy, class ErrorPolicy>

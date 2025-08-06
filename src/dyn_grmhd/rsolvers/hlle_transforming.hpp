@@ -65,45 +65,10 @@ void HLLE_TRANSFORMING(TeamMember_t const &member,
     // Extract left and right primitives
     Real prim_l[NPRIM], prim_r[NPRIM];
     Real Bu_l[NMAG], Bu_r[NMAG];
-    Real mb = eos.ps.GetEOS().GetBaryonMass();
-
-    prim_l[PRH] = wl(IDN, i)/mb;
-    prim_l[PVX] = wl(IVX, i);
-    prim_l[PVY] = wl(IVY, i);
-    prim_l[PVZ] = wl(IVZ, i);
-    for (int n = 0; n < nscal; n++) {
-      prim_l[PYF + n] = wl(nhyd + n, i);
-    }
-    eos.ps.GetEOS().ApplyDensityLimits(prim_l[PRH]);
-    eos.ps.GetEOS().ApplySpeciesLimits(&prim_l[PYF]);
-    prim_l[PPR] = wl(IPR, i);
-    prim_l[PTM] = eos.ps.GetEOS().GetTemperatureFromP(
-                  prim_l[PRH], prim_l[PPR], &prim_l[PYF]);
-    Bu_l[ibx] = bx(m, k, j, i)*isdetg;
-    Bu_l[iby] = bl(iby, i)*isdetg;
-    Bu_l[ibz] = bl(ibz, i)*isdetg;
-
-    prim_r[PRH] = wr(IDN, i)/mb;
-    prim_r[PVX] = wr(IVX, i);
-    prim_r[PVY] = wr(IVY, i);
-    prim_r[PVZ] = wr(IVZ, i);
-    for (int n = 0; n < nscal; n++) {
-      prim_r[PYF + n] = wr(nhyd + n, i);
-    }
-    eos.ps.GetEOS().ApplyDensityLimits(prim_r[PRH]);
-    eos.ps.GetEOS().ApplySpeciesLimits(&prim_r[PYF]);
-    prim_r[PPR] = wr(IPR, i);
-    prim_r[PTM] = eos.ps.GetEOS().GetTemperatureFromP(
-                  prim_r[PRH], prim_r[PPR], &prim_r[PYF]);
-    Bu_r[ibx] = bx(m, k, j, i)*isdetg;
-    Bu_r[iby] = br(iby, i)*isdetg;
-    Bu_r[ibz] = br(ibz, i)*isdetg;
-
-    // Apply floors to make sure these values are physical.
-    eos.ps.GetEOS().ApplyPrimitiveFloor(prim_l[PRH], &prim_l[PVX], prim_l[PPR],
-                                    prim_l[PTM], &prim_l[PYF]);
-    eos.ps.GetEOS().ApplyPrimitiveFloor(prim_r[PRH], &prim_r[PVX], prim_r[PPR],
-                                    prim_r[PTM], &prim_r[PYF]);
+    ExtractPrimitives(eos, wl, bl, bx, isdetg, prim_l, Bu_l,
+                      nhyd, nscal, m, k, j, i, ibx, iby, ibz);
+    ExtractPrimitives(eos, wr, br, bx, isdetg, prim_r, Bu_r,
+                      nhyd, nscal, m, k, j, i, ibx, iby, ibz);
 
     // Compute tetrad transformation
     Real e_cov[4][4], e_cont[4][4];
