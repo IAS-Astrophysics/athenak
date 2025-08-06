@@ -179,7 +179,7 @@ Z4c::Z4c(MeshBlockPack *ppack, ParameterInput *pin) :
   // set nrad_wave_extraction = 0 to turn off wave extraction
   nrad = pin->GetOrAddReal("z4c", "nrad_wave_extraction", 1);
   int nlev = pin->GetOrAddReal("z4c", "extraction_nlev", 10);
-  for (int i=1; i<=nrad; i++) {
+  for (int i=0; i<nrad; i++) {
     Real rad = pin->GetOrAddReal("z4c", "extraction_radius_"+std::to_string(i), 10);
     grids.push_back(std::make_unique<SphericalGrid>(ppack, nlev, rad));
   }
@@ -192,6 +192,8 @@ Z4c::Z4c(MeshBlockPack *ppack, ParameterInput *pin) :
   cce_dump_dt = pin->GetOrAddReal("cce", "cce_dt", 1);
   mkdir("cce",0775);
   cce_dump_last_output_time = -100;
+
+  mkdir("horizon",0775);
 
   // Construct the compact object trackers
   nco = 0;

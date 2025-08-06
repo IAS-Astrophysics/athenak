@@ -86,7 +86,7 @@ private:
   // Interpolation buffers
   std::vector<std::array<double,3>> cart_coords_;
   std::vector<double> radii_;
-  ArbitraryGrid *agrid_;
+  std::unique_ptr<ArbitraryGrid> agrid_;
 };
 
 #endif // BHAHAHA_HORIZON_FINDER_HPP
