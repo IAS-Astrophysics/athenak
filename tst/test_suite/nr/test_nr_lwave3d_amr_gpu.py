@@ -69,8 +69,7 @@ def test_run_plm(iv, rv, soe):
             iv,
             rv,
             fv,
-            soe,
-            mpi=True)
+            soe,)
 
 @pytest.mark.parametrize("iv" , ['rk3'])
 @pytest.mark.parametrize("rv" , _recon)
@@ -89,5 +88,4 @@ def test_run_other_recon(iv, rv, soe):
             iv,
             rv,
             fv,
-            soe,
-            mpi=True)
+            soe,)

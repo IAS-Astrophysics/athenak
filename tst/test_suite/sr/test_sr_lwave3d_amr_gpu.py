@@ -53,7 +53,7 @@ def test_run_plm(iv, rv, fv, soe):
     """Run a single test with given parameters."""
     # Ignore return arguments
     _,_ = testutils.test_error_convergence(
-        f"inputs/lwave_{soe}.athinput",
+        f"inputs/lwave_rel{soe}.athinput",
         f"lwave3d_amr_{soe}",
         arguments,
         errors,
@@ -72,7 +72,7 @@ def test_run_wenoz(iv, rv, fv, soe):
     """Run a single test with given parameters."""
     # Ignore return arguments
     _,_ = testutils.test_error_convergence(
-        f"inputs/lwave_{soe}.athinput",
+        f"inputs/lwave_rel{soe}.athinput",
         f"lwave3d_amr_{soe}",
         arguments,
         errors,
