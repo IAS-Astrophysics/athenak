@@ -162,15 +162,20 @@ class Z4c {
     Real ssl_damping_amp;
     Real ssl_damping_time;
     Real ssl_damping_index;
+    // telegrapher lapse condition
+    bool telegraph_lapse;
+    Real telegraph_tau;
+    Real telegraph_kappa;
+
     // Gauge condition for the shift
     Real shift_ggamma;
     Real shift_alpha2ggamma;
     Real shift_hh;
     Real shift_advect;
     Real shift_eta;
-    bool telegraph_lapse;
-    Real telegraph_tau;
-    Real telegraph_kappa;
+    // slow start shift condition
+    Real sss_damping_amp;
+    Real sss_damping_time;
 
     // Enable BSSN if false (disable theta)
     bool use_z4c;

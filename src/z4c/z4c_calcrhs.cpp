@@ -579,7 +579,8 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage) {
     }
     // shift vector
     for(int a = 0; a < 3; ++a) {
-      rhs.beta_u(m,a,k,j,i) = opt.shift_ggamma * z4c.vGam_u(m,a,k,j,i)
+      rhs.beta_u(m,a,k,j,i) = (1-opt.sss_damping_amp*exp(-0.5*pow(time/(opt.sss_damping_time),2)))
+                              * opt.shift_ggamma * z4c.vGam_u(m,a,k,j,i)
                             + opt.shift_advect * Lbeta_u(a);
       rhs.beta_u(m,a,k,j,i) -= opt.shift_eta * z4c.beta_u(m,a,k,j,i);
       // FORCE beta = 0
