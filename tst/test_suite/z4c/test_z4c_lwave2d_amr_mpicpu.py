@@ -18,7 +18,8 @@ import numpy as np
 # Threshold errors and error ratios for different integrators, reconstruction,
 # algorithms, and waves
 errors={
-    ('2nd-order'): (6.0e-11,0.25)}
+    ('2nd-order'): (6.0e-11,0.25),
+    ('6th-order'): (4.0e-12,0.0)}
 
 _res = [32, 64]     # resolutions to test
 
@@ -35,7 +36,8 @@ def arguments(res):
             'problem/kx3=0']
 
 input_file = "inputs/lwave_z4c.athinput"
-def test_run():
+# run test of 2nd order FD
+def test_run_2nd():
     """Run a single test."""
     try:
         for res in _res:
@@ -55,3 +57,22 @@ def test_run():
                         f"  expected ratio: {errorratio:g}")
     finally:
         testutils.cleanup()
+
+# run test of 6th order FD. Cannot run convergence test since 6th order requires
+# Meshblocks at least 8^3 or larger
+def test_run_6th():
+    """Run a single test."""
+    res = 64
+    try:
+        results = testutils.mpi_run(input_file, arguments(res))
+        assert results, f"Z4c linear wave run failed for {res}."
+        maxerror, errorratio = errors[('6th-order')]
+        data = athena_read.error_dat(f'z4c_lin_wave-errs.dat')
+        L1_RMS_INDEX = 4  # Index for L1 RMS error in data
+        l1_rms_err0 = data[0][L1_RMS_INDEX]
+        if l1_rms_err0 > maxerror:
+            pytest.fail(f"Z4c wave error too large,"
+                        f"error: {l1_rms_err0:g} threshold: {maxerror:g}")
+    finally:
+        testutils.cleanup()
+

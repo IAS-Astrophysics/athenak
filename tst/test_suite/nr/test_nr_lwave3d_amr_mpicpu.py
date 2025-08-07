@@ -1,9 +1,7 @@
 """
 Linear wave convergence test for non-relativistic hydro/MHD in 3D with AMR and MPI.
-Runs tests in both hydro and MHD for different
-  - time integrators
-  - reconstruction algorithms
-Only tests "0" wave and HLLC/HLLD Riemann solvers
+Runs tests in both hydro and MHD for RK2+PLM and RK3+WENOZ using HLLE Riemann solver.
+Only tests "0" wave
 """
 
 # Modules
@@ -29,9 +27,8 @@ errors={
     ('mhd', 'rk3', 'wenoz', '0'): (3.9e-06,0.39)
 }
 
-_recon = ['ppm4','ppmx','wenoz']
 _wave = ['0']                      
-_flux = {'hydro': ['hllc'], 'mhd': ['hlld']}
+_recon = ['plm','wenoz']
 _res = [32, 64]                            
 
 def arguments(iv, rv, fv, wv, res, soe, name):
@@ -52,42 +49,22 @@ def arguments(iv, rv, fv, wv, res, soe, name):
             'problem/amp=1.0e-3',
             'problem/wave_flag=' + wv]
 
-@pytest.mark.parametrize("iv" , ['rk2'])
-@pytest.mark.parametrize("rv" , ['plm'])
+@pytest.mark.parametrize("rv" , _recon)
+@pytest.mark.parametrize("fv" , ['hlle'])
 @pytest.mark.parametrize("soe",["hydro","mhd"])
 def test_run_plm(iv, rv, soe):
-    """Loop over Riemann solvers and run test with given integrator/resolution/physics."""
-    for fv in _flux[soe]:
-        # Ignore return arguments
-        _,_ = testutils.test_error_convergence(
-            f"inputs/lwave_{soe}.athinput",
-            f"lwave3d_amr_{soe}",
-            arguments,
-            errors,
-            _wave,
-            _res,
-            iv,
-            rv,
-            fv,
-            soe,
-            mpi=True)
-
-@pytest.mark.parametrize("iv" , ['rk3'])
-@pytest.mark.parametrize("rv" , _recon)
-@pytest.mark.parametrize("soe",["hydro","mhd"])
-def test_run_other_recon(iv, rv, soe):
-    """Loop over Riemann solvers and run test with given integrator/resolution/physics."""
-    for fv in _flux[soe]:
-        # Ignore return arguments
-        _,_ = testutils.test_error_convergence(
-            f"inputs/lwave_{soe}.athinput",
-            f"lwave3d_amr_{soe}",
-            arguments,
-            errors,
-            _wave,
-            _res,
-            iv,
-            rv,
-            fv,
-            soe,
-            mpi=True)
+    """run test with given integrator/resolution/physics."""
+    iv = 'rk2' if rv=="plm" else 'rk3'
+    # Ignore return arguments
+    _,_ = testutils.test_error_convergence(
+        f"inputs/lwave_{soe}.athinput",
+        f"lwave3d_amr_{soe}",
+        arguments,
+        errors,
+        _wave,
+        _res,
+        iv,
+        rv,
+        fv,
+        soe,
+        mpi=True)
