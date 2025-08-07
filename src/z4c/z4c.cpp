@@ -38,6 +38,7 @@ char const * const Z4c::Z4c_names[Z4c::nz4c] = {
   "z4c_Theta",
   "z4c_alpha",
   "z4c_betax", "z4c_betay", "z4c_betaz",
+  "z4c_Bx", "z4c_By", "z4c_Bz",
 };
 
 char const * const Z4c::Constraint_names[Z4c::ncon] = {
@@ -94,13 +95,9 @@ Z4c::Z4c(MeshBlockPack *ppack, ParameterInput *pin) :
   con.Z.InitWithShallowSlice(u_con, I_CON_Z);
   con.M_d.InitWithShallowSlice(u_con, I_CON_MX, I_CON_MZ);
 
-  // Matter commented out
-  //mat.rho.InitWithShallowSlice(u_mat, I_MAT_rho);
-  //mat.S_d.InitWithShallowSlice(u_mat, I_MAT_Sx, I_MAT_Sz);
-  //mat.S_dd.InitWithShallowSlice(u_mat, I_MAT_Sxx, I_MAT_Szz);
-
   z4c.alpha.InitWithShallowSlice (u0, I_Z4C_ALPHA);
   z4c.beta_u.InitWithShallowSlice(u0, I_Z4C_BETAX, I_Z4C_BETAZ);
+  z4c.vB_d.InitWithShallowSlice(u0, I_Z4C_BX, I_Z4C_BZ);
   z4c.chi.InitWithShallowSlice   (u0, I_Z4C_CHI);
   z4c.vKhat.InitWithShallowSlice  (u0, I_Z4C_KHAT);
   z4c.vTheta.InitWithShallowSlice (u0, I_Z4C_THETA);
@@ -110,6 +107,7 @@ Z4c::Z4c(MeshBlockPack *ppack, ParameterInput *pin) :
 
   rhs.alpha.InitWithShallowSlice (u_rhs, I_Z4C_ALPHA);
   rhs.beta_u.InitWithShallowSlice(u_rhs, I_Z4C_BETAX, I_Z4C_BETAZ);
+  rhs.vB_d.InitWithShallowSlice  (u_rhs, I_Z4C_BX, I_Z4C_BZ);
   rhs.chi.InitWithShallowSlice   (u_rhs, I_Z4C_CHI);
   rhs.vKhat.InitWithShallowSlice  (u_rhs, I_Z4C_KHAT);
   rhs.vTheta.InitWithShallowSlice (u_rhs, I_Z4C_THETA);
@@ -136,12 +134,14 @@ Z4c::Z4c(MeshBlockPack *ppack, ParameterInput *pin) :
   opt.ssl_damping_amp = pin->GetOrAddReal("z4c", "ssl_damping_amp", 0.6);
   opt.ssl_damping_time = pin->GetOrAddReal("z4c", "ssl_damping_time", 20.0);
   opt.ssl_damping_index = pin->GetOrAddInteger("z4c", "ssl_damping_index", 1);
+  opt.telegraph_lapse = pin->GetOrAddBoolean("z4c", "telegraph_lapse", false);
+  opt.telegraph_tau = pin->GetOrAddReal("z4c", "telegraph_tau", 0.1);
+  opt.telegraph_kappa = pin->GetOrAddReal("z4c", "telegraph_kappa", 0.1);
 
   opt.shift_ggamma = pin->GetOrAddReal("z4c", "shift_Gamma", 1.0);
   opt.shift_advect = pin->GetOrAddReal("z4c", "shift_advect", 1.0);
   opt.shift_alpha2ggamma = pin->GetOrAddReal("z4c", "shift_alpha2Gamma", 0.0);
   opt.shift_hh = pin->GetOrAddReal("z4c", "shift_H", 0.0);
-
   opt.shift_eta = pin->GetOrAddReal("z4c", "shift_eta", 2.0);
 
   opt.use_z4c = pin->GetOrAddBoolean("z4c", "use_z4c", true);
@@ -218,23 +218,6 @@ Z4c::Z4c(MeshBlockPack *ppack, ParameterInput *pin) :
       break;
     }
   }
-  /*
-  horizon_dt = pin->GetOrAddReal("z4c", "horizon_dt", 1);
-  horizon_last_output_time = 0;
-  n = 0;
-  for (auto & pt : ptracker) {
-    if (pin->GetOrAddBoolean("z4c", "dump_horizon_" + std::to_string(n),false)) {
-      horizon_extent.push_back(pin->GetOrAddReal("z4c", "horizon_"
-                              + std::to_string(n)+"_radius",3));
-      Real extend[3] = {horizon_extent[n],horizon_extent[n],horizon_extent[n]};
-      horizon_nx.push_back(pin->GetOrAddInteger("z4c", "horizon_"
-                              + std::to_string(n)+"_Nx",100));
-      int Nx[3] = {horizon_nx[n],horizon_nx[n],horizon_nx[n]};
-      horizon_dump.emplace_back(pmy_pack, pt.pos, extend, Nx);
-      n++;
-    }
-  }
-  */
 }
 
 //----------------------------------------------------------------------------------------
@@ -288,6 +271,7 @@ void Z4c::AlgConstr(MeshBlockPack *pmbp) {
     }
   });
 }
+
 //----------------------------------------------------------------------------------------
 // destructor
 Z4c::~Z4c() {
