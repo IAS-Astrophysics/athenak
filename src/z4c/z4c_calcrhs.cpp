@@ -558,9 +558,8 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage) {
       }
     }
     // lapse function
-    Real f = 0.0;
-    f = opt.lapse_oplog * opt.lapse_harmonicf
-                + opt.lapse_harmonic * z4c.alpha(m,k,j,i);
+    Real const f = opt.lapse_oplog * opt.lapse_harmonicf
+                 + opt.lapse_harmonic * z4c.alpha(m,k,j,i);
     rhs.alpha(m,k,j,i) = opt.lapse_advect * Lalpha
                        - f * z4c.alpha(m,k,j,i) * z4c.vKhat(m,k,j,i);
     if (opt.slow_start_lapse) {
@@ -573,7 +572,6 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage) {
     if (opt.telegraph_lapse) {
       Real W = (z4c.chi(m,k,j,i)>0)
               ? z4c.chi(m,k,j,i) : 0;
-      Real W2 = W * W;
       rhs.alpha(m,k,j,i) += W*dB;
       for(int a = 0; a < 3; ++a) {
         rhs.vB_d(m,a,k,j,i) = opt.lapse_advect * LB_d(a) + (1.0/opt.telegraph_tau) * ( - z4c.vB_d(m,a,k,j,i) + opt.telegraph_kappa*dalpha_d(a));
