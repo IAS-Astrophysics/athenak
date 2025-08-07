@@ -1,5 +1,3 @@
-#define OMPI_SKIP_MPICXX
-
 #include <assert.h>
 #include <unistd.h>
 #include <sys/stat.h>  // mkdir
@@ -63,15 +61,15 @@ BHAHAHorizonFinder::BHAHAHorizonFinder(MeshBlockPack *pmbp, ParameterInput *pin)
     bah_poisoning_set_inputs(&pd);
     pd.input_metric_data = nullptr;
     pd.use_fixed_radius_guess_on_full_sphere = 1;
-    pd.cfl_factor = 1.05;
+    pd.cfl_factor = pin_->GetOrAddReal("z4c", "bah_cfl", 0.4);
     pd.M_scale = m_guess[h];
     pd.eta_damping_times_M = 1.6;
     pd.KO_strength = 0;
-    pd.max_iterations = 10000;
-    pd.Theta_Linf_times_M_tolerance = 1e-2;
-    pd.Theta_L2_times_M_tolerance = 2e-5;
+    pd.max_iterations = pin->GetOrAddInteger("z4c", "bah_max_itr", 10000);
+    pd.Theta_Linf_times_M_tolerance = pin_->GetOrAddReal("z4c", "bah_Theta_Linf_tol", 1e-2);
+    pd.Theta_L2_times_M_tolerance = pin_->GetOrAddReal("z4c", "bah_Theta_L2_tol", 2e-5);
     pd.enable_eta_varying_alg_for_precision_common_horizon = 0;
-    pd.verbosity_level = 0;
+    pd.verbosity_level = pin->GetOrAddInteger("z4c", "bah_verbosity", 0);
     r_max_m1_[h] *= pd.M_scale;
     h++;
   }
@@ -299,17 +297,14 @@ void BHAHAHorizonFinder::InterpolateMetricData(int h) {
 
   Real x_extrap, y_extrap, z_extrap, r_min_extrap, r_max_extrap; // Variables to store extrapolated values.
   // `bah_xyz_center_r_minmax` performs the extrapolation using historical data (e.g., centers, radii, times at m1, m2, m3)
-  // bah_xyz_center_r_minmax(&pd, &x_extrap, &y_extrap, &z_extrap, &r_min_extrap, &r_max_extrap);
+  bah_xyz_center_r_minmax(&pd, &x_extrap, &y_extrap, &z_extrap, &r_min_extrap, &r_max_extrap);
 
   // If extrapolation suggests (or if it was already set that) a full sphere guess is needed, enforce it.
   //if (pd.use_fixed_radius_guess_on_full_sphere) {
-  //  std::cout << "Here" << std::endl;
+
+  //}
   r_min_extrap = 0.0;                      // No inner boundary for a full sphere guess.
   r_max_extrap = max_search_radius_*m_guess[h]; // Use the maximum search radius parameter.
-  //} // END IF: Full sphere guess is enforced.
-
-  std::cout << pd.t_m1 << "\t" << r_min_extrap << "\t" << r_max_extrap << std::endl;
-
   // radial grid
   bah_radial_grid_cell_centered_set_up(Nr_interp_, max_search_radius_*m_guess[h], r_min_extrap, r_max_extrap,
                                        &pd.Nr_external_input, &pd.r_min_external_input, &pd.dr_external_input,
@@ -352,7 +347,7 @@ void BHAHAHorizonFinder::SolveHorizon(int h) {
     if (rc == BHAHAHA_SUCCESS) {
       std::cout << "Success" << std::endl;
       bah_diagnostics_file_output(&diags, &pd, max_num_horizons_, pd.x_center_m1, pd.y_center_m1, pd.z_center_m1, "./horizon");
-      pd.use_fixed_radius_guess_on_full_sphere = 1;
+      pd.use_fixed_radius_guess_on_full_sphere = 0;
       t_m1_[h] = pmbp_->pmesh->time;
     } else {
       std::cout << "Failed with Error Flag " << rc << std::endl; 
