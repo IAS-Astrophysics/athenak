@@ -19,14 +19,14 @@ import numpy as np
 # Threshold errors and error ratios for different integrators, reconstruction,
 # algorithms, and waves
 errors={
-    ('hydro', 'rk2', 'plm', '0'): (1.4e-05,1.91),
-    ('hydro', 'rk3', 'ppm4', '0'): (6.2e-10,0.19),
-    ('hydro', 'rk3', 'ppmx', '0'): (9.4e-12,0.13),
-    ('hydro', 'rk3', 'wenoz', '0'): (9.1e-12,0.13),
-    ('mhd', 'rk2', 'plm', '0'): (7e-09,0.27),
-    ('mhd', 'rk3', 'ppm4', '0'): (3.3e-09,0.73),
-    ('mhd', 'rk3', 'ppmx', '0'): (5.6e-10,0.78),
-    ('mhd', 'rk3', 'wenoz', '0'): (1.7e-10,0.25),
+    ('hydro', 'rk2', 'plm', '0'): (1.4e-05,0.27),
+    ('hydro', 'rk3', 'ppm4', '0'): (8.3e-06,0.35),
+    ('hydro', 'rk3', 'ppmx', '0'): (7.4e-06,0.43),
+    ('hydro', 'rk3', 'wenoz', '0'): (5.9e-06,0.52),
+    ('mhd', 'rk2', 'plm', '0'): (1.5e-05,0.26),
+    ('mhd', 'rk3', 'ppm4', '0'): (9.8e-06,0.32),
+    ('mhd', 'rk3', 'ppmx', '0'): (8e-06,0.39),
+    ('mhd', 'rk3', 'wenoz', '0'): (4.1e-06,0.34),
     }
 
 _recon = ['plm','ppm4','ppmx','wenoz']

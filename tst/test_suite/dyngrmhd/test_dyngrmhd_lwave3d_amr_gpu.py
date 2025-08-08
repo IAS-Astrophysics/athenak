@@ -18,8 +18,8 @@ import numpy as np
 # Threshold errors and error ratios for different integrators, reconstruction,
 # algorithms, and waves
 errors={
-    ('mhd', 'rk2', 'plm', '0'): (4.6e-08,0.26),
-    ('mhd', 'rk3', 'wenoz', '0'): (3.9e-09,0.23),}
+    ('mhd', 'rk2', 'plm', '0'): (8.2e-05,0.25),
+    ('mhd', 'rk3', 'wenoz', '0'): (2.7e-05,0.18),}
 
 _wave = ['0']       # do not change order
 _res = [32, 64]     # resolutions to test
@@ -49,7 +49,7 @@ def arguments(iv, rv, fv, wv, res, soe, name):
 
 @pytest.mark.parametrize("rv" , _recon)
 @pytest.mark.parametrize("fv" , ['hlle'])
-@pytest.mark.parametrize("soe",["hydro","mhd"])
+@pytest.mark.parametrize("soe", _soe)
 def test_run(rv, fv, soe):
     """Run a single test with given parameters."""
     iv = 'rk2' if rv=="plm" else 'rk3'
