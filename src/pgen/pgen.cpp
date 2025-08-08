@@ -22,6 +22,7 @@
 #include "mhd/mhd.hpp"
 #include "coordinates/adm.hpp"
 #include "z4c/compact_object_tracker.hpp"
+#include "z4c/horizon_dump.hpp"
 #include "z4c/z4c.hpp"
 #include "radiation/radiation.hpp"
 #include "srcterms/turb_driver.hpp"
@@ -219,6 +220,24 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resf
       }
 #endif
       pt->SetPos(&pos[0]);
+    }
+
+    for (auto &pt : pz4c->phorizon_dump) {
+      int output_count;
+      if (global_variable::my_rank == 0 || single_file_per_rank) {
+        if (resfile.Read_Integers(&output_count, 1, single_file_per_rank) != 1) {
+          std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                    << std::endl << "horizon dump data size read from restart "
+                    << "file is incorrect, restart file is broken." << std::endl;
+          exit(EXIT_FAILURE);
+        }
+      }
+#if MPI_PARALLEL_ENABLED
+      if (!single_file_per_rank) {
+        MPI_Bcast(&output_count, sizeof(int), MPI_CHAR, 0, MPI_COMM_WORLD);
+      }
+#endif
+      pt->output_count = output_count;
     }
   }
 

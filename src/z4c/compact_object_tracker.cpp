@@ -60,18 +60,27 @@ CompactObjectTracker::CompactObjectTracker(Mesh *pmesh, ParameterInput *pin, int
   out_every = pin->GetOrAddInteger("z4c", "co_" + nstr + "_out_every", 1);
 
   if (0 == global_variable::my_rank) {
-    ofile.open(ofname.c_str());
+    std::ifstream fileCheck(ofname);
+    bool fileExists = fileCheck.good();
+    fileCheck.close();
+    if (!fileExists) {
+      std::ofstream createFile(ofname);
+      createFile.close();
 
-    if (type == BlackHole) {
-      ofile << "# Black Hole";
+      ofile.open(ofname, std::ios::out | std::ios::app);
+      if (type == BlackHole) {
+        ofile << "# Black Hole";
+      } else {
+        ofile << "# Neutron Star";
+      }
+      ofile << std::endl;
+
+      ofile << "# 1:iter 2:time 3:x 4:y 5:z 6:vx 7:vy 8:vz\n";
+      ofile << std::flush;
+      ofile << std::setprecision(19);
     } else {
-      ofile << "# Neutron Star";
+      ofile.open(ofname, std::ios::out | std::ios::app);
     }
-    ofile << std::endl;
-
-    ofile << "# 1:iter 2:time 3:x 4:y 5:z 6:vx 7:vy 8:vz\n";
-    ofile << std::flush;
-    ofile << std::setprecision(19);
   }
 }
 

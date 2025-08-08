@@ -224,7 +224,7 @@ void HorizonDump::ETK_setup_parfile() {
           "QuasiLocalMeasures::interpolator         ="
           " \"Hermite polynomial interpolation\"\n"
           "QuasiLocalMeasures::interpolator_options = \"order=3\"\n"
-          "QuasiLocalMeasures::killing_vector_method = axial \n"
+          "#QuasiLocalMeasures::killing_vector_method = axial \n"
           "QuasiLocalMeasures::num_surfaces         = 1\n"
           "QuasiLocalMeasures::spatial_order        = 2\n"
           "QuasiLocalMeasures::surface_index[0]     = 0\n"

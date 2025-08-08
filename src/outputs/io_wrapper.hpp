@@ -48,6 +48,8 @@ class IOWrapper {
   std::size_t Write_any_type_at_all(const void *buf, IOWrapperSizeT cnt,
                                     IOWrapperSizeT offset, std::string datatype,
                                     bool single_file_per_rank = false);
+  std::size_t Read_Integers(void *buf, IOWrapperSizeT count,
+                         bool single_file_per_rank = false);
   std::size_t Read_Reals(void *buf, IOWrapperSizeT count,
                          bool single_file_per_rank = false);
   std::size_t Read_Reals_at(void *buf, IOWrapperSizeT count, IOWrapperSizeT offset,
