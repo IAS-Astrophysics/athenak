@@ -1,5 +1,5 @@
 """
-Linear wave convergence test for non-relativistic hydro/MHD in 2D with AMR.
+Linear wave convergence test for non-relativistic hydro/MHD in 2D with AMR and MPI.
 Runs tests in both hydro and MHD for different
   - time integrators
   - reconstruction algorithms
@@ -29,7 +29,7 @@ errors = {
     ('mhd', 'rk3', 'wenoz', '0'): (3.9e-06,0.39),
 }
 
-_recon = ['ppm4','ppmx','wenoz']  # do not change order
+_recon = ['plm','ppm4','ppmx','wenoz']  # do not change order
 _wave = ['0']                      # do not change order
 _flux = {'hydro': ['hllc'], 'mhd': ['hlld']}
 _res = [64, 128]                            # resolutions to test
@@ -54,30 +54,11 @@ def arguments(iv,rv,fv,wv,res,soe,name):
             'problem/amp=1.0e-3',
             'problem/wave_flag=' + wv]
 
-@pytest.mark.parametrize("iv" , ['rk2'])
-@pytest.mark.parametrize("rv" , ['plm'])
-@pytest.mark.parametrize("soe",["hydro","mhd"])
-def test_run_plm(iv, rv, soe):
-    """Loop over Riemann solvers and run test with given integrator/resolution/physics."""
-    for fv in _flux[soe]:
-        # Ignore return arguments
-        _,_ = testutils.test_error_convergence(
-            f"inputs/lwave_{soe}.athinput",
-            f"lwave2d_amr_{soe}",
-            arguments,
-            errors,
-            _wave,
-            _res,
-            iv,
-            rv,
-            fv,
-            soe,)
-
-@pytest.mark.parametrize("iv" , ['rk3'])
 @pytest.mark.parametrize("rv" , _recon)
 @pytest.mark.parametrize("soe",["hydro","mhd"])
-def test_run_other_recon(iv, rv, soe):
+def test_run(rv, soe):
     """Loop over Riemann solvers and run test with given integrator/resolution/physics."""
+    iv = 'rk2' if rv=="plm" else 'rk3'
     for fv in _flux[soe]:
         # Ignore return arguments
         _,_ = testutils.test_error_convergence(
@@ -90,5 +71,5 @@ def test_run_other_recon(iv, rv, soe):
             iv,
             rv,
             fv,
-            soe,)
-
+            soe,
+            mpi=True)

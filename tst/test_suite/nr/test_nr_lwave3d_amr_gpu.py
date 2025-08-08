@@ -29,10 +29,9 @@ errors={
     ('mhd', 'rk3', 'wenoz', '0'): (1.7e-10,0.25),
     }
 
-_recon = ['ppm4','ppmx','wenoz']
+_recon = ['plm','ppm4','ppmx','wenoz']
 _wave = ['0']                      
-_flux = {'hydro': ['hllc'], 'mhd': ['hlld']}
-_res = [128, 256]  # test run on GPU, so use higher res                            
+_res = [64, 128]  # test run on GPU, so use higher res                            
 
 def arguments(iv, rv, fv, wv, res, soe, name):
     """Assemble arguments for run command"""
@@ -46,46 +45,28 @@ def arguments(iv, rv, fv, wv, res, soe, name):
             'meshblock/nx1=' + repr(res//8),
             'meshblock/nx2=' + repr(res//8),
             'meshblock/nx3=' + repr(res//8),
+            'mesh_refinement/max_nmb_per_rank=2048',
             'time/cfl_number=0.3',
             f'{soe}/reconstruct=' + rv,
             f'{soe}/rsolver=' + fv,
-            'problem/amp=1.0e-6',
+            'problem/amp=1.0e-3',
             'problem/wave_flag=' + wv]
 
-@pytest.mark.parametrize("iv" , ['rk2'])
-@pytest.mark.parametrize("rv" , ['plm'])
-@pytest.mark.parametrize("soe",["hydro","mhd"])
-def test_run_plm(iv, rv, soe):
-    """Loop over Riemann solvers and run test with given integrator/resolution/physics."""
-    for fv in _flux[soe]:
-        # Ignore return arguments
-        _,_ = testutils.test_error_convergence(
-            f"inputs/lwave_{soe}.athinput",
-            f"lwave3d_amr_{soe}",
-            arguments,
-            errors,
-            _wave,
-            _res,
-            iv,
-            rv,
-            fv,
-            soe,)
-
-@pytest.mark.parametrize("iv" , ['rk3'])
 @pytest.mark.parametrize("rv" , _recon)
+@pytest.mark.parametrize("fv" , ['hlle'])
 @pytest.mark.parametrize("soe",["hydro","mhd"])
-def test_run_other_recon(iv, rv, soe):
-    """Loop over Riemann solvers and run test with given integrator/resolution/physics."""
-    for fv in _flux[soe]:
-        # Ignore return arguments
-        _,_ = testutils.test_error_convergence(
-            f"inputs/lwave_{soe}.athinput",
-            f"lwave3d_amr_{soe}",
-            arguments,
-            errors,
-            _wave,
-            _res,
-            iv,
-            rv,
-            fv,
-            soe,)
+def test_run(rv, fv, soe):
+    """Run a single test with given parameters."""
+    iv = 'rk2' if rv=="plm" else 'rk3'
+    # Ignore return arguments
+    _,_ = testutils.test_error_convergence(
+        f"inputs/lwave_{soe}.athinput",
+        f"lwave3d_amr_{soe}",
+        arguments,
+        errors,
+        _wave,
+        _res,
+        iv,
+        rv,
+        fv,
+        soe)

@@ -52,7 +52,7 @@ def arguments(iv, rv, fv, wv, res, soe, name):
 @pytest.mark.parametrize("rv" , _recon)
 @pytest.mark.parametrize("fv" , ['hlle'])
 @pytest.mark.parametrize("soe",["hydro","mhd"])
-def test_run_plm(iv, rv, soe):
+def test_run(fv, rv, soe):
     """run test with given integrator/resolution/physics."""
     iv = 'rk2' if rv=="plm" else 'rk3'
     # Ignore return arguments

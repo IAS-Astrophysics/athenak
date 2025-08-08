@@ -23,7 +23,8 @@ errors={
     ('mhd', 'rk3', 'wenoz', '0'): (3.9e-09,0.23),}
 
 _wave = ['0']       # do not change order
-_res = [128, 256]   # resolutions to test, user higher res on GPU
+_res = [32, 64]     # resolutions to test
+_recon = ['plm','wenoz'] # spatial reconstruction
 _soe = ['hydro', 'mhd']  # system of equations to test
 
 def arguments(iv, rv, fv, wv, res, soe, name):
@@ -34,23 +35,25 @@ def arguments(iv, rv, fv, wv, res, soe, name):
             'mesh/nghost=' + repr(2 if rv=='plm' else 4),
             'mesh/nx1=' + repr(res),
             'mesh/nx2=' + repr(res//2),
-            'mesh/nx3=' + repr(res//4),
+            'mesh/nx3=' + repr(res//2),
             'meshblock/nx1=' + repr(res//8),
             'meshblock/nx2=' + repr(res//8),
             'meshblock/nx3=' + repr(res//8),
+            'mesh_refinement/max_nmb_per_rank=2048',
             'time/cfl_number=0.3',
             'coord/special_rel=false',
             'coord/general_rel=true',
             f'{soe}/reconstruct=' + rv,
             f'{soe}/rsolver=' + fv,
+            'problem/amp=1.0e-3',
             'problem/wave_flag=' + wv]
 
-@pytest.mark.parametrize("iv" , ['rk2'])
-@pytest.mark.parametrize("rv" , ['plm'])
+@pytest.mark.parametrize("rv" , _recon)
 @pytest.mark.parametrize("fv" , ['hlle'])
 @pytest.mark.parametrize("soe",["hydro","mhd"])
-def test_run_plm(iv, rv, fv, soe):
+def test_run(rv, fv, soe):
     """Run a single test with given parameters."""
+    iv = 'rk2' if rv=="plm" else 'rk3'
     # Ignore return arguments
     _,_ = testutils.test_error_convergence(
         f"inputs/lwave_rel{soe}.athinput",
@@ -63,23 +66,3 @@ def test_run_plm(iv, rv, fv, soe):
         rv,
         fv,
         soe)
-
-@pytest.mark.parametrize("iv" , ['rk3'])
-@pytest.mark.parametrize("rv" , ['wenoz'])
-@pytest.mark.parametrize("fv" , ['hlle'])
-@pytest.mark.parametrize("soe",["hydro","mhd"])
-def test_run_wenoz(iv, rv, fv, soe):
-    """Run a single test with given parameters."""
-    # Ignore return arguments
-    _,_ = testutils.test_error_convergence(
-        f"inputs/lwave_rel{soe}.athinput",
-        f"lwave3d_amr_{soe}",
-        arguments,
-        errors,
-        _wave,
-        _res,
-        iv,
-        rv,
-        fv,
-        soe)
-

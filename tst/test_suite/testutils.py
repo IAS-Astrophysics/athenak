@@ -118,7 +118,7 @@ def run(inputfile: str, flags=[], **kwargs)-> bool:
         raise RuntimeError(f"Failed to execute {inputfile} with flags {flags}")
     return True
 
-def mpi_run(inputfile: str, flags=[], threads: int = 8, **kwargs) -> bool:
+def mpi_run(inputfile: str, flags=[], threads: int = min(16,os.cpu_count()), **kwargs) -> bool:
     """
     Executes a test case using the AthenaK binary with MPI support.
 

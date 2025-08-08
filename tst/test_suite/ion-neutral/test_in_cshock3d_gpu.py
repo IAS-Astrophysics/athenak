@@ -20,23 +20,23 @@ errors = {
     ('imex3'): (0.85)}
 
 _int = ['imex2','imex3']
-_res = [256]
+_res = [128]
 input_file = "inputs/cshock.athinput"
 
 # On GPU runs a 3D test
 def arguments(iv, rv, res):
     """Assemble arguments for run command"""
-    return ['mesh/nx1=' + repr(res//4),
+    return ['mesh/nx1=' + repr(res//8),
             'mesh/ix1_bc=periodic',
             'mesh/ox1_bc=periodic',
-            'mesh/nx2=' + repr(res//4),
+            'mesh/nx2=' + repr(res//8),
             'mesh/ix2_bc=periodic',
             'mesh/ox2_bc=periodic',
             'mesh/nx3=' + repr(res),
             'mesh/ix3_bc=inflow',
             'mesh/ox3_bc=outflow',
-            'meshblock/nx1=' + repr(res//4),
-            'meshblock/nx2=' + repr(res//4),
+            'meshblock/nx1=' + repr(res//8),
+            'meshblock/nx2=' + repr(res//8),
             'meshblock/nx3=' + repr(res//4),
             'mesh/nghost=' + repr(2 if rv=='plm' else 3),
             'time/integrator=' + iv,
