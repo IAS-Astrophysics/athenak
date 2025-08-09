@@ -144,9 +144,13 @@ class CartesianDumpReader {
       fflush(stderr);
       abort();
     }
+    // DEBUG
+    printf("Reading cartesian dump file '%s'... ", fname);
+    // ENDDEBUG
 
     // Read metadata
     size_t sread = fread(&mdata, sizeof(MetaData), 1, fp);
+    assert(sread == 1);
     assert(mdata.numpoints[0] == mdata.numpoints[1]);
     assert(mdata.numpoints[0] == mdata.numpoints[2]);
     int const N = mdata.numpoints[0] - 1;
@@ -171,6 +175,10 @@ class CartesianDumpReader {
       data[std::string(token)] = var;
       token = strtok(NULL, " ");
     }
+
+    // DEBUG
+    printf("done!\n");
+    // ENDDEBUG
 
     fclose(fp);
   }
@@ -223,6 +231,7 @@ class BackgroundData {
 
   BackgroundData(ParameterInput *pin) {
     file_basename = pin->GetString("problem", "file_basename");
+    md_filename = pin->GetString("problem", "metadata_file");
     fnmin = pin->GetInteger("problem", "fnmin");
     fnmax = pin->GetInteger("problem", "fnmax");
     ncache = pin->GetOrAddInteger("problem", "ncache", 128);
@@ -230,7 +239,7 @@ class BackgroundData {
       std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
                 << "problem/ncache needs to be 2 or larger"
                 << std::endl;
-      exit(EXIT_FAILURE);
+      std::exit(EXIT_FAILURE);
     }
     Kokkos::realloc(cheb_data, NVARS, N + 1, N + 1, N + 1);
 #ifdef DEBUG_PGEN
@@ -245,38 +254,49 @@ class BackgroundData {
   }
 
   void ReadMetaData() {
-    Real center[3], extent[3];
+    Real box[6];
     int ndumps = fnmax - fnmin + 1;
     mtimes.resize(ndumps);
     if (0 == global_variable::my_rank) {
-      for (int n = fnmin; n <= fnmax; ++n) {
-        char fname[BUFSIZ];
-        {
-          snprintf(fname, BUFSIZ, "%s%s.%05d.bin", file_basename.c_str(),
-                   "mhd_w_bcc", n);
-          CartesianDumpReader cart(fname);
-          mtimes[n - fnmin] = cart.mdata.time;
-          // Read grid extent (assumed to be the same for all files)
-          if (n == fnmin) {
-            for (int d = 0; d < 3; ++d) {
-              center[d] = cart.mdata.center[d];
-              extent[d] = cart.mdata.extent[d];
-            }
-          }
-        }
+      FILE *fp = fopen(md_filename.c_str(), "rb");
+      if (fp == NULL) {
+        std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                  << std::endl << "Metadata file '" << md_filename
+                  << "' could not be opened" << std::endl << std::flush;
+        abort();
       }
+
+      for (int d = 0; d < 6; ++d) {
+        float tmp;
+        size_t sread = fread(&tmp, sizeof(float), 1, fp);
+        assert(sread == 1);
+        box[d] = static_cast<Real>(tmp);
+      }
+
+      int count;
+      size_t sread = fread(&count, sizeof(int), 1, fp);
+      assert(sread == 1);
+      assert(count >= ndumps);
+
+      for (int i = 0; i < ndumps; ++i) {
+        float tmp;
+        size_t sread = fread(&tmp, sizeof(float), 1, fp);
+        assert(sread == 1);
+        mtimes[i] = static_cast<Real>(tmp);
+      }
+
+      fclose(fp);
     }
 #if MPI_PARALLEL_ENABLED
-    MPI_Bcast(&center[0], 3, MPI_ATHENA_REAL, 0, MPI_COMM_WORLD);
-    MPI_Bcast(&extent[0], 3, MPI_ATHENA_REAL, 0, MPI_COMM_WORLD);
-    MPI_Bcast(mtimes.data(), mtimes.size(), MPI_ATHENA_REAL, 0, MPI_COMM_WORLD);
+    MPI_Bcast(&box[0], 6, MPI_ATHENA_REAL, 0, MPI_COMM_WORLD);
+    MPI_Bcast(mtimes.data(), ndumps, MPI_ATHENA_REAL, 0, MPI_COMM_WORLD);
 #endif
-    xmin = center[0] - extent[0];
-    xmax = center[0] + extent[0];
-    ymin = center[1] - extent[1];
-    ymax = center[1] + extent[1];
-    zmin = center[2] - extent[2];
-    zmax = center[2] + extent[2];
+    xmin = box[0];
+    xmax = box[1];
+    ymin = box[2];
+    ymax = box[3];
+    zmin = box[4];
+    zmax = box[5];
   }
 
   void ReadData(int f0) {
@@ -416,7 +436,7 @@ class BackgroundData {
   DualArray4D<Real> cheb_data;  // time interpolated data on the Chebyshev grid
   Real xmin, xmax, ymin, ymax, zmin, zmax;  // grid extent
 
-  std::string file_basename;
+  std::string file_basename, md_filename;
   int fnmin, fnmax;  // minimum/maximum file numbers to read
   int ncache;  // number of snapshots to keep in memory
 
@@ -449,7 +469,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
               << "GRMHD zoom-in problem can only be run when <adm> block is present"
               << std::endl;
-    exit(EXIT_FAILURE);
+    std::exit(EXIT_FAILURE);
   }
 
   user_bcs_func = TurbulenceBC;

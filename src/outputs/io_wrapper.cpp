@@ -15,6 +15,9 @@
 #include <string>
 
 #include "athena.hpp"
+// DEBUG
+#include "globals.hpp"
+// ENDDEBUG
 #include "io_wrapper.hpp"
 
 //----------------------------------------------------------------------------------------
@@ -536,6 +539,11 @@ std::size_t IOWrapper::Write_any_type_at_all(const void *buf, IOWrapperSizeT cnt
     }
     // Now write data using MPI-IO
     MPI_Status status;
+    // DEBUG
+    if (global_variable::my_rank == 0) {
+      Kokkos::printf("Using MPI_File_write_at_all to write data to file\n");
+    }
+    // ENDDEBUG
     int errcode = MPI_File_write_at_all(fh_, offset, buf, cnt, mpitype, &status);
     if (errcode != MPI_SUCCESS) {
       char msg[MPI_MAX_ERROR_STRING];
