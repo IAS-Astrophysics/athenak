@@ -180,7 +180,6 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
       i1_sum += i1_cm.d_view(ifr,iang);
     } // endfor ifr
     Real fac_norm = i0_sum/i1_sum;
-    printf("fac_norm=%e \n", fac_norm);
     for (int ifr=0; ifr<=nfrq1; ++ifr) {
       i1_cm.d_view(ifr,iang) = fac_norm * i1_cm.d_view(ifr,iang);
     } // endfor ifr
