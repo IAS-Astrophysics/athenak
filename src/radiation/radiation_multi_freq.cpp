@@ -122,7 +122,7 @@ TaskStatus Radiation::AddMultiFreqRadSrcTerm(Driver *pdriver, int stage) {
   Real &arad_ = arad;
   Real den_unit = 1.0, temp_unit = 1.0, l_unit = 1.0;
   Real mu_molecular = 1.0;
-  Real coeff_r = 1.0, coeff_pmr = 0.0; inv_t_elec = 1.0;
+  Real coeff_r = 1.0, coeff_pmr = 0.0, inv_t_elec = 1.0;
   if (are_units_enabled_) {
     den_unit  = pmy_pack->punit->density_cgs();
     temp_unit = pmy_pack->punit->temperature_cgs();
@@ -130,7 +130,7 @@ TaskStatus Radiation::AddMultiFreqRadSrcTerm(Driver *pdriver, int stage) {
     mu_molecular = pmy_pack->punit->mu();
     coeff_r   = pmy_pack->punit->rosseland_coef_cgs;
     coeff_pmr = pmy_pack->punit->planck_minus_rosseland_coef_cgs;
-    inv_t_elec = temperature_scale_/pmy_pack->punit->electron_rest_mass_energy_cgs;
+    inv_t_elec = temp_unit/pmy_pack->punit->electron_rest_mass_energy_cgs;
   }
 
   // Extract adiabatic index
@@ -319,6 +319,8 @@ TaskStatus Radiation::AddMultiFreqRadSrcTerm(Driver *pdriver, int stage) {
       ir_cm_grey(iang) += ir_cm_f; // used in guessing gas temperature
 
     } // endfor n
+
+    // TODO: normalization of intensity
 
     // Step 2: compute source terms and solve gas temperature update
     bool guess_grey_tgas = true;

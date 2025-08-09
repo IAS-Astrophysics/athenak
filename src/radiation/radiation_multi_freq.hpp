@@ -666,7 +666,7 @@ bool AssignFreqIntensity(const int &fIdx, const DvceArray1D<Real> &nu_tet, const
     boundary = 2;
   }
 
-  if ((fIdx < 0) && (fIdx >= nfreq1)) return false;
+  if ((fIdx < 0) || (fIdx >= nfreq1)) return false;
   else return true;
 }
 
@@ -732,7 +732,7 @@ bool AssignFreqIntensityInv(const int &fIdx, const DvceArray1D<Real> &nu_tet, co
     boundary = 2;
   }
 
-  if ((fIdx < 0) && (fIdx >= nfreq1)) return false;
+  if ((fIdx < 0) || (fIdx >= nfreq1)) return false;
   else return true;
 }
 
@@ -765,11 +765,24 @@ Real GetMultiFreqRadSlope(const Real  &nu0, const Real  &nu_l, const Real  &nu1,
 
   // First-order
   if (order == 1) {
-    // if ()
-    // inu_l, inu1, nu_l, nu1
-    return (inu1-inu_l)/(nu1-nu_l);
-  }
+    Real ka = (boundary == 1) ? (inu1-inu_l) / (nu1-nu_l)
+                              : (inu1-inu0)  / (nu1-nu0);
+    Real kb = (boundary == 2) ? (inu_r-inu1) / (nu_r-nu1)
+                              : (inu2-inu1)  / (nu2-nu1);
+    // forward
+    Real k_ret = ka;
 
+    // minmod limiter
+    if (limiter == 1)
+      k_ret = (ka*kb > 0) ? SIGN(ka)*fmin(fabs(ka),fabs(kb)) : 0;
+
+    // van Leer limiter
+    if (limiter == 2)
+      k_ret = ((fabs(ka+kb) > FLT_MIN) && (ka*kb > 0))
+            ? 2*ka*kb/(ka+kb) : 0;
+
+    return k_ret;
+  }
 
   // Second-order
   // without limiter
@@ -846,17 +859,39 @@ Real IntensityFraction(const Real  &nu_f, const Real  &nu_fp1,
   // ... ---|----------------|===========-----|----------------|--- ... --->
   //     nu_cm[R-1]       nu_cm[R]         nu_cm[R+1]       nu_cm[R+2]
   //             (nu1h)    (nu1)   (nu3h)   (nu2)   (nu5h)
-  Real k_slope = GetMultiFreqRadSlope(nu1h, nu1, nu3h, nu2, nu5h,
-                                      inu1h, inu1, inu3h, inu2, inu5h,
-                                      order, limiter, boundary);
+  int limiter_all[3];
+  limiter_all[0] = limiter;
+  limiter_all[1] = 2; limiter_all[2] = 1; // (limiter == 0)
+  if (limiter == 1) {
+    limiter_all[1] = 2;
+    limiter_all[2] = 0;
+  } else if (limiter == 2) {
+    limiter_all[1] = 1;
+    limiter_all[2] = 0;
+  }
 
-  Real nu_min = (leftbin) ? nu_f : fmax(nu1, nu_f) ;
-  Real nu_max = (leftbin) ? fmin(nu2, nu_fp1) : nu_fp1 ;
-  Real inu_min = inu3h + k_slope*(nu_min - nu3h);
-  Real inu_max = inu3h + k_slope*(nu_max - nu3h);
-  Real frac_ret = 0.5*(inu_min+inu_max)*(nu_max-nu_min);
+  Real ifrac_ret = 0;
+  for (int n_lim=0; n_lim < 3; ++n_lim) {
+    int limiter_use = limiter_all[n_lim];
+    Real k_slope = GetMultiFreqRadSlope(nu1h, nu1, nu3h, nu2, nu5h,
+                                        inu1h, inu1, inu3h, inu2, inu5h,
+                                        order, limiter_use, boundary);
+    Real nu_min = (leftbin) ? nu_f : fmax(nu1, nu_f) ;
+    Real nu_max = (leftbin) ? fmin(nu2, nu_fp1) : nu_fp1 ;
+    Real inu_min = inu3h + k_slope*(nu_min - nu3h);
+    Real inu_max = inu3h + k_slope*(nu_max - nu3h);
+    ifrac_ret = 0.5*(inu_min+inu_max)*(nu_max-nu_min);
+    if (ifrac_ret > 0) break;
+  } // endfor n_lim
 
-  return frac_ret;
+  // backup routine (0th order)
+  if (ifrac_ret < 0) {
+    Real nu_min = (leftbin) ? nu_f : fmax(nu1, nu_f) ;
+    Real nu_max = (leftbin) ? fmin(nu2, nu_fp1) : nu_fp1 ;
+    ifrac_ret = fmax(0, inu3h*(nu_max-nu_min));
+  }
+
+  return ifrac_ret;
 }
 
 //----------------------------------------------------------------------------------------
@@ -895,7 +930,7 @@ Real MapIntensity(const int &ifr, const DvceArray1D<Real> &nu_tet, const DvceArr
   // -1 <= idx_l   <= N-1
   //  0 <= idx_l+1 <= N
   int idx_lp1=0;
-  while ((n0_cm*nu_tet(idx_lp1) < nu_f) && (idx_lp1 <= nfrq)) idx_lp1++;
+  while ((n0_cm*nu_tet(idx_lp1) < nu_f) && (idx_lp1 <= nfreq1)) idx_lp1++;
   int idx_l = idx_lp1-1;
   // -1 <= idx_r   <= N-1
   //  0 <= idx_r+1 <= N
@@ -903,9 +938,17 @@ Real MapIntensity(const int &ifr, const DvceArray1D<Real> &nu_tet, const DvceArr
   if (ifr+1 <= nfreq1) {
     idx_rp1=fmax(idx_l,0);
     Real &nu_fp1 = nu_tet(ifr+1);
-    while ((n0_cm*nu_tet(idx_rp1) <= nu_fp1) && (idx_rp1 <= nfrq)) idx_rp1++;
+    while ((n0_cm*nu_tet(idx_rp1) <= nu_fp1) && (idx_rp1 <= nfreq1)) idx_rp1++;
     idx_r = idx_rp1-1;
   }
+
+  // bool ifprint = ((m==0) && (k==2) && (j==2) && (i==2) && (iang==5) && (ifr==0));
+  // if (ifprint) {
+  //   printf("  n0_cm=%f, nu_cm_e=%f, \n", n0_cm, n0_cm*nu_e);
+  //   printf("  idx_l=%d, nu_cm_l=%f, nu_f  =%f, nu_cm_lp1=%f, \n", idx_l, n0_cm*nu_tet(idx_l), nu_f, n0_cm*nu_tet(idx_l+1));
+  //   printf("  idx_r=%d, nu_cm_r=%f, nu_fp1=%f, nu_cm_rp1=%f, \n", idx_r, n0_cm*nu_tet(idx_r), nu_tet(ifr+1), n0_cm*nu_tet(idx_r+1));
+  // }
+
 
   // get mapping coefficients
   if (nu_f >= n0_cm*nu_e) { // only happen when (n0_cm < 1)
@@ -958,16 +1001,16 @@ Real MapIntensity(const int &ifr, const DvceArray1D<Real> &nu_tet, const DvceArr
                                                  inu1h, inu3h, inu5h, inu1, inu2,
                                                  ir_cm_star_1, boundary);
     // compute left fractional contribution
-    Real frac_l = 0;
+    Real ifrac_l = 0;
     if (left_bin_assigned) {
       bool leftbin = true;
       Real nu_fp1 = nu2 * 1e12; // set nu_fp1 in this way so it is not invoked in 'IntensityFraction'
-      frac_l = IntensityFraction(nu_f, nu_fp1,
-                                 nu1h, nu1, nu3h, nu2, nu5h,
-                                 inu1h, inu1, inu3h, inu2, inu5h,
-                                 order, limiter, boundary, leftbin);
-      ir_cm_f += frac_l * ir_cm_star_1;
-      if (update_matrix_row) matrix_imap(ifr,idx_l) = frac_l;
+      ifrac_l = IntensityFraction(nu_f, nu_fp1,
+                                  nu1h, nu1, nu3h, nu2, nu5h,
+                                  inu1h, inu1, inu3h, inu2, inu5h,
+                                  order, limiter, boundary, leftbin);
+      ir_cm_f += ifrac_l;
+      if (update_matrix_row) matrix_imap(ifr,idx_l) = ifrac_l/ir_cm_star_1;
     }
 
     // add the rest intensity contribution
@@ -978,6 +1021,7 @@ Real MapIntensity(const int &ifr, const DvceArray1D<Real> &nu_tet, const DvceArr
     }
 
   } else { // (f <= N-2)
+
     Real &nu_fp1 = nu_tet(ifr+1);
 
     // General Case:
@@ -999,6 +1043,8 @@ Real MapIntensity(const int &ifr, const DvceArray1D<Real> &nu_tet, const DvceArr
       if (update_matrix_row) matrix_imap(ifr,f) = 1;
     }
 
+    // if (ifprint) printf("  ir_cm_f: %e \n", ir_cm_f);
+
     // Left:                            (nu_f)
     //                                 nu_tet[f]
     // ................................ ---|--- ......................... --->
@@ -1017,16 +1063,20 @@ Real MapIntensity(const int &ifr, const DvceArray1D<Real> &nu_tet, const DvceArr
                                                  inu1h, inu3h, inu5h, inu1, inu2,
                                                  ir_cm_star_1, boundary);
     // compute left fractional contribution
-    Real frac_l = 0;
+    Real ifrac_l = 0;
     if (left_bin_assigned) {
       bool leftbin = true;
-      frac_l = IntensityFraction(nu_f, nu_fp1,
-                                 nu1h, nu1, nu3h, nu2, nu5h,
-                                 inu1h, inu1, inu3h, inu2, inu5h,
-                                 order, limiter, boundary, leftbin);
-      ir_cm_f += frac_l * ir_cm_star_1;
-      if (update_matrix_row) matrix_imap(ifr,idx_l) = frac_l;
+      ifrac_l = IntensityFraction(nu_f, nu_fp1,
+                                  nu1h, nu1, nu3h, nu2, nu5h,
+                                  inu1h, inu1, inu3h, inu2, inu5h,
+                                  order, limiter, boundary, leftbin);
+      ir_cm_f += ifrac_l;
+      if (update_matrix_row) matrix_imap(ifr,idx_l) = ifrac_l/ir_cm_star_1;
     }
+
+    // if (ifprint)
+    //   printf("  left: %d, ir_cm_f: %e, ifrac_l: %e, frac_l: %e \n",
+    //             left_bin_assigned, ir_cm_f, ifrac_l, ifrac_l/ir_cm_star_1);
 
     // Right:                          (nu_fp1)
     //                                nu_tet[f+1]
@@ -1046,16 +1096,28 @@ Real MapIntensity(const int &ifr, const DvceArray1D<Real> &nu_tet, const DvceArr
                                                   inu1h, inu3h, inu5h, inu1, inu2,
                                                   ir_cm_star_1, boundary);
     // compute right fractional contribution
-    Real frac_r = 0;
-    if (right_bin_assigned) {
+    Real ifrac_r = 0;
+    if ((right_bin_assigned) && (idx_r > idx_l)) {
+      // note: if idx_r=idx_l, right fraction is equivalent to left bin, which would double count the contribution.
       bool leftbin = false;
-      frac_r = IntensityFraction(nu_f, nu_fp1,
-                                 nu1h, nu1, nu3h, nu2, nu5h,
-                                 inu1h, inu1, inu3h, inu2, inu5h,
-                                 order, limiter, boundary, leftbin);
-      ir_cm_f += frac_r * ir_cm_star_1;
-      if (update_matrix_row) matrix_imap(ifr,idx_r) = frac_r;
+      ifrac_r = IntensityFraction(nu_f, nu_fp1,
+                                  nu1h, nu1, nu3h, nu2, nu5h,
+                                  inu1h, inu1, inu3h, inu2, inu5h,
+                                  order, limiter, boundary, leftbin);
+      ir_cm_f += ifrac_r;
+      if (update_matrix_row) matrix_imap(ifr,idx_r) = ifrac_r/ir_cm_star_1;
     }
+
+
+
+    // if (ifprint) {
+    //   printf("  boundary: %d \n", boundary);
+    //   printf("  nu1h: %e, nu1: %e, nu3h: %e, nu2: %e, nu5h: %e \n", nu1h, nu1, nu3h, nu2, nu5h);
+    //   printf("  inu1h: %e, inu1: %e, inu3h: %e, inu2: %e, inu5h: %e \n", inu1h, inu1, inu3h, inu2, inu5h);
+    //   printf("  right: %d, ir_cm_f: %e, ifrac_r: %e, frac_r: %e \n",
+    //             right_bin_assigned, ir_cm_f, ifrac_r, ifrac_r/ir_cm_star_1);
+    // }
+
 
     // Corner Case 4 (continue): Rightmost (nu_tet[f+1] >= nu_cm[N-1] >= nu_tet[f] && n0_cm < 1)
     //    (nu_f)                 (nu_fp1)
@@ -1072,9 +1134,8 @@ Real MapIntensity(const int &ifr, const DvceArray1D<Real> &nu_tet, const DvceArr
       int nr = getFreqAngIndex(idx_r, iang, nang);
       Real ir_cm_star_r = SQR(SQR(n0_cm))*i0(m,nr,k,j,i)/(n0*n_0);
       Real integral_r = 1./(4*M_PI) * BBIntegral(nu1, nu_fp1, teff, a_rad);
-      frac_r = integral_r/ir_cm_star_r;
       ir_cm_f += integral_r;
-      if (update_matrix_row) matrix_imap(ifr,idx_r) = frac_r;
+      if (update_matrix_row) matrix_imap(ifr,idx_r) = integral_r/ir_cm_star_r;
     }
 
     // Corner Case 1: Leftmost (ifr=0 && n0_cm > 1)
@@ -1106,6 +1167,7 @@ Real MapIntensity(const int &ifr, const DvceArray1D<Real> &nu_tet, const DvceArr
     // (L,L+1)=(-1,0) && R>=1 && R+1>=2
     // L = -1: left_bin_assigned=false
     // R <= N-1: Do nothing. Algorithm is self-consistent.
+
 
   } // endelse
 
@@ -1180,15 +1242,15 @@ Real InvMapIntensity(const int &ifr, const DvceArray1D<Real> &nu_tet, const ScrA
                                                     inu1h, inu3h, inu5h, inu1, inu2,
                                                     ir_cm_1, boundary);
     // compute left fractional contribution
-    Real frac_l = 0;
+    Real ifrac_l = 0;
     if (left_bin_assigned) {
       bool leftbin = true;
       Real nu_cm_fp1 = nu2 * 1e12; // set nu_cm_fp1 in this way so it is not invoked in 'IntensityFraction'
-      frac_l = IntensityFraction(nu_cm_f, nu_cm_fp1,
-                                 nu1h, nu1, nu3h, nu2, nu5h,
-                                 inu1h, inu1, inu3h, inu2, inu5h,
-                                 order, limiter, boundary, leftbin);
-      ir_cm_star_f += frac_l * ir_cm_1;
+      ifrac_l = IntensityFraction(nu_cm_f, nu_cm_fp1,
+                                  nu1h, nu1, nu3h, nu2, nu5h,
+                                  inu1h, inu1, inu3h, inu2, inu5h,
+                                  order, limiter, boundary, leftbin);
+      ir_cm_star_f += ifrac_l;
     }
 
     // add the rest intensity contribution
@@ -1211,14 +1273,14 @@ Real InvMapIntensity(const int &ifr, const DvceArray1D<Real> &nu_tet, const ScrA
                                                     inu1h, inu3h, inu5h, inu1, inu2,
                                                     ir_cm_1, boundary);
     // compute left fractional contribution
-    Real frac_l = 0;
+    Real ifrac_l = 0;
     if (left_bin_assigned) {
       bool leftbin = true;
-      frac_l = IntensityFraction(nu_cm_f, nu_cm_fp1,
-                                 nu1h, nu1, nu3h, nu2, nu5h,
-                                 inu1h, inu1, inu3h, inu2, inu5h,
-                                 order, limiter, boundary, leftbin);
-      ir_cm_star_f += frac_l * ir_cm_1;
+      ifrac_l = IntensityFraction(nu_cm_f, nu_cm_fp1,
+                                  nu1h, nu1, nu3h, nu2, nu5h,
+                                  inu1h, inu1, inu3h, inu2, inu5h,
+                                  order, limiter, boundary, leftbin);
+      ir_cm_star_f += ifrac_l;
     }
 
     // prepare right frequency and intensity
@@ -1228,14 +1290,14 @@ Real InvMapIntensity(const int &ifr, const DvceArray1D<Real> &nu_tet, const ScrA
                                                      inu1h, inu3h, inu5h, inu1, inu2,
                                                      ir_cm_1, boundary);
     // compute right fractional contribution
-    Real frac_r = 0;
+    Real ifrac_r = 0;
     if (right_bin_assigned) {
       bool leftbin = false;
-      frac_r = IntensityFraction(nu_cm_f, nu_cm_fp1,
-                                 nu1h, nu1, nu3h, nu2, nu5h,
-                                 inu1h, inu1, inu3h, inu2, inu5h,
-                                 order, limiter, boundary, leftbin);
-      ir_cm_star_f += frac_r * ir_cm_1;
+      ifrac_r = IntensityFraction(nu_cm_f, nu_cm_fp1,
+                                  nu1h, nu1, nu3h, nu2, nu5h,
+                                  inu1h, inu1, inu3h, inu2, inu5h,
+                                  order, limiter, boundary, leftbin);
+      ir_cm_star_f += ifrac_r;
     }
 
     // Corner Case 4 (continue): Rightmost (nu_cm[f+1] >= nu_tet[N-1] >= nu_cm[f] && n0_cm > 1)
@@ -1244,8 +1306,7 @@ Real InvMapIntensity(const int &ifr, const DvceArray1D<Real> &nu_tet, const ScrA
       nu1 = nu_tet(idx_r);
       Real ir_cm_r = ir_cm_update(iang, idx_r);
       Real integral_r = 1./(4*M_PI) * BBIntegral(nu1, nu_cm_fp1, teff, a_rad);
-      frac_r = integral_r/ir_cm_r;
-      ir_cm_star_f += integral_r;
+      ir_cm_star_f += integral_r/ir_cm_r;
     }
   } // endelse
 

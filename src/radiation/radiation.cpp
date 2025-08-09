@@ -139,11 +139,11 @@ Radiation::Radiation(MeshBlockPack *ppack, ParameterInput *pin) :
     affect_fluid = pin->GetOrAddBoolean("radiation","affect_fluid",true);
 
     // multi-frequency radiation
-    if (multi_freq && !are_units_enabled) {
-      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-        << std::endl << "Units must be specified for multi-frequency radiation" << std::endl;
-      std::exit(EXIT_FAILURE);
-    }
+    // if (multi_freq && !are_units_enabled) {
+    //   std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+    //     << std::endl << "Units must be specified for multi-frequency radiation" << std::endl;
+    //   std::exit(EXIT_FAILURE);
+    // }
 
   } // endif rad_source
 
