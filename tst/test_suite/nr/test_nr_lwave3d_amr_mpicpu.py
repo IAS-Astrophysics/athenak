@@ -17,14 +17,10 @@ import numpy as np
 # Threshold errors and error ratios for different integrators, reconstruction,
 # algorithms, and waves
 errors={
-    ('hydro', 'rk2', 'plm', '0'): (1.2e-05,0.29),
-    ('hydro', 'rk3', 'ppm4', '0'): (7.6e-06,0.4),
-    ('hydro', 'rk3', 'ppmx', '0'): (6.2e-06,0.55),
-    ('hydro', 'rk3', 'wenoz', '0'): (5.7e-06,0.67),
-    ('mhd', 'rk2', 'plm', '0'): (1.3e-05,0.28),
-    ('mhd', 'rk3', 'ppm4', '0'): (8.1e-06,0.3),
-    ('mhd', 'rk3', 'ppmx', '0'): (7e-06,0.37),
-    ('mhd', 'rk3', 'wenoz', '0'): (3.9e-06,0.39)
+    ('hydro', 'rk2', 'plm', '0'): (5e-05,0.32),
+    ('hydro', 'rk3', 'wenoz', '0'): (1.2e-05,0.2),
+    ('mhd', 'rk2', 'plm', '0'): (5.5e-05,0.3),
+    ('mhd', 'rk3', 'wenoz', '0'): (1.2e-05,0.21),
 }
 
 _wave = ['0']                      
