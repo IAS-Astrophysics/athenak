@@ -86,9 +86,9 @@ Radiation::Radiation(MeshBlockPack *ppack, ParameterInput *pin) :
     nu_min = pin->GetReal("radiation", "nu_min");
     nu_max = pin->GetReal("radiation", "nu_max");
     std::string freq_scale = pin->GetOrAddString("radiation", "freq_scale", "log");
-    if (freq_scale.compare("linear"))
+    if (freq_scale.compare("linear") == 0)
       flag_fscale = 0;
-    else if (freq_scale.compare("customize"))
+    else if (freq_scale.compare("customize") == 0)
       flag_fscale = 2;
     else // log frequency grid
       flag_fscale = 1;

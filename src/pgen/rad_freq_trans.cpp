@@ -211,8 +211,8 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
 
       // create directory to save outputs if it does not exist
       std::string dir_name;
-      // dir_name.assign(pin->GetString("job", "basename") + "_output");
-      dir_name.assign("output");
+      // dir_name.assign(pin->GetString("job", "basename") + "_data");
+      dir_name.assign("data");
       mkdir(dir_name.c_str(),0775);
 
       // initialize output file
