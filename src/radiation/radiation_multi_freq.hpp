@@ -265,6 +265,9 @@ bool FourthPolyRoot(const Real coeff4, const Real coeff0, Real &root) {
 //         Return matrix inverse inv if A is not singular
 KOKKOS_INLINE_FUNCTION
 bool InverseMatrix(const int N, const ScrArray2D<Real> &A, ScrArray2D<Real> &aug, ScrArray2D<Real> &inv) {
+  bool doublecheck = true;
+  Real tol = 1e-2;
+
   // Create augmented matrix [A | I]
   // Real aug[N][2*N];
   for (int i=0; i<N; i++) {
@@ -326,6 +329,20 @@ bool InverseMatrix(const int N, const ScrArray2D<Real> &A, ScrArray2D<Real> &aug
       }
   } // endfor i
 
+  // Double check
+  if (doublecheck) {
+    for (int i=0; i<N; i++) {
+        for (int j=0; j<N; j++) {
+          Real sum = 0.0;
+          for (int k=0; k<N; k++) {
+            sum += A(i,k) * inv(k,j);
+          }
+          Real err = (i==j) ? fabs(1-sum) : fabs(sum);
+          if (err > tol) return false; // matrix A is ill-conditioned
+        } // endfor j
+    } // endfor i
+  } // endif doublecheck
+  
   return true;
 }
 

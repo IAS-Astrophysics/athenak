@@ -23,7 +23,7 @@
 
 //----------------------------------------------------------------------------------------
 //! \fn void MeshBlock::UserProblem(ParameterInput *pin)
-//  \brief Sets initial conditions for GR radiation relaxation test
+//  \brief Sets tests for multi-frequency intensity mapping
 
 void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   MeshBlockPack *pmbp = pmy_mesh_->pmb_pack;
@@ -235,6 +235,40 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
           i2_cm.d_view(ifr,iang) = fac_norm2 * i2_cm.d_view(ifr,iang);
           i3_cm.d_view(ifr,iang) = fac_norm3 * i3_cm.d_view(ifr,iang);
         } // endfor ifr
+
+        bool ifprint = false;
+        // ifprint = ((iang == 3) && (inv_success == 1));
+        if (ifprint) {
+          printf("inv_success=%d\n", inv_success);
+          printf("\n matrix_map: \n");
+          for (int ii=0; ii<=nfrq1; ii++) {
+              for (int jj=0; jj<=nfrq1; jj++) {
+                printf("%f ", matrix_map(ii,jj));
+              }
+              printf("\n");
+          }
+
+          printf("\n matrix_inv: \n");
+          for (int ii=0; ii<=nfrq1; ii++) {
+              for (int jj=0; jj<=nfrq1; jj++) {
+                printf("%f ", matrix_inv(ii,jj));
+              }
+              printf("\n");
+          }
+
+          printf("\n matrix_identity: \n");
+          for (int ii=0; ii<=nfrq1; ii++) {
+              for (int jj=0; jj<=nfrq1; jj++) {
+                Real sum_tmp = 0.0;
+                for (int kk = 0; kk<=nfrq1; kk++) {
+                  sum_tmp += matrix_map(ii,kk) * matrix_inv(kk,jj);
+                }
+                printf("%f ", sum_tmp);
+              }
+              printf("\n");
+          }
+        } // endif print
+
 
       } // endif save
 
