@@ -89,6 +89,7 @@ ShearingBoxBoundary::~ShearingBoxBoundary() {
       delete [] recvbuf[n].vars_req;
     }
   }
+  MPI_Comm_free(&comm_sbox);
 #endif
 }
 

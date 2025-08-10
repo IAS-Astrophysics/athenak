@@ -121,6 +121,9 @@ MeshRefinement::~MeshRefinement() {
     delete [] nref_rsum;
     delete [] nderef_rsum;
   }
+#if MPI_PARALLEL_ENABLED
+  MPI_Comm_free(&amr_comm);
+#endif
 }
 
 //----------------------------------------------------------------------------------------
