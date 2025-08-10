@@ -84,6 +84,8 @@ MeshBoundaryValues::~MeshBoundaryValues() {
     delete [] recvbuf[n].vars_req;
     delete [] recvbuf[n].flux_req;
   }
+  MPI_Comm_free(&comm_vars);
+  MPI_Comm_free(&comm_flux);
 #endif
 }
 
@@ -250,4 +252,7 @@ particles::ParticlesBoundaryValues::ParticlesBoundaryValues(
 // destructor
 
 particles::ParticlesBoundaryValues::~ParticlesBoundaryValues() {
+#if MPI_PARALLEL_ENABLED
+  MPI_Comm_free(&mpi_comm_part);
+#endif
 }

@@ -57,5 +57,6 @@ OrbitalAdvection::~OrbitalAdvection() {
     delete [] sendbuf[n].vars_req;
     delete [] recvbuf[n].vars_req;
   }
+  MPI_Comm_free(&comm_orb_advect);
 #endif
 }
