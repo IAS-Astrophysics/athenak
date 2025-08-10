@@ -180,7 +180,7 @@ TaskStatus Radiation::AddMultiFreqRadSrcTerm(Driver *pdriver, int stage) {
   // Scratch memory
   size_t scr_size = ScrArray2D<Real>::shmem_size(nfrq, nfrq) * 2
                   + ScrArray2D<Real>::shmem_size(nfrq, 2*nfrq)
-                  + ScrArray2D<Real>::shmem_size(nang, nfrq)
+                  + ScrArray2D<Real>::shmem_size(nang, nfrq) * 2
                   + ScrArray1D<Real>::shmem_size(nfr_ang)
                   + ScrArray1D<Real>::shmem_size(nang) * 4
                   + ScrArray1D<Real>::shmem_size(nfrq) * 5;
@@ -194,6 +194,7 @@ TaskStatus Radiation::AddMultiFreqRadSrcTerm(Driver *pdriver, int stage) {
     ScrArray2D<Real> matrix_inv(member.team_scratch(scr_level), nfrq, nfrq);
     ScrArray2D<Real> matrix_aug(member.team_scratch(scr_level), nfrq, 2*nfrq);
     ScrArray2D<Real> ir_cm_update(member.team_scratch(scr_level), nang, nfrq);
+    ScrArray2D<Real> ir_cm_star_update(member.team_scratch(scr_level), nang, nfrq);
     ScrArray1D<Real> ir_cm_n(member.team_scratch(scr_level), nfr_ang);
     ScrArray1D<Real> fac_norm(member.team_scratch(scr_level), nang);
     ScrArray1D<Real> ir_cm_grey(member.team_scratch(scr_level), nang);
@@ -421,8 +422,6 @@ TaskStatus Radiation::AddMultiFreqRadSrcTerm(Driver *pdriver, int stage) {
 
     // Step 3: update intensity and fluid variables
     if (!(badcell)) {
-      Real m_old[4] = {0.0}; Real m_new[4] = {0.0};
-
       // Step 4: update frequency-dependent intensity in the fluid frame
       for (int n=0; n<=nfr_ang-1; ++n) {
         // frequency and angle indices
@@ -449,13 +448,64 @@ TaskStatus Radiation::AddMultiFreqRadSrcTerm(Driver *pdriver, int stage) {
 
       } // endfor n
 
-      // TODO: normalize ir_cm_update
-
       // Step 5: map fluid-frame intensity back to coordinate-frame
       for (int iang=0; iang<=nang1; ++iang) {
         // variables for frame transformation
-        Real &n_0 = n_0_iang[iang];
-        Real &n0_cm = n0_cm_iang[iang];
+        Real &n_0 = n_0_iang(iang);
+        Real &n0_cm = n0_cm_iang(iang);
+
+        // reset mapping matrices
+        for (int nn=0; nn<=nfreq1; nn++) {
+            for (int mm=0; mm<=nfreq1; mm++) {
+              matrix_map(nn,mm) = 0.0;
+              matrix_inv(nn,mm) = 0.0;
+              matrix_aug(nn,mm) = 0.0;
+              matrix_aug(nn,mm+nfreq1) = 0.0;
+            } // endfor mm
+        } // endfor nn
+
+        // compute mapping matrix
+        for (int ifr=0; ifr<=nfreq1; ++ifr) {
+          // compute ifr-th row of mapping matrix
+          Real _ = MapIntensity(ifr, nu_tet, i0_, m, k, j, i, iang,
+                                n0_cm, n0, n_0, arad_, order, limiter,
+                                matrix_map, true);
+        } // endfor ifr
+
+        // inverse matrix
+        bool inv_success = InverseMatrix(nfrq, matrix_map, matrix_aug, matrix_inv);
+
+        // update intensity
+        fac_norm(iang) = 0.0;
+        Real ir_cm_star_grey = 0.0;
+        for (int ifr=0; ifr<=nfreq1; ++ifr) {
+         // compute inverse-mapped intensity
+         if (inv_success) {
+           Real ir_cm_star_update_f = 0.0;
+           for (int f=0; f<=nfreq1; ++f) {
+             ir_cm_star_update_f += matrix_inv(ifr,f) * ir_cm_update(iang,f);
+           }
+           ir_cm_star_update(iang,ifr) = ir_cm_star_update_f;
+         } else {
+           // piecewise linear reconstruct the intensity update
+           ir_cm_star_update(iang,ifr) = InvMapIntensity(ifr, nu_tet, ir_cm_update, iang, n0_cm, arad_, order, limiter);
+         } // endif !inverse_success
+
+         // sum for normalization
+         fac_norm(iang)  += ir_cm_update(iang,ifr);
+         ir_cm_star_grey += ir_cm_star_update(iang,ifr);
+        } // endfor ifr
+
+        // compute normalization factor
+        fac_norm(iang) *= 1./ir_cm_star_grey;
+      } // endfor iang
+
+      // Step 6: update intensity and compute moment differences
+      Real m_old[4] = {0.0}; Real m_new[4] = {0.0};
+      for (int iang=0; iang<=nang1; ++iang) {
+        // variables for frame transformation
+        Real &n_0 = n_0_iang(iang);
+        Real &n0_cm = n0_cm_iang(iang);
 
         // coordinate normal components
         Real n_1 = tc(m,0,1,k,j,i)*nh_c_.d_view(iang,0) + tc(m,1,1,k,j,i)*nh_c_.d_view(iang,1)
@@ -466,66 +516,37 @@ TaskStatus Radiation::AddMultiFreqRadSrcTerm(Driver *pdriver, int stage) {
                  + tc(m,2,3,k,j,i)*nh_c_.d_view(iang,2) + tc(m,3,3,k,j,i)*nh_c_.d_view(iang,3);
         Real &domega = solid_angles_.d_view(iang);
 
-        // reset mapping matrices
-        for (int ii=0; ii<=nfreq1; ii++) {
-            for (int jj=0; jj<=nfreq1; jj++) {
-              matrix_map(ii,jj) = 0.0;
-              matrix_inv(ii,jj) = 0.0;
-              matrix_aug(ii,jj) = 0.0;
-              matrix_aug(ii,jj+nfreq1) = 0.0;
-            } // endfor jj
-        } // endfor ii
-
-        // compute mapping matrix
         for (int ifr=0; ifr<=nfreq1; ++ifr) {
-          // compute ifr-th row of mapping matrix
-          Real _ = MapIntensity(ifr, nu_tet, i0_, m, k, j, i, iang,
-                                n0_cm, n0, n_0, arad_, order, limiter,
-                                matrix_map, true);
-        }
-        // inverse matrix
-        bool inv_success = InverseMatrix(nfrq, matrix_map, matrix_aug, matrix_inv);
+            int n = getFreqAngIndex(ifr, iang, nang);
 
-        // update intensity
-        for (int ifr=0; ifr<=nfreq1; ++ifr) {
-         int n = getFreqAngIndex(ifr, iang, nang);
+            // compute moments before coupling
+            m_old[0] += (    i0_(m,n,k,j,i)    *domega);
+            m_old[1] += (n_1*i0_(m,n,k,j,i)/n_0*domega);
+            m_old[2] += (n_2*i0_(m,n,k,j,i)/n_0*domega);
+            m_old[3] += (n_3*i0_(m,n,k,j,i)/n_0*domega);
 
-         // compute inverse-mapped intensity
-         Real ir_cm_star_update = 0.0;
-         if (inv_success) {
-           for (int f=0; f<=nfreq1; ++f) {
-             ir_cm_star_update += matrix_inv(ifr,f) * ir_cm_update(iang,f);
-           }
-         } else {
-           // piecewise linear reconstruct the intensity update
-           ir_cm_star_update = InvMapIntensity(ifr, nu_tet, ir_cm_update, iang, n0_cm, arad_, order, limiter);
-         } // endif !inverse_success
+            // normalize ir_cm_star_update
+            Real ir_cm_star_update_f = fac_norm(iang)*ir_cm_star_update(iang,ifr);
 
-         // compute moments before coupling
-         m_old[0] += (    i0_(m,n,k,j,i)    *domega);
-         m_old[1] += (n_1*i0_(m,n,k,j,i)/n_0*domega);
-         m_old[2] += (n_2*i0_(m,n,k,j,i)/n_0*domega);
-         m_old[3] += (n_3*i0_(m,n,k,j,i)/n_0*domega);
+            // update lab-frame intensity
+            i0_(m,n,k,j,i) = (n0*n_0)*fmax(ir_cm_star_update_f, 0.0)/SQR(SQR(n0_cm));
 
-         // update lab-frame intensity
-         i0_(m,n,k,j,i) = (n0*n_0)*fmax(ir_cm_star_update, 0.0)/SQR(SQR(n0_cm));
+            // compute moments after coupling
+            m_new[0] += (    i0_(m,n,k,j,i)    *domega);
+            m_new[1] += (n_1*i0_(m,n,k,j,i)/n_0*domega);
+            m_new[2] += (n_2*i0_(m,n,k,j,i)/n_0*domega);
+            m_new[3] += (n_3*i0_(m,n,k,j,i)/n_0*domega);
 
-         // compute moments after coupling
-         m_new[0] += (    i0_(m,n,k,j,i)    *domega);
-         m_new[1] += (n_1*i0_(m,n,k,j,i)/n_0*domega);
-         m_new[2] += (n_2*i0_(m,n,k,j,i)/n_0*domega);
-         m_new[3] += (n_3*i0_(m,n,k,j,i)/n_0*domega);
         } // endfor ifr
+      } // endfor iang
 
-      } // endfor n
-
-      // Step 3.3: update fluid variables
+      // Step 7: update fluid variables
       u0_(m,IEN,k,j,i) += (m_old[0] - m_new[0]);
       u0_(m,IM1,k,j,i) += (m_old[1] - m_new[1]);
       u0_(m,IM2,k,j,i) += (m_old[2] - m_new[2]);
       u0_(m,IM3,k,j,i) += (m_old[3] - m_new[3]);
-
     } // endif (!(badcell))
+
 
 
 
