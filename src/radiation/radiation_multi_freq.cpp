@@ -182,7 +182,7 @@ TaskStatus Radiation::AddMultiFreqRadSrcTerm(Driver *pdriver, int stage) {
                   + ScrArray2D<Real>::shmem_size(nfrq, 2*nfrq)
                   + ScrArray2D<Real>::shmem_size(nang, nfrq)
                   + ScrArray1D<Real>::shmem_size(nfr_ang)
-                  + ScrArray1D<Real>::shmem_size(nang) * 3
+                  + ScrArray1D<Real>::shmem_size(nang) * 4
                   + ScrArray1D<Real>::shmem_size(nfrq) * 5;
   int scr_level = 0;
 
@@ -195,6 +195,7 @@ TaskStatus Radiation::AddMultiFreqRadSrcTerm(Driver *pdriver, int stage) {
     ScrArray2D<Real> matrix_aug(member.team_scratch(scr_level), nfrq, 2*nfrq);
     ScrArray2D<Real> ir_cm_update(member.team_scratch(scr_level), nang, nfrq);
     ScrArray1D<Real> ir_cm_n(member.team_scratch(scr_level), nfr_ang);
+    ScrArray1D<Real> fac_norm(member.team_scratch(scr_level), nang);
     ScrArray1D<Real> ir_cm_grey(member.team_scratch(scr_level), nang);
     ScrArray1D<Real> n_0_iang(member.team_scratch(scr_level), nang);
     ScrArray1D<Real> n0_cm_iang(member.team_scratch(scr_level), nang);
@@ -270,6 +271,7 @@ TaskStatus Radiation::AddMultiFreqRadSrcTerm(Driver *pdriver, int stage) {
       wght_sum += domega_cm;
 
       // initialize variables for later use when guessing temperature update
+      fac_norm(iang) = 0;
       ir_cm_grey(iang) = 0;
     } // endfor iang
 
@@ -291,7 +293,7 @@ TaskStatus Radiation::AddMultiFreqRadSrcTerm(Driver *pdriver, int stage) {
       jr_cm_old(ifr) = 0;
     } // endfor ifr
 
-    // Step 1: map intensity from coordinate frame to fluid frame
+    // Step 1: map intensity from fluid-frame to coordinate-frame frequency bins
     Real &nu_e = nu_tet(nfreq1); // last tetrad-frame frequency
     for (int n=0; n<=nfr_ang-1; ++n) {
       // frequency and angle indices
@@ -308,6 +310,31 @@ TaskStatus Radiation::AddMultiFreqRadSrcTerm(Driver *pdriver, int stage) {
                                   matrix_map, false);
       ir_cm_n(n) = ir_cm_f;
 
+      // sum for normalization
+      fac_norm(iang) += SQR(SQR(n0_cm))*i0_(m,n,k,j,i)/(n0*n_0);
+      ir_cm_grey(iang) += ir_cm_f;
+
+    } // endfor n
+
+    // compute normalization factors
+    for (int iang=0; iang<=nang1; ++iang) {
+      fac_norm(iang) *= 1./ir_cm_grey(iang);
+      ir_cm_grey(iang) = 0.; // reset for assignment after normalization
+    } // endfor iang
+
+    // compute normalized quantities
+    for (int n=0; n<=nfr_ang-1; ++n) {
+      // frequency and angle indices
+      int ifr, iang;
+      getFreqAngIndices(n, nang, ifr, iang);
+
+      // variables for frame transformation
+      Real &n0_cm = n0_cm_iang(iang);
+
+      // normalization
+      ir_cm_n(n) *= fac_norm(iang);
+      Real &ir_cm_f = ir_cm_n(n);
+
       // set coefficients for solving temperature update
       Real &chf_p=chi_p(ifr), &chf_r=chi_r(ifr), &chf_s=chi_s;
       Real chf_f = chf_r + chf_s;
@@ -317,10 +344,8 @@ TaskStatus Radiation::AddMultiFreqRadSrcTerm(Driver *pdriver, int stage) {
       sum_b(ifr) += n0_cm*dt_/(n0+n0_cm*chf_f*dt_)*domega_cm/(4*M_PI);
       jr_cm_old(ifr) += ir_cm_f*domega_cm/(4*M_PI);
       ir_cm_grey(iang) += ir_cm_f; // used in guessing gas temperature
-
     } // endfor n
 
-    // TODO: normalization of intensity
 
     // Step 2: compute source terms and solve gas temperature update
     bool guess_grey_tgas = true;
@@ -424,7 +449,9 @@ TaskStatus Radiation::AddMultiFreqRadSrcTerm(Driver *pdriver, int stage) {
 
       } // endfor n
 
-      // Step 5: map fluid-frame intensity back to lab frame
+      // TODO: normalize ir_cm_update
+
+      // Step 5: map fluid-frame intensity back to coordinate-frame
       for (int iang=0; iang<=nang1; ++iang) {
         // variables for frame transformation
         Real &n_0 = n_0_iang[iang];
@@ -438,6 +465,16 @@ TaskStatus Radiation::AddMultiFreqRadSrcTerm(Driver *pdriver, int stage) {
         Real n_3 = tc(m,0,3,k,j,i)*nh_c_.d_view(iang,0) + tc(m,1,3,k,j,i)*nh_c_.d_view(iang,1)
                  + tc(m,2,3,k,j,i)*nh_c_.d_view(iang,2) + tc(m,3,3,k,j,i)*nh_c_.d_view(iang,3);
         Real &domega = solid_angles_.d_view(iang);
+
+        // reset mapping matrices
+        for (int ii=0; ii<=nfreq1; ii++) {
+            for (int jj=0; jj<=nfreq1; jj++) {
+              matrix_map(ii,jj) = 0.0;
+              matrix_inv(ii,jj) = 0.0;
+              matrix_aug(ii,jj) = 0.0;
+              matrix_aug(ii,jj+nfreq1) = 0.0;
+            } // endfor jj
+        } // endfor ii
 
         // compute mapping matrix
         for (int ifr=0; ifr<=nfreq1; ++ifr) {

@@ -927,13 +927,13 @@ Real MapIntensity(const int &ifr, const DvceArray1D<Real> &nu_tet, const DvceArr
   Real teff = GetEffTemperature(ir_cm_star_e, n0_cm*nu_e, a_rad);
 
   // locate left & right fluid-frame frequency bins (if exist)
-  // -1 <= idx_l   <= N-1
-  //  0 <= idx_l+1 <= N
+  // -1 <= idx_l   <= N-2
+  //  0 <= idx_l+1 <= N-1
   int idx_lp1=0;
   while ((n0_cm*nu_tet(idx_lp1) < nu_f) && (idx_lp1 <= nfreq1)) idx_lp1++;
   int idx_l = idx_lp1-1;
-  // -1 <= idx_r   <= N-1
-  //  0 <= idx_r+1 <= N
+  // -1 <= idx_r   <= N-2
+  //  0 <= idx_r+1 <= N-1
   int idx_r=-1, idx_rp1=-1;
   if (ifr+1 <= nfreq1) {
     idx_rp1=fmax(idx_l,0);
@@ -941,14 +941,6 @@ Real MapIntensity(const int &ifr, const DvceArray1D<Real> &nu_tet, const DvceArr
     while ((n0_cm*nu_tet(idx_rp1) <= nu_fp1) && (idx_rp1 <= nfreq1)) idx_rp1++;
     idx_r = idx_rp1-1;
   }
-
-  // bool ifprint = ((m==0) && (k==2) && (j==2) && (i==2) && (iang==5) && (ifr==0));
-  // if (ifprint) {
-  //   printf("  n0_cm=%f, nu_cm_e=%f, \n", n0_cm, n0_cm*nu_e);
-  //   printf("  idx_l=%d, nu_cm_l=%f, nu_f  =%f, nu_cm_lp1=%f, \n", idx_l, n0_cm*nu_tet(idx_l), nu_f, n0_cm*nu_tet(idx_l+1));
-  //   printf("  idx_r=%d, nu_cm_r=%f, nu_fp1=%f, nu_cm_rp1=%f, \n", idx_r, n0_cm*nu_tet(idx_r), nu_tet(ifr+1), n0_cm*nu_tet(idx_r+1));
-  // }
-
 
   // get mapping coefficients
   if (nu_f >= n0_cm*nu_e) { // only happen when (n0_cm < 1)
@@ -973,6 +965,7 @@ Real MapIntensity(const int &ifr, const DvceArray1D<Real> &nu_tet, const DvceArr
       integral_f = 1./(4*M_PI) * a_rad*SQR(SQR(teff)); // from 0 to inf
       integral_f = integral_f - 1./(4*M_PI) * BBIntegral(0, nu_f, teff, a_rad);
     }
+    integral_f = fmax(0, integral_f); // avoid negative number in machine precision
     Real frac_f = integral_f/ir_cm_star_e;
     ir_cm_f += integral_f;
     if (update_matrix_row) matrix_imap(ifr,nfreq1) = frac_f;
@@ -1023,7 +1016,6 @@ Real MapIntensity(const int &ifr, const DvceArray1D<Real> &nu_tet, const DvceArr
   } else { // (f <= N-2)
 
     Real &nu_fp1 = nu_tet(ifr+1);
-
     // General Case:
     // Given frequency bin [nu_tet(f), nu_tet(f+1)],
     // we can always find nu_cm(L) <  nu_tet(f)   <= nu_cm(L+1)
@@ -1042,8 +1034,6 @@ Real MapIntensity(const int &ifr, const DvceArray1D<Real> &nu_tet, const DvceArr
       ir_cm_f += SQR(SQR(n0_cm))*i0(m,nf,k,j,i)/(n0*n_0);
       if (update_matrix_row) matrix_imap(ifr,f) = 1;
     }
-
-    // if (ifprint) printf("  ir_cm_f: %e \n", ir_cm_f);
 
     // Left:                            (nu_f)
     //                                 nu_tet[f]
@@ -1074,10 +1064,6 @@ Real MapIntensity(const int &ifr, const DvceArray1D<Real> &nu_tet, const DvceArr
       if (update_matrix_row) matrix_imap(ifr,idx_l) = ifrac_l/ir_cm_star_1;
     }
 
-    // if (ifprint)
-    //   printf("  left: %d, ir_cm_f: %e, ifrac_l: %e, frac_l: %e \n",
-    //             left_bin_assigned, ir_cm_f, ifrac_l, ifrac_l/ir_cm_star_1);
-
     // Right:                          (nu_fp1)
     //                                nu_tet[f+1]
     // ................................ ---|--- ......................... --->
@@ -1107,17 +1093,6 @@ Real MapIntensity(const int &ifr, const DvceArray1D<Real> &nu_tet, const DvceArr
       ir_cm_f += ifrac_r;
       if (update_matrix_row) matrix_imap(ifr,idx_r) = ifrac_r/ir_cm_star_1;
     }
-
-
-
-    // if (ifprint) {
-    //   printf("  boundary: %d \n", boundary);
-    //   printf("  nu1h: %e, nu1: %e, nu3h: %e, nu2: %e, nu5h: %e \n", nu1h, nu1, nu3h, nu2, nu5h);
-    //   printf("  inu1h: %e, inu1: %e, inu3h: %e, inu2: %e, inu5h: %e \n", inu1h, inu1, inu3h, inu2, inu5h);
-    //   printf("  right: %d, ir_cm_f: %e, ifrac_r: %e, frac_r: %e \n",
-    //             right_bin_assigned, ir_cm_f, ifrac_r, ifrac_r/ir_cm_star_1);
-    // }
-
 
     // Corner Case 4 (continue): Rightmost (nu_tet[f+1] >= nu_cm[N-1] >= nu_tet[f] && n0_cm < 1)
     //    (nu_f)                 (nu_fp1)
@@ -1203,18 +1178,18 @@ Real InvMapIntensity(const int &ifr, const DvceArray1D<Real> &nu_tet, const ScrA
   Real teff = GetEffTemperature(ir_cm_e, nu_e, a_rad);
 
   // locate left & right tetrad-frame frequency bins (if exist)
-  // -1 <= idx_l   <= N-1
-  //  0 <= idx_l+1 <= N
+  // -1 <= idx_l   <= N-2
+  //  0 <= idx_l+1 <= N-1
   int idx_lp1=0;
-  while ((nu_tet(idx_lp1) < nu_cm_f) && (idx_lp1 <= nfrq)) idx_lp1++;
+  while ((nu_tet(idx_lp1) < nu_cm_f) && (idx_lp1 <= nfreq1)) idx_lp1++;
   int idx_l = idx_lp1-1;
-  // -1 <= idx_r   <= N-1
-  //  0 <= idx_r+1 <= N
+  // -1 <= idx_r   <= N-2
+  //  0 <= idx_r+1 <= N-1
   int idx_r=-1, idx_rp1=-1;
   if (ifr+1 <= nfreq1) {
     idx_rp1=fmax(idx_l,0);
     Real nu_cm_fp1 = n0_cm*nu_tet(ifr+1);
-    while ((nu_tet(idx_rp1) <= nu_cm_fp1) && (idx_rp1 <= nfrq)) idx_rp1++;
+    while ((nu_tet(idx_rp1) <= nu_cm_fp1) && (idx_rp1 <= nfreq1)) idx_rp1++;
     idx_r = idx_rp1-1;
   }
 
@@ -1230,7 +1205,7 @@ Real InvMapIntensity(const int &ifr, const DvceArray1D<Real> &nu_tet, const ScrA
       integral_f = 1./(4*M_PI) * a_rad*SQR(SQR(teff)); // from 0 to inf
       integral_f = integral_f - 1./(4*M_PI) * BBIntegral(0, nu_cm_f, teff, a_rad);
     }
-    // Real frac_f = integral_f/ir_cm_e;
+    integral_f = fmax(0, integral_f); // avoid negative number in machine precision
     ir_cm_star_f += integral_f;
 
   } else if ((ifr == nfreq1) && (n0_cm < 1)) { // (f = N-1) && (n0_cm < 1)
@@ -1291,7 +1266,7 @@ Real InvMapIntensity(const int &ifr, const DvceArray1D<Real> &nu_tet, const ScrA
                                                      ir_cm_1, boundary);
     // compute right fractional contribution
     Real ifrac_r = 0;
-    if (right_bin_assigned) {
+    if ((right_bin_assigned) && (idx_r > idx_l)) {
       bool leftbin = false;
       ifrac_r = IntensityFraction(nu_cm_f, nu_cm_fp1,
                                   nu1h, nu1, nu3h, nu2, nu5h,
@@ -1306,7 +1281,7 @@ Real InvMapIntensity(const int &ifr, const DvceArray1D<Real> &nu_tet, const ScrA
       nu1 = nu_tet(idx_r);
       Real ir_cm_r = ir_cm_update(iang, idx_r);
       Real integral_r = 1./(4*M_PI) * BBIntegral(nu1, nu_cm_fp1, teff, a_rad);
-      ir_cm_star_f += integral_r/ir_cm_r;
+      ir_cm_star_f += integral_r;
     }
   } // endelse
 
