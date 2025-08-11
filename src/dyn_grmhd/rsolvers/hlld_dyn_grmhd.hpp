@@ -409,7 +409,7 @@ void HLLD_DYNGR(TeamMember_t const &member,
           bfint[iby] = bflux_r[iby] + lambda_r*(Bar[iby] - Bu_r[iby]);
           bfint[ibz] = bflux_r[ibz] + lambda_r*(Bar[ibz] - Bu_r[ibz]);
          
-          if (vint >= lar) {
+          if (vint < lar) {
             // Compute the right contact state using the RH conditions on the Alfven
             // state.
             for (int v = 0; v < nhyd; v++) {
