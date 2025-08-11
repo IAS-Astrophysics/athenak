@@ -46,14 +46,10 @@ def run_command(command: List[str], text: bool = False) -> bool:
     
     logging.info(f"Executing command: {' '.join(command)}")
     process = Popen(command, stdout=PIPE, stderr=PIPE, text=True)
-    # Log the output and errors only to the file
+    # Log the output only to the file
     with open(LOG_FILE_PATH, "a") as log_file:
         output, errors = process.communicate()
-        log_file.write("Command Output:\n")
-        log_file.write(output)  # Write output as-is
-        log_file.write("\nCommand Errors:\n")
-        log_file.write(errors)  # Write errors as-is
-        log_file.write("\n")
+        log_file.write(output)
 
     if process.returncode != 0:
         logging.error(f"Command failed with return code {process.returncode}")
@@ -131,7 +127,7 @@ def run(inputfile: str, flags=[], **kwargs)-> bool:
         raise RuntimeError(f"Failed to execute {inputfile} with flags {flags}")
     return True
 
-def mpi_run(inputfile: str, flags=[], threads: int = 16, **kwargs) -> bool:
+def mpi_run(inputfile: str, flags=[], threads: int = min(16,os.cpu_count()), **kwargs) -> bool:
     """
     Executes a test case using the AthenaK binary with MPI support.
 
