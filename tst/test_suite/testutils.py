@@ -22,7 +22,15 @@ ATHENAK_BUILD = "build/src"
 import logging
 
 # Configure logging
-logging.basicConfig(level=logging.INFO,format='%(asctime)s - %(levelname)s - %(message)s')
+LOG_FILE_PATH = os.path.abspath(os.path.join(ATHENAK_PATH, 'tst', 'test_log.txt'))
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler(LOG_FILE_PATH),
+        logging.StreamHandler()  # Optional: Keep console logging
+    ]
+)
 
 def run_command(command: List[str], text: bool = False) -> bool:
     """
@@ -37,11 +45,16 @@ def run_command(command: List[str], text: bool = False) -> bool:
     """
     
     logging.info(f"Executing command: {' '.join(command)}")
-    process = Popen(command, stdout=PIPE, stderr=PIPE, text=text)
-    output, errors = process.communicate()
-    if text:
-        logging.debug(f"Output: {output}")
-        logging.debug(f"Errors: {errors}")
+    process = Popen(command, stdout=PIPE, stderr=PIPE, text=True)
+    # Log the output and errors only to the file
+    with open(LOG_FILE_PATH, "a") as log_file:
+        output, errors = process.communicate()
+        log_file.write("Command Output:\n")
+        log_file.write(output)  # Write output as-is
+        log_file.write("\nCommand Errors:\n")
+        log_file.write(errors)  # Write errors as-is
+        log_file.write("\n")
+
     if process.returncode != 0:
         logging.error(f"Command failed with return code {process.returncode}")
     return process.returncode == 0
@@ -118,7 +131,7 @@ def run(inputfile: str, flags=[], **kwargs)-> bool:
         raise RuntimeError(f"Failed to execute {inputfile} with flags {flags}")
     return True
 
-def mpi_run(inputfile: str, flags=[], threads: int = min(16,os.cpu_count()), **kwargs) -> bool:
+def mpi_run(inputfile: str, flags=[], threads: int = 16, **kwargs) -> bool:
     """
     Executes a test case using the AthenaK binary with MPI support.
 
