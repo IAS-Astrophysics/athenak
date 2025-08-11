@@ -5,7 +5,7 @@
 // Copyright(C) 2020 James M. Stone <jmstone@ias.edu> and the Athena code team
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
-//! \file hlle_dyngrmhd.hpp
+//! \file hlle_transforming.hpp
 //! \brief HLLE Riemann solver for GRMHD that first transforms to local flat space
 
 #include <math.h>

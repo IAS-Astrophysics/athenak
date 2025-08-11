@@ -263,7 +263,6 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
         std::exit(EXIT_FAILURE);
       }
 
-    // Non-relativistic dynamic solvers
     } else if (pmy_pack->pcoord->is_dynamical_relativistic) {
       if (evolution_t.compare("dynamic") != 0) {
         std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
@@ -271,6 +270,7 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
                   << std::endl;
         std::exit(EXIT_FAILURE);
       }
+    // Non-relativistic dynamic solvers
     } else if (evolution_t.compare("dynamic") == 0) {
       // LLF solver
       if (rsolver.compare("llf") == 0) {
