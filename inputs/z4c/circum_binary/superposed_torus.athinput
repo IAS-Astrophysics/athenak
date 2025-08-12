@@ -7,36 +7,42 @@ basename  = torus
 
 <mesh>
 nghost = 4        # Number of ghost cells
-nx1    = 32	   # number of cells in x1-direction
-x1min  = -32.0  # minimum x1
-x1max  = 32.0   # maximum x1
+nx1    = 48	   # number of cells in x1-direction
+x1min  = -64.0  # minimum x1
+x1max  = 64.0   # maximum x1
 ix1_bc = outflow     # inner boundary
 ox1_bc = outflow     # outer boundary
 
-nx2    = 32	  # number of cells in x2-direction
-x2min  = -32.0  # minimum x2
-x2max  = 32.0   # maximum x2
+nx2    = 48	  # number of cells in x2-direction
+x2min  = -64.0  # minimum x2
+x2max  = 64.0   # maximum x2
 ix2_bc = outflow     # inner boundary
 ox2_bc = outflow     # outer boundary
 
-nx3    = 32	   # number of cells in x3-direction
-x3min  = -32.0  # minimum x3
-x3max  = 32.0   # maximum x3
+nx3    = 48	   # number of cells in x3-direction
+x3min  = -64.0  # minimum x3
+x3max  = 64.0   # maximum x3
 ix3_bc = outflow     # inner boundary
 ox3_bc = outflow     # outer boundary
 
 <meshblock>
-nx1  = 32         # Number of cells in each MeshBlock, X1-dir
-nx2  = 32          # Number of cells in each MeshBlock, X2-dir
-nx3  = 32          # Number of cells in each MeshBlock, X3-dir
+nx1  = 6         # Number of cells in each MeshBlock, X1-dir
+nx2  = 6          # Number of cells in each MeshBlock, X2-dir
+nx3  = 6          # Number of cells in each MeshBlock, X3-dir
 
 <time>
 evolution  = dynamic     # dynamic/kinematic/static
 integrator = rk2         # time integration algorithm
-cfl_number = 0.1         # The Courant, Friedrichs, & Lewy (CFL) Number
+cfl_number = 0.4         # The Courant, Friedrichs, & Lewy (CFL) Number
 nlim	   = -1         # cycle limit
-tlim	   = 10.0    # time limit
+tlim	   = 400.0    # time limit
 ndiag	   = 10          # cycles between diagostic output
+
+<mesh_refinement>
+refinement       = adaptive    # type of refinement
+max_nmb_per_rank = 500
+num_levels       = 2
+refinement_interval = 1
 
 <coord>
 general_rel = true	# general relativity
@@ -83,13 +89,17 @@ rho_max   = 1.0       # if > 0, rescale rho to have this peak; rescale pres by s
 l         = 0.0       # const. ang. mom. per unit mass u^t u_phi; only used if r_peak < 0
 pert_amp  = 2.0e-2    # perturbation amplitude
 user_hist = false      # enroll user-defined history function
-amr_condition = alpha_min
-radius_thr = 10.0
-alpha_thr = 0.2
-sep = 20.0
-q = 1.0
+sep = 20.
+q = 1.
 a1 = 0.
 a2 = 0.
+
+# mesh refinement
+amr_condition = none #tracker
+radius_thr = 10.0
+alpha_thr = 0.2
+radius_0_rad = 24
+radius_0_reflevel = 0
 
 #<output1>
 #file_type  = hst        # History output
@@ -97,20 +107,20 @@ a2 = 0.
 #user_hist_only = true   # only output user-defined history
 
 <output1>
-file_type  = vtk        # Binary data dump
+file_type  = bin        # Binary data dump
 variable   = mhd_w_bcc  # variables to be output
-dt         = 1.0      # time increment between outputs
+dt         = 50.0      # time increment between outputs
 
 <output2>
-file_type  = vtk        # Binary data dump
+file_type  = bin        # Binary data dump
 variable   = adm  # variables to be output
-dt         = 1.0      # time increment between outputs
+dt         = 50.0      # time increment between outputs
 
 <output3>
-file_type  = vtk
+file_type  = bin
 variable   = tmunu
-dt         = 1.
+dt         = 50.
 
 <output4>
 file_type   = rst         # Restart file
-dt         = 1.0
+dt         = 100

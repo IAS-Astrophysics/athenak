@@ -254,15 +254,19 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
 
   for (int nr = 0; nr < 16; ++nr) {
     std::string name = "radius_" + std::to_string(nr) + "_rad";
-    bbh_ref.radius.push_back(pin->GetReal("problem", name));
-    bbh_ref.reflevel.push_back(pin->GetOrAddInteger(
-        "problem", "radius_" + std::to_string(nr) + "_reflevel", -1));
+    if (pin->DoesParameterExist("problem", name)) {
+      bbh_ref.radius.push_back(pin->GetReal("problem", name));
+      bbh_ref.reflevel.push_back(pin->GetOrAddInteger(
+          "problem", "radius_" + std::to_string(nr) + "_reflevel", -1));
+    } else {
+      break;
+    }
   }
 
-  std::string amr_cond = pin->GetOrAddString("problem", "amr_condition", "track");
+  std::string amr_cond = pin->GetOrAddString("problem", "amr_condition", "none");
   if (amr_cond == "alpha_min") {
     bbh_ref.AlphaMin = true;
-  } else {
+  } else if (amr_cond == "tracker") {
     bbh_ref.Tracker = true;
   }
 
