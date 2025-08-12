@@ -89,7 +89,7 @@ if args.test is not None:
                 setattr(args, suffix, [])
         else:
             setattr(args, suffix, None)
-            
+
     if "_cpu" not in tests and "_mpicpu" not in tests and "_gpu" not in tests:
         print("Invalid test name. Please ensure it contains '_cpu', '_mpicpu', or '_gpu'.")
         sys.exit(1)
@@ -103,9 +103,7 @@ if args.mpicpu != None:
     pytest.main([tests, "-k", "_mpicpu"])  # run all scripts with _mpicpu in name
 
 if args.gpu != None: 
-    testutils.clean_make(flags=cmake_flags(args.gpu, ["-D", "Kokkos_ENABLE_CUDA=On"]),text=True)
+    testutils.clean_make(flags=cmake_flags(args.gpu, ["-D", "Kokkos_ENABLE_CUDA=On"]))
     pytest.main([tests, "-k", "_gpu"])     # run all scripts with _gpu in name
 
-    
-    pytest.main(["test_suite", "-k", args.test])  # Run the specific test by name
 testutils.clean()
