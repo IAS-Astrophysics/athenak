@@ -469,7 +469,6 @@ void ProblemGenerator::LinearWave(ParameterInput *pin, const bool restart) {
         pmbp->phydro->peos->PrimToCons(w0, pmbp->phydro->u1, is, ie, js, je, ks, ke);
       }
     }
-
   }  // End initialization Hydro variables
 
   // initialize MHD variables ------------------------------------------------------------
@@ -772,7 +771,6 @@ void ProblemGenerator::LinearWave(ParameterInput *pin, const bool restart) {
         pmbp->pmhd->peos->PrimToCons(w0, bcc0, pmbp->pmhd->u1, is, ie, js, je, ks, ke);
       }
     }
-
   }  // End initialization MHD variables
 
   return;
