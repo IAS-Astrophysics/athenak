@@ -1,0 +1,116 @@
+<comment>
+problem   = Chakrabarti equilibrium torus
+reference = Chakrabarti, S. 1985, ApJ 288, 1
+
+<job>
+basename  = torus
+
+<mesh>
+nghost = 4        # Number of ghost cells
+nx1    = 32	   # number of cells in x1-direction
+x1min  = -32.0  # minimum x1
+x1max  = 32.0   # maximum x1
+ix1_bc = outflow     # inner boundary
+ox1_bc = outflow     # outer boundary
+
+nx2    = 32	  # number of cells in x2-direction
+x2min  = -32.0  # minimum x2
+x2max  = 32.0   # maximum x2
+ix2_bc = outflow     # inner boundary
+ox2_bc = outflow     # outer boundary
+
+nx3    = 32	   # number of cells in x3-direction
+x3min  = -32.0  # minimum x3
+x3max  = 32.0   # maximum x3
+ix3_bc = outflow     # inner boundary
+ox3_bc = outflow     # outer boundary
+
+<meshblock>
+nx1  = 32         # Number of cells in each MeshBlock, X1-dir
+nx2  = 32          # Number of cells in each MeshBlock, X2-dir
+nx3  = 32          # Number of cells in each MeshBlock, X3-dir
+
+<time>
+evolution  = dynamic     # dynamic/kinematic/static
+integrator = rk2         # time integration algorithm
+cfl_number = 0.1         # The Courant, Friedrichs, & Lewy (CFL) Number
+nlim	   = -1         # cycle limit
+tlim	   = 10.0    # time limit
+ndiag	   = 10          # cycles between diagostic output
+
+<coord>
+general_rel = true	# general relativity
+m           = 1.0
+a           = 0.0
+excise      = true
+excision_scheme = lapse
+excise_lapse = 0.5
+dexcise = 1.0e-10
+pexcise = 1.0e-18
+
+<mhd>
+eos         = ideal	 # EOS type
+dyn_eos     = ideal	 # EOS type
+dyn_error   = reset_floor # EOS type
+reconstruct = wenoz	  # spatial reconstruction method
+rsolver     = hlle	 # Riemann-solver to be used
+dfloor      = 1.0e-10     # floor on density rho
+pfloor      = 1.0e-18  # floor on gas pressure p_gas
+tfloor      = 1.0e-8  # floor on gas pressure p_gas
+gamma       = 1.44444444444 # ratio of specific heats Gamma
+fofc        = true	 # Enable first order flux correction
+gamma_max   = 20.0	 # Enable ceiling on Lorentz factor
+enforce_maximum = false
+dmp_M       = 1.2
+calculate_tmunu = true   # calculate stress energy tensor
+
+<adm>
+dynamic = true
+
+<problem>
+chakrabarti_torus = true  # Chakrabarti
+r_edge            = 20.0  # radius of inner edge of disk
+r_peak            = 30.2  # radius of pressure maximum; use l instead if negative
+tilt_angle        = 0.0   # angle (deg) to incl disk spin axis rel. to BH spin in dir of x
+potential_beta_min = 100.0  # ratio of gas to magnetic pressure at maxima (diff locations)
+potential_cutoff   = 0.2    # amount to subtract from density when calculating potential
+potential_rho_pow = 1.0     # dependence of the vector potential on density rho
+rho_min   = 1.0e-5    # background on rho given by rho_min ...
+rho_pow   = -1.5      # ... * r^rho_pow
+pgas_min  = 0.333e-7  # background on p_gas given by pgas_min ...
+pgas_pow  = -2.5      # ... * r^pgas_pow
+rho_max   = 1.0       # if > 0, rescale rho to have this peak; rescale pres by same factor
+l         = 0.0       # const. ang. mom. per unit mass u^t u_phi; only used if r_peak < 0
+pert_amp  = 2.0e-2    # perturbation amplitude
+user_hist = false      # enroll user-defined history function
+amr_condition = alpha_min
+radius_thr = 10.0
+alpha_thr = 0.2
+sep = 20.0
+q = 1.0
+a1 = 0.
+a2 = 0.
+
+#<output1>
+#file_type  = hst        # History output
+#dt         = 10.0       # time increment between outputs
+#user_hist_only = true   # only output user-defined history
+
+<output1>
+file_type  = vtk        # Binary data dump
+variable   = mhd_w_bcc  # variables to be output
+dt         = 1.0      # time increment between outputs
+
+<output2>
+file_type  = vtk        # Binary data dump
+variable   = adm  # variables to be output
+dt         = 1.0      # time increment between outputs
+
+<output3>
+file_type  = vtk
+variable   = tmunu
+dt         = 1.
+
+<output4>
+file_type   = rst         # Restart file
+dt         = 1.0
