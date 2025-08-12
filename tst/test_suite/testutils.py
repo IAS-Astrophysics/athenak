@@ -96,7 +96,8 @@ def make(threads: int = os.cpu_count(), **kwargs) -> bool:
     Raises:
         RuntimeError: If the Make command fails.
     """
-    command = ['make', '-C', ATHENAK_BUILD, '-j', f'{threads}']
+    os.chdir(ATHENAK_BUILD)
+    command = ['make', '-j', f'{threads}']
     start_time = time.time()
     status =  run_command(command, **kwargs)
     end_time = time.time()
@@ -121,7 +122,7 @@ def run(inputfile: str, flags=[], **kwargs)-> bool:
     Raises:
         AssertionError: If the test case execution fails.
     """
-    command = [f"{ATHENAK_BUILD}/athena", '-i', inputfile] + flags
+    command = ["./athena", '-i', inputfile] + flags
     if not run_command(command, **kwargs):
         logging.error(f"Failed to execute {inputfile} with flags {flags}")
         raise RuntimeError(f"Failed to execute {inputfile} with flags {flags}")
@@ -144,7 +145,7 @@ def mpi_run(inputfile: str, flags=[], threads: int = min(16,os.cpu_count()), **k
         AssertionError: If the test case execution fails.
     """
     command = ['mpirun', '-np', str(threads),
-               f"{ATHENAK_BUILD}/athena", '-i', inputfile] + flags
+               f"./athena", '-i', inputfile] + flags
     if not run_command(command, **kwargs):
         logging.error(f"Failed to execute {inputfile} with flags {flags} using MPI")
         raise RuntimeError(f"Failed to execute {inputfile} with flags {flags} using MPI")
@@ -201,7 +202,7 @@ def clean_make(threads: int = os.cpu_count(),**kwargs) -> None:
     cmake(**kwargs) 
     make(threads=threads)  
     logging.info("Build directory cleaned and project rebuilt")
-
+    run_command(['ln', '-s', "../../inputs", 'inputs'])
 def read_dictionary_from_file(file_path):
     """
     Reads a dictionary from a file where each line is in the format "key: value".

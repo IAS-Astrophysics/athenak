@@ -79,8 +79,9 @@ if status:
 # Run tests based on arguments
 if  args.style:
     pytest.main(["test_suite/style"])
-
+original_dir= os.getcwd()
 tests="test_suite/"
+
 if args.test is not None:
     tests = args.test
     for suffix in ["cpu", "mpicpu", "gpu"]:
@@ -94,6 +95,8 @@ if args.test is not None:
         print("Invalid test name. Please ensure it contains '_cpu', '_mpicpu', or '_gpu'.")
         sys.exit(1)
 
+tests=os.path.abspath(tests)
+
 if args.cpu != None:
     testutils.clean_make(flags=cmake_flags(args.cpu, []))
     pytest.main([tests, "-k", "_cpu"])     # run all scripts with _cpu in name
@@ -106,4 +109,5 @@ if args.gpu != None:
     testutils.clean_make(flags=cmake_flags(args.gpu, ["-D", "Kokkos_ENABLE_CUDA=On"]))
     pytest.main([tests, "-k", "_gpu"])     # run all scripts with _gpu in name
 
+os.chdir(original_dir)
 testutils.clean()
