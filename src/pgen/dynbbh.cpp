@@ -265,8 +265,10 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
 
   std::string amr_cond = pin->GetOrAddString("problem", "amr_condition", "none");
   if (amr_cond == "alpha_min") {
+    std::cout << "Using Lapse-Based Refinement" << std::endl;
     bbh_ref.AlphaMin = true;
   } else if (amr_cond == "tracker") {
+    std::cout << "Using Tracker-Based Refinement" << std::endl;
     bbh_ref.Tracker = true;
   }
 
