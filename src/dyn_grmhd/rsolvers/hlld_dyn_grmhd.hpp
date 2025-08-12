@@ -326,7 +326,7 @@ void HLLD_DYNGR(TeamMember_t const &member,
       // as follows: if Ptot is less than both Pl and Pr, we take the minimum of the two.
       // If Ptot is greater than both Pl and Pr, we choose the maximum of the two. If it
       // sits in between, we take the average.
-      Real pmin = Kokkos::fmin(prim_l[PPR], prim_r[PPR]);
+      /*Real pmin = Kokkos::fmin(prim_l[PPR], prim_r[PPR]);
       Real pmax = Kokkos::fmax(prim_l[PPR], prim_r[PPR]);
       Real ptot_old;
       if (ptot < pmin) {
@@ -335,7 +335,8 @@ void HLLD_DYNGR(TeamMember_t const &member,
         ptot_old = pmax;
       } else {
         ptot_old = 0.5*(pmin + pmax);
-      }
+      }*/
+      Real ptot_old = 0.0;
       Real fold = froot(ptot_old);
       Real ptot_old2;
       const Real tol = 1e-6;
@@ -358,10 +359,10 @@ void HLLD_DYNGR(TeamMember_t const &member,
         // Root solver did not converge. Do nothing.
         fail = true;
       }
-      else if (Hbl <= ptot || Hbr <= ptot || valx <= lambda_l || varx >= lambda_r) {
+      else if (Hbl <= ptot || Hbr <= ptot || lal <= lambda_l || lar >= lambda_r) {
         // Either the interface pressure is too large or the eigenvalues are not
         // well-ordered, so return failure.
-        fail = false;
+        fail = true;
       } else if (vc <= lal || vc >= lar) {
         // Check an edge case where lar and lal are effectively the same due to very small
         // Bx. Only fail if the edge case doesn't apply because numerical errors can cause
@@ -394,8 +395,8 @@ void HLLD_DYNGR(TeamMember_t const &member,
 
             b_int[iby] = Bc[iby];
             b_int[ibz] = Bc[ibz];
-            bfint[iby] = bfint[iby] + lal*(Bal[iby] - Bu_l[iby]);
-            bfint[ibz] = bfint[ibz] + lal*(Bal[ibz] - Bu_l[ibz]);
+            bfint[iby] = bfint[iby] + lal*(Bc[iby] - Bal[iby]);
+            bfint[ibz] = bfint[ibz] + lal*(Bc[ibz] - Bal[ibz]);
           }
         } else {
           // Compute the right Alfven state
@@ -419,8 +420,8 @@ void HLLD_DYNGR(TeamMember_t const &member,
 
             b_int[iby] = Bc[iby];
             b_int[ibz] = Bc[ibz];
-            bfint[iby] = bfint[iby] + lar*(Bar[iby] - Bu_r[iby]);
-            bfint[ibz] = bfint[ibz] + lar*(Bar[ibz] - Bu_r[ibz]);
+            bfint[iby] = bfint[iby] + lar*(Bc[iby] - Bar[iby]);
+            bfint[ibz] = bfint[ibz] + lar*(Bc[ibz] - Bar[ibz]);
           }
         }
       }
