@@ -119,6 +119,7 @@ DynGRMHD::DynGRMHD(MeshBlockPack *pp, ParameterInput *pin) : pmy_pack(pp) {
   }
   scratch_level = pin->GetOrAddInteger("mhd", "dyn_scratch", 0);
   enforce_maximum = pin->GetOrAddBoolean("mhd", "enforce_maximum", true);
+  calculate_tmunu = pin->GetOrAddBoolean("mhd", "calculate_tmunu", false);
   dmp_M = pin->GetOrAddReal("mhd", "dmp_M", 1.2);
 
   fixed_evolution = pin->GetOrAddBoolean("mhd", "fixed", false);
@@ -158,7 +159,7 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::QueueDynGRMHDTasks() {
   }
 
   // Now the rest of the MHD run tasks
-  if (pz4c != nullptr) {
+  if (pz4c != nullptr || calculate_tmunu) {
     pnr->QueueTask(&DynGRMHD::SetTmunu, this, MHD_SetTmunu, "MHD_SetTmunu",
                    Task_Run, {MHD_CopyU});
   }
