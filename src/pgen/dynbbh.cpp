@@ -121,7 +121,16 @@ struct bbh_pgen {
   Real potential_rho_pow;                     // set vector potential dependence on rho
 };
 
+// a separate struc for refinement method, etc.
+struct bbh_refine {
+  bool AlphaMin = false;
+  bool Tracker = false;
+  std::vector<Real> radius;
+  std::vector<int> reflevel;
+};
+
 struct bbh_pgen bbh;
+struct bbh_refine bbh_ref;
 
 /* Declare functions */
 void find_traj_t(Real tt, Real traj_array[NTRAJ]);
@@ -141,6 +150,8 @@ void SuperposedBBH(const Real time, const Real x, const Real y, const Real z,
 void SetADMVariablesToBBH(MeshBlockPack *pmbp);
 void RefineAlphaMin(MeshBlockPack* pmbp);
 void RefineTracker(MeshBlockPack* pmbp);
+void RefineRadii(MeshBlockPack* pmbp);
+void Refine(MeshBlockPack* pmbp);
 
 
 KOKKOS_INLINE_FUNCTION
@@ -219,13 +230,6 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
               << std::endl;
     exit(EXIT_FAILURE);
   }
-  std::string amr_cond = pin->GetOrAddString("problem", "amr_condition", "track");
-  if (amr_cond == "alpha_min") {
-    user_ref_func = RefineAlphaMin;
-  } else {
-    user_ref_func = RefineTracker;
-  }
-
 
   bbh.spin = 0.0; //delete eventually?
 
@@ -246,7 +250,23 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   bbh.a2_buffer = pin->GetOrAddReal("problem", "a2_buffer", 0.01);
   bbh.cutoff_floor = pin->GetOrAddReal("problem", "cutoff_floor", 1e-4);
   bbh.alpha_thr = pin->GetOrAddReal("problem", "alpha_thr", 0.2);
-  bbh.radius_thr = pin->GetOrAddReal("problem", "radius_thr", 0.1);
+  bbh.radius_thr = pin->GetOrAddReal("problem", "radius_thr", 2.);
+
+  for (int nr = 0; nr < 16; ++nr) {
+    std::string name = "radius_" + std::to_string(nr) + "_rad";
+    bbh_ref.radius.push_back(pin->GetReal("problem", name));
+    bbh_ref.reflevel.push_back(pin->GetOrAddInteger(
+        "problem", "radius_" + std::to_string(nr) + "_reflevel", -1));
+  }
+
+  std::string amr_cond = pin->GetOrAddString("problem", "amr_condition", "track");
+  if (amr_cond == "alpha_min") {
+    bbh_ref.AlphaMin = true;
+  } else {
+    bbh_ref.Tracker = true;
+  }
+
+  user_ref_func = Refine;
 
   pmbp->padm->SetADMVariables = &SetADMVariablesToBBH;
 
@@ -1663,7 +1683,7 @@ void RefineAlphaMin(MeshBlockPack *pmbp) {
   auto bbh_ = bbh;
 
   par_for_outer(
-  "AMR::ChiMin", DevExeSpace(), 0, 0, 0, (nmb - 1),
+  "AMR::AlphaMin", DevExeSpace(), 0, 0, 0, (nmb - 1),
   KOKKOS_LAMBDA(TeamMember_t tmember, const int m) {
     Real team_dmin;
     Kokkos::parallel_reduce(
@@ -1763,8 +1783,63 @@ void RefineTracker(MeshBlockPack *pmbp) {
   refine_flag.template sync<DevExeSpace>();
 }
 
+// Enforce some minimum resolution within a certain spherical region
+void RefineRadii(MeshBlockPack *pmbp) {
+  Mesh *pmesh       = pmbp->pmesh;
+  auto &refine_flag = pmesh->pmr->refine_flag;
+  auto &size        = pmbp->pmb->mb_size;
+  int nmb           = pmbp->nmb_thispack;
+  int mbs           = pmesh->gids_eachrank[global_variable::my_rank];
 
+  for (int m = 0; m < nmb; ++m) {
+    // current refinement level
+    int level = pmesh->lloc_eachmb[m + mbs].level - pmesh->root_level;
 
+    // extract MeshBlock bounds
+    Real &x1min = size.h_view(m).x1min;
+    Real &x1max = size.h_view(m).x1max;
+    Real &x2min = size.h_view(m).x2min;
+    Real &x2max = size.h_view(m).x2max;
+    Real &x3min = size.h_view(m).x3min;
+    Real &x3max = size.h_view(m).x3max;
+
+    Real r2[8] = {
+      SQR(x1min) + SQR(x2min) + SQR(x3min),
+      SQR(x1max) + SQR(x2min) + SQR(x3min),
+      SQR(x1min) + SQR(x2max) + SQR(x3min),
+      SQR(x1max) + SQR(x2max) + SQR(x3min),
+      SQR(x1min) + SQR(x2min) + SQR(x3max),
+      SQR(x1max) + SQR(x2min) + SQR(x3max),
+      SQR(x1min) + SQR(x2max) + SQR(x3max),
+      SQR(x1max) + SQR(x2max) + SQR(x3max),
+    };
+    Real rmin2 = *std::min_element(&r2[0], &r2[8]);
+
+    for (int ir = 0; ir < bbh_ref.radius.size(); ++ir) {
+      if (rmin2 < SQR(bbh_ref.radius[ir])) {
+        if (level < bbh_ref.reflevel[ir]) {
+          refine_flag.h_view(m + mbs) = 1;
+        } else if (level == bbh_ref.reflevel[ir] && refine_flag.h_view(m + mbs) == -1) {
+          refine_flag.h_view(m + mbs) = 0;
+        }
+      }
+    }
+  }
+
+  // sync host and device
+  refine_flag.template modify<HostMemSpace>();
+  refine_flag.template sync<DevExeSpace>();
+}
+
+// 1: refines, -1: de-refines, 0: does nothing
+void Refine(MeshBlockPack *pmy_pack) {
+  if (bbh_ref.AlphaMin) {
+    RefineAlphaMin(pmy_pack);
+  } else if (bbh_ref.Tracker) {
+    RefineTracker(pmy_pack);
+  }
+  RefineRadii(pmy_pack);
+}
 
 //nere hardcoding zero spin
 KOKKOS_INLINE_FUNCTION
