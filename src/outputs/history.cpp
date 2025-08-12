@@ -181,6 +181,7 @@ void HistoryOutput::LoadZ4cHistoryData(HistoryData *pdata, Mesh *pm) {
 
   auto &size = pm->pmb_pack->pmb->mb_size;
   int &nhist_ = pdata->nhist;
+  auto &opt = pm->pmb_pack->pz4c->opt;
 
   // loop over all MeshBlocks in this pack
   auto &indcs = pm->pmb_pack->pmesh->mb_indcs;
@@ -205,11 +206,12 @@ void HistoryOutput::LoadZ4cHistoryData(HistoryData *pdata, Mesh *pm) {
                                 adm.g_dd(m,0,2,k,j,i), adm.g_dd(m,1,1,k,j,i),
                                 adm.g_dd(m,1,2,k,j,i), adm.g_dd(m,2,2,k,j,i));
 
-    Real vol = size.d_view(m).dx1*size.d_view(m).dx2*size.d_view(m).dx3 * std::pow(std::abs(detg),0.5);
+    Real vol = size.d_view(m).dx1*size.d_view(m).dx2*size.d_view(m).dx3
+               * std::sqrt(std::abs(detg));
 
     // Excise the punctures based on chi
     array_sum::GlobalSum hvars;
-    if (z4c.chi(m,k,j,i)>=0.0625) {
+    if (z4c.chi(m,k,j,i)>=opt.excise_chi) {
       hvars.the_array[0] = vol*u_con_(m,0,k,j,i); // ||C||^2 (comes already squared)
       hvars.the_array[1] = vol*SQR(u_con_(m,1,k,j,i)); //||H||^2
       hvars.the_array[2] = vol*u_con_(m,2,k,j,i); // ||M||^2 (comes already squared)

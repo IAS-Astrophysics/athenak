@@ -34,7 +34,7 @@
 //----------------------------------------------------------------------------------------
 HorizonDump::HorizonDump(MeshBlockPack *pmbp, ParameterInput *pin, int n, int is_common):
               common_horizon{is_common}, pos{NAN, NAN, NAN},
-              pmbp{pmbp}, horizon_ind{n} {
+              pmbp{pmbp}, horizon_ind{n}, horizon_last_output_time{0.0} {
   std::string nstr = std::to_string(n);
 
   pos[0] = pin->GetOrAddReal("z4c", "co_" + nstr + "_x", 0.0);
@@ -46,11 +46,14 @@ HorizonDump::HorizonDump(MeshBlockPack *pmbp, ParameterInput *pin, int n, int is
                               + nstr+"_Nx",10);
   horizon_dt = pin->GetOrAddReal("z4c", "horizon_dt", 1.0);
   r_guess = pin->GetOrAddReal("z4c", "horizon" + nstr + "r_guess", 0.5);
+  is_cheb = pin->GetOrAddBoolean("z4c", "co_" + nstr + "_dump_cheb", false);
+  regularize_order = pin->GetOrAddInteger("z4c", "horizon_"
+                              + nstr+"_rn",6);
   output_count = 0;
 
   Real extend[3] = {horizon_extent,horizon_extent,horizon_extent};
   int Nx[3] = {horizon_nx,horizon_nx,horizon_nx};
-  pcat_grid = new CartesianGrid(pmbp, pos, extend, Nx);
+  pcat_grid = new CartesianGrid(pmbp, pos, extend, Nx, is_cheb, regularize_order);
 
   // Initializing variables that will be dumped
   // The order is alpha, betax, betay, betaz,
@@ -107,9 +110,9 @@ void HorizonDump::SetGridAndInterpolate(Real center[NDIM]) {
     for (int ny = 0; ny < horizon_nx; ny ++)
     for (int nz = 0; nz < horizon_nx; nz ++) {
       data_out[nvar * horizon_nx * horizon_nx * horizon_nx +  // Section for nvar
-        nx * horizon_nx * horizon_nx +                 // Slice for nx
+        nz * horizon_nx * horizon_nx +                 // Slice for nx
         ny * horizon_nx +                              // Row for ny
-        nz]                                            // Column for nz
+        nx]                                            // Column for nz
         = pcat_grid->interp_vals.h_view(nx, ny, nz);        // Value being assigned
     }
   }
@@ -196,8 +199,8 @@ void HorizonDump::ETK_setup_parfile() {
           "ADMBase::metric_type = \"physical\"\n"
           "AHFinderDirect::find_every                             = 1\n"
           "AHFinderDirect::geometry_interpolator_name             ="
-          " \"Lagrange polynomial interpolation\"\n"
-          "AHFinderDirect::geometry_interpolator_pars             = \"order=2\"\n"
+          " \"Hermite polynomial interpolation\"\n"
+          "AHFinderDirect::geometry_interpolator_pars             = \"order=3\"\n"
           "AHFinderDirect::max_Newton_iterations__initial         = 100\n"
           "AHFinderDirect::max_Newton_iterations__subsequent      = 10\n"
           "AHFinderDirect::N_horizons                             = 1\n"
@@ -205,8 +208,8 @@ void HorizonDump::ETK_setup_parfile() {
           "AHFinderDirect::reset_horizon_after_not_finding[1]     = \"no\"\n"
           "AHFinderDirect::set_mask_for_individual_horizon[1]     = \"no\"\n"
           "AHFinderDirect::surface_interpolator_name              ="
-          " \"Lagrange polynomial interpolation\"\n"
-          "AHFinderDirect::surface_interpolator_pars              = \"order=2\"\n"
+          " \"Hermite polynomial interpolation\"\n"
+          "AHFinderDirect::surface_interpolator_pars              = \"order=3\"\n"
           "AHFinderDirect::verbose_level                          = \"physics details\"\n"
           "#AHFinderDirect::verbose_level                         ="
           " \"algorithm details\"\n"
@@ -215,14 +218,14 @@ void HorizonDump::ETK_setup_parfile() {
           "AHFinderDirect::run_at_CCTK_ANALYSIS = true\n"
           "\n"
           "# Parameters of thorn QuasiLocalMeasures (implementing QuasiLocalMeasures)\n"
-          "QuasiLocalMeasures::interpolator         ="
+          "#QuasiLocalMeasures::interpolator         ="
           " \"Lagrange polynomial interpolation\"\n"
-          "QuasiLocalMeasures::interpolator_options = \"order=4\"\n"
-          "# QuasiLocalMeasures::interpolator         ="
+          "#QuasiLocalMeasures::interpolator_options = \"order=4\"\n"
+          "QuasiLocalMeasures::interpolator         ="
           " \"Hermite polynomial interpolation\"\n"
-          "# QuasiLocalMeasures::interpolator_options = \"order=3\"\n"
-          "QuasiLocalMeasures::killing_vector_method = axial \n"
-	  "QuasiLocalMeasures::num_surfaces         = 1\n"
+          "QuasiLocalMeasures::interpolator_options = \"order=3\"\n"
+          "#QuasiLocalMeasures::killing_vector_method = axial \n"
+          "QuasiLocalMeasures::num_surfaces         = 1\n"
           "QuasiLocalMeasures::spatial_order        = 2\n"
           "QuasiLocalMeasures::surface_index[0]     = 0\n"
           "QuasiLocalMeasures::verbose              = yes\n"
