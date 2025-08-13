@@ -367,9 +367,19 @@ void HLLD_DYNGR(TeamMember_t const &member,
         // Check an edge case where lar and lal are effectively the same due to very small
         // Bx. Only fail if the edge case doesn't apply because numerical errors can cause
         // sign issues.
-        if (Kokkos::fabs(lar - lal) > tol*Kokkos::fabs(vc)) {
+        if (Kokkos::fabs(lar - lal) > tol) {
           fail = true;
+        } else {
+          // Set the eigenvalues to be identical to the contact speed. This forces the
+          // check on the Riemann fan to select one of the Alfven states instead, as
+          // numerical issues often cause the contact states to become invalid in these
+          // cases.
+          lal = vc;
+          lar = vc;
         }
+      } else if (lar - lal <= tol) {
+        lal = vc;
+        lar = vc;
       }
       if (!fail) {
         // If we reach this point, we have a valid solution. Otherwise, we will revert to
@@ -386,7 +396,7 @@ void HLLD_DYNGR(TeamMember_t const &member,
           bfint[iby] = bflux_l[iby] + lambda_l*(Bal[iby] - Bu_l[iby]);
           bfint[ibz] = bflux_l[ibz] + lambda_l*(Bal[ibz] - Bu_l[ibz]);
 
-          if (vint >= lal) {
+          if (vint > lal) {
             // Compute the left contact state using the RH condition on the Alfven state.
             for (int v = 0; v < nhyd; v++) {
               cons_int[v] = Ucl[v];
@@ -425,6 +435,11 @@ void HLLD_DYNGR(TeamMember_t const &member,
           }
         }
       }
+
+      /*if (!Kokkos::isfinite(cons_int[CDN]) || !Kokkos::isfinite(fint[CDN])) {
+        Kokkos::printf("There's a problem with the HLLD solution!\n");
+        fail = true;
+      }*/
 
       cons_interface = &cons_int[0];
       f_interface = &fint[0];
