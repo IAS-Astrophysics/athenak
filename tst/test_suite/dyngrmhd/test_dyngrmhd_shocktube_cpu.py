@@ -12,13 +12,10 @@ cause tests to fail unless test solutions are also wrong in the same way (unlike
 """
 
 # Modules
-import sys
 import pytest
 import test_suite.testutils as testutils
 import athena_read
 import numpy as np
-sys.path.append("../vis/python")
-sys.path.append("../tst/test_suite")
 
 _recon = ["plm", "ppm4", "ppmx", "wenoz"]  # do not change order
 _flux = ["llf", "hlle"]

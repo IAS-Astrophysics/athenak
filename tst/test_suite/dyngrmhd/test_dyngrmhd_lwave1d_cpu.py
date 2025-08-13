@@ -6,11 +6,8 @@ Runs tests only for MHD using RK2/RK3 for different
 """
 
 # Modules
-import sys
 import pytest
 import test_suite.testutils as testutils
-sys.path.append("../vis/python")
-sys.path.append("../tst/test_suite")
 
 
 # Threshold errors and error ratios for different integrators, reconstruction,

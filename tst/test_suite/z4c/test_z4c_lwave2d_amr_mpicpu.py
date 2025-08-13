@@ -6,13 +6,9 @@ Only 2nd order algorithm is tested on CPUs.
 """
 
 # Modules
-import sys
 import pytest
 import test_suite.testutils as testutils
 import athena_read
-
-sys.path.insert(0, "../vis/python")
-sys.path.insert(0, "../test_suite")
 
 # Threshold errors and error ratios for different integrators, reconstruction,
 # algorithms, and waves

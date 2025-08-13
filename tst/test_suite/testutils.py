@@ -7,15 +7,17 @@ Various utility functions used for automatic testing, including
 
 # Modules
 import os
-import sys
 from subprocess import Popen, PIPE
 from typing import List
 import time
 import pytest
-import athena_read
 import logging
+import sys
 
-sys.path.append("../vis/python")
+sys.path.insert(0, "../vis/python")
+import athena_read  # noqa: E402
+
+athena_read.check_nan_flag = True  # Enable NaN checking in athena_read
 
 # Constants and configurations
 ATHENAK_PATH = ".."
@@ -240,7 +242,6 @@ def test_error_convergence(
     soe,
     left_wave="0",
     right_wave="0",
-    dim=1,
     mpi=False,
 ):
     RUN = mpi_run if mpi else run

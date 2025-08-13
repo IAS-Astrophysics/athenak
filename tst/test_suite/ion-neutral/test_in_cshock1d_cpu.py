@@ -5,12 +5,9 @@ Runs tests for different
 """
 
 # Modules
-import sys
 import pytest
 import test_suite.testutils as testutils
 import athena_read
-sys.path.insert(0, "../vis/python")
-sys.path.insert(0, "../test_suite")
 
 
 # Threshold errors for test

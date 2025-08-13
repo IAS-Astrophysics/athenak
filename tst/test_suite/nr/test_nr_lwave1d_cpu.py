@@ -7,12 +7,8 @@ Runs tests in both hydro and MHD for different
 """
 
 # Modules
-import sys
 import pytest
 import test_suite.testutils as testutils
-
-sys.path.append("../vis/python")
-sys.path.append("../tst/test_suite")
 
 # Threshold errors and error ratios for different integrators, reconstruction,
 # algorithms, and wave types

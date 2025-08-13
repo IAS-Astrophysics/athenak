@@ -6,14 +6,10 @@ Runs tests for different
 """
 
 # Modules
-import sys
 import pytest
 import test_suite.testutils as testutils
 import athena_read
 import numpy as np
-
-sys.path.insert(0, "../vis/python")
-sys.path.insert(0, "../test_suite")
 
 _recon = ["plm", "ppm4", "ppmx", "wenoz"]  # do not change order
 _flux = ["llf", "hlle", "hllc", "roe"]

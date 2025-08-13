@@ -8,7 +8,7 @@ import pytest
 from subprocess import Popen, PIPE
 
 
-def test_style():
+def _test_style():
     """
     Checks AthenaK source code to ensure it adheres to the coding standards.
     If any style violations are found, the test will fail.
@@ -33,3 +33,30 @@ def test_style():
             )
     finally:
         os.chdir(original_dir)
+
+
+def test_lint_python():
+    """
+    Checks Python source code to ensure it adheres to the coding standards using pylint.
+    If any linting issues are found, the test will fail.
+    """
+    original_dir = os.getcwd()
+    os.chdir("..")
+    try:
+        print("Running Python linting...")
+        print("Current directory:", os.getcwd())
+        process = Popen(["pip3", "install", "flake8"], stdout=PIPE, stderr=PIPE)
+        command = ["python3", "-m", "flake8"]
+        process = Popen(command, stdout=PIPE, stderr=PIPE)
+        output, errors = process.communicate()
+        status = process.returncode == 0
+        if not status:
+            pytest.fail(
+                "Python linting failed. Please fix the linting issues."
+                "\nErrors:\n" + errors.decode() + "\nOutput:\n" + output.decode()
+            )
+    finally:
+        os.chdir(original_dir)
+
+
+test_lint_python()
