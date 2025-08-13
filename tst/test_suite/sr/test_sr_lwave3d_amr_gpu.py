@@ -1,61 +1,65 @@
 """
 Linear wave convergence test for special-relativistic hydro/MHD in 3D with AMR.
 Runs tests in both hydro and MHD for RK2+PLM and RK3+WENOZ using HLLE Riemann solver
-Only tests "0" wave 
+Only tests "0" wave
 """
 
 # Modules
 import sys
-sys.path.insert(0, '../vis/python')
-sys.path.insert(0, '../test_suite')
 import pytest
 import test_suite.testutils as testutils
-import scripts.utils.athena as athena
-import athena_read
-import numpy as np
+
+sys.path.insert(0, "../vis/python")
+sys.path.insert(0, "../test_suite")
+
 
 # Threshold errors and error ratios for different integrators, reconstruction,
 # algorithms, and waves
-errors={
-    ('hydro', 'rk2', 'plm', '0'): (2.3e-05,0.22),
-    ('hydro', 'rk3', 'wenoz', '0'): (4e-06,0.088),
-    ('mhd', 'rk2', 'plm', '0'): (8.4e-05,0.25),
-    ('mhd', 'rk3', 'wenoz', '0'): (2.6e-05,0.18),}
+errors = {
+    ("hydro", "rk2", "plm", "0"): (2.3e-05, 0.22),
+    ("hydro", "rk3", "wenoz", "0"): (4e-06, 0.088),
+    ("mhd", "rk2", "plm", "0"): (8.4e-05, 0.25),
+    ("mhd", "rk3", "wenoz", "0"): (2.6e-05, 0.18),
+}
 
-_wave = ['0']       # do not change order
-_res = [32, 64]     # resolutions to test
-_recon = ['plm','wenoz'] # spatial reconstruction
-_soe = ['hydro', 'mhd']  # system of equations to test
+_wave = ["0"]  # do not change order
+_res = [32, 64]  # resolutions to test
+_recon = ["plm", "wenoz"]  # spatial reconstruction
+_soe = ["hydro", "mhd"]  # system of equations to test
+
 
 def arguments(iv, rv, fv, wv, res, soe, name):
     """Assemble arguments for run command"""
-    return  [f'job/basename={name}',
-            'time/tlim=1.0',
-            'time/integrator=' + iv,
-            'mesh/nghost=' + repr(2 if rv=='plm' else 4),
-            'mesh/nx1=' + repr(res),
-            'mesh/nx2=' + repr(res//2),
-            'mesh/nx3=' + repr(res//2),
-            'meshblock/nx1=' + repr(res//8),
-            'meshblock/nx2=' + repr(res//8),
-            'meshblock/nx3=' + repr(res//8),
-            'mesh_refinement/max_nmb_per_rank=2048',
-            'time/cfl_number=0.3',
-            'coord/special_rel=true',
-            'coord/general_rel=false',
-            f'{soe}/reconstruct=' + rv,
-            f'{soe}/rsolver=' + fv,
-            'problem/amp=1.0e-3',
-            'problem/wave_flag=' + wv]
+    return [
+        f"job/basename={name}",
+        "time/tlim=1.0",
+        "time/integrator=" + iv,
+        "mesh/nghost=" + repr(2 if rv == "plm" else 4),
+        "mesh/nx1=" + repr(res),
+        "mesh/nx2=" + repr(res // 2),
+        "mesh/nx3=" + repr(res // 2),
+        "meshblock/nx1=" + repr(res // 8),
+        "meshblock/nx2=" + repr(res // 8),
+        "meshblock/nx3=" + repr(res // 8),
+        "mesh_refinement/max_nmb_per_rank=2048",
+        "time/cfl_number=0.3",
+        "coord/special_rel=true",
+        "coord/general_rel=false",
+        f"{soe}/reconstruct=" + rv,
+        f"{soe}/rsolver=" + fv,
+        "problem/amp=1.0e-3",
+        "problem/wave_flag=" + wv,
+    ]
 
-@pytest.mark.parametrize("rv" , _recon)
-@pytest.mark.parametrize("fv" , ['hlle'])
-@pytest.mark.parametrize("soe",["hydro","mhd"])
+
+@pytest.mark.parametrize("rv", _recon)
+@pytest.mark.parametrize("fv", ["hlle"])
+@pytest.mark.parametrize("soe", ["hydro", "mhd"])
 def test_run(rv, fv, soe):
     """Run a single test with given parameters."""
-    iv = 'rk2' if rv=="plm" else 'rk3'
+    iv = "rk2" if rv == "plm" else "rk3"
     # Ignore return arguments
-    _,_ = testutils.test_error_convergence(
+    _, _ = testutils.test_error_convergence(
         f"inputs/lwave_rel{soe}.athinput",
         f"lwave3d_amr_{soe}",
         arguments,
@@ -65,4 +69,5 @@ def test_run(rv, fv, soe):
         iv,
         rv,
         fv,
-        soe)
+        soe,
+    )

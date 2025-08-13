@@ -11,26 +11,27 @@ import sys
 from subprocess import Popen, PIPE
 from typing import List
 import time
-sys.path.append('../vis/python')
 import pytest
 import athena_read
+import logging
+
+sys.path.append("../vis/python")
 
 # Constants and configurations
 ATHENAK_PATH = ".."
 ATHENAK_BUILD = "build/src"
 
-import logging
-
 # Configure logging
-LOG_FILE_PATH = os.path.abspath(os.path.join(ATHENAK_PATH, 'tst', 'test_log.txt'))
+LOG_FILE_PATH = os.path.abspath(os.path.join(ATHENAK_PATH, "tst", "test_log.txt"))
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s',
+    format="%(asctime)s - %(levelname)s - %(message)s",
     handlers=[
         logging.FileHandler(LOG_FILE_PATH),
-        logging.StreamHandler()  # Optional: Keep console logging
-    ]
+        logging.StreamHandler(),  # Optional: Keep console logging
+    ],
 )
+
 
 def run_command(command: List[str], text: bool = False) -> bool:
     """
@@ -43,7 +44,7 @@ def run_command(command: List[str], text: bool = False) -> bool:
     Returns:
         bool: True if the command executed successfully, False otherwise.
     """
-    
+
     logging.info(f"Executing command: {' '.join(command)}")
     process = Popen(command, stdout=PIPE, stderr=PIPE, text=True)
     # Log the output only to the file
@@ -54,6 +55,7 @@ def run_command(command: List[str], text: bool = False) -> bool:
     if process.returncode != 0:
         logging.error(f"Command failed with return code {process.returncode}")
     return process.returncode == 0
+
 
 def cmake(flags: List[str] = [], **kwargs) -> bool:
     """
@@ -71,16 +73,17 @@ def cmake(flags: List[str] = [], **kwargs) -> bool:
     """
     original_dir = os.getcwd()
     try:
-        os.makedirs(os.path.join(ATHENAK_PATH, 'build'), exist_ok=True)
+        os.makedirs(os.path.join(ATHENAK_PATH, "build"), exist_ok=True)
         os.chdir(ATHENAK_PATH)
         logging.info(f"Configuring CMake in {os.getcwd()}")
-        
-        command = ['cmake'] + flags + ["-B", "tst/build"]
+
+        command = ["cmake"] + flags + ["-B", "tst/build"]
         if not run_command(command, **kwargs):
             raise RuntimeError("CMake configuration failed")
     finally:
         os.chdir(original_dir)
     return True
+
 
 def make(threads: int = os.cpu_count(), **kwargs) -> bool:
     """
@@ -97,9 +100,9 @@ def make(threads: int = os.cpu_count(), **kwargs) -> bool:
         RuntimeError: If the Make command fails.
     """
     os.chdir(ATHENAK_BUILD)
-    command = ['make', '-j', f'{threads}']
+    command = ["make", "-j", f"{threads}"]
     start_time = time.time()
-    status =  run_command(command, **kwargs)
+    status = run_command(command, **kwargs)
     end_time = time.time()
     elapsed_time = end_time - start_time  # Calculate elapsed time
     logging.info(f"make completed in {elapsed_time:.2f} seconds")
@@ -107,7 +110,8 @@ def make(threads: int = os.cpu_count(), **kwargs) -> bool:
         raise RuntimeError("Make command failed")
     return True
 
-def run(inputfile: str, flags=[], **kwargs)-> bool:
+
+def run(inputfile: str, flags=[], **kwargs) -> bool:
     """
     Executes a test case using the AthenaK binary.
 
@@ -122,13 +126,16 @@ def run(inputfile: str, flags=[], **kwargs)-> bool:
     Raises:
         AssertionError: If the test case execution fails.
     """
-    command = ["./athena", '-i', inputfile] + flags
+    command = ["./athena", "-i", inputfile] + flags
     if not run_command(command, **kwargs):
         logging.error(f"Failed to execute {inputfile} with flags {flags}")
         raise RuntimeError(f"Failed to execute {inputfile} with flags {flags}")
     return True
 
-def mpi_run(inputfile: str, flags=[], threads: int = min(16,os.cpu_count()), **kwargs) -> bool:
+
+def mpi_run(
+    inputfile: str, flags=[], threads: int = min(16, os.cpu_count()), **kwargs
+) -> bool:
     """
     Executes a test case using the AthenaK binary with MPI support.
 
@@ -144,37 +151,16 @@ def mpi_run(inputfile: str, flags=[], threads: int = min(16,os.cpu_count()), **k
     Raises:
         AssertionError: If the test case execution fails.
     """
-    command = ['mpirun', '-np', str(threads),
-               f"./athena", '-i', inputfile] + flags
+    command = ["mpirun", "-np", str(threads), "./athena", "-i", inputfile] + flags
     if not run_command(command, **kwargs):
         logging.error(f"Failed to execute {inputfile} with flags {flags} using MPI")
-        raise RuntimeError(f"Failed to execute {inputfile} with flags {flags} using MPI")
+        raise RuntimeError(
+            f"Failed to execute {inputfile} with flags {flags} using MPI"
+        )
     return True
 
-def athenak_run(inputfile, flags, use_cmake=False, use_make=False, **kwargs):
-    """
-    Executes a full test workflow, including optional CMake and Make steps.
 
-    Args:
-        inputfile (str): The path to the test case input file.
-        flags (list): Additional flags to pass to the AthenaK binary.
-        use_cmake (bool): Whether to run the CMake command before testing (default: False).
-        use_make (bool): Whether to run the Make command before testing (default: False).
-        **kwargs: Additional keyword arguments for `run_command`.
-
-    Returns:
-        bool: True if the test workflow succeeded, False otherwise.
-
-    Raises:
-        AssertionError: If any step in the workflow fails.
-    """
-    if use_cmake:
-        cmake()
-    if use_make:
-        make()
-    return run(inputfile, flags=flags, **kwargs)
-
-def cleanup(text=False)-> None:
+def cleanup(text=False) -> None:
     """
     Cleans up the test environment by removing generated files.
     """
@@ -193,16 +179,19 @@ def clean() -> None:
     logging.info("Cleaning build directory")
     Popen(["rm -rf build/"], shell=True, stdout=PIPE).communicate()
 
-def clean_make(threads: int = os.cpu_count(),**kwargs) -> None:
+
+def clean_make(threads: int = os.cpu_count(), **kwargs) -> None:
     """
     Cleans the build directory and rebuilds the project.
     Removes all files in the build directory and then runs CMake and Make.
     """
     clean()
-    cmake(**kwargs) 
-    make(threads=threads)  
+    cmake(**kwargs)
+    make(threads=threads)
     logging.info("Build directory cleaned and project rebuilt")
-    run_command(['ln', '-s', "../../inputs", 'inputs'])
+    run_command(["ln", "-s", "../../inputs", "inputs"])
+
+
 def read_dictionary_from_file(file_path):
     """
     Reads a dictionary from a file where each line is in the format "key: value".
@@ -226,7 +215,7 @@ def read_dictionary_from_file(file_path):
                         keys = keys.strip("()")
                         keys = keys.split(",")
                         keys = [key.strip(" '") for key in keys]
-                        my_dict[tuple(keys)] = (float(error),float(ratio))
+                        my_dict[tuple(keys)] = (float(error), float(ratio))
                     except ValueError:
                         print(f"Warning: Skipping invalid line: {line}")
         return my_dict
@@ -237,40 +226,49 @@ def read_dictionary_from_file(file_path):
         print(f"An error occurred while reading the file: {e}")
         return None
 
-def test_error_convergence(input_file,
-                        test_name,
-                        arguments,
-                        errors,
-                        _wave,
-                        _res,
-                        iv,
-                        rv,
-                        fv,
-                        soe,
-                        left_wave='0',
-                        right_wave='0',
-                        dim=1,
-                        mpi=False):
-    run = mpi_run if mpi else athenak_run
-    for wv in _wave:                    
+
+def test_error_convergence(
+    input_file,
+    test_name,
+    arguments,
+    errors,
+    _wave,
+    _res,
+    iv,
+    rv,
+    fv,
+    soe,
+    left_wave="0",
+    right_wave="0",
+    dim=1,
+    mpi=False,
+):
+    RUN = mpi_run if mpi else run
+    for wv in _wave:
         try:
             for res in _res:
-                results = run(input_file, arguments(iv,rv,fv,wv,res,soe,test_name))
+                results = RUN(
+                    input_file, arguments(iv, rv, fv, wv, res, soe, test_name)
+                )
                 assert results, f"Run failed for {soe}+{iv}+{res}+{fv}+{rv}+{wv}."
             maxerror, maxerrorratio = errors[(soe, iv, rv, wv)]
-            data = athena_read.error_dat(f'{test_name}-errs.dat')
+            data = athena_read.error_dat(f"{test_name}-errs.dat")
             L1_RMS_INDEX = 4  # Index for L1 RMS error in data
             l1_rms_nLR = data[0][L1_RMS_INDEX]
             l1_rms_nHR = data[1][L1_RMS_INDEX]
-            errorratio = l1_rms_nHR/l1_rms_nLR
-            if l1_rms_nHR > maxerror and not(rv=="ppmx" and iv=="rk2"):
+            errorratio = l1_rms_nHR / l1_rms_nLR
+            if l1_rms_nHR > maxerror and not (rv == "ppmx" and iv == "rk2"):
                 # PPMX with RK2 is known to have larger errors, so we skip the check
-                pytest.fail(f"{wv} wave error too large for {soe}+{iv}+{rv}+{fv},"
-                            f"error: {l1_rms_nHR:g} threshold: {maxerror:g}")
-            if  errorratio > maxerrorratio and not(rv=="ppmx" and iv=="rk2"):
+                pytest.fail(
+                    f"{wv} wave error too large for {soe}+{iv}+{rv}+{fv},"
+                    f"error: {l1_rms_nHR:g} threshold: {maxerror:g}"
+                )
+            if errorratio > maxerrorratio and not (rv == "ppmx" and iv == "rk2"):
                 # PPMX with RK2 is known to have larger errors, so we skip the check
-                pytest.fail(f"{wv} not converging for {soe}+{iv}+{rv}+{fv},"
-                            f"error ratio: {errorratio:g} threshold: {maxerrorratio:g}")
+                pytest.fail(
+                    f"{wv} not converging for {soe}+{iv}+{rv}+{fv},"
+                    f"error ratio: {errorratio:g} threshold: {maxerrorratio:g}"
+                )
             # store errors for selected L/R-going waves
             if wv == left_wave:
                 l1_rms_l = l1_rms_nHR
@@ -278,4 +276,4 @@ def test_error_convergence(input_file,
                 l1_rms_r = l1_rms_nHR
         finally:
             cleanup()
-    return l1_rms_l,l1_rms_r
+    return l1_rms_l, l1_rms_r
