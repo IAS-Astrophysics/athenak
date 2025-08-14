@@ -34,8 +34,6 @@ void ShearingBoxCC::SourceTermsCC(const DvceArray5D<Real> &w0, const EOS_Data &e
   int nmb1 = pmy_pack->nmb_thispack - 1;
   auto three_d_ = pmy_pack->pmesh->three_d;
   auto is_strat = is_stratified;
-  Real z0 = (pmy_pack->pmesh->mesh_size.x1max - pmy_pack->pmesh->mesh_size.x1min)/2.0;
-  Real lambda = 0.1/z0;
 
   // 3D or 2D r-phi source terms
   if (shearing_box_r_phi || three_d_) {
@@ -55,14 +53,7 @@ void ShearingBoxCC::SourceTermsCC(const DvceArray5D<Real> &w0, const EOS_Data &e
         Real &x3max = size.d_view(m).x3max;
         int nx3 = indcs.nx3;
         Real x3v = CellCenterX(k-ks, nx3, x3min, x3max);
-        // smoothing function to reduce acc'n near top/bottom of domain
-        Real sign = 1.0;
-        if (x3v >= 0) {
-          sign = -1.0;
-        }
-        Real xi = z0/x3v;
-        Real fsmooth = SQR( std::sqrt( SQR(xi+sign) + SQR(xi*lambda) ) + xi*sign );
-        u0(m,IM3,k,j,i) -= coef3*den*x3v*fsmooth;
+        u0(m,IM3,k,j,i) -= coef3*den*x3v;
       }
       if (eos_data.is_ideal) {
         // For more accuracy, better to use flux values
@@ -109,8 +100,6 @@ void ShearingBoxCC::SourceTermsCC(
   int nmb1 = pmy_pack->nmb_thispack - 1;
   auto three_d_ = pmy_pack->pmesh->three_d;
   auto is_strat = is_stratified;
-  Real z0 = (pmy_pack->pmesh->mesh_size.x1max - pmy_pack->pmesh->mesh_size.x1min)/2.0;
-  Real lambda = 0.1/z0;
 
   // 3D or 2D r-phi source terms
   if (shearing_box_r_phi || three_d_) {
@@ -130,14 +119,6 @@ void ShearingBoxCC::SourceTermsCC(
         Real &x3max = size.d_view(m).x3max;
         int nx3 = indcs.nx3;
         Real x3v = CellCenterX(k-ks, nx3, x3min, x3max);
-        // smoothing function to reduce acc'n near top/bottom of domain
-        Real sign = 1.0;
-        if (x3v >= 0) {
-          sign = -1.0;
-        }
-        Real xi = z0/x3v;
-        Real fsmooth = SQR( std::sqrt( SQR(xi+sign) + SQR(xi*lambda) ) + xi*sign );
-//        u0(m,IM3,k,j,i) -= coef3*den*x3v*fsmooth;
         u0(m,IM3,k,j,i) -= coef3*den*x3v;
       }
       if (eos_data.is_ideal) {
