@@ -18,7 +18,7 @@ jobs:
         shell: bash
         run: |
           source /usr/share/Modules/init/bash
-          module load gcc-devtoolset/10
+          module load gcc-toolset/10
           python3 -m pip install --user flake8 numpy pytest testutils
           cd ${{ github.workspace }}
           echo "Running test_suite..."
@@ -40,7 +40,7 @@ jobs:
         shell: bash
         run: |
           source /usr/share/Modules/init/bash
-          module load gcc-devtoolset/10
+          module load gcc-toolset/10
           python3 -m pip install --user flake8 numpy pytest testutils
           cd ${{ github.workspace }}/tst
           echo "Running regression script on GPU..."
@@ -62,7 +62,7 @@ jobs:
         shell: bash
         run: |
           source /usr/share/Modules/init/bash
-          module load gcc-devtoolset/10 openmpi/gcc/4.1.0
+          module load gcc-toolset/10 openmpi/gcc/4.1.0
           python3 -m pip install --user flake8 numpy pytest testutils
           cd ${{ github.workspace }}/tst
           echo "Running regression script on GPU..."
@@ -84,7 +84,7 @@ jobs:
         shell: bash
         run: |
           source /usr/share/Modules/init/bash
-          module load gcc-devtoolset/10 cudatoolkit/11.7
+          module load gcc-toolset/10 cudatoolkit/11.7
           python3 -m pip install --user flake8 numpy pytest testutils
           cd ${{ github.workspace }}/tst
           export CUDA_VISIBLE_DEVICES=1
