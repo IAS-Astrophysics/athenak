@@ -20,7 +20,7 @@ jobs:
           source /usr/share/Modules/init/bash
           module load gcc-toolset/10
           python3 -m pip install --user flake8 numpy pytest testutils
-          cd ${{ github.workspace }}
+          cd ${{ github.workspace }}/tst
           echo "Running test_suite..."
           python run_test_suite.py --style
       - name: Upload combinded lint log
