@@ -23,11 +23,10 @@
 #include "remap_fluxes.hpp"
 
 //----------------------------------------------------------------------------------------
-// ShearingBoxBoundaryCC derived class constructor:
+// ShearingBoxCC derived class constructor:
 
-ShearingBoxBoundaryCC::ShearingBoxBoundaryCC(MeshBlockPack *pp, ParameterInput *pin,
-                                             int nvar) :
-    ShearingBoxBoundary(pp, pin) {
+ShearingBoxCC::ShearingBoxCC(MeshBlockPack *pp, ParameterInput *pin, int nvar) :
+    ShearingBox(pp, pin) {
   // Allocate boundary buffers
   auto &indcs = pp->pmesh->mb_indcs;
   int ncells3 = indcs.nx3 + 2*indcs.ng;
@@ -41,13 +40,12 @@ ShearingBoxBoundaryCC::ShearingBoxBoundaryCC(MeshBlockPack *pp, ParameterInput *
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn void ShearingBoxBoundary::PackAndSendCC()
+//! \fn void ShearingBox::PackAndSendCC()
 //! \brief Apply shearing sheet BCs to cell-centered variables, including MPI
 //! MPI communications. Both the inner_x1 and outer_x1 boundaries are updated.
 //! Called on the physics_bcs task after purely periodic BC communication is finished.
 
-TaskStatus ShearingBoxBoundaryCC::PackAndSendCC(DvceArray5D<Real> &a,
-                                                ReconstructionMethod rcon) {
+TaskStatus ShearingBoxCC::PackAndSendCC(DvceArray5D<Real> &a, ReconstructionMethod rcon) {
   const auto &indcs = pmy_pack->pmesh->mb_indcs;
   const auto &ie = indcs.ie;
   const auto &js = indcs.js, &je = indcs.je;
@@ -273,12 +271,12 @@ TaskStatus ShearingBoxBoundaryCC::PackAndSendCC(DvceArray5D<Real> &a,
 }
 
 //----------------------------------------------------------------------------------------
-//! \!fn void ShearingBoxBoundaryCC::RecvAndUnpackCC()
+//! \!fn void ShearingBoxCC::RecvAndUnpackCC()
 //! \brief Check MPI communication of boundary buffers for CC variables have finished,
 //! then copy buffers into ghost zones. Shift has already been performed in
 //! PackAndSendCC() function
 
-TaskStatus ShearingBoxBoundaryCC::RecvAndUnpackCC(DvceArray5D<Real> &a) {
+TaskStatus ShearingBoxCC::RecvAndUnpackCC(DvceArray5D<Real> &a) {
   // create local references for variables in kernel
   const auto &indcs = pmy_pack->pmesh->mb_indcs;
   const int &ng = indcs.ng;
