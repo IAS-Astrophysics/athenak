@@ -63,7 +63,6 @@ class ProblemGenerator {
   void CShock(ParameterInput *pin, const bool restart);
   void Hohlraum(ParameterInput *pin, const bool restart);
   void LinearWave(ParameterInput *pin, const bool restart);
-  void GRLinearWave(ParameterInput *pin, const bool restart);
   void LWImplode(ParameterInput *pin, const bool restart);
   void Monopole(ParameterInput *pin, const bool restart);
   void OrszagTang(ParameterInput *pin, const bool restart);
