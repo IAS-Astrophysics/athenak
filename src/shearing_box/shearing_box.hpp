@@ -58,7 +58,8 @@ class ShearingBox {
   DualArray2D<int> x1bndry_mbgid;  // GIDs of MBs at x1 boundaries
   Real yshear;                     // x2-distance x1-boundaries have sheared
   Real qshear, omega0;             // Copies needed for all SB funcs
-  bool shearing_box_r_phi;
+  bool shearing_box_r_phi;         // NOT YET IMPLEMENTED
+  bool is_stratified;              // true for stratified shearing box
 
   // data buffers for shearing box BCs.  Only two x1-faces get sheared
   // Use seperate variables for ix1/ox1 since number of MBs on each face can be different

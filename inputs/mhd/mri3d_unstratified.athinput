@@ -8,7 +8,7 @@ reference = Hawley, J. F., Gammie, C.F. & Balbus, S. A., ApJ 440, 742-763 (1995)
 basename  = HGB       # problem ID: basename of output filenames
 
 <mesh>
-nghost    = 3         # Number of ghost cells
+nghost    = 2         # Number of ghost cells
 nx1       = 64        # Number of zones in X1-direction
 x1min     = -0.5      # minimum value of X1
 x1max     = 0.5       # maximum value of X1

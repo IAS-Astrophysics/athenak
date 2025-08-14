@@ -27,7 +27,7 @@ class OrbitalAdvection {
   // data
   int maxjshift;            // maximum integer shift of any cell in orbital advection
   Real qshear, omega0;      // Copies needed for all OA functions
-  bool shearing_box_r_phi;
+  bool shearing_box_r_phi;  // NOT YET IMPLEMENTED
 
   // data buffers for orbital advection. Only two x2-faces communicate
   ShearingBoxBoundaryBuffer sendbuf[2], recvbuf[2];
