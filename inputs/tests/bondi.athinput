@@ -8,28 +8,40 @@ basename  = gr_bondi  # problem ID: basename of output filenames
 
 <mesh>
 nghost    = 2      # Number of ghost cells
-nx1       = 48     # Number of zones in X1-direction
+nx1       = 32     # Number of zones in X1-direction
 x1min     = -10.0  # minimum value of X1
 x1max     = 10.0   # maximum value of X1
 ix1_bc    = user   # inner-X1 boundary flag
 ox1_bc    = user   # outer-X1 boundary flag
 
-nx2       = 48     # Number of zones in X2-direction
+nx2       = 32     # Number of zones in X2-direction
 x2min     = -10.0  # minimum value of X2
 x2max     = 10.0   # maximum value of X2
 ix2_bc    = user   # inner-X2 boundary flag
 ox2_bc    = user   # outer-X2 boundary flag
 
-nx3       = 48     # Number of zones in X3-direction
+nx3       = 32     # Number of zones in X3-direction
 x3min     = -10.0  # minimum value of X3
 x3max     = 10.0   # maximum value of X3
 ix3_bc    = user   # inner-X3 boundary flag
 ox3_bc    = user   # outer-X3 boundary flag
 
 <meshblock>
-nx1 = 16
-nx2 = 16
-nx3 = 16
+nx1 = 8
+nx2 = 8
+nx3 = 8
+
+<mesh_refinement>
+refinement = static    # type of refinement
+
+<refinement1>
+level = 1
+x1min = -4.0
+x1max = 4.0
+x2min = -4.0
+x2max = 4.0
+x3min = -4.0
+x3max = 4.0
 
 <coord>
 general_rel = true       # general relativity
@@ -58,6 +70,6 @@ k_adi      = 1.0       # adiabat K, p_gas = K rho^Gamma
 r_crit     = 8.0       # sonic point radius, in units of mass
 
 <output1>
-file_type  = vtk      # Binary data dump
+file_type  = bin      # Binary data dump
 variable   = hydro_w  # variables to be output
 dt         = 1.0      # time increment between outputs

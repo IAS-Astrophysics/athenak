@@ -55,10 +55,12 @@ class ProblemGenerator {
   UserHistoryFnPtr user_hist_func=nullptr;
 
   // predefined problem generator functions (default test suite)
+  void CallProblemGenerator(ParameterInput *pin, bool is_restart);
   void Advection(ParameterInput *pin, const bool restart);
   void AlfvenWave(ParameterInput *pin, const bool restart);
   void BondiAccretion(ParameterInput *pin, const bool restart);
   void CheckOrthonormalTetrad(ParameterInput *pin, const bool restart);
+  void CShock(ParameterInput *pin, const bool restart);
   void Hohlraum(ParameterInput *pin, const bool restart);
   void LinearWave(ParameterInput *pin, const bool restart);
   void LWImplode(ParameterInput *pin, const bool restart);
@@ -66,9 +68,13 @@ class ProblemGenerator {
   void OrszagTang(ParameterInput *pin, const bool restart);
   void ShockTube(ParameterInput *pin, const bool restart);
   void RadiationLinearWave(ParameterInput *pin, const bool restart);
+  void Z4cBoostedPuncture(ParameterInput *pin, const bool restart);
   void Z4cLinearWave(ParameterInput *pin, const bool restart);
   void SphericalCollapse(ParameterInput *pin, const bool restart);
   void Diffusion(ParameterInput *pin, const bool restart);
+
+  // Generic error output function (using difference u0-u1)
+  void OutputErrors(ParameterInput *pin, Mesh *pm);
 
   // template for user-specified problem generator
   void UserProblem(ParameterInput *pin, const bool restart);

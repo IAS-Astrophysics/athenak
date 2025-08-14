@@ -56,7 +56,14 @@ gamma       = 1.66666666667   # gamma = C_p/C_v
 pgen_name = linear_wave # problem generator name
 wave_flag = 0           # Wave family number ([0-4] for adiabatic hydro, [0-6] for MHD)
 amp       = 1.0e-3      # Wave Amplitude
-vflow     = 0.0         # background flow velocity
+dens      = 1.0         # density in background state
+pgas      = 0.6         # pressure in background state
+vx0       = 0.0         # x-velocity in background state
+vy0       = 0.0         # y-velocity in background state
+vz0       = 0.0         # z-velocity in background state
+bx0       = 1.0         # x-Bfield in background state
+by0       = 1.4142136   # y-Bfield in background state
+bz0       = 0.5         # z-Bfield in background state
 along_x1  = false       # set to 'true' for wave along x1-axis
 along_x2  = false       # set to 'true' for wave along x2-axis
 along_x3  = false       # set to 'true' for wave along x3-axis
