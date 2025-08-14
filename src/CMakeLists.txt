@@ -135,6 +135,7 @@ add_executable(
         shearing_box/orbital_advection.cpp
         shearing_box/orbital_advection_cc.cpp
         shearing_box/orbital_advection_fc.cpp
+        shearing_box/orbital_advection_tasks.cpp
         shearing_box/shearing_box.cpp
         shearing_box/shearing_box_cc.cpp
         shearing_box/shearing_box_fc.cpp

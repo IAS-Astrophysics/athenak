@@ -20,6 +20,7 @@
 #include "mesh/mesh.hpp"
 #include "coordinates/cell_locations.hpp"
 #include "shearing_box.hpp"
+#include "orbital_advection.hpp"
 #include "mhd/mhd.hpp"
 #include "remap_fluxes.hpp"
 
@@ -173,7 +174,7 @@ TaskStatus OrbitalAdvectionCC::PackAndSendCC(DvceArray5D<Real> &a) {
 //! integer shift and a fractional offset to input array a.
 
 TaskStatus OrbitalAdvectionCC::RecvAndUnpackCC(DvceArray5D<Real> &a,
-                                               ReconstructionMethod rcon, Real qom) {
+                                               ReconstructionMethod rcon) {
   // create local references for variables in kernel
   int nmb = pmy_pack->nmb_thispack;
   auto &rbuf = recvbuf;
@@ -241,7 +242,7 @@ TaskStatus OrbitalAdvectionCC::RecvAndUnpackCC(DvceArray5D<Real> &a,
     int nx1 = indcs.nx1;
     Real x1v = CellCenterX(i-is, nx1, x1min, x1max);
 
-    Real yshear = -qom*x1v*dt;
+    Real yshear = -(qshear*omega0)*x1v*dt;
     int joffset = static_cast<int>(yshear/(mbsize.d_view(m).dx2));
 
     // Load scratch array with no shift

@@ -20,6 +20,7 @@
 #include "mesh/mesh.hpp"
 #include "coordinates/cell_locations.hpp"
 #include "shearing_box.hpp"
+#include "orbital_advection.hpp"
 #include "mhd/mhd.hpp"
 #include "remap_fluxes.hpp"
 
@@ -172,7 +173,7 @@ TaskStatus OrbitalAdvectionFC::PackAndSendFC(DvceFaceFld4D<Real> &b) {
 //! The fields themselves are not directly remapped like the CC variables.
 
 TaskStatus OrbitalAdvectionFC::RecvAndUnpackFC(DvceFaceFld4D<Real> &b0,
-                                             ReconstructionMethod rcon, Real qom) {
+                                             ReconstructionMethod rcon) {
   int nmb = pmy_pack->nmb_thispack;
   auto &rbuf = recvbuf;
 #if MPI_PARALLEL_ENABLED
@@ -252,7 +253,7 @@ TaskStatus OrbitalAdvectionFC::RecvAndUnpackFC(DvceFaceFld4D<Real> &b0,
       // B1 located at x1-cell faces
       x1 = LeftEdgeX(i-is, nx1, x1min, x1max);
     }
-    Real yshear = -qom*x1*dt;
+    Real yshear = -(qshear*omega0)*x1*dt;
     int joffset = static_cast<int>(yshear/(mbsize.d_view(m).dx2));
 
     // Load scratch array with no shift

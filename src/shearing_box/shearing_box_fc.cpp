@@ -23,10 +23,10 @@
 #include "remap_fluxes.hpp"
 
 //----------------------------------------------------------------------------------------
-// ShearingBoxBoundaryFC derived class constructor:
+// ShearingBoxFC derived class constructor:
 
-ShearingBoxBoundaryFC::ShearingBoxBoundaryFC(MeshBlockPack *pp, ParameterInput *pin) :
-    ShearingBoxBoundary(pp, pin) {
+ShearingBoxFC::ShearingBoxFC(MeshBlockPack *pp, ParameterInput *pin) :
+    ShearingBox(pp, pin) {
   // Allocate boundary buffers
   auto &indcs = pp->pmesh->mb_indcs;
   int ncells3 = indcs.nx3 + 2*indcs.ng;
@@ -40,13 +40,13 @@ ShearingBoxBoundaryFC::ShearingBoxBoundaryFC(MeshBlockPack *pp, ParameterInput *
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn void ShearingBoxBoundary::PackAndSendFC()
+//! \fn void ShearingBox::PackAndSendFC()
 //! \brief Apply shearing sheet BCs to cell-centered variables, including MPI
 //! MPI communications. Both the inner_x1 and outer_x1 boundaries are updated.
 //! Called on the physics_bcs task after purely periodic BC communication is finished.
 
-TaskStatus ShearingBoxBoundaryFC::PackAndSendFC(DvceFaceFld4D<Real> &b,
-                                                ReconstructionMethod rcon) {
+TaskStatus ShearingBoxFC::PackAndSendFC(DvceFaceFld4D<Real> &b,
+                                        ReconstructionMethod rcon) {
   const auto &indcs = pmy_pack->pmesh->mb_indcs;
   const auto &ie = indcs.ie;
   const auto &js = indcs.js, &je = indcs.je;
@@ -291,12 +291,12 @@ TaskStatus ShearingBoxBoundaryFC::PackAndSendFC(DvceFaceFld4D<Real> &b,
 }
 
 //----------------------------------------------------------------------------------------
-//! \!fn void ShearingBoxBoundaryFC::RecvAndUnpackFC()
+//! \!fn void ShearingBoxFC::RecvAndUnpackFC()
 //! \brief Check MPI communication of boundary buffers for FC variables have finished,
 //! then copy buffers into ghost zones. Shift has already been performed in
 //! PackAndSendFC() function
 
-TaskStatus ShearingBoxBoundaryFC::RecvAndUnpackFC(DvceFaceFld4D<Real> &b) {
+TaskStatus ShearingBoxFC::RecvAndUnpackFC(DvceFaceFld4D<Real> &b) {
   // create local references for variables in kernel
   const auto &indcs = pmy_pack->pmesh->mb_indcs;
   const int &ng = indcs.ng;
