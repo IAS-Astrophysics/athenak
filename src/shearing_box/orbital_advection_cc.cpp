@@ -229,6 +229,7 @@ TaskStatus OrbitalAdvectionCC::RecvAndUnpackCC(DvceArray5D<Real> &a,
   auto &mesh_size = pmy_pack->pmesh->mesh_size;
   Real &dt = pmy_pack->pmesh->dt;
   Real ly = (mesh_size.x2max - mesh_size.x2min);
+  Real qo = qshear*omega0;
 
   int scr_lvl=0;
   size_t scr_size = ScrArray1D<Real>::shmem_size(nfx) * 2;
@@ -242,7 +243,7 @@ TaskStatus OrbitalAdvectionCC::RecvAndUnpackCC(DvceArray5D<Real> &a,
     int nx1 = indcs.nx1;
     Real x1v = CellCenterX(i-is, nx1, x1min, x1max);
 
-    Real yshear = -(qshear*omega0)*x1v*dt;
+    Real yshear = -(qo)*x1v*dt;
     int joffset = static_cast<int>(yshear/(mbsize.d_view(m).dx2));
 
     // Load scratch array with no shift
