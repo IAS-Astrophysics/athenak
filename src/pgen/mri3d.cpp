@@ -4,11 +4,16 @@
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
 //! \file mri3d.cpp
-//! \brief Problem generator for 3D MRI.
+//! \brief Problem generator for 3D MRI in both unstratified and stratified shearing box.
 //!
-//! PURPOSE:  Problem generator for 3D MRI. Based on the initial conditions described in
-//! "Local Three-dimensional Magnetohydrodynamic Simulations of Accretion Disks" by
-//! Hawley, Gammie & Balbus, or HGB.  AthanK version based on pgen/hgb.cpp in Athena++.
+//! PURPOSE:  Problem generator for 3D MRI. Unstratified case based on the initial
+//! conditions described in "Local Three-dimensional Magnetohydrodynamic Simulations of
+//! Accretion Disks" by Hawley, Gammie & Balbus, or HGB.  AthenaK version based on
+//! pgen/hgb.cpp in Athena++.
+//!
+//! Stratified case based on the initial conditions described in "Three-dimensional
+//! Magnetohydrodynamic Simulations of Vertically Stratified Accretion Disks" by Stone,
+//! Hawley, Gammie & Balbus.
 //!
 //! Several different field configurations are possible:
 //! - ifield = 1 - Bz=B0 sin(nwx*kx*x1) field with zero-net-flux [default] (nwx input)
@@ -16,7 +21,9 @@
 //! - ifield = 3 - uniform By
 //! Random perturbations to the pressure are added in the initial conditions to seed MRI
 //!
-//! REFERENCE: Hawley, J. F., Gammie, C.F. & Balbus, S. A., ApJ 440, 742-763 (1995).
+//! REFERENCES:
+//! - Hawley, J. F., Gammie, C.F. & Balbus, S. A., ApJ 440, 742-763 (1995).
+//! - Stone, J., Hawley, J., Gammie, C.F. & Balbus, S. A., ApJ 463, 656-673 (1996)
 
 // C++ headers
 #include <cmath>      // sqrt()
@@ -50,14 +57,15 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   // First, do some error checks
   if (!(pmy_mesh_->three_d)) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
-              << "mri3d problem generator only works in 2D (nx3=1)" << std::endl;
+              << "mri3d problem generator only works in 3D" << std::endl;
     exit(EXIT_FAILURE);
   }
   MeshBlockPack *pmbp = pmy_mesh_->pmb_pack;
   if (pmbp->pmhd != nullptr) {
-    if (pmbp->pmhd->psrc == nullptr) {
+    if (pmbp->pmhd->psbox_u == nullptr) {
       std::cout <<"### FATAL ERROR in "<< __FILE__ <<" at line " <<__LINE__ << std::endl
-                << "Shearing box source terms not enabled for mri3d problem" << std::endl;
+                << "Shearing box not enabled for mri3d problem, likely missing " <<
+                << "<shearing_box> block in input file" << std::endl;
       exit(EXIT_FAILURE);
     }
   } else {
