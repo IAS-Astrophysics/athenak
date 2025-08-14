@@ -29,6 +29,7 @@ ShearingBox::ShearingBox(MeshBlockPack *ppack, ParameterInput *pin) :
   // Read shear rate and orbital frequency
   qshear = pin->GetReal("shearing_box","qshear");
   omega0 = pin->GetReal("shearing_box","omega0");
+  is_stratified = pin->GetOrAddBoolean("shearing_box","stratified",false);
 
   // Create vector with GID of every MBs on this rank at ix1/ox1 shearing-box boundaries
   std::vector<int> tmp_ix1bndry_gid, tmp_ox1bndry_gid;

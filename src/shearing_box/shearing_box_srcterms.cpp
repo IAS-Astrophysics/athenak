@@ -27,17 +27,22 @@
 void ShearingBoxCC::SourceTermsCC(const DvceArray5D<Real> &w0, const EOS_Data &eos_data,
                                 const Real bdt, DvceArray5D<Real> &u0) {
   auto &indcs = pmy_pack->pmesh->mb_indcs;
+  auto &size = pmy_pack->pmb->mb_size;
   int is = indcs.is, ie = indcs.ie;
   int js = indcs.js, je = indcs.je;
   int ks = indcs.ks, ke = indcs.ke;
   int nmb1 = pmy_pack->nmb_thispack - 1;
   auto three_d_ = pmy_pack->pmesh->three_d;
+  auto is_strat = is_stratified;
+  Real z0 = (pmy_pack->pmesh->mesh_size.x1max - pmy_pack->pmesh->mesh_size.x1min)/2.0;
+  Real lambda = 0.1/z0;
 
   // 3D or 2D r-phi source terms
   if (shearing_box_r_phi || three_d_) {
     Real coef1 = 2.0*bdt*omega0;
     Real coef2 = (2.0-qshear)*bdt*omega0;
     Real qo = qshear*omega0;
+    Real coef3 = bdt*SQR(omega0);
     par_for("sbox", DevExeSpace(), 0, nmb1, ks, ke, js, je, is, ie,
     KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
       Real &den = w0(m,IDN,k,j,i);
@@ -45,6 +50,20 @@ void ShearingBoxCC::SourceTermsCC(const DvceArray5D<Real> &w0, const EOS_Data &e
       Real mom2 = den*w0(m,IVY,k,j,i);
       u0(m,IM1,k,j,i) += coef1*mom2;
       u0(m,IM2,k,j,i) -= coef2*mom1;
+      if (is_strat) {
+        Real &x3min = size.d_view(m).x3min;
+        Real &x3max = size.d_view(m).x3max;
+        int nx3 = indcs.nx3;
+        Real x3v = CellCenterX(k-ks, nx3, x3min, x3max);
+        // smoothing function to reduce acc'n near top/bottom of domain
+        Real sign = 1.0;
+        if (x3v >= 0) {
+          sign = -1.0;
+        }
+        Real xi = z0/x3v;
+        Real fsmooth = SQR( std::sqrt( SQR(xi+sign) + SQR(xi*lambda) ) + xi*sign );
+        u0(m,IM3,k,j,i) -= coef3*den*x3v*fsmooth;
+      }
       if (eos_data.is_ideal) {
         // For more accuracy, better to use flux values
         u0(m,IEN,k,j,i) += bdt*mom1*mom2/den*qo;
@@ -83,17 +102,22 @@ void ShearingBoxCC::SourceTermsCC(
     const DvceArray5D<Real> &w0, const DvceArray5D<Real> &bcc0,
     const EOS_Data &eos_data, const Real bdt, DvceArray5D<Real> &u0) {
   auto &indcs = pmy_pack->pmesh->mb_indcs;
+  auto &size = pmy_pack->pmb->mb_size;
   int is = indcs.is, ie = indcs.ie;
   int js = indcs.js, je = indcs.je;
   int ks = indcs.ks, ke = indcs.ke;
   int nmb1 = pmy_pack->nmb_thispack - 1;
   auto three_d_ = pmy_pack->pmesh->three_d;
+  auto is_strat = is_stratified;
+  Real z0 = (pmy_pack->pmesh->mesh_size.x1max - pmy_pack->pmesh->mesh_size.x1min)/2.0;
+  Real lambda = 0.1/z0;
 
   // 3D or 2D r-phi source terms
   if (shearing_box_r_phi || three_d_) {
     Real coef1 = 2.0*bdt*omega0;
     Real coef2 = (2.0-qshear)*bdt*omega0;
     Real qo = qshear*omega0;
+    Real coef3 = bdt*SQR(omega0);
     par_for("sbox", DevExeSpace(), 0, nmb1, ks, ke, js, je, is, ie,
     KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
       Real &den = w0(m,IDN,k,j,i);
@@ -101,6 +125,21 @@ void ShearingBoxCC::SourceTermsCC(
       Real mom2 = den*w0(m,IVY,k,j,i);
       u0(m,IM1,k,j,i) += coef1*mom2;
       u0(m,IM2,k,j,i) -= coef2*mom1;
+      if (is_strat) {
+        Real &x3min = size.d_view(m).x3min;
+        Real &x3max = size.d_view(m).x3max;
+        int nx3 = indcs.nx3;
+        Real x3v = CellCenterX(k-ks, nx3, x3min, x3max);
+        // smoothing function to reduce acc'n near top/bottom of domain
+        Real sign = 1.0;
+        if (x3v >= 0) {
+          sign = -1.0;
+        }
+        Real xi = z0/x3v;
+        Real fsmooth = SQR( std::sqrt( SQR(xi+sign) + SQR(xi*lambda) ) + xi*sign );
+//        u0(m,IM3,k,j,i) -= coef3*den*x3v*fsmooth;
+        u0(m,IM3,k,j,i) -= coef3*den*x3v;
+      }
       if (eos_data.is_ideal) {
         // For more accuracy, better to use flux values
         u0(m,IEN,k,j,i) += bdt*(mom1*mom2/den-bcc0(m,IBX,k,j,i)*bcc0(m,IBY,k,j,i))*qo;
