@@ -18,7 +18,7 @@ jobs:
         shell: bash
         run: |
           source /usr/share/Modules/init/bash
-          module load gcc-toolset/10
+          module load gcc-toolset/10 anaconda3
           python3 -m pip install --user flake8 numpy pytest testutils
           cd ${{ github.workspace }}/tst
           echo "Running test_suite..."
@@ -27,7 +27,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name:  lint_log.txt
-          path:  lint_log.txt
+          path:  ${{ github.workspace }}/tst/test_log.txt
   
   regression_cpu-job:
     needs: [lint-job]
@@ -40,16 +40,16 @@ jobs:
         shell: bash
         run: |
           source /usr/share/Modules/init/bash
-          module load gcc-toolset/10
-          python3 -m pip install --user flake8 numpy pytest testutils
+          module load gcc-toolset/10 anaconda3
+          python -m pip install --user flake8 numpy pytest testutils
           cd ${{ github.workspace }}/tst
-          echo "Running regression script on GPU..."
+          echo "Running regression script on CPU..."
           python run_test_suite.py --cpu
       - name: Archive log_file_cpu
         uses: actions/upload-artifact@v4
         with:
           name: cpu_test_log.txt
-          path: test_log.txt
+          path: ${{ github.workspace }}/tst/test_log.txt
 
   regression_mpi_cpu-job:
     needs: [lint-job]
@@ -62,16 +62,16 @@ jobs:
         shell: bash
         run: |
           source /usr/share/Modules/init/bash
-          module load gcc-toolset/10 openmpi/gcc/4.1.0
+          module load gcc-toolset/10 openmpi/gcc/4.1.0 anaconda3
           python3 -m pip install --user flake8 numpy pytest testutils
           cd ${{ github.workspace }}/tst
-          echo "Running regression script on GPU..."
+          echo "Running regression script on multiple CPUs..."
           python run_test_suite.py --mpicpu
       - name: Archive log_file_mpi_cpu
         uses: actions/upload-artifact@v4
         with:
           name: log_file_mpi_cpu.txt
-          path: test_log.txt
+          path: ${{ github.workspace }}/tst/test_log.txt
 
   regression_gpu-job:
     needs: [lint-job]
@@ -84,7 +84,7 @@ jobs:
         shell: bash
         run: |
           source /usr/share/Modules/init/bash
-          module load gcc-toolset/10 cudatoolkit/11.7
+          module load gcc-toolset/10 cudatoolkit/11.7 anaconda3
           python3 -m pip install --user flake8 numpy pytest testutils
           cd ${{ github.workspace }}/tst
           export CUDA_VISIBLE_DEVICES=1
@@ -94,4 +94,4 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: log_file_gpu.txt
-          path: test_log.txt
+          path: ${{ github.workspace }}/tst/test_log.txt
