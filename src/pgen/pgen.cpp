@@ -12,12 +12,14 @@
 #include <string>
 #include <utility>
 #include <algorithm>
+#include <cstdio>
 
 #include "athena.hpp"
 #include "geodesic-grid/geodesic_grid.hpp"
 #include "globals.hpp"
 #include "parameter_input.hpp"
 #include "mesh/mesh.hpp"
+#include "eos/eos.hpp"
 #include "hydro/hydro.hpp"
 #include "mhd/mhd.hpp"
 #include "coordinates/adm.hpp"
@@ -26,6 +28,7 @@
 #include "radiation/radiation.hpp"
 #include "srcterms/turb_driver.hpp"
 #include "pgen.hpp"
+
 
 //----------------------------------------------------------------------------------------
 // default constructor, calls pgen function.
@@ -45,53 +48,8 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm) :
   user_srcs = pin->GetOrAddBoolean("problem","user_srcs",false);
   user_hist = pin->GetOrAddBoolean("problem","user_hist",false);
 
-#if USER_PROBLEM_ENABLED
-  // call user-defined problem generator
-  UserProblem(pin, false);
-#else
-  // else read name of built-in pgen from <problem> block in input file, and call
-  std::string pgen_fun_name = pin->GetOrAddString("problem", "pgen_name", "none");
-
-  if (pgen_fun_name.compare("advection") == 0) {
-    Advection(pin, false);
-  } else if (pgen_fun_name.compare("cpaw") == 0) {
-    AlfvenWave(pin, false);
-  } else if (pgen_fun_name.compare("gr_bondi") == 0) {
-    BondiAccretion(pin, false);
-  } else if (pgen_fun_name.compare("tetrad") == 0) {
-    CheckOrthonormalTetrad(pin, false);
-  } else if (pgen_fun_name.compare("hohlraum") == 0) {
-    Hohlraum(pin, false);
-  } else if (pgen_fun_name.compare("linear_wave") == 0) {
-    LinearWave(pin, false);
-  } else if (pgen_fun_name.compare("implode") == 0) {
-    LWImplode(pin, false);
-  } else if (pgen_fun_name.compare("gr_monopole") == 0) {
-    Monopole(pin, false);
-  } else if (pgen_fun_name.compare("orszag_tang") == 0) {
-    OrszagTang(pin, false);
-  } else if (pgen_fun_name.compare("rad_linear_wave") == 0) {
-    RadiationLinearWave(pin, false);
-  } else if (pgen_fun_name.compare("shock_tube") == 0) {
-    ShockTube(pin, false);
-  } else if (pgen_fun_name.compare("z4c_linear_wave") == 0) {
-    Z4cLinearWave(pin, false);
-  } else if (pgen_fun_name.compare("spherical_collapse") == 0) {
-    SphericalCollapse(pin, false);
-  } else if (pgen_fun_name.compare("diffusion") == 0) {
-    Diffusion(pin, false);
-  // else, name not set on command line or input file, print warning and quit
-  } else {
-    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
-        << "Problem generator name could not be found in <problem> block in input file"
-        << std::endl
-        << "and it was not set by -D PROBLEM option on cmake command line during build"
-        << std::endl
-        << "Rerun cmake with -D PROBLEM=file to specify custom problem generator file"
-        << std::endl;;
-    std::exit(EXIT_FAILURE);
-  }
-#endif
+  // second argument false since this IS NOT a restart
+  CallProblemGenerator(pin, false);
 
   // Check that user defined BCs were enrolled if needed
   if (user_bcs) {
@@ -658,50 +616,8 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resf
   }
 
   // call problem generator again to re-initialize data, fn ptrs, as needed
-#if USER_PROBLEM_ENABLED
-  UserProblem(pin, true);
-#else
-  std::string pgen_fun_name = pin->GetOrAddString("problem", "pgen_name", "none");
-
-  if (pgen_fun_name.compare("advection") == 0) {
-    Advection(pin, true);
-  } else if (pgen_fun_name.compare("cpaw") == 0) {
-    AlfvenWave(pin, true);
-  } else if (pgen_fun_name.compare("gr_bondi") == 0) {
-    BondiAccretion(pin, true);
-  } else if (pgen_fun_name.compare("tetrad") == 0) {
-    CheckOrthonormalTetrad(pin, true);
-  } else if (pgen_fun_name.compare("hohlraum") == 0) {
-    Hohlraum(pin, true);
-  } else if (pgen_fun_name.compare("linear_wave") == 0) {
-    LinearWave(pin, true);
-  } else if (pgen_fun_name.compare("implode") == 0) {
-    LWImplode(pin, true);
-  } else if (pgen_fun_name.compare("gr_monopole") == 0) {
-    Monopole(pin, true);
-  } else if (pgen_fun_name.compare("orszag_tang") == 0) {
-    OrszagTang(pin, true);
-  } else if (pgen_fun_name.compare("rad_linear_wave") == 0) {
-    RadiationLinearWave(pin, true);
-  } else if (pgen_fun_name.compare("shock_tube") == 0) {
-    ShockTube(pin, true);
-  } else if (pgen_fun_name.compare("z4c_linear_wave") == 0) {
-    Z4cLinearWave(pin, true);
-  } else if (pgen_fun_name.compare("spherical_collapse") == 0) {
-    SphericalCollapse(pin, true);
-  } else if (pgen_fun_name.compare("diffusion") == 0) {
-    Diffusion(pin, true);
-  } else {
-    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
-        << "Problem generator name could not be found in <problem> block in input file"
-        << std::endl
-        << "and it was not set by -D PROBLEM option on cmake command line during build"
-        << std::endl
-        << "Rerun cmake with -D PROBLEM=file to specify custom problem generator file"
-        << std::endl;;
-    std::exit(EXIT_FAILURE);
-  }
-#endif
+  // second argument true since this IS a restart
+  CallProblemGenerator(pin, true);
 
   // Check that user defined BCs were enrolled if needed
   if (user_bcs) {
@@ -730,4 +646,296 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resf
       exit(EXIT_FAILURE);
     }
   }
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void ProblemGenerator::OutputErrors()
+//! \brief Generic function for computing the L1 and L-infty difference between solutions
+//! stored in the u0 and u1 registers, and outputting them to an error file.  This is
+//! used for linear wave convergence tests, for example.
+//! Function requires appropriate solutions already stored in u0 and u1.
+
+void ProblemGenerator::OutputErrors(ParameterInput *pin, Mesh *pm) {
+  Real l1_err[16];
+  Real linfty_err=0.0;
+  int nvars=0,nprev=0;
+
+  // capture class variables for kernel
+  auto &indcs = pm->mb_indcs;
+  int &nx1 = indcs.nx1;
+  int &nx2 = indcs.nx2;
+  int &nx3 = indcs.nx3;
+  int &is = indcs.is;
+  int &js = indcs.js;
+  int &ks = indcs.ks;
+  MeshBlockPack *pmbp = pm->pmb_pack;
+  auto &size = pmbp->pmb->mb_size;
+
+  // compute errors for Hydro  -----------------------------------------------------------
+  if (pmbp->phydro != nullptr) {
+    nvars = pmbp->phydro->nhydro;
+
+    auto &is_ideal_ = pmbp->phydro->peos->eos_data.is_ideal;
+    auto &u0_ = pmbp->phydro->u0;
+    auto &u1_ = pmbp->phydro->u1;
+
+    const int nmkji = (pmbp->nmb_thispack)*nx3*nx2*nx1;
+    const int nkji = nx3*nx2*nx1;
+    const int nji  = nx2*nx1;
+    array_sum::GlobalSum sum_this_mb;
+    Kokkos::parallel_reduce("L1-err",Kokkos::RangePolicy<>(DevExeSpace(), 0, nmkji),
+    KOKKOS_LAMBDA(const int &idx, array_sum::GlobalSum &mb_sum, Real &max_err) {
+      // compute n,k,j,i indices of thread
+      int m = (idx)/nkji;
+      int k = (idx - m*nkji)/nji;
+      int j = (idx - m*nkji - k*nji)/nx1;
+      int i = (idx - m*nkji - k*nji - j*nx1) + is;
+      k += ks;
+      j += js;
+
+      Real vol = size.d_view(m).dx1*size.d_view(m).dx2*size.d_view(m).dx3;
+
+      // conserved variables:
+      array_sum::GlobalSum evars;
+      evars.the_array[IDN] = vol*fabs(u0_(m,IDN,k,j,i) - u1_(m,IDN,k,j,i));
+      max_err = fmax(max_err, evars.the_array[IDN]);
+      evars.the_array[IM1] = vol*fabs(u0_(m,IM1,k,j,i) - u1_(m,IM1,k,j,i));
+      max_err = fmax(max_err, evars.the_array[IM1]);
+      evars.the_array[IM2] = vol*fabs(u0_(m,IM2,k,j,i) - u1_(m,IM2,k,j,i));
+      max_err = fmax(max_err, evars.the_array[IM2]);
+      evars.the_array[IM3] = vol*fabs(u0_(m,IM3,k,j,i) - u1_(m,IM3,k,j,i));
+      max_err = fmax(max_err, evars.the_array[IM3]);
+      if (is_ideal_) {
+        evars.the_array[IEN] = vol*fabs(u0_(m,IEN,k,j,i) - u1_(m,IEN,k,j,i));
+        max_err = fmax(max_err, evars.the_array[IEN]);
+      }
+
+      // fill rest of the_array with zeros, if narray < NREDUCTION_VARIABLES
+      for (int n=nvars; n<NREDUCTION_VARIABLES; ++n) {
+        evars.the_array[n] = 0.0;
+      }
+
+      // sum into parallel reduce
+      mb_sum += evars;
+    }, Kokkos::Sum<array_sum::GlobalSum>(sum_this_mb), Kokkos::Max<Real>(linfty_err));
+
+    // store data into l1_err array
+    for (int n=0; n<nvars; ++n) {
+      l1_err[n] = sum_this_mb.the_array[n];
+    }
+    nprev += nvars;
+  }
+
+  // compute errors for MHD  -------------------------------------------------------------
+  if (pmbp->pmhd != nullptr) {
+    nvars = pmbp->pmhd->nmhd + 3;  // include 3-compts of cell-centered B in errors
+    auto &is_ideal_ = pmbp->pmhd->peos->eos_data.is_ideal;
+
+    int bindx;
+    if (is_ideal_) {
+      bindx = 5;
+    } else {
+      bindx = 4;
+    }
+
+    auto &u0_ = pmbp->pmhd->u0;
+    auto &u1_ = pmbp->pmhd->u1;
+    auto &b0_ = pmbp->pmhd->b0;
+    auto &b1_ = pmbp->pmhd->b1;
+
+    const int nmkji = (pmbp->nmb_thispack)*nx3*nx2*nx1;
+    const int nkji = nx3*nx2*nx1;
+    const int nji  = nx2*nx1;
+    array_sum::GlobalSum sum_this_mb;
+    Kokkos::parallel_reduce("L1-err-Sums",Kokkos::RangePolicy<>(DevExeSpace(), 0, nmkji),
+    KOKKOS_LAMBDA(const int &idx, array_sum::GlobalSum &mb_sum, Real &max_err) {
+      // compute n,k,j,i indices of thread
+      int m = (idx)/nkji;
+      int k = (idx - m*nkji)/nji;
+      int j = (idx - m*nkji - k*nji)/nx1;
+      int i = (idx - m*nkji - k*nji - j*nx1) + is;
+      k += ks;
+      j += js;
+
+      Real vol = size.d_view(m).dx1*size.d_view(m).dx2*size.d_view(m).dx3;
+
+      // conserved variables:
+      array_sum::GlobalSum evars;
+      evars.the_array[IDN] = vol*fabs(u0_(m,IDN,k,j,i) - u1_(m,IDN,k,j,i));
+      max_err = fmax(max_err, evars.the_array[IDN]);
+      evars.the_array[IM1] = vol*fabs(u0_(m,IM1,k,j,i) - u1_(m,IM1,k,j,i));
+      max_err = fmax(max_err, evars.the_array[IM1]);
+      evars.the_array[IM2] = vol*fabs(u0_(m,IM2,k,j,i) - u1_(m,IM2,k,j,i));
+      max_err = fmax(max_err, evars.the_array[IM2]);
+      evars.the_array[IM3] = vol*fabs(u0_(m,IM3,k,j,i) - u1_(m,IM3,k,j,i));
+      max_err = fmax(max_err, evars.the_array[IM3]);
+      if (is_ideal_) {
+        evars.the_array[IEN] = vol*fabs(u0_(m,IEN,k,j,i) - u1_(m,IEN,k,j,i));
+        max_err = fmax(max_err, evars.the_array[IEN]);
+      }
+
+      // cell-centered B
+      Real bcc0 = 0.5*(b0_.x1f(m,k,j,i) + b0_.x1f(m,k,j,i+1));
+      Real bcc1 = 0.5*(b1_.x1f(m,k,j,i) + b1_.x1f(m,k,j,i+1));
+      evars.the_array[bindx] = vol*fabs(bcc0 - bcc1);
+      max_err = fmax(max_err, evars.the_array[IEN+1]);
+
+      bcc0 = 0.5*(b0_.x2f(m,k,j,i) + b0_.x2f(m,k,j+1,i));
+      bcc1 = 0.5*(b1_.x2f(m,k,j,i) + b1_.x2f(m,k,j+1,i));
+      evars.the_array[bindx+1] = vol*fabs(bcc0 - bcc1);
+      max_err = fmax(max_err, evars.the_array[IEN+2]);
+
+      bcc0 = 0.5*(b0_.x3f(m,k,j,i) + b0_.x3f(m,k+1,j,i));
+      bcc1 = 0.5*(b1_.x3f(m,k,j,i) + b1_.x3f(m,k+1,j,i));
+      evars.the_array[bindx+2] = vol*fabs(bcc0 - bcc1);
+      max_err = fmax(max_err, evars.the_array[IEN+3]);
+
+      // fill rest of the_array with zeros, if narray < NREDUCTION_VARIABLES
+      for (int n=nvars; n<NREDUCTION_VARIABLES; ++n) {
+        evars.the_array[n] = 0.0;
+      }
+
+      // sum into parallel reduce
+      mb_sum += evars;
+    }, Kokkos::Sum<array_sum::GlobalSum>(sum_this_mb), Kokkos::Max<Real>(linfty_err));
+
+    // store data into l1_err array
+    for (int n=0; n<nvars; ++n) {
+      l1_err[n+nprev] = sum_this_mb.the_array[n];
+    }
+    nprev += nvars;
+  }
+
+#if MPI_PARALLEL_ENABLED
+  MPI_Allreduce(MPI_IN_PLACE, &l1_err, nprev, MPI_ATHENA_REAL, MPI_SUM, MPI_COMM_WORLD);
+  MPI_Allreduce(MPI_IN_PLACE, &linfty_err, 1, MPI_ATHENA_REAL, MPI_MAX, MPI_COMM_WORLD);
+#endif
+
+  // normalize errors by number of cells
+  Real vol=  (pmbp->pmesh->mesh_size.x1max - pmbp->pmesh->mesh_size.x1min)
+            *(pmbp->pmesh->mesh_size.x2max - pmbp->pmesh->mesh_size.x2min)
+            *(pmbp->pmesh->mesh_size.x3max - pmbp->pmesh->mesh_size.x3min);
+  for (int i=0; i<nprev; ++i) l1_err[i] = l1_err[i]/vol;
+  linfty_err /= vol;
+
+  // compute rms error
+  Real rms_err = 0.0;
+  for (int i=0; i<nprev; ++i) {
+    rms_err += SQR(l1_err[i]);
+  }
+  rms_err = std::sqrt(rms_err);
+
+  // root process opens output file and writes out errors
+  if (global_variable::my_rank == 0) {
+    std::string fname;
+    fname.assign(pin->GetString("job","basename"));
+    fname.append("-errs.dat");
+    FILE *pfile;
+
+    // The file exists -- reopen the file in append mode
+    if ((pfile = std::fopen(fname.c_str(), "r")) != nullptr) {
+      if ((pfile = std::freopen(fname.c_str(), "a", pfile)) == nullptr) {
+        std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                  << std::endl << "Error output file could not be opened" <<std::endl;
+        std::exit(EXIT_FAILURE);
+      }
+
+    // The file does not exist -- open the file in write mode and add headers
+    } else {
+      if ((pfile = std::fopen(fname.c_str(), "w")) == nullptr) {
+        std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                  << std::endl << "Error output file could not be opened" <<std::endl;
+        std::exit(EXIT_FAILURE);
+      }
+      std::fprintf(pfile, "# Nx1  Nx2  Nx3   Ncycle   RMS-L1       L-infty       ");
+      if (pmbp->phydro != nullptr) {
+        std::fprintf(pfile,"d_L1          M1_L1         M2_L1         M3_L1         ");
+        if (pmbp->phydro->peos->eos_data.is_ideal) {
+          std::fprintf(pfile,"E_L1          ");
+        }
+      }
+      if (pmbp->pmhd != nullptr) {
+        std::fprintf(pfile,"d_L1          M1_L1         M2_L1         M3_L1         ");
+        if (pmbp->pmhd->peos->eos_data.is_ideal) {
+          std::fprintf(pfile,"E_L1          ");
+        }
+        std::fprintf(pfile,"B1_L1         B2_L1         B3_L1");
+      }
+      std::fprintf(pfile, "\n");
+    }
+
+    // write errors
+    std::fprintf(pfile, "%04d", pmbp->pmesh->mesh_indcs.nx1);
+    std::fprintf(pfile, "  %04d", pmbp->pmesh->mesh_indcs.nx2);
+    std::fprintf(pfile, "  %04d", pmbp->pmesh->mesh_indcs.nx3);
+    std::fprintf(pfile, "  %05d  %e %e", pmbp->pmesh->ncycle, rms_err, linfty_err);
+    for (int i=0; i<nprev; ++i) {
+      std::fprintf(pfile, "  %e", l1_err[i]);
+    }
+    std::fprintf(pfile, "\n");
+    std::fclose(pfile);
+  }
+
+  return;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn ProblemGenerator::CallProblemGenerator()
+//! \brief selects one of the default problem generators compiled automatically with
+//! the source code depending on input string in <problem> block ELSE selects a
+//! user-defined problem generator function compiled with the code.
+
+void ProblemGenerator::CallProblemGenerator(ParameterInput *pin, bool is_restart) {
+#if USER_PROBLEM_ENABLED
+  // call user-defined problem generator (if USER_PROBLEM_ENABLED macro defined at build)
+  UserProblem(pin, is_restart);
+#else
+  // else read name of built-in pgen from <problem> block in input file, and call
+  std::string pgen_fun_name = pin->GetOrAddString("problem", "pgen_name", "none");
+
+  if (pgen_fun_name.compare("advection") == 0) {
+    Advection(pin, is_restart);
+  } else if (pgen_fun_name.compare("cpaw") == 0) {
+    AlfvenWave(pin, is_restart);
+  } else if (pgen_fun_name.compare("gr_bondi") == 0) {
+    BondiAccretion(pin, is_restart);
+  } else if (pgen_fun_name.compare("tetrad") == 0) {
+    CheckOrthonormalTetrad(pin, is_restart);
+  } else if (pgen_fun_name.compare("cshock") == 0) {
+    CShock(pin, is_restart);
+  } else if (pgen_fun_name.compare("hohlraum") == 0) {
+    Hohlraum(pin, is_restart);
+  } else if (pgen_fun_name.compare("linear_wave") == 0) {
+    LinearWave(pin, is_restart);
+  } else if (pgen_fun_name.compare("implode") == 0) {
+    LWImplode(pin, is_restart);
+  } else if (pgen_fun_name.compare("gr_monopole") == 0) {
+    Monopole(pin, is_restart);
+  } else if (pgen_fun_name.compare("orszag_tang") == 0) {
+    OrszagTang(pin, is_restart);
+  } else if (pgen_fun_name.compare("rad_linear_wave") == 0) {
+    RadiationLinearWave(pin, is_restart);
+  } else if (pgen_fun_name.compare("shock_tube") == 0) {
+    ShockTube(pin, is_restart);
+  } else if (pgen_fun_name.compare("z4c_boosted_puncture") == 0) {
+    Z4cBoostedPuncture(pin, is_restart);
+  } else if (pgen_fun_name.compare("z4c_linear_wave") == 0) {
+    Z4cLinearWave(pin, is_restart);
+  } else if (pgen_fun_name.compare("spherical_collapse") == 0) {
+    SphericalCollapse(pin, is_restart);
+  } else if (pgen_fun_name.compare("diffusion") == 0) {
+    Diffusion(pin, is_restart);
+  // else, name not set on command line or input file, print warning and quit
+  } else {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+        << "Problem generator name could not be found in <problem> block in input file"
+        << std::endl
+        << "and it was not set by -D PROBLEM option on cmake command line during build"
+        << std::endl
+        << "Rerun cmake with -D PROBLEM=file to specify custom problem generator file"
+        << std::endl;;
+    std::exit(EXIT_FAILURE);
+  }
+#endif
+  return;
 }
