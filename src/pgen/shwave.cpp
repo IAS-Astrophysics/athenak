@@ -11,9 +11,9 @@
 //!
 //! Three kinds of problems
 //! - ipert = 1 - epicyclic motion
-//! - ipert = 2 - Hydro compressive shwave test of JG5
-//! - ipert = 3 - Hydro compressive shwave test of JG5
-//! - ipert = 4 - MHD compressive shwave test of JGG8
+//! - ipert = 2 - Hydro incompressible (vortical) shwave test of JG5
+//! - ipert = 3 - Hydro compressible shwave test of JG5
+//! - ipert = 4 - MHD compressible shwave test of JGG8
 
 
 // C++ headers
@@ -37,7 +37,7 @@
 
 #include <Kokkos_Random.hpp>
 
-// User-defined history function
+// User-defined history function (only used for compressible Hydro and MHD cases)
 void ShwaveHistory(HistoryData *pdata, Mesh *pm);
 
 //----------------------------------------------------------------------------------------
@@ -85,13 +85,20 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   auto &sv = shw_var;
 
   if (pmbp->phydro != nullptr) {
-    if (!(pmbp->phydro->psrc->shearing_box)) {
+    // Do some error checking in Hydro case
+    if (pmbp->phydro->psbox_u == nullptr) {
       std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-                << std::endl << "shwave problem generator only works in shearing box"
-                << std::endl << "Must add <shearing_box> block to input file"
+                << std::endl << "shwave problem generator only works in shearing box."
+                << std::endl << "Likely missing <shearing_box> block in input file"
                 << std::endl;
       exit(EXIT_FAILURE);
     }
+    if ((ipert < 1) || (ipert > 3)) {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                << std::endl << "ipert must be 1,2, or 3 for hydro shwaves" << std::endl;
+      exit(EXIT_FAILURE);
+    }
+
     EOS_Data &eos = pmbp->phydro->peos->eos_data;
     Real gm1 = eos.gamma - 1.0;
     auto &u0 = pmbp->phydro->u0;
@@ -133,8 +140,8 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     } else if (ipert == 3) {
       // enroll user history function for compressible hydro shwaves
       user_hist_func = ShwaveHistory;
-      sv.qshear = (pmbp->phydro->psrc->qshear);
-      sv.omega0 = (pmbp->phydro->psrc->omega0);
+      sv.qshear = (pmbp->phydro->psbox_u->qshear);
+      sv.omega0 = (pmbp->phydro->psbox_u->omega0);
 
       par_for("shwave3", DevExeSpace(), 0,(pmbp->nmb_thispack-1),ks,ke,js,je,is,ie,
       KOKKOS_LAMBDA(int m, int k, int j, int i) {
@@ -156,18 +163,15 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
           u0(m,IEN,k,j,i) = p0/gm1 + 0.5*d0*(SQR(rvx) + SQR(rvy));
         }
       });
-    } else {
-      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-                << std::endl << "Hydro test needs to have ipert = 1,2 or 3." << std::endl;
-      exit(EXIT_FAILURE);
     }
   }
 
   if (pmbp->pmhd != nullptr) {
-    if (!(pmbp->pmhd->psrc->shearing_box)) {
+    // Do some error checking in MHD case
+    if (pmbp->pmhd->psbox_u == nullptr) {
       std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                 << std::endl << "shwave problem generator only works in shearing box"
-                << std::endl << "Must add <shearing_box> block to input file"
+                << std::endl << "Likely missing <shearing_box> block in input file"
                 << std::endl;
       exit(EXIT_FAILURE);
     }
@@ -176,16 +180,16 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
                 << std::endl << "MHD shwave test requires ipert = 4." << std::endl;
       exit(EXIT_FAILURE);
     }
+
     // enroll user history function for compressible hydro shwaves
     user_hist_func = ShwaveHistory;
-    sv.qshear = (pmbp->pmhd->psrc->qshear);
-    sv.omega0 = (pmbp->pmhd->psrc->omega0);
+    sv.qshear = (pmbp->pmhd->psbox_u->qshear);
+    sv.omega0 = (pmbp->pmhd->psbox_u->omega0);
 
     EOS_Data &eos = pmbp->pmhd->peos->eos_data;
     Real gm1 = eos.gamma - 1.0;
     auto u0 = pmbp->pmhd->u0;
     auto b0 = pmbp->pmhd->b0;
-    Real omega0 = pmbp->pmhd->psrc->omega0;
 
     Real beta = pin->GetReal("problem", "beta");
     Real B02 = p0/beta;
@@ -194,7 +198,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     Real rby = -sv.kx*std::sqrt(B02/(SQR(sv.kx)+SQR(sv.ky)));
     Real rbz = 0.0;
 
-    Real sch = eos.iso_cs/omega0;
+    Real sch = eos.iso_cs/sv.omega0;
     Real cf1 = std::sqrt(B02*(1.0+beta));
     Real cf2 = amp*std::sqrt(sch*std::sqrt(k2*beta/(1.0+beta)));
     Real vd = cf1/std::sqrt(k2)*cf2;
@@ -227,7 +231,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
       }
     });
 
-    // compute vector potential
+    // compute vector potentials
     DvceArray4D<Real> a1, a2, a3;
     int ncells1 = indcs.nx1 + 2*(indcs.ng);
     int ncells2 = indcs.nx2 + 2*(indcs.ng);
@@ -290,9 +294,9 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
       a3(m,k,j,i) = temp*(rbx*sv.ky-rby*sv.kx);
     });
 
+    // Compute face-centered fields from curl(A)
     par_for("shwave3_b1", DevExeSpace(), 0,(pmbp->nmb_thispack-1),ks,ke,js,je,is,ie+1,
     KOKKOS_LAMBDA(int m, int k, int j, int i) {
-      // Compute face-centered fields from curl(A).
       Real dx2 = size.d_view(m).dx2;
       Real dx3 = size.d_view(m).dx3;
 
@@ -302,7 +306,6 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     });
     par_for("shwave3_b2", DevExeSpace(), 0,(pmbp->nmb_thispack-1),ks,ke,js,je+1,is,ie,
     KOKKOS_LAMBDA(int m, int k, int j, int i) {
-      // Compute face-centered fields from curl(A).
       Real dx1 = size.d_view(m).dx1;
       Real dx3 = size.d_view(m).dx3;
 
@@ -312,7 +315,6 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     });
     par_for("shwave3_b3", DevExeSpace(), 0,(pmbp->nmb_thispack-1),ks,ke+1,js,je,is,ie,
     KOKKOS_LAMBDA(int m, int k, int j, int i) {
-      // Compute face-centered fields from curl(A).
       Real dx1 = size.d_view(m).dx1;
       Real dx2 = size.d_view(m).dx2;
 
@@ -320,6 +322,8 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
                         +(a2(m,k,j,i+1) - a2(m,k,j,i))/dx1
                         -(a1(m,k,j+1,i) - a1(m,k,j,i))/dx2;
     });
+
+    // Compute total energy in ideal-gas EOS
     if (eos.is_ideal) {
       par_for("shwave3_e", DevExeSpace(), 0,(pmbp->nmb_thispack-1),ks,ke,js,je,is,ie,
       KOKKOS_LAMBDA(int m, int k, int j, int i) {
