@@ -33,7 +33,7 @@
 #include "mhd/mhd.hpp"
 #include "srcterms/srcterms.hpp"
 #include "shearing_box/shearing_box.hpp"
-#include "pgen.hpp"
+#include "pgen/pgen.hpp"
 
 #include <Kokkos_Random.hpp>
 
@@ -56,7 +56,7 @@ ShwaveVariables shw_var;
 //! \fn ProblemGenerator::_()
 //  \brief
 
-void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
+void ProblemGenerator::Shwave(ParameterInput *pin, const bool restart) {
   if (restart) return;
 
   // read parameters from input file
@@ -203,6 +203,15 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     Real cf2 = amp*std::sqrt(sch*std::sqrt(k2*beta/(1.0+beta)));
     Real vd = cf1/std::sqrt(k2)*cf2;
 
+/***/
+std::cout << "dpert = "<< cf2 << std::endl;
+std::cout << "vxpert = "<< vd*sv.kx << std::endl;
+std::cout << "vypert = "<< vd*sv.ky << std::endl;
+std::cout << "vzpert = "<< vd*sv.kz << std::endl;
+std::cout << "bxpert = "<< rbx << std::endl;
+std::cout << "bypert = "<< rby << std::endl;
+std::cout << "bzpert = "<< rbz << std::endl;
+/***/
     par_for("shwave4", DevExeSpace(), 0,(pmbp->nmb_thispack-1),ks,ke,js,je,is,ie,
     KOKKOS_LAMBDA(int m, int k, int j, int i) {
       Real &x1min = size.d_view(m).x1min;

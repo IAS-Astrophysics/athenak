@@ -118,6 +118,7 @@ add_executable(
         pgen/tests/lw_implode.cpp
         pgen/tests/orszag_tang.cpp
         pgen/tests/shock_tube.cpp
+        pgen/tests/shwave.cpp
         pgen/tests/rad_check_tetrad.cpp
         pgen/tests/rad_hohlraum.cpp
         pgen/tests/rad_linear_wave.cpp

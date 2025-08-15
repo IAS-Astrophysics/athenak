@@ -64,8 +64,3 @@ nwz       = 0       # number of wavelengths in z-direction
 file_type   = hst      # History data dump
 dt          = 0.1      # time increment between outputs
 data_format = %12.5e   # Optional data format string
-
-<output2>
-file_type   = vtk        # Binary data dump
-variable    = hydro_w    # variables to be output
-dt          = 0.1        # time increment between outputs
