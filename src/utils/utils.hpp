@@ -14,5 +14,6 @@
 void ShowConfig();
 void ChangeRunDir(const std::string dir);
 int CreateMPITag(int lid, int buff_id, int phys_id);
+void WatchDog(int timeout);
 
 #endif // UTILS_UTILS_HPP_

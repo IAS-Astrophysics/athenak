@@ -153,7 +153,9 @@ add_executable(
         utils/lagrange_interpolator.cpp
         utils/tr_table.cpp
         utils/cart_grid.cpp
+        utils/watchdog.cpp
         utils/spherical_surface.cpp
+
 
         z4c/compact_object_tracker.cpp
         z4c/horizon_dump.cpp
