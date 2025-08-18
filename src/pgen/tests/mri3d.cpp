@@ -38,7 +38,7 @@
 #include "hydro/hydro.hpp"
 #include "mhd/mhd.hpp"
 #include "shearing_box/shearing_box.hpp"
-#include "pgen.hpp"
+#include "pgen/pgen.hpp"
 
 #include <Kokkos_Random.hpp>
 
@@ -47,10 +47,10 @@ void MRIHistory(HistoryData *pdata, Mesh *pm);
 void StratifiedVerticalBCs(Mesh *pm);
 
 //----------------------------------------------------------------------------------------
-//! \fn ProblemGenerator::_()
+//! \fn ProblemGenerator::MRI3d()
 //  \brief
 
-void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
+void ProblemGenerator::MRI3d(ParameterInput *pin, const bool restart) {
   // enroll user history function
   user_hist_func = MRIHistory;
   // user boundary function for vertical boundaries in stratified disks

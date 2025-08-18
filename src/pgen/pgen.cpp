@@ -911,6 +911,8 @@ void ProblemGenerator::CallProblemGenerator(ParameterInput *pin, bool is_restart
     LWImplode(pin, is_restart);
   } else if (pgen_fun_name.compare("gr_monopole") == 0) {
     Monopole(pin, is_restart);
+  } else if (pgen_fun_name.compare("mri3d") == 0) {
+    MRI3d(pin, is_restart);
   } else if (pgen_fun_name.compare("orszag_tang") == 0) {
     OrszagTang(pin, is_restart);
   } else if (pgen_fun_name.compare("rad_linear_wave") == 0) {

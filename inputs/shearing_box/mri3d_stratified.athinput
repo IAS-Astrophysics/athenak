@@ -8,7 +8,7 @@ reference = Stone, Hawley, Gammie, & Balbus
 basename  = Strat      # problem ID: basename of output filenames
 
 <mesh>
-nghost  = 2         # Number of ghost cells
+nghost  = 3         # Number of ghost cells
 nx1     = 32        # Number of zones in X1-direction
 x1min   = -0.5      # minimum value of X1
 x1max   = 0.5       # maximum value of X1
@@ -47,11 +47,12 @@ stratified = true
 
 <mhd>
 eos          = isothermal   # EOS type
-reconstruct  = plm        # spatial reconstruction method
+reconstruct  = wenoz        # spatial reconstruction method
 rsolver      = hlle         # Riemann-solver to be used
 iso_sound_speed = 1.0
 
 <problem>
+pgen_name = mri3d
 beta      = 400     # Plasma beta
 amp       = 0.025   # dP/P <= amp
 dens      = 1.0
