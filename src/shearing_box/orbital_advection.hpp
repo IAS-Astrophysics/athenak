@@ -67,6 +67,10 @@ class OrbitalAdvectionCC : public OrbitalAdvection {
 class OrbitalAdvectionFC : public OrbitalAdvection {
  public:
   OrbitalAdvectionFC(MeshBlockPack *ppack, ParameterInput *pin);
+
+  // containers for Ex and Ey used to remap magnetic fields
+  DvceArray4D<Real> emfx, emfz;
+
   // functions to communicate FC data with orbital advection
   TaskStatus PackAndSendFC(DvceFaceFld4D<Real> &b);
   TaskStatus RecvAndUnpackFC(DvceFaceFld4D<Real> &b0, ReconstructionMethod rcon);
