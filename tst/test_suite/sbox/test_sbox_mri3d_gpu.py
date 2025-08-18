@@ -5,13 +5,13 @@ Previous tests show we should expect B^2 ~ 0.1 for this problem
 """
 
 # Modules
-import os
 import pytest
 import test_suite.testutils as testutils
 import athena_read
 import numpy as np
 
 input_file = "inputs/mri3d.athinput"
+
 
 # function to calculate mean of B^2 over time interval t=[25,50]
 # assumed data (history file) runs from t=[0,50]
@@ -25,7 +25,8 @@ def compute_mean(data):
         0.0,
     )
     # return 2X mean since 1/2 of array is zero
-    return(2.0*(np.mean(b2)))
+    return (2.0*(np.mean(b2)))
+
 
 def arguments():
     """Assemble arguments for run command"""
@@ -34,18 +35,19 @@ def arguments():
         "mesh/nx1=64",
         "mesh/nx2=128",
         "mesh/nx3=16",
-        "meshblock/nx1=64",
-        "meshblock/nx2=128",
+        "meshblock/nx1=32",
+        "meshblock/nx2=32",
         "meshblock/nx3=16",
         "time/tlim=50.0",
         "mhd/reconstruct=wenoz"
     ]
 
+
 def test_run():
     """run test with given reconstruction/flux."""
     try:
         results = testutils.run(input_file, arguments())
-        assert results, f"MRI test run failed."
+        assert results, "MRI test run failed"
         data = athena_read.hst("HGB.user.hst")
         # check mean B^2 over time-interval t=[25,50]
         aveb2 = compute_mean(data)
@@ -56,4 +58,3 @@ def test_run():
             )
     finally:
         testutils.cleanup()
-

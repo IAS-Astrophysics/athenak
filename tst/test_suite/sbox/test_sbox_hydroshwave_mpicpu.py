@@ -5,7 +5,6 @@ evolution of Vx to analytic solution
 """
 
 # Modules
-import os
 import pytest
 from subprocess import Popen, PIPE
 import test_suite.testutils as testutils
@@ -14,6 +13,7 @@ import numpy as np
 
 _res = [32, 64]  # resolutions to test
 input_file = "inputs/hydro_shwave.athinput"
+
 
 def compute_error(data, amp=1.0e-4):
     # computeds analytic solution of JG05 for dVx
@@ -27,6 +27,7 @@ def compute_error(data, amp=1.0e-4):
     # plt.show()
     return (np.abs(np.sqrt(32.0*data["1-KE"]) - dvx)).mean()
 
+
 def arguments(res):
     """Assemble arguments for run command"""
     return [
@@ -39,7 +40,10 @@ def arguments(res):
         "meshblock/nx3=4",
     ]
 
+
 errors = {}
+
+
 def test_run():
     """Loop over resolutions and run test with given reconstruction/flux."""
     try:

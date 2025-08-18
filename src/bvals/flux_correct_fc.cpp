@@ -466,18 +466,33 @@ void MeshBoundaryValuesFC::SumBoundaryFluxes(DvceEdgeFld4D<Real> &flx,
 
     // scalar loop over neighbors (except corners) to prevent race condition in sums
     for (int n=0; n<nnghbr; ++n) {
-      // only unpack buffers when (neighbor exists)
-      // AND not when (innerx1 BC is shear_periodic AND n=0,16,20,32,33,36,37) OR
-      //         when (outerx1 BC is shear_periodic AND n=4,18,22,34,35,38,39)
-      // AND when (neighbor at same level when same_level=true on input) OR
-      //     when (neighbor at finer level when same_level=false on input)
-      if (   (nghbr.d_view(m,n).gid >= 0)
-          && !(((mbbcs.d_view(m,0)==BoundaryFlag::shear_periodic) &&
-               ((n==0)||(n==16)||(n==20)||(n==32)||(n==33)||(n==36)||(n==37))) ||
-               ((mbbcs.d_view(m,1)==BoundaryFlag::shear_periodic) &&
-               ((n==4)||(n==18)||(n==22)||(n==34)||(n==35)||(n==38)||(n==39))))
-          && (((same_level) && (nghbr.d_view(m,n).lev == mblev.d_view(m))) ||
-              (!(same_level) && (nghbr.d_view(m,n).lev > mblev.d_view(m)))) ) {
+      // only unpack buffers when neighbor exists AND
+      // (neighbor at same level when same_level=true on input) OR
+      // (neighbor at finer level when same_level=false on input)
+      if (    (nghbr.d_view(m,n).gid >= 0) &&
+           (( (same_level) && (nghbr.d_view(m,n).lev == mblev.d_view(m))) ||
+            (!(same_level) && (nghbr.d_view(m,n).lev >  mblev.d_view(m)))) ) {
+        bool inner_bufs=false, outer_bufs=false;
+        if ((n==0)||(n==16)||(n==20)||(n==32)||(n==33)||(n==36)||(n==37)) {
+          inner_bufs=true;
+        }
+        if ((n==4)||(n==18)||(n==22)||(n==34)||(n==35)||(n==38)||(n==39)) {
+          outer_bufs=true;
+        }
+
+      // only unpack buffers when
+      //   (both innerx1 AND outerx1 BCs are NOT shear_periodic) OR
+      //   (only innerx1 BC is shear_periodic AND n!=0,16,20,32,33,36,37) OR
+      //   (only outerx1 BC is shear_periodic AND n!=4,18,22,34,35,38,39) OR
+      //   (both innerx1 AND outerx1 BC are shear_periodic AND n!=...)
+      if ( ((mbbcs.d_view(m,0)!=BoundaryFlag::shear_periodic) &&
+            (mbbcs.d_view(m,1)!=BoundaryFlag::shear_periodic)) ||
+           ((mbbcs.d_view(m,0)==BoundaryFlag::shear_periodic) && !(inner_bufs) &&
+            (mbbcs.d_view(m,1)!=BoundaryFlag::shear_periodic)) ||
+           ((mbbcs.d_view(m,0)!=BoundaryFlag::shear_periodic) &&
+            (mbbcs.d_view(m,1)==BoundaryFlag::shear_periodic) && !(outer_bufs)) ||
+           ((mbbcs.d_view(m,0)==BoundaryFlag::shear_periodic) && !(inner_bufs) &&
+            (mbbcs.d_view(m,1)==BoundaryFlag::shear_periodic) && !(outer_bufs)) ) {
         int il, iu, jl, ju, kl, ku, ndat;
         // if neighbor is at same level, use same indices to unpack buffer
         if (same_level) {
@@ -642,7 +657,7 @@ void MeshBoundaryValuesFC::SumBoundaryFluxes(DvceEdgeFld4D<Real> &flx,
             tmember.team_barrier();
           }
         }
-      }  // end if-neighbor-exists block
+      }}  // end if-neighbor-exists block
     }    // end for loop over n
   });    // end par_for_outer
 
@@ -827,13 +842,19 @@ void MeshBoundaryValuesFC::AverageBoundaryFluxes(DvceEdgeFld4D<Real> &flx,
     const int m = (tmember.league_rank())/(3*nnghbr);
     const int n = (tmember.league_rank() - m*(3*nnghbr))/3;
     const int v = (tmember.league_rank() - m*(3*nnghbr) - 3*n);
-
-    // only average when (neighbor exists)
-    // AND not when (innerx1 BC is shear_periodic AND n=0) OR
-    //         when (outerx1 BC is shear_periodic AND n=4)
-    if (   (nghbr.d_view(m,n).gid >= 0)
-        && !(((mbbcs.d_view(m,0)==BoundaryFlag::shear_periodic) && (n==0)) ||
-             ((mbbcs.d_view(m,1)==BoundaryFlag::shear_periodic) && (n==4))) ) {
+    // only average when
+    //   (both innerx1 AND outerx1 BCs are NOT shear_periodic) OR
+    //   (only innerx1 BC is shear_periodic AND n!=0) OR
+    //   (only outerx1 BC is shear_periodic AND n!=4) OR
+    //   (both innerx1 AND outerx1 BC are shear_periodic AND n!=0,4)
+    if ( ((mbbcs.d_view(m,0)!=BoundaryFlag::shear_periodic) &&
+          (mbbcs.d_view(m,1)!=BoundaryFlag::shear_periodic)) ||
+         ((mbbcs.d_view(m,0)==BoundaryFlag::shear_periodic) && (n!=0) &&
+          (mbbcs.d_view(m,1)!=BoundaryFlag::shear_periodic)) ||
+         ((mbbcs.d_view(m,0)!=BoundaryFlag::shear_periodic) &&
+          (mbbcs.d_view(m,1)==BoundaryFlag::shear_periodic) && (n!=4)) ||
+         ((mbbcs.d_view(m,0)==BoundaryFlag::shear_periodic) && (n!=0) &&
+          (mbbcs.d_view(m,1)==BoundaryFlag::shear_periodic) && (n!=4)) ) {
       int il, iu, jl, ju, kl, ku;
       il = rbuf[n].iflux_same[v].bis;
       iu = rbuf[n].iflux_same[v].bie;

@@ -25,6 +25,9 @@
 //! - Hawley, J. F., Gammie, C.F. & Balbus, S. A., ApJ 440, 742-763 (1995).
 //! - Stone, J., Hawley, J., Gammie, C.F. & Balbus, S. A., ApJ 463, 656-673 (1996)
 
+// C headers
+#include <algorithm>
+
 // C++ headers
 #include <cmath>      // sqrt()
 #include <iostream>   // endl
@@ -103,7 +106,7 @@ void ProblemGenerator::MRI3d(ParameterInput *pin, const bool restart) {
   } else {
     p0 = d0*SQR(eos.iso_cs);
     hs = eos.iso_cs/(pmy_mesh_->pmb_pack->pmhd->psbox_u->omega0);   // scale height
- }
+  }
   Real binit = std::sqrt(2.0*p0/beta);
 
   Real x1size = pmy_mesh_->mesh_size.x1max - pmy_mesh_->mesh_size.x1min;
