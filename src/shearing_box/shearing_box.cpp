@@ -4,7 +4,7 @@
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
 //! \file shearing_box.cpp
-//! \brief constructor for ShearingBoxBoundary abstract base class, and utility functions
+//! \brief constructor for ShearingBox abstract base class, and utility functions
 
 #include <algorithm>
 #include <iostream>
@@ -14,15 +14,23 @@
 #include "athena.hpp"
 #include "parameter_input.hpp"
 #include "mesh/mesh.hpp"
+#include "hydro/hydro.hpp"
+#include "mhd/mhd.hpp"
 #include "shearing_box.hpp"
 
 //----------------------------------------------------------------------------------------
-//! ShearingBoxBoundary base class constructor
+//! ShearingBox base class constructor
 
-ShearingBoxBoundary::ShearingBoxBoundary(MeshBlockPack *ppack, ParameterInput *pin) :
+ShearingBox::ShearingBox(MeshBlockPack *ppack, ParameterInput *pin) :
     nmb_x1bndry("nmbx1",2),
     x1bndry_mbgid("x1gid",1,1),
+    shearing_box_r_phi(false),     // 2D r-phi not yet implemented
     pmy_pack(ppack) {
+  // Read shear rate and orbital frequency
+  qshear = pin->GetReal("shearing_box","qshear");
+  omega0 = pin->GetReal("shearing_box","omega0");
+  is_stratified = pin->GetOrAddBoolean("shearing_box","stratified",false);
+
   // Create vector with GID of every MBs on this rank at ix1/ox1 shearing-box boundaries
   std::vector<int> tmp_ix1bndry_gid, tmp_ox1bndry_gid;
   auto &mbbcs = ppack->pmb->mb_bcs;
@@ -79,9 +87,9 @@ ShearingBoxBoundary::ShearingBoxBoundary(MeshBlockPack *ppack, ParameterInput *p
 }
 
 //----------------------------------------------------------------------------------------
-// ShearingBoxBoundary base class destructor
+// ShearingBox base class destructor
 
-ShearingBoxBoundary::~ShearingBoxBoundary() {
+ShearingBox::~ShearingBox() {
 #if MPI_PARALLEL_ENABLED
   for (int n=0; n<2; ++n) {
     if (nmb_x1bndry(n) > 0) {
@@ -93,10 +101,10 @@ ShearingBoxBoundary::~ShearingBoxBoundary() {
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn void ShearingBoxBoundary::FindTargetMB()
+//! \fn void ShearingBox::FindTargetMB()
 //! \brief  function to find target MB offset by shear.  Returns GID and rank
 
-void ShearingBoxBoundary::FindTargetMB(const int igid, const int jshift, int &gid,
+void ShearingBox::FindTargetMB(const int igid, const int jshift, int &gid,
                                        int &rank) {
   Mesh *pm = pmy_pack->pmesh;
   // find lloc of input MB
@@ -105,6 +113,7 @@ void ShearingBoxBoundary::FindTargetMB(const int igid, const int jshift, int &gi
   std::int32_t nmbx2 = pm->nmb_rootx2 << (lloc.level - pm->root_level);
   // apply shift by input number of blocks
   lloc.lx2 = static_cast<std::int32_t>((lloc.lx2 + jshift) % nmbx2);
+  if (lloc.lx2 < 0) lloc.lx2 += nmbx2;
   // find target GID and rank
   gid = (pm->ptree->FindMeshBlock(lloc))->GetGID();
   rank = pm->rank_eachmb[gid];

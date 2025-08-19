@@ -43,6 +43,9 @@ using Real = double;
 
 #define SQR(x) ( (x)*(x) )
 #define SIGN(x) ( ((x) < 0.0) ? -1.0 : 1.0 )
+#define ONE_3RD  0.3333333333333333
+#define TWO_3RDS 0.6666666666666667
+#define FOUR_3RDS 1.333333333333333
 
 // data types only used in physics modules (defined here to avoid recursive dependencies)
 
