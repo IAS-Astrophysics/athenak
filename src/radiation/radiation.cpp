@@ -116,7 +116,8 @@ Radiation::Radiation(MeshBlockPack *ppack, ParameterInput *pin) :
   n_0_floor = pin->GetOrAddReal("radiation","n_0_floor",0.1);
   prgeo = new GeodesicGrid(nlevel, rotate_geo, angular_fluxes);
 
-  int nmb = ppack->nmb_thispack;
+  // Total number of MeshBlocks on this rank to be used in array dimensioning
+  int nmb = std::max((ppack->nmb_thispack), (ppack->pmesh->nmb_maxperrank));
   auto &indcs = pmy_pack->pmesh->mb_indcs;
   {
   int ncells1 = indcs.nx1 + 2*(indcs.ng);
