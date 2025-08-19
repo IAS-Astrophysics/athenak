@@ -342,7 +342,7 @@ bool InverseMatrix(const int N, const ScrArray2D<Real> &A, ScrArray2D<Real> &aug
         } // endfor j
     } // endfor i
   } // endif doublecheck
-  
+
   return true;
 }
 

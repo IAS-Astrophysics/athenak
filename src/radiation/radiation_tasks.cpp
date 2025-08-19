@@ -54,8 +54,11 @@ void Radiation::AssembleRadTasks(std::map<std::string, std::shared_ptr<TaskList>
     id.mhd_sende = tl["stagen"]->AddTask(&mhd::MHD::SendE, pmhd, id.mhd_efld);
     id.mhd_recve = tl["stagen"]->AddTask(&mhd::MHD::RecvE, pmhd, id.mhd_sende);
     id.mhd_ct    = tl["stagen"]->AddTask(&mhd::MHD::CT, pmhd, id.mhd_recve);
-    id.rad_src   = tl["stagen"]->AddTask(
-                                    &Radiation::AddRadiationSourceTerm,this,id.mhd_ct);
+    if (!multi_freq) {
+      id.rad_src = tl["stagen"]->AddTask(&Radiation::AddRadiationSourceTerm,this,id.mhd_ct);
+    } else {
+      id.rad_src = tl["stagen"]->AddTask(&Radiation::AddMultiFreqRadSrcTerm,this,id.mhd_ct);
+    }
     id.rad_resti = tl["stagen"]->AddTask(&Radiation::RestrictI, this, id.rad_src);
     id.rad_sendi = tl["stagen"]->AddTask(&Radiation::SendI, this, id.rad_resti);
     id.rad_recvi = tl["stagen"]->AddTask(&Radiation::RecvI, this, id.rad_sendi);
@@ -95,8 +98,11 @@ void Radiation::AssembleRadTasks(std::map<std::string, std::shared_ptr<TaskList>
     id.hyd_sendf = tl["stagen"]->AddTask(&hydro::Hydro::SendFlux, phyd, id.hyd_flux);
     id.hyd_recvf = tl["stagen"]->AddTask(&hydro::Hydro::RecvFlux, phyd, id.hyd_sendf);
     id.hyd_rkupdt= tl["stagen"]->AddTask(&hydro::Hydro::RKUpdate,phyd,id.hyd_recvf);
-    id.rad_src   = tl["stagen"]->AddTask(
-                                   &Radiation::AddRadiationSourceTerm,this,id.hyd_rkupdt);
+    if (!multi_freq) {
+      id.rad_src   = tl["stagen"]->AddTask(&Radiation::AddRadiationSourceTerm,this,id.hyd_rkupdt);
+    } else {
+      id.rad_src   = tl["stagen"]->AddTask(&Radiation::AddMultiFreqRadSrcTerm,this,id.hyd_rkupdt);
+    }
     id.rad_resti = tl["stagen"]->AddTask(&Radiation::RestrictI, this, id.rad_src);
     id.rad_sendi = tl["stagen"]->AddTask(&Radiation::SendI, this, id.rad_resti);
     id.rad_recvi = tl["stagen"]->AddTask(&Radiation::RecvI, this, id.rad_sendi);
@@ -129,8 +135,11 @@ void Radiation::AssembleRadTasks(std::map<std::string, std::shared_ptr<TaskList>
     id.rad_sendf = tl["stagen"]->AddTask(&Radiation::SendFlux, this, id.rad_flux);
     id.rad_recvf = tl["stagen"]->AddTask(&Radiation::RecvFlux, this, id.rad_sendf);
     id.rad_rkupdt= tl["stagen"]->AddTask(&Radiation::RKUpdate, this, id.rad_recvf);
-    id.rad_src   = tl["stagen"]->AddTask(
-                                   &Radiation::AddRadiationSourceTerm,this,id.rad_rkupdt);
+    if (!multi_freq) {
+      id.rad_src   = tl["stagen"]->AddTask(&Radiation::AddRadiationSourceTerm,this,id.rad_rkupdt);
+    } else {
+      id.rad_src   = tl["stagen"]->AddTask(&Radiation::AddMultiFreqRadSrcTerm,this,id.rad_rkupdt);
+    }
     id.rad_resti = tl["stagen"]->AddTask(&Radiation::RestrictI, this, id.rad_src);
     id.rad_sendi = tl["stagen"]->AddTask(&Radiation::SendI, this, id.rad_resti);
     id.rad_recvi = tl["stagen"]->AddTask(&Radiation::RecvI, this, id.rad_sendi);

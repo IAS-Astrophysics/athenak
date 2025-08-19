@@ -56,7 +56,7 @@ void Radiation::SetFrequencyGrid() {
   freq_grid_(nfreq_grid-1) = freq_max;
 
   // partition frequency domain within [freq_min, freq_max]
-  if (nfreq_grid > 2) {
+  if (nfreq_grid > 3) {
     if (freq_scale == 0) { // linear frequency grid
       Real del_freq = (freq_max-freq_min) / (nfreq_grid-2);
       for (int f=2; f<nfreq_grid-1; ++f)
@@ -70,7 +70,7 @@ void Radiation::SetFrequencyGrid() {
         freq_grid_(f) = exp(log_freq);
       } // endfor f
     } // endelse freq_scale
-  } // endif (nfreq_ > 2)
+  } // endif (nfreq_ > 3)
 
   return;
 }
@@ -420,6 +420,8 @@ TaskStatus Radiation::AddMultiFreqRadSrcTerm(Driver *pdriver, int stage) {
     bool badcell=false;
     if (!(isfinite(tgas_new)) || (tgas_new < 0)) badcell = true;
 
+    // if ((i==2) && (j==0) && (k==0)) printf("tgas_new=%f \n", tgas_new);
+
     // Step 3: update intensity and fluid variables
     if (!(badcell)) {
       // Step 4: update frequency-dependent intensity in the fluid frame
@@ -448,6 +450,9 @@ TaskStatus Radiation::AddMultiFreqRadSrcTerm(Driver *pdriver, int stage) {
 
       } // endfor n
 
+      // if ((i==2) && (j==0) && (k==0)) printf("en_old=%f \n", u0_(m,IEN,k,j,i));
+
+
       // Step 5: map fluid-frame intensity back to coordinate-frame
       for (int iang=0; iang<=nang1; ++iang) {
         // variables for frame transformation
@@ -474,6 +479,8 @@ TaskStatus Radiation::AddMultiFreqRadSrcTerm(Driver *pdriver, int stage) {
 
         // inverse matrix
         bool inv_success = InverseMatrix(nfrq, matrix_map, matrix_aug, matrix_inv);
+        // if ((i==2) && (j==0) && (k==0) && inv_success) printf(" inv_success=true \n");
+        // if ((i==2) && (j==0) && (k==0) && !inv_success) printf(" inv_success=false \n");
 
         // update intensity
         fac_norm(iang) = 0.0;
@@ -491,11 +498,14 @@ TaskStatus Radiation::AddMultiFreqRadSrcTerm(Driver *pdriver, int stage) {
            ir_cm_star_update(iang,ifr) = InvMapIntensity(ifr, nu_tet, ir_cm_update, iang, n0_cm, arad_, order, limiter);
          } // endif !inverse_success
 
+
+         // if ((i==2) && (j==0) && (k==0)) printf("   ir_cm_star_update=%f \n", ir_cm_star_update(iang,ifr));
+
+
          // sum for normalization
          fac_norm(iang)  += ir_cm_update(iang,ifr);
          ir_cm_star_grey += ir_cm_star_update(iang,ifr);
         } // endfor ifr
-
         // compute normalization factor
         fac_norm(iang) *= 1./ir_cm_star_grey;
       } // endfor iang
@@ -548,6 +558,7 @@ TaskStatus Radiation::AddMultiFreqRadSrcTerm(Driver *pdriver, int stage) {
     } // endif (!(badcell))
 
 
+    // if ((i==2) && (j==0) && (k==0)) printf("en_new=%f \n", u0_(m,IEN,k,j,i));
 
 
     // Compton process

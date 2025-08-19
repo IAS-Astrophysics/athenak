@@ -17,6 +17,7 @@
 #include "hydro/hydro.hpp"
 #include "driver/driver.hpp"
 #include "radiation/radiation.hpp"
+#include "radiation/radiation_multi_freq.hpp"
 
 //----------------------------------------------------------------------------------------
 //! \fn void MeshBlock::UserProblem(ParameterInput *pin)
@@ -40,17 +41,26 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   auto &size = pmbp->pmb->mb_size;
   auto &coord = pmbp->pcoord->coord_data;
   int nmb1 = (pmbp->nmb_thispack-1);
-  int nang1 = (pmbp->prad->prgeo->nangles-1);
+  int &nang = pmbp->prad->prgeo->nangles;
+  int nang1 = nang-1;
+
+  // multi-frequency radiation
+  bool &multi_freq = pmbp->prad->multi_freq;
+  int &nfrq = pmbp->prad->nfreq;
+  int nfrq1 = nfrq - 1;
+  int nfr_ang1 = nfrq*nang - 1;
+  auto &nu_tet = pmbp->prad->freq_grid;
 
   // get problem parameters
   Real erad = pin->GetReal("problem", "erad");
   Real temp = pin->GetReal("problem", "temp");
+  Real a_rad = pin->GetOrAddReal("radiation", "arad", 1.0);
   Real v1 = pin->GetOrAddReal("problem", "v1", 0.0);
   Real lf = 1.0/sqrt(1.0-(SQR(v1)));
 
   // set primitive variables
   auto &w0 = pmbp->phydro->w0;
-  par_for("pgen_shadow1",DevExeSpace(),0,nmb1,0,(n3-1),0,(n2-1),0,(n1-1),
+  par_for("pgen_rad_relax",DevExeSpace(),0,nmb1,0,(n3-1),0,(n2-1),0,(n1-1),
   KOKKOS_LAMBDA(int m, int k, int j, int i) {
     w0(m,IDN,k,j,i) = 1.0;
     w0(m,IVX,k,j,i) = lf*v1;
@@ -87,28 +97,62 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     u_tet_[3] = (norm_to_tet_(m,3,0,k,j,i)*uu0 + norm_to_tet_(m,3,1,k,j,i)*uu1 +
                  norm_to_tet_(m,3,2,k,j,i)*uu2 + norm_to_tet_(m,3,3,k,j,i)*uu3);
 
-    // Go through each angle
-    for (int n=0; n<=nang1; ++n) {
-      // Calculate direction in fluid frame
-      Real un_t =  (u_tet_[1]*nh_c_.d_view(n,1) + u_tet_[2]*nh_c_.d_view(n,2) +
-                    u_tet_[3]*nh_c_.d_view(n,3));
+    if (!multi_freq) { // use gray radiation
 
-      Real n0_f =  u_tet_[0]*nh_c_.d_view(n,0) - un_t;
-      Real n1_f = (-u_tet_[1]*nh_c_.d_view(n,0) + u_tet_[1]/(u_tet_[0] + 1.0)*un_t +
-                   nh_c_.d_view(n,1));
-      Real n2_f = (-u_tet_[2]*nh_c_.d_view(n,0) + u_tet_[2]/(u_tet_[0] + 1.0)*un_t +
-                   nh_c_.d_view(n,2));
-      Real n3_f = (-u_tet_[3]*nh_c_.d_view(n,0) + u_tet_[3]/(u_tet_[0] + 1.0)*un_t +
-                   nh_c_.d_view(n,3));
+      // Go through each angle
+      for (int n=0; n<=nang1; ++n) {
+        // Calculate direction in fluid frame
+        Real un_t =  (u_tet_[1]*nh_c_.d_view(n,1) + u_tet_[2]*nh_c_.d_view(n,2) +
+                      u_tet_[3]*nh_c_.d_view(n,3));
 
-      // Calculate intensity in fluid frame
-      Real ii_f =  erad/(4.0*M_PI);
+        Real n0_f =  u_tet_[0]*nh_c_.d_view(n,0) - un_t;
+        Real n1_f = (-u_tet_[1]*nh_c_.d_view(n,0) + u_tet_[1]/(u_tet_[0] + 1.0)*un_t +
+                     nh_c_.d_view(n,1));
+        Real n2_f = (-u_tet_[2]*nh_c_.d_view(n,0) + u_tet_[2]/(u_tet_[0] + 1.0)*un_t +
+                     nh_c_.d_view(n,2));
+        Real n3_f = (-u_tet_[3]*nh_c_.d_view(n,0) + u_tet_[3]/(u_tet_[0] + 1.0)*un_t +
+                     nh_c_.d_view(n,3));
 
-      // Calculate intensity in tetrad frame
-      Real n0 = tet_c_(m,0,0,k,j,i); Real n_0 = 0.0;
-      for (int d=0; d<4; ++d) {  n_0 += tetcov_c_(m,d,0,k,j,i)*nh_c_.d_view(n,d);  }
-      i0(m,n,k,j,i) = n0*n_0*ii_f/SQR(SQR(n0_f));
-    }
+        // Calculate intensity in fluid frame
+        Real ii_f =  erad/(4.0*M_PI);
+
+        // Calculate intensity in tetrad frame
+        Real n0 = tet_c_(m,0,0,k,j,i); Real n_0 = 0.0;
+        for (int d=0; d<4; ++d) {  n_0 += tetcov_c_(m,d,0,k,j,i)*nh_c_.d_view(n,d);  }
+        i0(m,n,k,j,i) = n0*n_0*ii_f/SQR(SQR(n0_f));
+      } // endfor n
+
+    } else { // use multi-frequency radiation
+
+      Real n0 = tet_c_(m,0,0,k,j,i);
+
+      // Go through each angle and frequency
+      for (int iang=0; iang<=nang1; ++iang) {
+        // calculate direction in coordinate and fluid frames
+        Real n_0 = tetcov_c_(m,0,0,k,j,i)*nh_c_.d_view(iang,0) + tetcov_c_(m,1,0,k,j,i)*nh_c_.d_view(iang,1)
+                 + tetcov_c_(m,2,0,k,j,i)*nh_c_.d_view(iang,2) + tetcov_c_(m,3,0,k,j,i)*nh_c_.d_view(iang,3);
+
+        Real n0_cm = (u_tet_[0]*nh_c_.d_view(iang,0) - u_tet_[1]*nh_c_.d_view(iang,1)
+                    - u_tet_[2]*nh_c_.d_view(iang,2) - u_tet_[3]*nh_c_.d_view(iang,3));
+
+        for (int ifr=0; ifr<=nfrq1; ++ifr) {
+          Real trad = sqrt(sqrt(erad));
+
+          // assign intensity in fluid frame
+          Real eps_f = (ifr < nfrq1) ? BBIntegral(0, n0_cm*nu_tet(ifr+1), trad, a_rad)
+                                     : a_rad*SQR(SQR(trad));
+          eps_f -= BBIntegral(0, n0_cm*nu_tet(ifr), trad, a_rad);
+          eps_f = 1./(4*M_PI) * fmax(0., eps_f);
+          Real &i_cm_star_f = eps_f;
+
+          // convert intensity in tetrad frame
+          int n_ = getFreqAngIndex(ifr, iang, nang);
+          i0(m,n_,k,j,i) = n0*n_0*i_cm_star_f/SQR(SQR(n0_cm));
+        } // endfor ifr
+      } // endfor iang
+
+    } // endelse (multi_freq)
+
   });
 
   return;
