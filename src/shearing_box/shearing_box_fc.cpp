@@ -23,10 +23,10 @@
 #include "remap_fluxes.hpp"
 
 //----------------------------------------------------------------------------------------
-// ShearingBoxBoundaryFC derived class constructor:
+// ShearingBoxFC derived class constructor:
 
-ShearingBoxBoundaryFC::ShearingBoxBoundaryFC(MeshBlockPack *pp, ParameterInput *pin) :
-    ShearingBoxBoundary(pp, pin) {
+ShearingBoxFC::ShearingBoxFC(MeshBlockPack *pp, ParameterInput *pin) :
+    ShearingBox(pp, pin) {
   // Allocate boundary buffers
   auto &indcs = pp->pmesh->mb_indcs;
   int ncells3 = indcs.nx3 + 2*indcs.ng;
@@ -40,13 +40,13 @@ ShearingBoxBoundaryFC::ShearingBoxBoundaryFC(MeshBlockPack *pp, ParameterInput *
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn void ShearingBoxBoundary::PackAndSendFC()
+//! \fn void ShearingBox::PackAndSendFC()
 //! \brief Apply shearing sheet BCs to cell-centered variables, including MPI
 //! MPI communications. Both the inner_x1 and outer_x1 boundaries are updated.
 //! Called on the physics_bcs task after purely periodic BC communication is finished.
 
-TaskStatus ShearingBoxBoundaryFC::PackAndSendFC(DvceFaceFld4D<Real> &b,
-                                                ReconstructionMethod rcon) {
+TaskStatus ShearingBoxFC::PackAndSendFC(DvceFaceFld4D<Real> &b,
+                                        ReconstructionMethod rcon) {
   const auto &indcs = pmy_pack->pmesh->mb_indcs;
   const auto &ie = indcs.ie;
   const auto &js = indcs.js, &je = indcs.je;
@@ -64,14 +64,13 @@ TaskStatus ShearingBoxBoundaryFC::PackAndSendFC(DvceFaceFld4D<Real> &b,
   const auto &x1bndry_mbgid_ = x1bndry_mbgid;
   auto &sbuf = sendbuf;
   int scr_lvl=0;
-  size_t scr_size = ScrArray1D<Real>::shmem_size(nj) * 3;
+  size_t scr_size = ScrArray1D<Real>::shmem_size(nj) * 2;
   for (int n=0; n<2; ++n) {
     int nmb1 = nmb_x1bndry(n) - 1;
     par_for_outer("shrcc",DevExeSpace(),scr_size,scr_lvl,0,nmb1,0,2,kl,ku,0,(ng-1),
     KOKKOS_LAMBDA(TeamMember_t member,const int m,const int v,const int k,const int i) {
       ScrArray1D<Real> a_(member.team_scratch(scr_lvl), nj); // 1D slice of data
       ScrArray1D<Real> flx(member.team_scratch(scr_lvl), nj); // "flux" at faces
-      ScrArray1D<Real> q1_(member.team_scratch(scr_lvl), nj); // scratch array
       int mm = x1bndry_mbgid_.d_view(n,m) - gids_;
 
       // Load scratch array
@@ -80,36 +79,31 @@ TaskStatus ShearingBoxBoundaryFC::PackAndSendFC(DvceFaceFld4D<Real> &b,
           par_for_inner(member, 0, nj, [&](const int j) {
             a_(j) = b.x1f(mm,k,j,i);
           });
-          member.team_barrier();
         } else if (v==1) {
           par_for_inner(member, 0, nj, [&](const int j) {
             a_(j) = b.x2f(mm,k,j,i);
           });
-          member.team_barrier();
         } else if (v==2) {
           par_for_inner(member, 0, nj, [&](const int j) {
             a_(j) = b.x3f(mm,k,j,i);
           });
-          member.team_barrier();
         }
       } else if (n==1) {
         if (v==0) {
           par_for_inner(member, 0, nj, [&](const int j) {
             a_(j) = b.x1f(mm,k,j,(ie+2)+i);
           });
-          member.team_barrier();
         } else if (v==1) {
           par_for_inner(member, 0, nj, [&](const int j) {
             a_(j) = b.x2f(mm,k,j,(ie+1)+i);
           });
-          member.team_barrier();
         } else if (v==2) {
           par_for_inner(member, 0, nj, [&](const int j) {
             a_(j) = b.x3f(mm,k,j,(ie+1)+i);
           });
-          member.team_barrier();
         }
       }
+      member.team_barrier();
 
       // compute fractional offset
       Real eps = fmod(yshear_,(mbsize.d_view(mm).dx2))/(mbsize.d_view(mm).dx2);
@@ -118,18 +112,20 @@ TaskStatus ShearingBoxBoundaryFC::PackAndSendFC(DvceFaceFld4D<Real> &b,
       // Compute "fluxes" at shifted cell faces
       switch (rcon) {
         case ReconstructionMethod::dc:
-          DCRemapFlx(member, js, (je+1), eps, a_, q1_, flx);
+          DC_RemapFlx(member, js, (je+1), eps, a_, flx);
           break;
         case ReconstructionMethod::plm:
-          PLMRemapFlx(member, js, (je+1), eps, a_, q1_, flx);
+          PLM_RemapFlx(member, js, (je+1), eps, a_, flx);
           break;
-//      case ReconstructionMethod::ppm4:
-//      case ReconstructionMethod::ppmx:
-//          PPMRemapFlx(member,eos_,extrema,true,m,k,j,il,iu, w0_, wl_jp1, wr);
-//        break;
+        case ReconstructionMethod::ppm4:
+        case ReconstructionMethod::ppmx:
+        case ReconstructionMethod::wenoz:
+          PPMX_RemapFlx(member, js, (je+1), eps, a_, flx);
+          break;
         default:
           break;
       }
+      member.team_barrier();
 
       // update data in send buffer with fracational shift
       par_for_inner(member, js, je, [&](const int j) {
@@ -295,12 +291,12 @@ TaskStatus ShearingBoxBoundaryFC::PackAndSendFC(DvceFaceFld4D<Real> &b,
 }
 
 //----------------------------------------------------------------------------------------
-//! \!fn void ShearingBoxBoundaryFC::RecvAndUnpackFC()
+//! \!fn void ShearingBoxFC::RecvAndUnpackFC()
 //! \brief Check MPI communication of boundary buffers for FC variables have finished,
 //! then copy buffers into ghost zones. Shift has already been performed in
 //! PackAndSendFC() function
 
-TaskStatus ShearingBoxBoundaryFC::RecvAndUnpackFC(DvceFaceFld4D<Real> &b) {
+TaskStatus ShearingBoxFC::RecvAndUnpackFC(DvceFaceFld4D<Real> &b) {
   // create local references for variables in kernel
   const auto &indcs = pmy_pack->pmesh->mb_indcs;
   const int &ng = indcs.ng;

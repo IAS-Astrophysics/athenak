@@ -155,9 +155,13 @@ def mpi_run(
     """
     command = ["mpirun", "-np", str(threads), "./athena", "-i", inputfile] + flags
     if not run_command(command, **kwargs):
-        logging.error(f"Failed to execute {inputfile} with flags {flags} using MPI")
+        logging.error(
+           f"Failed to execute {inputfile} with flags {flags} using MPI "
+           f"and {threads}-threads"
+        )
         raise RuntimeError(
-            f"Failed to execute {inputfile} with flags {flags} using MPI"
+            f"Failed to execute {inputfile} with flags {flags} using MPI "
+            f"and {threads}-threads"
         )
     return True
 

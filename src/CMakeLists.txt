@@ -117,7 +117,9 @@ add_executable(
         pgen/tests/linear_wave.cpp
         pgen/tests/lw_implode.cpp
         pgen/tests/orszag_tang.cpp
+        pgen/tests/mri3d.cpp
         pgen/tests/shock_tube.cpp
+        pgen/tests/shwave.cpp
         pgen/tests/rad_check_tetrad.cpp
         pgen/tests/rad_hohlraum.cpp
         pgen/tests/rad_linear_wave.cpp
@@ -135,6 +137,7 @@ add_executable(
         shearing_box/orbital_advection.cpp
         shearing_box/orbital_advection_cc.cpp
         shearing_box/orbital_advection_fc.cpp
+        shearing_box/orbital_advection_tasks.cpp
         shearing_box/shearing_box.cpp
         shearing_box/shearing_box_cc.cpp
         shearing_box/shearing_box_fc.cpp

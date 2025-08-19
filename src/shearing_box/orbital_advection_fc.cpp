@@ -20,6 +20,7 @@
 #include "mesh/mesh.hpp"
 #include "coordinates/cell_locations.hpp"
 #include "shearing_box.hpp"
+#include "orbital_advection.hpp"
 #include "mhd/mhd.hpp"
 #include "remap_fluxes.hpp"
 
@@ -38,6 +39,14 @@ OrbitalAdvectionFC::OrbitalAdvectionFC(MeshBlockPack *pp, ParameterInput *pin) :
     Kokkos::realloc(sendbuf[n].vars,nmb,2,ncells3,ncells2,ncells1);
     Kokkos::realloc(recvbuf[n].vars,nmb,2,ncells3,ncells2,ncells1);
   }
+
+  // Allocate memory for electric fields
+  nmb = pmy_pack->nmb_thispack;
+  ncells1 = indcs.nx1 + 2*(indcs.ng);
+  ncells2 = indcs.nx2 + 2*(indcs.ng);
+  ncells3 = indcs.nx3 + 2*(indcs.ng);
+  Kokkos::realloc(emfx,nmb,ncells3,ncells2,ncells1);
+  Kokkos::realloc(emfz,nmb,ncells3,ncells2,ncells1);
 }
 
 //----------------------------------------------------------------------------------------
@@ -172,7 +181,7 @@ TaskStatus OrbitalAdvectionFC::PackAndSendFC(DvceFaceFld4D<Real> &b) {
 //! The fields themselves are not directly remapped like the CC variables.
 
 TaskStatus OrbitalAdvectionFC::RecvAndUnpackFC(DvceFaceFld4D<Real> &b0,
-                                             ReconstructionMethod rcon, Real qom) {
+                                             ReconstructionMethod rcon) {
   int nmb = pmy_pack->nmb_thispack;
   auto &rbuf = recvbuf;
 #if MPI_PARALLEL_ENABLED
@@ -224,20 +233,16 @@ TaskStatus OrbitalAdvectionFC::RecvAndUnpackFC(DvceFaceFld4D<Real> &b0,
   auto &mesh_size = pmy_pack->pmesh->mesh_size;
   Real &dt = pmy_pack->pmesh->dt;
   Real ly = (mesh_size.x2max - mesh_size.x2min);
+  Real qo = qshear*omega0;
 
   int scr_lvl=0;
-  size_t scr_size = ScrArray1D<Real>::shmem_size(nfx) * 3;
-  DvceArray4D<Real> emfx, emfz;
-    int ncells1 = indcs.nx1 + 2*(indcs.ng);
-    int ncells2 = indcs.nx2 + 2*(indcs.ng);
-    int ncells3 = indcs.nx3 + 2*(indcs.ng);
-    Kokkos::realloc(emfx,nmb,ncells3,ncells2,ncells1);
-    Kokkos::realloc(emfz,nmb,ncells3,ncells2,ncells1);
+  size_t scr_size = ScrArray1D<Real>::shmem_size(nfx) * 2;
+  auto &emfx_ = emfx;
+  auto &emfz_ = emfz;
   par_for_outer("oa-unB",DevExeSpace(),scr_size,scr_lvl,0,(nmb-1),0,1,ks,ke+1,is,ie+1,
   KOKKOS_LAMBDA(TeamMember_t member, const int m, const int v, const int k, const int i) {
     ScrArray1D<Real> b0_(member.team_scratch(scr_lvl), nfx); // 1D slice of data
     ScrArray1D<Real> flx(member.team_scratch(scr_lvl), nfx); // "flux" at faces
-    ScrArray1D<Real> q1_(member.team_scratch(scr_lvl), nfx); // scratch array
 
     Real &x1min = mbsize.d_view(m).x1min;
     Real &x1max = mbsize.d_view(m).x1max;
@@ -251,7 +256,7 @@ TaskStatus OrbitalAdvectionFC::RecvAndUnpackFC(DvceFaceFld4D<Real> &b0,
       // B1 located at x1-cell faces
       x1 = LeftEdgeX(i-is, nx1, x1min, x1max);
     }
-    Real yshear = -qom*x1*dt;
+    Real yshear = -(qo)*x1*dt;
     int joffset = static_cast<int>(yshear/(mbsize.d_view(m).dx2));
 
     // Load scratch array with no shift
@@ -277,30 +282,32 @@ TaskStatus OrbitalAdvectionFC::RecvAndUnpackFC(DvceFaceFld4D<Real> &b0,
     Real epsi = fmod(yshear,(mbsize.d_view(m).dx2))/(mbsize.d_view(m).dx2);
     switch (rcon) {
       case ReconstructionMethod::dc:
-        DCRemapFlx(member, (jfs-joffset), (jfe+1-joffset), epsi, b0_, q1_, flx);
+        DC_RemapFlx(member, (jfs-joffset), (jfe+1-joffset), epsi, b0_, flx);
         break;
       case ReconstructionMethod::plm:
-        PLMRemapFlx(member, (jfs-joffset), (jfe+1-joffset), epsi, b0_, q1_, flx);
+        PLM_RemapFlx(member, (jfs-joffset), (jfe+1-joffset), epsi, b0_, flx);
         break;
-//      case ReconstructionMethod::ppm4:
-//      case ReconstructionMethod::ppmx:
-//          PPMRemapFlx(member,eos_,extrema,true,m,k,j,il,iu, w0_, wl_jp1, wr);
-//        break;
+      case ReconstructionMethod::ppm4:
+      case ReconstructionMethod::ppmx:
+      case ReconstructionMethod::wenoz:
+        PPMX_RemapFlx(member, (jfs-joffset), (jfe+1-joffset), epsi, b0_, flx);
+        break;
       default:
         break;
     }
+    member.team_barrier();
 
     // Compute emfx = -VyBz, which is at cell-center in x1-direction
     if (v==0) {
       par_for_inner(member, js, je+1, [&](const int j) {
         int jf = j-js + jfs;
-        emfx(m,k,j,i) = -flx(jf-joffset);
+        emfx_(m,k,j,i) = -flx(jf-joffset);
         // Sum integer offsets into effective EMFs
         for (int jj=1; jj<=joffset; jj++) {
-          emfx(m,k,j,i) -= b0_(jf-jj);
+          emfx_(m,k,j,i) -= b0_(jf-jj);
         }
         for (int jj=(joffset+1); jj<=0; jj++) {
-          emfx(m,k,j,i) += b0_(jf-jj);
+          emfx_(m,k,j,i) += b0_(jf-jj);
         }
       });
       member.team_barrier();
@@ -309,13 +316,13 @@ TaskStatus OrbitalAdvectionFC::RecvAndUnpackFC(DvceFaceFld4D<Real> &b0,
     } else if (v==1) {
       par_for_inner(member, js, je+1, [&](const int j) {
         int jf = j-js + jfs;
-        emfz(m,k,j,i) = flx(jf-joffset);
+        emfz_(m,k,j,i) = flx(jf-joffset);
         // Sum integer offsets into effective EMFs
         for (int jj=1; jj<=joffset; jj++) {
-          emfz(m,k,j,i) += b0_(jf-jj);
+          emfz_(m,k,j,i) += b0_(jf-jj);
         }
         for (int jj=(joffset+1); jj<=0; jj++) {
-          emfz(m,k,j,i) -= b0_(jf-jj);
+          emfz_(m,k,j,i) -= b0_(jf-jj);
         }
       });
       member.team_barrier();
@@ -327,7 +334,7 @@ TaskStatus OrbitalAdvectionFC::RecvAndUnpackFC(DvceFaceFld4D<Real> &b0,
   if (pmy_pack->pmesh->multi_d) {
     par_for("oaCT-b1", DevExeSpace(), 0, nmb-1, ks, ke, js, je, is, ie+1,
     KOKKOS_LAMBDA(int m, int k, int j, int i) {
-      b0.x1f(m,k,j,i) -= (emfz(m,k,j+1,i) - emfz(m,k,j,i));
+      b0.x1f(m,k,j,i) -= (emfz_(m,k,j+1,i) - emfz_(m,k,j,i));
     });
   }
 
@@ -336,10 +343,10 @@ TaskStatus OrbitalAdvectionFC::RecvAndUnpackFC(DvceFaceFld4D<Real> &b0,
   par_for("oaCT-b2", DevExeSpace(), 0, nmb-1, ks, ke, js, je+1, is, ie,
   KOKKOS_LAMBDA(int m, int k, int j, int i) {
     Real dydx = mbsize.d_view(m).dx2/mbsize.d_view(m).dx1;
-    b0.x2f(m,k,j,i) += dydx*(emfz(m,k,j,i+1) - emfz(m,k,j,i));
+    b0.x2f(m,k,j,i) += dydx*(emfz_(m,k,j,i+1) - emfz_(m,k,j,i));
     if (three_d_) {
       Real dydz = mbsize.d_view(m).dx2/mbsize.d_view(m).dx3;
-      b0.x2f(m,k,j,i) -= dydz*(emfx(m,k+1,j,i) - emfx(m,k,j,i));
+      b0.x2f(m,k,j,i) -= dydz*(emfx_(m,k+1,j,i) - emfx_(m,k,j,i));
     }
   });
 
@@ -347,7 +354,7 @@ TaskStatus OrbitalAdvectionFC::RecvAndUnpackFC(DvceFaceFld4D<Real> &b0,
   if (pmy_pack->pmesh->multi_d) {
     par_for("oaCT-b3", DevExeSpace(), 0, nmb-1, ks, ke+1, js, je, is, ie,
     KOKKOS_LAMBDA(int m, int k, int j, int i) {
-      b0.x3f(m,k,j,i) += (emfx(m,k,j+1,i) - emfx(m,k,j,i));
+      b0.x3f(m,k,j,i) += (emfx_(m,k,j+1,i) - emfx_(m,k,j,i));
     });
   }
 

@@ -19,6 +19,7 @@
 #include "diffusion/conduction.hpp"
 #include "srcterms/srcterms.hpp"
 #include "shearing_box/shearing_box.hpp"
+#include "shearing_box/orbital_advection.hpp"
 #include "bvals/bvals.hpp"
 #include "mhd/mhd.hpp"
 
@@ -161,8 +162,8 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
   if (pin->DoesBlockExist("shearing_box")) {
     porb_u = new OrbitalAdvectionCC(ppack, pin, (nmhd+nscalars));
     porb_b = new OrbitalAdvectionFC(ppack, pin);
-    psbox_u = new ShearingBoxBoundaryCC(ppack, pin, (nmhd+nscalars));
-    psbox_b = new ShearingBoxBoundaryFC(ppack, pin);
+    psbox_u = new ShearingBoxCC(ppack, pin, (nmhd+nscalars));
+    psbox_b = new ShearingBoxFC(ppack, pin);
   } else {
     porb_u = nullptr;
     porb_b = nullptr;

@@ -32,8 +32,7 @@
 // Only source terms specified in input file are initialized.
 
 SourceTerms::SourceTerms(std::string block, MeshBlockPack *pp, ParameterInput *pin) :
-  pmy_pack(pp),
-  shearing_box_r_phi(false) {
+    pmy_pack(pp) {
   // (1) (constant) gravitational acceleration
   const_accel = pin->GetOrAddBoolean(block, "const_accel", false);
   if (const_accel) {
@@ -63,15 +62,6 @@ SourceTerms::SourceTerms(std::string block, MeshBlockPack *pp, ParameterInput *p
   if (rel_cooling) {
     crate_rel = pin->GetReal(block, "crate_rel");
     cpower_rel = pin->GetOrAddReal(block, "cpower_rel", 1.);
-  }
-
-  // (5) shearing box
-  if (pin->DoesBlockExist("shearing_box")) {
-    shearing_box = true;
-    qshear = pin->GetReal("shearing_box","qshear");
-    omega0 = pin->GetReal("shearing_box","omega0");
-  } else {
-    shearing_box = false;
   }
 }
 

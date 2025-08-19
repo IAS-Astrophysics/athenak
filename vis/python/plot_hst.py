@@ -14,12 +14,17 @@ import athena_read
 # Main function
 def main(**kwargs):
 
-    # get input file and read data
+    #  extract inputs
     input_file = kwargs['input']
+    variables = kwargs['variables']
+    output_file = kwargs['output']
+    x_log = kwargs['xlog']
+    y_log = kwargs['ylog']
+
+    # read data
     data = athena_read.hst(input_file)
 
-    # get variable names, check they are valid, and set x/y data
-    variables = kwargs['variables']
+    # check vraiable names are valid, and set x/y data
     if variables not in data:
         print('Invalid input variable name, valid names are:')
         for key in data:
@@ -29,10 +34,7 @@ def main(**kwargs):
     y_vals = data[variables]
     x_vals = data["time"]
 
-    print(data)
-
     # Load Python plotting modules
-    output_file = kwargs['output']
     if output_file != 'show':
         import matplotlib
         matplotlib.use('agg')
@@ -41,6 +43,12 @@ def main(**kwargs):
     # Plot data
     plt.figure()
     plt.plot(x_vals, y_vals)
+    plt.xlabel("time")
+    plt.ylabel(variables)
+    if x_log:
+        plt.xscale('log')
+    if y_log:
+        plt.yscale('log')
     plt.show()
 
 
@@ -54,6 +62,12 @@ if __name__ == '__main__':
                         help='image filename; omit to display to screen')
     parser.add_argument('-v', '--variables',
                         help='comma-separated list of variables to be plotted')
+    parser.add_argument('-xlog', '--xlog',
+                        action='store_true',
+                        help='plot log of x-values')
+    parser.add_argument('-ylog', '--ylog',
+                        action='store_true',
+                        help='plot log of y-values')
 
     args = parser.parse_args()
     main(**vars(args))

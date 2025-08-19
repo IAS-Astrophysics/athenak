@@ -24,6 +24,7 @@
 #include "srcterms/srcterms.hpp"
 #include "bvals/bvals.hpp"
 #include "shearing_box/shearing_box.hpp"
+#include "shearing_box/orbital_advection.hpp"
 #include "mhd/mhd.hpp"
 #include "dyn_grmhd/dyn_grmhd.hpp"
 
@@ -125,28 +126,31 @@ TaskStatus MHD::InitRecv(Driver *pdrive, int stage) {
   }
 
   // with orbital advection post receives for U and B
-  // only execute when (shearing box defined) AND (last stage) AND (3D OR 2d_r_phi)
-  if ((psrc->shearing_box) && (stage == pdrive->nexp_stages) &&
-      (pmy_pack->pmesh->three_d || psrc->shearing_box_r_phi)) {
-    tstat = porb_u->InitRecv();
-    if (tstat != TaskStatus::complete) return tstat;
-    tstat = porb_b->InitRecv();
-    if (tstat != TaskStatus::complete) return tstat;
+  if (porb_u != nullptr) {
+    // only execute when (last stage) AND (3D OR 2d_r_phi)
+    if ((stage == pdrive->nexp_stages) &&
+        (pmy_pack->pmesh->three_d || porb_u->shearing_box_r_phi)) {
+      tstat = porb_u->InitRecv();
+      if (tstat != TaskStatus::complete) return tstat;
+      tstat = porb_b->InitRecv();
+      if (tstat != TaskStatus::complete) return tstat;
+    }
   }
 
   // with shearing box boundaries caluclate x2-distance x1-boundaries have sheared and
   // with MPI post receives for U and B
-  // only execute when (shearing box defined) AND (3D OR 2d_r_phi)
-  if ((psrc->shearing_box) && (pmy_pack->pmesh->three_d || psrc->shearing_box_r_phi)) {
-    Real qom = (psrc->qshear)*(psrc->omega0);
-    Real time = pmy_pack->pmesh->time;
-    if (stage == pdrive->nexp_stages) {
-      time += pmy_pack->pmesh->dt;
+  if (psbox_u != nullptr) {
+    // only execute when (3D OR 2d_r_phi)
+    if (pmy_pack->pmesh->three_d || psbox_u->shearing_box_r_phi) {
+      Real time = pmy_pack->pmesh->time;
+      if (stage == pdrive->nexp_stages) {
+        time += pmy_pack->pmesh->dt;
+      }
+      tstat = psbox_u->InitRecv(time);
+      if (tstat != TaskStatus::complete) return tstat;
+      tstat = psbox_b->InitRecv(time);
+      if (tstat != TaskStatus::complete) return tstat;
     }
-    tstat = psbox_u->InitRecv(qom, time);
-    if (tstat != TaskStatus::complete) return tstat;
-    tstat = psbox_b->InitRecv(qom, time);
-    if (tstat != TaskStatus::complete) return tstat;
   }
 
   return tstat;
@@ -255,7 +259,9 @@ TaskStatus MHD::MHDSrcTerms(Driver *pdrive, int stage) {
   if (psrc->const_accel)  psrc->ConstantAccel(w0, peos->eos_data, beta_dt, u0);
   if (psrc->ism_cooling)  psrc->ISMCooling(w0, peos->eos_data, beta_dt, u0);
   if (psrc->rel_cooling)  psrc->RelCooling(w0, peos->eos_data, beta_dt, u0);
-  if (psrc->shearing_box) psrc->ShearingBox(w0, bcc0, peos->eos_data, beta_dt, u0);
+
+  // Add shearing box source terms for CC MHD variables
+  if (psbox_u != nullptr) psbox_u->SourceTermsCC(w0, bcc0, peos->eos_data, beta_dt, u0);
 
   // Add coordinate source terms in GR.  Again, must be computed with only primitives.
   if (pmy_pack->pcoord->is_general_relativistic &&
@@ -279,10 +285,12 @@ TaskStatus MHD::MHDSrcTerms(Driver *pdrive, int stage) {
 
 TaskStatus MHD::SendU_OA(Driver *pdrive, int stage) {
   TaskStatus tstat = TaskStatus::complete;
-  // only execute when (shearing box defined) AND (last stage) AND (3D OR 2d_r_phi)
-  if ((psrc->shearing_box) && (stage == pdrive->nexp_stages) &&
-      (pmy_pack->pmesh->three_d || psrc->shearing_box_r_phi)) {
-    tstat = porb_u->PackAndSendCC(u0);
+  if (porb_u != nullptr) {
+    // only execute when (last stage) AND (3D OR 2d_r_phi)
+    if ((stage == pdrive->nexp_stages) &&
+        (pmy_pack->pmesh->three_d || porb_u->shearing_box_r_phi)) {
+      tstat = porb_u->PackAndSendCC(u0);
+    }
   }
   return tstat;
 }
@@ -293,11 +301,12 @@ TaskStatus MHD::SendU_OA(Driver *pdrive, int stage) {
 
 TaskStatus MHD::RecvU_OA(Driver *pdrive, int stage) {
   TaskStatus tstat = TaskStatus::complete;
-  // only execute when (shearing box defined) AND (last stage) AND (3D OR 2d_r_phi)
-  if ((psrc->shearing_box) && (stage == pdrive->nexp_stages) &&
-      (pmy_pack->pmesh->three_d || psrc->shearing_box_r_phi)) {
-    Real qom = (psrc->qshear)*(psrc->omega0);
-    tstat = porb_u->RecvAndUnpackCC(u0, recon_method, qom);
+  if (porb_u != nullptr) {
+    // only execute when (last stage) AND (3D OR 2d_r_phi)
+    if ((stage == pdrive->nexp_stages) &&
+        (pmy_pack->pmesh->three_d || porb_u->shearing_box_r_phi)) {
+      tstat = porb_u->RecvAndUnpackCC(u0, recon_method);
+    }
   }
   return tstat;
 }
@@ -338,9 +347,11 @@ TaskStatus MHD::RecvU(Driver *pdrive, int stage) {
 
 TaskStatus MHD::SendU_Shr(Driver *pdrive, int stage) {
   TaskStatus tstat = TaskStatus::complete;
-  // only execute when (shearing box defined) AND (3D OR 2d_r_phi)
-  if ((psrc->shearing_box) && (pmy_pack->pmesh->three_d || psrc->shearing_box_r_phi)) {
-    tstat = psbox_u->PackAndSendCC(u0, recon_method);
+  if (psbox_u != nullptr) {
+    // only execute when (3D OR 2d_r_phi)
+    if (pmy_pack->pmesh->three_d || psbox_u->shearing_box_r_phi) {
+      tstat = psbox_u->PackAndSendCC(u0, recon_method);
+    }
   }
   return tstat;
 }
@@ -352,9 +363,11 @@ TaskStatus MHD::SendU_Shr(Driver *pdrive, int stage) {
 
 TaskStatus MHD::RecvU_Shr(Driver *pdrive, int stage) {
   TaskStatus tstat = TaskStatus::complete;
-  // only execute when (shearing box defined) AND (3D OR 2d_r_phi)
-  if ((psrc->shearing_box) && (pmy_pack->pmesh->three_d || psrc->shearing_box_r_phi)) {
-    tstat = psbox_u->RecvAndUnpackCC(u0);
+  if (psbox_u != nullptr) {
+    // only execute when (3D OR 2d_r_phi)
+    if (pmy_pack->pmesh->three_d || psbox_u->shearing_box_r_phi) {
+      tstat = psbox_u->RecvAndUnpackCC(u0);
+    }
   }
   return tstat;
 }
@@ -364,9 +377,11 @@ TaskStatus MHD::RecvU_Shr(Driver *pdrive, int stage) {
 //! \brief Wrapper task list function to apply source terms to electric field
 
 TaskStatus MHD::EFieldSrc(Driver *pdrive, int stage) {
-  // only execute when (shearing box defined) AND (2D)
-  if ((psrc->shearing_box) && (pmy_pack->pmesh->two_d)) {
-    psrc->SBoxEField(b0, efld);
+  if (psbox_b != nullptr) {
+    // only execute when (2D)
+    if (pmy_pack->pmesh->two_d) {
+      psbox_b->SourceTermsFC(b0, efld);
+    }
   }
   return TaskStatus::complete;
 }
@@ -401,10 +416,12 @@ TaskStatus MHD::RecvE(Driver *pdrive, int stage) {
 
 TaskStatus MHD::SendB_OA(Driver *pdrive, int stage) {
   TaskStatus tstat = TaskStatus::complete;
-  // only execute when (shearing box defined) AND (last stage) AND (3D OR 2d_r_phi)
-  if ((psrc->shearing_box) && (stage == pdrive->nexp_stages) &&
-      (pmy_pack->pmesh->three_d || psrc->shearing_box_r_phi)) {
-    tstat = porb_b->PackAndSendFC(b0);
+  if (porb_b != nullptr) {
+    // only execute when (last stage) AND (3D OR 2d_r_phi)
+    if ((stage == pdrive->nexp_stages) &&
+        (pmy_pack->pmesh->three_d || porb_b->shearing_box_r_phi)) {
+      tstat = porb_b->PackAndSendFC(b0);
+    }
   }
   return tstat;
 }
@@ -415,11 +432,12 @@ TaskStatus MHD::SendB_OA(Driver *pdrive, int stage) {
 
 TaskStatus MHD::RecvB_OA(Driver *pdrive, int stage) {
   TaskStatus tstat = TaskStatus::complete;
-  // only execute when (shearing box defined) AND (last stage) AND (3D OR 2d_r_phi)
-  if ((psrc->shearing_box) && (stage == pdrive->nexp_stages) &&
-      (pmy_pack->pmesh->three_d || psrc->shearing_box_r_phi)) {
-    Real qom = (psrc->qshear)*(psrc->omega0);
-    tstat = porb_b->RecvAndUnpackFC(b0, recon_method, qom);
+  if (porb_b != nullptr) {
+    // only execute when (last stage) AND (3D OR 2d_r_phi)
+    if ((stage == pdrive->nexp_stages) &&
+        (pmy_pack->pmesh->three_d || porb_b->shearing_box_r_phi)) {
+      tstat = porb_b->RecvAndUnpackFC(b0, recon_method);
+    }
   }
   return tstat;
 }
@@ -448,9 +466,11 @@ TaskStatus MHD::RecvB(Driver *pdrive, int stage) {
 
 TaskStatus MHD::SendB_Shr(Driver *pdrive, int stage) {
   TaskStatus tstat = TaskStatus::complete;
-  // only execute when (shearing box defined) AND (3D OR 2d_r_phi)
-  if ((psrc->shearing_box) && (pmy_pack->pmesh->three_d || psrc->shearing_box_r_phi)) {
-    tstat = psbox_b->PackAndSendFC(b0, recon_method);
+  if (psbox_b != nullptr) {
+    // only execute when (3D OR 2d_r_phi)
+    if (pmy_pack->pmesh->three_d || psbox_b->shearing_box_r_phi) {
+      tstat = psbox_b->PackAndSendFC(b0, recon_method);
+    }
   }
   return tstat;
 }
@@ -462,9 +482,11 @@ TaskStatus MHD::SendB_Shr(Driver *pdrive, int stage) {
 
 TaskStatus MHD::RecvB_Shr(Driver *pdrive, int stage) {
   TaskStatus tstat = TaskStatus::complete;
-  // only execute when (shearing box defined) AND (3D OR 2d_r_phi)
-  if ((psrc->shearing_box) && (pmy_pack->pmesh->three_d || psrc->shearing_box_r_phi)) {
-    tstat = psbox_b->RecvAndUnpackFC(b0);
+  if (psbox_b != nullptr) {
+    // only execute when (3D OR 2d_r_phi)
+    if (pmy_pack->pmesh->three_d || psbox_b->shearing_box_r_phi) {
+      tstat = psbox_b->RecvAndUnpackFC(b0);
+    }
   }
   return tstat;
 }
@@ -560,22 +582,26 @@ TaskStatus MHD::ClearSend(Driver *pdrive, int stage) {
 
   // with orbital advection check sends for U and B complete
   // only execute when (shearing box defined) AND (last stage) AND (3D OR 2d_r_phi)
-  if ((psrc->shearing_box) && (stage == pdrive->nexp_stages) &&
-      (pmy_pack->pmesh->three_d || psrc->shearing_box_r_phi)) {
-    tstat = porb_u->ClearSend();
-    if (tstat != TaskStatus::complete) return tstat;
-    tstat = porb_b->ClearSend();
-    if (tstat != TaskStatus::complete) return tstat;
+  if (porb_u != nullptr) {
+    if ((stage == pdrive->nexp_stages) &&
+        (pmy_pack->pmesh->three_d || porb_u->shearing_box_r_phi)) {
+      tstat = porb_u->ClearSend();
+      if (tstat != TaskStatus::complete) return tstat;
+      tstat = porb_b->ClearSend();
+      if (tstat != TaskStatus::complete) return tstat;
+    }
   }
 
   // with shearing box boundaries check sends of U and B complete
-  // only execute when (shearing box defined) AND (stage>=0 or -4) AND (3D OR 2d_r_phi)
-  if ((psrc->shearing_box) && ((stage >= 0) || (stage == -4)) &&
-      (pmy_pack->pmesh->three_d || psrc->shearing_box_r_phi)) {
-    tstat = psbox_u->ClearSend();
-    if (tstat != TaskStatus::complete) return tstat;
-    tstat = psbox_b->ClearSend();
-    if (tstat != TaskStatus::complete) return tstat;
+  if (psbox_u != nullptr) {
+    // only execute when (stage>=0 or -4) AND (3D OR 2d_r_phi)
+    if (((stage >= 0) || (stage == -4)) &&
+        (pmy_pack->pmesh->three_d || psbox_u->shearing_box_r_phi)) {
+      tstat = psbox_u->ClearSend();
+      if (tstat != TaskStatus::complete) return tstat;
+      tstat = psbox_b->ClearSend();
+      if (tstat != TaskStatus::complete) return tstat;
+    }
   }
 
   return TaskStatus::complete;
@@ -615,23 +641,27 @@ TaskStatus MHD::ClearRecv(Driver *pdrive, int stage) {
   }
 
   // with orbital advection check receives of U and B are complete
-  // only execute when (shearing box defined) AND (last stage) AND (3D OR 2d_r_phi)
-  if ((psrc->shearing_box) && (stage == pdrive->nexp_stages) &&
-      (pmy_pack->pmesh->three_d || psrc->shearing_box_r_phi)) {
-    tstat = porb_u->ClearRecv();
-    if (tstat != TaskStatus::complete) return tstat;
-    tstat = porb_b->ClearRecv();
-    if (tstat != TaskStatus::complete) return tstat;
+  if (porb_u != nullptr) {
+    // only execute when (last stage) AND (3D OR 2d_r_phi)
+    if ((stage == pdrive->nexp_stages) &&
+        (pmy_pack->pmesh->three_d || porb_u->shearing_box_r_phi)) {
+      tstat = porb_u->ClearRecv();
+      if (tstat != TaskStatus::complete) return tstat;
+      tstat = porb_b->ClearRecv();
+      if (tstat != TaskStatus::complete) return tstat;
+    }
   }
 
   // with shearing box boundaries check receives of U and B complete
-  // only execute when (shearing box defined) AND (stage>=0 or -4) AND (3D OR 2d_r_phi)
-  if ((psrc->shearing_box) && ((stage >= 0) || (stage == -4)) &&
-      (pmy_pack->pmesh->three_d || psrc->shearing_box_r_phi)) {
-    tstat = psbox_u->ClearRecv();
-    if (tstat != TaskStatus::complete) return tstat;
-    tstat = psbox_b->ClearRecv();
-    if (tstat != TaskStatus::complete) return tstat;
+  if (psbox_u != nullptr) {
+    // only execute when (stage>=0 or -4) AND (3D OR 2d_r_phi)
+    if (((stage >= 0) || (stage == -4)) &&
+        (pmy_pack->pmesh->three_d || psbox_u->shearing_box_r_phi)) {
+      tstat = psbox_u->ClearRecv();
+      if (tstat != TaskStatus::complete) return tstat;
+      tstat = psbox_b->ClearRecv();
+      if (tstat != TaskStatus::complete) return tstat;
+    }
   }
 
   return TaskStatus::complete;
