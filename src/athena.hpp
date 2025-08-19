@@ -37,8 +37,12 @@ using Real = double;
 //----------------------------------------------------------------------------------------
 // general purpose macros (never modified)
 
-// number of bits needed to store MeshBlock local ID in each rank in an integer.  Thus
-// maximum number of MBs per rank is 2^(NUM_BITS_LID).  Limit is set by MPI tag limit
+// number of bits used to store MeshBlock local ID in MPI message tags.  Thus maximum
+// number of MBs per rank is 2^(NUM_BITS_LID). This limit is required because the MPI
+// standard requires signed int tag, with MPI_TAG_UB>=2^15-1 = 32,767 (inclusive). In fact
+// virtually every library allows this limit to be exceeded. As of 2025, the Intel MPI
+// library provided the most stringent limit of 20 bits per tag. Six bits are needed to
+// store the buffer ID, leaving NUM_BITS_LID=14
 #define NUM_BITS_LID 14
 
 #define SQR(x) ( (x)*(x) )

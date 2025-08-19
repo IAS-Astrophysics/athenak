@@ -560,6 +560,7 @@ void MeshRefinement::RedistAndRefineMeshBlocks(ParameterInput *pin, int nnew, in
   // array in target MB.
   hydro::Hydro* phydro = pm->pmb_pack->phydro;
   mhd::MHD* pmhd = pm->pmb_pack->pmhd;
+  radiation::Radiation* prad = pm->pmb_pack->prad;
   z4c::Z4c* pz4c = pm->pmb_pack->pz4c;
   adm::ADM* padm = pm->pmb_pack->padm;
   // derefine (if needed)
@@ -570,6 +571,9 @@ void MeshRefinement::RedistAndRefineMeshBlocks(ParameterInput *pin, int nnew, in
     if (pmhd != nullptr) {
       DerefineCCSameRank(pmhd->u0, pmhd->coarse_u0);
       DerefineFCSameRank(pmhd->b0, pmhd->coarse_b0);
+    }
+    if (prad != nullptr) {
+      DerefineCCSameRank(prad->i0, prad->coarse_i0);
     }
     if (pz4c != nullptr) {
       DerefineCCSameRank(pz4c->u0, pz4c->coarse_u0);
@@ -586,6 +590,9 @@ void MeshRefinement::RedistAndRefineMeshBlocks(ParameterInput *pin, int nnew, in
     CopyCC(pmhd->u0);
     CopyFC(pmhd->b0);
   }
+  if (prad != nullptr) {
+    CopyCC(prad->i0);
+  }
   if (pz4c != nullptr) {
     CopyCC(pz4c->u0);
   } else if (padm != nullptr) {
@@ -601,6 +608,9 @@ void MeshRefinement::RedistAndRefineMeshBlocks(ParameterInput *pin, int nnew, in
     if (pmhd != nullptr) {
       CopyForRefinementCC(pmhd->u0, pmhd->coarse_u0);
       CopyForRefinementFC(pmhd->b0, pmhd->coarse_b0);
+    }
+    if (prad != nullptr) {
+      CopyForRefinementCC(prad->i0, prad->coarse_i0);
     }
     if (pz4c != nullptr) {
       CopyForRefinementCC(pz4c->u0, pz4c->coarse_u0);
@@ -634,11 +644,16 @@ void MeshRefinement::RedistAndRefineMeshBlocks(ParameterInput *pin, int nnew, in
       RefineCC(new_to_old, pmhd->u0, pmhd->coarse_u0);
       RefineFC(new_to_old, pmhd->b0, pmhd->coarse_b0);
     }
+    if (prad != nullptr) {
+      RefineCC(new_to_old, prad->i0, prad->coarse_i0);
+    }
     if (pz4c != nullptr) {
       RefineCC(new_to_old, pz4c->u0, pz4c->coarse_u0, true);
     }
   }
 
+  // Step 10.
+  // General housekeeping
   // Update new number of cycles since refinement
   HostArray1D<int> new_ncyc_since_ref("nnref",new_nmb_total);
   for (int m=0; m<(new_nmb_total); ++m) {
@@ -652,7 +667,6 @@ void MeshRefinement::RedistAndRefineMeshBlocks(ParameterInput *pin, int nnew, in
   Kokkos::realloc(ncyc_since_ref, new_nmb_total);
   Kokkos::deep_copy(ncyc_since_ref, new_ncyc_since_ref);
 
-  // Step 10.
   // Update data in Mesh/MeshBlockPack/MeshBlock classes with new grid properties
   delete [] pm->lloc_eachmb;
   delete [] pm->rank_eachmb;
@@ -677,14 +691,21 @@ void MeshRefinement::RedistAndRefineMeshBlocks(ParameterInput *pin, int nnew, in
   pm->pmb_pack->AddCoordinates(pin);
   pm->pmb_pack->pmb->SetNeighbors(pm->ptree, pm->rank_eachmb);
 
-  // clean-up and return
+  // clean-up
   delete [] newtoold;
   delete [] oldtonew;
 
   // Step 11.
-  // Recalculate ADM variables if necessary.
-  if ((pz4c == nullptr) && (padm != nullptr) && (nnew > 0 || ndel > 0)) {
-    padm->SetADMVariables(pm->pmb_pack);
+  // Initialize quantities stored on the mesh associated with each physics, if necessary
+  if ((nnew > 0) || (ndel > 0)) {
+    // With dynGRMHD, recalculate ADM variables
+    if ((pz4c == nullptr) && (padm != nullptr)) {
+      padm->SetADMVariables(pm->pmb_pack);
+    }
+    // With radiation, compute tetrads and associated mesh arrays
+    if (prad != nullptr) {
+      prad->SetOrthonormalTetrad();
+    }
   }
 
   return;
