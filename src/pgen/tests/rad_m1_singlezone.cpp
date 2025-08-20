@@ -110,12 +110,12 @@ void ProblemGenerator::RadiationM1SingleZoneTest_(ParameterInput *pin,
 
   auto cgs_units = Primitive::MakeCGS();
   auto code_units = eos.GetCodeUnitSystem();
-
+  
   Real rho_code = rho;
-  Real nb = rho_code / mb;
+  Real nb = rho / mb;
   Real P = eos.GetPressure(nb, temp, &ye);
   Real w_lorentz = 1. / Kokkos::sqrt(1. - vx * vx - vy * vy - vz * vz);
-
+  
   // initialize ADM variables
   adm::ADM::ADM_vars &adm = pmbp->padm->adm;
   par_for(
