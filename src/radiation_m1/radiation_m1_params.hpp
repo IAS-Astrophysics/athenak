@@ -55,7 +55,7 @@ struct RadiationM1Params {
   bool theta_limiter;   // activate theta limiter
   bool beam_sources;    // include beam sources
   bool backreact;
-
+  
   int nspecies;              // number of neutrino species
   Real closure_epsilon;      // precision with which to find closure
   int closure_maxiter;       // maximum number of iterations in closure root finder
@@ -79,6 +79,8 @@ struct RadiationM1Params {
   Real source_therm_limit;  // Assume neutrinos to be thermalized above this optical depth
   Real source_scat_limit;   // Use the scattering limit if the isotropization time is less
                             // than the timestep over this factor
+  bool opacity_one_dt;      // Compute opacities at timestep dt (constant throught the timestep)
+
 };
 
 enum SrcSignal {

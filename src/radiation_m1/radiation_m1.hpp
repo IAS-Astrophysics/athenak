@@ -70,6 +70,8 @@ class RadiationM1 {
   bool ismhd;                              // flag to check if <mhd> present
   bool ishydro;                            // flag to check if <hydro> present
   bool isunits;                            // flag to check if <units> present
+  bool isadm;                              // flag to check if <adm> present
+  
   RadiationM1Params params{};              // user parameters for grey M1
   PhotonOpacityParams photon_op_params{};  // params for photon opacities
 #if ENABLE_NURATES
@@ -95,6 +97,7 @@ class RadiationM1 {
   // conditional quantities
   DvceArray5D<Real> u_mu_data;                      // fluid velocity (when mhd is off)
   AthenaTensor<Real, TensorSymm::NONE, 4, 1> u_mu;  // fluid 4-velocity (when mhd is off)
+  bool use_u_mu_data;
   RadiationM1Beam rad_m1_beam;  // beam ID values (only needed when beams on)
 
   // functions...
