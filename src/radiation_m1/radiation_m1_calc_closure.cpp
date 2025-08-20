@@ -31,8 +31,10 @@ TaskStatus RadiationM1::CalcClosure(Driver *pdrive, int stage) {
   auto &nspecies_ = pmy_pack->pradm1->nspecies;
   auto &radiation_mask_ = pmy_pack->pradm1->radiation_mask;
 
-  DvceArray5D<Real> &w0_ = u_mu_data;
-  if (ismhd) {
+  DvceArray5D<Real> &w0_ = u_mu_data;  // just a hack to compile on SYC
+  if (ishydro) {
+    //w0_ = pmy_pack->phydro->w0; // @TODO
+  } else if (ismhd) {    
     w0_ = pmy_pack->pmhd->w0;
   }
 
@@ -107,19 +109,23 @@ TaskStatus RadiationM1::CalcClosure(Driver *pdrive, int stage) {
           AthenaPointTensor<Real, TensorSymm::NONE, 4, 2> proj_ud{};
 
           Real w_lorentz{};
-          if (ismhd) {
-            w_lorentz = Kokkos::sqrt(1. + w0_(m, IVX, k, j, i) * w0_(m, IVX, k, j, i) +
-                                     w0_(m, IVY, k, j, i) * w0_(m, IVY, k, j, i) +
-                                     w0_(m, IVZ, k, j, i) * w0_(m, IVZ, k, j, i));
+          if (use_u_mu_data) {
+	    w_lorentz = adm.alpha(m,k,j,i) * u_mu_(m, 0, k, j, i);
+            pack_u_u(u_mu_(m, 0, k, j, i), u_mu_(m, 1, k, j, i), u_mu_(m, 2, k, j, i),
+                     u_mu_(m, 3, k, j, i), u_u);
+          } else {	    
+            // w_lorentz = Kokkos::sqrt(1. + w0_(m, IVX, k, j, i) * w0_(m, IVX, k, j, i) +
+            //                          w0_(m, IVY, k, j, i) * w0_(m, IVY, k, j, i) +
+            //                          w0_(m, IVZ, k, j, i) * w0_(m, IVZ, k, j, i));
+	    w_lorentz = get_w_lorentz(w0_(m, IVX, k, j, i),
+				      w0_(m, IVY, k, j, i),
+				      w0_(m, IVZ, k, j, i),
+				      g_dd);
             pack_u_u(w_lorentz / adm.alpha(m, k, j, i),
                      w0_(m, IVX, k, j, i) - w_lorentz * beta_u(1) / adm.alpha(m, k, j, i),
                      w0_(m, IVY, k, j, i) - w_lorentz * beta_u(2) / adm.alpha(m, k, j, i),
                      w0_(m, IVZ, k, j, i) - w_lorentz * beta_u(3) / adm.alpha(m, k, j, i),
                      u_u);
-          } else {
-            w_lorentz = adm.alpha(m,k,j,i) * u_mu_(m, 0, k, j, i);
-            pack_u_u(u_mu_(m, 0, k, j, i), u_mu_(m, 1, k, j, i), u_mu_(m, 2, k, j, i),
-                     u_mu_(m, 3, k, j, i), u_u);
           }
           pack_v_u(u_u(0), u_u(1), u_u(2), u_u(3), adm.alpha(m, k, j, i),
                    adm.beta_u(m, 0, k, j, i), adm.beta_u(m, 1, k, j, i),

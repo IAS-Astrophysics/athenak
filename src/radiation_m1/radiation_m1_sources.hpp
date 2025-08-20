@@ -92,9 +92,9 @@ void explicit_update(const SrcParams &src_params, Real &Enew,
   Fnew_d(2) = src_params.Fstar_d(2) + src_params.cdt * src_params.tS_d(2);
   Fnew_d(3) = src_params.Fstar_d(3) + src_params.cdt * src_params.tS_d(3);
   // F_0 = g_0i F^i = beta_i F^i = beta^i F_i
-  Fnew_d(0) = -src_params.alp * src_params.n_u(1) * Fnew_d(1) -
-              src_params.alp * src_params.n_u(2) * Fnew_d(2) -
-              src_params.alp * src_params.n_u(3) * Fnew_d(3);
+  Fnew_d(0) = - src_params.alp * src_params.n_u(1) * Fnew_d(1)
+    - src_params.alp * src_params.n_u(2) * Fnew_d(2) 
+    - src_params.alp * src_params.n_u(3) * Fnew_d(3);
 }
 
 // Solves the implicit problem
