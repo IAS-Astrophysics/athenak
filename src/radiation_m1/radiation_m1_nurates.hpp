@@ -52,6 +52,8 @@ struct NuratesParams {
 
   int quad_nx;  // no. of quadrature points for 1d integration (bns_nurates)
   MyQuadrature quadrature;
+  int quad_nx_2;
+  MyQuadrature quadrature_2;
 };
 
 //! \fn void bns_nurates(Real &nb, Real &temp, Real &ye, Real &mu_n, Real &mu_p,
@@ -167,7 +169,7 @@ void bns_nurates(Real &nb, Real &temp, Real &ye, Real &mu_n, Real &mu_p, Real &m
     scat_1_anux = 0.;
     return;
   }
-
+      
   // populate opacity params
   GreyOpacityParams grey_op_params = {0};
 
@@ -229,7 +231,8 @@ void bns_nurates(Real &nb, Real &temp, Real &ye, Real &mu_n, Real &mu_p, Real &m
 
     // compute gray neutrino number and energy densities assuming equilibrium
     // N.B.: required for normalization factor of energy-averaged opacities
-    ComputeM1DensitiesEq(&grey_op_params.eos_pars, &grey_op_params.distr_pars,
+    ComputeM1DensitiesEq(&grey_op_params.eos_pars,
+			 &grey_op_params.distr_pars,
                          &grey_op_params.m1_pars);
 
     // populate eddington factor
@@ -238,10 +241,12 @@ void bns_nurates(Real &nb, Real &temp, Real &ye, Real &mu_n, Real &mu_p, Real &m
     grey_op_params.m1_pars.chi[id_nux] = 0.333333333333333333333333333;
     grey_op_params.m1_pars.chi[id_anux] = 0.333333333333333333333333333;
   }
+  
   // compute opacities
   M1Opacities opacities = ComputeM1Opacities(&nurates_params.quadrature,
-                                             &nurates_params.quadrature, &grey_op_params);
-
+                                             &nurates_params.quadrature_2,
+					     &grey_op_params);
+  
   // Similar to the comment above, the factors of 2 come from the fact that
   // bns_nurates and THC weight the heavy neutrinos differently. THC weights
   // them with a factor of 2 (because "nux" means "mu AND tau"), bns_nurates

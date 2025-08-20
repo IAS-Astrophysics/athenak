@@ -71,6 +71,11 @@ TaskStatus RadiationM1::CalcOpacityPhotons_(Driver *pdrive, int stage) {
   Real beta[2] = {0.5, 1.};
   Real beta_dt = (beta[stage - 1]) * (pmy_pack->pmesh->dt);
 
+  if ((m1_params_.opacity_one_dt) && (stage != 1)) {
+    // Keep opacities constant throught the timestep
+    return TaskStatus::complete;
+  }
+  
   Primitive::EOS<EOSPolicy, ErrorPolicy> &eos =
       static_cast<dyngr::DynGRMHDPS<EOSPolicy, ErrorPolicy> *>(pmy_pack->pdyngr)
           ->eos.ps.GetEOSMutable();
@@ -100,6 +105,7 @@ TaskStatus RadiationM1::CalcOpacityPhotons_(Driver *pdrive, int stage) {
   Real kappa_p_ = photon_op_params.kappa_p;
 
   Real gm1{};
+  auto &u_mu_ = pmy_pack->pradm1->u_mu;
   if (ishydro) {
     gm1 = pmy_pack->phydro->peos->eos_data.gamma - 1.0;
   } else if (ismhd) {
@@ -152,17 +158,24 @@ TaskStatus RadiationM1::CalcOpacityPhotons_(Driver *pdrive, int stage) {
           AthenaPointTensor<Real, TensorSymm::NONE, 4, 2> proj_ud{};
 
           Real w_lorentz{};
-          w_lorentz = Kokkos::sqrt(1. + w0_(m, IVX, k, j, i) * w0_(m, IVX, k, j, i) +
-                                   w0_(m, IVY, k, j, i) * w0_(m, IVY, k, j, i) +
-                                   w0_(m, IVZ, k, j, i) * w0_(m, IVZ, k, j, i));
-          pack_u_u(w_lorentz / adm.alpha(m, k, j, i),
-                   w0_(m, IVX, k, j, i) -
-                       w_lorentz * adm.beta_u(m, 0, k, j, i) / adm.alpha(m, k, j, i),
-                   w0_(m, IVY, k, j, i) -
-                       w_lorentz * adm.beta_u(m, 1, k, j, i) / adm.alpha(m, k, j, i),
-                   w0_(m, IVZ, k, j, i) -
-                       w_lorentz * adm.beta_u(m, 2, k, j, i) / adm.alpha(m, k, j, i),
-                   u_u);
+	  if (use_u_mu_data) {
+	    w_lorentz = adm.alpha(m,k,j,i) * u_mu_(m, 0, k, j, i);
+            pack_u_u(u_mu_(m, 0, k, j, i), u_mu_(m, 1, k, j, i), u_mu_(m, 2, k, j, i),
+                     u_mu_(m, 3, k, j, i), u_u);
+          } else {
+	    w_lorentz = get_w_lorentz(w0_(m, IVX, k, j, i),
+				      w0_(m, IVY, k, j, i),
+				      w0_(m, IVZ, k, j, i),
+				      g_dd);
+	    pack_u_u(w_lorentz / adm.alpha(m, k, j, i),
+                     w0_(m, IVX, k, j, i)
+		     - w_lorentz * adm.beta_u(m, 0, k, j, i) / adm.alpha(m, k, j, i),
+                     w0_(m, IVY, k, j, i)
+		     - w_lorentz * adm.beta_u(m, 1, k, j, i) / adm.alpha(m, k, j, i),
+                     w0_(m, IVZ, k, j, i)
+		     - w_lorentz * adm.beta_u(m, 2, k, j, i) / adm.alpha(m, k, j, i),
+                     u_u);
+          }
           pack_v_u(u_u(0), u_u(1), u_u(2), u_u(3), adm.alpha(m, k, j, i),
                    adm.beta_u(m, 0, k, j, i), adm.beta_u(m, 1, k, j, i),
                    adm.beta_u(m, 2, k, j, i), v_u);

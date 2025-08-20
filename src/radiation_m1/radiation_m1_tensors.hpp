@@ -236,4 +236,18 @@ void pack_P_dd(const Real &betax_u, const Real &betay_u, const Real &betaz_u,
   P_dd(3, 3) = Pzz_dd;
 }
 
+//----------------------------------------------------------------------------------------
+//! \fn radiationm1::get_w_lorentz
+//  \brief Lorentz factor from fluid velocity utilde^i and 4-metric
+KOKKOS_INLINE_FUNCTION
+Real get_w_lorentz(const Real &velx_u, const Real &vely_u, const Real &velz_u,
+		   const AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> &g_dd) {
+  AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> v_u{};
+  v_u(0) = 0;
+  v_u(1) = velx_u;
+  v_u(2) = vely_u;
+  v_u(3) = velz_u;
+  return Kokkos::sqrt(1. + tensor_dot(g_dd, v_u, v_u));
+}
+
 #endif  // RADIATION_M1_TENSORS_HPP
