@@ -420,8 +420,6 @@ TaskStatus Radiation::AddMultiFreqRadSrcTerm(Driver *pdriver, int stage) {
     bool badcell=false;
     if (!(isfinite(tgas_new)) || (tgas_new < 0)) badcell = true;
 
-    // if ((i==2) && (j==0) && (k==0)) printf("tgas_new=%f \n", tgas_new);
-
     // Step 3: update intensity and fluid variables
     if (!(badcell)) {
       // Step 4: update frequency-dependent intensity in the fluid frame
@@ -450,9 +448,6 @@ TaskStatus Radiation::AddMultiFreqRadSrcTerm(Driver *pdriver, int stage) {
 
       } // endfor n
 
-      // if ((i==2) && (j==0) && (k==0)) printf("en_old=%f \n", u0_(m,IEN,k,j,i));
-
-
       // Step 5: map fluid-frame intensity back to coordinate-frame
       for (int iang=0; iang<=nang1; ++iang) {
         // variables for frame transformation
@@ -463,9 +458,9 @@ TaskStatus Radiation::AddMultiFreqRadSrcTerm(Driver *pdriver, int stage) {
         for (int nn=0; nn<=nfreq1; nn++) {
             for (int mm=0; mm<=nfreq1; mm++) {
               matrix_map(nn,mm) = 0.0;
-              matrix_inv(nn,mm) = 0.0;
-              matrix_aug(nn,mm) = 0.0;
-              matrix_aug(nn,mm+nfreq1) = 0.0;
+              // matrix_inv(nn,mm) = 0.0;
+              // matrix_aug(nn,mm) = 0.0;
+              // matrix_aug(nn,mm+nfreq1) = 0.0;
             } // endfor mm
         } // endfor nn
 
@@ -478,34 +473,31 @@ TaskStatus Radiation::AddMultiFreqRadSrcTerm(Driver *pdriver, int stage) {
         } // endfor ifr
 
         // inverse matrix
-        bool inv_success = InverseMatrix(nfrq, matrix_map, matrix_aug, matrix_inv);
-        // if ((i==2) && (j==0) && (k==0) && inv_success) printf(" inv_success=true \n");
-        // if ((i==2) && (j==0) && (k==0) && !inv_success) printf(" inv_success=false \n");
+        // bool inv_success = InverseMatrix(nfrq, matrix_map, matrix_aug, matrix_inv);
+        bool inv_success = SolveTriLinearSystem(nfrq, matrix_map, ir_cm_update, iang, n0_cm, ir_cm_star_update);
 
         // update intensity
         fac_norm(iang) = 0.0;
         Real ir_cm_star_grey = 0.0;
         for (int ifr=0; ifr<=nfreq1; ++ifr) {
          // compute inverse-mapped intensity
-         if (inv_success) {
-           Real ir_cm_star_update_f = 0.0;
-           for (int f=0; f<=nfreq1; ++f) {
-             ir_cm_star_update_f += matrix_inv(ifr,f) * ir_cm_update(iang,f);
-           }
-           ir_cm_star_update(iang,ifr) = ir_cm_star_update_f;
-         } else {
+         // if (inv_success) {
+           // Real ir_cm_star_update_f = 0.0;
+           // for (int f=0; f<=nfreq1; ++f) {
+           //   ir_cm_star_update_f += matrix_inv(ifr,f) * ir_cm_update(iang,f);
+           // }
+           // ir_cm_star_update(iang,ifr) = ir_cm_star_update_f;
+         // } else {
+         if (!inv_success) {
            // piecewise linear reconstruct the intensity update
            ir_cm_star_update(iang,ifr) = InvMapIntensity(ifr, nu_tet, ir_cm_update, iang, n0_cm, arad_, order, limiter);
          } // endif !inverse_success
-
-
-         // if ((i==2) && (j==0) && (k==0)) printf("   ir_cm_star_update=%f \n", ir_cm_star_update(iang,ifr));
-
 
          // sum for normalization
          fac_norm(iang)  += ir_cm_update(iang,ifr);
          ir_cm_star_grey += ir_cm_star_update(iang,ifr);
         } // endfor ifr
+
         // compute normalization factor
         fac_norm(iang) *= 1./ir_cm_star_grey;
       } // endfor iang

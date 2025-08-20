@@ -346,6 +346,51 @@ bool InverseMatrix(const int N, const ScrArray2D<Real> &A, ScrArray2D<Real> &aug
   return true;
 }
 
+//----------------------------------------------------------------------------------------
+//! \fn bool UpdateFluidFrameIntensity
+//  \brief Given triangular linear system Ax=b, where
+//         mapping matrix A is either upper- or lower-triangular
+//         and b is updated fluid-frame intensity defined in tetrad-frame frequency bins,
+//         solve updated fluid-frame intensity x defined in fluid-frame frequency bins
+//         by backward or forward substitution.
+//         Return false if A is singular or any intensity x is negative
+KOKKOS_INLINE_FUNCTION
+bool SolveTriLinearSystem(const int N, const ScrArray2D<Real> &A, const ScrArray2D<Real> &ir_cm,
+                          const int &iang, const Real &n0_cm, ScrArray2D<Real> &ir_cm_star) {
+
+  if (n0_cm >= 1) {
+
+    // lower-triangular, forward substitution
+    for (int i=0; i < N; ++i) {
+      Real sum = ir_cm(iang,i);
+      for (int j=0; j < i; ++j) {
+        sum -= A(i,j) * ir_cm_star(iang,j);
+      } // endfor j
+      if (A(i,i) == 0.0) return false; // singular
+      Real ir_update = sum / A(i,i);
+      if (ir_update < 0) return false; // negative intensity
+      ir_cm_star(iang,i) = ir_update;
+    } // endfor i
+
+  } else {
+
+    // upper-triangular, backward substitution
+    for (int i=N-1; i >= 0; --i) {
+      Real sum = ir_cm(iang,i);
+      for (int j=i+1; j < N; ++j) {
+        sum -= A(i,j) * ir_cm_star(iang,j);
+      } // endfor j
+      if (A(i,i) == 0.0) return false; // singular
+      Real ir_update = sum / A(i,i);
+      if (ir_update < 0) return false; // negative intensity
+      ir_cm_star(iang,i) = ir_update;
+    } // endfor i
+
+  } // endelse
+
+  return true;
+}
+
 //============================= Effective Temperature Functions =============================
 //----------------------------------------------------------------------------------------
 //! \fn Real GuessEffTemperature
