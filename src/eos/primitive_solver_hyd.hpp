@@ -159,7 +159,7 @@ class PrimitiveSolverHydro {
 
     // Check for NaNs
     /*if (CheckForConservedNaNs(cons_pt)) {
-      printf("Location: PrimToConsPt\n");
+      Kokkos::printf("Location: PrimToConsPt\n");
       DumpPrimitiveVars(prim_pt);
     }*/
 
@@ -475,7 +475,7 @@ class PrimitiveSolverHydro {
                             (j < js) || (j > je) ||
                             (k < ks) || (k > ke);
 
-            printf("Density was nontrivially adjusted on MeshBlock %d!\n"
+            Kokkos::printf("Density was nontrivially adjusted on MeshBlock %d!\n"
                    "  Grid index: (i=%d, j=%d, k=%d)\n"
                    "  Physical position: (%g, %g, %g)\n"
                    "  D (old): %.17g\n"
