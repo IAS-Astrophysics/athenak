@@ -39,7 +39,9 @@ TaskStatus RadiationM1::CalcOpacityNurates(Driver *pdrive, int stage) {
 }
 
 template <class EOSPolicy, class ErrorPolicy>
-TaskStatus RadiationM1::CalcOpacityNurates_(Driver *pdrive, int stage) {
+TaskStatus RadiationM1::CalcOpacityNurates_(Driver *pdrive, int stage) {  
+  assert(((nspecies == 3) || (nspecies == 4)));    
+
   RegionIndcs &indcs = pmy_pack->pmesh->mb_indcs;
   int &is = indcs.is, &ie = indcs.ie;
   int &js = indcs.js, &je = indcs.je;
@@ -49,7 +51,7 @@ TaskStatus RadiationM1::CalcOpacityNurates_(Driver *pdrive, int stage) {
   auto &mbsize = pmy_pack->pmb->mb_size;
   auto &nspecies_ = nspecies;
   auto nvars_ = nvars;
-
+  
   auto &adm = pmy_pack->padm->adm;
   auto &radiation_mask_ = radiation_mask;
 
@@ -63,12 +65,24 @@ TaskStatus RadiationM1::CalcOpacityNurates_(Driver *pdrive, int stage) {
   auto &scat_1_ = scat_1;
 
   auto &u0_ = u0;
-  auto &w0_ = pmy_pack->pmhd->w0;
   auto &chi_ = chi;
 
+  auto &u_mu_ = pmy_pack->pradm1->u_mu;
+  DvceArray5D<Real> &w0_ = u_mu_data;
+  if (ishydro) {
+    //w0_ = pmy_pack->phydro->w0; // @TODO
+  } else if (ismhd) {
+    w0_ = pmy_pack->pmhd->w0;
+  }
+  
   Real beta[2] = {0.5, 1.};
   Real beta_dt = (beta[stage - 1]) * (pmy_pack->pmesh->dt);
 
+  if ((m1_params_.opacity_one_dt) && (stage != 1)) {
+    // Keep opacities constant throught the timestep
+    return TaskStatus::complete;
+  }
+  
   Primitive::EOS<EOSPolicy, ErrorPolicy> &eos =
       static_cast<dyngr::DynGRMHDPS<EOSPolicy, ErrorPolicy> *>(pmy_pack->pdyngr)
           ->eos.ps.GetEOSMutable();
@@ -77,9 +91,9 @@ TaskStatus RadiationM1::CalcOpacityNurates_(Driver *pdrive, int stage) {
   // conversion factors from cgs to code units
   auto code_units = eos.GetCodeUnitSystem();
   auto eos_units = eos.GetEOSUnitSystem();
-
+  
   par_for(
-      "radiation_m1_calc_opacity_nurates", DevExeSpace(), 0, nmb1, ks, ke, js, je, is, ie,
+      "radiation_m1_calc_opacity_nurates", DevExeSpace(), 0, nmb1, ks, ke, js, je, is, ie, 
       KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
         if (radiation_mask(m, k, j, i)) {
           for (int nuidx = 0; nuidx < nspecies_; nuidx++) {
@@ -129,20 +143,32 @@ TaskStatus RadiationM1::CalcOpacityNurates_(Driver *pdrive, int stage) {
           AthenaPointTensor<Real, TensorSymm::NONE, 4, 2> proj_ud{};
 
           Real w_lorentz{};
-          w_lorentz = Kokkos::sqrt(1. + w0_(m, IVX, k, j, i) * w0_(m, IVX, k, j, i) +
-                                   w0_(m, IVY, k, j, i) * w0_(m, IVY, k, j, i) +
-                                   w0_(m, IVZ, k, j, i) * w0_(m, IVZ, k, j, i));
-          pack_u_u(w_lorentz / adm.alpha(m, k, j, i),
-                   w0_(m, IVX, k, j, i) -
-                       w_lorentz * adm.beta_u(m, 0, k, j, i) / adm.alpha(m, k, j, i),
-                   w0_(m, IVY, k, j, i) -
-                       w_lorentz * adm.beta_u(m, 1, k, j, i) / adm.alpha(m, k, j, i),
-                   w0_(m, IVZ, k, j, i) -
-                       w_lorentz * adm.beta_u(m, 2, k, j, i) / adm.alpha(m, k, j, i),
-                   u_u);
+	  if (use_u_mu_data) {
+            w_lorentz = adm.alpha(m,k,j,i) * u_mu_(m, 0, k, j, i);
+            pack_u_u(u_mu_(m, 0, k, j, i), u_mu_(m, 1, k, j, i), u_mu_(m, 2, k, j, i),
+                     u_mu_(m, 3, k, j, i), u_u);
+          } else {
+            // w_lorentz = Kokkos::sqrt(1. + w0_(m, IVX, k, j, i) * w0_(m, IVX, k, j, i) +
+            //                          w0_(m, IVY, k, j, i) * w0_(m, IVY, k, j, i) +
+            //                          w0_(m, IVZ, k, j, i) * w0_(m, IVZ, k, j, i)); 
+	    w_lorentz = get_w_lorentz(w0_(m, IVX, k, j, i),
+				      w0_(m, IVY, k, j, i),
+				      w0_(m, IVZ, k, j, i),
+				      g_dd);
+	    pack_u_u(w_lorentz / adm.alpha(m, k, j, i),
+                     w0_(m, IVX, k, j, i)
+		     - w_lorentz * adm.beta_u(m, 0, k, j, i) / adm.alpha(m, k, j, i),
+                     w0_(m, IVY, k, j, i)
+		     - w_lorentz * adm.beta_u(m, 1, k, j, i) / adm.alpha(m, k, j, i),
+                     w0_(m, IVZ, k, j, i)
+		     - w_lorentz * adm.beta_u(m, 2, k, j, i) / adm.alpha(m, k, j, i),
+                     u_u);
+	  }
+	  
           pack_v_u(u_u(0), u_u(1), u_u(2), u_u(3), adm.alpha(m, k, j, i),
                    adm.beta_u(m, 0, k, j, i), adm.beta_u(m, 1, k, j, i),
-                   adm.beta_u(m, 2, k, j, i), v_u);
+                   adm.beta_u(m, 2, k, j, i),
+		   v_u);
           tensor_contract(g_dd, u_u, u_d);
           tensor_contract(g_dd, v_u, v_d);
           calc_proj(u_d, u_u, proj_ud);
@@ -155,7 +181,8 @@ TaskStatus RadiationM1::CalcOpacityNurates_(Driver *pdrive, int stage) {
                      adm.beta_u(m, 2, k, j, i),
                      u0_(m, CombinedIdx(nuidx, M1_FX_IDX, nvars_), k, j, i),
                      u0_(m, CombinedIdx(nuidx, M1_FY_IDX, nvars_), k, j, i),
-                     u0_(m, CombinedIdx(nuidx, M1_FZ_IDX, nvars_), k, j, i), F_d);
+                     u0_(m, CombinedIdx(nuidx, M1_FZ_IDX, nvars_), k, j, i),
+		     F_d);
             const Real E = u0_(m, CombinedIdx(nuidx, M1_E_IDX, nvars_), k, j, i);
             AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> P_dd{};
             apply_closure(g_dd, g_uu, n_d, w_lorentz, u_u, v_d, proj_ud, E, F_d,
@@ -169,6 +196,14 @@ TaskStatus RadiationM1::CalcOpacityNurates_(Driver *pdrive, int stage) {
             rnnu[nuidx] = u0_(m, CombinedIdx(nuidx, M1_N_IDX, nvars_), k, j, i) / Gamma;
           }
 
+	  // local undensitized neutrino quantities
+          Real nudens_0[4]{}, nudens_1[4]{}, chi_loc[4]{};
+          for (int nuidx = 0; nuidx < nspecies_; ++nuidx) {
+            nudens_0[nuidx] = rnnu[nuidx] / volform;
+            nudens_1[nuidx] = J[nuidx] / volform;
+            chi_loc[nuidx] = chi_(m, nuidx, k, j, i);
+          }
+	  
           // fluid quantities
           Real nb = w0_(m, IDN, k, j, i) / mb;
           Real p = w0_(m, IPR, k, j, i);
@@ -182,19 +217,11 @@ TaskStatus RadiationM1::CalcOpacityNurates_(Driver *pdrive, int stage) {
           Real mu_p = mu_b + mu_q;
           Real mu_e = mu_le - mu_q;
 
-          // local undensitized neutrino quantities
-          Real nudens_0[4]{}, nudens_1[4]{}, chi_loc[4]{};
-          for (int nuidx = 0; nuidx < nspecies_; ++nuidx) {
-            nudens_0[nuidx] = rnnu[nuidx] / volform;
-            nudens_1[nuidx] = J[nuidx] / volform;
-            chi_loc[nuidx] = chi_(m, nuidx, k, j, i);
-          }
-
           // get emissivities and opacities
           Real eta_0_loc[4]{}, eta_1_loc[4]{};
           Real abs_0_loc[4]{}, abs_1_loc[4]{};
           Real scat_0_loc[4]{}, scat_1_loc[4]{};
-
+	  
           // Note: everything sent and received are in code units
           bns_nurates(
               nb, T, Y, mu_n, mu_p, mu_e, nudens_0[0], nudens_1[0], chi_loc[0],
@@ -366,9 +393,18 @@ TaskStatus RadiationM1::CalcOpacityNurates_(Driver *pdrive, int stage) {
             }
 
             if (nurates_params_.use_kirchhoff_law) {
-              // enforce Kirchhoff's laws.
-                eta_0(m, nuidx, k, j, i) = abs_0(m, nuidx, k, j, i) * my_nudens_0;
-                eta_1(m, nuidx, k, j, i) = abs_1(m, nuidx, k, j, i) * my_nudens_1;
+	      // enforce Kirchhoff's laws.
+	      // eta_0(m, nuidx, k, j, i) = abs_0(m, nuidx, k, j, i) * my_nudens_0;
+	      // eta_1(m, nuidx, k, j, i) = abs_1(m, nuidx, k, j, i) * my_nudens_1;
+	      if (nuidx == 0 || nuidx == 1) {
+		eta_0(m, nuidx, k, j, i) = abs_0(m, nuidx, k, j, i) * my_nudens_0;
+		eta_1(m, nuidx, k, j, i) = abs_1(m, nuidx, k, j, i) * my_nudens_1;
+	      } else {
+		abs_0(m, nuidx, k, j, i) = (my_nudens_0 > m1_params_.rad_N_floor ?
+					    eta_0(m, nuidx, k, j, i)/my_nudens_0 : 0);
+		abs_1(m, nuidx, k, j, i) = (my_nudens_0 > m1_params_.rad_E_floor ?
+					    eta_1(m, nuidx, k, j, i)/my_nudens_1 : 0);
+	      }
             }
           }
         }

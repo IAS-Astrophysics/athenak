@@ -38,12 +38,27 @@ RadiationM1::RadiationM1(MeshBlockPack *ppack, ParameterInput *pin)
   ishydro = pin->DoesBlockExist("hydro");
   isunits = pin->DoesBlockExist("units");
   ismhd = pin->DoesBlockExist("mhd");
+  isadm = pin->DoesBlockExist("adm");
 
+  if (!isadm) {
+    std::cerr << "Error: radiation_m1 is only supported with "
+      "dynamical spacetimes" << std::endl;
+    // @TODO phydro are only partially implemented
+    exit(EXIT_FAILURE);
+  }
+
+  // allocate and use 4-velocity
+  use_u_mu_data = false;
+  if (!ismhd && !ishydro) {
+    use_u_mu_data = true;
+  }
+  
   nspecies = M1_TOTAL_NUM_SPECIES;
 
   params.gr_sources = pin->GetOrAddBoolean("radiation_m1", "gr_sources", true);
   params.matter_sources = pin->GetOrAddBoolean("radiation_m1", "matter_sources", false);
   params.backreact = pin->GetOrAddBoolean("radiation_m1", "backreact", true);
+  params.opacity_one_dt = pin->GetOrAddBoolean("radiation_m1", "opacity_one_dt", false);
   params.theta_limiter = pin->GetOrAddBoolean("radiation_m1", "theta_limiter", false);
   params.closure_epsilon = pin->GetOrAddReal("radiation_m1", "closure_epsilon", 1e-14);
   params.closure_maxiter = pin->GetOrAddInteger("radiation_m1", "closure_maxiter", 164);
@@ -67,7 +82,7 @@ RadiationM1::RadiationM1(MeshBlockPack *ppack, ParameterInput *pin)
   params.minmod_theta = pin->GetOrAddReal("radiation_m1", "minmod_theta", 1);
   params.source_limiter = pin->GetOrAddReal("radiation_m1", "source_limiter", 0.5);
   params.beam_sources = pin->GetOrAddBoolean("radiation_m1", "beam_sources", false);
-
+  
   // set closure (default: minerbo)
   std::string closure_fun = pin->GetOrAddString("radiation_m1", "closure_fun", "minerbo");
   if (closure_fun == "minerbo") {
@@ -102,16 +117,16 @@ RadiationM1::RadiationM1(MeshBlockPack *ppack, ParameterInput *pin)
 #if ENABLE_NURATES
     params.opacity_type = BnsNurates;
 
-    nurates_params.quad_nx = pin->GetOrAddInteger("bns_nurates", "nurates_quad_nx", 10);
+    nurates_params.quad_nx = pin->GetOrAddInteger("bns_nurates", "nurates_quad_nx", 6);
+    nurates_params.quad_nx_2 = pin->GetOrAddInteger("bns_nurates", "nurates_quad_nx_2", -1);
     nurates_params.opacity_tau_trap =
         pin->GetOrAddReal("bns_nurates", "opacity_tau_trap", 1.0);
     nurates_params.opacity_tau_delta =
         pin->GetOrAddReal("bns_nurate", "opacity_tau_delta", 1.0);
     nurates_params.opacity_corr_fac_max =
         pin->GetOrAddReal("bns_nurates", "opacity_corr_fac_max", 3.0);
-    nurates_params.nb_min = pin->GetOrAddReal("bns_nurates", "rho_min_cgs", 0.);
+    nurates_params.nb_min = pin->GetOrAddReal("bns_nurates", "nb_min_fm-3", 0.); // in bns_nurates()
     nurates_params.temp_min_mev = pin->GetOrAddReal("bns_nurates", "temp_min_mev", 0.);
-
     nurates_params.use_abs_em = pin->GetOrAddBoolean("bns_nurates", "use_abs_em", true);
     nurates_params.use_pair = pin->GetOrAddBoolean("bns_nurates", "use_pair", true);
     nurates_params.use_brem = pin->GetOrAddBoolean("bns_nurates", "use_brem", true);
@@ -140,6 +155,17 @@ RadiationM1::RadiationM1(MeshBlockPack *ppack, ParameterInput *pin)
     nurates_params.quadrature.x1 = 0.;
     nurates_params.quadrature.x2 = 1.;
     GaussLegendre(&nurates_params.quadrature);
+
+    if (nurates_params.quad_nx_2 == -1) {
+      nurates_params.quadrature_2 = nurates_params.quadrature;
+    } else {
+      nurates_params.quadrature_2.nx = nurates_params.quad_nx_2;
+      nurates_params.quadrature_2.dim = 1;
+      nurates_params.quadrature_2.type = kGauleg;
+      nurates_params.quadrature_2.x1 = 0.;
+      nurates_params.quadrature_2.x2 = 1.;
+      GaussLegendre(&nurates_params.quadrature_2);
+    }
 #else
     std::cerr << "Error: To use BNS_NURATES, executable must be compiled with "
                  "-DAthena_ENABLE_NURATES=ON"
@@ -207,7 +233,7 @@ RadiationM1::RadiationM1(MeshBlockPack *ppack, ParameterInput *pin)
 
   // allocate Eddington factor
   Kokkos::realloc(chi, nmb, nspecies, ncells3, ncells2, ncells1);
-
+  
   // allocate opacities
   Kokkos::realloc(eta_0, nmb, nspecies, ncells3, ncells2, ncells1);
   Kokkos::realloc(abs_0, nmb, nspecies, ncells3, ncells2, ncells1);
@@ -220,7 +246,7 @@ RadiationM1::RadiationM1(MeshBlockPack *ppack, ParameterInput *pin)
   Kokkos::deep_copy(radiation_mask, false);
 
   // allocate 4-velocity if not using mhd
-  if (!ismhd) {
+  if (use_u_mu_data) {
     Kokkos::realloc(u_mu_data, nmb, 4, ncells3, ncells2, ncells1);
     u_mu.InitWithShallowSlice(u_mu_data, 0, 3);
   }
