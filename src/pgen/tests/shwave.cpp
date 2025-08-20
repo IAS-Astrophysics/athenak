@@ -82,7 +82,7 @@ void ProblemGenerator::Shwave(ParameterInput *pin, const bool restart) {
   int &ks = indcs.ks; int &ke = indcs.ke;
   int nx1 = indcs.nx1, nx2 = indcs.nx2, nx3 = indcs.nx3;
   auto &size = pmbp->pmb->mb_size;
-  auto &sv = shw_var;
+  auto sv = shw_var;
 
   if (pmbp->phydro != nullptr) {
     // Do some error checking in Hydro case
@@ -348,7 +348,7 @@ void ShwaveHistory(HistoryData *pdata, Mesh *pm) {
   // capture class variabels for kernel
   auto &size = pm->pmb_pack->pmb->mb_size;
   int &nhist_ = pdata->nhist;
-  auto &sv = shw_var;
+  auto sv = shw_var;
   Real kx = sv.kx + (sv.qshear)*(sv.omega0)*(pm->time)*sv.ky;
   Real omega_t = (sv.omega0)*(pm->time);
 
