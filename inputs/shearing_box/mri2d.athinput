@@ -1,4 +1,4 @@
-# AthenaXXX input file for 2D MRI
+# AthenaK input file for 2D MRI
 
 <comment>
 problem   = 2D MRI
@@ -9,13 +9,13 @@ basename  = HB3       # problem ID: basename of output filenames
 
 <mesh>
 nghost    = 3         # Number of ghost cells
-nx1       = 64        # Number of zones in X1-direction
+nx1       = 128       # Number of zones in X1-direction
 x1min     = -0.5      # minimum value of X1
 x1max     = 0.5       # maximum value of X1
 ix1_bc    = shear_periodic  # Inner-X1 boundary condition flag
 ox1_bc    = shear_periodic  # Outer-X1 boundary condition flag
 
-nx2       = 64        # Number of zones in X2-direction
+nx2       = 128       # Number of zones in X2-direction
 x2min     = -0.5      # minimum value of X2
 x2max     = 0.5       # maximum value of X2
 ix2_bc    = periodic  # Inner-X2 boundary condition flag
@@ -37,7 +37,7 @@ evolution  = dynamic   # dynamic/kinematic/static
 integrator = rk3       # time integration algorithm
 cfl_number = 0.4       # The Courant, Friedrichs, & Lewy (CFL) Number
 nlim       = -1        # cycle limit
-tlim       = 62.831854      # time limit (about 8 orbits = 16\pi)
+tlim       = 62.831854 # time limit (about 10 orbits)
 ndiag      = 1         # cycles between diagostic output
 
 <shearing_box>
@@ -57,16 +57,11 @@ ifield     = 1         # 1 for zero-net-flux Bz, 2 for constant Bz
 nwx        = 1         # wavenumber in x1
 
 <output1>
-file_type   = hst      # History data dump
-dt          = 0.62831853      # time increment between outputs
-data_format = %12.5e   # Optional data format string
+file_type   = hst          # History data dump
+dt          = 0.62831853   # time increment between outputs
+data_format = %12.5e       # Optional data format string
 
 <output2>
-file_type   = vtk      # Binary data dump
-variable    = mhd_w    # variables to be output
-dt          = 6.2831853      # time increment between outputs
-
-<output3>
-file_type   = vtk      # Binary data dump
-variable    = mhd_bcc  # variables to be output
-dt          = 6.2831853      # time increment between outputs
+file_type   = vtk         # VTK data dump
+variable    = mhd_w_bcc   # variables to be output
+dt          = 0.62831853  # time increment between outputs

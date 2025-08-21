@@ -1,0 +1,75 @@
+# AthenaK input file for MHD shwave test of JGG
+# Use with shwave.cpp problem generator
+
+<comment>
+problem   = compressible MHD shwave of JGG
+reference = Johnson et al., 2008, ApJS, 177, 373
+
+<job>
+basename  = shwave4    # problem ID: basename of output filenames
+
+<mesh>
+nghost    = 3          # Number of ghost cells
+nx1       = 32         # Number of zones in X1-direction
+x1min     = -0.25      # minimum value of X1
+x1max     = 0.25       # maximum value of X1
+ix1_bc    = shear_periodic  # Inner-X1 boundary condition flag
+ox1_bc    = shear_periodic  # Outer-X1 boundary condition flag
+
+nx2       = 32         # Number of zones in X2-direction
+x2min     = -0.25      # minimum value of X2
+x2max     = 0.25       # maximum value of X2
+ix2_bc    = periodic   # Inner-X2 boundary condition flag
+ox2_bc    = periodic   # Outer-X2 boundary condition flag
+
+nx3       = 32         # Number of zones in X3-direction
+x3min     = -0.25      # minimum value of X3
+x3max     = 0.25       # maximum value of X3
+ix3_bc    = periodic   # Inner-X3 boundary condition flag
+ox3_bc    = periodic   # Outer-X3 boundary condition flag
+
+<meshblock>
+nx1       = 32       # Number of cells in each MeshBlock, X1-dir
+nx2       = 32       # Number of cells in each MeshBlock, X2-dir
+nx3       = 32        # Number of cells in each MeshBlock, X3-dir
+
+<time>
+evolution  = dynamic  # dynamic/kinematic/static
+integrator = rk2      # time integration algorithm
+cfl_number = 0.3      # The Courant, Friedrichs, & Lewy (CFL) Number
+nlim       = -1       # cycle limit
+tlim       = 3.0      # time limit
+ndiag      = 1        # cycles between diagostic output
+
+<shearing_box>
+qshear = 1.5 
+omega0 = 1.0 
+
+<mhd>
+eos             = isothermal   # EOS type
+reconstruct     = ppmx         # spatial reconstruction method
+rsolver         = hlle         # Riemann-solver to be used
+iso_sound_speed = 1.0          # isothermal sound speed
+
+<problem>
+pgen_name    = shwave
+ipert        = 4       # MHD shwave test of JGG
+d0           = 1.0     # background density
+amp          = 1.0e-6  # amplitude of wave in units of sound speed
+nwx          = -2      # number of wavelengths in x-direction
+nwy          = 1       # number of wavelengths in y-direction
+nwz          = 1       # number of wavelengths in z-direction
+beta         = 20      # plasma beta
+user_hist    = true
+
+<output1>
+file_type   = hst      # History data dump
+dt          = 0.01     # time increment between outputs
+data_format = %12.5e   # Optional data format string
+user_hist_only = true
+
+<output2>
+file_type   = vtk        # Binary data dump
+variable    = mhd_w_bcc  # variables to be output
+dt          = 0.1        # time increment between outputs
+ghost_zones = true

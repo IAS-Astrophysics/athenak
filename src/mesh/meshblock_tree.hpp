@@ -36,6 +36,7 @@ class MeshBlockTree {
   MeshBlockTree* GetLeaf(int ox1, int ox2, int ox3)
     { return pleaf_[(ox1 + (ox2<<1) + (ox3<<2))]; }
   int GetGID() {return gid_;}
+  std::int32_t GetLevel() {return lloc_.level;}
 
   // functions
   void CreateRootGrid();

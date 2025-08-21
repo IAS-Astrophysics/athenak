@@ -174,6 +174,8 @@ class Z4c {
     bool user_Sbc;
     // Boundary extrapolation order
     int extrap_order;
+    // Value of chi to specify the excision region for constraint evaluation
+    Real excise_chi;
   };
   Options opt;
   Real diss;              // Dissipation parameter

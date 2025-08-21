@@ -16,7 +16,7 @@
 #include "athena.hpp"
 #include "io_wrapper.hpp"
 
-#define NHISTORY_VARIABLES 12
+#define NHISTORY_VARIABLES 20
 #if NHISTORY_VARIABLES > NREDUCTION_VARIABLES
     #error NHISTORY > NREDUCTION in outputs.hpp
 #endif
@@ -141,6 +141,7 @@ struct OutputParameters {
   int nbin=0, nbin2=0;
   bool logscale=true, logscale2=true;
   bool mass_weighted=false;
+  bool single_file_per_rank=false; // DBF: parameter for single file per rank
 };
 
 //----------------------------------------------------------------------------------------
@@ -384,6 +385,51 @@ class RestartOutput : public BaseTypeOutput {
   void WriteOutputFile(Mesh *pm, ParameterInput *pin) override;
 };
 
+// Forward declaration
+class CartesianGrid;
+
+//----------------------------------------------------------------------------------------
+//! \class CartesianGridOutput
+//  \brief derived BaseTypeOutput class for output on a Cartesian grid
+class CartesianGridOutput : public BaseTypeOutput {
+  struct MetaData {
+    int cycle;
+    float time;
+    float center[3];
+    float extent[3];
+    int numpoints[3];
+    bool is_cheb;
+    int noutvars;
+  };
+ public:
+  CartesianGridOutput(ParameterInput *pin, Mesh *pm, OutputParameters oparams);
+  ~CartesianGridOutput();
+  //! Interpolate the data on the Cartesian grid and handle MPI communication
+  void LoadOutputData(Mesh *pm) override;
+  //! Write the data to file
+  void WriteOutputFile(Mesh *pm, ParameterInput *pin) override;
+ private:
+  CartesianGrid *pcart;
+  MetaData md;
+};
+
+// Forward declaration
+class SphericalSurface;
+
+//----------------------------------------------------------------------------------------
+//! \class SphericalGridOutput
+//  \brief derived BaseTypeOutput class for output on a Cartesian grid
+class SphericalSurfaceOutput : public BaseTypeOutput {
+ public:
+  SphericalSurfaceOutput(ParameterInput *pin, Mesh *pm, OutputParameters oparams);
+  ~SphericalSurfaceOutput();
+  //! Interpolate the data on the Cartesian grid and handle MPI communication
+  void LoadOutputData(Mesh *pm) override;
+  //! Write the data to file
+  void WriteOutputFile(Mesh *pm, ParameterInput *pin) override;
+ private:
+  SphericalSurface *psurf;
+};
 //----------------------------------------------------------------------------------------
 //! \class EventLogOutput
 //  \brief derived BaseTypeOutput class for event counter data

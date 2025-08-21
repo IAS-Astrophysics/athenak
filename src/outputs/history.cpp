@@ -21,6 +21,7 @@
 #include "hydro/hydro.hpp"
 #include "mhd/mhd.hpp"
 #include "z4c/z4c.hpp"
+#include "coordinates/adm.hpp"
 #include "outputs.hpp"
 
 //----------------------------------------------------------------------------------------
@@ -160,7 +161,7 @@ void HistoryOutput::LoadHydroHistoryData(HistoryData *pdata, Mesh *pm) {
 
 void HistoryOutput::LoadZ4cHistoryData(HistoryData *pdata, Mesh *pm) {
   // set number of and names of history variables for z4c
-  pdata->nhist = 8;
+  pdata->nhist = 9;
   pdata->label[0] = "C-norm2";
   pdata->label[1] = "H-norm2";
   pdata->label[2] = "M-norm2";
@@ -169,14 +170,18 @@ void HistoryOutput::LoadZ4cHistoryData(HistoryData *pdata, Mesh *pm) {
   pdata->label[5] = "My-norm2";
   pdata->label[6] = "Mz-norm2";
   pdata->label[7] = "Theta-norm2";
+  pdata->label[8] = "Volume";
 
   // capture class variabels for kernel
   auto &u0_ = pm->pmb_pack->pz4c->u0;
   auto &u_con_ = pm->pmb_pack->pz4c->u_con;
   const int &I_Z4c_Theta_ =  pm->pmb_pack->pz4c->I_Z4C_THETA;
+  auto &z4c = pm->pmb_pack->pz4c->z4c;
+  auto &adm = pm->pmb_pack->padm->adm;
 
   auto &size = pm->pmb_pack->pmb->mb_size;
   int &nhist_ = pdata->nhist;
+  auto &opt = pm->pmb_pack->pz4c->opt;
 
   // loop over all MeshBlocks in this pack
   auto &indcs = pm->pmb_pack->pmesh->mb_indcs;
@@ -197,18 +202,36 @@ void HistoryOutput::LoadZ4cHistoryData(HistoryData *pdata, Mesh *pm) {
     k += ks;
     j += js;
 
-    Real vol = size.d_view(m).dx1*size.d_view(m).dx2*size.d_view(m).dx3;
+    Real detg = adm::SpatialDet(adm.g_dd(m,0,0,k,j,i), adm.g_dd(m,0,1,k,j,i),
+                                adm.g_dd(m,0,2,k,j,i), adm.g_dd(m,1,1,k,j,i),
+                                adm.g_dd(m,1,2,k,j,i), adm.g_dd(m,2,2,k,j,i));
 
-    // Hydro conserved variables:
+    Real vol = size.d_view(m).dx1*size.d_view(m).dx2*size.d_view(m).dx3
+               * std::sqrt(std::abs(detg));
+
+    // Excise the punctures based on chi
     array_sum::GlobalSum hvars;
-    hvars.the_array[0] = vol*u_con_(m,0,k,j,i); // ||C||^2 (comes already squared)
-    hvars.the_array[1] = vol*SQR(u_con_(m,1,k,j,i)); //||H||^2
-    hvars.the_array[2] = vol*u_con_(m,2,k,j,i); // ||M||^2 (comes already squared)
-    hvars.the_array[3] = vol*u_con_(m,3,k,j,i); // ||Z||^2 (comes already squared)
-    hvars.the_array[4] = vol*SQR(u_con_(m,4,k,j,i));      // ||Mx||^2
-    hvars.the_array[5] = vol*SQR(u_con_(m,5,k,j,i));      // ||My||^2
-    hvars.the_array[6] = vol*SQR(u_con_(m,6,k,j,i));      // ||Mz||^2
-    hvars.the_array[7] = vol*SQR(u0_(m,I_Z4c_Theta_,k,j,i)); // ||Theta||^2
+    if (z4c.chi(m,k,j,i)>=opt.excise_chi) {
+      hvars.the_array[0] = vol*u_con_(m,0,k,j,i); // ||C||^2 (comes already squared)
+      hvars.the_array[1] = vol*SQR(u_con_(m,1,k,j,i)); //||H||^2
+      hvars.the_array[2] = vol*u_con_(m,2,k,j,i); // ||M||^2 (comes already squared)
+      hvars.the_array[3] = vol*u_con_(m,3,k,j,i); // ||Z||^2 (comes already squared)
+      hvars.the_array[4] = vol*SQR(u_con_(m,4,k,j,i));      // ||Mx||^2
+      hvars.the_array[5] = vol*SQR(u_con_(m,5,k,j,i));      // ||My||^2
+      hvars.the_array[6] = vol*SQR(u_con_(m,6,k,j,i));      // ||Mz||^2
+      hvars.the_array[7] = vol*SQR(u0_(m,I_Z4c_Theta_,k,j,i)); // ||Theta||^2
+      hvars.the_array[8] = vol;
+    } else {
+      hvars.the_array[0] = 0;
+      hvars.the_array[1] = 0;
+      hvars.the_array[2] = 0;
+      hvars.the_array[3] = 0;
+      hvars.the_array[4] = 0;
+      hvars.the_array[5] = 0;
+      hvars.the_array[6] = 0;
+      hvars.the_array[7] = 0;
+      hvars.the_array[8] = 0;
+    }
 
     // fill rest of the_array with zeros, if nhist < NHISTORY_VARIABLES
     for (int n=nhist_; n<NHISTORY_VARIABLES; ++n) {
