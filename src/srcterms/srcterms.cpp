@@ -249,7 +249,6 @@ void SourceTerms::BeamSource(DvceArray5D<Real> &i0, const Real bdt) {
         Real n0 = tt(m,0,0,k,j,i);
         Real n_0 = tc(m,0,0,k,j,i)*nh_c_.d_view(iang,0) + tc(m,1,0,k,j,i)*nh_c_.d_view(iang,1)
                  + tc(m,2,0,k,j,i)*nh_c_.d_view(iang,2) + tc(m,3,0,k,j,i)*nh_c_.d_view(iang,3);
-        // Real fac = 1. + (ifr+1.)/10;
         Real fac = ifr + 1.;
         i0(m,n,k,j,i) += fac*n0*n_0*dii_dt_*bdt;
         // handle excision

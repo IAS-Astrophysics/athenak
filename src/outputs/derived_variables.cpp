@@ -1012,6 +1012,7 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
     bool needs_fluid_only = (name.compare("rad_fluid") == 0);
     bool needs_both = !(needs_coord_only || needs_fluid_only);
     if (multi_freq) {
+      if (name.compare(0, 5, "radnu") == 0) needs_both = false; // correct it first
       bool needs_radnu_coord = (name.compare("radnu_coord") == 0);
       bool needs_radnu_fluid = (name.compare("radnu_fluid") == 0);
       bool needs_radnu_both  = (name.compare("radnu_coord_fluid") == 0);
@@ -1019,6 +1020,7 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
       needs_fluid_only = (needs_fluid_only || needs_radnu_fluid);
       needs_both = (needs_both || needs_radnu_both);
     }
+
     int mom_var_size = (needs_both) ? 20 : 10;
     int moments_offset = (needs_both) ? 10 : 0;
     Kokkos::realloc(derived_var, nmb, mom_var_size, n3, n2, n1);
