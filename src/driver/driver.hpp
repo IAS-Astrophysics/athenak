@@ -51,7 +51,7 @@ class Driver {
   // functions
   void ExecuteTaskList(Mesh *pm, std::string tl, int stage);
   void Initialize(Mesh *pmesh, ParameterInput *pin, Outputs *pout, bool rflag);
-  void Execute(Mesh *pmesh, ParameterInput *pin, Outputs *pout);
+  void Execute(Mesh *pmesh, ParameterInput *pin, Outputs *pout, bool wdflag);
   void Finalize(Mesh *pmesh, ParameterInput *pin, Outputs *pout);
   void InitBoundaryValuesAndPrimitives(Mesh *pm);
 
