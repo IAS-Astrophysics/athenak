@@ -95,7 +95,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   Kokkos::realloc(i3_cm, nfrq, nang);
   size_t scr_size = ScrArray2D<Real>::shmem_size(nfrq, nfrq) * 2
                   + ScrArray2D<Real>::shmem_size(nfrq, 2*nfrq)
-                  + ScrArray2D<Real>::shmem_size(nang, nfrq);
+                  + ScrArray2D<Real>::shmem_size(nang, nfrq) * 2;
   int scr_level = 0;
 
   par_for_outer("pgen_rad_freq_trans_i0",DevExeSpace(),scr_size,scr_level,0,nmb1,0,(n3-1),0,(n2-1),0,(n1-1),
@@ -107,6 +107,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     ScrArray2D<Real> matrix_inv(member.team_scratch(scr_level), nfrq, nfrq);
     ScrArray2D<Real> matrix_aug(member.team_scratch(scr_level), nfrq, 2*nfrq);
     ScrArray2D<Real> ir_cm_update(member.team_scratch(scr_level), nang, nfrq);
+    ScrArray2D<Real> ir_cm_star_update(member.team_scratch(scr_level), nang, nfrq);
 
     // compute fluid velocity in tetrad frame
     Real wvx = w0(m,IVX,k,j,i);
@@ -204,7 +205,8 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
         } // endfor ifr
 
         // inverse matrix
-        bool inv_success = InverseMatrix(nfrq, matrix_map, matrix_aug, matrix_inv);
+        // bool inv_success = InverseMatrix(nfrq, matrix_map, matrix_aug, matrix_inv);
+        bool inv_success = SolveTriLinearSystem(nfrq, matrix_map, ir_cm_update, iang, n0_cm, ir_cm_star_update);
         if_inv.d_view(iang) = inv_success;
 
         // map fluid-frame intensity from tetrad-frame to fluid-frame frequency
@@ -213,13 +215,14 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
         for (int ifr=0; ifr<=nfrq1; ++ifr) {
 
           // compute inverse-mapped intensity
-          Real ir_cm_star_back1 = 0.0;
-          if (inv_success) {
-            for (int f=0; f<=nfrq1; ++f) {
-              ir_cm_star_back1 += matrix_inv(ifr,f) * ir_cm_update(iang,f);
-            }
-          } // endif inv_success
-          i2_cm.d_view(ifr,iang) = ir_cm_star_back1;
+          // Real ir_cm_star_back1 = 0.0;
+          // if (inv_success) {
+          //   for (int f=0; f<=nfrq1; ++f) {
+          //     ir_cm_star_back1 += matrix_inv(ifr,f) * ir_cm_update(iang,f);
+          //   }
+          // } // endif inv_success
+          // i2_cm.d_view(ifr,iang) = ir_cm_star_back1;
+          i2_cm.d_view(ifr,iang) = ir_cm_star_update(iang,ifr);
           i2_sum += i2_cm.d_view(ifr,iang);
 
           // piecewise linear reconstruct the intensity update
