@@ -359,7 +359,6 @@ bool SolveTriLinearSystem(const int N, const ScrArray2D<Real> &A, const ScrArray
                           const int &iang, const Real &n0_cm, ScrArray2D<Real> &ir_cm_star) {
 
   if (n0_cm >= 1) {
-
     // lower-triangular, forward substitution
     for (int i=0; i < N; ++i) {
       Real sum = ir_cm(iang,i);
@@ -371,9 +370,7 @@ bool SolveTriLinearSystem(const int N, const ScrArray2D<Real> &A, const ScrArray
       if (ir_update < 0) return false; // negative intensity
       ir_cm_star(iang,i) = ir_update;
     } // endfor i
-
   } else {
-
     // upper-triangular, backward substitution
     for (int i=N-1; i >= 0; --i) {
       Real sum = ir_cm(iang,i);
@@ -385,7 +382,6 @@ bool SolveTriLinearSystem(const int N, const ScrArray2D<Real> &A, const ScrArray
       if (ir_update < 0) return false; // negative intensity
       ir_cm_star(iang,i) = ir_update;
     } // endfor i
-
   } // endelse
 
   return true;

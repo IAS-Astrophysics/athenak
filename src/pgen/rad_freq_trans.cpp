@@ -204,25 +204,34 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
           ir_cm_update(iang,ifr) = i1_cm.d_view(ifr,iang);
         } // endfor ifr
 
-        // inverse matrix
-        // bool inv_success = InverseMatrix(nfrq, matrix_map, matrix_aug, matrix_inv);
-        bool inv_success = SolveTriLinearSystem(nfrq, matrix_map, ir_cm_update, iang, n0_cm, ir_cm_star_update);
+        bool useMatrixInversion = false;
+        bool inv_success;
+        if (useMatrixInversion) {
+          // inverse matrix
+          inv_success = InverseMatrix(nfrq, matrix_map, matrix_aug, matrix_inv);
+        } else {
+          // directly inverse intensity
+          inv_success = SolveTriLinearSystem(nfrq, matrix_map, ir_cm_update, iang, n0_cm, ir_cm_star_update);
+        }
         if_inv.d_view(iang) = inv_success;
 
         // map fluid-frame intensity from tetrad-frame to fluid-frame frequency
         Real i2_sum=0, i3_sum=0;
         // recover using matrix inverse
         for (int ifr=0; ifr<=nfrq1; ++ifr) {
-
-          // compute inverse-mapped intensity
-          // Real ir_cm_star_back1 = 0.0;
-          // if (inv_success) {
-          //   for (int f=0; f<=nfrq1; ++f) {
-          //     ir_cm_star_back1 += matrix_inv(ifr,f) * ir_cm_update(iang,f);
-          //   }
-          // } // endif inv_success
-          // i2_cm.d_view(ifr,iang) = ir_cm_star_back1;
-          i2_cm.d_view(ifr,iang) = ir_cm_star_update(iang,ifr);
+          // updated inverse-mapped intensity
+          if (useMatrixInversion) { // through inverse matrix
+            Real ir_cm_star_back1 = 0.0;
+            if (inv_success) {
+              for (int f=0; f<=nfrq1; ++f) {
+                ir_cm_star_back1 += matrix_inv(ifr,f) * ir_cm_update(iang,f);
+              }
+            } // endif inv_success
+            i2_cm.d_view(ifr,iang) = ir_cm_star_back1;
+          } else {
+            // through solving triangular linear system
+            i2_cm.d_view(ifr,iang) = ir_cm_star_update(iang,ifr);
+          }
           i2_sum += i2_cm.d_view(ifr,iang);
 
           // piecewise linear reconstruct the intensity update
