@@ -28,7 +28,7 @@
 KOKKOS_INLINE_FUNCTION
 void WENOZ(const Real &q_im2, const Real &q_im1, const Real &q_i, const Real &q_ip1,
            const Real &q_ip2, Real &ql_ip1, Real &qr_i) noexcept  {
-  // Smooth WENO weights: Note that these are from Jiang & Shu 1996 (3.2)
+  // Smooth WENO weights: See Jiang & Shu 1996
   const Real beta_coeff[2]{13. / 12., 0.25};
 
   Real beta[3];
