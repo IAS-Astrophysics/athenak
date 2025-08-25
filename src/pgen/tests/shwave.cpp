@@ -41,15 +41,15 @@
 void ShwaveHistory(HistoryData *pdata, Mesh *pm);
 
 //----------------------------------------------------------------------------------------
-//! \struct ShwaveVariables
+//! \struct ShwaveTestVariables
 //! \brief container for variables shared with user-history functions
 
 namespace {
-struct ShwaveVariables {
+struct ShwaveTestVariables {
   Real kx, ky, kz, qshear, omega0;
 };
 
-ShwaveVariables shw_var;
+ShwaveTestVariables shw_var;
 }
 
 //----------------------------------------------------------------------------------------
@@ -82,7 +82,6 @@ void ProblemGenerator::Shwave(ParameterInput *pin, const bool restart) {
   int &ks = indcs.ks; int &ke = indcs.ke;
   int nx1 = indcs.nx1, nx2 = indcs.nx2, nx3 = indcs.nx3;
   auto &size = pmbp->pmb->mb_size;
-  auto &sv = shw_var;
 
   if (pmbp->phydro != nullptr) {
     // Do some error checking in Hydro case
@@ -102,6 +101,8 @@ void ProblemGenerator::Shwave(ParameterInput *pin, const bool restart) {
     EOS_Data &eos = pmbp->phydro->peos->eos_data;
     Real gm1 = eos.gamma - 1.0;
     auto &u0 = pmbp->phydro->u0;
+    shw_var.qshear = (pmbp->phydro->psbox_u->qshear);
+    shw_var.omega0 = (pmbp->phydro->psbox_u->omega0);
     // epicyclic oscillations
     if (ipert == 1) {
       par_for("shwave1", DevExeSpace(), 0,(pmbp->nmb_thispack-1),ks,ke,js,je,is,ie,
@@ -116,6 +117,7 @@ void ProblemGenerator::Shwave(ParameterInput *pin, const bool restart) {
       });
     // incompressible (vortical) hydro shwave of JG05
     } else if (ipert == 2) {
+      auto sv = shw_var;
       par_for("shwave2", DevExeSpace(), 0,(pmbp->nmb_thispack-1),ks,ke,js,je,is,ie,
       KOKKOS_LAMBDA(int m, int k, int j, int i) {
         Real &x1min = size.d_view(m).x1min;
@@ -140,9 +142,8 @@ void ProblemGenerator::Shwave(ParameterInput *pin, const bool restart) {
     } else if (ipert == 3) {
       // enroll user history function for compressible hydro shwaves
       user_hist_func = ShwaveHistory;
-      sv.qshear = (pmbp->phydro->psbox_u->qshear);
-      sv.omega0 = (pmbp->phydro->psbox_u->omega0);
 
+      auto sv = shw_var;
       par_for("shwave3", DevExeSpace(), 0,(pmbp->nmb_thispack-1),ks,ke,js,je,is,ie,
       KOKKOS_LAMBDA(int m, int k, int j, int i) {
         Real &x1min = size.d_view(m).x1min;
@@ -183,13 +184,14 @@ void ProblemGenerator::Shwave(ParameterInput *pin, const bool restart) {
 
     // enroll user history function for compressible hydro shwaves
     user_hist_func = ShwaveHistory;
-    sv.qshear = (pmbp->pmhd->psbox_u->qshear);
-    sv.omega0 = (pmbp->pmhd->psbox_u->omega0);
+    shw_var.qshear = (pmbp->pmhd->psbox_u->qshear);
+    shw_var.omega0 = (pmbp->pmhd->psbox_u->omega0);
 
     EOS_Data &eos = pmbp->pmhd->peos->eos_data;
     Real gm1 = eos.gamma - 1.0;
     auto u0 = pmbp->pmhd->u0;
     auto b0 = pmbp->pmhd->b0;
+    auto sv = shw_var;
 
     Real beta = pin->GetReal("problem", "beta");
     Real B02 = p0/beta;
@@ -348,7 +350,7 @@ void ShwaveHistory(HistoryData *pdata, Mesh *pm) {
   // capture class variabels for kernel
   auto &size = pm->pmb_pack->pmb->mb_size;
   int &nhist_ = pdata->nhist;
-  auto &sv = shw_var;
+  auto sv = shw_var;
   Real kx = sv.kx + (sv.qshear)*(sv.omega0)*(pm->time)*sv.ky;
   Real omega_t = (sv.omega0)*(pm->time);
 
