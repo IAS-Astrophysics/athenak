@@ -122,7 +122,7 @@ RadiationM1::RadiationM1(MeshBlockPack *ppack, ParameterInput *pin)
     nurates_params.opacity_tau_trap =
         pin->GetOrAddReal("bns_nurates", "opacity_tau_trap", 1.0);
     nurates_params.opacity_tau_delta =
-        pin->GetOrAddReal("bns_nurate", "opacity_tau_delta", 1.0);
+        pin->GetOrAddReal("bns_nurates", "opacity_tau_delta", 1.0);
     nurates_params.opacity_corr_fac_max =
         pin->GetOrAddReal("bns_nurates", "opacity_corr_fac_max", 3.0);
     nurates_params.nb_min = pin->GetOrAddReal("bns_nurates", "nb_min_fm-3", 0.); // in bns_nurates()

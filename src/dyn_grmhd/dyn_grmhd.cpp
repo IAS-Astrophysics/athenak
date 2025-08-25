@@ -239,6 +239,17 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::QueueDynGRMHDTasks() {
   // End task list
   pnr->QueueTask(&MHD::ClearSend, pmhd, MHD_ClearS, "MHD_ClearS", Task_End);
   pnr->QueueTask(&MHD::ClearRecv, pmhd, MHD_ClearR, "MHD_ClearR", Task_End);
+
+  // After time integrator task list
+  if (pmy_pack->pradm1 != nullptr) {
+    pnr->QueueTask(&MHD::RestrictU, pmhd, MHD_RestU, "MHD_RestU", Task_AfterTimeIntegrator);
+    pnr->QueueTask(&MHD::SendU, pmhd, MHD_SendU, "MHD_SendU", Task_AfterTimeIntegrator, {MHD_RestU});
+    pnr->QueueTask(&MHD::RecvU, pmhd, MHD_RecvU, "MHD_RecvU", Task_AfterTimeIntegrator, {MHD_SendU});
+    pnr->QueueTask(&MHD::ApplyPhysicalBCs, pmhd, MHD_BCS, "MHD_BCS", Task_AfterTimeIntegrator, {MHD_RecvU});
+    pnr->QueueTask(&MHD::Prolongate, pmhd, MHD_Prolong, "MHD_Prolong", Task_AfterTimeIntegrator, {MHD_BCS});
+    pnr->QueueTask(&DynGRMHDPS<EOSPolicy, ErrorPolicy>::ConToPrim, this, MHD_C2P,
+                   "MHD_C2P", Task_AfterTimeIntegrator, {MHD_Prolong}, {MHD_BCS});
+  }
 }
 
 //----------------------------------------------------------------------------------------
