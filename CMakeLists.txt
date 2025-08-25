@@ -82,19 +82,12 @@ endif()
 # set nurates macro (true/false)
 if(Athena_ENABLE_NURATES)
   set(ENABLE_NURATES 1)
+  set(M1_TOTAL_NUM_SPECIES 4)
   message(STATUS "Compiling with bns-nurates")
 else()
   set(ENABLE_NURATES 0)
+  set(M1_TOTAL_NUM_SPECIES 1)
 endif ()
-
-# set number of neutrino species
-set(Athena_M1_NUM_SPECIES_DEFAULT 1)
-set(Athena_M1_NUM_SPECIES ${Athena_M1_NUM_SPECIES_DEFAULT} CACHE STRING "Total number of radiation carrier species for M1 (1/3/4)")
-if(NOT Athena_M1_NUM_SPECIES STREQUAL "1" AND NOT Athena_M1_NUM_SPECIES STREQUAL "3" AND NOT Athena_M1_NUM_SPECIES STREQUAL "4")
-  message(WARNING "Invalid choice for number of radiation carrier species for M1: ${Athena_M1_NUM_SPECIES}. Setting to 1.")
-  set(Athena_M1_NUM_SPECIES 1)
-endif()
-message(STATUS "Setting number of M1 radiation carrier species to ${Athena_M1_NUM_SPECIES}")
 
 #set user problem generator flag
 if (NOT ${PROBLEM} STREQUAL "built_in_pgens")
