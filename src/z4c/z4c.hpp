@@ -185,6 +185,12 @@ class Z4c {
     int extrap_order;
     // Value of chi to specify the excision region for constraint evaluation
     Real excise_chi;
+
+    // Time dependent constraint damping
+    bool roll_kappa;
+    Real kappa_roll_start_time;
+    Real roll_window;
+    Real target_kappa1;
   };
   Options opt;
   Real diss;              // Dissipation parameter

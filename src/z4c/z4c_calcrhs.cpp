@@ -43,6 +43,19 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage) {
   Tmunu::Tmunu_vars tmunu;
   if (!is_vacuum) tmunu = pmy_pack->ptmunu->tmunu;
 
+  // Gaussian roll for kappa1 (host-side; capture by value into kernels)
+
+  Real kappa1_effective = opt.damp_kappa1;
+  if (opt.roll_kappa && time >= opt.kappa_roll_start_time) {
+    // Gaussian stitch: S(t0)=1, S→0 as t→\infty
+    Real s = (time - opt.kappa_roll_start_time) / opt.roll_window;
+    Real S = exp(-2.30258509299 * s * s);  // smooth, C^\infty falloff
+    // prefactor chosen to have S=0.1 at the end of the roll_window
+    kappa1_effective = opt.target_kappa1
+                      + (opt.damp_kappa1 - opt.target_kappa1) * S;
+  }
+  const Real kappa1_eff = kappa1_effective;
+
   // ===================================================================================
   // Main RHS calculation
   //
@@ -508,7 +521,7 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage) {
     // Khat, chi, and Theta
     rhs.vKhat(m,k,j,i) = - Ddalpha + z4c.alpha(m,k,j,i)
       * (AA + (1./3.)*SQR(K)) +
-      LKhat + opt.damp_kappa1*(1 - opt.damp_kappa2)
+      LKhat + kappa1_eff*(1 - opt.damp_kappa2)
       * z4c.alpha(m,k,j,i) * z4c.vTheta(m,k,j,i);
     // Matter term
     if(!is_vacuum) {
@@ -517,7 +530,7 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage) {
     rhs.chi(m,k,j,i) = Lchi - (1./6.) * opt.chi_psi_power *
       chi_guarded * z4c.alpha(m,k,j,i) * K;
     rhs.vTheta(m,k,j,i) = LTheta + z4c.alpha(m,k,j,i) * (
-        0.5*Ht - (2. + opt.damp_kappa2) * opt.damp_kappa1 * z4c.vTheta(m,k,j,i));
+        0.5*Ht - (2. + opt.damp_kappa2) * kappa1_eff * z4c.vTheta(m,k,j,i));
     // Matter term
     if(!is_vacuum) {
       rhs.vTheta(m,k,j,i) -= 8.*M_PI * z4c.alpha(m,k,j,i) * tmunu.E(m,k,j,i);
@@ -527,7 +540,7 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage) {
     // Gamma's
     for(int a = 0; a < 3; ++a) {
       rhs.vGam_u(m,a,k,j,i) = 2.*z4c.alpha(m,k,j,i)*DA_u(a) + LGam_u(a);
-      rhs.vGam_u(m,a,k,j,i) -= 2.*z4c.alpha(m,k,j,i) * opt.damp_kappa1 *
+      rhs.vGam_u(m,a,k,j,i) -= 2.*z4c.alpha(m,k,j,i) * kappa1_eff *
           (z4c.vGam_u(m,a,k,j,i) - Gamma_u(a));
       for(int b = 0; b < 3; ++b) {
         rhs.vGam_u(m,a,k,j,i) -= 2. * A_uu(a,b) * dalpha_d(b);

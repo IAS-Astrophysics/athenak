@@ -155,6 +155,11 @@ Z4c::Z4c(MeshBlockPack *ppack, ParameterInput *pin) :
   opt.extrap_order = fmax(2,fmin(indcs.ng,fmin(4,
       pin->GetOrAddInteger("z4c", "extrap_order", 2))));
 
+  opt.roll_kappa = pin->GetOrAddBoolean("z4c", "roll_kappa", false);
+  opt.kappa_roll_start_time = pin->GetOrAddReal("z4c", "kappa_roll_start_time", 0.0);
+  opt.roll_window = pin->GetOrAddReal("z4c", "roll_window", 20.0);
+  opt.target_kappa1 = pin->GetOrAddReal("z4c", "target_kappa1", 0.0);
+
   diss = opt.diss*pow(2., -2.*indcs.ng)*(indcs.ng % 2 == 0 ? -1. : 1.);
   }
 
