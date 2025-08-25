@@ -97,8 +97,8 @@ TaskStatus RadiationM1::CalcOpacityNurates_(Driver *pdrive, int stage) {
       KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
         if (radiation_mask(m, k, j, i)) {
           for (int nuidx = 0; nuidx < nspecies_; nuidx++) {
-            abs_0_(m, nuidx, k, j, i) = 0;
-            eta_0_(m, nuidx, k, j, i) = 0;
+	    abs_0_(m, nuidx, k, j, i) = 0;
+	    eta_0_(m, nuidx, k, j, i) = 0;
 
             abs_1_(m, nuidx, k, j, i) = 0;
             eta_1_(m, nuidx, k, j, i) = 0;
@@ -268,6 +268,7 @@ TaskStatus RadiationM1::CalcOpacityNurates_(Driver *pdrive, int stage) {
 
           if (nurates_params_.use_kirchhoff_law ||
               nurates_params_.use_equilibrium_distribution) {
+
             // effective optical depth to decide whether to compute black body function
             // for neutrinos assuming neutrino tapping or at fixed temperature and Ye
             Real tau =
@@ -329,7 +330,8 @@ TaskStatus RadiationM1::CalcOpacityNurates_(Driver *pdrive, int stage) {
               nudens_1_trap[2] *= 0.5;
               nudens_0_trap[3] = nudens_0_trap[2];
               nudens_1_trap[3] = nudens_1_trap[2];
-            }
+
+	    }
 
             // compute neutrino black body function assuming fixed temperature and Ye
             NeutrinoDens(mu_n, mu_p, mu_e, T, nudens_0_thin[0], nudens_0_thin[1],
@@ -370,33 +372,29 @@ TaskStatus RadiationM1::CalcOpacityNurates_(Driver *pdrive, int stage) {
                 my_nudens_1 =
                     lam * nudens_1_trap[nuidx] + (1 - lam) * nudens_1_thin[nuidx];
               }
+	    }
 
-              // Correction factor for absorption opacities for non-LTE effects
-              // (kappa ~ E_nu^2)
-              corr_fac = 1.0;
-              corr_fac = (J[nuidx] / rnnu[nuidx]) * (my_nudens_0 / my_nudens_1);
-              if (!Kokkos::isfinite(corr_fac)) {
-                corr_fac = 1.0;
-              }
-              corr_fac *= corr_fac;
-              corr_fac = Kokkos::max(
-                  1.0 / nurates_params_.opacity_corr_fac_max,
-                  Kokkos::min(corr_fac, nurates_params_.opacity_corr_fac_max));
-            }
+	    // Correction factor for absorption opacities for non-LTE effects
+	    // (kappa ~ E_nu^2)
+	    corr_fac = 1.0;
+	    if (nurates_params_.use_equilibrium_distribution) {
+	      corr_fac = (J[nuidx] / rnnu[nuidx]) * (my_nudens_0 / my_nudens_1);
+	      if (!Kokkos::isfinite(corr_fac)) {
+		corr_fac = 1.0;
+	      }
+	      corr_fac *= corr_fac;
+	      corr_fac = Kokkos::max(
+				     1.0 / nurates_params_.opacity_corr_fac_max,
+				     Kokkos::min(corr_fac, nurates_params_.opacity_corr_fac_max));
+	    }
 
-            if (nurates_params_.use_equilibrium_distribution) {
-              eta_0(m, nuidx, k, j, i) *= corr_fac;
-              eta_1(m, nuidx, k, j, i) *= corr_fac;
-              abs_0(m, nuidx, k, j, i) *= corr_fac;
-              abs_1(m, nuidx, k, j, i) *= corr_fac;
-              scat_1(m, nuidx, k, j, i) *= corr_fac;
-            }
+	    scat_1(m, nuidx, k, j, i) *= corr_fac;
 
             if (nurates_params_.use_kirchhoff_law) {
 	      // enforce Kirchhoff's laws.
-	      // eta_0(m, nuidx, k, j, i) = abs_0(m, nuidx, k, j, i) * my_nudens_0;
-	      // eta_1(m, nuidx, k, j, i) = abs_1(m, nuidx, k, j, i) * my_nudens_1;
 	      if (nuidx == 0 || nuidx == 1) {
+		abs_0(m, nuidx, k, j, i) *= corr_fac;
+		abs_1(m, nuidx, k, j, i) *= corr_fac;
 		eta_0(m, nuidx, k, j, i) = abs_0(m, nuidx, k, j, i) * my_nudens_0;
 		eta_1(m, nuidx, k, j, i) = abs_1(m, nuidx, k, j, i) * my_nudens_1;
 	      } else {
@@ -406,10 +404,18 @@ TaskStatus RadiationM1::CalcOpacityNurates_(Driver *pdrive, int stage) {
 					    eta_1(m, nuidx, k, j, i)/my_nudens_1 : 0);
 	      }
             }
-          }
-        }
-      });
+	    else {
+	      if (nuidx == 0 || nuidx == 1) {
+		eta_0(m, nuidx, k, j, i) *= corr_fac;
+		eta_1(m, nuidx, k, j, i) *= corr_fac;
+		abs_0(m, nuidx, k, j, i) *= corr_fac;
+		abs_1(m, nuidx, k, j, i) *= corr_fac;
+	      }
+	    }
 
+	  }
+	}
+      });
   return TaskStatus::complete;
 }
 }  // namespace radiationm1
