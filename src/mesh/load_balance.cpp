@@ -17,6 +17,7 @@
 #include "mesh.hpp"
 #include "hydro/hydro.hpp"
 #include "mhd/mhd.hpp"
+#include "radiation/radiation.hpp"
 #include "z4c/z4c.hpp"
 
 #if MPI_PARALLEL_ENABLED

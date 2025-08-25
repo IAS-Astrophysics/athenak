@@ -1,6 +1,12 @@
 """
-Linear wave convergence test for 1D radiation hydro with AMR.
+Linear wave convergence test for 2D radiation hydro with AMR + MPI.
+
 Problem generator only initializes L-going radiation acoustic mode
+
+Moroever, the analytic solution against which the numerical evolution is compared
+requires the Eddington approximation, and this can only be enforced in the code
+when the wave propagates along a grid direction. So in 2D radiation hydro waves
+propagate along the x2-axis instead of the domain diagonal.
 """
 
 # Modules
@@ -18,14 +24,14 @@ _res = [32, 64]  # resolutions to test
 def arguments(res):
     """Assemble arguments for run command"""
     return [
-        "mesh/nx1=" + repr(res),
-        "mesh/nx2=1",
+        "mesh/nx1=4",
+        "mesh/nx2=" + repr(res),
         "mesh/nx3=1",
-        "meshblock/nx1=" + repr(res // 8),
-        "meshblock/nx2=1",
+        "meshblock/nx1=4",
+        "meshblock/nx2=" + repr(res // 8),
         "meshblock/nx3=1",
-        "problem/along_x1=true",
-        "problem/along_x2=false",
+        "problem/along_x1=false",
+        "problem/along_x2=true",
         "problem/along_x3=false"
     ]
 
@@ -38,8 +44,9 @@ def test_run():
     """Run a single test."""
     try:
         for res in _res:
-            results = testutils.run(input_file, arguments(res))
-            assert results, f"1D radiation hydro linear wave run failed for {res}."
+            # set number of threads to initial number of MeshBlocks
+            results = testutils.mpi_run(input_file, arguments(res), threads=8)
+            assert results, f"2D radiation hydro linear wave run failed for {res}."
         maxerror, errorratio = errors[("rad-hydro")]
         data = athena_read.error_dat("rad_linwave-errs.dat")
         L1_RMS_INDEX = 4  # Index for L1 RMS error in data
@@ -47,12 +54,12 @@ def test_run():
         l1_rms_err1 = data[1][L1_RMS_INDEX]
         if l1_rms_err1 > maxerror:
             pytest.fail(
-                f"1D radiation hydro wave error too large,"
+                f"2D radiation hydro wave error too large,"
                 f"error: {l1_rms_err1:g} threshold: {maxerror:g}"
             )
         if (l1_rms_err1 / l1_rms_err0) > errorratio:
             pytest.fail(
-                f"1D radiation hydro wave converging too slow,"
+                f"2D radiation hydro wave converging too slow,"
                 f"error ratio: {(l1_rms_err1/l1_rms_err0):g}"
                 f"  expected ratio: {errorratio:g}"
             )

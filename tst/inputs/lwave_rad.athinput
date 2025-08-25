@@ -15,14 +15,14 @@ ix1_bc = periodic  # inner-X1 boundary flag
 ox1_bc = periodic  # outer-X1 boundary flag
 
 nx2    = 1         # Number of zones in X2-direction
-x2min  = -0.25     # minimum value of X2
-x2max  = 0.25      # maximum value of X2
+x2min  = 0.0       # minimum value of X2
+x2max  = 1.0       # maximum value of X2
 ix2_bc = periodic  # inner-X2 boundary flag
 ox2_bc = periodic  # outer-X2 boundary flag
 
 nx3    = 1         # Number of zones in X3-direction
-x3min  = -0.25     # minimum value of X3
-x3max  = 0.25      # maximum value of X3
+x3min  = 0.0       # minimum value of X3
+x3max  = 1.0       # maximum value of X3
 ix3_bc = periodic  # inner-X3 boundary flag
 ox3_bc = periodic  # outer-X3 boundary flag
 
@@ -67,6 +67,8 @@ arad = 19.253382731290966  # radiation constant
 <problem>
 pgen_name = rad_linear_wave
 along_x1  = true
+along_x2  = false
+along_x3  = false
 rho   = 1.0
 pgas  = 2.497687326549491e-01
 erad  = 7.493061979648474e-02
