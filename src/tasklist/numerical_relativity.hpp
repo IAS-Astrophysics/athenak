@@ -98,7 +98,8 @@ enum PhysicsDependency {
 enum TaskLocation {
   Task_Start,
   Task_Run,
-  Task_End
+  Task_End,
+  Task_AfterTimeIntegrator
 };
 
 struct QueuedTask {
@@ -166,6 +167,7 @@ class NumericalRelativity {
   std::vector<QueuedTask> start_queue;
   std::vector<QueuedTask> run_queue;
   std::vector<QueuedTask> end_queue;
+  std::vector<QueuedTask> after_timeintegrator_queue;
 
   std::vector<QueuedTask>& SelectQueue(TaskLocation loc);
   PhysicsDependency NeedsPhysics(TaskName task);
@@ -182,8 +184,6 @@ class NumericalRelativity {
 
   bool AssembleNumericalRelativityTasks(std::shared_ptr<TaskList>& list,
          std::vector<QueuedTask> &queue);
-
-  bool AssemblePostRadiationTasks(std::shared_ptr<TaskList>& list);
 };
 
 } // namespace numrel

@@ -30,6 +30,8 @@ std::vector<QueuedTask>& NumericalRelativity::SelectQueue(TaskLocation loc) {
       return run_queue;
     case Task_End:
       return end_queue;
+    case Task_AfterTimeIntegrator:
+      return after_timeintegrator_queue;
     default:
       std::cout << "NumericalRelativity: Unknown task queue requested!\n";
       abort();
@@ -138,25 +140,6 @@ bool NumericalRelativity::AssembleNumericalRelativityTasks(
   return true;
 }
 
-bool NumericalRelativity::AssemblePostRadiationTasks(std::shared_ptr<TaskList>& list) {
-  TaskID none(0);
-
-  auto &id = pmy_pack->pdyngr->id;
-  auto &idrad = pmy_pack->pradm1->id;
-
-  id.postrad_restu = list->AddTask(&mhd::MHD::RestrictU, pmy_pack->pmhd, none);
-  id.postrad_sendu = list->AddTask(&mhd::MHD::SendU, pmy_pack->pmhd, id.postrad_restu);
-  id.postrad_recvu = list->AddTask(&mhd::MHD::RecvU, pmy_pack->pmhd, id.postrad_sendu);
-  id.postrad_bcs = list->AddTask(&mhd::MHD::ApplyPhysicalBCs, pmy_pack->pmhd, id.postrad_recvu);
-  id.postrad_prol = list->AddTask(&mhd::MHD::Prolongate, pmy_pack->pmhd, id.postrad_bcs);
-  id.postrad_c2p = list->AddTask(&mhd::MHD::ConToPrim, pmy_pack->pmhd, id.postrad_prol);
-
-  if (pmy_pack->pradm1 == nullptr || pmy_pack->pdyngr == nullptr) {
-    return false;
-  }
-  return true;
-}
-
 void NumericalRelativity::PrintMissingTasks(std::vector<QueuedTask> &queue) {
   std::cout << "Successfully added the following tasks:\n";
   for (auto& task : queue) {
@@ -206,14 +189,13 @@ void NumericalRelativity::AssembleNumericalRelativityTasks(
     abort();
   }
 
-  if (pmy_pack->pradm1 != nullptr && pmy_pack->pdyngr != nullptr) {
-    success = AssemblePostRadiationTasks(tl["opsplit_after_timeintegrator"]);
-    if (!success) {
-      std::cout << "NumericalRelativity: Failed to construct post-radiation TaskList!\n"
-                << "  Check that there are no cyclical dependencies or missing tasks.\n";
-      PrintMissingTasks(end_queue);
-      abort();
-    }
+  success = AssembleNumericalRelativityTasks(tl["opsplit_after_timeintegrator"],
+                                             after_timeintegrator_queue);
+  if (!success) {
+    std::cout << "NumericalRelativity: Failed to construct end TaskList!\n"
+              << "  Check that there are no cyclical dependencies or missing tasks.\n";
+    PrintMissingTasks(after_timeintegrator_queue);
+    abort();
   }
 }
 
