@@ -56,9 +56,9 @@ RadiationM1::RadiationM1(MeshBlockPack *ppack, ParameterInput *pin)
   nspecies = M1_TOTAL_NUM_SPECIES;
 
   params.gr_sources = pin->GetOrAddBoolean("radiation_m1", "gr_sources", true);
-  params.matter_sources = pin->GetOrAddBoolean("radiation_m1", "matter_sources", false);
+  params.matter_sources = pin->GetOrAddBoolean("radiation_m1", "matter_sources", true);
   params.backreact = pin->GetOrAddBoolean("radiation_m1", "backreact", true);
-  params.opacity_one_dt = pin->GetOrAddBoolean("radiation_m1", "opacity_one_dt", false);
+  params.opacity_one_dt = pin->GetOrAddBoolean("radiation_m1", "opacity_one_dt", true);
   params.theta_limiter = pin->GetOrAddBoolean("radiation_m1", "theta_limiter", false);
   params.closure_epsilon = pin->GetOrAddReal("radiation_m1", "closure_epsilon", 1e-14);
   params.closure_maxiter = pin->GetOrAddInteger("radiation_m1", "closure_maxiter", 164);
@@ -138,9 +138,9 @@ RadiationM1::RadiationM1(MeshBlockPack *ppack, ParameterInput *pin)
     nurates_params.use_dU = pin->GetOrAddBoolean("bns_nurates", "use_dU", true);
     nurates_params.use_dm_eff = pin->GetOrAddBoolean("bns_nurates", "use_dm_eff", true);
     nurates_params.use_equilibrium_distribution =
-        pin->GetOrAddBoolean("bns_nurates", "use_equilibrium_distribution", false);
+        pin->GetOrAddBoolean("bns_nurates", "use_equilibrium_distribution", true);
     nurates_params.use_kirchhoff_law =
-        pin->GetOrAddBoolean("bns_nurates", "use_kirchoff_law", false);
+        pin->GetOrAddBoolean("bns_nurates", "use_kirchoff_law", true);
     nurates_params.use_NN_medium_corr =
         pin->GetOrAddBoolean("bns_nurates", "use_NN_medium_corr", true);
     nurates_params.neglect_blocking =
