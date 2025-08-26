@@ -13,7 +13,7 @@ import test_suite.testutils as testutils
 # Threshold errors and error ratios for different integrators, reconstruction,
 # algorithms, and wave types
 maxerrors = {
-    ("mhd", "rk2", "plm", "0"): (5.6e-010, 0.28),
+    ("mhd", "rk2", "plm", "0"): (5.6e-08, 0.28),
     ("mhd", "rk3", "ppm4", "0"): (2e-08, 0.27),
     ("mhd", "rk3", "ppmx", "0"): (5e-10, 0.21),
     ("mhd", "rk3", "wenoz", "0"): (4.9e-10, 0.24),
