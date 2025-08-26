@@ -41,6 +41,13 @@ def cmake_flags(args, flags):
     return flags
 
 
+def test(args):
+    """Run pytest with given arguments."""
+    exit_code = pytest.main(args)
+    if exit_code != 0:
+        sys.exit(exit_code)
+
+
 # Set up argument parser
 parser = argparse.ArgumentParser(description="Run AthenaK test suite.")
 parser.add_argument(
@@ -71,7 +78,8 @@ if status:
 
 # Run tests based on arguments
 if args.style:
-    pytest.main(["test_suite/style"])
+    test(["test_suite/style"])
+
 original_dir = os.getcwd()
 tests = "test_suite/"
 
@@ -94,15 +102,15 @@ tests = os.path.abspath(tests)
 
 if args.cpu is not None:
     testutils.clean_make(flags=cmake_flags(args.cpu, []))
-    pytest.main([tests, "-k", "_cpu"])  # run all scripts with _cpu in name
+    test([tests, "-k", "_cpu"])  # run all scripts with _cpu in name
 
 if args.mpicpu is not None:
     testutils.clean_make(flags=cmake_flags(args.mpicpu, ["-D", "Athena_ENABLE_MPI=ON"]))
-    pytest.main([tests, "-k", "_mpicpu"])  # run all scripts with _mpicpu in name
+    test([tests, "-k", "_mpicpu"])  # run all scripts with _mpicpu in name
 
 if args.gpu is not None:
     testutils.clean_make(flags=cmake_flags(args.gpu, ["-D", "Kokkos_ENABLE_CUDA=On"]))
-    pytest.main([tests, "-k", "_gpu"])  # run all scripts with _gpu in name
+    test([tests, "-k", "_gpu"])  # run all scripts with _gpu in name
 
 os.chdir(original_dir)
 testutils.clean()
