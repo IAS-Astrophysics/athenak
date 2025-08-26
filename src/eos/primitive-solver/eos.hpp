@@ -316,7 +316,7 @@ class EOS : public EOSPolicy, public ErrorPolicy {
   // \brief Get the equilibrium temperature and species fractions from the energy and total lepton fractions
   //
   //  \param[in]    n       The number density
-  //  \param[in]    e       The temperature
+  //  \param[in]    e       The energy density
   //  \param[in]    Yl      An array of size n_species of the total lepton fractions.
   //  \param[inout] T_eq    The equilibrium temperature.
   //  \param[inout] Y_eq    The equilibrium particle fractions.
