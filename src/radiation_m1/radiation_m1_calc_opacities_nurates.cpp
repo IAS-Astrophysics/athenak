@@ -283,9 +283,9 @@ TaskStatus RadiationM1::CalcOpacityNurates_(Driver *pdrive, int stage) {
             tau =
                 Kokkos::min(
                     Kokkos::sqrt(abs_1_loc[0] * (abs_1_loc[0] + scat_1_loc[0])),
-                    Kokkos::sqrt(abs_1_loc[1] *
-                                 (abs_1_loc[1] + scat_1_loc[1]))) *
-                beta_dt;
+                              Kokkos::sqrt(abs_1_loc[1] *
+                                           (abs_1_loc[1] + scat_1_loc[1]))) *
+                  beta_dt;
 
             // compute neutrino black body function assuming trapped neutrinos
             if (nurates_params_.opacity_tau_trap >= 0 &&
@@ -299,22 +299,20 @@ TaskStatus RadiationM1::CalcOpacityNurates_(Driver *pdrive, int stage) {
 
               Real Y_lep[3]{};
               eos.GetLeptonFractions(nb, Y_part, n_nu, Y_lep);
+              Real Y_guess[3] = {Y_lep[0], Y_lep[1], Y_lep[2]};
 
               Real e = eos.GetEnergy(nb, T, Y_part) + J[0] + J[1] + J[2] + J[3];
 
               Real temperature_trap{}, Y_e_trap[3]{};
               bool res = eos.GetBetaEquilibriumTrapped(
-                  nb, e, Y_lep, temperature_trap, &Y_e_trap[0], T, Y_part);
+                  nb, e, Y_lep, temperature_trap, &Y_e_trap[0], T, Y_guess);
 
               if (!res) {
                 // trying to recompute weak equilibrium neglecting current
                 // neutrino data
-                Real n_nu_zero[6]{};
-                Real Y_lep_zero[3]{};
-                eos.GetLeptonFractions(nb, Y_part, n_nu_zero, Y_lep_zero);
                 Real e_zero = eos.GetEnergy(nb, T, Y_part);
                 bool res = eos.GetBetaEquilibriumTrapped(
-                    nb, e_zero, Y_lep_zero, temperature_trap, &Y_e_trap[0], T,
+                    nb, e_zero, Y_part, temperature_trap, &Y_e_trap[0], T,
                     Y_part);
               }
 
@@ -322,8 +320,8 @@ TaskStatus RadiationM1::CalcOpacityNurates_(Driver *pdrive, int stage) {
                   nb, temperature_trap, &Y_e_trap[0]);
               Real mu_q_eq = eos.GetChargeChemicalPotential(
                   nb, temperature_trap, &Y_e_trap[0]);
-              Real mu_le_eq =
-                  eos.GetElectronLeptonChemicalPotential(nb, T, &Y_e_trap[0]);
+              Real mu_le_eq = eos.GetElectronLeptonChemicalPotential(
+                  nb, temperature_trap, &Y_e_trap[0]);
 
               Real mu_n_eq = mu_b_eq;
               Real mu_p_eq = mu_b_eq + mu_q_eq;
@@ -409,8 +407,8 @@ TaskStatus RadiationM1::CalcOpacityNurates_(Driver *pdrive, int stage) {
             if (nurates_params_.use_kirchhoff_law) {
               // enforce Kirchhoff's laws.
               if (nuidx == 0 || nuidx == 1) {
-                abs_0(m, nuidx, k, j, i) *= corr_fac;
-                abs_1(m, nuidx, k, j, i) *= corr_fac;
+              abs_0(m, nuidx, k, j, i) *= corr_fac;
+              abs_1(m, nuidx, k, j, i) *= corr_fac;
                 eta_0(m, nuidx, k, j, i) =
                     abs_0(m, nuidx, k, j, i) * my_nudens_0;
                 eta_1(m, nuidx, k, j, i) =
