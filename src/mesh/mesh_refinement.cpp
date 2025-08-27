@@ -20,6 +20,7 @@
 #include "parameter_input.hpp"
 #include "mesh.hpp"
 #include "mesh_refinement.hpp"
+#include "refinement_criteria.hpp"
 
 #include "hydro/hydro.hpp"
 #include "mhd/mhd.hpp"
@@ -80,11 +81,14 @@ MeshRefinement::MeshRefinement(Mesh *pm, ParameterInput *pin) :
     }
   }
 
-  if (pm->adaptive) {  // allocate arrays for AMR
+  // allocate arrays for AMR
+  // Allocate RefinementCriteria object with AMR
+  if (pm->adaptive) {
     nref_eachrank = new int[global_variable::nranks];
     nderef_eachrank = new int[global_variable::nranks];
     nref_rsum = new int[global_variable::nranks];
     nderef_rsum = new int[global_variable::nranks];
+    pmrc = new RefinementCriteria(pm, pin);
   }
 
   // be sure Views are initialized to zero
@@ -125,6 +129,7 @@ void MeshRefinement::AdaptiveMeshRefinement(Driver *pdriver, ParameterInput *pin
   CheckForRefinement(pmy_mesh->pmb_pack);
 
   // then update mesh tree if MeshBlock anywhere (on any rank) is flagged for refinement
+  // indicated by the refine_flag[m] value being true (1) for any m.
   int nnew = 0, ndel = 0;
   UpdateMeshBlockTree(nnew, ndel);
 
@@ -154,18 +159,10 @@ void MeshRefinement::AdaptiveMeshRefinement(Driver *pdriver, ParameterInput *pin
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn bool MeshRefinement::CheckForRefinement()
+//! \fn void RefinementCriteria::CheckForRefinement()
 //! \brief Checks for refinement/de-refinement and sets refine_flag(m) for all
-//! MeshBlocks within a MeshBlockPack. Returns true if any MeshBlock needs to be refined.
-//! Default refinement conditions implemented are:
-//!   (1) density max above a threshold value (hydro/MHD)
-//!   (2) gradient of density above a threshold value (hydro/MHD)
-//!   (3) gradient of pressure above a threshold value (hydro/MHD)
-//!   TODO(@user) (4) shear of velocity above a threshold value (hydro/MHD)
-//!   TODO(@user) (5) current density above a threshold (MHD)
-//! These are controlled by input parameters in the <mesh_refinement> block.
-//! User-defined refinement conditions can also be enrolled by setting the *usr_ref_func
-//! pointer in the problem generator.
+//! MeshBlocks within a MeshBlockPack.  Increments number of cycles since last refinement
+//! counter for all MeshBlocks
 
 void MeshRefinement::CheckForRefinement(MeshBlockPack* pmbp) {
   // reallocate and zero refine_flag in host space and sync with device
@@ -180,99 +177,41 @@ void MeshRefinement::CheckForRefinement(MeshBlockPack* pmbp) {
   for (int m=0; m<(pmy_mesh->nmb_total); ++m) {
     ncyc_since_ref(m) += 1;
   }
-  if ((pmbp->pmesh->ncycle)%(ncyc_check_amr) != 0) {return;}  // not cycle to check
+  if ((pmy_mesh->ncycle)%(ncyc_check_amr) != 0) {return;}  // not cycle to check
 
-  // capture variables for kernels
-  auto &multi_d = pmy_mesh->multi_d;
-  auto &three_d = pmy_mesh->three_d;
-  auto &indcs = pmy_mesh->mb_indcs;
-  int &is = indcs.is, nx1 = indcs.nx1;
-  int &js = indcs.js, nx2 = indcs.nx2;
-  int &ks = indcs.ks, nx3 = indcs.nx3;
-  const int nkji = nx3*nx2*nx1;
-  const int nji  = nx2*nx1;
+  // calculate derived refinement variables
+  if (pmrc->nderived > 0) {
+    pmrc->LoadDerivedVariables(pmbp);
+  }
 
-  // check (on device) Hydro/MHD refinement conditions for cons vars over all MeshBlocks
-  auto refine_flag_ = refine_flag;
-  auto &dens_thresh  = d_threshold_;
-  auto &ddens_thresh = dd_threshold_;
-  auto &dpres_thresh = dp_threshold_;
+  // iterate through list of refinement criteria and apply methods
+  for (auto it = pmrc->rcrit.begin(); it != pmrc->rcrit.end(); ++it) {
+    switch (it->rmethod) {
+      case RefCritMethod::min_max:
+        pmrc->CheckMinMax(pmbp, *it);
+        break;
+      case RefCritMethod::slope:
+        pmrc->CheckSlope(pmbp, *it);
+        break;
+      case RefCritMethod::second_deriv:
+        pmrc->CheckSecondDeriv(pmbp, *it);
+        break;
+      case RefCritMethod::location:
+        pmrc->CheckLocation(pmbp, *it);
+        break;
+      case RefCritMethod::user:
+        pmy_mesh->pgen->user_ref_func(pmbp);
+        break;
+      default:
+        std::cout<<"### FATAL ERROR in "<<__FILE__<<" at line "<<__LINE__<<std::endl;
+        Kokkos::abort("Unknown refinement method requested in a <refinement_criteria>");
+        break;
+    }
+  }
+
+  // Turn off (on host) refine/derefine flag for MeshBlocks at max/root level
   int nmb = pmbp->nmb_thispack;
   int mbs = pmy_mesh->gids_eachrank[global_variable::my_rank];
-  if (((pmbp->phydro != nullptr) || (pmbp->pmhd != nullptr)) && check_cons_) {
-    auto &u0 = (pmbp->phydro != nullptr)? pmbp->phydro->u0 : pmbp->pmhd->u0;
-    auto &w0 = (pmbp->phydro != nullptr)? pmbp->phydro->w0 : pmbp->pmhd->w0;
-
-    par_for_outer("ConsRefineCond",DevExeSpace(), 0, 0, 0, (nmb-1),
-    KOKKOS_LAMBDA(TeamMember_t tmember, const int m) {
-      // density threshold
-      if (dens_thresh!= 0.0) {
-        Real team_dmax=0.0;
-        Kokkos::parallel_reduce(Kokkos::TeamThreadRange(tmember, nkji),
-        [=](const int idx, Real& dmax) {
-          int k = (idx)/nji;
-          int j = (idx - k*nji)/nx1;
-          int i = (idx - k*nji - j*nx1) + is;
-          j += js;
-          k += ks;
-          dmax = fmax(u0(m,IDN,k,j,i), dmax);
-        },Kokkos::Max<Real>(team_dmax));
-
-        if (team_dmax > dens_thresh) {refine_flag_.d_view(m+mbs) = 1;}
-        if (team_dmax < dens_thresh) {refine_flag_.d_view(m+mbs) = -1;}
-      }
-
-      // density gradient threshold
-      if (ddens_thresh != 0.0) {
-        Real team_ddmax;
-        Kokkos::parallel_reduce(Kokkos::TeamThreadRange(tmember, nkji),
-        [=](const int idx, Real& ddmax) {
-          int k = (idx)/nji;
-          int j = (idx - k*nji)/nx1;
-          int i = (idx - k*nji - j*nx1) + is;
-          j += js;
-          k += ks;
-          Real d2 = SQR(u0(m,IDN,k,j,i+1) - u0(m,IDN,k,j,i-1));
-          if (multi_d) {d2 += SQR(u0(m,IDN,k,j+1,i) - u0(m,IDN,k,j-1,i));}
-          if (three_d) {d2 += SQR(u0(m,IDN,k+1,j,i) - u0(m,IDN,k-1,j,i));}
-          ddmax = fmax((sqrt(d2)/u0(m,IDN,k,j,i)), ddmax);
-        },Kokkos::Max<Real>(team_ddmax));
-
-        if (team_ddmax > ddens_thresh) {refine_flag_.d_view(m+mbs) = 1;}
-        if (team_ddmax < 0.25*ddens_thresh) {refine_flag_.d_view(m+mbs) = -1;}
-      }
-
-      // pressure gradient threshold
-      if (dpres_thresh != 0.0) {
-        Real team_dpmax;
-        Kokkos::parallel_reduce(Kokkos::TeamThreadRange(tmember, nkji),
-        [=](const int idx, Real& dpmax) {
-          int k = (idx)/nji;
-          int j = (idx - k*nji)/nx1;
-          int i = (idx - k*nji - j*nx1) + is;
-          j += js;
-          k += ks;
-          Real d2 = SQR(w0(m,IEN,k,j,i+1) - w0(m,IEN,k,j,i-1));
-          if (multi_d) {d2 += SQR(w0(m,IEN,k,j+1,i) - w0(m,IEN,k,j-1,i));}
-          if (three_d) {d2 += SQR(w0(m,IEN,k+1,j,i) - w0(m,IEN,k-1,j,i));}
-          dpmax = fmax((sqrt(d2)/w0(m,IEN,k,j,i)), dpmax);
-        },Kokkos::Max<Real>(team_dpmax));
-
-        if (team_dpmax > dpres_thresh) {refine_flag_.d_view(m+mbs) = 1;}
-        if (team_dpmax < 0.25*dpres_thresh) {refine_flag_.d_view(m+mbs) = -1;}
-      }
-    });
-  }
-
-  // Check (on device) user-defined refinement condition(s), if any
-  if (pmy_mesh->pgen->user_ref_func != nullptr) {
-    pmy_mesh->pgen->user_ref_func(pmbp);
-  }
-  // sync device array with host
-  refine_flag.template modify<DevExeSpace>();
-  refine_flag.template sync<HostMemSpace>();
-
-  // Check (on host) for MeshBlocks at max/root level flagged for refine/derefine
   for (int m=0; m<nmb; ++m) {
     if (pmy_mesh->lloc_eachmb[m+mbs].level == pmy_mesh->max_level) {
       if (refine_flag.h_view(m+mbs) > 0) {refine_flag.h_view(m+mbs) = 0;}
@@ -281,13 +220,13 @@ void MeshRefinement::CheckForRefinement(MeshBlockPack* pmbp) {
       if (refine_flag.h_view(m+mbs) < 0) {refine_flag.h_view(m+mbs) = 0;}
     }
   }
-
-  // Check (on host) that MB has not been recently refined
+  // Turn off (on host) refine/derefine flag for any MB that has been recently refined
   for (int m=0; m<nmb; ++m) {
     if (ncyc_since_ref(m+mbs) < refinement_interval) {refine_flag.h_view(m+mbs) = 0;}
   }
+
 #if MPI_PARALLEL_ENABLED
-  // Pass refine_flag between all ranks
+  // Pass (host) refine_flag between all ranks
     MPI_Allgatherv(MPI_IN_PLACE, pmy_mesh->nmb_eachrank[global_variable::my_rank],
                    MPI_INT, refine_flag.h_view.data(), pmy_mesh->nmb_eachrank,
                    pmy_mesh->gids_eachrank, MPI_INT, MPI_COMM_WORLD);
@@ -295,7 +234,6 @@ void MeshRefinement::CheckForRefinement(MeshBlockPack* pmbp) {
   // sync host array with device
   refine_flag.template modify<HostMemSpace>();
   refine_flag.template sync<DevExeSpace>();
-
   return;
 }
 
