@@ -80,7 +80,7 @@ TaskStatus RadiationM1::CalcOpacityNurates_(Driver *pdrive, int stage) {
   Real beta[2] = {0.5, 1.};
   Real beta_dt = (beta[stage - 1]) * (pmy_pack->pmesh->dt);
 
-  if ((m1_params_.opacity_one_dt) && (stage != 1)) {
+  if ((m1_params_.opacity_one_dt) && (stage != 2)) {
     // Keep opacities constant throught the timestep
     return TaskStatus::complete;
   }
