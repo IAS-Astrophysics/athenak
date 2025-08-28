@@ -55,6 +55,8 @@ void Hydro::CalculateFluxes(Driver *pdriver, int stage) {
   auto &size_ = pmy_pack->pmb->mb_size;
   auto &coord_ = pmy_pack->pcoord->coord_data;
   auto &w0_ = w0;
+  if (use_4th_order)
+    auto &w0_ = w0_c;
 
   //--------------------------------------------------------------------------------------
   // i-direction
@@ -62,6 +64,8 @@ void Hydro::CalculateFluxes(Driver *pdriver, int stage) {
   size_t scr_size = ScrArray2D<Real>::shmem_size(nvars, ncells1) * 2;
   int scr_level = 0;
   auto &flx1_ = uflx.x1f;
+  if (use_4th_order)
+    auto &flx1_ = uflx_f.x1f;
 
   // set the loop limits for 1D/2D/3D problems
   int il = is, iu = ie+1, jl = js, ju = je, kl = ks, ku = ke;
@@ -150,6 +154,8 @@ void Hydro::CalculateFluxes(Driver *pdriver, int stage) {
   if (pmy_pack->pmesh->multi_d) {
     scr_size = ScrArray2D<Real>::shmem_size(nvars, ncells1) * 3;
     auto &flx2_ = uflx.x2f;
+    if (use_4th_order)
+      auto &flx2_ = uflx_f.x2f;
 
     // set the loop limits for 1D/2D/3D problems
     il = is, iu = ie, jl = js-1, ju = je+1, kl = ks, ku = ke;
@@ -252,6 +258,8 @@ void Hydro::CalculateFluxes(Driver *pdriver, int stage) {
   if (pmy_pack->pmesh->three_d) {
     scr_size = ScrArray2D<Real>::shmem_size(nvars, ncells1) * 3;
     auto &flx3_ = uflx.x3f;
+    if (use_4th_order)
+      auto &flx3_ = uflx_f.x3f;
 
     // set the loop limits
     il = is, iu = ie, jl = js, ju = je, kl = ks-1, ku = ke+1;
@@ -339,6 +347,15 @@ void Hydro::CalculateFluxes(Driver *pdriver, int stage) {
         }
       } // end loop over k
     });
+  }
+
+  if (use_4th_order){
+    // Average conservative fluxes at cell interfaces
+    pmy_pack->pcoord->AverageSurfaceX1(uflx_f.x1f, uflx.x1f);
+    if (pmy_pack->pmesh->multi_d)
+      pmy_pack->pcoord->AverageSurfaceX2(uflx_f.x2f, uflx.x2f);
+    if (pmy_pack->pmesh->three_d)
+      pmy_pack->pcoord->AverageSurfaceX3(uflx_f.x3f, uflx.x3f);
   }
 
   return;

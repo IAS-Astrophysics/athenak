@@ -104,6 +104,13 @@ class Hydro {
   bool use_fofc = false;   // flag to enable FOFC
   DvceArray5D<Real> utest;  // scratch array for FOFC
 
+  // following used for 4th-order reconstruction
+  bool use_4th_order = false; // flag to enable 4th-order reconstruction
+  DvceArray5D<Real> u0_c;   // conserved variables at cell centers
+  DvceArray5D<Real> w0_c;   // primitive variables at cell centers
+  DvceFaceFld5D<Real> uflx_f;   // fluxes of conserved quantities on cell faces for 4th-order
+
+
   // container to hold names of TaskIDs
   HydroTaskIDs id;
 

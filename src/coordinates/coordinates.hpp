@@ -73,8 +73,40 @@ class Coordinates {
 
   void UpdateExcisionMasks();
 
+  void DeAverageVolume(const DvceArray5D<Real> &q_average,
+                        DvceArray5D<Real> &q);
+
+  void AverageVolume(const DvceArray5D<Real> &q,
+                        DvceArray5D<Real> &q_average);
+
+  void DeAverageSurfaceX1(const DvceArray5D<Real> &q_average,
+                        DvceArray5D<Real> &q);
+  
+  void AverageSurfaceX1(const DvceArray5D<Real> &q,
+                        DvceArray5D<Real> &q_average);
+  
+  void DeAverageSurfaceX2(const DvceArray5D<Real> &q_average,
+                        DvceArray5D<Real> &q);
+  
+  void AverageSurfaceX2(const DvceArray5D<Real> &q,                     
+                        DvceArray5D<Real> &q_average);
+  
+  void DeAverageSurfaceX3(const DvceArray5D<Real> &q_average,
+                        DvceArray5D<Real> &q);
+  
+  void AverageSurfaceX3(const DvceArray5D<Real> &q,
+                        DvceArray5D<Real> &q_average);
+  
+  void Apply_Laplacian2D(const DvceArray5D<Real> &q1, DvceArray5D<Real> &q2,
+                        const bool average, const int dim);
+  
+  void Apply_Laplacian3D(const DvceArray5D<Real> &q1, DvceArray5D<Real> &q2,
+                        const bool average);
+
+
  private:
   MeshBlockPack* pmy_pack;
 };
 
 #endif // COORDINATES_COORDINATES_HPP_
+

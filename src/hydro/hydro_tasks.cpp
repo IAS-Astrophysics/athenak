@@ -399,6 +399,14 @@ TaskStatus Hydro::ConToPrim(Driver *pdrive, int stage) {
   int n1m1 = indcs.nx1 + 2*ng - 1;
   int n2m1 = (indcs.nx2 > 1)? (indcs.nx2 + 2*ng - 1) : 0;
   int n3m1 = (indcs.nx3 > 1)? (indcs.nx3 + 2*ng - 1) : 0;
+  if (use_4th_order){
+  // De-average conservative variables at cell centers
+  pmy_pack->pcoord->DeAverageVolume(u0, u0_c);
+  // Convert to primitive variables
+  peos->ConsToPrim(u0_c, w0_c, false, 0, n1m1, 0, n2m1, 0, n3m1);
+  pmy_pack->pcoord->AverageVolume(w0_c, w0);
+  } 
+  else
   peos->ConsToPrim(u0, w0, false, 0, n1m1, 0, n2m1, 0, n3m1);
   return TaskStatus::complete;
 }
