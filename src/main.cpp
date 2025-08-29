@@ -34,11 +34,11 @@
 // Athena headers
 #include "athena.hpp"
 #include "globals.hpp"
-#include "utils/utils.hpp"
 #include "parameter_input.hpp"
 #include "mesh/mesh.hpp"
 #include "outputs/outputs.hpp"
 #include "driver/driver.hpp"
+#include "utils/utils.hpp"
 
 // MPI/OpenMP headers
 #if MPI_PARALLEL_ENABLED

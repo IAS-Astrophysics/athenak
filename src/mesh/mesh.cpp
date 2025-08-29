@@ -18,6 +18,7 @@
 #include "parameter_input.hpp"
 #include "mesh.hpp"
 #include "coordinates/cell_locations.hpp"
+#include "refinement_criteria.hpp"
 #include "hydro/hydro.hpp"
 #include "mhd/mhd.hpp"
 #include "z4c/z4c.hpp"
@@ -662,5 +663,11 @@ void Mesh::AddCoordinatesAndPhysics(ParameterInput *pinput) {
     if (pmb_pack->ppart != nullptr) {
       pmb_pack->ppart->CreateParticleTags(pinput);
     }
+  }
+
+  // Call RefinementCriteria constructor to enroll various criteria
+  // can only be done after the physics modules have been constructed
+  if (adaptive) {
+    pmr->pmrc = new RefinementCriteria(this, pinput);
   }
 }

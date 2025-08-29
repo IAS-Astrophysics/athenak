@@ -63,7 +63,7 @@ class RefinementCriteria {
   std::vector<RefCritData> rcrit;
 
   // functions
-  void SetRefinementData(MeshBlockPack* pmbp, bool only_count);
+  void SetRefinementData(MeshBlockPack* pmbp, bool count, bool load);
   void LoadDerivedVariables(MeshBlockPack* pmbp);
   void CheckMinMax(MeshBlockPack* pmbp, RefCritData crit);
   void CheckSlope(MeshBlockPack* pmbp, RefCritData crit);

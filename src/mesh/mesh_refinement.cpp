@@ -60,13 +60,13 @@ MeshRefinement::MeshRefinement(Mesh *pm, ParameterInput *pin) :
   }
 
   // allocate arrays for AMR
-  // Allocate RefinementCriteria object with AMR
+  // NOTE: RefinementCriteria object cannot be allocated until Physics modules are defined
+  // This is done in Mesh::AddCoordinatesAndPhysics and not in this constructor
   if (pm->adaptive) {
     nref_eachrank = new int[global_variable::nranks];
     nderef_eachrank = new int[global_variable::nranks];
     nref_rsum = new int[global_variable::nranks];
     nderef_rsum = new int[global_variable::nranks];
-    pmrc = new RefinementCriteria(pm, pin);
   }
 
   // be sure Views are initialized to zero
@@ -159,7 +159,7 @@ void MeshRefinement::CheckForRefinement(MeshBlockPack* pmbp) {
 
   // calculate derived refinement variables
   if (pmrc->nderived > 0) {
-    pmrc->LoadDerivedVariables(pmbp);
+    pmrc->SetRefinementData(pmbp, false, true);
   }
 
   // iterate through list of refinement criteria and apply methods

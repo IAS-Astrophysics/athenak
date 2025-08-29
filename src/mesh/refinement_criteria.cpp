@@ -19,6 +19,7 @@
 #include "mhd/mhd.hpp"
 #include "radiation/radiation.hpp"
 #include "refinement_criteria.hpp"
+#include "utils/utils.hpp"
 
 //----------------------------------------------------------------------------------------
 // RefinementCriteria constructor:
@@ -73,23 +74,24 @@ RefinementCriteria::RefinementCriteria(Mesh *pm, ParameterInput *pin) :
     if ((it->rvariable.compare(0, 5, "hydro") == 0) &&
         (pm->pmb_pack->phydro == nullptr)) {
       std::cout<<"### FATAL ERROR in "<<__FILE__<<" at line "<<__LINE__<<std::endl;
-      Kokkos::abort("Hydro refinement criteria specified but <hydro> not defined");
+      Kokkos::abort("Hydro refinement variable used but <hydro> not defined");
     }
     if ((it->rvariable.compare(0, 3, "mhd") == 0) &&
         (pm->pmb_pack->pmhd == nullptr)) {
       std::cout<<"### FATAL ERROR in "<<__FILE__<<" at line "<<__LINE__<<std::endl;
-      Kokkos::abort("MHD refinement criteria specified but <hydro> not defined");
+      Kokkos::abort("MHD refinement variable used but <mhd> not defined");
     }
     if ((it->rvariable.compare(0, 3, "rad") == 0) &&
         (pm->pmb_pack->prad == nullptr)) {
       std::cout<<"### FATAL ERROR in "<<__FILE__<<" at line "<<__LINE__<<std::endl;
-      Kokkos::abort("radiation refinement criteria specified but <hydro> not defined");
+      Kokkos::abort("radiation refinement variable used but <radiation> not defined");
     }
   }
 
   // count number of derived variables used for refinement
   // This is necessary to figure out dimensions needed for dvars array
-  SetRefinementData(pm->pmb_pack, true);
+  nderived = 0;
+  SetRefinementData(pm->pmb_pack, true, false);
 
   if (nderived > 0) {
     auto &indcs = pmy_mesh->mb_indcs;
@@ -101,7 +103,7 @@ RefinementCriteria::RefinementCriteria(Mesh *pm, ParameterInput *pin) :
   }
 
   // Set rdata array to shallow slice of target data
-  SetRefinementData(pm->pmb_pack, false);
+  SetRefinementData(pm->pmb_pack, false, false);
 }
 
 //----------------------------------------------------------------------------------------
@@ -114,7 +116,9 @@ RefinementCriteria::~RefinementCriteria() {
 //! \fn void RefinementCriteria::SetRefinementData()
 //! \brief Cycles through all criteria and load data
 
-void RefinementCriteria::SetRefinementData(MeshBlockPack* pmbp, bool only_count_derived) {
+void RefinementCriteria::SetRefinementData(MeshBlockPack* pmbp, bool count_derived,
+                                           bool load_derived) {
+  int iderived = 0;  // current index of variable in dvars array
   for (auto it = rcrit.begin(); it != rcrit.end(); ++it) {
     // Only load data for methods that need it
     if ((it->rmethod != RefCritMethod::location) &&
@@ -122,15 +126,27 @@ void RefinementCriteria::SetRefinementData(MeshBlockPack* pmbp, bool only_count_
       using Kokkos::ALL;
       // hydro (lab-frame) density
       if (it->rvariable.compare("hydro_u_d") == 0) {
-        if (!(only_count_derived)) {
+        if (!(count_derived) && !(load_derived)) {
           int n = static_cast<int>(IDN);
           it->rdata = Kokkos::subview(pmbp->phydro->u0, ALL, n, ALL, ALL, ALL);
         }
       // hydro (rest-frame) density
       } else if (it->rvariable.compare("hydro_w_d") == 0) {
-        if (!(only_count_derived)) {
+        if (!(count_derived) && !(load_derived)) {
           int n = static_cast<int>(IDN);
           it->rdata = Kokkos::subview(pmbp->phydro->w0, ALL, n, ALL, ALL, ALL);
+        }
+      // radiation coordinate frame energy density R^0^0
+      } else if (it->rvariable.compare("rad_coord_e") == 0) {
+        if (count_derived) {
+          nderived += 1;
+        } else if (load_derived) {
+          ComputeDerivedVariable(it->rvariable, iderived, pmbp, dvars);
+          iderived += 1;
+        } else {
+          int n = static_cast<int>(IDN);
+          it->rdata = Kokkos::subview(dvars, ALL, iderived, ALL, ALL, ALL);
+          iderived += 1;
         }
       } else {
         std::cout<<"### FATAL ERROR in "<<__FILE__<<" at line "<<__LINE__<<std::endl;
