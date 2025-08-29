@@ -48,12 +48,7 @@ MeshRefinement::MeshRefinement(Mesh *pm, ParameterInput *pin) :
   nmb_sent_thisrank(0),
   ncyc_check_amr(1),
   refinement_interval(5),
-  prolong_prims(false),
-  d_threshold_(0.0),
-  dd_threshold_(0.0),
-  dp_threshold_(0.0),
-  dv_threshold_(0.0),
-  check_cons_(false) {
+  prolong_prims(false) {
   if (pin->DoesBlockExist("mesh_refinement")) {
     // read interval (in cycles) between check of AMR and derefinement
     ncyc_check_amr = pin->GetOrAddReal("mesh_refinement", "ncycle_check", 1);
@@ -61,23 +56,6 @@ MeshRefinement::MeshRefinement(Mesh *pm, ParameterInput *pin) :
     // read prolongate primitives flag
     if (pin->DoesParameterExist("mesh_refinement", "prolong_primitives")) {
       prolong_prims = pin->GetBoolean("mesh_refinement", "prolong_primitives");
-    }
-    // read refinement criteria thresholds
-    if (pin->DoesParameterExist("mesh_refinement", "dens_max")) {
-      d_threshold_ = pin->GetReal("mesh_refinement", "dens_max");
-      check_cons_ = true;
-    }
-    if (pin->DoesParameterExist("mesh_refinement", "ddens_max")) {
-      dd_threshold_ = pin->GetReal("mesh_refinement", "ddens_max");
-      check_cons_ = true;
-    }
-    if (pin->DoesParameterExist("mesh_refinement", "dpres_max")) {
-      dp_threshold_ = pin->GetReal("mesh_refinement", "dpres_max");
-      check_cons_ = true;
-    }
-    if (pin->DoesParameterExist("mesh_refinement", "dvel_max")) {
-      dd_threshold_ = pin->GetReal("mesh_refinement", "dvel_max");
-      check_cons_ = true;
     }
   }
 
@@ -623,6 +601,7 @@ void MeshRefinement::RedistAndRefineMeshBlocks(ParameterInput *pin, int nnew, in
   pm->pmb_pack->gide = pm->pmb_pack->gids + pm->nmb_eachrank[global_variable::my_rank]-1;
   pm->pmb_pack->nmb_thispack = pm->pmb_pack->gide - pm->pmb_pack->gids + 1;
 
+  // Delete old then allocate new MeshBlocks and Coordinates (latter includes masks in GR)
   delete (pm->pmb_pack->pmb);
   delete (pm->pmb_pack->pcoord);
   pm->pmb_pack->AddMeshBlocks(pin);

@@ -28,37 +28,44 @@ RefinementCriteria::RefinementCriteria(Mesh *pm, ParameterInput *pin) :
     nderived(0),
     pmy_mesh(pm),
     dvars("derived_ref_vars",1,1,1,1,1) {
-  // cycle through ParameterInput list and read each <refinement_criteria> block
+  // cycle through ParameterInput list and read each <amr_criteria> block
   for (auto it = pin->block.begin(); it != pin->block.end(); ++it) {
-    if (it->block_name.compare(0, 19, "refinement_criteria") == 0) {
+    if (it->block_name.compare(0, 12, "amr_criteria") == 0) {
       RefCritData rcrit0;
-      std::string method = pin->GetString(it->block_name, "ref_method");
-      if (method == "min_max") {
+      std::string method = pin->GetString(it->block_name, "method");
+      if (method.compare("min_max") == 0) {
         rcrit0.rmethod = RefCritMethod::min_max;
-      } else if (method == "slope") {
+      } else if (method.compare("slope") == 0) {
         rcrit0.rmethod = RefCritMethod::slope;
-      } else if (method == "second_deriv") {
+      } else if (method.compare("second_deriv") == 0) {
         rcrit0.rmethod = RefCritMethod::second_deriv;
-      } else if (method == "location") {
+      } else if (method.compare("location") == 0) {
         rcrit0.rmethod = RefCritMethod::location;
-      } else if (method == "user") {
+      } else if (method.compare("user") == 0) {
         rcrit0.rmethod = RefCritMethod::user;
       } else {
         std::cout<<"### FATAL ERROR in "<<__FILE__<<" at line "<<__LINE__<<std::endl;
         Kokkos::abort("Unknown refinement criterion");
       }
-      rcrit0.rvariable = pin->GetString(it->block_name,"ref_variable");
-      rcrit0.rvalue_min = pin->GetOrAddReal(it->block_name,"ref_value_min",(-FLT_MAX));
-      rcrit0.rvalue_max = pin->GetOrAddReal(it->block_name,"ref_value_max", (FLT_MAX));
+      // read refinement variable only when needed
+      if ((method.compare("location")!=0) && (method.compare("user")!=0)) {
+        rcrit0.rvariable = pin->GetString(it->block_name,"variable");
+      }
+      rcrit0.rvalue_min = pin->GetOrAddReal(it->block_name,"value_min",(-FLT_MAX));
+      rcrit0.rvalue_max = pin->GetOrAddReal(it->block_name,"value_max", (FLT_MAX));
+      rcrit0.rloc_x1  = pin->GetOrAddReal(it->block_name,"location_x1", 0.0);
+      rcrit0.rloc_x2  = pin->GetOrAddReal(it->block_name,"location_x2", 0.0);
+      rcrit0.rloc_x3  = pin->GetOrAddReal(it->block_name,"location_x3", 0.0);
+      rcrit0.rloc_rad = pin->GetOrAddReal(it->block_name,"location_rad", 0.0);
       rcrit.emplace_back(rcrit0);
     }
   }
   ncriteria = rcrit.size();
 
-  // Error if there were no <refinement_criteria> blocks
+  // Error if there were no <amr_criteria> blocks
   if (ncriteria==0) {
     std::cout<<"### FATAL ERROR in "<<__FILE__<<" at line "<<__LINE__<<std::endl;
-    Kokkos::abort("No <refinement_criteria> blocks were found in input file");
+    Kokkos::abort("No <amr_criteria> blocks were found in input file");
   }
 
   // Error if class containing variable requested has not been initialized
@@ -105,27 +112,30 @@ RefinementCriteria::~RefinementCriteria() {
 
 //----------------------------------------------------------------------------------------
 //! \fn void RefinementCriteria::SetRefinementData()
-//! \brief
+//! \brief Cycles through all criteria and load data
 
 void RefinementCriteria::SetRefinementData(MeshBlockPack* pmbp, bool only_count_derived) {
-  // cycle through all criteria and load data
   for (auto it = rcrit.begin(); it != rcrit.end(); ++it) {
-    using Kokkos::ALL;
-    // hydro (lab-frame) density
-    if (it->rvariable.compare("hydro_u_d") == 0) {
-      if (!(only_count_derived)) {
-        int n = static_cast<int>(IDN);
-        it->rdata = Kokkos::subview(pmbp->phydro->u0, ALL, n, ALL, ALL, ALL);
+    // Only load data for methods that need it
+    if ((it->rmethod != RefCritMethod::location) &&
+        (it->rmethod != RefCritMethod::user)) {
+      using Kokkos::ALL;
+      // hydro (lab-frame) density
+      if (it->rvariable.compare("hydro_u_d") == 0) {
+        if (!(only_count_derived)) {
+          int n = static_cast<int>(IDN);
+          it->rdata = Kokkos::subview(pmbp->phydro->u0, ALL, n, ALL, ALL, ALL);
+        }
+      // hydro (rest-frame) density
+      } else if (it->rvariable.compare("hydro_w_d") == 0) {
+        if (!(only_count_derived)) {
+          int n = static_cast<int>(IDN);
+          it->rdata = Kokkos::subview(pmbp->phydro->w0, ALL, n, ALL, ALL, ALL);
+        }
+      } else {
+        std::cout<<"### FATAL ERROR in "<<__FILE__<<" at line "<<__LINE__<<std::endl;
+        Kokkos::abort("Unknown refinement variable requested in a <amr_criteria>");
       }
-    // hydro (rest-frame) density
-    } else if (it->rvariable.compare("hydro_w_d") == 0) {
-      if (!(only_count_derived)) {
-        int n = static_cast<int>(IDN);
-        it->rdata = Kokkos::subview(pmbp->phydro->w0, ALL, n, ALL, ALL, ALL);
-      }
-    } else {
-      std::cout<<"### FATAL ERROR in "<<__FILE__<<" at line "<<__LINE__<<std::endl;
-      Kokkos::abort("Unknown refinement variable requested in a <refinement_criteria>");
     }
   }
   return;
@@ -327,13 +337,16 @@ void RefinementCriteria::CheckLocation(MeshBlockPack* pmbp, RefCritData crit) {
     Real &x3max = size.h_view(m).x3max;
 
     if (((x1min < (x1+rad)) && (x1min > (x1-rad))) ||
-        ((x1max < (x1+rad)) && (x1max > (x1-rad)))) {
+        ((x1max < (x1+rad)) && (x1max > (x1-rad))) ||
+        ((x1max > (x1+rad)) && (x1min < (x1-rad)))) {
       if (!(multi_d) ||
           (((x2min < (x2+rad)) && (x2min > (x2-rad))) ||
-           ((x2max < (x2+rad)) && (x2max > (x2-rad)))) ) {
+           ((x2max < (x2+rad)) && (x2max > (x2-rad))) ||
+           ((x2max > (x2+rad)) && (x2min < (x2-rad)))) ) {
         if (!(three_d) ||
             (((x3min < (x3+rad)) && (x3min > (x3-rad))) ||
-             ((x3max < (x3+rad)) && (x3max > (x3-rad)))) ) {
+             ((x3max < (x3+rad)) && (x3max > (x3-rad))) ||
+             ((x3max > (x3+rad)) && (x3min < (x3-rad)))) ) {
           refine_flag.h_view(m + mbs) = 1;
         }
       }
