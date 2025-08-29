@@ -38,6 +38,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   // User boundary function
   user_bcs_func = ZeroIntensity;
 
+/**
   // capture variables for kernel
   auto &indcs = pmy_mesh_->mb_indcs;
   int &is = indcs.is; int &ie = indcs.ie;
@@ -128,6 +129,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
       }
     }
   });
+**/
 
   return;
 }

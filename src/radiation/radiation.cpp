@@ -40,8 +40,7 @@ Radiation::Radiation(MeshBlockPack *ppack, ParameterInput *pin) :
     tet_d2_x2f("tet_d2_x2f",1,1,1,1,1),
     tet_d3_x3f("tet_d3_x3f",1,1,1,1,1),
     na("na",1,1,1,1,1,1),
-    norm_to_tet("norm_to_tet",1,1,1,1,1,1),
-    beam_mask("beam_mask",1,1,1,1,1) {
+    norm_to_tet("norm_to_tet",1,1,1,1,1,1) {
   // Check for general relativity
   if (!(pmy_pack->pcoord->is_general_relativistic)) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
@@ -97,9 +96,10 @@ Radiation::Radiation(MeshBlockPack *ppack, ParameterInput *pin) :
   // Check for fluid evolution
   fixed_fluid = pin->GetOrAddBoolean("radiation","fixed_fluid",false);
 
-  // Other rad source terms (constructor parses input file to init only srcterms needed)
-  beam_source = pin->GetOrAddBoolean("radiation","beam_source",false);
-  psrc = new SourceTerms("radiation", ppack, pin);
+  // Source terms (if needed)
+  if (pin->DoesBlockExist("rad_srcterms")) {
+    psrc = new SourceTerms("rad_srcterms", ppack, pin);
+  }
 
   // Setup angular mesh and radiation geometry data
   int nlevel = pin->GetInteger("radiation", "nlevel");
@@ -197,9 +197,6 @@ Radiation::Radiation(MeshBlockPack *ppack, ParameterInput *pin) :
     Kokkos::realloc(iflx.x3f,nmb,prgeo->nangles,ncells3,ncells2,ncells1);
     if (angular_fluxes) {
       Kokkos::realloc(divfa,nmb,prgeo->nangles,ncells3,ncells2,ncells1);
-    }
-    if (beam_source) {
-      Kokkos::realloc(beam_mask,nmb,prgeo->nangles,ncells3,ncells2,ncells1);
     }
   }
 }
