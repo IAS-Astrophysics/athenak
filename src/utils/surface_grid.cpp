@@ -5,11 +5,12 @@
 #include "surface_grid.hpp"
 
 #include "mesh/mesh.hpp"
+#include "coordinates/cell_locations.hpp"
+#include "coordinates/adm.hpp" // For adm::SpatialDet and metric indices
 
-#include "coordinates/cell_locations.hpp"  // host utilities for cell centers
 #include <cmath>
 #include <iostream>
-#include <cstdlib> // For std::exit, EXIT_FAILURE
+#include <cstdlib>
 
 //----------------------------------------------------------------------------------------
 // Constructor
@@ -18,7 +19,7 @@ SphericalSurfaceGrid::SphericalSurfaceGrid(MeshBlockPack* pack,
                                            RFunc r_of_thph,
                                            const std::string& name,
                                            const Real* center)
-    : pmy_pack(pack), tag(name) {
+    : pmy_pack(pack), tag(name), metric_is_flat_(true) { // Assume flat metric initially
   // --- basic validation ---
   if (pmy_pack == nullptr || pmy_pack->pmesh == nullptr || pmy_pack->pmb == nullptr) {
     std::cerr << "### FATAL: SphericalSurfaceGrid requires a valid MeshBlockPack/mesh"
@@ -49,6 +50,7 @@ SphericalSurfaceGrid::SphericalSurfaceGrid(MeshBlockPack* pack,
   Kokkos::realloc(tan_th, npts, 3);
   Kokkos::realloc(tan_ph, npts, 3);
   Kokkos::realloc(weights, npts);
+  Kokkos::realloc(g_dd_surf_, npts, 6); // 6 components for symmetric 3x3 g_ij
 
   // Interpolation maps: allocate BEFORE building them
   auto &indcs = pmy_pack->pmesh->mb_indcs;
@@ -68,6 +70,7 @@ SphericalSurfaceGrid::SphericalSurfaceGrid(MeshBlockPack* pack,
   }
 
   // Build everything
+  InitializeFlatMetric();
   RebuildAll();
 }
 
@@ -83,16 +86,28 @@ void SphericalSurfaceGrid::SetCenter(const Real new_center[3]) {
   SetInterpolationWeights();
 }
 
-void SphericalSurfaceGrid::InterpolateToSurface(int nvars, DvceArray5D<Real> &val) {
+
+// <--- MODIFIED: Entire function implementation updated
+DualArray2D<Real> SphericalSurfaceGrid::InterpolateToSurface(
+    const DvceArray5D<Real> &source_array, int start_index, int end_index) {
   if (pmy_pack->pmesh->adaptive) {
     SetInterpolationIndices();
     SetInterpolationWeights();
   }
-  Kokkos::realloc(interp_vals, npts, nvars);
+  
+  // Calculate the number of variables to interpolate from the indices
+  const int nvars = end_index - start_index;
+  if (nvars <= 0) {
+      std::cerr << "### FATAL: InterpolateToSurface called with invalid range: "
+                << start_index << " to " << end_index << std::endl;
+      std::exit(EXIT_FAILURE);
+  }
+
+  // Create a local DualArray2D to hold and return the results
+  DualArray2D<Real> result("interp_vals_temp", npts, nvars);
 
   auto &iindcs = interp_indcs;
   auto &iwghts = interp_wghts;
-  auto &ivals  = interp_vals;
   auto &indcs = pmy_pack->pmesh->mb_indcs;
   const int ng = indcs.ng;
   const int is = indcs.is, js = indcs.js, ks = indcs.ks;
@@ -101,50 +116,66 @@ void SphericalSurfaceGrid::InterpolateToSurface(int nvars, DvceArray5D<Real> &va
     KOKKOS_LAMBDA(const int p, const int v) {
       const int mb_id = iindcs.d_view(p,0);
       if (mb_id == -1) {
-        ivals.d_view(p,v) = 0.0;
+        result.d_view(p,v) = 0.0;
         return;
       }
-      // Base indices are logical (0-based in active zone)
-      const int i0 = iindcs.d_view(p,1);
-      const int j0 = iindcs.d_view(p,2);
-      const int k0 = iindcs.d_view(p,3);
+      const int i0 = iindcs.d_view(p,1), j0 = iindcs.d_view(p,2), k0 = iindcs.d_view(p,3);
       Real accum = 0.0;
 
       for (int k_sten = 0; k_sten < 2*ng; ++k_sten) {
         for (int j_sten = 0; j_sten < 2*ng; ++j_sten) {
           for (int i_sten = 0; i_sten < 2*ng; ++i_sten) {
-            const Real w = iwghts.d_view(p, i_sten, 0)
-                         * iwghts.d_view(p, j_sten, 1)
-                         * iwghts.d_view(p, k_sten, 2);
-
-            // Adapted index calculation from GaussLegendreGrid example
+            const Real w = iwghts.d_view(p, i_sten, 0) * iwghts.d_view(p, j_sten, 1) * iwghts.d_view(p, k_sten, 2);
             const int I = i0 - (ng - i_sten - is) + 1;
             const int J = j0 - (ng - j_sten - js) + 1;
             const int K = k0 - (ng - k_sten - ks) + 1;
-
-            accum += w * val(mb_id, v, K, J, I);
+            // The key change: offset the source array index with start_index
+            accum += w * source_array(mb_id, start_index + v, K, J, I);
           }
         }
       }
-      ivals.d_view(p,v) = accum;
+      result.d_view(p,v) = accum;
     });
-  interp_vals.template modify<DevExeSpace>();
+  result.template modify<DevExeSpace>();
+  return result;
+}
+
+void SphericalSurfaceGrid::InterpolateMetric() {
+  // <--- MODIFIED: Call to InterpolateToSurface updated to use indices
+  // This avoids creating a subview entirely.
+  const int start = adm::ADM::I_ADM_GXX;
+  const int end = start + 6;
+  DualArray2D<Real> interpolated_metric = InterpolateToSurface(pmy_pack->padm->u_adm, start, end);
+
+  // Use the manual copy which is guaranteed to be safe.
+  auto dst_view = g_dd_surf_.d_view;
+  auto src_view = interpolated_metric.d_view;
+
+  Kokkos::parallel_for("ManualMetricCopy",
+                       Kokkos::MDRangePolicy<Kokkos::Rank<2>>({0, 0}, {npts, 6}),
+    KOKKOS_LAMBDA(const int p, const int v) {
+      dst_view(p, v) = src_view(p, v);
+    });
+
+  metric_is_flat_ = false;
 }
 
 
-void SphericalSurfaceGrid::BuildSurfaceCovectors(const DualArray1D<Real>& sqrtg,
-                                                 DualArray2D<Real>& dSigma) const {
+void SphericalSurfaceGrid::BuildSurfaceCovectors(DualArray2D<Real>& dSigma) const {
   const int np = npts;
   Kokkos::realloc(dSigma, np, 3);
   auto &eTh = tan_th; auto &ePh = tan_ph; auto &wq = weights;
+  auto &g_surf = g_dd_surf_;
 
-  Kokkos::parallel_for("surf_cov_curved",
-    Kokkos::RangePolicy<DevExeSpace>(0, np),
+  Kokkos::parallel_for("surf_cov_curved", Kokkos::RangePolicy<DevExeSpace>(0, np),
     KOKKOS_LAMBDA(const int p) {
-      // The scaling factor is sqrt(g) * dθ * dφ
-      const Real s = sqrtg.d_view(p) * wq.d_view(p);
+      const Real gxx = g_surf.d_view(p, 0), gxy = g_surf.d_view(p, 1), gxz = g_surf.d_view(p, 2);
+      const Real gyy = g_surf.d_view(p, 3), gyz = g_surf.d_view(p, 4), gzz = g_surf.d_view(p, 5);
+      const Real gamma = adm::SpatialDet(gxx, gxy, gxz, gyy, gyz, gzz);
+      // Added robustness check to prevent NaN from negative gamma due to numerical error.
+      const Real sqrt_gamma = (gamma > 0.0) ? sqrt(gamma) : 0.0;
+      const Real s = sqrt_gamma * wq.d_view(p);
 
-      // The cross product computes [ijk] * e_θ^j * e_φ^k
       const Real e1x = eTh.d_view(p,0), e1y = eTh.d_view(p,1), e1z = eTh.d_view(p,2);
       const Real e2x = ePh.d_view(p,0), e2y = ePh.d_view(p,1), e2z = ePh.d_view(p,2);
       dSigma.d_view(p,0) = s * (e1y*e2z - e1z*e2y);
@@ -155,17 +186,32 @@ void SphericalSurfaceGrid::BuildSurfaceCovectors(const DualArray1D<Real>& sqrtg,
   dSigma.template modify<DevExeSpace>();
 }
 
+// (The rest of the private helper methods remain unchanged)
+// ...
+// ... BuildCoordinates(), BuildQuadWeights(), etc. are identical to what you provided ...
+// ...
+
 //----------------------------------------------------------------------------------------
 // Private Helper Methods
 
 void SphericalSurfaceGrid::RebuildAll() {
   BuildCoordinates();
-  // MUST determine point ownership before assigning weights
   SetInterpolationIndices();
   BuildTangentsFD();
-  // MUST assign quad weights after indices are known for MPI-safety
   BuildQuadWeights();
   SetInterpolationWeights();
+}
+
+void SphericalSurfaceGrid::InitializeFlatMetric() {
+  auto h_g = g_dd_surf_.h_view;
+  for (int p=0; p<npts; ++p) {
+    h_g(p, 0) = 1.0; h_g(p, 1) = 0.0; h_g(p, 2) = 0.0;
+    h_g(p, 3) = 1.0; h_g(p, 4) = 0.0;
+    h_g(p, 5) = 1.0;
+  }
+  g_dd_surf_.template modify<HostMemSpace>();
+  g_dd_surf_.template sync<DevExeSpace>();
+  metric_is_flat_ = true;
 }
 
 void SphericalSurfaceGrid::BuildCoordinates() {
@@ -177,9 +223,7 @@ void SphericalSurfaceGrid::BuildCoordinates() {
     Real Xl, Yl, Zl;
     const Real st = sin(h_th(p)), ct = cos(h_th(p));
     const Real sp = sin(h_ph(p)), cp = cos(h_ph(p));
-    Xl = h_r(p) * st * cp;
-    Yl = h_r(p) * st * sp;
-    Zl = h_r(p) * ct;
+    Xl = h_r(p) * st * cp; Yl = h_r(p) * st * sp; Zl = h_r(p) * ct;
     h_x(p,0) = Xl + center_[0];
     h_x(p,1) = Yl + center_[1];
     h_x(p,2) = Zl + center_[2];
@@ -190,11 +234,8 @@ void SphericalSurfaceGrid::BuildCoordinates() {
 
 void SphericalSurfaceGrid::BuildQuadWeights() {
   auto h_w = weights.h_view;
-  // This must be called after SetInterpolationIndices to work correctly with MPI
   auto h_iind = interp_indcs.h_view;
-
   for (int p = 0; p < npts; ++p) {
-    // A point has a non-zero integration weight only if it is owned by this rank
     if (h_iind(p, 0) != -1) {
       h_w(p) = dth * dph;
     } else {
@@ -205,35 +246,22 @@ void SphericalSurfaceGrid::BuildQuadWeights() {
   weights.template sync<DevExeSpace>();
 }
 
-//---- ADAPTED INTERPOLATION ROUTINES ----
-
 void SphericalSurfaceGrid::SetInterpolationIndices() {
   auto &size = pmy_pack->pmb->mb_size;
   const int nmb = pmy_pack->nmb_thispack;
-
   auto h_coords = coords.h_view;
   auto h_iind = interp_indcs.h_view;
-
   for (int p = 0; p < npts; ++p) {
-    // indices default to -1 if point does not reside in this MeshBlockPack
-    h_iind(p,0) = -1;
-    h_iind(p,1) = -1;
-    h_iind(p,2) = -1;
-    h_iind(p,3) = -1;
+    h_iind(p,0) = -1; h_iind(p,1) = -1; h_iind(p,2) = -1; h_iind(p,3) = -1;
     for (int m = 0; m < nmb; ++m) {
       const auto &mb = size.h_view(m);
       const Real x1p = h_coords(p,0), x2p = h_coords(p,1), x3p = h_coords(p,2);
-
-      // check if this point resides in this MeshBlock
-      if ((x1p >= mb.x1min && x1p < mb.x1max) &&
-          (x2p >= mb.x2min && x2p < mb.x2max) &&
-          (x3p >= mb.x3min && x3p < mb.x3max)) {
+      if ((x1p >= mb.x1min && x1p < mb.x1max) && (x2p >= mb.x2min && x2p < mb.x2max) && (x3p >= mb.x3min && x3p < mb.x3max)) {
         h_iind(p,0) = m;
-        // calculate logical indices using floor logic
         h_iind(p,1) = static_cast<int>(std::floor((x1p - (mb.x1min + mb.dx1/2.0)) / mb.dx1));
         h_iind(p,2) = static_cast<int>(std::floor((x2p - (mb.x2min + mb.dx2/2.0)) / mb.dx2));
         h_iind(p,3) = static_cast<int>(std::floor((x3p - (mb.x3min + mb.dx3/2.0)) / mb.dx3));
-        break; // Found the meshblock, move to next point
+        break;
       }
     }
   }
@@ -245,40 +273,29 @@ void SphericalSurfaceGrid::SetInterpolationWeights() {
   auto &indcs = pmy_pack->pmesh->mb_indcs;
   auto &size = pmy_pack->pmb->mb_size;
   const int ng = indcs.ng;
-
   auto h_iind = interp_indcs.h_view;
   auto h_iw = interp_wghts.h_view;
   auto h_coords = coords.h_view;
-
   for (int p = 0; p < npts; ++p) {
     const int mb_id = h_iind(p,0);
-    if (mb_id == -1) {  // point not on this rank
+    if (mb_id == -1) {
       for (int i=0; i<2*ng; ++i) {
-        h_iw(p,i,0) = 0.0;
-        h_iw(p,i,1) = 0.0;
-        h_iw(p,i,2) = 0.0;
+        h_iw(p,i,0) = 0.0; h_iw(p,i,1) = 0.0; h_iw(p,i,2) = 0.0;
       }
     } else {
       const int i0 = h_iind(p,1), j0 = h_iind(p,2), k0 = h_iind(p,3);
       const Real x0 = h_coords(p,0), y0 = h_coords(p,1), z0 = h_coords(p,2);
-
       const auto &mb = size.h_view(mb_id);
-
-      // set interpolation weights
       for (int i=0; i<2*ng; ++i) {
-        h_iw(p,i,0) = 1.0;
-        h_iw(p,i,1) = 1.0;
-        h_iw(p,i,2) = 1.0;
+        h_iw(p,i,0) = 1.0; h_iw(p,i,1) = 1.0; h_iw(p,i,2) = 1.0;
         for (int j=0; j<2*ng; ++j) {
           if (j != i) {
             Real x1i = CellCenterX(i0 - ng + i + 1, indcs.nx1, mb.x1min, mb.x1max);
             Real x1j = CellCenterX(i0 - ng + j + 1, indcs.nx1, mb.x1min, mb.x1max);
             h_iw(p,i,0) *= (x0 - x1j) / (x1i - x1j);
-
             Real x2i = CellCenterX(j0 - ng + i + 1, indcs.nx2, mb.x2min, mb.x2max);
             Real x2j = CellCenterX(j0 - ng + j + 1, indcs.nx2, mb.x2min, mb.x2max);
             h_iw(p,i,1) *= (y0 - x2j) / (x2i - x2j);
-
             Real x3i = CellCenterX(k0 - ng + i + 1, indcs.nx3, mb.x3min, mb.x3max);
             Real x3j = CellCenterX(k0 - ng + j + 1, indcs.nx3, mb.x3min, mb.x3max);
             h_iw(p,i,2) *= (z0 - x3j) / (x3i - x3j);
@@ -291,21 +308,15 @@ void SphericalSurfaceGrid::SetInterpolationWeights() {
   interp_wghts.template sync<DevExeSpace>();
 }
 
-//----------------------------------------------------------------------------------------
-
 void SphericalSurfaceGrid::BuildTangentsFD() {
   auto h_x = coords.h_view;
   auto h_tan_th = tan_th.h_view;
   auto h_tan_ph = tan_ph.h_view;
-
   for (int it = 0; it < n_th; ++it) {
     for (int ip = 0; ip < n_ph; ++ip) {
       const int p = it * n_ph + ip;
-
-      // θ-direction
       if (it > 0 && it < n_th - 1) { // central
-        const int pp = p + n_ph;
-        const int pm = p - n_ph;
+        const int pp = p + n_ph; const int pm = p - n_ph;
         const Real fac = 0.5 / dth;
         for (int d=0; d<3; ++d) h_tan_th(p,d) = fac*(h_x(pp,d)-h_x(pm,d));
       } else if (it == 0) { // forward
@@ -317,8 +328,6 @@ void SphericalSurfaceGrid::BuildTangentsFD() {
         const Real fac = 0.5 / dth;
         for (int d=0; d<3; ++d) h_tan_th(p,d) = fac*(3.0*h_x(p,d) - 4.0*h_x(p1,d) + h_x(p2,d));
       }
-
-      // φ-direction (periodic central)
       const int pr = it * n_ph + ((ip + 1) % n_ph);
       const int pl = it * n_ph + ((ip - 1 + n_ph) % n_ph);
       const Real facp = 0.5 / dph;
