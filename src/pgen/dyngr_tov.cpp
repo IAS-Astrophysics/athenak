@@ -144,7 +144,7 @@ void SetupTOV(ParameterInput *pin, Mesh* pmy_mesh_) {
     w0_(m,IVY,k,j,i) = vr*x2v/r;
     w0_(m,IVZ,k,j,i) = vr*x3v/r;
     auto &nvars = nvars_;
-    if constexpr (use_ye) {
+    if (use_ye && pmbp->pmhd->nscalars>=1) {
       w0_(m,nvars,k,j,i) = ye;
     }
 
