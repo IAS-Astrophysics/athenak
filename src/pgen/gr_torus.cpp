@@ -171,11 +171,11 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   auto &grids = spherical_grids;
   const Real rflux =
     (is_radiation_enabled) ? ceil(r_excise + 1.0) : 1.0 + sqrt(1.0 - SQR(torus.spin));
-  grids.push_back(std::make_unique<SphericalGrid>(pmbp, 5, rflux));
+  grids.push_back(std::make_unique<SphericalGrid>(pmbp, 5, rflux, 2));
   // NOTE(@pdmullen): Enroll additional radii for flux analysis by
   // pushing back the grids vector with additional SphericalGrid instances
-  grids.push_back(std::make_unique<SphericalGrid>(pmbp, 5, 12.0));
-  grids.push_back(std::make_unique<SphericalGrid>(pmbp, 5, 24.0));
+  grids.push_back(std::make_unique<SphericalGrid>(pmbp, 5, 12.0, 2));
+  grids.push_back(std::make_unique<SphericalGrid>(pmbp, 5, 24.0, 2));
   user_hist_func = TorusFluxes;
 
   // return if restart
