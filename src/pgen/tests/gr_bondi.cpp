@@ -4,7 +4,10 @@
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
 //! \file gr_bondi.cpp
-//! \brief Problem generator for spherically symmetric black hole accretion.
+//! \brief Problem generator for spherically symmetric black hole accretion (Bondi)
+//! solution in GR hydrodynamics. Sets up the analytic solution initially, and then code
+//! is run to see if solution is preserved.  Automatically outputs errors (difference
+//! between initial and final times).
 
 #include <cmath>   // abs(), NAN, pow(), sqrt()
 #include <cstring> // strcmp()
@@ -241,152 +244,16 @@ void ProblemGenerator::BondiAccretion(ParameterInput *pin, const bool restart) {
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn void ProblemGenerator::LinearWaveErrors_()
-//  \brief Computes errors in linear wave solution and outputs to file.
+//! \fn void ProblemGenerator::BondiErrors_()
+//! \brief Computes errors in Bondi solution and outputs to file, using generic error
+//! output function.
 
 void BondiErrors(ParameterInput *pin, Mesh *pm) {
   // calculate reference solution by calling pgen again.  Solution stored in second
   // register u1/b1 when flag is false.
   bondi.reset_ic=true;
   pm->pgen->BondiAccretion(pin, false);
-
-  Real l1_err[8];
-  int nvars=0;
-
-  // capture class variables for kernel
-  auto &indcs = pm->mb_indcs;
-  int &nx1 = indcs.nx1;
-  int &nx2 = indcs.nx2;
-  int &nx3 = indcs.nx3;
-  int &is = indcs.is;
-  int &js = indcs.js;
-  int &ks = indcs.ks;
-  MeshBlockPack *pmbp = pm->pmb_pack;
-  auto &size = pmbp->pmb->mb_size;
-
-  // compute errors for Hydro  -----------------------------------------------------------
-  DvceArray5D<Real> u0_, u1_;
-  bool is_ideal;
-  if (pmbp->phydro != nullptr) {
-    u0_ = pmbp->phydro->u0;
-    u1_ = pmbp->phydro->u1;
-    is_ideal = pmbp->phydro->peos->eos_data.is_ideal;
-    nvars = pmbp->phydro->nhydro;
-  } else if (pmbp->pmhd != nullptr) {
-    u0_ = pmbp->pmhd->u0;
-    u1_ = pmbp->pmhd->u1;
-    is_ideal = pmbp->pmhd->peos->eos_data.is_ideal;
-    nvars = pmbp->pmhd->nmhd;
-  }
-  if (pmbp->phydro != nullptr || pmbp->pmhd != nullptr) {
-    const int nmkji = (pmbp->nmb_thispack)*nx3*nx2*nx1;
-    const int nkji = nx3*nx2*nx1;
-    const int nji  = nx2*nx1;
-    array_sum::GlobalSum sum_this_mb;
-    Kokkos::parallel_reduce("Bondi-err-Sums",
-                            Kokkos::RangePolicy<>(DevExeSpace(), 0, nmkji),
-    KOKKOS_LAMBDA(const int &idx, array_sum::GlobalSum &mb_sum) {
-      // compute n,k,j,i indices of thread
-      int m = (idx)/nkji;
-      int k = (idx - m*nkji)/nji;
-      int j = (idx - m*nkji - k*nji)/nx1;
-      int i = (idx - m*nkji - k*nji - j*nx1) + is;
-      k += ks;
-      j += js;
-
-      Real vol = size.d_view(m).dx1*size.d_view(m).dx2*size.d_view(m).dx3;
-
-      // Hydro conserved variables:
-      array_sum::GlobalSum evars;
-      evars.the_array[IDN] = vol*fabs(u0_(m,IDN,k,j,i) - u1_(m,IDN,k,j,i));
-      evars.the_array[IM1] = vol*fabs(u0_(m,IM1,k,j,i) - u1_(m,IM1,k,j,i));
-      evars.the_array[IM2] = vol*fabs(u0_(m,IM2,k,j,i) - u1_(m,IM2,k,j,i));
-      evars.the_array[IM3] = vol*fabs(u0_(m,IM3,k,j,i) - u1_(m,IM3,k,j,i));
-      if (is_ideal) {
-        evars.the_array[IEN] = vol*fabs(u0_(m,IEN,k,j,i) - u1_(m,IEN,k,j,i));
-      }
-
-      // fill rest of the_array with zeros, if narray < NREDUCTION_VARIABLES
-      for (int n=nvars; n<NREDUCTION_VARIABLES; ++n) {
-        evars.the_array[n] = 0.0;
-      }
-
-      // sum into parallel reduce
-      mb_sum += evars;
-    }, Kokkos::Sum<array_sum::GlobalSum>(sum_this_mb));
-
-    // store data into l1_err array
-    for (int n=0; n<nvars; ++n) {
-      l1_err[n] = sum_this_mb.the_array[n];
-    }
-  }
-
-#if MPI_PARALLEL_ENABLED
-  // sum over all ranks
-  if (global_variable::my_rank == 0) {
-    MPI_Reduce(MPI_IN_PLACE, l1_err, 8, MPI_DOUBLE, MPI_SUM, 0,
-               MPI_COMM_WORLD);
-  } else {
-    MPI_Reduce(l1_err, l1_err, 8, MPI_DOUBLE, MPI_SUM, 0,
-               MPI_COMM_WORLD);
-  }
-#endif
-
-  // normalize errors by number of cells
-  Real vol=  (pmbp->pmesh->mesh_size.x1max - pmbp->pmesh->mesh_size.x1min)
-            *(pmbp->pmesh->mesh_size.x2max - pmbp->pmesh->mesh_size.x2min)
-            *(pmbp->pmesh->mesh_size.x3max - pmbp->pmesh->mesh_size.x3min);
-  for (int i=0; i<nvars; ++i) l1_err[i] = l1_err[i]/vol;
-
-  // compute rms error
-  Real rms_err = 0.0;
-  for (int i=0; i<nvars; ++i) {
-    rms_err += SQR(l1_err[i]);
-  }
-  rms_err = std::sqrt(rms_err);
-
-  // open output file and write out errors
-  if (global_variable::my_rank==0) {
-    // open output file and write out errors
-    std::string fname;
-    fname.assign(pin->GetString("job","basename"));
-    fname.append("-errs.dat");
-    FILE *pfile;
-
-    // The file exists -- reopen the file in append mode
-    if ((pfile = std::fopen(fname.c_str(), "r")) != nullptr) {
-      if ((pfile = std::freopen(fname.c_str(), "a", pfile)) == nullptr) {
-        std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-                  << std::endl << "Error output file could not be opened" <<std::endl;
-        std::exit(EXIT_FAILURE);
-      }
-
-    // The file es not exist -- open the file in write mode and add headers
-    } else {
-      if ((pfile = std::fopen(fname.c_str(), "w")) == nullptr) {
-        std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-                  << std::endl << "Error output file could not be opened" <<std::endl;
-        std::exit(EXIT_FAILURE);
-      }
-      std::fprintf(pfile, "# Nx1  Nx2  Nx3   Ncycle  RMS-L1-err       ");
-      if (pmbp->phydro != nullptr) {
-        std::fprintf(pfile, "d_L1         M1_L1         M2_L1");
-        std::fprintf(pfile, "         M3_L1         E_L1 ");
-      }
-      std::fprintf(pfile, "\n");
-    }
-
-    // write errors
-    std::fprintf(pfile, "%04d", pmbp->pmesh->mesh_indcs.nx1);
-    std::fprintf(pfile, "  %04d", pmbp->pmesh->mesh_indcs.nx2);
-    std::fprintf(pfile, "  %04d", pmbp->pmesh->mesh_indcs.nx3);
-    std::fprintf(pfile, "  %05d  %e", pmbp->pmesh->ncycle, rms_err);
-    for (int i=0; i<nvars; ++i) {
-      std::fprintf(pfile, "  %e", l1_err[i]);
-    }
-    std::fprintf(pfile, "\n");
-    std::fclose(pfile);
-  }
+  pm->pgen->OutputErrors(pin, pm);
   return;
 }
 
