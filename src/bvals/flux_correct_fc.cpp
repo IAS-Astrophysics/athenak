@@ -317,6 +317,7 @@ TaskStatus MeshBoundaryValuesFC::PackAndSendFluxFC(DvceEdgeFld4D<Real> &flx) {
         }
       }
     }  // end if-neighbor-exists block
+    tmember.team_barrier();
   });  // end par_for_outer
 
 #if MPI_PARALLEL_ENABLED
@@ -616,6 +617,7 @@ void MeshBoundaryValuesFC::SumBoundaryFluxes(DvceEdgeFld4D<Real> &flx,
           }
         }
       }  // end if-neighbor-exists block
+      tmember.team_barrier();
     }    // end for loop over n
   });    // end par_for_outer
 
@@ -763,6 +765,7 @@ void MeshBoundaryValuesFC::ZeroFluxesAtBoundaryWithFiner(DvceEdgeFld4D<Real> &fl
         }
       }
     }  // end if-neighbor-exists block
+    tmember.team_barrier();
   });  // end par_for_outer
 
   return;
@@ -983,6 +986,7 @@ void MeshBoundaryValuesFC::AverageBoundaryFluxes(DvceEdgeFld4D<Real> &flx,
         });
       }
     }
+    tmember.team_barrier();
   });    // end par_for_outer
 
   return;
