@@ -317,6 +317,7 @@ TaskStatus MeshBoundaryValuesFC::PackAndSendFluxFC(DvceEdgeFld4D<Real> &flx) {
         }
       }
     }  // end if-neighbor-exists block
+    tmember.team_barrier();
   });  // end par_for_outer
 
 #if MPI_PARALLEL_ENABLED
@@ -636,7 +637,9 @@ void MeshBoundaryValuesFC::SumBoundaryFluxes(DvceEdgeFld4D<Real> &flx,
             });
           }
         }
-      }}  // end if-neighbor-exists block
+      }  // end if-neighbor-exists block
+      }
+      tmember.team_barrier();
     }    // end for loop over n
   });    // end par_for_outer
 
@@ -784,6 +787,7 @@ void MeshBoundaryValuesFC::ZeroFluxesAtBoundaryWithFiner(DvceEdgeFld4D<Real> &fl
         }
       }
     }  // end if-neighbor-exists block
+    tmember.team_barrier();
   });  // end par_for_outer
 
   return;
@@ -1015,18 +1019,19 @@ void MeshBoundaryValuesFC::AverageBoundaryFluxes(DvceEdgeFld4D<Real> &flx,
           });
         }
 
-      // x2x3 edges
-      } else if (three_d && (n==40 || n==42 || n==44 || n==46)) {
-        if (v==0) {
-          int ni = iu - il + 1;
-          Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember,ni),[&](const int idx) {
-            int i = idx + il;
-            flx.x1e(m,kl,jl,i) /= static_cast<Real>(nflx(m,n));
-          });
-        }
+    // x2x3 edges
+    } else if (three_d && (n==40 || n==42 || n==44 || n==46)) {
+      if (v==0) {
+        int ni = iu - il + 1;
+        Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember,ni),[&](const int idx) {
+          int i = idx + il;
+          flx.x1e(m,kl,jl,i) /= static_cast<Real>(nflx(m,n));
+        });
       }
-    } // end if-neighbor-exists
-  }); // end par_for_outer
+    }
+    }
+    tmember.team_barrier();
+  });    // end par_for_outer
 
   return;
 }
