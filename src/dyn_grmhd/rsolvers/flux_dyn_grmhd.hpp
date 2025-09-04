@@ -216,8 +216,6 @@ void TransformPrimitivesToTetrad(Real prim[NPRIM], Real Bu[NMAG], arr2D& e_td) {
   Real ut[3] = {0.0};
   Real Bt[3] = {0.0};
 
-  // Note that e_td is lower triangular, so we can save a few operations by restricting
-  // the loop on a.
   for (int b = 0; b < 3; b++) {
     for (int a = 0; a < 3; a++) {
       ut[b] += e_td[b+1][a+1]*prim[PVX+a];
