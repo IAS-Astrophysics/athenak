@@ -14,7 +14,6 @@
 // Forward declaration of the main integration function
 void TorusFluxes_General(HistoryData *pdata,
                          MeshBlockPack *pmbp,
-                         const std::vector<SphericalSurfaceGrid*>& surfs,
-                         const Real axis_n[3] = nullptr);
+                         const std::vector<SphericalSurfaceGrid*>& surfs);
 
 #endif // UTILS_FLUX_GENERALIZED_HPP_
