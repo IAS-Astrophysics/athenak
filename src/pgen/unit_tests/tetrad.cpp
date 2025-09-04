@@ -43,6 +43,33 @@ void ExtractADMMetric(Real g3d[NSPMETRIC], Real& alpha, Real beta_u[3], Real& de
   alpha = Kokkos::sqrt(-g_dd[0][0] + Primitive::Contract(beta_u, beta_d));
 }
 
+bool CheckVelocityConsistency(Real u_t[4], Real wv_t[3], Real W) {
+  if (Kokkos::fabs((u_t[0] + W)/W) > 1e-10) {
+    std::cout << "CheckVelocityConsistency:\n"
+              << "  t-component is not correct" << std::endl;
+    return false;
+  }
+
+  if (Kokkos::fabs((u_t[1] - wv_t[0])/W) > 1e-10) {
+    std::cout << "Kerr-Schild Velocity Test, x-direction failed:\n"
+              << " x-component is not correct" << std::endl;
+    return false;
+  }
+
+  if (Kokkos::fabs((u_t[2] - wv_t[1])/W) > 1e-10) {
+    std::cout << "Kerr-Schild Velocity Test, x-direction failed:\n"
+              << " y-component is not correct" << std::endl;
+    return false;
+  }
+
+  if (Kokkos::fabs((u_t[3] - wv_t[2])/W) > 1e-10) {
+    std::cout << "Kerr-Schild Velocity Test, x-direction failed:\n"
+              << " z-component is not correct" << std::endl;
+    return false;
+  }
+  return true;
+}
+
 template<class arr2D>
 bool CheckConsistency(arr2D& g_dd, arr2D& eta_dd, arr2D& e_ud, arr2D& e_dd,
                       Real det, Real tol) {
@@ -143,9 +170,6 @@ bool CheckConsistency(arr2D& g_dd, arr2D& eta_dd, arr2D& e_ud, arr2D& e_dd,
 //! \fn ProblemGenerator::UserProblem_()
 //! \brief Problem Generator for single puncture
 void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
-  MeshBlockPack *pmbp = pmy_mesh_->pmb_pack;
-  auto &indcs = pmy_mesh_->mb_indcs;
-
   // Metric for Minkowski spacetime
   Real eta_dd[4][4] = {0.0};
   eta_dd[0][0] = -1.0;
@@ -329,27 +353,50 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     }
   }
 
-  if (Kokkos::fabs((u_t[0] + W)/W) > 1e-10) {
-    std::cout << "Kerr-Schild Velocity Test, x-direction failed:\n"
-              << "  t-component is not correct" << std::endl;
+  if (!CheckVelocityConsistency(u_t, wv_t, W)) {
+    std::cout << "Kerr-Schild Velocity Test, x-direction failed" << std::endl;
     exit(EXIT_FAILURE);
   }
 
-  if (Kokkos::fabs((u_t[1] - wv_t[0])/W) > 1e-10) {
-    std::cout << "Kerr-Schild Velocity Test, x-direction failed:\n"
-              << " x-component is not correct" << std::endl;
+  dyngr::ComputeOrthonormalTetrad<2>(g3d, beta_u, alpha, 1.0/detg, e_ud, e_dd);
+
+  for (int a = 0; a < 3; a++) {
+    wv_t[a] = 0.0;
+    for (int i = 0; i < 3; i++) {
+      wv_t[a] += e_dd[a+1][i+1]*wvi[i];
+    }
+  }
+
+  for (int a = 0; a < 4; a++) {
+    u_t[a] = 0.0;
+    for (int mu = 0; mu < 4; mu++) {
+      u_t[a] += e_dd[a][mu]*u_u[mu];
+    }
+  }
+
+  if (!CheckVelocityConsistency(u_t, wv_t, W)) {
+    std::cout << "Kerr-Schild Velocity Test, y-direction failed" << std::endl;
     exit(EXIT_FAILURE);
   }
 
-  if (Kokkos::fabs((u_t[2] - wv_t[1])/W) > 1e-10) {
-    std::cout << "Kerr-Schild Velocity Test, x-direction failed:\n"
-              << " y-component is not correct" << std::endl;
-    exit(EXIT_FAILURE);
+  dyngr::ComputeOrthonormalTetrad<3>(g3d, beta_u, alpha, 1.0/detg, e_ud, e_dd);
+
+  for (int a = 0; a < 3; a++) {
+    wv_t[a] = 0.0;
+    for (int i = 0; i < 3; i++) {
+      wv_t[a] += e_dd[a+1][i+1]*wvi[i];
+    }
   }
 
-  if (Kokkos::fabs((u_t[3] - wv_t[2])/W) > 1e-10) {
-    std::cout << "Kerr-Schild Velocity Test, x-direction failed:\n"
-              << " z-component is not correct" << std::endl;
+  for (int a = 0; a < 4; a++) {
+    u_t[a] = 0.0;
+    for (int mu = 0; mu < 4; mu++) {
+      u_t[a] += e_dd[a][mu]*u_u[mu];
+    }
+  }
+
+  if (!CheckVelocityConsistency(u_t, wv_t, W)) {
+    std::cout << "Kerr-Schild Velocity Test, z-direction failed" << std::endl;
     exit(EXIT_FAILURE);
   }
 
