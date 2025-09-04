@@ -24,7 +24,7 @@ class Viscosity;
 class Conduction;
 class SourceTerms;
 class OrbitalAdvectionCC;
-class ShearingBoxBoundaryCC;
+class ShearingBoxCC;
 class Driver;
 
 // constants that enumerate Hydro Riemann Solver options
@@ -87,7 +87,7 @@ class Hydro {
 
   // Orbital advection and shearing box BCs
   OrbitalAdvectionCC *porb_u = nullptr;
-  ShearingBoxBoundaryCC *psbox_u = nullptr;
+  ShearingBoxCC *psbox_u = nullptr;
 
   // Object(s) for extra physics (viscosity, thermal conduction, srcterms)
   Viscosity *pvisc = nullptr;

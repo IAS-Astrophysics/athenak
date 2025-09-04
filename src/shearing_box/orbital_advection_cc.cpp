@@ -20,6 +20,7 @@
 #include "mesh/mesh.hpp"
 #include "coordinates/cell_locations.hpp"
 #include "shearing_box.hpp"
+#include "orbital_advection.hpp"
 #include "mhd/mhd.hpp"
 #include "remap_fluxes.hpp"
 
@@ -173,7 +174,7 @@ TaskStatus OrbitalAdvectionCC::PackAndSendCC(DvceArray5D<Real> &a) {
 //! integer shift and a fractional offset to input array a.
 
 TaskStatus OrbitalAdvectionCC::RecvAndUnpackCC(DvceArray5D<Real> &a,
-                                               ReconstructionMethod rcon, Real qom) {
+                                               ReconstructionMethod rcon) {
   // create local references for variables in kernel
   int nmb = pmy_pack->nmb_thispack;
   auto &rbuf = recvbuf;
@@ -228,21 +229,21 @@ TaskStatus OrbitalAdvectionCC::RecvAndUnpackCC(DvceArray5D<Real> &a,
   auto &mesh_size = pmy_pack->pmesh->mesh_size;
   Real &dt = pmy_pack->pmesh->dt;
   Real ly = (mesh_size.x2max - mesh_size.x2min);
+  Real qo = qshear*omega0;
 
   int scr_lvl=0;
-  size_t scr_size = ScrArray1D<Real>::shmem_size(nfx) * 3;
+  size_t scr_size = ScrArray1D<Real>::shmem_size(nfx) * 2;
   par_for_outer("oa-unpk",DevExeSpace(),scr_size,scr_lvl,0,(nmb-1),0,(nvar-1),ks,ke,is,ie,
   KOKKOS_LAMBDA(TeamMember_t member, const int m, const int n, const int k, const int i) {
     ScrArray1D<Real> a_(member.team_scratch(scr_lvl), nfx); // 1D slice of data
     ScrArray1D<Real> flx(member.team_scratch(scr_lvl), nfx); // "flux" at faces
-    ScrArray1D<Real> q1_(member.team_scratch(scr_lvl), nfx); // scratch array
 
     Real &x1min = mbsize.d_view(m).x1min;
     Real &x1max = mbsize.d_view(m).x1max;
     int nx1 = indcs.nx1;
     Real x1v = CellCenterX(i-is, nx1, x1min, x1max);
 
-    Real yshear = -qom*x1v*dt;
+    Real yshear = -(qo)*x1v*dt;
     int joffset = static_cast<int>(yshear/(mbsize.d_view(m).dx2));
 
     // Load scratch array with no shift
@@ -264,18 +265,20 @@ TaskStatus OrbitalAdvectionCC::RecvAndUnpackCC(DvceArray5D<Real> &a,
     Real epsi = fmod(yshear,(mbsize.d_view(m).dx2))/(mbsize.d_view(m).dx2);
     switch (rcon) {
       case ReconstructionMethod::dc:
-        DCRemapFlx(member, (jfs-joffset), (jfe+1-joffset), epsi, a_, q1_, flx);
+        DC_RemapFlx(member, (jfs-joffset), (jfe+1-joffset), epsi, a_, flx);
         break;
       case ReconstructionMethod::plm:
-        PLMRemapFlx(member, (jfs-joffset), (jfe+1-joffset), epsi, a_, q1_, flx);
+        PLM_RemapFlx(member, (jfs-joffset), (jfe+1-joffset), epsi, a_, flx);
         break;
-//      case ReconstructionMethod::ppm4:
-//      case ReconstructionMethod::ppmx:
-//          PPMRemapFlx(member,eos_,extrema,true,m,k,j,il,iu, w0_, wl_jp1, wr);
-//        break;
+      case ReconstructionMethod::ppm4:
+      case ReconstructionMethod::ppmx:
+      case ReconstructionMethod::wenoz:
+        PPMX_RemapFlx(member, (jfs-joffset), (jfe+1-joffset), epsi, a_, flx);
+        break;
       default:
         break;
     }
+    member.team_barrier();
 
     // Update CC variables with both integer shift (from a_) and a conservative remap
     // for the remaining fraction of a cell using upwind "fluxes"
