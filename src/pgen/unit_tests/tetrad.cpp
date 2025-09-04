@@ -299,6 +299,60 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   }
 
 
+  // Check that a four-velocity and spatial three-velocity transform consistently in
+  // Kerr-Schild coordinates.
+  dyngr::ComputeOrthonormalTetrad<1>(g3d, beta_u, alpha, 1.0/detg, e_ud, e_dd);
+  Real wvi[3] = {1.0, 2.0, 3.0};
+  Real W = 1.0;
+  for (int j = 0; j < 3; j++) {
+    for (int i = 0; i < 3; i++) {
+      W += g_dd[j+1][i+1]*wvi[j]*wvi[i];
+    }
+  }
+  W = Kokkos::sqrt(W);
+  u_u[0] = W/alpha;
+  u_u[1] = wvi[0] - W*beta_u[0]/alpha;
+  u_u[2] = wvi[1] - W*beta_u[1]/alpha;
+  u_u[3] = wvi[2] - W*beta_u[2]/alpha;
+
+  Real wv_t[3] = {0.0};
+  for (int a = 0; a < 3; a++) {
+    for (int i = 0; i < 3; i++) {
+      wv_t[a] += e_dd[a+1][i+1]*wvi[i];
+    }
+  }
+
+  for (int a = 0; a < 4; a++) {
+    u_t[a] = 0.0;
+    for (int mu = 0; mu < 4; mu++) {
+      u_t[a] += e_dd[a][mu]*u_u[mu];
+    }
+  }
+
+  if (Kokkos::fabs((u_t[0] + W)/W) > 1e-10) {
+    std::cout << "Kerr-Schild Velocity Test, x-direction failed:\n"
+              << "  t-component is not correct" << std::endl;
+    exit(EXIT_FAILURE);
+  }
+
+  if (Kokkos::fabs((u_t[1] - wv_t[0])/W) > 1e-10) {
+    std::cout << "Kerr-Schild Velocity Test, x-direction failed:\n"
+              << " x-component is not correct" << std::endl;
+    exit(EXIT_FAILURE);
+  }
+
+  if (Kokkos::fabs((u_t[2] - wv_t[1])/W) > 1e-10) {
+    std::cout << "Kerr-Schild Velocity Test, x-direction failed:\n"
+              << " y-component is not correct" << std::endl;
+    exit(EXIT_FAILURE);
+  }
+
+  if (Kokkos::fabs((u_t[3] - wv_t[2])/W) > 1e-10) {
+    std::cout << "Kerr-Schild Velocity Test, x-direction failed:\n"
+              << " z-component is not correct" << std::endl;
+    exit(EXIT_FAILURE);
+  }
+
   std::cout << "All tetrad tests passed!\n";
 
   return;
