@@ -71,11 +71,11 @@ void HLLE_TRANSFORMING(TeamMember_t const &member,
                       nhyd, nscal, m, k, j, i, ibx, iby, ibz);
 
     // Compute tetrad transformation
-    Real e_cov[4][4], e_cont[4][4];
-    ComputeOrthonormalTetrad<ivx>(g3d, beta_u, alpha, isdetg*isdetg, e_cov, e_cont);
-    Real ialpha = e_cov[0][0]; // Save a division this way
-    TransformPrimitivesToTetrad(prim_l, Bu_l, e_cont);
-    TransformPrimitivesToTetrad(prim_r, Bu_r, e_cont);
+    Real e_ut[4][4], e_td[4][4];
+    ComputeOrthonormalTetrad<ivx>(g3d, beta_u, alpha, isdetg*isdetg, e_ut, e_td);
+    Real ialpha = e_ut[0][0]; // Save a division this way
+    TransformPrimitivesToTetrad(prim_l, Bu_l, e_td);
+    TransformPrimitivesToTetrad(prim_r, Bu_r, e_td);
 
     // LEFT STATE
     Real cons_l[NCONS], flux_l[NCONS], bflux_l[NMAG], bsq_l;
@@ -134,9 +134,9 @@ void HLLE_TRANSFORMING(TeamMember_t const &member,
     b_hll[ibz] = ((lambda_r*Bu_r[ibz] - lambda_l*Bu_l[ibz]) +
                   (bflux_r[ibz] - bflux_r[ibz])) * qb;
 
-    // Note that the interface is moving! e_cont[ivx][ivx] = 1/sqrt(g^{xx}), so we use it
+    // Note that the interface is moving! e_td[ivx][ivx] = 1/sqrt(g^{xx}), so we use it
     // to save an expensive computation.
-    Real vint = beta_u[ibx]*ialpha*e_cont[ivx][ivx];
+    Real vint = beta_u[ibx]*ialpha*e_td[ivx][ivx];
     Real *f_interface, *bf_interface, *cons_interface, *b_interface;
     if (lambda_l >= vint) {
       f_interface = &flux_l[0];
@@ -159,7 +159,7 @@ void HLLE_TRANSFORMING(TeamMember_t const &member,
 
     // Transform the fluxes and store them in the global flux arrays.
     TransformFluxesToGlobal(cons_interface, f_interface, b_interface, bf_interface,
-                    e_cont, e_cov, flx, ey, ez, vol, m, k, j, i, ivx, ivy, ivz,
+                    e_td, e_ut, flx, ey, ez, vol, m, k, j, i, ivx, ivy, ivz,
                     ibx, iby, ibz, csx, csy, csz);
   });
 }
