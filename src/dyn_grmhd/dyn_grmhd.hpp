@@ -89,6 +89,9 @@ class DynGRMHD {
   virtual TaskStatus ConToPrim(Driver* pdrive, int stage) = 0;
   virtual void ConToPrimBC(int is, int ie, int js, int je, int ks, int ke) = 0;
   virtual void PrimToConInit(int is, int ie, int js, int je, int ks, int ke) = 0;
+  virtual void PrimToConInit(DvceArray5D<Real> &w, DvceArray5D<Real> &bcc,
+                             DvceArray5D<Real> &u, int is, int ie, int js, int je,
+                             int ks, int ke) = 0;
   virtual void ConvertInternalEnergyToPressure(int is, int ie,
                                                int js, int je, int ks, int ke) = 0;
 
@@ -132,6 +135,9 @@ class DynGRMHDPS : public DynGRMHD {
   virtual TaskStatus ConToPrim(Driver* pdrive, int stage);
   virtual void ConToPrimBC(int is, int ie, int js, int je, int ks, int ke);
   virtual void PrimToConInit(int is, int ie, int js, int je, int ks, int ke);
+  virtual void PrimToConInit(DvceArray5D<Real> &w, DvceArray5D<Real>& bcc,
+                             DvceArray5D<Real> &u, int is, int ie, int js, int je,
+                             int ks, int ke);
   virtual void ConvertInternalEnergyToPressure(int is, int ie,
                                                int js, int je, int ks, int ke);
 

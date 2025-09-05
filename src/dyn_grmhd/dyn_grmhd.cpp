@@ -220,19 +220,31 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::QueueDynGRMHDTasks() {
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn  TaskStatus DynGRMHD::ADMMatterSource_(Driver *pdrive, int stage) {
-//  \brief
+//! \fn  void PrimToConInit
+//  \brief Calculate conserved variables from a set of input primitive variables.
 template<class EOSPolicy, class ErrorPolicy>
-void DynGRMHDPS<EOSPolicy, ErrorPolicy>::PrimToConInit(int is, int ie, int js, int je,
-                                                    int ks, int ke) {
-  eos.PrimToCons(pmy_pack->pmhd->w0, pmy_pack->pmhd->bcc0, pmy_pack->pmhd->u0,
-                 is, ie, js, je, ks, ke);
+void DynGRMHDPS<EOSPolicy, ErrorPolicy>::PrimToConInit(DvceArray5D<Real> &w,
+                                                       DvceArray5D<Real> &bcc,
+                                                       DvceArray5D<Real> &u,
+                                                       int is, int ie, int js, int je,
+                                                       int ks, int ke) {
+  eos.PrimToCons(w, bcc, u, is, ie, js, je, ks, ke);
   if (pmy_pack->ptmunu != nullptr) {
     bool fixed = fixed_evolution;
     fixed_evolution = false;
     SetTmunu(nullptr, 0);
     fixed_evolution = fixed;
   }
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn  void PrimToConInit
+//  \brief Calculate conserved variables for the current stage (u0).
+template<class EOSPolicy, class ErrorPolicy>
+void DynGRMHDPS<EOSPolicy, ErrorPolicy>::PrimToConInit(int is, int ie, int js, int je,
+                                                    int ks, int ke) {
+  PrimToConInit(pmy_pack->pmhd->w0, pmy_pack->pmhd->bcc0, pmy_pack->pmhd->u0,
+                is, ie, js, je, ks, ke);
 }
 
 //----------------------------------------------------------------------------------------
