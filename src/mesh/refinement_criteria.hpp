@@ -64,7 +64,6 @@ class RefinementCriteria {
 
   // functions
   void SetRefinementData(MeshBlockPack* pmbp, bool count, bool load);
-  void LoadDerivedVariables(MeshBlockPack* pmbp);
   void CheckMinMax(MeshBlockPack* pmbp, RefCritData crit);
   void CheckSlope(MeshBlockPack* pmbp, RefCritData crit);
   void CheckSecondDeriv(MeshBlockPack* pmbp, RefCritData crit);

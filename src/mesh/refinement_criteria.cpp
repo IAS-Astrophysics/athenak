@@ -144,7 +144,6 @@ void RefinementCriteria::SetRefinementData(MeshBlockPack* pmbp, bool count_deriv
           ComputeDerivedVariable(it->rvariable, iderived, pmbp, dvars);
           iderived += 1;
         } else {
-          int n = static_cast<int>(IDN);
           it->rdata = Kokkos::subview(dvars, ALL, iderived, ALL, ALL, ALL);
           iderived += 1;
         }
@@ -154,15 +153,6 @@ void RefinementCriteria::SetRefinementData(MeshBlockPack* pmbp, bool count_deriv
       }
     }
   }
-  return;
-}
-
-//----------------------------------------------------------------------------------------
-//! \fn void RefinementCriteria::LoadDerivedVariables()
-//! \brief
-
-void RefinementCriteria::LoadDerivedVariables(MeshBlockPack* pmbp) {
-  // cycle through all criteria and load data
   return;
 }
 
@@ -199,8 +189,10 @@ void RefinementCriteria::CheckMinMax(MeshBlockPack* pmbp, RefCritData crit) {
         k += ks;
         qmax = fmax(q0(m,k,j,i), qmax);
       },Kokkos::Max<Real>(team_qmax));
-      if (team_qmax > valmax) {refine_flag.d_view(m+mbs) = 1;}
-      if (team_qmax < valmax) {refine_flag.d_view(m+mbs) = -1;}
+      // only derefine when flag has not been set by other criteria
+      int &flag = refine_flag.d_view(m+mbs);
+      if  (team_qmax > valmax)                 {flag = 1;}
+      if ((team_qmax < valmax) && (flag == 0)) {flag = -1;}
     });
   }
 
@@ -218,8 +210,10 @@ void RefinementCriteria::CheckMinMax(MeshBlockPack* pmbp, RefCritData crit) {
         k += ks;
         qmin = fmin(q0(m,k,j,i), qmin);
       },Kokkos::Min<Real>(team_qmin));
-      if (team_qmin < valmin) {refine_flag.d_view(m+mbs) = 1;}
-      if (team_qmin > valmin) {refine_flag.d_view(m+mbs) = -1;}
+      // only derefine when flag has not been set by other criteria
+      int &flag = refine_flag.d_view(m+mbs);
+      if  (team_qmin < valmin)                 {flag = 1;}
+      if ((team_qmin > valmin) && (flag == 0)) {flag = -1;}
     });
   }
   // sync device array with host
@@ -267,8 +261,10 @@ void RefinementCriteria::CheckSlope(MeshBlockPack* pmbp, RefCritData crit) {
         if (three_d) {d2 += SQR(q0(m,k+1,j,i) - q0(m,k-1,j,i));}
         dqmax = fmax((0.5*sqrt(d2)/q0(m,k,j,i)), dqmax);
       },Kokkos::Max<Real>(team_dqmax));
-      if (team_dqmax > valmax) {refine_flag.d_view(m+mbs) = 1;}
-      if (team_dqmax < valmax) {refine_flag.d_view(m+mbs) = -1;}
+      // only derefine when flag has not been set by other criteria
+      int &flag = refine_flag.d_view(m+mbs);
+      if  (team_dqmax > valmax)                 {flag = 1;}
+      if ((team_dqmax < valmax) && (flag == 0)) {flag = -1;}
     });
   }
   // sync device array with host
@@ -316,8 +312,10 @@ void RefinementCriteria::CheckSecondDeriv(MeshBlockPack* pmbp, RefCritData crit)
         if (three_d) {d2q += (q0(m,k+1,j,i) - 2.0*q0(m,k,j,i) + q0(m,k-1,j,i));}
         d2qmax = fmax((fabs(d2q)/q0(m,k,j,i)), d2qmax);
       },Kokkos::Max<Real>(team_d2qmax));
-      if (team_d2qmax > valmax) {refine_flag.d_view(m+mbs) = 1;}
-      if (team_d2qmax < valmax) {refine_flag.d_view(m+mbs) = -1;}
+      // only derefine when flag has not been set by other criteria
+      int &flag = refine_flag.d_view(m+mbs);
+      if  (team_d2qmax > valmax)                 {flag = 1;}
+      if ((team_d2qmax < valmax) && (flag == 0)) {flag = -1;}
     });
   }
   // sync device array with host
