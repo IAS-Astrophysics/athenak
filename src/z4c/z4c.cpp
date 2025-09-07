@@ -187,10 +187,13 @@ Z4c::Z4c(MeshBlockPack *ppack, ParameterInput *pin) :
   auto &grids = spherical_grids;
   // set nrad_wave_extraction = 0 to turn off wave extraction
   nrad = pin->GetOrAddReal("z4c", "nrad_wave_extraction", 0);
-  int nlev = pin->GetOrAddReal("z4c", "extraction_nlev", 10);
+  int nlev = pin->GetOrAddReal("z4c", "extraction_nlev", 32);
+  int ntheta = nlev;
+  int nphi = 2*ntheta;
   for (int i=0; i<nrad; i++) {
     Real rad = pin->GetOrAddReal("z4c", "extraction_radius_"+std::to_string(i), 10);
-    grids.push_back(std::make_unique<SphericalGrid>(ppack, nlev, rad));
+    auto r_func = [rad](Real, Real){ return rad; };
+    grids.push_back(std::make_unique<SphericalSurfaceGrid>(ppack, ntheta, nphi, r_func, "R"+std::to_string(rad)));
   }
   // TODO(@dur566): Why is the size of psi_out hardcoded?
   psi_out = new Real[nrad*77*2];

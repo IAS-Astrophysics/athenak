@@ -20,8 +20,7 @@
 #include "tasklist/task_list.hpp"
 #include "bvals/bvals.hpp"
 #include "athena_tensor.hpp"
-#include "geodesic-grid/geodesic_grid.hpp"
-#include "geodesic-grid/spherical_grid.hpp"
+#include "utils/surface_grid.hpp"
 
 // forward declarations
 class Coordinates;
@@ -205,7 +204,7 @@ class Z4c {
   Real dtnew;
 
   // geodesic grid for wave extr
-  std::vector<std::unique_ptr<SphericalGrid>> spherical_grids;
+  std::vector<std::unique_ptr<SphericalSurfaceGrid>> spherical_grids;
   // array storing waveform at each radii
   Real * psi_out;
   Real waveform_dt;
