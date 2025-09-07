@@ -92,7 +92,6 @@ class SphericalSurfaceGrid {
   void SetInterpolationIndices();
   void SetInterpolationWeights();
   
-  // --- Private Helper ---
   // Calculates gamma_ab and proper_dA_ from g_ij and tangents
   void CalculateDerivedGeometry();
 };
