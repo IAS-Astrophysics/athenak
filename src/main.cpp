@@ -270,6 +270,7 @@ int main(int argc, char *argv[]) {
     infile.Open(input_file.c_str(), IOWrapper::FileMode::read);
     pinput->LoadFromFile(infile);
     infile.Close();
+    pinput->CheckBlockNames();
   }
   pinput->ModifyFromCmdline(argc, argv);
 

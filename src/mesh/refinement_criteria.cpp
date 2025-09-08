@@ -29,9 +29,9 @@ RefinementCriteria::RefinementCriteria(Mesh *pm, ParameterInput *pin) :
     nderived(0),
     pmy_mesh(pm),
     dvars("derived_ref_vars",1,1,1,1,1) {
-  // cycle through ParameterInput list and read each <amr_criteria> block
+  // cycle through ParameterInput list and read each <amr_criterion> block
   for (auto it = pin->block.begin(); it != pin->block.end(); ++it) {
-    if (it->block_name.compare(0, 12, "amr_criteria") == 0) {
+    if (it->block_name.compare(0, 13, "amr_criterion") == 0) {
       RefCritData rcrit0;
       std::string method = pin->GetString(it->block_name, "method");
       if (method.compare("min_max") == 0) {
@@ -63,10 +63,10 @@ RefinementCriteria::RefinementCriteria(Mesh *pm, ParameterInput *pin) :
   }
   ncriteria = rcrit.size();
 
-  // Error if there were no <amr_criteria> blocks
+  // Error if there were no <amr_criterion> blocks
   if (ncriteria==0) {
     std::cout<<"### FATAL ERROR in "<<__FILE__<<" at line "<<__LINE__<<std::endl;
-    Kokkos::abort("No <amr_criteria> blocks were found in input file");
+    Kokkos::abort("No <amr_criterion> blocks were found in input file");
   }
 
   // Error if class containing variable requested has not been initialized
@@ -136,6 +136,12 @@ void RefinementCriteria::SetRefinementData(MeshBlockPack* pmbp, bool count_deriv
           int n = static_cast<int>(IDN);
           it->rdata = Kokkos::subview(pmbp->phydro->w0, ALL, n, ALL, ALL, ALL);
         }
+      // mhd (rest-frame) density
+      } else if (it->rvariable.compare("mhd_w_d") == 0) {
+        if (!(count_derived) && !(load_derived)) {
+          int n = static_cast<int>(IDN);
+          it->rdata = Kokkos::subview(pmbp->pmhd->w0, ALL, n, ALL, ALL, ALL);
+        }
       // radiation coordinate frame energy density R^0^0
       } else if (it->rvariable.compare("rad_coord_e") == 0) {
         if (count_derived) {
@@ -149,7 +155,7 @@ void RefinementCriteria::SetRefinementData(MeshBlockPack* pmbp, bool count_deriv
         }
       } else {
         std::cout<<"### FATAL ERROR in "<<__FILE__<<" at line "<<__LINE__<<std::endl;
-        Kokkos::abort("Unknown refinement variable requested in a <amr_criteria>");
+        Kokkos::abort("Unknown refinement variable requested in a <amr_criterion>");
       }
     }
   }

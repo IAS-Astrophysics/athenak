@@ -589,7 +589,9 @@ void Mesh::NewTimeStep(const Real tlim) {
       dt = std::min(dt, (cfl_no)*(pmb_pack->phydro->pcond->dtnew) );
     }
     // source terms timestep
-    dt = std::min(dt, (cfl_no)*(pmb_pack->phydro->psrc->dtnew) );
+    if (pmb_pack->phydro->psrc != nullptr) {
+      dt = std::min(dt, (cfl_no)*(pmb_pack->phydro->psrc->dtnew) );
+    }
   }
   // MHD timestep
   if (pmb_pack->pmhd != nullptr) {
@@ -607,7 +609,9 @@ void Mesh::NewTimeStep(const Real tlim) {
       dt = std::min(dt, (cfl_no)*(pmb_pack->pmhd->pcond->dtnew) );
     }
     // source terms timestep
-    dt = std::min(dt, (cfl_no)*(pmb_pack->pmhd->psrc->dtnew) );
+    if (pmb_pack->pmhd->psrc != nullptr) {
+      dt = std::min(dt, (cfl_no)*(pmb_pack->pmhd->psrc->dtnew) );
+    }
   }
   // z4c timestep
   if (pmb_pack->pz4c != nullptr) {

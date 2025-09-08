@@ -231,7 +231,7 @@ TaskStatus Radiation::RadSrcTerms(Driver *pdrive, int stage) {
   Real beta_dt = (pdrive->beta[stage-1])*(pmy_pack->pmesh->dt);
 
   // Add physics source terms (must be computed from primitives)
-  psrc->ApplySrcTerms(i0, beta_dt);
+  if (psrc != nullptr) psrc->ApplySrcTerms(i0, beta_dt);
 
   // Add user source terms
   if (pmy_pack->pmesh->pgen->user_srcs) {
