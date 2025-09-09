@@ -440,6 +440,7 @@ void SetADMVariablesToFLRW(MeshBlockPack *pmbp) {
     adm.g_dd(m,1,2,k,j,i) = 0.0;
     adm.g_dd(m,2,2,k,j,i) = a2;
 
+<<<<<<< HEAD
     adm.vK_dd(m,0,0,k,j,i) = -a*fac_;
     adm.vK_dd(m,0,1,k,j,i) = 0.0;
     adm.vK_dd(m,0,2,k,j,i) = 0.0;

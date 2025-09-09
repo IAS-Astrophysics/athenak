@@ -35,7 +35,7 @@ Z4c_AMR::Z4c_AMR(ParameterInput *pin) {
     chi_thresh = pin->GetOrAddReal("z4c_amr", "chi_min", 0.2);
   } else if (ref_method == "dchi") {
     method = dChi;
-    dchi_thresh = pin->GetOrAddReal("z4c_amr", "dchi_max", 0.1);
+    dchi_thresh = pin->GetOrAddReal("z4c_amr", "dchi_max", 0.01);
   } else {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line "
               << __LINE__ << std::endl;
@@ -93,25 +93,25 @@ void Z4c_AMR::RefineTracker(MeshBlockPack *pmbp) {
     flag.clear();
     for (auto & pt : pmbp->pz4c->ptracker) {
       Real d2[8] = {
-        SQ(x1min - pt.GetPos(0)) + SQ(x2min - pt.GetPos(1)) + SQ(x3min - pt.GetPos(2)),
-        SQ(x1max - pt.GetPos(0)) + SQ(x2min - pt.GetPos(1)) + SQ(x3min - pt.GetPos(2)),
-        SQ(x1min - pt.GetPos(0)) + SQ(x2max - pt.GetPos(1)) + SQ(x3min - pt.GetPos(2)),
-        SQ(x1max - pt.GetPos(0)) + SQ(x2max - pt.GetPos(1)) + SQ(x3min - pt.GetPos(2)),
-        SQ(x1min - pt.GetPos(0)) + SQ(x2min - pt.GetPos(1)) + SQ(x3max - pt.GetPos(2)),
-        SQ(x1max - pt.GetPos(0)) + SQ(x2min - pt.GetPos(1)) + SQ(x3max - pt.GetPos(2)),
-        SQ(x1min - pt.GetPos(0)) + SQ(x2max - pt.GetPos(1)) + SQ(x3max - pt.GetPos(2)),
-        SQ(x1max - pt.GetPos(0)) + SQ(x2max - pt.GetPos(1)) + SQ(x3max - pt.GetPos(2)),
+        SQ(x1min - pt->GetPos(0)) + SQ(x2min - pt->GetPos(1)) + SQ(x3min - pt->GetPos(2)),
+        SQ(x1max - pt->GetPos(0)) + SQ(x2min - pt->GetPos(1)) + SQ(x3min - pt->GetPos(2)),
+        SQ(x1min - pt->GetPos(0)) + SQ(x2max - pt->GetPos(1)) + SQ(x3min - pt->GetPos(2)),
+        SQ(x1max - pt->GetPos(0)) + SQ(x2max - pt->GetPos(1)) + SQ(x3min - pt->GetPos(2)),
+        SQ(x1min - pt->GetPos(0)) + SQ(x2min - pt->GetPos(1)) + SQ(x3max - pt->GetPos(2)),
+        SQ(x1max - pt->GetPos(0)) + SQ(x2min - pt->GetPos(1)) + SQ(x3max - pt->GetPos(2)),
+        SQ(x1min - pt->GetPos(0)) + SQ(x2max - pt->GetPos(1)) + SQ(x3max - pt->GetPos(2)),
+        SQ(x1max - pt->GetPos(0)) + SQ(x2max - pt->GetPos(1)) + SQ(x3max - pt->GetPos(2)),
       };
       Real dmin2 = *std::min_element(&d2[0], &d2[8]);
       bool iscontained =
-        (pt.GetPos(0) >= x1min && pt.GetPos(0) <= x1max) &&
-        (pt.GetPos(1) >= x2min && pt.GetPos(1) <= x2max) &&
-        (pt.GetPos(2) >= x3min && pt.GetPos(2) <= x3max);
+        (pt->GetPos(0) >= x1min && pt->GetPos(0) <= x1max) &&
+        (pt->GetPos(1) >= x2min && pt->GetPos(1) <= x2max) &&
+        (pt->GetPos(2) >= x3min && pt->GetPos(2) <= x3max);
 
-      if (dmin2 < SQ(pt.GetRadius()) || iscontained) {
-        if (pt.GetReflevel() < 0 || level < pt.GetReflevel()) {
+      if (dmin2 < SQ(pt->GetRadius()) || iscontained) {
+        if (pt->GetReflevel() < 0 || level < pt->GetReflevel()) {
           flag.push_back(1);
-        } else if (level == pt.GetReflevel()) {
+        } else if (level == pt->GetReflevel()) {
           flag.push_back(0);
         } else {
           flag.push_back(-1);

@@ -57,6 +57,8 @@ struct IonNeutralTaskIDs {
   TaskID n_newdt;
   TaskID i_clear;
   TaskID n_clear;
+  TaskID i_srctrms;
+  TaskID n_srctrms;
 };
 
 namespace ion_neutral {

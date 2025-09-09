@@ -47,13 +47,15 @@ void IonNeutral::AssembleIonNeutralTasks(
   id.i_sendf  = tl["stagen"]->AddTask(&MHD::SendFlux, pmhd, id.i_flux);
   id.i_recvf  = tl["stagen"]->AddTask(&MHD::RecvFlux, pmhd, id.i_sendf);
   id.i_rkupdt = tl["stagen"]->AddTask(&MHD::RKUpdate, pmhd, id.i_recvf);
+  id.i_srctrms   = tl["stagen"]->AddTask(&MHD::MHDSrcTerms, pmhd, id.i_rkupdt);
 
-  id.n_flux   = tl["stagen"]->AddTask(&Hydro::Fluxes, phyd, id.i_rkupdt);
+  id.n_flux   = tl["stagen"]->AddTask(&Hydro::Fluxes, phyd, id.i_srctrms);
   id.n_sendf  = tl["stagen"]->AddTask(&Hydro::SendFlux, phyd, id.n_flux);
   id.n_recvf  = tl["stagen"]->AddTask(&Hydro::RecvFlux, phyd, id.n_sendf);
   id.n_rkupdt = tl["stagen"]->AddTask(&Hydro::RKUpdate, phyd, id.n_recvf);
+  id.n_srctrms   = tl["stagen"]->AddTask(&Hydro::HydroSrcTerms, phyd, id.n_rkupdt);
 
-  id.impl     = tl["stagen"]->AddTask(&IonNeutral::ImpRKUpdate, this, id.n_rkupdt);
+  id.impl     = tl["stagen"]->AddTask(&IonNeutral::ImpRKUpdate, this, id.n_srctrms);
   id.i_restu  = tl["stagen"]->AddTask(&MHD::RestrictU, pmhd, id.impl);
   id.n_restu  = tl["stagen"]->AddTask(&Hydro::RestrictU, phyd, id.i_restu);
 
@@ -185,9 +187,24 @@ TaskStatus IonNeutral::ImpRKUpdate(Driver *pdriver, int estage) {
   // equations for ion-neutral drag.
   // Only required for istage = (1,2,3,[4])
   if (estage < pdriver->nexp_stages) {
-    Real gamma_adt = drag_coeff*(pdriver->a_impl)*(pmy_pack->pmesh->dt);
-    Real xi_adt = ionization_coeff*(pdriver->a_impl)*(pmy_pack->pmesh->dt);
-    Real alpha_adt = recombination_coeff*(pdriver->a_impl)*(pmy_pack->pmesh->dt);
+    Real gamma_adt;
+    Real xi_adt;
+    Real alpha_adt;
+
+    // Condition to set gamma_adt, xi_adt, and alpha_adt to zero
+    if (istage < 3 && pdriver->integrator == "imex2+") {
+      gamma_adt = 0.0;
+      xi_adt = 0.0;
+      alpha_adt = 0.0;
+    } else {
+      gamma_adt = drag_coeff * (pdriver->a_impl) * (pmy_pack->pmesh->dt);
+      xi_adt = ionization_coeff * (pdriver->a_impl) * (pmy_pack->pmesh->dt);
+      alpha_adt = recombination_coeff * (pdriver->a_impl) * (pmy_pack->pmesh->dt);
+    }
+
+    //Real gamma_adt = drag_coeff*(pdriver->a_impl)*(pmy_pack->pmesh->dt);
+    //Real xi_adt = ionization_coeff*(pdriver->a_impl)*(pmy_pack->pmesh->dt);
+    //Real alpha_adt = recombination_coeff*(pdriver->a_impl)*(pmy_pack->pmesh->dt)
     auto ui = pmhd->u0;
     auto un = phyd->u0;
     par_for("imex_imp",DevExeSpace(),0,nmb1,0,(n3-1),0,(n2-1),0,(n1-1),

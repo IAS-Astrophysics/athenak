@@ -57,6 +57,7 @@ add_executable(
 
         geodesic-grid/geodesic_grid.cpp
         geodesic-grid/spherical_grid.cpp
+	geodesic-grid/gauss_legendre.cpp
 
         hydro/hydro.cpp
         hydro/hydro_fluxes.cpp
@@ -88,12 +89,14 @@ add_executable(
         outputs/io_wrapper.cpp
         outputs/outputs.cpp
         outputs/basetype_output.cpp
+        outputs/cartgrid.cpp
         outputs/derived_variables.cpp
         outputs/binary.cpp
         outputs/eventlog.cpp
         outputs/formatted_table.cpp
         outputs/history.cpp
         outputs/restart.cpp
+        outputs/spherical_surface.cpp
         outputs/coarsened_binary.cpp
         outputs/track_prtcl.cpp
         outputs/vtk_mesh.cpp
@@ -108,16 +111,20 @@ add_executable(
         pgen/tests/advection.cpp
         pgen/tests/collapse.cpp
         pgen/tests/cpaw.cpp
+        pgen/tests/cshock.cpp
         pgen/tests/diffusion.cpp
         pgen/tests/gr_bondi.cpp
         pgen/tests/gr_monopole.cpp
         pgen/tests/linear_wave.cpp
         pgen/tests/lw_implode.cpp
         pgen/tests/orszag_tang.cpp
+        pgen/tests/mri3d.cpp
         pgen/tests/shock_tube.cpp
+        pgen/tests/shwave.cpp
         pgen/tests/rad_check_tetrad.cpp
         pgen/tests/rad_hohlraum.cpp
         pgen/tests/rad_linear_wave.cpp
+        pgen/tests/z4c_boosted_puncture.cpp
         pgen/tests/z4c_linear_wave.cpp
 
         radiation/radiation.cpp
@@ -131,6 +138,7 @@ add_executable(
         shearing_box/orbital_advection.cpp
         shearing_box/orbital_advection_cc.cpp
         shearing_box/orbital_advection_fc.cpp
+        shearing_box/orbital_advection_tasks.cpp
         shearing_box/shearing_box.cpp
         shearing_box/shearing_box_cc.cpp
         shearing_box/shearing_box_fc.cpp
@@ -149,8 +157,11 @@ add_executable(
         utils/lagrange_interpolator.cpp
         utils/tov/tov.cpp
         utils/tr_table.cpp
+        utils/cart_grid.cpp
+        utils/spherical_surface.cpp
 
         z4c/compact_object_tracker.cpp
+        z4c/horizon_dump.cpp
         z4c/tmunu.cpp
         z4c/z4c.cpp
         z4c/z4c_adm.cpp
@@ -163,6 +174,7 @@ add_executable(
         z4c/z4c_calculate_weyl_scalars.cpp
         z4c/z4c_wave_extr.cpp
         z4c/z4c_amr.cpp
+        z4c/cce/cce.cpp
 )
 
 # custom problem generator to be included in compile
