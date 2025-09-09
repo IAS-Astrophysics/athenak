@@ -14,6 +14,12 @@
 #include "utils/surface_grid.hpp"
 #include "outputs/outputs.hpp"
 #include "z4c/z4c.hpp"
+#include "dyn_grmhd/dyn_grmhd.hpp"
+
+#include "eos/primitive_solver_hyd.hpp"
+#include "eos/primitive-solver/idealgas.hpp"
+#include "eos/primitive-solver/piecewise_polytrope.hpp"
+#include "eos/primitive-solver/reset_floor.hpp"
 
 // Expanded accumulator for separated fluid/EM fluxes and all axes
 struct FluxAccumulator {
@@ -46,55 +52,32 @@ namespace Kokkos {
 } // namespace Kokkos
 
 
-// --- Main Function Definition ---
-void TorusFluxes_General(HistoryData *pdata,
-                         MeshBlockPack *pmbp,
-                         const std::vector<SphericalSurfaceGrid*>& surfs) {
-  //--- 1. Validation and Setup ---
-  if (pmbp->padm == nullptr || pmbp->pmhd == nullptr) {
-    std::cerr << "### FATAL: TorusFluxes_General requires ADM and MHD objects." << std::endl;
-    std::exit(EXIT_FAILURE);
-  }
+namespace { // anonymous namespace for internal helper functions
+
+// --- Templated Helper Function ---
+// This function contains the core logic and is templated on the specific
+// DynGRMHDPS type. This allows compile-time access to the 'eos' member.
+template <typename DynGRMHDPS_t>
+void CalculateFluxesForEOS(HistoryData *pdata, MeshBlockPack *pmbp,
+                           const std::vector<SphericalSurfaceGrid*>& surfs,
+                           DynGRMHDPS_t* pdyngr_ps) {
   int nvars_mhd = pmbp->pmhd->nmhd + pmbp->pmhd->nscalars;
-  const Real gamma_eos = pmbp->pmhd->peos->eos_data.gamma;
-
-  if (surfs.empty()) { pdata->nhist = 0; return; }
-  int nsurf = surfs.size();
+  auto eos_policy = pdyngr_ps->eos.ps.GetEOS(); // Capture by value for the kernel
+  const Real mb = eos_policy.GetBaryonMass();
+  const int nmhd = pmbp->pmhd->nmhd;
+  const int nscalars = pmbp->pmhd->nscalars;
   const int nflux = 17;
-  pdata->nhist = nsurf * nflux;
-
-  if (pdata->nhist > NHISTORY_VARIABLES) {
-    std::cerr << "### FATAL: pdata->nhist exceeds NHISTORY_VARIABLES" << std::endl;
-    std::exit(EXIT_FAILURE);
-  }
-
-  // Set new history output labels
-  for (int g=0; g<nsurf; ++g) {
-    std::string s_name = surfs[g]->Label();
-    int i = nflux*g;
-    pdata->label[i++] = "mdot_" + s_name;
-    pdata->label[i++] = "edot_fluid_" + s_name;
-    pdata->label[i++] = "edot_em_" + s_name;
-    pdata->label[i++] = "pdot_x_fluid_" + s_name;
-    pdata->label[i++] = "pdot_y_fluid_" + s_name;
-    pdata->label[i++] = "pdot_z_fluid_" + s_name;
-    pdata->label[i++] = "pdot_x_em_" + s_name;
-    pdata->label[i++] = "pdot_y_em_" + s_name;
-    pdata->label[i++] = "pdot_z_em_" + s_name;
-    pdata->label[i++] = "ldot_x_fluid_" + s_name;
-    pdata->label[i++] = "ldot_y_fluid_" + s_name;
-    pdata->label[i++] = "ldot_z_fluid_" + s_name;
-    pdata->label[i++] = "ldot_x_em_" + s_name;
-    pdata->label[i++] = "ldot_y_em_" + s_name;
-    pdata->label[i++] = "ldot_z_em_" + s_name;
-    pdata->label[i++] = "phiB_" + s_name;
-    pdata->label[i++] = "area_" + s_name;
-  }
 
   DualArray2D<Real> dSigma;
 
-  for (int g=0; g<nsurf; ++g) {
+  for (int g=0; g<surfs.size(); ++g) {
     auto current_surf = surfs[g];
+
+    // reconstruct surface geometry, interpolation etc if using AMR
+    if (pmbp->pmesh->adaptive) {
+      current_surf->RebuildAll();
+    }
+
     int np = current_surf->Npts();
 
     //--- 2. Interpolate all required grid quantities to the surface ---
@@ -145,15 +128,30 @@ void TorusFluxes_General(HistoryData *pdata,
         const Real g_dd_1d[6] = {g_dd[0][0], g_dd[0][1], g_dd[0][2],
                                  g_dd[1][1], g_dd[1][2], g_dd[2][2]};
 
-        Real v_sq = adm::SquareVector(v_prim_u, g_dd_1d);
+        Real v_sq = Primitive::SquareVector(v_prim_u, g_dd_1d);
         if (v_sq >= 1.0) v_sq = 1.0 - 1.0e-16;
         const Real W = 1.0/sqrt(1.0 - v_sq);
         const Real Wsq = W * W;
-        const Real h = 1.0 + (pgas/(gamma_eos-1.0) + pgas)/rho;
-        const Real H_enthalpy = rho * h;
-        
+
+        // General EOS-based enthalpy calculation
+        Real prim_pt[NPRIM] = {0.0};
+        prim_pt[PRH] = rho / mb;
+        prim_pt[PVX] = v_prim_u[0];
+        prim_pt[PVY] = v_prim_u[1];
+        prim_pt[PVZ] = v_prim_u[2];
+        prim_pt[PPR] = pgas;
+
+        for (int s = 0; s < nscalars; ++s) {
+            prim_pt[PYF + s] = w_vals_d(p, nmhd + s);
+        }
+
+        prim_pt[PTM] = eos_policy.GetTemperatureFromP(prim_pt[PRH], prim_pt[PPR],
+                                                 &prim_pt[PYF]);
+        const Real H_enthalpy = rho * eos_policy.GetEnthalpy(prim_pt[PRH], prim_pt[PTM],
+                                                        &prim_pt[PYF]);
+
         //--- C1. Calculate helper quantities from source-term formulation ---
-        const Real B_sq = adm::SquareVector(B_u, g_dd_1d);
+        const Real B_sq = Primitive::SquareVector(B_u, g_dd_1d);
 
         Real v_prim_d[3]={0.};
         Real B_d[3]={0.};
@@ -194,7 +192,6 @@ void TorusFluxes_General(HistoryData *pdata,
         Real S_uu_em[3][3];
         for (int i = 0; i < 3; i++) {
           for (int j = 0; j < 3; j++) {
-            // ----- FIX: Added Wsq to the fluid stress tensor for relativistic consistency -----
             S_uu_fluid[i][j] = H_enthalpy * Wsq * v_prim_u[i] * v_prim_u[j] + pgas * g_u[i][j];
 
             S_uu_em[i][j] = b_sq * v_prim_u[i] * v_prim_u[j]
@@ -218,7 +215,6 @@ void TorusFluxes_General(HistoryData *pdata,
         }
         
         //--- D. Calculate all fluxes ---
-        // 1. Mass Flux (purely fluid)
         const Real v_coord_x = alp * v_prim_u[0] - beta_u[0];
         const Real v_coord_y = alp * v_prim_u[1] - beta_u[1];
         const Real v_coord_z = alp * v_prim_u[2] - beta_u[2];
@@ -230,7 +226,6 @@ void TorusFluxes_General(HistoryData *pdata,
         const Real mass_flux_z = alpha_sqrt_gamma * rho * u_transport_u[2];
         update.mdot += -(mass_flux_x * dS_d[0] + mass_flux_y * dS_d[1] + mass_flux_z * dS_d[2]);
         
-        // 2. Energy Flux (fluid, EM)
         Real S_u_fluid[3] = {0.}, S_u_em[3] = {0.};
         for(int i=0; i<3; ++i) {
           for(int j=0; j<3; ++j) {
@@ -246,7 +241,6 @@ void TorusFluxes_General(HistoryData *pdata,
         update.edot_fluid += -(FE_fluid[0]*dS_d[0] + FE_fluid[1]*dS_d[1] + FE_fluid[2]*dS_d[2]);
         update.edot_em    += -(FE_em[0]*dS_d[0]    + FE_em[1]*dS_d[1]    + FE_em[2]*dS_d[2]);
 
-        // 3. Momentum and Angular Momentum Fluxes
         Real FS_fluid[3][3], FS_em[3][3];
         for(int i=0; i<3; ++i) {
           for(int j=0; j<3; ++j) {
@@ -285,7 +279,6 @@ void TorusFluxes_General(HistoryData *pdata,
         update.ldot_y_em += -(z * d_pdot_em[0] - x * d_pdot_em[2]);
         update.ldot_z_em += -(x * d_pdot_em[1] - y * d_pdot_em[0]);
 
-        // 4. Unsigned Magnetic Flux (Generalized TorusFluxes version)
         {
           const Real u_u_t = W / alp;
           const Real u_u[3] = {W*v_prim_u[0], W*v_prim_u[1], W*v_prim_u[2]};
@@ -303,7 +296,6 @@ void TorusFluxes_General(HistoryData *pdata,
           update.phiB += 0.5 * Kokkos::fabs(flux_dot_dS);
         }
         
-        // 5. Surface Area
         Real dS_u[3] = {0.};
         for(int i=0; i<3; ++i) {
             for(int j=0; j<3; ++j) { dS_u[i] += g_u[i][j] * dS_d[j]; }
@@ -332,6 +324,79 @@ void TorusFluxes_General(HistoryData *pdata,
     pdata->hdata[i++] = fluxes.ldot_z_em;
     pdata->hdata[i++] = fluxes.phiB;
     pdata->hdata[i++] = fluxes.area;
+  }
+}
+
+} // end anonymous namespace
+
+
+// --- Main Function Definition ---
+// This function now acts as a dispatcher. It determines the runtime EOS type
+// and calls the appropriate templated helper function.
+void TorusFluxes_General(HistoryData *pdata,
+                         MeshBlockPack *pmbp,
+                         const std::vector<SphericalSurfaceGrid*>& surfs) {
+  //--- 1. Validation and Setup ---
+  if (pmbp->padm == nullptr || pmbp->pmhd == nullptr || pmbp->pdyngr == nullptr) {
+    std::cerr << "### FATAL: TorusFluxes_General requires ADM, MHD, and DynGRMHD objects." << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+
+  if (surfs.empty()) { pdata->nhist = 0; return; }
+  const int nflux = 17;
+  pdata->nhist = surfs.size() * nflux;
+
+  if (pdata->nhist > NHISTORY_VARIABLES) {
+    std::cerr << "### FATAL: pdata->nhist exceeds NHISTORY_VARIABLES" << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+
+  // Set new history output labels
+  for (int g=0; g<surfs.size(); ++g) {
+    std::string s_name = surfs[g]->Label();
+    int i = nflux*g;
+    pdata->label[i++] = "mdot_" + s_name;
+    pdata->label[i++] = "edot_fluid_" + s_name;
+    pdata->label[i++] = "edot_em_" + s_name;
+    pdata->label[i++] = "pdot_x_fluid_" + s_name;
+    pdata->label[i++] = "pdot_y_fluid_" + s_name;
+    pdata->label[i++] = "pdot_z_fluid_" + s_name;
+    pdata->label[i++] = "pdot_x_em_" + s_name;
+    pdata->label[i++] = "pdot_y_em_" + s_name;
+    pdata->label[i++] = "pdot_z_em_" + s_name;
+    pdata->label[i++] = "ldot_x_fluid_" + s_name;
+    pdata->label[i++] = "ldot_y_fluid_" + s_name;
+    pdata->label[i++] = "ldot_z_fluid_" + s_name;
+    pdata->label[i++] = "ldot_x_em_" + s_name;
+    pdata->label[i++] = "ldot_y_em_" + s_name;
+    pdata->label[i++] = "ldot_z_em_" + s_name;
+    pdata->label[i++] = "phiB_" + s_name;
+    pdata->label[i++] = "area_" + s_name;
+  }
+
+  // Dispatch to the correct templated implementation based on the runtime EOS policy.
+  // We assume the error policy is always ResetFloor as it's the only one
+  // instantiated in the factory function.
+  switch (pmbp->pdyngr->eos_policy) {
+    case DynGRMHD_EOS::eos_ideal: {
+      auto pdyngr_ps = static_cast<dyngr::DynGRMHDPS<Primitive::IdealGas, Primitive::ResetFloor>*>(pmbp->pdyngr);
+      CalculateFluxesForEOS(pdata, pmbp, surfs, pdyngr_ps);
+      break;
+    }
+    case DynGRMHD_EOS::eos_piecewise_poly: {
+      auto pdyngr_ps = static_cast<dyngr::DynGRMHDPS<Primitive::PiecewisePolytrope, Primitive::ResetFloor>*>(pmbp->pdyngr);
+      CalculateFluxesForEOS(pdata, pmbp, surfs, pdyngr_ps);
+      break;
+    }
+    // Add other EOS cases here if they are added to the factory function
+    // case DynGRMHD_EOS::eos_compose: {
+    //   auto pdyngr_ps = static_cast<dyngr::DynGRMHDPS<Primitive::EOSCompOSE, Primitive::ResetFloor>*>(pmbp->pdyngr);
+    //   CalculateFluxesForEOS(pdata, pmbp, surfs, pdyngr_ps);
+    //   break;
+    // }
+    default:
+      std::cerr << "### FATAL: EOS policy in TorusFluxes_General is not supported." << std::endl;
+      std::exit(EXIT_FAILURE);
   }
 
   for (int n=pdata->nhist; n<NHISTORY_VARIABLES; ++n) pdata->hdata[n] = 0.0;

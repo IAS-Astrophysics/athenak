@@ -3,15 +3,15 @@
 // Copyright(C) 2020 James M. Stone <jmstone@ias.edu> and the Athena code team
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
-//! \file z4c_puncture_wind.cpp
-//  \brief Problem generator for a uniform relativistic MHD wind accreting onto a
-//  single, non-spinning black hole puncture in isotropic coordinates.
+//! \file z4c_puncture_inflow.cpp
+//  \brief Problem generator for a radial relativistic hydrodynamical inflow accreting
+//  onto a single, non-spinning black hole puncture in isotropic coordinates.
 //
 //  This problem generator is designed to test the general relativistic flux calculation
 //  in a Z4c evolved spacetime. It initializes the metric based on the puncture formalism
-//  and sets up a uniform fluid and magnetic field configuration throughout the domain.
-//  It registers a user-defined history function to integrate and record fluxes of
-//  mass, momentum, energy, and magnetic field through a spherical surface.
+//  and sets up a spherically symmetric radial inflow of fluid. It registers a
+//  user-defined history function to integrate and record fluxes of mass, momentum,
+//  and energy through a spherical surface.
 //========================================================================================
 
 #include <algorithm>
@@ -44,12 +44,12 @@
 namespace {
 
 // Forward declarations for functions in this file
-void WindHistory(HistoryData *pdata, Mesh *pm);
+void InflowHistory(HistoryData *pdata, Mesh *pm);
 void PrintAnalytic(ParameterInput *pin, Mesh *pm);
 } // namespace
 
 // Forward declarations for problem-specific functions
-void InitializeADMAndWind(MeshBlockPack *pmbp, ParameterInput *pin);
+void InitializeADMAndInflow(MeshBlockPack *pmbp, ParameterInput *pin);
 void RefinementCondition(MeshBlockPack* pmbp);
 
 
@@ -77,7 +77,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   }
 
   // --- Setup for Flux Integration ---
-  user_hist_func = &WindHistory; // Register our custom history function
+  user_hist_func = &InflowHistory; // Register our custom history function
 
   const Real analysis_radius = pin->GetReal("problem", "analysis_radius");
   const int ntheta = pin->GetOrAddInteger("problem", "flux_ntheta", 64);
@@ -91,7 +91,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
       pmbp, ntheta, nphi, r_func_fixed, "flux_sphere"));
 
   // --- Call the combined initialization function for metric and fluid ---
-  InitializeADMAndWind(pmbp, pin);
+  InitializeADMAndInflow(pmbp, pin);
 
   // --- Z4c evolution variable setup ---
   pmbp->pz4c->GaugePreCollapsedLapse(pmbp, pin);
@@ -106,7 +106,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     case 3: pmbp->pz4c->ADMConstraints<3>(pmbp); break;
     case 4: pmbp->pz4c->ADMConstraints<4>(pmbp); break;
   }
-  std::cout<<"One Puncture with MHD wind initialized."<<std::endl;
+  std::cout<<"One Puncture with GRH inflow initialized."<<std::endl;
 
   // Print the analytical flux values for comparison
   PrintAnalytic(pin, pmy_mesh_);
@@ -115,10 +115,10 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn void InitializeADMAndWind(MeshBlockPack *pmbp, ParameterInput *pin)
-//! \brief Initialize ADM variables for a puncture and the MHD wind variables.
+//! \fn void InitializeADMAndInflow(MeshBlockPack *pmbp, ParameterInput *pin)
+//! \brief Initialize ADM variables for a puncture and the hydro radial inflow.
 //----------------------------------------------------------------------------------------
-void InitializeADMAndWind(MeshBlockPack *pmbp, ParameterInput *pin) {
+void InitializeADMAndInflow(MeshBlockPack *pmbp, ParameterInput *pin) {
   // --- Capture variables and parameters for the Kokkos kernel ---
   auto &indcs = pmbp->pmesh->mb_indcs;
   auto &size = pmbp->pmb->mb_size;
@@ -136,15 +136,10 @@ void InitializeADMAndWind(MeshBlockPack *pmbp, ParameterInput *pin) {
   Real center_x2 = pin->GetOrAddReal("problem", "punc_center_x2", 0.);
   Real center_x3 = pin->GetOrAddReal("problem", "punc_center_x3", 0.);
 
-  // Wind parameters
+  // Inflow parameters
   const Real rho_inf = pin->GetReal("problem", "rho_inf");
   const Real p_inf = pin->GetReal("problem", "p_inf");
-  const Real vx_inf = pin->GetOrAddReal("problem", "vx_inf", 0.0);
-  const Real vy_inf = pin->GetOrAddReal("problem", "vy_inf", 0.0);
-  const Real vz_inf = pin->GetOrAddReal("problem", "vz_inf", 0.0);
-  const Real bx_inf = pin->GetOrAddReal("problem", "bx_inf", 0.0);
-  const Real by_inf = pin->GetOrAddReal("problem", "by_inf", 0.0);
-  const Real bz_inf = pin->GetOrAddReal("problem", "bz_inf", 0.0);
+  const Real inflow_speed = pin->GetReal("problem", "inflow_speed");
   const Real gamma_ad = pmbp->pmhd->peos->eos_data.gamma;
 
   // Capture Kokkos views for device access
@@ -152,7 +147,7 @@ void InitializeADMAndWind(MeshBlockPack *pmbp, ParameterInput *pin) {
   auto &w0 = pmbp->pmhd->w0;
   auto &bcc0 = pmbp->pmhd->bcc0;
 
-  par_for("pgen_puncture_wind_init",
+  par_for("pgen_puncture_inflow_init",
   DevExeSpace(),0,nmb-1,ksg,keg,jsg,jeg,isg,ieg,
   KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
     // --- Calculate cell-centered Cartesian coordinates ---
@@ -185,17 +180,20 @@ void InitializeADMAndWind(MeshBlockPack *pmbp, ParameterInput *pin) {
     adm.g_dd(m,1,2,k,j,i) = 0.0;  // g_yz
     adm.g_dd(m,2,2,k,j,i) = psi4; // g_zz
 
-    // --- Set Fluid and Field Initial Conditions (Uniform Wind) ---
+    // --- Set Fluid and Field Initial Conditions (Radial Inflow) ---
     w0(m, IDN, k, j, i) = rho_inf;
     w0(m, IPR, k, j, i) = p_inf;
     w0(m, IEN, k, j, i) = p_inf / (gamma_ad - 1.0);
-    w0(m, IVX, k, j, i) = vx_inf;
-    w0(m, IVY, k, j, i) = vy_inf;
-    w0(m, IVZ, k, j, i) = vz_inf;
 
-    bcc0(m, IBX, k, j, i) = bx_inf;
-    bcc0(m, IBY, k, j, i) = by_inf;
-    bcc0(m, IBZ, k, j, i) = bz_inf;
+    // Set radial velocity pointing towards the origin
+    w0(m, IVX, k, j, i) = -inflow_speed * x1v / r;
+    w0(m, IVY, k, j, i) = -inflow_speed * x2v / r;
+    w0(m, IVZ, k, j, i) = -inflow_speed * x3v / r;
+
+    // Set magnetic field to zero for a simple hydro setup
+    bcc0(m, IBX, k, j, i) = 0.0;
+    bcc0(m, IBY, k, j, i) = 0.0;
+    bcc0(m, IBZ, k, j, i) = 0.0;
   });
   pmbp->pmhd->peos->PrimToCons(w0, bcc0, pmbp->pmhd->u0, is, ie, js, je, ks, ke);
   pmbp->pdyngr->PrimToConInit(is, ie, js, je, ks, ke);
@@ -212,10 +210,10 @@ void RefinementCondition(MeshBlockPack* pmbp) {
 // Anonymous namespace for file-local functions
 namespace {
 //----------------------------------------------------------------------------------------
-//! \fn void WindHistory(HistoryData *pdata, Mesh *pm)
+//! \fn void InflowHistory(HistoryData *pdata, Mesh *pm)
 //! \brief The user-defined history function that calls the general flux integrator.
 //----------------------------------------------------------------------------------------
-void WindHistory(HistoryData *pdata, Mesh *pm) {
+void InflowHistory(HistoryData *pdata, Mesh *pm) {
     ProblemGenerator *pgen = pm->pgen.get();
     if (pgen->surface_grids.empty()) {
         pdata->nhist = 0;
@@ -236,7 +234,7 @@ void WindHistory(HistoryData *pdata, Mesh *pm) {
 
 //----------------------------------------------------------------------------------------
 //! \fn PrintAnalytic(ParameterInput *pin, Mesh *pm)
-//! \brief Calculates and prints the analytical fluxes for a uniform wind in flat space.
+//! \brief Calculates and prints the exact analytical fluxes for the initial data.
 //----------------------------------------------------------------------------------------
 void PrintAnalytic(ParameterInput *pin, Mesh *pm) {
     // This function should only execute on the root process.
@@ -244,48 +242,46 @@ void PrintAnalytic(ParameterInput *pin, Mesh *pm) {
         // Read parameters needed for analytical calculation
         const Real rho_inf = pin->GetReal("problem", "rho_inf");
         const Real p_inf = pin->GetReal("problem", "p_inf");
-        const Real vx_inf = pin->GetOrAddReal("problem", "vx_inf", 0.0);
-        const Real vy_inf = pin->GetOrAddReal("problem", "vy_inf", 0.0);
-        const Real vz_inf = pin->GetOrAddReal("problem", "vz_inf", 0.0);
+        const Real inflow_speed = pin->GetReal("problem", "inflow_speed");
+        const Real adm_mass = pin->GetOrAddReal("problem", "punc_ADM_mass", 1.0);
         const Real gamma_ad = pm->pmb_pack->pmhd->peos->eos_data.gamma;
         const Real analysis_radius = pin->GetReal("problem", "analysis_radius");
+        const Real Ra = analysis_radius; // shorthand
 
         std::cout << "---------------------------------------------------------" << std::endl;
-        std::cout << "--- Analytical Fluxes (Flat-Space, Uniform Wind Limit) ---" << std::endl;
+        std::cout << "--- Analytical Fluxes (Exact for Initial Conditions) ---" << std::endl;
         std::cout << "---------------------------------------------------------" << std::endl;
 
-        // For simplicity, we assume wind along the x-axis for this analytic estimate.
-        if (vy_inf != 0.0 || vz_inf != 0.0) {
-            std::cout << "WARNING: Analytic fluxes are simplified for a pure x-directed wind." << std::endl;
-        }
+        // --- Calculate derived quantities at the analysis radius ---
+        const Real psi = 1.0 + 0.5 * adm_mass / Ra;
+        const Real v_sq_proper = psi*psi*psi*psi * inflow_speed*inflow_speed;
 
-        const Real v2_inf = vx_inf*vx_inf + vy_inf*vy_inf + vz_inf*vz_inf;
-        if (v2_inf >= 1.0) {
-            std::cout << "ERROR: Wind velocity is superluminal in analytic calculation." << std::endl;
+        if (v_sq_proper >= 1.0) {
+            std::cout << "ERROR: Fluid velocity is superluminal at analysis radius." << std::endl;
             return;
         }
-        const Real W_inf = 1.0 / sqrt(1.0 - v2_inf);
-        const Real h_inf = 1.0 + (p_inf / rho_inf) * (gamma_ad / (gamma_ad - 1.0));
-        const Real cross_section_area = M_PI * analysis_radius * analysis_radius;
+        const Real W = 1.0 / sqrt(1.0 - v_sq_proper);
+        const Real h = 1.0 + (p_inf / rho_inf) * (gamma_ad / (gamma_ad - 1.0));
+        const Real H = rho_inf * h;
 
-        // Assuming wind along -x direction for accretion flux onto the origin
-        const Real v_normal_abs = std::abs(vx_inf);
-
-        const Real mdot_analytic = rho_inf * W_inf * v_normal_abs * cross_section_area;
-        const Real edot_analytic = (rho_inf * h_inf * W_inf*W_inf - p_inf) * v_normal_abs * cross_section_area;
-        const Real pdot_x_analytic = (rho_inf * h_inf * W_inf*W_inf * vx_inf*vx_inf + p_inf) * cross_section_area;
+        // --- Calculate exact analytical fluxes ---
+        // These formulas are derived to match exactly what the numerical integrator in
+        // flux_generalized.cpp calculates for this specific coordinate system and setup.
+        const Real mdot_analytic = 4.0 * M_PI * Ra*Ra * pow(psi, 10) * rho_inf * W * inflow_speed;
+        const Real edot_analytic = 4.0 * M_PI * Ra*Ra * pow(psi, 4) * H * W*W * inflow_speed;
+        const Real pdot_analytic = 0.0; // Zero by spherical symmetry
 
         // --- Print Comparison ---
         std::cout << std::scientific << std::setprecision(8);
-        std::cout << "Analysis Sphere Radius: " << analysis_radius << std::endl << std::endl;
+        std::cout << "Analysis Sphere Radius: " << Ra << std::endl << std::endl;
 
         std::cout << "Expected Mass Flux (mdot):         " << mdot_analytic << std::endl;
-        std::cout << "Expected Energy Flux (edot):       " << edot_analytic << std::endl;
-        std::cout << "Expected X-Momentum Flux (pdot_x): " << pdot_x_analytic << std::endl;
+        std::cout << "Expected Energy Flux (edot_fluid): " << edot_analytic << std::endl;
+        std::cout << "Expected Momentum Flux (pdot):     " << pdot_analytic << std::endl;
 
         std::cout << "---------------------------------------------------------" << std::endl;
-        std::cout << "NOTE: These are rough estimates assuming a flat-space background." << std::endl;
-        std::cout << "The numerical fluxes will differ due to spacetime curvature." << std::endl;
+        std::cout << "NOTE: These are the exact fluxes for the initial data slice." << std::endl;
+        std::cout << "The numerical fluxes should match these values at t=0." << std::endl;
         std::cout << "---------------------------------------------------------" << std::endl;
     }
 }

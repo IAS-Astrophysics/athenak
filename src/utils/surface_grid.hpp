@@ -9,8 +9,8 @@
 
 //========================================================================================
 // A uniformly sampled (θ,φ) surface with radius r(θ,φ) in Cartesian coords.
-// Provides: x^i(θ,φ), finite-difference tangents e_θ,e_φ, quadrature weights,
-// and a Lagrange (2*ng)^3 interpolator to pull grid fields onto the surface.
+// Provides: x^i(θ,φ), tangents e_θ,e_φ, interpolated metric g_ij, induced metric
+// gamma_ab, and the proper area element dA.
 //========================================================================================
 class MeshBlockPack;
 
@@ -30,17 +30,23 @@ class SphericalSurfaceGrid {
 
   // Recompute everything if r(θ,φ) changed externally.
   void RebuildFromRadius() { RebuildAll(); }
+  
+  // Rebuild interpolator and surface geometry.
+  void RebuildAll();
 
-  // <--- MODIFIED: Signature changed to accept start and end indices
   // Interpolates variables from source_array[start_index...end_index-1]
   DualArray2D<Real> InterpolateToSurface(const DvceArray5D<Real> &source_array,
                                            int start_index, int end_index);
 
-  // Interpolate the 6 components of the ADM spatial metric to the surface
+  // Interpolate the 6 components of the ADM spatial metric to the surface.
+  // This now automatically triggers the calculation of derived geometric quantities.
   void InterpolateMetric();
 
   // Compute surface covector dΣ_i. Uses interpolated metric if available, otherwise flat.
   void BuildSurfaceCovectors(DualArray2D<Real>& dSigma) const;
+
+  // Calculates gamma_ab and proper_dA_ from g_ij and tangents
+  void CalculateDerivedGeometry();
 
   // Accessors
   int Npts() const { return npts; }
@@ -53,7 +59,14 @@ class SphericalSurfaceGrid {
   DualArray1D<Real>& QuadWeights() { return weights; }
   DualArray2D<int>&  InterpIndices() { return interp_indcs; }
   DualArray3D<Real>& InterpWeights() { return interp_wghts; }
+
+  // Accessor for the 3D metric (g_ij) interpolated to the surface
   DualArray2D<Real>& Metric() { return g_dd_surf_; }
+  // Accessor for the 3 unique components of the 2D induced metric (gamma_ab)
+  DualArray2D<Real>& InducedMetric() { return gamma_dd_surf_; }
+  // Accessor for the scalar proper area element (dA)
+  DualArray1D<Real>& ProperAreaElement() { return proper_dA_; }
+
 
  private:
   MeshBlockPack* pmy_pack;
@@ -64,7 +77,7 @@ class SphericalSurfaceGrid {
   bool metric_is_flat_;
 
   // Core geometry
-  DualArray1D<Real> theta, phi, radius, weights;
+  DualArray1D<Real> theta, phi, radius, weights; // weights is now just dth*dph
   DualArray2D<Real> coords, tan_th, tan_ph;
 
   // Interpolation data
@@ -73,9 +86,10 @@ class SphericalSurfaceGrid {
 
   // Metric data
   DualArray2D<Real> g_dd_surf_; // 6 components of metric g_ij on surface points
+  DualArray2D<Real> gamma_dd_surf_;   // 3 components of induced 2D metric gamma_ab
+  DualArray1D<Real> proper_dA_;       // Scalar proper area element dA
 
   // --- Host-side setup functions ---
-  void RebuildAll();
   void InitializeFlatMetric();
   void BuildCoordinates();
   void BuildQuadWeights();

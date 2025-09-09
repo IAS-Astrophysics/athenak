@@ -50,7 +50,9 @@ SphericalSurfaceGrid::SphericalSurfaceGrid(MeshBlockPack* pack,
   Kokkos::realloc(tan_th, npts, 3);
   Kokkos::realloc(tan_ph, npts, 3);
   Kokkos::realloc(weights, npts);
-  Kokkos::realloc(g_dd_surf_, npts, 6); // 6 components for symmetric 3x3 g_ij
+  Kokkos::realloc(g_dd_surf_, npts, 6);
+  Kokkos::realloc(gamma_dd_surf_, npts, 3); // gamma_th_th, gamma_th_ph, gamma_ph_ph
+  Kokkos::realloc(proper_dA_, npts);       // scalar area element
 
   // Interpolation maps: allocate BEFORE building them
   auto &indcs = pmy_pack->pmesh->mb_indcs;
@@ -70,7 +72,6 @@ SphericalSurfaceGrid::SphericalSurfaceGrid(MeshBlockPack* pack,
   }
 
   // Build everything
-  InitializeFlatMetric();
   RebuildAll();
 }
 
@@ -81,21 +82,20 @@ void SphericalSurfaceGrid::SetCenter(const Real new_center[3]) {
   center_[0] = new_center[0];
   center_[1] = new_center[1];
   center_[2] = new_center[2];
-  BuildCoordinates();
-  SetInterpolationIndices();
-  SetInterpolationWeights();
+  RebuildAll();
 }
 
-
-// <--- MODIFIED: Entire function implementation updated
 DualArray2D<Real> SphericalSurfaceGrid::InterpolateToSurface(
     const DvceArray5D<Real> &source_array, int start_index, int end_index) {
-  if (pmy_pack->pmesh->adaptive) {
-    SetInterpolationIndices();
-    SetInterpolationWeights();
-  }
   
-  // Calculate the number of variables to interpolate from the indices
+  // Do this manually whenever using AMR! Simply call the RebuildAll() before using
+  // any of the surface quantities. This saves a huge amount of computational cost
+
+  //if (pmy_pack->pmesh->adaptive) {
+  //  SetInterpolationIndices();
+  //  SetInterpolationWeights();
+  //}
+
   const int nvars = end_index - start_index;
   if (nvars <= 0) {
       std::cerr << "### FATAL: InterpolateToSurface called with invalid range: "
@@ -103,7 +103,6 @@ DualArray2D<Real> SphericalSurfaceGrid::InterpolateToSurface(
       std::exit(EXIT_FAILURE);
   }
 
-  // Create a local DualArray2D to hold and return the results
   DualArray2D<Real> result("interp_vals_temp", npts, nvars);
 
   auto &iindcs = interp_indcs;
@@ -129,25 +128,26 @@ DualArray2D<Real> SphericalSurfaceGrid::InterpolateToSurface(
             const int I = i0 - (ng - i_sten - is) + 1;
             const int J = j0 - (ng - j_sten - js) + 1;
             const int K = k0 - (ng - k_sten - ks) + 1;
-            // The key change: offset the source array index with start_index
             accum += w * source_array(mb_id, start_index + v, K, J, I);
           }
         }
       }
       result.d_view(p,v) = accum;
     });
+
+  // --- FIX: Add fence to prevent race condition between the kernel above and the modify call below.
+  Kokkos::fence();
+
   result.template modify<DevExeSpace>();
+  result.template sync<HostMemSpace>();
   return result;
 }
 
 void SphericalSurfaceGrid::InterpolateMetric() {
-  // <--- MODIFIED: Call to InterpolateToSurface updated to use indices
-  // This avoids creating a subview entirely.
   const int start = adm::ADM::I_ADM_GXX;
   const int end = start + 6;
   DualArray2D<Real> interpolated_metric = InterpolateToSurface(pmy_pack->padm->u_adm, start, end);
 
-  // Use the manual copy which is guaranteed to be safe.
   auto dst_view = g_dd_surf_.d_view;
   auto src_view = interpolated_metric.d_view;
 
@@ -156,10 +156,12 @@ void SphericalSurfaceGrid::InterpolateMetric() {
     KOKKOS_LAMBDA(const int p, const int v) {
       dst_view(p, v) = src_view(p, v);
     });
-
+  g_dd_surf_.template modify<DevExeSpace>();
   metric_is_flat_ = false;
-}
 
+  // Automatically calculate derived geometry after metric is updated
+  CalculateDerivedGeometry();
+}
 
 void SphericalSurfaceGrid::BuildSurfaceCovectors(DualArray2D<Real>& dSigma) const {
   const int np = npts;
@@ -172,7 +174,6 @@ void SphericalSurfaceGrid::BuildSurfaceCovectors(DualArray2D<Real>& dSigma) cons
       const Real gxx = g_surf.d_view(p, 0), gxy = g_surf.d_view(p, 1), gxz = g_surf.d_view(p, 2);
       const Real gyy = g_surf.d_view(p, 3), gyz = g_surf.d_view(p, 4), gzz = g_surf.d_view(p, 5);
       const Real gamma = adm::SpatialDet(gxx, gxy, gxz, gyy, gyz, gzz);
-      // Added robustness check to prevent NaN from negative gamma due to numerical error.
       const Real sqrt_gamma = (gamma > 0.0) ? sqrt(gamma) : 0.0;
       const Real s = sqrt_gamma * wq.d_view(p);
 
@@ -183,16 +184,62 @@ void SphericalSurfaceGrid::BuildSurfaceCovectors(DualArray2D<Real>& dSigma) cons
       dSigma.d_view(p,2) = s * (e1x*e2y - e1y*e2x);
     }
   );
+
+  // --- FIX: Add fence to prevent race condition between the kernel above and the modify call below.
+  Kokkos::fence();
+
   dSigma.template modify<DevExeSpace>();
 }
 
-// (The rest of the private helper methods remain unchanged)
-// ...
-// ... BuildCoordinates(), BuildQuadWeights(), etc. are identical to what you provided ...
-// ...
-
 //----------------------------------------------------------------------------------------
 // Private Helper Methods
+
+// --- FIX: Replaced the entire host-based function with a high-performance GPU kernel.
+// This eliminates the GPU->CPU->GPU round-trip, fixing the major performance issue
+// and resolving the original race condition in InterpolateMetric().
+void SphericalSurfaceGrid::CalculateDerivedGeometry() {
+    auto g_3D = g_dd_surf_.d_view;
+    auto e_th = tan_th.d_view;
+    auto e_ph = tan_ph.d_view;
+    auto quad_weights = weights.d_view;
+    auto gamma_2D = gamma_dd_surf_.d_view;
+    auto dA = proper_dA_.d_view;
+
+    Kokkos::parallel_for("CalculateDerivedGeom", Kokkos::RangePolicy<DevExeSpace>(0, npts),
+      KOKKOS_LAMBDA(const int p) {
+        const Real gxx = g_3D(p, 0);
+        const Real gxy = g_3D(p, 1);
+        const Real gxz = g_3D(p, 2);
+        const Real gyy = g_3D(p, 3);
+        const Real gyz = g_3D(p, 4);
+        const Real gzz = g_3D(p, 5);
+
+        const Real e_th_x = e_th(p, 0), e_th_y = e_th(p, 1), e_th_z = e_th(p, 2);
+        const Real e_ph_x = e_ph(p, 0), e_ph_y = e_ph(p, 1), e_ph_z = e_ph(p, 2);
+
+        const Real gamma_th_th = gxx*e_th_x*e_th_x + gyy*e_th_y*e_th_y + gzz*e_th_z*e_th_z
+                               + 2.0*(gxy*e_th_x*e_th_y + gxz*e_th_x*e_th_z + gyz*e_th_y*e_th_z);
+        const Real gamma_ph_ph = gxx*e_ph_x*e_ph_x + gyy*e_ph_y*e_ph_y + gzz*e_ph_z*e_ph_z
+                               + 2.0*(gxy*e_ph_x*e_ph_y + gxz*e_ph_x*e_ph_z + gyz*e_ph_y*e_ph_z);
+        const Real gamma_th_ph = gxx*e_th_x*e_ph_x + gyy*e_th_y*e_ph_y + gzz*e_th_z*e_ph_z
+                               + gxy*(e_th_x*e_ph_y + e_th_y*e_ph_x)
+                               + gxz*(e_th_x*e_ph_z + e_th_z*e_ph_x)
+                               + gyz*(e_th_y*e_ph_z + e_th_z*e_ph_y);
+
+        gamma_2D(p, 0) = gamma_th_th;
+        gamma_2D(p, 1) = gamma_th_ph;
+        gamma_2D(p, 2) = gamma_ph_ph;
+
+        const Real det_gamma_2D = gamma_th_th * gamma_ph_ph - SQR(gamma_th_ph);
+
+        dA(p) = (det_gamma_2D > 0.0)
+                ? sqrt(det_gamma_2D) * quad_weights(p)
+                : 0.0;
+    });
+
+    gamma_dd_surf_.template modify<DevExeSpace>();
+    proper_dA_.template modify<DevExeSpace>();
+}
 
 void SphericalSurfaceGrid::RebuildAll() {
   BuildCoordinates();
@@ -200,6 +247,7 @@ void SphericalSurfaceGrid::RebuildAll() {
   BuildTangentsFD();
   BuildQuadWeights();
   SetInterpolationWeights();
+  InitializeFlatMetric(); // Also initializes derived geometry for flat space
 }
 
 void SphericalSurfaceGrid::InitializeFlatMetric() {
@@ -210,8 +258,11 @@ void SphericalSurfaceGrid::InitializeFlatMetric() {
     h_g(p, 5) = 1.0;
   }
   g_dd_surf_.template modify<HostMemSpace>();
-  g_dd_surf_.template sync<DevExeSpace>();
+  g_dd_surf_.template sync<DevExeSpace>(); // Sync flat metric to device
   metric_is_flat_ = true;
+
+  // Calculate flat-space derived geometry
+  CalculateDerivedGeometry();
 }
 
 void SphericalSurfaceGrid::BuildCoordinates() {
