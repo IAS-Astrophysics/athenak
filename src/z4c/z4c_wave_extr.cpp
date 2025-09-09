@@ -17,6 +17,7 @@
 #include <fstream>
 #include <algorithm>
 #include <string>
+#include <vector>
 
 #ifdef MPI_PARALLEL
 #include <mpi.h>
@@ -73,18 +74,59 @@ void Z4c::WaveExtr(MeshBlockPack *pmbp) {
 
   int nradii = grids.size();
   int lmax = 8;
+  
+  // --- MODIFICATION: Prepare storage for areal radii (only on root) and coordinate radii (all ranks)
+  std::vector<Real> areal_radii;
+  if (0 == global_variable::my_rank) {
+    areal_radii.resize(nradii);
+  }
+  std::vector<Real> coord_radii(nradii);
+  for (int g = 0; g < nradii; ++g) {
+    std::string label = grids[g]->Label();
+    std::string radius_str = (label.length() > 1) ? label.substr(1) : label;
+    coord_radii[g] = std::stod(radius_str);
+  }
 
   int count = 0;
   for (int g=0; g<nradii; ++g) {
+    // --- MODIFICATION: Rebuild surface geometry if AMR is enabled ---
+    // If the mesh has adapted, the old surface geometry (coordinates, interpolation
+    // map, etc.) is invalid and must be recomputed.
+    if (pmbp->pmesh->adaptive) {
+      grids[g]->RebuildAll();
+    }
+
     // --- 1. Interpolate data to the surface ---
-    // Interpolate Weyl scalars to a temporary buffer
     DualArray2D<Real> interpolated_weyl = grids[g]->InterpolateToSurface(u_weyl, 0, 2);
-    // Interpolate the metric, which now AUTOMATICALLY calculates the proper area element
+    interpolated_weyl.template sync<HostMemSpace>();
     grids[g]->InterpolateMetric();
 
-    // --- 2. Sync the pre-calculated area element to the host for the integration loop ---
+    // --- 2. Sync area element and calculate areal radius ---
     auto& proper_area_element = grids[g]->ProperAreaElement();
     proper_area_element.template sync<HostMemSpace>();
+    
+    // --- MODIFICATION: Calculate Areal Radius with MPI Reduction ---
+    // Step 1: Every rank calculates its local contribution to the surface area.
+    Real local_total_area = 0.0;
+    const int npts_g = grids[g]->Npts();
+    auto area_view = proper_area_element.h_view;
+    for (int ip = 0; ip < npts_g; ++ip) {
+      local_total_area += area_view(ip);
+    }
+
+    // Step 2: Reduce the local sums from all ranks into a global sum on the root rank.
+    Real global_total_area = 0.0;
+    #if MPI_PARALLEL_ENABLED
+    MPI_Reduce(&local_total_area, &global_total_area, 1, MPI_ATHENA_REAL, MPI_SUM, 0,
+               MPI_COMM_WORLD);
+    #else
+    global_total_area = local_total_area; // Fallback for serial execution
+    #endif
+
+    // Step 3: The root rank now has the correct total area and calculates the areal radius.
+    if (0 == global_variable::my_rank) {
+      areal_radii[g] = sqrt(global_total_area / (4.0 * M_PI));
+    }
 
     // --- 3. Perform spherical harmonic decomposition ---
     const int npts = grids[g]->Npts();
@@ -98,7 +140,6 @@ void Z4c::WaveExtr(MeshBlockPack *pmbp) {
           Real datareal = interpolated_weyl.h_view(ip,0);
           Real dataim = interpolated_weyl.h_view(ip,1);
 
-          // Get the pre-calculated proper area element
           Real weight = proper_area_element.h_view(ip);
 
           Real ylmR, ylmI;
@@ -107,8 +148,9 @@ void Z4c::WaveExtr(MeshBlockPack *pmbp) {
           psilmR += weight * (datareal * ylmR + dataim * ylmI);
           psilmI += weight * (dataim * ylmR - datareal * ylmI);
         }
-        psi_out[count++] = psilmR;
-        psi_out[count++] = psilmI;
+        // --- MODIFICATION: Divide by coordinate radius to get Psi4 from r*Psi4
+        psi_out[count++] = psilmR / coord_radii[g];
+        psi_out[count++] = psilmI / coord_radii[g];
       }
     }
   }
@@ -125,16 +167,10 @@ void Z4c::WaveExtr(MeshBlockPack *pmbp) {
   if (0 == global_variable::my_rank) {
     int idx = 0;
     for (int g=0; g<nradii; ++g) {
-      // Get the label (e.g., "R100") from the surface grid
-      std::string label = grids[g]->Label();
-
-      // Extract the radius part of the string (e.g., "100" from "R100")
-      // This assumes the name format is "R<radius>"
-      std::string radius_str = (label.length() > 1) ? label.substr(1) : label;
-      
-      // Format the radius string for the filename (e.g., zero-padding)
+      // --- MODIFICATION: Filename formatting fixed to use integer part of radius
+      int radius_int = static_cast<int>(coord_radii[g]);
       std::stringstream strObj;
-      strObj << std::setfill('0') << std::setw(4) << radius_str;
+      strObj << std::setfill('0') << std::setw(4) << radius_int;
       
       std::string filename = "waveforms/rpsi4_real_" + strObj.str() + ".txt";
       std::string filename2 = "waveforms/rpsi4_imag_" + strObj.str() + ".txt";
@@ -146,11 +182,12 @@ void Z4c::WaveExtr(MeshBlockPack *pmbp) {
       bool fileExists2 = fileCheck2.good();
       fileCheck2.close();
 
+      // --- MODIFICATION: Add Areal Radius to header
       if (!fileExists) {
         std::ofstream createFile(filename);
         std::ofstream outFile(filename, std::ios::out | std::ios::app);
-        outFile << "# 1:time" << "\t";
-        int a = 2;
+        outFile << "# 1:time\t2:areal_radius\t";
+        int a = 3;
         for (int l = 2; l < lmax+1; ++l) {
           for (int m = -l; m < l+1; ++m) {
             outFile << std::to_string(a++) + ":" + std::to_string(l) + std::to_string(m) << '\t';
@@ -162,8 +199,8 @@ void Z4c::WaveExtr(MeshBlockPack *pmbp) {
       if (!fileExists2) {
         std::ofstream createFile(filename2);
         std::ofstream outFile(filename2, std::ios::out | std::ios::app);
-        outFile << "# 1:time" << "\t";
-        int a = 2;
+        outFile << "# 1:time\t2:areal_radius\t";
+        int a = 3;
         for (int l = 2; l < lmax+1; ++l) {
           for (int m = -l; m < l+1; ++m) {
             outFile << std::to_string(a++) + ":" + std::to_string(l) + std::to_string(m) << '\t';
@@ -176,8 +213,9 @@ void Z4c::WaveExtr(MeshBlockPack *pmbp) {
       std::ofstream outFile(filename, std::ios::out | std::ios::app);
       std::ofstream outFile2(filename2, std::ios::out | std::ios::app);
 
-      outFile << pmbp->pmesh->time << "\t";
-      outFile2 << pmbp->pmesh->time << "\t";
+      // --- MODIFICATION: Write Areal Radius to data column
+      outFile << std::setprecision(15) << pmbp->pmesh->time << "\t" << areal_radii[g] << "\t";
+      outFile2 << std::setprecision(15) << pmbp->pmesh->time << "\t" << areal_radii[g] << "\t";
 
       for (int l = 2; l < lmax+1; ++l) {
         for (int m = -l; m < l+1; ++m) {
