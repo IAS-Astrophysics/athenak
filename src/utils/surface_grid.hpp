@@ -30,6 +30,7 @@ class SphericalSurfaceGrid {
 
   // Recompute everything if r(θ,φ) changed externally.
   void RebuildFromRadius() { RebuildAll(); }
+  void RebuildAll();
 
   // Interpolates variables from source_array[start_index...end_index-1]
   DualArray2D<Real> InterpolateToSurface(const DvceArray5D<Real> &source_array,
@@ -87,7 +88,6 @@ class SphericalSurfaceGrid {
   DualArray1D<Real> proper_dA_;       // Scalar proper area element dA
 
   // --- Host-side setup functions ---
-  void RebuildAll();
   void InitializeFlatMetric();
   void BuildCoordinates();
   void BuildQuadWeights();
