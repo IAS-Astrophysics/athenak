@@ -42,6 +42,9 @@ class SphericalSurfaceGrid {
   // Compute surface covector dΣ_i. Uses interpolated metric if available, otherwise flat.
   void BuildSurfaceCovectors(DualArray2D<Real>& dSigma) const;
 
+  // Calculates gamma_ab and proper_dA_ from g_ij and tangents
+  void CalculateDerivedGeometry();
+
   // Accessors
   int Npts() const { return npts; }
   const std::string& Label() const { return tag; }
@@ -91,7 +94,4 @@ class SphericalSurfaceGrid {
   void BuildTangentsFD();
   void SetInterpolationIndices();
   void SetInterpolationWeights();
-  
-  // Calculates gamma_ab and proper_dA_ from g_ij and tangents
-  void CalculateDerivedGeometry();
 };
