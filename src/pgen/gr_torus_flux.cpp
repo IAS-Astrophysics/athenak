@@ -137,15 +137,12 @@ void TorusFluxes(HistoryData *pdata, Mesh *pm);
 //! \brief New user history function that calls the general-purpose flux integrator.
 //----------------------------------------------------------------------------------------
 void TorusHistory(HistoryData *pdata, Mesh *pm) {
-    // Get the ProblemGenerator object from the Mesh
     ProblemGenerator *pgen = pm->pgen.get();
-    MeshBlockPack *pmbp = pm->pmb_pack;
-
-    // Check if there are any surfaces to integrate over
     if (pgen->surface_grids.empty()) {
         pdata->nhist = 0;
         return;
     }
+    MeshBlockPack *pmbp = pm->pmb_pack;
 
     // Convert the vector of unique_ptrs to a vector of raw pointers for the function.
     std::vector<SphericalSurfaceGrid*> surf_raw_ptrs;
@@ -155,8 +152,16 @@ void TorusHistory(HistoryData *pdata, Mesh *pm) {
     }
 
     // Call the generalized flux calculator from "utils/flux_generalized.cpp"
-    // Note: This requires linking against flux_generalized.o
     TorusFluxes_General(pdata, pmbp, surf_raw_ptrs);
+}
+
+// A helper function to get the radius r(θ,φ) of a sphere of constant R in Spherical Kerr-Schild
+static Real KerrSchildRadius(Real M, const Real a, const Real r, Real grid_theta, Real grid_phi) {
+
+  Real sin2_theta_BL = SQR(std::sin(grid_theta));
+
+  // Returns the Cartesian radius of the oblate horizon shape, relative to its own center
+  return sqrt(SQR(r) + SQR(a) * sin2_theta_BL);
 }
 
 //----------------------------------------------------------------------------------------
@@ -196,7 +201,6 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
 
   // --- MODIFIED: Setup for the new SphericalSurfaceGrid objects ---
   const Real r_horizon = 1.0 + sqrt(1.0 - SQR(torus.spin));
-  const Real r_flux_inner = (is_radiation_enabled) ? ceil(r_excise + 1.0) : r_horizon;
 
   // Get resolution for the flux surfaces from the input file
   const int ntheta = pin->GetOrAddInteger("problem", "flux_ntheta", 64);
@@ -204,15 +208,15 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
 
   // Create surfaces at three different radii and store them in the class member
   // This avoids the crash-on-exit from using a static variable.
-  auto r_func_inner = [r_flux_inner](Real, Real){ return r_flux_inner; };
+  auto r_func_inner = [=](Real th, Real ph){ return KerrSchildRadius(1., torus.spin, r_horizon, th, ph); };
   this->surface_grids.push_back(std::make_unique<SphericalSurfaceGrid>(
       pmbp, ntheta, nphi, r_func_inner, "horizon"));
 
-  auto r_func_mid = [](Real, Real){ return 12.0; };
+  auto r_func_mid = [=](Real th, Real ph){ return KerrSchildRadius(1., torus.spin, 12.0, th, ph); };
   this->surface_grids.push_back(std::make_unique<SphericalSurfaceGrid>(
       pmbp, ntheta, nphi, r_func_mid, "r12"));
 
-  auto r_func_outer = [](Real, Real){ return 24.0; };
+  auto r_func_outer = [=](Real th, Real ph){ return KerrSchildRadius(1., torus.spin, 24.0, th, ph); };
   this->surface_grids.push_back(std::make_unique<SphericalSurfaceGrid>(
       pmbp, ntheta, nphi, r_func_outer, "r24"));
 
