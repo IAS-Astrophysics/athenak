@@ -243,7 +243,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
           Real vu[3] = {bns->u_euler_x[idx] / vel_unit,
                         bns->u_euler_y[idx] / vel_unit,
                         bns->u_euler_z[idx] / vel_unit};
-          
+
           // Check for garbage values thrown in Lorene.
           if (host_w0(m, IDN, k, j, i) <= rho_cut) {
             host_w0(m, IDN, k, j, i) = 0.0;

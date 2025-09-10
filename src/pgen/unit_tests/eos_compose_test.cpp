@@ -64,7 +64,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
 template<class LogPolicy>
 void PerformTests(Mesh *pmesh, ParameterInput *pin) {
   MeshBlockPack *pmbp = pmesh->pmb_pack;
-  
+
   // Commit a crime against humanity to get access to the EOS
   Primitive::EOS<Primitive::EOSCompOSE<LogPolicy>, Primitive::ResetFloor>& eos =
     static_cast<
@@ -209,7 +209,7 @@ void PerformTests(Mesh *pmesh, ParameterInput *pin) {
     Real error_p = T_p/T - 1.;
     Real error_e = T_e/T - 1.;
     if (Kokkos::fabs(error_p) > tol) {
-      Kokkos::printf("The temperature was not recovered correctly from pressure:\n"
+      Kokkos::printf("The temperature was not recovered correctly from pressure:\n" // NOLINT
                      "  n = %20.17g\n"
                      "  Y = %20.17g\n"
                      "  T = %20.17g\n"
@@ -220,7 +220,7 @@ void PerformTests(Mesh *pmesh, ParameterInput *pin) {
       success = false;
     }
     if (Kokkos::fabs(error_e) > tol) {
-      Kokkos::printf("The temperature was not recovered correctly from energy:\n"
+      Kokkos::printf("The temperature was not recovered correctly from energy:\n" // NOLINT
                      "  n = %20.17g\n"
                      "  Y = %20.17g\n"
                      "  T = %20.17g\n"
@@ -229,7 +229,6 @@ void PerformTests(Mesh *pmesh, ParameterInput *pin) {
                      "  error = %20.17g\n",
                      n, Y[0], T, T_e, error_e);
       success = false;
-
     }
   }, Kokkos::LAnd<bool>(pert_success));
 

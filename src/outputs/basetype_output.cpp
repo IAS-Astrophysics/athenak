@@ -84,7 +84,8 @@ BaseTypeOutput::BaseTypeOutput(ParameterInput *pin, Mesh *pm, OutputParameters o
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
        << "Output of DynMHD variable requested in <output> block '"
        << out_params.block_name << "' but no DynMHD object has been constructed."
-       << std::endl << "Input file is likely missing a <adm> or <z4c>, and/or <mhd> block" << std::endl;
+       << std::endl << "Input file is likely missing a <adm> or <z4c>, and/or <mhd> block"
+       << std::endl;
     exit(EXIT_FAILURE);
   }
   if ((ivar==50) && (pm->pmb_pack->pturb == nullptr)) {

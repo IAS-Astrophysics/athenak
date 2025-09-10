@@ -21,7 +21,6 @@
 #include "z4c/z4c_amr.hpp"
 #include "coordinates/coordinates.hpp"
 #include "coordinates/cell_locations.hpp"
-#include "coordinates/coordinates.hpp"
 #include "dyn_grmhd/dyn_grmhd.hpp"
 #include "elliptica_id_reader_lib.h"
 #include "eos/eos.hpp"
@@ -30,8 +29,6 @@
 #include "mesh/mesh.hpp"
 #include "mhd/mhd.hpp"
 #include "parameter_input.hpp"
-#include "z4c/z4c.hpp"
-#include "z4c/z4c_amr.hpp"
 
 void EllipticaBNSHistory(HistoryData *pdata, Mesh *pm);
 void EllipticaBNSRefinementCondition(MeshBlockPack *pmbp);

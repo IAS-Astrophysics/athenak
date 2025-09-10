@@ -1,5 +1,5 @@
-#ifndef UTILS_TOV_TABULATED_HPP_
-#define UTILS_TOV_TABULATED_HPP_
+#ifndef UTILS_TOV_TOV_TABULATED_HPP_
+#define UTILS_TOV_TOV_TABULATED_HPP_
 //========================================================================================
 // AthenaXXX astrophysical plasma code
 // Copyright(C) 2020 James M. Stone <jmstone@ias.edu> and the Athena code team
@@ -7,8 +7,10 @@
 //========================================================================================
 //! \file tov_tabulated.hpp
 //  \brief Tabulated EOS for use with TOVStar
-#include <stdexcept>
+#include <iostream>
+#include <string>
 #include <sstream>
+#include <stdexcept>
 
 #include "athena.hpp"
 #include "parameter_input.hpp"
@@ -235,4 +237,4 @@ class TabulatedEOS {
 
 } // namespace tov
 
-#endif // UTILS_TOV_TABULATED_HPP_
+#endif // UTILS_TOV_TOV_TABULATED_HPP_

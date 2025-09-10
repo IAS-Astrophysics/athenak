@@ -18,6 +18,7 @@
 #include <type_traits>
 #include <iostream>
 #include <sstream>
+#include <algorithm>
 
 // PrimitiveSolver headers
 #include "eos/primitive-solver/eos.hpp"
@@ -61,7 +62,7 @@ class PrimitiveSolverHydro {
     }
     // Parameters for CompOSE EoS
     if constexpr (
-         std::is_same_v<Primitive::EOSCompOSE<Primitive::NormalLogs>, EOSPolicy> || 
+         std::is_same_v<Primitive::EOSCompOSE<Primitive::NormalLogs>, EOSPolicy> ||
          std::is_same_v<Primitive::EOSCompOSE<Primitive::NQTLogs>, EOSPolicy>) {
       // Get and set number of scalars in table. This will currently fail if not 1.
       ps.GetEOSMutable().SetNSpecies(pin->GetOrAddInteger(block, "nscalars", 1));
@@ -90,7 +91,7 @@ class PrimitiveSolverHydro {
     }
         // Parameters for Hybrid EoS
     if constexpr (
-         std::is_same_v<Primitive::EOSHybrid<Primitive::NormalLogs>, EOSPolicy> || 
+         std::is_same_v<Primitive::EOSHybrid<Primitive::NormalLogs>, EOSPolicy> ||
          std::is_same_v<Primitive::EOSHybrid<Primitive::NQTLogs>, EOSPolicy>) {
       // Get and set number of scalars in table. This will currently fail if not 0.
       ps.GetEOSMutable().SetThermalGamma(pin->GetOrAddReal(block, "gamma_th", 5.0/3.0));
@@ -316,7 +317,7 @@ class PrimitiveSolverHydro {
   }
 
   void ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &bfc,
-                  DvceArray5D<Real> &bcc0, DvceArray5D<Real> &prim, 
+                  DvceArray5D<Real> &bcc0, DvceArray5D<Real> &prim,
                   DvceArray5D<Real> &temperature,
                   const int il, const int iu, const int jl, const int ju,
                   const int kl, const int ku, bool floors_only=false) {

@@ -23,7 +23,7 @@ namespace tov {
 // Useful container for physical parameters of star
 class TOVStar {
  private:
-  TOVStar(ParameterInput* pin);
+  explicit TOVStar(ParameterInput* pin);
 
   template<class TOVEOS>
   void RHS(Real r, Real P_pt, Real m_pt, Real alp_pt, Real R_pt, TOVEOS& eos,
@@ -41,7 +41,7 @@ class TOVStar {
       dR = 1.0;
       return;
     }
-    
+
     Real rho = eos.template GetRhoFromP<LocationTag::Host>(P_pt);
     Real e = eos.template GetEFromRho<LocationTag::Host>(rho);
 

@@ -55,7 +55,7 @@ void EOSHybrid<LogPolicy>::ReadTableFromFile(std::string fname) {
 
     { // read nb
       Real * table_nb = table["nb"];
-      
+
       for (size_t in=0; in<m_nn; ++in) {
         host_log_nb(in) = log2_(table_nb[in]);
       }

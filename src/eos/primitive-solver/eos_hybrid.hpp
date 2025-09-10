@@ -33,6 +33,7 @@ class EOSHybrid : public EOSPolicyInterface, public LogPolicy {
  private:
   using LogPolicy::log2_;
   using LogPolicy::exp2_;
+
  public:
   enum TableVariables {
     ECLOGP  = 0,  //! log (pressure / 1 MeV fm^-3)
@@ -78,9 +79,11 @@ class EOSHybrid : public EOSPolicyInterface, public LogPolicy {
   /// Temperature from energy density.
   KOKKOS_INLINE_FUNCTION Real TemperatureFromE(Real n, Real e, Real *Y) const {
     assert (m_initialized);
-    if (n < min_n) { // If density is OOB then return minimum temperature
+    if (n < min_n) {
+      // If density is OOB then return minimum temperature
       return min_T;
-    } else if (e <= MinimumEnergy(n, Y)) { // If energy is OOB then return minimum temperature
+    } else if (e <= MinimumEnergy(n, Y)) {
+      // If energy is OOB then return minimum temperature
       return min_T;
     }
 
@@ -92,12 +95,14 @@ class EOSHybrid : public EOSPolicyInterface, public LogPolicy {
   /// Calculate the temperature using.
   KOKKOS_INLINE_FUNCTION Real TemperatureFromP(Real n, Real p, Real *Y) const {
     assert (m_initialized);
-    if (n < min_n) { // If density is OOB then return minimum temperature
+    if (n < min_n) {
+      // If density is OOB then return minimum temperature
       return min_T;
-    } else if (p <= MinimumPressure(n, Y)) { // If pressure is OOB then return minimum temperature
+    } else if (p <= MinimumPressure(n, Y)) {
+      // If pressure is OOB then return minimum temperature
       return min_T;
     }
-    
+
     Real p_cold = ColdPressure(n);
     Real T = (p-p_cold)/n;
     return Kokkos::fmax(T,min_T);
@@ -117,7 +122,7 @@ class EOSHybrid : public EOSPolicyInterface, public LogPolicy {
     return p_cold + p_th;
   }
 
-  /// Calculate the enthalpy per baryon using. 
+  /// Calculate the enthalpy per baryon using.
   KOKKOS_INLINE_FUNCTION Real Enthalpy(Real n, Real T, Real *Y) const {
     Real const P = Pressure(n, T, Y);
     Real const e = Energy(n, T, Y);
@@ -150,7 +155,6 @@ class EOSHybrid : public EOSPolicyInterface, public LogPolicy {
   KOKKOS_INLINE_FUNCTION Real ColdPressure(Real n) const {
     assert (m_initialized);
     return exp2_(eval_at_n(ECLOGP, n));
-
   }
 
   /// Calculate enthalpy for the cold part.
@@ -173,48 +177,48 @@ class EOSHybrid : public EOSPolicyInterface, public LogPolicy {
     return m_min_h;
   }
 
-  /// Get the minimum pressure at a given density and composition. 
+  /// Get the minimum pressure at a given density and composition.
   KOKKOS_INLINE_FUNCTION Real MinimumPressure(Real n, Real *Y) const {
     return Pressure(n, min_T, Y);
   }
 
-  /// Get the maximum pressure at a given density and composition. 
+  /// Get the maximum pressure at a given density and composition.
   KOKKOS_INLINE_FUNCTION Real MaximumPressure(Real n, Real *Y) const {
     // Note that max_T is already set to numeric_limits<Real>::max!
     return max_T;
   }
 
-  /// Get the minimum energy at a given density and composition. 
+  /// Get the minimum energy at a given density and composition.
   KOKKOS_INLINE_FUNCTION Real MinimumEnergy(Real n, Real *Y) const {
     return Energy(n, min_T, Y);
   }
 
-  /// Get the maximum energy at a given density and composition. 
+  /// Get the maximum energy at a given density and composition.
   KOKKOS_INLINE_FUNCTION Real MaximumEnergy(Real n, Real *Y) const {
     // Note that max_T is already set to numeric_limits<Real>::max!
     return max_T;
   }
 
  public:
-  /// Reads the table file. 
+  /// Reads the table file.
   void ReadTableFromFile(std::string fname);
 
-  /// Get the raw number density. 
+  /// Get the raw number density.
   KOKKOS_INLINE_FUNCTION DvceArray1D<Real> const GetRawLogNumberDensity() const {
     return m_log_nb;
   }
 
-  /// Get the raw table data. 
+  /// Get the raw table data.
   KOKKOS_INLINE_FUNCTION DvceArray2D<Real> const GetRawTable() const {
     return m_table;
   }
 
-  // Indexing used to access the data. 
+  // Indexing used to access the data.
   KOKKOS_INLINE_FUNCTION ptrdiff_t index(int iv, int in) const {
     return in + m_nn*iv;
   }
 
-  /// Check if the EOS has been initialized properly. 
+  /// Check if the EOS has been initialized properly.
   KOKKOS_INLINE_FUNCTION bool IsInitialized() const {
     return m_initialized;
   }
@@ -241,19 +245,19 @@ class EOSHybrid : public EOSPolicyInterface, public LogPolicy {
     return gamma_th;
   }
 
-  /// Set the EOS unit system. 
+  /// Set the EOS unit system.
   KOKKOS_INLINE_FUNCTION void SetEOSUnitSystem(UnitSystem units) {
     eos_units = units;
   }
 
  private:
-  /// Low level evaluation function, not intended for outside use. 
+  /// Low level evaluation function, not intended for outside use.
   KOKKOS_INLINE_FUNCTION Real eval_at_n(int vi, Real n) const {
     Real log_n = log2_(n);
     return eval_at_ln(vi, log_n);
   }
 
-  /// Low level evaluation function, not intended for outside use. 
+  /// Low level evaluation function, not intended for outside use.
   KOKKOS_INLINE_FUNCTION Real eval_at_ln(int iv, Real log_n)
       const {
     int in;

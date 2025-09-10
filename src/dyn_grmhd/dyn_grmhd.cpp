@@ -12,6 +12,7 @@
 #include <iostream>
 #include <string>
 #include <vector>
+#include <algorithm>
 
 #include "athena.hpp"
 #include "globals.hpp"
@@ -116,8 +117,8 @@ DynGRMHD* BuildDynGRMHD(MeshBlockPack *ppack, ParameterInput *pin) {
   return dyn_gr;
 }
 
-DynGRMHD::DynGRMHD(MeshBlockPack *pp, ParameterInput *pin) : 
-    pmy_pack(pp), 
+DynGRMHD::DynGRMHD(MeshBlockPack *pp, ParameterInput *pin) :
+    pmy_pack(pp),
     temperature("temperature",1,1,1,1,1) {
   std::string rsolver = pin->GetString("mhd", "rsolver");
   if (rsolver.compare("llf") == 0) {

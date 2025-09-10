@@ -1,5 +1,5 @@
-#ifndef UTILS_TOV_POLYTROPE_HPP_
-#define UTILS_TOV_POLYTROPE_HPP_
+#ifndef UTILS_TOV_TOV_POLYTROPE_HPP_
+#define UTILS_TOV_TOV_POLYTROPE_HPP_
 //========================================================================================
 // AthenaXXX astrophysical plasma code
 // Copyright(C) 2020 James M. Stone <jmstone@ias.edu> and the Athena code team
@@ -46,4 +46,4 @@ class PolytropeEOS {
 
 } // namespace tov
 
-#endif // UTILS_TOV_POLYTROPE_HPP_
+#endif // UTILS_TOV_TOV_POLYTROPE_HPP_

@@ -1,5 +1,5 @@
-#ifndef UTILS_TOV_PIECEWISE_POLY_HPP_
-#define UTILS_TOV_PIECEWISE_POLY_HPP_
+#ifndef UTILS_TOV_TOV_PIECEWISE_POLY_HPP_
+#define UTILS_TOV_TOV_PIECEWISE_POLY_HPP_
 //========================================================================================
 // AthenaXXX astrophysical plasma code
 // Copyright(C) 2020 James M. Stone <jmstone@ias.edu> and the Athena code team
@@ -47,4 +47,4 @@ class PiecewisePolytropeEOS: public Primitive::PiecewisePolytrope {
 
 } // namespace tov
 
-#endif
+#endif  // UTILS_TOV_TOV_PIECEWISE_POLY_HPP_

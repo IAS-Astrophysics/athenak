@@ -147,7 +147,7 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::FOFC(Driver *pdriver, int stage) {
     // Test whether conversion to primitives requires floors
     // Note b0 and w0 passed to function, but not used/changed.
     eos.ConsToPrim(utest_, pmy_pack->pmhd->b0, bcctest_,
-                           pmy_pack->pmhd->w0, temperature, 
+                           pmy_pack->pmhd->w0, temperature,
                            il, iu, jl, ju, kl, ku, true);
   }
 
@@ -445,5 +445,4 @@ INSTANTIATE_FOFC(Primitive::EOSCompOSE<Primitive::NormalLogs>, Primitive::ResetF
 INSTANTIATE_FOFC(Primitive::EOSCompOSE<Primitive::NQTLogs>, Primitive::ResetFloor)
 INSTANTIATE_FOFC(Primitive::EOSHybrid<Primitive::NormalLogs>, Primitive::ResetFloor)
 INSTANTIATE_FOFC(Primitive::EOSHybrid<Primitive::NQTLogs>, Primitive::ResetFloor)
-
 } // namespace dyngr
