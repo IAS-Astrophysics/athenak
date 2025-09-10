@@ -40,8 +40,8 @@ max_nmb_per_rank = 2300
 
 <amr_criterion0>
 method = slope
-variable = mhd_w_e
-value_max = 0.25
+variable = mhd_w_d
+value_max = 0.1
 
 <refined_region1>
 x1min = -1.5

@@ -101,8 +101,9 @@ void ParameterInput::CheckBlockNames() {
   std::vector<std::string> valid_name = {
     "comment", "job",
     "mesh", "meshblock", "mesh_refinement", "refined_region", "amr_criterion",
+    "coord", "adm", "shearing_box",
     "time", "problem", "output",
-    "hydro", "mhd", "radiation"
+    "hydro", "mhd", "ion-neutral", "radiation", "z4c", "z4c_amr"
     };
 
   for (auto it1 = block.begin(); it1 != block.end(); ++it1) {

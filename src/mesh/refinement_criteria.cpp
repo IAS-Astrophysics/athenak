@@ -136,6 +136,12 @@ void RefinementCriteria::SetRefinementData(MeshBlockPack* pmbp, bool count_deriv
           int n = static_cast<int>(IDN);
           it->rdata = Kokkos::subview(pmbp->phydro->w0, ALL, n, ALL, ALL, ALL);
         }
+      // mhd (lab-frame) density
+      } else if (it->rvariable.compare("mhd_u_d") == 0) {
+        if (!(count_derived) && !(load_derived)) {
+          int n = static_cast<int>(IDN);
+          it->rdata = Kokkos::subview(pmbp->pmhd->u0, ALL, n, ALL, ALL, ALL);
+        }
       // mhd (rest-frame) density
       } else if (it->rvariable.compare("mhd_w_d") == 0) {
         if (!(count_derived) && !(load_derived)) {
