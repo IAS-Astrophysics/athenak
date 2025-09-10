@@ -65,22 +65,22 @@ pgen_name  = shock_tube
 shock_dir  = 1     # Shock Direction -- (1,2,3) = (x1,x2,x3)
 xshock     = 0.0   # position of initial interface
 
-dl = 1.0           # density on left
-pl = 1.0           # pressure
+dl = 1.0e-3        # density on left
+pl = 1.0e-3        # pressure
 ul = 0.0           # X-velocity
 vl = 0.0           # Y-velocity
 wl = 0.0           # Z-velocity
-bxl = 0.5          # left magnetic field B^x
-byl = 1.0          # left magnetic field B^y
+bxl = 0.5e-3       # left magnetic field B^x
+byl = 1.0e-3       # left magnetic field B^y
 bzl = 0.0          # left magnetic field B^z
 
-dr = 0.125         # density on right
-pr = 0.1           # pressure
+dr = 0.125e-3      # density on right
+pr = 0.1e-3        # pressure
 ur = 0.0           # X-velocity
 vr = 0.0           # Y-velocity
 wr = 0.0           # Z-velocity
-bxr = 0.5          # right magnetic field B^x
-byr = -1.0         # right magnetic field B^y
+bxr = 0.5e-3       # right magnetic field B^x
+byr = -1.0e-3      # right magnetic field B^y
 bzr = 0.0          # right magnetic field B^z
 
 <output1>
