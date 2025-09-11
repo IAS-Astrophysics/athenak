@@ -152,7 +152,6 @@ TaskStatus MHD::NewTimeStep(Driver *pdriver, int stage) {
       min_dt3 = fmin((mbsize.d_view(m).dx3/max_dv3), min_dt3);
     }, Kokkos::Min<Real>(dt1), Kokkos::Min<Real>(dt2),Kokkos::Min<Real>(dt3));
   }
-  Kokkos::fence();
 
   // compute minimum of dt1/dt2/dt3 for 1D/2D/3D problems
   dtnew = dt1;

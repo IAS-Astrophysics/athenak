@@ -227,7 +227,6 @@ inline void par_for(const std::string &name, DevExeSpace exec_space,
     int i = (idx) + il;
     function(i);
   });
-  Kokkos::fence();
 }
 
 //------------------------------
@@ -248,7 +247,6 @@ inline void par_for(const std::string &name, DevExeSpace exec_space,
     j += jl;
     function(j, i);
   });
-  Kokkos::fence();
 }
 
 //------------------------------
@@ -273,7 +271,6 @@ inline void par_for(const std::string &name, DevExeSpace exec_space,
     j += jl;
     function(k, j, i);
   });
-  Kokkos::fence();
 }
 
 //------------------------------
@@ -303,7 +300,6 @@ inline void par_for(const std::string &name, DevExeSpace exec_space,
     j += jl;
     function(n, k, j, i);
   });
-  Kokkos::fence();
 }
 
 //------------------------------
@@ -338,7 +334,6 @@ inline void par_for(const std::string &name, DevExeSpace exec_space,
     j += jl;
     function(m, n, k, j, i);
   });
-  Kokkos::fence();
 }
 
 //------------------------------------------
@@ -354,7 +349,6 @@ inline void par_for_outer(const std::string &name, DevExeSpace exec_space,
     const int k = tmember.league_rank() + kl;
     function(tmember, k);
   });
-  Kokkos::fence();
 }
 
 //------------------------------------------
@@ -374,7 +368,6 @@ inline void par_for_outer(const std::string &name, DevExeSpace exec_space,
     const int j = tmember.league_rank()%nj + jl;
     function(tmember, k, j);
   });
-  Kokkos::fence();
 }
 
 //------------------------------------------
@@ -399,7 +392,6 @@ inline void par_for_outer(const std::string &name, DevExeSpace exec_space,
     k += kl;
     function(tmember, n, k, j);
   });
-  Kokkos::fence();
 }
 
 //------------------------------------------
@@ -429,7 +421,6 @@ inline void par_for_outer(const std::string &name, DevExeSpace exec_space,
     k += kl;
     function(tmember, m, n, k, j);
   });
-  Kokkos::fence();
 }
 
 //---------------------------------------------
@@ -439,7 +430,6 @@ KOKKOS_INLINE_FUNCTION void par_for_inner(TeamMember_t tmember, const int il,con
                                           const Function &function) {
   // Note Kokkos::TeamVectorRange only iterates from ibegin to iend-1, so must pass iu+1
   Kokkos::parallel_for(Kokkos::TeamVectorRange(tmember, il, iu+1), function);
-  tmember.team_barrier();
 }
 
 #define NREDUCTION_VARIABLES 20
