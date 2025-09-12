@@ -94,7 +94,8 @@ class PrimitiveSolverHydro {
          std::is_same_v<Primitive::EOSHybrid<Primitive::NormalLogs>, EOSPolicy> ||
          std::is_same_v<Primitive::EOSHybrid<Primitive::NQTLogs>, EOSPolicy>) {
       // Get and set number of scalars in table. This will currently fail if not 0.
-      ps.GetEOSMutable().SetThermalGamma(pin->GetOrAddReal(block, "gamma_th", 5.0/3.0));
+      ps.GetEOSMutable().SetThermalGamma(pin->GetOrAddReal(block, "gamma_thermal",
+                                         5.0/3.0));
       ps.GetEOSMutable().SetNSpecies(pin->GetOrAddInteger(block, "nscalars", 0));
       std::string units = pin->GetOrAddString(block, "units", "geometric_solar");
       if (!units.compare("geometric_solar")) {
