@@ -37,6 +37,9 @@ max_nmb_per_rank = 100
 num_levels = 7
 refinement_interval = 1
 
+<amr_criterion0>
+method = user
+
 <z4c_amr>
 method = tracker
 

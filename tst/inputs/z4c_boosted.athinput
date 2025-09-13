@@ -66,6 +66,9 @@ max_nmb_per_rank = 250
 num_levels       = 4
 refinement_interval   = 1
 
+<amr_criterion0>
+method = user
+
 <z4c_amr>
 method = chi 
 chi_min = 0.01
