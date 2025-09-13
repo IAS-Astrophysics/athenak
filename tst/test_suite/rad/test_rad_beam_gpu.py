@@ -15,34 +15,16 @@ import test_suite.testutils as testutils
 import athena_read
 
 
-_res = [32, 64]  # resolutions to test
-
-
-def arguments(res):
-    """Assemble arguments for run command"""
-    return [
-        "mesh/nx1=8",
-        "mesh/nx2=4",
-        "mesh/nx3=" + repr(res),
-        "meshblock/nx1=8",
-        "meshblock/nx2=4",
-        "meshblock/nx3=" + repr(res // 8),
-        "problem/along_x1=false",
-        "problem/along_x2=false",
-        "problem/along_x3=true"
-    ]
-
-
-input_file = "inputs/lwave_rad.athinput"
+input_file = "inputs/rad_beam.athinput"
 
 
 # run test
 def test_run():
     """Run a single test."""
     try:
-        results = testutils.run(input_file, arguments(res))
+        results = testutils.run(input_file)
         assert results, f"3D AMR radiation beam test run failed"
-        data = athena_read.tab("beam_cks.rad_coord.00001.tab")
+        data = athena_read.tab("tab/beam_cks.rad_coord.00001.tab")
         # test if AMR was working (in which case x2 slice output will have 56 cells)
         if len(data['x2v']) != 56:
             pytest.fail(

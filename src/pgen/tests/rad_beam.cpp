@@ -23,7 +23,7 @@
 #include "mesh/mesh.hpp"
 #include "radiation/radiation.hpp"
 #include "radiation/radiation_tetrad.hpp"
-#include "pgen.hpp"
+#include "pgen/pgen.hpp"
 
 // Prototypes for user-defined BCs
 void ZeroIntensity(Mesh *pm);
