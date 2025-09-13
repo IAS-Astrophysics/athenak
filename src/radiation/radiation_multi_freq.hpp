@@ -1346,6 +1346,208 @@ Real InvMapIntensity(const int &ifr, const DvceArray1D<Real> &nu_tet, const ScrA
   return ir_cm_star_f;
 }
 
+//============================= Compton Helper Functions =============================
+//----------------------------------------------------------------------------------------
+//! \fn void WienInt
+//  \brief Integrate Wien's tail from nu_e to inf given jr_cm_e for normalization
+KOKKOS_INLINE_FUNCTION
+void WienInt(const int &nu_e, const Real &jr_cm_e, const Real &tgas, const Real &arad,
+             Real &int_n_nu2_e, Real &int_n_nu4_e, Real &int_n2_nu4_e) {
+  Real tgas2 = SQR(tgas);
+  Real tgas3 = tgas*tgas2;
+  Real tgas4 = tgas*tgas3;
+  Real nu_e2 = SQR(nu_e);
+  Real nu_e3 = nu_e*nu_e2;
+  Real nu_e4 = nu_e*nu_e3;
+
+  // int_{nu_e}^{inf} exp(-nu/tgas) nu^3 dnu / (tgas * exp(-nu_e/tgas))
+  Real int_wien_nu3 = 6*tgas3 + 6*tgas2*nu_e + 3*tgas*nu_e2 + nu_e3;
+
+  // int_{nu_e}^{inf} exp(-nu/tgas) nu^2 dnu
+  int_n_nu2_e = 2*tgas2 + 2*tgas*nu_e + nu_e2;
+  int_n_nu2_e *= jr_cm_e/arad/int_wien_nu3;
+
+  // int_{nu_e}^{inf} exp(-nu/tgas) nu^4 dnu
+  int_n_nu4_e = 24*tgas4 + 24*tgas3*nu_e + 12*tgas2*nu_e2 + 4*tgas*nu_e3 + nu_e4;
+  int_n_nu4_e *= jr_cm_e/arad/int_wien_nu3;
+
+  // int_{nu_e}^{inf} exp(-nu/tgas)^2 nu^4 dnu
+  int_n2_nu4_e = 3*tgas4 + 6*tgas3*nu_e + 6*tgas2*nu_e2 + 4*tgas*nu_e3 + 2*nu_e4;
+  int_n2_nu4_e *= 0.25/tgas * SQR(jr_cm_e/arad/int_wien_nu3);
+
+  return;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void FuncCompTempEst
+//  \brief Target function to solve integrated Kompaneets equation for gas temperature estimation
+KOKKOS_INLINE_FUNCTION
+void FuncCompTempEst(const Real &rat, const Real &c5, const Real &c4, const Real &c0, Real &f, Real &df) {
+  Real rat3 = rat*SQR(rat);
+  Real rat4 = rat*rat3;
+
+  f = c5*rat*rat4 + c4*rat4 + c0;
+  df = 5*c5*rat4 + 4*c4*rat3;
+  return;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void SolCompTempEst
+//  \brief Solve integrated Kompaneets equation for gas temperature estimation
+KOKKOS_INLINE_FUNCTION
+int SolCompTempEst(const Real &c5, const Real &c4, const Real &c0, const Real &x0, Real &x_sol) {
+  int num_itr_max = 25;
+  Real tol = 1e-12;
+  Real f_max = 1e12, f_min = 1e-12; // these are the limits for the temperature changing factor
+  Real fac_scan = 10;
+
+  Real f, df;
+  FuncCompTempEst(x0, c5, c4, c0, f, df);
+
+  // look for left and right boundaries
+  Real xl, xr;
+  Real x = x0;
+  if (f < 0) {
+    xl = x0;
+    while ((f < 0) && (f <= f_max)) {
+      x *= fac_scan;
+      FuncCompTempEst(x, c5, c4, c0, f, df);
+    } // endwhile
+    if (f < 0) return -1;
+    xr = x;
+  } else { // f >= 0
+    xr = x0;
+    while ((f > 0) && (f >= f_min)) {
+      x /= fac_scan;
+      FuncCompTempEst(x, c5, c4, c0, f, df);
+    } // endwhile
+    if (f > 0) xl = 0; // f(0)=c0 is guaranteed to be negative
+    else xl = x;
+  } // endelse
+
+  // start Newton iterations at midpoint
+  x = 0.5 * (xl + xr);
+  FuncCompTempEst(x, c5, c4, c0, f, df);
+
+  // find solution
+  for (int i = 0; i < num_itr_max; ++i) {
+    Real xnext;
+    Real len = xr - xl;
+    Real xmid   = 0.5 * (xl + xr);
+    Real len_bi = 0.5 * len;
+
+    // try Newton method
+    bool use_newton = (fabs(df) > 0);
+    if (use_newton) {
+        xnext = x - f/df;
+        if (!(xnext > xl && xnext < xr) || !isfinite(xnext))
+          use_newton = false;
+    } // endif
+
+    // check if Newton is better than bisection
+    Real fnext, dfnext;
+    if (use_newton) {
+        FuncCompTempEst(xnext, c5, c4, c0, fnext, dfnext);
+
+        // compare bracket reduction against bisection
+        Real len_nw = (fnext > 0.0) ? (xnext - xl) : (xr - xnext);
+
+        // use 0.9 to require Newton to beat bisection clearly
+        if (len_nw > 0.9*len_bi) use_newton = false;
+    } // endif
+
+    // fall back to bisection
+    if (!use_newton) {
+        xnext = xmid;
+        FuncCompTempEst(xnext, c5, c4, c0, fnext, dfnext);
+    }
+
+    // update bracket
+    if (fnext <= 0.0) xl = xnext;
+    else xr = xnext;
+
+    // convergence check
+    x_sol = xnext;
+    if (fabs(xnext - x) <= tol * (1.0 + fabs(xnext)) || fabs(fnext) <= tol) {
+        return 0; // success
+    } // endif
+
+    x  = xnext;
+    f  = fnext;
+    df = dfnext;
+  } // endfor i
+
+  return 1; // reach maximum iteration
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void QuasiSteadySol
+//  \brief Solve lambda assuming quasi-steady distribution of photon occupation number,
+//         i.e., 2Li_3(1/lambda) = N/tgas^3
+KOKKOS_INLINE_FUNCTION
+Real QuasiSteadySol(const Real &n_tot, const Real &tgas) {
+  // TODO: develop a more accurate approximation for this
+  // use Yanfei's approximation temporarily
+  Real lambda = 1.0;
+  Real n_t3 = n_tot/(tgas*SQR(tgas));
+  if ((n_t3 < 2.3739) && (n_t3 > 0.6932)) {
+    lambda = 1.948 * pow(n_t3, -1.016) + 0.1907;
+  } else if (n_t3 <= 0.6932) {
+    lambda = (1.0 + sqrt(1.0 + 0.25 * n_t3))/n_t3;
+  }
+
+  return lambda;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void SolveTridiag
+//  \brief Solve a tridiagonal system Ax = komp_coeff
+//         komp_mat_d(1...nfrq-1): subdiagonal c1_f (komp_mat_d(0) unused)
+//         komp_mat_c(0...nfrq-1): diagonal    c2_f
+//         komp_mat_u(0...nfrq-2): superdiag   c3_f (komp_mat_u(nfrq-1) unused)
+//         komp_coeff(0...nfrq-1): RHS (i.e., -c4_f)
+//         Return x=ret(0...nfrq-1)
+KOKKOS_INLINE_FUNCTION
+bool SolveTridiag(const ScrArray1D<Real> &komp_mat_d, const ScrArray1D<Real> &komp_mat_c,
+                  const ScrArray1D<Real> &komp_mat_u, const ScrArray1D<Real> &komp_coeff,
+                  const int &nfrq, ScrArray1D<Real> &u_tmp, ScrArray1D<Real> &rhs_tmp,
+                  ScrArray1D<Real> &ret) {
+  
+  if (nfrq <= 0) return false; // invalid tridiagonal system
+  const Real eps = 1e-14;
+
+  for (int ifr=0; ifr<nfrq; ++ifr) {
+    u_tmp(ifr)   = 0.0;
+    rhs_tmp(ifr) = 0.0;
+  }
+
+  // ifr=0
+  Real denom = komp_mat_c(0);
+  if (std::fabs(denom) < eps) return false;
+
+  u_tmp(0)   = (nfrq > 1) ? (komp_mat_u(0)/denom) : Real(0);
+  rhs_tmp(0) = komp_coeff(0)/denom;
+
+  // forward sweep
+  for (int ifr=1; ifr<nfrq; ++ifr) {
+      denom = komp_mat_c(ifr) - komp_mat_d(ifr) * u_tmp(ifr - 1);
+      if (std::fabs(denom) < eps) return false;
+      u_tmp(ifr)   = (ifr < nfrq-1) ? (komp_mat_u(ifr)/denom) : 0;
+      rhs_tmp(ifr) = (komp_coeff(ifr) - komp_mat_d(ifr)*rhs_tmp(ifr-1)) / denom;
+  }
+
+  // back substitution
+  ret(nfrq-1) = rhs_tmp(nfrq-1);
+  for (int ifr=nfrq-2; ifr>=0; --ifr) {
+      ret(ifr) = rhs_tmp(ifr) - u_tmp(ifr) * ret(ifr+1);
+  }
+
+  return true;
+}
+
+
+
+
 
 
 
