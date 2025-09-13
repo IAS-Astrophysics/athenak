@@ -899,12 +899,8 @@ void ProblemGenerator::CallProblemGenerator(ParameterInput *pin, bool is_restart
     AlfvenWave(pin, is_restart);
   } else if (pgen_fun_name.compare("gr_bondi") == 0) {
     BondiAccretion(pin, is_restart);
-  } else if (pgen_fun_name.compare("tetrad") == 0) {
-    CheckOrthonormalTetrad(pin, is_restart);
   } else if (pgen_fun_name.compare("cshock") == 0) {
     CShock(pin, is_restart);
-  } else if (pgen_fun_name.compare("hohlraum") == 0) {
-    Hohlraum(pin, is_restart);
   } else if (pgen_fun_name.compare("linear_wave") == 0) {
     LinearWave(pin, is_restart);
   } else if (pgen_fun_name.compare("implode") == 0) {
@@ -917,6 +913,8 @@ void ProblemGenerator::CallProblemGenerator(ParameterInput *pin, bool is_restart
     OrszagTang(pin, is_restart);
   } else if (pgen_fun_name.compare("rad_linear_wave") == 0) {
     RadiationLinearWave(pin, is_restart);
+  } else if (pgen_fun_name.compare("rad_beam") == 0) {
+    RadiationBeam(pin, is_restart);
   } else if (pgen_fun_name.compare("shock_tube") == 0) {
     ShockTube(pin, is_restart);
   } else if (pgen_fun_name.compare("shwave") == 0) {
