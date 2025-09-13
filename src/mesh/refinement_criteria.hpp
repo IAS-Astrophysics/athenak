@@ -21,6 +21,7 @@
 //! User-defined refinement conditions can also be enrolled by setting the *usr_ref_func
 //! pointer in the problem generator.
 
+#include <string>
 #include <vector>
 
 #include "athena.hpp"

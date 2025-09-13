@@ -23,22 +23,20 @@ def test_run():
     """Run a single test."""
     try:
         results = testutils.run(input_file)
-        assert results, f"3D AMR radiation beam test run failed"
+        assert results, "3D AMR radiation beam test run failed"
         data = athena_read.tab("tab/beam_cks.rad_coord.00001.tab")
         # test if AMR was working (in which case x2 slice output will have 56 cells)
         if len(data['x2v']) != 56:
-            pytest.fail(
-                f"3D radiation beam tab output has wrong number of elements"
-            )
+            pytest.fail("3D radiation beam tab output has wrong number of elements")
         # test that radiation energy density is small for x2v < 2
         if max(data['r00'][0:24]) > 0.0025:
             pytest.fail(
-                f"Energy density too large for x2<2, beam has not propagated correctly"
+                "Energy density too large for x2<2, beam has not propagated correctly"
             )
         # test that radiation energy density is large for x2v > 2
         if max(data['r00'][24:56]) < 0.01:
             pytest.fail(
-                f"Energy density too small for x2>2, beam has not propagated correctly"
+                "Energy density too small for x2>2, beam has not propagated correctly"
             )
     finally:
         testutils.cleanup()

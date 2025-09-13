@@ -7,7 +7,8 @@
 //! \brief Implements constructor and functions in RefinementCriteria class.
 
 #include <iostream>
-#include <utility>   // pair
+#include <algorithm> // max
+#include <string>
 
 #include "athena.hpp"
 #include "globals.hpp"

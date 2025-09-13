@@ -9,6 +9,7 @@
 #include <float.h>
 
 #include <iostream>
+#include <algorithm> // max
 #include <string>
 
 #include "athena.hpp"
