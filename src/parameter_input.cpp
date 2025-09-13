@@ -103,7 +103,8 @@ void ParameterInput::CheckBlockNames() {
     "mesh", "meshblock", "mesh_refinement", "refined_region", "amr_criterion",
     "coord", "adm", "shearing_box",
     "time", "problem", "output",
-    "hydro", "mhd", "ion-neutral", "radiation", "z4c", "z4c_amr"
+    "hydro", "mhd", "ion-neutral", "radiation", "z4c", "z4c_amr",
+    "rad_srcterms", "hydro_srcterms", "mhd_srcterms"
     };
 
   for (auto it1 = block.begin(); it1 != block.end(); ++it1) {
