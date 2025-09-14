@@ -62,14 +62,11 @@ void CalculateFluxesForEOS(HistoryData *pdata, MeshBlockPack *pmbp,
                            const std::vector<SphericalSurfaceGrid*>& surfs,
                            DynGRMHDPS_t* pdyngr_ps) {
   int nvars_mhd = pmbp->pmhd->nmhd + pmbp->pmhd->nscalars;
-  auto &eos_policy = pdyngr_ps->eos.ps.GetEOS(); // Capture by value for the kernel
+  auto eos_policy = pdyngr_ps->eos.ps.GetEOS(); // Capture by value for the kernel
   const Real mb = eos_policy.GetBaryonMass();
-  int &nmhd  = pmbp->pmhd->nmhd;
-  int &nscalars = pmbp->pmhd->nscalars;
-  int nflux = 17;
-
-  std::cout << nvars_mhd << std::endl;
-  std::cout << nscalars << std::endl;
+  const int nmhd = pmbp->pmhd->nmhd;
+  const int nscalars = pmbp->pmhd->nscalars;
+  const int nflux = 17;
 
   DualArray2D<Real> dSigma;
 
@@ -144,9 +141,9 @@ void CalculateFluxesForEOS(HistoryData *pdata, MeshBlockPack *pmbp,
         prim_pt[PVZ] = v_prim_u[2];
         prim_pt[PPR] = pgas;
 
-       // for (int s = 0; s < nscalars; ++s) {
-       //   prim_pt[PYF + s] = w_vals_d(p, nmhd + s);
-       // }
+        for (int s = 0; s < nscalars; ++s) {
+            prim_pt[PYF + s] = w_vals_d(p, nmhd + s);
+        }
 
         prim_pt[PTM] = eos_policy.GetTemperatureFromP(prim_pt[PRH], prim_pt[PPR],
                                                  nullptr);
