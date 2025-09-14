@@ -42,6 +42,7 @@ Radiation::Radiation(MeshBlockPack *ppack, ParameterInput *pin) :
     na("na",1,1,1,1,1,1),
     norm_to_tet("norm_to_tet",1,1,1,1,1,1),
     freq_grid("freq_grid",1),
+    nnu_coeff("nnu_coeff",1,1,1,1,1),
     beam_mask("beam_mask",1,1,1,1,1) {
   // Check for general relativity
   if (!(pmy_pack->pcoord->is_general_relativistic)) {
@@ -71,6 +72,7 @@ Radiation::Radiation(MeshBlockPack *ppack, ParameterInput *pin) :
 
   // Check for multi-frequency radiation
   nfreq = 1;
+  freq_fluxes = false;
   multi_freq = pin->GetOrAddBoolean("radiation","multi_freq",false);
   if (multi_freq) {
     // number of frequency groups
@@ -102,7 +104,9 @@ Radiation::Radiation(MeshBlockPack *ppack, ParameterInput *pin) :
     // auxiliary quantities
     Kokkos::realloc(freq_grid,nfreq);
     SetFrequencyGrid();
-    // Kokkos::realloc(matrix_imap,nfreq,nfreq);
+
+    // flag for frequency fluxes
+    freq_fluxes = pin->GetOrAddBoolean("radiation","freq_fluxes",true);
   } // endif (multi_freq)
 
   // Enable radiation source term (radiation+(M)HD) by default if hydro or mhd enabled
@@ -175,6 +179,7 @@ Radiation::Radiation(MeshBlockPack *ppack, ParameterInput *pin) :
   Kokkos::realloc(tet_d2_x2f,nmb,4,ncells3,ncells2+1,ncells1);
   Kokkos::realloc(tet_d3_x3f,nmb,4,ncells3+1,ncells2,ncells1);
   if (angular_fluxes) {Kokkos::realloc(na,nmb,prgeo->nangles,ncells3,ncells2,ncells1,6);}
+  if (freq_fluxes) {Kokkos::realloc(nnu_coeff,nmb,prgeo->nangles,ncells3,ncells2,ncells1);}
   if (is_hydro_enabled || is_mhd_enabled) {
     Kokkos::realloc(norm_to_tet,nmb,4,4,ncells3,ncells2,ncells1);
   }
@@ -247,7 +252,7 @@ Radiation::Radiation(MeshBlockPack *ppack, ParameterInput *pin) :
     Kokkos::realloc(iflx.x1f,nmb,nfreq*prgeo->nangles,ncells3,ncells2,ncells1);
     Kokkos::realloc(iflx.x2f,nmb,nfreq*prgeo->nangles,ncells3,ncells2,ncells1);
     Kokkos::realloc(iflx.x3f,nmb,nfreq*prgeo->nangles,ncells3,ncells2,ncells1);
-    if (angular_fluxes) {
+    if (angular_fluxes || freq_fluxes) {
       Kokkos::realloc(divfa,nmb,nfreq*prgeo->nangles,ncells3,ncells2,ncells1);
     }
     if (beam_source) {

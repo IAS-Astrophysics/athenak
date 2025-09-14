@@ -30,9 +30,11 @@ TaskStatus Radiation::CalculateFluxes(Driver *pdriver, int stage) {
   int &is = indcs.is, &ie = indcs.ie;
   int &js = indcs.js, &je = indcs.je;
   int &ks = indcs.ks, &ke = indcs.ke;
-  int &nfreq_ = nfreq;
-  int &nang_  = prgeo->nangles;
-  int nfr_ang1 = nfreq_*nang_ - 1;
+  int &nfrq = nfreq;
+  int &nang  = prgeo->nangles;
+  int nang1 = nang - 1;
+  int nfreq1 = nfrq - 1;
+  int nfr_ang1 = nfrq*nang - 1;
   int nmb1 = pmy_pack->nmb_thispack - 1;
 
   const auto &recon_method_ = recon_method;
@@ -50,7 +52,7 @@ TaskStatus Radiation::CalculateFluxes(Driver *pdriver, int stage) {
   KOKKOS_LAMBDA(int m, int n, int k, int j, int i) {
     // compute frequency and angle indices
     int ifr, iang;
-    getFreqAngIndices(n, nang_, ifr, iang);
+    getFreqAngIndices(n, nang, ifr, iang);
 
     // calculate n^1 (hence determining upwinding direction)
     Real n1 = t1d1(m,0,k,j,i)*nh_c_.d_view(iang,0) + t1d1(m,1,k,j,i)*nh_c_.d_view(iang,1)
@@ -110,7 +112,7 @@ TaskStatus Radiation::CalculateFluxes(Driver *pdriver, int stage) {
     KOKKOS_LAMBDA(int m, int n, int k, int j, int i) {
       // compute frequency and angle indices
       int ifr, iang;
-      getFreqAngIndices(n, nang_, ifr, iang);
+      getFreqAngIndices(n, nang, ifr, iang);
 
       // calculate n^2 (hence determining upwinding direction)
       Real n2 = t2d2(m,0,k,j,i)*nh_c_.d_view(iang,0) + t2d2(m,1,k,j,i)*nh_c_.d_view(iang,1)
@@ -171,7 +173,7 @@ TaskStatus Radiation::CalculateFluxes(Driver *pdriver, int stage) {
     KOKKOS_LAMBDA(int m, int n, int k, int j, int i) {
       // compute frequency and angle indices
       int ifr, iang;
-      getFreqAngIndices(n, nang_, ifr, iang);
+      getFreqAngIndices(n, nang, ifr, iang);
 
       // calculate n^3 (hence determining upwinding direction)
       Real n3 = t3d3(m,0,k,j,i)*nh_c_.d_view(iang,0) + t3d3(m,1,k,j,i)*nh_c_.d_view(iang,1)
@@ -224,9 +226,7 @@ TaskStatus Radiation::CalculateFluxes(Driver *pdriver, int stage) {
 
   //--------------------------------------------------------------------------------------
   // Angular Fluxes
-
   if (angular_fluxes) {
-    // TODO: add frequency dependence
     auto &numn = prgeo->num_neighbors;
     auto &indn = prgeo->ind_neighbors;
     auto &arcl = prgeo->arc_lengths;
@@ -239,7 +239,7 @@ TaskStatus Radiation::CalculateFluxes(Driver *pdriver, int stage) {
     KOKKOS_LAMBDA(int m, int n, int k, int j, int i) {
       // compute frequency and angle indices
       int ifr, iang;
-      getFreqAngIndices(n, nang_, ifr, iang);
+      getFreqAngIndices(n, nang, ifr, iang);
       // compute angular fluxes
       Real divfa_tmp = 0.0;
       Real tet_c_tmp = tet_c_(m,0,0,k,j,i);
@@ -249,7 +249,7 @@ TaskStatus Radiation::CalculateFluxes(Driver *pdriver, int stage) {
         Real na_tmp = na_(m,iang,k,j,i,nb);
         Real flx_edge = na_tmp/tet_c_tmp;
         if (na_tmp < 0.0) {
-          int ifr_ang = getFreqAngIndex(ifr, indn.d_view(iang,nb), nang_);
+          int ifr_ang = getFreqAngIndex(ifr, indn.d_view(iang,nb), nang);
           flx_edge *= i0_(m,ifr_ang,k,j,i);
         } else {
           flx_edge *= i0_n;
@@ -259,6 +259,44 @@ TaskStatus Radiation::CalculateFluxes(Driver *pdriver, int stage) {
       divfa_(m,n,k,j,i) = divfa_tmp;
     });
   }
+
+  //--------------------------------------------------------------------------------------
+  // Frequency Fluxes
+  if (freq_fluxes) {
+    auto &divfa_ = divfa;
+    auto &nu_tet = freq_grid;
+    auto &nnu_coeff_ = nnu_coeff;
+
+    if (!angular_fluxes) Kokkos::deep_copy(divfa_, 0);
+
+    par_for("rflux_freq",DevExeSpace(),0,nmb1,0,nang1,ks,ke,js,je,is,ie,
+    KOKKOS_LAMBDA(int m, int iang, int k, int j, int i) {
+
+      Real n0 = tet_c_(m,0,0,k,j,i);
+
+      for (int ifr=1; ifr<=nfreq1; ++ifr) {
+        Real &nu_fm1 = nu_tet(ifr-1);
+        Real &nu_f   = nu_tet(ifr);
+        int nl = getFreqAngIndex(ifr-1, iang, nang);
+        int n  = getFreqAngIndex(ifr, iang, nang);
+        Real i0_l = i0_(m,nl,k,j,i)/n0;
+        Real i0_r = i0_(m,n,k,j,i) /n0;
+
+        // direction
+        Real nnu_f = -nu_f * nnu_coeff_(m,iang,k,j,i);
+
+        // upwind flux
+        Real i0_u = (nnu_f > 0) ? i0_l : i0_r;
+        Real flx_f = nnu_f*i0_u/(nu_f-nu_fm1);
+
+        // divergence
+        divfa_(m,nl,k,j,i) += -flx_f;
+        divfa_(m,n,k,j,i)  += flx_f;
+      } // endfor ifr
+
+    });
+
+  } // endfor freq_fluxes
 
   return TaskStatus::complete;
 }

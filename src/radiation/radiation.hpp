@@ -114,10 +114,12 @@ class Radiation {
 
   // Multi-frequency radiation
   bool multi_freq = false;
-  int nfreq = 1; // for multi-frequency, nfreq >= 3
-  int flag_fscale; // 0: linear, 1: log, 2: customize
-  Real nu_max, nu_min; // minimum and maximum frequency (excluding zero and infinity)
+  int nfreq = 1;               // for multi-frequency, nfreq >= 3
+  int flag_fscale;             // 0: linear, 1: log, 2: customize
+  Real nu_max, nu_min;         // minimum and maximum frequency (excluding zero and infinity)
+  bool freq_fluxes;            // flag to enable/disable frequency fluxes
   DvceArray1D<Real> freq_grid;
+  DvceArray5D<Real> nnu_coeff; // n^a n^b omega^0_{ab} for computing frequency fluxes
 
   // DvceArray2D<Real> matrix_imap;
   Real kappa_r_multi_freq; // constant Rosseland mean absoprtion coefficient
@@ -147,7 +149,7 @@ class Radiation {
   // following only used for time-evolving flow
   DvceArray5D<Real> i1;         // intensity at intermediate step
   DvceFaceFld5D<Real> iflx;     // spatial fluxes on zone faces
-  DvceArray5D<Real> divfa;      // angular flux divergence
+  DvceArray5D<Real> divfa;      // angular flux divergence + frequency flux divergence (if applicable)
   DvceArray5D<bool> beam_mask;  // boolean mask used for beam source term
   Real dtnew;
 

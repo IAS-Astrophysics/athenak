@@ -219,6 +219,51 @@ void Radiation::SetOrthonormalTetrad() {
     });
   }
 
+  // Calculate n^freq
+  if (freq_fluxes) {
+    auto nh_c_ = nh_c;
+    auto nnu_coeff_ = nnu_coeff;
+    par_for("nnu_coeff",DevExeSpace(),0,(nmb-1),0,(n3-1),0,(n2-1),0,(n1-1),
+    KOKKOS_LAMBDA(int m, int k, int j, int i) {
+      Real &x1min = size.d_view(m).x1min;
+      Real &x1max = size.d_view(m).x1max;
+      Real x1v = CellCenterX(i-is, indcs.nx1, x1min, x1max);
+
+      Real &x2min = size.d_view(m).x2min;
+      Real &x2max = size.d_view(m).x2max;
+      Real x2v = CellCenterX(j-js, indcs.nx2, x2min, x2max);
+
+      Real &x3min = size.d_view(m).x3min;
+      Real &x3max = size.d_view(m).x3max;
+      Real x3v = CellCenterX(k-ks, indcs.nx3, x3min, x3max);
+
+      Real glower[4][4], gupper[4][4];
+      ComputeMetricAndInverse(x1v,x2v,x3v,flat,spin,glower,gupper);
+      Real dgx[4][4], dgy[4][4], dgz[4][4];
+      ComputeMetricDerivatives(x1v,x2v,x3v,flat,spin,dgx,dgy,dgz);
+      Real e[4][4], e_cov[4][4], omega[4][4][4];
+      ComputeTetrad(x1v,x2v,x3v,flat,spin,glower,gupper,dgx,dgy,dgz,e,e_cov,omega);
+      for (int iang=0; iang<=nang1; ++iang) {
+        nnu_coeff_(m,iang,k,j,i) = nh_c_.d_view(iang,0)*nh_c_.d_view(iang,0)*omega[0][0][0] +
+                                   nh_c_.d_view(iang,1)*nh_c_.d_view(iang,0)*omega[0][1][0] +
+                                   nh_c_.d_view(iang,2)*nh_c_.d_view(iang,0)*omega[0][2][0] +
+                                   nh_c_.d_view(iang,3)*nh_c_.d_view(iang,0)*omega[0][3][0] +
+                                   nh_c_.d_view(iang,0)*nh_c_.d_view(iang,1)*omega[0][0][1] +
+                                   nh_c_.d_view(iang,1)*nh_c_.d_view(iang,1)*omega[0][1][1] +
+                                   nh_c_.d_view(iang,2)*nh_c_.d_view(iang,1)*omega[0][2][1] +
+                                   nh_c_.d_view(iang,3)*nh_c_.d_view(iang,1)*omega[0][3][1] +
+                                   nh_c_.d_view(iang,0)*nh_c_.d_view(iang,2)*omega[0][0][2] +
+                                   nh_c_.d_view(iang,1)*nh_c_.d_view(iang,2)*omega[0][1][2] +
+                                   nh_c_.d_view(iang,2)*nh_c_.d_view(iang,2)*omega[0][2][2] +
+                                   nh_c_.d_view(iang,3)*nh_c_.d_view(iang,2)*omega[0][3][2] +
+                                   nh_c_.d_view(iang,0)*nh_c_.d_view(iang,3)*omega[0][0][3] +
+                                   nh_c_.d_view(iang,1)*nh_c_.d_view(iang,3)*omega[0][1][3] +
+                                   nh_c_.d_view(iang,2)*nh_c_.d_view(iang,3)*omega[0][2][3] +
+                                   nh_c_.d_view(iang,3)*nh_c_.d_view(iang,3)*omega[0][3][3];
+      } // endfor iang
+    });
+  } // endif (freq_fluxes)
+
   // set transformation between normal and tetrad frame
   if (is_hydro_enabled || is_mhd_enabled) {
     auto norm_to_tet_ = norm_to_tet;

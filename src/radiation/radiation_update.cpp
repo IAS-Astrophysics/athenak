@@ -57,6 +57,7 @@ TaskStatus Radiation::RKUpdate(Driver *pdriver, int stage) {
   auto &tc = tetcov_c;
 
   auto &angular_fluxes_ = angular_fluxes;
+  auto &freq_fluxes_ = freq_fluxes;
   auto &divfa_ = divfa;
 
   auto &excise = pmy_pack->pcoord->coord_data.bh_excise;
@@ -79,8 +80,8 @@ TaskStatus Radiation::RKUpdate(Driver *pdriver, int stage) {
     }
     i0_(m,n,k,j,i) = gam0*i0_(m,n,k,j,i)+gam1*i1_(m,n,k,j,i)-beta_dt*divf_s;
 
-    // angular fluxes
-    if (angular_fluxes_) { i0_(m,n,k,j,i) -= beta_dt*divfa_(m,n,k,j,i); }
+    // angular fluxes + frequency flux divergence (if applicable)
+    if (angular_fluxes_ || freq_fluxes_) { i0_(m,n,k,j,i) -= beta_dt*divfa_(m,n,k,j,i); }
 
     // zero intensity if negative
     Real n0  = tt(m,0,0,k,j,i);
