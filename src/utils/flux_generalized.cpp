@@ -146,9 +146,9 @@ void CalculateFluxesForEOS(HistoryData *pdata, MeshBlockPack *pmbp,
         }
 
         prim_pt[PTM] = eos_policy.GetTemperatureFromP(prim_pt[PRH], prim_pt[PPR],
-                                                 nullptr);
+                                                 &prim_pt[PYF]);
         const Real H_enthalpy = rho * eos_policy.GetEnthalpy(prim_pt[PRH], prim_pt[PTM],
-                                                        nullptr);
+                                                        &prim_pt[PYF]);
 
         //--- C1. Calculate helper quantities from source-term formulation ---
         const Real B_sq = Primitive::SquareVector(B_u, g_dd_1d);
