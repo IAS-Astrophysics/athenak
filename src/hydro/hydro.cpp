@@ -38,6 +38,7 @@ Hydro::Hydro(MeshBlockPack *ppack, ParameterInput *pin) :
     fofc("fofc",1,1,1,1),
     u0_c("cons_c",1,1,1,1,1),
     w0_c("prim_c",1,1,1,1,1),
+    laplacian("laplacian",1,1,1,1,1),
     uflx_f("uflx_f",1,1,1,1,1)  {
   // Total number of MeshBlocks on this rank to be used in array dimensioning
   int nmb = std::max((ppack->nmb_thispack), (ppack->pmesh->nmb_maxperrank));
@@ -136,7 +137,8 @@ Hydro::Hydro(MeshBlockPack *ppack, ParameterInput *pin) :
   if (evolution_t.compare("stationary") != 0) {
     // determine if FOFC is enabled
     use_fofc = pin->GetOrAddBoolean("hydro","fofc",false);
-
+    use_4th_order = pin->GetOrAddBoolean("hydro","4th_order",false);
+    use_mignone = pin->GetOrAddBoolean("hydro","mignone",false);
     // select reconstruction method (default PLM)
     std::string xorder = pin->GetOrAddString("hydro","reconstruct","plm");
     if (xorder.compare("dc") == 0) {
@@ -291,10 +293,12 @@ Hydro::Hydro(MeshBlockPack *ppack, ParameterInput *pin) :
       if (use_4th_order){
         Kokkos::realloc(u0_c, nmb, (nhydro+nscalars), ncells3, ncells2, ncells1);
         Kokkos::realloc(w0_c, nmb, (nhydro+nscalars), ncells3, ncells2, ncells1);
+        
         Kokkos::realloc(uflx_f.x1f, nmb, (nhydro+nscalars), ncells3, ncells2, ncells1);
         Kokkos::realloc(uflx_f.x2f, nmb, (nhydro+nscalars), ncells3, ncells2, ncells1);
         Kokkos::realloc(uflx_f.x3f, nmb, (nhydro+nscalars), ncells3, ncells2, ncells1);
       }
+      Kokkos::realloc(laplacian, nmb, (nhydro+nscalars), ncells3, ncells2, ncells1);
     }
   }
 }

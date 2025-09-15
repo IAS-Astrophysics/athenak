@@ -31,7 +31,8 @@
 void ProblemGenerator::Advection(ParameterInput *pin, const bool restart) {
   // nothing needs to be done on restarts for this pgen
   if (restart) return;
-
+  bool use_4th_order = pmy_mesh_->pmb_pack->phydro->use_4th_order;
+  bool use_mignone = pmy_mesh_->pmb_pack->phydro->use_mignone;
   // Read input parameters
   int flow_dir = pin->GetInteger("problem","flow_dir");
   int iprob = pin->GetInteger("problem","iproblem");
@@ -65,6 +66,10 @@ void ProblemGenerator::Advection(ParameterInput *pin, const bool restart) {
   Real &x2mesh = pmy_mesh_->mesh_size.x2min;
   Real &x3mesh = pmy_mesh_->mesh_size.x3min;
   auto &indcs = pmy_mesh_->mb_indcs;
+  int &ng = indcs.ng;
+  int n1m1 = indcs.nx1 + 2*ng - 1;
+  int n2m1 = (indcs.nx2 > 1)? (indcs.nx2 + 2*ng - 1) : 0;
+  int n3m1 = (indcs.nx3 > 1)? (indcs.nx3 + 2*ng - 1) : 0;
   int &is = indcs.is; int &ie = indcs.ie;
   int &js = indcs.js; int &je = indcs.je;
   int &ks = indcs.ks; int &ke = indcs.ke;
@@ -80,9 +85,9 @@ void ProblemGenerator::Advection(ParameterInput *pin, const bool restart) {
     }
     int &nhydro = pmbp->phydro->nhydro;
     int &nscalars = pmbp->phydro->nscalars;
-    auto &u0 = pmbp->phydro->u0;
+    auto &u0 = (use_4th_order) ? pmbp->phydro->u0_c : pmbp->phydro->u0;
 
-    par_for("hydro_advect", DevExeSpace(), 0,(pmbp->nmb_thispack-1),ks,ke,js,je,is,ie,
+    par_for("hydro_advect", DevExeSpace(), 0,(pmbp->nmb_thispack-1),0,n3m1,0,n2m1,0,n1m1,
     KOKKOS_LAMBDA(int m, int k, int j, int i) {
       Real r; // coordinate that will span [0->1]
       if (flow_dir == 1) {
@@ -145,6 +150,27 @@ void ProblemGenerator::Advection(ParameterInput *pin, const bool restart) {
         u0(m,n,k,j,i) = f*u0(m,IDN,k,j,i);
       }
     });
+
+    if (use_4th_order){
+      if(use_mignone){
+        // Primitive variables: volume average -> cell center
+        pmbp->pcoord->AverageVolume(pmbp->phydro->u0_c, pmbp->phydro->u0);
+        // Conservative variables from cell-centered primitive variables
+        pmbp->phydro->peos->ConsToPrim(pmbp->phydro->u0_c, pmbp->phydro->w0_c, false, 0, n1m1, 0, n2m1, 0, n3m1);
+        // Primitive variables: volume average (2nd order accurate)
+        pmbp->phydro->peos->ConsToPrim(pmbp->phydro->u0, pmbp->phydro->w0, false, 0, n1m1, 0, n2m1, 0, n3m1);
+      }
+      else{
+        // Primitive variables: volume average -> cell center
+        pmbp->pcoord->AverageVolume(pmbp->phydro->u0_c, pmbp->phydro->u0);
+        // Conservative variables from cell-centered primitive variables
+        pmbp->phydro->peos->ConsToPrim(pmbp->phydro->u0_c, pmbp->phydro->w0_c, false, 0, n1m1, 0, n2m1, 0, n3m1);
+        // Conservative variables from volume-averaged primitive variables (2nd order accurate)
+        pmbp->phydro->peos->ConsToPrim(pmbp->phydro->u0, pmbp->phydro->w0, false, 0, n1m1, 0, n2m1, 0, n3m1);
+        // Volume-average conservative variables to 4th order accuracy
+        pmbp->pcoord->AverageVolume_mixed(pmbp->phydro->w0_c, pmbp->phydro->w0, pmbp->phydro->laplacian);
+      }
+    }
   }  // End initialization of Hydro variables
 
   // Initialize MHD variables ----------------------------------

@@ -245,7 +245,8 @@ void ProblemGenerator::LinearWave(ParameterInput *pin, const bool restart) {
   // set linear wave errors function
   pgen_final_func = LinearWaveErrors;
   if (restart) return;
-
+  bool use_4th_order = pmy_mesh_->pmb_pack->phydro->use_4th_order;
+  bool use_mignone = pmy_mesh_->pmb_pack->phydro->use_mignone;
   // Read and/or calculate direction of wavevector
   bool along_x1 = pin->GetOrAddBoolean("problem", "along_x1", false);
   bool along_x2 = pin->GetOrAddBoolean("problem", "along_x2", false);
@@ -339,6 +340,10 @@ void ProblemGenerator::LinearWave(ParameterInput *pin, const bool restart) {
 
   // capture variables for kernels
   auto &indcs = pmy_mesh_->mb_indcs;
+  int &ng = indcs.ng;
+  int n1m1 = indcs.nx1 + 2*ng - 1;
+  int n2m1 = (indcs.nx2 > 1)? (indcs.nx2 + 2*ng - 1) : 0;
+  int n3m1 = (indcs.nx3 > 1)? (indcs.nx3 + 2*ng - 1) : 0;
   int &is = indcs.is; int &ie = indcs.ie;
   int &js = indcs.js; int &je = indcs.je;
   int &ks = indcs.ks; int &ke = indcs.ke;
@@ -392,58 +397,87 @@ void ProblemGenerator::LinearWave(ParameterInput *pin, const bool restart) {
       }
     }
 
-
     // Calculate cell-centered primitive variables
-    auto &w0 = pmbp->phydro->w0;
-    par_for("pgen_linwave1", DevExeSpace(), 0,(pmbp->nmb_thispack-1),ks,ke,js,je,is,ie,
+    auto &w0 = use_4th_order ? pmbp->phydro->w0 : pmbp->phydro->w0;
+    auto &u0 = set_initial_conditions ? pmbp->phydro->u0 : pmbp->phydro->u1;
+    par_for("pgen_linwave1", DevExeSpace(), 0,(pmbp->nmb_thispack-1),0,n3m1,0,n2m1,0,n1m1,
     KOKKOS_LAMBDA(int m, int k, int j, int i) {
       Real &x1min = size.d_view(m).x1min;
       Real &x1max = size.d_view(m).x1max;
+      Real &dx1 = size.d_view(m).dx1;
       int nx1 = indcs.nx1;
-      Real x1v = CellCenterX(i-is, nx1, x1min, x1max);
-
+      
       Real &x2min = size.d_view(m).x2min;
       Real &x2max = size.d_view(m).x2max;
+      Real &dx2 = size.d_view(m).dx2;
       int nx2 = indcs.nx2;
-      Real x2v = CellCenterX(j-js, nx2, x2min, x2max);
-
+      
       Real &x3min = size.d_view(m).x3min;
       Real &x3max = size.d_view(m).x3max;
+      Real &dx3 = size.d_view(m).dx3;
       int nx3 = indcs.nx3;
-      Real x3v = CellCenterX(k-ks, nx3, x3min, x3max);
+      int nqx1 = (use_4th_order) ? 4 : 1;
+      int nqx2 = (use_4th_order && nx2 > 1) ? 4 : 1;
+      int nqx3 = (use_4th_order && nx3 > 1) ? 4 : 1;
 
-      Real x = lwv.cos_a2*(x1v*lwv.cos_a3 + x2v*lwv.sin_a3) + x3v*lwv.sin_a2;
-      Real sn = std::sin(lwv.k_par*x);
-      Real rho, vx, vy, vz, egas;
-
-      if (relativistic) {
-        rho = lwv.d0 + amp*sn * delta_rho;
-        Real vx_mink = lwv.vx_0 + amp*sn * delta_v[1];
-        Real vy_mink = lwv.vy_0 + amp*sn * delta_v[2];
-        Real vz_mink = lwv.vz_0 + amp*sn * delta_v[3];
-        Real lor = 1.0 / std::sqrt(1.0 - SQR(vx_mink) - SQR(vy_mink) - SQR(vz_mink));
-        vx = lor * vx_mink;
-        vy = lor * vy_mink;
-        vz = lor * vz_mink;
-        if (dynamical_relativistic) {
-          egas = lwv.p0 + amp*sn * delta_pgas;        // set pressure
-        } else {
-          egas = (lwv.p0 + amp*sn * delta_pgas)/gm1;  // set internal energy
-        }
-      } else {
-        rho  = lwv.d0   + amp*sn*rem[0][lwv.wave_flag];
-        vx   = lwv.vx_0 + amp*sn*rem[1][lwv.wave_flag];
-        vy   = lwv.vy_0 + amp*sn*rem[2][lwv.wave_flag];
-        vz   = lwv.vz_0 + amp*sn*rem[3][lwv.wave_flag];
-        egas = (lwv.p0 + amp*sn*rem[4][lwv.wave_flag])/gm1;
-      }
-      // set cell-centered conserved variables
-      w0(m,IDN,k,j,i)=rho;
-      w0(m,IVX,k,j,i)=vx*lwv.cos_a2*lwv.cos_a3 -vy*lwv.sin_a3 -vz*lwv.sin_a2*lwv.cos_a3;
-      w0(m,IVY,k,j,i)=vx*lwv.cos_a2*lwv.sin_a3 +vy*lwv.cos_a3 -vz*lwv.sin_a2*lwv.sin_a3;
-      w0(m,IVZ,k,j,i)=vx*lwv.sin_a2                           +vz*lwv.cos_a2;
+      // Gauss-Legendre quadrature points and weights for 4th order
+      const Real gl_points[4] = {-0.8611363115940526, -0.3399810435848563, 
+                                  0.3399810435848563,  0.8611363115940526};
+      const Real gl_weights[4] = {0.3478548451374538 * .5, 0.6521451548625461 * .5, 
+                                  0.6521451548625461 * .5, 0.3478548451374538 * .5};
+      Real weight=1;
+      w0(m,IDN,k,j,i)=0.0;
+      w0(m,IVX,k,j,i)=0.0;
+      w0(m,IVY,k,j,i)=0.0;
+      w0(m,IVZ,k,j,i)=0.0;
       if (eos.is_ideal) {
-        w0(m,IEN,k,j,i) = egas;
+        w0(m,IEN,k,j,i) = 0.0;
+      }
+      for (int kk=0; kk<nqx3; kk++) {
+        for (int jj=0; jj<nqx2; jj++) {
+          for (int ii=0; ii<nqx1; ii++) {
+              Real x1v = CellCenterX(i-is, nx1, x1min, x1max) + (use_4th_order ? 0.5 * dx1 * gl_points[ii] : 0.0);
+              Real x2v = CellCenterX(j-js, nx2, x2min, x2max) + ((use_4th_order && nx2>1) ? 0.5 * dx2 * gl_points[jj] : 0.0);
+              Real x3v = CellCenterX(k-ks, nx3, x3min, x3max) + ((use_4th_order && nx3>1) ? 0.5 * dx3 * gl_points[kk] : 0.0);
+
+              Real x = lwv.cos_a2*(x1v*lwv.cos_a3 + x2v*lwv.sin_a3) + x3v*lwv.sin_a2;
+              Real sn = std::sin(lwv.k_par*x);
+              Real rho, vx, vy, vz, egas;
+
+              if (relativistic) {
+                rho = lwv.d0 + amp*sn * delta_rho;
+                Real vx_mink = lwv.vx_0 + amp*sn * delta_v[1];
+                Real vy_mink = lwv.vy_0 + amp*sn * delta_v[2];
+                Real vz_mink = lwv.vz_0 + amp*sn * delta_v[3];
+                Real lor = 1.0 / std::sqrt(1.0 - SQR(vx_mink) - SQR(vy_mink) - SQR(vz_mink));
+                vx = lor * vx_mink;
+                vy = lor * vy_mink;
+                vz = lor * vz_mink;
+                if (dynamical_relativistic) {
+                  egas = lwv.p0 + amp*sn * delta_pgas;        // set pressure
+                } else {
+                  egas = (lwv.p0 + amp*sn * delta_pgas)/gm1;  // set internal energy
+                }
+              } else {
+                rho  = lwv.d0   + amp*sn*rem[0][lwv.wave_flag];
+                vx   = lwv.vx_0 + amp*sn*rem[1][lwv.wave_flag];
+                vy   = lwv.vy_0 + amp*sn*rem[2][lwv.wave_flag];
+                vz   = lwv.vz_0 + amp*sn*rem[3][lwv.wave_flag];
+                egas = (lwv.p0 + amp*sn*rem[4][lwv.wave_flag])/gm1;
+              }
+                // Compute the contribution to the integral
+              if (use_4th_order)
+                weight = gl_weights[ii] * (nx2>1 ? gl_weights[jj] : 1) * (nx3>1 ? gl_weights[kk] : 1);
+              // set cell-centered conserved variables
+              w0(m,IDN,k,j,i) += weight * (rho);
+              w0(m,IVX,k,j,i) += weight * (vx*lwv.cos_a2*lwv.cos_a3 -vy*lwv.sin_a3 -vz*lwv.sin_a2*lwv.cos_a3);
+              w0(m,IVY,k,j,i) += weight * (vx*lwv.cos_a2*lwv.sin_a3 +vy*lwv.cos_a3 -vz*lwv.sin_a2*lwv.sin_a3);
+              w0(m,IVZ,k,j,i) += weight * (vx*lwv.sin_a2                           +vz*lwv.cos_a2);
+              if (eos.is_ideal) {
+                w0(m,IEN,k,j,i) += weight*egas;
+              }
+          }
+        }
       }
     });
 
@@ -463,12 +497,33 @@ void ProblemGenerator::LinearWave(ParameterInput *pin, const bool restart) {
       }
     } else {
       // "regular" GRHydro in stationary spacetimes
-      if (set_initial_conditions) {
-        pmbp->phydro->peos->PrimToCons(w0, pmbp->phydro->u0, is, ie, js, je, ks, ke);
-      } else {
-        pmbp->phydro->peos->PrimToCons(w0, pmbp->phydro->u1, is, ie, js, je, ks, ke);
+      //At this point we have cell-centered values for both conservative and primitive variables
+      //We therefore need to compute the control volume average for both
+      if (use_4th_order){
+        if(use_mignone){
+          // Primitive variables: volume average -> cell center
+          pmbp->pcoord->DeAverageVolume(pmbp->phydro->w0, pmbp->phydro->w0_c);
+          // Conservative variables from cell-centered primitive variables
+          pmbp->phydro->peos->PrimToCons(pmbp->phydro->w0_c, pmbp->phydro->u0_c, 0, n1m1, 0, n2m1, 0, n3m1);
+          // Conservative variables: cell center -> volume average
+          pmbp->pcoord->AverageVolume(pmbp->phydro->u0_c, u0);
+        }
+        else{
+          // Primitive variables: volume average -> cell center
+          pmbp->pcoord->DeAverageVolume(pmbp->phydro->w0, pmbp->phydro->w0_c);
+          // Conservative variables from cell-centered primitive variables
+          pmbp->phydro->peos->PrimToCons(pmbp->phydro->w0_c, pmbp->phydro->u0_c, 0, n1m1, 0, n2m1, 0, n3m1);
+          // Conservative variables from volume-averaged primitive variables (2nd order accurate)
+          pmbp->phydro->peos->PrimToCons(pmbp->phydro->w0, u0, 0, n1m1, 0, n2m1, 0, n3m1);
+          // Volume-average conservative variables to 4th order accuracy
+          pmbp->pcoord->AverageVolume_mixed(pmbp->phydro->u0_c, u0, pmbp->phydro->laplacian);
+          //pmbp->phydro->peos->PrimToCons(pmbp->phydro->w0_c, u0, 0, n1m1, 0, n2m1, 0, n3m1);
+        }
       }
+      else
+        pmbp->phydro->peos->PrimToCons(w0, u0, 0, n1m1, 0, n2m1, 0, n3m1);
     }
+
   }  // End initialization Hydro variables
 
   // initialize MHD variables ------------------------------------------------------------

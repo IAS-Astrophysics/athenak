@@ -14,54 +14,60 @@
 #include "driver/driver.hpp"
 #include "eos/eos.hpp"
 #include "hydro.hpp"
+#include "coordinates/laplacian.hpp"
 
-namespace hydro {
-//----------------------------------------------------------------------------------------
-//! \fn  void Hydro::Update
-//  \brief Explicit RK update including flux divergence terms
+namespace hydro
+{
+  //----------------------------------------------------------------------------------------
+  //! \fn  void Hydro::Update
+  //  \brief Explicit RK update including flux divergence terms
 
-TaskStatus Hydro::RKUpdate(Driver *pdriver, int stage) {
-  auto &indcs = pmy_pack->pmesh->mb_indcs;
-  int is = indcs.is, ie = indcs.ie;
-  int js = indcs.js, je = indcs.je;
-  int ks = indcs.ks, ke = indcs.ke;
-  int ncells1 = indcs.nx1 + 2*(indcs.ng);
-  bool &multi_d = pmy_pack->pmesh->multi_d;
-  bool &three_d = pmy_pack->pmesh->three_d;
+  TaskStatus Hydro::RKUpdate(Driver *pdriver, int stage)
+  {
+    auto &indcs = pmy_pack->pmesh->mb_indcs;
+    int is = indcs.is, ie = indcs.ie;
+    int js = indcs.js, je = indcs.je;
+    int ks = indcs.ks, ke = indcs.ke;
+    int ncells1 = indcs.nx1 + 2 * (indcs.ng);
+    bool &multi_d = pmy_pack->pmesh->multi_d;
+    bool &three_d = pmy_pack->pmesh->three_d;
 
-  Real &gam0 = pdriver->gam0[stage-1];
-  Real &gam1 = pdriver->gam1[stage-1];
-  Real beta_dt = (pdriver->beta[stage-1])*(pmy_pack->pmesh->dt);
-  int nmb1 = pmy_pack->nmb_thispack - 1;
-  int nvar = nhydro + nscalars;
-  auto u0_ = u0;
-  auto u1_ = u1;
-  auto flx1 = uflx.x1f;
-  auto flx2 = uflx.x2f;
-  auto flx3 = uflx.x3f;
-  auto &mbsize = pmy_pack->pmb->mb_size;
+    Real &gam0 = pdriver->gam0[stage - 1];
+    Real &gam1 = pdriver->gam1[stage - 1];
+    Real beta_dt = (pdriver->beta[stage - 1]) * (pmy_pack->pmesh->dt);
+    int nmb1 = pmy_pack->nmb_thispack - 1;
+    int nvar = nhydro + nscalars;
+    auto u0_ = u0;
+    auto u1_ = u1;
+    auto flx1 = uflx.x1f;
+    auto flx2 = uflx.x2f;
+    auto flx3 = uflx.x3f;
+    auto &mbsize = pmy_pack->pmb->mb_size;
+    auto DivF = laplacian; // temporary array for 4th order
+    int ndim = (three_d) ? 3 : (multi_d) ? 2 : 1;
+    // hierarchical parallel loop that updates conserved variables to intermediate step
+    // using weights and fractional time step appropriate to stages of time-integrator.
+    // Vector inner loop used for good performance on cpus
+    int scr_level = 0;
+    size_t scr_size = ScrArray1D<Real>::shmem_size(ncells1);
 
-  // hierarchical parallel loop that updates conserved variables to intermediate step
-  // using weights and fractional time step appropriate to stages of time-integrator.
-  // Vector inner loop used for good performance on cpus
-  int scr_level = 0;
-  size_t scr_size = ScrArray1D<Real>::shmem_size(ncells1);
-
-  par_for_outer("h_update",DevExeSpace(),scr_size,scr_level,0,nmb1,0,nvar-1,ks,ke,js,je,
-  KOKKOS_LAMBDA(TeamMember_t member, const int m, const int n, const int k, const int j) {
+    par_for_outer("h_update", DevExeSpace(), scr_size, scr_level, 0, nmb1, 0, nvar - 1, ks, ke, js-(ndim>1), je+(ndim>1), 
+    KOKKOS_LAMBDA(TeamMember_t member, const int m, const int n, const int k, const int j) {
     ScrArray1D<Real> divf(member.team_scratch(scr_level), ncells1);
 
     // compute dF1/dx1
-    par_for_inner(member, is, ie, [&](const int i) {
+    par_for_inner(member, is-1, ie+1, [&](const int i) {
       divf(i) = (flx1(m,n,k,j,i+1) - flx1(m,n,k,j,i))/mbsize.d_view(m).dx1;
+      DivF(m,n,k,j,i) = divf(i);
     });
     member.team_barrier();
 
     // Add dF2/dx2
     // Fluxes must be summed in pairs to symmetrize round-off error in each dir
     if (multi_d) {
-      par_for_inner(member, is, ie, [&](const int i) {
+      par_for_inner(member, is-1, ie+1, [&](const int i) {
         divf(i) += (flx2(m,n,k,j+1,i) - flx2(m,n,k,j,i))/mbsize.d_view(m).dx2;
+        DivF(m,n,k,j,i) = divf(i);
       });
       member.team_barrier();
     }
@@ -69,8 +75,9 @@ TaskStatus Hydro::RKUpdate(Driver *pdriver, int stage) {
     // Add dF3/dx3
     // Fluxes must be summed in pairs to symmetrize round-off error in each dir
     if (three_d) {
-      par_for_inner(member, is, ie, [&](const int i) {
+      par_for_inner(member, is-1, ie+1, [&](const int i) {
         divf(i) += (flx3(m,n,k+1,j,i) - flx3(m,n,k,j,i))/mbsize.d_view(m).dx3;
+        DivF(m,n,k,j,i) = divf(i);
       });
       member.team_barrier();
     }
@@ -78,7 +85,18 @@ TaskStatus Hydro::RKUpdate(Driver *pdriver, int stage) {
     par_for_inner(member, is, ie, [&](const int i) {
       u0_(m,n,k,j,i) = gam0*u0_(m,n,k,j,i) + gam1*u1_(m,n,k,j,i) - beta_dt*divf(i);
     });
-  });
-  return TaskStatus::complete;
-}
+    });
+
+    if(use_4th_order && use_mignone){
+    // For RK4 with Mignone 4th-order, apply correction to flux divergence
+    par_for_outer("4th order correction", DevExeSpace(), scr_size, scr_level, 0, nmb1, 0, nvar - 1, ks, ke, js, je,
+     KOKKOS_LAMBDA(TeamMember_t member, const int m, const int n, const int k, const int j) {
+      par_for_inner(member, is, ie, [&](const int i) {
+        u0_(m,n,k,j,i) -= beta_dt*(Laplacian3D(m,n,k,j,i,DivF,(three_d) ? 3 : (multi_d) ? 2 : 1)/24.0);
+      });
+    });
+    }
+
+    return TaskStatus::complete;
+  }
 } // namespace hydro

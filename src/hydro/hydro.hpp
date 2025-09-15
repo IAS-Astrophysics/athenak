@@ -108,8 +108,9 @@ class Hydro {
   bool use_4th_order = false; // flag to enable 4th-order reconstruction
   DvceArray5D<Real> u0_c;   // conserved variables at cell centers
   DvceArray5D<Real> w0_c;   // primitive variables at cell centers
+  DvceArray5D<Real> laplacian;   // laplacian
   DvceFaceFld5D<Real> uflx_f;   // fluxes of conserved quantities on cell faces for 4th-order
-
+  bool use_mignone = false; // flag to enable Mignone 2025 4th-order reconstruction
 
   // container to hold names of TaskIDs
   HydroTaskIDs id;

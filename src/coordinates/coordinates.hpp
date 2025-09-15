@@ -103,6 +103,14 @@ class Coordinates {
   void Apply_Laplacian3D(const DvceArray5D<Real> &q1, DvceArray5D<Real> &q2,
                         const bool average);
 
+  void Apply_Laplacian3D_mixed(const DvceArray5D<Real> &q1, DvceArray5D<Real> &q2,
+                        DvceArray5D<Real> &Laplacian,
+                        const bool average);
+
+  void AverageVolume_mixed(const DvceArray5D<Real> &q,
+                        DvceArray5D<Real> &q_average,
+                        DvceArray5D<Real> &Laplacian);
+
 
  private:
   MeshBlockPack* pmy_pack;

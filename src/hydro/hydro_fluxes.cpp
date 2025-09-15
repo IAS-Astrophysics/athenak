@@ -50,23 +50,19 @@ void Hydro::CalculateFluxes(Driver *pdriver, int stage) {
   if (recon_method == ReconstructionMethod::ppmx) {
     extrema = true;
   }
-
+  //bool use_4th_order = false;
   auto &eos_ = peos->eos_data;
   auto &size_ = pmy_pack->pmb->mb_size;
   auto &coord_ = pmy_pack->pcoord->coord_data;
-  auto &w0_ = w0;
-  if (use_4th_order)
-    auto &w0_ = w0_c;
+  auto &w0_ = (use_4th_order && use_mignone) ? w0_c : w0;
 
   //--------------------------------------------------------------------------------------
   // i-direction
 
   size_t scr_size = ScrArray2D<Real>::shmem_size(nvars, ncells1) * 2;
   int scr_level = 0;
-  auto &flx1_ = uflx.x1f;
-  if (use_4th_order)
-    auto &flx1_ = uflx_f.x1f;
-
+  auto &flx1_ =  (use_4th_order && use_mignone) ? uflx_f.x1f : uflx.x1f;
+  
   // set the loop limits for 1D/2D/3D problems
   int il = is, iu = ie+1, jl = js, ju = je, kl = ks, ku = ke;
   if (use_fofc) {
@@ -75,6 +71,14 @@ void Hydro::CalculateFluxes(Driver *pdriver, int stage) {
       jl = js-1, ju = je+1, kl = ks, ku = ke;
     } else {
       jl = js-1, ju = je+1, kl = ks-1, ku = ke+1;
+    }
+  }
+  if (use_4th_order) {
+    il = is-2, iu = ie+3;
+    if (pmy_pack->pmesh->two_d) {
+      jl = js-2, ju = je+2, kl = ks, ku = ke;
+    } else if (pmy_pack->pmesh->three_d){
+      jl = js-2, ju = je+2, kl = ks-2, ku = ke+2;
     }
   }
 
@@ -153,9 +157,7 @@ void Hydro::CalculateFluxes(Driver *pdriver, int stage) {
 
   if (pmy_pack->pmesh->multi_d) {
     scr_size = ScrArray2D<Real>::shmem_size(nvars, ncells1) * 3;
-    auto &flx2_ = uflx.x2f;
-    if (use_4th_order)
-      auto &flx2_ = uflx_f.x2f;
+    auto &flx2_ = (use_4th_order && use_mignone) ? uflx_f.x2f : uflx.x2f;
 
     // set the loop limits for 1D/2D/3D problems
     il = is, iu = ie, jl = js-1, ju = je+1, kl = ks, ku = ke;
@@ -165,6 +167,14 @@ void Hydro::CalculateFluxes(Driver *pdriver, int stage) {
         il = is-1, iu = ie+1, kl = ks, ku = ke;
       } else {
         il = is-1, iu = ie+1, kl = ks-1, ku = ke+1;
+      }
+    }
+    if (use_4th_order) {
+      jl = js-2, ju = je+2;
+      if (pmy_pack->pmesh->two_d) {
+        il = is-2, iu = ie+2, kl = ks, ku = ke;
+      } else if (pmy_pack->pmesh->three_d){
+        il = is-2, iu = ie+2, kl = ks-2, ku = ke+2;
       }
     }
 
@@ -257,13 +267,14 @@ void Hydro::CalculateFluxes(Driver *pdriver, int stage) {
 
   if (pmy_pack->pmesh->three_d) {
     scr_size = ScrArray2D<Real>::shmem_size(nvars, ncells1) * 3;
-    auto &flx3_ = uflx.x3f;
-    if (use_4th_order)
-      auto &flx3_ = uflx_f.x3f;
+    auto &flx3_ = (use_4th_order && use_mignone) ? uflx_f.x3f : uflx.x3f;
 
     // set the loop limits
     il = is, iu = ie, jl = js, ju = je, kl = ks-1, ku = ke+1;
-    if (use_fofc) { il = is-1, iu = ie+1, jl = js-1, ju = je+1, kl = ks-2, ku = ke+2; }
+    if (use_fofc)
+     { il = is-1, iu = ie+1, jl = js-1, ju = je+1, kl = ks-2, ku = ke+2; }
+    if (use_4th_order)
+     { il = is-2, iu = ie+2, jl = js-2, ju = je+2; kl = ks-2, ku = ke+2;}
 
     par_for_outer("hflux_x3",DevExeSpace(), scr_size, scr_level, 0, nmb1, jl, ju,
     KOKKOS_LAMBDA(TeamMember_t member, const int m, const int j) {
@@ -349,7 +360,7 @@ void Hydro::CalculateFluxes(Driver *pdriver, int stage) {
     });
   }
 
-  if (use_4th_order){
+  if (use_4th_order && use_mignone) {
     // Average conservative fluxes at cell interfaces
     pmy_pack->pcoord->AverageSurfaceX1(uflx_f.x1f, uflx.x1f);
     if (pmy_pack->pmesh->multi_d)
