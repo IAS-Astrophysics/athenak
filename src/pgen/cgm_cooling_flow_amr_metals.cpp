@@ -545,6 +545,9 @@ void SNSource(Mesh* pm, const Real bdt) {
   int nmb1 = pmbp->nmb_thispack - 1;
   auto &size = pmbp->pmb->mb_size;
   
+  int nscalars = pmbp->phydro->nscalars;
+  int nhydro = pmbp->phydro->nhydro;
+
   auto &u0 = pmbp->phydro->u0;
   auto &w0 = pmbp->phydro->w0;
 
@@ -605,6 +608,7 @@ void SNSource(Mesh* pm, const Real bdt) {
     
     Real e_sn_ = e_sn;
     Real m_ej_ = m_ej;
+    Real Z_ej_ = 0.1;
 
     par_for("sn_injection", DevExeSpace(), 0, nmb1, ks, ke, js, je, is, ie,
     KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
@@ -633,8 +637,9 @@ void SNSource(Mesh* pm, const Real bdt) {
               
         // Inject energy if within injection radius
         if (r <= dr) {
-	  u0(m,IDN,k,j,i) += m_ej_;
-          u0(m,IEN,k,j,i) += e_sn_;
+	  //u0(m,IDN,k,j,i) += m_ej_;
+          //u0(m,IEN,k,j,i) += e_sn_;
+	  //u0(m, nhydro, k, j, i) += Z_ej_ * m_ej_;
 	}
       }
 

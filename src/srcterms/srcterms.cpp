@@ -72,7 +72,6 @@ SourceTerms::SourceTerms(std::string block, MeshBlockPack *pp, ParameterInput *p
     hscale_norm = pin->GetOrAddReal(block, "hscale_norm", 0.0); 
     hscale_height = pin->GetOrAddReal(block, "hscale_height", 0.0); // Scale height in code units
     hscale_radius = pin->GetOrAddReal(block, "hscale_radius", 0.0); // Scale radius in code units
-    hscale_alpha = pin->GetOrAddReal(block, "hscale_alpha", 0.0); // Scale coeff in code units
 
     // Set temperature ceiling
     T_max = pin->GetOrAddReal(block, "T_max", 1e10); // Temperature Ceiling in cgs
@@ -276,7 +275,6 @@ void SourceTerms::CGMCooling(const DvceArray5D<Real> &w0, const EOS_Data &eos_da
   Real h_norm = hscale_norm;
   Real h_height = hscale_height;
   Real h_radius = hscale_radius;
-  Real h_alpha = hscale_alpha;
   Real T_max_ = T_max;
 
   par_for("cgm_cooling", DevExeSpace(), 0, nmb1, ks, ke, js, je, is, ie,
@@ -362,7 +360,7 @@ void SourceTerms::CGMCooling(const DvceArray5D<Real> &w0, const EOS_Data &eos_da
     const Real R  = sqrt(R2);
 
     const Real horz_falloff = exp(-R / h_radius);
-    const Real vert_scale2  = fma(h_height, h_height , h_alpha*R2);
+    const Real vert_scale2  = h_height*h_height*(1 + R2 / (h_radius*h_radius));
     const Real vert_falloff = exp(-(x3v*x3v) / vert_scale2);
 
     Real gamma_heating = h_rate * h_norm * X * nH_unit * horz_falloff * vert_falloff;
@@ -382,7 +380,7 @@ void SourceTerms::CGMCooling(const DvceArray5D<Real> &w0, const EOS_Data &eos_da
     const Real tau  = neutral_frac * nH * 1.0e-17 * dx_cgs;
     const Real frac = exp(-tau);
     const Real lambda_cooling = (1.0 - frac) * lambda_CIE + frac * lambda_PIE;
-    gamma_heating *= (1.0 - frac);
+    //gamma_heating *= (1.0 - frac);
 
     // --- Energy update
     // First, normal source term:

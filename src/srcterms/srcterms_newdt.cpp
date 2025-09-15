@@ -120,7 +120,6 @@ void SourceTerms::NewTimeStep(const DvceArray5D<Real> &w0, const EOS_Data &eos_d
     Real h_norm = hscale_norm;
     Real h_height = hscale_height;
     Real h_radius = hscale_radius;
-    Real h_alpha = hscale_alpha;
     Real T_max_ = T_max;
 
     // find smallest (e/cooling_rate) in each cell
@@ -215,7 +214,7 @@ void SourceTerms::NewTimeStep(const DvceArray5D<Real> &w0, const EOS_Data &eos_d
       const Real R  = sqrt(R2);
 
       const Real horz_falloff = exp(-R / h_radius);
-      const Real vert_scale2  = fma(h_height, h_height , h_alpha*R2);
+      const Real vert_scale2  = h_height*h_height*(1 + R2 / (h_radius*h_radius));
       const Real vert_falloff = exp(-(x3v*x3v) / vert_scale2);
 
       Real gamma_heating = h_rate * h_norm * X * nH_unit * horz_falloff * vert_falloff;
@@ -235,7 +234,7 @@ void SourceTerms::NewTimeStep(const DvceArray5D<Real> &w0, const EOS_Data &eos_d
       const Real tau  = neutral_frac * nH * 1.0e-17 * dx_cgs;
       const Real frac = exp(-tau);
       const Real lambda_cooling = (1.0 - frac) * lambda_CIE + frac * lambda_PIE;
-      gamma_heating *= (1.0 - frac);
+      //gamma_heating *= (1.0 - frac);
 
       // --- Timestep calculation
       Real cooling_heating =
