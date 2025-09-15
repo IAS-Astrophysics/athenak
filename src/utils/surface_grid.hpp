@@ -13,24 +13,26 @@
 // gamma_ab, and the proper area element dA.
 //========================================================================================
 class MeshBlockPack;
+class ParameterInput;
 
 class SphericalSurfaceGrid {
  public:
   using RFunc = std::function<Real(Real, Real)>;  // r(θ,φ) measured from `center_`
 
-  // Constructor
+  // Constructor with new optional argument for interpolation order
   SphericalSurfaceGrid(MeshBlockPack* pack,
                        int ntheta, int nphi,
                        RFunc r_of_thph,
                        const std::string& name = "surf",
-                       const Real* center = nullptr);
+                       const Real* center = nullptr,
+                       int interp_order = 1);
 
   // Translate the surface. (Rebuilds coordinates + interpolation only.)
   void SetCenter(const Real new_center[3]);
 
   // Recompute everything if r(θ,φ) changed externally.
   void RebuildFromRadius() { RebuildAll(); }
-  
+
   // Rebuild interpolator and surface geometry.
   void RebuildAll();
 
@@ -75,6 +77,7 @@ class SphericalSurfaceGrid {
   int n_th, n_ph, npts;
   Real dth, dph;
   bool metric_is_flat_;
+  int interp_order_; // Decoupled interpolation order
 
   // Core geometry
   DualArray1D<Real> theta, phi, radius, weights; // weights is now just dth*dph

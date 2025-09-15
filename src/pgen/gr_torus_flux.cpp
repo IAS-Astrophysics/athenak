@@ -210,7 +210,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   // This avoids the crash-on-exit from using a static variable.
   auto r_func_inner = [=](Real th, Real ph){ return KerrSchildRadius(1., torus.spin, r_horizon, th, ph); };
   this->surface_grids.push_back(std::make_unique<SphericalSurfaceGrid>(
-      pmbp, ntheta, nphi, r_func_inner, "horizon"));
+      pmbp, ntheta, nphi, r_func_inner, "H0"));
 
   auto r_func_mid = [=](Real th, Real ph){ return KerrSchildRadius(1., torus.spin, 12.0, th, ph); };
   this->surface_grids.push_back(std::make_unique<SphericalSurfaceGrid>(

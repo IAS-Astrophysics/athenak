@@ -5,12 +5,14 @@
 #include "surface_grid.hpp"
 
 #include "mesh/mesh.hpp"
+#include "parameter_input.hpp"
 #include "coordinates/cell_locations.hpp"
 #include "coordinates/adm.hpp" // For adm::SpatialDet and metric indices
 
 #include <cmath>
 #include <iostream>
 #include <cstdlib>
+#include <algorithm> // For std::min
 
 //----------------------------------------------------------------------------------------
 // Constructor
@@ -18,8 +20,9 @@ SphericalSurfaceGrid::SphericalSurfaceGrid(MeshBlockPack* pack,
                                            int ntheta, int nphi,
                                            RFunc r_of_thph,
                                            const std::string& name,
-                                           const Real* center)
-    : pmy_pack(pack), tag(name), metric_is_flat_(true) { // Assume flat metric initially
+                                           const Real* center,
+                                           int interp_order)
+    : pmy_pack(pack), tag(name), metric_is_flat_(true), interp_order_(interp_order) {
   // --- basic validation ---
   if (pmy_pack == nullptr || pmy_pack->pmesh == nullptr || pmy_pack->pmb == nullptr) {
     std::cerr << "### FATAL: SphericalSurfaceGrid requires a valid MeshBlockPack/mesh"
@@ -32,6 +35,26 @@ SphericalSurfaceGrid::SphericalSurfaceGrid(MeshBlockPack* pack,
     std::exit(EXIT_FAILURE);
   }
 
+  // --- Safety cap on interpolation order based on ghost cells ---
+  const int ng = pmy_pack->pmesh->mb_indcs.ng;
+  const int max_stencil_pts = 2 * ng;
+  const int max_order = max_stencil_pts - 1;
+
+  if (interp_order_ > max_order) {
+    std::cout << "### WARNING in SphericalSurfaceGrid [" << tag << "]:\n"
+              << "    Requested interpolation order=" << interp_order_
+              << " requires a stencil of " << interp_order_ + 1 << " points.\n"
+              << "    With nghost=" << ng << ", the maximum available stencil is "
+              << max_stencil_pts << " points (order " << max_order << ").\n"
+              << "    Capping interpolation order to " << max_order << "." << std::endl;
+    interp_order_ = max_order;
+  }
+  if (interp_order_ < 1) {
+      std::cerr << "### FATAL: interpolation order must be 1 or greater." << std::endl;
+      std::exit(EXIT_FAILURE);
+  }
+
+
   // Store center
   center_[0] = center ? center[0] : 0.0;
   center_[1] = center ? center[1] : 0.0;
@@ -39,7 +62,7 @@ SphericalSurfaceGrid::SphericalSurfaceGrid(MeshBlockPack* pack,
 
   // Grid in parameter space
   n_th = ntheta; n_ph = nphi; npts = n_th * n_ph;
-  dth = (n_th > 1) ? (M_PI / (n_th - 1)) : 0.0;     // θ ∈ [0,π]
+  dth = M_PI / n_th;  // θ ∈ (0,π)
   dph = (n_ph > 1) ? (2.0 * M_PI / n_ph) : 0.0;     // φ ∈ [0,2π)
 
   // Allocate geometry arrays
@@ -56,13 +79,14 @@ SphericalSurfaceGrid::SphericalSurfaceGrid(MeshBlockPack* pack,
 
   // Interpolation maps: allocate BEFORE building them
   auto &indcs = pmy_pack->pmesh->mb_indcs;
+  // Allocation size remains tied to ng, as it's the max possible stencil
   Kokkos::realloc(interp_indcs, npts, 4);
   Kokkos::realloc(interp_wghts, npts, 2 * indcs.ng, 3);
 
   // Initialize parameter grid + r(θ,φ) on host
   int p = 0;
   for (int it = 0; it < n_th; ++it) {
-    const Real th = it * dth;
+    const Real th = (it + 0.5) * dth;
     for (int ip = 0; ip < n_ph; ++ip, ++p) {
       const Real ph = ip * dph;
       theta.h_view(p) = th;
@@ -87,14 +111,6 @@ void SphericalSurfaceGrid::SetCenter(const Real new_center[3]) {
 
 DualArray2D<Real> SphericalSurfaceGrid::InterpolateToSurface(
     const DvceArray5D<Real> &source_array, int start_index, int end_index) {
-  
-  // Do this manually whenever using AMR! Simply call the RebuildAll() before using
-  // any of the surface quantities. This saves a huge amount of computational cost
-
-  //if (pmy_pack->pmesh->adaptive) {
-  //  SetInterpolationIndices();
-  //  SetInterpolationWeights();
-  //}
 
   const int nvars = end_index - start_index;
   if (nvars <= 0) {
@@ -108,8 +124,10 @@ DualArray2D<Real> SphericalSurfaceGrid::InterpolateToSurface(
   auto &iindcs = interp_indcs;
   auto &iwghts = interp_wghts;
   auto &indcs = pmy_pack->pmesh->mb_indcs;
-  const int ng = indcs.ng;
   const int is = indcs.is, js = indcs.js, ks = indcs.ks;
+
+  const int nsten = interp_order_ + 1;
+  const int nleft = nsten / 2;
 
   par_for("int2surf_block", DevExeSpace(), 0, npts-1, 0, nvars-1,
     KOKKOS_LAMBDA(const int p, const int v) {
@@ -121,13 +139,15 @@ DualArray2D<Real> SphericalSurfaceGrid::InterpolateToSurface(
       const int i0 = iindcs.d_view(p,1), j0 = iindcs.d_view(p,2), k0 = iindcs.d_view(p,3);
       Real accum = 0.0;
 
-      for (int k_sten = 0; k_sten < 2*ng; ++k_sten) {
-        for (int j_sten = 0; j_sten < 2*ng; ++j_sten) {
-          for (int i_sten = 0; i_sten < 2*ng; ++i_sten) {
+      for (int k_sten = 0; k_sten < nsten; ++k_sten) {
+        for (int j_sten = 0; j_sten < nsten; ++j_sten) {
+          for (int i_sten = 0; i_sten < nsten; ++i_sten) {
             const Real w = iwghts.d_view(p, i_sten, 0) * iwghts.d_view(p, j_sten, 1) * iwghts.d_view(p, k_sten, 2);
-            const int I = i0 - (ng - i_sten - is) + 1;
-            const int J = j0 - (ng - j_sten - js) + 1;
-            const int K = k0 - (ng - k_sten - ks) + 1;
+
+            // --- FIXED: This index logic is now consistent with SetInterpolationWeights ---
+            const int I = is + i0 - nleft + 1 + i_sten;
+            const int J = js + j0 - nleft + 1 + j_sten;
+            const int K = ks + k0 - nleft + 1 + k_sten;
             accum += w * source_array(mb_id, start_index + v, K, J, I);
           }
         }
@@ -135,7 +155,6 @@ DualArray2D<Real> SphericalSurfaceGrid::InterpolateToSurface(
       result.d_view(p,v) = accum;
     });
 
-  // --- FIX: Add fence to prevent race condition between the kernel above and the modify call below.
   Kokkos::fence();
 
   result.template modify<DevExeSpace>();
@@ -159,7 +178,6 @@ void SphericalSurfaceGrid::InterpolateMetric() {
   g_dd_surf_.template modify<DevExeSpace>();
   metric_is_flat_ = false;
 
-  // Automatically calculate derived geometry after metric is updated
   CalculateDerivedGeometry();
 }
 
@@ -185,7 +203,6 @@ void SphericalSurfaceGrid::BuildSurfaceCovectors(DualArray2D<Real>& dSigma) cons
     }
   );
 
-  // --- FIX: Add fence to prevent race condition between the kernel above and the modify call below.
   Kokkos::fence();
 
   dSigma.template modify<DevExeSpace>();
@@ -194,9 +211,6 @@ void SphericalSurfaceGrid::BuildSurfaceCovectors(DualArray2D<Real>& dSigma) cons
 //----------------------------------------------------------------------------------------
 // Private Helper Methods
 
-// --- FIX: Replaced the entire host-based function with a high-performance GPU kernel.
-// This eliminates the GPU->CPU->GPU round-trip, fixing the major performance issue
-// and resolving the original race condition in InterpolateMetric().
 void SphericalSurfaceGrid::CalculateDerivedGeometry() {
     auto g_3D = g_dd_surf_.d_view;
     auto e_th = tan_th.d_view;
@@ -247,7 +261,7 @@ void SphericalSurfaceGrid::RebuildAll() {
   BuildTangentsFD();
   BuildQuadWeights();
   SetInterpolationWeights();
-  InitializeFlatMetric(); // Also initializes derived geometry for flat space
+  InitializeFlatMetric();
 }
 
 void SphericalSurfaceGrid::InitializeFlatMetric() {
@@ -258,10 +272,9 @@ void SphericalSurfaceGrid::InitializeFlatMetric() {
     h_g(p, 5) = 1.0;
   }
   g_dd_surf_.template modify<HostMemSpace>();
-  g_dd_surf_.template sync<DevExeSpace>(); // Sync flat metric to device
+  g_dd_surf_.template sync<DevExeSpace>();
   metric_is_flat_ = true;
 
-  // Calculate flat-space derived geometry
   CalculateDerivedGeometry();
 }
 
@@ -311,6 +324,7 @@ void SphericalSurfaceGrid::SetInterpolationIndices() {
         h_iind(p,0) = m;
         h_iind(p,1) = static_cast<int>(std::floor((x1p - (mb.x1min + mb.dx1/2.0)) / mb.dx1));
         h_iind(p,2) = static_cast<int>(std::floor((x2p - (mb.x2min + mb.dx2/2.0)) / mb.dx2));
+        // --- FIXED: Corrected typo "static_ofc" to "static_cast" ---
         h_iind(p,3) = static_cast<int>(std::floor((x3p - (mb.x3min + mb.dx3/2.0)) / mb.dx3));
         break;
       }
@@ -327,28 +341,55 @@ void SphericalSurfaceGrid::SetInterpolationWeights() {
   auto h_iind = interp_indcs.h_view;
   auto h_iw = interp_wghts.h_view;
   auto h_coords = coords.h_view;
+
+  const int nsten = interp_order_ + 1;
+  const int nleft = nsten / 2;
+
   for (int p = 0; p < npts; ++p) {
     const int mb_id = h_iind(p,0);
-    if (mb_id == -1) {
-      for (int i=0; i<2*ng; ++i) {
-        h_iw(p,i,0) = 0.0; h_iw(p,i,1) = 0.0; h_iw(p,i,2) = 0.0;
-      }
-    } else {
+
+    for (int i=0; i<2*ng; ++i) {
+      h_iw(p,i,0) = 0.0; h_iw(p,i,1) = 0.0; h_iw(p,i,2) = 0.0;
+    }
+
+    if (mb_id != -1) {
       const int i0 = h_iind(p,1), j0 = h_iind(p,2), k0 = h_iind(p,3);
       const Real x0 = h_coords(p,0), y0 = h_coords(p,1), z0 = h_coords(p,2);
       const auto &mb = size.h_view(mb_id);
-      for (int i=0; i<2*ng; ++i) {
-        h_iw(p,i,0) = 1.0; h_iw(p,i,1) = 1.0; h_iw(p,i,2) = 1.0;
-        for (int j=0; j<2*ng; ++j) {
+
+      // --- FIXED: Refactored into three separate loops for clarity and correctness ---
+
+      // Calculate X-direction weights
+      for (int i=0; i<nsten; ++i) {
+        h_iw(p,i,0) = 1.0;
+        for (int j=0; j<nsten; ++j) {
           if (j != i) {
-            Real x1i = CellCenterX(i0 - ng + i + 1, indcs.nx1, mb.x1min, mb.x1max);
-            Real x1j = CellCenterX(i0 - ng + j + 1, indcs.nx1, mb.x1min, mb.x1max);
+            Real x1i = CellCenterX(i0 - nleft + 1 + i, indcs.nx1, mb.x1min, mb.x1max);
+            Real x1j = CellCenterX(i0 - nleft + 1 + j, indcs.nx1, mb.x1min, mb.x1max);
             h_iw(p,i,0) *= (x0 - x1j) / (x1i - x1j);
-            Real x2i = CellCenterX(j0 - ng + i + 1, indcs.nx2, mb.x2min, mb.x2max);
-            Real x2j = CellCenterX(j0 - ng + j + 1, indcs.nx2, mb.x2min, mb.x2max);
+          }
+        }
+      }
+
+      // Calculate Y-direction weights
+      for (int i=0; i<nsten; ++i) {
+        h_iw(p,i,1) = 1.0;
+        for (int j=0; j<nsten; ++j) {
+          if (j != i) {
+            Real x2i = CellCenterX(j0 - nleft + 1 + i, indcs.nx2, mb.x2min, mb.x2max);
+            Real x2j = CellCenterX(j0 - nleft + 1 + j, indcs.nx2, mb.x2min, mb.x2max);
             h_iw(p,i,1) *= (y0 - x2j) / (x2i - x2j);
-            Real x3i = CellCenterX(k0 - ng + i + 1, indcs.nx3, mb.x3min, mb.x3max);
-            Real x3j = CellCenterX(k0 - ng + j + 1, indcs.nx3, mb.x3min, mb.x3max);
+          }
+        }
+      }
+
+      // Calculate Z-direction weights
+      for (int i=0; i<nsten; ++i) {
+        h_iw(p,i,2) = 1.0;
+        for (int j=0; j<nsten; ++j) {
+          if (j != i) {
+            Real x3i = CellCenterX(k0 - nleft + 1 + i, indcs.nx3, mb.x3min, mb.x3max);
+            Real x3j = CellCenterX(k0 - nleft + 1 + j, indcs.nx3, mb.x3min, mb.x3max);
             h_iw(p,i,2) *= (z0 - x3j) / (x3i - x3j);
           }
         }
