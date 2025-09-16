@@ -56,6 +56,7 @@ class SphericalSurfaceGrid {
   DualArray1D<Real>& Thetas() { return theta; }
   DualArray1D<Real>& Phis()   { return phi; }
   DualArray2D<Real>& Coords() { return coords; }
+  DualArray1D<Real>& Radius() { return radius; }
   DualArray2D<Real>& TanTheta() { return tan_th; }
   DualArray2D<Real>& TanPhi()   { return tan_ph; }
   DualArray1D<Real>& QuadWeights() { return weights; }
