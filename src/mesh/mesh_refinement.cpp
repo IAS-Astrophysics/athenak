@@ -23,7 +23,6 @@
 
 #include "hydro/hydro.hpp"
 #include "mhd/mhd.hpp"
-#include "dyn_grmhd/dyn_grmhd.hpp"
 #include "radiation/radiation.hpp"
 #include "coordinates/adm.hpp"
 #include "z4c/z4c.hpp"
@@ -689,10 +688,9 @@ void MeshRefinement::RedistAndRefineMeshBlocks(ParameterInput *pin, int nnew, in
   delete [] oldtonew;
 
   // Step 11.
-  // Recalculate ADM variables if necessary. Reset the C2P guess for mu.
+  // Recalculate ADM variables if necessary.
   if ((pz4c == nullptr) && (padm != nullptr) && (nnew > 0 || ndel > 0)) {
     padm->SetADMVariables(pm->pmb_pack);
-    pm->pmb_pack->pdyngr->ResetC2PGuess();
   }
 
   return;

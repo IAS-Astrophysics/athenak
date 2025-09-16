@@ -127,11 +127,10 @@ class PrimitiveSolverHydro {
   MeshBlockPack* pmy_pack;
   unsigned int nerrs;
   unsigned int errcap;
-  DvceArray4D<Real> mu_last;
 
   PrimitiveSolverHydro(std::string block, MeshBlockPack *pp, ParameterInput *pin) :
 //        pmy_pack(pp), ps{&eos} {
-        pmy_pack(pp), nerrs(0), mu_last("mu_last", 1, 1, 1, 1) {
+        pmy_pack(pp), nerrs(0) {
     SetPolicyParams(block, pin);
     Real mb = ps.GetEOS().GetBaryonMass();
     ps.GetEOSMutable().SetDensityFloor(pin->GetOrAddReal(block, "dfloor", (FLT_MIN))/mb);
@@ -154,17 +153,6 @@ class PrimitiveSolverHydro {
       spec_name << "s" << n << "_atmosphere";
       ps.GetEOSMutable().SetSpeciesAtmosphere(
           pin->GetOrAddReal(block, spec_name.str(), 0.0), n);
-    }
-
-    int nmb = std::max((pp->nmb_thispack), (pp->pmesh->nmb_maxperrank));
-    auto &indcs = pp->pmesh->mb_indcs;
-    int ncells1 = indcs.nx1 + 2*(indcs.ng);
-    int ncells2 = (indcs.nx2 > 1)? (indcs.nx2 + 2*(indcs.ng)) : 1;
-    int ncells3 = (indcs.nx3 > 1)? (indcs.nx3 + 2*(indcs.ng)) : 1;
-    ps.use_caching = pin->GetOrAddBoolean(block, "c2p_caching", false);
-    if (ps.use_caching) {
-      Kokkos::realloc(mu_last, nmb, ncells3, ncells2, ncells1);
-      Kokkos::deep_copy(mu_last, -1.0);
     }
   }
 
@@ -337,7 +325,6 @@ class PrimitiveSolverHydro {
     auto &adm  = pmy_pack->padm->adm;
     auto &eos_ = ps.GetEOS();
     auto &ps_  = ps;
-    auto &mu_last_ = mu_last;
 
     auto &indcs = pmy_pack->pmesh->mb_indcs;
     int &is = indcs.is;
@@ -353,7 +340,6 @@ class PrimitiveSolverHydro {
     const int rank = global_variable::my_rank;
     const int nerrs_ = nerrs;
     const int errcap_ = errcap;
-    const bool use_caching = ps.use_caching;
 
     Real mb = eos_.GetBaryonMass();
 
@@ -371,10 +357,10 @@ class PrimitiveSolverHydro {
     int count_errs=0;
     Kokkos::parallel_reduce("pshyd_c2p",Kokkos::RangePolicy<>(DevExeSpace(), 0, nmkji),
     KOKKOS_LAMBDA(const int &idx, int &sumerrs) {
-      const int m = (idx)/nkji;
+      int m = (idx)/nkji;
       int k = (idx - m*nkji)/nji;
       int j = (idx - m*nkji - k*nji)/ni;
-      const int i = (idx - m*nkji - k*nji - j*ni) + il;
+      int i = (idx - m*nkji - k*nji - j*ni) + il;
       j += jl;
       k += kl;
 
@@ -453,12 +439,10 @@ class PrimitiveSolverHydro {
           result.cons_adjusted = true;
           ps_.PrimToCon(prim_pt, cons_pt, b3u, g3d);
         } else {
-          Real& guess = use_caching ? mu_last_(m,k,j,i) : mu_last_(0,0,0,0);
-          result = ps_.ConToPrim(prim_pt, cons_pt, b3u, g3d, g3u, guess);
+          result = ps_.ConToPrim(prim_pt, cons_pt, b3u, g3d, g3u);
         }
       } else {
-        Real& guess = use_caching ? mu_last_(m,k,j,i) : mu_last_(0,0,0,0);
-        result = ps_.ConToPrim(prim_pt, cons_pt, b3u, g3d, g3u, guess);
+        result = ps_.ConToPrim(prim_pt, cons_pt, b3u, g3d, g3u);
       }
 
       if (result.error != Primitive::Error::SUCCESS && floors_only) {
