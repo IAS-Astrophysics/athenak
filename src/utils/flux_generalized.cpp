@@ -215,7 +215,7 @@ void CalculateFluxesForEOS(HistoryData *pdata, MeshBlockPack *pmbp,
           // 2. EHT-style Conserved Mass Flux (mdoteht)
           {
             const Real x1 = coords(p,0), x2 = coords(p,1), x3 = coords(p,2);
-            const Real r_bl = radius(p);
+            const Real r_bl = 12;
             const Real a = bh_spin;
             const Real a2 = a * a;
             const Real r2 = r_bl * r_bl;
