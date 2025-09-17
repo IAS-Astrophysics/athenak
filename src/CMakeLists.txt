@@ -51,6 +51,7 @@ add_executable(
         eos/ideal_srmhd.cpp
         eos/ideal_grmhd.cpp
         eos/primitive-solver/eos_compose.cpp
+        eos/primitive-solver/eos_hybrid.cpp
         eos/primitive-solver/piecewise_polytrope.cpp
         eos/primitive-solver/unit_system.cpp
 
@@ -154,6 +155,7 @@ add_executable(
         utils/change_rundir.cpp
         utils/show_config.cpp
         utils/lagrange_interpolator.cpp
+        utils/tov/tov.cpp
         utils/tr_table.cpp
         utils/cart_grid.cpp
         utils/spherical_surface.cpp

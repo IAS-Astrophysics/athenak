@@ -30,6 +30,7 @@ struct UnitSystem {
   Real energy;      //! Energy unit
   Real pressure;    //! Pressure unit
   Real temperature; //! Temperature unit
+  Real chemicalPotential; //! Chemical potential unit
 
   //! \defgroup conversiongroup Conversion Methods
   //  A collection of methods for getting unit
@@ -81,6 +82,10 @@ struct UnitSystem {
   KOKKOS_INLINE_FUNCTION constexpr Real TemperatureConversion(const UnitSystem& b) const {
     return b.temperature/temperature;
   }
+
+  KOKKOS_INLINE_FUNCTION constexpr Real ChemicalPotentialConversion(UnitSystem& b) const {
+    return b.chemicalPotential/chemicalPotential;
+  }
   //! \}
 };
 
@@ -107,7 +112,8 @@ static UnitSystem CGS{
   1.0, // mass, g
   1.0, // energy, erg
   1.0, // pressure, erg/cm^3
-  1.0  // temperature, K
+  1.0, // temperature, K
+  1.0, // chemical potential, erg
 };
 
 //! Geometric units with length in kilometers
