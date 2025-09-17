@@ -46,6 +46,9 @@ max_nmb_per_rank = 512
 num_levels       = 2
 refinement_interval = 1e-3
 
+<amr_criterion0>
+method = user
+
 <z4c>
 diss       = 1
 

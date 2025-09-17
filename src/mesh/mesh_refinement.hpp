@@ -34,6 +34,9 @@ struct AMRBuffer {
 };
 #endif
 
+// Forward declaration
+class RefinementCriteria;
+
 //----------------------------------------------------------------------------------------
 //! \class MeshRefinement
 //! \brief data/functions associated with SMR/AMR
@@ -50,6 +53,7 @@ class MeshRefinement {
   int ncyc_check_amr;        // # of cycles between checking mesh for ref/derefinement
   int refinement_interval;   // # of cycles between allowing successive ref/derefinement
   bool prolong_prims;        // flag to enable prolongation of primitive vars
+  RefinementCriteria* pmrc=nullptr;   // object to control various refinement criteria
 
   // following 2x Views are dimensioned [nmb_total]
   DualArray1D<int> refine_flag;    // refinement flag for each MeshBlock
@@ -131,7 +135,5 @@ class MeshRefinement {
  private:
   // data
   Mesh *pmy_mesh;
-  Real d_threshold_, dd_threshold_, dp_threshold_, dv_threshold_, chi_threshold_;
-  bool check_cons_;
 };
 #endif // MESH_MESH_REFINEMENT_HPP_

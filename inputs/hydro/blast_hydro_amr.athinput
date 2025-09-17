@@ -35,9 +35,13 @@ nx3       = 1           # Number of cells in each MeshBlock, X3-dir
 <mesh_refinement>
 refinement = adaptive
 num_levels = 2
-dpres_max  = 0.25
 refinement_interval = 3
 max_nmb_per_rank = 1024
+
+<amr_criterion0>
+method = slope
+variable = hydro_w_d
+value_max = 0.1
 
 <time>
 evolution  = dynamic    # dynamic/kinematic/static

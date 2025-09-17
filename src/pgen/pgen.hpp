@@ -59,10 +59,8 @@ class ProblemGenerator {
   void Advection(ParameterInput *pin, const bool restart);
   void AlfvenWave(ParameterInput *pin, const bool restart);
   void BondiAccretion(ParameterInput *pin, const bool restart);
-  void CheckOrthonormalTetrad(ParameterInput *pin, const bool restart);
   void CShock(ParameterInput *pin, const bool restart);
   void Diffusion(ParameterInput *pin, const bool restart);
-  void Hohlraum(ParameterInput *pin, const bool restart);
   void LinearWave(ParameterInput *pin, const bool restart);
   void LWImplode(ParameterInput *pin, const bool restart);
   void Monopole(ParameterInput *pin, const bool restart);
@@ -72,6 +70,7 @@ class ProblemGenerator {
   void Shwave(ParameterInput *pin, const bool restart);
   void SphericalCollapse(ParameterInput *pin, const bool restart);
   void RadiationLinearWave(ParameterInput *pin, const bool restart);
+  void RadiationBeam(ParameterInput *pin, const bool restart);
   void Z4cBoostedPuncture(ParameterInput *pin, const bool restart);
   void Z4cLinearWave(ParameterInput *pin, const bool restart);
 

@@ -35,11 +35,15 @@ nx3       = 10         # Number of cells in each MeshBlock, X3-dir
 <mesh_refinement>
 refinement = adaptive
 num_levels = 2
-dpres_max  = 0.25
 refinement_interval = 3
 max_nmb_per_rank = 2300
 
-<refinement1>
+<amr_criterion0>
+method = slope
+variable = mhd_w_d
+value_max = 0.1
+
+<refined_region1>
 x1min = -1.5
 x1max = 1.5
 x2min = -1.5

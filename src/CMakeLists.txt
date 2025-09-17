@@ -76,6 +76,7 @@ add_executable(
         mesh/meshblock_pack.cpp
         mesh/meshblock_tree.cpp
         mesh/mesh_refinement.cpp
+        mesh/refinement_criteria.cpp
 
         mhd/mhd.cpp
         mhd/mhd_corner_e.cpp
@@ -121,8 +122,7 @@ add_executable(
         pgen/tests/mri3d.cpp
         pgen/tests/shock_tube.cpp
         pgen/tests/shwave.cpp
-        pgen/tests/rad_check_tetrad.cpp
-        pgen/tests/rad_hohlraum.cpp
+        pgen/tests/rad_beam.cpp
         pgen/tests/rad_linear_wave.cpp
         pgen/tests/z4c_boosted_puncture.cpp
         pgen/tests/z4c_linear_wave.cpp
@@ -153,6 +153,7 @@ add_executable(
 
         units/units.cpp
         utils/change_rundir.cpp
+        utils/derived_vars.cpp
         utils/show_config.cpp
         utils/lagrange_interpolator.cpp
         utils/tov/tov.cpp

@@ -1,0 +1,91 @@
+# AthenaK input file for radiation hydro linear wave test
+
+<comment>
+problem  = linear wave, hydrodynamics, gas
+
+<job>
+basename = rad_linwave  # name of run
+
+<mesh>
+nghost = 4         # Number of ghost cells
+nx1    = 32        # Number of zones in X1-direction
+x1min  = 0.0       # minimum value of X1
+x1max  = 1.0       # maximum value of X1
+ix1_bc = periodic  # inner-X1 boundary flag
+ox1_bc = periodic  # outer-X1 boundary flag
+
+nx2    = 1         # Number of zones in X2-direction
+x2min  = 0.0       # minimum value of X2
+x2max  = 1.0       # maximum value of X2
+ix2_bc = periodic  # inner-X2 boundary flag
+ox2_bc = periodic  # outer-X2 boundary flag
+
+nx3    = 1         # Number of zones in X3-direction
+x3min  = 0.0       # minimum value of X3
+x3max  = 1.0       # maximum value of X3
+ix3_bc = periodic  # inner-X3 boundary flag
+ox3_bc = periodic  # outer-X3 boundary flag
+
+<meshblock>
+nx1    = 8       # Number of zones in X1-direction
+nx2    = 1       # Number of zones in X2-direction
+nx3    = 1       # Number of zones in X3-direction
+
+<mesh_refinement>
+refinement       = adaptive    # type of refinement
+max_nmb_per_rank = 512
+num_levels       = 2
+
+<amr_criterion1>
+method    = min_max
+variable  = hydro_u_d
+value_max = 1.00005
+
+<coord>
+general_rel = true   # w/ general relativity
+minkowski   = true
+
+<time>
+evolution  = dynamic  # dynamic/kinematic/static
+integrator = rk2      # time integration algorithm
+cfl_number = 0.3      # The Courant, Friedrichs, & Lewy (CFL) Number
+nlim       = -1       # cycle limit
+tlim       = 1.0      # time limit
+
+<hydro>
+eos         = ideal  # EOS type
+reconstruct = wenoz  # spatial reconstruction method
+rsolver     = hlle   # Riemann-solver to be used
+gamma = 1.6666666666666667  # gamma = C_p/C_v
+
+<radiation>
+nlevel = 0                 # geodesic mesh level
+rotate_geo = false         # disable rotation of geodesic mesh
+angular_fluxes = false     # disable angular fluxes
+reconstruct = plm          # reconstruction method
+kappa_a = 10.0             # absorption opacity
+kappa_s = 10.0             # scattering opacity
+kappa_p = 0.0              # planck minus rosseland opacity
+arad = 19.253382731290966  # radiation constant
+
+<problem>
+pgen_name = rad_linear_wave
+along_x1  = true
+along_x2  = false
+along_x3  = false
+rho   = 1.0
+pgas  = 2.497687326549491e-01
+erad  = 7.493061979648474e-02
+delta = 1.0e-4
+omega_real  =  3.1488157526582414e+00
+omega_imag  = -2.6190006385782953e-02
+drho_real   =  8.3877889167048014e-01
+drho_imag   =  0.0
+dpgas_real  =  3.2084488925731219e-01
+dpgas_imag  = -9.9134535607493107e-03
+dux_real    =  4.2035369927276667e-01
+dux_imag    = -3.4962560317943620e-03
+derad_real  =  1.2904189937790903e-01
+derad_imag  =  1.5203926879094193e-03
+dfxrad_real =  1.3260665610966586e-03
+dfxrad_imag = -6.7017329068802516e-03
