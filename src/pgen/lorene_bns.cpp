@@ -3,7 +3,7 @@
 // Copyright(C) 2020 James M. Stone <jmstone@ias.edu> and the Athena code team
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
-//! \file elliptica_bns.cpp
+//! \file lorene_bns.cpp
 //  \brief Initial data reader for binary neutron star data with LORENE
 //
 //  LORENE is available at https://lorene.obspm.fr/index.html
@@ -30,6 +30,8 @@
 #include "hydro/hydro.hpp"
 #include "mhd/mhd.hpp"
 #include "dyn_grmhd/dyn_grmhd.hpp"
+#include "utils/tov/tov_utils.hpp"
+#include "utils/tov/tov_tabulated.hpp"
 
 // Lorene
 #include "bin_ns.h"
@@ -84,6 +86,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   const Real B_unit = athenaB / 1.0e9; // 10^9 T
 
   std::string fname = pin->GetString("problem", "initial_data_file");
+  Real rho_cut = pin->GetOrAddReal("problem", "rho_cut", 1e-5);
 
   int ncells1 = indcs.nx1 + 2*(indcs.ng);
   int ncells2 = indcs.nx2 + 2*(indcs.ng);
@@ -95,6 +98,12 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   Real *x_coords = new Real[width];
   Real *y_coords = new Real[width];
   Real *z_coords = new Real[width];
+
+  // 1D EoS for setting scalars if using CompOSE EoS
+  tov::TabulatedEOS *p1Deos;
+  if (pmbp->pdyngr->eos_policy == DynGRMHD_EOS::eos_compose) {
+    p1Deos = new tov::TabulatedEOS(pin);
+  }
 
   std::cout << "Allocated coordinates of size " << width << std::endl;
 
@@ -235,6 +244,28 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
                         bns->u_euler_y[idx] / vel_unit,
                         bns->u_euler_z[idx] / vel_unit};
 
+          // Check for garbage values thrown in Lorene.
+          if (host_w0(m, IDN, k, j, i) <= rho_cut) {
+            host_w0(m, IDN, k, j, i) = 0.0;
+            vu[0] = 0.0;
+            vu[1] = 0.0;
+            vu[2] = 0.0;
+            egas = 0.0;
+          }
+
+          // If we're using a tabulated EOS, we need to get the pressure directly from
+          // the cold EOS because Lorene usually returns garbage. We also use this
+          // opportunity to get the electron fraction.
+          if (pmbp->pdyngr->eos_policy == DynGRMHD_EOS::eos_compose) {
+            host_w0(m, IPR, k, j, i) = p1Deos->template
+              GetPFromRho<tov::LocationTag::Host>(host_w0(m,IDN,k,j,i));
+            if (pmbp->pmhd->nscalars>=1) {
+              Real Ye = p1Deos->template
+                GetYeFromRho<tov::LocationTag::Host>(host_w0(m,IDN,k,j,i));
+              host_w0(m, IYF, k, j, i) = Ye;
+            }
+          }
+
           // Before we store the velocity, we need to make sure it's physical and
           // calculate the Lorentz factor. If the velocity is superluminal, we make a
           // last-ditch attempt to salvage the solution by rescaling it to
@@ -266,6 +297,9 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
 
   // Cleanup
   delete bns;
+  if (pmbp->pdyngr->eos_policy == DynGRMHD_EOS::eos_compose) {
+    delete p1Deos;
+  }
 
   std::cout << "Lorene freed." << std::endl;
 
@@ -278,11 +312,14 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
 
   std::cout << "Data copied." << std::endl;
 
-  // Convert internal energy to pressure.
-  pmbp->pdyngr->ConvertInternalEnergyToPressure(0, (ncells1-1),
-                                                0, (ncells2-1), 0, (ncells3-1));
-
-  // TODO(JMF): Read in scalars if necessary.
+  // Convert internal energy to pressure. This is NOT necessary if we use a tabulated
+  // EOS because we pull the energy straight from the cold EOS.
+  // TODO(JMF): This can be refactored to be EOS generic such that we no longer rely on
+  // Lorene's epsilon for any EOS.
+  if (pmbp->pdyngr->eos_policy != DynGRMHD_EOS::eos_compose) {
+    pmbp->pdyngr->ConvertInternalEnergyToPressure(0, (ncells1-1),
+                                                  0, (ncells2-1), 0, (ncells3-1));
+  }
 
   // TODO(JMF): Add magnetic fields
   auto &b0 = pmbp->pmhd->b0;

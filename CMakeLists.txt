@@ -34,6 +34,7 @@ endif()
 option(Athena_SINGLE_PRECISION "Compile for single precision" OFF)
 option(Athena_ENABLE_MPI "Compile with MPI parallelism enabled" OFF)
 option(Athena_ENABLE_OPENMP "Compile with OpenMP parallelism enabled" OFF)
+option(Athena_ENABLE_RNS "Compile with RNS support enabled" OFF)
 set(PROBLEM built_in_pgens CACHE STRING "Name of problem generator function")
 
 #------ set macros exported to config.hpp ------------------------------------------------
@@ -170,6 +171,15 @@ if (${PROBLEM} STREQUAL "elliptica_bns")
     find_package(OpenMP COMPONENTS CXX)
     target_link_libraries(athena PUBLIC OpenMP::OpenMP_CXX)
   endif()
+endif()
+
+if (Athena_ENABLE_RNS)
+  # Support for RNS library for rotating neutron stars. See
+  # https://github.com/computationalrelativity/RNSC
+  target_include_directories(athena PRIVATE
+      ${CMAKE_SOURCE_DIR}/rnsc/include)
+  target_link_libraries(athena PUBLIC
+      ${CMAKE_SOURCE_DIR}/rnsc/lib/libRNS.a)
 endif()
 
 if (${PROBLEM} STREQUAL "sgrid_bns")

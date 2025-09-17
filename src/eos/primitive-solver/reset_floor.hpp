@@ -98,11 +98,19 @@ class ResetFloor : public ErrorPolicyInterface {
   }
 
   /// Policy for resetting species fractions
-  KOKKOS_INLINE_FUNCTION void SpeciesLimits(Real* Y, const Real* Y_min, const Real* Y_max,
+  KOKKOS_INLINE_FUNCTION bool SpeciesLimits(Real* Y, const Real* Y_min, const Real* Y_max,
                                             int n_species) const {
+    bool adjusted = false;
     for (int i = 0; i < n_species; i++) {
-      Y[i] = fmax(Y_min[i], fmin(Y_max[i], Y[i]));
+      if (Y[i] < Y_min[i]) {
+        adjusted = true;
+        Y[i] = Y_min[i];
+      } else if (Y[i] > Y_max[i]) {
+        adjusted = true;
+        Y[i] = Y_max[i];
+      }
     }
+    return adjusted;
   }
 
   /// Policy for resetting pressure

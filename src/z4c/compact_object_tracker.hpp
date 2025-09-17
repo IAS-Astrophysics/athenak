@@ -23,6 +23,7 @@ class ParameterInput;
 //! \brief Tracks a single puncture
 class CompactObjectTracker {
   enum CompactObjectType { BlackHole, NeutronStar };
+  enum TrackerMode { ODE, Walk };
 
  public:
   //! Initialize a tracker
@@ -32,7 +33,7 @@ class CompactObjectTracker {
   //! Interpolate the shift vector to the puncture position
   void InterpolateVelocity(MeshBlockPack *pmbp);
   //! Update and broadcast the puncture position
-  void EvolveTracker();
+  void EvolveTracker(MeshBlockPack *pmbp);
   //! Write data to file
   void WriteTracker();
   //! Get position array
@@ -59,6 +60,7 @@ class CompactObjectTracker {
  private:
   bool owns_compact_object;
   CompactObjectType type;
+  TrackerMode mode;
   Real vel[NDIM];
   int reflevel;         // requested minimum refinement level (-1 for infinity)
   Real radius;          // nominal radius of the object (for the AMR driver)

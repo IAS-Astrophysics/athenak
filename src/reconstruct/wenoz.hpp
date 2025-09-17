@@ -11,7 +11,7 @@
 //! REFERENCES:
 //! Borges R., Carmona M., Costa B., Don W.S. , "An improved weighted essentially
 //! non-oscillatory scheme for hyperbolic conservation laws" , JCP, 227, 3191 (2008)
-//! 
+//!
 //! Castro M., Costa B., Don W.W. , "High order weighted essentially non-oscillatory
 //! WENO-Z schemes for hyperbolic conservation laws" , JCP, 230, 1766 (2011)
 

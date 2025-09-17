@@ -52,6 +52,12 @@ MeshRefinement::MeshRefinement(Mesh *pm, ParameterInput *pin) :
   dd_threshold_(0.0),
   dp_threshold_(0.0),
   dv_threshold_(0.0),
+#if MPI_PARALLEL_ENABLED
+  sendbuf("lb send buff",1),
+  recvbuf("lb recv buff",1),
+  send_data("lb send data",1),
+  recv_data("lb recv data",1),
+#endif
   check_cons_(false) {
   if (pin->DoesBlockExist("mesh_refinement")) {
     // read interval (in cycles) between check of AMR and derefinement
