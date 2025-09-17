@@ -89,12 +89,6 @@ class PiecewisePolytrope : public EOSPolicyInterface {
     return GetColdPressure(n, p) + n*T;
   }
 
-  /// Calculate the entropy per baryon using the ideal gas law.
-  KOKKOS_INLINE_FUNCTION Real Entropy(Real n, Real T, Real *Y) const {
-    // FIXME: Error message or abort
-    return 0.;
-  }
-
   /// Calculate the enthalpy per baryon using the ideal gas law.
   KOKKOS_INLINE_FUNCTION Real Enthalpy(Real n, Real T, Real *Y) const {
     int p = FindPiece(n);
