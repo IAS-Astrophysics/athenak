@@ -93,7 +93,7 @@ DualArray2D<Real> SphericalSurfaceGrid::InterpolateToSurface(
     SetInterpolationIndices();
     SetInterpolationWeights();
   }
-
+  
   const int nvars = end_index - start_index;
   if (nvars <= 0) {
       std::cerr << "### FATAL: InterpolateToSurface called with invalid range: "
@@ -132,12 +132,7 @@ DualArray2D<Real> SphericalSurfaceGrid::InterpolateToSurface(
       }
       result.d_view(p,v) = accum;
     });
-
-  // --- FIX: Add fence to prevent race condition between the kernel above and the modify call below.
-  Kokkos::fence();
-
   result.template modify<DevExeSpace>();
-  result.template sync<HostMemSpace>();
   return result;
 }
 
@@ -182,38 +177,38 @@ void SphericalSurfaceGrid::BuildSurfaceCovectors(DualArray2D<Real>& dSigma) cons
       dSigma.d_view(p,2) = s * (e1x*e2y - e1y*e2x);
     }
   );
-
-  // --- FIX: Add fence to prevent race condition between the kernel above and the modify call below.
-  Kokkos::fence();
-
   dSigma.template modify<DevExeSpace>();
 }
 
 //----------------------------------------------------------------------------------------
 // Private Helper Methods
 
-// --- FIX: Replaced the entire host-based function with a high-performance GPU kernel.
-// This eliminates the GPU->CPU->GPU round-trip, fixing the major performance issue
-// and resolving the original race condition in InterpolateMetric().
 void SphericalSurfaceGrid::CalculateDerivedGeometry() {
-    auto g_3D = g_dd_surf_.d_view;
-    auto e_th = tan_th.d_view;
-    auto e_ph = tan_ph.d_view;
-    auto quad_weights = weights.d_view;
-    auto gamma_2D = gamma_dd_surf_.d_view;
-    auto dA = proper_dA_.d_view;
+    // Ensure input data is available on the host
+    g_dd_surf_.template sync<HostMemSpace>();
+    tan_th.template sync<HostMemSpace>();
+    tan_ph.template sync<HostMemSpace>();
+    weights.template sync<HostMemSpace>();
 
-    Kokkos::parallel_for("CalculateDerivedGeom", Kokkos::RangePolicy<DevExeSpace>(0, npts),
-      KOKKOS_LAMBDA(const int p) {
-        const Real gxx = g_3D(p, 0);
-        const Real gxy = g_3D(p, 1);
-        const Real gxz = g_3D(p, 2);
-        const Real gyy = g_3D(p, 3);
-        const Real gyz = g_3D(p, 4);
-        const Real gzz = g_3D(p, 5);
+    // Get host views for calculation
+    auto h_g_3D = g_dd_surf_.h_view;
+    auto h_e_th = tan_th.h_view;
+    auto h_e_ph = tan_ph.h_view;
+    auto h_quad_weights = weights.h_view; // This is d(theta) * d(phi)
+    auto h_gamma_2D = gamma_dd_surf_.h_view;
+    auto h_dA = proper_dA_.h_view;
 
-        const Real e_th_x = e_th(p, 0), e_th_y = e_th(p, 1), e_th_z = e_th(p, 2);
-        const Real e_ph_x = e_ph(p, 0), e_ph_y = e_ph(p, 1), e_ph_z = e_ph(p, 2);
+    // Perform calculation on the host
+    for (int p = 0; p < npts; ++p) {
+        const Real gxx = h_g_3D(p, 0);
+        const Real gxy = h_g_3D(p, 1);
+        const Real gxz = h_g_3D(p, 2);
+        const Real gyy = h_g_3D(p, 3);
+        const Real gyz = h_g_3D(p, 4);
+        const Real gzz = h_g_3D(p, 5);
+
+        const Real e_th_x = h_e_th(p, 0), e_th_y = h_e_th(p, 1), e_th_z = h_e_th(p, 2);
+        const Real e_ph_x = h_e_ph(p, 0), e_ph_y = h_e_ph(p, 1), e_ph_z = h_e_ph(p, 2);
 
         const Real gamma_th_th = gxx*e_th_x*e_th_x + gyy*e_th_y*e_th_y + gzz*e_th_z*e_th_z
                                + 2.0*(gxy*e_th_x*e_th_y + gxz*e_th_x*e_th_z + gyz*e_th_y*e_th_z);
@@ -224,19 +219,22 @@ void SphericalSurfaceGrid::CalculateDerivedGeometry() {
                                + gxz*(e_th_x*e_ph_z + e_th_z*e_ph_x)
                                + gyz*(e_th_y*e_ph_z + e_th_z*e_ph_y);
 
-        gamma_2D(p, 0) = gamma_th_th;
-        gamma_2D(p, 1) = gamma_th_ph;
-        gamma_2D(p, 2) = gamma_ph_ph;
+        h_gamma_2D(p, 0) = gamma_th_th;
+        h_gamma_2D(p, 1) = gamma_th_ph;
+        h_gamma_2D(p, 2) = gamma_ph_ph;
 
         const Real det_gamma_2D = gamma_th_th * gamma_ph_ph - SQR(gamma_th_ph);
 
-        dA(p) = (det_gamma_2D > 0.0)
-                ? sqrt(det_gamma_2D) * quad_weights(p)
+        h_dA(p) = (det_gamma_2D > 0.0)
+                ? sqrt(det_gamma_2D) * h_quad_weights(p)
                 : 0.0;
-    });
+    }
 
-    gamma_dd_surf_.template modify<DevExeSpace>();
-    proper_dA_.template modify<DevExeSpace>();
+    // Mark host data as modified and sync to device
+    gamma_dd_surf_.template modify<HostMemSpace>();
+    proper_dA_.template modify<HostMemSpace>();
+    gamma_dd_surf_.template sync<DevExeSpace>();
+    proper_dA_.template sync<DevExeSpace>();
 }
 
 void SphericalSurfaceGrid::RebuildAll() {
@@ -256,9 +254,8 @@ void SphericalSurfaceGrid::InitializeFlatMetric() {
     h_g(p, 5) = 1.0;
   }
   g_dd_surf_.template modify<HostMemSpace>();
-  g_dd_surf_.template sync<DevExeSpace>(); // Sync flat metric to device
   metric_is_flat_ = true;
-
+  
   // Calculate flat-space derived geometry
   CalculateDerivedGeometry();
 }
