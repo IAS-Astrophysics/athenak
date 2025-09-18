@@ -53,6 +53,7 @@ Z4c_AMR::Z4c_AMR(ParameterInput *pin) {
       break;
     }
   }
+  max_ref_lev = pin->GetOrAddInteger("z4c_amr","max_ref_lev",10);
 }
 
 // 1: refines, -1: de-refines, 0: does nothing
@@ -144,10 +145,14 @@ void Z4c_AMR::RefineChiMin(MeshBlockPack *pmbp) {
   int I_Z4C_CHI  = pmbp->pz4c->I_Z4C_CHI;
   // note: we need this to prevent capture by this in the lambda expr.
   auto chi_thresh = this->chi_thresh;
+  auto &level = pmesh->lloc_eachmb;
+  auto root_lev = pmesh->root_level;
+  auto max_ref_lev = this->max_ref_lev;
 
   par_for_outer(
     "Z4c_AMR::ChiMin", DevExeSpace(), 0, 0, 0, (nmb - 1),
     KOKKOS_LAMBDA(TeamMember_t tmember, const int m) {
+      int lev = level[m + mbs].level - root_lev;
       Real team_dmin;
       Kokkos::parallel_reduce(
         Kokkos::TeamThreadRange(tmember, nkji),
@@ -161,10 +166,10 @@ void Z4c_AMR::RefineChiMin(MeshBlockPack *pmbp) {
         },
         Kokkos::Min<Real>(team_dmin));
 
-      if (team_dmin < chi_thresh) {
+      if (team_dmin < chi_thresh && lev < max_ref_lev) {
         refine_flag.d_view(m + mbs) = 1;
       }
-      if (team_dmin > 1.25 * chi_thresh) {
+      if (team_dmin > 1.25 * chi_thresh || lev > max_ref_lev) {
         refine_flag.d_view(m + mbs) = -1;
       }
     });
