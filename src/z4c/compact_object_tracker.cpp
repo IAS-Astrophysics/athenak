@@ -51,7 +51,8 @@ CompactObjectTracker::CompactObjectTracker(Mesh *pmesh, ParameterInput *pin, int
     std::exit(EXIT_FAILURE);
   }
 
-  std::string trmode = pin->GetOrAddString("z4c", "tracker_mode", "ode");
+  //std::string trmode = pin->GetOrAddString("z4c", "tracker_mode", "ode");
+  std::string trmode = pin->GetOrAddString("z4c", "co_" + nstr + "_tracker_mode", "ode");
   if (trmode == "ode") {
     mode = ODE;
   } else if (trmode == "walk") {
