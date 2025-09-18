@@ -75,7 +75,7 @@ void Z4c::WaveExtr(MeshBlockPack *pmbp) {
   int nradii = grids.size();
   int lmax = 8;
   
-  // Prepare storage for areal radii (only on root) and coordinate radii (all ranks)
+  // --- MODIFICATION: Prepare storage for areal radii (only on root) and coordinate radii (all ranks)
   std::vector<Real> areal_radii;
   if (0 == global_variable::my_rank) {
     areal_radii.resize(nradii);
@@ -89,7 +89,7 @@ void Z4c::WaveExtr(MeshBlockPack *pmbp) {
 
   int count = 0;
   for (int g=0; g<nradii; ++g) {
-    // Rebuild surface geometry if AMR is enabled ---
+    // --- MODIFICATION: Rebuild surface geometry if AMR is enabled ---
     // If the mesh has adapted, the old surface geometry (coordinates, interpolation
     // map, etc.) is invalid and must be recomputed.
     if (pmbp->pmesh->adaptive) {
@@ -105,6 +105,7 @@ void Z4c::WaveExtr(MeshBlockPack *pmbp) {
     auto& proper_area_element = grids[g]->ProperAreaElement();
     proper_area_element.template sync<HostMemSpace>();
     
+    // --- MODIFICATION: Calculate Areal Radius with MPI Reduction ---
     // Step 1: Every rank calculates its local contribution to the surface area.
     Real local_total_area = 0.0;
     const int npts_g = grids[g]->Npts();
@@ -147,9 +148,9 @@ void Z4c::WaveExtr(MeshBlockPack *pmbp) {
           psilmR += weight * (datareal * ylmR + dataim * ylmI);
           psilmI += weight * (dataim * ylmR - datareal * ylmI);
         }
-        // Factor out the coordinate radius and use areal radius instead
-        psi_out[count++] = psilmR / SQR(coord_radii[g]);
-        psi_out[count++] = psilmI / SQR(coord_radii[g]);
+        // --- MODIFICATION: Divide by coordinate radius to get Psi4 from r*Psi4
+        psi_out[count++] = psilmR / coord_radii[g];
+        psi_out[count++] = psilmI / coord_radii[g];
       }
     }
   }
@@ -166,6 +167,7 @@ void Z4c::WaveExtr(MeshBlockPack *pmbp) {
   if (0 == global_variable::my_rank) {
     int idx = 0;
     for (int g=0; g<nradii; ++g) {
+      // --- MODIFICATION: Filename formatting fixed to use integer part of radius
       int radius_int = static_cast<int>(coord_radii[g]);
       std::stringstream strObj;
       strObj << std::setfill('0') << std::setw(4) << radius_int;
@@ -180,7 +182,7 @@ void Z4c::WaveExtr(MeshBlockPack *pmbp) {
       bool fileExists2 = fileCheck2.good();
       fileCheck2.close();
 
-      // Add Areal Radius to header
+      // --- MODIFICATION: Add Areal Radius to header
       if (!fileExists) {
         std::ofstream createFile(filename);
         std::ofstream outFile(filename, std::ios::out | std::ios::app);
@@ -211,6 +213,7 @@ void Z4c::WaveExtr(MeshBlockPack *pmbp) {
       std::ofstream outFile(filename, std::ios::out | std::ios::app);
       std::ofstream outFile2(filename2, std::ios::out | std::ios::app);
 
+      // --- MODIFICATION: Write Areal Radius to data column
       outFile << std::setprecision(15) << pmbp->pmesh->time << "\t" << areal_radii[g] << "\t";
       outFile2 << std::setprecision(15) << pmbp->pmesh->time << "\t" << areal_radii[g] << "\t";
 
