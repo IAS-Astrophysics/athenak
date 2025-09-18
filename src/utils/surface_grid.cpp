@@ -82,19 +82,17 @@ void SphericalSurfaceGrid::SetCenter(const Real new_center[3]) {
   center_[0] = new_center[0];
   center_[1] = new_center[1];
   center_[2] = new_center[2];
-  RebuildAll();
+  BuildCoordinates();
+  SetInterpolationIndices();
+  SetInterpolationWeights();
 }
 
 DualArray2D<Real> SphericalSurfaceGrid::InterpolateToSurface(
     const DvceArray5D<Real> &source_array, int start_index, int end_index) {
-  
-  // Do this manually whenever using AMR! Simply call the RebuildAll() before using
-  // any of the surface quantities. This saves a huge amount of computational cost
-
-  //if (pmy_pack->pmesh->adaptive) {
-  //  SetInterpolationIndices();
-  //  SetInterpolationWeights();
-  //}
+  if (pmy_pack->pmesh->adaptive) {
+    SetInterpolationIndices();
+    SetInterpolationWeights();
+  }
 
   const int nvars = end_index - start_index;
   if (nvars <= 0) {
