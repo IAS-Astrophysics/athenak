@@ -39,8 +39,6 @@ class Z4c {
  public:
   Z4c(MeshBlockPack *ppack, ParameterInput *pin);
   ~Z4c();
-  Z4c(const Z4c&) = delete;
-  Z4c& operator=(const Z4c&) = delete;
 
   // Indices of evolved variables
   enum {
