@@ -157,7 +157,6 @@ add_executable(
         utils/tr_table.cpp
         utils/cart_grid.cpp
         utils/spherical_surface.cpp
-        utils/surface_grid.cpp
 
         z4c/compact_object_tracker.cpp
         z4c/horizon_dump.cpp
