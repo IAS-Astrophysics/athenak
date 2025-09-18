@@ -148,8 +148,8 @@ void Z4c::WaveExtr(MeshBlockPack *pmbp) {
           psilmI += weight * (dataim * ylmR - datareal * ylmI);
         }
         // Factor out the coordinate radius and use areal radius instead
-        psi_out[count++] = psilmR / coord_radii[g];
-        psi_out[count++] = psilmI / coord_radii[g];
+        psi_out[count++] = psilmR / SQR(coord_radii[g]);
+        psi_out[count++] = psilmI / SQR(coord_radii[g]);
       }
     }
   }
@@ -216,8 +216,8 @@ void Z4c::WaveExtr(MeshBlockPack *pmbp) {
 
       for (int l = 2; l < lmax+1; ++l) {
         for (int m = -l; m < l+1; ++m) {
-          outFile << std::setprecision(15) << psi_out[idx++]/areal_radii[g] << '\t';
-          outFile2 << std::setprecision(15) << psi_out[idx++]/areal_radii[g] << '\t';
+          outFile << std::setprecision(15) << psi_out[idx++] << '\t';
+          outFile2 << std::setprecision(15) << psi_out[idx++] << '\t';
         }
       }
       outFile << '\n';
