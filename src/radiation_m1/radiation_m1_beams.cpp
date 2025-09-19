@@ -63,7 +63,6 @@ void ApplyBeamSources2D(Mesh *pmesh) {
   auto &beam_source_1_y1_ = pmesh->pmb_pack->pradm1->rad_m1_beam.beam_ymin;
   auto &beam_source_1_y2_ = pmesh->pmb_pack->pradm1->rad_m1_beam.beam_ymax;
 
-  assert(pmesh->pmb_pack->pradm1->nspecies == 1);
 
   par_for(
       "radiation_m1_beams_populate_2d", DevExeSpace(), 0, nmb1, 0, nvarstotm1, 0,
@@ -101,6 +100,7 @@ void ApplyBeamSourcesBlackHole(Mesh *pmesh) {
   int n3 = (indcs.nx3 > 1) ? (indcs.nx3 + 2 * ng) : 1;
   auto &params_ = pmesh->pmb_pack->pradm1->params;
   auto nvars_ = pmesh->pmb_pack->pradm1->nvars;
+  auto &nspecies_ = pmesh->pmb_pack->pradm1->nspecies;
 
   auto &u0_ = pmesh->pmb_pack->pradm1->u0;
   adm::ADM::ADM_vars &adm = pmesh->pmb_pack->padm->adm;
@@ -108,7 +108,6 @@ void ApplyBeamSourcesBlackHole(Mesh *pmesh) {
   auto &beam_source_1_y1_ = pmesh->pmb_pack->pradm1->rad_m1_beam.beam_ymin;
   auto &beam_source_1_y2_ = pmesh->pmb_pack->pradm1->rad_m1_beam.beam_ymax;
 
-  assert(pmesh->pmb_pack->pradm1->nspecies == 1);
 
   par_for(
       "radiation_m1_beam_populate_black_hole", DevExeSpace(), 0, nmb1, 0, (n3 - 1), 0,
@@ -169,11 +168,12 @@ void ApplyBeamSourcesBlackHole(Mesh *pmesh) {
                          adm.beta_u(m, 2, k, j, i), volform * Fx, volform * Fy,
                          volform * Fz, F_d);
                 apply_floor(g_uu, E, F_d, params_);
-
-                u0_(m, M1_E_IDX, k, j, is - i - 1) = E;
-                u0_(m, M1_FX_IDX, k, j, is - i - 1) = F_d(1);
-                u0_(m, M1_FY_IDX, k, j, is - i - 1) = F_d(2);
-                u0_(m, M1_FZ_IDX, k, j, is - i - 1) = F_d(3);
+                for (int nuidx = 0; nuidx < nspecies_; nuidx++) {
+                  u0_(m, CombinedIdx(nuidx, M1_E_IDX, nvars_), k, j, is - i - 1) = E;
+                  u0_(m, CombinedIdx(nuidx, M1_FX_IDX, nvars_), k, j, is - i - 1) = F_d(1);
+                  u0_(m, CombinedIdx(nuidx, M1_FY_IDX, nvars_), k, j, is - i - 1) = F_d(2);
+                  u0_(m, CombinedIdx(nuidx, M1_FZ_IDX, nvars_), k, j, is - i - 1) = F_d(3);
+                }
               }
             }
             break;

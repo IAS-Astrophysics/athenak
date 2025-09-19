@@ -407,22 +407,12 @@ TaskStatus RadiationM1::CalcOpacityNurates_(Driver *pdrive, int stage) {
             if (nurates_params_.use_kirchhoff_law) {
               // enforce Kirchhoff's laws.
               if (nuidx == 0 || nuidx == 1) {
-              abs_0(m, nuidx, k, j, i) *= corr_fac;
-              abs_1(m, nuidx, k, j, i) *= corr_fac;
+                abs_0(m, nuidx, k, j, i) *= corr_fac;
+                abs_1(m, nuidx, k, j, i) *= corr_fac;
                 eta_0(m, nuidx, k, j, i) =
                     abs_0(m, nuidx, k, j, i) * my_nudens_0;
                 eta_1(m, nuidx, k, j, i) =
                     abs_1(m, nuidx, k, j, i) * my_nudens_1;
-              } else {
-                abs_0(m, nuidx, k, j, i) =
-                    (my_nudens_0 > m1_params_.rad_N_floor
-                         ? eta_0(m, nuidx, k, j, i) / my_nudens_0
-                         : 0);
-                abs_1(m, nuidx, k, j, i) =
-                    (my_nudens_0 > m1_params_.rad_E_floor
-                         ? eta_1(m, nuidx, k, j, i) / my_nudens_1
-                         : 0);
-              }
             } else {
               if (nuidx == 0 || nuidx == 1) {
                 eta_0(m, nuidx, k, j, i) *= corr_fac;
