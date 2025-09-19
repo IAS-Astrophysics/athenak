@@ -8,28 +8,41 @@ basename = tov
 
 <mesh>
 nghost = 4       # Number of ghost cells
-nx1    = 128     # number of cells in x1-direction
-x1min  = -20.0   # minimum x1
-x1max  = 20.0    # maximum x1
-ix1_bc = diode   # inner boundary
-ox1_bc = diode   # outer boundary
+nx1    = 64      # number of cells in x1-direction
+x1min  = 0.0     # minimum x1
+x1max  = 204.8   # maximum x1
+ix1_bc = reflect # inner boundary
+ox1_bc = outflow # outer boundary
 
-nx2    = 128     # number of cells in x2-direction
-x2min  = -20.0   # minimum x2
-x2max  = 20.0    # maximum x2
-ix2_bc = diode   # inner boundary
-ox2_bc = diode   # outer boundary
+nx2    = 64      # number of cells in x2-direction
+x2min  = 0.0     # minimum x2
+x2max  = 204.8   # maximum x2
+ix2_bc = reflect # inner boundary
+ox2_bc = outflow # outer boundary
 
-nx3    = 128     # number of cells in x3-direction
-x3min  = -20.0   # minimum x3
-x3max  = 20.0    # maximum x3
-ix3_bc = diode   # inner boundary
-ox3_bc = diode   # outer boundary
+nx3    = 64      # number of cells in x3-direction
+x3min  = 0.0     # minimum x3
+x3max  = 204.8   # maximum x3
+ix3_bc = reflect # inner boundary
+ox3_bc = outflow # outer boundary
 
 <meshblock>
-nx1  = 64        # Number of cells in each MeshBlock, X1-dir
-nx2  = 64        # Number of cells in each MeshBlock, X2-dir
-nx3  = 64        # Number of cells in each MeshBlock, X3-dir
+nx1  = 32        # Number of cells in each MeshBlock, X1-dir
+nx2  = 32        # Number of cells in each MeshBlock, X2-dir
+nx3  = 32        # Number of cells in each MeshBlock, X3-dir
+
+<mesh_refinement>
+refinement = static
+num_levels = 4
+
+<refinement1>
+x1min = 0.0
+x1max = 12.7
+x2min = 0.0
+x2max = 12.7
+x3min = 0.0
+x3max = 12.7
+level = 4
 
 <time>
 evolution  = dynamic    # dynamic/kinematic/static
@@ -50,35 +63,45 @@ num_species = 4
 closure_fun = minerbo
 src_update = implicit
 opacity_type = bns-nurates
+backreact = false
 
 <mhd>
-nscalars    = 1
 eos         = ideal     # EOS type
 dyn_eos     = compose     # EOS type
-table       = /home/yiqiu0714/athenak/build/DD2.athtab
 dyn_error   = reset_floor # error policy
-reconstruct = ppmx      # spatial reconstruction method
+reconstruct = wenoz     # spatial reconstruction method
 rsolver     = hlle      # Riemann solver to be used
-dfloor      = 1.0e-16   # floor on density rho
-tfloor      = 1.0e-14 
-dthreshold  = 1.02      # Threshold for flooring
+dfloor      = 1.28e-13   # floor on density rho
+tfloor      = 1.28e-11 
+dthreshold  = 0.1       # Threshold for flooring
 gamma       = 2.0       # ratio of specific heats Gamma
-dyn_scratch = 1
+dyn_scratch = 0
 fofc        = true
 enforce_maximum = false
+dmp_M       = 1.2
+nscalars = 1
+s0_atmosphere = 0.5
+table       = /global/homes/y/yiqiu/DD2/DD2.athtab
 
 <adm>
 
+<z4c>
+diss        = 0.1
+extrap_order = 2
+
 <problem>
-table       = /home/yiqiu0714/athenak/build/DD2.athtab
+table       = /global/homes/y/yiqiu/DD2/DD2_cold.athtab
 rhoc        = 1.28e-3 # Central density
 kappa       = 100.0    # P = kappa*rho^gamma
 npoints     = 10000.0  # buffer points for TOV calculation
 dr          = 1e-3     # radial step for TOV calculation
-b_norm      = 0.0 
+b_norm      = 0.0
 pcut        = 1e-6
 magindex    = 1
+isotropic   = true
 user_hist   = true
+v_pert      = 0.0
+rho_cut = 1.0e-7
 
 <output1>
 file_type   = rst
@@ -92,5 +115,11 @@ data_format = %20.15e
 <output3>
 file_type   = bin      # Binary output
 variable    = mhd_w
+dt          = 10.
+slice_x3    = 0.0
+
+<output4>
+file_type   = bin      # Binary output
+variable    = rad_m1_E
 dt          = 10.
 slice_x3    = 0.0

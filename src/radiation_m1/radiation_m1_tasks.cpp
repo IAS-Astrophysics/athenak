@@ -106,13 +106,13 @@ void RadiationM1::AssembleRadiationM1Tasks(
 
 TaskStatus RadiationM1::InitRecv(Driver *pdrive, int stage) {
   // post receives for U
-  TaskStatus tstat = pbval_u->InitRecv(nvars);
+  TaskStatus tstat = pbval_u->InitRecv(nvarstot);
   if (tstat != TaskStatus::complete) return tstat;
 
   // with SMR/AMR post receives for fluxes of U
   // do not post receives for fluxes when stage < 0 (i.e. ICs)
   if (pmy_pack->pmesh->multilevel && (stage >= 0)) {
-    tstat = pbval_u->InitFluxRecv(nvars);
+    tstat = pbval_u->InitFluxRecv(nvarstot);
   }
   if (tstat != TaskStatus::complete) return tstat;
 

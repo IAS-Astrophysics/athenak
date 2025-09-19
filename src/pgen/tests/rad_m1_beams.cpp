@@ -44,13 +44,6 @@ void ProblemGenerator::RadiationM1BeamTest(ParameterInput *pin, const bool resta
     exit(EXIT_FAILURE);
   }
 
-  if (pmbp->pradm1->nspecies != 1) {
-    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
-              << "The 1d diffusion problem generator can only be run with "
-                 "one neutrino species only!"
-              << std::endl;
-    exit(EXIT_FAILURE);
-  }
   // capture variables for kernel
   auto &indcs = pmy_mesh_->mb_indcs;
   auto &size = pmbp->pmb->mb_size;

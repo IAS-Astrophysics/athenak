@@ -56,10 +56,10 @@ KOKKOS_INLINE_FUNCTION void calc_closure(
       const Real z_th = BrentFunc(1., g_dd, g_uu, n_d, w_lorentz, u_u, v_d, proj_ud, E,
                                   F_d, m1_params, closure_type);
       if (Kokkos::abs(z_th) < Kokkos::abs(z_ed)) {
-        Kokkos::printf("LinalgEinval: set chi = 1\n");
+        // Kokkos::printf("LinalgEinval: set chi = 1\n");
         chi = 1.0;
       } else {
-        Kokkos::printf("LinalgEinval: set chi = 1/3\n");
+        // Kokkos::printf("LinalgEinval: set chi = 1/3\n");
         chi = 1. / 3.;
       }
       apply_closure(g_dd, g_uu, n_d, w_lorentz, u_u, v_d, proj_ud, E, F_d, chi, P_dd,

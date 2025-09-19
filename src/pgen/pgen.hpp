@@ -79,12 +79,12 @@ class ProblemGenerator {
   void RadiationM1DiffusionTest(ParameterInput *pin, const bool restart);
   void RadiationM1VelocityJumpTest(ParameterInput *pin, const bool restart);
   void RadiationM1SingleZoneTest(ParameterInput *pin, const bool restart);
+  template <class EOSPolicy, class ErrorPolicy>
+  void RadiationM1SingleZoneTest_(ParameterInput *pin, const bool restart);
 
  private:
   bool single_file_per_rank; // for restart file naming
   Mesh* pmy_mesh_;
-  template <class EOSPolicy, class ErrorPolicy>
-  void RadiationM1SingleZoneTest_(ParameterInput *pin, const bool restart);
 };
 
 #endif // PGEN_PGEN_HPP_
