@@ -57,6 +57,18 @@ CompactObjectTracker::CompactObjectTracker(Mesh *pmesh, ParameterInput *pin, int
     mode = ODE;
   } else if (trmode == "walk") {
     mode = Walk;
+    std::string trfield = pin->GetOrAddString("z4c", "co_" + nstr + "_tracker_field",
+                                              "lapse");
+    if (trfield == "lapse") {
+      field = Lapse;
+    } else if (trfield == "density") {
+      field = Density;
+    } else {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line "
+                << __LINE__ << std::endl;
+      std::cout << "Unknown tracker field:" << trfield << std::endl;
+      std::exit(EXIT_FAILURE);
+    }
   } else {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line "
               << __LINE__ << std::endl;
@@ -173,24 +185,52 @@ void CompactObjectTracker::EvolveTracker(MeshBlockPack *pmbp) {
           int jc = std::round((pos[1] - (x2min + 0.5 * dx2)) / dx2);
           int kc = std::round((pos[2] - (x3min + 0.5 * dx3)) / dx3);
 
-          DualArray3D<Real> alp("lapse", 3, 3, 3);
-          auto& adm = padm->adm;
-          par_for("Copy lapse neighborhood", DevExeSpace(), 0, 2, 0, 2, 0, 2,
-          KOKKOS_LAMBDA(const int k, const int j, const int i){
-            alp.d_view(k,j,i) = adm.alpha(m,kc + indcs.ks + k - 1,
-                                            jc + indcs.js + j - 1,
-                                            ic + indcs.is + i - 1);
-          });
+          DualArray3D<Real> tr_field("tr_field", 3, 3, 3);
+          bool (*op)(Real x, Real y);
+          Real local_field;
 
-          alp.template modify<DevMemSpace>();
-          alp.template sync<typename DualArray3D<Real>::host_mirror_space>();
+          if (field == Lapse) {
+            // Follow the minimum lapse
+            auto& adm = padm->adm;
+            local_field = std::numeric_limits<Real>::max();
 
-          Real alp_min = std::numeric_limits<Real>::max();
+            op = [](Real x, Real y)->bool {
+              return x < y;
+            };
+
+            par_for("Copy lapse neighborhood", DevExeSpace(), 0, 2, 0, 2, 0, 2,
+            KOKKOS_LAMBDA(const int k, const int j, const int i){
+              tr_field.d_view(k,j,i) = adm.alpha(m,kc + indcs.ks + k - 1,
+                                              jc + indcs.js + j - 1,
+                                              ic + indcs.is + i - 1);
+            });
+          } else {
+            // Follow the maximum density
+            auto &w0 = pmbp->pmhd->w0;
+            local_field = std::numeric_limits<Real>::min();
+
+            op = [](Real x, Real y)->bool {
+              return x > y;
+            };
+
+            par_for("Copy density neighborhood", DevExeSpace(), 0, 2, 0, 2, 0, 2,
+            KOKKOS_LAMBDA(const int k, const int j, const int i) {
+              tr_field.d_view(k,j,i) = w0(m,IDN,kc + indcs.ks + k - 1,
+                                          jc + indcs.js + j - 1,
+                                          ic + indcs.is + i - 1);
+            });
+          }
+
+          tr_field.template modify<DevMemSpace>();
+          tr_field.template sync<typename DualArray3D<Real>::host_mirror_space>();
+
+          //Real alp_min = std::numeric_limits<Real>::max();
           for (int k = 0; k < 3; ++k) {
             for (int j = 0; j < 3; ++j) {
               for (int i = 0; i < 3; ++i) {
-                if (alp.h_view(k, j, i) < alp_min) {
-                  alp_min = alp.h_view(k, j, i);
+                //if (tr_field.h_view(k, j, i) < alp_min) {
+                if (op(tr_field.h_view(k, j, i), local_field)) {
+                  local_field = tr_field.h_view(k, j, i);
                   pos[0] = CellCenterX(ic + (i - 1), indcs.nx1,
                                        x1min, x1max);
                   pos[1] = CellCenterX(jc + (j - 1), indcs.nx2,
