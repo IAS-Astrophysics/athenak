@@ -145,14 +145,12 @@ void Z4c_AMR::RefineChiMin(MeshBlockPack *pmbp) {
   int I_Z4C_CHI  = pmbp->pz4c->I_Z4C_CHI;
   // note: we need this to prevent capture by this in the lambda expr.
   auto chi_thresh = this->chi_thresh;
-  auto &level = pmesh->lloc_eachmb;
   auto root_lev = pmesh->root_level;
   auto max_ref_lev = this->max_ref_lev;
 
   par_for_outer(
     "Z4c_AMR::ChiMin", DevExeSpace(), 0, 0, 0, (nmb - 1),
     KOKKOS_LAMBDA(TeamMember_t tmember, const int m) {
-      int lev = level[m + mbs].level - root_lev;
       Real team_dmin;
       Kokkos::parallel_reduce(
         Kokkos::TeamThreadRange(tmember, nkji),
@@ -166,10 +164,10 @@ void Z4c_AMR::RefineChiMin(MeshBlockPack *pmbp) {
         },
         Kokkos::Min<Real>(team_dmin));
 
-      if (team_dmin < chi_thresh && lev < max_ref_lev) {
+      if (team_dmin < chi_thresh) {
         refine_flag.d_view(m + mbs) = 1;
       }
-      if (team_dmin > 1.25 * chi_thresh || lev > max_ref_lev) {
+      if (team_dmin > 1.25 * chi_thresh) {
         refine_flag.d_view(m + mbs) = -1;
       }
     });
@@ -177,6 +175,24 @@ void Z4c_AMR::RefineChiMin(MeshBlockPack *pmbp) {
   // sync host and device
   refine_flag.template modify<DevExeSpace>();
   refine_flag.template sync<HostMemSpace>();
+
+  // enforce maximum refinement level
+  for (int m = 0; m < nmb; ++m) {
+    // current refinement level
+    int level = pmesh->lloc_eachmb[m + mbs].level - pmesh->root_level;
+
+    if (level > max_ref_lev) {
+      // derefine mbs above the maximum set refinement level
+      refine_flag.h_view(m + mbs) = -1;
+    } elif (level == max_ref_lev && refine_flag.h_view(m + mbs) == 1) {
+      // avoid over refining
+      refine_flag.h_view(m + mbs) = 0;
+    }
+  }
+
+  // sync host and device
+  refine_flag.template modify<HostMemSpace>();
+  refine_flag.template sync<DevExeSpace>();
 }
 
 // refine based on max{dchi}
