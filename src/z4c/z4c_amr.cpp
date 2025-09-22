@@ -184,7 +184,7 @@ void Z4c_AMR::RefineChiMin(MeshBlockPack *pmbp) {
     if (level > max_ref_lev) {
       // derefine mbs above the maximum set refinement level
       refine_flag.h_view(m + mbs) = -1;
-    } elif (level == max_ref_lev && refine_flag.h_view(m + mbs) == 1) {
+    } else if (level == max_ref_lev && refine_flag.h_view(m + mbs) == 1) {
       // avoid over refining
       refine_flag.h_view(m + mbs) = 0;
     }
