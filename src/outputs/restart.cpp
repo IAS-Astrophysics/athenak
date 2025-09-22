@@ -232,6 +232,8 @@ void RestartOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
                             single_file_per_rank);
     resfile.Write_any_type(&(pm->ncycle), (sizeof(int)), "byte",
                             single_file_per_rank);
+    resfile.Write_any_type(&(global_variable::nranks), (sizeof(int)), "byte",
+                            single_file_per_rank);
   }
   //--- STEP 2.  Root process writes list of logical locations and cost of MeshBlocks
   // This data read in Mesh::BuildTreeFromRestart()
@@ -241,6 +243,14 @@ void RestartOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
                            "byte", single_file_per_rank);
     resfile.Write_any_type(&(pm->cost_eachmb[0]), (pm->nmb_total)*sizeof(float),
                            "byte", single_file_per_rank);
+    resfile.Write_any_type(&(pm->rank_eachmb[0]), (pm->nmb_total)*sizeof(int),
+                           "byte", single_file_per_rank);
+    if (global_variable::nranks > 0) {
+      resfile.Write_any_type(&(pm->gids_eachrank[0]), (global_variable::nranks)*sizeof(int),
+                             "byte", single_file_per_rank);
+      resfile.Write_any_type(&(pm->nmb_eachrank[0]), (global_variable::nranks)*sizeof(int),
+                             "byte", single_file_per_rank);
+    }
   }
 
   //--- STEP 3.  Root process writes internal state of objects that require it
@@ -296,9 +306,11 @@ void RestartOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
   }
 
   // calculate size of data written in Steps 1-2 above
-  IOWrapperSizeT step1size = sbuf.size()*sizeof(char) + 3*sizeof(int) + 2*sizeof(Real) +
+  IOWrapperSizeT step1size = sbuf.size()*sizeof(char) + 4*sizeof(int) + 2*sizeof(Real) +
                              sizeof(RegionSize) + 2*sizeof(RegionIndcs);
-  IOWrapperSizeT step2size = (pm->nmb_total)*(sizeof(LogicalLocation) + sizeof(float));
+  IOWrapperSizeT step2size = (pm->nmb_total)*(sizeof(LogicalLocation) + sizeof(float)
+                           + sizeof(int))
+                           + (global_variable::nranks)*2*sizeof(int);
 
   IOWrapperSizeT step3size = 3*nco*sizeof(Real);
   if (pz4c != nullptr) step3size += sizeof(Real);

@@ -8,10 +8,12 @@
 //! Default constructor calls problem generator function, while  constructor for restarts
 //! reads data from restart file, as well as re-initializing problem-specific data.
 
+#include <cstdio>
 #include <iostream>
 #include <string>
 #include <utility>
 #include <algorithm>
+#include <vector>
 
 #include "athena.hpp"
 #include "geodesic-grid/geodesic_grid.hpp"
@@ -26,6 +28,342 @@
 #include "radiation/radiation.hpp"
 #include "srcterms/turb_driver.hpp"
 #include "pgen.hpp"
+
+namespace {
+
+struct RestartBlockRequest {
+  int local_index;
+  int global_id;
+};
+
+void LoadSingleFileRestartData(Mesh *pm,
+                               IOWrapperSizeT headeroffset,
+                               IOWrapperSizeT data_stride,
+                               int nout1, int nout2, int nout3,
+                               int nhydro, int nmhd, int nrad,
+                               int nforce, int nz4c, int nadm,
+                               HostArray5D<Real> &ccin,
+                               HostFaceFld4D<Real> &fcin) {
+  MeshBlockPack *pack = pm->pmb_pack;
+  int nmb = pack->nmb_thispack;
+  hydro::Hydro* phydro = pack->phydro;
+  mhd::MHD* pmhd = pack->pmhd;
+  adm::ADM* padm = pack->padm;
+  z4c::Z4c* pz4c = pack->pz4c;
+  radiation::Radiation* prad = pack->prad;
+  TurbulenceDriver* pturb = pack->pturb;
+
+  const RestartMetaData &meta = pm->restart_meta;
+  if (meta.file_name.empty()) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+              << std::endl << "Restart metadata missing file name for single-file restart."
+              << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+  if (meta.rank_eachmb.size() != static_cast<std::size_t>(pm->nmb_total)) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+              << std::endl << "Restart metadata inconsistent with MeshBlock count."
+              << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+  if (meta.original_nranks <= 0 ||
+      meta.gids_eachrank.size() != static_cast<std::size_t>(meta.original_nranks) ||
+      meta.nmb_eachrank.size() != static_cast<std::size_t>(meta.original_nranks)) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+              << std::endl << "Restart metadata missing original rank layout."
+              << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+
+  std::vector<std::vector<RestartBlockRequest>> requests(meta.original_nranks);
+  for (int m=0; m<nmb; ++m) {
+    int gid = pack->pmb->mb_gid.h_view(m);
+    if (gid < 0 || gid >= pm->nmb_total) {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                << std::endl << "Invalid MeshBlock gid encountered during restart."
+                << std::endl;
+      std::exit(EXIT_FAILURE);
+    }
+    int src_rank = meta.rank_eachmb[gid];
+    if (src_rank < 0 || src_rank >= meta.original_nranks) {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                << std::endl << "Restart metadata contains invalid rank assignments."
+                << std::endl;
+      std::exit(EXIT_FAILURE);
+    }
+    requests[src_rank].push_back({m, gid});
+  }
+
+  std::vector<std::string> rank_paths(meta.original_nranks);
+  for (int r=0; r<meta.original_nranks; ++r) {
+    char rank_dir[20];
+    std::snprintf(rank_dir, sizeof(rank_dir), "rank_%08d", r);
+    if (!meta.base_dir.empty()) {
+      rank_paths[r] = meta.base_dir + "/" + rank_dir + "/" + meta.file_name;
+    } else {
+      rank_paths[r] = std::string(rank_dir) + "/" + meta.file_name;
+    }
+  }
+
+  const IOWrapperSizeT chunk_stride = data_stride;
+  IOWrapperSizeT chunk_offset = 0;
+  const IOWrapperSizeT hydro_offset = chunk_offset;
+  chunk_offset += nout1*nout2*nout3*nhydro*sizeof(Real);
+  const IOWrapperSizeT mhd_cc_offset = chunk_offset;
+  chunk_offset += nout1*nout2*nout3*nmhd*sizeof(Real);
+  const IOWrapperSizeT mhd_x1f_offset = chunk_offset;
+  chunk_offset += (nout1+1)*nout2*nout3*sizeof(Real);
+  const IOWrapperSizeT mhd_x2f_offset = chunk_offset;
+  chunk_offset += nout1*(nout2+1)*nout3*sizeof(Real);
+  const IOWrapperSizeT mhd_x3f_offset = chunk_offset;
+  chunk_offset += nout1*nout2*(nout3+1)*sizeof(Real);
+  const IOWrapperSizeT rad_offset = chunk_offset;
+  chunk_offset += nout1*nout2*nout3*nrad*sizeof(Real);
+  const IOWrapperSizeT turb_offset = chunk_offset;
+  chunk_offset += nout1*nout2*nout3*nforce*sizeof(Real);
+  const IOWrapperSizeT z4c_adm_offset = chunk_offset;
+  if (pz4c != nullptr) {
+    chunk_offset += nout1*nout2*nout3*nz4c*sizeof(Real);
+  } else if (padm != nullptr) {
+    chunk_offset += nout1*nout2*nout3*nadm*sizeof(Real);
+  }
+  if (chunk_offset != chunk_stride) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+              << std::endl << "Restart data chunk size mismatch, restart file is broken."
+              << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+
+  auto chunk_base = [&](int src_rank, int global_id) -> IOWrapperSizeT {
+    int start_gid = meta.gids_eachrank[src_rank];
+    int local_index = global_id - start_gid;
+    if (local_index < 0 || (meta.nmb_eachrank[src_rank] > 0 &&
+                            local_index >= meta.nmb_eachrank[src_rank])) {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                << std::endl << "Restart metadata inconsistent with MeshBlock ids."
+                << std::endl;
+      std::exit(EXIT_FAILURE);
+    }
+    return headeroffset + chunk_stride * static_cast<IOWrapperSizeT>(local_index);
+  };
+
+  if (phydro != nullptr && nhydro > 0) {
+    Kokkos::realloc(ccin, nmb, nhydro, nout3, nout2, nout1);
+    for (int r=0; r<meta.original_nranks; ++r) {
+      auto &reqs = requests[r];
+      if (reqs.empty()) continue;
+      IOWrapper srcfile;
+      srcfile.Open(rank_paths[r].c_str(), IOWrapper::FileMode::read, true);
+      for (const auto &req : reqs) {
+        auto mbptr = Kokkos::subview(ccin, req.local_index, Kokkos::ALL, Kokkos::ALL,
+                                     Kokkos::ALL, Kokkos::ALL);
+        int mbcnt = mbptr.size();
+        if (mbcnt > 0) {
+          IOWrapperSizeT base = chunk_base(r, req.global_id);
+          if (srcfile.Read_Reals_at(mbptr.data(), mbcnt, base + hydro_offset, true)
+              != mbcnt) {
+            std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                      << std::endl << "CC hydro data not read correctly from rst file, "
+                      << "restart file is broken." << std::endl;
+            std::exit(EXIT_FAILURE);
+          }
+        }
+      }
+      srcfile.Close(true);
+    }
+    Kokkos::deep_copy(Kokkos::subview(phydro->u0, std::make_pair(0,nmb), Kokkos::ALL,
+                      Kokkos::ALL, Kokkos::ALL, Kokkos::ALL), ccin);
+  }
+
+  if (pmhd != nullptr && nmhd > 0) {
+    Kokkos::realloc(ccin, nmb, nmhd, nout3, nout2, nout1);
+    Kokkos::realloc(fcin.x1f, nmb, nout3, nout2, nout1+1);
+    Kokkos::realloc(fcin.x2f, nmb, nout3, nout2+1, nout1);
+    Kokkos::realloc(fcin.x3f, nmb, nout3+1, nout2, nout1);
+    for (int r=0; r<meta.original_nranks; ++r) {
+      auto &reqs = requests[r];
+      if (reqs.empty()) continue;
+      IOWrapper srcfile;
+      srcfile.Open(rank_paths[r].c_str(), IOWrapper::FileMode::read, true);
+      for (const auto &req : reqs) {
+        IOWrapperSizeT base = chunk_base(r, req.global_id);
+        auto mbptr = Kokkos::subview(ccin, req.local_index, Kokkos::ALL, Kokkos::ALL,
+                                     Kokkos::ALL, Kokkos::ALL);
+        int mbcnt = mbptr.size();
+        if (mbcnt > 0) {
+          if (srcfile.Read_Reals_at(mbptr.data(), mbcnt, base + mhd_cc_offset, true)
+              != mbcnt) {
+            std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                      << std::endl << "CC mhd data not read correctly from rst file, "
+                      << "restart file is broken." << std::endl;
+            std::exit(EXIT_FAILURE);
+          }
+        }
+
+        auto x1fptr = Kokkos::subview(fcin.x1f, req.local_index, Kokkos::ALL, Kokkos::ALL,
+                                       Kokkos::ALL);
+        int fldcnt = x1fptr.size();
+        if (fldcnt > 0) {
+          if (srcfile.Read_Reals_at(x1fptr.data(), fldcnt, base + mhd_x1f_offset, true)
+              != fldcnt) {
+            std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                      << std::endl << "Input b0.x1f field not read correctly from rst file, "
+                      << "restart file is broken." << std::endl;
+            std::exit(EXIT_FAILURE);
+          }
+        }
+
+        auto x2fptr = Kokkos::subview(fcin.x2f, req.local_index, Kokkos::ALL, Kokkos::ALL,
+                                       Kokkos::ALL);
+        fldcnt = x2fptr.size();
+        if (fldcnt > 0) {
+          if (srcfile.Read_Reals_at(x2fptr.data(), fldcnt, base + mhd_x2f_offset, true)
+              != fldcnt) {
+            std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                      << std::endl << "Input b0.x2f field not read correctly from rst file, "
+                      << "restart file is broken." << std::endl;
+            std::exit(EXIT_FAILURE);
+          }
+        }
+
+        auto x3fptr = Kokkos::subview(fcin.x3f, req.local_index, Kokkos::ALL, Kokkos::ALL,
+                                       Kokkos::ALL);
+        fldcnt = x3fptr.size();
+        if (fldcnt > 0) {
+          if (srcfile.Read_Reals_at(x3fptr.data(), fldcnt, base + mhd_x3f_offset, true)
+              != fldcnt) {
+            std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                      << std::endl << "Input b0.x3f field not read correctly from rst file, "
+                      << "restart file is broken." << std::endl;
+            std::exit(EXIT_FAILURE);
+          }
+        }
+      }
+      srcfile.Close(true);
+    }
+    Kokkos::deep_copy(Kokkos::subview(pmhd->u0, std::make_pair(0,nmb), Kokkos::ALL,
+                      Kokkos::ALL, Kokkos::ALL, Kokkos::ALL), ccin);
+    Kokkos::deep_copy(Kokkos::subview(pmhd->b0.x1f, std::make_pair(0,nmb), Kokkos::ALL,
+                      Kokkos::ALL, Kokkos::ALL), fcin.x1f);
+    Kokkos::deep_copy(Kokkos::subview(pmhd->b0.x2f, std::make_pair(0,nmb), Kokkos::ALL,
+                      Kokkos::ALL, Kokkos::ALL), fcin.x2f);
+    Kokkos::deep_copy(Kokkos::subview(pmhd->b0.x3f, std::make_pair(0,nmb), Kokkos::ALL,
+                      Kokkos::ALL, Kokkos::ALL), fcin.x3f);
+  }
+
+  if (prad != nullptr && nrad > 0) {
+    Kokkos::realloc(ccin, nmb, nrad, nout3, nout2, nout1);
+    for (int r=0; r<meta.original_nranks; ++r) {
+      auto &reqs = requests[r];
+      if (reqs.empty()) continue;
+      IOWrapper srcfile;
+      srcfile.Open(rank_paths[r].c_str(), IOWrapper::FileMode::read, true);
+      for (const auto &req : reqs) {
+        auto mbptr = Kokkos::subview(ccin, req.local_index, Kokkos::ALL, Kokkos::ALL,
+                                     Kokkos::ALL, Kokkos::ALL);
+        int mbcnt = mbptr.size();
+        if (mbcnt > 0) {
+          IOWrapperSizeT base = chunk_base(r, req.global_id);
+          if (srcfile.Read_Reals_at(mbptr.data(), mbcnt, base + rad_offset, true)
+              != mbcnt) {
+            std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                      << std::endl << "CC rad data not read correctly from rst file, "
+                      << "restart file is broken." << std::endl;
+            std::exit(EXIT_FAILURE);
+          }
+        }
+      }
+      srcfile.Close(true);
+    }
+    Kokkos::deep_copy(Kokkos::subview(prad->i0, std::make_pair(0,nmb), Kokkos::ALL,
+                      Kokkos::ALL, Kokkos::ALL, Kokkos::ALL), ccin);
+  }
+
+  if (pturb != nullptr && nforce > 0) {
+    Kokkos::realloc(ccin, nmb, nforce, nout3, nout2, nout1);
+    for (int r=0; r<meta.original_nranks; ++r) {
+      auto &reqs = requests[r];
+      if (reqs.empty()) continue;
+      IOWrapper srcfile;
+      srcfile.Open(rank_paths[r].c_str(), IOWrapper::FileMode::read, true);
+      for (const auto &req : reqs) {
+        auto mbptr = Kokkos::subview(ccin, req.local_index, Kokkos::ALL, Kokkos::ALL,
+                                     Kokkos::ALL, Kokkos::ALL);
+        int mbcnt = mbptr.size();
+        if (mbcnt > 0) {
+          IOWrapperSizeT base = chunk_base(r, req.global_id);
+          if (srcfile.Read_Reals_at(mbptr.data(), mbcnt, base + turb_offset, true)
+              != mbcnt) {
+            std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                      << std::endl << "CC turb data not read correctly from rst file, "
+                      << "restart file is broken." << std::endl;
+            std::exit(EXIT_FAILURE);
+          }
+        }
+      }
+      srcfile.Close(true);
+    }
+    Kokkos::deep_copy(Kokkos::subview(pturb->force, std::make_pair(0,nmb), Kokkos::ALL,
+                      Kokkos::ALL, Kokkos::ALL, Kokkos::ALL), ccin);
+  }
+
+  if (pz4c != nullptr && nz4c > 0) {
+    Kokkos::realloc(ccin, nmb, nz4c, nout3, nout2, nout1);
+    for (int r=0; r<meta.original_nranks; ++r) {
+      auto &reqs = requests[r];
+      if (reqs.empty()) continue;
+      IOWrapper srcfile;
+      srcfile.Open(rank_paths[r].c_str(), IOWrapper::FileMode::read, true);
+      for (const auto &req : reqs) {
+        auto mbptr = Kokkos::subview(ccin, req.local_index, Kokkos::ALL, Kokkos::ALL,
+                                     Kokkos::ALL, Kokkos::ALL);
+        int mbcnt = mbptr.size();
+        if (mbcnt > 0) {
+          IOWrapperSizeT base = chunk_base(r, req.global_id);
+          if (srcfile.Read_Reals_at(mbptr.data(), mbcnt, base + z4c_adm_offset, true)
+              != mbcnt) {
+            std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                      << std::endl << "CC z4c data not read correctly from rst file, "
+                      << "restart file is broken." << std::endl;
+            std::exit(EXIT_FAILURE);
+          }
+        }
+      }
+      srcfile.Close(true);
+    }
+    Kokkos::deep_copy(Kokkos::subview(pz4c->u0, std::make_pair(0,nmb), Kokkos::ALL,
+                      Kokkos::ALL, Kokkos::ALL, Kokkos::ALL), ccin);
+    pz4c->Z4cToADM(pm->pmb_pack);
+  } else if (padm != nullptr && nadm > 0) {
+    Kokkos::realloc(ccin, nmb, nadm, nout3, nout2, nout1);
+    for (int r=0; r<meta.original_nranks; ++r) {
+      auto &reqs = requests[r];
+      if (reqs.empty()) continue;
+      IOWrapper srcfile;
+      srcfile.Open(rank_paths[r].c_str(), IOWrapper::FileMode::read, true);
+      for (const auto &req : reqs) {
+        auto mbptr = Kokkos::subview(ccin, req.local_index, Kokkos::ALL, Kokkos::ALL,
+                                     Kokkos::ALL, Kokkos::ALL);
+        int mbcnt = mbptr.size();
+        if (mbcnt > 0) {
+          IOWrapperSizeT base = chunk_base(r, req.global_id);
+          if (srcfile.Read_Reals_at(mbptr.data(), mbcnt, base + z4c_adm_offset, true)
+              != mbcnt) {
+            std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                      << std::endl << "CC adm data not read correctly from rst file, "
+                      << "restart file is broken." << std::endl;
+            std::exit(EXIT_FAILURE);
+          }
+        }
+      }
+      srcfile.Close(true);
+    }
+    Kokkos::deep_copy(Kokkos::subview(padm->u_adm, std::make_pair(0,nmb), Kokkos::ALL,
+                      Kokkos::ALL, Kokkos::ALL, Kokkos::ALL), ccin);
+  }
+}
+
+}  // namespace
 
 //----------------------------------------------------------------------------------------
 // default constructor, calls pgen function.
@@ -297,24 +635,29 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resf
     exit(EXIT_FAILURE);
   }
 
-  // read CC data into host array
-  int mygids = pm->gids_eachrank[global_variable::my_rank];
-  IOWrapperSizeT offset_myrank = headeroffset;
-  if (!single_file_per_rank) {
-    offset_myrank += data_size_ * pm->gids_eachrank[global_variable::my_rank];
-  }
-  IOWrapperSizeT myoffset = offset_myrank;
-
   HostArray5D<Real> ccin("rst-cc-in", 1, 1, 1, 1, 1);
   HostFaceFld4D<Real> fcin("rst-fc-in", 1, 1, 1, 1);
 
-  // calculate max/min number of MeshBlocks across all ranks
-  int noutmbs_max = pm->nmb_eachrank[0];
-  int noutmbs_min = pm->nmb_eachrank[0];
-  for (int i=0; i<(global_variable::nranks); ++i) {
-    noutmbs_max = std::max(noutmbs_max,pm->nmb_eachrank[i]);
-    noutmbs_min = std::min(noutmbs_min,pm->nmb_eachrank[i]);
-  }
+  if (single_file_per_rank) {
+    LoadSingleFileRestartData(pm, headeroffset, data_size_, nout1, nout2, nout3,
+                              nhydro, nmhd, nrad, nforce, nz4c, nadm,
+                              ccin, fcin);
+  } else {
+    // read CC data into host array
+    int mygids = pm->gids_eachrank[global_variable::my_rank];
+    IOWrapperSizeT offset_myrank = headeroffset;
+    if (!single_file_per_rank) {
+      offset_myrank += data_size_ * pm->gids_eachrank[global_variable::my_rank];
+    }
+    IOWrapperSizeT myoffset = offset_myrank;
+
+    // calculate max/min number of MeshBlocks across all ranks
+    int noutmbs_max = pm->nmb_eachrank[0];
+    int noutmbs_min = pm->nmb_eachrank[0];
+    for (int i=0; i<(global_variable::nranks); ++i) {
+      noutmbs_max = std::max(noutmbs_max,pm->nmb_eachrank[i]);
+      noutmbs_min = std::min(noutmbs_min,pm->nmb_eachrank[i]);
+    }
 
   if (phydro != nullptr) {
     Kokkos::realloc(ccin, nmb, nhydro, nout3, nout2, nout1);
@@ -655,6 +998,8 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resf
                       Kokkos::ALL, Kokkos::ALL, Kokkos::ALL), ccin);
     offset_myrank += nout1*nout2*nout3*nadm*sizeof(Real);   // adm u_adm
     myoffset = offset_myrank;
+  }
+
   }
 
   // call problem generator again to re-initialize data, fn ptrs, as needed

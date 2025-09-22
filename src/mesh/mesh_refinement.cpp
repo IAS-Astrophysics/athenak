@@ -1437,6 +1437,10 @@ void MeshRefinement::InitInterpWghts() {
 
 void MeshRefinement::RefineParticles() {
   auto pmbp = pmy_mesh->pmb_pack;
+  // Check if particles are enabled
+  if (pmbp->ppart == nullptr) {
+    return;
+  }
   int nmb = pmbp->nmb_thispack;
   auto &mbsize = pmbp->pmb->mb_size;
   auto gids = pmbp->gids;

@@ -59,6 +59,7 @@
 
 int main(int argc, char *argv[]) {
   std::string input_file, restart_file, run_dir;
+  std::string restart_base_dir, restart_file_name;
   bool iarg_flag = false;  // set to true if -i <file> argument is on cmdline
   bool marg_flag = false;  // set to true if -m        argument is on cmdline
   bool narg_flag = false;  // set to true if -n        argument is on cmdline
@@ -240,15 +241,24 @@ int main(int argc, char *argv[]) {
 
     // If single_file_per_rank is true, modify the path for the current rank
     if (single_file_per_rank) {
-        // Extract the base directory and file name
-        size_t last_slash = restart_file.rfind('/');
-        std::string base_dir = restart_file.substr(0, rank_pos);
-        std::string file_name = restart_file.substr(last_slash + 1);
+      size_t last_slash = restart_file.rfind('/');
+      restart_base_dir = restart_file.substr(0, rank_pos);
+      if (last_slash != std::string::npos && last_slash + 1 < restart_file.size()) {
+        restart_file_name = restart_file.substr(last_slash + 1);
+      } else {
+        restart_file_name = restart_file.substr(rank_pos);
+      }
 
-        // Construct the path for the current rank
-        char rank_dir[20];
-        std::snprintf(rank_dir, sizeof(rank_dir), "rank_%08d", global_variable::my_rank);
-        restart_file = base_dir + "/" + rank_dir + "/" + file_name;
+      char rank_dir[20];
+      std::snprintf(rank_dir, sizeof(rank_dir), "rank_%08d", 0);
+      if (!restart_base_dir.empty()) {
+        restart_file = restart_base_dir + "/" + rank_dir + "/" + restart_file_name;
+      } else {
+        restart_file = std::string(rank_dir) + "/" + restart_file_name;
+      }
+    } else {
+      restart_base_dir.clear();
+      restart_file_name = restart_file;
     }
 
     // Now use restart_file for opening the file
@@ -294,6 +304,7 @@ int main(int argc, char *argv[]) {
   if (!res_flag) {
     pmesh->BuildTreeFromScratch(pinput);
   } else {
+    pmesh->SetRestartFileInfo(restart_base_dir, restart_file_name, single_file_per_rank);
     pmesh->BuildTreeFromRestart(pinput, restartfile, single_file_per_rank);
   }
 

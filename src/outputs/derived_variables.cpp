@@ -53,6 +53,13 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
   int &i_dv = out_params.i_derived;
   int &n_dv = out_params.n_derived;
 
+  // ensure derived_var has sufficient capacity for current mesh state
+  if (derived_var.extent(0) < nmb || derived_var.extent(1) < n_dv ||
+      derived_var.extent(2) < n3  || derived_var.extent(3) < n2 ||
+      derived_var.extent(4) < n1) {
+    Kokkos::realloc(derived_var, nmb, n_dv, n3, n2, n1);
+  }
+
   // temperature = pressure / density
   if (name.compare("temperature") == 0) {
     if (derived_var.extent(4) <= 1)

@@ -324,7 +324,7 @@ void Mesh::BuildTreeFromRestart(ParameterInput *pin, IOWrapper &resfile,
 
   // following must be identical to calculation of headeroffset (excluding size of
   // ParameterInput data) in restart.cpp
-  IOWrapperSizeT headersize = 3*sizeof(int) + 2*sizeof(Real)
+  IOWrapperSizeT headersize = 4*sizeof(int) + 2*sizeof(Real)
     + sizeof(RegionSize) + 2*sizeof(RegionIndcs);
   char *headerdata = new char[headersize];
 
@@ -373,7 +373,15 @@ void Mesh::BuildTreeFromRestart(ParameterInput *pin, IOWrapper &resfile,
   std::memcpy(&dt, &(headerdata[hdos]), sizeof(Real));
   hdos += sizeof(Real);
   std::memcpy(&ncycle, &(headerdata[hdos]), sizeof(int));
+  hdos += sizeof(int);
+  std::memcpy(&(restart_meta.original_nranks), &(headerdata[hdos]), sizeof(int));
   delete [] headerdata;
+
+  if (restart_meta.original_nranks < 0) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+              << std::endl << "Number of ranks stored in restart file is invalid." << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
 
   // calculate the number of MeshBlocks at root level in each dir
   nmb_rootx1 = mesh_indcs.nx1/mb_indcs.nx1;
@@ -434,6 +442,68 @@ void Mesh::BuildTreeFromRestart(ParameterInput *pin, IOWrapper &resfile,
   }
   delete [] idlist;
   if (!adaptive) max_level = current_level;
+
+  restart_meta.rank_eachmb.assign(nmb_total, 0);
+  if (restart_meta.original_nranks > 0) {
+    restart_meta.gids_eachrank.assign(restart_meta.original_nranks, 0);
+    restart_meta.nmb_eachrank.assign(restart_meta.original_nranks, 0);
+  } else {
+    restart_meta.gids_eachrank.clear();
+    restart_meta.nmb_eachrank.clear();
+  }
+
+  if (global_variable::my_rank == 0 || single_file_per_rank) {
+    if (resfile.Read_bytes(restart_meta.rank_eachmb.data(), sizeof(int), nmb_total,
+                           single_file_per_rank)
+        != static_cast<unsigned int>(nmb_total)) {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                << std::endl << "MeshBlock rank list read from restart file is incorrect,"
+                << " restart file is broken." << std::endl;
+      std::exit(EXIT_FAILURE);
+    }
+  }
+#if MPI_PARALLEL_ENABLED
+  if (!single_file_per_rank) {
+    MPI_Bcast(restart_meta.rank_eachmb.data(), nmb_total*sizeof(int), MPI_CHAR, 0,
+              MPI_COMM_WORLD);
+  }
+#endif
+
+  if (restart_meta.original_nranks > 0) {
+    if (global_variable::my_rank == 0 || single_file_per_rank) {
+      if (resfile.Read_bytes(restart_meta.gids_eachrank.data(), sizeof(int),
+                             restart_meta.original_nranks, single_file_per_rank)
+          != static_cast<unsigned int>(restart_meta.original_nranks)) {
+        std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                  << std::endl << "Rank gid table read from restart file is incorrect,"
+                  << " restart file is broken." << std::endl;
+        std::exit(EXIT_FAILURE);
+      }
+    }
+#if MPI_PARALLEL_ENABLED
+    if (!single_file_per_rank) {
+      MPI_Bcast(restart_meta.gids_eachrank.data(),
+                restart_meta.original_nranks*sizeof(int), MPI_CHAR, 0, MPI_COMM_WORLD);
+    }
+#endif
+
+    if (global_variable::my_rank == 0 || single_file_per_rank) {
+      if (resfile.Read_bytes(restart_meta.nmb_eachrank.data(), sizeof(int),
+                             restart_meta.original_nranks, single_file_per_rank)
+          != static_cast<unsigned int>(restart_meta.original_nranks)) {
+        std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                  << std::endl << "Rank MeshBlock count read from restart file is incorrect,"
+                  << " restart file is broken." << std::endl;
+        std::exit(EXIT_FAILURE);
+      }
+    }
+#if MPI_PARALLEL_ENABLED
+    if (!single_file_per_rank) {
+      MPI_Bcast(restart_meta.nmb_eachrank.data(),
+                restart_meta.original_nranks*sizeof(int), MPI_CHAR, 0, MPI_COMM_WORLD);
+    }
+#endif
+  }
 
   // rebuild the MeshBlockTree
   ptree = std::make_unique<MeshBlockTree>(this);

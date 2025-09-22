@@ -1,15 +1,12 @@
-# Turbulence Driving Methods in AthenaK
+# Turbulence Driving in AthenaK
 
-This directory contains source term implementations for AthenaK, including turbulence driving methods. The turbulence driver (`turb_driver.hpp/cpp`) implements two distinct methods for driving turbulence in simulations:
-
-1. **Cartesian Fourier Driving** (standard method)
-2. **Spherical Fourier-Bessel (SFB) Driving** (new method)
+This directory contains source term implementations for AthenaK, including the turbulence driving method. The turbulence driver (`turb_driver.hpp/cpp`) implements Cartesian Fourier driving for simulating turbulence in computational domains.
 
 ## Cartesian Fourier Driving
 
 ### Mathematical Foundation
 
-The Cartesian method drives turbulence by applying a stochastic force field constructed from a superposition of plane waves:
+The turbulence driver applies a stochastic force field constructed from a superposition of plane waves:
 
 ```
 F(x,t) = ∑_k A_k(t) exp(i k·x)
@@ -42,73 +39,37 @@ where:
    - Precomputes sine/cosine values for efficiency
    - Uses global coordinates to ensure continuity across AMR boundaries
 
-## Spherical Fourier-Bessel (SFB) Driving
-
-### Mathematical Foundation
-
-The SFB method expands the force field in spherical harmonics and Bessel functions:
-
-```
-F(r,θ,φ,t) = ∑_{n,l,m} A_{nlm}(t) j_l(k_n r) Y_lm(θ,φ)
-```
-
-where:
-- `j_l` are spherical Bessel functions
-- `Y_lm` are spherical harmonics
-- `k_n` are discrete wavenumbers determined by boundary conditions
-- `n` is the radial mode index, `l` is the angular degree, `m` is the azimuthal order
-
-### Implementation Details
-
-1. **Basis Functions**:
-   - Radial: Spherical Bessel functions `j_l(k_n r)`
-   - Angular: Real spherical harmonics `Y_lm(θ,φ)`
-   - Wavenumbers from boundary conditions at `r_inner` and `r_outer`
-
-2. **Mode Selection**:
-   - Radial modes: `n_min ≤ n ≤ n_max`
-   - Angular modes: `l_min ≤ l ≤ l_max`, `|m| ≤ l`
-   - Total number of modes scales as O(n_max × l_max²)
-
-3. **Vector Field Construction**:
-   - Poloidal component: `F_pol = ∇ × (∇ × [Φ(r,θ,φ) r̂])`
-   - Toroidal component: `F_tor = ∇ × [Ψ(r,θ,φ) r̂]`
-   - Where Φ and Ψ are scalar potentials expanded in SFB basis
-
-4. **Key Features**:
-   - Naturally respects spherical geometry
-   - Can enforce boundary conditions at inner/outer radii
-   - Suitable for spherical shells and full spheres
-   - Automatically divergence-free when using vector spherical harmonics
-
 ## Configuration Parameters
 
 ### Common Parameters
-- `type`: "hydro" or "mhd" - determines which fluid variables to drive
+- `turb_flag`: 1=decaying turbulence, 2=continuously driven
 - `dedt`: Energy injection rate (energy/time/volume)
 - `tcorr`: Correlation time for amplitude evolution
-- `rseed`: Random seed for reproducibility
+- `rseed`: Random seed for reproducibility (-1 for time-based)
+- `sol_fraction`: Fraction of solenoidal modes (1.0 = incompressible)
 
-### Cartesian-Specific Parameters
+### Spectral Parameters
 - `nlow`, `nhigh`: Minimum and maximum |k| for mode selection
-- `min_kx`, `max_kx`: Range for k_x component (similarly for y,z)
+- `spect_form`: 1=parabolic spectrum, 2=power law
+- `kpeak`: Peak wavenumber for parabolic spectrum
+- `expo`: Power law exponent (if spect_form=2)
 
-### SFB-Specific Parameters
-- `r_inner`, `r_outer`: Inner and outer radii of driven region
-- `n_min`, `n_max`: Range of radial mode indices
-- `l_min`, `l_max`: Range of spherical harmonic degrees
-- `driving_pol`, `driving_tor`: Weights for poloidal/toroidal components
+### Spatial Windowing (optional)
+- `x_turb_scale_height`: Gaussian scale height in x-direction (-1 = no windowing)
+- `x_turb_center`: Center of Gaussian window in x-direction
+- (Similarly for y and z directions)
 
 ## Algorithm Flow
 
 1. **Initialization**:
    - Select modes based on configuration
-   - Precompute basis functions (sin/cos for Cartesian, Bessel/harmonics for SFB)
+   - Precompute basis functions (sin/cos arrays)
    - Initialize random amplitudes
 
 2. **Update** (every `dt_turb_update`):
-   - Evolve amplitudes using OU process
+   - Evolve amplitudes using Ornstein-Uhlenbeck process
    - Ensure desired power spectrum
+   - Remove net momentum to maintain momentum conservation
 
 3. **Force Application** (every timestep):
    - Compute force field at each cell center
@@ -117,20 +78,24 @@ where:
 
 ## AMR Considerations
 
-Both methods handle Adaptive Mesh Refinement (AMR) by:
+The turbulence driver handles Adaptive Mesh Refinement (AMR) by:
+- **Preserving mode amplitudes** during mesh refinement (critical!)
 - Using global coordinates for basis function evaluation
 - Ensuring phase continuity across refinement boundaries
 - Computing forces independently on each MeshBlock using global position
+- Never resetting the turbulence state during AMR events
+
+The key insight is that AMR is a numerical change, not a physical event. The Ornstein-Uhlenbeck process must continue smoothly through refinement.
 
 ## Performance Notes
 
-- Cartesian method: O(N_cells × N_modes) per update
-- SFB method: O(N_cells × N_modes) but with more expensive basis functions
-- Both methods benefit from precomputation and vectorization
+- Computational cost: O(N_cells × N_modes) per update
 - Memory usage scales with number of modes
+- Benefits from precomputation and vectorization
+- Sine/cosine values are cached for efficiency
 
 ## References
 
 - Cartesian driving: Stone et al. (1998), Mac Low (1999)
-- SFB driving: Inspired by geophysical turbulence studies and stellar convection simulations
-- Implementation follows Schmidt et al. (2009) for stochastic forcing
+- Ornstein-Uhlenbeck process: Uhlenbeck & Ornstein (1930), Phys. Rev. 36, 823
+- AMR with turbulence: Schmidt et al. (2009), A&A 494, 127

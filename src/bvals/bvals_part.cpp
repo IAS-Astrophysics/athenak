@@ -80,7 +80,6 @@ TaskStatus ParticlesBoundaryValues::SetNewPrtclGID() {
   auto &pdestroyl = destroylist;
   bool &multi_d = pmy_part->pmy_pack->pmesh->multi_d;
   bool &three_d = pmy_part->pmy_pack->pmesh->three_d;
-  auto par_type = pmy_part->particle_type;
   auto &mb_bcs = pmy_part->pmy_pack->pmb->mb_bcs;
 
   // Create device-side counter
