@@ -191,6 +191,8 @@ void HLLD_DYNGR(TeamMember_t const &member,
       Real bsq_hll = ((b_int[0]*b_int[0] + b_int[1]*b_int[1] + b_int[2]*b_int[2]) +
                       Bu_hll*Bu_hll)/Wsq_hll;
       Real ptot_hll = prim_hll[PPR] + 0.5*bsq_hll;
+      /*Real ptot_hll = (lambda_r*(prim_l[PPR] + 0.5*bsq_l) -
+                       lambda_l*(prim_r[PPR] + 0.5*bsq_r))*qb;*/
       Real ptot;
       if (b_int[ibx]*b_int[ibx]/ptot_hll < 0.1) {
         // If the flow is not strongly magnetized, we can initialize it assuming Bx = 0,
