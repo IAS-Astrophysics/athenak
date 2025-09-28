@@ -53,7 +53,8 @@ Z4c_AMR::Z4c_AMR(ParameterInput *pin) {
       break;
     }
   }
-  max_ref_lev = pin->GetOrAddInteger("z4c_amr","max_ref_lev",10);
+  int max_level = pin->GetOrAddInteger("mesh_refinement", "num_levels", 1);
+  max_ref_lev = pin->GetOrAddInteger("z4c_amr","max_ref_lev",max_level);
 }
 
 // 1: refines, -1: de-refines, 0: does nothing
