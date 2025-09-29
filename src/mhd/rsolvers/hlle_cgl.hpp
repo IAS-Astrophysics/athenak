@@ -36,6 +36,7 @@ void HLLE_CGL(TeamMember_t const &member, const EOS_Data &eos,
   Real gm1 = eos.gamma - 1.0;
   Real igm1 = 1.0/gm1;
   Real iso_cs = eos.iso_cs;
+  bool passive = true;
 
   par_for_inner(member, il, iu, [&](const int i) {
     //--- Step 1.  Create local references for L/R states (helps compiler vectorize)
@@ -54,8 +55,8 @@ void HLLE_CGL(TeamMember_t const &member, const EOS_Data &eos,
     Real &wr_iby = br(iby,i);
     Real &wr_ibz = br(ibz,i);
 
-    Real wl_ipr, wr_ipr;
-    if (eos.is_ideal) {
+    Real wl_ipr, wr_ipr; //this will be replaced with simply calling the wr/l(IPR) and wr/l(IPP) since those are the new primitives
+    if (!(passive)) {
       wl_ipr = eos.IdealGasPressure(wl(IEN,i));
       wr_ipr = eos.IdealGasPressure(wr(IEN,i));
     }
@@ -83,7 +84,7 @@ void HLLE_CGL(TeamMember_t const &member, const EOS_Data &eos,
     Real pbl = 0.5*(bxi*bxi + SQR(wl_iby) + SQR(wl_ibz));
     Real pbr = 0.5*(bxi*bxi + SQR(wr_iby) + SQR(wr_ibz));
     Real el,er,hroe,cl,cr;
-    if (eos.is_ideal) {
+    if (!(passive)) {
       el = wl_ipr*igm1 + 0.5*wl_idn*(SQR(wl_ivx)+SQR(wl_ivy)+SQR(wl_ivz)) + pbl;
       er = wr_ipr*igm1 + 0.5*wr_idn*(SQR(wr_ivx)+SQR(wr_ivy)+SQR(wr_ivz)) + pbr;
       hroe = ((el + wl_ipr + pbl)/sqrtdl + (er + wr_ipr + pbr)/sqrtdr)*isdlpdr;
@@ -101,7 +102,7 @@ void HLLE_CGL(TeamMember_t const &member, const EOS_Data &eos,
     Real btsq = SQR(wroe_iby) + SQR(wroe_ibz);
     Real vaxsq = bxi*bxi/wroe_idn;
     Real bt_starsq, twid_asq;
-    if (eos.is_ideal) {
+    if (!(passive)) {
       bt_starsq = (gm1 - (gm1 - 1.0)*y)*btsq;
       Real hp = hroe - (vaxsq + btsq/wroe_idn);
       Real vsq = SQR(wroe_ivx) + SQR(wroe_ivy) + SQR(wroe_ivz);

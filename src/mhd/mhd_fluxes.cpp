@@ -134,7 +134,7 @@ void MHD::CalculateFluxes(Driver *pdriver, int stage) {
     } else if constexpr (rsolver_method_ == MHD_RSolver::hlle) {
       HLLE(member,eos,indcs,size,coord,m,k,j,il,iu,IVX,wl,wr,bl,br,bx,flx1,e31,e21);
     } else if constexpr (rsolver_method_ == MHD_RSolver::hlle_cgl) {
-      HLLE_CGL(member,eos,indcs,size,coord,m,k,j,il,iu,IVX,wl,wr,bl,br,bx,flx1,e31,e21);
+      HLLE_CGL(member,eos,indcs,size,coord,m,k,j,il,iu,IVX,wl,wr,bl,br,bx,flx1,e31,e21); //start out only with piecewise linear recon, then figure out floors
     } else if constexpr (rsolver_method_ == MHD_RSolver::hlld) {
       HLLD(member,eos,indcs,size,coord,m,k,j,il,iu,IVX,wl,wr,bl,br,bx,flx1,e31,e21);
     } else if constexpr (rsolver_method_ == MHD_RSolver::llf_sr) {
