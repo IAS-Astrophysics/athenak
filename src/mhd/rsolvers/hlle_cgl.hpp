@@ -36,7 +36,6 @@ void HLLE_CGL(TeamMember_t const &member, const EOS_Data &eos,
   Real gm1 = eos.gamma - 1.0;
   Real igm1 = 1.0/gm1;
   Real iso_cs = eos.iso_cs;
-  bool passive = true;
 
   par_for_inner(member, il, iu, [&](const int i) {
     //--- Step 1.  Create local references for L/R states (helps compiler vectorize)
@@ -55,11 +54,11 @@ void HLLE_CGL(TeamMember_t const &member, const EOS_Data &eos,
     Real &wr_iby = br(iby,i);
     Real &wr_ibz = br(ibz,i);
 
-    Real wl_ipr, wr_ipr; //this will be replaced with simply calling the wr/l(IPR) and wr/l(IPP) since those are the new primitives
-    if (!(passive)) {
-      wl_ipr = eos.IdealGasPressure(wl(IEN,i));
-      wr_ipr = eos.IdealGasPressure(wr(IEN,i));
-    }
+    Real wl_ipr, wr_ipr; //this will be replaced with simply recalling the wr/l(IPR) and wr/l(IPP) since those are the new primitives, don't change yet
+    //if (eos.is_ideal) {
+    wl_ipr = eos.IdealGasPressure(wl(IEN,i));
+    wr_ipr = eos.IdealGasPressure(wr(IEN,i));
+    //}
 
     Real bxi = bx(m,k,j,i);
 
@@ -84,13 +83,15 @@ void HLLE_CGL(TeamMember_t const &member, const EOS_Data &eos,
     Real pbl = 0.5*(bxi*bxi + SQR(wl_iby) + SQR(wl_ibz));
     Real pbr = 0.5*(bxi*bxi + SQR(wr_iby) + SQR(wr_ibz));
     Real el,er,hroe,cl,cr;
-    if (!(passive)) {
+    if (!(eos.passive)) {
       el = wl_ipr*igm1 + 0.5*wl_idn*(SQR(wl_ivx)+SQR(wl_ivy)+SQR(wl_ivz)) + pbl;
       er = wr_ipr*igm1 + 0.5*wr_idn*(SQR(wr_ivx)+SQR(wr_ivy)+SQR(wr_ivz)) + pbr;
       hroe = ((el + wl_ipr + pbl)/sqrtdl + (er + wr_ipr + pbr)/sqrtdr)*isdlpdr;
       cl = eos.IdealMHDFastSpeed(wl_idn, wl_ipr, bxi, wl_iby, wl_ibz);
       cr = eos.IdealMHDFastSpeed(wr_idn, wr_ipr, bxi, wr_iby, wr_ibz);
     } else {
+      el = wl_ipr*igm1 + 0.5*wl_idn*(SQR(wl_ivx)+SQR(wl_ivy)+SQR(wl_ivz)) + pbl;
+      er = wr_ipr*igm1 + 0.5*wr_idn*(SQR(wr_ivx)+SQR(wr_ivy)+SQR(wr_ivz)) + pbr;
       cl = eos.IdealMHDFastSpeed(wl_idn, bxi, wl_iby, wl_ibz);
       cr = eos.IdealMHDFastSpeed(wr_idn, bxi, wr_iby, wr_ibz);
     }
@@ -102,7 +103,7 @@ void HLLE_CGL(TeamMember_t const &member, const EOS_Data &eos,
     Real btsq = SQR(wroe_iby) + SQR(wroe_ibz);
     Real vaxsq = bxi*bxi/wroe_idn;
     Real bt_starsq, twid_asq;
-    if (!(passive)) {
+    if (!(eos.passive)) {
       bt_starsq = (gm1 - (gm1 - 1.0)*y)*btsq;
       Real hp = hroe - (vaxsq + btsq/wroe_idn);
       Real vsq = SQR(wroe_ivx) + SQR(wroe_ivy) + SQR(wroe_ivz);
@@ -146,7 +147,7 @@ void HLLE_CGL(TeamMember_t const &member, const EOS_Data &eos,
     fl.mz = wl_idn*wl_ivz*vxl - bxi*wl_ibz;
     fr.mz = wr_idn*wr_ivz*vxr - bxi*wr_ibz;
 
-    if (eos.is_ideal) {
+    if (!(eos.passive)) {
       fl.mx += wl_ipr;
       fr.mx += wr_ipr;
       fl.e   = el*vxl + wl_ivx*(wl_ipr + pbl - bxi*bxi);
@@ -156,6 +157,10 @@ void HLLE_CGL(TeamMember_t const &member, const EOS_Data &eos,
     } else {
       fl.mx += (iso_cs*iso_cs)*wl_idn;
       fr.mx += (iso_cs*iso_cs)*wr_idn;
+      fl.e   = el*vxl + wl_ivx*(wl_ipr + pbl - bxi*bxi); //calculate energy fluxes anyway for passive evolution
+      fr.e   = er*vxr + wr_ivx*(wr_ipr + pbr - bxi*bxi);
+      fl.e  -= bxi*(wl_iby*wl_ivy + wl_ibz*wl_ivz);
+      fr.e  -= bxi*(wr_iby*wr_ivy + wr_ibz*wr_ivz);
     }
 
     fl.by = wl_iby*vxl - bxi*wl_ivy;
@@ -173,8 +178,8 @@ void HLLE_CGL(TeamMember_t const &member, const EOS_Data &eos,
     flx(m,ivx,k,j,i) = 0.5*(fl.mx + fr.mx) + (fl.mx - fr.mx)*tmp;
     flx(m,ivy,k,j,i) = 0.5*(fl.my + fr.my) + (fl.my - fr.my)*tmp;
     flx(m,ivz,k,j,i) = 0.5*(fl.mz + fr.mz) + (fl.mz - fr.mz)*tmp;
-    if (eos.is_ideal) flx(m,IEN,k,j,i) = 0.5*(fl.e + fr.e ) + (fl.e - fr.e)*tmp;
-    //need fluc for mu variable
+    flx(m,IEN,k,j,i) = 0.5*(fl.e + fr.e ) + (fl.e - fr.e)*tmp; //always apply pressure flux, passive or otherwise
+    flx(m,IMU,k,j,i) = 0.0;
     ey(m,k,j,i) = -0.5*(fl.by + fr.by) - (fl.by - fr.by)*tmp;
     ez(m,k,j,i) =  0.5*(fl.bz + fr.bz) + (fl.bz - fr.bz)*tmp;
   });

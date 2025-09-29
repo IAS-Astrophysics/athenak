@@ -20,7 +20,15 @@ CGLMHD::CGLMHD(MeshBlockPack *pp, ParameterInput *pin) :
   eos_data.is_ideal = true;
   eos_data.is_cgl = true;
   eos_data.gamma = pin->GetReal("mhd","gamma");
-  eos_data.iso_cs = 0.0;
+  std::string passive_flag = pin->GetString("mhd","passive");  // passive evolution for CGL
+  if (passive_flag.compare("true") == 0) {
+    eos_data.passive = true;
+    eos_data.iso_cs = pin->GetReal("mhd","iso_sound_speed");
+    std::cout << "Passive evolution turned on" << std::endl;
+  } else {
+    eos_data.passive = false;
+    eos_data.iso_cs = 0.0;
+  }
   eos_data.use_e = true;  // ideal gas EOS always uses internal energy
   eos_data.use_t = false;
 }

@@ -262,7 +262,7 @@ void HistoryOutput::LoadMHDHistoryData(HistoryData *pdata, Mesh *pm) {
   // set number of and names of history variables for mhd
   if (eos_data.is_cgl) {
     pdata->nhist = 12;
-    std::cout << "writing out history data for cgl" << std::endl;
+    //std::cout << "writing out history data for cgl" << std::endl;
   } else if (eos_data.is_ideal && !(eos_data.is_cgl)) {
     pdata->nhist = 11;
   } else {
