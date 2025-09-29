@@ -357,7 +357,6 @@ bool InverseMatrix(const int N, const ScrArray2D<Real> &A, ScrArray2D<Real> &aug
 KOKKOS_INLINE_FUNCTION
 bool SolveTriLinearSystem(const int N, const ScrArray2D<Real> &A, const ScrArray2D<Real> &ir_cm,
                           const int &iang, const Real &n0_cm, ScrArray2D<Real> &ir_cm_star) {
-
   if (n0_cm >= 1) {
     // lower-triangular, forward substitution
     for (int i=0; i < N; ++i) {
@@ -1399,7 +1398,7 @@ int SolCompTempEst(const Real &c5, const Real &c4, const Real &c0, const Real &x
   int num_itr_max = 25;
   Real tol = 1e-12;
   Real f_max = 1e12, f_min = 1e-12; // these are the limits for the temperature changing factor
-  Real fac_scan = 10;
+  Real fac_scan = 2;
 
   Real f, df;
   FuncCompTempEst(x0, c5, c4, c0, f, df);
@@ -1427,6 +1426,7 @@ int SolCompTempEst(const Real &c5, const Real &c4, const Real &c0, const Real &x
 
   // start Newton iterations at midpoint
   x = 0.5 * (xl + xr);
+  // x = x0;
   FuncCompTempEst(x, c5, c4, c0, f, df);
 
   // find solution
@@ -1468,7 +1468,7 @@ int SolCompTempEst(const Real &c5, const Real &c4, const Real &c0, const Real &x
 
     // convergence check
     x_sol = xnext;
-    if (fabs(xnext - x) <= tol * (1.0 + fabs(xnext)) || fabs(fnext) <= tol) {
+    if (fabs(xr - xl) <= tol * (1.0 + fabs(x_sol)) || fabs(fnext) <= tol) {
         return 0; // success
     } // endif
 
@@ -1512,7 +1512,7 @@ bool SolveTridiag(const ScrArray1D<Real> &komp_mat_d, const ScrArray1D<Real> &ko
                   const ScrArray1D<Real> &komp_mat_u, const ScrArray1D<Real> &komp_coeff,
                   const int &nfrq, ScrArray1D<Real> &u_tmp, ScrArray1D<Real> &rhs_tmp,
                   ScrArray1D<Real> &ret) {
-  
+
   if (nfrq <= 0) return false; // invalid tridiagonal system
   const Real eps = 1e-14;
 
@@ -1521,19 +1521,27 @@ bool SolveTridiag(const ScrArray1D<Real> &komp_mat_d, const ScrArray1D<Real> &ko
     rhs_tmp(ifr) = 0.0;
   }
 
+  // rescaling factor
+  Real fac_scale = komp_mat_c(0);
+  for (int ifr=0; ifr<nfrq; ++ifr) {
+    fac_scale = fmin(fac_scale, fabs(komp_mat_c(ifr)));
+  }
+  fac_scale = 1./fac_scale;
+  if (!(isfinite(fac_scale))) fac_scale = 1.;
+
   // ifr=0
-  Real denom = komp_mat_c(0);
+  Real denom = fac_scale*komp_mat_c(0);
   if (std::fabs(denom) < eps) return false;
 
-  u_tmp(0)   = (nfrq > 1) ? (komp_mat_u(0)/denom) : Real(0);
-  rhs_tmp(0) = komp_coeff(0)/denom;
+  u_tmp(0)   = (nfrq > 1) ? (fac_scale*komp_mat_u(0)/denom) : Real(0);
+  rhs_tmp(0) = fac_scale*komp_coeff(0)/denom;
 
   // forward sweep
   for (int ifr=1; ifr<nfrq; ++ifr) {
-      denom = komp_mat_c(ifr) - komp_mat_d(ifr) * u_tmp(ifr - 1);
+      denom = fac_scale*komp_mat_c(ifr) - fac_scale*komp_mat_d(ifr) * u_tmp(ifr - 1);
       if (std::fabs(denom) < eps) return false;
-      u_tmp(ifr)   = (ifr < nfrq-1) ? (komp_mat_u(ifr)/denom) : 0;
-      rhs_tmp(ifr) = (komp_coeff(ifr) - komp_mat_d(ifr)*rhs_tmp(ifr-1)) / denom;
+      u_tmp(ifr)   = (ifr < nfrq-1) ? (fac_scale*komp_mat_u(ifr)/denom) : 0;
+      rhs_tmp(ifr) = (fac_scale*komp_coeff(ifr) - fac_scale*komp_mat_d(ifr)*rhs_tmp(ifr-1)) / denom;
   }
 
   // back substitution
@@ -1544,8 +1552,6 @@ bool SolveTridiag(const ScrArray1D<Real> &komp_mat_d, const ScrArray1D<Real> &ko
 
   return true;
 }
-
-
 
 
 
