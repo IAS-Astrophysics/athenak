@@ -11,6 +11,7 @@
 #include <fstream>
 #include <iomanip>
 #include <iostream>
+#include <limits>
 #include <sstream>
 #include <string>
 
@@ -47,6 +48,18 @@ CompactObjectTracker::CompactObjectTracker(Mesh *pmesh, ParameterInput *pin, int
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line "
               << __LINE__ << std::endl;
     std::cout << "Unknown compact object type: " << cotype << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+
+  std::string trmode = pin->GetOrAddString("z4c", "tracker_mode", "ode");
+  if (trmode == "ode") {
+    mode = ODE;
+  } else if (trmode == "walk") {
+    mode = Walk;
+  } else {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line "
+              << __LINE__ << std::endl;
+    std::cout << "Unknown tracker mode: " << trmode << std::endl;
     std::exit(EXIT_FAILURE);
   }
 
@@ -125,10 +138,72 @@ void CompactObjectTracker::InterpolateVelocity(MeshBlockPack *pmbp) {
 }
 
 //----------------------------------------------------------------------------------------
-void CompactObjectTracker::EvolveTracker() {
+void CompactObjectTracker::EvolveTracker(MeshBlockPack *pmbp) {
   if (owns_compact_object) {
-    for (int a = 0; a < NDIM; ++a) {
-      pos[a] += pmesh->dt * vel[a];
+    if (mode == ODE) {
+      for (int a = 0; a < NDIM; ++a) {
+        pos[a] += pmesh->dt * vel[a];
+      }
+    } else {
+      auto &padm = pmbp->padm;
+      auto &size = pmbp->pmb->mb_size;
+      auto &indcs = pmbp->pmesh->mb_indcs;
+
+      int nmb1 = pmbp->nmb_thispack;
+      for (int m = 0; m < nmb1; ++m) {
+        // extract MeshBlock bounds
+        Real x1min = size.h_view(m).x1min;
+        Real x1max = size.h_view(m).x1max;
+        Real x2min = size.h_view(m).x2min;
+        Real x2max = size.h_view(m).x2max;
+        Real x3min = size.h_view(m).x3min;
+        Real x3max = size.h_view(m).x3max;
+
+        // extract MeshBlock grid cell spacings
+        Real dx1 = size.h_view(m).dx1;
+        Real dx2 = size.h_view(m).dx2;
+        Real dx3 = size.h_view(m).dx3;
+
+        // check if the compact object is in the current mesh block
+        if ((pos[0] >= x1min && pos[0] < x1max) &&
+            (pos[1] >= x2min && pos[1] < x2max) &&
+            (pos[2] >= x3min && pos[2] < x3max)) {
+          int ic = std::round((pos[0] - (x1min + 0.5 * dx1)) / dx1);
+          int jc = std::round((pos[1] - (x2min + 0.5 * dx2)) / dx2);
+          int kc = std::round((pos[2] - (x3min + 0.5 * dx3)) / dx3);
+
+          DualArray3D<Real> alp("lapse", 3, 3, 3);
+          auto& adm = padm->adm;
+          par_for("Copy lapse neighborhood", DevExeSpace(), 0, 2, 0, 2, 0, 2,
+          KOKKOS_LAMBDA(const int k, const int j, const int i){
+            alp.d_view(k,j,i) = adm.alpha(m,kc + indcs.ks + k - 1,
+                                            jc + indcs.js + j - 1,
+                                            ic + indcs.is + i - 1);
+          });
+
+          alp.template modify<DevMemSpace>();
+          alp.template sync<typename DualArray3D<Real>::host_mirror_space>();
+
+          Real alp_min = std::numeric_limits<Real>::max();
+          for (int k = 0; k < 3; ++k) {
+            for (int j = 0; j < 3; ++j) {
+              for (int i = 0; i < 3; ++i) {
+                if (alp.h_view(k, j, i) < alp_min) {
+                  alp_min = alp.h_view(k, j, i);
+                  pos[0] = CellCenterX(ic + (i - 1), indcs.nx1,
+                                       x1min, x1max);
+                  pos[1] = CellCenterX(jc + (j - 1), indcs.nx2,
+                                       x2min, x2max);
+                  pos[2] = CellCenterX(kc + (k - 1), indcs.nx3,
+                                       x3min, x3max);
+                }
+              }
+            }
+          }
+
+          break;
+        }
+      }
     }
 #if !(MPI_PARALLEL_ENABLED)
   } else {
