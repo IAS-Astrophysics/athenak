@@ -65,6 +65,7 @@ void SetupTOV(ParameterInput *pin, Mesh* pmy_mesh_) {
   //auto& u0_ = pmbp->pmhd->u0;
   auto& w0_ = pmbp->pmhd->w0;
   int& nvars_ = pmbp->pmhd->nmhd;
+  int& nscal_ = pmbp->pmhd->nscalars;
 
   // Capture variables for kernel
   auto &indcs = pmy_mesh_->mb_indcs;
@@ -144,7 +145,8 @@ void SetupTOV(ParameterInput *pin, Mesh* pmy_mesh_) {
     w0_(m,IVY,k,j,i) = vr*x2v/r;
     w0_(m,IVZ,k,j,i) = vr*x3v/r;
     auto &nvars = nvars_;
-    if (use_ye && pmbp->pmhd->nscalars>=1) {
+    auto &nscal = nscal_;
+    if (use_ye && nscal >= 1) {
       w0_(m,nvars,k,j,i) = ye;
     }
 
