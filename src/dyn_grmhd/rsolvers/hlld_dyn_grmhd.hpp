@@ -180,7 +180,7 @@ void HLLD_DYNGR(TeamMember_t const &member,
       //----------------------------------------------------------------------------------
       // Initial guess for pressure
       // FIXME(JMF): Doing a C2P here is absolutely horrible. We need something better.
-      Real flat[NSPMETRIC] = {1.0, 0.0, 0.0, 1.0, 0.0, 1.0};
+      /*Real flat[NSPMETRIC] = {1.0, 0.0, 0.0, 1.0, 0.0, 1.0};
       Real prim_hll[NPRIM];
       eos.ps.ConToPrim(prim_hll, cons_int, b_int, flat, flat);
       Real Wsq_hll = prim_hll[IVX]*prim_hll[IVX] +
@@ -190,9 +190,16 @@ void HLLD_DYNGR(TeamMember_t const &member,
                     b_int[2]*prim_hll[IVZ];
       Real bsq_hll = ((b_int[0]*b_int[0] + b_int[1]*b_int[1] + b_int[2]*b_int[2]) +
                       Bu_hll*Bu_hll)/Wsq_hll;
-      Real ptot_hll = prim_hll[PPR] + 0.5*bsq_hll;
-      /*Real ptot_hll = (lambda_r*(prim_l[PPR] + 0.5*bsq_l) -
-                       lambda_l*(prim_r[PPR] + 0.5*bsq_r))*qb;*/
+      Real ptot_hll = prim_hll[PPR] + 0.5*bsq_hll;*/
+      // Alternative guess--this is simply a weighted average based on the left and right
+      // wave speeds, but the justification for doing so is not very different from using
+      // the HLLE variables, and it's considerably cheaper. In either case, P_tot in HLLD
+      // is not actually a physical variable (see Mignone's HLLC paper for a discussion on
+      // this), so there is no guarantee that P_tot is positive, let alone close to an HLL
+      // average. The weighted average, therefore, is not necessarily *less* accurate than
+      // an HLL average, and it avoids an additional C2P operation.
+      Real ptot_hll = (lambda_r*(prim_l[PPR] + 0.5*bsq_l) -
+                       lambda_l*(prim_r[PPR] + 0.5*bsq_r))*qb;
       Real ptot;
       if (b_int[ibx]*b_int[ibx]/ptot_hll < 0.1) {
         // If the flow is not strongly magnetized, we can initialize it assuming Bx = 0,
