@@ -93,10 +93,11 @@ void SingleC2P_CGLMHD(MHDCons1D &u, const EOS_Data &eos,
                         HydPrim1D &w,
                         bool &dfloor_used, bool &efloor_used, bool &tfloor_used) {
   const Real &dfloor_ = eos.dfloor;
-  Real efloor = eos.pfloor/(eos.gamma - 1.0);
+  Real efloor = 1.5*eos.pfloor;
+  Real pfloor = eos.pfloor;
   Real tfloor = eos.tfloor;
   Real sfloor = eos.sfloor;
-  Real gm1 = eos.gamma - 1.0;
+  Real gm1 = 0.6666666666666667;
 
   // apply density floor, without changing momentum or energy
   if (u.d < dfloor_) {
@@ -112,30 +113,58 @@ void SingleC2P_CGLMHD(MHDCons1D &u, const EOS_Data &eos,
   w.vz = di*u.mz;
 
   // set internal energy, apply floor, correcting total energy
+  //Real e_k = 0.5*di*(SQR(u.mx) + SQR(u.my) + SQR(u.mz));
+  //Real e_m = 0.5*(SQR(u.bx) + SQR(u.by) + SQR(u.bz));
+  //w.e = (u.e - e_k - e_m);
+  //if (w.e < efloor) {
+  //  w.e = efloor;
+  // u.e = efloor + e_k + e_m;
+  //  efloor_used = true;
+  //}
+  // apply temperature floor
+  //if (gm1*w.e*di < tfloor) {
+  //  w.e = w.d*tfloor/gm1;
+  //  u.e = w.e + e_k + e_m;
+  //  tfloor_used =true;
+  //}
+  // apply entropy floor
+  //Real spe_over_eps = gm1/pow(w.d, gm1);
+  //Real spe = spe_over_eps*w.e*di;
+  //if (spe <= sfloor) {
+  //  w.e = w.d*sfloor/spe_over_eps;
+  //  efloor_used = true;
+  //}
+  
+  // set pressures, apply floors, correcting total energy
+  Real bsqr = SQR(u.bx) + SQR(u.by) + SQR(u.bz);
+  Real bmag = sqrt(bsqr);
   Real e_k = 0.5*di*(SQR(u.mx) + SQR(u.my) + SQR(u.mz));
-  Real e_m = 0.5*(SQR(u.bx) + SQR(u.by) + SQR(u.bz));
-  w.e = (u.e - e_k - e_m);
-  if (w.e < efloor) {
-    w.e = efloor;
-    u.e = efloor + e_k + e_m;
+  Real e_m = 0.5*bsqr;
+  Real eint = (u.e - e_k - e_m);
+  Real bcube_dsq_exp = bmag*bsqr*SQR(di) * exp(u.mu*di);
+  
+  //DO NOT FORGET TO ADD B FLOORS LATER
+  w.e = (u.e - e_k - e_m) / (0.5 + bcube_dsq_exp);
+  w.pp = w.e * bcube_dsq_exp;
+  
+  //use pfloor for pressures
+  if (w.e < pfloor && w.pp < pfloor) {
+    w.e = pfloor;
+    w.pp = pfloor;
+    u.e = 1.5*pfloor+ e_k + e_m;
     efloor_used = true;
   }
-  // apply temperature floor
-  if (gm1*w.e*di < tfloor) {
-    w.e = w.d*tfloor/gm1;
-    u.e = w.e + e_k + e_m;
-    tfloor_used =true;
+  if (w.e < pfloor) {
+    w.e = pfloor;
+    u.e = 0.5*pfloor + w.pp + e_k + e_m;
+    efloor_used = true;
   }
-  // apply entropy floor
-  Real spe_over_eps = gm1/pow(w.d, gm1);
-  Real spe = spe_over_eps*w.e*di;
-  if (spe <= sfloor) {
-    w.e = w.d*sfloor/spe_over_eps;
+  if (w.pp < pfloor) {
+    w.pp = pfloor;
+    u.e = w.e + pfloor + e_k + e_m;
     efloor_used = true;
   }
   
-  //compute perpendicular pressure (nothing for now) 
-  w.pp = u.mu;
   return;
 }
 
@@ -147,13 +176,20 @@ void SingleC2P_CGLMHD(MHDCons1D &u, const EOS_Data &eos,
 
 KOKKOS_INLINE_FUNCTION
 void SingleP2C_CGLMHD(const MHDPrim1D &w, HydCons1D &u) {
+  Real bsqr = SQR(w.bx) + SQR(w.by) + SQR(w.bz);
+  Real bmag = sqrt(bsqr);
+
   u.d  = w.d;
   u.mx = w.d*w.vx;
   u.my = w.d*w.vy;
   u.mz = w.d*w.vz;
-  u.e  = w.e + 0.5*(w.d*(SQR(w.vx) + SQR(w.vy) + SQR(w.vz)) +
-                        (SQR(w.bx) + SQR(w.by) + SQR(w.bz)) );
-  u.mu = w.pp; //change later
+  //u.e  = w.e + 0.5*(w.d*(SQR(w.vx) + SQR(w.vy) + SQR(w.vz)) +
+  //                      (SQR(w.bx) + SQR(w.by) + SQR(w.bz)) );
+  //u.mu = w.pp;
+  
+  //DO NOT FORGET TO ADD IN FLOOR FOR B
+  u.e  = w.pp + 0.5*w.e + 0.5*(w.d*(SQR(w.vx) + SQR(w.vy) + SQR(w.vz)) + bsqr );
+  u.mu = w.d * log(w.pp / w.e * SQR(w.d)/(bmag*SQR(bmag)) ) ;
   return;
 }
 

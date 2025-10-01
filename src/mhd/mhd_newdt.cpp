@@ -120,26 +120,46 @@ TaskStatus MHD::NewTimeStep(Driver *pdriver, int stage) {
       // timestep in Newtonian MHD
       } else {
         Real &w_d = w0_(m,IDN,k,j,i);
+        Real &w_e = w0_(m,IEN,k,j,i); //pprl for cgl
+        Real &w_p = w0_(m,IPP,k,j,i); //pprp for cgl
         Real &w_bx = bcc0_(m,IBX,k,j,i);
         Real &w_by = bcc0_(m,IBY,k,j,i);
         Real &w_bz = bcc0_(m,IBZ,k,j,i);
         Real cf;
         Real p = eos.IdealGasPressure(w0_(m,IEN,k,j,i));
-        if (eos.is_ideal) {
+        if (eos.is_cgl) {
+          if (eos.passive) {
+            cf = eos.IdealMHDFastSpeed(w_d, w_bx, w_by, w_bz);
+          } else {
+            cf = eos.IdealMHDFastSpeed(w_d, w_e, w_p, w_bx, w_by, w_bz);
+          }
+        } else if (eos.is_ideal) {
           cf = eos.IdealMHDFastSpeed(w_d, p, w_bx, w_by, w_bz);
         } else {
           cf = eos.IdealMHDFastSpeed(w_d, w_bx, w_by, w_bz);
         }
         max_dv1 = fabs(w0_(m,IVX,k,j,i)) + cf;
 
-        if (eos.is_ideal) {
+        if (eos.is_cgl) {
+          if (eos.passive) {
+            cf = eos.IdealMHDFastSpeed(w_d, w_by, w_bz, w_bx);
+          } else {
+            cf = eos.IdealMHDFastSpeed(w_d, w_e, w_p, w_by, w_bz, w_bx);
+          }
+        } else if (eos.is_ideal) {
           cf = eos.IdealMHDFastSpeed(w_d, p, w_by, w_bz, w_bx);
         } else {
           cf = eos.IdealMHDFastSpeed(w_d, w_by, w_bz, w_bx);
         }
         max_dv2 = fabs(w0_(m,IVY,k,j,i)) + cf;
 
-        if (eos.is_ideal) {
+        if (eos.is_cgl) {
+          if (eos.passive) {
+            cf = eos.IdealMHDFastSpeed(w_d, w_bz, w_bx, w_by);
+          } else {
+            cf = eos.IdealMHDFastSpeed(w_d, w_e, w_p, w_bz, w_bx, w_by);
+          }
+        } else if (eos.is_ideal) {
           cf = eos.IdealMHDFastSpeed(w_d, p, w_bz, w_bx, w_by);
         } else {
           cf = eos.IdealMHDFastSpeed(w_d, w_bz, w_bx, w_by);

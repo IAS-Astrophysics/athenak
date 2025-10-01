@@ -105,14 +105,14 @@ void CGLMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &b,
         sumd++;
       }
       if (efloor_used) {
-        cons(m,IEN,k,j,i) = u.e;
+        cons(m,IEN,k,j,i) = u.e;  //make sure this is okay, even if only one hits the floor
+        cons(m,IMU,k,j,i) = u.mu;
         sume++;
       }
-      if (tfloor_used) {
-        cons(m,IEN,k,j,i) = u.e;
-        sumt++;
-      }
-      //add floor for mu variable here once you know it
+      //if (tfloor_used) {
+      //  cons(m,IEN,k,j,i) = u.e;
+      //  sumt++;
+      //}
       
       // store primitive state in 3D array
       prim(m,IDN,k,j,i) = w.d;

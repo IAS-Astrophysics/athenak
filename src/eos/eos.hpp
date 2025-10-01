@@ -68,6 +68,24 @@ struct EOS_Data {
     Real tmp = bx*bx + ct2 - asq;
     return sqrt(0.5*(qsq + sqrt(tmp*tmp + 4.0*asq*ct2))/d);
   }
+  
+  //NON-RELATIVISTIC CGL MHD: inlined fast magnetosonic speed function
+  KOKKOS_INLINE_FUNCTION
+  Real IdealMHDFastSpeed(const Real d, const Real pr, const Real pp,
+                         const Real bx, const Real by, const Real bz) const {
+    //Real asq = (iso_cs*iso_cs)*d;
+    //Real ct2 = by*by + bz*bz;
+    //Real qsq = bx*bx + ct2 + asq;
+    //Real tmp = bx*bx + ct2 - asq;
+    //return sqrt(0.5*(qsq + sqrt(tmp*tmp + 4.0*asq*ct2))/d);
+    
+    Real bx2 = bx*bx;
+    Real bprp2 = (by*by + bz*bz);
+    Real bhatx2 = bx2/(bx2+bprp2);
+    Real qsq = bx2 + bprp2 + 2*pp + (2.*pr - pp)*bhatx2;
+    return sqrt( 0.5*(qsq + sqrt(fabs(qsq*qsq + 4.*pp*pp*(1. - bhatx2)*bhatx2
+                    - 12.*pr*pp*bhatx2*(2.-bhatx2) + 12.*pr*pp*bhatx2*bhatx2 - 12.*bx2*pr )) /d ));
+  }  
 
   // SPECIAL RELATIVISTIC IDEAL GAS HYDRO: inlined maximal sound wave speeds function
   // Inputs:

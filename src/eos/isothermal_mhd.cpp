@@ -23,6 +23,7 @@ IsothermalMHD::IsothermalMHD(MeshBlockPack *pp, ParameterInput *pin) :
   eos_data.gamma = 0.0;
   eos_data.use_e = false;
   eos_data.use_t = false;
+  eos_data.passive = false;
 }
 
 //----------------------------------------------------------------------------------------

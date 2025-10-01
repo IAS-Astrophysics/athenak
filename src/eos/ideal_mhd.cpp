@@ -22,6 +22,7 @@ IdealMHD::IdealMHD(MeshBlockPack *pp, ParameterInput *pin) :
   eos_data.iso_cs = 0.0;
   eos_data.use_e = true;  // ideal gas EOS always uses internal energy
   eos_data.use_t = false;
+  eos_data.passive = false;
 }
 
 //----------------------------------------------------------------------------------------

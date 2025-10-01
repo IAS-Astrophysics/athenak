@@ -44,6 +44,8 @@ void HLLE_CGL(TeamMember_t const &member, const EOS_Data &eos,
     Real &wl_ivx = wl(ivx,i);
     Real &wl_ivy = wl(ivy,i);
     Real &wl_ivz = wl(ivz,i);
+    Real &wl_ipr = wl(IPR,i);
+    Real &wl_ipp = wl(IPP,i);
     Real &wl_iby = bl(iby,i);
     Real &wl_ibz = bl(ibz,i);
 
@@ -51,79 +53,98 @@ void HLLE_CGL(TeamMember_t const &member, const EOS_Data &eos,
     Real &wr_ivx = wr(ivx,i);
     Real &wr_ivy = wr(ivy,i);
     Real &wr_ivz = wr(ivz,i);
+    Real &wr_ipr = wr(IPR,i);
+    Real &wr_ipp = wr(IPP,i);
     Real &wr_iby = br(iby,i);
     Real &wr_ibz = br(ibz,i);
-
-    Real wl_ipr, wr_ipr; //this will be replaced with simply recalling the wr/l(IPR) and wr/l(IPP) since those are the new primitives, don't change yet
-    //if (eos.is_ideal) {
-    wl_ipr = eos.IdealGasPressure(wl(IEN,i));
-    wr_ipr = eos.IdealGasPressure(wr(IEN,i));
-    //}
-
+    
     Real bxi = bx(m,k,j,i);
+    
+    //get mu variable specifically for passive advection later DONT FORGET TO ADD IN B FLOOR IF STATEMENT
+    Real pbl = 0.5*(bxi*bxi + SQR(wl_iby) + SQR(wl_ibz));
+    Real pbr = 0.5*(bxi*bxi + SQR(wr_iby) + SQR(wr_ibz));
+    Real bmagl = sqrt(2.*pbl);
+    Real bmagr = sqrt(2.*pbr);
+    
+    // Firehose parameter
+    Real fhl = 1. + (wl_ipp - wl_ipr)/(2.*pbl);
+    Real fhr = 1. + (wr_ipp - wr_ipr)/(2.*pbr);
+    
+    Real mul = wl_idn * log(wl_ipp / wl_ipr * SQR(wl_idn)/(bmagl*SQR(bmagl)) );
+    Real mur = wr_idn * log(wr_ipp / wr_ipr * SQR(wr_idn)/(bmagr*SQR(bmagr)) );
+    
+    Real el = 0.5*wl_ipr + wl_ipp + 0.5*wl_idn*(SQR(wl_ivx)+SQR(wl_ivy)+SQR(wl_ivz)) + pbl;
+    Real er = 0.5*wr_ipr + wr_ipp + 0.5*wr_idn*(SQR(wr_ivx)+SQR(wr_ivy)+SQR(wr_ivz)) + pbr;
 
-    //--- Step 2. Compute Roe-averaged state
+    //--- Step 2. Apply floor to magnetic field if necessary
+    
+    
+    //--- Step 3. Compute fast magnetosonic speed in L,R states (MHD used Roe-averaged)
+    
+    Real cl = eos.IdealMHDFastSpeed(wl_idn, wl_ipr, wl_ipp, bxi, wl_iby, wl_ibz);
+    Real cr = eos.IdealMHDFastSpeed(wr_idn, wr_ipr, wr_ipp, bxi, wr_iby, wr_ibz);
 
-    Real sqrtdl = sqrt(wl_idn);
-    Real sqrtdr = sqrt(wr_idn);
-    Real isdlpdr = 1.0/(sqrtdl + sqrtdr);
+    //Real sqrtdl = sqrt(wl_idn);
+    //Real sqrtdr = sqrt(wr_idn);
+    //Real isdlpdr = 1.0/(sqrtdl + sqrtdr);
 
-    Real wroe_idn = sqrtdl*sqrtdr;
-    Real wroe_ivx = (sqrtdl*wl_ivx + sqrtdr*wr_ivx)*isdlpdr;
-    Real wroe_ivy = (sqrtdl*wl_ivy + sqrtdr*wr_ivy)*isdlpdr;
-    Real wroe_ivz = (sqrtdl*wl_ivz + sqrtdr*wr_ivz)*isdlpdr;
+    //Real wroe_idn = sqrtdl*sqrtdr;
+    //Real wroe_ivx = (sqrtdl*wl_ivx + sqrtdr*wr_ivx)*isdlpdr;
+    //Real wroe_ivy = (sqrtdl*wl_ivy + sqrtdr*wr_ivy)*isdlpdr;
+    //Real wroe_ivz = (sqrtdl*wl_ivz + sqrtdr*wr_ivz)*isdlpdr;
     // Note Roe average of magnetic field is different
-    Real wroe_iby = (sqrtdr*wl_iby + sqrtdl*wr_iby)*isdlpdr;
-    Real wroe_ibz = (sqrtdr*wl_ibz + sqrtdl*wr_ibz)*isdlpdr;
-    Real x = 0.5*(SQR(wl_iby-wr_iby) + SQR(wl_ibz-wr_ibz))/(SQR(sqrtdl+sqrtdr));
-    Real y = 0.5*(wl_idn + wr_idn)/wroe_idn;
+    //Real wroe_iby = (sqrtdr*wl_iby + sqrtdl*wr_iby)*isdlpdr;
+    //Real wroe_ibz = (sqrtdr*wl_ibz + sqrtdl*wr_ibz)*isdlpdr;
+    //Real x = 0.5*(SQR(wl_iby-wr_iby) + SQR(wl_ibz-wr_ibz))/(SQR(sqrtdl+sqrtdr));
+    //Real y = 0.5*(wl_idn + wr_idn)/wroe_idn;
 
     // Following Roe(1981), the enthalpy H=(E+P)/d is averaged for ideal gas EOS,
     // rather than E or P directly. sqrtdl*hl = sqrtdl*(el+pl)/dl = (el+pl)/sqrtdl
-    Real pbl = 0.5*(bxi*bxi + SQR(wl_iby) + SQR(wl_ibz));
-    Real pbr = 0.5*(bxi*bxi + SQR(wr_iby) + SQR(wr_ibz));
-    Real el,er,hroe,cl,cr;
-    if (!(eos.passive)) {
-      el = wl_ipr*igm1 + 0.5*wl_idn*(SQR(wl_ivx)+SQR(wl_ivy)+SQR(wl_ivz)) + pbl;
-      er = wr_ipr*igm1 + 0.5*wr_idn*(SQR(wr_ivx)+SQR(wr_ivy)+SQR(wr_ivz)) + pbr;
-      hroe = ((el + wl_ipr + pbl)/sqrtdl + (er + wr_ipr + pbr)/sqrtdr)*isdlpdr;
-      cl = eos.IdealMHDFastSpeed(wl_idn, wl_ipr, bxi, wl_iby, wl_ibz);
-      cr = eos.IdealMHDFastSpeed(wr_idn, wr_ipr, bxi, wr_iby, wr_ibz);
-    } else {
-      el = wl_ipr*igm1 + 0.5*wl_idn*(SQR(wl_ivx)+SQR(wl_ivy)+SQR(wl_ivz)) + pbl;
-      er = wr_ipr*igm1 + 0.5*wr_idn*(SQR(wr_ivx)+SQR(wr_ivy)+SQR(wr_ivz)) + pbr;
-      cl = eos.IdealMHDFastSpeed(wl_idn, bxi, wl_iby, wl_ibz);
-      cr = eos.IdealMHDFastSpeed(wr_idn, bxi, wr_iby, wr_ibz);
-    }
-
-    //--- Step 3. Compute fast magnetosonic speed in L,R, and Roe-averaged states
+    //Real pbl = 0.5*(bxi*bxi + SQR(wl_iby) + SQR(wl_ibz));
+    //Real pbr = 0.5*(bxi*bxi + SQR(wr_iby) + SQR(wr_ibz));
+    //Real el,er,hroe,cl,cr;
+    //if (!(eos.passive)) {
+    //  el = wl_ipr*igm1 + 0.5*wl_idn*(SQR(wl_ivx)+SQR(wl_ivy)+SQR(wl_ivz)) + pbl;
+    //  er = wr_ipr*igm1 + 0.5*wr_idn*(SQR(wr_ivx)+SQR(wr_ivy)+SQR(wr_ivz)) + pbr;
+    //  hroe = ((el + wl_ipr + pbl)/sqrtdl + (er + wr_ipr + pbr)/sqrtdr)*isdlpdr;
+    //  cl = eos.IdealMHDFastSpeed(wl_idn, wl_ipr, bxi, wl_iby, wl_ibz);
+    //  cr = eos.IdealMHDFastSpeed(wr_idn, wr_ipr, bxi, wr_iby, wr_ibz);
+    //} else {
+    //  el = wl_ipr*igm1 + 0.5*wl_idn*(SQR(wl_ivx)+SQR(wl_ivy)+SQR(wl_ivz)) + pbl;
+    //  er = wr_ipr*igm1 + 0.5*wr_idn*(SQR(wr_ivx)+SQR(wr_ivy)+SQR(wr_ivz)) + pbr;
+    //  cl = eos.IdealMHDFastSpeed(wl_idn, bxi, wl_iby, wl_ibz);
+    //  cr = eos.IdealMHDFastSpeed(wr_idn, bxi, wr_iby, wr_ibz);
+    //}
 
 
     // Compute Roe-averaged Cf using eq. B18 (ideal gas) or B39 (isothermal)
-    Real btsq = SQR(wroe_iby) + SQR(wroe_ibz);
-    Real vaxsq = bxi*bxi/wroe_idn;
-    Real bt_starsq, twid_asq;
-    if (!(eos.passive)) {
-      bt_starsq = (gm1 - (gm1 - 1.0)*y)*btsq;
-      Real hp = hroe - (vaxsq + btsq/wroe_idn);
-      Real vsq = SQR(wroe_ivx) + SQR(wroe_ivy) + SQR(wroe_ivz);
-      twid_asq = fmax((gm1*(hp-0.5*vsq)-(gm1-1.0)*x), 0.0);
-    } else {
-      bt_starsq = btsq*y;
-      twid_asq = iso_cs*iso_cs + x;
-    }
-    Real ct2 = bt_starsq/wroe_idn;
-    Real tsum = vaxsq + ct2 + twid_asq;
-    Real tdif = vaxsq + ct2 - twid_asq;
-    Real cf2_cs2 = sqrt(tdif*tdif + 4.0*twid_asq*ct2);
+    //Real btsq = SQR(wroe_iby) + SQR(wroe_ibz);
+    //Real vaxsq = bxi*bxi/wroe_idn;
+    //Real bt_starsq, twid_asq;
+    //if (!(eos.passive)) {
+    //  bt_starsq = (gm1 - (gm1 - 1.0)*y)*btsq;
+    //  Real hp = hroe - (vaxsq + btsq/wroe_idn);
+    //  Real vsq = SQR(wroe_ivx) + SQR(wroe_ivy) + SQR(wroe_ivz);
+    //  twid_asq = fmax((gm1*(hp-0.5*vsq)-(gm1-1.0)*x), 0.0);
+    //} else {
+    //  bt_starsq = btsq*y;
+    //  twid_asq = iso_cs*iso_cs + x;
+    //}
+    //Real ct2 = bt_starsq/wroe_idn;
+    //Real tsum = vaxsq + ct2 + twid_asq;
+    //Real tdif = vaxsq + ct2 - twid_asq;
+    //Real cf2_cs2 = sqrt(tdif*tdif + 4.0*twid_asq*ct2);
 
-    Real cfsq = 0.5*(tsum + cf2_cs2);
-    Real a = sqrt(cfsq);
+    //Real cfsq = 0.5*(tsum + cf2_cs2);
+    //Real a = sqrt(cfsq);
 
     //--- Step 4. Compute the max/min wave speeds based on L/R and Roe-averaged values
 
-    Real al = fmin((wroe_ivx - a),(wl_ivx - cl));
-    Real ar = fmax((wroe_ivx + a),(wr_ivx + cr));
+    Real al = fmin((wr_ivx - cr),(wl_ivx - cl));
+    Real ar = fmax((wr_ivx + cr),(wl_ivx + cl));
+
+    //Real al = fmin((wroe_ivx - a),(wl_ivx - cl));
+    //Real ar = fmax((wroe_ivx + a),(wr_ivx + cr));
 
     // following min/max set to TINY_NUMBER to fix bug found in converging supersonic flow
     Real bp = ar > 0.0 ? ar : 1.0e-20;
@@ -137,32 +158,62 @@ void HLLE_CGL(TeamMember_t const &member, const EOS_Data &eos,
     MHDCons1D fl,fr;
     fl.d  = wl_idn*vxl;
     fr.d  = wr_idn*vxr;
-
-    fl.mx = wl_idn*wl_ivx*vxl + pbl - SQR(bxi);
-    fr.mx = wr_idn*wr_ivx*vxr + pbr - SQR(bxi);
-
-    fl.my = wl_idn*wl_ivy*vxl - bxi*wl_iby;
-    fr.my = wr_idn*wr_ivy*vxr - bxi*wr_iby;
-
-    fl.mz = wl_idn*wl_ivz*vxl - bxi*wl_ibz;
-    fr.mz = wr_idn*wr_ivz*vxr - bxi*wr_ibz;
-
-    if (!(eos.passive)) {
-      fl.mx += wl_ipr;
-      fr.mx += wr_ipr;
-      fl.e   = el*vxl + wl_ivx*(wl_ipr + pbl - bxi*bxi);
-      fr.e   = er*vxr + wr_ivx*(wr_ipr + pbr - bxi*bxi);
-      fl.e  -= bxi*(wl_iby*wl_ivy + wl_ibz*wl_ivz);
-      fr.e  -= bxi*(wr_iby*wr_ivy + wr_ibz*wr_ivz);
+    
+    if ( !(eos.passive) ){
+      fl.mx = wl_idn*wl_ivx*vxl + pbl + wl_ipp - SQR(bxi)*fhl;
+      fr.mx = wr_idn*wr_ivx*vxr + pbr + wr_ipp - SQR(bxi)*fhr;
+      
+      fl.my = wl_idn*wl_ivy*vxl - bxi*wl_iby*fhl;
+      fr.my = wr_idn*wr_ivy*vxr - bxi*wr_iby*fhr;
+      
+      fl.mz = wl_idn*wl_ivz*vxl - bxi*wl_ibz*fhl;
+      fr.mz = wr_idn*wr_ivz*vxr - bxi*wr_ibz*fhr;
     } else {
-      fl.mx += (iso_cs*iso_cs)*wl_idn;
-      fr.mx += (iso_cs*iso_cs)*wr_idn;
-      fl.e   = el*vxl + wl_ivx*(wl_ipr + pbl - bxi*bxi); //calculate energy fluxes anyway for passive evolution
-      fr.e   = er*vxr + wr_ivx*(wr_ipr + pbr - bxi*bxi);
-      fl.e  -= bxi*(wl_iby*wl_ivy + wl_ibz*wl_ivz);
-      fr.e  -= bxi*(wr_iby*wr_ivy + wr_ibz*wr_ivz);
+      fl.mx = wl_idn*wl_ivx*vxl + pbl + (iso_cs*iso_cs)*wl_idn - SQR(bxi);
+      fr.mx = wr_idn*wr_ivx*vxr + pbr + (iso_cs*iso_cs)*wl_idn - SQR(bxi);
+
+      fl.my = wl_idn*wl_ivy*vxl - bxi*wl_iby;
+      fr.my = wr_idn*wr_ivy*vxr - bxi*wr_iby;
+
+      fl.mz = wl_idn*wl_ivz*vxl - bxi*wl_ibz;
+      fr.mz = wr_idn*wr_ivz*vxr - bxi*wr_ibz;
     }
 
+
+    //fl.mx = wl_idn*wl_ivx*vxl + pbl - SQR(bxi);
+    //fr.mx = wr_idn*wr_ivx*vxr + pbr - SQR(bxi);
+
+    //fl.my = wl_idn*wl_ivy*vxl - bxi*wl_iby;
+    //fr.my = wr_idn*wr_ivy*vxr - bxi*wr_iby;
+
+    //fl.mz = wl_idn*wl_ivz*vxl - bxi*wl_ibz;
+    //fr.mz = wr_idn*wr_ivz*vxr - bxi*wr_ibz;
+
+    //if (!(eos.passive)) {
+    //  fl.mx += wl_ipr;
+    //  fr.mx += wr_ipr;
+    //} else {
+    //  fl.mx += (iso_cs*iso_cs)*wl_idn;
+    //  fr.mx += (iso_cs*iso_cs)*wr_idn;
+    //}
+    
+    //Energy fluxes
+    fl.e = el*vxl + wl_ivx*(wl_ipp + pbl);
+    fr.e = er*vxr + wr_ivx*(wr_ipp + pbr);
+    fl.e -= bxi*(bxi*wl_ivx + wl_iby*wl_ivy + wl_ibz*wl_ivz)*fhl;
+    fr.e -= bxi*(bxi*wr_ivx + wr_iby*wr_ivy + wr_ibz*wr_ivz)*fhr;
+    
+    //energy fluxes
+    //fl.e   = el*vxl + wl_ivx*(wl_ipr + pbl - bxi*bxi);
+    //fr.e   = er*vxr + wr_ivx*(wr_ipr + pbr - bxi*bxi);
+    //fl.e  -= bxi*(wl_iby*wl_ivy + wl_ibz*wl_ivz);
+    //fr.e  -= bxi*(wr_iby*wr_ivy + wr_ibz*wr_ivz);
+    
+    //Mu fluxes
+    fl.mu = mul*vxl;
+    fr.mu = mur*vxr;
+    
+    //B/E field fluxes for CT  
     fl.by = wl_iby*vxl - bxi*wl_ivy;
     fr.by = wr_iby*vxr - bxi*wr_ivy;
 
@@ -173,13 +224,19 @@ void HLLE_CGL(TeamMember_t const &member, const EOS_Data &eos,
 
     Real tmp=0.0;
     if (bp != bm) tmp = 0.5*(bp + bm)/(bp - bm);
-
-    flx(m,IDN,k,j,i) = 0.5*(fl.d  + fr.d ) + (fl.d  - fr.d )*tmp;
+    
+    //treat mu as passive scalar, flux is given by mass_flx*rl or mass_flx*rr
+    Real fdtmp = 0.5*(fl.d  + fr.d ) + (fl.d  - fr.d )*tmp;
+    mul /= wl_idn;
+    mur /= wr_idn;
+    Real fmutmp = ( fdtmp >= 0.0 ) ? fdtmp*mul : fdtmp*mur;
+    
+    flx(m,IDN,k,j,i) = fdtmp;
     flx(m,ivx,k,j,i) = 0.5*(fl.mx + fr.mx) + (fl.mx - fr.mx)*tmp;
     flx(m,ivy,k,j,i) = 0.5*(fl.my + fr.my) + (fl.my - fr.my)*tmp;
     flx(m,ivz,k,j,i) = 0.5*(fl.mz + fr.mz) + (fl.mz - fr.mz)*tmp;
-    flx(m,IEN,k,j,i) = 0.5*(fl.e + fr.e ) + (fl.e - fr.e)*tmp; //always apply pressure flux, passive or otherwise
-    flx(m,IMU,k,j,i) = 0.0;
+    flx(m,IEN,k,j,i) = 0.5*(fl.e + fr.e ) + (fl.e - fr.e)*tmp;
+    flx(m,IMU,k,j,i) = fmutmp;
     ey(m,k,j,i) = -0.5*(fl.by + fr.by) - (fl.by - fr.by)*tmp;
     ez(m,k,j,i) =  0.5*(fl.bz + fr.bz) + (fl.bz - fr.bz)*tmp;
   });

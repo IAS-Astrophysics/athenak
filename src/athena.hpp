@@ -77,6 +77,7 @@ enum PhysicsModule {HydroDynamics, MagnetoHydroDynamics,
 
 // structs to store primitive/conserved variables in one-dimension
 // (density, velocity/momentum, internal/total energy, [transverse magnetic field])
+// For CGL: primitive e is p_parallel, primitive pp is p_perpendicular
 struct HydPrim1D {
   Real d, vx, vy, vz, e, pp;
 };
