@@ -1,0 +1,92 @@
+# AthenaK input file for SR MHD shocktube, test #1 from MUB (2009)
+
+<comment>
+problem   = SR MHD shocktube problem with tabulated EOS
+reference = Mignone, Ugliano, & Bodo 2009, MNRAS 393 1141
+
+<job>
+basename  = MUB1       # problem ID: basename of output filenames
+
+<mesh>
+nghost    = 3
+nx1       = 1600      # Number of zones in X1-direction
+x1min     = -0.5      # minimum value of X1
+x1max     = 0.5       # maximum value of X1
+ix1_bc    = outflow   # Inner-X1 boundary condition flag
+ox1_bc    = outflow   # Outer-X1 boundary condition flag
+
+nx2       = 1         # Number of zones in X2-direction
+x2min     = -0.5      # minimum value of X2
+x2max     = 0.5       # maximum value of X2
+ix2_bc    = periodic  # Inner-X2 boundary condition flag
+ox2_bc    = periodic  # Outer-X2 boundary condition flag
+
+nx3       = 1         # Number of zones in X3-direction
+x3min     = -0.5      # minimum value of X3
+x3max     = 0.5       # maximum value of X3
+ix3_bc    = periodic  # Inner-X3 boundary condition flag
+ox3_bc    = periodic  # Outer-X3 boundary condition flag
+
+<meshblock>
+nx1       = 1600      # Number of cells in each MeshBlock, X1-dir
+nx2       = 1         # Number of cells in each MeshBlock, X2-dir
+nx3       = 1         # Number of cells in each MeshBlock, X3-dir
+
+<coord>
+special_rel = true
+general_rel = false
+minkowski   = true
+
+<adm>
+
+<time>
+evolution  = dynamic  # dynamic/kinematic/static
+integrator  = rk2     # time integration algorithm
+cfl_number  = 0.4     # The Courant, Friedrichs, & Lewy (CFL) Number
+nlim        = -1      # cycle limit
+tlim        = 0.4     # time limit
+ndiag       = 1       # cycles between diagostic output
+
+<mhd>
+reconstruct = plm
+rsolver     = hlle
+gamma       = 2.0         # ratio of specific heats Gamma
+dfloor      = 1.28e-13
+tfloor      = 0.11        # temperature floor instead of pressure floor
+dyn_eos     = compose     # enable ideal gas inside of PrimitiveSolver
+eos         = ideal       # EOS type; still need eos variable for compatibility reasons
+dyn_error   = reset_floor # enable ResetFloor error policy inside of PrimitiveSolver
+table       = inputs/tables/SFHo_reduced.athtab
+nscalars    = 1
+use_NQT     = false
+
+<problem>
+pgen_name  = shock_tube
+shock_dir  = 1     # Shock Direction -- (1,2,3) = (x1,x2,x3)
+xshock     = 0.0   # position of initial interface
+
+dl = 1.0e-3        # density on left
+pl = 1.0e-5        # pressure
+ul = 0.0           # X-velocity
+vl = 0.0           # Y-velocity
+wl = 0.0           # Z-velocity
+bxl = 0.5e-3       # left magnetic field B^x
+byl = 1.0e-3       # left magnetic field B^y
+bzl = 0.0          # left magnetic field B^z
+
+dr = 0.125e-3      # density on right
+pr = 0.1e-5        # pressure
+ur = 0.0           # X-velocity
+vr = 0.0           # Y-velocity
+wr = 0.0           # Z-velocity
+bxr = 0.5e-3       # right magnetic field B^x
+byr = -1.0e-3      # right magnetic field B^y
+bzr = 0.0          # right magnetic field B^z
+
+<output1>
+file_type   = tab       # Tabular data dump
+variable    = mhd_w     # variables to be output
+data_format = %12.5e    # Optional data format string
+dt          = 0.4       # time increment between outputs
+slice_x2    = 0.0       # slice in x2
+slice_x3    = 0.0       # slice in x3

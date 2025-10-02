@@ -403,6 +403,13 @@ TaskStatus DynGRMHDPS<EOSPolicy, ErrorPolicy>::\
 
 INSTANTIATE_CALC_FLUXES(Primitive::IdealGas, Primitive::ResetFloor)
 INSTANTIATE_CALC_FLUXES(Primitive::PiecewisePolytrope, Primitive::ResetFloor)
-INSTANTIATE_CALC_FLUXES(Primitive::EOSCompOSE, Primitive::ResetFloor)
+INSTANTIATE_CALC_FLUXES(Primitive::EOSCompOSE<Primitive::NormalLogs>,
+                        Primitive::ResetFloor)
+INSTANTIATE_CALC_FLUXES(Primitive::EOSCompOSE<Primitive::NQTLogs>,
+                        Primitive::ResetFloor)
+INSTANTIATE_CALC_FLUXES(Primitive::EOSHybrid<Primitive::NormalLogs>,
+                        Primitive::ResetFloor)
+INSTANTIATE_CALC_FLUXES(Primitive::EOSHybrid<Primitive::NQTLogs>,
+                        Primitive::ResetFloor)
 
 } // namespace dyngr

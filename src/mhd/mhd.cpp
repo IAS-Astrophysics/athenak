@@ -114,8 +114,10 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
     pcond = nullptr;
   }
 
-  // Source terms (constructor parses input file to initialize only srcterms needed)
-  psrc = new SourceTerms("mhd", ppack, pin);
+  // Source terms (if needed)
+  if (pin->DoesBlockExist("mhd_srcterms")) {
+    psrc = new SourceTerms("mhd_srcterms", ppack, pin);
+  }
 
   // (3) read time-evolution option [already error checked in driver constructor]
   // Then initialize memory and algorithms for reconstruction and Riemann solvers

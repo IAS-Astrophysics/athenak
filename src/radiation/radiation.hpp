@@ -46,6 +46,9 @@ struct RadiationTaskIDs {
   TaskID mhd_rkupdt;
   TaskID hyd_rkupdt;
   TaskID rad_src;
+  TaskID mhd_src;
+  TaskID hyd_src;
+  TaskID rad_coupl;
   TaskID rad_resti;
   TaskID hyd_restu;
   TaskID mhd_restu;
@@ -91,7 +94,7 @@ class Radiation {
   bool is_mhd_enabled;
   bool are_units_enabled;
 
-  // Radiation source term parameters
+  // Radiation coupling term parameters
   bool rad_source;          // flag to enable/disable radiation source term
   bool fixed_fluid;         // flag to enable/disable fluid integration
   bool affect_fluid;        // flag to enable/disable feedback of rad field on fluid
@@ -102,8 +105,7 @@ class Radiation {
   bool power_opacity;       // flag to enable Kramer's law opacity for kappa_a
   bool is_compton_enabled;  // flag to enable/disable compton
 
-  // Extra physics (i.e., other srcterms)
-  bool beam_source;
+  // radiation source term (i.e., beam)
   SourceTerms *psrc = nullptr;
 
   // Angular mesh
@@ -135,7 +137,6 @@ class Radiation {
   DvceArray5D<Real> i1;         // intensity at intermediate step
   DvceFaceFld5D<Real> iflx;     // spatial fluxes on zone faces
   DvceArray5D<Real> divfa;      // angular flux divergence
-  DvceArray5D<bool> beam_mask;  // boolean mask used for beam source term
   Real dtnew;
 
   // reconstruction method
@@ -154,7 +155,8 @@ class Radiation {
   TaskStatus SendFlux(Driver *d, int stage);
   TaskStatus RecvFlux(Driver *d, int stage);
   TaskStatus RKUpdate(Driver *d, int stage);
-  TaskStatus AddRadiationSourceTerm(Driver *d, int stage);
+  TaskStatus RadSrcTerms(Driver *d, int stage);
+  TaskStatus RadFluidCoupling(Driver *d, int stage);
   TaskStatus RestrictI(Driver *d, int stage);
   TaskStatus SendI(Driver *d, int stage);
   TaskStatus RecvI(Driver *d, int stage);

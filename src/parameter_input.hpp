@@ -74,6 +74,7 @@ class ParameterInput {
   std::list<InputBlock> block;
 
   // functions
+  void CheckBlockNames();
   void LoadFromStream(std::istream &is);
   void LoadFromFile(IOWrapper &input, bool single_file_per_rank=false);
   void ModifyFromCmdline(int argc, char *argv[]);
