@@ -115,14 +115,12 @@ TaskStatus MeshBoundaryValuesCC::PackAndSendCC(DvceArray5D<Real> &a,
             [&](const int i) {
               rbuf[dn].vars(dm, (i-il + ni*(j-jl + nj*(k-kl + nk*v))) ) = a(m,v,k,j,i);
             });
-            tmember.team_barrier();
           // if neighbor is at coarser level, load data from coarse_u0
           } else {
             Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember,il,iu+1),
             [&](const int i) {
               rbuf[dn].vars(dm, (i-il + ni*(j-jl + nj*(k-kl + nk*v))) ) = ca(m,v,k,j,i);
             });
-            tmember.team_barrier();
           }
 
         // else copy into send buffer for MPI communication below
@@ -134,18 +132,17 @@ TaskStatus MeshBoundaryValuesCC::PackAndSendCC(DvceArray5D<Real> &a,
             [&](const int i) {
               sbuf[n].vars(m, (i-il + ni*(j-jl + nj*(k-kl + nk*v))) ) = a(m,v,k,j,i);
             });
-            tmember.team_barrier();
           // if neighbor is at coarser level, load data from coarse_u0
           } else {
             Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember,il,iu+1),
             [&](const int i) {
               sbuf[n].vars(m, (i-il + ni*(j-jl + nj*(k-kl + nk*v))) ) = ca(m,v,k,j,i);
             });
-            tmember.team_barrier();
           }
         }
       });
     } // end if-neighbor-exists block
+    tmember.team_barrier();
   }); // end par_for_outer
 
   Kokkos::parallel_for("SendBuff", policy, KOKKOS_LAMBDA(TeamMember_t tmember) {
@@ -190,7 +187,6 @@ TaskStatus MeshBoundaryValuesCC::PackAndSendCC(DvceArray5D<Real> &a,
             [&](const int i) {
               rbuf[dn].vars(dm,ndat+ (i-il + ni*(j-jl + nj*(k-kl + nk*v))))=ca(m,v,k,j,i);
             });
-            tmember.team_barrier();
 
           // else copy into send buffer for MPI communication below
           } else {
@@ -199,11 +195,11 @@ TaskStatus MeshBoundaryValuesCC::PackAndSendCC(DvceArray5D<Real> &a,
             [&](const int i) {
               sbuf[n].vars(m,ndat+ (i-il + ni*(j-jl + nj*(k-kl + nk*v))) )=ca(m,v,k,j,i);
             });
-            tmember.team_barrier();
           }
         });
       }
     } // end if-neighbor-exists block
+    tmember.team_barrier();
   }); // end par_for_outer
   }
 
@@ -357,7 +353,6 @@ TaskStatus MeshBoundaryValuesCC::RecvAndUnpackCC(DvceArray5D<Real> &a,
           [&](const int i) {
             a(m,v,k,j,i) = rbuf[n].vars(m, (i-il + ni*(j-jl + nj*(k-kl + nk*v))) );
           });
-          tmember.team_barrier();
 
         // if neighbor is at coarser level, load data into coarse_u0
         } else {
@@ -365,10 +360,10 @@ TaskStatus MeshBoundaryValuesCC::RecvAndUnpackCC(DvceArray5D<Real> &a,
           [&](const int i) {
             ca(m,v,k,j,i) = rbuf[n].vars(m, (i-il + ni*(j-jl + nj*(k-kl + nk*v))) );
           });
-          tmember.team_barrier();
         }
       });
     }  // end if-neighbor-exists block
+    tmember.team_barrier();
   });  // end par_for_outer
 
   // Outer loop over (# of MeshBlocks)*(# of buffers)*(# of variables)
@@ -405,10 +400,10 @@ TaskStatus MeshBoundaryValuesCC::RecvAndUnpackCC(DvceArray5D<Real> &a,
           [&](const int i) {
             ca(m,v,k,j,i) = rbuf[n].vars(m,ndat + (i-il + ni*(j-jl + nj*(k-kl + nk*v))) );
           });
-          tmember.team_barrier();
         });
       }
     }  // end if-neighbor-exists block
+    tmember.team_barrier();
   });  // end par_for_outer
 
   return TaskStatus::complete;
