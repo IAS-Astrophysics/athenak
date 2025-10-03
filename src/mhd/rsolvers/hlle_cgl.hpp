@@ -34,6 +34,7 @@ void HLLE_CGL(TeamMember_t const &member, const EOS_Data &eos,
   int iby = ((ivx-IVX) + 1)%3;
   int ibz = ((ivx-IVX) + 2)%3;
   Real gm1 = eos.gamma - 1.0;
+  Real bfloor = eos.bfloor;
   Real igm1 = 1.0/gm1;
   Real iso_cs = eos.iso_cs;
 
@@ -78,11 +79,31 @@ void HLLE_CGL(TeamMember_t const &member, const EOS_Data &eos,
 
     //--- Step 2. Apply floor to magnetic field if necessary
     
+    //involves resetting the pprp and pprl each to 1/3pprl+2/3pprp, and resetting mu assuming pprp=pprl w/ bfloor as field
+    
+    if ( bmagl < bfloor || bmagr < bfloor ){
+      // Revert to (adiabatic) MHD EOS if B < bmag_floor
+      // In this case, we calculate flux of E as if in adiabatic MHD, while the
+      // conserved variable mu does nothing. We set pprp = pprl = 2/3*(E - pb - ke)
+      // in ConservedToPrimitive, which is like setting both to (2/3*pprp+1/3*pprl)
+      fhl = 1.;
+      fhr = 1.;
+      // Note: el and er are already correct when we average in this way
+      wl_ipr = TWO_3RDS*wl_ipp + ONE_3RD*wl_ipr;
+      wl_ipp = wl_ipr;
+      wr_ipr = TWO_3RDS*wr_ipp + ONE_3RD*wr_ipr;
+      wr_ipp = wr_ipr;
+      // Although mu is not used (it's reset in ConservedToPrimitive) better to stop it becoming NaN
+      mul = wl_idn * log( SQR(wl_idn)/(bfloor*SQR(bfloor)) );
+      mur = wr_idn * log( SQR(wr_idn)/(bfloor*SQR(bfloor)) );
+    }
+
     
     //--- Step 3. Compute fast magnetosonic speed in L,R states (MHD used Roe-averaged)
     
-    Real cl = eos.IdealMHDFastSpeed(wl_idn, wl_ipr, wl_ipp, bxi, wl_iby, wl_ibz);
-    Real cr = eos.IdealMHDFastSpeed(wr_idn, wr_ipr, wr_ipp, bxi, wr_iby, wr_ibz);
+    //need to use mhd fast speed instead if the bfloor was hit
+    Real cl = eos.IdealMHDFastSpeed(wl_idn, wl_ipr, wl_ipp, bxi, wl_iby, wl_ibz, bfloor);
+    Real cr = eos.IdealMHDFastSpeed(wr_idn, wr_ipr, wr_ipp, bxi, wr_iby, wr_ibz, bfloor);
 
     //Real sqrtdl = sqrt(wl_idn);
     //Real sqrtdr = sqrt(wr_idn);

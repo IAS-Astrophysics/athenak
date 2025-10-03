@@ -91,13 +91,13 @@ void SingleP2C_IdealMHD(const MHDPrim1D &w, HydCons1D &u) {
 KOKKOS_INLINE_FUNCTION
 void SingleC2P_CGLMHD(MHDCons1D &u, const EOS_Data &eos,
                         HydPrim1D &w,
-                        bool &dfloor_used, bool &efloor_used, bool &tfloor_used) {
+                        bool &dfloor_used, bool &efloor_used, bool &tfloor_used, bool &bfloor_used) {
   const Real &dfloor_ = eos.dfloor;
   Real efloor = 1.5*eos.pfloor;
   Real pfloor = eos.pfloor;
   Real tfloor = eos.tfloor;
   Real sfloor = eos.sfloor;
-  Real gm1 = 0.6666666666666667;
+  Real bfloor = eos.bfloor;
 
   // apply density floor, without changing momentum or energy
   if (u.d < dfloor_) {
@@ -143,11 +143,22 @@ void SingleC2P_CGLMHD(MHDCons1D &u, const EOS_Data &eos,
   Real eint = (u.e - e_k - e_m);
   Real bcube_dsq_exp = bmag*bsqr*SQR(di) * exp(u.mu*di);
   
-  //DO NOT FORGET TO ADD B FLOORS LATER
   w.e = (u.e - e_k - e_m) / (0.5 + bcube_dsq_exp);
   w.pp = w.e * bcube_dsq_exp;
   
-  //use pfloor for pressures
+  if (bmag>bfloor) {
+    // Standard CGL EOS
+    w.e = (u.e - e_k - e_m) / (0.5 + bcube_dsq_exp);
+    w.pp = w.e * bcube_dsq_exp;
+  } else {
+    // If field goes to zero, CGL is invalid. Revert to (adiabatic) EOS with
+    // pprp=pprl=(2/3*pprp+1/3*pprl).
+    w.e = TWO_3RDS*(u.e - e_k - e_m);
+    w.pp = w.e;
+    bfloor_used = true;
+  }
+      
+  //next use pfloor for pressures
   if (w.e < pfloor && w.pp < pfloor) {
     w.e = pfloor;
     w.pp = pfloor;
@@ -165,6 +176,11 @@ void SingleC2P_CGLMHD(MHDCons1D &u, const EOS_Data &eos,
     efloor_used = true;
   }
   
+  //check if bfloor then reset mu assuming pprl=pprp
+  if (bfloor_used) {
+    u.mu =  w.d*log(SQR(w.d)/(bfloor*SQR(bfloor)));
+  }
+  
   return;
 }
 
@@ -175,10 +191,10 @@ void SingleC2P_CGLMHD(MHDCons1D &u, const EOS_Data &eos,
 //! cell-centered magnetic fields, but CONSERVED state returned via arguments does not.
 
 KOKKOS_INLINE_FUNCTION
-void SingleP2C_CGLMHD(const MHDPrim1D &w, HydCons1D &u) {
+void SingleP2C_CGLMHD(const MHDPrim1D &w, const Real &bfloor, HydCons1D &u) {
   Real bsqr = SQR(w.bx) + SQR(w.by) + SQR(w.bz);
   Real bmag = sqrt(bsqr);
-
+  
   u.d  = w.d;
   u.mx = w.d*w.vx;
   u.my = w.d*w.vy;
@@ -187,9 +203,21 @@ void SingleP2C_CGLMHD(const MHDPrim1D &w, HydCons1D &u) {
   //                      (SQR(w.bx) + SQR(w.by) + SQR(w.bz)) );
   //u.mu = w.pp;
   
-  //DO NOT FORGET TO ADD IN FLOOR FOR B
   u.e  = w.pp + 0.5*w.e + 0.5*(w.d*(SQR(w.vx) + SQR(w.vy) + SQR(w.vz)) + bsqr );
   u.mu = w.d * log(w.pp / w.e * SQR(w.d)/(bmag*SQR(bmag)) ) ;
+  
+  //bfloor to reset u.mu assuming pprp=pprl
+  if (bmag>bfloor) {
+    // Standard CGL EOS
+    u.e  = w.pp + 0.5*w.e + 0.5*(w.d*(SQR(w.vx) + SQR(w.vy) + SQR(w.vz)) + bsqr );
+    u.mu = w.d * log(w.pp / w.e * SQR(w.d)/(bmag*SQR(bmag)) ) ;
+  } else {
+    // If field goes to zero, CGL is invalid. Revert to (adiabatic) EOS with
+    // pprp=pprl=(2/3*pprp+1/3*pprl). mu has no dynamical effect (in RS) but
+    // is updated to pprp/Bmin
+    u.e  = 0.5*w.e + w.pp + 0.5*(w.d*(SQR(w.vx) + SQR(w.vy) + SQR(w.vz)) + bsqr );
+    u.mu = w.d * log(SQR(w.d)/(bfloor*SQR(bfloor)));
+  }
   return;
 }
 

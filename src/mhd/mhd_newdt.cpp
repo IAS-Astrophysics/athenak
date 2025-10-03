@@ -125,13 +125,16 @@ TaskStatus MHD::NewTimeStep(Driver *pdriver, int stage) {
         Real &w_bx = bcc0_(m,IBX,k,j,i);
         Real &w_by = bcc0_(m,IBY,k,j,i);
         Real &w_bz = bcc0_(m,IBZ,k,j,i);
+        
+        //add in calc of bsq, then for cgl if statements, if below floor, correct pressures, and calc mhd fast speed
+        
         Real cf;
         Real p = eos.IdealGasPressure(w0_(m,IEN,k,j,i));
         if (eos.is_cgl) {
           if (eos.passive) {
             cf = eos.IdealMHDFastSpeed(w_d, w_bx, w_by, w_bz);
           } else {
-            cf = eos.IdealMHDFastSpeed(w_d, w_e, w_p, w_bx, w_by, w_bz);
+            cf = eos.IdealMHDFastSpeed(w_d, w_e, w_p, w_bx, w_by, w_bz, eos.bfloor);
           }
         } else if (eos.is_ideal) {
           cf = eos.IdealMHDFastSpeed(w_d, p, w_bx, w_by, w_bz);
@@ -144,7 +147,7 @@ TaskStatus MHD::NewTimeStep(Driver *pdriver, int stage) {
           if (eos.passive) {
             cf = eos.IdealMHDFastSpeed(w_d, w_by, w_bz, w_bx);
           } else {
-            cf = eos.IdealMHDFastSpeed(w_d, w_e, w_p, w_by, w_bz, w_bx);
+            cf = eos.IdealMHDFastSpeed(w_d, w_e, w_p, w_by, w_bz, w_bx, eos.bfloor);
           }
         } else if (eos.is_ideal) {
           cf = eos.IdealMHDFastSpeed(w_d, p, w_by, w_bz, w_bx);
@@ -157,7 +160,7 @@ TaskStatus MHD::NewTimeStep(Driver *pdriver, int stage) {
           if (eos.passive) {
             cf = eos.IdealMHDFastSpeed(w_d, w_bz, w_bx, w_by);
           } else {
-            cf = eos.IdealMHDFastSpeed(w_d, w_e, w_p, w_bz, w_bx, w_by);
+            cf = eos.IdealMHDFastSpeed(w_d, w_e, w_p, w_bz, w_bx, w_by, eos.bfloor);
           }
         } else if (eos.is_ideal) {
           cf = eos.IdealMHDFastSpeed(w_d, p, w_bz, w_bx, w_by);

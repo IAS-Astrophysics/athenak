@@ -89,8 +89,8 @@ void CGLMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &b,
     // call c2p function
     // (inline function in ideal_c2p_mhd.hpp file)
     HydPrim1D w;
-    bool dfloor_used=false, efloor_used=false, tfloor_used=false;
-    SingleC2P_CGLMHD(u, eos, w, dfloor_used, efloor_used, tfloor_used);
+    bool dfloor_used=false, efloor_used=false, tfloor_used=false, bfloor_used=false;
+    SingleC2P_CGLMHD(u, eos, w, dfloor_used, efloor_used, tfloor_used, bfloor_used);
 
     // set FOFC flag and quit loop if this function called only to check floors
     if (only_testfloors) {
@@ -105,10 +105,13 @@ void CGLMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &b,
         sumd++;
       }
       if (efloor_used) {
-        cons(m,IEN,k,j,i) = u.e;  //make sure this is okay, even if only one hits the floor
-        cons(m,IMU,k,j,i) = u.mu;
+        cons(m,IEN,k,j,i) = u.e;
         sume++;
       }
+      if (bfloor_used) {
+        cons(m,IMU,k,j,i) = u.mu;
+      }
+      
       //if (tfloor_used) {
       //  cons(m,IEN,k,j,i) = u.e;
       //  sumt++;
@@ -159,6 +162,7 @@ void CGLMHD::PrimToCons(const DvceArray5D<Real> &prim, const DvceArray5D<Real> &
   int &nmhd  = pmy_pack->pmhd->nmhd;
   int &nscal = pmy_pack->pmhd->nscalars;
   int &nmb = pmy_pack->nmb_thispack;
+  auto &bfloor = eos_data.bfloor;
 
   par_for("mhd_p2c", DevExeSpace(), 0, (nmb-1), kl, ku, jl, ju, il, iu,
   KOKKOS_LAMBDA(int m, int k, int j, int i) {
@@ -178,7 +182,9 @@ void CGLMHD::PrimToCons(const DvceArray5D<Real> &prim, const DvceArray5D<Real> &
 
     // call p2c function
     HydCons1D u;
-    SingleP2C_CGLMHD(w, u);
+    SingleP2C_CGLMHD(w, bfloor, u);
+    
+    //no need to change pressures here if bfloor was hit as they'll be changed elsewhere
 
     // store conserved state in 3D array
     cons(m,IDN,k,j,i) = u.d;

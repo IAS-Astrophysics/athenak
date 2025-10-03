@@ -31,7 +31,7 @@ struct EOS_Data {
   bool is_cgl;       // flag to denote cgl eos
   bool passive;      // flag to denote isothermal passive CGL evolution
   bool use_e, use_t; // use internal energy density (e) or temperature (t) as primitive
-  Real dfloor, pfloor, tfloor, sfloor;  // density, pressure, temperature, entropy floors
+  Real dfloor, pfloor, tfloor, sfloor, bfloor;  // density, pressure, temperature, entropy floors
   Real gamma_max;    // ceiling on Lorentz factor in SR/GR
 
   // IDEAL GAS PRESSURE: converts primitive variable (either internal energy density e
@@ -72,19 +72,25 @@ struct EOS_Data {
   //NON-RELATIVISTIC CGL MHD: inlined fast magnetosonic speed function
   KOKKOS_INLINE_FUNCTION
   Real IdealMHDFastSpeed(const Real d, const Real pr, const Real pp,
-                         const Real bx, const Real by, const Real bz) const {
-    //Real asq = (iso_cs*iso_cs)*d;
-    //Real ct2 = by*by + bz*bz;
-    //Real qsq = bx*bx + ct2 + asq;
-    //Real tmp = bx*bx + ct2 - asq;
-    //return sqrt(0.5*(qsq + sqrt(tmp*tmp + 4.0*asq*ct2))/d);
-    
+                         const Real bx, const Real by, const Real bz, const Real bflr) const {
+
+    Real bprp2 = by*by + bz*bz;
     Real bx2 = bx*bx;
-    Real bprp2 = (by*by + bz*bz);
-    Real bhatx2 = bx2/(bx2+bprp2);
-    Real qsq = bx2 + bprp2 + 2*pp + (2.*pr - pp)*bhatx2;
-    return sqrt( 0.5*(qsq + sqrt(fabs(qsq*qsq + 4.*pp*pp*(1. - bhatx2)*bhatx2
+    Real b2 = bx2+bprp2;
+    Real vfms = 1.;
+    if (b2 < bflr*bflr) {//use adiabatic MHD fast speed if below B floor
+        Real p = ONE_3RD*pr+TWO_3RDS*pp;
+        Real asq = 1.666666666666667*p;
+        Real qsq = b2 + asq;
+        Real tmp = b2 - asq;
+        vfms =  sqrt(0.5*(qsq + sqrt(tmp*tmp + 4.0*asq*bprp2))/d);
+    } else {
+        Real bhatx2 = bx2/b2;
+        Real qsq = b2 + 2*pp + (2.*pr - pp)*bhatx2;
+        vfms = sqrt( 0.5*(qsq + sqrt(fabs(qsq*qsq + 4.*pp*pp*(1. - bhatx2)*bhatx2
                     - 12.*pr*pp*bhatx2*(2.-bhatx2) + 12.*pr*pp*bhatx2*bhatx2 - 12.*bx2*pr )) /d ));
+    }
+    return vfms;
   }  
 
   // SPECIAL RELATIVISTIC IDEAL GAS HYDRO: inlined maximal sound wave speeds function
