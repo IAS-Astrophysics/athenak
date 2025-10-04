@@ -35,10 +35,10 @@ OrbitalAdvection::OrbitalAdvection(MeshBlockPack *ppack, ParameterInput *pin) :
   qshear = pin->GetReal("shearing_box","qshear");
   omega0 = pin->GetReal("shearing_box","omega0");
 
-  // estimate maximum integer shift in x2-direction for orbital advection
+  // estimate maximum integer shift in x2-direction for orbital advection from Athena4.2
   Real xmin = fabs(ppack->pmesh->mesh_size.x1min);
   Real xmax = fabs(ppack->pmesh->mesh_size.x1max);
-  maxjshift = static_cast<int>((ppack->pmesh->cfl_no)*std::max(xmin,xmax)) + 1;
+  maxjshift = static_cast<int>(1.5*(ppack->pmesh->cfl_no)*std::max(xmin,xmax)) + 2;
 
 #if MPI_PARALLEL_ENABLED
   // For orbital advection, communication is only with x2-face neighbors
