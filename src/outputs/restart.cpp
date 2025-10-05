@@ -74,7 +74,7 @@ void RestartOutput::LoadOutputData(Mesh *pm) {
   }
   // if the spacetime is evolved, we do not need to checkpoint/recover the ADM variables
   if (prad != nullptr) {
-    nrad = prad->prgeo->nangles;
+    nrad = prad->nfreq*prad->prgeo->nangles;
   }
 
   // Note for restarts, outarrays are dimensioned (m,n,k,j,i)
@@ -150,7 +150,7 @@ void RestartOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
     nmhd = pmhd->nmhd + pmhd->nscalars;
   }
   if (prad != nullptr) {
-    nrad = prad->prgeo->nangles;
+    nrad = prad->nfreq*prad->prgeo->nangles;
   }
   if (pz4c != nullptr) {
     nz4c = pz4c->nz4c;

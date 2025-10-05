@@ -165,7 +165,7 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resf
     nmhd = pmhd->nmhd + pmhd->nscalars;
   }
   if (prad != nullptr) {
-    nrad = prad->prgeo->nangles;
+    nrad = prad->nfreq*prad->prgeo->nangles;
   }
   if (pz4c != nullptr) {
     nz4c = pz4c->nz4c;

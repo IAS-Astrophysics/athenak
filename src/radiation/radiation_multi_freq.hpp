@@ -1524,7 +1524,8 @@ bool SolveTridiag(const ScrArray1D<Real> &komp_mat_d, const ScrArray1D<Real> &ko
   // rescaling factor
   Real fac_scale = komp_mat_c(0);
   for (int ifr=0; ifr<nfrq; ++ifr) {
-    fac_scale = fmin(fac_scale, fabs(komp_mat_c(ifr)));
+    if (fabs(komp_mat_c(ifr)) > 0)
+      fac_scale = fmin(fac_scale, fabs(komp_mat_c(ifr)));
   }
   fac_scale = 1./fac_scale;
   if (!(isfinite(fac_scale))) fac_scale = 1.;

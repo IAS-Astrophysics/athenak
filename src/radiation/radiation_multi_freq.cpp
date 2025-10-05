@@ -106,20 +106,18 @@ TaskStatus Radiation::AddMultiFreqRadSrcTerm(Driver *pdriver, int stage) {
   bool &fixed_fluid_ = fixed_fluid;
   bool &affect_fluid_ = affect_fluid;
 
-  // TODO: make them input parameters
-  bool update_fluid_energy = true;
-  bool update_fluid_moment = false;
-  bool test_only_compton = true;
-
-  bool est_tgas_4th_compton = true;
-  bool est_tgas_5th_compton = false;
-  Real tol_tgas_rel_compton = 1e-6;
-  int num_iter_compton = 5;
+  // Flags for fluid updates and parameters for compton process
+  bool &update_fluid_energy_ = update_fluid_energy;
+  bool &update_fluid_moment_ = update_fluid_moment;
+  bool &test_only_compton_therm_ = test_only_compton_therm;
+  bool &est_tgas_4th_compton_ = est_tgas_4th_compton;
+  bool &est_tgas_5th_compton_ = est_tgas_5th_compton;
+  Real &tol_rel_tgas_compton_ = tol_rel_tgas_compton;
+  int &num_iter_compton_ = num_iter_compton;
 
   // Parameters for intensity reconstruction
-  // TODO: make them input parameters
-  int order = 2;
-  int limiter = 2;
+  int order = order_multifreq;
+  int limiter = limiter_multifreq;
 
   // Extract coordinate/excision data
   auto &coord = pmy_pack->pcoord->coord_data;
@@ -306,7 +304,7 @@ TaskStatus Radiation::AddMultiFreqRadSrcTerm(Driver *pdriver, int stage) {
                     gm1, mu_molecular, power_opacity_, coeff_r, coeff_pmr,
                     kappa_a_, kappa_s_, kappa_p_, chi_abs, chi_s, chi_pmr);
 
-    if (test_only_compton) {
+    if (test_only_compton_therm_) {
       chi_abs = 0.0;
       chi_pmr = 0.0;
       chi_s = 0.0;
@@ -552,8 +550,8 @@ TaskStatus Radiation::AddMultiFreqRadSrcTerm(Driver *pdriver, int stage) {
             Real ir_cm_star_update_f = fac_norm(iang)*ir_cm_star_update(iang,ifr);
 
             // update lab-frame intensity
-            if (!test_only_compton) {
-              i0_(m,n,k,j,i) = (n0*n_0)*fmax(ir_cm_star_update_f, FLT_MIN)/SQR(SQR(n0_cm));
+            if (!test_only_compton_therm_) {
+              i0_(m,n,k,j,i) = (n0*n_0)*fmax(FLT_MIN, ir_cm_star_update_f)/SQR(SQR(n0_cm));
             }
 
             // compute moments after coupling
@@ -566,16 +564,16 @@ TaskStatus Radiation::AddMultiFreqRadSrcTerm(Driver *pdriver, int stage) {
       } // endfor iang
 
       // Step 7: update fluid variables
-      if ((!test_only_compton) && (affect_fluid_)) {
-        if (update_fluid_energy) {
+      if ((!test_only_compton_therm_) && (affect_fluid_)) {
+        if (update_fluid_energy_) {
           u0_(m,IEN,k,j,i) += (m_old[0] - m_new[0]);
         }
-        if (update_fluid_moment) {
+        if (update_fluid_moment_) {
           u0_(m,IM1,k,j,i) += (m_old[1] - m_new[1]);
           u0_(m,IM2,k,j,i) += (m_old[2] - m_new[2]);
           u0_(m,IM3,k,j,i) += (m_old[3] - m_new[3]);
         }
-      } // endif ((!test_only_compton) && (affect_fluid_))
+      } // endif ((!test_only_compton_therm_) && (affect_fluid_))
     } // endif (!(badcell))
 
 
@@ -583,12 +581,12 @@ TaskStatus Radiation::AddMultiFreqRadSrcTerm(Driver *pdriver, int stage) {
 
     // Compton process
     if (!(badcell) && is_compton_enabled_) {
-      for (int count=0; count<num_iter_compton; count++) {
+      for (int count=0; count<num_iter_compton_; count++) {
         // test setup
-        if (test_only_compton) {
+        if (test_only_compton_therm_) {
           chi_s = wdn*kappa_s_;
         }
-        
+
         // use partially updated gas temperature
         tgas = tgas_new;
 
@@ -645,7 +643,7 @@ TaskStatus Radiation::AddMultiFreqRadSrcTerm(Driver *pdriver, int stage) {
         Real rat_ini = 1;
 
         // solve 4th-order polynomial for initial guess and backup
-        if ((!badcell) && est_tgas_4th_compton) {
+        if ((!badcell) && est_tgas_4th_compton_) {
           Real a4 = coeff4/coeff5;
           Real a0 = coeff0/coeff5;
           if (fabs(a4) > 1.0e-20) {
@@ -658,7 +656,7 @@ TaskStatus Radiation::AddMultiFreqRadSrcTerm(Driver *pdriver, int stage) {
 
         // solve 5th-order polynomial for accurate estimation
         Real rat_soln = rat_ini;
-        if ((!badcell) && est_tgas_5th_compton) {
+        if ((!badcell) && est_tgas_5th_compton_) {
           int getSoln = SolCompTempEst(coeff5, coeff4, coeff0, rat_ini, rat_soln); // 0: success; 1: maximum iteration
           if (getSoln < 0) rat_soln = rat_ini;
         }
@@ -721,11 +719,13 @@ TaskStatus Radiation::AddMultiFreqRadSrcTerm(Driver *pdriver, int stage) {
 
             Real c1_f, c2_f, c3_f, c4_f;
             if (ifr == nfreq1) { // last frequency bin
-              c1_f = -coeff_bstar;
-              c2_f = coeff_astar + coeff_bstar + coeff_cstar;
+              Real &nu_fm1 = nu_tet(ifr-1);
+              Real nu_fm1h = (nu_fm1+nu_f)/2;
+              Real n_fm1h = jr_cm_old(ifr-1)/arad_/(nu_f-nu_fm1)/(nu_fm1h*SQR(nu_fm1h)) * SQR(SQR(M_PI))/15;
+              c1_f = (n_fm1h >= ne_old) ? -coeff_bstar : 0;
+              c2_f = (n_fm1h >= ne_old) ? (coeff_astar + coeff_bstar + coeff_cstar) : 1;
               c3_f = 0;
-              c4_f = -coeff_astar * ne_old;
-
+              c4_f = (n_fm1h >= ne_old) ? (-coeff_astar * ne_old) : -ne_old;
             } else { // (ifr < nfreq1)
               Real &delta_fp1 = coeff_delta(ifr+1);
               Real &nu_fp1 = nu_tet(ifr+1);
@@ -742,7 +742,8 @@ TaskStatus Radiation::AddMultiFreqRadSrcTerm(Driver *pdriver, int stage) {
 
               if (ifr == 0) {
                 c1_f = 0;
-                c2_f = coeff_af + coeff_bfp1 - delta_fp1*coeff_cfp1;
+                // c2_f = coeff_af + coeff_bfp1 - delta_fp1*coeff_cfp1;
+                c2_f = (n_fp1h > n_fp3h) ? 1.0 : coeff_af + coeff_bfp1 - delta_fp1*coeff_cfp1;
               } else { // ifr > 0
                 Real &nu_fm1 = nu_tet(ifr-1);
                 Real nu_fm1h = (nu_fm1+nu_f)/2;
@@ -752,12 +753,26 @@ TaskStatus Radiation::AddMultiFreqRadSrcTerm(Driver *pdriver, int stage) {
                 Real coeff_bf = SQR(SQR(nu_f))*tgas_new/(nu_fp1h-nu_fm1h);
                 Real coeff_cf = SQR(SQR(nu_f)) * (1+nf_old);
 
-                c1_f = -coeff_bf + delta_f*coeff_cf;
-                c2_f = (ifr==nfreq1-1) ? coeff_af + coeff_bf + coeff_bstar + (1-delta_f)*coeff_cf
-                                       : coeff_af + coeff_bf + coeff_bfp1 + (1-delta_f)*coeff_cf - delta_fp1*coeff_cfp1;
+                // c1_f = -coeff_bf + delta_f*coeff_cf;
+                c1_f = ((ifr == 1) && (n_fm1h > n_fp1h)) ? 0 : -coeff_bf + delta_f*coeff_cf;
+
+                if (ifr < nfreq1-1) {
+                  // c2_f = (coeff_af + coeff_bf + coeff_bfp1 + (1-delta_f)*coeff_cf - delta_fp1*coeff_cfp1);
+                  c2_f = ((ifr == 1) && (n_fm1h > n_fp1h)) ? (coeff_af + coeff_bfp1 - delta_fp1*coeff_cfp1)
+                         : (coeff_af + coeff_bf + coeff_bfp1 + (1-delta_f)*coeff_cf - delta_fp1*coeff_cfp1);
+                } else { // (ifr==nfreq1-1)
+                  c2_f = (n_fp1h >= ne_old) ? (coeff_af + coeff_bf + coeff_bstar + (1-delta_f)*coeff_cf)
+                                        : (coeff_af + coeff_bf + (1-delta_f)*coeff_cf);
+                }
+
               } // endelse
 
-              c3_f = (ifr==nfreq1-1) ? -coeff_bstar - coeff_cstar : -coeff_bfp1 - (1-delta_fp1)*coeff_cfp1;
+              if (ifr < nfreq1-1) {
+                // c3_f = -coeff_bfp1 - (1-delta_fp1)*coeff_cfp1;
+                c3_f = ((ifr == 0) && (n_fp1h > n_fp3h)) ? 0 : -coeff_bfp1 - (1-delta_fp1)*coeff_cfp1;
+              } else { // (ifr==nfreq1-1)
+                c3_f = (n_fp1h >= ne_old) ? (-coeff_bstar-coeff_cstar) : 0;
+              }
               c4_f = -coeff_af*n_fp1h;
             } // endelse
 
@@ -803,15 +818,19 @@ TaskStatus Radiation::AddMultiFreqRadSrcTerm(Driver *pdriver, int stage) {
               ir_cm_update(iang,ifr) += (jr_cm_new(ifr) - jr_cm_old(ifr)) / (nang*domega_cm/(4*M_PI)); // isotropically
               // ir_cm_update(iang,ifr) *= jr_cm_new(ifr)/jr_cm_old(ifr); // maintain original angular distribution
 
-              ir_cm_update(iang,ifr) = fmax(FLT_MIN, ir_cm_update(iang,ifr));
+              // when radiation is advection-dominated, comoving intensity can be very small
+              Real ir_cm_min = fmin(FLT_MIN, fabs(jr_cm_old(ifr)));
+              ir_cm_update(iang,ifr) = fmax(ir_cm_min, ir_cm_update(iang,ifr));
             } // endfor n
 
             // break if gas temperature converges
-            if (fabs(tgas_new-tgas_update)/tgas_new < tol_tgas_rel_compton) break;
+            if (fabs(tgas_new-tgas_update)/tgas_new < tol_rel_tgas_compton_) break;
             tgas_new = tgas_update;
           } // endif komp_update
         } // endif (!badcell); solve Kompaneets equation
       } // endfor count
+
+
 
       // Update radiation and gas
       if (!badcell) {
@@ -889,7 +908,7 @@ TaskStatus Radiation::AddMultiFreqRadSrcTerm(Driver *pdriver, int stage) {
               Real ir_cm_star_update_f = fac_norm(iang)*ir_cm_star_update(iang,ifr);
 
               // update lab-frame intensity
-              i0_(m,n,k,j,i) = (n0*n_0)*fmax(ir_cm_star_update_f, FLT_MIN)/SQR(SQR(n0_cm));
+              i0_(m,n,k,j,i) = (n0*n_0)*fmax(FLT_MIN, ir_cm_star_update_f)/SQR(SQR(n0_cm));
 
               // compute moments after coupling
               m_new[0] += (    i0_(m,n,k,j,i)    *domega);
@@ -901,10 +920,10 @@ TaskStatus Radiation::AddMultiFreqRadSrcTerm(Driver *pdriver, int stage) {
 
         // Step 7: update fluid variables
         if (affect_fluid_) {
-          if (update_fluid_energy) {
+          if (update_fluid_energy_) {
             u0_(m,IEN,k,j,i) += (m_old[0] - m_new[0]);
           }
-          if (update_fluid_moment) {
+          if (update_fluid_moment_) {
             u0_(m,IM1,k,j,i) += (m_old[1] - m_new[1]);
             u0_(m,IM2,k,j,i) += (m_old[2] - m_new[2]);
             u0_(m,IM3,k,j,i) += (m_old[3] - m_new[3]);

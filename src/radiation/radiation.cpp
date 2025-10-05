@@ -143,6 +143,30 @@ Radiation::Radiation(MeshBlockPack *ppack, ParameterInput *pin) :
     affect_fluid = pin->GetOrAddBoolean("radiation","affect_fluid",true);
 
     // multi-frequency radiation
+    if (multi_freq) {
+      // flags for fluid update
+      if (affect_fluid) {
+        update_fluid_energy = pin->GetOrAddBoolean("radiation","update_fluid_energy",true);
+        update_fluid_moment = pin->GetOrAddBoolean("radiation","update_fluid_moment",true);
+      } else {
+        update_fluid_energy = false;
+        update_fluid_moment = false;
+      }
+
+      // parameters for intensity mapping
+      order_multifreq = pin->GetOrAddInteger("radiation","order_multifreq",2);
+      limiter_multifreq = pin->GetOrAddInteger("radiation","limiter_multifreq",2);
+
+      // flags and parameters used in compton
+      if (is_compton_enabled) {
+        num_iter_compton     = pin->GetOrAddInteger("radiation","num_iter_compton",5);
+        tol_rel_tgas_compton = pin->GetOrAddReal("radiation","tol_rel_tgas_compton",1e-6);
+        est_tgas_4th_compton = pin->GetOrAddBoolean("radiation","est_tgas_4th_compton",true);
+        est_tgas_5th_compton = pin->GetOrAddBoolean("radiation","est_tgas_5th_compton",false);
+        test_only_compton_therm = pin->GetOrAddBoolean("radiation","test_only_compton_therm",false);
+      } // endif is_compton_enabled
+    } // endif (multi_freq)
+
     // if (multi_freq && !are_units_enabled) {
     //   std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
     //     << std::endl << "Units must be specified for multi-frequency radiation" << std::endl;
