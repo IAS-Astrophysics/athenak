@@ -231,21 +231,29 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
           host_adm.vK_dd(m, 2, 2, k, j, i) = coord_unit * bns->k_zz[idx];
 
           // Extract hydro quantities
-          host_w0(m, IDN, k, j, i) = bns->nbar[idx] / rho_unit;
+          // Note that Lorene does not necessarily use the same baryon rest-mass as
+          // AthenaK, and extracting this is difficult. Therefore, the better thing to do
+          // is extract the total energy density, which is invariant, and use that
+          // instead.
+          Real egas = bns->nbar[idx]*(1.0 + bns->ener_spec[idx] / ener_unit)/rho_unit;
+          /*host_w0(m, IDN, k, j, i) = bns->nbar[idx] / rho_unit;
           // Lorene only gives the specific internal energy, but PrimitiveSolver needs
           // pressure. Because PrimitiveSolver is templated, it's difficult to call it
           // directly. Thus, the easiest way is to save the internal energy density, IEN,
           // whose index overlaps the pressure, IPR, move the data to the GPU, then
           // make a call to a virtual DynGRMHD EOS function that will call the appropriate
           // template function.
-          Real egas = host_w0(m, IDN, k, j, i) * bns->ener_spec[idx] / ener_unit;
+          Real egas = host_w0(m, IDN, k, j, i) * bns->ener_spec[idx] / ener_unit;*/
+          host_w0(m, IDN, k, j, i) = p1Deos->template
+                                     GetRhoFromE<tov::LocationTag::Host>(egas);
           host_w0(m, IEN, k, j, i) = egas;
           Real vu[3] = {bns->u_euler_x[idx] / vel_unit,
                         bns->u_euler_y[idx] / vel_unit,
                         bns->u_euler_z[idx] / vel_unit};
 
-          // Check for garbage values thrown in Lorene.
-          if (host_w0(m, IDN, k, j, i) <= rho_cut) {
+          // Check for garbage values thrown in by Lorene.
+          if (host_w0(m, IDN, k, j, i) <= rho_cut ||
+              !Kokkos::isfinite(host_w0(m, IDN, k, j, i))) {
             host_w0(m, IDN, k, j, i) = 0.0;
             vu[0] = 0.0;
             vu[1] = 0.0;
