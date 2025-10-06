@@ -176,6 +176,16 @@ class TabulatedEOS {
 
   template<LocationTag loc>
   KOKKOS_INLINE_FUNCTION
+  Real GetRhoFromE(Real e) const {
+    Real le = log(e);
+    if (le < le_min) {
+      return 0.0;
+    }
+    return GetRhoFromVar<loc>(le, m_log_e);
+  }
+
+  template<LocationTag loc>
+  KOKKOS_INLINE_FUNCTION
   Real GetYeFromRho(Real rho) const {
     Real lrho = log(rho);
     if (lrho < lrho_min || !has_ye) {
@@ -192,24 +202,11 @@ class TabulatedEOS {
   KOKKOS_INLINE_FUNCTION
   Real GetRhoFromP(Real P) const {
     Real lP = log(P);
-    int lb = 0;
-    int ub = m_nn-1;
     // If the pressure is below the minimum of the table, we return zero density.
     if (lP < lP_min) {
       return 0.0;
     }
-    auto& lp_view = GetView<loc>(m_log_p);
-    auto& lrho_view = GetView<loc>(m_log_rho);
-    // Do a binary search for the lower and upper indices of the pressure
-    while (ub - lb > 1) {
-      int idx = (lb + ub)/2;
-      if (lp_view(idx) > lP) {
-        ub = idx;
-      } else {
-        lb = idx;
-      }
-    }
-    return exp(Interpolate(lP, lp_view(lb), lp_view(ub), lrho_view(lb), lrho_view(ub)));
+    return GetRhoFromVar<loc>(lP, m_log_p);
   }
 
  private:
@@ -221,6 +218,26 @@ class TabulatedEOS {
     } else {
       return arr.d_view;
     }
+  }
+
+  // Use bisection on a specified variable to find the corresponding density.
+  template<LocationTag loc>
+  KOKKOS_INLINE_FUNCTION
+  Real GetRhoFromVar(Real var, const DualArray1D<Real>& arr_var) const {
+    int lb = 0;
+    int ub = m_nn-1;
+    auto& v_view = GetView<loc>(arr_var);
+    auto& lrho_view = GetView<loc>(m_log_rho);
+    // Do a binary search for the lower and upper indices of arr_var
+    while (ub - lb > 1) {
+      int idx = (lb + ub)/2;
+      if (v_view(idx) > var) {
+        ub = idx;
+      } else {
+        lb = idx;
+      }
+    }
+    return exp(Interpolate(var, v_view(lb), v_view(ub), lrho_view(lb), lrho_view(ub)));
   }
 };
 
