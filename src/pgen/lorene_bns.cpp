@@ -231,21 +231,26 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
           host_adm.vK_dd(m, 2, 2, k, j, i) = coord_unit * bns->k_zz[idx];
 
           // Extract hydro quantities
-          // Note that Lorene does not necessarily use the same baryon rest-mass as
-          // AthenaK, and extracting this is difficult. Therefore, the better thing to do
-          // is extract the total energy density, which is invariant, and use that
-          // instead.
-          Real egas = bns->nbar[idx]*(1.0 + bns->ener_spec[idx] / ener_unit)/rho_unit;
-          /*host_w0(m, IDN, k, j, i) = bns->nbar[idx] / rho_unit;
-          // Lorene only gives the specific internal energy, but PrimitiveSolver needs
-          // pressure. Because PrimitiveSolver is templated, it's difficult to call it
-          // directly. Thus, the easiest way is to save the internal energy density, IEN,
-          // whose index overlaps the pressure, IPR, move the data to the GPU, then
-          // make a call to a virtual DynGRMHD EOS function that will call the appropriate
-          // template function.
-          Real egas = host_w0(m, IDN, k, j, i) * bns->ener_spec[idx] / ener_unit;*/
-          host_w0(m, IDN, k, j, i) = p1Deos->template
-                                     GetRhoFromE<tov::LocationTag::Host>(egas);
+          Real egas;
+          if (pmbp->pdyngr->eos_policy == DynGRMHD_EOS::eos_compose) {
+            // Note that Lorene does not necessarily use the same baryon rest-mass as
+            // AthenaK, and extracting this is difficult. Therefore, the better thing to do
+            // is extract the total energy density, which is invariant, and use that
+            // instead.
+            egas = bns->nbar[idx]*(1.0 + bns->ener_spec[idx] / ener_unit)/rho_unit;
+            host_w0(m, IDN, k, j, i) = p1Deos->template
+                                       GetRhoFromE<tov::LocationTag::Host>(egas);
+          }
+          else {
+            host_w0(m, IDN, k, j, i) = bns->nbar[idx] / rho_unit;
+            // Lorene only gives the specific internal energy, but PrimitiveSolver needs
+            // pressure. Because PrimitiveSolver is templated, it's difficult to call it
+            // directly. Thus, the easiest way is to save the internal energy density, IEN,
+            // whose index overlaps the pressure, IPR, move the data to the GPU, then
+            // make a call to a virtual DynGRMHD EOS function that will call the appropriate
+            // template function.
+            egas = host_w0(m, IDN, k, j, i) * bns->ener_spec[idx] / ener_unit;
+          }
           host_w0(m, IEN, k, j, i) = egas;
           Real vu[3] = {bns->u_euler_x[idx] / vel_unit,
                         bns->u_euler_y[idx] / vel_unit,
