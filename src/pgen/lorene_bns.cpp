@@ -31,6 +31,8 @@
 #include "mhd/mhd.hpp"
 #include "dyn_grmhd/dyn_grmhd.hpp"
 #include "utils/tov/tov_utils.hpp"
+#include "utils/tov/tov_polytrope.hpp"
+#include "utils/tov/tov_piecewise_poly.hpp"
 #include "utils/tov/tov_tabulated.hpp"
 
 // Lorene
@@ -41,28 +43,14 @@
 void BNSHistory(HistoryData *pdata, Mesh *pm);
 void LoreneBNSRefinementCondition(MeshBlockPack *pmbp);
 
-//----------------------------------------------------------------------------------------
-//! \fn ProblemGenerator::UserProblem_()
-//! \brief Problem Generator for BNS with LORENE
-void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
-  user_hist_func = &BNSHistory;
-  user_ref_func = &LoreneBNSRefinementCondition;
-
-  if (restart) return;
-
+template<class TOVEOS>
+void SetupBNS(ParameterInput *pin, Mesh* pmy_mesh_) {
   MeshBlockPack *pmbp = pmy_mesh_->pmb_pack;
   auto &indcs = pmy_mesh_->mb_indcs;
   auto &size = pmbp->pmb->mb_size;
   int &is = indcs.is; int &ie = indcs.ie;
   int &js = indcs.js; int &je = indcs.je;
   int &ks = indcs.ks; int &ke = indcs.ke;
-
-  /*if (pmbp->pdyngr == nullptr || pmbp->pz4c == nullptr) {
-    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
-              << "BNS data requires <mhd> and <z4c> blocks."
-              << std::endl;
-    exit(EXIT_FAILURE);
-  }*/
 
   // Conversion constants to translate between Lorene and AthenaK
   const Real c_light  = Lorene::Unites::c_si;      // speed of light [m/s]
@@ -99,17 +87,17 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   Real *y_coords = new Real[width];
   Real *z_coords = new Real[width];
 
-  // 1D EoS for setting scalars if using CompOSE EoS
-  tov::TabulatedEOS *p1Deos;
-  if (pmbp->pdyngr->eos_policy == DynGRMHD_EOS::eos_compose) {
-    p1Deos = new tov::TabulatedEOS(pin);
+  // Set up the 1D EOS
+  TOVEOS eos{pin};
+
+  // Enable ye if the EOS supports it.
+  constexpr bool use_ye = tov::UsesYe<TOVEOS>;
+
+  if (global_variable::my_rank == 0) {
+    std::cout << "Allocated coordinates of size " << width << std::endl;
   }
 
-  std::cout << "Allocated coordinates of size " << width << std::endl;
-
   // Populate coordinates for LORENE
-  // TODO(JMF): Replace with a Kokkos loop on Kokkos::DefaultHostExecutionSpace() to
-  // improve performance.
   int idx = 0;
   for (int m = 0; m < nmb; m++) {
     Real &x1min = size.h_view(m).x1min;
@@ -143,36 +131,35 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   }
 
   // Interpolate the data
-  std::cout << "Coordinates assigned." << std::endl;
+  if (global_variable::my_rank == 0) {
+    std::cout << "Coordinates assigned." << std::endl;
+  }
   Lorene::Bin_NS *bns = new Lorene::Bin_NS(width, x_coords, y_coords, z_coords,
-                                          fname.c_str());
+                                           fname.c_str());
 
   // Free the coordinates, since we'll no longer need them.
   delete[] x_coords;
   delete[] y_coords;
   delete[] z_coords;
 
-  std::cout << "Coordinates freed." << std::endl;
+  if (global_variable::my_rank == 0) {
+    std::cout << "Coordinates freed." << std::endl;
+  }
 
   // Capture variables for kernel; note that when Z4c is enabled, the gauge variables
   // are part of the Z4c class.
   auto &u_adm = pmbp->padm->u_adm;
-  auto &adm   = pmbp->padm->adm;
-  auto &w0    = pmbp->pmhd->w0;
-  //auto &u_z4c = pmbp->pz4c->u0;
-  // Because Elliptica only operates on the CPU, we can't construct the data on the GPU.
+  auto &adm = pmbp->padm->adm;
+  auto &w0 = pmbp->pmhd->w0;
+  // Because Lorene operates only on the CPU, we can't construct the data on the GPU.
   // Instead, we create a mirror guaranteed to be on the CPU, populate the data there,
-  // then move it back to the GPU.
-  // TODO(JMF): This needs to be tested on CPUs to ensure that it functions properly;
-  // In theory, create_mirror_view shouldn't copy the data unless it's in a different
-  // memory space.
-  HostArray5D<Real>::HostMirror host_u_adm = create_mirror_view(u_adm);
-  HostArray5D<Real>::HostMirror host_w0 = create_mirror_view(w0);
-  //HostArray5D<Real>::HostMirror host_u_z4c = create_mirror_view(u_z4c);
+  // then move it back to the GPU if applicable.
+  HostArray5D<Real>::HostMirror host_u_adm = Kokkos::create_mirror_view(u_adm);
+  HostArray5D<Real>::HostMirror host_w0 = Kokkos::create_mirror_view(w0);
   HostArray5D<Real>::HostMirror host_u_z4c;
   adm::ADM::ADMhost_vars host_adm;
   if (pmbp->pz4c != nullptr) {
-    host_u_z4c = create_mirror_view(pmbp->pz4c->u0);
+    host_u_z4c = Kokkos::create_mirror_view(pmbp->pz4c->u0);
     host_adm.alpha.InitWithShallowSlice(host_u_z4c, z4c::Z4c::I_Z4C_ALPHA);
     host_adm.beta_u.InitWithShallowSlice(host_u_z4c,
         z4c::Z4c::I_Z4C_BETAX, z4c::Z4c::I_Z4C_BETAZ);
@@ -186,29 +173,16 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   host_adm.vK_dd.InitWithShallowSlice(host_u_adm,
       adm::ADM::I_ADM_KXX, adm::ADM::I_ADM_KZZ);
 
-  std::cout << "Host mirrors created." << std::endl;
+  if (global_variable::my_rank == 0) {
+    std::cout << "Host mirrors created." << std::endl;
+  }
 
-  // TODO(JMF): Replace with a Kokkos loop on Kokkos::DefaultHostExecutionSpace() to
-  // improve performance.
+  // Copy the interpolated data into the mirrored views.
   idx = 0;
   for (int m = 0; m < nmb; m++) {
     for (int k = 0; k < ncells3; k++) {
       for (int j = 0; j < ncells2; j++) {
         for (int i = 0; i < ncells1; i++) {
-  /*const int nn = nmb;
-  const int nk = ncells3;
-  const int nj = ncells2;
-  const int ni = ncells1;
-  const int nnkji = nn * nk * nj * ni;
-  const int nkji = nk * nj * ni;
-  const int nji = nj * ni;
-  Kokkos::parallel_for("pgen_lorene",
-  Kokkos::RangePolicy<>(HostExeSpace(), 0, nnkji),
-  KOKKOS_LAMBDA(const int &idx) {
-          int m = (idx)/nkji;
-          int k = (idx - m*nkji)/nji;
-          int j = (idx - m*nkji - k*nji)/ni;
-          int i = (idx - m*nkji - k*nji - j*ni);*/
           // Extract metric quantities
           host_adm.alpha(m, k, j, i) = bns->nnn[idx];
           host_adm.beta_u(m, 0, k, j, i) = bns->beta_x[idx];
@@ -223,60 +197,32 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
           host_adm.g_dd(m, 1, 2, k, j, i) = g3d[S23] = bns->g_yz[idx];
           host_adm.g_dd(m, 2, 2, k, j, i) = g3d[S33] = bns->g_zz[idx];
 
-          host_adm.vK_dd(m, 0, 0, k, j, i) = coord_unit * bns->k_xx[idx];
-          host_adm.vK_dd(m, 0, 1, k, j, i) = coord_unit * bns->k_xy[idx];
-          host_adm.vK_dd(m, 0, 2, k, j, i) = coord_unit * bns->k_xz[idx];
-          host_adm.vK_dd(m, 1, 1, k, j, i) = coord_unit * bns->k_yy[idx];
-          host_adm.vK_dd(m, 1, 2, k, j, i) = coord_unit * bns->k_yz[idx];
-          host_adm.vK_dd(m, 2, 2, k, j, i) = coord_unit * bns->k_zz[idx];
-
           // Extract hydro quantities
-          Real egas;
-          if (pmbp->pdyngr->eos_policy == DynGRMHD_EOS::eos_compose) {
-            // Note that Lorene does not necessarily use the same baryon rest-mass as
-            // AthenaK, and extracting this is difficult. Therefore, the better thing to do
-            // is extract the total energy density, which is invariant, and use that
-            // instead.
-            egas = bns->nbar[idx]*(1.0 + bns->ener_spec[idx] / ener_unit)/rho_unit;
-            host_w0(m, IDN, k, j, i) = p1Deos->template
-                                       GetRhoFromE<tov::LocationTag::Host>(egas);
-          }
-          else {
-            host_w0(m, IDN, k, j, i) = bns->nbar[idx] / rho_unit;
-            // Lorene only gives the specific internal energy, but PrimitiveSolver needs
-            // pressure. Because PrimitiveSolver is templated, it's difficult to call it
-            // directly. Thus, the easiest way is to save the internal energy density, IEN,
-            // whose index overlaps the pressure, IPR, move the data to the GPU, then
-            // make a call to a virtual DynGRMHD EOS function that will call the appropriate
-            // template function.
-            egas = host_w0(m, IDN, k, j, i) * bns->ener_spec[idx] / ener_unit;
-          }
-          host_w0(m, IEN, k, j, i) = egas;
+          // Note that Lorene does not necessarily use the same baryon rest-mass as
+          // AthenaK. The most reasonable thing to do, then, is to extract the total
+          // energy density, which is invariant, and use that with the 1D EOS.
+          Real egas = bns->nbar[idx]*(1.0 + bns->ener_spec[idx] / ener_unit)/rho_unit;
+          Real& rho = host_w0(m, IDN, k, j, i);
+          rho = eos.template GetRhoFromE<tov::LocationTag::Host>(egas);
+          host_w0(m, IPR, k, j, i) = eos.template
+                                     GetPFromRho<tov::LocationTag::Host>(rho);
           Real vu[3] = {bns->u_euler_x[idx] / vel_unit,
                         bns->u_euler_y[idx] / vel_unit,
                         bns->u_euler_z[idx] / vel_unit};
-
+          
           // Check for garbage values thrown in by Lorene.
-          if (host_w0(m, IDN, k, j, i) <= rho_cut ||
-              !Kokkos::isfinite(host_w0(m, IDN, k, j, i))) {
-            host_w0(m, IDN, k, j, i) = 0.0;
+          if (rho <= rho_cut || !Kokkos::isfinite(rho)) {
+            rho = 0.0;
+            host_w0(m, IPR, k, j, i) = 0.0;
             vu[0] = 0.0;
             vu[1] = 0.0;
             vu[2] = 0.0;
-            egas = 0.0;
           }
 
-          // If we're using a tabulated EOS, we need to get the pressure directly from
-          // the cold EOS because Lorene usually returns garbage. We also use this
-          // opportunity to get the electron fraction.
-          if (pmbp->pdyngr->eos_policy == DynGRMHD_EOS::eos_compose) {
-            host_w0(m, IPR, k, j, i) = p1Deos->template
-              GetPFromRho<tov::LocationTag::Host>(host_w0(m,IDN,k,j,i));
-            if (pmbp->pmhd->nscalars>=1) {
-              Real Ye = p1Deos->template
-                GetYeFromRho<tov::LocationTag::Host>(host_w0(m,IDN,k,j,i));
-              host_w0(m, IYF, k, j, i) = Ye;
-            }
+          // If the electron fraction is available, find it in the 1D EOS.
+          if constexpr (use_ye) {
+            host_w0(m, IYF, k, j, i) = eos.template
+                                       GetYeFromRho<tov::LocationTag::Host>(rho);
           }
 
           // Before we store the velocity, we need to make sure it's physical and
@@ -287,34 +233,34 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
           if (1.0 - vsq <= 0) {
             std::cout << "The velocity is superluminal!" << std::endl
                       << "Attempting to adjust..." << std::endl;
-            Real fac = sqrt((1.0 - 1e-15)/vsq);
+            Real fac = Kokkos::sqrt((1.0 - 1e-15)/vsq);
             vu[0] *= fac;
             vu[1] *= fac;
             vu[2] *= fac;
             vsq = 1.0 - 1.0e-15;
           }
-          Real W = sqrt(1.0 / (1.0 - vsq));
+          Real W = Kokkos::sqrt(1.0 / (1.0 - vsq));
 
           host_w0(m, IVX, k, j, i) = W*vu[0];
           host_w0(m, IVY, k, j, i) = W*vu[1];
           host_w0(m, IVZ, k, j, i) = W*vu[2];
 
           idx++;
-  //});
         }
       }
     }
   }
 
-  std::cout << "Host mirrors filled." << std::endl;
+  if (global_variable::my_rank == 0) {
+    std::cout << "Host mirrors filled." << std::endl;
+  }
 
   // Cleanup
   delete bns;
-  if (pmbp->pdyngr->eos_policy == DynGRMHD_EOS::eos_compose) {
-    delete p1Deos;
-  }
 
-  std::cout << "Lorene freed." << std::endl;
+  if (global_variable::my_rank == 0) {
+    std::cout << "Lorene freed." << std::endl;
+  }
 
   // Copy the data to the GPU.
   Kokkos::deep_copy(u_adm, host_u_adm);
@@ -323,15 +269,8 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     Kokkos::deep_copy(pmbp->pz4c->u0, host_u_z4c);
   }
 
-  std::cout << "Data copied." << std::endl;
-
-  // Convert internal energy to pressure. This is NOT necessary if we use a tabulated
-  // EOS because we pull the energy straight from the cold EOS.
-  // TODO(JMF): This can be refactored to be EOS generic such that we no longer rely on
-  // Lorene's epsilon for any EOS.
-  if (pmbp->pdyngr->eos_policy != DynGRMHD_EOS::eos_compose) {
-    pmbp->pdyngr->ConvertInternalEnergyToPressure(0, (ncells1-1),
-                                                  0, (ncells2-1), 0, (ncells3-1));
+  if (global_variable::my_rank == 0) {
+    std::cout << "Data copied." << std::endl;
   }
 
   // TODO(JMF): Add magnetic fields
@@ -349,11 +288,13 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
       b0.x2f(m, k, j+1, i) = 0.0;
     }
     if (k == ke) {
-      b0.x3f(m, k+1, j ,i) = 0.0;
+      b0.x3f(m, k+1, j, i) = 0.0;
     }
   });
 
-  std::cout << "Face-centered fields zeroed." << std::endl;
+  if (global_variable::my_rank == 0) {
+    std::cout << "Face-centered fields calculated." << std::endl;
+  }
 
   // Compute cell-centered fields
   auto &bcc0 = pmbp->pmhd->bcc0;
@@ -361,10 +302,53 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   KOKKOS_LAMBDA(int m, int k, int j, int i) {
     bcc0(m, IBX, k, j, i) = 0.5*(b0.x1f(m, k, j, i) + b0.x1f(m, k, j, i+1));
     bcc0(m, IBY, k, j, i) = 0.5*(b0.x2f(m, k, j, i) + b0.x2f(m, k, j+1, i));
-    bcc0(m, IBZ, k, j, i) = 0.5*(b0.x3f(m, k, j, i) + b0.x3f(m, k+1, j, i));
+    bcc0(m, IBZ, k, j, i) = 0.5*(b0.x3f(m, k, j, i) + b0.x2f(m, k+1, j, i));
   });
 
-  std::cout << "Cell-centered fields calculated." << std::endl;
+  if (global_variable::my_rank == 0) {
+    std::cout << "Cell-centered fields calculated." << std::endl;
+  }
+
+  return;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn ProblemGenerator::UserProblem_()
+//! \brief Problem Generator for BNS with LORENE
+void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
+  MeshBlockPack *pmbp = pmy_mesh_->pmb_pack;
+  if (!pmbp->pcoord->is_dynamical_relativistic) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+              << "Lorene BNS problem must have <adm> block to run"
+              << std::endl;
+    exit(EXIT_FAILURE);
+  }
+  user_hist_func = &BNSHistory;
+  user_ref_func = &LoreneBNSRefinementCondition;
+
+  if (restart) return;
+
+  // Select the correct EOS template based on the EOS we need.
+  if (pmbp->pdyngr->eos_policy == DynGRMHD_EOS::eos_ideal) {
+    SetupBNS<tov::PolytropeEOS>(pin, pmy_mesh_);
+  } else if (pmbp->pdyngr->eos_policy == DynGRMHD_EOS::eos_compose) {
+    SetupBNS<tov::TabulatedEOS>(pin, pmy_mesh_);
+  } else if (pmbp->pdyngr->eos_policy == DynGRMHD_EOS::eos_hybrid) {
+    SetupBNS<tov::TabulatedEOS>(pin, pmy_mesh_);
+  } else if (pmbp->pdyngr->eos_policy == DynGRMHD_EOS::eos_piecewise_poly) {
+    SetupBNS<tov::PiecewisePolytropeEOS>(pin, pmy_mesh_);
+  } else {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+              << "Unknown EOS requested for Lorene BNS problem" << std::endl;
+    exit(EXIT_FAILURE);
+  }
+
+  auto &indcs = pmy_mesh_->mb_indcs;
+  auto &size = pmbp->pmb->mb_size;
+  int &ng = indcs.ng;
+  int ncells1 = indcs.nx1 + 2*ng;
+  int ncells2 = (indcs.nx2 > 1) ? (indcs.nx2 + 2*ng) : 1;
+  int ncells3 = (indcs.nx3 > 1) ? (indcs.nx3 + 2*ng) : 1;
 
   pmbp->pdyngr->PrimToConInit(0, (ncells1-1), 0, (ncells2-1), 0, (ncells3-1));
   if (pmbp->pz4c != nullptr) {
