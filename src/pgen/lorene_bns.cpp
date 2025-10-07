@@ -204,8 +204,6 @@ void SetupBNS(ParameterInput *pin, Mesh* pmy_mesh_) {
           Real egas = bns->nbar[idx]*(1.0 + bns->ener_spec[idx] / ener_unit)/rho_unit;
           Real& rho = host_w0(m, IDN, k, j, i);
           rho = eos.template GetRhoFromE<tov::LocationTag::Host>(egas);
-          host_w0(m, IPR, k, j, i) = eos.template
-                                     GetPFromRho<tov::LocationTag::Host>(rho);
           Real vu[3] = {bns->u_euler_x[idx] / vel_unit,
                         bns->u_euler_y[idx] / vel_unit,
                         bns->u_euler_z[idx] / vel_unit};
@@ -218,6 +216,9 @@ void SetupBNS(ParameterInput *pin, Mesh* pmy_mesh_) {
             vu[1] = 0.0;
             vu[2] = 0.0;
           }
+
+          host_w0(m, IPR, k, j, i) = eos.template
+                                     GetPFromRho<tov::LocationTag::Host>(rho);
 
           // If the electron fraction is available, find it in the 1D EOS.
           if constexpr (use_ye) {
