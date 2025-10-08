@@ -15,5 +15,6 @@ void ShowConfig();
 void ChangeRunDir(const std::string dir);
 void ComputeDerivedVariable(std::string name, int index, MeshBlockPack* pmbp,
                             DvceArray5D<Real> dvars);
+void WatchDog(int timeout);
 
 #endif // UTILS_UTILS_HPP_
