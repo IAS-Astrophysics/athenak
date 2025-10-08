@@ -158,9 +158,9 @@ void ComputeADMDecomposition(Real x, Real y, Real z, bool minkowski, Real a,
              *gxx, *gxy, *gxz, *gyy, *gyz, *gzz,
              &uxx, &uxy, &uxz, &uyy, &uyz, &uzz);
   Real const g_uu[3][3] = {
-    uxx, uxy, uxz,
-    uxy, uyy, uyz,
-    uxz, uyz, uzz
+    {uxx, uxy, uxz},
+    {uxy, uyy, uyz},
+    {uxz, uyz, uzz}
   };
 
   //
@@ -190,7 +190,7 @@ void ComputeADMDecomposition(Real x, Real y, Real z, bool minkowski, Real a,
     - SQR(z)/(SQR(r)*r) * ( qb )/( qa ) + 1.0/r},
   };
 
-  Real dg_ddd[3][3][3] = {0.0};
+  Real dg_ddd[3][3][3] = {{{0.0}}};
   for (int i = 0; i < 3; i++)
   for (int a = 0; a < 3; a++)
   for (int b = 0; b < 3; b++) {

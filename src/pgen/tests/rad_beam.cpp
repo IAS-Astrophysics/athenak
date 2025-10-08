@@ -81,7 +81,7 @@ void ProblemGenerator::RadiationBeam(ParameterInput *pin, const bool restart) {
       ComputeMetricAndInverse(x1v,x2v,x3v,flat,spin,glower,gupper);
 
       // Compute eta_alpha beta = g_mu nu e^mu_alpha e^nu_beta
-      Real test_eta[4][4] = {0.0};
+      Real test_eta[4][4] = {{0.0}};
       for (int alpha=0; alpha<4; ++alpha) {
         for (int beta=0; beta<4; ++beta) {
           test_eta[alpha][beta] = 0.0;

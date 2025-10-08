@@ -118,8 +118,8 @@ DynGRMHD* BuildDynGRMHD(MeshBlockPack *ppack, ParameterInput *pin) {
 }
 
 DynGRMHD::DynGRMHD(MeshBlockPack *pp, ParameterInput *pin) :
-    pmy_pack(pp),
-    temperature("temperature",1,1,1,1,1) {
+    temperature("temperature",1,1,1,1,1),
+    pmy_pack(pp) {
   std::string rsolver = pin->GetString("mhd", "rsolver");
   if (rsolver.compare("llf") == 0) {
     rsolver_method = DynGRMHD_RSolver::llf_dyngr;
@@ -538,8 +538,6 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::AddCoordTermsEOS(const DvceArray5D<Real
                            adm.g_dd(m,0,2,k,j,i), adm.g_dd(m,1,1,k,j,i),
                            adm.g_dd(m,1,2,k,j,i), adm.g_dd(m,2,2,k,j,i)};
     const Real& alpha = adm.alpha(m, k, j, i);
-    Real beta_u[3] = {adm.beta_u(m,0,k,j,i),
-                      adm.beta_u(m,1,k,j,i), adm.beta_u(m,2,k,j,i)};
     Real detg = adm::SpatialDet(g3d[S11], g3d[S12], g3d[S13],
                                 g3d[S22], g3d[S23], g3d[S33]);
     Real vol = sqrt(detg);
@@ -553,13 +551,13 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::AddCoordTermsEOS(const DvceArray5D<Real
     for (int a = 0; a < ndim; a++) {
       dalpha_d[a] = Dx<NGHOST>(a, idx, adm.alpha, m, k, j, i);
     }
-    Real dbeta_du[3][3] = {0.};
+    Real dbeta_du[3][3] = {{0.0}};
     for (int a = 0; a < 3; a++) {
       for (int b = 0; b < ndim; b++) {
         dbeta_du[b][a] = Dx<NGHOST>(b, idx, adm.beta_u, m, a, k, j, i);
       }
     }
-    Real dg_ddd[3][3][3] = {0.};
+    Real dg_ddd[3][3][3] = {{{0.0}}};
     for (int a = 0; a < 3; ++a) {
       for (int b = 0; b < 3; ++b) {
         for (int c = 0; c < ndim; ++c) {

@@ -28,11 +28,6 @@ namespace radiation {
 // constructor, initializes data structures and parameters
 
 Radiation::Radiation(MeshBlockPack *ppack, ParameterInput *pin) :
-    pmy_pack(ppack),
-    i0("i0",1,1,1,1,1),
-    i1("i1",1,1,1,1,1),
-    iflx("iflx",1,1,1,1,1),
-    divfa("divfa",1,1,1,1,1),
     nh_c("nh_c",1,1),
     nh_f("nh_f",1,1,1),
     tet_c("tet_c",1,1,1,1,1,1),
@@ -41,7 +36,13 @@ Radiation::Radiation(MeshBlockPack *ppack, ParameterInput *pin) :
     tet_d2_x2f("tet_d2_x2f",1,1,1,1,1),
     tet_d3_x3f("tet_d3_x3f",1,1,1,1,1),
     na("na",1,1,1,1,1,1),
-    norm_to_tet("norm_to_tet",1,1,1,1,1,1) {
+    norm_to_tet("norm_to_tet",1,1,1,1,1,1),
+    i0("i0",1,1,1,1,1),
+    coarse_i0("ci0",1,1,1,1,1),
+    i1("i1",1,1,1,1,1),
+    iflx("iflx",1,1,1,1,1),
+    divfa("divfa",1,1,1,1,1),
+    pmy_pack(ppack) {
   // Check for general relativity
   if (!(pmy_pack->pcoord->is_general_relativistic)) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__

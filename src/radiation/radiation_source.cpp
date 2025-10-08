@@ -77,7 +77,7 @@ TaskStatus Radiation::RadFluidCoupling(Driver *pdriver, int stage) {
   }
 
   // Extract adiabatic index
-  Real gm1;
+  Real gm1=0.0;
   if (is_hydro_enabled_) {
     gm1 = pmy_pack->phydro->peos->eos_data.gamma - 1.0;
   } else if (is_mhd_enabled_) {

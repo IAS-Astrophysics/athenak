@@ -24,11 +24,11 @@
 // MeshBoundaryValues constructor:
 
 MeshBoundaryValues::MeshBoundaryValues(MeshBlockPack *pp, ParameterInput *pin, bool z4c) :
-  pmy_pack(pp),
-  is_z4c_(z4c),
-  u_in("uin",1,1),
-  b_in("bin",1,1),
-  i_in("iin",1,1) {
+    u_in("uin",1,1),
+    b_in("bin",1,1),
+    i_in("iin",1,1),
+    pmy_pack(pp),
+    is_z4c_(z4c) {
   // allocate vector of status flags and MPI requests (if needed)
   int nnghbr = pmy_pack->pmb->nnghbr;
 

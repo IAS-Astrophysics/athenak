@@ -153,7 +153,6 @@ class NumericalRelativity {
     AddExtraDependencies(dependencies, optional);
     // Add a new task to the queue.
     //std::cout << "Queuing " << name_string << "...\n";
-    auto& queue = SelectQueue(loc);
     SelectQueue(loc).push_back(QueuedTask(name, name_string, false, TaskID(),
       dependencies,
       [=](Driver *d, int s) mutable -> TaskStatus {return (obj->*func)(d,s);}));

@@ -18,13 +18,6 @@
 // constructor, initializes data structures and parameters
 
 GeodesicGrid::GeodesicGrid(int nlev, bool rotate, bool fluxes) :
-    nlevel(nlev),
-    rotate_geo(rotate),
-    geo_fluxes(fluxes),
-    amesh_normals("amesh_normals",1,1,1,1),
-    ameshp_normals("ameshp_normals",1,1),
-    amesh_indices("amesh_indices",1,1,1),
-    ameshp_indices("ameshp_indices",1),
     num_neighbors("num_neighbors",1),
     ind_neighbors("ind_neighbors",1,1),
     ind_neighbors_edges("ind_neighbors_edges",1,1),
@@ -34,7 +27,14 @@ GeodesicGrid::GeodesicGrid(int nlev, bool rotate, bool fluxes) :
     cart_pos_mid("cart_pos_mid",1,1,1),
     polar_pos("polar_pos",1,1),
     polar_pos_mid("polar_pos_mid",1,1,1),
-    unit_flux("unit_flux",1,1,1) {
+    unit_flux("unit_flux",1,1,1),
+    nlevel(nlev),
+    rotate_geo(rotate),
+    geo_fluxes(fluxes),
+    amesh_normals("amesh_normals",1,1,1,1),
+    ameshp_normals("ameshp_normals",1,1),
+    amesh_indices("amesh_indices",1,1,1),
+    ameshp_indices("ameshp_indices",1) {
   if (nlevel > 0) {  // construct geodesic mesh
     // number of angles
     nangles = 5*2*SQR(nlevel) + 2;

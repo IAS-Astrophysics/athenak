@@ -140,8 +140,9 @@ class MHD {
   DvceArray5D<Real> bccsaved;
 
   // following used for FOFC algorithm
-  DvceArray4D<bool> fofc;  // flag for each cell to indicate if FOFC is needed
   bool use_fofc = false;   // flag to enable FOFC
+  DvceArray4D<bool> fofc;  // flag for each cell to indicate if FOFC is needed
+  DvceArray5D<Real> utest, bcctest;  // scratch arrays for FOFC
 
   // container to hold names of TaskIDs
   MHDTaskIDs id;
@@ -193,8 +194,6 @@ class MHD {
 
   // first-order flux correction
   void FOFC(Driver *d, int stage);
-
-  DvceArray5D<Real> utest, bcctest;  // scratch arrays for FOFC
 
  private:
   MeshBlockPack* pmy_pack;   // ptr to MeshBlockPack containing this MHD

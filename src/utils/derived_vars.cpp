@@ -43,8 +43,6 @@ void ComputeDerivedVariable(std::string name, int index, MeshBlockPack* pmbp,
   int &js = indcs.js;  int &je  = indcs.je;
   int &ks = indcs.ks;  int &ke  = indcs.ke;
   auto &size = pmbp->pmb->mb_size;
-  auto &multi_d = pmbp->pmesh->multi_d;
-  auto &three_d = pmbp->pmesh->three_d;
 
   // radiation coordinate frame energy density R^0^0
   if (name.compare("rad_coord_e") == 0) {

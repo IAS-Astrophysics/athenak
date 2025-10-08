@@ -244,14 +244,14 @@ void Radiation::SetOrthonormalTetrad() {
       ComputeTetrad(x1v,x2v,x3v,flat,spin,glower,gupper,dgx,dgy,dgz,e,e_cov,omega);
 
       // Minkowski metric
-      Real eta[4][4] = {0.0};
+      Real eta[4][4] = {{0.0}};
       eta[0][0] = -1.0;
       eta[1][1] = 1.0;
       eta[2][2] = 1.0;
       eta[3][3] = 1.0;
 
       // Calculate normal-to-coordinate transformation
-      Real norm_to_coord[4][4] = {0.0};
+      Real norm_to_coord[4][4] = {{0.0}};
       Real alpha = 1.0/sqrt(-gupper[0][0]);
       norm_to_coord[0][0] = 1.0/alpha;
       norm_to_coord[1][0] = -alpha*gupper[0][1];

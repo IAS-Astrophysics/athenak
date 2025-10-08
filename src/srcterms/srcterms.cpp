@@ -228,9 +228,6 @@ void SourceTerms::BeamSource(DvceArray5D<Real> &i0, const Real bdt) {
   int nmb1 = (pmy_pack->nmb_thispack-1);
   int nang1 = (pmy_pack->prad->prgeo->nangles-1);
 
-  auto &excise = pmy_pack->pcoord->coord_data.bh_excise;
-  auto &rad_mask_ = pmy_pack->pcoord->excision_floor;
-
   auto &size = pmy_pack->pmb->mb_size;
   auto &flat = pmy_pack->pcoord->coord_data.is_minkowski;
   auto &spin = pmy_pack->pcoord->coord_data.bh_spin;

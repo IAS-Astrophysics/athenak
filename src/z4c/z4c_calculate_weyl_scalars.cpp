@@ -67,7 +67,6 @@ void Z4c::Z4cWeyl(MeshBlockPack *pmbp) {
     Real dotp1 = 0.0;
     Real dotp2 = 0.0;
     Real K = 0.0;            // trace of extrinsic curvature
-    Real KK = 0.0;           // K^a_b K^b_a
 
     // Vectors
     AthenaPointTensor<Real, TensorSymm::NONE, 3, 1> Gamma_u;
@@ -227,11 +226,6 @@ void Z4c::Z4cWeyl(MeshBlockPack *pmbp) {
         }
       }
       K += K_ud(a,a);
-    }
-    // K^a_b K^b_a
-    for(int a = 0; a < 3; ++a)
-    for(int b = 0; b < 3; ++b) {
-      KK += K_ud(a,b) * K_ud(b,a);
     }
     // Covariant derivative of K
     for(int a = 0; a < 3; ++a)

@@ -24,20 +24,15 @@ class LagrangeInterpolator {
   void SetInterpolationIndices();
   void CalculateWeight();
   Real Interpolate(DvceArray5D<Real> &val, int nvars);
-  Real InterpolateTensor(
-    AthenaTensor<Real, TensorSymm::NONE, 3, 1> &val, int nvars);
-  Real ResetPointAndInterpolate(
-    DvceArray5D<Real> &val, int nvars, Real rcoords2[3]);
+  Real InterpolateTensor(AthenaTensor<Real, TensorSymm::NONE, 3, 1> &val, int nvars);
+  Real ResetPointAndInterpolate(DvceArray5D<Real> &val, int nvars, Real rcoords2[3]);
   bool point_exist; // point exist on this rank (meshblock pack)
  private:
+  MeshBlockPack *pmy_pack;  // ptr to MeshBlockPack containing this Hydro
   HostArray1D<Real> rcoord; // xyz coordinate for interpolated value
-
-  int nvars;               // index of the variable for interpolation
-  MeshBlockPack *pmy_pack; // ptr to MeshBlockPack containing this Hydro
-  int
-    ng; // number of ghost cell, which sets interpolation level automatically
-  HostArray1D<int>
-    interp_indcs; // indices of MeshBlock and zones therein for interp
+  int nvars;                // index of the variable for interpolation
+  int ng;                   // number of ghost cell, which sets interpolation level
+  HostArray1D<int> interp_indcs;  // indices of MeshBlock and zones therein for interp
   HostArray2D<Real> interp_wghts; // weights for interpolation
 };
 

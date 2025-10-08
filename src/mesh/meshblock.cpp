@@ -23,11 +23,11 @@
 // by SetNeighbors function called by BuildTree***() functions.
 
 MeshBlock::MeshBlock(MeshBlockPack* ppack, int igids, int nmb) :
-  pmy_pack(ppack),
-  mb_gid("mb_gid",nmb),
-  mb_lev("mb_lev",nmb),
-  mb_size("mbsize",nmb),
-  mb_bcs("mbbcs",nmb,6) {
+    mb_gid("mb_gid",nmb),
+    mb_lev("mb_lev",nmb),
+    mb_size("mbsize",nmb),
+    mb_bcs("mbbcs",nmb,6),
+    pmy_pack(ppack) {
   Mesh* pm = pmy_pack->pmesh;
   auto &ms = pm->mesh_size;
 

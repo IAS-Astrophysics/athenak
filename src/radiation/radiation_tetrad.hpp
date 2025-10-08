@@ -53,7 +53,7 @@ void ComputeTetrad(Real x, Real y, Real z, const bool minkowski, const Real a,
   e[3][3] = iwa*wb;
 
   // Set derivatives of tetrad
-  Real de[4][4][4] = {0.0};
+  Real de[4][4][4] = {{{0.0}}};
   Real qa = 2.0*SQR(r) - SQR(rad) + SQR(a);
   Real qb = SQR(r) + SQR(a);
   Real qc = 3.0*SQR(a * z)-SQR(r)*SQR(r);
@@ -125,7 +125,7 @@ void ComputeTetrad(Real x, Real y, Real z, const bool minkowski, const Real a,
   de[3][3][3]  = iwa*dwb_dx3 - iwasq*wb*dwa_dx3;
 
   // Stow metric derivatives in a temporary array
-  Real dg[4][4][4] = {0.0};
+  Real dg[4][4][4] = {{{0.0}}};
   for (int i=0; i<4; ++i) {
     for (int j=0; j<4; ++j) {
       dg[0][i][j] = 0.0;
@@ -136,15 +136,15 @@ void ComputeTetrad(Real x, Real y, Real z, const bool minkowski, const Real a,
   }
 
   // Set Minkowski metric
-  Real eta[4][4] = {0.0};
+  Real eta[4][4] = {{0.0}};
   eta[0][0] = -1.0;
   eta[1][1] = 1.0;
   eta[2][2] = 1.0;
   eta[3][3] = 1.0;
 
   // Calculate covariant tetrad, inverse tetrad, and connection coefficients
-  Real ei[4][4] = {0.0};
-  Real gamma[4][4][4] = {0.0};
+  Real ei[4][4] = {{0.0}};
+  Real gamma[4][4][4] = {{{0.0}}};
   for (int i=0; i<4; ++i) {
     for (int j=0; j<4; ++j) {
       ecov[i][j] = 0.0;

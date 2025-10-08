@@ -8,13 +8,14 @@
 //! \file mesh_refinement.hpp
 //! \brief defines MeshRefinement class containing data and functions controlling SMR/AMR
 
+#if MPI_PARALLEL_ENABLED
 //----------------------------------------------------------------------------------------
 //! \fn int CreateAMR_MPI_Tag(int lid, int ox1, int ox2, int ox3)
 //! \brief calculate an MPI tag for AMR communications.  Note maximum size of
 //! lid that can be encoded is set by (NUM_BITS_LID) macro.
 //! The convention in Athena++ is lid is for the *receiving* process.
 //! The MPI standard requires signed int tag, with MPI_TAG_UB>=2^15-1 = 32,767 (inclusive)
-static int CreateAMR_MPI_Tag(int lid, int ox1, int ox2, int ox3) {
+[[maybe_unused]] static int CreateAMR_MPI_Tag(int lid, int ox1, int ox2, int ox3) {
   return (ox1<<(NUM_BITS_LID+2)) | (ox2<<(NUM_BITS_LID+1))| (ox3<<(NUM_BITS_LID)) | lid;
 }
 
@@ -23,7 +24,6 @@ static int CreateAMR_MPI_Tag(int lid, int ox1, int ox2, int ox3) {
 //! \brief container for index ranges, storage, and flags for AMR buffers used with load
 //! balancing.
 
-#if MPI_PARALLEL_ENABLED
 struct AMRBuffer {
   int bis, bie, bjs, bje, bks, bke;  // start/end indices of data to be packed/unpacked
   int cntcc, cntfc;          // number of CC and FC array elements to be sent/recv per var

@@ -21,9 +21,9 @@
 // constructor, initializes coordinates data
 
 Coordinates::Coordinates(ParameterInput *pin, MeshBlockPack *ppack) :
-    pmy_pack(ppack),
     excision_floor("excision_floor",1,1,1,1),
-    excision_flux("excision_flux",1,1,1,1) {
+    excision_flux("excision_flux",1,1,1,1),
+    pmy_pack(ppack) {
   // Check for relativistic dynamics
   // WGC: idea for handling new EOS
   is_dynamical_relativistic = (pin->DoesBlockExist("adm") || pin->DoesBlockExist("z4c"))

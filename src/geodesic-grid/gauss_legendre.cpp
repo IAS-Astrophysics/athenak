@@ -24,15 +24,15 @@
 // constructor, initializes data structures and parameters
 
 GaussLegendreGrid::GaussLegendreGrid(MeshBlockPack *pmy_pack, int ntheta, Real rad):
-  pmy_pack(pmy_pack),
-  radius(rad),
-  ntheta(ntheta),
-  int_weights("int_weights",1),
-  polar_pos("polar_pos",1,1),
-  cart_pos("cart_pos",1,1),
-  interp_indcs("interp_indcs",1,1),
-  interp_wghts("interp_wghts",1,1,1),
-  interp_vals("interp_vals",1) {
+    ntheta(ntheta),
+    radius(rad),
+    int_weights("int_weights",1),
+    cart_pos("cart_pos",1,1),
+    polar_pos("polar_pos",1,1),
+    interp_vals("interp_vals",1),
+    interp_indcs("interp_indcs",1,1),
+    interp_wghts("interp_wghts",1,1,1),
+    pmy_pack(pmy_pack) {
   // reallocate and set interpolation coordinates, indices, and weights
   int &ng = pmy_pack->pmesh->mb_indcs.ng;
   nangles = 2*ntheta*ntheta;

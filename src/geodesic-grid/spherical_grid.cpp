@@ -25,12 +25,12 @@
 
 SphericalGrid::SphericalGrid(MeshBlockPack *ppack, int nlev, Real rad):
     GeodesicGrid(nlev,true,false),
-    pmy_pack(ppack),
     radius(rad),
     interp_coord("interp_coord",1,1),
+    interp_vals("interp_vals",1,1),
+    pmy_pack(ppack),
     interp_indcs("interp_indcs",1,1),
-    interp_wghts("interp_wghts",1,1,1),
-    interp_vals("interp_vals",1,1) {
+    interp_wghts("interp_wghts",1,1,1) {
   // reallocate and set interpolation coordinates, indices, and weights
   int &ng = pmy_pack->pmesh->mb_indcs.ng;
   Kokkos::realloc(interp_coord,nangles,3);

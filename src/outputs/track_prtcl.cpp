@@ -84,8 +84,6 @@ void TrackedParticleOutput::LoadOutputData(Mesh *pm) {
 //! With MPI, all particles are written to the same file.
 
 void TrackedParticleOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
-  int big_end = IsBigEndian(); // =1 on big endian machine
-
   // create filename: "trk/file_basename".trk
   std::string fname;
   fname.assign("trk/");

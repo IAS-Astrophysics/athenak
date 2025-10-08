@@ -79,11 +79,10 @@ class Z4c {
   // data
   // flags to denote relativistic dynamics
   DvceArray5D<Real> u_con;     // constraints fields
-  DvceArray5D<Real> u_mat;
   DvceArray5D<Real> u0;        // z4c solution
+  DvceArray5D<Real> coarse_u0; // coarse representation of z4c solution
   DvceArray5D<Real> u1;        // z4c solution at intermediate timestep
   DvceArray5D<Real> u_rhs;     // z4c rhs storage
-  DvceArray5D<Real> coarse_u0; // coarse representation of z4c solution
   DvceArray5D<Real> u_weyl; // weyl scalars
   DvceArray5D<Real> coarse_u_weyl; // coarse representation of weyl scalars
 

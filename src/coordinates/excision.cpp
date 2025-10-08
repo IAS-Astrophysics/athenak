@@ -59,10 +59,6 @@ void Coordinates::SetExcisionMasks(DvceArray4D<bool> &excision_floor,
 
     // We calculate the distance to the corner to make sure that only cells completely
     // inside the horizon are excised.
-    Real &dx1 = size.d_view(m).dx1;
-    Real &dx2 = size.d_view(m).dx2;
-    Real &dx3 = size.d_view(m).dx3;
-
     Real x1v   = CellCenterX(i  -is, indcs.nx1, x1min, x1max);
     Real x1vm1 = CellCenterX(i-1-is, indcs.nx1, x1min, x1max);
     Real x1vp1 = CellCenterX(i+1-is, indcs.nx1, x1min, x1max);

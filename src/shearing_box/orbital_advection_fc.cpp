@@ -230,9 +230,7 @@ TaskStatus OrbitalAdvectionFC::RecvAndUnpackFC(DvceFaceFld4D<Real> &b0,
   int nfx = indcs.nx2 + 2*(ng + maxjshift);
 
   auto &mbsize = pmy_pack->pmb->mb_size;
-  auto &mesh_size = pmy_pack->pmesh->mesh_size;
   Real &dt = pmy_pack->pmesh->dt;
-  Real ly = (mesh_size.x2max - mesh_size.x2min);
   Real qo = qshear*omega0;
 
   int scr_lvl=0;
@@ -252,7 +250,7 @@ TaskStatus OrbitalAdvectionFC::RecvAndUnpackFC(DvceFaceFld4D<Real> &b0,
     if (v==0) {
       // B3 located at x1-cell centers
       x1 = CellCenterX(i-is, nx1, x1min, x1max);
-    } else if (v==1) {
+    } else {
       // B1 located at x1-cell faces
       x1 = LeftEdgeX(i-is, nx1, x1min, x1max);
     }

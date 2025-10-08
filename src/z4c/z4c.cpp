@@ -58,16 +58,15 @@ char const * const Z4c::Constraint_names[Z4c::ncon] = {
 // constructor, initializes data structures and parameters
 
 Z4c::Z4c(MeshBlockPack *ppack, ParameterInput *pin) :
-  pmy_pack(ppack),
-  u_con("u_con",1,1,1,1,1),
-  //u_mat("u_mat",1,1,1,1,1),
-  u0("u0 z4c",1,1,1,1,1),
-  coarse_u0("coarse u0 z4c",1,1,1,1,1),
-  u1("u1 z4c",1,1,1,1,1),
-  u_rhs("u_rhs z4c",1,1,1,1,1),
-  u_weyl("u_weyl",1,1,1,1,1),
-  coarse_u_weyl("coarse_u_weyl",1,1,1,1,1),
-  pamr(new Z4c_AMR(pin)) {
+    u_con("u_con",1,1,1,1,1),
+    u0("u0 z4c",1,1,1,1,1),
+    coarse_u0("coarse u0 z4c",1,1,1,1,1),
+    u1("u1 z4c",1,1,1,1,1),
+    u_rhs("u_rhs z4c",1,1,1,1,1),
+    u_weyl("u_weyl",1,1,1,1,1),
+    coarse_u_weyl("coarse_u_weyl",1,1,1,1,1),
+    pamr(new Z4c_AMR(pin)),
+    pmy_pack(ppack) {
   // (1) read time-evolution option [already error checked in driver constructor]
   // Then initialize memory and algorithms for reconstruction and Riemann solvers
   std::string evolution_t = pin->GetString("time","evolution");
@@ -82,7 +81,6 @@ Z4c::Z4c(MeshBlockPack *ppack, ParameterInput *pin) :
   Kokkos::Profiling::pushRegion("Tensor fields");
   Kokkos::realloc(u_con, nmb, (ncon), ncells3, ncells2, ncells1);
   // Matter commented out
-  // kokkos::realloc(u_mat, nmb, (N_MAT), ncells3, ncells2, ncells1);
   Kokkos::realloc(u0,    nmb, (nz4c), ncells3, ncells2, ncells1);
   Kokkos::realloc(u1,    nmb, (nz4c), ncells3, ncells2, ncells1);
   Kokkos::realloc(u_rhs, nmb, (nz4c), ncells3, ncells2, ncells1);
@@ -93,11 +91,6 @@ Z4c::Z4c(MeshBlockPack *ppack, ParameterInput *pin) :
   con.M.InitWithShallowSlice(u_con, I_CON_M);
   con.Z.InitWithShallowSlice(u_con, I_CON_Z);
   con.M_d.InitWithShallowSlice(u_con, I_CON_MX, I_CON_MZ);
-
-  // Matter commented out
-  //mat.rho.InitWithShallowSlice(u_mat, I_MAT_rho);
-  //mat.S_d.InitWithShallowSlice(u_mat, I_MAT_Sx, I_MAT_Sz);
-  //mat.S_dd.InitWithShallowSlice(u_mat, I_MAT_Sxx, I_MAT_Szz);
 
   z4c.alpha.InitWithShallowSlice (u0, I_Z4C_ALPHA);
   z4c.beta_u.InitWithShallowSlice(u0, I_Z4C_BETAX, I_Z4C_BETAZ);

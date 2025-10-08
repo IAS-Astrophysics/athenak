@@ -75,12 +75,15 @@ Conduction::Conduction(std::string block, MeshBlockPack *pp, ParameterInput *pin
     }
   }
 
+std::cout << "constructing conduct" << std::endl;
+
   // Read parameters for thermal conduction (if any)
   kappa = pin->GetOrAddReal(block,"conductivity",0.0);
   tdep_kappa = pin->GetOrAddBoolean(block,"tdep_conductivity",false);
   kappa_ceiling = pin->GetOrAddReal(block,"cond_ceiling",
                   static_cast<Real>(std::numeric_limits<float>::max()));
   sat_hflux = pin->GetOrAddBoolean(block,"sat_hflux",false);
+std::cout << "constructing conduct" << std::endl;
 }
 
 //----------------------------------------------------------------------------------------

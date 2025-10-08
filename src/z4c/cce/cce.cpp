@@ -38,12 +38,7 @@
 namespace z4c {
 
 CCE::CCE(Mesh *const pm, ParameterInput *const pin, int index):
-  pm(pm),
-  pin(pin),
-  index(index) {
-  // pointer to meshblockpack
-  pmbp = pm->pmb_pack;
-
+    pmbp(pm->pmb_pack) {
   rin  = pin->GetOrAddReal("cce", "rin_"  + std::to_string(index),20.);
   rout = pin->GetOrAddReal("cce", "rout_" + std::to_string(index),40.);
   num_l_modes    = pin->GetOrAddInteger("cce","num_l_modes",16);

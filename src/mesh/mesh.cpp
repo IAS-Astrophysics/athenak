@@ -44,15 +44,15 @@
 //! only after the Mesh constructor has finished.
 
 Mesh::Mesh(ParameterInput *pin) :
-  one_d(false),
-  two_d(false),
-  three_d(false),
-  multi_d(false),
-  strictly_periodic(true),
-  nmb_packs_thisrank(1),
-  nprtcl_thisrank(0),
-  nprtcl_total(0),
-  dtold(0.) {
+    strictly_periodic(true),
+    one_d(false),
+    two_d(false),
+    three_d(false),
+    multi_d(false),
+    nprtcl_thisrank(0),
+    nprtcl_total(0),
+    dtold(0.0),
+    nmb_packs_thisrank(1) {
   // Set physical size and number of cells in mesh (root level)
   mesh_size.x1min = pin->GetReal("mesh", "x1min");
   mesh_size.x1max = pin->GetReal("mesh", "x1max");
@@ -364,8 +364,8 @@ void Mesh::PrintMeshDiagnostics() {
 
   // if more than one physical level: compute/output # of blocks and cost per level
   if ((max_level - root_level) > 1) {
-    int nb_per_plevel[max_level];      // NOLINT(runtime/arrays)
-    float cost_per_plevel[max_level];  // NOLINT(runtime/arrays)
+    int *nb_per_plevel = new int[max_level];
+    float *cost_per_plevel = new float[max_level];
     for (int i=0; i<max_level; ++i) {
       nb_per_plevel[i] = 0;
       cost_per_plevel[i] = 0.0;
@@ -381,23 +381,25 @@ void Mesh::PrintMeshDiagnostics() {
                   << cost_per_plevel[i-root_level] <<  std::endl;
       }
     }
+    delete[] nb_per_plevel;
+    delete[] cost_per_plevel;
   }
 
   std::cout << "Number of parallel ranks = " << global_variable::nranks << std::endl;
   // if more than one rank: compute/output # of blocks and cost per rank
   if (global_variable::nranks > 1) {
-    int nb_per_rank[global_variable::nranks];    // NOLINT(runtime/arrays)
-    int cost_per_rank[global_variable::nranks];  // NOLINT(runtime/arrays)
+    int *nb_per_rank = new int[global_variable::nranks];
+    float *cost_per_rank = new float[global_variable::nranks];
     for (int i=0; i<global_variable::nranks; ++i) {
       nb_per_rank[i] = 0;
-      cost_per_rank[i] = 0;
+      cost_per_rank[i] = 0.0;
     }
     for (int i=0; i<nmb_total; i++) {
       nb_per_rank[rank_eachmb[i]]++;
       cost_per_rank[rank_eachmb[i]] += cost_eachmb[i];
     }
-    int mincost = std::numeric_limits<int>::max();
-    int maxcost = 0, totalcost = 0;
+    float mincost = std::numeric_limits<float>::max();
+    float maxcost = 0.0, totalcost = 0.0;
     for (int i=0; i<global_variable::nranks; ++i) {
       std::cout << "  Rank = " << i << ": " << nb_per_rank[i] <<" MeshBlocks, cost = "
                 << cost_per_rank[i] << std::endl;
@@ -405,13 +407,13 @@ void Mesh::PrintMeshDiagnostics() {
       maxcost = std::max(maxcost,cost_per_rank[i]);
       totalcost += cost_per_rank[i];
     }
-
     // output normalized costs per rank
-    std::cout << "Load Balancing:" << std::endl;
-    std::cout << "  Maximum normalized cost = "
-      << static_cast<float>(maxcost)/static_cast<float>(mincost) << ", Average = "
-      << static_cast<float>(totalcost)/static_cast<float>(global_variable::nranks*mincost)
-      << std::endl;
+    std::cout << "Load Balancing:" << std::endl
+              << "  Maximum normalized cost = " << maxcost/mincost
+              << ", Average = " << totalcost/(global_variable::nranks*mincost)
+              << std::endl;
+    delete[] nb_per_rank;
+    delete[] cost_per_rank;
   }
 }
 

@@ -557,7 +557,7 @@ SolverResult PrimitiveSolver<EOSPolicy, ErrorPolicy>::ConToPrim(Real prim[NPRIM]
 template<typename EOSPolicy, typename ErrorPolicy>
 KOKKOS_INLINE_FUNCTION
 Error PrimitiveSolver<EOSPolicy, ErrorPolicy>::PrimToCon(Real prim[NPRIM],
-      Real cons[NCONS], Real bu[NMAG], Real g3d[NMETRIC]) const {
+      Real cons[NCONS], Real bu[NMAG], Real g3d[NSPMETRIC]) const {
   // Extract the primitive variables
   const Real &n = prim[PRH]; // number density
   const Real Wv_u[3] = {prim[PVX], prim[PVY], prim[PVZ]};

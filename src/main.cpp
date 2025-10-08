@@ -261,7 +261,6 @@ int main(int argc, char *argv[]) {
     // read parameters from restart file
     restartfile.Open(restart_file.c_str(),IOWrapper::FileMode::read,single_file_per_rank);
     pinput->LoadFromFile(restartfile, single_file_per_rank);
-    IOWrapperSizeT headeroffset = restartfile.GetPosition(single_file_per_rank);
   }
 
   // read parameters from input file.  If both -r and -i are specified, this will

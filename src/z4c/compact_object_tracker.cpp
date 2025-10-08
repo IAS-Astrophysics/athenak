@@ -32,8 +32,11 @@
 
 //----------------------------------------------------------------------------------------
 CompactObjectTracker::CompactObjectTracker(Mesh *pmesh, ParameterInput *pin, int n):
-              owns_compact_object{false}, pos{NAN, NAN, NAN}, vel{NAN, NAN, NAN},
-              pmesh{pmesh}, out_every{1} {
+     pmesh{pmesh},
+     owns_compact_object{false},
+     pos{NAN, NAN, NAN},
+     vel{NAN, NAN, NAN},
+     out_every{1} {
   std::string nstr = std::to_string(n);
   std::string ofname = pin->GetString("job", "basename") + ".";
   ofname += pin->GetOrAddString("z4c", "filename", "co_");

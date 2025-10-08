@@ -39,9 +39,11 @@ class Particles;
 //! \brief calculate an MPI tag for boundary buffer communications.  Note maximum size of
 //! lid that can be encoded is set by (NUM_BITS_LID) macro defined in athena.hpp.
 //! The convention in AthenaK is lid and bufid are both for the *receiving* process.
-static int CreateBvals_MPI_Tag(int lid, int bufid) {
+#if MPI_PARALLEL_ENABLED
+[[maybe_unused]] static int CreateBvals_MPI_Tag(int lid, int bufid) {
   return (bufid << (NUM_BITS_LID)) | lid;
 }
+#endif
 
 //----------------------------------------------------------------------------------------
 //! \struct BufferIndcs
@@ -109,7 +111,7 @@ class MeshBlockPack;
 class MeshBoundaryValues {
  public:
   MeshBoundaryValues(MeshBlockPack *ppack, ParameterInput *pin, bool z4c);
-  ~MeshBoundaryValues();
+  virtual ~MeshBoundaryValues();  // destructor must be virtual since this is an ABC
 
   // data for all 56 buffers in most general 3D case. Not all elements used in most cases.
   // However each MeshBoundaryBuffer is lightweight, so the convenience of fixed array

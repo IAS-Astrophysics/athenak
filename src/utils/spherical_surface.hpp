@@ -37,8 +37,7 @@ class SphericalSurface {
 
   // interpolate scalar field to sphere
   void InterpolateToSphere(int nvars, DvceArray5D<Real> &val);
-  DualArray2D<int>
-      interp_indcs;  // indices of MeshBlock and zones therein for interp
+  DualArray2D<int>  interp_indcs;  // indices of MeshBlock and zones therein for interp
   DualArray3D<Real> interp_wghts;  // weights for interpolation
 
   void SetInterpolationCoordinates();  // set indexing for interpolation
