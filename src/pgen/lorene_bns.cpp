@@ -206,6 +206,13 @@ void SetupBNS(ParameterInput *pin, Mesh* pmy_mesh_) {
           host_adm.g_dd(m, 1, 2, k, j, i) = g3d[S23] = bns->g_yz[idx];
           host_adm.g_dd(m, 2, 2, k, j, i) = g3d[S33] = bns->g_zz[idx];
 
+          host_adm.vK_dd(m, 0, 0, k, j, i) = coord_unit * bns->k_xx[idx];
+          host_adm.vK_dd(m, 0, 1, k, j, i) = coord_unit * bns->k_xy[idx];
+          host_adm.vK_dd(m, 0, 2, k, j, i) = coord_unit * bns->k_xz[idx];
+          host_adm.vK_dd(m, 1, 1, k, j, i) = coord_unit * bns->k_yy[idx];
+          host_adm.vK_dd(m, 1, 2, k, j, i) = coord_unit * bns->k_yz[idx];
+          host_adm.vK_dd(m, 2, 2, k, j, i) = coord_unit * bns->k_zz[idx];
+
           // Extract hydro quantities
           // Note that Lorene does not necessarily use the same baryon rest-mass as
           // AthenaK. The most reasonable thing to do, then, is to extract the total
@@ -216,7 +223,7 @@ void SetupBNS(ParameterInput *pin, Mesh* pmy_mesh_) {
           Real vu[3] = {bns->u_euler_x[idx] / vel_unit,
                         bns->u_euler_y[idx] / vel_unit,
                         bns->u_euler_z[idx] / vel_unit};
-          
+
           // Check for garbage values thrown in by Lorene.
           if (rho <= rho_cut || !Kokkos::isfinite(rho)) {
             rho = 0.0;
