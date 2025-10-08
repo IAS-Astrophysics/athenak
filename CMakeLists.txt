@@ -195,6 +195,7 @@ if (${PROBLEM} STREQUAL "lorene_bns")
   enable_language(Fortran)
   include(FortranCInterface)
   FortranCInterface_VERIFY(CXX)
+  find_library(GFORTRAN_LIBRARY NAMES gfortran)
   find_package(BLAS REQUIRED)
   find_package(LAPACK REQUIRED)
   find_package(GSL REQUIRED)
@@ -207,6 +208,7 @@ if (${PROBLEM} STREQUAL "lorene_bns")
       ${CMAKE_SOURCE_DIR}/Lorene/Lib/liblorenef77.a
       ${BLAS_LIBRARIES} ${LAPACK_LIBRARIES}
       GSL::gsl ${CMAKE_Fortran_IMPLICIT_LINK_LIBRARIES})
+  target_link_libraries(athena PUBLIC ${GFORTRAN_LIBRARY})
 endif()
 
 # enable include of header files created in build directories
