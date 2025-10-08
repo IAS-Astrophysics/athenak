@@ -25,6 +25,9 @@
 #include "reconstruct/wenoz.hpp"
 #include "dyn_grmhd/rsolvers/llf_dyn_grmhd.hpp"
 #include "dyn_grmhd/rsolvers/hlle_dyn_grmhd.hpp"
+#include "dyn_grmhd/rsolvers/hlle_dyn_grmhd.hpp"
+#include "dyn_grmhd/rsolvers/hlle_transforming.hpp"
+#include "dyn_grmhd/rsolvers/hlld_dyn_grmhd.hpp"
 // include PrimitiveSolver stuff
 #include "eos/primitive-solver/idealgas.hpp"
 #include "eos/primitive-solver/reset_floor.hpp"
@@ -62,6 +65,14 @@ TaskStatus DynGRMHDPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int s
   // Short-circuit the flux calculation if everything is to be fixed.
   if (fixed_evolution) {
     return TaskStatus::complete;
+  }
+
+  // If HLLD is enabled, temporarily reduce the tolerance of PrimitiveSolver to speed up
+  // the initial guess calculation
+  Real tol_old;
+  if constexpr (rsolver_method_ == DynGRMHD_RSolver::hlld_dyngr) {
+    tol_old = Kokkos::fmin(dyn_eos_.ps.tol, 1e-6);
+    dyn_eos_.ps.tol = 1e-6;
   }
 
   //--------------------------------------------------------------------------------------
@@ -141,6 +152,14 @@ TaskStatus DynGRMHDPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int s
                 flx1, e31, e21);
     } else if constexpr (rsolver_method_ == DynGRMHD_RSolver::hlle_dyngr) {
       HLLE_DYNGR<IVX>(member, dyn_eos, indcs, size, coord, m, k, j, il, iu,
+                wl, wr, bl, br, bx, nhyd_, nscal_, adm_,
+                flx1, e31, e21);
+    } else if constexpr (rsolver_method_ == DynGRMHD_RSolver::hlle_transform) {
+      HLLE_TRANSFORMING<IVX>(member, dyn_eos, indcs, size, coord, m, k, j, il, iu,
+                wl, wr, bl, br, bx, nhyd_, nscal_, adm_,
+                flx1, e31, e21);
+    } else if constexpr (rsolver_method_ == DynGRMHD_RSolver::hlld_dyngr) {
+      HLLD_DYNGR<IVX>(member, dyn_eos, indcs, size, coord, m, k, j, il, iu,
                 wl, wr, bl, br, bx, nhyd_, nscal_, adm_,
                 flx1, e31, e21);
     }
@@ -254,6 +273,12 @@ TaskStatus DynGRMHDPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int s
           } else if constexpr (rsolver_method_ == DynGRMHD_RSolver::hlle_dyngr) {
             HLLE_DYNGR<IVY>(member, dyn_eos, indcs, size, coord, m, k, j, is-1, ie+1,
                       wl, wr, bl, br, by, nhyd_, nscal_, adm_, flx2, e12, e32);
+          } else if constexpr (rsolver_method_ == DynGRMHD_RSolver::hlle_transform) {
+            HLLE_TRANSFORMING<IVY>(member, dyn_eos, indcs, size, coord, m, k, j, is-1, ie+1,
+                      wl, wr, bl, br, by, nhyd_, nscal_, adm_, flx2, e12, e32);
+          } else if constexpr (rsolver_method_ == DynGRMHD_RSolver::hlld_dyngr) {
+            HLLD_DYNGR<IVY>(member, dyn_eos, indcs, size, coord, m, k, j, is-1, ie+1,
+                      wl, wr, bl, br, by, nhyd_, nscal_, adm_, flx2, e12, e32);
           }
         }
         member.team_barrier();
@@ -362,6 +387,12 @@ TaskStatus DynGRMHDPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int s
           } else if constexpr (rsolver_method_ == DynGRMHD_RSolver::hlle_dyngr) {
             HLLE_DYNGR<IVZ>(member, dyn_eos, indcs, size, coord, m, k, j, is-1, ie+1,
                       wl, wr, bl, br, bz, nhyd_, nscal_, adm_, flx3, e23, e13);
+          } else if constexpr (rsolver_method_ == DynGRMHD_RSolver::hlle_transform) {
+            HLLE_TRANSFORMING<IVZ>(member, dyn_eos, indcs, size, coord, m, k, j, is-1, ie+1,
+                      wl, wr, bl, br, bz, nhyd_, nscal_, adm_, flx3, e23, e13);
+          } else if constexpr (rsolver_method_ == DynGRMHD_RSolver::hlld_dyngr) {
+            HLLD_DYNGR<IVZ>(member, dyn_eos, indcs, size, coord, m, k, j, is-1, ie+1,
+                      wl, wr, bl, br, bz, nhyd_, nscal_, adm_, flx3, e23, e13);
           }
         }
         member.team_barrier();
@@ -383,9 +414,19 @@ TaskStatus DynGRMHDPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int s
     });
   }
 
+  // Restore PrimitiveSolver to its original accuracy.
+  if constexpr (rsolver_method_ == DynGRMHD_RSolver::hlld_dyngr) {
+    dyn_eos_.ps.tol = tol_old;
+  }
+
   // Call FOFC if necessary
   if (pmy_pack->pmhd->use_fofc || pmy_pack->pcoord->coord_data.bh_excise) {
-    FOFC<rsolver_method_>(pdriver, stage);
+    if constexpr (rsolver_method_ == DynGRMHD_RSolver::llf_dyngr ||
+                  rsolver_method_ == DynGRMHD_RSolver::hlle_dyngr) {
+      FOFC<rsolver_method_>(pdriver, stage);
+    } else {
+      FOFC<DynGRMHD_RSolver::hlle_dyngr>(pdriver, stage);
+    }
   }
 
   return TaskStatus::complete;
@@ -399,7 +440,13 @@ TaskStatus DynGRMHDPS<EOSPolicy, ErrorPolicy>::\
             CalcFluxes<DynGRMHD_RSolver::llf_dyngr>(Driver *pdriver, int stage); \
 template \
 TaskStatus DynGRMHDPS<EOSPolicy, ErrorPolicy>::\
-            CalcFluxes<DynGRMHD_RSolver::hlle_dyngr>(Driver *pdriver, int stage);
+            CalcFluxes<DynGRMHD_RSolver::hlle_dyngr>(Driver *pdriver, int stage); \
+template \
+TaskStatus DynGRMHDPS<EOSPolicy, ErrorPolicy>::\
+            CalcFluxes<DynGRMHD_RSolver::hlle_transform>(Driver *pdriver, int stage); \
+template \
+TaskStatus DynGRMHDPS<EOSPolicy, ErrorPolicy>::\
+            CalcFluxes<DynGRMHD_RSolver::hlld_dyngr>(Driver *pdriver, int stage);
 
 INSTANTIATE_CALC_FLUXES(Primitive::IdealGas, Primitive::ResetFloor)
 INSTANTIATE_CALC_FLUXES(Primitive::PiecewisePolytrope, Primitive::ResetFloor)

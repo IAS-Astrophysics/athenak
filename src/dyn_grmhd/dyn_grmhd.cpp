@@ -125,6 +125,10 @@ DynGRMHD::DynGRMHD(MeshBlockPack *pp, ParameterInput *pin) :
     rsolver_method = DynGRMHD_RSolver::llf_dyngr;
   } else if (rsolver.compare("hlle") == 0) {
     rsolver_method = DynGRMHD_RSolver::hlle_dyngr;
+  } else if (rsolver.compare("hlle_transform") == 0) {
+    rsolver_method = DynGRMHD_RSolver::hlle_transform;
+  } else if (rsolver.compare("hlld") == 0) {
+    rsolver_method = DynGRMHD_RSolver::hlld_dyngr;
   } else {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
               << std::endl << "<mhd> rsolver = '" << rsolver
@@ -188,6 +192,14 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::QueueDynGRMHDTasks() {
     pnr->QueueTask(
            &DynGRMHDPS<EOSPolicy, ErrorPolicy>::CalcFluxes<DynGRMHD_RSolver::hlle_dyngr>,
            this, MHD_Flux, "MHD_Flux", Task_Run, {MHD_CopyU});
+  } else if (rsolver_method == DynGRMHD_RSolver::hlle_transform) {
+    pnr->QueueTask(
+           &DynGRMHDPS<EOSPolicy, ErrorPolicy>::CalcFluxes<DynGRMHD_RSolver::hlle_transform>,
+           this, MHD_Flux, "MHD_Flux", Task_Run, {MHD_CopyU});
+  } else if (rsolver_method == DynGRMHD_RSolver::hlld_dyngr) {
+    pnr->QueueTask(
+           &DynGRMHDPS<EOSPolicy, ErrorPolicy>::CalcFluxes<DynGRMHD_RSolver::hlld_dyngr>,
+           this, MHD_Flux, "MHD_Flux", Task_Run, {MHD_CopyU});
   } else { // put more rsolvers here
     abort();
   }
@@ -243,19 +255,31 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::QueueDynGRMHDTasks() {
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn  TaskStatus DynGRMHD::ADMMatterSource_(Driver *pdrive, int stage) {
-//  \brief
+//! \fn  void PrimToConInit
+//  \brief Calculate conserved variables from a set of input primitive variables.
 template<class EOSPolicy, class ErrorPolicy>
-void DynGRMHDPS<EOSPolicy, ErrorPolicy>::PrimToConInit(int is, int ie, int js, int je,
-                                                    int ks, int ke) {
-  eos.PrimToCons(pmy_pack->pmhd->w0, pmy_pack->pmhd->bcc0, pmy_pack->pmhd->u0,
-                 is, ie, js, je, ks, ke);
+void DynGRMHDPS<EOSPolicy, ErrorPolicy>::PrimToConInit(DvceArray5D<Real> &w,
+                                                       DvceArray5D<Real> &bcc,
+                                                       DvceArray5D<Real> &u,
+                                                       int is, int ie, int js, int je,
+                                                       int ks, int ke) {
+  eos.PrimToCons(w, bcc, u, is, ie, js, je, ks, ke);
   if (pmy_pack->ptmunu != nullptr) {
     bool fixed = fixed_evolution;
     fixed_evolution = false;
     SetTmunu(nullptr, 0);
     fixed_evolution = fixed;
   }
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn  void PrimToConInit
+//  \brief Calculate conserved variables for the current stage (u0).
+template<class EOSPolicy, class ErrorPolicy>
+void DynGRMHDPS<EOSPolicy, ErrorPolicy>::PrimToConInit(int is, int ie, int js, int je,
+                                                    int ks, int ke) {
+  PrimToConInit(pmy_pack->pmhd->w0, pmy_pack->pmhd->bcc0, pmy_pack->pmhd->u0,
+                is, ie, js, je, ks, ke);
 }
 
 //----------------------------------------------------------------------------------------
