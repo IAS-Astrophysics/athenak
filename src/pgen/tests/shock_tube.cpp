@@ -182,9 +182,9 @@ void ProblemGenerator::ShockTube(ParameterInput *pin, const bool restart) {
     wl.vy = pin->GetReal("problem","vl");
     wl.vz = pin->GetReal("problem","wl");
     wl.e  = (pin->GetReal("problem","pl"))/(eos.gamma - 1.0);
+    wl.bx = pin->GetReal("problem","bxl");
     wl.by = pin->GetReal("problem","byl");
     wl.bz = pin->GetReal("problem","bzl");
-    Real bx_l = pin->GetReal("problem","bxl");
     // compute Lorentz factor (needed for SR/GR)
     Real u0l = 1.0;
     if (pmbp->pcoord->is_special_relativistic || pmbp->pcoord->is_general_relativistic ||
@@ -202,9 +202,9 @@ void ProblemGenerator::ShockTube(ParameterInput *pin, const bool restart) {
     wr.vy = pin->GetReal("problem","vr");
     wr.vz = pin->GetReal("problem","wr");
     wr.e  = (pin->GetReal("problem","pr"))/(eos.gamma - 1.0);
+    wr.bx = pin->GetReal("problem","bxr");
     wr.by = pin->GetReal("problem","byr");
     wr.bz = pin->GetReal("problem","bzr");
-    Real bx_r = pin->GetReal("problem","bxr");
     // compute Lorentz factor (needed for SR/GR)
     Real u0r = 1.0;
     if (pmbp->pcoord->is_special_relativistic || pmbp->pcoord->is_general_relativistic ||
@@ -229,22 +229,22 @@ void ProblemGenerator::ShockTube(ParameterInput *pin, const bool restart) {
         Real &x1max = size.d_view(m).x1max;
         int nx1 = indcs.nx1;
         x = CellCenterX(i-is, nx1, x1min, x1max);
-        bxl = bx_l; byl = wl.by; bzl = wl.bz;
-        bxr = bx_r; byr = wr.by; bzr = wr.bz;
+        bxl = wl.bx; byl = wl.by; bzl = wl.bz;
+        bxr = wr.bx; byr = wr.by; bzr = wr.bz;
       } else if (shk_dir_ == 2) {
         Real &x2min = size.d_view(m).x2min;
         Real &x2max = size.d_view(m).x2max;
         int nx2 = indcs.nx2;
         x = CellCenterX(j-js, nx2, x2min, x2max);
-        bxl = wl.bz; byl = bx_l; bzl = wl.by;
-        bxr = wr.bz; byr = bx_r; bzr = wr.by;
+        bxl = wl.bz; byl = wl.bx; bzl = wl.by;
+        bxr = wr.bz; byr = wr.bx; bzr = wr.by;
       } else {
         Real &x3min = size.d_view(m).x3min;
         Real &x3max = size.d_view(m).x3max;
         int nx3 = indcs.nx3;
         x = CellCenterX(k-ks, nx3, x3min, x3max);
-        bxl = wl.by; byl = wl.bz; bzl = bx_l;
-        bxr = wr.by; byr = wr.bz; bzr = bx_r;
+        bxl = wl.by; byl = wl.bz; bzl = wl.bx;
+        bxr = wr.by; byr = wr.bz; bzr = wr.bx;
       }
 
       // in SR/GR, primitive variables use spatial components of 4-vel u^i = gamma * v^i

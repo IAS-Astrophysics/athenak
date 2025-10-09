@@ -45,13 +45,14 @@ TrackedParticleOutput::TrackedParticleOutput(ParameterInput *pin, Mesh *pm,
 void TrackedParticleOutput::LoadOutputData(Mesh *pm) {
   // Load data for tracked particles on this rank into new device array
   DualArray1D<TrackedParticleData> tracked_prtcl("d_trked",ntrack_thisrank);
-  int npart = pm->nprtcl_thisrank;
+  int npm1 = pm->nprtcl_thisrank - 1;
+  int &ntrack_ = ntrack;
   auto &pr = pm->pmb_pack->ppart->prtcl_rdata;
   auto &pi = pm->pmb_pack->ppart->prtcl_idata;
   int counter=0;
   int *pcounter = &counter;
-  par_for("part_update",DevExeSpace(),0,(npart-1), KOKKOS_LAMBDA(const int p) {
-    if (pi(PTAG,p) < ntrack) {
+  par_for("part_update",DevExeSpace(),0,npm1, KOKKOS_LAMBDA(const int p) {
+    if (pi(PTAG,p) < ntrack_) {
       int index = Kokkos::atomic_fetch_add(pcounter,1);
       tracked_prtcl.d_view(index).tag = pi(PTAG,p);
       tracked_prtcl.d_view(index).x   = pr(IPX,p);

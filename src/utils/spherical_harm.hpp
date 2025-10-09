@@ -35,8 +35,8 @@ void SWSphericalHarm(Real * ylmR, Real * ylmI, int l, int m, int s,
                      Real theta, Real phi) {
   Real wignerd = 0;
   int k1,k2,k;
-  k1 = std::max(0, m-s);
-  k2 = std::min(l+m,l-s);
+  k1 = ((m-s) > 0)? (m-s):0;           // k1 = max(0,m-s)
+  k2 = ((l+m) < (l-s))? (l+m):(l-s);   // k2 = min(l+m,l-s)
 
   for (k = k1; k<=k2; ++k) {
     wignerd += pow((-1),k)*pow(cos(theta/2.0),2*l+m-s-2*k)*pow(sin(theta/2.0),2*k+s-m)
