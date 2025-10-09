@@ -100,6 +100,10 @@ void FormattedTableOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
   }
 #if MPI_PARALLEL_ENABLED
   int ierr = MPI_Barrier(MPI_COMM_WORLD);
+  if (ierr != MPI_SUCCESS) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+              << std::endl << "MPI_Barrier error after writing header" << std::endl;
+  }
 #endif
 
   // now all ranks open file and append data
@@ -175,6 +179,10 @@ void FormattedTableOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
     std::fflush(pfile);
 #if MPI_PARALLEL_ENABLED
     int ierr = MPI_Barrier(MPI_COMM_WORLD);
+    if (ierr != MPI_SUCCESS) {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                << std::endl << "MPI_Barrier error after writing header" << std::endl;
+    }
 #endif
   }
 

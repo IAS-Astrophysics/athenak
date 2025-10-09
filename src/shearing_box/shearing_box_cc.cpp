@@ -256,6 +256,7 @@ TaskStatus ShearingBoxCC::PackAndSendCC(DvceArray5D<Real> &a, ReconstructionMeth
             int data_size = send_ptr.size();
             int ierr = MPI_Isend(send_ptr.data(), data_size, MPI_ATHENA_REAL, trank, tag,
                                  comm_sbox, &(sendbuf[n].vars_req[3*m + l]));
+            if (ierr != MPI_SUCCESS) {no_errors=false;}
 #endif
           }
         }
