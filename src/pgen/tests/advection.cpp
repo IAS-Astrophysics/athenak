@@ -102,7 +102,7 @@ void ProblemGenerator::Advection(ParameterInput *pin, const bool restart) {
         r = (CellCenterX(k-ks, nx3, x3min, x3max) - x3mesh)/length;
       }
 
-      Real f; // value for advected quantity, depending on problem type
+      Real f=0; // value for advected quantity, depending on problem type
 
       // iprob=1: sine wave
       if (iprob == 1) {
@@ -179,7 +179,7 @@ void ProblemGenerator::Advection(ParameterInput *pin, const bool restart) {
         r = (CellCenterX(k-ks, nx3, x3min, x3max) - x3mesh)/length;
       }
 
-      Real f; // value for advected quantity, depending on problem type
+      Real f=0; // value for advected quantity, depending on problem type
 
       // iprob=1: sine wave
       if (iprob == 1) {

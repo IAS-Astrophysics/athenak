@@ -255,7 +255,7 @@ void Z4c_AMR::RefineRadii(MeshBlockPack *pmbp) {
     };
     Real rmin2 = *std::min_element(&r2[0], &r2[8]);
 
-    for (int ir = 0; ir < radius.size(); ++ir) {
+    for (size_t ir = 0; ir < radius.size(); ++ir) {
       if (rmin2 < SQ(radius[ir])) {
         if (level < reflevel[ir]) {
           refine_flag.h_view(m + mbs) = 1;

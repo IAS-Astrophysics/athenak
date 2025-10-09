@@ -99,7 +99,7 @@ struct UnitSystem {
 //  in the 2021 Astronomer's Almanac:
 //  GM_S = 1.32712442099e26 cm^3 s^-2
 UnitSystem MakeCGS();
-static UnitSystem CGS{
+[[maybe_unused]] static UnitSystem CGS{
   2.99792458e10, // c, cm/s
   6.67408e-8, // G, cm^3 g^-1 s^-2
   1.38064852e-16, // kb, erg K^-1

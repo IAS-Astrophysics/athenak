@@ -143,7 +143,7 @@ void HorizonDump::SetGridAndInterpolate(Real center[NDIM]) {
     fwrite(&pmbp->pmesh->time, sizeof(Real), 1, etk_output_file);
     // Write the 4D array to the binary file
     size_t elementsWritten = fwrite(data_out, sizeof(Real), count, etk_output_file);
-    if (elementsWritten != count) {
+    if (elementsWritten != static_cast<size_t>(count)) {
       perror("Error writing to file");
     }
     // Close the file

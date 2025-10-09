@@ -152,6 +152,7 @@ using ScrArray2D = Kokkos::View<T **, LayoutWrapper, ScratchMemSpace,
 
 //----------------------------------------------------------------------------------------
 // struct for storing face-centered (area-averaged) variables, e.g. magnetic field
+/* [using old C-style comments to prevent multi-line-comment warning]
 //                 ___________
 //                 |x3f[k+1,j,i]
 //                 | \    X    \
@@ -161,6 +162,7 @@ using ScrArray2D = Kokkos::View<T **, LayoutWrapper, ScratchMemSpace,
 //   x2 x3          \  |    X    |
 //    \ |            \ |         |
 //     \|__x1         \|_________|
+*/
 
 template <typename T>
 struct DvceFaceFld4D {
@@ -194,6 +196,7 @@ struct HostFaceFld4D {
 
 //----------------------------------------------------------------------------------------
 // struct for storing edge-centered (line-averaged) variables, e.g. EMF
+/* [using old C-style comments to prevent multi-line-comment warning]
 //             _____________
 //             |\           \
 //             | \           \
@@ -204,6 +207,7 @@ struct HostFaceFld4D {
 //               \ |           |
 //                \|_____*_____|
 //                    x1e[k,j,i]
+*/
 
 template <typename T>
 struct DvceEdgeFld4D {

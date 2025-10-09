@@ -41,18 +41,19 @@ void SingleStateLLF_MHD(const MHDPrim1D &wl, const MHDPrim1D &wr, const Real &bx
   fsum.by = wl.by*wl.vx + wr.by*wr.vx - bxi*(wl.vy + wr.vy);
   fsum.bz = wl.bz*wl.vx + wr.bz*wr.vx - bxi*(wl.vz + wr.vz);
 
-  Real el,er,pl,pr;
+  Real el=0.0, er=0.0, pl,pr;
   if (eos.is_ideal) {
     pl = eos.IdealGasPressure(wl.e);
     pr = eos.IdealGasPressure(wr.e);
     el = wl.e + 0.5*wl.d*(SQR(wl.vx)+SQR(wl.vy)+SQR(wl.vz)) + qc + SQR(bxi);
     er = wr.e + 0.5*wr.d*(SQR(wr.vx)+SQR(wr.vy)+SQR(wr.vz)) + qd + SQR(bxi);
     fsum.mx += (pl + pr);
-    fsum.e  = (el + pl + qc)*wl.vx + (er + pr + qd)*wr.vx;
+    fsum.e   = (el + pl + qc)*wl.vx + (er + pr + qd)*wr.vx;
     fsum.e  -= bxi*(wl.by*wl.vy + wl.bz*wl.vz);
     fsum.e  -= bxi*(wr.by*wr.vy + wr.bz*wr.vz);
   } else {
     fsum.mx += SQR(eos.iso_cs)*(wl.d + wr.d);
+    fsum.e   = 0.0;
   }
 
   // Compute max wave speed in L,R states (see Toro eq. 10.43)
@@ -80,7 +81,11 @@ void SingleStateLLF_MHD(const MHDPrim1D &wl, const MHDPrim1D &wr, const Real &bx
   flux.mx = 0.5*(fsum.mx - du.mx);
   flux.my = 0.5*(fsum.my - du.my);
   flux.mz = 0.5*(fsum.mz - du.mz);
-  if (eos.is_ideal) {flux.e = 0.5*(fsum.e  - du.e);}
+  if (eos.is_ideal) {
+    flux.e = 0.5*(fsum.e  - du.e);
+  } else {
+    flux.e = 0.0;
+  }
   flux.by = -0.5*(fsum.by - du.by);
   flux.bz =  0.5*(fsum.bz - du.bz);
 

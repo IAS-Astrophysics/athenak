@@ -47,6 +47,9 @@ void LLF(TeamMember_t const &member, const EOS_Data &eos,
     if (eos.is_ideal) {
       wli.e = wl(IEN,i);
       wri.e = wr(IEN,i);
+    } else {
+      wli.e = 0.0;
+      wri.e = 0.0;
     }
 
     // Extract normal magnetic field

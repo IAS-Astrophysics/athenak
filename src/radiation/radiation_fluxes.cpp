@@ -50,9 +50,9 @@ TaskStatus Radiation::CalculateFluxes(Driver *pdriver, int stage) {
             + t1d1(m,2,k,j,i)*nh_c_.d_view(n,2) + t1d1(m,3,k,j,i)*nh_c_.d_view(n,3);
 
     // convert to primitive n_0 I
-    Real iim1, iicc, iim2, iip1, iim3, iip2;
-    iim1 = i0_(m,n,k,j,i-1)/tet_c_(m,0,0,k,j,i-1);
-    iicc = i0_(m,n,k,j,i  )/tet_c_(m,0,0,k,j,i  );
+    Real iim2=0.0, iip1=0.0, iim3=0.0, iip2=0.0;
+    Real iim1 = i0_(m,n,k,j,i-1)/tet_c_(m,0,0,k,j,i-1);
+    Real iicc = i0_(m,n,k,j,i  )/tet_c_(m,0,0,k,j,i  );
     if (recon_method_ > 0) {
       iim2 = i0_(m,n,k,j,i-2)/tet_c_(m,0,0,k,j,i-2);
       iip1 = i0_(m,n,k,j,i+1)/tet_c_(m,0,0,k,j,i+1);
@@ -63,7 +63,7 @@ TaskStatus Radiation::CalculateFluxes(Driver *pdriver, int stage) {
     }
 
     // reconstruct primitive intensity
-    Real iiu, scr;
+    Real iiu=0.0, scr;
     switch (recon_method_) {
       case ReconstructionMethod::dc:
         if (n1 > 0.0) iiu = iim1;
@@ -106,9 +106,9 @@ TaskStatus Radiation::CalculateFluxes(Driver *pdriver, int stage) {
               + t2d2(m,2,k,j,i)*nh_c_.d_view(n,2) + t2d2(m,3,k,j,i)*nh_c_.d_view(n,3);
 
       // convert to primitive n_0 I
-      Real iim1, iicc, iim2, iip1, iim3, iip2;
-      iim1 = i0_(m,n,k,j-1,i)/tet_c_(m,0,0,k,j-1,i);
-      iicc = i0_(m,n,k,j  ,i)/tet_c_(m,0,0,k,j  ,i);
+      Real iim2=0.0, iip1=0.0, iim3=0.0, iip2=0.0;
+      Real iim1 = i0_(m,n,k,j-1,i)/tet_c_(m,0,0,k,j-1,i);
+      Real iicc = i0_(m,n,k,j  ,i)/tet_c_(m,0,0,k,j  ,i);
       if (recon_method_ > 0) {
         iim2 = i0_(m,n,k,j-2,i)/tet_c_(m,0,0,k,j-2,i);
         iip1 = i0_(m,n,k,j+1,i)/tet_c_(m,0,0,k,j+1,i);
@@ -119,7 +119,7 @@ TaskStatus Radiation::CalculateFluxes(Driver *pdriver, int stage) {
       }
 
       // reconstruct primitive intensity
-      Real iiu, scr;
+      Real iiu=0.0, scr;
       switch (recon_method_) {
         case ReconstructionMethod::dc:
           if (n2 > 0.0) iiu = iim1;
@@ -163,9 +163,9 @@ TaskStatus Radiation::CalculateFluxes(Driver *pdriver, int stage) {
               + t3d3(m,2,k,j,i)*nh_c_.d_view(n,2) + t3d3(m,3,k,j,i)*nh_c_.d_view(n,3);
 
       // convert to primitive n_0 I
-      Real iim1, iicc, iim2, iip1, iim3, iip2;
-      iim1 = i0_(m,n,k-1,j,i)/tet_c_(m,0,0,k-1,j,i);
-      iicc = i0_(m,n,k  ,j,i)/tet_c_(m,0,0,k  ,j,i);
+      Real iim2=0.0, iip1=0.0, iim3=0.0, iip2=0.0;
+      Real iim1 = i0_(m,n,k-1,j,i)/tet_c_(m,0,0,k-1,j,i);
+      Real iicc = i0_(m,n,k  ,j,i)/tet_c_(m,0,0,k  ,j,i);
       if (recon_method_ > 0) {
         iim2 = i0_(m,n,k-2,j,i)/tet_c_(m,0,0,k-2,j,i);
         iip1 = i0_(m,n,k+1,j,i)/tet_c_(m,0,0,k+1,j,i);
@@ -176,7 +176,7 @@ TaskStatus Radiation::CalculateFluxes(Driver *pdriver, int stage) {
       }
 
       // reconstruct primitive intensity
-      Real iiu, scr;
+      Real iiu=0.0, scr;
       switch (recon_method_) {
         case ReconstructionMethod::dc:
           if (n3 > 0.0) iiu = iim1;

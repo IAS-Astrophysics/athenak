@@ -124,7 +124,7 @@ void EOSHybrid<LogPolicy>::ReadTableFromFile(std::string fname) {
 
     m_min_h = std::numeric_limits<Real>::max();
     // Compute minimum enthalpy
-    for (int in = 0; in < m_nn; ++in) {
+    for (size_t in=0; in<m_nn; ++in) {
       Real const nb = exp2_(host_log_nb(in));
       // This would use GPU memory, and we are currently on the CPU, so Enthalpy is
       // hardcoded

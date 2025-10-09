@@ -162,11 +162,11 @@ void CCE::InterpolateAndDecompose(MeshBlockPack *pmbp) {
     fwrite(&rout, sizeof(Real), 1, cce_file);
     // Write the 4D array to the binary file
     size_t elementsWritten = fwrite(data_real, sizeof(Real), count, cce_file);
-    if (elementsWritten != count) {
+    if (elementsWritten != static_cast<size_t>(count)) {
       perror("Error writing to file");
     }
     elementsWritten = fwrite(data_imag, sizeof(Real), count, cce_file);
-    if (elementsWritten != count) {
+    if (elementsWritten != static_cast<size_t>(count)) {
       perror("Error writing to file");
     }
     // Close the file

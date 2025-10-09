@@ -9,7 +9,7 @@
 #include <iostream>
 #include <sstream>
 #include <string>   // std::string, to_string()
-#include <cstdio> // snprintf
+#include <cstdio>   // snprintf
 #include <algorithm> // min_element
 #include <utility> // pair<>
 #include <vector>
@@ -273,7 +273,7 @@ BaseTypeOutput::BaseTypeOutput(ParameterInput *pin, Mesh *pm, OutputParameters o
       int nvars = nhyd + pm->pmb_pack->phydro->nscalars;
       for (int n=nhyd; n<nvars; ++n) {
         char number[3];
-        std::snprintf(number,sizeof(number),"%02d",(n - nhyd)%100);
+        std::snprintf(number,sizeof(number)+1,"%02d",(n - nhyd)%100);
         std::string vname;
         vname.assign("r_");
         vname.append(number);
@@ -290,7 +290,7 @@ BaseTypeOutput::BaseTypeOutput(ParameterInput *pin, Mesh *pm, OutputParameters o
       int nvars = nhyd + pm->pmb_pack->phydro->nscalars;
       for (int n=nhyd; n<nvars; ++n) {
         char number[3];
-        std::snprintf(number,sizeof(number),"%02d",(n - nhyd)%100);
+        std::snprintf(number,sizeof(number)+1,"%02d",(n - nhyd)%100);
         std::string vname;
         vname.assign("s_");
         vname.append(number);
@@ -409,7 +409,7 @@ BaseTypeOutput::BaseTypeOutput(ParameterInput *pin, Mesh *pm, OutputParameters o
       int nvars = nmhd + pm->pmb_pack->pmhd->nscalars;
       for (int n=nmhd; n<nvars; ++n) {
         char number[3];
-        std::snprintf(number,sizeof(number),"%02d",(n - nmhd)%100);
+        std::snprintf(number,sizeof(number)+1,"%02d",(n - nmhd)%100);
         std::string vname;
         vname.assign("r_");
         vname.append(number);
@@ -428,7 +428,7 @@ BaseTypeOutput::BaseTypeOutput(ParameterInput *pin, Mesh *pm, OutputParameters o
       int nvars = nmhd + pm->pmb_pack->pmhd->nscalars;
       for (int n=nmhd; n<nvars; ++n) {
         char number[3];
-        std::snprintf(number,sizeof(number),"%02d",(n - nmhd)%100);
+        std::snprintf(number,sizeof(number)+1,"%02d",(n - nmhd)%100);
         std::string vname;
         vname.assign("s_");
         vname.append(number);

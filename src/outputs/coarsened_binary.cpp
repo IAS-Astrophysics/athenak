@@ -350,14 +350,14 @@ void CoarsenedBinaryOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
       << "  variables:  ";
   if (out_params.compute_moments) {
     // need to write the label for each of the 4 moments
-    for (int n=0; n<outvars.size(); n++) {
+    for (size_t n=0; n<outvars.size(); n++) {
       msg << outvars[n].label.c_str() << "_1st  ";
       msg << outvars[n].label.c_str() << "_2nd  ";
       msg << outvars[n].label.c_str() << "_3rd  ";
       msg << outvars[n].label.c_str() << "_4th  ";
     }
   } else {
-    for (int n=0; n<outvars.size(); n++) {
+    for (size_t n=0; n<outvars.size(); n++) {
       msg << outvars[n].label.c_str() << "  ";
     }
   }

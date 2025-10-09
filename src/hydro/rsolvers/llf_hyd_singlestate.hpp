@@ -44,9 +44,10 @@ void SingleStateLLF_Hyd(const HydPrim1D &wl, const HydPrim1D &wr, const EOS_Data
     el = wl.e + 0.5*wl.d*(SQR(wl.vx) + SQR(wl.vy) + SQR(wl.vz));
     er = wr.e + 0.5*wr.d*(SQR(wr.vx) + SQR(wr.vy) + SQR(wr.vz));
     fsum.mx += (pl + pr);
-    fsum.e  = (el + pl)*wl.vx + (er + pr)*wr.vx;
+    fsum.e   = (el + pl)*wl.vx + (er + pr)*wr.vx;
   } else {
     fsum.mx += SQR(eos.iso_cs)*(wl.d + wr.d);
+    fsum.e   = 0.0;
   }
 
   // Compute max wave speed in L,R states (see Toro eq. 10.43)
@@ -72,7 +73,11 @@ void SingleStateLLF_Hyd(const HydPrim1D &wl, const HydPrim1D &wr, const EOS_Data
   flux.mx = 0.5*(fsum.mx - du.mx);
   flux.my = 0.5*(fsum.my - du.my);
   flux.mz = 0.5*(fsum.mz - du.mz);
-  if (eos.is_ideal) {flux.e = 0.5*(fsum.e - du.e);}
+  if (eos.is_ideal) {
+    flux.e = 0.5*(fsum.e - du.e);
+  } else {
+    flux.e = 0.0;
+  }
 
   return;
 }

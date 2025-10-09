@@ -40,6 +40,9 @@ void LLF(TeamMember_t const &member, const EOS_Data &eos,
     if (eos.is_ideal) {
       wli.e = wl(IEN,i);
       wri.e = wr(IEN,i);
+    } else {
+      wli.e = 0.0;
+      wri.e = 0.0;
     }
 
     // Call LLF solver on single interface state
@@ -51,7 +54,11 @@ void LLF(TeamMember_t const &member, const EOS_Data &eos,
     flx(m,ivx,k,j,i) = flux.mx;
     flx(m,ivy,k,j,i) = flux.my;
     flx(m,ivz,k,j,i) = flux.mz;
-    if (eos.is_ideal) {flx(m,IEN,k,j,i) = flux.e;}
+    if (eos.is_ideal) {
+      flx(m,IEN,k,j,i) = flux.e;
+    } else {
+      flx(m,IEN,k,j,i) = 0.0;
+    }
   });
 
   return;

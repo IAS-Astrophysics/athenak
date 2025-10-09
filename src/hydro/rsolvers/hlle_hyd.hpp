@@ -64,6 +64,9 @@ void HLLE(TeamMember_t const &member, const EOS_Data &eos,
     if (eos.is_ideal) {
       wl_ipr = eos.IdealGasPressure(wl(IEN,i));
       wr_ipr = eos.IdealGasPressure(wr(IEN,i));
+    } else {
+      wl_ipr = 0.0;
+      wr_ipr = 0.0;
     }
 
     //--- Step 2.  Compute Roe-averaged state
@@ -134,6 +137,8 @@ void HLLE(TeamMember_t const &member, const EOS_Data &eos,
     } else {
       fl.mx += (iso_cs*iso_cs)*wl_idn;
       fr.mx += (iso_cs*iso_cs)*wr_idn;
+      fl.e  = 0.0;
+      fr.e  = 0.0;
     }
 
     //--- Step 6. Compute the HLLE flux at interface. Formulae below equivalent to

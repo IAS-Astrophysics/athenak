@@ -194,10 +194,10 @@ void EOSCompOSE<LogPolicy>::ReadTableFromFile(std::string fname) {
 
     m_min_h = std::numeric_limits<Real>::max();
     // Compute minimum enthalpy
-    for (int in = 0; in < m_nn; ++in) {
+    for (size_t in = 0; in < m_nn; ++in) {
       Real const nb = exp2_(host_log_nb(in));
-      for (int iy = 0; iy < m_ny; ++iy) {
-        for (int it = 0; it < m_nt; ++it) {
+      for (size_t iy = 0; iy < m_ny; ++iy) {
+        for (size_t it = 0; it < m_nt; ++it) {
           // This would use GPU memory, and we are currently on the CPU, so Enthalpy is
           // hardcoded
           Real e = exp2_(host_table(ECLOGE,in,iy,it));
