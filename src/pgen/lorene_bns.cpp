@@ -446,7 +446,7 @@ void SetupBNS(ParameterInput *pin, Mesh* pmy_mesh_) {
   KOKKOS_LAMBDA(int m, int k, int j, int i) {
     bcc0(m, IBX, k, j, i) = 0.5*(b0.x1f(m, k, j, i) + b0.x1f(m, k, j, i+1));
     bcc0(m, IBY, k, j, i) = 0.5*(b0.x2f(m, k, j, i) + b0.x2f(m, k, j+1, i));
-    bcc0(m, IBZ, k, j, i) = 0.5*(b0.x3f(m, k, j, i) + b0.x2f(m, k+1, j, i));
+    bcc0(m, IBZ, k, j, i) = 0.5*(b0.x3f(m, k, j, i) + b0.x3f(m, k+1, j, i));
   });
 
   if (global_variable::my_rank == 0) {
