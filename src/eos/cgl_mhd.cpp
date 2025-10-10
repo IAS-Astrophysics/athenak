@@ -19,7 +19,8 @@ CGLMHD::CGLMHD(MeshBlockPack *pp, ParameterInput *pin) :
   std::cout <<"In CGL EOS constructor"<< std::endl;
   eos_data.is_ideal = true;
   eos_data.is_cgl = true;
-  eos_data.gamma = pin->GetReal("mhd","gamma");
+  eos_data.nu_coll = 0.0;
+  eos_data.gamma = 1.6666667;//pin->GetReal("mhd","gamma",1.6666667);
   std::string passive_flag = pin->GetString("mhd","passive");  // passive evolution for CGL
   if (passive_flag.compare("true") == 0) {
     eos_data.passive = true;
@@ -28,6 +29,10 @@ CGLMHD::CGLMHD(MeshBlockPack *pp, ParameterInput *pin) :
   } else {
     eos_data.passive = false;
     eos_data.iso_cs = 0.0;
+  }
+  if (pin->DoesParameterExist("mhd","nu_coll")) {    //collision frequency for CGL
+    eos_data.nu_coll = pin->GetReal("mhd","nu_coll");
+    std::cout << "Collisions turned on" << std::endl;
   }
   eos_data.use_e = true;  // ideal gas EOS always uses internal energy
   eos_data.use_t = false;
@@ -198,6 +203,60 @@ void CGLMHD::PrimToCons(const DvceArray5D<Real> &prim, const DvceArray5D<Real> &
     for (int n=nmhd; n<(nmhd+nscal); ++n) {
       cons(m,n,k,j,i) = u.d*prim(m,n,k,j,i);
     }
+  });
+
+  return;
+}
+
+//----------------------------------------------------------------------------------------
+//! \!fn void Collisions()
+//! \brief Decays pressure anisotropy according to scattering rate. Operates over range of cells
+//! given in argument list.
+
+void CGLMHD::Collisions(DvceArray5D<Real> &prim, const DvceArray5D<Real> &bcc,
+                          DvceArray5D<Real> &cons, const int il, const int iu,
+                          const int jl, const int ju, const int kl, const int ku) {
+  int &nmhd  = pmy_pack->pmhd->nmhd;
+  int &nscal = pmy_pack->pmhd->nscalars;
+  int &nmb = pmy_pack->nmb_thispack;
+  auto &nu_coll = eos_data.nu_coll;
+  auto &bfloor = eos_data.bfloor;
+  auto &dtc = pmy_pack->pmesh->dt;
+  
+  //std::cout << dtp << std::endl;
+
+  par_for("mhd_coll", DevExeSpace(), 0, (nmb-1), kl, ku, jl, ju, il, iu,
+  KOKKOS_LAMBDA(int m, int k, int j, int i) {
+    // load single state primitive variables
+    MHDPrim1D w;
+    w.d  = prim(m,IDN,k,j,i);
+    w.vx = prim(m,IVX,k,j,i);
+    w.vy = prim(m,IVY,k,j,i);
+    w.vz = prim(m,IVZ,k,j,i);
+    w.e  = prim(m,IPR,k,j,i);
+    w.pp = prim(m,IPP,k,j,i);
+
+    // load cell-centered fields into primitive state
+    w.bx = bcc(m,IBX,k,j,i);
+    w.by = bcc(m,IBY,k,j,i);
+    w.bz = bcc(m,IBZ,k,j,i);
+    
+    // need to add in another function here to take in nu_coll, and the limiter scattering rates,
+    // and calculate what the local scattering rate should be. Will be an inline function in 
+    // ideal_C2P_MHD
+
+    // call p2c function
+    HydCons1D u;
+    SingleColl_CGLMHD(w, nu_coll, dtc);
+    SingleP2C_CGLMHD(w, bfloor, u);
+
+    // Correct conserved anisotropy variable
+    cons(m,IMU,k,j,i) = u.mu;
+    
+    // Correct pressures
+    prim(m,IPR,k,j,i) = w.e;
+    prim(m,IPP,k,j,i) = w.pp;
+
   });
 
   return;

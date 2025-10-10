@@ -222,6 +222,24 @@ void SingleP2C_CGLMHD(const MHDPrim1D &w, const Real &bfloor, HydCons1D &u) {
 }
 
 //----------------------------------------------------------------------------------------
+//! \fn void SingleColl_CGLMHD()
+//! \brief Calculates the decay of pressure anisotropy due to scattering over one time step
+
+KOKKOS_INLINE_FUNCTION
+void SingleColl_CGLMHD(MHDPrim1D &w, const Real &nu_coll, const Real &dtc) {
+  
+  Real paniso = w.pp-w.e;
+  Real piso = ONE_3RD*w.e + TWO_3RDS*w.pp;
+  
+  Real expdtnu = exp(-nu_coll*dtc);
+  paniso = paniso*expdtnu;
+  
+  w.pp = ONE_3RD*(paniso + 3.0*piso);
+  w.e = w.pp - paniso;  
+  return;
+}
+
+//----------------------------------------------------------------------------------------
 //! \fn Real Equation49()
 //! \brief Inline function to compute function fa(mu) defined in eq. 49 of Kastaun et al.
 //! The root fa(mu)==0 of this function corresponds to the upper bracket for

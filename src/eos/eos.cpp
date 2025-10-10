@@ -58,3 +58,13 @@ void EquationOfState::PrimToCons(const DvceArray5D<Real> &prim,
                                  const int il, const int iu, const int jl, const int ju,
                                  const int kl, const int ku) {
 }
+
+//-----------------------------------------------------------------------------------------
+//! \fn void PrimToCon()
+//! \brief No-Op version of collisional relaxation function for CGL.
+//! Required because only CGL derived class overrides it.
+
+void EquationOfState::Collisions(DvceArray5D<Real> &prim, const DvceArray5D<Real> &bcc,
+                                 DvceArray5D<Real> &cons, const int il, const int iu,
+                                 const int jl, const int ju, const int kl, const int ku) {
+}

@@ -80,7 +80,11 @@ void MHD::AssembleMHDTasks(std::map<std::string, std::shared_ptr<TaskList>> tl) 
   // although RecvFlux/U/E/B functions check that all recvs complete, add ClearRecv to
   // task list anyways to catch potential bugs in MPI communication logic
   id.crecv = tl["after_stagen"]->AddTask(&MHD::ClearRecv, this, id.csend);
-
+  
+  //after time integrator here
+  //needs to return task status - make sure to apply these to the ghost cells as well in the same exact way so is-nghost..
+  id.cglcoll = tl["after_timeintegrator"]->AddTask(&MHD::CGLCollisions, this, none);
+  
   return;
 }
 
@@ -678,5 +682,24 @@ TaskStatus MHD::RestrictB(Driver *pdrive, int stage) {
   }
   return TaskStatus::complete;
 }
+
+//----------------------------------------------------------------------------------------
+//! \fn TaskStatus MHD::CGLCollisions
+//! \brief Wrapper task list function to collisionally decay pressure anisotropy over entire mesh (including gz)
+
+TaskStatus MHD::CGLCollisions(Driver *pdrive, int stage) { //need to ensure this only does something when collisions are on
+  auto &indcs = pmy_pack->pmesh->mb_indcs;
+  int &ng = indcs.ng;
+  int n1m1 = indcs.nx1 + 2*ng - 1;
+  int n2m1 = (indcs.nx2 > 1)? (indcs.nx2 + 2*ng - 1) : 0;
+  int n3m1 = (indcs.nx3 > 1)? (indcs.nx3 + 2*ng - 1) : 0;
+  
+  if (peos->eos_data.nu_coll > 0.0) {
+    std::cout << "In the collisions block" << std::endl;
+    peos->Collisions(w0, bcc0, u0, 0, n1m1, 0, n2m1, 0, n3m1);
+  }
+  return TaskStatus::complete;
+}
+
 
 } // namespace mhd

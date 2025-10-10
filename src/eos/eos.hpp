@@ -27,6 +27,7 @@
 struct EOS_Data {
   Real gamma;        // ratio of specific heats for ideal gas
   Real iso_cs;       // isothermal sound speed
+  Real nu_coll;
   bool is_ideal;     // flag to denote ideal gas EOS
   bool is_cgl;       // flag to denote cgl eos
   bool passive;      // flag to denote isothermal passive CGL evolution
@@ -249,6 +250,11 @@ class EquationOfState {
   virtual void PrimToCons(const DvceArray5D<Real> &prim, const DvceArray5D<Real> &bcc,
                           DvceArray5D<Real> &cons, const int il, const int iu,
                           const int jl, const int ju, const int kl, const int ku);
+                          
+  //virtual function for collisions - only rewritten in CGL eos
+  virtual void Collisions(DvceArray5D<Real> &prim, const DvceArray5D<Real> &bcc,
+                          DvceArray5D<Real> &cons, const int il, const int iu,
+                          const int jl, const int ju, const int kl, const int ku);
 };
 
 //----------------------------------------------------------------------------------------
@@ -382,6 +388,7 @@ class CGLMHD : public EquationOfState {
   // Following suppress warnings that Hydro versions are not over-ridden
   using EquationOfState::ConsToPrim;
   using EquationOfState::PrimToCons;
+  using EquationOfState::Collisions;
 
   CGLMHD(MeshBlockPack *pp, ParameterInput *pin);
   void ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &b,
@@ -390,6 +397,9 @@ class CGLMHD : public EquationOfState {
                   const int il, const int iu, const int jl, const int ju,
                   const int kl, const int ku) override;
   void PrimToCons(const DvceArray5D<Real> &prim, const DvceArray5D<Real> &bcc,
+                  DvceArray5D<Real> &cons, const int il, const int iu,
+                  const int jl, const int ju, const int kl, const int ku) override;
+  void Collisions(DvceArray5D<Real> &prim, const DvceArray5D<Real> &bcc,
                   DvceArray5D<Real> &cons, const int il, const int iu,
                   const int jl, const int ju, const int kl, const int ku) override;
 };
