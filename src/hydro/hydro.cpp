@@ -152,7 +152,8 @@ Hydro::Hydro(MeshBlockPack *ppack, ParameterInput *pin) :
       }
     } else if (xorder.compare("ppm4") == 0 ||
                xorder.compare("ppmx") == 0 ||
-               xorder.compare("wenoz") == 0) {
+               xorder.compare("wenoz") == 0) ||
+               xorder.compare("wenomz") {
       // check that nghost > 2
       auto &indcs = pmy_pack->pmesh->mb_indcs;
       if (indcs.ng < 3) {
@@ -161,7 +162,7 @@ Hydro::Hydro(MeshBlockPack *ppack, ParameterInput *pin) :
           << "but <mesh>/nghost=" << indcs.ng << std::endl;
         std::exit(EXIT_FAILURE);
       }
-      // check that nghost > 3 with PPM4(or PPMX or WENOZ)+FOFC
+      // check that nghost > 3 with PPM4(or PPMX or WENOZ or WENOMZ)+FOFC
       if (use_fofc && indcs.ng < 4) {
         std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
           << std::endl << "FOFC and " << xorder << " reconstruction requires at "
@@ -174,6 +175,8 @@ Hydro::Hydro(MeshBlockPack *ppack, ParameterInput *pin) :
         recon_method = ReconstructionMethod::ppmx;
       } else if (xorder.compare("wenoz") == 0) {
         recon_method = ReconstructionMethod::wenoz;
+      } else if (xorder.compare("wenomz") == 0) {
+        recon_method = ReconstructionMethod::wenomz;
       }
     } else {
       std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__

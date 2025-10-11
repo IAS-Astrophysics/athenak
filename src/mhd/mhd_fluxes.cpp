@@ -19,6 +19,7 @@
 #include "reconstruct/plm.hpp"
 #include "reconstruct/ppm.hpp"
 #include "reconstruct/wenoz.hpp"
+#include "reconstruct/wenomz.hpp"
 #include "mhd/rsolvers/advect_mhd.hpp"
 #include "mhd/rsolvers/llf_mhd.hpp"
 #include "mhd/rsolvers/hlle_mhd.hpp"
@@ -107,6 +108,10 @@ void MHD::CalculateFluxes(Driver *pdriver, int stage) {
       case ReconstructionMethod::wenoz:
         WENOZX1(member, eos_, true,  m, k, j, il-1, iu, w0_, wl, wr);
         WENOZX1(member, eos_, false, m, k, j, il-1, iu, b0_, bl, br);
+        break;
+      case ReconstructionMethod::wenomz:
+        WENOMZX1(member, eos_, true,  m, k, j, il-1, iu, w0_, wl, wr);
+        WENOMZX1(member, eos_, false, m, k, j, il-1, iu, b0_, bl, br);
         break;
       default:
         break;
@@ -221,6 +226,10 @@ void MHD::CalculateFluxes(Driver *pdriver, int stage) {
           case ReconstructionMethod::wenoz:
             WENOZX2(member, eos_, true,  m, k, j, is-1, ie+1, w0_, wl_jp1, wr);
             WENOZX2(member, eos_, false, m, k, j, is-1, ie+1, b0_, bl_jp1, br);
+            break;
+          case ReconstructionMethod::wenomz:
+            WENOMZX2(member, eos_, true,  m, k, j, is-1, ie+1, w0_, wl_jp1, wr);
+            WENOMZX2(member, eos_, false, m, k, j, is-1, ie+1, b0_, bl_jp1, br);
             break;
           default:
             break;
@@ -341,6 +350,10 @@ void MHD::CalculateFluxes(Driver *pdriver, int stage) {
           case ReconstructionMethod::wenoz:
             WENOZX3(member, eos_, true,  m, k, j, is-1, ie+1, w0_, wl_kp1, wr);
             WENOZX3(member, eos_, false, m, k, j, is-1, ie+1, b0_, bl_kp1, br);
+            break;
+          case ReconstructionMethod::wenomz:
+            WENOMZX3(member, eos_, true,  m, k, j, is-1, ie+1, w0_, wl_kp1, wr);
+            WENOMZX3(member, eos_, false, m, k, j, is-1, ie+1, b0_, bl_kp1, br);
             break;
           default:
             break;
