@@ -28,9 +28,14 @@ struct EOS_Data {
   Real gamma;        // ratio of specific heats for ideal gas
   Real iso_cs;       // isothermal sound speed
   Real nu_coll;
+  Real lim_coll;
   bool is_ideal;     // flag to denote ideal gas EOS
   bool is_cgl;       // flag to denote cgl eos
   bool passive;      // flag to denote isothermal passive CGL evolution
+  bool flim;         // flag for firehose limiter
+  bool mlim;         // flag for mirror limiter
+  bool coll;         // flag for overall collisions
+  bool backup_lim;   // flag for backup limiters
   bool use_e, use_t; // use internal energy density (e) or temperature (t) as primitive
   Real dfloor, pfloor, tfloor, sfloor, bfloor;  // density, pressure, temperature, entropy floors
   Real gamma_max;    // ceiling on Lorentz factor in SR/GR

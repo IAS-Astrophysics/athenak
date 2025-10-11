@@ -61,7 +61,7 @@ void HLLE_CGL(TeamMember_t const &member, const EOS_Data &eos,
     
     Real bxi = bx(m,k,j,i);
     
-    //get mu variable specifically for passive advection later DONT FORGET TO ADD IN B FLOOR IF STATEMENT
+    //get mu variable specifically for passive advection later 
     Real pbl = 0.5*(bxi*bxi + SQR(wl_iby) + SQR(wl_ibz));
     Real pbr = 0.5*(bxi*bxi + SQR(wr_iby) + SQR(wr_ibz));
     Real bmagl = sqrt(2.*pbl);

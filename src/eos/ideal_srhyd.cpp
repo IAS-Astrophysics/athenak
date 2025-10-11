@@ -22,7 +22,7 @@ IdealSRHydro::IdealSRHydro(MeshBlockPack *pp, ParameterInput *pin) :
     EquationOfState("hydro", pp, pin) {
   eos_data.is_ideal = true;
   eos_data.is_cgl = false;
-  eos_data.nu_coll = 0.0;
+  eos_data.coll = false;
   eos_data.gamma = pin->GetReal("hydro","gamma");
   eos_data.iso_cs = 0.0;
   eos_data.use_e = true;  // ideal gas EOS always uses internal energy

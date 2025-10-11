@@ -19,8 +19,15 @@ CGLMHD::CGLMHD(MeshBlockPack *pp, ParameterInput *pin) :
   std::cout <<"In CGL EOS constructor"<< std::endl;
   eos_data.is_ideal = true;
   eos_data.is_cgl = true;
-  eos_data.nu_coll = 0.0;
-  eos_data.gamma = 1.6666667;//pin->GetReal("mhd","gamma",1.6666667);
+  eos_data.mlim = false;
+  eos_data.flim = false;
+  eos_data.backup_lim = false;
+  eos_data.coll = false;  //overarching boolean for collisions
+  eos_data.gamma = 1.6666667;
+  eos_data.nu_coll = 0.0; //so they can be passed later, in case only one is initialized
+  eos_data.lim_coll = 0.0;
+  
+  //check for passive flag
   std::string passive_flag = pin->GetString("mhd","passive");  // passive evolution for CGL
   if (passive_flag.compare("true") == 0) {
     eos_data.passive = true;
@@ -30,10 +37,38 @@ CGLMHD::CGLMHD(MeshBlockPack *pp, ParameterInput *pin) :
     eos_data.passive = false;
     eos_data.iso_cs = 0.0;
   }
+  
+  //instability limiter flags
+  if (pin->DoesParameterExist("mhd","mirror_limiter")) {
+    eos_data.mlim = pin->GetBoolean("mhd","mirror_limiter");
+    eos_data.lim_coll = pin->GetReal("mhd","limiter_nu_coll");
+    std::cout << "Mirror limiter turned on" << std::endl;
+    eos_data.coll = true;
+    //check for backup limiter
+    if (pin->DoesParameterExist("mhd","backup_limiters")) {
+        eos_data.backup_lim = pin->GetBoolean("mhd","backup_limiters");
+        std::cout << "Backup mirror limiter turned on" << std::endl;
+    }
+  }
+  if (pin->DoesParameterExist("mhd","firehose_limiter")) {
+    eos_data.flim = pin->GetBoolean("mhd","firehose_limiter");
+    eos_data.lim_coll = pin->GetReal("mhd","limiter_nu_coll");
+    std::cout << "Firehose limiter turned on" << std::endl;
+    eos_data.coll = true;
+    //check for backup limiter
+    if (pin->DoesParameterExist("mhd","backup_limiters")) {
+        eos_data.backup_lim = pin->GetBoolean("mhd","backup_limiters");
+        std::cout << "Backup firehose limiter turned on" << std::endl;
+    }
+  }
+  
+  //set collision frequencies
   if (pin->DoesParameterExist("mhd","nu_coll")) {    //collision frequency for CGL
     eos_data.nu_coll = pin->GetReal("mhd","nu_coll");
-    std::cout << "Collisions turned on" << std::endl;
+    std::cout << "Background collisions turned on" << std::endl;
+    eos_data.coll = true;
   }
+  
   eos_data.use_e = true;  // ideal gas EOS always uses internal energy
   eos_data.use_t = false;
 }
@@ -220,10 +255,16 @@ void CGLMHD::Collisions(DvceArray5D<Real> &prim, const DvceArray5D<Real> &bcc,
   int &nscal = pmy_pack->pmhd->nscalars;
   int &nmb = pmy_pack->nmb_thispack;
   auto &nu_coll = eos_data.nu_coll;
+  auto &lim_coll = eos_data.lim_coll;
+  auto &flim = eos_data.flim;
+  auto &mlim = eos_data.mlim;
+  auto &backup = eos_data.backup_lim;
   auto &bfloor = eos_data.bfloor;
   auto &dtc = pmy_pack->pmesh->dt;
   
-  //std::cout << dtp << std::endl;
+  // Need state variable on grid for collisions that can be passed to the heat fluxes.
+  // May therefore need to consider having this go before time step in case heat flux
+  // oscillates? Or split before/after
 
   par_for("mhd_coll", DevExeSpace(), 0, (nmb-1), kl, ku, jl, ju, il, iu,
   KOKKOS_LAMBDA(int m, int k, int j, int i) {
@@ -241,13 +282,9 @@ void CGLMHD::Collisions(DvceArray5D<Real> &prim, const DvceArray5D<Real> &bcc,
     w.by = bcc(m,IBY,k,j,i);
     w.bz = bcc(m,IBZ,k,j,i);
     
-    // need to add in another function here to take in nu_coll, and the limiter scattering rates,
-    // and calculate what the local scattering rate should be. Will be an inline function in 
-    // ideal_C2P_MHD
-
-    // call p2c function
+    // call scattering and then p2c function
     HydCons1D u;
-    SingleColl_CGLMHD(w, nu_coll, dtc);
+    SingleColl_CGLMHD(w, nu_coll, lim_coll, dtc, mlim, flim, backup);
     SingleP2C_CGLMHD(w, bfloor, u);
 
     // Correct conserved anisotropy variable

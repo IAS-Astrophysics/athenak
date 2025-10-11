@@ -19,7 +19,7 @@ IsothermalHydro::IsothermalHydro(MeshBlockPack *pp, ParameterInput *pin) :
     EquationOfState("hydro", pp, pin) {
   eos_data.is_ideal = false;
   eos_data.is_cgl = false;
-  eos_data.nu_coll = 0.0;
+  eos_data.coll = false;
   eos_data.iso_cs = pin->GetReal("hydro","iso_sound_speed");
   eos_data.gamma = 0.0;
   eos_data.use_e = false;

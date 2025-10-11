@@ -78,7 +78,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     //set up primitives
     dens = 1.0;
     vx = 0.0;
-    vy = -amp*sin(2.*M_PI*x1v);
+    vy = -sqrt(1+DB0/2)*amp*sin(2.*M_PI*x1v);
     vz = 0.0;
 
     // set primitives in newtonian MHD

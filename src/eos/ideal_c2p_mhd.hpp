@@ -226,16 +226,69 @@ void SingleP2C_CGLMHD(const MHDPrim1D &w, const Real &bfloor, HydCons1D &u) {
 //! \brief Calculates the decay of pressure anisotropy due to scattering over one time step
 
 KOKKOS_INLINE_FUNCTION
-void SingleColl_CGLMHD(MHDPrim1D &w, const Real &nu_coll, const Real &dtc) {
+void SingleColl_CGLMHD(MHDPrim1D &w, const Real &nu_coll, const Real &lim_coll, 
+                       const Real &dtc, const bool &mlim, const bool &flim, 
+                       const bool &backup) {
   
   Real paniso = w.pp-w.e;
   Real piso = ONE_3RD*w.e + TWO_3RDS*w.pp;
   
+  // Apply background collisions
   Real expdtnu = exp(-nu_coll*dtc);
   paniso = paniso*expdtnu;
-  
   w.pp = ONE_3RD*(paniso + 3.0*piso);
   w.e = w.pp - paniso;  
+  
+  // Apply limiters
+  Real nudt = lim_coll*dtc;
+  Real nudt_b = 10000000000.*dtc;
+  Real bsqr = w.bx*w.bx+w.by*w.by+w.bz*w.bz;
+  Real wpptmp;
+  
+  // Firehose block
+  if (flim && backup) { //if using backup
+
+    if ((paniso <= -0.7*bsqr) && (paniso > -bsqr)) { //in between limiters
+      wpptmp = (3.*w.pp + nudt*(2.*w.pp + w.e - 0.7*bsqr ))/(3.+3.*nudt);
+      w.e = (3.*w.e + nudt*(2.*w.pp + w.e + 2.*0.7*bsqr ))/(3.+3.*nudt);
+      w.pp = wpptmp;
+    } else if ((paniso <= -bsqr)) {  //beyond backup limiters
+      wpptmp = (3.*w.pp + nudt_b*(2.*w.pp + w.e - bsqr ))/(3.+3.*nudt_b);
+      w.e = (3.*w.e + nudt_b*(2.*w.pp + w.e + 2.*bsqr ))/(3.+3.*nudt_b);
+      w.pp = wpptmp;
+    }
+
+  } else if (flim && (!backup)) { //if not using backup, just standard flim
+
+    if ((paniso <= -0.7*bsqr)) {  
+      wpptmp = (3.*w.pp + nudt*(2.*w.pp + w.e - 0.7*bsqr ))/(3.+3.*nudt);
+      w.e = (3.*w.e + nudt*(2.*w.pp + w.e + 2.*0.7*bsqr ))/(3.+3.*nudt);
+      w.pp = wpptmp;
+    }
+  }
+
+  // Mirror block
+  if (mlim && backup) {
+
+    if ((paniso >= bsqr) && (paniso < bsqr)) { //in between limiters
+      wpptmp = (3.*w.pp + nudt*(2.*w.pp + w.e + 0.5*bsqr ))/(3.+3.*nudt);
+      w.e = (3.*w.e + nudt*(2.*w.pp + w.e - bsqr ))/(3.+3.*nudt);
+      w.pp = wpptmp;
+    } else if ((paniso >= bsqr)) {  //beyond backup limiters
+      wpptmp = (3.*w.pp + nudt_b*(2.*w.pp + w.e + bsqr ))/(3.+3.*nudt_b);
+      w.e = (3.*w.e + nudt_b*(2.*w.pp + w.e - 2.*bsqr ))/(3.+3.*nudt_b);
+      w.pp = wpptmp;
+    }
+
+  } else if (mlim && (!backup)) {  //if not using backup, just standard mlim
+
+    if ((paniso >= bsqr)) {
+      wpptmp = (3.*w.pp + nudt*(2.*w.pp + w.e + 0.5*bsqr ))/(3.+3.*nudt);
+      w.e = (3.*w.e + nudt*(2.*w.pp + w.e - bsqr ))/(3.+3.*nudt);
+      w.pp = wpptmp;
+    }
+  }
+  
   return;
 }
 
