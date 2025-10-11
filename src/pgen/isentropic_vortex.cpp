@@ -77,7 +77,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     Real deltaV = eps*0.5*std::sqrt(arg)/M_PI;
     Real temp = 1.0 + deltaT;
     Real dens = std::pow(temp, 1/gm1);
-    Real pres = std::pow(desn, gamma);
+    Real pres = std::pow(dens, gamma);
     Real delta_u = deltaV*(x2c-x2v);
     Real delta_v = deltaV*(x1v-x1c);
 
@@ -86,7 +86,6 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     u0(m,IM2,k,j,i) = dens*(1.0 + delta_v);
     u0(m,IM3,k,j,i) = 0.0;
     u0(m,IEN,k,j,i) = pres/gm1 + 0.5*dens*(SQR(1.0 + delta_v) + SQR(1.0 + delta_u));
-    }
   });
 
   return;

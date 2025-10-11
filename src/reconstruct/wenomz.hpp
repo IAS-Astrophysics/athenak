@@ -78,8 +78,8 @@ void WENOMZ(const Real &q_im2, const Real &q_im1, const Real &q_i, const Real &q
   f[1] = (-1.0*q_ip1 + 5.0*q_i   + 2.0 *q_im1);
   f[2] = ( 2.0*q_i   + 5.0*q_im1 -      q_im2);
 
-  alpha[0] = 0.1 + 0.1*weight_arg[2]);
-  alpha[2] = 0.3 + 0.3*weight_arg[0]);
+  alpha[0] = 0.1 + 0.1*weight_arg[2];
+  alpha[2] = 0.3 + 0.3*weight_arg[0];
 
   alpha_sum = 6.0*(alpha[0] + alpha[1] + alpha[2]);
 

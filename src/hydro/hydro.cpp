@@ -152,8 +152,8 @@ Hydro::Hydro(MeshBlockPack *ppack, ParameterInput *pin) :
       }
     } else if (xorder.compare("ppm4") == 0 ||
                xorder.compare("ppmx") == 0 ||
-               xorder.compare("wenoz") == 0) ||
-               xorder.compare("wenomz") {
+               xorder.compare("wenoz") == 0 ||
+               xorder.compare("wenomz") == 0) {
       // check that nghost > 2
       auto &indcs = pmy_pack->pmesh->mb_indcs;
       if (indcs.ng < 3) {

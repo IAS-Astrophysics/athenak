@@ -81,7 +81,6 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     u0(m,IM2,k,j,i) = ug*d0;
     u0(m,IM3,k,j,i) = 0.0;
     u0(m,IEN,k,j,i) = p0/gm1 + 0.5*d0*(ug*ug + vg*vg);
-    }
   });
 
   return;
