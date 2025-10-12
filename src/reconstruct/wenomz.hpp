@@ -9,7 +9,7 @@
 //! \brief WENO-MZ reconstruction for a Cartesian-like coordinate with uniform spacing.
 //!
 //! REFERENCES:
-//! Wang Y., Zhao K., Yuan L., "A modified fifth-order WENO-Z scheme based on the  
+//! Wang Y., Zhao K., Yuan L., "A modified fifth-order WENO-Z scheme based on the
 //! weights of the reformulated adaptive order WENO scheme"
 //! Int J Numer Meth Fluids. 2024;96:1631–1652
 //!
@@ -44,9 +44,9 @@ void WENOMZ(const Real &q_im2, const Real &q_im1, const Real &q_i, const Real &q
           beta_coeff1 * SQR(q_ip2 + 3.0*q_i - 4.0*q_ip1);
 
   Real beta4 = beta_coeff4 * SQR(q_im1 - 2.0*q_i + q_ip1);
-  
+
   Real tau_5 = fabs(beta0 - beta2);
-  Real r = (fabs(beta2 - beta1) + epsL) / (fabs(beta0 - beta1) + epsL) ;
+  Real r = (fabs(beta2 - beta1) + epsL) / (fabs(beta0 - beta1) + epsL);
   Real t0 = 1.0 + r;
   Real t2 = 1.0 + 1.0/r;
   Real eta = tau_5*SQR(SQR(tau_5/(fmax(beta0, beta2) + epsL) ));
