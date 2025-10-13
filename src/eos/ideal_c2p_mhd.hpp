@@ -270,11 +270,11 @@ void SingleColl_CGLMHD(MHDPrim1D &w, const Real &nu_coll, const Real &lim_coll,
   // Mirror block
   if (mlim && backup) {
 
-    if ((paniso >= bsqr) && (paniso < bsqr)) { //in between limiters
+    if ((paniso >= 0.5*bsqr) && (paniso < bsqr)) { //in between limiters
       wpptmp = (3.*w.pp + nudt*(2.*w.pp + w.e + 0.5*bsqr ))/(3.+3.*nudt);
       w.e = (3.*w.e + nudt*(2.*w.pp + w.e - bsqr ))/(3.+3.*nudt);
       w.pp = wpptmp;
-    } else if ((paniso >= bsqr)) {  //beyond backup limiters
+    } else if ((paniso >= 0.5*bsqr)) {  //beyond backup limiters
       wpptmp = (3.*w.pp + nudt_b*(2.*w.pp + w.e + bsqr ))/(3.+3.*nudt_b);
       w.e = (3.*w.e + nudt_b*(2.*w.pp + w.e - 2.*bsqr ))/(3.+3.*nudt_b);
       w.pp = wpptmp;
@@ -282,7 +282,7 @@ void SingleColl_CGLMHD(MHDPrim1D &w, const Real &nu_coll, const Real &lim_coll,
 
   } else if (mlim && (!backup)) {  //if not using backup, just standard mlim
 
-    if ((paniso >= bsqr)) {
+    if ((paniso >= 0.5*bsqr)) {
       wpptmp = (3.*w.pp + nudt*(2.*w.pp + w.e + 0.5*bsqr ))/(3.+3.*nudt);
       w.e = (3.*w.e + nudt*(2.*w.pp + w.e - bsqr ))/(3.+3.*nudt);
       w.pp = wpptmp;
