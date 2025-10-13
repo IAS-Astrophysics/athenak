@@ -53,6 +53,7 @@ def run_command(command: List[str], text: bool = False) -> bool:
     with open(LOG_FILE_PATH, "a") as log_file:
         output, errors = process.communicate()
         log_file.write(output)
+        log_file.write(errors)
 
     if process.returncode != 0:
         logging.error(f"Command failed with return code {process.returncode}")
@@ -75,7 +76,6 @@ def cmake(flags: List[str] = [], **kwargs) -> bool:
     """
     original_dir = os.getcwd()
     try:
-        os.makedirs(os.path.join(ATHENAK_PATH, "build"), exist_ok=True)
         os.chdir(ATHENAK_PATH)
         logging.info(f"Configuring CMake in {os.getcwd()}")
 

@@ -163,7 +163,9 @@ TaskStatus MHD::NewTimeStep(Driver *pdriver, int stage) {
     pcond->NewTimeStep(w0, peos->eos_data);
   }
   // compute source terms timestep
-  psrc->NewTimeStep(w0, peos->eos_data);
+  if (psrc != nullptr) {
+    psrc->NewTimeStep(w0, peos->eos_data);
+  }
 
   return TaskStatus::complete;
 }
