@@ -79,10 +79,12 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     if (R2 < 0.1) { // RHS should be r^2
       dye_conc = 1.0;
     }
+
     u0(m, nhydro  , k, j, i) = dye_conc * den; // first scalar
     u0(m, nhydro+1, k, j, i) = dye_conc * den; // second scalar
     u0(m, nhydro+2, k, j, i) = dye_conc * den; // third scalar
     u0(m, nhydro+3, k, j, i) = dye_conc * den; // fourth scalar
+    u0(m, nhydro+4, k, j, i) = 0.5 * den;      // fifth scalar - mean gradient forcing
   });
 
   return;
@@ -108,6 +110,7 @@ Real heatStep(Real x, Real amplitude, Real dt)
 void UserSource(Mesh* pm, const Real bdt) {
   MeshBlockPack *pmbp = pm->pmb_pack;
   auto &indcs = pm->mb_indcs;
+  auto &size = pmbp->pmb->mb_size;
   int is = indcs.is, ie = indcs.ie;
   int js = indcs.js, je = indcs.je;
   int ks = indcs.ks, ke = indcs.ke;
@@ -137,15 +140,24 @@ void UserSource(Mesh* pm, const Real bdt) {
     Real new_scalar_conc_3 = heatStep(scalar_conc_3, 1.0, bdt);
     u0(m, nhydro+2, k, j, i) += (new_scalar_conc_3 - scalar_conc_3) * density;
 
-    // Apply heating to second scalar
+    // Apply heating to fourth scalar
     Real new_scalar_conc_4 = heatStep(scalar_conc_4, 10.0, bdt);
     u0(m, nhydro+3, k, j, i) += (new_scalar_conc_4 - scalar_conc_4) * density;
+
+    // Appy Mean Gradient Forcing to fifth scalar
+    // Passive scalar source term = u.G
+    // let G = (ds/dx, 0, 0) , then u.G = v_x * ds/dx
+    Real G = 0.5; // We set the x gradient to be small
+    Real vx = w0(m, IVX, k, j, i);
+    // Real vol = size.d_view(m).dx1*size.d_view(m).dx2*size.d_view(m).dx3;
+    u0(m, nhydro+4, k, j, i) += vx * G * bdt;
 
     // We should check that scalars are guaranteed to be in [0,1] after all source terms are added.
     u0(m, nhydro  , k, j, i) = Kokkos::clamp(u0(m, nhydro  , k, j, i), 0.0, u0(m,IDN,k,j,i));
     u0(m, nhydro+1, k, j, i) = Kokkos::clamp(u0(m, nhydro+1, k, j, i), 0.0, u0(m,IDN,k,j,i));
     u0(m, nhydro+2, k, j, i) = Kokkos::clamp(u0(m, nhydro+2, k, j, i), 0.0, u0(m,IDN,k,j,i));
     u0(m, nhydro+3, k, j, i) = Kokkos::clamp(u0(m, nhydro+3, k, j, i), 0.0, u0(m,IDN,k,j,i));
+    u0(m, nhydro+4, k, j, i) = Kokkos::clamp(u0(m, nhydro+4, k, j, i), 0.0, u0(m,IDN,k,j,i));
   });
 
   return;
