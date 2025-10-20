@@ -28,6 +28,16 @@
 
 #include <hdf5.h>
 
+// Forward declarations for interpolator
+static double lagrange1D(const double *x, const double *f, double xp);
+static double interpolate_3d(
+    const double *x, int nx,
+    const double *y, int ny,
+    const double *z, int nz,
+    const double *f,
+    double xp, double yp, double zp
+);
+
 //-----------------------------------------------------------------------------
 // Read a full dataset of doubles from an HDF5 file.
 void read_hdf5(const char *filename, double **data, hsize_t *dims, char *DATASET_NAME) {
@@ -78,20 +88,6 @@ void read_hdf5(const char *filename, double **data, hsize_t *dims, char *DATASET
     H5Fclose(file_id);
 }
 
-//-----------------------------------------------------------------------------
-// Find the index in A[inds..inde) whose value is closest to B.
-int find_closest_index(double *A, int inds, int inde, double B) {
-    int index = inds;
-    double min_diff = std::fabs(A[inds] - B);
-    for (int i = inds + 1; i < inde; ++i) {
-        double diff = std::fabs(A[i] - B);
-        if (diff < min_diff) {
-            min_diff = diff;
-            index = i;
-        }
-    }
-    return index - inds;
-}
 
 // Forward declarations
 void LoadIDSolveData(MeshBlockPack *pmbp, const std::string &file_name);
@@ -143,10 +139,10 @@ void LoadIDSolveData(MeshBlockPack *pmbp, const std::string &file_name) {
   read_hdf5(file_name.c_str(), &data_x2v, dims_y, const_cast<char*>("x2v"));
   read_hdf5(file_name.c_str(), &data_x3v, dims_z, const_cast<char*>("x3v"));
 
-  int number_of_meshblocks =        static_cast<int>(dims_x[0]);
-  int meshblock_dimx     =        static_cast<int>(dims_x[1]);
-  int meshblock_dimy     =        static_cast<int>(dims_y[1]);
-  int meshblock_dimz     =        static_cast<int>(dims_z[1]);
+  int number_of_meshblocks =      static_cast<int>(dims_x[0]);
+  int meshblock_dimx       =      static_cast<int>(dims_x[1]);
+  int meshblock_dimy       =      static_cast<int>(dims_y[1]);
+  int meshblock_dimz       =      static_cast<int>(dims_z[1]);
 
   // 2) Read the metric (6 comps) and extrinsic (6 comps) datasets
   double *metric_data=nullptr, *extrin_data=nullptr;
@@ -161,7 +157,7 @@ void LoadIDSolveData(MeshBlockPack *pmbp, const std::string &file_name) {
   int NY          = static_cast<int>(dims_m[3]);
   int NZ          = static_cast<int>(dims_m[4]);
   int block_vol   = NX*NY*NZ;
-  int comp_stride = nblocks * block_vol;         // bytes between successive components
+  int comp_stride = nblocks * block_vol;      // bytes between successive components
 
   // 3) Prepare AthenaK ADM host views
   auto &u_adm      = pmbp->padm->u_adm;
@@ -182,74 +178,172 @@ void LoadIDSolveData(MeshBlockPack *pmbp, const std::string &file_name) {
   int ksg = ks-indcs.ng; int keg = ke+indcs.ng;
   int nmb = pmbp->nmb_thispack;
 
+  // Cache for reordered data from the last used HDF5 meshblock
+  int last_meshblock = -1;
+  std::vector<double> interp_cache(12 * block_vol);
+  std::vector<double> xd(NX), yd(NY), zd(NZ);
 
-    // Now scatter into host_adm
+  //--- PASS 1: Interpolate from HDF5 to fill ACTIVE zones of all meshblocks ---
   for (int m = 0; m < nmb; ++m) {
-    for (int kk = isg; kk <= ieg; ++kk) {
-    for (int jj = jsg; jj <= jeg; ++jj) {
-    for (int ii = ksg; ii <= ieg; ++ii) {
-      Real &x1min = size.d_view(m).x1min;
-      Real &x1max = size.d_view(m).x1max;
-      int nx1 = indcs.nx1;
-      Real xx = CellCenterX(ii-is, nx1, x1min, x1max);
-  
-      Real &x2min = size.d_view(m).x2min;
-      Real &x2max = size.d_view(m).x2max;
-      int nx2 = indcs.nx2;
-      Real yy = CellCenterX(jj-js, nx2, x2min, x2max);
-  
-      Real &x3min = size.d_view(m).x3min;
-      Real &x3max = size.d_view(m).x3max;
-      int nx3 = indcs.nx3;
-      Real zz = CellCenterX(kk-ks, nx3, x3min, x3max);
+    for (int kk = ks; kk <= ke; ++kk) {
+    for (int jj = js; jj <= je; ++jj) {
+    for (int ii = is; ii <= ie; ++ii) {
+      Real xx = CellCenterX(ii-is, indcs.nx1, size.d_view(m).x1min, size.d_view(m).x1max);
+      Real yy = CellCenterX(jj-js, indcs.nx2, size.d_view(m).x2min, size.d_view(m).x2max);
+      Real zz = CellCenterX(kk-ks, indcs.nx3, size.d_view(m).x3min, size.d_view(m).x3max);
 
-      // — find which HDF5 meshblock contains (xx,yy,zz)
       int meshblock = 0;
       for (int l = 0; l < number_of_meshblocks; ++l) {
         double dx = data_x1v[l*meshblock_dimx + 1] - data_x1v[l*meshblock_dimx + 0];
         double dy = data_x2v[l*meshblock_dimy + 1] - data_x2v[l*meshblock_dimy + 0];
         double dz = data_x3v[l*meshblock_dimz + 1] - data_x3v[l*meshblock_dimz + 0];
-        double xmin = data_x1v[l*meshblock_dimx + 0] - dx/2;
-        double xmax = data_x1v[(l+1)*meshblock_dimx - 1] + dx/2;
-        double ymin = data_x2v[l*meshblock_dimy + 0] - dy/2;
-        double ymax = data_x2v[(l+1)*meshblock_dimy - 1] + dy/2;
-        double zmin = data_x3v[l*meshblock_dimz + 0] - dz/2;
-        double zmax = data_x3v[(l+1)*meshblock_dimz - 1] + dz/2;
-        if (xx>xmin && xx<=xmax && yy>ymin && yy<=ymax && zz>zmin && zz<=zmax) {
+        if (xx > (data_x1v[l*meshblock_dimx+0]-dx/2) && xx <= (data_x1v[(l+1)*meshblock_dimx-1]+dx/2) &&
+            yy > (data_x2v[l*meshblock_dimy+0]-dy/2) && yy <= (data_x2v[(l+1)*meshblock_dimy-1]+dy/2) &&
+            zz > (data_x3v[l*meshblock_dimz+0]-dz/2) && zz <= (data_x3v[(l+1)*meshblock_dimz-1]+dz/2)) {
           meshblock = l;
           break;
         }
       }
 
-      // — find nearest indices within that block
-      int sx = meshblock*meshblock_dimx, ex = (meshblock+1)*meshblock_dimx;
-      int sy = meshblock*meshblock_dimy, ey = (meshblock+1)*meshblock_dimy;
-      int sz = meshblock*meshblock_dimz, ez = (meshblock+1)*meshblock_dimz;
-      int rel_ix = find_closest_index(data_x1v, sx, ex, xx);
-      int rel_iy = find_closest_index(data_x2v, sy, ey, yy);
-      int rel_iz = find_closest_index(data_x3v, sz, ez, zz);
+      if (meshblock != last_meshblock) {
+        for (int i=0; i<NX; ++i) xd[i] = data_x1v[meshblock*meshblock_dimx + i];
+        for (int j=0; j<NY; ++j) yd[j] = data_x2v[meshblock*meshblock_dimy + j];
+        for (int k=0; k<NZ; ++k) zd[k] = data_x3v[meshblock*meshblock_dimz + k];
+        for (int comp=0; comp<12; ++comp) {
+          double *source_data = (comp < 6) ? metric_data : extrin_data;
+          int source_comp_idx = (comp < 6) ? comp : comp - 6;
+          double *cache_ptr = interp_cache.data() + comp * block_vol;
+          for (int k_src=0; k_src<NZ; ++k_src) {
+            for (int j_src=0; j_src<NY; ++j_src) {
+              for (int i_src=0; i_src<NX; ++i_src) {
+                int src_idx_in_block = i_src + NX*(j_src + NY*k_src);
+                int src_idx_global = meshblock*block_vol + src_idx_in_block;
+                double val = source_data[source_comp_idx*comp_stride + src_idx_global];
+                int dst_idx = i_src*NY*NZ + j_src*NZ + k_src;
+                cache_ptr[dst_idx] = val;
+              }
+            }
+          }
+        }
+        last_meshblock = meshblock;
+      }
 
-      // — linear offset into the 5‑D arrays
-      int local_idx = meshblock*block_vol
-                    + rel_ix + NX*(rel_iy + NY*rel_iz);
+      const double *xd_ptr=xd.data(), *yd_ptr=yd.data(), *zd_ptr=zd.data();
+      host_adm.g_dd(m,0,0,kk,jj,ii) = interpolate_3d(xd_ptr,NX,yd_ptr,NY,zd_ptr,NZ,interp_cache.data()+0*block_vol,xx,yy,zz);
+      host_adm.g_dd(m,0,1,kk,jj,ii) = interpolate_3d(xd_ptr,NX,yd_ptr,NY,zd_ptr,NZ,interp_cache.data()+1*block_vol,xx,yy,zz);
+      host_adm.g_dd(m,0,2,kk,jj,ii) = interpolate_3d(xd_ptr,NX,yd_ptr,NY,zd_ptr,NZ,interp_cache.data()+2*block_vol,xx,yy,zz);
+      host_adm.g_dd(m,1,1,kk,jj,ii) = interpolate_3d(xd_ptr,NX,yd_ptr,NY,zd_ptr,NZ,interp_cache.data()+3*block_vol,xx,yy,zz);
+      host_adm.g_dd(m,1,2,kk,jj,ii) = interpolate_3d(xd_ptr,NX,yd_ptr,NY,zd_ptr,NZ,interp_cache.data()+4*block_vol,xx,yy,zz);
+      host_adm.g_dd(m,2,2,kk,jj,ii) = interpolate_3d(xd_ptr,NX,yd_ptr,NY,zd_ptr,NZ,interp_cache.data()+5*block_vol,xx,yy,zz);
+      host_adm.vK_dd(m,0,0,kk,jj,ii) = interpolate_3d(xd_ptr,NX,yd_ptr,NY,zd_ptr,NZ,interp_cache.data()+6*block_vol,xx,yy,zz);
+      host_adm.vK_dd(m,0,1,kk,jj,ii) = interpolate_3d(xd_ptr,NX,yd_ptr,NY,zd_ptr,NZ,interp_cache.data()+7*block_vol,xx,yy,zz);
+      host_adm.vK_dd(m,0,2,kk,jj,ii) = interpolate_3d(xd_ptr,NX,yd_ptr,NY,zd_ptr,NZ,interp_cache.data()+8*block_vol,xx,yy,zz);
+      host_adm.vK_dd(m,1,1,kk,jj,ii) = interpolate_3d(xd_ptr,NX,yd_ptr,NY,zd_ptr,NZ,interp_cache.data()+9*block_vol,xx,yy,zz);
+      host_adm.vK_dd(m,1,2,kk,jj,ii) = interpolate_3d(xd_ptr,NX,yd_ptr,NY,zd_ptr,NZ,interp_cache.data()+10*block_vol,xx,yy,zz);
+      host_adm.vK_dd(m,2,2,kk,jj,ii) = interpolate_3d(xd_ptr,NX,yd_ptr,NY,zd_ptr,NZ,interp_cache.data()+11*block_vol,xx,yy,zz);
+    }}}
+  }
 
-      // — scatter metric (6 comps: gxx,gxy,gxz,gyy,gyz,gzz)
-      host_adm.g_dd(m,0,0,kk,jj,ii) = metric_data[0*comp_stride + local_idx];
-      host_adm.g_dd(m,0,1,kk,jj,ii) = metric_data[1*comp_stride + local_idx];
-      host_adm.g_dd(m,0,2,kk,jj,ii) = metric_data[2*comp_stride + local_idx];
-      host_adm.g_dd(m,1,1,kk,jj,ii) = metric_data[3*comp_stride + local_idx];
-      host_adm.g_dd(m,1,2,kk,jj,ii) = metric_data[4*comp_stride + local_idx];
-      host_adm.g_dd(m,2,2,kk,jj,ii) = metric_data[5*comp_stride + local_idx];
+  //--- PASS 2: Fill GHOST zones by copying from neighbors or interpolating as fallback ---
+  for (int m = 0; m < nmb; ++m) {
+    for (int kk = ksg; kk <= keg; ++kk) {
+    for (int jj = jsg; jj <= jeg; ++jj) {
+    for (int ii = isg; ii <= ieg; ++ii) {
+      if (ii >= is && ii <= ie && jj >= js && jj <= je && kk >= ks && kk <= ke) continue;
 
-      // — scatter extrinsic K (6 comps: Kxx,Kxy,Kxz,Kyy,Kyz,Kzz)
-      host_adm.vK_dd(m,0,0,kk,jj,ii) = extrin_data[0*comp_stride + local_idx];
-      host_adm.vK_dd(m,0,1,kk,jj,ii) = extrin_data[1*comp_stride + local_idx];
-      host_adm.vK_dd(m,0,2,kk,jj,ii) = extrin_data[2*comp_stride + local_idx];
-      host_adm.vK_dd(m,1,1,kk,jj,ii) = extrin_data[3*comp_stride + local_idx];
-      host_adm.vK_dd(m,1,2,kk,jj,ii) = extrin_data[4*comp_stride + local_idx];
-      host_adm.vK_dd(m,2,2,kk,jj,ii) = extrin_data[5*comp_stride + local_idx];
-    }}} // end ii,jj,kk
-  }    // end pack‐loop m
+      Real xx = CellCenterX(ii-is, indcs.nx1, size.d_view(m).x1min, size.d_view(m).x1max);
+      Real yy = CellCenterX(jj-js, indcs.nx2, size.d_view(m).x2min, size.d_view(m).x2max);
+      Real zz = CellCenterX(kk-ks, indcs.nx3, size.d_view(m).x3min, size.d_view(m).x3max);
+
+      bool found_home_in_neighbor = false;
+      for (int m_other = 0; m_other < nmb; ++m_other) {
+        if (m == m_other) continue;
+        auto &size_other = size.d_view(m_other);
+
+        Real i_logical = (xx - size_other.x1min)/size_other.dx1 - 0.5 + is;
+        Real j_logical = (yy - size_other.x2min)/size_other.dx2 - 0.5 + js;
+        Real k_logical = (zz - size_other.x3min)/size_other.dx3 - 0.5 + ks;
+
+        // BUG FIX 1: Use precise floating-point bounds for the check.
+        // The active domain spans from the left face of cell 'is' to the right face of cell 'ie'.
+        if (i_logical >= (is - 0.5) && i_logical < (ie + 0.5) &&
+            j_logical >= (js - 0.5) && j_logical < (je + 0.5) &&
+            k_logical >= (ks - 0.5) && k_logical < (ke + 0.5)) {
+          int i_other = static_cast<int>(round(i_logical));
+          int j_other = static_cast<int>(round(j_logical));
+          int k_other = static_cast<int>(round(k_logical));
+
+          host_adm.g_dd(m,0,0,kk,jj,ii) = host_adm.g_dd(m_other,0,0,k_other,j_other,i_other);
+          host_adm.g_dd(m,0,1,kk,jj,ii) = host_adm.g_dd(m_other,0,1,k_other,j_other,i_other);
+          host_adm.g_dd(m,0,2,kk,jj,ii) = host_adm.g_dd(m_other,0,2,k_other,j_other,i_other);
+          host_adm.g_dd(m,1,1,kk,jj,ii) = host_adm.g_dd(m_other,1,1,k_other,j_other,i_other);
+          host_adm.g_dd(m,1,2,kk,jj,ii) = host_adm.g_dd(m_other,1,2,k_other,j_other,i_other);
+          host_adm.g_dd(m,2,2,kk,jj,ii) = host_adm.g_dd(m_other,2,2,k_other,j_other,i_other);
+          host_adm.vK_dd(m,0,0,kk,jj,ii) = host_adm.vK_dd(m_other,0,0,k_other,j_other,i_other);
+          host_adm.vK_dd(m,0,1,kk,jj,ii) = host_adm.vK_dd(m_other,0,1,k_other,j_other,i_other);
+          host_adm.vK_dd(m,0,2,kk,jj,ii) = host_adm.vK_dd(m_other,0,2,k_other,j_other,i_other);
+          host_adm.vK_dd(m,1,1,kk,jj,ii) = host_adm.vK_dd(m_other,1,1,k_other,j_other,i_other);
+          host_adm.vK_dd(m,1,2,kk,jj,ii) = host_adm.vK_dd(m_other,1,2,k_other,j_other,i_other);
+          host_adm.vK_dd(m,2,2,kk,jj,ii) = host_adm.vK_dd(m_other,2,2,k_other,j_other,i_other);
+          found_home_in_neighbor = true;
+          break;
+        }
+      }
+
+      if (!found_home_in_neighbor) {
+        int meshblock = 0;
+        for (int l = 0; l < number_of_meshblocks; ++l) {
+            double dx = data_x1v[l*meshblock_dimx + 1] - data_x1v[l*meshblock_dimx + 0];
+            double dy = data_x2v[l*meshblock_dimy + 1] - data_x2v[l*meshblock_dimy + 0];
+            double dz = data_x3v[l*meshblock_dimz + 1] - data_x3v[l*meshblock_dimz + 0];
+            if (xx > (data_x1v[l*meshblock_dimx+0]-dx/2) && xx <= (data_x1v[(l+1)*meshblock_dimx-1]+dx/2) &&
+                yy > (data_x2v[l*meshblock_dimy+0]-dy/2) && yy <= (data_x2v[(l+1)*meshblock_dimy-1]+dy/2) &&
+                zz > (data_x3v[l*meshblock_dimz+0]-dz/2) && zz <= (data_x3v[(l+1)*meshblock_dimz-1]+dz/2)) {
+                meshblock = l;
+                break;
+            }
+        }
+
+        // BUG FIX 2: Added full caching logic to the fallback to prevent using stale data.
+        if (meshblock != last_meshblock) {
+          for (int i=0; i<NX; ++i) xd[i] = data_x1v[meshblock*meshblock_dimx + i];
+          for (int j=0; j<NY; ++j) yd[j] = data_x2v[meshblock*meshblock_dimy + j];
+          for (int k=0; k<NZ; ++k) zd[k] = data_x3v[meshblock*meshblock_dimz + k];
+          for (int comp=0; comp<12; ++comp) {
+            double *source_data = (comp < 6) ? metric_data : extrin_data;
+            int source_comp_idx = (comp < 6) ? comp : comp - 6;
+            double *cache_ptr = interp_cache.data() + comp * block_vol;
+            for (int k_src=0; k_src<NZ; ++k_src) {
+              for (int j_src=0; j_src<NY; ++j_src) {
+                for (int i_src=0; i_src<NX; ++i_src) {
+                  int src_idx_in_block = i_src + NX*(j_src + NY*k_src);
+                  int src_idx_global = meshblock*block_vol + src_idx_in_block;
+                  double val = source_data[source_comp_idx*comp_stride + src_idx_global];
+                  int dst_idx = i_src*NY*NZ + j_src*NZ + k_src;
+                  cache_ptr[dst_idx] = val;
+                }
+              }
+            }
+          }
+          last_meshblock = meshblock;
+        }
+
+        const double *xd_ptr=xd.data(), *yd_ptr=yd.data(), *zd_ptr=zd.data();
+        host_adm.g_dd(m,0,0,kk,jj,ii) = interpolate_3d(xd_ptr,NX,yd_ptr,NY,zd_ptr,NZ,interp_cache.data()+0*block_vol,xx,yy,zz);
+        host_adm.g_dd(m,0,1,kk,jj,ii) = interpolate_3d(xd_ptr,NX,yd_ptr,NY,zd_ptr,NZ,interp_cache.data()+1*block_vol,xx,yy,zz);
+        host_adm.g_dd(m,0,2,kk,jj,ii) = interpolate_3d(xd_ptr,NX,yd_ptr,NY,zd_ptr,NZ,interp_cache.data()+2*block_vol,xx,yy,zz);
+        host_adm.g_dd(m,1,1,kk,jj,ii) = interpolate_3d(xd_ptr,NX,yd_ptr,NY,zd_ptr,NZ,interp_cache.data()+3*block_vol,xx,yy,zz);
+        host_adm.g_dd(m,1,2,kk,jj,ii) = interpolate_3d(xd_ptr,NX,yd_ptr,NY,zd_ptr,NZ,interp_cache.data()+4*block_vol,xx,yy,zz);
+        host_adm.g_dd(m,2,2,kk,jj,ii) = interpolate_3d(xd_ptr,NX,yd_ptr,NY,zd_ptr,NZ,interp_cache.data()+5*block_vol,xx,yy,zz);
+        host_adm.vK_dd(m,0,0,kk,jj,ii) = interpolate_3d(xd_ptr,NX,yd_ptr,NY,zd_ptr,NZ,interp_cache.data()+6*block_vol,xx,yy,zz);
+        host_adm.vK_dd(m,0,1,kk,jj,ii) = interpolate_3d(xd_ptr,NX,yd_ptr,NY,zd_ptr,NZ,interp_cache.data()+7*block_vol,xx,yy,zz);
+        host_adm.vK_dd(m,0,2,kk,jj,ii) = interpolate_3d(xd_ptr,NX,yd_ptr,NY,zd_ptr,NZ,interp_cache.data()+8*block_vol,xx,yy,zz);
+        host_adm.vK_dd(m,1,1,kk,jj,ii) = interpolate_3d(xd_ptr,NX,yd_ptr,NY,zd_ptr,NZ,interp_cache.data()+9*block_vol,xx,yy,zz);
+        host_adm.vK_dd(m,1,2,kk,jj,ii) = interpolate_3d(xd_ptr,NX,yd_ptr,NY,zd_ptr,NZ,interp_cache.data()+10*block_vol,xx,yy,zz);
+        host_adm.vK_dd(m,2,2,kk,jj,ii) = interpolate_3d(xd_ptr,NX,yd_ptr,NY,zd_ptr,NZ,interp_cache.data()+11*block_vol,xx,yy,zz);
+      }
+    }}}
+  }
 
   // 5) Free buffers and copy to device
   std::free(data_x1v);
@@ -263,4 +357,91 @@ void LoadIDSolveData(MeshBlockPack *pmbp, const std::string &file_name) {
 
 void RefinementCondition(MeshBlockPack *pmbp) {
     pmbp->pz4c->pamr->Refine(pmbp);
+}
+
+//----------------------------------------------------------------------------------------
+// Helper functions for 4th-order interpolation
+//----------------------------------------------------------------------------------------
+
+//! \fn lagrange1D
+//! \brief 1D Lagrange interpolation over a 5-point stencil.
+static double lagrange1D(const double *x, const double *f, double xp) {
+    double result = 0.0;
+    for (int i = 0; i < 5; i++) {
+        double term = f[i];
+        for (int j = 0; j < 5; j++) {
+            if (j != i) {
+                term *= (xp - x[j]) / (x[i] - x[j]);
+            }
+        }
+        result += term;
+    }
+    return result;
+}
+
+//! \fn interpolate_3d
+//! \brief 4th-order accurate 3D interpolation using a 5-point stencil in each dimension.
+static double interpolate_3d(
+    const double *x, int nx,
+    const double *y, int ny,
+    const double *z, int nz,
+    const double *f,
+    double xp, double yp, double zp
+) {
+    // Clamp coordinates to nearest domain edge (nearest-neighbor extrapolation)
+    if (xp < x[0]) xp = x[0];
+    else if (xp > x[nx-1]) xp = x[nx-1];
+
+    if (yp < y[0]) yp = y[0];
+    else if (yp > y[ny-1]) yp = y[ny-1];
+
+    if (zp < z[0]) zp = z[0];
+    else if (zp > z[nz-1]) zp = z[nz-1];
+
+    // Find closest indices
+    int ix = 0, iy = 0, iz = 0;
+    double dx = std::fabs(xp - x[0]);
+    double dy = std::fabs(yp - y[0]);
+    double dz = std::fabs(zp - z[0]);
+    for (int i = 1; i < nx; i++) if (std::fabs(xp - x[i]) < dx) { dx = std::fabs(xp - x[i]); ix = i; }
+    for (int j = 1; j < ny; j++) if (std::fabs(yp - y[j]) < dy) { dy = std::fabs(yp - y[j]); iy = j; }
+    for (int k = 1; k < nz; k++) if (std::fabs(zp - z[k]) < dz) { dz = std::fabs(zp - z[k]); iz = k; }
+
+    // Define 5-point stencil, clamping to array bounds
+    int sx = ix - 2; if (sx < 0) sx = 0; if (sx > nx - 5) sx = nx - 5;
+    int sy = iy - 2; if (sy < 0) sy = 0; if (sy > ny - 5) sy = ny - 5;
+    int sz = iz - 2; if (sz < 0) sz = 0; if (sz > nz - 5) sz = nz - 5;
+
+    double x5[5], y5[5], z5[5];
+    for (int i = 0; i < 5; i++) {
+        x5[i] = x[sx + i];
+        y5[i] = y[sy + i];
+        z5[i] = z[sz + i];
+    }
+
+    // Interpolation along z-axis
+    double yz_interp[5][5];
+    for (int i = 0; i < 5; i++) {
+        for (int j = 0; j < 5; j++) {
+            double fz[5];
+            for (int k = 0; k < 5; k++) {
+                int idx = (sx + i) * ny * nz + (sy + j) * nz + (sz + k);
+                fz[k] = f[idx];
+            }
+            yz_interp[i][j] = lagrange1D(z5, fz, zp);
+        }
+    }
+
+    // Interpolation along y-axis
+    double x_interp[5];
+    for (int i = 0; i < 5; i++) {
+        double fy[5];
+        for (int j = 0; j < 5; j++) {
+            fy[j] = yz_interp[i][j];
+        }
+        x_interp[i] = lagrange1D(y5, fy, yp);
+    }
+
+    // Final interpolation along x-axis
+    return lagrange1D(x5, x_interp, xp);
 }
