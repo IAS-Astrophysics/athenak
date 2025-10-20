@@ -36,7 +36,11 @@ nx3       = 8          # Number of cells in each MeshBlock, X3-dir
 refinement       = adaptive    # type of refinement
 max_nmb_per_rank = 512
 num_levels       = 2
-dens_max         = 1.0008
+
+<amr_criterion1>
+method    = min_max
+variable  = hydro_u_d
+value_max = 1.0008
 
 <time>
 evolution  = dynamic   # dynamic/kinematic/static
