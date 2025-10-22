@@ -11,6 +11,10 @@
 
 #include <string>
 
+#include "athena.hpp"
+
+class MeshBlockPack;
+
 void ShowConfig();
 void ChangeRunDir(const std::string dir);
 void ComputeDerivedVariable(std::string name, int index, MeshBlockPack* pmbp,
