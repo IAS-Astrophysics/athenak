@@ -645,7 +645,7 @@ void BNSHistory(HistoryData *pdata, Mesh *pm) {
       Real beta_z = gxz*betax + gyz*betay + gzz*betaz;
       Real betasq = betax*beta_x + betay*beta_y + betaz*beta_z;
 
-      Real u_t = -W*(alp - betasq);
+      Real u_t = -W*alp + (beta_x*int_vx + beta_y*int_vy + beta_z*int_vz);
 
       Real b0 = (int_bx*v_x + int_by*v_y + int_bz*v_z)*ialp;
       Real bx = (int_bx + alp*b0*ux)*iW;
