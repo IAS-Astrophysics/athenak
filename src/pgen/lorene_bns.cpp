@@ -34,6 +34,8 @@
 #include "utils/tov/tov_polytrope.hpp"
 #include "utils/tov/tov_piecewise_poly.hpp"
 #include "utils/tov/tov_tabulated.hpp"
+#include "geodesic-grid/geodesic_grid.hpp"
+#include "geodesic-grid/spherical_grid.hpp"
 
 // Lorene
 #include "bin_ns.h"
@@ -470,6 +472,17 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   user_hist_func = &BNSHistory;
   user_ref_func = &LoreneBNSRefinementCondition;
 
+  // Spherical grids for user-defined history
+  auto& grids = spherical_grids;
+  int ngrids = pin->GetOrAddInteger("problem", "ngrids", 3);
+  for (int s = 0; s < ngrids; s++) {
+    std::stringstream ss;
+    ss << "rsurface_" << s;
+    Real rad = pin->GetOrAddReal("problem", ss.str(), (s + 1)*20.0);
+    grids.push_back(std::make_unique<SphericalGrid>(pmbp, 5, rad));
+  }
+
+
   if (restart) return;
 
   // Select the correct EOS template based on the EOS we need.
@@ -510,15 +523,164 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
 }
 
 void BNSHistory(HistoryData *pdata, Mesh *pm) {
+  // Extract grids for extracting Poynting flux
+  auto &grids = pm->pgen->spherical_grids;
+  int nradii = grids.size();
+
   // Select the number of outputs and create labels for them.
   int &nmhd = pm->pmb_pack->pmhd->nmhd;
-  pdata->nhist = 2;
+  pdata->nhist = 2 + nradii;
   pdata->label[0] = "rho-max";
   pdata->label[1] = "alpha-min";
+  for (int s = 0; s < nradii; s++) {
+    std::stringstream ss;
+    ss << "poynting_" << s;
+    pdata->label[2 + s] = ss.str();
+  }
 
   // Capture class variables for kernel
   auto &w0_ = pm->pmb_pack->pmhd->w0;
-  auto &adm = pm->pmb_pack->padm->adm;
+  auto *padm = pm->pmb_pack->padm;
+  auto &adm = padm->adm;
+  auto &bcc0_ = pm->pmb_pack->pmhd->bcc0;
+  auto *pz4c = pm->pmb_pack->pz4c;
+  int nvars = nmhd + pm->pmb_pack->pmhd->nscalars;
+
+  // Storage for interpolated metric and magnetic field variables.
+  DualArray2D<Real> interpolated_bcc;
+  DualArray2D<Real> interpolated_g;
+  DualArray2D<Real> interpolated_gauge;
+
+  // Get the correct source for the gauge variables.
+  DvceArray5D<Real> gauge_src;
+  int gauge_vs, gauge_ve;
+  if (pz4c == nullptr) {
+    gauge_src = padm->u_adm;
+    gauge_vs = padm->I_ADM_ALPHA;
+    gauge_ve = padm->I_ADM_BETAZ;
+  } else {
+    // In the (most probable) event that Z4c is enabled, the gauge is stored in Z4c
+    // rather than ADM.
+    gauge_src = pz4c->u0;
+    gauge_vs = pz4c->I_Z4C_ALPHA;
+    gauge_ve = pz4c->I_Z4C_BETAZ;
+  }
+
+  // Go through angles at each radius:
+  for (int g = 0; g < nradii; g++) {
+    // Zero fluxes at this radius
+    pdata->hdata[2 + g] = 0.0;
+
+    // Interpolate all variables
+
+    // Magnetic fields
+    grids[g]->InterpolateToSphere(3, bcc0_);
+    Kokkos::realloc(interpolated_bcc, grids[g]->nangles, 3);
+    Kokkos::deep_copy(interpolated_bcc, grids[g]->interp_vals);
+    interpolated_bcc.template modify<DevExeSpace>();
+    interpolated_bcc.template sync<HostMemSpace>();
+
+    // Metric
+    grids[g]->InterpolateToSphere(padm->I_ADM_GXX, padm->I_ADM_GZZ, padm->u_adm);
+    Kokkos::realloc(interpolated_g, grids[g]->nangles, 6);
+    Kokkos::deep_copy(interpolated_g, grids[g]->interp_vals);
+    interpolated_g.template modify<DevExeSpace>();
+    interpolated_g.template sync<HostMemSpace>();
+
+    // Gauge
+    grids[g]->InterpolateToSphere(gauge_vs, gauge_ve, gauge_src);
+    Kokkos::realloc(interpolated_gauge, grids[g]->nangles, 4);
+    Kokkos::deep_copy(interpolated_gauge, grids[g]->interp_vals);
+    interpolated_gauge.template modify<DevExeSpace>();
+    interpolated_gauge.template sync<HostMemSpace>();
+
+    grids[g]->InterpolateToSphere(nvars, w0_);
+
+    // Compute fluxes
+    for (int n = 0; n < grids[g]->nangles; n++) {
+      // extract coordinate data at this angle
+      Real r = grids[g]->radius;
+      Real theta = grids[g]->polar_pos.h_view(n,0);
+      Real phi = grids[g]->polar_pos.h_view(n,1);
+      Real x1 = grids[g]->interp_coord.h_view(n,0);
+      Real x2 = grids[g]->interp_coord.h_view(n,1);
+      Real x3 = grids[g]->interp_coord.h_view(n,2);
+
+      // extract interpolated fields
+      Real& int_vx = grids[g]->interp_vals.h_view(n,IVX);
+      Real& int_vy = grids[g]->interp_vals.h_view(n,IVY);
+      Real& int_vz = grids[g]->interp_vals.h_view(n,IVZ);
+
+      Real& int_bx = interpolated_bcc.h_view(n,IBX);
+      Real& int_by = interpolated_bcc.h_view(n,IBY);
+      Real& int_bz = interpolated_bcc.h_view(n,IBZ);
+
+      Real& gxx = interpolated_g.h_view(n,0);
+      Real& gxy = interpolated_g.h_view(n,1);
+      Real& gxz = interpolated_g.h_view(n,2);
+      Real& gyy = interpolated_g.h_view(n,3);
+      Real& gyz = interpolated_g.h_view(n,4);
+      Real& gzz = interpolated_g.h_view(n,5);
+
+      Real& alp = interpolated_gauge.h_view(n,0);
+      Real& betax = interpolated_gauge.h_view(n,1);
+      Real& betay = interpolated_gauge.h_view(n,2);
+      Real& betaz = interpolated_gauge.h_view(n,3);
+
+      // Compute some utility variables we need for the T^r_t component of the
+      // stress-energy tensor.
+      Real v_x = gxx*int_vx + gxy*int_vy + gxz*int_vz;
+      Real v_y = gxy*int_vx + gyy*int_vy + gyz*int_vz;
+      Real v_z = gxz*int_vx + gyz*int_vy + gzz*int_vz;
+      Real W = Kokkos::sqrt(1.0 + int_vx*v_x + int_vy*v_y + int_vz*v_z);
+      Real iW = 1.0/W;
+
+      Real ialp = 1.0/alp;
+      Real ux = int_vx - W*betax*ialp;
+      Real uy = int_vy - W*betay*ialp;
+      Real uz = int_vz - W*betaz*ialp;
+
+      Real beta_x = gxx*betax + gxy*betay + gxz*betaz;
+      Real beta_y = gxy*betax + gyy*betay + gyz*betaz;
+      Real beta_z = gxz*betax + gyz*betay + gzz*betaz;
+      Real betasq = betax*beta_x + betay*beta_y + betaz*beta_z;
+
+      Real u_t = -W*(alp - betasq);
+
+      Real b0 = (int_bx*v_x + int_by*v_y + int_bz*v_z)*ialp;
+      Real bx = (int_bx + alp*b0*ux)*iW;
+      Real by = (int_by + alp*b0*uy)*iW;
+      Real bz = (int_bz + alp*b0*uz)*iW;
+      Real B_x = gxx*int_bx + gxy*int_by + gxz*int_bz;
+      Real B_y = gxy*int_bx + gyy*int_by + gyz*int_bz;
+      Real B_z = gxz*int_bx + gyz*int_by + gzz*int_bz;
+      Real Bsq = int_bx*B_x + int_by*B_y + int_bz*B_z;
+      Real bsq = (Bsq + alp*alp*b0*b0)*(iW*iW);
+      Real b_t = (-alp*alp + betasq)*b0 + beta_x*bx + beta_y*by + beta_z*bz;
+
+      // Transform to spherical coordinates.
+      Real drdx = x1/r;
+      Real drdy = x2/r;
+      Real drdz = x3/r;
+
+      Real ur = drdx*ux + drdy*uy + drdz*uz;
+      Real br = drdx*bx + drdy*by + drdz*bz;
+
+      // Compute the EM stress-energy tensor component we need
+      Real Trt = bsq*ur*u_t - br*b_t;
+
+      // Compute volume form -- note that we artificially force the determinant to be
+      // positive. Though the spatial metric should be positive-definite, high-order
+      // interpolation might not respect that. All our metrics are asymptotically flat,
+      // so this shouldn't be a problem if the spherical surface is placed far enough
+      // away, but we do it nevertheless as a preventative measure.
+      Real detg = Kokkos::max(0.0, adm::SpatialDet(gxx, gxy, gxz, gyy, gyz, gzz));
+      Real vol = r*r*alp*Kokkos::sqrt(detg)*grids[g]->solid_angles.h_view(n);
+
+      // Perform the integration
+      pdata->hdata[2 + g] -= vol*Trt;
+    }
+  }
 
   // Loop over all MeshBlocks in this pack
   auto &indcs = pm->pmb_pack->pmesh->mb_indcs;
