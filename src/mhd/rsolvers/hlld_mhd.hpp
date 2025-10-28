@@ -106,7 +106,7 @@ void HLLD(TeamMember_t const &member, const EOS_Data &eos,
       Real ptl = wl_ipr + pbl; // total pressures L,R
       Real ptr = wr_ipr + pbr;
 
-      MHDCons1D fl,fr,flxi;           // Fluxes for left & right states
+      MHDCons1D fl,fr;           // Fluxes for left & right states
       fl.d  = ul.mx;
       fl.mx = ul.mx*wl_ivx + ptl - bxsq;
       fl.my = ul.my*wl_ivx - bxi*ul.by;
@@ -291,67 +291,59 @@ void HLLD(TeamMember_t const &member, const EOS_Data &eos,
 
       if (spd[0] >= 0.0) {
         // return Fl if flow is supersonic
-        flxi.d = fl.d;
-        flxi.mx = fl.mx;
-        flxi.my = fl.my;
-        flxi.mz = fl.mz;
-        flxi.e  = fl.e;
-        flxi.by = fl.by;
-        flxi.bz = fl.bz;
+        flx(m,IDN,k,j,i) = fl.d;
+        flx(m,ivx,k,j,i) = fl.mx;
+        flx(m,ivy,k,j,i) = fl.my;
+        flx(m,ivz,k,j,i) = fl.mz;
+        flx(m,IEN,k,j,i) = fl.e;
+        ey(m,k,j,i) = -fl.by;
+        ez(m,k,j,i) =  fl.bz;
       } else if (spd[4] <= 0.0) {
         // return Fr if flow is supersonic
-        flxi.d = fr.d;
-        flxi.mx = fr.mx;
-        flxi.my = fr.my;
-        flxi.mz = fr.mz;
-        flxi.e  = fr.e;
-        flxi.by = fr.by;
-        flxi.bz = fr.bz;
+        flx(m,IDN,k,j,i) = fr.d;
+        flx(m,ivx,k,j,i) = fr.mx;
+        flx(m,ivy,k,j,i) = fr.my;
+        flx(m,ivz,k,j,i) = fr.mz;
+        flx(m,IEN,k,j,i) = fr.e;
+        ey(m,k,j,i) = -fr.by;
+        ez(m,k,j,i) =  fr.bz;
       } else if (spd[1] >= 0.0) {
         // return Fl*
-        flxi.d = fl.d  + ulst.d;
-        flxi.mx = fl.mx + ulst.mx;
-        flxi.my = fl.my + ulst.my;
-        flxi.mz = fl.mz + ulst.mz;
-        flxi.e  = fl.e  + ulst.e;
-        flxi.by = fl.by + ulst.by;
-        flxi.bz = fl.bz + ulst.bz;
+        flx(m,IDN,k,j,i) = fl.d  + ulst.d;
+        flx(m,ivx,k,j,i) = fl.mx + ulst.mx;
+        flx(m,ivy,k,j,i) = fl.my + ulst.my;
+        flx(m,ivz,k,j,i) = fl.mz + ulst.mz;
+        flx(m,IEN,k,j,i) = fl.e  + ulst.e;
+        ey(m,k,j,i) = -(fl.by + ulst.by);
+        ez(m,k,j,i) =  (fl.bz + ulst.bz);
       } else if (spd[2] >= 0.0) {
         // return Fl**
-        flxi.d = fl.d  + ulst.d + uldst.d;
-        flxi.mx = fl.mx + ulst.mx + uldst.mx;
-        flxi.my = fl.my + ulst.my + uldst.my;
-        flxi.mz = fl.mz + ulst.mz + uldst.mz;
-        flxi.e  = fl.e  + ulst.e + uldst.e;
-        flxi.by = fl.by + ulst.by + uldst.by;
-        flxi.bz = fl.bz + ulst.bz + uldst.bz;
+        flx(m,IDN,k,j,i) = fl.d  + ulst.d + uldst.d;
+        flx(m,ivx,k,j,i) = fl.mx + ulst.mx + uldst.mx;
+        flx(m,ivy,k,j,i) = fl.my + ulst.my + uldst.my;
+        flx(m,ivz,k,j,i) = fl.mz + ulst.mz + uldst.mz;
+        flx(m,IEN,k,j,i) = fl.e  + ulst.e + uldst.e;
+        ey(m,k,j,i) = -(fl.by + ulst.by + uldst.by);
+        ez(m,k,j,i) =  (fl.bz + ulst.bz + uldst.bz);
       } else if (spd[3] > 0.0) {
         // return Fr**
-        flxi.d = fr.d + urst.d + urdst.d;
-        flxi.mx = fr.mx + urst.mx + urdst.mx;
-        flxi.my = fr.my + urst.my + urdst.my;
-        flxi.mz = fr.mz + urst.mz + urdst.mz;
-        flxi.e  = fr.e + urst.e + urdst.e;
-        flxi.by = fr.by + urst.by + urdst.by;
-        flxi.bz = fr.bz + urst.bz + urdst.bz;
+        flx(m,IDN,k,j,i) = fr.d + urst.d + urdst.d;
+        flx(m,ivx,k,j,i) = fr.mx + urst.mx + urdst.mx;
+        flx(m,ivy,k,j,i) = fr.my + urst.my + urdst.my;
+        flx(m,ivz,k,j,i) = fr.mz + urst.mz + urdst.mz;
+        flx(m,IEN,k,j,i) = fr.e + urst.e + urdst.e;
+        ey(m,k,j,i) = -(fr.by + urst.by + urdst.by);
+        ez(m,k,j,i) =  (fr.bz + urst.bz + urdst.bz);
       } else {
         // return Fr*
-        flxi.d = fr.d  + urst.d;
-        flxi.mx = fr.mx + urst.mx;
-        flxi.my = fr.my + urst.my;
-        flxi.mz = fr.mz + urst.mz;
-        flxi.e  = fr.e  + urst.e;
-        flxi.by = fr.by + urst.by;
-        flxi.bz = fr.bz + urst.bz;
+        flx(m,IDN,k,j,i) = fr.d  + urst.d;
+        flx(m,ivx,k,j,i) = fr.mx + urst.mx;
+        flx(m,ivy,k,j,i) = fr.my + urst.my;
+        flx(m,ivz,k,j,i) = fr.mz + urst.mz;
+        flx(m,IEN,k,j,i) = fr.e  + urst.e;
+        ey(m,k,j,i) = -(fr.by + urst.by);
+        ez(m,k,j,i) =  (fr.bz + urst.bz);
       }
-
-      flx(m,IDN,k,j,i) = flxi.d;
-      flx(m,ivx,k,j,i) = flxi.mx;
-      flx(m,ivy,k,j,i) = flxi.my;
-      flx(m,ivz,k,j,i) = flxi.mz;
-      flx(m,IEN,k,j,i) = flxi.e;
-      ey(m,k,j,i) = -flxi.by;
-      ez(m,k,j,i) =  flxi.bz;
     });
 
   //------------------------- ISOTHERMAL HLLD solver -------------------------------------
@@ -408,7 +400,7 @@ void HLLD(TeamMember_t const &member, const EOS_Data &eos,
       Real ptl = SQR(iso_cs)*wl_idn + 0.5*(bxsq + SQR(wl_iby) + SQR(wl_ibz));
       Real ptr = SQR(iso_cs)*wr_idn + 0.5*(bxsq + SQR(wr_iby) + SQR(wr_ibz));
 
-      MHDCons1D fl,fr,flxi;  // Fluxes for left & right states, and interface
+      MHDCons1D fl,fr;  // Fluxes for left & right states
       fl.d  = ul.mx;
       fl.mx = ul.mx*wl_ivx + ptl - bxsq;
       fl.my = ul.my*wl_ivx - bxi*ul.by;
@@ -506,52 +498,45 @@ void HLLD(TeamMember_t const &member, const EOS_Data &eos,
 
       if (spd[0] >= 0.0) {
         // return Fl if flow is supersonic, eqn. (38a) of Mignone
-        flxi.d  = fl.d;
-        flxi.mx = fl.mx;
-        flxi.my = fl.my;
-        flxi.mz = fl.mz;
-        flxi.by = fl.by;
-        flxi.bz = fl.bz;
+        flx(m,IDN,k,j,i) = fl.d;
+        flx(m,ivx,k,j,i) = fl.mx;
+        flx(m,ivy,k,j,i) = fl.my;
+        flx(m,ivz,k,j,i) = fl.mz;
+        ey(m,k,j,i) = -fl.by;
+        ez(m,k,j,i) =  fl.bz;
       } else if (spd[4] <= 0.0) {
         // return Fr if flow is supersonic, eqn. (38e) of Mignone
-        flxi.d  = fr.d;
-        flxi.mx = fr.mx;
-        flxi.my = fr.my;
-        flxi.mz = fr.mz;
-        flxi.by = fr.by;
-        flxi.bz = fr.bz;
+        flx(m,IDN,k,j,i) = fr.d;
+        flx(m,ivx,k,j,i) = fr.mx;
+        flx(m,ivy,k,j,i) = fr.my;
+        flx(m,ivz,k,j,i) = fr.mz;
+        ey(m,k,j,i) = -fr.by;
+        ez(m,k,j,i) =  fr.bz;
       } else if (spd[1] >= 0.0) {
         // return (Fl+Sl*(Ulst-Ul)), eqn. (38b) of Mignone
-        flxi.d  = fl.d  + spd[0]*(ulst.d  - ul.d);
-        flxi.mx = fl.mx + spd[0]*(ulst.mx - ul.mx);
-        flxi.my = fl.my + spd[0]*(ulst.my - ul.my);
-        flxi.mz = fl.mz + spd[0]*(ulst.mz - ul.mz);
-        flxi.by = fl.by + spd[0]*(ulst.by - ul.by);
-        flxi.bz = fl.bz + spd[0]*(ulst.bz - ul.bz);
+        flx(m,IDN,k,j,i) = fl.d  + spd[0]*(ulst.d  - ul.d);
+        flx(m,ivx,k,j,i) = fl.mx + spd[0]*(ulst.mx - ul.mx);
+        flx(m,ivy,k,j,i) = fl.my + spd[0]*(ulst.my - ul.my);
+        flx(m,ivz,k,j,i) = fl.mz + spd[0]*(ulst.mz - ul.mz);
+        ey(m,k,j,i) = -(fl.by + spd[0]*(ulst.by - ul.by));
+        ez(m,k,j,i) =  (fl.bz + spd[0]*(ulst.bz - ul.bz));
       } else if (spd[3] <= 0.0) {
         // return (Fr+Sr*(Urst-Ur)), eqn. (38d) of Mignone
-        flxi.d  = fr.d  + spd[4]*(urst.d  - ur.d);
-        flxi.mx = fr.mx + spd[4]*(urst.mx - ur.mx);
-        flxi.my = fr.my + spd[4]*(urst.my - ur.my);
-        flxi.mz = fr.mz + spd[4]*(urst.mz - ur.mz);
-        flxi.by = fr.by + spd[4]*(urst.by - ur.by);
-        flxi.bz = fr.bz + spd[4]*(urst.bz - ur.bz);
+        flx(m,IDN,k,j,i) = fr.d  + spd[4]*(urst.d  - ur.d);
+        flx(m,ivx,k,j,i) = fr.mx + spd[4]*(urst.mx - ur.mx);
+        flx(m,ivy,k,j,i) = fr.my + spd[4]*(urst.my - ur.my);
+        flx(m,ivz,k,j,i) = fr.mz + spd[4]*(urst.mz - ur.mz);
+        ey(m,k,j,i) = -(fr.by + spd[4]*(urst.by - ur.by));
+        ez(m,k,j,i) =  (fr.bz + spd[4]*(urst.bz - ur.bz));
       } else {
         // return Fcst, eqn. (38c) of Mignone, using eqn. (24)
-        flxi.d  = dhll*ustar;
-        flxi.mx = fmxhll;
-        flxi.my = ucst.my*ustar - bxi*ucst.by;
-        flxi.mz = ucst.mz*ustar - bxi*ucst.bz;
-        flxi.by = ucst.by*ustar - bxi*ucst.my/ucst.d;
-        flxi.bz = ucst.bz*ustar - bxi*ucst.mz/ucst.d;
+        flx(m,IDN,k,j,i) = dhll*ustar;
+        flx(m,ivx,k,j,i) = fmxhll;
+        flx(m,ivy,k,j,i) = ucst.my*ustar - bxi*ucst.by;
+        flx(m,ivz,k,j,i) = ucst.mz*ustar - bxi*ucst.bz;
+        ey(m,k,j,i) = -(ucst.by*ustar - bxi*ucst.my/ucst.d);
+        ez(m,k,j,i) =  (ucst.bz*ustar - bxi*ucst.mz/ucst.d);
       }
-
-      flx(m,IDN,k,j,i) = flxi.d;
-      flx(m,ivx,k,j,i) = flxi.mx;
-      flx(m,ivy,k,j,i) = flxi.my;
-      flx(m,ivz,k,j,i) = flxi.mz;
-      ey(m,k,j,i) = -flxi.by;
-      ez(m,k,j,i) =  flxi.bz;
     });
   } // end ideal gas/isothermal solvers
 

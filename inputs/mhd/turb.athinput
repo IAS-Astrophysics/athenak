@@ -1,0 +1,79 @@
+<comment>
+problem  = turbulence
+
+<job>
+basename = Turb      # problem ID: basename of output filenames
+
+<mesh>
+nghost  = 3       # Number of ghost cells
+nx1     = 480     # Number of zones in X1-direction
+x1min   = -0.5      # minimum value of X1
+x1max   = 0.5      # maximum value of X1
+ix1_bc  = periodic    # Inner-X1 boundary condition flag
+ox1_bc  = periodic    # Outer-X1 boundary condition flag
+nx2     = 480     # Number of zones in X2-direction
+x2min   = -0.5      # minimum value of X2
+x2max   = 0.5      # maximum value of X2
+ix2_bc  = periodic    # Inner-X2 boundary condition flag
+ox2_bc  = periodic    # Outer-X2 boundary condition flag
+nx3     = 480     # Number of zones in X3-direction
+x3min   = -0.5      # minimum value of X3
+x3max   = 0.5      # maximum value of X3
+ix3_bc  = periodic    # Inner-X3 boundary condition flag
+ox3_bc  = periodic    # Outer-X3 boundary condition flag
+
+<meshblock>
+nx1    = 240      # Number of cells in each MeshBlock, X1-dir
+nx2    = 240      # Number of cells in each MeshBlock, X2-dir
+nx3    = 120      # Number of cells in each MeshBlock, X3-dir
+
+<time>
+evolution = dynamic    # dynamic/kinematic/static
+integrator = rk2      # time integration algorithm
+cfl_number = 0.33     # The Courant, Friedrichs, & Lewy (CFL) Number
+nlim    = -1      # cycle limit
+tlim    = 8.0      # time limit
+ndiag   = 1       # cycles between diagostic output
+
+<mhd>
+eos     = ideal    # EOS type
+reconstruct = plm     # spatial reconstruction method
+rsolver   = hlld     # Riemann-solver to be used
+gamma    = 1.00001   # gamma = C_p/C_v
+
+<problem>
+beta   = 25.0
+user_hist = true      # enroll user-defined history function
+<turb_driving>
+tcorr = 0.25        # ~ L / 2 pi urms
+dedt = 0.25        # ~ urms^3 / 2 L
+spect_form = 1
+npeak = 2
+nlow = 1         # smallest wave number
+nhigh = 3         # largest wave number
+min_kz = 1
+sol_fraction = 0.1     # solenoidal fraction
+dt_turb_update = 0.01
+
+## ------------------------------------------------------------------------------------ ##
+## ------------------------------------------------------------------------------------ ##
+## ------------------------------------------------------------------------------------ ##
+## hst Output ##
+
+<output1>
+file_type = hst      # History output
+dt     = 0.005   # time increment between outputs
+data_format = %24.16e   # output data format
+## Restart Output ##
+
+<output2>
+file_type = rst      # Restart checkpoint
+dt     = 0.5     # time increment between outputs
+## Full Cube Outputs ##
+
+<output3>
+file_type = bin       # Binary data dump
+variable  = mhd_w_bcc    # variables to be output
+dt     = 0.25      # time increment between outputs
+id     = full_mhd_w_bcc # identifier for the output
+Collapse
