@@ -30,8 +30,8 @@ KOKKOS_INLINE_FUNCTION
 void HLLD(const EOS_Data &eos,
      const RegionIndcs &indcs,const DualArray1D<RegionSize> &size,const CoordData &coord,
      const int m, const int k, const int j, const int i, const int ivx,
-     const DvceArray5D<Real> &wl, const DvceArray5D<Real> &wr,
-     const DvceArray5D<Real> &bl, const DvceArray5D<Real> &br, const DvceArray4D<Real> &bx,
+     const ScrArray1D<Real> &wl, const ScrArray1D<Real> &wr,
+     const ScrArray1D<Real> &bl, const ScrArray1D<Real> &br, const DvceArray4D<Real> &bx,
      const DvceArray5D<Real> &flx, const DvceArray4D<Real> &ey, const DvceArray4D<Real> &ez) {
   //int ivy = IVX + ((ivx-IVX)+1)%3;
   //int ivz = IVX + ((ivx-IVX)+2)%3;
@@ -45,23 +45,23 @@ void HLLD(const EOS_Data &eos,
     Real igm1 = 1.0/gm1;
     //--- Step 1.  Create local references for L/R states (helps compiler vectorize)
 
-    Real wl_idn=wl(m, IDN,0,0,0);
-    Real wl_ivx=wl(m, ivx,0,0,0);
-    Real wl_ivy=wl(m,_ivy,0,0,0);
-    Real wl_ivz=wl(m,_ivz,0,0,0);
-    Real wl_iby=bl(m,_iby,0,0,0);
-    Real wl_ibz=bl(m,_ibz,0,0,0);  
+    Real wl_idn=wl( IDN);
+    Real wl_ivx=wl( ivx);
+    Real wl_ivy=wl(_ivy);
+    Real wl_ivz=wl(_ivz);
+    Real wl_iby=bl(_iby);
+    Real wl_ibz=bl(_ibz);  
 
-    Real wr_idn=wr(m, IDN,0,0,0);
-    Real wr_ivx=wr(m, ivx,0,0,0);
-    Real wr_ivy=wr(m,_ivy,0,0,0);
-    Real wr_ivz=wr(m,_ivz,0,0,0);
-    Real wr_iby=br(m,_iby,0,0,0);
-    Real wr_ibz=br(m,_ibz,0,0,0);
+    Real wr_idn=wr( IDN);
+    Real wr_ivx=wr( ivx);
+    Real wr_ivy=wr(_ivy);
+    Real wr_ivz=wr(_ivz);
+    Real wr_iby=br(_iby);
+    Real wr_ibz=br(_ibz);
 
     Real wl_ipr, wr_ipr;
-    wl_ipr = eos.IdealGasPressure(wl(m,IEN,0,0,0));
-    wr_ipr = eos.IdealGasPressure(wr(m,IEN,0,0,0));
+    wl_ipr = eos.IdealGasPressure(wl(IEN));
+    wr_ipr = eos.IdealGasPressure(wr(IEN));
 
     Real bxi = bx(m,k,j,i);
 

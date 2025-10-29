@@ -74,8 +74,15 @@ void MHD::CalculateFluxes(Driver *pdriver, int stage) {
   int il = is, iu = ie+1;
   if (use_fofc) { il = is-1, iu = ie+2; }
 
-  par_for("mhd_flux1",DevExeSpace(), 0, nmb1, kl, ku, jl, ju, il, iu,
-  KOKKOS_LAMBDA(int m, int k, int j, int i) {
+  int scr_level = 0;
+  size_t scr_size = ScrArray1D<Real>::shmem_size(nvars+3) * 2;
+
+  par_for_outer("mhd_flux1",DevExeSpace(), scr_size, scr_level, 0, nmb1, kl, ku, jl, ju, il, iu,
+  KOKKOS_LAMBDA(TeamMember_t member, int m, int k, int j, int i) {
+    ScrArray1D<Real> wl(member.team_scratch(scr_level),nvars);
+    ScrArray1D<Real> wr(member.team_scratch(scr_level),nvars);
+    ScrArray1D<Real> bl(member.team_scratch(scr_level),3);
+    ScrArray1D<Real> br(member.team_scratch(scr_level),3);
     // Reconstruct qR[i] and qL[i+1], for both W and Bcc
     PiecewiseLinear(m, k, j, i, w0_, wl, wr, 1);
     PiecewiseLinear(m, k, j, i, b0_, bl, br, 1);
@@ -84,7 +91,7 @@ void MHD::CalculateFluxes(Driver *pdriver, int stage) {
     // (IBZ) component of flx = E_{y} = -(v x B)_{y} =  (v1*b3 - v3*b1)
     // NOTE(@pdmullen): Capture variables prior to if constexpr.  Required for cuda 11.6+.
     HLLD(eos_,indcs_,size_,coord_,m,k,j,i,IVX,wl,wr,bl,br,b0.x1f,uflx.x1f,e3x1,e2x1);
-    });
+  });
   //--------------------------------------------------------------------------------------
   // j-direction
   if (pmy_pack->pmesh->multi_d) {
@@ -98,8 +105,12 @@ void MHD::CalculateFluxes(Driver *pdriver, int stage) {
     if (use_fofc) { jl = js-2, ju = je+2; }
 
     
-    par_for("mhd_flux2",DevExeSpace(), 0, nmb1, kl, ku, jl, ju, il, iu,
-      KOKKOS_LAMBDA(int m, int k, int j, int i) {
+    par_for_outer("mhd_flux2",DevExeSpace(), scr_size, scr_level, 0, nmb1, kl, ku, jl, ju, il, iu,
+    KOKKOS_LAMBDA(TeamMember_t member, int m, int k, int j, int i) {
+      ScrArray1D<Real> wl(member.team_scratch(scr_level),nvars);
+      ScrArray1D<Real> wr(member.team_scratch(scr_level),nvars);
+      ScrArray1D<Real> bl(member.team_scratch(scr_level),3);
+      ScrArray1D<Real> br(member.team_scratch(scr_level),3);
         // Reconstruct qR[j] and qL[j+1], for both W and Bcc
         PiecewiseLinear(m, k, j, i, w0_, wl, wr, 2);
         PiecewiseLinear(m, k, j, i, b0_, bl, br, 2);
@@ -118,9 +129,12 @@ void MHD::CalculateFluxes(Driver *pdriver, int stage) {
     kl = ks-1, ku = ke+1;
     if (use_fofc) { kl = ks-2, ku = ke+2; }
 
-    par_for("mhd_flux3",DevExeSpace(), 0, nmb1, kl, ku, jl, ju, il, iu,
-      KOKKOS_LAMBDA(int m, int k, int j, int i) {
-
+    par_for_outer("mhd_flux3",DevExeSpace(), scr_size, scr_level, 0, nmb1, kl, ku, jl, ju, il, iu,
+    KOKKOS_LAMBDA(TeamMember_t member, int m, int k, int j, int i) {
+      ScrArray1D<Real> wl(member.team_scratch(scr_level),nvars);
+      ScrArray1D<Real> wr(member.team_scratch(scr_level),nvars);
+      ScrArray1D<Real> bl(member.team_scratch(scr_level),3);
+      ScrArray1D<Real> br(member.team_scratch(scr_level),3);
         // Reconstruct qR[k] and qL[k+1], for both W and Bcc
         PiecewiseLinear(m, k, j, i, w0_, wl, wr, 3);
         PiecewiseLinear(m, k, j, i, b0_, bl, br, 3);

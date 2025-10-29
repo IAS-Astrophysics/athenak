@@ -92,7 +92,7 @@ void PiecewiseLinearX3(TeamMember_t const &member, const int m, const int k, con
 
 KOKKOS_INLINE_FUNCTION
 void PiecewiseLinear( const int m, const int k, const int j, const int i,
-    const DvceArray5D<Real> &q, DvceArray5D<Real> &ql, DvceArray5D<Real> &qr,
+    const DvceArray5D<Real> &q, ScrArray1D<Real> &ql, ScrArray1D<Real> &qr,
     const int dim) { 
   int nvar = q.extent_int(1);
   Real L, R;
@@ -100,12 +100,12 @@ void PiecewiseLinear( const int m, const int k, const int j, const int i,
       PLM(q(m,n,k-dim==3,j-dim==2,i-dim==1),
           q(m,n,k,j,i),
           q(m,n,k+dim==3,j+dim==2,i+dim==1),
-          L, qr(m,n,0,0,0));
+          L, qr(n));
 
       PLM(q(m,n,k+2*(dim==3),j+2*(dim==2),i+2*(dim==1)),
           q(m,n,k-dim==3,j-dim==2,i-dim==1),
           q(m,n,k,j,i),
-          ql(m,n,0,0,0), R);
+          ql(n), R);
     }
     return;
   }

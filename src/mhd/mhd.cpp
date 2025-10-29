@@ -51,10 +51,6 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
     e1_cc("e1_cc",1,1,1,1),
     e2_cc("e2_cc",1,1,1,1),
     e3_cc("e3_cc",1,1,1,1),
-    wl("wl",1,1,1,1,1),
-    wr("wr",1,1,1,1,1),
-    bl("bl",1,1,1,1,1),
-    br("br",1,1,1,1,1),
     utest("utest",1,1,1,1,1),
     bcctest("bcctest",1,1,1,1,1),
     fofc("fofc",1,1,1,1) {
@@ -343,12 +339,6 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
         Kokkos::realloc(bcctest, nmb, 3,    ncells3, ncells2, ncells1);
         Kokkos::deep_copy(fofc, false);
       }
-
-      // allocate temporary variables used to store face-centered states returned by reconstruction
-      Kokkos::realloc(wl, nmb, nmhd+nscalars, 1, 1, 1);
-      Kokkos::realloc(wr, nmb, nmhd+nscalars, 1, 1, 1);
-      Kokkos::realloc(bl, nmb, 3, 1, 1, 1);
-      Kokkos::realloc(br, nmb, 3, 1, 1, 1);
     }
   }
 }
