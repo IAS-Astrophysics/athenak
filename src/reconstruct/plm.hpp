@@ -95,9 +95,17 @@ void PiecewiseLinear( const int m, const int k, const int j, const int i,
     const DvceArray5D<Real> &q, DvceArray5D<Real> &ql, DvceArray5D<Real> &qr,
     const int dim) { 
   int nvar = q.extent_int(1);
+  Real L, R;
   for (int n=0; n<nvar; ++n) {
-      PLM(q(m,n,k-dim==3,j-dim==2,i-dim==1), q(m,n,k,j,i), q(m,n,k+dim==3,j+dim==2,i+dim==1),
-       ql(m,n,k+dim==3,j+dim==2,i+dim==1), qr(m,n,k,j,i));
+      PLM(q(m,n,k-dim==3,j-dim==2,i-dim==1),
+          q(m,n,k,j,i),
+          q(m,n,k+dim==3,j+dim==2,i+dim==1),
+          L, qr(m,n,0,0,0));
+
+      PLM(q(m,n,k+2*(dim==3),j+2*(dim==2),i+2*(dim==1)),
+          q(m,n,k-dim==3,j-dim==2,i-dim==1),
+          q(m,n,k,j,i),
+          ql(m,n,0,0,0), R);
     }
     return;
   }

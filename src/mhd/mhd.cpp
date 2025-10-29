@@ -345,18 +345,10 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
       }
 
       // allocate temporary variables used to store face-centered states returned by reconstruction
-      Kokkos::realloc(wl.x1f, nmb, nmhd+nscalars, ncells3, ncells2, ncells1+1);
-      Kokkos::realloc(wr.x1f, nmb, nmhd+nscalars, ncells3, ncells2, ncells1+1);
-      Kokkos::realloc(wl.x2f, nmb, nmhd+nscalars, ncells3, ncells2+1, ncells1);
-      Kokkos::realloc(wr.x2f, nmb, nmhd+nscalars, ncells3, ncells2+1, ncells1);
-      Kokkos::realloc(wl.x3f, nmb, nmhd+nscalars, ncells3+1, ncells2, ncells1);
-      Kokkos::realloc(wr.x3f, nmb, nmhd+nscalars, ncells3+1, ncells2, ncells1);
-      Kokkos::realloc(bl.x1f, nmb, 3, ncells3, ncells2, ncells1+1);
-      Kokkos::realloc(br.x1f, nmb, 3, ncells3, ncells2, ncells1+1);
-      Kokkos::realloc(bl.x2f, nmb, 3, ncells3, ncells2+1, ncells1);
-      Kokkos::realloc(br.x2f, nmb, 3, ncells3, ncells2+1, ncells1);
-      Kokkos::realloc(bl.x3f, nmb, 3, ncells3+1, ncells2, ncells1);
-      Kokkos::realloc(br.x3f, nmb, 3, ncells3+1, ncells2, ncells1);
+      Kokkos::realloc(wl, nmb, nmhd+nscalars, 1, 1, 1);
+      Kokkos::realloc(wr, nmb, nmhd+nscalars, 1, 1, 1);
+      Kokkos::realloc(bl, nmb, 3, 1, 1, 1);
+      Kokkos::realloc(br, nmb, 3, 1, 1, 1);
     }
   }
 }

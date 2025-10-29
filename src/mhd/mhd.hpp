@@ -133,8 +133,8 @@ class MHD {
   DvceArray4D<Real> e1x2, e3x2;
   DvceArray4D<Real> e2x3, e1x3;
   // temporary variables used to store face-centered states returned by reconstruction
-  DvceFaceFld5D<Real> wl, wr;
-  DvceFaceFld5D<Real> bl, br;
+  DvceArray5D<Real> wl, wr;
+  DvceArray5D<Real> bl, br;
 
   Real dtnew;
 

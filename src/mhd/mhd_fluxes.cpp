@@ -77,13 +77,13 @@ void MHD::CalculateFluxes(Driver *pdriver, int stage) {
   par_for("mhd_flux1",DevExeSpace(), 0, nmb1, kl, ku, jl, ju, il, iu,
   KOKKOS_LAMBDA(int m, int k, int j, int i) {
     // Reconstruct qR[i] and qL[i+1], for both W and Bcc
-    PiecewiseLinear(m, k, j, i, w0_, wl.x1f, wr.x1f, 1);
-    PiecewiseLinear(m, k, j, i, b0_, bl.x1f, br.x1f, 1);
+    PiecewiseLinear(m, k, j, i, w0_, wl, wr, 1);
+    PiecewiseLinear(m, k, j, i, b0_, bl, br, 1);
     // compute fluxes over [is,ie+1].  MHD RS also computes electric fields, where
     // (IBY) component of flx = E_{z} = -(v x B)_{z} = -(v1*b2 - v2*b1)
     // (IBZ) component of flx = E_{y} = -(v x B)_{y} =  (v1*b3 - v3*b1)
     // NOTE(@pdmullen): Capture variables prior to if constexpr.  Required for cuda 11.6+.
-    HLLD(eos_,indcs_,size_,coord_,m,k,j,i,IVX,wl.x1f,wr.x1f,bl.x1f,br.x1f,b0.x1f,uflx.x1f,e3x1,e2x1);
+    HLLD(eos_,indcs_,size_,coord_,m,k,j,i,IVX,wl,wr,bl,br,b0.x1f,uflx.x1f,e3x1,e2x1);
     });
   //--------------------------------------------------------------------------------------
   // j-direction
@@ -101,12 +101,12 @@ void MHD::CalculateFluxes(Driver *pdriver, int stage) {
     par_for("mhd_flux2",DevExeSpace(), 0, nmb1, kl, ku, jl, ju, il, iu,
       KOKKOS_LAMBDA(int m, int k, int j, int i) {
         // Reconstruct qR[j] and qL[j+1], for both W and Bcc
-        PiecewiseLinear(m, k, j, i, w0_, wl.x2f, wr.x2f, 2);
-        PiecewiseLinear(m, k, j, i, b0_, bl.x2f, br.x2f, 2);
+        PiecewiseLinear(m, k, j, i, w0_, wl, wr, 2);
+        PiecewiseLinear(m, k, j, i, b0_, bl, br, 2);
         // compute fluxes over [js,je+1].  MHD RS also computes electric fields, where
         // (IBY) component of flx = E_{x} = -(v x B)_{x} = -(v2*b3 - v3*b2)
         // (IBZ) component of flx = E_{z} = -(v x B)_{z} =  (v2*b1 - v1*b2)
-        HLLD(eos_,indcs_,size_,coord_,m,k,j,i,IVY,wl.x2f,wr.x2f,bl.x2f,br.x2f,b0.x2f,uflx.x2f,e1x2,e3x2);
+        HLLD(eos_,indcs_,size_,coord_,m,k,j,i,IVY,wl,wr,bl,br,b0.x2f,uflx.x2f,e1x2,e3x2);
       });
   }
 
@@ -120,10 +120,11 @@ void MHD::CalculateFluxes(Driver *pdriver, int stage) {
 
     par_for("mhd_flux3",DevExeSpace(), 0, nmb1, kl, ku, jl, ju, il, iu,
       KOKKOS_LAMBDA(int m, int k, int j, int i) {
+
         // Reconstruct qR[k] and qL[k+1], for both W and Bcc
-        PiecewiseLinear(m, k, j, i, w0_, wl.x3f, wr.x3f, 3);
-        PiecewiseLinear(m, k, j, i, b0_, bl.x3f, br.x3f, 3);
-        HLLD(eos_,indcs_,size_,coord_,m,k,j,i,IVZ,wl.x3f,wr.x3f,bl.x3f,br.x3f,b0.x3f,uflx.x3f,e2x3,e1x3);
+        PiecewiseLinear(m, k, j, i, w0_, wl, wr, 3);
+        PiecewiseLinear(m, k, j, i, b0_, bl, br, 3);
+        HLLD(eos_,indcs_,size_,coord_,m,k,j,i,IVZ,wl,wr,bl,br,b0.x3f,uflx.x3f,e2x3,e1x3);
       });
   }
  

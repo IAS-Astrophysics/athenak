@@ -45,23 +45,23 @@ void HLLD(const EOS_Data &eos,
     Real igm1 = 1.0/gm1;
     //--- Step 1.  Create local references for L/R states (helps compiler vectorize)
 
-    Real wl_idn=wl(m,IDN,k,j,i);
-    Real wl_ivx=wl(m,ivx,k,j,i);
-    Real wl_ivy=wl(m,_ivy,k,j,i);
-    Real wl_ivz=wl(m,_ivz,k,j,i);
-    Real wl_iby=bl(m,_iby,k,j,i);
-    Real wl_ibz=bl(m,_ibz,k,j,i);  
+    Real wl_idn=wl(m, IDN,0,0,0);
+    Real wl_ivx=wl(m, ivx,0,0,0);
+    Real wl_ivy=wl(m,_ivy,0,0,0);
+    Real wl_ivz=wl(m,_ivz,0,0,0);
+    Real wl_iby=bl(m,_iby,0,0,0);
+    Real wl_ibz=bl(m,_ibz,0,0,0);  
 
-    Real wr_idn=wr(m,IDN,k,j,i);
-    Real wr_ivx=wr(m,ivx,k,j,i);
-    Real wr_ivy=wr(m,_ivy,k,j,i);
-    Real wr_ivz=wr(m,_ivz,k,j,i);
-    Real wr_iby=br(m,_iby,k,j,i);
-    Real wr_ibz=br(m,_ibz,k,j,i);
+    Real wr_idn=wr(m, IDN,0,0,0);
+    Real wr_ivx=wr(m, ivx,0,0,0);
+    Real wr_ivy=wr(m,_ivy,0,0,0);
+    Real wr_ivz=wr(m,_ivz,0,0,0);
+    Real wr_iby=br(m,_iby,0,0,0);
+    Real wr_ibz=br(m,_ibz,0,0,0);
 
     Real wl_ipr, wr_ipr;
-    wl_ipr = eos.IdealGasPressure(wl(m,IEN,k,j,i));
-    wr_ipr = eos.IdealGasPressure(wr(m,IEN,k,j,i));
+    wl_ipr = eos.IdealGasPressure(wl(m,IEN,0,0,0));
+    wr_ipr = eos.IdealGasPressure(wr(m,IEN,0,0,0));
 
     Real bxi = bx(m,k,j,i);
 
