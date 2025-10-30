@@ -34,12 +34,12 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   }
 
   // capture variables for the kernel
-  auto &mbsize = pmy_mesh_->pmb_pack->pmb->mb_size;
-  auto &pr = pmy_mesh_->pmb_pack->ppart->prtcl_rdata;
-  auto &pi = pmy_mesh_->pmb_pack->ppart->prtcl_idata;
-  auto &npart = pmy_mesh_->pmb_pack->ppart->nprtcl_thispack;
-  auto gids = pmy_mesh_->pmb_pack->gids;
-  auto gide = pmy_mesh_->pmb_pack->gide;
+  auto &mbsize = pmbp->pmb->mb_size;
+  auto &pr = pmbp->ppart->prtcl_rdata;
+  auto &pi = pmbp->ppart->prtcl_idata;
+  auto &npart = pmbp->ppart->nprtcl_thispack;
+  auto gids = pmbp->gids;
+  auto gide = pmbp->gide;
 
   // initialize particles
   Kokkos::Random_XorShift64_Pool<> rand_pool64(pmbp->gids);
@@ -75,7 +75,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   // set timestep (which will remain constant for entire run
   // Assumes uniform mesh (no SMR or AMR)
   // Assumes velocities normalized to one, so dt=min(dx)
-  Real &dtnew_ = pmy_mesh_->pmb_pack->ppart->dtnew;
+  Real &dtnew_ = pmbp->ppart->dtnew;
   dtnew_ = std::min(mbsize.h_view(0).dx1, mbsize.h_view(0).dx2);
   dtnew_ = std::min(dtnew_, mbsize.h_view(0).dx3);
 
