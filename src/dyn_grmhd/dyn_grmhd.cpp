@@ -119,7 +119,8 @@ DynGRMHD* BuildDynGRMHD(MeshBlockPack *ppack, ParameterInput *pin) {
 
 DynGRMHD::DynGRMHD(MeshBlockPack *pp, ParameterInput *pin) :
     pmy_pack(pp),
-    temperature("temperature",1,1,1,1,1) {
+    temperature("temperature",1,1,1,1,1),
+    hlld_fail("hlld_fail",1,1,1,1) {
   std::string rsolver = pin->GetString("mhd", "rsolver");
   if (rsolver.compare("llf") == 0) {
     rsolver_method = DynGRMHD_RSolver::llf_dyngr;
@@ -129,6 +130,7 @@ DynGRMHD::DynGRMHD(MeshBlockPack *pp, ParameterInput *pin) :
     rsolver_method = DynGRMHD_RSolver::hlle_transform;
   } else if (rsolver.compare("hlld") == 0) {
     rsolver_method = DynGRMHD_RSolver::hlld_dyngr;
+    monitor_failures = pin->GetOrAddBoolean("mhd", "monitor_failures", false);
   } else {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
               << std::endl << "<mhd> rsolver = '" << rsolver
@@ -160,6 +162,11 @@ DynGRMHD::DynGRMHD(MeshBlockPack *pp, ParameterInput *pin) :
     int ncells2 = (indcs.nx2 > 1)? (indcs.nx2 + 2*(indcs.ng)) : 1;
     int ncells3 = (indcs.nx3 > 1)? (indcs.nx3 + 2*(indcs.ng)) : 1;
     Kokkos::realloc(temperature, nmb, 1, ncells3, ncells2, ncells1);
+
+    if (rsolver_method == DynGRMHD_RSolver::hlld_dyngr && monitor_failures) {
+      Kokkos::realloc(hlld_fail, nmb, ncells3, ncells2, ncells1);
+      failure_count = 0;
+    }
   }
 }
 

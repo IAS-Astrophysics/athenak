@@ -502,6 +502,16 @@ void Driver::Finalize(Mesh *pmesh, ParameterInput *pin, Outputs *pout) {
 #endif
       }
 
+      // Output the number of HLLD failures if applicable
+      if (pmesh->pmb_pack->pdyngr != nullptr) {
+        auto *pdyngr = pmesh->pmb_pack->pdyngr;
+        if (pdyngr->rsolver_method == DynGRMHD_RSolver::hlld_dyngr &&
+            pdyngr->hlld_fail.size() > 1) {
+          std::cout << std::endl << "HLLD failures: " << pdyngr->failure_count
+                    << std::endl;
+        }
+      }
+
       // Calculate and print the zone-cycles/cpu-second
       // Note the need for 64-bit integers since nmb_updated can easily exceed 2^32.
       std::uint64_t zonecycles = nmb_updated_ *

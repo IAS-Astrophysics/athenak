@@ -34,7 +34,8 @@ void HLLD_DYNGR(TeamMember_t const &member,
      const ScrArray2D<Real> &bl, const ScrArray2D<Real> &br, const DvceArray4D<Real> &bx,
      const int& nhyd, const int& nscal,
      const adm::ADM::ADM_vars& adm,
-     DvceArray5D<Real> flx, DvceArray4D<Real> ey, DvceArray4D<Real> ez) {
+     DvceArray5D<Real> flx, DvceArray4D<Real> ey, DvceArray4D<Real> ez,
+     DvceArray4D<size_t> hlld_fail) {
   par_for_inner(member, il, iu, [&](const int i) {
     constexpr int ivy = IVX + ((ivx - IVX) + 1)%3;
     constexpr int ivz = IVX + ((ivx - IVX) + 2)%3;
@@ -201,7 +202,7 @@ void HLLD_DYNGR(TeamMember_t const &member,
       Real ptot_hll = (lambda_r*(prim_l[PPR] + 0.5*bsq_l) -
                        lambda_l*(prim_r[PPR] + 0.5*bsq_r))*qb;
       Real ptot;
-      if (b_int[ibx]*b_int[ibx]/ptot_hll < 0.1) {
+      if (b_int[ibx]*b_int[ibx]/ptot_hll < 0.01) {
         // If the flow is not strongly magnetized, we can initialize it assuming Bx = 0,
         // which is a degenerate case with an exact solution.
         Real& sx_hll = cons_int[csx];
@@ -272,7 +273,7 @@ void HLLD_DYNGR(TeamMember_t const &member,
         lar = Kr[ibx];
 
         // Compute field in contact state
-        Real qe = 1.0/(lar - lal);
+        Real qe = 1.0/(lar - lal + 1e-12);
         Bc[ibx] = Bu_l[ibx];
         Bc[iby] = ((Bar[iby]*(lar - var[ibx]) + Bu_l[ibx]*var[iby]) -
                     (Bal[iby]*(lal - val[ibx]) + Bu_l[ibx]*val[iby]))*qe;
@@ -323,11 +324,12 @@ void HLLD_DYNGR(TeamMember_t const &member,
         vc = 0.5*(vcl[ibx] + vcr[ibx]);
 
         // Try to enforce vcl[ibx] = vcr[ibx]
-        Real DK = Kr[ibx] - Kl[ibx];
+        /*Real DK = Kr[ibx] - Kl[ibx];
         Real Yl = (1.0 - Ksql)*qfl;
         Real Yr = (1.0 - Ksqr)*qfr;
 
-        return DK - Bc[ibx]*(Yr - Yl);
+        return DK - Bc[ibx]*(Yr - Yl);*/
+        return vcl[ibx] - vcr[ibx];
       };
 
       // Secant method to find intermediate pressure.
@@ -335,32 +337,34 @@ void HLLD_DYNGR(TeamMember_t const &member,
       // as follows: if Ptot is less than both Pl and Pr, we take the minimum of the two.
       // If Ptot is greater than both Pl and Pr, we choose the maximum of the two. If it
       // sits in between, we take the average.
-      /*Real pmin = Kokkos::fmin(prim_l[PPR], prim_r[PPR]);
-      Real pmax = Kokkos::fmax(prim_l[PPR], prim_r[PPR]);
-      Real ptot_old;
-      if (ptot < pmin) {
-        ptot_old = pmin;
-      } else if (ptot > pmax) {
-        ptot_old = pmax;
-      } else {
-        ptot_old = 0.5*(pmin + pmax);
-      }*/
-      Real ptot_old = 0.0;
-      Real fold = froot(ptot_old);
-      Real ptot_old2;
-      const Real tol = 1e-6;
+      //Real ptot_old = ptot*(1.025);
+      //Real ptot_old = 0.0;
+      Real fold = froot(ptot);
+      const Real tol = 1e-12;
       const int max_iters = 15;
       int count = 0;
-      do {
-        Real f = froot(ptot);
-        count++;
+      // Check that the initial guess makes sense.
+      if (((lal <= lambda_l || vc <= lal || vc >= lar || lar >= lambda_r) && fold > tol)
+          || !Kokkos::isfinite(fold)) {
+        count = max_iters;
+      } else if (Kokkos::fabs(fold) > tol) {
+        Real ptot_old = ptot;
+        ptot *= 1.025;
+        Real ptot_old2;
+        //do {
+        while (Kokkos::fabs(fold) > tol && count < max_iters) {
+          Real f = froot(ptot);
+          count++;
 
-        ptot_old2 = ptot_old;
-        ptot_old = ptot;
-        ptot = (ptot_old2*f - ptot*fold)/(f - fold);
-        fold = f;
-      } while (Kokkos::fabs(ptot - ptot_old) > tol*Kokkos::fabs(ptot_old - ptot_old2) &&
-               count < max_iters);
+          ptot_old2 = ptot_old;
+          ptot_old = ptot;
+          ptot = (ptot_old2*f - ptot*fold)/(f - fold);
+          fold = f;
+        }
+        //} while (Kokkos::fabs(fold) > tol && count < max_iters);
+        /*} while (Kokkos::fabs(ptot - ptot_old) > tol*Kokkos::fabs(ptot_old - ptot_old2) &&
+                 count < max_iters);*/
+      }
       
       // STEP 4: Check for correctness and compute intermediate state if possible.
       bool fail = false;
@@ -443,12 +447,15 @@ void HLLD_DYNGR(TeamMember_t const &member,
             bfint[ibz] = bfint[ibz] + lar*(Bc[ibz] - Bar[ibz]);
           }
         }
+      } else if (hlld_fail.size() > 1) {
+        // Update the failure mask.
+        hlld_fail(m, k, j, i) += 1;
       }
 
-      /*if (!Kokkos::isfinite(cons_int[CDN]) || !Kokkos::isfinite(fint[CDN])) {
+      if (!Kokkos::isfinite(cons_int[CDN]) || !Kokkos::isfinite(fint[CDN])) {
         Kokkos::printf("There's a problem with the HLLD solution!\n");
         fail = true;
-      }*/
+      }
 
       cons_interface = &cons_int[0];
       f_interface = &fint[0];

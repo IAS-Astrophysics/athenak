@@ -58,6 +58,7 @@ TaskStatus DynGRMHDPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int s
   auto &eos_ = pmy_pack->pmhd->peos->eos_data;
   auto &dyn_eos_ = eos;
   auto &use_fofc = pmy_pack->pmhd->use_fofc;
+  auto &hlld_fail_ = hlld_fail;
   bool extrema = false;
   if (recon_method_ == ReconstructionMethod::ppmx) {
     extrema = true;
@@ -73,6 +74,9 @@ TaskStatus DynGRMHDPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int s
   if constexpr (rsolver_method_ == DynGRMHD_RSolver::hlld_dyngr) {
     tol_old = Kokkos::fmin(dyn_eos_.ps.tol, 1e-6);
     dyn_eos_.ps.tol = 1e-6;
+    if (monitor_failures) {
+      Kokkos::deep_copy(hlld_fail, 0);
+    }
   }
 
   //--------------------------------------------------------------------------------------
@@ -145,6 +149,7 @@ TaskStatus DynGRMHDPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int s
     auto &nhyd_ = nhyd;
     auto nscal_ = nvars - nhyd;
     auto &adm_ = adm;
+    auto &hlld_fail_mask = hlld_fail_;
     //int il = is; int iu = ie+1;
     if constexpr (rsolver_method_ == DynGRMHD_RSolver::llf_dyngr) {
       LLF_DYNGR<IVX>(member, dyn_eos, indcs, size, coord, m, k, j, il, iu,
@@ -161,7 +166,7 @@ TaskStatus DynGRMHDPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int s
     } else if constexpr (rsolver_method_ == DynGRMHD_RSolver::hlld_dyngr) {
       HLLD_DYNGR<IVX>(member, dyn_eos, indcs, size, coord, m, k, j, il, iu,
                 wl, wr, bl, br, bx, nhyd_, nscal_, adm_,
-                flx1, e31, e21);
+                flx1, e31, e21, hlld_fail_mask);
     }
     member.team_barrier();
 
@@ -265,6 +270,7 @@ TaskStatus DynGRMHDPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int s
         auto &nhyd_ = nhyd;
         auto nscal_ = nvars - nhyd;
         auto &adm_ = adm;
+        auto &hlld_fail_mask = hlld_fail_;
         //int il = is; int iu = ie;
         if (j>(jl)) {
           if constexpr (rsolver_method_ == DynGRMHD_RSolver::llf_dyngr) {
@@ -278,7 +284,7 @@ TaskStatus DynGRMHDPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int s
                       wl, wr, bl, br, by, nhyd_, nscal_, adm_, flx2, e12, e32);
           } else if constexpr (rsolver_method_ == DynGRMHD_RSolver::hlld_dyngr) {
             HLLD_DYNGR<IVY>(member, dyn_eos, indcs, size, coord, m, k, j, is-1, ie+1,
-                      wl, wr, bl, br, by, nhyd_, nscal_, adm_, flx2, e12, e32);
+                      wl, wr, bl, br, by, nhyd_, nscal_, adm_, flx2, e12, e32, hlld_fail_mask);
           }
         }
         member.team_barrier();
@@ -379,6 +385,7 @@ TaskStatus DynGRMHDPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int s
         auto &adm_ = adm;
         auto &nhyd_ = nhyd;
         auto nscal_ = nvars - nhyd;
+        auto &hlld_fail_mask = hlld_fail_;
         //int il = is; int iu = ie;
         if (k>(kl)) {
           if constexpr (rsolver_method_ == DynGRMHD_RSolver::llf_dyngr) {
@@ -392,7 +399,7 @@ TaskStatus DynGRMHDPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int s
                       wl, wr, bl, br, bz, nhyd_, nscal_, adm_, flx3, e23, e13);
           } else if constexpr (rsolver_method_ == DynGRMHD_RSolver::hlld_dyngr) {
             HLLD_DYNGR<IVZ>(member, dyn_eos, indcs, size, coord, m, k, j, is-1, ie+1,
-                      wl, wr, bl, br, bz, nhyd_, nscal_, adm_, flx3, e23, e13);
+                      wl, wr, bl, br, bz, nhyd_, nscal_, adm_, flx3, e23, e13, hlld_fail_mask);
           }
         }
         member.team_barrier();
@@ -417,6 +424,32 @@ TaskStatus DynGRMHDPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int s
   // Restore PrimitiveSolver to its original accuracy.
   if constexpr (rsolver_method_ == DynGRMHD_RSolver::hlld_dyngr) {
     dyn_eos_.ps.tol = tol_old;
+    // Reduce the number of failures if applicable.
+    if (monitor_failures) {
+      // failure_count
+
+      int nx1 = indcs_.nx1;
+      int nx2 = indcs_.nx2;
+      int nx3 = indcs_.nx3;
+      const int nmkji = (pmy_pack->nmb_thispack)*nx3*nx2*nx1;
+      const int nkji = nx3*nx2*nx1;
+      const int nji = nx2*nx1;
+
+      size_t sum = 0;
+
+      Kokkos::parallel_reduce("TOVHistSums",Kokkos::RangePolicy<>(DevExeSpace(), 0, nmkji),
+      KOKKOS_LAMBDA(const int &idx, size_t &mb_sum) {
+        int m = (idx)/nkji;
+        int k = (idx - m*nkji)/nji;
+        int j = (idx - m*nkji - k*nji)/nx1;
+        int i = (idx - m*nkji - k*nji - j*nx1) + is;
+        k += ks;
+        j += js;
+
+        mb_sum += hlld_fail_(m, k, j, i);
+      }, Kokkos::Sum<size_t>(sum));
+      failure_count += sum;
+    }
   }
 
   // Call FOFC if necessary
