@@ -444,7 +444,9 @@ inline void par_for_team(const std::string &name, DevExeSpace exec_space,
   const int nji   = nj*ni;
   const int nkji  = nk*nj*ni;
   const int nmkji = nm*nk*nj*ni;
-  Kokkos::TeamPolicy<> policy(exec_space, nmkji/64, 64);
+  Kokkos::TeamPolicy<> teamPolicy(nmkji, Kokkos::AUTO());
+  int tsize = teamPolicy.team_size();
+  Kokkos::TeamPolicy<> policy(exec_space, nmkji/tsize, tsize);
   Kokkos::parallel_for(name, policy.set_scratch_size(scr_level,Kokkos::PerTeam(scr_size)),
   KOKKOS_LAMBDA(TeamMember_t tmember) {
     int index = tmember.league_rank()*tmember.team_size() + tmember.team_rank();

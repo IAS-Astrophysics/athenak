@@ -60,20 +60,4 @@ dt_turb_update = 0.01
 ## ------------------------------------------------------------------------------------ ##
 ## hst Output ##
 
-<output1>
-file_type = hst      # History output
-dt     = 0.005   # time increment between outputs
-data_format = %24.16e   # output data format
-## Restart Output ##
 
-<output2>
-file_type = rst      # Restart checkpoint
-dt     = 0.5     # time increment between outputs
-## Full Cube Outputs ##
-
-<output3>
-file_type = bin       # Binary data dump
-variable  = mhd_w_bcc    # variables to be output
-dt     = 0.25      # time increment between outputs
-id     = full_mhd_w_bcc # identifier for the output
-Collapse
