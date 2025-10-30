@@ -91,23 +91,63 @@ void PiecewiseLinearX3(TeamMember_t const &member, const int m, const int k, con
 }
 
 KOKKOS_INLINE_FUNCTION
-void PiecewiseLinear( const int m, const int k, const int j, const int i,
+void PLM_X1( const int m, const int k, const int j, const int i,
     const DvceArray5D<Real> &q, ScrArray1D<Real> &ql, ScrArray1D<Real> &qr,
     const int dim) { 
   int nvar = q.extent_int(1);
   Real L, R;
   for (int n=0; n<nvar; ++n) {
-      PLM(q(m,n,k-dim==3,j-dim==2,i-dim==1),
+      PLM(q(m,n,k,j,i-1),
           q(m,n,k,j,i),
-          q(m,n,k+dim==3,j+dim==2,i+dim==1),
+          q(m,n,k,j,i+1),
           L, qr(n));
 
-      PLM(q(m,n,k+2*(dim==3),j+2*(dim==2),i+2*(dim==1)),
-          q(m,n,k-dim==3,j-dim==2,i-dim==1),
+      PLM(q(m,n,k,j,i-2),
+          q(m,n,k,j,i-1),
           q(m,n,k,j,i),
           ql(n), R);
     }
     return;
   }
+
+  KOKKOS_INLINE_FUNCTION
+  void PLM_X2( const int m, const int k, const int j, const int i,
+      const DvceArray5D<Real> &q, ScrArray1D<Real> &ql, ScrArray1D<Real> &qr,
+      const int dim) { 
+    int nvar = q.extent_int(1);
+    Real L, R;
+    for (int n=0; n<nvar; ++n) {
+        PLM(q(m,n,k,j-1,i),
+            q(m,n,k,j,i),
+            q(m,n,k,j+1,i),
+            L, qr(n));
+  
+        PLM(q(m,n,k,j-2,i),
+            q(m,n,k,j-1,i),
+            q(m,n,k,j,i),
+            ql(n), R);
+      }
+      return;
+    }
+
+  KOKKOS_INLINE_FUNCTION
+  void PLM_X3( const int m, const int k, const int j, const int i,
+      const DvceArray5D<Real> &q, ScrArray1D<Real> &ql, ScrArray1D<Real> &qr,
+      const int dim) { 
+    int nvar = q.extent_int(1);
+    Real L, R;
+    for (int n=0; n<nvar; ++n) {
+        PLM(q(m,n,k-1,j,i),
+            q(m,n,k,j,i),
+            q(m,n,k+1,j,i),
+            L, qr(n));
+  
+        PLM(q(m,n,k-2,j,i),
+            q(m,n,k-1,j,i),
+            q(m,n,k,j,i),
+            ql(n), R);
+      }
+      return;
+    }
 #endif // RECONSTRUCT_PLM_HPP_
 

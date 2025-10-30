@@ -430,6 +430,35 @@ inline void par_for_outer(const std::string &name, DevExeSpace exec_space,
   });
 }
 
+// 4D outer parallel loop using Kokkos Teams
+template <typename Function>
+inline void par_for_team(const std::string &name, DevExeSpace exec_space,
+                          size_t scr_size, const int scr_level,
+                          const int ml, const int mu,
+                          const int kl, const int ku, const int jl, const int ju,
+                          const int il, const int iu, const Function &function) {
+  const int nm = mu - ml + 1;
+  const int nk = ku - kl + 1;
+  const int nj = ju - jl + 1;
+  const int ni = iu - il + 1;
+  const int nji   = nj*ni;
+  const int nkji  = nk*nj*ni;
+  const int nmkji = nm*nk*nj*ni;
+  Kokkos::TeamPolicy<> policy(exec_space, nmkji/64, 64);
+  Kokkos::parallel_for(name, policy.set_scratch_size(scr_level,Kokkos::PerTeam(scr_size)),
+  KOKKOS_LAMBDA(TeamMember_t tmember) {
+    int index = tmember.league_rank()*tmember.team_size() + tmember.team_rank();
+    int m = (index)/nkji;
+    int k = (index - m*nkji)/nji;
+    int j = (index - m*nkji - k*nji)/ni;
+    int i = (index - m*nkji - k*nji - j*ni) + il;
+    m += ml;
+    k += kl;
+    j += jl;
+    function(tmember, m, k, j, i);
+  });
+}
+
 //---------------------------------------------
 // 1D inner parallel loop using TeamVectorRange
 template <typename Function>

@@ -77,15 +77,15 @@ void MHD::CalculateFluxes(Driver *pdriver, int stage) {
   int scr_level = 0;
   size_t scr_size = ScrArray1D<Real>::shmem_size(nvars+3) * 2;
 
-  par_for_outer("mhd_flux1",DevExeSpace(), scr_size, scr_level, 0, nmb1, kl, ku, jl, ju, il, iu,
+  par_for_team("mhd_flux1",DevExeSpace(), scr_size, scr_level, 0, nmb1, kl, ku, jl, ju, il, iu,
   KOKKOS_LAMBDA(TeamMember_t member, int m, int k, int j, int i) {
     ScrArray1D<Real> wl(member.team_scratch(scr_level),nvars);
     ScrArray1D<Real> wr(member.team_scratch(scr_level),nvars);
     ScrArray1D<Real> bl(member.team_scratch(scr_level),3);
     ScrArray1D<Real> br(member.team_scratch(scr_level),3);
     // Reconstruct qR[i] and qL[i+1], for both W and Bcc
-    PiecewiseLinear(m, k, j, i, w0_, wl, wr, 1);
-    PiecewiseLinear(m, k, j, i, b0_, bl, br, 1);
+    PLM_X1(m, k, j, i, w0_, wl, wr, 1);
+    PLM_X1(m, k, j, i, b0_, bl, br, 1);
     // compute fluxes over [is,ie+1].  MHD RS also computes electric fields, where
     // (IBY) component of flx = E_{z} = -(v x B)_{z} = -(v1*b2 - v2*b1)
     // (IBZ) component of flx = E_{y} = -(v x B)_{y} =  (v1*b3 - v3*b1)
@@ -105,15 +105,15 @@ void MHD::CalculateFluxes(Driver *pdriver, int stage) {
     if (use_fofc) { jl = js-2, ju = je+2; }
 
     
-    par_for_outer("mhd_flux2",DevExeSpace(), scr_size, scr_level, 0, nmb1, kl, ku, jl, ju, il, iu,
+    par_for_team("mhd_flux2",DevExeSpace(), scr_size, scr_level, 0, nmb1, kl, ku, jl, ju, il, iu,
     KOKKOS_LAMBDA(TeamMember_t member, int m, int k, int j, int i) {
       ScrArray1D<Real> wl(member.team_scratch(scr_level),nvars);
       ScrArray1D<Real> wr(member.team_scratch(scr_level),nvars);
       ScrArray1D<Real> bl(member.team_scratch(scr_level),3);
       ScrArray1D<Real> br(member.team_scratch(scr_level),3);
         // Reconstruct qR[j] and qL[j+1], for both W and Bcc
-        PiecewiseLinear(m, k, j, i, w0_, wl, wr, 2);
-        PiecewiseLinear(m, k, j, i, b0_, bl, br, 2);
+        PLM_X2(m, k, j, i, w0_, wl, wr, 2);
+        PLM_X2(m, k, j, i, b0_, bl, br, 2);
         // compute fluxes over [js,je+1].  MHD RS also computes electric fields, where
         // (IBY) component of flx = E_{x} = -(v x B)_{x} = -(v2*b3 - v3*b2)
         // (IBZ) component of flx = E_{z} = -(v x B)_{z} =  (v2*b1 - v1*b2)
@@ -129,15 +129,15 @@ void MHD::CalculateFluxes(Driver *pdriver, int stage) {
     kl = ks-1, ku = ke+1;
     if (use_fofc) { kl = ks-2, ku = ke+2; }
 
-    par_for_outer("mhd_flux3",DevExeSpace(), scr_size, scr_level, 0, nmb1, kl, ku, jl, ju, il, iu,
+    par_for_team("mhd_flux3",DevExeSpace(), scr_size, scr_level, 0, nmb1, kl, ku, jl, ju, il, iu,
     KOKKOS_LAMBDA(TeamMember_t member, int m, int k, int j, int i) {
       ScrArray1D<Real> wl(member.team_scratch(scr_level),nvars);
       ScrArray1D<Real> wr(member.team_scratch(scr_level),nvars);
       ScrArray1D<Real> bl(member.team_scratch(scr_level),3);
       ScrArray1D<Real> br(member.team_scratch(scr_level),3);
         // Reconstruct qR[k] and qL[k+1], for both W and Bcc
-        PiecewiseLinear(m, k, j, i, w0_, wl, wr, 3);
-        PiecewiseLinear(m, k, j, i, b0_, bl, br, 3);
+        PLM_X3(m, k, j, i, w0_, wl, wr, 3);
+        PLM_X3(m, k, j, i, b0_, bl, br, 3);
         HLLD(eos_,indcs_,size_,coord_,m,k,j,i,IVZ,wl,wr,bl,br,b0.x3f,uflx.x3f,e2x3,e1x3);
       });
   }
