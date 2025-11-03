@@ -56,6 +56,9 @@ enum TaskName {
   MHD_ClearS,
   MHD_ClearR,
   MHD_NTASKS,
+  MHD_URecv,
+  MHD_ClearSU,
+  MHD_ClearRU,
 
   Z4c_Recv,
   Z4c_IRecvW,

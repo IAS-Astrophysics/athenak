@@ -227,9 +227,9 @@ RadiationM1::RadiationM1(MeshBlockPack *ppack, ParameterInput *pin)
 
   // allocate second registers, fluxes
   Kokkos::realloc(u1, nmb, nvarstot, ncells3, ncells2, ncells1);
-  Kokkos::realloc(uflx.x1f, nmb, nvarstot, ncells3, ncells2, ncells1);
-  Kokkos::realloc(uflx.x2f, nmb, nvarstot, ncells3, ncells2, ncells1);
-  Kokkos::realloc(uflx.x3f, nmb, nvarstot, ncells3, ncells2, ncells1);
+  Kokkos::realloc(uflx.x1f, nmb, nvarstot, ncells3, ncells2, ncells1+1);
+  Kokkos::realloc(uflx.x2f, nmb, nvarstot, ncells3, ncells2+1, ncells1);
+  Kokkos::realloc(uflx.x3f, nmb, nvarstot, ncells3+1, ncells2, ncells1);
 
   // allocate Eddington factor
   Kokkos::realloc(chi, nmb, nspecies, ncells3, ncells2, ncells1);

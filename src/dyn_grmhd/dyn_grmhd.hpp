@@ -71,6 +71,7 @@ struct DynGRMHDTaskIDs {
   TaskID postrad_bcs;
   TaskID postrad_prol;
   TaskID postrad_c2p;
+  TaskID postrad_clear;
 };
 
 namespace dyngr {

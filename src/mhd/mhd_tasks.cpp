@@ -81,12 +81,15 @@ void MHD::AssembleMHDTasks(std::map<std::string, std::shared_ptr<TaskList>> tl) 
   id.crecv = tl["after_stagen"]->AddTask(&MHD::ClearRecv, this, id.csend);
 
   if (pmy_pack->pradm1 != nullptr) {
-    id.postrad_restu = tl["opsplit_after_timeintegrator"]->AddTask(&mhd::MHD::RestrictU, this, id.crecv);
+    id.postrad_initrecvu = tl["opsplit_after_timeintegrator"]->AddTask(&mhd::MHD::InitRecvU, this, id.crecv);
+    id.postrad_restu = tl["opsplit_after_timeintegrator"]->AddTask(&mhd::MHD::RestrictU, this, id.postrad_initrecvu);
     id.postrad_sendu = tl["opsplit_after_timeintegrator"]->AddTask(&mhd::MHD::SendU, this, id.postrad_restu);
     id.postrad_recvu = tl["opsplit_after_timeintegrator"]->AddTask(&mhd::MHD::RecvU, this, id.postrad_sendu);
     id.postrad_bcs = tl["opsplit_after_timeintegrator"]->AddTask(&mhd::MHD::ApplyPhysicalBCs, this, id.postrad_recvu);
     id.postrad_prol = tl["opsplit_after_timeintegrator"]->AddTask(&mhd::MHD::Prolongate, this, id.postrad_bcs);
     id.postrad_c2p = tl["opsplit_after_timeintegrator"]->AddTask(&mhd::MHD::ConToPrim, this, id.postrad_prol);
+    id.postrad_csend = tl["opsplit_after_timeintegrator"]->AddTask(&mhd::MHD::ClearSendU, this, id.postrad_c2p);
+    id.postrad_crecv = tl["opsplit_after_timeintegrator"]->AddTask(&mhd::MHD::ClearRecvU, this, id.postrad_csend);
   }
 
   return;
@@ -654,6 +657,34 @@ TaskStatus MHD::RestrictB(Driver *pdrive, int stage) {
   // Only execute Mesh function with SMR/AMR
   if (pmy_pack->pmesh->multilevel) {
     pmy_pack->pmesh->pmr->RestrictFC(b0, coarse_b0);
+  }
+
+  return TaskStatus::complete;
+}
+
+TaskStatus MHD::InitRecvU(Driver *pdrive, int stage) {
+  // post receives for U
+  TaskStatus tstat = pbval_u->InitRecv(nmhd+nscalars);
+  if (tstat != TaskStatus::complete) return tstat;
+  return tstat;
+}
+
+TaskStatus MHD::ClearSendU(Driver *pdrive, int stage) {
+  TaskStatus tstat;
+  if ((stage >= 0) || (stage == -1)) {
+    // check sends of U complete
+    TaskStatus tstat = pbval_u->ClearSend();
+    if (tstat != TaskStatus::complete) return tstat;
+  }
+  return TaskStatus::complete;
+}
+
+TaskStatus MHD::ClearRecvU(Driver *pdrive, int stage) {
+  TaskStatus tstat;
+  if ((stage >= 0) || (stage == -1)) {
+    // check receives of U complete
+    tstat = pbval_u->ClearRecv();
+    if (tstat != TaskStatus::complete) return tstat;
   }
   return TaskStatus::complete;
 }
