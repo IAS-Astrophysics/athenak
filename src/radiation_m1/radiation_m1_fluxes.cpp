@@ -242,7 +242,7 @@ TaskStatus RadiationM1::CalculateFluxes(Driver *pdrive, int stage) {
                    u0_(m, CombinedIdx(nuidx, momidx, nvars_), k, j, i - 1)) /
                   2.;
 
-          flx1_(m, momidx, k, j, i) =
+          flx1_(m, CombinedIdx(nuidx, momidx, nvars_), k, j, i) =
               flux_jp12_ho[momidx] - (sawtooth ? 1 : A_jp12) * (1 - phi_jp12) *
                                          (flux_jp12_ho[momidx] - flux_jp12_lo[momidx]);
         }
@@ -307,7 +307,7 @@ TaskStatus RadiationM1::CalculateFluxes(Driver *pdrive, int stage) {
                      u0_(m, CombinedIdx(nuidx, momidx, nvars_), k, j - 1, i)) /
                     2.;
 
-            flx2_(m, momidx, k, j, i) =
+            flx2_(m, CombinedIdx(nuidx, momidx, nvars_), k, j, i) =
                 flux_jp12_ho[momidx] - (sawtooth ? 1 : A_jp12) * (1 - phi_jp12) *
                                            (flux_jp12_ho[momidx] - flux_jp12_lo[momidx]);
           }
@@ -373,7 +373,7 @@ TaskStatus RadiationM1::CalculateFluxes(Driver *pdrive, int stage) {
                      u0_(m, CombinedIdx(nuidx, momidx, nvars_), k - 1, j, i)) /
                     2.;
 
-            flx3_(m, momidx, k, j, i) =
+            flx3_(m, CombinedIdx(nuidx, momidx, nvars_), k, j, i) =
                 flux_jp12_ho[momidx] - (sawtooth ? 1 : A_jp12) * (1 - phi_jp12) *
                                            (flux_jp12_ho[momidx] - flux_jp12_lo[momidx]);
           }

@@ -47,7 +47,5 @@ TaskStatus RadiationM1::NewTimeStep(Driver *pdrive, int stage) {
   if (pmy_pack->pmesh->three_d) { dtnew = std::min(dtnew, dt3); }
 
   return TaskStatus::complete;
-
-  return TaskStatus::complete;
 }
 } // namespace radiationm1

@@ -36,15 +36,6 @@ void ProblemGenerator::RadiationM1SphereTest(ParameterInput *pin,
     exit(EXIT_FAILURE);
   }
 
-  if (pmbp->pradm1->nspecies != 1) {
-    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-              << std::endl
-              << "The sphere test problem generator can only be run with "
-                 "one neutrino species only!"
-              << std::endl;
-    exit(EXIT_FAILURE);
-  }
-
   pmbp->pradm1->toy_opacity_fn = radiationm1::ToyOpacity{radiationm1::ToyOpacityModel::Sphere};
 
   // capture variables for kernel
