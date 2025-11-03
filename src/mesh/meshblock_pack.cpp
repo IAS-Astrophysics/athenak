@@ -174,8 +174,15 @@ void MeshBlockPack::AddPhysics(ParameterInput *pin) {
   // task lists respectively.
   if (pin->DoesBlockExist("turb_driving")) {
     pturb = new TurbulenceDriver(this, pin);
-    pturb->IncludeInitializeModesTask(tl_map["before_timeintegrator"], none);
-    pturb->IncludeAddForcingTask(tl_map["stagen"], none);
+    
+    // Check if task lists exist before using them
+    if (tl_map.find("before_timeintegrator") != tl_map.end()) {
+      pturb->IncludeInitializeModesTask(tl_map["before_timeintegrator"], none);
+    }
+    
+    if (tl_map.find("stagen") != tl_map.end()) {
+      pturb->IncludeAddForcingTask(tl_map["stagen"], none);
+    }
   } else {
     pturb = nullptr;
   }

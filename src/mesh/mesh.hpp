@@ -91,7 +91,7 @@ struct RestartMetaData {
 
 // Equality operator for LogicalLocation (needed for unordered_map)
 inline bool operator==(const LogicalLocation& a, const LogicalLocation& b) noexcept {
-  return (a.level == b.level && a.lx1 == b.lx1 &&
+  return (a.level == b.level && a.lx1 == b.lx1 && 
           a.lx2 == b.lx2 && a.lx3 == b.lx3);
 }
 
@@ -211,8 +211,10 @@ class Mesh {
     return (mb_indcs.nx1)*(mb_indcs.nx2)*(mb_indcs.nx3);
   }
 
+
  private:
   std::unique_ptr<MeshBlockTree> ptree;  // pointer to root node in binary/quad/oct-tree
+  
   void LoadBalance(float *clist, int *rlist, int *slist, int *nlist, int nb);
 };
 #endif  // MESH_MESH_HPP_

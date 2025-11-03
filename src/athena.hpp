@@ -58,6 +58,15 @@ enum MetricIndex {I00=0, I01=1, I02=2, I03=3, I11=4, I12=5, I13=6, I22=7, I23=8,
 // array indices for particle arrays
 enum ParticlesIndex {PGID=0, PTAG=1, IPX=0, IPVX=1, IPY=2, IPVY=3, IPZ=4, IPVZ=5};
 
+// additional indices for cosmic ray particles
+enum CRParticlesIndex {IPM=6, IPBX=7, IPBY=8, IPBZ=9, IPDX=10, IPDY=11, IPDZ=12, IPDB=13};
+
+// additional indices for star particles  
+enum StarParticlesIndex {IPT_CREATE=6, IPMASS=7, IPT_NEXT_SN=8};
+
+// integer data indices for particle types
+enum ParticleIntegerIndex {PSP=2, NSN=2};
+
 // integer constants to specify spatial reconstruction methods
 enum ReconstructionMethod {dc, plm, ppm4, ppmx, wenoz};
 

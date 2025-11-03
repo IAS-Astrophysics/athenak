@@ -301,10 +301,12 @@ int main(int argc, char *argv[]) {
   // pointer to Mesh.
 
   Mesh* pmesh = new Mesh(pinput);
+  if (res_flag) {
+    pmesh->SetRestartFileInfo(restart_base_dir, restart_file_name, single_file_per_rank);
+  }
   if (!res_flag) {
     pmesh->BuildTreeFromScratch(pinput);
   } else {
-    pmesh->SetRestartFileInfo(restart_base_dir, restart_file_name, single_file_per_rank);
     pmesh->BuildTreeFromRestart(pinput, restartfile, single_file_per_rank);
   }
 

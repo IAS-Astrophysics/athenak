@@ -102,7 +102,7 @@ bash check_athena_cpp_style.sh
 ```
 
 Key style requirements:
-- No tabs (spaces only)
+- No tabs (spaces only)  
 - Line length limit: 90 characters
 - Single closing brace per line
 - No trailing whitespace
@@ -168,6 +168,7 @@ When creating a new problem generator:
    });
    ```
 5. Build with `-DPROBLEM=my_problem`
+
 ### Input File Structure
 Input files use the `.athinput` format with parameter blocks:
 ```

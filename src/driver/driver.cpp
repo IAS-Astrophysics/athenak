@@ -299,6 +299,9 @@ void Driver::Initialize(Mesh *pmesh, ParameterInput *pin, Outputs *pout, bool re
   InitBoundaryValuesAndPrimitives(pmesh);
 
   //---- Step 2.  Compute time step (if problem involves time evolution)
+  // NOTE: For new simulations (!res_flag), the initial conditions haven't been set yet
+  // by the ProblemGenerator, so we can't compute a proper timestep for MHD here.
+  // The timestep will be computed properly on the first cycle.
   hydro::Hydro *phydro = pmesh->pmb_pack->phydro;
   mhd::MHD *pmhd = pmesh->pmb_pack->pmhd;
   radiation::Radiation *prad = pmesh->pmb_pack->prad;
