@@ -79,12 +79,15 @@ struct MHDTaskIDs {
   TaskID csend;
   TaskID crecv;
 
+  TaskID postrad_initrecvu;
   TaskID postrad_restu;
   TaskID postrad_sendu;
   TaskID postrad_recvu;
   TaskID postrad_bcs;
   TaskID postrad_prol;
   TaskID postrad_c2p;
+  TaskID postrad_csend;
+  TaskID postrad_crecv;
 };
 
 namespace mhd {
@@ -193,6 +196,10 @@ class MHD {
   // ...in "after_stagen_tl" task list
   TaskStatus ClearSend(Driver *d, int stage);
   TaskStatus ClearRecv(Driver *d, int stage);  // also in Driver::Initialize
+  // for radiation m1 feedback
+  TaskStatus InitRecvU(Driver *d, int stage);
+  TaskStatus ClearSendU(Driver *d, int stage);
+  TaskStatus ClearRecvU(Driver *d, int stage);
 
   // CalculateFluxes function templated over Riemann Solvers
   template <MHD_RSolver T>
