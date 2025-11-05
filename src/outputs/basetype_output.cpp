@@ -721,6 +721,16 @@ BaseTypeOutput::BaseTypeOutput(ParameterInput *pin, Mesh *pm, OutputParameters o
     }
   }
 
+  // radiation m1 lab number density
+  if (out_params.variable.compare("rad_m1_N") == 0) {
+    for (int nuidx = 0; nuidx < pm->pmb_pack->pradm1->nspecies; ++nuidx) {
+      outvars.emplace_back(
+          "N:" + std::to_string(nuidx),
+          radiationm1::CombinedIdx(nuidx, 4, pm->pmb_pack->pradm1->nvars),
+          &(pm->pmb_pack->pradm1->u0));
+    }
+  }
+
   // radiation m1 lab energy density
   if (out_params.variable.compare("rad_m1_F") == 0) {
     for (int nuidx = 0; nuidx < pm->pmb_pack->pradm1->nspecies; ++nuidx) {

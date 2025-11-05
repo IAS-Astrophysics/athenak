@@ -19,22 +19,24 @@ void ApplyBeamSources1D(Mesh *pmesh) {
   auto &indcs = pmesh->mb_indcs;
   int &is = indcs.is;
   int nmb1 = pmesh->pmb_pack->nmb_thispack - 1;
-  auto nvarstotm1 = pmesh->pmb_pack->pradm1->nvarstot - 1;
+  auto nvars_ = pmesh->pmb_pack->pradm1->nvars;
+  auto &nspecies_ = pmesh->pmb_pack->pradm1->nspecies;
   auto &mb_bcs = pmesh->pmb_pack->pmb->mb_bcs;
 
   int &ng = indcs.ng;
   auto &u0_ = pmesh->pmb_pack->pradm1->u0;
   auto &beam_source_1_vals_ = pmesh->pmb_pack->pradm1->rad_m1_beam.beam_source_vals;
 
-  assert(pmesh->pmb_pack->pradm1->nspecies == 1);
 
   par_for(
-      "radiation_m1_beams_populate_1d", DevExeSpace(), 0, nmb1, 0, nvarstotm1,
+      "radiation_m1_beams_populate_1d", DevExeSpace(), 0, nmb1, 0, nvars_-1,
       KOKKOS_LAMBDA(int m, int n) {
         switch (mb_bcs.d_view(m, BoundaryFace::inner_x1)) {
           case BoundaryFlag::outflow:
             for (int i = 0; i < ng; ++i) {
-              u0_(m, n, 0, 0, is - i - 1) = beam_source_1_vals_(n);
+                for (int nuidx = 0; nuidx < nspecies_; nuidx++) {
+                  u0_(m, CombinedIdx(nuidx, n, nvars_), 0, 0, is - i - 1) = beam_source_1_vals_(n);
+                }
             }
             break;
           default:
@@ -50,7 +52,8 @@ void ApplyBeamSources2D(Mesh *pmesh) {
   int &js = indcs.js;
 
   int nmb1 = pmesh->pmb_pack->nmb_thispack - 1;
-  auto nvarstotm1 = pmesh->pmb_pack->pradm1->nvarstot - 1;
+  auto nvars_ = pmesh->pmb_pack->pradm1->nvars;
+  auto &nspecies_ = pmesh->pmb_pack->pradm1->nspecies;
   auto &mb_bcs = pmesh->pmb_pack->pmb->mb_bcs;
   auto &size = pmesh->pmb_pack->pmb->mb_size;
 
@@ -65,7 +68,7 @@ void ApplyBeamSources2D(Mesh *pmesh) {
 
 
   par_for(
-      "radiation_m1_beams_populate_2d", DevExeSpace(), 0, nmb1, 0, nvarstotm1, 0,
+      "radiation_m1_beams_populate_2d", DevExeSpace(), 0, nmb1, 0, nvars_-1, 0,
       (n3 - 1), 0, (n2 - 1), KOKKOS_LAMBDA(int m, int n, int k, int j) {
         Real &x2min = size.d_view(m).x2min;
         Real &x2max = size.d_view(m).x2max;
@@ -76,7 +79,9 @@ void ApplyBeamSources2D(Mesh *pmesh) {
           case BoundaryFlag::outflow:
             if (beam_source_1_y1_ <= x2 && x2 <= beam_source_1_y2_) {
               for (int i = 0; i < ng; ++i) {
-                u0_(m, n, k, j, is - i - 1) = beam_source_1_vals_(n);
+                for (int nuidx = 0; nuidx < nspecies_; nuidx++) {
+                  u0_(m, CombinedIdx(nuidx, n, nvars_), k, j, is - i - 1) = beam_source_1_vals_(n);
+                }
               }
             }
             break;
