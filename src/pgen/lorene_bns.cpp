@@ -529,13 +529,15 @@ void BNSHistory(HistoryData *pdata, Mesh *pm) {
 
   // Select the number of outputs and create labels for them.
   int &nmhd = pm->pmb_pack->pmhd->nmhd;
-  pdata->nhist = 2 + nradii;
+  int nfixed = 3;
+  pdata->nhist = nfixed + nradii;
   pdata->label[0] = "rho-max";
   pdata->label[1] = "alpha-min";
+  pdata->label[2] = "bmag-max";
   for (int s = 0; s < nradii; s++) {
     std::stringstream ss;
     ss << "poynting_" << s;
-    pdata->label[2 + s] = ss.str();
+    pdata->label[nfixed + s] = ss.str();
   }
 
   // Capture class variables for kernel
@@ -569,7 +571,7 @@ void BNSHistory(HistoryData *pdata, Mesh *pm) {
   // Go through angles at each radius:
   for (int g = 0; g < nradii; g++) {
     // Zero fluxes at this radius
-    pdata->hdata[2 + g] = 0.0;
+    pdata->hdata[nfixed + g] = 0.0;
 
     // Interpolate all variables
 
@@ -678,7 +680,7 @@ void BNSHistory(HistoryData *pdata, Mesh *pm) {
       Real vol = r*r*alp*Kokkos::sqrt(detg)*grids[g]->solid_angles.h_view(n);
 
       // Perform the integration
-      pdata->hdata[2 + g] -= vol*Trt;
+      pdata->hdata[nfixed + g] -= vol*Trt;
     }
   }
 
@@ -692,8 +694,9 @@ void BNSHistory(HistoryData *pdata, Mesh *pm) {
   const int nji = nx2*nx1;
   Real rho_max = std::numeric_limits<Real>::max();
   Real alpha_min = -rho_max;
+  Real bmax;
   Kokkos::parallel_reduce("TOVHistSums",Kokkos::RangePolicy<>(DevExeSpace(), 0, nmkji),
-  KOKKOS_LAMBDA(const int &idx, Real &mb_max, Real &mb_alp_min) {
+  KOKKOS_LAMBDA(const int &idx, Real &mb_max, Real &mb_alp_min, Real &mb_bmax) {
     // coompute n,k,j,i indices of thread
     int m = (idx)/nkji;
     int k = (idx - m*nkji)/nji;
@@ -702,9 +705,20 @@ void BNSHistory(HistoryData *pdata, Mesh *pm) {
     k += ks;
     j += js;
 
+    Real g3d[NSPMETRIC] = {adm.g_dd(m, 0, 0, k, j, i), adm.g_dd(m, 0, 1, k, j, i),
+                           adm.g_dd(m, 0, 2, k, j, i), adm.g_dd(m, 1, 1, k, j, i),
+                           adm.g_dd(m, 1, 2, k, j, i), adm.g_dd(m, 2, 2, k, j, i)};
+    Real detg = Primitive::GetDeterminant(g3d);
+    Real Bu[NMAG] = {bcc0_(m, IBX, k, j, i), bcc0_(m, IBY, k, j, i),
+                     bcc0_(m, IBZ, k, j, i)};
+
+    Real Bmag = Kokkos::sqrt(Primitive::SquareVector(Bu, g3d)/detg);
+
     mb_max = fmax(mb_max, w0_(m,IDN,k,j,i));
     mb_alp_min = fmin(mb_alp_min, adm.alpha(m, k, j, i));
-  }, Kokkos::Max<Real>(rho_max), Kokkos::Min<Real>(alpha_min));
+    mb_bmax = Kokkos::fmax(mb_bmax, Bmag);
+  }, Kokkos::Max<Real>(rho_max), Kokkos::Min<Real>(alpha_min),
+  Kokkos::Max<Real>(bmax));
 
   // Currently AthenaK only supports MPI_SUM operations between ranks, but we need MPI_MAX
   // and MPI_MIN operations instead. This is a cheap hack to make it work as intended.
@@ -712,17 +726,21 @@ void BNSHistory(HistoryData *pdata, Mesh *pm) {
   if (global_variable::my_rank == 0) {
     MPI_Reduce(MPI_IN_PLACE, &rho_max, 1, MPI_ATHENA_REAL, MPI_MAX, 0, MPI_COMM_WORLD);
     MPI_Reduce(MPI_IN_PLACE, &alpha_min, 1, MPI_ATHENA_REAL, MPI_MIN, 0, MPI_COMM_WORLD);
+    MPI_Reduce(MPI_IN_PLACE, &bmax, 1, MPI_ATHENA_REAL, MPI_MAX, 0, MPI_COMM_WORLD);
   } else {
     MPI_Reduce(&rho_max, &rho_max, 1, MPI_ATHENA_REAL, MPI_MAX, 0, MPI_COMM_WORLD);
     MPI_Reduce(&alpha_min, &alpha_min, 1, MPI_ATHENA_REAL, MPI_MIN, 0, MPI_COMM_WORLD);
+    MPI_Reduce(&bmax, &bmax, 1, MPI_ATHENA_REAL, MPI_MAX, 0, MPI_COMM_WORLD);
     rho_max = 0.;
     alpha_min = 0.;
+    bmax = 0.;
   }
 #endif
 
   // store data in hdata array
   pdata->hdata[0] = rho_max;
   pdata->hdata[1] = alpha_min;
+  pdata->hdata[2] = bmax;
 }
 
 void LoreneBNSRefinementCondition(MeshBlockPack *pmbp) {
