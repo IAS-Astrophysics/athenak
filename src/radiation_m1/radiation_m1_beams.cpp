@@ -29,13 +29,13 @@ void ApplyBeamSources1D(Mesh *pmesh) {
 
 
   par_for(
-      "radiation_m1_beams_populate_1d", DevExeSpace(), 0, nmb1, 0, nvars_-1,
+      "radiation_m1_beams_populate_1d", DevExeSpace(), 0, nmb1, 0, nvars_-2,
       KOKKOS_LAMBDA(int m, int n) {
         switch (mb_bcs.d_view(m, BoundaryFace::inner_x1)) {
           case BoundaryFlag::outflow:
             for (int i = 0; i < ng; ++i) {
                 for (int nuidx = 0; nuidx < nspecies_; nuidx++) {
-                  u0_(m, CombinedIdx(nuidx, n, nvars_), 0, 0, is - i - 1) = beam_source_1_vals_(n);
+                  u0_(m, CombinedIdx(nuidx, n, nvars_), 0, 0, is - i - 1) = beam_source_1_vals_(n); 
                 }
             }
             break;
@@ -68,7 +68,7 @@ void ApplyBeamSources2D(Mesh *pmesh) {
 
 
   par_for(
-      "radiation_m1_beams_populate_2d", DevExeSpace(), 0, nmb1, 0, nvars_-1, 0,
+      "radiation_m1_beams_populate_2d", DevExeSpace(), 0, nmb1, 0, nvars_-2, 0,
       (n3 - 1), 0, (n2 - 1), KOKKOS_LAMBDA(int m, int n, int k, int j) {
         Real &x2min = size.d_view(m).x2min;
         Real &x2max = size.d_view(m).x2max;
