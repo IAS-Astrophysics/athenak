@@ -18,6 +18,8 @@
 #include "eos/eos.hpp"
 #include "mhd.hpp"
 #include "diffusion/conduction.hpp"
+#include "diffusion/viscosity.hpp"
+#include "diffusion/resistivity.hpp"
 #include "srcterms/srcterms.hpp"
 
 namespace mhd {
@@ -161,6 +163,12 @@ TaskStatus MHD::NewTimeStep(Driver *pdriver, int stage) {
   // compute timestep for diffusion
   if (pcond != nullptr) {
     pcond->NewTimeStep(w0, peos->eos_data);
+  }
+  if (pvisc != nullptr) {
+    pvisc->NewTimeStep(w0, peos->eos_data);
+  }
+  if (presist != nullptr) {
+    presist->NewTimeStep(w0, peos->eos_data);
   }
   // compute source terms timestep
   if (psrc != nullptr) {

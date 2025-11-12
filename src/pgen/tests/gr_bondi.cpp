@@ -91,12 +91,6 @@ void ProblemGenerator::BondiAccretion(ParameterInput *pin, const bool restart) {
   MeshBlockPack *pmbp = pmy_mesh_->pmb_pack;
 
   if (pmbp->pdyngr == nullptr) {
-    if (!(pmbp->phydro->peos->eos_data.use_e)) {
-      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-                << std::endl
-                << "gr_bondi test requires hydro/use_e=true" << std::endl;
-      exit(EXIT_FAILURE);
-    }
     if (!pmbp->pcoord->is_general_relativistic) {
       std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                 << std::endl

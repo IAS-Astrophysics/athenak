@@ -73,15 +73,14 @@ Hydro::Hydro(MeshBlockPack *ppack, ParameterInput *pin) :
   nscalars = pin->GetOrAddInteger("hydro","nscalars",0);
 
   // Viscosity (if requested in input file)
-  if (pin->DoesParameterExist("hydro","viscosity")) {
+  if (pin->DoesParameterExist("hydro","isotropic_viscosity")) {
     pvisc = new Viscosity("hydro", ppack, pin);
   } else {
     pvisc = nullptr;
   }
 
   // Thermal conduction (if requested in input file)
-  if (pin->DoesParameterExist("hydro","conductivity") ||
-      pin->DoesParameterExist("hydro","tdep_conductivity")) {
+  if (pin->DoesParameterExist("hydro","isotropic_conduction")) {
     pcond = new Conduction("hydro", ppack, pin);
   } else {
     pcond = nullptr;
