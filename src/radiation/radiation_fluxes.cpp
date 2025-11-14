@@ -18,6 +18,7 @@
 #include "reconstruct/plm.hpp"
 #include "reconstruct/ppm.hpp"
 #include "reconstruct/wenoz.hpp"
+#include "reconstruct/wenomz.hpp"
 
 namespace radiation {
 //----------------------------------------------------------------------------------------
@@ -85,6 +86,10 @@ TaskStatus Radiation::CalculateFluxes(Driver *pdriver, int stage) {
         if (n1 > 0.0) WENOZ(iim3, iim2, iim1, iicc, iip1, iiu, scr);
         else          WENOZ(iim2, iim1, iicc, iip1, iip2, scr, iiu);
         break;
+      case ReconstructionMethod::wenomz:
+        if (n1 > 0.0) WENOMZ(iim3, iim2, iim1, iicc, iip1, iiu, scr);
+        else          WENOMZ(iim2, iim1, iicc, iip1, iip2, scr, iiu);
+        break;
       default:
         break;
     }
@@ -140,6 +145,10 @@ TaskStatus Radiation::CalculateFluxes(Driver *pdriver, int stage) {
         case ReconstructionMethod::wenoz:
           if (n2 > 0.0) WENOZ(iim3, iim2, iim1, iicc, iip1, iiu, scr);
           else          WENOZ(iim2, iim1, iicc, iip1, iip2, scr, iiu);
+          break;
+        case ReconstructionMethod::wenomz:
+          if (n2 > 0.0) WENOMZ(iim3, iim2, iim1, iicc, iip1, iiu, scr);
+          else          WENOMZ(iim2, iim1, iicc, iip1, iip2, scr, iiu);
           break;
         default:
           break;
@@ -197,6 +206,10 @@ TaskStatus Radiation::CalculateFluxes(Driver *pdriver, int stage) {
         case ReconstructionMethod::wenoz:
           if (n3 > 0.0) WENOZ(iim3, iim2, iim1, iicc, iip1, iiu, scr);
           else          WENOZ(iim2, iim1, iicc, iip1, iip2, scr, iiu);
+          break;
+        case ReconstructionMethod::wenomz:
+          if (n3 > 0.0) WENOMZ(iim3, iim2, iim1, iicc, iip1, iiu, scr);
+          else          WENOMZ(iim2, iim1, iicc, iip1, iip2, scr, iiu);
           break;
         default:
           break;

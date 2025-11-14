@@ -23,6 +23,7 @@
 #include "reconstruct/plm.hpp"
 #include "reconstruct/ppm.hpp"
 #include "reconstruct/wenoz.hpp"
+#include "reconstruct/wenomz.hpp"
 #include "dyn_grmhd/rsolvers/llf_dyn_grmhd.hpp"
 #include "dyn_grmhd/rsolvers/hlle_dyn_grmhd.hpp"
 // include PrimitiveSolver stuff
@@ -115,6 +116,10 @@ TaskStatus DynGRMHDPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int s
       case ReconstructionMethod::wenoz:
         WENOZX1(member, eos_, false, m, k, j, il-1, iu, w0_, wl, wr);
         WENOZX1(member, eos_, false, m, k, j, il-1, iu, b0_, bl, br);
+        break;
+      case ReconstructionMethod::wenomz:
+        WENOMZX1(member, eos_, false, m, k, j, il-1, iu, w0_, wl, wr);
+        WENOMZX1(member, eos_, false, m, k, j, il-1, iu, b0_, bl, br);
         break;
       default:
         break;
@@ -228,6 +233,10 @@ TaskStatus DynGRMHDPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int s
             WENOZX2(member, eos_, false, m, k, j, is-1, ie+1, w0_, wl_jp1, wr);
             WENOZX2(member, eos_, false, m, k, j, is-1, ie+1, b0_, bl_jp1, br);
             break;
+          case ReconstructionMethod::wenomz:
+            WENOMZX2(member, eos_, false, m, k, j, is-1, ie+1, w0_, wl_jp1, wr);
+            WENOMZX2(member, eos_, false, m, k, j, is-1, ie+1, b0_, bl_jp1, br);
+            break;
           default:
             break;
         }
@@ -335,6 +344,10 @@ TaskStatus DynGRMHDPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int s
           case ReconstructionMethod::wenoz:
             WENOZX3(member, eos_, false, m, k, j, is-1, ie+1, w0_, wl_kp1, wr);
             WENOZX3(member, eos_, false, m, k, j, is-1, ie+1, b0_, bl_kp1, br);
+            break;
+          case ReconstructionMethod::wenomz:
+            WENOMZX3(member, eos_, false, m, k, j, is-1, ie+1, w0_, wl_kp1, wr);
+            WENOMZX3(member, eos_, false, m, k, j, is-1, ie+1, b0_, bl_kp1, br);
             break;
           default:
             break;
