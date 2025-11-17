@@ -48,8 +48,11 @@ class TurbulenceDriver {
   Real x_turb_scale_height, y_turb_scale_height, z_turb_scale_height;
   Real x_turb_center, y_turb_center, z_turb_center;
 
+<<<<<<< HEAD
   // Input random seed
   int random_seed = 1;
+=======
+>>>>>>> d4841eb338bcb5e8ac7d5b7931822da72565db1d
 
   // functions
   void IncludeInitializeModesTask(std::shared_ptr<TaskList> tl, TaskID start);
