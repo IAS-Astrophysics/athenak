@@ -88,11 +88,6 @@ TaskStatus Radiation::RKUpdate(Driver *pdriver, int stage) {
       if (rad_mask_(m,k,j,i) || fabs(n_0) < n_0_floor_) { i0_(m,n,k,j,i) = 0.0; }
     }
   });
-
-  // add beam source term, if any
-  if (psrc->beam)  psrc->BeamSource(i0_, beta_dt);
-
   return TaskStatus::complete;
 }
-
 } // namespace radiation

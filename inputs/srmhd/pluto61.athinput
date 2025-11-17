@@ -32,7 +32,7 @@ nx1       = 16        # Number of cells in each MeshBlock, X1-dir
 nx2       = 1         # Number of cells in each MeshBlock, X2-dir
 nx3       = 1         # Number of cells in each MeshBlock, X3-dir
 
-<refinement1>
+<refined_region1>
 level = 6
 x1min = 0.49
 x1max = 0.51
