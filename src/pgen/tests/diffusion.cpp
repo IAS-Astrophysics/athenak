@@ -43,10 +43,11 @@ bool set_initial_conditions = true;
 // input parameters passed to user-defined BC function
 struct DiffusionVariables {
   int prob_dir;
+  bool conduction_test, viscosity_test, resistivity_test;
   Real amp, t0, x10;
 };
 
-DiffusionVariables dvars;
+DiffusionVariables diffvars;
 
 } // end anonymous namespace
 
@@ -55,6 +56,12 @@ DiffusionVariables dvars;
 //! \brief Sets initial conditions for diffusion tests
 
 void ProblemGenerator::Diffusion(ParameterInput *pin, const bool restart) {
+  std::string evolution_t = pin->GetString("time","evolution");
+  if (evolution_t.compare("kinematic") != 0) {
+    std::cout <<"### FATAL ERROR in "<< __FILE__ <<" at line " << __LINE__ << std::endl
+            << "Difusion tests must be run in kinematic mode" << std::endl;
+    exit(EXIT_FAILURE);
+  }
   // set diffusion errors function
   pgen_final_func = DiffusionErrors;
   // user-define BC
@@ -62,10 +69,20 @@ void ProblemGenerator::Diffusion(ParameterInput *pin, const bool restart) {
   if (restart) return;
 
   // Read problem parameters
-  dvars.prob_dir = pin->GetOrAddInteger("problem","direction",1);
-  dvars.amp = pin->GetOrAddReal("problem", "amp", 1.e-6);
-  dvars.t0 = pin->GetOrAddReal("problem", "t0", 0.5);
-  dvars.x10 = pin->GetOrAddReal("problem", "x10", 0.0);
+  diffvars.prob_dir = pin->GetOrAddInteger("problem","direction",1);
+  diffvars.amp = pin->GetOrAddReal("problem", "amp", 1.e-6);
+  diffvars.t0 = pin->GetOrAddReal("problem", "t0", 0.5);
+  diffvars.x10 = pin->GetOrAddReal("problem", "x10", 0.0);
+  diffvars.conduction_test = pin->GetBoolean("problem", "conduction_test");
+  diffvars.viscosity_test = pin->GetBoolean("problem", "viscosity_test");
+  diffvars.resistivity_test = pin->GetBoolean("problem", "resistivity_test");
+  if ((diffvars.conduction_test) &&
+      (diffvars.viscosity_test || diffvars.resistivity_test)) {
+    std::cout <<"### FATAL ERROR in "<< __FILE__ <<" at line " << __LINE__ << std::endl
+            << "Cannot run conduction test at same time as viscosity OR resistivity test"
+            << std::endl;
+    exit(EXIT_FAILURE);
+  }
 
   // capture variables for the kernel
   auto &indcs = pmy_mesh_->mb_indcs;
@@ -77,27 +94,34 @@ void ProblemGenerator::Diffusion(ParameterInput *pin, const bool restart) {
   auto &time = pmbp->pmesh->time;
 
   // capture variables for the kernel
-  auto amp_ = dvars.amp, x10_ = dvars.x10;
+  Real amp_ = diffvars.amp;
+  bool ctest = diffvars.conduction_test;
+  bool vtest = diffvars.viscosity_test;
+  Real x10_ = diffvars.x10;
   // add stopping time when called at end of run
-  Real t1 = dvars.t0;
+  Real t1 = diffvars.t0;
   if (!(set_initial_conditions)) {t1 += time;}
 
   // Initialize Hydro variables -------------------------------
   if (pmbp->phydro != nullptr) {
-    EOS_Data &eos = pmbp->phydro->peos->eos_data;
-    if (pmbp->phydro->pvisc == nullptr || pmbp->phydro->pcond == nullptr) {
+    if (ctest && pmbp->phydro->pcond == nullptr) {
       std::cout <<"### FATAL ERROR in "<< __FILE__ <<" at line " << __LINE__ << std::endl
-              << "Diffusion test requires viscosity and conduction to be defined in"
-              << " Hydro input block" << std::endl;
+              << "Conduction not defined in Hydro input block" << std::endl;
       exit(EXIT_FAILURE);
     }
+    if (vtest && pmbp->phydro->pvisc == nullptr) {
+      std::cout <<"### FATAL ERROR in "<< __FILE__ <<" at line " << __LINE__ << std::endl
+              << "Viscosity not defined in Hydro input block" << std::endl;
+      exit(EXIT_FAILURE);
+    }
+
+    EOS_Data &eos = pmbp->phydro->peos->eos_data;
     if (!(eos.is_ideal)) {
       std::cout <<"### FATAL ERROR in "<< __FILE__ <<" at line " << __LINE__ << std::endl
               << "Diffusion test requires ideal EOS in Hydro block" << std::endl;
       exit(EXIT_FAILURE);
     }
     Real gm1 = eos.gamma - 1.0;
-    Real p0 = 1.0/eos.gamma;
     auto &nu_iso = pmbp->phydro->pvisc->nu_iso;
     auto &kappa_iso = pmbp->phydro->pcond->kappa_iso;
 
@@ -113,12 +137,19 @@ void ProblemGenerator::Diffusion(ParameterInput *pin, const bool restart) {
       int nx1 = indcs.nx1;
       Real x1v = CellCenterX(i-is, nx1, x1min, x1max);
 
+      Real vperp = 0.0;
+      if (vtest) {
+        vperp = amp_*exp(SQR(x1v-x10_)/(-4.0*nu_iso*t1))/sqrt(4.*M_PI*nu_iso*t1);
+      }
+      Real p0 = 1.0/eos.gamma;
+      if (ctest) {
+        p0 = amp_*exp(SQR(x1v-x10_)/(-4.0*kappa_iso*t1))/sqrt(4.*M_PI*kappa_iso*t1);
+      }
       u1(m,IDN,k,j,i) = 1,0;
       u1(m,IM1,k,j,i) = 0.0;
-      u1(m,IM2,k,j,i) = amp_*exp(SQR(x1v-x10_)/(-4.0*nu_iso*t1))/sqrt(4.*M_PI*nu_iso*t1);
-      u1(m,IM3,k,j,i) = amp_*exp(SQR(x1v-x10_)/(-4.0*nu_iso*t1))/sqrt(4.*M_PI*nu_iso*t1);
-      Real press = amp_*exp(SQR(x1v-x10_)/(-4.0*kappa_iso*t1))/sqrt(4.*M_PI*kappa_iso*t1);
-      u1(m,IEN,k,j,i) = press/gm1 + 0.5*(SQR(u1(m,IM2,k,j,i)) + SQR(u1(m,IM3,k,j,i)));
+      u1(m,IM2,k,j,i) = vperp;
+      u1(m,IM3,k,j,i) = vperp;
+      u1(m,IEN,k,j,i) = p0/gm1 + 0.5*(SQR(u1(m,IM2,k,j,i)) + SQR(u1(m,IM3,k,j,i)));
     });
   } // End initialization of Hydro variables
   return;
@@ -157,49 +188,52 @@ void GaussianProfileBCs(Mesh *pm) {
 
   EOS_Data &eos = pm->pmb_pack->phydro->peos->eos_data;
   Real gm1 = eos.gamma - 1.0;
-  Real p0 = 1.0/eos.gamma;
   auto &nu_iso = pm->pmb_pack->phydro->pvisc->nu_iso;
   auto &kappa_iso = pm->pmb_pack->phydro->pcond->kappa_iso;
   auto &u0 = pm->pmb_pack->phydro->u0;
 
   // capture variables for the kernel
   //auto dv_=dv;
-  auto amp_ = dvars.amp, x10_ = dvars.x10;
-  Real t1 = dvars.t0 + pm->time;
+  auto amp_ = diffvars.amp, x10_ = diffvars.x10;
+  Real t1 = diffvars.t0 + pm->time;
+  bool ctest = diffvars.conduction_test;
+  bool vtest = diffvars.viscosity_test;
 
-  if (dvars.prob_dir == 1) {
+  if (diffvars.prob_dir == 1) {
     par_for("diffusion_x1", DevExeSpace(),0,(nmb-1),0,(n3-1),0,(n2-1),
     KOKKOS_LAMBDA(int m, int k, int j) {
       for (int i=0; i<ng; ++i) {
         // Inner X1-boundary
         Real &x1min = size.d_view(m).x1min;
         Real &x1max = size.d_view(m).x1max;
-        int nx1 = indcs.nx1;
-        Real x1v = CellCenterX(-1-i, nx1, x1min, x1max);
-
-        u0(m,IDN,k,j,is-i-1) = 1.0;
+        Real x1v = CellCenterX(-1-i, indcs.nx1, x1min, x1max);
+        Real vperp = 0.0;
+        if (vtest) {
+          vperp = amp_*exp(SQR(x1v-x10_)/(-4.0*nu_iso*t1))/sqrt(4.*M_PI*nu_iso*t1);
+        }
+        Real p0 = 1.0/eos.gamma;
+        if (ctest) {
+          p0 = amp_*exp(SQR(x1v-x10_)/(-4.0*kappa_iso*t1))/sqrt(4.*M_PI*kappa_iso*t1);
+        }
+        u0(m,IDN,k,j,is-i-1) = 1,0;
         u0(m,IM1,k,j,is-i-1) = 0.0;
-        u0(m,IM2,k,j,is-i-1) = amp_*exp(SQR(x1v-x10_)/(-4.0*nu_iso*t1))
-                               /sqrt(4.*M_PI*nu_iso*t1);
-        u0(m,IM3,k,j,is-i-1) = amp_*exp(SQR(x1v-x10_)/(-4.0*nu_iso*t1))
-                               /sqrt(4.*M_PI*nu_iso*t1);
-        Real press = amp_*exp(SQR(x1v-x10_)/(-4.0*kappa_iso*t1))
-                     /sqrt(4.*M_PI*kappa_iso*t1);
-        u0(m,IEN,k,j,is-i-1) = press/gm1 +
-                               0.5*(SQR(u0(m,IM2,k,j,i)) + SQR(u0(m,IM3,k,j,i)));
+        u0(m,IM2,k,j,is-i-1) = vperp;
+        u0(m,IM3,k,j,is-i-1) = vperp;
+        u0(m,IEN,k,j,is-i-1) = p0/gm1 + 0.5*(SQR(u0(m,IM2,k,j,i)) + SQR(u0(m,IM3,k,j,i)));
 
         // Outer X1-boundary
-        x1v = CellCenterX(ie-is+1+i, nx1, x1min, x1max);
-
+        x1v = CellCenterX(ie-is+1+i, indcs.nx1, x1min, x1max);
+        if (vtest) {
+          vperp = amp_*exp(SQR(x1v-x10_)/(-4.0*nu_iso*t1))/sqrt(4.*M_PI*nu_iso*t1);
+        }
+        if (ctest) {
+          p0 = amp_*exp(SQR(x1v-x10_)/(-4.0*kappa_iso*t1))/sqrt(4.*M_PI*kappa_iso*t1);
+        }
         u0(m,IDN,k,j,ie+i+1) = 1,0;
         u0(m,IM1,k,j,ie+i+1) = 0.0;
-        u0(m,IM2,k,j,ie+i+1) = amp_*exp(SQR(x1v-x10_)/(-4.0*nu_iso*t1))
-                               /sqrt(4.*M_PI*nu_iso*t1);
-        u0(m,IM3,k,j,ie+i+1) = amp_*exp(SQR(x1v-x10_)/(-4.0*nu_iso*t1))
-                               /sqrt(4.*M_PI*nu_iso*t1);
-        press = amp_*exp(SQR(x1v-x10_)/(-4.0*kappa_iso*t1))/sqrt(4.*M_PI*kappa_iso*t1);
-        u0(m,IEN,k,j,ie+i+1) = press/gm1 +
-                               0.5*(SQR(u0(m,IM2,k,j,i)) + SQR(u0(m,IM3,k,j,i)));
+        u0(m,IM2,k,j,ie+i+1) = vperp;
+        u0(m,IM3,k,j,ie+i+1) = vperp;
+        u0(m,IEN,k,j,ie+i+1) = p0/gm1 + 0.5*(SQR(u0(m,IM2,k,j,i)) + SQR(u0(m,IM3,k,j,i)));
       }
     });
   }
