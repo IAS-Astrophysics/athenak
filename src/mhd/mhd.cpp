@@ -108,7 +108,13 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
 
   // Thermal conduction (only constructed if needed)
   if (pin->DoesParameterExist("mhd","isotropic_conduction")) {
-    pcond = new Conduction("mhd", ppack, pin);
+    if (peos->eos_data.is_ideal) {
+      pcond = new Conduction("mhd", ppack, pin);
+    } else {
+      std::cout << "### FATAL ERROR in "<< __FILE__ <<" at line " << __LINE__ << std::endl
+                << "Thermal conduction in MHD requires ideal gas EOS" << std::endl;
+      std::exit(EXIT_FAILURE);
+    }
   } else {
     pcond = nullptr;
   }

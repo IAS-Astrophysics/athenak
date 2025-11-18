@@ -63,23 +63,6 @@ Real TempDepKappa(Real temp, Real limit) {
 
 Conduction::Conduction(std::string block, MeshBlockPack *pp, ParameterInput *pin) :
     pmy_pack(pp) {
-  // Check that EOS is ideal
-  bool is_ideal;
-  if (block.compare("hydro") == 0) {
-    is_ideal = pmy_pack->phydro->peos->eos_data.is_ideal;
-  } else if (block.compare("mhd") == 0) {
-    is_ideal = pmy_pack->pmhd->peos->eos_data.is_ideal;
-  } else {
-    std::cout << "### FATAL ERROR in "<< __FILE__ <<" at line " << __LINE__ << std::endl
-              << "Invalid block name passed to Conduction constructor" << std::endl;
-    std::exit(EXIT_FAILURE);
-  }
-  if (is_ideal == false) {
-    std::cout << "### FATAL ERROR in "<< __FILE__ <<" at line " << __LINE__ << std::endl
-              << "Thermal conduction only works for ideal gas EOS" << std::endl;
-    std::exit(EXIT_FAILURE);
-  }
-
   // Read parameters for isotropic thermal conduction (if any)
   if (pin->DoesParameterExist(block,"isotropic_conduction")) {
     iso_cond_type = pin->GetString(block,"isotropic_conduction");
@@ -321,10 +304,36 @@ void Conduction::AddIsotropicHeatFluxSpitzerCond(const DvceArray5D<Real> &w0,
 //! \brief Compute new time step for thermal conduction.
 
 void Conduction::NewTimeStep(const DvceArray5D<Real> &w0, const EOS_Data &eos_data) {
+  dtnew = static_cast<Real>(std::numeric_limits<float>::max());
+  Real fac;
+  if (pmy_pack->pmesh->three_d) {
+    fac = 1.0/6.0;
+  } else if (pmy_pack->pmesh->two_d) {
+    fac = 0.25;
+  } else {
+    fac = 0.5;
+  }
 //  if (sat_hflux == true) {
 //    dtnew = static_cast<Real>(std::numeric_limits<float>::max());
 //    return;
 //  }
+
+  // set flag for Spitzer conductivity
+  bool spitzer = false;
+  if ((iso_cond_type.compare("spitzer") == 0) ||
+      (iso_cond_type.compare("spitzer_limited") == 0)) {
+    spitzer = true;
+  }
+  Real limit_ = kappa_iso_limit;
+  Real temp_unit=0.0, kappa_unit=0.0;
+
+  if (spitzer) {
+    Real temp_unit = pmy_pack->punit->temperature_cgs();
+    Real kappa_unit = pmy_pack->punit->pressure_cgs()*pmy_pack->punit->velocity_cgs()*
+                      pmy_pack->punit->length_cgs()/pmy_pack->punit->temperature_cgs();
+  }
+
+  // capture variables for kernel
   auto &indcs = pmy_pack->pmesh->mb_indcs;
   int is = indcs.is, nx1 = indcs.nx1;
   int js = indcs.js, nx2 = indcs.nx2;
@@ -339,30 +348,8 @@ void Conduction::NewTimeStep(const DvceArray5D<Real> &w0, const EOS_Data &eos_da
   Real gm1 = eos_data.gamma-1.0;
   Real kappa0 = kappa_iso;
 
-  // set flag for Spitzer conductivity
-  bool spitzer = false;
-  if ((iso_cond_type.compare("spitzer") == 0) ||
-      (iso_cond_type.compare("spitzer_limited") == 0)) {
-    spitzer = true;
-  }
-  Real limit_ = kappa_iso_limit;
-
-  Real fac;
-  if (pmy_pack->pmesh->three_d) {
-    fac = 1.0/6.0;
-  } else if (pmy_pack->pmesh->two_d) {
-    fac = 0.25;
-  } else {
-    fac = 0.5;
-  }
-
-  Real temp_unit = pmy_pack->punit->temperature_cgs();
-  Real kappa_unit = pmy_pack->punit->pressure_cgs()*pmy_pack->punit->velocity_cgs()*
-                    pmy_pack->punit->length_cgs()/pmy_pack->punit->temperature_cgs();
-
-  dtnew = static_cast<Real>(std::numeric_limits<float>::max());
-
   // find smallest timestep for thermal conduction in each cell
+  // Note loop over all cells needed even for constant conductivity
   Kokkos::parallel_reduce("cond_newdt", Kokkos::RangePolicy<>(DevExeSpace(), 0, nmkji),
   KOKKOS_LAMBDA(const int &idx, Real &min_dt) {
     // compute m,k,j,i indices of thread and call function

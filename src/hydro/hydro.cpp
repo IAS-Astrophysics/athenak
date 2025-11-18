@@ -81,7 +81,13 @@ Hydro::Hydro(MeshBlockPack *ppack, ParameterInput *pin) :
 
   // Thermal conduction (if requested in input file)
   if (pin->DoesParameterExist("hydro","isotropic_conduction")) {
-    pcond = new Conduction("hydro", ppack, pin);
+    if (peos->eos_data.is_ideal) {
+      pcond = new Conduction("hydro", ppack, pin);
+    } else {
+      std::cout << "### FATAL ERROR in "<< __FILE__ <<" at line " << __LINE__ << std::endl
+                << "Thermal conduction in hydro requires ideal gas EOS" << std::endl;
+      std::exit(EXIT_FAILURE);
+    }
   } else {
     pcond = nullptr;
   }
