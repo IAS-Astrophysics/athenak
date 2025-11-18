@@ -26,12 +26,6 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   auto &indcs = pmy_mesh_->mb_indcs;
   auto &size = pmbp->pmb->mb_size;
 
-  int nscalars = pmbp->phydro->nscalars;
-  int nhydro = pmbp->phydro->nhydro;
-
-  // Enroll user functions 
-  user_srcs_func = UserSource;
-
   if (restart) return;
 
   // Capture variables for kernel
@@ -44,7 +38,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   EOS_Data &eos = pmbp->phydro->peos->eos_data;
   Real gm1 = eos.gamma - 1.0;
 
-  Real den = 1.0;
+  Real den  = 2.0;
   Real temp = 1.0;
 
   // Set initial conditions
@@ -74,90 +68,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     u0(m,IEN,k,j,i) = den * temp / gm1 +
        0.5*(SQR(u0(m,IM1,k,j,i)) + SQR(u0(m,IM2,k,j,i)) +
        SQR(u0(m,IM3,k,j,i)))/u0(m,IDN,k,j,i);
-    
-    Real dye_conc = 0.0;
-    if (R2 < 0.1) { // RHS should be r^2
-      dye_conc = 1.0;
-    }
 
-    u0(m, nhydro  , k, j, i) = dye_conc * den; // first scalar
-    u0(m, nhydro+1, k, j, i) = dye_conc * den; // second scalar
-    u0(m, nhydro+2, k, j, i) = dye_conc * den; // third scalar
-    u0(m, nhydro+3, k, j, i) = dye_conc * den; // fourth scalar
-    u0(m, nhydro+4, k, j, i) = 0.5 * den;      // fifth scalar - mean gradient forcing
-  });
-
-  return;
-}
-
-KOKKOS_INLINE_FUNCTION
-// Advance x in [0,1] using a triangular heating profile.
-Real heatStep(Real x, Real amplitude, Real dt)
-{
-  // Clamp input to [0,1] just in case
-  x = Kokkos::clamp(x, 0.0, 1.0);
-
-  // Piecewise-linear heating rate
-  Real rate = amplitude * -1.0 * sin(x*2*Kokkos::numbers::pi);
-
-  // Update and clamp to 1.0
-  Real x_new = x + rate * dt;
-  if (x_new > 1.0) x_new = 1.0;
-
-  return x_new;
-}
-
-void UserSource(Mesh* pm, const Real bdt) {
-  MeshBlockPack *pmbp = pm->pmb_pack;
-  auto &indcs = pm->mb_indcs;
-  auto &size = pmbp->pmb->mb_size;
-  int is = indcs.is, ie = indcs.ie;
-  int js = indcs.js, je = indcs.je;
-  int ks = indcs.ks, ke = indcs.ke;
-  int nmb1 = pmbp->nmb_thispack - 1;
-  auto &u0 = pmbp->phydro->u0;
-  auto &w0 = pmbp->phydro->w0;
-  int nscalars = pmbp->phydro->nscalars;
-  int nhydro = pmbp->phydro->nhydro;
-
-  par_for("user_source", DevExeSpace(), 0, nmb1, ks, ke, js, je, is, ie,
-  KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
-    Real density = w0(m, IDN, k, j, i);
-    Real scalar_conc_1 = w0(m, nhydro  , k, j, i);
-    Real scalar_conc_2 = w0(m, nhydro+1, k, j, i);
-    Real scalar_conc_3 = w0(m, nhydro+2, k, j, i);
-    Real scalar_conc_4 = w0(m, nhydro+3, k, j, i);
-
-    // Apply heating to first scalar
-    Real new_scalar_conc_1 = heatStep(scalar_conc_1, 0.0, bdt);
-    u0(m, nhydro  , k, j, i) += (new_scalar_conc_1 - scalar_conc_1) * density;
-
-    // Apply heating to second scalar
-    Real new_scalar_conc_2 = heatStep(scalar_conc_2, 0.1, bdt);
-    u0(m, nhydro+1, k, j, i) += (new_scalar_conc_2 - scalar_conc_2) * density;
-
-    // Apply heating to third scalar
-    Real new_scalar_conc_3 = heatStep(scalar_conc_3, 1.0, bdt);
-    u0(m, nhydro+2, k, j, i) += (new_scalar_conc_3 - scalar_conc_3) * density;
-
-    // Apply heating to fourth scalar
-    Real new_scalar_conc_4 = heatStep(scalar_conc_4, 10.0, bdt);
-    u0(m, nhydro+3, k, j, i) += (new_scalar_conc_4 - scalar_conc_4) * density;
-
-    // Appy Mean Gradient Forcing to fifth scalar
-    // Passive scalar source term = u.G
-    // let G = (ds/dx, 0, 0) , then u.G = v_x * ds/dx
-    Real G = 0.5; // We set the x gradient to be small
-    Real vx = w0(m, IVX, k, j, i);
-    // Real vol = size.d_view(m).dx1*size.d_view(m).dx2*size.d_view(m).dx3;
-    u0(m, nhydro+4, k, j, i) += vx * G * bdt;
-
-    // We should check that scalars are guaranteed to be in [0,1] after all source terms are added.
-    u0(m, nhydro  , k, j, i) = Kokkos::clamp(u0(m, nhydro  , k, j, i), 0.0, u0(m,IDN,k,j,i));
-    u0(m, nhydro+1, k, j, i) = Kokkos::clamp(u0(m, nhydro+1, k, j, i), 0.0, u0(m,IDN,k,j,i));
-    u0(m, nhydro+2, k, j, i) = Kokkos::clamp(u0(m, nhydro+2, k, j, i), 0.0, u0(m,IDN,k,j,i));
-    u0(m, nhydro+3, k, j, i) = Kokkos::clamp(u0(m, nhydro+3, k, j, i), 0.0, u0(m,IDN,k,j,i));
-    u0(m, nhydro+4, k, j, i) = Kokkos::clamp(u0(m, nhydro+4, k, j, i), 0.0, u0(m,IDN,k,j,i));
   });
 
   return;
