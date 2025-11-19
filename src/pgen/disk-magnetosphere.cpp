@@ -73,10 +73,10 @@ namespace {
     Real gm0, r0, rho0, dslope, p0_over_r0, qslope, tcool, gamma_gas;
     Real dfloor, rho_floor0, rho_floor_slope;
     Real Omega0;
-    Real rs, smoothin, smoothtr, rfix;
+    Real rs, smoothin, smoothtr;
     Real Rmin, Ri, Ro, Rmax;
     Real thmin, thi, tho, thmax;
-    Real rrigid, origid, rmagsph, denstar, ratmagfloor, ratmagfslope;
+    Real origid, rmagsph, denstar, ratmagfloor, ratmagfslope;
     Real mm, b0, beta;
     bool is_ideal;
     bool magnetic_fields_enabled;
@@ -115,8 +115,8 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     //     user_bcs_func = FixedDiscBC;
     // }
 
-    // // If restarting then end initialisation here
-    // if (restart) return;
+    // If restarting then end initialisation here
+    if (restart) return;
 
     // Read problem parameters from input file
 
@@ -127,86 +127,99 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     mp.denstar = pin->GetOrAddReal("problem","denstar",0.0);
     mp.dslope = pin->GetOrAddReal("problem","dslope",0.0);
     mp.gamma_gas = pin->GetReal("hydro","gamma");
-    mp.gm0 = 1.0;
+    mp.gm0 = pin->GetOrAddReal("problem","gm0",1.0);
     mp.is_ideal = eos.is_ideal;
     if (pmbp->pmhd != nullptr) mp.magnetic_fields_enabled = true;
     else mp.magnetic_fields_enabled = false;
+    mp.mm = pin->GetOrAddReal("problem","mm",0.0);
     mp.origid = pin->GetOrAddReal("problem","origid",0.0);
     mp.p0_over_r0 = pin->GetOrAddReal("problem","p0_over_r0",0.0025);
     mp.qslope = pin->GetOrAddReal("problem","qslope",0.0);
     mp.ratmagfloor = pin->GetOrAddReal("problem","ratmagfloor",1.0e6);
     mp.ratmagfslope = pin->GetOrAddReal("problem","ratmagfslope", 5.5);
-    mp.rfix = pin->GetOrAddReal("problem", "rfix",0.1);
     mp.rho0 = pin->GetReal("problem","rho0");
     mp.rho_floor0 = pin->GetReal("problem","rho_floor0");
     mp.rho_floor_slope = pin->GetOrAddReal("problem","rho_floor_slope",0.0);
-    mp.rrigid = pin->GetOrAddReal("problem","rrigid",0.0);
     mp.rmagsph = pin->GetOrAddReal("problem","rmagsph",0.0);
     mp.rs = pin->GetOrAddReal("problem", "rstar",0.0);
     mp.smoothtr = pin->GetOrAddReal("problem","smoothtr",0.0);
     mp.tcool = pin->GetOrAddReal("problem","tcool",0.0);
+    
+    // Capture variables for kernel - e.g. indices for looping over the meshblocks and the size of the meshblocks.
+    auto &indcs = pmy_mesh_->mb_indcs;
+    int &is = indcs.is; int &ie = indcs.ie;
+    int &js = indcs.js; int &je = indcs.je;
+    int &ks = indcs.ks; int &ke = indcs.ke;
+    auto &size = pmbp->pmb->mb_size;
 
-    // If magnetic fields are enabled TODO: implement check
-    mp.mm = pin->GetOrAddReal("problem","mm",0.0);  // Read in the magnetic moment
+    // Initialise a pointer to the disc parameter structure   
+    auto mp_ = mp;
 
-    // // Capture variables for kernel - e.g. indices for looping over the meshblocks and the size of the meshblocks.
-    // auto &indcs = pmy_mesh_->mb_indcs;
-    // int &is = indcs.is; int &ie = indcs.ie;
-    // int &js = indcs.js; int &je = indcs.je;
-    // int &ks = indcs.ks; int &ke = indcs.ke;
-    // MeshBlockPack *pmbp = pmy_mesh_->pmb_pack;
-    // auto &size = pmbp->pmb->mb_size;
+    // Select either Hydro or MHD and extract the arrays - set on the device specifically since this is where the calculations
+    // are going to be done anyway. 
+    DvceArray5D<Real> u0_, w0_;
+    if (pmbp->phydro != nullptr) {
+        u0_ = pmbp->phydro->u0;
+        w0_ = pmbp->phydro->w0;
+    } else if (pmbp->pmhd != nullptr) {
+        u0_ = pmbp->pmhd->u0;
+        w0_ = pmbp->pmhd->w0;
+    }
 
-    // // Initialise a pointer to the disc parameter structure   
-    // auto disc_params_ = disc_params;
+    // initialize conservative variables for new run ---------------------------------------
+    par_for("pgen_magnetosphere_pgen",DevExeSpace(),0,(pmbp->nmb_thispack-1),ks,ke,js,je,is,ie,
+    KOKKOS_LAMBDA(int m,int k,int j,int i) {
+        Real &x1min = size.d_view(m).x1min;
+        Real &x1max = size.d_view(m).x1max;
+        int nx1 = indcs.nx1;
+        Real x1 = CellCenterX(i-is, nx1, x1min, x1max);
 
-    // // Select either Hydro or MHD and extract the arrays - set on the device specifically since this is where the calculations
-    // // are going to be done anyway. 
-    // DvceArray5D<Real> u0_, w0_;
-    // if (pmbp->phydro != nullptr) {
-    //     u0_ = pmbp->phydro->u0;
-    //     w0_ = pmbp->phydro->w0;
-    // }
+        Real &x2min = size.d_view(m).x2min;
+        Real &x2max = size.d_view(m).x2max;
+        int nx2 = indcs.nx2;
+        Real x2 = CellCenterX(j-js, nx2, x2min, x2max);
 
-    // // Loop over array and assign the quantities.
-    // par_for("pgen_UserProblem",DevExeSpace(),0,(pmbp->nmb_thispack-1),ks,ke,js,je,is,ie,
-    // KOKKOS_LAMBDA(int m,int k,int j,int i) {
-    //     Real &x1min = size.d_view(m).x1min;
-    //     Real &x1max = size.d_view(m).x1max;
-    //     int nx1 = indcs.nx1;
-    //     Real xwarp = CellCenterX(i-is, nx1, x1min, x1max);
+        Real &x3min = size.d_view(m).x3min;
+        Real &x3max = size.d_view(m).x3max;
+        int nx3 = indcs.nx3;
+        Real x3 = CellCenterX(k-ks, nx3, x3min, x3max);
 
-    //     Real &x2min = size.d_view(m).x2min;
-    //     Real &x2max = size.d_view(m).x2max;
-    //     int nx2 = indcs.nx2;
-    //     Real ywarp = CellCenterX(j-js, nx2, x2min, x2max);
+        Real rad(0.0), phi(0.0), z(0.0);
+        Real den(0.0), ux(0.0), uy(0.0), uz(0.0);
+        Real v1_disc(0.0), v2_disc(0.0), v3_disc(0.0);
+        Real v1_star(0.0), v2_star(0.0), v3_star(0.0);
 
-    //     Real &x3min = size.d_view(m).x3min;
-    //     Real &x3max = size.d_view(m).x3max;
-    //     int nx3 = indcs.nx3;
-    //     Real zwarp = CellCenterX(k-ks, nx3, x3min, x3max);
+        // get the cylindrical coodinates corresponding to this cartesian location
+        GetCylCoord(mp_,rad, phi, z, x1, x2, x3);
 
-    //     // Declare the primtive variables
-    //     Real den(0.0), pgas(0.0), ux(0.0), uy(0.0), uz(0.0);
+        // compute the disc density component at this location
+        den = DenDiscCyl(mp_, rad, phi, z);
+        // add the stellar density component at this location
+        den += DenStarCyl(mp_, rad, phi, z);
 
-    //     // Now compute the warped primitive variables at this location
-    //     ComputePrimitives(disc_params_,xwarp, ywarp, zwarp, den, pgas, ux, uy, uz);
+        // compute the disc velocity component at this location
+        VelDiscCyl(mp_, rad, phi, z, v1_disc, v2_disc, v3_disc);
+        // add the stellar velocity component at this location
+        VelStarCyl(mp_, rad, phi, z, v1_star, v2_star, v3_star);
+        // set the total velocity components
+        ux = v1_disc + v1_star;
+        uy = v2_disc + v2_star;
+        uz = v3_disc + v3_star;
 
-    //     // Now set the conserved variables using the primitive variables
-    //     u0_(m,IDN,k,j,i) = den;
-    //     u0_(m,IM1,k,j,i) = den*ux;
-    //     u0_(m,IM2,k,j,i) = den*uy;
-    //     u0_(m,IM3,k,j,i) = den*uz;
-    //     if (disc_params_.eos_flag != disc_params_.eos_isothermal) {
-    //         u0_(m,IEN,k,j,i) = pgas/(disc_params_.gamma_gas - 1.0)+0.5*(SQR(ux)+SQR(uy)+ SQR(uz))/den;
-    //     }
-    // });
-
-    // // Check that no errors were flagged during the initialisation
-    // if (disc_params_.error == 1) {
-    //     std::cout << "Error: Negative azimuthal velocity detected. Check your input parameters." << std::endl;
-    //     exit(1);
-    // }
+        // set the conserved variables
+        u0_(m,IDN,k,j,i) = den;
+        u0_(m,IM1,k,j,i) = den*ux;
+        u0_(m,IM2,k,j,i) = den*uy;
+        u0_(m,IM3,k,j,i) = den*uz;
+        
+        if (mp_.is_ideal) {
+            Real p_over_r = PoverR(mp_, rad, phi, z);
+            u0_(m,IEN,k,j,i) = p_over_r*den/(mp_.gamma_gas - 1.0)
+                               +0.5*(SQR(u0_(m,IM1,k,j,i))
+                               +SQR(u0_(m,IM2,k,j,i))
+                               +SQR(u0_(m,IM3,k,j,i)))/u0_(m,IDN,k,j,i) ;
+        }
+    });
 
     return; // END OF ProblemGenerator::UserProblem()
 }
@@ -296,7 +309,7 @@ namespace {
     KOKKOS_INLINE_FUNCTION
     static Real PoverR(struct my_params mp, const Real rad, const Real phi, const Real z) {
         Real poverr;
-        Real r = fmax(rad, mp.rfix);
+        Real r = fmax(rad, mp.rs);
         poverr = mp.p0_over_r0*std::pow(r/mp.r0, mp.qslope);
         return poverr;
     }
@@ -310,7 +323,10 @@ namespace {
         Real vel = (mp.dslope+mp.qslope)*p_over_r/(mp.gm0/r) + (1.0+mp.qslope) - mp.qslope*r/sqrt(r*r+z*z);
         vel = sqrt(mp.gm0/r)*sqrt(vel);
         Real rc = sqrt(rad*rad+z*z);
-        if (rc<mp.rmagsph) vel = vel*exp(-SQR((rc-mp.rmagsph)/mp.smoothtr));
+        if (rc<mp.rmagsph) {
+            vel = vel*exp(-SQR((rc-mp.rmagsph)/mp.smoothtr));
+            if (rc>mp.rs) vel += mp.origid*rad;
+        }
 
         v1=-vel*sin(phi);
         v2=+vel*cos(phi);
@@ -381,6 +397,7 @@ void MySourceTerms(Mesh* pm, const Real bdt) {
 
     StarGravSourceTerm(pm, bdt);
     if(mp.is_ideal && mp.tcool>0.0) CoolingSourceTerms(pm, bdt);
+    StarMask(pm, bdt);
     return;
 }
 
@@ -491,7 +508,8 @@ void StarMask(Mesh* pm, const Real bdt) {
     DvceArray1D<Real> src;
     Kokkos::realloc(src, nvar);
 
-    par_for("pgen_starsource",DevExeSpace(),0,(pmbp->nmb_thispack-1),ks,ke,js,je,is,ie,
+    // Could be more efficient with the masking function...see GRMHD for boolean masking array
+    par_for("pgen_starmask",DevExeSpace(),0,(pmbp->nmb_thispack-1),ks,ke,js,je,is,ie,
     KOKKOS_LAMBDA(int m,int k,int j,int i) {
 
         // Extract the cell center coordinates
@@ -511,19 +529,18 @@ void StarMask(Mesh* pm, const Real bdt) {
         Real v1(0.0),v2(0.0),v3(0.0);
 
         GetCylCoord(mp_,rad,phi,z,x1v,x2v,x3v);
-        Real rsph=sqrt(x1v*x1v+x2v*x2v+x3v*x3v);
+        Real rc=sqrt(x1v*x1v+x2v*x2v+x3v*x3v);
         
-        // TODO: this is the part to be careful with - in the case of a tilted+rotating dipole.
-        if (rsph<mp_.rfix) {
-            u0_(m,IDN,k,j,i) = DenDiscCyl(mp_,rad,phi,z);
-            VelDiscCyl(mp_,rad,phi,z,v1,v2,v3);
+        if (rc<mp_.rs) {
+            u0_(m,IDN,k,j,i) = DenStarCyl(mp_,rad, phi, z);
+            VelStarCyl(mp_,rad,phi,z,v1,v2,v3);
             u0_(m,IM1,k,j,i) = v1*u0_(m,IDN,k,j,i);
             u0_(m,IM2,k,j,i) = v2*u0_(m,IDN,k,j,i);
             u0_(m,IM3,k,j,i) = v3*u0_(m,IDN,k,j,i);
             
             if (mp_.is_ideal) {
                 u0_(m,IEN,k,j,i) = PoverR(mp_,rad, phi, z)*u0_(m,IDN,k,j,i)/(mp_.gamma_gas - 1.0)+
-                                0.5*(SQR(v1)+SQR(v2)+SQR(v3))*u0_(m,IDN,k,j,i);
+                                0.5*(SQR(u0_(m,IM1,k,j,i))+SQR(u0_(m,IM2,k,j,i))+SQR(u0_(m,IM3,k,j,i)))/u0_(m,IDN,k,j,i);
             
                 if (mp_.magnetic_fields_enabled) {
                     u0_(m,IEN,k,j,i) = u0_(m,IEN,k,j,i)+0.5*(SQR(bcc0_(m,IBX,k,j,i))+
