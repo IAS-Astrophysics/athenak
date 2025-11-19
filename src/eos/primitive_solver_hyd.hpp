@@ -447,6 +447,7 @@ class PrimitiveSolverHydro {
 
       if (result.error != Primitive::Error::SUCCESS && floors_only) {
         fofc_(m,k,j,i) = true;
+        sumerrs++;
       } else if (!floors_only) {
         if (result.error != Primitive::Error::SUCCESS && (nerrs_ + sumerrs < errcap_)) {
           sumerrs++;
@@ -560,6 +561,7 @@ class PrimitiveSolverHydro {
     if (floors_only) {
       ps.GetEOSMutable().SetPrimitiveFloorFailure(prim_failure);
       ps.GetEOSMutable().SetConservedFloorFailure(cons_failure);
+      pmy_pack->pmesh->ecounter.nfofc += count_errs;
     } else {
       nerrs += count_errs;
     }
