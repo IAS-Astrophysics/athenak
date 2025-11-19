@@ -52,7 +52,10 @@ namespace {
     static Real PoverR(struct my_params mp, const Real rad, const Real phi, const Real z);
 
     KOKKOS_INLINE_FUNCTION
-    static void VelProfileCyl(struct my_params mp, const Real rad, const Real phi, const Real z, Real &v1, Real &v2, Real &v3);
+    static void VelDiscCyl(struct my_params mp, const Real rad, const Real phi, const Real z, Real &v1, Real &v2, Real &v3);
+
+    KOKKOS_INLINE_FUNCTION
+    static void VelStarCyl(struct my_params mp, const Real rad, const Real phi, const Real z, Real &v1, Real &v2, Real &v3);
 
     KOKKOS_INLINE_FUNCTION
     static Real A1(struct my_params mp, const Real x1, const Real x2, const Real x3);
@@ -87,13 +90,12 @@ namespace {
 KOKKOS_INLINE_FUNCTION
 Real rho_floor(struct my_params mp, const Real r);
 
-KOKKOS_INLINE_FUNCTION
-Real GravPot_coe(struct my_params mp, Real rc);
-
 // prototypes for user-defined BCs and source functions
-void StarSourceTerms(Mesh* pm, const Real bdt);
+void StarGravSourceTerm(Mesh* pm, const Real bdt);
 void CoolingSourceTerms(Mesh* pm, const Real bdt);
 void MySourceTerms(Mesh* pm, const Real bdt);
+
+void StarMask(Mesh* pm, const Real bdt);
 
 //----------------------------------------------------------------------------------------
 //! \fn
@@ -301,7 +303,7 @@ namespace {
 
     //----------------------------------------------------------------------------------------
     KOKKOS_INLINE_FUNCTION
-    static void VelProfileCyl(struct my_params mp, const Real rad, const Real phi, const Real z, Real &v1, Real &v2, Real &v3) {
+    static void VelDiscCyl(struct my_params mp, const Real rad, const Real phi, const Real z, Real &v1, Real &v2, Real &v3) {
         
         Real r = fmax(rad, mp.rs);
         Real p_over_r = PoverR(mp, r, phi, z);
@@ -309,7 +311,21 @@ namespace {
         vel = sqrt(mp.gm0/r)*sqrt(vel);
         Real rc = sqrt(rad*rad+z*z);
         if (rc<mp.rmagsph) vel = vel*exp(-SQR((rc-mp.rmagsph)/mp.smoothtr));
-        if (rc<=mp.rrigid) vel += mp.origid*rad;
+
+        v1=-vel*sin(phi);
+        v2=+vel*cos(phi);
+        v3=0.0;
+
+        return;
+    }
+
+    //----------------------------------------------------------------------------------------
+    KOKKOS_INLINE_FUNCTION
+    static void VelStarCyl(struct my_params mp, const Real rad, const Real phi, const Real z, Real &v1, Real &v2, Real &v3) {
+        
+        Real vel(0.0);
+        Real rc = sqrt(rad*rad+z*z);
+        if (rc<=mp.rs) vel = mp.origid*rad;
 
         v1=-vel*sin(phi);
         v2=+vel*cos(phi);
@@ -353,11 +369,6 @@ Real rho_floor(struct my_params mp, Real rc) {
                                             pow((mp.r0/rc),mp.ratmagfslope);
     return fmax(rhofloor,mp.dfloor);
 }
-
-KOKKOS_INLINE_FUNCTION
-Real GravPot_coe(struct my_params mp, Real rc) {
-  return(-mp.gm0/rc/rc/rc);
-}
         
 //----------------------------------------------------------------------------------------
 //! Below we will define the custom user defined source terms and boundary conditions.
@@ -368,13 +379,13 @@ Real GravPot_coe(struct my_params mp, Real rc) {
 
 void MySourceTerms(Mesh* pm, const Real bdt) {
 
-    StarSourceTerms(pm, bdt);
+    StarGravSourceTerm(pm, bdt);
     if(mp.is_ideal && mp.tcool>0.0) CoolingSourceTerms(pm, bdt);
     return;
 }
 
 //----------------------------------------------------------------------------------------
-void StarSourceTerms(Mesh* pm, const Real bdt) {
+void StarGravSourceTerm(Mesh* pm, const Real bdt) {
 
     // Capture variables for kernel - e.g. indices for looping over the meshblocks and the size of the meshblocks.
     auto &indcs = pm->mb_indcs;
@@ -419,7 +430,7 @@ void StarSourceTerms(Mesh* pm, const Real bdt) {
         Real x3v = CellCenterX(k-ks, indcs.nx3, x3min, x3max);
 
         Real rc = sqrt(x1v*x1v+x2v*x2v+x3v*x3v);
-        Real fcoe=GravPot_coe(mp_,rc); // TODO: Need to define and implement this function.
+        Real fcoe=-mp_.gm0/rc/rc/rc; // TODO: Need to define and implement this function.
         
         Real f_x1 = fcoe*x1v;
         Real f_x2 = fcoe*x2v;
@@ -444,16 +455,68 @@ void StarSourceTerms(Mesh* pm, const Real bdt) {
                                 src(IM2)*w0_(m,IM2,k,j,i) + 
                                 src(IM3)*w0_(m,IM3,k,j,i);
         }
+            
+        u0_(m,IDN,k,j,i) = fmax(u0_(m,IDN,k,j,i),rho_floor(mp_,rc));
+        
+    }); // end par_for
 
+} // end star source terms 
+
+//----------------------------------------------------------------------------------------
+void StarMask(Mesh* pm, const Real bdt) {
+
+    // Capture variables for kernel - e.g. indices for looping over the meshblocks and the size of the meshblocks.
+    auto &indcs = pm->mb_indcs;
+    int &is = indcs.is; int &ie = indcs.ie;
+    int &js = indcs.js; int &je = indcs.je;
+    int &ks = indcs.ks; int &ke = indcs.ke;
+    MeshBlockPack *pmbp = pm->pmb_pack;
+    auto &size = pmbp->pmb->mb_size;
+
+    // Now set a local parameter struct for lambda capturing
+    auto mp_ = mp;
+
+    // Select either Hydro or MHD
+    DvceArray5D<Real> u0_, w0_, bcc0_;
+    if (pm->pmb_pack->phydro != nullptr) {
+        u0_ = pm->pmb_pack->phydro->u0;
+        w0_ = pm->pmb_pack->phydro->w0;
+    } else if (pm->pmb_pack->pmhd != nullptr) {
+        u0_ = pm->pmb_pack->pmhd->u0;
+        w0_ = pm->pmb_pack->pmhd->w0;
+        bcc0_ = pmbp->pmhd->bcc0;
+    }
+
+    int nvar = u0_.extent_int(1);
+    DvceArray1D<Real> src;
+    Kokkos::realloc(src, nvar);
+
+    par_for("pgen_starsource",DevExeSpace(),0,(pmbp->nmb_thispack-1),ks,ke,js,je,is,ie,
+    KOKKOS_LAMBDA(int m,int k,int j,int i) {
+
+        // Extract the cell center coordinates
+        Real &x1min = size.d_view(m).x1min;
+        Real &x1max = size.d_view(m).x1max;
+        Real x1v = CellCenterX(i-is, indcs.nx1, x1min, x1max);
+
+        Real &x2min = size.d_view(m).x2min;
+        Real &x2max = size.d_view(m).x2max;
+        Real x2v = CellCenterX(j-js, indcs.nx2, x2min, x2max);
+
+        Real &x3min = size.d_view(m).x3min;
+        Real &x3max = size.d_view(m).x3max;
+        Real x3v = CellCenterX(k-ks, indcs.nx3, x3min, x3max);
+        
         Real rad(0.0),phi(0.0),z(0.0);
         Real v1(0.0),v2(0.0),v3(0.0);
 
         GetCylCoord(mp_,rad,phi,z,x1v,x2v,x3v);
         Real rsph=sqrt(x1v*x1v+x2v*x2v+x3v*x3v);
+        
         // TODO: this is the part to be careful with - in the case of a tilted+rotating dipole.
         if (rsph<mp_.rfix) {
             u0_(m,IDN,k,j,i) = DenDiscCyl(mp_,rad,phi,z);
-            VelProfileCyl(mp_,rad,phi,z,v1,v2,v3);
+            VelDiscCyl(mp_,rad,phi,z,v1,v2,v3);
             u0_(m,IM1,k,j,i) = v1*u0_(m,IDN,k,j,i);
             u0_(m,IM2,k,j,i) = v2*u0_(m,IDN,k,j,i);
             u0_(m,IM3,k,j,i) = v3*u0_(m,IDN,k,j,i);
@@ -468,12 +531,10 @@ void StarSourceTerms(Mesh* pm, const Real bdt) {
                 }
             }
         }
-    
-        u0_(m,IDN,k,j,i) = fmax(u0_(m,IDN,k,j,i),rho_floor(mp_,rc));
-        
+            
     }); // end par_for
 
-} // end star source terms 
+} // end stellar mask  
 
 //----------------------------------------------------------------------------------------
 void CoolingSourceTerms(Mesh* pm, const Real bdt) {
