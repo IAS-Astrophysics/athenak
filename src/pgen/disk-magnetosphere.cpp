@@ -43,10 +43,10 @@ namespace {
     static void GetCylCoord(struct my_params mp, Real &rad,Real &phi,Real &z,Real &x1,Real &x2,Real &x3);
 
     KOKKOS_INLINE_FUNCTION
-    static void GetSphCoord(struct my_params mp, Real &rc,Real &theta,Real &phi, Real &x1, Real &x2, Real &x3);
+    static Real DenDiscCyl(struct my_params mp, const Real rad, const Real phi, const Real z);
 
     KOKKOS_INLINE_FUNCTION
-    static Real DenProfileCyl(struct my_params mp, const Real rad, const Real phi, const Real z);
+    static Real DenStarCyl(struct my_params mp, const Real rad, const Real phi, const Real z);
 
     KOKKOS_INLINE_FUNCTION
     static Real PoverR(struct my_params mp, const Real rad, const Real phi, const Real z);
@@ -227,18 +227,8 @@ namespace {
     }
 
     //----------------------------------------------------------------------------------------
-    //! Transform from cartesian to spherical coordinates
     KOKKOS_INLINE_FUNCTION
-    static void GetSphCoord(struct my_params mp, Real &rc,Real &theta,Real &phi, Real &x1, Real &x2, Real &x3) {
-        rc = sqrt(x1*x1 + x2*x2 + x3*x3);
-        theta = acos(x3/rc);
-        phi = atan2(x2,x1);
-        return;
-    }
-
-    //----------------------------------------------------------------------------------------
-    KOKKOS_INLINE_FUNCTION
-    static Real DenProfileCyl(struct my_params mp, const Real rad, const Real phi, const Real z) {
+    static Real DenDiscCyl(struct my_params mp, const Real rad, const Real phi, const Real z) {
         
         // Compute the density profile in cylindrical coordinates
         // Vertical hydrostatic equilibrium (Nelson et al. 2013) 
@@ -251,37 +241,52 @@ namespace {
         den = dentem;
 
         Real rc = sqrt(rad*rad+z*z);  // spherical radius
-        Real sinsq = rad*rad/rc/rc;
 
         // For region inside magnetosphere, apply exponential tapering
-        if (rc<mp.rmagsph) {
-            den = den*exp(-SQR((rc-mp.rmagsph)/mp.smoothtr));
-            
-            // Add the stellar density profile component
-            if (mp.is_ideal) p_over_r = PoverR(mp, mp.rs, phi, z);
-            // Pressure inside rs
-            Real pre=mp.denstar*p_over_r;
-            Real rint = 0;
-            Real dr = mp.rs/100.;
-            
-            while(rint<rc) {
+        if (rc<mp.rmagsph) den = den*exp(-SQR((rc-mp.rmagsph)/mp.smoothtr));
 
-                // Integrate pressure balance outwards from star assuming constant temperature
-                if(rint<mp.rs){
-                    pre = pre + dr*mp.origid*mp.origid*rint*sinsq*pre/p_over_r; // Note the ridid rotation needs to be counterbalanced with additional pressure.
-                } else {
-                    pre = pre - dr*mp.gm0/rint/rint*(rint-mp.rs)*
-                                (rint-mp.rs)/((rint-mp.rs)*(rint-mp.rs)+mp.smoothtr*mp.smoothtr)*
-                                pre/p_over_r + dr*mp.origid*mp.origid*rint*sinsq*pre/p_over_r;
-                }
-                rint = rint + dr;
-            }
-            
-            // Add on stellar contribution to the disk contribution
-            den += pre/p_over_r;
-        }
         // Apply the density floor
         den = fmax(den,rho_floor(mp,rc));
+        return den;
+    }
+
+    //----------------------------------------------------------------------------------------
+    KOKKOS_INLINE_FUNCTION
+    static Real DenStarCyl(struct my_params mp, const Real rad, const Real phi, const Real z) {
+        
+        // Add the stellar density profile component
+        Real den(0.0);
+        Real csq0 = mp.p0_over_r0;
+        Real rc = sqrt(rad*rad+z*z);  // spherical radius
+
+        if (rc<mp.rmagsph) {
+
+            Real sinsq = rad*rad/rc/rc;
+            if (mp.is_ideal) csq0 = PoverR(mp, mp.rs, phi, z);
+            
+            Real pre0=mp.denstar*csq0; // reference pressure
+            Real rint = mp.rs;         // integrate from stellar surface
+            Real dr = mp.rs/100.;      // integration step size
+
+            Real pre = pre0*exp(0.5*mp.origid*mp.origid*mp.rs*mp.rs*sinsq/csq0);  // pressure at stellar surface
+
+            if (rc < mp.rs) {
+                // analytic solution inside the star
+                pre = pre0*exp(0.5*mp.origid*mp.origid*rad*rad/csq0);
+            } else {
+                // integrate stellar envelope out from the stellar surface towards rc
+                while(rint<rc) {
+                    pre += - dr*mp.gm0/rint/rint*(rint-mp.rs)*
+                                (rint-mp.rs)/((rint-mp.rs)*(rint-mp.rs)+mp.smoothtr*mp.smoothtr)*
+                                pre/csq0 + dr*mp.origid*mp.origid*rint*sinsq*pre/csq0;
+                    rint = rint + dr;
+                }
+            }
+
+            den = pre/csq0;
+
+        }
+        
         return den;
     }
 
@@ -447,7 +452,7 @@ void StarSourceTerms(Mesh* pm, const Real bdt) {
         Real rsph=sqrt(x1v*x1v+x2v*x2v+x3v*x3v);
         // TODO: this is the part to be careful with - in the case of a tilted+rotating dipole.
         if (rsph<mp_.rfix) {
-            u0_(m,IDN,k,j,i) = DenProfileCyl(mp_,rad,phi,z);
+            u0_(m,IDN,k,j,i) = DenDiscCyl(mp_,rad,phi,z);
             VelProfileCyl(mp_,rad,phi,z,v1,v2,v3);
             u0_(m,IM1,k,j,i) = v1*u0_(m,IDN,k,j,i);
             u0_(m,IM2,k,j,i) = v2*u0_(m,IDN,k,j,i);
