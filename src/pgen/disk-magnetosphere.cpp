@@ -121,20 +121,29 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     // Read problem parameters from input file
 
     MeshBlockPack *pmbp = pmy_mesh_->pmb_pack;
+
+  if (pmbp->phydro != nullptr) {
+    EOS_Data &eos = pmbp->phydro->peos->eos_data;
+    mp.is_ideal = eos.is_ideal;
+  } 
+
+  if (pmbp->pmhd != nullptr) {
     EOS_Data &eos = pmbp->pmhd->peos->eos_data;
+    mp.is_ideal = eos.is_ideal;
+  }
 
     mp.beta = pin->GetReal("problem","beta");
     mp.denstar = pin->GetOrAddReal("problem","denstar",0.0);
     mp.dslope = pin->GetOrAddReal("problem","dslope",0.0);
     mp.gamma_gas = pin->GetReal("hydro","gamma");
     mp.gm0 = pin->GetOrAddReal("problem","gm0",1.0);
-    mp.is_ideal = eos.is_ideal;
     if (pmbp->pmhd != nullptr) mp.magnetic_fields_enabled = true;
     else mp.magnetic_fields_enabled = false;
     mp.mm = pin->GetOrAddReal("problem","mm",0.0);
     mp.origid = pin->GetOrAddReal("problem","origid",0.0);
     mp.p0_over_r0 = pin->GetOrAddReal("problem","p0_over_r0",0.0025);
     mp.qslope = pin->GetOrAddReal("problem","qslope",0.0);
+    mp.r0 = pin->GetOrAddReal("problem","r0",1.0);
     mp.ratmagfloor = pin->GetOrAddReal("problem","ratmagfloor",1.0e6);
     mp.ratmagfslope = pin->GetOrAddReal("problem","ratmagfslope", 5.5);
     mp.rho0 = pin->GetReal("problem","rho0");
@@ -154,6 +163,8 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
 
     // Initialise a pointer to the disc parameter structure   
     auto mp_ = mp;
+
+    // std::cout<< mp.is_ideal << std::endl;
 
     // Select either Hydro or MHD and extract the arrays - set on the device specifically since this is where the calculations
     // are going to be done anyway. 
@@ -219,6 +230,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
                                +SQR(u0_(m,IM2,k,j,i))
                                +SQR(u0_(m,IM3,k,j,i)))/u0_(m,IDN,k,j,i) ;
         }
+
     });
 
     return; // END OF ProblemGenerator::UserProblem()

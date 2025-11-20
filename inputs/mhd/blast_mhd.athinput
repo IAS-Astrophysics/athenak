@@ -21,23 +21,23 @@ x2max     = 0.5        # maximum value of X2
 ix2_bc    = periodic   # inner-X2 boundary flag
 ox2_bc    = periodic   # outer-X2 boundary flag
 
-nx3       = 1          # Number of zones in X3-direction
+nx3       = 100          # Number of zones in X3-direction
 x3min     = -0.5       # minimum value of X3
 x3max     = 0.5        # maximum value of X3
 ix3_bc    = periodic   # inner-X3 boundary flag
 ox3_bc    = periodic   # outer-X3 boundary flag
 
 <meshblock>
-nx1       = 200         # Number of cells in each MeshBlock, X1-dir
-nx2       = 200         # Number of cells in each MeshBlock, X2-dir
-nx3       = 1           # Number of cells in each MeshBlock, X3-dir
+nx1       = 25         # Number of cells in each MeshBlock, X1-dir
+nx2       = 25         # Number of cells in each MeshBlock, X2-dir
+nx3       = 25           # Number of cells in each MeshBlock, X3-dir
 
 <time>
 evolution  = dynamic    # dynamic/kinematic/static
 integrator = rk2        # time integration algorithm
 cfl_number = 0.3        # The Courant, Friedrichs, & Lewy (CFL) Number
 nlim       = -1         # cycle limit
-tlim       = 0.3        # time limit
+tlim       = 100        # time limit
 ndiag      = 1          # cycles between diagostic output
 
 <mhd>
