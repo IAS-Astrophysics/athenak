@@ -123,21 +123,28 @@ void ApplyBeamSourcesBlackHole(Mesh *pmesh) {
         Real x2 = CellCenterX(j - js, nx2, x2min, x2max);
 
         switch (mb_bcs.d_view(m, BoundaryFace::inner_x1)) {
-          case BoundaryFlag::outflow:
+          case BoundaryFlag::vacuum:
             if (beam_source_1_y1_ <= x2 && x2 <= beam_source_1_y2_) {
               for (int i = 0; i < ng; ++i) {
                 // Calculate inverse 4-metric and sqrt(det(3-metric))
-                AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> g_uu{};
-                Real garr_uu[16];
-                adm::SpacetimeUpperMetric(
+                Real garr_dd[16];
+                AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> g_dd{};
+                // Real garr_uu[16];
+                // adm::SpacetimeUpperMetric(
+                //     adm.alpha(m, k, j, i), adm.beta_u(m, 0, k, j, i),
+                //     adm.beta_u(m, 1, k, j, i), adm.beta_u(m, 2, k, j, i),
+                //     adm.g_dd(m, 0, 0, k, j, i), adm.g_dd(m, 0, 1, k, j, i),
+                //     adm.g_dd(m, 0, 2, k, j, i), adm.g_dd(m, 1, 1, k, j, i),
+                //     adm.g_dd(m, 1, 2, k, j, i), adm.g_dd(m, 2, 2, k, j, i), garr_uu);
+                adm::SpacetimeMetric(
                     adm.alpha(m, k, j, i), adm.beta_u(m, 0, k, j, i),
                     adm.beta_u(m, 1, k, j, i), adm.beta_u(m, 2, k, j, i),
                     adm.g_dd(m, 0, 0, k, j, i), adm.g_dd(m, 0, 1, k, j, i),
                     adm.g_dd(m, 0, 2, k, j, i), adm.g_dd(m, 1, 1, k, j, i),
-                    adm.g_dd(m, 1, 2, k, j, i), adm.g_dd(m, 2, 2, k, j, i), garr_uu);
+                    adm.g_dd(m, 1, 2, k, j, i), adm.g_dd(m, 2, 2, k, j, i), garr_dd);
                 for (int a = 0; a < 4; ++a) {
                   for (int b = 0; b < 4; ++b) {
-                    g_uu(a, b) = garr_uu[a + b * 4];
+                    g_dd(a, b) = garr_dd[a + b * 4];
                   }
                 }
                 const Real gam = adm::SpatialDet(
@@ -160,24 +167,43 @@ void ApplyBeamSourcesBlackHole(Mesh *pmesh) {
                 const Real a =
                     (-beta_x + sqrt(beta_x * beta_x - beta2 +
                                     adm.alpha(m, k, j, i) * adm.alpha(m, k, j, i) *
-                                        (1 - params_.rad_eps))) /
-                    g_xx;
+                                        (1 - params_.rad_eps))) / g_xx;
 
                 Real E = volform * 1.;
                 Real Fx = a * E / adm.alpha(m, k, j, i) +
                           adm.beta_u(m, 0, k, j, i) * E / adm.alpha(m, k, j, i);
                 Real Fy = adm.beta_u(m, 1, k, j, i) * E / adm.alpha(m, k, j, i);
                 Real Fz = adm.beta_u(m, 2, k, j, i) * E / adm.alpha(m, k, j, i);
+                AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> F_u{};
                 AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> F_d{};
-                pack_F_d(adm.beta_u(m, 0, k, j, i), adm.beta_u(m, 1, k, j, i),
-                         adm.beta_u(m, 2, k, j, i), volform * Fx, volform * Fy,
-                         volform * Fz, F_d);
-                apply_floor(g_uu, E, F_d, params_);
+                F_u(0) = 0;
+                F_u(1) = Fx;
+                F_u(2) = Fy;
+                F_u(3) = Fz;
+                tensor_contract(g_dd, F_u, F_d);
+                // apply_floor(g_uu, E, F_d, params_);
                 for (int nuidx = 0; nuidx < nspecies_; nuidx++) {
                   u0_(m, CombinedIdx(nuidx, M1_E_IDX, nvars_), k, j, is - i - 1) = E;
                   u0_(m, CombinedIdx(nuidx, M1_FX_IDX, nvars_), k, j, is - i - 1) = F_d(1);
                   u0_(m, CombinedIdx(nuidx, M1_FY_IDX, nvars_), k, j, is - i - 1) = F_d(2);
                   u0_(m, CombinedIdx(nuidx, M1_FZ_IDX, nvars_), k, j, is - i - 1) = F_d(3);
+                  u0_(m, CombinedIdx(nuidx, M1_N_IDX, nvars_), k, j, is - i - 1) = 1.0;
+                }
+              }
+            }
+            else {
+              for (int i = 0; i < ng; ++i) {
+                for (int nuidx = 0; nuidx < nspecies_; nuidx++) {
+                  u0_(m, CombinedIdx(nuidx, M1_E_IDX, nvars_), k, j, is - i - 1) =
+                      0.0;
+                  u0_(m, CombinedIdx(nuidx, M1_FX_IDX, nvars_), k, j, is - i - 1) =
+                      0.0;
+                  u0_(m, CombinedIdx(nuidx, M1_FY_IDX, nvars_), k, j, is - i - 1) =
+                      0.0;
+                  u0_(m, CombinedIdx(nuidx, M1_FZ_IDX, nvars_), k, j, is - i - 1) =
+                      0.0;
+                  u0_(m, CombinedIdx(nuidx, M1_N_IDX, nvars_), k, j, is - i - 1) =
+                      0.0;
                 }
               }
             }
