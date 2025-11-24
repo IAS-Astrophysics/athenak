@@ -135,7 +135,7 @@ TaskStatus RadiationM1::CalcClosure(Driver *pdrive, int stage) {
           calc_proj(u_d, u_u, proj_ud);
 
           par_for_inner(member, 0, nspecies_ - 1, [&](const int nuidx) {
-            Real E = u0_(m, CombinedIdx(nuidx, 0, nvars_), k, j, i);
+            Real E = u0_(m, CombinedIdx(nuidx, M1_E_IDX, nvars_), k, j, i);
             AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> F_d{};
             pack_F_d(beta_u(1), beta_u(2), beta_u(3),
                      u0_(m, CombinedIdx(nuidx, M1_FX_IDX, nvars_), k, j, i),
