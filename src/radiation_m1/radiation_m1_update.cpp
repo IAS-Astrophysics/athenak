@@ -544,7 +544,7 @@ TaskStatus RadiationM1::TimeUpdate_(Driver *d, int stage) {
                       u0_(m, CombinedIdx(nuidx, M1_N_IDX, nvars_), k, j, i);
                   AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> F_d{};
                   pack_F_d(
-                      0., 0., 0.,  // F_a is effectively 3-vector
+                      beta_u(1), beta_u(2), beta_u(3),
                       u0_(m, CombinedIdx(nuidx, M1_FX_IDX, nvars_), k, j, i),
                       u0_(m, CombinedIdx(nuidx, M1_FY_IDX, nvars_), k, j, i),
                       u0_(m, CombinedIdx(nuidx, M1_FZ_IDX, nvars_), k, j, i),
@@ -648,7 +648,7 @@ TaskStatus RadiationM1::TimeUpdate_(Driver *d, int stage) {
           u0_(m, CombinedIdx(nuidx, M1_FZ_IDX, nvars_), k, j, i) = Ff_d(3);
 
           if (nspecies_ > 1) {
-            Real Nf = u1_(m, CombinedIdx(nuidx, M1_N_IDX, nvars_), k, j, i) -
+            Real Nf = u1_(m, CombinedIdx(nuidx, M1_N_IDX, nvars_), k, j, i) +
                       beta_dt * rEFN[nuidx][M1_N_IDX] +
                       theta * DrEFN[nuidx][M1_N_IDX];
             Nf = Kokkos::max<Real>(Nf, params_.rad_N_floor);
