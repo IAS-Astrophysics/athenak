@@ -75,12 +75,16 @@ void ProblemGenerator::RadiationM1BeamTest(ParameterInput *pin, const bool resta
     user_bcs_func = radiationm1::ApplyBeamSources1D;
   }
   if (pmbp->pmesh->two_d) {
-    user_bcs_func = radiationm1::ApplyBeamSourcesBlackHole;
     if (pmbp->pradm1->params.beam_sources) {
       pmbp->pradm1->rad_m1_beam.beam_ymin =
           pin->GetOrAddReal("problem", "beam_ymin", 3.0);
       pmbp->pradm1->rad_m1_beam.beam_ymax =
           pin->GetOrAddReal("problem", "beam_ymax", 4.0);
+    }    
+    if (metric == "minkowski") {
+      user_bcs_func = radiationm1::ApplyBeamSources2D;
+    } else {
+      user_bcs_func = radiationm1::ApplyBeamSourcesBlackHole;  
     }
   }
 
