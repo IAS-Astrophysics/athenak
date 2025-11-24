@@ -410,7 +410,9 @@ void Driver::Execute(Mesh *pmesh, ParameterInput *pin, Outputs *pout) {
 
       // Work after time integrator indicated by "1" in stage
       ExecuteTaskList(pmesh, "after_timeintegrator", 1);
+#if MPI_PARALLEL_ENABLED
       (void)MPI_Barrier(MPI_COMM_WORLD);
+#endif
       if (opsplit) {
         for (int stage=1; stage<=(nopsplit_stages); ++stage) {
           ExecuteTaskList(pmesh, "opsplit_before_stagen", stage);
@@ -420,10 +422,14 @@ void Driver::Execute(Mesh *pmesh, ParameterInput *pin, Outputs *pout) {
           ExecuteTaskList(pmesh, "opsplit_after_stagen", stage);
           // std::cout << "opsplit_after_stagen" << std::endl;
         }
+#if MPI_PARALLEL_ENABLED
         (void)MPI_Barrier(MPI_COMM_WORLD);
+#endif
         ExecuteTaskList(pmesh, "opsplit_after_timeintegrator", 1);
         // std::cout << "opsplit_after_timeintegrator" << std::endl;
+#if MPI_PARALLEL_ENABLED
         (void)MPI_Barrier(MPI_COMM_WORLD);
+#endif
       }
 
       // Work outside of TaskLists:
