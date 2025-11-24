@@ -24,6 +24,8 @@
 #include "eos/eos.hpp"
 #include "mhd/mhd.hpp"
 #include "dyn_grmhd/dyn_grmhd.hpp"
+#include "radiation_m1/radiation_m1.hpp"
+#include "radiation_m1/radiation_m1_nurates.hpp"
 #include "utils/tov/tov.hpp"
 #include "utils/tov/tov_polytrope.hpp"
 #include "utils/tov/tov_tabulated.hpp"
@@ -188,6 +190,142 @@ void SetupTOV(ParameterInput *pin, Mesh* pmy_mesh_) {
     adm.beta_u(m,0,k,j,i) = adm.beta_u(m,1,k,j,i) = adm.beta_u(m,2,k,j,i) = 0.0;
     adm.vK_dd(m,0,0,k,j,i) = adm.vK_dd(m,0,1,k,j,i) = adm.vK_dd(m,0,2,k,j,i) = 0.0;
     adm.vK_dd(m,1,1,k,j,i) = adm.vK_dd(m,1,2,k,j,i) = adm.vK_dd(m,2,2,k,j,i) = 0.0;
+  });
+
+  auto &params_ = pmbp->pradm1->params;
+  auto &nurates_params_ = pmbp->pradm1->nurates_params;
+  auto &nspecies_ = pmbp->pradm1->nspecies;
+  auto m1nvars_ = pmbp->pradm1->nvars;
+  auto &u0_ = pmbp->pradm1->u0;
+  Primitive::EOS<Primitive::EOSCompOSE<Primitive::NormalLogs>,
+                                      Primitive::ResetFloor> &eos_tov =
+      static_cast<dyngr::DynGRMHDPS<Primitive::EOSCompOSE<Primitive::NormalLogs>,
+                                      Primitive::ResetFloor> *>(pmbp->pdyngr)
+          ->eos.ps.GetEOSMutable();
+  const Real mb = eos_tov.GetBaryonMass();
+  // conversion factors from cgs to code units
+  auto code_units = eos_tov.GetCodeUnitSystem();
+  auto eos_units = eos_tov.GetEOSUnitSystem();
+
+  par_for("pgen_tov_rad", DevExeSpace(), 0, nmb1, 0, (n3-1), 0, (n2-1), 0, (n1-1),
+  KOKKOS_LAMBDA(int m, int k, int j, int i) {
+    Real &x1min = size.d_view(m).x1min;
+    Real &x1max = size.d_view(m).x1max;
+    Real x1v = CellCenterX(i-is, indcs.nx1, x1min, x1max);
+
+    Real &x2min = size.d_view(m).x2min;
+    Real &x2max = size.d_view(m).x2max;
+    Real x2v = CellCenterX(j-js, indcs.nx2, x2min, x2max);
+
+    Real &x3min = size.d_view(m).x3min;
+    Real &x3max = size.d_view(m).x3max;
+    Real x3v = CellCenterX(k-ks, indcs.nx3, x3min, x3max);
+    Real garr_dd[16];
+    Real garr_uu[16];
+    AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> g_dd{};
+    AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> g_uu{};
+    AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> n_u{};
+    AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> n_d{};
+    AthenaPointTensor<Real, TensorSymm::NONE, 4, 2> gamma_ud{};
+    adm::SpacetimeMetric(
+        adm.alpha(m, k, j, i), adm.beta_u(m, 0, k, j, i),
+        adm.beta_u(m, 1, k, j, i), adm.beta_u(m, 2, k, j, i),
+        adm.g_dd(m, 0, 0, k, j, i), adm.g_dd(m, 0, 1, k, j, i),
+        adm.g_dd(m, 0, 2, k, j, i), adm.g_dd(m, 1, 1, k, j, i),
+        adm.g_dd(m, 1, 2, k, j, i), adm.g_dd(m, 2, 2, k, j, i), garr_dd);
+    adm::SpacetimeUpperMetric(
+        adm.alpha(m, k, j, i), adm.beta_u(m, 0, k, j, i),
+        adm.beta_u(m, 1, k, j, i), adm.beta_u(m, 2, k, j, i),
+        adm.g_dd(m, 0, 0, k, j, i), adm.g_dd(m, 0, 1, k, j, i),
+        adm.g_dd(m, 0, 2, k, j, i), adm.g_dd(m, 1, 1, k, j, i),
+        adm.g_dd(m, 1, 2, k, j, i), adm.g_dd(m, 2, 2, k, j, i), garr_uu);
+    for (int a = 0; a < 4; ++a) {
+      for (int b = 0; b < 4; ++b) {
+        g_dd(a, b) = garr_dd[a + b * 4];
+        g_uu(a, b) = garr_uu[a + b * 4];
+      }
+    }
+    pack_n_d(adm.alpha(m, k, j, i), n_d);
+    tensor_contract(g_uu, n_d, n_u);
+    for (int a = 0; a < 4; ++a) {
+      for (int b = 0; b < 4; ++b) {
+        gamma_ud(a, b) = (a == b) + n_u(a) * n_d(b);
+      }
+    }
+
+    Real gam = adm::SpatialDet(
+        adm.g_dd(m, 0, 0, k, j, i), adm.g_dd(m, 0, 1, k, j, i),
+        adm.g_dd(m, 0, 2, k, j, i), adm.g_dd(m, 1, 1, k, j, i),
+        adm.g_dd(m, 1, 2, k, j, i), adm.g_dd(m, 2, 2, k, j, i));
+    Real volform = Kokkos::sqrt(gam);
+
+    AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> u_u{};
+    AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> u_d{};
+    AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> F_d{};
+    AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> P_dd{};
+    AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> T_dd{};
+
+    Real w_lorentz{};
+    w_lorentz =
+        get_w_lorentz(w0_(m, IVX, k, j, i), w0_(m, IVY, k, j, i),
+                      w0_(m, IVZ, k, j, i), g_dd);
+    pack_u_u(
+        w_lorentz / adm.alpha(m, k, j, i),
+        w0_(m, IVX, k, j, i) - w_lorentz * adm.beta_u(m, 0, k, j, i) /
+                                    adm.alpha(m, k, j, i),
+        w0_(m, IVY, k, j, i) - w_lorentz * adm.beta_u(m, 1, k, j, i) /
+                                    adm.alpha(m, k, j, i),
+        w0_(m, IVZ, k, j, i) - w_lorentz * adm.beta_u(m, 2, k, j, i) /
+                                    adm.alpha(m, k, j, i),
+        u_u);
+    tensor_contract(g_dd, u_u, u_d);
+
+    // fluid quantities
+    Real nb = w0_(m, IDN, k, j, i) / mb;
+    Real p = w0_(m, IPR, k, j, i);
+    Real Y = w0_(m, IYF, k, j, i);
+    Real T = eos_tov.GetTemperatureFromP(nb, p, &Y);
+    Real mu_b = eos_tov.GetBaryonChemicalPotential(nb, T, &Y);
+    Real mu_q = eos_tov.GetChargeChemicalPotential(nb, T, &Y);
+    Real mu_le = eos_tov.GetElectronLeptonChemicalPotential(nb, T, &Y);
+
+    Real mu_n = mu_b;
+    Real mu_p = mu_b + mu_q;
+    Real mu_e = mu_le - mu_q;
+    // local undensitized neutrino quantities
+    Real nudens_0[4]{}, nudens_1[4]{};
+    // compute neutrino black body function assuming fixed temperature
+    // and Ye
+    NeutrinoDens(mu_n, mu_p, mu_e, T, nudens_0[0],
+                  nudens_0[1], nudens_0[2], nudens_1[0],
+                  nudens_1[1], nudens_1[2], nurates_params_,
+                  code_units, eos_units);
+
+    nudens_0[2] *= 0.5;
+    nudens_1[2] *= 0.5;
+    nudens_0[3] = nudens_0[2];
+    nudens_1[3] = nudens_1[2];
+    Real J[4]{};
+    for (int nuidx = 0; nuidx < nspecies_; ++nuidx) {
+      u0_(m, radiationm1::CombinedIdx(nuidx, M1_N_IDX, nvars_), k, j, i) = Kokkos::max(
+        w_lorentz * nudens_0[nuidx] / volform, params_.rad_N_floor);
+      J[nuidx] = nudens_1[nuidx] * volform;
+    
+      for (int a = 0; a < 4; ++a) {
+        for (int b = a; b < 4; ++b) {
+          T_dd(a, b) =
+              (4./3.) * J[nuidx] * u_d(a) * u_d(b) +
+              (1./3.) * J[nuidx] * g_dd(a, b);
+        }
+      }
+      Real E = radiationm1::calc_J_from_rT(T_dd, n_u);
+      radiationm1::calc_H_from_rT(T_dd, n_u, gamma_ud, F_d);
+      radiationm1::apply_floor(g_uu, E, F_d, params_);
+      u0_(m, radiationm1::CombinedIdx(nuidx, M1_E_IDX, nvars_), k, j, i) = E;
+      u0_(m, radiationm1::CombinedIdx(nuidx, M1_FX_IDX, nvars_), k, j, i) = F_d(1);
+      u0_(m, radiationm1::CombinedIdx(nuidx, M1_FY_IDX, nvars_), k, j, i) = F_d(2);
+      u0_(m, radiationm1::CombinedIdx(nuidx, M1_FZ_IDX, nvars_), k, j, i) = F_d(3);
+    }
   });
 
   // parse some parameters
