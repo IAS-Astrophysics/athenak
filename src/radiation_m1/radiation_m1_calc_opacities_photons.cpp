@@ -19,6 +19,11 @@
 namespace radiationm1 {
 
 TaskStatus RadiationM1::CalcOpacityPhotons(Driver *pdrive, int stage) {
+  // The opacities are constant throughout a timestep
+  if (stage > 1) {
+    return TaskStatus::complete;
+  }
+
   // Here we are using dynamic_cast to infer which derived type pdyngr is
   auto *ptest_nqt =
       dynamic_cast<dyngr::DynGRMHDPS<Primitive::EOSCompOSE<Primitive::NQTLogs>,
