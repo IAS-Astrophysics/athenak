@@ -122,7 +122,7 @@ bool NumericalRelativity::AssembleNumericalRelativityTasks(
       TaskID dep(0);
       if (DependenciesMet(task, queue, dep) && !task.added) {
         task.added = true;
-        task.id = list->AddTask(task.func_, dep);
+        task.id = list->AddTask(task.func_, dep, task.name_string);
         cycle_added++;
         added++;
         /*std::cout << "Successfully added " << task.name_string << " to task list!\n"

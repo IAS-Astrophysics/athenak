@@ -16,6 +16,8 @@
 
 namespace radiationm1 {
 
+// TODO: this code is computing some quantities, such as the metric many
+//       times for each grid point... it could be made much more efficient
 KOKKOS_INLINE_FUNCTION
 void CalcFlux(const int m, const int k, const int j, const int i, const int nuidx,
               const int dir, const DvceArray5D<Real> &u0_, const DvceArray5D<Real> &w0_,
