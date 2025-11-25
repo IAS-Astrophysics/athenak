@@ -55,7 +55,7 @@ void ProblemGenerator::RadiationM1SphereTest(ParameterInput *pin,
   int ksg = (indcs.nx3 > 1) ? ks - indcs.ng : ks;
   int keg = (indcs.nx3 > 1) ? ke + indcs.ng : ke;
   int nmb = pmbp->nmb_thispack;
-  auto &u_mu_ = pmbp->pradm1->u_mu;
+  auto &w0_ = pmbp->pradm1->w0;
   adm::ADM::ADM_vars &adm = pmbp->padm->adm;
 
   // set metric to minkowski, initialize velocity to zero
@@ -72,10 +72,9 @@ void ProblemGenerator::RadiationM1SphereTest(ParameterInput *pin,
 
         adm.alpha(m, k, j, i) = 1.;
 
-        u_mu_(m, 0, k, j, i) = 1.;
-        u_mu_(m, 1, k, j, i) = 0.;
-        u_mu_(m, 2, k, j, i) = 0.;
-        u_mu_(m, 3, k, j, i) = 0.;
+        w0_(m, IVX, k, j, i) = 0.;
+        w0_(m, IVY, k, j, i) = 0.;
+        w0_(m, IVZ, k, j, i) = 0.;
       });
 
   return;

@@ -74,7 +74,7 @@ void ProblemGenerator::RadiationM1DiffusionTest(ParameterInput *pin, const bool 
   int ksg = (indcs.nx3 > 1) ? ks - indcs.ng : ks;
   int keg = (indcs.nx3 > 1) ? ke + indcs.ng : ke;
   int nmb = pmbp->nmb_thispack;
-  auto &u_mu_ = pmbp->pradm1->u_mu;
+  auto &w0_ = pmbp->pradm1->w0;
   auto &u0_ = pmbp->pradm1->u0;
   adm::ADM::ADM_vars &adm = pmbp->padm->adm;
   auto &params_ = pmbp->pradm1->params;
@@ -96,10 +96,9 @@ void ProblemGenerator::RadiationM1DiffusionTest(ParameterInput *pin, const bool 
 
         adm.alpha(m, k, j, i) = 1.;
 
-        u_mu_(m, 0, k, j, i) = lorentz_w;
-        u_mu_(m, 1, k, j, i) = lorentz_w * vx;
-        u_mu_(m, 2, k, j, i) = 0.;
-        u_mu_(m, 3, k, j, i) = 0.;
+        w0_(m, IVX, k, j, i) = lorentz_w * vx;
+        w0_(m, IVY, k, j, i) = 0.;
+        w0_(m, IVZ, k, j, i) = 0.;
 
         Real &x1min = size.d_view(m).x1min;
         Real &x1max = size.d_view(m).x1max;
