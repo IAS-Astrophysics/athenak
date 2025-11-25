@@ -31,7 +31,7 @@ TaskStatus RadiationM1::CalcClosure(Driver* pdrive, int stage) {
   auto& nspecies_ = pmy_pack->pradm1->nspecies;
   auto& radiation_mask_ = pmy_pack->pradm1->radiation_mask;
 
-  DvceArray5D<Real>& w0_ = u_mu_data;  // just a hack to compile on SYC
+  DvceArray5D<Real> w0_ = u_mu_data;  // just a hack to compile on SYC
   if (ishydro) {
     assert(false); // not implemented
     // w0_ = pmy_pack->phydro->w0; // @TODO

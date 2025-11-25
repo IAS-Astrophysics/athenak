@@ -127,8 +127,8 @@ TaskStatus RadiationM1::TimeUpdate_(Driver *d, int stage) {
   auto &params_ = pmy_pack->pradm1->params;
 
   auto &u_mu_ = u_mu;
-  DvceArray5D<Real> &w0_ = u_mu_data;     // just a hack to compile on SYCL
-  DvceArray5D<Real> &umhd0_ = u_mu_data;  // just a hack to compile on SYCL
+  DvceArray5D<Real> w0_ = u_mu_data;     // just a hack to compile on SYCL
+  DvceArray5D<Real> umhd0_ = u_mu_data;  // just a hack to compile on SYCL
   if (ishydro) {
     assert(false); // not implemented
     // w0_ = pmy_pack->phydro->w0; // @TODO

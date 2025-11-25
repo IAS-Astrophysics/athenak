@@ -97,12 +97,34 @@ void explicit_update(const SrcParams &src_params, Real &Enew,
     - src_params.alp * src_params.n_u(3) * Fnew_d(3);
 }
 
+
+// forward declaration
+KOKKOS_INLINE_FUNCTION
+SrcSignal source_update_eddington(
+    const BrentFunctor &BrentFunc, const HybridsjFunctor &HybridsjFunc, const Real &cdt,
+    const Real &alp, const AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> &g_dd,
+    const AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> &g_uu,
+    const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &n_d,
+    const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &n_u,
+    const AthenaPointTensor<Real, TensorSymm::NONE, 4, 2> &gamma_ud,
+    const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &u_d,
+    const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &u_u,
+    const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &v_d,
+    const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &v_u,
+    const AthenaPointTensor<Real, TensorSymm::NONE, 4, 2> &proj_ud, const Real &W,
+    const Real &Eold, const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &Fold_d,
+    const Real &Estar, const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &Fstar_d,
+    const Real &eta, const Real &kabs, const Real &kscat, Real &chi, Real &Enew,
+    AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &Fnew_d,
+    const RadiationM1Params &m1_params);
+
+
 // Solves the implicit problem
 // .  q^new = q^star + dt S[q^new]
 // The source term is S^a = (eta - ka J) u^a - (ka + ks) H^a and includes
 // also emission.
 KOKKOS_INLINE_FUNCTION
-SrcSignal source_update(
+SrcSignal source_update_ll(
     const BrentFunctor &BrentFunc, const HybridsjFunctor &HybridsjFunc, const Real &cdt,
     const Real &alp, const AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> &g_dd,
     const AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> &g_uu,
@@ -191,27 +213,11 @@ SrcSignal source_update(
         Kokkos::printf("source_update: Non-linear solver is stuck.\n");
       }
       Kokkos::printf("source_update: Retrying with Eddington closure.\n");
-#endif
-      if (m1_params.closure_type !=
-          Eddington) {  //@TODO: SYCL does not support recursive functions
-        // Eddington closure
-        // auto signal = source_update(BrentFunc, HybridsjFunc, cdt, alp, g_dd, g_uu, n_d,
-        //                            n_u, gamma_ud, u_d, u_u, v_d, v_u, proj_ud, W, Eold,
-        //                           Fold_d, Estar, Fstar_d, eta, kabs, kscat, chi, Enew,
-        //                            Fnew_d, m1_params, Eddington);
-        // if (signal == SrcOk) {
-        //  return SrcEddington;
-        //} else {
-        //  return signal;
-        //}
-      } else {
-        // solver has failed
-#ifdef DEBUG_BUILD
         Kokkos::printf("source_update: The source solver has failed!\n");
 #endif
         return SrcFail;
-      }
-    } else if (ierr != LinalgSuccess) {
+      } else if (ierr != LinalgSuccess) {
+        if (closure_type != Eddington) return SrcFail;
 #ifdef DEBUG_BUILD
       Kokkos::printf("source_update: Unexpected error in source solver!\n");
 #endif
@@ -232,6 +238,37 @@ SrcSignal source_update(
   chi = src_params.chi;
 
   return SrcOk;
+}
+
+KOKKOS_INLINE_FUNCTION
+SrcSignal source_update(
+    const BrentFunctor &BrentFunc, const HybridsjFunctor &HybridsjFunc, const Real &cdt,
+    const Real &alp, const AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> &g_dd,
+    const AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> &g_uu,
+    const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &n_d,
+    const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &n_u,
+    const AthenaPointTensor<Real, TensorSymm::NONE, 4, 2> &gamma_ud,
+    const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &u_d,
+    const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &u_u,
+    const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &v_d,
+    const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &v_u,
+    const AthenaPointTensor<Real, TensorSymm::NONE, 4, 2> &proj_ud, const Real &W,
+    const Real &Eold, const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &Fold_d,
+    const Real &Estar, const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &Fstar_d,
+    const Real &eta, const Real &kabs, const Real &kscat, Real &chi, Real &Enew,
+    AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &Fnew_d,
+    const RadiationM1Params &m1_params, const RadiationM1Closure &closure_type) {
+  SrcSignal ierr = source_update_ll(
+      BrentFunc, HybridsjFunc, cdt, alp, g_dd, g_uu, n_d, n_u, gamma_ud, u_d,
+      u_u, v_d, v_u, proj_ud, W, Eold, Fold_d, Estar, Fstar_d, eta, kabs, kscat,
+      chi, Enew, Fnew_d, m1_params, closure_type);
+  if (ierr != SrcOk && closure_type != Eddington) {
+    ierr = source_update_ll(BrentFunc, HybridsjFunc, cdt, alp, g_dd, g_uu, n_d,
+                            n_u, gamma_ud, u_d, u_u, v_d, v_u, proj_ud, W, Eold,
+                            Fold_d, Estar, Fstar_d, eta, kabs, kscat, chi, Enew,
+                            Fnew_d, m1_params, Eddington);
+  }
+  return ierr;
 }
 
 }  // namespace radiationm1
