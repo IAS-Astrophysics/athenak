@@ -95,9 +95,8 @@ class RadiationM1 {
   Real dtnew{};
 
   // conditional quantities
-  DvceArray5D<Real> u_mu_data;                      // fluid velocity (when mhd is off)
-  AthenaTensor<Real, TensorSymm::NONE, 4, 1> u_mu;  // fluid 4-velocity (when mhd is off)
-  bool use_u_mu_data;
+  DvceArray5D<Real> w0;        // fluid quantities, when MHD is off, unused otherwise 
+  // TODO: get rid of this:
   RadiationM1Beam rad_m1_beam;  // beam ID values (only needed when beams on)
 
   // functions...

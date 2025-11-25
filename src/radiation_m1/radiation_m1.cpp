@@ -46,12 +46,6 @@ RadiationM1::RadiationM1(MeshBlockPack *ppack, ParameterInput *pin)
     // @TODO phydro are only partially implemented
     exit(EXIT_FAILURE);
   }
-
-  // allocate and use 4-velocity
-  use_u_mu_data = false;
-  if (!ismhd && !ishydro) {
-    use_u_mu_data = true;
-  }
   
   nspecies = M1_TOTAL_NUM_SPECIES;
 
@@ -244,11 +238,12 @@ RadiationM1::RadiationM1(MeshBlockPack *ppack, ParameterInput *pin)
   // radiation mask
   Kokkos::realloc(radiation_mask, nmb, ncells3, ncells2, ncells1);
   Kokkos::deep_copy(radiation_mask, false);
+  
+  nspecies = M1_TOTAL_NUM_SPECIES;
 
-  // allocate 4-velocity if not using mhd
-  if (use_u_mu_data) {
-    Kokkos::realloc(u_mu_data, nmb, 4, ncells3, ncells2, ncells1);
-    u_mu.InitWithShallowSlice(u_mu_data, 0, 3);
+  // allocate fake fluid quantities if not using MHD
+  if (!ismhd) {
+    Kokkos::realloc(w0, nmb, 5, ncells3, ncells2, ncells1);
   }
 
   // allocate boundary buffers for evolved (cell-centered) variables
