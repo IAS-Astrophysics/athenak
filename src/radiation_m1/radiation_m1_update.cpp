@@ -130,6 +130,7 @@ TaskStatus RadiationM1::TimeUpdate_(Driver *d, int stage) {
   DvceArray5D<Real> &w0_ = u_mu_data;     // just a hack to compile on SYCL
   DvceArray5D<Real> &umhd0_ = u_mu_data;  // just a hack to compile on SYCL
   if (ishydro) {
+    assert(false); // not implemented
     // w0_ = pmy_pack->phydro->w0; // @TODO
     // umhd0_ = pmy_pack->phydro->u0;
   } else if (ismhd) {
@@ -557,7 +558,7 @@ TaskStatus RadiationM1::TimeUpdate_(Driver *d, int stage) {
               }
             }
             // fluid lepton sources
-            if (nspecies_ > 1) {  // @TODO: check units of this one
+            if (nspecies_ > 1) {
               DDxp[nuidx] = -mb * (DrEFN[nuidx][M1_N_IDX] * (nuidx == 0) -
                                    DrEFN[nuidx][M1_N_IDX] * (nuidx == 1));
             }

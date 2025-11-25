@@ -140,7 +140,7 @@ void tensor_contract2(const AthenaPointTensor<Real, TensorSymm::SYM2, 3, 2> &g3_
 //! \fn radiationm1::pack_n_d
 //  \brief populate normal vector
 KOKKOS_INLINE_FUNCTION
-void pack_n_d(const Real &alpha, AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &n_d) {
+void pack_n_d(Real alpha, AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &n_d) {
   n_d(0) = -alpha;
   n_d(1) = 0;
   n_d(2) = 0;
@@ -151,7 +151,7 @@ void pack_n_d(const Real &alpha, AthenaPointTensor<Real, TensorSymm::NONE, 4, 1>
 //! \fn radiationm1::pack_beta_u
 //  \brief populate shift
 KOKKOS_INLINE_FUNCTION
-void pack_beta_u(const Real &betax_u, const Real &betay_u, const Real &betaz_u,
+void pack_beta_u(Real betax_u, Real betay_u, Real betaz_u,
                  AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &beta_u) {
   beta_u(0) = 0;
   beta_u(1) = betax_u;
@@ -163,8 +163,8 @@ void pack_beta_u(const Real &betax_u, const Real &betay_u, const Real &betaz_u,
 //! \fn radiationm1::pack_u_u
 //  \brief populate u_u
 KOKKOS_INLINE_FUNCTION
-void pack_u_u(const Real &u_mu_0, const Real &u_mu_1, const Real &u_mu_2,
-              const Real &u_mu_3, AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &u_u) {
+void pack_u_u(Real u_mu_0, Real u_mu_1, Real u_mu_2,
+              Real u_mu_3, AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &u_u) {
   u_u(0) = u_mu_0;
   u_u(1) = u_mu_1;
   u_u(2) = u_mu_2;
@@ -175,8 +175,8 @@ void pack_u_u(const Real &u_mu_0, const Real &u_mu_1, const Real &u_mu_2,
 //! \fn radiationm1::pack_v_u
 //  \brief populate v_u
 KOKKOS_INLINE_FUNCTION
-void pack_v_u(const Real &u_mu_0, const Real &u_mu_1, const Real &u_mu_2,
-              const Real &u_mu_3, const Real alpha, const Real betax_u,
+void pack_v_u(Real u_mu_0, Real u_mu_1, Real u_mu_2,
+              Real u_mu_3, const Real alpha, const Real betax_u,
               const Real betay_u, const Real betaz_u,
               AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &v_u) {
   const Real w_lorentz = u_mu_0 * alpha;
@@ -190,8 +190,8 @@ void pack_v_u(const Real &u_mu_0, const Real &u_mu_1, const Real &u_mu_2,
 //! \fn radiationm1::pack_F_d
 //  \brief populate F_d
 KOKKOS_INLINE_FUNCTION
-void pack_F_d(const Real &betax_u, const Real &betay_u, const Real &betaz_u,
-              const Real &Fx, const Real &Fy, const Real &Fz,
+void pack_F_d(Real betax_u, Real betay_u, Real betaz_u,
+              Real Fx, Real Fy, Real Fz,
               AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &F_d) {
   // F_0 = g_0i F^i = beta_i F^i = beta^i F_i
   F_d(0) = betax_u * Fx + betay_u * Fy + betaz_u * Fz;
@@ -201,7 +201,7 @@ void pack_F_d(const Real &betax_u, const Real &betay_u, const Real &betaz_u,
 }
 
 KOKKOS_INLINE_FUNCTION
-void pack_F_d(const Real &Fx, const Real &Fy, const Real &Fz,
+void pack_F_d(Real Fx, Real Fy, Real Fz,
               AthenaPointTensor<Real, TensorSymm::NONE, 3, 1> &F_d) {
   F_d(0) = Fx;
   F_d(1) = Fy;
@@ -212,9 +212,9 @@ void pack_F_d(const Real &Fx, const Real &Fy, const Real &Fz,
 //! \fn radiationm1::pack_P_dd
 //  \brief populate P_dd
 KOKKOS_INLINE_FUNCTION
-void pack_P_dd(const Real &betax_u, const Real &betay_u, const Real &betaz_u,
-               const Real &Pxx_dd, const Real &Pxy_dd, const Real &Pxz_dd,
-               const Real &Pyy_dd, const Real &Pyz_dd, const Real &Pzz_dd,
+void pack_P_dd(Real betax_u, Real betay_u, Real betaz_u,
+               Real Pxx_dd, Real Pxy_dd, Real Pxz_dd,
+               Real Pyy_dd, Real Pyz_dd, Real Pzz_dd,
                AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> &P_dd) {
   const Real Pbetax = Pxx_dd * betax_u + Pxy_dd * betay_u + Pxz_dd * betaz_u;
   const Real Pbetay = Pxy_dd * betax_u + Pyy_dd * betay_u + Pyz_dd * betaz_u;
@@ -238,15 +238,15 @@ void pack_P_dd(const Real &betax_u, const Real &betay_u, const Real &betaz_u,
 
 //----------------------------------------------------------------------------------------
 //! \fn radiationm1::get_w_lorentz
-//  \brief Lorentz factor from fluid velocity utilde^i and 4-metric
+//  \brief Lorentz factor from fluid velocity z^i = W v^i and 4-metric
 KOKKOS_INLINE_FUNCTION
-Real get_w_lorentz(const Real &velx_u, const Real &vely_u, const Real &velz_u,
+Real get_w_lorentz(const Real zx, const Real zy, const Real zz,
 		   const AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> &g_dd) {
   AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> v_u{};
   v_u(0) = 0;
-  v_u(1) = velx_u;
-  v_u(2) = vely_u;
-  v_u(3) = velz_u;
+  v_u(1) = zx;
+  v_u(2) = zy;
+  v_u(3) = zz;
   return Kokkos::sqrt(1. + tensor_dot(g_dd, v_u, v_u));
 }
 
