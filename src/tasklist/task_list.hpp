@@ -86,13 +86,18 @@ class TaskID {
 
 class Task {
  public:
-  Task(TaskID id, TaskID dep, std::function<TaskStatus(Driver*, int)> func) :
-  myid_(id), dep_(dep), func_(func) {}
+  Task(TaskID id, TaskID dep, std::function<TaskStatus(Driver*, int)> func, const std::string & name = "unnamed") :
+  myid_(id), dep_(dep), func_(func), name_(name) {}
   // overloaded operator() calls task function
   TaskStatus operator()(Driver *d, int s) {return func_(d,s);}
   TaskID GetID() {return myid_;}
   TaskID GetDependency() {return dep_;}
-  void SetComplete() {complete_ = true;}
+  void SetComplete() {
+#ifdef DEBUG_TASK_LIST
+    std::cout << "Task Complete: " << name_ << std::endl;
+#endif
+    complete_ = true;
+  }
   void SetIncomplete() {complete_ = false;}
   bool IsComplete() {return complete_;}
   // If this Task depends on id, change that dependency to 'newdep'
@@ -106,6 +111,7 @@ class Task {
   // bool lb_time_;   // flag to include this task in timing for automatic load balancing
   bool complete_ = false;
   std::function<TaskStatus(Driver*, int)> func_;  // ptr to Task function
+  std::string const name_;
 };
 
 //----------------------------------------------------------------------------------------
@@ -175,11 +181,11 @@ class TaskList {
   // arguments (Driver*, int).  Usage:
   //     taskid = tl.AddTask(&T::DoSomething, T, dependency);
   template <class F, class T>
-  TaskID AddTask(F func, T *obj, TaskID &dep) {
+  TaskID AddTask(F func, T *obj, TaskID &dep, const std::string & name = "unnamed") {
     auto size = task_list_.size();
     TaskID id(size+1);
     task_list_.push_back( Task(id, dep,
-       [=](Driver *d, int s) mutable -> TaskStatus {return (obj->*func)(d,s);}) );
+       [=](Driver *d, int s) mutable -> TaskStatus {return (obj->*func)(d,s);}, name) );
     return id;
   }
 
@@ -187,10 +193,10 @@ class TaskList {
   // list. Returns ID of new task. Task function must have arguments (Driver*, int).
   // Usage:
   //      taskid = tl.AddTask(DoSomething, dependency);
-  TaskID AddTask(std::function<TaskStatus(Driver*, int)> func, TaskID &dep) {
+  TaskID AddTask(std::function<TaskStatus(Driver*, int)> func, TaskID &dep, const std::string & name = "unnamed") {
     auto size = task_list_.size();
     TaskID id(size+1);
-    task_list_.push_back(Task(id, dep, func));
+    task_list_.push_back(Task(id, dep, func, name));
     return id;
   }
 
