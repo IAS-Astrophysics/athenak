@@ -49,12 +49,12 @@ void RadiationM1::AssembleRadiationM1Tasks(
   TaskID none(0);
 
   // assemble "before_stagen" task list
-  id.M1_irecv = tl["opsplit_before_stagen"]->AddTask(&RadiationM1::InitRecv, this, none);
+  id.M1_irecv = tl["opsplit_before_stagen"]->AddTask(&RadiationM1::InitRecv, this, none, "RadiationM1::InitRecv");
 
   // assemble "stagen" task list
-  id.M1_copyu = tl["opsplit_stagen"]->AddTask(&RadiationM1::CopyCons, this, none);
+  id.M1_copyu = tl["opsplit_stagen"]->AddTask(&RadiationM1::CopyCons, this, none, "RadiationM1::CopyU");
   id.M1_closure =
-      tl["opsplit_stagen"]->AddTask(&RadiationM1::CalcClosure, this, id.M1_copyu);
+      tl["opsplit_stagen"]->AddTask(&RadiationM1::CalcClosure, this, id.M1_copyu, "RadiationM1::CalcClosure");
 
   // decide what type of opacities to compute
   if (!params.matter_sources) {
@@ -62,38 +62,38 @@ void RadiationM1::AssembleRadiationM1Tasks(
   } else if (params.opacity_type == BnsNurates) {
 #if ENABLE_NURATES
     id.M1_mattersrc = tl["opsplit_stagen"]->AddTask(&RadiationM1::CalcOpacityNurates,
-                                                    this, id.M1_closure);
+                                                    this, id.M1_closure, "RadiationM1::CalcOpacityNurates");
 #endif
   } else if (params.opacity_type == Photons) {
     id.M1_mattersrc = tl["opsplit_stagen"]->AddTask(&RadiationM1::CalcOpacityPhotons,
-                                                    this, id.M1_closure);
+                                                    this, id.M1_closure, "RadiationM1::CalcOpacityPhotons");
   } else {
     id.M1_mattersrc =
-        tl["opsplit_stagen"]->AddTask(&RadiationM1::CalcOpacityToy, this, id.M1_closure);
+        tl["opsplit_stagen"]->AddTask(&RadiationM1::CalcOpacityToy, this, id.M1_closure, "RadiationM1::CalcOpacityToy");
   }
 
   id.M1_flux =
-      tl["opsplit_stagen"]->AddTask(&RadiationM1::CalculateFluxes, this, id.M1_mattersrc);
-  id.M1_sendf = tl["opsplit_stagen"]->AddTask(&RadiationM1::SendFlux, this, id.M1_flux);
-  id.M1_recvf = tl["opsplit_stagen"]->AddTask(&RadiationM1::RecvFlux, this, id.M1_sendf);
+      tl["opsplit_stagen"]->AddTask(&RadiationM1::CalculateFluxes, this, id.M1_mattersrc, "RadiationM1::CalculateFluxes");
+  id.M1_sendf = tl["opsplit_stagen"]->AddTask(&RadiationM1::SendFlux, this, id.M1_flux, "RadiationM1::SendFlux");
+  id.M1_recvf = tl["opsplit_stagen"]->AddTask(&RadiationM1::RecvFlux, this, id.M1_sendf, "RadiationM1::RecvFlux");
   id.M1_rkupdt =
-      tl["opsplit_stagen"]->AddTask(&RadiationM1::TimeUpdate, this, id.M1_recvf);
+      tl["opsplit_stagen"]->AddTask(&RadiationM1::TimeUpdate, this, id.M1_recvf, "RadiationM1::TimeUpdate");
   id.M1_restu =
-      tl["opsplit_stagen"]->AddTask(&RadiationM1::RestrictU, this, id.M1_rkupdt);
-  id.M1_sendu = tl["opsplit_stagen"]->AddTask(&RadiationM1::SendU, this, id.M1_restu);
-  id.M1_recvu = tl["opsplit_stagen"]->AddTask(&RadiationM1::RecvU, this, id.M1_sendu);
+      tl["opsplit_stagen"]->AddTask(&RadiationM1::RestrictU, this, id.M1_rkupdt, "RadiationM1::RestrictU");
+  id.M1_sendu = tl["opsplit_stagen"]->AddTask(&RadiationM1::SendU, this, id.M1_restu, "RadiationM1::SendU");
+  id.M1_recvu = tl["opsplit_stagen"]->AddTask(&RadiationM1::RecvU, this, id.M1_sendu, "RadiationM1::RecvU");
   id.M1_bcs =
-      tl["opsplit_stagen"]->AddTask(&RadiationM1::ApplyPhysicalBCs, this, id.M1_recvu);
-  id.M1_prol = tl["opsplit_stagen"]->AddTask(&RadiationM1::Prolongate, this, id.M1_bcs);
+      tl["opsplit_stagen"]->AddTask(&RadiationM1::ApplyPhysicalBCs, this, id.M1_recvu, "RadiationM1::ApplyPhysicalBCs");
+  id.M1_prol = tl["opsplit_stagen"]->AddTask(&RadiationM1::Prolongate, this, id.M1_bcs, "RadiationM1::Prolongate");
   id.M1_newdt =
-      tl["opsplit_stagen"]->AddTask(&RadiationM1::NewTimeStep, this, id.M1_prol);
+      tl["opsplit_stagen"]->AddTask(&RadiationM1::NewTimeStep, this, id.M1_prol, "RadiationM1::NewTimeStep");
 
   // assemble "after_stagen" task list
-  id.M1_csend = tl["opsplit_after_stagen"]->AddTask(&RadiationM1::ClearSend, this, none);
+  id.M1_csend = tl["opsplit_after_stagen"]->AddTask(&RadiationM1::ClearSend, this, none, "RadiationM1::ClearSend");
   // although RecvFlux/U functions check that all recvs complete, add ClearRecv
   // to task list anyway to catch potential bugs in MPI communication logic
   id.M1_crecv =
-      tl["opsplit_after_stagen"]->AddTask(&RadiationM1::ClearRecv, this, id.M1_csend);
+      tl["opsplit_after_stagen"]->AddTask(&RadiationM1::ClearRecv, this, id.M1_csend, "RadiationM1::ClearRecv");
 
   return;
 }
