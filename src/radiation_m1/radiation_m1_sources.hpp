@@ -212,15 +212,13 @@ SrcSignal source_update_ll(
       } else {
         Kokkos::printf("source_update: Non-linear solver is stuck.\n");
       }
-      Kokkos::printf("source_update: Retrying with Eddington closure.\n");
-        Kokkos::printf("source_update: The source solver has failed!\n");
 #endif
         return SrcFail;
       } else if (ierr != LinalgSuccess) {
-        if (closure_type != Eddington) return SrcFail;
 #ifdef DEBUG_BUILD
       Kokkos::printf("source_update: Unexpected error in source solver!\n");
 #endif
+        return SrcFail;
     }
     ierr = HybridsjTestDelta(hybridsj_params.dx, hybridsj_params.x,
                              m1_params.source_epsabs, m1_params.source_epsrel);
@@ -267,6 +265,14 @@ SrcSignal source_update(
                             n_u, gamma_ud, u_d, u_u, v_d, v_u, proj_ud, W, Eold,
                             Fold_d, Estar, Fstar_d, eta, kabs, kscat, chi, Enew,
                             Fnew_d, m1_params, Eddington);
+#ifdef DEBUG_BUILD
+    if (ierr != SrcOk) {
+      Kokkos::printf("source_update: The source solver has failed!\n");
+    }
+    else {
+      Kokkos::printf("source_update: Backup solver worked!\n");
+    }
+#endif
   }
   return ierr;
 }
