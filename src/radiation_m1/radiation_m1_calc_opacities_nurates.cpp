@@ -16,6 +16,11 @@
 namespace radiationm1 {
 
 TaskStatus RadiationM1::CalcOpacityNurates(Driver *pdrive, int stage) {
+  // The opacities are constant throughout a timestep
+  if (stage > 1) {
+    return TaskStatus::complete;
+  }
+
   // Here we are using dynamic_cast to infer which derived type pdyngr is
   auto *ptest_nqt =
       dynamic_cast<dyngr::DynGRMHDPS<Primitive::EOSCompOSE<Primitive::NQTLogs>,
@@ -72,6 +77,7 @@ TaskStatus RadiationM1::CalcOpacityNurates_(Driver *pdrive, int stage) {
   auto &u_mu_ = pmy_pack->pradm1->u_mu;
   DvceArray5D<Real> &w0_ = u_mu_data;
   if (ishydro) {
+    assert(false); // not implemented
     // w0_ = pmy_pack->phydro->w0; // @TODO
   } else if (ismhd) {
     w0_ = pmy_pack->pmhd->w0;
