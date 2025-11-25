@@ -126,14 +126,9 @@ TaskStatus RadiationM1::TimeUpdate_(Driver *d, int stage) {
   bool &three_d = pmy_pack->pmesh->three_d;
   auto &params_ = pmy_pack->pradm1->params;
 
-  auto &u_mu_ = u_mu;
-  DvceArray5D<Real> w0_ = u_mu_data;     // just a hack to compile on SYCL
-  DvceArray5D<Real> umhd0_ = u_mu_data;  // just a hack to compile on SYCL
-  if (ishydro) {
-    assert(false); // not implemented
-    // w0_ = pmy_pack->phydro->w0; // @TODO
-    // umhd0_ = pmy_pack->phydro->u0;
-  } else if (ismhd) {
+  DvceArray5D<Real> w0_ = w0;
+  DvceArray5D<Real> umhd0_;
+  if (ismhd) {
     w0_ = pmy_pack->pmhd->w0;
     umhd0_ = pmy_pack->pmhd->u0;
   }
@@ -261,27 +256,16 @@ TaskStatus RadiationM1::TimeUpdate_(Driver *d, int stage) {
         AthenaPointTensor<Real, TensorSymm::NONE, 4, 2> proj_ud{};
 
         Real w_lorentz{};
-        if (use_u_mu_data) {
-          w_lorentz = adm.alpha(m, k, j, i) * u_mu_(m, 0, k, j, i);
-          pack_u_u(u_mu_(m, 0, k, j, i), u_mu_(m, 1, k, j, i),
-                   u_mu_(m, 2, k, j, i), u_mu_(m, 3, k, j, i), u_u);
-        } else {
-          // w_lorentz = Kokkos::sqrt(1. + w0_(m, IVX, k, j, i) * w0_(m, IVX, k,
-          // j, i) +
-          //                          w0_(m, IVY, k, j, i) * w0_(m, IVY, k, j,
-          //                          i) + w0_(m, IVZ, k, j, i) * w0_(m, IVZ, k,
-          //                          j, i));
-          w_lorentz = get_w_lorentz(w0_(m, IVX, k, j, i), w0_(m, IVY, k, j, i),
-                                    w0_(m, IVZ, k, j, i), g_dd);
-          pack_u_u(w_lorentz / adm.alpha(m, k, j, i),
-                   w0_(m, IVX, k, j, i) -
-                       w_lorentz * beta_u(1) / adm.alpha(m, k, j, i),
-                   w0_(m, IVY, k, j, i) -
-                       w_lorentz * beta_u(2) / adm.alpha(m, k, j, i),
-                   w0_(m, IVZ, k, j, i) -
-                       w_lorentz * beta_u(3) / adm.alpha(m, k, j, i),
-                   u_u);
-        }
+        w_lorentz = get_w_lorentz(w0_(m, IVX, k, j, i), w0_(m, IVY, k, j, i),
+                                  w0_(m, IVZ, k, j, i), g_dd);
+        pack_u_u(w_lorentz / adm.alpha(m, k, j, i),
+                 w0_(m, IVX, k, j, i) -
+                     w_lorentz * beta_u(1) / adm.alpha(m, k, j, i),
+                 w0_(m, IVY, k, j, i) -
+                     w_lorentz * beta_u(2) / adm.alpha(m, k, j, i),
+                 w0_(m, IVZ, k, j, i) -
+                     w_lorentz * beta_u(3) / adm.alpha(m, k, j, i),
+                 u_u);
         pack_v_u(u_u(0), u_u(1), u_u(2), u_u(3), adm.alpha(m, k, j, i),
                  adm.beta_u(m, 0, k, j, i), adm.beta_u(m, 1, k, j, i),
                  adm.beta_u(m, 2, k, j, i), v_u);
@@ -656,7 +640,7 @@ TaskStatus RadiationM1::TimeUpdate_(Driver *d, int stage) {
             u0_(m, CombinedIdx(nuidx, M1_N_IDX, nvars_), k, j, i) = Nf;
           }
 
-          if (params_.backreact && stage == 2 && (ismhd || ishydro)) {
+          if (params_.backreact && stage == 2 && (ismhd)) {
             umhd0_(m, IEN, k, j, i) -= theta * DrEFN[nuidx][M1_E_IDX];
             umhd0_(m, IM1, k, j, i) -= theta * DrEFN[nuidx][M1_FX_IDX];
             umhd0_(m, IM2, k, j, i) -= theta * DrEFN[nuidx][M1_FY_IDX];

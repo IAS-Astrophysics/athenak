@@ -61,7 +61,7 @@ void ProblemGenerator::RadiationM1BeamTest(ParameterInput *pin, const bool resta
   int ksg = (indcs.nx3 > 1) ? ks - indcs.ng : ks;
   int keg = (indcs.nx3 > 1) ? ke + indcs.ng : ke;
   int nmb = pmbp->nmb_thispack;
-  auto &u_mu_ = pmbp->pradm1->u_mu;
+  auto &w0_ = pmbp->pradm1->w0;
   adm::ADM::ADM_vars &adm = pmbp->padm->adm;
   auto &beam_vals = pmbp->pradm1->rad_m1_beam.beam_source_vals;
 
@@ -102,10 +102,9 @@ void ProblemGenerator::RadiationM1BeamTest(ParameterInput *pin, const bool resta
 
           adm.alpha(m, k, j, i) = 1.;
 
-          u_mu_(m, 0, k, j, i) = 1.;
-          u_mu_(m, 1, k, j, i) = 0.;
-          u_mu_(m, 2, k, j, i) = 0.;
-          u_mu_(m, 3, k, j, i) = 0.;
+          w0_(m, IVX, k, j, i) = 0.;
+          w0_(m, IVY, k, j, i) = 0.;
+          w0_(m, IVZ, k, j, i) = 0.;
         } else if (metric == "isotropic") {
           Real &x1min = size.d_view(m).x1min;
           Real &x1max = size.d_view(m).x1max;
@@ -138,11 +137,9 @@ void ProblemGenerator::RadiationM1BeamTest(ParameterInput *pin, const bool resta
           adm.beta_u(m, 2, k, j, i) = 0;
 
           // set fluid velocity
-          u_mu_(m, 0, k, j, i) =
-              1. / adm.alpha(m, k, j, i);  // for isotropic coordinates only
-          u_mu_(m, 1, k, j, i) = 0.;
-          u_mu_(m, 2, k, j, i) = 0.;
-          u_mu_(m, 3, k, j, i) = 0.;
+          w0_(m, IVX, k, j, i) = 0.;
+          w0_(m, IVY, k, j, i) = 0.;
+          w0_(m, IVZ, k, j, i) = 0.;
         } else {
           Real &x1min = size.d_view(m).x1min;
           Real &x1max = size.d_view(m).x1max;
@@ -173,13 +170,9 @@ void ProblemGenerator::RadiationM1BeamTest(ParameterInput *pin, const bool resta
               2. * adm_mass * adm.alpha(m, k, j, i) * adm.alpha(m, k, j, i) * lvec[2] / r;
 
           // set fluid velocity
-          u_mu_(m, 0, k, j, i) = 1. / adm.alpha(m, k, j, i);
-          u_mu_(m, 1, k, j, i) =
-              -(1. / adm.alpha(m, k, j, i)) * adm.beta_u(m, 0, k, j, i);
-          u_mu_(m, 2, k, j, i) =
-              -(1. / adm.alpha(m, k, j, i)) * adm.beta_u(m, 1, k, j, i);
-          u_mu_(m, 3, k, j, i) =
-              -(1. / adm.alpha(m, k, j, i)) * adm.beta_u(m, 2, k, j, i);
+          w0_(m, IVX, k, j, i) = 0.;
+          w0_(m, IVY, k, j, i) = 0.;
+          w0_(m, IVZ, k, j, i) = 0.;
         }
       });
 

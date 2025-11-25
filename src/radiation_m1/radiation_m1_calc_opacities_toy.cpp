@@ -37,7 +37,6 @@ TaskStatus RadiationM1::CalcOpacityToy(Driver *pdrive, int stage) {
   bool &multi_d = pmy_pack->pmesh->multi_d;
   bool &three_d = pmy_pack->pmesh->three_d;
 
-  auto &u_mu_ = pmy_pack->pradm1->u_mu;
   auto &u0_ = pmy_pack->pradm1->u0;
 
   auto &eta_0_ = pmy_pack->pradm1->eta_0;

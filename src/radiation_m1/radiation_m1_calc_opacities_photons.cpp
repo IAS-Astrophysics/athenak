@@ -72,7 +72,10 @@ TaskStatus RadiationM1::CalcOpacityPhotons_(Driver *pdrive, int stage) {
   auto &scat_1_ = scat_1;
 
   auto &u0_ = u0;
-  auto &w0_ = pmy_pack->pmhd->w0;
+  DvceArray5D<Real> w0_ = w0;
+  if (ismhd) {
+    w0_ = pmy_pack->pmhd->w0;
+  }
   auto &chi_ = chi;
 
   Real beta[2] = {0.5, 1.};
@@ -113,7 +116,6 @@ TaskStatus RadiationM1::CalcOpacityPhotons_(Driver *pdrive, int stage) {
   Real kappa_p_ = photon_op_params.kappa_p;
 
   Real gm1{};
-  auto &u_mu_ = pmy_pack->pradm1->u_mu;
   if (ishydro) {
     gm1 = pmy_pack->phydro->peos->eos_data.gamma - 1.0;
   } else if (ismhd) {
@@ -167,24 +169,18 @@ TaskStatus RadiationM1::CalcOpacityPhotons_(Driver *pdrive, int stage) {
           AthenaPointTensor<Real, TensorSymm::NONE, 4, 2> proj_ud{};
 
           Real w_lorentz{};
-          if (use_u_mu_data) {
-            w_lorentz = adm.alpha(m, k, j, i) * u_mu_(m, 0, k, j, i);
-            pack_u_u(u_mu_(m, 0, k, j, i), u_mu_(m, 1, k, j, i),
-                     u_mu_(m, 2, k, j, i), u_mu_(m, 3, k, j, i), u_u);
-          } else {
-            w_lorentz =
-                get_w_lorentz(w0_(m, IVX, k, j, i), w0_(m, IVY, k, j, i),
-                              w0_(m, IVZ, k, j, i), g_dd);
-            pack_u_u(
-                w_lorentz / adm.alpha(m, k, j, i),
-                w0_(m, IVX, k, j, i) - w_lorentz * adm.beta_u(m, 0, k, j, i) /
-                                           adm.alpha(m, k, j, i),
-                w0_(m, IVY, k, j, i) - w_lorentz * adm.beta_u(m, 1, k, j, i) /
-                                           adm.alpha(m, k, j, i),
-                w0_(m, IVZ, k, j, i) - w_lorentz * adm.beta_u(m, 2, k, j, i) /
-                                           adm.alpha(m, k, j, i),
-                u_u);
-          }
+          w_lorentz =
+              get_w_lorentz(w0_(m, IVX, k, j, i), w0_(m, IVY, k, j, i),
+                            w0_(m, IVZ, k, j, i), g_dd);
+          pack_u_u(
+              w_lorentz / adm.alpha(m, k, j, i),
+              w0_(m, IVX, k, j, i) - w_lorentz * adm.beta_u(m, 0, k, j, i) /
+                                         adm.alpha(m, k, j, i),
+              w0_(m, IVY, k, j, i) - w_lorentz * adm.beta_u(m, 1, k, j, i) /
+                                         adm.alpha(m, k, j, i),
+              w0_(m, IVZ, k, j, i) - w_lorentz * adm.beta_u(m, 2, k, j, i) /
+                                         adm.alpha(m, k, j, i),
+              u_u);
           pack_v_u(u_u(0), u_u(1), u_u(2), u_u(3), adm.alpha(m, k, j, i),
                    adm.beta_u(m, 0, k, j, i), adm.beta_u(m, 1, k, j, i),
                    adm.beta_u(m, 2, k, j, i), v_u);
