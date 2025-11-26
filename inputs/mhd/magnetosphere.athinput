@@ -9,7 +9,7 @@ basename  = magsph      # problem ID: basename of output filenames
 <output1>
 file_type   = bin       # Tabular data dump
 variable    = hydro_u   # variables to be output
-dt          = 3.14      # time increment between outputs
+dt          = 0.0314      # time increment between outputs
 
 <output2>
 file_type   = hst       # history data dump
@@ -19,40 +19,41 @@ dt          = 0.0229    # time increment between outputs
 evolution   = dynamic
 cfl_number  = 0.3       # The Courant, Friedrichs, & Lewy (CFL) Number
 nlim        = -1        # cycle limit
-tlim        = 314       # time limit
+tlim        = 0.314       # time limit
 integrator  = rk2       # time integration algorithm
 
 <mesh>
 nghost    = 2           # Number of ghost cells
 
-nx1         = 128       # Number of zones in X1-direction
-x1min       = -9.0      # minimum value of X1
-x1max       = 9.0       # maximum value of X1
+nx1         = 256       # Number of zones in X1-direction
+x1min       = -5      # minimum value of X1
+x1max       = 5       # maximum value of X1
 ix1_bc      = outflow   # Inner-X1 boundary condition flag
 ox1_bc      = outflow   # Outer-X1 boundary condition flag
 x1rat       = 1.0       # non-uniform grid ratio
 
-nx2         = 128        # Number of zones in X2-direction
-x2min       = -9.0       # minimum value of X2
-x2max       = 9.0        # maximum value of X2
+nx2         = 256        # Number of zones in X2-direction
+x2min       = -5       # minimum value of X2
+x2max       = 5        # maximum value of X2
 ix2_bc      = outflow    # Inner-X2 boundary condition flag
 ox2_bc      = outflow    # Outer-X2 boundary condition flag
 
-nx3         = 64         # Number of zones in X3-direction
-x3min       = -3.3       # minimum value of X3
-x3max       = 3.3        # maximum value of X3
+nx3         = 256         # Number of zones in X3-direction
+x3min       = -5       # minimum value of X3
+x3max       = 5        # maximum value of X3
 ix3_bc      = outflow    # Inner-X3 boundary condition flag
 ox3_bc      = outflow    # Outer-X3 boundary condition flag
 
 refinement  = None
 
 <meshblock>
-nx1       = 128       # Number of cells in each MeshBlock, X1-dir
-nx2       = 128       # Number of cells in each MeshBlock, X2-dir
-nx3       = 64       # Number of cells in each MeshBlock, X3-dir
+nx1       = 256       # Number of cells in each MeshBlock, X1-dir
+nx2       = 256       # Number of cells in each MeshBlock, X2-dir
+nx3       = 256       # Number of cells in each MeshBlock, X3-dir
 
 <hydro>
-eos         = ideal         # EOS type
+eos         = ideal        # EOS type
+#iso_sound_speed = 0.1     
 gamma       = 1.4           # adaiabtic index
 dfloor      = 1.e-9         # Density floor
 pfloor      = 1.e-12        # Pressure floor
@@ -68,13 +69,16 @@ dslope = -1             # disc midplane surface density
 gm0 = 1.0               # GM for the central star
 mm = 0.0                # magnetic moment
 origid = 0.0            # angular velocity of star
-p0_over_r0 = 0.01       # characetristic csq  = pre/den
+h_over_r0 = 0.1         # characetristic cs
 qslope = -1             # disc temperature profile exponent
-r0 = 1
-rho0 = 1                # characteristic disc midplane density
-rho_floor0 = 1e-6       # radial density floor normalisation
-rho_floor_slope = -1    # radial density floor slope
+r0 = 1                  # reference radius
+rho0 = 1.0              # characteristic disc midplane density
 rmagsph = 0.5           # initial magnetospheric cavity radius
+rad_in_smooth = 0.1    
+rad_out_cutoff = 4
+rad_out_smooth = 0.2
+rho_floor0 = 1e-9       # radial density floor normalisation
+rho_floor_slope = -1    # radial density floor slope
 rstar = 0.1             # radius of the star
-smoothtr = 0.1          # smoothing of stellar gravity
+gravsmooth = 0.1        # smoothing of stellar gravity
 tcool = 1e-5            # characteristic cooling timescale [local orbital time]
