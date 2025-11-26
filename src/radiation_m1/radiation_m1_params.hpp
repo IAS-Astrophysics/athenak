@@ -79,8 +79,6 @@ struct RadiationM1Params {
   Real source_therm_limit;  // Assume neutrinos to be thermalized above this optical depth
   Real source_scat_limit;   // Use the scattering limit if the isotropization time is less
                             // than the timestep over this factor
-  bool opacity_one_dt;      // Compute opacities at timestep dt (constant throught the timestep)
-
 };
 
 enum SrcSignal {
