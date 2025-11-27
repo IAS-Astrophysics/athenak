@@ -125,7 +125,17 @@ struct torus_pgen {
 
   torus_pgen torus;
 
+  // a separate struc for refinement method, etc.
+  struct torus_refine {
+    std::vector<Real> radius;
+    std::vector<int> reflevel;
+  };
+
+  struct torus_refine torus_ref;
+
 } // namespace
+
+void RefineRadii(MeshBlockPack* pmbp);
 
 // Prototypes for user-defined BCs and history functions
 void NoInflowTorus(Mesh *pm);
@@ -141,6 +151,7 @@ void TorusHistory(HistoryData *pdata, Mesh *pm);
 //!  assumes x3 is axisymmetric direction
 
 void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
+  user_ref_func = RefineRadii;
   MeshBlockPack *pmbp = pmy_mesh_->pmb_pack;
   if (!pmbp->pcoord->is_general_relativistic &&
       !pmbp->pcoord->is_dynamical_relativistic) {
@@ -177,6 +188,17 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   grids.push_back(std::make_unique<SphericalGrid>(pmbp, 5, 12.0, 2));
   grids.push_back(std::make_unique<SphericalGrid>(pmbp, 5, 24.0, 2));
   user_hist_func = TorusFluxes;
+
+  for (int nr = 0; nr < 16; ++nr) {
+    std::string name = "radius_" + std::to_string(nr) + "_rad";
+    if (pin->DoesParameterExist("problem", name)) {
+      torus_ref.radius.push_back(pin->GetReal("problem", name));
+      torus_ref.reflevel.push_back(pin->GetOrAddInteger(
+          "problem", "radius_" + std::to_string(nr) + "_reflevel", -1));
+    } else {
+      break;
+    }
+  }
 
   // return if restart
   if (restart) return;
@@ -1895,4 +1917,48 @@ void TorusFluxes(HistoryData *pdata, Mesh *pm) {
   }
 
   return;
+}
+
+// Enforce some minimum resolution within a certain spherical region
+void RefineRadii(MeshBlockPack *pmbp) {
+  Mesh *pmesh       = pmbp->pmesh;
+  auto &refine_flag = pmesh->pmr->refine_flag;
+  auto &size        = pmbp->pmb->mb_size;
+  int nmb           = pmbp->nmb_thispack;
+  int mbs           = pmesh->gids_eachrank[global_variable::my_rank];
+
+  for (int m = 0; m < nmb; ++m) {
+    // current refinement level
+    int level = pmesh->lloc_eachmb[m + mbs].level - pmesh->root_level;
+
+    // extract MeshBlock bounds
+    Real &x1min = size.h_view(m).x1min;
+    Real &x1max = size.h_view(m).x1max;
+    Real &x2min = size.h_view(m).x2min;
+    Real &x2max = size.h_view(m).x2max;
+    Real &x3min = size.h_view(m).x3min;
+    Real &x3max = size.h_view(m).x3max;
+
+    Real r2[8] = {
+      SQR(x1min) + SQR(x2min) + SQR(x3min),
+      SQR(x1max) + SQR(x2min) + SQR(x3min),
+      SQR(x1min) + SQR(x2max) + SQR(x3min),
+      SQR(x1max) + SQR(x2max) + SQR(x3min),
+      SQR(x1min) + SQR(x2min) + SQR(x3max),
+      SQR(x1max) + SQR(x2min) + SQR(x3max),
+      SQR(x1min) + SQR(x2max) + SQR(x3max),
+      SQR(x1max) + SQR(x2max) + SQR(x3max),
+    };
+    Real rmin2 = *std::min_element(&r2[0], &r2[8]);
+
+    for (int ir = 0; ir < torus_ref.radius.size(); ++ir) {
+      if (rmin2 < SQR(torus_ref.radius[ir])) {
+        if (level < torus_ref.reflevel[ir]) {
+          refine_flag.h_view(m + mbs) = 1;
+        } else if (level == torus_ref.reflevel[ir] && refine_flag.h_view(m + mbs) == -1) {
+          refine_flag.h_view(m + mbs) = 0;
+        }
+      }
+    }
+  }
 }
