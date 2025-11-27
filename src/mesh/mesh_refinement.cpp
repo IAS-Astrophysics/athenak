@@ -8,6 +8,9 @@
 //! Note while restriction functions for CC and FC data are implemented in this file,
 //! prolongation operators are implemented as INLINE functions in prolongation.hpp (and
 //! are used both here for AMR and in the BVals class at fine/coarse boundaries).
+//!
+//! Because refinement cruteria & buffer sizes depend on physics, this constructor
+//! called in main() *after* physics modules are added
 
 #include <cstdint>   // int32_t
 #include <iostream>
@@ -65,14 +68,13 @@ MeshRefinement::MeshRefinement(Mesh *pm, ParameterInput *pin) :
     }
   }
 
-  // allocate arrays for AMR
-  // NOTE: RefinementCriteria object cannot be allocated until Physics modules are defined
-  // This is done in Mesh::AddCoordinatesAndPhysics and not in this constructor
+  // allocate arrays for AMR, add RefinementCriteria object
   if (pm->adaptive) {
     nref_eachrank = new int[global_variable::nranks];
     nderef_eachrank = new int[global_variable::nranks];
     nref_rsum = new int[global_variable::nranks];
     nderef_rsum = new int[global_variable::nranks];
+    pmrc = new RefinementCriteria(pm, pin);
   }
 
   // be sure Views are initialized to zero
@@ -89,6 +91,31 @@ MeshRefinement::MeshRefinement(Mesh *pm, ParameterInput *pin) :
 #if MPI_PARALLEL_ENABLED
   // create unique communicators for AMR
   MPI_Comm_dup(MPI_COMM_WORLD, &amr_comm);
+/***/
+  // allocate fixed-length send/recv data buffers as work around on Aurora
+  // count number of cell- and face-centered variables communicated depending on physics
+  int ncc_tosend=0, nfc_tosend=0;
+  if (pm->pmb_pack->phydro != nullptr) {
+    ncc_tosend += (pm->pmb_pack->phydro->nhydro +
+                   pm->pmb_pack->phydro->nscalars);
+  }
+  if (pm->pmb_pack->pmhd != nullptr) {
+    ncc_tosend += (pm->pmb_pack->pmhd->nmhd +
+                   pm->pmb_pack->pmhd->nscalars);
+    nfc_tosend += 1;
+  }
+  if (pm->pmb_pack->prad != nullptr) {
+    ncc_tosend += (pm->pmb_pack->prad->prgeo->nangles);
+  }
+  if (pm->pmb_pack->pz4c != nullptr) {
+    ncc_tosend += (pm->pmb_pack->pz4c->nz4c);
+  }
+  int nmb = std::max((pm->pmb_pack->nmb_thispack), (pm->nmb_maxperrank));
+  auto &indcs = pm->mb_indcs;
+  int ndata = nmb*(ncc_tosend + nfc_tosend)*(indcs.nx1)*(indcs.nx2)*(indcs.nx3);
+  Kokkos::realloc(recv_data, ndata);
+  Kokkos::realloc(send_data, ndata);
+/***/
 #endif
 }
 
