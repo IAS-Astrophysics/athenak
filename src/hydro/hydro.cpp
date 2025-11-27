@@ -87,8 +87,10 @@ Hydro::Hydro(MeshBlockPack *ppack, ParameterInput *pin) :
     pcond = nullptr;
   }
 
-  // Source terms (constructor parses input file to initialize only srcterms needed)
-  psrc = new SourceTerms("hydro", ppack, pin);
+  // Source terms (if needed)
+  if (pin->DoesBlockExist("hydro_srcterms")) {
+    psrc = new SourceTerms("hydro_srcterms", ppack, pin);
+  }
 
   // (3) read time-evolution option [already error checked in driver constructor]
   // Then initialize memory and algorithms for reconstruction and Riemann solvers
