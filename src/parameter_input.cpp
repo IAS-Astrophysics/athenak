@@ -102,7 +102,7 @@ void ParameterInput::CheckBlockNames() {
   std::vector<std::string> valid_name = {
     "comment", "job",
     "mesh", "meshblock", "mesh_refinement", "refined_region", "amr_criterion",
-    "coord", "adm", "shearing_box",
+    "coord", "adm", "shearing_box", "cyclic_zoom",
     "time", "problem", "output", "units",
     "hydro", "mhd", "ion-neutral", "radiation", "z4c", "z4c_amr", "cce",
     "rad_srcterms", "hydro_srcterms", "mhd_srcterms", "particles"
@@ -124,7 +124,8 @@ void ParameterInput::CheckBlockNames() {
           std::cout<< (*it2) << std::endl;
         }
       }
-      Kokkos::abort("Invalid <block_name> in input file");
+      std::string err = "Invalid <block_name> '" + it1->block_name + "' in input file";
+      Kokkos::abort(err.c_str());
     }
   }
 }

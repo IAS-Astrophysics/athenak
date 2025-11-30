@@ -77,6 +77,12 @@ add_executable(
         mesh/meshblock_tree.cpp
         mesh/mesh_refinement.cpp
         mesh/refinement_criteria.cpp
+        mesh/cyclic_zoom.cpp
+        mesh/zoom_criteria.cpp
+        mesh/zoom_data.cpp
+        mesh/zoom_physics.cpp
+        mesh/zoom_refinement.cpp
+        mesh/zoom_restart.cpp
 
         mhd/mhd.cpp
         mhd/mhd_corner_e.cpp

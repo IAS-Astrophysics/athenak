@@ -43,6 +43,8 @@ RefinementCriteria::RefinementCriteria(Mesh *pm, ParameterInput *pin) :
         rcrit0.rmethod = RefCritMethod::second_deriv;
       } else if (method.compare("location") == 0) {
         rcrit0.rmethod = RefCritMethod::location;
+      } else if (method.compare("cyclic_zoom") == 0) {
+        rcrit0.rmethod = RefCritMethod::cyclic_zoom;
       } else if (method.compare("user") == 0) {
         rcrit0.rmethod = RefCritMethod::user;
       } else {
@@ -50,6 +52,7 @@ RefinementCriteria::RefinementCriteria(Mesh *pm, ParameterInput *pin) :
         Kokkos::abort("Unknown refinement criterion");
       }
       // read refinement variable only when needed
+      // TODO(@mhguo): what if user-defined criterion needs variable?
       if ((method.compare("location")!=0) && (method.compare("user")!=0)) {
         rcrit0.rvariable = pin->GetString(it->block_name,"variable");
       }
@@ -382,5 +385,18 @@ void RefinementCriteria::CheckLocation(MeshBlockPack* pmbp, RefCritData crit) {
   // sync host array with device
   refine_flag.template modify<HostMemSpace>();
   refine_flag.template sync<DevExeSpace>();
+  return;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void RefinementCriteria::CheckCyclicZoom()
+//! \brief Checks whether MeshBlock should be flagged for refinement/derefinement based on
+//! current level of CyclicZoom object
+
+void RefinementCriteria::CheckCyclicZoom(MeshBlockPack* pmbp) {
+  // TODO(@mhguo): check consistency with AMR in input file
+  if (pmy_mesh->cyclic_zoom) {
+    pmy_mesh->pzoom->CheckRefinement();
+  }
   return;
 }

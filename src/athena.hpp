@@ -215,6 +215,16 @@ struct DvceEdgeFld4D {
   ~DvceEdgeFld4D() = default;
 };
 
+template <typename T>
+struct HostEdgeFld4D {
+  HostArray4D<T> x1e, x2e, x3e;   // name refers to direction NOT location
+  HostEdgeFld4D(const std::string &label, int nmb, int n3, int n2, int n1) :
+    x1e(label + ".x1e", nmb, n3+1, n2+1, n1),
+    x2e(label + ".x2e", nmb, n3+1, n2, n1+1),
+    x3e(label + ".x3e", nmb, n3, n2+1, n1+1) {}
+  ~HostEdgeFld4D() = default;
+};
+
 //----------------------------------------------------------------------------------------
 // wrappers for Kokkos::parallel_for
 // These wrappers implement a variety of parallel execution strategies, including
