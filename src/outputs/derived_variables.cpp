@@ -69,7 +69,7 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
       pm->pmb_pack->phydro->w0 : pm->pmb_pack->pmhd->w0;
     par_for("temperature", DevExeSpace(), 0, (nmb-1), ks, ke, js, je, is, ie,
     KOKKOS_LAMBDA(int m, int k, int j, int i) {
-      dv(m,i_dv,k,j,i) = (w0_(m,IEN,k,j,i+1) / w0_(m,IDN,k,j,i-1));
+      dv(m,i_dv,k,j,i) = (w0_(m,IEN,k,j,i) / w0_(m,IDN,k,j,i));
     });
     i_dv += 1; // increment derived variable index
   }
@@ -462,23 +462,141 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
     });
   }
 
-  // get all sgs terms for the MHD equations
+
+// ==========================================================================================
+// SUB-GRID SCALE (SGS) RECONSTRUCTION GUIDE
+// ==========================================================================================
+//
+// NOTATION:
+//   Let an overbar (e.g., <f>) denote the volume average (the value saved in this file).
+//   Let a tilde (e.g., {f}) denote the density-weighted Favre average: {f} = <rho * f> / <rho>.
+//
+//   Variables available in standard 'cons' output (Coarse Grid):
+//     <rho>  : Density
+//     <m>    : Momentum density (<rho*v>) -> implies {v} = <m> / <rho>
+//     <B>    : Magnetic field
+//     <E>    : Total energy density
+//     P_bar  : Pressure derived from (<E>, <m>, <B>) using the EOS on coarse variables.
+//
+// ==========================================================================================
+// 1. MHD SGS RECONSTRUCTION
+// ==========================================================================================
+//
+// A. MOMENTUM EQUATION (SGS Stress Tensor)
+//    The SGS stress tensor tau_ij accounts for unresolved momentum transport.
+//    Formula: tau_ij = ( <rho*v_i*v_j> - <rho>*{v_i}*{v_j} ) - ( <B_i*B_j> - <B_i>*<B_j> )
+//
+//    Reconstruction steps:
+//      1. Hydro Stress (Reynolds):
+//         Term <rho*v_i*v_j> is read directly from indices 8-13.
+//         Subtract <rho> * ({v_i} from <m>) * ({v_j} from <m>).
+//      2. Magnetic Stress (Maxwell):
+//         Term <B_i*B_j> is read directly from indices 14-19.
+//         Subtract <B_i> * <B_j> (from standard coarse output).
+//
+//    Index Map (derived_var indices):
+//      8:  <rho*vx*vx>   11: <rho*vy*vy>   13: <rho*vz*vz>
+//      9:  <rho*vx*vy>   12: <rho*vy*vz>
+//      10: <rho*vx*vz>
+//      14: <Bx*Bx>       17: <By*By>       19: <Bz*Bz>
+//      15: <Bx*By>       18: <By*Bz>
+//      16: <Bx*Bz>
+//
+// B. INDUCTION EQUATION (SGS Electromotive Force)
+//    The SGS EMF (E_sgs) accounts for unresolved dynamo action.
+//    Formula: E_sgs = < v x B > - ( {v} x <B> )
+//
+//    Reconstruction steps:
+//      1. Construct the averaged cross product <v x B> using the full tensor terms (indices 20-28).
+//         Example (x-component): <(v x B)_x> = <vy*Bz> (idx 25) - <vz*By> (idx 27).
+//      2. Calculate the mean field cross product: ({v} x <B>).
+//      3. Subtract: E_sgs_x = (dv[25] - dv[27]) - ({vy}*<Bz> - {vz}*<By>).
+//
+//    Index Map (Tensor <v_i * B_j>):
+//      20: <vx*Bx>   23: <vy*Bx>   26: <vz*Bx>
+//      21: <vx*By>   24: <vy*By>   27: <vz*By>
+//      22: <vx*Bz>   25: <vy*Bz>   28: <vz*Bz>
+//
+// C. ENERGY EQUATION (SGS Energy Flux)
+//    The SGS energy flux Q_sgs accounts for unresolved heat and Poynting flux.
+//    Formula: Q_sgs_i = <F_total_i> - F_total_i( <rho>, {v}, <B>, P_bar )
+//
+//    Reconstruction steps:
+//      1. Read the Total Averaged Flux <F_total> from indices 32-34.
+//      2. Calculate Resolved Flux (F_res) using coarse variables:
+//         v_sq_bar = {vx}^2 + {vy}^2 + {vz}^2
+//         B_sq_bar = <Bx>^2 + <By>^2 + <Bz>^2
+//         v_dot_B  = {vx}*<Bx> + {vy}*<By> + {vz}*<Bz>
+//         H_hydro  = 0.5*<rho>*v_sq_bar + (gamma * P_bar / (gamma-1)) * (gamma-1)
+//                  = 0.5*<rho>*v_sq_bar + gamma * P_bar
+//         F_res_i  = (H_hydro + B_sq_bar) * {v_i} - (v_dot_B) * <B_i>
+//      3. Subtract: Q_sgs_i = dv[32+i] - F_res_i
+//
+//    Index Map:
+//      32: <F_total_x>
+//      33: <F_total_y>
+//      34: <F_total_z>
+//
+// ==========================================================================================
+// 2. HYDRO SGS RECONSTRUCTION
+// ==========================================================================================
+//
+// A. MOMENTUM EQUATION (Reynolds Stress Only)
+//    Formula: tau_ij = <rho*v_i*v_j> - <rho>*{v_i}*{v_j}
+//
+//    Index Map:
+//      5: <rho*vx*vx>    8: <rho*vy*vy>    10: <rho*vz*vz>
+//      6: <rho*vx*vy>    9: <rho*vy*vz>
+//      7: <rho*vx*vz>
+//
+// B. ENERGY EQUATION
+//    Formula: Q_sgs_i = <F_total_i> - F_total_i( <rho>, {v}, P_bar )
+//
+//    Reconstruction steps:
+//      1. Read Total Averaged Flux <F_total> from indices 11-13.
+//      2. Calculate Resolved Flux:
+//         F_res_i = ( 0.5*<rho>*{v}^2 + gamma*P_bar ) * {v_i}
+//      3. Subtract: Q_sgs_i = dv[11+(i-x)] - F_res_i
+//
+//    Index Map:
+//      11: <F_total_x>
+//      12: <F_total_y>
+//      13: <F_total_z>
+//
+// ==========================================================================================
+// get all sgs terms for the MHD equations
   if (name.compare("mhd_sgs") == 0) {
-    int n_sgs = 59;
+    int n_sgs = 35;
     Kokkos::realloc(derived_var, nmb, n_sgs, n3, n2, n1);
     auto dv = derived_var;
     auto u0_ = pm->pmb_pack->pmhd->u0;
     auto &bcc = pm->pmb_pack->pmhd->bcc0;
+
+    // Ensure gamma is captured. Assuming it is available in this scope.
+    Real gamma = pm->pmb_pack->pmhd->peos->eos_data.gamma;
+
     par_for("mhd_sgs", DevExeSpace(), 0, (nmb-1), ks, ke, js, je, is, ie,
     KOKKOS_LAMBDA(int m, int k, int j, int i) {
       Real rho = u0_(m,IDN,k,j,i);
+      Real inv_rho = 1.0/rho; // Optimization: pre-compute inverse
       Real mx = u0_(m,IVX,k,j,i);
       Real my = u0_(m,IVY,k,j,i);
       Real mz = u0_(m,IVZ,k,j,i);
-      Real eint = u0_(m,IEN,k,j,i); // eint = P/(gamma-1)
+      Real E_total = u0_(m,IEN,k,j,i);
       Real Bx = bcc(m,IBX,k,j,i);
       Real By = bcc(m,IBY,k,j,i);
       Real Bz = bcc(m,IBZ,k,j,i);
+
+      Real vx = mx * inv_rho;
+      Real vy = my * inv_rho;
+      Real vz = mz * inv_rho;
+
+      Real v_dot_B = (mx*Bx + my*By + mz*Bz) * inv_rho;
+      Real B_sq    = Bx*Bx + By*By + Bz*Bz;
+      Real v_sq    = (mx*mx + my*my + mz*mz) * (inv_rho*inv_rho);
+      // Extract internal energy: eint = E_total - KE - ME = P/(gamma-1)
+      Real eint = E_total - 0.5*rho*v_sq - 0.5*B_sq;
+
       // state variables
       dv(m,0,k,j,i) = rho;
       dv(m,1,k,j,i) = mx;
@@ -488,13 +606,13 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
       dv(m,5,k,j,i) = Bx;
       dv(m,6,k,j,i) = By;
       dv(m,7,k,j,i) = Bz;
-      // rho * v_i * v_j = m_i * m_j / rho
-      dv(m,8,k,j,i) = mx*mx/rho;
-      dv(m,9,k,j,i) = mx*my/rho;
-      dv(m,10,k,j,i) = mx*mz/rho;
-      dv(m,11,k,j,i) = my*my/rho;
-      dv(m,12,k,j,i) = my*mz/rho;
-      dv(m,13,k,j,i) = mz*mz/rho;
+      // rho * v_i * v_j = m_i * v_j
+      dv(m,8,k,j,i) = mx*vx;
+      dv(m,9,k,j,i) = mx*vy;
+      dv(m,10,k,j,i) = mx*vz;
+      dv(m,11,k,j,i) = my*vy;
+      dv(m,12,k,j,i) = my*vz;
+      dv(m,13,k,j,i) = mz*vz;
       // B_i * B_j
       dv(m,14,k,j,i) = Bx*Bx;
       dv(m,15,k,j,i) = Bx*By;
@@ -503,92 +621,82 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
       dv(m,18,k,j,i) = By*Bz;
       dv(m,19,k,j,i) = Bz*Bz;
       // v_i * B_j
-      dv(m,20,k,j,i) = mx*Bx/rho;
-      dv(m,21,k,j,i) = mx*By/rho;
-      dv(m,22,k,j,i) = mx*Bz/rho;
-      dv(m,23,k,j,i) = my*Bx/rho;
-      dv(m,24,k,j,i) = my*By/rho;
-      dv(m,25,k,j,i) = my*Bz/rho;
-      dv(m,26,k,j,i) = mz*Bx/rho;
-      dv(m,27,k,j,i) = mz*By/rho;
-      dv(m,28,k,j,i) = mz*Bz/rho;
-      // rho * v_i * T = m_i * P / rho = m_i * P/rho / (gamma-1)
-      dv(m,29,k,j,i) = mx*eint/rho;
-      dv(m,30,k,j,i) = my*eint/rho;
-      dv(m,31,k,j,i) = mz*eint/rho;
-      // rho * v_i * v_j**2 = m_i * m_j**2 / rho**2
-      dv(m,32,k,j,i) = mx*mx*mx/rho/rho;
-      dv(m,33,k,j,i) = mx*my*my/rho/rho;
-      dv(m,34,k,j,i) = mx*mz*mz/rho/rho;
-      dv(m,35,k,j,i) = my*mx*mx/rho/rho;
-      dv(m,36,k,j,i) = my*my*my/rho/rho;
-      dv(m,37,k,j,i) = my*mz*mz/rho/rho;
-      dv(m,38,k,j,i) = mz*mx*mx/rho/rho;
-      dv(m,39,k,j,i) = mz*my*my/rho/rho;
-      dv(m,40,k,j,i) = mz*mz*mz/rho/rho;
-      // v_i * B_j**2 = m_i * B_j**2 / rho
-      dv(m,41,k,j,i) = mx*Bx*Bx/rho;
-      dv(m,42,k,j,i) = mx*By*By/rho;
-      dv(m,43,k,j,i) = mx*Bz*Bz/rho;
-      dv(m,44,k,j,i) = my*Bx*Bx/rho;
-      dv(m,45,k,j,i) = my*By*By/rho;
-      dv(m,46,k,j,i) = my*Bz*Bz/rho;
-      dv(m,47,k,j,i) = mz*Bx*Bx/rho;
-      dv(m,48,k,j,i) = mz*By*By/rho;
-      dv(m,49,k,j,i) = mz*Bz*Bz/rho;
-      // v_i * B_i * B_j = m_i * B_i * B_j / rho
-      dv(m,50,k,j,i) = mx*Bx*Bx/rho;
-      dv(m,51,k,j,i) = mx*Bx*By/rho;
-      dv(m,52,k,j,i) = mx*Bx*Bz/rho;
-      dv(m,53,k,j,i) = my*By*Bx/rho;
-      dv(m,54,k,j,i) = my*By*By/rho;
-      dv(m,55,k,j,i) = my*By*Bz/rho;
-      dv(m,56,k,j,i) = mz*Bz*Bx/rho;
-      dv(m,57,k,j,i) = mz*Bz*By/rho;
-      dv(m,58,k,j,i) = mz*Bz*Bz/rho;
+      dv(m,20,k,j,i) = vx*Bx;
+      dv(m,21,k,j,i) = vx*By;
+      dv(m,22,k,j,i) = vx*Bz;
+      dv(m,23,k,j,i) = vy*Bx;
+      dv(m,24,k,j,i) = vy*By;
+      dv(m,25,k,j,i) = vy*Bz;
+      dv(m,26,k,j,i) = vz*Bx;
+      dv(m,27,k,j,i) = vz*By;
+      dv(m,28,k,j,i) = vz*Bz;
+      // rho * v_i * e = m_i * eint / rho
+      dv(m,29,k,j,i) = vx*eint;
+      dv(m,30,k,j,i) = vy*eint;
+      dv(m,31,k,j,i) = vz*eint;
+
+      Real H_hydro = 0.5*rho*v_sq + gamma*eint;
+
+      // F_x = (H_hydro + B^2)*v_x - (v.B)*B_x
+      dv(m,32,k,j,i) = (H_hydro + B_sq)*vx - v_dot_B*Bx;
+
+      // F_y = (H_hydro + B^2)*v_y - (v.B)*B_y
+      dv(m,33,k,j,i) = (H_hydro + B_sq)*vy - v_dot_B*By;
+
+      // F_z = (H_hydro + B^2)*v_z - (v.B)*B_z
+      dv(m,34,k,j,i) = (H_hydro + B_sq)*vz - v_dot_B*Bz;
     });
   }
 
-// get all sgs terms for the MHD equations
+// get all sgs terms for the Hydro equations
   if (name.compare("hydro_sgs") == 0) {
-    int n_sgs = 23;
+    // Reduced from 23 to 14 variables
+    int n_sgs = 14;
     Kokkos::realloc(derived_var, nmb, n_sgs, n3, n2, n1);
     auto dv = derived_var;
     auto u0_ = pm->pmb_pack->phydro->u0;
+
+    // Ensure gamma is captured
+    Real gamma = pm->pmb_pack->phydro->peos->eos_data.gamma;
+
     par_for("hydro_sgs", DevExeSpace(), 0, (nmb-1), ks, ke, js, je, is, ie,
     KOKKOS_LAMBDA(int m, int k, int j, int i) {
       Real rho = u0_(m,IDN,k,j,i);
+      Real inv_rho = 1.0/rho;
       Real mx = u0_(m,IVX,k,j,i);
       Real my = u0_(m,IVY,k,j,i);
       Real mz = u0_(m,IVZ,k,j,i);
-      Real eint = u0_(m,IEN,k,j,i); // eint = P/(gamma-1)
+      Real E_total = u0_(m,IEN,k,j,i);
+
+      Real vx = mx * inv_rho;
+      Real vy = my * inv_rho;
+      Real vz = mz * inv_rho;
+      Real v_sq = vx*vx + vy*vy + vz*vz;
+      // Extract internal energy: eint = E_total - KE = P/(gamma-1)
+      Real eint = E_total - 0.5*rho*v_sq;
+
       // state variables
       dv(m,0,k,j,i) = rho;
       dv(m,1,k,j,i) = mx;
       dv(m,2,k,j,i) = my;
       dv(m,3,k,j,i) = mz;
       dv(m,4,k,j,i) = eint;
-      // rho * v_i * v_j = m_i * m_j / rho
-      dv(m,5,k,j,i) = mx*mx/rho;
-      dv(m,6,k,j,i) = mx*my/rho;
-      dv(m,7,k,j,i) = mx*mz/rho;
-      dv(m,8,k,j,i) = my*my/rho;
-      dv(m,9,k,j,i) = my*mz/rho;
-      dv(m,10,k,j,i) = mz*mz/rho;
-      // rho * v_i * T = m_i * P / rho = m_i * P/rho / (gamma-1)
-      dv(m,11,k,j,i) = mx*eint/rho;
-      dv(m,12,k,j,i) = my*eint/rho;
-      dv(m,13,k,j,i) = mz*eint/rho;
-      // rho * v_i * v_j**2 = m_i * m_j**2 / rho**2
-      dv(m,14,k,j,i) = mx*mx*mx/rho/rho;
-      dv(m,15,k,j,i) = mx*my*my/rho/rho;
-      dv(m,16,k,j,i) = mx*mz*mz/rho/rho;
-      dv(m,17,k,j,i) = my*mx*mx/rho/rho;
-      dv(m,18,k,j,i) = my*my*my/rho/rho;
-      dv(m,19,k,j,i) = my*mz*mz/rho/rho;
-      dv(m,20,k,j,i) = mz*mx*mx/rho/rho;
-      dv(m,21,k,j,i) = mz*my*my/rho/rho;
-      dv(m,22,k,j,i) = mz*mz*mz/rho/rho;
+
+      // rho * v_i * v_j = m_i * v_j
+      dv(m,5,k,j,i) = mx*vx;
+      dv(m,6,k,j,i) = mx*vy;
+      dv(m,7,k,j,i) = mx*vz;
+      dv(m,8,k,j,i) = my*vy;
+      dv(m,9,k,j,i) = my*vz;
+      dv(m,10,k,j,i) = mz*vz;
+
+      // Total Hydro Energy Flux
+      // F_E = (0.5*rho*v^2 + gamma*eint) * v
+      Real H_hydro = 0.5*rho*v_sq + gamma*eint;
+
+      dv(m,11,k,j,i) = H_hydro * vx;
+      dv(m,12,k,j,i) = H_hydro * vy;
+      dv(m,13,k,j,i) = H_hydro * vz;
     });
   }
 

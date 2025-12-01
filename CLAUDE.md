@@ -93,6 +93,11 @@ cd build/src
 ./athena -i ../../inputs/tests/linear_wave_hydro.athinput
 ```
 
+### Restart a Simulation
+```bash
+./athena -r restart_file.00123.rst
+```
+
 ## Code Style and Linting
 
 ### C++ Style Check
@@ -121,6 +126,19 @@ flake8 tst/ vis/
 3. **MeshBlock-based AMR**: Domain decomposed into MeshBlocks that can be refined/derefined
 4. **MeshBlockPack**: Groups of MeshBlocks for efficient vectorization
 5. **Physics Modules**: Each solver (hydro, MHD, etc.) is a separate module with standardized interfaces
+
+### Essential Types (defined in `athena.hpp`)
+- **Real**: Alias for `float` or `double` (controlled by `Athena_SINGLE_PRECISION`)
+- **DvceArray1D-6D<T>**: Device (GPU) Kokkos Views for 1-6 dimensional arrays
+- **HostArray1D-5D<T>**: Host (CPU) Kokkos Views
+- **DevExeSpace**: Default execution space (CPU or GPU)
+
+### Variable Index Constants
+Conserved variables use these indices (defined in `athena.hpp`):
+- `IDN=0`: Density
+- `IM1=1, IM2=2, IM3=3`: Momentum components (aliases: `IVX, IVY, IVZ` for velocity)
+- `IEN=4`: Total energy
+- `IBX=0, IBY=1, IBZ=2`: Magnetic field components
 
 ### Key Classes and Structures
 - **Mesh**: Top-level container managing the domain and MeshBlocks
@@ -156,18 +174,26 @@ flake8 tst/ vis/
 ### Problem Generator Development
 When creating a new problem generator:
 1. Create file in `src/pgen/` (e.g., `my_problem.cpp`)
-2. Must define `void ProblemGenerator(ParameterInput *pin, const bool restart)`
-3. Access mesh via `pm->pmesh`, MeshBlockPack via `pm->pmb_pack`
+2. Implement `void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart)`
+3. Access mesh via `pmy_mesh_`, MeshBlockPack via `pmy_mesh_->pmb_pack`
 4. Use Kokkos parallel patterns for all loops:
    ```cpp
-   auto &indcs = pmb->pmesh->mb_indcs;
+   auto &indcs = pmy_mesh_->mb_indcs;
+   int nmb = pmbp->nmb_thispack;
    par_for("init", DevExeSpace(), 0, nmb-1, indcs.ks, indcs.ke,
            indcs.js, indcs.je, indcs.is, indcs.ie,
    KOKKOS_LAMBDA(int m, int k, int j, int i) {
-     // Initialize variables
+     // Initialize variables: u0(m,IDN,k,j,i) = rho;
    });
    ```
 5. Build with `-DPROBLEM=my_problem`
+
+### User Hook Functions (registered in problem generator)
+- `user_ref_func`: Custom AMR refinement criteria
+- `user_bcs_func`: Custom boundary conditions
+- `user_srcs_func`: Custom source terms
+- `user_hist_func`: Custom history outputs
+- `pgen_final_func`: Post-simulation analysis
 
 ### Input File Structure
 Input files use the `.athinput` format with parameter blocks:
