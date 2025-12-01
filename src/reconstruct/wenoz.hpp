@@ -26,28 +26,32 @@ KOKKOS_INLINE_FUNCTION
 void WENOZ(const Real &q_im2, const Real &q_im1, const Real &q_i, const Real &q_ip1,
            const Real &q_ip2, Real &ql_ip1, Real &qr_i) noexcept  {
   // Smooth WENO weights: Note that these are from Del Zanna et al. 2007 (A.18)
-  const Real beta_coeff[2]{13. / 12., 0.25};
 
-  Real beta[3];
-  beta[0] = beta_coeff[0] * SQR(q_im2 +     q_i - 2.0*q_im1) +
-            beta_coeff[1] * SQR(q_im2 + 3.0*q_i - 4.0*q_im1);
+  constexpr Real beta_coeff0 = 13.0/12.0, beta_coeff1 = 0.25, beta_coeff4 = 1.0/12.0;
+  constexpr Real epsL = 1.0e-40;
+  constexpr Real t1 = 2.0;
 
-  beta[1] = beta_coeff[0] * SQR(q_im1 + q_ip1 - 2.0*q_i) +
-            beta_coeff[1] * SQR(q_im1 - q_ip1);
+  Real beta0 = beta_coeff0 * SQR(q_im2 +     q_i - 2.0*q_im1) +
+          beta_coeff1 * SQR(q_im2 + 3.0*q_i - 4.0*q_im1);
 
-  beta[2] = beta_coeff[0] * SQR(q_ip2 +      q_i - 2.0*q_ip1) +
-            beta_coeff[1] * SQR(q_ip2 + 3.0* q_i - 4.0*q_ip1);
+  Real beta1 = beta_coeff0 * SQR(q_im1 + q_ip1 - 2.0*q_i) +
+          beta_coeff1 * SQR(q_im1 - q_ip1);
 
-  // Rescale epsilon
-  const Real epsL = 1.0e-42;
+  Real beta2 = beta_coeff0 * SQR(q_ip2 +     q_i - 2.0*q_ip1) +
+          beta_coeff1 * SQR(q_ip2 + 3.0*q_i - 4.0*q_ip1);
 
-  // WENO-Z+: Acker et al. 2016
-  const Real tau_5 = fabs(beta[0] - beta[2]);
+  Real beta4 = beta_coeff4 * SQR(q_im1 - 2.0*q_i + q_ip1);
 
-  Real indicator[3];
-  indicator[0] = tau_5 / (beta[0] + epsL);
-  indicator[1] = tau_5 / (beta[1] + epsL);
-  indicator[2] = tau_5 / (beta[2] + epsL);
+  Real tau_5 = fabs(beta0 - beta2);
+  Real r = (fabs(beta2 - beta1) + epsL) / (fabs(beta0 - beta1) + epsL);
+  Real t0 = 1.0 + r;
+  Real t2 = 1.0 + 1.0/r;
+  Real eta = tau_5*SQR(SQR(tau_5/(fmax(beta0, beta2) + epsL) ));
+
+  Real weight_arg[3];
+  weight_arg[0] = eta/(beta0+epsL) + (tau_5 - eta)/(t0*beta4 + epsL);
+  weight_arg[1] = eta/(beta1+epsL) + (tau_5 - eta)/(t1*beta4 + epsL);
+  weight_arg[2] = eta/(beta2+epsL) + (tau_5 - eta)/(t2*beta4 + epsL);
 
   // compute qL_ip1
   // Factor of 1/6 in coefficients of f[] array applied to alpha_sum to reduce divisions
@@ -57,9 +61,10 @@ void WENOZ(const Real &q_im2, const Real &q_im1, const Real &q_i, const Real &q_
   f[2] = ( 2.0*q_i   + 5.0*q_ip1 -      q_ip2);
 
   Real alpha[3];
-  alpha[0] = 0.1*(1.0 + SQR(indicator[0]));
-  alpha[1] = 0.6*(1.0 + SQR(indicator[1]));
-  alpha[2] = 0.3*(1.0 + SQR(indicator[2]));
+  alpha[0] = 0.1 + 0.1*weight_arg[0];
+  alpha[1] = 0.6 + 0.6*weight_arg[1];
+  alpha[2] = 0.3 + 0.3*weight_arg[2];
+
   Real alpha_sum = 6.0*(alpha[0] + alpha[1] + alpha[2]);
 
   ql_ip1 = (f[0]*alpha[0] + f[1]*alpha[1] + f[2]*alpha[2])/alpha_sum;
@@ -70,16 +75,15 @@ void WENOZ(const Real &q_im2, const Real &q_im1, const Real &q_i, const Real &q_
   f[1] = (-1.0*q_ip1 + 5.0*q_i   + 2.0 *q_im1);
   f[2] = ( 2.0*q_i   + 5.0*q_im1 -      q_im2);
 
-  alpha[0] = 0.1*(1.0 + SQR(indicator[2]));
-  alpha[1] = 0.6*(1.0 + SQR(indicator[1]));
-  alpha[2] = 0.3*(1.0 + SQR(indicator[0]));
+  alpha[0] = 0.1 + 0.1*weight_arg[2];
+  alpha[2] = 0.3 + 0.3*weight_arg[0];
+
   alpha_sum = 6.0*(alpha[0] + alpha[1] + alpha[2]);
 
   qr_i = (f[0]*alpha[0] + f[1]*alpha[1] + f[2]*alpha[2])/alpha_sum;
 
   return;
 }
-
 
 //----------------------------------------------------------------------------------------
 //! \fn WENOZ
