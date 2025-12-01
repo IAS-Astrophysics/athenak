@@ -80,6 +80,7 @@ add_executable(
         mesh/cyclic_zoom.cpp
         mesh/zoom_criteria.cpp
         mesh/zoom_data.cpp
+        mesh/zoom_mesh.cpp
         mesh/zoom_physics.cpp
         mesh/zoom_refinement.cpp
         mesh/zoom_restart.cpp

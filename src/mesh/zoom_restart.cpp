@@ -21,7 +21,8 @@ IOWrapperSizeT CyclicZoom::RestartFileSize() {
   res_size += sizeof(ZoomState);
   // size of cell-centered data
   auto &indcs = pmesh->mb_indcs;
-  int nzoom = nvars;
+  int &mzoom = pzmesh->nzmb_max_perdvce;
+  int &nzoom = pzdata->nvars;
   int nout1 = indcs.nx1 + 2*(indcs.ng);
   int nout2 = (indcs.nx2 > 1)? (indcs.nx2 + 2*(indcs.ng)) : 1;
   int nout3 = (indcs.nx3 > 1)? (indcs.nx3 + 2*(indcs.ng)) : 1;
@@ -49,7 +50,8 @@ void CyclicZoom::WriteRestartFile(IOWrapper &resfile) {
   // write zoom parameters
   resfile.Write_any_type(&(zstate), sizeof(ZoomState), "byte");
   auto &indcs = pmesh->mb_indcs;
-  int nzoom = nvars;
+  int &mzoom = pzmesh->nzmb_max_perdvce;
+  int &nzoom = pzdata->nvars;
   int nout1 = indcs.nx1 + 2*(indcs.ng);
   int nout2 = (indcs.nx2 > 1)? (indcs.nx2 + 2*(indcs.ng)) : 1;
   int nout3 = (indcs.nx3 > 1)? (indcs.nx3 + 2*(indcs.ng)) : 1;
@@ -114,7 +116,8 @@ void CyclicZoom::ReadRestartFile(IOWrapper &resfile) {
   
   // Read pzoom w0 data
   auto &indcs = pmesh->mb_indcs;
-  int nzoom = nvars;
+  int &mzoom = pzmesh->nzmb_max_perdvce;
+  int &nzoom = pzdata->nvars;
   int nout1 = indcs.nx1 + 2*(indcs.ng);
   int nout2 = (indcs.nx2 > 1)? (indcs.nx2 + 2*(indcs.ng)) : 1;
   int nout3 = (indcs.nx3 > 1)? (indcs.nx3 + 2*(indcs.ng)) : 1;

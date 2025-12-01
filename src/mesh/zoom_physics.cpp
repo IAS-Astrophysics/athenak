@@ -60,7 +60,7 @@ void CyclicZoom::BoundaryConditions()
   auto cw0 = pzdata->coarse_w0;
 
   Real rzoom = zregion.radius;
-  int zid = nleaf*(zstate.zone-1);
+  int zid = pzmesh->nleaf*(zstate.zone-1);
   auto &flat = pmesh->pmb_pack->pcoord->coord_data.is_minkowski;
   auto &spin = pmesh->pmb_pack->pcoord->coord_data.bh_spin;
   par_for("fixed_radial", DevExeSpace(),0,nmb-1,ks-ng,ke+ng,js-ng,je+ng,is-ng,ie+ng,
@@ -173,8 +173,8 @@ void CyclicZoom::AddDeltaEField(DvceEdgeFld4D<Real> emf) {
   int nmb1 = pmesh->pmb_pack->nmb_thispack-1;
   if (zamr.first_emf) {
     UpdateDeltaEField(emf);
-    SyncZoomEField(pzdata->emf0,nleaf*(zstate.zone-1));
-    SyncZoomEField(pzdata->delta_efld,nleaf*(zstate.zone-1));
+    SyncZoomEField(pzdata->emf0,pzmesh->nleaf*(zstate.zone-1));
+    SyncZoomEField(pzdata->delta_efld,pzmesh->nleaf*(zstate.zone-1));
     SetMaxEField();
     if (dump_diag) {
       pzdata->DumpData();
@@ -190,7 +190,7 @@ void CyclicZoom::AddDeltaEField(DvceEdgeFld4D<Real> emf) {
   auto ef3 = emf.x3e;
   Real rzoom = zregion.radius;
 
-  int zid = nleaf*(zstate.zone-1);
+  int zid = pzmesh->nleaf*(zstate.zone-1);
   Real f0 = emf_f0; //(rad-rzoom)/rzoom;
   Real f1 = emf_f1; //(rzoom-rad)/rzoom;
   if (zstate.zone > emf_zmax) {
@@ -273,7 +273,7 @@ void CyclicZoom::UpdateDeltaEField(DvceEdgeFld4D<Real> emf) {
   auto ef1 = emf.x1e;
   auto ef2 = emf.x2e;
   auto ef3 = emf.x3e;
-  int zid = nleaf*(zstate.zone-1);
+  int zid = pzmesh->nleaf*(zstate.zone-1);
   Real rin = zregion.radius;
   for (int m=0; m<nmb; ++m) {
     if (pmesh->lloc_eachmb[m+mbs].level == zamr.level) {
@@ -330,7 +330,7 @@ void CyclicZoom::SyncZoomEField(DvceEdgeFld4D<Real> emf, int zid) {
   int e3_slice_size = n_ccells3 * (n_ccells2+1) * (n_ccells1+1);
 
   // int zid = nleaf*(zstate.zone-1);
-  for (int leaf=0; leaf<nleaf; ++leaf) {
+  for (int leaf=0; leaf<pzmesh->nleaf; ++leaf) {
     // determine which rank is the "root" rank
     int zm = zid + leaf;
     int x1r = (leaf%2 == 1); int x2r = (leaf%4 > 1); int x3r = (leaf > 3);
@@ -387,8 +387,8 @@ void CyclicZoom::SetMaxEField() {
   int is = indcs.is, cnx1p1 = indcs.cnx1+1;
   int js = indcs.js, cnx2p1 = indcs.cnx2+1;
   int ks = indcs.ks, cnx3p1 = indcs.cnx3+1;
-  const int zid = nleaf*(zstate.zone-1);
-  const int nmkji = nleaf*cnx3p1*cnx2p1*cnx1p1;
+  const int zid = pzmesh->nleaf*(zstate.zone-1);
+  const int nmkji = pzmesh->nleaf*cnx3p1*cnx2p1*cnx1p1;
   const int nkji = cnx3p1*cnx2p1*cnx1p1;
   const int nji  = cnx2p1*cnx1p1;
   const int ni = cnx1p1;
@@ -717,7 +717,7 @@ Real CyclicZoom::EMFTimeStep(Mesh* pm) {
   auto de3 = pzdata->delta_efld.x3e;
   Real rzoom = zregion.radius;
 
-  int zid = nleaf*(zstate.zone-1);
+  int zid = pzmesh->nleaf*(zstate.zone-1);
   Real &f0 = emf_f0; //(rad-rzoom)/rzoom;
   Real &f1 = emf_f1; //(rzoom-rad)/rzoom;
 

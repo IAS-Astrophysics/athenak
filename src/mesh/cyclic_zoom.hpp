@@ -68,6 +68,7 @@ typedef struct ZoomInterval {
 } ZoomInterval;
 
 // Forward declaration
+class ZoomMesh;
 class ZoomData;
 
 //----------------------------------------------------------------------------------------
@@ -75,6 +76,7 @@ class ZoomData;
 
 class CyclicZoom
 {
+  friend class ZoomMesh;
   friend class ZoomData;
  public:
   CyclicZoom(Mesh *pmesh, ParameterInput *pin);
@@ -90,13 +92,8 @@ class CyclicZoom
   bool fix_efield;         // flag for fixing electric field
   bool dump_diag;          // flag for dumping diagnostic output
   int ndiag;               // cycles between diagostic output
-  int mzoom;               // number of zoom meshblocks
-  int nleaf;               // number of zoom meshblocks on each level
-  int nvars;               // number of variables
   int nflux;               // number of fluxes through spherical surfaces
   int emf_flag;            // flag for modifying electric field
-  Real d_zoom;             // density within inner boundary
-  Real p_zoom;             // pressure within inner boundary
   Real emf_f0, emf_f1;     // electric field factor, e = f0 * e0 + f1 * e1
   Real emf_fmax;           // maximum electric field factor
   int  emf_zmax;           // maximum zone number for electric field
@@ -109,12 +106,13 @@ class CyclicZoom
   ZoomState zstate;        // zoom runtime state
 
   // array_sum::GlobalSum nc1, nc2, nc3, em1, em2, em3;
+  ZoomMesh *pzmesh;        // zoom mesh
   ZoomData *pzdata;        // zoom data
 
   // functions
-  void Initialize();
+  void Initialize(ParameterInput *pin);
   void Update(const bool restart);
-  void PrintInfo();
+  void PrintCyclicZoomDiagnostics();
   // AMR functions
   void CheckRefinement();
   void UpdateState();
@@ -156,17 +154,26 @@ class CyclicZoom
 class ZoomMesh
 {
  public:
-  ZoomMesh() = default;
+  ZoomMesh(CyclicZoom *pz, ParameterInput *pin);
   ~ZoomMesh() = default;
 
   // data
-  int zm_id;               // zoom mesh id
-  int zm_level;            // zoom mesh level
-  int zm_nx1, zm_nx2, zm_nx3; // zoom mesh dimensions
-  Real zm_dx1, zm_dx2, zm_dx3; // zoom mesh cell sizes
-  Real zm_x1min, zm_x1max; // zoom mesh x1 min/max
-  Real zm_x2min, zm_x2max; // zoom mesh x2 min/max
-  Real zm_x3min, zm_x3max; // zoom mesh x3 min/max
+  int max_level;           // maximum zoom mesh level
+  int min_level;           // minimum zoom mesh level
+  int nlevels;             // number of zoom mesh levels
+  // int mzoom;               // number of zoom meshblocks
+  int nleaf;               // number of zoom meshblocks on each level
+  int nzmb_total;          // total number of Zoom MeshBlocks across all levels/ranks
+  // int nmb_thisrank;        // number of MeshBlocks on this MPI rank (local)
+  int nzmb_thisdvce;       // number of Zoom MeshBlocks on this device (local)
+  int nzmb_thishost;       // number of Zoom MeshBlocks on this host (local)
+  int nzmb_max_perdvce;    // max allowed number of Zoom MBs per device (memory limit for AMR)
+  int nzmb_max_perhost;    // max allowed number of Zoom MBs per host (memory limit for AMR)
+  int *rank_eachmb;              // rank of each MeshBlock
+  LogicalLocation *lloc_eachmb;  // LogicalLocations for each MeshBlock
+  // following 2x arrays allocated with length [nranks] in BuildTreeFromXXXX()
+  int *gids_eachrank;      // starting global ID of MeshBlocks in each rank
+  int *nmb_eachrank;       // number of MeshBlocks on each rank
 
  private:
   CyclicZoom *pzoom;       // ptr to CyclicZoom containing this ZoomMesh module
@@ -178,16 +185,19 @@ class ZoomData
 {
   friend class CyclicZoom;
  public:
-  ZoomData(CyclicZoom *pz);
+  ZoomData(CyclicZoom *pz, ParameterInput *pin);
   ~ZoomData() = default;
   // data
+  int nvars;               // number of variables
+  Real d_zoom;             // density within inner boundary
+  Real p_zoom;             // pressure within inner boundary
   // std::vector<HostArray5D<Real>> vu0;  // Vector of conserved variables
   // std::vector<HostArray5D<Real>> vw0;  // Vector of primitive variables
   // std::vector<HostArray5D<Real>> vcoarse_u0;  // Vector of coarse conserved variables
   // std::vector<HostArray5D<Real>> vcoarse_w0;  // Vector of coarse primitive variables
   // std::vector<HostEdgeFld4D<Real>> vef0; // Vector of edge-centered electric fields just after zoom
   // std::vector<HostEdgeFld4D<Real>> vdelta_efld; // Vector of change in electric fields
-  
+
   DvceArray5D<Real> u0;    // conserved variables
   DvceArray5D<Real> w0;    // primitive variables
   DvceArray5D<Real> coarse_u0;  // coarse conserved variables
@@ -199,6 +209,14 @@ class ZoomData
   DvceEdgeFld4D<Real> emf0;   // edge-centered electric fields just after zoom
   DvceEdgeFld4D<Real> delta_efld; // change in electric fields
 
+  HostArray5D<Real> hu0;    // conserved variables
+  HostArray5D<Real> hw0;    // primitive variables
+  HostArray5D<Real> hcoarse_u0;  // coarse conserved variables
+  HostArray5D<Real> hcoarse_w0;  // coarse primitive variables
+  HostEdgeFld4D<Real> hefld;   // edge-centered electric fields (fluxes of B)
+  HostEdgeFld4D<Real> hemf0;   // edge-centered electric fields just after zoom
+  HostEdgeFld4D<Real> hdelta_efld; // change in electric fields
+
   HostArray2D<Real> max_emf0;  // maximum electric field
 
   HostArray5D<Real> harr_5d;  // host copy of 5D arrays
@@ -209,7 +227,8 @@ class ZoomData
   void DumpData();
 
  private:
-  CyclicZoom *pzoom;       // ptr to CyclicZoom containing this ZoomVariable module
+  CyclicZoom *pzoom;       // ptr to CyclicZoom containing this ZoomData module
+  ZoomMesh   *pzmesh;      // ptr to ZoomMesh containing this ZoomData module
 };
 
 #endif // MESH_CYCLIC_ZOOM_HPP_

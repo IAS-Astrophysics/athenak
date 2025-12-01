@@ -75,10 +75,10 @@ void CyclicZoom::UpdateVariables() {
   }
   auto cu = pzdata->coarse_u0, cw = pzdata->coarse_w0;
   // zoom state has updated
-  int zid = nleaf*(zstate.zone - 1);
-  int nlf = nleaf;
+  int zid = pzmesh->nleaf*(zstate.zone - 1);
+  int nlf = pzmesh->nleaf;
   Real rzoom = zregion.radius;
-  int nvar = nvars;
+  int nvar = pzdata->nvars;
   Real rin = zregion.radius;
   // TODO(@mhguo): it looks 0.8*rzoom works, but ideally should use edge center
   Real refac = re_fac; // r < refac*rzoom
@@ -336,11 +336,13 @@ void CyclicZoom::SyncVariables() {
   int n_ccells1 = indcs.cnx1 + 2*(indcs.ng);
   int n_ccells2 = (indcs.cnx2 > 1)? (indcs.cnx2 + 2*(indcs.ng)) : 1;
   int n_ccells3 = (indcs.cnx3 > 1)? (indcs.cnx3 + 2*(indcs.ng)) : 1;
+  int &nvars = pzdata->nvars;
   int u0_slice_size = nvars * ncells1 * ncells2 * ncells3;
   int w0_slice_size = nvars * ncells1 * ncells2 * ncells3;
   int cu_slice_size = nvars * n_ccells1 * n_ccells2 * n_ccells3;
   int cw_slice_size = nvars * n_ccells1 * n_ccells2 * n_ccells3;
   // zoom state has updated
+  int &nleaf = pzmesh->nleaf;
   int zid = nleaf*(zstate.zone - 1);
   for (int leaf=0; leaf<nleaf; ++leaf) {
     // determine which rank is the "root" rank
@@ -412,7 +414,8 @@ void CyclicZoom::UpdateGhostVariables() {
   int cnx1 = indcs.cnx1, cnx2 = indcs.cnx2, cnx3 = indcs.cnx3;
   auto u = pzdata->u0, w = pzdata->w0;
   auto cu = pzdata->coarse_u0, cw = pzdata->coarse_w0;
-  int nvar = nvars;
+  int &nvar = pzdata->nvars;
+  int &nleaf = pzmesh->nleaf;
   // zoom state has updated
   int zid = nleaf*(zstate.zone - 1);
   for (int leaf=0; leaf<nleaf; ++leaf) {
@@ -485,6 +488,7 @@ void CyclicZoom::ApplyVariables() {
   auto &flat = pmesh->pmb_pack->pcoord->coord_data.is_minkowski;
   auto &spin = pmesh->pmb_pack->pcoord->coord_data.bh_spin;
   auto u0_ = pzdata->u0, w0_ = pzdata->w0;
+  int &nleaf = pzmesh->nleaf;
   int zid = nleaf*zstate.zone;
   for (int m=0; m<nmb; ++m) {
     if (pmesh->lloc_eachmb[m+mbs].level == zamr.level) {

@@ -73,15 +73,7 @@ CyclicZoom::CyclicZoom(Mesh *pm, ParameterInput *pin) :
   zstate.next_time = pmesh->time;
   SetRegionAndInterval();
   zstate.next_time += zint.runtime;
-
-  nleaf = 2;
-  if (pmesh->two_d) nleaf = 4;
-  if (pmesh->three_d) nleaf = 8;
-  mzoom = nleaf*zamr.nlevels;
-  nvars = pin->GetOrAddInteger("cyclic_zoom","nvars",5);
   // TODO(@mhguo): move to a new struct?
-  d_zoom = pin->GetOrAddReal("cyclic_zoom","d_zoom",(FLT_MIN));
-  p_zoom = pin->GetOrAddReal("cyclic_zoom","p_zoom",(FLT_MIN));
   nflux = 3;
   emf_flag = 0;
   emf_f0 = 1.0;
@@ -105,8 +97,8 @@ CyclicZoom::CyclicZoom(Mesh *pm, ParameterInput *pin) :
   //             << total_mem/1e9 << " GB total" << std::endl;
   // }
 
-  Initialize();
-  PrintInfo();
+  Initialize(pin);
+  PrintCyclicZoomDiagnostics();
 
   return;
 }
@@ -115,9 +107,10 @@ CyclicZoom::CyclicZoom(Mesh *pm, ParameterInput *pin) :
 //! \fn void CyclicZoom::Initialize()
 //! \brief Initialize CyclicZoom variables
 
-void CyclicZoom::Initialize()
+void CyclicZoom::Initialize(ParameterInput *pin)
 {
-  pzdata = new ZoomData(this);
+  pzmesh = new ZoomMesh(this, pin);
+  pzdata = new ZoomData(this, pin);
   return;
 }
 
@@ -138,10 +131,10 @@ void CyclicZoom::Update(const bool restart)
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn void CyclicZoom::PrintInfo()
+//! \fn void CyclicZoom::PrintCyclicZoomDiagnostics()
 //! \brief Print CyclicZoom information
 
-void CyclicZoom::PrintInfo()
+void CyclicZoom::PrintCyclicZoomDiagnostics()
 {
   if (global_variable::my_rank == 0) {
     std::cout << "============== CyclicZoom Information ==============" << std::endl;
@@ -152,9 +145,10 @@ void CyclicZoom::PrintInfo()
               << " zoom_dt = " << zoom_dt << " fix_efield = " << fix_efield
               << " emf_flag = " << emf_flag << std::endl;
     // print model parameters
-    std::cout << "Model: mzoom = " << mzoom << " nvars = " << nvars
-              << " d_zoom = " << d_zoom
-              << " p_zoom = " << p_zoom  << std::endl;
+    std::cout << "Model: mzoom = " << pzmesh->nzmb_max_perdvce
+              << " nvars = " << pzdata->nvars
+              << " d_zoom = " << pzdata->d_zoom << " p_zoom = " << pzdata->p_zoom
+              << std::endl;
     // print electric field parameters
     std::cout << "Efield: emf_f0 = " << emf_f0 << " emf_f1 = " << emf_f1
               << " emf_fmax = " << emf_fmax << " emf_zmax = " << emf_zmax
