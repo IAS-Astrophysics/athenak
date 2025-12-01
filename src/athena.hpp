@@ -1,9 +1,9 @@
 #ifndef ATHENA_HPP_
 #define ATHENA_HPP_
 //========================================================================================
-// AthenaXXX astrophysical plasma code
-// Copyright(C) 2020 James M. Stone <jmstone@ias.edu> and the Athena code team
-// Licensed under the 3-clause BSD License (the "LICENSE")
+// AthenaK astrophysical fluid dynamics & numerical relativity code
+// Copyright(C) 2020 James M. Stone <jmstone@ias.edu> and the AthenaK collaboration
+// Licensed under the 3-clause BSD License, see LICENSE file for details
 //========================================================================================
 //! \file athena.hpp
 //  \brief contains Athena++ general purpose types, structures, enums, etc.
@@ -37,12 +37,19 @@ using Real = double;
 //----------------------------------------------------------------------------------------
 // general purpose macros (never modified)
 
-// number of bits needed to store MeshBlock local ID in each rank in an integer.  Thus
-// maximum number of MBs per rank is 2^(NUM_BITS_LID).  Limit is set by MPI tag limit
+// number of bits used to store MeshBlock local ID in MPI message tags.  Thus maximum
+// number of MBs per rank is 2^(NUM_BITS_LID). This limit is required because the MPI
+// standard requires signed int tag, with MPI_TAG_UB>=2^15-1 = 32,767 (inclusive). In fact
+// virtually every library allows this limit to be exceeded. As of 2025, the Intel MPI
+// library provided the most stringent limit of 20 bits per tag. Six bits are needed to
+// store the buffer ID, leaving NUM_BITS_LID=14
 #define NUM_BITS_LID 14
 
 #define SQR(x) ( (x)*(x) )
 #define SIGN(x) ( ((x) < 0.0) ? -1.0 : 1.0 )
+#define ONE_3RD  0.3333333333333333
+#define TWO_3RDS 0.6666666666666667
+#define FOUR_3RDS 1.333333333333333
 
 // data types only used in physics modules (defined here to avoid recursive dependencies)
 

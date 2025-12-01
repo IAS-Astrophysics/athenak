@@ -61,8 +61,9 @@ void Mesh::BuildTreeFromScratch(ParameterInput *pin) {
     max_level = 31;
   }
 
-  // For meshes with refinement, construct new nodes for <refinement> blocks in input file
-
+  // Read <refined_region> blocks and construct tree accordingly
+  // These regions can be used with both SMR (in which case they will remain fixed) and
+  // AMR (in which case they may be defined, unless the location refinement criteria used)
   if (multilevel) {
     // error check that number of cells in MeshBlock divisible by two
     if (mb_indcs.nx1 % 2 != 0 ||
@@ -74,10 +75,10 @@ void Mesh::BuildTreeFromScratch(ParameterInput *pin) {
       std::exit(EXIT_FAILURE);
     }
 
-    // cycle through ParameterInput list and find "refinement" blocks (SMR), extract data
-    // Expand MeshBlockTree to include "refinement" regions specified in input file:
+    // cycle through ParameterInput list and find "refined_region" blocks, extract data
+    // and expand MeshBlockTree
     for (auto it = pin->block.begin(); it != pin->block.end(); ++it) {
-      if (it->block_name.compare(0, 10, "refinement") == 0) {
+      if (it->block_name.compare(0, 14, "refined_region") == 0) {
         RegionSize ref_size;
         ref_size.x1min = pin->GetReal(it->block_name, "x1min");
         ref_size.x1max = pin->GetReal(it->block_name, "x1max");
@@ -102,13 +103,13 @@ void Mesh::BuildTreeFromScratch(ParameterInput *pin) {
         // error check parameters in "refinement" blocks
         if (phy_ref_lev < 1) {
           std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-              << std::endl << "Refinement level must be larger than 0 (root level = 0)"
+              << std::endl <<"<refined_region> level must be larger than 0 (root level=0)"
               << std::endl;
           std::exit(EXIT_FAILURE);
         }
         if (log_ref_lev > max_level) {
           std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-              << std::endl << "Refinement level exceeds maximum allowed ("
+              << std::endl << "<refined_region> level exceeds maximum allowed ("
               << max_level << ")" << std::endl << "Reduce/specify 'num_levels' in "
               << "<mesh_refinement> input block if using AMR" << std::endl;
           std::exit(EXIT_FAILURE);
@@ -117,7 +118,7 @@ void Mesh::BuildTreeFromScratch(ParameterInput *pin) {
             || ref_size.x2min > ref_size.x2max
             || ref_size.x3min > ref_size.x3max)  {
           std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-              << std::endl << "Invalid refinement region (xmax < xmin in one direction)."
+              << std::endl << "Invalid <refined_region> (xmax < xmin in one direction)."
               << std::endl;
           std::exit(EXIT_FAILURE);
         }
@@ -125,7 +126,7 @@ void Mesh::BuildTreeFromScratch(ParameterInput *pin) {
             || ref_size.x2min < mesh_size.x2min || ref_size.x2max > mesh_size.x2max
             || ref_size.x3min < mesh_size.x3min || ref_size.x3max > mesh_size.x3max) {
           std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-              << std::endl << "Refinement region must be fully contained within root mesh"
+              << std::endl << "<refined_region> must be fully contained within root mesh"
               << std::endl;
           std::exit(EXIT_FAILURE);
         }

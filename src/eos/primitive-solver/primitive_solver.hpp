@@ -133,10 +133,11 @@ class PrimitiveSolver {
       // Now we can get an estimate of the temperature, and from that, the pressure and
       // enthalpy.
       Real That = peos->GetTemperatureFromE(nhat, ehat, Y);
-      peos->ApplyTemperatureLimits(That);
+      //peos->ApplyTemperatureLimits(That);
       //ehat = peos->GetEnergy(nhat, That, Y);
       Real Phat = peos->GetPressure(nhat, That, Y);
-      Real hhat = peos->GetEnthalpy(nhat, That, Y);
+      //Real hhat = peos->GetEnthalpy(nhat, That, Y);
+      Real hhat = (ehat + Phat)/(mb*nhat);
 
       // Now we can get two different estimates for nu = h/W.
       Real nu_a = hhat*iWhat;
@@ -315,23 +316,6 @@ Error PrimitiveSolver<EOSPolicy, ErrorPolicy>::CheckDensityValid(Real& mul, Real
     if (f <= 0) {
       // W is not physical, so rho must be larger than rho_max.
       return Error::RHO_TOO_BIG;
-    } else {
-      MuFromW(f, df, mul, bsq, rsq, rbsq, W);
-      if (f < 0) {
-        Real mu;
-        Real mulc = mul;
-        Real muhc = muh;
-        // We can tighten up the bounds for mul.
-        // The derivative is zero at mu = 0, so we perturb it slightly.
-        /*if (mu <= root.tol) {
-          mu += root.tol;
-        }*/
-        bool result = root.NewtonSafe(MuFromW, mulc, muhc, mu, 1e-10, bsq, rsq, rbsq, W);
-        if (!result) {
-          return Error::BRACKETING_FAILED;
-        }
-        mul = (mu > mul) ? mu : mul;
-      }
     }
   }
   if (D < W_max*rho_min) {
@@ -341,19 +325,6 @@ Error PrimitiveSolver<EOSPolicy, ErrorPolicy>::CheckDensityValid(Real& mul, Real
     if (f >= 0) {
       // W is not physical, so rho must be smaller than rho_min.
       return Error::RHO_TOO_SMALL;
-    } else {
-      MuFromW(f, df, muh, bsq, rsq, rbsq, W);
-      if (f > 0) {
-        Real mu = muh;
-        Real mulc = mul;
-        Real muhc = muh;
-        // We can tighten up the bounds for muh.
-        bool result = root.NewtonSafe(MuFromW, mulc, muhc, mu, 1e-10, bsq, rsq, rbsq, W);
-        if (!result) {
-          return Error::BRACKETING_FAILED;
-        }
-        muh = (mu < muh) ? mu : muh;
-      }
     }
   }
   return Error::SUCCESS;
@@ -375,11 +346,14 @@ SolverResult PrimitiveSolver<EOSPolicy, ErrorPolicy>::ConToPrim(Real prim[NPRIM]
   // Extract the particle fractions.
   const int n_species = eos.GetNSpecies();
   Real Y[MAX_SPECIES] = {0.0};
-  for (int s = 0; s < n_species; s++) {
-    Y[s] = cons[CYD + s]/cons[CDN];
+  // Avoid division by zero.
+  if (cons[CDN] > 0 ) {
+    for (int s = 0; s < n_species; s++) {
+      Y[s] = cons[CYD + s]/cons[CDN];
+    }
   }
   // Apply limits to Y to ensure a physical state
-  eos.ApplySpeciesLimits(Y);
+  bool Y_adjusted = eos.ApplySpeciesLimits(Y);
 
   // Check the conserved variables for consistency and do whatever
   // the EOSPolicy wants us to.
@@ -389,6 +363,12 @@ SolverResult PrimitiveSolver<EOSPolicy, ErrorPolicy>::ConToPrim(Real prim[NPRIM]
     HandleFailure(prim, cons, b, g3d);
     solver_result.error = Error::CONS_FLOOR;
     return solver_result;
+  }
+  // If a floor is applied or Y is adjusted, we need to propagate the changes back to DYe.
+  if (floored || Y_adjusted) {
+    for (int s = 0; s < n_species; s++) {
+      cons[CYD + s] = D*Y[s];
+    }
   }
 
   // Calculate some utility quantities.
@@ -548,7 +528,7 @@ SolverResult PrimitiveSolver<EOSPolicy, ErrorPolicy>::ConToPrim(Real prim[NPRIM]
     return solver_result;
   }
   solver_result.cons_adjusted = solver_result.cons_adjusted || floored ||
-                                solver_result.cons_floor;
+                                solver_result.cons_floor || Y_adjusted;
 
   prim[PRH] = n;
   prim[PPR] = P;

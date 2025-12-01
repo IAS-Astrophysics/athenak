@@ -26,8 +26,8 @@ class Conduction;
 class SourceTerms;
 class OrbitalAdvectionCC;
 class OrbitalAdvectionFC;
-class ShearingBoxBoundaryCC;
-class ShearingBoxBoundaryFC;
+class ShearingBoxCC;
+class ShearingBoxFC;
 class Driver;
 
 // function ptr for user-defined MHD boundary functions enrolled in problem generator
@@ -114,8 +114,8 @@ class MHD {
   // Orbital advection and shearing box BCs
   OrbitalAdvectionCC *porb_u = nullptr;
   OrbitalAdvectionFC *porb_b = nullptr;
-  ShearingBoxBoundaryCC *psbox_u = nullptr;
-  ShearingBoxBoundaryFC *psbox_b = nullptr;
+  ShearingBoxCC *psbox_u = nullptr;
+  ShearingBoxFC *psbox_b = nullptr;
 
   // Object(s) for extra physics (viscosity, resistivity, thermal conduction, srcterms)
   Viscosity *pvisc = nullptr;

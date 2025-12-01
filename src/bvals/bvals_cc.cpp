@@ -142,6 +142,7 @@ TaskStatus MeshBoundaryValuesCC::PackAndSendCC(DvceArray5D<Real> &a,
         }
       });
     } // end if-neighbor-exists block
+    tmember.team_barrier();
   }); // end par_for_outer
 
   Kokkos::parallel_for("SendBuff", policy, KOKKOS_LAMBDA(TeamMember_t tmember) {
@@ -198,6 +199,7 @@ TaskStatus MeshBoundaryValuesCC::PackAndSendCC(DvceArray5D<Real> &a,
         });
       }
     } // end if-neighbor-exists block
+    tmember.team_barrier();
   }); // end par_for_outer
   }
 
@@ -362,6 +364,7 @@ TaskStatus MeshBoundaryValuesCC::RecvAndUnpackCC(DvceArray5D<Real> &a,
         }
       });
     }  // end if-neighbor-exists block
+    tmember.team_barrier();
   });  // end par_for_outer
 
   // Outer loop over (# of MeshBlocks)*(# of buffers)*(# of variables)
@@ -401,6 +404,7 @@ TaskStatus MeshBoundaryValuesCC::RecvAndUnpackCC(DvceArray5D<Real> &a,
         });
       }
     }  // end if-neighbor-exists block
+    tmember.team_barrier();
   });  // end par_for_outer
 
   return TaskStatus::complete;

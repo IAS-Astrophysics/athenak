@@ -1,0 +1,69 @@
+# AthenaK input file for HYDRO linear wave tests with AMR
+
+<comment>
+problem   = hydro linear waves
+reference = Stone et al, ApJS 178, 137 (2008), sect 8.1
+
+<job>
+basename  = LinWave    # problem ID: basename of output filenames
+
+<mesh>
+nghost    = 2          # Number of ghost cells
+nx1       = 64         # Number of zones in X1-direction
+x1min     = 0.0        # minimum value of X1
+x1max     = 3.0        # maximum value of X1
+ix1_bc    = periodic   # inner-X1 boundary flag
+ox1_bc    = periodic   # outer-X1 boundary flag
+
+nx2       = 32         # Number of zones in X2-direction
+x2min     = 0.0        # minimum value of X2
+x2max     = 1.5        # maximum value of X2
+ix2_bc    = periodic   # inner-X2 boundary flag
+ox2_bc    = periodic   # outer-X2 boundary flag
+
+nx3       = 32         # Number of zones in X3-direction
+x3min     = 0.0        # minimum value of X3
+x3max     = 1.5        # maximum value of X3
+ix3_bc    = periodic   # inner-X3 boundary flag
+ox3_bc    = periodic   # outer-X3 boundary flag
+
+<meshblock>
+nx1       = 8          # Number of cells in each MeshBlock, X1-dir
+nx2       = 8          # Number of cells in each MeshBlock, X2-dir
+nx3       = 8          # Number of cells in each MeshBlock, X3-dir
+
+<mesh_refinement>
+refinement       = adaptive    # type of refinement
+max_nmb_per_rank = 512
+num_levels       = 2
+
+<amr_criterion1>
+method    = min_max
+variable  = hydro_u_d
+value_max = 1.0008
+
+<time>
+evolution  = dynamic   # dynamic/kinematic/static
+integrator = rk2       # time integration algorithm
+cfl_number = 0.3       # The Courant, Friedrichs, & Lewy (CFL) Number
+nlim       = -1        # cycle limit (no limit if <0)
+tlim       = 1.0       # time limit
+ndiag      = 1         # cycles between diagostic output
+
+<hydro>
+eos         = ideal    # EOS type
+reconstruct = plm      # spatial reconstruction method
+rsolver     = llf      # Riemann-solver to be used
+gamma       = 1.66666666667   # gamma = C_p/C_v
+iso_sound_speed = 1.0     # isothermal sound speed
+
+<problem>
+pgen_name = linear_wave # problem generator name
+wave_flag = 0           # Wave family number ([0-4] for adiabatic hydro, [0-6] for MHD)
+amp       = 1.0e-3      # Wave Amplitude
+dens      = 1.0         # density in background state
+pgas      = 0.6         # pressure in background state
+vx0       = 0.0         # x-velocity in background state
+along_x1  = false       # set to 'true' for wave along x1-axis
+along_x2  = false       # set to 'true' for wave along x2-axis
+along_x3  = false       # set to 'true' for wave along x3-axis

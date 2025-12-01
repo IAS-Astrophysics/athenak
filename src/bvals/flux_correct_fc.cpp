@@ -140,7 +140,6 @@ TaskStatus MeshBoundaryValuesFC::PackAndSendFluxFC(DvceEdgeFld4D<Real> &flx) {
             }
           }
         });
-        tmember.team_barrier();
 
       // x2faces (only load x1e and x3e)
       } else if (n<16) {
@@ -191,7 +190,6 @@ TaskStatus MeshBoundaryValuesFC::PackAndSendFluxFC(DvceEdgeFld4D<Real> &flx) {
             }
           }
         });
-        tmember.team_barrier();
 
       // x1x2 edges (only load x3e)
       } else if (n<24) {
@@ -222,7 +220,6 @@ TaskStatus MeshBoundaryValuesFC::PackAndSendFluxFC(DvceEdgeFld4D<Real> &flx) {
               sbuf[n].flux(m, ndat*v + (k-kl)) = rflx;
             }
           });
-          tmember.team_barrier();
         }
 
       // x3faces (only load x1e and x2e)
@@ -266,7 +263,6 @@ TaskStatus MeshBoundaryValuesFC::PackAndSendFluxFC(DvceEdgeFld4D<Real> &flx) {
             }
           }
         });
-        tmember.team_barrier();
 
       // x3x1 edges (only load x2e)
       } else if (n<40) {
@@ -292,7 +288,6 @@ TaskStatus MeshBoundaryValuesFC::PackAndSendFluxFC(DvceEdgeFld4D<Real> &flx) {
               sbuf[n].flux(m, ndat*v + (j-jl)) = rflx;
             }
           });
-          tmember.team_barrier();
         }
 
       // x2x3 edges (only load x1e)
@@ -319,10 +314,10 @@ TaskStatus MeshBoundaryValuesFC::PackAndSendFluxFC(DvceEdgeFld4D<Real> &flx) {
               sbuf[n].flux(m, ndat*v + i-il) = rflx;
             }
           });
-          tmember.team_barrier();
         }
       }
     }  // end if-neighbor-exists block
+    tmember.team_barrier();
   });  // end par_for_outer
 
 #if MPI_PARALLEL_ENABLED
@@ -442,20 +437,20 @@ TaskStatus MeshBoundaryValuesFC::RecvAndUnpackFluxFC(DvceEdgeFld4D<Real> &flx) {
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn  void MeshBoundaryValuesFC::SumBoundaryFluxes
+//! \fn  void BoundaryValuesFC::SumBoundaryFluxes
 //! \brief Sums boundary buffer fluxes from neighboring MeshBlocks at the same level into
 //! flux (e.g. EMF) array if input argument 'same_level=true', or sums boundary buffer
 //! fluxes from neighboring MeshBlocks at a finer level into flux array otherwise.
 
 void MeshBoundaryValuesFC::SumBoundaryFluxes(DvceEdgeFld4D<Real> &flx,
-                                             const bool same_level,
-                                             DvceArray2D<int> &nflx) {
+                                          const bool same_level, DvceArray2D<int> &nflx) {
   // create local references for variables in kernel
   int nmb = pmy_pack->nmb_thispack;
   int nnghbr = pmy_pack->pmb->nnghbr;
   auto &nghbr = pmy_pack->pmb->nghbr;
   auto &rbuf = recvbuf;
   auto &mblev = pmy_pack->pmb->mb_lev;
+  auto &mbbcs = pmy_pack->pmb->mb_bcs;
 
   // Sum recieve buffers into EMFs stored on MeshBlocks
   // Outer loop over (# of MeshBlocks)*(3 field components)
@@ -469,9 +464,30 @@ void MeshBoundaryValuesFC::SumBoundaryFluxes(DvceEdgeFld4D<Real> &flx,
       // only unpack buffers when neighbor exists AND
       // (neighbor at same level when same_level=true on input) OR
       // (neighbor at finer level when same_level=false on input)
-      if ( (nghbr.d_view(m,n).gid >= 0) &&
-           (((same_level) && (nghbr.d_view(m,n).lev == mblev.d_view(m))) ||
-            (!(same_level) && (nghbr.d_view(m,n).lev > mblev.d_view(m)))) ) {
+      if (    (nghbr.d_view(m,n).gid >= 0) &&
+           (( (same_level) && (nghbr.d_view(m,n).lev == mblev.d_view(m))) ||
+            (!(same_level) && (nghbr.d_view(m,n).lev >  mblev.d_view(m)))) ) {
+        bool inner_bufs=false, outer_bufs=false;
+        if ((n==0)||(n==16)||(n==20)||(n==32)||(n==33)||(n==36)||(n==37)) {
+          inner_bufs=true;
+        }
+        if ((n==4)||(n==18)||(n==22)||(n==34)||(n==35)||(n==38)||(n==39)) {
+          outer_bufs=true;
+        }
+
+      // only unpack buffers when
+      //   (both innerx1 AND outerx1 BCs are NOT shear_periodic) OR
+      //   (only innerx1 BC is shear_periodic AND n!=0,16,20,32,33,36,37) OR
+      //   (only outerx1 BC is shear_periodic AND n!=4,18,22,34,35,38,39) OR
+      //   (both innerx1 AND outerx1 BC are shear_periodic AND n!=...)
+      if ( ((mbbcs.d_view(m,0)!=BoundaryFlag::shear_periodic) &&
+            (mbbcs.d_view(m,1)!=BoundaryFlag::shear_periodic)) ||
+           ((mbbcs.d_view(m,0)==BoundaryFlag::shear_periodic) && !(inner_bufs) &&
+            (mbbcs.d_view(m,1)!=BoundaryFlag::shear_periodic)) ||
+           ((mbbcs.d_view(m,0)!=BoundaryFlag::shear_periodic) &&
+            (mbbcs.d_view(m,1)==BoundaryFlag::shear_periodic) && !(outer_bufs)) ||
+           ((mbbcs.d_view(m,0)==BoundaryFlag::shear_periodic) && !(inner_bufs) &&
+            (mbbcs.d_view(m,1)==BoundaryFlag::shear_periodic) && !(outer_bufs)) ) {
         int il, iu, jl, ju, kl, ku, ndat;
         // if neighbor is at same level, use same indices to unpack buffer
         if (same_level) {
@@ -507,13 +523,11 @@ void MeshBoundaryValuesFC::SumBoundaryFluxes(DvceEdgeFld4D<Real> &flx,
               Kokkos::single(Kokkos::PerTeam(tmember), [&] () {
                 nflx(m,16) += 1; nflx(m,20) += 1; nflx(m,32) += 1; nflx(m,36) += 1;
               });
-              tmember.team_barrier();
             }
             if (n==4) {
               Kokkos::single(Kokkos::PerTeam(tmember), [&] () {
                 nflx(m,18) += 1; nflx(m,22) += 1; nflx(m,34) += 1; nflx(m,38) += 1;
               });
-              tmember.team_barrier();
             }
           } else {
             Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember,nkj),
@@ -527,7 +541,6 @@ void MeshBoundaryValuesFC::SumBoundaryFluxes(DvceEdgeFld4D<Real> &flx,
                 flx.x3e(m,k,j,il) += rbuf[n].flux(m,ndat*v + (j-jl + nj*(k-kl)));
               }
             });
-            tmember.team_barrier();
           }
 
         // x2faces
@@ -538,13 +551,11 @@ void MeshBoundaryValuesFC::SumBoundaryFluxes(DvceEdgeFld4D<Real> &flx,
               Kokkos::single(Kokkos::PerTeam(tmember), [&] () {
                 nflx(m,16) += 1; nflx(m,18) += 1; nflx(m,40) += 1; nflx(m,44) += 1;
               });
-              tmember.team_barrier();
             }
             if (n==12) {
               Kokkos::single(Kokkos::PerTeam(tmember), [&] () {
                 nflx(m,20) += 1; nflx(m,22) += 1; nflx(m,42) += 1; nflx(m,46) += 1;
               });
-              tmember.team_barrier();
             }
           }
           Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember,nki),
@@ -558,7 +569,6 @@ void MeshBoundaryValuesFC::SumBoundaryFluxes(DvceEdgeFld4D<Real> &flx,
               flx.x3e(m,k,jl,i) += rbuf[n].flux(m,ndat*v + i-il + ni*(k-kl));
             }
           });
-          tmember.team_barrier();
 
         // x1x2 edges
         } else if (n<24) {
@@ -567,13 +577,11 @@ void MeshBoundaryValuesFC::SumBoundaryFluxes(DvceEdgeFld4D<Real> &flx,
             Kokkos::single(Kokkos::PerTeam(tmember), [&] () {
               nflx(m,n) += 1;
             });
-            tmember.team_barrier();
           } else if (v==2) {
             Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember,nk),[&](const int idx){
               int k = idx + kl;
               flx.x3e(m,k,jl,il) += rbuf[n].flux(m,ndat*v + (k-kl));
             });
-            tmember.team_barrier();
           }
 
         // x3faces
@@ -584,13 +592,11 @@ void MeshBoundaryValuesFC::SumBoundaryFluxes(DvceEdgeFld4D<Real> &flx,
               Kokkos::single(Kokkos::PerTeam(tmember), [&] () {
                 nflx(m,32) += 1; nflx(m,34) += 1; nflx(m,40) += 1; nflx(m,42) += 1;
               });
-              tmember.team_barrier();
             }
             if (n==28) {
               Kokkos::single(Kokkos::PerTeam(tmember), [&] () {
                 nflx(m,36) += 1; nflx(m,38) += 1; nflx(m,44) += 1; nflx(m,46) += 1;
               });
-              tmember.team_barrier();
             }
           }
           Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember,nji),
@@ -604,7 +610,6 @@ void MeshBoundaryValuesFC::SumBoundaryFluxes(DvceEdgeFld4D<Real> &flx,
               flx.x2e(m,kl,j,i) += rbuf[n].flux(m,ndat*v + i-il + ni*(j-jl));
             }
           });
-          tmember.team_barrier();
 
         // x3x1 edges
         } else if (n<40) {
@@ -613,13 +618,11 @@ void MeshBoundaryValuesFC::SumBoundaryFluxes(DvceEdgeFld4D<Real> &flx,
             Kokkos::single(Kokkos::PerTeam(tmember), [&] () {
               nflx(m,n) += 1;
             });
-            tmember.team_barrier();
           } else if (v==1) {
             Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember,nj),[&](const int idx){
               int j = idx + jl;
               flx.x2e(m,kl,j,il) += rbuf[n].flux(m,ndat*v + (j-jl));
             });
-            tmember.team_barrier();
           }
 
         // x2x3 edges
@@ -628,15 +631,15 @@ void MeshBoundaryValuesFC::SumBoundaryFluxes(DvceEdgeFld4D<Real> &flx,
             Kokkos::single(Kokkos::PerTeam(tmember), [&] () {
               nflx(m,n) += 1;
             });
-            tmember.team_barrier();
             Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember,ni),[&](const int idx){
               int i = idx + il;
               flx.x1e(m,kl,jl,i) += rbuf[n].flux(m,ndat*v + i-il);
             });
-            tmember.team_barrier();
           }
         }
       }  // end if-neighbor-exists block
+      }
+      tmember.team_barrier();
     }    // end for loop over n
   });    // end par_for_outer
 
@@ -691,7 +694,6 @@ void MeshBoundaryValuesFC::ZeroFluxesAtBoundaryWithFiner(DvceEdgeFld4D<Real> &fl
           if (n==4) {
             nflx(m,18) = 0; nflx(m,22) = 0; nflx(m,34) = 0; nflx(m,38) = 0;
           }
-          tmember.team_barrier();
         // else zero fluxes
         } else {
           Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember,nkj),[&](const int idx){
@@ -704,7 +706,6 @@ void MeshBoundaryValuesFC::ZeroFluxesAtBoundaryWithFiner(DvceEdgeFld4D<Real> &fl
               flx.x3e(m,k,j,il) = 0.0;
             }
           });
-          tmember.team_barrier();
         }
 
       // x2faces
@@ -717,7 +718,6 @@ void MeshBoundaryValuesFC::ZeroFluxesAtBoundaryWithFiner(DvceEdgeFld4D<Real> &fl
           if (n==12) {
             nflx(m,20) = 0; nflx(m,22) = 0; nflx(m,42) = 0; nflx(m,46) = 0;
           }
-          tmember.team_barrier();
         // else zero fluxes
         } else {
           Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember,nki),[&](const int idx){
@@ -730,7 +730,6 @@ void MeshBoundaryValuesFC::ZeroFluxesAtBoundaryWithFiner(DvceEdgeFld4D<Real> &fl
               flx.x3e(m,k,jl,i) = 0.0;
             }
           });
-          tmember.team_barrier();
         }
 
       // x1x2 edges
@@ -741,7 +740,6 @@ void MeshBoundaryValuesFC::ZeroFluxesAtBoundaryWithFiner(DvceEdgeFld4D<Real> &fl
             int k = idx + kl;
             flx.x3e(m,k,jl,il) = 0.0;
           });
-          tmember.team_barrier();
         }
 
       // x3faces
@@ -754,7 +752,6 @@ void MeshBoundaryValuesFC::ZeroFluxesAtBoundaryWithFiner(DvceEdgeFld4D<Real> &fl
           if (n==28) {
             nflx(m,36) = 0; nflx(m,38) = 0; nflx(m,44) = 0; nflx(m,46) = 0;
           }
-          tmember.team_barrier();
         // else zero fluxes
         } else {
           Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember,nji),[&](const int idx){
@@ -767,7 +764,6 @@ void MeshBoundaryValuesFC::ZeroFluxesAtBoundaryWithFiner(DvceEdgeFld4D<Real> &fl
               flx.x2e(m,kl,j,i) = 0.0;
             }
           });
-          tmember.team_barrier();
         }
 
       // x3x1 edges
@@ -778,7 +774,6 @@ void MeshBoundaryValuesFC::ZeroFluxesAtBoundaryWithFiner(DvceEdgeFld4D<Real> &fl
             int j = idx + jl;
               flx.x2e(m,kl,j,il) = 0.0;
           });
-          tmember.team_barrier();
         }
 
       // x2x3 edges
@@ -789,10 +784,10 @@ void MeshBoundaryValuesFC::ZeroFluxesAtBoundaryWithFiner(DvceEdgeFld4D<Real> &fl
             int i = idx + il;
               flx.x1e(m,kl,jl,i) = 0.0;
           });
-          tmember.team_barrier();
         }
       }
     }  // end if-neighbor-exists block
+    tmember.team_barrier();
   });  // end par_for_outer
 
   return;
@@ -811,6 +806,7 @@ void MeshBoundaryValuesFC::AverageBoundaryFluxes(DvceEdgeFld4D<Real> &flx,
   auto &nghbr = pmy_pack->pmb->nghbr;
   auto &rbuf = recvbuf;
   auto &mblev = pmy_pack->pmb->mb_lev;
+  auto &mbbcs = pmy_pack->pmb->mb_bcs;
   bool &multi_d = pmy_pack->pmesh->multi_d;
   bool &three_d = pmy_pack->pmesh->three_d;
 
@@ -820,202 +816,208 @@ void MeshBoundaryValuesFC::AverageBoundaryFluxes(DvceEdgeFld4D<Real> &flx,
     const int m = (tmember.league_rank())/(3*nnghbr);
     const int n = (tmember.league_rank() - m*(3*nnghbr))/3;
     const int v = (tmember.league_rank() - m*(3*nnghbr) - 3*n);
+    // only average when
+    //   (both innerx1 AND outerx1 BCs are NOT shear_periodic) OR
+    //   (only innerx1 BC is shear_periodic AND n!=0) OR
+    //   (only outerx1 BC is shear_periodic AND n!=4) OR
+    //   (both innerx1 AND outerx1 BC are shear_periodic AND n!=0,4)
+    if ( ((mbbcs.d_view(m,0)!=BoundaryFlag::shear_periodic) &&
+          (mbbcs.d_view(m,1)!=BoundaryFlag::shear_periodic)) ||
+         ((mbbcs.d_view(m,0)==BoundaryFlag::shear_periodic) && (n!=0) &&
+          (mbbcs.d_view(m,1)!=BoundaryFlag::shear_periodic)) ||
+         ((mbbcs.d_view(m,0)!=BoundaryFlag::shear_periodic) &&
+          (mbbcs.d_view(m,1)==BoundaryFlag::shear_periodic) && (n!=4)) ||
+         ((mbbcs.d_view(m,0)==BoundaryFlag::shear_periodic) && (n!=0) &&
+          (mbbcs.d_view(m,1)==BoundaryFlag::shear_periodic) && (n!=4)) ) {
+      int il, iu, jl, ju, kl, ku;
+      il = rbuf[n].iflux_same[v].bis;
+      iu = rbuf[n].iflux_same[v].bie;
+      jl = rbuf[n].iflux_same[v].bjs;
+      ju = rbuf[n].iflux_same[v].bje;
+      kl = rbuf[n].iflux_same[v].bks;
+      ku = rbuf[n].iflux_same[v].bke;
 
-    int il, iu, jl, ju, kl, ku;
-    il = rbuf[n].iflux_same[v].bis;
-    iu = rbuf[n].iflux_same[v].bie;
-    jl = rbuf[n].iflux_same[v].bjs;
-    ju = rbuf[n].iflux_same[v].bje;
-    kl = rbuf[n].iflux_same[v].bks;
-    ku = rbuf[n].iflux_same[v].bke;
-
-    // x1faces
-    if (n==0 || n==4) {
-      if (v==1) {
-        int nj = ju - jl + 1;
-        // same level; divide EMFs on face by 2, excluding edges
-        if (nghbr.d_view(m,n).lev == mblev.d_view(m)) {
-          if (three_d) {
-            kl += 1; ku -= 1;
-          }
-          int nk = ku - kl + 1;
-          Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember, nk*nj),
-          [&](const int idx) {
-            int k = idx / nj;
-            int j = (idx - k * nj) + jl;
-            k += kl;
-            flx.x2e(m,k,j,il) *= 0.5;
-          });
-          tmember.team_barrier();
-        // finer level; divide EMFs that overlap at edges of fine faces by 2
-        } else if (nghbr.d_view(m,n).lev >= mblev.d_view(m)) {
-          if (three_d) {
-            int k = kl + (ku - kl + 1)/2;
-            Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember, nj),
+      // x1faces
+      if (n==0 || n==4) {
+        if (v==1) {
+          int nj = ju - jl + 1;
+          // same level; divide EMFs on face by 2, excluding edges
+          if (nghbr.d_view(m,n).lev == mblev.d_view(m)) {
+            if (three_d) {
+              kl += 1; ku -= 1;
+            }
+            int nk = ku - kl + 1;
+            Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember, nk*nj),
             [&](const int idx) {
-              int j = idx + jl;
+              int k = idx / nj;
+              int j = (idx - k * nj) + jl;
+              k += kl;
               flx.x2e(m,k,j,il) *= 0.5;
             });
-            tmember.team_barrier();
+          // finer level; divide EMFs that overlap at edges of fine faces by 2
+          } else if (nghbr.d_view(m,n).lev >= mblev.d_view(m)) {
+            if (three_d) {
+              int k = kl + (ku - kl + 1)/2;
+              Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember, nj),
+              [&](const int idx) {
+                int j = idx + jl;
+                flx.x2e(m,k,j,il) *= 0.5;
+              });
+              tmember.team_barrier();
+            }
+          }
+        } else if (v==2) {
+          int nk = ku - kl + 1;
+          // same level; divide EMFs on face by 2, excluding edges
+          if (nghbr.d_view(m,n).lev == mblev.d_view(m)) {
+            if (multi_d) {
+              jl += 1; ju -= 1;
+            }
+            int nj = ju - jl + 1;
+            Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember, nk*nj),
+            [&](const int idx) {
+              int k = idx / nj;
+              int j = (idx - k * nj) + jl;
+              k += kl;
+              flx.x3e(m,k,j,il) *= 0.5;
+            });
+          // finer level; divide EMFs that overlap at edges of fine faces by 2
+          } else if (nghbr.d_view(m,n).lev >= mblev.d_view(m)) {
+            if (multi_d) {
+              int j = jl + (ju - jl + 1)/2;
+              Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember, nk),
+              [&](const int idx) {
+              int k = idx + kl;
+                  flx.x3e(m,k,j,il) *= 0.5;
+              });
+            }
           }
         }
-      } else if (v==2) {
-        int nk = ku - kl + 1;
-        // same level; divide EMFs on face by 2, excluding edges
-        if (nghbr.d_view(m,n).lev == mblev.d_view(m)) {
-          if (multi_d) {
-            jl += 1; ju -= 1;
+
+      // x2faces
+      } else if (multi_d && (n==8 || n==12)) {
+        if (v==0) {
+          int ni = iu - il + 1;
+          // same level; divide EMFs on face by 2, excluding edges
+          if (nghbr.d_view(m,n).lev == mblev.d_view(m)) {
+            if (three_d) {
+              kl += 1; ku -= 1;
+            }
+            int nk = ku - kl + 1;
+            Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember, nk*ni),
+            [&](const int idx) {
+              int k = idx/ni;
+              int i = (idx - k * ni) + il;
+              k += kl;
+              flx.x1e(m,k,jl,i) *= 0.5;
+            });
+          // finer level; divide EMFs that overlap at edges of fine faces by 2
+          } else if (nghbr.d_view(m,n).lev >= mblev.d_view(m)) {
+            if (three_d) {
+              int k = kl + (ku - kl + 1)/2;
+              Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember, ni),
+              [&](const int idx) {
+                int i = idx + il;
+                flx.x1e(m,k,jl,i) *= 0.5;
+              });
+              tmember.team_barrier();
+            }
           }
-          int nj = ju - jl + 1;
-          Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember, nk*nj),
-          [&](const int idx) {
-            int k = idx / nj;
-            int j = (idx - k * nj) + jl;
-            k += kl;
-            flx.x3e(m,k,j,il) *= 0.5;
-          });
-          tmember.team_barrier();
-        // finer level; divide EMFs that overlap at edges of fine faces by 2
-        } else if (nghbr.d_view(m,n).lev >= mblev.d_view(m)) {
-          if (multi_d) {
-            int j = jl + (ju - jl + 1)/2;
+        } else if (v==2) {
+          int nk = ku - kl + 1;
+          // same level; divide EMFs on face by 2, excluding edges
+          if (nghbr.d_view(m,n).lev == mblev.d_view(m)) {
+            il += 1; iu -= 1;
+            int ni = iu - il + 1;
+            Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember, nk*ni),
+            [&](const int idx) {
+              int k = idx/ni;
+                int i = (idx - k * ni) + il;
+              k += kl;
+              flx.x3e(m,k,jl,i) *= 0.5;
+            });
+            tmember.team_barrier();
+          // finer level; divide EMFs that overlap at edges of fine faces by 2
+          } else if (nghbr.d_view(m,n).lev >= mblev.d_view(m)) {
+            int i = il + (iu - il + 1)/2;
             Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember, nk),
             [&](const int idx) {
               int k = idx + kl;
-              flx.x3e(m,k,j,il) *= 0.5;
+              flx.x3e(m,k,jl,i) *= 0.5;
             });
             tmember.team_barrier();
           }
         }
-      }
 
-    // x2faces
-    } else if (multi_d && (n==8 || n==12)) {
-      if (v==0) {
-        int ni = iu - il + 1;
-        // same level; divide EMFs on face by 2, excluding edges
-        if (nghbr.d_view(m,n).lev == mblev.d_view(m)) {
-          if (three_d) {
-            kl += 1; ku -= 1;
-          }
+      // x1x2 edges
+      } else if (multi_d && (n==16 || n==18 || n==20 || n==22)) {
+        if (v==2) {
           int nk = ku - kl + 1;
-          Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember, nk*ni),
-          [&](const int idx) {
-            int k = idx/ni;
-            int i = (idx - k * ni) + il;
-            k += kl;
-            flx.x1e(m,k,jl,i) *= 0.5;
+          Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember,nk),[&](const int idx) {
+            int k = idx + kl;
+            flx.x3e(m,k,jl,il) /= static_cast<Real>(nflx(m,n));
           });
-          tmember.team_barrier();
-        // finer level; divide EMFs that overlap at edges of fine faces by 2
-        } else if (nghbr.d_view(m,n).lev >= mblev.d_view(m)) {
-          if (three_d) {
-            int k = kl + (ku - kl + 1)/2;
-            Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember, ni),
+        }
+
+      // x3faces
+      } else if (three_d && (n==24 || n==28))  {
+        if (v==0) {
+          int ni = iu - il + 1;
+          // same level; divide EMFs on face by 2, excluding edges
+          if (nghbr.d_view(m,n).lev == mblev.d_view(m)) {
+            jl += 1; ju -= 1;
+            int nj = ju - jl + 1;
+            Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember, nj*ni),
             [&](const int idx) {
+              int j = idx / ni;
+              int i = (idx - j * ni) + il;
+              j += jl;
+              flx.x1e(m,kl,j,i) *= 0.5;
+            });
+            tmember.team_barrier();
+          // finer level; divide EMFs that overlap at edges of fine faces by 2
+          } else if (nghbr.d_view(m,n).lev >= mblev.d_view(m)) {
+            int j = jl + (ju - jl + 1)/2;
+            Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember,ni),[&](const int idx){
               int i = idx + il;
-              flx.x1e(m,k,jl,i) *= 0.5;
+              flx.x1e(m,kl,j,i) *= 0.5;
+            });
+            tmember.team_barrier();
+          }
+        } else if (v==1) {
+          int nj = ju - jl + 1;
+          // same level; divide EMFs on face by 2, excluding edges
+            if (nghbr.d_view(m,n).lev == mblev.d_view(m)) {
+            il += 1; iu -= 1;
+            int ni = iu - il + 1;
+            Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember, nj*ni),
+              [&](const int idx) {
+                int j = idx / ni;
+              int i = (idx - j * ni) + il;
+              j += jl;
+              flx.x2e(m,kl,j,i) *= 0.5;
+            });
+            tmember.team_barrier();
+          // finer level; divide EMFs that overlap at edges of fine faces by 2
+          } else if (nghbr.d_view(m,n).lev >= mblev.d_view(m)) {
+            int i = il + (iu - il + 1)/2;
+            Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember,nj),[&](const int idx){
+              int j = idx + jl;
+              flx.x2e(m,kl,j,i) *= 0.5;
             });
             tmember.team_barrier();
           }
         }
-      } else if (v==2) {
-        int nk = ku - kl + 1;
-        // same level; divide EMFs on face by 2, excluding edges
-        if (nghbr.d_view(m,n).lev == mblev.d_view(m)) {
-          il += 1; iu -= 1;
-          int ni = iu - il + 1;
-          Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember, nk*ni),
-          [&](const int idx) {
-            int k = idx/ni;
-            int i = (idx - k * ni) + il;
-            k += kl;
-            flx.x3e(m,k,jl,i) *= 0.5;
-          });
-          tmember.team_barrier();
-        // finer level; divide EMFs that overlap at edges of fine faces by 2
-        } else if (nghbr.d_view(m,n).lev >= mblev.d_view(m)) {
-          int i = il + (iu - il + 1)/2;
-          Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember, nk),
-          [&](const int idx) {
-            int k = idx + kl;
-            flx.x3e(m,k,jl,i) *= 0.5;
-          });
-          tmember.team_barrier();
-        }
-      }
 
-    // x1x2 edges
-    } else if (multi_d && (n==16 || n==18 || n==20 || n==22)) {
-      if (v==2) {
-        int nk = ku - kl + 1;
-        Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember,nk),[&](const int idx) {
-          int k = idx + kl;
-          flx.x3e(m,k,jl,il) /= static_cast<Real>(nflx(m,n));
-        });
-        tmember.team_barrier();
-      }
-
-    // x3faces
-    } else if (three_d && (n==24 || n==28))  {
-      if (v==0) {
-        int ni = iu - il + 1;
-        // same level; divide EMFs on face by 2, excluding edges
-        if (nghbr.d_view(m,n).lev == mblev.d_view(m)) {
-          jl += 1; ju -= 1;
+      // x3x1 edges
+      } else if (three_d && (n==32 || n==34 || n==36 || n==38)) {
+        if (v==1) {
           int nj = ju - jl + 1;
-          Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember, nj*ni),
-          [&](const int idx) {
-            int j = idx / ni;
-            int i = (idx - j * ni) + il;
-            j += jl;
-            flx.x1e(m,kl,j,i) *= 0.5;
-          });
-          tmember.team_barrier();
-        // finer level; divide EMFs that overlap at edges of fine faces by 2
-        } else if (nghbr.d_view(m,n).lev >= mblev.d_view(m)) {
-          int j = jl + (ju - jl + 1)/2;
-          Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember,ni),[&](const int idx){
-            int i = idx + il;
-            flx.x1e(m,kl,j,i) *= 0.5;
-          });
-          tmember.team_barrier();
-        }
-      } else if (v==1) {
-        int nj = ju - jl + 1;
-        // same level; divide EMFs on face by 2, excluding edges
-        if (nghbr.d_view(m,n).lev == mblev.d_view(m)) {
-          il += 1; iu -= 1;
-          int ni = iu - il + 1;
-          Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember, nj*ni),
-          [&](const int idx) {
-            int j = idx / ni;
-            int i = (idx - j * ni) + il;
-            j += jl;
-            flx.x2e(m,kl,j,i) *= 0.5;
-          });
-          tmember.team_barrier();
-        // finer level; divide EMFs that overlap at edges of fine faces by 2
-        } else if (nghbr.d_view(m,n).lev >= mblev.d_view(m)) {
-          int i = il + (iu - il + 1)/2;
-          Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember,nj),[&](const int idx){
+          Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember,nj),[&](const int idx) {
             int j = idx + jl;
-            flx.x2e(m,kl,j,i) *= 0.5;
+            flx.x2e(m,kl,j,il) /= static_cast<Real>(nflx(m,n));
           });
-          tmember.team_barrier();
         }
-      }
-
-    // x3x1 edges
-    } else if (three_d && (n==32 || n==34 || n==36 || n==38)) {
-      if (v==1) {
-        int nj = ju - jl + 1;
-        Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember,nj),[&](const int idx) {
-          int j = idx + jl;
-          flx.x2e(m,kl,j,il) /= static_cast<Real>(nflx(m,n));
-        });
-        tmember.team_barrier();
-      }
 
     // x2x3 edges
     } else if (three_d && (n==40 || n==42 || n==44 || n==46)) {
@@ -1025,9 +1027,10 @@ void MeshBoundaryValuesFC::AverageBoundaryFluxes(DvceEdgeFld4D<Real> &flx,
           int i = idx + il;
           flx.x1e(m,kl,jl,i) /= static_cast<Real>(nflx(m,n));
         });
-        tmember.team_barrier();
       }
     }
+    }
+    tmember.team_barrier();
   });    // end par_for_outer
 
   return;
