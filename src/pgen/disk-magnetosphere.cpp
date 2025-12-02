@@ -96,7 +96,7 @@ void CoolingSourceTerms(Mesh* pm, const Real bdt);
 void MySourceTerms(Mesh* pm, const Real bdt);
 
 void StarMask(Mesh* pm, const Real bdt);
-
+void InnerDiskMask(Mesh* pm, const Real bdt);
 void FixedBC(Mesh *pm);
 
 //----------------------------------------------------------------------------------------
@@ -212,14 +212,18 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
         GetCylCoord(mp_,rad, phi, z, x1, x2, x3);
 
         // compute the disc density component at this location
-        den = DenDiscCyl(mp_, rad, phi, z);
+        if (mp_.rho0 > 0.0){
+            den = DenDiscCyl(mp_, rad, phi, z);
+        }
         // add the stellar density component at this location
         if (mp_.denstar > 0.0) {
             den += DenStarCyl(mp_, rad, phi, z);
         }
 
         // compute the disc velocity component at this location
-        VelDiscCyl(mp_, rad, phi, z, v1_disc, v2_disc, v3_disc);
+        if (mp_.rho0 > 0.0){
+            VelDiscCyl(mp_, rad, phi, z, v1_disc, v2_disc, v3_disc);
+        }
         
         // add the stellar velocity component at this location
         if (mp_.denstar > 0.0) {
@@ -274,15 +278,15 @@ namespace {
         // Compute the density profile in cylindrical coordinates
         // Vertical hydrostatic equilibrium (Nelson et al. 2013) 
 
-        Real den;
+        Real den(0.0);
         Real r = fmax(rad, mp.rs);
         Real p_over_r = mp.p0_over_r0;
         if (mp.is_ideal) p_over_r = PoverR(mp, r, phi, z);
         Real denmid = mp.rho0*std::pow(r/mp.r0,mp.dslope);
 
         // Inner magnetosphere exponential cutoff
-        if (rad < mp.rmagsph) {
-            Real cutoff = exp(-SQR((rad-mp.rmagsph)/mp.rad_in_smooth));
+        if (rad < mp.rad_in_cutoff) {
+            Real cutoff = exp(-SQR((rad-mp.rad_in_cutoff)/mp.rad_in_smooth));
             denmid *= cutoff;
         }
 
@@ -292,13 +296,12 @@ namespace {
             denmid *= cutoff;
         }
 
-        Real dentem = denmid*std::exp(mp.gm0/p_over_r*(1./std::sqrt(SQR(r)+SQR(z))-1./r));
-        den = dentem;
-
-        Real rc = sqrt(rad*rad+z*z);  // spherical radius
+        den = denmid*std::exp(mp.gm0/p_over_r*(1./std::sqrt(SQR(r)+SQR(z))-1./r));
 
         // Apply the density floor
+        Real rc = sqrt(rad*rad+z*z);
         den = fmax(den,rho_floor(mp,rc));
+        
         return den;
     }
 
@@ -318,7 +321,6 @@ namespace {
             Real pre0=mp.denstar*csq0; // reference pressure
             Real rint = mp.rs;         // integrate from stellar surface
             Real dr = mp.rs/100.;      // integration step size
-
             Real pre = pre0*exp(0.5*mp.origid*mp.origid*mp.rs*mp.rs*sinsq/csq0);  // pressure at stellar surface
 
             if (rc < mp.rs) {
@@ -328,9 +330,9 @@ namespace {
                 
                 // integrate stellar envelope out from the stellar surface towards rc
                 while(rint<rc) {
-                    pre += - dr*mp.gm0/rint/rint*(rint-mp.rs)*
-                                (rint-mp.rs)/((rint-mp.rs)*(rint-mp.rs)+mp.gravsmooth*mp.gravsmooth)*
-                                pre/csq0 + dr*mp.origid*mp.origid*rint*sinsq*pre/csq0;
+                    pre += -dr*mp.gm0/rint/rint *
+                        (rint-mp.rs) * (rint-mp.rs)/((rint-mp.rs)*(rint-mp.rs)+mp.gravsmooth*mp.gravsmooth) *
+                        pre/csq0 + dr*mp.origid*mp.origid*rint*sinsq*pre/csq0;
                     rint = rint + dr;
                 }
             }
@@ -338,6 +340,25 @@ namespace {
             den = pre/csq0;
 
         }
+
+            // Real pre=mp.denstar*csq0; // reference pressure
+            // Real rint = 0.0;         // integrate from stellar surface
+            // Real dr = mp.rs/100.;      // integration step size
+
+            // while (rint<rc) {
+            //     if (rint<mp.rs){
+            //         pre = pre + dr*mp.origid*mp.origid*rint*sinsq*pre/csq0;
+            //     } else {
+            //         pre = pre - dr*mp.gm0/rint/rint*(rint-mp.rs)*
+            //                   (rint-mp.rs)/((rint-mp.rs)*(rint-mp.rs)+mp.gravsmooth*mp.gravsmooth)*
+            //                    pre/csq0 + dr*mp.origid*mp.origid*rint*sinsq*pre/csq0;
+            //     }
+            //     rint = rint + dr;
+            // }
+
+            // den = pre/csq0;
+
+        // }
         
         return den;
     }
@@ -356,7 +377,7 @@ namespace {
     static void VelDiscCyl(struct my_params mp, const Real rad, const Real phi, const Real z, Real &v1, Real &v2, Real &v3) {
         
         Real r = fmax(rad, mp.rs);
-        Real rc = sqrt(rad*rad+z*z);
+        Real rc = sqrt(r*r+z*z);
 
         // Old method for power law
         // Real p_over_r = PoverR(mp, r, phi, z);
@@ -365,12 +386,13 @@ namespace {
 
         // Testing new method for balance with pressure gradients
         Real dR = fmin(mp.rad_in_smooth, mp.rad_out_smooth)/100;
-        Real dPdr = (PoverR(mp, r+dR, phi, z) * DenDiscCyl(mp, r + dR, phi, z) - PoverR(mp, r-dR, phi, z) * DenDiscCyl(mp, r - dR, phi, z))/(2 * dR);
+        Real dPdr = (PoverR(mp, r+dR, phi, z) * DenDiscCyl(mp, r+dR, phi, z) - PoverR(mp, r-dR, phi, z) * DenDiscCyl(mp, r - dR, phi, z))/(2 * dR);
         Real vel = sqrt(fmax(mp.gm0*r*r/rc/rc/rc+r/DenDiscCyl(mp, r, phi, z)*dPdr,0.0));
 
+        rc = sqrt(rad*rad+z*z);
+
         if (rc<mp.rmagsph) {
-            vel = vel*exp(-SQR((rc-mp.rmagsph)/mp.gravsmooth));
-            if (rc>mp.rs) vel += mp.origid*rad;
+            vel = vel*exp(-SQR((rc-mp.rmagsph)/mp.rad_in_smooth));
         }
 
         v1=-vel*sin(phi);
@@ -385,8 +407,12 @@ namespace {
     static void VelStarCyl(struct my_params mp, const Real rad, const Real phi, const Real z, Real &v1, Real &v2, Real &v3) {
         
         Real vel(0.0);
-        Real rc = sqrt(rad*rad+z*z);
-        if (rc<=mp.rs) vel = mp.origid*rad;
+        Real rc = sqrt(rad*rad+z*z);  // spherical radius
+        
+        vel = mp.origid*rad; // rigid rotation
+        if (rc>mp.rmagsph) {
+            vel = mp.origid*rad*exp(-SQR((rc-mp.rmagsph)/mp.rad_in_smooth));
+        }
 
         v1=-vel*sin(phi);
         v2=+vel*cos(phi);
@@ -443,6 +469,7 @@ void MySourceTerms(Mesh* pm, const Real bdt) {
     StarGravSourceTerm(pm, bdt);
     if(mp.is_ideal && mp.tcool>0.0) CoolingSourceTerms(pm, bdt);
     if (mp.denstar > 0.0) StarMask(pm, bdt);
+    // InnerDiskMask(pm, bdt);
     return;
 }
 
@@ -588,6 +615,78 @@ void StarMask(Mesh* pm, const Real bdt) {
 } // end stellar mask  
 
 //----------------------------------------------------------------------------------------
+void InnerDiskMask(Mesh* pm, const Real bdt) {
+
+    // Capture variables for kernel - e.g. indices for looping over the meshblocks and the size of the meshblocks.
+    auto &indcs = pm->mb_indcs;
+    int &is = indcs.is; int &ie = indcs.ie;
+    int &js = indcs.js; int &je = indcs.je;
+    int &ks = indcs.ks; int &ke = indcs.ke;
+    MeshBlockPack *pmbp = pm->pmb_pack;
+    auto &size = pmbp->pmb->mb_size;
+
+    // Now set a local parameter struct for lambda capturing
+    auto mp_ = mp;
+
+    // Select either Hydro or MHD
+    DvceArray5D<Real> u0_, w0_, bcc0_;
+    if (pm->pmb_pack->phydro != nullptr) {
+        u0_ = pm->pmb_pack->phydro->u0;
+        w0_ = pm->pmb_pack->phydro->w0;
+    } else if (pm->pmb_pack->pmhd != nullptr) {
+        u0_ = pm->pmb_pack->pmhd->u0;
+        w0_ = pm->pmb_pack->pmhd->w0;
+        bcc0_ = pmbp->pmhd->bcc0;
+    }
+
+    // Could be more efficient with the masking function...see GRMHD for boolean masking array
+    par_for("pgen_starmask",DevExeSpace(),0,(pmbp->nmb_thispack-1),ks,ke,js,je,is,ie,
+    KOKKOS_LAMBDA(int m,int k,int j,int i) {
+
+        // Extract the cell center coordinates
+        Real &x1min = size.d_view(m).x1min;
+        Real &x1max = size.d_view(m).x1max;
+        Real x1v = CellCenterX(i-is, indcs.nx1, x1min, x1max);
+
+        Real &x2min = size.d_view(m).x2min;
+        Real &x2max = size.d_view(m).x2max;
+        Real x2v = CellCenterX(j-js, indcs.nx2, x2min, x2max);
+
+        Real &x3min = size.d_view(m).x3min;
+        Real &x3max = size.d_view(m).x3max;
+        Real x3v = CellCenterX(k-ks, indcs.nx3, x3min, x3max);
+        
+        Real rad(0.0),phi(0.0),z(0.0);
+        Real v1(0.0),v2(0.0),v3(0.0);
+
+        GetCylCoord(mp_,rad,phi,z,x1v,x2v,x3v);
+        Real rc=sqrt(x1v*x1v+x2v*x2v+x3v*x3v);
+        
+        if (rc<mp_.rmagsph) {
+
+            u0_(m,IDN,k,j,i) = DenDiscCyl(mp_,rad, phi, z);
+            VelDiscCyl(mp_, rad, phi, z, v1,v2,v3);
+
+            u0_(m,IM1,k,j,i) = v1*u0_(m,IDN,k,j,i);
+            u0_(m,IM2,k,j,i) = v2*u0_(m,IDN,k,j,i);
+            u0_(m,IM3,k,j,i) = v3*u0_(m,IDN,k,j,i);
+            
+            if (mp_.is_ideal) {
+                u0_(m,IEN,k,j,i) = PoverR(mp_,rad, phi, z)*u0_(m,IDN,k,j,i)/(mp_.gamma_gas - 1.0)+
+                                0.5*(SQR(u0_(m,IM1,k,j,i))+SQR(u0_(m,IM2,k,j,i))+SQR(u0_(m,IM3,k,j,i)))/u0_(m,IDN,k,j,i);
+            
+                if (mp_.magnetic_fields_enabled) {
+                    u0_(m,IEN,k,j,i) = u0_(m,IEN,k,j,i)+0.5*(SQR(bcc0_(m,IBX,k,j,i))+
+                                    SQR(bcc0_(m,IBY,k,j,i))+SQR(bcc0_(m,IBZ,k,j,i)));
+                }
+            }
+        }
+            
+    }); // end par_for
+
+} // end disk mask  
+
+//----------------------------------------------------------------------------------------
 void CoolingSourceTerms(Mesh* pm, const Real bdt) {
     // Implement cooling source terms here if needed
 
@@ -636,8 +735,13 @@ void CoolingSourceTerms(Mesh* pm, const Real bdt) {
         }
 
         Real rad(0.0),phi(0.0),z(0.0);
+        Real p_over_r(0.0);
         GetCylCoord(mp_,rad,phi,z,x1v,x2v,x3v);
-        Real p_over_r = PoverR(mp_,rad,phi,z);
+        if (mp_.rho0 <= 0.0){
+            p_over_r = PoverR(mp_,rad,phi,z);
+        } else {
+            p_over_r = PoverR(mp_,rad,phi,z);
+        }
 
         Real dtr = fmax(mp_.tcool*2.*M_PI/sqrt(mp_.gm0/rad/rad/rad),bdt);
         Real dfrac=bdt/dtr;
@@ -658,7 +762,6 @@ void FixedBC(Mesh *pm) {
       // Start by extracting the mesh block and cell information 
       auto &indcs = pm->mb_indcs;
       auto &size = pm->pmb_pack->pmb->mb_size;
-      auto &coord = pm->pmb_pack->pcoord->coord_data;
       int &ng = indcs.ng;
       int n1 = indcs.nx1 + 2*ng;
       int n2 = (indcs.nx2 > 1)? (indcs.nx2 + 2*ng) : 1;
@@ -701,7 +804,7 @@ void FixedBC(Mesh *pm) {
         Real &x3max = size.d_view(m).x3max;
         Real x3v = CellCenterX(k-ks, indcs.nx3, x3min, x3max);
 
-        Real den, pgas, ux, uy, uz;
+        Real den(0.0), pgas, ux(0.0), uy(0.0), uz(0.0);
         Real rad(0.0), phi(0.0), z(0.0);
         
         // Inner x1 boundary
@@ -709,8 +812,13 @@ void FixedBC(Mesh *pm) {
             
             // Compute the warped primitive variables at this location
             GetCylCoord(mp_,rad, phi, z, x1v, x2v, x3v);
-            den = DenStarCyl(mp_, rad, phi, z);
-            VelStarCyl(mp_, rad, phi, z, ux, uy, uz);
+            if (mp_.rho0 > 0.0){
+                den = DenDiscCyl(mp_, rad, phi, z);
+                VelDiscCyl(mp_, rad, phi, z, ux, uy, uz);
+            } else {
+                den = DenStarCyl(mp_, rad, phi, z);
+                VelStarCyl(mp_, rad, phi, z, ux, uy, uz);
+            } 
 
             w0_(m,IDN,k,j,i) = den;
             w0_(m,IVX,k,j,i) = ux;
@@ -730,8 +838,13 @@ void FixedBC(Mesh *pm) {
         if (mb_bcs.d_view(m,BoundaryFace::outer_x1) == BoundaryFlag::user) {
 
             GetCylCoord(mp_,rad, phi, z, x1v, x2v, x3v);
-            den = DenStarCyl(mp_, rad, phi, z);
-            VelStarCyl(mp_, rad, phi, z, ux, uy, uz);
+            if (mp_.rho0 > 0.0){
+                den = DenDiscCyl(mp_, rad, phi, z);
+                VelDiscCyl(mp_, rad, phi, z, ux, uy, uz);
+            } else {
+                den = DenStarCyl(mp_, rad, phi, z);
+                VelStarCyl(mp_, rad, phi, z, ux, uy, uz);
+            } 
             
             // Now set the conserved variables using the primitive variables
             w0_(m,IDN,k,j,(ie+i+1)) = den;
@@ -778,8 +891,13 @@ void FixedBC(Mesh *pm) {
             
             // Compute the warped primitive variables at this location
             GetCylCoord(mp_,rad, phi, z, x1v, x2v, x3v);
-            den = DenStarCyl(mp_, rad, phi, z);
-            VelStarCyl(mp_, rad, phi, z, ux, uy, uz);
+            if (mp_.rho0 > 0.0){
+                den = DenDiscCyl(mp_, rad, phi, z);
+                VelDiscCyl(mp_, rad, phi, z, ux, uy, uz);
+            } else {
+                den = DenStarCyl(mp_, rad, phi, z);
+                VelStarCyl(mp_, rad, phi, z, ux, uy, uz);
+            } 
 
             // Now set the conserved variables using the primitive variables
             w0_(m,IDN,k,j,i) = den;
@@ -799,8 +917,13 @@ void FixedBC(Mesh *pm) {
         if (mb_bcs.d_view(m,BoundaryFace::outer_x2) == BoundaryFlag::user) {
             // Compute the warped primitive variables at this location
             GetCylCoord(mp_,rad, phi, z, x1v, x2v, x3v);
-            den = DenStarCyl(mp_, rad, phi, z);
-            VelStarCyl(mp_, rad, phi, z, ux, uy, uz);
+            if (mp_.rho0 > 0.0){
+                den = DenDiscCyl(mp_, rad, phi, z);
+                VelDiscCyl(mp_, rad, phi, z, ux, uy, uz);
+            } else {
+                den = DenStarCyl(mp_, rad, phi, z);
+                VelStarCyl(mp_, rad, phi, z, ux, uy, uz);
+            } 
 
             // Now set the conserved variables using the primitive variables
             w0_(m,IDN,k,(je+j+1),i) = den;
@@ -844,8 +967,13 @@ void FixedBC(Mesh *pm) {
         if (mb_bcs.d_view(m,BoundaryFace::inner_x3) == BoundaryFlag::user) {
             // Compute the warped primitive variables at this location
             GetCylCoord(mp_,rad, phi, z, x1v, x2v, x3v);
-            den = DenStarCyl(mp_, rad, phi, z);
-            VelStarCyl(mp_, rad, phi, z, ux, uy, uz);
+            if (mp_.rho0 > 0.0){
+                den = DenDiscCyl(mp_, rad, phi, z);
+                VelDiscCyl(mp_, rad, phi, z, ux, uy, uz);
+            } else {
+                den = DenStarCyl(mp_, rad, phi, z);
+                VelStarCyl(mp_, rad, phi, z, ux, uy, uz);
+            } 
 
             // Now set the conserved variables using the primitive variables
             w0_(m,IDN,k,j,i) = den;
@@ -865,8 +993,13 @@ void FixedBC(Mesh *pm) {
         if (mb_bcs.d_view(m,BoundaryFace::outer_x3) == BoundaryFlag::user) {
             // Compute the warped primitive variables at this location
             GetCylCoord(mp_,rad, phi, z, x1v, x2v, x3v);
-            den = DenStarCyl(mp_, rad, phi, z);
-            VelStarCyl(mp_, rad, phi, z, ux, uy, uz);
+            if (mp_.rho0 > 0.0){
+                den = DenDiscCyl(mp_, rad, phi, z);
+                VelDiscCyl(mp_, rad, phi, z, ux, uy, uz);
+            } else {
+                den = DenStarCyl(mp_, rad, phi, z);
+                VelStarCyl(mp_, rad, phi, z, ux, uy, uz);
+            } 
 
             // Now set the conserved variables using the primitive variables
             w0_(m,IDN,(ke+k+1),j,i) = den;
@@ -877,7 +1010,6 @@ void FixedBC(Mesh *pm) {
                 pgas = PoverR(mp_, rad, phi, z)*den/(mp_.gamma_gas-1.0);
                 w0_(m,IEN,(ke+k+1),j,i) = pgas;
             }
-
         }
       });
       pm->pmb_pack->phydro->peos->PrimToCons(w0_,u0_,0,(n1-1),0,(n2-1),ks-ng,ks-1);

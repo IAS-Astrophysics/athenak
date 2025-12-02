@@ -40,48 +40,12 @@ refinement = static  # type of refinement
 
 <refined_region1>
 level = 1
-x1min = -64.0
-x1max = 64.0
-x2min = -64.0
-x2max = 64.0
-x3min = -64.0
-x3max = 64.0
-
-<refined_region2>
-level = 2
-x1min = -32.0
-x1max = 32.0
-x2min = -32.0
-x2max = 32.0
-x3min = -32.0
-x3max = 32.0
-
-<refined_region3>
-level = 3
-x1min = -16.0
-x1max = 16.0
-x2min = -16.0
-x2max = 16.0
-x3min = -16.0
-x3max = 16.0
-
-<refined_region4>
-level = 4
-x1min = -8.0
-x1max = 8.0
-x2min = -8.0
-x2max = 8.0
-x3min = -8.0
-x3max = 8.0
-
-<refined_region5>
-level = 5
-x1min = -4.0
-x1max = 4.0
-x2min = -4.0
-x2max = 4.0
-x3min = -4.0
-x3max = 4.0
+x1min = -0.1
+x1max = 0.1
+x2min = -0.1
+x2max = 0.1
+x3min = -0.1
+x3max = 0.1
 
 <time>
 evolution  = dynamic     # dynamic/kinematic/static
