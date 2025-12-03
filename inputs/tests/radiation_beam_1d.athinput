@@ -10,14 +10,14 @@ nghost    = 2           # Number of ghost cells
 nx1       = 200         # Number of zones in X1-direction
 x1min     = 0.0        # minimum value of X1
 x1max     = 5.0        # maximum value of X1
-ix1_bc    = outflow     # inner-X1 boundary flag
-ox1_bc    = outflow     # outer-X1 boundary flag
+ix1_bc    = vacuum     # inner-X1 boundary flag
+ox1_bc    = vacuum     # outer-X1 boundary flag
 
-nx2       = 1       # Number of zones in X2-direction
-x2min     = -0.5        # minimum value of X2
-x2max     = 0.5       # maximum value of X2
-ix2_bc    = periodic     # inner-X2 boundary flag
-ox2_bc    = periodic     # outer-X2 boundary flag
+nx2       = 200       # Number of zones in X2-direction
+x2min     = 0.0        # minimum value of X2
+x2max     = 5.0       # maximum value of X2
+ix2_bc    = vacuum     # inner-X2 boundary flag
+ox2_bc    = vacuum     # outer-X2 boundary flag
 
 nx3       = 1           # Number of zones in X3-direction
 x3min     = -0.5        # minimum value of X3
@@ -33,34 +33,34 @@ nx3       = 1           # Number of cells in each MeshBlock, X3-dir
 <time>
 evolution  = dynamic     # dynamic/kinematic/static
 integrator = rk2         # time integration algorithm
-cfl_number = 0.4         # The Courant, Friedrichs, & Lewy (CFL) Number
-tlim       = 10.0         # time limit
+cfl_number = 0.2         # The Courant, Friedrichs, & Lewy (CFL) Number
+tlim       = 20.0         # time limit
 ndiag      = 1           # cycles between diagostic output
 
+<coord>
+general_rel = true      # general relativity
+m           = 1.0
+a           = 0.0
+excise      = false
+
 <adm>
-metric = minkowski
+metric = kerrschild
 
 <radiation_m1>
 closure_fun = minerbo
-minmod_theta = 0 
-rad_E_floor = 1e-20
-closure_epsilon=1e-15
-closure_maxiter = 100
+minmod_theta = 1.0 
+rad_E_floor = 0.0
+backreact = false
+matter_sources = false
+rad_eps = 0.01
 
 <problem>
 pgen_name = rad_m1_beamtest
+beam_ymin = 3.25
+beam_ymax = 3.75
 
 <output1>
-file_type   = tab        # output format
+file_type   = bin        # output format
 variable    = rad_m1_E    # choice of variables to output
-dt          = 0.02        # output cadence
-
-<output2>
-file_type   = tab        # output format
-variable    = rad_m1_F    # choice of variables to output
-dt          = 0.02        # output cadence
-
-<output3>
-file_type   = tab        # output format
-variable    = rad_m1_chi    # choice of variables to output
-dt          = 0.02        # output cadence
+dt          = 0.1       # output cadence
+slice_x3    = 0.0       # slice in x3

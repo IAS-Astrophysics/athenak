@@ -190,21 +190,6 @@ void SetupTOV(ParameterInput *pin, Mesh* pmy_mesh_) {
     adm.vK_dd(m,1,1,k,j,i) = adm.vK_dd(m,1,2,k,j,i) = adm.vK_dd(m,2,2,k,j,i) = 0.0;
   });
 
-  auto &params_ = pmbp->pradm1->params;
-  auto &nurates_params_ = pmbp->pradm1->nurates_params;
-  auto &nspecies_ = pmbp->pradm1->nspecies;
-  auto m1nvars_ = pmbp->pradm1->nvars;
-  auto &u0_ = pmbp->pradm1->u0;
-  Primitive::EOS<Primitive::EOSCompOSE<Primitive::NormalLogs>,
-                                      Primitive::ResetFloor> &eos_tov =
-      static_cast<dyngr::DynGRMHDPS<Primitive::EOSCompOSE<Primitive::NormalLogs>,
-                                      Primitive::ResetFloor> *>(pmbp->pdyngr)
-          ->eos.ps.GetEOSMutable();
-  const Real mb = eos_tov.GetBaryonMass();
-  // conversion factors from cgs to code units
-  auto code_units = eos_tov.GetCodeUnitSystem();
-  auto eos_units = eos_tov.GetEOSUnitSystem();
-
   // parse some parameters
   Real b_norm = pin->GetOrAddReal("problem", "b_norm", 0.0);
   Real pcut = pin->GetOrAddReal("problem", "pcut", 1e-6);
