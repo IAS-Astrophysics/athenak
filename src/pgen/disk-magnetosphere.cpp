@@ -94,6 +94,7 @@ Real rho_floor(struct my_params mp, const Real r);
 void StarGravSourceTerm(Mesh* pm, const Real bdt);
 void CoolingSourceTerms(Mesh* pm, const Real bdt);
 void MySourceTerms(Mesh* pm, const Real bdt);
+void MyEfieldMask(Mesh* pm);
 
 void StarMask(Mesh* pm, const Real bdt);
 void InnerDiskMask(Mesh* pm, const Real bdt);
@@ -108,6 +109,8 @@ void FixedBC(Mesh *pm);
 
 void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
 
+    MeshBlockPack *pmbp = pmy_mesh_->pmb_pack;
+
     // Now enroll user source terms and boundary conditions if specified
     if (user_srcs) {
         user_srcs_func = MySourceTerms;
@@ -117,27 +120,22 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
         user_bcs_func = FixedBC;
     }
 
-    // TODO: CALLUM
-    // if (user_efldsrcs) {
-    //     user_efldsrcs_func = MyEfieldMask;
-    // }
+    if (user_esrcs && pmbp->pmhd != nullptr) {
+        user_esrcs_func = MyEfieldMask;
+    }
 
     // If restarting then end initialisation here
     if (restart) return;
 
-    // Read problem parameters from input file
+    if (pmbp->phydro != nullptr) {
+        EOS_Data &eos = pmbp->phydro->peos->eos_data;
+        mp.is_ideal = eos.is_ideal;
+    } 
 
-    MeshBlockPack *pmbp = pmy_mesh_->pmb_pack;
-
-  if (pmbp->phydro != nullptr) {
-    EOS_Data &eos = pmbp->phydro->peos->eos_data;
-    mp.is_ideal = eos.is_ideal;
-  } 
-
-  if (pmbp->pmhd != nullptr) {
-    EOS_Data &eos = pmbp->pmhd->peos->eos_data;
-    mp.is_ideal = eos.is_ideal;
-  }
+    if (pmbp->pmhd != nullptr) {
+        EOS_Data &eos = pmbp->pmhd->peos->eos_data;
+        mp.is_ideal = eos.is_ideal;
+    }
 
     mp.beta = pin->GetReal("problem","beta");
     mp.denstar = pin->GetOrAddReal("problem","denstar",0.0);
@@ -618,6 +616,154 @@ void StarMask(Mesh* pm, const Real bdt) {
     }); // end par_for
 
 } // end stellar mask  
+
+//----------------------------------------------------------------------------------------
+void MyEfieldMask(Mesh* pm) {
+
+    // Capture variables for kernel - e.g. indices for looping over the meshblocks and the size of the meshblocks.
+    auto &indcs = pm->mb_indcs;
+    int &is = indcs.is; int &ie = indcs.ie;
+    int &js = indcs.js; int &je = indcs.je;
+    int &ks = indcs.ks; int &ke = indcs.ke;
+    MeshBlockPack *pmbp = pm->pmb_pack;
+    auto &size = pmbp->pmb->mb_size;
+
+    DvceArray4D<Real> e1_,e2_,e3_;
+    if (pmbp->pmhd != nullptr) {
+        e1_ = pmbp->pmhd->efld.x1e;
+        e2_ = pmbp->pmhd->efld.x2e;
+        e3_ = pmbp->pmhd->efld.x3e;
+    }
+
+    // Now set a local parameter struct for lambda capturing
+    auto mp_ = mp;
+
+    // Define E1, E2, E3 on corners
+    // Note e1[is:ie,  js:je+1,ks:ke+1]
+    //      e2[is:ie+1,js:je,  ks:ke+1]
+    //      e3[is:ie+1,js:je+1,ks:ke  ]
+
+    par_for("pgen_e1mask", DevExeSpace(), 0,(pmbp->nmb_thispack-1),ks,ke+1,js,je+1,is,ie,
+    KOKKOS_LAMBDA(int m, int k, int j, int i) {
+
+        // Extract the cell center and left aligned edge coordinates coordinates
+        Real &x1min = size.d_view(m).x1min;
+        Real &x1max = size.d_view(m).x1max;
+        Real x1v    = CellCenterX(i-is, indcs.nx1, x1min, x1max);
+
+        Real &x2min = size.d_view(m).x2min;
+        Real &x2max = size.d_view(m).x2max;
+        Real x2f    = LeftEdgeX(j-js, indcs.nx2, x2min, x2max);
+
+        Real &x3min = size.d_view(m).x3min;
+        Real &x3max = size.d_view(m).x3max;
+        Real x3f    = LeftEdgeX(k-ks, indcs.nx3, x3min, x3max);
+
+        Real rc = sqrt(x1v*x1v+x2f*x2f+x3f*x3f);
+
+        if (rc<mp_.rs) {
+
+            Real rad(0.0),phi(0.0),z(0.0);
+            Real vx(0.0),vy(0.0),vz(0.0);
+            Real Bx(0.0),By(0.0),Bz(0.0);
+            GetCylCoord(mp_,rad,phi,z,x1v,x2f,x3f);
+
+            // Set the stellar velocity at this location
+            VelStarCyl(mp_,rad,phi,z,vx,vy,vz);
+
+            // Set the stellar interior magnetic field
+            Bx = 0.0;
+            By = 0.0;
+            Bz = 2*mp_.mm/pow(mp_.rs,3);
+
+            // E1=-(v X B)=VzBy-VyBz
+            e1_(m,k,j,i) = vz*By - vy*Bz;
+
+        }
+            
+    }); // end par_for
+
+    par_for("pgen_e2mask", DevExeSpace(), 0,(pmbp->nmb_thispack-1),ks,ke+1,js,je,is,ie+1,
+    KOKKOS_LAMBDA(int m, int k, int j, int i) {
+
+        Real &x1min = size.d_view(m).x1min;
+        Real &x1max = size.d_view(m).x1max;
+        Real x1f    = LeftEdgeX(i-is, indcs.nx1, x1min, x1max);
+
+        Real &x2min = size.d_view(m).x2min;
+        Real &x2max = size.d_view(m).x2max;
+        Real x2v    = CellCenterX(j-js, indcs.nx2, x2min, x2max);
+
+        Real &x3min = size.d_view(m).x3min;
+        Real &x3max = size.d_view(m).x3max;
+        Real x3f    = LeftEdgeX(k-ks, indcs.nx3, x3min, x3max);
+
+        Real rc = sqrt(x1f*x1f+x2v*x2v+x3f*x3f);
+
+        if (rc<mp_.rs) {
+
+            Real rad(0.0),phi(0.0),z(0.0);
+            Real vx(0.0),vy(0.0),vz(0.0);
+            Real Bx(0.0),By(0.0),Bz(0.0);
+            GetCylCoord(mp_,rad,phi,z,x1f,x2v,x3f);
+
+            // Set the stellar velocity at this location
+            VelStarCyl(mp_,rad,phi,z,vx,vy,vz);
+
+            // Set the interior star magnetic field
+            Bx = 0.0;
+            By = 0.0;
+            Bz = 2*mp_.mm/pow(mp_.rs,3);
+
+            // E2=-(v X B)=VxBz-VzBx
+            e2_(m,k,j,i) = vx*Bz - vz*Bx;
+
+        }
+            
+    }); // end par_for
+
+    par_for("pgen_e3mask", DevExeSpace(), 0,(pmbp->nmb_thispack-1),ks,ke,js,je+1,is,ie+1,
+    KOKKOS_LAMBDA(int m, int k, int j, int i) {
+
+        Real &x1min = size.d_view(m).x1min;
+        Real &x1max = size.d_view(m).x1max;
+        Real x1f    = LeftEdgeX(i-is, indcs.nx1, x1min, x1max);
+
+        Real &x2min = size.d_view(m).x2min;
+        Real &x2max = size.d_view(m).x2max;
+        Real x2f    = LeftEdgeX(j-js, indcs.nx2, x2min, x2max);
+
+        Real &x3min = size.d_view(m).x3min;
+        Real &x3max = size.d_view(m).x3max;
+        Real x3v    = CellCenterX(k-ks, indcs.nx3, x3min, x3max);
+
+        Real rc = sqrt(x1f*x1f+x2f*x2f+x3v*x3v);
+
+        if (rc<mp_.rs) {
+
+            Real rad(0.0),phi(0.0),z(0.0);
+            Real vx(0.0),vy(0.0),vz(0.0);
+            Real Bx(0.0),By(0.0),Bz(0.0);
+            GetCylCoord(mp_,rad,phi,z,x1f,x2f,x3v);
+
+            // Set the stellar velocity at this location
+            VelStarCyl(mp_,rad,phi,z,vx,vy,vz);
+
+            // Set the interior star magnetic field
+            Bx = 0.0;
+            By = 0.0;
+            Bz = 2*mp_.mm/pow(mp_.rs,3);
+
+            // E3=-(v X B)=VyBx-VxBy
+            e3_(m,k,j,i) = vy*Bx - vx*By;
+
+        }
+            
+    }); // end par_for
+
+    return;
+
+} // end E field mask  
 
 //----------------------------------------------------------------------------------------
 void InnerDiskMask(Mesh* pm, const Real bdt) {
