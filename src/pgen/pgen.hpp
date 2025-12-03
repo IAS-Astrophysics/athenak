@@ -20,6 +20,7 @@ using UserBoundaryFnPtr = void (*)(Mesh* pm);
 using UserSrctermFnPtr = void (*)(Mesh* pm, const Real bdt);
 using UserRefinementFnPtr = void (*)(MeshBlockPack* pmbp);
 using UserHistoryFnPtr = void (*)(HistoryData *pdata, Mesh *pm);
+using UserESrctermFnPtr = void (*)(Mesh* pm); // TODO: CALLUM - Check arguments list
 
 //----------------------------------------------------------------------------------------
 //! \class ProblemGenerator
@@ -42,6 +43,9 @@ class ProblemGenerator {
   // true if user history outputs are specified
   bool user_hist;
 
+  // true if user electric field source terms are specified
+  bool user_esrcs;
+
   // vector of SphericalGrid objects for analysis
   std::vector<std::unique_ptr<SphericalGrid>> spherical_grids;
 
@@ -53,6 +57,7 @@ class ProblemGenerator {
   UserSrctermFnPtr user_srcs_func=nullptr;
   UserRefinementFnPtr user_ref_func=nullptr;
   UserHistoryFnPtr user_hist_func=nullptr;
+  UserESrctermFnPtr user_esrcs_func=nullptr;
 
   // predefined problem generator functions (default test suite)
   void CallProblemGenerator(ParameterInput *pin, bool is_restart);

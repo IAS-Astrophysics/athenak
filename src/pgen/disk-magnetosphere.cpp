@@ -117,6 +117,11 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
         user_bcs_func = FixedBC;
     }
 
+    // TODO: CALLUM
+    // if (user_efldsrcs) {
+    //     user_efldsrcs_func = MyEfieldMask;
+    // }
+
     // If restarting then end initialisation here
     if (restart) return;
 
