@@ -285,6 +285,37 @@ BaseTypeOutput::BaseTypeOutput(ParameterInput *pin, Mesh *pm, OutputParameters o
       }
     }
 
+    // temperature
+    if (variable.compare("temperature") == 0) {
+      out_params.contains_derived = true;
+      out_params.n_derived += 1;
+      outvars.emplace_back("temperature",0,&(derived_var));
+    }
+
+    // hydro v moments
+    if (variable.compare("hydro_v_moments") == 0) {
+      out_params.contains_derived = true;
+      out_params.n_derived += 4;
+      for (int i=0; i<4; ++i) {
+        std::string variable_name;
+        variable_name.assign("v_moment_");
+        variable_name.append(std::to_string(i+1));
+        outvars.emplace_back(variable_name,i,&(derived_var));
+      }
+    }
+
+    // hydro vi moments
+    if (variable.compare("hydro_vi_moments") == 0) {
+      out_params.contains_derived = true;
+      out_params.n_derived += 6;
+      for (int i=0; i<6; ++i) {
+        std::string variable_name;
+        variable_name.assign("vi_moment_");
+        variable_name.append(std::to_string(i+1));
+        outvars.emplace_back(variable_name,i,&(derived_var));
+      }
+    }
+
     // mhd (lab-frame) density
     if (variable.compare("mhd_u_d") == 0 ||
         variable.compare("mhd_u") == 0 ||
@@ -535,6 +566,40 @@ BaseTypeOutput::BaseTypeOutput(ParameterInput *pin, Mesh *pm, OutputParameters o
       outvars.emplace_back("jcon1",1,&(derived_var));
       outvars.emplace_back("jcon2",2,&(derived_var));
       outvars.emplace_back("jcon3",3,&(derived_var));
+    }
+
+    // mhd alternative magnetic curvature
+    if (variable.compare("mhd_curv_alt") == 0) {
+      pm->pmb_pack->pmhd->SetSaveWBcc();
+      out_params.contains_derived = true;
+      out_params.n_derived += 1;
+      outvars.emplace_back("curv_alt",0,&(derived_var));
+    }
+
+    // mhd v-B moments
+    if (variable.compare("mhd_v_B_moments") == 0) {
+      pm->pmb_pack->pmhd->SetSaveWBcc();
+      out_params.contains_derived = true;
+      out_params.n_derived += 12;
+      for (int i=0; i<12; ++i) {
+        std::string variable_name;
+        variable_name.assign("v_B_moment_");
+        variable_name.append(std::to_string(i+1));
+        outvars.emplace_back(variable_name,i,&(derived_var));
+      }
+    }
+
+    // mhd vi-Bi moments
+    if (variable.compare("mhd_vi_Bi_moments") == 0) {
+      pm->pmb_pack->pmhd->SetSaveWBcc();
+      out_params.contains_derived = true;
+      out_params.n_derived += 18;
+      for (int i=0; i<18; ++i) {
+        std::string variable_name;
+        variable_name.assign("vi_Bi_moment_");
+        variable_name.append(std::to_string(i+1));
+        outvars.emplace_back(variable_name,i,&(derived_var));
+      }
     }
 
     // Hydro SGS tensor

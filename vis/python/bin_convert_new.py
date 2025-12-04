@@ -106,7 +106,7 @@ def read_all_ranks_binary(rank0_filename: str) -> Dict[str, Any]:
 
     file_sizes = np.array([os.path.getsize(file) for file in rank_files])
     if len(np.unique(file_sizes)) > 1:
-        print("Files are not the same size! you are probably trying to read a slice written with single_file_per_rank=True")
+        # print("Files are not the same size! you are probably trying to read a slice written with single_file_per_rank=True")
         unique_file_sizes = np.unique(file_sizes)
         larger_file_size = max(unique_file_sizes)
         rank_files = [file for file, size in zip(rank_files, file_sizes) if size == larger_file_size]
