@@ -61,6 +61,7 @@ namespace {
 }
 
 void SetADMVariablesToTOV(MeshBlockPack *pmbp);
+void FinalizeTOV(ParameterInput *pin, Mesh *pm);
 
 template<class TOVEOS>
 void SolveTOV(ParameterInput *pin, Mesh* pmy_mesh_) {
@@ -411,6 +412,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   }
 
   user_hist_func = &TOVHistory;
+  pgen_final_func = &FinalizeTOV;
   pmbp->padm->SetADMVariables = &SetADMVariablesToTOV;
 
   // initialize primitive variables for restart
@@ -581,6 +583,15 @@ void SetADMVariablesToTOV(MeshBlockPack *pmbp) {
     adm.vK_dd(m,0,0,k,j,i) = adm.vK_dd(m,0,1,k,j,i) = adm.vK_dd(m,0,2,k,j,i) = 0.0;
     adm.vK_dd(m,1,1,k,j,i) = adm.vK_dd(m,1,2,k,j,i) = adm.vK_dd(m,2,2,k,j,i) = 0.0;
   });
+}
+
+// Cleanup at the end of the run
+void FinalizeTOV(ParameterInput *pin, Mesh *pm) {
+  // This function is only needed to delete the TOV solver data, which is stored inside
+  // the dynamically allocated TOVParams object.
+  if (ptov_params != nullptr) {
+    delete ptov_params;
+  }
 }
 
 // History function
