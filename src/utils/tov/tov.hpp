@@ -91,6 +91,49 @@ class TOVStar {
     return lb;
   }
 
+  KOKKOS_INLINE_FUNCTION
+  void GetMandAlpha(Real r, Real &m, Real &alp) const {
+    if (r > R_edge) {
+      m = M_edge;
+      alp = sqrt(1.0 - 2.0*m/r);
+      return;
+    }
+
+    int idx = static_cast<int>(r/dr);
+    const auto &R_l = R.d_view;
+    const auto &alps_l = alpha.d_view;
+    const auto &Ms_l = M.d_view;
+    m = Interpolate(r, R_l(idx), R_l(idx+1), Ms_l(idx), Ms_l(idx+1));
+    alp = Interpolate(r, R_l(idx), R_l(idx+1), alps_l(idx), alps_l(idx+1));
+
+    return;
+  }
+
+  KOKKOS_INLINE_FUNCTION
+  void GetMandAlphaIso(Real r_iso, Real &m, Real &alp) const {
+    if (r_iso > R_edge_iso) {
+      m = M_edge;
+      alp = (1. - m/(2.*r_iso))/(1. + m/(2.*r_iso));
+      return;
+    }
+    // Because isotropic coordinates are not evenly spaced, we need to search for the
+    // right index.
+    const auto &R_iso_l = R_iso.d_view;
+    int idx = FindIsotropicIndex(r_iso);
+    const auto &alps_l = alpha.d_view;
+    const auto &Ms_l = M.d_view;
+    if (idx >= npoints || idx < 0) {
+      Kokkos::printf("There's a problem with the index!\n" // NOLINT
+                     " idx = %d\n"
+                     " r_iso = %g\n"
+                     " dr = %g\n",idx,r_iso,dr);
+    }
+    m = Interpolate(r_iso, R_iso_l(idx), R_iso_l(idx+1), Ms_l(idx), Ms_l(idx+1));
+    alp = Interpolate(r_iso, R_iso_l(idx), R_iso_l(idx+1), alps_l(idx), alps_l(idx+1));
+
+    return;
+  }
+
   template<class TOVEOS>
   KOKKOS_INLINE_FUNCTION
   void GetPrimitivesAtPoint(const TOVEOS& eos, Real r,
