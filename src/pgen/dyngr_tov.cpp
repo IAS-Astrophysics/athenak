@@ -63,6 +63,22 @@ namespace {
 void SetADMVariablesToTOV(MeshBlockPack *pmbp);
 
 template<class TOVEOS>
+void SolveTOV(ParameterInput *pin, Mesh* pmy_mesh_) {
+  bool isotropic = pin->GetOrAddBoolean("problem", "isotropic", false);
+  bool minkowski = pin->GetOrAddBoolean("problem", "minkowski", false);
+
+  MeshBlockPack *pmbp = pmy_mesh_->pmb_pack;
+
+  // If the metric is adaptive or dynamical ADM is enabled, we need to regenerate the
+  // TOV solution, since it is not stored in the restart file.
+  if (pmbp->padm->is_dynamic || pmy_mesh_->adaptive) {
+    TOVEOS eos{pin};
+    auto my_tov = tov::TOVStar::ConstructTOV(pin, eos, false);
+    ptov_params = new TOVParams(my_tov, isotropic, minkowski);
+  }
+}
+
+template<class TOVEOS>
 void SetupTOV(ParameterInput *pin, Mesh* pmy_mesh_) {
   Real v_pert = pin->GetOrAddReal("problem", "v_pert", 0.0);
   Real p_pert = pin->GetOrAddReal("problem", "p_pert", 0.0);
@@ -399,6 +415,15 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
 
   // initialize primitive variables for restart
   if (restart) {
+    if (pmbp->pdyngr->eos_policy == DynGRMHD_EOS::eos_ideal) {
+      SolveTOV<tov::PolytropeEOS>(pin, pmy_mesh_);
+    } else if (pmbp->pdyngr->eos_policy == DynGRMHD_EOS::eos_compose) {
+      SolveTOV<tov::TabulatedEOS>(pin, pmy_mesh_);
+    } else if (pmbp->pdyngr->eos_policy == DynGRMHD_EOS::eos_hybrid) {
+      SolveTOV<tov::TabulatedEOS>(pin, pmy_mesh_);
+    } else if (pmbp->pdyngr->eos_policy == DynGRMHD_EOS::eos_piecewise_poly) {
+      SolveTOV<tov::PiecewisePolytropeEOS>(pin, pmy_mesh_);
+    }
     return;
   }
 

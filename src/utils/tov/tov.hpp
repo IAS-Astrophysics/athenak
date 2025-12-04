@@ -56,7 +56,7 @@ class TOVStar {
 
  public:
   template<class TOVEOS>
-  static TOVStar ConstructTOV(ParameterInput* pin, TOVEOS& eos);
+  static TOVStar ConstructTOV(ParameterInput* pin, TOVEOS& eos, bool verbose=true);
 
   KOKKOS_INLINE_FUNCTION
   Real FindSchwarzschildR(Real r_iso, Real mass) const {
@@ -172,7 +172,7 @@ class TOVStar {
 };
 
 template<class TOVEOS>
-TOVStar TOVStar::ConstructTOV(ParameterInput *pin, TOVEOS& eos) {
+TOVStar TOVStar::ConstructTOV(ParameterInput *pin, TOVEOS& eos, bool verbose) {
   TOVStar tov{pin};
 
   tov.pfloor = eos.template GetPFromRho<LocationTag::Host>(tov.dfloor);
@@ -293,7 +293,7 @@ TOVStar TOVStar::ConstructTOV(ParameterInput *pin, TOVEOS& eos) {
   }
 
   // Print out details of the calculation
-  if (global_variable::my_rank == 0) {
+  if (global_variable::my_rank == 0 && verbose) {
     std::cout << "\nTOV INITIAL DATA\n"
               << "----------------\n";
     std::cout << "Total points in buffer: " << tov.npoints << "\n";
