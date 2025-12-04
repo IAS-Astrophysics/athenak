@@ -382,7 +382,6 @@ TaskStatus MHD::EFieldSrc(Driver *pdrive, int stage) {
     }
   }
 
-  // TODO: Callum - electric field source terms
   // Add user Efield source terms
   if (pmy_pack->pmesh->pgen->user_esrcs) {
     (pmy_pack->pmesh->pgen->user_esrcs_func)(pmy_pack->pmesh);

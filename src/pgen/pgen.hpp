@@ -20,7 +20,7 @@ using UserBoundaryFnPtr = void (*)(Mesh* pm);
 using UserSrctermFnPtr = void (*)(Mesh* pm, const Real bdt);
 using UserRefinementFnPtr = void (*)(MeshBlockPack* pmbp);
 using UserHistoryFnPtr = void (*)(HistoryData *pdata, Mesh *pm);
-using UserESrctermFnPtr = void (*)(Mesh* pm); // TODO: CALLUM - Check arguments list
+using UserESrctermFnPtr = void (*)(Mesh* pm);
 
 //----------------------------------------------------------------------------------------
 //! \class ProblemGenerator

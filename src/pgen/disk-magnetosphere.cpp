@@ -77,7 +77,7 @@ namespace {
     Real Rmin, Ri, Ro, Rmax;
     Real thmin, thi, tho, thmax;
     Real origid, rmagsph, denstar, ratmagfloor, ratmagfslope;
-    Real mm, b0, beta;
+    Real mm, beta;
     bool is_ideal;
     bool magnetic_fields_enabled;
     static int bc_ix3, bc_ox3;
@@ -98,7 +98,7 @@ void MyEfieldMask(Mesh* pm);
 
 void StarMask(Mesh* pm, const Real bdt);
 void InnerDiskMask(Mesh* pm, const Real bdt);
-void FixedBC(Mesh *pm);
+void FixedHydroBC(Mesh *pm);
 
 //----------------------------------------------------------------------------------------
 //! \fn
@@ -117,10 +117,10 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     }
 
     if (user_bcs) {
-        user_bcs_func = FixedBC;
+        user_bcs_func = FixedHydroBC;
     }
 
-    if (user_esrcs && pmbp->pmhd != nullptr) {
+    if (user_esrcs && (pmbp->pmhd != nullptr)) {
         user_esrcs_func = MyEfieldMask;
     }
 
@@ -140,7 +140,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     mp.beta = pin->GetReal("problem","beta");
     mp.denstar = pin->GetOrAddReal("problem","denstar",0.0);
     mp.dslope = pin->GetOrAddReal("problem","dslope",0.0);
-    mp.gamma_gas = pin->GetReal("hydro","gamma");
+    mp.gamma_gas = pin->GetReal("mhd","gamma");
     mp.gm0 = pin->GetOrAddReal("problem","gm0",1.0);
     if (pmbp->pmhd != nullptr) mp.magnetic_fields_enabled = true;
     else mp.magnetic_fields_enabled = false;
@@ -148,7 +148,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     mp.origid = pin->GetOrAddReal("problem","origid",0.0);
     if (mp.is_ideal){
         mp.p0_over_r0 = SQR(pin->GetOrAddReal("problem","h_over_r0",0.1));
-    } else { mp.p0_over_r0 = SQR(pin->GetReal("hydro","iso_sound_speed")); }
+    } else { mp.p0_over_r0 = SQR(pin->GetReal("mhd","iso_sound_speed")); }
     mp.qslope = pin->GetOrAddReal("problem","qslope",0.0);
     mp.r0 = pin->GetOrAddReal("problem","r0",1.0);
     mp.rad_in_cutoff = pin->GetOrAddReal("problem","rad_in_cutoff",0.0);
@@ -176,13 +176,18 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     // Initialise a pointer to the disc parameter structure   
     auto mp_ = mp;
 
-    // std::cout<< mp.is_ideal << std::endl;
-
     // Select either Hydro or MHD and extract the arrays - set on the device specifically since this is where the calculations
     // are going to be done anyway. 
     DvceArray5D<Real> u0_, w0_;
-    u0_ = pmbp->pmhd->u0;
-    w0_ = pmbp->pmhd->w0;
+    if (pmbp->phydro != nullptr){
+        u0_ = pmbp->phydro->u0;
+        w0_ = pmbp->phydro->w0;
+    }   else if (pmbp->pmhd != nullptr){
+        u0_ = pmbp->pmhd->u0;
+        w0_ = pmbp->pmhd->w0;
+    }
+
+    std::cout << "Here" << std::endl;
 
     // initialize conservative variables for new run ---------------------------------------
     par_for("magnetosphere_pgen",DevExeSpace(),0,(nmb-1),ks,ke,js,je,is,ie,
@@ -250,6 +255,8 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
 
     });
 
+    std::cout << "Here2" << std::endl;
+
     // initialize magnetic field if required ---------------------------------------
     if (pmbp->pmhd != nullptr) {
 
@@ -262,8 +269,12 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
         Kokkos::realloc(a2, nmb,ncells3,ncells2,ncells1);
         Kokkos::realloc(a3, nmb,ncells3,ncells2,ncells1);
 
+        std::cout << "Here3" << std::endl;
+
         auto &nghbr = pmbp->pmb->nghbr;
         auto &mblev = pmbp->pmb->mb_lev;
+
+        std::cout << "Here4" << std::endl;
 
         par_for("pgen_vector_potential", DevExeSpace(), 0,nmb-1,ks,ke+1,js,je+1,is,ie+1,
         KOKKOS_LAMBDA(int m, int k, int j, int i) {
@@ -389,6 +400,8 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
         
         });
 
+        std::cout << "Here5" << std::endl;
+
         auto &b0_ = pmbp->pmhd->b0;
         par_for("pgen_b0", DevExeSpace(), 0,nmb-1,ks,ke,js,je,is,ie,
         KOKKOS_LAMBDA(int m, int k, int j, int i) {
@@ -419,6 +432,8 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
             }
         });
 
+        std::cout << "Here6" << std::endl;
+
         if (mp.is_ideal) {
             par_for("bcc_e", DevExeSpace(), 0,(nmb-1),ks,ke,js,je,is,ie,
             KOKKOS_LAMBDA(int m, int k, int j, int i) {
@@ -428,8 +443,9 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
             });
         }
 
-    } // End of magnetic field initialization
+        std::cout << "Here7" << std::endl;
 
+    } // End of magnetic field initialization
 
     return; // END OF ProblemGenerator::UserProblem()
 }
@@ -606,7 +622,7 @@ namespace {
     static Real A1(struct my_params mp, const Real x1, const Real x2, const Real x3) {
         Real a1=0.0;
         Real rc = fmax(sqrt(x1*x1+x2*x2+x3*x3),mp.rs);
-        a1 = mp.mm*mp.b0/rc/rc/rc*(-1.*x2);
+        a1 = mp.mm/rc/rc/rc*(-1.*x2);
         return(a1);
     }
 
@@ -615,7 +631,7 @@ namespace {
     static Real A2(struct my_params mp, const Real x1, const Real x2, const Real x3) {
         Real a2=0.0;
         Real rc = fmax(sqrt(x1*x1+x2*x2+x3*x3),mp.rs);
-        a2 = mp.mm*mp.b0/rc/rc/rc*(+1.*x1);
+        a2 = mp.mm/rc/rc/rc*(+1.*x1);
         return(a2);
     }
 
@@ -1085,7 +1101,7 @@ void CoolingSourceTerms(Mesh* pm, const Real bdt) {
 //  \brief Sets boundary condition on surfaces of computational domain
 // Note quantities at boundaries are held fixed to initial condition values
 
-void FixedBC(Mesh *pm) {
+void FixedHydroBC(Mesh *pm) {
 
       // Start by extracting the mesh block and cell information 
       auto &indcs = pm->mb_indcs;
@@ -1104,12 +1120,11 @@ void FixedBC(Mesh *pm) {
 
       int nmb = pm->pmb_pack->nmb_thispack;
 
-      // Select either Hydro or MHD arrays
       DvceArray5D<Real> u0_, w0_;
       if (pm->pmb_pack->phydro != nullptr) {
         u0_ = pm->pmb_pack->phydro->u0;
         w0_ = pm->pmb_pack->phydro->w0;
-      }
+      } 
 
       // X1 BOUNDARY CONDITIONS ---------------> 
 

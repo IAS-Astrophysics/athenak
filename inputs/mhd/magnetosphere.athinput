@@ -8,7 +8,8 @@ basename  = magsph      # problem ID: basename of output filenames
 
 <output1>
 file_type   = bin       # Tabular data dump
-variable    = hydro_u   # variables to be output
+#variable    = hydro_u   # variables to be output
+variable    = mhd_u_bcc  # variables to be output
 dt          = 3.14      # time increment between outputs
 
 <output2>
@@ -25,24 +26,24 @@ integrator  = rk2       # time integration algorithm
 <mesh>
 nghost    = 2           # Number of ghost cells
 
-nx1         = 256     # Number of zones in X1-direction
+nx1         = 128     # Number of zones in X1-direction
 x1min       = -5      # minimum value of X1
 x1max       = 5       # maximum value of X1
-ix1_bc      = user    # Inner-X1 boundary condition flag
-ox1_bc      = user    # Outer-X1 boundary condition flag
+ix1_bc      = outflow    # Inner-X1 boundary condition flag
+ox1_bc      = outflow    # Outer-X1 boundary condition flag
 x1rat       = 1.0       # non-uniform grid ratio
 
-nx2         = 256      # Number of zones in X2-direction
+nx2         = 128      # Number of zones in X2-direction
 x2min       = -5       # minimum value of X2
 x2max       = 5        # maximum value of X2
-ix2_bc      = user     # Inner-X2 boundary condition flag
-ox2_bc      = user     # Outer-X2 boundary condition flag
+ix2_bc      = outflow     # Inner-X2 boundary condition flag
+ox2_bc      = outflow     # Outer-X2 boundary condition flag
 
-nx3         = 256         # Number of zones in X3-direction
+nx3         = 128         # Number of zones in X3-direction
 x3min       = -5       # minimum value of X3
 x3max       = 5        # maximum value of X3
-ix3_bc      = user    # Inner-X3 boundary condition flag
-ox3_bc      = user    # Outer-X3 boundary condition flag
+ix3_bc      = outflow    # Inner-X3 boundary condition flag
+ox3_bc      = outflow    # Outer-X3 boundary condition flag
 
 <meshblock>
 nx1       = 64       # Number of cells in each MeshBlock, X1-dir
@@ -61,34 +62,44 @@ x3min=-1
 x3max= 1
 level= 1
 
-<hydro>
-eos         = ideal        # EOS type
+#<hydro>
+#eos         = ideal        # EOS type
 #eos         = isothermal   # EOS type
 #iso_sound_speed = 0.1     
-gamma       = 1.4           # adaiabtic index
-dfloor      = 1.e-12         # Density floor
-pfloor      = 1.e-12        # Pressure floor
-rsolver     = hlle          # Riemann-solver to be used
+#gamma       = 1.4           # adaiabtic index
+#dfloor      = 1.e-12        # Density floor
+#pfloor      = 1.e-12        # Pressure floor
+#rsolver     = hlle          # Riemann-solver to be used
+
+<mhd>
+eos         = ideal    # EOS type
+reconstruct = plm      # spatial reconstruction method
+rsolver     = llf      # Riemann-solver to be used
+gamma       = 1.4      # gamma
+dfloor      = 1.e-12   # Density floor
+pfloor      = 1.e-12   # Pressure floor
+rsolver     = hlld     # Riemann-solver to be used
 
 <problem>
 pgen_name = magsph      # problem generator name
 user_srcs = true        # Switch the user source terms on
+user_esrcs = false
 
 beta = 10               #
 denstar = 1e7           # central stellar density
 dslope = -1             # disc midplane surface density
 gm0 = 1.0               # GM for the central star
-mm = 0.0                # magnetic moment
-origid = 1.0            # angular velocity of star
+mm = -0.0447            # magnetic moment
+origid = 0.0            # angular velocity of star
 h_over_r0 = 0.1         # characetristic cs
-qslope = -1              # disc temperature profile exponent
+qslope = -1             # disc temperature profile exponent
 r0 = 1                  # reference radius
 rho0 = 1.0              # characteristic disc midplane density
 rmagsph = 0.5           # initial magnetospheric cavity radius
 rad_in_cutoff = 1.0
 rad_in_smooth = 0.1     # Was 0.3
-rad_out_cutoff = 8.0
-rad_out_smooth = 0.3
+rad_out_cutoff = 5.0
+rad_out_smooth = 0.1
 rho_floor0 = 1e-12      # radial density floor normalisation
 rho_floor_slope = -1    # radial density floor slope
 rstar = 0.1             # radius of the star
