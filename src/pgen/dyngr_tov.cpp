@@ -46,18 +46,19 @@ static Real A2(const tov::TOVStar& tov_, const TOVEOS& eos, bool isotropic, Real
 void TOVHistory(HistoryData *pdata, Mesh *pm);
 
 namespace {
-  struct TOVParams {
-    tov::TOVStar my_tov;
-    bool isotropic;
-    bool minkowski;
+struct TOVParams {
+  tov::TOVStar my_tov;
+  bool isotropic;
+  bool minkowski;
 
-    TOVParams(tov::TOVStar& tov_star, bool isotropic_, bool minkowski_) : 
-     my_tov(std::move(tov_star)) {
-      isotropic = isotropic_;
-      minkowski = minkowski_;
-    }
-  };
-  TOVParams *ptov_params;
+  TOVParams(tov::TOVStar& tov_star, bool isotropic_, bool minkowski_) :
+   my_tov(std::move(tov_star)) {
+    isotropic = isotropic_;
+    minkowski = minkowski_;
+  }
+};
+
+TOVParams *ptov_params;
 }
 
 void SetADMVariablesToTOV(MeshBlockPack *pmbp);
