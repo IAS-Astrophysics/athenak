@@ -59,7 +59,7 @@ struct TOVParams {
 };
 
 TOVParams *ptov_params;
-}
+} // namespace
 
 void SetADMVariablesToTOV(MeshBlockPack *pmbp);
 void FinalizeTOV(ParameterInput *pin, Mesh *pm);
