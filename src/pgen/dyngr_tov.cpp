@@ -52,7 +52,7 @@ struct TOVParams {
   bool minkowski;
 
   TOVParams(tov::TOVStar& tov_star, bool isotropic_, bool minkowski_) :
-   my_tov(std::move(tov_star)) {
+      my_tov(std::move(tov_star)) {
     isotropic = isotropic_;
     minkowski = minkowski_;
   }
