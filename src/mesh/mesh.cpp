@@ -175,8 +175,6 @@ Mesh::Mesh(ParameterInput *pin) :
     ?  true : false;
   multilevel = (adaptive || pin->GetString("mesh_refinement","refinement") == "static")
     ?  true : false;
-  // TODO(mhguo): add check here to make sure AMR is consistent with cyclic zoom
-  cyclic_zoom = pin->DoesBlockExist("cyclic_zoom");
 
   // FIXME: The shearing box is not currently compatible with SMR/AMR
   if (multilevel && pin->DoesBlockExist("shearing_box")) {
@@ -682,8 +680,15 @@ void Mesh::AddCoordinatesAndPhysics(ParameterInput *pinput) {
 //! \fn Mesh::AddZoomData(ParameterInput *pin)
 
 void Mesh::AddZoomData(ParameterInput *pin) {
-  if (cyclic_zoom) {
-    pzoom = new CyclicZoom(this, pin);
-    // pzoom->InitializeZoomData();
+  if (adaptive) {
+    auto rcrit = pmr->pmrc->rcrit;
+    // TODO(@mhguo): currently only support one cyclic zoom region
+    for (auto it = rcrit.begin(); it != rcrit.end(); ++it) {
+      if (it->rmethod == RefCritMethod::cyclic_zoom) {
+        pzoom = new CyclicZoom(this, pin);
+        // pzoom->InitializeZoomData();
+        return;
+      }
+    }
   }
 }

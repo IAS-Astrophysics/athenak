@@ -23,25 +23,34 @@ CyclicZoom::CyclicZoom(Mesh *pm, ParameterInput *pin) :
     pmesh(pm),
     ndiag(-1)
   {
-  is_set = pin->GetOrAddBoolean("cyclic_zoom","is_set",false);
-  read_rst = pin->GetOrAddBoolean("cyclic_zoom","read_rst",true);
-  write_rst = pin->GetOrAddBoolean("cyclic_zoom","write_rst",true);
-  zoom_bcs = pin->GetOrAddBoolean("cyclic_zoom","zoom_bcs",true);
-  zoom_ref = pin->GetOrAddBoolean("cyclic_zoom","zoom_ref",true);
-  zoom_dt = pin->GetOrAddBoolean("cyclic_zoom","zoom_dt",false);
-  fix_efield = pin->GetOrAddBoolean("cyclic_zoom","fix_efield",false);
-  dump_diag  = pin->GetOrAddBoolean("cyclic_zoom","dump_diag",false);
-  ndiag = pin->GetOrAddInteger("cyclic_zoom","ndiag",-1);
+  // cycle through ParameterInput list and read each <amr_criterion> block
+  for (auto it = pin->block.begin(); it != pin->block.end(); ++it) {
+    if (it->block_name.compare(0, 13, "amr_criterion") == 0) {
+      std::string method = pin->GetString(it->block_name, "method");
+      if (method.compare("cyclic_zoom") == 0) {
+        block_name = it->block_name;
+      }
+    }
+  }
+  is_set = pin->GetOrAddBoolean(block_name,"is_set",false);
+  read_rst = pin->GetOrAddBoolean(block_name,"read_rst",true);
+  write_rst = pin->GetOrAddBoolean(block_name,"write_rst",true);
+  zoom_bcs = pin->GetOrAddBoolean(block_name,"zoom_bcs",true);
+  zoom_ref = pin->GetOrAddBoolean(block_name,"zoom_ref",true);
+  zoom_dt = pin->GetOrAddBoolean(block_name,"zoom_dt",false);
+  fix_efield = pin->GetOrAddBoolean(block_name,"fix_efield",false);
+  dump_diag  = pin->GetOrAddBoolean(block_name,"dump_diag",false);
+  ndiag = pin->GetOrAddInteger(block_name,"ndiag",-1);
 
   // TODO(@mhguo): may set the parameters so that the initial level equals the max level
   // TODO(@mhguo): currently we need to check whether zamr.level is correct by hand
   zstate.id = 0;
-  zstate.zone = pin->GetOrAddInteger("cyclic_zoom","zone",0);
+  zstate.zone = pin->GetOrAddInteger(block_name,"zone",0);
   zstate.last_zone = zstate.zone;
-  zstate.direction = pin->GetOrAddInteger("cyclic_zoom","direction",1);
+  zstate.direction = pin->GetOrAddInteger(block_name,"direction",1);
 
   // Set zoom AMR parameters
-  zamr.nlevels = pin->GetOrAddInteger("cyclic_zoom","nlevels",4);
+  zamr.nlevels = pin->GetOrAddInteger(block_name,"nlevels",4);
   zamr.max_level = pmesh->max_level;
   zamr.min_level = zamr.max_level - zamr.nlevels + 1;
   zamr.level = zamr.max_level - zstate.zone;
@@ -51,13 +60,13 @@ CyclicZoom::CyclicZoom(Mesh *pm, ParameterInput *pin) :
   zamr.first_emf = false;
   zamr.dump_rst = true;
 
-  zregion.x1c = pin->GetOrAddReal("cyclic_zoom","x1c",0.0);
-  zregion.x2c = pin->GetOrAddReal("cyclic_zoom","x2c",0.0);
-  zregion.x3c = pin->GetOrAddReal("cyclic_zoom","x3c",0.0);
-  zregion.r_0 = pin->GetOrAddReal("cyclic_zoom","r_0",1.0);
-  zint.t_run_fac = pin->GetOrAddReal("cyclic_zoom","t_run_fac",1.0);
-  zint.t_run_pow = pin->GetOrAddReal("cyclic_zoom","t_run_pow",0.0);
-  zint.t_run_max = pin->GetOrAddReal("cyclic_zoom","t_run_max",FLT_MAX);
+  zregion.x1c = pin->GetOrAddReal(block_name,"x1c",0.0);
+  zregion.x2c = pin->GetOrAddReal(block_name,"x2c",0.0);
+  zregion.x3c = pin->GetOrAddReal(block_name,"x3c",0.0);
+  zregion.r_0 = pin->GetOrAddReal(block_name,"r_0",1.0);
+  zint.t_run_fac = pin->GetOrAddReal(block_name,"t_run_fac",1.0);
+  zint.t_run_pow = pin->GetOrAddReal(block_name,"t_run_pow",0.0);
+  zint.t_run_max = pin->GetOrAddReal(block_name,"t_run_max",FLT_MAX);
   // Read number of zones from input parameters
   int num_zones = zamr.nlevels;
   // Initialize the dynamic interval structure
@@ -66,7 +75,7 @@ CyclicZoom::CyclicZoom(Mesh *pm, ParameterInput *pin) :
   for (int i = 0; i < num_zones; ++i) {
     std::string param_name = "t_run_fac_zone_" + std::to_string(i);
     Real default_value = 1.0;  // or some appropriate default
-    Real zone_factor = pin->GetOrAddReal("cyclic_zoom", param_name.c_str(), default_value);
+    Real zone_factor = pin->GetOrAddReal(block_name, param_name.c_str(), default_value);
     zint.t_run_fac_zones[i] = zone_factor;
   }
 
@@ -82,13 +91,13 @@ CyclicZoom::CyclicZoom(Mesh *pm, ParameterInput *pin) :
   re_fac = 0.8; // TODO(@mhguo): probably change to 1.0?
   r0_efld = 0.0;
   if (fix_efield) {
-    emf_flag = pin->GetInteger("cyclic_zoom","emf_flag");
-    emf_f0 = pin->GetOrAddReal("cyclic_zoom","emf_f0",emf_f0);
-    emf_f1 = pin->GetReal("cyclic_zoom","emf_f1");
-    emf_fmax = pin->GetReal("cyclic_zoom","emf_fmax");
-    emf_zmax = pin->GetOrAddInteger("cyclic_zoom","emf_zmax",zamr.nlevels);
-    re_fac = pin->GetOrAddReal("cyclic_zoom","re_fac",re_fac);
-    r0_efld = pin->GetOrAddReal("cyclic_zoom","r0_efld",0.0); // default value
+    emf_flag = pin->GetInteger(block_name,"emf_flag");
+    emf_f0 = pin->GetOrAddReal(block_name,"emf_f0",emf_f0);
+    emf_f1 = pin->GetReal(block_name,"emf_f1");
+    emf_fmax = pin->GetReal(block_name,"emf_fmax");
+    emf_zmax = pin->GetOrAddInteger(block_name,"emf_zmax",zamr.nlevels);
+    re_fac = pin->GetOrAddReal(block_name,"re_fac",re_fac);
+    r0_efld = pin->GetOrAddReal(block_name,"r0_efld",0.0); // default value
   }
   // size_t free_mem, total_mem;
   // cudaMemGetInfo(&free_mem, &total_mem);
@@ -111,6 +120,7 @@ void CyclicZoom::Initialize(ParameterInput *pin)
 {
   pzmesh = new ZoomMesh(this, pin);
   pzdata = new ZoomData(this, pin);
+  // pzmr = new ZoomRefinement(this, pin);
   return;
 }
 

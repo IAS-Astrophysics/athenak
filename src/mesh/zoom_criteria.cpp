@@ -104,16 +104,16 @@ void CyclicZoom::SetRefinementFlags() {
   // Check whether the MeshBlock is overlapping with the zoom region
   for (int m=0; m<nmb; ++m) {
     if (pmesh->lloc_eachmb[m+mbs].level == old_level) {
-      // extract bounds of parent MeshBlock
+      // extract bounds of MeshBlock
       Real x1min, x1max, x2min, x2max, x3min, x3max;
       if (ref_flag > 0) {
         // For refinement, the bounds are simply those of the current MeshBlock
-        x1min = size.h_view(m+mbs).x1min;
-        x1max = size.h_view(m+mbs).x1max;
-        x2min = size.h_view(m+mbs).x2min;
-        x2max = size.h_view(m+mbs).x2max;
-        x3min = size.h_view(m+mbs).x3min;
-        x3max = size.h_view(m+mbs).x3max;
+        x1min = size.h_view(m).x1min;
+        x1max = size.h_view(m).x1max;
+        x2min = size.h_view(m).x2min;
+        x2max = size.h_view(m).x2max;
+        x3min = size.h_view(m).x3min;
+        x3max = size.h_view(m).x3max;
       } else  {
         // For coarsening, need to compute the bounds of the parent MeshBlock
         // if (refine_flag < 0) {

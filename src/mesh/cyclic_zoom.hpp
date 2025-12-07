@@ -73,6 +73,7 @@ class ZoomData;
 
 //----------------------------------------------------------------------------------------
 //! \class CyclicZoom
+//! \brief Cyclic Zoom AMR module
 
 class CyclicZoom
 {
@@ -83,6 +84,7 @@ class CyclicZoom
   ~CyclicZoom() = default;
 
   // data
+  std::string block_name;  // block name for reading parameters
   bool is_set;
   bool read_rst;           // flag for reading zoom data restart file
   bool write_rst;          // flag for writing zoom data restart file
@@ -127,6 +129,13 @@ class CyclicZoom
   // void InitZoomRegion(){};
   void WorkBeforeAMR();
   void WorkAfterAMR();
+  // For zoom refinement
+  // TODO(@mhguo): need to reorganize these functions, now simply for compilation
+  void StoreVariables();
+  void ReInitVariables();
+  bool CheckStoreFlag(int m);
+  void CheckMaskFlag();
+  void CheckApplyFlag();
   // Boundary conditions, fluxes and source terms
   void BoundaryConditions();
   void FixEField(DvceEdgeFld4D<Real> emf);
@@ -151,6 +160,7 @@ class CyclicZoom
 
 //----------------------------------------------------------------------------------------
 //! \class ZoomMesh
+//! \brief Handles Zoom Mesh structures
 class ZoomMesh
 {
  public:
@@ -169,11 +179,16 @@ class ZoomMesh
   int nzmb_thishost;       // number of Zoom MeshBlocks on this host (local)
   int nzmb_max_perdvce;    // max allowed number of Zoom MBs per device (memory limit for AMR)
   int nzmb_max_perhost;    // max allowed number of Zoom MBs per host (memory limit for AMR)
-  int *rank_eachmb;              // rank of each MeshBlock
-  LogicalLocation *lloc_eachmb;  // LogicalLocations for each MeshBlock
   // following 2x arrays allocated with length [nranks] in BuildTreeFromXXXX()
+  int *gids_eachlevel;     // starting global ID of Zoom MeshBlocks in each level
+  int *nzmb_eachlevel;      // number of Zoom MeshBlocks on each level
   int *gids_eachrank;      // starting global ID of MeshBlocks in each rank
-  int *nmb_eachrank;       // number of MeshBlocks on each rank
+  int *nzmb_eachrank;       // number of MeshBlocks on each rank
+  std::vector<int> rank_eachzmb;        // rank of each Zoom MeshBlock
+  std::vector<int> lid_eachzmb;         // local ID of each Zoom MeshBlock
+  std::vector<int> rank_eachmb;        // rank of each MeshBlock that contains this zoom MeshBlock
+  std::vector<int> lid_eachmb;         // local ID of each MeshBlock that contains this zoom MeshBlock
+  std::vector<LogicalLocation> lloc_eachzmb;  // LogicalLocations for each MeshBlock
 
  private:
   CyclicZoom *pzoom;       // ptr to CyclicZoom containing this ZoomMesh module
@@ -181,6 +196,7 @@ class ZoomMesh
 
 //----------------------------------------------------------------------------------------
 //! \class ZoomData
+//! \brief Handles storage of data during cyclic zoom AMR
 class ZoomData
 {
   friend class CyclicZoom;
@@ -189,6 +205,7 @@ class ZoomData
   ~ZoomData() = default;
   // data
   int nvars;               // number of variables
+  int zmb_data_cnt;        // count of data elements per Zoom MeshBlock needed for zooming
   Real d_zoom;             // density within inner boundary
   Real p_zoom;             // pressure within inner boundary
   // std::vector<HostArray5D<Real>> vu0;  // Vector of conserved variables
@@ -209,26 +226,79 @@ class ZoomData
   DvceEdgeFld4D<Real> emf0;   // edge-centered electric fields just after zoom
   DvceEdgeFld4D<Real> delta_efld; // change in electric fields
 
-  HostArray5D<Real> hu0;    // conserved variables
-  HostArray5D<Real> hw0;    // primitive variables
-  HostArray5D<Real> hcoarse_u0;  // coarse conserved variables
-  HostArray5D<Real> hcoarse_w0;  // coarse primitive variables
-  HostEdgeFld4D<Real> hefld;   // edge-centered electric fields (fluxes of B)
-  HostEdgeFld4D<Real> hemf0;   // edge-centered electric fields just after zoom
-  HostEdgeFld4D<Real> hdelta_efld; // change in electric fields
+  DvceArray1D<Real> dzbuf;    // Device zoom buffer for data transfer
+  HostArray1D<Real> hzbuf;    // host zoom buffer for data transfer
+  HostArray1D<Real> hzdata;   // host zoom array for data storage, receiving data from buffer, and dumping to file
+  // HostArray5D<Real> hu0;    // conserved variables
+  // HostArray5D<Real> hw0;    // primitive variables
+  // HostArray5D<Real> hcoarse_u0;  // coarse conserved variables
+  // HostArray5D<Real> hcoarse_w0;  // coarse primitive variables
+  // HostEdgeFld4D<Real> hefld;   // edge-centered electric fields (fluxes of B)
+  // HostEdgeFld4D<Real> hemf0;   // edge-centered electric fields just after zoom
+  // HostEdgeFld4D<Real> hdelta_efld; // change in electric fields
 
   HostArray2D<Real> max_emf0;  // maximum electric field
 
   HostArray5D<Real> harr_5d;  // host copy of 5D arrays
   HostArray4D<Real> harr_4d;  // host copy of 4D arrays
 
+#if MPI_PARALLEL_ENABLED
+  int ndata;               // size of send/recv data
+  int nzmb_send, nzmb_recv;
+  MPI_Comm zoom_comm;                       // unique communicator for zoom refinement
+  // DualArray1D<AMRBuffer> sendbuf, recvbuf; // send/recv buffers
+  MPI_Request *send_req, *recv_req;
+#endif
+
   // functions
   void Initialize();
   void DumpData();
+  void StoreDataToZoomData(int zm, int m);
+  void StoreHydroData(int zm, int m);
+  void StoreCCData(int zm, int m);
+  void UpdateElectricFields(int zm, int m);
+  void MeshBlockDataSize();
+  void PackBuffer();
+  void PackBuffersCC(DvceArray1D<Real> packed_data, DvceArray5D<Real> a0,
+                     size_t offset_a0, const int m);
+  void PackBuffersFC(DvceArray1D<Real> packed_data, DvceFaceFld4D<Real> fc,
+                     size_t offset_fc, const int m);
+  void PackBuffersEC(DvceArray1D<Real> packed_data, DvceEdgeFld4D<Real> ec,
+                     size_t offset_ec, const int m);
+  void UnpackBuffer();
+  void SyncBufferToHost();
+  void SyncHostToBuffer();
+  void LoadDataFromZoomData(int zm, int m);
+
 
  private:
   CyclicZoom *pzoom;       // ptr to CyclicZoom containing this ZoomData module
   ZoomMesh   *pzmesh;      // ptr to ZoomMesh containing this ZoomData module
 };
+
+// //----------------------------------------------------------------------------------------
+// //! \class ZoomRefinement
+// //! \brief Handles refinement and MPI communication during cyclic zoom AMR
+// // TODO(@mhguo): may rename?
+// class ZoomRefinement
+// {
+//  public:
+//   ZoomRefinement(CyclicZoom *pz, ParameterInput *pin);
+//   ~ZoomRefinement() = default;
+
+// #if MPI_PARALLEL_ENABLED
+//   int ndata;               // size of send/recv data
+//   int nzmb_send, nzmb_recv;
+//   MPI_Comm zoom_comm;                       // unique communicator for zoom refinement
+//   // DualArray1D<AMRBuffer> sendbuf, recvbuf; // send/recv buffers
+//   MPI_Request *send_req, *recv_req;
+//   HostArray1D<Real> send_data, recv_data;    // send/recv device data
+// #endif
+
+//  private:
+//   CyclicZoom *pzoom;       // ptr to CyclicZoom containing this ZoomRefinement module
+//   ZoomMesh   *pzmesh;      // ptr to ZoomMesh containing this ZoomRefinement module
+//   ZoomData   *pzdata;      // ptr to ZoomData containing this ZoomRefinement module
+// };
 
 #endif // MESH_CYCLIC_ZOOM_HPP_

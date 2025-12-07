@@ -352,7 +352,7 @@ void CyclicZoom::SyncZoomEField(DvceEdgeFld4D<Real> emf, int zid) {
     // It looks device to device communication is not supported, so copy to host first
     auto harr_4d = pzdata->harr_4d;
     Kokkos::realloc(harr_4d, 1, n_ccells3+1, n_ccells2+1, n_ccells1);
-    auto e1_slice = Kokkos::subview(pzdata->emf0.x1e, Kokkos::make_pair(zm,zm+1),
+    auto e1_slice = Kokkos::subview(emf.x1e, Kokkos::make_pair(zm,zm+1),
                                     Kokkos::ALL, Kokkos::ALL, Kokkos::ALL);
     Kokkos::deep_copy(harr_4d, e1_slice);
     MPI_Bcast(harr_4d.data(), e1_slice_size, MPI_ATHENA_REAL, zm_rank, MPI_COMM_WORLD);

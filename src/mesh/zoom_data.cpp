@@ -10,6 +10,8 @@
 #include "globals.hpp"
 #include "parameter_input.hpp"
 #include "mesh/mesh.hpp"
+#include "coordinates/cartesian_ks.hpp"
+#include "coordinates/cell_locations.hpp"
 #include "eos/eos.hpp"
 #include "eos/ideal_c2p_hyd.hpp"
 #include "eos/ideal_c2p_mhd.hpp"
@@ -22,70 +24,85 @@
 
 ZoomData::ZoomData(CyclicZoom *pz, ParameterInput *pin) :
     pzoom(pz),
-    hu0("cons",1,1,1,1,1),
-    hw0("prim",1,1,1,1,1),
-    hcoarse_u0("ccons",1,1,1,1,1),
-    hcoarse_w0("cprim",1,1,1,1,1),
-    hefld("efld",1,1,1,1),
-    hemf0("emf0",1,1,1,1),
-    hdelta_efld("delta_efld",1,1,1,1),
-    u0("cons",1,1,1,1,1),
-    w0("prim",1,1,1,1,1),
-    coarse_u0("ccons",1,1,1,1,1),
-    coarse_w0("cprim",1,1,1,1,1),
-    efld("efld",1,1,1,1),
-    emf0("emf0",1,1,1,1),
-    delta_efld("delta_efld",1,1,1,1),
-    max_emf0("max_emf0",1,1)
+    u0("zcons",1,1,1,1,1),
+    w0("zprim",1,1,1,1,1),
+    coarse_u0("czcons",1,1,1,1,1),
+    coarse_w0("czprim",1,1,1,1,1),
+    efld("zefld",1,1,1,1),
+    emf0("zemf0",1,1,1,1),
+    delta_efld("zdelta_efld",1,1,1,1),
+    max_emf0("zmax_emf0",1,1),
+    dzbuf("dz_buffer",1),
+    hzbuf("hz_buffer",1),
+    hzdata("hz_data",1)
   {
   // allocate memory for primitive variables
   pzmesh = pzoom->pzmesh;
   auto &indcs = pzoom->pmesh->mb_indcs;
   int &nzmb = pzmesh->nzmb_max_perdvce;
   int &nlevels = pzmesh->nlevels;
-  bool is_mhd = (pzoom->pmesh->pmb_pack->pmhd != nullptr);
+  auto pmbp = pzoom->pmesh->pmb_pack;
+  bool is_mhd = (pmbp->pmhd != nullptr);
   nvars = 0;
   if (!is_mhd) {
-    nvars = pzoom->pmesh->pmb_pack->phydro->nhydro + pzoom->pmesh->pmb_pack->phydro->nscalars;
+    nvars = pmbp->phydro->nhydro + pmbp->phydro->nscalars;
   } else {
-    nvars = pzoom->pmesh->pmb_pack->pmhd->nmhd + pzoom->pmesh->pmb_pack->pmhd->nscalars;
+    nvars = pmbp->pmhd->nmhd + pmbp->pmhd->nscalars;
   }
-  d_zoom = pin->GetOrAddReal("cyclic_zoom","d_zoom",(FLT_MIN));
-  p_zoom = pin->GetOrAddReal("cyclic_zoom","p_zoom",(FLT_MIN));
+  d_zoom = pin->GetOrAddReal(pzoom->block_name,"d_zoom",(FLT_MIN));
+  p_zoom = pin->GetOrAddReal(pzoom->block_name,"p_zoom",(FLT_MIN));
+  // compute size of data per Zoom MeshBlock
+  MeshBlockDataSize();
+  // allocate ZoomData arrays
   int ncells1 = indcs.nx1 + 2*(indcs.ng);
   int ncells2 = (indcs.nx2 > 1)? (indcs.nx2 + 2*(indcs.ng)) : 1;
   int ncells3 = (indcs.nx3 > 1)? (indcs.nx3 + 2*(indcs.ng)) : 1;
   Kokkos::realloc(u0, nzmb, nvars, ncells3, ncells2, ncells1);
   Kokkos::realloc(w0, nzmb, nvars, ncells3, ncells2, ncells1);
-  int n_ccells1 = indcs.cnx1 + 2*(indcs.ng);
-  int n_ccells2 = (indcs.cnx2 > 1)? (indcs.cnx2 + 2*(indcs.ng)) : 1;
-  int n_ccells3 = (indcs.cnx3 > 1)? (indcs.cnx3 + 2*(indcs.ng)) : 1;
-  Kokkos::realloc(coarse_u0, nzmb, nvars, n_ccells3, n_ccells2, n_ccells1);
-  Kokkos::realloc(coarse_w0, nzmb, nvars, n_ccells3, n_ccells2, n_ccells1);
+  int nccells1 = indcs.cnx1 + 2*(indcs.ng);
+  int nccells2 = (indcs.cnx2 > 1)? (indcs.cnx2 + 2*(indcs.ng)) : 1;
+  int nccells3 = (indcs.cnx3 > 1)? (indcs.cnx3 + 2*(indcs.ng)) : 1;
+  Kokkos::realloc(coarse_u0, nzmb, nvars, nccells3, nccells2, nccells1);
+  Kokkos::realloc(coarse_w0, nzmb, nvars, nccells3, nccells2, nccells1);
 
-  // allocate electric fields
-  Kokkos::realloc(efld.x1e, nzmb, n_ccells3+1, n_ccells2+1, n_ccells1);
-  Kokkos::realloc(efld.x2e, nzmb, n_ccells3+1, n_ccells2, n_ccells1+1);
-  Kokkos::realloc(efld.x3e, nzmb, n_ccells3, n_ccells2+1, n_ccells1+1);
+  if (pzoom->pmesh->pmb_pack->pmhd != nullptr) {
+    // allocate electric fields
+    Kokkos::realloc(efld.x1e, nzmb, nccells3+1, nccells2+1, nccells1);
+    Kokkos::realloc(efld.x2e, nzmb, nccells3+1, nccells2, nccells1+1);
+    Kokkos::realloc(efld.x3e, nzmb, nccells3, nccells2+1, nccells1+1);
 
-  // allocate electric fields just after zoom
-  Kokkos::realloc(emf0.x1e, nzmb, n_ccells3+1, n_ccells2+1, n_ccells1);
-  Kokkos::realloc(emf0.x2e, nzmb, n_ccells3+1, n_ccells2, n_ccells1+1);
-  Kokkos::realloc(emf0.x3e, nzmb, n_ccells3, n_ccells2+1, n_ccells1+1);
+    // allocate electric fields just after zoom
+    Kokkos::realloc(emf0.x1e, nzmb, nccells3+1, nccells2+1, nccells1);
+    Kokkos::realloc(emf0.x2e, nzmb, nccells3+1, nccells2, nccells1+1);
+    Kokkos::realloc(emf0.x3e, nzmb, nccells3, nccells2+1, nccells1+1);
 
-  // allocate delta electric fields
-  Kokkos::realloc(delta_efld.x1e, nzmb, n_ccells3+1, n_ccells2+1, n_ccells1);
-  Kokkos::realloc(delta_efld.x2e, nzmb, n_ccells3+1, n_ccells2, n_ccells1+1);
-  Kokkos::realloc(delta_efld.x3e, nzmb, n_ccells3, n_ccells2+1, n_ccells1+1);
+    // allocate delta electric fields
+    Kokkos::realloc(delta_efld.x1e, nzmb, nccells3+1, nccells2+1, nccells1);
+    Kokkos::realloc(delta_efld.x2e, nzmb, nccells3+1, nccells2, nccells1+1);
+    Kokkos::realloc(delta_efld.x3e, nzmb, nccells3, nccells2+1, nccells1+1);
 
-  Kokkos::realloc(max_emf0, nlevels, 3);
-  for (int i = 0; i < nlevels; i++) {
-    for (int j = 0; j < 3; j++) {
-      max_emf0(i,j) = 0.0;
+    Kokkos::realloc(max_emf0, nlevels, 3);
+    for (int i = 0; i < nlevels; i++) {
+      for (int j = 0; j < 3; j++) {
+        max_emf0(i,j) = 0.0;
+      }
     }
   }
 
+  // allocate device and host arrays for data transfer and storage
+  Kokkos::realloc(dzbuf, nzmb * zmb_data_cnt);
+  Kokkos::realloc(hzbuf, nzmb * zmb_data_cnt);
+  Kokkos::realloc(hzdata, nzmb * zmb_data_cnt);
+  // ndata = pzdata->zmb_data_cnt * pzmesh->nzmb_max_perhost;
+  // Kokkos::realloc(send_data, ndata);
+  // Kokkos::realloc(recv_data, ndata);
+
   Initialize();
+
+#if MPI_PARALLEL_ENABLED
+  // create unique communicators for AMR
+  MPI_Comm_dup(MPI_COMM_WORLD, &zoom_comm);
+#endif
 
   return;
 }
@@ -150,24 +167,26 @@ void ZoomData::Initialize()
   //   peos->PrimToCons(cw0,cu0,0,nc3-1,0,nc2-1,0,nc1-1);
   // }
 
-  par_for("zoom_init_e1",DevExeSpace(),0,nzmb-1,0,nc3,0,nc2,0,nc1-1,
-  KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
-    e1(m,k,j,i) = 0.0;
-    e01(m,k,j,i) = 0.0;
-    de1(m,k,j,i) = 0.0;
-  });
-  par_for("zoom_init_e2",DevExeSpace(),0,nzmb-1,0,nc3,0,nc2-1,0,nc1,
-  KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
-    e2(m,k,j,i) = 0.0;
-    e02(m,k,j,i) = 0.0;
-    de2(m,k,j,i) = 0.0;
-  });
-  par_for("zoom_init_e3",DevExeSpace(),0,nzmb-1,0,nc3-1,0,nc2,0,nc1,
-  KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
-    e3(m,k,j,i) = 0.0;
-    e03(m,k,j,i) = 0.0;
-    de3(m,k,j,i) = 0.0;
-  });
+  if (pzoom->pmesh->pmb_pack->pmhd != nullptr) {
+    par_for("zoom_init_e1",DevExeSpace(),0,nzmb-1,0,nc3,0,nc2,0,nc1-1,
+    KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
+      e1(m,k,j,i) = 0.0;
+      e01(m,k,j,i) = 0.0;
+      de1(m,k,j,i) = 0.0;
+    });
+    par_for("zoom_init_e2",DevExeSpace(),0,nzmb-1,0,nc3,0,nc2-1,0,nc1,
+    KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
+      e2(m,k,j,i) = 0.0;
+      e02(m,k,j,i) = 0.0;
+      de2(m,k,j,i) = 0.0;
+    });
+    par_for("zoom_init_e3",DevExeSpace(),0,nzmb-1,0,nc3-1,0,nc2,0,nc1,
+    KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
+      e3(m,k,j,i) = 0.0;
+      e03(m,k,j,i) = 0.0;
+      de3(m,k,j,i) = 0.0;
+    });
+  }
 
   return;
 }
@@ -182,9 +201,9 @@ void ZoomData::DumpData() {
     std::cout << "CyclicZoom: Dumping data" << std::endl;
     auto pm = pzoom->pmesh;
     auto &indcs = pm->mb_indcs;
-    int n_ccells1 = indcs.cnx1 + 2*(indcs.ng);
-    int n_ccells2 = (indcs.cnx2 > 1)? (indcs.cnx2 + 2*(indcs.ng)) : 1;
-    int n_ccells3 = (indcs.cnx3 > 1)? (indcs.cnx3 + 2*(indcs.ng)) : 1;
+    int nccells1 = indcs.cnx1 + 2*(indcs.ng);
+    int nccells2 = (indcs.cnx2 > 1)? (indcs.cnx2 + 2*(indcs.ng)) : 1;
+    int nccells3 = (indcs.cnx3 > 1)? (indcs.cnx3 + 2*(indcs.ng)) : 1;
     int &nzmb = pzmesh->nzmb_max_perdvce;
 
     std::string fname;
@@ -201,27 +220,497 @@ void ZoomData::DumpData() {
     }
     int datasize = sizeof(Real);
     // xyz? bcc?
-    IOWrapperSizeT cnt = nzmb*nvars*(n_ccells3)*(n_ccells2)*(n_ccells1);
+    IOWrapperSizeT cnt = nzmb*nvars*(nccells3)*(nccells2)*(nccells1);
     std::fwrite(coarse_w0.data(),datasize,cnt,pfile);
     auto mbptr = efld.x1e;
-    cnt = nzmb*(n_ccells3+1)*(n_ccells2+1)*(n_ccells1);
+    cnt = nzmb*(nccells3+1)*(nccells2+1)*(nccells1);
     std::fwrite(mbptr.data(),datasize,cnt,pfile);
     mbptr = efld.x2e;
-    cnt = nzmb*(n_ccells3+1)*(n_ccells2)*(n_ccells1+1);
+    cnt = nzmb*(nccells3+1)*(nccells2)*(nccells1+1);
     std::fwrite(mbptr.data(),datasize,cnt,pfile);
     mbptr = efld.x3e;
-    cnt = nzmb*(n_ccells3)*(n_ccells2+1)*(n_ccells1+1);
+    cnt = nzmb*(nccells3)*(nccells2+1)*(nccells1+1);
     std::fwrite(mbptr.data(),datasize,cnt,pfile);
     mbptr = emf0.x1e;
-    cnt = nzmb*(n_ccells3+1)*(n_ccells2+1)*(n_ccells1);
+    cnt = nzmb*(nccells3+1)*(nccells2+1)*(nccells1);
     std::fwrite(mbptr.data(),datasize,cnt,pfile);
     mbptr = emf0.x2e;
-    cnt = nzmb*(n_ccells3+1)*(n_ccells2)*(n_ccells1+1);
+    cnt = nzmb*(nccells3+1)*(nccells2)*(nccells1+1);
     std::fwrite(mbptr.data(),datasize,cnt,pfile);
     mbptr = emf0.x3e;
-    cnt = nzmb*(n_ccells3)*(n_ccells2+1)*(n_ccells1+1);
+    cnt = nzmb*(nccells3)*(nccells2+1)*(nccells1+1);
     std::fwrite(mbptr.data(),datasize,cnt,pfile);
     std::fclose(pfile);
   }
+  return;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void ZoomData::MeshBlockDataSize()
+//! \brief Calculate the count of data elements per MeshBlock needed for zooming
+
+//TODO(@mhguo): consider magnetic fields, think if int is enough, maybe IOWrapperSizeT?
+void ZoomData::MeshBlockDataSize() {
+  int &cnt = zmb_data_cnt;
+  cnt = 0;
+  auto pmbp = pzoom->pmesh->pmb_pack;
+  auto &indcs = pzoom->pmesh->mb_indcs;
+  int ncells1 = indcs.nx1 + 2*(indcs.ng);
+  int ncells2 = (indcs.nx2 > 1)? (indcs.nx2 + 2*(indcs.ng)) : 1;
+  int ncells3 = (indcs.nx3 > 1)? (indcs.nx3 + 2*(indcs.ng)) : 1;
+  int nccells1 = indcs.cnx1 + 2*(indcs.ng);
+  int nccells2 = (indcs.cnx2 > 1)? (indcs.cnx2 + 2*(indcs.ng)) : 1;
+  int nccells3 = (indcs.cnx3 > 1)? (indcs.cnx3 + 2*(indcs.ng)) : 1;
+  cnt += 2 * nvars * ncells3 * ncells2 * ncells1; // u0 and w0
+  cnt += 2 * nvars * nccells3 * nccells2 * nccells1; // coarse u0 and coarse w0
+  if (pmbp->pmhd != nullptr) {
+    cnt += 3 * (nccells3+1) * (nccells2+1) * nccells1; // efld x1e
+    cnt += 3 * (nccells3+1) * nccells2 * (nccells1+1); // efld x2e
+    cnt += 3 * nccells3 * (nccells2+1) * (nccells1+1); // efld x3e
+  }
+  // TODO(@mhguo): add radiation variables later
+  return;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void ZoomData::StoreDataToZoomData(int zm, int m)
+//! \brief Store data from MeshBlock m to zoom data zm
+
+void ZoomData::StoreDataToZoomData(int zm, int m) {
+  StoreCCData(zm, m);
+  if (pzoom->pmesh->pmb_pack->pmhd != nullptr) {
+    StoreHydroData(zm, m);
+    UpdateElectricFields(zm, m);
+  }
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void ZoomData::StoreCCData(int zm, int m)
+//! \brief Store cell-centered data from MeshBlock m to zoom data zm
+
+void ZoomData::StoreCCData(int zm, int m) {
+  DvceArray5D<Real> u, w;
+  auto pmesh = pzoom->pmesh;
+  if (pmesh->pmb_pack->phydro != nullptr) {
+    u = pmesh->pmb_pack->phydro->u0;
+    w = pmesh->pmb_pack->phydro->w0;
+  } else if (pmesh->pmb_pack->pmhd != nullptr) {
+    u = pmesh->pmb_pack->pmhd->u0;
+    w = pmesh->pmb_pack->pmhd->w0;
+  }
+  auto des_slice = Kokkos::subview(u0, Kokkos::make_pair(zm,zm+1),
+                                   Kokkos::ALL,Kokkos::ALL,Kokkos::ALL,Kokkos::ALL);
+  auto src_slice = Kokkos::subview(u, Kokkos::make_pair(m,m+1),
+                                   Kokkos::ALL,Kokkos::ALL,Kokkos::ALL,Kokkos::ALL);
+  Kokkos::deep_copy(des_slice, src_slice);
+  des_slice = Kokkos::subview(w0, Kokkos::make_pair(zm,zm+1),
+                              Kokkos::ALL,Kokkos::ALL,Kokkos::ALL,Kokkos::ALL);
+  src_slice = Kokkos::subview(w, Kokkos::make_pair(m,m+1),
+                              Kokkos::ALL,Kokkos::ALL,Kokkos::ALL,Kokkos::ALL);
+  Kokkos::deep_copy(des_slice, src_slice);
+  // now do coarse data by averaging fine data
+  auto &indcs = pzoom->pmesh->mb_indcs;
+  int &cis = indcs.cis;  int &cie  = indcs.cie;
+  int &cjs = indcs.cjs;  int &cje  = indcs.cje;
+  int &cks = indcs.cks;  int &cke  = indcs.cke;
+  int nvar = nvars;
+  auto cu = coarse_u0, cw = coarse_w0;
+  int hng = indcs.ng / 2;
+  // TODO(@mhguo): may think whether we need to include ghost zones
+  // TODO(@mhguo): 1D and 2D cases are not tested yet!
+  // restrict in 1D
+  if (pmesh->one_d) {
+    par_for("zoom-restrictCC-1D",DevExeSpace(), 0, nvar-1, cis-hng, cie+hng,
+    KOKKOS_LAMBDA(const int n, const int i) {
+      int finei = 2*i - cis;  // correct when cis=is
+      cu(zm,n,cks,cjs,i) = 0.5*(u(m,n,cks,cjs,finei) + u(m,n,cks,cjs,finei+1));
+      cw(zm,n,cks,cjs,i) = 0.5*(w(m,n,cks,cjs,finei) + w(m,n,cks,cjs,finei+1));
+    });
+  // restrict in 2D
+  } else if (pmesh->two_d) {
+    par_for("zoom-restrictCC-2D",DevExeSpace(), 0, nvar-1,
+            cjs-hng, cje+hng, cis-hng, cie+hng,
+    KOKKOS_LAMBDA(const int n, const int j, const int i) {
+      int finei = 2*i - cis;  // correct when cis=is
+      int finej = 2*j - cjs;  // correct when cjs=js
+      cu(zm,n,cks,j,i) = 0.25*(u(m,n,cks,finej  ,finei) + u(m,n,cks,finej  ,finei+1)
+                             + u(m,n,cks,finej+1,finei) + u(m,n,cks,finej+1,finei+1));
+      cw(zm,n,cks,j,i) = 0.25*(w(m,n,cks,finej  ,finei) + w(m,n,cks,finej  ,finei+1)
+                             + w(m,n,cks,finej+1,finei) + w(m,n,cks,finej+1,finei+1));
+    });
+  // restrict in 3D
+  } else {
+    par_for("zoom-restrictCC-3D",DevExeSpace(), 0, nvar-1, cks-hng, cke+hng,
+            cjs-hng, cje+hng, cis-hng, cie+hng,
+    KOKKOS_LAMBDA(const int n, const int k, const int j, const int i) {
+      int finei = 2*i - cis;  // correct if cis = is
+      int finej = 2*j - cjs;  // correct if cjs = js
+      int finek = 2*k - cks;  // correct if cks = ks
+      cu(zm,n,k,j,i) =
+                 0.125*(u(m,n,finek  ,finej  ,finei) + u(m,n,finek  ,finej  ,finei+1)
+                      + u(m,n,finek  ,finej+1,finei) + u(m,n,finek  ,finej+1,finei+1)
+                      + u(m,n,finek+1,finej,  finei) + u(m,n,finek+1,finej,  finei+1)
+                      + u(m,n,finek+1,finej+1,finei) + u(m,n,finek+1,finej+1,finei+1));
+      cw(zm,n,k,j,i) =
+                 0.125*(w(m,n,finek  ,finej  ,finei) + w(m,n,finek  ,finej  ,finei+1)
+                      + w(m,n,finek  ,finej+1,finei) + w(m,n,finek  ,finej+1,finei+1)
+                      + w(m,n,finek+1,finej,  finei) + w(m,n,finek+1,finej,  finei+1)
+                      + w(m,n,finek+1,finej+1,finei) + w(m,n,finek+1,finej+1,finei+1));
+    });
+  }
+  return;
+}
+//----------------------------------------------------------------------------------------
+//! \fn void ZoomData::StoreHydroData(int zm, int m)
+//! \brief Store data from MeshBlock m to zoom data zm
+
+void ZoomData::StoreHydroData(int zm, int m) {
+  auto &indcs = pzoom->pmesh->mb_indcs;
+  auto pmbp = pzoom->pmesh->pmb_pack;
+  auto &size = pzoom->pmesh->pmb_pack->pmb->mb_size;
+  int &is = indcs.is;
+  int &js = indcs.js;
+  int &ks = indcs.ks;
+  int &cis = indcs.cis;  int &cie  = indcs.cie;
+  int &cjs = indcs.cjs;  int &cje  = indcs.cje;
+  int &cks = indcs.cks;  int &cke  = indcs.cke;
+  int nx1 = indcs.nx1, nx2 = indcs.nx2, nx3 = indcs.nx3;
+  int cnx1 = indcs.cnx1, cnx2 = indcs.cnx2, cnx3 = indcs.cnx3;
+  DvceArray5D<Real> u0_, w0_;
+  bool is_gr = pmbp->pcoord->is_general_relativistic;
+  auto peos = (pmbp->pmhd != nullptr)? pmbp->pmhd->peos : pmbp->phydro->peos;
+  auto eos = peos->eos_data;
+  if (pmbp->phydro != nullptr) {
+    u0_ = pmbp->phydro->u0;
+    w0_ = pmbp->phydro->w0;
+  } else if (pmbp->pmhd != nullptr) {
+    u0_ = pmbp->pmhd->u0;
+    w0_ = pmbp->pmhd->w0;
+  }
+  auto cw = coarse_w0;
+  Real &x1min = size.h_view(m).x1min;
+  Real &x1max = size.h_view(m).x1max;
+  Real &x2min = size.h_view(m).x2min;
+  Real &x2max = size.h_view(m).x2max;
+  Real &x3min = size.h_view(m).x3min;
+  Real &x3max = size.h_view(m).x3max;
+  bool flat = true;
+  Real spin = 0.0;
+  if (is_gr) {
+    flat = pmbp->pcoord->coord_data.is_minkowski;
+    spin = pmbp->pcoord->coord_data.bh_spin;
+  }
+  // TODO(@mhguo): should we consider 2D and 1D cases?
+  par_for("zoom-update-cwu",DevExeSpace(), cks,cke, cjs,cje, cis,cie,
+  KOKKOS_LAMBDA(const int ck, const int cj, const int ci) {
+    int fi = 2*ci - cis;  // correct when cis=is
+    int fj = 2*cj - cjs;  // correct when cjs=js
+    int fk = 2*ck - cks;  // correct when cks=ks
+    cw(zm,IDN,ck,cj,ci) = 0.0;
+    cw(zm,IM1,ck,cj,ci) = 0.0;
+    cw(zm,IM2,ck,cj,ci) = 0.0;
+    cw(zm,IM3,ck,cj,ci) = 0.0;
+    cw(zm,IEN,ck,cj,ci) = 0.0;
+    Real glower[4][4], gupper[4][4];
+    // Step 1: compute coarse-grained hydro conserved variables
+    for (int ii=0; ii<2; ++ii) {
+      for (int jj=0; jj<2; ++jj) {
+        for (int kk=0; kk<2; ++kk) {
+          // Load single state of primitive variables
+          HydPrim1D w;
+          w.d  = w0_(m,IDN,fk+kk,fj+jj,fi+ii);
+          w.vx = w0_(m,IVX,fk+kk,fj+jj,fi+ii);
+          w.vy = w0_(m,IVY,fk+kk,fj+jj,fi+ii);
+          w.vz = w0_(m,IVZ,fk+kk,fj+jj,fi+ii);
+          w.e  = w0_(m,IEN,fk+kk,fj+jj,fi+ii);
+
+          // call p2c function
+          HydCons1D u;
+          if (is_gr) {
+            Real x1v = CellCenterX(fi+ii-is, nx1, x1min, x1max);
+            Real x2v = CellCenterX(fj+jj-js, nx2, x2min, x2max);
+            Real x3v = CellCenterX(fk+kk-ks, nx3, x3min, x3max);
+            ComputeMetricAndInverse(x1v, x2v, x3v, flat, spin, glower, gupper);
+            SingleP2C_IdealGRHyd(glower, gupper, w, eos.gamma, u);
+          } else {
+            SingleP2C_IdealHyd(w, u);
+          }
+
+          // store conserved quantities using cw
+          cw(zm,IDN,ck,cj,ci) += 0.125*u.d;
+          cw(zm,IM1,ck,cj,ci) += 0.125*u.mx;
+          cw(zm,IM2,ck,cj,ci) += 0.125*u.my;
+          cw(zm,IM3,ck,cj,ci) += 0.125*u.mz;
+          cw(zm,IEN,ck,cj,ci) += 0.125*u.e;
+        }
+      }
+    }
+    // Step 2: convert coarse-grained hydro conserved variables to primitive variables
+    // Shall we add excision?
+    // load single state conserved variables
+    HydCons1D u;
+    u.d  = cw(zm,IDN,ck,cj,ci);
+    u.mx = cw(zm,IM1,ck,cj,ci);
+    u.my = cw(zm,IM2,ck,cj,ci);
+    u.mz = cw(zm,IM3,ck,cj,ci);
+    u.e  = cw(zm,IEN,ck,cj,ci);
+
+    HydPrim1D w;
+    if (is_gr) {
+      // Extract components of metric
+      Real x1v = CellCenterX(ci-cis, cnx1, x1min, x1max);
+      Real x2v = CellCenterX(cj-cjs, cnx2, x2min, x2max);
+      Real x3v = CellCenterX(ck-cks, cnx3, x3min, x3max);
+      ComputeMetricAndInverse(x1v, x2v, x3v, flat, spin, glower, gupper);
+
+      HydCons1D u_sr;
+      Real s2;
+      TransformToSRHyd(u,glower,gupper,s2,u_sr);
+      bool dfloor_used=false, efloor_used=false;
+      bool c2p_failure=false;
+      int iter_used=0;
+      SingleC2P_IdealSRHyd(u_sr, eos, s2, w,
+                        dfloor_used, efloor_used, c2p_failure, iter_used);
+      // apply velocity ceiling if necessary
+      Real tmp = glower[1][1]*SQR(w.vx)
+                + glower[2][2]*SQR(w.vy)
+                + glower[3][3]*SQR(w.vz)
+                + 2.0*glower[1][2]*w.vx*w.vy + 2.0*glower[1][3]*w.vx*w.vz
+                + 2.0*glower[2][3]*w.vy*w.vz;
+      Real lor = sqrt(1.0+tmp);
+      if (lor > eos.gamma_max) {
+        Real factor = sqrt((SQR(eos.gamma_max)-1.0)/(SQR(lor)-1.0));
+        w.vx *= factor;
+        w.vy *= factor;
+        w.vz *= factor;
+      }
+    } else {
+      bool dfloor_used=false, efloor_used=false, tfloor_used=false;
+      SingleC2P_IdealHyd(u, eos, w, dfloor_used, efloor_used, tfloor_used);
+    }
+    cw(zm,IDN,ck,cj,ci) = w.d;
+    cw(zm,IVX,ck,cj,ci) = w.vx;
+    cw(zm,IVY,ck,cj,ci) = w.vy;
+    cw(zm,IVZ,ck,cj,ci) = w.vz;
+    cw(zm,IEN,ck,cj,ci) = w.e;
+  });
+
+  return;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void ZoomData::UpdateElectricFields(int zm, int m)
+//! \brief Update electric fields in zoom data zm from MeshBlock m
+
+void ZoomData::UpdateElectricFields(int zm, int m) {
+  return;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn ZoomData::PackBuffer()
+//! \brief Packs data into AMR communication buffers for all MBs being sent
+
+void ZoomData::PackBuffer() {
+  std::cout << "CyclicZoom: Packing data into communication buffer" << std::endl;
+  nzmb_send = pzmesh->nzmb_thisdvce;
+  hydro::Hydro* phydro = pzoom->pmesh->pmb_pack->phydro;
+  mhd::MHD* pmhd = pzoom->pmesh->pmb_pack->pmhd;
+  // use size_t for offset to avoid overflow
+  size_t offset = 0;
+  size_t cc_cnt = u0.extent(1) * u0.extent(2) * u0.extent(3) * u0.extent(4);
+  size_t ccc_cnt = coarse_u0.extent(1) * coarse_u0.extent(2) * coarse_u0.extent(3) * coarse_u0.extent(4);
+  size_t ec_cnt = 0;
+  if (pmhd != nullptr) {
+    ec_cnt = efld.x1e.extent(1) * efld.x1e.extent(2) * efld.x1e.extent(3);
+    ec_cnt += efld.x2e.extent(1) * efld.x2e.extent(2) * efld.x2e.extent(3);
+    ec_cnt += efld.x3e.extent(1) * efld.x3e.extent(2) * efld.x3e.extent(3);
+  }
+  for (int zm = 0; zm < nzmb_send; ++zm) {
+    // offset = zm * zmb_data_cnt;
+    // pack conserved variables
+    PackBuffersCC(dzbuf, u0, offset, zm);
+    offset += cc_cnt;
+    // pack primitive variables
+    PackBuffersCC(dzbuf, w0, offset, zm);
+    offset += cc_cnt;
+    // pack coarse conserved variables
+    PackBuffersCC(dzbuf, coarse_u0, offset, zm);
+    offset += ccc_cnt;
+    // pack coarse primitive variables
+    PackBuffersCC(dzbuf, coarse_w0, offset, zm);
+    offset += ccc_cnt;
+    // pack magnetic fields and/or electric fields if MHD
+    if (pmhd != nullptr) {
+      PackBuffersEC(dzbuf, efld, offset, zm);
+      offset += ec_cnt;
+      PackBuffersEC(dzbuf, emf0, offset, zm);
+      offset += ec_cnt;
+      PackBuffersEC(dzbuf, delta_efld, offset, zm);
+      offset += ec_cnt;
+    }
+  }
+  // Single copy: device buffer → host buffer
+  Kokkos::deep_copy(hzbuf, dzbuf);
+  return;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn ZoomData::PackBuffersCC()
+//! \brief Packs data into AMR communication buffers for all MBs being sent
+
+void ZoomData::PackBuffersCC(DvceArray1D<Real> packed_data, DvceArray5D<Real> a0,
+                             size_t offset_a0, const int m) {
+  // Pack array a0 at MeshBlock m into packed_data starting from offset_a0
+  // auto u0_1d = Kokkos::View<Real*, Kokkos::LayoutRight, Kokkos::MemoryUnmanaged>(u0.data(), size_cc);
+  // Calculate size
+  // size_t size_cc = a0.extent(1) * a0.extent(2) * a0.extent(3) * a0.extent(4);
+  int nv = a0.extent_int(1);
+  int nk = a0.extent_int(2);
+  int nj = a0.extent_int(3);
+  int ni = a0.extent_int(4);
+  // auto a0_slice = Kokkos::subview(a0, 
+  //   Kokkos::make_pair(m,m+1), Kokkos::ALL, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL);
+  // Get pointer to the m-th slice of a0
+  // Real* a0_ptr = &a0(m, 0, 0, 0, 0);
+  // Create 1D unmanaged view of the slice
+  // auto a0_1d = Kokkos::View<Real*, Kokkos::LayoutRight, Kokkos::MemoryUnmanaged>(
+  //   a0_ptr, size_cc);
+  // auto packed_a0 = Kokkos::subview(packed_data, 
+  //   Kokkos::make_pair(offset_a0, offset_a0 + size_cc));
+  // // Kokkos::deep_copy(packed_a0, a0_slice);
+  // Kokkos::deep_copy(packed_a0, a0_1d);
+  // Pack using parallel kernel on device
+  par_for("pack_cc", DevExeSpace(), 0, nv-1, 0, nk-1, 0, nj-1, 0, ni-1,
+  KOKKOS_LAMBDA(const int v, const int k, const int j, const int i) {
+    packed_data(offset_a0 + (((v*nk + k)*nj + j)*ni + i)) = a0(m,v,k,j,i);
+  });
+  return;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn ZoomData::PackBuffersFC()
+//! \brief Packs face-centered data into AMR communication buffers for all MBs being sent
+
+void ZoomData::PackBuffersFC(DvceArray1D<Real> packed_data, DvceFaceFld4D<Real> fc,
+                             size_t offset_fc, const int m) {
+  // Pack face field fc at MeshBlock m into packed_data starting from offset_fc
+  // Pack f1
+  int nk = fc.x1f.extent_int(1);
+  int nj = fc.x1f.extent_int(2);
+  int ni = fc.x1f.extent_int(3);
+  par_for("pack_f1", DevExeSpace(), 0, nk-1, 0, nj-1, 0, ni-1,
+  KOKKOS_LAMBDA(const int k, const int j, const int i) {
+    packed_data(offset_fc + (k*nj + j)*ni + i) = fc.x1f(m,k,j,i);
+  });
+  offset_fc += nk*nj*ni;
+  // Pack f2
+  nk = fc.x2f.extent_int(1);
+  nj = fc.x2f.extent_int(2);
+  ni = fc.x2f.extent_int(3);
+  par_for("pack_f2", DevExeSpace(), 0, nk-1, 0, nj-1, 0, ni-1,
+  KOKKOS_LAMBDA(const int k, const int j, const int i) {
+    packed_data(offset_fc + (k*nj + j)*ni + i) = fc.x2f(m,k,j,i);
+  });
+  offset_fc += nk*nj*ni;
+  // Pack f3
+  nk = fc.x3f.extent_int(1);
+  nj = fc.x3f.extent_int(2);
+  ni = fc.x3f.extent_int(3);
+  par_for("pack_f3", DevExeSpace(), 0, nk-1, 0, nj-1, 0, ni-1,
+  KOKKOS_LAMBDA(const int k, const int j, const int i) {
+    packed_data(offset_fc + (k*nj + j)*ni + i) = fc.x3f(m,k,j,i);
+  });
+  return;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn ZoomData::PackBuffersEC()
+//! \brief Packs edge-centered data into AMR communication buffers for all MBs being sent
+
+void ZoomData::PackBuffersEC(DvceArray1D<Real> packed_data, DvceEdgeFld4D<Real> ec,
+                             size_t offset_ec, const int m) {
+  // Pack edge field ec at MeshBlock m into packed_data starting from offset_ec
+  // Pack e1
+  int nk = ec.x1e.extent_int(1);
+  int nj = ec.x1e.extent_int(2);
+  int ni = ec.x1e.extent_int(3);
+  par_for("pack_e1", DevExeSpace(), 0, nk-1, 0, nj-1, 0, ni-1,
+  KOKKOS_LAMBDA(const int k, const int j, const int i) {
+    packed_data(offset_ec + (k*nj + j)*ni + i) = ec.x1e(m,k,j,i);
+  });
+  offset_ec += nk*nj*ni;
+  // Pack e2
+  nk = ec.x2e.extent_int(1);
+  nj = ec.x2e.extent_int(2);
+  ni = ec.x2e.extent_int(3);
+  par_for("pack_e2", DevExeSpace(), 0, nk-1, 0, nj-1, 0, ni-1,
+  KOKKOS_LAMBDA(const int k, const int j, const int i) {
+    packed_data(offset_ec + (k*nj + j)*ni + i) = ec.x2e(m,k,j,i);
+  });
+  offset_ec += nk*nj*ni;
+  // Pack e3
+  nk = ec.x3e.extent_int(1);
+  nj = ec.x3e.extent_int(2);
+  ni = ec.x3e.extent_int(3);
+  par_for("pack_e3", DevExeSpace(), 0, nk-1, 0, nj-1, 0, ni-1,
+  KOKKOS_LAMBDA(const int k, const int j, const int i) {
+    packed_data(offset_ec + (k*nj + j)*ni + i) = ec.x3e(m,k,j,i);
+  });
+  return;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void ZoomData::SyncBufferToHost()
+//! \brief Sync zoom data buffer to host array
+
+// TODO(@mhguo): need to move to different ranks...
+void ZoomData::SyncBufferToHost() {
+  Kokkos::fence();
+  // First you have to rearrange the data
+  for (int zm = 0; zm < pzmesh->nzmb_thisdvce; ++zm) {
+  }
+  Kokkos::fence();
+  return;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void ZoomData::SyncHostToBuffer()
+//! \brief Sync zoom data from host array to buffer
+
+// TODO(@mhguo): need to move to different ranks...
+void ZoomData::SyncHostToBuffer() {
+  Kokkos::fence();
+  Kokkos::fence();
+  return;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn ZoomData::UnpackBuffer()
+//! \brief Unpacks data from AMR communication buffers for all MBs being received
+
+void ZoomData::UnpackBuffer() {
+  nzmb_recv = pzmesh->nzmb_thisdvce;
+  hydro::Hydro* phydro = pzoom->pmesh->pmb_pack->phydro;
+  mhd::MHD* pmhd = pzoom->pmesh->pmb_pack->pmhd;
+  // for (int zm = 0; zm < nzmb_recv; ++zm) {
+  //   int offset = zm * zmb_data_cnt;
+  //   // unpack conserved variables
+  //   UnpackBuffersCC(recv_data, offset, u0);
+  //   // unpack magnetic fields
+  //   if (pmhd != nullptr) {
+  //     UnpackBuffersFC(recv_data, offset, m, b0, coarse_b0);
+  //   }
+  // }
+  return;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn ZoomData::LoadDataFromZoomData(int zm, int m)
+//! \brief Load data from zoom data zm to MeshBlock m
+
+void ZoomData::LoadDataFromZoomData(int zm, int m) {
+  // LoadCCData(zm, m);
+  // LoadHydroData(zm, m);
+  // UpdateMeshBlockElectricFields(zm, m);
   return;
 }
