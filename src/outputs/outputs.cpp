@@ -250,25 +250,85 @@ Outputs::Outputs(ParameterInput *pin, Mesh *pm) {
         pnode = new CoarsenedBinaryOutput(pin,pm,opar);
         pout_list.insert(pout_list.begin(),pnode);
       } else if (opar.file_type.compare("pdf") == 0) {
-        opar.bin_min = pin->GetReal(opar.block_name,"bin_min");
-        opar.bin_max = pin->GetReal(opar.block_name,"bin_max");
-        opar.nbin = pin->GetInteger(opar.block_name,"nbin");
-        opar.logscale = pin->GetOrAddBoolean(opar.block_name,"logscale",true);
         opar.mass_weighted = pin->GetOrAddBoolean(opar.block_name,"mass_weighted",false);
-        // check and set second variable option.
-        if (pin->DoesParameterExist(opar.block_name,"variable_2")) {
-          opar.variable_2 = pin->GetString(opar.block_name, "variable_2");
-          opar.bin2_min = pin->GetOrAddReal(opar.block_name,"bin2_min",0);
-          opar.bin2_max = pin->GetOrAddReal(opar.block_name,"bin2_max",1);
-          opar.nbin2 = pin->GetOrAddInteger(opar.block_name,"nbin2",0);
-          opar.logscale2 = pin->GetOrAddBoolean(opar.block_name,"logscale2",true);
-        } else {
-          opar.variable_2 = "";
-          opar.bin2_min = 0;
-          opar.bin2_max = 1;
-          opar.nbin2 = 0;
-          opar.logscale2 = true;
+
+        // Parse N-D PDF parameters
+        // Count dimensions by checking for variable_1, variable_2, etc.
+        opar.pdf_ndim = 0;
+        for (int d = 0; d < opar.PDF_MAX_DIM; ++d) {
+          std::string var_key = "variable_" + std::to_string(d + 1);
+          if (pin->DoesParameterExist(opar.block_name, var_key)) {
+            opar.pdf_ndim = d + 1;
+          }
         }
+
+        // Backward compatibility: if variable_1 doesn't exist but variable does,
+        // treat 'variable' as alias for 'variable_1'
+        if (opar.pdf_ndim == 0 && pin->DoesParameterExist(opar.block_name, "variable")) {
+          opar.pdf_ndim = 1;
+          opar.pdf_variables[0] = opar.variable;  // already parsed above
+          opar.pdf_nbin[0] = pin->GetInteger(opar.block_name, "nbin");
+          opar.pdf_bin_min[0] = pin->GetReal(opar.block_name, "bin_min");
+          opar.pdf_bin_max[0] = pin->GetReal(opar.block_name, "bin_max");
+          opar.pdf_logscale[0] = pin->GetOrAddBoolean(opar.block_name, "logscale", true);
+
+          // Check for legacy variable_2 format
+          if (pin->DoesParameterExist(opar.block_name, "variable_2")) {
+            opar.pdf_ndim = 2;
+            opar.pdf_variables[1] = pin->GetString(opar.block_name, "variable_2");
+            opar.pdf_nbin[1] = pin->GetOrAddInteger(opar.block_name, "nbin2", 10);
+            opar.pdf_bin_min[1] = pin->GetOrAddReal(opar.block_name, "bin2_min", 0.0);
+            opar.pdf_bin_max[1] = pin->GetOrAddReal(opar.block_name, "bin2_max", 1.0);
+            opar.pdf_logscale[1] = pin->GetOrAddBoolean(opar.block_name, "logscale2", true);
+          }
+        } else {
+          // New N-D format: parse variable_1, variable_2, etc.
+          for (int d = 0; d < opar.pdf_ndim; ++d) {
+            std::string suffix = std::to_string(d + 1);
+            opar.pdf_variables[d] = pin->GetString(opar.block_name, "variable_" + suffix);
+            opar.pdf_nbin[d] = pin->GetInteger(opar.block_name, "nbin" + suffix);
+            opar.pdf_bin_min[d] = pin->GetReal(opar.block_name, "bin" + suffix + "_min");
+            opar.pdf_bin_max[d] = pin->GetReal(opar.block_name, "bin" + suffix + "_max");
+            opar.pdf_logscale[d] = pin->GetOrAddBoolean(opar.block_name,
+                                                         "logscale" + suffix, false);
+          }
+        }
+
+        // Validate PDF configuration
+        if (opar.pdf_ndim < 1 || opar.pdf_ndim > opar.PDF_MAX_DIM) {
+          std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+              << std::endl << "PDF output block '" << opar.block_name
+              << "' must have between 1 and " << opar.PDF_MAX_DIM << " dimensions"
+              << std::endl;
+          exit(EXIT_FAILURE);
+        }
+
+        // Validate logscale with positive bin_min
+        for (int d = 0; d < opar.pdf_ndim; ++d) {
+          if (opar.pdf_logscale[d] && opar.pdf_bin_min[d] <= 0.0) {
+            std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                << std::endl << "PDF dimension " << (d + 1) << " in block '"
+                << opar.block_name << "' has logscale=true but bin_min <= 0.0"
+                << std::endl;
+            exit(EXIT_FAILURE);
+          }
+        }
+
+        // Copy legacy fields for backward compatibility with pdf.cpp
+        if (opar.pdf_ndim >= 1) {
+          opar.nbin = opar.pdf_nbin[0];
+          opar.bin_min = opar.pdf_bin_min[0];
+          opar.bin_max = opar.pdf_bin_max[0];
+          opar.logscale = opar.pdf_logscale[0];
+        }
+        if (opar.pdf_ndim >= 2) {
+          opar.variable_2 = opar.pdf_variables[1];
+          opar.nbin2 = opar.pdf_nbin[1];
+          opar.bin2_min = opar.pdf_bin_min[1];
+          opar.bin2_max = opar.pdf_bin_max[1];
+          opar.logscale2 = opar.pdf_logscale[1];
+        }
+
         pnode = new PDFOutput(pin,pm,opar);
         pout_list.insert(pout_list.begin(),pnode);
       } else if (opar.file_type.compare("bin") == 0) {

@@ -4,24 +4,26 @@
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
 //! \file pdf.cpp
-//  \brief writes pdf output data --- Drummond B Fielding
-//  PDFs can be 1d or 2d and can be either mass or weightume weighted.
-//  the user can specify more than one pdf to be calculated
-//  each pdf will be stored in its own directory with a new file for each output
-//  the user should be able to specify either from the var_choice listed in outputs.hpp
-//  or by specifying a custom variable in the pgen
-//  but I will need to figure out how to do multiple user defined variables
+//  \brief writes N-D PDF output data --- Drummond B Fielding
 //
-//  The user must also specify the number of bins and the range of the bins and
-//  if they should be log or linearly spaced.
+//  PDFs can be 1D, 2D, 3D, or 4D and can be either mass or volume weighted.
+//  Each PDF is stored in its own directory with binary data files and an ASCII header.
+//  Variables can be any from var_choice[] in outputs.hpp, including coordinate variables.
 //
-//  These bins are written to their own file when the first output is written
-//  the pdfs are written to their own file for each output
+//  Input format (new N-D):
+//    variable_1 = <var>   bin1_min = <min>   bin1_max = <max>   nbin1 = <n>   logscale1 = <bool>
+//    variable_2 = <var>   bin2_min = <min>   bin2_max = <max>   nbin2 = <n>   logscale2 = <bool>
+//    ...
+//
+//  Output:
+//    - ASCII header file: <basename>.header.pdf (written once)
+//    - Binary data files: <basename>.XXXXX.pdf (one per output time)
 
 #include <sys/stat.h>  // mkdir
 
 #include <cstdio>
 #include <cstdlib>
+#include <cmath>
 #include <iomanip>
 #include <iostream>
 #include <sstream>
@@ -41,137 +43,40 @@
 
 
 //----------------------------------------------------------------------------------------
-// Constructor: also calls BaseTypeOutput base class constructor
-// this is not right yet
+// Constructor: initializes N-D PDF data structures
+
 PDFOutput::PDFOutput(ParameterInput *pin, Mesh *pm, OutputParameters op) :
-  BaseTypeOutput(pin, pm, op) , pdf_data(op.nbin2 == 0 ? 1 : 2, op.nbin, op.nbin2) {
-  // create directories for outputs
-  // create a new directory for each pdf
-  std::string dir_name;
-  dir_name.assign("pdf_");
-  dir_name.append(op.file_id);
-  if (pdf_data.pdf_dimension == 2) {
-    dir_name.append("_");
-    dir_name.append(op.variable_2);
-  }
-  mkdir(dir_name.c_str(),0775);
+  BaseTypeOutput(pin, pm, op) {
 
+  // Create directory for outputs
+  std::string dir_name = "pdf_" + op.file_id;
+  for (int d = 1; d < op.pdf_ndim; ++d) {
+    dir_name += "_" + op.pdf_variables[d];
+  }
+  mkdir(dir_name.c_str(), 0775);
+
+  // Initialize PDFData with N-D parameters
+  pdf_data.Initialize(op.pdf_ndim, op.pdf_nbin, op.pdf_bin_min,
+                      op.pdf_bin_max, op.pdf_logscale);
   pdf_data.mass_weighted = op.mass_weighted;
-  pdf_data.logscale = op.logscale;
-
-  // throw an error if the user tries to use logscale
-  // with a negative bin_min for both 1D and 2D
-  if (op.logscale && op.bin_min <= 0.0) {
-    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-      << std::endl << "logscale is true but bin_min <= 0.0" << std::endl;
-    exit(EXIT_FAILURE);
-  }
-
-  if (op.logscale2 && op.bin2_min <= 0.0 && pdf_data.pdf_dimension == 2) {
-    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-      << std::endl << "logscale2 is true but bin2_min <= 0.0" << std::endl;
-    exit(EXIT_FAILURE);
-  }
-
-
-  // Create bins for the pdf
-  // Create mirror view on host
-  auto bins_host = Kokkos::create_mirror_view(pdf_data.bins);
-
-  // Populate bins_host
-  if (op.logscale) {
-    Real logbin_min = std::log10(op.bin_min);
-    Real logbin_max = std::log10(op.bin_max);
-    for (int i = 0; i <= op.nbin; i++) {
-      bins_host(i) = std::pow(10, logbin_min + i * (logbin_max - logbin_min) / op.nbin);
-    }
-  } else {
-    Real bin_step = (op.bin_max - op.bin_min) / op.nbin;
-    for (int i = 0; i <= op.nbin; i++) {
-      bins_host(i) = op.bin_min + i * bin_step;
-    }
-  }
-
-  // Copy back to device
-  Kokkos::deep_copy(pdf_data.bins, bins_host);
-  Kokkos::fence();
-
-  // Update the step size in pdf_data
-  pdf_data.step_size = op.logscale ?
-                       (std::log10(op.bin_max) - std::log10(op.bin_min)) / op.nbin :
-                       (op.bin_max - op.bin_min) / op.nbin;
-
-
-
-
-  // Create second bins for the pdf if 2D
-  if (pdf_data.pdf_dimension == 2) {
-    pdf_data.logscale2 = op.logscale2;
-    auto bins2_host = Kokkos::create_mirror_view(pdf_data.bins2);
-
-    if (op.logscale2) {
-      Real logbin_min2 = std::log10(op.bin2_min);
-      Real logbin_max2 = std::log10(op.bin2_max);
-      for (int i = 0; i <= op.nbin2; i++) {
-        bins2_host(i) = std::pow(10, logbin_min2+i*(logbin_max2-logbin_min2)/op.nbin2);
-      }
-    } else {
-      Real step2 = (op.bin2_max - op.bin2_min) / op.nbin2;
-      for (int i = 0; i <= op.nbin2; i++) {
-        bins2_host(i) = op.bin2_min + i * step2;
-      }
-    }
-
-    // Copy back to device
-    Kokkos::deep_copy(pdf_data.bins2, bins2_host);
-    Kokkos::fence();
-
-    if (pdf_data.pdf_dimension == 2 && pdf_data.bins2.extent(0) != op.nbin2 + 1) {
-      std::cerr << "Error: pdf_data.bins2 size mismatch. Expected size: "
-                << op.nbin2 + 1 << ", Actual size: " << pdf_data.bins2.extent(0)
-                << std::endl;
-      exit(EXIT_FAILURE);
-    }
-
-
-    // Update the step size for bins2
-    pdf_data.step_size2 = op.logscale2 ?
-                         (std::log10(op.bin2_max) - std::log10(op.bin2_min)) / op.nbin2 :
-                         (op.bin2_max - op.bin2_min) / op.nbin2;
-  }
-
-
-  if (pdf_data.pdf_dimension == 2) {
-    pdf_data.result_ = DvceArray2D<Real>("result", op.nbin2+2, op.nbin+2);
-  } else if (pdf_data.pdf_dimension == 1) {
-    pdf_data.result_ = DvceArray2D<Real>("result", 1, op.nbin+2);
-  }
-  pdf_data.scatter_result = Kokkos::Experimental::ScatterView<Real **, LayoutWrapper>(
-    pdf_data.result_
-  );
+  pdf_data.PopulateBinEdges();
 }
-
 
 
 //----------------------------------------------------------------------------------------
 //! \fn void PDFOutput::LoadOutputData()
-//  \brief Wrapper function that cycles through hist_data vector and calls
-//  appropriate LoadXXXData() function for that physics
+//  \brief Computes N-D PDF histogram over all MeshBlocks
 
 void PDFOutput::LoadOutputData(Mesh *pm) {
-  // Calculate derived variables, if required
-  // if out_params.variable or out_params.variable_2 not a derived
-  // then ComputeDerivedVariable does nothing, so this should be fine
-  // although maybe not optimal -- should probably have a way to
-  // know beforehand which needs to be computed
+  // Compute derived variables for all PDF dimensions
   if (out_params.contains_derived) {
-    ComputeDerivedVariable(out_params.variable, pm);
-    ComputeDerivedVariable(out_params.variable_2, pm);
+    for (int d = 0; d < out_params.pdf_ndim; ++d) {
+      ComputeDerivedVariable(out_params.pdf_variables[d], pm);
+    }
   }
 
-  // Pointer for initial determination
+  // Get physics pointer for mass weighting
   DvceArray5D<Real> *u0_ptr = nullptr;
-
   if (pm->pmb_pack->phydro != nullptr) {
     u0_ptr = &(pm->pmb_pack->phydro->u0);
   } else if (pm->pmb_pack->pmhd != nullptr) {
@@ -180,237 +85,242 @@ void PDFOutput::LoadOutputData(Mesh *pm) {
     u0_ptr = &(pm->pmb_pack->pz4c->u0);
   }
 
-  // Check if a valid module was found
-  if (u0_ptr == nullptr) {
+  if (u0_ptr == nullptr && pdf_data.mass_weighted) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-              << std::endl << "No physics module found" << std::endl;
+              << std::endl << "Mass-weighted PDF requires physics module" << std::endl;
     exit(EXIT_FAILURE);
   }
 
-  // Now assign the reference
-  DvceArray5D<Real> &u0_ = *u0_ptr;
+  DvceArray5D<Real> u0_;
+  if (u0_ptr != nullptr) {
+    u0_ = *u0_ptr;
+  }
 
-  // capture class variables for kernel
   auto &size = pm->pmb_pack->pmb->mb_size;
-
-  // loop over all MeshBlocks in this pack
   auto &indcs = pm->pmb_pack->pmesh->mb_indcs;
   int is = indcs.is; int ie = indcs.ie;
   int js = indcs.js; int je = indcs.je;
   int ks = indcs.ks; int ke = indcs.ke;
-
-  auto result  = pdf_data.result_;
-  auto scatter = pdf_data.scatter_result;
 
   int nmb = pm->pmb_pack->nmb_thispack;
   int nx1 = indcs.nx1 + 2*indcs.ng;
   int nx2 = indcs.nx2 + 2*indcs.ng;
   int nx3 = indcs.nx3 + 2*indcs.ng;
 
-  // Copy MeshBlock data from host to device
+  // Copy variable data to device array
   DvceArray5D<Real> outvars_device("outvars_device", outvars.size(), nmb, nx3, nx2, nx1);
   for (std::size_t i = 0; i < outvars.size(); ++i) {
-      auto d_slice = Kokkos::subview(*(outvars[i].data_ptr),
-      Kokkos::ALL(), outvars[i].data_index, Kokkos::ALL(), Kokkos::ALL(), Kokkos::ALL());
-      auto d_target_slice = Kokkos::subview(outvars_device, i,
-      Kokkos::ALL(), Kokkos::ALL(), Kokkos::ALL(), Kokkos::ALL());
-      Kokkos::deep_copy(d_target_slice, d_slice);
+    auto d_slice = Kokkos::subview(*(outvars[i].data_ptr),
+        Kokkos::ALL(), outvars[i].data_index, Kokkos::ALL(), Kokkos::ALL(), Kokkos::ALL());
+    auto d_target_slice = Kokkos::subview(outvars_device, i,
+        Kokkos::ALL(), Kokkos::ALL(), Kokkos::ALL(), Kokkos::ALL());
+    Kokkos::deep_copy(d_target_slice, d_slice);
   }
   Kokkos::fence();
 
-  //
+  // Get PDF parameters
+  auto result = pdf_data.result_;
+  auto scatter = pdf_data.scatter_result;
+  int ndim = pdf_data.ndim;
+  int total_bins = pdf_data.total_bins;
+  bool mass_weighted = pdf_data.mass_weighted;
 
-  // Reset ScatterView from previous output
+  // Create device-accessible copies of PDF parameters
+  Kokkos::View<int[PDFData::MAX_DIM]> d_nbin("d_nbin");
+  Kokkos::View<int[PDFData::MAX_DIM]> d_nbin_with_overflow("d_nbin_with_overflow");
+  Kokkos::View<int[PDFData::MAX_DIM]> d_stride("d_stride");
+  Kokkos::View<Real[PDFData::MAX_DIM]> d_step_size("d_step_size");
+  Kokkos::View<Real[PDFData::MAX_DIM]> d_bin_min("d_bin_min");
+  Kokkos::View<bool[PDFData::MAX_DIM]> d_logscale("d_logscale");
+
+  auto h_nbin = Kokkos::create_mirror_view(d_nbin);
+  auto h_nbin_with_overflow = Kokkos::create_mirror_view(d_nbin_with_overflow);
+  auto h_stride = Kokkos::create_mirror_view(d_stride);
+  auto h_step_size = Kokkos::create_mirror_view(d_step_size);
+  auto h_bin_min = Kokkos::create_mirror_view(d_bin_min);
+  auto h_logscale = Kokkos::create_mirror_view(d_logscale);
+
+  for (int d = 0; d < PDFData::MAX_DIM; ++d) {
+    h_nbin(d) = pdf_data.nbin[d];
+    h_nbin_with_overflow(d) = pdf_data.nbin_with_overflow[d];
+    h_stride(d) = pdf_data.stride[d];
+    h_step_size(d) = pdf_data.step_size[d];
+    h_bin_min(d) = pdf_data.bin_min[d];
+    h_logscale(d) = pdf_data.logscale[d];
+  }
+
+  Kokkos::deep_copy(d_nbin, h_nbin);
+  Kokkos::deep_copy(d_nbin_with_overflow, h_nbin_with_overflow);
+  Kokkos::deep_copy(d_stride, h_stride);
+  Kokkos::deep_copy(d_step_size, h_step_size);
+  Kokkos::deep_copy(d_bin_min, h_bin_min);
+  Kokkos::deep_copy(d_logscale, h_logscale);
+  Kokkos::fence();
+
+  // Reset ScatterView and result array
   scatter.reset();
-  // Also reset the histogram from previous call.
-  // Currently still required for consistent results between host and device backends, see
-  // https://github.com/kokkos/kokkos/issues/6363
   Kokkos::deep_copy(result, 0);
   Kokkos::fence();
 
-  // Capture the necessary data from pdf_data
-  auto bins = pdf_data.bins;
-  auto bins2 = pdf_data.bins2;
-  auto step_size = pdf_data.step_size;
-  auto step_size2 = pdf_data.step_size2;
-  auto nbin_ = pdf_data.nbin;
-  auto nbin2_ = pdf_data.nbin2;
-  int pdf_dimension = pdf_data.pdf_dimension;
-  bool logscale = pdf_data.logscale;
-  bool logscale2 = pdf_data.logscale2;
-  bool mass_weighted = pdf_data.mass_weighted;
-
-  par_for("pdf", DevExeSpace(),0,nmb-1,ks,ke,js,je,is,ie,
+  // N-D binning kernel
+  par_for("pdf_nd", DevExeSpace(), 0, nmb-1, ks, ke, js, je, is, ie,
   KOKKOS_LAMBDA(int m, int k, int j, int i) {
-    auto &x_val = outvars_device(0, m, k, j, i);
-    int x_bin = -1;
-    // First handle edge cases explicitly
-    if (x_val < bins(0)) {
-      x_bin = 0;
-    } else if (x_val >= bins(nbin_)) {
-      x_bin = nbin_ + 1;
-    } else {
-      if (logscale == false) {
-        x_bin = static_cast<int>((x_val - bins(0)) / step_size) + 1;
-      } else if (logscale == true) {
-        x_bin = static_cast<int>(std::log10(x_val / bins(0)) / step_size) + 1;
-      }
-    }
-    // needs to be zero as for the 1D histogram we need 0 as first index of the 2D
-    // result array
-    int y_bin = 0;
-    if (pdf_dimension == 2) {
-      auto &y_val = outvars_device(1, m, k, j, i);
+    // Compute flat index for N-D bin
+    int flat_idx = 0;
+    for (int d = 0; d < ndim; ++d) {
+      Real val = outvars_device(d, m, k, j, i);
+      int bin_idx;
 
-      y_bin = -1; // reset to impossible value
-      // First handle edge cases explicitly
-      if (y_val < bins2(0)) {
-        y_bin = 0;
-      } else if (y_val >= bins2(nbin2_)) {
-        y_bin = nbin2_ + 1;
+      // Determine bin index for this dimension
+      if (d_logscale(d)) {
+        if (val <= 0.0 || val < d_bin_min(d)) {
+          bin_idx = 0;  // underflow
+        } else if (val >= d_bin_min(d) * std::pow(10.0, d_nbin(d) * d_step_size(d))) {
+          bin_idx = d_nbin(d) + 1;  // overflow
+        } else {
+          bin_idx = static_cast<int>(std::log10(val / d_bin_min(d)) / d_step_size(d)) + 1;
+        }
       } else {
-        // for lin and log directly pick index
-        if (logscale2 == false) {
-          y_bin = static_cast<int>((y_val - bins2(0)) / step_size2) + 1;
-        } else if (logscale2 == true) {
-          y_bin = static_cast<int>(std::log10(y_val/bins2(0)) / step_size2) + 1;
+        if (val < d_bin_min(d)) {
+          bin_idx = 0;  // underflow
+        } else if (val >= d_bin_min(d) + d_nbin(d) * d_step_size(d)) {
+          bin_idx = d_nbin(d) + 1;  // overflow
+        } else {
+          bin_idx = static_cast<int>((val - d_bin_min(d)) / d_step_size(d)) + 1;
         }
       }
+
+      // Clamp to valid range
+      bin_idx = (bin_idx < 0) ? 0 : bin_idx;
+      bin_idx = (bin_idx > d_nbin(d) + 1) ? d_nbin(d) + 1 : bin_idx;
+
+      flat_idx += bin_idx * d_stride(d);
     }
+
+    // Compute weight (volume or mass)
+    Real weight = size.d_view(m).dx1 * size.d_view(m).dx2 * size.d_view(m).dx3;
+    if (mass_weighted) {
+      weight *= u0_(m, IDN, k, j, i);
+    }
+
+    // Atomic add to histogram
     auto res = scatter.access();
-    Real weight = size.d_view(m).dx1*size.d_view(m).dx2*size.d_view(m).dx3;
-    weight *= mass_weighted == false
-              ? 1.0
-              : u0_(m, IDN, k, j, i);
-    res(y_bin, x_bin) += weight;
+    res(flat_idx) += weight;
   });
 
-  // "reduce" results from scatter view to original view.
-  // May be a no-op depending on backend.
-  Kokkos::Experimental::contribute(result, scatter); //.KokkosView()
-  // Kokkos::Experimental::contribute(result.KokkosView(), scatter);
-  Kokkos::fence(); // May not be required
+  // Reduce ScatterView to result array
+  Kokkos::Experimental::contribute(result, scatter);
+  Kokkos::fence();
 
-  // Now reduce over ranks
+  // MPI reduce across ranks
 #if MPI_PARALLEL_ENABLED
   if (global_variable::my_rank == 0) {
-    MPI_Reduce(MPI_IN_PLACE, result.data(), result.size(),
-                                   MPI_ATHENA_REAL, MPI_SUM, 0, MPI_COMM_WORLD);
+    MPI_Reduce(MPI_IN_PLACE, result.data(), total_bins,
+               MPI_ATHENA_REAL, MPI_SUM, 0, MPI_COMM_WORLD);
   } else {
-    MPI_Reduce(result.data(), result.data(), result.size(),
-                                   MPI_ATHENA_REAL, MPI_SUM, 0, MPI_COMM_WORLD);
+    MPI_Reduce(result.data(), result.data(), total_bins,
+               MPI_ATHENA_REAL, MPI_SUM, 0, MPI_COMM_WORLD);
   }
 #endif
 }
 
+
 //----------------------------------------------------------------------------------------
 //! \fn void PDFOutput::WriteOutputFile()
-//  \brief Cycles through hist_data vector and writes history file for each component
+//  \brief Writes N-D PDF to binary file with ASCII header
 
 void PDFOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
-  // only the master rank writes the file
+  // Only master rank writes files
   if (global_variable::my_rank == 0) {
-    // Write header, if it has not been written already
-    if (!(pdf_data.bins_written)) {
-      // create filename: "pdf_"+"file_id"/file_basename" + ".bins.pdf"
-      std::string fname;
-      fname.assign("pdf_");
-      fname.append(out_params.file_id);
-      if (pdf_data.pdf_dimension == 2) {
-        fname.append("_");
-        fname.append(out_params.variable_2);
-      }
-      fname.append("/");
-      fname.append(out_params.file_basename);
-      fname.append(".bins.pdf");
+    // Construct directory name
+    std::string dir_name = "pdf_" + out_params.file_id;
+    for (int d = 1; d < out_params.pdf_ndim; ++d) {
+      dir_name += "_" + out_params.pdf_variables[d];
+    }
 
-      // open file for output
-      FILE *pfile;
-      if ((pfile = std::fopen(fname.c_str(),"a")) == nullptr) {
+    // Write ASCII header file (once)
+    if (!(pdf_data.bins_written)) {
+      std::string header_fname = dir_name + "/" + out_params.file_basename + ".header.pdf";
+
+      FILE *hfile;
+      if ((hfile = std::fopen(header_fname.c_str(), "w")) == nullptr) {
         std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-          << std::endl << "Output file '" << fname << "' could not be opened" <<std::endl;
+            << std::endl << "Header file '" << header_fname << "' could not be opened"
+            << std::endl;
         exit(EXIT_FAILURE);
       }
 
-      std::fprintf(pfile,"# pdf bins \n");
-      std::fprintf(pfile,"# [1]= %.20s \n", outvars[0].label.c_str());
-      if (pdf_data.pdf_dimension == 2) {
-        std::fprintf(pfile,"# [2]= %.20s \n", outvars[1].label.c_str());
+      // Write header metadata
+      std::fprintf(hfile, "# AthenaK N-D PDF Output\n");
+      std::fprintf(hfile, "ndim = %d\n", pdf_data.ndim);
+      std::fprintf(hfile, "mass_weighted = %s\n", pdf_data.mass_weighted ? "true" : "false");
+      std::fprintf(hfile, "total_bins = %d\n", pdf_data.total_bins);
+      std::fprintf(hfile, "\n");
+
+      // Write dimension info
+      for (int d = 0; d < pdf_data.ndim; ++d) {
+        std::fprintf(hfile, "# Dimension %d\n", d + 1);
+        std::fprintf(hfile, "variable_%d = %s\n", d + 1, out_params.pdf_variables[d].c_str());
+        std::fprintf(hfile, "nbin%d = %d\n", d + 1, pdf_data.nbin[d]);
+        std::fprintf(hfile, "bin%d_min = %.15e\n", d + 1, pdf_data.bin_min[d]);
+        std::fprintf(hfile, "bin%d_max = %.15e\n", d + 1, pdf_data.bin_max[d]);
+        std::fprintf(hfile, "logscale%d = %s\n", d + 1, pdf_data.logscale[d] ? "true" : "false");
+        std::fprintf(hfile, "stride%d = %d\n", d + 1, pdf_data.stride[d]);
+        std::fprintf(hfile, "\n");
       }
 
-      // write bins
-      // Create a host mirror of the pdf_data.result_ array
-      auto bins_host = Kokkos::create_mirror_view(pdf_data.bins);
-      Kokkos::deep_copy(bins_host, pdf_data.bins);
-      Kokkos::fence();
-
-      for (int n=0; n<pdf_data.nbin+1; ++n) {
-        std::fprintf(pfile, out_params.data_format.c_str(), bins_host[n]);
-      }
-      std::fprintf(pfile,"\n");                              // terminate line
-      if (pdf_data.pdf_dimension == 2) {
-        auto bins2_host = Kokkos::create_mirror_view(pdf_data.bins2);
-        Kokkos::deep_copy(bins2_host, pdf_data.bins2);
+      // Write bin edges for each dimension
+      std::fprintf(hfile, "# Bin edges (nbin+1 values per dimension)\n");
+      for (int d = 0; d < pdf_data.ndim; ++d) {
+        auto bins_host = Kokkos::create_mirror_view(pdf_data.bin_edges[d]);
+        Kokkos::deep_copy(bins_host, pdf_data.bin_edges[d]);
         Kokkos::fence();
 
-        for (int n=0; n<pdf_data.nbin2+1; ++n) {
-          std::fprintf(pfile, out_params.data_format.c_str(), bins2_host[n]);
+        std::fprintf(hfile, "bin_edges_%d =", d + 1);
+        for (int n = 0; n <= pdf_data.nbin[d]; ++n) {
+          std::fprintf(hfile, " %.15e", bins_host(n));
         }
-        std::fprintf(pfile,"\n");                            // terminate line
+        std::fprintf(hfile, "\n");
       }
-      std::fclose(pfile);
+
+      std::fclose(hfile);
       pdf_data.bins_written = true;
     }
 
-    // create filename: "pdf_"+"file_id"/file_basename" + "." + XXXXX + ".pdf"
-    // where XXXXX = 5-digit file_number
-    std::string fname;
+    // Write binary data file
     char number[6];
     std::snprintf(number, sizeof(number), "%05d", out_params.file_number);
-    fname.assign("pdf_");
-    fname.append(out_params.file_id);
-    if (pdf_data.pdf_dimension == 2) {
-      fname.append("_");
-      fname.append(out_params.variable_2);
-    }
-    fname.append("/");
-    fname.append(out_params.file_basename);
-    fname.append(".");
-    fname.append(number);
-    fname.append(".pdf");
+    std::string data_fname = dir_name + "/" + out_params.file_basename + "."
+                           + std::string(number) + ".pdf";
 
-    // open file for output
     FILE *pfile;
-    if ((pfile = std::fopen(fname.c_str(),"a")) == nullptr) {
+    if ((pfile = std::fopen(data_fname.c_str(), "wb")) == nullptr) {
       std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-        << std::endl << "Output file '" << fname << "' could not be opened" <<std::endl;
+          << std::endl << "Data file '" << data_fname << "' could not be opened"
+          << std::endl;
       exit(EXIT_FAILURE);
     }
 
-    // Create a host mirror of the pdf_data.result_ array
+    // Write time as first 8 bytes (double)
+    double time_val = static_cast<double>(pm->time);
+    std::fwrite(&time_val, sizeof(double), 1, pfile);
+
+    // Copy result to host and write
     auto result_host = Kokkos::create_mirror_view(pdf_data.result_);
-
-    // Copy the data from the device to the host
     Kokkos::deep_copy(result_host, pdf_data.result_);
+    Kokkos::fence();
 
-    // write history variables
-    std::fprintf(pfile, "# time= ");
-    std::fprintf(pfile, out_params.data_format.c_str(), pm->time);
-    std::fprintf(pfile, "\n");
-    int number_n2_bins = pdf_data.pdf_dimension == 2 ? pdf_data.nbin2+2 : 1;
-    for (int n2=0; n2<number_n2_bins; ++n2) {
-      for (int n=0; n<pdf_data.nbin+2; ++n) {
-        std::fprintf(pfile, out_params.data_format.c_str(), result_host(n2, n));
-      }
-      std::fprintf(pfile,"\n"); // terminate line
+    // Write histogram data as doubles
+    for (int n = 0; n < pdf_data.total_bins; ++n) {
+      double val = static_cast<double>(result_host(n));
+      std::fwrite(&val, sizeof(double), 1, pfile);
     }
-    std::fprintf(pfile,"\n"); // terminate line
+
     std::fclose(pfile);
   }
 
-  // increment counters
-  out_params.file_number++; // By doing this I make a new file for each time.
-  // I could alternatively have a single file that is appended to each time.
+  // Update counters
+  out_params.file_number++;
   if (out_params.last_time < 0.0) {
     out_params.last_time = pm->time;
   } else {
@@ -418,5 +328,4 @@ void PDFOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
   }
   pin->SetInteger(out_params.block_name, "file_number", out_params.file_number);
   pin->SetReal(out_params.block_name, "last_time", out_params.last_time);
-  return;
 }

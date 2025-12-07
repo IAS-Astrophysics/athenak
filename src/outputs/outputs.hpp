@@ -21,7 +21,7 @@
     #error NHISTORY > NREDUCTION in outputs.hpp
 #endif
 
-#define NOUTPUT_CHOICES 158
+#define NOUTPUT_CHOICES 179
 // choices for output variables used in <ouput> blocks in input file
 // TO ADD MORE CHOICES:
 //   - add more strings to array below, change NOUTPUT_CHOICES above appropriately
@@ -96,7 +96,18 @@ static const char *var_choice[NOUTPUT_CHOICES] = {
   "tmunu",
 
   // Particles (156-157)
-  "prtcl_all", "prtcl_d"
+  "prtcl_all", "prtcl_d",
+
+  // Coordinate variables for PDF binning (158-166)
+  "coord_x", "coord_y", "coord_z",
+  "coord_r", "coord_theta", "coord_phi",
+  "coord_cyl_R", "coord_cyl_phi", "coord_cyl_z",
+
+  // Mass and energy flux derived variables (167-178)
+  "mdot_sph", "mdot_sph_out", "mdot_sph_in",
+  "edot_sph", "edot_sph_out", "edot_sph_in",
+  "mdot_vert", "mdot_vert_out", "mdot_vert_in",
+  "edot_vert", "edot_vert_out", "edot_vert_in"
 };
 
 
@@ -135,13 +146,22 @@ struct OutputParameters {
   // DBF parameters for PDF:
   // number of derived variables, index of current derived variable
   int n_derived=0, i_derived=0;
-  std::string variable_2; // DBF: for 2d PDFs
+  std::string variable_2; // DBF: for 2d PDFs (legacy)
   Real bin_min, bin_max;
   Real bin2_min, bin2_max;
   int nbin=0, nbin2=0;
   bool logscale=true, logscale2=true;
   bool mass_weighted=false;
   bool single_file_per_rank=false; // DBF: parameter for single file per rank
+
+  // N-D PDF parameters (max 4 dimensions)
+  static constexpr int PDF_MAX_DIM = 4;
+  int pdf_ndim = 0;                              // number of PDF dimensions
+  std::string pdf_variables[PDF_MAX_DIM];        // variable names for each dimension
+  int pdf_nbin[PDF_MAX_DIM] = {0, 0, 0, 0};      // number of bins for each dimension
+  Real pdf_bin_min[PDF_MAX_DIM] = {0, 0, 0, 0};  // bin minimum for each dimension
+  Real pdf_bin_max[PDF_MAX_DIM] = {1, 1, 1, 1};  // bin maximum for each dimension
+  bool pdf_logscale[PDF_MAX_DIM] = {false, false, false, false};  // log scale flag
 };
 
 //----------------------------------------------------------------------------------------
@@ -302,26 +322,106 @@ class CoarsenedBinaryOutput : public BaseTypeOutput {
 
 //----------------------------------------------------------------------------------------
 //! \struct PDFData
-//  \brief  container for PDF data
+//  \brief  container for N-D PDF data
 
 struct PDFData {
-  int pdf_dimension;
-  int nbin, nbin2;
-  Kokkos::View<Real*> bins;
-  Kokkos::View<Real*> bins2;
+  static constexpr int MAX_DIM = 4;
+
+  int ndim;                            // number of dimensions (1 to MAX_DIM)
+  int nbin[MAX_DIM];                   // number of bins per dimension
+  int nbin_with_overflow[MAX_DIM];     // nbin + 2 (includes overflow bins)
+  int stride[MAX_DIM];                 // strides for flattened indexing (row-major)
+  int total_bins;                      // total number of bins including overflow
+
+  Kokkos::View<Real*> bin_edges[MAX_DIM];  // bin edges for each dimension
+  Real step_size[MAX_DIM];                  // step size (or log step size)
+  bool logscale[MAX_DIM];                   // log scale flag per dimension
+  Real bin_min[MAX_DIM];                    // minimum bin value per dimension
+  Real bin_max[MAX_DIM];                    // maximum bin value per dimension
+
   bool bins_written;
-  // if logscale is true then this step is the log10 of the step size
-  Real step_size, step_size2;
   bool mass_weighted;
-  bool logscale, logscale2;
 
-  DvceArray2D<Real> result_; // resulting histogram
-  Kokkos::Experimental::ScatterView<Real **, LayoutWrapper> scatter_result;
+  DvceArray1D<Real> result_;  // flattened N-D histogram
+  Kokkos::Experimental::ScatterView<Real*, LayoutWrapper> scatter_result;
 
-  PDFData(int dim, int nbinVal, int nbin2Val)
-    : pdf_dimension(dim), nbin(nbinVal), nbin2(nbin2Val),
-      bins("bins", nbin + 1), bins2("bins2", nbin2 + 1),
-      bins_written(false), mass_weighted(false), logscale(false), logscale2(false) {
+  // Default constructor
+  PDFData() : ndim(0), total_bins(0), bins_written(false), mass_weighted(false) {
+    for (int d = 0; d < MAX_DIM; ++d) {
+      nbin[d] = 0;
+      nbin_with_overflow[d] = 0;
+      stride[d] = 0;
+      step_size[d] = 0.0;
+      logscale[d] = false;
+      bin_min[d] = 0.0;
+      bin_max[d] = 1.0;
+    }
+  }
+
+  // Constructor for N-D PDF
+  void Initialize(int ndim_in, const int* nbin_in, const Real* bin_min_in,
+                  const Real* bin_max_in, const bool* logscale_in) {
+    ndim = ndim_in;
+    total_bins = 1;
+
+    // Set up bins and compute strides (C-style row-major: last dim varies fastest)
+    for (int d = 0; d < ndim; ++d) {
+      nbin[d] = nbin_in[d];
+      nbin_with_overflow[d] = nbin[d] + 2;  // +2 for underflow/overflow
+      bin_min[d] = bin_min_in[d];
+      bin_max[d] = bin_max_in[d];
+      logscale[d] = logscale_in[d];
+
+      // Allocate bin edges
+      bin_edges[d] = Kokkos::View<Real*>("bin_edges_" + std::to_string(d), nbin[d] + 1);
+
+      // Compute step size
+      if (logscale[d]) {
+        step_size[d] = (std::log10(bin_max[d]) - std::log10(bin_min[d])) / nbin[d];
+      } else {
+        step_size[d] = (bin_max[d] - bin_min[d]) / nbin[d];
+      }
+
+      total_bins *= nbin_with_overflow[d];
+    }
+
+    // Compute strides (C-style row-major)
+    stride[ndim - 1] = 1;
+    for (int d = ndim - 2; d >= 0; --d) {
+      stride[d] = stride[d + 1] * nbin_with_overflow[d + 1];
+    }
+
+    // Zero out unused dimensions
+    for (int d = ndim; d < MAX_DIM; ++d) {
+      nbin[d] = 0;
+      nbin_with_overflow[d] = 0;
+      stride[d] = 0;
+    }
+
+    // Allocate result array
+    result_ = DvceArray1D<Real>("pdf_result", total_bins);
+    scatter_result = Kokkos::Experimental::ScatterView<Real*, LayoutWrapper>(result_);
+  }
+
+  // Populate bin edges on host, then copy to device
+  void PopulateBinEdges() {
+    for (int d = 0; d < ndim; ++d) {
+      auto bins_host = Kokkos::create_mirror_view(bin_edges[d]);
+      if (logscale[d]) {
+        Real log_min = std::log10(bin_min[d]);
+        Real log_max = std::log10(bin_max[d]);
+        for (int i = 0; i <= nbin[d]; ++i) {
+          bins_host(i) = std::pow(10.0, log_min + i * (log_max - log_min) / nbin[d]);
+        }
+      } else {
+        Real bstep = (bin_max[d] - bin_min[d]) / nbin[d];
+        for (int i = 0; i <= nbin[d]; ++i) {
+          bins_host(i) = bin_min[d] + i * bstep;
+        }
+      }
+      Kokkos::deep_copy(bin_edges[d], bins_host);
+    }
+    Kokkos::fence();
   }
 };
 

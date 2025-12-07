@@ -1188,6 +1188,639 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
     });
   }
 
+  // Cartesian coordinate x
+  if (name.compare("coord_x") == 0) {
+    if (derived_var.extent(4) <= 1)
+      Kokkos::realloc(derived_var, nmb, n_dv, n3, n2, n1);
+    auto dv = derived_var;
+    int nx1 = indcs.nx1;
+    par_for("coord_x", DevExeSpace(), 0, (nmb-1), ks, ke, js, je, is, ie,
+    KOKKOS_LAMBDA(int m, int k, int j, int i) {
+      dv(m, i_dv, k, j, i) = CellCenterX(i-is, nx1,
+                                         size.d_view(m).x1min, size.d_view(m).x1max);
+    });
+    i_dv += 1;
+  }
+
+  // Cartesian coordinate y
+  if (name.compare("coord_y") == 0) {
+    if (derived_var.extent(4) <= 1)
+      Kokkos::realloc(derived_var, nmb, n_dv, n3, n2, n1);
+    auto dv = derived_var;
+    int nx2 = indcs.nx2;
+    par_for("coord_y", DevExeSpace(), 0, (nmb-1), ks, ke, js, je, is, ie,
+    KOKKOS_LAMBDA(int m, int k, int j, int i) {
+      dv(m, i_dv, k, j, i) = CellCenterX(j-js, nx2,
+                                         size.d_view(m).x2min, size.d_view(m).x2max);
+    });
+    i_dv += 1;
+  }
+
+  // Cartesian coordinate z
+  if (name.compare("coord_z") == 0) {
+    if (derived_var.extent(4) <= 1)
+      Kokkos::realloc(derived_var, nmb, n_dv, n3, n2, n1);
+    auto dv = derived_var;
+    int nx3 = indcs.nx3;
+    par_for("coord_z", DevExeSpace(), 0, (nmb-1), ks, ke, js, je, is, ie,
+    KOKKOS_LAMBDA(int m, int k, int j, int i) {
+      dv(m, i_dv, k, j, i) = CellCenterX(k-ks, nx3,
+                                         size.d_view(m).x3min, size.d_view(m).x3max);
+    });
+    i_dv += 1;
+  }
+
+  // Spherical coordinate r = sqrt(x² + y² + z²)
+  if (name.compare("coord_r") == 0) {
+    if (derived_var.extent(4) <= 1)
+      Kokkos::realloc(derived_var, nmb, n_dv, n3, n2, n1);
+    auto dv = derived_var;
+    int nx1 = indcs.nx1;
+    int nx2 = indcs.nx2;
+    int nx3 = indcs.nx3;
+    par_for("coord_r", DevExeSpace(), 0, (nmb-1), ks, ke, js, je, is, ie,
+    KOKKOS_LAMBDA(int m, int k, int j, int i) {
+      Real x = CellCenterX(i-is, nx1, size.d_view(m).x1min, size.d_view(m).x1max);
+      Real y = CellCenterX(j-js, nx2, size.d_view(m).x2min, size.d_view(m).x2max);
+      Real z = CellCenterX(k-ks, nx3, size.d_view(m).x3min, size.d_view(m).x3max);
+      dv(m, i_dv, k, j, i) = sqrt(x*x + y*y + z*z);
+    });
+    i_dv += 1;
+  }
+
+  // Spherical coordinate theta = acos(z/r), range [0, π]
+  if (name.compare("coord_theta") == 0) {
+    if (derived_var.extent(4) <= 1)
+      Kokkos::realloc(derived_var, nmb, n_dv, n3, n2, n1);
+    auto dv = derived_var;
+    int nx1 = indcs.nx1;
+    int nx2 = indcs.nx2;
+    int nx3 = indcs.nx3;
+    par_for("coord_theta", DevExeSpace(), 0, (nmb-1), ks, ke, js, je, is, ie,
+    KOKKOS_LAMBDA(int m, int k, int j, int i) {
+      Real x = CellCenterX(i-is, nx1, size.d_view(m).x1min, size.d_view(m).x1max);
+      Real y = CellCenterX(j-js, nx2, size.d_view(m).x2min, size.d_view(m).x2max);
+      Real z = CellCenterX(k-ks, nx3, size.d_view(m).x3min, size.d_view(m).x3max);
+      Real r = sqrt(x*x + y*y + z*z);
+      // Handle r=0 case: theta = 0 (arbitrary but well-defined)
+      dv(m, i_dv, k, j, i) = (r > 0.0) ? acos(z / r) : 0.0;
+    });
+    i_dv += 1;
+  }
+
+  // Spherical coordinate phi = atan2(y, x), range [0, 2π]
+  if (name.compare("coord_phi") == 0) {
+    if (derived_var.extent(4) <= 1)
+      Kokkos::realloc(derived_var, nmb, n_dv, n3, n2, n1);
+    auto dv = derived_var;
+    int nx1 = indcs.nx1;
+    int nx2 = indcs.nx2;
+    Real two_pi = 2.0 * M_PI;
+    par_for("coord_phi", DevExeSpace(), 0, (nmb-1), ks, ke, js, je, is, ie,
+    KOKKOS_LAMBDA(int m, int k, int j, int i) {
+      Real x = CellCenterX(i-is, nx1, size.d_view(m).x1min, size.d_view(m).x1max);
+      Real y = CellCenterX(j-js, nx2, size.d_view(m).x2min, size.d_view(m).x2max);
+      Real phi = atan2(y, x);
+      // Shift from [-π, π] to [0, 2π]
+      if (phi < 0.0) phi += two_pi;
+      dv(m, i_dv, k, j, i) = phi;
+    });
+    i_dv += 1;
+  }
+
+  // Cylindrical coordinate R = sqrt(x² + y²)
+  if (name.compare("coord_cyl_R") == 0) {
+    if (derived_var.extent(4) <= 1)
+      Kokkos::realloc(derived_var, nmb, n_dv, n3, n2, n1);
+    auto dv = derived_var;
+    int nx1 = indcs.nx1;
+    int nx2 = indcs.nx2;
+    par_for("coord_cyl_R", DevExeSpace(), 0, (nmb-1), ks, ke, js, je, is, ie,
+    KOKKOS_LAMBDA(int m, int k, int j, int i) {
+      Real x = CellCenterX(i-is, nx1, size.d_view(m).x1min, size.d_view(m).x1max);
+      Real y = CellCenterX(j-js, nx2, size.d_view(m).x2min, size.d_view(m).x2max);
+      dv(m, i_dv, k, j, i) = sqrt(x*x + y*y);
+    });
+    i_dv += 1;
+  }
+
+  // Cylindrical coordinate phi = atan2(y, x), range [0, 2π]
+  if (name.compare("coord_cyl_phi") == 0) {
+    if (derived_var.extent(4) <= 1)
+      Kokkos::realloc(derived_var, nmb, n_dv, n3, n2, n1);
+    auto dv = derived_var;
+    int nx1 = indcs.nx1;
+    int nx2 = indcs.nx2;
+    Real two_pi = 2.0 * M_PI;
+    par_for("coord_cyl_phi", DevExeSpace(), 0, (nmb-1), ks, ke, js, je, is, ie,
+    KOKKOS_LAMBDA(int m, int k, int j, int i) {
+      Real x = CellCenterX(i-is, nx1, size.d_view(m).x1min, size.d_view(m).x1max);
+      Real y = CellCenterX(j-js, nx2, size.d_view(m).x2min, size.d_view(m).x2max);
+      Real phi = atan2(y, x);
+      // Shift from [-π, π] to [0, 2π]
+      if (phi < 0.0) phi += two_pi;
+      dv(m, i_dv, k, j, i) = phi;
+    });
+    i_dv += 1;
+  }
+
+  // Cylindrical coordinate z (same as Cartesian z)
+  if (name.compare("coord_cyl_z") == 0) {
+    if (derived_var.extent(4) <= 1)
+      Kokkos::realloc(derived_var, nmb, n_dv, n3, n2, n1);
+    auto dv = derived_var;
+    int nx3 = indcs.nx3;
+    par_for("coord_cyl_z", DevExeSpace(), 0, (nmb-1), ks, ke, js, je, is, ie,
+    KOKKOS_LAMBDA(int m, int k, int j, int i) {
+      dv(m, i_dv, k, j, i) = CellCenterX(k-ks, nx3,
+                                         size.d_view(m).x3min, size.d_view(m).x3max);
+    });
+    i_dv += 1;
+  }
+
+  // ==========================================================================================
+  // Mass and energy flux derived variables for radial/vertical profile analysis
+  // Spherical: v_r = (vx*x + vy*y + vz*z) / r, B_r = (Bx*x + By*y + Bz*z) / r
+  // Vertical: outward direction = v_z * sign(z)
+  // Energy flux: F_E,r = (H_hydro + B²) * v_r - (v·B) * B_r
+  //   where H_hydro = 0.5*ρ*v² + γ*eint, eint = E - 0.5*ρ*v² - 0.5*B²
+  // ==========================================================================================
+
+  // Spherical radial mass flux: ρ * v_r
+  if (name.compare("mdot_sph") == 0) {
+    if (derived_var.extent(4) <= 1)
+      Kokkos::realloc(derived_var, nmb, n_dv, n3, n2, n1);
+    auto dv = derived_var;
+    DvceArray5D<Real> u0_;
+    if (pm->pmb_pack->phydro != nullptr) {
+      u0_ = pm->pmb_pack->phydro->u0;
+    } else if (pm->pmb_pack->pmhd != nullptr) {
+      u0_ = pm->pmb_pack->pmhd->u0;
+    }
+    int nx1 = indcs.nx1;
+    int nx2 = indcs.nx2;
+    int nx3 = indcs.nx3;
+    par_for("mdot_sph", DevExeSpace(), 0, (nmb-1), ks, ke, js, je, is, ie,
+    KOKKOS_LAMBDA(int m, int k, int j, int i) {
+      Real x = CellCenterX(i-is, nx1, size.d_view(m).x1min, size.d_view(m).x1max);
+      Real y = CellCenterX(j-js, nx2, size.d_view(m).x2min, size.d_view(m).x2max);
+      Real z = CellCenterX(k-ks, nx3, size.d_view(m).x3min, size.d_view(m).x3max);
+      Real r = sqrt(x*x + y*y + z*z);
+      Real rho = u0_(m, IDN, k, j, i);
+      Real vx = u0_(m, IM1, k, j, i) / rho;
+      Real vy = u0_(m, IM2, k, j, i) / rho;
+      Real vz = u0_(m, IM3, k, j, i) / rho;
+      Real v_r = (r > 0.0) ? (vx*x + vy*y + vz*z) / r : 0.0;
+      dv(m, i_dv, k, j, i) = rho * v_r;
+    });
+    i_dv += 1;
+  }
+
+  // Spherical radial mass flux (outward only): ρ * max(v_r, 0)
+  if (name.compare("mdot_sph_out") == 0) {
+    if (derived_var.extent(4) <= 1)
+      Kokkos::realloc(derived_var, nmb, n_dv, n3, n2, n1);
+    auto dv = derived_var;
+    DvceArray5D<Real> u0_;
+    if (pm->pmb_pack->phydro != nullptr) {
+      u0_ = pm->pmb_pack->phydro->u0;
+    } else if (pm->pmb_pack->pmhd != nullptr) {
+      u0_ = pm->pmb_pack->pmhd->u0;
+    }
+    int nx1 = indcs.nx1;
+    int nx2 = indcs.nx2;
+    int nx3 = indcs.nx3;
+    par_for("mdot_sph_out", DevExeSpace(), 0, (nmb-1), ks, ke, js, je, is, ie,
+    KOKKOS_LAMBDA(int m, int k, int j, int i) {
+      Real x = CellCenterX(i-is, nx1, size.d_view(m).x1min, size.d_view(m).x1max);
+      Real y = CellCenterX(j-js, nx2, size.d_view(m).x2min, size.d_view(m).x2max);
+      Real z = CellCenterX(k-ks, nx3, size.d_view(m).x3min, size.d_view(m).x3max);
+      Real r = sqrt(x*x + y*y + z*z);
+      Real rho = u0_(m, IDN, k, j, i);
+      Real vx = u0_(m, IM1, k, j, i) / rho;
+      Real vy = u0_(m, IM2, k, j, i) / rho;
+      Real vz = u0_(m, IM3, k, j, i) / rho;
+      Real v_r = (r > 0.0) ? (vx*x + vy*y + vz*z) / r : 0.0;
+      dv(m, i_dv, k, j, i) = rho * fmax(v_r, 0.0);
+    });
+    i_dv += 1;
+  }
+
+  // Spherical radial mass flux (inward only): ρ * min(v_r, 0)
+  if (name.compare("mdot_sph_in") == 0) {
+    if (derived_var.extent(4) <= 1)
+      Kokkos::realloc(derived_var, nmb, n_dv, n3, n2, n1);
+    auto dv = derived_var;
+    DvceArray5D<Real> u0_;
+    if (pm->pmb_pack->phydro != nullptr) {
+      u0_ = pm->pmb_pack->phydro->u0;
+    } else if (pm->pmb_pack->pmhd != nullptr) {
+      u0_ = pm->pmb_pack->pmhd->u0;
+    }
+    int nx1 = indcs.nx1;
+    int nx2 = indcs.nx2;
+    int nx3 = indcs.nx3;
+    par_for("mdot_sph_in", DevExeSpace(), 0, (nmb-1), ks, ke, js, je, is, ie,
+    KOKKOS_LAMBDA(int m, int k, int j, int i) {
+      Real x = CellCenterX(i-is, nx1, size.d_view(m).x1min, size.d_view(m).x1max);
+      Real y = CellCenterX(j-js, nx2, size.d_view(m).x2min, size.d_view(m).x2max);
+      Real z = CellCenterX(k-ks, nx3, size.d_view(m).x3min, size.d_view(m).x3max);
+      Real r = sqrt(x*x + y*y + z*z);
+      Real rho = u0_(m, IDN, k, j, i);
+      Real vx = u0_(m, IM1, k, j, i) / rho;
+      Real vy = u0_(m, IM2, k, j, i) / rho;
+      Real vz = u0_(m, IM3, k, j, i) / rho;
+      Real v_r = (r > 0.0) ? (vx*x + vy*y + vz*z) / r : 0.0;
+      dv(m, i_dv, k, j, i) = rho * fmin(v_r, 0.0);
+    });
+    i_dv += 1;
+  }
+
+  // Spherical radial energy flux: F_E,r = (H_hydro + B²) * v_r - (v·B) * B_r
+  if (name.compare("edot_sph") == 0) {
+    if (derived_var.extent(4) <= 1)
+      Kokkos::realloc(derived_var, nmb, n_dv, n3, n2, n1);
+    auto dv = derived_var;
+    bool is_mhd = (pm->pmb_pack->pmhd != nullptr);
+    DvceArray5D<Real> u0_;
+    DvceArray5D<Real> bcc_;
+    Real gamma;
+    if (is_mhd) {
+      u0_ = pm->pmb_pack->pmhd->u0;
+      bcc_ = pm->pmb_pack->pmhd->bcc0;
+      gamma = pm->pmb_pack->pmhd->peos->eos_data.gamma;
+    } else if (pm->pmb_pack->phydro != nullptr) {
+      u0_ = pm->pmb_pack->phydro->u0;
+      gamma = pm->pmb_pack->phydro->peos->eos_data.gamma;
+    }
+    int nx1 = indcs.nx1;
+    int nx2 = indcs.nx2;
+    int nx3 = indcs.nx3;
+    par_for("edot_sph", DevExeSpace(), 0, (nmb-1), ks, ke, js, je, is, ie,
+    KOKKOS_LAMBDA(int m, int k, int j, int i) {
+      Real x = CellCenterX(i-is, nx1, size.d_view(m).x1min, size.d_view(m).x1max);
+      Real y = CellCenterX(j-js, nx2, size.d_view(m).x2min, size.d_view(m).x2max);
+      Real z = CellCenterX(k-ks, nx3, size.d_view(m).x3min, size.d_view(m).x3max);
+      Real r = sqrt(x*x + y*y + z*z);
+      Real rho = u0_(m, IDN, k, j, i);
+      Real inv_rho = 1.0 / rho;
+      Real vx = u0_(m, IM1, k, j, i) * inv_rho;
+      Real vy = u0_(m, IM2, k, j, i) * inv_rho;
+      Real vz = u0_(m, IM3, k, j, i) * inv_rho;
+      Real E_total = u0_(m, IEN, k, j, i);
+      Real v_sq = vx*vx + vy*vy + vz*vz;
+
+      Real B_sq = 0.0, Bx = 0.0, By = 0.0, Bz = 0.0, v_dot_B = 0.0;
+      if (is_mhd) {
+        Bx = bcc_(m, IBX, k, j, i);
+        By = bcc_(m, IBY, k, j, i);
+        Bz = bcc_(m, IBZ, k, j, i);
+        B_sq = Bx*Bx + By*By + Bz*Bz;
+        v_dot_B = vx*Bx + vy*By + vz*Bz;
+      }
+
+      // Internal energy: eint = E - 0.5*ρ*v² - 0.5*B²
+      Real eint = E_total - 0.5*rho*v_sq - 0.5*B_sq;
+      // Hydro enthalpy: H_hydro = 0.5*ρ*v² + γ*eint
+      Real H_hydro = 0.5*rho*v_sq + gamma*eint;
+
+      Real v_r = (r > 0.0) ? (vx*x + vy*y + vz*z) / r : 0.0;
+      Real B_r = (r > 0.0) ? (Bx*x + By*y + Bz*z) / r : 0.0;
+
+      // Energy flux: F_E,r = (H_hydro + B²) * v_r - (v·B) * B_r
+      dv(m, i_dv, k, j, i) = (H_hydro + B_sq) * v_r - v_dot_B * B_r;
+    });
+    i_dv += 1;
+  }
+
+  // Spherical radial energy flux (outward only)
+  if (name.compare("edot_sph_out") == 0) {
+    if (derived_var.extent(4) <= 1)
+      Kokkos::realloc(derived_var, nmb, n_dv, n3, n2, n1);
+    auto dv = derived_var;
+    bool is_mhd = (pm->pmb_pack->pmhd != nullptr);
+    DvceArray5D<Real> u0_;
+    DvceArray5D<Real> bcc_;
+    Real gamma;
+    if (is_mhd) {
+      u0_ = pm->pmb_pack->pmhd->u0;
+      bcc_ = pm->pmb_pack->pmhd->bcc0;
+      gamma = pm->pmb_pack->pmhd->peos->eos_data.gamma;
+    } else if (pm->pmb_pack->phydro != nullptr) {
+      u0_ = pm->pmb_pack->phydro->u0;
+      gamma = pm->pmb_pack->phydro->peos->eos_data.gamma;
+    }
+    int nx1 = indcs.nx1;
+    int nx2 = indcs.nx2;
+    int nx3 = indcs.nx3;
+    par_for("edot_sph_out", DevExeSpace(), 0, (nmb-1), ks, ke, js, je, is, ie,
+    KOKKOS_LAMBDA(int m, int k, int j, int i) {
+      Real x = CellCenterX(i-is, nx1, size.d_view(m).x1min, size.d_view(m).x1max);
+      Real y = CellCenterX(j-js, nx2, size.d_view(m).x2min, size.d_view(m).x2max);
+      Real z = CellCenterX(k-ks, nx3, size.d_view(m).x3min, size.d_view(m).x3max);
+      Real r = sqrt(x*x + y*y + z*z);
+      Real rho = u0_(m, IDN, k, j, i);
+      Real inv_rho = 1.0 / rho;
+      Real vx = u0_(m, IM1, k, j, i) * inv_rho;
+      Real vy = u0_(m, IM2, k, j, i) * inv_rho;
+      Real vz = u0_(m, IM3, k, j, i) * inv_rho;
+      Real E_total = u0_(m, IEN, k, j, i);
+      Real v_sq = vx*vx + vy*vy + vz*vz;
+
+      Real B_sq = 0.0, Bx = 0.0, By = 0.0, Bz = 0.0, v_dot_B = 0.0;
+      if (is_mhd) {
+        Bx = bcc_(m, IBX, k, j, i);
+        By = bcc_(m, IBY, k, j, i);
+        Bz = bcc_(m, IBZ, k, j, i);
+        B_sq = Bx*Bx + By*By + Bz*Bz;
+        v_dot_B = vx*Bx + vy*By + vz*Bz;
+      }
+
+      Real eint = E_total - 0.5*rho*v_sq - 0.5*B_sq;
+      Real H_hydro = 0.5*rho*v_sq + gamma*eint;
+
+      Real v_r = (r > 0.0) ? (vx*x + vy*y + vz*z) / r : 0.0;
+      Real B_r = (r > 0.0) ? (Bx*x + By*y + Bz*z) / r : 0.0;
+
+      Real F_E_r = (H_hydro + B_sq) * v_r - v_dot_B * B_r;
+      dv(m, i_dv, k, j, i) = (v_r > 0.0) ? F_E_r : 0.0;
+    });
+    i_dv += 1;
+  }
+
+  // Spherical radial energy flux (inward only)
+  if (name.compare("edot_sph_in") == 0) {
+    if (derived_var.extent(4) <= 1)
+      Kokkos::realloc(derived_var, nmb, n_dv, n3, n2, n1);
+    auto dv = derived_var;
+    bool is_mhd = (pm->pmb_pack->pmhd != nullptr);
+    DvceArray5D<Real> u0_;
+    DvceArray5D<Real> bcc_;
+    Real gamma;
+    if (is_mhd) {
+      u0_ = pm->pmb_pack->pmhd->u0;
+      bcc_ = pm->pmb_pack->pmhd->bcc0;
+      gamma = pm->pmb_pack->pmhd->peos->eos_data.gamma;
+    } else if (pm->pmb_pack->phydro != nullptr) {
+      u0_ = pm->pmb_pack->phydro->u0;
+      gamma = pm->pmb_pack->phydro->peos->eos_data.gamma;
+    }
+    int nx1 = indcs.nx1;
+    int nx2 = indcs.nx2;
+    int nx3 = indcs.nx3;
+    par_for("edot_sph_in", DevExeSpace(), 0, (nmb-1), ks, ke, js, je, is, ie,
+    KOKKOS_LAMBDA(int m, int k, int j, int i) {
+      Real x = CellCenterX(i-is, nx1, size.d_view(m).x1min, size.d_view(m).x1max);
+      Real y = CellCenterX(j-js, nx2, size.d_view(m).x2min, size.d_view(m).x2max);
+      Real z = CellCenterX(k-ks, nx3, size.d_view(m).x3min, size.d_view(m).x3max);
+      Real r = sqrt(x*x + y*y + z*z);
+      Real rho = u0_(m, IDN, k, j, i);
+      Real inv_rho = 1.0 / rho;
+      Real vx = u0_(m, IM1, k, j, i) * inv_rho;
+      Real vy = u0_(m, IM2, k, j, i) * inv_rho;
+      Real vz = u0_(m, IM3, k, j, i) * inv_rho;
+      Real E_total = u0_(m, IEN, k, j, i);
+      Real v_sq = vx*vx + vy*vy + vz*vz;
+
+      Real B_sq = 0.0, Bx = 0.0, By = 0.0, Bz = 0.0, v_dot_B = 0.0;
+      if (is_mhd) {
+        Bx = bcc_(m, IBX, k, j, i);
+        By = bcc_(m, IBY, k, j, i);
+        Bz = bcc_(m, IBZ, k, j, i);
+        B_sq = Bx*Bx + By*By + Bz*Bz;
+        v_dot_B = vx*Bx + vy*By + vz*Bz;
+      }
+
+      Real eint = E_total - 0.5*rho*v_sq - 0.5*B_sq;
+      Real H_hydro = 0.5*rho*v_sq + gamma*eint;
+
+      Real v_r = (r > 0.0) ? (vx*x + vy*y + vz*z) / r : 0.0;
+      Real B_r = (r > 0.0) ? (Bx*x + By*y + Bz*z) / r : 0.0;
+
+      Real F_E_r = (H_hydro + B_sq) * v_r - v_dot_B * B_r;
+      dv(m, i_dv, k, j, i) = (v_r < 0.0) ? F_E_r : 0.0;
+    });
+    i_dv += 1;
+  }
+
+  // Vertical mass flux: ρ * v_z * sign(z) (outward = away from midplane)
+  if (name.compare("mdot_vert") == 0) {
+    if (derived_var.extent(4) <= 1)
+      Kokkos::realloc(derived_var, nmb, n_dv, n3, n2, n1);
+    auto dv = derived_var;
+    DvceArray5D<Real> u0_;
+    if (pm->pmb_pack->phydro != nullptr) {
+      u0_ = pm->pmb_pack->phydro->u0;
+    } else if (pm->pmb_pack->pmhd != nullptr) {
+      u0_ = pm->pmb_pack->pmhd->u0;
+    }
+    int nx3 = indcs.nx3;
+    par_for("mdot_vert", DevExeSpace(), 0, (nmb-1), ks, ke, js, je, is, ie,
+    KOKKOS_LAMBDA(int m, int k, int j, int i) {
+      Real z = CellCenterX(k-ks, nx3, size.d_view(m).x3min, size.d_view(m).x3max);
+      Real sign_z = (z >= 0.0) ? 1.0 : -1.0;
+      Real rho = u0_(m, IDN, k, j, i);
+      Real vz = u0_(m, IM3, k, j, i) / rho;
+      dv(m, i_dv, k, j, i) = rho * vz * sign_z;
+    });
+    i_dv += 1;
+  }
+
+  // Vertical mass flux (outward only): ρ * max(v_z * sign(z), 0)
+  if (name.compare("mdot_vert_out") == 0) {
+    if (derived_var.extent(4) <= 1)
+      Kokkos::realloc(derived_var, nmb, n_dv, n3, n2, n1);
+    auto dv = derived_var;
+    DvceArray5D<Real> u0_;
+    if (pm->pmb_pack->phydro != nullptr) {
+      u0_ = pm->pmb_pack->phydro->u0;
+    } else if (pm->pmb_pack->pmhd != nullptr) {
+      u0_ = pm->pmb_pack->pmhd->u0;
+    }
+    int nx3 = indcs.nx3;
+    par_for("mdot_vert_out", DevExeSpace(), 0, (nmb-1), ks, ke, js, je, is, ie,
+    KOKKOS_LAMBDA(int m, int k, int j, int i) {
+      Real z = CellCenterX(k-ks, nx3, size.d_view(m).x3min, size.d_view(m).x3max);
+      Real sign_z = (z >= 0.0) ? 1.0 : -1.0;
+      Real rho = u0_(m, IDN, k, j, i);
+      Real vz = u0_(m, IM3, k, j, i) / rho;
+      Real v_out = vz * sign_z;
+      dv(m, i_dv, k, j, i) = rho * fmax(v_out, 0.0);
+    });
+    i_dv += 1;
+  }
+
+  // Vertical mass flux (inward only): ρ * min(v_z * sign(z), 0)
+  if (name.compare("mdot_vert_in") == 0) {
+    if (derived_var.extent(4) <= 1)
+      Kokkos::realloc(derived_var, nmb, n_dv, n3, n2, n1);
+    auto dv = derived_var;
+    DvceArray5D<Real> u0_;
+    if (pm->pmb_pack->phydro != nullptr) {
+      u0_ = pm->pmb_pack->phydro->u0;
+    } else if (pm->pmb_pack->pmhd != nullptr) {
+      u0_ = pm->pmb_pack->pmhd->u0;
+    }
+    int nx3 = indcs.nx3;
+    par_for("mdot_vert_in", DevExeSpace(), 0, (nmb-1), ks, ke, js, je, is, ie,
+    KOKKOS_LAMBDA(int m, int k, int j, int i) {
+      Real z = CellCenterX(k-ks, nx3, size.d_view(m).x3min, size.d_view(m).x3max);
+      Real sign_z = (z >= 0.0) ? 1.0 : -1.0;
+      Real rho = u0_(m, IDN, k, j, i);
+      Real vz = u0_(m, IM3, k, j, i) / rho;
+      Real v_out = vz * sign_z;
+      dv(m, i_dv, k, j, i) = rho * fmin(v_out, 0.0);
+    });
+    i_dv += 1;
+  }
+
+  // Vertical energy flux: F_E,z * sign(z)
+  if (name.compare("edot_vert") == 0) {
+    if (derived_var.extent(4) <= 1)
+      Kokkos::realloc(derived_var, nmb, n_dv, n3, n2, n1);
+    auto dv = derived_var;
+    bool is_mhd = (pm->pmb_pack->pmhd != nullptr);
+    DvceArray5D<Real> u0_;
+    DvceArray5D<Real> bcc_;
+    Real gamma;
+    if (is_mhd) {
+      u0_ = pm->pmb_pack->pmhd->u0;
+      bcc_ = pm->pmb_pack->pmhd->bcc0;
+      gamma = pm->pmb_pack->pmhd->peos->eos_data.gamma;
+    } else if (pm->pmb_pack->phydro != nullptr) {
+      u0_ = pm->pmb_pack->phydro->u0;
+      gamma = pm->pmb_pack->phydro->peos->eos_data.gamma;
+    }
+    int nx3 = indcs.nx3;
+    par_for("edot_vert", DevExeSpace(), 0, (nmb-1), ks, ke, js, je, is, ie,
+    KOKKOS_LAMBDA(int m, int k, int j, int i) {
+      Real z = CellCenterX(k-ks, nx3, size.d_view(m).x3min, size.d_view(m).x3max);
+      Real sign_z = (z >= 0.0) ? 1.0 : -1.0;
+      Real rho = u0_(m, IDN, k, j, i);
+      Real inv_rho = 1.0 / rho;
+      Real vx = u0_(m, IM1, k, j, i) * inv_rho;
+      Real vy = u0_(m, IM2, k, j, i) * inv_rho;
+      Real vz = u0_(m, IM3, k, j, i) * inv_rho;
+      Real E_total = u0_(m, IEN, k, j, i);
+      Real v_sq = vx*vx + vy*vy + vz*vz;
+
+      Real B_sq = 0.0, Bz = 0.0, v_dot_B = 0.0;
+      if (is_mhd) {
+        Real Bx = bcc_(m, IBX, k, j, i);
+        Real By = bcc_(m, IBY, k, j, i);
+        Bz = bcc_(m, IBZ, k, j, i);
+        B_sq = Bx*Bx + By*By + Bz*Bz;
+        v_dot_B = vx*Bx + vy*By + vz*Bz;
+      }
+
+      Real eint = E_total - 0.5*rho*v_sq - 0.5*B_sq;
+      Real H_hydro = 0.5*rho*v_sq + gamma*eint;
+
+      // F_E,z = (H_hydro + B²) * v_z - (v·B) * B_z
+      Real F_E_z = (H_hydro + B_sq) * vz - v_dot_B * Bz;
+      dv(m, i_dv, k, j, i) = F_E_z * sign_z;
+    });
+    i_dv += 1;
+  }
+
+  // Vertical energy flux (outward only)
+  if (name.compare("edot_vert_out") == 0) {
+    if (derived_var.extent(4) <= 1)
+      Kokkos::realloc(derived_var, nmb, n_dv, n3, n2, n1);
+    auto dv = derived_var;
+    bool is_mhd = (pm->pmb_pack->pmhd != nullptr);
+    DvceArray5D<Real> u0_;
+    DvceArray5D<Real> bcc_;
+    Real gamma;
+    if (is_mhd) {
+      u0_ = pm->pmb_pack->pmhd->u0;
+      bcc_ = pm->pmb_pack->pmhd->bcc0;
+      gamma = pm->pmb_pack->pmhd->peos->eos_data.gamma;
+    } else if (pm->pmb_pack->phydro != nullptr) {
+      u0_ = pm->pmb_pack->phydro->u0;
+      gamma = pm->pmb_pack->phydro->peos->eos_data.gamma;
+    }
+    int nx3 = indcs.nx3;
+    par_for("edot_vert_out", DevExeSpace(), 0, (nmb-1), ks, ke, js, je, is, ie,
+    KOKKOS_LAMBDA(int m, int k, int j, int i) {
+      Real z = CellCenterX(k-ks, nx3, size.d_view(m).x3min, size.d_view(m).x3max);
+      Real sign_z = (z >= 0.0) ? 1.0 : -1.0;
+      Real rho = u0_(m, IDN, k, j, i);
+      Real inv_rho = 1.0 / rho;
+      Real vx = u0_(m, IM1, k, j, i) * inv_rho;
+      Real vy = u0_(m, IM2, k, j, i) * inv_rho;
+      Real vz = u0_(m, IM3, k, j, i) * inv_rho;
+      Real E_total = u0_(m, IEN, k, j, i);
+      Real v_sq = vx*vx + vy*vy + vz*vz;
+
+      Real B_sq = 0.0, Bz = 0.0, v_dot_B = 0.0;
+      if (is_mhd) {
+        Real Bx = bcc_(m, IBX, k, j, i);
+        Real By = bcc_(m, IBY, k, j, i);
+        Bz = bcc_(m, IBZ, k, j, i);
+        B_sq = Bx*Bx + By*By + Bz*Bz;
+        v_dot_B = vx*Bx + vy*By + vz*Bz;
+      }
+
+      Real eint = E_total - 0.5*rho*v_sq - 0.5*B_sq;
+      Real H_hydro = 0.5*rho*v_sq + gamma*eint;
+
+      Real F_E_z = (H_hydro + B_sq) * vz - v_dot_B * Bz;
+      Real v_out = vz * sign_z;
+      dv(m, i_dv, k, j, i) = (v_out > 0.0) ? F_E_z * sign_z : 0.0;
+    });
+    i_dv += 1;
+  }
+
+  // Vertical energy flux (inward only)
+  if (name.compare("edot_vert_in") == 0) {
+    if (derived_var.extent(4) <= 1)
+      Kokkos::realloc(derived_var, nmb, n_dv, n3, n2, n1);
+    auto dv = derived_var;
+    bool is_mhd = (pm->pmb_pack->pmhd != nullptr);
+    DvceArray5D<Real> u0_;
+    DvceArray5D<Real> bcc_;
+    Real gamma;
+    if (is_mhd) {
+      u0_ = pm->pmb_pack->pmhd->u0;
+      bcc_ = pm->pmb_pack->pmhd->bcc0;
+      gamma = pm->pmb_pack->pmhd->peos->eos_data.gamma;
+    } else if (pm->pmb_pack->phydro != nullptr) {
+      u0_ = pm->pmb_pack->phydro->u0;
+      gamma = pm->pmb_pack->phydro->peos->eos_data.gamma;
+    }
+    int nx3 = indcs.nx3;
+    par_for("edot_vert_in", DevExeSpace(), 0, (nmb-1), ks, ke, js, je, is, ie,
+    KOKKOS_LAMBDA(int m, int k, int j, int i) {
+      Real z = CellCenterX(k-ks, nx3, size.d_view(m).x3min, size.d_view(m).x3max);
+      Real sign_z = (z >= 0.0) ? 1.0 : -1.0;
+      Real rho = u0_(m, IDN, k, j, i);
+      Real inv_rho = 1.0 / rho;
+      Real vx = u0_(m, IM1, k, j, i) * inv_rho;
+      Real vy = u0_(m, IM2, k, j, i) * inv_rho;
+      Real vz = u0_(m, IM3, k, j, i) * inv_rho;
+      Real E_total = u0_(m, IEN, k, j, i);
+      Real v_sq = vx*vx + vy*vy + vz*vz;
+
+      Real B_sq = 0.0, Bz = 0.0, v_dot_B = 0.0;
+      if (is_mhd) {
+        Real Bx = bcc_(m, IBX, k, j, i);
+        Real By = bcc_(m, IBY, k, j, i);
+        Bz = bcc_(m, IBZ, k, j, i);
+        B_sq = Bx*Bx + By*By + Bz*Bz;
+        v_dot_B = vx*Bx + vy*By + vz*Bz;
+      }
+
+      Real eint = E_total - 0.5*rho*v_sq - 0.5*B_sq;
+      Real H_hydro = 0.5*rho*v_sq + gamma*eint;
+
+      Real F_E_z = (H_hydro + B_sq) * vz - v_dot_B * Bz;
+      Real v_out = vz * sign_z;
+      dv(m, i_dv, k, j, i) = (v_out < 0.0) ? F_E_z * sign_z : 0.0;
+    });
+    i_dv += 1;
+  }
+
   // Particle density binned to mesh.
   if (name.compare("prtcl_d") == 0) {
     Kokkos::realloc(derived_var, nmb, 1, n3, n2, n1);

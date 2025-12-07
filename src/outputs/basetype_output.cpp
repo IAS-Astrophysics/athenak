@@ -745,6 +745,125 @@ BaseTypeOutput::BaseTypeOutput(ParameterInput *pin, Mesh *pm, OutputParameters o
     outvars.emplace_back("pdens",0,&(derived_var));
   }
 
+  // Coordinate variables for PDF binning (Cartesian)
+  if (out_params.variable.compare("coord_x") == 0) {
+    out_params.contains_derived = true;
+    out_params.n_derived += 1;
+    outvars.emplace_back("coord_x", out_params.i_derived, &derived_var);
+  }
+  if (out_params.variable.compare("coord_y") == 0) {
+    out_params.contains_derived = true;
+    out_params.n_derived += 1;
+    outvars.emplace_back("coord_y", out_params.i_derived, &derived_var);
+  }
+  if (out_params.variable.compare("coord_z") == 0) {
+    out_params.contains_derived = true;
+    out_params.n_derived += 1;
+    outvars.emplace_back("coord_z", out_params.i_derived, &derived_var);
+  }
+
+  // Coordinate variables for PDF binning (spherical)
+  if (out_params.variable.compare("coord_r") == 0) {
+    out_params.contains_derived = true;
+    out_params.n_derived += 1;
+    outvars.emplace_back("coord_r", out_params.i_derived, &derived_var);
+  }
+  if (out_params.variable.compare("coord_theta") == 0) {
+    out_params.contains_derived = true;
+    out_params.n_derived += 1;
+    outvars.emplace_back("coord_theta", out_params.i_derived, &derived_var);
+  }
+  if (out_params.variable.compare("coord_phi") == 0) {
+    out_params.contains_derived = true;
+    out_params.n_derived += 1;
+    outvars.emplace_back("coord_phi", out_params.i_derived, &derived_var);
+  }
+
+  // Coordinate variables for PDF binning (cylindrical)
+  if (out_params.variable.compare("coord_cyl_R") == 0) {
+    out_params.contains_derived = true;
+    out_params.n_derived += 1;
+    outvars.emplace_back("coord_cyl_R", out_params.i_derived, &derived_var);
+  }
+  if (out_params.variable.compare("coord_cyl_phi") == 0) {
+    out_params.contains_derived = true;
+    out_params.n_derived += 1;
+    outvars.emplace_back("coord_cyl_phi", out_params.i_derived, &derived_var);
+  }
+  if (out_params.variable.compare("coord_cyl_z") == 0) {
+    out_params.contains_derived = true;
+    out_params.n_derived += 1;
+    outvars.emplace_back("coord_cyl_z", out_params.i_derived, &derived_var);
+  }
+
+  // Spherical mass flux
+  if (out_params.variable.compare("mdot_sph") == 0) {
+    out_params.contains_derived = true;
+    out_params.n_derived += 1;
+    outvars.emplace_back("mdot_sph", out_params.i_derived, &derived_var);
+  }
+  if (out_params.variable.compare("mdot_sph_out") == 0) {
+    out_params.contains_derived = true;
+    out_params.n_derived += 1;
+    outvars.emplace_back("mdot_sph_out", out_params.i_derived, &derived_var);
+  }
+  if (out_params.variable.compare("mdot_sph_in") == 0) {
+    out_params.contains_derived = true;
+    out_params.n_derived += 1;
+    outvars.emplace_back("mdot_sph_in", out_params.i_derived, &derived_var);
+  }
+
+  // Spherical energy flux
+  if (out_params.variable.compare("edot_sph") == 0) {
+    out_params.contains_derived = true;
+    out_params.n_derived += 1;
+    outvars.emplace_back("edot_sph", out_params.i_derived, &derived_var);
+  }
+  if (out_params.variable.compare("edot_sph_out") == 0) {
+    out_params.contains_derived = true;
+    out_params.n_derived += 1;
+    outvars.emplace_back("edot_sph_out", out_params.i_derived, &derived_var);
+  }
+  if (out_params.variable.compare("edot_sph_in") == 0) {
+    out_params.contains_derived = true;
+    out_params.n_derived += 1;
+    outvars.emplace_back("edot_sph_in", out_params.i_derived, &derived_var);
+  }
+
+  // Vertical mass flux
+  if (out_params.variable.compare("mdot_vert") == 0) {
+    out_params.contains_derived = true;
+    out_params.n_derived += 1;
+    outvars.emplace_back("mdot_vert", out_params.i_derived, &derived_var);
+  }
+  if (out_params.variable.compare("mdot_vert_out") == 0) {
+    out_params.contains_derived = true;
+    out_params.n_derived += 1;
+    outvars.emplace_back("mdot_vert_out", out_params.i_derived, &derived_var);
+  }
+  if (out_params.variable.compare("mdot_vert_in") == 0) {
+    out_params.contains_derived = true;
+    out_params.n_derived += 1;
+    outvars.emplace_back("mdot_vert_in", out_params.i_derived, &derived_var);
+  }
+
+  // Vertical energy flux
+  if (out_params.variable.compare("edot_vert") == 0) {
+    out_params.contains_derived = true;
+    out_params.n_derived += 1;
+    outvars.emplace_back("edot_vert", out_params.i_derived, &derived_var);
+  }
+  if (out_params.variable.compare("edot_vert_out") == 0) {
+    out_params.contains_derived = true;
+    out_params.n_derived += 1;
+    outvars.emplace_back("edot_vert_out", out_params.i_derived, &derived_var);
+  }
+  if (out_params.variable.compare("edot_vert_in") == 0) {
+    out_params.contains_derived = true;
+    out_params.n_derived += 1;
+    outvars.emplace_back("edot_vert_in", out_params.i_derived, &derived_var);
+  }
+
   // initialize vector containing number of output MBs per rank
   noutmbs.assign(global_variable::nranks, 0);
 }
