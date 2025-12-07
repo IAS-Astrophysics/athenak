@@ -527,9 +527,9 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
 //         v_sq_bar = {vx}^2 + {vy}^2 + {vz}^2
 //         B_sq_bar = <Bx>^2 + <By>^2 + <Bz>^2
 //         v_dot_B  = {vx}*<Bx> + {vy}*<By> + {vz}*<Bz>
-//         H_hydro  = 0.5*<rho>*v_sq_bar + (gamma * P_bar / (gamma-1)) * (gamma-1)
+//         enthalpy_plus_ke = 0.5*<rho>*v_sq_bar + gamma * P_bar / (gamma-1)
 //                  = 0.5*<rho>*v_sq_bar + gamma * P_bar
-//         F_res_i  = (H_hydro + B_sq_bar) * {v_i} - (v_dot_B) * <B_i>
+//         F_res_i  = (enthalpy_plus_ke + B_sq_bar) * {v_i} - (v_dot_B) * <B_i>
 //      3. Subtract: Q_sgs_i = dv[32+i] - F_res_i
 //
 //    Index Map:
@@ -635,16 +635,18 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
       dv(m,30,k,j,i) = vy*eint;
       dv(m,31,k,j,i) = vz*eint;
 
-      Real H_hydro = 0.5*rho*v_sq + gamma*eint;
+      // Hydro enthalpy density: h = u + P. For ideal gas P = (γ-1)*u, so h = γ*u.
+      // Total hydro energy flux term = KE + enthalpy = 0.5*ρ*v² + γ*eint
+      Real enthalpy_plus_ke = 0.5*rho*v_sq + gamma*eint;
 
-      // F_x = (H_hydro + B^2)*v_x - (v.B)*B_x
-      dv(m,32,k,j,i) = (H_hydro + B_sq)*vx - v_dot_B*Bx;
+      // F_x = (enthalpy_plus_ke + B²)*v_x - (v·B)*B_x
+      dv(m,32,k,j,i) = (enthalpy_plus_ke + B_sq)*vx - v_dot_B*Bx;
 
-      // F_y = (H_hydro + B^2)*v_y - (v.B)*B_y
-      dv(m,33,k,j,i) = (H_hydro + B_sq)*vy - v_dot_B*By;
+      // F_y = (enthalpy_plus_ke + B²)*v_y - (v·B)*B_y
+      dv(m,33,k,j,i) = (enthalpy_plus_ke + B_sq)*vy - v_dot_B*By;
 
-      // F_z = (H_hydro + B^2)*v_z - (v.B)*B_z
-      dv(m,34,k,j,i) = (H_hydro + B_sq)*vz - v_dot_B*Bz;
+      // F_z = (enthalpy_plus_ke + B²)*v_z - (v·B)*B_z
+      dv(m,34,k,j,i) = (enthalpy_plus_ke + B_sq)*vz - v_dot_B*Bz;
     });
   }
 
@@ -690,13 +692,13 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
       dv(m,9,k,j,i) = my*vz;
       dv(m,10,k,j,i) = mz*vz;
 
-      // Total Hydro Energy Flux
-      // F_E = (0.5*rho*v^2 + gamma*eint) * v
-      Real H_hydro = 0.5*rho*v_sq + gamma*eint;
+      // Total Hydro Energy Flux: F_E = (KE + enthalpy) * v
+      // Enthalpy h = u + P = γ*u for ideal gas, so KE + h = 0.5*ρ*v² + γ*eint
+      Real enthalpy_plus_ke = 0.5*rho*v_sq + gamma*eint;
 
-      dv(m,11,k,j,i) = H_hydro * vx;
-      dv(m,12,k,j,i) = H_hydro * vy;
-      dv(m,13,k,j,i) = H_hydro * vz;
+      dv(m,11,k,j,i) = enthalpy_plus_ke * vx;
+      dv(m,12,k,j,i) = enthalpy_plus_ke * vy;
+      dv(m,13,k,j,i) = enthalpy_plus_ke * vz;
     });
   }
 
@@ -1450,8 +1452,8 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
   // Mass and energy flux derived variables for radial/vertical profile analysis
   // Spherical: v_r = (vx*x + vy*y + vz*z) / r, B_r = (Bx*x + By*y + Bz*z) / r
   // Vertical: outward direction = v_z * sign(z)
-  // Energy flux: F_E,r = (H_hydro + B²) * v_r - (v·B) * B_r
-  //   where H_hydro = 0.5*ρ*v² + γ*eint, eint = E - 0.5*ρ*v² - 0.5*B²
+  // Energy flux: F_E,r = (enthalpy_plus_ke + B²) * v_r - (v·B) * B_r
+  //   where enthalpy_plus_ke = 0.5*ρ*v² + γ*eint (KE + enthalpy), eint = E - 0.5*ρ*v² - 0.5*B²
   // ==========================================================================================
 
   // Spherical radial mass flux: ρ * v_r
@@ -1544,7 +1546,7 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
     i_dv += 1;
   }
 
-  // Spherical radial energy flux: F_E,r = (H_hydro + B²) * v_r - (v·B) * B_r
+  // Spherical radial energy flux: F_E,r = (enthalpy_plus_ke + B²) * v_r - (v·B) * B_r
   if (name.compare("edot_sph") == 0) {
     if (derived_var.extent(4) <= 1)
       Kokkos::realloc(derived_var, nmb, n_dv, n3, n2, n1);
@@ -1589,14 +1591,14 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
 
       // Internal energy: eint = E - 0.5*ρ*v² - 0.5*B²
       Real eint = E_total - 0.5*rho*v_sq - 0.5*B_sq;
-      // Hydro enthalpy: H_hydro = 0.5*ρ*v² + γ*eint
-      Real H_hydro = 0.5*rho*v_sq + gamma*eint;
+      // Enthalpy h = u + P = γ*u for ideal gas. KE + h = 0.5*ρ*v² + γ*eint
+      Real enthalpy_plus_ke = 0.5*rho*v_sq + gamma*eint;
 
       Real v_r = (r > 0.0) ? (vx*x + vy*y + vz*z) / r : 0.0;
       Real B_r = (r > 0.0) ? (Bx*x + By*y + Bz*z) / r : 0.0;
 
-      // Energy flux: F_E,r = (H_hydro + B²) * v_r - (v·B) * B_r
-      dv(m, i_dv, k, j, i) = (H_hydro + B_sq) * v_r - v_dot_B * B_r;
+      // Energy flux: F_E,r = (enthalpy_plus_ke + B²) * v_r - (v·B) * B_r
+      dv(m, i_dv, k, j, i) = (enthalpy_plus_ke + B_sq) * v_r - v_dot_B * B_r;
     });
     i_dv += 1;
   }
@@ -1645,12 +1647,12 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
       }
 
       Real eint = E_total - 0.5*rho*v_sq - 0.5*B_sq;
-      Real H_hydro = 0.5*rho*v_sq + gamma*eint;
+      Real enthalpy_plus_ke = 0.5*rho*v_sq + gamma*eint;
 
       Real v_r = (r > 0.0) ? (vx*x + vy*y + vz*z) / r : 0.0;
       Real B_r = (r > 0.0) ? (Bx*x + By*y + Bz*z) / r : 0.0;
 
-      Real F_E_r = (H_hydro + B_sq) * v_r - v_dot_B * B_r;
+      Real F_E_r = (enthalpy_plus_ke + B_sq) * v_r - v_dot_B * B_r;
       dv(m, i_dv, k, j, i) = (v_r > 0.0) ? F_E_r : 0.0;
     });
     i_dv += 1;
@@ -1700,12 +1702,12 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
       }
 
       Real eint = E_total - 0.5*rho*v_sq - 0.5*B_sq;
-      Real H_hydro = 0.5*rho*v_sq + gamma*eint;
+      Real enthalpy_plus_ke = 0.5*rho*v_sq + gamma*eint;
 
       Real v_r = (r > 0.0) ? (vx*x + vy*y + vz*z) / r : 0.0;
       Real B_r = (r > 0.0) ? (Bx*x + By*y + Bz*z) / r : 0.0;
 
-      Real F_E_r = (H_hydro + B_sq) * v_r - v_dot_B * B_r;
+      Real F_E_r = (enthalpy_plus_ke + B_sq) * v_r - v_dot_B * B_r;
       dv(m, i_dv, k, j, i) = (v_r < 0.0) ? F_E_r : 0.0;
     });
     i_dv += 1;
@@ -1822,10 +1824,10 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
       }
 
       Real eint = E_total - 0.5*rho*v_sq - 0.5*B_sq;
-      Real H_hydro = 0.5*rho*v_sq + gamma*eint;
+      Real enthalpy_plus_ke = 0.5*rho*v_sq + gamma*eint;
 
-      // F_E,z = (H_hydro + B²) * v_z - (v·B) * B_z
-      Real F_E_z = (H_hydro + B_sq) * vz - v_dot_B * Bz;
+      // F_E,z = (enthalpy_plus_ke + B²) * v_z - (v·B) * B_z
+      Real F_E_z = (enthalpy_plus_ke + B_sq) * vz - v_dot_B * Bz;
       dv(m, i_dv, k, j, i) = F_E_z * sign_z;
     });
     i_dv += 1;
@@ -1871,9 +1873,9 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
       }
 
       Real eint = E_total - 0.5*rho*v_sq - 0.5*B_sq;
-      Real H_hydro = 0.5*rho*v_sq + gamma*eint;
+      Real enthalpy_plus_ke = 0.5*rho*v_sq + gamma*eint;
 
-      Real F_E_z = (H_hydro + B_sq) * vz - v_dot_B * Bz;
+      Real F_E_z = (enthalpy_plus_ke + B_sq) * vz - v_dot_B * Bz;
       Real v_out = vz * sign_z;
       dv(m, i_dv, k, j, i) = (v_out > 0.0) ? F_E_z * sign_z : 0.0;
     });
@@ -1920,9 +1922,9 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
       }
 
       Real eint = E_total - 0.5*rho*v_sq - 0.5*B_sq;
-      Real H_hydro = 0.5*rho*v_sq + gamma*eint;
+      Real enthalpy_plus_ke = 0.5*rho*v_sq + gamma*eint;
 
-      Real F_E_z = (H_hydro + B_sq) * vz - v_dot_B * Bz;
+      Real F_E_z = (enthalpy_plus_ke + B_sq) * vz - v_dot_B * Bz;
       Real v_out = vz * sign_z;
       dv(m, i_dv, k, j, i) = (v_out < 0.0) ? F_E_z * sign_z : 0.0;
     });
