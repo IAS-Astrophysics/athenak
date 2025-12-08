@@ -113,7 +113,6 @@ void ProblemGenerator::RadiationM1SingleZoneTest_(ParameterInput *pin,
   
   Real rho_code = rho;
   Real nb = rho / mb;
-  Real P = eos.GetPressure(nb, temp, &ye);
   Real w_lorentz = 1. / Kokkos::sqrt(1. - vx * vx - vy * vy - vz * vz);
   
   // initialize ADM variables
@@ -135,11 +134,13 @@ void ProblemGenerator::RadiationM1SingleZoneTest_(ParameterInput *pin,
   par_for(
       "pgen_singlezone", DevExeSpace(), 0, nmb1, 0, (n3 - 1), 0, (n2 - 1), 0, (n1 - 1),
       KOKKOS_LAMBDA(int m, int k, int j, int i) {
+        Real ye_ = ye;
+
         w0_(m, IDN, k, j, i) = rho_code;
         w0_(m, IVX, k, j, i) = vx * w_lorentz;
         w0_(m, IVY, k, j, i) = vy * w_lorentz;
         w0_(m, IVZ, k, j, i) = vz * w_lorentz;
-        w0_(m, IPR, k, j, i) = P;
+        w0_(m, IPR, k, j, i) = eos.GetPressure(nb, temp, &ye_);
         w0_(m, IYF, k, j, i) = ye;
 
         for (int nuidx = 0; nuidx < nspecies_; ++nuidx) {
