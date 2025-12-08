@@ -17,7 +17,7 @@ cmake -B $build -DAthena_ENABLE_MPI=ON -DKokkos_ARCH_ZEN3=ON -DKokkos_ARCH_VEGA9
    -DKokkos_ENABLE_HIP=ON -DCMAKE_CXX_COMPILER=CC \
    -DCMAKE_EXE_LINKER_FLAGS="-L${ROCM_PATH}/lib -lamdhip64" \
    -DCMAKE_CXX_FLAGS="-I${ROCM_PATH}/include" \
-   -DPROBLEM=turbulent_box #cgm_cooling_flow_amr_metals
+   -DPROBLEM=cgm_cooling_flow_full
 
 cd $build
 #make clean

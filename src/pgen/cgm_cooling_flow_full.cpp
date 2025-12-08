@@ -11,6 +11,7 @@
 #include "units/units.hpp"
 #include "utils/profile_reader.hpp"
 #include "utils/sn_scheduler.hpp"
+#include "utils/random.hpp"
 #include "particles/particles.hpp"
 
 //===========================================================================//
@@ -201,6 +202,97 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
 	      << disk_profile_file << std::endl;
   }
 
+  // Generate the initial turbulent field
+  int nlow   = pin->GetOrAddInteger("problem", "cgm_turb_nlow", 1);
+  int nhigh  = pin->GetOrAddInteger("problem", "cgm_turb_nhigh", 8);
+  Real expo  = pin->GetOrAddReal("problem", "cgm_turb_expo", 5.0/3.0);
+  Real v_rms = pin->GetOrAddReal("problem", "cgm_turb_rms", 0.1);
+  Real cgm_turb_xscale = pin->GetOrAddReal("problem", "cgm_turb_xscale", 0.01);
+  Real cgm_turb_yscale = pin->GetOrAddReal("problem", "cgm_turb_yscale", 0.01);
+  Real cgm_turb_zscale = pin->GetOrAddReal("problem", "cgm_turb_zscale", 0.01);
+
+  // Initialize random state
+  RNG_State rstate;
+  rstate.idum = -1;
+
+  // Domain size
+  Real lx = pmy_mesh_->mesh_size.x1max - pmy_mesh_->mesh_size.x1min;
+  Real ly = pmy_mesh_->mesh_size.x2max - pmy_mesh_->mesh_size.x2min;
+  Real lz = pmy_mesh_->mesh_size.x3max - pmy_mesh_->mesh_size.x3min;
+  Real dkx = 2.0*M_PI/lx;
+  Real dky = 2.0*M_PI/ly;
+  Real dkz = 2.0*M_PI/lz;
+
+  // Count modes
+  int nmodes = 0;
+  for (int nkx = -nhigh; nkx <= nhigh; nkx++) {
+    for (int nky = -nhigh; nky <= nhigh; nky++) {
+      for (int nkz = -nhigh; nkz <= nhigh; nkz++) {
+        if (nkx == 0 && nky == 0 && nkz == 0) continue;
+        int nsqr = nkx*nkx + nky*nky + nkz*nkz;
+        if (nsqr >= nlow*nlow && nsqr <= nhigh*nhigh) {
+          nmodes++;
+        }
+  }}}
+
+  // Allocate arrays
+  DualArray2D<Real> k_modes, aka, akb;
+  Kokkos::realloc(k_modes, 3, nmodes);
+  Kokkos::realloc(aka, 3, nmodes);
+  Kokkos::realloc(akb, 3, nmodes);
+
+  // Generate modes
+  int nmode = 0;
+  Real total_energy = 0.0;
+  for (int nkx = -nhigh; nkx <= nhigh; nkx++) {
+    for (int nky = -nhigh; nky <= nhigh; nky++) {
+      for (int nkz = -nhigh; nkz <= nhigh; nkz++) {
+        if (nkx == 0 && nky == 0 && nkz == 0) continue;
+        int nsqr = nkx*nkx + nky*nky + nkz*nkz;
+        if (nsqr >= nlow*nlow && nsqr <= nhigh*nhigh) {
+          Real kx = dkx*nkx, ky = dky*nky, kz = dkz*nkz;
+          Real kiso = sqrt(kx*kx + ky*ky + kz*kz);
+
+          k_modes.h_view(0, nmode) = kx;
+          k_modes.h_view(1, nmode) = ky;
+          k_modes.h_view(2, nmode) = kz;
+
+          Real norm = 1.0/pow(kiso, (expo+2.0)/2.0);
+
+          Real aval[3], bval[3];
+          for (int dir = 0; dir < 3; dir++) {
+            aval[dir] = norm * RanGaussianSt(&rstate);
+            bval[dir] = norm * RanGaussianSt(&rstate);
+          }
+
+          Real k_dirs[3] = {kx, ky, kz};
+          Real ka = kx*aval[0] + ky*aval[1] + kz*aval[2];
+          Real kb = kx*bval[0] + ky*bval[1] + kz*bval[2];
+
+          for (int dir = 0; dir < 3; dir++) {
+            aval[dir] -= k_dirs[dir]*ka/(kiso*kiso);
+            bval[dir] -= k_dirs[dir]*kb/(kiso*kiso);
+
+            aka.h_view(dir,nmode) = aval[dir];
+            akb.h_view(dir,nmode) = bval[dir];
+
+            total_energy += 0.5*(aval[dir]*aval[dir] + bval[dir]*bval[dir]);
+          }
+          nmode++;
+        }
+      }
+    }
+  }
+
+  Real v_norm = v_rms/sqrt(total_energy);
+
+  k_modes.template modify<HostMemSpace>();
+  k_modes.template sync<DevExeSpace>();
+  aka.template modify<HostMemSpace>();
+  aka.template sync<DevExeSpace>();
+  akb.template modify<HostMemSpace>();
+  akb.template sync<DevExeSpace>();
+
   // Capture variables for kernel
   int &is = indcs.is; int &ie = indcs.ie;
   int &js = indcs.js; int &je = indcs.je;
@@ -262,6 +354,39 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     // uniformly set metallicity
     u0(m, nhydro, k, j, i) = Z_ * Zsol * u0(m, IDN, k, j, i);
 
+    // Compute turbulent velocities by summing Fourier modes
+    Real vx = 0.0, vy = 0.0, vz = 0.0;
+    for (int n = 0; n < nmodes; n++) {
+      Real phase = k_modes.d_view(0,n)*x1v 
+	         + k_modes.d_view(1,n)*x2v 
+	         + k_modes.d_view(2,n)*x3v;
+      Real cos_phase = cos(phase);
+      Real sin_phase = sin(phase);
+
+      vx += aka.d_view(0,n)*cos_phase - akb.d_view(0,n)*sin_phase;
+      vy += aka.d_view(1,n)*cos_phase - akb.d_view(1,n)*sin_phase;
+      vz += aka.d_view(2,n)*cos_phase - akb.d_view(2,n)*sin_phase;
+    }
+
+    // Attenuate in the center by 1 - Gaussian
+    Real att = 1.0 - exp(-0.5 * ( SQR(x1v)/SQR(cgm_turb_xscale)
+                                + SQR(x2v)/SQR(cgm_turb_yscale)
+                                + SQR(x3v)/SQR(cgm_turb_zscale)));
+
+    // Normalize to desired RMS velocity
+    vx *= v_norm*att; vy *= v_norm*att; vz *= v_norm*att;
+
+    // Add to conserved variables
+    Real rho = u0(m,IDN,k,j,i);
+    Real rho_v1 = u0(m,IM1,k,j,i);
+    Real rho_v2 = u0(m,IM2,k,j,i);
+    Real rho_v3 = u0(m,IM3,k,j,i);
+
+    u0(m,IEN,k,j,i) += 0.5 * rho * (SQR(vx) + SQR(vy) + SQR(vz));
+    u0(m,IEN,k,j,i) += rho_v1 * vx + rho_v2 * vy + rho_v3 * vz;
+    u0(m,IM1,k,j,i) += rho * vx;
+    u0(m,IM2,k,j,i) += rho * vy;
+    u0(m,IM3,k,j,i) += rho * vz;
   });
 
   if (global_variable::my_rank==0) {
@@ -329,7 +454,7 @@ void SetRotation(const DvceArray5D<Real> &u0,
   Real R = sqrt(x1v*x1v + x2v*x2v);
   
   // Calculate azimuthal velocity
-  Real v1 = 0.0, v2 = 0.0, v3 = 0.0;
+  Real vx = 0.0, vy = 0.0, vz = 0.0;
   constexpr Real tiny = 1.0e-20;
   if (r > tiny and R > tiny) {  // Avoid division by zero
     Real v_phi = 0.0;
@@ -343,17 +468,22 @@ void SetRotation(const DvceArray5D<Real> &u0,
     }
     
     // Calculate azimuthal velocity components
-    v1 = -v_phi * x2v / R;
-    v2 = v_phi * x1v / R;
-    v3 = 0.0;
+    vx = -v_phi * x2v / R;
+    vy = v_phi * x1v / R;
+    vz = 0.0;
   }
   
   // Set state variables
-  Real rho = u0(m, IDN, k, j, i);
-  u0(m, IM1, k, j, i) += rho * v1;
-  u0(m, IM2, k, j, i) += rho * v2;
-  u0(m, IM3, k, j, i) += rho * v3;
-  u0(m, IEN, k, j, i) += 0.5 * rho * (SQR(v1) + SQR(v2) + SQR(v3));
+  Real rho = u0(m,IDN,k,j,i);
+  Real rho_v1 = u0(m,IM1,k,j,i);
+  Real rho_v2 = u0(m,IM2,k,j,i);
+  Real rho_v3 = u0(m,IM3,k,j,i);
+
+  u0(m,IEN,k,j,i) += 0.5 * rho * (SQR(vx) + SQR(vy) + SQR(vz));
+  u0(m,IEN,k,j,i) += rho_v1 * vx + rho_v2 * vy + rho_v3 * vz;
+  u0(m,IM1,k,j,i) += rho * vx;
+  u0(m,IM2,k,j,i) += rho * vy;
+  u0(m,IM3,k,j,i) += rho * vz;
 }
 
 KOKKOS_INLINE_FUNCTION
@@ -637,9 +767,9 @@ void SNSource(Mesh* pm, const Real bdt) {
               
         // Inject energy if within injection radius
         if (r <= dr) {
-	  //u0(m,IDN,k,j,i) += m_ej_;
-          //u0(m,IEN,k,j,i) += e_sn_;
-	  //u0(m, nhydro, k, j, i) += Z_ej_ * m_ej_;
+	  u0(m,IDN,k,j,i) += m_ej_;
+          u0(m,IEN,k,j,i) += e_sn_;
+	  u0(m, nhydro, k, j, i) += Z_ej_ * m_ej_;
 	}
       }
 
@@ -803,6 +933,7 @@ void RefinementCondition(MeshBlockPack* pmbp) {
   const int nkji = nx3 * nx2 * nx1;
   const int nji  = nx2 * nx1;
   auto &u0       = pmbp->phydro->u0;
+  auto &w0       = pmbp->phydro->w0;
 
   auto &ddens_thresh = ddens_threshold;
 
@@ -819,11 +950,16 @@ void RefinementCondition(MeshBlockPack* pmbp) {
       k += ks;
 
       // Calculate density gradient
-      Real d2 = SQR(u0(m,IDN,k,j,i+1) - u0(m,IDN,k,j,i-1));
-      if (multi_d) {d2 += SQR(u0(m,IDN,k,j+1,i) - u0(m,IDN,k,j-1,i));}
-      if (three_d) {d2 += SQR(u0(m,IDN,k+1,j,i) - u0(m,IDN,k-1,j,i));}
+      Real d2 = (SQR(u0(m,IDN,k,j,i+1) - u0(m,IDN,k,j,i-1))
+               + SQR(u0(m,IDN,k,j+1,i) - u0(m,IDN,k,j-1,i))
+               + SQR(u0(m,IDN,k+1,j,i) - u0(m,IDN,k-1,j,i)));
       ddmax = fmax((sqrt(d2)/u0(m,IDN,k,j,i)), ddmax);
 
+      // Calculate pressure gradient
+      Real p2 = (SQR(w0(m,IEN,k,j,i+1) - w0(m,IEN,k,j,i-1))
+               + SQR(w0(m,IEN,k,j+1,i) - w0(m,IEN,k,j-1,i))
+	       + SQR(w0(m,IEN,k+1,j,i) - w0(m,IEN,k-1,j,i)));
+      ddmax = fmax((sqrt(p2)/w0(m,IEN,k,j,i)), ddmax);
     },Kokkos::Max<Real>(team_ddmax));
 
     if (team_ddmax > ddens_thresh) {refine_flag.d_view(m+mbs) = 1;}

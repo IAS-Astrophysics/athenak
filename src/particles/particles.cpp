@@ -189,6 +189,9 @@ Particles::Particles(MeshBlockPack *ppack, ParameterInput *pin) :
       int nrdata_ = nrdata;
       Real unit_time = pmy_pack->punit->time_cgs();
 
+      // Get global delay time for SN
+      Real delay = pin->GetOrAddReal("SN", "delay", 0.0);
+
       // Initialize particles
       par_for("star_par", DevExeSpace(), 0, nprtcl_thispack-1,
       KOKKOS_LAMBDA(const int p) {   
@@ -201,7 +204,7 @@ Particles::Particles(MeshBlockPack *ppack, ParameterInput *pin) :
         pr(IPVX,p) = pos_data(3, p);
         pr(IPVY,p) = pos_data(4, p);
         pr(IPVZ,p) = pos_data(5, p);
-        pr(6, p) = pos_data(6, p); // time of creation of star particle
+        pr(6, p) = pos_data(6, p) + delay; // time of creation of star particle
         pr(7, p) = pos_data(7, p); // mass of star particle
 	pr(8, p) = GetNthSNTime(pr(7,p), pr(6,p), unit_time, 0); // time of next SN
 

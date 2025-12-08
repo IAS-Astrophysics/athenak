@@ -38,7 +38,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   EOS_Data &eos = pmbp->phydro->peos->eos_data;
   Real gm1 = eos.gamma - 1.0;
 
-  Real den  = 2.0;
+  Real den  = 1.0;
   Real temp = 1.0;
 
   // Set initial conditions
