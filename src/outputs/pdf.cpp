@@ -70,9 +70,22 @@ PDFOutput::PDFOutput(ParameterInput *pin, Mesh *pm, OutputParameters op) :
 void PDFOutput::LoadOutputData(Mesh *pm) {
   // Compute derived variables for all PDF dimensions
   if (out_params.contains_derived) {
+    // Reset derived variable index before computing to ensure proper indexing.
+    out_params.i_derived = 0;
     for (int d = 0; d < out_params.pdf_ndim; ++d) {
       ComputeDerivedVariable(out_params.pdf_variables[d], pm);
     }
+    if (out_params.pdf_weight.compare("variable") == 0 &&
+        !out_params.pdf_weight_variable.empty()) {
+      ComputeDerivedVariable(out_params.pdf_weight_variable, pm);
+    }
+  }
+
+  int weight_mode = 0;  // 0=volume, 1=mass, 2=variable
+  if (out_params.pdf_weight.compare("mass") == 0) {
+    weight_mode = 1;
+  } else if (out_params.pdf_weight.compare("variable") == 0) {
+    weight_mode = 2;
   }
 
   // Get physics pointer for mass weighting
@@ -107,14 +120,18 @@ void PDFOutput::LoadOutputData(Mesh *pm) {
   int nx2 = indcs.nx2 + 2*indcs.ng;
   int nx3 = indcs.nx3 + 2*indcs.ng;
 
-  // Copy variable data to device array
+  // Copy MeshBlock data from host to device
+  // Use explicit ranges for ALL dimensions because:
+  // 1. Physics arrays may be allocated with more meshblocks than nmb_thispack
+  // 2. Need to ensure source and target shapes match exactly for deep_copy
   DvceArray5D<Real> outvars_device("outvars_device", outvars.size(), nmb, nx3, nx2, nx1);
   for (std::size_t i = 0; i < outvars.size(); ++i) {
-    auto d_slice = Kokkos::subview(*(outvars[i].data_ptr),
-        Kokkos::ALL(), outvars[i].data_index, Kokkos::ALL(), Kokkos::ALL(), Kokkos::ALL());
-    auto d_target_slice = Kokkos::subview(outvars_device, i,
-        Kokkos::ALL(), Kokkos::ALL(), Kokkos::ALL(), Kokkos::ALL());
-    Kokkos::deep_copy(d_target_slice, d_slice);
+      auto d_slice = Kokkos::subview(*(outvars[i].data_ptr),
+          Kokkos::make_pair(0, nmb), outvars[i].data_index,
+          Kokkos::make_pair(0, nx3), Kokkos::make_pair(0, nx2), Kokkos::make_pair(0, nx1));
+      auto d_target_slice = Kokkos::subview(outvars_device, i,
+          Kokkos::ALL(), Kokkos::ALL(), Kokkos::ALL(), Kokkos::ALL());
+      Kokkos::deep_copy(d_target_slice, d_slice);
   }
   Kokkos::fence();
 
