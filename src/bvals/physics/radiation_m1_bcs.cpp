@@ -35,7 +35,6 @@ void MeshBoundaryValues::RadiationM1BCs(MeshBlockPack *ppack,
   int n3 = (indcs.nx3 > 1) ? (indcs.nx3 + 2 * ng) : 1;
   int nmb = ppack->nmb_thispack;
 
-  Real rad_E_floor = 1e-14; //@TODO: get actual floor value
   // only apply BCs if not periodic
   if (pm->mesh_bcs[BoundaryFace::inner_x1] != BoundaryFlag::periodic) {
     int &is = indcs.is;

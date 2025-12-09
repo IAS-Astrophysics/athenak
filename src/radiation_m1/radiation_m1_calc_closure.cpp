@@ -17,7 +17,6 @@
 
 namespace radiationm1 {
 TaskStatus RadiationM1::CalcClosure(Driver* pdrive, int stage) {
-  auto& size = pmy_pack->pmb->mb_size;
   RegionIndcs& indcs = pmy_pack->pmesh->mb_indcs;
   int &is = indcs.is, &ie = indcs.ie;
   int &js = indcs.js, &je = indcs.je;

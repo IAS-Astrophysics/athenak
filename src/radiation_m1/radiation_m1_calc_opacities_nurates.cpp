@@ -55,7 +55,6 @@ TaskStatus RadiationM1::CalcOpacityNurates_(Driver *pdrive, int stage) {
   int &ks = indcs.ks, &ke = indcs.ke;
 
   auto nmb1 = pmy_pack->nmb_thispack - 1;
-  auto &mbsize = pmy_pack->pmb->mb_size;
   auto &nspecies_ = nspecies;
   auto nvars_ = nvars;
 
@@ -90,12 +89,13 @@ TaskStatus RadiationM1::CalcOpacityNurates_(Driver *pdrive, int stage) {
   // conversion factors from cgs to code units
   auto code_units = eos.GetCodeUnitSystem();
   auto eos_units = eos.GetEOSUnitSystem();
+  auto nurates_units = Primitive::MakeNGS();
 
   par_for(
       "radiation_m1_calc_opacity_nurates", DevExeSpace(), 0, nmb1, ks, ke, js,
       je, is, ie,
       KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
-        if (radiation_mask(m, k, j, i)) {
+        if (radiation_mask_(m, k, j, i)) {
           for (int nuidx = 0; nuidx < nspecies_; nuidx++) {
             abs_0_(m, nuidx, k, j, i) = 0;
             eta_0_(m, nuidx, k, j, i) = 0;
@@ -216,17 +216,10 @@ TaskStatus RadiationM1::CalcOpacityNurates_(Driver *pdrive, int stage) {
           Real scat_0_loc[4]{}, scat_1_loc[4]{};
 
           // Note: everything sent and received are in code units
-          bns_nurates(nb, T, Y, mu_n, mu_p, mu_e, nudens_0[0], nudens_1[0],
-                      chi_loc[0], nudens_0[1], nudens_1[1], chi_loc[1],
-                      nudens_0[2], nudens_1[2], chi_loc[2], nudens_0[3],
-                      nudens_1[3], chi_loc[3], eta_0_loc[0], eta_0_loc[1],
-                      eta_0_loc[2], eta_0_loc[3], eta_1_loc[0], eta_1_loc[1],
-                      eta_1_loc[2], eta_1_loc[3], abs_0_loc[0], abs_0_loc[1],
-                      abs_0_loc[2], abs_0_loc[3], abs_1_loc[0], abs_1_loc[1],
-                      abs_1_loc[2], abs_1_loc[3], scat_0_loc[0], scat_0_loc[1],
-                      scat_0_loc[2], scat_0_loc[3], scat_1_loc[0],
-                      scat_1_loc[1], scat_1_loc[2], scat_1_loc[3],
-                      nurates_params_, code_units, eos_units);
+          bns_nurates(nb, T, Y, mu_n, mu_p, mu_e, nudens_0, nudens_1, chi_loc,
+                      eta_0_loc, eta_1_loc, abs_0_loc, abs_1_loc, scat_0_loc,
+                      scat_1_loc, nurates_params_, code_units, eos_units,
+                      nurates_units);
 
           assert(Kokkos::isfinite(eta_0_loc[0]));
           assert(Kokkos::isfinite(eta_0_loc[1]));
@@ -316,7 +309,7 @@ TaskStatus RadiationM1::CalcOpacityNurates_(Driver *pdrive, int stage) {
               NeutrinoDens(mu_n_eq, mu_p_eq, mu_e_eq, temperature_trap,
                            nudens_0_trap[0], nudens_0_trap[1], nudens_0_trap[2],
                            nudens_1_trap[0], nudens_1_trap[1], nudens_1_trap[2],
-                           nurates_params_, code_units, eos_units);
+                           nurates_params_, code_units, eos_units, nurates_units);
 
               assert(Kokkos::isfinite(nudens_0_trap[0]));
               assert(Kokkos::isfinite(nudens_0_trap[1]));
@@ -336,7 +329,7 @@ TaskStatus RadiationM1::CalcOpacityNurates_(Driver *pdrive, int stage) {
             NeutrinoDens(mu_n, mu_p, mu_e, T, nudens_0_thin[0],
                          nudens_0_thin[1], nudens_0_thin[2], nudens_1_thin[0],
                          nudens_1_thin[1], nudens_1_thin[2], nurates_params_,
-                         code_units, eos_units);
+                         code_units, eos_units, nurates_units);
 
             nudens_0_thin[2] *= 0.5;
             nudens_1_thin[2] *= 0.5;
@@ -346,11 +339,11 @@ TaskStatus RadiationM1::CalcOpacityNurates_(Driver *pdrive, int stage) {
 
           for (int nuidx = 0; nuidx < nspecies_; ++nuidx) {
             // store opacities and emissivities
-            eta_0(m, nuidx, k, j, i) = eta_0_loc[nuidx];
-            eta_1(m, nuidx, k, j, i) = eta_1_loc[nuidx];
-            abs_0(m, nuidx, k, j, i) = abs_0_loc[nuidx];
-            abs_1(m, nuidx, k, j, i) = abs_1_loc[nuidx];
-            scat_1(m, nuidx, k, j, i) = scat_1_loc[nuidx];
+            eta_0_(m, nuidx, k, j, i) = eta_0_loc[nuidx];
+            eta_1_(m, nuidx, k, j, i) = eta_1_loc[nuidx];
+            abs_0_(m, nuidx, k, j, i) = abs_0_loc[nuidx];
+            abs_1_(m, nuidx, k, j, i) = abs_1_loc[nuidx];
+            scat_1_(m, nuidx, k, j, i) = scat_1_loc[nuidx];
 
             Real my_nudens_0{}, my_nudens_1{}, corr_fac{1};
             if (nurates_params_.use_kirchhoff_law ||
@@ -388,22 +381,22 @@ TaskStatus RadiationM1::CalcOpacityNurates_(Driver *pdrive, int stage) {
                   Kokkos::min(corr_fac, nurates_params_.opacity_corr_fac_max));
             }
 
-            scat_1(m, nuidx, k, j, i) *= corr_fac;
+            scat_1_(m, nuidx, k, j, i) *= corr_fac;
 
             if (nurates_params_.use_kirchhoff_law) {
               // enforce Kirchhoff's laws.
-              abs_0(m, nuidx, k, j, i) *= corr_fac;
-              abs_1(m, nuidx, k, j, i) *= corr_fac;
-              eta_0(m, nuidx, k, j, i) =
-                  abs_0(m, nuidx, k, j, i) * my_nudens_0;
-              eta_1(m, nuidx, k, j, i) =
-                  abs_1(m, nuidx, k, j, i) * my_nudens_1;
+              abs_0_(m, nuidx, k, j, i) *= corr_fac;
+              abs_1_(m, nuidx, k, j, i) *= corr_fac;
+              eta_0_(m, nuidx, k, j, i) =
+                  abs_0_(m, nuidx, k, j, i) * my_nudens_0;
+              eta_1_(m, nuidx, k, j, i) =
+                  abs_1_(m, nuidx, k, j, i) * my_nudens_1;
             } else {
               if (nuidx == 0 || nuidx == 1) {
-                eta_0(m, nuidx, k, j, i) *= corr_fac;
-                eta_1(m, nuidx, k, j, i) *= corr_fac;
-                abs_0(m, nuidx, k, j, i) *= corr_fac;
-                abs_1(m, nuidx, k, j, i) *= corr_fac;
+                eta_0_(m, nuidx, k, j, i) *= corr_fac;
+                eta_1_(m, nuidx, k, j, i) *= corr_fac;
+                abs_0_(m, nuidx, k, j, i) *= corr_fac;
+                abs_1_(m, nuidx, k, j, i) *= corr_fac;
               }
             }
           }
