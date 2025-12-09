@@ -35,7 +35,7 @@ class TurbulenceDriver {
   int nlow, nhigh, spect_form;
   int mode_count;
   Real kpeak;
-  Real tcorr, dedt, tdriv_duration, tdriv_start;
+  Real tcorr, dedt, acc_rms, tdriv_duration, tdriv_start;
   Real expo, exp_prl, exp_prp;
   int driving_type, turb_flag;
   int min_kz, max_kz;
@@ -48,11 +48,8 @@ class TurbulenceDriver {
   Real x_turb_scale_height, y_turb_scale_height, z_turb_scale_height;
   Real x_turb_center, y_turb_center, z_turb_center;
 
-<<<<<<< HEAD
   // Input random seed
   int random_seed = 1;
-=======
->>>>>>> d4841eb338bcb5e8ac7d5b7931822da72565db1d
 
   // functions
   void IncludeInitializeModesTask(std::shared_ptr<TaskList> tl, TaskID start);

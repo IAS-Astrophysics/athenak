@@ -61,12 +61,16 @@ TurbulenceDriver::TurbulenceDriver(MeshBlockPack *pp, ParameterInput *pin) :
   // min kz zero should be 0 for including kz modes and 1 for not including
   min_kz = pin->GetOrAddInteger("turb_driving", "min_kz", 0);
   max_kz = pin->GetOrAddInteger("turb_driving", "max_kz", nhigh);
+  // Seed for random number generator
+  random_seed = pin->GetOrAddInteger("turb_driving", "random_seed", 1);
   // power-law exponent for isotropic driving
   expo = pin->GetOrAddReal("turb_driving", "expo", 5.0/3.0);
   exp_prp = pin->GetOrAddReal("turb_driving", "exp_prp", 5.0/3.0);
   exp_prl = pin->GetOrAddReal("turb_driving", "exp_prl", 0.0);
   // energy injection rate
   dedt = pin->GetOrAddReal("turb_driving", "dedt", 1.0);
+  // target RMS acceleration
+  acc_rms = pin->GetOrAddReal("turb_driving", "acc_rms", -1.0);
   // correlation time - time over which the OU process decorrelates
   tcorr = pin->GetOrAddReal("turb_driving", "tcorr", 1.0);
   // update time for the turbulence driver -
@@ -556,7 +560,7 @@ TaskStatus TurbulenceDriver::InitializeModes(Driver *pdrive, int stage) {
 // 1. Copies values from temporary force array to the main force array.
 // 2. Applies Gaussian weighting to the forcing in x, y, and z directions if requested.
 // 3. Computes net momentum and applies corrections to ensure momentum conservation.
-// 4. Scales the forcing to input dedt.
+// 4. Scales the forcing either to input acc_rms (if acc_rms > 0) or to input dedt.
 //
 
 TaskStatus TurbulenceDriver::UpdateForcing(Driver *pdrive, int stage) {
@@ -704,56 +708,97 @@ TaskStatus TurbulenceDriver::UpdateForcing(Driver *pdrive, int stage) {
       force_(m,2,k,j,i) -= t3/t0;
     });
 
-    t0 = 0.0;
-    t1 = 0.0;
-    Real totvol=0.0;
-    Kokkos::parallel_reduce("net_mom_2", Kokkos::RangePolicy<>(DevExeSpace(),0,nmkji),
-    KOKKOS_LAMBDA(const int &idx, Real &sum_t0, Real &sum_t1, Real &totvol_) {
-      // compute n,k,j,i indices of thread
-      int m = (idx)/nkji;
-      int k = (idx - m*nkji)/nji;
-      int j = (idx - m*nkji - k*nji)/nx1;
-      int i = (idx - m*nkji - k*nji - j*nx1) + is;
-      k += ks;
-      j += js;
-      Real vol = size.d_view(m).dx1*size.d_view(m).dx2*size.d_view(m).dx3;
+    // Choose scaling method: by acc_rms if specified, otherwise by dedt
+    Real s = 1.0;
+    if (acc_rms > 0.0) {
+      // Scale by target RMS acceleration
+      // Compute volume-weighted RMS acceleration
+      Real t0_rms = 0.0;
+      Real totvol = 0.0;
+      Kokkos::parallel_reduce("acc_rms_compute",
+                              Kokkos::RangePolicy<>(DevExeSpace(), 0, nmkji),
+      KOKKOS_LAMBDA(const int &idx, Real &sum_t0_rms, Real &sum_totvol) {
+        // compute n,k,j,i indices of thread
+        int m = (idx)/nkji;
+        int k = (idx - m*nkji)/nji;
+        int j = (idx - m*nkji - k*nji)/nx1;
+        int i = (idx - m*nkji - k*nji - j*nx1) + is;
+        k += ks;
+        j += js;
+        Real vol = size.d_view(m).dx1*size.d_view(m).dx2*size.d_view(m).dx3;
 
-      Real den  = u0(m,IDN,k,j,i);
-      Real mom1 = u0(m,IM1,k,j,i);
-      Real mom2 = u0(m,IM2,k,j,i);
-      Real mom3 = u0(m,IM3,k,j,i);
-      if (flag_twofl) {
-        den  += u0_(m,IDN,k,j,i);
-        mom1 += u0_(m,IM1,k,j,i);
-        mom2 += u0_(m,IM2,k,j,i);
-        mom3 += u0_(m,IM3,k,j,i);
-      }
-      Real a1 = force_(m,0,k,j,i);
-      Real a2 = force_(m,1,k,j,i);
-      Real a3 = force_(m,2,k,j,i);
+        Real a1 = force_(m,0,k,j,i);
+        Real a2 = force_(m,1,k,j,i);
+        Real a3 = force_(m,2,k,j,i);
 
-      sum_t0 += den*0.5*(a1*a1+a2*a2+a3*a3)*dt*vol;
-      sum_t1 += (mom1*a1+mom2*a2+mom3*a3)*vol;
-      totvol_ += vol;
-    }, Kokkos::Sum<Real>(t0), Kokkos::Sum<Real>(t1), Kokkos::Sum<Real>(totvol));
+        sum_t0_rms += (a1*a1 + a2*a2 + a3*a3)*vol;
+        sum_totvol += vol;
+      }, Kokkos::Sum<Real>(t0_rms), Kokkos::Sum<Real>(totvol));
 
-  #if MPI_PARALLEL_ENABLED
-    m[0] = t0; m[1] = t1; m[2] = totvol;
-    MPI_Allreduce(m, gm, 3, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
-    t0 = gm[0]; t1 = gm[1]; totvol = gm[2];
-  #endif
+    #if MPI_PARALLEL_ENABLED
+      Real m[2], gm[2];
+      m[0] = t0_rms; m[1] = totvol;
+      MPI_Allreduce(m, gm, 2, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+      t0_rms = gm[0]; totvol = gm[1];
+    #endif
 
-    t0 = std::max(t0, 1.0e-20);
-
-    Real m0 = t0;
-    Real m1 = t1;
-
-    Real s;
-    if (m1 >= 0) {
-      s = -m1/2./m0 + sqrt(m1*m1/4./m0/m0 + dedt/m0);
+      Real acc_rms_current = sqrt(t0_rms / totvol);
+      acc_rms_current = std::max(acc_rms_current, 1.0e-20);
+      s = acc_rms / acc_rms_current;
     } else {
-      s = m1/2./m0 + sqrt(m1*m1/4./m0/m0 + dedt/m0);
+      // Scale by energy injection rate (dedt)
+      t0 = 0.0;
+      t1 = 0.0;
+      Real totvol = 0.0;
+      Kokkos::parallel_reduce("dedt_norm_compute", Kokkos::RangePolicy<>(DevExeSpace(), 0, nmkji),
+      KOKKOS_LAMBDA(const int &idx, Real &sum_t0, Real &sum_t1, Real &totvol_) {
+        // compute n,k,j,i indices of thread
+        int m = (idx)/nkji;
+        int k = (idx - m*nkji)/nji;
+        int j = (idx - m*nkji - k*nji)/nx1;
+        int i = (idx - m*nkji - k*nji - j*nx1) + is;
+        k += ks;
+        j += js;
+        Real vol = size.d_view(m).dx1*size.d_view(m).dx2*size.d_view(m).dx3;
+
+        Real den  = u0(m,IDN,k,j,i);
+        Real mom1 = u0(m,IM1,k,j,i);
+        Real mom2 = u0(m,IM2,k,j,i);
+        Real mom3 = u0(m,IM3,k,j,i);
+        if (flag_twofl) {
+          den  += u0_(m,IDN,k,j,i);
+          mom1 += u0_(m,IM1,k,j,i);
+          mom2 += u0_(m,IM2,k,j,i);
+          mom3 += u0_(m,IM3,k,j,i);
+        }
+        Real a1 = force_(m,0,k,j,i);
+        Real a2 = force_(m,1,k,j,i);
+        Real a3 = force_(m,2,k,j,i);
+
+        sum_t0 += den*0.5*(a1*a1+a2*a2+a3*a3)*dt*vol;
+        sum_t1 += (mom1*a1+mom2*a2+mom3*a3)*vol;
+        totvol_ += vol;
+      }, Kokkos::Sum<Real>(t0), Kokkos::Sum<Real>(t1), Kokkos::Sum<Real>(totvol));
+
+    #if MPI_PARALLEL_ENABLED
+      Real m[3], gm[3];
+      m[0] = t0; m[1] = t1; m[2] = totvol;
+      MPI_Allreduce(m, gm, 3, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+      t0 = gm[0]; t1 = gm[1]; totvol = gm[2];
+    #endif
+
+      t0 = std::max(t0, 1.0e-20);
+
+      Real m0 = t0;
+      Real m1 = t1;
+
+      if (m1 >= 0) {
+        s = -m1/2./m0 + sqrt(m1*m1/4./m0/m0 + dedt/m0);
+      } else {
+        s = m1/2./m0 + sqrt(m1*m1/4./m0/m0 + dedt/m0);
+      }
     }
+
     if (scale_forcing) {
       par_for("force_norm", DevExeSpace(),0,nmb-1,ks,ke,js,je,is,ie,
       KOKKOS_LAMBDA(int m, int k, int j, int i) {
