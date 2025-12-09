@@ -322,7 +322,6 @@ void SetADMVariablesToSchwarzschild(MeshBlockPack *pmbp) {
   int ivy = IVX + ((ivx - IVX) + 1)%3;
   int ivz = IVX + ((ivx - IVX) + 2)%3;
   int is = indcs.is, js = indcs.js, ks = indcs.ks;
-  int ie = indcs.ie, je = indcs.je, ke = indcs.ke;
   int nmb1 = pmbp->nmb_thispack - 1;
   int ng = indcs.ng;
   int n1 = indcs.nx1 + 2*ng;

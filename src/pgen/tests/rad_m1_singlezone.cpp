@@ -82,11 +82,6 @@ void ProblemGenerator::RadiationM1SingleZoneTest_(ParameterInput *pin,
   int n1 = indcs.nx1 + 2 * ng;
   int n2 = (indcs.nx2 > 1) ? (indcs.nx2 + 2 * ng) : 1;
   int n3 = (indcs.nx3 > 1) ? (indcs.nx3 + 2 * ng) : 1;
-  int &is = indcs.is;
-  int &js = indcs.js;
-  int &ks = indcs.ks;
-  auto &size = pmbp->pmb->mb_size;
-  auto &coord = pmbp->pcoord->coord_data;
   int nmb1 = (pmbp->nmb_thispack - 1);
   auto &w0_ = pmbp->pmhd->w0;
   auto &uradm1_ = pmbp->pradm1->u0;

@@ -79,7 +79,7 @@ void ProblemGenerator::RadiationM1DiffusionTest(ParameterInput *pin, const bool 
   adm::ADM::ADM_vars &adm = pmbp->padm->adm;
   auto &params_ = pmbp->pradm1->params;
 
-  auto erf = pin->GetOrAddString("problem", "initial_data", "gaussian");
+  bool erf = pin->GetOrAddString("problem", "initial_data", "gaussian") == "gaussian";
   auto vx = pin->GetOrAddReal("problem", "fluid_velocity", 0.0);
   auto lorentz_w = 1. / Kokkos::sqrt(1. - vx * vx);
 
@@ -106,7 +106,7 @@ void ProblemGenerator::RadiationM1DiffusionTest(ParameterInput *pin, const bool 
         Real x1 = CellCenterX(i - is, nx1, x1min, x1max);
 
         Real E{};
-        if (erf == "gaussian") {
+        if (erf) {
           E = Kokkos::exp(-9. * x1 * x1);
         } else {
           E = (x1 < 0);
