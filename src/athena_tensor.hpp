@@ -362,7 +362,6 @@ constexpr int TensorDOF<TensorSymm::SYM22, ndim, 4> = ndim*ndim*(ndim+1)*(ndim+1
 template<typename T, TensorSymm sym, int ndim>
 class AthenaPointTensor<T, sym, ndim, 2> {
  public:
-  KOKKOS_INLINE_FUNCTION
   AthenaPointTensor() = default;
   // the default destructor/copy operators are sufficient
   ~AthenaPointTensor() = default;
@@ -412,7 +411,6 @@ class AthenaPointTensor<T, sym, ndim, 2> {
 template<typename T, TensorSymm sym, int ndim>
 class AthenaPointTensor<T, sym, ndim, 3> {
  public:
-  KOKKOS_INLINE_FUNCTION
   AthenaPointTensor() = default;
   // the default destructor/copy operators are sufficient
   ~AthenaPointTensor() = default;
@@ -440,22 +438,21 @@ class AthenaPointTensor<T, sym, ndim, 3> {
   }
   KOKKOS_INLINE_FUNCTION
   Real & operator()(int const a, int const b, int const c) {
-    if constexpr (sym == TensorSymm::NONE) {
-      return data_[c + ndim*(b + ndim*a)];
-    } else if (sym == TensorSymm::SYM2) {
+    if constexpr (sym == TensorSymm::SYM2) {
       constexpr int ndof2_ = TensorDOF<TensorSymm::SYM2, ndim, 2>;
       if (c < b) {
         return data_[c*(2*ndim - c + 1)/2 + b - c + ndof2_*a];
       } else {
         return data_[b*(2*ndim - b + 1)/2 + c - b + ndof2_*a];
       }
-    } else if (sym == TensorSymm::ISYM2) {
+    } else if constexpr (sym == TensorSymm::ISYM2) {
       if (b < a) {
         return data_[c + ndim*(b*(2*ndim - b + 1)/2 + a - b)];
       } else {
         return data_[c + ndim*(a*(2*ndim - a + 1)/2 + b - a)];
       }
     }
+    return data_[c + ndim*(b + ndim*a)];
   }
   KOKKOS_INLINE_FUNCTION
   void ZeroClear() {

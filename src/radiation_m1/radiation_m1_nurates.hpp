@@ -68,7 +68,10 @@ struct NuratesParams {
 //!                      Real &scat_0_nue, Real &scat_0_anue, Real &scat_0_nux,
 //!                      Real &scat_0_anux, Real &scat_1_nue, Real &scat_1_anue,
 //!                      Real &scat_1_nux, Real &scat_1_anux,
-//!                      const NuratesParams nurates_params)
+//!                      const NuratesParams nurates_params,
+//!                      Primitive::UnitSystem const &code_units,
+//!                      Primitive::UnitSystem const &eos_units,
+//!                      Primitive::UnitSystem const &nurates_units)
 //
 //   \brief Computes the rates given the M1 quantities
 //
@@ -118,29 +121,65 @@ struct NuratesParams {
 //   \param[in]  nurates_params params for nurates
 //   \param[in]  code_units     code units
 //   \param[in]  eos_units      eos units
+//   \param[in]  nurates_units   bns_nurates units
 
 KOKKOS_INLINE_FUNCTION
 void bns_nurates(Real &nb, Real &temp, Real &ye, Real &mu_n, Real &mu_p, Real &mu_e,
-                 Real &n_nue, Real &j_nue, Real &chi_nue, Real &n_anue, Real &j_anue,
-                 Real &chi_anue, Real &n_nux, Real &j_nux, Real &chi_nux, Real &n_anux,
-                 Real &j_anux, Real &chi_anux, Real &R_nue, Real &R_anue, Real &R_nux,
-                 Real &R_anux, Real &Q_nue, Real &Q_anue, Real &Q_nux, Real &Q_anux,
-                 Real &sigma_0_nue, Real &sigma_0_anue, Real &sigma_0_nux,
-                 Real &sigma_0_anux, Real &sigma_1_nue, Real &sigma_1_anue,
-                 Real &sigma_1_nux, Real &sigma_1_anux, Real &scat_0_nue,
-                 Real &scat_0_anue, Real &scat_0_nux, Real &scat_0_anux, Real &scat_1_nue,
-                 Real &scat_1_anue, Real &scat_1_nux, Real &scat_1_anux,
+                 Real nudens_0[4],
+                 Real nudens_1[4],
+                 Real chi[4],
+                 Real eta_0[4],
+                 Real eta_1[4],
+                 Real abs_0[4],
+                 Real abs_1[4],
+                 Real scat_0[4],
+                 Real scat_1[4],
                  NuratesParams const &nurates_params,
                  Primitive::UnitSystem const &code_units,
-                 Primitive::UnitSystem const &eos_units) {
-  // compute unit conversion factors
-  Primitive::UnitSystem nurates_units = Primitive::MakeNGS();
-
+                 Primitive::UnitSystem const &eos_units,
+                 Primitive::UnitSystem const &nurates_units) {
   Real const unit_length = code_units.LengthConversion(nurates_units);
   Real const unit_time = code_units.TimeConversion(nurates_units);
   // Note that the number densities are always in EOS units
   Real const unit_num_dens = eos_units.NumberDensityConversion(nurates_units);
   Real const unit_ene_dens = code_units.EnergyDensityConversion(nurates_units);
+
+  Real const & n_nue = nudens_0[0];
+  Real const & n_anue = nudens_0[1];
+  Real const & n_nux = nudens_0[2];
+  Real const & n_anux = nudens_0[3];
+  Real const & j_nue = nudens_1[0];
+  Real const & j_anue = nudens_1[1];
+  Real const & j_nux = nudens_1[2];
+  Real const & j_anux = nudens_1[3];
+  Real & chi_nue = chi[0];
+  Real & chi_anue = chi[1];
+  Real & chi_nux = chi[2];
+  Real & chi_anux = chi[3];
+  Real & R_nue = eta_0[0];
+  Real & R_anue = eta_0[1];
+  Real & R_nux = eta_0[2];
+  Real & R_anux = eta_0[3];
+  Real & Q_nue = eta_1[0];
+  Real & Q_anue = eta_1[1];
+  Real & Q_nux = eta_1[2];
+  Real & Q_anux = eta_1[3];
+  Real & sigma_0_nue = abs_0[0];
+  Real & sigma_0_anue = abs_0[1];
+  Real & sigma_0_nux = abs_0[2];
+  Real & sigma_0_anux = abs_0[3];
+  Real & sigma_1_nue = abs_1[0];
+  Real & sigma_1_anue = abs_1[1];
+  Real & sigma_1_nux = abs_1[2];
+  Real & sigma_1_anux = abs_1[3];
+  Real & scat_0_nue = scat_0[0];
+  Real & scat_0_anue = scat_0[1];
+  Real & scat_0_nux = scat_0[2];
+  Real & scat_0_anux = scat_0[3];
+  Real & scat_1_nue = scat_1[0];
+  Real & scat_1_anue = scat_1[1];
+  Real & scat_1_nux = scat_1[2];
+  Real & scat_1_anux = scat_1[3];
 
   if ((nb < nurates_params.nb_min) || (temp < nurates_params.temp_min_mev)) {
     R_nue = 0.;
@@ -245,7 +284,7 @@ void bns_nurates(Real &nb, Real &temp, Real &ye, Real &mu_n, Real &mu_p, Real &m
   // compute opacities
   M1Opacities opacities = ComputeM1Opacities(&nurates_params.quadrature,
                                              &nurates_params.quadrature_2,
-					     &grey_op_params);
+                                             &grey_op_params);
   
   // Similar to the comment above, the factors of 2 come from the fact that
   // bns_nurates and THC weight the heavy neutrinos differently. THC weights
@@ -340,7 +379,10 @@ void bns_nurates(Real &nb, Real &temp, Real &ye, Real &mu_n, Real &mu_p, Real &m
 
 //! \fn void NeutrinoDens(Real mu_n, Real mu_p, Real mu_e, Real nb, Real temp,
 //!                       Real &n_nue, Real &n_anue, Real &n_nux, Real &en_nue,
-//!                       Real &en_anue, Real &en_nux, NuratesParams nurates_params)
+//!                       Real &en_anue, Real &en_nux, NuratesParams nurates_params,
+//!                       Primitive::UnitSystem const &code_units,
+//!                       Primitive::UnitSystem const &eos_units,
+//!                       Primitive::UnitSystem const &nurates_units)
 //
 //   \brief Computes the neutrino number and energy density
 //
@@ -357,12 +399,14 @@ void bns_nurates(Real &nb, Real &temp, Real &ye, Real &mu_n, Real &mu_p, Real &m
 //   \param[in]  nurates_params  struct for nurates parameters
 //   \param[in]  code_units      code units
 //   \param[in]  eos_units       eos units
+//   \param[in]  nurates_units   bns_nurates units
 KOKKOS_INLINE_FUNCTION
 void NeutrinoDens(Real mu_n, Real mu_p, Real mu_e, Real temp, Real &n_nue, Real &n_anue,
                   Real &n_nux, Real &en_nue, Real &en_anue, Real &en_nux,
                   NuratesParams const &nurates_params,
                   Primitive::UnitSystem const &code_units,
-                  Primitive::UnitSystem const &eos_units) {
+                  Primitive::UnitSystem const &eos_units,
+                  Primitive::UnitSystem const &nurates_units) {
   Real eta_nue = (mu_p + mu_e - mu_n) / temp;
   Real eta_anue = -eta_nue;
   Real eta_nux = 0.0;
@@ -386,9 +430,6 @@ void NeutrinoDens(Real mu_n, Real mu_p, Real mu_e, Real temp, Real &n_nue, Real 
   assert(Kokkos::isfinite(en_nue));
   assert(Kokkos::isfinite(en_anue));
   assert(Kokkos::isfinite(en_nux));
-
-  // convert to code units
-  Primitive::UnitSystem nurates_units = Primitive::MakeNGS();
 
   // Note that the number densities are always in EOS units
   Real const unit_num_dens = eos_units.NumberDensityConversion(nurates_units);
