@@ -102,7 +102,6 @@ TaskStatus RadiationM1::TimeUpdate_(Driver *d, int stage) {
   int &is = indcs.is, &ie = indcs.ie;
   int &js = indcs.js, &je = indcs.je;
   int &ks = indcs.ks, &ke = indcs.ke;
-  int ncells1 = indcs.nx1 + 2 * (indcs.ng);
   int nmb1 = pmy_pack->nmb_thispack - 1;
 
   auto &u0_ = u0;
@@ -149,6 +148,9 @@ TaskStatus RadiationM1::TimeUpdate_(Driver *d, int stage) {
   Real beta_dt = (beta[stage - 1]) * (pmy_pack->pmesh->dt);
 
   adm::ADM::ADM_vars &adm = pmy_pack->padm->adm;
+
+  bool ismhd_ = ismhd;
+  bool ishydro_ = ishydro;
 
   par_for(
       "radiation_m1_update", DevExeSpace(), 0, nmb1, ks, ke, js, je, is, ie,
@@ -551,9 +553,9 @@ TaskStatus RadiationM1::TimeUpdate_(Driver *d, int stage) {
           // [G] Limit sources
           theta = 1.0;
           if (params_.theta_limiter && params_.source_limiter >= 0) {
-            const Real tau = (ismhd || ishydro) ? umhd0_(m, IEN, k, j, i) : 0.;
-            const Real dens = (ismhd || ishydro) ? w0_(m, IDN, k, j, i) : 0.;
-            const Real Y_e = (ismhd || ishydro) ? w0_(m, IYF, k, j, i) : 0.;
+            const Real tau = (ismhd_ || ishydro_) ? umhd0_(m, IEN, k, j, i) : 0.;
+            const Real dens = (ismhd_ || ishydro_) ? w0_(m, IDN, k, j, i) : 0.;
+            const Real Y_e = (ismhd_ || ishydro_) ? w0_(m, IYF, k, j, i) : 0.;
 
             theta = 1.0;
             Real DTau_sum = 0.0;
@@ -640,7 +642,7 @@ TaskStatus RadiationM1::TimeUpdate_(Driver *d, int stage) {
             u0_(m, CombinedIdx(nuidx, M1_N_IDX, nvars_), k, j, i) = Nf;
           }
 
-          if (params_.backreact && stage == 2 && (ismhd)) {
+          if (params_.backreact && stage == 2 && (ismhd_)) {
             umhd0_(m, IEN, k, j, i) -= theta * DrEFN[nuidx][M1_E_IDX];
             umhd0_(m, IM1, k, j, i) -= theta * DrEFN[nuidx][M1_FX_IDX];
             umhd0_(m, IM2, k, j, i) -= theta * DrEFN[nuidx][M1_FY_IDX];

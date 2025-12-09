@@ -97,6 +97,7 @@ struct RadiationM1Beam {
 };
 
 struct SrcParams {
+  KOKKOS_INLINE_FUNCTION
   SrcParams(const Real _cdt, const Real _alp,
             const AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> &_g_dd,
             const AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> &_g_uu,

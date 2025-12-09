@@ -670,7 +670,6 @@ TaskStatus MHD::InitRecvU(Driver *pdrive, int stage) {
 }
 
 TaskStatus MHD::ClearSendU(Driver *pdrive, int stage) {
-  TaskStatus tstat;
   if ((stage >= 0) || (stage == -1)) {
     // check sends of U complete
     TaskStatus tstat = pbval_u->ClearSend();

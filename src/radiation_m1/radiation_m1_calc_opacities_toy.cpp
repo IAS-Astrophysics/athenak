@@ -26,18 +26,10 @@ TaskStatus RadiationM1::CalcOpacityToy(Driver *pdrive, int stage) {
   int &is = indcs.is, &ie = indcs.ie;
   int &js = indcs.js, &je = indcs.je;
   int &ks = indcs.ks, &ke = indcs.ke;
-  int &ng = indcs.ng;
 
   auto nmb1 = pmy_pack->nmb_thispack - 1;
   auto &mbsize = pmy_pack->pmb->mb_size;
   auto &nspecies_ = pmy_pack->pradm1->nspecies;
-  auto nvarstotm1 = pmy_pack->pradm1->nvarstot - 1;
-  auto nvars_ = pmy_pack->pradm1->nvars;
-  auto &params_ = pmy_pack->pradm1->params;
-  bool &multi_d = pmy_pack->pmesh->multi_d;
-  bool &three_d = pmy_pack->pmesh->three_d;
-
-  auto &u0_ = pmy_pack->pradm1->u0;
 
   auto &eta_0_ = pmy_pack->pradm1->eta_0;
   auto &abs_0_ = pmy_pack->pradm1->abs_0;
@@ -45,8 +37,6 @@ TaskStatus RadiationM1::CalcOpacityToy(Driver *pdrive, int stage) {
   auto &abs_1_ = pmy_pack->pradm1->abs_1;
   auto &scat_1_ = pmy_pack->pradm1->scat_1;
   auto &toy_opacity_fn_ = toy_opacity_fn;
-  auto &chi_ = pmy_pack->pradm1->chi;
-  adm::ADM::ADM_vars &adm = pmy_pack->padm->adm;
 
   par_for(
       "radiation_m1_calc_toy_opacity", DevExeSpace(), 0, nmb1, ks, ke, js, je, is, ie, 0,

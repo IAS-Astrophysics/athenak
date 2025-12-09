@@ -58,12 +58,9 @@ TaskStatus RadiationM1::CalcOpacityPhotons_(Driver *pdrive, int stage) {
   int &ks = indcs.ks, &ke = indcs.ke;
 
   auto nmb1 = pmy_pack->nmb_thispack - 1;
-  auto &mbsize = pmy_pack->pmb->mb_size;
-  auto &nspecies_ = nspecies;
   auto nvars_ = nvars;
 
   auto &adm = pmy_pack->padm->adm;
-  auto &radiation_mask_ = radiation_mask;
 
   auto &m1_params_ = params;
 
@@ -91,7 +88,6 @@ TaskStatus RadiationM1::CalcOpacityPhotons_(Driver *pdrive, int stage) {
   auto eos_units = eos.GetEOSUnitSystem();
 
   // Extract radiation constant and units
-  Real &arad_ = photon_op_params.arad;
   Real density_scale_ = 1.0, temperature_scale_ = 1.0, length_scale_ = 1.0;
   Real mean_mol_weight_ = 1.0;
   Real rosseland_coef_ = 1.0, planck_minus_rosseland_coef_ = 0.0;
@@ -117,11 +113,13 @@ TaskStatus RadiationM1::CalcOpacityPhotons_(Driver *pdrive, int stage) {
     gm1 = pmy_pack->pmhd->peos->eos_data.gamma - 1.0;
   }
 
+  auto & radiation_mask_ = radiation_mask;
+
   par_for(
       "radiation_m1_calc_opacity_photons", DevExeSpace(), 0, nmb1, ks, ke, js,
       je, is, ie,
       KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
-        if (radiation_mask(m, k, j, i)) {
+        if (radiation_mask_(m, k, j, i)) {
           abs_1_(m, 0, k, j, i) = 0;
           eta_1_(m, 0, k, j, i) = 0;
           scat_1_(m, 0, k, j, i) = 0;
@@ -209,7 +207,6 @@ TaskStatus RadiationM1::CalcOpacityPhotons_(Driver *pdrive, int stage) {
           Real tgas = pgas / wdn;
 
           // local undensitized photon quantities
-          Real nudens_1 = J / volform;
           Real chi_loc = chi_(m, 0, k, j, i);
 
           // get emissivities and opacities
@@ -232,9 +229,9 @@ TaskStatus RadiationM1::CalcOpacityPhotons_(Driver *pdrive, int stage) {
           assert(Kokkos::isfinite(abs_1_loc));
           assert(Kokkos::isfinite(scat_1_loc));
 
-          eta_1(m, 0, k, j, i) = eta_1_loc;
-          abs_1(m, 0, k, j, i) = abs_1_loc;
-          scat_1(m, 0, k, j, i) = scat_1_loc;
+          eta_1_(m, 0, k, j, i) = eta_1_loc;
+          abs_1_(m, 0, k, j, i) = abs_1_loc;
+          scat_1_(m, 0, k, j, i) = scat_1_loc;
         }
       });
 

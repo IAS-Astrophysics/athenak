@@ -40,7 +40,6 @@ void ProblemGenerator::RadiationM1SphereTest(ParameterInput *pin,
 
   // capture variables for kernel
   auto &indcs = pmy_mesh_->mb_indcs;
-  auto &size = pmbp->pmb->mb_size;
   int &is = indcs.is;
   int &ie = indcs.ie;
   int &js = indcs.js;

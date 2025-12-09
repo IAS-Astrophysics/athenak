@@ -316,7 +316,7 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resf
   }
 
   // read CC data into host array
-  int mygids = pm->gids_eachrank[global_variable::my_rank];
+  [[maybe_unused]] int mygids = pm->gids_eachrank[global_variable::my_rank];
   IOWrapperSizeT offset_myrank = headeroffset;
   if (!single_file_per_rank) {
     offset_myrank += data_size_ * pm->gids_eachrank[global_variable::my_rank];

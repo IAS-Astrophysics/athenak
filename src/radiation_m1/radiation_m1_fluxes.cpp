@@ -154,7 +154,6 @@ TaskStatus RadiationM1::CalculateFluxes(Driver *pdrive, int stage) {
   auto nmb1 = pmy_pack->nmb_thispack - 1;
   auto &mbsize = pmy_pack->pmb->mb_size;
   auto &nspecies_ = pmy_pack->pradm1->nspecies;
-  auto nvarstotm1 = pmy_pack->pradm1->nvarstot - 1;
   auto nvars_ = pmy_pack->pradm1->nvars;
   auto &params_ = pmy_pack->pradm1->params;
   bool &multi_d = pmy_pack->pmesh->multi_d;
