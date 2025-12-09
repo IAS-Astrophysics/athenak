@@ -345,7 +345,7 @@ class EOS : public EOSPolicy, public ErrorPolicy {
   //  \param[in]    Y    An array of size n_species of the particle fractions.
   //  \param[inout] n_nu The net number densities for each neutrino generation.
   //  \param[inout] e_nu The total energy densities for each neutrino generation.
-  inline void GetTrappedNeutrinos(Real n, Real T, Real *Y, Real n_nu[3], Real e_nu[3]) const {
+  KOKKOS_INLINE_FUNCTION void GetTrappedNeutrinos(Real n, Real T, Real *Y, Real n_nu[3], Real e_nu[3]) const {
    if constexpr (supports_potentials) {
     EOSPolicy::TrappedNeutrinos(n, T*code_units.TemperatureConversion(eos_units), Y, n_nu, e_nu);
 
@@ -367,7 +367,7 @@ class EOS : public EOSPolicy, public ErrorPolicy {
   //  \param[in]    Y    The particle fractions.
   //  \param[in]    n_nu The number densities for each neutrino species (e, ae, m, am, t, at).
   //  \param[inout] Yl   The total lepton fractions.
-  inline void GetLeptonFractions(Real n, Real *Y, Real n_nu[6], Real *Yl) const {
+  KOKKOS_INLINE_FUNCTION void GetLeptonFractions(Real n, Real *Y, Real n_nu[6], Real *Yl) const {
     for (int i=0; i<3; ++i) {
       Yl[i] = Y[i] + (n_nu[2*i] - n_nu[2*i+1])/n;
     }
