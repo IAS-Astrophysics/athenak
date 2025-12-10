@@ -71,13 +71,14 @@ namespace {
 
     struct my_params {
     Real gm0, r0, rho0, dslope, p0_over_r0, qslope, tcool, gamma_gas;
-    Real dfloor, rho_floor0, rho_floor_slope, rad_in_cutoff, rad_in_smooth, rad_out_cutoff, rad_out_smooth;
+    Real dfloor, rho_floor1, rho_floor_slope1, rho_floor2, rho_floor_slope2;
+    Real rad_in_cutoff, rad_in_smooth, rad_out_cutoff, rad_out_smooth;
     Real Omega0;
     Real rs, smoothin, gravsmooth;
     Real Rmin, Ri, Ro, Rmax;
     Real thmin, thi, tho, thmax;
-    Real origid, rmagsph, denstar, ratmagfloor, ratmagfslope;
-    Real mm, beta;
+    Real origid, rmagsph, denstar;
+    Real mm;
     bool is_ideal;
     bool magnetic_fields_enabled;
     static int bc_ix3, bc_ox3;
@@ -124,9 +125,6 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
         user_esrcs_func = MyEfieldMask;
     }
 
-    // If restarting then end initialisation here
-    if (restart) return;
-
     if (pmbp->phydro != nullptr) {
         EOS_Data &eos = pmbp->phydro->peos->eos_data;
         mp.is_ideal = eos.is_ideal;
@@ -137,7 +135,6 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
         mp.is_ideal = eos.is_ideal;
     }
 
-    mp.beta = pin->GetReal("problem","beta");
     mp.denstar = pin->GetOrAddReal("problem","denstar",0.0);
     mp.dslope = pin->GetOrAddReal("problem","dslope",0.0);
     mp.gamma_gas = pin->GetReal("mhd","gamma");
@@ -155,11 +152,11 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     mp.rad_in_smooth = pin->GetOrAddReal("problem","rad_in_smooth",0.1);
     mp.rad_out_cutoff = pin->GetOrAddReal("problem","rad_out_cutoff",0.0);
     mp.rad_out_smooth = pin->GetOrAddReal("problem","rad_out_smooth",0.1);
-    mp.ratmagfloor = pin->GetOrAddReal("problem","ratmagfloor",1.0e6);
-    mp.ratmagfslope = pin->GetOrAddReal("problem","ratmagfslope", 5.5);
     mp.rho0 = pin->GetReal("problem","rho0");
-    mp.rho_floor0 = pin->GetReal("problem","rho_floor0");
-    mp.rho_floor_slope = pin->GetOrAddReal("problem","rho_floor_slope",0.0);
+    mp.rho_floor1 = pin->GetReal("problem","rho_floor1");
+    mp.rho_floor_slope1 = pin->GetOrAddReal("problem","rho_floor_slope1",0.0);
+    mp.rho_floor2 = pin->GetOrAddReal("problem","rho_floor2",1.0e6);
+    mp.rho_floor_slope2 = pin->GetOrAddReal("problem","rho_floor_slope2", 5.5);
     mp.rmagsph = pin->GetOrAddReal("problem","rmagsph",0.0);
     mp.rs = pin->GetOrAddReal("problem", "rstar",0.0);
     mp.gravsmooth = pin->GetOrAddReal("problem","gravsmooth",0.0);
@@ -176,6 +173,9 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     // Initialise a pointer to the disc parameter structure   
     auto mp_ = mp;
 
+    // If restarting then end initialisation here
+    if (restart) return;
+
     // Select either Hydro or MHD and extract the arrays - set on the device specifically since this is where the calculations
     // are going to be done anyway. 
     DvceArray5D<Real> u0_, w0_;
@@ -186,8 +186,6 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
         u0_ = pmbp->pmhd->u0;
         w0_ = pmbp->pmhd->w0;
     }
-
-    std::cout << "Here" << std::endl;
 
     // initialize conservative variables for new run ---------------------------------------
     par_for("magnetosphere_pgen",DevExeSpace(),0,(nmb-1),ks,ke,js,je,is,ie,
@@ -255,8 +253,6 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
 
     });
 
-    std::cout << "Here2" << std::endl;
-
     // initialize magnetic field if required ---------------------------------------
     if (pmbp->pmhd != nullptr) {
 
@@ -269,12 +265,8 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
         Kokkos::realloc(a2, nmb,ncells3,ncells2,ncells1);
         Kokkos::realloc(a3, nmb,ncells3,ncells2,ncells1);
 
-        std::cout << "Here3" << std::endl;
-
         auto &nghbr = pmbp->pmb->nghbr;
         auto &mblev = pmbp->pmb->mb_lev;
-
-        std::cout << "Here4" << std::endl;
 
         par_for("pgen_vector_potential", DevExeSpace(), 0,nmb-1,ks,ke+1,js,je+1,is,ie+1,
         KOKKOS_LAMBDA(int m, int k, int j, int i) {
@@ -400,8 +392,6 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
         
         });
 
-        std::cout << "Here5" << std::endl;
-
         auto &b0_ = pmbp->pmhd->b0;
         par_for("pgen_b0", DevExeSpace(), 0,nmb-1,ks,ke,js,je,is,ie,
         KOKKOS_LAMBDA(int m, int k, int j, int i) {
@@ -432,8 +422,6 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
             }
         });
 
-        std::cout << "Here6" << std::endl;
-
         if (mp.is_ideal) {
             par_for("bcc_e", DevExeSpace(), 0,(nmb-1),ks,ke,js,je,is,ie,
             KOKKOS_LAMBDA(int m, int k, int j, int i) {
@@ -442,8 +430,6 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
                                     SQR(0.5*(b0_.x3f(m,k,j,i) + b0_.x3f(m,k+1,j,i))));
             });
         }
-
-        std::cout << "Here7" << std::endl;
 
     } // End of magnetic field initialization
 
@@ -646,10 +632,9 @@ namespace {
 
 KOKKOS_INLINE_FUNCTION
 Real rho_floor(struct my_params mp, Real rc) {
-    Real rhofloor = mp.rho_floor0;
-    if (rc > mp.rs) rhofloor = mp.rho_floor0*pow(rc/mp.rs, mp.rho_floor_slope);
-    if (mp.mm != 0. && rc > mp.rs) rhofloor += 4.*mp.rho0*mp.mm*mp.mm/mp.beta/mp.ratmagfloor*
-                                            pow((mp.r0/rc),mp.ratmagfslope);
+    Real rhofloor = mp.rho_floor1;
+    if (rc > mp.rs) rhofloor = mp.rho_floor1*pow(rc/mp.r0, mp.rho_floor_slope1);
+    if (mp.mm != 0. && rc > mp.rs) rhofloor += mp.rho_floor2*pow(rc/mp.r0,mp.rho_floor_slope2);
     return fmax(rhofloor,mp.dfloor);
 }
         
