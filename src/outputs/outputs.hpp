@@ -21,7 +21,7 @@
     #error NHISTORY > NREDUCTION in outputs.hpp
 #endif
 
-#define NOUTPUT_CHOICES 156
+#define NOUTPUT_CHOICES 158
 // choices for output variables used in <ouput> blocks in input file
 // TO ADD MORE CHOICES:
 //   - add more strings to array below, change NOUTPUT_CHOICES above appropriately
@@ -80,11 +80,11 @@ static const char *var_choice[NOUTPUT_CHOICES] = {
   "z4c_Bx", "z4c_By", "z4c_Bz",
   "z4c",
 
-  // Weyl (132-135)
+  // Weyl (132-134)
   "weyl_rpsi4", "weyl_ipsi4",
   "weyl",
 
-  // ADM constraints (134-141)
+  // ADM constraints (135-142)
   "con_C",
   "con_H",
   "con_M",
@@ -99,7 +99,13 @@ static const char *var_choice[NOUTPUT_CHOICES] = {
   "tmunu",
 
   // Particles (154-155)
-  "prtcl_all", "prtcl_d"
+  "prtcl_all", "prtcl_d",
+
+  // Angular Momentum (156)
+  "angular_momentum",
+
+  // Torque (157)
+  "drag"
 };
 
 

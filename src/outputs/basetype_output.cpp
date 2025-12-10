@@ -168,6 +168,20 @@ BaseTypeOutput::BaseTypeOutput(ParameterInput *pin, Mesh *pm, OutputParameters o
        << std::endl << "Input file is likely missing corresponding block" << std::endl;
     exit(EXIT_FAILURE);
   }
+  if ((ivar==156) && (pm->pmb_pack->padm == nullptr || pm->pmb_pack->pdyngr == nullptr)) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+       << "Output of angular momentum requested in <output> block '"
+       << out_params.block_name << "' but no adm or dyngrmhd object has been constructed."
+       << std::endl;
+    exit(EXIT_FAILURE);
+  }
+  if ((ivar==157) && (pm->pmb_pack->padm == nullptr || pm->pmb_pack->pdyngr == nullptr)) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+       << "Output of torque requested in <output> block '"
+       << out_params.block_name << "' but no adm or dyngrmhd object has been constructed."
+       << std::endl;
+    exit(EXIT_FAILURE);
+  }
 
   // Now load STL vector of output variables
   outvars.clear();
@@ -702,6 +716,25 @@ BaseTypeOutput::BaseTypeOutput(ParameterInput *pin, Mesh *pm, OutputParameters o
     out_params.contains_derived = true;
     out_params.n_derived += 1;
     outvars.emplace_back("pdens",0,&(derived_var));
+  }
+
+  if (out_params.variable.compare("angular_momentum") == 0) {
+    out_params.contains_derived = true;
+    out_params.n_derived += 6;
+    outvars.emplace_back("Jx",0,&(derived_var));
+    outvars.emplace_back("Jy",1,&(derived_var));
+    outvars.emplace_back("Jz",2,&(derived_var));
+    outvars.emplace_back("JEMx",3,&(derived_var));
+    outvars.emplace_back("JEMy",4,&(derived_var));
+    outvars.emplace_back("JEMz",5,&(derived_var));
+  }
+
+  if (out_params.variable.compare("drag") == 0) {
+    out_params.contains_derived = true;
+    out_params.n_derived += 3;
+    outvars.emplace_back("Tx",0,&(derived_var));
+    outvars.emplace_back("Ty",1,&(derived_var));
+    outvars.emplace_back("Tz",2,&(derived_var));
   }
 
   // initialize vector containing number of output MBs per rank
