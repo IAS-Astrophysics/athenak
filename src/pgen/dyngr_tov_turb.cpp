@@ -104,6 +104,9 @@ void SetupTOV(ParameterInput *pin, Mesh* pmy_mesh_) {
   auto cgs = Primitive::MakeCGS();
   auto geo = Primitive::MakeGeometricSolar();
 
+  // Note: this should be sqrt(1/4pi), not sqrt(4pi). This means all fields are actually
+  // 4pi larger than what shows up in the parameter file, but the results in the paper
+  // are correct.
   const Real mag_cgs_to_geo = Kokkos::sqrt(4.0*M_PI*cgs.MassDensityConversion(geo))*
                          (geo.c/cgs.c);
 
