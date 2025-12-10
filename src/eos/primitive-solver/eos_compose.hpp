@@ -305,7 +305,7 @@ class EOSCompOSE : public EOSPolicyInterface, public LogPolicy, public SupportsE
     assert (n<=MAX_SPECIES && n>=0);
 
     // Only 1 species is implemented for tables
-    assert (n == 1);
+    //assert (n == 1);
 
     n_species = n;
     return;

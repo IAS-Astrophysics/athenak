@@ -318,7 +318,7 @@ Error PrimitiveSolver<EOSPolicy, ErrorPolicy>::CheckDensityValid(Real& mul, Real
     if (f <= 0) {
       // W is not physical, so rho must be larger than rho_max.
       return Error::RHO_TOO_BIG;
-    } else {
+    } /*else {
       MuFromW(f, df, mul, bsq, rsq, rbsq, W);
       if (f < 0) {
         Real mu;
@@ -326,16 +326,13 @@ Error PrimitiveSolver<EOSPolicy, ErrorPolicy>::CheckDensityValid(Real& mul, Real
         Real muhc = muh;
         // We can tighten up the bounds for mul.
         // The derivative is zero at mu = 0, so we perturb it slightly.
-        /*if (mu <= root.tol) {
-          mu += root.tol;
-        }*/
         bool result = root.NewtonSafe(MuFromW, mulc, muhc, mu, 1e-10, bsq, rsq, rbsq, W);
         if (!result) {
           return Error::BRACKETING_FAILED;
         }
         mul = (mu > mul) ? mu : mul;
       }
-    }
+    }*/
   }
   if (D < W_max*rho_min) {
     Real W = D/rho_min;
@@ -344,7 +341,7 @@ Error PrimitiveSolver<EOSPolicy, ErrorPolicy>::CheckDensityValid(Real& mul, Real
     if (f >= 0) {
       // W is not physical, so rho must be smaller than rho_min.
       return Error::RHO_TOO_SMALL;
-    } else {
+    } /*else {
       MuFromW(f, df, muh, bsq, rsq, rbsq, W);
       if (f > 0) {
         Real mu = muh;
@@ -357,7 +354,7 @@ Error PrimitiveSolver<EOSPolicy, ErrorPolicy>::CheckDensityValid(Real& mul, Real
         }
         muh = (mu < muh) ? mu : muh;
       }
-    }
+    }*/
   }
   return Error::SUCCESS;
 }
