@@ -16,7 +16,7 @@
 #include "athena.hpp"
 #include "io_wrapper.hpp"
 
-#define NHISTORY_VARIABLES 200
+#define NHISTORY_VARIABLES 2000
 #if NHISTORY_VARIABLES > NREDUCTION_VARIABLES
     #error NHISTORY > NREDUCTION in outputs.hpp
 #endif

@@ -1231,12 +1231,20 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
 
     par_for("angular_momentum", DevExeSpace(), 0, (nmb-1), ks, ke, js, je, is, ie,
     KOKKOS_LAMBDA(int m, int k, int j, int i) {
+      AthenaPointTensor<Real, TensorSymm::SYM2, 3, 2> g_uu;
+
       // 1. Calculate Metric Determinant (sqrt{gamma}) and ivol
       Real detg = adm::SpatialDet(adm.g_dd(m,0,0,k,j,i), adm.g_dd(m,0,1,k,j,i),
                                   adm.g_dd(m,0,2,k,j,i), adm.g_dd(m,1,1,k,j,i),
                                   adm.g_dd(m,1,2,k,j,i), adm.g_dd(m,2,2,k,j,i));
       Real sqrt_gamma = sqrt(detg);
       Real ivol = 1.0/sqrt_gamma;
+
+      adm::SpatialInv(1.0/detg,
+                 adm.g_dd(m,0,0,k,j,i), adm.g_dd(m,0,1,k,j,i), adm.g_dd(m,0,2,k,j,i),
+                 adm.g_dd(m,1,1,k,j,i), adm.g_dd(m,1,2,k,j,i), adm.g_dd(m,2,2,k,j,i),
+                 &g_uu(0,0), &g_uu(0,1), &g_uu(0,2),
+                 &g_uu(1,1), &g_uu(1,2), &g_uu(2,2));
 
       // 2. Calculate Velocity Components
       // v_d = u_i (covariant spatial velocity)
@@ -1273,14 +1281,17 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
       Real pres = prim(m, IPR, k, j, i);
       Real h = 1.0 + (gamma_gas * pres) / (rho * gamma_m1);
 
-      // 5. Calculate Physical Momentum Density Vectors S_j (covariant)
+      // 5. Calculate Physical Momentum Density Vectors S^j (countravariant)
 
-      Real S_gas[3], S_em[3];
+      Real S_gas[3] = {0.0};
+      Real S_em[3] = {0.0};
       for (int a=0; a<3; ++a) {
-        // Gas Momentum: S_j = rho * h * W * u_j
-        S_gas[a] = rho * h * W * v_d[a];
-        // EM Momentum: S_j = b^2 * W * u_j - b^0 * b_j
-        S_em[a]  = Bsq * v_d[a] * iW - Bv * B_d[a];
+        for (int b=0; b<3; ++b) {
+          // Gas Momentum: S_j = rho * h * W * u_j
+          S_gas[a] += rho * h * W * v_d[b] * g_uu(b,a);
+          // EM Momentum: S_j = b^2 * W * u_j - b^0 * b_j
+          S_em[a]  += (Bsq * v_d[b] * iW - Bv * B_d[b]) * g_uu(b,a);
+        }
       }
 
       // 6. Calculate Coordinates
@@ -1307,7 +1318,7 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
   // Drag Force Integrand (Torque density)
   // Calculates: tau_i = sqrt(gamma) * epsilon_ilm * x^l * F^m
   // Where F^m = - E * d^m alpha + S_j * d^m beta^j + alpha * S^k_j * Gamma^j_k^m
-  // Uses Dx<2> for differentiation (requires 2 ghost zones)
+  // Uses Dx<4> for differentiation (requires 2 ghost zones)
   // Index convention: Derivative index FIRST (e.g. d_k g_ij -> dg_ddd(k,i,j))
   if (name.compare("drag") == 0) {
     int n_comp = 3;
@@ -1367,20 +1378,20 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
       for(int c=0; c<3; ++c) {
         for(int a=0; a<3; ++a) {
           for(int b=a; b<3; ++b) {
-             dg_ddd(c,a,b) = Dx<2>(c, idx, adm.g_dd, m, a, b, k, j, i);
+             dg_ddd(c,a,b) = Dx<4>(c, idx, adm.g_dd, m, a, b, k, j, i);
           }
         }
       }
 
       // d_c alpha
       for(int c=0; c<3; ++c) {
-        dalpha_d(c) = Dx<2>(c, idx, adm.alpha, m, k, j, i);
+        dalpha_d(c) = Dx<4>(c, idx, adm.alpha, m, k, j, i);
       }
 
       // d_c beta^a
       for(int c=0; c<3; ++c) {
         for(int a=0; a<3; ++a) {
-           dbeta_du(c,a) = Dx<2>(c, idx, adm.beta_u, m, a, k, j, i);
+           dbeta_du(c,a) = Dx<4>(c, idx, adm.beta_u, m, a, k, j, i);
         }
       }
 

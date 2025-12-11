@@ -26,6 +26,7 @@
 #include "mhd/mhd.hpp"
 #include "radiation/radiation.hpp"
 #include "dyn_grmhd/dyn_grmhd.hpp"
+#include "utils/flux_generalized.hpp"
 
 #include <Kokkos_Random.hpp>
 
@@ -153,6 +154,29 @@ void RefineTracker(MeshBlockPack* pmbp);
 void RefineRadii(MeshBlockPack* pmbp);
 void Refine(MeshBlockPack* pmbp);
 
+//----------------------------------------------------------------------------------------
+//! \fn void TorusHistory(HistoryData *pdata, Mesh *pm)
+//! \brief New user history function that calls the general-purpose flux integrator.
+//----------------------------------------------------------------------------------------
+void TorusHistory(HistoryData *pdata, Mesh *pm) {
+    ProblemGenerator *pgen = pm->pgen.get();
+    if (pgen->surface_grids.empty()) {
+        pdata->nhist = 0;
+        return;
+    }
+    MeshBlockPack *pmbp = pm->pmb_pack;
+
+    // Convert the vector of unique_ptrs to a vector of raw pointers for the function.
+    std::vector<SphericalSurfaceGrid*> surf_raw_ptrs;
+    surf_raw_ptrs.reserve(pgen->surface_grids.size());
+    for(const auto& s : pgen->surface_grids) {
+        surf_raw_ptrs.push_back(s.get());
+    }
+
+    // Call the generalized flux calculator from "utils/flux_generalized.cpp"
+    TorusFluxes_General(pdata, pmbp, surf_raw_ptrs);
+}
+
 
 KOKKOS_INLINE_FUNCTION
 static void GetSuperposedAndInverse(const Real t, 
@@ -273,8 +297,25 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   }
 
   user_ref_func = Refine;
+  user_hist_func = TorusHistory;
 
   pmbp->padm->SetADMVariables = &SetADMVariablesToBBH;
+
+  // Flux diagnostics setup
+  // Resolution of surface grids
+  const int ntheta = pin->GetOrAddInteger("problem", "flux_ntheta", 64);
+  const int nphi = pin->GetOrAddInteger("problem", "flux_nphi", 128);
+  // Setup Radius of surface grids
+  const Real r_surf_inner = pin->GetOrAddReal("problem", "flux_rsurf_inner", 10.0);
+  const Real dr_surf = pin->GetOrAddReal("problem", "flux_dr_surf", 5.0);
+  const Real r_surf_outer = pin->GetOrAddReal("problem", "flux_rsurf_outer", 20.0);
+  // Create surfaces at three different radii and store them in the class member
+  // This avoids the crash-on-exit from using a static variable.
+  for (Real r_surf = r_surf_inner; r_surf <= r_surf_outer; r_surf += dr_surf) {
+    auto r_func = [=](Real th, Real ph){ return r_surf; };
+    this->surface_grids.push_back(std::make_unique<SphericalSurfaceGrid>(
+        pmbp, ntheta, nphi, r_func, "R" + std::to_string(static_cast<int>(r_surf))));
+  }
 
   const bool is_radiation_enabled = (pmbp->prad != nullptr);
 

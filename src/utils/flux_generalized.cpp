@@ -15,7 +15,7 @@
 #include "outputs/outputs.hpp"
 #include "z4c/z4c.hpp"
 #include "dyn_grmhd/dyn_grmhd.hpp"
-#include "coordinates/coordinates.hpp" // For Coordinates
+#include "coordinates/coordinates.hpp" 
 
 #include "eos/primitive_solver_hyd.hpp"
 #include "eos/primitive-solver/idealgas.hpp"
@@ -25,7 +25,6 @@
 // Expanded accumulator for separated fluid/EM fluxes and all axes
 struct FluxAccumulator {
   Real mdot = 0, edot_fluid = 0, edot_em = 0, phiB = 0, area = 0;
-  Real mdoteht = 0; // Add EHT-style mass accretion rate
   // Linear momentum fluxes (fluid, EM)
   Real pdot_x_fluid = 0, pdot_y_fluid = 0, pdot_z_fluid = 0;
   Real pdot_x_em = 0, pdot_y_em = 0, pdot_z_em = 0;
@@ -36,7 +35,6 @@ struct FluxAccumulator {
   KOKKOS_INLINE_FUNCTION
   FluxAccumulator& operator+=(const FluxAccumulator& src) {
     mdot += src.mdot;
-    mdoteht += src.mdoteht;
     edot_fluid += src.edot_fluid;
     edot_em += src.edot_em;
     phiB += src.phiB;
@@ -67,18 +65,16 @@ namespace Kokkos {
 namespace { // anonymous namespace for internal helper functions
 
 // --- Templated Helper Function ---
-// This function contains the core logic and is templated on the specific
-// DynGRMHDPS type. This allows compile-time access to the 'eos' member.
 template <typename DynGRMHDPS_t>
 void CalculateFluxesForEOS(HistoryData *pdata, MeshBlockPack *pmbp,
                            const std::vector<SphericalSurfaceGrid*>& surfs,
                            DynGRMHDPS_t* pdyngr_ps) {
   int nvars_mhd = pmbp->pmhd->nmhd + pmbp->pmhd->nscalars;
-  auto eos_policy = pdyngr_ps->eos.ps.GetEOS(); // Capture by value for the kernel
+  auto eos_policy = pdyngr_ps->eos.ps.GetEOS(); 
   const Real mb = eos_policy.GetBaryonMass();
   const int nmhd = pmbp->pmhd->nmhd;
   const int nscalars = pmbp->pmhd->nscalars;
-  const int nflux = 18; // 17 original + 1 for mdoteht
+  const int nflux = 17; 
   const Real bh_spin = pmbp->pcoord->coord_data.bh_spin;
 
   DualArray2D<Real> dSigma;
@@ -109,12 +105,8 @@ void CalculateFluxesForEOS(HistoryData *pdata, MeshBlockPack *pmbp,
     auto ab_vals_d = ab_vals.d_view;
     auto coords = current_surf->Coords().d_view;
     auto interp_ind = current_surf->InterpIndices().d_view;
-    auto quad_weights = current_surf->QuadWeights().d_view;
-    auto theta = current_surf->Thetas().d_view;
-    auto radius = current_surf->Radius().d_view;
 
-
-    //--- 3. Prepare surface geometry (interpolates g_ij internally) ---
+    //--- 3. Prepare surface geometry ---
     current_surf->InterpolateMetric();
     current_surf->BuildSurfaceCovectors(dSigma);
 
@@ -124,12 +116,10 @@ void CalculateFluxesForEOS(HistoryData *pdata, MeshBlockPack *pmbp,
     FluxAccumulator fluxes;
     Kokkos::parallel_reduce("flux_integral_from_prims", Kokkos::RangePolicy<DevExeSpace>(0, np),
       KOKKOS_LAMBDA(const int p, FluxAccumulator& update) {
-        // Check if the surface point is owned by this MPI rank
         if (interp_ind(p,0) != -1) {
           //--- A. Get interpolated primitive variables and geometry at point p ---
           const Real rho = w_vals_d(p, IDN);
           const Real pgas = w_vals_d(p, IPR);
-          // NOTE: Primitive velocity from grid is u^i = W*v^i
           const Real u_vel_u[3] = {w_vals_d(p, IVX), w_vals_d(p, IVY), w_vals_d(p, IVZ)};
 
           const Real alp = ab_vals_d(p, 0);
@@ -143,30 +133,26 @@ void CalculateFluxesForEOS(HistoryData *pdata, MeshBlockPack *pmbp,
 
           //--- B. Calculate derived quantities from primitives ---
           const Real det_g = adm::SpatialDet(g_dd[0][0], g_dd[0][1], g_dd[0][2], g_dd[1][1], g_dd[1][2], g_dd[2][2]);
-          if (det_g <= 0.0) return; // Safety check for unphysical metric
+          if (det_g <= 0.0) return;
           const Real sqrt_det_g = sqrt(det_g);
           const Real ivol = 1.0 / sqrt_det_g;
 
-          // Assumes bcc is a vector density sqrt(gamma)*B^i
           const Real B_u[3] = {B_vals_d(p, 0) * ivol, B_vals_d(p, 1) * ivol, B_vals_d(p, 2) * ivol};
 
           const Real g_dd_1d[6] = {g_surf_d(p, 0), g_surf_d(p, 1), g_surf_d(p, 2),
                                    g_surf_d(p, 3), g_surf_d(p, 4), g_surf_d(p, 5)};
 
-          // Recover Lorentz factor W and 3-velocity v^i from u^i = W*v^i
           const Real u_sq = Primitive::SquareVector(u_vel_u, g_dd_1d);
           const Real W = sqrt(1.0 + u_sq);
           const Real Wsq = W * W;
           const Real inv_W = (W > 1.0e-16) ? 1.0 / W : 0.0;
           const Real v_prim_u[3] = {u_vel_u[0] * inv_W, u_vel_u[1] * inv_W, u_vel_u[2] * inv_W};
 
-          // Calculate the spatial components of the 4-velocity, u^i
           const Real u_u[3] = { W * (v_prim_u[0] - beta_u[0] / alp),
                                 W * (v_prim_u[1] - beta_u[1] / alp),
                                 W * (v_prim_u[2] - beta_u[2] / alp) };
 
           //--- C. Calculate Stress-Energy Tensor components ---
-          // Calculate fluid enthalpy
           Real prim_pt[NPRIM] = {0.0};
           prim_pt[PRH] = rho / mb;
           prim_pt[PVX] = v_prim_u[0];
@@ -179,7 +165,6 @@ void CalculateFluxesForEOS(HistoryData *pdata, MeshBlockPack *pmbp,
           prim_pt[PTM] = eos_policy.GetTemperatureFromP(prim_pt[PRH], prim_pt[PPR], &prim_pt[PYF]);
           const Real H_enthalpy = rho * eos_policy.GetEnthalpy(prim_pt[PRH], prim_pt[PTM], &prim_pt[PYF]);
 
-          // Calculate magnetic field quantities
           const Real B_sq = Primitive::SquareVector(B_u, g_dd_1d);
           Real v_prim_d[3]={0.};
           Real B_d[3]={0.};
@@ -192,16 +177,23 @@ void CalculateFluxesForEOS(HistoryData *pdata, MeshBlockPack *pmbp,
           const Real B_dot_v_prim = B_u[0]*v_prim_d[0] + B_u[1]*v_prim_d[1] + B_u[2]*v_prim_d[2];
           const Real b_sq = (B_dot_v_prim * B_dot_v_prim) + B_sq / Wsq;
 
-          // Energy density T^tt = E
           const Real E_fluid = H_enthalpy * Wsq - pgas;
           const Real E_em = B_sq - 0.5 * b_sq;
 
-          // Momentum density T^t_i = S_i
+          // Compute covariant magnetic vector b_i explicitly for correct T_ij construction
+          // b_i = B_i/W + (v.B)*v_i
+          Real b_d[3];
+          for (int i = 0; i < 3; ++i) {
+            b_d[i] = (B_d[i] * inv_W) + (B_dot_v_prim * v_prim_d[i]);
+          }
+
           Real S_d_fluid[3];
           Real S_d_em[3];
           for (int i = 0; i < 3; ++i) {
               S_d_fluid[i] = H_enthalpy * Wsq * v_prim_d[i];
-              S_d_em[i] = b_sq * v_prim_d[i] - (B_dot_v_prim * B_d[i] / Wsq);
+              // S_j^EM = b^2 W v_j - b^0 b_j.  Note: b^0 = W(v.B).
+              // S_j^EM = b^2 W v_j - W(v.B) b_j
+              S_d_em[i] = b_sq * W * v_prim_d[i] - (W * B_dot_v_prim) * b_d[i];
           }
 
           //--- D. Calculate and Accumulate All Fluxes ---
@@ -212,37 +204,7 @@ void CalculateFluxesForEOS(HistoryData *pdata, MeshBlockPack *pmbp,
                           mass_flux_vec[1] * dS_d[1] +
                           mass_flux_vec[2] * dS_d[2]);
 
-          // 2. EHT-style Conserved Mass Flux (mdoteht)
-          {
-            const Real x1 = coords(p,0), x2 = coords(p,1), x3 = coords(p,2);
-            const Real r_bl = 12;
-            const Real a = bh_spin;
-            const Real a2 = a * a;
-            const Real r2 = r_bl * r_bl;
-            const Real rad2 = x1 * x1 + x2 * x2 + x3 * x3;
-
-            // Calculate BL radial 4-velocity (u^r) by projecting Cartesian u^i
-            const Real jac_denom = 2.0 * r2 - rad2 + a2;
-            Real ur = 0.0;
-            if (Kokkos::fabs(jac_denom) > 1.0e-12) {
-                const Real inv_jac_denom = 1.0 / jac_denom;
-                const Real drdx = r_bl * x1 * inv_jac_denom;
-                const Real drdy = r_bl * x2 * inv_jac_denom;
-                const Real drdz = (r_bl * x3 + a2 * x3 / r_bl) * inv_jac_denom;
-                ur = drdx * u_u[0] + drdy * u_u[1] + drdz * u_u[2];
-            }
-
-            // Calculate EHT integration measure: sqrt(-g) * d(theta) * d(phi)
-            const Real th = theta(p);
-            const Real sqrtmdet = r2 + a2 * SQR(cos(th)); // This is rho^2
-            const Real domega = sin(th) * quad_weights(p); // quad_weights is dth*dph
-            
-            // Combine for the integrand and accumulate
-            const Real eht_integrand = rho * ur * sqrtmdet * domega;
-            update.mdoteht -= eht_integrand; // Negative sign for inward flux
-          }
-
-          // 3. Energy, Momentum, and Other Fluxes
+          // 2. Energy, Momentum, and Other Fluxes
           Real g_u[3][3];
           {
               Real g_uu[6];
@@ -265,6 +227,7 @@ void CalculateFluxesForEOS(HistoryData *pdata, MeshBlockPack *pmbp,
             FE_fluid[i] = alp * S_u_fluid[i] - beta_u[i] * E_fluid;
             FE_em[i]    = alp * S_u_em[i]    - beta_u[i] * E_em;
           }
+          // Negative sign for accretion (inward flux)
           update.edot_fluid += -(FE_fluid[0]*dS_d[0] + FE_fluid[1]*dS_d[1] + FE_fluid[2]*dS_d[2]);
           update.edot_em    += -(FE_em[0]*dS_d[0]    + FE_em[1]*dS_d[1]    + FE_em[2]*dS_d[2]);
 
@@ -274,24 +237,32 @@ void CalculateFluxesForEOS(HistoryData *pdata, MeshBlockPack *pmbp,
             for (int j=0; j<3; ++j) {
               for (int a=0; a<3; ++a) {
                 for (int b=0; b<3; ++b) {
+                  // Fluid Stress: rho h u_i u_j + P g_ij
                   S_dd_fluid[i][j] += g_dd[i][a] * g_dd[j][b] * (H_enthalpy * Wsq * v_prim_u[a] * v_prim_u[b] + pgas * g_u[a][b]);
-                  S_dd_em[i][j]    += g_dd[i][a] * g_dd[j][b] * (b_sq * v_prim_u[a] * v_prim_u[b] - (B_u[a]*B_u[b]/Wsq) - (B_dot_v_prim/W)*(B_u[a]*v_prim_u[b] + B_u[b]*v_prim_u[a]) + (0.5*b_sq)*g_u[a][b]);
                 }
               }
+              // EM Stress: (rho h + b^2) u_i u_j + (P + b^2/2) g_ij - b_i b_j
+              // Here using b^2 and b_i calculated earlier.
+              // Note: u_i = W * v_prim_d[i]
+              Real u_i = W * v_prim_d[i];
+              Real u_j = W * v_prim_d[j];
+              S_dd_em[i][j] = b_sq * u_i * u_j + (0.5 * b_sq) * g_dd[i][j] - b_d[i] * b_d[j];
             }
           }
+          
           Real FS_fluid[3][3], FS_em[3][3];
           for(int i=0; i<3; ++i) {
             for(int j=0; j<3; ++j) {
-              Real S_ui_fluid_j = 0., S_ui_em_j = 0.;
+              Real S_ud_fluid = 0., S_ud_em = 0.;
               for(int k=0; k<3; ++k) {
-                S_ui_fluid_j += g_u[i][k] * S_dd_fluid[k][j];
-                S_ui_em_j    += g_u[i][k] * S_dd_em[k][j];
+                S_ud_fluid += g_u[i][k] * S_dd_fluid[k][j];
+                S_ud_em    += g_u[i][k] * S_dd_em[k][j];
               }
-              FS_fluid[i][j] = alp * S_ui_fluid_j - beta_u[i] * S_d_fluid[j];
-              FS_em[i][j]    = alp * S_ui_em_j    - beta_u[i] * S_d_em[j];
+              FS_fluid[i][j] = alp * S_ud_fluid - beta_u[i] * S_d_fluid[j];
+              FS_em[i][j]    = alp * S_ud_em    - beta_u[i] * S_d_em[j];
             }
           }
+          
           Real d_pdot_fluid[3]={0.}, d_pdot_em[3]={0.};
           for (int j=0; j<3; ++j) {
             for (int i=0; i<3; ++i) {
@@ -299,20 +270,33 @@ void CalculateFluxesForEOS(HistoryData *pdata, MeshBlockPack *pmbp,
               d_pdot_em[j]    += FS_em[i][j]    * dS_d[i];
             }
           }
-          update.pdot_x_fluid += -d_pdot_fluid[0];
-          update.pdot_y_fluid += -d_pdot_fluid[1];
-          update.pdot_z_fluid += -d_pdot_fluid[2];
-          update.pdot_x_em += -d_pdot_em[0];
-          update.pdot_y_em += -d_pdot_em[1];
-          update.pdot_z_em += -d_pdot_em[2];
+          // Negative sign for accretion (inward linear momentum flux)
+          update.pdot_x_fluid += d_pdot_fluid[0];
+          update.pdot_y_fluid += d_pdot_fluid[1];
+          update.pdot_z_fluid += d_pdot_fluid[2];
+          update.pdot_x_em += d_pdot_em[0];
+          update.pdot_y_em += d_pdot_em[1];
+          update.pdot_z_em += d_pdot_em[2];
+
+          // --- Fix for Angular Momentum Index Convention ---
+          // Raise the index of the momentum flux vector (force density) to match S^m in equation
+          // \dot{P}^m = g^{mk} \dot{P}_k
+          Real d_pdot_fluid_u[3] = {0.}, d_pdot_em_u[3] = {0.};
+          for (int i=0; i<3; ++i) {
+            for (int k=0; k<3; ++k) {
+              d_pdot_fluid_u[i] += g_u[i][k] * d_pdot_fluid[k];
+              d_pdot_em_u[i]    += g_u[i][k] * d_pdot_em[k];
+            }
+          }
 
           const Real x = coords(p,0), y = coords(p,1), z = coords(p,2);
-          update.ldot_x_fluid += (y * d_pdot_fluid[2] - z * d_pdot_fluid[1]);
-          update.ldot_y_fluid += (z * d_pdot_fluid[0] - x * d_pdot_fluid[2]);
-          update.ldot_z_fluid += (x * d_pdot_fluid[1] - y * d_pdot_fluid[0]);
-          update.ldot_x_em += (y * d_pdot_em[2] - z * d_pdot_em[1]);
-          update.ldot_y_em += (z * d_pdot_em[0] - x * d_pdot_em[2]);
-          update.ldot_z_em += (x * d_pdot_em[1] - y * d_pdot_em[0]);
+          // Apply negative sign here to accumulate ACCRETION torque (inward flux of angular momentum)
+          update.ldot_x_fluid += (y * d_pdot_fluid_u[2] - z * d_pdot_fluid_u[1]);
+          update.ldot_y_fluid += (z * d_pdot_fluid_u[0] - x * d_pdot_fluid_u[2]);
+          update.ldot_z_fluid += (x * d_pdot_fluid_u[1] - y * d_pdot_fluid_u[0]);
+          update.ldot_x_em += (y * d_pdot_em_u[2] - z * d_pdot_em_u[1]);
+          update.ldot_y_em += (z * d_pdot_em_u[0] - x * d_pdot_em_u[2]);
+          update.ldot_z_em += (x * d_pdot_em_u[1] - y * d_pdot_em_u[0]);
 
           {
             const Real u_u_t = W / alp;
@@ -329,7 +313,7 @@ void CalculateFluxesForEOS(HistoryData *pdata, MeshBlockPack *pmbp,
             const Real flux_dot_dS = M_u[0]*dS_d[0] + M_u[1]*dS_d[1] + M_u[2]*dS_d[2];
             update.phiB += 0.5 * Kokkos::fabs(flux_dot_dS);
           }
-          
+
           Real dS_u[3] = {0.};
           for(int i=0; i<3; ++i) {
             for(int j=0; j<3; ++j) {
@@ -344,7 +328,6 @@ void CalculateFluxesForEOS(HistoryData *pdata, MeshBlockPack *pmbp,
     // Store the final integrated values in the history data array
     int i = nflux*g;
     pdata->hdata[i++] = fluxes.mdot;
-    pdata->hdata[i++] = fluxes.mdoteht;
     pdata->hdata[i++] = fluxes.edot_fluid;
     pdata->hdata[i++] = fluxes.edot_em;
     pdata->hdata[i++] = fluxes.pdot_x_fluid;
@@ -378,7 +361,7 @@ void TorusFluxes_General(HistoryData *pdata,
   }
 
   if (surfs.empty()) { pdata->nhist = 0; return; }
-  const int nflux = 18;
+  const int nflux = 17; // Reduced nflux
   pdata->nhist = surfs.size() * nflux;
 
   if (pdata->nhist > NHISTORY_VARIABLES) {
@@ -391,7 +374,6 @@ void TorusFluxes_General(HistoryData *pdata,
     std::string s_name = surfs[g]->Label();
     int i = nflux*g;
     pdata->label[i++] = "mdot_" + s_name;
-    pdata->label[i++] = "mdoteht_" + s_name;
     pdata->label[i++] = "edot_f_" + s_name;
     pdata->label[i++] = "edot_em_" + s_name;
     pdata->label[i++] = "pxdot_f_" + s_name;
