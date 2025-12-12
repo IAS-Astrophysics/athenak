@@ -105,7 +105,7 @@ static const char *var_choice[NOUTPUT_CHOICES] = {
   "angular_momentum",
 
   // Torque (157)
-  "drag"
+  "torque"
 };
 
 

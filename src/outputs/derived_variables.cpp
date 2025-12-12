@@ -1217,7 +1217,9 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
   // 3-5: EM    Angular Momentum (Lx, Ly, Lz)
   if (name.compare("angular_momentum") == 0) {
     int n_comp = 6;
-    Kokkos::realloc(derived_var, nmb, n_comp, n3, n2, n1);
+    if (derived_var.extent(4) <= 1) {
+      Kokkos::realloc(derived_var, nmb, n_dv, n3, n2, n1);
+    }
 
     auto dv   = derived_var;
     auto &adm = pm->pmb_pack->padm->adm;
@@ -1332,11 +1334,11 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
     i_dv += n_comp;
   }
 
-  // Drag Force Integrand (Torque density)
+  // Torque Integrand (Torque density)
   // tau_i = sqrt(gamma) * epsilon_ilm * x^l * F^m
   // with F^m = - E d^m alpha + S_j d^m beta^j + alpha S^k_j Gamma^j_k^m
   // All E, S_j, S_ij taken from a *single* Valencia stress-energy construction.
-  if (name.compare("drag") == 0) {
+  if (name.compare("torque") == 0) {
     int n_comp = 3;
     if (derived_var.extent(4) <= 1)
       Kokkos::realloc(derived_var, nmb, n_comp, n3, n2, n1);
@@ -1348,7 +1350,7 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
 
     Real gamma_gas = pm->pmb_pack->pmhd->peos->eos_data.gamma;
 
-    par_for("drag", DevExeSpace(), 0, (nmb-1), ks, ke, js, je, is, ie,
+    par_for("torque", DevExeSpace(), 0, (nmb-1), ks, ke, js, je, is, ie,
     KOKKOS_LAMBDA(int m, int k, int j, int i) {
       // --- 0. Cell geometry + inverse dx ---
       Real idx[3] = {
@@ -1538,9 +1540,9 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
                             size.d_view(m).x3min, size.d_view(m).x3max);
 
       // tau_i = sqrt(gamma) (r x F)^i
-      dv(m,0,k,j,i) = (x2v * F_u(2) - x3v * F_u(1)) * sqrt_gamma; // tau_x
-      dv(m,1,k,j,i) = (x3v * F_u(0) - x1v * F_u(2)) * sqrt_gamma; // tau_y
-      dv(m,2,k,j,i) = (x1v * F_u(1) - x2v * F_u(0)) * sqrt_gamma; // tau_z
+      dv(m,i_dv+0,k,j,i) = (x2v * F_u(2) - x3v * F_u(1)) * sqrt_gamma; // tau_x
+      dv(m,i_dv+1,k,j,i) = (x3v * F_u(0) - x1v * F_u(2)) * sqrt_gamma; // tau_y
+      dv(m,i_dv+2,k,j,i) = (x1v * F_u(1) - x2v * F_u(0)) * sqrt_gamma; // tau_z
     });
 
     i_dv += n_comp;

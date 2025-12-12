@@ -155,6 +155,7 @@ void TorusFluxes_General(HistoryData *pdata,
     current_surf->InterpolateMetric();
     current_surf->BuildSurfaceCovectors(dSigma);
     auto g_surf_d = current_surf->Metric().d_view;
+    auto dSigma_d = dSigma.d_view;
 
     FluxAccumulator fluxes;
 
@@ -197,9 +198,9 @@ void TorusFluxes_General(HistoryData *pdata,
 
         // dS_i (covariant surface element)
         const Real dS_d[3] = {
-          dSigma.d_view(p,0),
-          dSigma.d_view(p,1),
-          dSigma.d_view(p,2)
+          dSigma_d(p,0),
+          dSigma_d(p,1),
+          dSigma_d(p,2)
         };
 
         // Inverse metric g^{ij}

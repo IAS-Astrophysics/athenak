@@ -729,7 +729,7 @@ BaseTypeOutput::BaseTypeOutput(ParameterInput *pin, Mesh *pm, OutputParameters o
     outvars.emplace_back("JEMz",5,&(derived_var));
   }
 
-  if (out_params.variable.compare("drag") == 0) {
+  if (out_params.variable.compare("torque") == 0) {
     out_params.contains_derived = true;
     out_params.n_derived += 3;
     outvars.emplace_back("Tx",0,&(derived_var));
