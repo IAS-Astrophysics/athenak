@@ -339,56 +339,29 @@ void TorusFluxes_General(HistoryData *pdata,
         update.pdot_y_em    += d_pdot_em[1];
         update.pdot_z_em    += d_pdot_em[2];
 
-        // --- G. Angular-momentum fluxes (FIXED): use torque integrand consistent with paper ---
-        // We want:  A^m = ( α S^{j m} - β^j S^m ) dS_j
-        // where S^{j m} = γ^{jk} S_k{}^m  (i.e. raise the second index of S^j{}_k)
-        // then Ldot = r × A  (component-wise with Cartesian coordinates)
-        const Real x = coords(p,0);
-        const Real y = coords(p,1);
-        const Real z = coords(p,2);
+        // --- G. Angular-momentum fluxes (MINIMAL FIX)
+        // Angular momentum density uses J_a = ε_{aℓm} x^ℓ S_m (covariant S_m).
+        // Therefore flux through surface is
+        //   Ldot_a = ∮ ε_{aℓm} x^ℓ (F^j{}_m dΣ_j)
+        // and we already computed A_m := (F^j{}_m dΣ_j) as d_pdot_*[m] above.
+        {
+          const Real x = coords(p,0);
+          const Real y = coords(p,1);
+          const Real z = coords(p,2);
 
-        // beta·dS = β^j dS_j
-        const Real beta_dot_dS =
-            beta_u[0]*dS_d[0] + beta_u[1]*dS_d[1] + beta_u[2]*dS_d[2];
+          // A_m = F^j{}_m dΣ_j  (covariant in m)
+          const Real A_fluid_d[3] = { d_pdot_fluid[0], d_pdot_fluid[1], d_pdot_fluid[2] };
+          const Real A_em_d[3]    = { d_pdot_em[0],    d_pdot_em[1],    d_pdot_em[2]    };
 
-        // Build S^{j m} by raising the second (down) index of S^j{}_k:
-        // S^{j m} = S^j{}_k g^{m k}
-        Real S_fluid_uu[3][3], S_em_uu[3][3];
-        for (int jdir = 0; jdir < 3; ++jdir) {
-          for (int mdir = 0; mdir < 3; ++mdir) {
-            Real sum_f  = 0.0;
-            Real sum_em = 0.0;
-            for (int kdir = 0; kdir < 3; ++kdir) {
-              sum_f  += S_fluid_ud[jdir][kdir] * g_u[mdir][kdir];
-              sum_em += S_em_ud[jdir][kdir]    * g_u[mdir][kdir];
-            }
-            S_fluid_uu[jdir][mdir] = sum_f;
-            S_em_uu[jdir][mdir]    = sum_em;
-          }
+          // Ldot = r × A  (same convention as your angular_momentum density block)
+          update.ldot_x_fluid += (y * A_fluid_d[2] - z * A_fluid_d[1]);
+          update.ldot_y_fluid += (z * A_fluid_d[0] - x * A_fluid_d[2]);
+          update.ldot_z_fluid += (x * A_fluid_d[1] - y * A_fluid_d[0]);
+
+          update.ldot_x_em    += (y * A_em_d[2] - z * A_em_d[1]);
+          update.ldot_y_em    += (z * A_em_d[0] - x * A_em_d[2]);
+          update.ldot_z_em    += (x * A_em_d[1] - y * A_em_d[0]);
         }
-
-        // A^m = α S^{j m} dS_j - (β·dS) S^m
-        Real A_fluid_u[3] = {0.0, 0.0, 0.0};
-        Real A_em_u[3]    = {0.0, 0.0, 0.0};
-        for (int mdir = 0; mdir < 3; ++mdir) {
-          Real contr_f  = 0.0;
-          Real contr_em = 0.0;
-          for (int jdir = 0; jdir < 3; ++jdir) {
-            contr_f  += S_fluid_uu[jdir][mdir] * dS_d[jdir];
-            contr_em += S_em_uu[jdir][mdir]    * dS_d[jdir];
-          }
-          A_fluid_u[mdir] = alp * contr_f  - beta_dot_dS * S_fluid_u[mdir];
-          A_em_u[mdir]    = alp * contr_em - beta_dot_dS * S_em_u[mdir];
-        }
-
-        // Ldot = r × A
-        update.ldot_x_fluid += (y * A_fluid_u[2] - z * A_fluid_u[1]);
-        update.ldot_y_fluid += (z * A_fluid_u[0] - x * A_fluid_u[2]);
-        update.ldot_z_fluid += (x * A_fluid_u[1] - y * A_fluid_u[0]);
-
-        update.ldot_x_em    += (y * A_em_u[2] - z * A_em_u[1]);
-        update.ldot_y_em    += (z * A_em_u[0] - x * A_em_u[2]);
-        update.ldot_z_em    += (x * A_em_u[1] - y * A_em_u[0]);
 
         // --- H. Phi_B (magnetic flux) ---
         {

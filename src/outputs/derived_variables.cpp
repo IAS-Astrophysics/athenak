@@ -1294,16 +1294,6 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
                                     S_fluid_d, S_em_d,
                                     S_fluid_dd, S_em_dd);
 
-      // Raise to get S^i (for cross product L = r x S)
-      Real S_fluid_u[3] = {0.0,0.0,0.0};
-      Real S_em_u[3]    = {0.0,0.0,0.0};
-      for (int a = 0; a < 3; ++a) {
-        for (int b = 0; b < 3; ++b) {
-          S_fluid_u[a] += g_uu(a,b) * S_fluid_d[b];
-          S_em_u[a]    += g_uu(a,b) * S_em_d[b];
-        }
-      }
-
       // --- 5. Coordinates (Cartesian) ---
       Real x1v = CellCenterX(i - is, indcs.nx1,
                             size.d_view(m).x1min, size.d_view(m).x1max);
@@ -1317,34 +1307,46 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
 
       // Fluid
       dv(m, i_dv,   k, j, i) =
-        (x2v * S_fluid_u[2] - x3v * S_fluid_u[1]) * sqrt_gamma; // Lx
+        (x2v * S_fluid_d[2] - x3v * S_fluid_d[1]) * sqrt_gamma; // Lx
       dv(m, i_dv+1, k, j, i) =
-        (x3v * S_fluid_u[0] - x1v * S_fluid_u[2]) * sqrt_gamma; // Ly
+        (x3v * S_fluid_d[0] - x1v * S_fluid_d[2]) * sqrt_gamma; // Ly
       dv(m, i_dv+2, k, j, i) =
-        (x1v * S_fluid_u[1] - x2v * S_fluid_u[0]) * sqrt_gamma; // Lz
+        (x1v * S_fluid_d[1] - x2v * S_fluid_d[0]) * sqrt_gamma; // Lz
 
       // EM
       dv(m, i_dv+3, k, j, i) =
-        (x2v * S_em_u[2] - x3v * S_em_u[1]) * sqrt_gamma;
+        (x2v * S_em_d[2] - x3v * S_em_d[1]) * sqrt_gamma;
       dv(m, i_dv+4, k, j, i) =
-        (x3v * S_em_u[0] - x1v * S_em_u[2]) * sqrt_gamma;
+        (x3v * S_em_d[0] - x1v * S_em_d[2]) * sqrt_gamma;
       dv(m, i_dv+5, k, j, i) =
-        (x1v * S_em_u[1] - x2v * S_em_u[0]) * sqrt_gamma;
+        (x1v * S_em_d[1] - x2v * S_em_d[0]) * sqrt_gamma;
     });
     i_dv += n_comp;
   }
 
   // Torque Integrand (Torque density)
-  // tau_i = sqrt(gamma) * epsilon_ilm * x^l * F^m
-  // with F^m = - E d^m alpha + S_j d^m beta^j + alpha S^k_j Gamma^j_k^m
-  // All E, S_j, S_ij taken from a *single* Valencia stress-energy construction.
+  // Goal: consistent with paper’s momentum source (Eq. like 9a) AND the derived
+  // angular-momentum balance law.
+  //
+  // We output the *densitized* torque source for Cartesian rotations about the origin:
+  //
+  //   tau_a = sqrt(gamma) * [ (r × G)_a  +  (F^j{}_i ∂_j φ^i)_a ]
+  //
+  // where
+  //   G_i =  - E ∂_i α  +  S_j ∂_i β^j  +  (1/2) α S^{jk} ∂_i γ_{jk}
+  // and for Cartesian rotations: (F^j{}_i ∂_j φ^i)_a = F^j{}_i ε_{a j}{}^{i},
+  // with
+  //   F^j{}_i = α S^j{}_i - β^j S_i  (momentum flux, non-densitized here).
+  //
+  // IMPORTANT: assumes E, S_i, S_ij returned by ValenciaStressEnergyTotal are
+  // *non-densitized* (no sqrt(gamma)); we densitize only at the end.
   if (name.compare("torque") == 0) {
     int n_comp = 3;
     if (derived_var.extent(4) <= 1)
       Kokkos::realloc(derived_var, nmb, n_comp, n3, n2, n1);
 
-    auto dv   = derived_var;
-    auto &adm = pm->pmb_pack->padm->adm;
+    auto dv    = derived_var;
+    auto &adm  = pm->pmb_pack->padm->adm;
     auto &prim = pm->pmb_pack->pmhd->w0;
     auto &bcc  = pm->pmb_pack->pmhd->bcc0;
 
@@ -1370,7 +1372,15 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
 
       Real detg = adm::SpatialDet(g_dd_1d[0], g_dd_1d[1], g_dd_1d[2],
                                   g_dd_1d[3], g_dd_1d[4], g_dd_1d[5]);
-      Real sqrt_gamma = detg > 0.0 ? sqrt(detg) : 0.0;
+
+      // Guard against bad metric
+      if (detg <= 0.0) {
+        dv(m,i_dv+0,k,j,i) = 0.0;
+        dv(m,i_dv+1,k,j,i) = 0.0;
+        dv(m,i_dv+2,k,j,i) = 0.0;
+        return;
+      }
+      Real sqrt_gamma = sqrt(detg);
 
       AthenaPointTensor<Real, TensorSymm::SYM2, 3, 2> g_uu;
       adm::SpatialInv(1.0/detg,
@@ -1381,16 +1391,12 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
 
       Real alpha = adm.alpha(m, k, j, i);
 
-      // --- 2. Metric derivatives and Christoffels (same as before) ---
-      AthenaPointTensor<Real, TensorSymm::SYM2, 3, 3> dg_ddd;
-      AthenaPointTensor<Real, TensorSymm::SYM2, 3, 3> Gamma_ddd;
-      AthenaPointTensor<Real, TensorSymm::SYM2, 3, 3> Gamma_udd;
-      AthenaPointTensor<Real, TensorSymm::NONE, 3, 3> Gamma_udu;
+      // --- 2. Metric derivatives, lapse/shift derivatives (index DOWN: ∂_i) ---
+      AthenaPointTensor<Real, TensorSymm::SYM2, 3, 3> dg_ddd;   // ∂_c γ_ab
+      AthenaPointTensor<Real, TensorSymm::NONE, 3, 1> dalpha_d; // ∂_c α
+      AthenaPointTensor<Real, TensorSymm::NONE, 3, 2> dbeta_du; // ∂_c β^a
 
-      AthenaPointTensor<Real, TensorSymm::NONE, 3, 1> dalpha_d;
-      AthenaPointTensor<Real, TensorSymm::NONE, 3, 2> dbeta_du;
-
-      // d_c g_ab
+      // ∂_c γ_ab
       for (int c = 0; c < 3; ++c) {
         for (int a = 0; a < 3; ++a) {
           for (int b = a; b < 3; ++b) {
@@ -1399,42 +1405,15 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
         }
       }
 
-      // d_c alpha
+      // ∂_c α
       for (int c = 0; c < 3; ++c) {
         dalpha_d(c) = Dx<4>(c, idx, adm.alpha, m, k, j, i);
       }
 
-      // d_c beta^a
+      // ∂_c β^a
       for (int c = 0; c < 3; ++c) {
         for (int a = 0; a < 3; ++a) {
           dbeta_du(c,a) = Dx<4>(c, idx, adm.beta_u, m, a, k, j, i);
-        }
-      }
-
-      // Gamma_cab = 0.5 (d_a g_bc + d_b g_ac - d_c g_ab)
-      for (int c = 0; c < 3; ++c)
-      for (int a = 0; a < 3; ++a)
-      for (int b = a; b < 3; ++b) {
-        Gamma_ddd(c,a,b) = 0.5 * (dg_ddd(a,b,c) + dg_ddd(b,a,c) - dg_ddd(c,a,b));
-      }
-
-      // Raise first index: Gamma^c_ab
-      for (int c = 0; c < 3; ++c)
-      for (int a = 0; a < 3; ++a)
-      for (int b = a; b < 3; ++b) {
-        Gamma_udd(c,a,b) = 0.0;
-        for (int d = 0; d < 3; ++d) {
-          Gamma_udd(c,a,b) += g_uu(c,d) * Gamma_ddd(d,a,b);
-        }
-      }
-
-      // Raise last index: Gamma^c_a^b = Gamma^c_ad g^{db}
-      for (int c = 0; c < 3; ++c)
-      for (int a = 0; a < 3; ++a)
-      for (int b = 0; b < 3; ++b) {
-        Gamma_udu(c,a,b) = 0.0;
-        for (int d = 0; d < 3; ++d) {
-          Gamma_udu(c,a,b) += Gamma_udd(c,a,d) * g_uu(d,b);
         }
       }
 
@@ -1464,7 +1443,7 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
       Real Bv, b0, b_u[3], b_d[3], b2;
       ValenciaComovingB(v_u, v_d, B_u, B_d, W, Bv, b0, b_u, b_d, b2);
 
-      // Total stress-energy (fluid + EM)
+      // Total stress-energy (fluid + EM), non-densitized
       Real E_tot;
       Real S_d[3];
       Real S_dd[3][3];
@@ -1475,63 +1454,60 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
                                 g_dd_1d,
                                 E_tot, S_d, S_dd);
 
-      // Build mixed spatial stress S^k_j = g^{km} S_mj
+      // --- 4. Build stresses with needed index placements ---
+      // Mixed spatial stress: S^k{}_j = g^{km} S_{mj}
       AthenaPointTensor<Real, TensorSymm::NONE, 3, 2> S_ud;
       for (int kk = 0; kk < 3; ++kk) {
         for (int jj = 0; jj < 3; ++jj) {
-          S_ud(kk,jj) = 0.0;
+          Real sum = 0.0;
           for (int mm = 0; mm < 3; ++mm) {
-            S_ud(kk,jj) += g_uu(kk,mm) * S_dd[mm][jj];
+            sum += g_uu(kk,mm) * S_dd[mm][jj];
           }
+          S_ud(kk,jj) = sum;
         }
       }
 
-      // --- 4. Raise derivatives: d^m alpha, d^m beta^j ---
-      AthenaPointTensor<Real, TensorSymm::NONE, 3, 1> dalpha_u;
-      AthenaPointTensor<Real, TensorSymm::NONE, 3, 2> dbeta_uu;
-
-      for (int m_idx = 0; m_idx < 3; ++m_idx) {
-        dalpha_u(m_idx) = 0.0;
-        for (int n = 0; n < 3; ++n) {
-          dalpha_u(m_idx) += g_uu(m_idx,n) * dalpha_d(n);
-        }
-      }
-
-      for (int m_idx = 0; m_idx < 3; ++m_idx) {
-        for (int j_idx = 0; j_idx < 3; ++j_idx) {
-          dbeta_uu(m_idx,j_idx) = 0.0;
-          for (int n = 0; n < 3; ++n) {
-            dbeta_uu(m_idx,j_idx) += g_uu(m_idx,n) * dbeta_du(n,j_idx);
+      // Fully contravariant spatial stress: S^{jk} = g^{jm} g^{kn} S_{mn}
+      AthenaPointTensor<Real, TensorSymm::SYM2, 3, 2> S_uu;
+      for (int a = 0; a < 3; ++a) {
+        for (int b = a; b < 3; ++b) {
+          Real sum = 0.0;
+          for (int m2 = 0; m2 < 3; ++m2) {
+            for (int n2 = 0; n2 < 3; ++n2) {
+              sum += g_uu(a,m2) * g_uu(b,n2) * S_dd[m2][n2];
+            }
           }
+          S_uu(a,b) = sum;
         }
       }
 
-      // --- 5. Force vector F^m ---
-      AthenaPointTensor<Real, TensorSymm::NONE, 3, 1> F_u;
-      for (int m_idx = 0; m_idx < 3; ++m_idx) {
-        // - E d^m alpha
-        Real term1 = -E_tot * dalpha_u(m_idx);
+      // --- 5. Momentum source G_i (index DOWN) consistent with paper ---
+      // G_i = -E ∂_i α + S_j ∂_i β^j + (1/2) α S^{jk} ∂_i γ_{jk}
+      Real G_d[3] = {0.0, 0.0, 0.0};
+      for (int i_idx = 0; i_idx < 3; ++i_idx) {
+        // -E ∂_i α
+        Real term1 = -E_tot * dalpha_d(i_idx);
 
-        // S_j d^m beta^j
+        // S_j ∂_i β^j
         Real term2 = 0.0;
         for (int j_idx = 0; j_idx < 3; ++j_idx) {
-          term2 += S_d[j_idx] * dbeta_uu(m_idx,j_idx);
+          term2 += S_d[j_idx] * dbeta_du(i_idx, j_idx);
         }
 
-        // alpha S^k_j Gamma^j_k^m
-        // check whether gamma has the first index up or down
+        // (1/2) α S^{jk} ∂_i γ_{jk}
         Real term3 = 0.0;
         for (int j_idx = 0; j_idx < 3; ++j_idx) {
-          for (int k_idx = 0; k_idx < 3; ++k_idx) {
-            term3 += S_ud(k_idx,j_idx) * Gamma_udu(j_idx,k_idx,m_idx);
+          for (int k_idx = j_idx; k_idx < 3; ++k_idx) {
+            const Real fac = (j_idx == k_idx ? 1.0 : 2.0); // account for symmetry
+            term3 += 0.5 * fac * S_uu(j_idx, k_idx) * dg_ddd(i_idx, j_idx, k_idx);
           }
         }
         term3 *= alpha;
 
-        F_u(m_idx) = term1 + term2 + term3;
+        G_d[i_idx] = term1 + term2 + term3;
       }
 
-      // --- 6. Position and torque density ---
+      // --- 6. Position and densitized torque density (r × G)_a ---
       Real x1v = CellCenterX(i - is, indcs.nx1,
                             size.d_view(m).x1min, size.d_view(m).x1max);
       Real x2v = CellCenterX(j - js, indcs.nx2,
@@ -1539,12 +1515,31 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
       Real x3v = CellCenterX(k - ks, indcs.nx3,
                             size.d_view(m).x3min, size.d_view(m).x3max);
 
-      // tau_i = sqrt(gamma) (r x F)^i
-      dv(m,i_dv+0,k,j,i) = (x2v * F_u(2) - x3v * F_u(1)) * sqrt_gamma; // tau_x
-      dv(m,i_dv+1,k,j,i) = (x3v * F_u(0) - x1v * F_u(2)) * sqrt_gamma; // tau_y
-      dv(m,i_dv+2,k,j,i) = (x1v * F_u(1) - x2v * F_u(0)) * sqrt_gamma; // tau_z
-    });
+      // Start with sqrt(gamma) * (r × G)_a   (using Cartesian r × ...)
+      dv(m,i_dv+0,k,j,i) = (x2v * G_d[2] - x3v * G_d[1]) * sqrt_gamma; // tau_x
+      dv(m,i_dv+1,k,j,i) = (x3v * G_d[0] - x1v * G_d[2]) * sqrt_gamma; // tau_y
+      dv(m,i_dv+2,k,j,i) = (x1v * G_d[1] - x2v * G_d[0]) * sqrt_gamma; // tau_z
 
+      // --- 7. Add the product-rule term: F^j{}_i ∂_j φ^i = F^j{}_i ε_{a j}{}^{i} ---
+      // F^j{}_i = α S^j{}_i - β^j S_i
+      Real F_ud[3][3];
+      for (int jdir = 0; jdir < 3; ++jdir) {
+        const Real betaj = adm.beta_u(m, jdir, k, j, i); // β^j
+        for (int idir = 0; idir < 3; ++idir) {
+          F_ud[jdir][idir] = alpha * S_ud(jdir, idir) - betaj * S_d[idir];
+        }
+      }
+
+      // (F^j{}_i ε_{a j}{}^{i}) components
+      Real miss[3] = {0.0, 0.0, 0.0};
+      miss[0] = F_ud[1][2] - F_ud[2][1]; // a = x
+      miss[1] = F_ud[2][0] - F_ud[0][2]; // a = y
+      miss[2] = F_ud[0][1] - F_ud[1][0]; // a = z
+
+      dv(m,i_dv+0,k,j,i) += sqrt_gamma * miss[0];
+      dv(m,i_dv+1,k,j,i) += sqrt_gamma * miss[1];
+      dv(m,i_dv+2,k,j,i) += sqrt_gamma * miss[2];
+    });
     i_dv += n_comp;
   }
   i_dv = i_dv % n_dv; // reset derived variable index
