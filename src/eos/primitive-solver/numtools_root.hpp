@@ -20,6 +20,15 @@ class Root {
   /// Maximum number of iterations
   unsigned int iterations;
 
+  struct RootResult {
+    bool success;
+    Real tolerance;
+    Real flast;
+    Real err;
+    unsigned int iterations;
+    bool bracketed;
+  };
+
   Root() : iterations(30) {}
 
   // FalsePosition {{{
@@ -40,12 +49,12 @@ class Root {
 
   template<class Functor, class ... Types>
   KOKKOS_INLINE_FUNCTION
-  bool FalsePosition(Functor&& f, Real &lb, Real &ub, Real& x, Real tol,
+  RootResult FalsePosition(Functor&& f, Real &lb, Real &ub, Real& x, Real tol,
                      Types ... args) const {
+    RootResult result{true, tol, 0., 1e10, 0, true};
     int side = 0;
     Real ftest;
     unsigned int count = 0;
-    //last_count = 0;
     // Get our initial bracket.
     Real flb = f(lb, args...);
     Real fub = f(ub, args...);
@@ -54,13 +63,19 @@ class Root {
     // If one of the bounds is already within tolerance of the root, we have the root.
     if (fabs(flb)/lb <= tol) {
       x = lb;
-      return true;
+      result.flast = flb;
+      result.err = std::fabs(flb);
+      return result;
     } else if (fabs(fub)/ub <= tol) {
       x = ub;
-      return true;
+      result.flast = fub;
+      result.err = std::fabs(fub);
+      return result;
     }
     if (flb*fub > 0) {
-      return false;
+      result.success = false;
+      result.bracketed = false;
+      return result;
     }
     do {
       xold = x;
@@ -69,8 +84,11 @@ class Root {
       count++;
       // Calculate f at the prospective root.
       ftest = f(x,args...);
-      if (fabs((x-xold)/x) <= tol) {
-        return true;
+      result.err = std::fabs((x-xold)/x);
+      if (result.err <= tol) {
+        result.iterations = count;
+        result.flast = ftest;
+        return result;
       }
       // Check the sign of f. If f is on the same side as the lower bound, then we adjust
       // the lower bound. Similarly, if f is on the same side as the upper bound, we
@@ -97,10 +115,14 @@ class Root {
         side = -1;
       }
     } while (count < iterations);
+    result.iterations = count;
+    result.flast = ftest;
+    result.err = fabs((x-xold)/x);
     //last_count = count;
 
     // Return success if we're below the tolerance, otherwise report failure.
-    return fabs((x-xold)/x) <= tol;
+    result.success = result.err <= tol;
+    return result;
   }
 
   // }}}

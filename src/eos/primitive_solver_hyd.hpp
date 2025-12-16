@@ -137,6 +137,7 @@ class PrimitiveSolverHydro {
     ps.GetEOSMutable().SetTemperatureFloor(pin->GetOrAddReal(block, "tfloor", (FLT_MIN)));
     ps.GetEOSMutable().SetThreshold(pin->GetOrAddReal(block, "dthreshold", 1.0));
     ps.tol = pin->GetOrAddReal(block, "c2p_tol", 1e-15);
+    ps.failure_tol = pin->GetOrAddReal(block, "c2p_fail_tol", 1e-5);
     ps.GetRootSolverMutable().iterations = pin->GetOrAddInteger(block, "c2p_iter", 50);
     errcap = pin->GetOrAddInteger(block, "c2perrs", 1000);
 
@@ -481,8 +482,8 @@ class PrimitiveSolverHydro {
                  "    g_dd = {%.17g, %.17g, %.17g, %.17g, %.17g, %.17g}\n"
                  "    alp  = %.17g\n"
                  "    beta = {%.17g, %.17g, %.17g}\n"
-                 "    psi4 = %.17g\n"
-                 "    K_dd = {%.17g, %.17g, %.17g, %.17g, %.17g, %.17g}\n",
+                 "  In the case of SLOW_CONVERGENCE, the error policy will not be\n"
+                 "  applied. Considering loosening c2p_tol or increasing c2p_iter.\n",
                  ErrorToString(result.error),
                  m, k, j, i,
                  x1v, x2v, x3v,
@@ -491,12 +492,7 @@ class PrimitiveSolverHydro {
                  g3d[S11], g3d[S12], g3d[S13], g3d[S22], g3d[S23], g3d[S33],
                  adm.alpha(m, k, j, i),
                  adm.beta_u(m, 0, k, j, i),
-                 adm.beta_u(m, 1, k, j, i), adm.beta_u(m, 2, k, j, i),
-                 adm.psi4(m, k, j, i),
-                 adm.vK_dd(m, 0, 0, k, j, i), adm.vK_dd(m, 0, 1, k, j, i),
-                 adm.vK_dd(m, 0, 2, k, j, i),
-                 adm.vK_dd(m, 1, 1, k, j, i), adm.vK_dd(m, 1, 2, k, j, i),
-                 adm.vK_dd(m, 2, 2, k, j, i));
+                 adm.beta_u(m, 1, k, j, i), adm.beta_u(m, 2, k, j, i));
           if (nerrs_ + sumerrs == errcap_) {
             Kokkos::printf("%d C2P errors have been detected on rank %d."
                    "All future C2P errors\n"
@@ -611,6 +607,9 @@ class PrimitiveSolverHydro {
     switch(e) {
       case Primitive::Error::SUCCESS:
         return "SUCCESS";
+        break;
+      case Primitive::Error::SLOW_CONVERGENCE:
+        return "SLOW_CONVERGENCE";
         break;
       case Primitive::Error::RHO_TOO_BIG:
         return "RHO_TOO_BIG";

@@ -202,12 +202,14 @@ class PrimitiveSolver {
 
  public:
   Real tol;
+  Real failure_tol;
 
   /// Constructor
   //PrimitiveSolver(EOS<EOSPolicy, ErrorPolicy> *eos) : peos(eos) {
   PrimitiveSolver() {
     //root = NumTools::Root();
     tol = 1e-15;
+    failure_tol = 1e-5;
     root.iterations = 30;
   }
 
@@ -494,15 +496,24 @@ SolverResult PrimitiveSolver<EOSPolicy, ErrorPolicy>::ConToPrim(Real prim[NPRIM]
 
   // Do the root solve.
   Real n, P, T, mu;
-  bool result = root.FalsePosition(RootFunction, mul, muh, mu, tol,
+  auto result = root.FalsePosition(RootFunction, mul, muh, mu, tol,
                                    D, q, bsqr, rsqr, rbsqr, Y, &eos, &n, &T, &P);
-  // WARNING: the reported number of iterations is not thread-safe and should only be
-  // trusted on single-thread benchmarks.
-  solver_result.iterations = root.iterations;
-  if (!result) {
-    HandleFailure(prim, cons, b, g3d);
-    solver_result.error = Error::NO_SOLUTION;
-    return solver_result;
+  solver_result.iterations = result.iterations;
+  if (!result.success) {
+    // It may be the case that the result isn't great, but it's still valid. In this case,
+    // we just warn the user about convergence being poor.
+    if (result.iterations == root.iterations &&
+        result.err < failure_tol) {
+      solver_result.error = Error::SLOW_CONVERGENCE;
+    } else {
+      HandleFailure(prim, cons, b, g3d);
+      if (result.bracketed) {
+        solver_result.error = Error::NO_SOLUTION;
+      } else {
+        solver_result.error = Error::BRACKETING_FAILED;
+      }
+      return solver_result;
+    }
   }
 
   // Retrieve the primitive variables.

@@ -11,6 +11,7 @@
 namespace Primitive {
 enum struct Error {
   SUCCESS,
+  SLOW_CONVERGENCE,
   RHO_TOO_BIG,
   RHO_TOO_SMALL,
   NANS_IN_CONS,
