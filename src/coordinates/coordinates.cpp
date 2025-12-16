@@ -70,6 +70,12 @@ Coordinates::Coordinates(ParameterInput *pin, MeshBlockPack *ppack) :
         } else if (emethod.compare("lapse") == 0) {
           coord_data.excision_scheme = ExcisionScheme::lapse;
           coord_data.excise_lapse = pin->GetOrAddReal("coord","excise_lapse", 0.25);
+        } else if (emethod.compare("puncture") == 0) {
+          coord_data.excision_scheme = ExcisionScheme::puncture;
+          // set puncture locations in pgen or z4c
+          // TO DO (@hzhu): update with z4c
+          coord_data.punc_0_rad = pin->GetOrAddReal("coord","excise_1_rad", 0.);
+          coord_data.punc_1_rad = pin->GetOrAddReal("coord","excise_2_rad", 0.);
         } else {
           std::cout << "### FATAL ERROR in " << __FILE__ << " at line "
                     << __LINE__ << std::endl

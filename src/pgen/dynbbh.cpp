@@ -985,6 +985,8 @@ void SetADMVariablesToBBH(MeshBlockPack *pmbp) {
   int n2 = (indcs.nx2 > 1) ? (indcs.nx2 + 2*ng) : 1;
   int n3 = (indcs.nx3 > 1) ? (indcs.nx3 + 2*ng) : 1;
 
+  auto &coord = pmbp->pcoord->coord_data;
+
   Real bbh_traj_p1[NTRAJ];
   Real bbh_traj_0[NTRAJ];
   Real bbh_traj_m1[NTRAJ];
@@ -996,6 +998,15 @@ void SetADMVariablesToBBH(MeshBlockPack *pmbp) {
   find_traj_t(tt+h, bbh_traj_p1);
   find_traj_t(tt, bbh_traj_0);
   find_traj_t(tt-h, bbh_traj_m1);
+
+  // update punc location for excision
+  coord.punc_0[0] = bbh_traj_0[X1];
+  coord.punc_0[1] = bbh_traj_0[Y1];
+  coord.punc_0[2] = bbh_traj_0[Z1];
+  coord.punc_1[0] = bbh_traj_0[X2];
+  coord.punc_1[1] = bbh_traj_0[Y2];
+  coord.punc_1[2] = bbh_traj_0[Z2];
+
 
 
   par_for("update_adm_vars", DevExeSpace(), 0,nmb-1,0,(n3-1),0,(n2-1),0,(n1-1),

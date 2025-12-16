@@ -21,7 +21,8 @@ struct EOS_Data;
 // Enumerator for the excision method
 enum class ExcisionScheme {
   fixed,
-  lapse
+  lapse,
+  puncture
 };
 
 //----------------------------------------------------------------------------------------
@@ -41,6 +42,10 @@ struct CoordData {
   Real flux_excise_r;              // reduce to first-order inside this radius
   ExcisionScheme excision_scheme;  // excision method
   Real excise_lapse;               // if excision_scheme = lapse, excise under this lapse
+  Real punc_0[3];                  // if excision_scheme = puncture, excise within a radius
+  Real punc_1[3];                  // of punc_n_rad of punc_n
+  Real punc_0_rad;
+  Real punc_1_rad;
 };
 
 //----------------------------------------------------------------------------------------
