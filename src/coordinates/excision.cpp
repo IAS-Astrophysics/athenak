@@ -227,7 +227,7 @@ void Coordinates::UpdateExcisionMasks() {
       Real r0 = std::sqrt(SQR(x1v - p0_x)+SQR(x2v - p0_y)+SQR(x3v - p0_z));
       Real r1 = std::sqrt(SQR(x1v - p1_x)+SQR(x2v - p1_y)+SQR(x3v - p1_z));
 
-      bool excise = ( r0 < punc_0_r || r1 < punc_1_r );
+      bool excise = ( r0 <= punc_0_r || r1 <= punc_1_r );
       floor(m,k,j,i) = excise;
       flux(m,k,j,i) = excise;
     });
