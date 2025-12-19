@@ -179,6 +179,7 @@ add_executable(
         radiation_m1/radiation_m1_newdt.cpp
         radiation_m1/radiation_m1_macro.hpp
         radiation_m1/radiation_m1_calc_closure.cpp
+        radiation_m1/radiation_m1_tmunu.cpp
         bvals/physics/radiation_m1_bcs.cpp
         radiation_m1/radiation_m1_beams.cpp
         pgen/tests/rad_m1_beams.cpp

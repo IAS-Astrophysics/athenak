@@ -71,6 +71,8 @@ class RadiationM1 {
   bool ishydro;                            // flag to check if <hydro> present
   bool isunits;                            // flag to check if <units> present
   bool isadm;                              // flag to check if <adm> present
+
+  bool is_chi_updated;                     // true if the closure is already up to date
   
   RadiationM1Params params{};              // user parameters for grey M1
   PhotonOpacityParams photon_op_params{};  // params for photon opacities
@@ -122,6 +124,7 @@ class RadiationM1 {
   // ...in "after_stagen_tl" list
   TaskStatus ClearSend(Driver* d, int stage);
   TaskStatus ClearRecv(Driver* d, int stage);  // also in Driver::Initialize
+  TaskStatus SetTmunu(Driver* d, int stage);
 
   // eos related quantites (only when mhd is on)
   template <class EOSPolicy, class ErrorPolicy>
