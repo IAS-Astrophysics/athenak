@@ -81,7 +81,6 @@ namespace {
     Real mm;
     bool is_ideal;
     bool magnetic_fields_enabled;
-    static int bc_ix3, bc_ox3;
     };
 
     my_params mp;
@@ -100,6 +99,7 @@ void MyEfieldMask(Mesh* pm);
 void StarMask(Mesh* pm, const Real bdt);
 void InnerDiskMask(Mesh* pm, const Real bdt);
 void FixedHydroBC(Mesh *pm);
+void FixedMHDBC(Mesh *pm);
 
 //----------------------------------------------------------------------------------------
 //! \fn
@@ -118,7 +118,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     }
 
     if (user_bcs) {
-        user_bcs_func = FixedHydroBC;
+        user_bcs_func = FixedMHDBC;
     }
 
     if (user_esrcs && (pmbp->pmhd != nullptr)) {
@@ -221,6 +221,10 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
         if (mp_.denstar > 0.0) {
             den += DenStarCyl(mp_, rad, phi, z);
         }
+
+        // apply the density floor
+        Real rc = sqrt(rad*rad+z*z);
+        den = fmax(den,rho_floor(mp_,rc));
 
         // compute the disc velocity component at this location
         if (mp_.rho0 > 0.0){
@@ -479,10 +483,6 @@ namespace {
         }
 
         den = denmid*std::exp(mp.gm0/p_over_r*(1./std::sqrt(SQR(r)+SQR(z))-1./r));
-
-        // Apply the density floor
-        Real rc = sqrt(rad*rad+z*z);
-        den = fmax(den,rho_floor(mp,rc));
         
         return den;
     }
@@ -520,27 +520,8 @@ namespace {
             }
 
             den = pre/csq0;
-
+        
         }
-
-            // Real pre=mp.denstar*csq0; // reference pressure
-            // Real rint = 0.0;         // integrate from stellar surface
-            // Real dr = mp.rs/100.;      // integration step size
-
-            // while (rint<rc) {
-            //     if (rint<mp.rs){
-            //         pre = pre + dr*mp.origid*mp.origid*rint*sinsq*pre/csq0;
-            //     } else {
-            //         pre = pre - dr*mp.gm0/rint/rint*(rint-mp.rs)*
-            //                   (rint-mp.rs)/((rint-mp.rs)*(rint-mp.rs)+mp.gravsmooth*mp.gravsmooth)*
-            //                    pre/csq0 + dr*mp.origid*mp.origid*rint*sinsq*pre/csq0;
-            //     }
-            //     rint = rint + dr;
-            // }
-
-            // den = pre/csq0;
-
-        // }
         
         return den;
     }
@@ -843,14 +824,13 @@ void MyEfieldMask(Mesh* pm) {
 
             Real rad(0.0),phi(0.0),z(0.0);
             Real vx(0.0),vy(0.0),vz(0.0);
-            Real Bx(0.0),By(0.0),Bz(0.0);
+            Real By(0.0),Bz(0.0);
             GetCylCoord(mp_,rad,phi,z,x1v,x2f,x3f);
 
             // Set the stellar velocity at this location
             VelStarCyl(mp_,rad,phi,z,vx,vy,vz);
 
             // Set the stellar interior magnetic field
-            Bx = 0.0;
             By = 0.0;
             Bz = 2*mp_.mm/pow(mp_.rs,3);
 
@@ -882,7 +862,7 @@ void MyEfieldMask(Mesh* pm) {
 
             Real rad(0.0),phi(0.0),z(0.0);
             Real vx(0.0),vy(0.0),vz(0.0);
-            Real Bx(0.0),By(0.0),Bz(0.0);
+            Real Bx(0.0),Bz(0.0);
             GetCylCoord(mp_,rad,phi,z,x1f,x2v,x3f);
 
             // Set the stellar velocity at this location
@@ -890,7 +870,6 @@ void MyEfieldMask(Mesh* pm) {
 
             // Set the interior star magnetic field
             Bx = 0.0;
-            By = 0.0;
             Bz = 2*mp_.mm/pow(mp_.rs,3);
 
             // E2=-(v X B)=VxBz-VzBx
@@ -921,7 +900,7 @@ void MyEfieldMask(Mesh* pm) {
 
             Real rad(0.0),phi(0.0),z(0.0);
             Real vx(0.0),vy(0.0),vz(0.0);
-            Real Bx(0.0),By(0.0),Bz(0.0);
+            Real Bx(0.0),By(0.0);
             GetCylCoord(mp_,rad,phi,z,x1f,x2f,x3v);
 
             // Set the stellar velocity at this location
@@ -930,7 +909,6 @@ void MyEfieldMask(Mesh* pm) {
             // Set the interior star magnetic field
             Bx = 0.0;
             By = 0.0;
-            Bz = 2*mp_.mm/pow(mp_.rs,3);
 
             // E3=-(v X B)=VyBx-VxBy
             e3_(m,k,j,i) = vy*Bx - vx*By;
@@ -1138,7 +1116,7 @@ void FixedHydroBC(Mesh *pm) {
         // Inner x1 boundary
         if (mb_bcs.d_view(m,BoundaryFace::inner_x1) == BoundaryFlag::user) {
             
-            // Compute the warped primitive variables at this location
+            // Compute the primitive variables at this location
             GetCylCoord(mp_,rad, phi, z, x1v, x2v, x3v);
             if (mp_.rho0 > 0.0){
                 den = DenDiscCyl(mp_, rad, phi, z);
@@ -1154,8 +1132,8 @@ void FixedHydroBC(Mesh *pm) {
             w0_(m,IVZ,k,j,i) = uz;
 
             if (mp_.is_ideal) {
-                pgas = PoverR(mp_, rad, phi, z)*den/(mp_.gamma_gas-1.0);
-                w0_(m,IEN,k,j,i) = pgas;
+                pgas = PoverR(mp_, rad, phi, z)*den;
+                w0_(m,IEN,k,j,i) = pgas/(mp_.gamma_gas - 1.0);
             }
 
         }
@@ -1181,8 +1159,8 @@ void FixedHydroBC(Mesh *pm) {
             w0_(m,IVZ,k,j,(ie+i+1)) = uz;
 
             if (mp_.is_ideal) {
-                pgas = PoverR(mp_, rad, phi, z)*den/(mp_.gamma_gas-1.0);
-                w0_(m,IEN,k,j,(ie+i+1)) = pgas;
+                pgas = PoverR(mp_, rad, phi, z)*den;
+                w0_(m,IEN,k,j,(ie+i+1)) = pgas/(mp_.gamma_gas - 1.0);
             }
 
         }
@@ -1217,7 +1195,7 @@ void FixedHydroBC(Mesh *pm) {
         // Inner x2 boundary
         if (mb_bcs.d_view(m,BoundaryFace::inner_x2) == BoundaryFlag::user) {
             
-            // Compute the warped primitive variables at this location
+            // Compute the primitive variables at this location
             GetCylCoord(mp_,rad, phi, z, x1v, x2v, x3v);
             if (mp_.rho0 > 0.0){
                 den = DenDiscCyl(mp_, rad, phi, z);
@@ -1234,8 +1212,8 @@ void FixedHydroBC(Mesh *pm) {
             w0_(m,IVZ,k,j,i) = uz;
 
             if (mp_.is_ideal) {
-                pgas = PoverR(mp_, rad, phi, z)*den/(mp_.gamma_gas-1.0);
-                w0_(m,IEN,k,j,i) = pgas;
+                pgas = PoverR(mp_, rad, phi, z)*den;
+                w0_(m,IEN,k,j,i) = pgas/(mp_.gamma_gas - 1.0);
             }
         }
 
@@ -1243,7 +1221,7 @@ void FixedHydroBC(Mesh *pm) {
         x2v = CellCenterX((je+j+1)-js, indcs.nx2, x2min, x2max);
 
         if (mb_bcs.d_view(m,BoundaryFace::outer_x2) == BoundaryFlag::user) {
-            // Compute the warped primitive variables at this location
+            // Compute the primitive variables at this location
             GetCylCoord(mp_,rad, phi, z, x1v, x2v, x3v);
             if (mp_.rho0 > 0.0){
                 den = DenDiscCyl(mp_, rad, phi, z);
@@ -1260,8 +1238,8 @@ void FixedHydroBC(Mesh *pm) {
             w0_(m,IVZ,k,(je+j+1),i) = uz;
 
             if (mp_.is_ideal){
-                pgas = PoverR(mp_, rad, phi, z)*den/(mp_.gamma_gas-1.0);
-                w0_(m,IEN,k,(je+j+1),i) = pgas;
+                pgas = PoverR(mp_, rad, phi, z)*den;
+                w0_(m,IEN,k,(je+j+1),i) = pgas/(mp_.gamma_gas - 1.0);
             }
         }
       });
@@ -1310,8 +1288,8 @@ void FixedHydroBC(Mesh *pm) {
             w0_(m,IVZ,k,j,i) = uz;
 
             if (mp_.is_ideal) {
-                pgas = PoverR(mp_, rad, phi, z)*den/(mp_.gamma_gas-1.0);
-                w0_(m,IEN,k,j,i) = pgas;
+                pgas = PoverR(mp_, rad, phi, z)*den;
+                w0_(m,IEN,k,j,i) = pgas/(mp_.gamma_gas - 1.0);
             }
         }
 
@@ -1335,8 +1313,8 @@ void FixedHydroBC(Mesh *pm) {
             w0_(m,IVY,(ke+k+1),j,i) = uy;
             w0_(m,IVZ,(ke+k+1),j,i) = uz;
             if (mp_.is_ideal) {
-                pgas = PoverR(mp_, rad, phi, z)*den/(mp_.gamma_gas-1.0);
-                w0_(m,IEN,(ke+k+1),j,i) = pgas;
+                pgas = PoverR(mp_, rad, phi, z)*den;
+                w0_(m,IEN,(ke+k+1),j,i) = pgas/(mp_.gamma_gas - 1.0);
             }
         }
       });
@@ -1345,3 +1323,358 @@ void FixedHydroBC(Mesh *pm) {
 
   return;
 }
+
+//----------------------------------------------------------------------------------------
+//! \fn FixedDiscBC
+//  \brief Sets boundary condition on surfaces of computational domain
+// Note quantities at boundaries are held fixed to initial condition values
+
+void FixedMHDBC(Mesh *pm) {
+
+  // Start by extracting the mesh block and cell information 
+  auto &indcs = pm->mb_indcs;
+  auto &size = pm->pmb_pack->pmb->mb_size;
+  int &ng = indcs.ng;
+  int n1 = indcs.nx1 + 2*ng;
+  int n2 = (indcs.nx2 > 1)? (indcs.nx2 + 2*ng) : 1;
+  int n3 = (indcs.nx3 > 1)? (indcs.nx3 + 2*ng) : 1;
+  int &is = indcs.is;  int &ie  = indcs.ie;
+  int &js = indcs.js;  int &je  = indcs.je;
+  int &ks = indcs.ks;  int &ke  = indcs.ke;
+  auto &mb_bcs = pm->pmb_pack->pmb->mb_bcs;
+
+  // Initialise a pointer to the disc parameter structure   
+  auto mp_ = mp;
+
+  int nmb = pm->pmb_pack->nmb_thispack;
+
+  // Initialise the MHD arrays
+  DvceArray5D<Real> u0_, w0_;
+  auto &b0_ = pm->pmb_pack->pmhd->b0;
+  auto &bcc_ = pm->pmb_pack->pmhd->bcc0;
+
+  if (pm->pmb_pack->pmhd != nullptr) {
+    u0_ = pm->pmb_pack->pmhd->u0;
+    w0_ = pm->pmb_pack->pmhd->w0;
+  }
+
+  // X1 BOUNDARY CONDITIONS ---------------> 
+
+  par_for("mhd_bc_x1", DevExeSpace(),0,(nmb-1),0,(n3-1),0,(n2-1),
+  KOKKOS_LAMBDA(int m, int k, int j) {
+    if (mb_bcs.d_view(m,BoundaryFace::inner_x1) == BoundaryFlag::user) {
+    for (int i=0; i<ng; ++i) {
+        b0_.x1f(m,k,j,is-i-1) = b0_.x1f(m,k,j,is);
+        b0_.x2f(m,k,j,is-i-1) = b0_.x2f(m,k,j,is);
+        if (j == n2-1) {b0_.x2f(m,k,j+1,is-i-1) = b0_.x2f(m,k,j+1,is);}
+        b0_.x3f(m,k,j,is-i-1) = b0_.x3f(m,k,j,is);
+        if (k == n3-1) {b0_.x3f(m,k+1,j,is-i-1) = b0_.x3f(m,k+1,j,is);}
+    }
+    }
+    if (mb_bcs.d_view(m,BoundaryFace::outer_x1) == BoundaryFlag::user) {
+    for (int i=0; i<ng; ++i) {
+        b0_.x1f(m,k,j,ie+i+2) = b0_.x1f(m,k,j,ie+1);
+        b0_.x2f(m,k,j,ie+i+1) = b0_.x2f(m,k,j,ie);
+        if (j == n2-1) {b0_.x2f(m,k,j+1,ie+i+1) = b0_.x2f(m,k,j+1,ie);}
+        b0_.x3f(m,k,j,ie+i+1) = b0_.x3f(m,k,j,ie);
+        if (k == n3-1) {b0_.x3f(m,k+1,j,ie+i+1) = b0_.x3f(m,k+1,j,ie);}
+    }
+    }
+  });
+
+  // ConsToPrim over all X1 ghost zones *and* at the innermost/outermost X1-active zones
+  // of Meshblocks, even if Meshblock face is not at the edge of computational domain
+  pm->pmb_pack->pmhd->peos->ConsToPrim(u0_,b0_,w0_,bcc_,false,is-ng,is,0,(n2-1),0,(n3-1));
+  pm->pmb_pack->pmhd->peos->ConsToPrim(u0_,b0_,w0_,bcc_,false,ie,ie+ng,0,(n2-1),0,(n3-1));
+
+  par_for("hd_bc_x1", DevExeSpace(),0,(nmb-1),0,(n3-1),0,(n2-1),0,(ng-1),
+  KOKKOS_LAMBDA(int m, int k, int j, int i) {
+
+    // Extract coordinates at inner x1 boundary on each meshblock in the pack
+    Real &x1min = size.d_view(m).x1min;
+    Real &x1max = size.d_view(m).x1max;
+    Real x1v = CellCenterX(i-is, indcs.nx1, x1min, x1max);
+
+    Real &x2min = size.d_view(m).x2min;
+    Real &x2max = size.d_view(m).x2max;
+    Real x2v = CellCenterX(j-js, indcs.nx2, x2min, x2max);
+
+    Real &x3min = size.d_view(m).x3min;
+    Real &x3max = size.d_view(m).x3max;
+    Real x3v = CellCenterX(k-ks, indcs.nx3, x3min, x3max);
+
+    Real den(0.0), ux(0.0), uy(0.0), uz(0.0);
+    Real rad(0.0), phi(0.0), z(0.0);
+
+    // Inner x1 boundary
+    if (mb_bcs.d_view(m,BoundaryFace::inner_x1) == BoundaryFlag::user) {
+            
+        // Compute primitive variables at this location
+        GetCylCoord(mp_,rad, phi, z, x1v, x2v, x3v);
+        if (mp_.rho0 > 0.0){
+            den = DenDiscCyl(mp_, rad, phi, z);
+            VelDiscCyl(mp_, rad, phi, z, ux, uy, uz);
+        } else {
+            den = DenStarCyl(mp_, rad, phi, z);
+            VelStarCyl(mp_, rad, phi, z, ux, uy, uz);
+        } 
+
+        // Apply density floor
+        Real rc = sqrt(x1v*x1v + x2v*x2v + x3v*x3v);
+        den = fmax(den,rho_floor(mp_,rc));
+
+        // Now set the conserved variables using the primitive variables
+        w0_(m,IDN,k,j,i) = den;
+        w0_(m,IVX,k,j,i) = ux;
+        w0_(m,IVY,k,j,i) = uy;
+        w0_(m,IVZ,k,j,i) = uz;
+        if (mp_.is_ideal) {
+            w0_(m,IEN,k,j,i) = PoverR(mp_, rad, phi, z)*den/(mp_.gamma_gas - 1.0);
+        }
+    }
+
+    // Outer x1 boundary
+    x1v = CellCenterX((ie+i+1)-is, indcs.nx1, x1min, x1max);
+
+    if (mb_bcs.d_view(m,BoundaryFace::outer_x1) == BoundaryFlag::user) {
+        
+        // Compute primitive variables at this location
+        GetCylCoord(mp_,rad, phi, z, x1v, x2v, x3v);
+        if (mp_.rho0 > 0.0){
+            den = DenDiscCyl(mp_, rad, phi, z);
+            VelDiscCyl(mp_, rad, phi, z, ux, uy, uz);
+        } else {
+            den = DenStarCyl(mp_, rad, phi, z);
+            VelStarCyl(mp_, rad, phi, z, ux, uy, uz);
+        } 
+
+        // Apply density floor
+        Real rc = sqrt(x1v*x1v + x2v*x2v + x3v*x3v);
+        den = fmax(den,rho_floor(mp_,rc));
+
+        // Now set the conserved variables using the primitive variables
+        w0_(m,IDN,k,j,(ie+i+1)) = den;
+        w0_(m,IVX,k,j,(ie+i+1)) = ux;
+        w0_(m,IVY,k,j,(ie+i+1)) = uy;
+        w0_(m,IVZ,k,j,(ie+i+1)) = uz;
+        if (mp_.is_ideal) {
+            w0_(m,IEN,k,j,(ie+i+1)) = PoverR(mp_, rad, phi, z)*den/(mp_.gamma_gas - 1.0);
+        }
+    }
+  });
+  // PrimToCons on X1 ghost zones
+  pm->pmb_pack->pmhd->peos->PrimToCons(w0_,bcc_,u0_,is-ng,is-1,0,(n2-1),0,(n3-1));
+  pm->pmb_pack->pmhd->peos->PrimToCons(w0_,bcc_,u0_,ie+1,ie+ng,0,(n2-1),0,(n3-1));
+
+  // X2 BOUNDARY CONDITIONS ---------------> 
+
+  par_for("mhd_bc_x2", DevExeSpace(),0,(nmb-1),0,(n3-1),0,(n1-1),
+    KOKKOS_LAMBDA(int m, int k, int i) {
+      if (mb_bcs.d_view(m,BoundaryFace::inner_x2) == BoundaryFlag::user) {
+        for (int j=0; j<ng; ++j) {
+          b0_.x1f(m,k,js-j-1,i) = b0_.x1f(m,k,js,i);
+          if (i == n1-1) {b0_.x1f(m,k,js-j-1,i+1) = b0_.x1f(m,k,js,i+1);}
+          b0_.x2f(m,k,js-j-1,i) = b0_.x2f(m,k,js,i);
+          b0_.x3f(m,k,js-j-1,i) = b0_.x3f(m,k,js,i);
+          if (k == n3-1) {b0_.x3f(m,k+1,js-j-1,i) = b0_.x3f(m,k+1,js,i);}
+        }
+      }
+      if (mb_bcs.d_view(m,BoundaryFace::outer_x2) == BoundaryFlag::user) {
+        for (int j=0; j<ng; ++j) {
+          b0_.x1f(m,k,je+j+1,i) = b0_.x1f(m,k,je,i);
+          if (i == n1-1) {b0_.x1f(m,k,je+j+1,i+1) = b0_.x1f(m,k,je,i+1);}
+          b0_.x2f(m,k,je+j+2,i) = b0_.x2f(m,k,je+1,i);
+          b0_.x3f(m,k,je+j+1,i) = b0_.x3f(m,k,je,i);
+          if (k == n3-1) {b0_.x3f(m,k+1,je+j+1,i) = b0_.x3f(m,k+1,je,i);}
+        }
+      }
+    });
+
+  pm->pmb_pack->pmhd->peos->ConsToPrim(u0_,b0_,w0_,bcc_,false,0,(n1-1),js-ng,js,0,(n3-1));
+  pm->pmb_pack->pmhd->peos->ConsToPrim(u0_,b0_,w0_,bcc_,false,0,(n1-1),je,je+ng,0,(n3-1));
+
+  par_for("hd_bc_x2", DevExeSpace(),0,(nmb-1),0,(n3-1),0,(ng-1),0,(n1-1),
+  KOKKOS_LAMBDA(int m, int k, int j, int i) {
+    // inner x2 boundary
+    Real &x1min = size.d_view(m).x1min;
+    Real &x1max = size.d_view(m).x1max;
+    Real x1v = CellCenterX(i-is, indcs.nx1, x1min, x1max);
+
+    Real &x2min = size.d_view(m).x2min;
+    Real &x2max = size.d_view(m).x2max;
+    Real x2v = CellCenterX(j-js, indcs.nx2, x2min, x2max);
+
+    Real &x3min = size.d_view(m).x3min;
+    Real &x3max = size.d_view(m).x3max;
+    Real x3v = CellCenterX(k-ks, indcs.nx3, x3min, x3max);
+
+    Real den(0.0), ux(0.0), uy(0.0), uz(0.0);
+    Real rad(0.0), phi(0.0), z(0.0);
+
+    // Inner x2 boundary
+    if (mb_bcs.d_view(m,BoundaryFace::inner_x2) == BoundaryFlag::user) {
+
+        // Compute primitive variables at this location
+        GetCylCoord(mp_,rad, phi, z, x1v, x2v, x3v);
+        if (mp_.rho0 > 0.0){
+            den = DenDiscCyl(mp_, rad, phi, z);
+            VelDiscCyl(mp_, rad, phi, z, ux, uy, uz);
+        } else {
+            den = DenStarCyl(mp_, rad, phi, z);
+            VelStarCyl(mp_, rad, phi, z, ux, uy, uz);
+        } 
+
+        // Apply density floor
+        Real rc = sqrt(x1v*x1v + x2v*x2v + x3v*x3v);
+        den = fmax(den,rho_floor(mp_,rc));
+
+        // Now set the conserved variables using the primitive variables
+        w0_(m,IDN,k,j,i) = den;
+        w0_(m,IVX,k,j,i) = ux;
+        w0_(m,IVY,k,j,i) = uy;
+        w0_(m,IVZ,k,j,i) = uz;
+        if (mp_.is_ideal) {
+            w0_(m,IEN,k,j,i) = PoverR(mp_, rad, phi, z)*den/(mp_.gamma_gas - 1.0);
+        }
+    }
+
+    // Outer x2 boundary
+    x2v = CellCenterX((je+j+1)-js, indcs.nx2, x2min, x2max);
+
+    if (mb_bcs.d_view(m,BoundaryFace::outer_x2) == BoundaryFlag::user) {
+
+        // Compute primitive variables at this location
+        GetCylCoord(mp_,rad, phi, z, x1v, x2v, x3v);
+        if (mp_.rho0 > 0.0){
+            den = DenDiscCyl(mp_, rad, phi, z);
+            VelDiscCyl(mp_, rad, phi, z, ux, uy, uz);
+        } else {
+            den = DenStarCyl(mp_, rad, phi, z);
+            VelStarCyl(mp_, rad, phi, z, ux, uy, uz);
+        } 
+
+        // Apply density floor
+        Real rc = sqrt(x1v*x1v + x2v*x2v + x3v*x3v);
+        den = fmax(den,rho_floor(mp_,rc));
+
+        // Now set the conserved variables using the primitive variables
+        w0_(m,IDN,k,(je+j+1),i) = den;
+        w0_(m,IVX,k,(je+j+1),i) = ux;
+        w0_(m,IVY,k,(je+j+1),i) = uy;
+        w0_(m,IVZ,k,(je+j+1),i) = uz;
+        if (mp_.is_ideal) {
+            w0_(m,IEN,k,(je+j+1),i) = PoverR(mp_, rad, phi, z)*den/(mp_.gamma_gas - 1.0);
+        }
+    }
+  });
+
+  pm->pmb_pack->pmhd->peos->PrimToCons(w0_,bcc_,u0_,0,(n1-1),js-ng,js-1,0,(n3-1));
+  pm->pmb_pack->pmhd->peos->PrimToCons(w0_,bcc_,u0_,0,(n1-1),je+1,je+ng,0,(n3-1));
+
+  // X3 BOUNDARY CONDITIONS ---------------> 
+
+  par_for("mhd_bc_x3", DevExeSpace(),0,(nmb-1),0,(n2-1),0,(n1-1),
+    KOKKOS_LAMBDA(int m, int j, int i) {
+      if (mb_bcs.d_view(m,BoundaryFace::inner_x3) == BoundaryFlag::user) {
+        for (int k=0; k<ng; ++k) {
+          b0_.x1f(m,ks-k-1,j,i) = b0_.x1f(m,ks,j,i);
+          if (i == n1-1) {b0_.x1f(m,ks-k-1,j,i+1) = b0_.x1f(m,ks,j,i+1);}
+          b0_.x2f(m,ks-k-1,j,i) = b0_.x2f(m,ks,j,i);
+          if (j == n2-1) {b0_.x2f(m,ks-k-1,j+1,i) = b0_.x2f(m,ks,j+1,i);}
+          b0_.x3f(m,ks-k-1,j,i) = b0_.x3f(m,ks,j,i);
+        }
+      }
+      if (mb_bcs.d_view(m,BoundaryFace::outer_x3) == BoundaryFlag::user) {
+        for (int k=0; k<ng; ++k) {
+          b0_.x1f(m,ke+k+1,j,i) = b0_.x1f(m,ke,j,i);
+          if (i == n1-1) {b0_.x1f(m,ke+k+1,j,i+1) = b0_.x1f(m,ke,j,i+1);}
+          b0_.x2f(m,ke+k+1,j,i) = b0_.x2f(m,ke,j,i);
+          if (j == n2-1) {b0_.x2f(m,ke+k+1,j+1,i) = b0_.x2f(m,ke,j+1,i);}
+          b0_.x3f(m,ke+k+2,j,i) = b0_.x3f(m,ke+1,j,i);
+        }
+      }
+    });
+
+  pm->pmb_pack->pmhd->peos->ConsToPrim(u0_,b0_,w0_,bcc_,false,0,(n1-1),0,(n2-1),ks-ng,ks);
+  pm->pmb_pack->pmhd->peos->ConsToPrim(u0_,b0_,w0_,bcc_,false,0,(n1-1),0,(n2-1),ke,ke+ng);
+
+  par_for("hd_bc_x3", DevExeSpace(),0,(nmb-1),0,(ng-1),0,(n2-1),0,(n1-1),
+  KOKKOS_LAMBDA(int m, int k, int j, int i) {
+    // inner x3 boundary
+    Real &x1min = size.d_view(m).x1min;
+    Real &x1max = size.d_view(m).x1max;
+    Real x1v = CellCenterX(i-is, indcs.nx1, x1min, x1max);
+
+    Real &x2min = size.d_view(m).x2min;
+    Real &x2max = size.d_view(m).x2max;
+    Real x2v = CellCenterX(j-js, indcs.nx2, x2min, x2max);
+
+    Real &x3min = size.d_view(m).x3min;
+    Real &x3max = size.d_view(m).x3max;
+    Real x3v = CellCenterX(k-ks, indcs.nx3, x3min, x3max);
+
+    Real den(0.0), ux(0.0), uy(0.0), uz(0.0);
+    Real rad(0.0), phi(0.0), z(0.0);
+
+    // Inner x3 boundary
+    if (mb_bcs.d_view(m,BoundaryFace::inner_x3) == BoundaryFlag::user) {
+        
+        // Compute primitive variables at this location
+        GetCylCoord(mp_,rad, phi, z, x1v, x2v, x3v);
+        if (mp_.rho0 > 0.0){
+            den = DenDiscCyl(mp_, rad, phi, z);
+            VelDiscCyl(mp_, rad, phi, z, ux, uy, uz);
+        } else {
+            den = DenStarCyl(mp_, rad, phi, z);
+            VelStarCyl(mp_, rad, phi, z, ux, uy, uz);
+        } 
+
+        // Apply density floor
+        Real rc = sqrt(x1v*x1v + x2v*x2v + x3v*x3v);
+        den = fmax(den,rho_floor(mp_,rc));
+
+        // Now set the conserved variables using the primitive variables
+        w0_(m,IDN,k,j,i) = den;
+        w0_(m,IVX,k,j,i) = ux;
+        w0_(m,IVY,k,j,i) = uy;
+        w0_(m,IVZ,k,j,i) = uz;
+        if (mp_.is_ideal) {
+            w0_(m,IEN,k,j,i) = PoverR(mp_, rad, phi, z)*den/(mp_.gamma_gas - 1.0);
+        }
+    }
+
+    // Outer x3 boundary
+    x3v = CellCenterX((ke+k+1)-ks, indcs.nx3, x3min, x3max);
+
+    if (mb_bcs.d_view(m,BoundaryFace::outer_x3) == BoundaryFlag::user) {
+
+        // Compute primitive variables at this location
+        GetCylCoord(mp_,rad, phi, z, x1v, x2v, x3v);
+        if (mp_.rho0 > 0.0){
+            den = DenDiscCyl(mp_, rad, phi, z);
+            VelDiscCyl(mp_, rad, phi, z, ux, uy, uz);
+        } else {
+            den = DenStarCyl(mp_, rad, phi, z);
+            VelStarCyl(mp_, rad, phi, z, ux, uy, uz);
+        } 
+
+        // Apply density floor
+        Real rc = sqrt(x1v*x1v + x2v*x2v + x3v*x3v);
+        den = fmax(den,rho_floor(mp_,rc));
+
+        // Now set the conserved variables using the primitive variables
+        w0_(m,IDN,(ke+k+1),j,i) = den;
+        w0_(m,IVX,(ke+k+1),j,i) = ux;
+        w0_(m,IVY,(ke+k+1),j,i) = uy;
+        w0_(m,IVZ,(ke+k+1),j,i) = uz;
+        if (mp_.is_ideal) {
+            w0_(m,IEN,(ke+k+1),j,i) = PoverR(mp_, rad, phi, z)*den/(mp_.gamma_gas - 1.0);
+        }
+    }
+  });
+    
+  pm->pmb_pack->pmhd->peos->PrimToCons(w0_,bcc_,u0_,0,(n1-1),0,(n2-1),ks-ng,ks-1);
+  pm->pmb_pack->pmhd->peos->PrimToCons(w0_,bcc_,u0_,0,(n1-1),0,(n2-1),ke+1,ke+ng);
+
+  return;
+} 

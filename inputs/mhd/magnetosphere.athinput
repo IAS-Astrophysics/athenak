@@ -8,7 +8,7 @@ basename  = magsph      # problem ID: basename of output filenames
 
 <output1>
 file_type   = bin        # Tabular data dump
-#variable    = hydro_u   # variables to be output
+#variable   = hydro_u   # variables to be output
 variable    = mhd_u_bcc  # variables to be output
 dt          = 3.14       # time increment between outputs
 
@@ -24,60 +24,114 @@ dt          = 9.42
 evolution   = dynamic
 cfl_number  = 0.3        # The Courant, Friedrichs, & Lewy (CFL) Number
 nlim        = -1         # cycle limit
-tlim        =  94.2      # 94.2      # time limit
+tlim        =  94.2      # time limit
 integrator  = rk2        # time integration algorithm
 
 <mesh>
 nghost    = 2           # Number of ghost cells
 
-nx1         = 256       # Number of zones in X1-direction
-x1min       = -64        # minimum value of X1
-x1max       = 64        # maximum value of X1
-ix1_bc      = outflow   # Inner-X1 boundary condition flag
-ox1_bc      = outflow   # Outer-X1 boundary condition flag
+nx1         = 120       # Number of zones in X1-direction
+x1min       = -3       # minimum value of X1
+x1max       = 3        # maximum value of X1
+ix1_bc      = user   # Inner-X1 boundary condition flag
+ox1_bc      = user   # Outer-X1 boundary condition flag
 x1rat       = 1.0       # non-uniform grid ratio
 
-nx2         = 256       # Number of zones in X2-direction
-x2min       = -64       # minimum value of X2
-x2max       = 64        # maximum value of X2
-ix2_bc      = outflow   # Inner-X2 boundary condition flag
-ox2_bc      = outflow   # Outer-X2 boundary condition flag
+nx2         = 120       # Number of zones in X2-direction
+x2min       = -3       # minimum value of X2
+x2max       = 3        # maximum value of X2
+ix2_bc      = user   # Inner-X2 boundary condition flag
+ox2_bc      = user   # Outer-X2 boundary condition flag
 
-nx3         = 256       # Number of zones in X3-direction
-x3min       = -64        # minimum value of X3
-x3max       = 64         # maximum value of X3
-ix3_bc      = outflow   # Inner-X3 boundary condition flag
-ox3_bc      = outflow   # Outer-X3 boundary condition flag
+nx3         = 120       # Number of zones in X3-direction
+x3min       = -3       # minimum value of X3
+x3max       = 3        # maximum value of X3
+ix3_bc      = user   # Inner-X3 boundary condition flag
+ox3_bc      = user   # Outer-X3 boundary condition flag
 
 <meshblock>
-nx1       = 32       # Number of cells in each MeshBlock, X1-dir
-nx2       = 32      # Number of cells in each MeshBlock, X2-dir
-nx3       = 32       # Number of cells in each MeshBlock, X3-dir
+nx1       = 40      # Number of cells in each MeshBlock, X1-dir
+nx2       = 40      # Number of cells in each MeshBlock, X2-dir
+nx3       = 20      # Number of cells in each MeshBlock, X3-dir
 
-<mesh_refinement>
-refinement = static  # type of refinement
+#<mesh_refinement>
+#refinement = static  # type of refinement
 
 #<refined_region1>
-#x1min=-1
-#x1max= 1
-#x2min=-1
-#x2max= 1
-#x3min=-1
-#x3max= 1
-#level= 1
+#x1min=-3.9
+#x1max= 3.9
+#x2min=-3.9
+#x2max= 3.9
+#x3min=-0.4
+#x3max= 0.4
+#level= 2
 
 <refined_region1>
-x1min=-0.125
-x1max= 0.125
-x2min=-0.125
-x2max= 0.125
-x3min=-0.125
-x3max= 0.125
-level= 5
+x1min=-1.9
+x1max= 1.9
+x2min=-1.9
+x2max= 1.9
+x3min=-0.2
+x3max= 0.2
+level= 2
+
+<refined_region2>
+x1min=-0.9
+x1max= 0.9
+x2min=-0.9
+x2max= 0.9
+x3min=-0.12
+x3max= 0.12
+level= 3
+
+#<refined_region4>
+#x1min=-0.9
+#x1max= 0.9
+#x2min=-0.9
+#x2max= 0.9
+#x3min=-0.09
+#x3max= 0.09
+#level= 7
+
+#<refined_region1>
+#x1min=-7.9
+#x1max= 7.9
+#x2min=-7.9
+#x2max= 7.9
+#x3min=-0.79
+#x3max= 0.79
+#level= 4
+
+#<refined_region2>
+#x1min=-3.9
+#x1max= 3.9
+#x2min=-3.9
+#x2max= 3.9
+#x3min=-0.39
+#x3max= 0.39
+#level= 5
+
+#<refined_region3>
+#x1min=-1.9
+#x1max= 1.9
+#x2min=-1.9
+#x2max= 1.9
+#x3min=-0.19
+#x3max= 0.19
+#level= 6
+
+#<refined_region4>
+#x1min=-0.9
+#x1max= 0.9
+#x2min=-0.9
+#x2max= 0.9
+#x3min=-0.09
+#x3max= 0.09
+#level= 7
 
 #<hydro>
-#eos         = ideal        # EOS type
-#eos         = isothermal   # EOS type
+#eos         = ideal         # EOS type
+#eos         = isothermal    # EOS type
 #iso_sound_speed = 0.1     
 #gamma       = 1.4           # adaiabtic index
 #dfloor      = 1.e-12        # Density floor
@@ -98,23 +152,23 @@ user_srcs = true        # Switch the user source terms on
 user_esrcs = true       # Switch the user e field mask on
 
 denstar = 1e7           # central stellar density
-dslope = -2.25             # disc midplane surface density
+dslope = -2.25          # disc midplane surface density
 gm0 = 1.0               # GM for the central star
-mm = -0.0447            # magnetic moment
+mm = -0.0447            #-0.0447   # magnetic moment
 origid = 0.0            # angular velocity of star
 h_over_r0 = 0.1         # characetristic cs
-qslope = -1             # disc temperature profile exponent
+qslope = -0.5           # disc temperature profile exponent
 r0 = 1                  # reference radius
 rho0 = 1.0              # characteristic disc midplane density
 rmagsph = 0.5           # initial magnetospheric cavity radius
 rad_in_cutoff = 1.0
-rad_in_smooth = 0.1     # Was 0.3
+rad_in_smooth = 0.1      
 rad_out_cutoff = 60.0
 rad_out_smooth = 1.0
-rho_floor1 = 1e-5           # radial density floor normalisation 1
-rho_floor2 = 1.33e-5        # radial density floor normalisation 2
-rho_floor_slope1 = -2.25    # radial density floor slope 1
-rho_floor_slope2 = -5.5     # radial density floor slope 2
-rstar = 0.1             # radius of the star
-gravsmooth = 0.1        # smoothing of stellar gravity
-tcool = 1e-5            # characteristic cooling timescale [local orbital time]
+rho_floor1 = 1e-5         # radial density floor normalisation 1
+rho_floor2 = 1.33e-5      # radial density floor normalisation 2
+rho_floor_slope1 = -2.25  # radial density floor slope 1
+rho_floor_slope2 = -5.5   # radial density floor slope 2
+rstar = 0.1               # radius of the star
+gravsmooth = 0.1          # smoothing of stellar gravity
+tcool = 1e-5              # characteristic cooling timescale [local orbital time]
