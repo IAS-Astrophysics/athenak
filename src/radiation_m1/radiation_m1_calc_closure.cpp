@@ -51,16 +51,13 @@ TaskStatus RadiationM1::CalcClosure(Driver* pdrive, int stage) {
   int ksg = (indcs.nx3 > 1) ? ks - indcs.ng : ks;
   int keg = (indcs.nx3 > 1) ? ke + indcs.ng : ke;
 
-  size_t scr_size = 1;
-  int scr_level = 0;
   // TODO: there is no need to have outer and inner par for here
-  par_for_outer(
-      "radiation_m1_calc_closure", DevExeSpace(), scr_size, scr_level, 0, nmb1,
-      ksg, keg, jsg, jeg, isg, ieg,
-      KOKKOS_LAMBDA(TeamMember_t member, const int m, const int k, const int j,
-                    const int i) {
+  par_for(
+      "radiation_m1_calc_closure", DevExeSpace(), 0, nmb1, ksg, keg, jsg, jeg,
+      isg, ieg,
+      KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
         if (radiation_mask_(m, k, j, i)) {
-          par_for_inner(member, 0, nspecies_ - 1, [&](const int nuidx) {
+          for (int nuidx = 0; nuidx < nspecies_; ++nuidx) {
             u0_(m, CombinedIdx(nuidx, M1_E_IDX, nvars_), k, j, i) = 0;
             u0_(m, CombinedIdx(nuidx, M1_FX_IDX, nvars_), k, j, i) = 0;
             u0_(m, CombinedIdx(nuidx, M1_FY_IDX, nvars_), k, j, i) = 0;
@@ -69,7 +66,7 @@ TaskStatus RadiationM1::CalcClosure(Driver* pdrive, int stage) {
               u0_(m, CombinedIdx(nuidx, M1_N_IDX, nvars_), k, j, i) = 0;
             }
             chi_(m, nuidx, k, j, i) = 0;
-          });
+          }
         } else {
           // calculate metric and inverse metric
           Real garr_dd[16];
@@ -127,7 +124,7 @@ TaskStatus RadiationM1::CalcClosure(Driver* pdrive, int stage) {
           tensor_contract(g_dd, v_u, v_d);
           calc_proj(u_d, u_u, proj_ud);
 
-          par_for_inner(member, 0, nspecies_ - 1, [&](const int nuidx) {
+          for (int nuidx = 0; nuidx < nspecies_; ++nuidx) {
             Real E = u0_(m, CombinedIdx(nuidx, M1_E_IDX, nvars_), k, j, i);
             AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> F_d{};
             pack_F_d(beta_u(1), beta_u(2), beta_u(3),
@@ -142,7 +139,7 @@ TaskStatus RadiationM1::CalcClosure(Driver* pdrive, int stage) {
                          proj_ud, E, F_d, chi, Ptemp_dd, params_,
                          params_.closure_type);
             chi_(m, nuidx, k, j, i) = chi;
-          });
+          };
         }
       });
   is_chi_updated = true;
