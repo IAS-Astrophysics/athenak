@@ -20,7 +20,9 @@
 #include "mesh/mesh.hpp"
 #include "parameter_input.hpp"
 #include "radiation_m1/radiation_m1.hpp"
+#include "tasklist/numerical_relativity.hpp"
 #include "tasklist/task_list.hpp"
+#include "z4c/z4c.hpp"
 
 namespace radiationm1 {
 //----------------------------------------------------------------------------------------
@@ -47,6 +49,16 @@ namespace radiationm1 {
 void RadiationM1::AssembleRadiationM1Tasks(
     std::map<std::string, std::shared_ptr<TaskList>> tl) {
   TaskID none(0);
+  using namespace numrel; // NOLINT(build/namespaces)
+
+  z4c::Z4c *pz4c = pmy_pack->pz4c;
+  NumericalRelativity *pnr = pmy_pack->pnr;
+
+  // add tasks for the Tmunu
+  if (pz4c != nullptr) {
+    pnr->QueueTask(&RadiationM1::CalcClosure, this, M1_Closure, "M1_Closure", Task_Run);
+    pnr->QueueTask(&RadiationM1::SetTmunu, this, M1_SetTmunu, "M1_SetTmunu", Task_Run, {MHD_SetTmunu});
+  }
 
   // assemble "before_stagen" task list
   id.M1_irecv = tl["opsplit_before_stagen"]->AddTask(&RadiationM1::InitRecv, this, none, "RadiationM1::InitRecv");
@@ -59,8 +71,8 @@ void RadiationM1::AssembleRadiationM1Tasks(
   // decide what type of opacities to compute
   if (!params.matter_sources) {
     id.M1_mattersrc = id.M1_closure;
-  } else if (params.opacity_type == BnsNurates) {
 #if ENABLE_NURATES
+  } else if (params.opacity_type == BnsNurates) {
     id.M1_mattersrc = tl["opsplit_stagen"]->AddTask(&RadiationM1::CalcOpacityNurates,
                                                     this, id.M1_closure, "RadiationM1::CalcOpacityNurates");
 #endif

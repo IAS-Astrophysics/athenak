@@ -43,6 +43,8 @@ std::vector<QueuedTask>& NumericalRelativity::SelectQueue(TaskLocation loc) {
 PhysicsDependency NumericalRelativity::NeedsPhysics(TaskName task) {
   if (task < MHD_NTASKS) {
     return Phys_MHD;
+  } else if (task < M1_NTASKS) {
+    return Phys_M1;
   } else if (task < Z4c_NTASKS) {
     return Phys_Z4c;
   } else {
@@ -56,6 +58,8 @@ bool NumericalRelativity::DependencyAvailable(PhysicsDependency dep) {
       return true;
     case Phys_MHD:
       return pmy_pack->pdyngr != nullptr;
+    case Phys_M1:
+      return pmy_pack->pradm1 != nullptr;
     case Phys_Z4c:
       return pmy_pack->pz4c != nullptr;
     default:
