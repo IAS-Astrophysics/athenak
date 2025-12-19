@@ -653,6 +653,7 @@ TaskStatus RadiationM1::TimeUpdate_(Driver *d, int stage) {
           }
         }
       });
+  is_chi_updated = false;
   return TaskStatus::complete;
 }
 }  // namespace radiationm1

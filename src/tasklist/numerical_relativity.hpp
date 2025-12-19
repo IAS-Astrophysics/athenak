@@ -60,6 +60,10 @@ enum TaskName {
   MHD_ClearRU,
   MHD_NTASKS,
 
+  M1_Closure,
+  M1_SetTmunu,
+  M1_NTASKS,
+
   Z4c_Recv,
   Z4c_IRecvW,
   Z4c_CopyU,
@@ -95,6 +99,7 @@ enum TaskName {
 enum PhysicsDependency {
   Phys_None,
   Phys_MHD,
+  Phys_M1,
   Phys_Z4c
 };
 
