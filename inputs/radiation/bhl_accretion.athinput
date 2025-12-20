@@ -1,0 +1,137 @@
+# AthenaK input file for Bondi-Hoyle-Littleton accretion
+# Relativistic BHL accretion onto a spinning black hole with magnetic field
+
+<comment>
+problem   = BHL accretion (using gr_torus as base, modify for uniform inflow)
+reference = Bondi & Hoyle 1944; Shapiro 1973; Font & Ibanez 1998
+
+<job>
+basename  = bhl_accretion    # problem ID: basename of output filenames
+<mesh>
+nghost = 4        # Number of ghost cells
+nx1    = 256       # number of cells in x1-direction
+x1min  = -64.0  # minimum x1
+x1max  = 64.0   # maximum x1
+ix1_bc = user     # inner boundary
+ox1_bc = user     # outer boundary
+
+nx2    = 256       # number of cells in x2-direction
+x2min  = -64.0  # minimum x2
+x2max  = 64.0   # maximum x2
+ix2_bc = user     # inner boundary
+ox2_bc = user     # outer boundary
+
+nx3    = 256       # number of cells in x3-direction
+x3min  = -64.0  # minimum x3
+x3max  = 64.0   # maximum x3
+ix3_bc = user     # inner boundary
+ox3_bc = user     # outer boundary
+
+<meshblock>
+nx1  = 64          # Number of cells in each MeshBlock, X1-dir
+nx2  = 64          # Number of cells in each MeshBlock, X2-dir
+nx3  = 64          # Number of cells in each MeshBlock, X3-dir
+
+<mesh_refinement>
+refinement = static  # type of refinement
+
+#<refined_region4>
+#level = 1
+#x1min = -64.0
+#x1max = 64.0
+#x2min = -64.0
+#x2max = 64.0
+#x3min = -64.0
+#x3max = 64.0
+
+<time>
+evolution  = dynamic     # dynamic/kinematic/static
+integrator = rk2         # time integration algorithm
+cfl_number = 0.3         # The Courant, Friedrichs, & Lewy (CFL) Number
+nlim       = -1          # cycle limit
+tlim       = 10000.0     # time limit
+ndiag      = 1           # cycles between diagostic output
+
+<coord>
+general_rel = true       # general relativity
+a           = 0.0        # black hole spin a (0 <= a/M < 1)
+excise      = true       # excise r_ks <= 1.0
+dexcise     = 1.0e-8     # density inside excision
+pexcise     = 0.333e-10  # pressure inside excision
+
+<mhd>
+eos         = ideal      # EOS type
+reconstruct = ppm4       # spatial reconstruction method
+rsolver     = hlle       # Riemann-solver to be used
+dfloor      = 1.0e-8     # floor on density rho
+pfloor      = 0.333e-10  # floor on gas pressure p_gas
+sfloor      = 5.0e-7     # floor on gas specific entropy s
+gamma       = 1.4444444444444444  # ratio of specific heats Gamma
+fofc        = true       # Enable first order flux correction
+gamma_max   = 20.0       # Enable ceiling on Lorentz factor
+
+<radiation>
+reconstruct = plm     # reconstruction method
+rotate_geo = false    # geodesic grid rotation
+nlevel = 3            # geodesic level
+power_opacity = true  # absorption opacity related to temperature by power law
+compton = true        # flag to enable compton
+kappa_s = 0.34        # scattering opacity
+n_0_floor = 0.1       # floor on n_0
+
+<units>
+bhmass_msun = 10.0    # black hole mass in solar masses
+density_cgs = 1.0e-4  # density unit (cgs)
+mu = 0.5              # mean molecular weight
+
+<problem>
+# Ambient medium properties at infinity
+rho_inf    = 1.0            # density at infinity
+pgas_inf   = 0.01           # gas pressure at infinity  
+v_inf      = 0.1            # wind velocity at infinity (in units of c)
+mach_inf   = 5.0            # Mach number at infinity
+
+# Magnetic field (uniform at infinity)
+beta_mag   = 100.0          # plasma beta = p_gas / p_mag
+bx_fraction= 0.0            # Bx component (relative)
+by_fraction= 0.0            # By component (relative)
+bz_fraction= 1.0            # Bz component (relative, vertical field)
+
+rho_min    = 1.0e-6         # minimum density
+pgas_min   = 1.0e-8         # minimum pressure
+user_hist = true      # enroll user-defined history function
+
+<output1>
+file_type  = bin            # Binary data dump
+slice_x1   = 0.0            # slice in X1 plane
+id         = slice_x1       # output id tag
+variable   = rad_mhd_w_bcc  # variables to be output
+dt         = 10.0           # time increment between outputs
+
+<output2>
+file_type  = bin            # Binary data dump
+slice_x1   = 0.0            # slice in X1 plane
+id         = slice_x2       # output id tag
+variable   = rad_mhd_w_bcc  # variables to be output
+dt         = 10.0           # time increment between outputs
+
+<output3>
+file_type  = bin            # Binary data dump
+slice_x1   = 0.0            # slice in X1 plane
+id         = slice_x3       # output id tag
+variable   = mhd_w_bcc  # variables to be output
+dt         = 10.0           # time increment between outputs
+
+<output4>
+file_type  = hst        # History output
+dt         = 10.0       # time increment between outputs
+user_hist_only = true   # only output user-defined history
+
+<output5>
+file_type  = bin            # Binary data dump
+variable   = rad_mhd_w_bcc  # variables to be output
+dt         = 200.0          # time increment between outputs
+
+<output6>
+file_type  = rst    # Binary data dump
+dt         = 200.0  # time increment between outputs
