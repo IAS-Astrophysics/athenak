@@ -73,6 +73,10 @@ RefinementCriteria::RefinementCriteria(Mesh *pm, ParameterInput *pin) :
     Kokkos::abort("No <amr_criterion> blocks were found in input file");
   }
 
+  // Sort criteria by rmethod
+  std::sort(rcrit.begin(), rcrit.end(), [](const RefCritData& a, const RefCritData& b)
+      { return static_cast<int>(a.rmethod) < static_cast<int>(b.rmethod);});
+
   // Error if class containing variable requested has not been initialized
   for (auto it = rcrit.begin(); it != rcrit.end(); ++it) {
     if ((it->rvariable.compare(0, 5, "hydro") == 0) &&

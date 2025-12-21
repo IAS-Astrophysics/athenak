@@ -47,6 +47,8 @@ void CyclicZoom::WorkBeforeAMR() {
   // zoom state has been updated in SetRefinementFlags()
   if (zamr.zooming_out) {
     StoreVariables();
+    pzdata->PackBuffer();
+    pzdata->SyncBufferToHost();
     UpdateVariables();
     // TODO(@mhguo): only store the data needed on this rank instead of holding all
     SyncVariables();
@@ -69,11 +71,18 @@ void CyclicZoom::WorkBeforeAMR() {
 void CyclicZoom::WorkAfterAMR() {
   if (zamr.zooming_in) {
     ApplyVariables();
-    // ReInitVariables();
+    ReInitVariables();
     if (global_variable::my_rank == 0) {
       std::cout << "CyclicZoom: Apply variables after zooming" << std::endl;
     }
     zamr.zooming_in = false;
+  }
+  // Set up mask region
+  CheckMaskFlag();
+  pzdata->SyncHostToBuffer();
+  pzdata->UnpackBuffer();
+  if (global_variable::my_rank == 0) {
+    std::cout << "CyclicZoom: Done Work After AMR" << std::endl;
   }
   return;
 }
@@ -83,10 +92,13 @@ void CyclicZoom::WorkAfterAMR() {
 //! \brief Store variables before zooming (out)
 
 void CyclicZoom::StoreVariables() {
-  std::cout << "CyclicZoom: Storing variables before zooming" << std::endl;
+  if (global_variable::my_rank == 0) {
+    std::cout << "CyclicZoom: Storing variables before zooming" << std::endl;
+  }
   int nmb = pmesh->pmb_pack->nmb_thispack;
   int mbs = pmesh->gids_eachrank[global_variable::my_rank];
   int zm = 0;
+  // TODO(@mhguo): now CheckStoreFlag is called multiple times, can be optimized
   for (int m=0; m<nmb; ++m) {
     if (CheckStoreFlag(m)) {
       if (zm >= pzmesh->nzmb_max_perdvce) {
@@ -95,98 +107,29 @@ void CyclicZoom::StoreVariables() {
                   << std::endl;
         exit(1);
       }
-      std::cout << "CyclicZoom: Rank " << global_variable::my_rank << " Storing MeshBlock "
-                << m+mbs << " as zoom MeshBlock " << zm << std::endl;
-      pzdata->StoreDataToZoomData(zm, m);
       ++zm;
     }
   }
   // TODO(@mhguo): move some of the following code to ZoomMesh functions
-  pzmesh->nzmb_thisdvce = zm;
-// Get starting global index for this rank (exclusive scan)
-int zm_offset = 0;
-// Get total number across all ranks (inclusive scan or Allreduce)
-int zm_total = zm;
-#if MPI_PARALLEL_ENABLED
-  MPI_Exscan(&zm, &zm_offset, 1, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
-  // sum up number of stored MeshBlocks over all ranks
-  MPI_Allreduce(MPI_IN_PLACE, &zm_total, 1, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
-#endif
-  pzmesh->nzmb_total += zm_total;
-  pzmesh->nzmb_eachlevel[zstate.zone] = zm_total;
-  pzmesh->gids_eachlevel[zstate.zone+1] = pzmesh->gids_eachlevel[zstate.zone] + zm_total;
-  // resize arrays to hold all zoom MeshBlocks across all levels/ranks
-  pzmesh->rank_eachzmb.resize(pzmesh->nzmb_total);
-  pzmesh->lid_eachzmb.resize(pzmesh->nzmb_total);
-  pzmesh->rank_eachmb.resize(pzmesh->nzmb_total);
-  pzmesh->lid_eachmb.resize(pzmesh->nzmb_total);
-  pzmesh->lloc_eachzmb.resize(pzmesh->nzmb_total);
-  // copy LogicalLocation of stored MeshBlocks
-  // int mbs = pmesh->gids_eachrank[global_variable::my_rank];
-  // assgin rank of each zoom MB on host, perform simultaneously on all ranks
-  int offset = pzmesh->gids_eachlevel[zstate.zone];
-  for (int zm=0; zm<pzmesh->nzmb_eachlevel[zstate.zone]; ++zm) {
-    pzmesh->rank_eachzmb[offset + zm] = (offset + zm) / pzmesh->nzmb_max_perhost;
-    pzmesh->lid_eachzmb[offset + zm] = (offset + zm) % pzmesh->nzmb_max_perhost;
-  }
-  // assign rank and local ID of each MB that contains the zoom MBs
-  // reuse variables offset and zm
-  offset = pzmesh->gids_eachlevel[zstate.zone] + zm_offset;
-  zm = 0;
+  pzmesh->SyncMBMetaData(zm);
   // TODO(@mhguo): may create a list of stored MBs to avoid this loop?
+  // assign rank and local ID of each MB that contains the zoom MBs
+  int offset = pzmesh->gids_eachdvce[global_variable::my_rank];
+  zm = 0;
   for (int m=0; m<nmb; ++m) {
     if (CheckStoreFlag(m)) {
       pzmesh->rank_eachmb[offset + zm] = global_variable::my_rank;
       pzmesh->lid_eachmb[offset + zm] = m;
       pzmesh->lloc_eachzmb[offset + zm] = pmesh->lloc_eachmb[m + mbs];
+      pzdata->StoreDataToZoomData(zm, m);
       ++zm;
     }
   }
 
   // sync rank_eachmb and lid_eachmb to all ranks
   // TODO(@mhguo): need to check whether this is correct
-#if MPI_PARALLEL_ENABLED
-  // Create SEPARATE buffers for MPI communication
-  std::vector<int> send_rank_buf(zm);  // Local data to send
-  std::vector<int> send_lid_buf(zm);
-  
-  // Copy local data to send buffers
-  int local_offset = pzmesh->gids_eachlevel[zstate.zone] + zm_offset;
-  for (int i = 0; i < zm; ++i) {
-    send_rank_buf[i] = pzmesh->rank_eachmb[local_offset + i];
-    send_lid_buf[i] = pzmesh->lid_eachmb[local_offset + i];
-  }
-  
-  // Gather counts and displacements
-  std::vector<int> counts(global_variable::nranks);
-  std::vector<int> displs(global_variable::nranks);
-  
-  MPI_Allgather(&zm, 1, MPI_INT, counts.data(), 1, MPI_INT, MPI_COMM_WORLD);
-  
-  displs[0] = 0;
-  for (int i = 1; i < global_variable::nranks; ++i) {
-    displs[i] = displs[i-1] + counts[i-1];
-  }
-  
-  offset = pzmesh->gids_eachlevel[zstate.zone];
-  
-  // Gather rank_eachmb (separate source and destination)
-  MPI_Allgatherv(send_rank_buf.data(),                    // ✅ Separate source
-                 zm, MPI_INT,
-                 pzmesh->rank_eachmb.data() + offset,     // Destination
-                 counts.data(), displs.data(), MPI_INT,
-                 MPI_COMM_WORLD);
-  
-  // Gather lid_eachmb (separate source and destination)
-  MPI_Allgatherv(send_lid_buf.data(),                     // ✅ Separate source
-                 zm, MPI_INT,
-                 pzmesh->lid_eachmb.data() + offset,      // Destination
-                 counts.data(), displs.data(), MPI_INT,
-                 MPI_COMM_WORLD);
-#endif
-
-  pzdata->PackBuffer();
-  pzdata->SyncBufferToHost();
+  pzmesh->SyncMBLists();
+  pzmesh->SyncLogicalLocations();
   return;
 }
 
@@ -261,6 +204,7 @@ void CyclicZoom::CheckMaskFlag() {
   // use the updated zoom region parameters
   // Real r_zoom = zregion.radius;
   // Real x1c = zregion.x1c, x2c = zregion.x2c, x3c = zregion.x3c;
+  int zm_count = 0;
   for (int zm = 0; zm < nzmb; ++zm) {
     for (int m=0; m<nmb; ++m) {
       // check previous level (finer level)
@@ -272,12 +216,21 @@ void CyclicZoom::CheckMaskFlag() {
               (zlloc.lx1>>1 == lloc.lx1) &&
               (zlloc.lx2>>1 == lloc.lx2) &&
               (zlloc.lx3>>1 == lloc.lx3) ) {
+          // now map the zoom MB to this MB for masking
           pzmesh->rank_eachmb[zm+zmbs] = global_variable::my_rank;
           pzmesh->lid_eachmb[zm+zmbs] = m;
+          std::cout << "CyclicZoom: Rank " << global_variable::my_rank
+                    << " Masking MeshBlock " << m+mbs << " for zoom MeshBlock "
+                    << zm+zmbs << std::endl;
+          ++zm_count;
         }
       }
     }
   }
+  std::cout << "  Rank " << global_variable::my_rank << " total zoom MBs to be masked: "
+            << zm_count << std::endl;
+  pzmesh->SyncNZMB(zm_count);
+  pzmesh->SyncMBLists();
   return;
 }
 

@@ -511,8 +511,9 @@ void ZoomData::UpdateElectricFields(int zm, int m) {
 //! \brief Packs data into AMR communication buffers for all MBs being sent
 
 void ZoomData::PackBuffer() {
-  std::cout << "CyclicZoom: Packing data into communication buffer" << std::endl;
-  nzmb_send = pzmesh->nzmb_thisdvce;
+  if (global_variable::my_rank == 0) {
+    std::cout << "CyclicZoom: Packing data into communication buffer" << std::endl;
+  }
   hydro::Hydro* phydro = pzoom->pmesh->pmb_pack->phydro;
   mhd::MHD* pmhd = pzoom->pmesh->pmb_pack->pmhd;
   // use size_t for offset to avoid overflow
@@ -525,7 +526,7 @@ void ZoomData::PackBuffer() {
     ec_cnt += efld.x2e.extent(1) * efld.x2e.extent(2) * efld.x2e.extent(3);
     ec_cnt += efld.x3e.extent(1) * efld.x3e.extent(2) * efld.x3e.extent(3);
   }
-  for (int zm = 0; zm < nzmb_send; ++zm) {
+  for (int zm = 0; zm < pzmesh->nzmb_thisdvce; ++zm) {
     // offset = zm * zmb_data_cnt;
     // pack conserved variables
     PackBuffersCC(dzbuf, u0, offset, zm);
@@ -549,7 +550,7 @@ void ZoomData::PackBuffer() {
       offset += ec_cnt;
     }
   }
-  // Single copy: device buffer → host buffer
+  // Single copy: device buffer -> host buffer
   Kokkos::deep_copy(hzbuf, dzbuf);
   return;
 }
@@ -561,24 +562,10 @@ void ZoomData::PackBuffer() {
 void ZoomData::PackBuffersCC(DvceArray1D<Real> packed_data, DvceArray5D<Real> a0,
                              size_t offset_a0, const int m) {
   // Pack array a0 at MeshBlock m into packed_data starting from offset_a0
-  // auto u0_1d = Kokkos::View<Real*, Kokkos::LayoutRight, Kokkos::MemoryUnmanaged>(u0.data(), size_cc);
-  // Calculate size
-  // size_t size_cc = a0.extent(1) * a0.extent(2) * a0.extent(3) * a0.extent(4);
   int nv = a0.extent_int(1);
   int nk = a0.extent_int(2);
   int nj = a0.extent_int(3);
   int ni = a0.extent_int(4);
-  // auto a0_slice = Kokkos::subview(a0, 
-  //   Kokkos::make_pair(m,m+1), Kokkos::ALL, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL);
-  // Get pointer to the m-th slice of a0
-  // Real* a0_ptr = &a0(m, 0, 0, 0, 0);
-  // Create 1D unmanaged view of the slice
-  // auto a0_1d = Kokkos::View<Real*, Kokkos::LayoutRight, Kokkos::MemoryUnmanaged>(
-  //   a0_ptr, size_cc);
-  // auto packed_a0 = Kokkos::subview(packed_data, 
-  //   Kokkos::make_pair(offset_a0, offset_a0 + size_cc));
-  // // Kokkos::deep_copy(packed_a0, a0_slice);
-  // Kokkos::deep_copy(packed_a0, a0_1d);
   // Pack using parallel kernel on device
   par_for("pack_cc", DevExeSpace(), 0, nv-1, 0, nk-1, 0, nj-1, 0, ni-1,
   KOKKOS_LAMBDA(const int v, const int k, const int j, const int i) {
@@ -665,11 +652,84 @@ void ZoomData::PackBuffersEC(DvceArray1D<Real> packed_data, DvceEdgeFld4D<Real> 
 
 // TODO(@mhguo): need to move to different ranks...
 void ZoomData::SyncBufferToHost() {
-  Kokkos::fence();
-  // First you have to rearrange the data
-  for (int zm = 0; zm < pzmesh->nzmb_thisdvce; ++zm) {
+#if MPI_PARALLEL_ENABLED
+  auto rank_send = pzmesh->rank_eachmb;
+  auto rank_recv = pzmesh->rank_eachzmb;
+  int nzmb = pzmesh->nzmb_eachlevel[pzoom->zstate.zone-1];
+  int zmbs = pzmesh->gids_eachlevel[pzoom->zstate.zone-1];
+  size_t data_per_zmb = zmb_data_cnt;
+
+  int nsend = 0, nrecv = 0, ncopy = 0;
+  int my_rank = global_variable::my_rank;
+  std::vector<MPI_Request> requests;
+
+  int zmbuf = 0;
+  for (int zm = 0; zm < nzmb; ++zm) {
+    int src_rank = rank_send[zm+zmbs];
+    int dst_rank = rank_recv[zm+zmbs];
+    
+    // Post receives first
+    if (dst_rank == my_rank && src_rank != my_rank) {
+      // Receive from src_rank
+      MPI_Request req;
+      size_t offset_dst = pzmesh->lid_eachzmb[zm+zmbs] * data_per_zmb;
+      MPI_Irecv(hzdata.data() + offset_dst, data_per_zmb, 
+                MPI_ATHENA_REAL, src_rank, zm, zoom_comm, &req);
+      requests.push_back(req);
+      std::cout << "  Rank " << global_variable::my_rank 
+                << " Irecv to host for zmb " << zm+zmbs 
+                << " from rank " << src_rank << " to offset " << offset_dst 
+                << " with local id " << pzmesh->lid_eachzmb[zm+zmbs]
+                << std::endl;
+      ++nrecv;
+    }
+
+    // Post sends
+    if (src_rank == my_rank && dst_rank != my_rank) {
+      // Send to dst_rank
+      MPI_Request req;
+      size_t offset_src = zmbuf * data_per_zmb;
+      MPI_Isend(hzbuf.data() + offset_src, data_per_zmb,
+                MPI_ATHENA_REAL, dst_rank, zm, zoom_comm, &req);
+      requests.push_back(req);
+      std::cout << "  Rank " << global_variable::my_rank 
+                << " Isend to host for zmb " << zm+zmbs 
+                << " to rank " << dst_rank << " from offset " << offset_src
+                << " with local id " << zmbuf
+                << std::endl;
+      ++nsend;
+      ++zmbuf;
+    } 
+
+    // Local copy
+    if (src_rank == my_rank && dst_rank == my_rank) {
+      size_t offset_src = zmbuf * data_per_zmb;
+      size_t offset_dst = pzmesh->lid_eachzmb[zm+zmbs] * data_per_zmb;
+      Kokkos::deep_copy(
+        Kokkos::subview(hzdata, Kokkos::make_pair(offset_dst, offset_dst + data_per_zmb)),
+        Kokkos::subview(hzbuf, Kokkos::make_pair(offset_src, offset_src + data_per_zmb))
+      );
+      std::cout << "  Rank " << global_variable::my_rank 
+                << " local copy to host for zmb " << zm+zmbs
+                << " from offset " << offset_src << " to offset " << offset_dst
+                << " from local id " << zmbuf << " to local id " << pzmesh->lid_eachzmb[zm+zmbs]
+                << std::endl;
+      ++ncopy;
+      ++zmbuf;
+    }
   }
-  Kokkos::fence();
+  
+  // Wait for all communications to complete
+  if (!requests.empty()) {
+    MPI_Waitall(requests.size(), requests.data(), MPI_STATUSES_IGNORE);
+  }
+  
+  std::cout << "SyncBufferToHost: Rank " << global_variable::my_rank << " completed "
+            << requests.size() << " MPI operations"
+            << " (sends: " << nsend << ", receives: " << nrecv
+            << ", local copies: " << ncopy << ")" << std::endl;
+
+#endif
   return;
 }
 
@@ -679,8 +739,84 @@ void ZoomData::SyncBufferToHost() {
 
 // TODO(@mhguo): need to move to different ranks...
 void ZoomData::SyncHostToBuffer() {
-  Kokkos::fence();
-  Kokkos::fence();
+#if MPI_PARALLEL_ENABLED
+  auto rank_send = pzmesh->rank_eachzmb;
+  auto rank_recv = pzmesh->rank_eachmb;
+  int nzmb = pzmesh->nzmb_eachlevel[pzoom->zstate.zone-1];
+  int zmbs = pzmesh->gids_eachlevel[pzoom->zstate.zone-1];
+  size_t data_per_zmb = zmb_data_cnt;
+
+  int nsend = 0, nrecv = 0, ncopy = 0;
+  int my_rank = global_variable::my_rank;
+  std::vector<MPI_Request> requests;
+
+  int zmbuf = 0;
+  for (int zm = 0; zm < nzmb; ++zm) {
+    int src_rank = rank_send[zm+zmbs];
+    int dst_rank = rank_recv[zm+zmbs];
+    
+    // Post receives first
+    if (dst_rank == my_rank && src_rank != my_rank) {
+      // Receive from src_rank
+      MPI_Request req;
+      size_t offset_dst = zmbuf * data_per_zmb;
+      MPI_Irecv(hzbuf.data() + offset_dst, data_per_zmb, 
+                MPI_ATHENA_REAL, src_rank, zm, zoom_comm, &req);
+      requests.push_back(req);
+      std::cout << "  Rank " << global_variable::my_rank 
+                << " Irecv to buffer for zmb " << zm+zmbs
+                << " from rank " << src_rank << " to offset " << offset_dst 
+                << " with local id " << zmbuf
+                << std::endl;
+      ++nrecv;
+      ++zmbuf;
+    }
+
+    // Post sends
+    if (src_rank == my_rank && dst_rank != my_rank) {
+      // Send to dst_rank
+      MPI_Request req;
+      size_t offset_src = pzmesh->lid_eachzmb[zm+zmbs] * data_per_zmb;
+      MPI_Isend(hzdata.data() + offset_src, data_per_zmb,
+                MPI_ATHENA_REAL, dst_rank, zm, zoom_comm, &req);
+      requests.push_back(req);
+      std::cout << "  Rank " << global_variable::my_rank 
+                << " Isend to buffer for zmb " << zm+zmbs 
+                << " to rank " << dst_rank << " from offset " << offset_src
+                << " with local id " << pzmesh->lid_eachzmb[zm+zmbs]
+                << std::endl;
+      ++nsend;
+    } 
+
+    // Local copy
+    if (src_rank == my_rank && dst_rank == my_rank) {
+      size_t offset_src = pzmesh->lid_eachzmb[zm+zmbs] * data_per_zmb;
+      size_t offset_dst = zmbuf * data_per_zmb;
+      Kokkos::deep_copy(
+        Kokkos::subview(hzbuf, Kokkos::make_pair(offset_dst, offset_dst + data_per_zmb)),
+        Kokkos::subview(hzdata, Kokkos::make_pair(offset_src, offset_src + data_per_zmb))
+      );
+      std::cout << "  Rank " << global_variable::my_rank 
+                << " local copy to buffer for zmb " << zm+zmbs
+                << " from offset " << offset_src << " to offset " << offset_dst
+                << " from local id " << pzmesh->lid_eachzmb[zm+zmbs] << " to local id " << zmbuf
+                << std::endl;
+      ++ncopy;
+      ++zmbuf;
+    }
+  }
+  
+  // Wait for all communications to complete
+  if (!requests.empty()) {
+    MPI_Waitall(requests.size(), requests.data(), MPI_STATUSES_IGNORE);
+  }
+  
+  std::cout << "SyncHostToBuffer: Rank " << global_variable::my_rank << " completed "
+            << requests.size() << " MPI operations"
+            << " (sends: " << nsend << ", receives: " << nrecv
+            << ", local copies: " << ncopy << ")" << std::endl;
+
+#endif
   return;
 }
 
@@ -689,18 +825,133 @@ void ZoomData::SyncHostToBuffer() {
 //! \brief Unpacks data from AMR communication buffers for all MBs being received
 
 void ZoomData::UnpackBuffer() {
-  nzmb_recv = pzmesh->nzmb_thisdvce;
   hydro::Hydro* phydro = pzoom->pmesh->pmb_pack->phydro;
   mhd::MHD* pmhd = pzoom->pmesh->pmb_pack->pmhd;
-  // for (int zm = 0; zm < nzmb_recv; ++zm) {
-  //   int offset = zm * zmb_data_cnt;
-  //   // unpack conserved variables
-  //   UnpackBuffersCC(recv_data, offset, u0);
-  //   // unpack magnetic fields
-  //   if (pmhd != nullptr) {
-  //     UnpackBuffersFC(recv_data, offset, m, b0, coarse_b0);
-  //   }
-  // }
+  // use size_t for offset to avoid overflow
+  size_t offset = 0;
+  size_t cc_cnt = u0.extent(1) * u0.extent(2) * u0.extent(3) * u0.extent(4);
+  size_t ccc_cnt = coarse_u0.extent(1) * coarse_u0.extent(2) * coarse_u0.extent(3) * coarse_u0.extent(4);
+  size_t ec_cnt = 0;
+  if (pmhd != nullptr) {
+    ec_cnt = efld.x1e.extent(1) * efld.x1e.extent(2) * efld.x1e.extent(3);
+    ec_cnt += efld.x2e.extent(1) * efld.x2e.extent(2) * efld.x2e.extent(3);
+    ec_cnt += efld.x3e.extent(1) * efld.x3e.extent(2) * efld.x3e.extent(3);
+  }
+  for (int zm = 0; zm < pzmesh->nzmb_thisdvce; ++zm) {
+    // offset = zm * zmb_data_cnt;
+    // unpack conserved variables
+    UnpackBuffersCC(dzbuf, u0, offset, zm);
+    offset += cc_cnt;
+    // unpack primitive variables
+    UnpackBuffersCC(dzbuf, w0, offset, zm);
+    offset += cc_cnt;
+    // unpack coarse conserved variables
+    UnpackBuffersCC(dzbuf, coarse_u0, offset, zm);
+    offset += ccc_cnt;
+    // unpack coarse primitive variables
+    UnpackBuffersCC(dzbuf, coarse_w0, offset, zm);
+    offset += ccc_cnt;
+    // unpack magnetic fields and/or electric fields if MHD
+    if (pmhd != nullptr) {
+      UnpackBuffersEC(dzbuf, efld, offset, zm);
+      offset += ec_cnt;
+      UnpackBuffersEC(dzbuf, emf0, offset, zm);
+      offset += ec_cnt;
+      UnpackBuffersEC(dzbuf, delta_efld, offset, zm);
+      offset += ec_cnt;
+    }
+  }
+  return;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn ZoomData::UnpackBuffersCC()
+//! \brief Unpacks cell-centered data from AMR communication buffers
+
+void ZoomData::UnpackBuffersCC(DvceArray1D<Real> packed_data, DvceArray5D<Real> a0,
+                               size_t offset_a0, const int m) {
+  // Unpack array a0 at MeshBlock m from packed_data starting from offset_a0
+  int nv = a0.extent_int(1);
+  int nk = a0.extent_int(2);
+  int nj = a0.extent_int(3);
+  int ni = a0.extent_int(4);
+  // Unpack using parallel kernel on device
+  par_for("unpack_cc", DevExeSpace(), 0, nv-1, 0, nk-1, 0, nj-1, 0, ni-1,
+  KOKKOS_LAMBDA(const int v, const int k, const int j, const int i) {
+    a0(m,v,k,j,i) = packed_data(offset_a0 + (((v*nk + k)*nj + j)*ni + i));
+  });
+  return;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn ZoomData::UnpackBuffersFC()
+//! \brief Unpacks face-centered data from AMR communication buffers
+
+void ZoomData::UnpackBuffersFC(DvceArray1D<Real> packed_data, DvceFaceFld4D<Real> fc,
+                               size_t offset_fc, const int m) {
+  // Unpack face field fc at MeshBlock m from packed_data starting from offset_fc
+  // Unpack f1
+  int nk = fc.x1f.extent_int(1);
+  int nj = fc.x1f.extent_int(2);
+  int ni = fc.x1f.extent_int(3);
+  par_for("unpack_f1", DevExeSpace(), 0, nk-1, 0, nj-1, 0, ni-1,
+  KOKKOS_LAMBDA(const int k, const int j, const int i) {
+    fc.x1f(m,k,j,i) = packed_data(offset_fc + (k*nj + j)*ni + i);
+  });
+  offset_fc += nk*nj*ni;
+  // Unpack f2
+  nk = fc.x2f.extent_int(1);
+  nj = fc.x2f.extent_int(2);
+  ni = fc.x2f.extent_int(3);
+  par_for("unpack_f2", DevExeSpace(), 0, nk-1, 0, nj-1, 0, ni-1,
+  KOKKOS_LAMBDA(const int k, const int j, const int i) {
+    fc.x2f(m,k,j,i) = packed_data(offset_fc + (k*nj + j)*ni + i);
+  });
+  offset_fc += nk*nj*ni;
+  // Unpack f3
+  nk = fc.x3f.extent_int(1);
+  nj = fc.x3f.extent_int(2);
+  ni = fc.x3f.extent_int(3);
+  par_for("unpack_f3", DevExeSpace(), 0, nk-1, 0, nj-1, 0, ni-1,
+  KOKKOS_LAMBDA(const int k, const int j, const int i) {
+    fc.x3f(m,k,j,i) = packed_data(offset_fc + (k*nj + j)*ni + i);
+  });
+  return;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn ZoomData::UnpackBuffersEC()
+//! \brief Unpacks edge-centered data from AMR communication buffers
+
+void ZoomData::UnpackBuffersEC(DvceArray1D<Real> packed_data, DvceEdgeFld4D<Real> ec,
+                               size_t offset_ec, const int m) {
+  // Unpack edge field ec at MeshBlock m from packed_data starting from offset_ec
+  // Unpack e1
+  int nk = ec.x1e.extent_int(1);
+  int nj = ec.x1e.extent_int(2);
+  int ni = ec.x1e.extent_int(3);
+  par_for("unpack_e1", DevExeSpace(), 0, nk-1, 0, nj-1, 0, ni-1,
+  KOKKOS_LAMBDA(const int k, const int j, const int i) {
+    ec.x1e(m,k,j,i) = packed_data(offset_ec + (k*nj + j)*ni + i);
+  });
+  offset_ec += nk*nj*ni;
+  // Unpack e2
+  nk = ec.x2e.extent_int(1);
+  nj = ec.x2e.extent_int(2);
+  ni = ec.x2e.extent_int(3);
+  par_for("unpack_e2", DevExeSpace(), 0, nk-1, 0, nj-1, 0, ni-1,
+  KOKKOS_LAMBDA(const int k, const int j, const int i) {
+    ec.x2e(m,k,j,i) = packed_data(offset_ec + (k*nj + j)*ni + i);
+  });
+  offset_ec += nk*nj*ni;
+  // Unpack e3
+  nk = ec.x3e.extent_int(1);
+  nj = ec.x3e.extent_int(2);
+  ni = ec.x3e.extent_int(3);
+  par_for("unpack_e3", DevExeSpace(), 0, nk-1, 0, nj-1, 0, ni-1,
+  KOKKOS_LAMBDA(const int k, const int j, const int i) {
+    ec.x3e(m,k,j,i) = packed_data(offset_ec + (k*nj + j)*ni + i);
+  });
   return;
 }
 

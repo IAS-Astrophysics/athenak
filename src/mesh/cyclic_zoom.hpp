@@ -165,7 +165,7 @@ class ZoomMesh
 {
  public:
   ZoomMesh(CyclicZoom *pz, ParameterInput *pin);
-  ~ZoomMesh() = default;
+  ~ZoomMesh();
 
   // data
   int max_level;           // maximum zoom mesh level
@@ -180,15 +180,23 @@ class ZoomMesh
   int nzmb_max_perdvce;    // max allowed number of Zoom MBs per device (memory limit for AMR)
   int nzmb_max_perhost;    // max allowed number of Zoom MBs per host (memory limit for AMR)
   // following 2x arrays allocated with length [nranks] in BuildTreeFromXXXX()
+  // TODO(@mhguo): do you really need so many lists here?
   int *gids_eachlevel;     // starting global ID of Zoom MeshBlocks in each level
-  int *nzmb_eachlevel;      // number of Zoom MeshBlocks on each level
-  int *gids_eachrank;      // starting global ID of MeshBlocks in each rank
-  int *nzmb_eachrank;       // number of MeshBlocks on each rank
-  std::vector<int> rank_eachzmb;        // rank of each Zoom MeshBlock
-  std::vector<int> lid_eachzmb;         // local ID of each Zoom MeshBlock
+  int *nzmb_eachlevel;     // number of Zoom MeshBlocks on each level
+  int *gids_eachdvce;      // starting global ID of MeshBlocks in each device
+  int *nzmb_eachdvce;      // number of MeshBlocks on each device
   std::vector<int> rank_eachmb;        // rank of each MeshBlock that contains this zoom MeshBlock
   std::vector<int> lid_eachmb;         // local ID of each MeshBlock that contains this zoom MeshBlock
+  std::vector<int> rank_eachzmb;        // rank of each Zoom MeshBlock
+  std::vector<int> lid_eachzmb;         // local ID of each Zoom MeshBlock
   std::vector<LogicalLocation> lloc_eachzmb;  // LogicalLocations for each MeshBlock
+
+  // functions
+  // TODO(@mhguo): think whether there is a better design
+  void SyncNZMB(int zm_count);
+  void SyncMBMetaData(int zm_count);
+  void SyncMBLists();
+  void SyncLogicalLocations();
 
  private:
   CyclicZoom *pzoom;       // ptr to CyclicZoom containing this ZoomMesh module
@@ -244,7 +252,6 @@ class ZoomData
 
 #if MPI_PARALLEL_ENABLED
   int ndata;               // size of send/recv data
-  int nzmb_send, nzmb_recv;
   MPI_Comm zoom_comm;                       // unique communicator for zoom refinement
   // DualArray1D<AMRBuffer> sendbuf, recvbuf; // send/recv buffers
   MPI_Request *send_req, *recv_req;
@@ -266,6 +273,12 @@ class ZoomData
   void PackBuffersEC(DvceArray1D<Real> packed_data, DvceEdgeFld4D<Real> ec,
                      size_t offset_ec, const int m);
   void UnpackBuffer();
+  void UnpackBuffersCC(DvceArray1D<Real> packed_data, DvceArray5D<Real> a0,
+                       size_t offset_a0, const int m);
+  void UnpackBuffersFC(DvceArray1D<Real> packed_data, DvceFaceFld4D<Real> fc,
+                       size_t offset_fc, const int m);
+  void UnpackBuffersEC(DvceArray1D<Real> packed_data, DvceEdgeFld4D<Real> ec,
+                       size_t offset_ec, const int m);
   void SyncBufferToHost();
   void SyncHostToBuffer();
   void LoadDataFromZoomData(int zm, int m);
