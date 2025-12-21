@@ -17,8 +17,10 @@
 
 #include "athena.hpp"
 #include "coordinates/adm.hpp"
-#include "coordinates/cell_locations.hpp"
+#include "z4c/z4c.hpp"
+#include "z4c/z4c_amr.hpp"
 #include "coordinates/coordinates.hpp"
+#include "coordinates/cell_locations.hpp"
 #include "dyn_grmhd/dyn_grmhd.hpp"
 #include "elliptica_id_reader_lib.h"
 #include "eos/eos.hpp"
@@ -27,8 +29,6 @@
 #include "mesh/mesh.hpp"
 #include "mhd/mhd.hpp"
 #include "parameter_input.hpp"
-#include "z4c/z4c.hpp"
-#include "z4c/z4c_amr.hpp"
 
 void EllipticaBNSHistory(HistoryData *pdata, Mesh *pm);
 void EllipticaBNSRefinementCondition(MeshBlockPack *pmbp);
@@ -38,10 +38,9 @@ void EllipticaBNSRefinementCondition(MeshBlockPack *pmbp);
 //! \brief Problem Generator for BNS with Elliptica
 void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   user_hist_func = &EllipticaBNSHistory;
-  user_ref_func  = &EllipticaBNSRefinementCondition;
+  user_ref_func = &EllipticaBNSRefinementCondition;
 
-  if (restart)
-    return;
+  if (restart) return;
 
   MeshBlockPack *pmbp = pmy_mesh_->pmb_pack;
   auto &indcs         = pmy_mesh_->mb_indcs;

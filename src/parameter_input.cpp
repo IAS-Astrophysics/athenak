@@ -41,6 +41,7 @@
 #include <iostream>
 #include <sstream>
 #include <string>
+#include <vector>
 
 #include "athena.hpp"
 #include "globals.hpp"
@@ -68,6 +69,7 @@ ParameterInput::ParameterInput(std::string input_filename) : last_filename{} {
   infile.Open(input_filename.c_str(), IOWrapper::FileMode::read);
   LoadFromFile(infile);
   infile.Close();
+  CheckBlockNames();
 }
 
 //----------------------------------------------------------------------------------------
@@ -88,6 +90,43 @@ InputLine* InputBlock::GetPtrToLine(std::string name) {
     if (name.compare(it->param_name) == 0) return &*it;
   }
   return nullptr;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void ParameterInput::CheckBlockNames()
+//  \brief Checks that all <input_block> names in the input file are valid
+//! To add new names, add more strings to the valid_name list
+
+void ParameterInput::CheckBlockNames() {
+  // Following are currently recognized <input_block> names. New ones can be added to end
+  std::vector<std::string> valid_name = {
+    "comment", "job",
+    "mesh", "meshblock", "mesh_refinement", "refined_region", "amr_criterion",
+    "coord", "adm", "shearing_box",
+    "time", "problem", "output",
+    "hydro", "mhd", "ion-neutral", "radiation", "z4c", "z4c_amr", "cce",
+    "rad_srcterms", "hydro_srcterms", "mhd_srcterms"
+    };
+
+  for (auto it1 = block.begin(); it1 != block.end(); ++it1) {
+    bool found = false;
+    for (auto it2 = valid_name.begin(); it2 != valid_name.end(); ++it2) {
+      if (it1->block_name.compare(0, it2->length(), (*it2)) == 0) {
+        found = true;
+        break;
+      }
+    }
+    if (!(found)) {
+      if (global_variable::my_rank == 0) {
+        std::cout<<"### FATAL ERROR in "<<__FILE__<<" at line "<<__LINE__<< std::endl;
+        std::cout<<"Allowed <input_block> names in input file are:" << std::endl;
+        for (auto it2 = valid_name.begin(); it2 != valid_name.end(); ++it2) {
+          std::cout<< (*it2) << std::endl;
+        }
+      }
+      Kokkos::abort("Invalid <block_name> in input file");
+    }
+  }
 }
 
 //----------------------------------------------------------------------------------------

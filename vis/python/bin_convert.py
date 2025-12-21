@@ -235,6 +235,7 @@ def read_binary(filename):
     filedata["Nx2"] = Nx2
     filedata["Nx3"] = Nx3
     filedata["nvars"] = nvars
+    filedata["nghost"] = nghost
 
     filedata["x1min"] = x1min
     filedata["x1max"] = x1max
@@ -1747,6 +1748,7 @@ def write_athdf(filename, fdata, varsize_bytes=4, locsize_bytes=8):
     nx3_out = fdata["nx3_out_mb"]
 
     number_of_moments = fdata.get("number_of_moments", 1)
+    nghost = fdata.get("nghost", 0)
 
     # check dimensionality/slicing
     two_d = Nx2 != 1 and Nx3 == 1
@@ -1781,12 +1783,25 @@ def write_athdf(filename, fdata, varsize_bytes=4, locsize_bytes=8):
         LogicalLocations[mb] = logical[:3]
         Levels[mb] = logical[-1]
         geometry = fdata["mb_geometry"][mb]
-        mb_x1f = np.linspace(geometry[0], geometry[1], nx1 + 1)
+        # Calculate cell spacings for the active zone
+        dx1 = (geometry[1] - geometry[0]) / nx1 if nx1 > 1 else 0.0
+        dx2 = (geometry[3] - geometry[2]) / nx2 if nx2 > 1 else 0.0
+        dx3 = (geometry[5] - geometry[4]) / nx3 if nx3 > 1 else 0.0
+
+        # Calculate face coordinates including ghost zones
+        mb_x1f = np.linspace(
+            geometry[0] - nghost * dx1, geometry[1] + nghost * dx1, nx1_out + 1
+        )
         mb_x1v = 0.5 * (mb_x1f[1:] + mb_x1f[:-1])
-        mb_x2f = np.linspace(geometry[2], geometry[3], nx2 + 1)
+        mb_x2f = np.linspace(
+            geometry[2] - nghost * dx2, geometry[3] + nghost * dx2, nx2_out + 1
+        )
         mb_x2v = 0.5 * (mb_x2f[1:] + mb_x2f[:-1])
-        mb_x3f = np.linspace(geometry[4], geometry[5], nx3 + 1)
+        mb_x3f = np.linspace(
+            geometry[4] - nghost * dx3, geometry[5] + nghost * dx3, nx3_out + 1
+        )
         mb_x3v = 0.5 * (mb_x3f[1:] + mb_x3f[:-1])
+
         if x1slice:
             x1f[mb] = np.array(
                 mb_x1f[(fdata["mb_index"][mb][0]): (fdata["mb_index"][mb][0] + 2)]

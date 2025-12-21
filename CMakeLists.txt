@@ -34,6 +34,7 @@ endif()
 option(Athena_SINGLE_PRECISION "Compile for single precision" OFF)
 option(Athena_ENABLE_MPI "Compile with MPI parallelism enabled" OFF)
 option(Athena_ENABLE_OPENMP "Compile with OpenMP parallelism enabled" OFF)
+option(Athena_ENABLE_RNS "Compile with RNS support enabled" OFF)
 set(PROBLEM built_in_pgens CACHE STRING "Name of problem generator function")
 
 #------ set macros exported to config.hpp ------------------------------------------------
@@ -177,6 +178,15 @@ if (${PROBLEM} STREQUAL "elliptica_bns")
   endif()
 endif()
 
+if (Athena_ENABLE_RNS)
+  # Support for RNS library for rotating neutron stars. See
+  # https://github.com/computationalrelativity/RNSC
+  target_include_directories(athena PRIVATE
+      ${CMAKE_SOURCE_DIR}/rnsc/include)
+  target_link_libraries(athena PUBLIC
+      ${CMAKE_SOURCE_DIR}/rnsc/lib/libRNS.a)
+endif()
+
 if (${PROBLEM} STREQUAL "sgrid_bns")
   target_link_libraries(athena PUBLIC
       ${CMAKE_SOURCE_DIR}/sgrid/lib/libsgrid.a)
@@ -202,6 +212,20 @@ if (${PROBLEM} STREQUAL "lorene_bns")
       ${CMAKE_SOURCE_DIR}/Lorene/Lib/liblorenef77.a
       ${BLAS_LIBRARIES} ${LAPACK_LIBRARIES}
       GSL::gsl ${CMAKE_Fortran_IMPLICIT_LINK_LIBRARIES})
+endif()
+
+if (${PROBLEM} STREQUAL "id_solve")
+  # --- HDF5 I/O (dynamic by default, static optional) --------------------------
+  #   • Set STATIC_HDF5=ON at CMake configure time to bake every HDF5 object
+  #     into the executable for easy archival or clusters that disallow .so’s.
+  #   • Leave it OFF (default) to keep the binary small and enable VOL/plugins.
+  #find_package(hdf5 COMPONENTS C HL REQUIRED)
+  #target_include_directories(athena PRIVATE
+  #    ${CMAKE_SOURCE_DIR}/hdf5/include)
+  find_package(HDF5 REQUIRED COMPONENTS C HL)
+  target_link_libraries(athena PUBLIC
+    hdf5::hdf5
+    hdf5::hdf5_hl)
 endif()
 
 # enable include of header files created in build directories

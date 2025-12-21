@@ -51,6 +51,7 @@ class Z4c {
     I_Z4C_THETA,
     I_Z4C_ALPHA,
     I_Z4C_BETAX, I_Z4C_BETAY, I_Z4C_BETAZ,
+    I_Z4C_BX, I_Z4C_BY, I_Z4C_BZ,
     nz4c
   };
   // Names of Z4c variables
@@ -113,6 +114,8 @@ class Z4c {
     AthenaTensor<Real, TensorSymm::NONE, 3, 0> alpha;   // lapse
     AthenaTensor<Real, TensorSymm::NONE, 3, 1> vGam_u;  // Gamma functions (BSSN)
     AthenaTensor<Real, TensorSymm::NONE, 3, 1> beta_u;  // shift
+    // advective derivative of shift or heat flux for telegraph lapse
+    AthenaTensor<Real, TensorSymm::NONE, 3, 1> vB_d;
     AthenaTensor<Real, TensorSymm::SYM2, 3, 2> g_dd;    // conf. 3-metric
     AthenaTensor<Real, TensorSymm::SYM2, 3, 2> vA_dd;   // conf. traceless extr. curvature
   };
@@ -159,21 +162,35 @@ class Z4c {
     Real ssl_damping_amp;
     Real ssl_damping_time;
     Real ssl_damping_index;
+    // telegrapher lapse condition
+    bool telegraph_lapse;
+    Real telegraph_tau;
+    Real telegraph_kappa;
+
     // Gauge condition for the shift
     Real shift_ggamma;
     Real shift_alpha2ggamma;
     Real shift_hh;
     Real shift_advect;
     Real shift_eta;
-    // turn on shift damping smoothly
-    bool slow_roll_eta;
-    Real turn_on_time;
+    // slow start shift condition
+    Real sss_damping_amp;
+    Real sss_damping_time;
+
     // Enable BSSN if false (disable theta)
     bool use_z4c;
     // Apply the Sommerfeld condition for user BCs.
     bool user_Sbc;
     // Boundary extrapolation order
     int extrap_order;
+    // Value of chi to specify the excision region for constraint evaluation
+    Real excise_chi;
+
+    // Time dependent constraint damping
+    bool roll_kappa;
+    Real kappa_roll_start_time;
+    Real roll_window;
+    Real target_kappa1;
   };
   Options opt;
   Real diss;              // Dissipation parameter
@@ -249,6 +266,9 @@ class Z4c {
   int nco;
   BHAHAHorizonFinder *pahfind;
 
+  // TODO(@hzhu): think about how to automatically trigger common horizon
+  // maybe have a horizon dump object to save all the space here
+  // same for the waveform.
  private:
   MeshBlockPack* pmy_pack;  // ptr to MeshBlockPack containing this Z4c
 };

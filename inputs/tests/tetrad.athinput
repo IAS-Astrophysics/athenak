@@ -34,7 +34,7 @@ nx3  = 8           # Number of cells in each MeshBlock, X3-dir
 <mesh_refinement>
 refinement = static  # type of refinement
 
-<refinement1>
+<refined_region1>
 level = 1
 x1min = -5.0
 x1max = 5.0
