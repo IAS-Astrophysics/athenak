@@ -239,7 +239,6 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
             VelStarCyl(mp_, radw, phiw, zw, v1_starw, v2_starw, v3_starw);
             // rotate the velocity components back to the original frame
             RotateCart(mp_, v1_star, v2_star, v3_star, v1_starw, v2_starw, v3_starw, -mp_.thetaw);
-        
         }
 
         // apply the density floor
@@ -306,21 +305,9 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
             Real dx2 = size.d_view(m).dx2;
             Real dx3 = size.d_view(m).dx3;
 
-            Real a1temp, a2temp, a3temp;
-
-            // rotate coordinates to be aligned with magnetic axis
-            Real x1vrot(0.0), x2vrot(0.0), x3vrot(0.0);
-            Real x1frot(0.0), x2frot(0.0), x3frot(0.0);
-            RotateCart(mp_, x1vrot, x2vrot, x3vrot, x1v, x2v, x3v, mp_.thetab);
-            RotateCart(mp_, x1frot, x2frot, x3frot, x1f, x2f, x3f, mp_.thetab);
-
-            // compute vector potential 
-            a1temp = A1(mp_, x1vrot, x2frot, x3frot);
-            a2temp = A2(mp_, x1frot, x2vrot, x3frot);
-            a3temp = A3(mp_, x1frot, x2frot, x3vrot);
-
-            // rotate vector potential components back to original frame
-            RotateCart(mp_, a1(m,k,j,i), a2(m,k,j,i), a3(m,k,j,i), a1temp, a2temp, a3temp, -mp_.thetab);
+            a1(m,k,j,i) = A1(mp_, x1v, x2f, x3f);
+            a2(m,k,j,i) = A2(mp_, x1f, x2v, x3f);
+            a3(m,k,j,i) = A3(mp_, x1f, x2f, x3v);
 
             // When neighboring MeshBock is at finer level, compute vector potential as sum of
             // values at fine grid resolution.  This guarantees flux on shared fine/coarse
@@ -585,7 +572,7 @@ namespace {
         Real rc = sqrt(r*r+z*z);
 
         // Old method for power law
-        // Real p_over_r = PoverR(mp, r, phi, z);
+        // Real p_over_r = PoverR(mp, r);
         // Real vel = (mp.dslope+mp.qslope)*p_over_r/(mp.gm0/r) + (1.0+mp.qslope) - mp.qslope*r/sqrt(r*r+z*z);
         // vel = sqrt(mp.gm0/r)*sqrt(vel);
 
@@ -630,8 +617,12 @@ namespace {
     KOKKOS_INLINE_FUNCTION
     static Real A1(struct my_params mp, const Real x1, const Real x2, const Real x3) {
         Real a1=0.0;
+        Real x1b = cos(mp.thetab)*x1 + sin(mp.thetab)*x3;
+        Real x2b = x2;
+        Real x3b = sin(mp.thetab)*x1 - cos(mp.thetab)*x3;
+
         Real rc = fmax(sqrt(x1*x1+x2*x2+x3*x3),mp.rs);
-        a1 = mp.mm/rc/rc/rc*(-1.*x2);
+        a1 = mp.mm/rc/rc/rc*(-1.*x2b*cos(mp.thetab));
         return(a1);
     }
 
@@ -639,8 +630,12 @@ namespace {
     KOKKOS_INLINE_FUNCTION
     static Real A2(struct my_params mp, const Real x1, const Real x2, const Real x3) {
         Real a2=0.0;
+        Real x1b = cos(mp.thetab)*x1 + sin(mp.thetab)*x3;
+        Real x2b = x2;
+        Real x3b = sin(mp.thetab)*x1 - cos(mp.thetab)*x3;
+
         Real rc = fmax(sqrt(x1*x1+x2*x2+x3*x3),mp.rs);
-        a2 = mp.mm/rc/rc/rc*(+1.*x1);
+        a2 = mp.mm/rc/rc/rc*(+1.*x1b);
         return(a2);
     }
 
@@ -648,6 +643,12 @@ namespace {
     KOKKOS_INLINE_FUNCTION
     static Real A3(struct my_params mp, const Real x1, const Real x2, const Real x3) {
         Real a3=0.0;
+        Real x1b = cos(mp.thetab)*x1 + sin(mp.thetab)*x3;
+        Real x2b = x2;
+        Real x3b = sin(mp.thetab)*x1 - cos(mp.thetab)*x3;
+
+        Real rc = fmax(sqrt(x1*x1+x2*x2+x3*x3),mp.rs);
+        a3 = mp.mm/rc/rc/rc*(-1.*x2b*sin(mp.thetab));
         return(a3);
     }
 
@@ -859,7 +860,7 @@ void MyEfieldMask(Mesh* pm) {
     Real Byw = Bmag*sin(mp.thetaw-mp.thetab)*sin(mp.origid*time);
 
     Real Bx(0.0),By(0.0),Bz(0.0);
-    // Rotate to standard frame
+    // Rotate from stellar spin frame to standard frame
     RotateCart(mp_,Bx,By,Bz,Bxw,Byw,Bzw,-mp_.thetaw);
 
     // Define E1, E2, E3 on corners
