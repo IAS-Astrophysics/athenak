@@ -43,13 +43,16 @@ namespace {
     static void GetCylCoord(struct my_params mp, Real &rad,Real &phi,Real &z,Real &x1,Real &x2,Real &x3);
 
     KOKKOS_INLINE_FUNCTION
+    static void RotateCart(struct my_params mp, Real &x1rot, Real &x2rot, Real &x3rot, const Real x1, const Real x2,const Real x3,const Real rot);
+
+    KOKKOS_INLINE_FUNCTION
     static Real DenDiscCyl(struct my_params mp, const Real rad, const Real phi, const Real z);
 
     KOKKOS_INLINE_FUNCTION
     static Real DenStarCyl(struct my_params mp, const Real rad, const Real phi, const Real z);
 
     KOKKOS_INLINE_FUNCTION
-    static Real PoverR(struct my_params mp, const Real rad, const Real phi, const Real z);
+    static Real PoverR(struct my_params mp, const Real rad);
 
     KOKKOS_INLINE_FUNCTION
     static void VelDiscCyl(struct my_params mp, const Real rad, const Real phi, const Real z, Real &v1, Real &v2, Real &v3);
@@ -70,6 +73,7 @@ namespace {
     // pgen_struct disc_params;
 
     struct my_params {
+    Real thetaw, thetab;
     Real gm0, r0, rho0, dslope, p0_over_r0, qslope, tcool, gamma_gas;
     Real dfloor, rho_floor1, rho_floor_slope1, rho_floor2, rho_floor_slope2;
     Real rad_in_cutoff, rad_in_smooth, rad_out_cutoff, rad_out_smooth;
@@ -135,6 +139,8 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
         mp.is_ideal = eos.is_ideal;
     }
 
+    mp.thetaw = pin->GetOrAddReal("problem","thetaw",0.0);
+    mp.thetab = pin->GetOrAddReal("problem","thetab",0.0);
     mp.denstar = pin->GetOrAddReal("problem","denstar",0.0);
     mp.dslope = pin->GetOrAddReal("problem","dslope",0.0);
     mp.gamma_gas = pin->GetReal("mhd","gamma");
@@ -205,36 +211,40 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
         int nx3 = indcs.nx3;
         Real x3 = CellCenterX(k-ks, nx3, x3min, x3max);
 
+        Real x1w(0.0), x2w(0.0), x3w(0.0);
         Real rad(0.0), phi(0.0), z(0.0);
+        Real radw(0.0), phiw(0.0), zw(0.0);  // coordinates in frame aligned with stellar rotation axis
         Real den(0.0), ux(0.0), uy(0.0), uz(0.0);
         Real v1_disc(0.0), v2_disc(0.0), v3_disc(0.0);
+        Real v1_starw(0.0), v2_starw(0.0), v3_starw(0.0);
         Real v1_star(0.0), v2_star(0.0), v3_star(0.0);
 
         // get the cylindrical coodinates corresponding to this cartesian location
         GetCylCoord(mp_,rad, phi, z, x1, x2, x3);
-
-        // compute the disc density component at this location
+    
         if (mp_.rho0 > 0.0){
+            // compute the disc density component at this location
             den = DenDiscCyl(mp_, rad, phi, z);
+            // compute the disc velocity component at this location
+            VelDiscCyl(mp_, rad, phi, z, v1_disc, v2_disc, v3_disc);
         }
-        // add the stellar density component at this location
+        
         if (mp_.denstar > 0.0) {
-            den += DenStarCyl(mp_, rad, phi, z);
+            // rotate to the frame aligned with the stellar rotation axis
+            RotateCart(mp_, x1w, x2w, x3w, x1, x2, x3, mp_.thetaw);
+            GetCylCoord(mp_,radw, phiw, zw, x1w, x2w, x3w);
+            // add the stellar density component at this location
+            den += DenStarCyl(mp_,radw,phiw,zw);
+            // add the stellar velocity component at this location
+            VelStarCyl(mp_, radw, phiw, zw, v1_starw, v2_starw, v3_starw);
+            // rotate the velocity components back to the original frame
+            RotateCart(mp_, v1_star, v2_star, v3_star, v1_starw, v2_starw, v3_starw, -mp_.thetaw);
+        
         }
 
         // apply the density floor
         Real rc = sqrt(rad*rad+z*z);
         den = fmax(den,rho_floor(mp_,rc));
-
-        // compute the disc velocity component at this location
-        if (mp_.rho0 > 0.0){
-            VelDiscCyl(mp_, rad, phi, z, v1_disc, v2_disc, v3_disc);
-        }
-        
-        // add the stellar velocity component at this location
-        if (mp_.denstar > 0.0) {
-            VelStarCyl(mp_, rad, phi, z, v1_star, v2_star, v3_star);
-        }
         
         // set the total velocity components
         ux = v1_disc + v1_star;
@@ -248,7 +258,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
         u0_(m,IM3,k,j,i) = den*uz;
         
         if (mp_.is_ideal) {
-            Real p_over_r = PoverR(mp_, rad, phi, z);
+            Real p_over_r = PoverR(mp_, rad);
             u0_(m,IEN,k,j,i) = p_over_r*den/(mp_.gamma_gas - 1.0)
                                +0.5*(SQR(u0_(m,IM1,k,j,i))
                                +SQR(u0_(m,IM2,k,j,i))
@@ -296,9 +306,21 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
             Real dx2 = size.d_view(m).dx2;
             Real dx3 = size.d_view(m).dx3;
 
-            a1(m,k,j,i) = A1(mp_, x1v, x2f, x3f);
-            a2(m,k,j,i) = A2(mp_, x1f, x2v, x3f);
-            a3(m,k,j,i) = A3(mp_, x1f, x2f, x3v);
+            Real a1temp, a2temp, a3temp;
+
+            // rotate coordinates to be aligned with magnetic axis
+            Real x1vrot(0.0), x2vrot(0.0), x3vrot(0.0);
+            Real x1frot(0.0), x2frot(0.0), x3frot(0.0);
+            RotateCart(mp_, x1vrot, x2vrot, x3vrot, x1v, x2v, x3v, mp_.thetab);
+            RotateCart(mp_, x1frot, x2frot, x3frot, x1f, x2f, x3f, mp_.thetab);
+
+            // compute vector potential 
+            a1temp = A1(mp_, x1vrot, x2frot, x3frot);
+            a2temp = A2(mp_, x1frot, x2vrot, x3frot);
+            a3temp = A3(mp_, x1frot, x2frot, x3vrot);
+
+            // rotate vector potential components back to original frame
+            RotateCart(mp_, a1(m,k,j,i), a2(m,k,j,i), a3(m,k,j,i), a1temp, a2temp, a3temp, -mp_.thetab);
 
             // When neighboring MeshBock is at finer level, compute vector potential as sum of
             // values at fine grid resolution.  This guarantees flux on shared fine/coarse
@@ -458,6 +480,26 @@ namespace {
     }
 
     //----------------------------------------------------------------------------------------
+    //! Rotate the cartesian coordinates by some angle to get the tilted coordinates
+    KOKKOS_INLINE_FUNCTION
+    static void RotateCart(struct my_params mp, Real &x1rot,Real &x2rot,Real &x3rot,const Real x1,const Real x2,const Real x3, const Real theta) {
+
+        // The adopted convetion here rotates the underlying axes counter-clockwise by an angle theta about the y-axis. 
+        // Hence one can bring the axes into alignment with the spin axis or initial dipole axis.
+        // Note that converting the cartesian vectors in this tilted frame back to the standard frame requires a rotation of components by -theta.
+        
+        // Rotation matrix R about the y axis
+        Real cost=cos(theta);
+        Real sint=sin(theta);
+
+        x1rot=cost*x1 + sint*x3;
+        x2rot=x2;
+        x3rot=-sint*x1 + cost*x3;
+
+        return;
+    }
+
+    //----------------------------------------------------------------------------------------
     KOKKOS_INLINE_FUNCTION
     static Real DenDiscCyl(struct my_params mp, const Real rad, const Real phi, const Real z) {
         
@@ -467,7 +509,7 @@ namespace {
         Real den(0.0);
         Real r = fmax(rad, mp.rs);
         Real p_over_r = mp.p0_over_r0;
-        if (mp.is_ideal) p_over_r = PoverR(mp, r, phi, z);
+        if (mp.is_ideal) p_over_r = PoverR(mp, r);
         Real denmid = mp.rho0*std::pow(r/mp.r0,mp.dslope);
 
         // Inner magnetosphere exponential cutoff
@@ -498,7 +540,7 @@ namespace {
         if (rc<mp.rmagsph) {
 
             Real sinsq = rad*rad/rc/rc;
-            Real csq0 = PoverR(mp, mp.rs, phi, z);
+            Real csq0 = PoverR(mp, mp.rs);
             
             Real pre0=mp.denstar*csq0; // reference pressure
             Real rint = mp.rs;         // integrate from stellar surface
@@ -528,7 +570,7 @@ namespace {
 
     //----------------------------------------------------------------------------------------
     KOKKOS_INLINE_FUNCTION
-    static Real PoverR(struct my_params mp, const Real rad, const Real phi, const Real z) {
+    static Real PoverR(struct my_params mp, const Real rad) {
         Real poverr;
         Real r = fmax(rad, mp.rs);
         poverr = mp.p0_over_r0*std::pow(r/mp.r0, mp.qslope);
@@ -549,7 +591,7 @@ namespace {
 
         // Testing new method for balance with pressure gradients
         Real dR = fmin(mp.rad_in_smooth, mp.rad_out_smooth)/100;
-        Real dPdr = (PoverR(mp, r+dR, phi, z) * DenDiscCyl(mp, r+dR, phi, z) - PoverR(mp, r-dR, phi, z) * DenDiscCyl(mp, r - dR, phi, z))/(2 * dR);
+        Real dPdr = (PoverR(mp, r+dR) * DenDiscCyl(mp, r+dR,phi,z) - PoverR(mp, r-dR) * DenDiscCyl(mp, r - dR,phi,z))/(2 * dR);
         Real vel = sqrt(fmax(mp.gm0*r*r/rc/rc/rc+r/DenDiscCyl(mp, r, phi, z)*dPdr,0.0));
 
         rc = sqrt(rad*rad+z*z);
@@ -748,21 +790,32 @@ void StarMask(Mesh* pm, const Real bdt) {
         Real &x3max = size.d_view(m).x3max;
         Real x3v = CellCenterX(k-ks, indcs.nx3, x3min, x3max);
         
-        Real rad(0.0),phi(0.0),z(0.0);
-        Real v1(0.0),v2(0.0),v3(0.0);
-
-        GetCylCoord(mp_,rad,phi,z,x1v,x2v,x3v);
         Real rc=sqrt(x1v*x1v+x2v*x2v+x3v*x3v);
         
         if (rc<mp_.rs) {
-            u0_(m,IDN,k,j,i) = DenStarCyl(mp_,rad, phi, z);
-            VelStarCyl(mp_,rad,phi,z,v1,v2,v3);
+
+            Real x1w(0.0),x2w(0.0),x3w(0.0);
+            Real radw(0.0),phiw(0.0),zw(0.0);
+            Real v1(0.0),v2(0.0),v3(0.0);
+            Real v1w(0.0),v2w(0.0),v3w(0.0);
+
+            // rotate into tilted frame if needed
+            RotateCart(mp_,x1w,x2w,x3w,x1v,x2v,x3v,mp_.thetaw);
+            GetCylCoord(mp_,radw,phiw,zw,x1w,x2w,x3w);
+
+            // compute density and velocity in tilted cylindrical coords
+            u0_(m,IDN,k,j,i) = DenStarCyl(mp_,radw,phiw,zw);
+            VelStarCyl(mp_,radw,phiw,zw,v1w,v2w,v3w);
+
+            // rotate the velocity back to cartesian coordinates
+            RotateCart(mp_,v1,v2,v3,v1w,v2w,v3w,-mp_.thetaw);
+
             u0_(m,IM1,k,j,i) = v1*u0_(m,IDN,k,j,i);
             u0_(m,IM2,k,j,i) = v2*u0_(m,IDN,k,j,i);
             u0_(m,IM3,k,j,i) = v3*u0_(m,IDN,k,j,i);
             
             if (mp_.is_ideal) {
-                u0_(m,IEN,k,j,i) = PoverR(mp_,rad, phi, z)*u0_(m,IDN,k,j,i)/(mp_.gamma_gas - 1.0)+
+                u0_(m,IEN,k,j,i) = PoverR(mp_,mp_.rs)*u0_(m,IDN,k,j,i)/(mp_.gamma_gas - 1.0)+
                                 0.5*(SQR(u0_(m,IM1,k,j,i))+SQR(u0_(m,IM2,k,j,i))+SQR(u0_(m,IM3,k,j,i)))/u0_(m,IDN,k,j,i);
             
                 if (mp_.magnetic_fields_enabled) {
@@ -786,6 +839,7 @@ void MyEfieldMask(Mesh* pm) {
     int &ks = indcs.ks; int &ke = indcs.ke;
     MeshBlockPack *pmbp = pm->pmb_pack;
     auto &size = pmbp->pmb->mb_size;
+    Real &time = pm->time;
 
     DvceArray4D<Real> e1_,e2_,e3_;
     if (pmbp->pmhd != nullptr) {
@@ -796,6 +850,17 @@ void MyEfieldMask(Mesh* pm) {
 
     // Now set a local parameter struct for lambda capturing
     auto mp_ = mp;
+
+    // The magnetic field inside the star is spatially uniform so can be computed outside of the loop
+    // Set the stellar interior magnetic field in the frame aligned with stellar spin
+    Real Bmag = 2*mp.mm/pow(mp.rs,3);
+    Real Bzw = Bmag*cos(mp.thetaw-mp.thetab);
+    Real Bxw = Bmag*sin(mp.thetaw-mp.thetab)*cos(mp.origid*time);
+    Real Byw = Bmag*sin(mp.thetaw-mp.thetab)*sin(mp.origid*time);
+
+    Real Bx(0.0),By(0.0),Bz(0.0);
+    // Rotate to standard frame
+    RotateCart(mp_,Bx,By,Bz,Bxw,Byw,Bzw,-mp_.thetaw);
 
     // Define E1, E2, E3 on corners
     // Note e1[is:ie,  js:je+1,ks:ke+1]
@@ -822,17 +887,19 @@ void MyEfieldMask(Mesh* pm) {
 
         if (rc<mp_.rs) {
 
-            Real rad(0.0),phi(0.0),z(0.0);
+            Real x1vw(0.0),x2fw(0.0),x3fw(0.0);
+            Real radw(0.0),phiw(0.0),zw(0.0);
+            Real vxw(0.0),vyw(0.0),vzw(0.0);
             Real vx(0.0),vy(0.0),vz(0.0);
-            Real By(0.0),Bz(0.0);
-            GetCylCoord(mp_,rad,phi,z,x1v,x2f,x3f);
+
+            // tilt coordinates into stellar rotating frame 
+            RotateCart(mp_,x1vw,x2fw,x3fw,x1v,x2f,x3f,mp_.thetaw);
+            GetCylCoord(mp_,radw,phiw,zw,x1vw,x2fw,x3fw);
 
             // Set the stellar velocity at this location
-            VelStarCyl(mp_,rad,phi,z,vx,vy,vz);
-
-            // Set the stellar interior magnetic field
-            By = 0.0;
-            Bz = 2*mp_.mm/pow(mp_.rs,3);
+            VelStarCyl(mp_,radw,phiw,zw,vxw,vyw,vzw);
+            // rotate velocity and field to standard frame
+            RotateCart(mp_,vx,vy,vz,vxw,vyw,vzw,-mp_.thetaw);
 
             // E1=-(v X B)=VzBy-VyBz
             e1_(m,k,j,i) = vz*By - vy*Bz;
@@ -860,17 +927,19 @@ void MyEfieldMask(Mesh* pm) {
 
         if (rc<mp_.rs) {
 
-            Real rad(0.0),phi(0.0),z(0.0);
+            Real x1fw(0.0),x2vw(0.0),x3fw(0.0);
+            Real radw(0.0),phiw(0.0),zw(0.0);
+            Real vxw(0.0),vyw(0.0),vzw(0.0);
             Real vx(0.0),vy(0.0),vz(0.0);
-            Real Bx(0.0),Bz(0.0);
-            GetCylCoord(mp_,rad,phi,z,x1f,x2v,x3f);
+
+            // tilt coordinates into stellar rotating frame
+            RotateCart(mp_,x1fw,x2vw,x3fw,x1f,x2v,x3f,mp_.thetaw);
+            GetCylCoord(mp_,radw,phiw,zw,x1fw,x2vw,x3fw);
 
             // Set the stellar velocity at this location
-            VelStarCyl(mp_,rad,phi,z,vx,vy,vz);
-
-            // Set the interior star magnetic field
-            Bx = 0.0;
-            Bz = 2*mp_.mm/pow(mp_.rs,3);
+            VelStarCyl(mp_,radw,phiw,zw,vxw,vyw,vzw);
+            // rotate velocity and field to standard frame
+            RotateCart(mp_,vx,vy,vz,vxw,vyw,vzw,-mp_.thetaw);
 
             // E2=-(v X B)=VxBz-VzBx
             e2_(m,k,j,i) = vx*Bz - vz*Bx;
@@ -898,17 +967,19 @@ void MyEfieldMask(Mesh* pm) {
 
         if (rc<mp_.rs) {
 
-            Real rad(0.0),phi(0.0),z(0.0);
+            Real x1fw(0.0),x2fw(0.0),x3vw(0.0);
+            Real radw(0.0),phiw(0.0),zw(0.0);
+            Real vxw(0.0),vyw(0.0),vzw(0.0);
             Real vx(0.0),vy(0.0),vz(0.0);
-            Real Bx(0.0),By(0.0);
-            GetCylCoord(mp_,rad,phi,z,x1f,x2f,x3v);
+
+            // tilt coordinates into stellar rotating frame
+            RotateCart(mp_,x1fw,x2fw,x3vw,x1f,x2f,x3v,mp_.thetaw);
+            GetCylCoord(mp_,radw,phiw,zw,x1fw,x2fw,x3vw);
 
             // Set the stellar velocity at this location
-            VelStarCyl(mp_,rad,phi,z,vx,vy,vz);
-
-            // Set the interior star magnetic field
-            Bx = 0.0;
-            By = 0.0;
+            VelStarCyl(mp_,radw,phiw,zw,vxw,vyw,vzw);
+            // rotate velocity and field to standard frame
+            RotateCart(mp_,vx,vy,vz,vxw,vyw,vzw,-mp_.thetaw);
 
             // E3=-(v X B)=VyBx-VxBy
             e3_(m,k,j,i) = vy*Bx - vx*By;
@@ -979,7 +1050,7 @@ void InnerDiskMask(Mesh* pm, const Real bdt) {
             u0_(m,IM3,k,j,i) = v3*u0_(m,IDN,k,j,i);
             
             if (mp_.is_ideal) {
-                u0_(m,IEN,k,j,i) = PoverR(mp_,rad, phi, z)*u0_(m,IDN,k,j,i)/(mp_.gamma_gas - 1.0)+
+                u0_(m,IEN,k,j,i) = PoverR(mp_,rad)*u0_(m,IDN,k,j,i)/(mp_.gamma_gas - 1.0)+
                                 0.5*(SQR(u0_(m,IM1,k,j,i))+SQR(u0_(m,IM2,k,j,i))+SQR(u0_(m,IM3,k,j,i)))/u0_(m,IDN,k,j,i);
             
                 if (mp_.magnetic_fields_enabled) {
@@ -1045,9 +1116,9 @@ void CoolingSourceTerms(Mesh* pm, const Real bdt) {
         Real p_over_r(0.0);
         GetCylCoord(mp_,rad,phi,z,x1v,x2v,x3v);
         if (mp_.rho0 <= 0.0){
-            p_over_r = PoverR(mp_,rad,phi,z);
+            p_over_r = PoverR(mp_,rad);
         } else {
-            p_over_r = PoverR(mp_,rad,phi,z);
+            p_over_r = PoverR(mp_,rad);
         }
 
         Real dtr = fmax(mp_.tcool*2.*M_PI/sqrt(mp_.gm0/rad/rad/rad),bdt);
@@ -1132,7 +1203,7 @@ void FixedHydroBC(Mesh *pm) {
             w0_(m,IVZ,k,j,i) = uz;
 
             if (mp_.is_ideal) {
-                pgas = PoverR(mp_, rad, phi, z)*den;
+                pgas = PoverR(mp_, rad)*den;
                 w0_(m,IEN,k,j,i) = pgas/(mp_.gamma_gas - 1.0);
             }
 
@@ -1159,7 +1230,7 @@ void FixedHydroBC(Mesh *pm) {
             w0_(m,IVZ,k,j,(ie+i+1)) = uz;
 
             if (mp_.is_ideal) {
-                pgas = PoverR(mp_, rad, phi, z)*den;
+                pgas = PoverR(mp_, rad)*den;
                 w0_(m,IEN,k,j,(ie+i+1)) = pgas/(mp_.gamma_gas - 1.0);
             }
 
@@ -1212,7 +1283,7 @@ void FixedHydroBC(Mesh *pm) {
             w0_(m,IVZ,k,j,i) = uz;
 
             if (mp_.is_ideal) {
-                pgas = PoverR(mp_, rad, phi, z)*den;
+                pgas = PoverR(mp_, rad)*den;
                 w0_(m,IEN,k,j,i) = pgas/(mp_.gamma_gas - 1.0);
             }
         }
@@ -1238,7 +1309,7 @@ void FixedHydroBC(Mesh *pm) {
             w0_(m,IVZ,k,(je+j+1),i) = uz;
 
             if (mp_.is_ideal){
-                pgas = PoverR(mp_, rad, phi, z)*den;
+                pgas = PoverR(mp_, rad)*den;
                 w0_(m,IEN,k,(je+j+1),i) = pgas/(mp_.gamma_gas - 1.0);
             }
         }
@@ -1288,7 +1359,7 @@ void FixedHydroBC(Mesh *pm) {
             w0_(m,IVZ,k,j,i) = uz;
 
             if (mp_.is_ideal) {
-                pgas = PoverR(mp_, rad, phi, z)*den;
+                pgas = PoverR(mp_, rad)*den;
                 w0_(m,IEN,k,j,i) = pgas/(mp_.gamma_gas - 1.0);
             }
         }
@@ -1313,7 +1384,7 @@ void FixedHydroBC(Mesh *pm) {
             w0_(m,IVY,(ke+k+1),j,i) = uy;
             w0_(m,IVZ,(ke+k+1),j,i) = uz;
             if (mp_.is_ideal) {
-                pgas = PoverR(mp_, rad, phi, z)*den;
+                pgas = PoverR(mp_, rad)*den;
                 w0_(m,IEN,(ke+k+1),j,i) = pgas/(mp_.gamma_gas - 1.0);
             }
         }
@@ -1429,7 +1500,7 @@ void FixedMHDBC(Mesh *pm) {
         w0_(m,IVY,k,j,i) = uy;
         w0_(m,IVZ,k,j,i) = uz;
         if (mp_.is_ideal) {
-            w0_(m,IEN,k,j,i) = PoverR(mp_, rad, phi, z)*den/(mp_.gamma_gas - 1.0);
+            w0_(m,IEN,k,j,i) = PoverR(mp_, rad)*den/(mp_.gamma_gas - 1.0);
         }
     }
 
@@ -1458,7 +1529,7 @@ void FixedMHDBC(Mesh *pm) {
         w0_(m,IVY,k,j,(ie+i+1)) = uy;
         w0_(m,IVZ,k,j,(ie+i+1)) = uz;
         if (mp_.is_ideal) {
-            w0_(m,IEN,k,j,(ie+i+1)) = PoverR(mp_, rad, phi, z)*den/(mp_.gamma_gas - 1.0);
+            w0_(m,IEN,k,j,(ie+i+1)) = PoverR(mp_, rad)*den/(mp_.gamma_gas - 1.0);
         }
     }
   });
@@ -1534,7 +1605,7 @@ void FixedMHDBC(Mesh *pm) {
         w0_(m,IVY,k,j,i) = uy;
         w0_(m,IVZ,k,j,i) = uz;
         if (mp_.is_ideal) {
-            w0_(m,IEN,k,j,i) = PoverR(mp_, rad, phi, z)*den/(mp_.gamma_gas - 1.0);
+            w0_(m,IEN,k,j,i) = PoverR(mp_, rad)*den/(mp_.gamma_gas - 1.0);
         }
     }
 
@@ -1563,7 +1634,7 @@ void FixedMHDBC(Mesh *pm) {
         w0_(m,IVY,k,(je+j+1),i) = uy;
         w0_(m,IVZ,k,(je+j+1),i) = uz;
         if (mp_.is_ideal) {
-            w0_(m,IEN,k,(je+j+1),i) = PoverR(mp_, rad, phi, z)*den/(mp_.gamma_gas - 1.0);
+            w0_(m,IEN,k,(je+j+1),i) = PoverR(mp_, rad)*den/(mp_.gamma_gas - 1.0);
         }
     }
   });
@@ -1639,7 +1710,7 @@ void FixedMHDBC(Mesh *pm) {
         w0_(m,IVY,k,j,i) = uy;
         w0_(m,IVZ,k,j,i) = uz;
         if (mp_.is_ideal) {
-            w0_(m,IEN,k,j,i) = PoverR(mp_, rad, phi, z)*den/(mp_.gamma_gas - 1.0);
+            w0_(m,IEN,k,j,i) = PoverR(mp_, rad)*den/(mp_.gamma_gas - 1.0);
         }
     }
 
@@ -1668,7 +1739,7 @@ void FixedMHDBC(Mesh *pm) {
         w0_(m,IVY,(ke+k+1),j,i) = uy;
         w0_(m,IVZ,(ke+k+1),j,i) = uz;
         if (mp_.is_ideal) {
-            w0_(m,IEN,(ke+k+1),j,i) = PoverR(mp_, rad, phi, z)*den/(mp_.gamma_gas - 1.0);
+            w0_(m,IEN,(ke+k+1),j,i) = PoverR(mp_, rad)*den/(mp_.gamma_gas - 1.0);
         }
     }
   });
