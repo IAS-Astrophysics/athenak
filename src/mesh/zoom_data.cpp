@@ -273,7 +273,7 @@ void ZoomData::MeshBlockDataSize() {
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn void ZoomData::StoreDataToZoomData(int zm, int m)
+//! \fn void ZoomData::StoreDataToZoomData()
 //! \brief Store data from MeshBlock m to zoom data zm
 
 void ZoomData::StoreDataToZoomData(int zm, int m) {
@@ -285,7 +285,7 @@ void ZoomData::StoreDataToZoomData(int zm, int m) {
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn void ZoomData::StoreCCData(int zm, int m)
+//! \fn void ZoomData::StoreCCData()
 //! \brief Store cell-centered data from MeshBlock m to zoom data zm
 
 void ZoomData::StoreCCData(int zm, int m) {
@@ -360,8 +360,9 @@ void ZoomData::StoreCCData(int zm, int m) {
   }
   return;
 }
+
 //----------------------------------------------------------------------------------------
-//! \fn void ZoomData::StoreHydroData(int zm, int m)
+//! \fn void ZoomData::StoreHydroData()
 //! \brief Store data from MeshBlock m to zoom data zm
 
 void ZoomData::StoreHydroData(int zm, int m) {
@@ -401,6 +402,7 @@ void ZoomData::StoreHydroData(int zm, int m) {
     spin = pmbp->pcoord->coord_data.bh_spin;
   }
   // TODO(@mhguo): should we consider 2D and 1D cases?
+  // TODO(@mhguo): may think whether we need to include ghost zones
   par_for("zoom-update-cwu",DevExeSpace(), cks,cke, cjs,cje, cis,cie,
   KOKKOS_LAMBDA(const int ck, const int cj, const int ci) {
     int fi = 2*ci - cis;  // correct when cis=is
@@ -499,7 +501,7 @@ void ZoomData::StoreHydroData(int zm, int m) {
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn void ZoomData::UpdateElectricFields(int zm, int m)
+//! \fn void ZoomData::UpdateElectricFields()
 //! \brief Update electric fields in zoom data zm from MeshBlock m
 
 void ZoomData::UpdateElectricFields(int zm, int m) {
@@ -651,12 +653,12 @@ void ZoomData::PackBuffersEC(DvceArray1D<Real> packed_data, DvceEdgeFld4D<Real> 
 //! \brief Sync zoom data buffer to host array
 
 // TODO(@mhguo): need to move to different ranks...
-void ZoomData::SyncBufferToHost() {
+void ZoomData::SyncBufferToHost(int zone) {
 #if MPI_PARALLEL_ENABLED
   auto rank_send = pzmesh->rank_eachmb;
   auto rank_recv = pzmesh->rank_eachzmb;
-  int nzmb = pzmesh->nzmb_eachlevel[pzoom->zstate.zone-1];
-  int zmbs = pzmesh->gids_eachlevel[pzoom->zstate.zone-1];
+  int nzmb = pzmesh->nzmb_eachlevel[zone];
+  int zmbs = pzmesh->gids_eachlevel[zone];
   size_t data_per_zmb = zmb_data_cnt;
 
   int nsend = 0, nrecv = 0, ncopy = 0;
@@ -738,12 +740,12 @@ void ZoomData::SyncBufferToHost() {
 //! \brief Sync zoom data from host array to buffer
 
 // TODO(@mhguo): need to move to different ranks...
-void ZoomData::SyncHostToBuffer() {
+void ZoomData::SyncHostToBuffer(int zone) {
 #if MPI_PARALLEL_ENABLED
   auto rank_send = pzmesh->rank_eachzmb;
   auto rank_recv = pzmesh->rank_eachmb;
-  int nzmb = pzmesh->nzmb_eachlevel[pzoom->zstate.zone-1];
-  int zmbs = pzmesh->gids_eachlevel[pzoom->zstate.zone-1];
+  int nzmb = pzmesh->nzmb_eachlevel[zone];
+  int zmbs = pzmesh->gids_eachlevel[zone];
   size_t data_per_zmb = zmb_data_cnt;
 
   int nsend = 0, nrecv = 0, ncopy = 0;
@@ -956,12 +958,30 @@ void ZoomData::UnpackBuffersEC(DvceArray1D<Real> packed_data, DvceEdgeFld4D<Real
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn ZoomData::LoadDataFromZoomData(int zm, int m)
+//! \fn ZoomData::LoadDataFromZoomData()
 //! \brief Load data from zoom data zm to MeshBlock m
 
-void ZoomData::LoadDataFromZoomData(int zm, int m) {
-  // LoadCCData(zm, m);
-  // LoadHydroData(zm, m);
-  // UpdateMeshBlockElectricFields(zm, m);
+void ZoomData::LoadDataFromZoomData(int m, int zm) {
+  LoadCCData(m, zm);
+  LoadHydroData(m, zm);
+  // UpdateMeshBlockElectricFields(m, zm);
+  return;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void ZoomData::LoadCCData()
+//! \brief Load cell-centered data from zoom data zm to MeshBlock m
+
+// TODO(@mhguo): implement this function
+void ZoomData::LoadCCData(int m, int zm) {
+  return;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void ZoomData::LoadHydroData()
+//! \brief Load hydro data from zoom data zm to MeshBlock m
+
+// TODO(@mhguo): implement this function
+void ZoomData::LoadHydroData(int m, int zm) {
   return;
 }

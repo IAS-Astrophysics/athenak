@@ -38,8 +38,9 @@ void CyclicZoom::UpdateState() {
   if (zstate.direction > 0) {zamr.zooming_out = true;}
   if (zstate.direction < 0) {zamr.zooming_in = true;}
   if (zamr.zooming_out && zamr.zooming_in) {
-    std::cerr << "CyclicZoom Error: cannot zoom in and out at the same time!" << std::endl;
-    exit(1);
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+              << "CyclicZoom AMR: zooming_in and zooming_out both true!" << std::endl;
+    std::exit(EXIT_FAILURE);
   }
   if (zamr.zooming_out) {
     if (fix_efield && emf_flag >=1) {
@@ -98,7 +99,7 @@ void CyclicZoom::SetRefinementFlags() {
   Real r_zoom = zregion.radius;
   Real x1c = zregion.x1c, x2c = zregion.x2c, x3c = zregion.x3c;
   if(global_variable::my_rank == 0) {
-    std::cout << "CyclicZoom AMR: Refining to level " << old_level + ref_flag 
+    std::cout << "CyclicZoom AMR: Refine/derefine to level " << old_level + ref_flag
               << " (refine_flag=" << ref_flag << ")" << std::endl;
   }
   // Check whether the MeshBlock is overlapping with the zoom region

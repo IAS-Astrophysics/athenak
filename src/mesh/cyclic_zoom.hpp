@@ -132,10 +132,12 @@ class CyclicZoom
   // For zoom refinement
   // TODO(@mhguo): need to reorganize these functions, now simply for compilation
   void StoreVariables();
-  void ReInitVariables();
+  void ReinitVariables();
+  void FindMaskRegion();
+  void FindReinitRegion();
   bool CheckStoreFlag(int m);
-  void CheckMaskFlag();
-  void CheckApplyFlag();
+  int FindMaskMB(int zm);
+  int FindReinitMB(int zm);
   // Boundary conditions, fluxes and source terms
   void BoundaryConditions();
   void FixEField(DvceEdgeFld4D<Real> emf);
@@ -193,8 +195,8 @@ class ZoomMesh
 
   // functions
   // TODO(@mhguo): think whether there is a better design
-  void SyncNZMB(int zm_count);
-  void SyncMBMetaData(int zm_count);
+  void GatherZMB(int zm_count, int zone);
+  void UpdateMeshData();
   void SyncMBLists();
   void SyncLogicalLocations();
 
@@ -261,8 +263,8 @@ class ZoomData
   void Initialize();
   void DumpData();
   void StoreDataToZoomData(int zm, int m);
-  void StoreHydroData(int zm, int m);
   void StoreCCData(int zm, int m);
+  void StoreHydroData(int zm, int m);
   void UpdateElectricFields(int zm, int m);
   void MeshBlockDataSize();
   void PackBuffer();
@@ -279,10 +281,11 @@ class ZoomData
                        size_t offset_fc, const int m);
   void UnpackBuffersEC(DvceArray1D<Real> packed_data, DvceEdgeFld4D<Real> ec,
                        size_t offset_ec, const int m);
-  void SyncBufferToHost();
-  void SyncHostToBuffer();
-  void LoadDataFromZoomData(int zm, int m);
-
+  void SyncBufferToHost(int zone);
+  void SyncHostToBuffer(int zone);
+  void LoadDataFromZoomData(int m, int zm);
+  void LoadCCData(int m, int zm);
+  void LoadHydroData(int m, int zm);
 
  private:
   CyclicZoom *pzoom;       // ptr to CyclicZoom containing this ZoomData module
