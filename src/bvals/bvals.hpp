@@ -17,7 +17,10 @@ enum BoundaryFace {undef=-1, inner_x1, outer_x1, inner_x2, outer_x2, inner_x3, o
 
 // identifiers for boundary conditions
 enum class BoundaryFlag {undef=-1,block, reflect, inflow, outflow, diode, user, periodic,
-                         shear_periodic, vacuum};
+                         shear_periodic, vacuum, mg_zerograd, mg_zerofixed, mg_multipole};
+
+//! identifiers for status of MPI boundary communications
+enum class BoundaryStatus {waiting, arrived, completed};
 
 #include <algorithm>
 #include <vector>
@@ -73,6 +76,7 @@ struct MeshBoundaryBuffer {
 
   // Maximum number of data elements (bie-bis+1) across 3 components of above
   int isame_ndat, isame_z4c_ndat, icoar_ndat, ifine_ndat, iflxs_ndat, iflxc_ndat;
+  int facex1, facex2, facex3; // face identifiers for this buffer
 
   // 2D Views that store buffer data on device, dimensioned (nmb, ndata)
   DvceArray2D<Real> vars, flux;
@@ -206,6 +210,20 @@ class MeshBoundaryValuesFC : public MeshBoundaryValues {
                          DvceArray2D<int> &nflx);
   void ZeroFluxesAtBoundaryWithFiner(DvceEdgeFld4D<Real> &flx, DvceArray2D<int> &nflx);
   void AverageBoundaryFluxes(DvceEdgeFld4D<Real> &flx, DvceArray2D<int> &nflx);
+};
+
+template <int n = 56>
+struct BoundaryData { // aggregate and POD (even when MPI_PARALLEL is defined)
+  static constexpr int kMaxNeighbor = n;
+  // KGF: "nbmax" only used in bvals_var.cpp, Init/DestroyBoundaryData()
+  int nbmax;  //!> actual maximum number of neighboring MeshBlocks
+  // currently, sflag[] is only used by Multgrid (send buffers are reused each stage in
+  // red-black comm. pattern; need to check if they are available) and shearing box
+  BoundaryStatus flag[kMaxNeighbor], sflag[kMaxNeighbor];
+  Real *send[kMaxNeighbor], *recv[kMaxNeighbor];
+#ifdef MPI_PARALLEL
+  MPI_Request req_send[kMaxNeighbor], req_recv[kMaxNeighbor];
+#endif
 };
 
 //----------------------------------------------------------------------------------------

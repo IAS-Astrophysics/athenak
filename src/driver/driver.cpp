@@ -24,6 +24,7 @@
 #include "ion-neutral/ion-neutral.hpp"
 #include "radiation/radiation.hpp"
 #include "driver.hpp"
+#include "gravity/gravity.hpp"
 
 #if MPI_PARALLEL_ENABLED
 #include <mpi.h>
@@ -381,6 +382,12 @@ void Driver::Execute(Mesh *pmesh, ParameterInput *pin, Outputs *pout) {
   }
 
   if (time_evolution == TimeEvolution::tstatic) {
+    std::cout << "\nStatic time evolution selected, solving steady-state problem...\n"
+              << std::endl;
+    if (pmesh->pmb_pack->pgrav != nullptr) {
+      std::cout << "Solving Poisson equation for gravity..." << std::endl;
+      pmesh->pmb_pack->pgrav->pmgd->Solve(this, 0);
+    }
     // TODO(@user): add work for time static problems here
   } else {
     Real elapsed_time = -1.;
@@ -394,7 +401,7 @@ void Driver::Execute(Mesh *pmesh, ParameterInput *pin, Outputs *pout) {
       // Execute TaskLists
       // Work before time integrator indicated by "0" in stage
       ExecuteTaskList(pmesh, "before_timeintegrator", 0);
-
+      if (pmesh->pmb_pack->pgrav != nullptr) {pmesh->pmb_pack->pgrav->pmgd->Solve(this, 0);}
       // time-integrator tasks for each stage of integrator
       for (int stage=1; stage<=(nexp_stages); ++stage) {
         ExecuteTaskList(pmesh, "before_stagen", stage);

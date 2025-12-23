@@ -927,6 +927,8 @@ void ProblemGenerator::CallProblemGenerator(ParameterInput *pin, bool is_restart
     SphericalCollapse(pin, is_restart);
   } else if (pgen_fun_name.compare("diffusion") == 0) {
     Diffusion(pin, is_restart);
+  } else if (pgen_fun_name.compare("gravity") == 0) {
+    SelfGravity(pin, is_restart);
   // else, name not set on command line or input file, print warning and quit
   } else {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
