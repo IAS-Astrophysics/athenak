@@ -156,7 +156,7 @@ void Refine(MeshBlockPack* pmbp);
 
 //----------------------------------------------------------------------------------------
 //! \fn void TorusHistory(HistoryData *pdata, Mesh *pm)
-//! \brief New user history function that calls the general-purpose flux integrator.
+//! \brief User history function that centers horizon grids and calls flux integrator.
 //----------------------------------------------------------------------------------------
 void TorusHistory(HistoryData *pdata, Mesh *pm) {
     ProblemGenerator *pgen = pm->pgen.get();
@@ -166,14 +166,34 @@ void TorusHistory(HistoryData *pdata, Mesh *pm) {
     }
     MeshBlockPack *pmbp = pm->pmb_pack;
 
-    // Convert the vector of unique_ptrs to a vector of raw pointers for the function.
+    // 1. Calculate current Black Hole Trajectory
+    Real tt = pm->time;
+    Real bbh_traj[NTRAJ];
+
+    // Ensure find_traj_t is visible here (it is declared global in your snippet)
+    find_traj_t(tt, bbh_traj);
+
+    // 2. Update Surface Grid Centers
+    // We iterate through all grids and check labels to see if they are horizons
+    for(auto& grid_ptr : pgen->surface_grids) {
+        if (grid_ptr->Label() == "H1") {
+            // Move grid to BH1 location (Indices 0, 1, 2)
+            grid_ptr->SetCenter(&bbh_traj[0]);
+        }
+        else if (grid_ptr->Label() == "H2") {
+            // Move grid to BH2 location (Indices 3, 4, 5)
+            grid_ptr->SetCenter(&bbh_traj[3]);
+        }
+    }
+
+    // 3. Prepare pointers for the flux calculator
     std::vector<SphericalSurfaceGrid*> surf_raw_ptrs;
     surf_raw_ptrs.reserve(pgen->surface_grids.size());
     for(const auto& s : pgen->surface_grids) {
         surf_raw_ptrs.push_back(s.get());
     }
 
-    // Call the generalized flux calculator from "utils/flux_generalized.cpp"
+    // 4. Calculate fluxes
     TorusFluxes_General(pdata, pmbp, surf_raw_ptrs);
 }
 
@@ -315,6 +335,28 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     auto r_func = [=](Real th, Real ph){ return r_surf; };
     this->surface_grids.push_back(std::make_unique<SphericalSurfaceGrid>(
         pmbp, ntheta, nphi, r_func, "R" + std::to_string(static_cast<int>(r_surf))));
+  }
+
+  // Horizon 1
+  bool do_h1 = pin->GetOrAddBoolean("problem", "flux_horizon1", false);
+  if (do_h1) {
+    Real r_h1 = pin->GetOrAddReal("problem", "flux_radius1", 1);
+    // Initialize centered at 0,0,0; will be moved in TorusHistory
+    this->surface_grids.push_back(std::make_unique<SphericalSurfaceGrid>(
+        pmbp, ntheta, nphi,
+        [=](Real th, Real ph){ return r_h1; },
+        "H1"));
+  }
+
+  // Horizon 2
+  bool do_h2 = pin->GetOrAddBoolean("problem", "flux_horizon2", false);
+  if (do_h2) {
+    Real r_h2 = pin->GetOrAddReal("problem", "flux_radius2", 1);
+    // Initialize centered at 0,0,0; will be moved in TorusHistory
+    this->surface_grids.push_back(std::make_unique<SphericalSurfaceGrid>(
+        pmbp, ntheta, nphi,
+        [=](Real th, Real ph){ return r_h2; },
+        "H2"));
   }
 
   const bool is_radiation_enabled = (pmbp->prad != nullptr);
