@@ -227,12 +227,6 @@ class ZoomData
   int zmb_data_cnt;        // count of data elements per Zoom MeshBlock needed for zooming
   Real d_zoom;             // density within inner boundary
   Real p_zoom;             // pressure within inner boundary
-  // std::vector<HostArray5D<Real>> vu0;  // Vector of conserved variables
-  // std::vector<HostArray5D<Real>> vw0;  // Vector of primitive variables
-  // std::vector<HostArray5D<Real>> vcoarse_u0;  // Vector of coarse conserved variables
-  // std::vector<HostArray5D<Real>> vcoarse_w0;  // Vector of coarse primitive variables
-  // std::vector<HostEdgeFld4D<Real>> vef0; // Vector of edge-centered electric fields just after zoom
-  // std::vector<HostEdgeFld4D<Real>> vdelta_efld; // Vector of change in electric fields
 
   DvceArray5D<Real> u0;    // conserved variables
   DvceArray5D<Real> w0;    // primitive variables
@@ -248,13 +242,6 @@ class ZoomData
   DvceArray1D<Real> dzbuf;    // Device zoom buffer for data transfer
   HostArray1D<Real> hzbuf;    // host zoom buffer for data transfer
   HostArray1D<Real> hzdata;   // host zoom array for data storage, receiving data from buffer, and dumping to file
-  // HostArray5D<Real> hu0;    // conserved variables
-  // HostArray5D<Real> hw0;    // primitive variables
-  // HostArray5D<Real> hcoarse_u0;  // coarse conserved variables
-  // HostArray5D<Real> hcoarse_w0;  // coarse primitive variables
-  // HostEdgeFld4D<Real> hefld;   // edge-centered electric fields (fluxes of B)
-  // HostEdgeFld4D<Real> hemf0;   // edge-centered electric fields just after zoom
-  // HostEdgeFld4D<Real> hdelta_efld; // change in electric fields
 
   HostArray2D<Real> max_emf0;  // maximum electric field
 

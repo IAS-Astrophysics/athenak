@@ -677,9 +677,9 @@ void Mesh::AddCoordinatesAndPhysics(ParameterInput *pinput) {
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn Mesh::AddZoomData(ParameterInput *pin)
+//! \fn Mesh::AddCyclicZoom(ParameterInput *pin)
 
-void Mesh::AddZoomData(ParameterInput *pin) {
+void Mesh::AddCyclicZoom(ParameterInput *pin) {
   if (adaptive) {
     auto rcrit = pmr->pmrc->rcrit;
     // TODO(@mhguo): currently only support one cyclic zoom region

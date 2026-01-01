@@ -318,7 +318,7 @@ int main(int argc, char *argv[]) {
 
   pmesh->AddCoordinatesAndPhysics(pinput);
   // Initialize cyclic zoom data, only if cyclic zoom is enabled
-  pmesh->AddZoomData(pinput);
+  pmesh->AddCyclicZoom(pinput);
   if (!res_flag) {
     // set ICs using ProblemGenerator constructor for new runs
     pmesh->pgen = std::make_unique<ProblemGenerator>(pinput, pmesh);

@@ -72,16 +72,6 @@ void CyclicZoom::WorkAfterAMR() {
     pzmesh->SyncMBLists();
     pzdata->SyncHostToBuffer(zstate.zone-1);
     pzdata->UnpackBuffer();
-    // TODO(@mhguo): debug print
-    // output pzmesh->gids_eachlevel and pzmesh->nzmb_eachlevel for diagnostics
-    // for (int i=0; i<pzmesh->nlevels; ++i) {
-    //   if (global_variable::my_rank == 0) {
-    //     std::cout << "CyclicZoom: Zoom Mesh Level " << i
-    //               << " starting gid = " << pzmesh->gids_eachlevel[i]
-    //               << ", number of zoom MBs = " << pzmesh->nzmb_eachlevel[i]
-    //               << std::endl;
-    //   }
-    // }
     MaskVariables();
   }
   if (global_variable::my_rank == 0) {
@@ -158,11 +148,6 @@ void CyclicZoom::MaskVariables() {
   int zmbs = pzmesh->gids_eachdvce[global_variable::my_rank];
   for (int zm=0; zm<pzmesh->nzmb_thisdvce; ++zm) {
     int m = pzmesh->lid_eachmb[zm+zmbs];
-    // TODO(@mhguo): debug print
-    // std::cout << "  Rank " << global_variable::my_rank
-    //           << " Masking MeshBlock " << m + pmesh->gids_eachrank[global_variable::my_rank]
-    //           << " using zoom MeshBlock " << zm + zmbs
-    //           << std::endl;
     pzdata->MaskDataInZoomRegion(m, zm);
   }
   return;

@@ -898,10 +898,6 @@ void ZoomData::UnpackBuffersCC(DvceArray1D<Real> packed_data, DvceArray5D<Real> 
   par_for("unpack_cc", DevExeSpace(), 0, nv-1, 0, nk-1, 0, nj-1, 0, ni-1,
   KOKKOS_LAMBDA(const int v, const int k, const int j, const int i) {
     a0(m,v,k,j,i) = packed_data(offset_a0 + (((v*nk + k)*nj + j)*ni + i));
-    // TODO(@mhguo): debug print
-    // if (m == 7 && v == 0 && k == 4 && j == 4 && i == 4) {
-    //   printf("unpack_cc: m=%d v=%d k=%d j=%d i=%d value=%f\n", m, v, k, j, i, a0(m,v,k,j,i));
-    // }
   });
   return;
 }
@@ -1175,30 +1171,7 @@ void ZoomData::MaskDataInZoomRegion(int m, int zm) {
   //           << std::endl;
   // return;
   if (pmbp->phydro != nullptr) {
-    // TODO(@mhguo): debug
-    // find denisty max in zoom region
-    // Real dmax = 0.0;
-    // const int kji = cnx3 * cnx2 * cnx1;
-    // Kokkos::parallel_reduce("find_dmax_zoom", Kokkos::RangePolicy<>(DevExeSpace(), 0, kji),
-    // KOKKOS_LAMBDA(const int &idx, Real& local_dmax) {
-    //   int ck = idx / (cnx2 * cnx1);
-    //   int cj = (idx - ck * cnx2 * cnx1) / cnx1;
-    //   int ci = (idx - ck * cnx2 * cnx1 - cj * cnx1) + cis;
-    //   ck += cks;
-    //   cj += cjs;
-    //   int i = ci + ox1 * cnx1;;
-    //   int j = cj + ox2 * cnx2;
-    //   int k = ck + ox3 * cnx3;
-    //   Real x1v = CellCenterX(i-is, nx1, x1min, x1max);
-    //   Real x2v = CellCenterX(j-js, nx2, x2min, x2max);
-    //   Real x3v = CellCenterX(k-ks, nx3, x3min, x3max);
-    //   if (zregion.IsInZoomRegion(x1v, x2v, x3v)) { // apply to zoom region
-    //   }
-    //   local_dmax = fmax(local_dmax, cu0(zm,IDN,ck,cj,ci));
-    // }, Kokkos::Max<Real>(dmax));
-    // std::cout << "  Rank " << global_variable::my_rank 
-    //           << " Zoom meshblock " << zm
-    //           << " density max in zoom region = " << dmax << std::endl;
+    // TODO(@mhguo): probably don't have to mask the ghost zones?
     // par_for("zoom_mask", DevExeSpace(),ks-ng,ke+ng,js-ng,je+ng,is-ng,ie+ng,
     par_for("zoom_mask", DevExeSpace(),cks,cke,cjs,cje,cis,cie,
     KOKKOS_LAMBDA(int ck, int cj, int ci) {
@@ -1276,9 +1249,5 @@ void ZoomData::MaskDataInZoomRegion(int m, int zm) {
       }
     });
   }
-  // TODO(@mhguo): debug print
-  // std::cout << "  Rank " << global_variable::my_rank 
-  //           << " Masked variables in meshblock " << m
-  //           << " using zoom meshblock " << zm << std::endl;
   return;
 }
