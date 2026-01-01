@@ -47,6 +47,13 @@ typedef struct ZoomRegion {
   Real x1c, x2c, x3c;           // center of zoom region
   Real r_0;                     // radius of zoom region at zone 0
   Real radius;                  // radius of zoom region
+
+  // TODO(@mhguo): may need to check whether in previous zoom region
+  // Kokkos inline function to check if a location is within the zoom region
+  KOKKOS_INLINE_FUNCTION
+  bool IsInZoomRegion(Real x1, Real x2, Real x3) const {
+    return (SQR(x1 - x1c) + SQR(x2 - x2c) + SQR(x3 - x3c) <= SQR(radius));
+  }
 } ZoomRegion;
 
 //----------------------------------------------------------------------------------------
@@ -105,6 +112,7 @@ class CyclicZoom
   ZoomAMR zamr;            // zoom AMR parameters
   ZoomInterval zint;       // zoom interval parameters
   ZoomRegion zregion;      // zoom region parameters
+  ZoomRegion old_zregion;  // previous zoom region parameters
   ZoomState zstate;        // zoom runtime state
 
   // array_sum::GlobalSum nc1, nc2, nc3, em1, em2, em3;
@@ -133,11 +141,12 @@ class CyclicZoom
   // TODO(@mhguo): need to reorganize these functions, now simply for compilation
   void StoreVariables();
   void ReinitVariables();
+  void MaskVariables();
   void FindMaskRegion();
   void FindReinitRegion();
   bool CheckStoreFlag(int m);
-  int FindMaskMB(int zm);
-  int FindReinitMB(int zm);
+  int FindMaskMB(int lm);
+  int FindReinitMB(int lm);
   // Boundary conditions, fluxes and source terms
   void BoundaryConditions();
   void FixEField(DvceEdgeFld4D<Real> emf);
@@ -286,6 +295,7 @@ class ZoomData
   void LoadDataFromZoomData(int m, int zm);
   void LoadCCData(int m, int zm);
   void LoadHydroData(int m, int zm);
+  void MaskDataInZoomRegion(int m, int zm);
 
  private:
   CyclicZoom *pzoom;       // ptr to CyclicZoom containing this ZoomData module

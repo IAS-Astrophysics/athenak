@@ -81,6 +81,7 @@ CyclicZoom::CyclicZoom(Mesh *pm, ParameterInput *pin) :
 
   zstate.next_time = pmesh->time;
   SetRegionAndInterval();
+  old_zregion = zregion; // initialize old zoom region
   zstate.next_time += zint.runtime;
   // TODO(@mhguo): move to a new struct?
   nflux = 3;
@@ -136,6 +137,8 @@ void CyclicZoom::Update(const bool restart)
 
   zamr.level = pmesh->max_level - zstate.zone;
   SetRegionAndInterval();
+  // TODO(@mhguo): this should be wrong, need to think how to restart properly
+  old_zregion = zregion; // initialize old zoom region
 
   return;
 }

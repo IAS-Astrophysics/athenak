@@ -48,6 +48,8 @@ void CyclicZoom::UpdateState() {
     }
   }
   // Update zoom state
+  // TODO(@mhguo): this may not be a deep copy if ZoomRegion contains pointers but now it does not
+  old_zregion = zregion; // store previous zoom region
   zstate.last_zone = zstate.zone;
   zstate.zone += zstate.direction;
   if (zstate.zone == 0) {zstate.direction = 1;}
@@ -63,6 +65,7 @@ void CyclicZoom::UpdateState() {
               << " zone = " << zstate.zone 
               << " level = " << zamr.level
               << std::endl;
+    std::cout << "CyclicZoom AMR: old region radius = " << old_zregion.radius << std::endl;
     std::cout << "CyclicZoom AMR: region radius = " << zregion.radius << std::endl;
     std::cout << "CyclicZoom AMR: runtime = " << zint.runtime 
               << " next time = " << zstate.next_time << std::endl;

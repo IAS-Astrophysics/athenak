@@ -109,10 +109,10 @@ void ZoomMesh::UpdateMeshData() {
   lloc_eachzmb.resize(nzmb_total);
   // simultaneously assign rank and local ID of each zoom MB on host
   // using round-robin for load balancing
-  int zmbs = gids_eachlevel[pzoom->zstate.zone-1];
-  for (int zm=0; zm<nzmb_eachlevel[pzoom->zstate.zone-1]; ++zm) {
-    rank_eachzmb[zm+zmbs] = (zm+zmbs) % global_variable::nranks;
-    lid_eachzmb[zm+zmbs] = (zm+zmbs) / global_variable::nranks;
+  int lmbs = gids_eachlevel[pzoom->zstate.zone-1];
+  for (int lm=0; lm<nzmb_eachlevel[pzoom->zstate.zone-1]; ++lm) {
+    rank_eachzmb[lm+lmbs] = (lm+lmbs) % global_variable::nranks;
+    lid_eachzmb[lm+lmbs] = (lm+lmbs) / global_variable::nranks;
   }
   return;
 }

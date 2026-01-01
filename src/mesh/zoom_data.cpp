@@ -365,6 +365,7 @@ void ZoomData::StoreCCData(int zm, int m) {
 //! \fn void ZoomData::StoreHydroData()
 //! \brief Store data from MeshBlock m to zoom data zm
 
+// TODO(@mhguo): this may only apply to MHD as HD can use copy
 void ZoomData::StoreHydroData(int zm, int m) {
   auto &indcs = pzoom->pmesh->mb_indcs;
   auto pmbp = pzoom->pmesh->pmb_pack;
@@ -403,7 +404,8 @@ void ZoomData::StoreHydroData(int zm, int m) {
   }
   // TODO(@mhguo): should we consider 2D and 1D cases?
   // TODO(@mhguo): may think whether we need to include ghost zones
-  par_for("zoom-update-cwu",DevExeSpace(), cks,cke, cjs,cje, cis,cie,
+  int hng = indcs.ng / 2;
+  par_for("zoom-update-cwu",DevExeSpace(), cks-hng,cke+hng, cjs-hng,cje+hng, cis-hng,cie+hng,
   KOKKOS_LAMBDA(const int ck, const int cj, const int ci) {
     int fi = 2*ci - cis;  // correct when cis=is
     int fj = 2*cj - cjs;  // correct when cjs=js
@@ -516,8 +518,8 @@ void ZoomData::PackBuffer() {
   if (global_variable::my_rank == 0) {
     std::cout << "CyclicZoom: Packing data into communication buffer" << std::endl;
   }
-  hydro::Hydro* phydro = pzoom->pmesh->pmb_pack->phydro;
-  mhd::MHD* pmhd = pzoom->pmesh->pmb_pack->pmhd;
+  // pack data for all zmbs on this device
+  auto &pmhd = pzoom->pmesh->pmb_pack->pmhd;
   // use size_t for offset to avoid overflow
   size_t offset = 0;
   size_t cc_cnt = u0.extent(1) * u0.extent(2) * u0.extent(3) * u0.extent(4);
@@ -553,7 +555,12 @@ void ZoomData::PackBuffer() {
     }
   }
   // Single copy: device buffer -> host buffer
-  Kokkos::deep_copy(hzbuf, dzbuf);
+  // Only copy the portion that's actually used
+  size_t used_size = pzmesh->nzmb_thisdvce * zmb_data_cnt;
+  Kokkos::deep_copy(
+    Kokkos::subview(hzbuf, Kokkos::make_pair(size_t(0), used_size)),
+    Kokkos::subview(dzbuf, Kokkos::make_pair(size_t(0), used_size))
+  );
   return;
 }
 
@@ -653,35 +660,36 @@ void ZoomData::PackBuffersEC(DvceArray1D<Real> packed_data, DvceEdgeFld4D<Real> 
 //! \brief Sync zoom data buffer to host array
 
 // TODO(@mhguo): need to move to different ranks...
+// TODO(@mhguo): need some sync even if mpi is not enabled
 void ZoomData::SyncBufferToHost(int zone) {
 #if MPI_PARALLEL_ENABLED
   auto rank_send = pzmesh->rank_eachmb;
   auto rank_recv = pzmesh->rank_eachzmb;
-  int nzmb = pzmesh->nzmb_eachlevel[zone];
-  int zmbs = pzmesh->gids_eachlevel[zone];
+  int nlmb = pzmesh->nzmb_eachlevel[zone];
+  int lmbs = pzmesh->gids_eachlevel[zone];
   size_t data_per_zmb = zmb_data_cnt;
 
   int nsend = 0, nrecv = 0, ncopy = 0;
   int my_rank = global_variable::my_rank;
   std::vector<MPI_Request> requests;
 
-  int zmbuf = 0;
-  for (int zm = 0; zm < nzmb; ++zm) {
-    int src_rank = rank_send[zm+zmbs];
-    int dst_rank = rank_recv[zm+zmbs];
+  int zm = 0;
+  for (int lm = 0; lm < nlmb; ++lm) {
+    int src_rank = rank_send[lm+lmbs];
+    int dst_rank = rank_recv[lm+lmbs];
     
     // Post receives first
     if (dst_rank == my_rank && src_rank != my_rank) {
       // Receive from src_rank
       MPI_Request req;
-      size_t offset_dst = pzmesh->lid_eachzmb[zm+zmbs] * data_per_zmb;
+      size_t offset_dst = pzmesh->lid_eachzmb[lm+lmbs] * data_per_zmb;
       MPI_Irecv(hzdata.data() + offset_dst, data_per_zmb, 
-                MPI_ATHENA_REAL, src_rank, zm, zoom_comm, &req);
+                MPI_ATHENA_REAL, src_rank, lm, zoom_comm, &req);
       requests.push_back(req);
       std::cout << "  Rank " << global_variable::my_rank 
-                << " Irecv to host for zmb " << zm+zmbs 
+                << " Irecv to host for zmb " << lm+lmbs 
                 << " from rank " << src_rank << " to offset " << offset_dst 
-                << " with local id " << pzmesh->lid_eachzmb[zm+zmbs]
+                << " with local id " << pzmesh->lid_eachzmb[lm+lmbs]
                 << std::endl;
       ++nrecv;
     }
@@ -690,42 +698,42 @@ void ZoomData::SyncBufferToHost(int zone) {
     if (src_rank == my_rank && dst_rank != my_rank) {
       // Send to dst_rank
       MPI_Request req;
-      size_t offset_src = zmbuf * data_per_zmb;
+      size_t offset_src = zm * data_per_zmb;
       MPI_Isend(hzbuf.data() + offset_src, data_per_zmb,
-                MPI_ATHENA_REAL, dst_rank, zm, zoom_comm, &req);
+                MPI_ATHENA_REAL, dst_rank, lm, zoom_comm, &req);
       requests.push_back(req);
       std::cout << "  Rank " << global_variable::my_rank 
-                << " Isend to host for zmb " << zm+zmbs 
+                << " Isend to host for zmb " << lm+lmbs 
                 << " to rank " << dst_rank << " from offset " << offset_src
-                << " with local id " << zmbuf
+                << " with local id " << zm
                 << std::endl;
       ++nsend;
-      ++zmbuf;
+      ++zm;
     } 
 
     // Local copy
     if (src_rank == my_rank && dst_rank == my_rank) {
-      size_t offset_src = zmbuf * data_per_zmb;
-      size_t offset_dst = pzmesh->lid_eachzmb[zm+zmbs] * data_per_zmb;
+      size_t offset_src = zm * data_per_zmb;
+      size_t offset_dst = pzmesh->lid_eachzmb[lm+lmbs] * data_per_zmb;
       Kokkos::deep_copy(
         Kokkos::subview(hzdata, Kokkos::make_pair(offset_dst, offset_dst + data_per_zmb)),
         Kokkos::subview(hzbuf, Kokkos::make_pair(offset_src, offset_src + data_per_zmb))
       );
       std::cout << "  Rank " << global_variable::my_rank 
-                << " local copy to host for zmb " << zm+zmbs
+                << " local copy to host for zmb " << lm+lmbs
                 << " from offset " << offset_src << " to offset " << offset_dst
-                << " from local id " << zmbuf << " to local id " << pzmesh->lid_eachzmb[zm+zmbs]
+                << " from local id " << zm << " to local id " << pzmesh->lid_eachzmb[lm+lmbs]
                 << std::endl;
       ++ncopy;
-      ++zmbuf;
+      ++zm;
     }
   }
-  
+
   // Wait for all communications to complete
   if (!requests.empty()) {
     MPI_Waitall(requests.size(), requests.data(), MPI_STATUSES_IGNORE);
   }
-  
+
   std::cout << "SyncBufferToHost: Rank " << global_variable::my_rank << " completed "
             << requests.size() << " MPI operations"
             << " (sends: " << nsend << ", receives: " << nrecv
@@ -744,67 +752,67 @@ void ZoomData::SyncHostToBuffer(int zone) {
 #if MPI_PARALLEL_ENABLED
   auto rank_send = pzmesh->rank_eachzmb;
   auto rank_recv = pzmesh->rank_eachmb;
-  int nzmb = pzmesh->nzmb_eachlevel[zone];
-  int zmbs = pzmesh->gids_eachlevel[zone];
+  int nlmb = pzmesh->nzmb_eachlevel[zone];
+  int lmbs = pzmesh->gids_eachlevel[zone];
   size_t data_per_zmb = zmb_data_cnt;
 
   int nsend = 0, nrecv = 0, ncopy = 0;
   int my_rank = global_variable::my_rank;
   std::vector<MPI_Request> requests;
 
-  int zmbuf = 0;
-  for (int zm = 0; zm < nzmb; ++zm) {
-    int src_rank = rank_send[zm+zmbs];
-    int dst_rank = rank_recv[zm+zmbs];
+  int zm = 0;
+  for (int lm = 0; lm < nlmb; ++lm) {
+    int src_rank = rank_send[lm+lmbs];
+    int dst_rank = rank_recv[lm+lmbs];
     
     // Post receives first
     if (dst_rank == my_rank && src_rank != my_rank) {
       // Receive from src_rank
       MPI_Request req;
-      size_t offset_dst = zmbuf * data_per_zmb;
+      size_t offset_dst = zm * data_per_zmb;
       MPI_Irecv(hzbuf.data() + offset_dst, data_per_zmb, 
-                MPI_ATHENA_REAL, src_rank, zm, zoom_comm, &req);
+                MPI_ATHENA_REAL, src_rank, lm, zoom_comm, &req);
       requests.push_back(req);
       std::cout << "  Rank " << global_variable::my_rank 
-                << " Irecv to buffer for zmb " << zm+zmbs
+                << " Irecv to buffer for zmb " << lm+lmbs
                 << " from rank " << src_rank << " to offset " << offset_dst 
-                << " with local id " << zmbuf
+                << " with local id " << zm
                 << std::endl;
       ++nrecv;
-      ++zmbuf;
+      ++zm;
     }
 
     // Post sends
     if (src_rank == my_rank && dst_rank != my_rank) {
       // Send to dst_rank
       MPI_Request req;
-      size_t offset_src = pzmesh->lid_eachzmb[zm+zmbs] * data_per_zmb;
+      size_t offset_src = pzmesh->lid_eachzmb[lm+lmbs] * data_per_zmb;
       MPI_Isend(hzdata.data() + offset_src, data_per_zmb,
-                MPI_ATHENA_REAL, dst_rank, zm, zoom_comm, &req);
+                MPI_ATHENA_REAL, dst_rank, lm, zoom_comm, &req);
       requests.push_back(req);
       std::cout << "  Rank " << global_variable::my_rank 
-                << " Isend to buffer for zmb " << zm+zmbs 
+                << " Isend to buffer for zmb " << lm+lmbs 
                 << " to rank " << dst_rank << " from offset " << offset_src
-                << " with local id " << pzmesh->lid_eachzmb[zm+zmbs]
+                << " with local id " << pzmesh->lid_eachzmb[lm+lmbs]
                 << std::endl;
       ++nsend;
     } 
 
     // Local copy
     if (src_rank == my_rank && dst_rank == my_rank) {
-      size_t offset_src = pzmesh->lid_eachzmb[zm+zmbs] * data_per_zmb;
-      size_t offset_dst = zmbuf * data_per_zmb;
+      size_t offset_src = pzmesh->lid_eachzmb[lm+lmbs] * data_per_zmb;
+      size_t offset_dst = zm * data_per_zmb;
       Kokkos::deep_copy(
         Kokkos::subview(hzbuf, Kokkos::make_pair(offset_dst, offset_dst + data_per_zmb)),
         Kokkos::subview(hzdata, Kokkos::make_pair(offset_src, offset_src + data_per_zmb))
       );
       std::cout << "  Rank " << global_variable::my_rank 
-                << " local copy to buffer for zmb " << zm+zmbs
+                << " local copy to buffer for zmb " << lm+lmbs
                 << " from offset " << offset_src << " to offset " << offset_dst
-                << " from local id " << pzmesh->lid_eachzmb[zm+zmbs] << " to local id " << zmbuf
+                << " from local id " << pzmesh->lid_eachzmb[lm+lmbs ] << " to local id " << zm
                 << std::endl;
       ++ncopy;
-      ++zmbuf;
+      ++zm;
     }
   }
   
@@ -827,8 +835,15 @@ void ZoomData::SyncHostToBuffer(int zone) {
 //! \brief Unpacks data from AMR communication buffers for all MBs being received
 
 void ZoomData::UnpackBuffer() {
-  hydro::Hydro* phydro = pzoom->pmesh->pmb_pack->phydro;
-  mhd::MHD* pmhd = pzoom->pmesh->pmb_pack->pmhd;
+  // Single copy: host buffer -> device buffer
+  // Only copy the portion that's actually used
+  size_t used_size = pzmesh->nzmb_thisdvce * zmb_data_cnt;
+  Kokkos::deep_copy(
+    Kokkos::subview(dzbuf, Kokkos::make_pair(size_t(0), used_size)),
+    Kokkos::subview(hzbuf, Kokkos::make_pair(size_t(0), used_size))
+  );
+  // Unpack data from dzbuf to zoom data arrays
+  auto &pmhd = pzoom->pmesh->pmb_pack->pmhd;
   // use size_t for offset to avoid overflow
   size_t offset = 0;
   size_t cc_cnt = u0.extent(1) * u0.extent(2) * u0.extent(3) * u0.extent(4);
@@ -840,6 +855,8 @@ void ZoomData::UnpackBuffer() {
     ec_cnt += efld.x3e.extent(1) * efld.x3e.extent(2) * efld.x3e.extent(3);
   }
   for (int zm = 0; zm < pzmesh->nzmb_thisdvce; ++zm) {
+    std::cout << " Rank " << global_variable::my_rank 
+              << " Unpacking buffer for zmb " << zm << std::endl;
     // offset = zm * zmb_data_cnt;
     // unpack conserved variables
     UnpackBuffersCC(dzbuf, u0, offset, zm);
@@ -881,6 +898,10 @@ void ZoomData::UnpackBuffersCC(DvceArray1D<Real> packed_data, DvceArray5D<Real> 
   par_for("unpack_cc", DevExeSpace(), 0, nv-1, 0, nk-1, 0, nj-1, 0, ni-1,
   KOKKOS_LAMBDA(const int v, const int k, const int j, const int i) {
     a0(m,v,k,j,i) = packed_data(offset_a0 + (((v*nk + k)*nj + j)*ni + i));
+    // TODO(@mhguo): debug print
+    // if (m == 7 && v == 0 && k == 4 && j == 4 && i == 4) {
+    //   printf("unpack_cc: m=%d v=%d k=%d j=%d i=%d value=%f\n", m, v, k, j, i, a0(m,v,k,j,i));
+    // }
   });
   return;
 }
@@ -961,10 +982,12 @@ void ZoomData::UnpackBuffersEC(DvceArray1D<Real> packed_data, DvceEdgeFld4D<Real
 //! \fn ZoomData::LoadDataFromZoomData()
 //! \brief Load data from zoom data zm to MeshBlock m
 
+// TODO(@mhguo): is this what you want?
 void ZoomData::LoadDataFromZoomData(int m, int zm) {
   LoadCCData(m, zm);
   LoadHydroData(m, zm);
-  // UpdateMeshBlockElectricFields(m, zm);
+  // TODO(@mhguo): shall we load magnetic fields too?
+  // UpdateBFields(m, zm);
   return;
 }
 
@@ -983,5 +1006,279 @@ void ZoomData::LoadCCData(int m, int zm) {
 
 // TODO(@mhguo): implement this function
 void ZoomData::LoadHydroData(int m, int zm) {
+  auto &indcs = pzoom->pmesh->mb_indcs;
+  auto pmbp = pzoom->pmesh->pmb_pack;
+  auto &size = pmbp->pmb->mb_size;
+  int &ng = indcs.ng;
+  int &is = indcs.is;  int &ie  = indcs.ie;
+  int &js = indcs.js;  int &je  = indcs.je;
+  int &ks = indcs.ks;  int &ke  = indcs.ke;
+  int nx1 = indcs.nx1, nx2 = indcs.nx2, nx3 = indcs.nx3;
+  DvceArray5D<Real> u_, w_;
+  if (pmbp->phydro != nullptr) {
+    u_ = pmbp->phydro->u0;
+    w_ = pmbp->phydro->w0;
+  } else if (pmbp->pmhd != nullptr) {
+    u_ = pmbp->pmhd->u0;
+    w_ = pmbp->pmhd->w0;
+  }
+  auto u0_ = u0, w0_ = w0;
+  auto peos = (pmbp->pmhd != nullptr)? pmbp->pmhd->peos : pmbp->phydro->peos;
+  auto eos = peos->eos_data;
+  Real gamma = eos.gamma;
+  bool is_gr = pmbp->pcoord->is_general_relativistic;
+  bool flat = true;
+  Real spin = 0.0;
+  if (is_gr) {
+    flat = pmbp->pcoord->coord_data.is_minkowski;
+    spin = pmbp->pcoord->coord_data.bh_spin;
+  }
+  Real &x1min = size.h_view(m).x1min;
+  Real &x1max = size.h_view(m).x1max;
+  Real &x2min = size.h_view(m).x2min;
+  Real &x2max = size.h_view(m).x2max;
+  Real &x3min = size.h_view(m).x3min;
+  Real &x3max = size.h_view(m).x3max;
+  auto ozregion = pzoom->old_zregion;
+  if (global_variable::my_rank == 0) {
+    std::cout << " Old zoom region radius: " << ozregion.radius << std::endl;
+  }
+  if (pmbp->phydro != nullptr) {
+    // par_for("zoom_reinit", DevExeSpace(),ks-ng,ke+ng,js-ng,je+ng,is-ng,ie+ng,
+    par_for("zoom_reinit", DevExeSpace(),ks,ke,js,je,is,ie,
+    KOKKOS_LAMBDA(int k, int j, int i) {
+      Real x1v = CellCenterX(i-is, nx1, x1min, x1max);
+      Real x2v = CellCenterX(j-js, nx2, x2min, x2max);
+      Real x3v = CellCenterX(k-ks, nx3, x3min, x3max);
+      if (ozregion.IsInZoomRegion(x1v, x2v, x3v)) { // apply to old zoom region
+        // simply copy primitive and conserved variables
+        w_(m,IDN,k,j,i) = w0_(zm,IDN,k,j,i);
+        w_(m,IVX,k,j,i) = w0_(zm,IVX,k,j,i);
+        w_(m,IVY,k,j,i) = w0_(zm,IVY,k,j,i);
+        w_(m,IVZ,k,j,i) = w0_(zm,IVZ,k,j,i);
+        w_(m,IEN,k,j,i) = w0_(zm,IEN,k,j,i);
+        u_(m,IDN,k,j,i) = u0_(zm,IDN,k,j,i);
+        u_(m,IM1,k,j,i) = u0_(zm,IM1,k,j,i);
+        u_(m,IM2,k,j,i) = u0_(zm,IM2,k,j,i);
+        u_(m,IM3,k,j,i) = u0_(zm,IM3,k,j,i);
+        u_(m,IEN,k,j,i) = u0_(zm,IEN,k,j,i);
+      }
+    });
+  } else if (pmbp->pmhd != nullptr) {
+    auto b = pmbp->pmhd->b0;
+    // par_for("zoom_reinit", DevExeSpace(),ks-ng,ke+ng,js-ng,je+ng,is-ng,ie+ng,
+    par_for("zoom_reinit", DevExeSpace(),ks,ke,js,je,is,ie,
+    KOKKOS_LAMBDA(int k, int j, int i) {
+      Real x1v = CellCenterX(i-is, nx1, x1min, x1max);
+      Real x2v = CellCenterX(j-js, nx2, x2min, x2max);
+      Real x3v = CellCenterX(k-ks, nx3, x3min, x3max);
+      if (ozregion.IsInZoomRegion(x1v, x2v, x3v)) { // apply to old zoom region
+        // convert primitive variables to conserved variables
+        // load primitive variables from 3D array
+        w_(m,IDN,k,j,i) = w0_(zm,IDN,k,j,i);
+        w_(m,IM1,k,j,i) = w0_(zm,IM1,k,j,i);
+        w_(m,IM2,k,j,i) = w0_(zm,IM2,k,j,i);
+        w_(m,IM3,k,j,i) = w0_(zm,IM3,k,j,i);
+        w_(m,IEN,k,j,i) = w0_(zm,IEN,k,j,i);
+
+        // Load single state of primitive variables
+        MHDPrim1D w;
+        w.d  = w_(m,IDN,k,j,i);
+        w.vx = w_(m,IVX,k,j,i);
+        w.vy = w_(m,IVY,k,j,i);
+        w.vz = w_(m,IVZ,k,j,i);
+        w.e  = w_(m,IEN,k,j,i);
+
+        // load cell-centered fields into primitive state
+        // use simple linear average of face-centered fields as bcc is not updated
+        w.bx = 0.5*(b.x1f(m,k,j,i) + b.x1f(m,k,j,i+1));
+        w.by = 0.5*(b.x2f(m,k,j,i) + b.x2f(m,k,j+1,i));
+        w.bz = 0.5*(b.x3f(m,k,j,i) + b.x3f(m,k+1,j,i));
+
+        // call p2c function
+        HydCons1D u;
+        if (is_gr) {
+          Real glower[4][4], gupper[4][4];
+          ComputeMetricAndInverse(x1v, x2v, x3v, flat, spin, glower, gupper);
+          SingleP2C_IdealGRMHD(glower, gupper, w, gamma, u);
+        } else {
+          SingleP2C_IdealMHD(w, u);
+        }
+
+        // store conserved quantities in 3D array
+        u_(m,IDN,k,j,i) = u.d;
+        u_(m,IM1,k,j,i) = u.mx;
+        u_(m,IM2,k,j,i) = u.my;
+        u_(m,IM3,k,j,i) = u.mz;
+        u_(m,IEN,k,j,i) = u.e;
+      }
+    });
+  }
+  std::cout << "  Rank " << global_variable::my_rank 
+            << " Reinitialized variables in meshblock " << m
+            << " using zoom meshblock " << zm << std::endl;
+  return;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void ZoomData::MaskDataInZoomRegion()
+//! \brief Mask data in zoom region in MeshBlock m
+
+void ZoomData::MaskDataInZoomRegion(int m, int zm) {
+  auto &indcs = pzoom->pmesh->mb_indcs;
+  auto pmbp = pzoom->pmesh->pmb_pack;
+  auto &size = pmbp->pmb->mb_size;
+  int &ng = indcs.ng;
+  int &is = indcs.is, &js = indcs.js, &ks = indcs.ks;
+  // int &ie = indcs.ie, &je = indcs.je, &ke = indcs.ke;
+  int nx1 = indcs.nx1, nx2 = indcs.nx2, nx3 = indcs.nx3;
+  int &cis = indcs.cis;  int &cie  = indcs.cie;
+  int &cjs = indcs.cjs;  int &cje  = indcs.cje;
+  int &cks = indcs.cks;  int &cke  = indcs.cke;
+  int cnx1 = indcs.cnx1, cnx2 = indcs.cnx2, cnx3 = indcs.cnx3;
+  DvceArray5D<Real> u_, w_;
+  if (pmbp->phydro != nullptr) {
+    u_ = pmbp->phydro->u0;
+    w_ = pmbp->phydro->w0;
+  } else if (pmbp->pmhd != nullptr) {
+    u_ = pmbp->pmhd->u0;
+    w_ = pmbp->pmhd->w0;
+  }
+  auto cu0 = coarse_u0, cw0 = coarse_w0;
+  auto peos = (pmbp->pmhd != nullptr)? pmbp->pmhd->peos : pmbp->phydro->peos;
+  auto eos = peos->eos_data;
+  Real gamma = eos.gamma;
+  bool is_gr = pmbp->pcoord->is_general_relativistic;
+  bool flat = true;
+  Real spin = 0.0;
+  if (is_gr) {
+    flat = pmbp->pcoord->coord_data.is_minkowski;
+    spin = pmbp->pcoord->coord_data.bh_spin;
+  }
+  Real &x1min = size.h_view(m).x1min;
+  Real &x1max = size.h_view(m).x1max;
+  Real &x2min = size.h_view(m).x2min;
+  Real &x2max = size.h_view(m).x2max;
+  Real &x3min = size.h_view(m).x3min;
+  Real &x3max = size.h_view(m).x3max;
+  auto zregion = pzoom->zregion;
+  // eachlevel[pzoom->zstate.zone-1]; // starting gid of zoom MBs on previous level
+  int zmbs = pzmesh->gids_eachdvce[global_variable::my_rank]; // global id start of dvce
+  auto &zlloc = pzmesh->lloc_eachzmb[zm+zmbs];
+  int ox1 = ((zlloc.lx1 & 1) == 1);
+  int ox2 = ((zlloc.lx2 & 1) == 1);
+  int ox3 = ((zlloc.lx3 & 1) == 1);
+  // std::cout << "  Rank " << global_variable::my_rank 
+  //           << " Masking variables in meshblock " << m
+  //           << " using zoom meshblock " << zm 
+  //           << " with offsets (" << ox1 << "," << ox2 << "," << ox3 << ")"
+  //           << std::endl;
+  // return;
+  if (pmbp->phydro != nullptr) {
+    // TODO(@mhguo): debug
+    // find denisty max in zoom region
+    // Real dmax = 0.0;
+    // const int kji = cnx3 * cnx2 * cnx1;
+    // Kokkos::parallel_reduce("find_dmax_zoom", Kokkos::RangePolicy<>(DevExeSpace(), 0, kji),
+    // KOKKOS_LAMBDA(const int &idx, Real& local_dmax) {
+    //   int ck = idx / (cnx2 * cnx1);
+    //   int cj = (idx - ck * cnx2 * cnx1) / cnx1;
+    //   int ci = (idx - ck * cnx2 * cnx1 - cj * cnx1) + cis;
+    //   ck += cks;
+    //   cj += cjs;
+    //   int i = ci + ox1 * cnx1;;
+    //   int j = cj + ox2 * cnx2;
+    //   int k = ck + ox3 * cnx3;
+    //   Real x1v = CellCenterX(i-is, nx1, x1min, x1max);
+    //   Real x2v = CellCenterX(j-js, nx2, x2min, x2max);
+    //   Real x3v = CellCenterX(k-ks, nx3, x3min, x3max);
+    //   if (zregion.IsInZoomRegion(x1v, x2v, x3v)) { // apply to zoom region
+    //   }
+    //   local_dmax = fmax(local_dmax, cu0(zm,IDN,ck,cj,ci));
+    // }, Kokkos::Max<Real>(dmax));
+    // std::cout << "  Rank " << global_variable::my_rank 
+    //           << " Zoom meshblock " << zm
+    //           << " density max in zoom region = " << dmax << std::endl;
+    // par_for("zoom_mask", DevExeSpace(),ks-ng,ke+ng,js-ng,je+ng,is-ng,ie+ng,
+    par_for("zoom_mask", DevExeSpace(),cks,cke,cjs,cje,cis,cie,
+    KOKKOS_LAMBDA(int ck, int cj, int ci) {
+      int i = ci + ox1 * cnx1;
+      int j = cj + ox2 * cnx2;
+      int k = ck + ox3 * cnx3;
+      Real x1v = CellCenterX(i-is, nx1, x1min, x1max);
+      Real x2v = CellCenterX(j-js, nx2, x2min, x2max);
+      Real x3v = CellCenterX(k-ks, nx3, x3min, x3max);
+      if (zregion.IsInZoomRegion(x1v, x2v, x3v)) { // apply to zoom region
+        // simply copy primitive and conserved variables
+        w_(m,IDN,k,j,i) = cw0(zm,IDN,ck,cj,ci);
+        w_(m,IVX,k,j,i) = cw0(zm,IVX,ck,cj,ci);
+        w_(m,IVY,k,j,i) = cw0(zm,IVY,ck,cj,ci);
+        w_(m,IVZ,k,j,i) = cw0(zm,IVZ,ck,cj,ci);
+        w_(m,IEN,k,j,i) = cw0(zm,IEN,ck,cj,ci);
+        u_(m,IDN,k,j,i) = cu0(zm,IDN,ck,cj,ci);
+        u_(m,IM1,k,j,i) = cu0(zm,IM1,ck,cj,ci);
+        u_(m,IM2,k,j,i) = cu0(zm,IM2,ck,cj,ci);
+        u_(m,IM3,k,j,i) = cu0(zm,IM3,ck,cj,ci);
+        u_(m,IEN,k,j,i) = cu0(zm,IEN,ck,cj,ci);
+      }
+    });
+  } else if (pmbp->pmhd != nullptr) {
+    auto b = pmbp->pmhd->b0;
+    // TODO(@mhguo): probably don't have to mask the ghost zones?
+    // par_for("zoom_mask", DevExeSpace(),ks-ng,ke+ng,js-ng,je+ng,is-ng,ie+ng,
+    par_for("zoom_mask", DevExeSpace(),cks,cke,cjs,cje,cis,cie,
+    KOKKOS_LAMBDA(int ck, int cj, int ci) {
+      Real x1v = CellCenterX(ci-cis, cnx1, x1min, x1max);
+      Real x2v = CellCenterX(cj-cjs, cnx2, x2min, x2max);
+      Real x3v = CellCenterX(ck-cks, cnx3, x3min, x3max);
+      if (zregion.IsInZoomRegion(x1v, x2v, x3v)) { // apply to old zoom region
+        // convert primitive variables to conserved variables
+        // load primitive variables from 3D array
+        int i = ci + ox1 * cnx1;
+        int j = cj + ox2 * cnx2;
+        int k = ck + ox3 * cnx3;
+        w_(m,IDN,k,j,i) = cw0(zm,IDN,ck,cj,ci);
+        w_(m,IM1,k,j,i) = cw0(zm,IM1,ck,cj,ci);
+        w_(m,IM2,k,j,i) = cw0(zm,IM2,ck,cj,ci);
+        w_(m,IM3,k,j,i) = cw0(zm,IM3,ck,cj,ci);
+        w_(m,IEN,k,j,i) = cw0(zm,IEN,ck,cj,ci);
+
+        // Load single state of primitive variables
+        MHDPrim1D w;
+        w.d  = w_(m,IDN,k,j,i);
+        w.vx = w_(m,IVX,k,j,i);
+        w.vy = w_(m,IVY,k,j,i);
+        w.vz = w_(m,IVZ,k,j,i);
+        w.e  = w_(m,IEN,k,j,i);
+
+        // load cell-centered fields into primitive state
+        // use simple linear average of face-centered fields as bcc is not updated
+        w.bx = 0.5*(b.x1f(m,k,j,i) + b.x1f(m,k,j,i+1));
+        w.by = 0.5*(b.x2f(m,k,j,i) + b.x2f(m,k,j+1,i));
+        w.bz = 0.5*(b.x3f(m,k,j,i) + b.x3f(m,k+1,j,i));
+
+        // call p2c function
+        HydCons1D u;
+        if (is_gr) {
+          Real glower[4][4], gupper[4][4];
+          ComputeMetricAndInverse(x1v, x2v, x3v, flat, spin, glower, gupper);
+          SingleP2C_IdealGRMHD(glower, gupper, w, gamma, u);
+        } else {
+          SingleP2C_IdealMHD(w, u);
+        }
+
+        // store conserved quantities in 3D array
+        u_(m,IDN,k,j,i) = u.d;
+        u_(m,IM1,k,j,i) = u.mx;
+        u_(m,IM2,k,j,i) = u.my;
+        u_(m,IM3,k,j,i) = u.mz;
+        u_(m,IEN,k,j,i) = u.e;
+      }
+    });
+  }
+  // TODO(@mhguo): debug print
+  // std::cout << "  Rank " << global_variable::my_rank 
+  //           << " Masked variables in meshblock " << m
+  //           << " using zoom meshblock " << zm << std::endl;
   return;
 }
