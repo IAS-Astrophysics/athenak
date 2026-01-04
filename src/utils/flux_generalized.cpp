@@ -365,23 +365,13 @@ void TorusFluxes_General(HistoryData *pdata,
 
         // --- H. Phi_B (magnetic flux) ---
         {
-          // b^μ: using comoving B pieces from ValenciaComovingB
-          const Real u_u_t = W / alp;  // u^t (Eulerian)
-          const Real b_u_t = Bv / alp; // b^t
+          // The EHT definition is Flux = 0.5 * Integral |B . dA|
+          // B_u is the Eulerian magnetic field (already available).
+          // dS_d is the covariant surface area element (normal vector * area).
 
-          Real b_u_fields[3];
-          for (int i = 0; i < 3; ++i) {
-            b_u_fields[i] = B_u[i]/W + Bv * v_u[i];
-          }
+          const Real flux_dot_dS = 
+            B_u[0]*dS_d[0] + B_u[1]*dS_d[1] + B_u[2]*dS_d[2];
 
-          const Real M_u[3] = {
-            u_u_t * b_u_fields[0] - u_u[0] * b_u_t,
-            u_u_t * b_u_fields[1] - u_u[1] * b_u_t,
-            u_u_t * b_u_fields[2] - u_u[2] * b_u_t
-          };
-
-          const Real flux_dot_dS =
-            M_u[0]*dS_d[0] + M_u[1]*dS_d[1] + M_u[2]*dS_d[2];
           update.phiB += 0.5 * Kokkos::fabs(flux_dot_dS);
         }
 
