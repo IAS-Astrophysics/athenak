@@ -144,12 +144,14 @@ dynamic = true
 r_edge   = 60.0 # radius of inner edge of disk
 r_peak   = 240.0 # radius of pressure maximum; use l instead if negative
 tilt_angle = 0.0  # angle (deg) to incl disk spin axis relative to BH spin in dir of x
-potential_beta_min = 100.0 # ratio of gas to magnetic pressure at maxima (diff locations)
-potential_cutoff  = 0.2  # amount to subtract from density when calculating potential
-potential_r_pow  = 3.0  # vector potential proportional to this power of radius
-potential_falloff = 400.0 # falloff for exponential in vector potential
-potential_rho_pow = 1.0   # dependence of the vector potential on density rho
-rho_min  = 1.0e-5  # background on rho given by rho_min ...
+
+vertical_field      = true    # Enable vertical geometry
+potential_beta_min  = 100.0   # Moderate Strength (MAD-capable but safer)
+potential_r_pow     = 3.0     # Sets A_phi ~ r (Uniform B_z in the core)
+potential_rho_pow   = 0.0     # CRITICAL: 0.0 allows field in vacuum so "falloff" works
+potential_falloff   = 500.0  # Field is uniform until r=2000, then decays
+potential_cutoff    = 0.0     # No threshold subtraction
+rho_min  = 5.0e-5  # background on rho given by rho_min ...
 rho_pow  = -1.5   # ... * r^rho_pow
 pgas_min = 0.333e-7 # background on p_gas given by pgas_min ...
 pgas_pow = -2.5   # ... * r^pgas_pow
