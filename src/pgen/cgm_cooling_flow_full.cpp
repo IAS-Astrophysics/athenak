@@ -963,7 +963,7 @@ void RefinementCondition(MeshBlockPack* pmbp) {
     },Kokkos::Max<Real>(team_ddmax));
 
     if (team_ddmax > ddens_thresh) {refine_flag.d_view(m+mbs) = 1;}
-    if (team_ddmax < 0.25*ddens_thresh) {refine_flag.d_view(m+mbs) = -1;}
+    if (team_ddmax < 0.1*ddens_thresh) {refine_flag.d_view(m+mbs) = -1;}
 
   });
 
