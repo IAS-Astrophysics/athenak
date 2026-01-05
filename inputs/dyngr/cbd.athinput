@@ -8,39 +8,39 @@ basename = torus
 <mesh>
 nghost = 4    # Number of ghost cells
 nx1  = 256    # number of cells in x1-direction
-x1min = -1024 # minimum x1
-x1max = 1024  # maximum x1
-ix1_bc = outflow   # inner boundary
-ox1_bc = outflow   # outer boundary
+x1min = -4096 # minimum x1
+x1max = 4096  # maximum x1
+ix1_bc = diode   # inner boundary
+ox1_bc = diode   # outer boundary
 
 nx2  = 256   # number of cells in x2-direction
-x2min = -1024 # minimum x2
-x2max = 1024  # maximum x2
-ix2_bc = outflow   # inner boundary
-ox2_bc = outflow   # outer boundary
+x2min = -4096 # minimum x2
+x2max = 4096  # maximum x2
+ix2_bc = diode   # inner boundary
+ox2_bc = diode   # outer boundary
 
 nx3  = 256    # number of cells in x3-direction
-x3min = -1024   # minimum x3
-x3max = 1024   # maximum x3
-ix3_bc = outflow   # inner boundary
-ox3_bc = outflow   # outer boundary
+x3min = -4096   # minimum x3
+x3max = 4096   # maximum x3
+ix3_bc = diode   # inner boundary
+ox3_bc = diode   # outer boundary
 
 <meshblock>
-nx1  = 64          # Number of cells in each MeshBlock, X1-dir
-nx2  = 64          # Number of cells in each MeshBlock, X2-dir
-nx3  = 64          # Number of cells in each MeshBlock, X3-dir
+nx1  = 32          # Number of cells in each MeshBlock, X1-dir
+nx2  = 32          # Number of cells in each MeshBlock, X2-dir
+nx3  = 32          # Number of cells in each MeshBlock, X3-dir
 
 <mesh_refinement>
 refinement       = adaptive    # type of refinement
-max_nmb_per_rank = 50
-num_levels       = 10
+max_nmb_per_rank = 5000
+num_levels       = 12
 refinement_interval = 1
 
 <amr_criterion0>
 method = user
 
 <refined_region1>
-level = 4
+level = 6
 x1min = -64.0
 x1max = 64.0
 x2min = -64.0
@@ -48,6 +48,52 @@ x2max = 64.0
 x3min = -64.0
 x3max = 64.0
 
+<refined_region2>
+level = 5
+x1min = -128.0
+x1max = 128.0
+x2min = -128.0
+x2max = 128.0
+x3min = -128.0
+x3max = 128.0
+
+<refined_region3>
+level = 4
+x1min = -256.0
+x1max = 256.0
+x2min = -256.0
+x2max = 256.0
+x3min = -256.0
+x3max = 256.0
+
+
+<refined_region4>
+level = 3
+x1min = -512.0
+x1max = 512.0
+x2min = -512.0
+x2max = 512.0
+x3min = -512.0
+x3max = 512.0
+
+
+<refined_region5>
+level = 2
+x1min = -1024.0
+x1max = 1024.0
+x2min = -1024.0
+x2max = 1024.0
+x3min = -1024.0
+x3max = 1024.0
+
+<refined_region6>
+level = 1
+x1min = -2048.0
+x1max = 2048.0
+x2min = -2048.0
+x2max = 2048.0
+x3min = -2048.0
+x3max = 2048.0
 
 <time>
 evolution = dynamic   # dynamic/kinematic/static
@@ -61,11 +107,18 @@ ndiag   = 10     # cycles between diagostic output
 general_rel = true   # general relativity
 m      = 1.0
 a      = 0.0
+
 excise   = true
-excision_scheme = lapse
-excise_lapse = 0.8 # should set to 1/sqrt(3), which corresponds to lapse at extremal black hole horizon
-dexcise = 1.0e-10
-pexcise = 1.0e-18
+
+#excision_scheme = lapse
+#excise_lapse = 0.8 # should set to 1/sqrt(3), which corresponds to lapse at extremal black hole horizon
+
+excision_scheme = puncture
+excise_1_rad = 1 # this is the smaller black hole
+excise_2_rad = 1 # approximately the size of the horizon
+
+dexcise = 1.0e-8
+pexcise = 0.333e-10
 
 <mhd>
 eos     = ideal   # EOS type
@@ -88,8 +141,8 @@ dynamic = true
 
 <problem>
 # disk parameters
-r_edge   = 50.0 # radius of inner edge of disk
-r_peak   = 120.0 # radius of pressure maximum; use l instead if negative
+r_edge   = 60.0 # radius of inner edge of disk
+r_peak   = 240.0 # radius of pressure maximum; use l instead if negative
 tilt_angle = 0.0  # angle (deg) to incl disk spin axis relative to BH spin in dir of x
 potential_beta_min = 100.0 # ratio of gas to magnetic pressure at maxima (diff locations)
 potential_cutoff  = 0.2  # amount to subtract from density when calculating potential
@@ -115,74 +168,77 @@ amr_condition = none #alphamin or tracker
 radius_thr = 5.0
 alpha_thr = 0.8 # something larger than 1/sqrt(2) to make sure the horizon is all refined
 radius_0_rad = 256
-radius_0_reflevel = 2
+radius_0_reflevel = 4
 radius_1_rad = 128
-radius_1_reflevel = 3
+radius_1_reflevel = 5
 radius_2_rad = 64
-radius_2_reflevel = 4
+radius_2_reflevel = 6
 radius_3_rad = 32
-radius_3_reflevel = 4
+radius_3_reflevel = 6
 radius_4_rad = 16
-radius_4_reflevel = 4
+radius_4_reflevel = 6
+radius_5_rad = 512
+radius_5_reflevel = 3
+radius_6_rad = 1024
+radius_6_reflevel = 2
+radius_7_rad = 2048
+radius_7_reflevel = 1
 
 # fluxes
 flux_rsurf_inner = 20
-flux_rsurf_outer = 300
+flux_rsurf_outer = 400
 flux_dr_surf = 10
 user_hist = true      # enroll user-defined history function
 
-<output3>
+# horizon
+flux_horizon1 = true
+flux_horizon2 = true
+flux_radius1 = 2
+flux_radius2 = 2
+
+<output1>
 file_type = bin    # Binary data dump
 variable  = angular_momentum # variables to be output
 dt     = 50   # time increment between outputs
 
-<output4>
+<output2>
 file_type = bin    # Binary data dump
 variable  = torque # variables to be output
 dt     = 50   # time increment between outputs
 
-<output5>
+<output3>
 file_type  = hst        # History output
 dt         = 50       # time increment between outputs
 user_hist_only = true   # only output user-defined history
 
 
-<output1>
+<output4>
 file_type = bin    # Binary data dump
 variable  = mhd_w_bcc # variables to be output
-dt     = 200.0   # time increment between outputs
+dt     = 800.0   # time increment between outputs
 
-#<output2>
-#file_type = bin    # Binary data dump
-#variable  = adm # variables to be output
-#slice_x3  = 0
-#dt     = 50.0   # time increment between outputs
+<output5>
+file_type  = bin            # Binary data dump
+slice_x1   = 0.0            # slice in X1 plane
+id         = slice_x1       # output id tag
+variable   = mhd_w_bcc  # variables to be output
+dt         = 100           # time increment between outputs
 
-#<output3>
-#file_type = bin
-#variable  = tmunu
-#slice_x3  = 0
-#dt     = 50.
+<output6>
+file_type  = bin            # Binary data dump
+slice_x2   = 0.0            # slice in X1 plane
+id         = slice_x2       # output id tag
+variable   = mhd_w_bcc  # variables to be output
+dt         = 100           # time increment between outputs
 
-#<output4>
-#file_type = bin    # Binary data dump
-#variable  = mhd_w_bcc # variables to be output
-#slice_x2  = 0
-#dt     = 50.0   # time increment between outputs
+<output7>
+file_type  = bin            # Binary data dump
+slice_x3   = 0.0            # slice in X1 plane
+id         = slice_x3       # output id tag
+variable   = mhd_w_bcc  # variables to be output
+dt         = 100           # time increment between outputs
 
-#<output5>
-#file_type = bin    # Binary data dump
-#variable  = adm # variables to be output
-#slice_x2  = 0
-#dt     = 50.0   # time increment between outputs
-
-#<output6>
-#file_type = bin
-#variable  = tmunu
-#slice_x2  = 0
-#dt     = 50.
-
-<output2>
+<output8>
 file_type  = rst     # Restart file
 dt     = 5000
 single_file_per_rank = true
