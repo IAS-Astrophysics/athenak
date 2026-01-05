@@ -1,0 +1,188 @@
+<comment>
+problem  = Chakrabarti equilibrium torus
+reference = Chakrabarti, S. 1985, ApJ 288, 1
+
+<job>
+basename = torus
+
+<mesh>
+nghost = 4    # Number of ghost cells
+nx1  = 256    # number of cells in x1-direction
+x1min = -1024 # minimum x1
+x1max = 1024  # maximum x1
+ix1_bc = outflow   # inner boundary
+ox1_bc = outflow   # outer boundary
+
+nx2  = 256   # number of cells in x2-direction
+x2min = -1024 # minimum x2
+x2max = 1024  # maximum x2
+ix2_bc = outflow   # inner boundary
+ox2_bc = outflow   # outer boundary
+
+nx3  = 256    # number of cells in x3-direction
+x3min = -1024   # minimum x3
+x3max = 1024   # maximum x3
+ix3_bc = outflow   # inner boundary
+ox3_bc = outflow   # outer boundary
+
+<meshblock>
+nx1  = 64          # Number of cells in each MeshBlock, X1-dir
+nx2  = 64          # Number of cells in each MeshBlock, X2-dir
+nx3  = 64          # Number of cells in each MeshBlock, X3-dir
+
+<mesh_refinement>
+refinement       = adaptive    # type of refinement
+max_nmb_per_rank = 50
+num_levels       = 10
+refinement_interval = 1
+
+<amr_criterion0>
+method = user
+
+<refined_region1>
+level = 4
+x1min = -64.0
+x1max = 64.0
+x2min = -64.0
+x2max = 64.0
+x3min = -64.0
+x3max = 64.0
+
+
+<time>
+evolution = dynamic   # dynamic/kinematic/static
+integrator = rk2     # time integration algorithm
+cfl_number = 0.4     # The Courant, Friedrichs, & Lewy (CFL) Number
+nlim    = -1     # cycle limit
+tlim    = 1000000 # time limit
+ndiag   = 10     # cycles between diagostic output
+
+<coord>
+general_rel = true   # general relativity
+m      = 1.0
+a      = 0.0
+excise   = true
+excision_scheme = lapse
+excise_lapse = 0.8 # should set to 1/sqrt(3), which corresponds to lapse at extremal black hole horizon
+dexcise = 1.0e-10
+pexcise = 1.0e-18
+
+<mhd>
+eos     = ideal   # EOS type
+dyn_eos   = ideal   # EOS type
+dyn_error  = reset_floor # EOS type
+reconstruct = wenoz    # spatial reconstruction method
+rsolver   = hlle    # Riemann-solver to be used
+dfloor   = 1.0e-10   # floor on density rho
+pfloor   = 1.0e-18 # floor on gas pressure p_gas
+tfloor   = 1.0e-8 # floor on gas pressure p_gas
+gamma    = 1.44444444444 # ratio of specific heats Gamma
+fofc    = true    # Enable first order flux correction
+gamma_max  = 20.0    # Enable ceiling on Lorentz factor
+enforce_maximum = false
+dmp_M    = 1.2
+calculate_tmunu = true  # calculate stress energy tensor
+
+<adm>
+dynamic = true
+
+<problem>
+# disk parameters
+r_edge   = 50.0 # radius of inner edge of disk
+r_peak   = 120.0 # radius of pressure maximum; use l instead if negative
+tilt_angle = 0.0  # angle (deg) to incl disk spin axis relative to BH spin in dir of x
+potential_beta_min = 100.0 # ratio of gas to magnetic pressure at maxima (diff locations)
+potential_cutoff  = 0.2  # amount to subtract from density when calculating potential
+potential_r_pow  = 3.0  # vector potential proportional to this power of radius
+potential_falloff = 400.0 # falloff for exponential in vector potential
+potential_rho_pow = 1.0   # dependence of the vector potential on density rho
+rho_min  = 1.0e-5  # background on rho given by rho_min ...
+rho_pow  = -1.5   # ... * r^rho_pow
+pgas_min = 0.333e-7 # background on p_gas given by pgas_min ...
+pgas_pow = -2.5   # ... * r^pgas_pow
+rho_max  = 1.0    # if > 0, rescale rho to have this peak; rescale pres by same factor
+l     = 0.0    # const. ang. mom. per unit mass u^t u_phi; only used if r_peak < 0
+pert_amp = 2.0e-2  # perturbation amplitude
+
+# binary parameters
+sep = 25.
+q = 1.
+a1 = 0.
+a2 = 0.
+
+# mesh refinement
+amr_condition = none #alphamin or tracker
+radius_thr = 5.0
+alpha_thr = 0.8 # something larger than 1/sqrt(2) to make sure the horizon is all refined
+radius_0_rad = 256
+radius_0_reflevel = 2
+radius_1_rad = 128
+radius_1_reflevel = 3
+radius_2_rad = 64
+radius_2_reflevel = 4
+radius_3_rad = 32
+radius_3_reflevel = 4
+radius_4_rad = 16
+radius_4_reflevel = 4
+
+# fluxes
+flux_rsurf_inner = 20
+flux_rsurf_outer = 300
+flux_dr_surf = 10
+user_hist = true      # enroll user-defined history function
+
+<output3>
+file_type = bin    # Binary data dump
+variable  = angular_momentum # variables to be output
+dt     = 50   # time increment between outputs
+
+<output4>
+file_type = bin    # Binary data dump
+variable  = torque # variables to be output
+dt     = 50   # time increment between outputs
+
+<output5>
+file_type  = hst        # History output
+dt         = 50       # time increment between outputs
+user_hist_only = true   # only output user-defined history
+
+
+<output1>
+file_type = bin    # Binary data dump
+variable  = mhd_w_bcc # variables to be output
+dt     = 200.0   # time increment between outputs
+
+#<output2>
+#file_type = bin    # Binary data dump
+#variable  = adm # variables to be output
+#slice_x3  = 0
+#dt     = 50.0   # time increment between outputs
+
+#<output3>
+#file_type = bin
+#variable  = tmunu
+#slice_x3  = 0
+#dt     = 50.
+
+#<output4>
+#file_type = bin    # Binary data dump
+#variable  = mhd_w_bcc # variables to be output
+#slice_x2  = 0
+#dt     = 50.0   # time increment between outputs
+
+#<output5>
+#file_type = bin    # Binary data dump
+#variable  = adm # variables to be output
+#slice_x2  = 0
+#dt     = 50.0   # time increment between outputs
+
+#<output6>
+#file_type = bin
+#variable  = tmunu
+#slice_x2  = 0
+#dt     = 50.
+
+<output2>
+file_type  = rst     # Restart file
+dt     = 5000
+single_file_per_rank = true
