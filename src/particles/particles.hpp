@@ -79,7 +79,6 @@ class Particles {
 
   // functions...
   void InitializeStars(ParameterInput *pin);
-
   void CreateParticleTags(ParameterInput *pin);
   void AssembleTasks(std::map<std::string, std::shared_ptr<TaskList>> tl);
   TaskStatus Push(Driver *pdriver, int stage);
@@ -90,6 +89,10 @@ class Particles {
   TaskStatus RecvP(Driver *pdriver, int stage);
   TaskStatus ClearSend(Driver *pdriver, int stage);
   TaskStatus ClearRecv(Driver *pdriver, int stage);
+
+  // particle restart loading function
+  static bool LoadFromRestart(ParameterInput *pin, MeshBlockPack *ppack,
+		              Particles* ppart, const std::string& restart_file); 
 
  private:
   MeshBlockPack* pmy_pack;  // ptr to MeshBlockPack containing this Particles

@@ -18,7 +18,7 @@
 //! Required parameters that must be specified in an <output[n]> block are:
 //!   - variable  = [list of currently implemented strings for specifing output variables
 //!                  is defined at start of outputs.hpp file]
-//!   - file_type = tab,vtk,hst,bin,rst
+//!   - file_type = tab,vtk,hst,bin,rst,rst_prtcl
 //!   - dt        = problem time between outputs
 //!
 //! EXAMPLE of an <output[n]> block for a TAB dump:
@@ -91,6 +91,7 @@ Outputs::Outputs(ParameterInput *pin, Mesh *pm) {
       // but only for those output types that use them
       if (opar.file_type.compare("hst") != 0 &&
           opar.file_type.compare("rst") != 0 &&
+	  opar.file_type.compare("rst_prtcl") != 0 &&
           opar.file_type.compare("log") != 0 &&
           opar.file_type.compare("trk") != 0) {
         opar.variable = pin->GetString(opar.block_name, "variable");
@@ -182,6 +183,7 @@ Outputs::Outputs(ParameterInput *pin, Mesh *pm) {
       // set output variable and optional file id (default is output variable name)
       if (opar.file_type.compare("hst") != 0 &&
           opar.file_type.compare("rst") != 0 &&
+	  opar.file_type.compare("rst_prtcl") != 0 &&
           opar.file_type.compare("log") != 0) {
         opar.variable = pin->GetString(opar.block_name, "variable");
         opar.file_id = pin->GetOrAddString(opar.block_name,"id",opar.variable);
@@ -344,6 +346,10 @@ Outputs::Outputs(ParameterInput *pin, Mesh *pm) {
         pnode = new RestartOutput(pin,pm,opar);
         pout_list.push_back(pnode);
         num_rst++;
+      } else if (opar.file_type.compare("rst_prtcl") == 0) {
+      // Add particle restarts - can coexist with regular restarts
+        pnode = new ParticleRestartOutput(pin,pm,opar);
+        pout_list.push_back(pnode);
       } else {
         std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
             << std::endl << "Unrecognized file format = '" << opar.file_type

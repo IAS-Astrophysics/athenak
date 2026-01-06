@@ -32,6 +32,7 @@ Particles::Particles(MeshBlockPack *ppack, ParameterInput *pin) :
     std::exit(EXIT_FAILURE);
   }
 
+  // Normal initialization
   // select particle type
   {
     std::string ptype = pin->GetString("particles","particle_type");
@@ -119,8 +120,23 @@ Particles::Particles(MeshBlockPack *ppack, ParameterInput *pin) :
   // allocate boundary object
   pbval_part = new ParticlesBoundaryValues(this, pin);
 
-  // Initialize Star particles if particle type is "star"
-  {
+  // Check if we should load from particle restart file
+  int prtcl_rst_flag = pin->GetOrAddInteger("problem","prtcl_rst_flag",0);
+  bool loaded_from_restart = false;
+	  
+  if (prtcl_rst_flag) {
+    std::string prst_fname = pin->GetString("problem","prtcl_res_file");
+    loaded_from_restart = LoadFromRestart(pin, pmy_pack, this, prst_fname);
+
+    if (!loaded_from_restart) {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+                << "Failed to load particle restart file: " << prst_fname << std::endl;
+      std::exit(EXIT_FAILURE);
+    }
+  }
+
+  // Initialize Star particles if particle type is "star" and not loaded from restart file
+  if (!prtcl_rst_flag) {
     std::string ptype = pin->GetString("particles","particle_type");
     if (ptype.compare("star") == 0) {
       InitializeStars(pin);
@@ -257,6 +273,196 @@ void Particles::InitializeStars(ParameterInput *pin) {
 
   dtnew = std::min(size.h_view(0).dx1, size.h_view(0).dx2);
   dtnew = std::min(dtnew, size.h_view(0).dx3);
+}
+
+//----------------------------------------------------------------------------------------
+// LoadFromRestart()
+// Static function to load particle data from restart file
+// Returns true if particle data was successfully loaded, false otherwise
+
+bool Particles::LoadFromRestart(ParameterInput *pin, MeshBlockPack *ppack,
+                                Particles* ppart, const std::string& restart_file) {
+
+  // Step 1: Read particle data from single restart file (rank 0 reads, then broadcasts)
+  std::vector<Real> all_particle_rdata;
+  std::vector<int> all_particle_idata;
+  int total_particles = 0;
+  int nrdata_global = 0, nidata_global = 0;
+
+#if MPI_PARALLEL_ENABLED
+  // Master rank reads the file
+  if (global_variable::my_rank == 0) {
+    std::ifstream prtcl_file(restart_file, std::ios::binary);
+    if (!prtcl_file.is_open()) {
+      std::cout << "### ERROR: Could not open particle restart file: "
+                << restart_file << std::endl;
+      total_particles = -1; // Error flag
+    } else {
+      // Read header
+      Real restart_time;
+      int restart_ncycle;
+
+      prtcl_file.read(reinterpret_cast<char*>(&restart_time), sizeof(Real));
+      prtcl_file.read(reinterpret_cast<char*>(&restart_ncycle), sizeof(int));
+      prtcl_file.read(reinterpret_cast<char*>(&total_particles), sizeof(int));
+
+      if (total_particles > 0) {
+        prtcl_file.read(reinterpret_cast<char*>(&nrdata_global), sizeof(int));
+        prtcl_file.read(reinterpret_cast<char*>(&nidata_global), sizeof(int));
+
+        // Read all particle data
+        all_particle_rdata.resize(total_particles * nrdata_global);
+        all_particle_idata.resize(total_particles * nidata_global);
+
+        prtcl_file.read(reinterpret_cast<char*>(all_particle_rdata.data()),
+                       total_particles * nrdata_global * sizeof(Real));
+        prtcl_file.read(reinterpret_cast<char*>(all_particle_idata.data()),
+                       total_particles * nidata_global * sizeof(int));
+      }
+
+      prtcl_file.close();
+      std::cout << "Read " << total_particles << " particles from restart file: "
+                << restart_file << std::endl;
+    }
+  }
+
+  // Broadcast total particle count and dimensions to all ranks
+  std::vector<int> global_info = {total_particles, nrdata_global, nidata_global};
+  MPI_Bcast(global_info.data(), 3, MPI_INT, 0, MPI_COMM_WORLD);
+  total_particles = global_info[0];
+  nrdata_global = global_info[1];
+  nidata_global = global_info[2];
+
+  if (total_particles < 0) {
+    return false; // Error occurred on rank 0
+  }
+
+  if (total_particles == 0) {
+    ppart->nprtcl_thispack = 0;
+    return true; // Successfully loaded (zero particles)
+  }
+
+  // Broadcast all particle data to all ranks
+  if (global_variable::my_rank != 0) {
+    all_particle_rdata.resize(total_particles * nrdata_global);
+    all_particle_idata.resize(total_particles * nidata_global);
+  }
+
+  MPI_Bcast(all_particle_rdata.data(), total_particles * nrdata_global,
+            MPI_ATHENA_REAL, 0, MPI_COMM_WORLD); 
+  MPI_Bcast(all_particle_idata.data(), total_particles * nidata_global,
+            MPI_INT, 0, MPI_COMM_WORLD);
+
+#else
+  // Serial version: read the file directly
+  std::ifstream prtcl_file(restart_file, std::ios::binary);
+  if (!prtcl_file.is_open()) {
+    return false;
+  }
+
+  Real restart_time;
+  int restart_ncycle;
+
+  prtcl_file.read(reinterpret_cast<char*>(&restart_time), sizeof(Real));
+  prtcl_file.read(reinterpret_cast<char*>(&restart_ncycle), sizeof(int));
+  prtcl_file.read(reinterpret_cast<char*>(&total_particles), sizeof(int));
+
+  if (total_particles == 0) {
+    prtcl_file.close();
+    ppart->nprtcl_thispack = 0;
+    return true;
+  }
+
+  prtcl_file.read(reinterpret_cast<char*>(&nrdata_global), sizeof(int));
+  prtcl_file.read(reinterpret_cast<char*>(&nidata_global), sizeof(int));
+
+  all_particle_rdata.resize(total_particles * nrdata_global);
+  all_particle_idata.resize(total_particles * nidata_global);
+
+  prtcl_file.read(reinterpret_cast<char*>(all_particle_rdata.data()),
+                 total_particles * nrdata_global * sizeof(Real));
+  prtcl_file.read(reinterpret_cast<char*>(all_particle_idata.data()),
+                 total_particles * nidata_global * sizeof(int));
+
+  prtcl_file.close();
+#endif
+
+  // Step 2: Redistribute particles based on current mesh decomposition
+  std::vector<Real> my_particle_rdata;
+  std::vector<int> my_particle_idata;
+
+  auto &size = ppack->pmb->mb_size;
+  int nmb = ppack->nmb_thispack;
+  const int &gids = ppack->gids;
+
+  // Check each particle to see if it belongs to this rank's mesh blocks
+  for (int p = 0; p < total_particles; ++p) {
+    Real px = all_particle_rdata[p * nrdata_global + IPX];
+    Real py = all_particle_rdata[p * nrdata_global + IPY];
+    Real pz = all_particle_rdata[p * nrdata_global + IPZ];
+
+    // Check if particle is in any of this rank's mesh blocks
+    bool particle_belongs_here = false;
+    int local_mb = -1;
+
+    for (int m = 0; m < nmb; ++m) {
+      if (px > size.h_view(m).x1min && px <= size.h_view(m).x1max &&
+          py > size.h_view(m).x2min && py <= size.h_view(m).x2max &&
+          pz > size.h_view(m).x3min && pz <= size.h_view(m).x3max) {
+        particle_belongs_here = true;
+        local_mb = m;
+        break;
+      }
+    }
+
+    if (particle_belongs_here) {
+      // Copy particle real data
+      for (int i = 0; i < nrdata_global; ++i) {
+        my_particle_rdata.push_back(all_particle_rdata[p * nrdata_global + i]);
+      }
+      // Copy particle integer data
+      for (int i = 0; i < nidata_global; ++i) {
+        my_particle_idata.push_back(all_particle_idata[p * nidata_global + i]);
+      }
+
+      // Update particle's global ID to reflect new rank assignment
+      int gid_idx = (my_particle_idata.size() / nidata_global - 1) * nidata_global + PGID;
+      my_particle_idata[gid_idx] = gids + local_mb;
+    }
+  }
+
+  // Step 3: Set up this rank's particle data
+  ppart->nprtcl_thispack = my_particle_rdata.size() / nrdata_global;
+  ppart->nrdata = nrdata_global;
+  ppart->nidata = nidata_global;
+
+  if (ppart->nprtcl_thispack > 0) {
+    // Allocate and populate particle arrays
+    Kokkos::realloc(ppart->prtcl_rdata, ppart->nrdata, ppart->nprtcl_thispack);
+    Kokkos::realloc(ppart->prtcl_idata, ppart->nidata, ppart->nprtcl_thispack);
+
+    auto rdata_host = Kokkos::create_mirror_view(ppart->prtcl_rdata);
+    auto idata_host = Kokkos::create_mirror_view(ppart->prtcl_idata);
+
+    // Copy data
+    for (int p = 0; p < ppart->nprtcl_thispack; ++p) {
+      for (int i = 0; i < ppart->nrdata; ++i) {
+        rdata_host(i, p) = my_particle_rdata[p * ppart->nrdata + i];
+      }
+      for (int i = 0; i < ppart->nidata; ++i) {
+        idata_host(i, p) = my_particle_idata[p * ppart->nidata + i];
+      }
+    }
+
+    // Copy to device
+    Kokkos::deep_copy(ppart->prtcl_rdata, rdata_host);
+    Kokkos::deep_copy(ppart->prtcl_idata, idata_host);
+  }
+
+  std::cout << "Rank " << global_variable::my_rank << " loaded "
+            << ppart->nprtcl_thispack << " particles after redistribution" << std::endl;
+
+  return true;
 }
 
 } // namespace particles

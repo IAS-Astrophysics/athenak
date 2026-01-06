@@ -520,6 +520,22 @@ class TrackedParticleOutput : public BaseTypeOutput {
 };
 
 //----------------------------------------------------------------------------------------
+//! \class ParticleRestartOutput
+//  \brief derived BaseTypeOutput class for particle restart files
+
+class ParticleRestartOutput : public BaseTypeOutput {
+ public:
+  ParticleRestartOutput(ParameterInput *pin, Mesh *pm, OutputParameters oparams);
+  void LoadOutputData(Mesh *pm) override;
+  void WriteOutputFile(Mesh *pm, ParameterInput *pin) override;
+ protected:
+  int nprtcl_thisrank;  // number of particles this rank
+  int nrdata, nidata;   // dimensions of particle data arrays
+  HostArray2D<Real> outpart_rdata;  // particle real data on host
+  HostArray2D<int>  outpart_idata;  // particle integer data on host
+};
+
+//----------------------------------------------------------------------------------------
 //! \class Outputs
 //  \brief root class for all Athena++ outputs. Provides a std::vector of BaseTypeOutputs,
 //   with each element representing one mode/format of output to be made.
