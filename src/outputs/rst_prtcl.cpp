@@ -28,7 +28,7 @@
 ParticleRestartOutput::ParticleRestartOutput(ParameterInput *pin, Mesh *pm,
                                            OutputParameters op) :
   BaseTypeOutput(pin, pm, op) {
-  // create directories for particle restart outputs
+  // create directory for particle restart outputs
   mkdir("rst_prtcl", 0775);
 
   // Check if we're starting from a particle restart and adjust file number
