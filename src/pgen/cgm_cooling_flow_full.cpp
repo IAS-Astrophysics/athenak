@@ -99,8 +99,6 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   pgen_final_func = FreeProfile;
   user_ref_func   = RefinementCondition;
 
-  if (restart) return;
-
   if (global_variable::my_rank==0) {
     std::cout << std::endl;
     std::cout << "==============================================" << std::endl;
@@ -201,6 +199,16 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     std::cout << "Successfully loaded disk profiles from " 
 	      << disk_profile_file << std::endl;
   }
+
+  // Count total particles and initialize SN centers buffer
+  pmy_mesh_->CountParticles();
+  sn_centers_buffer = DvceArray2D<Real>("sn_centers_buffer", 3, pmy_mesh_->nprtcl_total);
+  if (global_variable::my_rank==0) {
+    std::cout << "Successfully initialized " << pmy_mesh_->nprtcl_total
+              << " particles!" << std::endl;
+  }
+
+  if (restart) return;
 
   // Generate the initial turbulent field
   int nlow   = pin->GetOrAddInteger("problem", "cgm_turb_nlow", 1);
@@ -391,14 +399,6 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
 
   if (global_variable::my_rank==0) {
     std::cout << "Successfully initialized grid!" << std::endl;
-  }
-
-  // Count total particles and initialize SN centers buffer
-  pmy_mesh_->CountParticles();
-  sn_centers_buffer = DvceArray2D<Real>("sn_centers_buffer", 3, pmy_mesh_->nprtcl_total);
-  if (global_variable::my_rank==0) {
-    std::cout << "Successfully initialized " << pmy_mesh_->nprtcl_total 
-              << " particles!" << std::endl;
   }
 
   return;

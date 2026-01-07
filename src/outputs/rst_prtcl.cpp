@@ -71,9 +71,8 @@ void ParticleRestartOutput::LoadOutputData(Mesh *pm) {
   Kokkos::realloc(outpart_rdata, nrdata, nprtcl_thisrank);
   Kokkos::realloc(outpart_idata, nidata, nprtcl_thisrank);
 
-  // Copy particle data from device to host
-  Kokkos::deep_copy(outpart_rdata, ppart->prtcl_rdata);
-  Kokkos::deep_copy(outpart_idata, ppart->prtcl_idata);
+  Kokkos::deep_copy(outpart_rdata,ppart->prtcl_rdata); 
+  Kokkos::deep_copy(outpart_idata,ppart->prtcl_idata);
 }
 
 //----------------------------------------------------------------------------------------
@@ -138,10 +137,6 @@ void ParticleRestartOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
     std::fclose(pfile);
   }
 
-//#if MPI_PARALLEL_ENABLED
-//  MPI_Barrier(MPI_COMM_WORLD);
-//#endif
-
   // All ranks open the file with IOWrapper in append mode
   if (total_particles > 0) {
     IOWrapper prtcl_file;
@@ -161,14 +156,30 @@ void ParticleRestartOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
 
     // Each rank writes its own data at computed offset
     if (nprtcl_thisrank > 0) {
-      prtcl_file.Write_any_type_at(outpart_rdata.data(), 
+      // Transpose rdata to row-major for writing
+      std::vector<Real> rdata_transposed(nprtcl_thisrank * nrdata);
+      for (int p = 0; p < nprtcl_thisrank; ++p) {
+        for (int i = 0; i < nrdata; ++i) {
+          rdata_transposed[p * nrdata + i] = outpart_rdata(i, p);
+        }
+      }
+  
+      // Transpose idata to row-major for writing
+      std::vector<int> idata_transposed(nprtcl_thisrank * nidata);
+      for (int p = 0; p < nprtcl_thisrank; ++p) {
+        for (int i = 0; i < nidata; ++i) {
+          idata_transposed[p * nidata + i] = outpart_idata(i, p);
+        }
+      }
+
+      prtcl_file.Write_any_type_at(rdata_transposed.data(),
                                    nprtcl_thisrank * nrdata,
                                    rdata_start + my_rdata_offset * sizeof(Real),
-				   "byte");
-      prtcl_file.Write_any_type_at(outpart_idata.data(),
-                                   nprtcl_thisrank * nidata, 
-                                   idata_start + my_idata_offset * sizeof(int),
-				   "byte");
+				   "double");
+      prtcl_file.Write_any_type_at(idata_transposed.data(),
+                                   nprtcl_thisrank * nidata,
+				   idata_start + my_idata_offset * sizeof(int),
+                                   "int");
     }
 
     prtcl_file.Close();

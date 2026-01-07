@@ -130,7 +130,6 @@ Particles::Particles(MeshBlockPack *ppack, ParameterInput *pin) :
       InitializeStars(pin);
     }
   }
-  std::cout<< "particles loaded" << std::endl;
 }
 
 //----------------------------------------------------------------------------------------
@@ -387,6 +386,16 @@ void Particles::LoadFromRestart(ParameterInput *pin, MeshBlockPack *ppack,
     Kokkos::deep_copy(ppart->prtcl_rdata, rdata_host);
     Kokkos::deep_copy(ppart->prtcl_idata, idata_host);
   }
+
+  if (ppart->nprtcl_thispack > 0) {
+    auto rdata_host = Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace(),
+                                                          ppart->prtcl_rdata);
+    auto idata_host = Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace(),
+                                                          ppart->prtcl_idata);
+  }
+
+  dtnew = std::min(size.h_view(0).dx1, size.h_view(0).dx2);
+  dtnew = std::min(dtnew, size.h_view(0).dx3);
   
   std::cout << "Rank " << global_variable::my_rank << " loaded "
             << ppart->nprtcl_thispack << " particles after redistribution" << std::endl;

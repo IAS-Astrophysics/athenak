@@ -112,15 +112,19 @@ void LoadSingleFileRestartData(Mesh *pm,
   const IOWrapperSizeT mhd_cc_offset = chunk_offset;
   chunk_offset += nout1*nout2*nout3*nmhd*sizeof(Real);
   const IOWrapperSizeT mhd_x1f_offset = chunk_offset;
-  chunk_offset += (nout1+1)*nout2*nout3*sizeof(Real);
   const IOWrapperSizeT mhd_x2f_offset = chunk_offset;
-  chunk_offset += nout1*(nout2+1)*nout3*sizeof(Real);
   const IOWrapperSizeT mhd_x3f_offset = chunk_offset;
-  chunk_offset += nout1*nout2*(nout3+1)*sizeof(Real);
+  if (pmhd != nullptr) {
+    chunk_offset += (nout1+1)*nout2*nout3*sizeof(Real);
+    chunk_offset += nout1*(nout2+1)*nout3*sizeof(Real);
+    chunk_offset += nout1*nout2*(nout3+1)*sizeof(Real);
+  }
   const IOWrapperSizeT rad_offset = chunk_offset;
   chunk_offset += nout1*nout2*nout3*nrad*sizeof(Real);
   const IOWrapperSizeT turb_offset = chunk_offset;
-  chunk_offset += nout1*nout2*nout3*nforce*sizeof(Real);
+  if (pturb != nullptr) {
+    chunk_offset += nout1*nout2*nout3*nforce*sizeof(Real);
+  }
   const IOWrapperSizeT z4c_adm_offset = chunk_offset;
   if (pz4c != nullptr) {
     chunk_offset += nout1*nout2*nout3*nz4c*sizeof(Real);

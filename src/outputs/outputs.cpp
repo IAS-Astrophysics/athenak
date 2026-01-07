@@ -338,6 +338,10 @@ Outputs::Outputs(ParameterInput *pin, Mesh *pm) {
           "single_file_per_rank", false);
         pnode = new MeshBinaryOutput(pin,pm,opar);
         pout_list.insert(pout_list.begin(),pnode);
+      } else if (opar.file_type.compare("rst_prtcl") == 0) {
+      // Add particle restarts - can coexist with regular restarts
+        pnode = new ParticleRestartOutput(pin,pm,opar);
+        pout_list.push_back(pnode);
       } else if (opar.file_type.compare("rst") == 0) {
       // Add restarts to the tail end of BaseTypeOutput list, so file counters for other
       // output types are up-to-date in restart file
@@ -346,10 +350,6 @@ Outputs::Outputs(ParameterInput *pin, Mesh *pm) {
         pnode = new RestartOutput(pin,pm,opar);
         pout_list.push_back(pnode);
         num_rst++;
-      } else if (opar.file_type.compare("rst_prtcl") == 0) {
-      // Add particle restarts - can coexist with regular restarts
-        pnode = new ParticleRestartOutput(pin,pm,opar);
-        pout_list.push_back(pnode);
       } else {
         std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
             << std::endl << "Unrecognized file format = '" << opar.file_type

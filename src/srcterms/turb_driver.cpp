@@ -181,7 +181,15 @@ TurbulenceDriver::TurbulenceDriver(MeshBlockPack *pp, ParameterInput *pin) :
     std::cout << "Initialising turbulence driving module" << std::endl <<
     " dedt = " << dedt << " tcorr = " << tcorr << " dt_turb_update = " << dt_turb_update << std::endl;
   }
-  n_turb_updates_yet = 0;
+
+  // Initialize n_turb_updates_yet based on current simulation time
+  Real current_time = pmy_pack->pmesh->time;
+  if (current_time < tdriv_start) {
+    n_turb_updates_yet = 0;
+  } else {
+    Real t_since_start = current_time - tdriv_start;
+    n_turb_updates_yet = (int) (t_since_start/dt_turb_update);
+  }
 
   Real nlow_sqr = nlow*nlow;
   Real nhigh_sqr = nhigh*nhigh;
