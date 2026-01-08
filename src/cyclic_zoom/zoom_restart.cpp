@@ -9,7 +9,7 @@
 #include "athena.hpp"
 #include "globals.hpp"
 #include "mesh/mesh.hpp"
-#include "mesh/cyclic_zoom.hpp"
+#include "cyclic_zoom/cyclic_zoom.hpp"
 
 //----------------------------------------------------------------------------------------
 //! \fn IOWrapperSizeT CyclicZoom::RestartFileSize()

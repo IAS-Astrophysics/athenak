@@ -14,7 +14,7 @@
 #include "coordinates/cartesian_ks.hpp"
 #include "coordinates/cell_locations.hpp"
 #include "pgen/pgen.hpp"
-#include "mesh/cyclic_zoom.hpp"
+#include "cyclic_zoom/cyclic_zoom.hpp"
 
 //----------------------------------------------------------------------------------------
 // constructor, initializes data structures and parameters

@@ -17,7 +17,7 @@
 #include "eos/ideal_c2p_mhd.hpp"
 #include "hydro/hydro.hpp"
 #include "mhd/mhd.hpp"
-#include "mesh/cyclic_zoom.hpp"
+#include "cyclic_zoom/cyclic_zoom.hpp"
 
 //----------------------------------------------------------------------------------------
 // constructor, initializes data structures and parameters

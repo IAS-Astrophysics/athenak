@@ -1,5 +1,5 @@
-#ifndef MESH_CYCLIC_ZOOM_HPP_
-#define MESH_CYCLIC_ZOOM_HPP_
+#ifndef CYCLIC_ZOOM_CYCLIC_ZOOM_HPP_
+#define CYCLIC_ZOOM_CYCLIC_ZOOM_HPP_
 //========================================================================================
 // AthenaXXX astrophysical plasma code
 // Copyright(C) 2020 James M. Stone <jmstone@ias.edu> and the Athena code team
@@ -314,4 +314,4 @@ class ZoomData
 //   ZoomData   *pzdata;      // ptr to ZoomData containing this ZoomRefinement module
 // };
 
-#endif // MESH_CYCLIC_ZOOM_HPP_
+#endif // CYCLIC_ZOOM_CYCLIC_ZOOM_HPP_
