@@ -101,7 +101,9 @@ void SetupTOV(ParameterInput *pin, Mesh* pmy_mesh_) {
 
   bool minkowski = pin->GetOrAddBoolean("problem", "minkowski", false);
 
-  Real omega = 2.0*M_PI*pin->GetOrAddReal("problem", "freq", 200.0);
+  constexpr Real freq_to_geo = 4.925794970773136e-06;
+
+  Real omega = 2.0*M_PI*pin->GetOrAddReal("problem", "freq", 200.0)*freq_to_geo;
   Real q = pin->GetOrAddReal("problem", "q", 1.0);
   Real A = pin->GetOrAddReal("problem", "amp", 1.0);
 
