@@ -32,9 +32,9 @@ ParticleRestartOutput::ParticleRestartOutput(ParameterInput *pin, Mesh *pm,
   mkdir("rst_prtcl", 0775);
 
   // Check if we're starting from a particle restart and adjust file number
-  int prtcl_rst_flag = pin->GetOrAddInteger("problem","prtcl_rst_flag",0);
+  int prtcl_rst_flag = pin->GetInteger("particles","star_prtcl_rst_flag");
   if (prtcl_rst_flag) {
-    std::string prst_fname = pin->GetString("problem","prtcl_res_file");
+    std::string prst_fname = pin->GetString("particles","star_particle_file");
     size_t last_period = prst_fname.rfind('.');
     std::string outnumber_str = prst_fname.substr(last_period-5,5);
     int outnumber = std::stoi(outnumber_str);
