@@ -266,7 +266,6 @@ void Particles::InitializeStars(ParameterInput *pin) {
 //----------------------------------------------------------------------------------------
 // LoadFromRestart()
 // Load particle data from restart file
-// Returns true if particle data was successfully loaded, false otherwise
 
 void Particles::LoadFromRestart(ParameterInput *pin, MeshBlockPack *ppack,
                                 Particles* ppart) {
@@ -397,8 +396,8 @@ void Particles::LoadFromRestart(ParameterInput *pin, MeshBlockPack *ppack,
   dtnew = std::min(size.h_view(0).dx1, size.h_view(0).dx2);
   dtnew = std::min(dtnew, size.h_view(0).dx3);
   
-  std::cout << "Rank " << global_variable::my_rank << " loaded "
-            << ppart->nprtcl_thispack << " particles after redistribution" << std::endl;
+  //std::cout << "Rank " << global_variable::my_rank << " loaded "
+  //          << ppart->nprtcl_thispack << " particles after redistribution" << std::endl;
   
   return;
 }
