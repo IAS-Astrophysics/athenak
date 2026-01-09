@@ -659,8 +659,6 @@ void Mesh::AddCoordinatesAndPhysics(ParameterInput *pinput) {
   if (ppart != nullptr) {
     // Determine total number of particles across all ranks
     CountParticles();
-    // Assign particle IDs
-    ppart->CreateParticleTags(pinput);
   }
 }
 

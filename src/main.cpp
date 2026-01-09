@@ -39,6 +39,7 @@
 #include "mesh/mesh.hpp"
 #include "outputs/outputs.hpp"
 #include "driver/driver.hpp"
+#include "particles/particles.hpp"
 
 // MPI/OpenMP headers
 #if MPI_PARALLEL_ENABLED
@@ -332,6 +333,9 @@ int main(int argc, char *argv[]) {
   if (!res_flag) {
     // set ICs using ProblemGenerator constructor for new runs
     pmesh->pgen = std::make_unique<ProblemGenerator>(pinput, pmesh);
+    if (pmesh->pmb_pack->ppart != nullptr) {
+      pmesh->pmb_pack->ppart->CreateParticleTags(pinput);
+    }
   } else {
     // read ICs from restart file using ProblemGenerator constructor for restarts
     pmesh->pgen = std::make_unique<ProblemGenerator>(pinput,
