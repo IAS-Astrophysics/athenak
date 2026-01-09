@@ -246,9 +246,15 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
         den = fmax(den,rho_floor(mp_,rc));
         
         // set the total velocity components
-        ux = v1_disc + v1_star;
-        uy = v2_disc + v2_star;
-        uz = v3_disc + v3_star;
+        // ux = v1_disc + v1_star;
+        // uy = v2_disc + v2_star;
+        // uz = v3_disc + v3_star; 
+
+        Real sigma = 1/(1+exp((rc - mp_.rmagsph)/0.1));
+
+        ux = (1-sigma)*v1_disc + sigma*v1_star;
+        uy = (1-sigma)*v2_disc + sigma*v2_star;
+        uz = (1-sigma)*v3_disc + sigma*v3_star; 
 
         // set the conserved variables
         u0_(m,IDN,k,j,i) = den;
@@ -583,9 +589,9 @@ namespace {
 
         rc = sqrt(rad*rad+z*z);
 
-        if (rc<mp.rmagsph) {
-            vel = vel*exp(-SQR((rc-mp.rmagsph)/mp.rad_in_smooth));
-        }
+        // if (rc<mp.rmagsph) {
+        //     vel = vel*exp(-SQR((rc-mp.rmagsph)/mp.rad_in_smooth));
+        // }
 
         v1=-vel*sin(phi);
         v2=+vel*cos(phi);
@@ -602,9 +608,9 @@ namespace {
         Real rc = sqrt(rad*rad+z*z);  // spherical radius
         
         vel = mp.origid*rad; // rigid rotation
-        if (rc>mp.rmagsph) {
-            vel = mp.origid*rad*exp(-SQR((rc-mp.rmagsph)/mp.rad_in_smooth));
-        }
+        // if (rc>mp.rmagsph) {
+        //     vel = mp.origid*rad*exp(-SQR((rc-mp.rmagsph)/mp.rad_in_smooth));
+        // }
 
         v1=-vel*sin(phi);
         v2=+vel*cos(phi);
@@ -631,7 +637,7 @@ namespace {
     static Real A2(struct my_params mp, const Real x1, const Real x2, const Real x3) {
         Real a2=0.0;
         Real x1b = cos(mp.thetab)*x1 + sin(mp.thetab)*x3;
-        Real x2b = x2;
+        // Real x2b = x2;
         Real x3b = sin(mp.thetab)*x1 - cos(mp.thetab)*x3;
 
         Real rc = fmax(sqrt(x1*x1+x2*x2+x3*x3),mp.rs);

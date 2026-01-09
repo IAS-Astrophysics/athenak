@@ -8,9 +8,9 @@ basename  = magsph      # problem ID: basename of output filenames
 
 <output1>
 file_type   = bin        # Tabular data dump
-#variable   = hydro_u   # variables to be output
+#variable   = hydro_u    # variables to be output
 variable    = mhd_u_bcc  # variables to be output
-dt          = 3.14       # time increment between outputs
+dt          = 0.314      # time increment between outputs
 
 <output2>
 file_type   = hst       # history data dump
@@ -23,8 +23,8 @@ dt          = 9.42
 <time>
 evolution   = dynamic
 cfl_number  = 0.3        # The Courant, Friedrichs, & Lewy (CFL) Number
-nlim        = 1         # cycle limit
-tlim        =  94.2      # time limit
+nlim        = -1         # cycle limit
+tlim        = 6.28       # time limit
 integrator  = rk2        # time integration algorithm
 
 <mesh>
@@ -57,15 +57,6 @@ nx3       = 20      # Number of cells in each MeshBlock, X3-dir
 <mesh_refinement>
 refinement = static  # type of refinement
 
-#<refined_region1>
-#x1min=-3.9
-#x1max= 3.9
-#x2min=-3.9
-#x2max= 3.9
-#x3min=-0.4
-#x3max= 0.4
-#level= 1
-
 <refined_region1>
 x1min=-1.9
 x1max= 1.9
@@ -73,7 +64,7 @@ x2min=-1.9
 x2max= 1.9
 x3min=-0.2
 x3max= 0.2
-level= 1
+level= 2
 
 <refined_region2>
 x1min=-0.9
@@ -82,52 +73,7 @@ x2min=-0.9
 x2max= 0.9
 x3min=-0.12
 x3max= 0.12
-level= 2
-
-#<refined_region4>
-#x1min=-0.9
-#x1max= 0.9
-#x2min=-0.9
-#x2max= 0.9
-#x3min=-0.09
-#x3max= 0.09
-#level= 7
-
-#<refined_region1>
-#x1min=-7.9
-#x1max= 7.9
-#x2min=-7.9
-#x2max= 7.9
-#x3min=-0.79
-#x3max= 0.79
-#level= 4
-
-#<refined_region2>
-#x1min=-3.9
-#x1max= 3.9
-#x2min=-3.9
-#x2max= 3.9
-#x3min=-0.39
-#x3max= 0.39
-#level= 5
-
-#<refined_region3>
-#x1min=-1.9
-#x1max= 1.9
-#x2min=-1.9
-#x2max= 1.9
-#x3min=-0.19
-#x3max= 0.19
-#level= 6
-
-#<refined_region4>
-#x1min=-0.9
-#x1max= 0.9
-#x2min=-0.9
-#x2max= 0.9
-#x3min=-0.09
-#x3max= 0.09
-#level= 7
+level= 3
 
 #<hydro>
 #eos         = ideal         # EOS type
@@ -151,13 +97,13 @@ pgen_name = magsph      # problem generator name
 user_srcs = true        # Switch the user source terms on
 user_esrcs = true       # Switch the user e field mask on
 
-thetaw = 1.57            # tilt of stellar rotation axis (counterclockwise rot about y-axis)
+thetaw = 0.0            # tilt of stellar rotation axis (counterclockwise rot about y-axis)
 thetab = 1.0            # tilt of stellar dipole axis (counterclockwise rot about y-axis)
+origid = 1.0            # angular velocity of star
 denstar = 1e7           # central stellar density
 dslope = -2.25          # disc midplane surface density
 gm0 = 1.0               # GM for the central star
 mm = -0.0447            #-0.0447   # magnetic moment
-origid = 1.0            # angular velocity of star
 h_over_r0 = 0.1         # characetristic cs
 qslope = -0.5           # disc temperature profile exponent
 r0 = 1                  # reference radius
@@ -165,8 +111,8 @@ rho0 = 1.0              # characteristic disc midplane density
 rmagsph = 1.0           # initial magnetospheric cavity radius
 rad_in_cutoff = 1.0
 rad_in_smooth = 0.1      
-rad_out_cutoff = 60.0
-rad_out_smooth = 1.0
+rad_out_cutoff = 4.0
+rad_out_smooth = 0.5
 rho_floor1 = 1e-5         # radial density floor normalisation 1
 rho_floor2 = 1.33e-5      # radial density floor normalisation 2
 rho_floor_slope1 = -2.25  # radial density floor slope 1
