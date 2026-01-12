@@ -1872,9 +1872,9 @@ void RefineTracker(MeshBlockPack *pmbp) {
 
     if (dmin2_bh1 < SQR(bbh.radius_thr) || dmin2_bh2 < SQR(bbh.radius_thr) ||
         iscontained_bh1 || iscontained_bh2) {
-      refine_flag.d_view(m + mbs) = 1;
+      refine_flag.h_view(m + mbs) = 1;
     } else {
-      refine_flag.d_view(m + mbs) = -1;
+      refine_flag.h_view(m + mbs) = -1;
     }
   }
 
