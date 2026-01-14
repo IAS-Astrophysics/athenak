@@ -12,6 +12,7 @@
 
 // C++ headers
 #include <algorithm>  // min
+#include <iomanip>
 #include <cmath>      // sqrt(), pow()
 #include <cstdlib>    // srand
 #include <cstring>    // strcmp()
@@ -35,6 +36,9 @@
 #include "hydro/hydro.hpp"
 #include "mesh/mesh.hpp"
 #include "parameter_input.hpp"
+
+#include "geodesic-grid/geodesic_grid.hpp"  // CF: Add this for integrating over sphere
+#include "geodesic-grid/spherical_grid.hpp" // CF: Add this for integrating over sphere
 
 // prototypes for functions used internally to this pgen
 namespace {
@@ -77,6 +81,7 @@ namespace {
     Real gm0, r0, rho0, dslope, p0_over_r0, qslope, tcool, gamma_gas;
     Real dfloor, rho_floor1, rho_floor_slope1, rho_floor2, rho_floor_slope2;
     Real rad_in_cutoff, rad_in_smooth, rad_out_cutoff, rad_out_smooth;
+    Real sig_star_disc;
     Real Omega0;
     Real rs, smoothin, gravsmooth;
     Real Rmin, Ri, Ro, Rmax;
@@ -99,6 +104,7 @@ void StarGravSourceTerm(Mesh* pm, const Real bdt);
 void CoolingSourceTerms(Mesh* pm, const Real bdt);
 void MySourceTerms(Mesh* pm, const Real bdt);
 void MyEfieldMask(Mesh* pm);
+void MyHistFunc(HistoryData *pdata, Mesh *pm);
 
 void StarMask(Mesh* pm, const Real bdt);
 void InnerDiskMask(Mesh* pm, const Real bdt);
@@ -127,6 +133,17 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
 
     if (user_esrcs && (pmbp->pmhd != nullptr)) {
         user_esrcs_func = MyEfieldMask;
+    }
+
+    if (user_hist) {
+
+        // Spherical Grid for user-defined history
+        auto &grids = spherical_grids;
+        Real rslice1 = 1.0;
+        Real rslice2 = 2.0;
+        grids.push_back(std::make_unique<SphericalGrid>(pmbp, 5, rslice1));
+        grids.push_back(std::make_unique<SphericalGrid>(pmbp, 5, rslice2));
+        user_hist_func = MyHistFunc;
     }
 
     if (pmbp->phydro != nullptr) {
@@ -167,6 +184,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     mp.rs = pin->GetOrAddReal("problem", "rstar",0.0);
     mp.gravsmooth = pin->GetOrAddReal("problem","gravsmooth",0.0);
     mp.tcool = pin->GetOrAddReal("problem","tcool",0.0);
+    mp.sig_star_disc = pin->GetOrAddReal("problem","sig_star_disc",0.1);
     
     // Capture variables for kernel - e.g. indices for looping over the meshblocks and the size of the meshblocks.
     auto &indcs = pmy_mesh_->mb_indcs;
@@ -245,13 +263,8 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
         Real rc = sqrt(rad*rad+z*z);
         den = fmax(den,rho_floor(mp_,rc));
         
-        // set the total velocity components
-        // ux = v1_disc + v1_star;
-        // uy = v2_disc + v2_star;
-        // uz = v3_disc + v3_star; 
-
-        Real sigma = 1/(1+exp((rc - mp_.rmagsph)/0.1));
-
+        // set the total velocity components - switch smoothly from star to disc across magsph boundary
+        Real sigma = 1/(1+exp((rc - mp_.rmagsph)/mp_.sig_star_disc));
         ux = (1-sigma)*v1_disc + sigma*v1_star;
         uy = (1-sigma)*v2_disc + sigma*v2_star;
         uz = (1-sigma)*v3_disc + sigma*v3_star; 
@@ -464,7 +477,7 @@ namespace {
 
     //----------------------------------------------------------------------------------------
     //! Transform from cartesian to cylindrical coordinates
-    KOKKOS_INLINE_FUNCTION
+    KOKKOS_INLINE_FUNCTION //CF:CHECKED
     static void GetCylCoord(struct my_params mp, Real &rad,Real &phi,Real &z,Real &x1,Real &x2,Real &x3) {
         rad=sqrt(x1*x1 + x2*x2);
         phi=atan2(x2,x1);
@@ -474,7 +487,7 @@ namespace {
 
     //----------------------------------------------------------------------------------------
     //! Rotate the cartesian coordinates by some angle to get the tilted coordinates
-    KOKKOS_INLINE_FUNCTION
+    KOKKOS_INLINE_FUNCTION //CF:CHECKED
     static void RotateCart(struct my_params mp, Real &x1rot,Real &x2rot,Real &x3rot,const Real x1,const Real x2,const Real x3, const Real theta) {
 
         // The adopted convetion here rotates the underlying axes counter-clockwise by an angle theta about the y-axis. 
@@ -493,7 +506,7 @@ namespace {
     }
 
     //----------------------------------------------------------------------------------------
-    KOKKOS_INLINE_FUNCTION
+    KOKKOS_INLINE_FUNCTION //CF:CHECKED
     static Real DenDiscCyl(struct my_params mp, const Real rad, const Real phi, const Real z) {
         
         // Compute the density profile in cylindrical coordinates
@@ -523,7 +536,7 @@ namespace {
     }
 
     //----------------------------------------------------------------------------------------
-    KOKKOS_INLINE_FUNCTION
+    KOKKOS_INLINE_FUNCTION //CF:CHECKED
     static Real DenStarCyl(struct my_params mp, const Real rad, const Real phi, const Real z) {
         
         // Add the stellar density profile component
@@ -562,7 +575,7 @@ namespace {
     }
 
     //----------------------------------------------------------------------------------------
-    KOKKOS_INLINE_FUNCTION
+    KOKKOS_INLINE_FUNCTION //CF:CHECKED
     static Real PoverR(struct my_params mp, const Real rad) {
         Real poverr;
         Real r = fmax(rad, mp.rs);
@@ -571,7 +584,7 @@ namespace {
     }
 
     //----------------------------------------------------------------------------------------
-    KOKKOS_INLINE_FUNCTION
+    KOKKOS_INLINE_FUNCTION //CF:CHECKED
     static void VelDiscCyl(struct my_params mp, const Real rad, const Real phi, const Real z, Real &v1, Real &v2, Real &v3) {
         
         Real r = fmax(rad, mp.rs);
@@ -587,12 +600,6 @@ namespace {
         Real dPdr = (PoverR(mp, r+dR) * DenDiscCyl(mp, r+dR,phi,z) - PoverR(mp, r-dR) * DenDiscCyl(mp, r - dR,phi,z))/(2 * dR);
         Real vel = sqrt(fmax(mp.gm0*r*r/rc/rc/rc+r/DenDiscCyl(mp, r, phi, z)*dPdr,0.0));
 
-        rc = sqrt(rad*rad+z*z);
-
-        // if (rc<mp.rmagsph) {
-        //     vel = vel*exp(-SQR((rc-mp.rmagsph)/mp.rad_in_smooth));
-        // }
-
         v1=-vel*sin(phi);
         v2=+vel*cos(phi);
         v3=0.0;
@@ -601,16 +608,12 @@ namespace {
     }
 
     //----------------------------------------------------------------------------------------
-    KOKKOS_INLINE_FUNCTION
+    KOKKOS_INLINE_FUNCTION //CF:CHECKED
     static void VelStarCyl(struct my_params mp, const Real rad, const Real phi, const Real z, Real &v1, Real &v2, Real &v3) {
         
         Real vel(0.0);
         Real rc = sqrt(rad*rad+z*z);  // spherical radius
-        
         vel = mp.origid*rad; // rigid rotation
-        // if (rc>mp.rmagsph) {
-        //     vel = mp.origid*rad*exp(-SQR((rc-mp.rmagsph)/mp.rad_in_smooth));
-        // }
 
         v1=-vel*sin(phi);
         v2=+vel*cos(phi);
@@ -620,39 +623,30 @@ namespace {
     }
 
     //----------------------------------------------------------------------------------------
-    KOKKOS_INLINE_FUNCTION
+    KOKKOS_INLINE_FUNCTION //CF:CHECKED
     static Real A1(struct my_params mp, const Real x1, const Real x2, const Real x3) {
         Real a1=0.0;
-        Real x1b = cos(mp.thetab)*x1 + sin(mp.thetab)*x3;
         Real x2b = x2;
-        Real x3b = sin(mp.thetab)*x1 - cos(mp.thetab)*x3;
-
         Real rc = fmax(sqrt(x1*x1+x2*x2+x3*x3),mp.rs);
         a1 = mp.mm/rc/rc/rc*(-1.*x2b*cos(mp.thetab));
         return(a1);
     }
 
     //----------------------------------------------------------------------------------------
-    KOKKOS_INLINE_FUNCTION
+    KOKKOS_INLINE_FUNCTION //CF:CHECKED
     static Real A2(struct my_params mp, const Real x1, const Real x2, const Real x3) {
         Real a2=0.0;
         Real x1b = cos(mp.thetab)*x1 + sin(mp.thetab)*x3;
-        // Real x2b = x2;
-        Real x3b = sin(mp.thetab)*x1 - cos(mp.thetab)*x3;
-
         Real rc = fmax(sqrt(x1*x1+x2*x2+x3*x3),mp.rs);
         a2 = mp.mm/rc/rc/rc*(+1.*x1b);
         return(a2);
     }
 
     //----------------------------------------------------------------------------------------
-    KOKKOS_INLINE_FUNCTION
+    KOKKOS_INLINE_FUNCTION //CF:CHECKED
     static Real A3(struct my_params mp, const Real x1, const Real x2, const Real x3) {
         Real a3=0.0;
-        Real x1b = cos(mp.thetab)*x1 + sin(mp.thetab)*x3;
         Real x2b = x2;
-        Real x3b = sin(mp.thetab)*x1 - cos(mp.thetab)*x3;
-
         Real rc = fmax(sqrt(x1*x1+x2*x2+x3*x3),mp.rs);
         a3 = mp.mm/rc/rc/rc*(-1.*x2b*sin(mp.thetab));
         return(a3);
@@ -675,7 +669,7 @@ Real rho_floor(struct my_params mp, Real rc) {
 //! the same function and enrolled together. Currently I have written a cooling function
 //! and a velocity damping function.
 
-void MySourceTerms(Mesh* pm, const Real bdt) {
+void MySourceTerms(Mesh* pm, const Real bdt) { //CF:CHECKED
 
     StarGravSourceTerm(pm, bdt);
     if(mp.is_ideal && mp.tcool>0.0) CoolingSourceTerms(pm, bdt);
@@ -685,7 +679,7 @@ void MySourceTerms(Mesh* pm, const Real bdt) {
 }
 
 //----------------------------------------------------------------------------------------
-void StarGravSourceTerm(Mesh* pm, const Real bdt) {
+void StarGravSourceTerm(Mesh* pm, const Real bdt) { //CF:CHECKED
 
     // Capture variables for kernel - e.g. indices for looping over the meshblocks and the size of the meshblocks.
     auto &indcs = pm->mb_indcs;
@@ -756,7 +750,7 @@ void StarGravSourceTerm(Mesh* pm, const Real bdt) {
 } // end star source terms 
 
 //----------------------------------------------------------------------------------------
-void StarMask(Mesh* pm, const Real bdt) {
+void StarMask(Mesh* pm, const Real bdt) { //CF:CHECKED
 
     // Capture variables for kernel - e.g. indices for looping over the meshblocks and the size of the meshblocks.
     auto &indcs = pm->mb_indcs;
@@ -814,7 +808,7 @@ void StarMask(Mesh* pm, const Real bdt) {
             u0_(m,IDN,k,j,i) = DenStarCyl(mp_,radw,phiw,zw);
             VelStarCyl(mp_,radw,phiw,zw,v1w,v2w,v3w);
 
-            // rotate the velocity back to cartesian coordinates
+            // rotate the velocity back to reference frame
             RotateCart(mp_,v1,v2,v3,v1w,v2w,v3w,-mp_.thetaw);
 
             u0_(m,IM1,k,j,i) = v1*u0_(m,IDN,k,j,i);
@@ -837,7 +831,7 @@ void StarMask(Mesh* pm, const Real bdt) {
 } // end stellar mask  
 
 //----------------------------------------------------------------------------------------
-void MyEfieldMask(Mesh* pm) {
+void MyEfieldMask(Mesh* pm) { //CF:CHECKED
 
     // Capture variables for kernel - e.g. indices for looping over the meshblocks and the size of the meshblocks.
     auto &indcs = pm->mb_indcs;
@@ -1072,7 +1066,7 @@ void InnerDiskMask(Mesh* pm, const Real bdt) {
 } // end disk mask  
 
 //----------------------------------------------------------------------------------------
-void CoolingSourceTerms(Mesh* pm, const Real bdt) {
+void CoolingSourceTerms(Mesh* pm, const Real bdt) { //CF:CHECKED
     // Implement cooling source terms here if needed
 
     // Capture variables for kernel - e.g. indices for looping over the meshblocks and the size of the meshblocks.
@@ -1122,12 +1116,8 @@ void CoolingSourceTerms(Mesh* pm, const Real bdt) {
         Real rad(0.0),phi(0.0),z(0.0);
         Real p_over_r(0.0);
         GetCylCoord(mp_,rad,phi,z,x1v,x2v,x3v);
-        if (mp_.rho0 <= 0.0){
-            p_over_r = PoverR(mp_,rad);
-        } else {
-            p_over_r = PoverR(mp_,rad);
-        }
-
+        p_over_r = PoverR(mp_,rad);
+        
         Real dtr = fmax(mp_.tcool*2.*M_PI/sqrt(mp_.gm0/rad/rad/rad),bdt);
         Real dfrac=bdt/dtr;
         Real dE=eint-p_over_r/(mp_.gamma_gas-1.0)*u0_(m,IDN,k,j,i);
@@ -1756,3 +1746,102 @@ void FixedMHDBC(Mesh *pm) {
 
   return;
 } 
+
+//----------------------------------------------------------------------------------------
+// Function for computing accretion fluxes through constant spherical KS radius surfaces
+
+void MyHistFunc(HistoryData *pdata, Mesh *pm) {
+
+    MeshBlockPack *pmbp = pm->pmb_pack;
+
+  // set nvars, primitive array w0, and field array bcc0
+  int nvars;
+  // Load appropriate variables depending on hydro or mhd
+  DvceArray5D<Real> w0_, bcc0_;
+  if (pmbp->phydro != nullptr) {
+    nvars = pmbp->phydro->nhydro + pmbp->phydro->nscalars;
+    w0_ = pmbp->phydro->w0;
+  } else if (pmbp->pmhd != nullptr) {
+    nvars = pmbp->pmhd->nmhd + pmbp->pmhd->nscalars;
+    w0_ = pmbp->pmhd->w0;
+    bcc0_ = pmbp->pmhd->bcc0;
+  }
+
+  // extract grids, number of radii, number of fluxes, and history appending index
+  auto &grids = pm->pgen->spherical_grids;
+  int nradii = grids.size();
+  int nflux = 1;  // increase for different flux diagnostics
+
+  // set number of and names of history variables for hydro or mhd
+  // (1) mass accretion rate
+  // ... list other fluxes here as needed
+
+  // Number of history variables = no. of radial slices * no. of fluxes
+  pdata->nhist = nradii*nflux; 
+  if (pdata->nhist > NHISTORY_VARIABLES) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+              << std::endl << "User history function specified pdata->nhist larger than"
+              << " NHISTORY_VARIABLES" << std::endl;
+    exit(EXIT_FAILURE);
+  }
+
+  // set labels for each history variable
+  for (int g=0; g<nradii; ++g) {
+    std::stringstream stream;
+    stream << std::fixed << std::setprecision(1) << grids[g]->radius;
+    std::string rad_str = stream.str();
+    pdata->label[nflux*g+0] = "mdot_" + rad_str;
+    // Can add other flux labels here
+  }
+
+  // go through angles at each radii
+  for (int g=0; g<nradii; ++g) {
+    // initialize zero fluxes at this radius
+    pdata->hdata[nflux*g+0] = 0.0;
+    pdata->hdata[nflux*g+1] = 0.0;
+    pdata->hdata[nflux*g+2] = 0.0;
+
+    // interpolate the primitive variables onto the sphere for each radial slice
+    grids[g]->InterpolateToSphere(nvars, w0_);
+
+    // compute fluxes - loop over angles in each radial slice
+    for (int n=0; n<grids[g]->nangles; ++n) {
+      // extract coordinate data at this angle
+      Real r = grids[g]->radius;
+      Real theta = grids[g]->polar_pos.h_view(n,0);
+      Real phi = grids[g]->polar_pos.h_view(n,1);
+      Real x1 = grids[g]->interp_coord.h_view(n,0);
+      Real x2 = grids[g]->interp_coord.h_view(n,1);
+      Real x3 = grids[g]->interp_coord.h_view(n,2);
+
+      // extract interpolated primitives
+      Real &int_dn = grids[g]->interp_vals.h_view(n,IDN);
+      Real &int_vx = grids[g]->interp_vals.h_view(n,IVX);
+      Real &int_vy = grids[g]->interp_vals.h_view(n,IVY);
+      Real &int_vz = grids[g]->interp_vals.h_view(n,IVZ);
+      Real &int_ie = grids[g]->interp_vals.h_view(n,IEN);
+
+      // integration area element - area subtended by solid angle of geodesic element
+      Real dA = SQR(r)*grids[g]->solid_angles.h_view(n);
+
+      Real sinth = sin(theta);
+      Real costh = cos(theta);
+      Real sinph = sin(phi);
+      Real cosph = cos(phi);
+
+      // radial component of the velocity at this angle
+      Real ur = int_vx*cosph*sinth + int_vy*sinph*sinth + int_vz*costh;
+
+      // compute mass flux -ve sign convention so inwards accretion is +ve
+      pdata->hdata[nflux*g+0] += -1.0*int_dn*ur*dA;
+
+    }
+  }
+
+  // fill rest of the_array with zeros, if nhist < NHISTORY_VARIABLES
+  for (int n=pdata->nhist; n<NHISTORY_VARIABLES; ++n) {
+    pdata->hdata[n] = 0.0;
+  }
+
+  return;
+}
