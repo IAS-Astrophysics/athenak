@@ -153,6 +153,7 @@ void RefineAlphaMin(MeshBlockPack* pmbp);
 void RefineTracker(MeshBlockPack* pmbp);
 void RefineRadii(MeshBlockPack* pmbp);
 void Refine(MeshBlockPack* pmbp);
+void AddValenciaGRCooling(Mesh *pm, const Real bdt);
 
 //----------------------------------------------------------------------------------------
 //! \fn void TorusHistory(HistoryData *pdata, Mesh *pm)
@@ -318,6 +319,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
 
   user_ref_func = Refine;
   user_hist_func = TorusHistory;
+  user_srcs_func = AddValenciaGRCooling;
 
   pmbp->padm->SetADMVariables = &SetADMVariablesToBBH;
 
@@ -2489,6 +2491,175 @@ static void InvertMetric(Real gcov[][NDIM], Real gcon[][NDIM]){
    gcon[ZZ][ZZ] = det *   ( gcov[TT][TT] * A1212 - gcov[TT][XX] * A0212 + gcov[TT][YY] * A0112 );
 
    return;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void AddValenciaGRCooling(Mesh *pm, const Real bdt)
+//! \brief Valencia GR cooling source term with subcycling.
+
+void AddValenciaGRCooling(Mesh *pm, const Real bdt) {
+  MeshBlockPack *pmbp = pm->pmb_pack;
+
+  // ---- Units ----
+  Real temp_unit     = pmbp->punit->temperature_cgs();
+  Real density_unit  = pmbp->punit->density_cgs();
+  Real time_unit     = pmbp->punit->time_cgs();
+  Real pressure_unit = pmbp->punit->pressure_cgs();
+
+  Real mu  = pmbp->punit->mu();
+  Real amu = pmbp->punit->atomic_mass_unit_cgs; 
+
+  Real n_unit = density_unit / (mu * amu); 
+  Real cooling_unit = pressure_unit / time_unit / (n_unit * n_unit);
+
+  // ---- Indices ----
+  auto &indcs = pm->mb_indcs;
+  int is = indcs.is, ie = indcs.ie;
+  int js = indcs.js, je = indcs.je;
+  int ks = indcs.ks, ke = indcs.ke;
+  int nmb = pmbp->nmb_thispack;
+
+  // ---- Accessors ----
+  auto &adm = pmbp->padm->adm;
+  auto &w0  = pmbp->pmhd->w0;  // primitives
+  auto &u0  = pmbp->pmhd->u0;  // conserved 
+
+  // ---- EOS ----
+  auto &eos_data = pmbp->pmhd->peos->eos_data;
+  Real gamma_adi = eos_data.gamma;
+  Real gm1       = gamma_adi - 1.0;
+  Real rho_floor = eos_data.dfloor; 
+  Real p_floor   = eos_data.pfloor; 
+
+  // ---- Stability Control ----
+  // Use the simulation's global CFL number for consistency
+  // instead of a hardcoded "by-hand" value.
+  Real cfl_limit = pm->cfl_no; 
+
+  constexpr int  max_sub  = 64;
+  constexpr Real tiny     = 1.0e-30;
+
+  par_for("Valencia_IsotropicCooling", DevExeSpace(),
+          0, nmb-1, ks, ke, js, je, is, ie,
+  KOKKOS_LAMBDA(int m, int k, int j, int i) {
+
+    // --- metric gamma_ij and sqrt(gamma) ---
+    Real gxx = adm.g_dd(m,0,0,k,j,i);
+    Real gxy = adm.g_dd(m,0,1,k,j,i);
+    Real gxz = adm.g_dd(m,0,2,k,j,i);
+    Real gyy = adm.g_dd(m,1,1,k,j,i);
+    Real gyz = adm.g_dd(m,1,2,k,j,i);
+    Real gzz = adm.g_dd(m,2,2,k,j,i);
+
+    Real detg = adm::SpatialDet(gxx, gxy, gxz, gyy, gyz, gzz);
+    detg = fmax(detg, tiny);
+    Real sqrt_gamma = sqrt(detg);
+
+    Real alpha = adm.alpha(m,k,j,i);
+
+    // --- primitive state ---
+    Real rho  = w0(m,IDN,k,j,i);
+    if (rho <= rho_floor) return;
+
+    Real pres = w0(m,IPR,k,j,i);
+
+    // primitive stores u^{i'}
+    Real u1p = w0(m,IVX,k,j,i);
+    Real u2p = w0(m,IVY,k,j,i);
+    Real u3p = w0(m,IVZ,k,j,i);
+
+    // W = sqrt(1 + gamma_ij u^{i'} u^{j'})
+    Real u_sq = gxx*u1p*u1p + 2.0*gxy*u1p*u2p + 2.0*gxz*u1p*u3p
+              + gyy*u2p*u2p + 2.0*gyz*u2p*u3p + gzz*u3p*u3p;
+    Real W = sqrt(1.0 + u_sq);
+
+    // covariant spatial components u_i
+    Real u1_cov = gxx*u1p + gxy*u2p + gxz*u3p;
+    Real u2_cov = gxy*u1p + gyy*u2p + gyz*u3p;
+    Real u3_cov = gxz*u1p + gyz*u2p + gzz*u3p;
+
+    // comoving internal energy density
+    Real e_int = pres / gm1;
+    Real e_floor = p_floor / gm1;
+
+    // Subcycling in coordinate time
+    Real dt_rem = bdt;
+
+    // Accumulated conserved decrements
+    Real dTau_total = 0.0;
+    Real dS1_total  = 0.0;
+    Real dS2_total  = 0.0;
+    Real dS3_total  = 0.0;
+
+    for (int n = 0; n < max_sub && dt_rem > 0.0; ++n) {
+      // Temperature proxy 
+      Real T_cgs = ( (e_int * gm1) / rho ) * temp_unit;
+
+      // Determine Cooling Rate
+      Real Lambda_cgs = 0.0;
+      if (T_cgs >= eos_data.tfloor * temp_unit) {
+         Lambda_cgs = ISMCoolFn(T_cgs);
+      }
+
+      // q = n^2 Lambda
+      Real q = (rho * rho) * (Lambda_cgs / cooling_unit); // code units
+
+      if (q <= 0.0) break;
+
+      // Coordinate-time cooling rate for e_int: de_int/dt = -(alpha/W) q
+      Real rate_e_dt = (alpha / W) * q;
+
+      // === DYNAMIC CLAMP (Based on CFL) ===
+      // Max allowed rate is one that removes 'cfl_limit' fraction of e_int 
+      // over the full timestep 'bdt'.
+      // This ensures operator splitting doesn't shock the hydro solver.
+      Real rate_max = (cfl_limit * e_int) / (bdt + tiny);
+      
+      rate_e_dt = fmin(rate_e_dt, rate_max);
+      // ====================================
+
+      // Choose substep using the same CFL limit
+      Real dt_sub = cfl_limit * e_int / (rate_e_dt + tiny);
+      dt_sub = fmin(dt_sub, dt_rem);
+      dt_sub = fmax(dt_sub, tiny * bdt);
+
+      // Proposed decrement 
+      Real de = rate_e_dt * dt_sub; 
+
+      // Enforce floor on e_int
+      Real de_applied = de;
+      if (e_int - de_applied < e_floor) {
+        de_applied = e_int - e_floor;
+        e_int = e_floor;
+      } else {
+        e_int -= de_applied;
+      }
+
+      if (de_applied <= 0.0) break;
+
+      // Convert applied decrement back to q*dt (source term magnitude)
+      Real q_dt = de_applied * (W / alpha);
+
+      // Valencia isotropic cooling sources:
+      Real dTau = sqrt_gamma * alpha * W * q_dt;
+      Real dS1  = sqrt_gamma * alpha * u1_cov * q_dt;
+      Real dS2  = sqrt_gamma * alpha * u2_cov * q_dt;
+      Real dS3  = sqrt_gamma * alpha * u3_cov * q_dt;
+
+      dTau_total += dTau;
+      dS1_total  += dS1;
+      dS2_total  += dS2;
+      dS3_total  += dS3;
+
+      dt_rem -= dt_sub;
+    }
+
+    // Apply to conserved variables 
+    u0(m,IEN,k,j,i) -= dTau_total;
+    u0(m,IM1,k,j,i) -= dS1_total;
+    u0(m,IM2,k,j,i) -= dS2_total;
+    u0(m,IM3,k,j,i) -= dS3_total;
+  });
 }
 
 

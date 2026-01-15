@@ -161,11 +161,14 @@ void AddValenciaGRCooling(Mesh *pm, const Real bdt) {
   auto &eos_data = pmbp->pmhd->peos->eos_data;
   Real gamma_adi = eos_data.gamma;
   Real gm1       = gamma_adi - 1.0;
-  Real rho_floor = eos_data.dfloor; // FIXED: rho_min -> dfloor
-  Real p_floor   = eos_data.pfloor; // FIXED: p_min -> pfloor
+  Real rho_floor = eos_data.dfloor; 
+  Real p_floor   = eos_data.pfloor; 
 
-  // Subcycle controls
-  constexpr Real cfl_cool = 0.1;
+  // ---- Stability Control ----
+  // Use the simulation's global CFL number for consistency
+  // instead of a hardcoded "by-hand" value.
+  Real cfl_limit = pm->cfl_no; 
+
   constexpr int  max_sub  = 64;
   constexpr Real tiny     = 1.0e-30;
 
@@ -193,7 +196,7 @@ void AddValenciaGRCooling(Mesh *pm, const Real bdt) {
 
     Real pres = w0(m,IPR,k,j,i);
 
-    // primitive stores u^{i'} (normal-frame spatial 4-velocity components)
+    // primitive stores u^{i'}
     Real u1p = w0(m,IVX,k,j,i);
     Real u2p = w0(m,IVY,k,j,i);
     Real u3p = w0(m,IVZ,k,j,i);
@@ -203,15 +206,14 @@ void AddValenciaGRCooling(Mesh *pm, const Real bdt) {
               + gyy*u2p*u2p + 2.0*gyz*u2p*u3p + gzz*u3p*u3p;
     Real W = sqrt(1.0 + u_sq);
 
-    // covariant spatial components u_i = gamma_ij u^{j'}
+    // covariant spatial components u_i
     Real u1_cov = gxx*u1p + gxy*u2p + gxz*u3p;
     Real u2_cov = gxy*u1p + gyy*u2p + gyz*u3p;
     Real u3_cov = gxz*u1p + gyz*u2p + gzz*u3p;
 
-    // comoving internal energy density e = P/(Gamma-1)
+    // comoving internal energy density
     Real e_int = pres / gm1;
     Real e_floor = p_floor / gm1;
-
 
     // Subcycling in coordinate time
     Real dt_rem = bdt;
@@ -232,7 +234,7 @@ void AddValenciaGRCooling(Mesh *pm, const Real bdt) {
          Lambda_cgs = ISMCoolFn(T_cgs);
       }
 
-      // q = n^2 Lambda, expressed in CODE energy/(vol*proper time)
+      // q = n^2 Lambda
       Real q = (rho * rho) * (Lambda_cgs / cooling_unit); // code units
 
       if (q <= 0.0) break;
@@ -240,12 +242,21 @@ void AddValenciaGRCooling(Mesh *pm, const Real bdt) {
       // Coordinate-time cooling rate for e_int: de_int/dt = -(alpha/W) q
       Real rate_e_dt = (alpha / W) * q;
 
-      // Choose substep
-      Real dt_sub = cfl_cool * e_int / (rate_e_dt + tiny);
+      // === DYNAMIC CLAMP (Based on CFL) ===
+      // Max allowed rate is one that removes 'cfl_limit' fraction of e_int 
+      // over the full timestep 'bdt'.
+      // This ensures operator splitting doesn't shock the hydro solver.
+      Real rate_max = (cfl_limit * e_int) / (bdt + tiny);
+      
+      rate_e_dt = fmin(rate_e_dt, rate_max);
+      // ====================================
+
+      // Choose substep using the same CFL limit
+      Real dt_sub = cfl_limit * e_int / (rate_e_dt + tiny);
       dt_sub = fmin(dt_sub, dt_rem);
       dt_sub = fmax(dt_sub, tiny * bdt);
 
-      // Proposed decrement in e_int 
+      // Proposed decrement 
       Real de = rate_e_dt * dt_sub; 
 
       // Enforce floor on e_int
@@ -264,8 +275,6 @@ void AddValenciaGRCooling(Mesh *pm, const Real bdt) {
 
       // Valencia isotropic cooling sources:
       Real dTau = sqrt_gamma * alpha * W * q_dt;
-
-      // d(S_i) = - alpha * sqrt_gamma * q * u_i * dt
       Real dS1  = sqrt_gamma * alpha * u1_cov * q_dt;
       Real dS2  = sqrt_gamma * alpha * u2_cov * q_dt;
       Real dS3  = sqrt_gamma * alpha * u3_cov * q_dt;
