@@ -251,7 +251,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
       Real rho = gizmo_disk.density[idx];
       gizmo_disk.internal_energy[idx] = rho * temp * gm1_inv * gizmo_disk.pressure_scale;
     } else {
-      gizmo_disk.internal_energy[idx] *= gizmo_disk.pressure_scale;
+      gizmo_disk.internal_energy[idx] *= gizmo_disk.density[idx] * gizmo_disk.pressure_scale;
     }
   }
 
