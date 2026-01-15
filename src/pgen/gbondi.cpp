@@ -45,6 +45,7 @@
 #include "eos/eos.hpp"
 #include "hydro/hydro.hpp"
 #include "mhd/mhd.hpp"
+#include "dyn_grmhd/dyn_grmhd.hpp" // Added for dyngr support
 
 // HDF5 support
 #include <hdf5.h>
@@ -136,6 +137,9 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   int nmb = pmbp->nmb_thispack;
   int ng = indcs.ng;
   
+  // Check if we are running with DynGR
+  bool use_dyngr = (pmbp->pdyngr != nullptr);
+
   // Select either Hydro or MHD
   DvceArray5D<Real> u0_, w0_;
   bool is_mhd = false;
@@ -324,6 +328,12 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   
   auto &size = pmbp->pmb->mb_size;
 
+  // initialize ADM variables -----------------------------------------
+
+  if (pmbp->padm != nullptr) {
+    pmbp->padm->SetADMVariables(pmbp);
+  }
+
   // Initialize primitive variables
   par_for("pgen_gizmo_hydro", DevExeSpace(), 0, nmb-1, ks, ke, js, je, is, ie,
   KOKKOS_LAMBDA(int m, int k, int j, int i) {
@@ -425,7 +435,14 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     }
     
     w0_(m, IDN, k, j, i) = rho;
-    w0_(m, IEN, k, j, i) = eint;
+    
+    // DynGR expects Pressure in IPR, Standard Hydro expects Internal Energy in IEN
+    if (use_dyngr) {
+      w0_(m, IPR, k, j, i) = eint * (gamma - 1.0);
+    } else {
+      w0_(m, IEN, k, j, i) = eint;
+    }
+
     w0_(m, IVX, k, j, i) = ux;
     w0_(m, IVY, k, j, i) = uy;
     w0_(m, IVZ, k, j, i) = uz;
@@ -545,11 +562,17 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   }
 
   // Convert primitives to conserved
-  if (pmbp->phydro != nullptr) {
-    pmbp->phydro->peos->PrimToCons(w0_, u0_, is, ie, js, je, ks, ke);
-  } else if (pmbp->pmhd != nullptr) {
-    auto &bcc0_ = pmbp->pmhd->bcc0;
-    pmbp->pmhd->peos->PrimToCons(w0_, bcc0_, u0_, is, ie, js, je, ks, ke);
+  if (use_dyngr) {
+    // DynGR specific initialization
+    pmbp->pdyngr->PrimToConInit(is, ie, js, je, ks, ke);
+  } else {
+    // Standard Hydro/MHD initialization
+    if (pmbp->phydro != nullptr) {
+      pmbp->phydro->peos->PrimToCons(w0_, u0_, is, ie, js, je, ks, ke);
+    } else if (pmbp->pmhd != nullptr) {
+      auto &bcc0_ = pmbp->pmhd->bcc0;
+      pmbp->pmhd->peos->PrimToCons(w0_, bcc0_, u0_, is, ie, js, je, ks, ke);
+    }
   }
 
   if (myrank == 0) {
