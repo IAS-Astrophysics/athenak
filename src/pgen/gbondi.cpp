@@ -372,14 +372,16 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
       Real yd = fmax(0.0, fmin(1.0, (x2v - y0) / (y1_c - y0)));
       Real zd = fmax(0.0, fmin(1.0, (x3v - z0) / (z1_c - z0)));
       
-      int idx000 = ix + nx_g * (iy + ny_g * iz);
-      int idx100 = (ix + 1) + nx_g * (iy + ny_g * iz);
-      int idx010 = ix + nx_g * ((iy + 1) + ny_g * iz);
-      int idx110 = (ix + 1) + nx_g * ((iy + 1) + ny_g * iz);
-      int idx001 = ix + nx_g * (iy + ny_g * (iz + 1));
-      int idx101 = (ix + 1) + nx_g * (iy + ny_g * (iz + 1));
-      int idx011 = ix + nx_g * ((iy + 1) + ny_g * (iz + 1));
-      int idx111 = (ix + 1) + nx_g * ((iy + 1) + ny_g * (iz + 1));
+      // C-style row-major indexing for HDF5/numpy arrays: idx = i*ny*nz + j*nz + k
+      // Array stored as arr[ix, iy, iz] with shape (nx, ny, nz)
+      int idx000 = ix * ny_g * nz_g + iy * nz_g + iz;
+      int idx100 = (ix + 1) * ny_g * nz_g + iy * nz_g + iz;
+      int idx010 = ix * ny_g * nz_g + (iy + 1) * nz_g + iz;
+      int idx110 = (ix + 1) * ny_g * nz_g + (iy + 1) * nz_g + iz;
+      int idx001 = ix * ny_g * nz_g + iy * nz_g + (iz + 1);
+      int idx101 = (ix + 1) * ny_g * nz_g + iy * nz_g + (iz + 1);
+      int idx011 = ix * ny_g * nz_g + (iy + 1) * nz_g + (iz + 1);
+      int idx111 = (ix + 1) * ny_g * nz_g + (iy + 1) * nz_g + (iz + 1);
       
       // Trilinear interpolation
       Real c00, c01, c10, c11, c0, c1;
@@ -499,14 +501,15 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
         Real yd = fmax(0.0, fmin(1.0, (py - y0_l) / (y1_l - y0_l)));
         Real zd = fmax(0.0, fmin(1.0, (pz - z0_l) / (z1_l - z0_l)));
         
-        int idx000 = ix + nx_g * (iy + ny_g * iz);
-        int idx100 = (ix + 1) + nx_g * (iy + ny_g * iz);
-        int idx010 = ix + nx_g * ((iy + 1) + ny_g * iz);
-        int idx110 = (ix + 1) + nx_g * ((iy + 1) + ny_g * iz);
-        int idx001 = ix + nx_g * (iy + ny_g * (iz + 1));
-        int idx101 = (ix + 1) + nx_g * (iy + ny_g * (iz + 1));
-        int idx011 = ix + nx_g * ((iy + 1) + ny_g * (iz + 1));
-        int idx111 = (ix + 1) + nx_g * ((iy + 1) + ny_g * (iz + 1));
+        // C-style row-major indexing for HDF5/numpy arrays: idx = i*ny*nz + j*nz + k
+        int idx000 = ix * ny_g * nz_g + iy * nz_g + iz;
+        int idx100 = (ix + 1) * ny_g * nz_g + iy * nz_g + iz;
+        int idx010 = ix * ny_g * nz_g + (iy + 1) * nz_g + iz;
+        int idx110 = (ix + 1) * ny_g * nz_g + (iy + 1) * nz_g + iz;
+        int idx001 = ix * ny_g * nz_g + iy * nz_g + (iz + 1);
+        int idx101 = (ix + 1) * ny_g * nz_g + iy * nz_g + (iz + 1);
+        int idx011 = ix * ny_g * nz_g + (iy + 1) * nz_g + (iz + 1);
+        int idx111 = (ix + 1) * ny_g * nz_g + (iy + 1) * nz_g + (iz + 1);
         
         Real c00 = A_f(idx000)*(1.0-xd) + A_f(idx100)*xd;
         Real c01 = A_f(idx001)*(1.0-xd) + A_f(idx101)*xd;
