@@ -32,10 +32,7 @@
 
 Multigrid::Multigrid(MultigridDriver *pmd, MeshBlockPack *pmbp, int nghost):
   pmy_driver_(pmd), pmy_pack_(pmbp), pmy_mesh_(pmd->pmy_mesh_), ngh_(nghost), nvar_(pmd->nvar_), defscale_(1.0)  {
-  std::cout<< "Entering Multigrid constructor." <<std::endl;
-  std::cout<< "Number of ghost zones: " << ngh_ << std::endl;
   if(pmy_pack_ != nullptr) {
-    std::cout<< "Initializing Multigrid on MeshBlockPack." <<std::endl;
     //Meshblock levels
     indcs_ = pmy_mesh_->mb_indcs;
     nmmb_  = pmy_pack_->nmb_thispack;
@@ -56,7 +53,6 @@ Multigrid::Multigrid(MultigridDriver *pmd, MeshBlockPack *pmbp, int nghost):
     loc_ = pmy_pack_->pmesh->lloc_eachmb[0];
     size_ = pmy_pack_->pmb->mb_size.h_view(0);
   } else {
-    std::cout<< "Initializing Multigrid on RootGrid." <<std::endl;
     //Root levels
     indcs_.nx1 = pmy_mesh_->nmb_rootx1;
     indcs_.nx2 = pmy_mesh_->nmb_rootx2;
@@ -68,10 +64,6 @@ Multigrid::Multigrid(MultigridDriver *pmd, MeshBlockPack *pmbp, int nghost):
     // Root grid should be a single meshblock
     nmmb_ = 1;
     loc_  = pmy_mesh_->lloc_eachmb[0];
-    std::cout<< "Number of MeshBlocks in the pack: " << nmmb_ << std::endl;
-    std::cout<< "MeshBlock size: "
-             << indcs_.nx1 << " x " << indcs_.nx2 << " x " << indcs_.nx3 << std::endl;
-  
   }
 
   rdx_ = (size_.x1max-size_.x1min)/static_cast<Real>(indcs_.nx1);
@@ -115,7 +107,6 @@ Multigrid::Multigrid(MultigridDriver *pmd, MeshBlockPack *pmbp, int nghost):
         break;
       }
     }
-    std::cout<< "Multigrid meshblock levels: " << nlevel_ << std::endl;
     if (nlevel_ == 0) {
       std::cout << "### FATAL ERROR in Multigrid::Multigrid" << std::endl
           << "The MeshBlock size must be power of two." << std::endl;
@@ -125,14 +116,11 @@ Multigrid::Multigrid(MultigridDriver *pmd, MeshBlockPack *pmbp, int nghost):
   }
 
   current_level_ = nlevel_-1;
-  std::cout<< "Current Multigrid level: " << current_level_ << std::endl;
 
   // allocate arrays
   u_ = new DvceArray5D<Real>[nlevel_];
   src_ = new DvceArray5D<Real>[nlevel_];
   def_ = new DvceArray5D<Real>[nlevel_];
-  //coord_ = new Coordinates[nlevel_];
-  //ccoord_ = new Coordinates[nlevel_];
   coeff_ = new DvceArray5D<Real>[nlevel_];
   matrix_ = new DvceArray5D<Real>[nlevel_];
   uold_ = new DvceArray5D<Real>[nlevel_];
@@ -149,17 +137,10 @@ Multigrid::Multigrid(MultigridDriver *pmd, MeshBlockPack *pmbp, int nghost):
     if (!((pmy_pack_ != nullptr) && (l == nlevel_-1)))
       Kokkos::realloc(uold_[l], nmmb_, nvar_, ncz, ncy, ncx);
 
-    //coord_[l].AllocateMGCoordinates(ncx,ncy,ncz);
-    //coord_[l].CalculateMGCoordinates(size_, ll, ngh_);
-    //if (ncoeff_ > 0)
-    //  Kokkos::realloc(coeff_[l],nmmb_, ncoeff_, ncz, ncy, ncx);
-    //if (nmatrix_ > 0)
-    //  Kokkos::realloc(matrix_[l],nmmb_, nmatrix_, ncz, ncy, ncx);
     ncx=(indcs_.nx1>>(ll+1))+2*ngh_;
     ncy=(indcs_.nx2>>(ll+1))+2*ngh_;
     ncz=(indcs_.nx3>>(ll+1))+2*ngh_;
-    //ccoord_[l].AllocateMGCoordinates(ncx,ncy,ncz);
-    //ccoord_[l].CalculateMGCoordinates(size_, ll+1, ngh_);
+
   }
 }
 
@@ -194,9 +175,6 @@ void Multigrid::LoadFinestData(const DvceArray5D<Real> &src, int ns, int ngh) {
   const int lns = ns;
   const int lks = ks, ljs = js, lis = is, lngh = ngh;
 
-  //auto dst_ = dst;
-  //auto src_ = src;
-
   par_for("Multigrid::LoadFinestData", DevExeSpace(),0, nmmb_-1,
           0, nvar_-1, ks, ke, js, je, is, ie,
   KOKKOS_LAMBDA(const int m, const int v, const int mk, const int mj, const int mi) {
@@ -220,7 +198,7 @@ void Multigrid::LoadSource(const DvceArray5D<Real> &src, int ns, int ngh, Real f
   // ngh is the number of ghost zones in src
   // ngh_ is the number of ghost zones in dst
 
-  DvceArray5D<Real> &dst = src_[nlevel_-1];
+  auto &dst = src_[nlevel_-1];
   int is, ie, js, je, ks, ke;
   is = js = ks = ngh_-ngh;
   ie = is + indcs_.nx1 + 2*ngh - 1;
@@ -231,9 +209,6 @@ void Multigrid::LoadSource(const DvceArray5D<Real> &src, int ns, int ngh, Real f
   const Real lfac = fac;
   const int m0 = 0, m1 = nmmb_ - 1;
   const int v0 = 0, v1 = nvar_ - 1;
-
-  //auto dst_ = dst;
-  //auto src_ = src;
 
   par_for("Multigrid::LoadSource", DevExeSpace(),
           m0, m1, v0, v1, ks, ke, js, je, is, ie,
@@ -247,11 +222,7 @@ void Multigrid::LoadSource(const DvceArray5D<Real> &src, int ns, int ngh, Real f
     } else {
       dst(m, v, mk, mj, mi) = src(m, nsrc, k, j, i) * lfac;
     }
-    //std::cout<< "Loading source at MB "<< m <<", var "<< v <<", (i,j,k)=("<< mi <<","<< mj <<","<< mk <<") : "
-    //         << dst(m, v, mk, mj, mi)<<"at"<<i<<","<<j <<","<<k <<std::endl;
-    //std::cout<<std::setprecision(3)<<dst(m, v, mk, mj, mi)<<", ";
-    //if( mi == ie) std::cout<<std::endl;
-    //if( mj == je && mi == ie) std::cout<<std::endl;
+    dst(m, v, mk, mj, mi) -= 2;
   });
 
   current_level_ = nlevel_-1;
@@ -331,30 +302,22 @@ void Multigrid::RestrictCoefficients() {
 //! \brief Set the result, including the ghost zone
 
 void Multigrid::RetrieveResult(DvceArray5D<Real> &dst, int ns, int ngh) {
-  const DvceArray5D<Real> &src = u_[nlevel_-1];
+  const auto &src = u_[nlevel_-1];
+  int is, ie, js, je, ks, ke;
   int sngh = std::min(ngh_,ngh);
-  int ie = indcs_.nx1 + ngh_ + sngh - 1;
-  int je = indcs_.nx2 + ngh_ + sngh - 1;
-  int ke = indcs_.nx3 + ngh_ + sngh - 1;
-
-  // local copies for device lambda capture
-  const int m0 = 0, m1 = nmmb_ - 1;
-  const int v0 = 0, v1 = nvar_ - 1;
-  const int mk0 = ngh_ - sngh, mk1 = ke;
-  const int mj0 = ngh_ - sngh, mj1 = je;
-  const int mi0 = ngh_ - sngh, mi1 = ie;
-
-  auto dst_ = dst;
-  auto src_ = src;
+  is = js = ks = ngh_-sngh;
+  ie = indcs_.nx1 + ngh_ + sngh - 1;
+  je = indcs_.nx2 + ngh_ + sngh - 1;
+  ke = indcs_.nx3 + ngh_ + sngh - 1;
 
   par_for("Multigrid::RetrieveResult", DevExeSpace(),
-          m0, m1, v0, v1, mk0, mk1, mj0, mj1, mi0, mi1,
+          0, nmmb_-1, 0, nvar_-1, ks, ke, js, je, is, ie,
   KOKKOS_LAMBDA(const int m, const int v, const int mk, const int mj, const int mi) {
     const int ndst = ns + v;
-    const int k = mk - ngh_ + ngh;
-    const int j = mj - ngh_ + ngh;
-    const int i = mi - ngh_ + ngh;
-    dst_(m, ndst, k, j, i) = src_(m, v, mk, mj, mi);
+    const int k = mk - ks;
+    const int j = mj - js;
+    const int i = mi - is;
+    dst(m, ndst, k, j, i) = src(m, v, mk, mj, mi);
   });
 
   return;
@@ -415,32 +378,18 @@ void Multigrid::RestrictPack() {
   int ll=nlevel_-current_level_;
   int is, ie, js, je, ks, ke;
   int th = false;
-  std::cout << "Solution at level " << current_level_ << std::endl;
-  PrintActiveRegion(u_[current_level_]);
-  std::cout << "Source at level " << current_level_ << std::endl;
-  PrintActiveRegion(src_[current_level_]);
   CalculateDefectPack();
-  PrintActiveRegion(def_[current_level_]);
   int ngc = ngh_-(ngh_>>1);
-  std::cout<< "ngc="<<ngc<<std::endl;
   is=js=ks= ngc;
   ie = is+(indcs_.nx1>>ll)+ngc-1;
   je = js+(indcs_.nx2>>ll)+ngc-1;
   ke = ks+(indcs_.nx3>>ll)+ngc-1;
-  std::cout<<(indcs_.nx1>>ll)<<","<<(indcs_.nx2>>ll)<<","<<(indcs_.nx3>>ll)<<std::endl;
-  std::cout<<is<<","<<ie<<","<<js<<","<<je<<","<<ks<<","<<ke<<std::endl;
-  std::cout << "Restricting defect from level " << current_level_ << " to level "
-            << current_level_-1 << std::endl;
   Restrict(src_[current_level_-1], def_[current_level_],
            nvar_, is, ie, js, je, ks, ke, th);
-  std::cout<< "Restricting solution from level "<< current_level_ <<" to level "
-           << current_level_-1 <<std::endl;
   // Full Approximation Scheme - restrict the variable itself
   Restrict(u_[current_level_-1], u_[current_level_],
              nvar_, is, ie, js, je, ks, ke, th);
   current_level_--;
-  PrintActiveRegion(src_[current_level_]);
-  PrintAll(u_[current_level_]);
   return;
 }
 
@@ -457,18 +406,13 @@ void Multigrid::ProlongateAndCorrectPack() {
   ie=is+(indcs_.nx1>>ll)-1;
   je=js+(indcs_.nx2>>ll)-1;
   ke=ks+(indcs_.nx3>>ll)-1;
-  std::cout<<(indcs_.nx1>>ll)<<","<<(indcs_.nx2>>ll)<<","<<(indcs_.nx3>>ll)<<std::endl;
-  std::cout<<"Before computing correction at level "<< current_level_ <<std::endl;
-  PrintAll(u_[current_level_]);
+
   ComputeCorrection();
-  std::cout<<"After computing correction at level "<< current_level_ <<std::endl;
-  PrintActiveRegion(u_[current_level_]);
   
   ProlongateAndCorrect(u_[current_level_+1], u_[current_level_],
                        is, ie, js, je, ks, ke, ngh_, ngh_, ngh_, th);
 
   current_level_++;
-  PrintActiveRegion(u_[current_level_]);
   return;
 }
 
@@ -485,10 +429,10 @@ void Multigrid::SmoothPack(int color) {
   ie = is+(indcs_.nx1>>ll) + 2*(ngh_-1) - 1;
   je = js+(indcs_.nx2>>ll) + 2*(ngh_-1) - 1;
   ke = ks+(indcs_.nx3>>ll) + 2*(ngh_-1) - 1;
-
+  //PrintActiveRegion(src_[current_level_]);
+  PrintActiveRegion(u_[current_level_]);
   Smooth(u_[current_level_], src_[current_level_],  coeff_[current_level_],
          matrix_[current_level_], -ll, is, ie, js, je, ks, ke, color, th);
-  PrintActiveRegion(u_[current_level_]);
 
   return;
 }
@@ -527,10 +471,8 @@ void Multigrid::CalculateFASRHSPack() {
   ie = is+(indcs_.nx1>>ll) + 2*(ngh_-1) - 1;
   je = js+(indcs_.nx2>>ll) + 2*(ngh_-1) - 1;
   ke = ks+(indcs_.nx3>>ll) + 2*(ngh_-1) - 1;
-  std::cout << "Calculating FAS RHS at level " << current_level_ << std::endl;
   CalculateFASRHS(src_[current_level_], u_[current_level_], coeff_[current_level_],
                   matrix_[current_level_], -ll, is, ie, js, je, ks, ke, th);
-  PrintActiveRegion(src_[current_level_]);
   return;
 }
 
@@ -540,32 +482,42 @@ void Multigrid::CalculateFASRHSPack() {
 
 void Multigrid::SetFromRootGrid(bool folddata) {
   current_level_=0;
-  DvceArray5D<Real> &dst = u_[current_level_];
-  DvceArray5D<Real> &odst = uold_[current_level_];
+  auto &dst = u_[current_level_];
+  auto &odst = uold_[current_level_];
+  const auto &src=pmy_driver_->mgroot_->GetCurrentData();
+  const auto &osrc = pmy_driver_->mgroot_->GetCurrentOldData();
   int lev = loc_.level - pmy_driver_->locrootlevel_;
-  std::cout<<"Root grid data at level "<<pmy_driver_->mgroot_->current_level_
-               <<" loading to Multigrid level "<<pmy_driver_->current_level_<<std::endl; 
+  
+  //Host copy/mirror this should be optimized later
+  auto dst_h = Kokkos::create_mirror_view(dst);
+  auto odst_h = Kokkos::create_mirror_view(odst);
+  const auto src_h = Kokkos::create_mirror_view_and_copy(HostMemSpace(), src);
+  const auto osrc_h = Kokkos::create_mirror_view_and_copy(HostMemSpace(), osrc);
+
   if (lev == 0) { // from the root grid
     for(int m=0; m<nmmb_; ++m) {
       auto loc = pmy_mesh_->lloc_eachmb[m];
       int ci = static_cast<int>(loc.lx1);
       int cj = static_cast<int>(loc.lx2);
       int ck = static_cast<int>(loc.lx3);
-      const DvceArray5D<Real> &src=pmy_driver_->mgroot_->GetCurrentData();
-      const DvceArray5D<Real> &osrc = pmy_driver_->mgroot_->GetCurrentOldData();
+      
       for (int v=0; v<nvar_; ++v) {
         for (int k=ngh_-1; k<=ngh_+1; ++k) {
           for (int j=ngh_-1; j<=ngh_+1; ++j) {
             for (int i=ngh_-1; i<=ngh_+1; ++i){
-              dst(m, v, k, j, i) = src(0, v, ck+k, cj+j, ci+i);
+              dst_h(m, v, k, j, i) = src_h(0, v, ck+k, cj+j, ci+i);
               if(folddata)
-                odst(m,v, k, j, i) = osrc(0, v, ck+k, cj+j, ci+i);
+                odst_h(m,v, k, j, i) = osrc_h(0, v, ck+k, cj+j, ci+i);
             }
           }
         }
       }
     }
   }
+  //Copy back to device
+  Kokkos::deep_copy(dst, dst_h);
+  if(folddata)
+    Kokkos::deep_copy(odst, odst_h);
   return;
 }
 
@@ -575,7 +527,7 @@ void Multigrid::SetFromRootGrid(bool folddata) {
 //! \brief calculate the residual norm
 
 Real Multigrid::CalculateDefectNorm(MGNormType nrm, int n) {
-  DvceArray5D<Real> &def=def_[current_level_];
+  auto &def=def_[current_level_];
   int ll=nlevel_-1-current_level_;
   int is, ie, js, je, ks, ke;
   is=js=ks=ngh_;
@@ -611,6 +563,7 @@ Real Multigrid::CalculateDefectNorm(MGNormType nrm, int n) {
         local_sum += std::abs(def(m, v, k, j, i));
       }, Kokkos::Sum<Real>(norm));
     norm *= dV;
+    std::cout << "Defect norm L1 at level " << pmy_driver_->current_level_ << ": " << norm << std::endl;  
 
   } else { // L2 norm (default)
     // L2 norm: sqrt(sum of squares)
@@ -622,9 +575,9 @@ Real Multigrid::CalculateDefectNorm(MGNormType nrm, int n) {
         local_sum += val * val;
         }, Kokkos::Sum<Real>(norm));
     norm = std::sqrt(norm * dV);
+    std::cout << "Defect norm L2 at level " << pmy_driver_->current_level_ << ": " << norm << std::endl;  
   }
   norm *= defscale_;
-  std::cout << "Defect norm at level " << pmy_driver_->current_level_ << ": " << norm << std::endl;  
   return norm;
 
 }
@@ -635,22 +588,23 @@ Real Multigrid::CalculateDefectNorm(MGNormType nrm, int n) {
 //! \brief calculate the sum of the array (type: 0=src, 1=u)
 
 Real Multigrid::CalculateTotal(MGVariable type, int n) {
-  DvceArray5D<Real> &src =
-                    (type == MGVariable::src) ? src_[current_level_] : u_[current_level_];
-  int ll = nlevel_ - 1 - current_level_;
-  Real s=0.0;
-  int is, ie, js, je, ks, ke;
-  is=js=ks=ngh_;
-  ie=is+(indcs_.nx1>>ll)-1, je=js+(indcs_.nx2>>ll)-1, ke=ks+(indcs_.nx3>>ll)-1;
-  Real dx=rdx_*static_cast<Real>(1<<ll), dy=rdy_*static_cast<Real>(1<<ll),
-       dz=rdz_*static_cast<Real>(1<<ll);
-  for (int k=ks; k<=ke; ++k) {
-    for (int j=js; j<=je; ++j) {
-      for (int i=is; i<=ie; ++i)
-        s+=0;//src(n,k,j,i);
-    }
-  }
-  return s*dx*dy*dz;
+  //DvceArray5D<Real> &src =
+  //                  (type == MGVariable::src) ? src_[current_level_] : u_[current_level_];
+  //int ll = nlevel_ - 1 - current_level_;
+  //Real s=0.0;
+  //int is, ie, js, je, ks, ke;
+  //is=js=ks=ngh_;
+  //ie=is+(indcs_.nx1>>ll)-1, je=js+(indcs_.nx2>>ll)-1, ke=ks+(indcs_.nx3>>ll)-1;
+  //Real dx=rdx_*static_cast<Real>(1<<ll), dy=rdy_*static_cast<Real>(1<<ll),
+  //     dz=rdz_*static_cast<Real>(1<<ll);
+  //for (int k=ks; k<=ke; ++k) {
+  //  for (int j=js; j<=je; ++j) {
+  //    for (int i=is; i<=ie; ++i)
+  //      s+=src(n,k,j,i);
+  //  }
+  //}
+  //return s*dx*dy*dz;
+  return 0.0;
 }
 
 
@@ -688,7 +642,7 @@ void Multigrid::SubtractAverage(MGVariable type, int n, Real ave) {
 //! \brief store the old u data in the uold array
 
 void Multigrid::StoreOldData() {
-  Kokkos::deep_copy(uold_[current_level_], u_[current_level_]);
+  Kokkos::deep_copy(DevExeSpace(),uold_[current_level_], u_[current_level_]);
   return;
 }
 
@@ -697,6 +651,7 @@ void Multigrid::StoreOldData() {
 //! \fn Real Multigrid::GetCoarsestData(MGVariable type, int n)
 //  \brief get the value on the coarsest level in the MG Pack
 
+KOKKOS_INLINE_FUNCTION
 Real Multigrid::GetCoarsestData(MGVariable type, int m, int n) {
   if (type == MGVariable::src)
     return src_[0](m, n, ngh_, ngh_, ngh_);
@@ -734,16 +689,14 @@ void Multigrid::Restrict(DvceArray5D<Real> &dst, const DvceArray5D<Real> &src,
 
   const int m0 = 0, m1 = nmmb_ - 1;
   const int v0 = 0, v1 = nvar - 1;
-
-  //auto dst_ = dst;
-  //auto src_ = src;
-
+  const int ngh = ngh_;
+                
   par_for("Multigrid::Restrict", DevExeSpace(),
           m0, m1, v0, v1, k0, k1, j0, j1, i0, i1,
   KOKKOS_LAMBDA(const int m, const int v, const int k, const int j, const int i) {
-    const int fk = 2*k - ngh_;
-    const int fj = 2*j - ngh_;
-    const int fi = 2*i - ngh_;
+    const int fk = 2*k - ngh;
+    const int fj = 2*j - ngh;
+    const int fi = 2*i - ngh;
     dst(m, v, k, j, i) = 0.125 * (
         src(m, v, fk,   fj,   fi)   + src(m, v, fk,   fj,   fi+1)
       + src(m, v, fk,   fj+1, fi)   + src(m, v, fk,   fj+1, fi+1)
@@ -773,6 +726,7 @@ void Multigrid::ComputeCorrection() {
   KOKKOS_LAMBDA(const int m, const int v, const int k, const int j, const int i) {
     u(m, v, k, j, i) -= uold(m, v, k, j, i);
   });
+  //PrintAll(u);
   return;
 }
 
@@ -903,7 +857,6 @@ void Multigrid::ProlongateAndCorrect(DvceArray5D<Real> &dst, const DvceArray5D<R
       ) / 32768.0;  
     });
   } else { // trilinear
-    std::cout<<"Using trilinear prolongation"<<std::endl; 
     par_for("Multigrid::ProlongateAndCorrect_trilinear", DevExeSpace(),
             m0, m1, v0, v1, k0, k1, j0, j1, i0, i1,
     KOKKOS_LAMBDA(const int m, const int v, const int k, const int j, const int i) {
@@ -982,10 +935,6 @@ TaskStatus MultigridBoundaryValues::PackAndSendMG(const DvceArray5D<Real> &u) {
   int shift_ = pmy_mg->GetLevelShift();
   int nx1_ = pmy_mg->GetSize();
 
-  std::cout << " MG::PackAndSendCC at level " << current_level << " with " << shift_ <<" shift " <<std::endl;
-  std::cout << "   nx1="<<nx1_<<", nmb="<<nmb<<", nnghbr="<<nnghbr<<", nvar="<<nvar<<std::endl;
-  //exit(0);
-
   // Outer loop over (# of MeshBlocks)*(# of buffers)*(# of variables)
   int nmnv = nmb*nnghbr*nvar;
   Kokkos::TeamPolicy<> policy(DevExeSpace(), nmnv, Kokkos::AUTO);
@@ -997,7 +946,7 @@ TaskStatus MultigridBoundaryValues::PackAndSendMG(const DvceArray5D<Real> &u) {
     int shift = shift_;
     int nx1 = nx1_;
     int diff;
-    int ngh = pmy_pack->pmesh->mb_indcs.ng;
+    //int ngh = pmy_pack->pmesh->mb_indcs.ng;
     // only load buffers when neighbor exists
     if (nghbr.d_view(m,n).gid >= 0) {
       // For multigrid, all neighbors are at the same level, so always use isame indices
@@ -1009,37 +958,33 @@ TaskStatus MultigridBoundaryValues::PackAndSendMG(const DvceArray5D<Real> &u) {
       int ku = sbuf[n].isame[0].bke;
 
       while(shift>0){
-        if(rbuf[n].facex1 and il==nx1){
+        if(rbuf[n].faces.d_view(0) and il==nx1){
           diff = iu-il;
           il = (il)>>1;  
           iu = il + diff;
         }
-        else if(rbuf[n].facex1-1){
+        else if(rbuf[n].faces.d_view(0)-1){
           iu = ((iu-il)>>1) + il;
         }
-        if(rbuf[n].facex2 and jl==nx1){
+        if(rbuf[n].faces.d_view(1) and jl==nx1){
           diff = ju-jl;
           jl = (jl)>>1;  
           ju = jl + diff;
         }
-        else if(rbuf[n].facex2-1){
+        else if(rbuf[n].faces.d_view(1)-1){
           ju = ((ju-jl)>>1) + jl;
         }
-        if(rbuf[n].facex3 and kl==nx1){
+        if(rbuf[n].faces.d_view(2) and kl==nx1){
           diff = ku-kl;
           kl = (kl)>>1;  
           ku = kl + diff;
         }
-        else if(rbuf[n].facex3-1){
+        else if(rbuf[n].faces.d_view(2)-1){
           ku = ((ku-kl)>>1) + kl;
         }
         shift--;
         nx1 = nx1 >> 1;
-      }
-
-      //std::cout<<"Packing MG buffer "<<n<<" for MB "<<m<<" var "<<v
-      //         <<" il="<<il<<", iu="<<iu<<", jl="<<jl<<", ju="<<ju<<", kl="<<kl<<", ku="<<ku<<std::endl;
-     
+      }     
 
       int ni = iu - il + 1;
       int nj = ju - jl + 1;
@@ -1075,6 +1020,7 @@ TaskStatus MultigridBoundaryValues::PackAndSendMG(const DvceArray5D<Real> &u) {
     }  // end if-neighbor-exists block
     tmember.team_barrier();
   });  // end par_for
+  return TaskStatus::complete;
 }
 
 //----------------------------------------------------------------------------------------
@@ -1083,8 +1029,7 @@ TaskStatus MultigridBoundaryValues::PackAndSendMG(const DvceArray5D<Real> &u) {
 //! Handles ghost-cell filling at each multigrid level independently.
 
 TaskStatus MultigridBoundaryValues::RecvAndUnpackMG(DvceArray5D<Real> &u) {
-  //return TaskStatus::complete;
-
+  if (pmy_mg == nullptr) return TaskStatus::complete;
   // create local references for variables in kernel
   int nmb = pmy_pack->nmb_thispack;
   int nnghbr = pmy_pack->pmb->nnghbr;
@@ -1096,7 +1041,6 @@ TaskStatus MultigridBoundaryValues::RecvAndUnpackMG(DvceArray5D<Real> &u) {
   int ngh = pmy_pack->pmesh->mb_indcs.ng;
   // Outer loop over (# of MeshBlocks)*(# of buffers)*(# of variables)
   Kokkos::TeamPolicy<> policy(DevExeSpace(), (nmb*nnghbr*nvar), Kokkos::AUTO);
-  std::cout << " MG::RecvAndUnpackCC at level " << pmy_mg->GetCurrentLevel() << " with " << shift_ <<" shift " <<std::endl;
   Kokkos::parallel_for("MG::RecvAndUnpackCC", policy, KOKKOS_LAMBDA(TeamMember_t tmember) {
     const int m = (tmember.league_rank())/(nnghbr*nvar);
     const int n = (tmember.league_rank() - m*(nnghbr*nvar))/nvar;
@@ -1115,35 +1059,33 @@ TaskStatus MultigridBoundaryValues::RecvAndUnpackMG(DvceArray5D<Real> &u) {
       ku = rbuf[n].isame[0].bke;
 
       while(shift>0){
-        if(rbuf[n].facex1 and il>1){
+        if(rbuf[n].faces.d_view(0) and il>1){
           diff = iu-il;
           il = (il+ngh)>>1;  
           iu = il + diff;
         }
-        else if(rbuf[n].facex1-1){
+        else if(rbuf[n].faces.d_view(0)-1){
           iu = ((iu-il)>>1) + il;
         }
-        if(rbuf[n].facex2 and jl>1){
+        if(rbuf[n].faces.d_view(1) and jl>1){
           diff = ju-jl;
           jl = (jl+ngh)>>1;  
           ju = jl + diff;
         }
-        else if(rbuf[n].facex2-1){
+        else if(rbuf[n].faces.d_view(1)-1){
           ju = ((ju-jl)>>1) + jl;
         }
-        if(rbuf[n].facex3 and kl>1){
+        if(rbuf[n].faces.d_view(2) and kl>1){
           diff = ku-kl;
           kl = (kl+ngh)>>1;  
           ku = kl + diff;
         }
-        else if(rbuf[n].facex3-1){
+        else if(rbuf[n].faces.d_view(2)-1){
           ku = ((ku-kl)>>1) + kl;
         }
         shift--;
       }
-      //std::cout<<"Unpacking MG buffer "<<n<<" for MB "<<m<<" var "<<v
-      //         <<" il="<<il<<", iu="<<iu<<", jl="<<jl<<", ju="<<ju<<", kl="<<kl<<", ku="<<ku<<std::endl;
-      
+       
       int ni = iu - il + 1;
       int nj = ju - jl + 1;
       int nk = ku - kl + 1;
@@ -1169,6 +1111,7 @@ TaskStatus MultigridBoundaryValues::RecvAndUnpackMG(DvceArray5D<Real> &u) {
 }
 
 void Multigrid::PrintActiveRegion(const DvceArray5D<Real> &u) {
+  auto u_h = Kokkos::create_mirror_view_and_copy(HostMemSpace(), u);
   int ll = nlevel_ - 1 - current_level_;
   int ngh = ngh_;  // number of ghost cells
   
@@ -1179,49 +1122,56 @@ void Multigrid::PrintActiveRegion(const DvceArray5D<Real> &u) {
   std::cout << "Active region at level " << current_level_ << " (nx=" << (indcs_.nx1 >> ll) << ")\n";
   std::cout << "Range: i=[" << is << "," << ie << "], j=[" << js << "," << je 
             << "], k=[" << ks << "," << ke << "]\n";
+  std::cout << "[";
   for (int mz = 0; mz < nmmbx3_; ++mz) {
   for (int k = ks; k <= ke; ++k) {
+        std::cout << "[";
         for (int my=0; my < nmmbx2_; ++my) {
           for (int j = js; j <= je; ++j) {
+            std::cout << "[";
             for (int mx= 0; mx < nmmbx1_; ++mx) {
               for (int i = is; i <= ie; ++i){
-                std::cout << std::setprecision(3) << u(mx+my*2+mz*4, 0, k, j, i) << " ";
+                std::cout << std::setprecision(3) << u_h(mx+my*2+mz*4, 0, k, j, i) << ", ";
               }
-              //std::cout << " | ";
             }
+            std::cout << "],";
             std::cout << "\n";
           }
         }
+        std::cout << "],";
         std::cout << "\n";
     }
   }
+  std::cout << "]";
   return;
 }
 
 void Multigrid::PrintAll(const DvceArray5D<Real> &u) {
+  auto u_h = Kokkos::create_mirror_view_and_copy(HostMemSpace(), u);
   int ll = nlevel_ - 1 - current_level_;
   int ngh = ngh_;  // number of ghost cells
   
   int is = 2, ie = is + (indcs_.nx1 >> ll) +2 *ngh - 5;
   int js = 2, je = js + (indcs_.nx2 >> ll) +2 *ngh - 5;
   int ks = 2, ke = ks + (indcs_.nx3 >> ll) +2 *ngh - 5;
-  std::cout<<"nrbx1="<<nmmbx1_<<", nrbx2="<<nmmbx2_<<", nrbx3="<<nmmbx3_<<std::endl;  
-  std::cout << "Whole domain at level " << current_level_ << " (nx=" << (indcs_.nx1 >> ll) << ")\n";
-  std::cout << "Range: i=[" << is << "," << ie << "], j=[" << js << "," << je 
-            << "], k=[" << ks << "," << ke << "]\n";
+  //std::cout<<"nrbx1="<<nmmbx1_<<", nrbx2="<<nmmbx2_<<", nrbx3="<<nmmbx3_<<std::endl;  
+  //std::cout << "Whole domain at level " << current_level_ << " (nx=" << (indcs_.nx1 >> ll) << ")\n";
+  //std::cout << "Range: i=[" << is << "," << ie << "], j=[" << js << "," << je 
+  //          << "], k=[" << ks << "," << ke << "]\n";
   for (int mz = 0; mz < nmmbx3_; ++mz) {
   for (int k = ks+mz; k <= ke+(1-nmmbx3_)+mz; ++k) {
         for (int my=0; my < nmmbx2_; ++my) {
           for (int j = js+my; j <= je+(1-nmmbx2_)+my; ++j) {
             for (int mx= 0; mx < nmmbx1_; ++mx) {
               for (int i = is+mx; i <= ie+(1-nmmbx1_)+mx; ++i){
-                std::cout << std::setprecision(3) << u(mx+my*2+mz*4, 0, k, j, i) << " ";
+                std::cout << std::setprecision(3) << u_h(mx+my*2+mz*4, 0, k, j, i) << ", ";
               }
-              //std::cout << " | ";
             }
+            std::cout << "],";
             std::cout << "\n";
           }
         }
+        std::cout << "],";
         std::cout << "\n";
     }
   }

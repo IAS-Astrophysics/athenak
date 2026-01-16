@@ -10,6 +10,7 @@
 
 // C++ headers
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <cstdlib>    // abs
 #include <iomanip>    // setprecision
@@ -37,7 +38,6 @@ MultigridDriver::MultigridDriver(MeshBlockPack *pmbp, int invar):
     needinit_(true), eps_(-1.0),
     niter_(-1), npresmooth_(1), npostsmooth_(1), coffset_(0), fprolongation_(0),
     nb_rank_(0) {
-  std::cout << std::scientific << std::setprecision(15);
   if (pmy_mesh_->mb_indcs.nx2==1 || pmy_mesh_->mb_indcs.nx3==1) {
     std::cout << "### FATAL ERROR in MultigridDriver::MultigridDriver" << std::endl
         << "Currently the Multigrid solver works only in 3D." << std::endl;
@@ -45,14 +45,9 @@ MultigridDriver::MultigridDriver(MeshBlockPack *pmbp, int invar):
     return;
   }
 
-  //for (int i=0; i<6; i++) {
-  //  MGBoundaryFunction_[i] = MGBoundary[i];
-  //  MGCoeffBoundaryFunction_[i] = MGCoeffBoundary[i];
-  //}
-
   ranklist_  = new int[nbtotal_];
   int nv = std::max(nvar_*2, ncoeff_);
-  rootbuf_ = new Real[nbtotal_*nv];
+  Kokkos::realloc(rootbuf_, nv, nbtotal_);
   for (int n = 0; n < nbtotal_; ++n)
     ranklist_[n] = pmy_mesh_->rank_eachmb[n];
   nslist_  = new int[nranks_];
@@ -83,7 +78,7 @@ MultigridDriver::~MultigridDriver() {
   delete [] nvslist_;
   delete [] nvlisti_;
   delete [] nvslisti_;
-  delete [] rootbuf_;
+  //delete [] rootbuf_;
 }
 
 
@@ -92,36 +87,7 @@ MultigridDriver::~MultigridDriver() {
 //  \brief Calculate the global average and subtract it
 
 void MultigridDriver::SubtractAverage(MGVariable type) {
-//#pragma omp parallel for num_threads(nthreads_)
-//  for (auto itr = vmg_.begin(); itr < vmg_.end(); itr++) {
-//    Multigrid *pmg = *itr;
-//    for (int v=0; v<nvar_; ++v)
-//      rootbuf_[pmg->pmy_block_-> mb_gid[0]*nvar_+v] = pmg->CalculateTotal(type, v);
-//  }
-//#ifdef MPI_PARALLEL
-//  if (nb_rank_ > 0)  // every rank has the same number of MeshBlocks
-//    MPI_Allgather(MPI_IN_PLACE, nb_rank_*nvar_, MPI_ATHENA_REAL,
-//                  rootbuf_, nb_rank_*nvar_, MPI_ATHENA_REAL, MPI_COMM_MULTIGRID);
-//  else
-//    MPI_Allgatherv(MPI_IN_PLACE, nblist_[Globals::my_rank]*nvar_, MPI_ATHENA_REAL,
-//                   rootbuf_, nvlisti_, nvslisti_, MPI_ATHENA_REAL, MPI_COMM_MULTIGRID);
-//#endif
-//  Real vol = (pmy_mesh_->mesh_size.x1max - pmy_mesh_->mesh_size.x1min)
-//           * (pmy_mesh_->mesh_size.x2max - pmy_mesh_->mesh_size.x2min)
-//           * (pmy_mesh_->mesh_size.x3max - pmy_mesh_->mesh_size.x3min);
-//  for (int v=0; v<nvar_; ++v) {
-//    Real total = 0.0;
-//    for (int n = 0; n < nbtotal_; ++n)
-//      total += rootbuf_[n*nvar_+v];
-//    last_ave_ = total/vol;
-//#pragma omp parallel for num_threads(nthreads_)
-//    for (auto itr = vmg_.begin(); itr < vmg_.end(); itr++) {
-//      Multigrid *pmg = *itr;
-//      pmg->SubtractAverage(type, v, last_ave_);
-//    }
-//  }
-//
-//  return;
+
 }
 
 
@@ -133,7 +99,7 @@ void MultigridDriver::SetupMultigrid(Real dt, bool ftrivial) {
   locrootlevel_ = pmy_mesh_->root_level;
   nrootlevel_ = mgroot_->GetNumberOfLevels();
   nmblevel_ = mglevels_->GetNumberOfLevels();
-  //nreflevel_ = current_level_ - locrootlevel_;
+  nreflevel_ = 0;
   ntotallevel_ = nrootlevel_ + nmblevel_ - 1;
   std::cout<< "Multigrid total levels: " << ntotallevel_ << std::endl;
   std::cout<< "Multigrid root levels: " << nrootlevel_ << std::endl;
@@ -169,48 +135,44 @@ void MultigridDriver::SetupMultigrid(Real dt, bool ftrivial) {
 //! \brief collect the coarsest data and transfer to the root grid
 
 void MultigridDriver::TransferFromBlocksToRoot(bool initflag) {
-  int nv = nvar_;
-  if (!initflag) nv *= 2; // store both src and u when !initflag
-  
+  const int nv = nvar_;
+  auto rootbuf = rootbuf_;
+  const auto &src_ =  mglevels_->src_[0];
+  const auto &u_ =  mglevels_->u_[0];
+  const int ngh_ = mglevels_->ngh_;
   // Gather data from meshblock-level multigrids into rootbuf_
-  if (mglevels_ != nullptr) {
-    // mglevels_ is a pack-aware multigrid covering nmmb_ meshblocks
-    int nmmb = mglevels_->nmmb_;
-    
-    for (int m = 0; m < nmmb; ++m) {
-      // Get the global meshblock ID (or use m as a simple index)
-      // For pack-based structures, you may need to map pack index to global gid
-      int gid = m; // placeholder; adjust if global IDs are available elsewhere
-
-      // Transfer source data (always)
-      for (int v = 0; v < nvar_; ++v) {
-        rootbuf_[gid * nv + v] = mglevels_->GetCoarsestData(MGVariable::src, v, m);
+  // mglevels_ is a pack-aware multigrid covering nmmb_ meshblocks
+  int nmmb = mglevels_->nmmb_-1;
+  par_for("Multigrid:SaveToRoot",DevExeSpace(), 0, nmmb, KOKKOS_LAMBDA(const int m) {  
+    // Transfer source and solution data (always)
+      for (int v = 0; v < nv; ++v) {
+        rootbuf.d_view(v   , m) = src_(m, v, ngh_, ngh_, ngh_);
+        rootbuf.d_view(v+nv, m) = u_(m, v, ngh_, ngh_, ngh_);
       }
-
-      // Transfer solution data when running FAS (full approximation storage) and not initializing
-      if (!initflag) {
-        for (int v = 0; v < nvar_; ++v) {
-          rootbuf_[gid * nv + nvar_ + v] = mglevels_->GetCoarsestData(MGVariable::u, v, m);
-        }
-      }
-    }
-  }
+    });
+  rootbuf.template modify<DevExeSpace>();
+  rootbuf.template sync<HostExeSpace>();
+  
   // TODO: Add MPI communication here if running in parallel to gather data to root grid
-
-  for (int m = 0; m < nbtotal_; ++m) {
-    const LogicalLocation &loc=pmy_mesh_->lloc_eachmb[m];
-    int i = static_cast<int>(loc.lx1);
-    int j = static_cast<int>(loc.lx2);
-    int k = static_cast<int>(loc.lx3);
-    if (loc.level == locrootlevel_) {
-        for (int v = 0; v < nvar_; ++v)
-        mgroot_->SetData(MGVariable::src, v, k, j, i, rootbuf_[m*nv+v]);
-      if (!initflag) {
-        for (int v = 0; v < nvar_; ++v)
-          mgroot_->SetData(MGVariable::u, v, k, j, i, rootbuf_[m*nv+nvar_+v]);
-      }
+  const auto loc = pmy_mesh_->lloc_eachmb;
+  int rootlevel = locrootlevel_;
+  const auto &src_r = mgroot_->GetCurrentSource();
+  const auto &u_r = mgroot_->GetCurrentData();
+  auto u_h = Kokkos::create_mirror_view_and_copy(HostMemSpace(), u_r);
+  auto src_h = Kokkos::create_mirror_view_and_copy(HostMemSpace(), src_r);
+  for (int m = 0; m <= nmmb; ++m) {
+    int i = static_cast<int>(loc[m].lx1);
+    int j = static_cast<int>(loc[m].lx2);
+    int k = static_cast<int>(loc[m].lx3);
+    if (loc[m].level == rootlevel) {
+        for (int v = 0; v < nv; ++v){
+          src_h(0, v, k+ngh_, j+ngh_, i+ngh_) = rootbuf.h_view(v, m);
+          u_h(0, v, k+ngh_, j+ngh_, i+ngh_) = rootbuf.h_view(v+nv, m);
+        }
     } 
   }
+  Kokkos::deep_copy(src_r, src_h);
+  Kokkos::deep_copy(u_r, u_h);
   return;
 }
 
@@ -231,27 +193,18 @@ void MultigridDriver::TransferFromRootToBlocks(bool folddata) {
 
 void MultigridDriver::OneStepToFiner(Driver *pdriver, int nsmooth) {
   int ngh=mgroot_->ngh_;
-  int flag=0;
   if (current_level_ == nrootlevel_ - 1) {
     MGRootBoundary(mgroot_->GetCurrentData());
     TransferFromRootToBlocks(true);
-    flag=1;
   }
   if (current_level_ >= nrootlevel_ - 1) { // MeshBlocks
-    std::cout << "Meshblocks at level " << current_level_ << std::endl;
-    mglevels_->PrintActiveRegion(mglevels_->GetCurrentData());
     pmg = mglevels_;
-    if (current_level_ == ntotallevel_ - 2) flag=2;
     SetMGTaskListToFiner(nsmooth, ngh);
-    std::cout << "Prolongate and correct to level " << current_level_+1 << std::endl; 
     pdriver->ExecuteTaskList(pmy_mesh_,"mg_to_finer",0);
     current_level_++;
   } 
   else { // root grid
-    std::cout << "Root grid at level " << current_level_ << std::endl;
-    mgroot_->PrintActiveRegion(mgroot_->GetCurrentData());
     MGRootBoundary(mgroot_->GetCurrentData());
-    std::cout << "Prolongate and correct to level " << current_level_+1 << std::endl; 
     mgroot_->ProlongateAndCorrectPack();
     current_level_++;
     for (int n = 0; n < nsmooth; ++n) {
@@ -274,19 +227,14 @@ void MultigridDriver::OneStepToFiner(Driver *pdriver, int nsmooth) {
 void MultigridDriver::OneStepToCoarser(Driver *pdriver, int nsmooth) {
   int ngh=mgroot_->ngh_;
   if (current_level_ >= nrootlevel_) { // MeshBlocks
-    std::cout << "Meshblocks at level " << current_level_ << std::endl;
     pmg = mglevels_;
     SetMGTaskListToCoarser(nsmooth, ngh);
     pdriver->ExecuteTaskList(pmy_mesh_,"mg_to_coarser",0);
-    std::cout << "Current level: " << current_level_ << ", nrootlevel_: " << nrootlevel_ << ", nreflevel_: " << nreflevel_ << std::endl;
     if (current_level_ == nrootlevel_ + nreflevel_) {
-      std::cout << "Transfer from blocks to root grid at level " << current_level_ << std::endl;
       TransferFromBlocksToRoot(false);
     }
   }
   else { // uniform root grid
-    std::cout << "Root grid at level " << current_level_ << std::endl;
-    //mgroot_->pmgbval->ApplyPhysicalBoundaries(0, false);
     MGRootBoundary(mgroot_->GetCurrentData());
     mgroot_->StoreOldData();
     mgroot_->CalculateFASRHSPack();
@@ -326,17 +274,23 @@ void MultigridDriver::SolveVCycle(Driver *pdriver, int npresmooth, int npostsmoo
 //  \brief Solve iteratively niter_ times
 
 void MultigridDriver::SolveIterative(Driver *pdriver) {
-  niter_ = 1; // for testing
+  niter_ = 3; // for testing
   std::cout << "Starting Multigrid SolveIterative with " << niter_ << " V-cycles." << std::endl;
-  for (int n = 0; n < niter_; ++n)
+  auto start_time = std::chrono::high_resolution_clock::now();
+  for (int n = 0; n < niter_; ++n){
     SolveVCycle(pdriver, npresmooth_, npostsmooth_);
-  if (fsubtract_average_)
-    SubtractAverage(MGVariable::u);
-  Real def = 0.0;
-  for (int v = 0; v < nvar_; ++v)
-    def += CalculateDefectNorm(MGNormType::l2, v);
-  //if (fshowdef_ && global_variable::my_rank == 0)
-    std::cout << "Multigrid defect L2-norm : " << def << std::endl;
+    Real def = 0.0;
+    for (int v = 0; v < nvar_; ++v)
+      def += CalculateDefectNorm(MGNormType::l2, v);
+      if (global_variable::my_rank == 0)
+        std::cout << "Multigrid defect L2-norm : " << def << std::endl;
+  }
+  Kokkos::fence();
+  auto end_time = std::chrono::high_resolution_clock::now();
+  std::chrono::duration<double> elapsed = (end_time - start_time)/niter_;
+  std::cout << "SolveIterative time: " << elapsed.count() << " seconds" << std::endl;
+  
+  
   return;
 }
 
@@ -348,20 +302,6 @@ void MultigridDriver::SolveIterative(Driver *pdriver) {
 void MultigridDriver::SolveCoarsestGrid() {
   int ni = (std::max(nrbx1_, std::max(nrbx2_, nrbx3_))
             >> (nrootlevel_-1));
-  if (fsubtract_average_ && ni == 1) { // trivial case - all zero
-      MGRootBoundary(mgroot_->GetCurrentData());
-      mgroot_->StoreOldData();
-      mgroot_->ZeroClearData();
-  } else {
-    if (fsubtract_average_) {
-      Real vol=(mgroot_->size_.x1max-mgroot_->size_.x1min)
-          *(mgroot_->size_.x2max-mgroot_->size_.x2min)
-          *(mgroot_->size_.x3max-mgroot_->size_.x3min);
-      for (int v=0; v<nvar_; ++v) {
-        Real ave=mgroot_->CalculateTotal(MGVariable::u, v)/vol;
-        mgroot_->SubtractAverage(MGVariable::u, v, ave);
-      }
-    }
     MGRootBoundary(mgroot_->GetCurrentData());
     mgroot_->StoreOldData();
     mgroot_->CalculateFASRHSPack();
@@ -373,19 +313,8 @@ void MultigridDriver::SolveCoarsestGrid() {
       mgroot_->SmoothPack(1-coffset_);
       MGRootBoundary(mgroot_->GetCurrentData());
     }
-    std::cout << "Solved coarsest grid with " << ni << " smoothing iterations." << std::endl; 
     std::cout << "Solution at coarsest grid:" << std::endl;
     mgroot_->PrintActiveRegion(mgroot_->GetCurrentData());
-  }
-  if (fsubtract_average_) {
-    Real vol=(mgroot_->size_.x1max-mgroot_->size_.x1min)
-            *(mgroot_->size_.x2max-mgroot_->size_.x2min)
-            *(mgroot_->size_.x3max-mgroot_->size_.x3min);
-    for (int v = 0; v < nvar_; ++v) {
-      Real ave=mgroot_->CalculateTotal(MGVariable::u, v)/vol;
-      mgroot_->SubtractAverage(MGVariable::u, v, ave);
-    }
-  }
   return;
 }
 
@@ -479,6 +408,4 @@ void MultigridDriver::MGRootBoundary(const DvceArray5D<Real> &u) {
       u(m, v, nz - ngh + n, j, i) = u(m, v, ngh + n, j, i);  // top ghost <- bottom interior
     }
   });
-
-  std::cout << " MG::PackAndSendMGRoot at level " << current_level << std::endl;
 }

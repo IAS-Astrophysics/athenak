@@ -160,6 +160,10 @@ class MultigridDriver {
   // pure virtual function
   virtual void Solve(Driver *pdriver, int step, Real dt = 0.0) = 0;
   int GetCoffset() const { return coffset_; }
+  void MGRootBoundary(const DvceArray5D<Real> &u);
+  void TransferFromBlocksToRoot(bool initflag);
+  void TransferFromRootToBlocks(bool folddata);
+  DualArray2D<Real> rootbuf_;
 
   friend class Multigrid;
 
@@ -167,8 +171,6 @@ class MultigridDriver {
   void CheckBoundaryFunctions();
   void SubtractAverage(MGVariable type);
   void SetupMultigrid(Real dt, bool ftrivial);
-  void TransferFromBlocksToRoot(bool initflag);
-  void TransferFromRootToBlocks(bool folddata);
   void OneStepToFiner(Driver *pdriver,int nsmooth);
   void OneStepToCoarser(Driver *pdriver,int nsmooth);
   void SolveVCycle(Driver *pdriver,int npresmooth, int npostsmooth);
@@ -199,7 +201,6 @@ class MultigridDriver {
   void SetMGTaskListToCoarser(int nsmooth, int ngh);
   void SetMGTaskListBoundaryCommunication();
   void DoTaskListOneStage();
-  void MGRootBoundary(const DvceArray5D<Real> &u);
 
   virtual void SolveCoarsestGrid();
   Real CalculateDefectNorm(MGNormType nrm, int n);
@@ -239,7 +240,6 @@ class MultigridDriver {
   DvceArray3D<bool> *ncoarse_;
 
  private:
-  Real *rootbuf_;
   int nb_rank_;
 };
 

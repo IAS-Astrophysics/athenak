@@ -60,11 +60,8 @@ MGGravityDriver::MGGravityDriver(MeshBlockPack *pmbp, ParameterInput *pin)
 
   // Allocate the root multigrid
   int nghost = pmbp->pmesh->mb_indcs.ng;
-  std::cout<< "Allocating MGGravity root multigrid object." <<std::endl;
   mgroot_ = new MGGravity(this, nullptr, nghost);
-  std::cout<< "MGGravity root multigrid object allocated." <<std::endl;
   mglevels_ = new MGGravity(this, pmbp, nghost);
-  std::cout<< "MGGravity meshblock multigrid object allocated." <<std::endl;
   // allocate boundary buffers
   mglevels_->pbval = new MultigridBoundaryValues(pmbp, pin, false, mglevels_);
   mglevels_->pbval->InitializeBuffers((nvar_));
@@ -105,28 +102,31 @@ MGGravity::~MGGravity() {
 //! \brief load the data and solve
 
 void MGGravityDriver::Solve(Driver *pdriver, int stage, Real dt) {
-  std::cout << "MGGravityDriver::Solve called at stage " << stage << std::endl;
   RegionIndcs &indcs_ = pmy_pack_->pmesh->mb_indcs;
   // mglevels_ points to the Multigrid object for all MeshBlocks
   mglevels_->LoadSource(pmy_pack_->phydro->u0, IDN, indcs_.ng, four_pi_G_);
   //mglevels_->PrintAll(mglevels_->GetCurrentSource()); // DEBUG
   // iterative mode - load initial guess
   mglevels_->LoadFinestData(pmy_pack_->pgrav->phi, 0, indcs_.ng);
-  std::cout << "Starting Multigrid Solve..." << std::endl;
   SetupMultigrid(dt, false);
-  std::cout << "Multigrid Setup complete." << std::endl;
+  
   SolveIterative(pdriver);
 
   gravity::Gravity *pgrav = pmy_pack_->pgrav;
   mglevels_->RetrieveResult(pgrav->phi, 0, indcs_.ng);
-  mglevels_->RetrieveDefect(pgrav->def, 0, indcs_.ng);
+  //mglevels_->RetrieveDefect(pgrav->def, 0, indcs_.ng);
 
   //if (vmg_[0]->pmy_block_->pgrav->fill_ghost)
   //  gtlist_->DoTaskListOneStage(pmy_mesh_, stage);
-
   return;
 }
 
+KOKKOS_INLINE_FUNCTION
+Real Laplacian(const DvceArray5D<Real> &u_, int m, int v, int k, int j, int i) {
+  return (6.0*u_(m,v,k,j,i) - u_(m,v,k+1,j,i) - u_(m,v,k,j+1,i)
+          - u_(m,v,k,j,i+1) - u_(m,v,k-1,j,i) - u_(m,v,k,j-1,i)
+          - u_(m,v,k,j,i-1));
+}
 
 //----------------------------------------------------------------------------------------
 //! \fn  void MGGravity::Smooth(DvceArray5D<Real> &u, const DvceArray5D<Real> &src,
@@ -141,21 +141,15 @@ void MGGravity::Smooth(DvceArray5D<Real> &u, const DvceArray5D<Real> &src,
   Real dx;
   if (rlev <= 0) dx = rdx_*static_cast<Real>(1<<(-rlev));
   else           dx = rdx_/static_cast<Real>(1<<rlev);
-  std::cout<<"h="<< dx <<", rlev="<< rlev <<std::endl;
   Real dx2 = SQR(dx);
   Real isix = static_cast<MGGravityDriver*>(pmy_driver_)->omega_/6.0;
   color ^= pmy_driver_->GetCoffset();
   
-  std::cout<<"omega = "<< static_cast<MGGravityDriver*>(pmy_driver_)->omega_ <<", isix="<< isix <<std::endl;
-  //auto u_ = u;
-  //auto src_ = src;
-  std::cout<< "Smoothing with shift "<< rlev <<", il="<< il <<", iu="<< iu <<", color="<< color <<std::endl;
   par_for("MGGravity::Smooth", DevExeSpace(),0 ,nmmb_-1, kl, ku, jl, ju,
   KOKKOS_LAMBDA(const int m, const int k, const int j) {
     const int c = (color + k + j) & 1;
     for (int i = il + c; i <= iu; i += 2) {
-      u(m,0,k,j,i) -= ((6.0*u(m,0,k,j,i) - u(m,0,k+1,j,i) - u(m,0,k,j+1,i) - u(m,0,k,j,i+1)
-                         - u(m,0,k-1,j,i) - u(m,0,k,j-1,i) - u(m,0,k,j,i-1)) + src(m,0,k,j,i)*dx2)*isix;
+      u(m,0,k,j,i) -= (Laplacian(u, m, 0, k, j, i)-src(m,0,k,j,i)*dx2)*isix;
     }
   });
   return;
@@ -180,19 +174,15 @@ void MGGravity::CalculateDefect(DvceArray5D<Real> &def, const DvceArray5D<Real> 
   Real idx2 = 1.0/SQR(dx);
 
   // local copies for safe capture in device lambda
-  const int li = il, lu = iu;
   const Real lidx2 = idx2;
 
   auto def_ = def;
   auto u_ = u;
   auto src_ = src;
-  std::cout<< "Calculating defect with shift "<< rlev <<", il="<< il <<", iu="<< iu <<std::endl;
   par_for("MGGravity::CalculateDefect", DevExeSpace(),
           0, nmmb_-1, kl, ku, jl, ju, il, iu,
   KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
-    def_(m,0,k,j,i) = (6.0*u_(m,0,k,j,i) - u_(m,0,k+1,j,i) - u_(m,0,k,j+1,i)
-                           - u_(m,0,k,j,i+1) - u_(m,0,k-1,j,i) - u_(m,0,k,j-1,i)
-                           - u_(m,0,k,j,i-1)) * lidx2 + src_(m,0,k,j,i);
+    def_(m,0,k,j,i) = src_(m,0,k,j,i) - Laplacian(u, m, 0, k, j, i) * lidx2;
   });
 
   return;
@@ -214,19 +204,12 @@ void MGGravity::CalculateFASRHS(DvceArray5D<Real> &src, const DvceArray5D<Real> 
   if (shift <= 0) dx = rdx_*static_cast<Real>(1<<(-shift));
   else           dx = rdx_/static_cast<Real>(1<<shift);
   Real idx2 = 1.0/SQR(dx);
-
   // locals for capture
   const Real lidx2 = idx2;
-  const int li = il, lu = iu;
-
-  //auto src_ = src;
-  //auto u_ = u;
   par_for("MGGravity::CalculateFASRHS", DevExeSpace(),
-          0, nmmb_-1, kl, ku, jl, ju, li, lu,
+          0, nmmb_-1, kl, ku, jl, ju, il, iu,
   KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
-    src(m,0,k,j,i) -=  (6.0*u(m,0,k,j,i) - u(m,0,k+1,j,i) - u(m,0,k,j+1,i)
-                         - u(m,0,k,j,i+1) - u(m,0,k-1,j,i) - u(m,0,k,j-1,i)
-                         - u(m,0,k,j,i-1)) * lidx2;    
+    src(m,0,k,j,i) +=  Laplacian(u, m, 0, k, j, i) * lidx2;    
   });
   return;
 }

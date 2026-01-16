@@ -105,6 +105,7 @@ inline std::int64_t rotl(std::int64_t i, int s) {
 // define default Kokkos execution and memory spaces
 
 using DevExeSpace = Kokkos::DefaultExecutionSpace;
+using HostExeSpace = Kokkos::DefaultHostExecutionSpace;
 using DevMemSpace = Kokkos::DefaultExecutionSpace::memory_space;
 using HostMemSpace = Kokkos::HostSpace;
 using ScratchMemSpace = DevExeSpace::scratch_memory_space;

@@ -112,27 +112,12 @@ TaskStatus MultigridDriver::Prolongate(Driver *pdrive, int stage) {
 }
 
 TaskStatus MultigridDriver::CalculateFASRHS(Driver *pdrive, int stage) {
-  if (current_level_ < ntotallevel_-1)
+  if (current_level_ < ntotallevel_-1){
     pmg->StoreOldData();
+  }
   pmg->CalculateFASRHSPack();
   return TaskStatus::complete;
 }
-
-TaskStatus MultigridDriver::Smooth(Driver *pdriver, int stag) {
-  pmg->PrintActiveRegion(pmg->u_[pmg->current_level_]);
-  if(pmg->current_level_ < pmg->nlevel_-1)
-    pmg->CalculateFASRHSPack();
- //pmg->PrintActiveRegion(pmg->src_[pmg->current_level_]);
-  pmg->SmoothPack(coffset_);
-  pmg->PrintActiveRegion(pmg->u_[pmg->current_level_]);
-  pmg->SmoothPack(1-coffset_);
-  pmg->PrintActiveRegion(pmg->u_[pmg->current_level_]);
-  //pmg->PrintAll(pmg->u_[pmg->current_level_]);
-  //pmg->PrintActiveRegion(pmg->GetCurrentData());
-  return TaskStatus::complete;  
-}
-
-
 
 TaskStatus MultigridDriver::ProlongateBoundary(Driver *pdrive, int stage) {
   //pmg->pmgbval->ProlongateMultigridBoundariesFluxCons();

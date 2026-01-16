@@ -76,7 +76,7 @@ struct MeshBoundaryBuffer {
 
   // Maximum number of data elements (bie-bis+1) across 3 components of above
   int isame_ndat, isame_z4c_ndat, icoar_ndat, ifine_ndat, iflxs_ndat, iflxc_ndat;
-  int facex1, facex2, facex3; // face identifiers for this buffer
+  DualArray1D<int> faces; // face identifiers for this buffer
 
   // 2D Views that store buffer data on device, dimensioned (nmb, ndata)
   DvceArray2D<Real> vars, flux;
@@ -100,6 +100,7 @@ struct MeshBoundaryBuffer {
     }
     int nmax = std::max(iflxs_ndat, iflxc_ndat);
     Kokkos::realloc(flux, nmb, (nvars*nmax));
+    Kokkos::realloc(faces, 3);
   }
 };
 
