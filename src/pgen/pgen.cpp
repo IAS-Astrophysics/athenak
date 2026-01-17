@@ -103,6 +103,7 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resf
   }
   user_srcs = pin->GetOrAddBoolean("problem","user_srcs",false);
   user_hist = pin->GetOrAddBoolean("problem","user_hist",false);
+  bool read_from_harm = pin->GetOrAddBoolean("problem", "read_from_harm", false);
 
   // get spatial dimensions of arrays, including ghost zones
   auto &indcs = pm->pmb_pack->pmesh->mb_indcs;
@@ -129,7 +130,7 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resf
   }
   if (pz4c != nullptr) {
     nz4c = pz4c->nz4c;
-  } else if (padm != nullptr) {
+  } else if (padm != nullptr && read_from_harm==false) {
     nadm = padm->nadm;
   }
 
@@ -273,7 +274,7 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resf
   }
   if (pz4c != nullptr) {
     data_size_ += nout1*nout2*nout3*nz4c*sizeof(Real);   // z4c u0
-  } else if (padm != nullptr) {
+  } else if (padm != nullptr && read_from_harm==false) {
     data_size_ += nout1*nout2*nout3*nadm*sizeof(Real);   // adm u_adm
   }
 
@@ -605,7 +606,7 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resf
 
     // We also need to reinitialize the ADM data.
     pz4c->Z4cToADM(pmy_mesh_->pmb_pack);
-  } else if (padm != nullptr) {
+  } else if (padm != nullptr && read_from_harm==false) {
     Kokkos::realloc(ccin, nmb, nadm, nout3, nout2, nout1);
     for (int m=0;  m<noutmbs_max; ++m) {
       // every rank has a MB to read, so read collectively
