@@ -1,393 +1,459 @@
 import numpy as np
 import h5py
 import glob
-import matplotlib.pyplot as plt
-import matplotlib.cm as cm
 import argparse
 import sys
-from multiprocessing import Pool
+import re
 import os
+from multiprocessing import Pool
 
-# ============================================================
-# 1. Shell integration with partial-cell volume fractions
-# ============================================================
+# ==============================================================================
+# 1. Parameter Parsing & Physics Helpers
+# ==============================================================================
 
-def integrate_between_shells(uov, x1v, x2v, x3v, rmin, rmax, dr):
+def read_parfile(par_file="parfile.par"):
     """
-    Integrate variables in uov over spherical shells [rmin, rmax) with width dr.
-    (Logic unchanged from original)
+    Parses the AthenaK/Athena++ input file into a nested dictionary.
+    Returns a structure like: params['block']['key'] = value
     """
-    # --- radial shells ---
-    bin_edges = np.arange(rmin, rmax + dr * 1e-9, dr)
-    n_bins = len(bin_edges) - 1
-    radii = 0.5 * (bin_edges[:-1] + bin_edges[1:])
+    params = {}
+    current_block = None
+    
+    if not os.path.exists(par_file):
+        print(f"[Error] Parfile '{par_file}' not found. Using defaults.")
+        return {}
 
-    n_vars, n_blocks, nz, ny, nx = uov.shape
-    results = np.zeros((n_vars, n_bins))
+    try:
+        with open(par_file, 'r') as f:
+            lines = f.readlines()
+            
+        for line in lines:
+            line = line.strip()
+            # Skip comments and empty lines
+            if not line or line.startswith('#'):
+                continue
+            
+            # Detect Block Headers <blockname>
+            if line.startswith('<') and line.endswith('>'):
+                current_block = line[1:-1]
+                params[current_block] = {}
+                continue
+                
+            # Parse Key = Value
+            if '=' in line:
+                key, val = line.split('=', 1)
+                key = key.strip()
+                val = val.split('#')[0].strip() # Remove inline comments
+                
+                # Type conversion
+                if val.lower() == 'true':
+                    val = True
+                elif val.lower() == 'false':
+                    val = False
+                else:
+                    try:
+                        if '.' in val or 'e' in val.lower():
+                            val = float(val)
+                        else:
+                            val = int(val)
+                    except ValueError:
+                        pass # Keep as string
+                
+                if current_block:
+                    params[current_block][key] = val
+                else:
+                    params[key] = val
+    except Exception as e:
+        print(f"[Error] Failed to parse parfile: {e}")
+        sys.exit(1)
+    
+    return params
 
-    for b in range(n_blocks):
-        x = x1v[b]
-        y = x2v[b]
-        z = x3v[b]
-
-        # --- cell sizes & volume (Cartesian grid) ---
-        dx = x[1] - x[0] if len(x) > 1 else 1.0
-        dy = y[1] - y[0] if len(y) > 1 else 1.0
-        dz = z[1] - z[0] if len(z) > 1 else 1.0
-        dV = dx * dy * dz
-
-        # Effective radial half-thickness
-        h_r = 0.5 * np.sqrt(dx*dx + dy*dy + dz*dz)
-        seg_len = 2.0 * h_r
-
-        # Quick block-level culling
-        corners_x = np.array([x[0] - dx/2, x[-1] + dx/2])
-        corners_y = np.array([y[0] - dy/2, y[-1] + dy/2])
-        corners_z = np.array([z[0] - dz/2, z[-1] + dz/2])
-        cx, cy, cz = np.meshgrid(corners_x, corners_y, corners_z, indexing='ij')
-        cr = np.sqrt(cx**2 + cy**2 + cz**2)
-
-        if cr.max() < rmin or cr.min() > rmax:
-            continue
-
-        # Full 3D coordinates & radius
-        Z, Y, X = np.meshgrid(z, y, x, indexing='ij')      # (nz, ny, nx)
-        R = np.sqrt(X**2 + Y**2 + Z**2)                    # (nz, ny, nx)
-        R_flat = R.ravel()                                 # (n_cell,)
-
-        # Radial segment per cell
-        r_min_cell = R_flat - h_r
-        r_max_cell = R_flat + h_r
-
-        # Cells that intersect the [rmin, rmax] band at all
-        mask_band = (r_max_cell > rmin) & (r_min_cell < rmax)
-        if not np.any(mask_band):
-            continue
-
-        R_valid     = R_flat[mask_band]
-        r_min_valid = r_min_cell[mask_band]
-        r_max_valid = r_max_cell[mask_band]
-
-        # Bin according to cell-center radius
-        bin_center = np.digitize(R_valid, bin_edges) - 1    # 0..n_bins-1
-        mask_valid_bins = (bin_center >= 0) & (bin_center < n_bins)
-        if not np.any(mask_valid_bins):
-            continue
-
-        R_valid      = R_valid[mask_valid_bins]
-        r_min_valid  = r_min_valid[mask_valid_bins]
-        r_max_valid  = r_max_valid[mask_valid_bins]
-        bins_center  = bin_center[mask_valid_bins]
-        n_valid      = R_valid.size
-
-        # Flatten data for this block
-        data_block = uov[:, b].reshape(n_vars, -1)
-        data_valid = data_block[:, mask_band][:, mask_valid_bins]
-
-        left_edge  = bin_edges[bins_center]
-        right_edge = bin_edges[bins_center + 1]
-
-        inside_mask = (r_min_valid >= left_edge) & (r_max_valid <= right_edge)
-        boundary_mask = ~inside_mask
-
-        # 1) Fully interior cells
-        if np.any(inside_mask):
-            idx_inside = bins_center[inside_mask]
-            for v in range(n_vars):
-                w = data_valid[v, inside_mask] * dV
-                results[v] += np.bincount(idx_inside, weights=w, minlength=n_bins)
-
-        # 2) Boundary cells
-        if np.any(boundary_mask):
-            bins_b   = bins_center[boundary_mask]
-            rmin_b   = r_min_valid[boundary_mask]
-            rmax_b   = r_max_valid[boundary_mask]
-            left_b   = left_edge[boundary_mask]
-            right_b  = right_edge[boundary_mask]
-            data_b   = data_valid[:, boundary_mask]
-
-            # (a) Overlap with center shell
-            overlap_center = np.clip(
-                np.minimum(rmax_b, right_b) - np.maximum(rmin_b, left_b), 0.0, None
-            )
-            frac_center = overlap_center / seg_len
-
-            for v in range(n_vars):
-                w_center = data_b[v] * dV * frac_center
-                results[v] += np.bincount(bins_b, weights=w_center, minlength=n_bins)
-
-            # (b) Overlap with right neighbor
-            mask_right = (rmax_b > right_b) & (bins_b < n_bins - 1)
-            if np.any(mask_right):
-                bins_r = bins_b[mask_right] + 1
-                rmin_r = rmin_b[mask_right]
-                rmax_r = rmax_b[mask_right]
-                right_b_r = right_b[mask_right]
-                right_edge_next = bin_edges[bins_r + 1]
-
-                overlap_r = np.clip(
-                    np.minimum(rmax_r, right_edge_next) - np.maximum(rmin_r, right_b_r), 0.0, None
-                )
-                frac_r = overlap_r / seg_len
-
-                for v in range(n_vars):
-                    w_r = data_b[v, mask_right] * dV * frac_r
-                    results[v] += np.bincount(bins_r, weights=w_r, minlength=n_bins)
-
-            # (c) Overlap with left neighbor
-            mask_left = (rmin_b < left_b) & (bins_b > 0)
-            if np.any(mask_left):
-                bins_l = bins_b[mask_left] - 1
-                rmin_l = rmin_b[mask_left]
-                rmax_l = rmax_b[mask_left]
-                left_b_l = left_b[mask_left]
-                left_edge_prev = bin_edges[bins_l]
-
-                overlap_l = np.clip(
-                    np.minimum(rmax_l, left_b_l) - np.maximum(rmin_l, left_edge_prev), 0.0, None
-                )
-                frac_l = overlap_l / seg_len
-
-                for v in range(n_vars):
-                    w_l = data_b[v, mask_left] * dV * frac_l
-                    results[v] += np.bincount(bins_l, weights=w_l, minlength=n_bins)
-
-    return results, radii
-
-
-# ============================================================
-# 2. Parallel Batch processing logic
-# ============================================================
-
-def process_single_file(args):
+def get_bh_positions(t, sep, q):
     """
-    Worker function to process one file.
-    Args tuple: (fname, rmin, rmax, dr, file_index)
+    Calculates analytical BH positions at time t based on circular Keplerian orbit.
     """
-    fname, rmin, rmax, dr, idx = args
+    om = sep**(-1.5)
+    r_bh1 = (q / (1.0 + q)) * sep
+    r_bh2 = (1.0 / (1.0 + q)) * sep 
+    
+    cos_om_t = np.cos(om * t)
+    sin_om_t = np.sin(om * t)
+    
+    pos1 = np.array([ r_bh1 * cos_om_t, r_bh1 * sin_om_t, 0.0 ])
+    pos2 = np.array([ -r_bh2 * cos_om_t, -r_bh2 * sin_om_t, 0.0 ])
+    
+    return pos1, pos2
+
+def check_geometry_intersection(params, r_min_requested):
+    """
+    Checks if the excision spheres around the BHs overlap with R_MIN.
+    If overlap exists, snaps R_MIN to the next valid flux surface radius.
+    """
+    sep = params['problem'].get('sep', 25.0)
+    q   = params['problem'].get('q', 1.0)
+    
+    r_exc_1 = params['problem'].get('flux_radius1', 5.0)
+    r_exc_2 = params['problem'].get('flux_radius2', 5.0)
+    
+    # Flux grid parameters for snapping
+    # Defaults based on your typical setup if missing in parfile
+    flux_start = params['problem'].get('flux_rsurf_inner', 20.0)
+    flux_dr    = params['problem'].get('flux_dr_surf', 10.0) 
+    
+    # Calculate geometric extent
+    dist_bh1 = (q / (1.0 + q)) * sep
+    dist_bh2 = (1.0 / (1.0 + q)) * sep
+    
+    max_extent_1 = dist_bh1 + r_exc_1
+    max_extent_2 = dist_bh2 + r_exc_2
+    global_max_extent = max(max_extent_1, max_extent_2)
+    
+    # Tiny epsilon for floating point comparison safety
+    epsilon = 1e-5
+    
+    if r_min_requested > (global_max_extent + epsilon):
+        return r_min_requested, False, "No intersection detected."
+    
+    # Logic: Find the smallest valid Flux Radius > global_max_extent
+    # R_valid = flux_start + n * flux_dr
+    
+    current_r = flux_start
+    while current_r < (global_max_extent + epsilon):
+        current_r += flux_dr
+        
+    note = (f"Overlap detected: Req R_MIN={r_min_requested} < Extent={global_max_extent:.2f}.\n"
+            f"Adjusting R_MIN to {current_r:.1f} (Next valid flux surface).")
+            
+    return current_r, True, note
+
+# ==============================================================================
+# 2. Worker Kernel (Super-sampling Integration)
+# ==============================================================================
+
+def integrate_frame(args):
+    """
+    Worker function to process a single .athdf file with SUPER-SAMPLING logic.
+    """
+    fname, rmin, rmax, dr, sep, q, r_exc_1, r_exc_2 = args
+    
+    result_template = (None, None, None, None, None, None, None) 
     
     try:
         with h5py.File(fname, 'r') as f:
+            if 'uov' not in f or 'x1v' not in f:
+                return (*result_template[:-1], f"Corrupted structure in {fname}")
             uov = f['uov'][:] 
             x1v = f['x1v'][:]
             x2v = f['x2v'][:]
             x3v = f['x3v'][:]
-            t_val = f.attrs.get('Time', float(idx))
+            t_val = f.attrs.get('Time', 0.0)
+
+        bh1_pos, bh2_pos = get_bh_positions(t_val, sep, q)
+
+        # --- 1. Global Shell Setup ---
+        bin_edges = np.arange(rmin, rmax + dr * 1e-9, dr)
+        n_bins = len(bin_edges) - 1
+        radii_axis = 0.5 * (bin_edges[:-1] + bin_edges[1:])
+        
+        n_vars, n_blocks, nz, ny, nx = uov.shape
+        
+        # Accumulators
+        shell_integrals = np.zeros((n_vars, n_bins))
+        bh1_vol = np.zeros(n_vars)
+        bh2_vol = np.zeros(n_vars)
+        cavity_vol = np.zeros(n_vars)
+
+        # Loop over MeshBlocks
+        for b in range(n_blocks):
+            x = x1v[b]
+            y = x2v[b]
+            z = x3v[b]
             
-        integ, radii = integrate_between_shells(uov, x1v, x2v, x3v, rmin, rmax, dr)
-        return (t_val, integ, radii, None) # None = no error
+            # Compute cell size
+            dx = x[1] - x[0] if len(x) > 1 else (x[0] if len(x)==1 else 1.0)
+            dy = y[1] - y[0] if len(y) > 1 else (y[0] if len(y)==1 else 1.0)
+            dz = z[1] - z[0] if len(z) > 1 else (z[0] if len(z)==1 else 1.0)
+            dV = dx * dy * dz
+            
+            # --- Check Super-sampling Condition ---
+            # User request: Only do super-sampling if cell size >= dr/5
+            use_supersampling = (dx >= dr/5) and (dy >= dr/5) and (dz >= dr/5)
+
+            # Half-diagonal (radius of the bounding sphere of the cell)
+            h_r = 0.5 * np.sqrt(dx*dx + dy*dy + dz*dz)
+
+            # 3D Grid of Cell Centers
+            Z, Y, X = np.meshgrid(z, y, x, indexing='ij')
+            
+            # Distance from origin
+            R = np.sqrt(X**2 + Y**2 + Z**2)
+            
+            # Flatten arrays
+            flat_uov = uov[:, b].reshape(n_vars, -1)
+            X_flat = X.ravel()
+            Y_flat = Y.ravel()
+            Z_flat = Z.ravel()
+            R_flat = R.ravel()
+
+            # --- A. Shell Integration (rmin <= r < rmax) ---
+            
+            # Determine min/max bin index per cell based on bounding sphere
+            idx_min = np.floor((R_flat - h_r - rmin) / dr).astype(int)
+            idx_max = np.floor((R_flat + h_r - rmin) / dr).astype(int)
+            
+            # Valid cells must interact with ROI
+            mask_global = (idx_max >= 0) & (idx_min < n_bins)
+            
+            if np.any(mask_global):
+                # Apply mask to data structures
+                inds_min = idx_min[mask_global]
+                inds_max = idx_max[mask_global]
+                data_active = flat_uov[:, mask_global]
+                
+                # 1. Fast Path
+                if use_supersampling:
+                    mask_easy = (inds_min == inds_max)
+                else:
+                    # Treat all as easy, re-calculate bin on center strictly
+                    mask_easy = np.ones(inds_min.shape, dtype=bool) 
+                    R_active = R_flat[mask_global]
+                    simple_bins = np.digitize(R_active, bin_edges) - 1
+                    inds_min = simple_bins
+
+                if np.any(mask_easy):
+                    final_bins = inds_min[mask_easy]
+                    valid_easy = (final_bins >= 0) & (final_bins < n_bins)
+                    
+                    if np.any(valid_easy):
+                        bins_to_count = final_bins[valid_easy]
+                        for v in range(n_vars):
+                            w = data_active[v, mask_easy][valid_easy] * dV
+                            shell_integrals[v] += np.bincount(bins_to_count, weights=w, minlength=n_bins)
+
+                # 2. Slow Path: Boundary Cells (Super-sampling)
+                mask_split = (~mask_easy)
+                
+                if use_supersampling and np.any(mask_split):
+                    X_split = X_flat[mask_global][mask_split]
+                    Y_split = Y_flat[mask_global][mask_split]
+                    Z_split = Z_flat[mask_global][mask_split]
+                    data_split = data_active[:, mask_split]
+                    
+                    off_x, off_y, off_z = 0.25*dx, 0.25*dy, 0.25*dz
+                    sub_dV = dV / 8.0
+                    
+                    offsets = [
+                        ( off_x,  off_y,  off_z), ( off_x,  off_y, -off_z),
+                        ( off_x, -off_y,  off_z), ( off_x, -off_y, -off_z),
+                        (-off_x,  off_y,  off_z), (-off_x,  off_y, -off_z),
+                        (-off_x, -off_y,  off_z), (-off_x, -off_y, -off_z)
+                    ]
+                    
+                    for (ox, oy, oz) in offsets:
+                        R_sub = np.sqrt((X_split + ox)**2 + (Y_split + oy)**2 + (Z_split + oz)**2)
+                        bins_sub = np.floor((R_sub - rmin) / dr).astype(int)
+                        
+                        mask_valid_sub = (bins_sub >= 0) & (bins_sub < n_bins)
+                        
+                        if np.any(mask_valid_sub):
+                            valid_bins = bins_sub[mask_valid_sub]
+                            for v in range(n_vars):
+                                w_sub = data_split[v, mask_valid_sub] * sub_dV
+                                shell_integrals[v] += np.bincount(valid_bins, weights=w_sub, minlength=n_bins)
+
+            # --- B. Excision Volume ---
+            dist_sq_1 = (X - bh1_pos[0])**2 + (Y - bh1_pos[1])**2 + (Z - bh1_pos[2])**2
+            mask_bh1 = dist_sq_1 < (r_exc_1**2)
+            if np.any(mask_bh1):
+                flat_mask1 = mask_bh1.ravel()
+                for v in range(n_vars):
+                    bh1_vol[v] += np.sum(flat_uov[v, flat_mask1]) * dV
+            
+            dist_sq_2 = (X - bh2_pos[0])**2 + (Y - bh2_pos[1])**2 + (Z - bh2_pos[2])**2
+            mask_bh2 = dist_sq_2 < (r_exc_2**2)
+            if np.any(mask_bh2):
+                flat_mask2 = mask_bh2.ravel()
+                for v in range(n_vars):
+                    bh2_vol[v] += np.sum(flat_uov[v, flat_mask2]) * dV
+
+            # --- C. Central Cavity (r < rmin) with Super-sampling ---
+            mask_cavity_center = R_flat < rmin
+            
+            if use_supersampling:
+                # Fully inside cells (Conservative check using h_r)
+                mask_full_in = (R_flat + h_r) < rmin
+                if np.any(mask_full_in):
+                     for v in range(n_vars):
+                        cavity_vol[v] += np.sum(flat_uov[v, mask_full_in]) * dV
+                
+                # Overlapping cells (Center might be in or out, but bounding sphere touches boundary)
+                # Logic: Is "partially inside"? (R-h < rmin) AND "partially outside"? (R+h >= rmin)
+                # Note: mask_full_in is strictly inside. We need the rest.
+                mask_overlap = ((R_flat - h_r) < rmin) & (~mask_full_in)
+                
+                if np.any(mask_overlap):
+                    X_ov = X_flat[mask_overlap]
+                    Y_ov = Y_flat[mask_overlap]
+                    Z_ov = Z_flat[mask_overlap]
+                    data_ov = flat_uov[:, mask_overlap]
+                    
+                    off_x, off_y, off_z = 0.25*dx, 0.25*dy, 0.25*dz
+                    sub_dV = dV / 8.0
+                    
+                    offsets = [
+                        ( off_x,  off_y,  off_z), ( off_x,  off_y, -off_z),
+                        ( off_x, -off_y,  off_z), ( off_x, -off_y, -off_z),
+                        (-off_x,  off_y,  off_z), (-off_x,  off_y, -off_z),
+                        (-off_x, -off_y,  off_z), (-off_x, -off_y, -off_z)
+                    ]
+                    
+                    for (ox, oy, oz) in offsets:
+                        R_sub = np.sqrt((X_ov + ox)**2 + (Y_ov + oy)**2 + (Z_ov + oz)**2)
+                        mask_sub_in = R_sub < rmin
+                        if np.any(mask_sub_in):
+                            for v in range(n_vars):
+                                cavity_vol[v] += np.sum(data_ov[v, mask_sub_in]) * sub_dV
+            else:
+                # Standard integration
+                if np.any(mask_cavity_center):
+                    for v in range(n_vars):
+                        cavity_vol[v] += np.sum(flat_uov[v, mask_cavity_center]) * dV
+
+        return (t_val, shell_integrals, radii_axis, bh1_vol, bh2_vol, cavity_vol, None)
+
+    except (OSError, KeyError, IOError) as e:
+        return (*result_template[:-1], f"Corruption/IO Error: {e}")
     except Exception as e:
-        return (None, None, None, f"Error processing {fname}: {str(e)}")
+        return (*result_template[:-1], f"Unexpected Error: {e}")
 
+# ==============================================================================
+# 3. Parallel Processing Driver
+# ==============================================================================
 
-def process_files_parallel(file_pattern, rmin, rmax, dr, output_npz, nproc=1, var_idx_for_quick_plot=None):
-    """
-    Parallel version of process_files.
-    """
+def process_files(file_pattern, rmin, rmax, dr, params, output_filename, nproc=1):
     files = sorted(glob.glob(file_pattern))
     if not files:
-        print(f"[process_files] No files found matching {file_pattern}")
+        print(f"[Warning] No files found matching: {file_pattern}")
         return
 
-    n_files = len(files)
-    print(f"[process_files] Found {n_files} files. Starting processing with {nproc} threads...")
+    try:
+        sep = params['problem'].get('sep', 25.0)
+        q   = params['problem'].get('q', 1.0)
+        r_exc_1 = params['problem'].get('flux_radius1', 5.0)
+        r_exc_2 = params['problem'].get('flux_radius2', 5.0)
+    except KeyError:
+        print("[Error] Could not find critical binary parameters in <problem> block.")
+        return
 
-    # Prepare arguments for the worker
-    tasks = [(f, rmin, rmax, dr, i) for i, f in enumerate(files)]
+    tasks = [(f, rmin, rmax, dr, sep, q, r_exc_1, r_exc_2) for f in files]
+    
+    print(f"Starting analysis on {len(files)} files -> {output_filename}")
+    print(f"Config: Shells=[{rmin}, {rmax}], BH_exc_r=[{r_exc_1}, {r_exc_2}], Cavity < {rmin}")
 
-    results = []
     if nproc > 1:
-        with Pool(nproc) as p:
-            # Map returns results in order
-            raw_results = p.map(process_single_file, tasks)
-            results = raw_results
+        with Pool(nproc) as pool:
+            raw_results = pool.map(integrate_frame, tasks)
     else:
-        # Serial fallback
-        for t in tasks:
-            results.append(process_single_file(t))
+        raw_results = [integrate_frame(t) for t in tasks]
 
-    # Unpack results
+    # Post-process results
     times = []
-    data_buffer = []
+    shell_data = []
+    bh1_data = []
+    bh2_data = []
+    cavity_data = []
     radii_axis = None
-
-    for res in results:
-        t_val, integ, radii, error = res
-        if error:
-            print(error)
-            continue
-        
-        times.append(t_val)
-        data_buffer.append(integ)
-        if radii_axis is None:
-            radii_axis = radii
-
-    print(f"\n[process_files] Integration complete for {len(times)}/{n_files} files.")
     
-    if len(times) == 0:
-        print("No valid data collected. Exiting this batch.")
+    for i, res in enumerate(raw_results):
+        t, shells, r, b1, b2, cav, err = res
+        
+        if err:
+            print(f"  [Skipping File {i}] {err}")
+            continue
+            
+        times.append(t)
+        shell_data.append(shells)
+        bh1_data.append(b1)
+        bh2_data.append(b2)
+        cavity_data.append(cav)
+        
+        if radii_axis is None:
+            radii_axis = r
+
+    if not times:
+        print("[Error] No valid data extracted from files.")
         return
 
-    # Convert to arrays and sort by time (just in case)
     times = np.array(times)
-    all_data = np.array(data_buffer) # (Nt, n_vars, Nshell)
-
-    # Ensure time ordering
     sort_idx = np.argsort(times)
-    times = times[sort_idx]
-    all_data = all_data[sort_idx]
-
-    print(f"[process_files] Saving to {output_npz} ...")
-    np.savez(output_npz,
-             data=all_data,
-             radius=radii_axis,
-             time=times)
-
-    # --- Quick Plot (Serial) ---
-    if var_idx_for_quick_plot is not None:
-        print("[process_files] Generating quick radial evolution plot...")
-        plt.figure(figsize=(9, 6))
-        ax = plt.gca()
-
-        if len(times) > 1:
-            colors = cm.viridis(np.linspace(0, 1, len(times)))
-        else:
-            colors = ['C0']
-
-        var_data = all_data[:, var_idx_for_quick_plot, :]
-
-        for t_idx, profile in enumerate(var_data):
-            c = colors[t_idx] if len(times) > 1 else 'C0'
-            plt.plot(radii_axis, profile, color=c, label=f"t={times[t_idx]:.3f}")
-
-        plt.xlabel("Radius")
-        plt.ylabel(f"Integrated var index {var_idx_for_quick_plot}")
-        plt.title(f"Radial profile evolution (dr={dr})")
-        if len(times) <= 10:
-            plt.legend()
-        else:
-            sm = plt.cm.ScalarMappable(cmap=cm.viridis, norm=plt.Normalize(vmin=times.min(), vmax=times.max()))
-            plt.colorbar(sm, ax=ax, label="time")
-        plt.grid(alpha=0.3)
-        plt.tight_layout()
-        plt.savefig(output_npz.replace(".npz", "_radial_evolution.png"), dpi=150)
-        plt.close()
-
-
-# ============================================================
-# 3. Shell-wise angular momentum balance (Unchanged)
-# ============================================================
-
-def shell_imbalance(time, radius, angular_momentum_profile, torque_profile, flux_array, t_idx, comp=2, flux_idx=11):
-    Nt = time.shape[0]
-    # Check bounds
-    if t_idx >= Nt - 1:
-        print(f"Warning: t_idx {t_idx} is out of bounds for derivative (Nt={Nt}). Skipping.")
-        return np.zeros_like(radius), np.zeros_like(radius), np.zeros_like(radius), np.zeros_like(radius)
-
-    dt = time[t_idx + 1] - time[t_idx]
-
-    L_now  = angular_momentum_profile[t_idx,   comp, :]
-    L_next = angular_momentum_profile[t_idx+1, comp, :]
-    dLdt = (L_next - L_now) / dt
-
-    F_now  = flux_array[t_idx,   :, flux_idx]
-    F_next = flux_array[t_idx+1, :, flux_idx]
-    F_mid  = 0.5 * (F_now + F_next)
     
-    advective_term = -(F_mid[1:] - F_mid[:-1])
+    times = times[sort_idx]
+    shell_data = np.array(shell_data)[sort_idx]   
+    bh1_data = np.array(bh1_data)[sort_idx]       
+    bh2_data = np.array(bh2_data)[sort_idx]       
+    cavity_data = np.array(cavity_data)[sort_idx] 
 
-    T_now  = torque_profile[t_idx,   comp, :]
-    T_next = torque_profile[t_idx+1, comp, :]
-    T_mid  = 0.5 * (T_now + T_next)
+    np.savez(output_filename,
+             time=times,
+             radius=radii_axis,
+             shell_data=shell_data,
+             bh1_data=bh1_data,
+             bh2_data=bh2_data,
+             cavity_data=cavity_data,
+             rmin_used=rmin)
+    
+    print(f"Successfully saved {len(times)} snapshots to {output_filename}\n")
 
-    residual = dLdt + advective_term - T_mid
-    return dLdt, advective_term, T_mid, residual
-
-
-# ============================================================
-# 4. Main Execution
-# ============================================================
+# ==============================================================================
+# 4. Main
+# ==============================================================================
 
 if __name__ == "__main__":
-    # --- Parse Command Line Arguments ---
-    parser = argparse.ArgumentParser(description="Parallel Shell Integration Analysis")
-    parser.add_argument('-n', '--nproc', type=int, default=1, help='Number of parallel processes (default: 1)')
+    parser = argparse.ArgumentParser(description="AthenaK Binary Analysis Script")
+    parser.add_argument('-n', '--nproc', type=int, default=1, help='Number of processes')
+    parser.add_argument('--parfile', type=str, default='parfile.par')
     args = parser.parse_args()
 
-    # --- Configurable parameters ---
-    R_MIN = 20.0
-    R_MAX = 300.0
-    DR    = 10.0
-
-    # File patterns
-    FILE_PATTERN_AM     = "./bin/torus.angular_momentum.*.athdf"
-    FILE_PATTERN_TORQUE = "./bin/torus.torque.*.athdf"
-    OUTPUT_AM           = "angular_momentum_shells.npz"
-    OUTPUT_TORQUE       = "torque_shells.npz"
-
-    # 4.1 Process angular momentum and torque athdf series (Parallel)
-    process_files_parallel(FILE_PATTERN_AM, R_MIN, R_MAX, DR, OUTPUT_AM, 
-                           nproc=args.nproc, var_idx_for_quick_plot=2)
-    
-    process_files_parallel(FILE_PATTERN_TORQUE, R_MIN, R_MAX, DR, OUTPUT_TORQUE, 
-                           nproc=args.nproc, var_idx_for_quick_plot=2)
-
-    # 4.2 Load shell-integrated data (Serial Analysis)
-    if not os.path.exists(OUTPUT_AM) or not os.path.exists(OUTPUT_TORQUE):
-        print("Output NPZ files not found. Exiting.")
+    print(f"--- Reading {args.parfile} ---")
+    params = read_parfile(args.parfile)
+    if 'problem' not in params:
+        print("Error: Parfile missing <problem> block.")
         sys.exit(1)
 
-    am_data   = np.load(OUTPUT_AM)
-    torque_data = np.load(OUTPUT_TORQUE)
-
-    angular_momentum_profile = am_data["data"]   
-    radius   = am_data["radius"]                 
-    time     = am_data["time"]                   
-    torque_profile = torque_data["data"]             
-
-    # 4.3 Load flux history
-    if os.path.exists("torus.user.hst"):
-        flux_raw = np.loadtxt("torus.user.hst")
-        time_hst = flux_raw[:, 0]
-        flux_flat = flux_raw[:, 2:]
-        # Check dimensions
-        if flux_flat.shape[1] % 17 == 0:
-            Nsurf = flux_flat.shape[1] // 17
-            flux_array = flux_flat.reshape(flux_flat.shape[0], Nsurf, 17)
-
-            # 4.4 Check balance
-            t_idx = 0      
-            comp = 2       
-            flux_idx = 11  
-
-            dLdt, adv_flux, torque_mid, resid = shell_imbalance(
-                time=time,
-                radius=radius,
-                angular_momentum_profile=angular_momentum_profile,
-                torque_profile=torque_profile,
-                flux_array=flux_array,
-                t_idx=t_idx,
-                comp=comp,
-                flux_idx=flux_idx
-            )
-
-            # 4.5 Plot
-            plt.figure(figsize=(9, 6))
-            plt.plot(radius, dLdt,     label="dL/dt (shell Lz)")
-            plt.plot(radius, adv_flux, label="Advective flux term")
-            plt.plot(radius, torque_mid, label="Torque term")
-            plt.plot(radius, resid,    label="Residual", linestyle='--')
-            plt.axhline(0.0, color="k", linestyle="--", linewidth=0.8)
-            plt.xlabel("r")
-            plt.ylabel("Torque density (code units)")
-            plt.title(f"Angular momentum balance, t_idx={t_idx}")
-            plt.legend()
-            plt.grid(alpha=0.3)
-            plt.tight_layout()
-            plt.savefig("angular_momentum_balance_tidx%d.png" % t_idx, dpi=150)
-            print(f"Analysis plot saved to angular_momentum_balance_tidx{t_idx}.png")
-        else:
-            print("torus.user.hst shape does not match expected 17 vars/surf.")
+    r_edge = params['problem'].get('r_edge', 60.0)
+    desired_rmin = params['problem'].get('flux_rsurf_inner', 20.0) 
+    
+    R_MIN, adjusted, note = check_geometry_intersection(params, desired_rmin)
+    if adjusted:
+        print(f"!!! GEOMETRY WARNING !!!\n{note}\n")
     else:
-        print("torus.user.hst not found. Skipping balance check.")
+        print(f"Geometry check passed: R_MIN={R_MIN} clears binary motion.")
+
+    R_MAX = params['problem'].get('flux_rsurf_outer', 400.0)
+    DR    = params['problem'].get('flux_dr_surf', 1.0) 
+    
+    process_files("./bin/torus.torque.*.athdf", R_MIN, R_MAX, DR, 
+                  params, "analysis_torque.npz", args.nproc)
+    
+    process_files("./bin/torus.angular_momentum.*.athdf", R_MIN, R_MAX, DR, 
+                  params, "analysis_am.npz", args.nproc)
+
+    print("\n--- Summary ---")
+    if os.path.exists("analysis_torque.npz"):
+        data = np.load("analysis_torque.npz")
+        t_vol = data['time']
+        if len(t_vol) > 0:
+            print(f"Torque Analysis: {len(t_vol)} snapshots processed.")
+            print(f"Time range: t={t_vol[0]:.1f} to {t_vol[-1]:.1f}")
+        else:
+            print("Torque Analysis produced empty arrays.")
+    else:
+        print("Torque output file not found.")
+
+    if os.path.exists("analysis_am.npz"):
+        data = np.load("analysis_am.npz")
+        t_vol = data['time']
+        print(f"AM Analysis: {len(t_vol)} snapshots processed.")
+
+    print("\nDone.")
