@@ -116,6 +116,7 @@ void ParameterInput::CheckBlockNames() {
         break;
       }
     }
+    /*
     if (!(found)) {
       if (global_variable::my_rank == 0) {
         std::cout<<"### FATAL ERROR in "<<__FILE__<<" at line "<<__LINE__<< std::endl;
@@ -126,6 +127,7 @@ void ParameterInput::CheckBlockNames() {
       }
       Kokkos::abort("Invalid <block_name> in input file");
     }
+    */
   }
 }
 
