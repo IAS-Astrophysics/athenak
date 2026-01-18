@@ -347,15 +347,36 @@ def process_files(file_pattern, rmin, rmax, dr, params, output_filename, nproc=1
         return
 
     tasks = [(f, rmin, rmax, dr, sep, q, r_exc_1, r_exc_2) for f in files]
+    total_files = len(files)
     
-    print(f"Starting analysis on {len(files)} files -> {output_filename}")
+    print(f"Starting analysis on {total_files} files -> {output_filename}")
     print(f"Config: Shells=[{rmin}, {rmax}], BH_exc_r=[{r_exc_1}, {r_exc_2}], Cavity < {rmin}")
 
+    raw_results = []
+    
+    # --- Parallel Execution with Progress Reporting ---
     if nproc > 1:
         with Pool(nproc) as pool:
-            raw_results = pool.map(integrate_frame, tasks)
+            # imap returns results as they complete, allowing progress tracking
+            for i, result in enumerate(pool.imap(integrate_frame, tasks)):
+                raw_results.append(result)
+                
+                # Progress Bar Logic
+                percent = (i + 1) / total_files * 100
+                sys.stdout.write(f"\r[Progress] {i + 1}/{total_files} files ({percent:.1f}%)")
+                sys.stdout.flush()
     else:
-        raw_results = [integrate_frame(t) for t in tasks]
+        # Serial execution
+        for i, task in enumerate(tasks):
+            result = integrate_frame(task)
+            raw_results.append(result)
+            
+            # Progress Bar Logic
+            percent = (i + 1) / total_files * 100
+            sys.stdout.write(f"\r[Progress] {i + 1}/{total_files} files ({percent:.1f}%)")
+            sys.stdout.flush()
+
+    print("") # Move to new line after progress bar
 
     # Post-process results
     times = []
@@ -369,7 +390,7 @@ def process_files(file_pattern, rmin, rmax, dr, params, output_filename, nproc=1
         t, shells, r, b1, b2, cav, err = res
         
         if err:
-            print(f"  [Skipping File {i}] {err}")
+            print(f"\n  [Skipping File {i}] {err}")
             continue
             
         times.append(t)
