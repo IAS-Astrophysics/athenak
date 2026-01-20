@@ -80,7 +80,7 @@ namespace {
     Real thetaw, thetab;
     Real gm0, r0, rho0, dslope, p0_over_r0, qslope, tcool, gamma_gas;
     Real dfloor, rho_floor1, rho_floor_slope1, rho_floor2, rho_floor_slope2;
-    Real rad_in_cutoff, rad_in_smooth, rad_out_cutoff, rad_out_smooth;
+    Real rfix, rad_in_cutoff, rad_in_smooth, rad_out_cutoff, rad_out_smooth;
     Real sig_star_disc;
     Real Omega0;
     Real rs, smoothin, gravsmooth;
@@ -171,6 +171,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     } else { mp.p0_over_r0 = SQR(pin->GetReal("mhd","iso_sound_speed")); }
     mp.qslope = pin->GetOrAddReal("problem","qslope",0.0);
     mp.r0 = pin->GetOrAddReal("problem","r0",1.0);
+    mp.rfix = pin->GetOrAddReal("problem", "rfix",0.1);
     mp.rad_in_cutoff = pin->GetOrAddReal("problem","rad_in_cutoff",0.0);
     mp.rad_in_smooth = pin->GetOrAddReal("problem","rad_in_smooth",0.1);
     mp.rad_out_cutoff = pin->GetOrAddReal("problem","rad_out_cutoff",0.0);
@@ -274,7 +275,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
         u0_(m,IM1,k,j,i) = den*ux;
         u0_(m,IM2,k,j,i) = den*uy;
         u0_(m,IM3,k,j,i) = den*uz;
-        
+
         if (mp_.is_ideal) {
             Real p_over_r = PoverR(mp_, rad);
             u0_(m,IEN,k,j,i) = p_over_r*den/(mp_.gamma_gas - 1.0)
@@ -793,30 +794,42 @@ void StarMask(Mesh* pm, const Real bdt) { //CF:CHECKED
         
         Real rc=sqrt(x1v*x1v+x2v*x2v+x3v*x3v);
         
-        if (rc<mp_.rs) {
+        if (rc<mp_.rfix) {
 
             Real x1w(0.0),x2w(0.0),x3w(0.0);
+            Real rad(0.0),phi(0.0),z(0.0);
             Real radw(0.0),phiw(0.0),zw(0.0);
-            Real v1(0.0),v2(0.0),v3(0.0);
-            Real v1w(0.0),v2w(0.0),v3w(0.0);
+            Real v1_star(0.0),v2_star(0.0),v3_star(0.0);
+            Real v1_starw(0.0),v2_starw(0.0),v3_starw(0.0);
+            Real v1_disc(0.0),v2_disc(0.0),v3_disc(0.0);
+            Real den_disc(0.0), den_star(0.0);
 
-            // rotate into tilted frame if needed
+            // compute the disc velocity and density at this location
+            GetCylCoord(mp_, rad, phi, z, x1v, x2v, x3v);
+            den_disc = DenDiscCyl(mp_, rad, phi, z);
+            VelDiscCyl(mp_, rad, phi, z, v1_disc, v2_disc, v3_disc);
+
+            // compute density and velocity associated with the star
             RotateCart(mp_,x1w,x2w,x3w,x1v,x2v,x3v,mp_.thetaw);
             GetCylCoord(mp_,radw,phiw,zw,x1w,x2w,x3w);
+            den_star = DenStarCyl(mp_,radw,phiw,zw);
+            VelStarCyl(mp_,radw,phiw,zw,v1_starw,v2_starw,v3_starw);
+            RotateCart(mp_,v1_star,v2_star,v3_star,v1_starw,v2_starw,v3_starw,-mp_.thetaw);
 
-            // compute density and velocity in tilted cylindrical coords
-            u0_(m,IDN,k,j,i) = DenStarCyl(mp_,radw,phiw,zw);
-            VelStarCyl(mp_,radw,phiw,zw,v1w,v2w,v3w);
+            // Combine the velocities
+            Real sigma = 1/(1+exp((rc - mp_.rmagsph)/mp_.sig_star_disc));
+            Real ux = (1-sigma)*v1_disc + sigma*v1_star;
+            Real uy = (1-sigma)*v2_disc + sigma*v2_star;
+            Real uz = (1-sigma)*v3_disc + sigma*v3_star;
 
-            // rotate the velocity back to reference frame
-            RotateCart(mp_,v1,v2,v3,v1w,v2w,v3w,-mp_.thetaw);
-
-            u0_(m,IM1,k,j,i) = v1*u0_(m,IDN,k,j,i);
-            u0_(m,IM2,k,j,i) = v2*u0_(m,IDN,k,j,i);
-            u0_(m,IM3,k,j,i) = v3*u0_(m,IDN,k,j,i);
+            // Assign to conserved varaibles
+            u0_(m,IDN,k,j,i) = den_disc + den_star;            
+            u0_(m,IM1,k,j,i) = u0_(m,IDN,k,j,i)*ux;
+            u0_(m,IM2,k,j,i) = u0_(m,IDN,k,j,i)*uy;
+            u0_(m,IM3,k,j,i) = u0_(m,IDN,k,j,i)*uz;
             
             if (mp_.is_ideal) {
-                u0_(m,IEN,k,j,i) = PoverR(mp_,mp_.rs)*u0_(m,IDN,k,j,i)/(mp_.gamma_gas - 1.0)+
+                u0_(m,IEN,k,j,i) = PoverR(mp_,rad)*u0_(m,IDN,k,j,i)/(mp_.gamma_gas - 1.0)+
                                 0.5*(SQR(u0_(m,IM1,k,j,i))+SQR(u0_(m,IM2,k,j,i))+SQR(u0_(m,IM3,k,j,i)))/u0_(m,IDN,k,j,i);
             
                 if (mp_.magnetic_fields_enabled) {
