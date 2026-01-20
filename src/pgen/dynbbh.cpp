@@ -1394,9 +1394,9 @@ void find_traj_t(Real t, Real bbh_t[NTRAJ]) {
   bbh_t[AX1] = bbh.a1*std::sin(bbh.th_a1)*std::cos(bbh.ph_a1);
   bbh_t[AY1] = bbh.a1*std::sin(bbh.th_a1)*std::sin(bbh.ph_a1);
   bbh_t[AZ1] = bbh.a1*std::cos(bbh.th_a1);
-  bbh_t[AX2] = bbh.a1*std::sin(bbh.th_a2)*std::cos(bbh.ph_a2);
-  bbh_t[AY2] = bbh.a1*std::sin(bbh.th_a2)*std::sin(bbh.ph_a2);
-  bbh_t[AZ2] = bbh.a1*std::cos(bbh.th_a2);
+  bbh_t[AX2] = bbh.a2*std::sin(bbh.th_a2)*std::cos(bbh.ph_a2);
+  bbh_t[AY2] = bbh.a2*std::sin(bbh.th_a2)*std::sin(bbh.ph_a2);
+  bbh_t[AZ2] = bbh.a2*std::cos(bbh.th_a2);
   bbh_t[M1T] = 1.0/(bbh.q+1.0);
   bbh_t[M2T] = 1.0 - bbh_t[M1T];
 }
