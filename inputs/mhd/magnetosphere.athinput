@@ -54,7 +54,7 @@ ntheta = 256             # Number of angles in theta, phi resolution is 2*ntheta
 evolution   = dynamic
 cfl_number  = 0.3        # The Courant, Friedrichs, & Lewy (CFL) Number
 nlim        = -1         # cycle limit
-tlim        = 3.14       # 6.28       # time limit
+tlim        = 6.28       # 6.28       # time limit
 integrator  = rk2        # time integration algorithm
 
 <mesh>
@@ -65,7 +65,6 @@ x1min       = -3        # minimum value of X1
 x1max       = 3         # maximum value of X1
 ix1_bc      = outflow   # Inner-X1 boundary condition flag
 ox1_bc      = outflow   # Outer-X1 boundary condition flag
-x1rat       = 1.0       # non-uniform grid ratio
 
 nx2         = 120       # Number of zones in X2-direction
 x2min       = -3        # minimum value of X2
@@ -105,15 +104,6 @@ x3min=-0.12
 x3max= 0.12
 level= 3
 
-#<hydro>
-#eos         = ideal         # EOS type
-#eos         = isothermal    # EOS type
-#iso_sound_speed = 0.1     
-#gamma       = 1.4           # adaiabtic index
-#dfloor      = 1.e-12        # Density floor
-#pfloor      = 1.e-12        # Pressure floor
-#rsolver     = hlle          # Riemann-solver to be used
-
 <mhd>
 eos         = ideal    # EOS type
 reconstruct = plm      # spatial reconstruction method
@@ -140,6 +130,7 @@ qslope = -0.5           # disc temperature profile exponent
 r0 = 1                  # reference radius
 rho0 = 1.0              # characteristic disc midplane density
 rmagsph = 0.5           # initial magnetospheric cavity radius
+sig_star_disc = 0.01    # connect velocities between star and the disc
 rfix = 0.16             # Inner masking radius for v and rho
 rad_in_cutoff = 0.5
 rad_in_smooth = 0.1      

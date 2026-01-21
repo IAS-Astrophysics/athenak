@@ -44,7 +44,7 @@
 namespace {
 
     KOKKOS_INLINE_FUNCTION
-    static void GetCylCoord(struct my_params mp, Real &rad,Real &phi,Real &z,Real &x1,Real &x2,Real &x3);
+    static void GetCylCoord(struct my_params mp, Real &rad,Real &phi,Real &z, const Real x1, const Real x2, const Real x3);
 
     KOKKOS_INLINE_FUNCTION
     static void RotateCart(struct my_params mp, Real &x1rot, Real &x2rot, Real &x3rot, const Real x1, const Real x2,const Real x3,const Real rot);
@@ -63,6 +63,15 @@ namespace {
 
     KOKKOS_INLINE_FUNCTION
     static void VelStarCyl(struct my_params mp, const Real rad, const Real phi, const Real z, Real &v1, Real &v2, Real &v3);
+    
+    KOKKOS_INLINE_FUNCTION
+    static void VelStar(struct my_params mp, const Real x1, const Real x2, const Real x3, Real &v1_star, Real &v2_star, Real &v3_star);
+
+    KOKKOS_INLINE_FUNCTION
+    static void DenDiscPlusStar(struct my_params mp, const Real x1, const Real x2, const Real x3, Real &den);
+
+    KOKKOS_INLINE_FUNCTION
+    static void VelDiscPlusStar(struct my_params mp, const Real x1, const Real x2, const Real x3, Real &ux, Real &uy, Real &uz);
 
     KOKKOS_INLINE_FUNCTION
     static Real A1(struct my_params mp, const Real x1, const Real x2, const Real x3);
@@ -72,6 +81,9 @@ namespace {
 
     KOKKOS_INLINE_FUNCTION
     static Real A3(struct my_params mp, const Real x1, const Real x2, const Real x3);
+
+    KOKKOS_INLINE_FUNCTION
+    static void Bfield(struct my_params mp, const Real x1, const Real x2, const Real x3, const Real mmx, const Real mmy, const Real mmz, Real &bx, Real &by,  Real &bz);
 
     // Initialize global instance of the parameter structure
     // pgen_struct disc_params;
@@ -230,45 +242,11 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
         int nx3 = indcs.nx3;
         Real x3 = CellCenterX(k-ks, nx3, x3min, x3max);
 
-        Real x1w(0.0), x2w(0.0), x3w(0.0);
-        Real rad(0.0), phi(0.0), z(0.0);
-        Real radw(0.0), phiw(0.0), zw(0.0);  // coordinates in frame aligned with stellar rotation axis
         Real den(0.0), ux(0.0), uy(0.0), uz(0.0);
-        Real v1_disc(0.0), v2_disc(0.0), v3_disc(0.0);
-        Real v1_starw(0.0), v2_starw(0.0), v3_starw(0.0);
-        Real v1_star(0.0), v2_star(0.0), v3_star(0.0);
 
-        // get the cylindrical coodinates corresponding to this cartesian location
-        GetCylCoord(mp_,rad, phi, z, x1, x2, x3);
-    
-        if (mp_.rho0 > 0.0){
-            // compute the disc density component at this location
-            den = DenDiscCyl(mp_, rad, phi, z);
-            // compute the disc velocity component at this location
-            VelDiscCyl(mp_, rad, phi, z, v1_disc, v2_disc, v3_disc);
-        }
-        
-        if (mp_.denstar > 0.0) {
-            // rotate to the frame aligned with the stellar rotation axis
-            RotateCart(mp_, x1w, x2w, x3w, x1, x2, x3, mp_.thetaw);
-            GetCylCoord(mp_,radw, phiw, zw, x1w, x2w, x3w);
-            // add the stellar density component at this location
-            den += DenStarCyl(mp_,radw,phiw,zw);
-            // add the stellar velocity component at this location
-            VelStarCyl(mp_, radw, phiw, zw, v1_starw, v2_starw, v3_starw);
-            // rotate the velocity components back to the original frame
-            RotateCart(mp_, v1_star, v2_star, v3_star, v1_starw, v2_starw, v3_starw, -mp_.thetaw);
-        }
-
-        // apply the density floor
-        Real rc = sqrt(rad*rad+z*z);
-        den = fmax(den,rho_floor(mp_,rc));
-        
-        // set the total velocity components - switch smoothly from star to disc across magsph boundary
-        Real sigma = 1/(1+exp((rc - mp_.rmagsph)/mp_.sig_star_disc));
-        ux = (1-sigma)*v1_disc + sigma*v1_star;
-        uy = (1-sigma)*v2_disc + sigma*v2_star;
-        uz = (1-sigma)*v3_disc + sigma*v3_star; 
+        // Compute density and velocity in the disc+star system
+        DenDiscPlusStar(mp_, x1, x2, x3, den);
+        VelDiscPlusStar(mp_, x1, x2, x3, ux, uy, uz);
 
         // set the conserved variables
         u0_(m,IDN,k,j,i) = den;
@@ -277,6 +255,8 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
         u0_(m,IM3,k,j,i) = den*uz;
 
         if (mp_.is_ideal) {
+            // Compute cylindrical radius
+            Real rad=sqrt(x1*x1 + x2*x2);
             Real p_over_r = PoverR(mp_, rad);
             u0_(m,IEN,k,j,i) = p_over_r*den/(mp_.gamma_gas - 1.0)
                                +0.5*(SQR(u0_(m,IM1,k,j,i))
@@ -479,7 +459,7 @@ namespace {
     //----------------------------------------------------------------------------------------
     //! Transform from cartesian to cylindrical coordinates
     KOKKOS_INLINE_FUNCTION //CF:CHECKED
-    static void GetCylCoord(struct my_params mp, Real &rad,Real &phi,Real &z,Real &x1,Real &x2,Real &x3) {
+    static void GetCylCoord(struct my_params mp, Real &rad,Real &phi,Real &z, const Real x1, const Real x2, const Real x3) {
         rad=sqrt(x1*x1 + x2*x2);
         phi=atan2(x2,x1);
         z=x3;
@@ -489,7 +469,7 @@ namespace {
     //----------------------------------------------------------------------------------------
     //! Rotate the cartesian coordinates by some angle to get the tilted coordinates
     KOKKOS_INLINE_FUNCTION //CF:CHECKED
-    static void RotateCart(struct my_params mp, Real &x1rot,Real &x2rot,Real &x3rot,const Real x1,const Real x2,const Real x3, const Real theta) {
+    static void RotateCart(struct my_params mp, Real &x1rot,Real &x2rot,Real &x3rot, const Real x1, const Real x2,const Real x3, const Real theta) {
 
         // The adopted convetion here rotates the underlying axes counter-clockwise by an angle theta about the y-axis. 
         // Hence one can bring the axes into alignment with the spin axis or initial dipole axis.
@@ -625,6 +605,75 @@ namespace {
 
     //----------------------------------------------------------------------------------------
     KOKKOS_INLINE_FUNCTION //CF:CHECKED
+    static void VelStar(struct my_params mp, const Real x1, const Real x2, const Real x3, Real &v1_star, Real &v2_star, Real &v3_star) {
+        
+        Real x1w(0.0), x2w(0.0), x3w(0.0);
+        Real v1_starw(0.0), v2_starw(0.0), v3_starw(0.0);
+        Real radw(0.0), phiw(0.0), zw(0.0);  // coordinates in frame aligned with stellar rotation axis
+
+        // rotate to the frame aligned with the stellar rotation axis
+        RotateCart(mp, x1w, x2w, x3w, x1, x2, x3, mp.thetaw);
+        GetCylCoord(mp,radw, phiw, zw, x1w, x2w, x3w);
+        // add the stellar velocity component at this location
+        VelStarCyl(mp, radw, phiw, zw, v1_starw, v2_starw, v3_starw);
+        // rotate the velocity components back to the original frame
+        RotateCart(mp, v1_star, v2_star, v3_star, v1_starw, v2_starw, v3_starw, -mp.thetaw);
+
+        return;
+    }
+
+    //----------------------------------------------------------------------------------------
+    static void DenDiscPlusStar(struct my_params mp, const Real x1, const Real x2, const Real x3, Real &den) {
+
+        Real x1w(0.0), x2w(0.0), x3w(0.0);
+        Real rad(0.0), phi(0.0), z(0.0);
+        Real radw(0.0), phiw(0.0), zw(0.0);  // coordinates in frame aligned with stellar rotation axis
+
+        // get the cylindrical coodinates corresponding to this cartesian location
+        GetCylCoord(mp,rad, phi, z, x1, x2, x3);
+    
+        // compute the disc density component at this location
+        den = DenDiscCyl(mp, rad, phi, z);
+        
+        // rotate to the frame aligned with the stellar rotation axis
+        RotateCart(mp, x1w, x2w, x3w, x1, x2, x3, mp.thetaw);
+        GetCylCoord(mp,radw, phiw, zw, x1w, x2w, x3w);
+        // add the stellar density component at this location
+        den += DenStarCyl(mp,radw,phiw,zw);
+
+        // apply the density floor
+        Real rc = sqrt(rad*rad+z*z);
+        den = fmax(den,rho_floor(mp,rc));
+
+        return;
+    }
+
+    //----------------------------------------------------------------------------------------
+    static void VelDiscPlusStar(struct my_params mp, const Real x1, const Real x2, const Real x3, Real &ux, Real &uy, Real &uz) {
+
+        Real rad(0.0), phi(0.0), z(0.0);
+        Real v1_disc(0.0), v2_disc(0.0), v3_disc(0.0);
+        Real v1_star(0.0), v2_star(0.0), v3_star(0.0);
+
+        // compute the disc velocity component at this location
+        GetCylCoord(mp,rad, phi, z, x1, x2, x3);
+        VelDiscCyl(mp, rad, phi, z, v1_disc, v2_disc, v3_disc);
+    
+        // compute the stellar velocity component at this location
+        VelStar(mp, x1, x2, x3, v1_star, v2_star, v3_star);
+        
+        // set the total velocity components - switch smoothly from star to disc across magsph boundary
+        Real rc = sqrt(rad*rad+z*z);
+        Real sigma = 1/(1+exp((rc - mp.rmagsph)/mp.sig_star_disc));
+        ux = (1-sigma)*v1_disc + sigma*v1_star;
+        uy = (1-sigma)*v2_disc + sigma*v2_star;
+        uz = (1-sigma)*v3_disc + sigma*v3_star;
+
+        return;
+    }
+
+    //----------------------------------------------------------------------------------------
+    KOKKOS_INLINE_FUNCTION //CF:CHECKED
     static Real A1(struct my_params mp, const Real x1, const Real x2, const Real x3) {
         Real a1=0.0;
         Real x2b = x2;
@@ -652,6 +701,30 @@ namespace {
         a3 = mp.mm/rc/rc/rc*(-1.*x2b*sin(mp.thetab));
         return(a3);
     }
+
+    //----------------------------------------------------------------------------------------
+    KOKKOS_INLINE_FUNCTION //CF:CHECKED
+    static void Bfield(struct my_params mp, const Real x1, const Real x2, const Real x3, const Real mmx, const Real mmy, const Real mmz, Real &bx, Real &by,  Real &bz) {
+
+        Real rc = sqrt(x1*x1+x2*x2+x3*x3);
+        Real rccubed = rc*rc*rc;
+        Real rscubed = mp.rs*mp.rs*mp.rs;
+        Real mdotr = mmx*x1 + mmy*x2 + mmz*x3;
+
+        if (rc < mp.rs) {
+            // Inside the stellar radius, set B to zero
+            bx = 2.*mmx/rscubed;
+            by = 2.*mmy/rscubed;
+            bz = 2.*mmz/rscubed;
+        } else {
+            bx = 3.*x1*mdotr/rccubed/rc/rc - mmx/rccubed;
+            by = 3.*x2*mdotr/rccubed/rc/rc - mmy/rccubed;
+            bz = 3.*x3*mdotr/rccubed/rc/rc - mmz/rccubed;
+        }
+
+        return;
+
+    } // end B field 
 
 } // End of namespace functions
 
@@ -792,38 +865,19 @@ void StarMask(Mesh* pm, const Real bdt) { //CF:CHECKED
         Real &x3max = size.d_view(m).x3max;
         Real x3v = CellCenterX(k-ks, indcs.nx3, x3min, x3max);
         
-        Real rc=sqrt(x1v*x1v+x2v*x2v+x3v*x3v);
+        Real rad=sqrt(x1v*x1v+x2v*x2v);
+        Real rc=sqrt(rad*rad+x3v*x3v);
         
         if (rc<mp_.rfix) {
 
-            Real x1w(0.0),x2w(0.0),x3w(0.0);
-            Real rad(0.0),phi(0.0),z(0.0);
-            Real radw(0.0),phiw(0.0),zw(0.0);
-            Real v1_star(0.0),v2_star(0.0),v3_star(0.0);
-            Real v1_starw(0.0),v2_starw(0.0),v3_starw(0.0);
-            Real v1_disc(0.0),v2_disc(0.0),v3_disc(0.0);
-            Real den_disc(0.0), den_star(0.0);
+            Real den(0.0), ux(0.0), uy(0.0), uz(0.0);
 
-            // compute the disc velocity and density at this location
-            GetCylCoord(mp_, rad, phi, z, x1v, x2v, x3v);
-            den_disc = DenDiscCyl(mp_, rad, phi, z);
-            VelDiscCyl(mp_, rad, phi, z, v1_disc, v2_disc, v3_disc);
-
-            // compute density and velocity associated with the star
-            RotateCart(mp_,x1w,x2w,x3w,x1v,x2v,x3v,mp_.thetaw);
-            GetCylCoord(mp_,radw,phiw,zw,x1w,x2w,x3w);
-            den_star = DenStarCyl(mp_,radw,phiw,zw);
-            VelStarCyl(mp_,radw,phiw,zw,v1_starw,v2_starw,v3_starw);
-            RotateCart(mp_,v1_star,v2_star,v3_star,v1_starw,v2_starw,v3_starw,-mp_.thetaw);
-
-            // Combine the velocities
-            Real sigma = 1/(1+exp((rc - mp_.rmagsph)/mp_.sig_star_disc));
-            Real ux = (1-sigma)*v1_disc + sigma*v1_star;
-            Real uy = (1-sigma)*v2_disc + sigma*v2_star;
-            Real uz = (1-sigma)*v3_disc + sigma*v3_star;
+            // Get the combined density and velocity at this location
+            DenDiscPlusStar(mp_, x1v, x2v, x3v, den);
+            VelStar(mp_, x1v, x2v, x3v, ux, uy, uz);
 
             // Assign to conserved varaibles
-            u0_(m,IDN,k,j,i) = den_disc + den_star;            
+            u0_(m,IDN,k,j,i) = den;            
             u0_(m,IM1,k,j,i) = u0_(m,IDN,k,j,i)*ux;
             u0_(m,IM2,k,j,i) = u0_(m,IDN,k,j,i)*uy;
             u0_(m,IM3,k,j,i) = u0_(m,IDN,k,j,i)*uz;
@@ -865,16 +919,14 @@ void MyEfieldMask(Mesh* pm) { //CF:CHECKED
     // Now set a local parameter struct for lambda capturing
     auto mp_ = mp;
 
-    // The magnetic field inside the star is spatially uniform so can be computed outside of the loop
-    // Set the stellar interior magnetic field in the frame aligned with stellar spin
-    Real Bmag = 2*mp.mm/pow(mp.rs,3);
-    Real Bzw = Bmag*cos(mp.thetaw-mp.thetab);
-    Real Bxw = Bmag*sin(mp.thetaw-mp.thetab)*cos(mp.origid*time);
-    Real Byw = Bmag*sin(mp.thetaw-mp.thetab)*sin(mp.origid*time);
+    // The magnetic dipole in the frame aligned with the stellar spin
+    Real mmxw = mp.mm*sin(mp.thetaw-mp.thetab)*cos(mp.origid*time);
+    Real mmyw = mp.mm*sin(mp.thetaw-mp.thetab)*sin(mp.origid*time);
+    Real mmzw = mp.mm*cos(mp.thetaw-mp.thetab);
+    Real mmx(0.0),mmy(0.0),mmz(0.0);
 
-    Real Bx(0.0),By(0.0),Bz(0.0);
     // Rotate from stellar spin frame to standard frame
-    RotateCart(mp_,Bx,By,Bz,Bxw,Byw,Bzw,-mp_.thetaw);
+    RotateCart(mp_,mmx,mmy,mmz,mmxw,mmyw,mmzw,-mp_.thetaw);
 
     // Define E1, E2, E3 on corners
     // Note e1[is:ie,  js:je+1,ks:ke+1]
@@ -899,21 +951,13 @@ void MyEfieldMask(Mesh* pm) { //CF:CHECKED
 
         Real rc = sqrt(x1v*x1v+x2f*x2f+x3f*x3f);
 
-        if (rc<mp_.rs) {
+        if (rc<mp_.rfix) {
 
-            Real x1vw(0.0),x2fw(0.0),x3fw(0.0);
-            Real radw(0.0),phiw(0.0),zw(0.0);
-            Real vxw(0.0),vyw(0.0),vzw(0.0);
             Real vx(0.0),vy(0.0),vz(0.0);
+            Real Bx(0.0),By(0.0),Bz(0.0);
 
-            // tilt coordinates into stellar rotating frame 
-            RotateCart(mp_,x1vw,x2fw,x3fw,x1v,x2f,x3f,mp_.thetaw);
-            GetCylCoord(mp_,radw,phiw,zw,x1vw,x2fw,x3fw);
-
-            // Set the stellar velocity at this location
-            VelStarCyl(mp_,radw,phiw,zw,vxw,vyw,vzw);
-            // rotate velocity and field to standard frame
-            RotateCart(mp_,vx,vy,vz,vxw,vyw,vzw,-mp_.thetaw);
+            VelStar(mp_, x1v, x2f, x3f, vx, vy, vz);
+            Bfield(mp_, x1v, x2f, x3f, mmx, mmy, mmz, Bx, By, Bz);
 
             // E1=-(v X B)=VzBy-VyBz
             e1_(m,k,j,i) = vz*By - vy*Bz;
@@ -939,21 +983,13 @@ void MyEfieldMask(Mesh* pm) { //CF:CHECKED
 
         Real rc = sqrt(x1f*x1f+x2v*x2v+x3f*x3f);
 
-        if (rc<mp_.rs) {
+        if (rc<mp_.rfix) {
 
-            Real x1fw(0.0),x2vw(0.0),x3fw(0.0);
-            Real radw(0.0),phiw(0.0),zw(0.0);
-            Real vxw(0.0),vyw(0.0),vzw(0.0);
             Real vx(0.0),vy(0.0),vz(0.0);
+            Real Bx(0.0),By(0.0),Bz(0.0);
 
-            // tilt coordinates into stellar rotating frame
-            RotateCart(mp_,x1fw,x2vw,x3fw,x1f,x2v,x3f,mp_.thetaw);
-            GetCylCoord(mp_,radw,phiw,zw,x1fw,x2vw,x3fw);
-
-            // Set the stellar velocity at this location
-            VelStarCyl(mp_,radw,phiw,zw,vxw,vyw,vzw);
-            // rotate velocity and field to standard frame
-            RotateCart(mp_,vx,vy,vz,vxw,vyw,vzw,-mp_.thetaw);
+            VelStar(mp_, x1f, x2v, x3f, vx, vy, vz);
+            Bfield(mp_, x1f, x2v, x3f, mmx, mmy, mmz, Bx, By, Bz);
 
             // E2=-(v X B)=VxBz-VzBx
             e2_(m,k,j,i) = vx*Bz - vz*Bx;
@@ -979,21 +1015,13 @@ void MyEfieldMask(Mesh* pm) { //CF:CHECKED
 
         Real rc = sqrt(x1f*x1f+x2f*x2f+x3v*x3v);
 
-        if (rc<mp_.rs) {
+        if (rc<mp_.rfix) {
 
-            Real x1fw(0.0),x2fw(0.0),x3vw(0.0);
-            Real radw(0.0),phiw(0.0),zw(0.0);
-            Real vxw(0.0),vyw(0.0),vzw(0.0);
             Real vx(0.0),vy(0.0),vz(0.0);
+            Real Bx(0.0),By(0.0),Bz(0.0);
 
-            // tilt coordinates into stellar rotating frame
-            RotateCart(mp_,x1fw,x2fw,x3vw,x1f,x2f,x3v,mp_.thetaw);
-            GetCylCoord(mp_,radw,phiw,zw,x1fw,x2fw,x3vw);
-
-            // Set the stellar velocity at this location
-            VelStarCyl(mp_,radw,phiw,zw,vxw,vyw,vzw);
-            // rotate velocity and field to standard frame
-            RotateCart(mp_,vx,vy,vz,vxw,vyw,vzw,-mp_.thetaw);
+            VelStar(mp_, x1f, x2f, x3v, vx, vy, vz);
+            Bfield(mp_, x1f, x2f, x3v, mmx, mmy, mmz, Bx, By, Bz);
 
             // E3=-(v X B)=VyBx-VxBy
             e3_(m,k,j,i) = vy*Bx - vx*By;
