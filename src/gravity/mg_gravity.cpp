@@ -57,7 +57,6 @@ MGGravityDriver::MGGravityDriver(MeshBlockPack *pmbp, ParameterInput *pin)
         << "using the SetGravitationalConstant or SetFourPiG function." << std::endl;
     exit(EXIT_FAILURE);
   }
-
   // Allocate the root multigrid
   int nghost = pmbp->pmesh->mb_indcs.ng;
   mgroot_ = new MGGravity(this, nullptr, nghost);
@@ -105,7 +104,9 @@ void MGGravityDriver::Solve(Driver *pdriver, int stage, Real dt) {
   RegionIndcs &indcs_ = pmy_pack_->pmesh->mb_indcs;
   // mglevels_ points to the Multigrid object for all MeshBlocks
   mglevels_->LoadSource(pmy_pack_->phydro->u0, IDN, indcs_.ng, four_pi_G_);
-  //mglevels_->PrintAll(mglevels_->GetCurrentSource()); // DEBUG
+  //if (fsubtract_average_)
+    mglevels_->SubtractAverage(MGVariable::src, 0, 2);
+
   // iterative mode - load initial guess
   mglevels_->LoadFinestData(pmy_pack_->pgrav->phi, 0, indcs_.ng);
   SetupMultigrid(dt, false);
@@ -116,8 +117,6 @@ void MGGravityDriver::Solve(Driver *pdriver, int stage, Real dt) {
   mglevels_->RetrieveResult(pgrav->phi, 0, indcs_.ng);
   //mglevels_->RetrieveDefect(pgrav->def, 0, indcs_.ng);
 
-  //if (vmg_[0]->pmy_block_->pgrav->fill_ghost)
-  //  gtlist_->DoTaskListOneStage(pmy_mesh_, stage);
   return;
 }
 

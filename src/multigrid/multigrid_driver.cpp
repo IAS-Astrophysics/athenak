@@ -37,16 +37,15 @@ MultigridDriver::MultigridDriver(MeshBlockPack *pmbp, int invar):
     pmy_mesh_(pmbp->pmesh), fsubtract_average_(false),
     needinit_(true), eps_(-1.0),
     niter_(-1), npresmooth_(1), npostsmooth_(1), coffset_(0), fprolongation_(0),
-    nb_rank_(0) {
+    nb_rank_(0), ncoeff_(0) {
   if (pmy_mesh_->mb_indcs.nx2==1 || pmy_mesh_->mb_indcs.nx3==1) {
     std::cout << "### FATAL ERROR in MultigridDriver::MultigridDriver" << std::endl
         << "Currently the Multigrid solver works only in 3D." << std::endl;
     exit(EXIT_FAILURE);
     return;
   }
-
   ranklist_  = new int[nbtotal_];
-  int nv = std::max(nvar_*2, ncoeff_);
+  int nv = nvar_*2;
   Kokkos::realloc(rootbuf_, nv, nbtotal_);
   for (int n = 0; n < nbtotal_; ++n)
     ranklist_[n] = pmy_mesh_->rank_eachmb[n];
@@ -61,10 +60,10 @@ MultigridDriver::MultigridDriver(MeshBlockPack *pmbp, int invar):
     ncslist_ = new int[nranks_];
   }
 
-#ifdef MPI_PARALLEL
-  MPI_Comm_dup(MPI_COMM_WORLD, &MPI_COMM_MULTIGRID);
-  mg_phys_id_ = pmy_mesh_->ReserveTagPhysIDs(1);
-#endif
+//#if MPI_PARALLEL_ENABLED
+//  MPI_Comm_dup(MPI_COMM_WORLD, &MPI_COMM_MULTIGRID);
+//  mg_phys_id_ = pmy_mesh_->ReserveTagPhysIDs(1);
+//#endif
 
 }
 
@@ -123,7 +122,6 @@ void MultigridDriver::SetupMultigrid(Real dt, bool ftrivial) {
     }
   }
   needinit_ = false;
-
   //TODO: Apply mask to source if needed
   if (fsubtract_average_)SubtractAverage(MGVariable::src);
   current_level_ = ntotallevel_ - 1;
@@ -143,24 +141,30 @@ void MultigridDriver::TransferFromBlocksToRoot(bool initflag) {
   // Gather data from meshblock-level multigrids into rootbuf_
   // mglevels_ is a pack-aware multigrid covering nmmb_ meshblocks
   int nmmb = mglevels_->nmmb_-1;
+  int padding = nslist_[global_variable::my_rank];
   par_for("Multigrid:SaveToRoot",DevExeSpace(), 0, nmmb, KOKKOS_LAMBDA(const int m) {  
     // Transfer source and solution data (always)
       for (int v = 0; v < nv; ++v) {
-        rootbuf.d_view(v   , m) = src_(m, v, ngh_, ngh_, ngh_);
-        rootbuf.d_view(v+nv, m) = u_(m, v, ngh_, ngh_, ngh_);
+        rootbuf.d_view(v   , m+padding) = src_(m, v, ngh_, ngh_, ngh_);
+        rootbuf.d_view(v+nv, m+padding) = u_(m, v, ngh_, ngh_, ngh_);
       }
     });
   rootbuf.template modify<DevExeSpace>();
   rootbuf.template sync<HostExeSpace>();
-  
-  // TODO: Add MPI communication here if running in parallel to gather data to root grid
+  #if MPI_PARALLEL_ENABLED
+  //TODO: Optimize MPI communication (make rootbuf_ contiguous in memory)
+  for (int v = 0; v < 2*nv; ++v) {
+    MPI_Allgatherv(MPI_IN_PLACE, nblist_[global_variable::my_rank], MPI_ATHENA_REAL,
+                     &rootbuf.h_view(v,0), nblist_, nslist_, MPI_ATHENA_REAL, MPI_COMM_WORLD);
+                    }
+  #endif
   const auto loc = pmy_mesh_->lloc_eachmb;
   int rootlevel = locrootlevel_;
   const auto &src_r = mgroot_->GetCurrentSource();
   const auto &u_r = mgroot_->GetCurrentData();
   auto u_h = Kokkos::create_mirror_view_and_copy(HostMemSpace(), u_r);
   auto src_h = Kokkos::create_mirror_view_and_copy(HostMemSpace(), src_r);
-  for (int m = 0; m <= nmmb; ++m) {
+  for (int m = 0; m < nbtotal_; ++m) {
     int i = static_cast<int>(loc[m].lx1);
     int j = static_cast<int>(loc[m].lx2);
     int k = static_cast<int>(loc[m].lx3);
@@ -259,7 +263,8 @@ void MultigridDriver::OneStepToCoarser(Driver *pdriver, int nsmooth) {
 void MultigridDriver::SolveVCycle(Driver *pdriver, int npresmooth, int npostsmooth) {
   int startlevel=current_level_;
   coffset_ ^= 1;
-  std::cout << "Starting V-Cycle at level " << current_level_ << std::endl;
+  if (global_variable::my_rank == 0)
+    std::cout << "Starting V-Cycle at level " << current_level_ << std::endl;
   while (current_level_ > 0)
     OneStepToCoarser(pdriver, npresmooth);
   SolveCoarsestGrid();
@@ -274,8 +279,9 @@ void MultigridDriver::SolveVCycle(Driver *pdriver, int npresmooth, int npostsmoo
 //  \brief Solve iteratively niter_ times
 
 void MultigridDriver::SolveIterative(Driver *pdriver) {
-  niter_ = 3; // for testing
-  std::cout << "Starting Multigrid SolveIterative with " << niter_ << " V-cycles." << std::endl;
+  niter_ = 10; // for testing
+  if (global_variable::my_rank == 0)
+    std::cout << "Starting Multigrid SolveIterative with " << niter_ << " V-cycles." << std::endl;
   auto start_time = std::chrono::high_resolution_clock::now();
   for (int n = 0; n < niter_; ++n){
     SolveVCycle(pdriver, npresmooth_, npostsmooth_);
@@ -288,9 +294,8 @@ void MultigridDriver::SolveIterative(Driver *pdriver) {
   Kokkos::fence();
   auto end_time = std::chrono::high_resolution_clock::now();
   std::chrono::duration<double> elapsed = (end_time - start_time)/niter_;
-  std::cout << "SolveIterative time: " << elapsed.count() << " seconds" << std::endl;
-  
-  
+  if (global_variable::my_rank == 0)
+    std::cout << "SolveIterative time: " << elapsed.count() << " seconds" << std::endl;
   return;
 }
 
@@ -313,8 +318,6 @@ void MultigridDriver::SolveCoarsestGrid() {
       mgroot_->SmoothPack(1-coffset_);
       MGRootBoundary(mgroot_->GetCurrentData());
     }
-    std::cout << "Solution at coarsest grid:" << std::endl;
-    mgroot_->PrintActiveRegion(mgroot_->GetCurrentData());
   return;
 }
 
@@ -336,18 +339,16 @@ Real MultigridDriver::CalculateDefectNorm(MGNormType nrm, int n) {
     }
   }
 
-  // Also include root-grid defect if applicable (coarsest level)
-  else if (mgroot_ != nullptr) {
-    Real root_norm = mgroot_->CalculateDefectNorm(nrm, n);
-    if (nrm == MGNormType::max) {
-      norm = std::max(norm, root_norm);
-    } else {
-      norm += root_norm;
-    }
+  #if MPI_PARALLEL_ENABLED
+  // Reduce over all MPI ranks
+  Real global_norm = 0.0;
+  if (nrm == MGNormType::max) {
+    MPI_Allreduce(&norm, &global_norm, 1, MPI_ATHENA_REAL, MPI_MAX, MPI_COMM_WORLD);
+  } else {
+    MPI_Allreduce(&norm, &global_norm, 1, MPI_ATHENA_REAL, MPI_SUM, MPI_COMM_WORLD);
   }
-
-  //TODO: Add MPI reduction here if running in parallel
-
+  norm = global_norm;
+  #endif
   // Normalize by volume for L2 norm
   if (nrm != MGNormType::max) {
     Real vol = (mgroot_->size_.x1max - mgroot_->size_.x1min)
@@ -355,12 +356,10 @@ Real MultigridDriver::CalculateDefectNorm(MGNormType nrm, int n) {
              * (mgroot_->size_.x3max - mgroot_->size_.x3min);
     norm /= vol;
   }
-
   // Take square root for L2 norm
   if (nrm == MGNormType::l2) {
     norm = std::sqrt(norm);
   }
-
   return norm;
 }
 

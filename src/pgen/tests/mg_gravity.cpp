@@ -31,7 +31,6 @@
 void ProblemGenerator::SelfGravity(ParameterInput *pin, const bool restart) {
   // nothing needs to be done on restarts for this pgen
   if (restart) return;
-
   // Read input parameters
   Real four_pi_G = pin->GetOrAddReal("gravity", "four_pi_G", 1.0);
   Real gamma = pin->GetOrAddReal("hydro", "gamma", 5.0/3.0);
@@ -75,22 +74,9 @@ void ProblemGenerator::SelfGravity(ParameterInput *pin, const bool restart) {
       Real &x3min = size.d_view(m).x3min;
       Real &x3max = size.d_view(m).x3max;
       Real x3v = CellCenterX(k-ks, indcs.nx3, x3min, x3max);
-      //std::cout<<std::setprecision(2)<<"MB "<<m<<", (x1,x2,x3)=("<<x1v<<","<<x2v<<","<<x3v<<")"<<std::endl;
-
-      // distance from center
-      Real dx = x1v - center_x;
-      Real dy = x2v - center_y;
-      Real dz = x3v - center_z;
-      Real r = std::sqrt(dx*dx + dy*dy + dz*dz);
-      Real r2_plus_a2 = r*r + a*a;
-
-      // Plummer potential: phi = -M / sqrt(r^2 + a^2)
-      Real phi_analytic = -M / std::sqrt(r2_plus_a2);
-
-      // Plummer density: rho = (3*M*a^2) / (4*pi*(r^2 + a^2)^(5/2))
-      // Equivalently: rho = -(nabla^2 phi) / (4*pi*G)
-      Real denom = std::pow(r2_plus_a2, 2.5);  // (r^2 + a^2)^(5/2)
-      Real rho = (3.0 * M * a * a) / (4.0 * M_PI * denom * four_pi_G);
+      
+      // Periodic test: Sinusoidal density wave
+      Real rho = 2.0 + std::sin(2*M_PI*x1v) * std::sin(2*M_PI*x2v) * std::sin(2*M_PI*x3v);
 
       // set hydro conserved variables: density, momenta, total energy
       u0(m, IDN, k, j, i) = rho;

@@ -36,28 +36,53 @@ enum class MGNormType {max, l1, l2};
 
 struct MultigridTaskIDs {
       TaskID send0;
+      TaskID ircv0;
       TaskID recv0;
       TaskID physb0;
       TaskID send1;
+      TaskID ircv1;
       TaskID recv1;
       TaskID physb1;
       TaskID sendR;
+      TaskID ircvR;
       TaskID recvR;
       TaskID physbR;
       TaskID smoothR;
       TaskID clearR;
       TaskID sendB;
+      TaskID ircvB;
       TaskID recvB;
       TaskID physbB;
       TaskID smoothB;
-      TaskID clearB;
-      TaskID restrict;
+      TaskID sendR2;
+      TaskID ircvR2;
+      TaskID recvR2;
+      TaskID physbR2;
+      TaskID smoothR2;
+      TaskID sendB2;
+      TaskID ircvB2;
+      TaskID recvB2;
+      TaskID physbB2;
+      TaskID smoothB2;
+      TaskID restrict_;
       TaskID prolongate;
       TaskID calc_rhs;
       TaskID apply_mask;
       TaskID zero_clear;
       TaskID store_old;
       TaskID smooth;
+      TaskID clear_recv0;
+      TaskID clear_send0;
+      TaskID clear_recv1;
+      TaskID clear_send1;
+      TaskID clear_recvR;
+      TaskID clear_sendR;
+      TaskID clear_recvB;
+      TaskID clear_sendB;
+      TaskID clear_recvR2;
+      TaskID clear_sendR2;
+      TaskID clear_recvB2;
+      TaskID clear_sendB2;
 };
 
 //! \class Multigrid
@@ -104,6 +129,7 @@ class Multigrid {
   int GetCurrentLevel() { return current_level_; }
   int GetLevelShift() { return nlevel_ - 1 - current_level_; }
   int GetSize() { return indcs_.nx1; }
+  int GetGhostCells() { return ngh_; }
   DvceArray5D<Real>& GetCurrentData() { return u_[current_level_]; }
   DvceArray5D<Real>& GetCurrentSource() { return src_[current_level_]; }
   DvceArray5D<Real>& GetCurrentOldData() { return uold_[current_level_]; }
@@ -197,6 +223,8 @@ class MultigridDriver {
   TaskStatus ProlongateBoundaryForProlongation(Driver *pdrive, int stag);
   TaskStatus CalculateFASRHS(Driver *pdrive, int stag);
   TaskStatus StoreOldData(Driver *pdrive, int stag);
+  TaskStatus ClearRecv(Driver *pdrive, int stag);
+  TaskStatus ClearSend(Driver *pdrive, int stag);
   void SetMGTaskListToFiner(int nsmooth, int ngh);
   void SetMGTaskListToCoarser(int nsmooth, int ngh);
   void SetMGTaskListBoundaryCommunication();
@@ -252,6 +280,7 @@ class MultigridBoundaryValues : public MeshBoundaryValuesCC {
   TaskStatus PackAndSendMG(const DvceArray5D<Real> &u);
   // receive/unpack fluxes at fine/coarse boundaries from boundary buffers and
   TaskStatus RecvAndUnpackMG(DvceArray5D<Real> &u);
+  TaskStatus InitRecvMG(const int nvars);
 
  private:
   // data

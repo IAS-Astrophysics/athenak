@@ -385,6 +385,7 @@ void Driver::Execute(Mesh *pmesh, ParameterInput *pin, Outputs *pout) {
     std::cout << "\nStatic time evolution selected, solving steady-state problem...\n"
               << std::endl;
     if (pmesh->pmb_pack->pgrav != nullptr) {
+      if (global_variable::my_rank == 0)
       std::cout << "Solving Poisson equation for gravity..." << std::endl;
       pmesh->pmb_pack->pgrav->pmgd->Solve(this, 0);
     }

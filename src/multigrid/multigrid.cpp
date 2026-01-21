@@ -222,7 +222,6 @@ void Multigrid::LoadSource(const DvceArray5D<Real> &src, int ns, int ngh, Real f
     } else {
       dst(m, v, mk, mj, mi) = src(m, nsrc, k, j, i) * lfac;
     }
-    dst(m, v, mk, mj, mi) -= 2;
   });
 
   current_level_ = nlevel_-1;
@@ -273,11 +272,7 @@ void Multigrid::ApplyMask() {
   ie = is + indcs_.nx1;
   je = js + indcs_.nx2;
   ke = ks + indcs_.nx3;
-  //if (pmy_driver_->srcmask_ != nullptr)
-  //  pmy_driver_->srcmask_(src_[nlevel_-1], is, ie, js, je, ks, ke, coord_[nlevel_-1]);
-  //if (ncoeff_ > 0 && pmy_driver_->coeffmask_ != nullptr)
-  //  pmy_driver_->coeffmask_(coeff_[nlevel_-1], is, ie, js, je, ks, ke, coord_[nlevel_-1]);
-  //return;
+  return;
 }
 
 
@@ -429,11 +424,8 @@ void Multigrid::SmoothPack(int color) {
   ie = is+(indcs_.nx1>>ll) + 2*(ngh_-1) - 1;
   je = js+(indcs_.nx2>>ll) + 2*(ngh_-1) - 1;
   ke = ks+(indcs_.nx3>>ll) + 2*(ngh_-1) - 1;
-  //PrintActiveRegion(src_[current_level_]);
-  PrintActiveRegion(u_[current_level_]);
   Smooth(u_[current_level_], src_[current_level_],  coeff_[current_level_],
          matrix_[current_level_], -ll, is, ie, js, je, ks, ke, color, th);
-
   return;
 }
 
@@ -487,7 +479,7 @@ void Multigrid::SetFromRootGrid(bool folddata) {
   const auto &src=pmy_driver_->mgroot_->GetCurrentData();
   const auto &osrc = pmy_driver_->mgroot_->GetCurrentOldData();
   int lev = loc_.level - pmy_driver_->locrootlevel_;
-  
+  int padding = pmy_mesh_->gids_eachrank[global_variable::my_rank];
   //Host copy/mirror this should be optimized later
   auto dst_h = Kokkos::create_mirror_view(dst);
   auto odst_h = Kokkos::create_mirror_view(odst);
@@ -496,7 +488,7 @@ void Multigrid::SetFromRootGrid(bool folddata) {
 
   if (lev == 0) { // from the root grid
     for(int m=0; m<nmmb_; ++m) {
-      auto loc = pmy_mesh_->lloc_eachmb[m];
+      auto loc = pmy_mesh_->lloc_eachmb[m+padding];
       int ci = static_cast<int>(loc.lx1);
       int cj = static_cast<int>(loc.lx2);
       int ck = static_cast<int>(loc.lx3);
@@ -563,8 +555,6 @@ Real Multigrid::CalculateDefectNorm(MGNormType nrm, int n) {
         local_sum += std::abs(def(m, v, k, j, i));
       }, Kokkos::Sum<Real>(norm));
     norm *= dV;
-    std::cout << "Defect norm L1 at level " << pmy_driver_->current_level_ << ": " << norm << std::endl;  
-
   } else { // L2 norm (default)
     // L2 norm: sqrt(sum of squares)
     Kokkos::parallel_reduce("MG::DefectNorm_L2",
@@ -574,8 +564,7 @@ Real Multigrid::CalculateDefectNorm(MGNormType nrm, int n) {
         Real val = def(m, v, k, j, i);
         local_sum += val * val;
         }, Kokkos::Sum<Real>(norm));
-    norm = std::sqrt(norm * dV);
-    std::cout << "Defect norm L2 at level " << pmy_driver_->current_level_ << ": " << norm << std::endl;  
+    norm *= dV;
   }
   norm *= defscale_;
   return norm;
@@ -616,7 +605,9 @@ void Multigrid::SubtractAverage(MGVariable type, int n, Real ave) {
   DvceArray5D<Real> &dst = (type == MGVariable::src) ? src_[nlevel_-1] : u_[nlevel_-1];
   int is, ie, js, je, ks, ke;
   is = js = ks = 0;
-  ie = is + indcs_.nx1 + 1; je = js + indcs_.nx2 + 1; ke = ks + indcs_.nx3 + 1;
+  ie = is + indcs_.nx1 + 2*ngh_ - 1;
+  je = js + indcs_.nx2 + 2*ngh_ - 1;
+  ke = ks + indcs_.nx3 + 2*ngh_ - 1;
 
   // local copies for device lambda capture
   const int m0 = 0, m1 = nmmb_ - 1;
@@ -645,39 +636,6 @@ void Multigrid::StoreOldData() {
   Kokkos::deep_copy(DevExeSpace(),uold_[current_level_], u_[current_level_]);
   return;
 }
-
-
-//----------------------------------------------------------------------------------------
-//! \fn Real Multigrid::GetCoarsestData(MGVariable type, int n)
-//  \brief get the value on the coarsest level in the MG Pack
-
-KOKKOS_INLINE_FUNCTION
-Real Multigrid::GetCoarsestData(MGVariable type, int m, int n) {
-  if (type == MGVariable::src)
-    return src_[0](m, n, ngh_, ngh_, ngh_);
-  else if (type == MGVariable::u)
-    return u_[0](m, n, ngh_, ngh_, ngh_);
-  else
-    return coeff_[0](m, n, ngh_, ngh_, ngh_);
-}
-
-
-//----------------------------------------------------------------------------------------
-//! \fn void Multigrid::SetData(MGVariable type, int n, int k, int j, int i, Real v)
-//! \brief set a value to a cell on the current level
-
-void Multigrid::SetData(MGVariable type, int n, int k, int j, int i, Real v) {
-  if (type == MGVariable::src){
-    src_[current_level_](0, n, ngh_+k, ngh_+j, ngh_+i) = v;
-    }
-  else if (type == MGVariable::u){
-    u_[current_level_](0, n, ngh_+k, ngh_+j, ngh_+i) = v;
-    }
-  else
-    coeff_[current_level_](0, n, ngh_+k, ngh_+j, ngh_+i) = v;
-  return;
-}
-
 
 //----------------------------------------------------------------------------------------
 //! \fn void Multigrid::Restrict(DvceArray5D<Real> &dst, const DvceArray5D<Real> &src,
@@ -726,7 +684,6 @@ void Multigrid::ComputeCorrection() {
   KOKKOS_LAMBDA(const int m, const int v, const int k, const int j, const int i) {
     u(m, v, k, j, i) -= uold(m, v, k, j, i);
   });
-  //PrintAll(u);
   return;
 }
 
@@ -946,7 +903,6 @@ TaskStatus MultigridBoundaryValues::PackAndSendMG(const DvceArray5D<Real> &u) {
     int shift = shift_;
     int nx1 = nx1_;
     int diff;
-    //int ngh = pmy_pack->pmesh->mb_indcs.ng;
     // only load buffers when neighbor exists
     if (nghbr.d_view(m,n).gid >= 0) {
       // For multigrid, all neighbors are at the same level, so always use isame indices
@@ -1020,6 +976,48 @@ TaskStatus MultigridBoundaryValues::PackAndSendMG(const DvceArray5D<Real> &u) {
     }  // end if-neighbor-exists block
     tmember.team_barrier();
   });  // end par_for
+
+  #if MPI_PARALLEL_ENABLED
+  // Send boundary buffer to neighboring MeshBlocks using MPI
+  Kokkos::fence();
+  bool no_errors=true;
+  for (int m=0; m<nmb; ++m) {
+    for (int n=0; n<nnghbr; ++n) {
+      if (nghbr.h_view(m,n).gid >= 0) {  // neighbor exists and not a physical boundary
+        // index and rank of destination Neighbor
+        int dn = nghbr.h_view(m,n).dest;
+        int drank = nghbr.h_view(m,n).rank;
+        if (drank != my_rank) {
+          // create tag using local ID and buffer index of *receiving* MeshBlock
+          int lid = nghbr.h_view(m,n).gid - pmy_pack->pmesh->gids_eachrank[drank];
+          int tag = CreateBvals_MPI_Tag(lid, dn);
+
+          // get ptr to send buffer when neighbor is at coarser/same/fine level
+          int data_size = nvar;
+          data_size *= sendbuf[n].isame_ndat;
+          
+          if (not(sendbuf[n].faces.h_view(0)))
+            data_size >>= shift_;
+          if (not(sendbuf[n].faces.h_view(1)))
+            data_size >>= shift_;
+          if (not(sendbuf[n].faces.h_view(2)))
+            data_size >>= shift_;
+
+          auto send_ptr = Kokkos::subview(sendbuf[n].vars, m, Kokkos::ALL);
+          int ierr = MPI_Isend(send_ptr.data(), data_size, MPI_ATHENA_REAL, drank, tag,
+                               comm_vars, &(sendbuf[n].vars_req[m]));
+          if (ierr != MPI_SUCCESS) {no_errors=false;}
+        }
+      }
+    }
+  }
+  // Quit if MPI error detected
+  if (!(no_errors)) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+       << std::endl << "MPI error in posting sends" << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+#endif
   return TaskStatus::complete;
 }
 
@@ -1036,9 +1034,40 @@ TaskStatus MultigridBoundaryValues::RecvAndUnpackMG(DvceArray5D<Real> &u) {
   auto &nghbr = pmy_pack->pmb->nghbr;
   auto &rbuf = recvbuf;
   int shift_ = pmy_mg->GetLevelShift();
+  #if MPI_PARALLEL_ENABLED
+  //----- STEP 1: check that recv boundary buffer communications have all completed
+  bool bflag = false;
+  bool no_errors=true;
+  for (int m=0; m<nmb; ++m) {
+    for (int n=0; n<nnghbr; ++n) {
+      if (nghbr.h_view(m,n).gid >= 0) { // neighbor exists and not a physical boundary
+        if (nghbr.h_view(m,n).rank != global_variable::my_rank) {
+          int test;
+          int ierr = MPI_Test(&(rbuf[n].vars_req[m]), &test, MPI_STATUS_IGNORE);
+          if (ierr != MPI_SUCCESS) {no_errors=false;}
+          if (!(static_cast<bool>(test))) {
+            bflag = true;
+          }
+        }
+      }
+    }
+  }
+  // Quit if MPI error detected
+  if (!(no_errors)) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+              << std::endl << "MPI error in testing non-blocking receives"
+              << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+  // exit if recv boundary buffer communications have not completed
+  if (bflag) {return TaskStatus::incomplete;}
+  MPI_Barrier(comm_vars);
+#endif
+
   //----- STEP 2: buffers have all completed, so unpack
   int nvar = u.extent_int(1);
-  int ngh = pmy_pack->pmesh->mb_indcs.ng;
+  int ngh = pmy_mg->GetGhostCells();
+  int rank = global_variable::my_rank;
   // Outer loop over (# of MeshBlocks)*(# of buffers)*(# of variables)
   Kokkos::TeamPolicy<> policy(DevExeSpace(), (nmb*nnghbr*nvar), Kokkos::AUTO);
   Kokkos::parallel_for("MG::RecvAndUnpackCC", policy, KOKKOS_LAMBDA(TeamMember_t tmember) {
@@ -1110,6 +1139,61 @@ TaskStatus MultigridBoundaryValues::RecvAndUnpackMG(DvceArray5D<Real> &u) {
   return TaskStatus::complete;
 }
 
+//----------------------------------------------------------------------------------------
+//! \fn  void MeshBoundaryValues::InitRecv
+//! \brief Posts non-blocking receives (with MPI) for boundary communications of vars.
+
+TaskStatus MultigridBoundaryValues::InitRecvMG(const int nvars) {
+#if MPI_PARALLEL_ENABLED
+  int &nmb = pmy_pack->nmb_thispack;
+  int &nnghbr = pmy_pack->pmb->nnghbr;
+  auto &nghbr = pmy_pack->pmb->nghbr;
+  int shift_ = pmy_mg->GetLevelShift();
+
+  // Initialize communications of variables
+  bool no_errors=true;
+  for (int m=0; m<nmb; ++m) {
+    for (int n=0; n<nnghbr; ++n) {
+      if (nghbr.h_view(m,n).gid >= 0) {
+        // rank of destination buffer
+        int drank = nghbr.h_view(m,n).rank;
+
+        // post non-blocking receive if neighboring MeshBlock on a different rank
+        if (drank != global_variable::my_rank) {
+          // create tag using local ID and buffer index of *receiving* MeshBlock
+          int tag = CreateBvals_MPI_Tag(m, n);
+
+          // calculate amount of data to be passed, get pointer to variables
+          int data_size = nvars;
+          data_size *= sendbuf[n].isame_ndat;
+          
+          if (not(recvbuf[n].faces.h_view(0)))
+            data_size >>= shift_;
+          if (not(recvbuf[n].faces.h_view(1)))
+            data_size >>= shift_;
+          if (not(recvbuf[n].faces.h_view(2)))
+            data_size >>= shift_;
+
+          auto recv_ptr = Kokkos::subview(recvbuf[n].vars, m, Kokkos::ALL);
+
+          // Post non-blocking receive for this buffer on this MeshBlock
+          int ierr = MPI_Irecv(recv_ptr.data(), data_size, MPI_ATHENA_REAL, drank, tag,
+                               comm_vars, &(recvbuf[n].vars_req[m]));
+          if (ierr != MPI_SUCCESS) {no_errors=false;}
+        }
+      }
+    }
+  }
+  // Quit if MPI error detected
+  if (!(no_errors)) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+       << std::endl << "MPI error in posting non-blocking receives" << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+#endif
+  return TaskStatus::complete;
+}
+
 void Multigrid::PrintActiveRegion(const DvceArray5D<Real> &u) {
   auto u_h = Kokkos::create_mirror_view_and_copy(HostMemSpace(), u);
   int ll = nlevel_ - 1 - current_level_;
@@ -1123,8 +1207,8 @@ void Multigrid::PrintActiveRegion(const DvceArray5D<Real> &u) {
   std::cout << "Range: i=[" << is << "," << ie << "], j=[" << js << "," << je 
             << "], k=[" << ks << "," << ke << "]\n";
   std::cout << "[";
-  for (int mz = 0; mz < nmmbx3_; ++mz) {
-  for (int k = ks; k <= ke; ++k) {
+  for (int mz = 0; mz < nmmbx3_/global_variable::nranks; ++mz) {
+  for (int k = ks; k <= ks+((ke-ks)/(3-global_variable::nranks)); ++k) {
         std::cout << "[";
         for (int my=0; my < nmmbx2_; ++my) {
           for (int j = js; j <= je; ++j) {
