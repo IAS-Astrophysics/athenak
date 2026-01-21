@@ -287,10 +287,10 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   bbh.q = pin->GetOrAddReal("problem", "q", 1.0);
   bbh.a1 = pin->GetOrAddReal("problem", "a1", 0.0);
   bbh.a2 = pin->GetOrAddReal("problem", "a2", 0.0);
-  bbh.th_a1 = pin->GetOrAddReal("problem", "th_a1", 0.0);
-  bbh.th_a2 = pin->GetOrAddReal("problem", "th_a2", 0.0);
-  bbh.ph_a1 = pin->GetOrAddReal("problem", "ph_a1", 0.0);
-  bbh.ph_a2 = pin->GetOrAddReal("problem", "ph_a2", 0.0);
+  bbh.th_a1 = pin->GetOrAddReal("problem", "th_a1", 0.0) * (M_PI/180.0);
+  bbh.th_a2 = pin->GetOrAddReal("problem", "th_a2", 0.0) * (M_PI/180.0);
+  bbh.ph_a1 = pin->GetOrAddReal("problem", "ph_a1", 0.0) * (M_PI/180.0);
+  bbh.ph_a2 = pin->GetOrAddReal("problem", "ph_a2", 0.0) * (M_PI/180.0);
   bbh.d = pin->GetOrAddReal("problem", "duniform", 1.0);
   bbh.gamma_adi = pin->GetOrAddReal("problem", "gamma_adi", 1.6666666);
   bbh.adjust_mass1 = pin->GetOrAddReal("problem", "adjust_mass1", 1.0);
@@ -1394,9 +1394,9 @@ void find_traj_t(Real t, Real bbh_t[NTRAJ]) {
   bbh_t[AX1] = bbh.a1*std::sin(bbh.th_a1)*std::cos(bbh.ph_a1);
   bbh_t[AY1] = bbh.a1*std::sin(bbh.th_a1)*std::sin(bbh.ph_a1);
   bbh_t[AZ1] = bbh.a1*std::cos(bbh.th_a1);
-  bbh_t[AX2] = bbh.a1*std::sin(bbh.th_a2)*std::cos(bbh.ph_a2);
-  bbh_t[AY2] = bbh.a1*std::sin(bbh.th_a2)*std::sin(bbh.ph_a2);
-  bbh_t[AZ2] = bbh.a1*std::cos(bbh.th_a2);
+  bbh_t[AX2] = bbh.a2*std::sin(bbh.th_a2)*std::cos(bbh.ph_a2);
+  bbh_t[AY2] = bbh.a2*std::sin(bbh.th_a2)*std::sin(bbh.ph_a2);
+  bbh_t[AZ2] = bbh.a2*std::cos(bbh.th_a2);
   bbh_t[M1T] = 1.0/(bbh.q+1.0);
   bbh_t[M2T] = 1.0 - bbh_t[M1T];
 }
