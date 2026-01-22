@@ -30,14 +30,15 @@ class SphericalGrid: public GeodesicGrid {
     void InterpolateToSphere(int nvars, DvceArray5D<Real>& val);  // interpolate to sphere
     // interpolate a range of variables to a sphere
     void InterpolateToSphere(int vs, int ve, DvceArray5D<Real>& val);
+    // Public methods for updating interpolation when mesh changes (e.g., AMR)
+    void SetInterpolationIndices();      // set indexing for interpolation
+    void SetInterpolationWeights();      // set weights for interpolation
 
  private:
     MeshBlockPack* pmy_pack;  // ptr to MeshBlockPack containing this Hydro
     DualArray2D<int> interp_indcs;   // indices of MeshBlock and zones therein for interp
     DualArray3D<Real> interp_wghts;  // weights for interpolation
     void SetInterpolationCoordinates();  // set indexing for interpolation
-    void SetInterpolationIndices();      // set indexing for interpolation
-    void SetInterpolationWeights();      // set weights for interpolation
 };
 
 #endif // GEODESIC_GRID_SPHERICAL_GRID_HPP_
