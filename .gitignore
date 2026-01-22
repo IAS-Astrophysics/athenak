@@ -1,5 +1,6 @@
 # build directories
 build*/
+__pycache__*/
 
 # Athena output files
 *.tab
