@@ -119,7 +119,6 @@ void MyEfieldMask(Mesh* pm);
 void MyHistFunc(HistoryData *pdata, Mesh *pm);
 
 void StarMask(Mesh* pm, const Real bdt);
-void InnerDiskMask(Mesh* pm, const Real bdt);
 void FixedHydroBC(Mesh *pm);
 void FixedMHDBC(Mesh *pm);
 
@@ -281,7 +280,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
         auto &nghbr = pmbp->pmb->nghbr;
         auto &mblev = pmbp->pmb->mb_lev;
 
-        par_for("pgen_vector_potential", DevExeSpace(), 0,nmb-1,ks,ke+1,js,je+1,is,ie+1,
+        par_for("pgen_vector_potential", DevExeSpace(), 0,(nmb-1),ks,ke+1,js,je+1,is,ie+1,
         KOKKOS_LAMBDA(int m, int k, int j, int i) {
             Real &x1min = size.d_view(m).x1min;
             Real &x1max = size.d_view(m).x1max;
@@ -435,13 +434,16 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
             }
         });
 
-        if (mp.is_ideal) {
+        if (mp_.is_ideal) {
+
             par_for("bcc_e", DevExeSpace(), 0,(nmb-1),ks,ke,js,je,is,ie,
             KOKKOS_LAMBDA(int m, int k, int j, int i) {
                 u0_(m,IEN,k,j,i) += 0.5*(SQR(0.5*(b0_.x1f(m,k,j,i) + b0_.x1f(m,k,j,i+1))) +
                                     SQR(0.5*(b0_.x2f(m,k,j,i) + b0_.x2f(m,k,j+1,i))) +
                                     SQR(0.5*(b0_.x3f(m,k,j,i) + b0_.x3f(m,k+1,j,i))));
+                    
             });
+
         }
 
     } // End of magnetic field initialization
@@ -748,7 +750,6 @@ void MySourceTerms(Mesh* pm, const Real bdt) { //CF:CHECKED
     StarGravSourceTerm(pm, bdt);
     if(mp.is_ideal && mp.tcool>0.0) CoolingSourceTerms(pm, bdt);
     if (mp.denstar > 0.0) StarMask(pm, bdt);
-    // InnerDiskMask(pm, bdt);
     return;
 }
 
@@ -1032,79 +1033,7 @@ void MyEfieldMask(Mesh* pm) { //CF:CHECKED
 
     return;
 
-} // end E field mask  
-
-//----------------------------------------------------------------------------------------
-void InnerDiskMask(Mesh* pm, const Real bdt) {
-
-    // Capture variables for kernel - e.g. indices for looping over the meshblocks and the size of the meshblocks.
-    auto &indcs = pm->mb_indcs;
-    int &is = indcs.is; int &ie = indcs.ie;
-    int &js = indcs.js; int &je = indcs.je;
-    int &ks = indcs.ks; int &ke = indcs.ke;
-    MeshBlockPack *pmbp = pm->pmb_pack;
-    auto &size = pmbp->pmb->mb_size;
-
-    // Now set a local parameter struct for lambda capturing
-    auto mp_ = mp;
-
-    // Select either Hydro or MHD
-    DvceArray5D<Real> u0_, w0_, bcc0_;
-    if (pm->pmb_pack->phydro != nullptr) {
-        u0_ = pm->pmb_pack->phydro->u0;
-        w0_ = pm->pmb_pack->phydro->w0;
-    } else if (pm->pmb_pack->pmhd != nullptr) {
-        u0_ = pm->pmb_pack->pmhd->u0;
-        w0_ = pm->pmb_pack->pmhd->w0;
-        bcc0_ = pmbp->pmhd->bcc0;
-    }
-
-    // Could be more efficient with the masking function...see GRMHD for boolean masking array
-    par_for("pgen_starmask",DevExeSpace(),0,(pmbp->nmb_thispack-1),ks,ke,js,je,is,ie,
-    KOKKOS_LAMBDA(int m,int k,int j,int i) {
-
-        // Extract the cell center coordinates
-        Real &x1min = size.d_view(m).x1min;
-        Real &x1max = size.d_view(m).x1max;
-        Real x1v = CellCenterX(i-is, indcs.nx1, x1min, x1max);
-
-        Real &x2min = size.d_view(m).x2min;
-        Real &x2max = size.d_view(m).x2max;
-        Real x2v = CellCenterX(j-js, indcs.nx2, x2min, x2max);
-
-        Real &x3min = size.d_view(m).x3min;
-        Real &x3max = size.d_view(m).x3max;
-        Real x3v = CellCenterX(k-ks, indcs.nx3, x3min, x3max);
-        
-        Real rad(0.0),phi(0.0),z(0.0);
-        Real v1(0.0),v2(0.0),v3(0.0);
-
-        GetCylCoord(mp_,rad,phi,z,x1v,x2v,x3v);
-        Real rc=sqrt(x1v*x1v+x2v*x2v+x3v*x3v);
-        
-        if (rc<mp_.rmagsph) {
-
-            u0_(m,IDN,k,j,i) = DenDiscCyl(mp_,rad, phi, z);
-            VelDiscCyl(mp_, rad, phi, z, v1,v2,v3);
-
-            u0_(m,IM1,k,j,i) = v1*u0_(m,IDN,k,j,i);
-            u0_(m,IM2,k,j,i) = v2*u0_(m,IDN,k,j,i);
-            u0_(m,IM3,k,j,i) = v3*u0_(m,IDN,k,j,i);
-            
-            if (mp_.is_ideal) {
-                u0_(m,IEN,k,j,i) = PoverR(mp_,rad)*u0_(m,IDN,k,j,i)/(mp_.gamma_gas - 1.0)+
-                                0.5*(SQR(u0_(m,IM1,k,j,i))+SQR(u0_(m,IM2,k,j,i))+SQR(u0_(m,IM3,k,j,i)))/u0_(m,IDN,k,j,i);
-            
-                if (mp_.magnetic_fields_enabled) {
-                    u0_(m,IEN,k,j,i) = u0_(m,IEN,k,j,i)+0.5*(SQR(bcc0_(m,IBX,k,j,i))+
-                                    SQR(bcc0_(m,IBY,k,j,i))+SQR(bcc0_(m,IBZ,k,j,i)));
-                }
-            }
-        }
-            
-    }); // end par_for
-
-} // end disk mask  
+} // end E field mask   
 
 //----------------------------------------------------------------------------------------
 void CoolingSourceTerms(Mesh* pm, const Real bdt) { //CF:CHECKED

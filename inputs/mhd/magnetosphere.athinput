@@ -50,6 +50,16 @@ yc = 0.0
 zc = 0.0
 ntheta = 256             # Number of angles in theta, phi resolution is 2*ntheta
 
+<output7>
+file_type   = sphshell     # Output type identifier
+variable    = mhd_u_bcc    # Variables to output (same as other outputs)
+dt          = 0.314        # Time interval between outputs
+nr          = 50           # Number of radial shells
+rmin        = 0.5          # Minimum radius
+rmax        = 5.0          # Maximum radius
+log_spacing = false        # Linear spacing (true for log spacing)
+nlev        = 6            # Geodesic grid refinement (3-6 typical)
+
 <time>
 evolution   = dynamic
 cfl_number  = 0.3        # The Courant, Friedrichs, & Lewy (CFL) Number
@@ -114,9 +124,9 @@ rsolver     = hlld     # Riemann-solver to be used
 
 <problem>
 pgen_name = magsph      # problem generator name
-user_srcs = true        # Switch the user source terms on
+user_srcs = false       # Switch the user source terms on
 user_esrcs = true       # Switch the user e field mask on
-user_hist = true       # Switch the user history function on
+user_hist = false       # Switch the user history function on
 
 thetaw = 0.0            # tilt of stellar rotation axis (counterclockwise rot about y-axis)
 thetab = 0.0            # tilt of stellar dipole axis (counterclockwise rot about y-axis)
@@ -142,4 +152,4 @@ rho_floor_slope1 = -2.25  # radial density floor slope 1
 rho_floor_slope2 = -5.5   # radial density floor slope 2
 rstar = 0.1               # radius of the star
 gravsmooth = 0.1          # smoothing of stellar gravity
-tcool = 1e-5              # characteristic cooling timescale [local orbital time]
+tcool = -1.               # characteristic cooling timescale [local orbital time]

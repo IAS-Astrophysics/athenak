@@ -15,6 +15,7 @@
 
 #include "athena.hpp"
 #include "io_wrapper.hpp"
+#include "geodesic-grid/spherical_grid.hpp"
 
 #define NHISTORY_VARIABLES 20
 #if NHISTORY_VARIABLES > NREDUCTION_VARIABLES
@@ -432,6 +433,27 @@ class SphericalSurfaceOutput : public BaseTypeOutput {
  private:
   SphericalSurface *psurf;
 };
+
+//----------------------------------------------------------------------------------------
+//! \class SphericalShellsOutput
+//  \brief derived BaseTypeOutput class for spherically integrated output over shells
+class SphericalShellsOutput : public BaseTypeOutput {
+ public:
+  SphericalShellsOutput(ParameterInput *pin, Mesh *pm, OutputParameters oparams);
+  ~SphericalShellsOutput();
+  //! Interpolate and integrate data over spherical shells
+  void LoadOutputData(Mesh *pm) override;
+  //! Write the integrated data to file
+  void WriteOutputFile(Mesh *pm, ParameterInput *pin) override;
+ private:
+  int nr;                                           // number of radial shells
+  Real rmin, rmax;                                  // min and max radii
+  bool log_spacing;                                 // use logarithmic spacing
+  std::vector<Real> radii;                          // array of shell center radii
+  std::vector<Real> radii_faces;                    // array of shell face radii (nr+1 values)
+  std::vector<std::unique_ptr<SphericalGrid>> spheres;  // grid for each shell
+};
+
 //----------------------------------------------------------------------------------------
 //! \class EventLogOutput
 //  \brief derived BaseTypeOutput class for event counter data
