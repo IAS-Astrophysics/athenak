@@ -32,6 +32,8 @@ class TabulatedEOS {
   Real lrho_max;
   Real lP_min;
   Real lP_max;
+  Real le_min;
+  Real le_max;
 
   bool has_ye = false;
   Real ye_atmosphere;
@@ -115,7 +117,8 @@ class TabulatedEOS {
       m_log_e.h_view(in) = log(mb*(table_Q7[in] + 1.)*table_nb[in]*
                                     unit_nuc.EnergyDensityConversion(unit_geo));
     }
-
+    le_min = m_log_e.h_view(0);
+    le_max = m_log_e.h_view(m_nn-1);
 
     // Read electron fraction (optional)
     if (has_ye) {
@@ -152,13 +155,9 @@ class TabulatedEOS {
     }
     int lb = static_cast<int>((lrho-lrho_min)/dlrho);
     int ub = lb + 1;
-    if constexpr (loc == LocationTag::Host) {
-      return exp(Interpolate(lrho, m_log_rho.h_view(lb), m_log_rho.h_view(ub),
-                              m_log_p.h_view(lb), m_log_p.h_view(ub)));
-    } else {
-      return exp(Interpolate(lrho, m_log_rho.d_view(lb), m_log_rho.d_view(ub),
-                              m_log_p.d_view(lb), m_log_p.d_view(ub)));
-    }
+    auto& lrho_view = GetView<loc>(m_log_rho);
+    auto& lp_view = GetView<loc>(m_log_p);
+    return exp(Interpolate(lrho, lrho_view(lb), lrho_view(ub), lp_view(lb), lp_view(ub)));
   }
 
   template<LocationTag loc>
@@ -170,13 +169,19 @@ class TabulatedEOS {
     }
     int lb = static_cast<int>((lrho-lrho_min)/dlrho);
     int ub = lb + 1;
-    if constexpr (loc == LocationTag::Host) {
-      return exp(Interpolate(lrho, m_log_rho.h_view(lb), m_log_rho.h_view(ub),
-                              m_log_e.h_view(lb), m_log_e.h_view(ub)));
-    } else {
-      return exp(Interpolate(lrho, m_log_rho.d_view(lb), m_log_rho.d_view(ub),
-                              m_log_e.d_view(lb), m_log_e.d_view(ub)));
+    auto& lrho_view = GetView<loc>(m_log_rho);
+    auto& le_view = GetView<loc>(m_log_e);
+    return exp(Interpolate(lrho, lrho_view(lb), lrho_view(ub), le_view(lb), le_view(ub)));
+  }
+
+  template<LocationTag loc>
+  KOKKOS_INLINE_FUNCTION
+  Real GetRhoFromE(Real e) const {
+    Real le = log(e);
+    if (le < le_min) {
+      return 0.0;
     }
+    return GetRhoFromVar<loc>(le, m_log_e);
   }
 
   template<LocationTag loc>
@@ -188,49 +193,51 @@ class TabulatedEOS {
     }
     int lb = static_cast<int>((lrho-lrho_min)/dlrho);
     int ub = lb + 1;
-    if constexpr (loc == LocationTag::Host) {
-      return Interpolate(lrho, m_log_rho.h_view(lb), m_log_rho.h_view(ub),
-                          m_ye.h_view(lb), m_ye.h_view(ub));
-    } else {
-      return Interpolate(lrho, m_log_rho.d_view(lb), m_log_rho.d_view(ub),
-                          m_ye.d_view(lb), m_ye.d_view(ub));
-    }
+    auto& lrho_view = GetView<loc>(m_log_rho);
+    auto& ye_view = GetView<loc>(m_ye);
+    return Interpolate(lrho, lrho_view(lb), lrho_view(ub), ye_view(lb), ye_view(ub));
   }
 
   template<LocationTag loc>
   KOKKOS_INLINE_FUNCTION
   Real GetRhoFromP(Real P) const {
     Real lP = log(P);
-    int lb = 0;
-    int ub = m_nn-1;
     // If the pressure is below the minimum of the table, we return zero density.
     if (lP < lP_min) {
       return 0.0;
     }
-    // Do a binary search for the lower and upper indices of the pressure
+    return GetRhoFromVar<loc>(lP, m_log_p);
+  }
+
+ private:
+  template<LocationTag loc>
+  KOKKOS_INLINE_FUNCTION
+  auto& GetView(const DualArray1D<Real>& arr) const {
     if constexpr (loc == LocationTag::Host) {
-      while (ub - lb > 1) {
-        int idx = (lb + ub)/2;
-        if (m_log_p.h_view(idx) > lP) {
-          ub = idx;
-        } else {
-          lb = idx;
-        }
-      }
-      return exp(Interpolate(lP, m_log_p.h_view(lb), m_log_p.h_view(ub),
-                              m_log_rho.h_view(lb), m_log_rho.h_view(ub)));
+      return arr.h_view;
     } else {
-      while (ub - lb > 1) {
-        int idx = (lb + ub)/2;
-        if (m_log_p.d_view(idx) > lP) {
-          ub = idx;
-        } else {
-          lb = idx;
-        }
-      }
-      return exp(Interpolate(lP, m_log_p.d_view(lb), m_log_p.d_view(ub),
-                              m_log_rho.d_view(lb), m_log_rho.d_view(ub)));
+      return arr.d_view;
     }
+  }
+
+  // Use bisection on a specified variable to find the corresponding density.
+  template<LocationTag loc>
+  KOKKOS_INLINE_FUNCTION
+  Real GetRhoFromVar(Real var, const DualArray1D<Real>& arr_var) const {
+    int lb = 0;
+    int ub = m_nn-1;
+    auto& v_view = GetView<loc>(arr_var);
+    auto& lrho_view = GetView<loc>(m_log_rho);
+    // Do a binary search for the lower and upper indices of arr_var
+    while (ub - lb > 1) {
+      int idx = (lb + ub)/2;
+      if (v_view(idx) > var) {
+        ub = idx;
+      } else {
+        lb = idx;
+      }
+    }
+    return exp(Interpolate(var, v_view(lb), v_view(ub), lrho_view(lb), lrho_view(ub)));
   }
 };
 

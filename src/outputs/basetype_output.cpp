@@ -629,8 +629,8 @@ BaseTypeOutput::BaseTypeOutput(ParameterInput *pin, Mesh *pm, OutputParameters o
 
     // mat z4c variables
     for (int v = 0; v < Tmunu::N_Tmunu; ++v) {
-      if (out_params.variable.compare("tmunu") == 0 ||
-          out_params.variable.compare(Tmunu::Tmunu_names[v]) == 0) {
+      if (variable.compare("tmunu") == 0 ||
+          variable.compare(Tmunu::Tmunu_names[v]) == 0) {
         outvars.emplace_back(Tmunu::Tmunu_names[v], v, &(pm->pmb_pack->ptmunu->u_tmunu));
       }
     }
@@ -645,14 +645,14 @@ BaseTypeOutput::BaseTypeOutput(ParameterInput *pin, Mesh *pm, OutputParameters o
 
     // z4c variables
     for (int v = 0; v < z4c::Z4c::nz4c; ++v) {
-      if (out_params.variable.compare("z4c") == 0 ||
-          out_params.variable.compare(z4c::Z4c::Z4c_names[v]) == 0) {
+      if (variable.compare("z4c") == 0 ||
+          variable.compare(z4c::Z4c::Z4c_names[v]) == 0) {
         outvars.emplace_back(z4c::Z4c::Z4c_names[v], v, &(pm->pmb_pack->pz4c->u0));
       }
     }
 
     // weyl scalars
-    if (out_params.variable.compare("weyl") == 0) {
+    if (variable.compare("weyl") == 0) {
       outvars.emplace_back("weyl_rpsi4",0,&(pm->pmb_pack->pz4c->u_weyl));
       outvars.emplace_back("weyl_ipsi4",1,&(pm->pmb_pack->pz4c->u_weyl));
     }
@@ -700,6 +700,7 @@ BaseTypeOutput::BaseTypeOutput(ParameterInput *pin, Mesh *pm, OutputParameters o
   // particle density binned to mesh
   if (out_params.variable.compare("prtcl_d") == 0) {
     out_params.contains_derived = true;
+    out_params.n_derived += 1;
     outvars.emplace_back("pdens",0,&(derived_var));
   }
 
