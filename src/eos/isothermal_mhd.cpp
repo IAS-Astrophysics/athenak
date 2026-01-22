@@ -22,6 +22,7 @@ IsothermalMHD::IsothermalMHD(MeshBlockPack *pp, ParameterInput *pin) :
   eos_data.gamma = 0.0;
   eos_data.use_e = false;
   eos_data.use_t = false;
+  eos_data.sigma_max = pin->GetOrAddReal("mhd","sigma_max",(FLT_MAX));
 }
 
 //----------------------------------------------------------------------------------------

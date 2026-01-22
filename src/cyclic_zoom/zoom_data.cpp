@@ -28,13 +28,12 @@ ZoomData::ZoomData(CyclicZoom *pz, ParameterInput *pin) :
     w0("zprim",1,1,1,1,1),
     coarse_u0("czcons",1,1,1,1,1),
     coarse_w0("czprim",1,1,1,1,1),
-    efld("zefld",1,1,1,1),
-    emf0("zemf0",1,1,1,1),
+    efld_pre("zefldp",1,1,1,1),
+    efld_aft("zeflda",1,1,1,1),
     delta_efld("zdelta_efld",1,1,1,1),
     max_emf0("zmax_emf0",1,1),
-    dzbuf("dz_buffer",1),
-    hzbuf("hz_buffer",1),
-    hzdata("hz_data",1)
+    zbuf("z_buffer",1),
+    zdata("z_data",1)
   {
   // allocate memory for primitive variables
   pzmesh = pzoom->pzmesh;
@@ -67,14 +66,14 @@ ZoomData::ZoomData(CyclicZoom *pz, ParameterInput *pin) :
 
   if (pzoom->pmesh->pmb_pack->pmhd != nullptr) {
     // allocate electric fields
-    Kokkos::realloc(efld.x1e, nzmb, nccells3+1, nccells2+1, nccells1);
-    Kokkos::realloc(efld.x2e, nzmb, nccells3+1, nccells2, nccells1+1);
-    Kokkos::realloc(efld.x3e, nzmb, nccells3, nccells2+1, nccells1+1);
+    Kokkos::realloc(efld_pre.x1e, nzmb, nccells3+1, nccells2+1, nccells1);
+    Kokkos::realloc(efld_pre.x2e, nzmb, nccells3+1, nccells2, nccells1+1);
+    Kokkos::realloc(efld_pre.x3e, nzmb, nccells3, nccells2+1, nccells1+1);
 
     // allocate electric fields just after zoom
-    Kokkos::realloc(emf0.x1e, nzmb, nccells3+1, nccells2+1, nccells1);
-    Kokkos::realloc(emf0.x2e, nzmb, nccells3+1, nccells2, nccells1+1);
-    Kokkos::realloc(emf0.x3e, nzmb, nccells3, nccells2+1, nccells1+1);
+    Kokkos::realloc(efld_aft.x1e, nzmb, nccells3+1, nccells2+1, nccells1);
+    Kokkos::realloc(efld_aft.x2e, nzmb, nccells3+1, nccells2, nccells1+1);
+    Kokkos::realloc(efld_aft.x3e, nzmb, nccells3, nccells2+1, nccells1+1);
 
     // allocate delta electric fields
     Kokkos::realloc(delta_efld.x1e, nzmb, nccells3+1, nccells2+1, nccells1);
@@ -90,9 +89,13 @@ ZoomData::ZoomData(CyclicZoom *pz, ParameterInput *pin) :
   }
 
   // allocate device and host arrays for data transfer and storage
-  Kokkos::realloc(dzbuf, nzmb * zmb_data_cnt);
-  Kokkos::realloc(hzbuf, nzmb * zmb_data_cnt);
-  Kokkos::realloc(hzdata, nzmb * zmb_data_cnt);
+  // DualView buffer: device side for packing, host side (pinned) for MPI send
+  // Stores ZMBs currently owned by this rank before redistribution
+  // zbuf.resize(nzmb * zmb_data_cnt);
+  Kokkos::realloc(zbuf, nzmb * zmb_data_cnt);
+  // Host receive buffer: stores ZMBs that will be owned by this rank after AMR/redistribution
+  // Note: zdata may contain completely different ZMBs than zbuf due to load balancing
+  Kokkos::realloc(zdata, nzmb * zmb_data_cnt);
   // ndata = pzdata->zmb_data_cnt * pzmesh->nzmb_max_perhost;
   // Kokkos::realloc(send_data, ndata);
   // Kokkos::realloc(recv_data, ndata);
@@ -127,12 +130,12 @@ void ZoomData::Initialize()
   auto &w0_ = w0;
   auto &cu0 = coarse_u0;
   auto &cw0 = coarse_w0;
-  auto e1 = efld.x1e;
-  auto e2 = efld.x2e;
-  auto e3 = efld.x3e;
-  auto e01 = emf0.x1e;
-  auto e02 = emf0.x2e;
-  auto e03 = emf0.x3e;
+  auto e1 = efld_pre.x1e;
+  auto e2 = efld_pre.x2e;
+  auto e3 = efld_pre.x3e;
+  auto e01 = efld_aft.x1e;
+  auto e02 = efld_aft.x2e;
+  auto e03 = efld_aft.x3e;
   auto de1 = delta_efld.x1e;
   auto de2 = delta_efld.x2e;
   auto de3 = delta_efld.x3e;
@@ -161,12 +164,11 @@ void ZoomData::Initialize()
     cw0(m,IEN,k,j,i) = p0/gm1;
   });
 
-  // In MHD, we don't use conserved variables so no need to convert
-  // if (!is_mhd) {
-  //   peos->PrimToCons(w0_,u0_,0,n3-1,0,n2-1,0,n1-1);
-  //   peos->PrimToCons(cw0,cu0,0,nc3-1,0,nc2-1,0,nc1-1);
-  // }
+  // convert primitive to conserved variables
+  peos->PrimToCons(w0_,u0_,0,n3-1,0,n2-1,0,n1-1);
+  peos->PrimToCons(cw0,cu0,0,nc3-1,0,nc2-1,0,nc1-1);
 
+  // initialize electric fields to zero
   if (pzoom->pmesh->pmb_pack->pmhd != nullptr) {
     par_for("zoom_init_e1",DevExeSpace(),0,nzmb-1,0,nc3,0,nc2,0,nc1-1,
     KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
@@ -187,6 +189,35 @@ void ZoomData::Initialize()
       de3(m,k,j,i) = 0.0;
     });
   }
+
+  return;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void ZoomData::ResetDataEC()
+//! \brief Reset edge-centered data
+
+void ZoomData::ResetDataEC(DvceEdgeFld4D<Real> ec) {
+  int &nzmb = pzmesh->nzmb_thisdvce;
+  auto e1 = ec.x1e;
+  auto e2 = ec.x2e;
+  auto e3 = ec.x3e;
+
+  int nk = e1.extent_int(1), nj = e1.extent_int(2), ni = e1.extent_int(3);
+  par_for("zoom_clear_e1",DevExeSpace(),0,nzmb-1,0,nk-1,0,nj-1,0,ni-1,
+  KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
+    e1(m,k,j,i) = 0.0;
+  });
+  nk = e2.extent_int(1), nj = e2.extent_int(2), ni = e2.extent_int(3);
+  par_for("zoom_clear_e2",DevExeSpace(),0,nzmb-1,0,nk-1,0,nj-1,0,ni-1,
+  KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
+    e2(m,k,j,i) = 0.0;
+  });
+  nk = e3.extent_int(1), nj = e3.extent_int(2), ni = e3.extent_int(3);
+  par_for("zoom_clear_e3",DevExeSpace(),0,nzmb-1,0,nk-1,0,nj-1,0,ni-1,
+  KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
+    e3(m,k,j,i) = 0.0;
+  });
 
   return;
 }
@@ -222,22 +253,22 @@ void ZoomData::DumpData() {
     // xyz? bcc?
     IOWrapperSizeT cnt = nzmb*nvars*(nccells3)*(nccells2)*(nccells1);
     std::fwrite(coarse_w0.data(),datasize,cnt,pfile);
-    auto mbptr = efld.x1e;
+    auto mbptr = efld_pre.x1e;
     cnt = nzmb*(nccells3+1)*(nccells2+1)*(nccells1);
     std::fwrite(mbptr.data(),datasize,cnt,pfile);
-    mbptr = efld.x2e;
+    mbptr = efld_pre.x2e;
     cnt = nzmb*(nccells3+1)*(nccells2)*(nccells1+1);
     std::fwrite(mbptr.data(),datasize,cnt,pfile);
-    mbptr = efld.x3e;
+    mbptr = efld_pre.x3e;
     cnt = nzmb*(nccells3)*(nccells2+1)*(nccells1+1);
     std::fwrite(mbptr.data(),datasize,cnt,pfile);
-    mbptr = emf0.x1e;
+    mbptr = efld_aft.x1e;
     cnt = nzmb*(nccells3+1)*(nccells2+1)*(nccells1);
     std::fwrite(mbptr.data(),datasize,cnt,pfile);
-    mbptr = emf0.x2e;
+    mbptr = efld_aft.x2e;
     cnt = nzmb*(nccells3+1)*(nccells2)*(nccells1+1);
     std::fwrite(mbptr.data(),datasize,cnt,pfile);
-    mbptr = emf0.x3e;
+    mbptr = efld_aft.x3e;
     cnt = nzmb*(nccells3)*(nccells2+1)*(nccells1+1);
     std::fwrite(mbptr.data(),datasize,cnt,pfile);
     std::fclose(pfile);
@@ -277,10 +308,19 @@ void ZoomData::MeshBlockDataSize() {
 //! \brief Store data from MeshBlock m to zoom data zm
 
 void ZoomData::StoreDataToZoomData(int zm, int m) {
-  StoreCCData(zm, m);
-  if (pzoom->pmesh->pmb_pack->pmhd != nullptr) {
-    StoreHydroData(zm, m);
-    UpdateElectricFields(zm, m);
+  auto pmesh = pzoom->pmesh;
+  DvceArray5D<Real> u, w;
+  if (pmesh->pmb_pack->phydro != nullptr) {
+    u = pmesh->pmb_pack->phydro->u0;
+    w = pmesh->pmb_pack->phydro->w0;
+    StoreCCData(zm, m, u, w);
+  }
+  if (pmesh->pmb_pack->pmhd != nullptr) {
+    u = pmesh->pmb_pack->pmhd->u0;
+    w = pmesh->pmb_pack->pmhd->w0;
+    StoreHydroData(zm, m, u, w);
+    DvceEdgeFld4D<Real> efld = pmesh->pmb_pack->pmhd->efld;
+    StoreEFieldsBeforeAMR(zm, m, efld);
   }
 }
 
@@ -288,16 +328,8 @@ void ZoomData::StoreDataToZoomData(int zm, int m) {
 //! \fn void ZoomData::StoreCCData()
 //! \brief Store cell-centered data from MeshBlock m to zoom data zm
 
-void ZoomData::StoreCCData(int zm, int m) {
-  DvceArray5D<Real> u, w;
+void ZoomData::StoreCCData(int zm, int m, DvceArray5D<Real> u, DvceArray5D<Real> w) {
   auto pmesh = pzoom->pmesh;
-  if (pmesh->pmb_pack->phydro != nullptr) {
-    u = pmesh->pmb_pack->phydro->u0;
-    w = pmesh->pmb_pack->phydro->w0;
-  } else if (pmesh->pmb_pack->pmhd != nullptr) {
-    u = pmesh->pmb_pack->pmhd->u0;
-    w = pmesh->pmb_pack->pmhd->w0;
-  }
   auto des_slice = Kokkos::subview(u0, Kokkos::make_pair(zm,zm+1),
                                    Kokkos::ALL,Kokkos::ALL,Kokkos::ALL,Kokkos::ALL);
   auto src_slice = Kokkos::subview(u, Kokkos::make_pair(m,m+1),
@@ -366,7 +398,7 @@ void ZoomData::StoreCCData(int zm, int m) {
 //! \brief Store data from MeshBlock m to zoom data zm
 
 // TODO(@mhguo): this may only apply to MHD as HD can use copy
-void ZoomData::StoreHydroData(int zm, int m) {
+void ZoomData::StoreHydroData(int zm, int m, DvceArray5D<Real> u0_, DvceArray5D<Real> w0_) {
   auto &indcs = pzoom->pmesh->mb_indcs;
   auto pmbp = pzoom->pmesh->pmb_pack;
   auto &size = pzoom->pmesh->pmb_pack->pmb->mb_size;
@@ -378,17 +410,10 @@ void ZoomData::StoreHydroData(int zm, int m) {
   int &cks = indcs.cks;  int &cke  = indcs.cke;
   int nx1 = indcs.nx1, nx2 = indcs.nx2, nx3 = indcs.nx3;
   int cnx1 = indcs.cnx1, cnx2 = indcs.cnx2, cnx3 = indcs.cnx3;
-  DvceArray5D<Real> u0_, w0_;
+  // DvceArray5D<Real> u0_, w0_;
   bool is_gr = pmbp->pcoord->is_general_relativistic;
   auto peos = (pmbp->pmhd != nullptr)? pmbp->pmhd->peos : pmbp->phydro->peos;
   auto eos = peos->eos_data;
-  if (pmbp->phydro != nullptr) {
-    u0_ = pmbp->phydro->u0;
-    w0_ = pmbp->phydro->w0;
-  } else if (pmbp->pmhd != nullptr) {
-    u0_ = pmbp->pmhd->u0;
-    w0_ = pmbp->pmhd->w0;
-  }
   auto cw = coarse_w0;
   Real &x1min = size.h_view(m).x1min;
   Real &x1max = size.h_view(m).x1max;
@@ -502,13 +527,8 @@ void ZoomData::StoreHydroData(int zm, int m) {
   return;
 }
 
-//----------------------------------------------------------------------------------------
-//! \fn void ZoomData::UpdateElectricFields()
-//! \brief Update electric fields in zoom data zm from MeshBlock m
-
-void ZoomData::UpdateElectricFields(int zm, int m) {
-  return;
-}
+// TODO(@mhguo): may need a more flexible packing function
+// TODO(@mhguo): also a more flexible function to get the data from host
 
 //----------------------------------------------------------------------------------------
 //! \fn ZoomData::PackBuffer()
@@ -526,10 +546,13 @@ void ZoomData::PackBuffer() {
   size_t ccc_cnt = coarse_u0.extent(1) * coarse_u0.extent(2) * coarse_u0.extent(3) * coarse_u0.extent(4);
   size_t ec_cnt = 0;
   if (pmhd != nullptr) {
+    // use efld_pre to get sizes for all edge fields
+    auto efld = efld_pre;
     ec_cnt = efld.x1e.extent(1) * efld.x1e.extent(2) * efld.x1e.extent(3);
     ec_cnt += efld.x2e.extent(1) * efld.x2e.extent(2) * efld.x2e.extent(3);
     ec_cnt += efld.x3e.extent(1) * efld.x3e.extent(2) * efld.x3e.extent(3);
   }
+  auto dzbuf = zbuf.d_view;  // Get device view for packing
   for (int zm = 0; zm < pzmesh->nzmb_thisdvce; ++zm) {
     // offset = zm * zmb_data_cnt;
     // pack conserved variables
@@ -546,9 +569,9 @@ void ZoomData::PackBuffer() {
     offset += ccc_cnt;
     // pack magnetic fields and/or electric fields if MHD
     if (pmhd != nullptr) {
-      PackBuffersEC(dzbuf, efld, offset, zm);
+      PackBuffersEC(dzbuf, efld_pre, offset, zm);
       offset += ec_cnt;
-      PackBuffersEC(dzbuf, emf0, offset, zm);
+      PackBuffersEC(dzbuf, efld_aft, offset, zm);
       offset += ec_cnt;
       PackBuffersEC(dzbuf, delta_efld, offset, zm);
       offset += ec_cnt;
@@ -558,7 +581,7 @@ void ZoomData::PackBuffer() {
   // Only copy the portion that's actually used
   size_t used_size = pzmesh->nzmb_thisdvce * zmb_data_cnt;
   Kokkos::deep_copy(
-    Kokkos::subview(hzbuf, Kokkos::make_pair(size_t(0), used_size)),
+    Kokkos::subview(zbuf.h_view, Kokkos::make_pair(size_t(0), used_size)),
     Kokkos::subview(dzbuf, Kokkos::make_pair(size_t(0), used_size))
   );
   return;
@@ -658,8 +681,11 @@ void ZoomData::PackBuffersEC(DvceArray1D<Real> packed_data, DvceEdgeFld4D<Real> 
 //----------------------------------------------------------------------------------------
 //! \fn void ZoomData::SyncBufferToHost()
 //! \brief Sync zoom data buffer to host array
+//! \details Redistributes ZMBs across ranks during AMR. Each rank:
+//!   1. Sends its current ZMBs (from zbuf) to destination ranks
+//!   2. Receives new ZMBs (into zdata) from source ranks based on logical mapping
+//!   After this function, zdata contains potentially different ZMBs than zbuf had.
 
-// TODO(@mhguo): need to move to different ranks...
 // TODO(@mhguo): need some sync even if mpi is not enabled
 void ZoomData::SyncBufferToHost(int zone) {
 #if MPI_PARALLEL_ENABLED
@@ -673,6 +699,7 @@ void ZoomData::SyncBufferToHost(int zone) {
   int my_rank = global_variable::my_rank;
   std::vector<MPI_Request> requests;
 
+  auto hzbuf = zbuf.h_view;  // Get host view of buffer
   int zm = 0;
   for (int lm = 0; lm < nlmb; ++lm) {
     int src_rank = rank_send[lm+lmbs];
@@ -683,7 +710,7 @@ void ZoomData::SyncBufferToHost(int zone) {
       // Receive from src_rank
       MPI_Request req;
       size_t offset_dst = pzmesh->lid_eachzmb[lm+lmbs] * data_per_zmb;
-      MPI_Irecv(hzdata.data() + offset_dst, data_per_zmb, 
+      MPI_Irecv(zdata.data() + offset_dst, data_per_zmb, 
                 MPI_ATHENA_REAL, src_rank, lm, zoom_comm, &req);
       requests.push_back(req);
       std::cout << "  Rank " << global_variable::my_rank 
@@ -716,7 +743,7 @@ void ZoomData::SyncBufferToHost(int zone) {
       size_t offset_src = zm * data_per_zmb;
       size_t offset_dst = pzmesh->lid_eachzmb[lm+lmbs] * data_per_zmb;
       Kokkos::deep_copy(
-        Kokkos::subview(hzdata, Kokkos::make_pair(offset_dst, offset_dst + data_per_zmb)),
+        Kokkos::subview(zdata, Kokkos::make_pair(offset_dst, offset_dst + data_per_zmb)),
         Kokkos::subview(hzbuf, Kokkos::make_pair(offset_src, offset_src + data_per_zmb))
       );
       std::cout << "  Rank " << global_variable::my_rank 
@@ -746,8 +773,10 @@ void ZoomData::SyncBufferToHost(int zone) {
 //----------------------------------------------------------------------------------------
 //! \fn void ZoomData::SyncHostToBuffer()
 //! \brief Sync zoom data from host array to buffer
+//! \details Reverse of SyncBufferToHost - redistributes ZMBs for zooming in.
+//!   Reads from zdata (logical global storage) and redistributes to zbuf on each rank
+//!   based on which rank needs each ZMB for computation.
 
-// TODO(@mhguo): need to move to different ranks...
 void ZoomData::SyncHostToBuffer(int zone) {
 #if MPI_PARALLEL_ENABLED
   auto rank_send = pzmesh->rank_eachzmb;
@@ -760,6 +789,10 @@ void ZoomData::SyncHostToBuffer(int zone) {
   int my_rank = global_variable::my_rank;
   std::vector<MPI_Request> requests;
 
+  // Loop over all ZMBs at this level to determine reverse communication pattern
+  // src_rank: who has the ZMB data in zdata (from previous SyncBufferToHost)
+  // dst_rank: who needs the ZMB data for computation (receives into their hzbuf)
+  auto hzbuf = zbuf.h_view;  // Get host view of buffer
   int zm = 0;
   for (int lm = 0; lm < nlmb; ++lm) {
     int src_rank = rank_send[lm+lmbs];
@@ -787,7 +820,7 @@ void ZoomData::SyncHostToBuffer(int zone) {
       // Send to dst_rank
       MPI_Request req;
       size_t offset_src = pzmesh->lid_eachzmb[lm+lmbs] * data_per_zmb;
-      MPI_Isend(hzdata.data() + offset_src, data_per_zmb,
+      MPI_Isend(zdata.data() + offset_src, data_per_zmb,
                 MPI_ATHENA_REAL, dst_rank, lm, zoom_comm, &req);
       requests.push_back(req);
       std::cout << "  Rank " << global_variable::my_rank 
@@ -804,7 +837,7 @@ void ZoomData::SyncHostToBuffer(int zone) {
       size_t offset_dst = zm * data_per_zmb;
       Kokkos::deep_copy(
         Kokkos::subview(hzbuf, Kokkos::make_pair(offset_dst, offset_dst + data_per_zmb)),
-        Kokkos::subview(hzdata, Kokkos::make_pair(offset_src, offset_src + data_per_zmb))
+        Kokkos::subview(zdata, Kokkos::make_pair(offset_src, offset_src + data_per_zmb))
       );
       std::cout << "  Rank " << global_variable::my_rank 
                 << " local copy to buffer for zmb " << lm+lmbs
@@ -835,14 +868,14 @@ void ZoomData::SyncHostToBuffer(int zone) {
 //! \brief Unpacks data from AMR communication buffers for all MBs being received
 
 void ZoomData::UnpackBuffer() {
-  // Single copy: host buffer -> device buffer
-  // Only copy the portion that's actually used
+  // Sync only the used portion to device for bandwidth efficiency
   size_t used_size = pzmesh->nzmb_thisdvce * zmb_data_cnt;
   Kokkos::deep_copy(
-    Kokkos::subview(dzbuf, Kokkos::make_pair(size_t(0), used_size)),
-    Kokkos::subview(hzbuf, Kokkos::make_pair(size_t(0), used_size))
+    Kokkos::subview(zbuf.d_view, Kokkos::make_pair(size_t(0), used_size)),
+    Kokkos::subview(zbuf.h_view, Kokkos::make_pair(size_t(0), used_size))
   );
-  // Unpack data from dzbuf to zoom data arrays
+  // Unpack data from device buffer to zoom data arrays
+  auto dzbuf = zbuf.d_view;  // Get device view for unpacking
   auto &pmhd = pzoom->pmesh->pmb_pack->pmhd;
   // use size_t for offset to avoid overflow
   size_t offset = 0;
@@ -850,6 +883,8 @@ void ZoomData::UnpackBuffer() {
   size_t ccc_cnt = coarse_u0.extent(1) * coarse_u0.extent(2) * coarse_u0.extent(3) * coarse_u0.extent(4);
   size_t ec_cnt = 0;
   if (pmhd != nullptr) {
+    // use efld_pre to get sizes for all edge fields
+    auto efld = efld_pre;
     ec_cnt = efld.x1e.extent(1) * efld.x1e.extent(2) * efld.x1e.extent(3);
     ec_cnt += efld.x2e.extent(1) * efld.x2e.extent(2) * efld.x2e.extent(3);
     ec_cnt += efld.x3e.extent(1) * efld.x3e.extent(2) * efld.x3e.extent(3);
@@ -872,9 +907,9 @@ void ZoomData::UnpackBuffer() {
     offset += ccc_cnt;
     // unpack magnetic fields and/or electric fields if MHD
     if (pmhd != nullptr) {
-      UnpackBuffersEC(dzbuf, efld, offset, zm);
+      UnpackBuffersEC(dzbuf, efld_pre, offset, zm);
       offset += ec_cnt;
-      UnpackBuffersEC(dzbuf, emf0, offset, zm);
+      UnpackBuffersEC(dzbuf, efld_aft, offset, zm);
       offset += ec_cnt;
       UnpackBuffersEC(dzbuf, delta_efld, offset, zm);
       offset += ec_cnt;
@@ -1005,7 +1040,6 @@ void ZoomData::LoadHydroData(int m, int zm) {
   auto &indcs = pzoom->pmesh->mb_indcs;
   auto pmbp = pzoom->pmesh->pmb_pack;
   auto &size = pmbp->pmb->mb_size;
-  int &ng = indcs.ng;
   int &is = indcs.is;  int &ie  = indcs.ie;
   int &js = indcs.js;  int &je  = indcs.je;
   int &ks = indcs.ks;  int &ke  = indcs.ke;
@@ -1124,7 +1158,6 @@ void ZoomData::MaskDataInZoomRegion(int m, int zm) {
   auto &indcs = pzoom->pmesh->mb_indcs;
   auto pmbp = pzoom->pmesh->pmb_pack;
   auto &size = pmbp->pmb->mb_size;
-  int &ng = indcs.ng;
   int &is = indcs.is, &js = indcs.js, &ks = indcs.ks;
   // int &ie = indcs.ie, &je = indcs.je, &ke = indcs.ke;
   int nx1 = indcs.nx1, nx2 = indcs.nx2, nx3 = indcs.nx3;
@@ -1201,15 +1234,15 @@ void ZoomData::MaskDataInZoomRegion(int m, int zm) {
     // par_for("zoom_mask", DevExeSpace(),ks-ng,ke+ng,js-ng,je+ng,is-ng,ie+ng,
     par_for("zoom_mask", DevExeSpace(),cks,cke,cjs,cje,cis,cie,
     KOKKOS_LAMBDA(int ck, int cj, int ci) {
-      Real x1v = CellCenterX(ci-cis, cnx1, x1min, x1max);
-      Real x2v = CellCenterX(cj-cjs, cnx2, x2min, x2max);
-      Real x3v = CellCenterX(ck-cks, cnx3, x3min, x3max);
-      if (zregion.IsInZoomRegion(x1v, x2v, x3v)) { // apply to old zoom region
+      int i = ci + ox1 * cnx1;
+      int j = cj + ox2 * cnx2;
+      int k = ck + ox3 * cnx3;
+      Real x1v = CellCenterX(i-is, nx1, x1min, x1max);
+      Real x2v = CellCenterX(j-js, nx2, x2min, x2max);
+      Real x3v = CellCenterX(k-ks, nx3, x3min, x3max);
+      if (zregion.IsInZoomRegion(x1v, x2v, x3v)) { // apply to zoom region
         // convert primitive variables to conserved variables
         // load primitive variables from 3D array
-        int i = ci + ox1 * cnx1;
-        int j = cj + ox2 * cnx2;
-        int k = ck + ox3 * cnx3;
         w_(m,IDN,k,j,i) = cw0(zm,IDN,ck,cj,ci);
         w_(m,IM1,k,j,i) = cw0(zm,IM1,ck,cj,ci);
         w_(m,IM2,k,j,i) = cw0(zm,IM2,ck,cj,ci);
@@ -1225,6 +1258,7 @@ void ZoomData::MaskDataInZoomRegion(int m, int zm) {
         w.e  = w_(m,IEN,k,j,i);
 
         // load cell-centered fields into primitive state
+        // TODO(@mhguo): use bcc if available?
         // use simple linear average of face-centered fields as bcc is not updated
         w.bx = 0.5*(b.x1f(m,k,j,i) + b.x1f(m,k,j,i+1));
         w.by = 0.5*(b.x2f(m,k,j,i) + b.x2f(m,k,j+1,i));

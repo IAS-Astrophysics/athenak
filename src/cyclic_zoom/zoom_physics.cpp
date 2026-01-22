@@ -173,7 +173,7 @@ void CyclicZoom::AddDeltaEField(DvceEdgeFld4D<Real> emf) {
   int nmb1 = pmesh->pmb_pack->nmb_thispack-1;
   if (zamr.first_emf) {
     UpdateDeltaEField(emf);
-    SyncZoomEField(pzdata->emf0,pzmesh->nleaf*(zstate.zone-1));
+    SyncZoomEField(pzdata->efld_aft,pzmesh->nleaf*(zstate.zone-1));
     SyncZoomEField(pzdata->delta_efld,pzmesh->nleaf*(zstate.zone-1));
     SetMaxEField();
     if (dump_diag) {
@@ -261,12 +261,12 @@ void CyclicZoom::UpdateDeltaEField(DvceEdgeFld4D<Real> emf) {
   int cnx1 = indcs.cnx1, cnx2 = indcs.cnx2, cnx3 = indcs.cnx3;
   int nmb = pmesh->pmb_pack->nmb_thispack;
   int mbs = pmesh->gids_eachrank[global_variable::my_rank];
-  auto e1 = pzdata->efld.x1e;
-  auto e2 = pzdata->efld.x2e;
-  auto e3 = pzdata->efld.x3e;
-  auto e01 = pzdata->emf0.x1e;
-  auto e02 = pzdata->emf0.x2e;
-  auto e03 = pzdata->emf0.x3e;
+  auto e1 = pzdata->efld_pre.x1e;
+  auto e2 = pzdata->efld_pre.x2e;
+  auto e3 = pzdata->efld_pre.x3e;
+  auto e01 = pzdata->efld_aft.x1e;
+  auto e02 = pzdata->efld_aft.x2e;
+  auto e03 = pzdata->efld_aft.x3e;
   auto de1 = pzdata->delta_efld.x1e;
   auto de2 = pzdata->delta_efld.x2e;
   auto de3 = pzdata->delta_efld.x3e;
@@ -392,9 +392,9 @@ void CyclicZoom::SetMaxEField() {
   const int nkji = cnx3p1*cnx2p1*cnx1p1;
   const int nji  = cnx2p1*cnx1p1;
   const int ni = cnx1p1;
-  auto e01 = pzdata->emf0.x1e;
-  auto e02 = pzdata->emf0.x2e;
-  auto e03 = pzdata->emf0.x3e;
+  auto e01 = pzdata->efld_aft.x1e;
+  auto e02 = pzdata->efld_aft.x2e;
+  auto e03 = pzdata->efld_aft.x3e;
   // debuging
   Real demax1 = 0.0;
   Real demax2 = 0.0;

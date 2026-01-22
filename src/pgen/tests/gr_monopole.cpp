@@ -103,6 +103,7 @@ void ProblemGenerator::Monopole(ParameterInput *pin, const bool restart) {
 
   // Extract problem parameters
   Real sigma_max = pin->GetOrAddReal("problem", "sigma_max", 1.e2);
+  Real sigma_pow = pin->GetOrAddReal("problem", "sigma_pow", -1.0);
   Real rhomin = pin->GetOrAddReal("problem", "rhomin", 1.e-6);
   Real umin = pin->GetOrAddReal("problem", "umin", 1.e-8);
   Real a_norm = pin->GetOrAddReal("problem", "a_norm", 1.0);
@@ -113,7 +114,7 @@ void ProblemGenerator::Monopole(ParameterInput *pin, const bool restart) {
 
   // initialize primitive variables for new run ------------------------------------------
 
-  par_for("pgen_monopole1", DevExeSpace(), 0,nmb-1,ks,ke,js,je,js,je,
+  par_for("pgen_monopole1", DevExeSpace(), 0,nmb-1,ks,ke,js,je,is,ie,
   KOKKOS_LAMBDA(int m, int k, int j, int i) {
     Real &x1min = size.d_view(m).x1min;
     Real &x1max = size.d_view(m).x1max;
@@ -134,8 +135,8 @@ void ProblemGenerator::Monopole(ParameterInput *pin, const bool restart) {
     // Calculate background primitives
     Real rho_bg, pgas_bg;
     if (r > 1.0) {
-      rho_bg  =     (rhomin + (r/rc)/pow(r,4.)/sigma_max);
-      pgas_bg = gm1*(umin   + (r/rc)/pow(r,4.)/sigma_max);
+      rho_bg  =     (rhomin + pow(r/rc,-sigma_pow)/pow(r,4.)/sigma_max);
+      pgas_bg = gm1*(umin   + pow(r/rc,-sigma_pow)/pow(r,4.)/sigma_max);
     } else {
       rho_bg  = dexcise;
       pgas_bg = pexcise;
@@ -314,6 +315,11 @@ void ProblemGenerator::Monopole(ParameterInput *pin, const bool restart) {
       b0.x3f(m,k+1,j,i) = ((a2(m,k+1,j,i+1) - a2(m,k+1,j,i))/dx1 -
                            (a1(m,k+1,j+1,i) - a1(m,k+1,j,i))/dx2);
     }
+    // TODO(@mhguo): remove debug print
+    // if (m==1 && k==ks && j==js && i==is) {
+    //   printf("Monopole pgen: b0.x1f=%23.16e b0.x2f=%23.16e b0.x3f=%23.16e at (i,j,k)=(%d,%d,%d)\n",
+    //          b0.x1f(m,k,j,i),b0.x2f(m,k,j,i),b0.x3f(m,k,j,i),i,j,k);
+    // }
   });
 
   // Compute cell-centered fields
@@ -465,6 +471,28 @@ void ReflectingMonopole(Mesh *pm) {
   int nvar = u0_.extent_int(1);
 
   // X1-Boundary
+  // Set X1-BCs on b0 and bcc0 if Meshblock face is at the edge of computational domain
+  par_for("noinflow_field_x1", DevExeSpace(),0,(nmb-1),0,(n3-1),0,(n2-1),
+  KOKKOS_LAMBDA(int m, int k, int j) {
+    if (mb_bcs.d_view(m,BoundaryFace::inner_x1) == BoundaryFlag::user) {
+      for (int i=0; i<ng; ++i) {
+        b0.x1f(m,k,j,is-i-1) = b0.x1f(m,k,j,is);
+        b0.x2f(m,k,j,is-i-1) = b0.x2f(m,k,j,is);
+        if (j == n2-1) {b0.x2f(m,k,j+1,is-i-1) = b0.x2f(m,k,j+1,is);}
+        b0.x3f(m,k,j,is-i-1) = b0.x3f(m,k,j,is);
+        if (k == n3-1) {b0.x3f(m,k+1,j,is-i-1) = b0.x3f(m,k+1,j,is);}
+      }
+    }
+    if (mb_bcs.d_view(m,BoundaryFace::outer_x1) == BoundaryFlag::user) {
+      for (int i=0; i<ng; ++i) {
+        b0.x1f(m,k,j,ie+i+2) = b0.x1f(m,k,j,ie+1);
+        b0.x2f(m,k,j,ie+i+1) = b0.x2f(m,k,j,ie);
+        if (j == n2-1) {b0.x2f(m,k,j+1,ie+i+1) = b0.x2f(m,k,j+1,ie);}
+        b0.x3f(m,k,j,ie+i+1) = b0.x3f(m,k,j,ie);
+        if (k == n3-1) {b0.x3f(m,k+1,j,ie+i+1) = b0.x3f(m,k+1,j,ie);}
+      }
+    }
+  });
   // ConsToPrim over all x1 ghost zones *and* at the innermost/outermost x1-active zones
   // of Meshblocks, even if Meshblock face is not at the edge of computational domain
   pm->pmb_pack->pmhd->peos->ConsToPrim(u0_,b0,w0_,bcc_,false,is-ng,is,0,(n2-1),0,(n3-1));
@@ -491,51 +519,33 @@ void ReflectingMonopole(Mesh *pm) {
       }
     }
   });
-  // Set X1-BCs on b0 and bcc0 if Meshblock face is at the edge of computational domain
-  par_for("noinflow_field_x1", DevExeSpace(),0,(nmb-1),0,(n3-1),0,(n2-1),
-  KOKKOS_LAMBDA(int m, int k, int j) {
-    if (mb_bcs.d_view(m,BoundaryFace::inner_x1) == BoundaryFlag::user) {
-      for (int i=0; i<ng; ++i) {
-        b0.x1f(m,k,j,is-i-1) = b0.x1f(m,k,j,is);
-        b0.x2f(m,k,j,is-i-1) = b0.x2f(m,k,j,is);
-        if (j == n2-1) {b0.x2f(m,k,j+1,is-i-1) = b0.x2f(m,k,j+1,is);}
-        b0.x3f(m,k,j,is-i-1) = b0.x3f(m,k,j,is);
-        if (k == n3-1) {b0.x3f(m,k+1,j,is-i-1) = b0.x3f(m,k+1,j,is);}
-      }
-    }
-    if (mb_bcs.d_view(m,BoundaryFace::outer_x1) == BoundaryFlag::user) {
-      for (int i=0; i<ng; ++i) {
-        b0.x1f(m,k,j,ie+i+2) = b0.x1f(m,k,j,ie+1);
-        b0.x2f(m,k,j,ie+i+1) = b0.x2f(m,k,j,ie);
-        if (j == n2-1) {b0.x2f(m,k,j+1,ie+i+1) = b0.x2f(m,k,j+1,ie);}
-        b0.x3f(m,k,j,ie+i+1) = b0.x3f(m,k,j,ie);
-        if (k == n3-1) {b0.x3f(m,k+1,j,ie+i+1) = b0.x3f(m,k+1,j,ie);}
-      }
-    }
-  });
-  par_for("noinflow_field_x1", DevExeSpace(),0,(nmb-1),0,(n3-1),0,(n2-1),
-  KOKKOS_LAMBDA(int m, int k, int j) {
-    if (mb_bcs.d_view(m,BoundaryFace::inner_x1) == BoundaryFlag::user) {
-      for (int i=0; i<ng; ++i) {
-        bcc_(m,IBX,k,j,is-i-1) = 0.5*(b0.x1f(m,k,j,is-i-1) + b0.x1f(m,k,  j,  is-i  ));
-        bcc_(m,IBY,k,j,is-i-1) = 0.5*(b0.x2f(m,k,j,is-i-1) + b0.x2f(m,k,  j+1,is-i-1));
-        bcc_(m,IBZ,k,j,is-i-1) = 0.5*(b0.x3f(m,k,j,is-i-1) + b0.x3f(m,k+1,j  ,is-i-1));
-      }
-    }
-    if (mb_bcs.d_view(m,BoundaryFace::outer_x1) == BoundaryFlag::user) {
-      for (int i=0; i<ng; ++i) {
-        bcc_(m,IBX,k,j,ie+i+1) = 0.5*(b0.x1f(m,k,j,ie+i+1) + b0.x1f(m,k  ,j  ,ie+i+2));
-        bcc_(m,IBY,k,j,ie+i+1) = 0.5*(b0.x2f(m,k,j,ie+i+1) + b0.x2f(m,k  ,j+1,ie+i+1));
-        bcc_(m,IBZ,k,j,ie+i+1) = 0.5*(b0.x3f(m,k,j,ie+i+1) + b0.x3f(m,k+1,j  ,ie+i+1));
-      }
-    }
-  });
-
   // PrimToCons on X1 ghost zones
   pm->pmb_pack->pmhd->peos->PrimToCons(w0_,bcc_,u0_,is-ng,is-1,0,(n2-1),0,(n3-1));
   pm->pmb_pack->pmhd->peos->PrimToCons(w0_,bcc_,u0_,ie+1,ie+ng,0,(n2-1),0,(n3-1));
 
   // X2-Boundary
+  // Set X2-BCs on b0 and bcc0 if Meshblock face is at the edge of computational domain
+  par_for("noinflow_field_x2", DevExeSpace(),0,(nmb-1),0,(n3-1),0,(n1-1),
+  KOKKOS_LAMBDA(int m, int k, int i) {
+    if (mb_bcs.d_view(m,BoundaryFace::inner_x2) == BoundaryFlag::user) {
+      for (int j=0; j<ng; ++j) {
+        b0.x1f(m,k,js-j-1,i) = b0.x1f(m,k,js,i);
+        if (i == n1-1) {b0.x1f(m,k,js-j-1,i+1) = b0.x1f(m,k,js,i+1);}
+        b0.x2f(m,k,js-j-1,i) = b0.x2f(m,k,js,i);
+        b0.x3f(m,k,js-j-1,i) = b0.x3f(m,k,js,i);
+        if (k == n3-1) {b0.x3f(m,k+1,js-j-1,i) = b0.x3f(m,k+1,js,i);}
+      }
+    }
+    if (mb_bcs.d_view(m,BoundaryFace::outer_x2) == BoundaryFlag::user) {
+      for (int j=0; j<ng; ++j) {
+        b0.x1f(m,k,je+j+1,i) = b0.x1f(m,k,je,i);
+        if (i == n1-1) {b0.x1f(m,k,je+j+1,i+1) = b0.x1f(m,k,je,i+1);}
+        b0.x2f(m,k,je+j+2,i) = b0.x2f(m,k,je+1,i);
+        b0.x3f(m,k,je+j+1,i) = b0.x3f(m,k,je,i);
+        if (k == n3-1) {b0.x3f(m,k+1,je+j+1,i) = b0.x3f(m,k+1,je,i);}
+      }
+    }
+  });
   // ConsToPrim over all x2 ghost zones *and* at the innermost/outermost x2-active zones
   // of Meshblocks, even if Meshblock face is not at the edge of computational domain
   pm->pmb_pack->pmhd->peos->ConsToPrim(u0_,b0,w0_,bcc_,false,0,(n1-1),js-ng,js,0,(n3-1));
@@ -562,51 +572,33 @@ void ReflectingMonopole(Mesh *pm) {
       }
     }
   });
-  // Set X2-BCs on b0 and bcc0 if Meshblock face is at the edge of computational domain
-  par_for("noinflow_field_x2", DevExeSpace(),0,(nmb-1),0,(n3-1),0,(n1-1),
-  KOKKOS_LAMBDA(int m, int k, int i) {
-    if (mb_bcs.d_view(m,BoundaryFace::inner_x2) == BoundaryFlag::user) {
-      for (int j=0; j<ng; ++j) {
-        b0.x1f(m,k,js-j-1,i) = b0.x1f(m,k,js,i);
-        if (i == n1-1) {b0.x1f(m,k,js-j-1,i+1) = b0.x1f(m,k,js,i+1);}
-        b0.x2f(m,k,js-j-1,i) = b0.x2f(m,k,js,i);
-        b0.x3f(m,k,js-j-1,i) = b0.x3f(m,k,js,i);
-        if (k == n3-1) {b0.x3f(m,k+1,js-j-1,i) = b0.x3f(m,k+1,js,i);}
-      }
-    }
-    if (mb_bcs.d_view(m,BoundaryFace::outer_x2) == BoundaryFlag::user) {
-      for (int j=0; j<ng; ++j) {
-        b0.x1f(m,k,je+j+1,i) = b0.x1f(m,k,je,i);
-        if (i == n1-1) {b0.x1f(m,k,je+j+1,i+1) = b0.x1f(m,k,je,i+1);}
-        b0.x2f(m,k,je+j+2,i) = b0.x2f(m,k,je+1,i);
-        b0.x3f(m,k,je+j+1,i) = b0.x3f(m,k,je,i);
-        if (k == n3-1) {b0.x3f(m,k+1,je+j+1,i) = b0.x3f(m,k+1,je,i);}
-      }
-    }
-  });
-  par_for("noinflow_field_x2", DevExeSpace(),0,(nmb-1),0,(n3-1),0,(n1-1),
-  KOKKOS_LAMBDA(int m, int k, int i) {
-    if (mb_bcs.d_view(m,BoundaryFace::inner_x2) == BoundaryFlag::user) {
-      for (int j=0; j<ng; ++j) {
-        bcc_(m,IBX,k,js-j-1,i) = 0.5*(b0.x1f(m,k,js-j-1,i) + b0.x1f(m,k  ,js-j-1,i+1));
-        bcc_(m,IBY,k,js-j-1,i) = 0.5*(b0.x2f(m,k,js-j-1,i) + b0.x2f(m,k  ,js-j  ,i  ));
-        bcc_(m,IBZ,k,js-j-1,i) = 0.5*(b0.x3f(m,k,js-j-1,i) + b0.x3f(m,k+1,js-j-1,i  ));
-      }
-    }
-    if (mb_bcs.d_view(m,BoundaryFace::outer_x2) == BoundaryFlag::user) {
-      for (int j=0; j<ng; ++j) {
-        bcc_(m,IBX,k,je+j+1,i) = 0.5*(b0.x1f(m,k,je+j+1,i) + b0.x1f(m,k  ,je+j+1,i+1));
-        bcc_(m,IBY,k,je+j+1,i) = 0.5*(b0.x2f(m,k,je+j+1,i) + b0.x2f(m,k  ,je+j+2,i  ));
-        bcc_(m,IBZ,k,je+j+1,i) = 0.5*(b0.x3f(m,k,je+j+1,i) + b0.x3f(m,k+1,je+j+1,i  ));
-      }
-    }
-  });
-
   // PrimToCons on X2 ghost zones
   pm->pmb_pack->pmhd->peos->PrimToCons(w0_,bcc_,u0_,0,(n1-1),js-ng,js-1,0,(n3-1));
   pm->pmb_pack->pmhd->peos->PrimToCons(w0_,bcc_,u0_,0,(n1-1),je+1,je+ng,0,(n3-1));
 
   // x3-Boundary
+  // Set x3-BCs on b0 and bcc0 if Meshblock face is at the edge of computational domain
+  par_for("noinflow_field_x3", DevExeSpace(),0,(nmb-1),0,(n2-1),0,(n1-1),
+  KOKKOS_LAMBDA(int m, int j, int i) {
+    if (mb_bcs.d_view(m,BoundaryFace::inner_x3) == BoundaryFlag::user) {
+      for (int k=0; k<ng; ++k) {
+        b0.x1f(m,ks-k-1,j,i) = b0.x1f(m,ks+k,j,i);
+        if (i == n1-1) {b0.x1f(m,ks-k-1,j,i+1) = b0.x1f(m,ks+k,j,i+1);}
+        b0.x2f(m,ks-k-1,j,i) = b0.x2f(m,ks+k,j,i);
+        if (j == n2-1) {b0.x2f(m,ks-k-1,j+1,i) = b0.x2f(m,ks+k,j+1,i);}
+        b0.x3f(m,ks-k-1,j,i) = -b0.x3f(m,ks+k+1,j,i);
+      }
+    }
+    if (mb_bcs.d_view(m,BoundaryFace::outer_x3) == BoundaryFlag::user) {
+      for (int k=0; k<ng; ++k) {
+        b0.x1f(m,ke+k+1,j,i) = b0.x1f(m,ke,j,i);
+        if (i == n1-1) {b0.x1f(m,ke+k+1,j,i+1) = b0.x1f(m,ke,j,i+1);}
+        b0.x2f(m,ke+k+1,j,i) = b0.x2f(m,ke,j,i);
+        if (j == n2-1) {b0.x2f(m,ke+k+1,j+1,i) = b0.x2f(m,ke,j+1,i);}
+        b0.x3f(m,ke+k+2,j,i) = b0.x3f(m,ke+1,j,i);
+      }
+    }
+  });
   // ConsToPrim over all x3 ghost zones *and* at the innermost/outermost x3-active zones
   // of Meshblocks, even if Meshblock face is not at the edge of computational domain
   pm->pmb_pack->pmhd->peos->ConsToPrim(u0_,b0,w0_,bcc_,false,0,(n1-1),0,(n2-1),ks-ng,ks);
@@ -633,45 +625,6 @@ void ReflectingMonopole(Mesh *pm) {
       }
     }
   });
-  // Set x3-BCs on b0 and bcc0 if Meshblock face is at the edge of computational domain
-  par_for("noinflow_field_x3", DevExeSpace(),0,(nmb-1),0,(n2-1),0,(n1-1),
-  KOKKOS_LAMBDA(int m, int j, int i) {
-    if (mb_bcs.d_view(m,BoundaryFace::inner_x3) == BoundaryFlag::user) {
-      for (int k=0; k<ng; ++k) {
-        b0.x1f(m,ks-k-1,j,i) = b0.x1f(m,ks,j,i);
-        if (i == n1-1) {b0.x1f(m,ks-k-1,j,i+1) = b0.x1f(m,ks,j,i+1);}
-        b0.x2f(m,ks-k-1,j,i) = b0.x2f(m,ks,j,i);
-        if (j == n2-1) {b0.x2f(m,ks-k-1,j+1,i) = b0.x2f(m,ks,j+1,i);}
-        b0.x3f(m,ks-k-1,j,i) = -b0.x3f(m,ks,j,i);
-      }
-    }
-    if (mb_bcs.d_view(m,BoundaryFace::outer_x3) == BoundaryFlag::user) {
-      for (int k=0; k<ng; ++k) {
-        b0.x1f(m,ke+k+1,j,i) = b0.x1f(m,ke,j,i);
-        if (i == n1-1) {b0.x1f(m,ke+k+1,j,i+1) = b0.x1f(m,ke,j,i+1);}
-        b0.x2f(m,ke+k+1,j,i) = b0.x2f(m,ke,j,i);
-        if (j == n2-1) {b0.x2f(m,ke+k+1,j+1,i) = b0.x2f(m,ke,j+1,i);}
-        b0.x3f(m,ke+k+2,j,i) = b0.x3f(m,ke+1,j,i);
-      }
-    }
-  });
-  par_for("noinflow_field_x3", DevExeSpace(),0,(nmb-1),0,(n2-1),0,(n1-1),
-  KOKKOS_LAMBDA(int m, int j, int i) {
-    if (mb_bcs.d_view(m,BoundaryFace::inner_x3) == BoundaryFlag::user) {
-      for (int k=0; k<ng; ++k) {
-        bcc_(m,IBX,ks-k-1,j,i) = 0.5*(b0.x1f(m,ks-k-1,j,i) + b0.x1f(m,ks-k-1,j  ,i+1));
-        bcc_(m,IBY,ks-k-1,j,i) = 0.5*(b0.x2f(m,ks-k-1,j,i) + b0.x2f(m,ks-k-1,j+1,i  ));
-        bcc_(m,IBZ,ks-k-1,j,i) = 0.5*(b0.x3f(m,ks-k-1,j,i) + b0.x3f(m,ks-k  ,j  ,i  ));
-      }
-    }
-    if (mb_bcs.d_view(m,BoundaryFace::outer_x3) == BoundaryFlag::user) {
-      for (int k=0; k<ng; ++k) {
-        bcc_(m,IBX,ke+k+1,j,i) = 0.5*(b0.x1f(m,ke+k+1,j,i) + b0.x1f(m,ke+k+1,j  ,i+1));
-        bcc_(m,IBY,ke+k+1,j,i) = 0.5*(b0.x2f(m,ke+k+1,j,i) + b0.x2f(m,ke+k+1,j+1,i  ));
-        bcc_(m,IBZ,ke+k+1,j,i) = 0.5*(b0.x3f(m,ke+k+1,j,i) + b0.x3f(m,ke+k+2,j  ,i  ));
-      }
-    }
-  });
   // PrimToCons on x3 ghost zones
   pm->pmb_pack->pmhd->peos->PrimToCons(w0_,bcc_,u0_,0,(n1-1),0,(n2-1),ks-ng,ks-1);
   pm->pmb_pack->pmhd->peos->PrimToCons(w0_,bcc_,u0_,0,(n1-1),0,(n2-1),ke+1,ke+ng);
@@ -692,7 +645,10 @@ void MonopoleDiagnostic(ParameterInput *pin, Mesh *pm) {
 
   // construct spherical grid
   int nlevel = pin->GetOrAddInteger("problem", "nlevel", 10);
-  SphericalGrid *psph = new SphericalGrid(pmbp, nlevel, rh);
+  int ninterp = pin->GetOrAddInteger("problem", "ninterp", -1);
+  SphericalGrid *psph = new SphericalGrid(pmbp, nlevel, rh, ninterp);
+  std::cout << "Monopole diagnostic: nlevel = " << nlevel
+            << ", ninterp = " << psph->ninterp << std::endl;
 
   // capture variables
   auto &w0_ = pm->pmb_pack->pmhd->w0;

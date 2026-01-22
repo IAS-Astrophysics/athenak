@@ -40,7 +40,6 @@ void CyclicZoom::WorkBeforeAMR() {
     if (global_variable::my_rank == 0) {
       std::cout << "CyclicZoom: Stored variables before zooming" << std::endl;
     }
-    zamr.zooming_out = false;
     if (global_variable::my_rank == 0) {
       std::cout << "CyclicZoom: Done Work Before AMR" << std::endl;
     }
@@ -52,7 +51,7 @@ void CyclicZoom::WorkBeforeAMR() {
 //! \fn void CyclicZoom::WorkAfterAMR()
 //! \brief Work after zooming: initialize zoom region, store emf if needed
 
-void CyclicZoom::WorkAfterAMR() {
+void CyclicZoom::WorkAfterAMR(Driver *pdriver) {
   if (zamr.zooming_in) {
     FindReinitRegion();
     pzmesh->SyncMBLists();
@@ -63,7 +62,6 @@ void CyclicZoom::WorkAfterAMR() {
     if (global_variable::my_rank == 0) {
       std::cout << "CyclicZoom: Apply variables after zooming" << std::endl;
     }
-    zamr.zooming_in = false;
   }
   // Set up mask region
   // TODO(@mhguo): data may already be on the correct device, probably try to avoid unnecessary transfer
@@ -74,6 +72,17 @@ void CyclicZoom::WorkAfterAMR() {
     pzdata->UnpackBuffer();
     MaskVariables();
   }
+  if (zamr.zooming_out) {
+    if (pmesh->pmb_pack->pmhd != nullptr) {
+      UpdateElectricFields(pdriver);
+      // TODO(@mhguo): this is inefficient, may optimize to only transfer emf data
+      pzdata->PackBuffer();
+      pzdata->SyncBufferToHost(zstate.zone-1);
+    }
+  }
+  // reset zooming flags
+  zamr.zooming_out = false;
+  zamr.zooming_in = false;
   if (global_variable::my_rank == 0) {
     std::cout << "CyclicZoom: Done Work After AMR" << std::endl;
   }
@@ -125,7 +134,7 @@ void CyclicZoom::StoreVariables() {
 
 //----------------------------------------------------------------------------------------
 //! \fn void CyclicZoom::ReinitVariables()
-//! \brief Re-initialize variables after zooming (in)
+//! \brief Reinitialize variables after zooming (in)
 
 void CyclicZoom::ReinitVariables() {
   int zmbs = pzmesh->gids_eachdvce[global_variable::my_rank];
@@ -152,6 +161,54 @@ void CyclicZoom::MaskVariables() {
   }
   return;
 }
+
+//----------------------------------------------------------------------------------------
+//! \fn void CyclicZoom::UpdateElectricFields()
+//! \brief Update electric fields after masking
+
+void CyclicZoom::UpdateElectricFields(Driver *pdriver) {
+  // step 1: call MHD functions to update electric fields in all MeshBlocks
+  // clear delta_efld first
+  pzdata->ResetDataEC(pzdata->delta_efld);
+  // call MHD functions
+  mhd::MHD *pmhd = pmesh->pmb_pack->pmhd;
+  (void) pmhd->InitRecv(pdriver, 0);  // stage = 0 
+  (void) pmhd->CopyCons(pdriver, 1);  // stage = 1: copy u0 to u1
+  (void) pmhd->Fluxes(pdriver, 0);
+  // (void) pmhd->RestrictU(this, 0);
+  // TODO(@mhguo): think about the order
+  // TODO(@mhguo): this is redundant, should only send/recv electric fields
+  (void) pmhd->SendFlux(pdriver, 0);  // stage = 0
+  (void) pmhd->RecvFlux(pdriver, 0);  // stage = 0
+  (void) pmhd->SendU(pdriver, 0);
+  (void) pmhd->RecvU(pdriver, 0);
+  (void) pmhd->CornerE(pdriver, 0);
+  (void) pmhd->EFieldSrc(pdriver, 0);
+  (void) pmhd->SendE(pdriver, 0);
+  (void) pmhd->RecvE(pdriver, 0);
+  (void) pmhd->SendB(pdriver, 0);
+  (void) pmhd->RecvB(pdriver, 0);
+  (void) pmhd->ClearSend(pdriver, 0); // stage = 0
+  (void) pmhd->ClearRecv(pdriver, 0); // stage = 0
+  std::cout << " Rank " << global_variable::my_rank 
+            << " Calculated electric fields after AMR" << std::endl;
+
+  // step 2: update electric fields in zoom region
+  // TODO(@mhguo): only stored the emf, may need to limit de to emin/max
+  int zmbs = pzmesh->gids_eachdvce[global_variable::my_rank];
+  for (int zm=0; zm<pzmesh->nzmb_thisdvce; ++zm) {
+    int m = pzmesh->lid_eachmb[zm+zmbs];
+    // pzdata->UpdateElectricFieldsInZoomRegion(m, zm);
+    auto efld = pmesh->pmb_pack->pmhd->efld;
+    pzdata->StoreEFieldsAfterAMR(zm, m, efld);
+  }
+  pzdata->LimitEFields();
+  if (global_variable::my_rank == 0) {
+    std::cout << "CyclicZoom: Updated electric fields in zoom region" << std::endl;
+  }
+  return;
+}
+
 
 //----------------------------------------------------------------------------------------
 //! \fn bool CyclicZoom::CheckStoreFlag(int m)
@@ -392,11 +449,11 @@ void CyclicZoom::UpdateVariables() {
                   + w(m,n,finek+1,finej+1,finei) + w(m,n,finek+1,finej+1,finei+1));
         });
         UpdateHydroVariables(zm, m);
-        if (pmesh->pmb_pack->pmhd != nullptr && fix_efield) {
+        if (pmesh->pmb_pack->pmhd != nullptr && add_emf) {
           DvceEdgeFld4D<Real> emf = pmesh->pmb_pack->pmhd->efld;
-          auto e1 = pzdata->efld.x1e;
-          auto e2 = pzdata->efld.x2e;
-          auto e3 = pzdata->efld.x3e;
+          auto e1 = pzdata->efld_pre.x1e;
+          auto e2 = pzdata->efld_pre.x2e;
+          auto e3 = pzdata->efld_pre.x3e;
           auto ef1 = emf.x1e;
           auto ef2 = emf.x2e;
           auto ef3 = emf.x3e;
@@ -656,7 +713,7 @@ void CyclicZoom::SyncVariables() {
     Kokkos::deep_copy(cw_slice, harr_5d);
   }
   if (pmesh->pmb_pack->pmhd != nullptr) {
-    SyncZoomEField(pzdata->efld,nleaf*zstate.zone-1);
+    SyncZoomEField(pzdata->efld_pre,nleaf*zstate.zone-1);
   }
 #endif
   return;

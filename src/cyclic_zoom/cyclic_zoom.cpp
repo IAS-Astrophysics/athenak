@@ -20,8 +20,7 @@
 // constructor, initializes data structures and parameters
 
 CyclicZoom::CyclicZoom(Mesh *pm, ParameterInput *pin) :
-    pmesh(pm),
-    ndiag(-1)
+    pmesh(pm)
   {
   // cycle through ParameterInput list and read each <amr_criterion> block
   for (auto it = pin->block.begin(); it != pin->block.end(); ++it) {
@@ -38,7 +37,7 @@ CyclicZoom::CyclicZoom(Mesh *pm, ParameterInput *pin) :
   zoom_bcs = pin->GetOrAddBoolean(block_name,"zoom_bcs",true);
   zoom_ref = pin->GetOrAddBoolean(block_name,"zoom_ref",true);
   zoom_dt = pin->GetOrAddBoolean(block_name,"zoom_dt",false);
-  fix_efield = pin->GetOrAddBoolean(block_name,"fix_efield",false);
+  add_emf = pin->GetOrAddBoolean(block_name,"add_emf",true); // default true
   dump_diag  = pin->GetOrAddBoolean(block_name,"dump_diag",false);
   ndiag = pin->GetOrAddInteger(block_name,"ndiag",-1);
 
@@ -74,8 +73,7 @@ CyclicZoom::CyclicZoom(Mesh *pm, ParameterInput *pin) :
   // Read the runtime factors from input file
   for (int i = 0; i < num_zones; ++i) {
     std::string param_name = "t_run_fac_zone_" + std::to_string(i);
-    Real default_value = 1.0;  // or some appropriate default
-    Real zone_factor = pin->GetOrAddReal(block_name, param_name.c_str(), default_value);
+    Real zone_factor = pin->GetOrAddReal(block_name, param_name.c_str(), zint.t_run_fac);
     zint.t_run_fac_zones[i] = zone_factor;
   }
 
@@ -91,11 +89,12 @@ CyclicZoom::CyclicZoom(Mesh *pm, ParameterInput *pin) :
   emf_fmax = 1.0;
   re_fac = 0.8; // TODO(@mhguo): probably change to 1.0?
   r0_efld = 0.0;
-  if (fix_efield) {
-    emf_flag = pin->GetInteger(block_name,"emf_flag");
+  // Think whether to read emf parameters from input file
+  if (add_emf) {
+    emf_flag = pin->GetOrAddInteger(block_name,"emf_flag",emf_flag);
     emf_f0 = pin->GetOrAddReal(block_name,"emf_f0",emf_f0);
-    emf_f1 = pin->GetReal(block_name,"emf_f1");
-    emf_fmax = pin->GetReal(block_name,"emf_fmax");
+    emf_f1 = pin->GetOrAddReal(block_name,"emf_f1",emf_f1);
+    emf_fmax = pin->GetOrAddReal(block_name,"emf_fmax",emf_fmax);
     emf_zmax = pin->GetOrAddInteger(block_name,"emf_zmax",zamr.nlevels);
     re_fac = pin->GetOrAddReal(block_name,"re_fac",re_fac);
     r0_efld = pin->GetOrAddReal(block_name,"r0_efld",0.0); // default value
@@ -155,7 +154,7 @@ void CyclicZoom::PrintCyclicZoomDiagnostics()
     std::cout << "Basic: is_set = " << is_set << " read_rst = " << read_rst
               << " write_rst = " << write_rst << " ndiag = " << ndiag << std::endl;
     std::cout << "Funcs: zoom_bcs = " << zoom_bcs << " zoom_ref = " << zoom_ref 
-              << " zoom_dt = " << zoom_dt << " fix_efield = " << fix_efield
+              << " zoom_dt = " << zoom_dt << " add_emf = " << add_emf
               << " emf_flag = " << emf_flag << std::endl;
     // print model parameters
     std::cout << "Model: mzoom = " << pzmesh->nzmb_max_perdvce

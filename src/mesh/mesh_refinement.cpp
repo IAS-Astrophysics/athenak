@@ -123,7 +123,7 @@ void MeshRefinement::AdaptiveMeshRefinement(Driver *pdriver, ParameterInput *pin
     pmy_mesh->pzoom->WorkBeforeAMR();
     RedistAndRefineMeshBlocks(pin, nnew, ndel);
     pdriver->InitBoundaryValuesAndPrimitives(pmy_mesh);
-    pmy_mesh->pzoom->WorkAfterAMR();
+    pmy_mesh->pzoom->WorkAfterAMR(pdriver);
 
     MeshBlockPack* pmbp = pmy_mesh->pmb_pack;
     if (pmbp->phydro != nullptr) {

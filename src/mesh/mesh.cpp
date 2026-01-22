@@ -682,11 +682,9 @@ void Mesh::AddCoordinatesAndPhysics(ParameterInput *pinput) {
 void Mesh::AddCyclicZoom(ParameterInput *pin) {
   if (adaptive) {
     auto rcrit = pmr->pmrc->rcrit;
-    // TODO(@mhguo): currently only support one cyclic zoom region
     for (auto it = rcrit.begin(); it != rcrit.end(); ++it) {
       if (it->rmethod == RefCritMethod::cyclic_zoom) {
         pzoom = new CyclicZoom(this, pin);
-        // pzoom->InitializeZoomData();
         return;
       }
     }

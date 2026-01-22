@@ -43,7 +43,7 @@ void CyclicZoom::UpdateState() {
     std::exit(EXIT_FAILURE);
   }
   if (zamr.zooming_out) {
-    if (fix_efield && emf_flag >=1) {
+    if (add_emf && emf_flag >=1) {
       zamr.first_emf = true;
     }
   }
@@ -67,7 +67,7 @@ void CyclicZoom::UpdateState() {
               << std::endl;
     std::cout << "CyclicZoom AMR: old region radius = " << old_zregion.radius << std::endl;
     std::cout << "CyclicZoom AMR: region radius = " << zregion.radius << std::endl;
-    std::cout << "CyclicZoom AMR: runtime = " << zint.runtime 
+    std::cout << "CyclicZoom AMR: time = " << pmesh->time << " runtime = " << zint.runtime
               << " next time = " << zstate.next_time << std::endl;
   }
 }

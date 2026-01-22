@@ -86,11 +86,11 @@ void ZoomMesh::UpdateMeshData() {
   // Get starting global index for this rank (exclusive scan)
   // int zm_offset = 0;
   // Get total number across all ranks (inclusive scan or Allreduce)
-  int zm_total = 0;
+  int nzmb_thislevel = 0;
   for (int i = 0; i < global_variable::nranks; ++i) {
-    zm_total += nzmb_eachdvce[i];
+    nzmb_thislevel += nzmb_eachdvce[i];
   }
-  nzmb_total += zm_total;
+  nzmb_total = gids_eachlevel[pzoom->zstate.zone-1] + nzmb_thislevel;
   if (nzmb_total > nzmb_max_perhost * global_variable::nranks) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
               << "CyclicZoom:: Total number of zoom MeshBlocks exceed maximum "
@@ -98,8 +98,8 @@ void ZoomMesh::UpdateMeshData() {
               << nzmb_max_perhost * global_variable::nranks << std::endl;
     std::exit(EXIT_FAILURE);
   }
-  nzmb_eachlevel[pzoom->zstate.zone-1] = zm_total;
-  gids_eachlevel[pzoom->zstate.zone] = gids_eachlevel[pzoom->zstate.zone-1] + zm_total;
+  nzmb_eachlevel[pzoom->zstate.zone-1] = nzmb_thislevel;
+  gids_eachlevel[pzoom->zstate.zone] = nzmb_total;
   // gids_eachdvce[global_variable::my_rank] = gids_eachlevel[zstate.zone-1] + zm_offset;
   // resize arrays to hold all zoom MeshBlocks across all levels/ranks
   rank_eachzmb.resize(nzmb_total);

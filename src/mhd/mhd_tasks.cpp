@@ -381,6 +381,9 @@ TaskStatus MHD::EFieldSrc(Driver *pdrive, int stage) {
       psbox_b->SourceTermsFC(b0, efld);
     }
   }
+  if (pmy_pack->pmesh->pzoom != nullptr) {
+    pmy_pack->pmesh->pzoom->SourceTermsFC(efld);
+  }
   return TaskStatus::complete;
 }
 
@@ -542,6 +545,12 @@ TaskStatus MHD::ConToPrim(Driver *pdrive, int stage) {
   int n2m1 = (indcs.nx2 > 1)? (indcs.nx2 + 2*ng - 1) : 0;
   int n3m1 = (indcs.nx3 > 1)? (indcs.nx3 + 2*ng - 1) : 0;
   peos->ConsToPrim(u0, b0, w0, bcc0, false, 0, n1m1, 0, n2m1, 0, n3m1);
+  // TODO(@mhguo): this is temporary, need to move to a general mask function later
+  if (pmy_pack->pmesh->pzoom != nullptr) {
+    if (!pmy_pack->pmesh->pzoom->zamr.zooming_out && !pmy_pack->pmesh->pzoom->zamr.zooming_in) {
+      pmy_pack->pmesh->pzoom->MaskVariables();
+    }
+  }
   return TaskStatus::complete;
 }
 

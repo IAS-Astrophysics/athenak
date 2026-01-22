@@ -98,7 +98,7 @@ class CyclicZoom
   bool zoom_bcs;           // flag for zoom boundary conditions
   bool zoom_ref;           // flag for zoom refinement
   bool zoom_dt;            // flag for zoom time step
-  bool fix_efield;         // flag for fixing electric field
+  bool add_emf;            // flag for fixing electric field
   bool dump_diag;          // flag for dumping diagnostic output
   int ndiag;               // cycles between diagostic output
   int nflux;               // number of fluxes through spherical surfaces
@@ -136,7 +136,7 @@ class CyclicZoom
   // void StoreZoomRegion(){};
   // void InitZoomRegion(){};
   void WorkBeforeAMR();
-  void WorkAfterAMR();
+  void WorkAfterAMR(Driver *pdriver);
   // For zoom refinement
   // TODO(@mhguo): need to reorganize these functions, now simply for compilation
   void StoreVariables();
@@ -147,6 +147,8 @@ class CyclicZoom
   bool CheckStoreFlag(int m);
   int FindMaskMB(int lm);
   int FindReinitMB(int lm);
+  void UpdateElectricFields(Driver *pdriver);
+  void SourceTermsFC(DvceEdgeFld4D<Real> emf);
   // Boundary conditions, fluxes and source terms
   void BoundaryConditions();
   void FixEField(DvceEdgeFld4D<Real> emf);
@@ -235,13 +237,19 @@ class ZoomData
   // DvceArray5D<Real> coarse_wuh; // coarse primitive variables from hydro conserved variables
 
   // following only used for time-evolving flow
-  DvceEdgeFld4D<Real> efld;   // edge-centered electric fields (fluxes of B)
-  DvceEdgeFld4D<Real> emf0;   // edge-centered electric fields just after zoom
+  DvceEdgeFld4D<Real> efld_pre;   // coarse edge-centered electric fields before zoom
+  DvceEdgeFld4D<Real> efld_aft;   // coarse edge-centered electric fields after zoom
+  // DvceEdgeFld4D<Real> efld;   // edge-centered electric fields (fluxes of B)
+  // DvceEdgeFld4D<Real> emf0;   // edge-centered electric fields just after zoom
   DvceEdgeFld4D<Real> delta_efld; // change in electric fields
 
-  DvceArray1D<Real> dzbuf;    // Device zoom buffer for data transfer
-  HostArray1D<Real> hzbuf;    // host zoom buffer for data transfer
-  HostArray1D<Real> hzdata;   // host zoom array for data storage, receiving data from buffer, and dumping to file
+  // DualView for device ↔ host mirrored packing buffer (replaces dzbuf+hzbuf)
+  // Syncs only used portion via subviews for bandwidth efficiency
+  DualArray1D<Real> zbuf;
+  
+  // Separate host buffer for MPI receive - NOT a mirror of zbuf!
+  // Contains different ZMBs after redistribution due to load balancing
+  HostArray1D<Real> zdata;   // host array for persistent storage with load balancing
 
   HostArray2D<Real> max_emf0;  // maximum electric field
 
@@ -257,11 +265,16 @@ class ZoomData
 
   // functions
   void Initialize();
+  void ResetDataEC(DvceEdgeFld4D<Real> ec);
   void DumpData();
   void StoreDataToZoomData(int zm, int m);
-  void StoreCCData(int zm, int m);
-  void StoreHydroData(int zm, int m);
-  void UpdateElectricFields(int zm, int m);
+  // TODO(@mhguo): u or u0_?
+  void StoreCCData(int zm, int m, DvceArray5D<Real> u, DvceArray5D<Real> w);
+  void StoreHydroData(int zm, int m, DvceArray5D<Real> u0_, DvceArray5D<Real> w0_);
+  // TODO(@mhguo): find a better name
+  void StoreEFieldsBeforeAMR(int zm, int m, DvceEdgeFld4D<Real> efld);
+  void StoreEFieldsAfterAMR(int zm, int m, DvceEdgeFld4D<Real> efld);
+  void LimitEFields();
   void MeshBlockDataSize();
   void PackBuffer();
   void PackBuffersCC(DvceArray1D<Real> packed_data, DvceArray5D<Real> a0,
@@ -283,35 +296,11 @@ class ZoomData
   void LoadCCData(int m, int zm);
   void LoadHydroData(int m, int zm);
   void MaskDataInZoomRegion(int m, int zm);
+  void AddSrcTermsFC(int m, int zm, DvceEdgeFld4D<Real> emf);
 
  private:
   CyclicZoom *pzoom;       // ptr to CyclicZoom containing this ZoomData module
   ZoomMesh   *pzmesh;      // ptr to ZoomMesh containing this ZoomData module
 };
-
-// //----------------------------------------------------------------------------------------
-// //! \class ZoomRefinement
-// //! \brief Handles refinement and MPI communication during cyclic zoom AMR
-// // TODO(@mhguo): may rename?
-// class ZoomRefinement
-// {
-//  public:
-//   ZoomRefinement(CyclicZoom *pz, ParameterInput *pin);
-//   ~ZoomRefinement() = default;
-
-// #if MPI_PARALLEL_ENABLED
-//   int ndata;               // size of send/recv data
-//   int nzmb_send, nzmb_recv;
-//   MPI_Comm zoom_comm;                       // unique communicator for zoom refinement
-//   // DualArray1D<AMRBuffer> sendbuf, recvbuf; // send/recv buffers
-//   MPI_Request *send_req, *recv_req;
-//   HostArray1D<Real> send_data, recv_data;    // send/recv device data
-// #endif
-
-//  private:
-//   CyclicZoom *pzoom;       // ptr to CyclicZoom containing this ZoomRefinement module
-//   ZoomMesh   *pzmesh;      // ptr to ZoomMesh containing this ZoomRefinement module
-//   ZoomData   *pzdata;      // ptr to ZoomData containing this ZoomRefinement module
-// };
 
 #endif // CYCLIC_ZOOM_CYCLIC_ZOOM_HPP_

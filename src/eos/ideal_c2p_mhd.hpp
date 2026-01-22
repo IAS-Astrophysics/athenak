@@ -32,6 +32,12 @@ void SingleC2P_IdealMHD(MHDCons1D &u, const EOS_Data &eos,
     u.d = dfloor_;
     dfloor_used = true;
   }
+  // apply magnetization ceiling
+  Real b2 = SQR(u.bx) + SQR(u.by) + SQR(u.bz);
+  if (b2/u.d > eos.sigma_max) {
+    u.d = b2/eos.sigma_max;
+    dfloor_used = true; // not exactly by definition, but it is a floor effectively
+  }
   w.d = u.d;
 
   // compute velocities
@@ -136,6 +142,11 @@ void SingleC2P_IdealSRMHD(MHDCons1D &u, const EOS_Data &eos, Real s2, Real b2, R
   if (u.d < eos.dfloor) {
     u.d = eos.dfloor;
     dfloor_used = true;
+  }
+  // apply magnetization ceiling
+  if (b2/u.d > eos.sigma_max) {
+    u.d = b2/eos.sigma_max;
+    dfloor_used = true; // not exactly by definition, but it is a floor effectively
   }
 
   // apply energy floor

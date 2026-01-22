@@ -34,10 +34,12 @@ add_executable(
         cyclic_zoom/cyclic_zoom.cpp
         cyclic_zoom/zoom_criteria.cpp
         cyclic_zoom/zoom_data.cpp
+        cyclic_zoom/zoom_efld.cpp
         cyclic_zoom/zoom_mesh.cpp
         cyclic_zoom/zoom_physics.cpp
         cyclic_zoom/zoom_refinement.cpp
         cyclic_zoom/zoom_restart.cpp
+        cyclic_zoom/zoom_srcterms.cpp
 
         diffusion/conduction.cpp
         diffusion/resistivity.cpp
