@@ -1,6 +1,10 @@
 # build directories
 build*/
-__pycache__*/
+CMakeFiles/
+CMakeCache.txt
+
+# analysis cache directories
+vis/python/__pycache__/
 
 # Athena output files
 *.tab
