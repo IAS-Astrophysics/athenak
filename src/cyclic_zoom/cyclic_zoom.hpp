@@ -290,8 +290,11 @@ class ZoomData
                        size_t offset_fc, const int m);
   void UnpackBuffersEC(DvceArray1D<Real> packed_data, DvceEdgeFld4D<Real> ec,
                        size_t offset_ec, const int m);
-  void SyncBufferToHost(int zone);
-  void SyncHostToBuffer(int zone);
+  void RedistributeZMBs(int zone,
+                        HostArray1D<Real> src_buf, std::vector<int>& src_ranks, std::vector<int>* src_lids,
+                        HostArray1D<Real> dst_buf, std::vector<int>& dst_ranks, std::vector<int>* dst_lids);
+  void SaveToStorage(int zone);
+  void LoadFromStorage(int zone);
   void LoadDataFromZoomData(int m, int zm);
   void LoadCCData(int m, int zm);
   void LoadHydroData(int m, int zm);

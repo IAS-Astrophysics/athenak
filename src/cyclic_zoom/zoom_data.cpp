@@ -679,188 +679,157 @@ void ZoomData::PackBuffersEC(DvceArray1D<Real> packed_data, DvceEdgeFld4D<Real> 
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn void ZoomData::SyncBufferToHost()
-//! \brief Sync zoom data buffer to host array
-//! \details Redistributes ZMBs across ranks during AMR. Each rank:
-//!   1. Sends its current ZMBs (from zbuf) to destination ranks
-//!   2. Receives new ZMBs (into zdata) from source ranks based on logical mapping
-//!   After this function, zdata contains potentially different ZMBs than zbuf had.
+//! \fn void ZoomData::RedistributeZMBs()
+//! \brief Generic MPI redistribution between two buffers with flexible indexing
+//!
+//! \details This function redistributes Zoom MeshBlocks (ZMBs) between two host buffers
+//!          across MPI ranks. It supports two indexing schemes:
+//!
+//!          1. Dense indexing: Sequential local indices (0, 1, 2, ...) for ZMBs owned by
+//!             a rank. Used by zbuf during computation where each rank processes a 
+//!             contiguous subset of ZMBs.
+//!
+//!          2. Logical indexing: Global indices specified by lid_eachzmb array, which may
+//!             be scattered. Used by zdata for persistent storage where each ZMB has a
+//!             fixed global position regardless of which rank owns it.
+//!
+//!          The redistribution handles three communication patterns:
+//!          - Remote receives: ZMBs where destination rank differs from source rank
+//!          - Remote sends: ZMBs sent from this rank to other ranks
+//!          - Local copies: ZMBs that stay on the same rank but may need reindexing
+//!
+//!          Typical usage:
+//!          - SaveToStorage: zbuf (dense) → zdata (logical) before AMR refinement
+//!          - LoadFromStorage: zdata (logical) → zbuf (dense) after AMR refinement
+//!
+//! \param[in] zone      Zone level for identifying which ZMBs to redistribute
+//! \param[in] src_buf   Source buffer containing data to send
+//! \param[in] src_ranks Rank ownership array for source (size: total ZMBs at level)
+//! \param[in] src_lids  Logical index array for source (nullptr = dense indexing)
+//! \param[out] dst_buf  Destination buffer to receive data
+//! \param[in] dst_ranks Rank ownership array for destination (size: total ZMBs at level)
+//! \param[in] dst_lids  Logical index array for destination (nullptr = dense indexing)
 
-// TODO(@mhguo): need some sync even if mpi is not enabled
-void ZoomData::SyncBufferToHost(int zone) {
+void ZoomData::RedistributeZMBs(int zone,
+                                HostArray1D<Real> src_buf, 
+                                std::vector<int>& src_ranks,
+                                std::vector<int>* src_lids,
+                                HostArray1D<Real> dst_buf,
+                                std::vector<int>& dst_ranks,
+                                std::vector<int>* dst_lids) {
 #if MPI_PARALLEL_ENABLED
-  auto rank_send = pzmesh->rank_eachmb;
-  auto rank_recv = pzmesh->rank_eachzmb;
-  int nlmb = pzmesh->nzmb_eachlevel[zone];
-  int lmbs = pzmesh->gids_eachlevel[zone];
-  size_t data_per_zmb = zmb_data_cnt;
+  // Get ZMB information for this level
+  int nlmb = pzmesh->nzmb_eachlevel[zone];  // Number of ZMBs at this level
+  int lmbs = pzmesh->gids_eachlevel[zone];  // Global starting index for this level
+  size_t data_per_zmb = zmb_data_cnt;       // Data elements per ZMB
 
   int nsend = 0, nrecv = 0, ncopy = 0;
   int my_rank = global_variable::my_rank;
   std::vector<MPI_Request> requests;
 
-  auto hzbuf = zbuf.h_view;  // Get host view of buffer
-  int zm = 0;
+  // Dense indexing counters (only incremented when rank owns the ZMB)
+  int src_dense_idx = 0;
+  int dst_dense_idx = 0;
+  
+  // Loop over all ZMBs at this level
   for (int lm = 0; lm < nlmb; ++lm) {
-    int src_rank = rank_send[lm+lmbs];
-    int dst_rank = rank_recv[lm+lmbs];
+    int global_idx = lm + lmbs;  // Global ZMB index
+    int src_rank_val = src_ranks[global_idx];
+    int dst_rank_val = dst_ranks[global_idx];
     
-    // Post receives first
-    if (dst_rank == my_rank && src_rank != my_rank) {
-      // Receive from src_rank
+    // Compute source offset:
+    // - If src_lids is nullptr: use dense indexing (sequential local index)
+    // - Otherwise: use logical indexing from src_lids array
+    size_t offset_src = (src_lids == nullptr) ? 
+                        src_dense_idx * data_per_zmb : 
+                        (*src_lids)[global_idx] * data_per_zmb;
+    
+    // Compute destination offset with same logic
+    size_t offset_dst = (dst_lids == nullptr) ? 
+                        dst_dense_idx * data_per_zmb : 
+                        (*dst_lids)[global_idx] * data_per_zmb;
+    
+    // Post receives first (avoids potential deadlock)
+    if (dst_rank_val == my_rank && src_rank_val != my_rank) {
       MPI_Request req;
-      size_t offset_dst = pzmesh->lid_eachzmb[lm+lmbs] * data_per_zmb;
-      MPI_Irecv(zdata.data() + offset_dst, data_per_zmb, 
-                MPI_ATHENA_REAL, src_rank, lm, zoom_comm, &req);
+      MPI_Irecv(dst_buf.data() + offset_dst, data_per_zmb, 
+                MPI_ATHENA_REAL, src_rank_val, lm, zoom_comm, &req);
       requests.push_back(req);
-      std::cout << "  Rank " << global_variable::my_rank 
-                << " Irecv to host for zmb " << lm+lmbs 
-                << " from rank " << src_rank << " to offset " << offset_dst 
-                << " with local id " << pzmesh->lid_eachzmb[lm+lmbs]
-                << std::endl;
       ++nrecv;
+      // Only increment dense counter if destination uses dense indexing
+      if (dst_lids == nullptr) ++dst_dense_idx;
     }
 
     // Post sends
-    if (src_rank == my_rank && dst_rank != my_rank) {
-      // Send to dst_rank
+    if (src_rank_val == my_rank && dst_rank_val != my_rank) {
       MPI_Request req;
-      size_t offset_src = zm * data_per_zmb;
-      MPI_Isend(hzbuf.data() + offset_src, data_per_zmb,
-                MPI_ATHENA_REAL, dst_rank, lm, zoom_comm, &req);
+      MPI_Isend(src_buf.data() + offset_src, data_per_zmb,
+                MPI_ATHENA_REAL, dst_rank_val, lm, zoom_comm, &req);
       requests.push_back(req);
-      std::cout << "  Rank " << global_variable::my_rank 
-                << " Isend to host for zmb " << lm+lmbs 
-                << " to rank " << dst_rank << " from offset " << offset_src
-                << " with local id " << zm
-                << std::endl;
       ++nsend;
-      ++zm;
-    } 
+      // Only increment dense counter if source uses dense indexing
+      if (src_lids == nullptr) ++src_dense_idx;
+    }
 
-    // Local copy
-    if (src_rank == my_rank && dst_rank == my_rank) {
-      size_t offset_src = zm * data_per_zmb;
-      size_t offset_dst = pzmesh->lid_eachzmb[lm+lmbs] * data_per_zmb;
+    // Local copy (same rank, but may need reindexing between dense/logical)
+    if (src_rank_val == my_rank && dst_rank_val == my_rank) {
       Kokkos::deep_copy(
-        Kokkos::subview(zdata, Kokkos::make_pair(offset_dst, offset_dst + data_per_zmb)),
-        Kokkos::subview(hzbuf, Kokkos::make_pair(offset_src, offset_src + data_per_zmb))
+        Kokkos::subview(dst_buf, Kokkos::make_pair(offset_dst, offset_dst + data_per_zmb)),
+        Kokkos::subview(src_buf, Kokkos::make_pair(offset_src, offset_src + data_per_zmb))
       );
-      std::cout << "  Rank " << global_variable::my_rank 
-                << " local copy to host for zmb " << lm+lmbs
-                << " from offset " << offset_src << " to offset " << offset_dst
-                << " from local id " << zm << " to local id " << pzmesh->lid_eachzmb[lm+lmbs]
-                << std::endl;
       ++ncopy;
-      ++zm;
+      // Increment both counters for local copies
+      if (src_lids == nullptr) ++src_dense_idx;
+      if (dst_lids == nullptr) ++dst_dense_idx;
     }
   }
 
-  // Wait for all communications to complete
+  // Wait for all asynchronous communications to complete
   if (!requests.empty()) {
     MPI_Waitall(requests.size(), requests.data(), MPI_STATUSES_IGNORE);
   }
 
-  std::cout << "SyncBufferToHost: Rank " << global_variable::my_rank << " completed "
-            << requests.size() << " MPI operations"
-            << " (sends: " << nsend << ", receives: " << nrecv
-            << ", local copies: " << ncopy << ")" << std::endl;
-
+  if (global_variable::my_rank == 0) {
+    std::cout << "RedistributeZMBs(zone=" << zone << "): completed " 
+              << requests.size() << " MPI ops (sends: " << nsend 
+              << ", recvs: " << nrecv << ", local: " << ncopy << ")" << std::endl;
+  }
 #endif
   return;
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn void ZoomData::SyncHostToBuffer()
-//! \brief Sync zoom data from host array to buffer
-//! \details Reverse of SyncBufferToHost - redistributes ZMBs for zooming in.
-//!   Reads from zdata (logical global storage) and redistributes to zbuf on each rank
-//!   based on which rank needs each ZMB for computation.
+//! \fn void ZoomData::SaveToStorage()
+//! \brief Save ZMBs from computation buffer to persistent storage
+//!
+//! \details Wrapper for RedistributeZMBs that transfers data from zbuf (dense indexing,
+//!          distributed for computation) to zdata (logical indexing, fixed global layout).
+//!          Called before AMR refinement operations.
+//!
+//! \param[in] zone Zone level to save
 
-void ZoomData::SyncHostToBuffer(int zone) {
-#if MPI_PARALLEL_ENABLED
-  auto rank_send = pzmesh->rank_eachzmb;
-  auto rank_recv = pzmesh->rank_eachmb;
-  int nlmb = pzmesh->nzmb_eachlevel[zone];
-  int lmbs = pzmesh->gids_eachlevel[zone];
-  size_t data_per_zmb = zmb_data_cnt;
+void ZoomData::SaveToStorage(int zone) {
+  auto hzbuf = zbuf.h_view;
+  RedistributeZMBs(zone, 
+                   hzbuf, pzmesh->rank_eachmb, nullptr,  // src: dense buffer
+                   zdata, pzmesh->rank_eachzmb, &pzmesh->lid_eachzmb);  // dst: logical storage
+}
 
-  int nsend = 0, nrecv = 0, ncopy = 0;
-  int my_rank = global_variable::my_rank;
-  std::vector<MPI_Request> requests;
+//----------------------------------------------------------------------------------------
+//! \fn void ZoomData::LoadFromStorage()
+//! \brief Load ZMBs from persistent storage to computation buffer
+//!
+//! \details Wrapper for RedistributeZMBs that transfers data from zdata (logical indexing,
+//!          fixed global layout) to zbuf (dense indexing, redistributed for computation).
+//!          Called after AMR refinement operations.
+//!
+//! \param[in] zone Zone level to load
 
-  // Loop over all ZMBs at this level to determine reverse communication pattern
-  // src_rank: who has the ZMB data in zdata (from previous SyncBufferToHost)
-  // dst_rank: who needs the ZMB data for computation (receives into their hzbuf)
-  auto hzbuf = zbuf.h_view;  // Get host view of buffer
-  int zm = 0;
-  for (int lm = 0; lm < nlmb; ++lm) {
-    int src_rank = rank_send[lm+lmbs];
-    int dst_rank = rank_recv[lm+lmbs];
-    
-    // Post receives first
-    if (dst_rank == my_rank && src_rank != my_rank) {
-      // Receive from src_rank
-      MPI_Request req;
-      size_t offset_dst = zm * data_per_zmb;
-      MPI_Irecv(hzbuf.data() + offset_dst, data_per_zmb, 
-                MPI_ATHENA_REAL, src_rank, lm, zoom_comm, &req);
-      requests.push_back(req);
-      std::cout << "  Rank " << global_variable::my_rank 
-                << " Irecv to buffer for zmb " << lm+lmbs
-                << " from rank " << src_rank << " to offset " << offset_dst 
-                << " with local id " << zm
-                << std::endl;
-      ++nrecv;
-      ++zm;
-    }
-
-    // Post sends
-    if (src_rank == my_rank && dst_rank != my_rank) {
-      // Send to dst_rank
-      MPI_Request req;
-      size_t offset_src = pzmesh->lid_eachzmb[lm+lmbs] * data_per_zmb;
-      MPI_Isend(zdata.data() + offset_src, data_per_zmb,
-                MPI_ATHENA_REAL, dst_rank, lm, zoom_comm, &req);
-      requests.push_back(req);
-      std::cout << "  Rank " << global_variable::my_rank 
-                << " Isend to buffer for zmb " << lm+lmbs 
-                << " to rank " << dst_rank << " from offset " << offset_src
-                << " with local id " << pzmesh->lid_eachzmb[lm+lmbs]
-                << std::endl;
-      ++nsend;
-    } 
-
-    // Local copy
-    if (src_rank == my_rank && dst_rank == my_rank) {
-      size_t offset_src = pzmesh->lid_eachzmb[lm+lmbs] * data_per_zmb;
-      size_t offset_dst = zm * data_per_zmb;
-      Kokkos::deep_copy(
-        Kokkos::subview(hzbuf, Kokkos::make_pair(offset_dst, offset_dst + data_per_zmb)),
-        Kokkos::subview(zdata, Kokkos::make_pair(offset_src, offset_src + data_per_zmb))
-      );
-      std::cout << "  Rank " << global_variable::my_rank 
-                << " local copy to buffer for zmb " << lm+lmbs
-                << " from offset " << offset_src << " to offset " << offset_dst
-                << " from local id " << pzmesh->lid_eachzmb[lm+lmbs ] << " to local id " << zm
-                << std::endl;
-      ++ncopy;
-      ++zm;
-    }
-  }
-  
-  // Wait for all communications to complete
-  if (!requests.empty()) {
-    MPI_Waitall(requests.size(), requests.data(), MPI_STATUSES_IGNORE);
-  }
-  
-  std::cout << "SyncHostToBuffer: Rank " << global_variable::my_rank << " completed "
-            << requests.size() << " MPI operations"
-            << " (sends: " << nsend << ", receives: " << nrecv
-            << ", local copies: " << ncopy << ")" << std::endl;
-
-#endif
-  return;
+void ZoomData::LoadFromStorage(int zone) {
+  auto hzbuf = zbuf.h_view;
+  RedistributeZMBs(zone,
+                   zdata, pzmesh->rank_eachzmb, &pzmesh->lid_eachzmb,  // src: logical storage
+                   hzbuf, pzmesh->rank_eachmb, nullptr);   // dst: dense buffer
 }
 
 //----------------------------------------------------------------------------------------
