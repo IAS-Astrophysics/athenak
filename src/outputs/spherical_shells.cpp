@@ -115,7 +115,10 @@ void SphericalShellsOutput::LoadOutputData(Mesh *pm) {
     
     for (int n = 0; n < nout_vars; ++n) {
       // Interpolate data to this spherical surface at radius r0
-      sphere->InterpolateToSphere(outvars[n].data_index, *(outvars[n].data_ptr));
+      // Note the geodesic spherical grid uses an inclusive range for the variables
+      // so we pass the same index for vs and ve (start and end).
+      // This is unlike in the SphericalSurface class.
+      sphere->InterpolateToSphere(outvars[n].data_index, outvars[n].data_index, *(outvars[n].data_ptr));
       
       // Integrate over the shell using proper volume element
       // dV = r^2 * dOmega * dr
@@ -125,7 +128,6 @@ void SphericalShellsOutput::LoadOutputData(Mesh *pm) {
       for (int iang = 0; iang < sphere->nangles; ++iang) {
         Real solid_angle = sphere->solid_angles.h_view(iang);
         Real value = sphere->interp_vals.h_view(iang, 0);
-        // Volume element = solid_angle * radial_factor
         integrated_value += value * solid_angle * radial_factor;
       }
       
@@ -198,4 +200,14 @@ void SphericalShellsOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
 #if MPI_PARALLEL_ENABLED
   }
 #endif
+
+  // Increment counters
+  out_params.file_number++;
+  if (out_params.last_time < 0.0) {
+    out_params.last_time = pm->time;
+  } else {
+    out_params.last_time += out_params.dt;
+  }
+  pin->SetInteger(out_params.block_name, "file_number", out_params.file_number);
+  pin->SetReal(out_params.block_name, "last_time", out_params.last_time);
 }
