@@ -52,13 +52,23 @@ ntheta = 256             # Number of angles in theta, phi resolution is 2*ntheta
 
 <output7>
 file_type   = sphshell     # Output type identifier
-variable    = mhd_u_bcc    # Variables to output (same as other outputs)
+variable    = mhd_u_bcc   # Variables to output (same as other outputs)
+dt          = 0.314        # Time interval between outputs
+nr          = 50          # Number of radial shells
+rmin        = 0.5          # Minimum radius
+rmax        = 5.0          # Maximum radius
+log_spacing = false        # Linear spacing (true for log spacing)
+nlev        = 6            # Geodesic grid refinement (3-6 typical)
+
+<output8>
+file_type   = sphshell     # Output type identifier
+variable    = mhd_angmom   # Variables to output (same as other outputs)
 dt          = 0.314        # Time interval between outputs
 nr          = 50           # Number of radial shells
 rmin        = 0.5          # Minimum radius
 rmax        = 5.0          # Maximum radius
 log_spacing = false        # Linear spacing (true for log spacing)
-nlev        = 6            # Geodesic grid refinement (3-6 typical)
+nlev        = 10            # Geodesic grid refinement (3-6 typical)
 
 <time>
 evolution   = dynamic
@@ -132,11 +142,11 @@ thetaw = 0.0            # tilt of stellar rotation axis (counterclockwise rot ab
 thetab = 0.0            # tilt of stellar dipole axis (counterclockwise rot about y-axis)
 origid = 2.8            # angular velocity of star
 denstar = 1e5           # central stellar density
-dslope = -2.25          # disc midplane surface density
+dslope = -1        #-2.25          # disc midplane surface density
 gm0 = 1.0               # GM for the central star
 mm = -0.0089            #-0.0447   # magnetic moment
 h_over_r0 = 0.1         # characetristic cs
-qslope = -0.5           # disc temperature profile exponent
+qslope = -1           #-0.5           # disc temperature profile exponent
 r0 = 1                  # reference radius
 rho0 = 1.0              # characteristic disc midplane density
 rmagsph = 0.5           # initial magnetospheric cavity radius

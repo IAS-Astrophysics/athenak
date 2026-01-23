@@ -11,6 +11,8 @@
 //!   - magnitude of vorticity Curl(v)^2  [non-relativistic]
 //!   - z-component of current density Jz  [non-relativistic]
 //!   - magnitude of current density J^2  [non-relativistic]
+//!   - angular momentum components L_i = (r x rho*v)_i  [non-relativistic]
+//!   - magnitude of angular momentum L^2  [non-relativistic]
 
 #include <iostream>
 #include <sstream>
@@ -1179,6 +1181,50 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
         }
       }
     });
+  }
+
+  // angular momentum: L = r x rho*v
+  // Outputs all four components: L_x, L_y, L_z, L^2
+  if (name.compare("hydro_angmom") == 0 ||
+      name.compare("mhd_angmom") == 0) {
+    if (derived_var.extent(4) <= 1)
+      Kokkos::realloc(derived_var, nmb, n_dv, n3, n2, n1);
+    auto dv = derived_var;
+    auto &w0_ = (name.compare("hydro_angmom") == 0)?
+      pm->pmb_pack->phydro->w0 : pm->pmb_pack->pmhd->w0;
+    
+    par_for("angmom", DevExeSpace(), 0, (nmb-1), ks, ke, js, je, is, ie,
+    KOKKOS_LAMBDA(int m, int k, int j, int i) {
+      Real &x1min = size.d_view(m).x1min;
+      Real &x1max = size.d_view(m).x1max;
+      Real x1v = CellCenterX(i-is, indcs.nx1, x1min, x1max);
+
+      Real &x2min = size.d_view(m).x2min;
+      Real &x2max = size.d_view(m).x2max;
+      Real x2v = CellCenterX(j-js, indcs.nx2, x2min, x2max);
+
+      Real &x3min = size.d_view(m).x3min;
+      Real &x3max = size.d_view(m).x3max;
+      Real x3v = CellCenterX(k-ks, indcs.nx3, x3min, x3max);
+
+      Real rho = w0_(m,IDN,k,j,i);
+      Real momx = w0_(m,IVX,k,j,i) * rho;  // rho*vx
+      Real momy = w0_(m,IVY,k,j,i) * rho;  // rho*vy
+      Real momz = w0_(m,IVZ,k,j,i) * rho;  // rho*vz
+
+      // L_x = y*(rho*vz) - z*(rho*vy)
+      Real L_x = x2v * momz - x3v * momy;
+      // L_y = z*(rho*vx) - x*(rho*vz)
+      Real L_y = x3v * momx - x1v * momz;
+      // L_z = x*(rho*vy) - y*(rho*vx)
+      Real L_z = x1v * momy - x2v * momx;
+
+      dv(m,i_dv,k,j,i) = L_x;       // Component 0: L_x
+      dv(m,i_dv+1,k,j,i) = L_y;     // Component 1: L_y
+      dv(m,i_dv+2,k,j,i) = L_z;     // Component 2: L_z
+      dv(m,i_dv+3,k,j,i) = L_x*L_x + L_y*L_y + L_z*L_z;  // Component 3: L^2
+    });
+    i_dv += 4;
   }
 
   // Particle density binned to mesh.
