@@ -242,6 +242,8 @@ void Particles::InitializeStars(ParameterInput *pin) {
   auto &pr = prtcl_rdata;
   Real unit_time = pmy_pack->punit->time_cgs();
 
+  Real sn_delay = pin->GetReal("SN","delay");
+
   // Initialize particles on device
   par_for("star_par", DevExeSpace(), 0, nprtcl_thispack-1,
   KOKKOS_LAMBDA(const int p) {
@@ -254,7 +256,7 @@ void Particles::InitializeStars(ParameterInput *pin) {
     pr(IPVX,p) = pos_data(3, p);
     pr(IPVY,p) = pos_data(4, p);
     pr(IPVZ,p) = pos_data(5, p);
-    pr(IPT_CREATE, p) = pos_data(6, p);
+    pr(IPT_CREATE, p) = sn_delay + pos_data(6, p);
     pr(IPMASS, p)     = pos_data(7, p);
     pr(IPT_NEXT_SN,p) = GetNthSNTime(pr(IPMASS,p), pr(IPT_CREATE,p), unit_time, 0);
   });
