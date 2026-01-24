@@ -72,10 +72,20 @@ Coordinates::Coordinates(ParameterInput *pin, MeshBlockPack *ppack) :
           coord_data.excise_lapse = pin->GetOrAddReal("coord","excise_lapse", 0.25);
         } else if (emethod.compare("puncture") == 0) {
           coord_data.excision_scheme = ExcisionScheme::puncture;
-          // set puncture locations in pgen or z4c
-          // TO DO (@hzhu): update with z4c
+          
+          // Initial radii (R_start) - These should match your CURRENT restart radii
           coord_data.punc_0_rad = pin->GetOrAddReal("coord","excise_1_rad", -1.);
           coord_data.punc_1_rad = pin->GetOrAddReal("coord","excise_2_rad", -1.);
+          
+          // NEW: Read asymptotic shrinking parameters
+          // Timescale (tau). Larger = slower shrinking.
+          coord_data.punc_shrink_timescale = pin->GetOrAddReal("coord", "excise_shrink_timescale", 1.0);
+          
+          // Target Minimum Radius (R_target) - e.g., the horizon radius
+          coord_data.punc_min_rad = pin->GetOrAddReal("coord", "excise_min_rad", 0.0);
+          
+          // Start Time (t_0) - set this to your RESTART TIME
+          coord_data.punc_shrink_t0 = pin->GetOrAddReal("coord", "excise_shrink_t0", 0.0);
         } else {
           std::cout << "### FATAL ERROR in " << __FILE__ << " at line "
                     << __LINE__ << std::endl

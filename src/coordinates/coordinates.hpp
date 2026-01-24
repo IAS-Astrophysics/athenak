@@ -46,6 +46,11 @@ struct CoordData {
   Real punc_1[3];                  // of punc_n_rad of punc_n
   Real punc_0_rad;
   Real punc_1_rad;
+
+  // NEW: Parameters for dynamic excision shrinking
+  Real punc_shrink_timescale;      // e-folding timescale (tau) for decay
+  Real punc_min_rad;               // Target asymptotic radius (R_target)
+  Real punc_shrink_t0;             // Time to start shrinking (t_0)
 };
 
 //----------------------------------------------------------------------------------------

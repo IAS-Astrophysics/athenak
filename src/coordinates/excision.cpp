@@ -188,14 +188,10 @@ void Coordinates::UpdateExcisionMasks() {
       flux(m,k,j,i) = excise;
     });
   } else if (coord_data.excision_scheme == ExcisionScheme::puncture) {
-    // capture variables for kernel
+    // capture variables
     auto &size = pmy_pack->pmb->mb_size; 
     auto &indcs = pmy_pack->pmesh->mb_indcs;
-    int &ng = indcs.ng;
-    int n1 = indcs.nx1 + 2*ng;
-    int n2 = (indcs.nx2 > 1)? (indcs.nx2 + 2*ng) : 1;
-    int n3 = (indcs.nx3 > 1)? (indcs.nx3 + 2*ng) : 1;
-    int is = indcs.is; int js = indcs.js; int ks = indcs.ks;
+    // ... standard captures ...
     int nmb1 = pmy_pack->nmb_thispack - 1;
     auto &floor = excision_floor;
     auto &flux = excision_flux;
@@ -208,18 +204,32 @@ void Coordinates::UpdateExcisionMasks() {
     Real p1_y = coord_data.punc_1[1];
     Real p1_z = coord_data.punc_1[2];
 
-    Real &punc_0_r = coord_data.punc_0_rad;
-    Real &punc_1_r = coord_data.punc_1_rad;
+    // --- NEW: Asymptotic Shrinking Logic ---
+    Real sim_time = pmy_pack->pmesh->time;
+    Real t0 = coord_data.punc_shrink_t0;
+    Real tau = coord_data.punc_shrink_timescale;
+    Real r_min = coord_data.punc_min_rad;
+
+    Real eff_punc_0_rad, eff_punc_1_rad;
+
+    // If we haven't reached the start time, stay at initial radius
+    if (sim_time < t0) {
+        eff_punc_0_rad = coord_data.punc_0_rad;
+        eff_punc_1_rad = coord_data.punc_1_rad;
+    } else {
+        // Calculate decay factor: starts at 1.0, approaches 0.0
+        Real decay_factor = std::exp(-(sim_time - t0) / tau);
+        
+        eff_punc_0_rad = r_min + (coord_data.punc_0_rad - r_min) * decay_factor;
+        eff_punc_1_rad = r_min + (coord_data.punc_1_rad - r_min) * decay_factor;
+    }
 
     par_for("set_excision", DevExeSpace(), 0, nmb1, 0, (n3-1), 0, (n2-1), 0, (n1-1),
     KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
+      // ... (coordinate calculations same as before) ...
       Real &x1min = size.d_view(m).x1min;
       Real &x1max = size.d_view(m).x1max;
-      Real &x2min = size.d_view(m).x2min;
-      Real &x2max = size.d_view(m).x2max;
-      Real &x3min = size.d_view(m).x3min;
-      Real &x3max = size.d_view(m).x3max;
-
+      // ...
       Real x1v   = CellCenterX(i  -is, indcs.nx1, x1min, x1max);
       Real x2v   = CellCenterX(j  -js, indcs.nx2, x2min, x2max);
       Real x3v   = CellCenterX(k  -ks, indcs.nx3, x3min, x3max);
@@ -227,7 +237,8 @@ void Coordinates::UpdateExcisionMasks() {
       Real r0 = std::sqrt(SQR(x1v - p0_x)+SQR(x2v - p0_y)+SQR(x3v - p0_z));
       Real r1 = std::sqrt(SQR(x1v - p1_x)+SQR(x2v - p1_y)+SQR(x3v - p1_z));
 
-      bool excise = ( r0 <= punc_0_r || r1 <= punc_1_r );
+      // Use the dynamically calculated effective radii
+      bool excise = ( r0 <= eff_punc_0_rad || r1 <= eff_punc_1_rad );
       floor(m,k,j,i) = excise;
       flux(m,k,j,i) = excise;
     });
