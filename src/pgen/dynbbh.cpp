@@ -124,6 +124,7 @@ struct bbh_pgen {
   Real potential_r_pow;                       // set how vector potential scales
   Real potential_beta_min;                    // set how vector potential scales (cont.)
   Real potential_rho_pow;                     // set vector potential dependence on rho
+  bool enable_cooling;                      // enable cooling function
 };
 
 // a separate struc for refinement method, etc.
@@ -158,7 +159,9 @@ void RefineTracker(MeshBlockPack* pmbp);
 void RefineRadii(MeshBlockPack* pmbp);
 void Refine(MeshBlockPack* pmbp);
 void AddValenciaGRCooling(Mesh *pm, const Real bdt);
-void AddSigmaCap(Mesh *pm, const Real bdt);
+void CombinedSourceTerms(Mesh *pm, const Real bdt);
+void AddTwoTierSigmaCap(Mesh *pm, const Real bdt);
+
 //----------------------------------------------------------------------------------------
 //! \fn void TorusHistory(HistoryData *pdata, Mesh *pm)
 //! \brief User history function that centers horizon grids and calls flux integrator.
@@ -323,7 +326,9 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
 
   user_ref_func = Refine;
   user_hist_func = TorusHistory;
-  user_srcs_func = AddSigmaCap;
+
+  bbh.enable_cooling = pin->GetOrAddBoolean("problem", "enable_cooling", false);
+  user_srcs_func = CombinedSourceTerms;
 
   pmbp->padm->SetADMVariables = &SetADMVariablesToBBH;
 
@@ -2665,17 +2670,65 @@ void AddValenciaGRCooling(Mesh *pm, const Real bdt) {
     u0(m,IM3,k,j,i) -= dS3_total;
   });
 }
+//----------------------------------------------------------------------------------------
+//! \fn void CombinedSourceTerms(Mesh *pm, const Real bdt)
+//! \brief Wrapper to handle both Valencia Cooling and Sigma Ceiling
+//----------------------------------------------------------------------------------------
+void CombinedSourceTerms(Mesh *pm, const Real bdt) {
+  // 1. Apply Cooling only if enabled by parameter input (default false)
+  if (bbh.enable_cooling) {
+    AddValenciaGRCooling(pm, bdt);
+  }
+
+  // 2. Apply Two-Tier Sigma Ceiling
+  AddTwoTierSigmaCap(pm, bdt);
+}
 
 //----------------------------------------------------------------------------------------
-//! \fn void AddSigmaCap(Mesh *pm, const Real bdt)
-//! \brief Source term that injects mass in the drift frame to cap sigma.
+//! \fn void AddTwoTierSigmaCap(Mesh *pm, const Real bdt)
+//! \brief Source term that injects mass to cap sigma. 
+//!        Sigma limit is 10 inside (Horizon OR Excision), 100 outside.
 //----------------------------------------------------------------------------------------
-void AddSigmaCap(Mesh *pm, const Real bdt) {
+void AddTwoTierSigmaCap(Mesh *pm, const Real bdt) {
   MeshBlockPack *pmbp = pm->pmb_pack;
   
-  // Hardcoded limit for now, can be moved to pin
-  const Real sigma_max = 100.0;
+  // Constants
+  const Real sigma_max_outside = 100.0;
+  const Real sigma_max_inside  = 10.0;
   const Real tiny = 1.0e-30;
+
+  // 1. Get Trajectories (Host)
+  Real bbh_traj[NTRAJ];
+  find_traj_t(pm->time, bbh_traj);
+
+  // 2. Calculate Individual Masses
+  //    Based on find_traj_t: M1 = 1/(q+1), M2 = q/(q+1)
+  Real m1 = 1.0 / (bbh.q + 1.0);
+  Real m2 = bbh.q / (bbh.q + 1.0);
+
+  // 3. Determine Boundary Radii (Host)
+  //    Calculate Horizon Radii: R = M * (1 + sqrt(1 - a^2))
+  Real rh1_calc = m1 * (1.0 + sqrt(fmax(0.0, 1.0 - SQR(bbh.a1))));
+  Real rh2_calc = m2 * (1.0 + sqrt(fmax(0.0, 1.0 - SQR(bbh.a2))));
+
+  //    Get Excision Radii (read in UserProblem)
+  auto &coord = pmbp->pcoord->coord_data;
+  Real re1 = coord.punc_0_rad;
+  Real re2 = coord.punc_1_rad;
+
+  //    Use the LARGER of the two as the inner zone limit
+  //    (Compare squared values in kernel to avoid sqrt costs, so square here)
+  Real r_lim_sq_1 = SQR(fmax(rh1_calc, re1));
+  Real r_lim_sq_2 = SQR(fmax(rh2_calc, re2));
+
+  // 4. Unpack Trajectory to Scalars for Lambda Capture
+  Real traj_x1_bh1 = bbh_traj[X1];
+  Real traj_x2_bh1 = bbh_traj[Y1];
+  Real traj_x3_bh1 = bbh_traj[Z1];
+  
+  Real traj_x1_bh2 = bbh_traj[X2];
+  Real traj_x2_bh2 = bbh_traj[Y2];
+  Real traj_x3_bh2 = bbh_traj[Z2];
 
   auto &indcs = pm->mb_indcs;
   int is = indcs.is, ie = indcs.ie;
@@ -2683,13 +2736,15 @@ void AddSigmaCap(Mesh *pm, const Real bdt) {
   int ks = indcs.ks, ke = indcs.ke;
   int nmb = pmbp->nmb_thispack;
 
-  auto &adm = pmbp->padm->adm;
-  auto &w0  = pmbp->pmhd->w0;
-  auto &u0  = pmbp->pmhd->u0;
+  auto &size = pmbp->pmb->mb_size; 
+  auto &adm  = pmbp->padm->adm;
+  auto &w0   = pmbp->pmhd->w0;
+  auto &u0   = pmbp->pmhd->u0;
 
-  par_for("SigmaCap_Source", DevExeSpace(),
+  par_for("TwoTierSigmaCap", DevExeSpace(),
           0, nmb-1, ks, ke, js, je, is, ie,
   KOKKOS_LAMBDA(int m, int k, int j, int i) {
+    // --- Calculate Magnetization (Same as before) ---
     Real gxx = adm.g_dd(m,0,0,k,j,i);
     Real gxy = adm.g_dd(m,0,1,k,j,i);
     Real gxz = adm.g_dd(m,0,2,k,j,i);
@@ -2702,7 +2757,6 @@ void AddSigmaCap(Mesh *pm, const Real bdt) {
     Real sqrt_gamma = sqrt(detg);
 
     Real rho = w0(m,IDN,k,j,i);
-    // Ignore floor values to avoid division by zero or erroneous caps
     if (rho < tiny) return;
 
     Real u1p = w0(m,IVX,k,j,i);
@@ -2717,34 +2771,52 @@ void AddSigmaCap(Mesh *pm, const Real bdt) {
     Real u2_cov = gxy*u1p + gyy*u2p + gyz*u3p;
     Real u3_cov = gxz*u1p + gyz*u2p + gzz*u3p;
 
-    // --- Calculate Magnetization ---
     Real b1 = w0(m,IBX,k,j,i);
     Real b2 = w0(m,IBY,k,j,i);
     Real b3 = w0(m,IBZ,k,j,i);
 
-    // B^2 = gamma_ij B^i B^j
     Real B_sq = gxx*b1*b1 + 2.0*gxy*b1*b2 + 2.0*gxz*b1*b3
               + gyy*b2*b2 + 2.0*gyz*b2*b3 + gzz*b3*b3;
     
-    // u.B = u_i B^i
     Real u_dot_B = u1_cov*b1 + u2_cov*b2 + u3_cov*b3;
 
-    // b^2 = (B^2 + (u.B)^2) / W^2
     Real bsq = (B_sq + SQR(u_dot_B)) / (W*W);
     Real sigma = bsq / rho;
 
-    // --- Enforce Cap via Mass Injection ---
-    if (sigma > sigma_max) {
-      // Calculate density required to reach sigma_max
-      Real rho_target = bsq / sigma_max;
+    // --- Determine Location relative to Caps ---
+    Real &x1min = size.d_view(m).x1min;
+    Real &x1max = size.d_view(m).x1max;
+    Real x1v = CellCenterX(i-is, indcs.nx1, x1min, x1max);
+
+    Real &x2min = size.d_view(m).x2min;
+    Real &x2max = size.d_view(m).x2max;
+    Real x2v = CellCenterX(j-js, indcs.nx2, x2min, x2max);
+
+    Real &x3min = size.d_view(m).x3min;
+    Real &x3max = size.d_view(m).x3max;
+    Real x3v = CellCenterX(k-ks, indcs.nx3, x3min, x3max);
+
+    Real dist_sq_1 = SQR(x1v - traj_x1_bh1) + 
+                     SQR(x2v - traj_x2_bh1) + 
+                     SQR(x3v - traj_x3_bh1);
+
+    Real dist_sq_2 = SQR(x1v - traj_x1_bh2) + 
+                     SQR(x2v - traj_x2_bh2) + 
+                     SQR(x3v - traj_x3_bh2);
+
+    Real current_sigma_max = sigma_max_outside;
+
+    // Check against the LARGER of Horizon or Excision radius
+    if (dist_sq_1 < r_lim_sq_1 || dist_sq_2 < r_lim_sq_2) {
+      current_sigma_max = sigma_max_inside;
+    }
+
+    // --- Apply Cap ---
+    if (sigma > current_sigma_max) {
+      Real rho_target = bsq / current_sigma_max;
       Real drho = rho_target - rho;
 
       if (drho > 0.0) {
-        // Inject cold mass (enthalpy h=1) in the drift frame
-        // Delta D   = sqrt_gamma * W * drho
-        // Delta S_i = sqrt_gamma * W * u_i * drho
-        // Delta tau = sqrt_gamma * W * (W - 1) * drho
-
         Real dD   = sqrt_gamma * W * drho;
         Real dTau = sqrt_gamma * W * (W - 1.0) * drho;
         Real dS1  = sqrt_gamma * W * u1_cov * drho;
