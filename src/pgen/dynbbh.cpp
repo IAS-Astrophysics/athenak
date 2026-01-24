@@ -158,7 +158,7 @@ void RefineTracker(MeshBlockPack* pmbp);
 void RefineRadii(MeshBlockPack* pmbp);
 void Refine(MeshBlockPack* pmbp);
 void AddValenciaGRCooling(Mesh *pm, const Real bdt);
-
+void AddSigmaCap(Mesh *pm, const Real bdt);
 //----------------------------------------------------------------------------------------
 //! \fn void TorusHistory(HistoryData *pdata, Mesh *pm)
 //! \brief User history function that centers horizon grids and calls flux integrator.
@@ -2674,7 +2674,7 @@ void AddSigmaCap(Mesh *pm, const Real bdt) {
   MeshBlockPack *pmbp = pm->pmb_pack;
   
   // Hardcoded limit for now, can be moved to pin
-  const Real sigma_max = 50.0;
+  const Real sigma_max = 100.0;
   const Real tiny = 1.0e-30;
 
   auto &indcs = pm->mb_indcs;
@@ -2742,14 +2742,14 @@ void AddSigmaCap(Mesh *pm, const Real bdt) {
       if (drho > 0.0) {
         // Inject cold mass (enthalpy h=1) in the drift frame
         // Delta D   = sqrt_gamma * W * drho
-        // Delta S_i = sqrt_gamma * u_i * drho
-        // Delta tau = sqrt_gamma * (W - 1) * drho
+        // Delta S_i = sqrt_gamma * W * u_i * drho
+        // Delta tau = sqrt_gamma * W * (W - 1) * drho
 
         Real dD   = sqrt_gamma * W * drho;
-        Real dTau = sqrt_gamma * (W - 1.0) * drho;
-        Real dS1  = sqrt_gamma * u1_cov * drho;
-        Real dS2  = sqrt_gamma * u2_cov * drho;
-        Real dS3  = sqrt_gamma * u3_cov * drho;
+        Real dTau = sqrt_gamma * W * (W - 1.0) * drho;
+        Real dS1  = sqrt_gamma * W * u1_cov * drho;
+        Real dS2  = sqrt_gamma * W * u2_cov * drho;
+        Real dS3  = sqrt_gamma * W * u3_cov * drho;
 
         u0(m,IDN,k,j,i) += dD;
         u0(m,IEN,k,j,i) += dTau;
