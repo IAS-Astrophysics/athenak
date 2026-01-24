@@ -323,7 +323,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
 
   user_ref_func = Refine;
   user_hist_func = TorusHistory;
-  user_srcs_func = AddValenciaGRCooling;
+  user_srcs_func = AddSigmaCap;
 
   pmbp->padm->SetADMVariables = &SetADMVariablesToBBH;
 
@@ -2663,6 +2663,101 @@ void AddValenciaGRCooling(Mesh *pm, const Real bdt) {
     u0(m,IM1,k,j,i) -= dS1_total;
     u0(m,IM2,k,j,i) -= dS2_total;
     u0(m,IM3,k,j,i) -= dS3_total;
+  });
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void AddSigmaCap(Mesh *pm, const Real bdt)
+//! \brief Source term that injects mass in the drift frame to cap sigma.
+//----------------------------------------------------------------------------------------
+void AddSigmaCap(Mesh *pm, const Real bdt) {
+  MeshBlockPack *pmbp = pm->pmb_pack;
+  
+  // Hardcoded limit for now, can be moved to pin
+  const Real sigma_max = 50.0;
+  const Real tiny = 1.0e-30;
+
+  auto &indcs = pm->mb_indcs;
+  int is = indcs.is, ie = indcs.ie;
+  int js = indcs.js, je = indcs.je;
+  int ks = indcs.ks, ke = indcs.ke;
+  int nmb = pmbp->nmb_thispack;
+
+  auto &adm = pmbp->padm->adm;
+  auto &w0  = pmbp->pmhd->w0;
+  auto &u0  = pmbp->pmhd->u0;
+
+  par_for("SigmaCap_Source", DevExeSpace(),
+          0, nmb-1, ks, ke, js, je, is, ie,
+  KOKKOS_LAMBDA(int m, int k, int j, int i) {
+    Real gxx = adm.g_dd(m,0,0,k,j,i);
+    Real gxy = adm.g_dd(m,0,1,k,j,i);
+    Real gxz = adm.g_dd(m,0,2,k,j,i);
+    Real gyy = adm.g_dd(m,1,1,k,j,i);
+    Real gyz = adm.g_dd(m,1,2,k,j,i);
+    Real gzz = adm.g_dd(m,2,2,k,j,i);
+
+    Real detg = adm::SpatialDet(gxx, gxy, gxz, gyy, gyz, gzz);
+    detg = fmax(detg, tiny);
+    Real sqrt_gamma = sqrt(detg);
+
+    Real rho = w0(m,IDN,k,j,i);
+    // Ignore floor values to avoid division by zero or erroneous caps
+    if (rho < tiny) return;
+
+    Real u1p = w0(m,IVX,k,j,i);
+    Real u2p = w0(m,IVY,k,j,i);
+    Real u3p = w0(m,IVZ,k,j,i);
+
+    Real u_sq = gxx*u1p*u1p + 2.0*gxy*u1p*u2p + 2.0*gxz*u1p*u3p
+              + gyy*u2p*u2p + 2.0*gyz*u2p*u3p + gzz*u3p*u3p;
+    Real W = sqrt(1.0 + u_sq);
+
+    Real u1_cov = gxx*u1p + gxy*u2p + gxz*u3p;
+    Real u2_cov = gxy*u1p + gyy*u2p + gyz*u3p;
+    Real u3_cov = gxz*u1p + gyz*u2p + gzz*u3p;
+
+    // --- Calculate Magnetization ---
+    Real b1 = w0(m,IBX,k,j,i);
+    Real b2 = w0(m,IBY,k,j,i);
+    Real b3 = w0(m,IBZ,k,j,i);
+
+    // B^2 = gamma_ij B^i B^j
+    Real B_sq = gxx*b1*b1 + 2.0*gxy*b1*b2 + 2.0*gxz*b1*b3
+              + gyy*b2*b2 + 2.0*gyz*b2*b3 + gzz*b3*b3;
+    
+    // u.B = u_i B^i
+    Real u_dot_B = u1_cov*b1 + u2_cov*b2 + u3_cov*b3;
+
+    // b^2 = (B^2 + (u.B)^2) / W^2
+    Real bsq = (B_sq + SQR(u_dot_B)) / (W*W);
+    Real sigma = bsq / rho;
+
+    // --- Enforce Cap via Mass Injection ---
+    if (sigma > sigma_max) {
+      // Calculate density required to reach sigma_max
+      Real rho_target = bsq / sigma_max;
+      Real drho = rho_target - rho;
+
+      if (drho > 0.0) {
+        // Inject cold mass (enthalpy h=1) in the drift frame
+        // Delta D   = sqrt_gamma * W * drho
+        // Delta S_i = sqrt_gamma * u_i * drho
+        // Delta tau = sqrt_gamma * (W - 1) * drho
+
+        Real dD   = sqrt_gamma * W * drho;
+        Real dTau = sqrt_gamma * (W - 1.0) * drho;
+        Real dS1  = sqrt_gamma * u1_cov * drho;
+        Real dS2  = sqrt_gamma * u2_cov * drho;
+        Real dS3  = sqrt_gamma * u3_cov * drho;
+
+        u0(m,IDN,k,j,i) += dD;
+        u0(m,IEN,k,j,i) += dTau;
+        u0(m,IM1,k,j,i) += dS1;
+        u0(m,IM2,k,j,i) += dS2;
+        u0(m,IM3,k,j,i) += dS3;
+      }
+    }
   });
 }
 
