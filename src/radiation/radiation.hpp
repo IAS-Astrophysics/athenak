@@ -105,6 +105,14 @@ class Radiation {
   bool power_opacity;       // flag to enable Kramer's law opacity for kappa_a
   bool is_compton_enabled;  // flag to enable/disable compton
 
+  // Flags and parameters for ad hoc fixes
+  bool correct_radsrc_velocity;
+  bool correct_radsrc_opacity;
+  Real dfloor_opacity;
+  Real dens_trunc_max;
+  Real tau_truncation;
+  Real sigmoid_residual; // sigmoid residual must be less than 1./3
+
   // radiation source term (i.e., beam)
   SourceTerms *psrc = nullptr;
 

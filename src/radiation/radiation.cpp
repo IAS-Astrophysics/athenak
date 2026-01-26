@@ -59,6 +59,14 @@ Radiation::Radiation(MeshBlockPack *ppack, ParameterInput *pin) :
     std::exit(EXIT_FAILURE);
   }
   are_units_enabled = pin->DoesBlockExist("units");
+  // Check flags and parameters for ad hoc fixes
+  correct_radsrc_velocity = pin->GetOrAddBoolean("radiation","correct_radsrc_velocity",false);
+  correct_radsrc_opacity  = pin->GetOrAddBoolean("radiation","correct_radsrc_opacity",false);
+  dfloor_opacity = pin->GetOrAddReal("radiation","dfloor_opacity",1e-100);
+  dens_trunc_max = pin->GetOrAddReal("radiation","dens_trunc_max",1e100);
+  tau_truncation = pin->GetOrAddReal("radiation","tau_truncation",1e-100);
+  sigmoid_residual = pin->GetOrAddReal("radiation","sigmoid_residual",1e-2);
+  sigmoid_residual = fmin(sigmoid_residual, 1./3); // sigmoid residual must be less than 1./3
 
   // Enable radiation source term (radiation+(M)HD) by default if hydro or mhd enabled
   // Otherwise, disable radiation source term.  The former can be overriden by
