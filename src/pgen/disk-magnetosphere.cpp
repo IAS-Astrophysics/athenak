@@ -593,7 +593,7 @@ namespace {
     //----------------------------------------------------------------------------------------
     KOKKOS_INLINE_FUNCTION //CF:CHECKED
     static void VelStarCyl(struct my_params mp, const Real rad, const Real phi, const Real z, Real &v1, Real &v2, Real &v3) {
-        
+        // The rigid body velocity of the star in coordinates aligned with the stellar rotation axis.
         Real vel(0.0);
         Real rc = sqrt(rad*rad+z*z);  // spherical radius
         vel = mp.origid*rad; // rigid rotation
@@ -608,7 +608,7 @@ namespace {
     //----------------------------------------------------------------------------------------
     KOKKOS_INLINE_FUNCTION //CF:CHECKED
     static void VelStar(struct my_params mp, const Real x1, const Real x2, const Real x3, Real &v1_star, Real &v2_star, Real &v3_star) {
-        
+        // The stellar velocity in the original cartesian frame.
         Real x1w(0.0), x2w(0.0), x3w(0.0);
         Real v1_starw(0.0), v2_starw(0.0), v3_starw(0.0);
         Real radw(0.0), phiw(0.0), zw(0.0);  // coordinates in frame aligned with stellar rotation axis
@@ -625,6 +625,7 @@ namespace {
     }
 
     //----------------------------------------------------------------------------------------
+    KOKKOS_INLINE_FUNCTION
     static void DenDiscPlusStar(struct my_params mp, const Real x1, const Real x2, const Real x3, Real &den) {
 
         Real x1w(0.0), x2w(0.0), x3w(0.0);
@@ -651,6 +652,7 @@ namespace {
     }
 
     //----------------------------------------------------------------------------------------
+    KOKKOS_INLINE_FUNCTION
     static void VelDiscPlusStar(struct my_params mp, const Real x1, const Real x2, const Real x3, Real &ux, Real &uy, Real &uz) {
 
         Real rad(0.0), phi(0.0), z(0.0);
@@ -677,30 +679,54 @@ namespace {
     //----------------------------------------------------------------------------------------
     KOKKOS_INLINE_FUNCTION //CF:CHECKED
     static Real A1(struct my_params mp, const Real x1, const Real x2, const Real x3) {
-        Real a1=0.0;
+        // Real a1=0.0;
+        // Real x2b = x2;
+        // Real rc = fmax(sqrt(x1*x1+x2*x2+x3*x3),mp.rs);
+        // a1 = mp.mm/rc/rc/rc*(-1.*x2b*cos(mp.thetab));
+
         Real x2b = x2;
-        Real rc = fmax(sqrt(x1*x1+x2*x2+x3*x3),mp.rs);
-        a1 = mp.mm/rc/rc/rc*(-1.*x2b*cos(mp.thetab));
+        Real rc = sqrt(x1*x1+x2*x2+x3*x3);
+        Real rb = mp.rs/2;
+        Real delta = 1/(10*mp.rs);
+        Real f = pow(rb,-3)*pow(pow(rc/rb,3*delta)+1,-1/delta);
+        Real a1 = mp.mm* f * (-1.*x2b*cos(mp.thetab));        
+        
         return(a1);
     }
 
     //----------------------------------------------------------------------------------------
     KOKKOS_INLINE_FUNCTION //CF:CHECKED
     static Real A2(struct my_params mp, const Real x1, const Real x2, const Real x3) {
-        Real a2=0.0;
+        // Real a2=0.0;
+        // Real x1b = cos(mp.thetab)*x1 + sin(mp.thetab)*x3;
+        // Real rc = fmax(sqrt(x1*x1+x2*x2+x3*x3),mp.rs);
+        // a2 = mp.mm/rc/rc/rc*(+1.*x1b);
+
         Real x1b = cos(mp.thetab)*x1 + sin(mp.thetab)*x3;
-        Real rc = fmax(sqrt(x1*x1+x2*x2+x3*x3),mp.rs);
-        a2 = mp.mm/rc/rc/rc*(+1.*x1b);
+        Real rc = sqrt(x1*x1+x2*x2+x3*x3);
+        Real rb = mp.rs/2;
+        Real delta = 1/(10*mp.rs);
+        Real f = pow(rb,-3)*pow(pow(rc/rb,3*delta)+1,-1/delta);
+        Real a2 = mp.mm* f * (+1.*x1b);
+        
         return(a2);
     }
 
     //----------------------------------------------------------------------------------------
     KOKKOS_INLINE_FUNCTION //CF:CHECKED
     static Real A3(struct my_params mp, const Real x1, const Real x2, const Real x3) {
-        Real a3=0.0;
+        // Real a3=0.0;
+        // Real x2b = x2;
+        // Real rc = fmax(sqrt(x1*x1+x2*x2+x3*x3),mp.rs);
+        // a3 = mp.mm/rc/rc/rc*(-1.*x2b*sin(mp.thetab));
+
         Real x2b = x2;
-        Real rc = fmax(sqrt(x1*x1+x2*x2+x3*x3),mp.rs);
-        a3 = mp.mm/rc/rc/rc*(-1.*x2b*sin(mp.thetab));
+        Real rc = sqrt(x1*x1+x2*x2+x3*x3);
+        Real rb = mp.rs/2;
+        Real delta = 1/(10*mp.rs);
+        Real f = pow(rb,-3)*pow(pow(rc/rb,3*delta)+1,-1/delta);
+        Real a3 = mp.mm* f * (-1.*x2b*sin(mp.thetab));
+
         return(a3);
     }
 
@@ -708,21 +734,32 @@ namespace {
     KOKKOS_INLINE_FUNCTION //CF:CHECKED
     static void Bfield(struct my_params mp, const Real x1, const Real x2, const Real x3, const Real mmx, const Real mmy, const Real mmz, Real &bx, Real &by,  Real &bz) {
 
-        Real rc = sqrt(x1*x1+x2*x2+x3*x3);
-        Real rccubed = rc*rc*rc;
-        Real rscubed = mp.rs*mp.rs*mp.rs;
+        // Real rc = sqrt(x1*x1+x2*x2+x3*x3);
+        // Real rccubed = rc*rc*rc;
+        // Real rscubed = mp.rs*mp.rs*mp.rs;
+        // Real mdotr = mmx*x1 + mmy*x2 + mmz*x3;
+
+        // if (rc < mp.rs) {
+        //     bx = 2.*mmx/rscubed;
+        //     by = 2.*mmy/rscubed;
+        //     bz = 2.*mmz/rscubed;
+        // } else {
+        //     bx = 3.*x1*mdotr/rccubed/rc/rc - mmx/rccubed;
+        //     by = 3.*x2*mdotr/rccubed/rc/rc - mmy/rccubed;
+        //     bz = 3.*x3*mdotr/rccubed/rc/rc - mmz/rccubed;
+        // }
+
         Real mdotr = mmx*x1 + mmy*x2 + mmz*x3;
 
-        if (rc < mp.rs) {
-            // Inside the stellar radius, set B to zero
-            bx = 2.*mmx/rscubed;
-            by = 2.*mmy/rscubed;
-            bz = 2.*mmz/rscubed;
-        } else {
-            bx = 3.*x1*mdotr/rccubed/rc/rc - mmx/rccubed;
-            by = 3.*x2*mdotr/rccubed/rc/rc - mmy/rccubed;
-            bz = 3.*x3*mdotr/rccubed/rc/rc - mmz/rccubed;
-        }
+        Real rc = sqrt(x1*x1+x2*x2+x3*x3);
+        Real rb = mp.rs/2;
+        Real delta = 1/(10*mp.rs);
+        Real f = pow(rb,-3)*pow(pow(rc/rb,3*delta)+1,-1/delta);
+        Real g = -3*pow(rb,-5)*pow(pow(rc/rb,3*delta)+1,-1/delta-1)*pow(rc/rb,3*delta-2);
+
+        bx = 2*mmx*f + g*(mmx*rc*rc-mdotr*x1);
+        by = 2*mmy*f + g*(mmy*rc*rc-mdotr*x2);
+        bz = 2*mmz*f + g*(mmz*rc*rc-mdotr*x3);
 
         return;
 

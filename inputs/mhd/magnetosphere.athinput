@@ -10,7 +10,7 @@ basename  = magsph      # problem ID: basename of output filenames
 file_type   = bin        # Tabular data dump
 #variable   = hydro_u    # variables to be output
 variable    = mhd_u_bcc  # variables to be output
-dt          = 0.314      # time increment between outputs
+dt          = 0.0314     # time increment between outputs
 
 <output2>
 file_type   = hst       # history data dump
@@ -20,27 +20,7 @@ dt          = 0.0229    # time increment between outputs
 file_type   = rst
 dt          = 9.42
 
-<output4>
-file_type = sph         # output on spherical grid
-dt = 0.0314               # time increment between outputs
-variable = mhd_u_bcc    # Output variable
-radius = 1              # Set a radius to output data
-xc = 0.0                # x, y,, and z coordinates for center of grid
-yc = 0.0
-zc = 0.0
-ntheta = 256             # Number of angles in theta, phi resolution is 2*ntheta
-
-<output5>
-file_type = sph         # output on spherical grid
-dt = 0.0314               # time increment between outputs
-variable = mhd_u_bcc    # Output variable
-radius = 0.5            # Set a radius to output data
-xc = 0.0                # x, y,, and z coordinates for center of grid
-yc = 0.0
-zc = 0.0
-ntheta = 256             # Number of angles in theta, phi resolution is 2*ntheta
-
-<output6>
+<output3>
 file_type = sph         # output on spherical grid
 dt = 0.0314               # time increment between outputs
 variable = mhd_u_bcc    # Output variable
@@ -50,17 +30,7 @@ yc = 0.0
 zc = 0.0
 ntheta = 256             # Number of angles in theta, phi resolution is 2*ntheta
 
-<output7>
-file_type   = sphshell     # Output type identifier
-variable    = mhd_u_bcc   # Variables to output (same as other outputs)
-dt          = 0.314        # Time interval between outputs
-nr          = 50          # Number of radial shells
-rmin        = 0.5          # Minimum radius
-rmax        = 5.0          # Maximum radius
-log_spacing = false        # Linear spacing (true for log spacing)
-nlev        = 6            # Geodesic grid refinement (3-6 typical)
-
-<output8>
+<output4>
 file_type   = sphshell     # Output type identifier
 variable    = mhd_angmom   # Variables to output (same as other outputs)
 dt          = 0.314        # Time interval between outputs
@@ -74,11 +44,11 @@ nlev        = 10            # Geodesic grid refinement (3-6 typical)
 evolution   = dynamic
 cfl_number  = 0.3        # The Courant, Friedrichs, & Lewy (CFL) Number
 nlim        = -1         # cycle limit
-tlim        = 6.28       # 6.28       # time limit
+tlim        = 0.314.     #31.4  #6.28 # time limit
 integrator  = rk2        # time integration algorithm
 
 <mesh>
-nghost      = 2         # Number of ghost cells
+nghost      = 4         # Number of ghost cells
 
 nx1         = 120       # Number of zones in X1-direction
 x1min       = -3        # minimum value of X1
@@ -131,10 +101,11 @@ gamma       = 1.4      # gamma
 dfloor      = 1.e-9    # Density floor
 pfloor      = 1.e-12   # Pressure floor
 rsolver     = hlld     # Riemann-solver to be used
+fofc        = true     # First order flux correction
 
 <problem>
 pgen_name = magsph      # problem generator name
-user_srcs = false       # Switch the user source terms on
+user_srcs = true       # Switch the user source terms on
 user_esrcs = true       # Switch the user e field mask on
 user_hist = false       # Switch the user history function on
 
@@ -142,11 +113,11 @@ thetaw = 0.0            # tilt of stellar rotation axis (counterclockwise rot ab
 thetab = 0.0            # tilt of stellar dipole axis (counterclockwise rot about y-axis)
 origid = 2.8            # angular velocity of star
 denstar = 1e5           # central stellar density
-dslope = -1        #-2.25          # disc midplane surface density
+dslope = -2.25          # disc midplane surface density
 gm0 = 1.0               # GM for the central star
 mm = -0.0089            #-0.0447   # magnetic moment
 h_over_r0 = 0.1         # characetristic cs
-qslope = -1           #-0.5           # disc temperature profile exponent
+qslope = -0.5           # disc temperature profile exponent
 r0 = 1                  # reference radius
 rho0 = 1.0              # characteristic disc midplane density
 rmagsph = 0.5           # initial magnetospheric cavity radius
@@ -162,4 +133,4 @@ rho_floor_slope1 = -2.25  # radial density floor slope 1
 rho_floor_slope2 = -5.5   # radial density floor slope 2
 rstar = 0.1               # radius of the star
 gravsmooth = 0.1          # smoothing of stellar gravity
-tcool = -1.               # characteristic cooling timescale [local orbital time]
+tcool = 1e-5              # characteristic cooling timescale [local orbital time]

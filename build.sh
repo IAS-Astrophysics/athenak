@@ -1,7 +1,7 @@
 #!/bin/bash
 # PROB='blast'  # test using standard blast problem
 PROB='disk-magnetosphere'  # problem to build
-ARCHDEFAULT="A100"
+ARCHDEFAULT="H200"
 
 # Check for architecture argument
 if [ -z "$1" ]; then
