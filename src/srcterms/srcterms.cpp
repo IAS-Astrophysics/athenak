@@ -18,6 +18,7 @@
 #include "coordinates/cell_locations.hpp"
 #include "eos/eos.hpp"
 #include "geodesic-grid/geodesic_grid.hpp"
+#include "gravity/gravity.hpp"
 //#include "hydro/hydro.hpp"
 #include "ismcooling.hpp"
 #include "mesh/mesh.hpp"
@@ -40,6 +41,7 @@ SourceTerms::SourceTerms(std::string block, MeshBlockPack *pp, ParameterInput *p
   ism_cooling = pin->GetOrAddBoolean(block, "ism_cooling", false);
   rel_cooling = pin->GetOrAddBoolean(block, "rel_cooling", false);
   rad_beam = pin->GetOrAddBoolean(block, "rad_beam", false);
+  self_gravity = pin->GetOrAddBoolean(block, "self_gravity", false);
 
   // (1) read data for (constant) gravitational acceleration
   if (const_accel) {
@@ -94,6 +96,7 @@ void SourceTerms::ApplySrcTerms(const DvceArray5D<Real> &w0, const EOS_Data &eos
   if (const_accel) ConstantAccel(w0, eos_data,  bdt, u0);
   if (ism_cooling) ISMCooling(w0, eos_data, bdt, u0);
   if (rel_cooling) RelCooling(w0, eos_data, bdt, u0);
+  if (self_gravity) SelfGravity(w0, eos_data, bdt, u0);
   return;
 }
 
@@ -211,6 +214,100 @@ void SourceTerms::RelCooling(const DvceArray5D<Real> &w0, const EOS_Data &eos_da
     u0(m,IM2,k,j,i) -= bdt*w0(m,IDN,k,j,i)*uy*pow((temp*cooling_rate), cooling_power);
     u0(m,IM3,k,j,i) -= bdt*w0(m,IDN,k,j,i)*uz*pow((temp*cooling_rate), cooling_power);
   });
+
+  return;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn SourceTerms::SelfGravity
+//! \brief Adds source terms for self-gravitational acceleration to conserved variables
+//! \note
+//! This implements the source term formula in Mullen, Hanawa and Gammie 2020, but only
+//! for the momentum part. The energy source term is not conservative in this version.
+//! Also note that this implementation is not exactly conservative when the potential
+//! contains a residual error (Multigrid has small but non-zero residual).
+
+void SourceTerms::SelfGravity(const DvceArray5D<Real> &w0, const EOS_Data &eos_data,
+                              const Real bdt, DvceArray5D<Real> &u0) {
+  auto &indcs = pmy_pack->pmesh->mb_indcs;
+  int is = indcs.is, ie = indcs.ie;
+  int js = indcs.js, je = indcs.je;
+  int ks = indcs.ks, ke = indcs.ke;
+  int nmb = pmy_pack->nmb_thispack;
+  bool &multi_d = pmy_pack->pmesh->multi_d;
+  bool &three_d = pmy_pack->pmesh->three_d;
+  auto &mbsize = pmy_pack->pmb->mb_size;
+
+  // Get gravitational potential - check if gravity is enabled
+  if (pmy_pack->pgrav == nullptr) {
+    std::cout << "### ERROR in SourceTerms::SelfGravity" << std::endl
+              << "self_gravity source term enabled but pgrav is null" << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+  
+  auto &phi = pmy_pack->pgrav->phi;
+  
+  // x1-direction momentum and energy source terms
+  par_for("selfgrav_x1",DevExeSpace(),0,nmb-1,ks,ke,js,je,is,ie,
+  KOKKOS_LAMBDA(int m, int k, int j, int i) {
+    Real dx1 = mbsize.d_view(m).dx1;
+    Real hdtodx1 = 0.5*bdt/dx1;
+    Real dpl = -(phi(m,0,k,j,i  ) - phi(m,0,k,j,i-1));
+    Real dpr = -(phi(m,0,k,j,i+1) - phi(m,0,k,j,i  ));
+    
+    // Add momentum source term
+    u0(m,IM1,k,j,i) += hdtodx1 * w0(m,IDN,k,j,i) * (dpl + dpr);
+    
+    // Add energy source term (ideal EOS only)
+    if (eos_data.is_ideal) {
+      // Energy source uses density flux approximation
+      Real rho_flux_l = 0.5*(w0(m,IDN,k,j,i-1) + w0(m,IDN,k,j,i  )) * w0(m,IVX,k,j,i  );
+      Real rho_flux_r = 0.5*(w0(m,IDN,k,j,i  ) + w0(m,IDN,k,j,i+1)) * w0(m,IVX,k,j,i+1);
+      u0(m,IEN,k,j,i) += hdtodx1 * (rho_flux_l * dpl + rho_flux_r * dpr);
+    }
+  });
+
+  if (multi_d) {
+    // x2-direction momentum and energy source terms
+    par_for("selfgrav_x2",DevExeSpace(),0,nmb-1,ks,ke,js,je,is,ie,
+    KOKKOS_LAMBDA(int m, int k, int j, int i) {
+      Real dx2 = mbsize.d_view(m).dx2;
+      Real hdtodx2 = 0.5*bdt/dx2;
+      Real dpl = -(phi(m,0,k,j,  i) - phi(m,0,k,j-1,i));
+      Real dpr = -(phi(m,0,k,j+1,i) - phi(m,0,k,j,  i));
+      
+      // Add momentum source term
+      u0(m,IM2,k,j,i) += hdtodx2 * w0(m,IDN,k,j,i) * (dpl + dpr);
+      
+      // Add energy source term (ideal EOS only)
+      if (eos_data.is_ideal) {
+        Real rho_flux_l = 0.5*(w0(m,IDN,k,j-1,i) + w0(m,IDN,k,j,  i)) * w0(m,IVY,k,j,  i);
+        Real rho_flux_r = 0.5*(w0(m,IDN,k,j,  i) + w0(m,IDN,k,j+1,i)) * w0(m,IVY,k,j+1,i);
+        u0(m,IEN,k,j,i) += hdtodx2 * (rho_flux_l * dpl + rho_flux_r * dpr);
+      }
+    });
+  }
+
+  if (three_d) {
+    // x3-direction momentum and energy source terms
+    par_for("selfgrav_x3",DevExeSpace(),0,nmb-1,ks,ke,js,je,is,ie,
+    KOKKOS_LAMBDA(int m, int k, int j, int i) {
+      Real dx3 = mbsize.d_view(m).dx3;
+      Real hdtodx3 = 0.5*bdt/dx3;
+      Real dpl = -(phi(m,0,k,  j,i) - phi(m,0,k-1,j,i));
+      Real dpr = -(phi(m,0,k+1,j,i) - phi(m,0,k,  j,i));
+      
+      // Add momentum source term
+      u0(m,IM3,k,j,i) += hdtodx3 * w0(m,IDN,k,j,i) * (dpl + dpr);
+      
+      // Add energy source term (ideal EOS only)
+      if (eos_data.is_ideal) {
+        Real rho_flux_l = 0.5*(w0(m,IDN,k-1,j,i) + w0(m,IDN,k,  j,i)) * w0(m,IVZ,k,  j,i);
+        Real rho_flux_r = 0.5*(w0(m,IDN,k,  j,i) + w0(m,IDN,k+1,j,i)) * w0(m,IVZ,k+1,j,i);
+        u0(m,IEN,k,j,i) += hdtodx3 * (rho_flux_l * dpl + rho_flux_r * dpr);
+      }
+    });
+  }
 
   return;
 }

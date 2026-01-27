@@ -100,11 +100,6 @@ void MultigridDriver::SetupMultigrid(Real dt, bool ftrivial) {
   nmblevel_ = mglevels_->GetNumberOfLevels();
   nreflevel_ = 0;
   ntotallevel_ = nrootlevel_ + nmblevel_ - 1;
-  std::cout<< "Multigrid total levels: " << ntotallevel_ << std::endl;
-  std::cout<< "Multigrid root levels: " << nrootlevel_ << std::endl;
-  std::cout<< "Multigrid meshblock levels: " << nmblevel_ << std::endl;
-  std::cout<< "Multigrid refinement levels: " << nreflevel_ << std::endl;
-
   os_ = mgroot_->ngh_;
   oe_ = os_+1;
   // note: the level of an Octet is one level lower than the data stored there
@@ -263,8 +258,6 @@ void MultigridDriver::OneStepToCoarser(Driver *pdriver, int nsmooth) {
 void MultigridDriver::SolveVCycle(Driver *pdriver, int npresmooth, int npostsmooth) {
   int startlevel=current_level_;
   coffset_ ^= 1;
-  if (global_variable::my_rank == 0)
-    std::cout << "Starting V-Cycle at level " << current_level_ << std::endl;
   while (current_level_ > 0)
     OneStepToCoarser(pdriver, npresmooth);
   SolveCoarsestGrid();
@@ -279,23 +272,9 @@ void MultigridDriver::SolveVCycle(Driver *pdriver, int npresmooth, int npostsmoo
 //  \brief Solve iteratively niter_ times
 
 void MultigridDriver::SolveIterative(Driver *pdriver) {
-  niter_ = 10; // for testing
-  if (global_variable::my_rank == 0)
-    std::cout << "Starting Multigrid SolveIterative with " << niter_ << " V-cycles." << std::endl;
-  auto start_time = std::chrono::high_resolution_clock::now();
-  for (int n = 0; n < niter_; ++n){
+  for (int n = 0; n < niter_; ++n)
     SolveVCycle(pdriver, npresmooth_, npostsmooth_);
-    Real def = 0.0;
-    for (int v = 0; v < nvar_; ++v)
-      def += CalculateDefectNorm(MGNormType::l2, v);
-      if (global_variable::my_rank == 0)
-        std::cout << "Multigrid defect L2-norm : " << def << std::endl;
-  }
   Kokkos::fence();
-  auto end_time = std::chrono::high_resolution_clock::now();
-  std::chrono::duration<double> elapsed = (end_time - start_time)/niter_;
-  if (global_variable::my_rank == 0)
-    std::cout << "SolveIterative time: " << elapsed.count() << " seconds" << std::endl;
   return;
 }
 

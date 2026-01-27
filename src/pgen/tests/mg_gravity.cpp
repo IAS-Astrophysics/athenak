@@ -43,7 +43,7 @@ void ProblemGenerator::SelfGravity(ParameterInput *pin, const bool restart) {
   Real center_z = pin->GetOrAddReal("problem", "center_z", 0.0);
 
   // background pressure (for hydro stability)
-  Real p0 = pin->GetOrAddReal("problem", "pressure_bg", 1e-6);
+  Real p0 = pin->GetOrAddReal("problem", "pressure_bg", 1.0);
   Real ie_int = p0 / (gamma - 1.0);
 
   // capture variables for kernel
@@ -76,14 +76,14 @@ void ProblemGenerator::SelfGravity(ParameterInput *pin, const bool restart) {
       Real x3v = CellCenterX(k-ks, indcs.nx3, x3min, x3max);
       
       // Periodic test: Sinusoidal density wave
-      Real rho = 2.0 + std::sin(2*M_PI*x1v) * std::sin(2*M_PI*x2v) * std::sin(2*M_PI*x3v);
+      Real rho = 2.0 + 0.1*std::sin(2*M_PI*x1v) * std::sin(2*M_PI*x2v) * std::sin(2*M_PI*x3v);
 
       // set hydro conserved variables: density, momenta, total energy
       u0(m, IDN, k, j, i) = rho;
-      u0(m, IM1, k, j, i) = 0.0;
+      u0(m, IM1, k, j, i) = 1.0;
       u0(m, IM2, k, j, i) = 0.0;
       u0(m, IM3, k, j, i) = 0.0;
-      u0(m, IEN, k, j, i) = ie_int + 0.5 * rho * 0.0;  // no kinetic term (static)
+      u0(m, IEN, k, j, i) = ie_int;  // no kinetic term (static)
     });
   }  // End initialization of Hydro variables
 

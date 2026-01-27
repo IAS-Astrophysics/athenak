@@ -65,7 +65,6 @@ Gravity::Gravity(MeshBlockPack *pmbp, ParameterInput *pin):
     int ncells2 = (indcs.nx2 > 1)? (indcs.nx2 + 2*(indcs.ng)) : 1;
     int ncells3 = (indcs.nx3 > 1)? (indcs.nx3 + 2*(indcs.ng)) : 1;
     Kokkos::realloc(phi, nmb, 1, ncells3, ncells2, ncells1);
-    Kokkos::realloc(def, nmb, 1, ncells3, ncells2, ncells1);
 }
 
 //----------------------------------------------------------------------------------------
