@@ -29,6 +29,7 @@
 #include "utils/tov/tov_polytrope.hpp"
 #include "utils/tov/tov_tabulated.hpp"
 #include "utils/tov/tov_piecewise_poly.hpp"
+#include "utils/spherical_harm.hpp"
 
 #include <Kokkos_Random.hpp>
 
@@ -633,9 +634,14 @@ void FinalizeTOV(ParameterInput *pin, Mesh *pm) {
 // History function
 void TOVHistory(HistoryData *pdata, Mesh *pm) {
   // Select the number of outputs and create labels for them.
-  pdata->nhist = 2;
+  pdata->nhist = 7;
   pdata->label[0] = "rho-max";
   pdata->label[1] = "alpha-min";
+  pdata->label[2] = "I2,-2";
+  pdata->label[3] = "I2,-1";
+  pdata->label[4] = "I2,0";
+  pdata->label[5] = "I2,1";
+  pdata->label[6] = "I2,2";
 
   // capture class variables for kernel
   auto &w0_ = pm->pmb_pack->pmhd->w0;
@@ -643,6 +649,7 @@ void TOVHistory(HistoryData *pdata, Mesh *pm) {
 
   // loop over all MeshBlocks in this pack
   auto &indcs = pm->pmb_pack->pmesh->mb_indcs;
+  auto &size = pm->pmb_pack->pmb->mb_size;
   int is = indcs.is; int nx1 = indcs.nx1;
   int js = indcs.js; int nx2 = indcs.nx2;
   int ks = indcs.ks; int nx3 = indcs.nx3;
@@ -651,8 +658,10 @@ void TOVHistory(HistoryData *pdata, Mesh *pm) {
   const int nji = nx2*nx1;
   Real rho_max = std::numeric_limits<Real>::max();
   Real alpha_min = -rho_max;
+  Real I2m2, I2m1, I20, I2p1, I2p2;
   Kokkos::parallel_reduce("TOVHistSums",Kokkos::RangePolicy<>(DevExeSpace(), 0, nmkji),
-  KOKKOS_LAMBDA(const int &idx, Real &mb_max, Real &mb_alp_min) {
+  KOKKOS_LAMBDA(const int &idx, Real &mb_max, Real &mb_alp_min, Real &mb_I2m2,
+      Real &mb_I2m1, Real &mb_I20, Real &mb_I2p1, Real &mb_I2p2) {
     // coompute n,k,j,i indices of thread
     int m = (idx)/nkji;
     int k = (idx - m*nkji)/nji;
@@ -660,10 +669,46 @@ void TOVHistory(HistoryData *pdata, Mesh *pm) {
     int i = (idx - m*nkji - k*nji - j*nx1) + is;
     k += ks;
     j += js;
+    Real &x1min = size.d_view(m).x1min;
+    Real &x1max = size.d_view(m).x1max;
+    Real &x2min = size.d_view(m).x2min;
+    Real &x2max = size.d_view(m).x2max;
+    Real &x3min = size.d_view(m).x3min;
+    Real &x3max = size.d_view(m).x3max;
+    Real &dx1 = size.d_view(m).dx1;
+    Real &dx2 = size.d_view(m).dx2;
+    Real &dx3 = size.d_view(m).dx3;
+    Real x1v = CellCenterX(i-is, indcs.nx1, x1min, x1max);
+    Real x2v = CellCenterX(j-js, indcs.nx2, x2min, x2max);
+    Real x3v = CellCenterX(k-ks, indcs.nx3, x3min, x3max);
+
+    Real r = Kokkos::sqrt(x1v*x1v + x2v*x2v + x3v*x3v);
+    Real phi = Kokkos::atan2(x2v, x1v);
+    Real theta = Kokkos::acos(x3v/r);
+    Real vol = dx1*dx2*dx3;
 
     mb_max = fmax(mb_max, w0_(m,IDN,k,j,i));
     mb_alp_min = fmin(mb_alp_min, adm.alpha(m, k, j, i));
-  }, Kokkos::Max<Real>(rho_max), Kokkos::Min<Real>(alpha_min));
+
+    // Compute multipole modes for $\ell=2$.
+    Real modes[5];
+    for (int m = -2; m <= 2; m++) {
+      Real ylmR, ylmI;
+      SWSphericalHarm(&ylmR, &ylmI, 2, m, 0, theta, phi);
+      modes[m+2] = w0_(m,IDN,k,j,i)*r*r*ylmR;
+      /*if (!Kokkos::isfinite(modes[m+2])) {
+        //Kokkos::printf("There's a problem with the mode calculation!");
+        //std::cout << "There's a problem with the mode calculation!\n";
+      }*/
+    }
+    mb_I2m2 += modes[0]*vol;
+    mb_I2m1 += modes[1]*vol;
+    mb_I20 += modes[2]*vol;
+    mb_I2p1 += modes[3]*vol;
+    mb_I2p2 += modes[4]*vol;
+  }, Kokkos::Max<Real>(rho_max), Kokkos::Min<Real>(alpha_min), Kokkos::Sum<Real>(I2m2),
+  Kokkos::Sum<Real>(I2m1), Kokkos::Sum<Real>(I20), Kokkos::Sum<Real>(I2p1),
+  Kokkos::Sum<Real>(I2p2));
 
   // Currently AthenaK only supports MPI_SUM operations between ranks, but we need MPI_MAX
   // and MPI_MIN operations instead. This is a cheap hack to make it work as intended.
@@ -682,4 +727,9 @@ void TOVHistory(HistoryData *pdata, Mesh *pm) {
   // store data in hdata array
   pdata->hdata[0] = rho_max;
   pdata->hdata[1] = alpha_min;
+  pdata->hdata[2] = I2m2;
+  pdata->hdata[3] = I2m1;
+  pdata->hdata[4] = I20;
+  pdata->hdata[5] = I2p1;
+  pdata->hdata[6] = I2p2;
 }
