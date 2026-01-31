@@ -21,7 +21,7 @@
     #error NHISTORY > NREDUCTION in outputs.hpp
 #endif
 
-#define NOUTPUT_CHOICES 179
+#define NOUTPUT_CHOICES 188
 // choices for output variables used in <ouput> blocks in input file
 // TO ADD MORE CHOICES:
 //   - add more strings to array below, change NOUTPUT_CHOICES above appropriately
@@ -105,12 +105,18 @@ static const char *var_choice[NOUTPUT_CHOICES] = {
   "coord_x", "coord_y", "coord_z",
   "coord_r", "coord_theta", "coord_phi",
   "coord_cyl_R", "coord_cyl_phi", "coord_cyl_z",
+  "coord_costheta",
 
   // Mass and energy flux derived variables (167-178)
   "mdot_sph", "mdot_sph_out", "mdot_sph_in",
   "edot_sph", "edot_sph_out", "edot_sph_in",
   "mdot_vert", "mdot_vert_out", "mdot_vert_in",
-  "edot_vert", "edot_vert_out", "edot_vert_in"
+  "edot_vert", "edot_vert_out", "edot_vert_in",
+
+  // Spherical/cylindrical velocity components and energy flux components (179-186)
+  "vel_sph_r", "vel_sph_theta", "vel_sph_phi",
+  "vel_cyl_R", "vel_cyl_phi",
+  "edot_sph_kin", "edot_sph_th", "edot_sph_mag"
 };
 
 
@@ -154,7 +160,6 @@ struct OutputParameters {
   Real bin2_min, bin2_max;
   int nbin=0, nbin2=0;
   bool logscale=true, logscale2=true;
-  bool mass_weighted=false;
   bool single_file_per_rank=false; // DBF: parameter for single file per rank
 
   // N-D PDF parameters (max 4 dimensions)
@@ -165,6 +170,8 @@ struct OutputParameters {
   Real pdf_bin_min[PDF_MAX_DIM] = {0, 0, 0, 0};  // bin minimum for each dimension
   Real pdf_bin_max[PDF_MAX_DIM] = {1, 1, 1, 1};  // bin maximum for each dimension
   bool pdf_logscale[PDF_MAX_DIM] = {false, false, false, false};  // log scale flag
+  std::string pdf_weight = "volume";            // volume, mass, or variable
+  std::string pdf_weight_variable;              // weight variable when pdf_weight=variable
 };
 
 //----------------------------------------------------------------------------------------
@@ -343,13 +350,12 @@ struct PDFData {
   Real bin_max[MAX_DIM];                    // maximum bin value per dimension
 
   bool bins_written;
-  bool mass_weighted;
 
   DvceArray1D<Real> result_;  // flattened N-D histogram
   Kokkos::Experimental::ScatterView<Real*, LayoutWrapper> scatter_result;
 
   // Default constructor
-  PDFData() : ndim(0), total_bins(0), bins_written(false), mass_weighted(false) {
+  PDFData() : ndim(0), total_bins(0), bins_written(false) {
     for (int d = 0; d < MAX_DIM; ++d) {
       nbin[d] = 0;
       nbin_with_overflow[d] = 0;

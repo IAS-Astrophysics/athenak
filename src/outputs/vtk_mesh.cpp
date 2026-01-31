@@ -76,10 +76,18 @@ void MeshVTKOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
   int nout1=0,nout2=0,nout3=0;   // total number of cells output (across all MeshBlocks)
   auto &indcs = pm->pmb_pack->pmesh->mb_indcs;
   int nout_mbs = (outmbs.size());
+  if (out_params.gid >= 0 && nout_mbs == 0) {
+    return;  // gid requested on a non-owning rank
+  }
+  int mb_nx1 = indcs.nx1 + (out_params.include_gzs ? 2*indcs.ng : 0);
+  int mb_nx2 = (indcs.nx2 > 1)?
+               (indcs.nx2 + (out_params.include_gzs ? 2*indcs.ng : 0)) : 1;
+  int mb_nx3 = (indcs.nx3 > 1)?
+               (indcs.nx3 + (out_params.include_gzs ? 2*indcs.ng : 0)) : 1;
   if ((pm->nmb_total > 1) && (out_params.gid < 0)) {
-    nout1 = (out_params.slice1)? 1 : (pm->nmb_rootx1*indcs.nx1);
-    nout2 = (out_params.slice2)? 1 : (pm->nmb_rootx2*indcs.nx2);
-    nout3 = (out_params.slice3)? 1 : (pm->nmb_rootx3*indcs.nx3);
+    nout1 = (out_params.slice1)? 1 : (pm->nmb_rootx1*mb_nx1);
+    nout2 = (out_params.slice2)? 1 : (pm->nmb_rootx2*mb_nx2);
+    nout3 = (out_params.slice3)? 1 : (pm->nmb_rootx3*mb_nx3);
   } else if (nout_mbs > 0) {
     nout1 = outmbs[0].oie - outmbs[0].ois + 1;
     nout2 = outmbs[0].oje - outmbs[0].ojs + 1;
@@ -112,12 +120,16 @@ void MeshVTKOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
     dx2 = pm->mesh_size.dx2;
     dx3 = pm->mesh_size.dx3;
   } else {
-    x1min = pm->pmb_pack->pmb->mb_size.h_view(out_params.gid).x1min;
-    x2min = pm->pmb_pack->pmb->mb_size.h_view(out_params.gid).x2min;
-    x3min = pm->pmb_pack->pmb->mb_size.h_view(out_params.gid).x3min;
-    dx1 = pm->pmb_pack->pmb->mb_size.h_view(out_params.gid).dx1;
-    dx2 = pm->pmb_pack->pmb->mb_size.h_view(out_params.gid).dx2;
-    dx3 = pm->pmb_pack->pmb->mb_size.h_view(out_params.gid).dx3;
+    int gid_local = pm->FindMeshBlockIndex(out_params.gid);
+    if (gid_local < 0) {
+      return;
+    }
+    x1min = pm->pmb_pack->pmb->mb_size.h_view(gid_local).x1min;
+    x2min = pm->pmb_pack->pmb->mb_size.h_view(gid_local).x2min;
+    x3min = pm->pmb_pack->pmb->mb_size.h_view(gid_local).x3min;
+    dx1 = pm->pmb_pack->pmb->mb_size.h_view(gid_local).dx1;
+    dx2 = pm->pmb_pack->pmb->mb_size.h_view(gid_local).dx2;
+    dx3 = pm->pmb_pack->pmb->mb_size.h_view(gid_local).dx3;
   }
   if (out_params.include_gzs) {
     x1min -= (indcs.ng)*dx1;
@@ -207,7 +219,7 @@ void MeshVTKOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
           for (int k=0; k<nx3; ++k) {
             for (int j=0; j<nx2; ++j) {
               for (int i=0; i<nx1; ++i) {
-                int indx = i + j*indcs.nx1 + k*indcs.nx1*indcs.nx2;
+                int indx = i + j*nx1 + k*nx1*nx2;
                 data[indx] = static_cast<float>(outarray(n,m,k,j,i));
               }
             }
@@ -290,13 +302,16 @@ void MeshVTKOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
         int &oje = outmbs[m].oje;
         int &oks = outmbs[m].oks;
         int &oke = outmbs[m].oke;
+        int mbx1 = oie - ois + 1;
+        int mbx2 = oje - ojs + 1;
+        int mbx3 = oke - oks + 1;
         for (int k=oks; k<=oke; ++k) {
           for (int j=ojs; j<=oje; ++j) {
             for (int i=ois; i<=oie; ++i) {
-              int indx = imb*indcs.nx1 + (i-ois) +
-                        (jmb*indcs.nx2 + (j-ojs))*nout1 +
-                        (kmb*indcs.nx3 + (k-oks))*nout1*nout2;
-              data[indx] = static_cast<float>(outarray(n,m,k-oks,j-ojs,i-ois));
+        int indx = imb*mbx1 + (i-ois) +
+                  (jmb*mbx2 + (j-ojs))*nout1 +
+                  (kmb*mbx3 + (k-oks))*nout1*nout2;
+        data[indx] = static_cast<float>(outarray(n,m,k-oks,j-ojs,i-ois));
             }
           }
         }

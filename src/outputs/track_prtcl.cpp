@@ -75,14 +75,16 @@ void TrackedParticleOutput::LoadOutputData(Mesh *pm) {
   MPI_Allgather(&npout, 1, MPI_INT, npout_eachrank.data(), 1, MPI_INT, MPI_COMM_WORLD);
 #endif
 
-  tracked_prtcl.resize(npout);
   // sync tracked particle device array with host
   tracked_prtcl.template modify<DevExeSpace>();
   tracked_prtcl.template sync<HostMemSpace>();
 
   // copy host view into host outpart array
   Kokkos::realloc(outpart, npout);
-  Kokkos::deep_copy(outpart, tracked_prtcl.h_view);
+  if (npout > 0) {
+    auto tracked_slice = Kokkos::subview(tracked_prtcl.h_view, std::make_pair(0, npout));
+    Kokkos::deep_copy(outpart, tracked_slice);
+  }
 
 }
 
@@ -138,7 +140,7 @@ void TrackedParticleOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
 
   // calculate local data offset
   std::vector<int> rank_offset(global_variable::nranks, 0);
-  int npout_min = pm->nprtcl_eachrank[0];
+  int npout_min = npout_eachrank[0];
   for (int n=1; n<global_variable::nranks; ++n) {
     rank_offset[n] = rank_offset[n-1] + npout_eachrank[n-1];
     npout_min = std::min(npout_min, npout_eachrank[n]);

@@ -94,7 +94,13 @@ Outputs::Outputs(ParameterInput *pin, Mesh *pm) {
 	  opar.file_type.compare("rst_prtcl") != 0 &&
           opar.file_type.compare("log") != 0 &&
           opar.file_type.compare("trk") != 0) {
-        opar.variable = pin->GetString(opar.block_name, "variable");
+        if (opar.file_type.compare("pdf") == 0 &&
+            !pin->DoesParameterExist(opar.block_name, "variable") &&
+            pin->DoesParameterExist(opar.block_name, "variable_1")) {
+          opar.variable = pin->GetString(opar.block_name, "variable_1");
+        } else {
+          opar.variable = pin->GetString(opar.block_name, "variable");
+        }
         opar.file_id = pin->GetOrAddString(opar.block_name,"id",opar.variable);
       }
 
@@ -162,33 +168,6 @@ Outputs::Outputs(ParameterInput *pin, Mesh *pm) {
         opar.slice3 = false;
       }
 
-      // read ghost cell option
-      opar.include_gzs = pin->GetOrAddBoolean(opar.block_name, "ghost_zones", false);
-
-      // read MeshBlock ID (if specified)
-      opar.gid = pin->GetOrAddInteger(opar.block_name, "gid", -1);
-      if (opar.gid >= 0 && pm->nmb_total == 1) {
-        std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-            << std::endl << "Cannot specify MeshBlock ID in output block '"
-            << opar.block_name << "' when there is only one" << std::endl;
-        exit(EXIT_FAILURE);
-      }
-      if (opar.gid > (pm->nmb_total-1)) {
-        std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-            << std::endl << "MeshBlock gid=" << opar.gid << " in output block '"
-            << opar.block_name << "' exceeds total number of MeshBlocks" << std::endl;
-        exit(EXIT_FAILURE);
-      }
-
-      // set output variable and optional file id (default is output variable name)
-      if (opar.file_type.compare("hst") != 0 &&
-          opar.file_type.compare("rst") != 0 &&
-	  opar.file_type.compare("rst_prtcl") != 0 &&
-          opar.file_type.compare("log") != 0) {
-        opar.variable = pin->GetString(opar.block_name, "variable");
-        opar.file_id = pin->GetOrAddString(opar.block_name,"id",opar.variable);
-      }
-
       // check that pdf variables are single variables
       // raise error if variable = mhd_w, mhd_u, hydro_w, hydro_u
       if (opar.file_type.compare("pdf") == 0) {
@@ -252,7 +231,38 @@ Outputs::Outputs(ParameterInput *pin, Mesh *pm) {
         pnode = new CoarsenedBinaryOutput(pin,pm,opar);
         pout_list.insert(pout_list.begin(),pnode);
       } else if (opar.file_type.compare("pdf") == 0) {
-        opar.mass_weighted = pin->GetOrAddBoolean(opar.block_name,"mass_weighted",false);
+        if (pin->DoesParameterExist(opar.block_name, "mass_weighted")) {
+          std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+              << std::endl << "PDF output block '" << opar.block_name
+              << "' no longer supports mass_weighted. Use weight=mass instead."
+              << std::endl;
+          exit(EXIT_FAILURE);
+        }
+        if (pin->DoesParameterExist(opar.block_name, "weight")) {
+          opar.pdf_weight = pin->GetString(opar.block_name, "weight");
+        } else {
+          opar.pdf_weight = "volume";
+        }
+        if (opar.pdf_weight.compare("volume") != 0 &&
+            opar.pdf_weight.compare("mass") != 0 &&
+            opar.pdf_weight.compare("variable") != 0) {
+          std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+              << std::endl << "PDF output block '" << opar.block_name
+              << "' has invalid weight option '" << opar.pdf_weight
+              << "'. Valid choices are volume, mass, or variable." << std::endl;
+          exit(EXIT_FAILURE);
+        }
+        if (opar.pdf_weight.compare("variable") == 0) {
+          if (!pin->DoesParameterExist(opar.block_name, "weight_variable")) {
+            std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                << std::endl << "PDF output block '" << opar.block_name
+                << "' requires weight_variable when weight=variable" << std::endl;
+            exit(EXIT_FAILURE);
+          }
+          opar.pdf_weight_variable = pin->GetString(opar.block_name, "weight_variable");
+        } else {
+          opar.pdf_weight_variable.clear();
+        }
 
         // Parse N-D PDF parameters
         // Count dimensions by checking for variable_1, variable_2, etc.

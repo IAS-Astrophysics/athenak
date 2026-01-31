@@ -1,0 +1,161 @@
+# AthenaXXX input file for a Chevalier & Clegg (1985) injection test
+
+<comment>
+problem = CC85 wind test with uniform mass/energy injection
+
+<job>
+basename  = cc85
+
+<mesh>
+nghost    = 2
+nx1       = 64
+x1min     = -0.5
+x1max     = 0.5
+ix1_bc    = outflow
+ox1_bc    = outflow
+
+nx2       = 64
+x2min     = -0.5
+x2max     = 0.5
+ix2_bc    = outflow
+ox2_bc    = outflow
+
+nx3       = 64
+x3min     = -0.5
+x3max     = 0.5
+ix3_bc    = outflow
+ox3_bc    = outflow
+
+<meshblock>
+nx1       = 32
+nx2       = 32
+nx3       = 32
+
+<time>
+evolution  = dynamic
+integrator = rk2
+cfl_number = 0.3
+tlim       = 1.0
+ndiag      = 1
+
+<hydro>
+eos         = ideal
+reconstruct = plm
+rsolver     = hllc
+gamma       = 1.666666667
+
+<problem>
+pgen_name = chevalier_clegg
+user_srcs = true
+
+# Initial uniform state
+rho0   = 1.0
+pres0  = 1.0
+v1     = 0.0
+v2     = 0.0
+v3     = 0.0
+
+# Injection region and rates (code units, thermal-only)
+r_inj  = 0.1
+mdot   = 1.0
+edot   = 10.0
+
+<output1>
+file_type = hst
+dt        = 0.05
+
+<output2>
+file_type = pdf
+dt        = 0.1
+variable_1 = coord_r
+bin1_min = 1e-3
+bin1_max = 2.0
+nbin1 = 128
+logscale1 = true
+variable_2 = coord_costheta
+bin2_min = -1.0
+bin2_max = 1.0
+nbin2 = 64
+variable_3 = temperature
+bin3_min = 1e-2
+bin3_max = 1e2
+nbin3 = 64
+logscale3 = true
+variable_4 = vel_sph_r
+bin4_min = -5.0
+bin4_max = 5.0
+nbin4 = 128
+weight = variable
+weight_variable = mdot_sph
+
+<output3>
+file_type = pdf
+dt        = 0.1
+variable_1 = coord_r
+bin1_min = 1e-3
+bin1_max = 2.0
+nbin1 = 128
+logscale1 = true
+variable_2 = coord_costheta
+bin2_min = -1.0
+bin2_max = 1.0
+nbin2 = 64
+variable_3 = temperature
+bin3_min = 1e-2
+bin3_max = 1e2
+nbin3 = 64
+logscale3 = true
+variable_4 = vel_sph_r
+bin4_min = -5.0
+bin4_max = 5.0
+nbin4 = 128
+weight = variable
+weight_variable = edot_sph
+
+<output4>
+file_type = pdf
+dt        = 0.1
+variable_1 = coord_r
+bin1_min = 1e-3
+bin1_max = 2.0
+nbin1 = 128
+logscale1 = true
+variable_2 = coord_costheta
+bin2_min = -1.0
+bin2_max = 1.0
+nbin2 = 64
+variable_3 = temperature
+bin3_min = 1e-2
+bin3_max = 1e2
+nbin3 = 64
+logscale3 = true
+variable_4 = vel_sph_r
+bin4_min = -5.0
+bin4_max = 5.0
+nbin4 = 128
+weight = variable
+weight_variable = edot_sph_kin
+
+<output5>
+file_type = pdf
+dt        = 0.1
+variable_1 = coord_r
+bin1_min = 1e-3
+bin1_max = 2.0
+nbin1 = 128
+logscale1 = true
+variable_2 = coord_costheta
+bin2_min = -1.0
+bin2_max = 1.0
+nbin2 = 64
+variable_3 = temperature
+bin3_min = 1e-2
+bin3_max = 1e2
+nbin3 = 64
+logscale3 = true
+variable_4 = vel_sph_r
+bin4_min = -5.0
+bin4_max = 5.0
+nbin4 = 128
+weight = variable
+weight_variable = edot_sph_th

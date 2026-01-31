@@ -52,116 +52,156 @@ BaseTypeOutput::BaseTypeOutput(ParameterInput *pin, Mesh *pm, OutputParameters o
   // initialize vector containing number of output MBs per rank
   noutmbs.assign(global_variable::nranks, 0);
 
-  // check for valid choice of variables
-  int ivar = -1;
-  for (int i=0; i<(NOUTPUT_CHOICES); ++i) {
-    if (out_params.variable.compare(var_choice[i]) == 0) {ivar = i;}
-  }
-  if (ivar < 0) {
-    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
-       << "Variable '" << out_params.variable << "' in block '" << out_params.block_name
-       << "' in input file is not a valid choice" << std::endl;
-    std::exit(EXIT_FAILURE);
-  }
+  auto validate_variable = [&](const std::string &variable) {
+    auto starts_with = [](const std::string &name, const std::string &prefix) {
+      return name.compare(0, prefix.size(), prefix) == 0;
+    };
 
-  // check that appropriate physics is defined for requested output variable
-  // Index ranges: hydro(0-18), mhd(19-58), coarsened(59-60), dynamo(61), turb(62),
-  // rad_coord(63-65), rad_hydro(66-79), rad_mhd(80-99), ADM(100-117), Z4c(118-140),
-  // Weyl(141-143), constraints(144-151), tmunu(152-162), particles(163-164)
-  if ((ivar<19) && (pm->pmb_pack->phydro == nullptr)) {
-    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
-       << "Output of Hydro variable requested in <output> block '"
-       << out_params.block_name << "' but no Hydro object has been constructed."
-       << std::endl << "Input file is likely missing a <hydro> block" << std::endl;
-    exit(EXIT_FAILURE);
-  }
-  if ((ivar>=19) && (ivar<59) && (pm->pmb_pack->pmhd == nullptr)) {
-    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
-       << "Output of MHD variable requested in <output> block '"
-       << out_params.block_name << "' but no MHD object has been constructed."
-       << std::endl << "Input file is likely missing a <mhd> block" << std::endl;
-    exit(EXIT_FAILURE);
-  }
-  if ((ivar==62) && (pm->pmb_pack->pturb == nullptr)) {
-    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
-       << "Output of Force variable requested in <output> block '"
-       << out_params.block_name << "' but no Force object has been constructed."
-       << std::endl << "Input file is likely missing a <forcing> block" << std::endl;
-    exit(EXIT_FAILURE);
-  }
-  if (ivar==63 && (pm->pmb_pack->prad == nullptr)) {
-    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
-       << "Output of Radiation moments requested in <output> block '"
-       << out_params.block_name << "' but no Radiation object has been constructed."
-       << std::endl << "Input file is likely missing a <radiation> block" << std::endl;
-    exit(EXIT_FAILURE);
-  }
-  if ((ivar==64 || ivar==65) &&
-      ((pm->pmb_pack->prad == nullptr) ||
-       (pm->pmb_pack->phydro == nullptr && pm->pmb_pack->pmhd == nullptr))) {
-    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
-       << "Output of Fluid Frame Radiation moments requested in <output> block '"
-       << out_params.block_name << "' but either Radiation object has not been "
-       << " constructed, or corresponding Hydro or MHD object missing" << std::endl;
-    exit(EXIT_FAILURE);
-  }
-  if ((ivar>=66) && (ivar<80) &&
-      (pm->pmb_pack->prad == nullptr || pm->pmb_pack->phydro == nullptr)) {
-    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
-       << "Output of Radiation Hydro variables requested in <output> block '"
-       << out_params.block_name << "' but Radiation and/or Hydro object not constructed."
-       << std::endl << "Input file is likely missing corresponding block" << std::endl;
-    exit(EXIT_FAILURE);
-  }
-  if ((ivar>=80) && (ivar<100) &&
-      (pm->pmb_pack->prad == nullptr || pm->pmb_pack->pmhd == nullptr)) {
-    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
-       << "Output of Radiation MHD variables requested in <output> block '"
-       << out_params.block_name << "' but Radiation and/or MHD object not constructed."
-       << std::endl << "Input file is likely missing corresponding block" << std::endl;
-    exit(EXIT_FAILURE);
-  }
-  if ((ivar>=100) && (ivar<118) && (pm->pmb_pack->padm == nullptr)) {
-    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
-       << "Output of ADM variable requested in <output> block '"
-       << out_params.block_name << "' but ADM object not constructed."
-       << std::endl << "Input file is likely missing corresponding block" << std::endl;
-    exit(EXIT_FAILURE);
-  }
-  if ((ivar>=118) && (ivar<141) && (pm->pmb_pack->pz4c == nullptr)) {
-    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
-       << "Output of Z4c variable requested in <output> block '"
-       << out_params.block_name << "' but Z4c object not constructed."
-       << std::endl << "Input file is likely missing corresponding block" << std::endl;
-    exit(EXIT_FAILURE);
-  }
-  if ((ivar>=141) && (ivar<144) && (pm->pmb_pack->pz4c == nullptr)) {
-    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
-       << "Output of weyl variable requested in <output> block '"
-       << out_params.block_name << "' but weyl object not constructed."
-       << std::endl << "Input file is likely missing corresponding block" << std::endl;
-    exit(EXIT_FAILURE);
-  }
-  if ((ivar>=144) && (ivar<152) && (pm->pmb_pack->pz4c == nullptr)) {
-    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
-       << "Output of constraint variables request in <output> block '"
-       << out_params.block_name << "' but Z4c object not constructed."
-       << std::endl << "Input file is likely missing corresponding block" << std::endl;
-    exit(EXIT_FAILURE);
-  }
-  if ((ivar>=152) && (ivar<163) && (pm->pmb_pack->ptmunu == nullptr)) {
-    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
-       << "Output of Tmunu variable requested in <output> block '"
-       << out_params.block_name << "' but no Tmunu object has been constructed."
-       << std::endl << "Input file is likely missing a <adm> block" << std::endl;
-    exit(EXIT_FAILURE);
-  }
-  if ((ivar>=163) && (ivar<165) && (pm->pmb_pack->ppart == nullptr)) {
-    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
-       << "Output of particles requested in <output> block '"
-       << out_params.block_name << "' but particle object not constructed."
-       << std::endl << "Input file is likely missing corresponding block" << std::endl;
-    exit(EXIT_FAILURE);
+    int ivar = -1;
+    for (int i=0; i<(NOUTPUT_CHOICES); ++i) {
+      if (variable.compare(var_choice[i]) == 0) {ivar = i;}
+    }
+    if (ivar < 0) {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+         << "Variable '" << variable << "' in block '" << out_params.block_name
+         << "' in input file is not a valid choice" << std::endl;
+      std::exit(EXIT_FAILURE);
+    }
+
+    const bool has_hydro = (pm->pmb_pack->phydro != nullptr);
+    const bool has_mhd = (pm->pmb_pack->pmhd != nullptr);
+    const bool has_rad = (pm->pmb_pack->prad != nullptr);
+    const bool has_adm = (pm->pmb_pack->padm != nullptr);
+    const bool has_z4c = (pm->pmb_pack->pz4c != nullptr);
+    const bool has_tmunu = (pm->pmb_pack->ptmunu != nullptr);
+    const bool has_prtcl = (pm->pmb_pack->ppart != nullptr);
+    const bool has_turb = (pm->pmb_pack->pturb != nullptr);
+
+    const bool needs_hydro = starts_with(variable, "hydro_");
+    const bool needs_mhd = starts_with(variable, "mhd_");
+    const bool needs_rad = starts_with(variable, "rad_");
+    const bool needs_rad_hydro = starts_with(variable, "rad_hydro");
+    const bool needs_rad_mhd = starts_with(variable, "rad_mhd");
+    const bool needs_rad_fluid = (variable == "rad_fluid" ||
+                                  variable == "rad_coord_fluid");
+    const bool needs_adm = (variable == "adm") || starts_with(variable, "adm_");
+    const bool needs_z4c = (variable == "z4c") || starts_with(variable, "z4c_");
+    const bool needs_weyl = (variable == "weyl") || starts_with(variable, "weyl_");
+    const bool needs_con = (variable == "con") || starts_with(variable, "con_");
+    const bool needs_tmunu = (variable == "tmunu") || starts_with(variable, "tmunu_");
+    const bool needs_prtcl = starts_with(variable, "prtcl_");
+    const bool needs_turb = (variable == "turb_force");
+    const bool needs_hydro_or_mhd =
+        (variable == "temperature" || starts_with(variable, "mdot_") ||
+         starts_with(variable, "edot_") || starts_with(variable, "vel_"));
+    const bool needs_mhd_only = (variable == "edot_sph_mag");
+
+    if (needs_mhd_only && !has_mhd) {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+         << "Output of MHD-only variable requested in <output> block '"
+         << out_params.block_name << "' but no MHD object has been constructed."
+         << std::endl << "Input file is likely missing a <mhd> block" << std::endl;
+      exit(EXIT_FAILURE);
+    }
+
+    if (needs_hydro && !has_hydro) {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+         << "Output of Hydro variable requested in <output> block '"
+         << out_params.block_name << "' but no Hydro object has been constructed."
+         << std::endl << "Input file is likely missing a <hydro> block" << std::endl;
+      exit(EXIT_FAILURE);
+    }
+    if (needs_mhd && !has_mhd) {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+         << "Output of MHD variable requested in <output> block '"
+         << out_params.block_name << "' but no MHD object has been constructed."
+         << std::endl << "Input file is likely missing a <mhd> block" << std::endl;
+      exit(EXIT_FAILURE);
+    }
+    if (needs_hydro_or_mhd && !(has_hydro || has_mhd)) {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+         << "Output of fluid variable requested in <output> block '"
+         << out_params.block_name << "' but neither Hydro nor MHD objects exist."
+         << std::endl << "Input file is likely missing a <hydro> or <mhd> block"
+         << std::endl;
+      exit(EXIT_FAILURE);
+    }
+    if (needs_turb && !has_turb) {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+         << "Output of Force variable requested in <output> block '"
+         << out_params.block_name << "' but no Force object has been constructed."
+         << std::endl << "Input file is likely missing a <forcing> block" << std::endl;
+      exit(EXIT_FAILURE);
+    }
+    if (needs_rad && !has_rad) {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+         << "Output of Radiation variable requested in <output> block '"
+         << out_params.block_name << "' but no Radiation object has been constructed."
+         << std::endl << "Input file is likely missing a <radiation> block" << std::endl;
+      exit(EXIT_FAILURE);
+    }
+    if (needs_rad_hydro && !has_hydro) {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+         << "Output of Radiation Hydro variables requested in <output> block '"
+         << out_params.block_name << "' but Hydro object not constructed."
+         << std::endl << "Input file is likely missing a <hydro> block" << std::endl;
+      exit(EXIT_FAILURE);
+    }
+    if (needs_rad_mhd && !has_mhd) {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+         << "Output of Radiation MHD variables requested in <output> block '"
+         << out_params.block_name << "' but MHD object not constructed."
+         << std::endl << "Input file is likely missing a <mhd> block" << std::endl;
+      exit(EXIT_FAILURE);
+    }
+    if (needs_rad_fluid && !(has_hydro || has_mhd)) {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+         << "Output of Fluid Frame Radiation moments requested in <output> block '"
+         << out_params.block_name << "' but neither Hydro nor MHD objects exist."
+         << std::endl << "Input file is likely missing a <hydro> or <mhd> block"
+         << std::endl;
+      exit(EXIT_FAILURE);
+    }
+    if (needs_adm && !has_adm) {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+         << "Output of ADM variable requested in <output> block '"
+         << out_params.block_name << "' but ADM object not constructed."
+         << std::endl << "Input file is likely missing corresponding block" << std::endl;
+      exit(EXIT_FAILURE);
+    }
+    if ((needs_z4c || needs_weyl || needs_con) && !has_z4c) {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+         << "Output of Z4c/Weyl/constraint variable requested in <output> block '"
+         << out_params.block_name << "' but Z4c object not constructed."
+         << std::endl << "Input file is likely missing corresponding block" << std::endl;
+      exit(EXIT_FAILURE);
+    }
+    if (needs_tmunu && !has_tmunu) {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+         << "Output of Tmunu variable requested in <output> block '"
+         << out_params.block_name << "' but no Tmunu object has been constructed."
+         << std::endl << "Input file is likely missing a <adm> block" << std::endl;
+      exit(EXIT_FAILURE);
+    }
+    if (needs_prtcl && !has_prtcl) {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+         << "Output of particles requested in <output> block '"
+         << out_params.block_name << "' but particle object not constructed."
+         << std::endl << "Input file is likely missing corresponding block" << std::endl;
+      exit(EXIT_FAILURE);
+    }
+  };
+
+  if (out_params.file_type == "pdf" && out_params.pdf_ndim > 0) {
+    for (int d = 0; d < out_params.pdf_ndim; ++d) {
+      validate_variable(out_params.pdf_variables[d]);
+    }
+    if (out_params.pdf_weight.compare("variable") == 0 &&
+        !out_params.pdf_weight_variable.empty()) {
+      validate_variable(out_params.pdf_weight_variable);
+    }
+  } else {
+    validate_variable(out_params.variable);
   }
 
   // Now load STL vector of output variables
@@ -169,12 +209,16 @@ BaseTypeOutput::BaseTypeOutput(ParameterInput *pin, Mesh *pm, OutputParameters o
 
   // make a vector of out_params.variables
   std::vector<std::string> variables;
-
-  variables.push_back(out_params.variable);
-  if (out_params.file_type == "pdf") {
-    if (out_params.nbin2 > 1) {
-      variables.push_back(out_params.variable_2);
+  if (out_params.file_type == "pdf" && out_params.pdf_ndim > 0) {
+    for (int d = 0; d < out_params.pdf_ndim; ++d) {
+      variables.push_back(out_params.pdf_variables[d]);
     }
+    if (out_params.pdf_weight.compare("variable") == 0 &&
+        !out_params.pdf_weight_variable.empty()) {
+      variables.push_back(out_params.pdf_weight_variable);
+    }
+  } else {
+    variables.push_back(out_params.variable);
   }
 
 
@@ -312,8 +356,8 @@ BaseTypeOutput::BaseTypeOutput(ParameterInput *pin, Mesh *pm, OutputParameters o
     // hydro vi moments
     if (variable.compare("hydro_vi_moments") == 0) {
       out_params.contains_derived = true;
-      out_params.n_derived += 6;
-      for (int i=0; i<6; ++i) {
+      out_params.n_derived += 12;
+      for (int i=0; i<12; ++i) {
         std::string variable_name;
         variable_name.assign("vi_moment_");
         variable_name.append(std::to_string(i+1));
@@ -620,7 +664,7 @@ BaseTypeOutput::BaseTypeOutput(ParameterInput *pin, Mesh *pm, OutputParameters o
     }
 
     // added by GNW --- contravariant components of magnetic field
-    if (out_params.variable.compare("mhd_jcon") == 0) {
+    if (variable.compare("mhd_jcon") == 0) {
       pm->pmb_pack->pmhd->SetSaveWBcc();
       out_params.contains_derived = true;
       out_params.n_derived += 4;
@@ -656,8 +700,8 @@ BaseTypeOutput::BaseTypeOutput(ParameterInput *pin, Mesh *pm, OutputParameters o
     if (variable.compare("mhd_vi_Bi_moments") == 0) {
       pm->pmb_pack->pmhd->SetSaveWBcc();
       out_params.contains_derived = true;
-      out_params.n_derived += 18;
-      for (int i=0; i<18; ++i) {
+      out_params.n_derived += 24;
+      for (int i=0; i<24; ++i) {
         std::string variable_name;
         variable_name.assign("vi_Bi_moment_");
         variable_name.append(std::to_string(i+1));
@@ -733,8 +777,8 @@ BaseTypeOutput::BaseTypeOutput(ParameterInput *pin, Mesh *pm, OutputParameters o
 
     // mat z4c variables
     for (int v = 0; v < Tmunu::N_Tmunu; ++v) {
-      if (out_params.variable.compare("tmunu") == 0 ||
-          out_params.variable.compare(Tmunu::Tmunu_names[v]) == 0) {
+      if (variable.compare("tmunu") == 0 ||
+          variable.compare(Tmunu::Tmunu_names[v]) == 0) {
         outvars.emplace_back(Tmunu::Tmunu_names[v], v, &(pm->pmb_pack->ptmunu->u_tmunu));
       }
     }
@@ -749,14 +793,14 @@ BaseTypeOutput::BaseTypeOutput(ParameterInput *pin, Mesh *pm, OutputParameters o
 
     // z4c variables
     for (int v = 0; v < z4c::Z4c::nz4c; ++v) {
-      if (out_params.variable.compare("z4c") == 0 ||
-          out_params.variable.compare(z4c::Z4c::Z4c_names[v]) == 0) {
+      if (variable.compare("z4c") == 0 ||
+          variable.compare(z4c::Z4c::Z4c_names[v]) == 0) {
         outvars.emplace_back(z4c::Z4c::Z4c_names[v], v, &(pm->pmb_pack->pz4c->u0));
       }
     }
 
     // weyl scalars
-    if (out_params.variable.compare("weyl") == 0) {
+    if (variable.compare("weyl") == 0) {
       outvars.emplace_back("weyl_rpsi4",0,&(pm->pmb_pack->pz4c->u_weyl));
       outvars.emplace_back("weyl_ipsi4",1,&(pm->pmb_pack->pz4c->u_weyl));
     }
@@ -799,10 +843,9 @@ BaseTypeOutput::BaseTypeOutput(ParameterInput *pin, Mesh *pm, OutputParameters o
       outvars.emplace_back("r23_ff",moments_offset+8,&(derived_var));
       outvars.emplace_back("r33_ff",moments_offset+9,&(derived_var));
     }
-  }
 
   // particle density binned to mesh
-  if (out_params.variable.compare("prtcl_d") == 0) {
+  if (variable.compare("prtcl_d") == 0) {
     out_params.contains_derived = true;
     out_params.n_derived += 1;
     int i_derived = out_params.n_derived - 1;
@@ -810,122 +853,204 @@ BaseTypeOutput::BaseTypeOutput(ParameterInput *pin, Mesh *pm, OutputParameters o
   }
 
   // Coordinate variables for PDF binning (Cartesian)
-  if (out_params.variable.compare("coord_x") == 0) {
+  if (variable.compare("coord_x") == 0) {
     out_params.contains_derived = true;
     out_params.n_derived += 1;
-    outvars.emplace_back("coord_x", out_params.i_derived, &derived_var);
+    int i_derived = out_params.n_derived - 1;
+    outvars.emplace_back("coord_x", i_derived, &derived_var);
   }
-  if (out_params.variable.compare("coord_y") == 0) {
+  if (variable.compare("coord_y") == 0) {
     out_params.contains_derived = true;
     out_params.n_derived += 1;
-    outvars.emplace_back("coord_y", out_params.i_derived, &derived_var);
+    int i_derived = out_params.n_derived - 1;
+    outvars.emplace_back("coord_y", i_derived, &derived_var);
   }
-  if (out_params.variable.compare("coord_z") == 0) {
+  if (variable.compare("coord_z") == 0) {
     out_params.contains_derived = true;
     out_params.n_derived += 1;
-    outvars.emplace_back("coord_z", out_params.i_derived, &derived_var);
+    int i_derived = out_params.n_derived - 1;
+    outvars.emplace_back("coord_z", i_derived, &derived_var);
   }
 
   // Coordinate variables for PDF binning (spherical)
-  if (out_params.variable.compare("coord_r") == 0) {
+  if (variable.compare("coord_r") == 0) {
     out_params.contains_derived = true;
     out_params.n_derived += 1;
-    outvars.emplace_back("coord_r", out_params.i_derived, &derived_var);
+    int i_derived = out_params.n_derived - 1;
+    outvars.emplace_back("coord_r", i_derived, &derived_var);
   }
-  if (out_params.variable.compare("coord_theta") == 0) {
+  if (variable.compare("coord_theta") == 0) {
     out_params.contains_derived = true;
     out_params.n_derived += 1;
-    outvars.emplace_back("coord_theta", out_params.i_derived, &derived_var);
+    int i_derived = out_params.n_derived - 1;
+    outvars.emplace_back("coord_theta", i_derived, &derived_var);
   }
-  if (out_params.variable.compare("coord_phi") == 0) {
+  if (variable.compare("coord_costheta") == 0) {
     out_params.contains_derived = true;
     out_params.n_derived += 1;
-    outvars.emplace_back("coord_phi", out_params.i_derived, &derived_var);
+    int i_derived = out_params.n_derived - 1;
+    outvars.emplace_back("coord_costheta", i_derived, &derived_var);
+  }
+  if (variable.compare("coord_phi") == 0) {
+    out_params.contains_derived = true;
+    out_params.n_derived += 1;
+    int i_derived = out_params.n_derived - 1;
+    outvars.emplace_back("coord_phi", i_derived, &derived_var);
   }
 
   // Coordinate variables for PDF binning (cylindrical)
-  if (out_params.variable.compare("coord_cyl_R") == 0) {
+  if (variable.compare("coord_cyl_R") == 0) {
     out_params.contains_derived = true;
     out_params.n_derived += 1;
-    outvars.emplace_back("coord_cyl_R", out_params.i_derived, &derived_var);
+    int i_derived = out_params.n_derived - 1;
+    outvars.emplace_back("coord_cyl_R", i_derived, &derived_var);
   }
-  if (out_params.variable.compare("coord_cyl_phi") == 0) {
+  if (variable.compare("coord_cyl_phi") == 0) {
     out_params.contains_derived = true;
     out_params.n_derived += 1;
-    outvars.emplace_back("coord_cyl_phi", out_params.i_derived, &derived_var);
+    int i_derived = out_params.n_derived - 1;
+    outvars.emplace_back("coord_cyl_phi", i_derived, &derived_var);
   }
-  if (out_params.variable.compare("coord_cyl_z") == 0) {
+  if (variable.compare("coord_cyl_z") == 0) {
     out_params.contains_derived = true;
     out_params.n_derived += 1;
-    outvars.emplace_back("coord_cyl_z", out_params.i_derived, &derived_var);
+    int i_derived = out_params.n_derived - 1;
+    outvars.emplace_back("coord_cyl_z", i_derived, &derived_var);
   }
 
   // Spherical mass flux
-  if (out_params.variable.compare("mdot_sph") == 0) {
+  if (variable.compare("mdot_sph") == 0) {
     out_params.contains_derived = true;
     out_params.n_derived += 1;
-    outvars.emplace_back("mdot_sph", out_params.i_derived, &derived_var);
+    int i_derived = out_params.n_derived - 1;
+    outvars.emplace_back("mdot_sph", i_derived, &derived_var);
   }
-  if (out_params.variable.compare("mdot_sph_out") == 0) {
+  if (variable.compare("mdot_sph_out") == 0) {
     out_params.contains_derived = true;
     out_params.n_derived += 1;
-    outvars.emplace_back("mdot_sph_out", out_params.i_derived, &derived_var);
+    int i_derived = out_params.n_derived - 1;
+    outvars.emplace_back("mdot_sph_out", i_derived, &derived_var);
   }
-  if (out_params.variable.compare("mdot_sph_in") == 0) {
+  if (variable.compare("mdot_sph_in") == 0) {
     out_params.contains_derived = true;
     out_params.n_derived += 1;
-    outvars.emplace_back("mdot_sph_in", out_params.i_derived, &derived_var);
+    int i_derived = out_params.n_derived - 1;
+    outvars.emplace_back("mdot_sph_in", i_derived, &derived_var);
   }
 
   // Spherical energy flux
-  if (out_params.variable.compare("edot_sph") == 0) {
+  if (variable.compare("edot_sph") == 0) {
     out_params.contains_derived = true;
     out_params.n_derived += 1;
-    outvars.emplace_back("edot_sph", out_params.i_derived, &derived_var);
+    int i_derived = out_params.n_derived - 1;
+    outvars.emplace_back("edot_sph", i_derived, &derived_var);
   }
-  if (out_params.variable.compare("edot_sph_out") == 0) {
+  if (variable.compare("edot_sph_out") == 0) {
     out_params.contains_derived = true;
     out_params.n_derived += 1;
-    outvars.emplace_back("edot_sph_out", out_params.i_derived, &derived_var);
+    int i_derived = out_params.n_derived - 1;
+    outvars.emplace_back("edot_sph_out", i_derived, &derived_var);
   }
-  if (out_params.variable.compare("edot_sph_in") == 0) {
+  if (variable.compare("edot_sph_in") == 0) {
     out_params.contains_derived = true;
     out_params.n_derived += 1;
-    outvars.emplace_back("edot_sph_in", out_params.i_derived, &derived_var);
+    int i_derived = out_params.n_derived - 1;
+    outvars.emplace_back("edot_sph_in", i_derived, &derived_var);
   }
 
   // Vertical mass flux
-  if (out_params.variable.compare("mdot_vert") == 0) {
+  if (variable.compare("mdot_vert") == 0) {
     out_params.contains_derived = true;
     out_params.n_derived += 1;
-    outvars.emplace_back("mdot_vert", out_params.i_derived, &derived_var);
+    int i_derived = out_params.n_derived - 1;
+    outvars.emplace_back("mdot_vert", i_derived, &derived_var);
   }
-  if (out_params.variable.compare("mdot_vert_out") == 0) {
+  if (variable.compare("mdot_vert_out") == 0) {
     out_params.contains_derived = true;
     out_params.n_derived += 1;
-    outvars.emplace_back("mdot_vert_out", out_params.i_derived, &derived_var);
+    int i_derived = out_params.n_derived - 1;
+    outvars.emplace_back("mdot_vert_out", i_derived, &derived_var);
   }
-  if (out_params.variable.compare("mdot_vert_in") == 0) {
+  if (variable.compare("mdot_vert_in") == 0) {
     out_params.contains_derived = true;
     out_params.n_derived += 1;
-    outvars.emplace_back("mdot_vert_in", out_params.i_derived, &derived_var);
+    int i_derived = out_params.n_derived - 1;
+    outvars.emplace_back("mdot_vert_in", i_derived, &derived_var);
   }
 
   // Vertical energy flux
-  if (out_params.variable.compare("edot_vert") == 0) {
+  if (variable.compare("edot_vert") == 0) {
     out_params.contains_derived = true;
     out_params.n_derived += 1;
-    outvars.emplace_back("edot_vert", out_params.i_derived, &derived_var);
+    int i_derived = out_params.n_derived - 1;
+    outvars.emplace_back("edot_vert", i_derived, &derived_var);
   }
-  if (out_params.variable.compare("edot_vert_out") == 0) {
+  if (variable.compare("edot_vert_out") == 0) {
     out_params.contains_derived = true;
     out_params.n_derived += 1;
-    outvars.emplace_back("edot_vert_out", out_params.i_derived, &derived_var);
+    int i_derived = out_params.n_derived - 1;
+    outvars.emplace_back("edot_vert_out", i_derived, &derived_var);
   }
-  if (out_params.variable.compare("edot_vert_in") == 0) {
+  if (variable.compare("edot_vert_in") == 0) {
     out_params.contains_derived = true;
     out_params.n_derived += 1;
-    outvars.emplace_back("edot_vert_in", out_params.i_derived, &derived_var);
+    int i_derived = out_params.n_derived - 1;
+    outvars.emplace_back("edot_vert_in", i_derived, &derived_var);
+  }
+
+  // Spherical velocity components
+  if (variable.compare("vel_sph_r") == 0) {
+    out_params.contains_derived = true;
+    out_params.n_derived += 1;
+    int i_derived = out_params.n_derived - 1;
+    outvars.emplace_back("vel_sph_r", i_derived, &derived_var);
+  }
+  if (variable.compare("vel_sph_theta") == 0) {
+    out_params.contains_derived = true;
+    out_params.n_derived += 1;
+    int i_derived = out_params.n_derived - 1;
+    outvars.emplace_back("vel_sph_theta", i_derived, &derived_var);
+  }
+  if (variable.compare("vel_sph_phi") == 0) {
+    out_params.contains_derived = true;
+    out_params.n_derived += 1;
+    int i_derived = out_params.n_derived - 1;
+    outvars.emplace_back("vel_sph_phi", i_derived, &derived_var);
+  }
+
+  // Cylindrical velocity components
+  if (variable.compare("vel_cyl_R") == 0) {
+    out_params.contains_derived = true;
+    out_params.n_derived += 1;
+    int i_derived = out_params.n_derived - 1;
+    outvars.emplace_back("vel_cyl_R", i_derived, &derived_var);
+  }
+  if (variable.compare("vel_cyl_phi") == 0) {
+    out_params.contains_derived = true;
+    out_params.n_derived += 1;
+    int i_derived = out_params.n_derived - 1;
+    outvars.emplace_back("vel_cyl_phi", i_derived, &derived_var);
+  }
+
+  // Spherical energy flux components
+  if (variable.compare("edot_sph_kin") == 0) {
+    out_params.contains_derived = true;
+    out_params.n_derived += 1;
+    int i_derived = out_params.n_derived - 1;
+    outvars.emplace_back("edot_sph_kin", i_derived, &derived_var);
+  }
+  if (variable.compare("edot_sph_th") == 0) {
+    out_params.contains_derived = true;
+    out_params.n_derived += 1;
+    int i_derived = out_params.n_derived - 1;
+    outvars.emplace_back("edot_sph_th", i_derived, &derived_var);
+  }
+  if (variable.compare("edot_sph_mag") == 0) {
+    out_params.contains_derived = true;
+    out_params.n_derived += 1;
+    int i_derived = out_params.n_derived - 1;
+    outvars.emplace_back("edot_sph_mag", i_derived, &derived_var);
+  }
   }
 
   // initialize vector containing number of output MBs per rank
@@ -1041,7 +1166,6 @@ void BaseTypeOutput::LoadOutputData(Mesh *pm) {
 
   // Calculate derived variables, if required
   if (out_params.contains_derived) {
-    // Reset derived variable index before computing to ensure proper indexing
     out_params.i_derived = 0;
     ComputeDerivedVariable(out_params.variable, pm);
   }

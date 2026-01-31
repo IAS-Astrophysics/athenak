@@ -6,7 +6,7 @@
 //! \file pdf.cpp
 //  \brief writes N-D PDF output data --- Drummond B Fielding
 //
-//  PDFs can be 1D, 2D, 3D, or 4D and can be either mass or volume weighted.
+//  PDFs can be 1D, 2D, 3D, or 4D and can be volume, mass, or variable weighted.
 //  Each PDF is stored in its own directory with binary data files and an ASCII header.
 //  Variables can be any from var_choice[] in outputs.hpp, including coordinate variables.
 //
@@ -14,6 +14,7 @@
 //    variable_1 = <var>   bin1_min = <min>   bin1_max = <max>   nbin1 = <n>   logscale1 = <bool>
 //    variable_2 = <var>   bin2_min = <min>   bin2_max = <max>   nbin2 = <n>   logscale2 = <bool>
 //    ...
+//    weight = volume|mass|variable   weight_variable = <var>  (optional)
 //
 //  Output:
 //    - ASCII header file: <basename>.header.pdf (written once)
@@ -58,8 +59,21 @@ PDFOutput::PDFOutput(ParameterInput *pin, Mesh *pm, OutputParameters op) :
   // Initialize PDFData with N-D parameters
   pdf_data.Initialize(op.pdf_ndim, op.pdf_nbin, op.pdf_bin_min,
                       op.pdf_bin_max, op.pdf_logscale);
-  pdf_data.mass_weighted = op.mass_weighted;
   pdf_data.PopulateBinEdges();
+
+  int expected_vars = out_params.pdf_ndim;
+  if (out_params.pdf_weight.compare("variable") == 0) {
+    expected_vars += 1;
+  }
+  if (out_params.pdf_ndim > 0 &&
+      outvars.size() != static_cast<std::size_t>(expected_vars)) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+              << std::endl << "PDF output block '" << out_params.block_name
+              << "' must use scalar variables (one per PDF dimension"
+              << (expected_vars > out_params.pdf_ndim ? " and weight variable" : "")
+              << ")" << std::endl;
+    exit(EXIT_FAILURE);
+  }
 }
 
 
@@ -90,18 +104,20 @@ void PDFOutput::LoadOutputData(Mesh *pm) {
 
   // Get physics pointer for mass weighting
   DvceArray5D<Real> *u0_ptr = nullptr;
-  if (pm->pmb_pack->phydro != nullptr) {
-    u0_ptr = &(pm->pmb_pack->phydro->u0);
-  } else if (pm->pmb_pack->pmhd != nullptr) {
-    u0_ptr = &(pm->pmb_pack->pmhd->u0);
-  } else if (pm->pmb_pack->pz4c != nullptr) {
-    u0_ptr = &(pm->pmb_pack->pz4c->u0);
-  }
+  if (weight_mode == 1) {
+    if (pm->pmb_pack->phydro != nullptr) {
+      u0_ptr = &(pm->pmb_pack->phydro->u0);
+    } else if (pm->pmb_pack->pmhd != nullptr) {
+      u0_ptr = &(pm->pmb_pack->pmhd->u0);
+    } else if (pm->pmb_pack->pz4c != nullptr) {
+      u0_ptr = &(pm->pmb_pack->pz4c->u0);
+    }
 
-  if (u0_ptr == nullptr && pdf_data.mass_weighted) {
-    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-              << std::endl << "Mass-weighted PDF requires physics module" << std::endl;
-    exit(EXIT_FAILURE);
+    if (u0_ptr == nullptr) {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                << std::endl << "Mass-weighted PDF requires physics module" << std::endl;
+      exit(EXIT_FAILURE);
+    }
   }
 
   DvceArray5D<Real> u0_;
@@ -117,8 +133,8 @@ void PDFOutput::LoadOutputData(Mesh *pm) {
 
   int nmb = pm->pmb_pack->nmb_thispack;
   int nx1 = indcs.nx1 + 2*indcs.ng;
-  int nx2 = indcs.nx2 + 2*indcs.ng;
-  int nx3 = indcs.nx3 + 2*indcs.ng;
+  int nx2 = (indcs.nx2 > 1) ? (indcs.nx2 + 2*indcs.ng) : 1;
+  int nx3 = (indcs.nx3 > 1) ? (indcs.nx3 + 2*indcs.ng) : 1;
 
   // Copy MeshBlock data from host to device
   // Use explicit ranges for ALL dimensions because:
@@ -140,7 +156,10 @@ void PDFOutput::LoadOutputData(Mesh *pm) {
   auto scatter = pdf_data.scatter_result;
   int ndim = pdf_data.ndim;
   int total_bins = pdf_data.total_bins;
-  bool mass_weighted = pdf_data.mass_weighted;
+  int weight_idx = -1;
+  if (weight_mode == 2) {
+    weight_idx = out_params.pdf_ndim;
+  }
 
   // Create device-accessible copies of PDF parameters
   Kokkos::View<int[PDFData::MAX_DIM]> d_nbin("d_nbin");
@@ -192,10 +211,12 @@ void PDFOutput::LoadOutputData(Mesh *pm) {
       if (d_logscale(d)) {
         if (val <= 0.0 || val < d_bin_min(d)) {
           bin_idx = 0;  // underflow
-        } else if (val >= d_bin_min(d) * std::pow(10.0, d_nbin(d) * d_step_size(d))) {
+        } else if (val >= d_bin_min(d) * Kokkos::pow(10.0,
+                                                     d_nbin(d) * d_step_size(d))) {
           bin_idx = d_nbin(d) + 1;  // overflow
         } else {
-          bin_idx = static_cast<int>(std::log10(val / d_bin_min(d)) / d_step_size(d)) + 1;
+          bin_idx = static_cast<int>(Kokkos::log10(val / d_bin_min(d))
+                                     / d_step_size(d)) + 1;
         }
       } else {
         if (val < d_bin_min(d)) {
@@ -214,10 +235,12 @@ void PDFOutput::LoadOutputData(Mesh *pm) {
       flat_idx += bin_idx * d_stride(d);
     }
 
-    // Compute weight (volume or mass)
+    // Compute weight (volume, mass, or variable), always scaled by cell volume
     Real weight = size.d_view(m).dx1 * size.d_view(m).dx2 * size.d_view(m).dx3;
-    if (mass_weighted) {
+    if (weight_mode == 1) {
       weight *= u0_(m, IDN, k, j, i);
+    } else if (weight_mode == 2) {
+      weight *= outvars_device(weight_idx, m, k, j, i);
     }
 
     // Atomic add to histogram
@@ -270,7 +293,11 @@ void PDFOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
       // Write header metadata
       std::fprintf(hfile, "# AthenaK N-D PDF Output\n");
       std::fprintf(hfile, "ndim = %d\n", pdf_data.ndim);
-      std::fprintf(hfile, "mass_weighted = %s\n", pdf_data.mass_weighted ? "true" : "false");
+      std::fprintf(hfile, "weight = %s\n", out_params.pdf_weight.c_str());
+      if (out_params.pdf_weight.compare("variable") == 0) {
+        std::fprintf(hfile, "weight_variable = %s\n",
+                     out_params.pdf_weight_variable.c_str());
+      }
       std::fprintf(hfile, "total_bins = %d\n", pdf_data.total_bins);
       std::fprintf(hfile, "\n");
 

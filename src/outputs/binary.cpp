@@ -50,7 +50,8 @@ MeshBinaryOutput::MeshBinaryOutput(ParameterInput *pin, Mesh *pm, OutputParamete
 
 void MeshBinaryOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
   // check if slicing
-  bool bin_slice = (out_params.slice1 || out_params.slice2 || out_params.slice3);
+  bool bin_slice = (out_params.slice1 || out_params.slice2 || out_params.slice3 ||
+                    out_params.gid >= 0);
 
   // create filename: "bin/file_basename" + "." + "file_id" + "." + XXXXX + ".bin"
   // where XXXXX = 5-digit file_number
@@ -140,8 +141,9 @@ void MeshBinaryOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
   int ns_mbs = pm->gids_eachrank[global_variable::my_rank];
   int nb_mbs = pm->nmb_eachrank[global_variable::my_rank];
 
+  int write_mbs = bin_slice ? nout_mbs : nb_mbs;
   // allocate 1D vector of floats used to convert and output data
-  char *data = new char[nb_mbs*data_size];
+  char *data = new char[write_mbs*data_size];
   float *single_data = new float[cells];
 
   // Loop over MeshBlocks
