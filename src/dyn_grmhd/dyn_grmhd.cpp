@@ -152,6 +152,13 @@ DynGRMHD::DynGRMHD(MeshBlockPack *pp, ParameterInput *pin) :
   enforce_maximum = pin->GetOrAddBoolean("mhd", "enforce_maximum", true);
   dmp_M = pin->GetOrAddReal("mhd", "dmp_M", 1.2);
 
+  well_balanced = pin->GetOrAddBoolean("mhd", "well_balanced", false);
+  if (well_balanced && rsolver_method != DynGRMHD_RSolver::hlld_dyngr) {
+    std::cout << "### WARNING in " << __FILE__ << " at line " << __LINE__
+              << std::endl << "Well balancing may not work without HLLD"
+              << std::endl;
+  }
+
   fixed_evolution = pin->GetOrAddBoolean("mhd", "fixed", false);
 
   // allocate memory for temperature
@@ -365,14 +372,15 @@ template<class EOSPolicy, class ErrorPolicy>
 void DynGRMHDPS<EOSPolicy, ErrorPolicy>::AddCoordTerms(const DvceArray5D<Real> &prim,
     const DvceArray5D<Real> &bcc,
     const Real dt, DvceArray5D<Real> &rhs, int nghost) {
-  switch (nghost) {
+  /*switch (nghost) {
     case 2: AddCoordTermsEOS<2>(prim, bcc, dt, rhs);
             break;
     case 3: AddCoordTermsEOS<3>(prim, bcc, dt, rhs);
             break;
     case 4: AddCoordTermsEOS<4>(prim, bcc, dt, rhs);
             break;
-  }
+  }*/
+  AddCoordTermsEOS<2>(prim, bcc, dt, rhs);
 }
 
 //----------------------------------------------------------------------------------------

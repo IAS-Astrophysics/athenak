@@ -28,6 +28,7 @@
 #include "dyn_grmhd/rsolvers/hlle_dyn_grmhd.hpp"
 #include "dyn_grmhd/rsolvers/hlle_transforming.hpp"
 #include "dyn_grmhd/rsolvers/hlld_dyn_grmhd.hpp"
+#include "dyn_grmhd/rsolvers/wb_equilibrium.hpp"
 // include PrimitiveSolver stuff
 #include "eos/primitive-solver/idealgas.hpp"
 #include "eos/primitive-solver/reset_floor.hpp"
@@ -60,6 +61,7 @@ TaskStatus DynGRMHDPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int s
   auto &use_fofc = pmy_pack->pmhd->use_fofc;
   auto &hlld_fail_ = hlld_fail;
   bool extrema = false;
+  bool &well_balanced_ = well_balanced;
   if (recon_method_ == ReconstructionMethod::ppmx) {
     extrema = true;
   }
@@ -82,8 +84,14 @@ TaskStatus DynGRMHDPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int s
   //--------------------------------------------------------------------------------------
   // i-direction
 
+  size_t extra = 0;
+  if (well_balanced) {
+    extra = ScrArray2D<Real>::shmem_size(1, ncells1);
+  }
+
   size_t scr_size = ScrArray2D<Real>::shmem_size(nvars, ncells1) * 2 +
-                    ScrArray2D<Real>::shmem_size(3, ncells1) * 2;
+                    ScrArray2D<Real>::shmem_size(3, ncells1) * 2 +
+                    extra * 2;
   int scr_level = scratch_level;
   auto flx1_ = pmy_pack->pmhd->uflx.x1f;
   auto &e31_ = pmy_pack->pmhd->e3x1;
@@ -109,15 +117,33 @@ TaskStatus DynGRMHDPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int s
     ScrArray2D<Real> wr(member.team_scratch(scr_level), nvars, ncells1);
     ScrArray2D<Real> bl(member.team_scratch(scr_level), 3, ncells1);
     ScrArray2D<Real> br(member.team_scratch(scr_level), 3, ncells1);
+    ScrArray1D<Real> pl;
+    ScrArray1D<Real> pr;
+    if (well_balanced_) {
+      pl = ScrArray1D<Real>(member.team_scratch(scr_level), ncells1);
+      pr = ScrArray1D<Real>(member.team_scratch(scr_level), ncells1);
+      PressureEquilibriumX1(member, dyn_eos_, nvars - nhyd, m, k, j, il-1, iu, w0_, adm,
+                            pl, pr);
+    }
 
     // Reconstruct qR[i] and qL[i+1]
     switch (recon_method_) {
       case ReconstructionMethod::dc:
         DonorCellX1(member, m, k, j, il-1, iu, w0_, wl, wr);
         DonorCellX1(member, m, k, j, il-1, iu, b0_, bl, br);
+        if (well_balanced_) {
+          par_for_inner(member, il, iu, [&](const int i) {
+            wl(IPR, i) = pl(i);
+            wr(IPR, i) = pr(i);
+          });
+        }
         break;
       case ReconstructionMethod::plm:
-        PiecewiseLinearX1(member, m, k, j, il-1, iu, w0_, wl, wr);
+        if (well_balanced_) {
+          PiecewiseLinearWBX1(member, m, k, j, il-1, iu, w0_, wl, wr, pl, pr);
+        } else {
+          PiecewiseLinearX1(member, m, k, j, il-1, iu, w0_, wl, wr);
+        }
         PiecewiseLinearX1(member, m, k, j, il-1, iu, b0_, bl, br);
         break;
       // JF: These higher-order reconstruction methods all need EOS_Data to calculate a
@@ -128,7 +154,11 @@ TaskStatus DynGRMHDPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int s
         PiecewiseParabolicX1(member,eos_,extrema,false, m, k, j, il-1, iu, b0_, bl, br);
         break;
       case ReconstructionMethod::wenoz:
-        WENOZX1(member, eos_, false, m, k, j, il-1, iu, w0_, wl, wr);
+        if (well_balanced_) {
+          WENOZWBX1(member, eos_, false, m, k, j, il-1, iu, w0_, wl, wr, pl, pr);
+        } else {
+          WENOZX1(member, eos_, false, m, k, j, il-1, iu, w0_, wl, wr);
+        }
         WENOZX1(member, eos_, false, m, k, j, il-1, iu, b0_, bl, br);
         break;
       default:
@@ -190,7 +220,8 @@ TaskStatus DynGRMHDPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int s
 
   if (pmy_pack->pmesh->multi_d) {
     scr_size = ScrArray2D<Real>::shmem_size(nvars, ncells1) * 3
-             + ScrArray2D<Real>::shmem_size(3, ncells1) * 3;
+             + ScrArray2D<Real>::shmem_size(3, ncells1) * 3
+             + extra * 3;
     auto flx2_ = pmy_pack->pmhd->uflx.x2f;
     auto &by_ = pmy_pack->pmhd->b0.x2f;
     auto &e12_ = pmy_pack->pmhd->e1x2;
@@ -213,6 +244,14 @@ TaskStatus DynGRMHDPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int s
       ScrArray2D<Real> scr4(member.team_scratch(scr_level), 3, ncells1);
       ScrArray2D<Real> scr5(member.team_scratch(scr_level), 3, ncells1);
       ScrArray2D<Real> scr6(member.team_scratch(scr_level), 3, ncells1);
+      ScrArray1D<Real> scr7;
+      ScrArray1D<Real> scr8;
+      ScrArray1D<Real> scr9;
+      if (well_balanced_) {
+        scr7 = ScrArray1D<Real>(member.team_scratch(scr_level), ncells1);
+        scr8 = ScrArray1D<Real>(member.team_scratch(scr_level), ncells1);
+        scr9 = ScrArray1D<Real>(member.team_scratch(scr_level), ncells1);
+      }
 
       for (int j=jl; j<=ju; ++j) {
         // Permute scratch arrays.
@@ -222,21 +261,40 @@ TaskStatus DynGRMHDPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int s
         auto bl     = scr4;
         auto bl_jp1 = scr5;
         auto br     = scr6;
+        auto pl     = scr7;
+        auto pl_jp1 = scr8;
+        auto pr     = scr9;
         if ((j%2) == 0) {
           wl     = scr2;
           wl_jp1 = scr1;
           bl     = scr5;
           bl_jp1 = scr4;
+          pl     = scr8;
+          pl_jp1 = scr7;
         }
 
+        if (well_balanced_) {
+          PressureEquilibriumX2(member, dyn_eos_, nvars - nhyd, m, k, j, is-1, ie+1, w0_,
+                                adm, pl_jp1, pr);
+        }
         // Reconstruct qR[j] and qL[j+1]
         switch (recon_method_) {
           case ReconstructionMethod::dc:
             DonorCellX2(member, m, k, j, is-1, ie+1, w0_, wl_jp1, wr);
             DonorCellX2(member, m, k, j, is-1, ie+1, b0_, bl_jp1, br);
+            if (well_balanced_) {
+              par_for_inner(member, is-1, ie+1, [&](const int i) {
+                wl_jp1(IPR, i) = pl_jp1(i);
+                wr(IPR, i) = pr(i);
+              });
+            }
             break;
           case ReconstructionMethod::plm:
-            PiecewiseLinearX2(member, m, k, j, is-1, ie+1, w0_, wl_jp1, wr);
+            if (well_balanced_) {
+              PiecewiseLinearWBX2(member, m, k, j, is-1, ie+1, w0_, wl_jp1, wr, pl_jp1, pr);
+            } else {
+              PiecewiseLinearX2(member, m, k, j, is-1, ie+1, w0_, wl_jp1, wr);
+            }
             PiecewiseLinearX2(member, m, k, j, is-1, ie+1, b0_, bl_jp1, br);
             break;
           // JF: These higher-order reconstruction methods all need EOS_Data to calculate
@@ -311,7 +369,8 @@ TaskStatus DynGRMHDPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int s
 
   if (pmy_pack->pmesh->three_d) {
     scr_size = ScrArray2D<Real>::shmem_size(nvars, ncells1) * 3
-             + ScrArray2D<Real>::shmem_size(3, ncells1) * 3;
+             + ScrArray2D<Real>::shmem_size(3, ncells1) * 3
+             + extra * 3;
     auto &flx3_ = pmy_pack->pmhd->uflx.x3f;
     auto &bz_   = pmy_pack->pmhd->b0.x3f;
     auto &e23_  = pmy_pack->pmhd->e2x3;
@@ -328,6 +387,14 @@ TaskStatus DynGRMHDPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int s
       ScrArray2D<Real> scr4(member.team_scratch(scr_level), 3, ncells1);
       ScrArray2D<Real> scr5(member.team_scratch(scr_level), 3, ncells1);
       ScrArray2D<Real> scr6(member.team_scratch(scr_level), 3, ncells1);
+      ScrArray1D<Real> scr7;
+      ScrArray1D<Real> scr8;
+      ScrArray1D<Real> scr9;
+      if (well_balanced_) {
+        scr7 = ScrArray1D<Real>(member.team_scratch(scr_level), ncells1);
+        scr8 = ScrArray1D<Real>(member.team_scratch(scr_level), ncells1);
+        scr9 = ScrArray1D<Real>(member.team_scratch(scr_level), ncells1);
+      }
 
       for (int k=kl; k<=ku; ++k) {
         // Permute scratch arrays.
@@ -337,21 +404,40 @@ TaskStatus DynGRMHDPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int s
         auto bl     = scr4;
         auto bl_kp1 = scr5;
         auto br     = scr6;
+        auto pl     = scr7;
+        auto pl_kp1 = scr8;
+        auto pr     = scr9;
         if ((k%2) == 0) {
           wl     = scr2;
           wl_kp1 = scr1;
           bl     = scr5;
           bl_kp1 = scr4;
+          pl     = scr8;
+          pl_kp1 = scr7;
         }
 
+        if (well_balanced_) {
+          PressureEquilibriumX3(member, dyn_eos_, nvars - nhyd, m, k, j, is-1, ie+1, w0_,
+                                adm, pl_kp1, pr);
+        }
         // Reconstruct qR[j] and qL[j+1]
         switch (recon_method_) {
           case ReconstructionMethod::dc:
             DonorCellX3(member, m, k, j, is-1, ie+1, w0_, wl_kp1, wr);
             DonorCellX3(member, m, k, j, is-1, ie+1, b0_, bl_kp1, br);
+            if (well_balanced_) {
+              par_for_inner(member, is-1, ie+1, [&](const int i) {
+                wl_kp1(IPR, i) = pl_kp1(i);
+                wr(IPR, i) = pr(i);
+              });
+            }
             break;
           case ReconstructionMethod::plm:
-            PiecewiseLinearX3(member, m, k, j, is-1, ie+1, w0_, wl_kp1, wr);
+            if (well_balanced_) {
+              PiecewiseLinearWBX3(member, m, k, j, is-1, ie+1, w0_, wl_kp1, wr, pl_kp1, pr);
+            } else {
+              PiecewiseLinearX3(member, m, k, j, is-1, ie+1, w0_, wl_kp1, wr);
+            }
             PiecewiseLinearX3(member, m, k, j, is-1, ie+1, b0_, bl_kp1, br);
             break;
           // JF: These higher-order reconstruction methods all need EOS_Data to calculate

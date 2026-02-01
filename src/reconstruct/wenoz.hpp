@@ -120,6 +120,64 @@ void WENOZX1(TeamMember_t const &member, const EOS_Data &eos, const bool apply_f
 }
 
 //----------------------------------------------------------------------------------------
+//! \fn WENOZ
+//! \brief Wrapper function for WENOZ reconstruction in x1-direction.
+//! This function should be called over [is-1,ie+1] to get BOTH L/R states over [is,ie]
+
+KOKKOS_INLINE_FUNCTION
+void WENOZWBX1(TeamMember_t const &member, const EOS_Data &eos, const bool apply_floors,
+     const int m, const int k, const int j, const int il, const int iu,
+     const DvceArray5D<Real> &q, ScrArray2D<Real> &ql, ScrArray2D<Real> &qr,
+     ScrArray1D<Real> &pl, ScrArray1D<Real> &pr) {
+  int nvar = q.extent_int(1);
+  const Real &dfloor_ = eos.dfloor;
+  // TODO(jmstone): ideal gas only for now
+  Real efloor_ = eos.pfloor/(eos.gamma - 1.0);
+  for (int n=0; n<nvar; ++n) {
+    if (n==IPR) {
+      par_for_inner(member, il, iu, [&](const int i) {
+        const Real &peqp = pl(i+1);
+        const Real &peqm = pr(i);
+        const Real &peq  = q(m,n,k,j,i);
+        Real pep1 = Kokkos::fmax(3.*(peqp - peq) + peqm, 0.0);
+        Real pep2 = Kokkos::fmax(-15.0*peq + 6.0*peqm + 10.0*peqp, 0.0);
+        Real pem1 = Kokkos::fmax(3.*(peqm - peq) + peqp, 0.0);
+        Real pem2 = Kokkos::fmax(-15.0*peq + 6.0*peqp + 10.0*peqm, 0.0);
+        Real p0 = 0.0;
+        Real pp1 = q(m,n,k,j,i+1) - pep1;
+        Real pp2 = q(m,n,k,j,i+2) - pep2;
+        Real pm1 = q(m,n,k,j,i-1) - pem1;
+        Real pm2 = q(m,n,k,j,i-2) - pem2;
+        Real left, right;
+        WENOZ(pm2, pm1, p0, pp1, pp2, left, right);
+        qr(n,i) = right + peqm;
+        ql(n,i+1) = left + peqp;
+      });
+    } else {
+      par_for_inner(member, il, iu, [&](const int i) {
+        Real &qim2 = q(m,n,k,j,i-2);
+        Real &qim1 = q(m,n,k,j,i-1);
+        Real &qi   = q(m,n,k,j,i  );
+        Real &qip1 = q(m,n,k,j,i+1);
+        Real &qip2 = q(m,n,k,j,i+2);
+        WENOZ(qim2, qim1, qi, qip1, qip2, ql(n,i+1), qr(n,i));
+        if (apply_floors) {
+          if (n==IDN) {
+            ql(IDN,i+1) = fmax(ql(IDN,i+1), dfloor_);
+            qr(IDN,i  ) = fmax(qr(IDN,i  ), dfloor_);
+          }
+          if (n==IEN) {
+            ql(IEN,i+1) = fmax(ql(IEN,i+1), efloor_);
+            qr(IEN,i  ) = fmax(qr(IEN,i  ), efloor_);
+          }
+        }
+      });
+    }
+  }
+  return;
+}
+
+//----------------------------------------------------------------------------------------
 //! \fn WENOZX2
 //! \brief Wrapper function for WENOZ reconstruction in x1-direction.
 //! This function should be called over [js-1,je+1] to get BOTH L/R states over [js,je]
