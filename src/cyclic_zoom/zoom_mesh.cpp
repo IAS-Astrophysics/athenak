@@ -181,7 +181,6 @@ int ZoomMesh::FindMB(int gzm) {
 //! \brief Find meshblocks for certain zone
 
 void ZoomMesh::FindRegion(int zone) {
-  int nmb = pzoom->pmesh->pmb_pack->nmb_thispack;
   int mbs = pzoom->pmesh->gids_eachrank[global_variable::my_rank];
   int nlmb = nzmb_eachlevel[zone]; // number of zoom MBs on previous level
   int lmbs = gids_eachlevel[zone]; // starting gid of zoom MBs on previous level

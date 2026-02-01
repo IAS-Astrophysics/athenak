@@ -48,9 +48,9 @@ void ZoomData::StoreEFieldsBeforeAMR(int zm, int m, DvceEdgeFld4D<Real> efld) {
 
 void ZoomData::StoreFinerEFields(int zmc, int zm, DvceEdgeFld4D<Real> efld) {
   auto &indcs = pzoom->pmesh->mb_indcs;
-  int &cis = indcs.cis;  int &cie  = indcs.cie;
-  int &cjs = indcs.cjs;  int &cje  = indcs.cje;
-  int &cks = indcs.cks;  int &cke  = indcs.cke;
+  int &cis = indcs.cis;
+  int &cjs = indcs.cjs;
+  int &cks = indcs.cks;
   int cnx1 = indcs.cnx1, cnx2 = indcs.cnx2, cnx3 = indcs.cnx3;
   auto ef1 = efld.x1e;
   auto ef2 = efld.x2e;
@@ -101,10 +101,6 @@ void ZoomData::StoreFinerEFields(int zmc, int zm, DvceEdgeFld4D<Real> efld) {
 
 void ZoomData::StoreEFieldsAfterAMR(int zm, int m, DvceEdgeFld4D<Real> efld) {
   auto &indcs = pzoom->pmesh->mb_indcs;
-  auto &size = pzoom->pmesh->pmb_pack->pmb->mb_size;
-  int &is = indcs.is, &js = indcs.js, &ks = indcs.ks;
-  // int &ie = indcs.ie, &je = indcs.je, &ke = indcs.ke;
-  int nx1 = indcs.nx1, nx2 = indcs.nx2, nx3 = indcs.nx3;
   int &cis = indcs.cis;  int &cie  = indcs.cie;
   int &cjs = indcs.cjs;  int &cje  = indcs.cje;
   int &cks = indcs.cks;  int &cke  = indcs.cke;

@@ -6,7 +6,7 @@
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
 //! \file cyclic_zoom.hpp
-//  \brief definitions for CyclicZoom class
+//! \brief definitions for CyclicZoom class
 
 //----------------------------------------------------------------------------------------
 //! \struct ZoomState
@@ -48,7 +48,6 @@ typedef struct ZoomRegion {
   Real r_0;                     // radius of zoom region at zone 0
   Real radius;                  // radius of zoom region
 
-  // TODO(@mhguo): may need to check whether in previous zoom region
   // Kokkos inline function to check if a location is within the zoom region
   KOKKOS_INLINE_FUNCTION
   bool IsInZoomRegion(Real x1, Real x2, Real x3) const {
@@ -128,34 +127,20 @@ class CyclicZoom
   void UpdateState();
   void SetRegionAndInterval();
   void SetRefinementFlags();
-  void UpdateVariables();
-  void UpdateHydroVariables(int zm, int m);
-  void SyncVariables();
-  void UpdateGhostVariables();
-  void ApplyVariables();
   // void StoreZoomRegion(){};
   // void InitZoomRegion(){};
-  void WorkBeforeAMR();
-  void WorkAfterAMR(Driver *pdriver);
+  void StoreZoomRegion();
+  void ApplyZoomRegion(Driver *pdriver);
   // For zoom refinement
   // TODO(@mhguo): need to reorganize these functions, now simply for compilation
   void StoreVariables();
+  bool CheckStoreFlag(int m);
   void CorrectVariables();
   void ReinitVariables();
   void MaskVariables();
-  void FindMaskRegion();
-  void FindReinitRegion();
-  bool CheckStoreFlag(int m);
-  void UpdateElectricFields(Driver *pdriver);
+  void UpdateFluxes(Driver *pdriver);
+  void StoreFluxes();
   void SourceTermsFC(DvceEdgeFld4D<Real> emf);
-  // Boundary conditions, fluxes and source terms
-  void BoundaryConditions();
-  void FixEField(DvceEdgeFld4D<Real> emf);
-  // void AddEField(DvceEdgeFld4D<Real> emf);
-  void AddDeltaEField(DvceEdgeFld4D<Real> emf);
-  void UpdateDeltaEField(DvceEdgeFld4D<Real> emf);
-  void SyncZoomEField(DvceEdgeFld4D<Real> emf, int zid);
-  void SetMaxEField();
   // timestep functions
   Real NewTimeStep(Mesh* pm);
   Real GRTimeStep(Mesh* pm);

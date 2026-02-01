@@ -159,3 +159,37 @@ void CyclicZoom::SetRefinementFlags() {
   refine_flag.template sync<DevExeSpace>();
   return;
 }
+
+
+//----------------------------------------------------------------------------------------
+//! \fn bool CyclicZoom::CheckStoreFlag(int m)
+//! \brief Check whether to store variables for MeshBlock with given global ID
+
+bool CyclicZoom::CheckStoreFlag(int m) {
+  auto &size = pmesh->pmb_pack->pmb->mb_size;
+  int mbs = pmesh->gids_eachrank[global_variable::my_rank];
+  // note that now the zoom state has been updated
+  // use the updated zoom region parameters
+  Real r_zoom = zregion.radius;
+  Real x1c = zregion.x1c, x2c = zregion.x2c, x3c = zregion.x3c;
+  // check previous level (finer level)
+  if (pmesh->lloc_eachmb[m+mbs].level == zamr.level + 1) {
+    // extract bounds of MeshBlock
+    Real x1min = size.h_view(m).x1min;
+    Real x1max = size.h_view(m).x1max;
+    Real x2min = size.h_view(m).x2min;
+    Real x2max = size.h_view(m).x2max;
+    Real x3min = size.h_view(m).x3min;
+    Real x3max = size.h_view(m).x3max;
+    // Find the closest point on the box to the sphere center
+    Real closest_x1 = fmax(x1min, fmin(x1c, x1max));
+    Real closest_x2 = fmax(x2min, fmin(x2c, x2max));
+    Real closest_x3 = fmax(x3min, fmin(x3c, x3max));
+    // Calculate the distance from sphere center to this closest point
+    Real r_sq = SQR(x1c - closest_x1) + SQR(x2c - closest_x2) + SQR(x3c - closest_x3);
+    if (r_sq < SQR(r_zoom)) {
+      return true;
+    }
+  }
+  return false;
+}
