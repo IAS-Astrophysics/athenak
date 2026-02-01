@@ -315,11 +315,6 @@ void ProblemGenerator::Monopole(ParameterInput *pin, const bool restart) {
       b0.x3f(m,k+1,j,i) = ((a2(m,k+1,j,i+1) - a2(m,k+1,j,i))/dx1 -
                            (a1(m,k+1,j+1,i) - a1(m,k+1,j,i))/dx2);
     }
-    // TODO(@mhguo): remove debug print
-    // if (m==1 && k==ks && j==js && i==is) {
-    //   printf("Monopole pgen: b0.x1f=%23.16e b0.x2f=%23.16e b0.x3f=%23.16e at (i,j,k)=(%d,%d,%d)\n",
-    //          b0.x1f(m,k,j,i),b0.x2f(m,k,j,i),b0.x3f(m,k,j,i),i,j,k);
-    // }
   });
 
   // Compute cell-centered fields

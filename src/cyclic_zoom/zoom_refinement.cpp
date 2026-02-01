@@ -26,15 +26,6 @@
 void CyclicZoom::WorkBeforeAMR() {
   // zoom state has been updated in SetRefinementFlags()
   if (zamr.zooming_out) {
-    // TODO(@mhguo): let's do a quick fix here first
-    // if (pmesh->pmb_pack->pmhd != nullptr) {
-    //   if (zstate.zone > 1) {
-    //     pzmesh->FindRegion(zstate.zone-2);
-    //     pzmesh->SyncMBLists();
-    //     pzdata->LoadFromStorage(zstate.zone-2);
-    //     pzdata->ExtractEField(pzdata->efld_buf);
-    //   }
-    // }
     StoreVariables();
     // sync rank_eachmb and lid_eachmb to all ranks
     pzmesh->SyncMBLists();

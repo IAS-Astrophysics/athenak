@@ -35,6 +35,7 @@ add_executable(
         cyclic_zoom/zoom_criteria.cpp
         cyclic_zoom/zoom_data.cpp
         cyclic_zoom/zoom_efld.cpp
+        cyclic_zoom/zoom_loadbalance.cpp
         cyclic_zoom/zoom_mesh.cpp
         cyclic_zoom/zoom_physics.cpp
         cyclic_zoom/zoom_refinement.cpp
@@ -67,7 +68,7 @@ add_executable(
 
         geodesic-grid/geodesic_grid.cpp
         geodesic-grid/spherical_grid.cpp
-	      geodesic-grid/gauss_legendre.cpp
+        geodesic-grid/gauss_legendre.cpp
 
         hydro/hydro.cpp
         hydro/hydro_fluxes.cpp

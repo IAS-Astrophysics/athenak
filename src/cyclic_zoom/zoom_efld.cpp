@@ -70,8 +70,6 @@ void ZoomData::StoreFinerEFields(int zmc, int zm, DvceEdgeFld4D<Real> efld) {
   int ccie = ccis + hcnx1 - 1;
   int ccje = ccjs + hcnx2 - 1;
   int ccke = ccks + hcnx3 - 1;
-  printf("ZoomData::StoreFinerEFields zmc=%d zm=%d ox1=%d ox2=%d ox3=%d ccis=%d ccie=%d ccjs=%d ccje=%d ccks=%d ccke=%d\n",
-         zmc, zm, ox1, ox2, ox3, ccis, ccie, ccjs, ccje, ccks, ccke);
   // update coarse electric fields
   par_for("zoom-finer-efld1",DevExeSpace(), ccks, ccke+1, ccjs, ccje+1, ccis, ccie,
   KOKKOS_LAMBDA(const int ck, const int cj, const int ci) {
@@ -94,24 +92,6 @@ void ZoomData::StoreFinerEFields(int zmc, int zm, DvceEdgeFld4D<Real> efld) {
     int fk = 2*(ck - ccks) + cks;
     e3(zmc,ck,cj,ci) = 0.5*(ef3(zm,fk,fj,fi) + ef3(zm,fk+1,fj,fi));
   });
-
-  // print debug info
-    // if (fi == cis && fj == cjs && fk == cks) {
-    //   printf("ZoomData::StoreFinerEFields zmc=%d zm=%d fi=%d fj=%d fk=%d ef1=%e ef2=%e ef3=%e\n",
-    //          zmc, zm, fi, fj, fk,
-    //          ef1(zmc,fk,fj,fi), ef2(zmc,fk,fj,fi), ef3(zmc,fk,fj,fi));
-    // }
-    // if (fi == cie && fj == cje && fk == cke) {
-    //   printf("ZoomData::StoreFinerEFields zmc=%d zm=%d fi=%d fj=%d fk=%d ef1=%e ef2=%e ef3=%e\n",
-    //          zmc, zm, fi, fj, fk,
-    //          ef1(zmc,fk,fj,fi), ef2(zmc,fk,fj,fi), ef3(zmc,fk,fj,fi));
-    // }
-    // int ckm = (cks + cke) / 2, cjm = (cjs + cje) / 2, cim = (cis + cie) / 2;
-    // if (fk == ckm && fj == cjm && fi == cim) {
-    //   printf("ZoomData::StoreFinerEFields zmc=%d zm=%d fi=%d fj=%d fk=%d ef1=%e ef2=%e ef3=%e\n",
-    //          zmc, zm, fi, fj, fk,
-    //          ef1(zmc,fk,fj,fi), ef2(zmc,fk,fj,fi), ef3(zmc,fk,fj,fi));
-    // }
   return;
 }
 
@@ -163,55 +143,6 @@ void ZoomData::StoreEFieldsAfterAMR(int zm, int m, DvceEdgeFld4D<Real> efld) {
     de1(zm,ck,cj,ci) = ep1(zm,ck,cj,ci) - ef1(m,k,j,i);
     de2(zm,ck,cj,ci) = ep2(zm,ck,cj,ci) - ef2(m,k,j,i);
     de3(zm,ck,cj,ci) = ep3(zm,ck,cj,ci) - ef3(m,k,j,i);
-
-    // debugging info
-    Real &x1min = size.d_view(m).x1min;
-    Real &x1max = size.d_view(m).x1max;
-    Real x1v = CellCenterX(i-is, nx1, x1min, x1max);
-    Real x1f = LeftEdgeX  (i-is, nx1, x1min, x1max);
-
-    Real &x2min = size.d_view(m).x2min;
-    Real &x2max = size.d_view(m).x2max;
-    Real x2v = CellCenterX(j-js, nx2, x2min, x2max);
-    Real x2f = LeftEdgeX  (j-js, nx2, x2min, x2max);
-
-    Real &x3min = size.d_view(m).x3min;
-    Real &x3max = size.d_view(m).x3max;
-    Real x3v = CellCenterX(k-ks, nx3, x3min, x3max);
-    Real x3f = LeftEdgeX  (k-ks, nx3, x3min, x3max);
-
-    Real rad = sqrt(x1v*x1v + x2v*x2v + x3v*x3v);
-
-    // print debug info
-    if (ck==cks && cj==cjs) {
-      printf("ZoomData::StoreEFieldsAfterAMR zm=%d m=%d k-1=%d j=%d i=%d rad=%e w0=%e w1=%e  w2=%e  w3=%e  w4=%e\n",
-             zm, m, k-1, j, i, rad, w_(m,IDN,k-1,j,i), w_(m,IVX,k-1,j,i), w_(m,IVY,k-1,j,i), w_(m,IVZ,k-1,j,i), w_(m,IEN,k-1,j,i));
-      printf("ZoomData::StoreEFieldsAfterAMR zm=%d m=%d k=%d j=%d i=%d rad=%e w0=%e w1=%e  w2=%e  w3=%e  w4=%e\n",
-             zm, m, k, j, i, rad, w_(m,IDN,k,j,i), w_(m,IVX,k,j,i), w_(m,IVY,k,j,i), w_(m,IVZ,k,j,i), w_(m,IEN,k,j,i));
-      printf("ZoomData::StoreEFieldsAfterAMR zm=%d m=%d k=%d j=%d i=%d rad=%e ep1=%e, ef1=%e de1=%e\n",
-             zm, m, k, j, i, rad, ep1(zm,ck,cj,ci), ef1(m,k,j,i), de1(zm,ck,cj,ci));
-      printf("ZoomData::StoreEFieldsAfterAMR zm=%d m=%d k=%d j=%d i=%d rad=%e ep2=%e, ef2=%e de2=%e\n",
-             zm, m, k, j, i, rad, ep2(zm,ck,cj,ci), ef2(m,k,j,i), de2(zm,ck,cj,ci));
-      printf("ZoomData::StoreEFieldsAfterAMR zm=%d m=%d k=%d j=%d i=%d rad=%e ep3=%e, ef3=%e de3=%e\n",
-             zm, m, k, j, i, rad, ep3(zm,ck,cj,ci), ef3(m,k,j,i), de3(zm,ck,cj,ci));
-    }
-    if (ck==cke && cj==cje && ci==cie) {
-      printf("ZoomData::StoreEFieldsAfterAMR zm=%d m=%d k=%d j=%d i=%d rad=%e ep1=%e, ef1=%e de1=%e\n",
-             zm, m, k, j, i, rad, ep1(zm,ck,cj,ci), ef1(m,k,j,i), de1(zm,ck,cj,ci));
-      printf("ZoomData::StoreEFieldsAfterAMR zm=%d m=%d k=%d j=%d i=%d rad=%e ep2=%e, ef2=%e de2=%e\n",
-             zm, m, k, j, i, rad, ep2(zm,ck,cj,ci), ef2(m,k,j,i), de2(zm,ck,cj,ci));
-      printf("ZoomData::StoreEFieldsAfterAMR zm=%d m=%d k=%d j=%d i=%d rad=%e ep3=%e, ef3=%e de3=%e\n",
-             zm, m, k, j, i, rad, ep3(zm,ck,cj,ci), ef3(m,k,j,i), de3(zm,ck,cj,ci));
-    }
-    int ckm = (cks + cke + 1) / 2, cjm = (cjs + cje + 1) / 2, cim = (cis + cie + 1) / 2;
-    if (ck==ckm && cj==cjm && ci==cim) {
-      printf("ZoomData::StoreEFieldsAfterAMR zm=%d m=%d k=%d j=%d i=%d rad=%e ep1=%e, ef1=%e de1=%e\n",
-             zm, m, k, j, i, rad, ep1(zm,ck,cj,ci), ef1(m,k,j,i), de1(zm,ck,cj,ci));
-      printf("ZoomData::StoreEFieldsAfterAMR zm=%d m=%d k=%d j=%d i=%d rad=%e ep2=%e, ef2=%e de2=%e\n",
-             zm, m, k, j, i, rad, ep2(zm,ck,cj,ci), ef2(m,k,j,i), de2(zm,ck,cj,ci));
-      printf("ZoomData::StoreEFieldsAfterAMR zm=%d m=%d k=%d j=%d i=%d rad=%e ep3=%e, ef3=%e de3=%e\n",
-             zm, m, k, j, i, rad, ep3(zm,ck,cj,ci), ef3(m,k,j,i), de3(zm,ck,cj,ci));
-    }
   });
   return;
 }

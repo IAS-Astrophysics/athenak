@@ -268,6 +268,7 @@ class ZoomData
   void Initialize();
   void ResetDataEC(DvceEdgeFld4D<Real> ec);
   void DumpData();
+  void MeshBlockDataSize();
   void StoreDataToZoomData(int zm, int m);
   // TODO(@mhguo): u or u0_?
   void StoreCCData(int zm, int m, DvceArray5D<Real> u, DvceArray5D<Real> w);
@@ -277,7 +278,6 @@ class ZoomData
   void StoreFinerEFields(int zmc, int zm, DvceEdgeFld4D<Real> efld);
   void StoreEFieldsAfterAMR(int zm, int m, DvceEdgeFld4D<Real> efld);
   void LimitEFields();
-  void MeshBlockDataSize();
   void PackBuffer();
   void PackBuffersCC(DvceArray1D<Real> packed_data, DvceArray5D<Real> a0,
                      size_t offset_a0, const int m);
@@ -292,12 +292,12 @@ class ZoomData
                        size_t offset_fc, const int m);
   void UnpackBuffersEC(DvceArray1D<Real> packed_data, DvceEdgeFld4D<Real> ec,
                        size_t offset_ec, const int m);
-  void RedistributeZMBs(int zone,
-                        HostArray1D<Real> src_buf, std::vector<int>& src_ranks, std::vector<int>* src_lids,
-                        HostArray1D<Real> dst_buf, std::vector<int>& dst_ranks, std::vector<int>* dst_lids);
+  void RedistZMBs(int nlmb, int lmbs,
+                  HostArray1D<Real> src_buf, HostArray1D<Real> dst_buf,
+                  const std::vector<int>& src_ranks, const std::vector<int>& dst_ranks,
+                  const std::vector<int>* src_lids, const std::vector<int>* dst_lids);
   void SaveToStorage(int zone);
   void LoadFromStorage(int zone);
-  void ExtractEField(DvceEdgeFld4D<Real> ec);
   void LoadDataFromZoomData(int m, int zm);
   void LoadCCData(int m, int zm);
   void LoadHydroData(int m, int zm);
