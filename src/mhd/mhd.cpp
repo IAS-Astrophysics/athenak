@@ -63,6 +63,9 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
   if (eqn_of_state.compare("ideal") == 0) {
     if (pmy_pack->pcoord->is_special_relativistic) {
       peos = new IdealSRMHD(ppack, pin);
+    } else if (pmy_pack->pcoord->is_dynamical_relativistic) {
+      // DynGRMHD uses PrimitiveSolver instead, so use a no-op here.
+      peos = new NoOpDynGRMHD(ppack, pin);
     } else if (pmy_pack->pcoord->is_general_relativistic) {
       peos = new IdealGRMHD(ppack, pin);
     } else {
