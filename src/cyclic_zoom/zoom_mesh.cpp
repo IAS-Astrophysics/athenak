@@ -150,3 +150,70 @@ void ZoomMesh::SyncLogicalLocations() {
 #endif
   return;
 }
+
+//----------------------------------------------------------------------------------------
+//! \fn int ZoomMesh::FindMB()
+//! \brief find the meshblock that cover this zoom meshblock
+
+int ZoomMesh::FindMB(int gzm) {
+  int nmb = pzoom->pmesh->pmb_pack->nmb_thispack;
+  int mbs = pzoom->pmesh->gids_eachrank[global_variable::my_rank];
+  auto &zlloc = lloc_eachzmb[gzm];
+  // check current level (zoom MBs at same level as current AMR level)
+  for (int m = 0; m < nmb; ++m) {
+    auto &lloc = pzoom->pmesh->lloc_eachmb[m+mbs];
+    int level_diff = zlloc.level - lloc.level;
+    // if zoom MB is the same as or a child of this MB
+    if (level_diff >= 0) {
+      if ( (zlloc.lx1 >> level_diff == lloc.lx1) &&
+          (zlloc.lx2 >> level_diff == lloc.lx2) &&
+          (zlloc.lx3 >> level_diff == lloc.lx3) ) {
+        return m;
+      }
+    }
+    // }
+  }
+  return -1;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void ZoomMesh::FindRegion()
+//! \brief Find meshblocks for certain zone
+
+void ZoomMesh::FindRegion(int zone) {
+  int nmb = pzoom->pmesh->pmb_pack->nmb_thispack;
+  int mbs = pzoom->pmesh->gids_eachrank[global_variable::my_rank];
+  int nlmb = nzmb_eachlevel[zone]; // number of zoom MBs on previous level
+  int lmbs = gids_eachlevel[zone]; // starting gid of zoom MBs on previous level
+  // note that now the zoom state has been updated
+  // use the updated zoom region parameters
+  int zm_count = 0;
+  for (int lm=0; lm<nlmb; ++lm) {
+    int m = FindMB(lm+lmbs);
+    if (m >= 0) {
+      rank_eachmb[lm+lmbs] = global_variable::my_rank;
+      lid_eachmb[lm+lmbs] = m;
+      std::cout << "  Rank " << global_variable::my_rank
+                << " Find MeshBlock " << m+mbs << " for zoom MeshBlock "
+                << lm+lmbs << std::endl;
+      ++zm_count;
+    }
+  }
+  std::cout << "  Rank " << global_variable::my_rank << " total zoom MBs to be applied: "
+            << zm_count << std::endl;
+  // TODO(@mhguo): you probably don't need to sync, as lloc_eachmb includes all MBs
+  // TODO(@mhguo): you can loop over all meshblocks though it may be slower
+  GatherZMB(zm_count, zone);
+  int lm_total = 0;
+  for (int i = 0; i < global_variable::nranks; ++i) {
+    lm_total += nzmb_eachdvce[i];
+  }
+  if (lm_total != nlmb) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+              << "CyclicZoom::GatherZMB(): inconsistent total number of zoom MeshBlocks "
+              << "across all ranks: found " << lm_total << " vs. stored "
+              << nlmb << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+  return;
+}

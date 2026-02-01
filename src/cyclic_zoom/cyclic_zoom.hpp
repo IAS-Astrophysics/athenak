@@ -140,13 +140,12 @@ class CyclicZoom
   // For zoom refinement
   // TODO(@mhguo): need to reorganize these functions, now simply for compilation
   void StoreVariables();
+  void CorrectVariables();
   void ReinitVariables();
   void MaskVariables();
   void FindMaskRegion();
   void FindReinitRegion();
   bool CheckStoreFlag(int m);
-  int FindMaskMB(int lm);
-  int FindReinitMB(int lm);
   void UpdateElectricFields(Driver *pdriver);
   void SourceTermsFC(DvceEdgeFld4D<Real> emf);
   // Boundary conditions, fluxes and source terms
@@ -210,6 +209,8 @@ class ZoomMesh
   void UpdateMeshData();
   void SyncMBLists();
   void SyncLogicalLocations();
+  int FindMB(int gzm);
+  void FindRegion(int zone);
 
  private:
   CyclicZoom *pzoom;       // ptr to CyclicZoom containing this ZoomMesh module
@@ -236,12 +237,12 @@ class ZoomData
   DvceArray5D<Real> coarse_w0;  // coarse primitive variables
   // DvceArray5D<Real> coarse_wuh; // coarse primitive variables from hydro conserved variables
 
-  // following only used for time-evolving flow
   DvceEdgeFld4D<Real> efld_pre;   // coarse edge-centered electric fields before zoom
   DvceEdgeFld4D<Real> efld_aft;   // coarse edge-centered electric fields after zoom
   // DvceEdgeFld4D<Real> efld;   // edge-centered electric fields (fluxes of B)
   // DvceEdgeFld4D<Real> emf0;   // edge-centered electric fields just after zoom
   DvceEdgeFld4D<Real> delta_efld; // change in electric fields
+  DvceEdgeFld4D<Real> efld_buf;   // buffer for electric fields during zoom
 
   // DualView for device ↔ host mirrored packing buffer (replaces dzbuf+hzbuf)
   // Syncs only used portion via subviews for bandwidth efficiency
@@ -273,6 +274,7 @@ class ZoomData
   void StoreHydroData(int zm, int m, DvceArray5D<Real> u0_, DvceArray5D<Real> w0_);
   // TODO(@mhguo): find a better name
   void StoreEFieldsBeforeAMR(int zm, int m, DvceEdgeFld4D<Real> efld);
+  void StoreFinerEFields(int zmc, int zm, DvceEdgeFld4D<Real> efld);
   void StoreEFieldsAfterAMR(int zm, int m, DvceEdgeFld4D<Real> efld);
   void LimitEFields();
   void MeshBlockDataSize();
@@ -295,6 +297,7 @@ class ZoomData
                         HostArray1D<Real> dst_buf, std::vector<int>& dst_ranks, std::vector<int>* dst_lids);
   void SaveToStorage(int zone);
   void LoadFromStorage(int zone);
+  void ExtractEField(DvceEdgeFld4D<Real> ec);
   void LoadDataFromZoomData(int m, int zm);
   void LoadCCData(int m, int zm);
   void LoadHydroData(int m, int zm);

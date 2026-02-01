@@ -10,6 +10,7 @@
 #include "globals.hpp"
 #include "mesh/mesh.hpp"
 #include "coordinates/cell_locations.hpp"
+#include "mhd/mhd.hpp"
 #include "cyclic_zoom/cyclic_zoom.hpp"
 
 //----------------------------------------------------------------------------------------
@@ -29,6 +30,18 @@ void CyclicZoom::SourceTermsFC(DvceEdgeFld4D<Real> efld) {
     // pzdata->UpdateElectricFieldsInZoomRegion(m, zm);
     // pzdata->StoreEFields(zm, m);
     pzdata->AddSrcTermsFC(m, zm, efld);
+  }
+  if (zamr.first_emf) {
+    pzdata->LimitEFields();
+    pzdata->PackBuffer();
+    pzdata->SaveToStorage(zstate.zone-1);
+    if (dump_diag) {
+      pzdata->DumpData();
+    }
+    zamr.first_emf = false;
+  }
+  if (global_variable::my_rank == 0) {
+    std::cout << "CyclicZoom: Added source terms to electric fields in zoom region" << std::endl;
   }
   return;
 }
@@ -58,6 +71,9 @@ void ZoomData::AddSrcTermsFC(int m, int zm, DvceEdgeFld4D<Real> efld) {
   auto ep1 = efld_pre.x1e;
   auto ep2 = efld_pre.x2e;
   auto ep3 = efld_pre.x3e;
+  auto ea1 = efld_aft.x1e;
+  auto ea2 = efld_aft.x2e;
+  auto ea3 = efld_aft.x3e;
 
   int zmbs = pzmesh->gids_eachdvce[global_variable::my_rank]; // global id start of dvce
   auto &zlloc = pzmesh->lloc_eachzmb[zm+zmbs];
@@ -66,8 +82,13 @@ void ZoomData::AddSrcTermsFC(int m, int zm, DvceEdgeFld4D<Real> efld) {
   int ox3 = ((zlloc.lx3 & 1) == 1);
   auto zregion = pzoom->zregion;
 
+  bool first_emf = pzoom->zamr.first_emf;
+  auto w_ = pzoom->pmesh->pmb_pack->pmhd->w0;
+  auto u_ = pzoom->pmesh->pmb_pack->pmhd->u0;
+
   // par_for("apply-emf", DevExeSpace(), 0, nmb1, ks-1, ke+1, js-1, je+1 ,is-1, ie+1,
-  par_for("apply-emf", DevExeSpace(), cks, cke+1, cjs, cje+1, cis, cie+1,
+  // par_for("apply-emf", DevExeSpace(), cks, cke+1, cjs, cje+1, cis, cie+1,
+  par_for("apply-emf", DevExeSpace(), cks, cke+1, cjs, cje+1, cis, cie,
   KOKKOS_LAMBDA(int ck, int cj, int ci) {
     int i = ci + ox1 * cnx1;
     int j = cj + ox2 * cnx2;
@@ -75,17 +96,40 @@ void ZoomData::AddSrcTermsFC(int m, int zm, DvceEdgeFld4D<Real> efld) {
     Real &x1min = size.d_view(m).x1min;
     Real &x1max = size.d_view(m).x1max;
     Real x1v = CellCenterX(i-is, nx1, x1min, x1max);
-    Real x1f = LeftEdgeX  (i-is, nx1, x1min, x1max);
 
     Real &x2min = size.d_view(m).x2min;
     Real &x2max = size.d_view(m).x2max;
-    Real x2v = CellCenterX(j-js, nx2, x2min, x2max);
     Real x2f = LeftEdgeX  (j-js, nx2, x2min, x2max);
 
     Real &x3min = size.d_view(m).x3min;
     Real &x3max = size.d_view(m).x3max;
-    Real x3v = CellCenterX(k-ks, nx3, x3min, x3max);
     Real x3f = LeftEdgeX  (k-ks, nx3, x3min, x3max);
+
+    // May store efld here?
+    if (first_emf) {
+      ea1(zm,ck,cj,ci) = ef1(m,k,j,i);
+      de1(zm,ck,cj,ci) = ep1(zm,ck,cj,ci) - ef1(m,k,j,i);
+    }
+    // print debug info
+    Real rad = sqrt(x1v*x1v + x2f*x2f + x3f*x3f);
+    if (ck==cks && cj==cjs) {
+      printf("ZoomData::AddSrcTermFC zm=%d m=%d k=%d j=%d i=%d rad=%e w0=%e w1=%e  w2=%e  w3=%e  w4=%e\n",
+             zm, m, k, j, i, rad, w_(m,IDN,k-1,j,i), w_(m,IVX,k-1,j,i), w_(m,IVY,k-1,j,i), w_(m,IVZ,k-1,j,i), w_(m,IEN,k-1,j,i));
+    }
+    
+    if (ck==cks && cj==cjs) {
+      printf("ZoomData::AddSrcTermFC zm=%d m=%d k=%d j=%d i=%d rad=%e ep1=%e, ef1=%e de1=%e\n",
+             zm, m, k, j, i, rad, ep1(zm,ck,cj,ci), ef1(m,k,j,i), de1(zm,ck,cj,ci));
+    }
+    if (ck==cke && cj==cje && ci==cie) {
+      printf("ZoomData::AddSrcTermFC zm=%d m=%d k=%d j=%d i=%d rad=%e ep1=%e, ef1=%e de1=%e\n",
+             zm, m, k, j, i, rad, ep1(zm,ck,cj,ci), ef1(m,k,j,i), de1(zm,ck,cj,ci));
+    }
+    int ckm = (cks + cke + 1) / 2, cjm = (cjs + cje + 1) / 2, cim = (cis + cie + 1) / 2;
+    if (ck==ckm && cj==cjm && ci==cim) {
+      printf("ZoomData::AddSrcTermFC zm=%d m=%d k=%d j=%d i=%d rad=%e ep1=%e, ef1=%e de1=%e\n",
+             zm, m, k, j, i, rad, ep1(zm,ck,cj,ci), ef1(m,k,j,i), de1(zm,ck,cj,ci));
+    }
 
     // apply to zoom region
     if (zregion.IsInZoomRegion(x1v, x2f, x3f)) {
@@ -94,46 +138,96 @@ void ZoomData::AddSrcTermsFC(int m, int zm, DvceEdgeFld4D<Real> efld) {
         // ef1(m,k,j,i) = f0*ef1(m,k,j,i) + f1*fmax(-emax1, fmin(emax1, de1(zm,ck,cj,ci)));
         ef1(m,k,j,i) += de1(zm,ck,cj,ci);
     }
+  });
+  par_for("apply-emf", DevExeSpace(), cks, cke+1, cjs, cje, cis, cie+1,
+  KOKKOS_LAMBDA(int ck, int cj, int ci) {
+    int i = ci + ox1 * cnx1;
+    int j = cj + ox2 * cnx2;
+    int k = ck + ox3 * cnx3;
+    Real &x1min = size.d_view(m).x1min;
+    Real &x1max = size.d_view(m).x1max;
+    Real x1f = LeftEdgeX  (i-is, nx1, x1min, x1max);
+
+    Real &x2min = size.d_view(m).x2min;
+    Real &x2max = size.d_view(m).x2max;
+    Real x2v = CellCenterX(j-js, nx2, x2min, x2max);
+
+    Real &x3min = size.d_view(m).x3min;
+    Real &x3max = size.d_view(m).x3max;
+    Real x3f = LeftEdgeX  (k-ks, nx3, x3min, x3max);
+
+    if (first_emf) {
+      ea2(zm,ck,cj,ci) = ef2(m,k,j,i);
+      de2(zm,ck,cj,ci) = ep2(zm,ck,cj,ci) - ef2(m,k,j,i);
+    }
+    // print debug info
+    Real rad = sqrt(x1f*x1f + x2v*x2v + x3f*x3f);
+    if (ck==cks && cj==cjs) {
+      printf("ZoomData::AddSrcTermFC zm=%d m=%d k=%d j=%d i=%d rad=%e ep2=%e, ef2=%e de2=%e\n",
+             zm, m, k, j, i, rad, ep2(zm,ck,cj,ci), ef2(m,k,j,i), de2(zm,ck,cj,ci));
+    }
+    if (ck==cke && cj==cje && ci==cie) {
+      printf("ZoomData::AddSrcTermFC zm=%d m=%d k=%d j=%d i=%d rad=%e ep2=%e, ef2=%e de2=%e\n",
+             zm, m, k, j, i, rad, ep2(zm,ck,cj,ci), ef2(m,k,j,i), de2(zm,ck,cj,ci));
+    }
+    int ckm = (cks + cke + 1) / 2, cjm = (cjs + cje + 1) / 2, cim = (cis + cie + 1) / 2;
+    if (ck==ckm && cj==cjm && ci==cim) {
+      printf("ZoomData::AddSrcTermFC zm=%d m=%d k=%d j=%d i=%d rad=%e ep2=%e, ef2=%e de2=%e\n",
+             zm, m, k, j, i, rad, ep2(zm,ck,cj,ci), ef2(m,k,j,i), de2(zm,ck,cj,ci));
+    }
+
+    // apply to zoom region
     if (zregion.IsInZoomRegion(x1f, x2v, x3f)) {
         // ef2(m,k,j,i) = f0*ef2(m,k,j,i) + f1*de2(zm,ck,cj,ci);
         // limit de2 to be between -emax2 and emax2
         // ef2(m,k,j,i) = f0*ef2(m,k,j,i) + f1*fmax(-emax2, fmin(emax2, de2(zm,ck,cj,ci)));
         ef2(m,k,j,i) += de2(zm,ck,cj,ci);
     }
+  });
+  par_for("apply-emf", DevExeSpace(), cks, cke, cjs, cje+1, cis, cie+1,
+  KOKKOS_LAMBDA(int ck, int cj, int ci) {
+    int i = ci + ox1 * cnx1;
+    int j = cj + ox2 * cnx2;
+    int k = ck + ox3 * cnx3;
+    Real &x1min = size.d_view(m).x1min;
+    Real &x1max = size.d_view(m).x1max;
+    Real x1f = LeftEdgeX  (i-is, nx1, x1min, x1max);
+
+    Real &x2min = size.d_view(m).x2min;
+    Real &x2max = size.d_view(m).x2max;
+    Real x2f = LeftEdgeX  (j-js, nx2, x2min, x2max);
+
+    Real &x3min = size.d_view(m).x3min;
+    Real &x3max = size.d_view(m).x3max;
+    Real x3v = CellCenterX(k-ks, nx3, x3min, x3max);
+
+    
+    if (first_emf) {
+      ea3(zm,ck,cj,ci) = ef3(m,k,j,i);
+      de3(zm,ck,cj,ci) = ep3(zm,ck,cj,ci) - ef3(m,k,j,i);
+    }
+    // print debug info
+    Real rad = sqrt(x1f*x1f + x2f*x2f + x3v*x3v);
+    if (ck==cks && cj==cjs) {
+      printf("ZoomData::AddSrcTermFC zm=%d m=%d k=%d j=%d i=%d rad=%e ep3=%e, ef3=%e de3=%e\n",
+             zm, m, k, j, i, rad, ep3(zm,ck,cj,ci), ef3(m,k,j,i), de3(zm,ck,cj,ci));
+    }
+    if (ck==cke && cj==cje && ci==cie) {
+      printf("ZoomData::AddSrcTermFC zm=%d m=%d k=%d j=%d i=%d rad=%e ep3=%e, ef3=%e de3=%e\n",
+             zm, m, k, j, i, rad, ep3(zm,ck,cj,ci), ef3(m,k,j,i), de3(zm,ck,cj,ci));
+    }
+    int ckm = (cks + cke + 1) / 2, cjm = (cjs + cje + 1) / 2, cim = (cis + cie + 1) / 2;
+    if (ck==ckm && cj==cjm && ci==cim) {
+      printf("ZoomData::AddSrcTermFC zm=%d m=%d k=%d j=%d i=%d rad=%e ep3=%e, ef3=%e de3=%e\n",
+             zm, m, k, j, i, rad, ep3(zm,ck,cj,ci), ef3(m,k,j,i), de3(zm,ck,cj,ci));
+    }
+
+    // apply to zoom region
     if (zregion.IsInZoomRegion(x1f, x2f, x3v)) {
         // ef3(m,k,j,i) = f0*ef3(m,k,j,i) + f1*de3(zm,ck,cj,ci);
         // limit de3 to be between -emax3 and emax3
         // ef3(m,k,j,i) = f0*ef3(m,k,j,i) + f1*fmax(-emax3, fmin(emax3, de3(zm,ck,cj,ci)));
         ef3(m,k,j,i) += de3(zm,ck,cj,ci);
-    }
-
-    Real rad = sqrt(x1v*x1v + x2v*x2v + x3v*x3v);
-
-    // print debug info
-    if (ck==cks && cj==cjs && ci==cis) {
-      printf("ZoomData::AddSrcTermFC zm=%d m=%d rad=%e ep1=%e, ef1=%e de1=%e\n",
-             zm, m, rad, ep1(zm,ck,cj,ci), ef1(m,k,j,i), de1(zm,ck,cj,ci));
-      printf("ZoomData::AddSrcTermFC zm=%d m=%d rad=%e ep2=%e, ef2=%e de2=%e\n",
-             zm, m, rad, ep2(zm,ck,cj,ci), ef2(m,k,j,i), de2(zm,ck,cj,ci));
-      printf("ZoomData::AddSrcTermFC zm=%d m=%d rad=%e ep3=%e, ef3=%e de3=%e\n",
-             zm, m, rad, ep3(zm,ck,cj,ci), ef3(m,k,j,i), de3(zm,ck,cj,ci));
-    }
-    if (ck==cke && cj==cje && ci==cie) {
-      printf("ZoomData::AddSrcTermFC zm=%d m=%d rad=%e ep1=%e, ef1=%e de1=%e\n",
-             zm, m, rad, ep1(zm,ck,cj,ci), ef1(m,k,j,i), de1(zm,ck,cj,ci));
-      printf("ZoomData::AddSrcTermFC zm=%d m=%d rad=%e ep2=%e, ef2=%e de2=%e\n",
-             zm, m, rad, ep2(zm,ck,cj,ci), ef2(m,k,j,i), de2(zm,ck,cj,ci));
-      printf("ZoomData::AddSrcTermFC zm=%d m=%d rad=%e ep3=%e, ef3=%e de3=%e\n",
-             zm, m, rad, ep3(zm,ck,cj,ci), ef3(m,k,j,i), de3(zm,ck,cj,ci));
-    }
-    int ckm = (cks + cke) / 2, cjm = (cjs + cje) / 2, cim = (cis + cie) / 2;
-    if (ck==ckm && cj==cjm && ci==cim) {
-      printf("ZoomData::AddSrcTermFC zm=%d m=%d rad=%e ep1=%e, ef1=%e de1=%e\n",
-             zm, m, rad, ep1(zm,ck,cj,ci), ef1(m,k,j,i), de1(zm,ck,cj,ci));
-      printf("ZoomData::AddSrcTermFC zm=%d m=%d rad=%e ep2=%e, ef2=%e de2=%e\n",
-             zm, m, rad, ep2(zm,ck,cj,ci), ef2(m,k,j,i), de2(zm,ck,cj,ci));
-      printf("ZoomData::AddSrcTermFC zm=%d m=%d rad=%e ep3=%e, ef3=%e de3=%e\n",
-             zm, m, rad, ep3(zm,ck,cj,ci), ef3(m,k,j,i), de3(zm,ck,cj,ci));
     }
   });
 

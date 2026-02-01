@@ -31,6 +31,7 @@ ZoomData::ZoomData(CyclicZoom *pz, ParameterInput *pin) :
     efld_pre("zefldp",1,1,1,1),
     efld_aft("zeflda",1,1,1,1),
     delta_efld("zdelta_efld",1,1,1,1),
+    efld_buf("zefld_buf",1,1,1,1),
     max_emf0("zmax_emf0",1,1),
     zbuf("z_buffer",1),
     zdata("z_data",1)
@@ -79,6 +80,11 @@ ZoomData::ZoomData(CyclicZoom *pz, ParameterInput *pin) :
     Kokkos::realloc(delta_efld.x1e, nzmb, nccells3+1, nccells2+1, nccells1);
     Kokkos::realloc(delta_efld.x2e, nzmb, nccells3+1, nccells2, nccells1+1);
     Kokkos::realloc(delta_efld.x3e, nzmb, nccells3, nccells2+1, nccells1+1);
+
+    // allocate buffer for electric fields during zoom
+    Kokkos::realloc(efld_buf.x1e, nzmb, nccells3+1, nccells2+1, nccells1);
+    Kokkos::realloc(efld_buf.x2e, nzmb, nccells3+1, nccells2, nccells1+1);
+    Kokkos::realloc(efld_buf.x3e, nzmb, nccells3, nccells2+1, nccells1+1);
 
     Kokkos::realloc(max_emf0, nlevels, 3);
     for (int i = 0; i < nlevels; i++) {
@@ -139,6 +145,9 @@ void ZoomData::Initialize()
   auto de1 = delta_efld.x1e;
   auto de2 = delta_efld.x2e;
   auto de3 = delta_efld.x3e;
+  auto ebuf1 = efld_buf.x1e;
+  auto ebuf2 = efld_buf.x2e;
+  auto ebuf3 = efld_buf.x3e;
   bool is_mhd = (pzoom->pmesh->pmb_pack->pmhd != nullptr);
   auto peos = (is_mhd)? pzoom->pmesh->pmb_pack->pmhd->peos : pzoom->pmesh->pmb_pack->phydro->peos;
   Real gm1 = peos->eos_data.gamma - 1.0;
@@ -175,18 +184,21 @@ void ZoomData::Initialize()
       e1(m,k,j,i) = 0.0;
       e01(m,k,j,i) = 0.0;
       de1(m,k,j,i) = 0.0;
+      ebuf1(m,k,j,i) = 0.0;
     });
     par_for("zoom_init_e2",DevExeSpace(),0,nzmb-1,0,nc3,0,nc2-1,0,nc1,
     KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
       e2(m,k,j,i) = 0.0;
       e02(m,k,j,i) = 0.0;
       de2(m,k,j,i) = 0.0;
+      ebuf2(m,k,j,i) = 0.0;
     });
     par_for("zoom_init_e3",DevExeSpace(),0,nzmb-1,0,nc3-1,0,nc2,0,nc1,
     KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
       e3(m,k,j,i) = 0.0;
       e03(m,k,j,i) = 0.0;
       de3(m,k,j,i) = 0.0;
+      ebuf3(m,k,j,i) = 0.0;
     });
   }
 
@@ -235,7 +247,7 @@ void ZoomData::DumpData() {
     int nccells1 = indcs.cnx1 + 2*(indcs.ng);
     int nccells2 = (indcs.cnx2 > 1)? (indcs.cnx2 + 2*(indcs.ng)) : 1;
     int nccells3 = (indcs.cnx3 > 1)? (indcs.cnx3 + 2*(indcs.ng)) : 1;
-    int &nzmb = pzmesh->nzmb_max_perdvce;
+    int nzmb = pzmesh->nzmb_thisdvce;  // Use actual count, not max
 
     std::string fname;
     fname.assign("CyclicZoom");
@@ -250,27 +262,43 @@ void ZoomData::DumpData() {
       std::exit(EXIT_FAILURE);
     }
     int datasize = sizeof(Real);
-    // xyz? bcc?
+    
+    // Create host mirrors and copy data from device
+    auto h_coarse_w0 = Kokkos::create_mirror_view(coarse_w0);
+    Kokkos::deep_copy(h_coarse_w0, coarse_w0);
+    
+    auto h_efld_pre_x1e = Kokkos::create_mirror_view(efld_pre.x1e);
+    auto h_efld_pre_x2e = Kokkos::create_mirror_view(efld_pre.x2e);
+    auto h_efld_pre_x3e = Kokkos::create_mirror_view(efld_pre.x3e);
+    Kokkos::deep_copy(h_efld_pre_x1e, efld_pre.x1e);
+    Kokkos::deep_copy(h_efld_pre_x2e, efld_pre.x2e);
+    Kokkos::deep_copy(h_efld_pre_x3e, efld_pre.x3e);
+    
+    auto h_efld_aft_x1e = Kokkos::create_mirror_view(efld_aft.x1e);
+    auto h_efld_aft_x2e = Kokkos::create_mirror_view(efld_aft.x2e);
+    auto h_efld_aft_x3e = Kokkos::create_mirror_view(efld_aft.x3e);
+    Kokkos::deep_copy(h_efld_aft_x1e, efld_aft.x1e);
+    Kokkos::deep_copy(h_efld_aft_x2e, efld_aft.x2e);
+    Kokkos::deep_copy(h_efld_aft_x3e, efld_aft.x3e);
+    
+    // Write host data to file
     IOWrapperSizeT cnt = nzmb*nvars*(nccells3)*(nccells2)*(nccells1);
-    std::fwrite(coarse_w0.data(),datasize,cnt,pfile);
-    auto mbptr = efld_pre.x1e;
+    std::fwrite(h_coarse_w0.data(),datasize,cnt,pfile);
+    
     cnt = nzmb*(nccells3+1)*(nccells2+1)*(nccells1);
-    std::fwrite(mbptr.data(),datasize,cnt,pfile);
-    mbptr = efld_pre.x2e;
+    std::fwrite(h_efld_pre_x1e.data(),datasize,cnt,pfile);
     cnt = nzmb*(nccells3+1)*(nccells2)*(nccells1+1);
-    std::fwrite(mbptr.data(),datasize,cnt,pfile);
-    mbptr = efld_pre.x3e;
+    std::fwrite(h_efld_pre_x2e.data(),datasize,cnt,pfile);
     cnt = nzmb*(nccells3)*(nccells2+1)*(nccells1+1);
-    std::fwrite(mbptr.data(),datasize,cnt,pfile);
-    mbptr = efld_aft.x1e;
+    std::fwrite(h_efld_pre_x3e.data(),datasize,cnt,pfile);
+    
     cnt = nzmb*(nccells3+1)*(nccells2+1)*(nccells1);
-    std::fwrite(mbptr.data(),datasize,cnt,pfile);
-    mbptr = efld_aft.x2e;
+    std::fwrite(h_efld_aft_x1e.data(),datasize,cnt,pfile);
     cnt = nzmb*(nccells3+1)*(nccells2)*(nccells1+1);
-    std::fwrite(mbptr.data(),datasize,cnt,pfile);
-    mbptr = efld_aft.x3e;
+    std::fwrite(h_efld_aft_x2e.data(),datasize,cnt,pfile);
     cnt = nzmb*(nccells3)*(nccells2+1)*(nccells1+1);
-    std::fwrite(mbptr.data(),datasize,cnt,pfile);
+    std::fwrite(h_efld_aft_x3e.data(),datasize,cnt,pfile);
+    
     std::fclose(pfile);
   }
   return;
@@ -318,6 +346,7 @@ void ZoomData::StoreDataToZoomData(int zm, int m) {
   if (pmesh->pmb_pack->pmhd != nullptr) {
     u = pmesh->pmb_pack->pmhd->u0;
     w = pmesh->pmb_pack->pmhd->w0;
+    StoreCCData(zm, m, u, w);
     StoreHydroData(zm, m, u, w);
     DvceEdgeFld4D<Real> efld = pmesh->pmb_pack->pmhd->efld;
     StoreEFieldsBeforeAMR(zm, m, efld);
@@ -888,6 +917,37 @@ void ZoomData::UnpackBuffer() {
 }
 
 //----------------------------------------------------------------------------------------
+//! \fn ZoomData::ExtractEField()
+//! \brief extracts electric field data from AMR communication buffers for all MBs being received
+
+void ZoomData::ExtractEField(DvceEdgeFld4D<Real> ec) {
+  // Sync only the used portion to device for bandwidth efficiency
+  size_t used_size = pzmesh->nzmb_thisdvce * zmb_data_cnt;
+  Kokkos::deep_copy(
+    Kokkos::subview(zbuf.d_view, Kokkos::make_pair(size_t(0), used_size)),
+    Kokkos::subview(zbuf.h_view, Kokkos::make_pair(size_t(0), used_size))
+  );
+  // Unpack data from device buffer to zoom data arrays
+  auto dzbuf = zbuf.d_view;  // Get device view for unpacking
+  auto &pmhd = pzoom->pmesh->pmb_pack->pmhd;
+  // use size_t for offset to avoid overflow
+  size_t offset = 0;
+  size_t cc_cnt = u0.extent(1) * u0.extent(2) * u0.extent(3) * u0.extent(4);
+  size_t ccc_cnt = coarse_u0.extent(1) * coarse_u0.extent(2) * coarse_u0.extent(3) * coarse_u0.extent(4);
+  size_t ec_offset = cc_cnt + cc_cnt + ccc_cnt + ccc_cnt; // offset to edge-centered data
+  for (int zm = 0; zm < pzmesh->nzmb_thisdvce; ++zm) {
+    std::cout << " Rank " << global_variable::my_rank 
+              << " Unpacking buffer for zmb " << zm << std::endl;
+    offset = static_cast<size_t>(zm) * zmb_data_cnt + ec_offset;
+    // unpack magnetic fields and/or electric fields if MHD
+    if (pmhd != nullptr) {
+      UnpackBuffersEC(dzbuf, ec, offset, zm);
+    }
+  }
+  return;
+}
+
+//----------------------------------------------------------------------------------------
 //! \fn ZoomData::UnpackBuffersCC()
 //! \brief Unpacks cell-centered data from AMR communication buffers
 
@@ -1075,9 +1135,9 @@ void ZoomData::LoadHydroData(int m, int zm) {
         // convert primitive variables to conserved variables
         // load primitive variables from 3D array
         w_(m,IDN,k,j,i) = w0_(zm,IDN,k,j,i);
-        w_(m,IM1,k,j,i) = w0_(zm,IM1,k,j,i);
-        w_(m,IM2,k,j,i) = w0_(zm,IM2,k,j,i);
-        w_(m,IM3,k,j,i) = w0_(zm,IM3,k,j,i);
+        w_(m,IVX,k,j,i) = w0_(zm,IVX,k,j,i);
+        w_(m,IVY,k,j,i) = w0_(zm,IVY,k,j,i);
+        w_(m,IVZ,k,j,i) = w0_(zm,IVZ,k,j,i);
         w_(m,IEN,k,j,i) = w0_(zm,IEN,k,j,i);
 
         // Load single state of primitive variables

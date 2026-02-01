@@ -43,7 +43,8 @@ void CyclicZoom::UpdateState() {
     std::exit(EXIT_FAILURE);
   }
   if (zamr.zooming_out) {
-    if (add_emf && emf_flag >=1) {
+    // if (add_emf && emf_flag >=1) {
+    if (add_emf) {
       zamr.first_emf = true;
     }
   }

@@ -26,6 +26,15 @@
 void CyclicZoom::WorkBeforeAMR() {
   // zoom state has been updated in SetRefinementFlags()
   if (zamr.zooming_out) {
+    // TODO(@mhguo): let's do a quick fix here first
+    // if (pmesh->pmb_pack->pmhd != nullptr) {
+    //   if (zstate.zone > 1) {
+    //     pzmesh->FindRegion(zstate.zone-2);
+    //     pzmesh->SyncMBLists();
+    //     pzdata->LoadFromStorage(zstate.zone-2);
+    //     pzdata->ExtractEField(pzdata->efld_buf);
+    //   }
+    // }
     StoreVariables();
     // sync rank_eachmb and lid_eachmb to all ranks
     pzmesh->SyncMBLists();
@@ -53,7 +62,7 @@ void CyclicZoom::WorkBeforeAMR() {
 
 void CyclicZoom::WorkAfterAMR(Driver *pdriver) {
   if (zamr.zooming_in) {
-    FindReinitRegion();
+    pzmesh->FindRegion(zstate.zone);
     pzmesh->SyncMBLists();
     pzdata->LoadFromStorage(zstate.zone);
     pzdata->UnpackBuffer();
@@ -66,12 +75,14 @@ void CyclicZoom::WorkAfterAMR(Driver *pdriver) {
   // Set up mask region
   // TODO(@mhguo): data may already be on the correct device, probably try to avoid unnecessary transfer
   if (zstate.zone > 0) {
-    FindMaskRegion();
+    pzmesh->FindRegion(zstate.zone-1);
     pzmesh->SyncMBLists();
     pzdata->LoadFromStorage(zstate.zone-1);
     pzdata->UnpackBuffer();
     MaskVariables();
   }
+  // Initialize boundary values and primitive variables after reinitialization and masking
+  pdriver->InitBoundaryValuesAndPrimitives(pmesh);
   if (zamr.zooming_out) {
     if (pmesh->pmb_pack->pmhd != nullptr) {
       UpdateElectricFields(pdriver);
@@ -97,6 +108,13 @@ void CyclicZoom::StoreVariables() {
   if (global_variable::my_rank == 0) {
     std::cout << "CyclicZoom: Storing variables before zooming" << std::endl;
   }
+  // store efld_pre for future use
+  if (pmesh->pmb_pack->pmhd != nullptr) {
+    // copy pzdata->efld_pre to pzdata->efld_buf
+    Kokkos::deep_copy(pzdata->efld_buf.x1e, pzdata->efld_pre.x1e);
+    Kokkos::deep_copy(pzdata->efld_buf.x2e, pzdata->efld_pre.x2e);
+    Kokkos::deep_copy(pzdata->efld_buf.x3e, pzdata->efld_pre.x3e);
+  }
   int nmb = pmesh->pmb_pack->nmb_thispack;
   int mbs = pmesh->gids_eachrank[global_variable::my_rank];
   int zm_count = 0;
@@ -109,9 +127,11 @@ void CyclicZoom::StoreVariables() {
                   << std::endl;
         exit(1);
       }
+      pzdata->StoreDataToZoomData(zm_count, m);
       ++zm_count;
     }
   }
+  CorrectVariables(); // do this after zoom data update but before zoom mesh update
   // TODO(@mhguo): move some of the following code to ZoomMesh functions
   pzmesh->GatherZMB(zm_count, zstate.zone-1);
   pzmesh->UpdateMeshData();
@@ -125,12 +145,42 @@ void CyclicZoom::StoreVariables() {
       pzmesh->lid_eachmb[zmbs + zm] = m;
       // copy LogicalLocation of stored MeshBlocks
       pzmesh->lloc_eachzmb[zmbs + zm] = pmesh->lloc_eachmb[m + mbs];
-      pzdata->StoreDataToZoomData(zm, m);
       ++zm;
     }
   }
   return;
 }
+
+//----------------------------------------------------------------------------------------
+//! \fn void CyclicZoom::CorrectVariables()
+//! \brief Correct physical variables before storing (e.g., electric fields)
+
+void CyclicZoom::CorrectVariables() {
+  if (pmesh->pmb_pack->pmhd != nullptr && zstate.zone > 1) {
+    int zmbs = pzmesh->gids_eachdvce[global_variable::my_rank];
+    int zm_count = 0;
+    int m0 = pzmesh->lid_eachmb[zmbs];
+    for (int zm=0; zm<pzmesh->nzmb_thisdvce; ++zm) {
+      int m = pzmesh->lid_eachmb[zm+zmbs];
+      if (m > m0) { // now move to next MeshBlock
+        m0 = m;
+        ++zm_count;
+      }
+      // print diagnostic info
+      std::cout << "CyclicZoom: Correcting variables for zoom MeshBlock " << zm_count
+                << " using zoom MeshBlock " << zm
+                << " on MeshBlock " << m + pmesh->gids_eachrank[global_variable::my_rank]
+                << std::endl;
+      // correct electric fields
+      pzdata->StoreFinerEFields(zm_count, zm, pzdata->efld_buf);
+    }
+    if (global_variable::my_rank == 0) {
+      std::cout << "CyclicZoom: Corrected variables before zooming" << std::endl;
+    }
+  }
+  return;
+}
+
 
 //----------------------------------------------------------------------------------------
 //! \fn void CyclicZoom::ReinitVariables()
@@ -172,24 +222,24 @@ void CyclicZoom::UpdateElectricFields(Driver *pdriver) {
   pzdata->ResetDataEC(pzdata->delta_efld);
   // call MHD functions
   mhd::MHD *pmhd = pmesh->pmb_pack->pmhd;
-  (void) pmhd->InitRecv(pdriver, 0);  // stage = 0 
+  (void) pmhd->InitRecv(pdriver, 1);  // stage = 1 
   (void) pmhd->CopyCons(pdriver, 1);  // stage = 1: copy u0 to u1
-  (void) pmhd->Fluxes(pdriver, 0);
+  (void) pmhd->Fluxes(pdriver, 1);
   // (void) pmhd->RestrictU(this, 0);
   // TODO(@mhguo): think about the order
   // TODO(@mhguo): this is redundant, should only send/recv electric fields
-  (void) pmhd->SendFlux(pdriver, 0);  // stage = 0
-  (void) pmhd->RecvFlux(pdriver, 0);  // stage = 0
-  (void) pmhd->SendU(pdriver, 0);
-  (void) pmhd->RecvU(pdriver, 0);
-  (void) pmhd->CornerE(pdriver, 0);
-  (void) pmhd->EFieldSrc(pdriver, 0);
-  (void) pmhd->SendE(pdriver, 0);
-  (void) pmhd->RecvE(pdriver, 0);
-  (void) pmhd->SendB(pdriver, 0);
-  (void) pmhd->RecvB(pdriver, 0);
-  (void) pmhd->ClearSend(pdriver, 0); // stage = 0
-  (void) pmhd->ClearRecv(pdriver, 0); // stage = 0
+  (void) pmhd->SendFlux(pdriver, 1);  // stage = 1
+  (void) pmhd->RecvFlux(pdriver, 1);  // stage = 1
+  (void) pmhd->SendU(pdriver, 1);
+  (void) pmhd->RecvU(pdriver, 1);
+  (void) pmhd->CornerE(pdriver, 1);
+  (void) pmhd->EFieldSrc(pdriver, 1);
+  (void) pmhd->SendE(pdriver, 1);
+  (void) pmhd->RecvE(pdriver, 1);
+  (void) pmhd->SendB(pdriver, 1);
+  (void) pmhd->RecvB(pdriver, 1);
+  (void) pmhd->ClearSend(pdriver, 1); // stage = 1
+  (void) pmhd->ClearRecv(pdriver, 1); // stage = 1
   std::cout << " Rank " << global_variable::my_rank 
             << " Calculated electric fields after AMR" << std::endl;
 
@@ -256,7 +306,7 @@ void CyclicZoom::FindMaskRegion() {
   // use the updated zoom region parameters
   int zm_count = 0;
   for (int lm=0; lm<nlmb; ++lm) {
-    int m = FindMaskMB(lm);
+    int m = pzmesh->FindMB(lm+lmbs);
     if (m >= 0) {
       // now map the zoom MB to this MB for masking
       pzmesh->rank_eachmb[lm+lmbs] = global_variable::my_rank;
@@ -270,6 +320,7 @@ void CyclicZoom::FindMaskRegion() {
   std::cout << "  Rank " << global_variable::my_rank << " total zoom MBs to be masked: "
             << zm_count << std::endl;
   // TODO(@mhguo): you probably don't need to sync, as lloc_eachmb includes all MBs
+  // TODO(@mhguo): you can loop over all meshblocks though it may be slower
   pzmesh->GatherZMB(zm_count, zstate.zone-1);
   int lm_total = 0;
   for (int i = 0; i < global_variable::nranks; ++i) {
@@ -299,7 +350,7 @@ void CyclicZoom::FindReinitRegion() {
   // use the updated zoom region parameters
   int zm_count = 0;
   for (int lm=0; lm<nlmb; ++lm) {
-    int m = FindReinitMB(lm);
+    int m = pzmesh->FindMB(lm+lmbs);
     if (m >= 0) {
       pzmesh->rank_eachmb[lm+lmbs] = global_variable::my_rank;
       pzmesh->lid_eachmb[lm+lmbs] = m;
@@ -312,6 +363,7 @@ void CyclicZoom::FindReinitRegion() {
   std::cout << "  Rank " << global_variable::my_rank << " total zoom MBs to be applied: "
             << zm_count << std::endl;
   // TODO(@mhguo): you probably don't need to sync, as lloc_eachmb includes all MBs
+  // TODO(@mhguo): you can loop over all meshblocks though it may be slower
   pzmesh->GatherZMB(zm_count, zstate.zone);
   int lm_total = 0;
   for (int i = 0; i < global_variable::nranks; ++i) {
@@ -325,50 +377,4 @@ void CyclicZoom::FindReinitRegion() {
     std::exit(EXIT_FAILURE);
   }
   return;
-}
-
-//----------------------------------------------------------------------------------------
-//! \fn int CyclicZoom::FindMaskMB()
-//! \brief Check which meshblocks need to be masked
-
-int CyclicZoom::FindMaskMB(int lm) {
-  int nmb = pmesh->pmb_pack->nmb_thispack;
-  int mbs = pmesh->gids_eachrank[global_variable::my_rank];
-  int lmbs = pzmesh->gids_eachlevel[zstate.zone-1]; // starting gid of zoom MBs on previous level
-  auto &zlloc = pzmesh->lloc_eachzmb[lm+lmbs];
-  // check previous level (finer level)
-  for (int m = 0; m < nmb; ++m) {
-    auto &lloc = pmesh->lloc_eachmb[m+mbs];
-    // if (lloc.level == zamr.level) {
-    // if zoom MB is child of this MB
-    if ( (zlloc.level == lloc.level + 1) && (zlloc.lx1>>1 == lloc.lx1) &&
-          (zlloc.lx2>>1 == lloc.lx2) && (zlloc.lx3>>1 == lloc.lx3) ) {
-      return m;
-    }
-    // }
-  }
-  return -1;
-}
-
-//----------------------------------------------------------------------------------------
-//! \fn int CyclicZoom::FindReinitMB()
-//! \brief Check which meshblocks need to be applied
-
-int CyclicZoom::FindReinitMB(int lm) {
-  int nmb = pmesh->pmb_pack->nmb_thispack;
-  int mbs = pmesh->gids_eachrank[global_variable::my_rank];
-  int lmbs = pzmesh->gids_eachlevel[zstate.zone]; // starting gid of zoom MBs on this level
-  auto &zlloc = pzmesh->lloc_eachzmb[lm+lmbs];
-  // check current level (zoom MBs at same level as current AMR level)
-  for (int m = 0; m < nmb; ++m) {
-    auto &lloc = pmesh->lloc_eachmb[m+mbs];
-    // if (lloc.level == zamr.level) {
-    // if zoom MB is the same as this MB
-    if ( (zlloc.level == lloc.level) && (zlloc.lx1 == lloc.lx1) &&
-          (zlloc.lx2 == lloc.lx2) && (zlloc.lx3 == lloc.lx3) ) {
-      return m;
-    }
-    // }
-  }
-  return -1;
 }
