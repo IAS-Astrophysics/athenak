@@ -291,7 +291,8 @@ Real CyclicZoom::EMFTimeStep(Mesh* pm) {
   auto de3 = pzdata->delta_efld.x3e;
   Real rzoom = zregion.radius;
 
-  int zid = pzmesh->nleaf*(zstate.zone-1);
+  // TODO(@mhguo): this is wrong!!! need to fix or remove
+  int zid = (zstate.zone-1);
   Real &f0 = emf_f0; //(rad-rzoom)/rzoom;
   Real &f1 = emf_f1; //(rzoom-rad)/rzoom;
 

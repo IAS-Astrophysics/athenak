@@ -32,7 +32,6 @@ ZoomData::ZoomData(CyclicZoom *pz, ParameterInput *pin) :
     efld_aft("zeflda",1,1,1,1),
     delta_efld("zdelta_efld",1,1,1,1),
     efld_buf("zefld_buf",1,1,1,1),
-    max_emf0("zmax_emf0",1,1),
     zbuf("z_buffer",1),
     zdata("z_data",1)
   {
@@ -85,13 +84,6 @@ ZoomData::ZoomData(CyclicZoom *pz, ParameterInput *pin) :
     Kokkos::realloc(efld_buf.x1e, nzmb, nccells3+1, nccells2+1, nccells1);
     Kokkos::realloc(efld_buf.x2e, nzmb, nccells3+1, nccells2, nccells1+1);
     Kokkos::realloc(efld_buf.x3e, nzmb, nccells3, nccells2+1, nccells1+1);
-
-    Kokkos::realloc(max_emf0, nlevels, 3);
-    for (int i = 0; i < nlevels; i++) {
-      for (int j = 0; j < 3; j++) {
-        max_emf0(i,j) = 0.0;
-      }
-    }
   }
 
   // allocate device and host arrays for data transfer and storage
@@ -206,6 +198,33 @@ void ZoomData::Initialize()
 }
 
 //----------------------------------------------------------------------------------------
+//! \fn void ZoomData::MeshBlockDataSize()
+//! \brief Calculate the count of data elements per MeshBlock needed for zooming
+
+//TODO(@mhguo): consider magnetic fields, think if int is enough, maybe IOWrapperSizeT?
+void ZoomData::MeshBlockDataSize() {
+  int &cnt = zmb_data_cnt;
+  cnt = 0;
+  auto pmbp = pzoom->pmesh->pmb_pack;
+  auto &indcs = pzoom->pmesh->mb_indcs;
+  int ncells1 = indcs.nx1 + 2*(indcs.ng);
+  int ncells2 = (indcs.nx2 > 1)? (indcs.nx2 + 2*(indcs.ng)) : 1;
+  int ncells3 = (indcs.nx3 > 1)? (indcs.nx3 + 2*(indcs.ng)) : 1;
+  int nccells1 = indcs.cnx1 + 2*(indcs.ng);
+  int nccells2 = (indcs.cnx2 > 1)? (indcs.cnx2 + 2*(indcs.ng)) : 1;
+  int nccells3 = (indcs.cnx3 > 1)? (indcs.cnx3 + 2*(indcs.ng)) : 1;
+  cnt += 2 * nvars * ncells3 * ncells2 * ncells1; // u0 and w0
+  cnt += 2 * nvars * nccells3 * nccells2 * nccells1; // coarse u0 and coarse w0
+  if (pmbp->pmhd != nullptr) {
+    cnt += 3 * (nccells3+1) * (nccells2+1) * nccells1; // efld x1e
+    cnt += 3 * (nccells3+1) * nccells2 * (nccells1+1); // efld x2e
+    cnt += 3 * nccells3 * (nccells2+1) * (nccells1+1); // efld x3e
+  }
+  // TODO(@mhguo): add radiation variables later
+  return;
+}
+
+//----------------------------------------------------------------------------------------
 //! \fn void ZoomData::ResetDataEC()
 //! \brief Reset edge-centered data
 
@@ -301,33 +320,6 @@ void ZoomData::DumpData() {
     
     std::fclose(pfile);
   }
-  return;
-}
-
-//----------------------------------------------------------------------------------------
-//! \fn void ZoomData::MeshBlockDataSize()
-//! \brief Calculate the count of data elements per MeshBlock needed for zooming
-
-//TODO(@mhguo): consider magnetic fields, think if int is enough, maybe IOWrapperSizeT?
-void ZoomData::MeshBlockDataSize() {
-  int &cnt = zmb_data_cnt;
-  cnt = 0;
-  auto pmbp = pzoom->pmesh->pmb_pack;
-  auto &indcs = pzoom->pmesh->mb_indcs;
-  int ncells1 = indcs.nx1 + 2*(indcs.ng);
-  int ncells2 = (indcs.nx2 > 1)? (indcs.nx2 + 2*(indcs.ng)) : 1;
-  int ncells3 = (indcs.nx3 > 1)? (indcs.nx3 + 2*(indcs.ng)) : 1;
-  int nccells1 = indcs.cnx1 + 2*(indcs.ng);
-  int nccells2 = (indcs.cnx2 > 1)? (indcs.cnx2 + 2*(indcs.ng)) : 1;
-  int nccells3 = (indcs.cnx3 > 1)? (indcs.cnx3 + 2*(indcs.ng)) : 1;
-  cnt += 2 * nvars * ncells3 * ncells2 * ncells1; // u0 and w0
-  cnt += 2 * nvars * nccells3 * nccells2 * nccells1; // coarse u0 and coarse w0
-  if (pmbp->pmhd != nullptr) {
-    cnt += 3 * (nccells3+1) * (nccells2+1) * nccells1; // efld x1e
-    cnt += 3 * (nccells3+1) * nccells2 * (nccells1+1); // efld x2e
-    cnt += 3 * nccells3 * (nccells2+1) * (nccells1+1); // efld x3e
-  }
-  // TODO(@mhguo): add radiation variables later
   return;
 }
 
@@ -739,7 +731,7 @@ void ZoomData::MaskDataInZoomRegion(int m, int zm) {
   Real &x3max = size.h_view(m).x3max;
   auto zregion = pzoom->zregion;
   // eachlevel[pzoom->zstate.zone-1]; // starting gid of zoom MBs on previous level
-  int zmbs = pzmesh->gids_eachdvce[global_variable::my_rank]; // global id start of dvce
+  int zmbs = pzmesh->gzms_eachdvce[global_variable::my_rank]; // global id start of dvce
   auto &zlloc = pzmesh->lloc_eachzmb[zm+zmbs];
   int ox1 = ((zlloc.lx1 & 1) == 1);
   int ox2 = ((zlloc.lx2 & 1) == 1);

@@ -120,7 +120,7 @@ class CyclicZoom
 
   // functions
   void Initialize(ParameterInput *pin);
-  void Update(const bool restart);
+  void UpdateAMRFromRestart();
   void PrintCyclicZoomDiagnostics();
   // AMR functions
   void CheckRefinement();
@@ -147,8 +147,10 @@ class CyclicZoom
   Real EMFTimeStep(Mesh* pm);
   // restart functions
   IOWrapperSizeT RestartFileSize();
-  void WriteRestartFile(IOWrapper &resfile);
-  void ReadRestartFile(IOWrapper &resfile);
+  void WriteRestartFile(IOWrapper &resfile, IOWrapperSizeT offset_zoom,
+                        bool single_file_per_rank);
+  void ReadRestartFile(IOWrapper &resfile, IOWrapperSizeT offset_zoom,
+                       bool single_file_per_rank);
 
  private:
   // data
@@ -168,19 +170,16 @@ class ZoomMesh
   int max_level;           // maximum zoom mesh level
   int min_level;           // minimum zoom mesh level
   int nlevels;             // number of zoom mesh levels
-  // int mzoom;               // number of zoom meshblocks
-  int nleaf;               // number of zoom meshblocks on each level
   int nzmb_total;          // total number of Zoom MeshBlocks across all levels/ranks
   // int nmb_thisrank;        // number of MeshBlocks on this MPI rank (local)
   int nzmb_thisdvce;       // number of Zoom MeshBlocks on this device (local)
-  int nzmb_thishost;       // number of Zoom MeshBlocks on this host (local)
   int nzmb_max_perdvce;    // max allowed number of Zoom MBs per device (memory limit for AMR)
   int nzmb_max_perhost;    // max allowed number of Zoom MBs per host (memory limit for AMR)
   // following 2x arrays allocated with length [nranks] in BuildTreeFromXXXX()
   // TODO(@mhguo): do you really need so many lists here?
-  int *gids_eachlevel;     // starting global ID of Zoom MeshBlocks in each level
+  int *gzms_eachlevel;     // starting global ID of Zoom MeshBlocks in each level
   int *nzmb_eachlevel;     // number of Zoom MeshBlocks on each level
-  int *gids_eachdvce;      // starting global ID of MeshBlocks in each device
+  int *gzms_eachdvce;      // starting global ID of MeshBlocks in each device
   int *nzmb_eachdvce;      // number of MeshBlocks on each device
   std::vector<int> rank_eachmb;        // rank of each MeshBlock that contains this zoom MeshBlock
   std::vector<int> lid_eachmb;         // local ID of each MeshBlock that contains this zoom MeshBlock
@@ -191,10 +190,11 @@ class ZoomMesh
   // functions
   // TODO(@mhguo): think whether there is a better design
   void GatherZMB(int zm_count, int zone);
-  void UpdateMeshData();
+  void UpdateMeshStructure();
+  void RebuildMeshStructure();
   void SyncMBLists();
   void SyncLogicalLocations();
-  int FindMB(int gzm);
+  int  FindMB(int gzm);
   void FindRegion(int zone);
 
  private:
@@ -237,11 +237,6 @@ class ZoomData
   // Contains different ZMBs after redistribution due to load balancing
   HostArray1D<Real> zdata;   // host array for persistent storage with load balancing
 
-  HostArray2D<Real> max_emf0;  // maximum electric field
-
-  HostArray5D<Real> harr_5d;  // host copy of 5D arrays
-  HostArray4D<Real> harr_4d;  // host copy of 4D arrays
-
 #if MPI_PARALLEL_ENABLED
   int ndata;               // size of send/recv data
   MPI_Comm zoom_comm;                       // unique communicator for zoom refinement
@@ -251,9 +246,9 @@ class ZoomData
 
   // functions
   void Initialize();
+  void MeshBlockDataSize();
   void ResetDataEC(DvceEdgeFld4D<Real> ec);
   void DumpData();
-  void MeshBlockDataSize();
   void StoreDataToZoomData(int zm, int m);
   // TODO(@mhguo): u or u0_?
   void StoreCCData(int zm, int m, DvceArray5D<Real> u, DvceArray5D<Real> w);

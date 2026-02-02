@@ -58,7 +58,7 @@ void ZoomData::StoreFinerEFields(int zmc, int zm, DvceEdgeFld4D<Real> efld) {
   auto e1 = efld_pre.x1e;
   auto e2 = efld_pre.x2e;
   auto e3 = efld_pre.x3e;
-  int zmbs = pzmesh->gids_eachdvce[global_variable::my_rank]; // global id start of dvce
+  int zmbs = pzmesh->gzms_eachdvce[global_variable::my_rank]; // global id start of dvce
   auto &zlloc = pzmesh->lloc_eachzmb[zm+zmbs];
   int ox1 = ((zlloc.lx1 & 1) == 1);
   int ox2 = ((zlloc.lx2 & 1) == 1);
@@ -117,7 +117,7 @@ void ZoomData::StoreEFieldsAfterAMR(int zm, int m, DvceEdgeFld4D<Real> efld) {
   auto de1 = delta_efld.x1e;
   auto de2 = delta_efld.x2e;
   auto de3 = delta_efld.x3e;
-  int zmbs = pzmesh->gids_eachdvce[global_variable::my_rank]; // global id start of dvce
+  int zmbs = pzmesh->gzms_eachdvce[global_variable::my_rank]; // global id start of dvce
   auto &zlloc = pzmesh->lloc_eachzmb[zm+zmbs];
   int ox1 = ((zlloc.lx1 & 1) == 1);
   int ox2 = ((zlloc.lx2 & 1) == 1);

@@ -49,8 +49,6 @@ void CyclicZoom::UpdateState() {
     }
   }
   // Update zoom state
-  // TODO(@mhguo): this may not be a deep copy if ZoomRegion contains pointers but now it does not
-  old_zregion = zregion; // store previous zoom region
   zstate.last_zone = zstate.zone;
   zstate.zone += zstate.direction;
   if (zstate.zone == 0) {zstate.direction = 1;}
@@ -78,6 +76,8 @@ void CyclicZoom::UpdateState() {
 //! \brief Set the time interval for the next zoom
 
 void CyclicZoom::SetRegionAndInterval() {
+  // TODO(@mhguo): may add more complex and robust region settings later
+  old_zregion.radius = zregion.r_0 * std::pow(2.0,static_cast<Real>(zstate.last_zone));
   zregion.radius = zregion.r_0 * std::pow(2.0,static_cast<Real>(zstate.zone));
   Real timescale = pow(zregion.radius,zint.t_run_pow);
   // zint.runtime = zint.t_run_fac*timescale;

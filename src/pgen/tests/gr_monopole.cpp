@@ -82,6 +82,8 @@ void ProblemGenerator::Monopole(ParameterInput *pin, const bool restart) {
   // User boundary function
   user_bcs_func = ReflectingMonopole;
 
+  if (restart) return;
+
   // Capture variables for kernel
   auto &indcs = pmy_mesh_->mb_indcs;
   int &is = indcs.is; int &ie = indcs.ie;

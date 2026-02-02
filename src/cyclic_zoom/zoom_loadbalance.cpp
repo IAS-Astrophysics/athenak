@@ -357,26 +357,26 @@ void ZoomData::RedistZMBs(int nlmb, int lmbs,
   std::vector<MPI_Request> requests;
 
   // Dense indexing counters (only incremented when rank owns the ZMB)
-  int src_dense_idx = 0;
-  int dst_dense_idx = 0;
+  int src_zm = 0;
+  int dst_zm = 0;
   
   // Loop over all ZMBs at this level
   for (int lm = 0; lm < nlmb; ++lm) {
-    int global_idx = lm + lmbs;  // Global ZMB index
-    int src_rank_val = src_ranks[global_idx];
-    int dst_rank_val = dst_ranks[global_idx];
+    int gzm = lm + lmbs;  // Global ZMB index
+    int src_rank_val = src_ranks[gzm];
+    int dst_rank_val = dst_ranks[gzm];
     
     // Compute source offset:
     // - If src_lids is nullptr: use dense indexing (sequential local index)
     // - Otherwise: use logical indexing from src_lids array
     size_t offset_src = (src_lids == nullptr) ? 
-                        src_dense_idx * data_per_zmb : 
-                        (*src_lids)[global_idx] * data_per_zmb;
+                        src_zm * data_per_zmb : 
+                        (*src_lids)[gzm] * data_per_zmb;
     
     // Compute destination offset with same logic
     size_t offset_dst = (dst_lids == nullptr) ? 
-                        dst_dense_idx * data_per_zmb : 
-                        (*dst_lids)[global_idx] * data_per_zmb;
+                        dst_zm * data_per_zmb : 
+                        (*dst_lids)[gzm] * data_per_zmb;
     
     // Post receives first (avoids potential deadlock)
     if (dst_rank_val == my_rank && src_rank_val != my_rank) {
@@ -386,7 +386,7 @@ void ZoomData::RedistZMBs(int nlmb, int lmbs,
       requests.push_back(req);
       ++nrecv;
       // Only increment dense counter if destination uses dense indexing
-      if (dst_lids == nullptr) ++dst_dense_idx;
+      if (dst_lids == nullptr) ++dst_zm;
     }
 
     // Post sends
@@ -397,7 +397,7 @@ void ZoomData::RedistZMBs(int nlmb, int lmbs,
       requests.push_back(req);
       ++nsend;
       // Only increment dense counter if source uses dense indexing
-      if (src_lids == nullptr) ++src_dense_idx;
+      if (src_lids == nullptr) ++src_zm;
     }
 
     // Local copy (same rank, but may need reindexing between dense/logical)
@@ -408,8 +408,8 @@ void ZoomData::RedistZMBs(int nlmb, int lmbs,
       );
       ++ncopy;
       // Increment both counters for local copies
-      if (src_lids == nullptr) ++src_dense_idx;
-      if (dst_lids == nullptr) ++dst_dense_idx;
+      if (src_lids == nullptr) ++src_zm;
+      if (dst_lids == nullptr) ++dst_zm;
     }
   }
 
@@ -440,7 +440,7 @@ void ZoomData::RedistZMBs(int nlmb, int lmbs,
 void ZoomData::SaveToStorage(int zone) {
   auto hzbuf = zbuf.h_view;
   int nlmb = pzmesh->nzmb_eachlevel[zone];  // Number of ZMBs at this level
-  int lmbs = pzmesh->gids_eachlevel[zone];  // Global starting index for this level
+  int lmbs = pzmesh->gzms_eachlevel[zone];  // Global starting index for this level
   RedistZMBs(nlmb, lmbs,
              hzbuf, zdata,  // src: dense buffer, dst: logical storage
              pzmesh->rank_eachmb, pzmesh->rank_eachzmb,
@@ -460,7 +460,7 @@ void ZoomData::SaveToStorage(int zone) {
 void ZoomData::LoadFromStorage(int zone) {
   auto hzbuf = zbuf.h_view;
   int nlmb = pzmesh->nzmb_eachlevel[zone];  // Number of ZMBs at this level
-  int lmbs = pzmesh->gids_eachlevel[zone];  // Global starting index for this level
+  int lmbs = pzmesh->gzms_eachlevel[zone];  // Global starting index for this level
   RedistZMBs(nlmb, lmbs,
              zdata, hzbuf,  // src: logical storage, dst: dense buffer
              pzmesh->rank_eachzmb, pzmesh->rank_eachmb,

@@ -119,10 +119,10 @@ void CyclicZoom::StoreVariables() {
   CorrectVariables(); // correct variables after zoom data update but before zoom mesh update
   // TODO(@mhguo): move some of the following code to ZoomMesh functions
   pzmesh->GatherZMB(zm_count, zstate.zone-1);
-  pzmesh->UpdateMeshData();
+  pzmesh->UpdateMeshStructure();
   // TODO(@mhguo): may create a list of stored MBs to avoid this loop?
   // assign rank and local ID of each MB that contains the zoom MBs
-  int zmbs = pzmesh->gids_eachdvce[global_variable::my_rank];
+  int zmbs = pzmesh->gzms_eachdvce[global_variable::my_rank];
   int zm = 0;
   for (int m=0; m<nmb; ++m) {
     if (CheckStoreFlag(m)) {
@@ -142,7 +142,7 @@ void CyclicZoom::StoreVariables() {
 
 void CyclicZoom::CorrectVariables() {
   if (pmesh->pmb_pack->pmhd != nullptr && zstate.zone > 1) {
-    int zmbs = pzmesh->gids_eachdvce[global_variable::my_rank];
+    int zmbs = pzmesh->gzms_eachdvce[global_variable::my_rank];
     int zm_count = 0;
     int m0 = pzmesh->lid_eachmb[zmbs];
     for (int zm=0; zm<pzmesh->nzmb_thisdvce; ++zm) {
@@ -172,7 +172,7 @@ void CyclicZoom::CorrectVariables() {
 //! \brief Reinitialize variables after zooming (in)
 
 void CyclicZoom::ReinitVariables() {
-  int zmbs = pzmesh->gids_eachdvce[global_variable::my_rank];
+  int zmbs = pzmesh->gzms_eachdvce[global_variable::my_rank];
   for (int zm=0; zm<pzmesh->nzmb_thisdvce; ++zm) {
     int m = pzmesh->lid_eachmb[zm+zmbs];
     std::cout << "  Rank " << global_variable::my_rank
@@ -189,7 +189,7 @@ void CyclicZoom::ReinitVariables() {
 //! \brief Mask variables in the zoom region
 
 void CyclicZoom::MaskVariables() {
-  int zmbs = pzmesh->gids_eachdvce[global_variable::my_rank];
+  int zmbs = pzmesh->gzms_eachdvce[global_variable::my_rank];
   for (int zm=0; zm<pzmesh->nzmb_thisdvce; ++zm) {
     int m = pzmesh->lid_eachmb[zm+zmbs];
     pzdata->MaskDataInZoomRegion(m, zm);
@@ -234,7 +234,7 @@ void CyclicZoom::UpdateFluxes(Driver *pdriver) {
 void CyclicZoom::StoreFluxes() {
   // update electric fields in zoom region
   // TODO(@mhguo): only stored the emf, may need to limit de to emin/max
-  int zmbs = pzmesh->gids_eachdvce[global_variable::my_rank];
+  int zmbs = pzmesh->gzms_eachdvce[global_variable::my_rank];
   for (int zm=0; zm<pzmesh->nzmb_thisdvce; ++zm) {
     int m = pzmesh->lid_eachmb[zm+zmbs];
     // pzdata->UpdateElectricFieldsInZoomRegion(m, zm);

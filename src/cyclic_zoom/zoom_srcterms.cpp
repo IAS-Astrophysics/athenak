@@ -24,7 +24,7 @@ void CyclicZoom::SourceTermsFC(DvceEdgeFld4D<Real> efld) {
   // apply only when zone > 0
   if (zstate.zone == 0) return;
   if (zamr.zooming_out || zamr.zooming_in) return;
-  int zmbs = pzmesh->gids_eachdvce[global_variable::my_rank];
+  int zmbs = pzmesh->gzms_eachdvce[global_variable::my_rank];
   for (int zm=0; zm<pzmesh->nzmb_thisdvce; ++zm) {
     int m = pzmesh->lid_eachmb[zm+zmbs];
     // pzdata->UpdateElectricFieldsInZoomRegion(m, zm);
@@ -66,7 +66,7 @@ void ZoomData::AddSrcTermsFC(int m, int zm, DvceEdgeFld4D<Real> efld) {
   auto ea2 = efld_aft.x2e;
   auto ea3 = efld_aft.x3e;
 
-  int zmbs = pzmesh->gids_eachdvce[global_variable::my_rank]; // global id start of dvce
+  int zmbs = pzmesh->gzms_eachdvce[global_variable::my_rank]; // global id start of dvce
   auto &zlloc = pzmesh->lloc_eachzmb[zm+zmbs];
   int ox1 = ((zlloc.lx1 & 1) == 1);
   int ox2 = ((zlloc.lx2 & 1) == 1);
