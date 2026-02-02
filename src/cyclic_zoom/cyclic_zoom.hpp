@@ -119,20 +119,18 @@ class CyclicZoom
   ZoomData *pzdata;        // zoom data
 
   // functions
+  // basic functions
   void Initialize(ParameterInput *pin);
   void UpdateAMRFromRestart();
   void PrintCyclicZoomDiagnostics();
-  // AMR functions
+  // functions for zooming
   void CheckRefinement();
   void UpdateState();
   void SetRegionAndInterval();
   void SetRefinementFlags();
-  // void StoreZoomRegion(){};
-  // void InitZoomRegion(){};
+  // functions to handle zoom region
   void StoreZoomRegion();
   void ApplyZoomRegion(Driver *pdriver);
-  // For zoom refinement
-  // TODO(@mhguo): need to reorganize these functions, now simply for compilation
   void StoreVariables();
   bool CheckStoreFlag(int m);
   void CorrectVariables();
@@ -171,12 +169,10 @@ class ZoomMesh
   int min_level;           // minimum zoom mesh level
   int nlevels;             // number of zoom mesh levels
   int nzmb_total;          // total number of Zoom MeshBlocks across all levels/ranks
-  // int nmb_thisrank;        // number of MeshBlocks on this MPI rank (local)
   int nzmb_thisdvce;       // number of Zoom MeshBlocks on this device (local)
   int nzmb_max_perdvce;    // max allowed number of Zoom MBs per device (memory limit for AMR)
   int nzmb_max_perhost;    // max allowed number of Zoom MBs per host (memory limit for AMR)
   // following 2x arrays allocated with length [nranks] in BuildTreeFromXXXX()
-  // TODO(@mhguo): do you really need so many lists here?
   int *gzms_eachlevel;     // starting global ID of Zoom MeshBlocks in each level
   int *nzmb_eachlevel;     // number of Zoom MeshBlocks on each level
   int *gzms_eachdvce;      // starting global ID of MeshBlocks in each device
@@ -188,7 +184,6 @@ class ZoomMesh
   std::vector<LogicalLocation> lloc_eachzmb;  // LogicalLocations for each MeshBlock
 
   // functions
-  // TODO(@mhguo): think whether there is a better design
   void GatherZMB(int zm_count, int zone);
   void UpdateMeshStructure();
   void RebuildMeshStructure();
@@ -250,9 +245,8 @@ class ZoomData
   void ResetDataEC(DvceEdgeFld4D<Real> ec);
   void DumpData();
   void StoreDataToZoomData(int zm, int m);
-  // TODO(@mhguo): u or u0_?
   void StoreCCData(int zm, int m, DvceArray5D<Real> u, DvceArray5D<Real> w);
-  void StoreHydroData(int zm, int m, DvceArray5D<Real> u0_, DvceArray5D<Real> w0_);
+  void StoreCoarseHydroData(int zm, int m, DvceArray5D<Real> u0_, DvceArray5D<Real> w0_);
   // TODO(@mhguo): find a better name
   void StoreEFieldsBeforeAMR(int zm, int m, DvceEdgeFld4D<Real> efld);
   void StoreFinerEFields(int zmc, int zm, DvceEdgeFld4D<Real> efld);

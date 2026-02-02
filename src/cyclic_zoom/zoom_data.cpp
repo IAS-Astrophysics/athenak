@@ -339,7 +339,7 @@ void ZoomData::StoreDataToZoomData(int zm, int m) {
     u = pmesh->pmb_pack->pmhd->u0;
     w = pmesh->pmb_pack->pmhd->w0;
     StoreCCData(zm, m, u, w);
-    StoreHydroData(zm, m, u, w);
+    StoreCoarseHydroData(zm, m, u, w);
     DvceEdgeFld4D<Real> efld = pmesh->pmb_pack->pmhd->efld;
     StoreEFieldsBeforeAMR(zm, m, efld);
   }
@@ -347,7 +347,7 @@ void ZoomData::StoreDataToZoomData(int zm, int m) {
 
 //----------------------------------------------------------------------------------------
 //! \fn void ZoomData::StoreCCData()
-//! \brief Store cell-centered data from MeshBlock m to zoom data zm
+//! \brief Store cell-centered data from MeshBlock m to zoom meshblock zm
 
 void ZoomData::StoreCCData(int zm, int m, DvceArray5D<Real> u, DvceArray5D<Real> w) {
   auto pmesh = pzoom->pmesh;
@@ -415,13 +415,18 @@ void ZoomData::StoreCCData(int zm, int m, DvceArray5D<Real> u, DvceArray5D<Real>
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn void ZoomData::StoreHydroData()
-//! \brief Store data from MeshBlock m to zoom data zm
+//! \fn void ZoomData::StoreCoarseHydroData()
+//! \brief Store coarse-grained hydro conserved variables from mb m to zoom mb zm
+//! only for mhd case
 
-// TODO(@mhguo): this may only apply to MHD as HD can use copy
-void ZoomData::StoreHydroData(int zm, int m, DvceArray5D<Real> u0_, DvceArray5D<Real> w0_) {
-  auto &indcs = pzoom->pmesh->mb_indcs;
+void ZoomData::StoreCoarseHydroData(int zm, int m, DvceArray5D<Real> u0_, DvceArray5D<Real> w0_) {
   auto pmbp = pzoom->pmesh->pmb_pack;
+  if (pmbp->pmhd == nullptr) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+              << std::endl << "StoreCoarseHydroData only works for MHD case" <<std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+  auto &indcs = pzoom->pmesh->mb_indcs;
   auto &size = pzoom->pmesh->pmb_pack->pmb->mb_size;
   int &is = indcs.is;
   int &js = indcs.js;
@@ -433,8 +438,7 @@ void ZoomData::StoreHydroData(int zm, int m, DvceArray5D<Real> u0_, DvceArray5D<
   int cnx1 = indcs.cnx1, cnx2 = indcs.cnx2, cnx3 = indcs.cnx3;
   // DvceArray5D<Real> u0_, w0_;
   bool is_gr = pmbp->pcoord->is_general_relativistic;
-  auto peos = (pmbp->pmhd != nullptr)? pmbp->pmhd->peos : pmbp->phydro->peos;
-  auto eos = peos->eos_data;
+  auto eos = pmbp->pmhd->peos->eos_data;
   auto cw = coarse_w0;
   Real &x1min = size.h_view(m).x1min;
   Real &x1max = size.h_view(m).x1max;

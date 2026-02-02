@@ -104,7 +104,7 @@ void ProblemGenerator::Monopole(ParameterInput *pin, const bool restart) {
   Real gm1 = pmbp->pmhd->peos->eos_data.gamma - 1.0;
 
   // Extract problem parameters
-  Real sigma_max = pin->GetOrAddReal("problem", "sigma_max", 1.e2);
+  Real sigma_norm = pin->GetOrAddReal("problem", "sigma_norm", 1.e2);
   Real sigma_pow = pin->GetOrAddReal("problem", "sigma_pow", -1.0);
   Real rhomin = pin->GetOrAddReal("problem", "rhomin", 1.e-6);
   Real umin = pin->GetOrAddReal("problem", "umin", 1.e-8);
@@ -137,8 +137,8 @@ void ProblemGenerator::Monopole(ParameterInput *pin, const bool restart) {
     // Calculate background primitives
     Real rho_bg, pgas_bg;
     if (r > 1.0) {
-      rho_bg  =     (rhomin + pow(r/rc,-sigma_pow)/pow(r,4.)/sigma_max);
-      pgas_bg = gm1*(umin   + pow(r/rc,-sigma_pow)/pow(r,4.)/sigma_max);
+      rho_bg  =     (rhomin + pow(r/rc,-sigma_pow)/pow(r,4.)/sigma_norm);
+      pgas_bg = gm1*(umin   + pow(r/rc,-sigma_pow)/pow(r,4.)/sigma_norm);
     } else {
       rho_bg  = dexcise;
       pgas_bg = pexcise;
@@ -644,8 +644,6 @@ void MonopoleDiagnostic(ParameterInput *pin, Mesh *pm) {
   int nlevel = pin->GetOrAddInteger("problem", "nlevel", 10);
   int ninterp = pin->GetOrAddInteger("problem", "ninterp", -1);
   SphericalGrid *psph = new SphericalGrid(pmbp, nlevel, rh, ninterp);
-  std::cout << "Monopole diagnostic: nlevel = " << nlevel
-            << ", ninterp = " << psph->ninterp << std::endl;
 
   // capture variables
   auto &w0_ = pm->pmb_pack->pmhd->w0;
