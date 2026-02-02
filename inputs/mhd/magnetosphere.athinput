@@ -10,7 +10,7 @@ basename  = magsph      # problem ID: basename of output filenames
 file_type   = bin        # Tabular data dump
 #variable   = hydro_u    # variables to be output
 variable    = mhd_u_bcc  # variables to be output
-dt          = 0.0314     # time increment between outputs
+dt          = 0.314      # time increment between outputs
 
 <output2>
 file_type   = hst       # history data dump
@@ -20,53 +20,53 @@ dt          = 0.0229    # time increment between outputs
 file_type   = rst
 dt          = 9.42
 
-<output3>
+<output4>
 file_type = sph         # output on spherical grid
-dt = 0.0314               # time increment between outputs
+dt = 0.314              # time increment between outputs
 variable = mhd_u_bcc    # Output variable
 radius = 0.2            # Set a radius to output data
-xc = 0.0                # x, y,, and z coordinates for center of grid
+xc = 0.0                # x, y, and z coordinates for center of grid
 yc = 0.0
 zc = 0.0
 ntheta = 256             # Number of angles in theta, phi resolution is 2*ntheta
 
-<output4>
+<output5>
 file_type   = sphshell     # Output type identifier
 variable    = mhd_angmom   # Variables to output (same as other outputs)
 dt          = 0.314        # Time interval between outputs
-nr          = 50           # Number of radial shells
+nr          = 100          # Number of radial shells
 rmin        = 0.5          # Minimum radius
 rmax        = 5.0          # Maximum radius
 log_spacing = false        # Linear spacing (true for log spacing)
-nlev        = 10            # Geodesic grid refinement (3-6 typical)
+nlev        = 10           # Geodesic grid refinement (3-6 typical)
 
 <time>
 evolution   = dynamic
 cfl_number  = 0.3        # The Courant, Friedrichs, & Lewy (CFL) Number
-nlim        = -1         # cycle limit
-tlim        = 0.314.     #31.4  #6.28 # time limit
+nlim        = 1          # cycle limit
+tlim        = 94.25      #31.4  #6.28 # time limit
 integrator  = rk2        # time integration algorithm
 
 <mesh>
 nghost      = 4         # Number of ghost cells
 
-nx1         = 120       # Number of zones in X1-direction
-x1min       = -3        # minimum value of X1
-x1max       = 3         # maximum value of X1
+nx1         = 160       # Number of zones in X1-direction
+x1min       = -32        # minimum value of X1
+x1max       = 32         # maximum value of X1
 ix1_bc      = outflow   # Inner-X1 boundary condition flag
 ox1_bc      = outflow   # Outer-X1 boundary condition flag
 
-nx2         = 120       # Number of zones in X2-direction
-x2min       = -3        # minimum value of X2
-x2max       = 3         # maximum value of X2
-ix2_bc      = outflow      # Inner-X2 boundary condition flag
-ox2_bc      = outflow      # Outer-X2 boundary condition flag
+nx2         = 160        # Number of zones in X2-direction
+x2min       = -32        # minimum value of X2
+x2max       = 32         # maximum value of X2
+ix2_bc      = outflow    # Inner-X2 boundary condition flag
+ox2_bc      = outflow    # Outer-X2 boundary condition flag
 
-nx3         = 120       # Number of zones in X3-direction
-x3min       = -3        # minimum value of X3
-x3max       = 3         # maximum value of X3
-ix3_bc      = outflow      # Inner-X3 boundary condition flag
-ox3_bc      = outflow      # Outer-X3 boundary condition flag
+nx3         = 160        # Number of zones in X3-direction
+x3min       = -32        # minimum value of X3
+x3max       = 32         # maximum value of X3
+ix3_bc      = outflow    # Inner-X3 boundary condition flag
+ox3_bc      = outflow    # Outer-X3 boundary condition flag
 
 <meshblock>
 nx1       = 40      # Number of cells in each MeshBlock, X1-dir
@@ -77,26 +77,44 @@ nx3       = 20      # Number of cells in each MeshBlock, X3-dir
 refinement = static  # type of refinement
 
 <refined_region1>
+x1min=-7.9
+x1max= 7.9
+x2min=-7.9
+x2max= 7.9
+x3min=-0.79
+x3max= 0.79
+level= 3
+
+<refined_region2>
+x1min=-3.9
+x1max= 3.9
+x2min=-3.9
+x2max= 3.9
+x3min=-0.39
+x3max= 0.39
+level= 4
+
+<refined_region3>
 x1min=-1.9
 x1max= 1.9
 x2min=-1.9
 x2max= 1.9
 x3min=-0.2
 x3max= 0.2
-level= 2
+level= 5
 
-<refined_region2>
+<refined_region4>
 x1min=-0.9
 x1max= 0.9
 x2min=-0.9
 x2max= 0.9
 x3min=-0.12
 x3max= 0.12
-level= 3
+level= 6
 
 <mhd>
 eos         = ideal    # EOS type
-reconstruct = plm      # spatial reconstruction method
+reconstruct = wenoz    # spatial reconstruction method
 gamma       = 1.4      # gamma
 dfloor      = 1.e-9    # Density floor
 pfloor      = 1.e-12   # Pressure floor
@@ -105,12 +123,12 @@ fofc        = true     # First order flux correction
 
 <problem>
 pgen_name = magsph      # problem generator name
-user_srcs = true       # Switch the user source terms on
+user_srcs = true        # Switch the user source terms on
 user_esrcs = true       # Switch the user e field mask on
 user_hist = false       # Switch the user history function on
 
 thetaw = 0.0            # tilt of stellar rotation axis (counterclockwise rot about y-axis)
-thetab = 0.0            # tilt of stellar dipole axis (counterclockwise rot about y-axis)
+thetab = 0.0          # tilt of stellar dipole axis (counterclockwise rot about y-axis)
 origid = 2.8            # angular velocity of star
 denstar = 1e5           # central stellar density
 dslope = -2.25          # disc midplane surface density
@@ -125,12 +143,13 @@ sig_star_disc = 0.01    # connect velocities between star and the disc
 rfix = 0.16             # Inner masking radius for v and rho
 rad_in_cutoff = 0.5
 rad_in_smooth = 0.1      
-rad_out_cutoff = 10.0
-rad_out_smooth = 0.5
-rho_floor1 = 1e-5         # radial density floor normalisation 1
-rho_floor2 = 1.33e-5      # radial density floor normalisation 2
-rho_floor_slope1 = -2.25  # radial density floor slope 1
+rad_out_cutoff = 28.0
+rad_out_smooth = 1.0
+rho_floor1 = 1e-6         # radial density floor normalisation 1
+rho_floor2 = 1.6e-6       # radial density floor normalisation 2
+rho_floor_slope1 = -3.0   # radial density floor slope 1
 rho_floor_slope2 = -5.5   # radial density floor slope 2
 rstar = 0.1               # radius of the star
 gravsmooth = 0.1          # smoothing of stellar gravity
 tcool = 1e-5              # characteristic cooling timescale [local orbital time]
+avg_grid_bfields = false  # when masking the induction eqn use the grid avg of face centred B 

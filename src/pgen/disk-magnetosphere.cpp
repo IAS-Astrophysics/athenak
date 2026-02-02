@@ -102,6 +102,7 @@ namespace {
     Real mm;
     bool is_ideal;
     bool magnetic_fields_enabled;
+    bool avg_grid_bfields;
     };
 
     my_params mp;
@@ -197,6 +198,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     mp.gravsmooth = pin->GetOrAddReal("problem","gravsmooth",0.0);
     mp.tcool = pin->GetOrAddReal("problem","tcool",0.0);
     mp.sig_star_disc = pin->GetOrAddReal("problem","sig_star_disc",0.1);
+    mp.avg_grid_bfields = pin->GetOrAddBoolean("problem","avg_grid_bfields",false);
     
     // Capture variables for kernel - e.g. indices for looping over the meshblocks and the size of the meshblocks.
     auto &indcs = pmy_mesh_->mb_indcs;
@@ -966,6 +968,8 @@ void MyEfieldMask(Mesh* pm) { //CF:CHECKED
     // Rotate from stellar spin frame to standard frame
     RotateCart(mp_,mmx,mmy,mmz,mmxw,mmyw,mmzw,-mp_.thetaw);
 
+    auto &b0_ = pmbp->pmhd->b0;
+
     // Define E1, E2, E3 on corners
     // Note e1[is:ie,  js:je+1,ks:ke+1]
     //      e2[is:ie+1,js:je,  ks:ke+1]
@@ -995,7 +999,22 @@ void MyEfieldMask(Mesh* pm) { //CF:CHECKED
             Real Bx(0.0),By(0.0),Bz(0.0);
 
             VelStar(mp_, x1v, x2f, x3f, vx, vy, vz);
-            Bfield(mp_, x1v, x2f, x3f, mmx, mmy, mmz, Bx, By, Bz);
+            
+            if (mp_.avg_grid_bfields) {
+                // Average face-centered B fields to edge location
+                // E1 edge at (i,j,k) samples from [k-1,k]x[j-1,j]x[i,i+1]
+                // Bx (parallel): 8-point average over [k-1,k]x[j-1,j]x[i,i+1]
+                // By (perpendicular): 2-point average in k direction at [k-1,k]x[j]
+                // Bz (perpendicular): 2-point average in j direction at [j-1,j]x[k]
+                Bx = 0.125*(b0_.x1f(m,k-1,j-1,i) + b0_.x1f(m,k-1,j,i) + 
+                            b0_.x1f(m,k,j-1,i) + b0_.x1f(m,k,j,i) +
+                            b0_.x1f(m,k-1,j-1,i+1) + b0_.x1f(m,k-1,j,i+1) + 
+                            b0_.x1f(m,k,j-1,i+1) + b0_.x1f(m,k,j,i+1));
+                By = 0.5*(b0_.x2f(m,k-1,j,i) + b0_.x2f(m,k,j,i));
+                Bz = 0.5*(b0_.x3f(m,k,j-1,i) + b0_.x3f(m,k,j,i));
+            } else {
+                Bfield(mp_, x1v, x2f, x3f, mmx, mmy, mmz, Bx, By, Bz);
+            }
 
             // E1=-(v X B)=VzBy-VyBz
             e1_(m,k,j,i) = vz*By - vy*Bz;
@@ -1027,7 +1046,22 @@ void MyEfieldMask(Mesh* pm) { //CF:CHECKED
             Real Bx(0.0),By(0.0),Bz(0.0);
 
             VelStar(mp_, x1f, x2v, x3f, vx, vy, vz);
-            Bfield(mp_, x1f, x2v, x3f, mmx, mmy, mmz, Bx, By, Bz);
+            
+            if (mp_.avg_grid_bfields) {
+                // Average face-centered B fields to edge location
+                // E2 edge at (i,j,k) samples from [k-1,k]x[j,j+1]x[i-1,i]
+                // By (parallel): 8-point average over [k-1,k]x[j,j+1]x[i-1,i]
+                // Bx (perpendicular): 2-point average in k direction at [k-1,k]x[i]
+                // Bz (perpendicular): 2-point average in i direction at [i-1,i]x[k]
+                Bx = 0.5*(b0_.x1f(m,k-1,j,i) + b0_.x1f(m,k,j,i));
+                By = 0.125*(b0_.x2f(m,k-1,j,i-1) + b0_.x2f(m,k-1,j+1,i-1) + 
+                            b0_.x2f(m,k,j,i-1) + b0_.x2f(m,k,j+1,i-1) +
+                            b0_.x2f(m,k-1,j,i) + b0_.x2f(m,k-1,j+1,i) + 
+                            b0_.x2f(m,k,j,i) + b0_.x2f(m,k,j+1,i));
+                Bz = 0.5*(b0_.x3f(m,k,j,i-1) + b0_.x3f(m,k,j,i));
+            } else {
+                Bfield(mp_, x1f, x2v, x3f, mmx, mmy, mmz, Bx, By, Bz);
+            }
 
             // E2=-(v X B)=VxBz-VzBx
             e2_(m,k,j,i) = vx*Bz - vz*Bx;
@@ -1059,7 +1093,22 @@ void MyEfieldMask(Mesh* pm) { //CF:CHECKED
             Real Bx(0.0),By(0.0),Bz(0.0);
 
             VelStar(mp_, x1f, x2f, x3v, vx, vy, vz);
-            Bfield(mp_, x1f, x2f, x3v, mmx, mmy, mmz, Bx, By, Bz);
+            
+            if (mp_.avg_grid_bfields) {
+                // Average face-centered B fields to edge location
+                // E3 edge at (i,j,k) samples from [k,k+1]x[j-1,j]x[i-1,i]
+                // Bz (parallel): 8-point average over [k,k+1]x[j-1,j]x[i-1,i]
+                // Bx (perpendicular): 2-point average in j direction at [j-1,j]x[i]
+                // By (perpendicular): 2-point average in i direction at [i-1,i]x[j]
+                Bx = 0.5*(b0_.x1f(m,k,j-1,i) + b0_.x1f(m,k,j,i));
+                By = 0.5*(b0_.x2f(m,k,j,i-1) + b0_.x2f(m,k,j,i));
+                Bz = 0.125*(b0_.x3f(m,k,j-1,i-1) + b0_.x3f(m,k,j,i-1) + 
+                            b0_.x3f(m,k,j-1,i) + b0_.x3f(m,k,j,i) +
+                            b0_.x3f(m,k+1,j-1,i-1) + b0_.x3f(m,k+1,j,i-1) + 
+                            b0_.x3f(m,k+1,j-1,i) + b0_.x3f(m,k+1,j,i));
+            } else {
+                Bfield(mp_, x1f, x2f, x3v, mmx, mmy, mmz, Bx, By, Bz);
+            }
 
             // E3=-(v X B)=VyBx-VxBy
             e3_(m,k,j,i) = vy*Bx - vx*By;
