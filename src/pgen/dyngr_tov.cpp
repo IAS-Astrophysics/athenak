@@ -43,6 +43,12 @@ static Real A2(const tov::TOVStar& tov_, const TOVEOS& eos, bool isotropic, Real
 
 // Prototypes for user-defined BCs and history
 void TOVHistory(HistoryData *pdata, Mesh *pm);
+// Custom source term which updates the EOS
+void UpdateEOS(Mesh *pmesh, double dt);
+// Relaxation time for the Gamma
+static Real eos_soft_tau;
+static Real eos_soft_gamma_0;
+static Real eos_soft_gamma_1;
 
 template<class TOVEOS>
 void SetupTOV(ParameterInput *pin, Mesh* pmy_mesh_) {
@@ -371,6 +377,13 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     exit(EXIT_FAILURE);
   }
 
+  if (user_srcs) {
+    user_srcs_func = &UpdateEOS;
+    eos_soft_tau = pin->GetOrAddReal("problem", "eos_soft_tau", 1000.0);
+    eos_soft_gamma_0 = pin->GetOrAddReal("problem", "eos_soft_gamma_0", 2.0);
+    eos_soft_gamma_1 = pin->GetOrAddReal("problem", "eos_soft_gamma_1", 1.0 + 1.0/3.0);
+  }
+
   user_hist_func = &TOVHistory;
 
   // initialize primitive variables for restart
@@ -501,4 +514,13 @@ void TOVHistory(HistoryData *pdata, Mesh *pm) {
   // store data in hdata array
   pdata->hdata[0] = rho_max;
   pdata->hdata[1] = alpha_min;
+}
+
+void UpdateEOS(Mesh* pmesh, Real bdt) {
+  Real lam = exp(-pmesh->time/eos_soft_tau);
+  Primitive::EOS<Primitive::IdealGas, Primitive::ResetFloor>& eos =
+      static_cast<
+        dyngr::DynGRMHDPS<Primitive::IdealGas, Primitive::ResetFloor>*>(
+          pmesh->pmb_pack->pdyngr)->eos.ps.GetEOSMutable();
+  eos.SetGamma(lam*eos_soft_gamma_0 + (1.0 - lam)*eos_soft_gamma_1);
 }
