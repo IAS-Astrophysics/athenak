@@ -583,7 +583,7 @@ void ReflectingMonopole(Mesh *pm) {
         if (i == n1-1) {b0.x1f(m,ks-k-1,j,i+1) = b0.x1f(m,ks,j,i+1);}
         b0.x2f(m,ks-k-1,j,i) = b0.x2f(m,ks,j,i);
         if (j == n2-1) {b0.x2f(m,ks-k-1,j+1,i) = b0.x2f(m,ks,j+1,i);}
-        b0.x3f(m,ks-k-1,j,i) = -b0.x3f(m,ks,j,i);
+        b0.x3f(m,ks-k-1,j,i) = -b0.x3f(m,ks+1,j,i);
       }
     }
     if (mb_bcs.d_view(m,BoundaryFace::outer_x3) == BoundaryFlag::user) {
