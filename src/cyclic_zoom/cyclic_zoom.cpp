@@ -37,7 +37,6 @@ CyclicZoom::CyclicZoom(Mesh *pm, ParameterInput *pin) :
   zoom_bcs = pin->GetOrAddBoolean(block_name,"zoom_bcs",true);
   zoom_ref = pin->GetOrAddBoolean(block_name,"zoom_ref",true);
   zoom_dt = pin->GetOrAddBoolean(block_name,"zoom_dt",false);
-  add_emf = pin->GetOrAddBoolean(block_name,"add_emf",true); // default true
   dump_diag  = pin->GetOrAddBoolean(block_name,"dump_diag",false);
   ndiag = pin->GetOrAddInteger(block_name,"ndiag",-1);
 
@@ -56,7 +55,6 @@ CyclicZoom::CyclicZoom(Mesh *pm, ParameterInput *pin) :
   zamr.refine_flag = - zstate.direction;
   zamr.zooming_in = false;
   zamr.zooming_out = false;
-  zamr.first_emf = false;
   zamr.dump_rst = true;
 
   zregion.x1c = pin->GetOrAddReal(block_name,"x1c",0.0);
@@ -82,22 +80,22 @@ CyclicZoom::CyclicZoom(Mesh *pm, ParameterInput *pin) :
   SetRegionAndInterval();
   zstate.next_time += zint.runtime;
   // TODO(@mhguo): move to a new struct?
-  nflux = 3;
-  emf_flag = 0;
-  emf_f0 = 1.0;
-  emf_f1 = 0.0;
-  emf_fmax = 1.0;
-  re_fac = 0.8; // TODO(@mhguo): probably change to 1.0?
-  r0_efld = 0.0;
+  zemf.emf_flag = 0;
+  zemf.emf_f0 = 1.0;
+  zemf.emf_f1 = 0.0;
+  zemf.emf_fmax = 1.0;
+  zemf.re_fac = 0.8; // TODO(@mhguo): probably change to 1.0?
+  zemf.r0_efld = 0.0;
   // Think whether to read emf parameters from input file
-  if (add_emf) {
-    emf_flag = pin->GetOrAddInteger(block_name,"emf_flag",emf_flag);
-    emf_f0 = pin->GetOrAddReal(block_name,"emf_f0",emf_f0);
-    emf_f1 = pin->GetOrAddReal(block_name,"emf_f1",emf_f1);
-    emf_fmax = pin->GetOrAddReal(block_name,"emf_fmax",emf_fmax);
-    emf_zmax = pin->GetOrAddInteger(block_name,"emf_zmax",zamr.nlevels);
-    re_fac = pin->GetOrAddReal(block_name,"re_fac",re_fac);
-    r0_efld = pin->GetOrAddReal(block_name,"r0_efld",0.0); // default value
+  zemf.add_emf = pin->GetOrAddBoolean(block_name,"add_emf",true); // default true
+  if (zemf.add_emf) {
+    zemf.emf_flag = pin->GetOrAddInteger(block_name,"emf_flag",zemf.emf_flag);
+    zemf.emf_f0 = pin->GetOrAddReal(block_name,"emf_f0",zemf.emf_f0);
+    zemf.emf_f1 = pin->GetOrAddReal(block_name,"emf_f1",zemf.emf_f1);
+    zemf.emf_fmax = pin->GetOrAddReal(block_name,"emf_fmax",zemf.emf_fmax);
+    zemf.emf_zmax = pin->GetOrAddInteger(block_name,"emf_zmax",zamr.nlevels);
+    zemf.re_fac = pin->GetOrAddReal(block_name,"re_fac",zemf.re_fac);
+    zemf.r0_efld = pin->GetOrAddReal(block_name,"r0_efld",0.0); // default value
   }
   // size_t free_mem, total_mem;
   // cudaMemGetInfo(&free_mem, &total_mem);
@@ -149,17 +147,17 @@ void CyclicZoom::PrintCyclicZoomDiagnostics()
     std::cout << "Basic: is_set = " << is_set << " read_rst = " << read_rst
               << " write_rst = " << write_rst << " ndiag = " << ndiag << std::endl;
     std::cout << "Funcs: zoom_bcs = " << zoom_bcs << " zoom_ref = " << zoom_ref 
-              << " zoom_dt = " << zoom_dt << " add_emf = " << add_emf
-              << " emf_flag = " << emf_flag << std::endl;
+              << " zoom_dt = " << zoom_dt << " add_emf = " << zemf.add_emf
+              << " emf_flag = " << zemf.emf_flag << std::endl;
     // print model parameters
     std::cout << "Model: mzoom = " << pzmesh->nzmb_max_perdvce
               << " nvars = " << pzdata->nvars
               << " d_zoom = " << pzdata->d_zoom << " p_zoom = " << pzdata->p_zoom
               << std::endl;
     // print electric field parameters
-    std::cout << "Efield: emf_f0 = " << emf_f0 << " emf_f1 = " << emf_f1
-              << " emf_fmax = " << emf_fmax << " emf_zmax = " << emf_zmax
-              << " re_fac = " << re_fac << " r0_efld = " << r0_efld << std::endl;
+    std::cout << "Efield: emf_f0 = " << zemf.emf_f0 << " emf_f1 = " << zemf.emf_f1
+              << " emf_fmax = " << zemf.emf_fmax << " emf_zmax = " << zemf.emf_zmax
+              << " re_fac = " << zemf.re_fac << " r0_efld = " << zemf.r0_efld << std::endl;
     // print interval parameters
     std::cout << "Interval: t_run_fac = " << zint.t_run_fac
               << " t_run_pow = " << zint.t_run_pow

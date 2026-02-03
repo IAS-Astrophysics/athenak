@@ -32,7 +32,6 @@ typedef struct ZoomAMR {
   int refine_flag;              // flag for refinement (+1: refine, -1: coarsen)
   bool zooming_in;              // flag for performing zoom in (refinement)
   bool zooming_out;             // flag for performing zoom out (coarsening)
-  bool first_emf;               // flag for first electric field
   bool dump_rst;                // flag for dumping restart file
 } ZoomAMR;
 
@@ -73,6 +72,20 @@ typedef struct ZoomInterval {
   Real runtime;                 // interval for zoom
 } ZoomInterval;
 
+//----------------------------------------------------------------------------------------
+//! \struct ZoomEMF
+//! \brief parameters for EMF during zoom
+
+typedef struct ZoomEMF {
+  bool add_emf;            // flag for fixing electric field
+  int emf_flag;            // flag for modifying electric field
+  Real emf_f0, emf_f1;     // electric field factor, e = f0 * e0 + f1 * e1
+  Real emf_fmax;           // maximum electric field factor
+  int  emf_zmax;           // maximum zone number for electric field
+  Real re_fac;             // factor for electric field
+  Real r0_efld;            // modify e if r < r0_efld
+} ZoomEMF;
+
 // Forward declaration
 class ZoomMesh;
 class ZoomData;
@@ -97,22 +110,15 @@ class CyclicZoom
   bool zoom_bcs;           // flag for zoom boundary conditions
   bool zoom_ref;           // flag for zoom refinement
   bool zoom_dt;            // flag for zoom time step
-  bool add_emf;            // flag for fixing electric field
   bool dump_diag;          // flag for dumping diagnostic output
   int ndiag;               // cycles between diagostic output
-  int nflux;               // number of fluxes through spherical surfaces
-  int emf_flag;            // flag for modifying electric field
-  Real emf_f0, emf_f1;     // electric field factor, e = f0 * e0 + f1 * e1
-  Real emf_fmax;           // maximum electric field factor
-  int  emf_zmax;           // maximum zone number for electric field
-  Real re_fac;             // factor for electric field
-  Real r0_efld;            // modify e if r < r0_efld
 
+  ZoomState zstate;        // zoom runtime state
   ZoomAMR zamr;            // zoom AMR parameters
   ZoomInterval zint;       // zoom interval parameters
   ZoomRegion zregion;      // zoom region parameters
   ZoomRegion old_zregion;  // previous zoom region parameters
-  ZoomState zstate;        // zoom runtime state
+  ZoomEMF zemf;            // zoom electric field parameters
 
   // array_sum::GlobalSum nc1, nc2, nc3, em1, em2, em3;
   ZoomMesh *pzmesh;        // zoom mesh

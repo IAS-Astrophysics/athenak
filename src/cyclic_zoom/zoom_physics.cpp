@@ -293,8 +293,8 @@ Real CyclicZoom::EMFTimeStep(Mesh* pm) {
 
   // TODO(@mhguo): this is wrong!!! need to fix or remove
   int zid = (zstate.zone-1);
-  Real &f0 = emf_f0; //(rad-rzoom)/rzoom;
-  Real &f1 = emf_f1; //(rzoom-rad)/rzoom;
+  Real &f0 = zemf.emf_f0; //(rad-rzoom)/rzoom;
+  Real &f1 = zemf.emf_f1; //(rzoom-rad)/rzoom;
 
   // find smallest dx*|B/E| in each direction for mhd problems
   Kokkos::parallel_reduce("ZEMFNudt",Kokkos::RangePolicy<>(DevExeSpace(), 0, nmkji),

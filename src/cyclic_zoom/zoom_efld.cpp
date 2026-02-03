@@ -191,10 +191,10 @@ void ZoomData::LimitEFields() {
               << ", emax3=" << emax3 << std::endl;
   }
   Real emax = fmax(fmax(emax1, emax2), emax3);
+  emax *= pzoom->zemf.emf_fmax; // limiting factor
   if (global_variable::my_rank == 0) {
     std::cout << "ZoomData::LimitEFields: emax for limiting = " << emax << std::endl;
   }
-  // Real elimit = 0.1; // TODO(@mhguo): make this a parameter
   auto de1 = delta_efld.x1e;
   auto de2 = delta_efld.x2e;
   auto de3 = delta_efld.x3e;

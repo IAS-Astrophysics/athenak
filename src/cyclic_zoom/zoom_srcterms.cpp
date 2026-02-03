@@ -20,7 +20,7 @@
 // TODO(@mhguo): check the corner case in ghost zones
 void CyclicZoom::SourceTermsFC(DvceEdgeFld4D<Real> efld) {
   // only apply when add_emf is true
-  if (!add_emf) return;
+  if (!zemf.add_emf) return;
   // apply only when zone > 0
   if (zstate.zone == 0) return;
   if (zamr.zooming_out || zamr.zooming_in) return;

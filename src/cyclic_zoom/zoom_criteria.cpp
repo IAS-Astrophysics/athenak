@@ -42,12 +42,6 @@ void CyclicZoom::UpdateState() {
               << "CyclicZoom AMR: zooming_in and zooming_out both true!" << std::endl;
     std::exit(EXIT_FAILURE);
   }
-  if (zamr.zooming_out) {
-    // if (add_emf && emf_flag >=1) {
-    if (add_emf) {
-      zamr.first_emf = true;
-    }
-  }
   // Update zoom state
   zstate.last_zone = zstate.zone;
   zstate.zone += zstate.direction;
