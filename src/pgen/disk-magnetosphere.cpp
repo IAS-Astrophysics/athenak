@@ -532,28 +532,41 @@ namespace {
 
             Real sinsq = rad*rad/rc/rc;
             Real csq0 = PoverR(mp, mp.rs);
-            
-            Real pre0=mp.denstar*csq0; // reference pressure
-            Real rint = mp.rs;         // integrate from stellar surface
-            Real dr = mp.rs/100.;      // integration step size
-            Real pre = pre0*exp(0.5*mp.origid*mp.origid*mp.rs*mp.rs*sinsq/csq0);  // pressure at stellar surface
+            Real pre0=mp.denstar*csq0;   // reference pressure
+            Real dr = mp.rs/100.;        // integration step size
 
-            if (rc < mp.rs) {
-                // analytic solution inside the star
-                pre = pre0*exp(0.5*mp.origid*mp.origid*rad*rad/csq0);
-            } else {
+            // Real rint = mp.rs;        // integrate from stellar surface
+            // Real pre = pre0*exp(0.5*mp.origid*mp.origid*mp.rs*mp.rs*sinsq/csq0);  // pressure at stellar surface
+            // if (rc < mp.rs) {
+            //     // analytic solution inside the star
+            //     pre = pre0*exp(0.5*mp.origid*mp.origid*rad*rad/csq0);
+            // } else {
                 
-                // integrate stellar envelope out from the stellar surface towards rc
-                while(rint<rc) {
-                    pre += -dr*mp.gm0/rint/rint *
-                        (rint-mp.rs) * (rint-mp.rs)/((rint-mp.rs)*(rint-mp.rs)+mp.gravsmooth*mp.gravsmooth) *
-                        pre/csq0 + dr*mp.origid*mp.origid*rint*sinsq*pre/csq0;
-                    rint = rint + dr;
+            //     // integrate stellar envelope out from the stellar surface towards rc
+            //     while(rint<rc) {
+            //         pre += -dr*mp.gm0/rint/rint *
+            //             (rint-mp.rs) * (rint-mp.rs)/((rint-mp.rs)*(rint-mp.rs)+mp.gravsmooth*mp.gravsmooth) *
+            //             pre/csq0 + dr*mp.origid*mp.origid*rint*sinsq*pre/csq0;
+            //         rint = rint + dr;
+            //     }
+            // }
+
+            Real rint = 0.0;             // integrate from stellar interior
+            Real pre = pre0;             // pressure at stellar interior
+            // integrate stellar envelope out from the stellar interior towards rc
+            while (rint<rc) {
+                if (rint < mp.rs) {
+                    // inside the star
+                    pre += +dr*mp.origid*mp.origid*rint*sinsq*pre/csq0;
+                } else {
+                    // outside the star
+                    pre -= - dr*mp.gm0/rint/rint*(rint-mp.rs)*(rint-mp.rs)/((rint-mp.rs)*(rint-mp.rs)+mp.gravsmooth*mp.gravsmooth)*pre/csq0
+                          +dr*mp.origid*mp.origid*rint*sinsq*pre/csq0;
                 }
-            }
+                rint += + dr;
 
             den = pre/csq0;
-        
+            }
         }
         
         return den;
@@ -563,7 +576,7 @@ namespace {
     KOKKOS_INLINE_FUNCTION //CF:CHECKED
     static Real PoverR(struct my_params mp, const Real rad) {
         Real poverr;
-        Real r = fmax(rad, mp.rs);
+        Real r = fmax(rad, mp.rfix);
         poverr = mp.p0_over_r0*std::pow(r/mp.r0, mp.qslope);
         return poverr;
     }
