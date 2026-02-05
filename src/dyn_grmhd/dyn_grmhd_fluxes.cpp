@@ -55,6 +55,7 @@ TaskStatus DynGRMHDPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int s
   auto coord_ = pmy_pack->pcoord->coord_data;
   auto &w0_ = pmy_pack->pmhd->w0;
   auto &b0_ = pmy_pack->pmhd->bcc0;
+  auto &temp_ = temperature;
   auto &adm = pmy_pack->padm->adm;
   auto &eos_ = pmy_pack->pmhd->peos->eos_data;
   auto &dyn_eos_ = eos;
@@ -123,7 +124,7 @@ TaskStatus DynGRMHDPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int s
       pl = ScrArray1D<Real>(member.team_scratch(scr_level), ncells1);
       pr = ScrArray1D<Real>(member.team_scratch(scr_level), ncells1);
       PressureEquilibriumX1(member, dyn_eos_, nvars - nhyd, m, k, j, il-1, iu, w0_, adm,
-                            pl, pr);
+                            temp_, pl, pr);
     }
 
     // Reconstruct qR[i] and qL[i+1]
@@ -275,7 +276,7 @@ TaskStatus DynGRMHDPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int s
 
         if (well_balanced_) {
           PressureEquilibriumX2(member, dyn_eos_, nvars - nhyd, m, k, j, is-1, ie+1, w0_,
-                                adm, pl_jp1, pr);
+                                adm, temp_, pl_jp1, pr);
         }
         // Reconstruct qR[j] and qL[j+1]
         switch (recon_method_) {
@@ -418,7 +419,7 @@ TaskStatus DynGRMHDPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int s
 
         if (well_balanced_) {
           PressureEquilibriumX3(member, dyn_eos_, nvars - nhyd, m, k, j, is-1, ie+1, w0_,
-                                adm, pl_kp1, pr);
+                                adm, temp_, pl_kp1, pr);
         }
         // Reconstruct qR[j] and qL[j+1]
         switch (recon_method_) {

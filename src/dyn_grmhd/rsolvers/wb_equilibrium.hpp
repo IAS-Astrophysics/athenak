@@ -29,9 +29,8 @@ KOKKOS_INLINE_FUNCTION
 void PressureEquilibrium(const PrimitiveSolverHydro<EOSPolicy, ErrorPolicy>& eos,
     const Real &alpm1, const Real &alp0, const Real &alpp1, Real gddm1[NSPMETRIC],
     Real gdd0[NSPMETRIC], Real gddp1[NSPMETRIC], const Real &n0, const Real &P0,
-    Real Y[MAX_SPECIES], Real &pl_ip1, Real &pr_i) {
+    const Real &T0, Real Y[MAX_SPECIES], Real &pl_ip1, Real &pr_i) {
   // Constants needed for both the left and right
-  Real T0 = eos.ps.GetEOS().GetTemperatureFromP(n0, P0, Y);
   Real e0 = eos.ps.GetEOS().GetEnergy(n0, T0, Y);
   Real guu0[NSPMETRIC];
   Real sdetg0 = Kokkos::sqrt(Primitive::GetDeterminant(gdd0));
@@ -84,7 +83,7 @@ void PressureEquilibriumX1(TeamMember_t const &member,
      const PrimitiveSolverHydro<EOSPolicy, ErrorPolicy>& eos, const int nscal,
      const int m, const int k, const int j, const int il, const int iu,
      const DvceArray5D<Real> &q, const adm::ADM::ADM_vars& adm,
-     ScrArray1D<Real> &pl, ScrArray1D<Real> &pr) {
+     const DvceArray5D<Real> &temp, ScrArray1D<Real> &pl, ScrArray1D<Real> &pr) {
   par_for_inner(member, il, iu, [&](const int i) {
     Real &alp0 = adm.alpha(m, k, j, i);
     Real &alpp1 = adm.alpha(m, k, j, i+1);
@@ -92,6 +91,7 @@ void PressureEquilibriumX1(TeamMember_t const &member,
     Real &rho0 = q(m, IDN, k, j, i);
     Real n0 = rho0/eos.ps.GetEOS().GetBaryonMass();
     Real &P0   = q(m, IPR, k, j, i);
+    Real &T0   = temp(m, 0, k, j, i);
     Real Y[MAX_SPECIES];
     for (int s = 0; s < nscal; s++) {
       Y[s] = q(m, IYF+s, k, j, i);
@@ -106,7 +106,7 @@ void PressureEquilibriumX1(TeamMember_t const &member,
                              adm.g_dd(m, 0, 2, k, j, i-1), adm.g_dd(m, 1, 1, k, j, i-1),
                              adm.g_dd(m, 1, 2, k, j, i-1), adm.g_dd(m, 2, 2, k, j, i-1)};
 
-    PressureEquilibrium(eos, alpm1, alp0, alpp1, gddm1, gdd0, gddp1, n0, P0, Y,
+    PressureEquilibrium(eos, alpm1, alp0, alpp1, gddm1, gdd0, gddp1, n0, P0, T0, Y,
                         pl(i+1), pr(i));
   });
 }
@@ -121,7 +121,7 @@ void PressureEquilibriumX2(TeamMember_t const &member,
      const PrimitiveSolverHydro<EOSPolicy, ErrorPolicy>& eos, const int nscal,
      const int m, const int k, const int j, const int il, const int iu,
      const DvceArray5D<Real> &q, const adm::ADM::ADM_vars& adm,
-     ScrArray1D<Real> &pl_jp1, ScrArray1D<Real> &pr_j) {
+     const DvceArray5D<Real> &temp, ScrArray1D<Real> &pl_jp1, ScrArray1D<Real> &pr_j) {
   par_for_inner(member, il, iu, [&](const int i) {
     Real &alp0 = adm.alpha(m, k, j, i);
     Real &alpp1 = adm.alpha(m, k, j+1, i);
@@ -129,6 +129,7 @@ void PressureEquilibriumX2(TeamMember_t const &member,
     Real &rho0 = q(m, IDN, k, j, i);
     Real n0 = rho0/eos.ps.GetEOS().GetBaryonMass();
     Real &P0   = q(m, IPR, k, j, i);
+    Real &T0   = temp(m, 0, k, j, i);
     Real Y[MAX_SPECIES];
     for (int s = 0; s < nscal; s++) {
       Y[s] = q(m, IYF+s, k, j, i);
@@ -143,7 +144,7 @@ void PressureEquilibriumX2(TeamMember_t const &member,
                              adm.g_dd(m, 0, 2, k, j-1, i), adm.g_dd(m, 1, 1, k, j-1, i),
                              adm.g_dd(m, 1, 2, k, j-1, i), adm.g_dd(m, 2, 2, k, j-1, i)};
 
-    PressureEquilibrium(eos, alpm1, alp0, alpp1, gddm1, gdd0, gddp1, n0, P0, Y,
+    PressureEquilibrium(eos, alpm1, alp0, alpp1, gddm1, gdd0, gddp1, n0, P0, T0, Y,
                         pl_jp1(i), pr_j(i));
   });
 }
@@ -158,7 +159,7 @@ void PressureEquilibriumX3(TeamMember_t const &member,
      const PrimitiveSolverHydro<EOSPolicy, ErrorPolicy>& eos, const int nscal,
      const int m, const int k, const int j, const int il, const int iu,
      const DvceArray5D<Real> &q, const adm::ADM::ADM_vars& adm,
-     ScrArray1D<Real> &pl_kp1, ScrArray1D<Real> &pr_k) {
+     const DvceArray5D<Real> &temp, ScrArray1D<Real> &pl_kp1, ScrArray1D<Real> &pr_k) {
   par_for_inner(member, il, iu, [&](const int i) {
     Real &alp0 = adm.alpha(m, k, j, i);
     Real &alpp1 = adm.alpha(m, k+1, j, i);
@@ -166,6 +167,7 @@ void PressureEquilibriumX3(TeamMember_t const &member,
     Real &rho0 = q(m, IDN, k, j, i);
     Real n0 = rho0/eos.ps.GetEOS().GetBaryonMass();
     Real &P0   = q(m, IPR, k, j, i);
+    Real &T0   = temp(m, 0, k, j, i);
     Real Y[MAX_SPECIES];
     for (int s = 0; s < nscal; s++) {
       Y[s] = q(m, IYF+s, k, j, i);
@@ -180,7 +182,7 @@ void PressureEquilibriumX3(TeamMember_t const &member,
                              adm.g_dd(m, 0, 2, k-1, j, i), adm.g_dd(m, 1, 1, k-1, j, i),
                              adm.g_dd(m, 1, 2, k-1, j, i), adm.g_dd(m, 2, 2, k-1, j, i)};
 
-    PressureEquilibrium(eos, alpm1, alp0, alpp1, gddm1, gdd0, gddp1, n0, P0, Y,
+    PressureEquilibrium(eos, alpm1, alp0, alpp1, gddm1, gdd0, gddp1, n0, P0, T0, Y,
                         pl_kp1(i), pr_k(i));
   });
 }
