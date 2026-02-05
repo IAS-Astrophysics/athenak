@@ -35,7 +35,6 @@ void PressureEquilibrium(const PrimitiveSolverHydro<EOSPolicy, ErrorPolicy>& eos
   Real e0 = eos.ps.GetEOS().GetEnergy(n0, T0, Y);
   Real guu0[NSPMETRIC];
   Real sdetg0 = Kokkos::sqrt(Primitive::GetDeterminant(gdd0));
-  Real chi0 = Kokkos::log(sdetg0);
   Primitive::InvertMatrix(guu0, gdd0, sdetg0*sdetg0);
   constexpr int max_iter = 30;
   constexpr Real tol = 1e-15;
@@ -162,8 +161,8 @@ void PressureEquilibriumX3(TeamMember_t const &member,
      ScrArray1D<Real> &pl_kp1, ScrArray1D<Real> &pr_k) {
   par_for_inner(member, il, iu, [&](const int i) {
     Real &alp0 = adm.alpha(m, k, j, i);
-    Real &alpp1 = adm.alpha(m, k, j+1, i);
-    Real &alpm1 = adm.alpha(m, k, j-1, i);
+    Real &alpp1 = adm.alpha(m, k+1, j, i);
+    Real &alpm1 = adm.alpha(m, k-1, j, i);
     Real &rho0 = q(m, IDN, k, j, i);
     Real n0 = rho0/eos.ps.GetEOS().GetBaryonMass();
     Real &P0   = q(m, IPR, k, j, i);

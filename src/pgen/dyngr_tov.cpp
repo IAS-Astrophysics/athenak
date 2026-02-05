@@ -215,7 +215,7 @@ void SetupTOV(ParameterInput *pin, Mesh* pmy_mesh_) {
   auto &nghbr = pmbp->pmb->nghbr;
   auto &mblev = pmbp->pmb->mb_lev;
 
-  par_for("pgen_potential", DevExeSpace(), 0,nmb-1,ks,ke+1,js,je+1,is,ie+1,
+  /*par_for("pgen_potential", DevExeSpace(), 0,nmb-1,ks,ke+1,js,je+1,is,ie+1,
   KOKKOS_LAMBDA(int m, int k, int j, int i) {
     Real &x1min = size.d_view(m).x1min;
     Real &x1max = size.d_view(m).x1max;
@@ -354,7 +354,7 @@ void SetupTOV(ParameterInput *pin, Mesh* pmy_mesh_) {
     w_bx = 0.5*(b0.x1f(m,k,j,i) + b0.x1f(m,k,j,i+1));
     w_by = 0.5*(b0.x2f(m,k,j,i) + b0.x2f(m,k,j+1,i));
     w_bz = 0.5*(b0.x3f(m,k,j,i) + b0.x3f(m,k+1,j,i));
-  });
+  });*/
 }
 
 //----------------------------------------------------------------------------------------

@@ -124,9 +124,11 @@ void PiecewiseLinearWBX2(TeamMember_t const &member, const int m, const int k, c
         const Real &peqp = pl_jp1(i);
         const Real &peqm = pr_j(i);
         const Real &peq = q(m,n,k,j,i);
+        Real pep1 = Kokkos::fmax(3.*(peqp - peq) + peqm, 0.0);
+        Real pem1 = Kokkos::fmax(3.*(peqm - peq) + peqp, 0.0);
         Real p0 = 0.0;
-        Real pp = q(m,n,k,j+1,i) - (3.*(peqp - peq) + peqm);
-        Real pm = q(m,n,k,j-1,i) - (3.*(peqm - peq) + peqp);
+        Real pp = q(m,n,k,j+1,i) - pep1;
+        Real pm = q(m,n,k,j-1,i) - pem1;
         PLM(pm, p0, pp, ql_jp1(n,i), qr_j(n,i));
         qr_j(n,i) += peqm;
         ql_jp1(n,i) += peqp;
@@ -175,9 +177,11 @@ void PiecewiseLinearWBX3(TeamMember_t const &member, const int m, const int k, c
         const Real &peqp = pl_kp1(i);
         const Real &peqm = pr_k(i);
         const Real &peq = q(m,n,k,j,i);
+        Real pep1 = Kokkos::fmax(3.*(peqp - peq) + peqm, 0.0);
+        Real pem1 = Kokkos::fmax(3.*(peqm - peq) + peqp, 0.0);
         Real p0 = 0.0;
-        Real pp = q(m,n,k+1,j,i) - (3.*(peqp - peq) + peqm);
-        Real pm = q(m,n,k-1,j,i) - (3.*(peqm - peq) + peqp);
+        Real pp = q(m,n,k+1,j,i) - pep1;
+        Real pm = q(m,n,k-1,j,i) - pem1;
         PLM(pm, p0, pp, ql_kp1(n,i), qr_k(n,i));
         qr_k(n,i) += peqm;
         ql_kp1(n,i) += peqp;

@@ -132,7 +132,7 @@ TaskStatus DynGRMHDPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int s
         DonorCellX1(member, m, k, j, il-1, iu, w0_, wl, wr);
         DonorCellX1(member, m, k, j, il-1, iu, b0_, bl, br);
         if (well_balanced_) {
-          par_for_inner(member, il, iu, [&](const int i) {
+          par_for_inner(member, il-1, iu, [&](const int i) {
             wl(IPR, i) = pl(i);
             wr(IPR, i) = pr(i);
           });
