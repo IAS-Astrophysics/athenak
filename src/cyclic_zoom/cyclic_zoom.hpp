@@ -145,10 +145,6 @@ class CyclicZoom
   void UpdateFluxes(Driver *pdriver);
   void StoreFluxes();
   void SourceTermsFC(DvceEdgeFld4D<Real> emf);
-  // timestep functions
-  Real NewTimeStep(Mesh* pm);
-  Real GRTimeStep(Mesh* pm);
-  Real EMFTimeStep(Mesh* pm);
   // restart functions
   IOWrapperSizeT RestartFileSize();
   void WriteRestartFile(IOWrapper &resfile, IOWrapperSizeT offset_zoom,
