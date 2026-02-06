@@ -557,10 +557,10 @@ namespace {
             while (rint<rc) {
                 if (rint < mp.rs) {
                     // inside the star
-                    pre += +dr*mp.origid*mp.origid*rint*sinsq*pre/csq0;
+                    pre = pre+dr*mp.origid*mp.origid*rint*sinsq*pre/csq0;
                 } else {
                     // outside the star
-                    pre -= - dr*mp.gm0/rint/rint*(rint-mp.rs)*(rint-mp.rs)/((rint-mp.rs)*(rint-mp.rs)+mp.gravsmooth*mp.gravsmooth)*pre/csq0
+                    pre = pre-dr*mp.gm0/rint/rint*(rint-mp.rs)*(rint-mp.rs)/((rint-mp.rs)*(rint-mp.rs)+mp.gravsmooth*mp.gravsmooth)*pre/csq0
                           +dr*mp.origid*mp.origid*rint*sinsq*pre/csq0;
                 }
                 rint += + dr;
