@@ -108,8 +108,8 @@ void IsothermalMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real
     u.bz = 0.5*(b.x3f(m,k,j,i) + b.x3f(m,k+1,j,i));
 
     // call c2p function
-    const Real b2 = SQR(u.bx) + SQR(u.by) + SQR(u.bz);
-    const Real dfloor_ = fmax(dfloor, b2/eos_data.sigma_max);
+    Real b2 = SQR(u.bx) + SQR(u.by) + SQR(u.bz);
+    Real dfloor_ = fmax(dfloor, b2/eos_data.sigma_max);
     HydPrim1D w;
     bool dfloor_used = false;
     SingleC2P_IsothermalMHD(u, dfloor_, w, dfloor_used);
