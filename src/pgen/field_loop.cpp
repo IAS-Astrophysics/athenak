@@ -113,7 +113,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   // Initialize conserved variables in Hydro
   // Hydro only works with shearing box and iprob=1 or 4
   if (pmbp->phydro != nullptr) {
-    auto &shearing_box_ = pmbp->phydro->psrc->shearing_box;
+    bool shearing_box_ = pmbp->phydro->psbox_u != nullptr;
     if (!(shearing_box_)) {
       std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
          << std::endl << "Hydro field loop problem can only be run with shearing box"
@@ -170,7 +170,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
 
   // Initialize conserved variables and magnetic field in MHD
   if (pmbp->pmhd != nullptr) {
-    auto &shearing_box_ = pmbp->pmhd->psrc->shearing_box;
+    bool shearing_box_ = pmbp->pmhd->psbox_u != nullptr;
     if (shearing_box_) {
       if (iprob != 1 && iprob != 4) {
         std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
