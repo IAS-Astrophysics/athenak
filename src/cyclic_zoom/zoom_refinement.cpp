@@ -179,7 +179,7 @@ void CyclicZoom::ReinitVariables() {
               << " Reinitializing MeshBlock " << m + pmesh->gids_eachrank[global_variable::my_rank]
               << " using zoom MeshBlock " << zm + zmbs
               << std::endl;
-    pzdata->LoadDataFromZoomData(m, zm);
+    pzdata->ApplyDataFromZoomData(m, zm);
   }
   return;
 }

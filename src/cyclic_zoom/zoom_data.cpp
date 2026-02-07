@@ -17,6 +17,7 @@
 #include "eos/ideal_c2p_mhd.hpp"
 #include "hydro/hydro.hpp"
 #include "mhd/mhd.hpp"
+#include "radiation/radiation.hpp"
 #include "cyclic_zoom/cyclic_zoom.hpp"
 
 //----------------------------------------------------------------------------------------
@@ -26,12 +27,14 @@ ZoomData::ZoomData(CyclicZoom *pz, ParameterInput *pin) :
     pzoom(pz),
     u0("zcons",1,1,1,1,1),
     w0("zprim",1,1,1,1,1),
-    coarse_u0("czcons",1,1,1,1,1),
-    coarse_w0("czprim",1,1,1,1,1),
+    coarse_u0("zccons",1,1,1,1,1),
+    coarse_w0("zcprim",1,1,1,1,1),
     efld_pre("zefldp",1,1,1,1),
     efld_aft("zeflda",1,1,1,1),
     delta_efld("zdelta_efld",1,1,1,1),
     efld_buf("zefld_buf",1,1,1,1),
+    i0("zi0",1,1,1,1,1),
+    coarse_i0("zci0",1,1,1,1,1),
     zbuf("z_buffer",1),
     zdata("z_data",1)
   {
@@ -39,32 +42,30 @@ ZoomData::ZoomData(CyclicZoom *pz, ParameterInput *pin) :
   pzmesh = pzoom->pzmesh;
   auto &indcs = pzoom->pmesh->mb_indcs;
   int &nzmb = pzmesh->nzmb_max_perdvce;
-  int &nlevels = pzmesh->nlevels;
   auto pmbp = pzoom->pmesh->pmb_pack;
-  bool is_mhd = (pmbp->pmhd != nullptr);
   nvars = 0;
-  if (!is_mhd) {
+  if (pmbp->phydro != nullptr) {
     nvars = pmbp->phydro->nhydro + pmbp->phydro->nscalars;
-  } else {
+  } else if (pmbp->pmhd != nullptr) {
     nvars = pmbp->pmhd->nmhd + pmbp->pmhd->nscalars;
   }
   d_zoom = pin->GetOrAddReal(pzoom->block_name,"d_zoom",(FLT_MIN));
   p_zoom = pin->GetOrAddReal(pzoom->block_name,"p_zoom",(FLT_MIN));
-  // compute size of data per Zoom MeshBlock
-  MeshBlockDataSize();
   // allocate ZoomData arrays
   int ncells1 = indcs.nx1 + 2*(indcs.ng);
   int ncells2 = (indcs.nx2 > 1)? (indcs.nx2 + 2*(indcs.ng)) : 1;
   int ncells3 = (indcs.nx3 > 1)? (indcs.nx3 + 2*(indcs.ng)) : 1;
-  Kokkos::realloc(u0, nzmb, nvars, ncells3, ncells2, ncells1);
-  Kokkos::realloc(w0, nzmb, nvars, ncells3, ncells2, ncells1);
   int nccells1 = indcs.cnx1 + 2*(indcs.ng);
   int nccells2 = (indcs.cnx2 > 1)? (indcs.cnx2 + 2*(indcs.ng)) : 1;
   int nccells3 = (indcs.cnx3 > 1)? (indcs.cnx3 + 2*(indcs.ng)) : 1;
-  Kokkos::realloc(coarse_u0, nzmb, nvars, nccells3, nccells2, nccells1);
-  Kokkos::realloc(coarse_w0, nzmb, nvars, nccells3, nccells2, nccells1);
+  if (pmbp->phydro != nullptr || pmbp->pmhd != nullptr) {
+    Kokkos::realloc(u0, nzmb, nvars, ncells3, ncells2, ncells1);
+    Kokkos::realloc(w0, nzmb, nvars, ncells3, ncells2, ncells1);
+    Kokkos::realloc(coarse_u0, nzmb, nvars, nccells3, nccells2, nccells1);
+    Kokkos::realloc(coarse_w0, nzmb, nvars, nccells3, nccells2, nccells1);
+  }
 
-  if (pzoom->pmesh->pmb_pack->pmhd != nullptr) {
+  if (pmbp->pmhd != nullptr) {
     // allocate electric fields
     Kokkos::realloc(efld_pre.x1e, nzmb, nccells3+1, nccells2+1, nccells1);
     Kokkos::realloc(efld_pre.x2e, nzmb, nccells3+1, nccells2, nccells1+1);
@@ -85,6 +86,17 @@ ZoomData::ZoomData(CyclicZoom *pz, ParameterInput *pin) :
     Kokkos::realloc(efld_buf.x2e, nzmb, nccells3+1, nccells2, nccells1+1);
     Kokkos::realloc(efld_buf.x3e, nzmb, nccells3, nccells2+1, nccells1+1);
   }
+
+  // allocate memory for radiation
+  nangles = 0;
+  if (pmbp->prad != nullptr) {
+    nangles = pmbp->prad->prgeo->nangles;
+    Kokkos::realloc(i0,nzmb,nangles,ncells3,ncells2,ncells1);
+    Kokkos::realloc(coarse_i0,nzmb,nangles,nccells3,nccells2,nccells1);
+  }
+
+  // compute size of data per Zoom MeshBlock
+  MeshBlockDataSize();
 
   // allocate device and host arrays for data transfer and storage
   // DualView buffer: device side for packing, host side (pinned) for MPI send
@@ -140,37 +152,42 @@ void ZoomData::Initialize()
   auto ebuf1 = efld_buf.x1e;
   auto ebuf2 = efld_buf.x2e;
   auto ebuf3 = efld_buf.x3e;
-  bool is_mhd = (pzoom->pmesh->pmb_pack->pmhd != nullptr);
-  auto peos = (is_mhd)? pzoom->pmesh->pmb_pack->pmhd->peos : pzoom->pmesh->pmb_pack->phydro->peos;
-  Real gm1 = peos->eos_data.gamma - 1.0;
+  auto &i0_ = i0;
+  auto &ci0 = coarse_i0;
 
-  Real d0 = d_zoom;
-  Real p0 = p_zoom;
+  auto pmbp = pzoom->pmesh->pmb_pack;
+  // initialize primitive and conserved variables
+  if (pmbp->phydro != nullptr || pmbp->pmhd != nullptr) {
+    auto peos = (pmbp->pmhd != nullptr)? pmbp->pmhd->peos : pmbp->phydro->peos;
+    Real gm1 = peos->eos_data.gamma - 1.0;
+    Real d0 = d_zoom;
+    Real p0 = p_zoom;
 
-  par_for("zoom_init", DevExeSpace(),0,nzmb-1,0,n3-1,0,n2-1,0,n1-1,
-  KOKKOS_LAMBDA(int m, int k, int j, int i) {
-    w0_(m,IDN,k,j,i) = d0;
-    w0_(m,IM1,k,j,i) = 0.0;
-    w0_(m,IM2,k,j,i) = 0.0;
-    w0_(m,IM3,k,j,i) = 0.0;
-    w0_(m,IEN,k,j,i) = p0/gm1;
-  });
+    par_for("zoom_init", DevExeSpace(),0,nzmb-1,0,n3-1,0,n2-1,0,n1-1,
+    KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
+      w0_(m,IDN,k,j,i) = d0;
+      w0_(m,IM1,k,j,i) = 0.0;
+      w0_(m,IM2,k,j,i) = 0.0;
+      w0_(m,IM3,k,j,i) = 0.0;
+      w0_(m,IEN,k,j,i) = p0/gm1;
+    });
 
-  par_for("zoom_init_c",DevExeSpace(),0,nzmb-1,0,nc3-1,0,nc2-1,0,nc1-1,
-  KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
-    cw0(m,IDN,k,j,i) = d0;
-    cw0(m,IM1,k,j,i) = 0.0;
-    cw0(m,IM2,k,j,i) = 0.0;
-    cw0(m,IM3,k,j,i) = 0.0;
-    cw0(m,IEN,k,j,i) = p0/gm1;
-  });
+    par_for("zoom_init_c",DevExeSpace(),0,nzmb-1,0,nc3-1,0,nc2-1,0,nc1-1,
+    KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
+      cw0(m,IDN,k,j,i) = d0;
+      cw0(m,IM1,k,j,i) = 0.0;
+      cw0(m,IM2,k,j,i) = 0.0;
+      cw0(m,IM3,k,j,i) = 0.0;
+      cw0(m,IEN,k,j,i) = p0/gm1;
+    });
 
-  // convert primitive to conserved variables
-  peos->PrimToCons(w0_,u0_,0,n3-1,0,n2-1,0,n1-1);
-  peos->PrimToCons(cw0,cu0,0,nc3-1,0,nc2-1,0,nc1-1);
+    // convert primitive to conserved variables
+    peos->PrimToCons(w0_,u0_,0,n3-1,0,n2-1,0,n1-1);
+    peos->PrimToCons(cw0,cu0,0,nc3-1,0,nc2-1,0,nc1-1);
+  }
 
   // initialize electric fields to zero
-  if (pzoom->pmesh->pmb_pack->pmhd != nullptr) {
+  if (pmbp->pmhd != nullptr) {
     par_for("zoom_init_e1",DevExeSpace(),0,nzmb-1,0,nc3,0,nc2,0,nc1-1,
     KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
       e1(m,k,j,i) = 0.0;
@@ -194,6 +211,25 @@ void ZoomData::Initialize()
     });
   }
 
+  // initialize intensity to zero
+  if (pmbp->prad != nullptr) {
+    int &nangles_ = nangles;
+    par_for("zoom_init_i0", DevExeSpace(),0,nzmb-1,0,n3-1,0,n2-1,0,n1-1,
+    KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
+      // Go through each angle
+      for (int n=0; n<nangles_; ++n) {
+        i0_(m,n,k,j,i) = 0.0;
+      }
+    });
+    par_for("zoom_init_ci0",DevExeSpace(),0,nzmb-1,0,nc3-1,0,nc2-1,0,nc1-1,
+    KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
+      // Go through each angle
+      for (int n=0; n<nangles_; ++n) {
+        ci0(m,n,k,j,i) = 0.0;
+      }
+    });
+  }
+
   return;
 }
 
@@ -201,7 +237,6 @@ void ZoomData::Initialize()
 //! \fn void ZoomData::MeshBlockDataSize()
 //! \brief Calculate the count of data elements per MeshBlock needed for zooming
 
-//TODO(@mhguo): consider magnetic fields, think if int is enough, maybe IOWrapperSizeT?
 void ZoomData::MeshBlockDataSize() {
   int &cnt = zmb_data_cnt;
   cnt = 0;
@@ -213,14 +248,19 @@ void ZoomData::MeshBlockDataSize() {
   int nccells1 = indcs.cnx1 + 2*(indcs.ng);
   int nccells2 = (indcs.cnx2 > 1)? (indcs.cnx2 + 2*(indcs.ng)) : 1;
   int nccells3 = (indcs.cnx3 > 1)? (indcs.cnx3 + 2*(indcs.ng)) : 1;
-  cnt += 2 * nvars * ncells3 * ncells2 * ncells1; // u0 and w0
-  cnt += 2 * nvars * nccells3 * nccells2 * nccells1; // coarse u0 and coarse w0
+  if (pmbp->phydro != nullptr || pmbp->pmhd != nullptr) {
+    cnt += 2 * nvars * ncells3 * ncells2 * ncells1; // u0 and w0
+    cnt += 2 * nvars * nccells3 * nccells2 * nccells1; // coarse u0 and coarse w0
+  }
   if (pmbp->pmhd != nullptr) {
     cnt += 3 * (nccells3+1) * (nccells2+1) * nccells1; // efld x1e
     cnt += 3 * (nccells3+1) * nccells2 * (nccells1+1); // efld x2e
     cnt += 3 * nccells3 * (nccells2+1) * (nccells1+1); // efld x3e
   }
-  // TODO(@mhguo): add radiation variables later
+  if (pmbp->prad != nullptr) {
+    cnt += nangles * ncells3 * ncells2 * ncells1; // i0
+    cnt += nangles * nccells3 * nccells2 * nccells1; // coarse i0
+  }
   return;
 }
 
@@ -328,20 +368,25 @@ void ZoomData::DumpData() {
 //! \brief Store data from MeshBlock m to zoom data zm
 
 void ZoomData::StoreDataToZoomData(int zm, int m) {
-  auto pmesh = pzoom->pmesh;
-  DvceArray5D<Real> u, w;
-  if (pmesh->pmb_pack->phydro != nullptr) {
-    u = pmesh->pmb_pack->phydro->u0;
-    w = pmesh->pmb_pack->phydro->w0;
-    StoreCCData(zm, m, u, w);
+  auto pmbp = pzoom->pmesh->pmb_pack;
+  if (pmbp->phydro != nullptr) {
+    auto u_ = pmbp->phydro->u0;
+    auto w_ = pmbp->phydro->w0;
+    StoreCCData(zm, u0, coarse_u0, m, u_);
+    StoreCCData(zm, w0, coarse_w0, m, w_);
   }
-  if (pmesh->pmb_pack->pmhd != nullptr) {
-    u = pmesh->pmb_pack->pmhd->u0;
-    w = pmesh->pmb_pack->pmhd->w0;
-    StoreCCData(zm, m, u, w);
-    StoreCoarseHydroData(zm, m, u, w);
-    DvceEdgeFld4D<Real> efld = pmesh->pmb_pack->pmhd->efld;
+  if (pmbp->pmhd != nullptr) {
+    auto u_ = pmbp->pmhd->u0;
+    auto w_ = pmbp->pmhd->w0;
+    StoreCCData(zm, u0, coarse_u0, m, u_);
+    StoreCCData(zm, w0, coarse_w0, m, w_);
+    StoreCoarseHydroData(zm, coarse_w0, m, w_);
+    auto efld = pmbp->pmhd->efld;
     StoreEFieldsBeforeAMR(zm, m, efld);
+  }
+  if (pmbp->prad != nullptr) {
+    auto i_ = pmbp->prad->i0;
+    StoreCCData(zm, i0, coarse_i0, m, i_);
   }
 }
 
@@ -349,25 +394,20 @@ void ZoomData::StoreDataToZoomData(int zm, int m) {
 //! \fn void ZoomData::StoreCCData()
 //! \brief Store cell-centered data from MeshBlock m to zoom meshblock zm
 
-void ZoomData::StoreCCData(int zm, int m, DvceArray5D<Real> u, DvceArray5D<Real> w) {
+void ZoomData::StoreCCData(int zm, DvceArray5D<Real> a0, DvceArray5D<Real> ca,
+                           int m, DvceArray5D<Real> a) {
   auto pmesh = pzoom->pmesh;
-  auto des_slice = Kokkos::subview(u0, Kokkos::make_pair(zm,zm+1),
+  auto des_slice = Kokkos::subview(a0, Kokkos::make_pair(zm,zm+1),
                                    Kokkos::ALL,Kokkos::ALL,Kokkos::ALL,Kokkos::ALL);
-  auto src_slice = Kokkos::subview(u, Kokkos::make_pair(m,m+1),
+  auto src_slice = Kokkos::subview(a, Kokkos::make_pair(m,m+1),
                                    Kokkos::ALL,Kokkos::ALL,Kokkos::ALL,Kokkos::ALL);
-  Kokkos::deep_copy(des_slice, src_slice);
-  des_slice = Kokkos::subview(w0, Kokkos::make_pair(zm,zm+1),
-                              Kokkos::ALL,Kokkos::ALL,Kokkos::ALL,Kokkos::ALL);
-  src_slice = Kokkos::subview(w, Kokkos::make_pair(m,m+1),
-                              Kokkos::ALL,Kokkos::ALL,Kokkos::ALL,Kokkos::ALL);
   Kokkos::deep_copy(des_slice, src_slice);
   // now do coarse data by averaging fine data
   auto &indcs = pzoom->pmesh->mb_indcs;
   int &cis = indcs.cis;  int &cie  = indcs.cie;
   int &cjs = indcs.cjs;  int &cje  = indcs.cje;
   int &cks = indcs.cks;  int &cke  = indcs.cke;
-  int nvar = nvars;
-  auto cu = coarse_u0, cw = coarse_w0;
+  int nvar = a.extent_int(1);
   int hng = indcs.ng / 2;
   // TODO(@mhguo): may think whether we need to include ghost zones
   // TODO(@mhguo): 1D and 2D cases are not tested yet!
@@ -376,8 +416,7 @@ void ZoomData::StoreCCData(int zm, int m, DvceArray5D<Real> u, DvceArray5D<Real>
     par_for("zoom-restrictCC-1D",DevExeSpace(), 0, nvar-1, cis-hng, cie+hng,
     KOKKOS_LAMBDA(const int n, const int i) {
       int finei = 2*i - cis;  // correct when cis=is
-      cu(zm,n,cks,cjs,i) = 0.5*(u(m,n,cks,cjs,finei) + u(m,n,cks,cjs,finei+1));
-      cw(zm,n,cks,cjs,i) = 0.5*(w(m,n,cks,cjs,finei) + w(m,n,cks,cjs,finei+1));
+      ca(zm,n,cks,cjs,i) = 0.5*(a(m,n,cks,cjs,finei) + a(m,n,cks,cjs,finei+1));
     });
   // restrict in 2D
   } else if (pmesh->two_d) {
@@ -386,10 +425,8 @@ void ZoomData::StoreCCData(int zm, int m, DvceArray5D<Real> u, DvceArray5D<Real>
     KOKKOS_LAMBDA(const int n, const int j, const int i) {
       int finei = 2*i - cis;  // correct when cis=is
       int finej = 2*j - cjs;  // correct when cjs=js
-      cu(zm,n,cks,j,i) = 0.25*(u(m,n,cks,finej  ,finei) + u(m,n,cks,finej  ,finei+1)
-                             + u(m,n,cks,finej+1,finei) + u(m,n,cks,finej+1,finei+1));
-      cw(zm,n,cks,j,i) = 0.25*(w(m,n,cks,finej  ,finei) + w(m,n,cks,finej  ,finei+1)
-                             + w(m,n,cks,finej+1,finei) + w(m,n,cks,finej+1,finei+1));
+      ca(zm,n,cks,j,i) = 0.25*(a(m,n,cks,finej  ,finei) + a(m,n,cks,finej  ,finei+1)
+                             + a(m,n,cks,finej+1,finei) + a(m,n,cks,finej+1,finei+1));
     });
   // restrict in 3D
   } else {
@@ -399,16 +436,11 @@ void ZoomData::StoreCCData(int zm, int m, DvceArray5D<Real> u, DvceArray5D<Real>
       int finei = 2*i - cis;  // correct if cis = is
       int finej = 2*j - cjs;  // correct if cjs = js
       int finek = 2*k - cks;  // correct if cks = ks
-      cu(zm,n,k,j,i) =
-                 0.125*(u(m,n,finek  ,finej  ,finei) + u(m,n,finek  ,finej  ,finei+1)
-                      + u(m,n,finek  ,finej+1,finei) + u(m,n,finek  ,finej+1,finei+1)
-                      + u(m,n,finek+1,finej,  finei) + u(m,n,finek+1,finej,  finei+1)
-                      + u(m,n,finek+1,finej+1,finei) + u(m,n,finek+1,finej+1,finei+1));
-      cw(zm,n,k,j,i) =
-                 0.125*(w(m,n,finek  ,finej  ,finei) + w(m,n,finek  ,finej  ,finei+1)
-                      + w(m,n,finek  ,finej+1,finei) + w(m,n,finek  ,finej+1,finei+1)
-                      + w(m,n,finek+1,finej,  finei) + w(m,n,finek+1,finej,  finei+1)
-                      + w(m,n,finek+1,finej+1,finei) + w(m,n,finek+1,finej+1,finei+1));
+      ca(zm,n,k,j,i) =
+                 0.125*(a(m,n,finek  ,finej  ,finei) + a(m,n,finek  ,finej  ,finei+1)
+                      + a(m,n,finek  ,finej+1,finei) + a(m,n,finek  ,finej+1,finei+1)
+                      + a(m,n,finek+1,finej,  finei) + a(m,n,finek+1,finej,  finei+1)
+                      + a(m,n,finek+1,finej+1,finei) + a(m,n,finek+1,finej+1,finei+1));
     });
   }
   return;
@@ -419,7 +451,8 @@ void ZoomData::StoreCCData(int zm, int m, DvceArray5D<Real> u, DvceArray5D<Real>
 //! \brief Store coarse-grained hydro conserved variables from mb m to zoom mb zm
 //! only for mhd case
 
-void ZoomData::StoreCoarseHydroData(int zm, int m, DvceArray5D<Real> u0_, DvceArray5D<Real> w0_) {
+void ZoomData::StoreCoarseHydroData(int zm, DvceArray5D<Real> cw, 
+                                    int m, DvceArray5D<Real> w_) {
   auto pmbp = pzoom->pmesh->pmb_pack;
   if (pmbp->pmhd == nullptr) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
@@ -439,7 +472,6 @@ void ZoomData::StoreCoarseHydroData(int zm, int m, DvceArray5D<Real> u0_, DvceAr
   // DvceArray5D<Real> u0_, w0_;
   bool is_gr = pmbp->pcoord->is_general_relativistic;
   auto eos = pmbp->pmhd->peos->eos_data;
-  auto cw = coarse_w0;
   Real &x1min = size.h_view(m).x1min;
   Real &x1max = size.h_view(m).x1max;
   Real &x2min = size.h_view(m).x2min;
@@ -472,11 +504,11 @@ void ZoomData::StoreCoarseHydroData(int zm, int m, DvceArray5D<Real> u0_, DvceAr
         for (int kk=0; kk<2; ++kk) {
           // Load single state of primitive variables
           HydPrim1D w;
-          w.d  = w0_(m,IDN,fk+kk,fj+jj,fi+ii);
-          w.vx = w0_(m,IVX,fk+kk,fj+jj,fi+ii);
-          w.vy = w0_(m,IVY,fk+kk,fj+jj,fi+ii);
-          w.vz = w0_(m,IVZ,fk+kk,fj+jj,fi+ii);
-          w.e  = w0_(m,IEN,fk+kk,fj+jj,fi+ii);
+          w.d  = w_(m,IDN,fk+kk,fj+jj,fi+ii);
+          w.vx = w_(m,IVX,fk+kk,fj+jj,fi+ii);
+          w.vy = w_(m,IVY,fk+kk,fj+jj,fi+ii);
+          w.vz = w_(m,IVZ,fk+kk,fj+jj,fi+ii);
+          w.e  = w_(m,IEN,fk+kk,fj+jj,fi+ii);
 
           // call p2c function
           HydCons1D u;
@@ -553,33 +585,33 @@ void ZoomData::StoreCoarseHydroData(int zm, int m, DvceArray5D<Real> u0_, DvceAr
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn ZoomData::LoadDataFromZoomData()
+//! \fn ZoomData::ApplyDataFromZoomData()
 //! \brief Load data from zoom data zm to MeshBlock m
 
 // TODO(@mhguo): is this what you want?
-void ZoomData::LoadDataFromZoomData(int m, int zm) {
-  LoadCCData(m, zm);
-  LoadHydroData(m, zm);
-  // TODO(@mhguo): shall we load magnetic fields too?
-  // UpdateBFields(m, zm);
+void ZoomData::ApplyDataFromZoomData(int m, int zm) {
+  auto pmbp = pzoom->pmesh->pmb_pack;
+  if (pmbp->phydro == nullptr && pmbp->pmhd == nullptr && pmbp->prad == nullptr) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+              << std::endl << "No physics package is enabled, nothing to load" <<std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+  if (pmbp->phydro != nullptr || pmbp->prad != nullptr) {
+    ApplyCCData(m, zm);
+  }
+  if (pmbp->pmhd != nullptr) {
+    ApplyMHDHydroData(m, zm);
+    // TODO(@mhguo): shall we load magnetic fields too?
+    // UpdateBFields(m, zm);
+  }
   return;
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn void ZoomData::LoadCCData()
-//! \brief Load cell-centered data from zoom data zm to MeshBlock m
+//! \fn void ZoomData::ApplyCCData()
+//! \brief Apply cell-centered data to MeshBlock m from zoom data zm 
 
-// TODO(@mhguo): implement this function
-void ZoomData::LoadCCData(int m, int zm) {
-  return;
-}
-
-//----------------------------------------------------------------------------------------
-//! \fn void ZoomData::LoadHydroData()
-//! \brief Load hydro data from zoom data zm to MeshBlock m
-
-// TODO(@mhguo): implement this function
-void ZoomData::LoadHydroData(int m, int zm) {
+void ZoomData::ApplyCCData(int m, int zm) {
   auto &indcs = pzoom->pmesh->mb_indcs;
   auto pmbp = pzoom->pmesh->pmb_pack;
   auto &size = pmbp->pmb->mb_size;
@@ -587,25 +619,6 @@ void ZoomData::LoadHydroData(int m, int zm) {
   int &js = indcs.js;  int &je  = indcs.je;
   int &ks = indcs.ks;  int &ke  = indcs.ke;
   int nx1 = indcs.nx1, nx2 = indcs.nx2, nx3 = indcs.nx3;
-  DvceArray5D<Real> u_, w_;
-  if (pmbp->phydro != nullptr) {
-    u_ = pmbp->phydro->u0;
-    w_ = pmbp->phydro->w0;
-  } else if (pmbp->pmhd != nullptr) {
-    u_ = pmbp->pmhd->u0;
-    w_ = pmbp->pmhd->w0;
-  }
-  auto u0_ = u0, w0_ = w0;
-  auto peos = (pmbp->pmhd != nullptr)? pmbp->pmhd->peos : pmbp->phydro->peos;
-  auto eos = peos->eos_data;
-  Real gamma = eos.gamma;
-  bool is_gr = pmbp->pcoord->is_general_relativistic;
-  bool flat = true;
-  Real spin = 0.0;
-  if (is_gr) {
-    flat = pmbp->pcoord->coord_data.is_minkowski;
-    spin = pmbp->pcoord->coord_data.bh_spin;
-  }
   Real &x1min = size.h_view(m).x1min;
   Real &x1max = size.h_view(m).x1max;
   Real &x2min = size.h_view(m).x2min;
@@ -617,6 +630,8 @@ void ZoomData::LoadHydroData(int m, int zm) {
     std::cout << " Old zoom region radius: " << ozregion.radius << std::endl;
   }
   if (pmbp->phydro != nullptr) {
+    auto u_ = pmbp->phydro->u0, w_ = pmbp->phydro->w0;
+    auto u0_ = u0, w0_ = w0;
     // par_for("zoom_reinit", DevExeSpace(),ks-ng,ke+ng,js-ng,je+ng,is-ng,ie+ng,
     par_for("zoom_reinit", DevExeSpace(),ks,ke,js,je,is,ie,
     KOKKOS_LAMBDA(int k, int j, int i) {
@@ -637,7 +652,65 @@ void ZoomData::LoadHydroData(int m, int zm) {
         u_(m,IEN,k,j,i) = u0_(zm,IEN,k,j,i);
       }
     });
-  } else if (pmbp->pmhd != nullptr) {
+  }
+  if (pmbp->pmhd != nullptr) {
+    // pass as this will be done in other functions
+  }
+  if (pmbp->prad != nullptr) {
+    int &nangles_ = nangles;
+    auto i_ = pmbp->prad->i0;
+    auto i0_ = i0;
+    par_for("zoom_reinit", DevExeSpace(),ks,ke,js,je,is,ie,
+    KOKKOS_LAMBDA(int k, int j, int i) {
+      Real x1v = CellCenterX(i-is, nx1, x1min, x1max);
+      Real x2v = CellCenterX(j-js, nx2, x2min, x2max);
+      Real x3v = CellCenterX(k-ks, nx3, x3min, x3max);
+      if (ozregion.IsInZoomRegion(x1v, x2v, x3v)) { // apply to old zoom region
+        // Go through each angle
+        for (int n=0; n<nangles_; ++n) {
+          i_(m,n,k,j,i) = i0_(n,zm,k,j,i);
+        }
+      }
+    });
+  }
+  return;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void ZoomData::ApplyMHDHydroData()
+//! \brief Apply MHD hydro data to MeshBlock m from zoom data zm 
+
+void ZoomData::ApplyMHDHydroData(int m, int zm) {
+  auto &indcs = pzoom->pmesh->mb_indcs;
+  auto pmbp = pzoom->pmesh->pmb_pack;
+  auto &size = pmbp->pmb->mb_size;
+  int &is = indcs.is;  int &ie  = indcs.ie;
+  int &js = indcs.js;  int &je  = indcs.je;
+  int &ks = indcs.ks;  int &ke  = indcs.ke;
+  int nx1 = indcs.nx1, nx2 = indcs.nx2, nx3 = indcs.nx3;
+  auto peos = (pmbp->pmhd != nullptr)? pmbp->pmhd->peos : pmbp->phydro->peos;
+  auto eos = peos->eos_data;
+  Real gamma = eos.gamma;
+  bool is_gr = pmbp->pcoord->is_general_relativistic;
+  bool flat = true;
+  Real spin = 0.0;
+  if (is_gr) {
+    flat = pmbp->pcoord->coord_data.is_minkowski;
+    spin = pmbp->pcoord->coord_data.bh_spin;
+  }
+  Real &x1min = size.h_view(m).x1min;
+  Real &x1max = size.h_view(m).x1max;
+  Real &x2min = size.h_view(m).x2min;
+  Real &x2max = size.h_view(m).x2max;
+  Real &x3min = size.h_view(m).x3min;
+  Real &x3max = size.h_view(m).x3max;
+  auto ozregion = pzoom->old_zregion;
+  if (global_variable::my_rank == 0) {
+    std::cout << " Old zoom region radius: " << ozregion.radius << std::endl;
+  }
+  if (pmbp->pmhd != nullptr) {
+    auto u_ = pmbp->pmhd->u0, w_ = pmbp->pmhd->w0;
+    auto u0_ = u0, w0_ = w0;
     auto b = pmbp->pmhd->b0;
     // par_for("zoom_reinit", DevExeSpace(),ks-ng,ke+ng,js-ng,je+ng,is-ng,ie+ng,
     par_for("zoom_reinit", DevExeSpace(),ks,ke,js,je,is,ie,

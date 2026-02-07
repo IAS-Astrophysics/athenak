@@ -209,6 +209,7 @@ class ZoomData
   ~ZoomData() = default;
   // data
   int nvars;               // number of variables
+  int nangles;             // number of angles
   int zmb_data_cnt;        // count of data elements per Zoom MeshBlock needed for zooming
   Real d_zoom;             // density within inner boundary
   Real p_zoom;             // pressure within inner boundary
@@ -225,6 +226,10 @@ class ZoomData
   // DvceEdgeFld4D<Real> emf0;   // edge-centered electric fields just after zoom
   DvceEdgeFld4D<Real> delta_efld; // change in electric fields
   DvceEdgeFld4D<Real> efld_buf;   // buffer for electric fields during zoom
+
+  // intensity arrays
+  DvceArray5D<Real> i0;         // intensities
+  DvceArray5D<Real> coarse_i0;  // intensities on 2x coarser grid (for SMR/AMR)
 
   // DualView for device ↔ host mirrored packing buffer (replaces dzbuf+hzbuf)
   // Syncs only used portion via subviews for bandwidth efficiency
@@ -247,36 +252,38 @@ class ZoomData
   void ResetDataEC(DvceEdgeFld4D<Real> ec);
   void DumpData();
   void StoreDataToZoomData(int zm, int m);
-  void StoreCCData(int zm, int m, DvceArray5D<Real> u, DvceArray5D<Real> w);
-  void StoreCoarseHydroData(int zm, int m, DvceArray5D<Real> u0_, DvceArray5D<Real> w0_);
+  void StoreCCData(int zm, DvceArray5D<Real> a0, DvceArray5D<Real> ca,
+                   int m, DvceArray5D<Real> a);
+  void StoreCoarseHydroData(int zm, DvceArray5D<Real> cw,
+                            int m, DvceArray5D<Real> w0_);
   // TODO(@mhguo): find a better name
   void StoreEFieldsBeforeAMR(int zm, int m, DvceEdgeFld4D<Real> efld);
   void StoreFinerEFields(int zmc, int zm, DvceEdgeFld4D<Real> efld);
   void StoreEFieldsAfterAMR(int zm, int m, DvceEdgeFld4D<Real> efld);
   void LimitEFields();
   void PackBuffer();
-  void PackBuffersCC(DvceArray1D<Real> packed_data, DvceArray5D<Real> a0,
-                     size_t offset_a0, const int m);
-  void PackBuffersFC(DvceArray1D<Real> packed_data, DvceFaceFld4D<Real> fc,
-                     size_t offset_fc, const int m);
-  void PackBuffersEC(DvceArray1D<Real> packed_data, DvceEdgeFld4D<Real> ec,
-                     size_t offset_ec, const int m);
+  void PackBuffersCC(DvceArray1D<Real> packed_data, size_t offset,
+                     int m, DvceArray5D<Real> a0);
+  void PackBuffersFC(DvceArray1D<Real> packed_data, size_t offset,
+                     int m, DvceFaceFld4D<Real> fc);
+  void PackBuffersEC(DvceArray1D<Real> packed_data, size_t offset,
+                     int m, DvceEdgeFld4D<Real> ec);
   void UnpackBuffer();
-  void UnpackBuffersCC(DvceArray1D<Real> packed_data, DvceArray5D<Real> a0,
-                       size_t offset_a0, const int m);
-  void UnpackBuffersFC(DvceArray1D<Real> packed_data, DvceFaceFld4D<Real> fc,
-                       size_t offset_fc, const int m);
-  void UnpackBuffersEC(DvceArray1D<Real> packed_data, DvceEdgeFld4D<Real> ec,
-                       size_t offset_ec, const int m);
+  void UnpackBuffersCC(DvceArray1D<Real> packed_data, size_t offset,
+                       int m, DvceArray5D<Real> a0);
+  void UnpackBuffersFC(DvceArray1D<Real> packed_data, size_t offset,
+                       int m, DvceFaceFld4D<Real> fc);
+  void UnpackBuffersEC(DvceArray1D<Real> packed_data, size_t offset,
+                       int m, DvceEdgeFld4D<Real> ec);
   void RedistZMBs(int nlmb, int lmbs,
                   HostArray1D<Real> src_buf, HostArray1D<Real> dst_buf,
                   const std::vector<int>& src_ranks, const std::vector<int>& dst_ranks,
                   const std::vector<int>* src_lids, const std::vector<int>* dst_lids);
   void SaveToStorage(int zone);
   void LoadFromStorage(int zone);
-  void LoadDataFromZoomData(int m, int zm);
-  void LoadCCData(int m, int zm);
-  void LoadHydroData(int m, int zm);
+  void ApplyDataFromZoomData(int m, int zm);
+  void ApplyCCData(int m, int zm);
+  void ApplyMHDHydroData(int m, int zm);
   void MaskDataInZoomRegion(int m, int zm);
   void AddSrcTermsFC(int m, int zm, DvceEdgeFld4D<Real> emf);
 

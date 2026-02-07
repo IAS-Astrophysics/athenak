@@ -23,47 +23,68 @@ void ZoomData::PackBuffer() {
     std::cout << "CyclicZoom: Packing data into communication buffer" << std::endl;
   }
   // pack data for all zmbs on this device
-  auto &pmhd = pzoom->pmesh->pmb_pack->pmhd;
+  auto &pmbp = pzoom->pmesh->pmb_pack;
   // use size_t for offset to avoid overflow
   size_t offset = 0;
   size_t cc_cnt = u0.extent(1) * u0.extent(2) * u0.extent(3) * u0.extent(4);
   size_t ccc_cnt = coarse_u0.extent(1) * coarse_u0.extent(2) * coarse_u0.extent(3) * coarse_u0.extent(4);
   size_t ec_cnt = 0;
-  if (pmhd != nullptr) {
+  if (pmbp->pmhd != nullptr) {
     // use efld_pre to get sizes for all edge fields
     auto efld = efld_pre;
     ec_cnt = efld.x1e.extent(1) * efld.x1e.extent(2) * efld.x1e.extent(3);
     ec_cnt += efld.x2e.extent(1) * efld.x2e.extent(2) * efld.x2e.extent(3);
     ec_cnt += efld.x3e.extent(1) * efld.x3e.extent(2) * efld.x3e.extent(3);
   }
+  size_t i0_cnt = 0;
+  size_t ci0_cnt = 0;
+  if (pmbp->prad != nullptr) {
+    i0_cnt = i0.extent(1) * i0.extent(2) * i0.extent(3) * i0.extent(4);
+    ci0_cnt = coarse_i0.extent(1) * coarse_i0.extent(2) * coarse_i0.extent(3) * coarse_i0.extent(4);
+  }
   auto dzbuf = zbuf.d_view;  // Get device view for packing
   for (int zm = 0; zm < pzmesh->nzmb_thisdvce; ++zm) {
     // offset = zm * zmb_data_cnt;
-    // pack conserved variables
-    PackBuffersCC(dzbuf, u0, offset, zm);
-    offset += cc_cnt;
-    // pack primitive variables
-    PackBuffersCC(dzbuf, w0, offset, zm);
-    offset += cc_cnt;
-    // pack coarse conserved variables
-    PackBuffersCC(dzbuf, coarse_u0, offset, zm);
-    offset += ccc_cnt;
-    // pack coarse primitive variables
-    PackBuffersCC(dzbuf, coarse_w0, offset, zm);
-    offset += ccc_cnt;
+    if (pmbp->phydro != nullptr || pmbp->pmhd != nullptr) {
+      // pack conserved variables
+      PackBuffersCC(dzbuf, offset, zm, u0);
+      offset += cc_cnt;
+      // pack primitive variables
+      PackBuffersCC(dzbuf, offset, zm, w0);
+      offset += cc_cnt;
+      // pack coarse conserved variables
+      PackBuffersCC(dzbuf, offset, zm, coarse_u0);
+      offset += ccc_cnt;
+      // pack coarse primitive variables
+      PackBuffersCC(dzbuf, offset, zm, coarse_w0);
+      offset += ccc_cnt;
+    }
     // pack magnetic fields and/or electric fields if MHD
-    if (pmhd != nullptr) {
-      PackBuffersEC(dzbuf, efld_pre, offset, zm);
+    if (pmbp->pmhd != nullptr) {
+      PackBuffersEC(dzbuf, offset, zm, efld_pre);
       offset += ec_cnt;
-      PackBuffersEC(dzbuf, efld_aft, offset, zm);
+      PackBuffersEC(dzbuf, offset, zm, efld_aft);
       offset += ec_cnt;
-      PackBuffersEC(dzbuf, delta_efld, offset, zm);
+      PackBuffersEC(dzbuf, offset, zm, delta_efld);
       offset += ec_cnt;
+    }
+    // pack radiation variables if radiation is enabled
+    if (pmbp->prad != nullptr) {
+      PackBuffersCC(dzbuf, offset, zm, i0);
+      offset += i0_cnt;
+      PackBuffersCC(dzbuf, offset, zm, coarse_i0);
+      offset += ci0_cnt;
     }
   }
   // Single copy: device buffer -> host buffer
   // Only copy the portion that's actually used
   size_t used_size = pzmesh->nzmb_thisdvce * zmb_data_cnt;
+  if (offset != used_size) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+              << ": Packed data size does not match expected size!" << std::endl;
+    std::cout << "Packed size: " << offset << ", Expected size: " << used_size << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
   Kokkos::deep_copy(
     Kokkos::subview(zbuf.h_view, Kokkos::make_pair(size_t(0), used_size)),
     Kokkos::subview(dzbuf, Kokkos::make_pair(size_t(0), used_size))
@@ -75,9 +96,9 @@ void ZoomData::PackBuffer() {
 //! \fn ZoomData::PackBuffersCC()
 //! \brief Packs data into AMR communication buffers for all MBs being sent
 
-void ZoomData::PackBuffersCC(DvceArray1D<Real> packed_data, DvceArray5D<Real> a0,
-                             size_t offset_a0, const int m) {
-  // Pack array a0 at MeshBlock m into packed_data starting from offset_a0
+void ZoomData::PackBuffersCC(DvceArray1D<Real> packed_data, size_t offset,
+                             const int m, DvceArray5D<Real> a0) {
+  // Pack array a0 at MeshBlock m into packed_data starting from offset
   int nv = a0.extent_int(1);
   int nk = a0.extent_int(2);
   int nj = a0.extent_int(3);
@@ -85,7 +106,7 @@ void ZoomData::PackBuffersCC(DvceArray1D<Real> packed_data, DvceArray5D<Real> a0
   // Pack using parallel kernel on device
   par_for("pack_cc", DevExeSpace(), 0, nv-1, 0, nk-1, 0, nj-1, 0, ni-1,
   KOKKOS_LAMBDA(const int v, const int k, const int j, const int i) {
-    packed_data(offset_a0 + (((v*nk + k)*nj + j)*ni + i)) = a0(m,v,k,j,i);
+    packed_data(offset + (((v*nk + k)*nj + j)*ni + i)) = a0(m,v,k,j,i);
   });
   return;
 }
@@ -94,8 +115,8 @@ void ZoomData::PackBuffersCC(DvceArray1D<Real> packed_data, DvceArray5D<Real> a0
 //! \fn ZoomData::PackBuffersFC()
 //! \brief Packs face-centered data into AMR communication buffers for all MBs being sent
 
-void ZoomData::PackBuffersFC(DvceArray1D<Real> packed_data, DvceFaceFld4D<Real> fc,
-                             size_t offset_fc, const int m) {
+void ZoomData::PackBuffersFC(DvceArray1D<Real> packed_data, size_t offset,
+                             const int m, DvceFaceFld4D<Real> fc) {
   // Pack face field fc at MeshBlock m into packed_data starting from offset_fc
   // Pack f1
   int nk = fc.x1f.extent_int(1);
@@ -103,25 +124,25 @@ void ZoomData::PackBuffersFC(DvceArray1D<Real> packed_data, DvceFaceFld4D<Real> 
   int ni = fc.x1f.extent_int(3);
   par_for("pack_f1", DevExeSpace(), 0, nk-1, 0, nj-1, 0, ni-1,
   KOKKOS_LAMBDA(const int k, const int j, const int i) {
-    packed_data(offset_fc + (k*nj + j)*ni + i) = fc.x1f(m,k,j,i);
+    packed_data(offset + (k*nj + j)*ni + i) = fc.x1f(m,k,j,i);
   });
-  offset_fc += nk*nj*ni;
+  offset += nk*nj*ni;
   // Pack f2
   nk = fc.x2f.extent_int(1);
   nj = fc.x2f.extent_int(2);
   ni = fc.x2f.extent_int(3);
   par_for("pack_f2", DevExeSpace(), 0, nk-1, 0, nj-1, 0, ni-1,
   KOKKOS_LAMBDA(const int k, const int j, const int i) {
-    packed_data(offset_fc + (k*nj + j)*ni + i) = fc.x2f(m,k,j,i);
+    packed_data(offset + (k*nj + j)*ni + i) = fc.x2f(m,k,j,i);
   });
-  offset_fc += nk*nj*ni;
+  offset += nk*nj*ni;
   // Pack f3
   nk = fc.x3f.extent_int(1);
   nj = fc.x3f.extent_int(2);
   ni = fc.x3f.extent_int(3);
   par_for("pack_f3", DevExeSpace(), 0, nk-1, 0, nj-1, 0, ni-1,
   KOKKOS_LAMBDA(const int k, const int j, const int i) {
-    packed_data(offset_fc + (k*nj + j)*ni + i) = fc.x3f(m,k,j,i);
+    packed_data(offset + (k*nj + j)*ni + i) = fc.x3f(m,k,j,i);
   });
   return;
 }
@@ -130,34 +151,34 @@ void ZoomData::PackBuffersFC(DvceArray1D<Real> packed_data, DvceFaceFld4D<Real> 
 //! \fn ZoomData::PackBuffersEC()
 //! \brief Packs edge-centered data into AMR communication buffers for all MBs being sent
 
-void ZoomData::PackBuffersEC(DvceArray1D<Real> packed_data, DvceEdgeFld4D<Real> ec,
-                             size_t offset_ec, const int m) {
-  // Pack edge field ec at MeshBlock m into packed_data starting from offset_ec
+void ZoomData::PackBuffersEC(DvceArray1D<Real> packed_data, size_t offset,
+                             const int m, DvceEdgeFld4D<Real> ec) {
+  // Pack edge field ec at MeshBlock m into packed_data starting from offset
   // Pack e1
   int nk = ec.x1e.extent_int(1);
   int nj = ec.x1e.extent_int(2);
   int ni = ec.x1e.extent_int(3);
   par_for("pack_e1", DevExeSpace(), 0, nk-1, 0, nj-1, 0, ni-1,
   KOKKOS_LAMBDA(const int k, const int j, const int i) {
-    packed_data(offset_ec + (k*nj + j)*ni + i) = ec.x1e(m,k,j,i);
+    packed_data(offset + (k*nj + j)*ni + i) = ec.x1e(m,k,j,i);
   });
-  offset_ec += nk*nj*ni;
+  offset += nk*nj*ni;
   // Pack e2
   nk = ec.x2e.extent_int(1);
   nj = ec.x2e.extent_int(2);
   ni = ec.x2e.extent_int(3);
   par_for("pack_e2", DevExeSpace(), 0, nk-1, 0, nj-1, 0, ni-1,
   KOKKOS_LAMBDA(const int k, const int j, const int i) {
-    packed_data(offset_ec + (k*nj + j)*ni + i) = ec.x2e(m,k,j,i);
+    packed_data(offset + (k*nj + j)*ni + i) = ec.x2e(m,k,j,i);
   });
-  offset_ec += nk*nj*ni;
+  offset += nk*nj*ni;
   // Pack e3
   nk = ec.x3e.extent_int(1);
   nj = ec.x3e.extent_int(2);
   ni = ec.x3e.extent_int(3);
   par_for("pack_e3", DevExeSpace(), 0, nk-1, 0, nj-1, 0, ni-1,
   KOKKOS_LAMBDA(const int k, const int j, const int i) {
-    packed_data(offset_ec + (k*nj + j)*ni + i) = ec.x3e(m,k,j,i);
+    packed_data(offset + (k*nj + j)*ni + i) = ec.x3e(m,k,j,i);
   });
   return;
 }
@@ -175,44 +196,65 @@ void ZoomData::UnpackBuffer() {
   );
   // Unpack data from device buffer to zoom data arrays
   auto dzbuf = zbuf.d_view;  // Get device view for unpacking
-  auto &pmhd = pzoom->pmesh->pmb_pack->pmhd;
+  auto &pmbp = pzoom->pmesh->pmb_pack;
   // use size_t for offset to avoid overflow
   size_t offset = 0;
   size_t cc_cnt = u0.extent(1) * u0.extent(2) * u0.extent(3) * u0.extent(4);
   size_t ccc_cnt = coarse_u0.extent(1) * coarse_u0.extent(2) * coarse_u0.extent(3) * coarse_u0.extent(4);
   size_t ec_cnt = 0;
-  if (pmhd != nullptr) {
+  if (pmbp->pmhd != nullptr) {
     // use efld_pre to get sizes for all edge fields
     auto efld = efld_pre;
     ec_cnt = efld.x1e.extent(1) * efld.x1e.extent(2) * efld.x1e.extent(3);
     ec_cnt += efld.x2e.extent(1) * efld.x2e.extent(2) * efld.x2e.extent(3);
     ec_cnt += efld.x3e.extent(1) * efld.x3e.extent(2) * efld.x3e.extent(3);
   }
+  size_t i0_cnt = 0;
+  size_t ci0_cnt = 0;
+  if (pmbp->prad != nullptr) {
+    i0_cnt = i0.extent(1) * i0.extent(2) * i0.extent(3) * i0.extent(4);
+    ci0_cnt = coarse_i0.extent(1) * coarse_i0.extent(2) * coarse_i0.extent(3) * coarse_i0.extent(4);
+  }
   for (int zm = 0; zm < pzmesh->nzmb_thisdvce; ++zm) {
     std::cout << " Rank " << global_variable::my_rank 
               << " Unpacking buffer for zmb " << zm << std::endl;
     // offset = zm * zmb_data_cnt;
-    // unpack conserved variables
-    UnpackBuffersCC(dzbuf, u0, offset, zm);
-    offset += cc_cnt;
-    // unpack primitive variables
-    UnpackBuffersCC(dzbuf, w0, offset, zm);
-    offset += cc_cnt;
-    // unpack coarse conserved variables
-    UnpackBuffersCC(dzbuf, coarse_u0, offset, zm);
-    offset += ccc_cnt;
-    // unpack coarse primitive variables
-    UnpackBuffersCC(dzbuf, coarse_w0, offset, zm);
-    offset += ccc_cnt;
+    if (pmbp->phydro != nullptr || pmbp->pmhd != nullptr) {
+      // unpack conserved variables
+      UnpackBuffersCC(dzbuf, offset, zm, u0);
+      offset += cc_cnt;
+      // unpack primitive variables
+      UnpackBuffersCC(dzbuf, offset, zm, w0);
+      offset += cc_cnt;
+      // unpack coarse conserved variables
+      UnpackBuffersCC(dzbuf, offset, zm, coarse_u0);
+      offset += ccc_cnt;
+      // unpack coarse primitive variables
+      UnpackBuffersCC(dzbuf, offset, zm, coarse_w0);
+      offset += ccc_cnt;
+    }
     // unpack magnetic fields and/or electric fields if MHD
-    if (pmhd != nullptr) {
-      UnpackBuffersEC(dzbuf, efld_pre, offset, zm);
+    if (pmbp->pmhd != nullptr) {
+      UnpackBuffersEC(dzbuf, offset, zm, efld_pre);
       offset += ec_cnt;
-      UnpackBuffersEC(dzbuf, efld_aft, offset, zm);
+      UnpackBuffersEC(dzbuf, offset, zm, efld_aft);
       offset += ec_cnt;
-      UnpackBuffersEC(dzbuf, delta_efld, offset, zm);
+      UnpackBuffersEC(dzbuf, offset, zm, delta_efld);
       offset += ec_cnt;
     }
+    // unpack radiation variables if radiation is enabled
+    if (pmbp->prad != nullptr) {
+      UnpackBuffersCC(dzbuf, offset, zm, i0);
+      offset += i0_cnt;
+      UnpackBuffersCC(dzbuf, offset, zm, coarse_i0);
+      offset += ci0_cnt;
+    }
+  }
+  if (offset != used_size) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+              << ": Unpacked data size does not match expected size!" << std::endl;
+    std::cout << "Unpacked size: " << offset << ", Expected size: " << used_size << std::endl;
+    std::exit(EXIT_FAILURE);
   }
   return;
 }
@@ -221,8 +263,8 @@ void ZoomData::UnpackBuffer() {
 //! \fn ZoomData::UnpackBuffersCC()
 //! \brief Unpacks cell-centered data from AMR communication buffers
 
-void ZoomData::UnpackBuffersCC(DvceArray1D<Real> packed_data, DvceArray5D<Real> a0,
-                               size_t offset_a0, const int m) {
+void ZoomData::UnpackBuffersCC(DvceArray1D<Real> packed_data, size_t offset,
+                               int m, DvceArray5D<Real> a0) {
   // Unpack array a0 at MeshBlock m from packed_data starting from offset_a0
   int nv = a0.extent_int(1);
   int nk = a0.extent_int(2);
@@ -231,7 +273,7 @@ void ZoomData::UnpackBuffersCC(DvceArray1D<Real> packed_data, DvceArray5D<Real> 
   // Unpack using parallel kernel on device
   par_for("unpack_cc", DevExeSpace(), 0, nv-1, 0, nk-1, 0, nj-1, 0, ni-1,
   KOKKOS_LAMBDA(const int v, const int k, const int j, const int i) {
-    a0(m,v,k,j,i) = packed_data(offset_a0 + (((v*nk + k)*nj + j)*ni + i));
+    a0(m,v,k,j,i) = packed_data(offset + (((v*nk + k)*nj + j)*ni + i));
   });
   return;
 }
@@ -240,34 +282,34 @@ void ZoomData::UnpackBuffersCC(DvceArray1D<Real> packed_data, DvceArray5D<Real> 
 //! \fn ZoomData::UnpackBuffersFC()
 //! \brief Unpacks face-centered data from AMR communication buffers
 
-void ZoomData::UnpackBuffersFC(DvceArray1D<Real> packed_data, DvceFaceFld4D<Real> fc,
-                               size_t offset_fc, const int m) {
-  // Unpack face field fc at MeshBlock m from packed_data starting from offset_fc
+void ZoomData::UnpackBuffersFC(DvceArray1D<Real> packed_data, size_t offset,
+                               int m, DvceFaceFld4D<Real> fc) {
+  // Unpack face field fc at MeshBlock m from packed_data starting from offset
   // Unpack f1
   int nk = fc.x1f.extent_int(1);
   int nj = fc.x1f.extent_int(2);
   int ni = fc.x1f.extent_int(3);
   par_for("unpack_f1", DevExeSpace(), 0, nk-1, 0, nj-1, 0, ni-1,
   KOKKOS_LAMBDA(const int k, const int j, const int i) {
-    fc.x1f(m,k,j,i) = packed_data(offset_fc + (k*nj + j)*ni + i);
+    fc.x1f(m,k,j,i) = packed_data(offset + (k*nj + j)*ni + i);
   });
-  offset_fc += nk*nj*ni;
+  offset += nk*nj*ni;
   // Unpack f2
   nk = fc.x2f.extent_int(1);
   nj = fc.x2f.extent_int(2);
   ni = fc.x2f.extent_int(3);
   par_for("unpack_f2", DevExeSpace(), 0, nk-1, 0, nj-1, 0, ni-1,
   KOKKOS_LAMBDA(const int k, const int j, const int i) {
-    fc.x2f(m,k,j,i) = packed_data(offset_fc + (k*nj + j)*ni + i);
+    fc.x2f(m,k,j,i) = packed_data(offset + (k*nj + j)*ni + i);
   });
-  offset_fc += nk*nj*ni;
+  offset += nk*nj*ni;
   // Unpack f3
   nk = fc.x3f.extent_int(1);
   nj = fc.x3f.extent_int(2);
   ni = fc.x3f.extent_int(3);
   par_for("unpack_f3", DevExeSpace(), 0, nk-1, 0, nj-1, 0, ni-1,
   KOKKOS_LAMBDA(const int k, const int j, const int i) {
-    fc.x3f(m,k,j,i) = packed_data(offset_fc + (k*nj + j)*ni + i);
+    fc.x3f(m,k,j,i) = packed_data(offset + (k*nj + j)*ni + i);
   });
   return;
 }
@@ -276,34 +318,34 @@ void ZoomData::UnpackBuffersFC(DvceArray1D<Real> packed_data, DvceFaceFld4D<Real
 //! \fn ZoomData::UnpackBuffersEC()
 //! \brief Unpacks edge-centered data from AMR communication buffers
 
-void ZoomData::UnpackBuffersEC(DvceArray1D<Real> packed_data, DvceEdgeFld4D<Real> ec,
-                               size_t offset_ec, const int m) {
-  // Unpack edge field ec at MeshBlock m from packed_data starting from offset_ec
+void ZoomData::UnpackBuffersEC(DvceArray1D<Real> packed_data, size_t offset,
+                               int m, DvceEdgeFld4D<Real> ec) {
+  // Unpack edge field ec at MeshBlock m from packed_data starting from offset
   // Unpack e1
   int nk = ec.x1e.extent_int(1);
   int nj = ec.x1e.extent_int(2);
   int ni = ec.x1e.extent_int(3);
   par_for("unpack_e1", DevExeSpace(), 0, nk-1, 0, nj-1, 0, ni-1,
   KOKKOS_LAMBDA(const int k, const int j, const int i) {
-    ec.x1e(m,k,j,i) = packed_data(offset_ec + (k*nj + j)*ni + i);
+    ec.x1e(m,k,j,i) = packed_data(offset + (k*nj + j)*ni + i);
   });
-  offset_ec += nk*nj*ni;
+  offset += nk*nj*ni;
   // Unpack e2
   nk = ec.x2e.extent_int(1);
   nj = ec.x2e.extent_int(2);
   ni = ec.x2e.extent_int(3);
   par_for("unpack_e2", DevExeSpace(), 0, nk-1, 0, nj-1, 0, ni-1,
   KOKKOS_LAMBDA(const int k, const int j, const int i) {
-    ec.x2e(m,k,j,i) = packed_data(offset_ec + (k*nj + j)*ni + i);
+    ec.x2e(m,k,j,i) = packed_data(offset + (k*nj + j)*ni + i);
   });
-  offset_ec += nk*nj*ni;
+  offset += nk*nj*ni;
   // Unpack e3
   nk = ec.x3e.extent_int(1);
   nj = ec.x3e.extent_int(2);
   ni = ec.x3e.extent_int(3);
   par_for("unpack_e3", DevExeSpace(), 0, nk-1, 0, nj-1, 0, ni-1,
   KOKKOS_LAMBDA(const int k, const int j, const int i) {
-    ec.x3e(m,k,j,i) = packed_data(offset_ec + (k*nj + j)*ni + i);
+    ec.x3e(m,k,j,i) = packed_data(offset + (k*nj + j)*ni + i);
   });
   return;
 }
