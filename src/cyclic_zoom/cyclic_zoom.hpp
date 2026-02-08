@@ -129,7 +129,7 @@ class CyclicZoom
   void Initialize(ParameterInput *pin);
   void UpdateAMRFromRestart();
   void PrintCyclicZoomDiagnostics();
-  // functions for zooming
+  // functions for zoom criteria
   void CheckRefinement();
   void UpdateState();
   void SetRegionAndInterval();
@@ -172,18 +172,18 @@ class ZoomMesh
   int nlevels;             // number of zoom mesh levels
   int nzmb_total;          // total number of Zoom MeshBlocks across all levels/ranks
   int nzmb_thisdvce;       // number of Zoom MeshBlocks on this device (local)
-  int nzmb_max_perdvce;    // max allowed number of Zoom MBs per device (memory limit for AMR)
-  int nzmb_max_perhost;    // max allowed number of Zoom MBs per host (memory limit for AMR)
+  int nzmb_max_perdvce;    // max allowed number of Zoom MBs per device (memory limit)
+  int nzmb_max_perhost;    // max allowed number of Zoom MBs per host (memory limit)
   // following 2x arrays allocated with length [nranks] in BuildTreeFromXXXX()
   int *gzms_eachlevel;     // starting global ID of Zoom MeshBlocks in each level
   int *nzmb_eachlevel;     // number of Zoom MeshBlocks on each level
   int *gzms_eachdvce;      // starting global ID of MeshBlocks in each device
   int *nzmb_eachdvce;      // number of MeshBlocks on each device
-  std::vector<int> rank_eachmb;        // rank of each MeshBlock that contains this zoom MeshBlock
-  std::vector<int> lid_eachmb;         // local ID of each MeshBlock that contains this zoom MeshBlock
-  std::vector<int> rank_eachzmb;        // rank of each Zoom MeshBlock
-  std::vector<int> lid_eachzmb;         // local ID of each Zoom MeshBlock
-  std::vector<LogicalLocation> lloc_eachzmb;  // LogicalLocations for each MeshBlock
+  std::vector<int> rank_eachmb;    // rank of each MeshBlock that covers this zoom MB
+  std::vector<int> lid_eachmb;     // local ID of each MeshBlock that covers this zoom MB
+  std::vector<int> rank_eachzmb;   // rank of each Zoom MeshBlock
+  std::vector<int> lid_eachzmb;    // local ID of each Zoom MeshBlock
+  std::vector<LogicalLocation> lloc_eachzmb;  // LogicalLocations for each zoom MeshBlock
 
   // functions
   void GatherZMB(int zm_count, int zone);
@@ -214,30 +214,28 @@ class ZoomData
   Real d_zoom;             // density within inner boundary
   Real p_zoom;             // pressure within inner boundary
 
+  // arrays
   DvceArray5D<Real> u0;    // conserved variables
   DvceArray5D<Real> w0;    // primitive variables
   DvceArray5D<Real> coarse_u0;  // coarse conserved variables
   DvceArray5D<Real> coarse_w0;  // coarse primitive variables
-  // DvceArray5D<Real> coarse_wuh; // coarse primitive variables from hydro conserved variables
 
   DvceEdgeFld4D<Real> efld_pre;   // coarse edge-centered electric fields before zoom
   DvceEdgeFld4D<Real> efld_aft;   // coarse edge-centered electric fields after zoom
-  // DvceEdgeFld4D<Real> efld;   // edge-centered electric fields (fluxes of B)
-  // DvceEdgeFld4D<Real> emf0;   // edge-centered electric fields just after zoom
   DvceEdgeFld4D<Real> delta_efld; // change in electric fields
   DvceEdgeFld4D<Real> efld_buf;   // buffer for electric fields during zoom
 
-  // intensity arrays
+  // Radiation intensity arrays
   DvceArray5D<Real> i0;         // intensities
   DvceArray5D<Real> coarse_i0;  // intensities on 2x coarser grid (for SMR/AMR)
 
-  // DualView for device ↔ host mirrored packing buffer (replaces dzbuf+hzbuf)
+  // DualView for device ↔ host mirrored packing buffer
   // Syncs only used portion via subviews for bandwidth efficiency
   DualArray1D<Real> zbuf;
   
-  // Separate host buffer for MPI receive - NOT a mirror of zbuf!
+  // Host array for storage with load balancing
   // Contains different ZMBs after redistribution due to load balancing
-  HostArray1D<Real> zdata;   // host array for persistent storage with load balancing
+  HostArray1D<Real> zdata;
 
 #if MPI_PARALLEL_ENABLED
   int ndata;               // size of send/recv data
@@ -252,22 +250,22 @@ class ZoomData
   void ResetDataEC(DvceEdgeFld4D<Real> ec);
   void DumpData();
   // functions for storing/applying data during zoom
-  void StoreDataToZoomData(int zm, int m);
+  void StoreData(int zm, int m);
   void StoreCCData(int zm, DvceArray5D<Real> a0, DvceArray5D<Real> ca,
                    int m, DvceArray5D<Real> a);
-  void StoreCoarseHydroData(int zm, DvceArray5D<Real> cw,
+  void StoreCoarsePrimData(int zm, DvceArray5D<Real> cw,
                             int m, DvceArray5D<Real> w0_);
   void ApplyDataSameLevel(int m, int zm, const ZoomRegion &zregion);
+  void ApplyDataFromFiner(int m, int zm, const ZoomRegion &zregion);
   void ApplyCCDataSameLevel(int m, DvceArray5D<Real> a, int zm, DvceArray5D<Real> a0,
                             const ZoomRegion &zregion);
-  void ApplyMHDHydroSameLevel(int m, int zm, const ZoomRegion &zregion);
-  void ApplyDataFromFiner(int m, int zm, const ZoomRegion &zregion);
   void ApplyCCDataFromFiner(int m, DvceArray5D<Real> a, int zm, DvceArray5D<Real> ca,
                             const ZoomRegion &zregion);
-  void ApplyMHDHydroFromFiner(int m, int zm, const ZoomRegion &zregion);
+  void ApplyPrimSameLevel(int m, int zm, const ZoomRegion &zregion);
+  void ApplyPrimFromFiner(int m, int zm, const ZoomRegion &zregion);
   // functions for storing/applying electric fields during zoom
   void StoreEFieldsBeforeAMR(int zm, int m, DvceEdgeFld4D<Real> efld);
-  void StoreFinerEFields(int zmc, int zm, DvceEdgeFld4D<Real> efld);
+  void StoreEFieldsFromFiner(int zmc, int zm, DvceEdgeFld4D<Real> efld);
   void StoreEFieldsAfterAMR(int zm, int m, DvceEdgeFld4D<Real> efld);
   void LimitEFields();
   // load balancing functions

@@ -34,7 +34,7 @@ add_executable(
         cyclic_zoom/cyclic_zoom.cpp
         cyclic_zoom/zoom_criteria.cpp
         cyclic_zoom/zoom_data.cpp
-        cyclic_zoom/zoom_efld.cpp
+        cyclic_zoom/zoom_fluxes.cpp
         cyclic_zoom/zoom_loadbalance.cpp
         cyclic_zoom/zoom_mask.cpp
         cyclic_zoom/zoom_mesh.cpp

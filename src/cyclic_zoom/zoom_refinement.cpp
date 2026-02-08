@@ -10,14 +10,6 @@
 #include "globals.hpp"
 #include "mesh/mesh.hpp"
 #include "cyclic_zoom/cyclic_zoom.hpp"
-#include "coordinates/cartesian_ks.hpp"
-#include "coordinates/cell_locations.hpp"
-#include "eos/eos.hpp"
-#include "eos/ideal_c2p_hyd.hpp"
-#include "eos/ideal_c2p_mhd.hpp"
-#include "hydro/hydro.hpp"
-#include "mhd/mhd.hpp"
-// TODO(@mhguo): check whehther all above includes are necessary
 
 //----------------------------------------------------------------------------------------
 //! \fn void CyclicZoom::StoreZoomRegion()
@@ -112,7 +104,7 @@ void CyclicZoom::StoreVariables() {
                   << std::endl;
         exit(1);
       }
-      pzdata->StoreDataToZoomData(zm_count, m);
+      pzdata->StoreData(zm_count, m);
       ++zm_count;
     }
   }
@@ -145,7 +137,8 @@ void CyclicZoom::CorrectVariables() {
     int zmbs = pzmesh->gzms_eachdvce[global_variable::my_rank];
     int zm_count = 0;
     int m0 = pzmesh->lid_eachmb[zmbs];
-    for (int zm=0; zm<pzmesh->nzmb_thisdvce; ++zm) {
+    // TODO(@mhguo): think whether this is ok if with multiple levels
+    for (int zm = 0; zm < pzmesh->nzmb_thisdvce; ++zm) {
       int m = pzmesh->lid_eachmb[zm+zmbs];
       if (m > m0) { // now move to next MeshBlock
         m0 = m;
@@ -157,7 +150,7 @@ void CyclicZoom::CorrectVariables() {
                 << " on MeshBlock " << m + pmesh->gids_eachrank[global_variable::my_rank]
                 << std::endl;
       // correct electric fields
-      pzdata->StoreFinerEFields(zm_count, zm, pzdata->efld_buf);
+      pzdata->StoreEFieldsFromFiner(zm_count, zm, pzdata->efld_buf);
     }
     if (global_variable::my_rank == 0) {
       std::cout << "CyclicZoom: Corrected variables before zooming" << std::endl;
@@ -173,16 +166,27 @@ void CyclicZoom::CorrectVariables() {
 
 void CyclicZoom::ReinitVariables() {
   int zmbs = pzmesh->gzms_eachdvce[global_variable::my_rank];
+  int mbs = pmesh->gids_eachrank[global_variable::my_rank];
   if (global_variable::my_rank == 0) {
     std::cout << " Apply zoom region radius: " << old_zregion.radius << std::endl;
   }
-  for (int zm=0; zm<pzmesh->nzmb_thisdvce; ++zm) {
+  for (int zm = 0; zm < pzmesh->nzmb_thisdvce; ++zm) {
+    auto &zlloc = pzmesh->lloc_eachzmb[zm+zmbs];
     int m = pzmesh->lid_eachmb[zm+zmbs];
+    auto &lloc = pmesh->lloc_eachmb[m+mbs];
     std::cout << "  Rank " << global_variable::my_rank
               << " Reinitializing MeshBlock " << m + pmesh->gids_eachrank[global_variable::my_rank]
               << " using zoom MeshBlock " << zm + zmbs
               << std::endl;
-    pzdata->ApplyDataSameLevel(m, zm, old_zregion);
+    // Reinitialize variables in the zoom region using the same level zoom data
+    if (zlloc.level == lloc.level) {
+      pzdata->ApplyDataSameLevel(m, zm, old_zregion);
+    } else {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                << "zoom meshblock level is different from MeshBlock level"
+                << std::endl;
+      std::exit(EXIT_FAILURE);
+    }
   }
   return;
 }
@@ -193,65 +197,24 @@ void CyclicZoom::ReinitVariables() {
 
 void CyclicZoom::MaskVariables() {
   int zmbs = pzmesh->gzms_eachdvce[global_variable::my_rank];
+  int mbs = pmesh->gids_eachrank[global_variable::my_rank];
   if (global_variable::my_rank == 0) {
     std::cout << " Mask zoom region radius: " << zregion.radius << std::endl;
   }
-  for (int zm=0; zm<pzmesh->nzmb_thisdvce; ++zm) {
+  for (int zm = 0; zm < pzmesh->nzmb_thisdvce; ++zm) {
+    auto &zlloc = pzmesh->lloc_eachzmb[zm+zmbs];
     int m = pzmesh->lid_eachmb[zm+zmbs];
-    pzdata->ApplyDataFromFiner(m, zm, zregion);
-  }
-  return;
-}
-
-//----------------------------------------------------------------------------------------
-//! \fn void CyclicZoom::UpdateFluxes()
-//! \brief Update electric fields after masking
-
-void CyclicZoom::UpdateFluxes(Driver *pdriver) {
-  // call MHD functions to update electric fields in all MeshBlocks
-  mhd::MHD *pmhd = pmesh->pmb_pack->pmhd;
-  (void) pmhd->InitRecv(pdriver, 1);  // stage = 1 
-  (void) pmhd->CopyCons(pdriver, 1);  // stage = 1: copy u0 to u1
-  (void) pmhd->Fluxes(pdriver, 1);
-  // (void) pmhd->RestrictU(this, 0);
-  // TODO(@mhguo): think about the order
-  // TODO(@mhguo): this is redundant, should only send/recv electric fields
-  (void) pmhd->SendFlux(pdriver, 1);  // stage = 1
-  (void) pmhd->RecvFlux(pdriver, 1);  // stage = 1
-  (void) pmhd->SendU(pdriver, 1);
-  (void) pmhd->RecvU(pdriver, 1);
-  (void) pmhd->CornerE(pdriver, 1);
-  (void) pmhd->EFieldSrc(pdriver, 1);
-  (void) pmhd->SendE(pdriver, 1);
-  (void) pmhd->RecvE(pdriver, 1);
-  (void) pmhd->SendB(pdriver, 1);
-  (void) pmhd->RecvB(pdriver, 1);
-  (void) pmhd->ClearSend(pdriver, 1); // stage = 1
-  (void) pmhd->ClearRecv(pdriver, 1); // stage = 1
-  std::cout << " Rank " << global_variable::my_rank 
-            << " Calculated electric fields after AMR" << std::endl;
-  return;
-}
-
-//----------------------------------------------------------------------------------------
-//! \fn void CyclicZoom::StoreFluxes()
-//! \brief Update electric fields after masking
-
-void CyclicZoom::StoreFluxes() {
-  // update electric fields in zoom region
-  // TODO(@mhguo): only stored the emf, may need to limit de to emin/max
-  int zmbs = pzmesh->gzms_eachdvce[global_variable::my_rank];
-  for (int zm=0; zm<pzmesh->nzmb_thisdvce; ++zm) {
-    int m = pzmesh->lid_eachmb[zm+zmbs];
-    // pzdata->UpdateElectricFieldsInZoomRegion(m, zm);
-    auto efld = pmesh->pmb_pack->pmhd->efld;
-    pzdata->StoreEFieldsAfterAMR(zm, m, efld);
-  }
-
-  // limit electric fields if needed
-  pzdata->LimitEFields();
-  if (global_variable::my_rank == 0) {
-    std::cout << "CyclicZoom: Updated electric fields in zoom region" << std::endl;
+    auto &lloc = pmesh->lloc_eachmb[m+mbs];
+    if (zlloc.level == lloc.level) {
+      pzdata->ApplyDataSameLevel(m, zm, zregion);
+    } else if (zlloc.level - lloc.level == 1) {
+      pzdata->ApplyDataFromFiner(m, zm, zregion);
+    } else {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                << "zoom meshblock level is more than 1 level finer than MeshBlock level"
+                << std::endl;
+      std::exit(EXIT_FAILURE);
+    }
   }
   return;
 }

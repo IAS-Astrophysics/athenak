@@ -20,10 +20,10 @@
 #include "cyclic_zoom/cyclic_zoom.hpp"
 
 //----------------------------------------------------------------------------------------
-//! \fn void ZoomData::StoreDataToZoomData()
+//! \fn void ZoomData::StoreData()
 //! \brief Store data from MeshBlock m to zoom data zm
 
-void ZoomData::StoreDataToZoomData(int zm, int m) {
+void ZoomData::StoreData(int zm, int m) {
   auto pmbp = pzoom->pmesh->pmb_pack;
   if (pmbp->phydro != nullptr) {
     auto u_ = pmbp->phydro->u0;
@@ -36,7 +36,7 @@ void ZoomData::StoreDataToZoomData(int zm, int m) {
     auto w_ = pmbp->pmhd->w0;
     StoreCCData(zm, u0, coarse_u0, m, u_);
     StoreCCData(zm, w0, coarse_w0, m, w_);
-    StoreCoarseHydroData(zm, coarse_w0, m, w_);
+    StoreCoarsePrimData(zm, coarse_w0, m, w_);
     auto efld = pmbp->pmhd->efld;
     StoreEFieldsBeforeAMR(zm, m, efld);
   }
@@ -103,16 +103,16 @@ void ZoomData::StoreCCData(int zm, DvceArray5D<Real> a0, DvceArray5D<Real> ca,
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn void ZoomData::StoreCoarseHydroData()
+//! \fn void ZoomData::StoreCoarsePrimData()
 //! \brief Store coarse-grained hydro conserved variables from mb m to zoom mb zm
 //! only for mhd case
 
-void ZoomData::StoreCoarseHydroData(int zm, DvceArray5D<Real> cw, 
+void ZoomData::StoreCoarsePrimData(int zm, DvceArray5D<Real> cw, 
                                     int m, DvceArray5D<Real> w_) {
   auto pmbp = pzoom->pmesh->pmb_pack;
   if (pmbp->pmhd == nullptr) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-              << std::endl << "StoreCoarseHydroData only works for MHD case" <<std::endl;
+              << std::endl << "StoreCoarsePrimData only works for MHD case" <<std::endl;
     std::exit(EXIT_FAILURE);
   }
   auto &indcs = pzoom->pmesh->mb_indcs;
@@ -244,7 +244,6 @@ void ZoomData::StoreCoarseHydroData(int zm, DvceArray5D<Real> cw,
 //! \fn ZoomData::ApplyDataSameLevel()
 //! \brief Load data from zoom data zm to MeshBlock m
 
-// TODO(@mhguo): is this what you want?
 void ZoomData::ApplyDataSameLevel(int m, int zm, const ZoomRegion &zregion) {
   auto pmbp = pzoom->pmesh->pmb_pack;
   if (pmbp->phydro == nullptr && pmbp->pmhd == nullptr && pmbp->prad == nullptr) {
@@ -257,12 +256,38 @@ void ZoomData::ApplyDataSameLevel(int m, int zm, const ZoomRegion &zregion) {
     ApplyCCDataSameLevel(m, pmbp->phydro->w0, zm, w0, zregion);
   }
   if (pmbp->pmhd != nullptr) {
-    ApplyMHDHydroSameLevel(m, zm, zregion);
+    ApplyPrimSameLevel(m, zm, zregion);
     // TODO(@mhguo): shall we load magnetic fields too?
     // UpdateBFields(m, zm);
   }
   if (pmbp->prad != nullptr) {
     ApplyCCDataSameLevel(m, pmbp->prad->i0, zm, i0, zregion);
+  }
+  return;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn ZoomData::ApplyDataFromFiner()
+//! \brief Apply data to MeshBlock m from finer level zoom data zm for the zoom region
+
+void ZoomData::ApplyDataFromFiner(int m, int zm, const ZoomRegion &zregion) {
+  auto pmbp = pzoom->pmesh->pmb_pack;
+  if (pmbp->phydro == nullptr && pmbp->pmhd == nullptr && pmbp->prad == nullptr) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+              << std::endl << "No physics package is enabled, nothing to load" <<std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+  if (pmbp->phydro != nullptr) {
+    ApplyCCDataFromFiner(m, pmbp->phydro->u0, zm, coarse_u0, zregion);
+    ApplyCCDataFromFiner(m, pmbp->phydro->w0, zm, coarse_w0, zregion);
+  }
+  if (pmbp->pmhd != nullptr) {
+    ApplyPrimFromFiner(m, zm, zregion);
+    // TODO(@mhguo): shall we load magnetic fields too?
+    // UpdateBFields(m, zm);
+  }
+  if (pmbp->prad != nullptr) {
+    ApplyCCDataFromFiner(m, pmbp->prad->i0, zm, coarse_i0, zregion);
   }
   return;
 }
@@ -304,14 +329,60 @@ void ZoomData::ApplyCCDataSameLevel(int m, DvceArray5D<Real> a, int zm, DvceArra
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn void ZoomData::ApplyMHDHydroSameLevel()
+//! \fn void ZoomData::ApplyCCDataFromFiner()
+//! \brief Apply cell-centered data to MeshBlock m from finer level zoom data zm for the zoom region
+
+void ZoomData::ApplyCCDataFromFiner(int m, DvceArray5D<Real> a, int zm, DvceArray5D<Real> ca,
+                          const ZoomRegion &zregion) {
+  auto &indcs = pzoom->pmesh->mb_indcs;
+  auto pmbp = pzoom->pmesh->pmb_pack;
+  auto &size = pmbp->pmb->mb_size;
+  int &is = indcs.is;  int &js = indcs.js;  int &ks = indcs.ks;
+  int nx1 = indcs.nx1, nx2 = indcs.nx2, nx3 = indcs.nx3;
+  int &cis = indcs.cis;  int &cie  = indcs.cie;
+  int &cjs = indcs.cjs;  int &cje  = indcs.cje;
+  int &cks = indcs.cks;  int &cke  = indcs.cke;
+  int cnx1 = indcs.cnx1, cnx2 = indcs.cnx2, cnx3 = indcs.cnx3;
+  Real &x1min = size.h_view(m).x1min;
+  Real &x1max = size.h_view(m).x1max;
+  Real &x2min = size.h_view(m).x2min;
+  Real &x2max = size.h_view(m).x2max;
+  Real &x3min = size.h_view(m).x3min;
+  Real &x3max = size.h_view(m).x3max;
+  int nvar = a.extent_int(1);
+  int zmbs = pzmesh->gzms_eachdvce[global_variable::my_rank]; // global id start of dvce
+  auto &zlloc = pzmesh->lloc_eachzmb[zm+zmbs];
+  int ox1 = ((zlloc.lx1 & 1) == 1);
+  int ox2 = ((zlloc.lx2 & 1) == 1);
+  int ox3 = ((zlloc.lx3 & 1) == 1);
+  // par_for("zoom_mask", DevExeSpace(),ks-ng,ke+ng,js-ng,je+ng,is-ng,ie+ng,
+  par_for("zoom_mask", DevExeSpace(),cks,cke,cjs,cje,cis,cie,
+  KOKKOS_LAMBDA(int ck, int cj, int ci) {
+    int i = ci + ox1 * cnx1;
+    int j = cj + ox2 * cnx2;
+    int k = ck + ox3 * cnx3;
+    Real x1v = CellCenterX(i-is, nx1, x1min, x1max);
+    Real x2v = CellCenterX(j-js, nx2, x2min, x2max);
+    Real x3v = CellCenterX(k-ks, nx3, x3min, x3max);
+    if (zregion.IsInZoomRegion(x1v, x2v, x3v)) { // apply to zoom region
+      // simply copy
+      for (int n=0; n<nvar; ++n) {
+        a(m,n,k,j,i) = ca(zm,n,ck,cj,ci);
+      }
+    }
+  });
+  return;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void ZoomData::ApplyPrimSameLevel()
 //! \brief Apply MHD hydro data to MeshBlock m from zoom data zm 
 
-void ZoomData::ApplyMHDHydroSameLevel(int m, int zm, const ZoomRegion &zregion) {
+void ZoomData::ApplyPrimSameLevel(int m, int zm, const ZoomRegion &zregion) {
   auto pmbp = pzoom->pmesh->pmb_pack;
   if (pmbp->pmhd == nullptr) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-              << std::endl << "ApplyMHDHydroSameLevel only works for MHD case" <<std::endl;
+              << std::endl << "ApplyPrimSameLevel only works for MHD case" <<std::endl;
     std::exit(EXIT_FAILURE);
   }
   auto &indcs = pzoom->pmesh->mb_indcs;
@@ -392,86 +463,14 @@ void ZoomData::ApplyMHDHydroSameLevel(int m, int zm, const ZoomRegion &zregion) 
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn ZoomData::ApplyDataFromFiner()
-//! \brief Apply data to MeshBlock m from finer level zoom data zm for the zoom region
-
-void ZoomData::ApplyDataFromFiner(int m, int zm, const ZoomRegion &zregion) {
-  auto pmbp = pzoom->pmesh->pmb_pack;
-  if (pmbp->phydro == nullptr && pmbp->pmhd == nullptr && pmbp->prad == nullptr) {
-    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-              << std::endl << "No physics package is enabled, nothing to load" <<std::endl;
-    std::exit(EXIT_FAILURE);
-  }
-  if (pmbp->phydro != nullptr) {
-    ApplyCCDataFromFiner(m, pmbp->phydro->u0, zm, coarse_u0, zregion);
-    ApplyCCDataFromFiner(m, pmbp->phydro->w0, zm, coarse_w0, zregion);
-  }
-  if (pmbp->pmhd != nullptr) {
-    ApplyMHDHydroFromFiner(m, zm, zregion);
-    // TODO(@mhguo): shall we load magnetic fields too?
-    // UpdateBFields(m, zm);
-  }
-  if (pmbp->prad != nullptr) {
-    ApplyCCDataFromFiner(m, pmbp->prad->i0, zm, coarse_i0, zregion);
-  }
-  return;
-}
-
-//----------------------------------------------------------------------------------------
-//! \fn void ZoomData::ApplyCCDataFromFiner()
-//! \brief Apply cell-centered data to MeshBlock m from finer level zoom data zm for the zoom region
-
-void ZoomData::ApplyCCDataFromFiner(int m, DvceArray5D<Real> a, int zm, DvceArray5D<Real> ca,
-                          const ZoomRegion &zregion) {
-  auto &indcs = pzoom->pmesh->mb_indcs;
-  auto pmbp = pzoom->pmesh->pmb_pack;
-  auto &size = pmbp->pmb->mb_size;
-  int &is = indcs.is;  int &js = indcs.js;  int &ks = indcs.ks;
-  int nx1 = indcs.nx1, nx2 = indcs.nx2, nx3 = indcs.nx3;
-  int &cis = indcs.cis;  int &cie  = indcs.cie;
-  int &cjs = indcs.cjs;  int &cje  = indcs.cje;
-  int &cks = indcs.cks;  int &cke  = indcs.cke;
-  int cnx1 = indcs.cnx1, cnx2 = indcs.cnx2, cnx3 = indcs.cnx3;
-  Real &x1min = size.h_view(m).x1min;
-  Real &x1max = size.h_view(m).x1max;
-  Real &x2min = size.h_view(m).x2min;
-  Real &x2max = size.h_view(m).x2max;
-  Real &x3min = size.h_view(m).x3min;
-  Real &x3max = size.h_view(m).x3max;
-  int nvar = a.extent_int(1);
-  int zmbs = pzmesh->gzms_eachdvce[global_variable::my_rank]; // global id start of dvce
-  auto &zlloc = pzmesh->lloc_eachzmb[zm+zmbs];
-  int ox1 = ((zlloc.lx1 & 1) == 1);
-  int ox2 = ((zlloc.lx2 & 1) == 1);
-  int ox3 = ((zlloc.lx3 & 1) == 1);
-  // par_for("zoom_mask", DevExeSpace(),ks-ng,ke+ng,js-ng,je+ng,is-ng,ie+ng,
-  par_for("zoom_mask", DevExeSpace(),cks,cke,cjs,cje,cis,cie,
-  KOKKOS_LAMBDA(int ck, int cj, int ci) {
-    int i = ci + ox1 * cnx1;
-    int j = cj + ox2 * cnx2;
-    int k = ck + ox3 * cnx3;
-    Real x1v = CellCenterX(i-is, nx1, x1min, x1max);
-    Real x2v = CellCenterX(j-js, nx2, x2min, x2max);
-    Real x3v = CellCenterX(k-ks, nx3, x3min, x3max);
-    if (zregion.IsInZoomRegion(x1v, x2v, x3v)) { // apply to zoom region
-      // simply copy
-      for (int n=0; n<nvar; ++n) {
-        a(m,n,k,j,i) = ca(zm,n,ck,cj,ci);
-      }
-    }
-  });
-  return;
-}
-
-//----------------------------------------------------------------------------------------
-//! \fn void ZoomData::ApplyMHDHydroFromFiner()
+//! \fn void ZoomData::ApplyPrimFromFiner()
 //! \brief Apply MHD hydro data to MeshBlock m from finer level zoom data zm for the zoom region
 
-void ZoomData::ApplyMHDHydroFromFiner(int m, int zm, const ZoomRegion &zregion) {
+void ZoomData::ApplyPrimFromFiner(int m, int zm, const ZoomRegion &zregion) {
   auto pmbp = pzoom->pmesh->pmb_pack;
   if (pmbp->pmhd == nullptr) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-              << std::endl << "ApplyMHDHydroFromFiner only works for MHD case" <<std::endl;
+              << std::endl << "ApplyPrimFromFiner only works for MHD case" <<std::endl;
     std::exit(EXIT_FAILURE);
   }
   auto &indcs = pzoom->pmesh->mb_indcs;

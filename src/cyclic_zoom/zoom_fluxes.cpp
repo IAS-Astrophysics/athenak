@@ -3,15 +3,67 @@
 // Copyright(C) 2020 James M. Stone <jmstone@ias.edu> and the Athena code team
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
-//! \file zoom_efld.cpp
-//  \brief Functions for edge-centered fields in ZoomData class
+//! \file zoom_fluxes.cpp
+//  \brief Functions for updating and storing fluxes during zooming
 
 #include "athena.hpp"
 #include "globals.hpp"
 #include "mesh/mesh.hpp"
 #include "coordinates/cell_locations.hpp"
-#include "mhd/mhd.hpp"
 #include "cyclic_zoom/cyclic_zoom.hpp"
+#include "mhd/mhd.hpp"
+
+//----------------------------------------------------------------------------------------
+//! \fn void CyclicZoom::UpdateFluxes()
+//! \brief Update electric fields after masking
+
+void CyclicZoom::UpdateFluxes(Driver *pdriver) {
+  // call MHD functions to update electric fields in all MeshBlocks
+  mhd::MHD *pmhd = pmesh->pmb_pack->pmhd;
+  (void) pmhd->InitRecv(pdriver, 1);  // stage = 1 
+  (void) pmhd->CopyCons(pdriver, 1);  // stage = 1: copy u0 to u1
+  (void) pmhd->Fluxes(pdriver, 1);
+  // (void) pmhd->RestrictU(this, 0);
+  // TODO(@mhguo): think about the order
+  // TODO(@mhguo): this is redundant, should only send/recv electric fields
+  (void) pmhd->SendFlux(pdriver, 1);  // stage = 1
+  (void) pmhd->RecvFlux(pdriver, 1);  // stage = 1
+  (void) pmhd->SendU(pdriver, 1);
+  (void) pmhd->RecvU(pdriver, 1);
+  (void) pmhd->CornerE(pdriver, 1);
+  (void) pmhd->EFieldSrc(pdriver, 1);
+  (void) pmhd->SendE(pdriver, 1);
+  (void) pmhd->RecvE(pdriver, 1);
+  (void) pmhd->SendB(pdriver, 1);
+  (void) pmhd->RecvB(pdriver, 1);
+  (void) pmhd->ClearSend(pdriver, 1); // stage = 1
+  (void) pmhd->ClearRecv(pdriver, 1); // stage = 1
+  std::cout << " Rank " << global_variable::my_rank 
+            << " Calculated electric fields after AMR" << std::endl;
+  return;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void CyclicZoom::StoreFluxes()
+//! \brief Update electric fields after masking
+
+void CyclicZoom::StoreFluxes() {
+  // update electric fields in zoom region
+  // TODO(@mhguo): only stored the emf, may need to limit de to emin/max
+  int zmbs = pzmesh->gzms_eachdvce[global_variable::my_rank];
+  for (int zm = 0; zm < pzmesh->nzmb_thisdvce; ++zm) {
+    int m = pzmesh->lid_eachmb[zm+zmbs];
+    // pzdata->UpdateElectricFieldsInZoomRegion(m, zm);
+    auto efld = pmesh->pmb_pack->pmhd->efld;
+    pzdata->StoreEFieldsAfterAMR(zm, m, efld);
+  }
+  // limit electric fields if needed
+  pzdata->LimitEFields();
+  if (global_variable::my_rank == 0) {
+    std::cout << "CyclicZoom: Updated electric fields in zoom region" << std::endl;
+  }
+  return;
+}
 
 //----------------------------------------------------------------------------------------
 //! \fn void ZoomData::StoreEFieldsBeforeAMR()
@@ -43,10 +95,10 @@ void ZoomData::StoreEFieldsBeforeAMR(int zm, int m, DvceEdgeFld4D<Real> efld) {
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn void ZoomData::StoreFinerEFields()
+//! \fn void ZoomData::StoreEFieldsFromFiner()
 //! \brief Store coarse electric fields in zoom data zmc from finer zoom data zm on previous level
 
-void ZoomData::StoreFinerEFields(int zmc, int zm, DvceEdgeFld4D<Real> efld) {
+void ZoomData::StoreEFieldsFromFiner(int zmc, int zm, DvceEdgeFld4D<Real> efld) {
   auto &indcs = pzoom->pmesh->mb_indcs;
   int &cis = indcs.cis;
   int &cjs = indcs.cjs;

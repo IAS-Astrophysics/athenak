@@ -6,7 +6,6 @@
 //! \file cyclic_zoom.cpp
 //  \brief implementation of constructor and functions in CyclicZoom class
 
-//TODO(@mhguo): check whether all includes are necessary
 #include "athena.hpp"
 #include "globals.hpp"
 #include "parameter_input.hpp"

@@ -9,8 +9,8 @@
 #include "athena.hpp"
 #include "globals.hpp"
 #include "mesh/mesh.hpp"
-#include "cyclic_zoom/cyclic_zoom.hpp"
 #include "coordinates/cell_locations.hpp"
+#include "cyclic_zoom/cyclic_zoom.hpp"
 
 //----------------------------------------------------------------------------------------
 //! \fn void CyclicZoom::CheckRefinement()
