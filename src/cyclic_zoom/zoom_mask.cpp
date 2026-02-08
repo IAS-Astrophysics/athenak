@@ -241,33 +241,38 @@ void ZoomData::StoreCoarseHydroData(int zm, DvceArray5D<Real> cw,
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn ZoomData::ApplyDataFromZoomData()
+//! \fn ZoomData::ApplyDataSameLevel()
 //! \brief Load data from zoom data zm to MeshBlock m
 
 // TODO(@mhguo): is this what you want?
-void ZoomData::ApplyDataFromZoomData(int m, int zm) {
+void ZoomData::ApplyDataSameLevel(int m, int zm, const ZoomRegion &zregion) {
   auto pmbp = pzoom->pmesh->pmb_pack;
   if (pmbp->phydro == nullptr && pmbp->pmhd == nullptr && pmbp->prad == nullptr) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
               << std::endl << "No physics package is enabled, nothing to load" <<std::endl;
     std::exit(EXIT_FAILURE);
   }
-  if (pmbp->phydro != nullptr || pmbp->prad != nullptr) {
-    ApplyCCData(m, zm);
+  if (pmbp->phydro != nullptr) {
+    ApplyCCDataSameLevel(m, pmbp->phydro->u0, zm, u0, zregion);
+    ApplyCCDataSameLevel(m, pmbp->phydro->w0, zm, w0, zregion);
   }
   if (pmbp->pmhd != nullptr) {
-    ApplyMHDHydroData(m, zm);
+    ApplyMHDHydroSameLevel(m, zm, zregion);
     // TODO(@mhguo): shall we load magnetic fields too?
     // UpdateBFields(m, zm);
+  }
+  if (pmbp->prad != nullptr) {
+    ApplyCCDataSameLevel(m, pmbp->prad->i0, zm, i0, zregion);
   }
   return;
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn void ZoomData::ApplyCCData()
+//! \fn void ZoomData::ApplyCCDataSameLevel()
 //! \brief Apply cell-centered data to MeshBlock m from zoom data zm 
 
-void ZoomData::ApplyCCData(int m, int zm) {
+void ZoomData::ApplyCCDataSameLevel(int m, DvceArray5D<Real> a, int zm, DvceArray5D<Real> a0,
+                           const ZoomRegion &zregion) {
   auto &indcs = pzoom->pmesh->mb_indcs;
   auto pmbp = pzoom->pmesh->pmb_pack;
   auto &size = pmbp->pmb->mb_size;
@@ -281,71 +286,41 @@ void ZoomData::ApplyCCData(int m, int zm) {
   Real &x2max = size.h_view(m).x2max;
   Real &x3min = size.h_view(m).x3min;
   Real &x3max = size.h_view(m).x3max;
-  auto ozregion = pzoom->old_zregion;
-  if (global_variable::my_rank == 0) {
-    std::cout << " Old zoom region radius: " << ozregion.radius << std::endl;
-  }
-  if (pmbp->phydro != nullptr) {
-    auto u_ = pmbp->phydro->u0, w_ = pmbp->phydro->w0;
-    auto u0_ = u0, w0_ = w0;
-    // par_for("zoom_reinit", DevExeSpace(),ks-ng,ke+ng,js-ng,je+ng,is-ng,ie+ng,
-    par_for("zoom_reinit", DevExeSpace(),ks,ke,js,je,is,ie,
-    KOKKOS_LAMBDA(int k, int j, int i) {
-      Real x1v = CellCenterX(i-is, nx1, x1min, x1max);
-      Real x2v = CellCenterX(j-js, nx2, x2min, x2max);
-      Real x3v = CellCenterX(k-ks, nx3, x3min, x3max);
-      if (ozregion.IsInZoomRegion(x1v, x2v, x3v)) { // apply to old zoom region
-        // simply copy primitive and conserved variables
-        w_(m,IDN,k,j,i) = w0_(zm,IDN,k,j,i);
-        w_(m,IVX,k,j,i) = w0_(zm,IVX,k,j,i);
-        w_(m,IVY,k,j,i) = w0_(zm,IVY,k,j,i);
-        w_(m,IVZ,k,j,i) = w0_(zm,IVZ,k,j,i);
-        w_(m,IEN,k,j,i) = w0_(zm,IEN,k,j,i);
-        u_(m,IDN,k,j,i) = u0_(zm,IDN,k,j,i);
-        u_(m,IM1,k,j,i) = u0_(zm,IM1,k,j,i);
-        u_(m,IM2,k,j,i) = u0_(zm,IM2,k,j,i);
-        u_(m,IM3,k,j,i) = u0_(zm,IM3,k,j,i);
-        u_(m,IEN,k,j,i) = u0_(zm,IEN,k,j,i);
+  int nvar = a.extent_int(1);
+  // par_for("zoom_reinit", DevExeSpace(),ks-ng,ke+ng,js-ng,je+ng,is-ng,ie+ng,
+  par_for("zoom_apply", DevExeSpace(),ks,ke,js,je,is,ie,
+  KOKKOS_LAMBDA(int k, int j, int i) {
+    Real x1v = CellCenterX(i-is, nx1, x1min, x1max);
+    Real x2v = CellCenterX(j-js, nx2, x2min, x2max);
+    Real x3v = CellCenterX(k-ks, nx3, x3min, x3max);
+    if (zregion.IsInZoomRegion(x1v, x2v, x3v)) { // apply to old zoom region
+      // simply copy
+      for (int n=0; n<nvar; ++n) {
+        a(m,n,k,j,i) = a0(zm,n,k,j,i);
       }
-    });
-  }
-  if (pmbp->pmhd != nullptr) {
-    // pass as this will be done in other functions
-  }
-  if (pmbp->prad != nullptr) {
-    int &nangles_ = nangles;
-    auto i_ = pmbp->prad->i0;
-    auto i0_ = i0;
-    par_for("zoom_reinit", DevExeSpace(),ks,ke,js,je,is,ie,
-    KOKKOS_LAMBDA(int k, int j, int i) {
-      Real x1v = CellCenterX(i-is, nx1, x1min, x1max);
-      Real x2v = CellCenterX(j-js, nx2, x2min, x2max);
-      Real x3v = CellCenterX(k-ks, nx3, x3min, x3max);
-      if (ozregion.IsInZoomRegion(x1v, x2v, x3v)) { // apply to old zoom region
-        // Go through each angle
-        for (int n=0; n<nangles_; ++n) {
-          i_(m,n,k,j,i) = i0_(n,zm,k,j,i);
-        }
-      }
-    });
-  }
+    }
+  });
   return;
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn void ZoomData::ApplyMHDHydroData()
+//! \fn void ZoomData::ApplyMHDHydroSameLevel()
 //! \brief Apply MHD hydro data to MeshBlock m from zoom data zm 
 
-void ZoomData::ApplyMHDHydroData(int m, int zm) {
-  auto &indcs = pzoom->pmesh->mb_indcs;
+void ZoomData::ApplyMHDHydroSameLevel(int m, int zm, const ZoomRegion &zregion) {
   auto pmbp = pzoom->pmesh->pmb_pack;
+  if (pmbp->pmhd == nullptr) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+              << std::endl << "ApplyMHDHydroSameLevel only works for MHD case" <<std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+  auto &indcs = pzoom->pmesh->mb_indcs;
   auto &size = pmbp->pmb->mb_size;
   int &is = indcs.is;  int &ie  = indcs.ie;
   int &js = indcs.js;  int &je  = indcs.je;
   int &ks = indcs.ks;  int &ke  = indcs.ke;
   int nx1 = indcs.nx1, nx2 = indcs.nx2, nx3 = indcs.nx3;
-  auto peos = (pmbp->pmhd != nullptr)? pmbp->pmhd->peos : pmbp->phydro->peos;
-  auto eos = peos->eos_data;
+  auto eos = pmbp->pmhd->peos->eos_data;
   Real gamma = eos.gamma;
   bool is_gr = pmbp->pcoord->is_general_relativistic;
   bool flat = true;
@@ -360,62 +335,56 @@ void ZoomData::ApplyMHDHydroData(int m, int zm) {
   Real &x2max = size.h_view(m).x2max;
   Real &x3min = size.h_view(m).x3min;
   Real &x3max = size.h_view(m).x3max;
-  auto ozregion = pzoom->old_zregion;
-  if (global_variable::my_rank == 0) {
-    std::cout << " Old zoom region radius: " << ozregion.radius << std::endl;
-  }
-  if (pmbp->pmhd != nullptr) {
-    auto u_ = pmbp->pmhd->u0, w_ = pmbp->pmhd->w0;
-    auto u0_ = u0, w0_ = w0;
-    auto b = pmbp->pmhd->b0;
-    // par_for("zoom_reinit", DevExeSpace(),ks-ng,ke+ng,js-ng,je+ng,is-ng,ie+ng,
-    par_for("zoom_reinit", DevExeSpace(),ks,ke,js,je,is,ie,
-    KOKKOS_LAMBDA(int k, int j, int i) {
-      Real x1v = CellCenterX(i-is, nx1, x1min, x1max);
-      Real x2v = CellCenterX(j-js, nx2, x2min, x2max);
-      Real x3v = CellCenterX(k-ks, nx3, x3min, x3max);
-      if (ozregion.IsInZoomRegion(x1v, x2v, x3v)) { // apply to old zoom region
-        // convert primitive variables to conserved variables
-        // load primitive variables from 3D array
-        w_(m,IDN,k,j,i) = w0_(zm,IDN,k,j,i);
-        w_(m,IVX,k,j,i) = w0_(zm,IVX,k,j,i);
-        w_(m,IVY,k,j,i) = w0_(zm,IVY,k,j,i);
-        w_(m,IVZ,k,j,i) = w0_(zm,IVZ,k,j,i);
-        w_(m,IEN,k,j,i) = w0_(zm,IEN,k,j,i);
+  auto u_ = pmbp->pmhd->u0, w_ = pmbp->pmhd->w0;
+  auto u0_ = u0, w0_ = w0;
+  auto b = pmbp->pmhd->b0;
+  // par_for("zoom_reinit", DevExeSpace(),ks-ng,ke+ng,js-ng,je+ng,is-ng,ie+ng,
+  par_for("zoom_reinit", DevExeSpace(),ks,ke,js,je,is,ie,
+  KOKKOS_LAMBDA(int k, int j, int i) {
+    Real x1v = CellCenterX(i-is, nx1, x1min, x1max);
+    Real x2v = CellCenterX(j-js, nx2, x2min, x2max);
+    Real x3v = CellCenterX(k-ks, nx3, x3min, x3max);
+    if (zregion.IsInZoomRegion(x1v, x2v, x3v)) { // apply to old zoom region
+      // convert primitive variables to conserved variables
+      // load primitive variables from 3D array
+      w_(m,IDN,k,j,i) = w0_(zm,IDN,k,j,i);
+      w_(m,IVX,k,j,i) = w0_(zm,IVX,k,j,i);
+      w_(m,IVY,k,j,i) = w0_(zm,IVY,k,j,i);
+      w_(m,IVZ,k,j,i) = w0_(zm,IVZ,k,j,i);
+      w_(m,IEN,k,j,i) = w0_(zm,IEN,k,j,i);
 
-        // Load single state of primitive variables
-        MHDPrim1D w;
-        w.d  = w_(m,IDN,k,j,i);
-        w.vx = w_(m,IVX,k,j,i);
-        w.vy = w_(m,IVY,k,j,i);
-        w.vz = w_(m,IVZ,k,j,i);
-        w.e  = w_(m,IEN,k,j,i);
+      // Load single state of primitive variables
+      MHDPrim1D w;
+      w.d  = w_(m,IDN,k,j,i);
+      w.vx = w_(m,IVX,k,j,i);
+      w.vy = w_(m,IVY,k,j,i);
+      w.vz = w_(m,IVZ,k,j,i);
+      w.e  = w_(m,IEN,k,j,i);
 
-        // load cell-centered fields into primitive state
-        // use simple linear average of face-centered fields as bcc is not updated
-        w.bx = 0.5*(b.x1f(m,k,j,i) + b.x1f(m,k,j,i+1));
-        w.by = 0.5*(b.x2f(m,k,j,i) + b.x2f(m,k,j+1,i));
-        w.bz = 0.5*(b.x3f(m,k,j,i) + b.x3f(m,k+1,j,i));
+      // load cell-centered fields into primitive state
+      // use simple linear average of face-centered fields as bcc is not updated
+      w.bx = 0.5*(b.x1f(m,k,j,i) + b.x1f(m,k,j,i+1));
+      w.by = 0.5*(b.x2f(m,k,j,i) + b.x2f(m,k,j+1,i));
+      w.bz = 0.5*(b.x3f(m,k,j,i) + b.x3f(m,k+1,j,i));
 
-        // call p2c function
-        HydCons1D u;
-        if (is_gr) {
-          Real glower[4][4], gupper[4][4];
-          ComputeMetricAndInverse(x1v, x2v, x3v, flat, spin, glower, gupper);
-          SingleP2C_IdealGRMHD(glower, gupper, w, gamma, u);
-        } else {
-          SingleP2C_IdealMHD(w, u);
-        }
-
-        // store conserved quantities in 3D array
-        u_(m,IDN,k,j,i) = u.d;
-        u_(m,IM1,k,j,i) = u.mx;
-        u_(m,IM2,k,j,i) = u.my;
-        u_(m,IM3,k,j,i) = u.mz;
-        u_(m,IEN,k,j,i) = u.e;
+      // call p2c function
+      HydCons1D u;
+      if (is_gr) {
+        Real glower[4][4], gupper[4][4];
+        ComputeMetricAndInverse(x1v, x2v, x3v, flat, spin, glower, gupper);
+        SingleP2C_IdealGRMHD(glower, gupper, w, gamma, u);
+      } else {
+        SingleP2C_IdealMHD(w, u);
       }
-    });
-  }
+
+      // store conserved quantities in 3D array
+      u_(m,IDN,k,j,i) = u.d;
+      u_(m,IM1,k,j,i) = u.mx;
+      u_(m,IM2,k,j,i) = u.my;
+      u_(m,IM3,k,j,i) = u.mz;
+      u_(m,IEN,k,j,i) = u.e;
+    }
+  });
   std::cout << "  Rank " << global_variable::my_rank 
             << " Reinitialized variables in meshblock " << m
             << " using zoom meshblock " << zm << std::endl;
@@ -423,12 +392,89 @@ void ZoomData::ApplyMHDHydroData(int m, int zm) {
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn void ZoomData::MaskDataInZoomRegion()
-//! \brief Mask data in zoom region in MeshBlock m
+//! \fn ZoomData::ApplyDataFromFiner()
+//! \brief Apply data to MeshBlock m from finer level zoom data zm for the zoom region
 
-void ZoomData::MaskDataInZoomRegion(int m, int zm) {
+void ZoomData::ApplyDataFromFiner(int m, int zm, const ZoomRegion &zregion) {
+  auto pmbp = pzoom->pmesh->pmb_pack;
+  if (pmbp->phydro == nullptr && pmbp->pmhd == nullptr && pmbp->prad == nullptr) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+              << std::endl << "No physics package is enabled, nothing to load" <<std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+  if (pmbp->phydro != nullptr) {
+    ApplyCCDataFromFiner(m, pmbp->phydro->u0, zm, coarse_u0, zregion);
+    ApplyCCDataFromFiner(m, pmbp->phydro->w0, zm, coarse_w0, zregion);
+  }
+  if (pmbp->pmhd != nullptr) {
+    ApplyMHDHydroFromFiner(m, zm, zregion);
+    // TODO(@mhguo): shall we load magnetic fields too?
+    // UpdateBFields(m, zm);
+  }
+  if (pmbp->prad != nullptr) {
+    ApplyCCDataFromFiner(m, pmbp->prad->i0, zm, coarse_i0, zregion);
+  }
+  return;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void ZoomData::ApplyCCDataFromFiner()
+//! \brief Apply cell-centered data to MeshBlock m from finer level zoom data zm for the zoom region
+
+void ZoomData::ApplyCCDataFromFiner(int m, DvceArray5D<Real> a, int zm, DvceArray5D<Real> ca,
+                          const ZoomRegion &zregion) {
   auto &indcs = pzoom->pmesh->mb_indcs;
   auto pmbp = pzoom->pmesh->pmb_pack;
+  auto &size = pmbp->pmb->mb_size;
+  int &is = indcs.is;  int &js = indcs.js;  int &ks = indcs.ks;
+  int nx1 = indcs.nx1, nx2 = indcs.nx2, nx3 = indcs.nx3;
+  int &cis = indcs.cis;  int &cie  = indcs.cie;
+  int &cjs = indcs.cjs;  int &cje  = indcs.cje;
+  int &cks = indcs.cks;  int &cke  = indcs.cke;
+  int cnx1 = indcs.cnx1, cnx2 = indcs.cnx2, cnx3 = indcs.cnx3;
+  Real &x1min = size.h_view(m).x1min;
+  Real &x1max = size.h_view(m).x1max;
+  Real &x2min = size.h_view(m).x2min;
+  Real &x2max = size.h_view(m).x2max;
+  Real &x3min = size.h_view(m).x3min;
+  Real &x3max = size.h_view(m).x3max;
+  int nvar = a.extent_int(1);
+  int zmbs = pzmesh->gzms_eachdvce[global_variable::my_rank]; // global id start of dvce
+  auto &zlloc = pzmesh->lloc_eachzmb[zm+zmbs];
+  int ox1 = ((zlloc.lx1 & 1) == 1);
+  int ox2 = ((zlloc.lx2 & 1) == 1);
+  int ox3 = ((zlloc.lx3 & 1) == 1);
+  // par_for("zoom_mask", DevExeSpace(),ks-ng,ke+ng,js-ng,je+ng,is-ng,ie+ng,
+  par_for("zoom_mask", DevExeSpace(),cks,cke,cjs,cje,cis,cie,
+  KOKKOS_LAMBDA(int ck, int cj, int ci) {
+    int i = ci + ox1 * cnx1;
+    int j = cj + ox2 * cnx2;
+    int k = ck + ox3 * cnx3;
+    Real x1v = CellCenterX(i-is, nx1, x1min, x1max);
+    Real x2v = CellCenterX(j-js, nx2, x2min, x2max);
+    Real x3v = CellCenterX(k-ks, nx3, x3min, x3max);
+    if (zregion.IsInZoomRegion(x1v, x2v, x3v)) { // apply to zoom region
+      // simply copy
+      for (int n=0; n<nvar; ++n) {
+        a(m,n,k,j,i) = ca(zm,n,ck,cj,ci);
+      }
+    }
+  });
+  return;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void ZoomData::ApplyMHDHydroFromFiner()
+//! \brief Apply MHD hydro data to MeshBlock m from finer level zoom data zm for the zoom region
+
+void ZoomData::ApplyMHDHydroFromFiner(int m, int zm, const ZoomRegion &zregion) {
+  auto pmbp = pzoom->pmesh->pmb_pack;
+  if (pmbp->pmhd == nullptr) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+              << std::endl << "ApplyMHDHydroFromFiner only works for MHD case" <<std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+  auto &indcs = pzoom->pmesh->mb_indcs;
   auto &size = pmbp->pmb->mb_size;
   int &is = indcs.is, &js = indcs.js, &ks = indcs.ks;
   // int &ie = indcs.ie, &je = indcs.je, &ke = indcs.ke;
@@ -437,17 +483,8 @@ void ZoomData::MaskDataInZoomRegion(int m, int zm) {
   int &cjs = indcs.cjs;  int &cje  = indcs.cje;
   int &cks = indcs.cks;  int &cke  = indcs.cke;
   int cnx1 = indcs.cnx1, cnx2 = indcs.cnx2, cnx3 = indcs.cnx3;
-  DvceArray5D<Real> u_, w_;
-  if (pmbp->phydro != nullptr) {
-    u_ = pmbp->phydro->u0;
-    w_ = pmbp->phydro->w0;
-  } else if (pmbp->pmhd != nullptr) {
-    u_ = pmbp->pmhd->u0;
-    w_ = pmbp->pmhd->w0;
-  }
   auto cu0 = coarse_u0, cw0 = coarse_w0;
-  auto peos = (pmbp->pmhd != nullptr)? pmbp->pmhd->peos : pmbp->phydro->peos;
-  auto eos = peos->eos_data;
+  auto eos = pmbp->pmhd->peos->eos_data;
   Real gamma = eos.gamma;
   bool is_gr = pmbp->pcoord->is_general_relativistic;
   bool flat = true;
@@ -462,7 +499,6 @@ void ZoomData::MaskDataInZoomRegion(int m, int zm) {
   Real &x2max = size.h_view(m).x2max;
   Real &x3min = size.h_view(m).x3min;
   Real &x3max = size.h_view(m).x3max;
-  auto zregion = pzoom->zregion;
   // eachlevel[pzoom->zstate.zone-1]; // starting gid of zoom MBs on previous level
   int zmbs = pzmesh->gzms_eachdvce[global_variable::my_rank]; // global id start of dvce
   auto &zlloc = pzmesh->lloc_eachzmb[zm+zmbs];
@@ -475,85 +511,60 @@ void ZoomData::MaskDataInZoomRegion(int m, int zm) {
   //           << " with offsets (" << ox1 << "," << ox2 << "," << ox3 << ")"
   //           << std::endl;
   // return;
-  if (pmbp->phydro != nullptr) {
-    // TODO(@mhguo): probably don't have to mask the ghost zones?
-    // par_for("zoom_mask", DevExeSpace(),ks-ng,ke+ng,js-ng,je+ng,is-ng,ie+ng,
-    par_for("zoom_mask", DevExeSpace(),cks,cke,cjs,cje,cis,cie,
-    KOKKOS_LAMBDA(int ck, int cj, int ci) {
-      int i = ci + ox1 * cnx1;
-      int j = cj + ox2 * cnx2;
-      int k = ck + ox3 * cnx3;
-      Real x1v = CellCenterX(i-is, nx1, x1min, x1max);
-      Real x2v = CellCenterX(j-js, nx2, x2min, x2max);
-      Real x3v = CellCenterX(k-ks, nx3, x3min, x3max);
-      if (zregion.IsInZoomRegion(x1v, x2v, x3v)) { // apply to zoom region
-        // simply copy primitive and conserved variables
-        w_(m,IDN,k,j,i) = cw0(zm,IDN,ck,cj,ci);
-        w_(m,IVX,k,j,i) = cw0(zm,IVX,ck,cj,ci);
-        w_(m,IVY,k,j,i) = cw0(zm,IVY,ck,cj,ci);
-        w_(m,IVZ,k,j,i) = cw0(zm,IVZ,ck,cj,ci);
-        w_(m,IEN,k,j,i) = cw0(zm,IEN,ck,cj,ci);
-        u_(m,IDN,k,j,i) = cu0(zm,IDN,ck,cj,ci);
-        u_(m,IM1,k,j,i) = cu0(zm,IM1,ck,cj,ci);
-        u_(m,IM2,k,j,i) = cu0(zm,IM2,ck,cj,ci);
-        u_(m,IM3,k,j,i) = cu0(zm,IM3,ck,cj,ci);
-        u_(m,IEN,k,j,i) = cu0(zm,IEN,ck,cj,ci);
+  auto u_ = pmbp->pmhd->u0;
+  auto w_ = pmbp->pmhd->w0;
+  auto b = pmbp->pmhd->b0;
+  // TODO(@mhguo): probably don't have to mask the ghost zones?
+  // par_for("zoom_mask", DevExeSpace(),ks-ng,ke+ng,js-ng,je+ng,is-ng,ie+ng,
+  par_for("zoom_mask", DevExeSpace(),cks,cke,cjs,cje,cis,cie,
+  KOKKOS_LAMBDA(int ck, int cj, int ci) {
+    int i = ci + ox1 * cnx1;
+    int j = cj + ox2 * cnx2;
+    int k = ck + ox3 * cnx3;
+    Real x1v = CellCenterX(i-is, nx1, x1min, x1max);
+    Real x2v = CellCenterX(j-js, nx2, x2min, x2max);
+    Real x3v = CellCenterX(k-ks, nx3, x3min, x3max);
+    if (zregion.IsInZoomRegion(x1v, x2v, x3v)) { // apply to zoom region
+      // convert primitive variables to conserved variables
+      // load primitive variables from 3D array
+      w_(m,IDN,k,j,i) = cw0(zm,IDN,ck,cj,ci);
+      w_(m,IM1,k,j,i) = cw0(zm,IM1,ck,cj,ci);
+      w_(m,IM2,k,j,i) = cw0(zm,IM2,ck,cj,ci);
+      w_(m,IM3,k,j,i) = cw0(zm,IM3,ck,cj,ci);
+      w_(m,IEN,k,j,i) = cw0(zm,IEN,ck,cj,ci);
+
+      // Load single state of primitive variables
+      MHDPrim1D w;
+      w.d  = w_(m,IDN,k,j,i);
+      w.vx = w_(m,IVX,k,j,i);
+      w.vy = w_(m,IVY,k,j,i);
+      w.vz = w_(m,IVZ,k,j,i);
+      w.e  = w_(m,IEN,k,j,i);
+
+      // load cell-centered fields into primitive state
+      // TODO(@mhguo): use bcc if available?
+      // use simple linear average of face-centered fields as bcc is not updated
+      w.bx = 0.5*(b.x1f(m,k,j,i) + b.x1f(m,k,j,i+1));
+      w.by = 0.5*(b.x2f(m,k,j,i) + b.x2f(m,k,j+1,i));
+      w.bz = 0.5*(b.x3f(m,k,j,i) + b.x3f(m,k+1,j,i));
+
+      // call p2c function
+      HydCons1D u;
+      if (is_gr) {
+        Real glower[4][4], gupper[4][4];
+        ComputeMetricAndInverse(x1v, x2v, x3v, flat, spin, glower, gupper);
+        SingleP2C_IdealGRMHD(glower, gupper, w, gamma, u);
+      } else {
+        SingleP2C_IdealMHD(w, u);
       }
-    });
-  } else if (pmbp->pmhd != nullptr) {
-    auto b = pmbp->pmhd->b0;
-    // TODO(@mhguo): probably don't have to mask the ghost zones?
-    // par_for("zoom_mask", DevExeSpace(),ks-ng,ke+ng,js-ng,je+ng,is-ng,ie+ng,
-    par_for("zoom_mask", DevExeSpace(),cks,cke,cjs,cje,cis,cie,
-    KOKKOS_LAMBDA(int ck, int cj, int ci) {
-      int i = ci + ox1 * cnx1;
-      int j = cj + ox2 * cnx2;
-      int k = ck + ox3 * cnx3;
-      Real x1v = CellCenterX(i-is, nx1, x1min, x1max);
-      Real x2v = CellCenterX(j-js, nx2, x2min, x2max);
-      Real x3v = CellCenterX(k-ks, nx3, x3min, x3max);
-      if (zregion.IsInZoomRegion(x1v, x2v, x3v)) { // apply to zoom region
-        // convert primitive variables to conserved variables
-        // load primitive variables from 3D array
-        w_(m,IDN,k,j,i) = cw0(zm,IDN,ck,cj,ci);
-        w_(m,IM1,k,j,i) = cw0(zm,IM1,ck,cj,ci);
-        w_(m,IM2,k,j,i) = cw0(zm,IM2,ck,cj,ci);
-        w_(m,IM3,k,j,i) = cw0(zm,IM3,ck,cj,ci);
-        w_(m,IEN,k,j,i) = cw0(zm,IEN,ck,cj,ci);
 
-        // Load single state of primitive variables
-        MHDPrim1D w;
-        w.d  = w_(m,IDN,k,j,i);
-        w.vx = w_(m,IVX,k,j,i);
-        w.vy = w_(m,IVY,k,j,i);
-        w.vz = w_(m,IVZ,k,j,i);
-        w.e  = w_(m,IEN,k,j,i);
-
-        // load cell-centered fields into primitive state
-        // TODO(@mhguo): use bcc if available?
-        // use simple linear average of face-centered fields as bcc is not updated
-        w.bx = 0.5*(b.x1f(m,k,j,i) + b.x1f(m,k,j,i+1));
-        w.by = 0.5*(b.x2f(m,k,j,i) + b.x2f(m,k,j+1,i));
-        w.bz = 0.5*(b.x3f(m,k,j,i) + b.x3f(m,k+1,j,i));
-
-        // call p2c function
-        HydCons1D u;
-        if (is_gr) {
-          Real glower[4][4], gupper[4][4];
-          ComputeMetricAndInverse(x1v, x2v, x3v, flat, spin, glower, gupper);
-          SingleP2C_IdealGRMHD(glower, gupper, w, gamma, u);
-        } else {
-          SingleP2C_IdealMHD(w, u);
-        }
-
-        // store conserved quantities in 3D array
-        u_(m,IDN,k,j,i) = u.d;
-        u_(m,IM1,k,j,i) = u.mx;
-        u_(m,IM2,k,j,i) = u.my;
-        u_(m,IM3,k,j,i) = u.mz;
-        u_(m,IEN,k,j,i) = u.e;
-      }
-    });
-  }
+      // store conserved quantities in 3D array
+      u_(m,IDN,k,j,i) = u.d;
+      u_(m,IM1,k,j,i) = u.mx;
+      u_(m,IM2,k,j,i) = u.my;
+      u_(m,IM3,k,j,i) = u.mz;
+      u_(m,IEN,k,j,i) = u.e;
+    }
+  });
   return;
 }

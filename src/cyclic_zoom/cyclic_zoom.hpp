@@ -251,16 +251,26 @@ class ZoomData
   void MeshBlockDataSize();
   void ResetDataEC(DvceEdgeFld4D<Real> ec);
   void DumpData();
+  // functions for storing/applying data during zoom
   void StoreDataToZoomData(int zm, int m);
   void StoreCCData(int zm, DvceArray5D<Real> a0, DvceArray5D<Real> ca,
                    int m, DvceArray5D<Real> a);
   void StoreCoarseHydroData(int zm, DvceArray5D<Real> cw,
                             int m, DvceArray5D<Real> w0_);
-  // TODO(@mhguo): find a better name
+  void ApplyDataSameLevel(int m, int zm, const ZoomRegion &zregion);
+  void ApplyCCDataSameLevel(int m, DvceArray5D<Real> a, int zm, DvceArray5D<Real> a0,
+                            const ZoomRegion &zregion);
+  void ApplyMHDHydroSameLevel(int m, int zm, const ZoomRegion &zregion);
+  void ApplyDataFromFiner(int m, int zm, const ZoomRegion &zregion);
+  void ApplyCCDataFromFiner(int m, DvceArray5D<Real> a, int zm, DvceArray5D<Real> ca,
+                            const ZoomRegion &zregion);
+  void ApplyMHDHydroFromFiner(int m, int zm, const ZoomRegion &zregion);
+  // functions for storing/applying electric fields during zoom
   void StoreEFieldsBeforeAMR(int zm, int m, DvceEdgeFld4D<Real> efld);
   void StoreFinerEFields(int zmc, int zm, DvceEdgeFld4D<Real> efld);
   void StoreEFieldsAfterAMR(int zm, int m, DvceEdgeFld4D<Real> efld);
   void LimitEFields();
+  // load balancing functions
   void PackBuffer();
   void PackBuffersCC(DvceArray1D<Real> packed_data, size_t offset,
                      int m, DvceArray5D<Real> a0);
@@ -281,10 +291,7 @@ class ZoomData
                   const std::vector<int>* src_lids, const std::vector<int>* dst_lids);
   void SaveToStorage(int zone);
   void LoadFromStorage(int zone);
-  void ApplyDataFromZoomData(int m, int zm);
-  void ApplyCCData(int m, int zm);
-  void ApplyMHDHydroData(int m, int zm);
-  void MaskDataInZoomRegion(int m, int zm);
+  // source term functions
   void AddSrcTermsFC(int m, int zm, DvceEdgeFld4D<Real> emf);
 
  private:

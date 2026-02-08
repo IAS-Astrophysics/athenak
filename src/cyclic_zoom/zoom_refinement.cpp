@@ -173,13 +173,16 @@ void CyclicZoom::CorrectVariables() {
 
 void CyclicZoom::ReinitVariables() {
   int zmbs = pzmesh->gzms_eachdvce[global_variable::my_rank];
+  if (global_variable::my_rank == 0) {
+    std::cout << " Apply zoom region radius: " << old_zregion.radius << std::endl;
+  }
   for (int zm=0; zm<pzmesh->nzmb_thisdvce; ++zm) {
     int m = pzmesh->lid_eachmb[zm+zmbs];
     std::cout << "  Rank " << global_variable::my_rank
               << " Reinitializing MeshBlock " << m + pmesh->gids_eachrank[global_variable::my_rank]
               << " using zoom MeshBlock " << zm + zmbs
               << std::endl;
-    pzdata->ApplyDataFromZoomData(m, zm);
+    pzdata->ApplyDataSameLevel(m, zm, old_zregion);
   }
   return;
 }
@@ -190,9 +193,12 @@ void CyclicZoom::ReinitVariables() {
 
 void CyclicZoom::MaskVariables() {
   int zmbs = pzmesh->gzms_eachdvce[global_variable::my_rank];
+  if (global_variable::my_rank == 0) {
+    std::cout << " Mask zoom region radius: " << zregion.radius << std::endl;
+  }
   for (int zm=0; zm<pzmesh->nzmb_thisdvce; ++zm) {
     int m = pzmesh->lid_eachmb[zm+zmbs];
-    pzdata->MaskDataInZoomRegion(m, zm);
+    pzdata->ApplyDataFromFiner(m, zm, zregion);
   }
   return;
 }
