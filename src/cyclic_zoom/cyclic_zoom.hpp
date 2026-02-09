@@ -32,7 +32,6 @@ typedef struct ZoomAMR {
   int refine_flag;              // flag for refinement (+1: refine, -1: coarsen)
   bool zooming_in;              // flag for performing zoom in (refinement)
   bool zooming_out;             // flag for performing zoom out (coarsening)
-  bool dump_rst;                // flag for dumping restart file
 } ZoomAMR;
 
 //----------------------------------------------------------------------------------------
@@ -104,14 +103,9 @@ class CyclicZoom
 
   // data
   std::string block_name;  // block name for reading parameters
-  bool is_set;
+  bool verbose;            // flag for verbose output
   bool read_rst;           // flag for reading zoom data restart file
   bool write_rst;          // flag for writing zoom data restart file
-  bool zoom_bcs;           // flag for zoom boundary conditions
-  bool zoom_ref;           // flag for zoom refinement
-  bool zoom_dt;            // flag for zoom time step
-  bool verbose;            // flag for verbose output
-  bool dump_diag;          // flag for dumping diagnostic output
 
   ZoomState zstate;        // zoom runtime state
   ZoomAMR zamr;            // zoom AMR parameters

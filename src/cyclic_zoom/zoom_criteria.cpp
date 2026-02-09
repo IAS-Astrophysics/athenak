@@ -17,8 +17,6 @@
 //! \brief Main function for CyclicZoom Adaptive Mesh Refinement
 
 void CyclicZoom::CheckRefinement() {
-  if (!zoom_ref) return;
-  // zamr.dump_rst = (zstate.zone == 0);
   if (pmesh->time >= zstate.next_time) {
     if (verbose && global_variable::my_rank == 0) {
       std::cout << "CyclicZoom AMR: old level = " << zamr.level << std::endl;

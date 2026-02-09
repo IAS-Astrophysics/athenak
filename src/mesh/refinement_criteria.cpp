@@ -52,8 +52,8 @@ RefinementCriteria::RefinementCriteria(Mesh *pm, ParameterInput *pin) :
         Kokkos::abort("Unknown refinement criterion");
       }
       // read refinement variable only when needed
-      // TODO(@mhguo): what if user-defined criterion needs variable?
-      if ((method.compare("location")!=0) && (method.compare("user")!=0)) {
+      if ((method.compare("location")!=0) && (method.compare("cyclic_zoom")!=0)
+          && (method.compare("user")!=0)) {
         rcrit0.rvariable = pin->GetString(it->block_name,"variable");
       }
       rcrit0.rvalue_min = pin->GetOrAddReal(it->block_name,"value_min",(-FLT_MAX));
@@ -130,6 +130,7 @@ void RefinementCriteria::SetRefinementData(MeshBlockPack* pmbp, bool count_deriv
   for (auto it = rcrit.begin(); it != rcrit.end(); ++it) {
     // Only load data for methods that need it
     if ((it->rmethod != RefCritMethod::location) &&
+        (it->rmethod != RefCritMethod::cyclic_zoom) &&
         (it->rmethod != RefCritMethod::user)) {
       using Kokkos::ALL;
       // hydro (lab-frame) density

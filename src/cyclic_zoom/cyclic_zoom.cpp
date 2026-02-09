@@ -19,8 +19,7 @@
 // constructor, initializes data structures and parameters
 
 CyclicZoom::CyclicZoom(Mesh *pm, ParameterInput *pin) :
-    pmesh(pm)
-  {
+    pmesh(pm) {
   // cycle through ParameterInput list and read each <amr_criterion> block
   for (auto it = pin->block.begin(); it != pin->block.end(); ++it) {
     if (it->block_name.compare(0, 13, "amr_criterion") == 0) {
@@ -30,14 +29,9 @@ CyclicZoom::CyclicZoom(Mesh *pm, ParameterInput *pin) :
       }
     }
   }
-  is_set = pin->GetOrAddBoolean(block_name,"is_set",false);
+  verbose = pin->GetOrAddBoolean(block_name,"verbose",false);
   read_rst = pin->GetOrAddBoolean(block_name,"read_rst",true);
   write_rst = pin->GetOrAddBoolean(block_name,"write_rst",true);
-  zoom_bcs = pin->GetOrAddBoolean(block_name,"zoom_bcs",true);
-  zoom_ref = pin->GetOrAddBoolean(block_name,"zoom_ref",true);
-  zoom_dt = pin->GetOrAddBoolean(block_name,"zoom_dt",false);
-  verbose = pin->GetOrAddBoolean(block_name,"verbose",false);
-  dump_diag  = pin->GetOrAddBoolean(block_name,"dump_diag",false);
 
   // TODO(@mhguo): may set the parameters so that the initial level equals the max level
   // TODO(@mhguo): currently we need to check whether zamr.level is correct by hand
@@ -54,7 +48,6 @@ CyclicZoom::CyclicZoom(Mesh *pm, ParameterInput *pin) :
   zamr.refine_flag = - zstate.direction;
   zamr.zooming_in = false;
   zamr.zooming_out = false;
-  zamr.dump_rst = true;
 
   zregion.x1c = pin->GetOrAddReal(block_name,"x1c",0.0);
   zregion.x2c = pin->GetOrAddReal(block_name,"x2c",0.0);
@@ -78,7 +71,6 @@ CyclicZoom::CyclicZoom(Mesh *pm, ParameterInput *pin) :
   old_zregion = zregion; // initialize old zoom region
   SetRegionAndInterval();
   zstate.next_time += zint.runtime;
-  // TODO(@mhguo): move to a new struct?
   zemf.emf_flag = 0;
   zemf.emf_f0 = 1.0;
   zemf.emf_f1 = 0.0;
@@ -96,12 +88,6 @@ CyclicZoom::CyclicZoom(Mesh *pm, ParameterInput *pin) :
     zemf.re_fac = pin->GetOrAddReal(block_name,"re_fac",zemf.re_fac);
     zemf.r0_efld = pin->GetOrAddReal(block_name,"r0_efld",0.0); // default value
   }
-  // size_t free_mem, total_mem;
-  // cudaMemGetInfo(&free_mem, &total_mem);
-  // if (global_variable::my_rank == 0) {
-  //   std::cout << "GPU memory: " << free_mem/1e9 << " GB free of " 
-  //             << total_mem/1e9 << " GB total" << std::endl;
-  // }
 
   Initialize(pin);
   PrintCyclicZoomDiagnostics();
@@ -113,11 +99,9 @@ CyclicZoom::CyclicZoom(Mesh *pm, ParameterInput *pin) :
 //! \fn void CyclicZoom::Initialize()
 //! \brief Initialize CyclicZoom variables
 
-void CyclicZoom::Initialize(ParameterInput *pin)
-{
+void CyclicZoom::Initialize(ParameterInput *pin) {
   pzmesh = new ZoomMesh(this, pin);
   pzdata = new ZoomData(this, pin);
-  // pzmr = new ZoomRefinement(this, pin);
   return;
 }
 
@@ -125,12 +109,10 @@ void CyclicZoom::Initialize(ParameterInput *pin)
 //! \fn void CyclicZoom::UpdateAMRFromRestart()
 //! \brief Update CyclicZoom runtime parameters after reading restart file
 
-void CyclicZoom::UpdateAMRFromRestart()
-{
+void CyclicZoom::UpdateAMRFromRestart() {
   zamr.level = pmesh->max_level - zstate.zone;
   zamr.refine_flag = -zstate.direction;
   SetRegionAndInterval();
-
   return;
 }
 
@@ -138,15 +120,13 @@ void CyclicZoom::UpdateAMRFromRestart()
 //! \fn void CyclicZoom::PrintCyclicZoomDiagnostics()
 //! \brief Print CyclicZoom information
 
-void CyclicZoom::PrintCyclicZoomDiagnostics()
-{
+void CyclicZoom::PrintCyclicZoomDiagnostics() {
   if (verbose && global_variable::my_rank == 0) {
     std::cout << "=============== CyclicZoom Information ===============" << std::endl;
     // print basic parameters
-    std::cout << "Basic: is_set = " << is_set << " read_rst = " << read_rst
+    std::cout << "Basic: read_rst = " << read_rst
               << " write_rst = " << write_rst << std::endl;
-    std::cout << "Funcs: zoom_bcs = " << zoom_bcs << " zoom_ref = " << zoom_ref 
-              << " zoom_dt = " << zoom_dt << " add_emf = " << zemf.add_emf
+    std::cout << "Funcs: add_emf = " << zemf.add_emf
               << " emf_flag = " << zemf.emf_flag << std::endl;
     // print mesh parameters
     std::cout << "Mesh: nzmb_max_perdvce = " << pzmesh->nzmb_max_perdvce
