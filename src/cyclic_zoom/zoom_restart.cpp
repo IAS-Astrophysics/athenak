@@ -87,12 +87,6 @@ void CyclicZoom::WriteRestartFile(IOWrapper &resfile, IOWrapperSizeT offset_zoom
       
       // Calculate offset in local zdata array
       size_t data_offset = zm * zmb_size;
-      
-      // Write this ZMB's data to file
-      std::cout << "CyclicZoom: Rank " << my_rank
-                << " writing zoom MeshBlock " << zm
-                << " to global position " << gzm
-                << " at file offset " << file_offset << std::endl;
       resfile.Write_any_type_at(pzdata->zdata.data() + data_offset, 
                                 zmb_size, file_offset, "Real");
     }

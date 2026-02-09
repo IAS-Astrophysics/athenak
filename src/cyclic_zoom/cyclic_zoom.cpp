@@ -141,17 +141,23 @@ void CyclicZoom::UpdateAMRFromRestart()
 void CyclicZoom::PrintCyclicZoomDiagnostics()
 {
   if (global_variable::my_rank == 0) {
-    std::cout << "============== CyclicZoom Information ==============" << std::endl;
+    std::cout << "=============== CyclicZoom Information ===============" << std::endl;
     // print basic parameters
     std::cout << "Basic: is_set = " << is_set << " read_rst = " << read_rst
               << " write_rst = " << write_rst << " ndiag = " << ndiag << std::endl;
     std::cout << "Funcs: zoom_bcs = " << zoom_bcs << " zoom_ref = " << zoom_ref 
               << " zoom_dt = " << zoom_dt << " add_emf = " << zemf.add_emf
               << " emf_flag = " << zemf.emf_flag << std::endl;
-    // print model parameters
-    std::cout << "Model: mzoom = " << pzmesh->nzmb_max_perdvce
-              << " nvars = " << pzdata->nvars
-              << " d_zoom = " << pzdata->d_zoom << " p_zoom = " << pzdata->p_zoom
+    // print mesh parameters
+    std::cout << "Mesh: nzmb_max_perdvce = " << pzmesh->nzmb_max_perdvce
+              << " nzmb_max_perhost = " << pzmesh->nzmb_max_perhost << std::endl;
+    // print data parameters
+    std::cout << "Data: nvars = " << pzdata->nvars
+              << " nangles = " << pzdata->nangles
+              << " zmb_data_cnt = " << pzdata->zmb_data_cnt
+              << std::endl;
+    std::cout << "Initial: d_zoom = " << pzdata->d_zoom
+              << " p_zoom = " << pzdata->p_zoom
               << std::endl;
     // print electric field parameters
     std::cout << "Efield: emf_f0 = " << zemf.emf_f0 << " emf_f1 = " << zemf.emf_f1
@@ -177,12 +183,7 @@ void CyclicZoom::PrintCyclicZoomDiagnostics()
     // print runtime information
     std::cout << "Time: runtime = " << zint.runtime << " next time = "
               << zstate.next_time << std::endl;
-    // throw warning
-    if (zstate.zone != 0) {
-      std::cout << "### WARNING! in " << __FILE__ << " at line " << __LINE__ << std::endl
-                << "CyclicZoom zone is not zero, this is not expected" << std::endl;
-    }
-    std::cout << "==============================================" << std::endl;
+    std::cout << "======================================================" << std::endl;
   }
   return;
 }

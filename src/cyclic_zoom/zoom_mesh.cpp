@@ -59,6 +59,7 @@ void ZoomMesh::GatherZMB(int zm_count, int zone) {
   // Get total number across all ranks (inclusive scan or Allreduce)
   // int zm_total = zm_count;
   nzmb_thisdvce = zm_count;
+  nzmb_eachdvce[global_variable::my_rank] = nzmb_thisdvce;
 #if MPI_PARALLEL_ENABLED
   // Gather counts and displacements
   MPI_Allgather(&nzmb_thisdvce, 1, MPI_INT, nzmb_eachdvce, 1, MPI_INT, MPI_COMM_WORLD);

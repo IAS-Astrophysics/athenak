@@ -45,6 +45,14 @@ ZoomData::ZoomData(CyclicZoom *pz, ParameterInput *pin) :
   } else if (pmbp->pmhd != nullptr) {
     nvars = pmbp->pmhd->nmhd + pmbp->pmhd->nscalars;
   }
+  nangles = 0;
+  if (pmbp->prad != nullptr) {
+    nangles = pmbp->prad->prgeo->nangles;
+  }
+  // compute size of data per Zoom MeshBlock
+  zmb_data_cnt = 0;
+  MeshBlockDataSize();
+
   d_zoom = pin->GetOrAddReal(pzoom->block_name,"d_zoom",(FLT_MIN));
   p_zoom = pin->GetOrAddReal(pzoom->block_name,"p_zoom",(FLT_MIN));
   // allocate ZoomData arrays
@@ -84,15 +92,10 @@ ZoomData::ZoomData(CyclicZoom *pz, ParameterInput *pin) :
   }
 
   // allocate memory for radiation
-  nangles = 0;
   if (pmbp->prad != nullptr) {
-    nangles = pmbp->prad->prgeo->nangles;
     Kokkos::realloc(i0,nzmb,nangles,ncells3,ncells2,ncells1);
     Kokkos::realloc(coarse_i0,nzmb,nangles,nccells3,nccells2,nccells1);
   }
-
-  // compute size of data per Zoom MeshBlock
-  MeshBlockDataSize();
 
   // allocate device and host arrays for data transfer and storage
   // DualView buffer: device side for packing, host side (pinned) for MPI send
@@ -102,9 +105,6 @@ ZoomData::ZoomData(CyclicZoom *pz, ParameterInput *pin) :
   // Host receive buffer: stores ZMBs that will be owned by this rank after AMR/redistribution
   // Note: zdata may contain completely different ZMBs than zbuf due to load balancing
   Kokkos::realloc(zdata, nzmb * zmb_data_cnt);
-  // ndata = pzdata->zmb_data_cnt * pzmesh->nzmb_max_perhost;
-  // Kokkos::realloc(send_data, ndata);
-  // Kokkos::realloc(recv_data, ndata);
 
   Initialize();
 

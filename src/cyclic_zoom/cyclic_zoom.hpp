@@ -238,7 +238,6 @@ class ZoomData
   HostArray1D<Real> zdata;
 
 #if MPI_PARALLEL_ENABLED
-  int ndata;               // size of send/recv data
   MPI_Comm zoom_comm;                       // unique communicator for zoom refinement
   // DualArray1D<AMRBuffer> sendbuf, recvbuf; // send/recv buffers
   MPI_Request *send_req, *recv_req;

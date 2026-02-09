@@ -390,13 +390,15 @@ void ZoomData::RedistZMBs(int nlmb, int lmbs,
                           const std::vector<int>& dst_ranks,
                           const std::vector<int>* src_lids,
                           const std::vector<int>* dst_lids) {
-#if MPI_PARALLEL_ENABLED
   // Get ZMB information for this level
   size_t data_per_zmb = zmb_data_cnt;       // Data elements per ZMB
 
-  int nsend = 0, nrecv = 0, ncopy = 0;
+  int ncopy = 0;
   int my_rank = global_variable::my_rank;
+#if MPI_PARALLEL_ENABLED
+  int nsend = 0, nrecv = 0;
   std::vector<MPI_Request> requests;
+#endif
 
   // Dense indexing counters (only incremented when rank owns the ZMB)
   int src_zm = 0;
@@ -419,7 +421,20 @@ void ZoomData::RedistZMBs(int nlmb, int lmbs,
     size_t offset_dst = (dst_lids == nullptr) ? 
                         dst_zm * data_per_zmb : 
                         (*dst_lids)[gzm] * data_per_zmb;
-    
+
+    // Local copy (same rank, but may need reindexing between dense/logical)
+    if (src_rank_val == my_rank && dst_rank_val == my_rank) {
+      Kokkos::deep_copy(
+        Kokkos::subview(dst_buf, Kokkos::make_pair(offset_dst, offset_dst + data_per_zmb)),
+        Kokkos::subview(src_buf, Kokkos::make_pair(offset_src, offset_src + data_per_zmb))
+      );
+      ++ncopy;
+      // Increment both counters for local copies
+      if (src_lids == nullptr) ++src_zm;
+      if (dst_lids == nullptr) ++dst_zm;
+    }
+
+#if MPI_PARALLEL_ENABLED
     // Post receives first (avoids potential deadlock)
     if (dst_rank_val == my_rank && src_rank_val != my_rank) {
       MPI_Request req;
@@ -441,31 +456,25 @@ void ZoomData::RedistZMBs(int nlmb, int lmbs,
       // Only increment dense counter if source uses dense indexing
       if (src_lids == nullptr) ++src_zm;
     }
-
-    // Local copy (same rank, but may need reindexing between dense/logical)
-    if (src_rank_val == my_rank && dst_rank_val == my_rank) {
-      Kokkos::deep_copy(
-        Kokkos::subview(dst_buf, Kokkos::make_pair(offset_dst, offset_dst + data_per_zmb)),
-        Kokkos::subview(src_buf, Kokkos::make_pair(offset_src, offset_src + data_per_zmb))
-      );
-      ++ncopy;
-      // Increment both counters for local copies
-      if (src_lids == nullptr) ++src_zm;
-      if (dst_lids == nullptr) ++dst_zm;
-    }
+#endif
   }
 
+#if MPI_PARALLEL_ENABLED
   // Wait for all asynchronous communications to complete
   if (!requests.empty()) {
     MPI_Waitall(requests.size(), requests.data(), MPI_STATUSES_IGNORE);
   }
+#endif
 
   if (global_variable::my_rank == 0) {
     std::cout << "RedistZMBs: completed " 
+#if MPI_PARALLEL_ENABLED
               << requests.size() << " MPI ops (sends: " << nsend 
               << ", recvs: " << nrecv << ", local: " << ncopy << ")" << std::endl;
-  }
+#else
+              << ncopy << " local copies" << std::endl;
 #endif
+  }
   return;
 }
 
