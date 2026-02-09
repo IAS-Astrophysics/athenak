@@ -249,10 +249,11 @@ void SourceTerms::NewTimeStep(const DvceArray5D<Real> &w0, const EOS_Data &eos_d
 
       // --- Timestep calculation
       Real cooling_heating =
-        FLT_MIN + fabs(X * rho * ( X * rho * (lambda_cooling / cooling_unit)
-                                            - (gamma_heating / heating_unit)));
-
-      min_dt = fmin(0.25 * (egy/cooling_heating), min_dt);
+        FLT_MIN + (X * rho * ( X * rho * (lambda_cooling / cooling_unit)
+                                       - (gamma_heating / heating_unit)));
+      if (cooling_heating > 0) {
+        min_dt = fmin(0.25 * (egy/cooling_heating), min_dt);
+      }
     }, Kokkos::Min<Real>(dtnew));
     
   }

@@ -551,12 +551,29 @@ void SetEquilibriumState(const DvceArray5D<Real> &u0,
       v2 =  v_phi * x1v / R;
     }
 
+    // Combine cgm and disk material consistently
+    Real rho_cgm  = u0(m, IDN, k, j, i);
+    Real mom1_cgm = u0(m, IM1, k, j, i);
+    Real mom2_cgm = u0(m, IM2, k, j, i);
+    Real mom3_cgm = u0(m, IM3, k, j, i);
+    Real E_cgm    = u0(m, IEN, k, j, i);
+
+    Real KE_cgm  = 0.5*(SQR(mom1_cgm) + SQR(mom2_cgm) + SQR(mom3_cgm))/rho_cgm;
+    Real Eth_cgm = E_cgm - KE_cgm;
+
+    Real rho_tot  = rho_cgm + rho;
+    Real mom1_tot = mom1_cgm + rho * v1;
+    Real mom2_tot = mom2_cgm + rho * v2;
+    Real mom3_tot = mom3_cgm;
+
+    Real KE_tot = 0.5*(SQR(mom1_tot)+SQR(mom2_tot)+SQR(mom3_tot))/rho_tot;
+
     // Set state variables
-    u0(m, IDN, k, j, i) += rho;
-    u0(m, IM1, k, j, i) += rho * v1;
-    u0(m, IM2, k, j, i) += rho * v2;
-    u0(m, IM3, k, j, i) += 0.0;
-    u0(m, IEN, k, j, i) += (rho * temp)/gm1 + 0.5 * rho * (SQR(v1) + SQR(v2));
+    u0(m, IDN, k, j, i) = rho_tot;
+    u0(m, IM1, k, j, i) = mom1_tot;
+    u0(m, IM2, k, j, i) = mom2_tot;
+    u0(m, IM3, k, j, i) = mom3_tot;
+    u0(m, IEN, k, j, i) = Eth_cgm + (rho * temp)/gm1 + KE_tot;
 }
 
 //===========================================================================//
