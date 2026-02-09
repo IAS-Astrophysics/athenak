@@ -21,7 +21,7 @@
     #error NHISTORY > NREDUCTION in outputs.hpp
 #endif
 
-#define NOUTPUT_CHOICES 188
+#define NOUTPUT_CHOICES 195
 // choices for output variables used in <ouput> blocks in input file
 // TO ADD MORE CHOICES:
 //   - add more strings to array below, change NOUTPUT_CHOICES above appropriately
@@ -98,22 +98,22 @@ static const char *var_choice[NOUTPUT_CHOICES] = {
   "tmunu_Sx", "tmunu_Sy", "tmunu_Sz",
   "tmunu",
 
-  // Particles (156-157)
+  // Particles (163-164)
   "prtcl_all", "prtcl_d",
 
-  // Coordinate variables for PDF binning (158-166)
+  // Coordinate variables for PDF binning (165-174)
   "coord_x", "coord_y", "coord_z",
   "coord_r", "coord_theta", "coord_phi",
   "coord_cyl_R", "coord_cyl_phi", "coord_cyl_z",
   "coord_costheta",
 
-  // Mass and energy flux derived variables (167-178)
+  // Mass and energy flux derived variables (175-186)
   "mdot_sph", "mdot_sph_out", "mdot_sph_in",
   "edot_sph", "edot_sph_out", "edot_sph_in",
   "mdot_vert", "mdot_vert_out", "mdot_vert_in",
   "edot_vert", "edot_vert_out", "edot_vert_in",
 
-  // Spherical/cylindrical velocity components and energy flux components (179-186)
+  // Spherical/cylindrical velocity components and energy flux components (187-194)
   "vel_sph_r", "vel_sph_theta", "vel_sph_phi",
   "vel_cyl_R", "vel_cyl_phi",
   "edot_sph_kin", "edot_sph_th", "edot_sph_mag"
