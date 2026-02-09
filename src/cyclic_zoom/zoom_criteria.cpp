@@ -20,7 +20,7 @@ void CyclicZoom::CheckRefinement() {
   if (!zoom_ref) return;
   // zamr.dump_rst = (zstate.zone == 0);
   if (pmesh->time >= zstate.next_time) {
-    if (global_variable::my_rank == 0) {
+    if (verbose && global_variable::my_rank == 0) {
       std::cout << "CyclicZoom AMR: old level = " << zamr.level << std::endl;
     }
     SetRefinementFlags();
@@ -52,7 +52,7 @@ void CyclicZoom::UpdateState() {
   SetRegionAndInterval();
   zstate.id++;
   zstate.next_time = pmesh->time + zint.runtime;
-  if (global_variable::my_rank == 0) {
+  if (verbose && global_variable::my_rank == 0) {
     std::cout << "CyclicZoom AMR:"
               << " new id = " << zstate.id
               << " zone = " << zstate.zone 
@@ -96,7 +96,7 @@ void CyclicZoom::SetRefinementFlags() {
   int ref_flag = zamr.refine_flag;
   Real r_zoom = zregion.radius;
   Real x1c = zregion.x1c, x2c = zregion.x2c, x3c = zregion.x3c;
-  if(global_variable::my_rank == 0) {
+  if(verbose && global_variable::my_rank == 0) {
     std::cout << "CyclicZoom AMR: Refine/derefine to level " << old_level + ref_flag
               << " (refine_flag=" << ref_flag << ")" << std::endl;
   }

@@ -456,9 +456,11 @@ void ZoomData::ApplyPrimSameLevel(int m, int zm, const ZoomRegion &zregion) {
       u_(m,IEN,k,j,i) = u.e;
     }
   });
-  std::cout << "  Rank " << global_variable::my_rank 
-            << " Reinitialized variables in meshblock " << m
-            << " using zoom meshblock " << zm << std::endl;
+  if (pzoom->verbose) {
+    std::cout << "  Rank " << global_variable::my_rank 
+              << " Reinitialized variables in meshblock " << m
+              << " using zoom meshblock " << zm << std::endl;
+  }
   return;
 }
 
@@ -504,12 +506,6 @@ void ZoomData::ApplyPrimFromFiner(int m, int zm, const ZoomRegion &zregion) {
   int ox1 = ((zlloc.lx1 & 1) == 1);
   int ox2 = ((zlloc.lx2 & 1) == 1);
   int ox3 = ((zlloc.lx3 & 1) == 1);
-  // std::cout << "  Rank " << global_variable::my_rank 
-  //           << " Masking variables in meshblock " << m
-  //           << " using zoom meshblock " << zm 
-  //           << " with offsets (" << ox1 << "," << ox2 << "," << ox3 << ")"
-  //           << std::endl;
-  // return;
   auto u_ = pmbp->pmhd->u0;
   auto w_ = pmbp->pmhd->w0;
   auto b = pmbp->pmhd->b0;

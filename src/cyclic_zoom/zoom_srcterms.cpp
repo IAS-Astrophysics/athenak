@@ -31,7 +31,7 @@ void CyclicZoom::SourceTermsFC(DvceEdgeFld4D<Real> efld) {
     // pzdata->StoreEFields(zm, m);
     pzdata->AddSrcTermsFC(m, zm, efld);
   }
-  if (global_variable::my_rank == 0) {
+  if (verbose && global_variable::my_rank == 0) {
     std::cout << "CyclicZoom: Added source terms to electric fields in zoom region" << std::endl;
   }
   return;

@@ -110,8 +110,8 @@ class CyclicZoom
   bool zoom_bcs;           // flag for zoom boundary conditions
   bool zoom_ref;           // flag for zoom refinement
   bool zoom_dt;            // flag for zoom time step
+  bool verbose;            // flag for verbose output
   bool dump_diag;          // flag for dumping diagnostic output
-  int ndiag;               // cycles between diagostic output
 
   ZoomState zstate;        // zoom runtime state
   ZoomAMR zamr;            // zoom AMR parameters

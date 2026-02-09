@@ -119,7 +119,6 @@ void MeshRefinement::AdaptiveMeshRefinement(Driver *pdriver, ParameterInput *pin
 
   // Refine/derefine mesh and evolved data, set boundary conditions/timestep on new mesh
   if (nnew != 0 || ndel != 0) { // at least one (de)refinement flagged
-    std::cout<<"nnew="<<nnew<<" ndel="<<ndel<<std::endl;
     pmy_mesh->pzoom->StoreZoomRegion();
     RedistAndRefineMeshBlocks(pin, nnew, ndel);
     pdriver->InitBoundaryValuesAndPrimitives(pmy_mesh);

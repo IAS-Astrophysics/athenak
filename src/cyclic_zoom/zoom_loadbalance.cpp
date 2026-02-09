@@ -19,7 +19,7 @@
 //! \brief Packs data into AMR communication buffers for all MBs being sent
 
 void ZoomData::PackBuffer() {
-  if (global_variable::my_rank == 0) {
+  if (pzoom->verbose && global_variable::my_rank == 0) {
     std::cout << "CyclicZoom: Packing data into communication buffer" << std::endl;
   }
   // pack data for all zmbs on this device
@@ -216,8 +216,10 @@ void ZoomData::UnpackBuffer() {
     ci0_cnt = coarse_i0.extent(1) * coarse_i0.extent(2) * coarse_i0.extent(3) * coarse_i0.extent(4);
   }
   for (int zm = 0; zm < pzmesh->nzmb_thisdvce; ++zm) {
-    std::cout << " Rank " << global_variable::my_rank 
-              << " Unpacking buffer for zmb " << zm << std::endl;
+    if (pzoom->verbose) {
+      std::cout << " Rank " << global_variable::my_rank 
+                << " Unpacking buffer for zmb " << zm << std::endl;
+    }
     // offset = zm * zmb_data_cnt;
     if (pmbp->phydro != nullptr || pmbp->pmhd != nullptr) {
       // unpack conserved variables
@@ -466,7 +468,7 @@ void ZoomData::RedistZMBs(int nlmb, int lmbs,
   }
 #endif
 
-  if (global_variable::my_rank == 0) {
+  if (pzoom->verbose && global_variable::my_rank == 0) {
     std::cout << "RedistZMBs: completed " 
 #if MPI_PARALLEL_ENABLED
               << requests.size() << " MPI ops (sends: " << nsend 

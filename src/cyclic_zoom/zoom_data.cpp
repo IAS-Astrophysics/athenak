@@ -295,8 +295,10 @@ void ZoomData::ResetDataEC(DvceEdgeFld4D<Real> ec) {
 
 // TODO: dumping on a single rank now, should consider parallel dumping
 void ZoomData::DumpData() {
-  if (global_variable::my_rank == 0) {
+  if (pzoom->verbose && global_variable::my_rank == 0) {
     std::cout << "CyclicZoom: Dumping data" << std::endl;
+  }
+  if (global_variable::my_rank == 0) {
     auto pm = pzoom->pmesh;
     auto &indcs = pm->mb_indcs;
     int nccells1 = indcs.cnx1 + 2*(indcs.ng);

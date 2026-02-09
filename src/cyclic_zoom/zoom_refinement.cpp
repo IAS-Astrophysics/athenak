@@ -24,7 +24,7 @@ void CyclicZoom::StoreZoomRegion() {
     pzmesh->SyncLogicalLocations();
     pzdata->PackBuffer();
     pzdata->SaveToStorage(zstate.zone-1);
-    if (global_variable::my_rank == 0) {
+    if (verbose && global_variable::my_rank == 0) {
       std::cout << "CyclicZoom: Stored zoom region before zooming" << std::endl;
     }
   }
@@ -42,7 +42,7 @@ void CyclicZoom::ApplyZoomRegion(Driver *pdriver) {
     pzdata->LoadFromStorage(zstate.zone);
     pzdata->UnpackBuffer();
     ReinitVariables();
-    if (global_variable::my_rank == 0) {
+    if (verbose && global_variable::my_rank == 0) {
       std::cout << "CyclicZoom: Apply variables after zooming" << std::endl;
     }
   }
@@ -71,7 +71,7 @@ void CyclicZoom::ApplyZoomRegion(Driver *pdriver) {
   // reset zooming flags
   zamr.zooming_out = false;
   zamr.zooming_in = false;
-  if (global_variable::my_rank == 0) {
+  if (verbose && global_variable::my_rank == 0) {
     std::cout << "CyclicZoom: Applied zoom region" << std::endl;
   }
   return;
@@ -82,7 +82,7 @@ void CyclicZoom::ApplyZoomRegion(Driver *pdriver) {
 //! \brief Store variables before zooming (out)
 
 void CyclicZoom::StoreVariables() {
-  if (global_variable::my_rank == 0) {
+  if (verbose && global_variable::my_rank == 0) {
     std::cout << "CyclicZoom: Storing variables before zooming" << std::endl;
   }
   // store efld_pre for future use
@@ -145,14 +145,16 @@ void CyclicZoom::CorrectVariables() {
         ++zm_count;
       }
       // print diagnostic info
-      std::cout << "CyclicZoom: Correcting variables for zoom MeshBlock " << zm_count
-                << " using zoom MeshBlock " << zm
-                << " on MeshBlock " << m + pmesh->gids_eachrank[global_variable::my_rank]
-                << std::endl;
+      if (verbose && global_variable::my_rank == 0) {
+        std::cout << "CyclicZoom: Correcting variables for zoom MeshBlock " << zm_count
+                  << " using zoom MeshBlock " << zm
+                  << " on MeshBlock " << m + pmesh->gids_eachrank[global_variable::my_rank]
+                  << std::endl;
+      }
       // correct electric fields
       pzdata->StoreEFieldsFromFiner(zm_count, zm, pzdata->efld_buf);
     }
-    if (global_variable::my_rank == 0) {
+    if (verbose && global_variable::my_rank == 0) {
       std::cout << "CyclicZoom: Corrected variables before zooming" << std::endl;
     }
   }
@@ -167,17 +169,19 @@ void CyclicZoom::CorrectVariables() {
 void CyclicZoom::ReinitVariables() {
   int zmbs = pzmesh->gzms_eachdvce[global_variable::my_rank];
   int mbs = pmesh->gids_eachrank[global_variable::my_rank];
-  if (global_variable::my_rank == 0) {
+  if (verbose && global_variable::my_rank == 0) {
     std::cout << " Apply zoom region radius: " << old_zregion.radius << std::endl;
   }
   for (int zm = 0; zm < pzmesh->nzmb_thisdvce; ++zm) {
     auto &zlloc = pzmesh->lloc_eachzmb[zm+zmbs];
     int m = pzmesh->lid_eachmb[zm+zmbs];
     auto &lloc = pmesh->lloc_eachmb[m+mbs];
-    std::cout << "  Rank " << global_variable::my_rank
-              << " Reinitializing MeshBlock " << m + pmesh->gids_eachrank[global_variable::my_rank]
-              << " using zoom MeshBlock " << zm + zmbs
-              << std::endl;
+    if (verbose && global_variable::my_rank == 0) {
+      std::cout << "  Rank " << global_variable::my_rank
+                << " Reinitializing MeshBlock " << m + pmesh->gids_eachrank[global_variable::my_rank]
+                << " using zoom MeshBlock " << zm + zmbs
+                << std::endl;
+    }
     // Reinitialize variables in the zoom region using the same level zoom data
     if (zlloc.level == lloc.level) {
       pzdata->ApplyDataSameLevel(m, zm, old_zregion);
@@ -198,7 +202,7 @@ void CyclicZoom::ReinitVariables() {
 void CyclicZoom::MaskVariables() {
   int zmbs = pzmesh->gzms_eachdvce[global_variable::my_rank];
   int mbs = pmesh->gids_eachrank[global_variable::my_rank];
-  if (global_variable::my_rank == 0) {
+  if (verbose && global_variable::my_rank == 0) {
     std::cout << " Mask zoom region radius: " << zregion.radius << std::endl;
   }
   for (int zm = 0; zm < pzmesh->nzmb_thisdvce; ++zm) {

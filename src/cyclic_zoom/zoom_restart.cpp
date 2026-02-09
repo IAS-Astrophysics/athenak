@@ -46,8 +46,10 @@ void CyclicZoom::WriteRestartFile(IOWrapper &resfile, IOWrapperSizeT offset_zoom
   int &zmb_size = pzdata->zmb_data_cnt;
   int my_rank = global_variable::my_rank;
 
-  std::cout << "CyclicZoom: Writing cyclic zoom restart data at offset "
-            << offset_zoom << " from rank " << my_rank << std::endl;
+  if (verbose && my_rank == 0) {
+    std::cout << "CyclicZoom: Writing cyclic zoom restart data at offset "
+              << offset_zoom << " from rank " << my_rank << std::endl;
+  }
   
   // STEP 1: Use the passed offset_zoom which points to start of cyclic zoom data
   IOWrapperSizeT current_offset = offset_zoom;

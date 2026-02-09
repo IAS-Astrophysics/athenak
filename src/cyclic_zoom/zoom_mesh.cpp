@@ -221,14 +221,18 @@ void ZoomMesh::FindRegion(int zone) {
     if (m >= 0) {
       rank_eachmb[lm+lmbs] = global_variable::my_rank;
       lid_eachmb[lm+lmbs] = m;
-      std::cout << "  Rank " << global_variable::my_rank
-                << " Find MeshBlock " << m+mbs << " for zoom MeshBlock "
-                << lm+lmbs << std::endl;
+      if (pzoom->verbose) {
+        std::cout << "  Rank " << global_variable::my_rank
+                  << " Find MeshBlock " << m+mbs << " for zoom MeshBlock "
+                  << lm+lmbs << std::endl;
+      }
       ++zm_count;
     }
   }
-  std::cout << "  Rank " << global_variable::my_rank << " total zoom MBs to be applied: "
-            << zm_count << std::endl;
+  if (pzoom->verbose) {
+    std::cout << "  Rank " << global_variable::my_rank << " total zoom MBs to be applied: "
+              << zm_count << std::endl;
+  }
   // TODO(@mhguo): you probably don't need to sync, as lloc_eachmb includes all MBs
   // TODO(@mhguo): you can loop over all meshblocks though it may be slower
   GatherZMB(zm_count, zone);

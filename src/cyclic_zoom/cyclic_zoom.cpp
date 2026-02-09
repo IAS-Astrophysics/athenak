@@ -36,8 +36,8 @@ CyclicZoom::CyclicZoom(Mesh *pm, ParameterInput *pin) :
   zoom_bcs = pin->GetOrAddBoolean(block_name,"zoom_bcs",true);
   zoom_ref = pin->GetOrAddBoolean(block_name,"zoom_ref",true);
   zoom_dt = pin->GetOrAddBoolean(block_name,"zoom_dt",false);
+  verbose = pin->GetOrAddBoolean(block_name,"verbose",false);
   dump_diag  = pin->GetOrAddBoolean(block_name,"dump_diag",false);
-  ndiag = pin->GetOrAddInteger(block_name,"ndiag",-1);
 
   // TODO(@mhguo): may set the parameters so that the initial level equals the max level
   // TODO(@mhguo): currently we need to check whether zamr.level is correct by hand
@@ -140,11 +140,11 @@ void CyclicZoom::UpdateAMRFromRestart()
 
 void CyclicZoom::PrintCyclicZoomDiagnostics()
 {
-  if (global_variable::my_rank == 0) {
+  if (verbose && global_variable::my_rank == 0) {
     std::cout << "=============== CyclicZoom Information ===============" << std::endl;
     // print basic parameters
     std::cout << "Basic: is_set = " << is_set << " read_rst = " << read_rst
-              << " write_rst = " << write_rst << " ndiag = " << ndiag << std::endl;
+              << " write_rst = " << write_rst << std::endl;
     std::cout << "Funcs: zoom_bcs = " << zoom_bcs << " zoom_ref = " << zoom_ref 
               << " zoom_dt = " << zoom_dt << " add_emf = " << zemf.add_emf
               << " emf_flag = " << zemf.emf_flag << std::endl;

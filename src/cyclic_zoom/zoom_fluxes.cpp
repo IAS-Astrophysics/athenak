@@ -38,8 +38,10 @@ void CyclicZoom::UpdateFluxes(Driver *pdriver) {
   (void) pmhd->RecvB(pdriver, 1);
   (void) pmhd->ClearSend(pdriver, 1); // stage = 1
   (void) pmhd->ClearRecv(pdriver, 1); // stage = 1
-  std::cout << " Rank " << global_variable::my_rank 
+  if (verbose) {
+    std::cout << " Rank " << global_variable::my_rank 
             << " Calculated electric fields after AMR" << std::endl;
+  }
   return;
 }
 
@@ -59,7 +61,7 @@ void CyclicZoom::StoreFluxes() {
   }
   // limit electric fields if needed
   pzdata->LimitEFields();
-  if (global_variable::my_rank == 0) {
+  if (verbose && global_variable::my_rank == 0) {
     std::cout << "CyclicZoom: Updated electric fields in zoom region" << std::endl;
   }
   return;
@@ -227,7 +229,7 @@ void ZoomData::LimitEFields() {
     max_e2 = fmax(max_e2, fabs(e02(zm,ck,cj,ci)));
     max_e3 = fmax(max_e3, fabs(e03(zm,ck,cj,ci)));
   }, Kokkos::Max<Real>(emax1), Kokkos::Max<Real>(emax2),Kokkos::Max<Real>(emax3));
-  if (global_variable::my_rank == 0) {
+  if (pzoom->verbose && global_variable::my_rank == 0) {
     std::cout << "ZoomData::LimitEFields: local emax1=" << emax1
               << ", emax2=" << emax2
               << ", emax3=" << emax3 << std::endl;
@@ -237,14 +239,14 @@ void ZoomData::LimitEFields() {
   MPI_Allreduce(MPI_IN_PLACE, &emax2, 1, MPI_ATHENA_REAL, MPI_MAX, MPI_COMM_WORLD);
   MPI_Allreduce(MPI_IN_PLACE, &emax3, 1, MPI_ATHENA_REAL, MPI_MAX, MPI_COMM_WORLD);
 #endif
-  if (global_variable::my_rank == 0) {
+  if (pzoom->verbose && global_variable::my_rank == 0) {
     std::cout << "ZoomData::LimitEFields: emax1=" << emax1
               << ", emax2=" << emax2
               << ", emax3=" << emax3 << std::endl;
   }
   Real emax = fmax(fmax(emax1, emax2), emax3);
   emax *= pzoom->zemf.emf_fmax; // limiting factor
-  if (global_variable::my_rank == 0) {
+  if (pzoom->verbose && global_variable::my_rank == 0) {
     std::cout << "ZoomData::LimitEFields: emax for limiting = " << emax << std::endl;
   }
   auto de1 = delta_efld.x1e;
@@ -267,7 +269,7 @@ void ZoomData::LimitEFields() {
     max_de2 = fmax(max_de2, fabs(de2(zm,ck,cj,ci)));
     max_de3 = fmax(max_de3, fabs(de3(zm,ck,cj,ci)));
   }, Kokkos::Max<Real>(emax1), Kokkos::Max<Real>(emax2),Kokkos::Max<Real>(emax3));
-  if (global_variable::my_rank == 0) {
+  if (pzoom->verbose && global_variable::my_rank == 0) {
     std::cout << "ZoomData::LimitEFields: pre-limit local de1max=" << emax1
               << ", de2max=" << emax2
               << ", de3max=" << emax3 << std::endl;
@@ -277,7 +279,7 @@ void ZoomData::LimitEFields() {
   MPI_Allreduce(MPI_IN_PLACE, &emax2, 1, MPI_ATHENA_REAL, MPI_MAX, MPI_COMM_WORLD);
   MPI_Allreduce(MPI_IN_PLACE, &emax3, 1, MPI_ATHENA_REAL, MPI_MAX, MPI_COMM_WORLD);
 #endif
-  if (global_variable::my_rank == 0) {
+  if (pzoom->verbose && global_variable::my_rank == 0) {
     std::cout << "ZoomData::LimitEFields: pre-limit de1max=" << emax1
               << ", de2max=" << emax2
               << ", de3max=" << emax3 << std::endl;
@@ -313,7 +315,7 @@ void ZoomData::LimitEFields() {
     max_de2 = fmax(max_de2, fabs(de2(zm,ck,cj,ci)));
     max_de3 = fmax(max_de3, fabs(de3(zm,ck,cj,ci)));
   }, Kokkos::Max<Real>(emax1), Kokkos::Max<Real>(emax2),Kokkos::Max<Real>(emax3));
-  if (global_variable::my_rank == 0) {
+  if (pzoom->verbose && global_variable::my_rank == 0) {
     std::cout << "ZoomData::LimitEFields: post-limit local de1max=" << emax1
               << ", de2max=" << emax2
               << ", de3max=" << emax3 << std::endl;
@@ -323,7 +325,7 @@ void ZoomData::LimitEFields() {
   MPI_Allreduce(MPI_IN_PLACE, &emax2, 1, MPI_ATHENA_REAL, MPI_MAX, MPI_COMM_WORLD);
   MPI_Allreduce(MPI_IN_PLACE, &emax3, 1, MPI_ATHENA_REAL, MPI_MAX, MPI_COMM_WORLD);
 #endif
-  if (global_variable::my_rank == 0) {
+  if (pzoom->verbose && global_variable::my_rank == 0) {
     std::cout << "ZoomData::LimitEFields: post-limit de1max=" << emax1
               << ", de2max=" << emax2
               << ", de3max=" << emax3 << std::endl;
