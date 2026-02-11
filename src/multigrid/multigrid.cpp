@@ -388,6 +388,25 @@ void Multigrid::RestrictPack() {
   return;
 }
 
+//----------------------------------------------------------------------------------------
+//! \fn void Multigrid::RestrictSourcePack()
+//! \brief Restrict the source (and solution) without forming defect
+
+void Multigrid::RestrictSourcePack() {
+  int ll=nlevel_-current_level_;
+  int is, ie, js, je, ks, ke;
+  int th = false;
+  int ngc = ngh_-(ngh_>>1);
+  is=js=ks= ngc;
+  ie = is+(indcs_.nx1>>ll)+ngc-1;
+  je = js+(indcs_.nx2>>ll)+ngc-1;
+  ke = ks+(indcs_.nx3>>ll)+ngc-1;
+  Restrict(src_[current_level_-1], src_[current_level_],
+           nvar_, is, ie, js, je, ks, ke, th);
+  current_level_--;
+  return;
+}
+
 
 //----------------------------------------------------------------------------------------
 //! \fn void Multigrid::ProlongateAndCorrectPack()
@@ -406,6 +425,25 @@ void Multigrid::ProlongateAndCorrectPack() {
   
   ProlongateAndCorrect(u_[current_level_+1], u_[current_level_],
                        is, ie, js, je, ks, ke, ngh_, ngh_, ngh_, th);
+
+  current_level_++;
+  return;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void Multigrid::FMGProlongatePack()
+//! \brief Prolongate the solution for FMG (direct overwrite, always tricubic)
+
+void Multigrid::FMGProlongatePack() {
+  int ll=nlevel_-1-current_level_;
+  int is, ie, js, je, ks, ke;
+  is=js=ks=ngh_;
+  ie=is+(indcs_.nx1>>ll)-1;
+  je=js+(indcs_.nx2>>ll)-1;
+  ke=ks+(indcs_.nx3>>ll)-1;
+
+  FMGProlongate(u_[current_level_+1], u_[current_level_],
+                is, ie, js, je, ks, ke, ngh_, ngh_, ngh_);
 
   current_level_++;
   return;
@@ -478,7 +516,6 @@ void Multigrid::SetFromRootGrid(bool folddata) {
   auto &odst = uold_[current_level_];
   const auto &src=pmy_driver_->mgroot_->GetCurrentData();
   const auto &osrc = pmy_driver_->mgroot_->GetCurrentOldData();
-  int lev = loc_.level - pmy_driver_->locrootlevel_;
   int padding = pmy_mesh_->gids_eachrank[global_variable::my_rank];
   //Host copy/mirror this should be optimized later
   auto dst_h = Kokkos::create_mirror_view(dst);
@@ -486,13 +523,16 @@ void Multigrid::SetFromRootGrid(bool folddata) {
   const auto src_h = Kokkos::create_mirror_view_and_copy(HostMemSpace(), src);
   const auto osrc_h = Kokkos::create_mirror_view_and_copy(HostMemSpace(), osrc);
 
-  if (lev == 0) { // from the root grid
-    for(int m=0; m<nmmb_; ++m) {
-      auto loc = pmy_mesh_->lloc_eachmb[m+padding];
-      int ci = static_cast<int>(loc.lx1);
-      int cj = static_cast<int>(loc.lx2);
-      int ck = static_cast<int>(loc.lx3);
-      
+  // Handle each meshblock based on its refinement level
+  for(int m=0; m<nmmb_; ++m) {
+    auto loc = pmy_mesh_->lloc_eachmb[m+padding];
+    int lev = loc.level - pmy_driver_->locrootlevel_;
+    int ci = static_cast<int>(loc.lx1);
+    int cj = static_cast<int>(loc.lx2);
+    int ck = static_cast<int>(loc.lx3);
+    
+    if (lev == 0) {
+      // Direct copy from root grid (no refinement)
       for (int v=0; v<nvar_; ++v) {
         for (int k=ngh_-1; k<=ngh_+1; ++k) {
           for (int j=ngh_-1; j<=ngh_+1; ++j) {
@@ -504,8 +544,56 @@ void Multigrid::SetFromRootGrid(bool folddata) {
           }
         }
       }
+    } else if (lev > 0) {
+      // Meshblock is refined: get data from appropriate octet level
+      // If octets are available, use them; otherwise use root grid with prolongation
+      if (lev <= pmy_driver_->nreflevel_ && pmy_driver_->mgoct_ != nullptr && 
+          pmy_driver_->mgoct_[lev-1] != nullptr) {
+        // Get data from octet at level (lev-1)
+        const auto &oct_src = pmy_driver_->mgoct_[lev-1]->GetCurrentData();
+        const auto &oct_osrc = pmy_driver_->mgoct_[lev-1]->GetCurrentOldData();
+        auto oct_src_h = Kokkos::create_mirror_view_and_copy(HostMemSpace(), oct_src);
+        auto oct_osrc_h = Kokkos::create_mirror_view_and_copy(HostMemSpace(), oct_osrc);
+        
+        // Find position in octet grid
+        int oi = ci / 2;  // parent position at coarser level
+        int oj = cj / 2;
+        int ok = ck / 2;
+        
+        for (int v=0; v<nvar_; ++v) {
+          for (int k=ngh_-1; k<=ngh_+1; ++k) {
+            for (int j=ngh_-1; j<=ngh_+1; ++j) {
+              for (int i=ngh_-1; i<=ngh_+1; ++i){
+                dst_h(m, v, k, j, i) = oct_src_h(0, v, ok+k, oj+j, oi+i);
+                if(folddata)
+                  odst_h(m,v, k, j, i) = oct_osrc_h(0, v, ok+k, oj+j, oi+i);
+              }
+            }
+          }
+        }
+      } else {
+        // Octets not available: prolongate directly from root grid
+        // Use simple trilinear interpolation
+        for (int v=0; v<nvar_; ++v) {
+          for (int k=ngh_-1; k<=ngh_+1; ++k) {
+            for (int j=ngh_-1; j<=ngh_+1; ++j) {
+              for (int i=ngh_-1; i<=ngh_+1; ++i){
+                // Map to root grid with refinement factor
+                Real rfac = 1.0 / (1 << lev);
+                int ri = static_cast<int>(ci * rfac + i * rfac) + ngh_;
+                int rj = static_cast<int>(cj * rfac + j * rfac) + ngh_;
+                int rk = static_cast<int>(ck * rfac + k * rfac) + ngh_;
+                dst_h(m, v, k, j, i) = src_h(0, v, rk, rj, ri);
+                if(folddata)
+                  odst_h(m,v, k, j, i) = osrc_h(0, v, rk, rj, ri);
+              }
+            }
+          }
+        }
+      }
     }
   }
+  
   //Copy back to device
   Kokkos::deep_copy(dst, dst_h);
   if(folddata)
@@ -545,7 +633,7 @@ Real Multigrid::CalculateDefectNorm(MGNormType nrm, int n) {
       KOKKOS_LAMBDA(const int m, const int v, const int k, const int j, const int i, Real &local_max) {
         local_max = std::max(local_max, std::abs(def(m, v, k, j, i)));
       }, Kokkos::Max<Real>(norm));
-
+      return norm;
   } else if (nrm == MGNormType::l1) {
     // L1 norm: sum of absolute values
     Kokkos::parallel_reduce("MG::DefectNorm_L1",
@@ -554,7 +642,6 @@ Real Multigrid::CalculateDefectNorm(MGNormType nrm, int n) {
       KOKKOS_LAMBDA(const int m, const int v, const int k, const int j, const int i, Real &local_sum) {
         local_sum += std::abs(def(m, v, k, j, i));
       }, Kokkos::Sum<Real>(norm));
-    norm *= dV;
   } else { // L2 norm (default)
     // L2 norm: sqrt(sum of squares)
     Kokkos::parallel_reduce("MG::DefectNorm_L2",
@@ -564,11 +651,54 @@ Real Multigrid::CalculateDefectNorm(MGNormType nrm, int n) {
         Real val = def(m, v, k, j, i);
         local_sum += val * val;
         }, Kokkos::Sum<Real>(norm));
-    norm *= dV;
   }
   norm *= defscale_;
   return norm;
 
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn Real Multigrid::CalculateAverage(MGVariable type)
+//! \brief Calculate volume-weighted average of variable 0 on current level
+
+Real Multigrid::CalculateAverage(MGVariable type) {
+  const auto &src = (type == MGVariable::src) ? src_[current_level_] : u_[current_level_];
+  int ll = nlevel_ - 1 - current_level_;
+  int is, ie, js, je, ks, ke;
+  is = js = ks = ngh_;
+  ie = is + (indcs_.nx1 >> ll) - 1;
+  je = js + (indcs_.nx2 >> ll) - 1;
+  ke = ks + (indcs_.nx3 >> ll) - 1;
+
+  Real dx = rdx_ * static_cast<Real>(1 << ll);
+  Real dy = rdy_ * static_cast<Real>(1 << ll);
+  Real dz = rdz_ * static_cast<Real>(1 << ll);
+  Real dV = dx * dy * dz;
+
+  Real sum = 0.0;
+  Kokkos::parallel_reduce("MG::Average",
+    Kokkos::MDRangePolicy<Kokkos::Rank<4>>(DevExeSpace(), {0, ks, js, is},
+                                            {nmmb_, ke+1, je+1, ie+1}),
+    KOKKOS_LAMBDA(const int m, const int k, const int j, const int i, Real &local_sum) {
+      local_sum += src(m, 0, k, j, i);
+    }, Kokkos::Sum<Real>(sum));
+  sum *= dV;
+
+  Real volume = (size_.x1max - size_.x1min)
+              * (size_.x2max - size_.x2min)
+              * (size_.x3max - size_.x3min)
+              * static_cast<Real>(nmmb_);
+
+  #if MPI_PARALLEL_ENABLED
+  Real global_sum = 0.0;
+  Real global_volume = 0.0;
+  MPI_Allreduce(&sum, &global_sum, 1, MPI_ATHENA_REAL, MPI_SUM, MPI_COMM_WORLD);
+  MPI_Allreduce(&volume, &global_volume, 1, MPI_ATHENA_REAL, MPI_SUM, MPI_COMM_WORLD);
+  sum = global_sum;
+  volume = global_volume;
+  #endif
+
+  return (volume > 0.0) ? (sum / volume) : 0.0;
 }
 
 
@@ -857,6 +987,133 @@ void Multigrid::ProlongateAndCorrect(DvceArray5D<Real> &dst, const DvceArray5D<R
   }
   return;
 }
+
+
+//----------------------------------------------------------------------------------------
+//! \fn void Multigrid::FMGProlongate(DvceArray5D<Real> &dst,
+//!     const DvceArray5D<Real> &src, int il, int iu, int jl, int ju, int kl, int ku,
+//!     int fil, int fjl, int fkl)
+//! \brief FMG prolongation: direct overwrite (=) with tricubic interpolation.
+//! Unlike ProlongateAndCorrect (+=), this overwrites the destination array.
+
+void Multigrid::FMGProlongate(DvceArray5D<Real> &dst, const DvceArray5D<Real> &src,
+     int il, int iu, int jl, int ju, int kl, int ku, int fil, int fjl, int fkl) {
+
+  const int m0 = 0, m1 = nmmb_ - 1;
+  const int v0 = 0, v1 = nvar_ - 1;
+  const int k0 = kl, k1 = ku;
+  const int j0 = jl, j1 = ju;
+  const int i0 = il, i1 = iu;
+
+  auto dst_ = dst;
+  auto src_ = src;
+
+  par_for("Multigrid::FMGProlongate", DevExeSpace(),
+          m0, m1, v0, v1, k0, k1, j0, j1, i0, i1,
+  KOKKOS_LAMBDA(const int m, const int v, const int k, const int j, const int i) {
+    const int fk = 2*(k-kl) + fkl;
+    const int fj = 2*(j-jl) + fjl;
+    const int fi = 2*(i-il) + fil;
+
+    dst_(m,v,fk  ,fj  ,fi  ) = (
+      + 125.*src_(m,v,k-1,j-1,i-1)+  750.*src_(m,v,k-1,j-1,i  )-  75.*src_(m,v,k-1,j-1,i+1)
+      + 750.*src_(m,v,k-1,j,  i-1)+ 4500.*src_(m,v,k-1,j,  i  )- 450.*src_(m,v,k-1,j,  i+1)
+      -  75.*src_(m,v,k-1,j+1,i-1)-  450.*src_(m,v,k-1,j+1,i  )+  45.*src_(m,v,k-1,j+1,i+1)
+      + 750.*src_(m,v,k,  j-1,i-1)+ 4500.*src_(m,v,k,  j-1,i  )- 450.*src_(m,v,k,  j-1,i+1)
+      +4500.*src_(m,v,k,  j,  i-1)+27000.*src_(m,v,k,  j,  i  )-2700.*src_(m,v,k,  j,  i+1)
+      - 450.*src_(m,v,k,  j+1,i-1)- 2700.*src_(m,v,k,  j+1,i  )+ 270.*src_(m,v,k,  j+1,i+1)
+      -  75.*src_(m,v,k+1,j-1,i-1)-  450.*src_(m,v,k+1,j-1,i  )+  45.*src_(m,v,k+1,j-1,i+1)
+      - 450.*src_(m,v,k+1,j,  i-1)- 2700.*src_(m,v,k+1,j,  i  )+ 270.*src_(m,v,k+1,j,  i+1)
+      +  45.*src_(m,v,k+1,j+1,i-1)+  270.*src_(m,v,k+1,j+1,i  )-  27.*src_(m,v,k+1,j+1,i+1)
+    ) / 32768.0;
+
+    dst_(m,v,fk,  fj,  fi+1) = (
+      -  75.*src_(m,v,k-1,j-1,i-1)+  750.*src_(m,v,k-1,j-1,i  )+ 125.*src_(m,v,k-1,j-1,i+1)
+      - 450.*src_(m,v,k-1,j,  i-1)+ 4500.*src_(m,v,k-1,j,  i  )+ 750.*src_(m,v,k-1,j,  i+1)
+      +  45.*src_(m,v,k-1,j+1,i-1)-  450.*src_(m,v,k-1,j+1,i  )-  75.*src_(m,v,k-1,j+1,i+1)
+      - 450.*src_(m,v,k,  j-1,i-1)+ 4500.*src_(m,v,k,  j-1,i  )+ 750.*src_(m,v,k,  j-1,i+1)
+      -2700.*src_(m,v,k,  j,  i-1)+27000.*src_(m,v,k,  j,  i  )+4500.*src_(m,v,k,  j,  i+1)
+      + 270.*src_(m,v,k,  j+1,i-1)- 2700.*src_(m,v,k,  j+1,i  )- 450.*src_(m,v,k,  j+1,i+1)
+      +  45.*src_(m,v,k+1,j-1,i-1)-  450.*src_(m,v,k+1,j-1,i  )-  75.*src_(m,v,k+1,j-1,i+1)
+      + 270.*src_(m,v,k+1,j,  i-1)- 2700.*src_(m,v,k+1,j,  i  )- 450.*src_(m,v,k+1,j,  i+1)
+      -  27.*src_(m,v,k+1,j+1,i-1)+  270.*src_(m,v,k+1,j+1,i  )+  45.*src_(m,v,k+1,j+1,i+1)
+    ) / 32768.0;
+
+    dst_(m,v,fk  ,fj+1,fi  ) = (
+      -  75.*src_(m,v,k-1,j-1,i-1)-  450.*src_(m,v,k-1,j-1,i  )+  45.*src_(m,v,k-1,j-1,i+1)
+      + 750.*src_(m,v,k-1,j,  i-1)+ 4500.*src_(m,v,k-1,j,  i  )- 450.*src_(m,v,k-1,j,  i+1)
+      + 125.*src_(m,v,k-1,j+1,i-1)+  750.*src_(m,v,k-1,j+1,i  )-  75.*src_(m,v,k-1,j+1,i+1)
+      - 450.*src_(m,v,k,  j-1,i-1)- 2700.*src_(m,v,k,  j-1,i  )+ 270.*src_(m,v,k,  j-1,i+1)
+      +4500.*src_(m,v,k,  j,  i-1)+27000.*src_(m,v,k,  j,  i  )-2700.*src_(m,v,k,  j,  i+1)
+      + 750.*src_(m,v,k,  j+1,i-1)+ 4500.*src_(m,v,k,  j+1,i  )- 450.*src_(m,v,k,  j+1,i+1)
+      +  45.*src_(m,v,k+1,j-1,i-1)+  270.*src_(m,v,k+1,j-1,i  )-  27.*src_(m,v,k+1,j-1,i+1)
+      - 450.*src_(m,v,k+1,j,  i-1)- 2700.*src_(m,v,k+1,j,  i  )+ 270.*src_(m,v,k+1,j,  i+1)
+      -  75.*src_(m,v,k+1,j+1,i-1)-  450.*src_(m,v,k+1,j+1,i  )+  45.*src_(m,v,k+1,j+1,i+1)
+    ) / 32768.0;
+
+    dst_(m,v,fk,  fj+1,fi+1) = (
+      +  45.*src_(m,v,k-1,j-1,i-1)-  450.*src_(m,v,k-1,j-1,i  )-  75.*src_(m,v,k-1,j-1,i+1)
+      - 450.*src_(m,v,k-1,j,  i-1)+ 4500.*src_(m,v,k-1,j,  i  )+ 750.*src_(m,v,k-1,j,  i+1)
+      -  75.*src_(m,v,k-1,j+1,i-1)+  750.*src_(m,v,k-1,j+1,i  )+ 125.*src_(m,v,k-1,j+1,i+1)
+      + 270.*src_(m,v,k,  j-1,i-1)- 2700.*src_(m,v,k,  j-1,i  )- 450.*src_(m,v,k,  j-1,i+1)
+      -2700.*src_(m,v,k,  j,  i-1)+27000.*src_(m,v,k,  j,  i  )+4500.*src_(m,v,k,  j,  i+1)
+      - 450.*src_(m,v,k,  j+1,i-1)+ 4500.*src_(m,v,k,  j+1,i  )+ 750.*src_(m,v,k,  j+1,i+1)
+      -  27.*src_(m,v,k+1,j-1,i-1)+  270.*src_(m,v,k+1,j-1,i  )+  45.*src_(m,v,k+1,j-1,i+1)
+      + 270.*src_(m,v,k+1,j,  i-1)- 2700.*src_(m,v,k+1,j,  i  )- 450.*src_(m,v,k+1,j,  i+1)
+      +  45.*src_(m,v,k+1,j+1,i-1)-  450.*src_(m,v,k+1,j+1,i  )-  75.*src_(m,v,k+1,j+1,i+1)
+    ) / 32768.0;
+
+    dst_(m,v,fk+1,fj,  fi  ) = (
+      -  75.*src_(m,v,k-1,j-1,i-1)-  450.*src_(m,v,k-1,j-1,i  )+  45.*src_(m,v,k-1,j-1,i+1)
+      - 450.*src_(m,v,k-1,j,  i-1)- 2700.*src_(m,v,k-1,j,  i  )+ 270.*src_(m,v,k-1,j,  i+1)
+      +  45.*src_(m,v,k-1,j+1,i-1)+  270.*src_(m,v,k-1,j+1,i  )-  27.*src_(m,v,k-1,j+1,i+1)
+      + 750.*src_(m,v,k,  j-1,i-1)+ 4500.*src_(m,v,k,  j-1,i  )- 450.*src_(m,v,k,  j-1,i+1)
+      +4500.*src_(m,v,k,  j,  i-1)+27000.*src_(m,v,k,  j,  i  )-2700.*src_(m,v,k,  j,  i+1)
+      - 450.*src_(m,v,k,  j+1,i-1)- 2700.*src_(m,v,k,  j+1,i  )+ 270.*src_(m,v,k,  j+1,i+1)
+      + 125.*src_(m,v,k+1,j-1,i-1)+  750.*src_(m,v,k+1,j-1,i  )-  75.*src_(m,v,k+1,j-1,i+1)
+      + 750.*src_(m,v,k+1,j,  i-1)+ 4500.*src_(m,v,k+1,j,  i  )- 450.*src_(m,v,k+1,j,  i+1)
+      -  75.*src_(m,v,k+1,j+1,i-1)-  450.*src_(m,v,k+1,j+1,i  )+  45.*src_(m,v,k+1,j+1,i+1)
+    ) / 32768.0;
+
+    dst_(m,v,fk+1,fj,  fi+1) = (
+      +  45.*src_(m,v,k-1,j-1,i-1)-  450.*src_(m,v,k-1,j-1,i  )-  75.*src_(m,v,k-1,j-1,i+1)
+      + 270.*src_(m,v,k-1,j,  i-1)- 2700.*src_(m,v,k-1,j,  i  )- 450.*src_(m,v,k-1,j,  i+1)
+      -  27.*src_(m,v,k-1,j+1,i-1)+  270.*src_(m,v,k-1,j+1,i  )+  45.*src_(m,v,k-1,j+1,i+1)
+      - 450.*src_(m,v,k,  j-1,i-1)+ 4500.*src_(m,v,k,  j-1,i  )+ 750.*src_(m,v,k,  j-1,i+1)
+      -2700.*src_(m,v,k,  j,  i-1)+27000.*src_(m,v,k,  j,  i  )+4500.*src_(m,v,k,  j,  i+1)
+      + 270.*src_(m,v,k,  j+1,i-1)- 2700.*src_(m,v,k,  j+1,i  )- 450.*src_(m,v,k,  j+1,i+1)
+      -  75.*src_(m,v,k+1,j-1,i-1)+  750.*src_(m,v,k+1,j-1,i  )+ 125.*src_(m,v,k+1,j-1,i+1)
+      - 450.*src_(m,v,k+1,j,  i-1)+ 4500.*src_(m,v,k+1,j,  i  )+ 750.*src_(m,v,k+1,j,  i+1)
+      +  45.*src_(m,v,k+1,j+1,i-1)-  450.*src_(m,v,k+1,j+1,i  )-  75.*src_(m,v,k+1,j+1,i+1)
+    ) / 32768.0;
+
+    dst_(m,v,fk+1,fj+1,fi  ) = (
+      +  45.*src_(m,v,k-1,j-1,i-1)+  270.*src_(m,v,k-1,j-1,i  )-  27.*src_(m,v,k-1,j-1,i+1)
+      - 450.*src_(m,v,k-1,j,  i-1)- 2700.*src_(m,v,k-1,j,  i  )+ 270.*src_(m,v,k-1,j,  i+1)
+      -  75.*src_(m,v,k-1,j+1,i-1)-  450.*src_(m,v,k-1,j+1,i  )+  45.*src_(m,v,k-1,j+1,i+1)
+      - 450.*src_(m,v,k,  j-1,i-1)- 2700.*src_(m,v,k,  j-1,i  )+ 270.*src_(m,v,k,  j-1,i+1)
+      +4500.*src_(m,v,k,  j,  i-1)+27000.*src_(m,v,k,  j,  i  )-2700.*src_(m,v,k,  j,  i+1)
+      + 750.*src_(m,v,k,  j+1,i-1)+ 4500.*src_(m,v,k,  j+1,i  )- 450.*src_(m,v,k,  j+1,i+1)
+      -  75.*src_(m,v,k+1,j-1,i-1)-  450.*src_(m,v,k+1,j-1,i  )+  45.*src_(m,v,k+1,j-1,i+1)
+      + 750.*src_(m,v,k+1,j,  i-1)+ 4500.*src_(m,v,k+1,j,  i  )- 450.*src_(m,v,k+1,j,  i+1)
+      + 125.*src_(m,v,k+1,j+1,i-1)+  750.*src_(m,v,k+1,j+1,i  )-  75.*src_(m,v,k+1,j+1,i+1)
+    ) / 32768.0;
+
+    dst_(m,v,fk+1,fj+1,fi+1) = (
+      -  27.*src_(m,v,k-1,j-1,i-1)+  270.*src_(m,v,k-1,j-1,i  )+  45.*src_(m,v,k-1,j-1,i+1)
+      + 270.*src_(m,v,k-1,j,  i-1)- 2700.*src_(m,v,k-1,j,  i  )- 450.*src_(m,v,k-1,j,  i+1)
+      +  45.*src_(m,v,k-1,j+1,i-1)-  450.*src_(m,v,k-1,j+1,i  )-  75.*src_(m,v,k-1,j+1,i+1)
+      + 270.*src_(m,v,k,  j-1,i-1)- 2700.*src_(m,v,k,  j-1,i  )- 450.*src_(m,v,k,  j-1,i+1)
+      -2700.*src_(m,v,k,  j,  i-1)+27000.*src_(m,v,k,  j,  i  )+4500.*src_(m,v,k,  j,  i+1)
+      - 450.*src_(m,v,k,  j+1,i-1)+ 4500.*src_(m,v,k,  j+1,i  )+ 750.*src_(m,v,k,  j+1,i+1)
+      +  45.*src_(m,v,k+1,j-1,i-1)-  450.*src_(m,v,k+1,j-1,i  )-  75.*src_(m,v,k+1,j-1,i+1)
+      - 450.*src_(m,v,k+1,j,  i-1)+ 4500.*src_(m,v,k+1,j,  i  )+ 750.*src_(m,v,k+1,j,  i+1)
+      -  75.*src_(m,v,k+1,j+1,i-1)+  750.*src_(m,v,k+1,j+1,i  )+ 125.*src_(m,v,k+1,j+1,i+1)
+    ) / 32768.0;
+  });
+  return;
+}
+
 
 //----------------------------------------------------------------------------------------
 //! \fn MultigridBoundaryValues::MultigridBoundaryValues()

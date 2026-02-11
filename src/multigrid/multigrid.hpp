@@ -66,6 +66,7 @@ struct MultigridTaskIDs {
       TaskID smoothB2;
       TaskID restrict_;
       TaskID prolongate;
+      TaskID fmg_prolongate;
       TaskID calc_rhs;
       TaskID apply_mask;
       TaskID zero_clear;
@@ -106,7 +107,9 @@ class Multigrid {
   void RetrieveDefect(DvceArray5D<Real> &dst, int ns, int ngh);
   void ZeroClearData();
   void RestrictPack();
+  void RestrictSourcePack();
   void RestrictCoefficients();
+  void FMGProlongatePack();
   void ProlongateAndCorrectPack();
   void SmoothPack(int color);
   void CalculateDefectPack();
@@ -115,6 +118,7 @@ class Multigrid {
   void CalculateMatrixPack(Real dt);
   void SetFromRootGrid(bool folddata);
   Real CalculateDefectNorm(MGNormType nrm, int n);
+  Real CalculateAverage(MGVariable type);
   Real CalculateTotal(MGVariable type, int n);
   void SubtractAverage(MGVariable type, int n, Real ave);
   void StoreOldData();
@@ -140,6 +144,8 @@ class Multigrid {
                 int nvar, int il, int iu, int jl, int ju, int kl, int ku, bool th);
   void ProlongateAndCorrect(DvceArray5D<Real> &dst, const DvceArray5D<Real> &src,
     int il, int iu, int jl, int ju, int kl, int ku, int fil, int fjl, int fkl, bool th);
+  void FMGProlongate(DvceArray5D<Real> &dst, const DvceArray5D<Real> &src,
+    int il, int iu, int jl, int ju, int kl, int ku, int fil, int fjl, int fkl);
 
   // physics-dependent virtual functions
   virtual void Smooth(DvceArray5D<Real> &dst, const DvceArray5D<Real> &src,
@@ -197,10 +203,15 @@ class MultigridDriver {
   void CheckBoundaryFunctions();
   void SubtractAverage(MGVariable type);
   void SetupMultigrid(Real dt, bool ftrivial);
+  void FMGProlongate(Driver *pdriver);
   void OneStepToFiner(Driver *pdriver,int nsmooth);
   void OneStepToCoarser(Driver *pdriver,int nsmooth);
   void SolveVCycle(Driver *pdriver,int npresmooth, int npostsmooth);
+  void SolveFMG(Driver *pdriver);
+  void SolveMG(Driver *pdriver);
+  void SolveFMGCoarser();
   void SolveIterative(Driver *pdriver);
+  void SolveIterativeFixedTimes(Driver *pdriver);
   void AssembleTasks(std::map<std::string, std::shared_ptr<TaskList>> tl);
   TaskStatus SendBoundary(Driver *pdrive, int stag);
   TaskStatus RecvBoundary(Driver *pdrive, int stag);
@@ -219,6 +230,7 @@ class MultigridDriver {
   TaskStatus PhysicalBoundary(Driver *pdrive, int stag);
   TaskStatus Restrict(Driver *pdrive, int stag);
   TaskStatus Prolongate(Driver *pdrive, int stag);
+  TaskStatus FMGProlongateTask(Driver *pdrive, int stag);
   TaskStatus ProlongateBoundary(Driver *pdrive, int stag);
   TaskStatus ProlongateBoundaryForProlongation(Driver *pdrive, int stag);
   TaskStatus CalculateFASRHS(Driver *pdrive, int stag);
@@ -226,6 +238,7 @@ class MultigridDriver {
   TaskStatus ClearRecv(Driver *pdrive, int stag);
   TaskStatus ClearSend(Driver *pdrive, int stag);
   void SetMGTaskListToFiner(int nsmooth, int ngh);
+  void SetMGTaskListFMGProlongate(int ngh);
   void SetMGTaskListToCoarser(int nsmooth, int ngh);
   void SetMGTaskListBoundaryCommunication();
   void DoTaskListOneStage();
@@ -263,9 +276,15 @@ class MultigridDriver {
   int coffset_;
   int fprolongation_;
   int fshowdef_;
+  bool full_multigrid_;
+  int fmg_ncycle_;
 
   DvceArray5D<Real> *cbuf_, *cbufold_;
   DvceArray3D<bool> *ncoarse_;
+  
+  // Octet arrays for SMR (one per refinement level)
+  Multigrid **mgoct_;  // array of octet multigrids
+  int noct_;           // number of octet levels
 
  private:
   int nb_rank_;

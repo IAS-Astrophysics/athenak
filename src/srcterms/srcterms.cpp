@@ -19,7 +19,7 @@
 #include "eos/eos.hpp"
 #include "geodesic-grid/geodesic_grid.hpp"
 #include "gravity/gravity.hpp"
-//#include "hydro/hydro.hpp"
+#include "hydro/hydro.hpp"
 #include "ismcooling.hpp"
 #include "mesh/mesh.hpp"
 //#include "mhd/mhd.hpp"
@@ -237,16 +237,21 @@ void SourceTerms::SelfGravity(const DvceArray5D<Real> &w0, const EOS_Data &eos_d
   bool &multi_d = pmy_pack->pmesh->multi_d;
   bool &three_d = pmy_pack->pmesh->three_d;
   auto &mbsize = pmy_pack->pmb->mb_size;
-
   // Get gravitational potential - check if gravity is enabled
   if (pmy_pack->pgrav == nullptr) {
     std::cout << "### ERROR in SourceTerms::SelfGravity" << std::endl
               << "self_gravity source term enabled but pgrav is null" << std::endl;
     std::exit(EXIT_FAILURE);
   }
-  
+
   auto &phi = pmy_pack->pgrav->phi;
-  
+
+  // Get Godunov density fluxes from Hydro Riemann solver
+  // (following Mullen, Hanawa & Gammie 2020 for the energy source term)
+  auto flx1 = pmy_pack->phydro->uflx.x1f;
+  auto flx2 = pmy_pack->phydro->uflx.x2f;
+  auto flx3 = pmy_pack->phydro->uflx.x3f;
+
   // x1-direction momentum and energy source terms
   par_for("selfgrav_x1",DevExeSpace(),0,nmb-1,ks,ke,js,je,is,ie,
   KOKKOS_LAMBDA(int m, int k, int j, int i) {
@@ -254,16 +259,14 @@ void SourceTerms::SelfGravity(const DvceArray5D<Real> &w0, const EOS_Data &eos_d
     Real hdtodx1 = 0.5*bdt/dx1;
     Real dpl = -(phi(m,0,k,j,i  ) - phi(m,0,k,j,i-1));
     Real dpr = -(phi(m,0,k,j,i+1) - phi(m,0,k,j,i  ));
-    
+
     // Add momentum source term
     u0(m,IM1,k,j,i) += hdtodx1 * w0(m,IDN,k,j,i) * (dpl + dpr);
-    
-    // Add energy source term (ideal EOS only)
+
+    // Add energy source term using Godunov fluxes (ideal EOS only)
     if (eos_data.is_ideal) {
-      // Energy source uses density flux approximation
-      Real rho_flux_l = 0.5*(w0(m,IDN,k,j,i-1) + w0(m,IDN,k,j,i  )) * w0(m,IVX,k,j,i  );
-      Real rho_flux_r = 0.5*(w0(m,IDN,k,j,i  ) + w0(m,IDN,k,j,i+1)) * w0(m,IVX,k,j,i+1);
-      u0(m,IEN,k,j,i) += hdtodx1 * (rho_flux_l * dpl + rho_flux_r * dpr);
+      u0(m,IEN,k,j,i) += hdtodx1 * (flx1(m,IDN,k,j,i  ) * dpl
+                                    + flx1(m,IDN,k,j,i+1) * dpr);
     }
   });
 
@@ -275,15 +278,14 @@ void SourceTerms::SelfGravity(const DvceArray5D<Real> &w0, const EOS_Data &eos_d
       Real hdtodx2 = 0.5*bdt/dx2;
       Real dpl = -(phi(m,0,k,j,  i) - phi(m,0,k,j-1,i));
       Real dpr = -(phi(m,0,k,j+1,i) - phi(m,0,k,j,  i));
-      
+
       // Add momentum source term
       u0(m,IM2,k,j,i) += hdtodx2 * w0(m,IDN,k,j,i) * (dpl + dpr);
-      
-      // Add energy source term (ideal EOS only)
+
+      // Add energy source term using Godunov fluxes (ideal EOS only)
       if (eos_data.is_ideal) {
-        Real rho_flux_l = 0.5*(w0(m,IDN,k,j-1,i) + w0(m,IDN,k,j,  i)) * w0(m,IVY,k,j,  i);
-        Real rho_flux_r = 0.5*(w0(m,IDN,k,j,  i) + w0(m,IDN,k,j+1,i)) * w0(m,IVY,k,j+1,i);
-        u0(m,IEN,k,j,i) += hdtodx2 * (rho_flux_l * dpl + rho_flux_r * dpr);
+        u0(m,IEN,k,j,i) += hdtodx2 * (flx2(m,IDN,k,j,  i) * dpl
+                                      + flx2(m,IDN,k,j+1,i) * dpr);
       }
     });
   }
@@ -296,15 +298,14 @@ void SourceTerms::SelfGravity(const DvceArray5D<Real> &w0, const EOS_Data &eos_d
       Real hdtodx3 = 0.5*bdt/dx3;
       Real dpl = -(phi(m,0,k,  j,i) - phi(m,0,k-1,j,i));
       Real dpr = -(phi(m,0,k+1,j,i) - phi(m,0,k,  j,i));
-      
+
       // Add momentum source term
       u0(m,IM3,k,j,i) += hdtodx3 * w0(m,IDN,k,j,i) * (dpl + dpr);
-      
-      // Add energy source term (ideal EOS only)
+
+      // Add energy source term using Godunov fluxes (ideal EOS only)
       if (eos_data.is_ideal) {
-        Real rho_flux_l = 0.5*(w0(m,IDN,k-1,j,i) + w0(m,IDN,k,  j,i)) * w0(m,IVZ,k,  j,i);
-        Real rho_flux_r = 0.5*(w0(m,IDN,k,  j,i) + w0(m,IDN,k+1,j,i)) * w0(m,IVZ,k+1,j,i);
-        u0(m,IEN,k,j,i) += hdtodx3 * (rho_flux_l * dpl + rho_flux_r * dpr);
+        u0(m,IEN,k,j,i) += hdtodx3 * (flx3(m,IDN,k,  j,i) * dpl
+                                      + flx3(m,IDN,k+1,j,i) * dpr);
       }
     });
   }

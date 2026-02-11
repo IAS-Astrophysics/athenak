@@ -52,6 +52,7 @@ class MGGravityDriver : public MultigridDriver {
     // Allocate a pack-aware multigrid instance for meshblock levels (attach to pack->pgrav->pmg)
     void CreateMeshblockMultigrids(MeshBlockPack *pmbp);
     void Solve(Driver *pdriver, int stage, Real dt = 0.0) final;
+    void SetFourPiG(Real four_pi_G);
     friend class MGGravity;
   private:
     Real four_pi_G_, omega_;

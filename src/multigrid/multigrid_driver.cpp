@@ -34,7 +34,7 @@ MultigridDriver::MultigridDriver(MeshBlockPack *pmbp, int invar):
     maxreflevel_(pmbp->pmesh->multilevel?pmbp->pmesh->max_level-pmbp->pmesh->root_level:0),
     nrbx1_(pmbp->pmesh->nmb_rootx1), nrbx2_(pmbp->pmesh->nmb_rootx2), nrbx3_(pmbp->pmesh->nmb_rootx3),
     pmy_pack_(pmbp),
-    pmy_mesh_(pmbp->pmesh), fsubtract_average_(false),
+    pmy_mesh_(pmbp->pmesh),
     needinit_(true), eps_(-1.0),
     niter_(-1), npresmooth_(1), npostsmooth_(1), coffset_(0), fprolongation_(0),
     nb_rank_(0), ncoeff_(0) {
@@ -59,6 +59,17 @@ MultigridDriver::MultigridDriver(MeshBlockPack *pmbp, int invar):
     nclist_  = new int[nranks_];
     ncslist_ = new int[nranks_];
   }
+  
+  // Initialize octet arrays for SMR
+  noct_ = maxreflevel_;
+  if (noct_ > 0) {
+    mgoct_ = new Multigrid*[noct_];
+    for (int i = 0; i < noct_; ++i) {
+      mgoct_[i] = nullptr;
+    }
+  } else {
+    mgoct_ = nullptr;
+  }
 
 //#if MPI_PARALLEL_ENABLED
 //  MPI_Comm_dup(MPI_COMM_WORLD, &MPI_COMM_MULTIGRID);
@@ -78,6 +89,14 @@ MultigridDriver::~MultigridDriver() {
   delete [] nvlisti_;
   delete [] nvslisti_;
   //delete [] rootbuf_;
+  
+  // Clean up octets
+  if (mgoct_ != nullptr) {
+    for (int i = 0; i < noct_; ++i) {
+      if (mgoct_[i] != nullptr) delete mgoct_[i];
+    }
+    delete [] mgoct_;
+  }
 }
 
 
@@ -86,7 +105,8 @@ MultigridDriver::~MultigridDriver() {
 //  \brief Calculate the global average and subtract it
 
 void MultigridDriver::SubtractAverage(MGVariable type) {
-
+  pmg->SubtractAverage(type,0,pmg->CalculateAverage(type));
+  return;
 }
 
 
@@ -98,11 +118,32 @@ void MultigridDriver::SetupMultigrid(Real dt, bool ftrivial) {
   locrootlevel_ = pmy_mesh_->root_level;
   nrootlevel_ = mgroot_->GetNumberOfLevels();
   nmblevel_ = mglevels_->GetNumberOfLevels();
+  
+  // Calculate number of refinement levels present in mesh
   nreflevel_ = 0;
-  ntotallevel_ = nrootlevel_ + nmblevel_ - 1;
+  if (pmy_mesh_->multilevel) {
+    for (int n = 0; n < nbtotal_; ++n) {
+      int lev = pmy_mesh_->lloc_eachmb[n].level - locrootlevel_;
+      nreflevel_ = std::max(nreflevel_, lev);
+    }
+    std::cout << "MultigridDriver::SetupMultigrid: Number of refinement levels = "
+              << nreflevel_ << std::endl;
+  }
+  
+  // For uniform meshes (nreflevel_=0): ntotallevel = nrootlevel + nmblevel - 1
+  // For SMR (nreflevel_>0): add refinement levels to the total
+  ntotallevel_ = nrootlevel_ + nmblevel_ - 1 + nreflevel_;
   os_ = mgroot_->ngh_;
   oe_ = os_+1;
-  // note: the level of an Octet is one level lower than the data stored there
+  
+  // Initialize octet levels for SMR (one per refinement level)
+  // Note: the level of an Octet is one level lower than the data stored there
+  if (nreflevel_ > 0 && mgoct_ != nullptr) {
+    // Create octet multigrids for intermediate refinement levels
+    // Each octet handles the transition between root grid and refined blocks
+    // For now, we'll create them on demand in TransferFromRootToBlocks
+  }
+  
   if (needinit_) {
   // assume the same parallelization as hydro
     for (int n = 0; n < nbtotal_; ++n)
@@ -118,8 +159,12 @@ void MultigridDriver::SetupMultigrid(Real dt, bool ftrivial) {
   }
   needinit_ = false;
   //TODO: Apply mask to source if needed
-  if (fsubtract_average_)SubtractAverage(MGVariable::src);
+  if (fsubtract_average_) {
+    pmg = mglevels_;
+    SubtractAverage(MGVariable::src);
+  }
   current_level_ = ntotallevel_ - 1;
+  fmglevel_ = current_level_;
   return;
 }
 
@@ -159,16 +204,33 @@ void MultigridDriver::TransferFromBlocksToRoot(bool initflag) {
   const auto &u_r = mgroot_->GetCurrentData();
   auto u_h = Kokkos::create_mirror_view_and_copy(HostMemSpace(), u_r);
   auto src_h = Kokkos::create_mirror_view_and_copy(HostMemSpace(), src_r);
+  
+  // For SMR: handle blocks at different refinement levels
   for (int m = 0; m < nbtotal_; ++m) {
+    int lev = loc[m].level - rootlevel;
     int i = static_cast<int>(loc[m].lx1);
     int j = static_cast<int>(loc[m].lx2);
     int k = static_cast<int>(loc[m].lx3);
-    if (loc[m].level == rootlevel) {
-        for (int v = 0; v < nv; ++v){
-          src_h(0, v, k+ngh_, j+ngh_, i+ngh_) = rootbuf.h_view(v, m);
-          u_h(0, v, k+ngh_, j+ngh_, i+ngh_) = rootbuf.h_view(v+nv, m);
-        }
-    } 
+    
+    if (lev == 0) {
+      // Direct copy for root level blocks
+      for (int v = 0; v < nv; ++v){
+        src_h(0, v, k+ngh_, j+ngh_, i+ngh_) = rootbuf.h_view(v, m);
+        u_h(0, v, k+ngh_, j+ngh_, i+ngh_) = rootbuf.h_view(v+nv, m);
+      }
+    } else if (lev > 0) {
+      // Refined block: restrict to root level
+      // For now, just use the block's coarsest value
+      // TODO: implement proper restriction with averaging
+      Real rfac = 1.0 / (1 << lev);
+      int ri = static_cast<int>(i * rfac);
+      int rj = static_cast<int>(j * rfac);
+      int rk = static_cast<int>(k * rfac);
+      for (int v = 0; v < nv; ++v){
+        src_h(0, v, rk+ngh_, rj+ngh_, ri+ngh_) = rootbuf.h_view(v, m);
+        u_h(0, v, rk+ngh_, rj+ngh_, ri+ngh_) = rootbuf.h_view(v+nv, m);
+      }
+    }
   }
   Kokkos::deep_copy(src_r, src_h);
   Kokkos::deep_copy(u_r, u_h);
@@ -181,10 +243,45 @@ void MultigridDriver::TransferFromBlocksToRoot(bool initflag) {
 //! \brief Transfer the data from the root grid to the coarsest level of each MeshBlock
 
 void MultigridDriver::TransferFromRootToBlocks(bool folddata) {
-  //TODO: Add Octet-based data transfer if needed
+  // For SMR: first transfer from root grid to octets, then octets to blocks
+  if (nreflevel_ > 0 && mgoct_ != nullptr) {
+    // Create octets on demand and populate them from root grid
+    // For now, we skip explicit octet creation and let SetFromRootGrid
+    // handle the transfer directly, with octet support built-in
+    // Future: implement explicit TransferFromRootToOctets() here
+  }
+  
+  // Transfer to meshblock levels (handles octets internally if available)
   mglevels_->SetFromRootGrid(folddata);
   return;
 }
+
+//----------------------------------------------------------------------------------------
+//! \fn void MultigridDriver::FMGProlongate(Driver *pdriver)
+//! \brief FMG prolongation one level (direct overwrite, no smoothing)
+//! Following Athena++, this is a standalone function that handles
+//! root grid, octets, and MeshBlock levels for FMG prolongation.
+
+void MultigridDriver::FMGProlongate(Driver *pdriver) {
+  int ngh = mgroot_->ngh_;
+  if (current_level_ == nrootlevel_ - 1) {
+    // Transition from root grid to MeshBlocks
+    MGRootBoundary(mgroot_->GetCurrentData());
+    TransferFromRootToBlocks(false);
+  }
+  if (current_level_ >= nrootlevel_ - 1) { // MeshBlocks
+    pmg = mglevels_;
+    SetMGTaskListFMGProlongate(ngh);
+    pdriver->ExecuteTaskList(pmy_mesh_, "mg_fmg_prolongate", 0);
+    current_level_++;
+  } else { // root grid
+    MGRootBoundary(mgroot_->GetCurrentData());
+    mgroot_->FMGProlongatePack();
+    current_level_++;
+  }
+  return;
+}
+
 
 //----------------------------------------------------------------------------------------
 //! \fn void MultigridDriver::OneStepToFiner(int nsmooth)
@@ -258,22 +355,125 @@ void MultigridDriver::OneStepToCoarser(Driver *pdriver, int nsmooth) {
 void MultigridDriver::SolveVCycle(Driver *pdriver, int npresmooth, int npostsmooth) {
   int startlevel=current_level_;
   coffset_ ^= 1;
-  while (current_level_ > 0)
+  while (current_level_ > 0){
+    //std::cout << "SolveVCycle(coarser):" << current_level_ <<"->" << current_level_-1 << std::endl;
     OneStepToCoarser(pdriver, npresmooth);
+  }
   SolveCoarsestGrid();
   while (current_level_ < startlevel)
+  {
+    //std::cout << "SolveVCycle(finer):" << current_level_ <<"->" << current_level_+1 << std::endl;
     OneStepToFiner(pdriver, npostsmooth);
+  }
+  return;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void MultigridDriver::SolveMG(Driver *pdriver)
+//! \brief Multigrid (MG) solve using V-cycles
+//! \brief Solve the V-cycle starting from the current level
+
+void MultigridDriver::SolveMG(Driver *pdriver) {
+  if (eps_ >= 0.0) {
+    SolveIterative(pdriver);
+  } else {
+    SolveIterativeFixedTimes(pdriver);
+  }
+  return;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void MultigridDriver::SolveFMG(Driver *pdriver)
+//! \brief Full multigrid (FMG) solve using FAS and V-cycles
+//! Performs the FMG sweep (coarsest to finest) with fmg_ncycle_ V-cycles per level,
+//! then polishes with iterative V-cycles (convergence-based or fixed-count).
+
+void MultigridDriver::SolveFMG(Driver *pdriver) {
+  int cycles = std::max(1, fmg_ncycle_);
+  SolveFMGCoarser();
+  // Prolongate one level at a time and apply V-cycles
+  while (current_level_ < ntotallevel_ - 1) {
+    fmglevel_ = current_level_ + 1;
+    // Prolongate solution.
+    FMGProlongate(pdriver);
+    fmglevel_ = current_level_;
+    // Solve V-cycles at this FMG level
+    for (int n = 0; n < cycles; ++n) {
+      SolveVCycle(pdriver, npresmooth_, npostsmooth_);
+    }
+  }
+  fmglevel_ = ntotallevel_ - 1;
+  if (fsubtract_average_) {
+    pmg = mglevels_;
+    SubtractAverage(MGVariable::u);
+  }
+  // Polish with additional V-cycles after the FMG sweep
+  SolveMG(pdriver);
+  return;
+}
+
+void MultigridDriver::SolveFMGCoarser() {
+  while (current_level_ > 0){
+    //std::cout << "SolveFMG(coarser):" << current_level_ <<"->" << current_level_-1 << std::endl;
+    if (current_level_ >= nrootlevel_) { // MeshBlocks
+      pmg = mglevels_;
+      pmg->RestrictSourcePack(); // restrict the source to the coarsest level
+      if (current_level_ == nrootlevel_ + nreflevel_) {
+        TransferFromBlocksToRoot(true); // transfer the restricted source to the root grid  
+      }
+    }
+    else { // root grid
+      pmg = mgroot_;
+      pmg->RestrictSourcePack(); // restrict the source to the root grid
+    }
+    current_level_--;
+  }
   return;
 }
 
 
 //----------------------------------------------------------------------------------------
-//! \fn void MultigridDriver::SolveIterativeFixedTimes()
-//  \brief Solve iteratively niter_ times
+//! \fn void MultigridDriver::SolveIterative(Driver *pdriver)
+//! \brief Solve iteratively until defect norm drops below eps_
 
 void MultigridDriver::SolveIterative(Driver *pdriver) {
-  for (int n = 0; n < niter_; ++n)
+  Real def = 0.0;
+  for (int v = 0; v < nvar_; ++v) {
+    def += CalculateDefectNorm(MGNormType::l2, v);
+  }
+  int n = 0;
+  while (def > eps_) {
     SolveVCycle(pdriver, npresmooth_, npostsmooth_);
+    Real olddef = def;
+    def = 0.0;
+    for (int v = 0; v < nvar_; ++v) {
+      def += CalculateDefectNorm(MGNormType::l2, v);
+    }
+    if (fshowdef_) {
+      std::cout << "  MG iteration " << n << ": defect = " << def << std::endl;
+    }
+    if (def/olddef > 0.9) {
+      if (eps_ == 0.0) break;
+      if (fshowdef_) {
+        std::cout << "### WARNING in MultigridDriver::SolveIterative" << std::endl
+                  << "Slow convergence: defect ratio = " << def/olddef << std::endl;
+      }
+    }
+    ++n;
+  }
+  Kokkos::fence();
+  return;
+}
+
+
+//----------------------------------------------------------------------------------------
+//! \fn void MultigridDriver::SolveIterativeFixedTimes(Driver *pdriver)
+//! \brief Solve iteratively niter_ times (fixed count)
+
+void MultigridDriver::SolveIterativeFixedTimes(Driver *pdriver) {
+  for (int n = 0; n < niter_; ++n) {
+    SolveVCycle(pdriver, npresmooth_, npostsmooth_);
+  }
   Kokkos::fence();
   return;
 }
@@ -284,19 +484,30 @@ void MultigridDriver::SolveIterative(Driver *pdriver) {
 //! \brief Solve the coarsest root grid
 
 void MultigridDriver::SolveCoarsestGrid() {
+  pmg = mgroot_;
   int ni = (std::max(nrbx1_, std::max(nrbx2_, nrbx3_))
             >> (nrootlevel_-1));
+  if (fsubtract_average_ && ni == 1) { // trivial case - all zero
     MGRootBoundary(mgroot_->GetCurrentData());
     mgroot_->StoreOldData();
-    mgroot_->CalculateFASRHSPack();
-    for (int i = 0; i < ni; ++i) { // iterate ni times
-      //RED
-      mgroot_->SmoothPack(coffset_);
-      MGRootBoundary(mgroot_->GetCurrentData());
-      //BLACK
-      mgroot_->SmoothPack(1-coffset_);
-      MGRootBoundary(mgroot_->GetCurrentData());
-    }
+    mgroot_->ZeroClearData();
+    return;
+  }
+  if (fsubtract_average_)
+    SubtractAverage(MGVariable::u);
+  MGRootBoundary(mgroot_->GetCurrentData());
+  mgroot_->StoreOldData();
+  mgroot_->CalculateFASRHSPack();
+  for (int i = 0; i < ni; ++i) { // iterate ni times
+    //RED
+    mgroot_->SmoothPack(coffset_);
+    MGRootBoundary(mgroot_->GetCurrentData());
+    //BLACK
+    mgroot_->SmoothPack(1-coffset_);
+    MGRootBoundary(mgroot_->GetCurrentData());
+  }
+  if (fsubtract_average_)
+    SubtractAverage(MGVariable::u);
   return;
 }
 

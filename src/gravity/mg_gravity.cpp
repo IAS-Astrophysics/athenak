@@ -36,13 +36,16 @@ class MeshBlockPack;
 
 MGGravityDriver::MGGravityDriver(MeshBlockPack *pmbp, ParameterInput *pin)
     : MultigridDriver(pmbp, 1) {
-    four_pi_G_ = pin->GetOrAddReal("gravity", "four_pi_G", -1);
+    four_pi_G_ = pin->GetOrAddReal("gravity", "four_pi_G", -1.0);
     omega_ = pin->GetOrAddReal("gravity", "omega", 1.15);
     eps_ = pin->GetOrAddReal("gravity", "threshold", -1.0);
     niter_ = pin->GetOrAddInteger("gravity", "niteration", -1);
     npresmooth_ = pin->GetOrAddReal("gravity", "npresmooth", npresmooth_);
     npostsmooth_ = pin->GetOrAddReal("gravity", "npostsmooth", npostsmooth_);
+    full_multigrid_ = pin->GetOrAddBoolean("gravity", "full_multigrid", false);
+    fmg_ncycle_ = pin->GetOrAddInteger("gravity", "fmg_ncycle", 1);
     fshowdef_ = pin->GetOrAddBoolean("gravity", "show_defect", false);
+    fsubtract_average_ = pin->GetOrAddBoolean("gravity", "subtract_average", true);
     if (eps_ < 0.0 && niter_ < 0) {
         std::cout<< "### FATAL ERROR in MGGravityDriver::MGGravityDriver" << std::endl
         << "Either \"threshold\" or \"niteration\" parameter must be set "
@@ -76,6 +79,10 @@ MGGravityDriver::~MGGravityDriver() {
   delete mglevels_;
 }
 
+void MGGravityDriver::SetFourPiG(Real four_pi_G) {
+  four_pi_G_ = four_pi_G;
+}
+
 //----------------------------------------------------------------------------------------
 //! \fn MGGravity::MGGravity(MultigridDriver *pmd, MeshBlock *pmb)
 //! \brief MGGravity constructor
@@ -103,19 +110,29 @@ MGGravity::~MGGravity() {
 void MGGravityDriver::Solve(Driver *pdriver, int stage, Real dt) {
   RegionIndcs &indcs_ = pmy_pack_->pmesh->mb_indcs;
   // mglevels_ points to the Multigrid object for all MeshBlocks
-  mglevels_->LoadSource(pmy_pack_->phydro->u0, IDN, indcs_.ng, four_pi_G_);
-  //if (fsubtract_average_)
-    mglevels_->SubtractAverage(MGVariable::src, 0, 2);
+  // The MG smoother solves -∇²u = src (note the minus sign from the Laplacian
+  // convention: Laplacian(u) = 6u - neighbors = -dx²∇²u).  To obtain the
+  // standard Poisson equation ∇²φ = 4πGρ we must load the source with a
+  // negative sign so that -∇²φ = -4πGρ, i.e. ∇²φ = +4πGρ.
+  mglevels_->LoadSource(pmy_pack_->phydro->u0, IDN, indcs_.ng, -four_pi_G_);
 
   // iterative mode - load initial guess
-  mglevels_->LoadFinestData(pmy_pack_->pgrav->phi, 0, indcs_.ng);
-  SetupMultigrid(dt, false);
+  if(not full_multigrid_) 
+    mglevels_->LoadFinestData(pmy_pack_->pgrav->phi, 0, indcs_.ng);
   
-  SolveIterative(pdriver);
+  SetupMultigrid(dt, false);
 
-  gravity::Gravity *pgrav = pmy_pack_->pgrav;
-  mglevels_->RetrieveResult(pgrav->phi, 0, indcs_.ng);
-  //mglevels_->RetrieveDefect(pgrav->def, 0, indcs_.ng);
+  if (full_multigrid_)
+    SolveFMG(pdriver);
+  else
+    SolveMG(pdriver);
+
+  if (true) {
+    Real norm = CalculateDefectNorm(MGNormType::l2, 0);
+    std::cout << "MGGravityDriver::Solve: Final defect norm = " << norm << std::endl;
+  }
+
+  mglevels_->RetrieveResult(pmy_pack_->pgrav->phi, 0, indcs_.ng);
 
   return;
 }
