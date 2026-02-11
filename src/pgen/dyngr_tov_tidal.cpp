@@ -634,14 +634,19 @@ void FinalizeTOV(ParameterInput *pin, Mesh *pm) {
 // History function
 void TOVHistory(HistoryData *pdata, Mesh *pm) {
   // Select the number of outputs and create labels for them.
-  pdata->nhist = 7;
+  pdata->nhist = 12;
   pdata->label[0] = "rho-max";
   pdata->label[1] = "alpha-min";
-  pdata->label[2] = "I2,-2";
-  pdata->label[3] = "I2,-1";
-  pdata->label[4] = "I2,0";
-  pdata->label[5] = "I2,1";
-  pdata->label[6] = "I2,2";
+  pdata->label[2] = "ReI2,-2";
+  pdata->label[3] = "ReI2,-1";
+  pdata->label[4] = "ReI2,0";
+  pdata->label[5] = "ReI2,1";
+  pdata->label[6] = "ReI2,2";
+  pdata->label[7] = "ImI2,-2";
+  pdata->label[8] = "ImI2,-1";
+  pdata->label[9] = "ImI2,0";
+  pdata->label[10] = "ImI2,1";
+  pdata->label[11] = "ImI2,2";
 
   // capture class variables for kernel
   auto &w0_ = pm->pmb_pack->pmhd->w0;
@@ -658,10 +663,12 @@ void TOVHistory(HistoryData *pdata, Mesh *pm) {
   const int nji = nx2*nx1;
   Real rho_max = std::numeric_limits<Real>::max();
   Real alpha_min = -rho_max;
-  Real I2m2, I2m1, I20, I2p1, I2p2;
+  Real ReI2m2, ReI2m1, ReI20, ReI2p1, ReI2p2;
+  Real ImI2m2, ImI2m1, ImI20, ImI2p1, ImI2p2;
   Kokkos::parallel_reduce("TOVHistSums",Kokkos::RangePolicy<>(DevExeSpace(), 0, nmkji),
-  KOKKOS_LAMBDA(const int &idx, Real &mb_max, Real &mb_alp_min, Real &mb_I2m2,
-      Real &mb_I2m1, Real &mb_I20, Real &mb_I2p1, Real &mb_I2p2) {
+  KOKKOS_LAMBDA(const int &idx, Real &mb_max, Real &mb_alp_min, Real &mb_ReI2m2,
+      Real &mb_ReI2m1, Real &mb_ReI20, Real &mb_ReI2p1, Real &mb_ReI2p2, Real &mb_ImI2m2,
+      Real &mb_ImI2m1, Real &mb_ImI20, Real &mb_ImI2p1, Real &mb_ImI2p2) {
     // coompute n,k,j,i indices of thread
     int m = (idx)/nkji;
     int k = (idx - m*nkji)/nji;
@@ -691,24 +698,32 @@ void TOVHistory(HistoryData *pdata, Mesh *pm) {
     mb_alp_min = fmin(mb_alp_min, adm.alpha(m, k, j, i));
 
     // Compute multipole modes for $\ell=2$.
-    Real modes[5];
+    Real modes_re[5];
+    Real modes_im[5];
     for (int m = -2; m <= 2; m++) {
       Real ylmR, ylmI;
       SWSphericalHarm(&ylmR, &ylmI, 2, m, 0, theta, phi);
-      modes[m+2] = w0_(m,IDN,k,j,i)*r*r*ylmR;
+      modes_re[m+2] = w0_(m,IDN,k,j,i)*r*r*ylmR;
+      modes_im[m+2] = w0_(m,IDN,k,j,i)*r*r*ylmI;
       /*if (!Kokkos::isfinite(modes[m+2])) {
         //Kokkos::printf("There's a problem with the mode calculation!");
         //std::cout << "There's a problem with the mode calculation!\n";
       }*/
     }
-    mb_I2m2 += modes[0]*vol;
-    mb_I2m1 += modes[1]*vol;
-    mb_I20 += modes[2]*vol;
-    mb_I2p1 += modes[3]*vol;
-    mb_I2p2 += modes[4]*vol;
-  }, Kokkos::Max<Real>(rho_max), Kokkos::Min<Real>(alpha_min), Kokkos::Sum<Real>(I2m2),
-  Kokkos::Sum<Real>(I2m1), Kokkos::Sum<Real>(I20), Kokkos::Sum<Real>(I2p1),
-  Kokkos::Sum<Real>(I2p2));
+    mb_ReI2m2 += modes_re[0]*vol;
+    mb_ReI2m1 += modes_re[1]*vol;
+    mb_ReI20 += modes_re[2]*vol;
+    mb_ReI2p1 += modes_re[3]*vol;
+    mb_ReI2p2 += modes_re[4]*vol;
+    mb_ImI2m2 += modes_im[0]*vol;
+    mb_ImI2m1 += modes_im[1]*vol;
+    mb_ImI20 += modes_im[2]*vol;
+    mb_ImI2p1 += modes_im[3]*vol;
+    mb_ImI2p2 += modes_im[4]*vol;
+  }, Kokkos::Max<Real>(rho_max), Kokkos::Min<Real>(alpha_min), Kokkos::Sum<Real>(ReI2m2),
+  Kokkos::Sum<Real>(ReI2m1), Kokkos::Sum<Real>(ReI20), Kokkos::Sum<Real>(ReI2p1),
+  Kokkos::Sum<Real>(ReI2p2), Kokkos::Sum<Real>(ImI2m2), Kokkos::Sum<Real>(ImI2m1),
+  Kokkos::Sum<Real>(ImI20), Kokkos::Sum<Real>(ImI2p1), Kokkos::Sum<Real>(ImI2p2));
 
   // Currently AthenaK only supports MPI_SUM operations between ranks, but we need MPI_MAX
   // and MPI_MIN operations instead. This is a cheap hack to make it work as intended.
@@ -727,9 +742,14 @@ void TOVHistory(HistoryData *pdata, Mesh *pm) {
   // store data in hdata array
   pdata->hdata[0] = rho_max;
   pdata->hdata[1] = alpha_min;
-  pdata->hdata[2] = I2m2;
-  pdata->hdata[3] = I2m1;
-  pdata->hdata[4] = I20;
-  pdata->hdata[5] = I2p1;
-  pdata->hdata[6] = I2p2;
+  pdata->hdata[2] = ReI2m2;
+  pdata->hdata[3] = ReI2m1;
+  pdata->hdata[4] = ReI20;
+  pdata->hdata[5] = ReI2p1;
+  pdata->hdata[6] = ReI2p2;
+  pdata->hdata[7] = ImI2m2;
+  pdata->hdata[8] = ImI2m1;
+  pdata->hdata[9] = ImI20;
+  pdata->hdata[10] = ImI2p1;
+  pdata->hdata[11] = ImI2p2;
 }
