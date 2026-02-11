@@ -227,6 +227,7 @@ void MeshBoundaryValues::InitializeBuffers(const int nvar) {
 particles::ParticlesBoundaryValues::ParticlesBoundaryValues(
   particles::Particles *pp, ParameterInput *pin) :
     sendlist("sendlist",1),
+    destroylist("destroylist",1),
 #if MPI_PARALLEL_ENABLED
     prtcl_rsendbuf("rsend",1),
     prtcl_rrecvbuf("rrecv",1),
