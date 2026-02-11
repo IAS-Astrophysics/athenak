@@ -100,9 +100,11 @@ namespace {
     Real thmin, thi, tho, thmax;
     Real origid, rmagsph, denstar;
     Real mm;
+    Real fofc_scalar_tau;  // timescale for damping FOFC diagnostic scalar (0 = off)
     bool is_ideal;
     bool magnetic_fields_enabled;
     bool avg_grid_bfields;
+    int mag_option;
     };
 
     my_params mp;
@@ -195,10 +197,12 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     mp.rho_floor_slope2 = pin->GetOrAddReal("problem","rho_floor_slope2", 5.5);
     mp.rmagsph = pin->GetOrAddReal("problem","rmagsph",0.0);
     mp.rs = pin->GetOrAddReal("problem", "rstar",0.0);
-    mp.gravsmooth = pin->GetOrAddReal("problem","gravsmooth",0.0);
+    mp.gravsmooth = pin->GetOrAddReal("problem","gravsmooth",0.1);
     mp.tcool = pin->GetOrAddReal("problem","tcool",0.0);
+    mp.fofc_scalar_tau = pin->GetOrAddReal("problem","fofc_scalar_tau",0.0);
     mp.sig_star_disc = pin->GetOrAddReal("problem","sig_star_disc",0.1);
     mp.avg_grid_bfields = pin->GetOrAddBoolean("problem","avg_grid_bfields",false);
+    mp.mag_option = pin->GetOrAddInteger("problem","mag_option",1);
     
     // Capture variables for kernel - e.g. indices for looping over the meshblocks and the size of the meshblocks.
     auto &indcs = pmy_mesh_->mb_indcs;
@@ -266,6 +270,16 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
         }
 
     });
+
+    // Initialize FOFC diagnostic passive scalar to 0 (when used)
+    if (pmbp->pmhd != nullptr && pmbp->pmhd->nscalars >= 1) {
+        int nmhd = pmbp->pmhd->nmhd;
+        auto u0_scalar_ = pmbp->pmhd->u0;
+        par_for("magnetosphere_pgen_fofc_scalar", DevExeSpace(), 0, (nmb - 1), ks, ke, js, je, is, ie,
+        KOKKOS_LAMBDA(int m, int k, int j, int i) {
+            u0_scalar_(m, nmhd, k, j, i) = 0.0;
+        });
+    }
 
     // initialize magnetic field if required ---------------------------------------
     if (pmbp->pmhd != nullptr) {
@@ -503,15 +517,18 @@ namespace {
         if (mp.is_ideal) p_over_r = PoverR(mp, r);
         Real denmid = mp.rho0*std::pow(r/mp.r0,mp.dslope);
 
+        // Cutoff based on the spherical radius
+        Real rc = sqrt(rad*rad + z*z);
+
         // Inner magnetosphere exponential cutoff
-        if (rad < mp.rad_in_cutoff) {
-            Real cutoff = exp(-SQR((rad-mp.rad_in_cutoff)/mp.rad_in_smooth));
+        if (rc < mp.rad_in_cutoff) {
+            Real cutoff = exp(-SQR((rc-mp.rad_in_cutoff)/mp.rad_in_smooth));
             denmid *= cutoff;
         }
 
         // Outer disc exponential cutoff
-        if (rad > mp.rad_out_cutoff) {
-            Real cutoff = exp(-SQR((rad - mp.rad_out_cutoff)/mp.rad_out_smooth));
+        if (rc > mp.rad_out_cutoff) {
+            Real cutoff = exp(-SQR((rc - mp.rad_out_cutoff)/mp.rad_out_smooth));
             denmid *= cutoff;
         }
 
@@ -589,14 +606,14 @@ namespace {
         Real rc = sqrt(r*r+z*z);
 
         // Old method for power law
-        // Real p_over_r = PoverR(mp, r);
-        // Real vel = (mp.dslope+mp.qslope)*p_over_r/(mp.gm0/r) + (1.0+mp.qslope) - mp.qslope*r/sqrt(r*r+z*z);
-        // vel = sqrt(mp.gm0/r)*sqrt(vel);
+        Real p_over_r = PoverR(mp, r);
+        Real vel = (mp.dslope+mp.qslope)*p_over_r/(mp.gm0/r) + (1.0+mp.qslope) - mp.qslope*r/sqrt(r*r+z*z);
+        vel = sqrt(mp.gm0/r)*sqrt(vel);
 
         // Testing new method for balance with pressure gradients
-        Real dR = fmin(mp.rad_in_smooth, mp.rad_out_smooth)/100;
-        Real dPdr = (PoverR(mp, r+dR) * DenDiscCyl(mp, r+dR,phi,z) - PoverR(mp, r-dR) * DenDiscCyl(mp, r - dR,phi,z))/(2 * dR);
-        Real vel = sqrt(fmax(mp.gm0*r*r/rc/rc/rc+r/DenDiscCyl(mp, r, phi, z)*dPdr,0.0));
+        // Real dR = fmin(mp.rad_in_smooth, mp.rad_out_smooth)/100;
+        // Real dPdr = (PoverR(mp, r+dR) * DenDiscCyl(mp, r+dR,phi,z) - PoverR(mp, r-dR) * DenDiscCyl(mp, r - dR,phi,z))/(2 * dR);
+        // Real vel = sqrt(fmax(mp.gm0*r*r/rc/rc/rc+r/DenDiscCyl(mp, r, phi, z)*dPdr,0.0));
 
         v1=-vel*sin(phi);
         v2=+vel*cos(phi);
@@ -608,9 +625,9 @@ namespace {
     //----------------------------------------------------------------------------------------
     KOKKOS_INLINE_FUNCTION //CF:CHECKED
     static void VelStarCyl(struct my_params mp, const Real rad, const Real phi, const Real z, Real &v1, Real &v2, Real &v3) {
+        
         // The rigid body velocity of the star in coordinates aligned with the stellar rotation axis.
         Real vel(0.0);
-        Real rc = sqrt(rad*rad+z*z);  // spherical radius
         vel = mp.origid*rad; // rigid rotation
 
         v1=-vel*sin(phi);
@@ -680,13 +697,32 @@ namespace {
     
         // compute the stellar velocity component at this location
         VelStar(mp, x1, x2, x3, v1_star, v2_star, v3_star);
-        
-        // set the total velocity components - switch smoothly from star to disc across magsph boundary
+
         Real rc = sqrt(rad*rad+z*z);
-        Real sigma = 1/(1+exp((rc - mp.rmagsph)/mp.sig_star_disc));
-        ux = (1-sigma)*v1_disc + sigma*v1_star;
-        uy = (1-sigma)*v2_disc + sigma*v2_star;
-        uz = (1-sigma)*v3_disc + sigma*v3_star;
+
+        if (rc > mp.rmagsph) {
+            // outside the magnetosphere, set the velocity to the disc velocity
+            ux = v1_disc;
+            uy = v2_disc;
+            uz = v3_disc;
+
+        } else {
+            // inside the inner cutoff, set the velocity to the stellar velocity
+            ux = v1_disc*exp(-SQR((rc-mp.rmagsph)/mp.rs));
+            uy = v2_disc*exp(-SQR((rc-mp.rmagsph)/mp.rs));
+            uz = v3_disc*exp(-SQR((rc-mp.rmagsph)/mp.rs));
+
+            ux += v1_star;
+            uy += v2_star;
+            uz += v3_star;
+        } 
+
+        // // set the total velocity components - switch smoothly from star to disc across magsph boundary
+        // Real rc = sqrt(rad*rad+z*z);
+        // Real sigma = 1/(1+exp((rc - mp.rmagsph)/mp.sig_star_disc));
+        // ux = (1-sigma)*v1_disc + sigma*v1_star;
+        // uy = (1-sigma)*v2_disc + sigma*v2_star;
+        // uz = (1-sigma)*v3_disc + sigma*v3_star;
 
         return;
     }
@@ -694,17 +730,21 @@ namespace {
     //----------------------------------------------------------------------------------------
     KOKKOS_INLINE_FUNCTION //CF:CHECKED
     static Real A1(struct my_params mp, const Real x1, const Real x2, const Real x3) {
-        // Real a1=0.0;
-        // Real x2b = x2;
-        // Real rc = fmax(sqrt(x1*x1+x2*x2+x3*x3),mp.rs);
-        // a1 = mp.mm/rc/rc/rc*(-1.*x2b*cos(mp.thetab));
+        
+        Real a1=0.0;
 
-        Real x2b = x2;
-        Real rc = sqrt(x1*x1+x2*x2+x3*x3);
-        Real rb = mp.rs/2;
-        Real delta = 1/(10*mp.rs);
-        Real f = pow(rb,-3)*pow(pow(rc/rb,3*delta)+1,-1/delta);
-        Real a1 = mp.mm* f * (-1.*x2b*cos(mp.thetab));        
+        if (mp.mag_option == 1) {
+            Real x2b = x2;
+            Real rc = fmax(sqrt(x1*x1+x2*x2+x3*x3),mp.rs/2);
+            a1 = mp.mm/rc/rc/rc*(-1.*x2b*cos(mp.thetab));
+        } else if (mp.mag_option == 2) {
+            Real x2b = x2;
+            Real rc = sqrt(x1*x1+x2*x2+x3*x3);
+            Real rb = mp.rs/2;
+            Real delta = 1/(10*mp.rs);
+            Real f = pow(rb,-3)*pow(pow(rc/rb,3*delta)+1,-1/delta);
+            a1 = mp.mm* f * (-1.*x2b*cos(mp.thetab));  
+        }      
         
         return(a1);
     }
@@ -712,17 +752,21 @@ namespace {
     //----------------------------------------------------------------------------------------
     KOKKOS_INLINE_FUNCTION //CF:CHECKED
     static Real A2(struct my_params mp, const Real x1, const Real x2, const Real x3) {
-        // Real a2=0.0;
-        // Real x1b = cos(mp.thetab)*x1 + sin(mp.thetab)*x3;
-        // Real rc = fmax(sqrt(x1*x1+x2*x2+x3*x3),mp.rs);
-        // a2 = mp.mm/rc/rc/rc*(+1.*x1b);
-
-        Real x1b = cos(mp.thetab)*x1 + sin(mp.thetab)*x3;
-        Real rc = sqrt(x1*x1+x2*x2+x3*x3);
-        Real rb = mp.rs/2;
-        Real delta = 1/(10*mp.rs);
-        Real f = pow(rb,-3)*pow(pow(rc/rb,3*delta)+1,-1/delta);
-        Real a2 = mp.mm* f * (+1.*x1b);
+        
+        Real a2=0.0;
+        
+        if (mp.mag_option == 1) {
+            Real x1b = cos(mp.thetab)*x1 + sin(mp.thetab)*x3;
+            Real rc = fmax(sqrt(x1*x1+x2*x2+x3*x3),mp.rs/2);
+            a2 = mp.mm/rc/rc/rc*(+1.*x1b);
+        } else if (mp.mag_option == 2) {
+            Real x1b = cos(mp.thetab)*x1 + sin(mp.thetab)*x3;
+            Real rc = sqrt(x1*x1+x2*x2+x3*x3);
+            Real rb = mp.rs/2;
+            Real delta = 1/(10*mp.rs);
+            Real f = pow(rb,-3)*pow(pow(rc/rb,3*delta)+1,-1/delta);
+            a2 = mp.mm* f * (+1.*x1b);
+        }
         
         return(a2);
     }
@@ -730,17 +774,21 @@ namespace {
     //----------------------------------------------------------------------------------------
     KOKKOS_INLINE_FUNCTION //CF:CHECKED
     static Real A3(struct my_params mp, const Real x1, const Real x2, const Real x3) {
-        // Real a3=0.0;
-        // Real x2b = x2;
-        // Real rc = fmax(sqrt(x1*x1+x2*x2+x3*x3),mp.rs);
-        // a3 = mp.mm/rc/rc/rc*(-1.*x2b*sin(mp.thetab));
-
-        Real x2b = x2;
-        Real rc = sqrt(x1*x1+x2*x2+x3*x3);
-        Real rb = mp.rs/2;
-        Real delta = 1/(10*mp.rs);
-        Real f = pow(rb,-3)*pow(pow(rc/rb,3*delta)+1,-1/delta);
-        Real a3 = mp.mm* f * (-1.*x2b*sin(mp.thetab));
+        
+        Real a3=0.0;
+        
+        if (mp.mag_option == 1) {
+            Real x2b = x2;
+            Real rc = fmax(sqrt(x1*x1+x2*x2+x3*x3),mp.rs/2);
+            a3 = mp.mm/rc/rc/rc*(-1.*x2b*sin(mp.thetab));
+        } else if (mp.mag_option == 2) {
+            Real x2b = x2;
+            Real rc = sqrt(x1*x1+x2*x2+x3*x3);
+            Real rb = mp.rs/2;
+            Real delta = 1/(10*mp.rs);
+            Real f = pow(rb,-3)*pow(pow(rc/rb,3*delta)+1,-1/delta);
+            a3 = mp.mm* f * (-1.*x2b*sin(mp.thetab));
+        }
 
         return(a3);
     }
@@ -749,32 +797,36 @@ namespace {
     KOKKOS_INLINE_FUNCTION //CF:CHECKED
     static void Bfield(struct my_params mp, const Real x1, const Real x2, const Real x3, const Real mmx, const Real mmy, const Real mmz, Real &bx, Real &by,  Real &bz) {
 
-        // Real rc = sqrt(x1*x1+x2*x2+x3*x3);
-        // Real rccubed = rc*rc*rc;
-        // Real rscubed = mp.rs*mp.rs*mp.rs;
-        // Real mdotr = mmx*x1 + mmy*x2 + mmz*x3;
+        if (mp.mag_option == 1) {
+            Real rc = sqrt(x1*x1+x2*x2+x3*x3);
+            Real rccubed = rc*rc*rc;
+            Real rscubed = (mp.rs/2)*(mp.rs/2)*(mp.rs/2);
+            Real mdotr = mmx*x1 + mmy*x2 + mmz*x3;
 
-        // if (rc < mp.rs) {
-        //     bx = 2.*mmx/rscubed;
-        //     by = 2.*mmy/rscubed;
-        //     bz = 2.*mmz/rscubed;
-        // } else {
-        //     bx = 3.*x1*mdotr/rccubed/rc/rc - mmx/rccubed;
-        //     by = 3.*x2*mdotr/rccubed/rc/rc - mmy/rccubed;
-        //     bz = 3.*x3*mdotr/rccubed/rc/rc - mmz/rccubed;
-        // }
+            if (rc < mp.rs/2) {
+                bx = 2.*mmx/rscubed;
+                by = 2.*mmy/rscubed;
+                bz = 2.*mmz/rscubed;
+            } else {
+                bx = 3.*x1*mdotr/rccubed/rc/rc - mmx/rccubed;
+                by = 3.*x2*mdotr/rccubed/rc/rc - mmy/rccubed;
+                bz = 3.*x3*mdotr/rccubed/rc/rc - mmz/rccubed;
+            }
 
-        Real mdotr = mmx*x1 + mmy*x2 + mmz*x3;
+        } else if (mp.mag_option == 2) {
 
-        Real rc = sqrt(x1*x1+x2*x2+x3*x3);
-        Real rb = mp.rs/2;
-        Real delta = 1/(10*mp.rs);
-        Real f = pow(rb,-3)*pow(pow(rc/rb,3*delta)+1,-1/delta);
-        Real g = -3*pow(rb,-5)*pow(pow(rc/rb,3*delta)+1,-1/delta-1)*pow(rc/rb,3*delta-2);
+            Real mdotr = mmx*x1 + mmy*x2 + mmz*x3;
 
-        bx = 2*mmx*f + g*(mmx*rc*rc-mdotr*x1);
-        by = 2*mmy*f + g*(mmy*rc*rc-mdotr*x2);
-        bz = 2*mmz*f + g*(mmz*rc*rc-mdotr*x3);
+            Real rc = sqrt(x1*x1+x2*x2+x3*x3);
+            Real rb = mp.rs/2;
+            Real delta = 1/(10*mp.rs);
+            Real f = pow(rb,-3)*pow(pow(rc/rb,3*delta)+1,-1/delta);
+            Real g = -3*pow(rb,-5)*pow(pow(rc/rb,3*delta)+1,-1/delta-1)*pow(rc/rb,3*delta-2);
+
+            bx = 2*mmx*f + g*(mmx*rc*rc-mdotr*x1);
+            by = 2*mmy*f + g*(mmy*rc*rc-mdotr*x2);
+            bz = 2*mmz*f + g*(mmz*rc*rc-mdotr*x3);
+        }
 
         return;
 
@@ -800,8 +852,25 @@ Real rho_floor(struct my_params mp, Real rc) {
 void MySourceTerms(Mesh* pm, const Real bdt) { //CF:CHECKED
 
     StarGravSourceTerm(pm, bdt);
-    if(mp.is_ideal && mp.tcool>0.0) CoolingSourceTerms(pm, bdt);
     if (mp.denstar > 0.0) StarMask(pm, bdt);
+    if(mp.is_ideal && mp.tcool>0.0) CoolingSourceTerms(pm, bdt);
+
+    // FOFC diagnostic: damp conserved scalar (rho*s) with source -bdt*dens*s/tau
+    MeshBlockPack *pmbp = pm->pmb_pack;
+    if (pmbp->pmhd != nullptr && pmbp->pmhd->nscalars >= 1 && mp.fofc_scalar_tau > 0.0) {
+        auto &indcs = pm->mb_indcs;
+        int is = indcs.is, ie = indcs.ie, js = indcs.js, je = indcs.je, ks = indcs.ks, ke = indcs.ke;
+        int nmhd = pmbp->pmhd->nmhd;
+        Real tau = mp.fofc_scalar_tau;
+        auto u0_ = pmbp->pmhd->u0;
+        par_for("pgen_fofc_scalar_damp", DevExeSpace(), 0, (pmbp->nmb_thispack - 1), ks, ke, js, je, is, ie,
+        KOKKOS_LAMBDA(int m, int k, int j, int i) {
+            Real dens = u0_(m, IDN, k, j, i);
+            Real rho_s = u0_(m, nmhd, k, j, i);
+            Real sink = bdt * rho_s / tau;
+            u0_(m, nmhd, k, j, i) = fmax(0.0, rho_s - sink);
+        });
+    }
     return;
 }
 
@@ -1176,11 +1245,9 @@ void CoolingSourceTerms(Mesh* pm, const Real bdt) { //CF:CHECKED
         Real &x3max = size.d_view(m).x3max;
         Real x3v = CellCenterX(k-ks, indcs.nx3, x3min, x3max);
 
-        Real eint = u0_(m,IEN,k,j,i)-0.5*(SQR(u0_(m,IM1,k,j,i))+SQR(u0_(m,IM2,k,j,i))
-                                            +SQR(u0_(m,IM3,k,j,i)))/u0_(m,IDN,k,j,i);
-        if (mp_.magnetic_fields_enabled) {
-            eint = eint-0.5*(SQR(bcc0_(m,IBX,k,j,i))+SQR(bcc0_(m,IBY,k,j,i))+SQR(bcc0_(m,IBZ,k,j,i)));
-        }
+        // Use primitives for current state (consistent, avoids mom^2/rho issues in low density)
+        Real dens = w0_(m,IDN,k,j,i);
+        Real eint = w0_(m,IEN,k,j,i);  // internal energy per unit volume
 
         Real rad(0.0),phi(0.0),z(0.0);
         Real p_over_r(0.0);
@@ -1189,7 +1256,8 @@ void CoolingSourceTerms(Mesh* pm, const Real bdt) { //CF:CHECKED
         
         Real dtr = fmax(mp_.tcool*2.*M_PI/sqrt(mp_.gm0/rad/rad/rad),bdt);
         Real dfrac=bdt/dtr;
-        Real dE=eint-p_over_r/(mp_.gamma_gas-1.0)*u0_(m,IDN,k,j,i);
+        Real eint_target = p_over_r/(mp_.gamma_gas-1.0)*dens;
+        Real dE = eint - eint_target;
         u0_(m,IEN,k,j,i) -= dE*dfrac;
         
     }); // end par_for

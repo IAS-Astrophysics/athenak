@@ -14,6 +14,7 @@
 #include "coordinates/cell_locations.hpp"
 #include "eos/eos.hpp"
 #include "mhd/rsolvers/llf_mhd_singlestate.hpp"
+#include "reconstruct/plm.hpp"
 #include "mhd.hpp"
 
 namespace mhd {
@@ -50,7 +51,7 @@ void MHD::FOFC(Driver *pdriver, int stage) {
   auto &e2x3_ = e2x3;
   auto &e1x3_ = e1x3;
 
-  if (use_fofc) {
+  if (use_fofc || use_sofc) {
     Real &gam0 = pdriver->gam0[stage-1];
     Real &gam1 = pdriver->gam1[stage-1];
     Real beta_dt = (pdriver->beta[stage-1])*(pmy_pack->pmesh->dt);
@@ -117,6 +118,7 @@ void MHD::FOFC(Driver *pdriver, int stage) {
   bool &is_gr = pmy_pack->pcoord->is_general_relativistic;
   auto &eos = peos->eos_data;
   auto &use_fofc_ = use_fofc;
+  auto &use_sofc_ = use_sofc;
   auto fofc_ = fofc;
   auto &use_excise_ = pmy_pack->pcoord->coord_data.bh_excise;
   auto &excision_flux_ = pmy_pack->pcoord->excision_flux;
@@ -128,13 +130,26 @@ void MHD::FOFC(Driver *pdriver, int stage) {
   if (multi_d) { jl = js-1, ju = je+1; }
   if (three_d) { kl = ks-1, ku = ke+1; }
 
-  // Replace fluxes with first-order LLF fluxes at i,j,k faces for any cell where FOFC
-  // and/or excision is used (if GR+excising)
+  // FOFC diagnostic: set conserved passive scalar to rho*s (s=1) at cells where FOFC triggered
+  if ((use_fofc || use_sofc) && nscalars >= 1) {
+    int &nmhd_ = nmhd;
+    auto &u0_ = u0;
+    auto fofc_scalar_ = fofc;
+    par_for("FOFC-scalar", DevExeSpace(), 0, nmb-1, kl, ku, jl, ju, il, iu,
+    KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
+      if (fofc_scalar_(m, k, j, i)) {
+        u0_(m, nmhd_, k, j, i) = u0_(m, IDN, k, j, i);  // rho*s with s=1
+      }
+    });
+  }
+
+  // Replace fluxes with first-order or second-order (PLM) LLF fluxes at i,j,k faces
+  // for any cell where FOFC/SOFC and/or excision is used (if GR+excising)
   par_for("FOFC-flx", DevExeSpace(), 0, nmb-1, kl, ku, jl, ju, il, iu,
   KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
     // Check for FOFC flag
     bool fofc_flag = false;
-    if (use_fofc_) { fofc_flag = fofc_(m,k,j,i); }
+    if (use_fofc_ || use_sofc_) { fofc_flag = fofc_(m,k,j,i); }
 
     // Check for GR + excision
     bool fofc_excision = false;
@@ -142,8 +157,8 @@ void MHD::FOFC(Driver *pdriver, int stage) {
       if (use_excise_) { fofc_excision = excision_flux_(m,k,j,i); }
     }
 
-    // Apply FOFC
-    if (fofc_flag || fofc_excision) {
+    // Apply FOFC (first-order)
+    if (use_fofc_ && (fofc_flag || fofc_excision)) {
       // load W_{i-1} state
       MHDPrim1D wim1;
       wim1.d  = w0_(m,IDN,k,j,i-1);
@@ -302,6 +317,205 @@ void MHD::FOFC(Driver *pdriver, int stage) {
         e2x3_(m,k,j,i) = flux.by;
         e1x3_(m,k,j,i) = flux.bz;
       }
+    } else if (use_sofc_ && fofc_flag && !fofc_excision) {
+      // Apply SOFC (PLM + LLF) when flag set and stencil available
+      if (i >= is+1) {
+        // PLM left/right states at i-face (ql_i from cell i-1, qr_i from cell i)
+        MHDPrim1D wL, wR;
+        Real ql_i, qr_im1, ql_ip1, qr_i;
+        PLM(w0_(m,IDN,k,j,i-2), w0_(m,IDN,k,j,i-1), w0_(m,IDN,k,j,i), ql_i, qr_im1);
+        wL.d = ql_i;
+        PLM(w0_(m,IDN,k,j,i-1), w0_(m,IDN,k,j,i), w0_(m,IDN,k,j,i+1), ql_ip1, qr_i);
+        wR.d = qr_i;
+        PLM(w0_(m,IVX,k,j,i-2), w0_(m,IVX,k,j,i-1), w0_(m,IVX,k,j,i), ql_i, qr_im1);
+        wL.vx = ql_i;
+        PLM(w0_(m,IVX,k,j,i-1), w0_(m,IVX,k,j,i), w0_(m,IVX,k,j,i+1), ql_ip1, qr_i);
+        wR.vx = qr_i;
+        PLM(w0_(m,IVY,k,j,i-2), w0_(m,IVY,k,j,i-1), w0_(m,IVY,k,j,i), ql_i, qr_im1);
+        wL.vy = ql_i;
+        PLM(w0_(m,IVY,k,j,i-1), w0_(m,IVY,k,j,i), w0_(m,IVY,k,j,i+1), ql_ip1, qr_i);
+        wR.vy = qr_i;
+        PLM(w0_(m,IVZ,k,j,i-2), w0_(m,IVZ,k,j,i-1), w0_(m,IVZ,k,j,i), ql_i, qr_im1);
+        wL.vz = ql_i;
+        PLM(w0_(m,IVZ,k,j,i-1), w0_(m,IVZ,k,j,i), w0_(m,IVZ,k,j,i+1), ql_ip1, qr_i);
+        wR.vz = qr_i;
+        if (eos.is_ideal) {
+          PLM(w0_(m,IEN,k,j,i-2), w0_(m,IEN,k,j,i-1), w0_(m,IEN,k,j,i), ql_i, qr_im1);
+          wL.e = ql_i;
+          PLM(w0_(m,IEN,k,j,i-1), w0_(m,IEN,k,j,i), w0_(m,IEN,k,j,i+1), ql_ip1, qr_i);
+          wR.e = qr_i;
+        }
+        PLM(bcc0_(m,IBY,k,j,i-2), bcc0_(m,IBY,k,j,i-1), bcc0_(m,IBY,k,j,i), ql_i, qr_im1);
+        wL.by = ql_i;
+        PLM(bcc0_(m,IBY,k,j,i-1), bcc0_(m,IBY,k,j,i), bcc0_(m,IBY,k,j,i+1), ql_ip1, qr_i);
+        wR.by = qr_i;
+        PLM(bcc0_(m,IBZ,k,j,i-2), bcc0_(m,IBZ,k,j,i-1), bcc0_(m,IBZ,k,j,i), ql_i, qr_im1);
+        wL.bz = ql_i;
+        PLM(bcc0_(m,IBZ,k,j,i-1), bcc0_(m,IBZ,k,j,i), bcc0_(m,IBZ,k,j,i+1), ql_ip1, qr_i);
+        wR.bz = qr_i;
+
+        // compute new SOFC (PLM+LLF) flux at i-face
+        {
+          Real bxi = b0_.x1f(m,k,j,i);
+          MHDCons1D flux;
+          if (is_gr) {
+            Real &x1min = size.d_view(m).x1min;
+            Real &x1max = size.d_view(m).x1max;
+            Real x1v = LeftEdgeX(i-is, nx1, x1min, x1max);
+            Real &x2min = size.d_view(m).x2min;
+            Real &x2max = size.d_view(m).x2max;
+            Real x2v = CellCenterX(j-js, nx2, x2min, x2max);
+            Real &x3min = size.d_view(m).x3min;
+            Real &x3max = size.d_view(m).x3max;
+            Real x3v = CellCenterX(k-ks, nx3, x3min, x3max);
+            SingleStateLLF_GRMHD(wL, wR, bxi, x1v, x2v, x3v, IVX, coord, eos, flux);
+          } else if (is_sr) {
+            SingleStateLLF_SRMHD(wL, wR, bxi, eos, flux);
+          } else {
+            SingleStateLLF_MHD(wL, wR, bxi, eos, flux);
+          }
+
+          // store SOFC fluxes.
+          flx1(m,IDN,k,j,i) = flux.d;
+          flx1(m,IM1,k,j,i) = flux.mx;
+          flx1(m,IM2,k,j,i) = flux.my;
+          flx1(m,IM3,k,j,i) = flux.mz;
+          if (eos.is_ideal) {flx1(m,IEN,k,j,i) = flux.e;}
+          e3x1_(m,k,j,i) = flux.by;
+          e2x1_(m,k,j,i) = flux.bz;
+        }
+      }
+
+      if (multi_d && j >= js+1) {
+        // PLM left/right states at j-face (permutting components for 1D solver)
+        MHDPrim1D wL, wR;
+        Real ql_j, qr_jm1, ql_jp1, qr_j;
+        PLM(w0_(m,IDN,k,j-2,i), w0_(m,IDN,k,j-1,i), w0_(m,IDN,k,j,i), ql_j, qr_jm1);
+        wL.d = ql_j;
+        PLM(w0_(m,IDN,k,j-1,i), w0_(m,IDN,k,j,i), w0_(m,IDN,k,j+1,i), ql_jp1, qr_j);
+        wR.d = qr_j;
+        PLM(w0_(m,IVY,k,j-2,i), w0_(m,IVY,k,j-1,i), w0_(m,IVY,k,j,i), ql_j, qr_jm1);
+        wL.vx = ql_j;
+        PLM(w0_(m,IVY,k,j-1,i), w0_(m,IVY,k,j,i), w0_(m,IVY,k,j+1,i), ql_jp1, qr_j);
+        wR.vx = qr_j;
+        PLM(w0_(m,IVZ,k,j-2,i), w0_(m,IVZ,k,j-1,i), w0_(m,IVZ,k,j,i), ql_j, qr_jm1);
+        wL.vy = ql_j;
+        PLM(w0_(m,IVZ,k,j-1,i), w0_(m,IVZ,k,j,i), w0_(m,IVZ,k,j+1,i), ql_jp1, qr_j);
+        wR.vy = qr_j;
+        PLM(w0_(m,IVX,k,j-2,i), w0_(m,IVX,k,j-1,i), w0_(m,IVX,k,j,i), ql_j, qr_jm1);
+        wL.vz = ql_j;
+        PLM(w0_(m,IVX,k,j-1,i), w0_(m,IVX,k,j,i), w0_(m,IVX,k,j+1,i), ql_jp1, qr_j);
+        wR.vz = qr_j;
+        if (eos.is_ideal) {
+          PLM(w0_(m,IEN,k,j-2,i), w0_(m,IEN,k,j-1,i), w0_(m,IEN,k,j,i), ql_j, qr_jm1);
+          wL.e = ql_j;
+          PLM(w0_(m,IEN,k,j-1,i), w0_(m,IEN,k,j,i), w0_(m,IEN,k,j+1,i), ql_jp1, qr_j);
+          wR.e = qr_j;
+        }
+        PLM(bcc0_(m,IBZ,k,j-2,i), bcc0_(m,IBZ,k,j-1,i), bcc0_(m,IBZ,k,j,i), ql_j, qr_jm1);
+        wL.by = ql_j;
+        PLM(bcc0_(m,IBZ,k,j-1,i), bcc0_(m,IBZ,k,j,i), bcc0_(m,IBZ,k,j+1,i), ql_jp1, qr_j);
+        wR.by = qr_j;
+        PLM(bcc0_(m,IBX,k,j-2,i), bcc0_(m,IBX,k,j-1,i), bcc0_(m,IBX,k,j,i), ql_j, qr_jm1);
+        wL.bz = ql_j;
+        PLM(bcc0_(m,IBX,k,j-1,i), bcc0_(m,IBX,k,j,i), bcc0_(m,IBX,k,j+1,i), ql_jp1, qr_j);
+        wR.bz = qr_j;
+
+        // compute new SOFC (PLM+LLF) flux at j-face
+        Real bxi = b0_.x2f(m,k,j,i);
+        MHDCons1D flux;
+        if (is_gr) {
+          Real &x1min = size.d_view(m).x1min;
+          Real &x1max = size.d_view(m).x1max;
+          Real x1v = CellCenterX(i-is, nx1, x1min, x1max);
+          Real &x2min = size.d_view(m).x2min;
+          Real &x2max = size.d_view(m).x2max;
+          Real x2v = LeftEdgeX(j-js, nx2, x2min, x2max);
+          Real &x3min = size.d_view(m).x3min;
+          Real &x3max = size.d_view(m).x3max;
+          Real x3v = CellCenterX(k-ks, nx3, x3min, x3max);
+          SingleStateLLF_GRMHD(wL, wR, bxi, x1v, x2v, x3v, IVY, coord, eos, flux);
+        } else if (is_sr) {
+          SingleStateLLF_SRMHD(wL, wR, bxi, eos, flux);
+        } else {
+          SingleStateLLF_MHD(wL, wR, bxi, eos, flux);
+        }
+
+        // store SOFC fluxes, permutting indices.
+        flx2(m,IDN,k,j,i) = flux.d;
+        flx2(m,IM2,k,j,i) = flux.mx;
+        flx2(m,IM3,k,j,i) = flux.my;
+        flx2(m,IM1,k,j,i) = flux.mz;
+        if (eos.is_ideal) {flx2(m,IEN,k,j,i) = flux.e;}
+        e1x2_(m,k,j,i) = flux.by;
+        e3x2_(m,k,j,i) = flux.bz;
+      }
+
+      if (three_d && k >= ks+1) {
+        // PLM left/right states at k-face (permutting components for 1D solver)
+        MHDPrim1D wL, wR;
+        Real ql_k, qr_km1, ql_kp1, qr_k;
+        PLM(w0_(m,IDN,k-2,j,i), w0_(m,IDN,k-1,j,i), w0_(m,IDN,k,j,i), ql_k, qr_km1);
+        wL.d = ql_k;
+        PLM(w0_(m,IDN,k-1,j,i), w0_(m,IDN,k,j,i), w0_(m,IDN,k+1,j,i), ql_kp1, qr_k);
+        wR.d = qr_k;
+        PLM(w0_(m,IVZ,k-2,j,i), w0_(m,IVZ,k-1,j,i), w0_(m,IVZ,k,j,i), ql_k, qr_km1);
+        wL.vx = ql_k;
+        PLM(w0_(m,IVZ,k-1,j,i), w0_(m,IVZ,k,j,i), w0_(m,IVZ,k+1,j,i), ql_kp1, qr_k);
+        wR.vx = qr_k;
+        PLM(w0_(m,IVX,k-2,j,i), w0_(m,IVX,k-1,j,i), w0_(m,IVX,k,j,i), ql_k, qr_km1);
+        wL.vy = ql_k;
+        PLM(w0_(m,IVX,k-1,j,i), w0_(m,IVX,k,j,i), w0_(m,IVX,k+1,j,i), ql_kp1, qr_k);
+        wR.vy = qr_k;
+        PLM(w0_(m,IVY,k-2,j,i), w0_(m,IVY,k-1,j,i), w0_(m,IVY,k,j,i), ql_k, qr_km1);
+        wL.vz = ql_k;
+        PLM(w0_(m,IVY,k-1,j,i), w0_(m,IVY,k,j,i), w0_(m,IVY,k+1,j,i), ql_kp1, qr_k);
+        wR.vz = qr_k;
+        if (eos.is_ideal) {
+          PLM(w0_(m,IEN,k-2,j,i), w0_(m,IEN,k-1,j,i), w0_(m,IEN,k,j,i), ql_k, qr_km1);
+          wL.e = ql_k;
+          PLM(w0_(m,IEN,k-1,j,i), w0_(m,IEN,k,j,i), w0_(m,IEN,k+1,j,i), ql_kp1, qr_k);
+          wR.e = qr_k;
+        }
+        PLM(bcc0_(m,IBX,k-2,j,i), bcc0_(m,IBX,k-1,j,i), bcc0_(m,IBX,k,j,i), ql_k, qr_km1);
+        wL.by = ql_k;
+        PLM(bcc0_(m,IBX,k-1,j,i), bcc0_(m,IBX,k,j,i), bcc0_(m,IBX,k+1,j,i), ql_kp1, qr_k);
+        wR.by = qr_k;
+        PLM(bcc0_(m,IBY,k-2,j,i), bcc0_(m,IBY,k-1,j,i), bcc0_(m,IBY,k,j,i), ql_k, qr_km1);
+        wL.bz = ql_k;
+        PLM(bcc0_(m,IBY,k-1,j,i), bcc0_(m,IBY,k,j,i), bcc0_(m,IBY,k+1,j,i), ql_kp1, qr_k);
+        wR.bz = qr_k;
+
+        // compute new SOFC (PLM+LLF) flux at k-face
+        Real bxi = b0_.x3f(m,k,j,i);
+        MHDCons1D flux;
+        if (is_gr) {
+          Real &x1min = size.d_view(m).x1min;
+          Real &x1max = size.d_view(m).x1max;
+          Real x1v = CellCenterX(i-is, nx1, x1min, x1max);
+          Real &x2min = size.d_view(m).x2min;
+          Real &x2max = size.d_view(m).x2max;
+          Real x2v = CellCenterX(j-js, nx2, x2min, x2max);
+          Real &x3min = size.d_view(m).x3min;
+          Real &x3max = size.d_view(m).x3max;
+          Real x3v = LeftEdgeX(k-ks, nx3, x3min, x3max);
+          SingleStateLLF_GRMHD(wL, wR, bxi, x1v, x2v, x3v, IVZ, coord, eos, flux);
+        } else if (is_sr) {
+          SingleStateLLF_SRMHD(wL, wR, bxi, eos, flux);
+        } else {
+          SingleStateLLF_MHD(wL, wR, bxi, eos, flux);
+        }
+
+        // store SOFC fluxes, permutting indices.
+        flx3(m,IDN,k,j,i) = flux.d;
+        flx3(m,IM3,k,j,i) = flux.mx;
+        flx3(m,IM1,k,j,i) = flux.my;
+        flx3(m,IM2,k,j,i) = flux.mz;
+        if (eos.is_ideal) {flx3(m,IEN,k,j,i) = flux.e;}
+        e2x3_(m,k,j,i) = flux.by;
+        e1x3_(m,k,j,i) = flux.bz;
+      }
+
     }
   });
 
@@ -311,7 +525,7 @@ void MHD::FOFC(Driver *pdriver, int stage) {
   KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
     // Check for FOFC flag
     bool fofc_flag = false;
-    if (use_fofc_) { fofc_flag = fofc_(m,k,j,i); }
+    if (use_fofc_ || use_sofc_) { fofc_flag = fofc_(m,k,j,i); }
 
     // Check for GR + excision
     bool fofc_excision = false;
@@ -319,8 +533,8 @@ void MHD::FOFC(Driver *pdriver, int stage) {
       if (use_excise_) { fofc_excision = excision_flux_(m,k,j,i); }
     }
 
-    // Apply FOFC
-    if (fofc_flag || fofc_excision) {
+    // Apply FOFC (first-order)
+    if (use_fofc_ && (fofc_flag || fofc_excision)) {
       // load W_{i} state
       MHDPrim1D wi;
       wi.d  = w0_(m,IDN,k,j,i);
@@ -479,11 +693,210 @@ void MHD::FOFC(Driver *pdriver, int stage) {
         e2x3_(m,k+1,j,i) = flux.by;
         e1x3_(m,k+1,j,i) = flux.bz;
       }
+    } else if (use_sofc_ && fofc_flag && !fofc_excision) {
+        // Apply SOFC (PLM + LLF) at i+1, j+1, k+1 faces
+        if (i <= ie-1) {
+          // PLM left/right states at (i+1)-face
+          MHDPrim1D wL, wR;
+          Real ql_ip1, qr_i, ql_ip2, qr_ip1;
+          PLM(w0_(m,IDN,k,j,i-1), w0_(m,IDN,k,j,i), w0_(m,IDN,k,j,i+1), ql_ip1, qr_i);
+          wL.d = ql_ip1;
+          PLM(w0_(m,IDN,k,j,i), w0_(m,IDN,k,j,i+1), w0_(m,IDN,k,j,i+2), ql_ip2, qr_ip1);
+          wR.d = qr_ip1;
+          PLM(w0_(m,IVX,k,j,i-1), w0_(m,IVX,k,j,i), w0_(m,IVX,k,j,i+1), ql_ip1, qr_i);
+          wL.vx = ql_ip1;
+          PLM(w0_(m,IVX,k,j,i), w0_(m,IVX,k,j,i+1), w0_(m,IVX,k,j,i+2), ql_ip2, qr_ip1);
+          wR.vx = qr_ip1;
+          PLM(w0_(m,IVY,k,j,i-1), w0_(m,IVY,k,j,i), w0_(m,IVY,k,j,i+1), ql_ip1, qr_i);
+          wL.vy = ql_ip1;
+          PLM(w0_(m,IVY,k,j,i), w0_(m,IVY,k,j,i+1), w0_(m,IVY,k,j,i+2), ql_ip2, qr_ip1);
+          wR.vy = qr_ip1;
+          PLM(w0_(m,IVZ,k,j,i-1), w0_(m,IVZ,k,j,i), w0_(m,IVZ,k,j,i+1), ql_ip1, qr_i);
+          wL.vz = ql_ip1;
+          PLM(w0_(m,IVZ,k,j,i), w0_(m,IVZ,k,j,i+1), w0_(m,IVZ,k,j,i+2), ql_ip2, qr_ip1);
+          wR.vz = qr_ip1;
+          if (eos.is_ideal) {
+            PLM(w0_(m,IEN,k,j,i-1), w0_(m,IEN,k,j,i), w0_(m,IEN,k,j,i+1), ql_ip1, qr_i);
+            wL.e = ql_ip1;
+            PLM(w0_(m,IEN,k,j,i), w0_(m,IEN,k,j,i+1), w0_(m,IEN,k,j,i+2), ql_ip2, qr_ip1);
+            wR.e = qr_ip1;
+          }
+          PLM(bcc0_(m,IBY,k,j,i-1), bcc0_(m,IBY,k,j,i), bcc0_(m,IBY,k,j,i+1), ql_ip1, qr_i);
+          wL.by = ql_ip1;
+          PLM(bcc0_(m,IBY,k,j,i), bcc0_(m,IBY,k,j,i+1), bcc0_(m,IBY,k,j,i+2), ql_ip2, qr_ip1);
+          wR.by = qr_ip1;
+          PLM(bcc0_(m,IBZ,k,j,i-1), bcc0_(m,IBZ,k,j,i), bcc0_(m,IBZ,k,j,i+1), ql_ip1, qr_i);
+          wL.bz = ql_ip1;
+          PLM(bcc0_(m,IBZ,k,j,i), bcc0_(m,IBZ,k,j,i+1), bcc0_(m,IBZ,k,j,i+2), ql_ip2, qr_ip1);
+          wR.bz = qr_ip1;
+
+          // compute new SOFC (PLM+LLF) flux at (i+1)-face
+          {
+            Real bxi = b0_.x1f(m,k,j,i+1);
+            MHDCons1D flux;
+            if (is_gr) {
+              Real &x1min = size.d_view(m).x1min;
+              Real &x1max = size.d_view(m).x1max;
+              Real x1v = LeftEdgeX(i+1-is, nx1, x1min, x1max);
+              Real &x2min = size.d_view(m).x2min;
+              Real &x2max = size.d_view(m).x2max;
+              Real x2v = CellCenterX(j-js, nx2, x2min, x2max);
+              Real &x3min = size.d_view(m).x3min;
+              Real &x3max = size.d_view(m).x3max;
+              Real x3v = CellCenterX(k-ks, nx3, x3min, x3max);
+              SingleStateLLF_GRMHD(wL, wR, bxi, x1v, x2v, x3v, IVX, coord, eos, flux);
+            } else if (is_sr) {
+              SingleStateLLF_SRMHD(wL, wR, bxi, eos, flux);
+            } else {
+              SingleStateLLF_MHD(wL, wR, bxi, eos, flux);
+            }
+
+            // store SOFC fluxes.
+            flx1(m,IDN,k,j,i+1) = flux.d;
+            flx1(m,IM1,k,j,i+1) = flux.mx;
+            flx1(m,IM2,k,j,i+1) = flux.my;
+            flx1(m,IM3,k,j,i+1) = flux.mz;
+            if (eos.is_ideal) {flx1(m,IEN,k,j,i+1) = flux.e;}
+            e3x1_(m,k,j,i+1) = flux.by;
+            e2x1_(m,k,j,i+1) = flux.bz;
+          }
+        }
+
+        if (multi_d && j <= je-1) {
+          // PLM left/right states at (j+1)-face (permutting components for 1D solver)
+          MHDPrim1D wL, wR;
+          Real ql_jp1, qr_j, ql_jp2, qr_jp1;
+          PLM(w0_(m,IDN,k,j-1,i), w0_(m,IDN,k,j,i), w0_(m,IDN,k,j+1,i), ql_jp1, qr_j);
+          wL.d = ql_jp1;
+          PLM(w0_(m,IDN,k,j,i), w0_(m,IDN,k,j+1,i), w0_(m,IDN,k,j+2,i), ql_jp2, qr_jp1);
+          wR.d = qr_jp1;
+          PLM(w0_(m,IVY,k,j-1,i), w0_(m,IVY,k,j,i), w0_(m,IVY,k,j+1,i), ql_jp1, qr_j);
+          wL.vx = ql_jp1;
+          PLM(w0_(m,IVY,k,j,i), w0_(m,IVY,k,j+1,i), w0_(m,IVY,k,j+2,i), ql_jp2, qr_jp1);
+          wR.vx = qr_jp1;
+          PLM(w0_(m,IVZ,k,j-1,i), w0_(m,IVZ,k,j,i), w0_(m,IVZ,k,j+1,i), ql_jp1, qr_j);
+          wL.vy = ql_jp1;
+          PLM(w0_(m,IVZ,k,j,i), w0_(m,IVZ,k,j+1,i), w0_(m,IVZ,k,j+2,i), ql_jp2, qr_jp1);
+          wR.vy = qr_jp1;
+          PLM(w0_(m,IVX,k,j-1,i), w0_(m,IVX,k,j,i), w0_(m,IVX,k,j+1,i), ql_jp1, qr_j);
+          wL.vz = ql_jp1;
+          PLM(w0_(m,IVX,k,j,i), w0_(m,IVX,k,j+1,i), w0_(m,IVX,k,j+2,i), ql_jp2, qr_jp1);
+          wR.vz = qr_jp1;
+          if (eos.is_ideal) {
+            PLM(w0_(m,IEN,k,j-1,i), w0_(m,IEN,k,j,i), w0_(m,IEN,k,j+1,i), ql_jp1, qr_j);
+            wL.e = ql_jp1;
+            PLM(w0_(m,IEN,k,j,i), w0_(m,IEN,k,j+1,i), w0_(m,IEN,k,j+2,i), ql_jp2, qr_jp1);
+            wR.e = qr_jp1;
+          }
+          PLM(bcc0_(m,IBZ,k,j-1,i), bcc0_(m,IBZ,k,j,i), bcc0_(m,IBZ,k,j+1,i), ql_jp1, qr_j);
+          wL.by = ql_jp1;
+          PLM(bcc0_(m,IBZ,k,j,i), bcc0_(m,IBZ,k,j+1,i), bcc0_(m,IBZ,k,j+2,i), ql_jp2, qr_jp1);
+          wR.by = qr_jp1;
+          PLM(bcc0_(m,IBX,k,j-1,i), bcc0_(m,IBX,k,j,i), bcc0_(m,IBX,k,j+1,i), ql_jp1, qr_j);
+          wL.bz = ql_jp1;
+          PLM(bcc0_(m,IBX,k,j,i), bcc0_(m,IBX,k,j+1,i), bcc0_(m,IBX,k,j+2,i), ql_jp2, qr_jp1);
+          wR.bz = qr_jp1;
+
+          // compute new SOFC (PLM+LLF) flux at (j+1)-face
+          Real bxi = b0_.x2f(m,k,j+1,i);
+          MHDCons1D flux;
+          if (is_gr) {
+            Real &x1min = size.d_view(m).x1min;
+            Real &x1max = size.d_view(m).x1max;
+            Real x1v = CellCenterX(i-is, nx1, x1min, x1max);
+            Real &x2min = size.d_view(m).x2min;
+            Real &x2max = size.d_view(m).x2max;
+            Real x2v = LeftEdgeX(j+1-js, nx2, x2min, x2max);
+            Real &x3min = size.d_view(m).x3min;
+            Real &x3max = size.d_view(m).x3max;
+            Real x3v = CellCenterX(k-ks, nx3, x3min, x3max);
+            SingleStateLLF_GRMHD(wL, wR, bxi, x1v, x2v, x3v, IVY, coord, eos, flux);
+          } else if (is_sr) {
+            SingleStateLLF_SRMHD(wL, wR, bxi, eos, flux);
+          } else {
+            SingleStateLLF_MHD(wL, wR, bxi, eos, flux);
+          }
+
+          // store SOFC fluxes, permutting indices.
+          flx2(m,IDN,k,j+1,i) = flux.d;
+          flx2(m,IM2,k,j+1,i) = flux.mx;
+          flx2(m,IM3,k,j+1,i) = flux.my;
+          flx2(m,IM1,k,j+1,i) = flux.mz;
+          if (eos.is_ideal) {flx2(m,IEN,k,j+1,i) = flux.e;}
+          e1x2_(m,k,j+1,i) = flux.by;
+          e3x2_(m,k,j+1,i) = flux.bz;
+        }
+
+        if (three_d && k <= ke-1) {
+          // PLM left/right states at (k+1)-face (permutting components for 1D solver)
+          MHDPrim1D wL, wR;
+          Real ql_kp1, qr_k, ql_kp2, qr_kp1;
+          PLM(w0_(m,IDN,k-1,j,i), w0_(m,IDN,k,j,i), w0_(m,IDN,k+1,j,i), ql_kp1, qr_k);
+          wL.d = ql_kp1;
+          PLM(w0_(m,IDN,k,j,i), w0_(m,IDN,k+1,j,i), w0_(m,IDN,k+2,j,i), ql_kp2, qr_kp1);
+          wR.d = qr_kp1;
+          PLM(w0_(m,IVZ,k-1,j,i), w0_(m,IVZ,k,j,i), w0_(m,IVZ,k+1,j,i), ql_kp1, qr_k);
+          wL.vx = ql_kp1;
+          PLM(w0_(m,IVZ,k,j,i), w0_(m,IVZ,k+1,j,i), w0_(m,IVZ,k+2,j,i), ql_kp2, qr_kp1);
+          wR.vx = qr_kp1;
+          PLM(w0_(m,IVX,k-1,j,i), w0_(m,IVX,k,j,i), w0_(m,IVX,k+1,j,i), ql_kp1, qr_k);
+          wL.vy = ql_kp1;
+          PLM(w0_(m,IVX,k,j,i), w0_(m,IVX,k+1,j,i), w0_(m,IVX,k+2,j,i), ql_kp2, qr_kp1);
+          wR.vy = qr_kp1;
+          PLM(w0_(m,IVY,k-1,j,i), w0_(m,IVY,k,j,i), w0_(m,IVY,k+1,j,i), ql_kp1, qr_k);
+          wL.vz = ql_kp1;
+          PLM(w0_(m,IVY,k,j,i), w0_(m,IVY,k+1,j,i), w0_(m,IVY,k+2,j,i), ql_kp2, qr_kp1);
+          wR.vz = qr_kp1;
+          if (eos.is_ideal) {
+            PLM(w0_(m,IEN,k-1,j,i), w0_(m,IEN,k,j,i), w0_(m,IEN,k+1,j,i), ql_kp1, qr_k);
+            wL.e = ql_kp1;
+            PLM(w0_(m,IEN,k,j,i), w0_(m,IEN,k+1,j,i), w0_(m,IEN,k+2,j,i), ql_kp2, qr_kp1);
+            wR.e = qr_kp1;
+          }
+          PLM(bcc0_(m,IBX,k-1,j,i), bcc0_(m,IBX,k,j,i), bcc0_(m,IBX,k+1,j,i), ql_kp1, qr_k);
+          wL.by = ql_kp1;
+          PLM(bcc0_(m,IBX,k,j,i), bcc0_(m,IBX,k+1,j,i), bcc0_(m,IBX,k+2,j,i), ql_kp2, qr_kp1);
+          wR.by = qr_kp1;
+          PLM(bcc0_(m,IBY,k-1,j,i), bcc0_(m,IBY,k,j,i), bcc0_(m,IBY,k+1,j,i), ql_kp1, qr_k);
+          wL.bz = ql_kp1;
+          PLM(bcc0_(m,IBY,k,j,i), bcc0_(m,IBY,k+1,j,i), bcc0_(m,IBY,k+2,j,i), ql_kp2, qr_kp1);
+          wR.bz = qr_kp1;
+
+          // compute new SOFC (PLM+LLF) flux at (k+1)-face
+          Real bxi = b0_.x3f(m,k+1,j,i);
+          MHDCons1D flux;
+          if (is_gr) {
+            Real &x1min = size.d_view(m).x1min;
+            Real &x1max = size.d_view(m).x1max;
+            Real x1v = CellCenterX(i-is, nx1, x1min, x1max);
+            Real &x2min = size.d_view(m).x2min;
+            Real &x2max = size.d_view(m).x2max;
+            Real x2v = CellCenterX(j-js, nx2, x2min, x2max);
+            Real &x3min = size.d_view(m).x3min;
+            Real &x3max = size.d_view(m).x3max;
+            Real x3v = LeftEdgeX(k+1-ks, nx3, x3min, x3max);
+            SingleStateLLF_GRMHD(wL, wR, bxi, x1v, x2v, x3v, IVZ, coord, eos, flux);
+          } else if (is_sr) {
+            SingleStateLLF_SRMHD(wL, wR, bxi, eos, flux);
+          } else {
+            SingleStateLLF_MHD(wL, wR, bxi, eos, flux);
+          }
+
+          // store SOFC fluxes, permutting indices.
+          flx3(m,IDN,k+1,j,i) = flux.d;
+          flx3(m,IM3,k+1,j,i) = flux.mx;
+          flx3(m,IM1,k+1,j,i) = flux.my;
+          flx3(m,IM2,k+1,j,i) = flux.mz;
+          if (eos.is_ideal) {flx3(m,IEN,k+1,j,i) = flux.e;}
+          e2x3_(m,k+1,j,i) = flux.by;
+          e1x3_(m,k+1,j,i) = flux.bz;
+        }
+
     }
   });
 
-  // reset FOFC flag (do not reset excision flag)
-  if (use_fofc_) {
+  // reset FOFC/SOFC flag (do not reset excision flag)
+  if (use_fofc_ || use_sofc_) {
     Kokkos::deep_copy(fofc, false);
   }
 

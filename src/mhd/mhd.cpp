@@ -175,8 +175,9 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
 
   // for time-evolving problems, continue to construct methods, allocate arrays
   if (evolution_t.compare("stationary") != 0) {
-    // determine if FOFC is enabled
+    // determine if FOFC and/or SOFC are enabled
     use_fofc = pin->GetOrAddBoolean("mhd","fofc",false);
+    use_sofc = pin->GetOrAddBoolean("mhd","sofc",false);
 
     // select reconstruction method (default PLM)
     std::string xorder = pin->GetOrAddString("mhd","reconstruct","plm");
@@ -186,9 +187,9 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
       recon_method = ReconstructionMethod::plm;
       // check that nghost > 2 with PLM+FOFC
       auto &indcs = pmy_pack->pmesh->mb_indcs;
-      if (use_fofc && indcs.ng < 3) {
+      if ((use_fofc || use_sofc) && indcs.ng < 3) {
         std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-          << std::endl << "FOFC and " << xorder << " reconstruction requires at "
+          << std::endl << "FOFC/SOFC and " << xorder << " reconstruction requires at "
           << "least 3 ghost zones, but <mesh>/nghost=" << indcs.ng << std::endl;
         std::exit(EXIT_FAILURE);
       }
@@ -203,10 +204,10 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
           << "but <mesh>/nghost=" << indcs.ng << std::endl;
         std::exit(EXIT_FAILURE);
       }
-      // check that nghost > 3 with PPM4(or PPMX or WENOZ)+FOFC
-      if (use_fofc && indcs.ng < 4) {
+      // check that nghost > 3 with PPM4(or PPMX or WENOZ)+FOFC/SOFC
+      if ((use_fofc || use_sofc) && indcs.ng < 4) {
         std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-          << std::endl << "FOFC and " << xorder << " reconstruction requires at "
+          << std::endl << "FOFC/SOFC and " << xorder << " reconstruction requires at "
           << "least 4 ghost zones, but <mesh>/nghost=" << indcs.ng << std::endl;
         std::exit(EXIT_FAILURE);
       }
@@ -331,8 +332,8 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
       Kokkos::realloc(e2_cc, nmb, ncells3, ncells2, ncells1);
       Kokkos::realloc(e3_cc, nmb, ncells3, ncells2, ncells1);
 
-      // allocate array of flags used with FOFC
-      if (use_fofc) {
+      // allocate arrays used with FOFC/SOFC
+      if (use_fofc || use_sofc) {
         int nvars = (pmy_pack->pcoord->is_dynamical_relativistic) ? nmhd+nscalars : nmhd;
         Kokkos::realloc(fofc,    nmb, ncells3, ncells2, ncells1);
         Kokkos::realloc(utest,   nmb, nvars, ncells3, ncells2, ncells1);

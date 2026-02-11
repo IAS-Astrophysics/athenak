@@ -206,8 +206,8 @@ TaskStatus MHD::Fluxes(Driver *pdrive, int stage) {
     pcond->AddHeatFlux(w0, peos->eos_data, uflx);
   }
 
-  // call FOFC if necessary
-  if (use_fofc) {
+  // call FOFC/SOFC if necessary
+  if (use_fofc || use_sofc) {
     FOFC(pdrive, stage);
   } else if (pmy_pack->pcoord->is_general_relativistic) {
     if (pmy_pack->pcoord->coord_data.bh_excise) {

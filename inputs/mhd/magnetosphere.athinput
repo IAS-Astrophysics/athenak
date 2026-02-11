@@ -120,11 +120,13 @@ dfloor      = 1.e-9    # Density floor
 pfloor      = 1.e-12   # Pressure floor
 rsolver     = hlld     # Riemann-solver to be used
 fofc        = true     # First order flux correction
+nscalars    = 1        # FOFC diagnostic passive scalar (temporary)
 
 <problem>
 pgen_name = magsph      # problem generator name
 user_srcs = true        # Switch the user source terms on
 user_esrcs = true       # Switch the user e field mask on
+fofc_scalar_tau = 1.0   # Damping timescale for FOFC diagnostic scalar (0 = off)
 user_hist = false       # Switch the user history function on
 
 thetaw = 0.0            # tilt of stellar rotation axis (counterclockwise rot about y-axis)
