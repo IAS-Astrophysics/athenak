@@ -71,7 +71,6 @@ MeshBlockPack::~MeshBlockPack() {
   if (phydro != nullptr) {delete phydro;}
   if (punit  != nullptr) {delete punit;}
   delete pcoord;
-  // must be last, since it calls ~MeshBoundaryValues() which (MPI) uses pmy_pack->pmb->nnghbr
   delete pmb;
 }
 
