@@ -1259,6 +1259,22 @@ void CoolingSourceTerms(Mesh* pm, const Real bdt) { //CF:CHECKED
         Real eint_target = p_over_r/(mp_.gamma_gas-1.0)*dens;
         Real dE = eint - eint_target;
         u0_(m,IEN,k,j,i) -= dE*dfrac;
+
+        // Real eint = u0_(m,IEN,k,j,i)-0.5*(SQR(u0_(m,IM1,k,j,i))+SQR(u0_(m,IM2,k,j,i))
+        //                                     +SQR(u0_(m,IM3,k,j,i)))/u0_(m,IDN,k,j,i);
+        // if (mp_.magnetic_fields_enabled) {
+        //     eint = eint-0.5*(SQR(bcc0_(m,IBX,k,j,i))+SQR(bcc0_(m,IBY,k,j,i))+SQR(bcc0_(m,IBZ,k,j,i)));
+        // }
+
+        // Real rad(0.0),phi(0.0),z(0.0);
+        // Real p_over_r(0.0);
+        // GetCylCoord(mp_,rad,phi,z,x1v,x2v,x3v);
+        // p_over_r = PoverR(mp_,rad);
+        
+        // Real dtr = fmax(mp_.tcool*2.*M_PI/sqrt(mp_.gm0/rad/rad/rad),bdt);
+        // Real dfrac=bdt/dtr;
+        // Real dE=eint-p_over_r/(mp_.gamma_gas-1.0)*u0_(m,IDN,k,j,i);
+        // u0_(m,IEN,k,j,i) -= dE*dfrac;
         
     }); // end par_for
 
