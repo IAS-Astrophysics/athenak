@@ -32,7 +32,7 @@ SphericalGrid::SphericalGrid(MeshBlockPack *ppack, int nlev, Real rad, int nintp
     interp_wghts("interp_wghts",1,1,1),
     interp_vals("interp_vals",1,1) {
   // reallocate and set interpolation coordinates, indices, and weights
-  ninterp = (nintp <= 0) ? pmy_pack->pmesh->mb_indcs.ng*2 : nintp;
+  ninterp = (nintp <= 0) ? pmy_pack->pmesh->mb_indcs.ng*2+1 : nintp;
   if (ninterp > pmy_pack->pmesh->mb_indcs.ng*2+1) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
               << "ninterp = " << ninterp << " exceeds maximum allowed value of "
