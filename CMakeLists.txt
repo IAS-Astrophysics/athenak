@@ -161,7 +161,7 @@ if (${PROBLEM} STREQUAL "z4c_spectre_bbh")
   target_link_libraries(athena PRIVATE spectre::Exporter)
 endif()
 
-if (${PROBLEM} STREQUAL "elliptica_bns")
+if (${PROBLEM} STREQUAL "elliptica_bns" OR ${PROBLEM} STREQUAL "elliptica_bhns")
   target_include_directories(athena PRIVATE
       ${CMAKE_SOURCE_DIR}/Elliptica_ID_Reader/include)
   target_link_libraries(athena PUBLIC
