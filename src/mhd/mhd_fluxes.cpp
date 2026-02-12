@@ -15,6 +15,7 @@
 #include "mesh/mesh.hpp"
 #include "mhd.hpp"
 #include "eos/eos.hpp"
+#include "coordinates/cell_locations.hpp"
 #include "reconstruct/dc.hpp"
 #include "reconstruct/plm.hpp"
 #include "reconstruct/ppm.hpp"
@@ -30,6 +31,39 @@
 // #include "mhd/rsolvers/roe_mhd.hpp"
 
 namespace mhd {
+//----------------------------------------------------------------------------------------
+//! \fn InReconRegion
+//! \brief Return true if cell (m,k,j,i) is inside the user-defined reconstruction region
+//! (box or sphere in problem coordinates).
+
+KOKKOS_INLINE_FUNCTION
+bool InReconRegion(const int m, const int k, const int j, const int i,
+                   const RegionIndcs &indcs, const DualArray1D<RegionSize> &size,
+                   const bool use_box,
+                   const Real rx1min, const Real rx1max, const Real rx2min, const Real rx2max,
+                   const Real rx3min, const Real rx3max,
+                   const Real cx1, const Real cx2, const Real cx3, const Real r_radius) {
+  int is = indcs.is, js = indcs.js, ks = indcs.ks;
+  int nx1 = indcs.nx1, nx2 = indcs.nx2, nx3 = indcs.nx3;
+  Real &x1min = size.d_view(m).x1min;
+  Real &x1max = size.d_view(m).x1max;
+  Real &x2min = size.d_view(m).x2min;
+  Real &x2max = size.d_view(m).x2max;
+  Real &x3min = size.d_view(m).x3min;
+  Real &x3max = size.d_view(m).x3max;
+  Real x1 = CellCenterX(i - is, nx1, x1min, x1max);
+  Real x2 = CellCenterX(j - js, nx2, x2min, x2max);
+  Real x3 = CellCenterX(k - ks, nx3, x3min, x3max);
+  if (use_box) {
+    return (x1 >= rx1min && x1 <= rx1max &&
+            x2 >= rx2min && x2 <= rx2max &&
+            x3 >= rx3min && x3 <= rx3max);
+  } else {
+    Real dx1 = x1 - cx1, dx2 = x2 - cx2, dx3 = x3 - cx3;
+    return (dx1*dx1 + dx2*dx2 + dx3*dx3 <= r_radius*r_radius);
+  }
+}
+
 //----------------------------------------------------------------------------------------
 //! \fn void MHD::CalculateFlux
 //! \brief Calculate fluxes of conserved variables, and face-centered area-averaged EMFs
@@ -58,6 +92,20 @@ void MHD::CalculateFluxes(Driver *pdriver, int stage) {
   auto &coord_ = pmy_pack->pcoord->coord_data;
   auto &w0_ = w0;
   auto &b0_ = bcc0;
+
+  const bool use_recon_region_ = use_recon_region;
+  const auto recon_region_method_ = recon_region_method;
+  const bool recon_region_use_box_ = recon_region_use_box_;
+  const Real recon_region_x1min_ = recon_region_x1min_;
+  const Real recon_region_x1max_ = recon_region_x1max_;
+  const Real recon_region_x2min_ = recon_region_x2min_;
+  const Real recon_region_x2max_ = recon_region_x2max_;
+  const Real recon_region_x3min_ = recon_region_x3min_;
+  const Real recon_region_x3max_ = recon_region_x3max_;
+  const Real recon_region_x1_center_ = recon_region_x1_center_;
+  const Real recon_region_x2_center_ = recon_region_x2_center_;
+  const Real recon_region_x3_center_ = recon_region_x3_center_;
+  const Real recon_region_radius_ = recon_region_radius_;
 
   //--------------------------------------------------------------------------------------
   // i-direction
@@ -113,6 +161,50 @@ void MHD::CalculateFluxes(Driver *pdriver, int stage) {
     }
     // Sync all threads in the team so that scratch memory is consistent
     member.team_barrier();
+
+    // Overwrite wl/wr at faces inside recon region with alternate method (PLM or DC)
+    if (use_recon_region_) {
+      auto indcs_r = indcs_;
+      auto size_r = size_;
+      par_for_inner(member, il, iu, [&](const int i) {
+        bool face_in_region = InReconRegion(m, k, j, i-1, indcs_r, size_r,
+            recon_region_use_box_, recon_region_x1min_, recon_region_x1max_,
+            recon_region_x2min_, recon_region_x2max_, recon_region_x3min_, recon_region_x3max_,
+            recon_region_x1_center_, recon_region_x2_center_, recon_region_x3_center_,
+            recon_region_radius_) ||
+            InReconRegion(m, k, j, i, indcs_r, size_r,
+            recon_region_use_box_, recon_region_x1min_, recon_region_x1max_,
+            recon_region_x2min_, recon_region_x2max_, recon_region_x3min_, recon_region_x3max_,
+            recon_region_x1_center_, recon_region_x2_center_, recon_region_x3_center_,
+            recon_region_radius_);
+        if (!face_in_region) return;
+        if (recon_region_method_ == ReconstructionMethod::dc) {
+          for (int n = 0; n < nvars; ++n) {
+            wl(n, i) = w0_(m, n, k, j, i-1);
+            wr(n, i) = w0_(m, n, k, j, i);
+          }
+          for (int b = 0; b < 3; ++b) {
+            bl(b, i) = b0_(m, b, k, j, i-1);
+            br(b, i) = b0_(m, b, k, j, i);
+          }
+        } else {
+          Real ql_i, qr_im1, ql_ip1, qr_i;
+          for (int n = 0; n < nvars; ++n) {
+            PLM(w0_(m, n, k, j, i-2), w0_(m, n, k, j, i-1), w0_(m, n, k, j, i), ql_i, qr_im1);
+            wl(n, i) = ql_i;
+            PLM(w0_(m, n, k, j, i-1), w0_(m, n, k, j, i), w0_(m, n, k, j, i+1), ql_ip1, qr_i);
+            wr(n, i) = qr_i;
+          }
+          for (int b = 0; b < 3; ++b) {
+            PLM(b0_(m, b, k, j, i-2), b0_(m, b, k, j, i-1), b0_(m, b, k, j, i), ql_i, qr_im1);
+            bl(b, i) = ql_i;
+            PLM(b0_(m, b, k, j, i-1), b0_(m, b, k, j, i), b0_(m, b, k, j, i+1), ql_ip1, qr_i);
+            br(b, i) = qr_i;
+          }
+        }
+      });
+      member.team_barrier();
+    }
 
     // compute fluxes over [is,ie+1].  MHD RS also computes electric fields, where
     // (IBY) component of flx = E_{z} = -(v x B)_{z} = -(v1*b2 - v2*b1)
@@ -227,10 +319,86 @@ void MHD::CalculateFluxes(Driver *pdriver, int stage) {
         }
         member.team_barrier();
 
-        // compute fluxes over [js,je+1].  MHD RS also computes electric fields, where
-        // (IBY) component of flx = E_{x} = -(v x B)_{x} = -(v2*b3 - v3*b2)
-        // (IBZ) component of flx = E_{z} = -(v x B)_{z} =  (v2*b1 - v1*b2)
         if (j>jl) {
+          // Overwrite wl/wr at faces inside recon region with alternate method (PLM or DC)
+          if (use_recon_region_) {
+            auto indcs_r = indcs_;
+            auto size_r = size_;
+            par_for_inner(member, is-1, ie+1, [&](const int i) {
+              bool face_in_region = InReconRegion(m, k, j-1, i, indcs_r, size_r,
+                  recon_region_use_box_, recon_region_x1min_, recon_region_x1max_,
+                  recon_region_x2min_, recon_region_x2max_, recon_region_x3min_, recon_region_x3max_,
+                  recon_region_x1_center_, recon_region_x2_center_, recon_region_x3_center_,
+                  recon_region_radius_) ||
+                  InReconRegion(m, k, j, i, indcs_r, size_r,
+                  recon_region_use_box_, recon_region_x1min_, recon_region_x1max_,
+                  recon_region_x2min_, recon_region_x2max_, recon_region_x3min_, recon_region_x3max_,
+                  recon_region_x1_center_, recon_region_x2_center_, recon_region_x3_center_,
+                  recon_region_radius_);
+              if (!face_in_region) return;
+              if (recon_region_method_ == ReconstructionMethod::dc) {
+                wl(IDN, i) = w0_(m, IDN, k, j-1, i); wr(IDN, i) = w0_(m, IDN, k, j, i);
+                wl(IVX, i) = w0_(m, IVY, k, j-1, i); wr(IVX, i) = w0_(m, IVY, k, j, i);
+                wl(IVY, i) = w0_(m, IVZ, k, j-1, i); wr(IVY, i) = w0_(m, IVZ, k, j, i);
+                wl(IVZ, i) = w0_(m, IVX, k, j-1, i); wr(IVZ, i) = w0_(m, IVX, k, j, i);
+                if (eos_.is_ideal) {
+                  wl(IEN, i) = w0_(m, IEN, k, j-1, i); wr(IEN, i) = w0_(m, IEN, k, j, i);
+                }
+                bl(0, i) = b0_(m, IBY, k, j-1, i); br(0, i) = b0_(m, IBY, k, j, i);
+                bl(1, i) = b0_(m, IBX, k, j-1, i); br(1, i) = b0_(m, IBX, k, j, i);
+                bl(2, i) = b0_(m, IBZ, k, j-1, i); br(2, i) = b0_(m, IBZ, k, j, i);
+                for (int n = nmhd_; n < nvars; ++n) {
+                  wl(n, i) = w0_(m, n, k, j-1, i); wr(n, i) = w0_(m, n, k, j, i);
+                }
+              } else {
+                Real ql_j, qr_jm1, ql_jp1, qr_j;
+                PLM(w0_(m,IDN,k,j-2,i), w0_(m,IDN,k,j-1,i), w0_(m,IDN,k,j,i), ql_j, qr_jm1);
+                wl(IDN, i) = ql_j;
+                PLM(w0_(m,IDN,k,j-1,i), w0_(m,IDN,k,j,i), w0_(m,IDN,k,j+1,i), ql_jp1, qr_j);
+                wr(IDN, i) = qr_j;
+                PLM(w0_(m,IVY,k,j-2,i), w0_(m,IVY,k,j-1,i), w0_(m,IVY,k,j,i), ql_j, qr_jm1);
+                wl(IVX, i) = ql_j;
+                PLM(w0_(m,IVY,k,j-1,i), w0_(m,IVY,k,j,i), w0_(m,IVY,k,j+1,i), ql_jp1, qr_j);
+                wr(IVX, i) = qr_j;
+                PLM(w0_(m,IVZ,k,j-2,i), w0_(m,IVZ,k,j-1,i), w0_(m,IVZ,k,j,i), ql_j, qr_jm1);
+                wl(IVY, i) = ql_j;
+                PLM(w0_(m,IVZ,k,j-1,i), w0_(m,IVZ,k,j,i), w0_(m,IVZ,k,j+1,i), ql_jp1, qr_j);
+                wr(IVY, i) = qr_j;
+                PLM(w0_(m,IVX,k,j-2,i), w0_(m,IVX,k,j-1,i), w0_(m,IVX,k,j,i), ql_j, qr_jm1);
+                wl(IVZ, i) = ql_j;
+                PLM(w0_(m,IVX,k,j-1,i), w0_(m,IVX,k,j,i), w0_(m,IVX,k,j+1,i), ql_jp1, qr_j);
+                wr(IVZ, i) = qr_j;
+                if (eos_.is_ideal) {
+                  PLM(w0_(m,IEN,k,j-2,i), w0_(m,IEN,k,j-1,i), w0_(m,IEN,k,j,i), ql_j, qr_jm1);
+                  wl(IEN, i) = ql_j;
+                  PLM(w0_(m,IEN,k,j-1,i), w0_(m,IEN,k,j,i), w0_(m,IEN,k,j+1,i), ql_jp1, qr_j);
+                  wr(IEN, i) = qr_j;
+                }
+                PLM(b0_(m,IBY,k,j-2,i), b0_(m,IBY,k,j-1,i), b0_(m,IBY,k,j,i), ql_j, qr_jm1);
+                bl(0, i) = ql_j;
+                PLM(b0_(m,IBY,k,j-1,i), b0_(m,IBY,k,j,i), b0_(m,IBY,k,j+1,i), ql_jp1, qr_j);
+                br(0, i) = qr_j;
+                PLM(b0_(m,IBX,k,j-2,i), b0_(m,IBX,k,j-1,i), b0_(m,IBX,k,j,i), ql_j, qr_jm1);
+                bl(1, i) = ql_j;
+                PLM(b0_(m,IBX,k,j-1,i), b0_(m,IBX,k,j,i), b0_(m,IBX,k,j+1,i), ql_jp1, qr_j);
+                br(1, i) = qr_j;
+                PLM(b0_(m,IBZ,k,j-2,i), b0_(m,IBZ,k,j-1,i), b0_(m,IBZ,k,j,i), ql_j, qr_jm1);
+                bl(2, i) = ql_j;
+                PLM(b0_(m,IBZ,k,j-1,i), b0_(m,IBZ,k,j,i), b0_(m,IBZ,k,j+1,i), ql_jp1, qr_j);
+                br(2, i) = qr_j;
+                for (int n = nmhd_; n < nvars; ++n) {
+                  PLM(w0_(m,n,k,j-2,i), w0_(m,n,k,j-1,i), w0_(m,n,k,j,i), ql_j, qr_jm1);
+                  wl(n, i) = ql_j;
+                  PLM(w0_(m,n,k,j-1,i), w0_(m,n,k,j,i), w0_(m,n,k,j+1,i), ql_jp1, qr_j);
+                  wr(n, i) = qr_j;
+                }
+              }
+            });
+            member.team_barrier();
+          }
+          // compute fluxes over [js,je+1].  MHD RS also computes electric fields, where
+          // (IBY) component of flx = E_{x} = -(v x B)_{x} = -(v2*b3 - v3*b2)
+          // (IBZ) component of flx = E_{z} = -(v x B)_{z} =  (v2*b1 - v1*b2)
           // NOTE(@pdmullen): Capture variables prior to if constexpr.
           auto eos = eos_;
           auto indcs = indcs_;
@@ -347,10 +515,86 @@ void MHD::CalculateFluxes(Driver *pdriver, int stage) {
         }
         member.team_barrier();
 
-        // compute fluxes over [ks,ke+1].  MHD RS also computes electric fields, where
-        // (IBY) component of flx = E_{y} = -(v x B)_{y} = -(v3*b1 - v1*b3)
-        // (IBZ) component of flx = E_{x} = -(v x B)_{x} =  (v3*b2 - v2*b3)
         if (k>kl) {
+          // Overwrite wl/wr at faces inside recon region with alternate method (PLM or DC)
+          if (use_recon_region_) {
+            auto indcs_r = indcs_;
+            auto size_r = size_;
+            par_for_inner(member, is-1, ie+1, [&](const int i) {
+              bool face_in_region = InReconRegion(m, k-1, j, i, indcs_r, size_r,
+                  recon_region_use_box_, recon_region_x1min_, recon_region_x1max_,
+                  recon_region_x2min_, recon_region_x2max_, recon_region_x3min_, recon_region_x3max_,
+                  recon_region_x1_center_, recon_region_x2_center_, recon_region_x3_center_,
+                  recon_region_radius_) ||
+                  InReconRegion(m, k, j, i, indcs_r, size_r,
+                  recon_region_use_box_, recon_region_x1min_, recon_region_x1max_,
+                  recon_region_x2min_, recon_region_x2max_, recon_region_x3min_, recon_region_x3max_,
+                  recon_region_x1_center_, recon_region_x2_center_, recon_region_x3_center_,
+                  recon_region_radius_);
+              if (!face_in_region) return;
+              if (recon_region_method_ == ReconstructionMethod::dc) {
+                wl(IDN, i) = w0_(m, IDN, k-1, j, i); wr(IDN, i) = w0_(m, IDN, k, j, i);
+                wl(IVX, i) = w0_(m, IVZ, k-1, j, i); wr(IVX, i) = w0_(m, IVZ, k, j, i);
+                wl(IVY, i) = w0_(m, IVX, k-1, j, i); wr(IVY, i) = w0_(m, IVX, k, j, i);
+                wl(IVZ, i) = w0_(m, IVY, k-1, j, i); wr(IVZ, i) = w0_(m, IVY, k, j, i);
+                if (eos_.is_ideal) {
+                  wl(IEN, i) = w0_(m, IEN, k-1, j, i); wr(IEN, i) = w0_(m, IEN, k, j, i);
+                }
+                bl(0, i) = b0_(m, IBX, k-1, j, i); br(0, i) = b0_(m, IBX, k, j, i);
+                bl(1, i) = b0_(m, IBY, k-1, j, i); br(1, i) = b0_(m, IBY, k, j, i);
+                bl(2, i) = b0_(m, IBZ, k-1, j, i); br(2, i) = b0_(m, IBZ, k, j, i);
+                for (int n = nmhd_; n < nvars; ++n) {
+                  wl(n, i) = w0_(m, n, k-1, j, i); wr(n, i) = w0_(m, n, k, j, i);
+                }
+              } else {
+                Real ql_k, qr_km1, ql_kp1, qr_k;
+                PLM(w0_(m,IDN,k-2,j,i), w0_(m,IDN,k-1,j,i), w0_(m,IDN,k,j,i), ql_k, qr_km1);
+                wl(IDN, i) = ql_k;
+                PLM(w0_(m,IDN,k-1,j,i), w0_(m,IDN,k,j,i), w0_(m,IDN,k+1,j,i), ql_kp1, qr_k);
+                wr(IDN, i) = qr_k;
+                PLM(w0_(m,IVZ,k-2,j,i), w0_(m,IVZ,k-1,j,i), w0_(m,IVZ,k,j,i), ql_k, qr_km1);
+                wl(IVX, i) = ql_k;
+                PLM(w0_(m,IVZ,k-1,j,i), w0_(m,IVZ,k,j,i), w0_(m,IVZ,k+1,j,i), ql_kp1, qr_k);
+                wr(IVX, i) = qr_k;
+                PLM(w0_(m,IVX,k-2,j,i), w0_(m,IVX,k-1,j,i), w0_(m,IVX,k,j,i), ql_k, qr_km1);
+                wl(IVY, i) = ql_k;
+                PLM(w0_(m,IVX,k-1,j,i), w0_(m,IVX,k,j,i), w0_(m,IVX,k+1,j,i), ql_kp1, qr_k);
+                wr(IVY, i) = qr_k;
+                PLM(w0_(m,IVY,k-2,j,i), w0_(m,IVY,k-1,j,i), w0_(m,IVY,k,j,i), ql_k, qr_km1);
+                wl(IVZ, i) = ql_k;
+                PLM(w0_(m,IVY,k-1,j,i), w0_(m,IVY,k,j,i), w0_(m,IVY,k+1,j,i), ql_kp1, qr_k);
+                wr(IVZ, i) = qr_k;
+                if (eos_.is_ideal) {
+                  PLM(w0_(m,IEN,k-2,j,i), w0_(m,IEN,k-1,j,i), w0_(m,IEN,k,j,i), ql_k, qr_km1);
+                  wl(IEN, i) = ql_k;
+                  PLM(w0_(m,IEN,k-1,j,i), w0_(m,IEN,k,j,i), w0_(m,IEN,k+1,j,i), ql_kp1, qr_k);
+                  wr(IEN, i) = qr_k;
+                }
+                PLM(b0_(m,IBX,k-2,j,i), b0_(m,IBX,k-1,j,i), b0_(m,IBX,k,j,i), ql_k, qr_km1);
+                bl(0, i) = ql_k;
+                PLM(b0_(m,IBX,k-1,j,i), b0_(m,IBX,k,j,i), b0_(m,IBX,k+1,j,i), ql_kp1, qr_k);
+                br(0, i) = qr_k;
+                PLM(b0_(m,IBY,k-2,j,i), b0_(m,IBY,k-1,j,i), b0_(m,IBY,k,j,i), ql_k, qr_km1);
+                bl(1, i) = ql_k;
+                PLM(b0_(m,IBY,k-1,j,i), b0_(m,IBY,k,j,i), b0_(m,IBY,k+1,j,i), ql_kp1, qr_k);
+                br(1, i) = qr_k;
+                PLM(b0_(m,IBZ,k-2,j,i), b0_(m,IBZ,k-1,j,i), b0_(m,IBZ,k,j,i), ql_k, qr_km1);
+                bl(2, i) = ql_k;
+                PLM(b0_(m,IBZ,k-1,j,i), b0_(m,IBZ,k,j,i), b0_(m,IBZ,k+1,j,i), ql_kp1, qr_k);
+                br(2, i) = qr_k;
+                for (int n = nmhd_; n < nvars; ++n) {
+                  PLM(w0_(m,n,k-2,j,i), w0_(m,n,k-1,j,i), w0_(m,n,k,j,i), ql_k, qr_km1);
+                  wl(n, i) = ql_k;
+                  PLM(w0_(m,n,k-1,j,i), w0_(m,n,k,j,i), w0_(m,n,k+1,j,i), ql_kp1, qr_k);
+                  wr(n, i) = qr_k;
+                }
+              }
+            });
+            member.team_barrier();
+          }
+          // compute fluxes over [ks,ke+1].  MHD RS also computes electric fields, where
+          // (IBY) component of flx = E_{y} = -(v x B)_{y} = -(v3*b1 - v1*b3)
+          // (IBZ) component of flx = E_{x} = -(v x B)_{x} =  (v3*b2 - v2*b3)
           // NOTE(@pdmullen): Capture variables prior to if constexpr.
           auto eos = eos_;
           auto indcs = indcs_;

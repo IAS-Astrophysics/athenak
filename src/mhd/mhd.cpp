@@ -225,6 +225,43 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
       std::exit(EXIT_FAILURE);
     }
 
+    // region-based reconstruction switch (optional)
+    std::string recon_region = pin->GetOrAddString("mhd", "recon_region", "none");
+    if (recon_region.compare("none") != 0) {
+      use_recon_region = true;
+      std::string rrm = pin->GetOrAddString("mhd", "recon_region_method", "plm");
+      if (rrm.compare("dc") == 0) {
+        recon_region_method = ReconstructionMethod::dc;
+      } else if (rrm.compare("plm") == 0) {
+        recon_region_method = ReconstructionMethod::plm;
+      } else {
+        std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                  << std::endl << "<mhd> recon_region_method = '" << rrm
+                  << "' not implemented (use 'plm' or 'dc')" << std::endl;
+        std::exit(EXIT_FAILURE);
+      }
+      if (recon_region.compare("box") == 0) {
+        recon_region_use_box_ = true;
+        recon_region_x1min_ = pin->GetReal("mhd", "recon_region_x1min");
+        recon_region_x1max_ = pin->GetReal("mhd", "recon_region_x1max");
+        recon_region_x2min_ = pin->GetReal("mhd", "recon_region_x2min");
+        recon_region_x2max_ = pin->GetReal("mhd", "recon_region_x2max");
+        recon_region_x3min_ = pin->GetReal("mhd", "recon_region_x3min");
+        recon_region_x3max_ = pin->GetReal("mhd", "recon_region_x3max");
+      } else if (recon_region.compare("sphere") == 0) {
+        recon_region_use_box_ = false;
+        recon_region_x1_center_ = pin->GetReal("mhd", "recon_region_x1_center");
+        recon_region_x2_center_ = pin->GetReal("mhd", "recon_region_x2_center");
+        recon_region_x3_center_ = pin->GetReal("mhd", "recon_region_x3_center");
+        recon_region_radius_ = pin->GetReal("mhd", "recon_region_radius");
+      } else {
+        std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                  << std::endl << "<mhd> recon_region = '" << recon_region
+                  << "' not implemented (use 'none', 'box', or 'sphere')" << std::endl;
+        std::exit(EXIT_FAILURE);
+      }
+    }
+
     // select Riemann solver (no default).  Test for compatibility of options
     std::string rsolver = pin->GetString("mhd","rsolver");
     // Special relativistic solvers

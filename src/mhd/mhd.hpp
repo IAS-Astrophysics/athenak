@@ -144,6 +144,18 @@ class MHD {
   bool use_fofc = false;   // flag to enable FOFC
   bool use_sofc = false;  // flag to enable SOFC (PLM + LLF when fofc set)
 
+  // following used for region-based reconstruction switch
+  bool use_recon_region = false;
+  ReconstructionMethod recon_region_method = ReconstructionMethod::plm;
+  bool recon_region_use_box_ = true;  // true = box, false = sphere
+  // box limits (problem coordinates)
+  Real recon_region_x1min_ = 0.0, recon_region_x1max_ = 0.0;
+  Real recon_region_x2min_ = 0.0, recon_region_x2max_ = 0.0;
+  Real recon_region_x3min_ = 0.0, recon_region_x3max_ = 0.0;
+  // sphere (problem coordinates)
+  Real recon_region_x1_center_ = 0.0, recon_region_x2_center_ = 0.0, recon_region_x3_center_ = 0.0;
+  Real recon_region_radius_ = 0.0;
+
   // container to hold names of TaskIDs
   MHDTaskIDs id;
 
