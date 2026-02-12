@@ -338,62 +338,27 @@ void MHD::CalculateFluxes(Driver *pdriver, int stage) {
                   recon_region_radius_);
               if (!face_in_region) return;
               if (recon_region_method_ == ReconstructionMethod::dc) {
-                wl(IDN, i) = w0_(m, IDN, k, j-1, i); wr(IDN, i) = w0_(m, IDN, k, j, i);
-                wl(IVX, i) = w0_(m, IVX, k, j-1, i); wr(IVX, i) = w0_(m, IVX, k, j, i);
-                wl(IVY, i) = w0_(m, IVY, k, j-1, i); wr(IVY, i) = w0_(m, IVY, k, j, i);
-                wl(IVZ, i) = w0_(m, IVZ, k, j-1, i); wr(IVZ, i) = w0_(m, IVZ, k, j, i);
-                if (eos_.is_ideal) {
-                  wl(IEN, i) = w0_(m, IEN, k, j-1, i); wr(IEN, i) = w0_(m, IEN, k, j, i);
+                for (int n = 0; n < nvars; ++n) {
+                  wl(n, i) = w0_(m, n, k, j-1, i);
+                  wr(n, i) = w0_(m, n, k, j, i);
                 }
-                // j-face RS reads bl(0),bl(2) as transverse (iby=2,ibz=0): must be Bx,Bz
-                bl(0, i) = b0_(m, IBX, k, j-1, i); br(0, i) = b0_(m, IBX, k, j, i);
-                bl(1, i) = b0_(m, IBY, k, j-1, i); br(1, i) = b0_(m, IBY, k, j, i);
-                bl(2, i) = b0_(m, IBZ, k, j-1, i); br(2, i) = b0_(m, IBZ, k, j, i);
-                for (int n = nmhd_; n < nvars; ++n) {
-                  wl(n, i) = w0_(m, n, k, j-1, i); wr(n, i) = w0_(m, n, k, j, i);
+                for (int b = 0; b < 3; ++b) {
+                  bl(b, i) = b0_(m, b, k, j-1, i);
+                  br(b, i) = b0_(m, b, k, j, i);
                 }
               } else {
                 Real ql_j, qr_jm1, ql_jp1, qr_j;
-                PLM(w0_(m,IDN,k,j-2,i), w0_(m,IDN,k,j-1,i), w0_(m,IDN,k,j,i), ql_j, qr_jm1);
-                wl(IDN, i) = ql_j;
-                PLM(w0_(m,IDN,k,j-1,i), w0_(m,IDN,k,j,i), w0_(m,IDN,k,j+1,i), ql_jp1, qr_j);
-                wr(IDN, i) = qr_j;
-                PLM(w0_(m,IVX,k,j-2,i), w0_(m,IVX,k,j-1,i), w0_(m,IVX,k,j,i), ql_j, qr_jm1);
-                wl(IVX, i) = ql_j;
-                PLM(w0_(m,IVX,k,j-1,i), w0_(m,IVX,k,j,i), w0_(m,IVX,k,j+1,i), ql_jp1, qr_j);
-                wr(IVX, i) = qr_j;
-                PLM(w0_(m,IVY,k,j-2,i), w0_(m,IVY,k,j-1,i), w0_(m,IVY,k,j,i), ql_j, qr_jm1);
-                wl(IVY, i) = ql_j;
-                PLM(w0_(m,IVY,k,j-1,i), w0_(m,IVY,k,j,i), w0_(m,IVY,k,j+1,i), ql_jp1, qr_j);
-                wr(IVY, i) = qr_j;
-                PLM(w0_(m,IVZ,k,j-2,i), w0_(m,IVZ,k,j-1,i), w0_(m,IVZ,k,j,i), ql_j, qr_jm1);
-                wl(IVZ, i) = ql_j;
-                PLM(w0_(m,IVZ,k,j-1,i), w0_(m,IVZ,k,j,i), w0_(m,IVZ,k,j+1,i), ql_jp1, qr_j);
-                wr(IVZ, i) = qr_j;
-                if (eos_.is_ideal) {
-                  PLM(w0_(m,IEN,k,j-2,i), w0_(m,IEN,k,j-1,i), w0_(m,IEN,k,j,i), ql_j, qr_jm1);
-                  wl(IEN, i) = ql_j;
-                  PLM(w0_(m,IEN,k,j-1,i), w0_(m,IEN,k,j,i), w0_(m,IEN,k,j+1,i), ql_jp1, qr_j);
-                  wr(IEN, i) = qr_j;
-                }
-                // j-face RS reads bl(0),bl(2) as transverse (iby=2,ibz=0): must be Bx,Bz
-                PLM(b0_(m,IBX,k,j-2,i), b0_(m,IBX,k,j-1,i), b0_(m,IBX,k,j,i), ql_j, qr_jm1);
-                bl(0, i) = ql_j;
-                PLM(b0_(m,IBX,k,j-1,i), b0_(m,IBX,k,j,i), b0_(m,IBX,k,j+1,i), ql_jp1, qr_j);
-                br(0, i) = qr_j;
-                PLM(b0_(m,IBY,k,j-2,i), b0_(m,IBY,k,j-1,i), b0_(m,IBY,k,j,i), ql_j, qr_jm1);
-                bl(1, i) = ql_j;
-                PLM(b0_(m,IBY,k,j-1,i), b0_(m,IBY,k,j,i), b0_(m,IBY,k,j+1,i), ql_jp1, qr_j);
-                br(1, i) = qr_j;
-                PLM(b0_(m,IBZ,k,j-2,i), b0_(m,IBZ,k,j-1,i), b0_(m,IBZ,k,j,i), ql_j, qr_jm1);
-                bl(2, i) = ql_j;
-                PLM(b0_(m,IBZ,k,j-1,i), b0_(m,IBZ,k,j,i), b0_(m,IBZ,k,j+1,i), ql_jp1, qr_j);
-                br(2, i) = qr_j;
-                for (int n = nmhd_; n < nvars; ++n) {
-                  PLM(w0_(m,n,k,j-2,i), w0_(m,n,k,j-1,i), w0_(m,n,k,j,i), ql_j, qr_jm1);
+                for (int n = 0; n < nvars; ++n) {
+                  PLM(w0_(m, n, k, j-2, i), w0_(m, n, k, j-1, i), w0_(m, n, k, j, i), ql_j, qr_jm1);
                   wl(n, i) = ql_j;
-                  PLM(w0_(m,n,k,j-1,i), w0_(m,n,k,j,i), w0_(m,n,k,j+1,i), ql_jp1, qr_j);
+                  PLM(w0_(m, n, k, j-1, i), w0_(m, n, k, j, i), w0_(m, n, k, j+1, i), ql_jp1, qr_j);
                   wr(n, i) = qr_j;
+                }
+                for (int b = 0; b < 3; ++b) {
+                  PLM(b0_(m, b, k, j-2, i), b0_(m, b, k, j-1, i), b0_(m, b, k, j, i), ql_j, qr_jm1);
+                  bl(b, i) = ql_j;
+                  PLM(b0_(m, b, k, j-1, i), b0_(m, b, k, j, i), b0_(m, b, k, j+1, i), ql_jp1, qr_j);
+                  br(b, i) = qr_j;
                 }
               }
             });
@@ -536,60 +501,27 @@ void MHD::CalculateFluxes(Driver *pdriver, int stage) {
                   recon_region_radius_);
               if (!face_in_region) return;
               if (recon_region_method_ == ReconstructionMethod::dc) {
-                wl(IDN, i) = w0_(m, IDN, k-1, j, i); wr(IDN, i) = w0_(m, IDN, k, j, i);
-                wl(IVX, i) = w0_(m, IVX, k-1, j, i); wr(IVX, i) = w0_(m, IVX, k, j, i);
-                wl(IVY, i) = w0_(m, IVY, k-1, j, i); wr(IVY, i) = w0_(m, IVY, k, j, i);
-                wl(IVZ, i) = w0_(m, IVZ, k-1, j, i); wr(IVZ, i) = w0_(m, IVZ, k, j, i);
-                if (eos_.is_ideal) {
-                  wl(IEN, i) = w0_(m, IEN, k-1, j, i); wr(IEN, i) = w0_(m, IEN, k, j, i);
+                for (int n = 0; n < nvars; ++n) {
+                  wl(n, i) = w0_(m, n, k-1, j, i);
+                  wr(n, i) = w0_(m, n, k, j, i);
                 }
-                bl(0, i) = b0_(m, IBX, k-1, j, i); br(0, i) = b0_(m, IBX, k, j, i);
-                bl(1, i) = b0_(m, IBY, k-1, j, i); br(1, i) = b0_(m, IBY, k, j, i);
-                bl(2, i) = b0_(m, IBZ, k-1, j, i); br(2, i) = b0_(m, IBZ, k, j, i);
-                for (int n = nmhd_; n < nvars; ++n) {
-                  wl(n, i) = w0_(m, n, k-1, j, i); wr(n, i) = w0_(m, n, k, j, i);
+                for (int b = 0; b < 3; ++b) {
+                  bl(b, i) = b0_(m, b, k-1, j, i);
+                  br(b, i) = b0_(m, b, k, j, i);
                 }
               } else {
                 Real ql_k, qr_km1, ql_kp1, qr_k;
-                PLM(w0_(m,IDN,k-2,j,i), w0_(m,IDN,k-1,j,i), w0_(m,IDN,k,j,i), ql_k, qr_km1);
-                wl(IDN, i) = ql_k;
-                PLM(w0_(m,IDN,k-1,j,i), w0_(m,IDN,k,j,i), w0_(m,IDN,k+1,j,i), ql_kp1, qr_k);
-                wr(IDN, i) = qr_k;
-                PLM(w0_(m,IVX,k-2,j,i), w0_(m,IVX,k-1,j,i), w0_(m,IVX,k,j,i), ql_k, qr_km1);
-                wl(IVX, i) = ql_k;
-                PLM(w0_(m,IVX,k-1,j,i), w0_(m,IVX,k,j,i), w0_(m,IVX,k+1,j,i), ql_kp1, qr_k);
-                wr(IVX, i) = qr_k;
-                PLM(w0_(m,IVY,k-2,j,i), w0_(m,IVY,k-1,j,i), w0_(m,IVY,k,j,i), ql_k, qr_km1);
-                wl(IVY, i) = ql_k;
-                PLM(w0_(m,IVY,k-1,j,i), w0_(m,IVY,k,j,i), w0_(m,IVY,k+1,j,i), ql_kp1, qr_k);
-                wr(IVY, i) = qr_k;
-                PLM(w0_(m,IVZ,k-2,j,i), w0_(m,IVZ,k-1,j,i), w0_(m,IVZ,k,j,i), ql_k, qr_km1);
-                wl(IVZ, i) = ql_k;
-                PLM(w0_(m,IVZ,k-1,j,i), w0_(m,IVZ,k,j,i), w0_(m,IVZ,k+1,j,i), ql_kp1, qr_k);
-                wr(IVZ, i) = qr_k;
-                if (eos_.is_ideal) {
-                  PLM(w0_(m,IEN,k-2,j,i), w0_(m,IEN,k-1,j,i), w0_(m,IEN,k,j,i), ql_k, qr_km1);
-                  wl(IEN, i) = ql_k;
-                  PLM(w0_(m,IEN,k-1,j,i), w0_(m,IEN,k,j,i), w0_(m,IEN,k+1,j,i), ql_kp1, qr_k);
-                  wr(IEN, i) = qr_k;
-                }
-                PLM(b0_(m,IBX,k-2,j,i), b0_(m,IBX,k-1,j,i), b0_(m,IBX,k,j,i), ql_k, qr_km1);
-                bl(0, i) = ql_k;
-                PLM(b0_(m,IBX,k-1,j,i), b0_(m,IBX,k,j,i), b0_(m,IBX,k+1,j,i), ql_kp1, qr_k);
-                br(0, i) = qr_k;
-                PLM(b0_(m,IBY,k-2,j,i), b0_(m,IBY,k-1,j,i), b0_(m,IBY,k,j,i), ql_k, qr_km1);
-                bl(1, i) = ql_k;
-                PLM(b0_(m,IBY,k-1,j,i), b0_(m,IBY,k,j,i), b0_(m,IBY,k+1,j,i), ql_kp1, qr_k);
-                br(1, i) = qr_k;
-                PLM(b0_(m,IBZ,k-2,j,i), b0_(m,IBZ,k-1,j,i), b0_(m,IBZ,k,j,i), ql_k, qr_km1);
-                bl(2, i) = ql_k;
-                PLM(b0_(m,IBZ,k-1,j,i), b0_(m,IBZ,k,j,i), b0_(m,IBZ,k+1,j,i), ql_kp1, qr_k);
-                br(2, i) = qr_k;
-                for (int n = nmhd_; n < nvars; ++n) {
-                  PLM(w0_(m,n,k-2,j,i), w0_(m,n,k-1,j,i), w0_(m,n,k,j,i), ql_k, qr_km1);
+                for (int n = 0; n < nvars; ++n) {
+                  PLM(w0_(m, n, k-2, j, i), w0_(m, n, k-1, j, i), w0_(m, n, k, j, i), ql_k, qr_km1);
                   wl(n, i) = ql_k;
-                  PLM(w0_(m,n,k-1,j,i), w0_(m,n,k,j,i), w0_(m,n,k+1,j,i), ql_kp1, qr_k);
+                  PLM(w0_(m, n, k-1, j, i), w0_(m, n, k, j, i), w0_(m, n, k+1, j, i), ql_kp1, qr_k);
                   wr(n, i) = qr_k;
+                }
+                for (int b = 0; b < 3; ++b) {
+                  PLM(b0_(m, b, k-2, j, i), b0_(m, b, k-1, j, i), b0_(m, b, k, j, i), ql_k, qr_km1);
+                  bl(b, i) = ql_k;
+                  PLM(b0_(m, b, k-1, j, i), b0_(m, b, k, j, i), b0_(m, b, k+1, j, i), ql_kp1, qr_k);
+                  br(b, i) = qr_k;
                 }
               }
             });
