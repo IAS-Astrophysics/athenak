@@ -54,14 +54,15 @@ bool InReconRegion(const int m, const int k, const int j, const int i,
   Real x1 = CellCenterX(i - is, nx1, x1min, x1max);
   Real x2 = CellCenterX(j - js, nx2, x2min, x2max);
   Real x3 = CellCenterX(k - ks, nx3, x3min, x3max);
-  if (use_box) {
-    return (x1 >= rx1min && x1 <= rx1max &&
-            x2 >= rx2min && x2 <= rx2max &&
-            x3 >= rx3min && x3 <= rx3max);
-  } else {
-    Real dx1 = x1 - cx1, dx2 = x2 - cx2, dx3 = x3 - cx3;
-    return (dx1*dx1 + dx2*dx2 + dx3*dx3 <= r_radius*r_radius);
-  }
+  // if (use_box) {
+  //   return (x1 >= rx1min && x1 <= rx1max &&
+  //           x2 >= rx2min && x2 <= rx2max &&
+  //           x3 >= rx3min && x3 <= rx3max);
+  // } else {
+  //   Real dx1 = x1 - cx1, dx2 = x2 - cx2, dx3 = x3 - cx3;
+  //   return (dx1*dx1 + dx2*dx2 + dx3*dx3 <= r_radius*r_radius);
+  // }
+  return true; //CF:Check
 }
 
 //----------------------------------------------------------------------------------------
@@ -95,17 +96,17 @@ void MHD::CalculateFluxes(Driver *pdriver, int stage) {
 
   const bool use_recon_region_ = use_recon_region;
   const auto recon_region_method_ = recon_region_method;
-  const bool recon_region_use_box_ = recon_region_use_box_;
-  const Real recon_region_x1min_ = recon_region_x1min_;
-  const Real recon_region_x1max_ = recon_region_x1max_;
-  const Real recon_region_x2min_ = recon_region_x2min_;
-  const Real recon_region_x2max_ = recon_region_x2max_;
-  const Real recon_region_x3min_ = recon_region_x3min_;
-  const Real recon_region_x3max_ = recon_region_x3max_;
-  const Real recon_region_x1_center_ = recon_region_x1_center_;
-  const Real recon_region_x2_center_ = recon_region_x2_center_;
-  const Real recon_region_x3_center_ = recon_region_x3_center_;
-  const Real recon_region_radius_ = recon_region_radius_;
+  const bool recon_region_use_box_ = this->recon_region_use_box_;
+  const Real recon_region_x1min_ = this->recon_region_x1min_;
+  const Real recon_region_x1max_ = this->recon_region_x1max_;
+  const Real recon_region_x2min_ = this->recon_region_x2min_;
+  const Real recon_region_x2max_ = this->recon_region_x2max_;
+  const Real recon_region_x3min_ = this->recon_region_x3min_;
+  const Real recon_region_x3max_ = this->recon_region_x3max_;
+  const Real recon_region_x1_center_ = this->recon_region_x1_center_;
+  const Real recon_region_x2_center_ = this->recon_region_x2_center_;
+  const Real recon_region_x3_center_ = this->recon_region_x3_center_;
+  const Real recon_region_radius_ = this->recon_region_radius_;
 
   //--------------------------------------------------------------------------------------
   // i-direction
@@ -338,14 +339,15 @@ void MHD::CalculateFluxes(Driver *pdriver, int stage) {
               if (!face_in_region) return;
               if (recon_region_method_ == ReconstructionMethod::dc) {
                 wl(IDN, i) = w0_(m, IDN, k, j-1, i); wr(IDN, i) = w0_(m, IDN, k, j, i);
-                wl(IVX, i) = w0_(m, IVY, k, j-1, i); wr(IVX, i) = w0_(m, IVY, k, j, i);
-                wl(IVY, i) = w0_(m, IVZ, k, j-1, i); wr(IVY, i) = w0_(m, IVZ, k, j, i);
-                wl(IVZ, i) = w0_(m, IVX, k, j-1, i); wr(IVZ, i) = w0_(m, IVX, k, j, i);
+                wl(IVX, i) = w0_(m, IVX, k, j-1, i); wr(IVX, i) = w0_(m, IVX, k, j, i);
+                wl(IVY, i) = w0_(m, IVY, k, j-1, i); wr(IVY, i) = w0_(m, IVY, k, j, i);
+                wl(IVZ, i) = w0_(m, IVZ, k, j-1, i); wr(IVZ, i) = w0_(m, IVZ, k, j, i);
                 if (eos_.is_ideal) {
                   wl(IEN, i) = w0_(m, IEN, k, j-1, i); wr(IEN, i) = w0_(m, IEN, k, j, i);
                 }
-                bl(0, i) = b0_(m, IBY, k, j-1, i); br(0, i) = b0_(m, IBY, k, j, i);
-                bl(1, i) = b0_(m, IBX, k, j-1, i); br(1, i) = b0_(m, IBX, k, j, i);
+                // j-face RS reads bl(0),bl(2) as transverse (iby=2,ibz=0): must be Bx,Bz
+                bl(0, i) = b0_(m, IBX, k, j-1, i); br(0, i) = b0_(m, IBX, k, j, i);
+                bl(1, i) = b0_(m, IBY, k, j-1, i); br(1, i) = b0_(m, IBY, k, j, i);
                 bl(2, i) = b0_(m, IBZ, k, j-1, i); br(2, i) = b0_(m, IBZ, k, j, i);
                 for (int n = nmhd_; n < nvars; ++n) {
                   wl(n, i) = w0_(m, n, k, j-1, i); wr(n, i) = w0_(m, n, k, j, i);
@@ -356,17 +358,17 @@ void MHD::CalculateFluxes(Driver *pdriver, int stage) {
                 wl(IDN, i) = ql_j;
                 PLM(w0_(m,IDN,k,j-1,i), w0_(m,IDN,k,j,i), w0_(m,IDN,k,j+1,i), ql_jp1, qr_j);
                 wr(IDN, i) = qr_j;
-                PLM(w0_(m,IVY,k,j-2,i), w0_(m,IVY,k,j-1,i), w0_(m,IVY,k,j,i), ql_j, qr_jm1);
-                wl(IVX, i) = ql_j;
-                PLM(w0_(m,IVY,k,j-1,i), w0_(m,IVY,k,j,i), w0_(m,IVY,k,j+1,i), ql_jp1, qr_j);
-                wr(IVX, i) = qr_j;
-                PLM(w0_(m,IVZ,k,j-2,i), w0_(m,IVZ,k,j-1,i), w0_(m,IVZ,k,j,i), ql_j, qr_jm1);
-                wl(IVY, i) = ql_j;
-                PLM(w0_(m,IVZ,k,j-1,i), w0_(m,IVZ,k,j,i), w0_(m,IVZ,k,j+1,i), ql_jp1, qr_j);
-                wr(IVY, i) = qr_j;
                 PLM(w0_(m,IVX,k,j-2,i), w0_(m,IVX,k,j-1,i), w0_(m,IVX,k,j,i), ql_j, qr_jm1);
-                wl(IVZ, i) = ql_j;
+                wl(IVX, i) = ql_j;
                 PLM(w0_(m,IVX,k,j-1,i), w0_(m,IVX,k,j,i), w0_(m,IVX,k,j+1,i), ql_jp1, qr_j);
+                wr(IVX, i) = qr_j;
+                PLM(w0_(m,IVY,k,j-2,i), w0_(m,IVY,k,j-1,i), w0_(m,IVY,k,j,i), ql_j, qr_jm1);
+                wl(IVY, i) = ql_j;
+                PLM(w0_(m,IVY,k,j-1,i), w0_(m,IVY,k,j,i), w0_(m,IVY,k,j+1,i), ql_jp1, qr_j);
+                wr(IVY, i) = qr_j;
+                PLM(w0_(m,IVZ,k,j-2,i), w0_(m,IVZ,k,j-1,i), w0_(m,IVZ,k,j,i), ql_j, qr_jm1);
+                wl(IVZ, i) = ql_j;
+                PLM(w0_(m,IVZ,k,j-1,i), w0_(m,IVZ,k,j,i), w0_(m,IVZ,k,j+1,i), ql_jp1, qr_j);
                 wr(IVZ, i) = qr_j;
                 if (eos_.is_ideal) {
                   PLM(w0_(m,IEN,k,j-2,i), w0_(m,IEN,k,j-1,i), w0_(m,IEN,k,j,i), ql_j, qr_jm1);
@@ -374,13 +376,14 @@ void MHD::CalculateFluxes(Driver *pdriver, int stage) {
                   PLM(w0_(m,IEN,k,j-1,i), w0_(m,IEN,k,j,i), w0_(m,IEN,k,j+1,i), ql_jp1, qr_j);
                   wr(IEN, i) = qr_j;
                 }
-                PLM(b0_(m,IBY,k,j-2,i), b0_(m,IBY,k,j-1,i), b0_(m,IBY,k,j,i), ql_j, qr_jm1);
-                bl(0, i) = ql_j;
-                PLM(b0_(m,IBY,k,j-1,i), b0_(m,IBY,k,j,i), b0_(m,IBY,k,j+1,i), ql_jp1, qr_j);
-                br(0, i) = qr_j;
+                // j-face RS reads bl(0),bl(2) as transverse (iby=2,ibz=0): must be Bx,Bz
                 PLM(b0_(m,IBX,k,j-2,i), b0_(m,IBX,k,j-1,i), b0_(m,IBX,k,j,i), ql_j, qr_jm1);
-                bl(1, i) = ql_j;
+                bl(0, i) = ql_j;
                 PLM(b0_(m,IBX,k,j-1,i), b0_(m,IBX,k,j,i), b0_(m,IBX,k,j+1,i), ql_jp1, qr_j);
+                br(0, i) = qr_j;
+                PLM(b0_(m,IBY,k,j-2,i), b0_(m,IBY,k,j-1,i), b0_(m,IBY,k,j,i), ql_j, qr_jm1);
+                bl(1, i) = ql_j;
+                PLM(b0_(m,IBY,k,j-1,i), b0_(m,IBY,k,j,i), b0_(m,IBY,k,j+1,i), ql_jp1, qr_j);
                 br(1, i) = qr_j;
                 PLM(b0_(m,IBZ,k,j-2,i), b0_(m,IBZ,k,j-1,i), b0_(m,IBZ,k,j,i), ql_j, qr_jm1);
                 bl(2, i) = ql_j;
@@ -534,9 +537,9 @@ void MHD::CalculateFluxes(Driver *pdriver, int stage) {
               if (!face_in_region) return;
               if (recon_region_method_ == ReconstructionMethod::dc) {
                 wl(IDN, i) = w0_(m, IDN, k-1, j, i); wr(IDN, i) = w0_(m, IDN, k, j, i);
-                wl(IVX, i) = w0_(m, IVZ, k-1, j, i); wr(IVX, i) = w0_(m, IVZ, k, j, i);
-                wl(IVY, i) = w0_(m, IVX, k-1, j, i); wr(IVY, i) = w0_(m, IVX, k, j, i);
-                wl(IVZ, i) = w0_(m, IVY, k-1, j, i); wr(IVZ, i) = w0_(m, IVY, k, j, i);
+                wl(IVX, i) = w0_(m, IVX, k-1, j, i); wr(IVX, i) = w0_(m, IVX, k, j, i);
+                wl(IVY, i) = w0_(m, IVY, k-1, j, i); wr(IVY, i) = w0_(m, IVY, k, j, i);
+                wl(IVZ, i) = w0_(m, IVZ, k-1, j, i); wr(IVZ, i) = w0_(m, IVZ, k, j, i);
                 if (eos_.is_ideal) {
                   wl(IEN, i) = w0_(m, IEN, k-1, j, i); wr(IEN, i) = w0_(m, IEN, k, j, i);
                 }
@@ -552,17 +555,17 @@ void MHD::CalculateFluxes(Driver *pdriver, int stage) {
                 wl(IDN, i) = ql_k;
                 PLM(w0_(m,IDN,k-1,j,i), w0_(m,IDN,k,j,i), w0_(m,IDN,k+1,j,i), ql_kp1, qr_k);
                 wr(IDN, i) = qr_k;
-                PLM(w0_(m,IVZ,k-2,j,i), w0_(m,IVZ,k-1,j,i), w0_(m,IVZ,k,j,i), ql_k, qr_km1);
-                wl(IVX, i) = ql_k;
-                PLM(w0_(m,IVZ,k-1,j,i), w0_(m,IVZ,k,j,i), w0_(m,IVZ,k+1,j,i), ql_kp1, qr_k);
-                wr(IVX, i) = qr_k;
                 PLM(w0_(m,IVX,k-2,j,i), w0_(m,IVX,k-1,j,i), w0_(m,IVX,k,j,i), ql_k, qr_km1);
-                wl(IVY, i) = ql_k;
+                wl(IVX, i) = ql_k;
                 PLM(w0_(m,IVX,k-1,j,i), w0_(m,IVX,k,j,i), w0_(m,IVX,k+1,j,i), ql_kp1, qr_k);
-                wr(IVY, i) = qr_k;
+                wr(IVX, i) = qr_k;
                 PLM(w0_(m,IVY,k-2,j,i), w0_(m,IVY,k-1,j,i), w0_(m,IVY,k,j,i), ql_k, qr_km1);
-                wl(IVZ, i) = ql_k;
+                wl(IVY, i) = ql_k;
                 PLM(w0_(m,IVY,k-1,j,i), w0_(m,IVY,k,j,i), w0_(m,IVY,k+1,j,i), ql_kp1, qr_k);
+                wr(IVY, i) = qr_k;
+                PLM(w0_(m,IVZ,k-2,j,i), w0_(m,IVZ,k-1,j,i), w0_(m,IVZ,k,j,i), ql_k, qr_km1);
+                wl(IVZ, i) = ql_k;
+                PLM(w0_(m,IVZ,k-1,j,i), w0_(m,IVZ,k,j,i), w0_(m,IVZ,k+1,j,i), ql_kp1, qr_k);
                 wr(IVZ, i) = qr_k;
                 if (eos_.is_ideal) {
                   PLM(w0_(m,IEN,k-2,j,i), w0_(m,IEN,k-1,j,i), w0_(m,IEN,k,j,i), ql_k, qr_km1);
