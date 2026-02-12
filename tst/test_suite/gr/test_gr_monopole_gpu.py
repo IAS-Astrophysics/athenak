@@ -10,6 +10,7 @@ import test_suite.testutils as testutils
 import athena_read
 import numpy as np
 
+
 def arguments():
     """Assemble arguments for run command"""
     return [
