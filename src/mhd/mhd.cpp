@@ -347,13 +347,17 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
 // destructor
 
 MHD::~MHD() {
-  delete peos;
-  delete pbval_u;
+  if (psbox_b != nullptr) {delete psbox_b;}
+  if (psbox_u != nullptr) {delete psbox_u;}
+  if (porb_b != nullptr) {delete porb_b;}
+  if (porb_u != nullptr) {delete porb_u;}
   delete pbval_b;
-  if (pvisc != nullptr) {delete pvisc;}
-  if (presist!= nullptr) {delete presist;}
-  if (pcond != nullptr) {delete pcond;}
+  delete pbval_u;
   if (psrc!= nullptr) {delete psrc;}
+  if (pcond != nullptr) {delete pcond;}
+  if (presist!= nullptr) {delete presist;}
+  if (pvisc != nullptr) {delete pvisc;}
+  delete peos;
 }
 
 //----------------------------------------------------------------------------------------
