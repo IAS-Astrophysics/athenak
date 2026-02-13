@@ -45,7 +45,13 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   int &js = indcs.js; int &je = indcs.je;
   int &ks = indcs.ks; int &ke = indcs.ke;
 
-  Real cs = pin->GetOrAddReal("eos","iso_sound_speed",1.0);
+  Real cs = 1.0;
+  if (pmbp->phydro != nullptr) {
+    cs = pin->GetOrAddReal("hydro","iso_sound_speed",1.0);
+  } else if (pmbp->pmhd != nullptr) {
+    cs = pin->GetOrAddReal("mhd","iso_sound_speed",1.0);
+  }
+
   Real beta = pin->GetOrAddReal("problem","beta",1.0);
 
   // Initialize Hydro variables -------------------------------
