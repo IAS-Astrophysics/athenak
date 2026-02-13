@@ -50,6 +50,7 @@ add_executable(
         eos/ideal_grhyd.cpp
         eos/ideal_srmhd.cpp
         eos/ideal_grmhd.cpp
+        eos/noop_dyngrmhd.cpp
         eos/primitive-solver/eos_compose.cpp
         eos/primitive-solver/eos_hybrid.cpp
         eos/primitive-solver/piecewise_polytrope.cpp
