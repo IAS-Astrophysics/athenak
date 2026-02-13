@@ -91,7 +91,7 @@ namespace {
     struct my_params {
     Real thetaw, thetab;
     Real gm0, r0, rho0, dslope, p0_over_r0, qslope, tcool, gamma_gas;
-    Real dfloor, rho_floor1, rho_floor_slope1, rho_floor2, rho_floor_slope2;
+    Real dfloor, pfloor, rho_floor1, rho_floor_slope1, rho_floor2, rho_floor_slope2;
     Real rfix, rad_in_cutoff, rad_in_smooth, rad_out_cutoff, rad_out_smooth;
     Real sig_star_disc;
     Real Omega0;
@@ -105,6 +105,10 @@ namespace {
     bool magnetic_fields_enabled;
     bool avg_grid_bfields;
     int mag_option;
+    Real disc_mask_rin;   // inner disc-only mask radius (negative = off)
+    Real disc_mask_rout;  // outer disc-only mask radius (negative = off)
+    bool cooling_use_primitives;  // if true, compute cooling from w0 (lagged); else from u0
+    bool cooling_direct_set;      // if true, set temperature to desired profile; else relax toward target
     };
 
     my_params mp;
@@ -122,6 +126,7 @@ void MyEfieldMask(Mesh* pm);
 void MyHistFunc(HistoryData *pdata, Mesh *pm);
 
 void StarMask(Mesh* pm, const Real bdt);
+void DiscOnlyMask(Mesh* pm, const Real bdt);
 void FixedHydroBC(Mesh *pm);
 void FixedMHDBC(Mesh *pm);
 
@@ -203,7 +208,16 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     mp.sig_star_disc = pin->GetOrAddReal("problem","sig_star_disc",0.1);
     mp.avg_grid_bfields = pin->GetOrAddBoolean("problem","avg_grid_bfields",false);
     mp.mag_option = pin->GetOrAddInteger("problem","mag_option",1);
-    
+    mp.disc_mask_rin  = pin->GetOrAddReal("problem", "disc_mask_rin",  -1.0);
+    mp.disc_mask_rout = pin->GetOrAddReal("problem", "disc_mask_rout", -1.0);
+    mp.cooling_use_primitives = pin->GetOrAddBoolean("problem", "cooling_use_primitives", false);
+    mp.cooling_direct_set = pin->GetOrAddBoolean("problem", "cooling_direct_set", false);
+    // EOS pressure floor (for cooling: never cool below pfloor so we don't fight the EOS)
+    if (pmbp->pmhd != nullptr)
+        mp.pfloor = pin->GetOrAddReal("mhd", "pfloor", 1.e-11);
+    else
+        mp.pfloor = pin->GetOrAddReal("hydro", "pfloor", 1.e-11);
+
     // Capture variables for kernel - e.g. indices for looping over the meshblocks and the size of the meshblocks.
     auto &indcs = pmy_mesh_->mb_indcs;
     int &is = indcs.is; int &ie = indcs.ie;
@@ -853,6 +867,7 @@ void MySourceTerms(Mesh* pm, const Real bdt) { //CF:CHECKED
 
     StarGravSourceTerm(pm, bdt);
     if (mp.denstar > 0.0) StarMask(pm, bdt);
+    if (mp.disc_mask_rin >= 0.0 || mp.disc_mask_rout >= 0.0) DiscOnlyMask(pm, bdt);
     if(mp.is_ideal && mp.tcool>0.0) CoolingSourceTerms(pm, bdt);
 
     // FOFC diagnostic: damp conserved scalar (rho*s) with source -bdt*dens*s/tau
@@ -1018,6 +1033,76 @@ void StarMask(Mesh* pm, const Real bdt) { //CF:CHECKED
     }); // end par_for
 
 } // end stellar mask  
+
+//----------------------------------------------------------------------------------------
+void DiscOnlyMask(Mesh* pm, const Real bdt) {
+
+    if (mp.disc_mask_rin < 0.0 && mp.disc_mask_rout < 0.0) return;
+
+    auto &indcs = pm->mb_indcs;
+    int &is = indcs.is; int &ie = indcs.ie;
+    int &js = indcs.js; int &je = indcs.je;
+    int &ks = indcs.ks; int &ke = indcs.ke;
+    MeshBlockPack *pmbp = pm->pmb_pack;
+    auto &size = pmbp->pmb->mb_size;
+
+    auto mp_ = mp;
+
+    DvceArray5D<Real> u0_, w0_, bcc0_;
+    if (pmbp->phydro != nullptr) {
+        u0_ = pmbp->phydro->u0;
+        w0_ = pmbp->phydro->w0;
+    } else if (pmbp->pmhd != nullptr) {
+        u0_ = pmbp->pmhd->u0;
+        w0_ = pmbp->pmhd->w0;
+        bcc0_ = pmbp->pmhd->bcc0;
+    }
+
+    par_for("pgen_disconlymask", DevExeSpace(), 0, (pmbp->nmb_thispack - 1), ks, ke, js, je, is, ie,
+    KOKKOS_LAMBDA(int m, int k, int j, int i) {
+
+        Real &x1min = size.d_view(m).x1min;
+        Real &x1max = size.d_view(m).x1max;
+        Real x1v = CellCenterX(i - is, indcs.nx1, x1min, x1max);
+
+        Real &x2min = size.d_view(m).x2min;
+        Real &x2max = size.d_view(m).x2max;
+        Real x2v = CellCenterX(j - js, indcs.nx2, x2min, x2max);
+
+        Real &x3min = size.d_view(m).x3min;
+        Real &x3max = size.d_view(m).x3max;
+        Real x3v = CellCenterX(k - ks, indcs.nx3, x3min, x3max);
+
+        Real rad = sqrt(x1v*x1v + x2v*x2v);
+        Real rc = sqrt(rad*rad + x3v*x3v);
+        Real phi = atan2(x2v, x1v);
+        Real z = x3v;
+
+        bool in_inner = (mp_.disc_mask_rin >= 0.0 && rc < mp_.disc_mask_rin);
+        bool in_outer = (mp_.disc_mask_rout >= 0.0 && rc > mp_.disc_mask_rout);
+        if (!in_inner && !in_outer) return;
+
+        Real den = DenDiscCyl(mp_, rad, phi, z);
+        den = fmax(den, rho_floor(mp_, rc));
+
+        Real v1(0.0), v2(0.0), v3(0.0);
+        VelDiscCyl(mp_, rad, phi, z, v1, v2, v3);
+
+        u0_(m, IDN, k, j, i) = den;
+        u0_(m, IM1, k, j, i) = den * v1;
+        u0_(m, IM2, k, j, i) = den * v2;
+        u0_(m, IM3, k, j, i) = den * v3;
+
+        if (mp_.is_ideal) {
+            u0_(m, IEN, k, j, i) = PoverR(mp_, rad) * den / (mp_.gamma_gas - 1.0)
+                + 0.5 * den * (SQR(v1) + SQR(v2) + SQR(v3));
+            if (mp_.magnetic_fields_enabled) {
+                u0_(m, IEN, k, j, i) += 0.5 * (SQR(bcc0_(m, IBX, k, j, i)) +
+                    SQR(bcc0_(m, IBY, k, j, i)) + SQR(bcc0_(m, IBZ, k, j, i)));
+            }
+        }
+    });
+}
 
 //----------------------------------------------------------------------------------------
 void MyEfieldMask(Mesh* pm) { //CF:CHECKED
@@ -1245,37 +1330,46 @@ void CoolingSourceTerms(Mesh* pm, const Real bdt) { //CF:CHECKED
         Real &x3max = size.d_view(m).x3max;
         Real x3v = CellCenterX(k-ks, indcs.nx3, x3min, x3max);
 
-        // Use primitives for current state (consistent, avoids mom^2/rho issues in low density)
-        Real dens = w0_(m,IDN,k,j,i);
-        Real eint = w0_(m,IEN,k,j,i);  // internal energy per unit volume
+        Real mom2 = 0.5*(SQR(u0_(m,IM1,k,j,i)) + SQR(u0_(m,IM2,k,j,i)) + SQR(u0_(m,IM3,k,j,i)));
+        Real e_m = 0.0;
+        if (mp_.magnetic_fields_enabled) {
+            e_m = 0.5*(SQR(bcc0_(m,IBX,k,j,i)) + SQR(bcc0_(m,IBY,k,j,i)) + SQR(bcc0_(m,IBZ,k,j,i)));
+        }
+        Real efloor = mp_.pfloor/(mp_.gamma_gas - 1.0);
+        Real dens_u0 = fmax(u0_(m,IDN,k,j,i), mp_.dfloor);
+        Real e_k_u0 = mom2 / dens_u0;
 
         Real rad(0.0),phi(0.0),z(0.0);
         Real p_over_r(0.0);
         GetCylCoord(mp_,rad,phi,z,x1v,x2v,x3v);
         p_over_r = PoverR(mp_,rad);
-        
-        Real dtr = fmax(mp_.tcool*2.*M_PI/sqrt(mp_.gm0/rad/rad/rad),bdt);
-        Real dfrac=bdt/dtr;
-        Real eint_target = p_over_r/(mp_.gamma_gas-1.0)*dens;
-        Real dE = eint - eint_target;
-        u0_(m,IEN,k,j,i) -= dE*dfrac;
 
-        // Real eint = u0_(m,IEN,k,j,i)-0.5*(SQR(u0_(m,IM1,k,j,i))+SQR(u0_(m,IM2,k,j,i))
-        //                                     +SQR(u0_(m,IM3,k,j,i)))/u0_(m,IDN,k,j,i);
-        // if (mp_.magnetic_fields_enabled) {
-        //     eint = eint-0.5*(SQR(bcc0_(m,IBX,k,j,i))+SQR(bcc0_(m,IBY,k,j,i))+SQR(bcc0_(m,IBZ,k,j,i)));
-        // }
+        // Desired internal energy per unit volume: eint_vol = p/(gamma-1) = (p_over_r*rho)/(gamma-1)
+        // efloor = pfloor/(gamma-1) is also per unit volume; same units for fmax and E_min
 
-        // Real rad(0.0),phi(0.0),z(0.0);
-        // Real p_over_r(0.0);
-        // GetCylCoord(mp_,rad,phi,z,x1v,x2v,x3v);
-        // p_over_r = PoverR(mp_,rad);
-        
-        // Real dtr = fmax(mp_.tcool*2.*M_PI/sqrt(mp_.gm0/rad/rad/rad),bdt);
-        // Real dfrac=bdt/dtr;
-        // Real dE=eint-p_over_r/(mp_.gamma_gas-1.0)*u0_(m,IDN,k,j,i);
-        // u0_(m,IEN,k,j,i) -= dE*dfrac;
-        
+        if (mp_.cooling_direct_set) {
+            // Set total energy so temperature matches desired profile directly (no relaxation)
+            Real eint_set = p_over_r*dens_u0/(mp_.gamma_gas - 1.0);
+            u0_(m,IEN,k,j,i) = e_k_u0 + e_m + eint_set;
+        } else {
+            // Relax toward target over cooling timescale (eint and eint_desired_vol both per unit volume)
+            Real dens(0.0), eint(0.0);
+            if (mp_.cooling_use_primitives) {
+                dens = w0_(m,IDN,k,j,i);
+                eint = w0_(m,IEN,k,j,i);
+            } else {
+                dens = u0_(m,IDN,k,j,i);
+                eint = u0_(m,IEN,k,j,i) - e_k_u0 - e_m;
+            }
+            Real eint_target_vol = p_over_r*dens/(mp_.gamma_gas - 1.0);
+            Real rad_safe = fmax(rad, mp_.rfix);
+            Real dtr = fmax(mp_.tcool*2.*M_PI/sqrt(mp_.gm0/rad_safe/rad_safe/rad_safe),bdt);
+            Real dfrac = bdt/dtr;
+            Real dE = eint - eint_target_vol;  // per unit volume
+            u0_(m,IEN,k,j,i) -= dE*dfrac;
+            Real E_min = e_k_u0 + e_m + efloor;
+            u0_(m,IEN,k,j,i) = fmax(u0_(m,IEN,k,j,i), E_min);
+        }
     }); // end par_for
 
 }// end cooling source terms 

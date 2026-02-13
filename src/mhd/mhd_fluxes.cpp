@@ -54,15 +54,14 @@ bool InReconRegion(const int m, const int k, const int j, const int i,
   Real x1 = CellCenterX(i - is, nx1, x1min, x1max);
   Real x2 = CellCenterX(j - js, nx2, x2min, x2max);
   Real x3 = CellCenterX(k - ks, nx3, x3min, x3max);
-  // if (use_box) {
-  //   return (x1 >= rx1min && x1 <= rx1max &&
-  //           x2 >= rx2min && x2 <= rx2max &&
-  //           x3 >= rx3min && x3 <= rx3max);
-  // } else {
-  //   Real dx1 = x1 - cx1, dx2 = x2 - cx2, dx3 = x3 - cx3;
-  //   return (dx1*dx1 + dx2*dx2 + dx3*dx3 <= r_radius*r_radius);
-  // }
-  return true; //CF:Check
+  if (use_box) {
+    return (x1 >= rx1min && x1 <= rx1max &&
+            x2 >= rx2min && x2 <= rx2max &&
+            x3 >= rx3min && x3 <= rx3max);
+  } else {
+    Real dx1 = x1 - cx1, dx2 = x2 - cx2, dx3 = x3 - cx3;
+    return (dx1*dx1 + dx2*dx2 + dx3*dx3 <= r_radius*r_radius);
+  }
 }
 
 //----------------------------------------------------------------------------------------
