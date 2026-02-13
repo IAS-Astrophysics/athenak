@@ -51,7 +51,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   } else if (pmbp->pmhd != nullptr) {
     cs = pin->GetOrAddReal("mhd","iso_sound_speed",1.0);
   }
-  
+
   Real beta = pin->GetOrAddReal("problem","beta",1.0);
 
   // Initialize Hydro variables -------------------------------
