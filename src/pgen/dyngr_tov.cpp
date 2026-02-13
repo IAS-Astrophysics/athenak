@@ -12,6 +12,7 @@
 #include <iostream>
 #include <limits>
 #include <sstream>
+#include <utility>
 
 #include "athena.hpp"
 #include "globals.hpp"
@@ -43,6 +44,41 @@ static Real A2(const tov::TOVStar& tov_, const TOVEOS& eos, bool isotropic, Real
 
 // Prototypes for user-defined BCs and history
 void TOVHistory(HistoryData *pdata, Mesh *pm);
+
+namespace {
+struct TOVParams {
+  tov::TOVStar my_tov;
+  bool isotropic;
+  bool minkowski;
+
+  TOVParams(tov::TOVStar& tov_star, bool isotropic_, bool minkowski_) :
+      my_tov(std::move(tov_star)) {
+    isotropic = isotropic_;
+    minkowski = minkowski_;
+  }
+};
+
+TOVParams *ptov_params;
+} // namespace
+
+void SetADMVariablesToTOV(MeshBlockPack *pmbp);
+void FinalizeTOV(ParameterInput *pin, Mesh *pm);
+
+template<class TOVEOS>
+void SolveTOV(ParameterInput *pin, Mesh* pmy_mesh_) {
+  bool isotropic = pin->GetOrAddBoolean("problem", "isotropic", false);
+  bool minkowski = pin->GetOrAddBoolean("problem", "minkowski", false);
+
+  MeshBlockPack *pmbp = pmy_mesh_->pmb_pack;
+
+  // If the metric is adaptive or dynamical ADM is enabled, we need to regenerate the
+  // TOV solution, since it is not stored in the restart file.
+  if (pmbp->padm->is_dynamic || pmy_mesh_->adaptive) {
+    TOVEOS eos{pin};
+    auto my_tov = tov::TOVStar::ConstructTOV(pin, eos, false);
+    ptov_params = new TOVParams(my_tov, isotropic, minkowski);
+  }
+}
 
 template<class TOVEOS>
 void SetupTOV(ParameterInput *pin, Mesh* pmy_mesh_) {
@@ -355,6 +391,11 @@ void SetupTOV(ParameterInput *pin, Mesh* pmy_mesh_) {
     w_by = 0.5*(b0.x2f(m,k,j,i) + b0.x2f(m,k,j+1,i));
     w_bz = 0.5*(b0.x3f(m,k,j,i) + b0.x3f(m,k+1,j,i));
   });
+
+  // Copy the TOV to another object for storage if needed.
+  if (pmbp->padm->is_dynamic || pmy_mesh_->adaptive == true) {
+    ptov_params = new TOVParams(my_tov, isotropic, minkowski);
+  }
 }
 
 //----------------------------------------------------------------------------------------
@@ -372,9 +413,20 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   }
 
   user_hist_func = &TOVHistory;
+  pgen_final_func = &FinalizeTOV;
+  pmbp->padm->SetADMVariables = &SetADMVariablesToTOV;
 
   // initialize primitive variables for restart
   if (restart) {
+    if (pmbp->pdyngr->eos_policy == DynGRMHD_EOS::eos_ideal) {
+      SolveTOV<tov::PolytropeEOS>(pin, pmy_mesh_);
+    } else if (pmbp->pdyngr->eos_policy == DynGRMHD_EOS::eos_compose) {
+      SolveTOV<tov::TabulatedEOS>(pin, pmy_mesh_);
+    } else if (pmbp->pdyngr->eos_policy == DynGRMHD_EOS::eos_hybrid) {
+      SolveTOV<tov::TabulatedEOS>(pin, pmy_mesh_);
+    } else if (pmbp->pdyngr->eos_policy == DynGRMHD_EOS::eos_piecewise_poly) {
+      SolveTOV<tov::PiecewisePolytropeEOS>(pin, pmy_mesh_);
+    }
     return;
   }
 
@@ -447,6 +499,100 @@ static Real A2(const tov::TOVStar& tov_, const TOVEOS& eos, bool isotropic, Real
     tov_.GetPandRhoIso(eos, r, rho, p);
   }
   return x1*fmax(p - pcut, 0.0)*pow(1.0 - rho/tov_.rhoc,magindex);
+}
+
+// Metric update function
+void SetADMVariablesToTOV(MeshBlockPack *pmbp) {
+  auto &adm = pmbp->padm->adm;
+  auto &size = pmbp->pmb->mb_size;
+  auto &indcs = pmbp->pmesh->mb_indcs;
+  int &ng = indcs.ng;
+  int is = indcs.is, js = indcs.js, ks = indcs.ks;
+  int ie = indcs.ie, je = indcs.je, ke = indcs.ke;
+  int nmb = pmbp->nmb_thispack;
+  int n1 = indcs.nx1 + 2*ng;
+  int n2 = (indcs.nx2 > 1) ? (indcs.nx2 + 2*ng) : 1;
+  int n3 = (indcs.nx3 > 1) ? (indcs.nx3 + 2*ng) : 1;
+
+  auto& tov_ = ptov_params->my_tov;
+  bool isotropic = ptov_params->isotropic;
+  bool minkowski = ptov_params->minkowski;
+  par_for("update_adm_vars", DevExeSpace(), 0,nmb-1,0,(n3-1),0,(n2-1),0,(n1-1),
+  KOKKOS_LAMBDA(int m, int k, int j, int i) {
+    Real &x1min = size.d_view(m).x1min;
+    Real &x1max = size.d_view(m).x1max;
+    int nx1 = indcs.nx1;
+    Real x1v = CellCenterX(i-is, nx1, x1min, x1max);
+
+    Real &x2min = size.d_view(m).x2min;
+    Real &x2max = size.d_view(m).x2max;
+    int nx2 = indcs.nx2;
+    Real x2v = CellCenterX(j-js, nx2, x2min, x2max);
+
+    Real &x3min = size.d_view(m).x3min;
+    Real &x3max = size.d_view(m).x3max;
+    int nx3 = indcs.nx3;
+    Real x3v = CellCenterX(k-ks, nx3, x3min, x3max);
+
+    Real r = sqrt(SQR(x1v) + SQR(x2v) + SQR(x3v));
+    Real s = sqrt(SQR(x1v) + SQR(x2v));
+
+    Real mass, alp, r_schw;
+    if (isotropic) {
+      tov_.GetMandAlphaIso(r, mass, alp);
+      r_schw = tov_.FindSchwarzschildR(r, mass);
+    } else {
+      tov_.GetMandAlpha(r, mass, alp);
+    }
+
+    // Set ADM variables
+    adm.alpha(m,k,j,i) = alp;
+    if (minkowski) {
+      adm.g_dd(m,0,0,k,j,i) = adm.g_dd(m,1,1,k,j,i) = adm.g_dd(m,2,2,k,j,i) = 1.0;
+      adm.g_dd(m,0,1,k,j,i) = adm.g_dd(m,0,2,k,j,i) = adm.g_dd(m,1,2,k,j,i) = 0.0;
+      adm.alpha(m,k,j,i) = 1.0;
+    } else if (!isotropic) {
+      // Auxiliary metric quantities
+      Real fmet = 0.0;
+      if (r > 0) {
+        fmet = (1./(1. - 2*mass/r) - 1.)/(r*r);
+      }
+
+      adm.g_dd(m,0,0,k,j,i) = x1v*x1v*fmet + 1.0;
+      adm.g_dd(m,0,1,k,j,i) = x1v*x2v*fmet;
+      adm.g_dd(m,0,2,k,j,i) = x1v*x3v*fmet;
+      adm.g_dd(m,1,1,k,j,i) = x2v*x2v*fmet + 1.0;
+      adm.g_dd(m,1,2,k,j,i) = x2v*x3v*fmet;
+      adm.g_dd(m,2,2,k,j,i) = x3v*x3v*fmet + 1.0;
+      Real det = adm::SpatialDet(
+              adm.g_dd(m,0,0,k,j,i), adm.g_dd(m,0,1,k,j,i),
+              adm.g_dd(m,0,2,k,j,i), adm.g_dd(m,1,1,k,j,i),
+              adm.g_dd(m,1,2,k,j,i), adm.g_dd(m,2,2,k,j,i));
+      adm.psi4(m,k,j,i) = pow(det, 1./3.);
+    } else {
+      Real fmet = 1.;
+      if (r > 0) {
+        fmet = r_schw/r;
+      }
+      Real psi4 = fmet*fmet;
+
+      adm.g_dd(m,0,0,k,j,i) = adm.g_dd(m,1,1,k,j,i) = adm.g_dd(m,2,2,k,j,i) = psi4;
+      adm.g_dd(m,0,1,k,j,i) = adm.g_dd(m,0,2,k,j,i) = adm.g_dd(m,1,2,k,j,i) = 0.0;
+      adm.psi4(m,k,j,i) = psi4;
+    }
+    adm.beta_u(m,0,k,j,i) = adm.beta_u(m,1,k,j,i) = adm.beta_u(m,2,k,j,i) = 0.0;
+    adm.vK_dd(m,0,0,k,j,i) = adm.vK_dd(m,0,1,k,j,i) = adm.vK_dd(m,0,2,k,j,i) = 0.0;
+    adm.vK_dd(m,1,1,k,j,i) = adm.vK_dd(m,1,2,k,j,i) = adm.vK_dd(m,2,2,k,j,i) = 0.0;
+  });
+}
+
+// Cleanup at the end of the run
+void FinalizeTOV(ParameterInput *pin, Mesh *pm) {
+  // This function is only needed to delete the TOV solver data, which is stored inside
+  // the dynamically allocated TOVParams object.
+  if (ptov_params != nullptr) {
+    delete ptov_params;
+  }
 }
 
 // History function
