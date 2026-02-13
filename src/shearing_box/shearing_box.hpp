@@ -12,7 +12,6 @@
 #include "athena.hpp"
 #include "parameter_input.hpp"
 #include "tasklist/task_list.hpp"
-#include "bvals/bvals.hpp"
 
 //----------------------------------------------------------------------------------------
 //! \struct ShearingBoxTaskIDs
