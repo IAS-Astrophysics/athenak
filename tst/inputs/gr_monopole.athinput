@@ -63,8 +63,3 @@ sigma_norm = 5000.0
 rhomin = 1.0e-6
 umin = 1.0e-8
 a_norm = 1.0
-
-<output1>
-file_type  = vtk        # Binary data dump
-variable   = mhd_w_bcc  # variables to be output
-dt         = 1.0        # time increment between outputs
