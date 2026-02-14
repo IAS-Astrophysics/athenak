@@ -133,6 +133,7 @@ class MHD {
   DvceArray4D<Real> e1x2, e3x2;
   DvceArray4D<Real> e2x3, e1x3;
   Real dtnew;
+  bool gr_dt = false;         // flag for accurate GR timestep calculation
 
   // following used for time derivatives in computation of jcon
   bool wbcc_saved = false;
