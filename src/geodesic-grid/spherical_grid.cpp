@@ -105,7 +105,7 @@ void SphericalGrid::SetInterpolationIndices() {
 
   auto &rcoord = interp_coord;
   auto &iindcs = interp_indcs;
-  Real offset = (ninterp % 2 == 0) ? 0.5 : 0.0;
+  Real offset = (ninterp % 2 == 0) ? -0.5 : 0.0;
   for (int n=0; n<=nang1; ++n) {
     // indices default to -1 if angle does not reside in this MeshBlockPack
     iindcs.h_view(n,0) = -1;
