@@ -32,7 +32,7 @@ SphericalGrid::SphericalGrid(MeshBlockPack *ppack, int nlev, Real rad, int nintp
     interp_wghts("interp_wghts",1,1,1),
     interp_vals("interp_vals",1,1) {
   // reallocate and set interpolation coordinates, indices, and weights
-  ninterp = (nintp <= 0) ? pmy_pack->pmesh->mb_indcs.ng*2+1 : nintp;
+  ninterp = (nintp <= 0) ? pmy_pack->pmesh->mb_indcs.ng*2 : nintp;
   if (ninterp > pmy_pack->pmesh->mb_indcs.ng*2+1) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
               << "ninterp = " << ninterp << " exceeds maximum allowed value of "
@@ -105,6 +105,7 @@ void SphericalGrid::SetInterpolationIndices() {
 
   auto &rcoord = interp_coord;
   auto &iindcs = interp_indcs;
+  Real offset = (ninterp % 2 == 0) ? 0.5 : 0.0;
   for (int n=0; n<=nang1; ++n) {
     // indices default to -1 if angle does not reside in this MeshBlockPack
     iindcs.h_view(n,0) = -1;
@@ -132,11 +133,11 @@ void SphericalGrid::SetInterpolationIndices() {
           (rcoord.h_view(n,2) >= x3min && rcoord.h_view(n,2) <= x3max)) {
         iindcs.h_view(n,0) = m;
         iindcs.h_view(n,1) = static_cast<int>(std::floor((rcoord.h_view(n,0)-
-                                                          (x1min))/dx1));
+                                                          (x1min+offset*dx1))/dx1));
         iindcs.h_view(n,2) = static_cast<int>(std::floor((rcoord.h_view(n,1)-
-                                                          (x2min))/dx2));
+                                                          (x2min+offset*dx2))/dx2));
         iindcs.h_view(n,3) = static_cast<int>(std::floor((rcoord.h_view(n,2)-
-                                                          (x3min))/dx3));
+                                                          (x3min+offset*dx3))/dx3));
       }
     }
   }
