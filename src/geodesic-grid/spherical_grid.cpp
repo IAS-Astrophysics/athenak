@@ -105,6 +105,7 @@ void SphericalGrid::SetInterpolationIndices() {
 
   auto &rcoord = interp_coord;
   auto &iindcs = interp_indcs;
+  Real offset = (ninterp % 2 == 0) ? -0.5 : 0.0;
   for (int n=0; n<=nang1; ++n) {
     // indices default to -1 if angle does not reside in this MeshBlockPack
     iindcs.h_view(n,0) = -1;
@@ -126,19 +127,17 @@ void SphericalGrid::SetInterpolationIndices() {
       Real &dx3 = size.h_view(m).dx3;
 
       // save MeshBlock and zone indicies for nearest position to spherical patch center
-      // if this angle position resides in the active cells of this MeshBlock without
-      // double count between different ranks
-      // TODO(@mhguo): xmax is not included, also avoid double count of different ranks or meshblocks?
-      if ((rcoord.h_view(n,0) >= x1min && rcoord.h_view(n,0) < x1max) &&
-          (rcoord.h_view(n,1) >= x2min && rcoord.h_view(n,1) < x2max) &&
-          (rcoord.h_view(n,2) >= x3min && rcoord.h_view(n,2) < x3max)) {
+      // if this angle position resides in this MeshBlock
+      if ((rcoord.h_view(n,0) >= x1min && rcoord.h_view(n,0) <= x1max) &&
+          (rcoord.h_view(n,1) >= x2min && rcoord.h_view(n,1) <= x2max) &&
+          (rcoord.h_view(n,2) >= x3min && rcoord.h_view(n,2) <= x3max)) {
         iindcs.h_view(n,0) = m;
         iindcs.h_view(n,1) = static_cast<int>(std::floor((rcoord.h_view(n,0)-
-                                                          (x1min))/dx1));
+                                                          (x1min+offset*dx1))/dx1));
         iindcs.h_view(n,2) = static_cast<int>(std::floor((rcoord.h_view(n,1)-
-                                                          (x2min))/dx2));
+                                                          (x2min+offset*dx2))/dx2));
         iindcs.h_view(n,3) = static_cast<int>(std::floor((rcoord.h_view(n,2)-
-                                                          (x3min))/dx3));
+                                                          (x3min+offset*dx3))/dx3));
       }
     }
   }
@@ -266,7 +265,7 @@ void SphericalGrid::InterpolateToSphere(int vs, int ve, DvceArray5D<Real>& val) 
         for (int j=0; j<nintp; j++) {
           for (int k=0; k<nintp; k++) {
             Real iwght = iwghts.d_view(n,i,0)*iwghts.d_view(n,j,1)*iwghts.d_view(n,k,2);
-            int_value += iwght*val(ii0,v,ii3+k+ks-nleft,ii2+j+js-nleft,ii1+i+is-nleft);
+            int_value += iwght*val(ii0,v+vs,ii3+k+ks-nleft,ii2+j+js-nleft,ii1+i+is-nleft);
           }
         }
       }

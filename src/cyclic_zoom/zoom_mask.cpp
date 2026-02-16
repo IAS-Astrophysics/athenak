@@ -6,6 +6,9 @@
 //! \file zoom_data.cpp
 //  \brief implementation of constructor and functions in CyclicZoom class
 
+#include <iostream>
+#include <utility>
+
 #include "athena.hpp"
 #include "globals.hpp"
 #include "mesh/mesh.hpp"
@@ -64,12 +67,12 @@ void ZoomData::StoreCCData(int zm, DvceArray5D<Real> a0, DvceArray5D<Real> ca,
   int &cjs = indcs.cjs;  int &cje  = indcs.cje;
   int &cks = indcs.cks;  int &cke  = indcs.cke;
   int nvar = a.extent_int(1);
-  int hng = indcs.ng / 2;
+  int hg = indcs.ng / 2;
   // TODO(@mhguo): may think whether we need to include ghost zones
   // TODO(@mhguo): 1D and 2D cases are not tested yet!
   // restrict in 1D
   if (pmesh->one_d) {
-    par_for("zoom-restrictCC-1D",DevExeSpace(), 0, nvar-1, cis-hng, cie+hng,
+    par_for("zoom-restrictCC-1D",DevExeSpace(), 0, nvar-1, cis-hg, cie+hg,
     KOKKOS_LAMBDA(const int n, const int i) {
       int finei = 2*i - cis;  // correct when cis=is
       ca(zm,n,cks,cjs,i) = 0.5*(a(m,n,cks,cjs,finei) + a(m,n,cks,cjs,finei+1));
@@ -77,7 +80,7 @@ void ZoomData::StoreCCData(int zm, DvceArray5D<Real> a0, DvceArray5D<Real> ca,
   // restrict in 2D
   } else if (pmesh->two_d) {
     par_for("zoom-restrictCC-2D",DevExeSpace(), 0, nvar-1,
-            cjs-hng, cje+hng, cis-hng, cie+hng,
+            cjs-hg, cje+hg, cis-hg, cie+hg,
     KOKKOS_LAMBDA(const int n, const int j, const int i) {
       int finei = 2*i - cis;  // correct when cis=is
       int finej = 2*j - cjs;  // correct when cjs=js
@@ -86,8 +89,8 @@ void ZoomData::StoreCCData(int zm, DvceArray5D<Real> a0, DvceArray5D<Real> ca,
     });
   // restrict in 3D
   } else {
-    par_for("zoom-restrictCC-3D",DevExeSpace(), 0, nvar-1, cks-hng, cke+hng,
-            cjs-hng, cje+hng, cis-hng, cie+hng,
+    par_for("zoom-restrictCC-3D",DevExeSpace(), 0, nvar-1, cks-hg, cke+hg,
+            cjs-hg, cje+hg, cis-hg, cie+hg,
     KOKKOS_LAMBDA(const int n, const int k, const int j, const int i) {
       int finei = 2*i - cis;  // correct if cis = is
       int finej = 2*j - cjs;  // correct if cjs = js
@@ -107,7 +110,7 @@ void ZoomData::StoreCCData(int zm, DvceArray5D<Real> a0, DvceArray5D<Real> ca,
 //! \brief Store coarse-grained hydro conserved variables from mb m to zoom mb zm
 //! only for mhd case
 
-void ZoomData::StoreCoarsePrimData(int zm, DvceArray5D<Real> cw, 
+void ZoomData::StoreCoarsePrimData(int zm, DvceArray5D<Real> cw,
                                     int m, DvceArray5D<Real> w_) {
   auto pmbp = pzoom->pmesh->pmb_pack;
   if (pmbp->pmhd == nullptr) {
@@ -142,8 +145,8 @@ void ZoomData::StoreCoarsePrimData(int zm, DvceArray5D<Real> cw,
   }
   // TODO(@mhguo): should we consider 2D and 1D cases?
   // TODO(@mhguo): may think whether we need to include ghost zones
-  int hng = indcs.ng / 2;
-  par_for("zoom-update-cwu",DevExeSpace(), cks-hng,cke+hng, cjs-hng,cje+hng, cis-hng,cie+hng,
+  int hg = indcs.ng / 2;
+  par_for("zoom-store-cw",DevExeSpace(), cks-hg, cke+hg, cjs-hg, cje+hg, cis-hg, cie+hg,
   KOKKOS_LAMBDA(const int ck, const int cj, const int ci) {
     int fi = 2*ci - cis;  // correct when cis=is
     int fj = 2*cj - cjs;  // correct when cjs=js
@@ -248,7 +251,7 @@ void ZoomData::ApplyDataSameLevel(int m, int zm, const ZoomRegion &zregion) {
   auto pmbp = pzoom->pmesh->pmb_pack;
   if (pmbp->phydro == nullptr && pmbp->pmhd == nullptr && pmbp->prad == nullptr) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-              << std::endl << "No physics package is enabled, nothing to load" <<std::endl;
+              << std::endl << "No physics module enabled, nothing to load" <<std::endl;
     std::exit(EXIT_FAILURE);
   }
   if (pmbp->phydro != nullptr) {
@@ -274,7 +277,7 @@ void ZoomData::ApplyDataFromFiner(int m, int zm, const ZoomRegion &zregion) {
   auto pmbp = pzoom->pmesh->pmb_pack;
   if (pmbp->phydro == nullptr && pmbp->pmhd == nullptr && pmbp->prad == nullptr) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-              << std::endl << "No physics package is enabled, nothing to load" <<std::endl;
+              << std::endl << "No physics module enabled, nothing to load" <<std::endl;
     std::exit(EXIT_FAILURE);
   }
   if (pmbp->phydro != nullptr) {
@@ -294,10 +297,11 @@ void ZoomData::ApplyDataFromFiner(int m, int zm, const ZoomRegion &zregion) {
 
 //----------------------------------------------------------------------------------------
 //! \fn void ZoomData::ApplyCCDataSameLevel()
-//! \brief Apply cell-centered data to MeshBlock m from zoom data zm 
+//! \brief Apply cell-centered data to MeshBlock m from zoom data zm
 
-void ZoomData::ApplyCCDataSameLevel(int m, DvceArray5D<Real> a, int zm, DvceArray5D<Real> a0,
-                           const ZoomRegion &zregion) {
+void ZoomData::ApplyCCDataSameLevel(int m, DvceArray5D<Real> a,
+                                    int zm, DvceArray5D<Real> a0,
+                                    const ZoomRegion &zregion) {
   auto &indcs = pzoom->pmesh->mb_indcs;
   auto pmbp = pzoom->pmesh->pmb_pack;
   auto &size = pmbp->pmb->mb_size;
@@ -330,10 +334,11 @@ void ZoomData::ApplyCCDataSameLevel(int m, DvceArray5D<Real> a, int zm, DvceArra
 
 //----------------------------------------------------------------------------------------
 //! \fn void ZoomData::ApplyCCDataFromFiner()
-//! \brief Apply cell-centered data to MeshBlock m from finer level zoom data zm for the zoom region
+//! \brief Apply cell-centered data to MeshBlock m from finer level zoom data zm
 
-void ZoomData::ApplyCCDataFromFiner(int m, DvceArray5D<Real> a, int zm, DvceArray5D<Real> ca,
-                          const ZoomRegion &zregion) {
+void ZoomData::ApplyCCDataFromFiner(int m, DvceArray5D<Real> a,
+                                    int zm, DvceArray5D<Real> ca,
+                                    const ZoomRegion &zregion) {
   auto &indcs = pzoom->pmesh->mb_indcs;
   auto pmbp = pzoom->pmesh->pmb_pack;
   auto &size = pmbp->pmb->mb_size;
@@ -376,7 +381,7 @@ void ZoomData::ApplyCCDataFromFiner(int m, DvceArray5D<Real> a, int zm, DvceArra
 
 //----------------------------------------------------------------------------------------
 //! \fn void ZoomData::ApplyPrimSameLevel()
-//! \brief Apply MHD hydro data to MeshBlock m from zoom data zm 
+//! \brief Apply MHD hydro data to MeshBlock m from zoom data zm
 
 void ZoomData::ApplyPrimSameLevel(int m, int zm, const ZoomRegion &zregion) {
   auto pmbp = pzoom->pmesh->pmb_pack;
@@ -457,7 +462,7 @@ void ZoomData::ApplyPrimSameLevel(int m, int zm, const ZoomRegion &zregion) {
     }
   });
   if (pzoom->verbose) {
-    std::cout << "  Rank " << global_variable::my_rank 
+    std::cout << "  Rank " << global_variable::my_rank
               << " Reinitialized variables in meshblock " << m
               << " using zoom meshblock " << zm << std::endl;
   }
@@ -466,7 +471,7 @@ void ZoomData::ApplyPrimSameLevel(int m, int zm, const ZoomRegion &zregion) {
 
 //----------------------------------------------------------------------------------------
 //! \fn void ZoomData::ApplyPrimFromFiner()
-//! \brief Apply MHD hydro data to MeshBlock m from finer level zoom data zm for the zoom region
+//! \brief Apply MHD hydro data to MeshBlock m from finer level zoom data zm
 
 void ZoomData::ApplyPrimFromFiner(int m, int zm, const ZoomRegion &zregion) {
   auto pmbp = pzoom->pmesh->pmb_pack;

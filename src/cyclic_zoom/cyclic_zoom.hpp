@@ -8,6 +8,9 @@
 //! \file cyclic_zoom.hpp
 //! \brief definitions for CyclicZoom class
 
+#include <string>
+#include <vector>
+
 //----------------------------------------------------------------------------------------
 //! \struct ZoomState
 //! \brief runtime state of cyclic zoom AMR, updated during simulation, used for restart
@@ -77,12 +80,8 @@ typedef struct ZoomInterval {
 
 typedef struct ZoomEMF {
   bool add_emf;            // flag for fixing electric field
-  int emf_flag;            // flag for modifying electric field
-  Real emf_f0, emf_f1;     // electric field factor, e = f0 * e0 + f1 * e1
   Real emf_fmax;           // maximum electric field factor
   int  emf_zmax;           // maximum zone number for electric field
-  Real re_fac;             // factor for electric field
-  Real r0_efld;            // modify e if r < r0_efld
 } ZoomEMF;
 
 // Forward declaration
@@ -93,8 +92,7 @@ class ZoomData;
 //! \class CyclicZoom
 //! \brief Cyclic Zoom AMR module
 
-class CyclicZoom
-{
+class CyclicZoom {
   friend class ZoomMesh;
   friend class ZoomData;
  public:
@@ -102,6 +100,7 @@ class CyclicZoom
   ~CyclicZoom() = default;
 
   // data
+  // TODO(@mhguo): may extend to accept multiple zoom criteria later
   std::string block_name;  // block name for reading parameters
   bool verbose;            // flag for verbose output
   bool read_rst;           // flag for reading zoom data restart file
@@ -136,6 +135,7 @@ class CyclicZoom
   void CorrectVariables();
   void ReinitVariables();
   void MaskVariables();
+  void ApplyMask();
   void UpdateFluxes(Driver *pdriver);
   void StoreFluxes();
   void SourceTermsFC(DvceEdgeFld4D<Real> emf);
@@ -154,8 +154,7 @@ class CyclicZoom
 //----------------------------------------------------------------------------------------
 //! \class ZoomMesh
 //! \brief Handles Zoom Mesh structures
-class ZoomMesh
-{
+class ZoomMesh {
  public:
   ZoomMesh(CyclicZoom *pz, ParameterInput *pin);
   ~ZoomMesh();
@@ -195,8 +194,7 @@ class ZoomMesh
 //----------------------------------------------------------------------------------------
 //! \class ZoomData
 //! \brief Handles storage of data during cyclic zoom AMR
-class ZoomData
-{
+class ZoomData {
   friend class CyclicZoom;
  public:
   ZoomData(CyclicZoom *pz, ParameterInput *pin);
@@ -226,7 +224,7 @@ class ZoomData
   // DualView for device ↔ host mirrored packing buffer
   // Syncs only used portion via subviews for bandwidth efficiency
   DualArray1D<Real> zbuf;
-  
+
   // Host array for storage with load balancing
   // Contains different ZMBs after redistribution due to load balancing
   HostArray1D<Real> zdata;
@@ -241,7 +239,6 @@ class ZoomData
   void Initialize();
   void MeshBlockDataSize();
   void ResetDataEC(DvceEdgeFld4D<Real> ec);
-  void DumpData();
   // functions for storing/applying data during zoom
   void StoreData(int zm, int m);
   void StoreCCData(int zm, DvceArray5D<Real> a0, DvceArray5D<Real> ca,

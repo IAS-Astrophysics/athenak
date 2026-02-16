@@ -6,6 +6,8 @@
 //! \file zoom_refinement.cpp
 //! \brief Functions to handle cyclic zoom mesh refinement
 
+#include <iostream>
+
 #include "athena.hpp"
 #include "globals.hpp"
 #include "mesh/mesh.hpp"
@@ -47,7 +49,8 @@ void CyclicZoom::ApplyZoomRegion(Driver *pdriver) {
     }
   }
   // Set up mask region
-  // TODO(@mhguo): data may already be on the correct device, probably try to avoid unnecessary transfer
+  // TODO(@mhguo): data may already be on the correct device,
+  // TODO(@mhguo): may try to avoid unnecessary transfer later
   if (zstate.zone > 0) {
     pzmesh->FindRegion(zstate.zone-1);
     pzmesh->SyncMBLists();
@@ -108,7 +111,8 @@ void CyclicZoom::StoreVariables() {
       ++zm_count;
     }
   }
-  CorrectVariables(); // correct variables after zoom data update but before zoom mesh update
+  // correct variables after zoom data update but before zoom mesh update
+  CorrectVariables();
   // TODO(@mhguo): move some of the following code to ZoomMesh functions
   pzmesh->GatherZMB(zm_count, zstate.zone-1);
   pzmesh->UpdateMeshStructure();
@@ -145,10 +149,11 @@ void CyclicZoom::CorrectVariables() {
         ++zm_count;
       }
       // print diagnostic info
-      if (verbose && global_variable::my_rank == 0) {
+      if (verbose) {
         std::cout << "CyclicZoom: Correcting variables for zoom MeshBlock " << zm_count
-                  << " using zoom MeshBlock " << zm
-                  << " on MeshBlock " << m + pmesh->gids_eachrank[global_variable::my_rank]
+                  << " using zoom MeshBlock " << zm + zmbs << " on MeshBlock "
+                  << m + pmesh->gids_eachrank[global_variable::my_rank]
+                  << " on rank " << global_variable::my_rank
                   << std::endl;
       }
       // correct electric fields
@@ -178,7 +183,7 @@ void CyclicZoom::ReinitVariables() {
     auto &lloc = pmesh->lloc_eachmb[m+mbs];
     if (verbose && global_variable::my_rank == 0) {
       std::cout << "  Rank " << global_variable::my_rank
-                << " Reinitializing MeshBlock " << m + pmesh->gids_eachrank[global_variable::my_rank]
+                << " Reinitializing MeshBlock " << m + mbs
                 << " using zoom MeshBlock " << zm + zmbs
                 << std::endl;
     }
@@ -202,9 +207,6 @@ void CyclicZoom::ReinitVariables() {
 void CyclicZoom::MaskVariables() {
   int zmbs = pzmesh->gzms_eachdvce[global_variable::my_rank];
   int mbs = pmesh->gids_eachrank[global_variable::my_rank];
-  if (verbose && global_variable::my_rank == 0) {
-    std::cout << " Mask zoom region radius: " << zregion.radius << std::endl;
-  }
   for (int zm = 0; zm < pzmesh->nzmb_thisdvce; ++zm) {
     auto &zlloc = pzmesh->lloc_eachzmb[zm+zmbs];
     int m = pzmesh->lid_eachmb[zm+zmbs];
@@ -215,10 +217,21 @@ void CyclicZoom::MaskVariables() {
       pzdata->ApplyDataFromFiner(m, zm, zregion);
     } else {
       std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-                << "zoom meshblock level is more than 1 level finer than MeshBlock level"
+                << "zoom MeshBlock is more than 1 level finer than MeshBlock level"
                 << std::endl;
       std::exit(EXIT_FAILURE);
     }
+  }
+  return;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void CyclicZoom::ApplyMask()
+//! \brief wrapper function to call MaskVariables()
+
+void CyclicZoom::ApplyMask() {
+  if (zstate.zone > 0 && !zamr.zooming_out && !zamr.zooming_in) {
+    MaskVariables();
   }
   return;
 }

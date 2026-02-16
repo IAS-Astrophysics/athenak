@@ -505,10 +505,8 @@ TaskStatus MHD::ApplyPhysicalBCs(Driver *pdrive, int stage) {
   pbval_b->BFieldBCs((pmy_pack), (pbval_b->b_in), b0);
 
   // TODO(@mhguo): this is temporary, need to move to a general mask function later
-  if (pmy_pack->pmesh->pzoom != nullptr && pmy_pack->pmesh->pzoom->zstate.zone > 0) {
-    if (!pmy_pack->pmesh->pzoom->zamr.zooming_out && !pmy_pack->pmesh->pzoom->zamr.zooming_in) {
-      pmy_pack->pmesh->pzoom->MaskVariables();
-    }
+  if (pmy_pack->pmesh->pzoom != nullptr) {
+    pmy_pack->pmesh->pzoom->ApplyMask();
   }
 
   // user BCs

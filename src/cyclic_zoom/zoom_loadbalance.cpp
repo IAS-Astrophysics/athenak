@@ -6,6 +6,10 @@
 //! \file zoom_loadbalance.cpp
 //! \brief Functions to handle load balancing of zoom data during cyclic zoom AMR
 
+#include <iostream>
+#include <utility>
+#include <vector>
+
 #include "athena.hpp"
 #include "globals.hpp"
 #include "mesh/mesh.hpp"
@@ -27,7 +31,8 @@ void ZoomData::PackBuffer() {
   // use size_t for offset to avoid overflow
   size_t offset = 0;
   size_t cc_cnt = u0.extent(1) * u0.extent(2) * u0.extent(3) * u0.extent(4);
-  size_t ccc_cnt = coarse_u0.extent(1) * coarse_u0.extent(2) * coarse_u0.extent(3) * coarse_u0.extent(4);
+  size_t ccc_cnt = coarse_u0.extent(1) * coarse_u0.extent(2) *
+                   coarse_u0.extent(3) * coarse_u0.extent(4);
   size_t ec_cnt = 0;
   if (pmbp->pmhd != nullptr) {
     // use efld_pre to get sizes for all edge fields
@@ -40,7 +45,8 @@ void ZoomData::PackBuffer() {
   size_t ci0_cnt = 0;
   if (pmbp->prad != nullptr) {
     i0_cnt = i0.extent(1) * i0.extent(2) * i0.extent(3) * i0.extent(4);
-    ci0_cnt = coarse_i0.extent(1) * coarse_i0.extent(2) * coarse_i0.extent(3) * coarse_i0.extent(4);
+    ci0_cnt = coarse_i0.extent(1) * coarse_i0.extent(2) *
+              coarse_i0.extent(3) * coarse_i0.extent(4);
   }
   auto dzbuf = zbuf.d_view;  // Get device view for packing
   for (int zm = 0; zm < pzmesh->nzmb_thisdvce; ++zm) {
@@ -81,8 +87,8 @@ void ZoomData::PackBuffer() {
   size_t used_size = pzmesh->nzmb_thisdvce * zmb_data_cnt;
   if (offset != used_size) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-              << ": Packed data size does not match expected size!" << std::endl;
-    std::cout << "Packed size: " << offset << ", Expected size: " << used_size << std::endl;
+              << ": Packed data size " << offset << " does not match expected size "
+              << used_size << "!" << std::endl;
     std::exit(EXIT_FAILURE);
   }
   Kokkos::deep_copy(
@@ -200,7 +206,8 @@ void ZoomData::UnpackBuffer() {
   // use size_t for offset to avoid overflow
   size_t offset = 0;
   size_t cc_cnt = u0.extent(1) * u0.extent(2) * u0.extent(3) * u0.extent(4);
-  size_t ccc_cnt = coarse_u0.extent(1) * coarse_u0.extent(2) * coarse_u0.extent(3) * coarse_u0.extent(4);
+  size_t ccc_cnt = coarse_u0.extent(1) * coarse_u0.extent(2) *
+                   coarse_u0.extent(3) * coarse_u0.extent(4);
   size_t ec_cnt = 0;
   if (pmbp->pmhd != nullptr) {
     // use efld_pre to get sizes for all edge fields
@@ -213,11 +220,12 @@ void ZoomData::UnpackBuffer() {
   size_t ci0_cnt = 0;
   if (pmbp->prad != nullptr) {
     i0_cnt = i0.extent(1) * i0.extent(2) * i0.extent(3) * i0.extent(4);
-    ci0_cnt = coarse_i0.extent(1) * coarse_i0.extent(2) * coarse_i0.extent(3) * coarse_i0.extent(4);
+    ci0_cnt = coarse_i0.extent(1) * coarse_i0.extent(2) *
+              coarse_i0.extent(3) * coarse_i0.extent(4);
   }
   for (int zm = 0; zm < pzmesh->nzmb_thisdvce; ++zm) {
     if (pzoom->verbose) {
-      std::cout << " Rank " << global_variable::my_rank 
+      std::cout << " Rank " << global_variable::my_rank
                 << " Unpacking buffer for zmb " << zm << std::endl;
     }
     // offset = zm * zmb_data_cnt;
@@ -254,8 +262,8 @@ void ZoomData::UnpackBuffer() {
   }
   if (offset != used_size) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-              << ": Unpacked data size does not match expected size!" << std::endl;
-    std::cout << "Unpacked size: " << offset << ", Expected size: " << used_size << std::endl;
+              << ": Unpacked data size " << offset << " does not match expected size "
+              << used_size << "!" << std::endl;
     std::exit(EXIT_FAILURE);
   }
   return;
@@ -360,7 +368,7 @@ void ZoomData::UnpackBuffersEC(DvceArray1D<Real> packed_data, size_t offset,
 //!          across MPI ranks. It supports two indexing schemes:
 //!
 //!          1. Dense indexing: Sequential local indices (0, 1, 2, ...) for ZMBs owned by
-//!             a rank. Used by zbuf during computation where each rank processes a 
+//!             a rank. Used by zbuf during computation where each rank processes a
 //!             contiguous subset of ZMBs.
 //!
 //!          2. Logical indexing: Global indices specified by lid_eachzmb array, which may
@@ -393,7 +401,7 @@ void ZoomData::RedistZMBs(int nlmb, int lmbs,
                           const std::vector<int>* src_lids,
                           const std::vector<int>* dst_lids) {
   // Get ZMB information for this level
-  size_t data_per_zmb = zmb_data_cnt;       // Data elements per ZMB
+  size_t cnt_per_zmb = zmb_data_cnt;       // Data elements per ZMB
 
   int ncopy = 0;
   int my_rank = global_variable::my_rank;
@@ -405,30 +413,30 @@ void ZoomData::RedistZMBs(int nlmb, int lmbs,
   // Dense indexing counters (only incremented when rank owns the ZMB)
   int src_zm = 0;
   int dst_zm = 0;
-  
+
   // Loop over all ZMBs at this level
   for (int lm = 0; lm < nlmb; ++lm) {
     int gzm = lm + lmbs;  // Global ZMB index
     int src_rank_val = src_ranks[gzm];
     int dst_rank_val = dst_ranks[gzm];
-    
+
     // Compute source offset:
     // - If src_lids is nullptr: use dense indexing (sequential local index)
     // - Otherwise: use logical indexing from src_lids array
-    size_t offset_src = (src_lids == nullptr) ? 
-                        src_zm * data_per_zmb : 
-                        (*src_lids)[gzm] * data_per_zmb;
-    
+    size_t offset_src = (src_lids == nullptr) ?
+                        src_zm * cnt_per_zmb :
+                        (*src_lids)[gzm] * cnt_per_zmb;
+
     // Compute destination offset with same logic
-    size_t offset_dst = (dst_lids == nullptr) ? 
-                        dst_zm * data_per_zmb : 
-                        (*dst_lids)[gzm] * data_per_zmb;
+    size_t offset_dst = (dst_lids == nullptr) ?
+                        dst_zm * cnt_per_zmb :
+                        (*dst_lids)[gzm] * cnt_per_zmb;
 
     // Local copy (same rank, but may need reindexing between dense/logical)
     if (src_rank_val == my_rank && dst_rank_val == my_rank) {
       Kokkos::deep_copy(
-        Kokkos::subview(dst_buf, Kokkos::make_pair(offset_dst, offset_dst + data_per_zmb)),
-        Kokkos::subview(src_buf, Kokkos::make_pair(offset_src, offset_src + data_per_zmb))
+        Kokkos::subview(dst_buf, Kokkos::make_pair(offset_dst, offset_dst + cnt_per_zmb)),
+        Kokkos::subview(src_buf, Kokkos::make_pair(offset_src, offset_src + cnt_per_zmb))
       );
       ++ncopy;
       // Increment both counters for local copies
@@ -440,7 +448,7 @@ void ZoomData::RedistZMBs(int nlmb, int lmbs,
     // Post receives first (avoids potential deadlock)
     if (dst_rank_val == my_rank && src_rank_val != my_rank) {
       MPI_Request req;
-      MPI_Irecv(dst_buf.data() + offset_dst, data_per_zmb, 
+      MPI_Irecv(dst_buf.data() + offset_dst, cnt_per_zmb,
                 MPI_ATHENA_REAL, src_rank_val, lm, zoom_comm, &req);
       requests.push_back(req);
       ++nrecv;
@@ -451,7 +459,7 @@ void ZoomData::RedistZMBs(int nlmb, int lmbs,
     // Post sends
     if (src_rank_val == my_rank && dst_rank_val != my_rank) {
       MPI_Request req;
-      MPI_Isend(src_buf.data() + offset_src, data_per_zmb,
+      MPI_Isend(src_buf.data() + offset_src, cnt_per_zmb,
                 MPI_ATHENA_REAL, dst_rank_val, lm, zoom_comm, &req);
       requests.push_back(req);
       ++nsend;
@@ -469,9 +477,9 @@ void ZoomData::RedistZMBs(int nlmb, int lmbs,
 #endif
 
   if (pzoom->verbose && global_variable::my_rank == 0) {
-    std::cout << "RedistZMBs: completed " 
+    std::cout << "RedistZMBs: completed "
 #if MPI_PARALLEL_ENABLED
-              << requests.size() << " MPI ops (sends: " << nsend 
+              << requests.size() << " MPI ops (sends: " << nsend
               << ", recvs: " << nrecv << ", local: " << ncopy << ")" << std::endl;
 #else
               << ncopy << " local copies" << std::endl;
@@ -484,8 +492,7 @@ void ZoomData::RedistZMBs(int nlmb, int lmbs,
 //! \fn void ZoomData::SaveToStorage()
 //! \brief Save ZMBs from computation buffer to persistent storage
 //!
-//! \details Wrapper for RedistZMBs that transfers data from zbuf (dense indexing,
-//!          distributed for computation) to zdata (logical indexing, fixed global layout).
+//! \details Wrapper for RedistZMBs that transfers data from zbuf to zdata.
 //!          Called before AMR refinement operations.
 //!
 //! \param[in] zone Zone level to save
@@ -505,8 +512,7 @@ void ZoomData::SaveToStorage(int zone) {
 //! \fn void ZoomData::LoadFromStorage()
 //! \brief Load ZMBs from persistent storage to computation buffer
 //!
-//! \details Wrapper for RedistZMBs that transfers data from zdata (logical indexing,
-//!          fixed global layout) to zbuf (dense indexing, redistributed for computation).
+//! \details Wrapper for RedistZMBs that transfers data from zdata to zbuf.
 //!          Called after AMR refinement operations.
 //!
 //! \param[in] zone Zone level to load

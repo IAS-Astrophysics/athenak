@@ -6,6 +6,8 @@
 //! \file zoom_fluxes.cpp
 //  \brief Functions for updating and storing fluxes during zooming
 
+#include <iostream>
+
 #include "athena.hpp"
 #include "globals.hpp"
 #include "mesh/mesh.hpp"
@@ -20,7 +22,7 @@
 void CyclicZoom::UpdateFluxes(Driver *pdriver) {
   // call MHD functions to update electric fields in all MeshBlocks
   mhd::MHD *pmhd = pmesh->pmb_pack->pmhd;
-  (void) pmhd->InitRecv(pdriver, 1);  // stage = 1 
+  (void) pmhd->InitRecv(pdriver, 1);  // stage = 1
   (void) pmhd->CopyCons(pdriver, 1);  // stage = 1: copy u0 to u1
   (void) pmhd->Fluxes(pdriver, 1);
   // (void) pmhd->RestrictU(this, 0);
@@ -39,7 +41,7 @@ void CyclicZoom::UpdateFluxes(Driver *pdriver) {
   (void) pmhd->ClearSend(pdriver, 1); // stage = 1
   (void) pmhd->ClearRecv(pdriver, 1); // stage = 1
   if (verbose) {
-    std::cout << " Rank " << global_variable::my_rank 
+    std::cout << " Rank " << global_variable::my_rank
             << " Calculated electric fields after AMR" << std::endl;
   }
   return;
@@ -92,13 +94,13 @@ void ZoomData::StoreEFieldsBeforeAMR(int zm, int m, DvceEdgeFld4D<Real> efld) {
     e2(zm,ck,cj,ci) = 0.5*(ef2(m,fk,fj,fi) + ef2(m,fk,fj+1,fi));
     e3(zm,ck,cj,ci) = 0.5*(ef3(m,fk,fj,fi) + ef3(m,fk+1,fj,fi));
   });
-  // TODO(@mhguo): add even finer electric fields
   return;
 }
 
 //----------------------------------------------------------------------------------------
 //! \fn void ZoomData::StoreEFieldsFromFiner()
-//! \brief Store coarse electric fields in zoom data zmc from finer zoom data zm on previous level
+//! \brief Store coarse electric fields in zoom data zmc from finer zoom data zm on
+//! previous level
 
 void ZoomData::StoreEFieldsFromFiner(int zmc, int zm, DvceEdgeFld4D<Real> efld) {
   auto &indcs = pzoom->pmesh->mb_indcs;
@@ -253,37 +255,6 @@ void ZoomData::LimitEFields() {
   auto de2 = delta_efld.x2e;
   auto de3 = delta_efld.x3e;
   int nzmbm1 = pzmesh->nzmb_thisdvce - 1;
-  // debug info
-  emax1 = 0.0;
-  emax2 = 0.0;
-  emax3 = 0.0;
-  Kokkos::parallel_reduce("zoom-max-delta-emf",Kokkos::RangePolicy<>(DevExeSpace(), 0, nmkji),
-  KOKKOS_LAMBDA(const int &idx, Real &max_de1, Real &max_de2, Real &max_de3) {
-    int zm = (idx)/nkji;
-    int ck = (idx - zm*nkji)/nji;
-    int cj = (idx - zm*nkji - ck*nji)/ni;
-    int ci = (idx - zm*nkji - ck*nji - cj*ni) + cis;
-    ck += cks;
-    cj += cjs;
-    max_de1 = fmax(max_de1, fabs(de1(zm,ck,cj,ci)));
-    max_de2 = fmax(max_de2, fabs(de2(zm,ck,cj,ci)));
-    max_de3 = fmax(max_de3, fabs(de3(zm,ck,cj,ci)));
-  }, Kokkos::Max<Real>(emax1), Kokkos::Max<Real>(emax2),Kokkos::Max<Real>(emax3));
-  if (pzoom->verbose && global_variable::my_rank == 0) {
-    std::cout << "ZoomData::LimitEFields: pre-limit local de1max=" << emax1
-              << ", de2max=" << emax2
-              << ", de3max=" << emax3 << std::endl;
-  }
-#if MPI_PARALLEL_ENABLED
-  MPI_Allreduce(MPI_IN_PLACE, &emax1, 1, MPI_ATHENA_REAL, MPI_MAX, MPI_COMM_WORLD);
-  MPI_Allreduce(MPI_IN_PLACE, &emax2, 1, MPI_ATHENA_REAL, MPI_MAX, MPI_COMM_WORLD);
-  MPI_Allreduce(MPI_IN_PLACE, &emax3, 1, MPI_ATHENA_REAL, MPI_MAX, MPI_COMM_WORLD);
-#endif
-  if (pzoom->verbose && global_variable::my_rank == 0) {
-    std::cout << "ZoomData::LimitEFields: pre-limit de1max=" << emax1
-              << ", de2max=" << emax2
-              << ", de3max=" << emax3 << std::endl;
-  }
 
   par_for("zoom-limit-efld",DevExeSpace(), 0, nzmbm1, cks,cke+1, cjs,cje+1, cis,cie+1,
   KOKKOS_LAMBDA(const int zm, const int ck, const int cj, const int ci) {
@@ -298,38 +269,6 @@ void ZoomData::LimitEFields() {
       de3(zm,ck,cj,ci) = copysign(emax, de3(zm,ck,cj,ci));
     }
   });
-
-  // debug info
-  emax1 = 0.0;
-  emax2 = 0.0;
-  emax3 = 0.0;
-  Kokkos::parallel_reduce("zoom-max-delta-emf",Kokkos::RangePolicy<>(DevExeSpace(), 0, nmkji),
-  KOKKOS_LAMBDA(const int &idx, Real &max_de1, Real &max_de2, Real &max_de3) {
-    int zm = (idx)/nkji;
-    int ck = (idx - zm*nkji)/nji;
-    int cj = (idx - zm*nkji - ck*nji)/ni;
-    int ci = (idx - zm*nkji - ck*nji - cj*ni) + cis;
-    ck += cks;
-    cj += cjs;
-    max_de1 = fmax(max_de1, fabs(de1(zm,ck,cj,ci)));
-    max_de2 = fmax(max_de2, fabs(de2(zm,ck,cj,ci)));
-    max_de3 = fmax(max_de3, fabs(de3(zm,ck,cj,ci)));
-  }, Kokkos::Max<Real>(emax1), Kokkos::Max<Real>(emax2),Kokkos::Max<Real>(emax3));
-  if (pzoom->verbose && global_variable::my_rank == 0) {
-    std::cout << "ZoomData::LimitEFields: post-limit local de1max=" << emax1
-              << ", de2max=" << emax2
-              << ", de3max=" << emax3 << std::endl;
-  }
-#if MPI_PARALLEL_ENABLED
-  MPI_Allreduce(MPI_IN_PLACE, &emax1, 1, MPI_ATHENA_REAL, MPI_MAX, MPI_COMM_WORLD);
-  MPI_Allreduce(MPI_IN_PLACE, &emax2, 1, MPI_ATHENA_REAL, MPI_MAX, MPI_COMM_WORLD);
-  MPI_Allreduce(MPI_IN_PLACE, &emax3, 1, MPI_ATHENA_REAL, MPI_MAX, MPI_COMM_WORLD);
-#endif
-  if (pzoom->verbose && global_variable::my_rank == 0) {
-    std::cout << "ZoomData::LimitEFields: post-limit de1max=" << emax1
-              << ", de2max=" << emax2
-              << ", de3max=" << emax3 << std::endl;
-  }
 
   return;
 }

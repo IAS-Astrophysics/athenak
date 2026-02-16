@@ -6,6 +6,8 @@
 //! \file zoom_refinement.cpp
 //! \brief Functions to handle cyclic zoom mesh refinement
 
+#include <iostream>
+
 #include "athena.hpp"
 #include "globals.hpp"
 #include "mesh/mesh.hpp"
@@ -53,11 +55,13 @@ void CyclicZoom::UpdateState() {
   if (verbose && global_variable::my_rank == 0) {
     std::cout << "CyclicZoom AMR:"
               << " new id = " << zstate.id
-              << " zone = " << zstate.zone 
+              << " zone = " << zstate.zone
               << " level = " << zamr.level
               << std::endl;
-    std::cout << "CyclicZoom AMR: old region radius = " << old_zregion.radius << std::endl;
-    std::cout << "CyclicZoom AMR: region radius = " << zregion.radius << std::endl;
+    std::cout << "CyclicZoom AMR: old region radius = " << old_zregion.radius
+              << std::endl;
+    std::cout << "CyclicZoom AMR: new region radius = " << zregion.radius
+              << std::endl;
     std::cout << "CyclicZoom AMR: time = " << pmesh->time << " runtime = " << zint.runtime
               << " next time = " << zstate.next_time << std::endl;
   }
@@ -136,12 +140,6 @@ void CyclicZoom::SetRefinementFlags() {
       // Calculate the distance from sphere center to this closest point
       Real r_sq = SQR(x1c - closest_x1) + SQR(x2c - closest_x2) + SQR(x3c - closest_x3);
       if (r_sq < SQR(r_zoom)) {
-        // std::cerr << "CyclicZoom Error: MeshBlock " << m+mbs 
-        //           << " at level " << pmesh->lloc_eachmb[m+mbs].level
-        //           << " cannot be refined/coarsened to level " << old_level + ref_flag
-        //           << "!" << std::endl;
-        // Kokkos::abort("CyclicZoom AMR level mismatch");
-        // printf("MB %d: dist^2 = %e, r_zoom^2 = %e\n", m+mbs, r_sq, SQR(r_zoom));
         refine_flag.h_view(m+mbs) = ref_flag;
       }
     }

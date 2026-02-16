@@ -6,6 +6,9 @@
 //! \file cyclic_zoom.cpp
 //  \brief implementation of constructor and functions in CyclicZoom class
 
+#include <iostream>
+#include <string>
+
 #include "athena.hpp"
 #include "globals.hpp"
 #include "parameter_input.hpp"
@@ -29,9 +32,9 @@ CyclicZoom::CyclicZoom(Mesh *pm, ParameterInput *pin) :
       }
     }
   }
-  verbose = pin->GetOrAddBoolean(block_name,"verbose",false);
-  read_rst = pin->GetOrAddBoolean(block_name,"read_rst",true);
-  write_rst = pin->GetOrAddBoolean(block_name,"write_rst",true);
+  verbose = pin->GetOrAddBoolean("cyclic_zoom","verbose",false);
+  read_rst = pin->GetOrAddBoolean("cyclic_zoom","read_rst",true);
+  write_rst = pin->GetOrAddBoolean("cyclic_zoom","write_rst",true);
 
   // TODO(@mhguo): may set the parameters so that the initial level equals the max level
   // TODO(@mhguo): currently we need to check whether zamr.level is correct by hand
@@ -71,22 +74,12 @@ CyclicZoom::CyclicZoom(Mesh *pm, ParameterInput *pin) :
   old_zregion = zregion; // initialize old zoom region
   SetRegionAndInterval();
   zstate.next_time += zint.runtime;
-  zemf.emf_flag = 0;
-  zemf.emf_f0 = 1.0;
-  zemf.emf_f1 = 0.0;
   zemf.emf_fmax = 1.0;
-  zemf.re_fac = 0.8; // TODO(@mhguo): probably change to 1.0?
-  zemf.r0_efld = 0.0;
   // Think whether to read emf parameters from input file
   zemf.add_emf = pin->GetOrAddBoolean(block_name,"add_emf",true); // default true
   if (zemf.add_emf) {
-    zemf.emf_flag = pin->GetOrAddInteger(block_name,"emf_flag",zemf.emf_flag);
-    zemf.emf_f0 = pin->GetOrAddReal(block_name,"emf_f0",zemf.emf_f0);
-    zemf.emf_f1 = pin->GetOrAddReal(block_name,"emf_f1",zemf.emf_f1);
     zemf.emf_fmax = pin->GetOrAddReal(block_name,"emf_fmax",zemf.emf_fmax);
     zemf.emf_zmax = pin->GetOrAddInteger(block_name,"emf_zmax",zamr.nlevels);
-    zemf.re_fac = pin->GetOrAddReal(block_name,"re_fac",zemf.re_fac);
-    zemf.r0_efld = pin->GetOrAddReal(block_name,"r0_efld",0.0); // default value
   }
 
   Initialize(pin);
@@ -126,8 +119,7 @@ void CyclicZoom::PrintCyclicZoomDiagnostics() {
     // print basic parameters
     std::cout << "Basic: read_rst = " << read_rst
               << " write_rst = " << write_rst << std::endl;
-    std::cout << "Funcs: add_emf = " << zemf.add_emf
-              << " emf_flag = " << zemf.emf_flag << std::endl;
+    std::cout << "Funcs: add_emf = " << zemf.add_emf << std::endl;
     // print mesh parameters
     std::cout << "Mesh: nzmb_max_perdvce = " << pzmesh->nzmb_max_perdvce
               << " nzmb_max_perhost = " << pzmesh->nzmb_max_perhost << std::endl;
@@ -140,9 +132,8 @@ void CyclicZoom::PrintCyclicZoomDiagnostics() {
               << " p_zoom = " << pzdata->p_zoom
               << std::endl;
     // print electric field parameters
-    std::cout << "Efield: emf_f0 = " << zemf.emf_f0 << " emf_f1 = " << zemf.emf_f1
-              << " emf_fmax = " << zemf.emf_fmax << " emf_zmax = " << zemf.emf_zmax
-              << " re_fac = " << zemf.re_fac << " r0_efld = " << zemf.r0_efld << std::endl;
+    std::cout << "Efield: emf_fmax = " << zemf.emf_fmax << " emf_zmax = " << zemf.emf_zmax
+              << std::endl;
     // print interval parameters
     std::cout << "Interval: t_run_fac = " << zint.t_run_fac
               << " t_run_pow = " << zint.t_run_pow
@@ -150,7 +141,8 @@ void CyclicZoom::PrintCyclicZoomDiagnostics() {
               << std::endl;
     // output zone-specific time factors
     for (int i = 0; i < zint.t_run_fac_zones.size(); ++i) {
-      std::cout << " t_run_fac_zone_" << i << " = " << zint.t_run_fac_zones[i] << std::endl;
+      std::cout << " t_run_fac_zone_" << i << " = " << zint.t_run_fac_zones[i]
+                << std::endl;
     }
     // print level structure
     std::cout << "Level: zone = " << zstate.zone << " direction = " << zstate.direction

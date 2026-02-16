@@ -6,6 +6,8 @@
 //! \file zoom_mesh.cpp
 //  \brief implementation of constructor and functions in CyclicZoom class
 
+#include <iostream>
+
 #include "athena.hpp"
 #include "globals.hpp"
 #include "parameter_input.hpp"
@@ -16,19 +18,29 @@
 // constructor, initializes data structures and parameters
 
 ZoomMesh::ZoomMesh(CyclicZoom *pz, ParameterInput *pin) :
-    pzoom(pz)
-  {
+    pzoom(pz) {
   max_level = pzoom->zamr.max_level;
   min_level = pzoom->zamr.min_level;
   nlevels = max_level - min_level + 1;
   nzmb_total = 0;
   nzmb_thisdvce = 0;
   // TODO(@mhguo): let's use a large default value for now, may tune it later
-  // TODO(@mhguo): error check if the number of zoom MBs exceeds maximum when storing variables
-  nzmb_max_perdvce = pin->GetOrAddInteger(pzoom->block_name,"max_nzmb_per_dvce",
+  nzmb_max_perdvce = pin->GetOrAddInteger("cyclic_zoom","max_nzmb_per_dvce",
                      pzoom->pmesh->nmb_maxperrank);
-  nzmb_max_perhost = pin->GetOrAddInteger(pzoom->block_name,"max_nzmb_per_host",
+  nzmb_max_perhost = pin->GetOrAddInteger("cyclic_zoom","max_nzmb_per_host",
                      pzoom->pmesh->nmb_maxperrank);
+  if (nzmb_max_perdvce > pzoom->pmesh->nmb_maxperrank) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+              << std::endl << "max_nzmb_per_dvce exceeds max_nmb_per_rank: "
+              << nzmb_max_perdvce << " > " << pzoom->pmesh->nmb_maxperrank << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+  if (nzmb_max_perhost > pzoom->pmesh->nmb_maxperrank) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+              << std::endl << "max_nzmb_per_host exceeds max_nmb_per_rank: "
+              << nzmb_max_perhost << " > " << pzoom->pmesh->nmb_maxperrank << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
   gzms_eachlevel = new int[nlevels]();
   nzmb_eachlevel = new int[nlevels]();
   gzms_eachdvce = new int[global_variable::nranks]();
@@ -136,7 +148,7 @@ void ZoomMesh::RebuildMeshStructure() {
   rank_eachmb.resize(nzmb_total);
   lid_eachmb.resize(nzmb_total);
   lloc_eachzmb.resize(nzmb_total);
-  
+
   // Rebuild rank_eachzmb and lid_eachzmb using round-robin distribution
   for (int gzm = 0; gzm < nzmb_total; ++gzm) {
     rank_eachzmb[gzm] = gzm % global_variable::nranks;
@@ -230,7 +242,7 @@ void ZoomMesh::FindRegion(int zone) {
     }
   }
   if (pzoom->verbose) {
-    std::cout << "  Rank " << global_variable::my_rank << " total zoom MBs to be applied: "
+    std::cout << " Rank " << global_variable::my_rank << " total zoom MBs to be applied: "
               << zm_count << std::endl;
   }
   // TODO(@mhguo): you probably don't need to sync, as lloc_eachmb includes all MBs

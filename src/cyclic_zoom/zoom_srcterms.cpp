@@ -23,6 +23,7 @@ void CyclicZoom::SourceTermsFC(DvceEdgeFld4D<Real> efld) {
   if (!zemf.add_emf) return;
   // apply only when zone > 0
   if (zstate.zone == 0) return;
+  if (zstate.zone > zemf.emf_zmax) return;
   if (zamr.zooming_out || zamr.zooming_in) return;
   int zmbs = pzmesh->gzms_eachdvce[global_variable::my_rank];
   for (int zm = 0; zm < pzmesh->nzmb_thisdvce; ++zm) {
@@ -30,9 +31,6 @@ void CyclicZoom::SourceTermsFC(DvceEdgeFld4D<Real> efld) {
     // pzdata->UpdateElectricFieldsInZoomRegion(m, zm);
     // pzdata->StoreEFields(zm, m);
     pzdata->AddSrcTermsFC(m, zm, efld);
-  }
-  if (verbose && global_variable::my_rank == 0) {
-    std::cout << "CyclicZoom: Added source terms to electric fields in zoom region" << std::endl;
   }
   return;
 }
@@ -99,9 +97,6 @@ void ZoomData::AddSrcTermsFC(int m, int zm, DvceEdgeFld4D<Real> efld) {
 
     // apply to zoom region
     if (zregion.IsInZoomRegion(x1v, x2f, x3f)) {
-        // ef1(m,k,j,i) = f0*ef1(m,k,j,i) + f1*de1(zm,ck,cj,ci);
-        // limit de1 to be between -emax1 and emax1
-        // ef1(m,k,j,i) = f0*ef1(m,k,j,i) + f1*fmax(-emax1, fmin(emax1, de1(zm,ck,cj,ci)));
         ef1(m,k,j,i) += de1(zm,ck,cj,ci);
     }
   });
@@ -125,9 +120,6 @@ void ZoomData::AddSrcTermsFC(int m, int zm, DvceEdgeFld4D<Real> efld) {
 
     // apply to zoom region
     if (zregion.IsInZoomRegion(x1f, x2v, x3f)) {
-        // ef2(m,k,j,i) = f0*ef2(m,k,j,i) + f1*de2(zm,ck,cj,ci);
-        // limit de2 to be between -emax2 and emax2
-        // ef2(m,k,j,i) = f0*ef2(m,k,j,i) + f1*fmax(-emax2, fmin(emax2, de2(zm,ck,cj,ci)));
         ef2(m,k,j,i) += de2(zm,ck,cj,ci);
     }
   });
@@ -151,9 +143,6 @@ void ZoomData::AddSrcTermsFC(int m, int zm, DvceEdgeFld4D<Real> efld) {
 
     // apply to zoom region
     if (zregion.IsInZoomRegion(x1f, x2f, x3v)) {
-        // ef3(m,k,j,i) = f0*ef3(m,k,j,i) + f1*de3(zm,ck,cj,ci);
-        // limit de3 to be between -emax3 and emax3
-        // ef3(m,k,j,i) = f0*ef3(m,k,j,i) + f1*fmax(-emax3, fmin(emax3, de3(zm,ck,cj,ci)));
         ef3(m,k,j,i) += de3(zm,ck,cj,ci);
     }
   });

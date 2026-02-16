@@ -6,6 +6,9 @@
 //! \file zoom_data.cpp
 //  \brief implementation of constructor and functions in CyclicZoom class
 
+#include <iostream>
+#include <string>
+
 #include "athena.hpp"
 #include "globals.hpp"
 #include "parameter_input.hpp"
@@ -32,8 +35,7 @@ ZoomData::ZoomData(CyclicZoom *pz, ParameterInput *pin) :
     i0("zi0",1,1,1,1,1),
     coarse_i0("zci0",1,1,1,1,1),
     zbuf("z_buffer",1),
-    zdata("z_data",1)
-  {
+    zdata("z_data",1) {
   // allocate memory for primitive variables
   pzmesh = pzoom->pzmesh;
   auto &indcs = pzoom->pmesh->mb_indcs;
@@ -100,9 +102,8 @@ ZoomData::ZoomData(CyclicZoom *pz, ParameterInput *pin) :
   // allocate device and host arrays for data transfer and storage
   // DualView buffer: device side for packing, host side (pinned) for MPI send
   // Stores ZMBs currently owned by this rank before redistribution
-  // zbuf.resize(nzmb * zmb_data_cnt);
   Kokkos::realloc(zbuf, nzmb * zmb_data_cnt);
-  // Host receive buffer: stores ZMBs that will be owned by this rank after AMR/redistribution
+  // Host data buffer: stores ZMBs for load balancing and restart
   // Note: zdata may contain completely different ZMBs than zbuf due to load balancing
   Kokkos::realloc(zdata, nzmb * zmb_data_cnt);
 
@@ -120,8 +121,7 @@ ZoomData::ZoomData(CyclicZoom *pz, ParameterInput *pin) :
 //! \fn void ZoomData::Initialize()
 //! \brief Initialize ZoomData variables
 
-void ZoomData::Initialize()
-{
+void ZoomData::Initialize() {
   auto &indcs = pzoom->pmesh->mb_indcs;
   int &ng = indcs.ng;
   int n1 = indcs.nx1 + 2*ng;
@@ -286,77 +286,5 @@ void ZoomData::ResetDataEC(DvceEdgeFld4D<Real> ec) {
     e3(m,k,j,i) = 0.0;
   });
 
-  return;
-}
-
-//----------------------------------------------------------------------------------------
-//! \fn void ZoomData::DumpData()
-//! \brief dump zoom data to file
-
-// TODO: dumping on a single rank now, should consider parallel dumping
-void ZoomData::DumpData() {
-  if (pzoom->verbose && global_variable::my_rank == 0) {
-    std::cout << "CyclicZoom: Dumping data" << std::endl;
-  }
-  if (global_variable::my_rank == 0) {
-    auto pm = pzoom->pmesh;
-    auto &indcs = pm->mb_indcs;
-    int nccells1 = indcs.cnx1 + 2*(indcs.ng);
-    int nccells2 = (indcs.cnx2 > 1)? (indcs.cnx2 + 2*(indcs.ng)) : 1;
-    int nccells3 = (indcs.cnx3 > 1)? (indcs.cnx3 + 2*(indcs.ng)) : 1;
-    int nzmb = pzmesh->nzmb_thisdvce;  // Use actual count, not max
-
-    std::string fname;
-    fname.assign("CyclicZoom");
-    // add pmesh ncycles
-    fname.append(".");
-    fname.append(std::to_string(pm->ncycle));
-    fname.append(".dat");
-    FILE *pfile;
-    if ((pfile = std::fopen(fname.c_str(), "wb")) == nullptr) {
-      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-                << std::endl << "Error output file could not be opened" <<std::endl;
-      std::exit(EXIT_FAILURE);
-    }
-    int datasize = sizeof(Real);
-    
-    // Create host mirrors and copy data from device
-    auto h_coarse_w0 = Kokkos::create_mirror_view(coarse_w0);
-    Kokkos::deep_copy(h_coarse_w0, coarse_w0);
-    
-    auto h_efld_pre_x1e = Kokkos::create_mirror_view(efld_pre.x1e);
-    auto h_efld_pre_x2e = Kokkos::create_mirror_view(efld_pre.x2e);
-    auto h_efld_pre_x3e = Kokkos::create_mirror_view(efld_pre.x3e);
-    Kokkos::deep_copy(h_efld_pre_x1e, efld_pre.x1e);
-    Kokkos::deep_copy(h_efld_pre_x2e, efld_pre.x2e);
-    Kokkos::deep_copy(h_efld_pre_x3e, efld_pre.x3e);
-    
-    auto h_efld_aft_x1e = Kokkos::create_mirror_view(efld_aft.x1e);
-    auto h_efld_aft_x2e = Kokkos::create_mirror_view(efld_aft.x2e);
-    auto h_efld_aft_x3e = Kokkos::create_mirror_view(efld_aft.x3e);
-    Kokkos::deep_copy(h_efld_aft_x1e, efld_aft.x1e);
-    Kokkos::deep_copy(h_efld_aft_x2e, efld_aft.x2e);
-    Kokkos::deep_copy(h_efld_aft_x3e, efld_aft.x3e);
-    
-    // Write host data to file
-    IOWrapperSizeT cnt = nzmb*nvars*(nccells3)*(nccells2)*(nccells1);
-    std::fwrite(h_coarse_w0.data(),datasize,cnt,pfile);
-    
-    cnt = nzmb*(nccells3+1)*(nccells2+1)*(nccells1);
-    std::fwrite(h_efld_pre_x1e.data(),datasize,cnt,pfile);
-    cnt = nzmb*(nccells3+1)*(nccells2)*(nccells1+1);
-    std::fwrite(h_efld_pre_x2e.data(),datasize,cnt,pfile);
-    cnt = nzmb*(nccells3)*(nccells2+1)*(nccells1+1);
-    std::fwrite(h_efld_pre_x3e.data(),datasize,cnt,pfile);
-    
-    cnt = nzmb*(nccells3+1)*(nccells2+1)*(nccells1);
-    std::fwrite(h_efld_aft_x1e.data(),datasize,cnt,pfile);
-    cnt = nzmb*(nccells3+1)*(nccells2)*(nccells1+1);
-    std::fwrite(h_efld_aft_x2e.data(),datasize,cnt,pfile);
-    cnt = nzmb*(nccells3)*(nccells2+1)*(nccells1+1);
-    std::fwrite(h_efld_aft_x3e.data(),datasize,cnt,pfile);
-    
-    std::fclose(pfile);
-  }
   return;
 }
