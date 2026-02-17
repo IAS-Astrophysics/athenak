@@ -56,7 +56,7 @@ void CyclicZoom::StoreFluxes() {
   // TODO(@mhguo): only stored the emf, may need to limit de to emin/max
   int zmbs = pzmesh->gzms_eachdvce[global_variable::my_rank];
   for (int zm = 0; zm < pzmesh->nzmb_thisdvce; ++zm) {
-    int m = pzmesh->lid_eachmb[zm+zmbs];
+    int m = pzmesh->mblid_eachzmb[zm+zmbs];
     // pzdata->UpdateElectricFieldsInZoomRegion(m, zm);
     auto efld = pmesh->pmb_pack->pmhd->efld;
     pzdata->StoreEFieldsAfterAMR(zm, m, efld);
@@ -102,7 +102,7 @@ void ZoomData::StoreEFieldsBeforeAMR(int zm, int m, DvceEdgeFld4D<Real> efld) {
 //! \brief Store coarse electric fields in zoom data zmc from finer zoom data zm on
 //! previous level
 
-void ZoomData::StoreEFieldsFromFiner(int zmc, int zm, DvceEdgeFld4D<Real> efld) {
+void ZoomData::StoreEFieldsFromFiner(int zmc, int zmf, DvceEdgeFld4D<Real> efld) {
   auto &indcs = pzoom->pmesh->mb_indcs;
   int &cis = indcs.cis;
   int &cjs = indcs.cjs;
@@ -115,7 +115,7 @@ void ZoomData::StoreEFieldsFromFiner(int zmc, int zm, DvceEdgeFld4D<Real> efld) 
   auto e2 = efld_pre.x2e;
   auto e3 = efld_pre.x3e;
   int zmbs = pzmesh->gzms_eachdvce[global_variable::my_rank]; // global id start of dvce
-  auto &zlloc = pzmesh->lloc_eachzmb[zm+zmbs];
+  auto &zlloc = pzmesh->lloc_eachzmb[zmf+zmbs];
   int ox1 = ((zlloc.lx1 & 1) == 1);
   int ox2 = ((zlloc.lx2 & 1) == 1);
   int ox3 = ((zlloc.lx3 & 1) == 1);
@@ -132,21 +132,21 @@ void ZoomData::StoreEFieldsFromFiner(int zmc, int zm, DvceEdgeFld4D<Real> efld) 
     int fi = 2*(ci - ccis) + cis;
     int fj = 2*(cj - ccjs) + cjs;
     int fk = 2*(ck - ccks) + cks;
-    e1(zmc,ck,cj,ci) = 0.5*(ef1(zm,fk,fj,fi) + ef1(zm,fk,fj,fi+1));
+    e1(zmc,ck,cj,ci) = 0.5*(ef1(zmf,fk,fj,fi) + ef1(zmf,fk,fj,fi+1));
   });
   par_for("zoom-finer-efld2",DevExeSpace(), ccks, ccke+1, ccjs, ccje, ccis, ccie+1,
   KOKKOS_LAMBDA(const int ck, const int cj, const int ci) {
     int fi = 2*(ci - ccis) + cis;
     int fj = 2*(cj - ccjs) + cjs;
     int fk = 2*(ck - ccks) + cks;
-    e2(zmc,ck,cj,ci) = 0.5*(ef2(zm,fk,fj,fi) + ef2(zm,fk,fj+1,fi));
+    e2(zmc,ck,cj,ci) = 0.5*(ef2(zmf,fk,fj,fi) + ef2(zmf,fk,fj+1,fi));
   });
   par_for("zoom-finer-efld3",DevExeSpace(), ccks, ccke, ccjs, ccje+1, ccis, ccie+1,
   KOKKOS_LAMBDA(const int ck, const int cj, const int ci) {
     int fi = 2*(ci - ccis) + cis;
     int fj = 2*(cj - ccjs) + cjs;
     int fk = 2*(ck - ccks) + cks;
-    e3(zmc,ck,cj,ci) = 0.5*(ef3(zm,fk,fj,fi) + ef3(zm,fk+1,fj,fi));
+    e3(zmc,ck,cj,ci) = 0.5*(ef3(zmf,fk,fj,fi) + ef3(zmf,fk+1,fj,fi));
   });
   return;
 }

@@ -503,7 +503,7 @@ void ZoomData::SaveToStorage(int zone) {
   int lmbs = pzmesh->gzms_eachlevel[zone];  // Global starting index for this level
   RedistZMBs(nlmb, lmbs,
              hzbuf, zdata,  // src: dense buffer, dst: logical storage
-             pzmesh->rank_eachmb, pzmesh->rank_eachzmb,
+             pzmesh->mbrank_eachzmb, pzmesh->rank_eachzmb,
              nullptr, &pzmesh->lid_eachzmb);
   return;
 }
@@ -523,7 +523,7 @@ void ZoomData::LoadFromStorage(int zone) {
   int lmbs = pzmesh->gzms_eachlevel[zone];  // Global starting index for this level
   RedistZMBs(nlmb, lmbs,
              zdata, hzbuf,  // src: logical storage, dst: dense buffer
-             pzmesh->rank_eachzmb, pzmesh->rank_eachmb,
+             pzmesh->rank_eachzmb, pzmesh->mbrank_eachzmb,
              &pzmesh->lid_eachzmb, nullptr);
   return;
 }

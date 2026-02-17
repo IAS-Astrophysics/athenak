@@ -172,8 +172,9 @@ class ZoomMesh {
   int *nzmb_eachlevel;     // number of Zoom MeshBlocks on each level
   int *gzms_eachdvce;      // starting global ID of MeshBlocks in each device
   int *nzmb_eachdvce;      // number of MeshBlocks on each device
-  std::vector<int> rank_eachmb;    // rank of each MeshBlock that covers this zoom MB
-  std::vector<int> lid_eachmb;     // local ID of each MeshBlock that covers this zoom MB
+  int *zm_eachmb;          // local index of zoom MeshBlock for each MeshBlock
+  std::vector<int> mbrank_eachzmb; // MeshBlock rank of each zoom MeshBlock
+  std::vector<int> mblid_eachzmb;  // MeshBlock local ID of each zoom MeshBlock
   std::vector<int> rank_eachzmb;   // rank of each Zoom MeshBlock
   std::vector<int> lid_eachzmb;    // local ID of each Zoom MeshBlock
   std::vector<LogicalLocation> lloc_eachzmb;  // LogicalLocations for each zoom MeshBlock

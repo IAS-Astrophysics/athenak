@@ -45,10 +45,11 @@ ZoomMesh::ZoomMesh(CyclicZoom *pz, ParameterInput *pin) :
   nzmb_eachlevel = new int[nlevels]();
   gzms_eachdvce = new int[global_variable::nranks]();
   nzmb_eachdvce = new int[global_variable::nranks]();
+  zm_eachmb = new int[pzoom->pmesh->nmb_maxperrank]();
   rank_eachzmb.resize(1);
   lid_eachzmb.resize(1);
-  rank_eachmb.resize(1);
-  lid_eachmb.resize(1);
+  mbrank_eachzmb.resize(1);
+  mblid_eachzmb.resize(1);
   lloc_eachzmb.resize(1);
   return;
 }
@@ -61,6 +62,7 @@ ZoomMesh::~ZoomMesh() {
   delete[] nzmb_eachlevel;
   delete[] gzms_eachdvce;
   delete[] nzmb_eachdvce;
+  delete[] zm_eachmb;
 }
 
 //----------------------------------------------------------------------------------------
@@ -114,8 +116,8 @@ void ZoomMesh::UpdateMeshStructure() {
   // resize arrays to hold all zoom MeshBlocks across all levels/ranks
   rank_eachzmb.resize(nzmb_total);
   lid_eachzmb.resize(nzmb_total);
-  rank_eachmb.resize(nzmb_total);
-  lid_eachmb.resize(nzmb_total);
+  mbrank_eachzmb.resize(nzmb_total);
+  mblid_eachzmb.resize(nzmb_total);
   lloc_eachzmb.resize(nzmb_total);
   // simultaneously assign rank and local ID of each zoom MB on host
   // using round-robin for load balancing
@@ -145,8 +147,8 @@ void ZoomMesh::RebuildMeshStructure() {
   // These define which rank owns each ZMB in zdata storage using round-robin
   rank_eachzmb.resize(nzmb_total);
   lid_eachzmb.resize(nzmb_total);
-  rank_eachmb.resize(nzmb_total);
-  lid_eachmb.resize(nzmb_total);
+  mbrank_eachzmb.resize(nzmb_total);
+  mblid_eachzmb.resize(nzmb_total);
   lloc_eachzmb.resize(nzmb_total);
 
   // Rebuild rank_eachzmb and lid_eachzmb using round-robin distribution
@@ -160,15 +162,15 @@ void ZoomMesh::RebuildMeshStructure() {
 
 //----------------------------------------------------------------------------------------
 //! \fn void ZoomMesh::SyncMBLists()
-//! \brief Sync rank_eachmb and lid_eachmb across all ranks
+//! \brief Sync mbrank_eachzmb and mblid_eachzmb across all ranks
 
 void ZoomMesh::SyncMBLists() {
 #if MPI_PARALLEL_ENABLED
-  // Gather rank_eachmb
-  MPI_Allgatherv(MPI_IN_PLACE, nzmb_thisdvce, MPI_INT, rank_eachmb.data(),
+  // Gather mbrank_eachzmb
+  MPI_Allgatherv(MPI_IN_PLACE, nzmb_thisdvce, MPI_INT, mbrank_eachzmb.data(),
                  nzmb_eachdvce, gzms_eachdvce, MPI_INT, MPI_COMM_WORLD);
-  // Gather lid_eachmb
-  MPI_Allgatherv(MPI_IN_PLACE, nzmb_thisdvce, MPI_INT, lid_eachmb.data(),
+  // Gather mblid_eachzmb
+  MPI_Allgatherv(MPI_IN_PLACE, nzmb_thisdvce, MPI_INT, mblid_eachzmb.data(),
                  nzmb_eachdvce, gzms_eachdvce, MPI_INT, MPI_COMM_WORLD);
 #endif
   return;
@@ -231,8 +233,8 @@ void ZoomMesh::FindRegion(int zone) {
   for (int lm=0; lm<nlmb; ++lm) {
     int m = FindMB(lm+lmbs);
     if (m >= 0) {
-      rank_eachmb[lm+lmbs] = global_variable::my_rank;
-      lid_eachmb[lm+lmbs] = m;
+      mbrank_eachzmb[lm+lmbs] = global_variable::my_rank;
+      mblid_eachzmb[lm+lmbs] = m;
       if (pzoom->verbose) {
         std::cout << "  Rank " << global_variable::my_rank
                   << " Find MeshBlock " << m+mbs << " for zoom MeshBlock "

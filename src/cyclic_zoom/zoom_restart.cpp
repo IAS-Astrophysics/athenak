@@ -41,7 +41,7 @@ IOWrapperSizeT CyclicZoom::RestartFileSize() {
 //! \brief Write cyclic zoom restart data to file
 //! \details Writes ZoomState and ZoomMesh metadata, then each rank writes its owned ZMBs.
 //!          Metadata includes: nzmb_total, nzmb_eachlevel, and lloc_eachzmb arrays.
-//!          Derived arrays (rank_eachmb, lid_eachmb, etc.) are rebuilt during restart.
+//!          Derived arrays are rebuilt during restart.
 
 void CyclicZoom::WriteRestartFile(IOWrapper &resfile, IOWrapperSizeT offset_zoom,
                                   bool single_file_per_rank) {
@@ -144,7 +144,7 @@ void CyclicZoom::ReadRestartFile(IOWrapper &resfile, IOWrapperSizeT offset_zoom,
 
   // Resize arrays and read lloc data
   pzmesh->nzmb_total = nzmb_total_read;
-  // Rebuild derived mesh structure arrays (including rank_eachmb, lid_eachmb)
+  // Rebuild derived mesh structure arrays (including mbrank_eachzmb, mblid_eachzmb)
   pzmesh->RebuildMeshStructure();
 
   if (my_rank == 0) {

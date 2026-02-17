@@ -21,7 +21,7 @@ void CyclicZoom::StoreZoomRegion() {
   // zoom state has been updated in SetRefinementFlags()
   if (zamr.zooming_out) {
     StoreVariables();
-    // sync rank_eachmb and lid_eachmb to all ranks
+    // sync mbrank_eachzmb and mblid_eachzmb to all ranks
     pzmesh->SyncMBLists();
     pzmesh->SyncLogicalLocations();
     pzdata->PackBuffer();
@@ -107,8 +107,17 @@ void CyclicZoom::StoreVariables() {
                   << std::endl;
         exit(1);
       }
+      pzmesh->zm_eachmb[m] = zm_count;
       pzdata->StoreData(zm_count, m);
+      if (verbose) {
+        std::cout << " CyclicZoom: Rank " << global_variable::my_rank
+                  << " Storing MeshBlock " << m + mbs
+                  << " with zoom MeshBlock index " << pzmesh->zm_eachmb[m]
+                  << std::endl;
+      }
       ++zm_count;
+    } else {
+      pzmesh->zm_eachmb[m] = -1; // if not stored, set to -1
     }
   }
   // correct variables after zoom data update but before zoom mesh update
@@ -121,12 +130,12 @@ void CyclicZoom::StoreVariables() {
   int zmbs = pzmesh->gzms_eachdvce[global_variable::my_rank];
   int zm = 0;
   for (int m=0; m<nmb; ++m) {
-    if (CheckStoreFlag(m)) {
-      pzmesh->rank_eachmb[zmbs + zm] = global_variable::my_rank;
-      pzmesh->lid_eachmb[zmbs + zm] = m;
+    if (pzmesh->zm_eachmb[m] >= 0) {
+      zm = pzmesh->zm_eachmb[m];
+      pzmesh->mbrank_eachzmb[zmbs + zm] = global_variable::my_rank;
+      pzmesh->mblid_eachzmb[zmbs + zm] = m;
       // copy LogicalLocation of stored MeshBlocks
       pzmesh->lloc_eachzmb[zmbs + zm] = pmesh->lloc_eachmb[m + mbs];
-      ++zm;
     }
   }
   return;
@@ -137,27 +146,24 @@ void CyclicZoom::StoreVariables() {
 //! \brief Correct physical variables before storing (e.g., electric fields)
 
 void CyclicZoom::CorrectVariables() {
+  // now zoom data is updated, but zoom mesh is still old with data stored in the buffer
+  // so we correct the zoom data using the data buffer from the finer zoom data
   if (pmesh->pmb_pack->pmhd != nullptr && zstate.zone > 1) {
     int zmbs = pzmesh->gzms_eachdvce[global_variable::my_rank];
-    int zm_count = 0;
-    int m0 = pzmesh->lid_eachmb[zmbs];
     // TODO(@mhguo): think whether this is ok if with multiple levels
-    for (int zm = 0; zm < pzmesh->nzmb_thisdvce; ++zm) {
-      int m = pzmesh->lid_eachmb[zm+zmbs];
-      if (m > m0) { // now move to next MeshBlock
-        m0 = m;
-        ++zm_count;
-      }
+    for (int zmf = 0; zmf < pzmesh->nzmb_thisdvce; ++zmf) {
+      int m = pzmesh->mblid_eachzmb[zmf+zmbs];
+      int zmc = pzmesh->zm_eachmb[m];
       // print diagnostic info
       if (verbose) {
-        std::cout << "CyclicZoom: Correcting variables for zoom MeshBlock " << zm_count
-                  << " using zoom MeshBlock " << zm + zmbs << " on MeshBlock "
+        std::cout << "CyclicZoom: Correcting variables for zoom MeshBlock " << zmc
+                  << " using zoom MeshBlock " << zmf + zmbs << " on MeshBlock "
                   << m + pmesh->gids_eachrank[global_variable::my_rank]
                   << " on rank " << global_variable::my_rank
                   << std::endl;
       }
       // correct electric fields
-      pzdata->StoreEFieldsFromFiner(zm_count, zm, pzdata->efld_buf);
+      pzdata->StoreEFieldsFromFiner(zmc, zmf, pzdata->efld_buf);
     }
     if (verbose && global_variable::my_rank == 0) {
       std::cout << "CyclicZoom: Corrected variables before zooming" << std::endl;
@@ -179,7 +185,7 @@ void CyclicZoom::ReinitVariables() {
   }
   for (int zm = 0; zm < pzmesh->nzmb_thisdvce; ++zm) {
     auto &zlloc = pzmesh->lloc_eachzmb[zm+zmbs];
-    int m = pzmesh->lid_eachmb[zm+zmbs];
+    int m = pzmesh->mblid_eachzmb[zm+zmbs];
     auto &lloc = pmesh->lloc_eachmb[m+mbs];
     if (verbose && global_variable::my_rank == 0) {
       std::cout << "  Rank " << global_variable::my_rank
@@ -209,7 +215,7 @@ void CyclicZoom::MaskVariables() {
   int mbs = pmesh->gids_eachrank[global_variable::my_rank];
   for (int zm = 0; zm < pzmesh->nzmb_thisdvce; ++zm) {
     auto &zlloc = pzmesh->lloc_eachzmb[zm+zmbs];
-    int m = pzmesh->lid_eachmb[zm+zmbs];
+    int m = pzmesh->mblid_eachzmb[zm+zmbs];
     auto &lloc = pmesh->lloc_eachmb[m+mbs];
     if (zlloc.level == lloc.level) {
       pzdata->ApplyDataSameLevel(m, zm, zregion);

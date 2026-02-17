@@ -27,7 +27,7 @@ void CyclicZoom::SourceTermsFC(DvceEdgeFld4D<Real> efld) {
   if (zamr.zooming_out || zamr.zooming_in) return;
   int zmbs = pzmesh->gzms_eachdvce[global_variable::my_rank];
   for (int zm = 0; zm < pzmesh->nzmb_thisdvce; ++zm) {
-    int m = pzmesh->lid_eachmb[zm+zmbs];
+    int m = pzmesh->mblid_eachzmb[zm+zmbs];
     // pzdata->UpdateElectricFieldsInZoomRegion(m, zm);
     // pzdata->StoreEFields(zm, m);
     pzdata->AddSrcTermsFC(m, zm, efld);
