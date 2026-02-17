@@ -15,8 +15,7 @@
 #include "mesh/mesh.hpp"
 #include "cyclic_zoom/cyclic_zoom.hpp"
 
-// TODO(@mhguo): may need a more flexible packing function
-// TODO(@mhguo): also a more flexible function to get the data from host
+// TODO(@mhguo): may need more flexible packing and loading function
 
 //----------------------------------------------------------------------------------------
 //! \fn ZoomData::PackBuffer()

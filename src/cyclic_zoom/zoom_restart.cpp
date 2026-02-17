@@ -144,7 +144,7 @@ void CyclicZoom::ReadRestartFile(IOWrapper &resfile, IOWrapperSizeT offset_zoom,
 
   // Resize arrays and read lloc data
   pzmesh->nzmb_total = nzmb_total_read;
-  // Rebuild derived mesh structure arrays (including mbrank_eachzmb, mblid_eachzmb)
+  // Rebuild derived mesh structure arrays
   pzmesh->RebuildMeshStructure();
 
   if (my_rank == 0) {

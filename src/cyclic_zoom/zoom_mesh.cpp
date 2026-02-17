@@ -161,6 +161,59 @@ void ZoomMesh::RebuildMeshStructure() {
 }
 
 //----------------------------------------------------------------------------------------
+//! \fn int ZoomMesh::CountMBsToStore()
+//! \brief Find the list of stored MeshBlocks for each zoom MeshBlock
+
+int ZoomMesh::CountMBsToStore(int zone) {
+  int nmb = pzoom->pmesh->pmb_pack->nmb_thispack;
+  int mbs = pzoom->pmesh->gids_eachrank[global_variable::my_rank];
+  int zm_count = 0;
+  for (int m=0; m<nmb; ++m) {
+    if (pzoom->CheckStoreFlag(m)) {
+      if (zm_count >= nzmb_max_perdvce) {
+        std::cerr << "CyclicZoom::StoreVariables ERROR: exceed maximum number of "
+                  << "stored MeshBlocks per device: " << nzmb_max_perdvce
+                  << std::endl;
+        std::exit(EXIT_FAILURE);
+      }
+      zm_eachmb[m] = zm_count;
+      if (pzoom->verbose) {
+        int mbs = pzoom->pmesh->gids_eachrank[global_variable::my_rank];
+        std::cout << " CyclicZoom: Rank " << global_variable::my_rank
+                  << " Storing MeshBlock " << m + mbs
+                  << " with zoom MeshBlock index " << zm_eachmb[m]
+                  << std::endl;
+      }
+      ++zm_count;
+    } else {
+      zm_eachmb[m] = -1; // if not stored, set to -1
+    }
+  }  
+  return zm_count;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void ZoomMesh::AssignMBLists()
+//! \brief Assign mbrank_eachzmb and mblid_eachzmb using round-robin distribution
+
+void ZoomMesh::AssignMBLists() {
+  // assign rank and local ID of each MB that contains the zoom MBs
+  int nmb = pzoom->pmesh->pmb_pack->nmb_thispack;
+  int mbs = pzoom->pmesh->gids_eachrank[global_variable::my_rank];
+  int zmbs = gzms_eachdvce[global_variable::my_rank];
+  for (int m=0; m<nmb; ++m) {
+    int zm = zm_eachmb[m];
+    if (zm >= 0) {
+      mbrank_eachzmb[zmbs + zm] = global_variable::my_rank;
+      mblid_eachzmb[zmbs + zm] = m;
+      // copy LogicalLocation of stored MeshBlocks
+      lloc_eachzmb[zmbs + zm] = pzoom->pmesh->lloc_eachmb[m + mbs];
+    }
+  }
+  return;
+}
+
+//----------------------------------------------------------------------------------------
 //! \fn void ZoomMesh::SyncMBLists()
 //! \brief Sync mbrank_eachzmb and mblid_eachzmb across all ranks
 

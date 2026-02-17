@@ -20,8 +20,13 @@
 void CyclicZoom::StoreZoomRegion() {
   // zoom state has been updated in SetRefinementFlags()
   if (zamr.zooming_out) {
+    int zm_count = pzmesh->CountMBsToStore(zstate.zone-1);
     StoreVariables();
-    // sync mbrank_eachzmb and mblid_eachzmb to all ranks
+    // correct variables after zoom data update but before zoom mesh update
+    CorrectVariables();
+    pzmesh->GatherZMB(zm_count, zstate.zone-1);
+    pzmesh->UpdateMeshStructure();
+    pzmesh->AssignMBLists();
     pzmesh->SyncMBLists();
     pzmesh->SyncLogicalLocations();
     pzdata->PackBuffer();
@@ -96,46 +101,9 @@ void CyclicZoom::StoreVariables() {
     Kokkos::deep_copy(pzdata->efld_buf.x3e, pzdata->efld_pre.x3e);
   }
   int nmb = pmesh->pmb_pack->nmb_thispack;
-  int mbs = pmesh->gids_eachrank[global_variable::my_rank];
-  int zm_count = 0;
-  // TODO(@mhguo): now CheckStoreFlag is called multiple times, can be optimized
-  for (int m=0; m<nmb; ++m) {
-    if (CheckStoreFlag(m)) {
-      if (zm_count >= pzmesh->nzmb_max_perdvce) {
-        std::cerr << "CyclicZoom::StoreVariables ERROR: exceed maximum number of "
-                  << "stored MeshBlocks per device: " << pzmesh->nzmb_max_perdvce
-                  << std::endl;
-        exit(1);
-      }
-      pzmesh->zm_eachmb[m] = zm_count;
-      pzdata->StoreData(zm_count, m);
-      if (verbose) {
-        std::cout << " CyclicZoom: Rank " << global_variable::my_rank
-                  << " Storing MeshBlock " << m + mbs
-                  << " with zoom MeshBlock index " << pzmesh->zm_eachmb[m]
-                  << std::endl;
-      }
-      ++zm_count;
-    } else {
-      pzmesh->zm_eachmb[m] = -1; // if not stored, set to -1
-    }
-  }
-  // correct variables after zoom data update but before zoom mesh update
-  CorrectVariables();
-  // TODO(@mhguo): move some of the following code to ZoomMesh functions
-  pzmesh->GatherZMB(zm_count, zstate.zone-1);
-  pzmesh->UpdateMeshStructure();
-  // TODO(@mhguo): may create a list of stored MBs to avoid this loop?
-  // assign rank and local ID of each MB that contains the zoom MBs
-  int zmbs = pzmesh->gzms_eachdvce[global_variable::my_rank];
-  int zm = 0;
   for (int m=0; m<nmb; ++m) {
     if (pzmesh->zm_eachmb[m] >= 0) {
-      zm = pzmesh->zm_eachmb[m];
-      pzmesh->mbrank_eachzmb[zmbs + zm] = global_variable::my_rank;
-      pzmesh->mblid_eachzmb[zmbs + zm] = m;
-      // copy LogicalLocation of stored MeshBlocks
-      pzmesh->lloc_eachzmb[zmbs + zm] = pmesh->lloc_eachmb[m + mbs];
+      pzdata->StoreData(pzmesh->zm_eachmb[m], m);
     }
   }
   return;
@@ -171,7 +139,6 @@ void CyclicZoom::CorrectVariables() {
   }
   return;
 }
-
 
 //----------------------------------------------------------------------------------------
 //! \fn void CyclicZoom::ReinitVariables()

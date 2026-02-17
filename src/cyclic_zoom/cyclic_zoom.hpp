@@ -183,6 +183,8 @@ class ZoomMesh {
   void GatherZMB(int zm_count, int zone);
   void UpdateMeshStructure();
   void RebuildMeshStructure();
+  int  CountMBsToStore(int zone);
+  void AssignMBLists();
   void SyncMBLists();
   void SyncLogicalLocations();
   int  FindMB(int gzm);
