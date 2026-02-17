@@ -514,8 +514,6 @@ void ZoomData::ApplyPrimFromFiner(int m, int zm, const ZoomRegion &zregion) {
   auto u_ = pmbp->pmhd->u0;
   auto w_ = pmbp->pmhd->w0;
   auto b = pmbp->pmhd->b0;
-  // TODO(@mhguo): probably don't have to mask the ghost zones?
-  // par_for("zoom_mask", DevExeSpace(),ks-ng,ke+ng,js-ng,je+ng,is-ng,ie+ng,
   par_for("zoom_mask", DevExeSpace(),cks,cke,cjs,cje,cis,cie,
   KOKKOS_LAMBDA(int ck, int cj, int ci) {
     int i = ci + ox1 * cnx1;
@@ -542,8 +540,7 @@ void ZoomData::ApplyPrimFromFiner(int m, int zm, const ZoomRegion &zregion) {
       w.e  = w_(m,IEN,k,j,i);
 
       // load cell-centered fields into primitive state
-      // TODO(@mhguo): use bcc if available?
-      // use simple linear average of face-centered fields as bcc is not updated
+      // use simple linear average of face-centered fields as bcc is probably not updated
       w.bx = 0.5*(b.x1f(m,k,j,i) + b.x1f(m,k,j,i+1));
       w.by = 0.5*(b.x2f(m,k,j,i) + b.x2f(m,k,j+1,i));
       w.bz = 0.5*(b.x3f(m,k,j,i) + b.x3f(m,k+1,j,i));

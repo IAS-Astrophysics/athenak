@@ -33,8 +33,7 @@ void CyclicZoom::CheckRefinement() {
 //! \brief Update zoom state before/after refinement/coarsening
 
 void CyclicZoom::UpdateState() {
-  // TODO(@mhguo): may clean the logic here a bit, perhaps using zone directly?
-  // Update flags
+  // update flags
   if (zstate.direction > 0) {zamr.zooming_out = true;}
   if (zstate.direction < 0) {zamr.zooming_in = true;}
   if (zamr.zooming_out && zamr.zooming_in) {
@@ -42,16 +41,19 @@ void CyclicZoom::UpdateState() {
               << "CyclicZoom AMR: zooming_in and zooming_out both true!" << std::endl;
     std::exit(EXIT_FAILURE);
   }
-  // Update zoom state
+  // update zoom state
   zstate.last_zone = zstate.zone;
   zstate.zone += zstate.direction;
   if (zstate.zone == 0) {zstate.direction = 1;}
   if (zstate.zone == zamr.nlevels - 1 ) {zstate.direction = -1;}
+  zstate.id++;
+  // update zoom AMR parameters
   zamr.level = zamr.max_level - zstate.zone;
   zamr.refine_flag = -zstate.direction;
+  // update zoom interval
   SetRegionAndInterval();
-  zstate.id++;
   zstate.next_time = pmesh->time + zint.runtime;
+  // print verbose output
   if (verbose && global_variable::my_rank == 0) {
     std::cout << "CyclicZoom AMR:"
               << " new id = " << zstate.id

@@ -184,12 +184,7 @@ void CyclicZoom::ReadRestartFile(IOWrapper &resfile, IOWrapperSizeT offset_zoom,
   }
 
   if (zstate.zone > 0) {
-    pzmesh->FindRegion(zstate.zone-1);
-    pzmesh->SyncMBLists();
-    pzdata->LoadFromStorage(zstate.zone-1);
-    pzdata->UnpackBuffer();
-    // TODO(@mhguo): do you need to remask variables here?
-    // MaskVariables();
+    LoadZoomData(zstate.zone-1);
   }
 
   PrintCyclicZoomDiagnostics();

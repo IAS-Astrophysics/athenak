@@ -130,6 +130,7 @@ class CyclicZoom {
   // functions to handle zoom region
   void StoreZoomRegion();
   void ApplyZoomRegion(Driver *pdriver);
+  void LoadZoomData(int zone);
   void StoreVariables();
   bool CheckStoreFlag(int m);
   void CorrectVariables();
@@ -173,14 +174,14 @@ class ZoomMesh {
   int *gzms_eachdvce;      // starting global ID of MeshBlocks in each device
   int *nzmb_eachdvce;      // number of MeshBlocks on each device
   int *zm_eachmb;          // local index of zoom MeshBlock for each MeshBlock
-  std::vector<int> mbrank_eachzmb; // MeshBlock rank of each zoom MeshBlock
-  std::vector<int> mblid_eachzmb;  // MeshBlock local ID of each zoom MeshBlock
   std::vector<int> rank_eachzmb;   // rank of each Zoom MeshBlock
   std::vector<int> lid_eachzmb;    // local ID of each Zoom MeshBlock
+  std::vector<int> mbrank_eachzmb; // MeshBlock rank of each zoom MeshBlock
+  std::vector<int> mblid_eachzmb;  // MeshBlock local ID of each zoom MeshBlock
   std::vector<LogicalLocation> lloc_eachzmb;  // LogicalLocations for each zoom MeshBlock
 
   // functions
-  void GatherZMB(int zm_count, int zone);
+  void GatherNZMB(int zm_count, int zone);
   void UpdateMeshStructure();
   void RebuildMeshStructure();
   int  CountMBsToStore(int zone);

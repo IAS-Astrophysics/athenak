@@ -26,8 +26,7 @@ void CyclicZoom::UpdateFluxes(Driver *pdriver) {
   (void) pmhd->CopyCons(pdriver, 1);  // stage = 1: copy u0 to u1
   (void) pmhd->Fluxes(pdriver, 1);
   // (void) pmhd->RestrictU(this, 0);
-  // TODO(@mhguo): think about the order
-  // TODO(@mhguo): this is redundant, should only send/recv electric fields
+  // TODO(@mhguo): may only send/recv electric fields if possible
   (void) pmhd->SendFlux(pdriver, 1);  // stage = 1
   (void) pmhd->RecvFlux(pdriver, 1);  // stage = 1
   (void) pmhd->SendU(pdriver, 1);

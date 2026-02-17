@@ -36,8 +36,6 @@ CyclicZoom::CyclicZoom(Mesh *pm, ParameterInput *pin) :
   read_rst = pin->GetOrAddBoolean("cyclic_zoom","read_rst",true);
   write_rst = pin->GetOrAddBoolean("cyclic_zoom","write_rst",true);
 
-  // TODO(@mhguo): may set the parameters so that the initial level equals the max level
-  // TODO(@mhguo): currently we need to check whether zamr.level is correct by hand
   zstate.id = 0;
   zstate.zone = pin->GetOrAddInteger(block_name,"zone",0);
   zstate.last_zone = zstate.zone;

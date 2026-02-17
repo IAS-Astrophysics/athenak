@@ -24,7 +24,7 @@ void CyclicZoom::StoreZoomRegion() {
     StoreVariables();
     // correct variables after zoom data update but before zoom mesh update
     CorrectVariables();
-    pzmesh->GatherZMB(zm_count, zstate.zone-1);
+    pzmesh->GatherNZMB(zm_count, zstate.zone-1);
     pzmesh->UpdateMeshStructure();
     pzmesh->AssignMBLists();
     pzmesh->SyncMBLists();
@@ -44,23 +44,15 @@ void CyclicZoom::StoreZoomRegion() {
 
 void CyclicZoom::ApplyZoomRegion(Driver *pdriver) {
   if (zamr.zooming_in) {
-    pzmesh->FindRegion(zstate.zone);
-    pzmesh->SyncMBLists();
-    pzdata->LoadFromStorage(zstate.zone);
-    pzdata->UnpackBuffer();
+    LoadZoomData(zstate.zone);
     ReinitVariables();
     if (verbose && global_variable::my_rank == 0) {
       std::cout << "CyclicZoom: Apply variables after zooming" << std::endl;
     }
   }
   // Set up mask region
-  // TODO(@mhguo): data may already be on the correct device,
-  // TODO(@mhguo): may try to avoid unnecessary transfer later
   if (zstate.zone > 0) {
-    pzmesh->FindRegion(zstate.zone-1);
-    pzmesh->SyncMBLists();
-    pzdata->LoadFromStorage(zstate.zone-1);
-    pzdata->UnpackBuffer();
+    LoadZoomData(zstate.zone-1);
     MaskVariables();
   }
   // Initialize boundary values and primitive variables after reinitialization and masking
@@ -82,6 +74,18 @@ void CyclicZoom::ApplyZoomRegion(Driver *pdriver) {
   if (verbose && global_variable::my_rank == 0) {
     std::cout << "CyclicZoom: Applied zoom region" << std::endl;
   }
+  return;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void CyclicZoom::LoadZoomData()
+//! \brief Load zoom data from storage for a given zone
+
+void CyclicZoom::LoadZoomData(int zone) {
+  pzmesh->FindRegion(zone);
+  pzmesh->SyncMBLists();
+  pzdata->LoadFromStorage(zone);
+  pzdata->UnpackBuffer();
   return;
 }
 
@@ -118,7 +122,7 @@ void CyclicZoom::CorrectVariables() {
   // so we correct the zoom data using the data buffer from the finer zoom data
   if (pmesh->pmb_pack->pmhd != nullptr && zstate.zone > 1) {
     int zmbs = pzmesh->gzms_eachdvce[global_variable::my_rank];
-    // TODO(@mhguo): think whether this is ok if with multiple levels
+    // TODO(@mhguo): think whether this is ok if with multiple levels in the future
     for (int zmf = 0; zmf < pzmesh->nzmb_thisdvce; ++zmf) {
       int m = pzmesh->mblid_eachzmb[zmf+zmbs];
       int zmc = pzmesh->zm_eachmb[m];

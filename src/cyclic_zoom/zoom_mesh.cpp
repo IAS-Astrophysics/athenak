@@ -24,7 +24,6 @@ ZoomMesh::ZoomMesh(CyclicZoom *pz, ParameterInput *pin) :
   nlevels = max_level - min_level + 1;
   nzmb_total = 0;
   nzmb_thisdvce = 0;
-  // TODO(@mhguo): let's use a large default value for now, may tune it later
   nzmb_max_perdvce = pin->GetOrAddInteger("cyclic_zoom","max_nzmb_per_dvce",
                      pzoom->pmesh->nmb_maxperrank);
   nzmb_max_perhost = pin->GetOrAddInteger("cyclic_zoom","max_nzmb_per_host",
@@ -66,10 +65,10 @@ ZoomMesh::~ZoomMesh() {
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn void ZoomMesh::GatherZMB()
-//! \brief Sync meta data of zoom MeshBlocks across all ranks
+//! \fn void ZoomMesh::GatherNZMB()
+//! \brief Gather number of zoom MeshBlocks across all ranks
 
-void ZoomMesh::GatherZMB(int zm_count, int zone) {
+void ZoomMesh::GatherNZMB(int zm_count, int zone) {
   // Get total number across all ranks (inclusive scan or Allreduce)
   // int zm_total = zm_count;
   nzmb_thisdvce = zm_count;
@@ -188,7 +187,7 @@ int ZoomMesh::CountMBsToStore(int zone) {
     } else {
       zm_eachmb[m] = -1; // if not stored, set to -1
     }
-  }  
+  }
   return zm_count;
 }
 
@@ -204,10 +203,10 @@ void ZoomMesh::AssignMBLists() {
   for (int m=0; m<nmb; ++m) {
     int zm = zm_eachmb[m];
     if (zm >= 0) {
-      mbrank_eachzmb[zmbs + zm] = global_variable::my_rank;
-      mblid_eachzmb[zmbs + zm] = m;
+      mbrank_eachzmb[zm+zmbs] = global_variable::my_rank;
+      mblid_eachzmb[zm+zmbs] = m;
       // copy LogicalLocation of stored MeshBlocks
-      lloc_eachzmb[zmbs + zm] = pzoom->pmesh->lloc_eachmb[m + mbs];
+      lloc_eachzmb[zm+zmbs] = pzoom->pmesh->lloc_eachmb[m+mbs];
     }
   }
   return;
@@ -267,7 +266,6 @@ int ZoomMesh::FindMB(int gzm) {
         return m;
       }
     }
-    // }
   }
   return -1;
 }
@@ -302,14 +300,14 @@ void ZoomMesh::FindRegion(int zone) {
   }
   // TODO(@mhguo): you probably don't need to sync, as lloc_eachmb includes all MBs
   // TODO(@mhguo): you can loop over all meshblocks though it may be slower
-  GatherZMB(zm_count, zone);
+  GatherNZMB(zm_count, zone);
   int lm_total = 0;
   for (int i = 0; i < global_variable::nranks; ++i) {
     lm_total += nzmb_eachdvce[i];
   }
   if (lm_total != nlmb) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
-              << "CyclicZoom::GatherZMB(): inconsistent total number of zoom MeshBlocks "
+              << "CyclicZoom::GatherNZMB(): inconsistent total number of zoom MeshBlocks "
               << "across all ranks: found " << lm_total << " vs. stored "
               << nlmb << std::endl;
     std::exit(EXIT_FAILURE);

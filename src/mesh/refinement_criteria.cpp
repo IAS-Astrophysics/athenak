@@ -399,7 +399,6 @@ void RefinementCriteria::CheckLocation(MeshBlockPack* pmbp, RefCritData crit) {
 //! current level of CyclicZoom object
 
 void RefinementCriteria::CheckCyclicZoom(MeshBlockPack* pmbp) {
-  // TODO(@mhguo): check consistency with AMR in input file
   if (pmy_mesh->pzoom != nullptr) {
     pmy_mesh->pzoom->CheckRefinement();
   }

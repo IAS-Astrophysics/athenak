@@ -17,7 +17,6 @@
 //! \fn void CyclicZoom::SourceTermsFC()
 //! \brief Add delta E field from small scale
 
-// TODO(@mhguo): check the corner case in ghost zones
 void CyclicZoom::SourceTermsFC(DvceEdgeFld4D<Real> efld) {
   // only apply when add_emf is true
   if (!zemf.add_emf) return;
@@ -39,7 +38,6 @@ void CyclicZoom::SourceTermsFC(DvceEdgeFld4D<Real> efld) {
 //! \fn void ZoomData::AddSrcTermsFC()
 //! \brief Add delta E field from small scale for one meshblock
 
-// TODO(@mhguo): check the corner case in ghost zones
 void ZoomData::AddSrcTermsFC(int m, int zm, DvceEdgeFld4D<Real> efld) {
   auto &indcs = pzoom->pmesh->mb_indcs;
   auto &size = pzoom->pmesh->pmb_pack->pmb->mb_size;
