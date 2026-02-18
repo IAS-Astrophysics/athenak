@@ -249,31 +249,57 @@ void LoadIDSolveData(MeshBlockPack *pmbp, ParameterInput *pin, const std::string
           yy <= ymin_b || yy > ymax_b || 
           zz <= zmin_b || zz > zmax_b) { 
 
-        // Find which HDF5 block contains this cell (linear search) 
+        // Find which HDF5 block contains this cell 
         int meshblock = -1; 
-        for (int l = 0; l < number_of_meshblocks; ++l) { 
-            // Assuming uniform grid *within* a block 
-            double dx = data_x1v[l*meshblock_dimx + 1] - data_x1v[l*meshblock_dimx + 0]; 
-            double dy = data_x2v[l*meshblock_dimy + 1] - data_x2v[l*meshblock_dimy + 0]; 
-            double dz = data_x3v[l*meshblock_dimz + 1] - data_x3v[l*meshblock_dimz + 0]; 
-            double xmin_l = data_x1v[l*meshblock_dimx+0]-dx/2.0; 
-            double xmax_l = data_x1v[l*meshblock_dimx + meshblock_dimx-1]+dx/2.0; 
-            double ymin_l = data_x2v[l*meshblock_dimy+0]-dy/2.0; 
-            double ymax_l = data_x2v[l*meshblock_dimy + meshblock_dimy-1]+dy/2.0; 
-            double zmin_l = data_x3v[l*meshblock_dimz+0]-dz/2.0; 
-            double zmax_l = data_x3v[l*meshblock_dimz + meshblock_dimz-1]+dz/2.0; 
+        
+        // Assume source HDF5 has same ghost depth as current mesh
+        int ng_src = indcs.ng; 
 
-            if (xx > xmin_l && xx <= xmax_l && 
-                yy > ymin_l && yy <= ymax_l && 
-                zz > zmin_l && zz <= zmax_l) { 
-                meshblock = l; 
-                // Cache the bounds of the block we just found 
-                xmin_b = xmin_l; xmax_b = xmax_l; 
-                ymin_b = ymin_l; ymax_b = ymax_l; 
-                zmin_b = zmin_l; zmax_b = zmax_l; 
-                break; 
-            } 
-        } 
+        // Two-pass search: 
+        // Pass 0: Prefer block where point is in Active region (avoids ghost/biased stencil)
+        // Pass 1: Fallback to block where point is in Ghost region (for boundary points)
+        for (int pass = 0; pass < 2; ++pass) {
+            for (int l = 0; l < number_of_meshblocks; ++l) { 
+                // Assuming uniform grid *within* a block 
+                double dx = data_x1v[l*meshblock_dimx + 1] - data_x1v[l*meshblock_dimx + 0]; 
+                double dy = data_x2v[l*meshblock_dimy + 1] - data_x2v[l*meshblock_dimy + 0]; 
+                double dz = data_x3v[l*meshblock_dimz + 1] - data_x3v[l*meshblock_dimz + 0]; 
+                
+                // Full extents (including ghosts)
+                double xmin_l = data_x1v[l*meshblock_dimx+0]-dx/2.0; 
+                double xmax_l = data_x1v[l*meshblock_dimx + meshblock_dimx-1]+dx/2.0; 
+                double ymin_l = data_x2v[l*meshblock_dimy+0]-dy/2.0; 
+                double ymax_l = data_x2v[l*meshblock_dimy + meshblock_dimy-1]+dy/2.0; 
+                double zmin_l = data_x3v[l*meshblock_dimz+0]-dz/2.0; 
+                double zmax_l = data_x3v[l*meshblock_dimz + meshblock_dimz-1]+dz/2.0; 
+
+                // Determine search bounds for this pass
+                double s_xmin = xmin_l, s_xmax = xmax_l;
+                double s_ymin = ymin_l, s_ymax = ymax_l;
+                double s_zmin = zmin_l, s_zmax = zmax_l;
+
+                if (pass == 0) {
+                    // Shrink bounds to Active region only
+                    s_xmin += ng_src * dx; s_xmax -= ng_src * dx;
+                    s_ymin += ng_src * dy; s_ymax -= ng_src * dy;
+                    s_zmin += ng_src * dz; s_zmax -= ng_src * dz;
+                }
+
+                if (xx > s_xmin && xx <= s_xmax && 
+                    yy > s_ymin && yy <= s_ymax && 
+                    zz > s_zmin && zz <= s_zmax) { 
+                    
+                    meshblock = l; 
+                    // Always cache the FULL bounds of the block we found 
+                    xmin_b = xmin_l; xmax_b = xmax_l; 
+                    ymin_b = ymin_l; ymax_b = ymax_l; 
+                    zmin_b = zmin_l; zmax_b = zmax_l; 
+                    break; 
+                } 
+            }
+            // If we found a valid block in Pass 0, do not run Pass 1
+            if (meshblock != -1) break;
+        }
 
         if (meshblock == -1) { 
             // Point is not in any block (e.g., ghost cell outside HDF5 domain) 
