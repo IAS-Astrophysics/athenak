@@ -23,7 +23,7 @@
 //----------------------------------------------------------------------------------------
 // constructor, initializes data structures and parameters
 
-SphericalGrid::SphericalGrid(MeshBlockPack *ppack, int nlev, Real rad):
+SphericalGrid::SphericalGrid(MeshBlockPack *ppack, int nlev, Real rad, int nintp):
     GeodesicGrid(nlev,true,false),
     pmy_pack(ppack),
     radius(rad),
@@ -32,10 +32,16 @@ SphericalGrid::SphericalGrid(MeshBlockPack *ppack, int nlev, Real rad):
     interp_wghts("interp_wghts",1,1,1),
     interp_vals("interp_vals",1,1) {
   // reallocate and set interpolation coordinates, indices, and weights
-  int &ng = pmy_pack->pmesh->mb_indcs.ng;
+  ninterp = (nintp <= 0) ? pmy_pack->pmesh->mb_indcs.ng*2 : nintp;
+  if (ninterp > pmy_pack->pmesh->mb_indcs.ng*2+1) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+              << "ninterp = " << ninterp << " exceeds maximum allowed value of "
+              << pmy_pack->pmesh->mb_indcs.ng*2+1 << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
   Kokkos::realloc(interp_coord,nangles,3);
   Kokkos::realloc(interp_indcs,nangles,4);
-  Kokkos::realloc(interp_wghts,nangles,2*ng,3);
+  Kokkos::realloc(interp_wghts,nangles,ninterp,3);
 
   // Call functions to prepare SphericalGrid object for interpolation
   SetInterpolationCoordinates();
@@ -99,6 +105,7 @@ void SphericalGrid::SetInterpolationIndices() {
 
   auto &rcoord = interp_coord;
   auto &iindcs = interp_indcs;
+  Real offset = (ninterp % 2 == 0) ? -0.5 : 0.0;
   for (int n=0; n<=nang1; ++n) {
     // indices default to -1 if angle does not reside in this MeshBlockPack
     iindcs.h_view(n,0) = -1;
@@ -126,11 +133,11 @@ void SphericalGrid::SetInterpolationIndices() {
           (rcoord.h_view(n,2) >= x3min && rcoord.h_view(n,2) <= x3max)) {
         iindcs.h_view(n,0) = m;
         iindcs.h_view(n,1) = static_cast<int>(std::floor((rcoord.h_view(n,0)-
-                                                          (x1min+dx1/2.0))/dx1));
+                                                          (x1min+offset*dx1))/dx1));
         iindcs.h_view(n,2) = static_cast<int>(std::floor((rcoord.h_view(n,1)-
-                                                          (x2min+dx2/2.0))/dx2));
+                                                          (x2min+offset*dx2))/dx2));
         iindcs.h_view(n,3) = static_cast<int>(std::floor((rcoord.h_view(n,2)-
-                                                          (x3min+dx3/2.0))/dx3));
+                                                          (x3min+offset*dx3))/dx3));
       }
     }
   }
@@ -149,7 +156,6 @@ void SphericalGrid::SetInterpolationIndices() {
 void SphericalGrid::SetInterpolationWeights() {
   auto &indcs = pmy_pack->pmesh->mb_indcs;
   auto &size = pmy_pack->pmb->mb_size;
-  int &ng = indcs.ng;
 
   auto &iindcs = interp_indcs;
   auto &iwghts = interp_wghts;
@@ -161,7 +167,7 @@ void SphericalGrid::SetInterpolationWeights() {
     int &ii3 = iindcs.h_view(n,3);
 
     if (ii0==-1) {  // angle not on this rank
-      for (int i=0; i<2*ng; ++i) {
+      for (int i=0; i<ninterp; ++i) {
         iwghts.h_view(n,i,0) = 0.0;
         iwghts.h_view(n,i,1) = 0.0;
         iwghts.h_view(n,i,2) = 0.0;
@@ -181,20 +187,21 @@ void SphericalGrid::SetInterpolationWeights() {
       Real &x3max = size.h_view(ii0).x3max;
 
       // set interpolation weights
-      for (int i=0; i<2*ng; ++i) {
+      int nleft = ninterp/2;
+      for (int i=0; i<ninterp; ++i) {
         iwghts.h_view(n,i,0) = 1.;
         iwghts.h_view(n,i,1) = 1.;
         iwghts.h_view(n,i,2) = 1.;
-        for (int j=0; j<2*ng; ++j) {
+        Real x1vpi1 = CellCenterX(ii1-nleft+i, indcs.nx1, x1min, x1max);
+        Real x2vpi1 = CellCenterX(ii2-nleft+i, indcs.nx2, x2min, x2max);
+        Real x3vpi1 = CellCenterX(ii3-nleft+i, indcs.nx3, x3min, x3max);
+        for (int j=0; j<ninterp; ++j) {
           if (j != i) {
-            Real x1vpi1 = CellCenterX(ii1-ng+i+1, indcs.nx1, x1min, x1max);
-            Real x1vpj1 = CellCenterX(ii1-ng+j+1, indcs.nx1, x1min, x1max);
+            Real x1vpj1 = CellCenterX(ii1-nleft+j, indcs.nx1, x1min, x1max);
             iwghts.h_view(n,i,0) *= (x0-x1vpj1)/(x1vpi1-x1vpj1);
-            Real x2vpi1 = CellCenterX(ii2-ng+i+1, indcs.nx2, x2min, x2max);
-            Real x2vpj1 = CellCenterX(ii2-ng+j+1, indcs.nx2, x2min, x2max);
+            Real x2vpj1 = CellCenterX(ii2-nleft+j, indcs.nx2, x2min, x2max);
             iwghts.h_view(n,i,1) *= (y0-x2vpj1)/(x2vpi1-x2vpj1);
-            Real x3vpi1 = CellCenterX(ii3-ng+i+1, indcs.nx3, x3min, x3max);
-            Real x3vpj1 = CellCenterX(ii3-ng+j+1, indcs.nx3, x3min, x3max);
+            Real x3vpj1 = CellCenterX(ii3-nleft+j, indcs.nx3, x3min, x3max);
             iwghts.h_view(n,i,2) *= (z0-x3vpj1)/(x3vpi1-x3vpj1);
           }
         }
@@ -231,10 +238,11 @@ void SphericalGrid::InterpolateToSphere(int vs, int ve, DvceArray5D<Real>& val) 
   // capturing variables for kernel
   auto &indcs = pmy_pack->pmesh->mb_indcs;
   int &is = indcs.is; int &js = indcs.js; int &ks = indcs.ks;
-  int &ng = indcs.ng;
   int nang1 = nangles - 1;
   int nvars = ve - vs + 1;
   int nvar1 = nvars - 1;
+  int nintp = ninterp;
+  int nleft = nintp/2;
 
   // reallocate container
   Kokkos::realloc(interp_vals,nangles,nvars);
@@ -253,12 +261,11 @@ void SphericalGrid::InterpolateToSphere(int vs, int ve, DvceArray5D<Real>& val) 
       ivals.d_view(n,v) = 0.0;
     } else {
       Real int_value = 0.0;
-      for (int i=0; i<2*ng; i++) {
-        for (int j=0; j<2*ng; j++) {
-          for (int k=0; k<2*ng; k++) {
+      for (int i=0; i<nintp; i++) {
+        for (int j=0; j<nintp; j++) {
+          for (int k=0; k<nintp; k++) {
             Real iwght = iwghts.d_view(n,i,0)*iwghts.d_view(n,j,1)*iwghts.d_view(n,k,2);
-            int_value += iwght*val(ii0,v+vs,ii3-(ng-k-ks)+1,
-                                   ii2-(ng-j-js)+1,ii1-(ng-i-is)+1);
+            int_value += iwght*val(ii0,v+vs,ii3+k+ks-nleft,ii2+j+js-nleft,ii1+i+is-nleft);
           }
         }
       }
