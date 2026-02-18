@@ -390,4 +390,17 @@ class IdealGRMHD : public EquationOfState {
                   const int jl, const int ju, const int kl, const int ku) override;
 };
 
+//----------------------------------------------------------------------------------------
+//! \class NoOpDynGRMHD
+//! \brief Derived class for no-op EOS in dynamical GRMHD
+
+class NoOpDynGRMHD : public EquationOfState {
+ public:
+  // Following suppress warnings that MHD versions are not over-ridden
+  using EquationOfState::ConsToPrim;
+  using EquationOfState::PrimToCons;
+
+  NoOpDynGRMHD(MeshBlockPack *pp, ParameterInput *pin);
+};
+
 #endif // EOS_EOS_HPP_

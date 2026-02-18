@@ -297,8 +297,8 @@ void Z4c::AlgConstr(MeshBlockPack *pmbp) {
 // destructor
 Z4c::~Z4c() {
   delete[] psi_out;
-  delete pbval_u;
   delete pbval_weyl;
+  delete pbval_u;
   delete pamr;
 }
 
