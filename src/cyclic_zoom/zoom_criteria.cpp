@@ -3,8 +3,8 @@
 // Copyright(C) 2020 James M. Stone <jmstone@ias.edu> and the Athena code team
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
-//! \file zoom_refinement.cpp
-//! \brief Functions to handle cyclic zoom mesh refinement
+//! \file zoom_criteria.cpp
+//! \brief Functions to handle cyclic zoom mesh refinement criteria
 
 #include <iostream>
 
@@ -77,10 +77,9 @@ void CyclicZoom::SetRegionAndInterval() {
   // TODO(@mhguo): may add more complex and robust region settings later
   old_zregion.radius = zregion.r_0 * std::pow(2.0,static_cast<Real>(zstate.last_zone));
   zregion.radius = zregion.r_0 * std::pow(2.0,static_cast<Real>(zstate.zone));
-  Real timescale = pow(zregion.radius,zint.t_run_pow);
-  // zint.runtime = zint.t_run_fac*timescale;
-  zint.runtime = zint.t_run_fac_zones[zstate.zone]*timescale;
-  if (zint.runtime > zint.t_run_max) {zint.runtime = zint.t_run_max;}
+  Real timescale = pow(zregion.radius,zint.trun_pow);
+  zint.runtime = zint.trun_facs[zstate.zone]*timescale;
+  if (zint.runtime > zint.trun_max) {zint.runtime = zint.trun_max;}
 }
 
 //----------------------------------------------------------------------------------------
@@ -101,7 +100,8 @@ void CyclicZoom::SetRefinementFlags() {
   Real r_zoom = zregion.radius;
   Real x1c = zregion.x1c, x2c = zregion.x2c, x3c = zregion.x3c;
   if(verbose && global_variable::my_rank == 0) {
-    std::cout << "CyclicZoom AMR: Refine/derefine to level " << old_level + ref_flag
+    std::cout << "ZoomCriteria: " << (ref_flag > 0 ? "Refines" : "Derefines")
+              << " to level " << old_level + ref_flag
               << " (refine_flag=" << ref_flag << ")" << std::endl;
   }
   // Check whether the MeshBlock is overlapping with the zoom region

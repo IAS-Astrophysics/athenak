@@ -4,7 +4,7 @@
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
 //! \file zoom_refinement.cpp
-//! \brief Functions to handle cyclic zoom mesh refinement
+//! \brief Functions to handle cyclic zoom mesh refinement logic for zoom region
 
 #include <iostream>
 
@@ -122,7 +122,6 @@ void CyclicZoom::CorrectVariables() {
   // so we correct the zoom data using the data buffer from the finer zoom data
   if (pmesh->pmb_pack->pmhd != nullptr && zstate.zone > 1) {
     int zmbs = pzmesh->gzms_eachdvce[global_variable::my_rank];
-    // TODO(@mhguo): think whether this is ok if with multiple levels in the future
     for (int zmf = 0; zmf < pzmesh->nzmb_thisdvce; ++zmf) {
       int m = pzmesh->mblid_eachzmb[zmf+zmbs];
       int zmc = pzmesh->zm_eachmb[m];
@@ -158,8 +157,8 @@ void CyclicZoom::ReinitVariables() {
     auto &zlloc = pzmesh->lloc_eachzmb[zm+zmbs];
     int m = pzmesh->mblid_eachzmb[zm+zmbs];
     auto &lloc = pmesh->lloc_eachmb[m+mbs];
-    if (verbose && global_variable::my_rank == 0) {
-      std::cout << "  Rank " << global_variable::my_rank
+    if (verbose) {
+      std::cout << " Rank " << global_variable::my_rank
                 << " Reinitializing MeshBlock " << m + mbs
                 << " using zoom MeshBlock " << zm + zmbs
                 << std::endl;
@@ -169,7 +168,8 @@ void CyclicZoom::ReinitVariables() {
       pzdata->ApplyDataSameLevel(m, zm, old_zregion);
     } else {
       std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-                << "zoom meshblock level is different from MeshBlock level"
+                << std::endl << "zoom meshblock level " << zlloc.level
+                << " is different from MeshBlock level " << lloc.level
                 << std::endl;
       std::exit(EXIT_FAILURE);
     }
@@ -194,7 +194,8 @@ void CyclicZoom::MaskVariables() {
       pzdata->ApplyDataFromFiner(m, zm, zregion);
     } else {
       std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-                << "zoom MeshBlock is more than 1 level finer than MeshBlock level"
+                << std::endl << "zoom MeshBlock level " << zlloc.level
+                << " is more than 1 level finer than MeshBlock level " << lloc.level
                 << std::endl;
       std::exit(EXIT_FAILURE);
     }

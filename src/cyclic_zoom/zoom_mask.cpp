@@ -3,8 +3,8 @@
 // Copyright(C) 2020 James M. Stone <jmstone@ias.edu> and the Athena code team
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
-//! \file zoom_data.cpp
-//  \brief implementation of constructor and functions in CyclicZoom class
+//! \file zoom_mask.cpp
+//! \brief Functions for storing and applying data in zoom mask region
 
 #include <iostream>
 #include <utility>
@@ -114,8 +114,8 @@ void ZoomData::StoreCoarsePrimData(int zm, DvceArray5D<Real> cw,
                                     int m, DvceArray5D<Real> w_) {
   auto pmbp = pzoom->pmesh->pmb_pack;
   if (pmbp->pmhd == nullptr) {
-    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-              << std::endl << "StoreCoarsePrimData only works for MHD case" <<std::endl;
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+              << "StoreCoarsePrimData only works for MHD case" <<std::endl;
     std::exit(EXIT_FAILURE);
   }
   auto &indcs = pzoom->pmesh->mb_indcs;
@@ -250,8 +250,8 @@ void ZoomData::StoreCoarsePrimData(int zm, DvceArray5D<Real> cw,
 void ZoomData::ApplyDataSameLevel(int m, int zm, const ZoomRegion &zregion) {
   auto pmbp = pzoom->pmesh->pmb_pack;
   if (pmbp->phydro == nullptr && pmbp->pmhd == nullptr && pmbp->prad == nullptr) {
-    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-              << std::endl << "No physics module enabled, nothing to load" <<std::endl;
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+              << "No physics module enabled, nothing to load" <<std::endl;
     std::exit(EXIT_FAILURE);
   }
   if (pmbp->phydro != nullptr) {
@@ -276,8 +276,8 @@ void ZoomData::ApplyDataSameLevel(int m, int zm, const ZoomRegion &zregion) {
 void ZoomData::ApplyDataFromFiner(int m, int zm, const ZoomRegion &zregion) {
   auto pmbp = pzoom->pmesh->pmb_pack;
   if (pmbp->phydro == nullptr && pmbp->pmhd == nullptr && pmbp->prad == nullptr) {
-    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-              << std::endl << "No physics module enabled, nothing to load" <<std::endl;
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+              << "No physics module enabled, nothing to load" <<std::endl;
     std::exit(EXIT_FAILURE);
   }
   if (pmbp->phydro != nullptr) {
@@ -386,8 +386,8 @@ void ZoomData::ApplyCCDataFromFiner(int m, DvceArray5D<Real> a,
 void ZoomData::ApplyPrimSameLevel(int m, int zm, const ZoomRegion &zregion) {
   auto pmbp = pzoom->pmesh->pmb_pack;
   if (pmbp->pmhd == nullptr) {
-    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-              << std::endl << "ApplyPrimSameLevel only works for MHD case" <<std::endl;
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+              << "ApplyPrimSameLevel only works for MHD case" <<std::endl;
     std::exit(EXIT_FAILURE);
   }
   auto &indcs = pzoom->pmesh->mb_indcs;
@@ -462,8 +462,8 @@ void ZoomData::ApplyPrimSameLevel(int m, int zm, const ZoomRegion &zregion) {
     }
   });
   if (pzoom->verbose) {
-    std::cout << "  Rank " << global_variable::my_rank
-              << " Reinitialized variables in meshblock " << m
+    std::cout << " Rank " << global_variable::my_rank
+              << " applied primitive variables in meshblock " << m
               << " using zoom meshblock " << zm << std::endl;
   }
   return;
@@ -476,8 +476,8 @@ void ZoomData::ApplyPrimSameLevel(int m, int zm, const ZoomRegion &zregion) {
 void ZoomData::ApplyPrimFromFiner(int m, int zm, const ZoomRegion &zregion) {
   auto pmbp = pzoom->pmesh->pmb_pack;
   if (pmbp->pmhd == nullptr) {
-    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-              << std::endl << "ApplyPrimFromFiner only works for MHD case" <<std::endl;
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+              << "ApplyPrimFromFiner only works for MHD case" <<std::endl;
     std::exit(EXIT_FAILURE);
   }
   auto &indcs = pzoom->pmesh->mb_indcs;

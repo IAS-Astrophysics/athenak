@@ -4,7 +4,7 @@
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
 //! \file zoom_fluxes.cpp
-//  \brief Functions for updating and storing fluxes during zooming
+//! \brief Functions for updating and storing fluxes during zooming
 
 #include <iostream>
 
@@ -39,9 +39,8 @@ void CyclicZoom::UpdateFluxes(Driver *pdriver) {
   (void) pmhd->RecvB(pdriver, 1);
   (void) pmhd->ClearSend(pdriver, 1); // stage = 1
   (void) pmhd->ClearRecv(pdriver, 1); // stage = 1
-  if (verbose) {
-    std::cout << " Rank " << global_variable::my_rank
-            << " Calculated electric fields after AMR" << std::endl;
+  if (verbose && global_variable::my_rank == 0) {
+    std::cout << " CyclicZoom: Calculated electric fields after AMR" << std::endl;
   }
   return;
 }
@@ -230,11 +229,6 @@ void ZoomData::LimitEFields() {
     max_e2 = fmax(max_e2, fabs(e02(zm,ck,cj,ci)));
     max_e3 = fmax(max_e3, fabs(e03(zm,ck,cj,ci)));
   }, Kokkos::Max<Real>(emax1), Kokkos::Max<Real>(emax2),Kokkos::Max<Real>(emax3));
-  if (pzoom->verbose && global_variable::my_rank == 0) {
-    std::cout << "ZoomData::LimitEFields: local emax1=" << emax1
-              << ", emax2=" << emax2
-              << ", emax3=" << emax3 << std::endl;
-  }
 #if MPI_PARALLEL_ENABLED
   MPI_Allreduce(MPI_IN_PLACE, &emax1, 1, MPI_ATHENA_REAL, MPI_MAX, MPI_COMM_WORLD);
   MPI_Allreduce(MPI_IN_PLACE, &emax2, 1, MPI_ATHENA_REAL, MPI_MAX, MPI_COMM_WORLD);

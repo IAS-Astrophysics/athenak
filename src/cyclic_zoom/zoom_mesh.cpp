@@ -4,7 +4,7 @@
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
 //! \file zoom_mesh.cpp
-//  \brief implementation of constructor and functions in CyclicZoom class
+//! \brief Implementation of constructor and basic functions in ZoomMesh class
 
 #include <iostream>
 
@@ -29,14 +29,14 @@ ZoomMesh::ZoomMesh(CyclicZoom *pz, ParameterInput *pin) :
   nzmb_max_perhost = pin->GetOrAddInteger("cyclic_zoom","max_nzmb_per_host",
                      pzoom->pmesh->nmb_maxperrank);
   if (nzmb_max_perdvce > pzoom->pmesh->nmb_maxperrank) {
-    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-              << std::endl << "max_nzmb_per_dvce exceeds max_nmb_per_rank: "
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+              << "max_nzmb_per_dvce exceeds max_nmb_per_rank: "
               << nzmb_max_perdvce << " > " << pzoom->pmesh->nmb_maxperrank << std::endl;
     std::exit(EXIT_FAILURE);
   }
   if (nzmb_max_perhost > pzoom->pmesh->nmb_maxperrank) {
-    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-              << std::endl << "max_nzmb_per_host exceeds max_nmb_per_rank: "
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+              << "max_nzmb_per_host exceeds max_nmb_per_rank: "
               << nzmb_max_perhost << " > " << pzoom->pmesh->nmb_maxperrank << std::endl;
     std::exit(EXIT_FAILURE);
   }
@@ -104,7 +104,7 @@ void ZoomMesh::UpdateMeshStructure() {
   nzmb_total = gzms_eachlevel[pzoom->zstate.zone-1] + nzmb_thislevel;
   if (nzmb_total > nzmb_max_perhost * global_variable::nranks) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
-              << "CyclicZoom:: Total number of zoom MeshBlocks exceed maximum "
+              << "Total number of zoom MeshBlocks exceed maximum "
               << "allowed on host: " << nzmb_total << " > "
               << nzmb_max_perhost * global_variable::nranks << std::endl;
     std::exit(EXIT_FAILURE);
@@ -170,16 +170,17 @@ int ZoomMesh::CountMBsToStore(int zone) {
   for (int m=0; m<nmb; ++m) {
     if (pzoom->CheckStoreFlag(m)) {
       if (zm_count >= nzmb_max_perdvce) {
-        std::cerr << "CyclicZoom::StoreVariables ERROR: exceed maximum number of "
-                  << "stored MeshBlocks per device: " << nzmb_max_perdvce
-                  << std::endl;
+        std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                  << std::endl << " ZoomMesh: number of zoom MeshBlocks to store "
+                  << zm_count << " exceeds maximum number of zoom MeshBlocks per device: "
+                  << nzmb_max_perdvce << std::endl;
         std::exit(EXIT_FAILURE);
       }
       zm_eachmb[m] = zm_count;
       if (pzoom->verbose) {
         int mbs = pzoom->pmesh->gids_eachrank[global_variable::my_rank];
-        std::cout << " CyclicZoom: Rank " << global_variable::my_rank
-                  << " Storing MeshBlock " << m + mbs
+        std::cout << " Rank " << global_variable::my_rank
+                  << " Stores MeshBlock " << m + mbs
                   << " with zoom MeshBlock index " << zm_eachmb[m]
                   << std::endl;
       }
@@ -287,8 +288,8 @@ void ZoomMesh::FindRegion(int zone) {
       mbrank_eachzmb[lm+lmbs] = global_variable::my_rank;
       mblid_eachzmb[lm+lmbs] = m;
       if (pzoom->verbose) {
-        std::cout << "  Rank " << global_variable::my_rank
-                  << " Find MeshBlock " << m+mbs << " for zoom MeshBlock "
+        std::cout << " Rank " << global_variable::my_rank
+                  << " Finds MeshBlock " << m+mbs << " for zoom MeshBlock "
                   << lm+lmbs << std::endl;
       }
       ++zm_count;
@@ -307,9 +308,8 @@ void ZoomMesh::FindRegion(int zone) {
   }
   if (lm_total != nlmb) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
-              << "CyclicZoom::GatherNZMB(): inconsistent total number of zoom MeshBlocks "
-              << "across all ranks: found " << lm_total << " vs. stored "
-              << nlmb << std::endl;
+              << "Inconsistent total number of zoom MeshBlocks across all ranks: "
+              << "found " << lm_total << " vs. stored " << nlmb << std::endl;
     std::exit(EXIT_FAILURE);
   }
   return;

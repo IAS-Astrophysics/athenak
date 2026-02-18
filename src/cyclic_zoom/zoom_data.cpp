@@ -4,7 +4,7 @@
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
 //! \file zoom_data.cpp
-//  \brief implementation of constructor and functions in CyclicZoom class
+//! \brief Implementation of constructor and basic functions in ZoomData class
 
 #include <iostream>
 #include <string>

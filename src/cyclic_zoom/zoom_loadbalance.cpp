@@ -85,7 +85,7 @@ void ZoomData::PackBuffer() {
   // Only copy the portion that's actually used
   size_t used_size = pzmesh->nzmb_thisdvce * zmb_data_cnt;
   if (offset != used_size) {
-    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
               << ": Packed data size " << offset << " does not match expected size "
               << used_size << "!" << std::endl;
     std::exit(EXIT_FAILURE);
@@ -193,6 +193,9 @@ void ZoomData::PackBuffersEC(DvceArray1D<Real> packed_data, size_t offset,
 //! \brief Unpacks data from AMR communication buffers for all MBs being received
 
 void ZoomData::UnpackBuffer() {
+  if (pzoom->verbose && global_variable::my_rank == 0) {
+    std::cout << "CyclicZoom: Unpacking data from communication buffer" << std::endl;
+  }
   // Sync only the used portion to device for bandwidth efficiency
   size_t used_size = pzmesh->nzmb_thisdvce * zmb_data_cnt;
   Kokkos::deep_copy(
@@ -223,10 +226,6 @@ void ZoomData::UnpackBuffer() {
               coarse_i0.extent(3) * coarse_i0.extent(4);
   }
   for (int zm = 0; zm < pzmesh->nzmb_thisdvce; ++zm) {
-    if (pzoom->verbose) {
-      std::cout << " Rank " << global_variable::my_rank
-                << " Unpacking buffer for zmb " << zm << std::endl;
-    }
     // offset = zm * zmb_data_cnt;
     if (pmbp->phydro != nullptr || pmbp->pmhd != nullptr) {
       // unpack conserved variables
@@ -260,7 +259,7 @@ void ZoomData::UnpackBuffer() {
     }
   }
   if (offset != used_size) {
-    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
               << ": Unpacked data size " << offset << " does not match expected size "
               << used_size << "!" << std::endl;
     std::exit(EXIT_FAILURE);
@@ -475,8 +474,8 @@ void ZoomData::RedistZMBs(int nlmb, int lmbs,
   }
 #endif
 
-  if (pzoom->verbose && global_variable::my_rank == 0) {
-    std::cout << "RedistZMBs: completed "
+  if (pzoom->verbose) {
+    std::cout << " RedistZMBs: Rank " << global_variable::my_rank << " completed "
 #if MPI_PARALLEL_ENABLED
               << requests.size() << " MPI ops (sends: " << nsend
               << ", recvs: " << nrecv << ", local: " << ncopy << ")" << std::endl;
@@ -504,6 +503,10 @@ void ZoomData::SaveToStorage(int zone) {
              hzbuf, zdata,  // src: dense buffer, dst: logical storage
              pzmesh->mbrank_eachzmb, pzmesh->rank_eachzmb,
              nullptr, &pzmesh->lid_eachzmb);
+  if (pzoom->verbose && global_variable::my_rank == 0) {
+    std::cout << "ZoomData: saved " << nlmb
+              << " zoom MeshBlocks to storage for zone " << zone << std::endl;
+  }
   return;
 }
 
@@ -524,5 +527,9 @@ void ZoomData::LoadFromStorage(int zone) {
              zdata, hzbuf,  // src: logical storage, dst: dense buffer
              pzmesh->rank_eachzmb, pzmesh->mbrank_eachzmb,
              &pzmesh->lid_eachzmb, nullptr);
+  if (pzoom->verbose && global_variable::my_rank == 0) {
+    std::cout << "ZoomData: loaded " << nlmb
+              << " zoom MeshBlocks from storage for zone " << zone << std::endl;
+  }
   return;
 }

@@ -6,7 +6,7 @@
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
 //! \file cyclic_zoom.hpp
-//! \brief definitions for CyclicZoom class
+//! \brief Definitions for CyclicZoom class and related structures
 
 #include <string>
 #include <vector>
@@ -61,15 +61,15 @@ typedef struct ZoomRegion {
 //! \brief parameters of zoom interval
 
 typedef struct ZoomInterval {
-  Real t_run_fac;               // interval factor
-  Real t_run_pow;               // interval power law
-  Real t_run_max;               // maximum interval
-  std::vector<Real> t_run_fac_zones;        // runtime factors for zones (dynamic)
+  Real trun_fac;                // interval factor
+  Real trun_pow;                // interval power law
+  Real trun_max;                // maximum interval
+  std::vector<Real> trun_facs;  // interval factors for each zone (dynamic)
   // Constructor for initialization
   ZoomInterval() = default;
   // Initialize with given number of zones
   void initialize(int num_zones) {
-    t_run_fac_zones.resize(num_zones);
+    trun_facs.resize(num_zones);
   }
   Real runtime;                 // interval for zoom
 } ZoomInterval;
@@ -113,7 +113,6 @@ class CyclicZoom {
   ZoomRegion old_zregion;  // previous zoom region parameters
   ZoomEMF zemf;            // zoom electric field parameters
 
-  // array_sum::GlobalSum nc1, nc2, nc3, em1, em2, em3;
   ZoomMesh *pzmesh;        // zoom mesh
   ZoomData *pzdata;        // zoom data
 
@@ -218,14 +217,14 @@ class ZoomData {
 
   DvceEdgeFld4D<Real> efld_pre;   // coarse edge-centered electric fields before zoom
   DvceEdgeFld4D<Real> efld_aft;   // coarse edge-centered electric fields after zoom
-  DvceEdgeFld4D<Real> delta_efld; // change in electric fields
+  DvceEdgeFld4D<Real> delta_efld; // change in electric fields, used for source terms
   DvceEdgeFld4D<Real> efld_buf;   // buffer for electric fields during zoom
 
   // Radiation intensity arrays
   DvceArray5D<Real> i0;         // intensities
   DvceArray5D<Real> coarse_i0;  // intensities on 2x coarser grid (for SMR/AMR)
 
-  // DualView for device ↔ host mirrored packing buffer
+  // DualView for device <-> host mirrored packing buffer
   // Syncs only used portion via subviews for bandwidth efficiency
   DualArray1D<Real> zbuf;
 
@@ -235,7 +234,6 @@ class ZoomData {
 
 #if MPI_PARALLEL_ENABLED
   MPI_Comm zoom_comm;                       // unique communicator for zoom refinement
-  // DualArray1D<AMRBuffer> sendbuf, recvbuf; // send/recv buffers
   MPI_Request *send_req, *recv_req;
 #endif
 

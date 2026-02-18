@@ -4,7 +4,7 @@
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
 //! \file cyclic_zoom.cpp
-//  \brief implementation of constructor and functions in CyclicZoom class
+//! \brief Implementation of constructor and functions in CyclicZoom class
 
 #include <iostream>
 #include <string>
@@ -54,18 +54,17 @@ CyclicZoom::CyclicZoom(Mesh *pm, ParameterInput *pin) :
   zregion.x2c = pin->GetOrAddReal(block_name,"x2c",0.0);
   zregion.x3c = pin->GetOrAddReal(block_name,"x3c",0.0);
   zregion.r_0 = pin->GetOrAddReal(block_name,"r_0",1.0);
-  zint.t_run_fac = pin->GetOrAddReal(block_name,"t_run_fac",1.0);
-  zint.t_run_pow = pin->GetOrAddReal(block_name,"t_run_pow",0.0);
-  zint.t_run_max = pin->GetOrAddReal(block_name,"t_run_max",FLT_MAX);
+  zint.trun_fac = pin->GetOrAddReal(block_name,"trun_fac",1.0);
+  zint.trun_pow = pin->GetOrAddReal(block_name,"trun_pow",0.0);
+  zint.trun_max = pin->GetOrAddReal(block_name,"trun_max",FLT_MAX);
   // Read number of zones from input parameters
   int num_zones = zamr.nlevels;
   // Initialize the dynamic interval structure
   zint.initialize(num_zones);
   // Read the runtime factors from input file
   for (int i = 0; i < num_zones; ++i) {
-    std::string param_name = "t_run_fac_zone_" + std::to_string(i);
-    Real zone_factor = pin->GetOrAddReal(block_name, param_name.c_str(), zint.t_run_fac);
-    zint.t_run_fac_zones[i] = zone_factor;
+    std::string param_name = "trun_fac_" + std::to_string(i);
+    zint.trun_facs[i] = pin->GetOrAddReal(block_name, param_name.c_str(), zint.trun_fac);
   }
 
   zstate.next_time = pmesh->time;
@@ -133,13 +132,13 @@ void CyclicZoom::PrintCyclicZoomDiagnostics() {
     std::cout << "Efield: emf_fmax = " << zemf.emf_fmax << " emf_zmax = " << zemf.emf_zmax
               << std::endl;
     // print interval parameters
-    std::cout << "Interval: t_run_fac = " << zint.t_run_fac
-              << " t_run_pow = " << zint.t_run_pow
-              << " t_run_max = " << zint.t_run_max
+    std::cout << "Interval: trun_fac = " << zint.trun_fac
+              << " trun_pow = " << zint.trun_pow
+              << " trun_max = " << zint.trun_max
               << std::endl;
     // output zone-specific time factors
-    for (int i = 0; i < zint.t_run_fac_zones.size(); ++i) {
-      std::cout << " t_run_fac_zone_" << i << " = " << zint.t_run_fac_zones[i]
+    for (int i = 0; i < zint.trun_facs.size(); ++i) {
+      std::cout << " trun_fac_" << i << " = " << zint.trun_facs[i]
                 << std::endl;
     }
     // print level structure
