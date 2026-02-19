@@ -153,6 +153,10 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
         user_esrcs_func = MyEfieldMask;
     }
 
+    if (user_constraint) {
+        user_constraint_func = CoolingSourceTerms;
+    }
+
     if (user_hist) {
 
         // Spherical Grid for user-defined history
@@ -855,7 +859,7 @@ void MySourceTerms(Mesh* pm, const Real bdt) { //CF:CHECKED
     StarGravSourceTerm(pm, bdt);
     if (mp.denstar > 0.0) StarMask(pm, bdt);
     if (mp.disc_mask_rin >= 0.0 || mp.disc_mask_rout >= 0.0) DiscOnlyMask(pm, bdt);
-    if(mp.is_ideal && mp.tcool>0.0) CoolingSourceTerms(pm, bdt);
+    // if(mp.is_ideal && mp.tcool>0.0) CoolingSourceTerms(pm, bdt);
 
     // FOFC diagnostic: damp conserved scalar (rho*s) with source -bdt*dens*s/tau
     MeshBlockPack *pmbp = pm->pmb_pack;
@@ -1278,28 +1282,38 @@ void MyEfieldMask(Mesh* pm) { //CF:CHECKED
 
 //----------------------------------------------------------------------------------------
 void CoolingSourceTerms(Mesh* pm, const Real bdt) { //CF:CHECKED
-    // Implement cooling source terms here if needed
+    // Implement cooling source terms here if needed.
+    // Loop over interior + ghost cells so no further conserved-var communication
+    // is required after this user constraint update.
 
-    // Capture variables for kernel - e.g. indices for looping over the meshblocks and the size of the meshblocks.
     auto &indcs = pm->mb_indcs;
-    int &is = indcs.is; int &ie = indcs.ie;
-    int &js = indcs.js; int &je = indcs.je;
-    int &ks = indcs.ks; int &ke = indcs.ke;
+    int &is = indcs.is;
+    int &ie = indcs.ie;
+    int &js = indcs.js;
+    int &je = indcs.je;
+    int &ks = indcs.ks;
+    int &ke = indcs.ke;
+    int ng = indcs.ng;
     MeshBlockPack *pmbp = pm->pmb_pack;
     auto &size = pmbp->pmb->mb_size;
 
-    // Now set a local parameter struct for lambda capturing
+    // Bounds including ghost zones (so BCs do not need to exchange U after this)
+    int il = is - ng;
+    int iu = ie + ng;
+    int jl = (indcs.nx2 > 1) ? (js - ng) : js;
+    int ju = (indcs.nx2 > 1) ? (je + ng) : je;
+    int kl = (indcs.nx3 > 1) ? (ks - ng) : ks;
+    int ku = (indcs.nx3 > 1) ? (ke + ng) : ke;
+
     auto mp_ = mp;
 
-
-
-    // Select either Hydro or MHD
     DvceArray5D<Real> u0_, w0_;
     u0_ = pm->pmb_pack->pmhd->u0;
     w0_ = pm->pmb_pack->pmhd->w0;
     auto &b0_ = pmbp->pmhd->b0;
-    
-    par_for("pgen_coolsource",DevExeSpace(),0,(pmbp->nmb_thispack-1),ks,ke,js,je,is,ie,
+
+    par_for("pgen_coolsource", DevExeSpace(), 0, (pmbp->nmb_thispack - 1), kl,
+            ku, jl, ju, il, iu,
     KOKKOS_LAMBDA(int m,int k,int j,int i) {
 
         // Extract the cell center coordinates

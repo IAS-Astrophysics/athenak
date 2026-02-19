@@ -125,6 +125,7 @@ nscalars    = 1        # FOFC diagnostic passive scalar (temporary)
 <problem>
 pgen_name = magsph      # problem generator name
 user_srcs = true        # Switch the user source terms on
+user_constraint = true  # Cooling applied in separate MHD stage (after RecvB_Shr)
 user_esrcs = true       # Switch the user e field mask on
 fofc_scalar_tau = 1.0   # Damping timescale for FOFC diagnostic scalar (0 = off)
 user_hist = false       # Switch the user history function on

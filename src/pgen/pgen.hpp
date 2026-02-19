@@ -21,6 +21,7 @@ using UserSrctermFnPtr = void (*)(Mesh* pm, const Real bdt);
 using UserRefinementFnPtr = void (*)(MeshBlockPack* pmbp);
 using UserHistoryFnPtr = void (*)(HistoryData *pdata, Mesh *pm);
 using UserESrctermFnPtr = void (*)(Mesh* pm);
+using UserConstraintFnPtr = void (*)(Mesh* pm, const Real bdt);
 
 //----------------------------------------------------------------------------------------
 //! \class ProblemGenerator
@@ -46,6 +47,9 @@ class ProblemGenerator {
   // true if user electric field source terms are specified
   bool user_esrcs;
 
+  // true if user constraint (e.g. cooling) is specified
+  bool user_constraint;
+
   // vector of SphericalGrid objects for analysis
   std::vector<std::unique_ptr<SphericalGrid>> spherical_grids;
 
@@ -58,6 +62,7 @@ class ProblemGenerator {
   UserRefinementFnPtr user_ref_func=nullptr;
   UserHistoryFnPtr user_hist_func=nullptr;
   UserESrctermFnPtr user_esrcs_func=nullptr;
+  UserConstraintFnPtr user_constraint_func=nullptr;
 
   // predefined problem generator functions (default test suite)
   void CallProblemGenerator(ParameterInput *pin, bool is_restart);

@@ -72,6 +72,7 @@ struct MHDTaskIDs {
   TaskID recvb;
   TaskID sendb_shr;
   TaskID recvb_shr;
+  TaskID user_constraint;
   TaskID bcs;
   TaskID prol;
   TaskID c2p;
@@ -192,6 +193,7 @@ class MHD {
   TaskStatus RecvB(Driver *d, int stage);
   TaskStatus SendB_Shr(Driver *d, int stage);
   TaskStatus RecvB_Shr(Driver *d, int stage);
+  TaskStatus UserConstraint(Driver *d, int stage);
   TaskStatus ApplyPhysicalBCs(Driver* pdrive, int stage);
   TaskStatus Prolongate(Driver* pdrive, int stage);
   TaskStatus ConToPrim(Driver *d, int stage);

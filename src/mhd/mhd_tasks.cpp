@@ -70,7 +70,10 @@ void MHD::AssembleMHDTasks(std::map<std::string, std::shared_ptr<TaskList>> tl) 
   id.recvb     = tl["stagen"]->AddTask(&MHD::RecvB, this, id.sendb);
   id.sendb_shr = tl["stagen"]->AddTask(&MHD::SendB_Shr, this, id.recvb);
   id.recvb_shr = tl["stagen"]->AddTask(&MHD::RecvB_Shr, this, id.sendb_shr);
-  id.bcs       = tl["stagen"]->AddTask(&MHD::ApplyPhysicalBCs, this, id.recvb_shr);
+  id.user_constraint = tl["stagen"]->AddTask(&MHD::UserConstraint, this,
+                              id.recvb_shr);
+  id.bcs       = tl["stagen"]->AddTask(&MHD::ApplyPhysicalBCs, this,
+                              id.user_constraint);
   id.prol      = tl["stagen"]->AddTask(&MHD::Prolongate, this, id.bcs);
   id.c2p       = tl["stagen"]->AddTask(&MHD::ConToPrim, this, id.prol);
   id.newdt     = tl["stagen"]->AddTask(&MHD::NewTimeStep, this, id.c2p);
@@ -274,6 +277,20 @@ TaskStatus MHD::MHDSrcTerms(Driver *pdrive, int stage) {
     (pmy_pack->pmesh->pgen->user_srcs_func)(pmy_pack->pmesh, beta_dt);
   }
 
+  return TaskStatus::complete;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn TaskStatus MHD::UserConstraint
+//! \brief Wrapper task to apply user-defined constraint (e.g. cooling) to
+//! conserved variables. Runs after RecvB_Shr, before ApplyPhysicalBCs.
+
+TaskStatus MHD::UserConstraint(Driver *pdrive, int stage) {
+  if (pmy_pack->pmesh->pgen->user_constraint &&
+      pmy_pack->pmesh->pgen->user_constraint_func != nullptr) {
+    Real beta_dt = (pdrive->beta[stage - 1]) * (pmy_pack->pmesh->dt);
+    (pmy_pack->pmesh->pgen->user_constraint_func)(pmy_pack->pmesh, beta_dt);
+  }
   return TaskStatus::complete;
 }
 

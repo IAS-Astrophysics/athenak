@@ -38,6 +38,7 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm) :
     user_srcs(false),
     user_hist(false),
     user_esrcs(false),
+    user_constraint(false),
     pmy_mesh_(pm) {
   // check for user-defined boundary conditions
   for (int dir=0; dir<6; ++dir) {
@@ -49,6 +50,8 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm) :
   user_srcs = pin->GetOrAddBoolean("problem","user_srcs",false);
   user_hist = pin->GetOrAddBoolean("problem","user_hist",false);
   user_esrcs = pin->GetOrAddBoolean("problem","user_esrcs",false);
+  user_constraint =
+      pin->GetOrAddBoolean("problem","user_constraint",false);
 
   // second argument false since this IS NOT a restart
   CallProblemGenerator(pin, false);
@@ -89,6 +92,15 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm) :
       exit(EXIT_FAILURE);
     }
   }
+  // Check that user constraint was enrolled if needed
+  if (user_constraint) {
+    if (user_constraint_func == nullptr) {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                << std::endl << "User constraint specified in <problem> "
+                << "block, but not enrolled by UserProblem()." << std::endl;
+      exit(EXIT_FAILURE);
+    }
+  }
 }
 
 //----------------------------------------------------------------------------------------
@@ -105,6 +117,7 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resf
     user_srcs(false),
     user_hist(false),
     user_esrcs(false),
+    user_constraint(false),
     pmy_mesh_(pm) {
   // check for user-defined boundary conditions
   for (int dir=0; dir<6; ++dir) {
@@ -115,6 +128,8 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resf
   user_srcs = pin->GetOrAddBoolean("problem","user_srcs",false);
   user_hist = pin->GetOrAddBoolean("problem","user_hist",false);
   user_esrcs = pin->GetOrAddBoolean("problem","user_esrcs",false);
+  user_constraint =
+      pin->GetOrAddBoolean("problem","user_constraint",false);
 
   // get spatial dimensions of arrays, including ghost zones
   auto &indcs = pm->pmb_pack->pmesh->mb_indcs;
@@ -665,6 +680,15 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resf
       std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                 << std::endl << "User ESRCs specified in <problem> block, but not "
                 << "enrolled by UserProblem()." << std::endl;
+      exit(EXIT_FAILURE);
+    }
+  }
+  // Check that user constraint was enrolled if needed
+  if (user_constraint) {
+    if (user_constraint_func == nullptr) {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                << std::endl << "User constraint specified in <problem> "
+                << "block, but not enrolled by UserProblem()." << std::endl;
       exit(EXIT_FAILURE);
     }
   }
