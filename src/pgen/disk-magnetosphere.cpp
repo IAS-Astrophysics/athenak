@@ -91,7 +91,7 @@ namespace {
     struct my_params {
     Real thetaw, thetab;
     Real gm0, r0, rho0, dslope, p0_over_r0, qslope, tcool, gamma_gas;
-    Real dfloor, pfloor, rho_floor1, rho_floor_slope1, rho_floor2, rho_floor_slope2;
+    Real dfloor, rho_floor1, rho_floor_slope1, rho_floor2, rho_floor_slope2;
     Real rfix, rad_in_cutoff, rad_in_smooth, rad_out_cutoff, rad_out_smooth;
     Real sig_star_disc;
     Real Omega0;
@@ -99,7 +99,7 @@ namespace {
     Real Rmin, Ri, Ro, Rmax;
     Real thmin, thi, tho, thmax;
     Real origid, rmagsph, denstar;
-    Real mm;
+    Real mm, rb, delta;
     Real fofc_scalar_tau;  // timescale for damping FOFC diagnostic scalar (0 = off)
     bool is_ideal;
     bool magnetic_fields_enabled;
@@ -107,7 +107,6 @@ namespace {
     int mag_option;
     Real disc_mask_rin;   // inner disc-only mask radius (negative = off)
     Real disc_mask_rout;  // outer disc-only mask radius (negative = off)
-    bool cooling_use_primitives;  // if true, compute cooling from w0 (lagged); else from u0
     bool cooling_direct_set;      // if true, set temperature to desired profile; else relax toward target
     };
 
@@ -184,6 +183,8 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     if (pmbp->pmhd != nullptr) mp.magnetic_fields_enabled = true;
     else mp.magnetic_fields_enabled = false;
     mp.mm = pin->GetOrAddReal("problem","mm",0.0);
+    mp.rb = pin->GetOrAddReal("problem","rb",0.05);
+    mp.delta = pin->GetOrAddReal("problem","delta",1.0);
     mp.origid = pin->GetOrAddReal("problem","origid",0.0);
     if (mp.is_ideal){
         mp.p0_over_r0 = SQR(pin->GetOrAddReal("problem","h_over_r0",0.1));
@@ -201,7 +202,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     mp.rho_floor2 = pin->GetOrAddReal("problem","rho_floor2",1.0e6);
     mp.rho_floor_slope2 = pin->GetOrAddReal("problem","rho_floor_slope2", 5.5);
     mp.rmagsph = pin->GetOrAddReal("problem","rmagsph",0.0);
-    mp.rs = pin->GetOrAddReal("problem", "rstar",0.0);
+    mp.rs = pin->GetOrAddReal("problem", "rstar",0.1);
     mp.gravsmooth = pin->GetOrAddReal("problem","gravsmooth",0.1);
     mp.tcool = pin->GetOrAddReal("problem","tcool",0.0);
     mp.fofc_scalar_tau = pin->GetOrAddReal("problem","fofc_scalar_tau",0.0);
@@ -210,13 +211,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     mp.mag_option = pin->GetOrAddInteger("problem","mag_option",1);
     mp.disc_mask_rin  = pin->GetOrAddReal("problem", "disc_mask_rin",  -1.0);
     mp.disc_mask_rout = pin->GetOrAddReal("problem", "disc_mask_rout", -1.0);
-    mp.cooling_use_primitives = pin->GetOrAddBoolean("problem", "cooling_use_primitives", false);
     mp.cooling_direct_set = pin->GetOrAddBoolean("problem", "cooling_direct_set", false);
-    // EOS pressure floor (for cooling: never cool below pfloor so we don't fight the EOS)
-    if (pmbp->pmhd != nullptr)
-        mp.pfloor = pin->GetOrAddReal("mhd", "pfloor", 1.e-11);
-    else
-        mp.pfloor = pin->GetOrAddReal("hydro", "pfloor", 1.e-11);
 
     // Capture variables for kernel - e.g. indices for looping over the meshblocks and the size of the meshblocks.
     auto &indcs = pmy_mesh_->mb_indcs;
@@ -714,6 +709,7 @@ namespace {
 
         Real rc = sqrt(rad*rad+z*z);
 
+        // Zhu velocity switch setup ----------------------
         if (rc > mp.rmagsph) {
             // outside the magnetosphere, set the velocity to the disc velocity
             ux = v1_disc;
@@ -731,8 +727,7 @@ namespace {
             uz += v3_star;
         } 
 
-        // // set the total velocity components - switch smoothly from star to disc across magsph boundary
-        // Real rc = sqrt(rad*rad+z*z);
+        // // Smooth velocity siwtch setup ----------------------
         // Real sigma = 1/(1+exp((rc - mp.rmagsph)/mp.sig_star_disc));
         // ux = (1-sigma)*v1_disc + sigma*v1_star;
         // uy = (1-sigma)*v2_disc + sigma*v2_star;
@@ -754,9 +749,7 @@ namespace {
         } else if (mp.mag_option == 2) {
             Real x2b = x2;
             Real rc = sqrt(x1*x1+x2*x2+x3*x3);
-            Real rb = mp.rs/2;
-            Real delta = 1/(10*mp.rs);
-            Real f = pow(rb,-3)*pow(pow(rc/rb,3*delta)+1,-1/delta);
+            Real f = pow(mp.rb,-3)*pow(pow(rc/mp.rb,3*mp.delta)+1,-1/mp.delta);
             a1 = mp.mm* f * (-1.*x2b*cos(mp.thetab));  
         }      
         
@@ -776,9 +769,7 @@ namespace {
         } else if (mp.mag_option == 2) {
             Real x1b = cos(mp.thetab)*x1 + sin(mp.thetab)*x3;
             Real rc = sqrt(x1*x1+x2*x2+x3*x3);
-            Real rb = mp.rs/2;
-            Real delta = 1/(10*mp.rs);
-            Real f = pow(rb,-3)*pow(pow(rc/rb,3*delta)+1,-1/delta);
+            Real f = pow(mp.rb,-3)*pow(pow(rc/mp.rb,3*mp.delta)+1,-1/mp.delta);
             a2 = mp.mm* f * (+1.*x1b);
         }
         
@@ -798,9 +789,7 @@ namespace {
         } else if (mp.mag_option == 2) {
             Real x2b = x2;
             Real rc = sqrt(x1*x1+x2*x2+x3*x3);
-            Real rb = mp.rs/2;
-            Real delta = 1/(10*mp.rs);
-            Real f = pow(rb,-3)*pow(pow(rc/rb,3*delta)+1,-1/delta);
+            Real f = pow(mp.rb,-3)*pow(pow(rc/mp.rb,3*mp.delta)+1,-1/mp.delta);
             a3 = mp.mm* f * (-1.*x2b*sin(mp.thetab));
         }
 
@@ -832,10 +821,8 @@ namespace {
             Real mdotr = mmx*x1 + mmy*x2 + mmz*x3;
 
             Real rc = sqrt(x1*x1+x2*x2+x3*x3);
-            Real rb = mp.rs/2;
-            Real delta = 1/(10*mp.rs);
-            Real f = pow(rb,-3)*pow(pow(rc/rb,3*delta)+1,-1/delta);
-            Real g = -3*pow(rb,-5)*pow(pow(rc/rb,3*delta)+1,-1/delta-1)*pow(rc/rb,3*delta-2);
+            Real f = pow(mp.rb,-3)*pow(pow(rc/mp.rb,3*mp.delta)+1,-1/mp.delta);
+            Real g = -3*pow(mp.rb,-5)*pow(pow(rc/mp.rb,3*mp.delta)+1,-1/mp.delta-1)*pow(rc/mp.rb,3*mp.delta-2);
 
             bx = 2*mmx*f + g*(mmx*rc*rc-mdotr*x1);
             by = 2*mmy*f + g*(mmy*rc*rc-mdotr*x2);
@@ -886,6 +873,7 @@ void MySourceTerms(Mesh* pm, const Real bdt) { //CF:CHECKED
             u0_(m, nmhd, k, j, i) = fmax(0.0, rho_s - sink);
         });
     }
+    
     return;
 }
 
@@ -1303,17 +1291,14 @@ void CoolingSourceTerms(Mesh* pm, const Real bdt) { //CF:CHECKED
     // Now set a local parameter struct for lambda capturing
     auto mp_ = mp;
 
-    // Select either Hydro or MHD
-    DvceArray5D<Real> u0_, w0_, bcc0_;
-    if (pm->pmb_pack->phydro != nullptr) {
-        u0_ = pm->pmb_pack->phydro->u0;
-        w0_ = pm->pmb_pack->phydro->w0;
-    } else if (pm->pmb_pack->pmhd != nullptr) {
-        u0_ = pm->pmb_pack->pmhd->u0;
-        w0_ = pm->pmb_pack->pmhd->w0;
-        bcc0_ = pmbp->pmhd->bcc0;
-    }
 
+
+    // Select either Hydro or MHD
+    DvceArray5D<Real> u0_, w0_;
+    u0_ = pm->pmb_pack->pmhd->u0;
+    w0_ = pm->pmb_pack->pmhd->w0;
+    auto &b0_ = pmbp->pmhd->b0;
+    
     par_for("pgen_coolsource",DevExeSpace(),0,(pmbp->nmb_thispack-1),ks,ke,js,je,is,ie,
     KOKKOS_LAMBDA(int m,int k,int j,int i) {
 
@@ -1333,19 +1318,20 @@ void CoolingSourceTerms(Mesh* pm, const Real bdt) { //CF:CHECKED
         Real mom2 = 0.5*(SQR(u0_(m,IM1,k,j,i)) + SQR(u0_(m,IM2,k,j,i)) + SQR(u0_(m,IM3,k,j,i)));
         Real e_m = 0.0;
         if (mp_.magnetic_fields_enabled) {
-            e_m = 0.5*(SQR(bcc0_(m,IBX,k,j,i)) + SQR(bcc0_(m,IBY,k,j,i)) + SQR(bcc0_(m,IBZ,k,j,i)));
+            // Compute cell-centered B from updated face-centered B (same as ConToPrim and setup)
+            Real bx_cc = 0.5*(b0_.x1f(m,k,j,i) + b0_.x1f(m,k,j,i+1));
+            Real by_cc = 0.5*(b0_.x2f(m,k,j,i) + b0_.x2f(m,k,j+1,i));
+            Real bz_cc = 0.5*(b0_.x3f(m,k,j,i) + b0_.x3f(m,k+1,j,i));
+            e_m = 0.5*(SQR(bx_cc) + SQR(by_cc) + SQR(bz_cc));
         }
-        Real efloor = mp_.pfloor/(mp_.gamma_gas - 1.0);
-        Real dens_u0 = fmax(u0_(m,IDN,k,j,i), mp_.dfloor);
+
+        Real dens_u0 = u0_(m,IDN,k,j,i); // Already floored from previous source term
         Real e_k_u0 = mom2 / dens_u0;
 
         Real rad(0.0),phi(0.0),z(0.0);
         Real p_over_r(0.0);
         GetCylCoord(mp_,rad,phi,z,x1v,x2v,x3v);
         p_over_r = PoverR(mp_,rad);
-
-        // Desired internal energy per unit volume: eint_vol = p/(gamma-1) = (p_over_r*rho)/(gamma-1)
-        // efloor = pfloor/(gamma-1) is also per unit volume; same units for fmax and E_min
 
         if (mp_.cooling_direct_set) {
             // Set total energy so temperature matches desired profile directly (no relaxation)
@@ -1354,21 +1340,14 @@ void CoolingSourceTerms(Mesh* pm, const Real bdt) { //CF:CHECKED
         } else {
             // Relax toward target over cooling timescale (eint and eint_desired_vol both per unit volume)
             Real dens(0.0), eint(0.0);
-            if (mp_.cooling_use_primitives) {
-                dens = w0_(m,IDN,k,j,i);
-                eint = w0_(m,IEN,k,j,i);
-            } else {
-                dens = u0_(m,IDN,k,j,i);
-                eint = u0_(m,IEN,k,j,i) - e_k_u0 - e_m;
-            }
+            dens = w0_(m,IDN,k,j,i);
+            eint = w0_(m,IEN,k,j,i);
             Real eint_target_vol = p_over_r*dens/(mp_.gamma_gas - 1.0);
             Real rad_safe = fmax(rad, mp_.rfix);
             Real dtr = fmax(mp_.tcool*2.*M_PI/sqrt(mp_.gm0/rad_safe/rad_safe/rad_safe),bdt);
             Real dfrac = bdt/dtr;
             Real dE = eint - eint_target_vol;  // per unit volume
             u0_(m,IEN,k,j,i) -= dE*dfrac;
-            Real E_min = e_k_u0 + e_m + efloor;
-            u0_(m,IEN,k,j,i) = fmax(u0_(m,IEN,k,j,i), E_min);
         }
     }); // end par_for
 
