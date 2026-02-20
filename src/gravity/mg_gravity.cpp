@@ -61,7 +61,7 @@ MGGravityDriver::MGGravityDriver(MeshBlockPack *pmbp, ParameterInput *pin)
     exit(EXIT_FAILURE);
   }
   // Allocate the root multigrid
-  int nghost = pmbp->pmesh->mb_indcs.ng;
+  int nghost = pin->GetOrAddInteger("gravity", "mg_nghost", 2);
   mgroot_ = new MGGravity(this, nullptr, nghost);
   mglevels_ = new MGGravity(this, pmbp, nghost);
   // allocate boundary buffers
@@ -88,9 +88,6 @@ void MGGravityDriver::SetFourPiG(Real four_pi_G) {
 //! \brief MGGravity constructor
 
 MGGravity::MGGravity(MultigridDriver *pmd, MeshBlockPack *pmbp, int nghost) : Multigrid(pmd, pmbp, nghost) {
-  //btype = BoundaryQuantity::mg;
-  //btypef = BoundaryQuantity::mg_faceonly;
-  //pmgbval = new MGGravityBoundaryValues(this, mg_block_bcs_);
 }
 
 
@@ -127,7 +124,7 @@ void MGGravityDriver::Solve(Driver *pdriver, int stage, Real dt) {
   else
     SolveMG(pdriver);
 
-  if (true) {
+  if (fshowdef_) {
     Real norm = CalculateDefectNorm(MGNormType::l2, 0);
     std::cout << "MGGravityDriver::Solve: Final defect norm = " << norm << std::endl;
   }
@@ -154,15 +151,16 @@ Real Laplacian(const DvceArray5D<Real> &u_, int m, int v, int k, int j, int i) {
 void MGGravity::Smooth(DvceArray5D<Real> &u, const DvceArray5D<Real> &src,
                 const DvceArray5D<Real> &coeff, const DvceArray5D<Real> &matrix, int rlev,
                 int il, int iu, int jl, int ju, int kl, int ku, int color, bool th) {
-  Real dx;
-  if (rlev <= 0) dx = rdx_*static_cast<Real>(1<<(-rlev));
-  else           dx = rdx_/static_cast<Real>(1<<rlev);
-  Real dx2 = SQR(dx);
+  auto brdx = block_rdx_;
+  int rlev_l = rlev;
   Real isix = static_cast<MGGravityDriver*>(pmy_driver_)->omega_/6.0;
   color ^= pmy_driver_->GetCoffset();
   
   par_for("MGGravity::Smooth", DevExeSpace(),0 ,nmmb_-1, kl, ku, jl, ju,
   KOKKOS_LAMBDA(const int m, const int k, const int j) {
+    Real dx = (rlev_l <= 0) ? brdx(m) * static_cast<Real>(1<<(-rlev_l))
+                            : brdx(m) / static_cast<Real>(1<<rlev_l);
+    Real dx2 = dx * dx;
     const int c = (color + k + j) & 1;
     for (int i = il + c; i <= iu; i += 2) {
       u(m,0,k,j,i) -= (Laplacian(u, m, 0, k, j, i)-src(m,0,k,j,i)*dx2)*isix;
@@ -184,13 +182,8 @@ void MGGravity::CalculateDefect(DvceArray5D<Real> &def, const DvceArray5D<Real> 
                 const DvceArray5D<Real> &src, const DvceArray5D<Real> &coeff,
                 const DvceArray5D<Real> &matrix, int rlev,
                 int il, int iu, int jl, int ju, int kl, int ku, bool th) {
-  Real dx;
-  if (rlev <= 0) dx = rdx_*static_cast<Real>(1<<(-rlev));
-  else           dx = rdx_/static_cast<Real>(1<<rlev);
-  Real idx2 = 1.0/SQR(dx);
-
-  // local copies for safe capture in device lambda
-  const Real lidx2 = idx2;
+  auto brdx = block_rdx_;
+  int rlev_l = rlev;
 
   auto def_ = def;
   auto u_ = u;
@@ -198,7 +191,10 @@ void MGGravity::CalculateDefect(DvceArray5D<Real> &def, const DvceArray5D<Real> 
   par_for("MGGravity::CalculateDefect", DevExeSpace(),
           0, nmmb_-1, kl, ku, jl, ju, il, iu,
   KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
-    def_(m,0,k,j,i) = src_(m,0,k,j,i) - Laplacian(u, m, 0, k, j, i) * lidx2;
+    Real dx = (rlev_l <= 0) ? brdx(m) * static_cast<Real>(1<<(-rlev_l))
+                            : brdx(m) / static_cast<Real>(1<<rlev_l);
+    Real idx2 = 1.0 / (dx * dx);
+    def_(m,0,k,j,i) = src_(m,0,k,j,i) - Laplacian(u, m, 0, k, j, i) * idx2;
   });
 
   return;
@@ -216,16 +212,70 @@ void MGGravity::CalculateDefect(DvceArray5D<Real> &def, const DvceArray5D<Real> 
 void MGGravity::CalculateFASRHS(DvceArray5D<Real> &src, const DvceArray5D<Real> &u,
                 const DvceArray5D<Real> &coeff, const DvceArray5D<Real> &matrix,
                 int shift, int il, int iu, int jl, int ju, int kl, int ku, bool th) {
-  Real dx;
-  if (shift <= 0) dx = rdx_*static_cast<Real>(1<<(-shift));
-  else           dx = rdx_/static_cast<Real>(1<<shift);
-  Real idx2 = 1.0/SQR(dx);
-  // locals for capture
-  const Real lidx2 = idx2;
+  auto brdx = block_rdx_;
+  int shift_l = shift;
   par_for("MGGravity::CalculateFASRHS", DevExeSpace(),
           0, nmmb_-1, kl, ku, jl, ju, il, iu,
   KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
-    src(m,0,k,j,i) +=  Laplacian(u, m, 0, k, j, i) * lidx2;    
+    Real dx = (shift_l <= 0) ? brdx(m) * static_cast<Real>(1<<(-shift_l))
+                             : brdx(m) / static_cast<Real>(1<<shift_l);
+    Real idx2 = 1.0 / (dx * dx);
+    src(m,0,k,j,i) +=  Laplacian(u, m, 0, k, j, i) * idx2;    
   });
   return;
+}
+
+
+//----------------------------------------------------------------------------------------
+// Host-side octet physics for MGGravityDriver
+
+static inline Real OctLaplacian(const MGOctet &o, int v, int k, int j, int i) {
+  return (6.0*o.U(v,k,j,i) - o.U(v,k+1,j,i) - o.U(v,k,j+1,i)
+          - o.U(v,k,j,i+1) - o.U(v,k-1,j,i) - o.U(v,k,j-1,i)
+          - o.U(v,k,j,i-1));
+}
+
+void MGGravityDriver::SmoothOctet(MGOctet &oct, int rlev, int color) {
+  int ngh = mgroot_->GetGhostCells();
+  Real root_dx = mgroot_->GetRootDx();
+  Real dx = root_dx / static_cast<Real>(1 << rlev);
+  Real dx2 = dx * dx;
+  Real isix = omega_ / 6.0;
+  int c = color ^ coffset_;
+  for (int k = ngh; k <= ngh+1; ++k) {
+    for (int j = ngh; j <= ngh+1; ++j) {
+      for (int i = ngh + ((c^k^j)&1); i <= ngh+1; i += 2) {
+        Real lap = OctLaplacian(oct, 0, k, j, i);
+        oct.U(0,k,j,i) -= (lap - oct.Src(0,k,j,i)*dx2)*isix;
+      }
+    }
+  }
+}
+
+void MGGravityDriver::CalculateDefectOctet(MGOctet &oct, int rlev) {
+  int ngh = mgroot_->GetGhostCells();
+  Real root_dx = mgroot_->GetRootDx();
+  Real dx = root_dx / static_cast<Real>(1 << rlev);
+  Real idx2 = 1.0 / (dx * dx);
+  for (int k = ngh; k <= ngh+1; ++k) {
+    for (int j = ngh; j <= ngh+1; ++j) {
+      for (int i = ngh; i <= ngh+1; ++i) {
+        oct.Def(0,k,j,i) = oct.Src(0,k,j,i) - OctLaplacian(oct, 0, k, j, i) * idx2;
+      }
+    }
+  }
+}
+
+void MGGravityDriver::CalculateFASRHSOctet(MGOctet &oct, int rlev) {
+  int ngh = mgroot_->GetGhostCells();
+  Real root_dx = mgroot_->GetRootDx();
+  Real dx = root_dx / static_cast<Real>(1 << rlev);
+  Real idx2 = 1.0 / (dx * dx);
+  for (int k = ngh; k <= ngh+1; ++k) {
+    for (int j = ngh; j <= ngh+1; ++j) {
+      for (int i = ngh; i <= ngh+1; ++i) {
+        oct.Src(0,k,j,i) += OctLaplacian(oct, 0, k, j, i) * idx2;
+      }
+    }
+  }
 }

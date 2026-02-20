@@ -70,6 +70,21 @@ Multigrid::Multigrid(MultigridDriver *pmd, MeshBlockPack *pmbp, int nghost):
   rdy_ = (size_.x2max-size_.x2min)/static_cast<Real>(indcs_.nx2);
   rdz_ = (size_.x3max-size_.x3min)/static_cast<Real>(indcs_.nx3);
 
+  Kokkos::realloc(block_rdx_, nmmb_);
+  {
+    auto brdx_h = Kokkos::create_mirror_view(block_rdx_);
+    if (pmy_pack_ != nullptr) {
+      auto &mb_size = pmy_pack_->pmb->mb_size;
+      Real rnx1 = static_cast<Real>(indcs_.nx1);
+      for (int m = 0; m < nmmb_; ++m) {
+        brdx_h(m) = (mb_size.h_view(m).x1max - mb_size.h_view(m).x1min) / rnx1;
+      }
+    } else {
+      brdx_h(0) = rdx_;
+    }
+    Kokkos::deep_copy(block_rdx_, brdx_h);
+  }
+
   nlevel_ = 0;
   if (pmy_pack_ == nullptr) { 
     // Root grid levels
@@ -142,6 +157,7 @@ Multigrid::Multigrid(MultigridDriver *pmd, MeshBlockPack *pmbp, int nghost):
     ncz=(indcs_.nx3>>(ll+1))+2*ngh_;
 
   }
+
 }
 
 
@@ -195,28 +211,31 @@ void Multigrid::LoadFinestData(const DvceArray5D<Real> &src, int ns, int ngh) {
 //! \brief Fill the source in the active zone of the finest level
 
 void Multigrid::LoadSource(const DvceArray5D<Real> &src, int ns, int ngh, Real fac) {
-  // ngh is the number of ghost zones in src
-  // ngh_ is the number of ghost zones in dst
+  // ngh is the number of ghost zones in src (hydro)
+  // ngh_ is the number of ghost zones in dst (multigrid)
+  // Copy active zone + min(ngh_,ngh) ghost cells, aligning active zones.
 
   auto &dst = src_[nlevel_-1];
+  int sngh = std::min(ngh_, ngh);
   int is, ie, js, je, ks, ke;
-  is = js = ks = ngh_-ngh;
-  ie = is + indcs_.nx1 + 2*ngh - 1;
-  je = js + indcs_.nx2 + 2*ngh - 1;
-  ke = ks + indcs_.nx3 + 2*ngh - 1;
+  is = js = ks = ngh_ - sngh;
+  ie = is + indcs_.nx1 + 2*sngh - 1;
+  je = js + indcs_.nx2 + 2*sngh - 1;
+  ke = ks + indcs_.nx3 + 2*sngh - 1;
 
   // local copies for device lambda capture
   const Real lfac = fac;
   const int m0 = 0, m1 = nmmb_ - 1;
   const int v0 = 0, v1 = nvar_ - 1;
+  const int src_off = ngh - ngh_;
 
   par_for("Multigrid::LoadSource", DevExeSpace(),
           m0, m1, v0, v1, ks, ke, js, je, is, ie,
   KOKKOS_LAMBDA(const int m, const int v, const int mk, const int mj, const int mi) {
     const int nsrc = ns + v;
-    const int k = mk - ks;
-    const int j = mj - js;
-    const int i = mi - is;
+    const int k = mk + src_off;
+    const int j = mj + src_off;
+    const int i = mi + src_off;
     if (lfac == (Real)1.0) {
       dst(m, v, mk, mj, mi) = src(m, nsrc, k, j, i);
     } else {
@@ -240,8 +259,7 @@ void Multigrid::LoadCoefficients(const DvceArray5D<Real> &coeff, int ngh) {
   ie = indcs_.nx1 + 2*ngh_ - 1; je = indcs_.nx2 + 2*ngh_ - 1; ke = indcs_.nx3 + 2*ngh_ - 1;
 
   // copy locals for device lambda capture
-  const int lks = ks, ljs = js, lis = is;
-  const int lngh = ngh;
+  const int coeff_off = ngh - ngh_;
   const int m0 = 0, m1 = nmmb_ - 1;
   const int v0 = 0, v1 = ncoeff_ - 1;
 
@@ -251,9 +269,9 @@ void Multigrid::LoadCoefficients(const DvceArray5D<Real> &coeff, int ngh) {
   par_for("Multigrid::LoadCoefficients", DevExeSpace(),
           m0, m1, v0, v1, ks, ke, js, je, is, ie,
   KOKKOS_LAMBDA(const int m, const int v, const int mk, const int mj, const int mi) {
-    const int k = mk + lngh - ngh_; // mk + (ngh - ngh_)
-    const int j = mj + lngh - ngh_;
-    const int i = mi + lngh - ngh_;
+    const int k = mk + coeff_off;
+    const int j = mj + coeff_off;
+    const int i = mi + coeff_off;
     cm_(m, v, mk, mj, mi) = coeff_(m, v, k, j, i);
   });
 
@@ -298,22 +316,33 @@ void Multigrid::RestrictCoefficients() {
 
 void Multigrid::RetrieveResult(DvceArray5D<Real> &dst, int ns, int ngh) {
   const auto &src = u_[nlevel_-1];
-  int is, ie, js, je, ks, ke;
   int sngh = std::min(ngh_,ngh);
-  is = js = ks = ngh_-sngh;
-  ie = indcs_.nx1 + ngh_ + sngh - 1;
-  je = indcs_.nx2 + ngh_ + sngh - 1;
-  ke = indcs_.nx3 + ngh_ + sngh - 1;
 
-  par_for("Multigrid::RetrieveResult", DevExeSpace(),
-          0, nmmb_-1, 0, nvar_-1, ks, ke, js, je, is, ie,
-  KOKKOS_LAMBDA(const int m, const int v, const int mk, const int mj, const int mi) {
-    const int ndst = ns + v;
-    const int k = mk - ks;
-    const int j = mj - js;
-    const int i = mi - is;
-    dst(m, ndst, k, j, i) = src(m, v, mk, mj, mi);
-  });
+  if (ns == 0 && ngh_ == ngh && nvar_ == 1
+      && src.extent(0) == dst.extent(0)
+      && src.extent(2) == dst.extent(2)
+      && src.extent(3) == dst.extent(3)
+      && src.extent(4) == dst.extent(4)) {
+    Kokkos::deep_copy(dst, src);
+  } else {
+    int is, ie, js, je, ks, ke;
+    is = js = ks = ngh_ - sngh;
+    ie = indcs_.nx1 + ngh_ + sngh - 1;
+    je = indcs_.nx2 + ngh_ + sngh - 1;
+    ke = indcs_.nx3 + ngh_ + sngh - 1;
+
+    const int dst_off = ngh - ngh_;
+
+    par_for("Multigrid::RetrieveResult", DevExeSpace(),
+            0, nmmb_-1, 0, nvar_-1, ks, ke, js, je, is, ie,
+    KOKKOS_LAMBDA(const int m, const int v, const int mk, const int mj, const int mi) {
+      const int ndst = ns + v;
+      const int k = mk + dst_off;
+      const int j = mj + dst_off;
+      const int i = mi + dst_off;
+      dst(m, ndst, k, j, i) = src(m, v, mk, mj, mi);
+    });
+  }
 
   return;
 }
@@ -337,6 +366,7 @@ void Multigrid::RetrieveDefect(DvceArray5D<Real> &dst, int ns, int ngh) {
   const int mj0 = ngh_ - sngh, mj1 = je;
   const int mi0 = ngh_ - sngh, mi1 = ie;
   const Real scale = defscale_;
+  const int dst_off = ngh - ngh_;
 
   auto dst_ = dst;
   auto src_ = src;
@@ -345,9 +375,9 @@ void Multigrid::RetrieveDefect(DvceArray5D<Real> &dst, int ns, int ngh) {
           m0, m1, v0, v1, mk0, mk1, mj0, mj1, mi0, mi1,
   KOKKOS_LAMBDA(const int m, const int v, const int mk, const int mj, const int mi) {
     const int ndst = ns + v;
-    const int k = mk - ngh_ + ngh;
-    const int j = mj - ngh_ + ngh;
-    const int i = mi - ngh_ + ngh;
+    const int k = mk + dst_off;
+    const int j = mj + dst_off;
+    const int i = mi + dst_off;
     dst_(m, ndst, k, j, i) = src_(m, v, mk, mj, mi) * scale;
   });
 
@@ -364,6 +394,9 @@ void Multigrid::ZeroClearData() {
   return;
 }
 
+void Multigrid::CopySourceToData() {
+  Kokkos::deep_copy(u_[nlevel_-1], src_[nlevel_-1]);
+}
 
 //----------------------------------------------------------------------------------------
 //! \fn void Multigrid::RestrictPack()
@@ -458,10 +491,10 @@ void Multigrid::SmoothPack(int color) {
   int ll = nlevel_-1-current_level_;
   int is, ie, js, je, ks, ke;
   int th = false;
-  is = js = ks = 1;
-  ie = is+(indcs_.nx1>>ll) + 2*(ngh_-1) - 1;
-  je = js+(indcs_.nx2>>ll) + 2*(ngh_-1) - 1;
-  ke = ks+(indcs_.nx3>>ll) + 2*(ngh_-1) - 1;
+  is = js = ks = ngh_;
+  ie = is+(indcs_.nx1>>ll) - 1;
+  je = js+(indcs_.nx2>>ll) - 1;
+  ke = ks+(indcs_.nx3>>ll) - 1;
   Smooth(u_[current_level_], src_[current_level_],  coeff_[current_level_],
          matrix_[current_level_], -ll, is, ie, js, je, ks, ke, color, th);
   return;
@@ -476,10 +509,10 @@ void Multigrid::CalculateDefectPack() {
   int ll = nlevel_-1-current_level_;
   int is, ie, js, je, ks, ke;
   int th = false;
-  is = js = ks = 1;
-  ie = is+(indcs_.nx1>>ll) + 2*(ngh_-1) - 1;
-  je = js+(indcs_.nx2>>ll) + 2*(ngh_-1) - 1;
-  ke = ks+(indcs_.nx3>>ll) + 2*(ngh_-1) - 1;
+  is = js = ks = ngh_;
+  ie = is+(indcs_.nx1>>ll) - 1;
+  je = js+(indcs_.nx2>>ll) - 1;
+  ke = ks+(indcs_.nx3>>ll) - 1;
 
   CalculateDefect(def_[current_level_], u_[current_level_], src_[current_level_],
                   coeff_[current_level_], matrix_[current_level_],
@@ -497,10 +530,10 @@ void Multigrid::CalculateFASRHSPack() {
   int ll = nlevel_-1-current_level_;
   int is, ie, js, je, ks, ke;
   int th = false;
-  is = js = ks = 1;
-  ie = is+(indcs_.nx1>>ll) + 2*(ngh_-1) - 1;
-  je = js+(indcs_.nx2>>ll) + 2*(ngh_-1) - 1;
-  ke = ks+(indcs_.nx3>>ll) + 2*(ngh_-1) - 1;
+  is = js = ks = ngh_;
+  ie = is+(indcs_.nx1>>ll) - 1;
+  je = js+(indcs_.nx2>>ll) - 1;
+  ke = ks+(indcs_.nx3>>ll) - 1;
   CalculateFASRHS(src_[current_level_], u_[current_level_], coeff_[current_level_],
                   matrix_[current_level_], -ll, is, ie, js, je, ks, ke, th);
   return;
@@ -508,95 +541,68 @@ void Multigrid::CalculateFASRHSPack() {
 
 //----------------------------------------------------------------------------------------
 //! \fn void Multigrid::SetFromRootGrid(bool folddata)
-//! \brief Load the data from the root grid or octets
+//! \brief Load the data from the root grid or octets (Athena++ style per-cell octets)
 
 void Multigrid::SetFromRootGrid(bool folddata) {
-  current_level_=0;
+  current_level_ = 0;
   auto &dst = u_[current_level_];
   auto &odst = uold_[current_level_];
-  const auto &src=pmy_driver_->mgroot_->GetCurrentData();
-  const auto &osrc = pmy_driver_->mgroot_->GetCurrentOldData();
+  const auto &rsrc = pmy_driver_->mgroot_->GetCurrentData();
+  const auto &rosrc = pmy_driver_->mgroot_->GetCurrentOldData();
   int padding = pmy_mesh_->gids_eachrank[global_variable::my_rank];
-  //Host copy/mirror this should be optimized later
   auto dst_h = Kokkos::create_mirror_view(dst);
   auto odst_h = Kokkos::create_mirror_view(odst);
-  const auto src_h = Kokkos::create_mirror_view_and_copy(HostMemSpace(), src);
-  const auto osrc_h = Kokkos::create_mirror_view_and_copy(HostMemSpace(), osrc);
+  const auto src_h = Kokkos::create_mirror_view_and_copy(HostMemSpace(), rsrc);
+  const auto osrc_h = Kokkos::create_mirror_view_and_copy(HostMemSpace(), rosrc);
 
-  // Handle each meshblock based on its refinement level
-  for(int m=0; m<nmmb_; ++m) {
-    auto loc = pmy_mesh_->lloc_eachmb[m+padding];
+  for (int m = 0; m < nmmb_; ++m) {
+    auto loc = pmy_mesh_->lloc_eachmb[m + padding];
     int lev = loc.level - pmy_driver_->locrootlevel_;
-    int ci = static_cast<int>(loc.lx1);
-    int cj = static_cast<int>(loc.lx2);
-    int ck = static_cast<int>(loc.lx3);
-    
     if (lev == 0) {
-      // Direct copy from root grid (no refinement)
-      for (int v=0; v<nvar_; ++v) {
-        for (int k=ngh_-1; k<=ngh_+1; ++k) {
-          for (int j=ngh_-1; j<=ngh_+1; ++j) {
-            for (int i=ngh_-1; i<=ngh_+1; ++i){
+      // Root-level block: read 3x3x3 neighborhood from root grid
+      int ci = static_cast<int>(loc.lx1);
+      int cj = static_cast<int>(loc.lx2);
+      int ck = static_cast<int>(loc.lx3);
+      for (int v = 0; v < nvar_; ++v) {
+        for (int k = 0; k <= 2; ++k) {
+          for (int j = 0; j <= 2; ++j) {
+            for (int i = 0; i <= 2; ++i) {
               dst_h(m, v, k, j, i) = src_h(0, v, ck+k, cj+j, ci+i);
-              if(folddata)
-                odst_h(m,v, k, j, i) = osrc_h(0, v, ck+k, cj+j, ci+i);
+              if (folddata)
+                odst_h(m, v, k, j, i) = osrc_h(0, v, ck+k, cj+j, ci+i);
             }
           }
         }
       }
-    } else if (lev > 0) {
-      // Meshblock is refined: get data from appropriate octet level
-      // If octets are available, use them; otherwise use root grid with prolongation
-      if (lev <= pmy_driver_->nreflevel_ && pmy_driver_->mgoct_ != nullptr && 
-          pmy_driver_->mgoct_[lev-1] != nullptr) {
-        // Get data from octet at level (lev-1)
-        const auto &oct_src = pmy_driver_->mgoct_[lev-1]->GetCurrentData();
-        const auto &oct_osrc = pmy_driver_->mgoct_[lev-1]->GetCurrentOldData();
-        auto oct_src_h = Kokkos::create_mirror_view_and_copy(HostMemSpace(), oct_src);
-        auto oct_osrc_h = Kokkos::create_mirror_view_and_copy(HostMemSpace(), oct_osrc);
-        
-        // Find position in octet grid
-        int oi = ci / 2;  // parent position at coarser level
-        int oj = cj / 2;
-        int ok = ck / 2;
-        
-        for (int v=0; v<nvar_; ++v) {
-          for (int k=ngh_-1; k<=ngh_+1; ++k) {
-            for (int j=ngh_-1; j<=ngh_+1; ++j) {
-              for (int i=ngh_-1; i<=ngh_+1; ++i){
-                dst_h(m, v, k, j, i) = oct_src_h(0, v, ok+k, oj+j, oi+i);
-                if(folddata)
-                  odst_h(m,v, k, j, i) = oct_osrc_h(0, v, ok+k, oj+j, oi+i);
-              }
-            }
-          }
-        }
-      } else {
-        // Octets not available: prolongate directly from root grid
-        // Use simple trilinear interpolation
-        for (int v=0; v<nvar_; ++v) {
-          for (int k=ngh_-1; k<=ngh_+1; ++k) {
-            for (int j=ngh_-1; j<=ngh_+1; ++j) {
-              for (int i=ngh_-1; i<=ngh_+1; ++i){
-                // Map to root grid with refinement factor
-                Real rfac = 1.0 / (1 << lev);
-                int ri = static_cast<int>(ci * rfac + i * rfac) + ngh_;
-                int rj = static_cast<int>(cj * rfac + j * rfac) + ngh_;
-                int rk = static_cast<int>(ck * rfac + k * rfac) + ngh_;
-                dst_h(m, v, k, j, i) = src_h(0, v, rk, rj, ri);
-                if(folddata)
-                  odst_h(m,v, k, j, i) = osrc_h(0, v, rk, rj, ri);
-              }
+    } else {
+      // Refined block: read from parent octet
+      LogicalLocation oloc;
+      oloc.lx1 = (loc.lx1 >> 1);
+      oloc.lx2 = (loc.lx2 >> 1);
+      oloc.lx3 = (loc.lx3 >> 1);
+      oloc.level = loc.level - 1;
+      int olev = oloc.level - pmy_driver_->locrootlevel_;
+      int oid = pmy_driver_->octetmap_[olev][oloc];
+      int ci = (static_cast<int>(loc.lx1) & 1);
+      int cj = (static_cast<int>(loc.lx2) & 1);
+      int ck = (static_cast<int>(loc.lx3) & 1);
+      const MGOctet &oct = pmy_driver_->octets_[olev][oid];
+      for (int v = 0; v < nvar_; ++v) {
+        for (int k = 0; k <= 2; ++k) {
+          for (int j = 0; j <= 2; ++j) {
+            for (int i = 0; i <= 2; ++i) {
+              dst_h(m, v, k, j, i) = oct.U(v, ck+k, cj+j, ci+i);
+              if (folddata)
+                odst_h(m, v, k, j, i) = oct.Uold(v, ck+k, cj+j, ci+i);
             }
           }
         }
       }
     }
   }
-  
-  //Copy back to device
+
   Kokkos::deep_copy(dst, dst_h);
-  if(folddata)
+  if (folddata)
     Kokkos::deep_copy(odst, odst_h);
   return;
 }
@@ -670,24 +676,28 @@ Real Multigrid::CalculateAverage(MGVariable type) {
   je = js + (indcs_.nx2 >> ll) - 1;
   ke = ks + (indcs_.nx3 >> ll) - 1;
 
-  Real dx = rdx_ * static_cast<Real>(1 << ll);
-  Real dy = rdy_ * static_cast<Real>(1 << ll);
-  Real dz = rdz_ * static_cast<Real>(1 << ll);
-  Real dV = dx * dy * dz;
+  auto brdx = block_rdx_;
+  int ll_l = ll;
 
   Real sum = 0.0;
   Kokkos::parallel_reduce("MG::Average",
     Kokkos::MDRangePolicy<Kokkos::Rank<4>>(DevExeSpace(), {0, ks, js, is},
                                             {nmmb_, ke+1, je+1, ie+1}),
     KOKKOS_LAMBDA(const int m, const int k, const int j, const int i, Real &local_sum) {
-      local_sum += src(m, 0, k, j, i);
+      Real dx_m = brdx(m) * static_cast<Real>(1 << ll_l);
+      Real dV_m = dx_m * dx_m * dx_m;
+      local_sum += src(m, 0, k, j, i) * dV_m;
     }, Kokkos::Sum<Real>(sum));
-  sum *= dV;
 
-  Real volume = (size_.x1max - size_.x1min)
-              * (size_.x2max - size_.x2min)
-              * (size_.x3max - size_.x3min)
-              * static_cast<Real>(nmmb_);
+  Real volume = 0.0;
+  {
+    auto brdx_h = Kokkos::create_mirror_view_and_copy(HostMemSpace(), block_rdx_);
+    Real nx = static_cast<Real>(indcs_.nx1);
+    for (int m = 0; m < nmmb_; ++m) {
+      Real len = brdx_h(m) * nx;
+      volume += len * len * len;
+    }
+  }
 
   #if MPI_PARALLEL_ENABLED
   Real global_sum = 0.0;
@@ -1123,6 +1133,54 @@ void Multigrid::FMGProlongate(DvceArray5D<Real> &dst, const DvceArray5D<Real> &s
 MultigridBoundaryValues::MultigridBoundaryValues(MeshBlockPack *pmbp, ParameterInput *pin, bool coarse, Multigrid *pmg) 
   :
    MeshBoundaryValuesCC(pmbp, pin, coarse), pmy_mg(pmg){
+
+  // Remap isame indices from hydro coordinates (ng ghost cells) to MG coordinates
+  // (ngh_ ghost cells) so that PackAndSendMG / RecvAndUnpackMG access the correct
+  // regions of the smaller MG arrays.
+  int ng  = pmbp->pmesh->mb_indcs.ng;
+  int ngh = pmg->GetGhostCells();
+  if (ng != ngh) {
+    int nx1 = pmbp->pmesh->mb_indcs.nx1;
+    int nx2 = pmbp->pmesh->mb_indcs.nx2;
+    int nx3 = pmbp->pmesh->mb_indcs.nx3;
+    int is_h = ng, ie_h = ng + nx1 - 1;
+    int js_h = ng, je_h = ng + nx2 - 1;
+    int ks_h = ng, ke_h = ng + nx3 - 1;
+    int is_m = ngh, ie_m = ngh + nx1 - 1;
+    int js_m = ngh, je_m = ngh + nx2 - 1;
+    int ks_m = ngh, ke_m = ngh + nx3 - 1;
+    int ng1_m = ngh - 1;
+    int nnghbr = pmbp->pmb->nnghbr;
+
+    // Helper: remap one dimension of send indices
+    auto remap_send = [](int &lo, int &hi,
+                         int s_h, int e_h, int s_m, int e_m, int ng1) {
+      if (lo == s_h && hi == e_h) { lo = s_m; hi = e_m; }
+      else if (lo > s_h)          { lo = e_m - ng1; hi = e_m; }
+      else                        { lo = s_m; hi = s_m + ng1; }
+    };
+    // Helper: remap one dimension of recv indices
+    auto remap_recv = [](int &lo, int &hi,
+                         int s_h, int e_h, int s_m, int e_m, int ng_m) {
+      if (lo >= s_h && hi <= e_h) { lo = s_m; hi = e_m; }
+      else if (lo > e_h)          { lo = e_m + 1; hi = e_m + ng_m; }
+      else                        { lo = s_m - ng_m; hi = s_m - 1; }
+    };
+
+    for (int n = 0; n < nnghbr; ++n) {
+      auto &si = sendbuf[n].isame[0];
+      remap_send(si.bis, si.bie, is_h, ie_h, is_m, ie_m, ng1_m);
+      remap_send(si.bjs, si.bje, js_h, je_h, js_m, je_m, ng1_m);
+      remap_send(si.bks, si.bke, ks_h, ke_h, ks_m, ke_m, ng1_m);
+      sendbuf[n].isame_ndat = (si.bie-si.bis+1)*(si.bje-si.bjs+1)*(si.bke-si.bks+1);
+
+      auto &ri = recvbuf[n].isame[0];
+      remap_recv(ri.bis, ri.bie, is_h, ie_h, is_m, ie_m, ngh);
+      remap_recv(ri.bjs, ri.bje, js_h, je_h, js_m, je_m, ngh);
+      remap_recv(ri.bks, ri.bke, ks_h, ke_h, ks_m, ke_m, ngh);
+      recvbuf[n].isame_ndat = (ri.bie-ri.bis+1)*(ri.bje-ri.bjs+1)*(ri.bke-ri.bks+1);
+    }
+  }
   return;
 }
 //----------------------------------------------------------------------------------------
@@ -1133,7 +1191,6 @@ MultigridBoundaryValues::MultigridBoundaryValues(MeshBlockPack *pmbp, ParameterI
 TaskStatus MultigridBoundaryValues::PackAndSendMG(const DvceArray5D<Real> &u) {
   if (pmy_mg == nullptr) return TaskStatus::complete;
 
-  // create local references for variables in kernel
   int nmb = pmy_pack->nmb_thispack;
   int nnghbr = pmy_pack->pmb->nnghbr;
   int nvar = u.extent_int(1);
@@ -1141,98 +1198,115 @@ TaskStatus MultigridBoundaryValues::PackAndSendMG(const DvceArray5D<Real> &u) {
   int my_rank = global_variable::my_rank;
   auto &nghbr = pmy_pack->pmb->nghbr;
   auto &mbgid = pmy_pack->pmb->mb_gid;
+  auto &mblev = pmy_pack->pmb->mb_lev;
   auto &sbuf = sendbuf;
   auto &rbuf = recvbuf;
 
-  int current_level = pmy_mg->GetCurrentLevel();
-  int nlevels = pmy_mg->GetNumberOfLevels();
   int shift_ = pmy_mg->GetLevelShift();
   int nx1_ = pmy_mg->GetSize();
 
-  // Outer loop over (# of MeshBlocks)*(# of buffers)*(# of variables)
-  int nmnv = nmb*nnghbr*nvar;
-  Kokkos::TeamPolicy<> policy(DevExeSpace(), nmnv, Kokkos::AUTO);
+  // Host-side pack to bypass GPU crash
+  {
+    auto u_h = Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace(), u);
 
-  Kokkos::parallel_for("MG::PackAndSendCC", policy, KOKKOS_LAMBDA(TeamMember_t tmember) {
-    const int m = (tmember.league_rank())/(nnghbr*nvar);
-    const int n = (tmember.league_rank() - m*(nnghbr*nvar))/nvar;
-    const int v = (tmember.league_rank() - m*(nnghbr*nvar) - n*nvar);
-    int shift = shift_;
-    int nx1 = nx1_;
-    int diff;
-    // only load buffers when neighbor exists
-    if (nghbr.d_view(m,n).gid >= 0) {
-      // For multigrid, all neighbors are at the same level, so always use isame indices
-      int il = sbuf[n].isame[0].bis;
-      int iu = sbuf[n].isame[0].bie;
-      int jl = sbuf[n].isame[0].bjs;
-      int ju = sbuf[n].isame[0].bje;
-      int kl = sbuf[n].isame[0].bks;
-      int ku = sbuf[n].isame[0].bke;
+    // Pre-mirror all recv buffer vars to host for same-rank direct writes
+    std::vector<decltype(Kokkos::create_mirror_view(rbuf[0].vars))> rbuf_h;
+    rbuf_h.reserve(nnghbr);
+    for (int n = 0; n < nnghbr; ++n)
+      rbuf_h.push_back(Kokkos::create_mirror_view_and_copy(
+                          Kokkos::HostSpace(), rbuf[n].vars));
 
-      while(shift>0){
-        if(rbuf[n].faces.d_view(0) and il==nx1){
-          diff = iu-il;
-          il = (il)>>1;  
-          iu = il + diff;
+    for (int m = 0; m < nmb; ++m) {
+      for (int n = 0; n < nnghbr; ++n) {
+        if (nghbr.h_view(m,n).gid < 0) continue;
+        if (nghbr.h_view(m,n).lev != mblev.h_view(m)) continue;
+
+        int il = sbuf[n].isame[0].bis;
+        int iu = sbuf[n].isame[0].bie;
+        int jl = sbuf[n].isame[0].bjs;
+        int ju = sbuf[n].isame[0].bje;
+        int kl = sbuf[n].isame[0].bks;
+        int ku = sbuf[n].isame[0].bke;
+
+        int shift = shift_;
+        int nx1 = nx1_;
+        while (shift > 0) {
+          if (rbuf[n].faces.h_view(0) && il == nx1) {
+            int d = iu - il; il = il >> 1; iu = il + d;
+          } else if (rbuf[n].faces.h_view(0) - 1) {
+            iu = ((iu - il) >> 1) + il;
+          }
+          if (rbuf[n].faces.h_view(1) && jl == nx1) {
+            int d = ju - jl; jl = jl >> 1; ju = jl + d;
+          } else if (rbuf[n].faces.h_view(1) - 1) {
+            ju = ((ju - jl) >> 1) + jl;
+          }
+          if (rbuf[n].faces.h_view(2) && kl == nx1) {
+            int d = ku - kl; kl = kl >> 1; ku = kl + d;
+          } else if (rbuf[n].faces.h_view(2) - 1) {
+            ku = ((ku - kl) >> 1) + kl;
+          }
+          shift--;
+          nx1 = nx1 >> 1;
         }
-        else if(rbuf[n].faces.d_view(0)-1){
-          iu = ((iu-il)>>1) + il;
-        }
-        if(rbuf[n].faces.d_view(1) and jl==nx1){
-          diff = ju-jl;
-          jl = (jl)>>1;  
-          ju = jl + diff;
-        }
-        else if(rbuf[n].faces.d_view(1)-1){
-          ju = ((ju-jl)>>1) + jl;
-        }
-        if(rbuf[n].faces.d_view(2) and kl==nx1){
-          diff = ku-kl;
-          kl = (kl)>>1;  
-          ku = kl + diff;
-        }
-        else if(rbuf[n].faces.d_view(2)-1){
-          ku = ((ku-kl)>>1) + kl;
-        }
-        shift--;
-        nx1 = nx1 >> 1;
-      }     
 
-      int ni = iu - il + 1;
-      int nj = ju - jl + 1;
-      int nk = ku - kl + 1;
-      int nkj = nk*nj;
+        int ni = iu - il + 1;
+        int nj = ju - jl + 1;
+        int nk = ku - kl + 1;
 
-      // index of receiving (destination) MB in neighbor rank's pack
-      int dm = nghbr.d_view(m,n).gid - mbgid.d_view(0);
-      int dn = nghbr.d_view(m,n).dest;
+        int dm = nghbr.h_view(m,n).gid - mbgid.h_view(0);
+        int dn = nghbr.h_view(m,n).dest;
+        int buf_size = ni * nj * nk * nvar;
+        int max_lin = buf_size - 1;
 
-      // Middle loop over k,j
-      Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember, nkj), [&](const int idx) {
-        int k = idx / nj;
-        int j = (idx - k * nj) + jl;
-        k += kl;
-
-        // Inner (vector) loop over i
-        // copy directly into recv buffer if MeshBlocks on same rank
-        if (nghbr.d_view(m,n).rank == my_rank) {
-          Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember, il, iu+1),
-          [&](const int i) {
-            rbuf[dn].vars(dm, (i-il + ni*(j-jl + nj*(k-kl + nk*v)))) = u(m, v, k, j, i);
-          });
-
-        // else copy into send buffer for MPI communication
+        if (nghbr.h_view(m,n).rank == my_rank) {
+          if (dn < 0 || dn >= nnghbr ||
+              dm < 0 || dm >= static_cast<int>(rbuf_h[dn].extent(0)) ||
+              max_lin >= static_cast<int>(rbuf_h[dn].extent(1))) {
+            std::cerr << "PackAndSendMG OVERFLOW: m=" << m << " n=" << n
+                      << " dn=" << dn << " dm=" << dm
+                      << " rbuf_dim=(" << rbuf_h[dn].extent(0) << ","
+                      << rbuf_h[dn].extent(1) << ")"
+                      << " buf_size=" << buf_size
+                      << " il=" << il << " iu=" << iu
+                      << " jl=" << jl << " ju=" << ju
+                      << " kl=" << kl << " ku=" << ku
+                      << " shift=" << shift_ << " nvar=" << nvar
+                      << std::endl;
+          } else {
+            for (int v = 0; v < nvar; ++v)
+              for (int k = kl; k <= ku; ++k)
+                for (int j = jl; j <= ju; ++j)
+                  for (int i = il; i <= iu; ++i)
+                    rbuf_h[dn](dm, (i-il + ni*(j-jl + nj*(k-kl + nk*v))))
+                        = u_h(m, v, k, j, i);
+          }
         } else {
-          Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember, il, iu+1),
-          [&](const int i) {
-            sbuf[n].vars(m, (i-il + ni*(j-jl + nj*(k-kl + nk*v)))) = u(m, v, k, j, i);
-          });
+          auto sbuf_h = Kokkos::create_mirror_view(sbuf[n].vars);
+          Kokkos::deep_copy(sbuf_h, sbuf[n].vars);
+          if (m >= static_cast<int>(sbuf_h.extent(0)) ||
+              max_lin >= static_cast<int>(sbuf_h.extent(1))) {
+            std::cerr << "PackAndSendMG SBUF OVERFLOW: m=" << m << " n=" << n
+                      << " sbuf_dim=(" << sbuf_h.extent(0) << ","
+                      << sbuf_h.extent(1) << ")"
+                      << " buf_size=" << buf_size << std::endl;
+          } else {
+            for (int v = 0; v < nvar; ++v)
+              for (int k = kl; k <= ku; ++k)
+                for (int j = jl; j <= ju; ++j)
+                  for (int i = il; i <= iu; ++i)
+                    sbuf_h(m, (i-il + ni*(j-jl + nj*(k-kl + nk*v))))
+                        = u_h(m, v, k, j, i);
+            Kokkos::deep_copy(sbuf[n].vars, sbuf_h);
+          }
         }
-      });
-    }  // end if-neighbor-exists block
-    tmember.team_barrier();
-  });  // end par_for
+      }
+    }
+
+    // Copy modified recv buffers back to device
+    for (int n = 0; n < nnghbr; ++n)
+      Kokkos::deep_copy(rbuf[n].vars, rbuf_h[n]);
+  }
 
   #if MPI_PARALLEL_ENABLED
   // Send boundary buffer to neighboring MeshBlocks using MPI
@@ -1240,8 +1314,8 @@ TaskStatus MultigridBoundaryValues::PackAndSendMG(const DvceArray5D<Real> &u) {
   bool no_errors=true;
   for (int m=0; m<nmb; ++m) {
     for (int n=0; n<nnghbr; ++n) {
-      if (nghbr.h_view(m,n).gid >= 0) {  // neighbor exists and not a physical boundary
-        // index and rank of destination Neighbor
+      if (nghbr.h_view(m,n).gid >= 0
+          && nghbr.h_view(m,n).lev == pmy_pack->pmb->mb_lev.h_view(m)) {
         int dn = nghbr.h_view(m,n).dest;
         int drank = nghbr.h_view(m,n).rank;
         if (drank != my_rank) {
@@ -1289,6 +1363,7 @@ TaskStatus MultigridBoundaryValues::RecvAndUnpackMG(DvceArray5D<Real> &u) {
   int nmb = pmy_pack->nmb_thispack;
   int nnghbr = pmy_pack->pmb->nnghbr;
   auto &nghbr = pmy_pack->pmb->nghbr;
+  auto &mblev = pmy_pack->pmb->mb_lev;
   auto &rbuf = recvbuf;
   int shift_ = pmy_mg->GetLevelShift();
   #if MPI_PARALLEL_ENABLED
@@ -1297,7 +1372,8 @@ TaskStatus MultigridBoundaryValues::RecvAndUnpackMG(DvceArray5D<Real> &u) {
   bool no_errors=true;
   for (int m=0; m<nmb; ++m) {
     for (int n=0; n<nnghbr; ++n) {
-      if (nghbr.h_view(m,n).gid >= 0) { // neighbor exists and not a physical boundary
+      if (nghbr.h_view(m,n).gid >= 0
+          && nghbr.h_view(m,n).lev == mblev.h_view(m)) {
         if (nghbr.h_view(m,n).rank != global_variable::my_rank) {
           int test;
           int ierr = MPI_Test(&(rbuf[n].vars_req[m]), &test, MPI_STATUS_IGNORE);
@@ -1324,74 +1400,82 @@ TaskStatus MultigridBoundaryValues::RecvAndUnpackMG(DvceArray5D<Real> &u) {
   //----- STEP 2: buffers have all completed, so unpack
   int nvar = u.extent_int(1);
   int ngh = pmy_mg->GetGhostCells();
-  int rank = global_variable::my_rank;
-  // Outer loop over (# of MeshBlocks)*(# of buffers)*(# of variables)
-  Kokkos::TeamPolicy<> policy(DevExeSpace(), (nmb*nnghbr*nvar), Kokkos::AUTO);
-  Kokkos::parallel_for("MG::RecvAndUnpackCC", policy, KOKKOS_LAMBDA(TeamMember_t tmember) {
-    const int m = (tmember.league_rank())/(nnghbr*nvar);
-    const int n = (tmember.league_rank() - m*(nnghbr*nvar))/nvar;
-    const int v = (tmember.league_rank() - m*(nnghbr*nvar) - n*nvar);
-    int shift = shift_;
-    // only unpack buffers when neighbor exists
-    if (nghbr.d_view(m,n).gid >= 0) {
-      int il, iu, jl, ju, kl, ku;
-      int diff;
-      // For multigrid all neighbors at same level, so use isame indices
-      il = rbuf[n].isame[0].bis;
-      iu = rbuf[n].isame[0].bie;
-      jl = rbuf[n].isame[0].bjs;
-      ju = rbuf[n].isame[0].bje;
-      kl = rbuf[n].isame[0].bks;
-      ku = rbuf[n].isame[0].bke;
 
-      while(shift>0){
-        if(rbuf[n].faces.d_view(0) and il>1){
-          diff = iu-il;
-          il = (il+ngh)>>1;  
-          iu = il + diff;
+  // Host-side unpack to bypass GPU crash
+  {
+    auto u_h = Kokkos::create_mirror_view(u);
+    Kokkos::deep_copy(u_h, u);
+
+    // Pre-mirror all recv buffers
+    std::vector<decltype(Kokkos::create_mirror_view_and_copy(
+                  Kokkos::HostSpace(), rbuf[0].vars))> rbuf_h;
+    rbuf_h.reserve(nnghbr);
+    for (int n = 0; n < nnghbr; ++n)
+      rbuf_h.push_back(Kokkos::create_mirror_view_and_copy(
+                          Kokkos::HostSpace(), rbuf[n].vars));
+
+    for (int m = 0; m < nmb; ++m) {
+      for (int n = 0; n < nnghbr; ++n) {
+        if (nghbr.h_view(m,n).gid < 0) continue;
+        if (nghbr.h_view(m,n).lev != mblev.h_view(m)) continue;
+        int il = rbuf[n].isame[0].bis;
+        int iu = rbuf[n].isame[0].bie;
+        int jl = rbuf[n].isame[0].bjs;
+        int ju = rbuf[n].isame[0].bje;
+        int kl = rbuf[n].isame[0].bks;
+        int ku = rbuf[n].isame[0].bke;
+        int sh = shift_;
+        while (sh > 0) {
+          if (rbuf[n].faces.h_view(0) && il > 1) {
+            int d = iu-il; il = (il+ngh)>>1; iu = il+d;
+          } else if (rbuf[n].faces.h_view(0)-1) {
+            iu = ((iu-il)>>1)+il;
+          }
+          if (rbuf[n].faces.h_view(1) && jl > 1) {
+            int d = ju-jl; jl = (jl+ngh)>>1; ju = jl+d;
+          } else if (rbuf[n].faces.h_view(1)-1) {
+            ju = ((ju-jl)>>1)+jl;
+          }
+          if (rbuf[n].faces.h_view(2) && kl > 1) {
+            int d = ku-kl; kl = (kl+ngh)>>1; ku = kl+d;
+          } else if (rbuf[n].faces.h_view(2)-1) {
+            ku = ((ku-kl)>>1)+kl;
+          }
+          sh--;
         }
-        else if(rbuf[n].faces.d_view(0)-1){
-          iu = ((iu-il)>>1) + il;
+        int ni = iu-il+1, nj = ju-jl+1, nk = ku-kl+1;
+        int buf_size = ni * nj * nk * nvar;
+        int max_lin = buf_size - 1;
+        bool u_oob = (il < 0 || iu >= static_cast<int>(u_h.extent(4)) ||
+                      jl < 0 || ju >= static_cast<int>(u_h.extent(3)) ||
+                      kl < 0 || ku >= static_cast<int>(u_h.extent(2)));
+        bool r_oob = (m >= static_cast<int>(rbuf_h[n].extent(0)) ||
+                      max_lin >= static_cast<int>(rbuf_h[n].extent(1)));
+        if (u_oob || r_oob) {
+          std::cerr << "RecvAndUnpackMG OVERFLOW: m=" << m << " n=" << n
+                    << " u_dim=(" << u_h.extent(0) << "," << u_h.extent(1)
+                    << "," << u_h.extent(2) << "," << u_h.extent(3)
+                    << "," << u_h.extent(4) << ")"
+                    << " rbuf_dim=(" << rbuf_h[n].extent(0) << ","
+                    << rbuf_h[n].extent(1) << ")"
+                    << " il=" << il << " iu=" << iu
+                    << " jl=" << jl << " ju=" << ju
+                    << " kl=" << kl << " ku=" << ku
+                    << " buf_size=" << buf_size
+                    << " shift=" << shift_
+                    << std::endl;
+        } else {
+          for (int v = 0; v < nvar; ++v)
+            for (int k = kl; k <= ku; ++k)
+              for (int j = jl; j <= ju; ++j)
+                for (int i = il; i <= iu; ++i)
+                  u_h(m, v, k, j, i) = rbuf_h[n](m,
+                      (i-il + ni*(j-jl + nj*(k-kl + nk*v))));
         }
-        if(rbuf[n].faces.d_view(1) and jl>1){
-          diff = ju-jl;
-          jl = (jl+ngh)>>1;  
-          ju = jl + diff;
-        }
-        else if(rbuf[n].faces.d_view(1)-1){
-          ju = ((ju-jl)>>1) + jl;
-        }
-        if(rbuf[n].faces.d_view(2) and kl>1){
-          diff = ku-kl;
-          kl = (kl+ngh)>>1;  
-          ku = kl + diff;
-        }
-        else if(rbuf[n].faces.d_view(2)-1){
-          ku = ((ku-kl)>>1) + kl;
-        }
-        shift--;
       }
-       
-      int ni = iu - il + 1;
-      int nj = ju - jl + 1;
-      int nk = ku - kl + 1;
-      int nkj  = nk*nj;
-
-      // Middle loop over k,j
-      Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember, nkj), [&](const int idx) {
-        int k = idx / nj;
-        int j = (idx - k * nj) + jl;
-        k += kl;
-
-        // Inner (vector) loop over i: unpack from buffer into ghost cells
-        Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember,il,iu+1),
-        [&](const int i) {
-          u(m,v,k,j,i) = rbuf[n].vars(m, (i-il + ni*(j-jl + nj*(k-kl + nk*v))) );
-        });
-      });
-    }  // end if-neighbor-exists block
-    tmember.team_barrier();
-  });  // end par_for
+    }
+    Kokkos::deep_copy(u, u_h);
+  }
 
   return TaskStatus::complete;
 }
@@ -1405,13 +1489,15 @@ TaskStatus MultigridBoundaryValues::InitRecvMG(const int nvars) {
   int &nmb = pmy_pack->nmb_thispack;
   int &nnghbr = pmy_pack->pmb->nnghbr;
   auto &nghbr = pmy_pack->pmb->nghbr;
+  auto &mblev = pmy_pack->pmb->mb_lev;
   int shift_ = pmy_mg->GetLevelShift();
 
   // Initialize communications of variables
   bool no_errors=true;
   for (int m=0; m<nmb; ++m) {
     for (int n=0; n<nnghbr; ++n) {
-      if (nghbr.h_view(m,n).gid >= 0) {
+      if (nghbr.h_view(m,n).gid >= 0
+          && nghbr.h_view(m,n).lev == mblev.h_view(m)) {
         // rank of destination buffer
         int drank = nghbr.h_view(m,n).rank;
 

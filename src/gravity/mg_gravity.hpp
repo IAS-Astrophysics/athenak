@@ -53,6 +53,12 @@ class MGGravityDriver : public MultigridDriver {
     void CreateMeshblockMultigrids(MeshBlockPack *pmbp);
     void Solve(Driver *pdriver, int stage, Real dt = 0.0) final;
     void SetFourPiG(Real four_pi_G);
+
+    // octet physics (host-side)
+    void SmoothOctet(MGOctet &oct, int rlev, int color) final;
+    void CalculateDefectOctet(MGOctet &oct, int rlev) final;
+    void CalculateFASRHSOctet(MGOctet &oct, int rlev) final;
+
     friend class MGGravity;
   private:
     Real four_pi_G_, omega_;
