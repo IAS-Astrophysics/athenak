@@ -700,15 +700,11 @@ void TOVHistory(HistoryData *pdata, Mesh *pm) {
     // Compute multipole modes for $\ell=2$.
     Real modes_re[5];
     Real modes_im[5];
-    for (int m = -2; m <= 2; m++) {
+    for (int em = -2; em <= 2; em++) {
       Real ylmR, ylmI;
-      SWSphericalHarm(&ylmR, &ylmI, 2, m, 0, theta, phi);
-      modes_re[m+2] = w0_(m,IDN,k,j,i)*r*r*ylmR;
-      modes_im[m+2] = w0_(m,IDN,k,j,i)*r*r*ylmI;
-      /*if (!Kokkos::isfinite(modes[m+2])) {
-        //Kokkos::printf("There's a problem with the mode calculation!");
-        //std::cout << "There's a problem with the mode calculation!\n";
-      }*/
+      SWSphericalHarm(&ylmR, &ylmI, 2, em, 0, theta, phi);
+      modes_re[em+2] = w0_(m,IDN,k,j,i)*r*r*ylmR;
+      modes_im[em+2] = w0_(m,IDN,k,j,i)*r*r*ylmI;
     }
     mb_ReI2m2 += modes_re[0]*vol;
     mb_ReI2m1 += modes_re[1]*vol;
