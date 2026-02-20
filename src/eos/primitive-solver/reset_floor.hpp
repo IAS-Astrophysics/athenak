@@ -29,6 +29,7 @@ class ResetFloor : public ErrorPolicyInterface {
     fail_conserved_floor = false;
     fail_primitive_floor = false;
     adjust_conserved = true;
+    aggressive_floor = true;
   }
 
   /// Floor for primitive variables
@@ -36,12 +37,14 @@ class ResetFloor : public ErrorPolicyInterface {
                                              int n_species) const {
     if (n < n_atm*n_threshold) {
       n = n_atm;
-      v[0] = 0.0;
-      v[1] = 0.0;
-      v[2] = 0.0;
-      T = T_atm;
-      for (int i = 0; i < n_species; i++) {
-        Y[i] = Y_atm[i];
+      if (aggressive_floor) {
+        v[0] = 0.0;
+        v[1] = 0.0;
+        v[2] = 0.0;
+        T = T_atm;
+        for (int i = 0; i < n_species; i++) {
+          Y[i] = Y_atm[i];
+        }
       }
       return true;
     } else if (T < T_atm) {
@@ -57,12 +60,14 @@ class ResetFloor : public ErrorPolicyInterface {
                                 int n_species) const {
     if (D < D_floor*n_threshold) {
       D = D_floor;
-      Sd[0] = 0.0;
-      Sd[1] = 0.0;
-      Sd[2] = 0.0;
-      tau = tau_abs_floor;
-      for (int i = 0; i < n_species; i++) {
-        Y[i] = Y_atm[i];
+      if (aggressive_floor) {
+        Sd[0] = 0.0;
+        Sd[1] = 0.0;
+        Sd[2] = 0.0;
+        tau = tau_abs_floor;
+        for (int i = 0; i < n_species; i++) {
+          Y[i] = Y_atm[i];
+        }
       }
       return true;
     } else if (tau < tau_floor) {
@@ -136,6 +141,8 @@ class ResetFloor : public ErrorPolicyInterface {
     return true;
   }
 
+  bool aggressive_floor;
+
  public:
   /// Set the failure mode for conserved flooring
   KOKKOS_INLINE_FUNCTION void SetConservedFloorFailure(bool failure) {
@@ -150,6 +157,11 @@ class ResetFloor : public ErrorPolicyInterface {
   /// Set whether or not it's okay to adjust the conserved variables.
   KOKKOS_INLINE_FUNCTION void SetAdjustConserved(bool adjust) {
     adjust_conserved = adjust;
+  }
+
+  /// Set whether or not to floor everything if the density falls below the floor.
+  KOKKOS_INLINE_FUNCTION void SetAggressiveFlooring(bool aggressive) {
+    aggressive_floor = aggressive;
   }
 };
 
