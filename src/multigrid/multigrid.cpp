@@ -1205,107 +1205,76 @@ TaskStatus MultigridBoundaryValues::PackAndSendMG(const DvceArray5D<Real> &u) {
   int shift_ = pmy_mg->GetLevelShift();
   int nx1_ = pmy_mg->GetSize();
 
-  // Host-side pack to bypass GPU crash
   {
-    auto u_h = Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace(), u);
+  int nmnv = nmb * nnghbr * nvar;
+  Kokkos::TeamPolicy<> policy(DevExeSpace(), nmnv, Kokkos::AUTO);
+  Kokkos::parallel_for("PackMG", policy, KOKKOS_LAMBDA(TeamMember_t tmember) {
+    const int m = tmember.league_rank() / (nnghbr * nvar);
+    const int n = (tmember.league_rank() - m * nnghbr * nvar) / nvar;
+    const int v = tmember.league_rank() - m * nnghbr * nvar - n * nvar;
 
-    // Pre-mirror all recv buffer vars to host for same-rank direct writes
-    std::vector<decltype(Kokkos::create_mirror_view(rbuf[0].vars))> rbuf_h;
-    rbuf_h.reserve(nnghbr);
-    for (int n = 0; n < nnghbr; ++n)
-      rbuf_h.push_back(Kokkos::create_mirror_view_and_copy(
-                          Kokkos::HostSpace(), rbuf[n].vars));
+    if (nghbr.d_view(m, n).gid >= 0 &&
+        nghbr.d_view(m, n).lev == mblev.d_view(m)) {
+      int il = sbuf[n].isame[0].bis;
+      int iu = sbuf[n].isame[0].bie;
+      int jl = sbuf[n].isame[0].bjs;
+      int ju = sbuf[n].isame[0].bje;
+      int kl = sbuf[n].isame[0].bks;
+      int ku = sbuf[n].isame[0].bke;
 
-    for (int m = 0; m < nmb; ++m) {
-      for (int n = 0; n < nnghbr; ++n) {
-        if (nghbr.h_view(m,n).gid < 0) continue;
-        if (nghbr.h_view(m,n).lev != mblev.h_view(m)) continue;
-
-        int il = sbuf[n].isame[0].bis;
-        int iu = sbuf[n].isame[0].bie;
-        int jl = sbuf[n].isame[0].bjs;
-        int ju = sbuf[n].isame[0].bje;
-        int kl = sbuf[n].isame[0].bks;
-        int ku = sbuf[n].isame[0].bke;
-
-        int shift = shift_;
-        int nx1 = nx1_;
-        while (shift > 0) {
-          if (rbuf[n].faces.h_view(0) && il == nx1) {
-            int d = iu - il; il = il >> 1; iu = il + d;
-          } else if (rbuf[n].faces.h_view(0) - 1) {
-            iu = ((iu - il) >> 1) + il;
-          }
-          if (rbuf[n].faces.h_view(1) && jl == nx1) {
-            int d = ju - jl; jl = jl >> 1; ju = jl + d;
-          } else if (rbuf[n].faces.h_view(1) - 1) {
-            ju = ((ju - jl) >> 1) + jl;
-          }
-          if (rbuf[n].faces.h_view(2) && kl == nx1) {
-            int d = ku - kl; kl = kl >> 1; ku = kl + d;
-          } else if (rbuf[n].faces.h_view(2) - 1) {
-            ku = ((ku - kl) >> 1) + kl;
-          }
-          shift--;
-          nx1 = nx1 >> 1;
+      int sh = shift_;
+      int nx = nx1_;
+      while (sh > 0) {
+        if (rbuf[n].faces.d_view(0) && il == nx) {
+          int d = iu - il; il = il >> 1; iu = il + d;
+        } else if (rbuf[n].faces.d_view(0) - 1) {
+          iu = ((iu - il) >> 1) + il;
         }
-
-        int ni = iu - il + 1;
-        int nj = ju - jl + 1;
-        int nk = ku - kl + 1;
-
-        int dm = nghbr.h_view(m,n).gid - mbgid.h_view(0);
-        int dn = nghbr.h_view(m,n).dest;
-        int buf_size = ni * nj * nk * nvar;
-        int max_lin = buf_size - 1;
-
-        if (nghbr.h_view(m,n).rank == my_rank) {
-          if (dn < 0 || dn >= nnghbr ||
-              dm < 0 || dm >= static_cast<int>(rbuf_h[dn].extent(0)) ||
-              max_lin >= static_cast<int>(rbuf_h[dn].extent(1))) {
-            std::cerr << "PackAndSendMG OVERFLOW: m=" << m << " n=" << n
-                      << " dn=" << dn << " dm=" << dm
-                      << " rbuf_dim=(" << rbuf_h[dn].extent(0) << ","
-                      << rbuf_h[dn].extent(1) << ")"
-                      << " buf_size=" << buf_size
-                      << " il=" << il << " iu=" << iu
-                      << " jl=" << jl << " ju=" << ju
-                      << " kl=" << kl << " ku=" << ku
-                      << " shift=" << shift_ << " nvar=" << nvar
-                      << std::endl;
-          } else {
-            for (int v = 0; v < nvar; ++v)
-              for (int k = kl; k <= ku; ++k)
-                for (int j = jl; j <= ju; ++j)
-                  for (int i = il; i <= iu; ++i)
-                    rbuf_h[dn](dm, (i-il + ni*(j-jl + nj*(k-kl + nk*v))))
-                        = u_h(m, v, k, j, i);
-          }
-        } else {
-          auto sbuf_h = Kokkos::create_mirror_view(sbuf[n].vars);
-          Kokkos::deep_copy(sbuf_h, sbuf[n].vars);
-          if (m >= static_cast<int>(sbuf_h.extent(0)) ||
-              max_lin >= static_cast<int>(sbuf_h.extent(1))) {
-            std::cerr << "PackAndSendMG SBUF OVERFLOW: m=" << m << " n=" << n
-                      << " sbuf_dim=(" << sbuf_h.extent(0) << ","
-                      << sbuf_h.extent(1) << ")"
-                      << " buf_size=" << buf_size << std::endl;
-          } else {
-            for (int v = 0; v < nvar; ++v)
-              for (int k = kl; k <= ku; ++k)
-                for (int j = jl; j <= ju; ++j)
-                  for (int i = il; i <= iu; ++i)
-                    sbuf_h(m, (i-il + ni*(j-jl + nj*(k-kl + nk*v))))
-                        = u_h(m, v, k, j, i);
-            Kokkos::deep_copy(sbuf[n].vars, sbuf_h);
-          }
+        if (rbuf[n].faces.d_view(1) && jl == nx) {
+          int d = ju - jl; jl = jl >> 1; ju = jl + d;
+        } else if (rbuf[n].faces.d_view(1) - 1) {
+          ju = ((ju - jl) >> 1) + jl;
         }
+        if (rbuf[n].faces.d_view(2) && kl == nx) {
+          int d = ku - kl; kl = kl >> 1; ku = kl + d;
+        } else if (rbuf[n].faces.d_view(2) - 1) {
+          ku = ((ku - kl) >> 1) + kl;
+        }
+        sh--;
+        nx = nx >> 1;
       }
-    }
 
-    // Copy modified recv buffers back to device
-    for (int n = 0; n < nnghbr; ++n)
-      Kokkos::deep_copy(rbuf[n].vars, rbuf_h[n]);
+      int ni = iu - il + 1;
+      int nj = ju - jl + 1;
+      int nk = ku - kl + 1;
+      int nkj = nk * nj;
+
+      int dm = nghbr.d_view(m, n).gid - mbgid.d_view(0);
+      int dn = nghbr.d_view(m, n).dest;
+
+      Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember, nkj),
+      [&](const int idx) {
+        int k = idx / nj;
+        int j = (idx - k * nj) + jl;
+        k += kl;
+
+        if (nghbr.d_view(m, n).rank == my_rank) {
+          Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember, il, iu + 1),
+          [&](const int i) {
+            rbuf[dn].vars(dm, (i-il + ni*(j-jl + nj*(k-kl + nk*v))))
+                = u(m, v, k, j, i);
+          });
+        } else {
+          Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember, il, iu + 1),
+          [&](const int i) {
+            sbuf[n].vars(m, (i-il + ni*(j-jl + nj*(k-kl + nk*v))))
+                = u(m, v, k, j, i);
+          });
+        }
+      });
+    }
+    tmember.team_barrier();
+  });
   }
 
   #if MPI_PARALLEL_ENABLED
@@ -1401,80 +1370,63 @@ TaskStatus MultigridBoundaryValues::RecvAndUnpackMG(DvceArray5D<Real> &u) {
   int nvar = u.extent_int(1);
   int ngh = pmy_mg->GetGhostCells();
 
-  // Host-side unpack to bypass GPU crash
   {
-    auto u_h = Kokkos::create_mirror_view(u);
-    Kokkos::deep_copy(u_h, u);
+  int nmnv = nmb * nnghbr * nvar;
+  Kokkos::TeamPolicy<> policy(DevExeSpace(), nmnv, Kokkos::AUTO);
+  Kokkos::parallel_for("UnpackMG", policy, KOKKOS_LAMBDA(TeamMember_t tmember) {
+    const int m = tmember.league_rank() / (nnghbr * nvar);
+    const int n = (tmember.league_rank() - m * nnghbr * nvar) / nvar;
+    const int v = tmember.league_rank() - m * nnghbr * nvar - n * nvar;
 
-    // Pre-mirror all recv buffers
-    std::vector<decltype(Kokkos::create_mirror_view_and_copy(
-                  Kokkos::HostSpace(), rbuf[0].vars))> rbuf_h;
-    rbuf_h.reserve(nnghbr);
-    for (int n = 0; n < nnghbr; ++n)
-      rbuf_h.push_back(Kokkos::create_mirror_view_and_copy(
-                          Kokkos::HostSpace(), rbuf[n].vars));
+    if (nghbr.d_view(m, n).gid >= 0 &&
+        nghbr.d_view(m, n).lev == mblev.d_view(m)) {
+      int il = rbuf[n].isame[0].bis;
+      int iu = rbuf[n].isame[0].bie;
+      int jl = rbuf[n].isame[0].bjs;
+      int ju = rbuf[n].isame[0].bje;
+      int kl = rbuf[n].isame[0].bks;
+      int ku = rbuf[n].isame[0].bke;
 
-    for (int m = 0; m < nmb; ++m) {
-      for (int n = 0; n < nnghbr; ++n) {
-        if (nghbr.h_view(m,n).gid < 0) continue;
-        if (nghbr.h_view(m,n).lev != mblev.h_view(m)) continue;
-        int il = rbuf[n].isame[0].bis;
-        int iu = rbuf[n].isame[0].bie;
-        int jl = rbuf[n].isame[0].bjs;
-        int ju = rbuf[n].isame[0].bje;
-        int kl = rbuf[n].isame[0].bks;
-        int ku = rbuf[n].isame[0].bke;
-        int sh = shift_;
-        while (sh > 0) {
-          if (rbuf[n].faces.h_view(0) && il > 1) {
-            int d = iu-il; il = (il+ngh)>>1; iu = il+d;
-          } else if (rbuf[n].faces.h_view(0)-1) {
-            iu = ((iu-il)>>1)+il;
-          }
-          if (rbuf[n].faces.h_view(1) && jl > 1) {
-            int d = ju-jl; jl = (jl+ngh)>>1; ju = jl+d;
-          } else if (rbuf[n].faces.h_view(1)-1) {
-            ju = ((ju-jl)>>1)+jl;
-          }
-          if (rbuf[n].faces.h_view(2) && kl > 1) {
-            int d = ku-kl; kl = (kl+ngh)>>1; ku = kl+d;
-          } else if (rbuf[n].faces.h_view(2)-1) {
-            ku = ((ku-kl)>>1)+kl;
-          }
-          sh--;
+      int sh = shift_;
+      while (sh > 0) {
+        if (rbuf[n].faces.d_view(0) && il > 1) {
+          int d = iu - il; il = (il + ngh) >> 1; iu = il + d;
+        } else if (rbuf[n].faces.d_view(0) - 1) {
+          iu = ((iu - il) >> 1) + il;
         }
-        int ni = iu-il+1, nj = ju-jl+1, nk = ku-kl+1;
-        int buf_size = ni * nj * nk * nvar;
-        int max_lin = buf_size - 1;
-        bool u_oob = (il < 0 || iu >= static_cast<int>(u_h.extent(4)) ||
-                      jl < 0 || ju >= static_cast<int>(u_h.extent(3)) ||
-                      kl < 0 || ku >= static_cast<int>(u_h.extent(2)));
-        bool r_oob = (m >= static_cast<int>(rbuf_h[n].extent(0)) ||
-                      max_lin >= static_cast<int>(rbuf_h[n].extent(1)));
-        if (u_oob || r_oob) {
-          std::cerr << "RecvAndUnpackMG OVERFLOW: m=" << m << " n=" << n
-                    << " u_dim=(" << u_h.extent(0) << "," << u_h.extent(1)
-                    << "," << u_h.extent(2) << "," << u_h.extent(3)
-                    << "," << u_h.extent(4) << ")"
-                    << " rbuf_dim=(" << rbuf_h[n].extent(0) << ","
-                    << rbuf_h[n].extent(1) << ")"
-                    << " il=" << il << " iu=" << iu
-                    << " jl=" << jl << " ju=" << ju
-                    << " kl=" << kl << " ku=" << ku
-                    << " buf_size=" << buf_size
-                    << " shift=" << shift_
-                    << std::endl;
-        } else {
-          for (int v = 0; v < nvar; ++v)
-            for (int k = kl; k <= ku; ++k)
-              for (int j = jl; j <= ju; ++j)
-                for (int i = il; i <= iu; ++i)
-                  u_h(m, v, k, j, i) = rbuf_h[n](m,
-                      (i-il + ni*(j-jl + nj*(k-kl + nk*v))));
+        if (rbuf[n].faces.d_view(1) && jl > 1) {
+          int d = ju - jl; jl = (jl + ngh) >> 1; ju = jl + d;
+        } else if (rbuf[n].faces.d_view(1) - 1) {
+          ju = ((ju - jl) >> 1) + jl;
         }
+        if (rbuf[n].faces.d_view(2) && kl > 1) {
+          int d = ku - kl; kl = (kl + ngh) >> 1; ku = kl + d;
+        } else if (rbuf[n].faces.d_view(2) - 1) {
+          ku = ((ku - kl) >> 1) + kl;
+        }
+        sh--;
       }
+
+      int ni = iu - il + 1;
+      int nj = ju - jl + 1;
+      int nk = ku - kl + 1;
+      int nkj = nk * nj;
+
+      Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember, nkj),
+      [&](const int idx) {
+        int k = idx / nj;
+        int j = (idx - k * nj) + jl;
+        k += kl;
+
+        Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember, il, iu + 1),
+        [&](const int i) {
+          u(m, v, k, j, i) = rbuf[n].vars(m,
+              (i-il + ni*(j-jl + nj*(k-kl + nk*v))));
+        });
+      });
     }
-    Kokkos::deep_copy(u, u_h);
+    tmember.team_barrier();
+  });
   }
 
   return TaskStatus::complete;
