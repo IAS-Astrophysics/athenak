@@ -374,7 +374,12 @@ void MultigridDriver::OneStepToFiner(Driver *pdriver, int nsmooth) {
   }
   if (current_level_ >= nrootlevel_ + nreflevel_ - 1) { // MeshBlocks
     pmg = mglevels_;
-    SetMGTaskListToFiner(nsmooth, ngh);
+    int flag = 0;
+    // flag = 1: first time on meshblock levels
+    if (current_level_ == nrootlevel_ + nreflevel_ - 1) flag = 1;
+    
+    if (current_level_ == ntotallevel_ - 2) flag = 2;
+    SetMGTaskListToFiner(nsmooth, ngh, flag);
     pdriver->ExecuteTaskList(pmy_mesh_, "mg_to_finer", 0);
     current_level_++;
   } else if (current_level_ >= nrootlevel_ - 1) { // octets
@@ -568,6 +573,10 @@ void MultigridDriver::SolveIterative(Driver *pdriver) {
 void MultigridDriver::SolveIterativeFixedTimes(Driver *pdriver) {
   for (int n = 0; n < niter_; ++n) {
     SolveVCycle(pdriver, npresmooth_, npostsmooth_);
+    if (fshowdef_) {
+      Real norm = CalculateDefectNorm(MGNormType::l2, 0);
+      std::cout << "MG iteration " << n << ": defect = " << norm << std::endl;
+    }
   }
   Kokkos::fence();
   return;

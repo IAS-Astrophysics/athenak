@@ -354,10 +354,9 @@ class MultigridDriver {
   TaskStatus StoreOldData(Driver *pdrive, int stag);
   TaskStatus ClearRecv(Driver *pdrive, int stag);
   TaskStatus ClearSend(Driver *pdrive, int stag);
-  void SetMGTaskListToFiner(int nsmooth, int ngh);
+  void SetMGTaskListToFiner(int nsmooth, int ngh, int flag=0);
   void SetMGTaskListFMGProlongate(int ngh);
   void SetMGTaskListToCoarser(int nsmooth, int ngh);
-  void SetMGTaskListBoundaryCommunication();
   void DoTaskListOneStage();
 
   virtual void SolveCoarsestGrid();
