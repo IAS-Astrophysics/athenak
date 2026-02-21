@@ -61,12 +61,13 @@ MGGravityDriver::MGGravityDriver(MeshBlockPack *pmbp, ParameterInput *pin)
     exit(EXIT_FAILURE);
   }
   // Allocate the root multigrid
-  int nghost = pin->GetOrAddInteger("gravity", "mg_nghost", 2);
+  int nghost = pin->GetOrAddInteger("gravity", "mg_nghost", 1);
   mgroot_ = new MGGravity(this, nullptr, nghost);
   mglevels_ = new MGGravity(this, pmbp, nghost);
   // allocate boundary buffers
   mglevels_->pbval = new MultigridBoundaryValues(pmbp, pin, false, mglevels_);
   mglevels_->pbval->InitializeBuffers((nvar_));
+  mglevels_->pbval->RemapIndicesForMG();
 }
 
 
@@ -114,7 +115,7 @@ void MGGravityDriver::Solve(Driver *pdriver, int stage, Real dt) {
   mglevels_->LoadSource(pmy_pack_->phydro->u0, IDN, indcs_.ng, -four_pi_G_);
 
   // iterative mode - load initial guess
-  if(not full_multigrid_) 
+  if(!full_multigrid_) 
     mglevels_->LoadFinestData(pmy_pack_->pgrav->phi, 0, indcs_.ng);
   
   SetupMultigrid(dt, false);

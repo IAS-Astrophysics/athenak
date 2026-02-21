@@ -407,11 +407,10 @@ void Multigrid::RestrictPack() {
   int is, ie, js, je, ks, ke;
   int th = false;
   CalculateDefectPack();
-  int ngc = ngh_-(ngh_>>1);
-  is=js=ks= ngc;
-  ie = is+(indcs_.nx1>>ll)+ngc-1;
-  je = js+(indcs_.nx2>>ll)+ngc-1;
-  ke = ks+(indcs_.nx3>>ll)+ngc-1;
+  is=js=ks= ngh_;
+  ie = is + (indcs_.nx1>>ll) - 1;
+  je = js + (indcs_.nx2>>ll) - 1;
+  ke = ks + (indcs_.nx3>>ll) - 1;
   Restrict(src_[current_level_-1], def_[current_level_],
            nvar_, is, ie, js, je, ks, ke, th);
   // Full Approximation Scheme - restrict the variable itself
@@ -429,11 +428,10 @@ void Multigrid::RestrictSourcePack() {
   int ll=nlevel_-current_level_;
   int is, ie, js, je, ks, ke;
   int th = false;
-  int ngc = ngh_-(ngh_>>1);
-  is=js=ks= ngc;
-  ie = is+(indcs_.nx1>>ll)+ngc-1;
-  je = js+(indcs_.nx2>>ll)+ngc-1;
-  ke = ks+(indcs_.nx3>>ll)+ngc-1;
+  is=js=ks= ngh_;
+  ie = is+(indcs_.nx1>>ll) - 1;
+  je = js+(indcs_.nx2>>ll) - 1;
+  ke = ks+(indcs_.nx3>>ll) - 1;
   Restrict(src_[current_level_-1], src_[current_level_],
            nvar_, is, ie, js, je, ks, ke, th);
   current_level_--;
@@ -554,7 +552,6 @@ void Multigrid::SetFromRootGrid(bool folddata) {
   auto odst_h = Kokkos::create_mirror_view(odst);
   const auto src_h = Kokkos::create_mirror_view_and_copy(HostMemSpace(), rsrc);
   const auto osrc_h = Kokkos::create_mirror_view_and_copy(HostMemSpace(), rosrc);
-
   for (int m = 0; m < nmmb_; ++m) {
     auto loc = pmy_mesh_->lloc_eachmb[m + padding];
     int lev = loc.level - pmy_driver_->locrootlevel_;
@@ -1133,16 +1130,20 @@ void Multigrid::FMGProlongate(DvceArray5D<Real> &dst, const DvceArray5D<Real> &s
 MultigridBoundaryValues::MultigridBoundaryValues(MeshBlockPack *pmbp, ParameterInput *pin, bool coarse, Multigrid *pmg) 
   :
    MeshBoundaryValuesCC(pmbp, pin, coarse), pmy_mg(pmg){
+}
 
-  // Remap isame indices from hydro coordinates (ng ghost cells) to MG coordinates
-  // (ngh_ ghost cells) so that PackAndSendMG / RecvAndUnpackMG access the correct
-  // regions of the smaller MG arrays.
-  int ng  = pmbp->pmesh->mb_indcs.ng;
-  int ngh = pmg->GetGhostCells();
+//----------------------------------------------------------------------------------------
+//! \fn void MultigridBoundaryValues::RemapIndicesForMG()
+//! \brief Remap isame indices from hydro coordinates (ng ghost cells) to MG coordinates
+//! (ngh_ ghost cells). Must be called AFTER InitializeBuffers.
+
+void MultigridBoundaryValues::RemapIndicesForMG() {
+  int ng  = pmy_pack->pmesh->mb_indcs.ng;
+  int ngh = pmy_mg->GetGhostCells();
   if (ng != ngh) {
-    int nx1 = pmbp->pmesh->mb_indcs.nx1;
-    int nx2 = pmbp->pmesh->mb_indcs.nx2;
-    int nx3 = pmbp->pmesh->mb_indcs.nx3;
+    int nx1 = pmy_pack->pmesh->mb_indcs.nx1;
+    int nx2 = pmy_pack->pmesh->mb_indcs.nx2;
+    int nx3 = pmy_pack->pmesh->mb_indcs.nx3;
     int is_h = ng, ie_h = ng + nx1 - 1;
     int js_h = ng, je_h = ng + nx2 - 1;
     int ks_h = ng, ke_h = ng + nx3 - 1;
@@ -1150,16 +1151,14 @@ MultigridBoundaryValues::MultigridBoundaryValues(MeshBlockPack *pmbp, ParameterI
     int js_m = ngh, je_m = ngh + nx2 - 1;
     int ks_m = ngh, ke_m = ngh + nx3 - 1;
     int ng1_m = ngh - 1;
-    int nnghbr = pmbp->pmb->nnghbr;
+    int nnghbr = pmy_pack->pmb->nnghbr;
 
-    // Helper: remap one dimension of send indices
     auto remap_send = [](int &lo, int &hi,
                          int s_h, int e_h, int s_m, int e_m, int ng1) {
       if (lo == s_h && hi == e_h) { lo = s_m; hi = e_m; }
       else if (lo > s_h)          { lo = e_m - ng1; hi = e_m; }
       else                        { lo = s_m; hi = s_m + ng1; }
     };
-    // Helper: remap one dimension of recv indices
     auto remap_recv = [](int &lo, int &hi,
                          int s_h, int e_h, int s_m, int e_m, int ng_m) {
       if (lo >= s_h && hi <= e_h) { lo = s_m; hi = e_m; }
@@ -1181,7 +1180,6 @@ MultigridBoundaryValues::MultigridBoundaryValues(MeshBlockPack *pmbp, ParameterI
       recvbuf[n].isame_ndat = (ri.bie-ri.bis+1)*(ri.bje-ri.bjs+1)*(ri.bke-ri.bks+1);
     }
   }
-  return;
 }
 //----------------------------------------------------------------------------------------
 //! \fn TaskStatus MultigridBoundaryValues::PackAndSend()
@@ -1224,20 +1222,21 @@ TaskStatus MultigridBoundaryValues::PackAndSendMG(const DvceArray5D<Real> &u) {
 
       int sh = shift_;
       int nx = nx1_;
+    
       while (sh > 0) {
-        if (rbuf[n].faces.d_view(0) && il == nx) {
+        if (sbuf[n].faces.d_view(0) && (il == nx)) {
           int d = iu - il; il = il >> 1; iu = il + d;
-        } else if (rbuf[n].faces.d_view(0) - 1) {
+        } else if (!sbuf[n].faces.d_view(0)) {
           iu = ((iu - il) >> 1) + il;
         }
-        if (rbuf[n].faces.d_view(1) && jl == nx) {
+        if (sbuf[n].faces.d_view(1) && (jl == nx)) {
           int d = ju - jl; jl = jl >> 1; ju = jl + d;
-        } else if (rbuf[n].faces.d_view(1) - 1) {
+        } else if (!sbuf[n].faces.d_view(1)) {
           ju = ((ju - jl) >> 1) + jl;
         }
-        if (rbuf[n].faces.d_view(2) && kl == nx) {
+        if (sbuf[n].faces.d_view(2) && (kl == nx)) {
           int d = ku - kl; kl = kl >> 1; ku = kl + d;
-        } else if (rbuf[n].faces.d_view(2) - 1) {
+        } else if (!sbuf[n].faces.d_view(2)) {
           ku = ((ku - kl) >> 1) + kl;
         }
         sh--;
@@ -1391,17 +1390,17 @@ TaskStatus MultigridBoundaryValues::RecvAndUnpackMG(DvceArray5D<Real> &u) {
       while (sh > 0) {
         if (rbuf[n].faces.d_view(0) && il > 1) {
           int d = iu - il; il = (il + ngh) >> 1; iu = il + d;
-        } else if (rbuf[n].faces.d_view(0) - 1) {
+        } else if (!rbuf[n].faces.d_view(0)) {
           iu = ((iu - il) >> 1) + il;
         }
         if (rbuf[n].faces.d_view(1) && jl > 1) {
           int d = ju - jl; jl = (jl + ngh) >> 1; ju = jl + d;
-        } else if (rbuf[n].faces.d_view(1) - 1) {
+        } else if (!rbuf[n].faces.d_view(1)) {
           ju = ((ju - jl) >> 1) + jl;
         }
         if (rbuf[n].faces.d_view(2) && kl > 1) {
           int d = ku - kl; kl = (kl + ngh) >> 1; ku = kl + d;
-        } else if (rbuf[n].faces.d_view(2) - 1) {
+        } else if (!rbuf[n].faces.d_view(2)) {
           ku = ((ku - kl) >> 1) + kl;
         }
         sh--;

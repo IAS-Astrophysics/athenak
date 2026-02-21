@@ -407,6 +407,8 @@ class MultigridBoundaryValues : public MeshBoundaryValuesCC {
   MultigridBoundaryValues(MeshBlockPack *pmbp, ParameterInput *pin, bool coarse, Multigrid *pmg);
   ~MultigridBoundaryValues();
 
+  void RemapIndicesForMG();
+
   // pack/restrict fluxes at fine/coarse boundaries into boundary buffers and send
   TaskStatus PackAndSendMG(const DvceArray5D<Real> &u);
   TaskStatus RecvAndUnpackMG(DvceArray5D<Real> &u);
