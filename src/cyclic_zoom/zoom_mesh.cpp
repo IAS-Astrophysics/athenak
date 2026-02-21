@@ -296,8 +296,8 @@ void ZoomMesh::FindRegion(int zone) {
     }
   }
   if (pzoom->verbose) {
-    std::cout << " Rank " << global_variable::my_rank << " total zoom MBs to be applied: "
-              << zm_count << std::endl;
+    std::cout << " Rank " << global_variable::my_rank << " found: "
+              << zm_count << " zoom MeshBlocks" << std::endl;
   }
   // TODO(@mhguo): you probably don't need to sync, as lloc_eachmb includes all MBs
   // TODO(@mhguo): you can loop over all meshblocks though it may be slower

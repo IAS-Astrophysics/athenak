@@ -1,0 +1,94 @@
+# AthenaK input file for the magnetic monopole problem
+
+<comment>
+problem   = GR magnetic monopole
+
+<job>
+basename  = monopole  # problem ID: basename of output filenames
+
+<mesh>
+nghost    = 4      # Number of ghost cells
+nx1       = 64     # Number of zones in X1-direction
+x1min     = -64.0  # minimum value of X1
+x1max     = 64.0   # maximum value of X1
+ix1_bc    = user   # inner-X1 boundary flag
+ox1_bc    = user   # outer-X1 boundary flag
+
+nx2       = 64     # Number of zones in X2-direction
+x2min     = -64.0  # minimum value of X2
+x2max     = 64.0   # maximum value of X2
+ix2_bc    = user   # inner-X2 boundary flag
+ox2_bc    = user   # outer-X2 boundary flag
+
+nx3       = 32     # Number of zones in X3-direction
+x3min     = 0.0    # minimum value of X3
+x3max     = 64.0   # maximum value of X3
+ix3_bc    = user   # inner-X3 boundary flag
+ox3_bc    = user   # outer-X3 boundary flag
+
+<meshblock>
+nx1  = 16           # Number of cells in each MeshBlock, X1-dir
+nx2  = 16           # Number of cells in each MeshBlock, X2-dir
+nx3  = 16           # Number of cells in each MeshBlock, X3-dir
+
+<mesh_refinement>
+#refinement = static    # type of refinement
+refinement       = adaptive  # type of refinement
+max_nmb_per_rank = 256      # max allowed number of MBs per device (memory limit for AMR)
+ncycle_check     = 1         # cycles between checking mesh for ref/derefinement
+refinement_interval = 1      # cycles between allowing successive ref/derefinement
+num_levels       = 6
+
+<refined_region1>
+level = 5
+x1min = -1.0
+x1max = 1.0
+x2min = -1.0
+x2max = 1.0
+x3min = 0.0
+x3max = 1.0
+
+<amr_criterion1>
+method      = cyclic_zoom   # refinement criterion
+nlevels     = 4             # number of levels for zoom data
+r_0         = 1.0           # radius of zoom region at zone 0
+trun_fac    = 2.5           # default interval factor (trun = trun_fac * M^trun_pow)
+trun_pow    = 1.0           # power for interval (trun = trun_fac * M^trun_pow)
+trun_fac_0  = 16.0          # interval factor for zone 0
+trun_fac_1  = 0.0           # interval factor for zone 1
+trun_fac_2  = 0.0           # interval factor for zone 2
+
+<coord>
+general_rel = true       # general relativity
+a           = 0.5        # black hole spin a (0 <= a/M < 1)
+excise      = true       # excise r_ks <= 1.0
+dexcise     = 1.0e-4     # density inside excision
+pexcise     = 0.333e-6   # pressure inside excision
+
+<time>
+evolution  = dynamic  # dynamic/kinematic/static
+integrator = rk2      # time integration algorithm
+cfl_number = 0.3      # The Courant, Friedrichs, & Lewy (CFL) Number
+nlim       = -1       # cycle limit
+tlim       = 40.0     # time limit
+ndiag      = 1        # cycles between diagostic output
+
+<mhd>
+eos         = ideal  # EOS type
+reconstruct = plm    # spatial reconstruction method
+rsolver     = hlle   # Riemann-solver to be used
+gamma       = 1.3333333333333  # gamma = C_p/C_v
+dfloor      = 1.0e-15   # density floor
+pfloor      = 0.333e-16 # pressure floor
+fofc        = true      # FOFC
+gamma_max   = 10.0      # ceiling on Lorentz factor
+sigma_max   = 5000.0    # ceiling on magnetization
+
+<problem>
+pgen_name = gr_monopole
+nlevel = 10
+sigma_norm = 5000.0
+sigma_pow = 0.0       # exponent for sigma profile: sigma = sigma_max * r^sigma_pow
+rhomin = 1.0e-15
+umin = 1.0e-16
+a_norm = 1.0

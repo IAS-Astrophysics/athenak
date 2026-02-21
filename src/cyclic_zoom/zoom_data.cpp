@@ -155,6 +155,7 @@ void ZoomData::Initialize() {
   // initialize primitive and conserved variables
   if (pmbp->phydro != nullptr || pmbp->pmhd != nullptr) {
     auto peos = (pmbp->pmhd != nullptr)? pmbp->pmhd->peos : pmbp->phydro->peos;
+    const bool &is_ideal = peos->eos_data.is_ideal;
     Real gm1 = peos->eos_data.gamma - 1.0;
     Real d0 = d_zoom;
     Real p0 = p_zoom;
@@ -165,7 +166,9 @@ void ZoomData::Initialize() {
       w0_(m,IM1,k,j,i) = 0.0;
       w0_(m,IM2,k,j,i) = 0.0;
       w0_(m,IM3,k,j,i) = 0.0;
-      w0_(m,IEN,k,j,i) = p0/gm1;
+      if (is_ideal) {
+        w0_(m,IEN,k,j,i) = p0/gm1;
+      }
     });
 
     par_for("zoom_init_c",DevExeSpace(),0,nzmb-1,0,nc3-1,0,nc2-1,0,nc1-1,
@@ -174,12 +177,22 @@ void ZoomData::Initialize() {
       cw0(m,IM1,k,j,i) = 0.0;
       cw0(m,IM2,k,j,i) = 0.0;
       cw0(m,IM3,k,j,i) = 0.0;
-      cw0(m,IEN,k,j,i) = p0/gm1;
+      if (is_ideal) {
+        cw0(m,IEN,k,j,i) = p0/gm1;
+      }
     });
 
     // convert primitive to conserved variables
-    peos->PrimToCons(w0_,u0_,0,n3-1,0,n2-1,0,n1-1);
-    peos->PrimToCons(cw0,cu0,0,nc3-1,0,nc2-1,0,nc1-1);
+    if (pmbp->phydro != nullptr) {
+      peos->PrimToCons(w0_,u0_,0,n3-1,0,n2-1,0,n1-1);
+      peos->PrimToCons(cw0,cu0,0,nc3-1,0,nc2-1,0,nc1-1);
+    }
+    if (pmbp->pmhd != nullptr) {
+      DvceArray5D<Real> bcc_zero("zbcc_zero",nzmb,3,n3,n2,n1);
+      DvceArray5D<Real> cbcc_zero("zcbcc_zero",nzmb,3,nc3,nc2,nc1);
+      peos->PrimToCons(w0_,bcc_zero,u0_,0,n3-1,0,n2-1,0,n1-1);
+      peos->PrimToCons(cw0,cbcc_zero,cu0,0,nc3-1,0,nc2-1,0,nc1-1);
+    }
   }
 
   // initialize electric fields to zero

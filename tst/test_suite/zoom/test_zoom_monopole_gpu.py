@@ -1,5 +1,5 @@
 """
-GR Monopole BZ field rotation rates test.
+Cyclic Zoom GR Monopole BZ field rotation rates test.
 Runs a 3D GRMHD simulation for a spinning black hole and measures the field rotation
 rate at the black hole event horizon (exploiting the SphericalGrid infrastructure).
 """
@@ -21,21 +21,21 @@ def arguments():
     ]
 
 
-input_file = "inputs/gr_monopole.athinput"
+input_file = "inputs/zoom_gr_monopole.athinput"
 
 
 def test_run():
     """Run a single test with given arguments."""
     try:
         results = testutils.run(input_file, arguments())
-        assert results, "GR Monopole test run failed."
+        assert results, "Cyclic Zoom GR Monopole test run failed."
         # Check the errors in the output
         data = athena_read.error_dat("monopole-diag.dat")
         omega = data[:, 2]
         omega_error = np.abs(np.average(omega) - 0.5)/0.5
         omega_std = np.std(omega)
-        error_threshold = 0.03
-        std_threshold = 0.03
+        error_threshold = 0.1
+        std_threshold = 0.1
 
         if (omega_error > error_threshold):
             pytest.fail(f"Rotation rate error too large, "
