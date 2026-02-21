@@ -22,6 +22,7 @@
 #include "../athena.hpp"
 #include "../coordinates/coordinates.hpp"
 #include "../mesh/mesh.hpp"
+#include "../mesh/nghbr_index.hpp"
 #include "../parameter_input.hpp"
 #include "multigrid.hpp"
 
@@ -1181,6 +1182,181 @@ void MultigridBoundaryValues::RemapIndicesForMG() {
     }
   }
 }
+
+//----------------------------------------------------------------------------------------
+//! \fn TaskStatus MultigridBoundaryValues::FillFineCoarseMGGhosts()
+//! \brief Fill ghost cells at fine-coarse boundaries using injection prolongation
+//! from coarser neighbors and restriction from finer neighbors (same-rank only).
+
+TaskStatus MultigridBoundaryValues::FillFineCoarseMGGhosts(DvceArray5D<Real> &u) {
+  if (pmy_mg == nullptr) return TaskStatus::complete;
+
+  int nvar = u.extent_int(1);
+  int shift = pmy_mg->GetLevelShift();
+  int ngh = pmy_mg->GetGhostCells();
+  int nx = pmy_mg->GetSize();
+  int ncells = nx >> shift;
+
+  if (ncells < 1) return TaskStatus::complete;
+
+  int nmb = pmy_pack->nmb_thispack;
+  int nnghbr = pmy_pack->pmb->nnghbr;
+  int my_rank = global_variable::my_rank;
+  auto &nghbr = pmy_pack->pmb->nghbr;
+  auto &mblev = pmy_pack->pmb->mb_lev;
+  auto &mbgid = pmy_pack->pmb->mb_gid;
+  auto &lloc = pmy_pack->pmesh->lloc_eachmb;
+
+  auto u_h = Kokkos::create_mirror_view_and_copy(HostMemSpace(), u);
+  bool modified = false;
+
+  for (int m = 0; m < nmb; ++m) {
+    int m_lev = mblev.h_view(m);
+    int m_gid = mbgid.h_view(m);
+    LogicalLocation m_loc = lloc[m_gid];
+
+    for (int ox3 = -1; ox3 <= 1; ++ox3) {
+      for (int ox2 = -1; ox2 <= 1; ++ox2) {
+        for (int ox1 = -1; ox1 <= 1; ++ox1) {
+          if (ox1 == 0 && ox2 == 0 && ox3 == 0) continue;
+
+          for (int f2 = 0; f2 <= 1; ++f2) {
+            for (int f1 = 0; f1 <= 1; ++f1) {
+              int n = NeighborIndex(ox1, ox2, ox3, f1, f2);
+              if (n < 0 || n >= nnghbr) continue;
+              if (nghbr.h_view(m, n).gid < 0) continue;
+
+              int nlev = nghbr.h_view(m, n).lev;
+              if (nlev == m_lev) continue;
+              if (nghbr.h_view(m, n).rank != my_rank) continue;
+
+              int dm = nghbr.h_view(m, n).gid - mbgid.h_view(0);
+              if (dm < 0 || dm >= nmb) continue;
+
+              // Ghost cell ranges in each dimension
+              int gis, gie, gjs, gje, gks, gke;
+              if (ox1 < 0)      { gis = 0;            gie = ngh - 1; }
+              else if (ox1 > 0) { gis = ngh + ncells;  gie = ngh + ncells + ngh - 1; }
+              else              { gis = ngh;            gie = ngh + ncells - 1; }
+              if (ox2 < 0)      { gjs = 0;            gje = ngh - 1; }
+              else if (ox2 > 0) { gjs = ngh + ncells;  gje = ngh + ncells + ngh - 1; }
+              else              { gjs = ngh;            gje = ngh + ncells - 1; }
+              if (ox3 < 0)      { gks = 0;            gke = ngh - 1; }
+              else if (ox3 > 0) { gks = ngh + ncells;  gke = ngh + ncells + ngh - 1; }
+              else              { gks = ngh;            gke = ngh + ncells - 1; }
+
+              if (nlev < m_lev) {
+                // ---- Neighbor is COARSER: injection prolongation ----
+                int child_x = m_loc.lx1 & 1;
+                int child_y = m_loc.lx2 & 1;
+                int child_z = m_loc.lx3 & 1;
+
+                for (int v = 0; v < nvar; ++v) {
+                  for (int gk = gks; gk <= gke; ++gk) {
+                    for (int gj = gjs; gj <= gje; ++gj) {
+                      for (int gi = gis; gi <= gie; ++gi) {
+                        int si, sj, sk;
+                        if (ox1 < 0)      si = ngh + ncells - 1;
+                        else if (ox1 > 0) si = ngh;
+                        else si = ngh + child_x*(ncells/2) + (gi - ngh)/2;
+
+                        if (ox2 < 0)      sj = ngh + ncells - 1;
+                        else if (ox2 > 0) sj = ngh;
+                        else sj = ngh + child_y*(ncells/2) + (gj - ngh)/2;
+
+                        if (ox3 < 0)      sk = ngh + ncells - 1;
+                        else if (ox3 > 0) sk = ngh;
+                        else sk = ngh + child_z*(ncells/2) + (gk - ngh)/2;
+
+                        u_h(m, v, gk, gj, gi) = u_h(dm, v, sk, sj, si);
+                      }
+                    }
+                  }
+                }
+                modified = true;
+
+              } else {
+                // ---- Neighbor is FINER: restriction (average 2x2x2 fine cells) ----
+                // Determine which portion of my ghost cells this fine subblock covers.
+                // For non-face dimensions, the subblock (f1,f2) splits my active range
+                // in half.
+                int sub_x = 0, sub_y = 0, sub_z = 0;
+                // x1-face: non-face dims are y,z → f1=fy, f2=fz
+                // x2-face: non-face dims are x,z → f1=fx, f2=fz
+                // x3-face: non-face dims are x,y → f1=fx, f2=fy
+                // edges/corners: only 1 or 0 non-face dims
+                int nface = (ox1 != 0 ? 1:0) + (ox2 != 0 ? 1:0) + (ox3 != 0 ? 1:0);
+                if (nface == 1) {
+                  if (ox1 != 0) { sub_y = f1; sub_z = f2; }
+                  if (ox2 != 0) { sub_x = f1; sub_z = f2; }
+                  if (ox3 != 0) { sub_x = f1; sub_y = f2; }
+                } else if (nface == 2) {
+                  if (ox1 == 0) sub_x = f1;
+                  if (ox2 == 0) sub_y = f1;
+                  if (ox3 == 0) sub_z = f1;
+                }
+
+                // Restrict ghost range for ox==0 dims to the subblock half
+                int half = ncells / 2;
+                if (ox1 == 0) { gis = ngh + sub_x*half; gie = ngh + sub_x*half + half - 1; }
+                if (ox2 == 0) { gjs = ngh + sub_y*half; gje = ngh + sub_y*half + half - 1; }
+                if (ox3 == 0) { gks = ngh + sub_z*half; gke = ngh + sub_z*half + half - 1; }
+
+                for (int v = 0; v < nvar; ++v) {
+                  for (int gk = gks; gk <= gke; ++gk) {
+                    for (int gj = gjs; gj <= gje; ++gj) {
+                      for (int gi = gis; gi <= gie; ++gi) {
+                        // Map each coarse ghost cell to 2x2x2 fine cells
+                        int fi0, fi1, fj0, fj1, fk0, fk1;
+                        if (ox1 < 0) {
+                          fi0 = ngh + ncells - 2; fi1 = ngh + ncells - 1;
+                        } else if (ox1 > 0) {
+                          fi0 = ngh; fi1 = ngh + 1;
+                        } else {
+                          int local_i = gi - (ngh + sub_x*half);
+                          fi0 = ngh + 2*local_i; fi1 = fi0 + 1;
+                        }
+                        if (ox2 < 0) {
+                          fj0 = ngh + ncells - 2; fj1 = ngh + ncells - 1;
+                        } else if (ox2 > 0) {
+                          fj0 = ngh; fj1 = ngh + 1;
+                        } else {
+                          int local_j = gj - (ngh + sub_y*half);
+                          fj0 = ngh + 2*local_j; fj1 = fj0 + 1;
+                        }
+                        if (ox3 < 0) {
+                          fk0 = ngh + ncells - 2; fk1 = ngh + ncells - 1;
+                        } else if (ox3 > 0) {
+                          fk0 = ngh; fk1 = ngh + 1;
+                        } else {
+                          int local_k = gk - (ngh + sub_z*half);
+                          fk0 = ngh + 2*local_k; fk1 = fk0 + 1;
+                        }
+                        u_h(m, v, gk, gj, gi) = 0.125 * (
+                          u_h(dm,v,fk0,fj0,fi0) + u_h(dm,v,fk0,fj0,fi1) +
+                          u_h(dm,v,fk0,fj1,fi0) + u_h(dm,v,fk0,fj1,fi1) +
+                          u_h(dm,v,fk1,fj0,fi0) + u_h(dm,v,fk1,fj0,fi1) +
+                          u_h(dm,v,fk1,fj1,fi0) + u_h(dm,v,fk1,fj1,fi1));
+                      }
+                    }
+                  }
+                }
+                modified = true;
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
+  if (modified) {
+    Kokkos::deep_copy(u, u_h);
+  }
+
+  return TaskStatus::complete;
+}
+
 //----------------------------------------------------------------------------------------
 //! \fn TaskStatus MultigridBoundaryValues::PackAndSend()
 //! \brief Pack restricted fluxes of multigrid variables at fine/coarse boundaries

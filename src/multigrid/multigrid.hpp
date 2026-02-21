@@ -159,6 +159,12 @@ struct MultigridTaskIDs {
       TaskID clear_sendR2;
       TaskID clear_recvB2;
       TaskID clear_sendB2;
+      TaskID fc_ghosts0;
+      TaskID fc_ghostsR;
+      TaskID fc_ghostsB;
+      TaskID fc_ghostsR2;
+      TaskID fc_ghostsB2;
+      TaskID fc_ghosts_prol;
 };
 
 //! \class Multigrid
@@ -343,6 +349,7 @@ class MultigridDriver {
   TaskStatus FMGProlongateTask(Driver *pdrive, int stag);
   TaskStatus ProlongateBoundary(Driver *pdrive, int stag);
   TaskStatus ProlongateBoundaryForProlongation(Driver *pdrive, int stag);
+  TaskStatus FillFCBoundary(Driver *pdrive, int stag);
   TaskStatus CalculateFASRHS(Driver *pdrive, int stag);
   TaskStatus StoreOldData(Driver *pdrive, int stag);
   TaskStatus ClearRecv(Driver *pdrive, int stag);
@@ -413,6 +420,7 @@ class MultigridBoundaryValues : public MeshBoundaryValuesCC {
   TaskStatus PackAndSendMG(const DvceArray5D<Real> &u);
   TaskStatus RecvAndUnpackMG(DvceArray5D<Real> &u);
   TaskStatus InitRecvMG(const int nvars);
+  TaskStatus FillFineCoarseMGGhosts(DvceArray5D<Real> &u);
 
  private:
   // data
