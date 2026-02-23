@@ -17,6 +17,7 @@
 #include "reconstruct/plm.hpp"
 #include "reconstruct/ppm.hpp"
 #include "reconstruct/wenoz.hpp"
+#include "reconstruct/wenomz.hpp"
 #include "hydro/rsolvers/advect_hyd.hpp"
 #include "hydro/rsolvers/llf_hyd.hpp"
 #include "hydro/rsolvers/hlle_hyd.hpp"
@@ -93,6 +94,9 @@ void Hydro::CalculateFluxes(Driver *pdriver, int stage) {
         break;
       case ReconstructionMethod::wenoz:
         WENOZX1(member, eos_, true, m, k, j, il-1, iu, w0_, wl, wr);
+        break;
+      case ReconstructionMethod::wenomz:
+        WENOMZX1(member, eos_, true, m, k, j, il-1, iu, w0_, wl, wr);
         break;
       default:
         break;
@@ -193,6 +197,9 @@ void Hydro::CalculateFluxes(Driver *pdriver, int stage) {
           case ReconstructionMethod::wenoz:
             WENOZX2(member, eos_, true, m, k, j, il, iu, w0_, wl_jp1, wr);
             break;
+          case ReconstructionMethod::wenomz:
+            WENOMZX2(member, eos_, true, m, k, j, il, iu, w0_, wl_jp1, wr);
+            break;
           default:
             break;
         }
@@ -287,6 +294,9 @@ void Hydro::CalculateFluxes(Driver *pdriver, int stage) {
             break;
           case ReconstructionMethod::wenoz:
             WENOZX3(member, eos_, true, m, k, j, il, iu, w0_, wl_kp1, wr);
+            break;
+          case ReconstructionMethod::wenomz:
+            WENOMZX3(member, eos_, true, m, k, j, il, iu, w0_, wl_kp1, wr);
             break;
           default:
             break;
