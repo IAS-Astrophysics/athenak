@@ -21,14 +21,15 @@ class Z4c;
 //! \class Z4c_AMR
 //  \brief managing AMR for Z4c simulations
 class Z4c_AMR {
-  enum RefinementMethod { Trivial, Tracker, Chi, dChi };
+  enum RefinementMethod { Trivial, Tracker, TrackerClamp, Chi, dChi };
 
  public:
   explicit Z4c_AMR(ParameterInput *pin);
   ~Z4c_AMR() noexcept = default;
 
   void Refine(MeshBlockPack *pmbp);             // call the AMR method
-  void RefineTracker(MeshBlockPack *pmbp);      // Refine based on the trackers
+  void RefineTracker(MeshBlockPack *pmbp);      // Refine based on the trackers (corner distance)
+  void RefineTrackerClamp(MeshBlockPack *pmbp); // Refine based on the trackers (AABB clamp)
   void RefineChiMin(MeshBlockPack *pmbp);       // Refine based on min{chi}
   void RefineDchiMax(MeshBlockPack *pmbp);      // Refine based on max{dchi}
   void RefineRadii(MeshBlockPack *pmbp);        // Refine based on the radii
