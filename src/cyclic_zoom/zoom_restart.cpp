@@ -61,7 +61,14 @@ void CyclicZoom::WriteRestartFile(IOWrapper &resfile, IOWrapperSizeT offset_zoom
     // Write ZoomState parameters
     resfile.Write_any_type_at(&(zstate), sizeof(ZoomState), current_offset, "byte");
     current_offset += sizeof(ZoomState);
+  }
 
+  // If zone is 0, skip writing zoom mesh metadata and ZMB data
+  if (zstate.zone == 0) {
+    return;
+  }
+
+  if (my_rank == 0) {
     // Write ZoomMesh metadata
     resfile.Write_any_type_at(&(pzmesh->nzmb_total), sizeof(int), current_offset, "byte");
     current_offset += sizeof(int);
@@ -127,6 +134,12 @@ void CyclicZoom::ReadRestartFile(IOWrapper &resfile, IOWrapperSizeT offset_zoom,
   // Update CyclicZoom runtime parameters from restart data
   UpdateAMRFromRestart();
 
+  // If zone is 0, skip reading zoom mesh metadata and ZMB data
+  if (zstate.zone == 0) {
+    PrintCyclicZoomDiagnostics();
+    return;
+  }
+
   // STEP 2: Read and broadcast zoom mesh metadata
   int nzmb_total_read;
   if (my_rank == 0) {
@@ -147,7 +160,7 @@ void CyclicZoom::ReadRestartFile(IOWrapper &resfile, IOWrapperSizeT offset_zoom,
   // Rebuild derived mesh structure arrays
   pzmesh->RebuildMeshStructure();
 
-  if (my_rank == 0) {
+  if (my_rank == 0 && nzmb_total_read > 0) {
     resfile.Read_bytes_at(pzmesh->lloc_eachzmb.data(), nzmb_total_read,
                           sizeof(LogicalLocation), current_offset);
     current_offset += nzmb_total_read * sizeof(LogicalLocation);
@@ -181,10 +194,6 @@ void CyclicZoom::ReadRestartFile(IOWrapper &resfile, IOWrapperSizeT offset_zoom,
       // Read this ZMB's data from file
       resfile.Read_Reals_at(pzdata->zdata.data() + data_offset, zmb_size, file_offset);
     }
-  }
-
-  if (zstate.zone > 0) {
-    LoadZoomData(zstate.zone-1);
   }
 
   PrintCyclicZoomDiagnostics();

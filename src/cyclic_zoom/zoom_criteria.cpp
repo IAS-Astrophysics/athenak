@@ -77,6 +77,7 @@ void CyclicZoom::SetRegionAndInterval() {
   // TODO(@mhguo): may add more complex and robust region settings later
   old_zregion.radius = zregion.r_0 * std::pow(2.0,static_cast<Real>(zstate.last_zone));
   zregion.radius = zregion.r_0 * std::pow(2.0,static_cast<Real>(zstate.zone));
+  zregion.excise_radius = zregion.excise_factor * zregion.radius;
   Real timescale = pow(zregion.radius,zint.trun_pow);
   zint.runtime = zint.trun_facs[zstate.zone]*timescale;
   if (zint.runtime > zint.trun_max) {zint.runtime = zint.trun_max;}

@@ -16,6 +16,7 @@
 #include "cell_locations.hpp"
 #include "hydro/hydro.hpp"
 #include "mhd/mhd.hpp"
+#include "cyclic_zoom/cyclic_zoom.hpp"
 
 //----------------------------------------------------------------------------------------
 // constructor, initializes coordinates data
@@ -61,6 +62,13 @@ Coordinates::Coordinates(ParameterInput *pin, MeshBlockPack *ppack) :
         pin->GetOrAddReal("coord","flux_excise_r",1.0);
       coord_data.rexcise =
         (pin->DoesBlockExist("radiation")) ? 1.0+sqrt(1.0-SQR(coord_data.bh_spin)) : 1.0;
+      if(pmy_pack->pmesh->pzoom != nullptr) {
+        if(pmy_pack->pmesh->pzoom->zstate.zone > 0) {
+          Real zoom_radius = pmy_pack->pmesh->pzoom->zregion.excise_radius;
+          coord_data.flux_excise_r = std::max(coord_data.flux_excise_r, zoom_radius);
+          coord_data.rexcise = std::max(coord_data.rexcise, zoom_radius);
+        }
+      }
 
       coord_data.excision_scheme = ExcisionScheme::fixed;
       if (is_dynamical_relativistic) {

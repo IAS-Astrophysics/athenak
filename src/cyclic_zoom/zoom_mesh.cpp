@@ -165,7 +165,6 @@ void ZoomMesh::RebuildMeshStructure() {
 
 int ZoomMesh::CountMBsToStore(int zone) {
   int nmb = pzoom->pmesh->pmb_pack->nmb_thispack;
-  int mbs = pzoom->pmesh->gids_eachrank[global_variable::my_rank];
   int zm_count = 0;
   for (int m=0; m<nmb; ++m) {
     if (pzoom->CheckStoreFlag(m)) {

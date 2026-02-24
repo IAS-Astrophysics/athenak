@@ -54,6 +54,7 @@ CyclicZoom::CyclicZoom(Mesh *pm, ParameterInput *pin) :
   zregion.x2c = pin->GetOrAddReal(block_name,"x2c",0.0);
   zregion.x3c = pin->GetOrAddReal(block_name,"x3c",0.0);
   zregion.r_0 = pin->GetOrAddReal(block_name,"r_0",1.0);
+  zregion.excise_factor = pin->GetOrAddReal(block_name,"excise_fac",0.25);
   zint.trun_fac = pin->GetOrAddReal(block_name,"trun_fac",1.0);
   zint.trun_pow = pin->GetOrAddReal(block_name,"trun_pow",0.0);
   zint.trun_max = pin->GetOrAddReal(block_name,"trun_max",FLT_MAX);
@@ -148,7 +149,9 @@ void CyclicZoom::PrintCyclicZoomDiagnostics() {
     // print region parameters
     std::cout << "Region: x1c = " << zregion.x1c << " x2c = " << zregion.x2c
               << " x3c = " << zregion.x3c << " r_0 = " << zregion.r_0
-              << " radius = " << zregion.radius << std::endl;
+              << " radius = " << zregion.radius
+              << " excise_fac = " << zregion.excise_factor
+              << " excise_radius = " << zregion.excise_radius << std::endl;
     // print runtime information
     std::cout << "Time: runtime = " << zint.runtime << " next time = "
               << zstate.next_time << std::endl;

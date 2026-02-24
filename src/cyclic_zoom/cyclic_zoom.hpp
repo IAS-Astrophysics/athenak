@@ -48,6 +48,8 @@ typedef struct ZoomRegion {
   Real x1c, x2c, x3c;           // center of zoom region
   Real r_0;                     // radius of zoom region at zone 0
   Real radius;                  // radius of zoom region
+  Real excise_factor;           // factor for excision radius
+  Real excise_radius;           // radius of excision region within zoom region
 
   // Kokkos inline function to check if a location is within the zoom region
   KOKKOS_INLINE_FUNCTION
