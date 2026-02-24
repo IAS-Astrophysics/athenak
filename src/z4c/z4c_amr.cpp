@@ -30,6 +30,8 @@ Z4c_AMR::Z4c_AMR(ParameterInput *pin) {
     method = Trivial;
   } else if (ref_method == "tracker") {
     method = Tracker;
+  } else if (ref_method == "tracker_clamp") {
+    method = TrackerClamp;
   } else if (ref_method == "chi") {
     method = Chi;
     chi_thresh = pin->GetOrAddReal("z4c_amr", "chi_min", 0.2);
@@ -59,6 +61,8 @@ Z4c_AMR::Z4c_AMR(ParameterInput *pin) {
 void Z4c_AMR::Refine(MeshBlockPack *pmy_pack) {
   if (method == Tracker) {
     RefineTracker(pmy_pack);
+  } else if (method == TrackerClamp) {
+    RefineTrackerClamp(pmy_pack);
   } else if (method == Chi) {
     RefineChiMin(pmy_pack);
   } else if (method == dChi) {
@@ -264,6 +268,68 @@ void Z4c_AMR::RefineRadii(MeshBlockPack *pmbp) {
         }
       }
     }
+  }
+
+  // sync host and device
+  refine_flag.template modify<HostMemSpace>();
+  refine_flag.template sync<DevExeSpace>();
+}
+
+// refine region within a certain distance from each compact object
+// using exact minimum distance via AABB clamping, which correctly handles
+// all cases: tracker nearest to a face, edge, or corner of the block.
+void Z4c_AMR::RefineTrackerClamp(MeshBlockPack *pmbp) {
+  Mesh *pmesh       = pmbp->pmesh;
+  auto &refine_flag = pmesh->pmr->refine_flag;
+  auto &size        = pmbp->pmb->mb_size;
+  int nmb           = pmbp->nmb_thispack;
+  int mbs           = pmesh->gids_eachrank[global_variable::my_rank];
+
+  std::vector<int> flag;
+  flag.reserve(pmbp->pz4c->ptracker.size());
+
+  for (int m = 0; m < nmb; ++m) {
+    int level = pmesh->lloc_eachmb[m + mbs].level - pmesh->root_level;
+
+    Real &x1min = size.h_view(m).x1min;
+    Real &x1max = size.h_view(m).x1max;
+    Real &x2min = size.h_view(m).x2min;
+    Real &x2max = size.h_view(m).x2max;
+    Real &x3min = size.h_view(m).x3min;
+    Real &x3max = size.h_view(m).x3max;
+
+    flag.clear();
+    for (auto &pt : pmbp->pz4c->ptracker) {
+      Real px = pt->GetPos(0);
+      Real py = pt->GetPos(1);
+      Real pz = pt->GetPos(2);
+
+      // clamp tracker position to box bounds: closest point on the box
+      Real cx = fmax(x1min, fmin(px, x1max));
+      Real cy = fmax(x2min, fmin(py, x2max));
+      Real cz = fmax(x3min, fmin(pz, x3max));
+
+      Real dmin2 = SQ(px - cx) + SQ(py - cy) + SQ(pz - cz);
+
+      // safety net for radius = 0: dmin2 = 0 inside the block but 0 < SQ(0) is false
+      bool iscontained =
+        (px >= x1min && px <= x1max) &&
+        (py >= x2min && py <= x2max) &&
+        (pz >= x3min && pz <= x3max);
+
+      if (dmin2 < SQ(pt->GetRadius()) || iscontained) {
+        if (pt->GetReflevel() < 0 || level < pt->GetReflevel()) {
+          flag.push_back(1);
+        } else if (level == pt->GetReflevel()) {
+          flag.push_back(0);
+        } else {
+          flag.push_back(-1);
+        }
+      } else {
+        flag.push_back(-1);
+      }
+    }
+    refine_flag.h_view(m + mbs) = *std::max_element(flag.begin(), flag.end());
   }
 
   // sync host and device
