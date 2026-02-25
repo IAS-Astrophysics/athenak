@@ -335,15 +335,16 @@ Mesh::Mesh(ParameterInput *pin) :
 // destructor
 
 Mesh::~Mesh() {
-  delete [] cost_eachmb;
-  delete [] rank_eachmb;
-  delete [] lloc_eachmb;
-  delete [] gids_eachrank;
-  delete [] nmb_eachrank;
-  delete pmb_pack;
+  if (pmb_pack->ppart != nullptr) {delete [] nprtcl_eachrank;}
   if (multilevel) {
     delete pmr;
   }
+  delete pmb_pack;
+  delete [] nmb_eachrank;
+  delete [] gids_eachrank;
+  delete [] lloc_eachmb;
+  delete [] rank_eachmb;
+  delete [] cost_eachmb;
 }
 
 void Mesh::SetRestartFileInfo(const std::string &base_dir,

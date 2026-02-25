@@ -51,18 +51,18 @@ MeshBlockPack::MeshBlockPack(Mesh *pm, int igids, int igide) :
 // MeshBlock destructor
 
 MeshBlockPack::~MeshBlockPack() {
-  delete pcoord;
-  if (phydro != nullptr) {delete phydro;}
-  if (pmhd   != nullptr) {delete pmhd;}
-  if (padm   != nullptr) {delete padm;}
-  if (ptmunu != nullptr) {delete ptmunu;}
-  if (prad   != nullptr) {delete prad;}
-  if (pdyngr != nullptr) {delete pdyngr;}
-  if (pnr    != nullptr) {delete pnr;}
-  if (pturb  != nullptr) {delete pturb;}
-  if (punit  != nullptr) {delete punit;}
-  if (pz4c   != nullptr) {delete pz4c;}
   if (ppart  != nullptr) {delete ppart;}
+  if (pnr    != nullptr) {delete pnr;}
+  if (pdyngr != nullptr) {delete pdyngr;}
+  if (ptmunu != nullptr) {delete ptmunu;}
+  if (padm   != nullptr) {delete padm;}
+  if (pz4c   != nullptr) {delete pz4c;}
+  if (pturb  != nullptr) {delete pturb;}
+  if (prad   != nullptr) {delete prad;}
+  if (pmhd   != nullptr) {delete pmhd;}
+  if (phydro != nullptr) {delete phydro;}
+  if (punit  != nullptr) {delete punit;}
+  delete pcoord;
   // must be last, since it calls ~BoundaryValues() which (MPI) uses pmy_pack->pmb->nnghbr
   delete pmb;
 }
@@ -221,7 +221,7 @@ void MeshBlockPack::AddPhysics(ParameterInput *pin) {
     pnr->AssembleNumericalRelativityTasks(tl_map);
   }
 
-  // (8) PARTICLES
+  // (9) PARTICLES
   // Create particles module.  Create tasklist.
   if (pin->DoesBlockExist("particles")) {
     ppart = new particles::Particles(this, pin);

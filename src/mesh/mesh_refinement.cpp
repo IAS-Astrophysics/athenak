@@ -601,6 +601,7 @@ void MeshRefinement::RedistAndRefineMeshBlocks(ParameterInput *pin, int nnew, in
   if (pz4c != nullptr) {
     CopyCC(pz4c->u0);
   }
+
   // Step 7.
   // Copy evolved physics variables for MBs flagged for refinement from source fine array
   // to target coarse array, when both are on same rank.
@@ -1457,6 +1458,7 @@ void MeshRefinement::RefineParticles() {
     Real x2 = pr(IPY, p);
     Real x3 = pr(IPZ, p);
     int m = pi(PGID, p) - gids;
+    if (m < 0 || m >= nmb) return;
     bool in_place = false;
     if (x1 >= mbsize.d_view(m).x1min && x1 < mbsize.d_view(m).x1max &&
         x2 >= mbsize.d_view(m).x2min && x2 < mbsize.d_view(m).x2max &&
@@ -1467,10 +1469,11 @@ void MeshRefinement::RefineParticles() {
       int newm;
       for (int n = 1; n < nleaf; ++n) {
         newm = m + n;
+	if (newm >= nmb) break;
         if (x1 >= mbsize.d_view(newm).x1min && x1 < mbsize.d_view(newm).x1max &&
             x2 >= mbsize.d_view(newm).x2min && x2 < mbsize.d_view(newm).x2max &&
             x3 >= mbsize.d_view(newm).x3min && x3 < mbsize.d_view(newm).x3max) {
-          pi(PGID, p) = gids + m;
+          pi(PGID, p) = gids + newm;
           in_place = true;
 	  break;
         }
@@ -1483,6 +1486,3 @@ void MeshRefinement::RefineParticles() {
 
   return;
 }
-
-
-
