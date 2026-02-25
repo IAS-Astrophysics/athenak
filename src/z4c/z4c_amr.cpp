@@ -81,8 +81,10 @@ void Z4c_AMR::RefineTracker(MeshBlockPack *pmbp) {
   flag.reserve(pmbp->pz4c->ptracker.size());
 
   for (int m = 0; m < nmb; ++m) {
+    // current refinement level
     int level = pmesh->lloc_eachmb[m + mbs].level - pmesh->root_level;
 
+    // extract MeshBlock bounds
     Real &x1min = size.h_view(m).x1min;
     Real &x1max = size.h_view(m).x1max;
     Real &x2min = size.h_view(m).x2min;
@@ -92,22 +94,20 @@ void Z4c_AMR::RefineTracker(MeshBlockPack *pmbp) {
 
     flag.clear();
     for (auto &pt : pmbp->pz4c->ptracker) {
-      Real px = pt->GetPos(0);
-      Real py = pt->GetPos(1);
-      Real pz = pt->GetPos(2);
-
       // clamp tracker position to box bounds: closest point on the box
-      Real cx = fmax(x1min, fmin(px, x1max));
-      Real cy = fmax(x2min, fmin(py, x2max));
-      Real cz = fmax(x3min, fmin(pz, x3max));
+      Real cx = fmax(x1min, fmin(pt->GetPos(0), x1max));
+      Real cy = fmax(x2min, fmin(pt->GetPos(1), x2max));
+      Real cz = fmax(x3min, fmin(pt->GetPos(2), x3max));
 
-      Real dmin2 = SQ(px - cx) + SQ(py - cy) + SQ(pz - cz);
+      Real dmin2 = SQ(pt->GetPos(0) - cx) \
+                   + SQ(pt->GetPos(1) - cy) \
+                   + SQ(pt->GetPos(2) - cz);
 
       // safety net for radius = 0: dmin2 = 0 inside the block but 0 < SQ(0) is false
       bool iscontained =
-        (px >= x1min && px <= x1max) &&
-        (py >= x2min && py <= x2max) &&
-        (pz >= x3min && pz <= x3max);
+        (pt->GetPos(0) >= x1min && pt->GetPos(0) <= x1max) &&
+        (pt->GetPos(1) >= x2min && pt->GetPos(1) <= x2max) &&
+        (pt->GetPos(2) >= x3min && pt->GetPos(2) <= x3max);
 
       if (dmin2 < SQ(pt->GetRadius()) || iscontained) {
         if (pt->GetReflevel() < 0 || level < pt->GetReflevel()) {
