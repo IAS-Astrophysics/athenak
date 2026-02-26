@@ -17,6 +17,7 @@
 #include "radiation_m1_helpers.hpp"
 #include "radiation_m1_nurates.hpp"
 #include "radiation_m1_sources.hpp"
+#include "radiation_m1_closure.hpp"
 #include "z4c/z4c.hpp"
 
 namespace radiationm1 {
@@ -459,7 +460,8 @@ TaskStatus RadiationM1::TimeUpdate_(Driver *d, int stage) {
 
               // Update Tmunu
               const Real H2 = tensor_dot(g_uu, Hnew_d, Hnew_d);
-              chi_(m, nuidx, k, j, i) = 1. / 3.;
+              const Real xi = Kokkos::sqrt(H2)*(Jnew > params_.rad_E_floor ? 1./Jnew : 0.);
+              chi_(m, nuidx, k, j, i) = closure_fun(xi, params_.closure_type);
 
               const Real dthick = 3. * (1. - chi_(m, nuidx, k, j, i)) / 2.;
               const Real dthin = 1. - dthick;

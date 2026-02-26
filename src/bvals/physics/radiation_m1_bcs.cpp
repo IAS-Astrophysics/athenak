@@ -76,6 +76,22 @@ void MeshBoundaryValues::RadiationM1BCs(MeshBlockPack *ppack,
               }
             }
             break;
+          case BoundaryFlag::diode:
+            for (int i = 0; i < ng; ++i) {
+              i0(m, radiationm1::CombinedIdx(nuidx, M1_E_IDX, nvars_), k, j, is - i - 1) = i0(m,
+               radiationm1::CombinedIdx(nuidx, M1_E_IDX, nvars_), k, j, is);
+              i0(m, radiationm1::CombinedIdx(nuidx, M1_FX_IDX, nvars_), k, j, is - i - 1) =  
+               fmin(0.0, i0(m, radiationm1::CombinedIdx(nuidx, M1_FX_IDX, nvars_), k, j, is));
+              i0(m, radiationm1::CombinedIdx(nuidx, M1_FY_IDX, nvars_), k, j, is - i - 1) = i0(m,
+               radiationm1::CombinedIdx(nuidx, M1_FY_IDX, nvars_), k, j, is);
+              i0(m, radiationm1::CombinedIdx(nuidx, M1_FZ_IDX, nvars_), k, j, is - i - 1) = i0(m,
+               radiationm1::CombinedIdx(nuidx, M1_FZ_IDX, nvars_), k, j, is);
+              if (nspecies_ > 1) {
+                i0(m, radiationm1::CombinedIdx(nuidx, M1_N_IDX, nvars_), k, j, is - i - 1) = i0(m,
+                 radiationm1::CombinedIdx(nuidx, M1_N_IDX, nvars_), k, j, is);
+              }
+            }
+            break;          
           case BoundaryFlag::vacuum:
             for (int i = 0; i < ng; ++i) {
               i0(m, radiationm1::CombinedIdx(nuidx, M1_E_IDX, nvars_), k, j, is - i - 1) = params_.rad_E_floor;
@@ -126,6 +142,22 @@ void MeshBoundaryValues::RadiationM1BCs(MeshBlockPack *ppack,
               }
             }
             break;
+          case BoundaryFlag::diode:
+            for (int i = 0; i < ng; ++i) {
+              i0(m, radiationm1::CombinedIdx(nuidx, M1_E_IDX, nvars_), k, j, ie + i + 1) = i0(m,
+               radiationm1::CombinedIdx(nuidx, M1_E_IDX, nvars_), k, j, ie);
+              i0(m, radiationm1::CombinedIdx(nuidx, M1_FX_IDX, nvars_), k, j, ie + i + 1) =  
+               fmax(0.0, i0(m, radiationm1::CombinedIdx(nuidx, M1_FX_IDX, nvars_), k, j, ie));
+              i0(m, radiationm1::CombinedIdx(nuidx, M1_FY_IDX, nvars_), k, j, ie + i + 1) = i0(m,
+               radiationm1::CombinedIdx(nuidx, M1_FY_IDX, nvars_), k, j, ie);
+              i0(m, radiationm1::CombinedIdx(nuidx, M1_FZ_IDX, nvars_), k, j, ie + i + 1) = i0(m,
+               radiationm1::CombinedIdx(nuidx, M1_FZ_IDX, nvars_), k, j, ie);
+              if (nspecies_ > 1) {
+                i0(m, radiationm1::CombinedIdx(nuidx, M1_N_IDX, nvars_), k, j, ie + i + 1) = i0(m,
+                 radiationm1::CombinedIdx(nuidx, M1_N_IDX, nvars_), k, j, ie);
+              }
+            }
+            break; 
           case BoundaryFlag::vacuum:
             for (int i = 0; i < ng; ++i) {
               i0(m, radiationm1::CombinedIdx(nuidx, M1_E_IDX, nvars_), k, j, ie + i + 1) = params_.rad_E_floor;
@@ -185,6 +217,23 @@ void MeshBoundaryValues::RadiationM1BCs(MeshBlockPack *ppack,
                  radiationm1::CombinedIdx(nuidx, M1_N_IDX, nvars_), k, js, i);
               }
             }
+            break;
+          case BoundaryFlag::diode:
+            for (int j = 0; j < ng; ++j) {
+              i0(m, radiationm1::CombinedIdx(nuidx, M1_E_IDX, nvars_), k, js - j - 1, i) = i0(m,
+               radiationm1::CombinedIdx(nuidx, M1_E_IDX, nvars_), k, js, i);
+              i0(m, radiationm1::CombinedIdx(nuidx, M1_FY_IDX, nvars_), k, js - j - 1, i) =  
+               fmin(0.0, i0(m, radiationm1::CombinedIdx(nuidx, M1_FY_IDX, nvars_), k, js, i));
+              i0(m, radiationm1::CombinedIdx(nuidx, M1_FX_IDX, nvars_), k, js - j - 1, i) = i0(m,
+               radiationm1::CombinedIdx(nuidx, M1_FX_IDX, nvars_), k, js, i);
+              i0(m, radiationm1::CombinedIdx(nuidx, M1_FZ_IDX, nvars_), k, js - j - 1, i) = i0(m,
+               radiationm1::CombinedIdx(nuidx, M1_FZ_IDX, nvars_), k, js, i);
+              if (nspecies_ > 1) {
+                i0(m, radiationm1::CombinedIdx(nuidx, M1_N_IDX, nvars_), k, js - j - 1, i) = i0(m,
+                 radiationm1::CombinedIdx(nuidx, M1_N_IDX, nvars_), k, js, i);
+              }
+            }
+            break;
           case BoundaryFlag::vacuum:
             for (int j = 0; j < ng; ++j) {
               i0(m, radiationm1::CombinedIdx(nuidx, M1_E_IDX, nvars_), k, js - j - 1, i) = params_.rad_E_floor;
@@ -226,6 +275,22 @@ void MeshBoundaryValues::RadiationM1BCs(MeshBlockPack *ppack,
                radiationm1::CombinedIdx(nuidx, M1_FX_IDX, nvars_), k, je, i);
               i0(m, radiationm1::CombinedIdx(nuidx, M1_FY_IDX, nvars_), k, je + j + 1, i) = i0(m,
                radiationm1::CombinedIdx(nuidx, M1_FY_IDX, nvars_), k, je, i);
+              i0(m, radiationm1::CombinedIdx(nuidx, M1_FZ_IDX, nvars_), k, je + j + 1, i) = i0(m,
+               radiationm1::CombinedIdx(nuidx, M1_FZ_IDX, nvars_), k, je, i);
+              if (nspecies_ > 1) {
+                i0(m, radiationm1::CombinedIdx(nuidx, M1_N_IDX, nvars_), k, je + j + 1, i) = i0(m,
+                 radiationm1::CombinedIdx(nuidx, M1_N_IDX, nvars_), k, je, i);
+              }
+            }
+            break;
+          case BoundaryFlag::diode:
+            for (int j = 0; j < ng; ++j) {
+              i0(m, radiationm1::CombinedIdx(nuidx, M1_E_IDX, nvars_), k, je + j + 1, i) = i0(m,
+               radiationm1::CombinedIdx(nuidx, M1_E_IDX, nvars_), k, je, i);
+              i0(m, radiationm1::CombinedIdx(nuidx, M1_FY_IDX, nvars_), k, je + j + 1, i) =  
+               fmax(0.0, i0(m, radiationm1::CombinedIdx(nuidx, M1_FY_IDX, nvars_), k, je, i));
+              i0(m, radiationm1::CombinedIdx(nuidx, M1_FX_IDX, nvars_), k, je + j + 1, i) = i0(m,
+               radiationm1::CombinedIdx(nuidx, M1_FX_IDX, nvars_), k, je, i);
               i0(m, radiationm1::CombinedIdx(nuidx, M1_FZ_IDX, nvars_), k, je + j + 1, i) = i0(m,
                radiationm1::CombinedIdx(nuidx, M1_FZ_IDX, nvars_), k, je, i);
               if (nspecies_ > 1) {
@@ -295,6 +360,22 @@ void MeshBoundaryValues::RadiationM1BCs(MeshBlockPack *ppack,
               }
             }
           break;
+        case BoundaryFlag::diode:
+          for (int k = 0; k < ng; ++k) {
+            i0(m, radiationm1::CombinedIdx(nuidx, M1_E_IDX, nvars_), ks - k - 1, j, i) = i0(m,
+              radiationm1::CombinedIdx(nuidx, M1_E_IDX, nvars_), ks, j, i);
+            i0(m, radiationm1::CombinedIdx(nuidx, M1_FZ_IDX, nvars_), ks - k - 1, j, i) =  
+              fmin(0.0, i0(m, radiationm1::CombinedIdx(nuidx, M1_FZ_IDX, nvars_), ks, j, i));
+            i0(m, radiationm1::CombinedIdx(nuidx, M1_FX_IDX, nvars_), ks - k - 1, j, i) = i0(m,
+              radiationm1::CombinedIdx(nuidx, M1_FX_IDX, nvars_), ks, j, i);
+            i0(m, radiationm1::CombinedIdx(nuidx, M1_FY_IDX, nvars_), ks - k - 1, j, i) = i0(m,
+              radiationm1::CombinedIdx(nuidx, M1_FY_IDX, nvars_), ks, j, i);
+            if (nspecies_ > 1) {
+              i0(m, radiationm1::CombinedIdx(nuidx, M1_N_IDX, nvars_), ks - k - 1, j, i) = i0(m,
+                radiationm1::CombinedIdx(nuidx, M1_N_IDX, nvars_), ks, j, i);
+            }
+          }
+          break;
         case BoundaryFlag::vacuum:
           for (int k = 0; k < ng; ++k) {
               i0(m, radiationm1::CombinedIdx(nuidx, M1_E_IDX, nvars_), ks - k - 1, j, i) = params_.rad_E_floor;
@@ -343,6 +424,22 @@ void MeshBoundaryValues::RadiationM1BCs(MeshBlockPack *ppack,
                  radiationm1::CombinedIdx(nuidx, M1_N_IDX, nvars_), ke, j, i);
               }
             }
+          break;
+        case BoundaryFlag::diode:
+          for (int k = 0; k < ng; ++k) {
+            i0(m, radiationm1::CombinedIdx(nuidx, M1_E_IDX, nvars_), ke + k + 1, j, i) = i0(m,
+              radiationm1::CombinedIdx(nuidx, M1_E_IDX, nvars_), ke, j, i);
+            i0(m, radiationm1::CombinedIdx(nuidx, M1_FZ_IDX, nvars_), ke + k + 1, j, i) =  
+              fmax(0.0, i0(m, radiationm1::CombinedIdx(nuidx, M1_FZ_IDX, nvars_), ke, j, i));
+            i0(m, radiationm1::CombinedIdx(nuidx, M1_FX_IDX, nvars_), ke + k + 1, j, i) = i0(m,
+              radiationm1::CombinedIdx(nuidx, M1_FX_IDX, nvars_), ke, j, i);
+            i0(m, radiationm1::CombinedIdx(nuidx, M1_FY_IDX, nvars_), ke + k + 1, j, i) = i0(m,
+              radiationm1::CombinedIdx(nuidx, M1_FY_IDX, nvars_), ke, j, i);
+            if (nspecies_ > 1) {
+              i0(m, radiationm1::CombinedIdx(nuidx, M1_N_IDX, nvars_), ke + k + 1, j, i) = i0(m,
+                radiationm1::CombinedIdx(nuidx, M1_N_IDX, nvars_), ke, j, i);
+            }
+          }
           break;
         case BoundaryFlag::vacuum:
           for (int k = 0; k < ng; ++k) {

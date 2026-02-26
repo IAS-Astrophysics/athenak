@@ -202,6 +202,8 @@ TaskStatus RadiationM1::CalcOpacityNurates_(Driver *pdrive, int stage) {
           Real p = w0_(m, IPR, k, j, i);
           Real Y = w0_(m, IYF, k, j, i);
           Real T = eos.GetTemperatureFromP(nb, p, &Y);
+          Real yp = eos.GetProtonFraction(nb, T, &Y);
+          Real yn = eos.GetNeutronFraction(nb, T, &Y);
           Real mu_b = eos.GetBaryonChemicalPotential(nb, T, &Y);
           Real mu_q = eos.GetChargeChemicalPotential(nb, T, &Y);
           Real mu_le = eos.GetElectronLeptonChemicalPotential(nb, T, &Y);
@@ -216,7 +218,7 @@ TaskStatus RadiationM1::CalcOpacityNurates_(Driver *pdrive, int stage) {
           Real scat_0_loc[4]{}, scat_1_loc[4]{};
 
           // Note: everything sent and received are in code units
-          bns_nurates(nb, T, Y, mu_n, mu_p, mu_e, nudens_0, nudens_1, chi_loc,
+          bns_nurates(nb, T, yp, yn, mu_n, mu_p, mu_e, nudens_0, nudens_1, chi_loc,
                       eta_0_loc, eta_1_loc, abs_0_loc, abs_1_loc, scat_0_loc,
                       scat_1_loc, nurates_params_, code_units, eos_units,
                       nurates_units);
@@ -286,7 +288,7 @@ TaskStatus RadiationM1::CalcOpacityNurates_(Driver *pdrive, int stage) {
               bool res = eos.GetBetaEquilibriumTrapped(
                   nb, e, Y_lep, temperature_trap, &Y_e_trap[0], T, Y_guess);
 
-              if (!res) {
+              if (res) {
                 // trying to recompute weak equilibrium neglecting current
                 // neutrino data
                 Real e_zero = eos.GetEnergy(nb, T, Y_part);
