@@ -133,7 +133,10 @@ void MeshRefinement::InitRecvAMR(int nleaf) {
   if (nmb_recv == 0) return;  // nothing to do
 
   // allocate array of recv buffers
-  Kokkos::realloc(recvbuf, nmb_recv);
+  //Kokkos::realloc(recvbuf, nmb_recv);
+  if ((int)recvbuf.h_view.extent(0) < nmb_recv) {
+    Kokkos::realloc(recvbuf, nmb_recv);
+  }
   recv_req = new MPI_Request[nmb_recv];
   for (int n=0; n<nmb_recv; ++n) {
     recv_req[n] = MPI_REQUEST_NULL;
@@ -266,7 +269,10 @@ void MeshRefinement::InitRecvAMR(int nleaf) {
   recvbuf.template sync<DevExeSpace>();
   {
     int ndata = recvbuf.h_view((nmb_recv-1)).offset + recvbuf.h_view((nmb_recv-1)).cnt;
-    Kokkos::realloc(recv_data, ndata);
+    //Kokkos::realloc(recv_data, ndata);
+    if ((int)recv_data.extent(0) < ndata) {
+      Kokkos::realloc(recv_data, ndata);
+    }
   }
 
   // Step 3. (InitRecvAMR)
@@ -391,7 +397,10 @@ void MeshRefinement::PackAndSendAMR(int nleaf) {
   if (nmb_send == 0) return;  // nothing to do
 
   // allocate array of send buffers
-  Kokkos::realloc(sendbuf, nmb_send);
+  //Kokkos::realloc(sendbuf, nmb_send);
+  if ((int)sendbuf.h_view.extent(0) < nmb_send) {
+    Kokkos::realloc(sendbuf, nmb_send);
+  }
   send_req = new MPI_Request[nmb_send];
   for (int n=0; n<nmb_send; ++n) {
     send_req[n] = MPI_REQUEST_NULL;
@@ -526,7 +535,10 @@ void MeshRefinement::PackAndSendAMR(int nleaf) {
   sendbuf.template sync<DevExeSpace>();
   {
     int ndata = sendbuf.h_view((nmb_send-1)).offset + sendbuf.h_view((nmb_send-1)).cnt;
-    Kokkos::realloc(send_data, ndata);
+    //Kokkos::realloc(send_data, ndata);
+    if ((int)send_data.extent(0) < ndata) {
+      Kokkos::realloc(send_data, ndata);
+    }
   }
 
   // Step 3. (PackAndSendAMR)

@@ -202,12 +202,12 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   }
 
   // Count total particles and initialize SN centers buffer
-  //pmy_mesh_->CountParticles();
-  //sn_centers_buffer = DvceArray2D<Real>("sn_centers_buffer", 3, pmy_mesh_->nprtcl_total);
-  //if (global_variable::my_rank==0) {
-  //  std::cout << "Successfully initialized " << pmy_mesh_->nprtcl_total
-  //            << " particles!" << std::endl;
-  //}
+  pmy_mesh_->CountParticles();
+  sn_centers_buffer = DvceArray2D<Real>("sn_centers_buffer", 3, pmy_mesh_->nprtcl_total);
+  if (global_variable::my_rank==0) {
+    std::cout << "Successfully initialized " << pmy_mesh_->nprtcl_total
+              << " particles!" << std::endl;
+  }
 
   if (restart) return;
 
@@ -582,7 +582,7 @@ void SetEquilibriumState(const DvceArray5D<Real> &u0,
 //===========================================================================//
 
 void UserSource(Mesh* pm, const Real bdt) {
-  //SNSource(pm, bdt);
+  SNSource(pm, bdt);
   GravitySource(pm, bdt);
   DensityCeilingSource(pm, bdt);
 
@@ -1045,5 +1045,5 @@ void FreeProfile(ParameterInput *pin, Mesh *pm) {
   // Free Kokkos views before Kokkos::finalize is called
   profile_reader.~ProfileReader();
   disk_profile_reader.~ProfileReader();
-  //sn_centers_buffer = DvceArray2D<Real>();
+  sn_centers_buffer = DvceArray2D<Real>();
 }
