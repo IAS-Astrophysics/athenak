@@ -184,6 +184,30 @@ void EOSCompOSE<LogPolicy>::ReadTableFromFile(std::string fname) {
       }
     }
 
+    { // Read proton fraction -> Y[p]
+      Real * table_yq = table["Y[p]"];
+      for (size_t in=0; in<m_nn; ++in) {
+        for (size_t iy=0; iy<m_ny; ++iy) {
+          for (size_t it=0; it<m_nt; ++it) {
+            size_t iflat = it + m_nt*(iy + m_ny*in);
+            host_table(ECYP,in,iy,it) = table_yq[iflat];
+          }
+        }
+      }
+    }
+
+    { // Read neutron fraction -> Y[n]
+      Real * table_yq = table["Y[n]"];
+      for (size_t in=0; in<m_nn; ++in) {
+        for (size_t iy=0; iy<m_ny; ++iy) {
+          for (size_t it=0; it<m_nt; ++it) {
+            size_t iflat = it + m_nt*(iy + m_ny*in);
+            host_table(ECYN,in,iy,it) = table_yq[iflat];
+          }
+        }
+      }
+    }
+
     // Copy from host to device
     Kokkos::deep_copy(m_log_nb, host_log_nb);
     Kokkos::deep_copy(m_yq,     host_yq);

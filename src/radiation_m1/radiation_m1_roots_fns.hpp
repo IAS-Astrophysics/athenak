@@ -152,8 +152,8 @@ KOKKOS_INLINE_FUNCTION void source_jacobian(
   Real Jxy = -alpha * (kapas * HxdFy + W * kapa * vx * JdFy);
   Real Jxz = -alpha * (kapas * HxdFz + W * kapa * vx * JdFz);
 
-  Real Jyy = -alpha * (kapas * HydFx + W * kapa * vy * JdFx);
-  Real Jyx = -alpha * (kapas * HydFy + W * kapa * vy * JdFy);
+  Real Jyx = -alpha * (kapas * HydFx + W * kapa * vy * JdFx);
+  Real Jyy = -alpha * (kapas * HydFy + W * kapa * vy * JdFy);
   Real Jyz = -alpha * (kapas * HydFz + W * kapa * vy * JdFz);
 
   Real Jzx = -alpha * (kapas * HzdFx + W * kapa * vz * JdFx);
@@ -164,7 +164,7 @@ KOKKOS_INLINE_FUNCTION void source_jacobian(
   J[0][0] = 1 - cdt * J00;
   J[0][1] = -cdt * J0x;
   J[0][2] = -cdt * J0y;
-  J[0][2] = -cdt * J0z;
+  J[0][3] = -cdt * J0z;
   J[1][0] = -cdt * Jx0;
   J[1][1] = 1 - cdt * Jxx;
   J[1][2] = -cdt * Jxy;
