@@ -433,6 +433,7 @@ void Driver::Execute(Mesh *pmesh, ParameterInput *pin, Outputs *pout) {
       if (wall_time > 0.) {
         elapsed_time = UpdateWallClock();
       }
+
     }  // end while
   }    // end of (time_evolution != tstatic) clause
   return;
@@ -517,7 +518,8 @@ void Driver::OutputCycleDiagnostics(Mesh *pm) {
     Real elapsed = pwall_clock_->seconds();
     std::cout << "elapsed=" << std::scientific << std::setprecision(dtprcsn) << elapsed
               << " cycle=" << pm->ncycle
-              << " time=" << pm->time << " dt=" << pm->dt << std::endl;
+              << " time=" << pm->time << " dt=" << pm->dt
+              << " nmb=" << pm->nmb_total << std::endl;
   }
   return;
 }
