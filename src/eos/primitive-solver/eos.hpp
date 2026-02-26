@@ -312,6 +312,38 @@ class EOS : public EOSPolicy, public ErrorPolicy {
    }
   }
 
+    //! \fn Real GetProtonFraction(Real n, Real T, Real *Y)
+  //  \brief Get the proton fraction from the number density, temperature,
+  //         and particle fractions.
+  //
+  //  \param[in] n  The number density
+  //  \param[in] T  The temperature
+  //  \param[in] Y  An array of size n_species of the particle fractions.
+  //  \return The proton fraction for the EOS.
+  KOKKOS_INLINE_FUNCTION Real GetProtonFraction(Real n, Real T, Real *Y) const {
+   if constexpr (supports_potentials) {
+    return EOSPolicy::ProtonFraction(n, T*code_units.TemperatureConversion(eos_units), Y);
+    } else {
+    return std::numeric_limits<Real>::quiet_NaN();
+    }
+  }
+
+    //! \fn Real GetNeutronFraction(Real n, Real T, Real *Y)
+  //  \brief Get the neutron fraction from the number density, temperature,
+  //         and particle fractions.
+  //
+  //  \param[in] n  The number density
+  //  \param[in] T  The temperature
+  //  \param[in] Y  An array of size n_species of the particle fractions.
+  //  \return The proton fraction for the EOS.
+  KOKKOS_INLINE_FUNCTION Real GetNeutronFraction(Real n, Real T, Real *Y) const {
+   if constexpr (supports_potentials) {
+    return EOSPolicy::NeutronFraction(n, T*code_units.TemperatureConversion(eos_units), Y);
+    } else {
+    return std::numeric_limits<Real>::quiet_NaN();
+    }
+  }
+
     //! \fn Real GetBetaEquilibriumTrapped(Real n, Real e, Real *Yl, Real &T_eq, Real *Y_eq, Real T_guess, Real *Y_guess) 
   // \brief Get the equilibrium temperature and species fractions from the energy and total lepton fractions
   //

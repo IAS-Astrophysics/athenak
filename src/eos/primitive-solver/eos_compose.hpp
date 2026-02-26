@@ -42,7 +42,9 @@ class EOSCompOSE : public EOSPolicyInterface, public LogPolicy, public SupportsE
     ECMUL   = 4,  //! lepton chemical potential [MeV]
     ECLOGE  = 5,  //! log (total energy density / 1 MeV fm^-3)
     ECCS    = 6,  //! sound speed [c]
-    ECNVARS = 7
+    ECYP    = 7,  //! proton fraction
+    ECYN    = 8,  //! neutron fraction
+    ECNVARS = 9
   };
 
  protected:
@@ -166,6 +168,18 @@ class EOSCompOSE : public EOSPolicyInterface, public LogPolicy, public SupportsE
     return eval_at_nty(ECMUL, n, T, Y[0]);
   }
 
+  /// Calculate the proton fraction
+  KOKKOS_INLINE_FUNCTION Real ProtonFraction(Real n, Real T, Real *Y) const {
+    assert (m_initialized);
+    return eval_at_nty(ECYP, n, T, Y[0]);
+  }
+
+  /// Calculate the neutron fraction
+  KOKKOS_INLINE_FUNCTION Real NeutronFraction(Real n, Real T, Real *Y) const {
+    assert (m_initialized);
+    return eval_at_nty(ECYN, n, T, Y[0]);
+  }
+
   /// Calculate hot (neutrino trapped) beta equilibrium T_eq and Y_eq given n, e, and Yl
   KOKKOS_INLINE_FUNCTION int BetaEquilibriumTrapped(Real n, Real e, Real *Yl, Real &T_eq, Real *Y_eq, Real T_guess, Real *Y_guess) const {
     const int n_at = 16;
@@ -206,7 +220,7 @@ class EOSCompOSE : public EOSPolicyInterface, public LogPolicy, public SupportsE
 
     if (ierr==0){ // Success
       T_eq = x1[0];
-      Y_eq[0] = x1[1];
+      Y_eq[0] = x1[1]; // Maybe in the future we could explicitly conserve the lepton numbers
     } else {      // Failure
       T_eq = T_guess;       // Set results to guesses
       Y_eq[0] = Y_guess[0];
@@ -658,13 +672,14 @@ class EOSCompOSE : public EOSPolicyInterface, public LogPolicy, public SupportsE
 
     Real T2 = T*T;
     Real T3 = T2*T;
-    // Real T4 = T3*T;
+    Real T4 = T3*T;
 
     J[0][0] = nu_n_prefactor/n*T2*(3.e0*eta*(pi2+eta2)+T*(pi2+3.e0*eta2)*detadt);
     J[0][1] = 1.e0+nu_n_prefactor/n*T3*(pi2+3.e0*eta2)*detadye;
 
     J[1][0] = (dedt+nu_e_prefactor*T3*(nu_7pi4_15+nu_14pi4_15+2.e0*eta2*(pi2+0.5*eta2)+eta*T*(pi2+eta2)*detadt))/e_eq;
-    J[1][1] = (dedye+nu_e_prefactor*T3*eta*(pi2+eta2)*detadye)/e_eq;
+    // Below was changed to T4 from T3 to be consistent with the dimensional analysis.
+    J[1][1] = (dedye+nu_e_prefactor*T4*eta*(pi2+eta2)*detadye)/e_eq;
 
     return ierr;
   }

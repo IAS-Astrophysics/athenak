@@ -56,7 +56,7 @@ struct NuratesParams {
   MyQuadrature quadrature_2;
 };
 
-//! \fn void bns_nurates(Real &nb, Real &temp, Real &ye, Real &mu_n, Real &mu_p,
+//! \fn void bns_nurates(Real &nb, Real &temp, Real &yp, Real &yn, Real &mu_n, Real &mu_p,
 //!                      Real &mu_e, Real &n_nue, Real &j_nue, Real &chi_nue,
 //!                      Real &n_anue, Real &j_anue, Real &chi_anue, Real &n_nux,
 //!                      Real &j_nux, Real &chi_nux, Real &n_anux, Real &j_anux,
@@ -77,7 +77,8 @@ struct NuratesParams {
 //
 //   \param[in] nb              baryon number density (fm^-3)
 //   \param[in] temp            temperature (MeV)
-//   \param[in] ye              electron fraction (dimensionless)
+//   \param[in] yp              proton fraction (dimensionless)
+//   \param[in] yn              neutron fraction (dimensionless)
 //   \param[in] mu_n            neutron chemical potential (MeV)
 //   \param[in] mu_p            proton chemical potential (MeV)
 //   \param[in] mu_e            electron chemical potential (MeV)
@@ -124,7 +125,7 @@ struct NuratesParams {
 //   \param[in]  nurates_units   bns_nurates units
 
 KOKKOS_INLINE_FUNCTION
-void bns_nurates(Real &nb, Real &temp, Real &ye, Real &mu_n, Real &mu_p, Real &mu_e,
+void bns_nurates(Real &nb, Real &temp, Real &yp, Real &yn, Real &mu_n, Real &mu_p, Real &mu_e,
                  Real nudens_0[4],
                  Real nudens_1[4],
                  Real chi[4],
@@ -232,8 +233,8 @@ void bns_nurates(Real &nb, Real &temp, Real &ye, Real &mu_n, Real &mu_p, Real &m
   // populate EOS quantities
   grey_op_params.eos_pars.nb = nb * unit_num_dens;  // [baryon/nm^3]
   grey_op_params.eos_pars.temp = temp;              // [MeV]
-  grey_op_params.eos_pars.yp = ye;                  // [dimensionless]
-  grey_op_params.eos_pars.yn = 1 - ye;              // [dimensionless]
+  grey_op_params.eos_pars.yp = yp;                  // [dimensionless]
+  grey_op_params.eos_pars.yn = yn;              // [dimensionless]
   grey_op_params.eos_pars.mu_e = mu_e;              // [MeV]
   grey_op_params.eos_pars.mu_p = mu_p;              // [MeV]
   grey_op_params.eos_pars.mu_n = mu_n;              // [MeV]
