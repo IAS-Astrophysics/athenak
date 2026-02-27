@@ -24,7 +24,6 @@
 
 #include "hydro/hydro.hpp"
 #include "mhd/mhd.hpp"
-#include "dyn_grmhd/dyn_grmhd.hpp"
 #include "radiation/radiation.hpp"
 #include "coordinates/adm.hpp"
 #include "z4c/z4c.hpp"
@@ -49,18 +48,13 @@ MeshRefinement::MeshRefinement(Mesh *pm, ParameterInput *pin) :
   nmb_sent_thisrank(0),
   ncyc_check_amr(1),
   refinement_interval(5),
-  prolong_prims(false),
-  d_threshold_(0.0),
-  dd_threshold_(0.0),
-  dp_threshold_(0.0),
-  dv_threshold_(0.0),
 #if MPI_PARALLEL_ENABLED
   sendbuf("lb send buff",1),
   recvbuf("lb recv buff",1),
   send_data("lb send data",1),
   recv_data("lb recv data",1),
 #endif
-  check_cons_(false) {
+  prolong_prims(false) {
   if (pin->DoesBlockExist("mesh_refinement")) {
     // read interval (in cycles) between check of AMR and derefinement
     ncyc_check_amr = pin->GetOrAddReal("mesh_refinement", "ncycle_check", 1);
@@ -625,10 +619,16 @@ void MeshRefinement::RedistAndRefineMeshBlocks(ParameterInput *pin, int nnew, in
   delete [] oldtonew;
 
   // Step 11.
-  // Recalculate ADM variables if necessary. Reset the C2P guess for mu.
-  if ((pz4c == nullptr) && (padm != nullptr) && (nnew > 0 || ndel > 0)) {
-    padm->SetADMVariables(pm->pmb_pack);
-    pm->pmb_pack->pdyngr->ResetC2PGuess();
+  // Initialize quantities stored on the mesh associated with each physics, if necessary
+  if ((nnew > 0) || (ndel > 0)) {
+    // With dynGRMHD, recalculate ADM variables
+    if ((pz4c == nullptr) && (padm != nullptr)) {
+      padm->SetADMVariables(pm->pmb_pack);
+    }
+    // With radiation, compute tetrads and associated mesh arrays
+    if (prad != nullptr) {
+      prad->SetOrthonormalTetrad();
+    }
   }
 
   return;

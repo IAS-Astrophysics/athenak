@@ -9,12 +9,12 @@
 #include "athena.hpp"
 #include "coordinates/adm.hpp"
 #include "dyn_grmhd/dyn_grmhd.hpp"
+#include "eos/eos.hpp"
 #include "eos/primitive-solver/unit_system.hpp"
+#include "hydro/hydro.hpp"
 #include "radiation/radiation_opacities.hpp"
 #include "radiation_m1/radiation_m1.hpp"
 #include "units/units.hpp"
-#include "eos/eos.hpp"
-#include "hydro/hydro.hpp"
 
 namespace radiationm1 {
 
@@ -27,21 +27,23 @@ TaskStatus RadiationM1::CalcOpacityPhotons(Driver *pdrive, int stage) {
   // Here we are using dynamic_cast to infer which derived type pdyngr is
   auto *ptest_nqt =
       dynamic_cast<dyngr::DynGRMHDPS<Primitive::EOSCompOSE<Primitive::NQTLogs>,
-                                     Primitive::ResetFloor> *>(pmy_pack->pdyngr);
+                                     Primitive::ResetFloor> *>(
+          pmy_pack->pdyngr);
   if (ptest_nqt != nullptr) {
     return CalcOpacityPhotons_<Primitive::EOSCompOSE<Primitive::NQTLogs>,
                                Primitive::ResetFloor>(pdrive, stage);
   }
 
-  auto *ptest_nlog =
-      dynamic_cast<dyngr::DynGRMHDPS<Primitive::EOSCompOSE<Primitive::NormalLogs>,
-                                     Primitive::ResetFloor> *>(pmy_pack->pdyngr);
+  auto *ptest_nlog = dynamic_cast<dyngr::DynGRMHDPS<
+      Primitive::EOSCompOSE<Primitive::NormalLogs>, Primitive::ResetFloor> *>(
+      pmy_pack->pdyngr);
   if (ptest_nlog != nullptr) {
     return CalcOpacityPhotons_<Primitive::EOSCompOSE<Primitive::NormalLogs>,
                                Primitive::ResetFloor>(pdrive, stage);
   }
 
-  std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl;
+  std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+            << std::endl;
   std::cout << "Unsupported EOS type!\n";
   abort();
 }
@@ -95,7 +97,8 @@ TaskStatus RadiationM1::CalcOpacityPhotons_(Driver *pdrive, int stage) {
     length_scale_ = pmy_pack->punit->length_cgs();
     mean_mol_weight_ = pmy_pack->punit->mu();
     rosseland_coef_ = pmy_pack->punit->rosseland_coef_cgs;
-    planck_minus_rosseland_coef_ = pmy_pack->punit->planck_minus_rosseland_coef_cgs;
+    planck_minus_rosseland_coef_ =
+        pmy_pack->punit->planck_minus_rosseland_coef_cgs;
   }
 
   bool power_opacity_ = photon_op_params.is_power_opacity;
@@ -113,7 +116,8 @@ TaskStatus RadiationM1::CalcOpacityPhotons_(Driver *pdrive, int stage) {
   auto & radiation_mask_ = radiation_mask;
 
   par_for(
-      "radiation_m1_calc_opacity_photons", DevExeSpace(), 0, nmb1, ks, ke, js, je, is, ie,
+      "radiation_m1_calc_opacity_photons", DevExeSpace(), 0, nmb1, ks, ke, js,
+      je, is, ie,
       KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
         if (radiation_mask_(m, k, j, i)) {
           abs_1_(m, 0, k, j, i) = 0;
@@ -126,18 +130,18 @@ TaskStatus RadiationM1::CalcOpacityPhotons_(Driver *pdrive, int stage) {
           AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> g_uu{};
           AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> n_d{};
           pack_n_d(adm.alpha(m, k, j, i), n_d);
-          adm::SpacetimeMetric(adm.alpha(m, k, j, i), adm.beta_u(m, 0, k, j, i),
-                               adm.beta_u(m, 1, k, j, i), adm.beta_u(m, 2, k, j, i),
-                               adm.g_dd(m, 0, 0, k, j, i), adm.g_dd(m, 0, 1, k, j, i),
-                               adm.g_dd(m, 0, 2, k, j, i), adm.g_dd(m, 1, 1, k, j, i),
-                               adm.g_dd(m, 1, 2, k, j, i), adm.g_dd(m, 2, 2, k, j, i),
-                               garr_dd);
+          adm::SpacetimeMetric(
+              adm.alpha(m, k, j, i), adm.beta_u(m, 0, k, j, i),
+              adm.beta_u(m, 1, k, j, i), adm.beta_u(m, 2, k, j, i),
+              adm.g_dd(m, 0, 0, k, j, i), adm.g_dd(m, 0, 1, k, j, i),
+              adm.g_dd(m, 0, 2, k, j, i), adm.g_dd(m, 1, 1, k, j, i),
+              adm.g_dd(m, 1, 2, k, j, i), adm.g_dd(m, 2, 2, k, j, i), garr_dd);
           adm::SpacetimeUpperMetric(
-              adm.alpha(m, k, j, i), adm.beta_u(m, 0, k, j, i), adm.beta_u(m, 1, k, j, i),
-              adm.beta_u(m, 2, k, j, i), adm.g_dd(m, 0, 0, k, j, i),
-              adm.g_dd(m, 0, 1, k, j, i), adm.g_dd(m, 0, 2, k, j, i),
-              adm.g_dd(m, 1, 1, k, j, i), adm.g_dd(m, 1, 2, k, j, i),
-              adm.g_dd(m, 2, 2, k, j, i), garr_uu);
+              adm.alpha(m, k, j, i), adm.beta_u(m, 0, k, j, i),
+              adm.beta_u(m, 1, k, j, i), adm.beta_u(m, 2, k, j, i),
+              adm.g_dd(m, 0, 0, k, j, i), adm.g_dd(m, 0, 1, k, j, i),
+              adm.g_dd(m, 0, 2, k, j, i), adm.g_dd(m, 1, 1, k, j, i),
+              adm.g_dd(m, 1, 2, k, j, i), adm.g_dd(m, 2, 2, k, j, i), garr_uu);
           for (int a = 0; a < 4; ++a) {
             for (int b = 0; b < 4; ++b) {
               g_dd(a, b) = garr_dd[a + b * 4];
@@ -145,10 +149,10 @@ TaskStatus RadiationM1::CalcOpacityPhotons_(Driver *pdrive, int stage) {
             }
           }
 
-          Real gam =
-              adm::SpatialDet(adm.g_dd(m, 0, 0, k, j, i), adm.g_dd(m, 0, 1, k, j, i),
-                              adm.g_dd(m, 0, 2, k, j, i), adm.g_dd(m, 1, 1, k, j, i),
-                              adm.g_dd(m, 1, 2, k, j, i), adm.g_dd(m, 2, 2, k, j, i));
+          Real gam = adm::SpatialDet(
+              adm.g_dd(m, 0, 0, k, j, i), adm.g_dd(m, 0, 1, k, j, i),
+              adm.g_dd(m, 0, 2, k, j, i), adm.g_dd(m, 1, 1, k, j, i),
+              adm.g_dd(m, 1, 2, k, j, i), adm.g_dd(m, 2, 2, k, j, i));
           Real volform = Kokkos::sqrt(gam);
 
           AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> u_u{};
@@ -195,12 +199,12 @@ TaskStatus RadiationM1::CalcOpacityPhotons_(Driver *pdrive, int stage) {
           Real J = calc_J_from_rT(T_dd, u_u);
 
           // fluid quantities
-          Real &wdn = w0_(m,IDN,k,j,i);
-          Real &wen = w0_(m,IEN,k,j,i);
+          Real &wdn = w0_(m, IDN, k, j, i);
+          Real &wen = w0_(m, IEN, k, j, i);
 
           // derived quantities
-          Real pgas = gm1*wen;
-          Real tgas = pgas/wdn;
+          Real pgas = gm1 * wen;
+          Real tgas = pgas / wdn;
 
           // local undensitized photon quantities
           Real chi_loc = chi_(m, 0, k, j, i);
@@ -210,10 +214,16 @@ TaskStatus RadiationM1::CalcOpacityPhotons_(Driver *pdrive, int stage) {
 
           // set photon opacities
           Real sigma_a, sigma_s, sigma_p;
-          OpacityFunction(wdn, density_scale_, tgas, temperature_scale_, length_scale_,
-                          gm1, mean_mol_weight_, power_opacity_, rosseland_coef_,
-                         planck_minus_rosseland_coef_, kappa_a_, kappa_s_, kappa_p_,
-                          sigma_a, sigma_s, sigma_p);
+          OpacityFunction(wdn, density_scale_, tgas, temperature_scale_,
+                          length_scale_, gm1, mean_mol_weight_, power_opacity_,
+                          rosseland_coef_, planck_minus_rosseland_coef_,
+                          kappa_a_, kappa_s_, kappa_p_, sigma_a, sigma_s,
+                          sigma_p);
+
+          // compute opacities from sigma_a, sigma_s, sigma_p
+          eta_1_loc = sigma_p;
+          abs_1_loc = sigma_p;
+          scat_1_loc = sigma_s + sigma_a;
 
           assert(Kokkos::isfinite(eta_1_loc));
           assert(Kokkos::isfinite(abs_1_loc));
@@ -227,4 +237,4 @@ TaskStatus RadiationM1::CalcOpacityPhotons_(Driver *pdrive, int stage) {
 
   return TaskStatus::complete;
 }
-}  // namespace radiationm1
+} // namespace radiationm1

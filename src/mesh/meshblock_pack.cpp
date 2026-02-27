@@ -58,6 +58,7 @@ MeshBlockPack::MeshBlockPack(Mesh *pm, int igids, int igide) :
 
 MeshBlockPack::~MeshBlockPack() {
   delete pcoord;
+  if (ppart  != nullptr) {delete ppart;}
   if (phydro != nullptr) {delete phydro;}
   if (pmhd   != nullptr) {delete pmhd;}
   if (padm   != nullptr) {delete padm;}
