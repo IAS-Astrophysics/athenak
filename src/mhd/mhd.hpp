@@ -22,6 +22,7 @@ class EquationOfState;
 class Coordinates;
 class Viscosity;
 class Resistivity;
+class AmbipolarDiffusion;
 class Conduction;
 class SourceTerms;
 class OrbitalAdvectionCC;
@@ -119,6 +120,7 @@ class MHD {
   // Object(s) for extra physics (viscosity, resistivity, thermal conduction, srcterms)
   Viscosity *pvisc = nullptr;
   Resistivity *presist = nullptr;
+  AmbipolarDiffusion *pambipolar = nullptr;
   Conduction *pcond = nullptr;
   SourceTerms *psrc = nullptr;
 

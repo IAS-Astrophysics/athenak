@@ -20,6 +20,7 @@
 #include "diffusion/conduction.hpp"
 #include "diffusion/viscosity.hpp"
 #include "diffusion/resistivity.hpp"
+#include "diffusion/ambipolar_diffusion.hpp"
 #include "srcterms/srcterms.hpp"
 
 namespace mhd {
@@ -169,6 +170,9 @@ TaskStatus MHD::NewTimeStep(Driver *pdriver, int stage) {
   }
   if (presist != nullptr) {
     presist->NewTimeStep(w0, peos->eos_data);
+  }
+  if (pambipolar != nullptr) {
+    pambipolar->NewTimeStep(w0, peos->eos_data);
   }
   // compute source terms timestep
   if (psrc != nullptr) {

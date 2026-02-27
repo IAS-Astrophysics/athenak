@@ -33,6 +33,7 @@ add_executable(
 
         diffusion/conduction.cpp
         diffusion/resistivity.cpp
+        diffusion/ambipolar_diffusion.cpp
         diffusion/viscosity.cpp
 
         driver/driver.cpp
