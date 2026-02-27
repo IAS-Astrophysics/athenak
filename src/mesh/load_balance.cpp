@@ -1106,8 +1106,11 @@ void MeshRefinement::PackAMRBuffersParticles() {
   bool no_errors = true;
 
   // Allocate send buffer
-  Kokkos::realloc(prtcl_rsendbuf, nrdata*nprtcl_send);
-  Kokkos::realloc(prtcl_isendbuf, nidata*nprtcl_send);
+  if ((int)prtcl_rsendbuf.extent(0) < nrdata*nprtcl_send)
+    Kokkos::realloc(prtcl_rsendbuf, nrdata*nprtcl_send);
+  if ((int)prtcl_isendbuf.extent(0) < nidata*nprtcl_send)
+    Kokkos::realloc(prtcl_isendbuf, nidata*nprtcl_send);
+
 
   // sendlist on device is already sorted by destrank in CountSendAndRecvs()
   // Use sendlist on device to load particles into send buffer ordered by dest_rank
@@ -1453,8 +1456,10 @@ void MeshRefinement::InitPartRecv() {
 
     if (nprtcl_recv > 0) {
       // Allocate particle receive buffers
-      Kokkos::realloc(prtcl_rrecvbuf, ppart->nrdata * nprtcl_recv);
-      Kokkos::realloc(prtcl_irecvbuf, ppart->nidata * nprtcl_recv);
+      if ((int)prtcl_rrecvbuf.extent(0) < ppart->nrdata * nprtcl_recv)
+        Kokkos::realloc(prtcl_rrecvbuf, ppart->nrdata * nprtcl_recv);
+      if ((int)prtcl_irecvbuf.extent(0) < ppart->nidata * nprtcl_recv)
+        Kokkos::realloc(prtcl_irecvbuf, ppart->nidata * nprtcl_recv);
 
       // Initialize MPI request vectors
       prtcl_rrecv_req.clear();
