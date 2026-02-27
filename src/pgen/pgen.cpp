@@ -48,6 +48,9 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm) :
   user_srcs = pin->GetOrAddBoolean("problem","user_srcs",false);
   user_hist = pin->GetOrAddBoolean("problem","user_hist",false);
 
+  // second argument false since this IS NOT a restart
+  CallProblemGenerator(pin, false);
+
 #if USER_PROBLEM_ENABLED
   // call user-defined problem generator
   UserProblem(pin, false);
@@ -319,7 +322,7 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resf
   }
 
   // read CC data into host array
-  [[maybe_unused]] int mygids = pm->gids_eachrank[global_variable::my_rank];
+  int mygids = pm->gids_eachrank[global_variable::my_rank];
   IOWrapperSizeT offset_myrank = headeroffset;
   if (!single_file_per_rank) {
     offset_myrank += data_size_ * pm->gids_eachrank[global_variable::my_rank];
