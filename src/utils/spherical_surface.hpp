@@ -20,10 +20,11 @@ class MeshBlockPack;
 class SphericalSurface {
  public:
   SphericalSurface(MeshBlockPack *pmy_pack, int ntheta, Real rad, Real xc = 0.0,
-                   Real yc = 0.0, Real zc = 0.0);
+                   Real yc = 0.0, Real zc = 0.0, int nphi = -1);
   ~SphericalSurface();
-  int nangles;  // total number of gridpoints
-  int ntheta;   // number of gridpoints along theta direction, nphi = 2ntheta
+  int nangles;  // total number of gridpoints (= nphi * ntheta)
+  int ntheta;   // number of gridpoints along theta direction
+  int nphi;     // number of gridpoints along phi direction
   Real radius;  // radius to initialize the sphere
   Real xc, yc, zc;                // sphere center
   DualArray1D<Real> int_weights;  // weights for quadrature integration

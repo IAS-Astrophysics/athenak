@@ -8,6 +8,7 @@
 //! \file outputs.hpp
 //  \brief provides classes to handle ALL types of data output
 
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -16,6 +17,7 @@
 #include "athena.hpp"
 #include "io_wrapper.hpp"
 #include "geodesic-grid/spherical_grid.hpp"
+#include "utils/spherical_surface.hpp"
 
 #define NHISTORY_VARIABLES 20
 #if NHISTORY_VARIABLES > NREDUCTION_VARIABLES
@@ -452,6 +454,24 @@ class SphericalShellsOutput : public BaseTypeOutput {
   std::vector<Real> radii;                          // array of shell center radii
   std::vector<Real> radii_faces;                    // array of shell face radii (nr+1 values)
   std::vector<std::unique_ptr<SphericalGrid>> spheres;  // grid for each shell
+};
+
+//----------------------------------------------------------------------------------------
+//! \class AzimuthalAverageOutput
+//  \brief derived BaseTypeOutput class for phi-averaged output on (r, theta) grid
+class AzimuthalAverageOutput : public BaseTypeOutput {
+ public:
+  AzimuthalAverageOutput(ParameterInput *pin, Mesh *pm, OutputParameters oparams);
+  ~AzimuthalAverageOutput();
+  void LoadOutputData(Mesh *pm) override;
+  void WriteOutputFile(Mesh *pm, ParameterInput *pin) override;
+ private:
+  int nr, ntheta, nphi;
+  Real rmin, rmax;
+  bool log_spacing;
+  std::vector<Real> radii;
+  std::vector<Real> theta_grid;
+  std::vector<std::unique_ptr<SphericalSurface>> surfaces;
 };
 
 //----------------------------------------------------------------------------------------

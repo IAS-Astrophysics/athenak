@@ -99,6 +99,7 @@ add_executable(
         outputs/restart.cpp
         outputs/spherical_surface.cpp
         outputs/spherical_shells.cpp
+        outputs/azimuthal_average.cpp
         outputs/coarsened_binary.cpp
         outputs/track_prtcl.cpp
         outputs/vtk_mesh.cpp
