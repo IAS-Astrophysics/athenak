@@ -15,6 +15,7 @@
 #include <vector>
 
 #include "athena.hpp"
+#include "parameter_input.hpp"
 #include "coordinates/adm.hpp"
 #include "coordinates/cell_locations.hpp"
 #include "eos/eos.hpp"
@@ -28,8 +29,7 @@
 #include "z4c/z4c.hpp"
 #include "srcterms/srcterms.hpp"
 #include "srcterms/turb_driver.hpp"
-#include "z4c/tmunu.hpp"
-#include "z4c/z4c.hpp"
+#include "outputs.hpp"
 
 #if MPI_PARALLEL_ENABLED
 #include <mpi.h>

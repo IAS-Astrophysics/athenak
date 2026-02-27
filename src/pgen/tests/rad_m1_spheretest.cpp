@@ -4,7 +4,7 @@
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
 //! \file rad_m1_beams.cpp
-//  \brief 1D beam for grey M1
+//  \brief Sphere test for grey M1
 
 // C++ headers
 
@@ -30,7 +30,7 @@ void ProblemGenerator::RadiationM1SphereTest(ParameterInput *pin,
   if (pmbp->pradm1 == nullptr) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
               << std::endl
-              << "The 1d diffusion problem generator can only be run with "
+              << "The sphere test problem generator can only be run with "
                  "radiation-m1, but no "
               << "<radiation_m1> block in input file" << std::endl;
     exit(EXIT_FAILURE);

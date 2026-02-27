@@ -31,6 +31,8 @@
 #include "mhd/mhd.hpp"
 #include "dyn_grmhd/dyn_grmhd.hpp"
 #include "utils/tov/tov_utils.hpp"
+#include "utils/tov/tov_polytrope.hpp"
+#include "utils/tov/tov_piecewise_poly.hpp"
 #include "utils/tov/tov_tabulated.hpp"
 
 // Lorene
@@ -41,14 +43,11 @@
 void BNSHistory(HistoryData *pdata, Mesh *pm);
 void LoreneBNSRefinementCondition(MeshBlockPack *pmbp);
 
-//----------------------------------------------------------------------------------------
-//! \fn ProblemGenerator::UserProblem_()
-//! \brief Problem Generator for BNS with LORENE
-void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
-  user_hist_func = &BNSHistory;
-  user_ref_func = &LoreneBNSRefinementCondition;
-
-  if (restart) return;
+// Prototypes for magnetic vector potential
+KOKKOS_INLINE_FUNCTION
+static Real A1(Real x, Real y, Real z, Real I_0, Real r_0);
+KOKKOS_INLINE_FUNCTION
+static Real A2(Real x, Real y, Real z, Real I_0, Real r_0);
 
 template<class TOVEOS>
 void SetupBNS(ParameterInput *pin, Mesh* pmy_mesh_) {
@@ -82,6 +81,9 @@ void SetupBNS(ParameterInput *pin, Mesh* pmy_mesh_) {
 
   std::string fname = pin->GetString("problem", "initial_data_file");
   Real rho_cut = pin->GetOrAddReal("problem", "rho_cut", 1e-5);
+  Real b_max = pin->GetOrAddReal("problem", "b_max", 1e12) / 8.3519664583273e+19;
+  Real r_0 = pin->GetOrAddReal("problem", "r_0_current", 5.0);
+  Real I_0 = 4*r_0*b_max/(23.0*M_PI);
 
   int ncells1 = indcs.nx1 + 2*(indcs.ng);
   int ncells2 = indcs.nx2 + 2*(indcs.ng);
@@ -94,13 +96,15 @@ void SetupBNS(ParameterInput *pin, Mesh* pmy_mesh_) {
   Real *y_coords = new Real[width];
   Real *z_coords = new Real[width];
 
-  // 1D EoS for setting scalars if using CompOSE EoS
-  tov::TabulatedEOS *p1Deos;
-  if (pmbp->pdyngr->eos_policy == DynGRMHD_EOS::eos_compose) {
-    p1Deos = new tov::TabulatedEOS(pin);
-  }
+  // Set up the 1D EOS
+  TOVEOS eos{pin};
 
-  std::cout << "Allocated coordinates of size " << width << std::endl;
+  // Enable ye if the EOS supports it.
+  constexpr bool use_ye = tov::UsesYe<TOVEOS>;
+
+  if (global_variable::my_rank == 0) {
+    std::cout << "Allocated coordinates of size " << width << std::endl;
+  }
 
   // Populate coordinates for LORENE
   int idx = 0;
@@ -219,28 +223,6 @@ void SetupBNS(ParameterInput *pin, Mesh* pmy_mesh_) {
           Real vu[3] = {bns->u_euler_x[idx] / vel_unit,
                         bns->u_euler_y[idx] / vel_unit,
                         bns->u_euler_z[idx] / vel_unit};
-          
-          // Check for garbage values thrown in Lorene.
-          if (host_w0(m, IDN, k, j, i) <= rho_cut) {
-            host_w0(m, IDN, k, j, i) = 0.0;
-            vu[0] = 0.0;
-            vu[1] = 0.0;
-            vu[2] = 0.0;
-            egas = 0.0;
-          }
-
-          // If we're using a tabulated EOS, we need to get the pressure directly from
-          // the cold EOS because Lorene usually returns garbage. We also use this
-          // opportunity to get the electron fraction.
-          if (pmbp->pdyngr->eos_policy == DynGRMHD_EOS::eos_compose) {
-            host_w0(m, IPR, k, j, i) = p1Deos->template
-              GetPFromRho<tov::LocationTag::Host>(host_w0(m,IDN,k,j,i));
-            if (pmbp->pmhd->nscalars>=1) {
-              Real Ye = p1Deos->template
-                GetYeFromRho<tov::LocationTag::Host>(host_w0(m,IDN,k,j,i));
-              host_w0(m, IYF, k, j, i) = Ye;
-            }
-          }
 
           // Check for garbage values thrown in by Lorene.
           if (rho <= rho_cut || !Kokkos::isfinite(rho)) {
@@ -297,9 +279,6 @@ void SetupBNS(ParameterInput *pin, Mesh* pmy_mesh_) {
 
   // Cleanup
   delete bns;
-  if (pmbp->pdyngr->eos_policy == DynGRMHD_EOS::eos_compose) {
-    delete p1Deos;
-  }
 
   if (global_variable::my_rank == 0) {
     std::cout << "Lorene freed." << std::endl;
@@ -316,14 +295,14 @@ void SetupBNS(ParameterInput *pin, Mesh* pmy_mesh_) {
     std::cout << "Data copied." << std::endl;
   }
 
-  // Convert internal energy to pressure. This is NOT necessary if we use a tabulated
-  // EOS because we pull the energy straight from the cold EOS.
-  // TODO(JMF): This can be refactored to be EOS generic such that we no longer rely on
-  // Lorene's epsilon for any EOS.
-  if (pmbp->pdyngr->eos_policy != DynGRMHD_EOS::eos_compose) {
-    pmbp->pdyngr->ConvertInternalEnergyToPressure(0, (ncells1-1),
-                                                  0, (ncells2-1), 0, (ncells3-1));
-  }
+  // compute vector potential over all faces
+  DvceArray4D<Real> a1, a2, a3;
+  Kokkos::realloc(a1, nmb,ncells3,ncells2,ncells1);
+  Kokkos::realloc(a2, nmb,ncells3,ncells2,ncells1);
+  Kokkos::realloc(a3, nmb,ncells3,ncells2,ncells1);
+
+  auto &nghbr = pmbp->pmb->nghbr;
+  auto &mblev = pmbp->pmb->mb_lev;
 
   par_for("pgen_vector_potential", DevExeSpace(), 0,nmb-1,ks,ke+1,js,je+1,is,ie+1,
   KOKKOS_LAMBDA(int m, int k, int j, int i) {
@@ -586,4 +565,20 @@ void BNSHistory(HistoryData *pdata, Mesh *pm) {
 
 void LoreneBNSRefinementCondition(MeshBlockPack *pmbp) {
   pmbp->pz4c->pamr->Refine(pmbp);
+}
+
+KOKKOS_INLINE_FUNCTION
+static Real A1(Real x, Real y, Real z, Real I_0, Real r_0) {
+  Real w2 = SQR(x) + SQR(y);
+  Real r2 = w2 + SQR(z);
+  return -y * M_PI * SQR(r_0)*I_0 / pow(SQR(r_0) + r2, 1.5) *
+         (1.0 + 15.0/8.0*SQR(r_0)*(SQR(r_0)+w2)/SQR(SQR(r_0)+r2));
+}
+
+KOKKOS_INLINE_FUNCTION
+static Real A2(Real x, Real y, Real z, Real I_0, Real r_0) {
+  Real w2 = SQR(x) + SQR(y);
+  Real r2 = w2 + SQR(z);
+  return x * M_PI * SQR(r_0)*I_0 / pow(SQR(r_0) + r2, 1.5) *
+         (1.0 + 15.0/8.0*SQR(r_0)*(SQR(r_0)+w2)/SQR(SQR(r_0)+r2));
 }

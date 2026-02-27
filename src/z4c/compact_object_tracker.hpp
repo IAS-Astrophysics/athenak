@@ -61,7 +61,6 @@ class CompactObjectTracker {
   bool owns_compact_object;
   CompactObjectType type;
   TrackerMode mode;
-  Real pos[NDIM];
   Real vel[NDIM];
   int reflevel;         // requested minimum refinement level (-1 for infinity)
   Real radius;          // nominal radius of the object (for the AMR driver)
