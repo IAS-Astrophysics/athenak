@@ -5,6 +5,7 @@
 //========================================================================================
 //! \file turb.cpp
 //  \brief Problem generator for turbulence
+#include <cmath>
 #include <iostream> // cout
 
 #include "athena.hpp"
@@ -82,9 +83,20 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   if (pmbp->pmhd != nullptr) {
     Real d_i = pin->GetOrAddReal("problem","d_i",1.0);
     Real d_n = pin->GetOrAddReal("problem","d_n",1.0);
+    int ifield = pin->GetOrAddInteger("problem","ifield",2);
+    if (ifield != 1 && ifield != 2) {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+                << "Invalid <problem>/ifield = " << ifield
+                << ", allowed values are 1 (zero-net-flux Bz) or 2 (uniform Bz)."
+                << std::endl;
+      exit(EXIT_FAILURE);
+    }
     Real B0 = cs*std::sqrt(2.0*d_i/beta);
+    Real x1size = pmy_mesh_->mesh_size.x1max - pmy_mesh_->mesh_size.x1min;
+    Real kx = 2.0*(M_PI/x1size);
     auto &u0 = pmbp->pmhd->u0;
     auto &b0 = pmbp->pmhd->b0;
+    auto &size = pmbp->pmb->mb_size;
     EOS_Data &eos = pmbp->pmhd->peos->eos_data;
     Real gm1 = eos.gamma - 1.0;
     Real p0 = 1.0/eos.gamma;
@@ -97,16 +109,32 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
       u0(m,IM2,k,j,i) = 0.0;
       u0(m,IM3,k,j,i) = 0.0;
 
-      // initialize B
-      b0.x1f(m,k,j,i) = 0.0;
-      b0.x2f(m,k,j,i) = 0.0;
-      b0.x3f(m,k,j,i) = B0;
-      if (i==ie) {b0.x1f(m,k,j,i+1) = 0.0;}
-      if (j==je) {b0.x2f(m,k,j+1,i) = 0.0;}
-      if (k==ke) {b0.x3f(m,k+1,j,i) = B0;}
+      Real &x1min = size.d_view(m).x1min;
+      Real &x1max = size.d_view(m).x1max;
+      int nx1 = indcs.nx1;
+      Real x1v = CellCenterX(i-is, nx1, x1min, x1max);
+
+      if (ifield == 1) {
+        // zero-net-flux Bz
+        b0.x1f(m,k,j,i) = 0.0;
+        b0.x2f(m,k,j,i) = 0.0;
+        b0.x3f(m,k,j,i) = B0*std::sin(kx*x1v);
+        if (i==ie) {b0.x1f(m,k,j,i+1) = 0.0;}
+        if (j==je) {b0.x2f(m,k,j+1,i) = 0.0;}
+        if (k==ke) {b0.x3f(m,k+1,j,i) = B0*std::sin(kx*x1v);}
+      } else if (ifield == 2) {
+        // constant Bz
+        b0.x1f(m,k,j,i) = 0.0;
+        b0.x2f(m,k,j,i) = 0.0;
+        b0.x3f(m,k,j,i) = B0;
+        if (i==ie) {b0.x1f(m,k,j,i+1) = 0.0;}
+        if (j==je) {b0.x2f(m,k,j+1,i) = 0.0;}
+        if (k==ke) {b0.x3f(m,k+1,j,i) = B0;}
+      }
 
       if (eos.is_ideal) {
-        u0(m,IEN,k,j,i) = p0/gm1 + 0.5*B0*B0 + // fix contribution from dB
+        Real bz_cc = 0.5*(b0.x3f(m,k,j,i) + b0.x3f(m,k+1,j,i));
+        u0(m,IEN,k,j,i) = p0/gm1 + 0.5*bz_cc*bz_cc +
            0.5*(SQR(u0(m,IM1,k,j,i)) + SQR(u0(m,IM2,k,j,i)) +
            SQR(u0(m,IM3,k,j,i)))/u0(m,IDN,k,j,i);
       }
