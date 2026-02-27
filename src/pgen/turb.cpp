@@ -85,7 +85,8 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     Real d_n = pin->GetOrAddReal("problem","d_n",1.0);
     int ifield = pin->GetOrAddInteger("problem","ifield",2);
     if (ifield != 1 && ifield != 2) {
-      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+      std::cout << "### FATAL ERROR in " << __FILE__
+                << " at line " << __LINE__ << std::endl
                 << "Invalid <problem>/ifield = " << ifield
                 << ", allowed values are 1 (zero-net-flux Bz) or 2 (uniform Bz)."
                 << std::endl;
@@ -152,7 +153,8 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     Real d_n = pin->GetOrAddReal("problem","d_n",1.0);
     int ifield = pin->GetOrAddInteger("problem","ifield",2);
     if (ifield != 1 && ifield != 2) {
-      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+      std::cout << "### FATAL ERROR in " << __FILE__
+                << " at line " << __LINE__ << std::endl
                 << "Invalid <problem>/ifield = " << ifield
                 << ", allowed values are 1 (zero-net-flux Bz) or 2 (uniform Bz)."
                 << std::endl;
