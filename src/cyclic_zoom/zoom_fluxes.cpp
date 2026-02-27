@@ -96,12 +96,13 @@ void ZoomData::StoreEFieldsBeforeAMR(int zm, int m, DvceEdgeFld4D<Real> efld) {
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn void ZoomData::StoreEFieldsFromFiner()
-//! \brief Store coarse electric fields in zoom data zmc from finer zoom data zm on
-//! previous level
+//! \fn void ZoomData::CorrectEFieldsFromFiner()
+//! \brief Correct coarse electric fields in zoom data zm in MeshBlock m from finer zoom
+//! data zmf on previous level
 
-void ZoomData::StoreEFieldsFromFiner(int zmc, int zmf, DvceEdgeFld4D<Real> efld) {
+void ZoomData::CorrectEFieldsFromFiner(int zm, int m, int zmf, DvceEdgeFld4D<Real> efld) {
   auto &indcs = pzoom->pmesh->mb_indcs;
+  auto &size = pzoom->pmesh->pmb_pack->pmb->mb_size;
   int &cis = indcs.cis;
   int &cjs = indcs.cjs;
   int &cks = indcs.cks;
@@ -124,27 +125,52 @@ void ZoomData::StoreEFieldsFromFiner(int zmc, int zmf, DvceEdgeFld4D<Real> efld)
   int ccie = ccis + hcnx1 - 1;
   int ccje = ccjs + hcnx2 - 1;
   int ccke = ccks + hcnx3 - 1;
+  auto zregion = pzoom->old_zregion; // previous zoom region
   // update coarse electric fields
   par_for("zoom-finer-efld1",DevExeSpace(), ccks, ccke+1, ccjs, ccje+1, ccis, ccie,
   KOKKOS_LAMBDA(const int ck, const int cj, const int ci) {
-    int fi = 2*(ci - ccis) + cis;
-    int fj = 2*(cj - ccjs) + cjs;
-    int fk = 2*(ck - ccks) + cks;
-    e1(zmc,ck,cj,ci) = 0.5*(ef1(zmf,fk,fj,fi) + ef1(zmf,fk,fj,fi+1));
+    Real x1v = CellCenterX(ci-cis, cnx1, size.d_view(m).x1min, size.d_view(m).x1max);
+    Real x2f = LeftEdgeX  (cj-cjs, cnx2, size.d_view(m).x2min, size.d_view(m).x2max);
+    Real x3f = LeftEdgeX  (ck-cks, cnx3, size.d_view(m).x3min, size.d_view(m).x3max);
+    if (zregion.IsInZoomRegion(x1v, x2f, x3f)) {
+      int fi = 2*(ci - ccis) + cis;
+      int fj = 2*(cj - ccjs) + cjs;
+      int fk = 2*(ck - ccks) + cks;
+      e1(zm,ck,cj,ci) = 0.5*(ef1(zmf,fk,fj,fi) + ef1(zmf,fk,fj,fi+1));
+    }
+    if (zregion.IsInZoomRegion(x1v, x2f, x3f, zregion.r_flux_mask)) {
+      e1(zm,ck,cj,ci) = 0.0;
+    }
   });
   par_for("zoom-finer-efld2",DevExeSpace(), ccks, ccke+1, ccjs, ccje, ccis, ccie+1,
   KOKKOS_LAMBDA(const int ck, const int cj, const int ci) {
-    int fi = 2*(ci - ccis) + cis;
-    int fj = 2*(cj - ccjs) + cjs;
-    int fk = 2*(ck - ccks) + cks;
-    e2(zmc,ck,cj,ci) = 0.5*(ef2(zmf,fk,fj,fi) + ef2(zmf,fk,fj+1,fi));
+    Real x1f = LeftEdgeX  (ci-cis, cnx1, size.d_view(m).x1min, size.d_view(m).x1max);
+    Real x2v = CellCenterX(cj-cjs, cnx2, size.d_view(m).x2min, size.d_view(m).x2max);
+    Real x3f = LeftEdgeX  (ck-cks, cnx3, size.d_view(m).x3min, size.d_view(m).x3max);
+    if (zregion.IsInZoomRegion(x1f, x2v, x3f)) {
+      int fi = 2*(ci - ccis) + cis;
+      int fj = 2*(cj - ccjs) + cjs;
+      int fk = 2*(ck - ccks) + cks;
+      e2(zm,ck,cj,ci) = 0.5*(ef2(zmf,fk,fj,fi) + ef2(zmf,fk,fj+1,fi));
+    }
+    if (zregion.IsInZoomRegion(x1f, x2v, x3f, zregion.r_flux_mask)) {
+      e2(zm,ck,cj,ci) = 0.0;
+    }
   });
   par_for("zoom-finer-efld3",DevExeSpace(), ccks, ccke, ccjs, ccje+1, ccis, ccie+1,
   KOKKOS_LAMBDA(const int ck, const int cj, const int ci) {
-    int fi = 2*(ci - ccis) + cis;
-    int fj = 2*(cj - ccjs) + cjs;
-    int fk = 2*(ck - ccks) + cks;
-    e3(zmc,ck,cj,ci) = 0.5*(ef3(zmf,fk,fj,fi) + ef3(zmf,fk+1,fj,fi));
+    Real x1f = LeftEdgeX  (ci-cis, cnx1, size.d_view(m).x1min, size.d_view(m).x1max);
+    Real x2f = LeftEdgeX  (cj-cjs, cnx2, size.d_view(m).x2min, size.d_view(m).x2max);
+    Real x3v = CellCenterX(ck-cks, cnx3, size.d_view(m).x3min, size.d_view(m).x3max);
+    if (zregion.IsInZoomRegion(x1f, x2f, x3v)) {
+      int fi = 2*(ci - ccis) + cis;
+      int fj = 2*(cj - ccjs) + cjs;
+      int fk = 2*(ck - ccks) + cks;
+      e3(zm,ck,cj,ci) = 0.5*(ef3(zmf,fk,fj,fi) + ef3(zmf,fk+1,fj,fi));
+    }
+    if (zregion.IsInZoomRegion(x1f, x2f, x3v, zregion.r_flux_mask)) {
+      e3(zm,ck,cj,ci) = 0.0;
+    }
   });
   return;
 }

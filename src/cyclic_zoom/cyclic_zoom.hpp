@@ -48,13 +48,18 @@ typedef struct ZoomRegion {
   Real x1c, x2c, x3c;           // center of zoom region
   Real r_0;                     // radius of zoom region at zone 0
   Real radius;                  // radius of zoom region
-  Real excise_factor;           // factor for excision radius
-  Real excise_radius;           // radius of excision region within zoom region
+  Real f_excise;                // factor for excision radius
+  Real r_excise;                // radius of excision region within zoom region
+  Real r_flux_mask;             // radius of masking flux region within zoom region
 
   // Kokkos inline function to check if a location is within the zoom region
   KOKKOS_INLINE_FUNCTION
   bool IsInZoomRegion(Real x1, Real x2, Real x3) const {
-    return (SQR(x1 - x1c) + SQR(x2 - x2c) + SQR(x3 - x3c) <= SQR(radius));
+    return IsInZoomRegion(x1, x2, x3, radius);
+  }
+  KOKKOS_INLINE_FUNCTION
+  bool IsInZoomRegion(Real x1, Real x2, Real x3, Real r) const {
+    return (SQR(x1 - x1c) + SQR(x2 - x2c) + SQR(x3 - x3c) <= SQR(r));
   }
 } ZoomRegion;
 
@@ -259,7 +264,7 @@ class ZoomData {
   void ApplyPrimFromFiner(int m, int zm, const ZoomRegion &zregion);
   // functions for storing/applying electric fields during zoom
   void StoreEFieldsBeforeAMR(int zm, int m, DvceEdgeFld4D<Real> efld);
-  void StoreEFieldsFromFiner(int zmc, int zm, DvceEdgeFld4D<Real> efld);
+  void CorrectEFieldsFromFiner(int zmc, int m, int zmf, DvceEdgeFld4D<Real> efld);
   void StoreEFieldsAfterAMR(int zm, int m, DvceEdgeFld4D<Real> efld);
   void LimitEFields();
   // load balancing functions

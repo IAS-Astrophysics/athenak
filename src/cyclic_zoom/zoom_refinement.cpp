@@ -118,23 +118,24 @@ void CyclicZoom::StoreVariables() {
 //! \brief Correct physical variables before storing (e.g., electric fields)
 
 void CyclicZoom::CorrectVariables() {
-  // now zoom data is updated, but zoom mesh is still old with data stored in the buffer
+  // now zoom data and zm_eachmb is updated, but zoom mesh remains old
+  // with mblid_eachzmb still the same as the old zoom mesh data
   // so we correct the zoom data using the data buffer from the finer zoom data
   if (pmesh->pmb_pack->pmhd != nullptr && zstate.zone > 1) {
     int zmbs = pzmesh->gzms_eachdvce[global_variable::my_rank];
     for (int zmf = 0; zmf < pzmesh->nzmb_thisdvce; ++zmf) {
       int m = pzmesh->mblid_eachzmb[zmf+zmbs];
-      int zmc = pzmesh->zm_eachmb[m];
+      int zm = pzmesh->zm_eachmb[m];
       // print diagnostic info
       if (verbose) {
-        std::cout << "CyclicZoom: Correcting variables for zoom MeshBlock " << zmc
+        std::cout << "CyclicZoom: Correcting variables for zoom MeshBlock " << zm
                   << " using zoom MeshBlock " << zmf + zmbs << " on MeshBlock "
                   << m + pmesh->gids_eachrank[global_variable::my_rank]
                   << " on rank " << global_variable::my_rank
                   << std::endl;
       }
       // correct electric fields
-      pzdata->StoreEFieldsFromFiner(zmc, zmf, pzdata->efld_buf);
+      pzdata->CorrectEFieldsFromFiner(zm, m, zmf, pzdata->efld_buf);
     }
     if (verbose && global_variable::my_rank == 0) {
       std::cout << "CyclicZoom: Corrected variables before zooming" << std::endl;

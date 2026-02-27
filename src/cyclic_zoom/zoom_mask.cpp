@@ -348,12 +348,6 @@ void ZoomData::ApplyCCDataFromFiner(int m, DvceArray5D<Real> a,
   int &cjs = indcs.cjs;  int &cje  = indcs.cje;
   int &cks = indcs.cks;  int &cke  = indcs.cke;
   int cnx1 = indcs.cnx1, cnx2 = indcs.cnx2, cnx3 = indcs.cnx3;
-  Real &x1min = size.h_view(m).x1min;
-  Real &x1max = size.h_view(m).x1max;
-  Real &x2min = size.h_view(m).x2min;
-  Real &x2max = size.h_view(m).x2max;
-  Real &x3min = size.h_view(m).x3min;
-  Real &x3max = size.h_view(m).x3max;
   int nvar = a.extent_int(1);
   int zmbs = pzmesh->gzms_eachdvce[global_variable::my_rank]; // global id start of dvce
   auto &zlloc = pzmesh->lloc_eachzmb[zm+zmbs];
@@ -366,6 +360,12 @@ void ZoomData::ApplyCCDataFromFiner(int m, DvceArray5D<Real> a,
     int i = ci + ox1 * cnx1;
     int j = cj + ox2 * cnx2;
     int k = ck + ox3 * cnx3;
+    Real &x1min = size.d_view(m).x1min;
+    Real &x1max = size.d_view(m).x1max;
+    Real &x2min = size.d_view(m).x2min;
+    Real &x2max = size.d_view(m).x2max;
+    Real &x3min = size.d_view(m).x3min;
+    Real &x3max = size.d_view(m).x3max;
     Real x1v = CellCenterX(i-is, nx1, x1min, x1max);
     Real x2v = CellCenterX(j-js, nx2, x2min, x2max);
     Real x3v = CellCenterX(k-ks, nx3, x3min, x3max);

@@ -5,6 +5,7 @@
 //========================================================================================
 //! \file coordinates.cpp
 //! \brief
+#include <algorithm> // max
 #include <iostream> // cout
 #include <string>
 
@@ -64,9 +65,9 @@ Coordinates::Coordinates(ParameterInput *pin, MeshBlockPack *ppack) :
         (pin->DoesBlockExist("radiation")) ? 1.0+sqrt(1.0-SQR(coord_data.bh_spin)) : 1.0;
       if(pmy_pack->pmesh->pzoom != nullptr) {
         if(pmy_pack->pmesh->pzoom->zstate.zone > 0) {
-          Real zoom_radius = pmy_pack->pmesh->pzoom->zregion.excise_radius;
-          coord_data.flux_excise_r = std::max(coord_data.flux_excise_r, zoom_radius);
-          coord_data.rexcise = std::max(coord_data.rexcise, zoom_radius);
+          Real r_zoom_excise = pmy_pack->pmesh->pzoom->zregion.r_excise;
+          coord_data.flux_excise_r = std::max(coord_data.flux_excise_r, r_zoom_excise);
+          coord_data.rexcise = std::max(coord_data.rexcise, r_zoom_excise);
         }
       }
 
