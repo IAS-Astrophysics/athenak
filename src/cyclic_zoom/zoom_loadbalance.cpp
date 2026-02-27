@@ -477,13 +477,13 @@ void ZoomData::RedistZMBs(int nlmb, int lmbs,
   if (pzoom->verbose) {
 #if MPI_PARALLEL_ENABLED
     if (nsend > 0 || nrecv > 0 || ncopy > 0) {
-      std::cout << " RedistZMBs: Rank " << global_variable::my_rank << " completed "
+      std::cout << " RedistZMBs: Rank " << global_variable::my_rank << " completed"
                 << " sends: " << nsend << ", recvs: " << nrecv
                 << ", copies: " << ncopy << std::endl;
     }
 #else
     if (ncopy > 0) {
-      std::cout << " RedistZMBs: Rank " << global_variable::my_rank << " completed "
+      std::cout << " RedistZMBs: Rank " << global_variable::my_rank << " completed"
                 << " copies: " << ncopy << std::endl;
     }
 #endif

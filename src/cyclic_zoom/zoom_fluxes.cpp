@@ -40,7 +40,7 @@ void CyclicZoom::UpdateFluxes(Driver *pdriver) {
   (void) pmhd->ClearSend(pdriver, 1); // stage = 1
   (void) pmhd->ClearRecv(pdriver, 1); // stage = 1
   if (verbose && global_variable::my_rank == 0) {
-    std::cout << " CyclicZoom: Calculated electric fields after AMR" << std::endl;
+    std::cout << "CyclicZoom: Calculated electric fields after AMR" << std::endl;
   }
   return;
 }
@@ -132,13 +132,13 @@ void ZoomData::CorrectEFieldsFromFiner(int zm, int m, int zmf, DvceEdgeFld4D<Rea
     Real x1v = CellCenterX(ci-cis, cnx1, size.d_view(m).x1min, size.d_view(m).x1max);
     Real x2f = LeftEdgeX  (cj-cjs, cnx2, size.d_view(m).x2min, size.d_view(m).x2max);
     Real x3f = LeftEdgeX  (ck-cks, cnx3, size.d_view(m).x3min, size.d_view(m).x3max);
-    if (zregion.IsInZoomRegion(x1v, x2f, x3f)) {
+    if (zregion.IsInRegion(x1v, x2f, x3f)) {
       int fi = 2*(ci - ccis) + cis;
       int fj = 2*(cj - ccjs) + cjs;
       int fk = 2*(ck - ccks) + cks;
       e1(zm,ck,cj,ci) = 0.5*(ef1(zmf,fk,fj,fi) + ef1(zmf,fk,fj,fi+1));
     }
-    if (zregion.IsInZoomRegion(x1v, x2f, x3f, zregion.r_flux_mask)) {
+    if (zregion.IsInRegion(x1v, x2f, x3f, zregion.r_in_flux)) {
       e1(zm,ck,cj,ci) = 0.0;
     }
   });
@@ -147,13 +147,13 @@ void ZoomData::CorrectEFieldsFromFiner(int zm, int m, int zmf, DvceEdgeFld4D<Rea
     Real x1f = LeftEdgeX  (ci-cis, cnx1, size.d_view(m).x1min, size.d_view(m).x1max);
     Real x2v = CellCenterX(cj-cjs, cnx2, size.d_view(m).x2min, size.d_view(m).x2max);
     Real x3f = LeftEdgeX  (ck-cks, cnx3, size.d_view(m).x3min, size.d_view(m).x3max);
-    if (zregion.IsInZoomRegion(x1f, x2v, x3f)) {
+    if (zregion.IsInRegion(x1f, x2v, x3f)) {
       int fi = 2*(ci - ccis) + cis;
       int fj = 2*(cj - ccjs) + cjs;
       int fk = 2*(ck - ccks) + cks;
       e2(zm,ck,cj,ci) = 0.5*(ef2(zmf,fk,fj,fi) + ef2(zmf,fk,fj+1,fi));
     }
-    if (zregion.IsInZoomRegion(x1f, x2v, x3f, zregion.r_flux_mask)) {
+    if (zregion.IsInRegion(x1f, x2v, x3f, zregion.r_in_flux)) {
       e2(zm,ck,cj,ci) = 0.0;
     }
   });
@@ -162,13 +162,13 @@ void ZoomData::CorrectEFieldsFromFiner(int zm, int m, int zmf, DvceEdgeFld4D<Rea
     Real x1f = LeftEdgeX  (ci-cis, cnx1, size.d_view(m).x1min, size.d_view(m).x1max);
     Real x2f = LeftEdgeX  (cj-cjs, cnx2, size.d_view(m).x2min, size.d_view(m).x2max);
     Real x3v = CellCenterX(ck-cks, cnx3, size.d_view(m).x3min, size.d_view(m).x3max);
-    if (zregion.IsInZoomRegion(x1f, x2f, x3v)) {
+    if (zregion.IsInRegion(x1f, x2f, x3v)) {
       int fi = 2*(ci - ccis) + cis;
       int fj = 2*(cj - ccjs) + cjs;
       int fk = 2*(ck - ccks) + cks;
       e3(zm,ck,cj,ci) = 0.5*(ef3(zmf,fk,fj,fi) + ef3(zmf,fk+1,fj,fi));
     }
-    if (zregion.IsInZoomRegion(x1f, x2f, x3v, zregion.r_flux_mask)) {
+    if (zregion.IsInRegion(x1f, x2f, x3v, zregion.r_in_flux)) {
       e3(zm,ck,cj,ci) = 0.0;
     }
   });

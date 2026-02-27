@@ -94,7 +94,7 @@ void ZoomData::AddSrcTermsFC(int m, int zm, DvceEdgeFld4D<Real> efld) {
     Real x3f = LeftEdgeX  (k-ks, nx3, x3min, x3max);
 
     // apply to zoom region
-    if (zregion.IsInZoomRegion(x1v, x2f, x3f)) {
+    if (zregion.IsInRegion(x1v, x2f, x3f)) {
         ef1(m,k,j,i) += de1(zm,ck,cj,ci);
     }
   });
@@ -117,7 +117,7 @@ void ZoomData::AddSrcTermsFC(int m, int zm, DvceEdgeFld4D<Real> efld) {
     Real x3f = LeftEdgeX  (k-ks, nx3, x3min, x3max);
 
     // apply to zoom region
-    if (zregion.IsInZoomRegion(x1f, x2v, x3f)) {
+    if (zregion.IsInRegion(x1f, x2v, x3f)) {
         ef2(m,k,j,i) += de2(zm,ck,cj,ci);
     }
   });
@@ -140,7 +140,7 @@ void ZoomData::AddSrcTermsFC(int m, int zm, DvceEdgeFld4D<Real> efld) {
     Real x3v = CellCenterX(k-ks, nx3, x3min, x3max);
 
     // apply to zoom region
-    if (zregion.IsInZoomRegion(x1f, x2f, x3v)) {
+    if (zregion.IsInRegion(x1f, x2f, x3v)) {
         ef3(m,k,j,i) += de3(zm,ck,cj,ci);
     }
   });

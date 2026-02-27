@@ -59,8 +59,9 @@ CyclicZoom::CyclicZoom(Mesh *pm, ParameterInput *pin) :
   zregion.x3c = pin->GetOrAddReal(block_name,"x3c",0.0);
   zregion.r_0 = pin->GetOrAddReal(block_name,"r_0",1.0);
   // default 0.4 based on monopole test
-  zregion.f_excise = pin->GetOrAddReal(block_name,"f_excise",0.4);
-  zregion.r_flux_mask = pin->GetOrAddReal(block_name,"r_flux_mask",0.0);
+  zregion.f_in = pin->GetOrAddReal(block_name,"f_in",0.4);
+  zregion.r_in_flux = pin->GetOrAddReal(block_name,"r_in_flux",0.0);
+  zregion.r_in_max = pin->GetOrAddReal(block_name,"r_in_max",8.0);
 
   // Set zoom interval parameters
   zint.trun_fac = pin->GetOrAddReal(block_name,"trun_fac",1.0);
@@ -117,6 +118,7 @@ void CyclicZoom::UpdateAMRFromRestart() {
   zamr.level = pmesh->max_level - zstate.zone;
   zamr.refine_flag = -zstate.direction;
   SetRegionAndInterval();
+  AdjustExcisionForZoom();
   return;
 }
 
@@ -149,9 +151,10 @@ void CyclicZoom::PrintCyclicZoomDiagnostics() {
     std::cout << "Region: x1c = " << zregion.x1c << " x2c = " << zregion.x2c
               << " x3c = " << zregion.x3c << " r_0 = " << zregion.r_0
               << " radius = " << zregion.radius << std::endl
-              << " f_excise = " << zregion.f_excise
-              << " r_excise = " << zregion.r_excise
-              << " r_flux_mask = " << zregion.r_flux_mask
+              << " f_in = " << zregion.f_in
+              << " r_in = " << zregion.r_in
+              << " r_in_flux = " << zregion.r_in_flux
+              << " r_in_max = " << zregion.r_in_max
               << std::endl;
     // print interval parameters
     std::cout << "Interval: trun_fac = " << zint.trun_fac

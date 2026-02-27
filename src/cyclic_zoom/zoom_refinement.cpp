@@ -6,6 +6,7 @@
 //! \file zoom_refinement.cpp
 //! \brief Functions to handle cyclic zoom mesh refinement logic for zoom region
 
+#include <algorithm>
 #include <iostream>
 
 #include "athena.hpp"
@@ -52,6 +53,7 @@ void CyclicZoom::ApplyZoomRegion(Driver *pdriver) {
   }
   // Set up mask region
   if (zstate.zone > 0) {
+    AdjustExcisionForZoom();
     LoadZoomData(zstate.zone-1);
     MaskVariables();
   }
@@ -107,6 +109,13 @@ void CyclicZoom::StoreVariables() {
   int nmb = pmesh->pmb_pack->nmb_thispack;
   for (int m=0; m<nmb; ++m) {
     if (pzmesh->zm_eachmb[m] >= 0) {
+      if (verbose) {
+        std::cout << " Rank " << global_variable::my_rank
+                  << " Storing MeshBlock "
+                  << m + pmesh->gids_eachrank[global_variable::my_rank]
+                  << " with zoom MeshBlock index " << pzmesh->zm_eachmb[m]
+                  << std::endl;
+      }
       pzdata->StoreData(pzmesh->zm_eachmb[m], m);
     }
   }
@@ -128,10 +137,10 @@ void CyclicZoom::CorrectVariables() {
       int zm = pzmesh->zm_eachmb[m];
       // print diagnostic info
       if (verbose) {
-        std::cout << "CyclicZoom: Correcting variables for zoom MeshBlock " << zm
-                  << " using zoom MeshBlock " << zmf + zmbs << " on MeshBlock "
+        std::cout << " Rank " << global_variable::my_rank
+                  << " Correcting local zoom MeshBlock " << zm
+                  << " using old zoom MeshBlock " << zmf + zmbs << " on MeshBlock "
                   << m + pmesh->gids_eachrank[global_variable::my_rank]
-                  << " on rank " << global_variable::my_rank
                   << std::endl;
       }
       // correct electric fields
@@ -211,6 +220,24 @@ void CyclicZoom::MaskVariables() {
 void CyclicZoom::ApplyMask() {
   if (zstate.zone > 0 && !zamr.zooming_out && !zamr.zooming_in) {
     MaskVariables();
+  }
+  return;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void CyclicZoom::AdjustExcisionForZoom()
+//! \brief Update excision masks
+
+void CyclicZoom::AdjustExcisionForZoom() {
+  // update excision masks if necessary
+  auto pcoord = pmesh->pmb_pack->pcoord;
+  auto &coord = pcoord->coord_data;
+  if (coord.bh_excise) {
+    coord.flux_excise_r = std::max(coord.flux_excise_r, zregion.r_in);
+    coord.rexcise = std::max(coord.rexcise, zregion.r_in);
+    if (coord.excision_scheme == ExcisionScheme::fixed) {
+      pcoord->SetExcisionMasks(pcoord->excision_floor, pcoord->excision_flux);
+    }
   }
   return;
 }

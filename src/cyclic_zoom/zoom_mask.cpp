@@ -322,7 +322,7 @@ void ZoomData::ApplyCCDataSameLevel(int m, DvceArray5D<Real> a,
     Real x1v = CellCenterX(i-is, nx1, x1min, x1max);
     Real x2v = CellCenterX(j-js, nx2, x2min, x2max);
     Real x3v = CellCenterX(k-ks, nx3, x3min, x3max);
-    if (zregion.IsInZoomRegion(x1v, x2v, x3v)) { // apply to old zoom region
+    if (zregion.IsInRegion(x1v, x2v, x3v)) { // apply to zoom region
       // simply copy
       for (int n=0; n<nvar; ++n) {
         a(m,n,k,j,i) = a0(zm,n,k,j,i);
@@ -369,7 +369,7 @@ void ZoomData::ApplyCCDataFromFiner(int m, DvceArray5D<Real> a,
     Real x1v = CellCenterX(i-is, nx1, x1min, x1max);
     Real x2v = CellCenterX(j-js, nx2, x2min, x2max);
     Real x3v = CellCenterX(k-ks, nx3, x3min, x3max);
-    if (zregion.IsInZoomRegion(x1v, x2v, x3v)) { // apply to zoom region
+    if (zregion.IsInRegion(x1v, x2v, x3v)) { // apply to zoom region
       // simply copy
       for (int n=0; n<nvar; ++n) {
         a(m,n,k,j,i) = ca(zm,n,ck,cj,ci);
@@ -399,11 +399,12 @@ void ZoomData::ApplyPrimSameLevel(int m, int zm, const ZoomRegion &zregion) {
   auto eos = pmbp->pmhd->peos->eos_data;
   Real gamma = eos.gamma;
   bool is_gr = pmbp->pcoord->is_general_relativistic;
+  auto &coord = pmbp->pcoord->coord_data;
   bool flat = true;
   Real spin = 0.0;
   if (is_gr) {
-    flat = pmbp->pcoord->coord_data.is_minkowski;
-    spin = pmbp->pcoord->coord_data.bh_spin;
+    flat = coord.is_minkowski;
+    spin = coord.bh_spin;
   }
   Real &x1min = size.h_view(m).x1min;
   Real &x1max = size.h_view(m).x1max;
@@ -420,15 +421,21 @@ void ZoomData::ApplyPrimSameLevel(int m, int zm, const ZoomRegion &zregion) {
     Real x1v = CellCenterX(i-is, nx1, x1min, x1max);
     Real x2v = CellCenterX(j-js, nx2, x2min, x2max);
     Real x3v = CellCenterX(k-ks, nx3, x3min, x3max);
-    if (zregion.IsInZoomRegion(x1v, x2v, x3v)) { // apply to old zoom region
+    if (zregion.IsInRegion(x1v, x2v, x3v)) { // apply to zoom region
       // convert primitive variables to conserved variables
-      // load primitive variables from 3D array
-      w_(m,IDN,k,j,i) = w0_(zm,IDN,k,j,i);
-      w_(m,IVX,k,j,i) = w0_(zm,IVX,k,j,i);
-      w_(m,IVY,k,j,i) = w0_(zm,IVY,k,j,i);
-      w_(m,IVZ,k,j,i) = w0_(zm,IVZ,k,j,i);
-      w_(m,IEN,k,j,i) = w0_(zm,IEN,k,j,i);
-
+      if (is_gr && coord.bh_excise && zregion.IsInRegion(x1v, x2v, x3v, zregion.r_in)) {
+        w_(m,IDN,k,j,i) = coord.dexcise;
+        w_(m,IVX,k,j,i) = 0.0;
+        w_(m,IVY,k,j,i) = 0.0;
+        w_(m,IVZ,k,j,i) = 0.0;
+        w_(m,IEN,k,j,i) = coord.pexcise/(gamma-1.0);
+      } else {
+        w_(m,IDN,k,j,i) = w0_(zm,IDN,k,j,i);
+        w_(m,IVX,k,j,i) = w0_(zm,IVX,k,j,i);
+        w_(m,IVY,k,j,i) = w0_(zm,IVY,k,j,i);
+        w_(m,IVZ,k,j,i) = w0_(zm,IVZ,k,j,i);
+        w_(m,IEN,k,j,i) = w0_(zm,IEN,k,j,i);
+      }
       // Load single state of primitive variables
       MHDPrim1D w;
       w.d  = w_(m,IDN,k,j,i);
@@ -493,6 +500,7 @@ void ZoomData::ApplyPrimFromFiner(int m, int zm, const ZoomRegion &zregion) {
   auto eos = pmbp->pmhd->peos->eos_data;
   Real gamma = eos.gamma;
   bool is_gr = pmbp->pcoord->is_general_relativistic;
+  auto &coord = pmbp->pcoord->coord_data;
   bool flat = true;
   Real spin = 0.0;
   if (is_gr) {
@@ -522,14 +530,21 @@ void ZoomData::ApplyPrimFromFiner(int m, int zm, const ZoomRegion &zregion) {
     Real x1v = CellCenterX(i-is, nx1, x1min, x1max);
     Real x2v = CellCenterX(j-js, nx2, x2min, x2max);
     Real x3v = CellCenterX(k-ks, nx3, x3min, x3max);
-    if (zregion.IsInZoomRegion(x1v, x2v, x3v)) { // apply to zoom region
+    if (zregion.IsInRegion(x1v, x2v, x3v)) { // apply to zoom region
       // convert primitive variables to conserved variables
-      // load primitive variables from 3D array
-      w_(m,IDN,k,j,i) = cw0(zm,IDN,ck,cj,ci);
-      w_(m,IM1,k,j,i) = cw0(zm,IM1,ck,cj,ci);
-      w_(m,IM2,k,j,i) = cw0(zm,IM2,ck,cj,ci);
-      w_(m,IM3,k,j,i) = cw0(zm,IM3,ck,cj,ci);
-      w_(m,IEN,k,j,i) = cw0(zm,IEN,ck,cj,ci);
+      if (is_gr && coord.bh_excise && zregion.IsInRegion(x1v, x2v, x3v, zregion.r_in)) {
+        w_(m,IDN,k,j,i) = coord.dexcise;
+        w_(m,IVX,k,j,i) = 0.0;
+        w_(m,IVY,k,j,i) = 0.0;
+        w_(m,IVZ,k,j,i) = 0.0;
+        w_(m,IEN,k,j,i) = coord.pexcise/(gamma-1.0);
+      } else {
+        w_(m,IDN,k,j,i) = cw0(zm,IDN,ck,cj,ci);
+        w_(m,IVX,k,j,i) = cw0(zm,IVX,ck,cj,ci);
+        w_(m,IVY,k,j,i) = cw0(zm,IVY,ck,cj,ci);
+        w_(m,IVZ,k,j,i) = cw0(zm,IVZ,ck,cj,ci);
+        w_(m,IEN,k,j,i) = cw0(zm,IEN,ck,cj,ci);
+      }
 
       // Load single state of primitive variables
       MHDPrim1D w;

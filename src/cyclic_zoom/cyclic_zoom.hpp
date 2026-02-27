@@ -48,17 +48,18 @@ typedef struct ZoomRegion {
   Real x1c, x2c, x3c;           // center of zoom region
   Real r_0;                     // radius of zoom region at zone 0
   Real radius;                  // radius of zoom region
-  Real f_excise;                // factor for excision radius
-  Real r_excise;                // radius of excision region within zoom region
-  Real r_flux_mask;             // radius of masking flux region within zoom region
+  Real f_in;                    // factor for inner radius
+  Real r_in;                    // inner radius of zoom region
+  Real r_in_flux;               // inner radius zoom region for flux
+  Real r_in_max;                // maximum inner radius of zoom region
 
   // Kokkos inline function to check if a location is within the zoom region
   KOKKOS_INLINE_FUNCTION
-  bool IsInZoomRegion(Real x1, Real x2, Real x3) const {
-    return IsInZoomRegion(x1, x2, x3, radius);
+  bool IsInRegion(Real x1, Real x2, Real x3) const {
+    return IsInRegion(x1, x2, x3, radius);
   }
   KOKKOS_INLINE_FUNCTION
-  bool IsInZoomRegion(Real x1, Real x2, Real x3, Real r) const {
+  bool IsInRegion(Real x1, Real x2, Real x3, Real r) const {
     return (SQR(x1 - x1c) + SQR(x2 - x2c) + SQR(x3 - x3c) <= SQR(r));
   }
 } ZoomRegion;
@@ -143,6 +144,7 @@ class CyclicZoom {
   void ReinitVariables();
   void MaskVariables();
   void ApplyMask();
+  void AdjustExcisionForZoom();
   void UpdateFluxes(Driver *pdriver);
   void StoreFluxes();
   void SourceTermsFC(DvceEdgeFld4D<Real> emf);

@@ -288,14 +288,14 @@ void ZoomMesh::FindRegion(int zone) {
       mblid_eachzmb[lm+lmbs] = m;
       if (pzoom->verbose) {
         std::cout << " Rank " << global_variable::my_rank
-                  << " Finds MeshBlock " << m+mbs << " for zoom MeshBlock "
+                  << " finds MeshBlock " << m+mbs << " for zoom MeshBlock "
                   << lm+lmbs << std::endl;
       }
       ++zm_count;
     }
   }
-  if (pzoom->verbose) {
-    std::cout << " Rank " << global_variable::my_rank << " found: "
+  if (pzoom->verbose && zm_count > 0) {
+    std::cout << " Rank " << global_variable::my_rank << " found "
               << zm_count << " zoom MeshBlocks" << std::endl;
   }
   // TODO(@mhguo): you probably don't need to sync, as lloc_eachmb includes all MBs

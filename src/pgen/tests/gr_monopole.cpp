@@ -47,11 +47,11 @@ static void GetKerrSchildCoordinates(Real spin,
                                      Real *pr, Real *ptheta, Real *pphi);
 
 KOKKOS_INLINE_FUNCTION
-Real A1(Real a_norm, Real spin, Real x1, Real x2, Real x3);
+Real A1(Real a_norm, Real spin, Real x1, Real x2, Real x3, Real r_r);
 KOKKOS_INLINE_FUNCTION
-Real A2(Real a_norm, Real spin, Real x1, Real x2, Real x3);
+Real A2(Real a_norm, Real spin, Real x1, Real x2, Real x3, Real r_r);
 KOKKOS_INLINE_FUNCTION
-Real A3(Real a_norm, Real spin, Real x1, Real x2, Real x3);
+Real A3(Real a_norm, Real spin, Real x1, Real x2, Real x3, Real r_r);
 
 } // namespace
 
@@ -109,6 +109,7 @@ void ProblemGenerator::Monopole(ParameterInput *pin, const bool restart) {
   Real rhomin = pin->GetOrAddReal("problem", "rhomin", 1.e-6);
   Real umin = pin->GetOrAddReal("problem", "umin", 1.e-8);
   Real a_norm = pin->GetOrAddReal("problem", "a_norm", 1.0);
+  Real r_r = pin->GetOrAddReal("problem", "r_ramp", 1.0);
   Real rh = 1.0 + sqrt(1.-SQR(spin));
   Real rc = 10.0*rh;
   Real &dexcise = coord.dexcise;
@@ -190,9 +191,9 @@ void ProblemGenerator::Monopole(ParameterInput *pin, const bool restart) {
     Real dx2 = size.d_view(m).dx2;
     Real dx3 = size.d_view(m).dx3;
 
-    a1(m,k,j,i) = A1(a_norm, spin, x1v, x2f, x3f);
-    a2(m,k,j,i) = A2(a_norm, spin, x1f, x2v, x3f);
-    a3(m,k,j,i) = A3(a_norm, spin, x1f, x2f, x3v);
+    a1(m,k,j,i) = A1(a_norm, spin, x1v, x2f, x3f, r_r);
+    a2(m,k,j,i) = A2(a_norm, spin, x1f, x2v, x3f, r_r);
+    a3(m,k,j,i) = A3(a_norm, spin, x1f, x2f, x3v, r_r);
 
     // When neighboring MeshBock is at finer level, compute vector potential as sum of
     // values at fine grid resolution.  This guarantees flux on shared fine/coarse
@@ -225,7 +226,7 @@ void ProblemGenerator::Monopole(ParameterInput *pin, const bool restart) {
         (nghbr.d_view(m,47).lev > mblev.d_view(m) && j==je+1 && k==ke+1)) {
       Real xl = x1v + 0.25*dx1;
       Real xr = x1v - 0.25*dx1;
-      a1(m,k,j,i) = 0.5*(A1(a_norm,spin,xl,x2f,x3f) + A1(a_norm,spin,xr,x2f,x3f));
+      a1(m,k,j,i) = 0.5*(A1(a_norm,spin,xl,x2f,x3f,r_r) + A1(a_norm,spin,xr,x2f,x3f,r_r));
     }
 
     // Correct A2 at x1-faces, x3-faces, and x1x3-edges
@@ -255,7 +256,7 @@ void ProblemGenerator::Monopole(ParameterInput *pin, const bool restart) {
         (nghbr.d_view(m,39).lev > mblev.d_view(m) && i==ie+1 && k==ke+1)) {
       Real xl = x2v + 0.25*dx2;
       Real xr = x2v - 0.25*dx2;
-      a2(m,k,j,i) = 0.5*(A2(a_norm,spin,x1f,xl,x3f) + A2(a_norm,spin,x1f,xr,x3f));
+      a2(m,k,j,i) = 0.5*(A2(a_norm,spin,x1f,xl,x3f,r_r) + A2(a_norm,spin,x1f,xr,x3f,r_r));
     }
 
     // Correct A3 at x1-faces, x2-faces, and x1x2-edges
@@ -285,7 +286,7 @@ void ProblemGenerator::Monopole(ParameterInput *pin, const bool restart) {
         (nghbr.d_view(m,23).lev > mblev.d_view(m) && i==ie+1 && j==je+1)) {
       Real xl = x3v + 0.25*dx3;
       Real xr = x3v - 0.25*dx3;
-      a3(m,k,j,i) = 0.5*(A3(a_norm,spin,x1f,x2f,xl) + A3(a_norm,spin,x1f,x2f,xr));
+      a3(m,k,j,i) = 0.5*(A3(a_norm,spin,x1f,x2f,xl,r_r) + A3(a_norm,spin,x1f,x2f,xr,r_r));
     }
   });
 
@@ -368,7 +369,7 @@ static void GetKerrSchildCoordinates(Real spin, Real x1, Real x2, Real x3,
 // phi_ks = arctan((r*y + a*x)/(r*x - a*y) )
 
 KOKKOS_INLINE_FUNCTION
-Real A1(Real a_norm, Real spin, Real x1, Real x2, Real x3) {
+Real A1(Real a_norm, Real spin, Real x1, Real x2, Real x3, Real r_r) {
   Real rad = sqrt(SQR(x1) + SQR(x2) + SQR(x3));
   x3 = (rad < 1.0 && fabs(x3) < 1.0e-5) ? 1.0e-5 : x3;
   Real r, theta, phi;
@@ -382,8 +383,8 @@ Real A1(Real a_norm, Real spin, Real x1, Real x2, Real x3) {
   Real a1_val = aphi*(-x2/(SQR(x1)+SQR(x2)) + spin*x1*r/((SQR(spin)+SQR(r))*sqrt_term));
 
   // multiply by ramp function that goes to zero at r = 0
-  if (r < 1.0) {
-    a1_val *= sin(0.5*M_PI*SQR(r));
+  if (r < r_r) {
+    a1_val *= sin(0.5*M_PI*SQR(r/r_r));
   }
 
   //dphi/dx =  partial phi/partial x + partial phi/partial r partial r/partial x
@@ -394,7 +395,7 @@ Real A1(Real a_norm, Real spin, Real x1, Real x2, Real x3) {
 // Function to compute 2-component of vector potential. See comments for A1.
 
 KOKKOS_INLINE_FUNCTION
-Real A2(Real a_norm, Real spin, Real x1, Real x2, Real x3) {
+Real A2(Real a_norm, Real spin, Real x1, Real x2, Real x3, Real r_r) {
   Real rad = sqrt(SQR(x1) + SQR(x2) + SQR(x3));
   x3 = (rad < 1.0 && fabs(x3) < 1.0e-5) ? 1.0e-5 : x3;
   Real r, theta, phi;
@@ -408,8 +409,8 @@ Real A2(Real a_norm, Real spin, Real x1, Real x2, Real x3) {
   Real a2_val = aphi*( x1/(SQR(x1)+SQR(x2)) + spin*x2*r/((SQR(spin)+SQR(r))*sqrt_term) );
 
   // multiply by ramp function that goes to zero at r = 0
-  if (r < 1.0) {
-    a2_val *= sin(0.5*M_PI*SQR(r));
+  if (r < r_r) {
+    a2_val *= sin(0.5*M_PI*SQR(r/r_r));
   }
 
   //dphi/dx =  partial phi/partial y + partial phi/partial r partial r/partial y
@@ -420,7 +421,7 @@ Real A2(Real a_norm, Real spin, Real x1, Real x2, Real x3) {
 // Function to compute 3-component of vector potential. See comments for A1.
 
 KOKKOS_INLINE_FUNCTION
-Real A3(Real a_norm, Real spin, Real x1, Real x2, Real x3) {
+Real A3(Real a_norm, Real spin, Real x1, Real x2, Real x3, Real r_r) {
   Real r, theta, phi;
   GetKerrSchildCoordinates(spin, x1, x2, x3, &r, &theta, &phi);
   Real rad = sqrt(SQR(x1) + SQR(x2) + SQR(x3));
@@ -434,8 +435,8 @@ Real A3(Real a_norm, Real spin, Real x1, Real x2, Real x3) {
   Real a3_val = aphi*(spin*x3/(r*sqrt_term));
 
   // multiply by ramp function that goes to zero at r = 0
-  if (r < 1.0) {
-    a3_val *= sin(0.5*M_PI*SQR(r));
+  if (r < r_r) {
+    a3_val *= sin(0.5*M_PI*SQR(r/r_r));
   }
 
   //dphi/dx =   partial phi/partial r partial r/partial z

@@ -6,6 +6,7 @@
 //! \file zoom_criteria.cpp
 //! \brief Functions to handle cyclic zoom mesh refinement criteria
 
+#include <algorithm>
 #include <iostream>
 
 #include "athena.hpp"
@@ -16,7 +17,7 @@
 
 //----------------------------------------------------------------------------------------
 //! \fn void CyclicZoom::CheckRefinement()
-//! \brief Main function for CyclicZoom Adaptive Mesh Refinement
+//! \brief Main function for CyclicZoom adaptive mesh refinement criteria
 
 void CyclicZoom::CheckRefinement() {
   if (pmesh->time >= zstate.next_time) {
@@ -63,6 +64,8 @@ void CyclicZoom::UpdateState() {
     std::cout << "CyclicZoom AMR: old region radius = " << old_zregion.radius
               << std::endl;
     std::cout << "CyclicZoom AMR: new region radius = " << zregion.radius
+              << " r_in = " << zregion.r_in
+              << " r_in_flux = " << zregion.r_in_flux
               << std::endl;
     std::cout << "CyclicZoom AMR: time = " << pmesh->time << " runtime = " << zint.runtime
               << " next time = " << zstate.next_time << std::endl;
@@ -74,10 +77,10 @@ void CyclicZoom::UpdateState() {
 //! \brief Set the time interval for the next zoom
 
 void CyclicZoom::SetRegionAndInterval() {
-  // TODO(@mhguo): may add more complex and robust region settings later
+  // TODO(@mhguo): may add more flexible and robust region settings later
   old_zregion.radius = zregion.r_0 * std::pow(2.0,static_cast<Real>(zstate.last_zone));
   zregion.radius = zregion.r_0 * std::pow(2.0,static_cast<Real>(zstate.zone));
-  zregion.r_excise = zregion.f_excise * zregion.radius;
+  zregion.r_in = std::min(zregion.f_in * zregion.radius, zregion.r_in_max);
   Real timescale = pow(zregion.radius,zint.trun_pow);
   zint.runtime = zint.trun_facs[zstate.zone]*timescale;
   if (zint.runtime > zint.trun_max) {zint.runtime = zint.trun_max;}
