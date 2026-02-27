@@ -98,13 +98,18 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     auto &b0 = pmbp->pmhd->b0;
     auto &size = pmbp->pmb->mb_size;
     EOS_Data &eos = pmbp->pmhd->peos->eos_data;
-    Real gm1 = eos.gamma - 1.0;
-    Real p0 = 1.0/eos.gamma;
+    Real gm1 = 0.0;
+    Real p0 = 0.0;
+    if (eos.is_ideal) {
+      gm1 = eos.gamma - 1.0;
+      p0 = d_i*SQR(cs)/eos.gamma;
+      B0 = std::sqrt(2.0*p0/beta);
+    }
 
     // Set initial conditions
     par_for("pgen_turb", DevExeSpace(),0,(pmbp->nmb_thispack-1),ks,ke,js,je,is,ie,
     KOKKOS_LAMBDA(int m, int k, int j, int i) {
-      u0(m,IDN,k,j,i) = 1.0;
+      u0(m,IDN,k,j,i) = d_i;
       u0(m,IM1,k,j,i) = 0.0;
       u0(m,IM2,k,j,i) = 0.0;
       u0(m,IM3,k,j,i) = 0.0;
