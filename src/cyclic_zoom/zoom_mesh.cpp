@@ -255,6 +255,7 @@ int ZoomMesh::FindMB(int gzm) {
   int mbs = pzoom->pmesh->gids_eachrank[global_variable::my_rank];
   auto &zlloc = lloc_eachzmb[gzm];
   // check current level (zoom MBs at same level as current AMR level)
+  // TODO(@mhguo): may loop over all MBs to avoid the sync later, though it may be slower
   for (int m = 0; m < nmb; ++m) {
     auto &lloc = pzoom->pmesh->lloc_eachmb[m+mbs];
     int level_diff = zlloc.level - lloc.level;
@@ -298,8 +299,6 @@ void ZoomMesh::FindRegion(int zone) {
     std::cout << " Rank " << global_variable::my_rank << " found "
               << zm_count << " zoom MeshBlocks" << std::endl;
   }
-  // TODO(@mhguo): you probably don't need to sync, as lloc_eachmb includes all MBs
-  // TODO(@mhguo): you can loop over all meshblocks though it may be slower
   GatherNZMB(zm_count, zone);
   int lm_total = 0;
   for (int i = 0; i < global_variable::nranks; ++i) {

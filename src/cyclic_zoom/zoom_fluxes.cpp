@@ -51,7 +51,6 @@ void CyclicZoom::UpdateFluxes(Driver *pdriver) {
 
 void CyclicZoom::StoreFluxes() {
   // update electric fields in zoom region
-  // TODO(@mhguo): only stored the emf, may need to limit de to emin/max
   int zmbs = pzmesh->gzms_eachdvce[global_variable::my_rank];
   for (int zm = 0; zm < pzmesh->nzmb_thisdvce; ++zm) {
     int m = pzmesh->mblid_eachzmb[zm+zmbs];

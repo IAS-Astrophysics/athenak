@@ -68,7 +68,6 @@ void ZoomData::StoreCCData(int zm, DvceArray5D<Real> a0, DvceArray5D<Real> ca,
   int &cks = indcs.cks;  int &cke  = indcs.cke;
   int nvar = a.extent_int(1);
   int hg = indcs.ng / 2;
-  // TODO(@mhguo): may think whether we need to include ghost zones
   // TODO(@mhguo): 1D and 2D cases are not tested yet!
   // restrict in 1D
   if (pmesh->one_d) {
@@ -143,8 +142,7 @@ void ZoomData::StoreCoarsePrimData(int zm, DvceArray5D<Real> cw,
     flat = pmbp->pcoord->coord_data.is_minkowski;
     spin = pmbp->pcoord->coord_data.bh_spin;
   }
-  // TODO(@mhguo): should we consider 2D and 1D cases?
-  // TODO(@mhguo): may think whether we need to include ghost zones
+  // TODO(@mhguo): may include 1D and 2D cases
   int hg = indcs.ng / 2;
   par_for("zoom-store-cw",DevExeSpace(), cks-hg, cke+hg, cjs-hg, cje+hg, cis-hg, cie+hg,
   KOKKOS_LAMBDA(const int ck, const int cj, const int ci) {
@@ -260,7 +258,7 @@ void ZoomData::ApplyDataSameLevel(int m, int zm, const ZoomRegion &zregion) {
   }
   if (pmbp->pmhd != nullptr) {
     ApplyPrimSameLevel(m, zm, zregion);
-    // TODO(@mhguo): shall we load magnetic fields too?
+    // TODO(@mhguo): may update magnetic fields using finer data
     // UpdateBFields(m, zm);
   }
   if (pmbp->prad != nullptr) {
@@ -286,7 +284,7 @@ void ZoomData::ApplyDataFromFiner(int m, int zm, const ZoomRegion &zregion) {
   }
   if (pmbp->pmhd != nullptr) {
     ApplyPrimFromFiner(m, zm, zregion);
-    // TODO(@mhguo): shall we load magnetic fields too?
+    // TODO(@mhguo): may update magnetic fields using finer data
     // UpdateBFields(m, zm);
   }
   if (pmbp->prad != nullptr) {
