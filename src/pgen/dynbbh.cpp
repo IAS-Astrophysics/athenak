@@ -2544,20 +2544,8 @@ void BinarySinkGR(Mesh *pm, const Real bdt, DvceArray5D<Real> &u0, DvceArray5D<R
   const int nmb = pmbp->nmb_thispack;
   auto size = pmbp->pmb->mb_size;
   
-  bool use_dyngr = (pmbp->pdyngr != nullptr);
   bool use_mhd = (pmbp->pmhd != nullptr);
 
-// ---------------------------------------------------------------------
-  // STEP A0: Sync Primitives before Damping
-  // ---------------------------------------------------------------------
-  // Block-wide host update ensures w0 is synced from u0 before the kernel.
-  if (use_mhd) {
-    // MHD signature: cons, b, prim, bcc, only_testfloors, indices...
-    pmbp->pmhd->peos->ConsToPrim(u0, pmbp->pmhd->b0, w0, pmbp->pmhd->bcc0, false, is, ie, js, je, ks, ke);
-  } else {
-    // Hydro signature: cons, prim, only_testfloors, indices...
-    pmbp->phydro->peos->ConsToPrim(u0, w0, false, is, ie, js, je, ks, ke);
-  }
   Real time = pm->time;
   auto bbh_ = bbh; 
 
@@ -2634,17 +2622,14 @@ void BinarySinkGR(Mesh *pm, const Real bdt, DvceArray5D<Real> &u0, DvceArray5D<R
         get_sink_taper_and_eta(x, y, z, taper, eta_phys);
         
         if (taper > 0.0) {
-            // Note: If you prefer the inline device function here, prefix it with its 
-            // namespace (e.g., dyn_grmhd::ConsToPrim) and uncomment:
-            // ConsToPrim(u0, w0, m, k, j, i);
-            
             Real damp_factor = exp(-bdt * taper / (bbh_.sink_tau + 1.0e-15));
-            w0(m, IDN, k, j, i) *= damp_factor; 
-            if (!use_dyngr) {
-                w0(m, IEN, k, j, i) *= damp_factor; 
-            } else {
-                w0(m, IPR, k, j, i) *= damp_factor; 
-            }
+            
+            // Directly damp the conserved variables
+            u0(m, IDN, k, j, i) *= damp_factor; 
+            u0(m, IM1, k, j, i) *= damp_factor; 
+            u0(m, IM2, k, j, i) *= damp_factor; 
+            u0(m, IM3, k, j, i) *= damp_factor; 
+            u0(m, IEN, k, j, i) *= damp_factor; 
         }
       });
 
@@ -2735,15 +2720,5 @@ void BinarySinkGR(Mesh *pm, const Real bdt, DvceArray5D<Real> &u0, DvceArray5D<R
             bcc0(m, IBZ, k, j, i) = 0.5 * (b0.x3f(m, k, j, i) + b0.x3f(m, k+1, j, i));
         });
   } // End if(use_mhd)
-
-  // ---------------------------------------------------------------------
-  // STEP E: Recompute Conserved from Damped Primitives + Bcc
-  // ---------------------------------------------------------------------
-  if (use_mhd) {
-    pmbp->pmhd->peos->PrimToCons(w0, pmbp->pmhd->bcc0, u0, is, ie, js, je, ks, ke);
-  } else {
-    pmbp->phydro->peos->PrimToCons(w0, u0, is, ie, js, je, ks, ke);
-  }
 }
-
 }//namespace
