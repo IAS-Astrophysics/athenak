@@ -101,7 +101,8 @@ struct bbh_pgen {
   Real cutoff_floor;
   Real alpha_thr;
   Real radius_thr;
-  Real sink_r;
+  Real sink_r1;
+  Real sink_r2;
   Real sink_tau;
 
   Real spin;
@@ -300,8 +301,24 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   bbh.cutoff_floor = pin->GetOrAddReal("problem", "cutoff_floor", 1e-4);
   bbh.alpha_thr = pin->GetOrAddReal("problem", "alpha_thr", 0.2);
   bbh.radius_thr = pin->GetOrAddReal("problem", "radius_thr", 2.);
-  bbh.sink_r = pin->GetOrAddReal("problem", "sink_r", 1.0);
-  bbh.sink_tau = pin->GetOrAddReal("problem", "sink_tau", 0.05);
+  // --- Calculate Event Horizons for Default Sinks ---
+  // M1_t = 1 / (1 + q), M2_t = q / (1 + q) based on your trajectory formulas
+  Real m1 = (1.0 / (1.0 + bbh.q)) * bbh.adjust_mass1;
+  Real m2 = (bbh.q / (1.0 + bbh.q)) * bbh.adjust_mass2;
+  
+  // Dimensional spin magnitudes (scaled by adjusted mass)
+  Real a1_mag = bbh.a1 * bbh.adjust_mass1;
+  Real a2_mag = bbh.a2 * bbh.adjust_mass2;
+
+  // Horizon radius: r_+ = M + sqrt(M^2 - a^2)
+  // fmax ensures we don't get a NaN if the user accidentally inputs a > M
+  Real r_hor1 = m1 + std::sqrt(fmax(m1*m1 - a1_mag*a1_mag, 0.0));
+  Real r_hor2 = m2 + std::sqrt(fmax(m2*m2 - a2_mag*a2_mag, 0.0));
+
+  // Read from input, but seamlessly default to the physical horizons
+  bbh.sink_r1 = pin->GetOrAddReal("problem", "sink_r1", r_hor1);
+  bbh.sink_r2 = pin->GetOrAddReal("problem", "sink_r2", r_hor2);
+  bbh.sink_tau = pin->GetOrAddReal("problem", "sink_tau", 0.5);
 
   for (int nr = 0; nr < 16; ++nr) {
     std::string name = "radius_" + std::to_string(nr) + "_rad";
@@ -2574,8 +2591,6 @@ void BinarySinkGR(Mesh *pm, const Real bdt, DvceArray5D<Real> &u0,
         Real R1_sq = dx1*dx1 + dy1*dy1 + dz1*dz1;
         Real a1_dot_x1 = dx1*a1x + dy1*a1y + dz1*a1z;
         
-        // Exact KS radius relation for arbitrary 3D spin:
-        // r^2 = 0.5 * [ (R^2 - a^2) + sqrt( (R^2 - a^2)^2 + 4*(a \cdot x)^2 ) ]
         Real term1 = R1_sq - a1_sq;
         Real r1_ks = sqrt(0.5 * (term1 + sqrt(term1*term1 + 4.0 * a1_dot_x1*a1_dot_x1)));
 
@@ -2589,19 +2604,22 @@ void BinarySinkGR(Mesh *pm, const Real bdt, DvceArray5D<Real> &u0,
         Real term2 = R2_sq - a2_sq;
         Real r2_ks = sqrt(0.5 * (term2 + sqrt(term2*term2 + 4.0 * a2_dot_x2*a2_dot_x2)));
         
-        // --- Apply Sink if inside the specified KS radius ---
-        if (r1_ks < bbh_.sink_r || r2_ks < bbh_.sink_r) {
-            
-            // Determine which BH we are closest to for the taper logic
-            Real r_ks_min = fmin(r1_ks, r2_ks);
-            
-            // Creates a smooth taper: 0 at sink_r, 1 at the singularity
-            // Floor applied before squaring for mathematical safety
-            Real taper_linear = fmax(1.0 - (r_ks_min / bbh_.sink_r), 0.0);
-            Real taper = SQR(taper_linear);
+        // --- Evaluate independent taper strengths for each BH ---
+        // taper = 0 (no sink) at the boundary, taper = 1 (max sink) at the singularity
+        Real taper = 0.0;
+        
+        if (r1_ks < bbh_.sink_r1) {
+            taper = fmax(taper, SQR(1.0 - (r1_ks / bbh_.sink_r1)));
+        }
+        if (r2_ks < bbh_.sink_r2) {
+            taper = fmax(taper, SQR(1.0 - (r2_ks / bbh_.sink_r2)));
+        }
+
+        // --- Apply Sink if inside either specified KS radius ---
+        if (taper > 0.0) {
             
             // Apply the user-specified timescale
-            Real damp_factor = exp(-bdt * taper / bbh_.sink_tau);
+            Real damp_factor = exp(-bdt * taper / (bbh_.sink_tau + 1.0e-15));
 
             // Damp the conserved GRMHD variables. 
             // We DO NOT touch the magnetic fields here to strictly preserve DivB = 0
