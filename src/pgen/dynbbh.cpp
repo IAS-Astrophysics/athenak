@@ -101,6 +101,8 @@ struct bbh_pgen {
   Real cutoff_floor;
   Real alpha_thr;
   Real radius_thr;
+  Real sink_r;
+  Real sink_tau;
 
   Real spin;
 
@@ -135,6 +137,9 @@ struct bbh_refine bbh_ref;
 
 /* Declare functions */
 void find_traj_t(Real tt, Real traj_array[NTRAJ]);
+void AddUserSrcs(Mesh *pm, const Real bdt);
+void BinarySinkGR(Mesh *pm, const Real bdt, DvceArray5D<Real> &u0,
+                  const DvceArray5D<Real> &w0, const EOS_Data &eos_data);
 
 KOKKOS_INLINE_FUNCTION
 void numerical_4metric(const Real t, const Real x, const Real y,
@@ -295,6 +300,8 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   bbh.cutoff_floor = pin->GetOrAddReal("problem", "cutoff_floor", 1e-4);
   bbh.alpha_thr = pin->GetOrAddReal("problem", "alpha_thr", 0.2);
   bbh.radius_thr = pin->GetOrAddReal("problem", "radius_thr", 2.);
+  bbh.sink_r = pin->GetOrAddReal("problem", "sink_r", 1.0);
+  bbh.sink_tau = pin->GetOrAddReal("problem", "sink_tau", 0.05);
 
   for (int nr = 0; nr < 16; ++nr) {
     std::string name = "radius_" + std::to_string(nr) + "_rad";
@@ -318,6 +325,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
 
   user_ref_func = Refine;
   user_hist_func = TorusHistory;
+  user_srcs_func = AddUserSrcs;
 
   pmbp->padm->SetADMVariables = &SetADMVariablesToBBH;
 
@@ -2489,6 +2497,121 @@ static void InvertMetric(Real gcov[][NDIM], Real gcon[][NDIM]){
    gcon[ZZ][ZZ] = det *   ( gcov[TT][TT] * A1212 - gcov[TT][XX] * A0212 + gcov[TT][YY] * A0112 );
 
    return;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void AddUserSrcs(Mesh *pm, const Real bdt)
+//! \brief Wrapper function to route to the binary sink logic
+//----------------------------------------------------------------------------------------
+void AddUserSrcs(Mesh *pm, const Real bdt) {
+  MeshBlockPack *pmbp = pm->pmb_pack;
+  
+  // Extract conserved and primitive arrays
+  DvceArray5D<Real> &u0 = (pmbp->pmhd != nullptr) ? pmbp->pmhd->u0 : pmbp->phydro->u0;
+  DvceArray5D<Real> &w0 = (pmbp->pmhd != nullptr) ? pmbp->pmhd->w0 : pmbp->phydro->w0;
+  
+  // Extract EOS data
+  const EOS_Data &eos_data = (pmbp->pmhd != nullptr)
+                                 ? pmbp->pmhd->peos->eos_data
+                                 : pmbp->phydro->peos->eos_data;
+
+  BinarySinkGR(pm, bdt, u0, w0, eos_data);
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void BinarySinkGR(...)
+//! \brief Drains matter, momentum, and energy localized to a specified KS radius
+//----------------------------------------------------------------------------------------
+void BinarySinkGR(Mesh *pm, const Real bdt, DvceArray5D<Real> &u0,
+                  const DvceArray5D<Real> &w0, const EOS_Data &eos_data) {
+                  
+  MeshBlockPack *pmbp = pm->pmb_pack;
+  auto &indcs = pmbp->pmesh->mb_indcs;
+  int is = indcs.is, ie = indcs.ie, nx1 = indcs.nx1;
+  int js = indcs.js, je = indcs.je, nx2 = indcs.nx2;
+  int ks = indcs.ks, ke = indcs.ke, nx3 = indcs.nx3;
+  const int nmb = pmbp->nmb_thispack;
+  auto size = pmbp->pmb->mb_size;
+  
+  Real time = pm->time;
+  auto bbh_ = bbh; // Capture global BBH struct for device execution
+
+  // 1. Get current BH positions and kinematics
+  Real bbh_traj[NTRAJ];
+  find_traj_t(time, bbh_traj);
+  
+  Real xi1x = bbh_traj[X1], xi1y = bbh_traj[Y1], xi1z = bbh_traj[Z1];
+  Real xi2x = bbh_traj[X2], xi2y = bbh_traj[Y2], xi2z = bbh_traj[Z2];
+  
+  Real a1x = bbh_traj[AX1], a1y = bbh_traj[AY1], a1z = bbh_traj[AZ1];
+  Real a2x = bbh_traj[AX2], a2y = bbh_traj[AY2], a2z = bbh_traj[AZ2];
+  
+  Real a1_sq = a1x*a1x + a1y*a1y + a1z*a1z;
+  Real a2_sq = a2x*a2x + a2y*a2y + a2z*a2z;
+
+  // 2. Loop over the grid and apply localized sink
+  par_for(
+      "BinarySinkGR", DevExeSpace(), 0, nmb - 1, ks, ke, js, je, is, ie,
+      KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
+        
+        // Find Cartesian cell centers
+        Real &x1min = size.d_view(m).x1min;
+        Real &x1max = size.d_view(m).x1max;
+        Real x = CellCenterX(i - is, nx1, x1min, x1max);
+
+        Real &x2min = size.d_view(m).x2min;
+        Real &x2max = size.d_view(m).x2max;
+        Real y = CellCenterX(j - js, nx2, x2min, x2max);
+
+        Real &x3min = size.d_view(m).x3min;
+        Real &x3max = size.d_view(m).x3max;
+        Real z = CellCenterX(k - ks, nx3, x3min, x3max);
+
+        // --- Calculate KS Radius for BH1 ---
+        Real dx1 = x - xi1x;
+        Real dy1 = y - xi1y;
+        Real dz1 = z - xi1z;
+        Real R1_sq = dx1*dx1 + dy1*dy1 + dz1*dz1;
+        Real a1_dot_x1 = dx1*a1x + dy1*a1y + dz1*a1z;
+        
+        // Exact KS radius relation for arbitrary 3D spin:
+        // r^2 = 0.5 * [ (R^2 - a^2) + sqrt( (R^2 - a^2)^2 + 4*(a \cdot x)^2 ) ]
+        Real term1 = R1_sq - a1_sq;
+        Real r1_ks = sqrt(0.5 * (term1 + sqrt(term1*term1 + 4.0 * a1_dot_x1*a1_dot_x1)));
+
+        // --- Calculate KS Radius for BH2 ---
+        Real dx2 = x - xi2x;
+        Real dy2 = y - xi2y;
+        Real dz2 = z - xi2z;
+        Real R2_sq = dx2*dx2 + dy2*dy2 + dz2*dz2;
+        Real a2_dot_x2 = dx2*a2x + dy2*a2y + dz2*a2z;
+
+        Real term2 = R2_sq - a2_sq;
+        Real r2_ks = sqrt(0.5 * (term2 + sqrt(term2*term2 + 4.0 * a2_dot_x2*a2_dot_x2)));
+        
+        // --- Apply Sink if inside the specified KS radius ---
+        if (r1_ks < bbh_.sink_r || r2_ks < bbh_.sink_r) {
+            
+            // Determine which BH we are closest to for the taper logic
+            Real r_ks_min = fmin(r1_ks, r2_ks);
+            
+            // Creates a smooth taper: 0 at sink_r, 1 at the singularity
+            // Floor applied before squaring for mathematical safety
+            Real taper_linear = fmax(1.0 - (r_ks_min / bbh_.sink_r), 0.0);
+            Real taper = SQR(taper_linear);
+            
+            // Apply the user-specified timescale
+            Real damp_factor = exp(-bdt * taper / bbh_.sink_tau);
+
+            // Damp the conserved GRMHD variables. 
+            // We DO NOT touch the magnetic fields here to strictly preserve DivB = 0
+            u0(m, IDN, k, j, i) *= damp_factor; // Density
+            u0(m, IEN, k, j, i) *= damp_factor; // Energy
+            u0(m, IM1, k, j, i) *= damp_factor; // Momentum X
+            u0(m, IM2, k, j, i) *= damp_factor; // Momentum Y
+            u0(m, IM3, k, j, i) *= damp_factor; // Momentum Z
+        }
+      });
 }
 
 
