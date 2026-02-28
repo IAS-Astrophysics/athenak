@@ -30,6 +30,7 @@ namespace mhd {
 MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
     pmy_pack(ppack),
     u0("cons",1,1,1,1,1),
+    e0("efield",1,1,1,1,1),
     w0("prim",1,1,1,1,1),
     b0("B_fc",1,1,1,1),
     bcc0("B_cc",1,1,1,1,1),
@@ -133,6 +134,7 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
     int ncells3 = (indcs.nx3 > 1)? (indcs.nx3 + 2*(indcs.ng)) : 1;
     Kokkos::realloc(u0,   nmb, (nmhd+nscalars), ncells3, ncells2, ncells1);
     Kokkos::realloc(w0,   nmb, (nmhd+nscalars), ncells3, ncells2, ncells1);
+    Kokkos::realloc(e0,   nmb, 3, ncells3, ncells2, ncells1);
 
     // allocate memory for face-centered and cell-centered magnetic fields
     Kokkos::realloc(bcc0,   nmb, 3, ncells3, ncells2, ncells1);

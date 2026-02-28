@@ -139,8 +139,7 @@ struct bbh_refine bbh_ref;
 /* Declare functions */
 void find_traj_t(Real tt, Real traj_array[NTRAJ]);
 void AddUserSrcs(Mesh *pm, const Real bdt);
-void BinarySinkGR(Mesh *pm, const Real bdt, DvceArray5D<Real> &u0,
-                  const DvceArray5D<Real> &w0, const EOS_Data &eos_data);
+void BinarySinkGR(Mesh *pm, const Real bdt, DvceArray5D<Real> &u0, DvceArray5D<Real> &w0);
 
 KOKKOS_INLINE_FUNCTION
 void numerical_4metric(const Real t, const Real x, const Real y,
@@ -2517,8 +2516,7 @@ static void InvertMetric(Real gcov[][NDIM], Real gcon[][NDIM]){
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn void AddUserSrcs(Mesh *pm, const Real bdt)
-//! \brief Wrapper function to route to the binary sink logic
+// Wrapper function to route to the binary sink logic
 //----------------------------------------------------------------------------------------
 void AddUserSrcs(Mesh *pm, const Real bdt) {
   MeshBlockPack *pmbp = pm->pmb_pack;
@@ -2526,21 +2524,17 @@ void AddUserSrcs(Mesh *pm, const Real bdt) {
   // Extract conserved and primitive arrays
   DvceArray5D<Real> &u0 = (pmbp->pmhd != nullptr) ? pmbp->pmhd->u0 : pmbp->phydro->u0;
   DvceArray5D<Real> &w0 = (pmbp->pmhd != nullptr) ? pmbp->pmhd->w0 : pmbp->phydro->w0;
-  
-  // Extract EOS data
-  const EOS_Data &eos_data = (pmbp->pmhd != nullptr)
-                                 ? pmbp->pmhd->peos->eos_data
-                                 : pmbp->phydro->peos->eos_data;
 
-  BinarySinkGR(pm, bdt, u0, w0, eos_data);
+  BinarySinkGR(pm, bdt, u0, w0);
 }
 
 //----------------------------------------------------------------------------------------
 //! \fn void BinarySinkGR(...)
-//! \brief Drains matter, momentum, and energy localized to a specified KS radius
+//! \brief Drains matter, momentum, and energy localized to a KS radius.
+//!        Safely damps magnetic fields via an edge-centered resistive Electric Field
+//!        to strictly preserve DivB = 0 (Constrained Transport).
 //----------------------------------------------------------------------------------------
-void BinarySinkGR(Mesh *pm, const Real bdt, DvceArray5D<Real> &u0,
-                  const DvceArray5D<Real> &w0, const EOS_Data &eos_data) {
+void BinarySinkGR(Mesh *pm, const Real bdt, DvceArray5D<Real> &u0, DvceArray5D<Real> &w0) {
                   
   MeshBlockPack *pmbp = pm->pmb_pack;
   auto &indcs = pmbp->pmesh->mb_indcs;
@@ -2550,8 +2544,22 @@ void BinarySinkGR(Mesh *pm, const Real bdt, DvceArray5D<Real> &u0,
   const int nmb = pmbp->nmb_thispack;
   auto size = pmbp->pmb->mb_size;
   
+  bool use_dyngr = (pmbp->pdyngr != nullptr);
+  bool use_mhd = (pmbp->pmhd != nullptr);
+
+// ---------------------------------------------------------------------
+  // STEP A0: Sync Primitives before Damping
+  // ---------------------------------------------------------------------
+  // Block-wide host update ensures w0 is synced from u0 before the kernel.
+  if (use_mhd) {
+    // MHD signature: cons, b, prim, bcc, only_testfloors, indices...
+    pmbp->pmhd->peos->ConsToPrim(u0, pmbp->pmhd->b0, w0, pmbp->pmhd->bcc0, false, is, ie, js, je, ks, ke);
+  } else {
+    // Hydro signature: cons, prim, only_testfloors, indices...
+    pmbp->phydro->peos->ConsToPrim(u0, w0, false, is, ie, js, je, ks, ke);
+  }
   Real time = pm->time;
-  auto bbh_ = bbh; // Capture global BBH struct for device execution
+  auto bbh_ = bbh; 
 
   // 1. Get current BH positions and kinematics
   Real bbh_traj[NTRAJ];
@@ -2560,77 +2568,182 @@ void BinarySinkGR(Mesh *pm, const Real bdt, DvceArray5D<Real> &u0,
   Real xi1x = bbh_traj[X1], xi1y = bbh_traj[Y1], xi1z = bbh_traj[Z1];
   Real xi2x = bbh_traj[X2], xi2y = bbh_traj[Y2], xi2z = bbh_traj[Z2];
   
-  Real a1x = bbh_traj[AX1], a1y = bbh_traj[AY1], a1z = bbh_traj[AZ1];
-  Real a2x = bbh_traj[AX2], a2y = bbh_traj[AY2], a2z = bbh_traj[AZ2];
+  // Fractional mass scaling matching the metric
+  Real m1 = bbh_traj[M1T] * bbh_.adjust_mass1;
+  Real m2 = bbh_traj[M2T] * bbh_.adjust_mass2;
   
-  Real a1_sq = a1x*a1x + a1y*a1y + a1z*a1z;
-  Real a2_sq = a2x*a2x + a2y*a2y + a2z*a2z;
+  Real a1x = bbh_traj[AX1]*m1, a1y = bbh_traj[AY1]*m1, a1z = bbh_traj[AZ1]*m1;
+  Real a2x = bbh_traj[AX2]*m2, a2y = bbh_traj[AY2]*m2, a2z = bbh_traj[AZ2]*m2;
+  
+  // Helper Lambda: Computes the taper factor independently and returns the max (stronger sink)
+  auto get_sink_taper_and_eta = KOKKOS_LAMBDA(Real x, Real y, Real z, Real &taper, Real &eta_phys) {
+      Real a1_sq = a1x*a1x + a1y*a1y + a1z*a1z;
+      Real a2_sq = a2x*a2x + a2y*a2y + a2z*a2z;
 
-  // 2. Loop over the grid and apply localized sink
+      Real dx1 = x - xi1x; Real dy1 = y - xi1y; Real dz1 = z - xi1z;
+      Real adot1 = dx1*a1x + dy1*a1y + dz1*a1z;
+      Real term1 = (dx1*dx1 + dy1*dy1 + dz1*dz1) - a1_sq;
+      Real disc1 = fmax(term1*term1 + 4.0 * adot1*adot1, 0.0);
+      Real r1_sq = 0.5 * (term1 + sqrt(disc1));
+      Real r1_ks = sqrt(fmax(r1_sq, 0.0));
+
+      Real dx2 = x - xi2x; Real dy2 = y - xi2y; Real dz2 = z - xi2z;
+      Real adot2 = dx2*a2x + dy2*a2y + dz2*a2z;
+      Real term2 = (dx2*dx2 + dy2*dy2 + dz2*dz2) - a2_sq;
+      Real disc2 = fmax(term2*term2 + 4.0 * adot2*adot2, 0.0);
+      Real r2_sq = 0.5 * (term2 + sqrt(disc2));
+      Real r2_ks = sqrt(fmax(r2_sq, 0.0));
+
+      Real tau_mag = 2.0 * M_PI / (bbh_.om + 1.0e-15); 
+      
+      // Calculate independent tapers to prevent disjoint masking
+      Real taper1 = 0.0, eta1 = 0.0;
+      if (r1_ks < bbh_.sink_r1) {
+          taper1 = SQR(1.0 - (r1_ks / bbh_.sink_r1));
+          eta1   = SQR(bbh_.sink_r1) / tau_mag;
+      }
+
+      Real taper2 = 0.0, eta2 = 0.0;
+      if (r2_ks < bbh_.sink_r2) {
+          taper2 = SQR(1.0 - (r2_ks / bbh_.sink_r2));
+          eta2   = SQR(bbh_.sink_r2) / tau_mag;
+      }
+
+      // Stronger sink wins
+      if (taper1 >= taper2) { 
+          taper = taper1; 
+          eta_phys = eta1; 
+      } else { 
+          taper = taper2; 
+          eta_phys = eta2; 
+      }
+  };
+
+  // ---------------------------------------------------------------------
+  // STEP A: Standard Hydro Damping 
+  // Removes matter/energy in coordinate-time without artificial torque
+  // ---------------------------------------------------------------------
   par_for(
-      "BinarySinkGR", DevExeSpace(), 0, nmb - 1, ks, ke, js, je, is, ie,
+      "Sink_Hydro", DevExeSpace(), 0, nmb - 1, ks, ke, js, je, is, ie,
       KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
+        Real x = CellCenterX(i - is, nx1, size.d_view(m).x1min, size.d_view(m).x1max);
+        Real y = CellCenterX(j - js, nx2, size.d_view(m).x2min, size.d_view(m).x2max);
+        Real z = CellCenterX(k - ks, nx3, size.d_view(m).x3min, size.d_view(m).x3max);
+
+        Real taper, eta_phys;
+        get_sink_taper_and_eta(x, y, z, taper, eta_phys);
         
-        // Find Cartesian cell centers
-        Real &x1min = size.d_view(m).x1min;
-        Real &x1max = size.d_view(m).x1max;
-        Real x = CellCenterX(i - is, nx1, x1min, x1max);
-
-        Real &x2min = size.d_view(m).x2min;
-        Real &x2max = size.d_view(m).x2max;
-        Real y = CellCenterX(j - js, nx2, x2min, x2max);
-
-        Real &x3min = size.d_view(m).x3min;
-        Real &x3max = size.d_view(m).x3max;
-        Real z = CellCenterX(k - ks, nx3, x3min, x3max);
-
-        // --- Calculate KS Radius for BH1 ---
-        Real dx1 = x - xi1x;
-        Real dy1 = y - xi1y;
-        Real dz1 = z - xi1z;
-        Real R1_sq = dx1*dx1 + dy1*dy1 + dz1*dz1;
-        Real a1_dot_x1 = dx1*a1x + dy1*a1y + dz1*a1z;
-        
-        Real term1 = R1_sq - a1_sq;
-        Real r1_ks = sqrt(0.5 * (term1 + sqrt(term1*term1 + 4.0 * a1_dot_x1*a1_dot_x1)));
-
-        // --- Calculate KS Radius for BH2 ---
-        Real dx2 = x - xi2x;
-        Real dy2 = y - xi2y;
-        Real dz2 = z - xi2z;
-        Real R2_sq = dx2*dx2 + dy2*dy2 + dz2*dz2;
-        Real a2_dot_x2 = dx2*a2x + dy2*a2y + dz2*a2z;
-
-        Real term2 = R2_sq - a2_sq;
-        Real r2_ks = sqrt(0.5 * (term2 + sqrt(term2*term2 + 4.0 * a2_dot_x2*a2_dot_x2)));
-        
-        // --- Evaluate independent taper strengths for each BH ---
-        // taper = 0 (no sink) at the boundary, taper = 1 (max sink) at the singularity
-        Real taper = 0.0;
-        
-        if (r1_ks < bbh_.sink_r1) {
-            taper = fmax(taper, SQR(1.0 - (r1_ks / bbh_.sink_r1)));
-        }
-        if (r2_ks < bbh_.sink_r2) {
-            taper = fmax(taper, SQR(1.0 - (r2_ks / bbh_.sink_r2)));
-        }
-
-        // --- Apply Sink if inside either specified KS radius ---
         if (taper > 0.0) {
+            // Note: If you prefer the inline device function here, prefix it with its 
+            // namespace (e.g., dyn_grmhd::ConsToPrim) and uncomment:
+            // ConsToPrim(u0, w0, m, k, j, i);
             
-            // Apply the user-specified timescale
             Real damp_factor = exp(-bdt * taper / (bbh_.sink_tau + 1.0e-15));
-
-            // Damp the conserved GRMHD variables. 
-            // We DO NOT touch the magnetic fields here to strictly preserve DivB = 0
-            u0(m, IDN, k, j, i) *= damp_factor; // Density
-            u0(m, IEN, k, j, i) *= damp_factor; // Energy
-            u0(m, IM1, k, j, i) *= damp_factor; // Momentum X
-            u0(m, IM2, k, j, i) *= damp_factor; // Momentum Y
-            u0(m, IM3, k, j, i) *= damp_factor; // Momentum Z
+            w0(m, IDN, k, j, i) *= damp_factor; 
+            if (!use_dyngr) {
+                w0(m, IEN, k, j, i) *= damp_factor; 
+            } else {
+                w0(m, IPR, k, j, i) *= damp_factor; 
+            }
         }
       });
-}
 
+  // ---------------------------------------------------------------------
+  // STEP B: Edge-Centered Resistive Electric Fields (E = \eta J)
+  // ---------------------------------------------------------------------
+  if (use_mhd) {
+      auto b0 = pmbp->pmhd->b0;
+      auto bcc0 = pmbp->pmhd->bcc0;
+      auto e0 = pmbp->pmhd->e0; 
+
+      par_for("Sink_Edamp", DevExeSpace(), 0, nmb-1, ks, ke+1, js, je+1, is, ie+1,
+        KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
+          Real dx1 = size.d_view(m).dx1; Real dx2 = size.d_view(m).dx2; Real dx3 = size.d_view(m).dx3;
+
+          Real inv_dx2_sum = (1.0/(dx1*dx1)) + (1.0/(dx2*dx2)) + (1.0/(dx3*dx3));
+          Real eta_cfl = 0.1 * (1.0 / inv_dx2_sum) / (bdt + 1.0e-15);
+
+          Real x1v = CellCenterX(i - is, nx1, size.d_view(m).x1min, size.d_view(m).x1max);
+          Real x1f = LeftEdgeX(i - is, nx1, size.d_view(m).x1min, size.d_view(m).x1max);
+          Real x2v = CellCenterX(j - js, nx2, size.d_view(m).x2min, size.d_view(m).x2max);
+          Real x2f = LeftEdgeX(j - js, nx2, size.d_view(m).x2min, size.d_view(m).x2max);
+          Real x3v = CellCenterX(k - ks, nx3, size.d_view(m).x3min, size.d_view(m).x3max);
+          Real x3f = LeftEdgeX(k - ks, nx3, size.d_view(m).x3min, size.d_view(m).x3max);
+
+          // E1 = \eta J_1 (Lives exactly at x1v, x2f, x3f)
+          Real taper1, eta_phys1;
+          get_sink_taper_and_eta(x1v, x2f, x3f, taper1, eta_phys1);
+          if (taper1 > 0.0) {
+              Real j1 = (b0.x3f(m, k, j, i) - b0.x3f(m, k, j-1, i))/dx2 
+                      - (b0.x2f(m, k, j, i) - b0.x2f(m, k-1, j, i))/dx3;
+              e0(m, 0, k, j, i) = fmin(eta_phys1, eta_cfl) * taper1 * j1;
+          } else {
+              e0(m, 0, k, j, i) = 0.0;
+          }
+
+          // E2 = \eta J_2 (Lives exactly at x1f, x2v, x3f)
+          Real taper2, eta_phys2;
+          get_sink_taper_and_eta(x1f, x2v, x3f, taper2, eta_phys2);
+          if (taper2 > 0.0) {
+              Real j2 = (b0.x1f(m, k, j, i) - b0.x1f(m, k-1, j, i))/dx3 
+                      - (b0.x3f(m, k, j, i) - b0.x3f(m, k, j, i-1))/dx1;
+              e0(m, 1, k, j, i) = fmin(eta_phys2, eta_cfl) * taper2 * j2;
+          } else {
+              e0(m, 1, k, j, i) = 0.0;
+          }
+
+          // E3 = \eta J_3 (Lives exactly at x1f, x2f, x3v)
+          Real taper3, eta_phys3;
+          get_sink_taper_and_eta(x1f, x2f, x3v, taper3, eta_phys3);
+          if (taper3 > 0.0) {
+              Real j3 = (b0.x2f(m, k, j, i) - b0.x2f(m, k, j, i-1))/dx1 
+                      - (b0.x1f(m, k, j, i) - b0.x1f(m, k, j-1, i))/dx2;
+              e0(m, 2, k, j, i) = fmin(eta_phys3, eta_cfl) * taper3 * j3;
+          } else {
+              e0(m, 2, k, j, i) = 0.0;
+          }
+        });
+
+      // ---------------------------------------------------------------------
+      // STEP C: Apply Faraday's Law to damp Magnetic Face Fields (Curl of E)
+      // ---------------------------------------------------------------------
+      par_for("Sink_CurlE", DevExeSpace(), 0, nmb-1, ks, ke+1, js, je+1, is, ie+1,
+        KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
+          Real dx1 = size.d_view(m).dx1; Real dx2 = size.d_view(m).dx2; Real dx3 = size.d_view(m).dx3;
+
+          if (i <= ie+1 && j <= je && k <= ke) {
+              b0.x1f(m, k, j, i) -= bdt * ( (e0(m, 2, k, j+1, i) - e0(m, 2, k, j, i))/dx2 - 
+                                            (e0(m, 1, k+1, j, i) - e0(m, 1, k, j, i))/dx3 );
+          }
+          if (i <= ie && j <= je+1 && k <= ke) {
+              b0.x2f(m, k, j, i) -= bdt * ( (e0(m, 0, k+1, j, i) - e0(m, 0, k, j, i))/dx3 - 
+                                            (e0(m, 2, k, j, i+1) - e0(m, 2, k, j, i))/dx1 );
+          }
+          if (i <= ie && j <= je && k <= ke+1) {
+              b0.x3f(m, k, j, i) -= bdt * ( (e0(m, 1, k, j, i+1) - e0(m, 1, k, j, i))/dx1 - 
+                                            (e0(m, 0, k, j+1, i) - e0(m, 0, k, j, i))/dx2 );
+          }
+        });
+
+      // ---------------------------------------------------------------------
+      // STEP D: Re-average B-faces to Cell Centers
+      // ---------------------------------------------------------------------
+      par_for("Sink_Reaverage_B", DevExeSpace(), 0, nmb-1, ks, ke, js, je, is, ie,
+        KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
+            bcc0(m, IBX, k, j, i) = 0.5 * (b0.x1f(m, k, j, i) + b0.x1f(m, k, j, i+1));
+            bcc0(m, IBY, k, j, i) = 0.5 * (b0.x2f(m, k, j, i) + b0.x2f(m, k, j+1, i));
+            bcc0(m, IBZ, k, j, i) = 0.5 * (b0.x3f(m, k, j, i) + b0.x3f(m, k+1, j, i));
+        });
+  } // End if(use_mhd)
+
+  // ---------------------------------------------------------------------
+  // STEP E: Recompute Conserved from Damped Primitives + Bcc
+  // ---------------------------------------------------------------------
+  if (use_mhd) {
+    pmbp->pmhd->peos->PrimToCons(w0, pmbp->pmhd->bcc0, u0, is, ie, js, je, ks, ke);
+  } else {
+    pmbp->phydro->peos->PrimToCons(w0, u0, is, ie, js, je, ks, ke);
+  }
+}
 
 }//namespace

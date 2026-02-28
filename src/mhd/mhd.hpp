@@ -99,6 +99,7 @@ class MHD {
   int nscalars;            // number of passive scalars
   DvceArray5D<Real> u0;    // conserved variables
   DvceArray5D<Real> w0;    // primitive variables
+  DvceArray5D<Real> e0;    // electric field
   DvceFaceFld4D<Real> b0;  // face-centered magnetic fields
   DvceArray5D<Real> bcc0;  // cell-centered magnetic fields
 
