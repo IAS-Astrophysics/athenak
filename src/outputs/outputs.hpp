@@ -475,6 +475,19 @@ class AzimuthalAverageOutput : public BaseTypeOutput {
 };
 
 //----------------------------------------------------------------------------------------
+//! \class GeodesicSurfaceOutput
+//  \brief derived BaseTypeOutput class for output on a geodesic grid at a given radius
+class GeodesicSurfaceOutput : public BaseTypeOutput {
+ public:
+  GeodesicSurfaceOutput(ParameterInput *pin, Mesh *pm, OutputParameters oparams);
+  ~GeodesicSurfaceOutput();
+  void LoadOutputData(Mesh *pm) override;
+  void WriteOutputFile(Mesh *pm, ParameterInput *pin) override;
+ private:
+  SphericalGrid *pgrid;
+};
+
+//----------------------------------------------------------------------------------------
 //! \class EventLogOutput
 //  \brief derived BaseTypeOutput class for event counter data
 
