@@ -10,8 +10,6 @@
 //  The ambipolar EMF is: E_amb = eta_ad * [B^2 * J - (J.B) * B]
 //  where J = curl(B) is the current density.
 
-#include <string>
-
 #include "athena.hpp"
 #include "parameter_input.hpp"
 #include "mesh/meshblock.hpp"
@@ -27,7 +25,6 @@ class AmbipolarDiffusion {
 
   // data
   Real dtnew;
-  std::string amb_type;  // only "constant" implemented
   Real eta_ad;           // ambipolar diffusion coefficient
 
   // wrapper functions (dispatch to type-specific implementations)

@@ -49,7 +49,6 @@ eos         = isothermal
 reconstruct = plm
 rsolver     = hlld
 iso_sound_speed = 1.0
-ambipolar_diffusivity = constant
 eta_ad      = 0.01
 
 <output1>

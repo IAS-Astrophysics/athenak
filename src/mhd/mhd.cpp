@@ -108,7 +108,7 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
   }
 
   // Ambipolar diffusion (only constructed if needed)
-  if (pin->DoesParameterExist("mhd","ambipolar_diffusivity")) {
+  if (pin->DoesParameterExist("mhd","eta_ad")) {
     pambipolar = new AmbipolarDiffusion(ppack, pin);
   } else {
     pambipolar = nullptr;

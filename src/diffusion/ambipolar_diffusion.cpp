@@ -10,9 +10,7 @@
 
 #include <float.h>
 #include <algorithm>
-#include <iostream>
 #include <limits>
-#include <string>
 
 #include "athena.hpp"
 #include "parameter_input.hpp"
@@ -26,12 +24,6 @@
 
 AmbipolarDiffusion::AmbipolarDiffusion(MeshBlockPack *pp, ParameterInput *pin) :
     pmy_pack(pp) {
-  amb_type = pin->GetString("mhd","ambipolar_diffusivity");
-  if (amb_type.compare("constant") != 0) {
-    std::cout << "### FATAL ERROR in "<< __FILE__ <<" at line " << __LINE__ << std::endl
-              << "Invalid choice for ambipolar diffusivity type" << std::endl;
-    std::exit(EXIT_FAILURE);
-  }
   eta_ad = pin->GetReal("mhd","eta_ad");
 }
 

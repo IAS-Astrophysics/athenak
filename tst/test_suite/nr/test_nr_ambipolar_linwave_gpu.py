@@ -90,7 +90,6 @@ def build_arguments(wave_flag, dim, res, basename):
         f"mhd/iso_sound_speed=1.0",
         f"mhd/reconstruct=plm",
         f"mhd/rsolver=hlld",
-        f"mhd/ambipolar_diffusivity=constant",
         f"mhd/eta_ad={_eta_ad}",
         f"output1/file_type=hst",
         f"output1/dt=0.05",
