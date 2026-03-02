@@ -15,7 +15,7 @@
 
 //----------------------------------------------------------------------------------------
 //! \fn void CyclicZoom::SourceTermsFC()
-//! \brief Add delta E field from small scale
+//! \brief Add delta E field from small scale for constrained transport
 
 void CyclicZoom::SourceTermsFC(DvceEdgeFld4D<Real> efld) {
   // only apply when add_emf is true
@@ -95,7 +95,7 @@ void ZoomData::AddSrcTermsFC(int m, int zm, DvceEdgeFld4D<Real> efld) {
 
     // apply to zoom region
     if (zregion.IsInRegion(x1v, x2f, x3f)) {
-        ef1(m,k,j,i) += de1(zm,ck,cj,ci);
+      ef1(m,k,j,i) += de1(zm,ck,cj,ci);
     }
   });
 
@@ -118,7 +118,7 @@ void ZoomData::AddSrcTermsFC(int m, int zm, DvceEdgeFld4D<Real> efld) {
 
     // apply to zoom region
     if (zregion.IsInRegion(x1f, x2v, x3f)) {
-        ef2(m,k,j,i) += de2(zm,ck,cj,ci);
+      ef2(m,k,j,i) += de2(zm,ck,cj,ci);
     }
   });
 
@@ -141,7 +141,7 @@ void ZoomData::AddSrcTermsFC(int m, int zm, DvceEdgeFld4D<Real> efld) {
 
     // apply to zoom region
     if (zregion.IsInRegion(x1f, x2f, x3v)) {
-        ef3(m,k,j,i) += de3(zm,ck,cj,ci);
+      ef3(m,k,j,i) += de3(zm,ck,cj,ci);
     }
   });
 

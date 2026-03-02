@@ -3,8 +3,8 @@
 // Copyright(C) 2020 James M. Stone <jmstone@ias.edu> and the Athena code team
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
-//! \file zoom_mask.cpp
-//! \brief Functions for storing and applying data in zoom mask region
+//! \file zoom_datablock.cpp
+//! \brief Functions for storing and applying data in for given zoom data block
 
 #include <iostream>
 #include <utility>
@@ -47,6 +47,7 @@ void ZoomData::StoreData(int zm, int m) {
     auto i_ = pmbp->prad->i0;
     StoreCCData(zm, i0, coarse_i0, m, i_);
   }
+  return;
 }
 
 //----------------------------------------------------------------------------------------
