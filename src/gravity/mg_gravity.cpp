@@ -207,6 +207,7 @@ void MGGravityDriver::Solve(Driver *pdriver, int stage, Real dt) {
   if (mporder_ > 0) {
     if (autompo_) CalculateCenterOfMass();
     CalculateMultipoleCoefficients();
+    SyncMultipoleToDevice();
   }
 
   auto t_start = std::chrono::high_resolution_clock::now();

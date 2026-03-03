@@ -113,39 +113,6 @@ TaskStatus MultigridDriver::FillFCBoundary(Driver *pdrive, int stage) {
   return TaskStatus::complete;
 }
 
-// Device-callable multipole potential evaluation
-KOKKOS_INLINE_FUNCTION
-Real EvalMultipolePhi(Real x, Real y, Real z,
-                      const Real *mpc, int order) {
-  Real x2 = x*x, y2 = y*y, z2 = z*z;
-  Real xy = x*y, yz = y*z, zx = z*x;
-  Real r2 = x2 + y2 + z2;
-  Real ir2 = 1.0/r2, ir1 = Kokkos::sqrt(ir2);
-  Real ir3 = ir2*ir1, ir5 = ir3*ir2;
-  Real hx2my2 = 0.5*(x2-y2);
-  Real phis = ir1*mpc[0]
-    + ir3*(mpc[1]*y + mpc[2]*z + mpc[3]*x)
-    + ir5*(mpc[4]*xy + mpc[5]*yz + (3.0*z2-r2)*mpc[6]
-         + mpc[7]*zx + mpc[8]*hx2my2);
-  if (order == 4) {
-    Real ir7 = ir5*ir2, ir9 = ir7*ir2;
-    Real x2mty2 = x2-3.0*y2;
-    Real tx2my2 = 3.0*x2-y2;
-    phis += ir7*(y*tx2my2*mpc[9] + x*x2mty2*mpc[15]
-               + xy*z*mpc[10] + z*hx2my2*mpc[14]
-               + (5.0*z2-r2)*(y*mpc[11] + x*mpc[13])
-               + z*(z2-3.0*r2)*mpc[12])
-         + ir9*(xy*hx2my2*mpc[16]
-               + 0.125*(x2*x2mty2-y2*tx2my2)*mpc[24]
-               + yz*tx2my2*mpc[17] + zx*x2mty2*mpc[23]
-               + (7.0*z2-r2)*(xy*mpc[18] + hx2my2*mpc[22])
-               + (7.0*z2-3.0*r2)*(yz*mpc[19] + zx*mpc[21])
-               + (35.0*z2*z2-30.0*z2*r2+3.0*r2*r2)*mpc[20]);
-  }
-  return phis;
-}
-
-
 TaskStatus MultigridDriver::PhysicalBoundary(Driver *pdrive, int stage) {
   if (pmy_pack_->pmesh->strictly_periodic) return TaskStatus::complete;
 

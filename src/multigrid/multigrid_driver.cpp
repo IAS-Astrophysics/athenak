@@ -540,6 +540,7 @@ void MultigridDriver::TransferFromBlocksToRoot(bool initflag) {
 //! \brief Transfer data from root/octets to block coarsest levels
 
 void MultigridDriver::TransferFromRootToBlocks(bool folddata) {
+  SyncRootToHost();
   if (nreflevel_ > 0) {
     RestrictOctetsBeforeTransfer();
     SetOctetBoundariesBeforeTransfer(folddata);
@@ -794,7 +795,7 @@ void MultigridDriver::SolveIterative(Driver *pdriver) {
       }
     }
     ++n;
-    if (n >= 80) {
+    if (n >= 40) {
       std::cout << "### FATAL ERROR in MultigridDriver::SolveIterative" << std::endl
                 << "Failed to converge after " << n << " iterations (defect = "
                 << def << ", threshold = " << eps_ << ")" << std::endl;
@@ -1056,6 +1057,7 @@ void MultigridDriver::RestrictOctets() {
 void MultigridDriver::ProlongateAndCorrectOctets() {
   int clev = current_level_ - nrootlevel_;
   int flev = clev + 1;
+  if (flev == 0) SyncRootToHost();
   int ngh = mgroot_->ngh_;
   constexpr Real w0[3] = {5.0, 30.0, -3.0};
   constexpr Real w1[3] = {-3.0, 30.0, 5.0};
@@ -1148,6 +1150,7 @@ void MultigridDriver::ProlongateAndCorrectOctets() {
 void MultigridDriver::FMGProlongateOctets() {
   int clev = current_level_ - nrootlevel_;
   int flev = clev + 1;
+  if (flev == 0) SyncRootToHost();
   int ngh = mgroot_->ngh_;
   constexpr Real w0[3] = {5.0, 30.0, -3.0};
   constexpr Real w1[3] = {-3.0, 30.0, 5.0};
@@ -1788,14 +1791,20 @@ void MultigridDriver::ApplyPhysicalBoundariesOctet(MGOctet &oct, bool fcbuf) {
 }
 
 
+void MultigridDriver::SyncMultipoleToDevice() {
+  if (mporder_ <= 0) return;
+  if (d_mpcoeff_.extent(0) == 0)
+    Kokkos::realloc(d_mpcoeff_, 25);
+  auto h_mpc = Kokkos::create_mirror_view(d_mpcoeff_);
+  for (int c = 0; c < 25; ++c) h_mpc(c) = mpcoeff_[c];
+  Kokkos::deep_copy(d_mpcoeff_, h_mpc);
+}
+
+
 void MultigridDriver::MGRootBoundary() {
-  SyncRootToHost();
-  auto u = mgroot_->GetCurrentData_h();
-  int nvar = u.extent_int(1);
   int current_level = mgroot_->GetCurrentLevel();
   int nlevels = mgroot_->GetNumberOfLevels();
   int ngh = mgroot_->ngh_;
-
   int ll = nlevels - 1 - current_level;
   int nx = (mgroot_->indcs_.nx1 >> ll) + 2*ngh;
   int ny = (mgroot_->indcs_.nx2 >> ll) + 2*ngh;
@@ -1808,10 +1817,19 @@ void MultigridDriver::MGRootBoundary() {
   BoundaryFlag bc_ix3 = mg_mesh_bcs_[BoundaryFace::inner_x3];
   BoundaryFlag bc_ox3 = mg_mesh_bcs_[BoundaryFace::outer_x3];
 
-  for (int v = 0; v < nvar; ++v) {
+  if (!mgroot_->on_host_) {
+    // ---- Device path: fill boundaries directly on d_view ----
+    auto u = mgroot_->GetCurrentData();
+    int nvar = u.extent_int(1);
+
     // x1 boundaries
-    for (int k = 0; k < nz; ++k) {
-      for (int j = 0; j < ny; ++j) {
+    Kokkos::parallel_for("MGRootBnd_x1",
+      Kokkos::RangePolicy<DevExeSpace>(0, nvar * nz * ny),
+      KOKKOS_LAMBDA(const int idx) {
+        int v = idx / (nz * ny);
+        int rem = idx - v * nz * ny;
+        int k = rem / ny;
+        int j = rem - k * ny;
         for (int n = 0; n < ngh; ++n) {
           if (bc_ix1 == BoundaryFlag::periodic) {
             u(0, v, k, j, n) = u(0, v, k, j, nx - 2*ngh + n);
@@ -1828,11 +1846,15 @@ void MultigridDriver::MGRootBoundary() {
             u(0, v, k, j, nx - ngh + n) = u(0, v, k, j, nx - ngh - 1 - n);
           }
         }
-      }
-    }
-    // x2 boundaries
-    for (int k = 0; k < nz; ++k) {
-      for (int i = 0; i < nx; ++i) {
+      });
+    // x2 boundaries (x1 ghost cells already filled)
+    Kokkos::parallel_for("MGRootBnd_x2",
+      Kokkos::RangePolicy<DevExeSpace>(0, nvar * nz * nx),
+      KOKKOS_LAMBDA(const int idx) {
+        int v = idx / (nz * nx);
+        int rem = idx - v * nz * nx;
+        int k = rem / nx;
+        int i = rem - k * nx;
         for (int n = 0; n < ngh; ++n) {
           if (bc_ix2 == BoundaryFlag::periodic) {
             u(0, v, k, n, i) = u(0, v, k, ny - 2*ngh + n, i);
@@ -1849,11 +1871,15 @@ void MultigridDriver::MGRootBoundary() {
             u(0, v, k, ny - ngh + n, i) = u(0, v, k, ny - ngh - 1 - n, i);
           }
         }
-      }
-    }
-    // x3 boundaries
-    for (int j = 0; j < ny; ++j) {
-      for (int i = 0; i < nx; ++i) {
+      });
+    // x3 boundaries (x1,x2 ghost cells already filled)
+    Kokkos::parallel_for("MGRootBnd_x3",
+      Kokkos::RangePolicy<DevExeSpace>(0, nvar * ny * nx),
+      KOKKOS_LAMBDA(const int idx) {
+        int v = idx / (ny * nx);
+        int rem = idx - v * ny * nx;
+        int j = rem / nx;
+        int i = rem - j * nx;
         for (int n = 0; n < ngh; ++n) {
           if (bc_ix3 == BoundaryFlag::periodic) {
             u(0, v, n, j, i) = u(0, v, nz - 2*ngh + n, j, i);
@@ -1870,139 +1896,270 @@ void MultigridDriver::MGRootBoundary() {
             u(0, v, nz - ngh + n, j, i) = u(0, v, nz - ngh - 1 - n, j, i);
           }
         }
+      });
+
+    // Multipole expansion boundaries on device
+    if (mporder_ > 0) {
+      int ncx = (mgroot_->indcs_.nx1 >> ll);
+      int ncy = (mgroot_->indcs_.nx2 >> ll);
+      int ncz = (mgroot_->indcs_.nx3 >> ll);
+      Real x1min_v = pmy_mesh_->mesh_size.x1min;
+      Real x1max_v = pmy_mesh_->mesh_size.x1max;
+      Real x2min_v = pmy_mesh_->mesh_size.x2min;
+      Real x2max_v = pmy_mesh_->mesh_size.x2max;
+      Real x3min_v = pmy_mesh_->mesh_size.x3min;
+      Real x3max_v = pmy_mesh_->mesh_size.x3max;
+      Real dx1 = (x1max_v - x1min_v) / static_cast<Real>(ncx);
+      Real dx2 = (x2max_v - x2min_v) / static_cast<Real>(ncy);
+      Real dx3 = (x3max_v - x3min_v) / static_cast<Real>(ncz);
+      Real xo = mpo_[0], yo = mpo_[1], zo = mpo_[2];
+      int order = mporder_;
+      auto d_mpc = d_mpcoeff_;
+
+      Kokkos::parallel_for("MGRootBnd_multipole",
+        Kokkos::RangePolicy<DevExeSpace>(0, 1),
+        KOKKOS_LAMBDA(const int) {
+          if (bc_ix1 == BoundaryFlag::mg_multipole) {
+            Real xf = x1min_v - xo;
+            for (int k = ngh; k < ngh + ncz; ++k) {
+              Real zv = x3min_v + (k - ngh + 0.5)*dx3 - zo;
+              for (int j = ngh; j < ngh + ncy; ++j) {
+                Real yv = x2min_v + (j - ngh + 0.5)*dx2 - yo;
+                Real phis = EvalMultipolePhi(xf, yv, zv, d_mpc.data(), order);
+                for (int n = 0; n < ngh; ++n)
+                  u(0, 0, k, j, ngh - 1 - n) = 2.0*phis - u(0, 0, k, j, ngh + n);
+              }
+            }
+          }
+          if (bc_ox1 == BoundaryFlag::mg_multipole) {
+            Real xf = x1max_v - xo;
+            for (int k = ngh; k < ngh + ncz; ++k) {
+              Real zv = x3min_v + (k - ngh + 0.5)*dx3 - zo;
+              for (int j = ngh; j < ngh + ncy; ++j) {
+                Real yv = x2min_v + (j - ngh + 0.5)*dx2 - yo;
+                Real phis = EvalMultipolePhi(xf, yv, zv, d_mpc.data(), order);
+                for (int n = 0; n < ngh; ++n)
+                  u(0,0,k,j,ngh+ncx+n) = 2.0*phis - u(0,0,k,j,ngh+ncx-1-n);
+              }
+            }
+          }
+          if (bc_ix2 == BoundaryFlag::mg_multipole) {
+            Real yf = x2min_v - yo;
+            for (int k = ngh; k < ngh + ncz; ++k) {
+              Real zv = x3min_v + (k - ngh + 0.5)*dx3 - zo;
+              for (int i = ngh; i < ngh + ncx; ++i) {
+                Real xv = x1min_v + (i - ngh + 0.5)*dx1 - xo;
+                Real phis = EvalMultipolePhi(xv, yf, zv, d_mpc.data(), order);
+                for (int n = 0; n < ngh; ++n)
+                  u(0, 0, k, ngh - 1 - n, i) = 2.0*phis - u(0, 0, k, ngh + n, i);
+              }
+            }
+          }
+          if (bc_ox2 == BoundaryFlag::mg_multipole) {
+            Real yf = x2max_v - yo;
+            for (int k = ngh; k < ngh + ncz; ++k) {
+              Real zv = x3min_v + (k - ngh + 0.5)*dx3 - zo;
+              for (int i = ngh; i < ngh + ncx; ++i) {
+                Real xv = x1min_v + (i - ngh + 0.5)*dx1 - xo;
+                Real phis = EvalMultipolePhi(xv, yf, zv, d_mpc.data(), order);
+                for (int n = 0; n < ngh; ++n)
+                  u(0,0,k,ngh+ncy+n,i) = 2.0*phis - u(0,0,k,ngh+ncy-1-n,i);
+              }
+            }
+          }
+          if (bc_ix3 == BoundaryFlag::mg_multipole) {
+            Real zf = x3min_v - zo;
+            for (int j = ngh; j < ngh + ncy; ++j) {
+              Real yv = x2min_v + (j - ngh + 0.5)*dx2 - yo;
+              for (int i = ngh; i < ngh + ncx; ++i) {
+                Real xv = x1min_v + (i - ngh + 0.5)*dx1 - xo;
+                Real phis = EvalMultipolePhi(xv, yv, zf, d_mpc.data(), order);
+                for (int n = 0; n < ngh; ++n)
+                  u(0, 0, ngh - 1 - n, j, i) = 2.0*phis - u(0, 0, ngh + n, j, i);
+              }
+            }
+          }
+          if (bc_ox3 == BoundaryFlag::mg_multipole) {
+            Real zf = x3max_v - zo;
+            for (int j = ngh; j < ngh + ncy; ++j) {
+              Real yv = x2min_v + (j - ngh + 0.5)*dx2 - yo;
+              for (int i = ngh; i < ngh + ncx; ++i) {
+                Real xv = x1min_v + (i - ngh + 0.5)*dx1 - xo;
+                Real phis = EvalMultipolePhi(xv, yv, zf, d_mpc.data(), order);
+                for (int n = 0; n < ngh; ++n)
+                  u(0,0,ngh+ncz+n,j,i) = 2.0*phis - u(0,0,ngh+ncz-1-n,j,i);
+              }
+            }
+          }
+        });
+    }
+
+    MarkRootDeviceModified();
+  } else {
+    // ---- Host path: operate on h_view directly ----
+    auto u = mgroot_->GetCurrentData_h();
+    int nvar = u.extent_int(1);
+
+    for (int v = 0; v < nvar; ++v) {
+      for (int k = 0; k < nz; ++k) {
+        for (int j = 0; j < ny; ++j) {
+          for (int n = 0; n < ngh; ++n) {
+            if (bc_ix1 == BoundaryFlag::periodic) {
+              u(0, v, k, j, n) = u(0, v, k, j, nx - 2*ngh + n);
+            } else if (bc_ix1 == BoundaryFlag::mg_zerofixed) {
+              u(0, v, k, j, ngh - 1 - n) = -u(0, v, k, j, ngh + n);
+            } else if (bc_ix1 == BoundaryFlag::mg_zerograd) {
+              u(0, v, k, j, ngh - 1 - n) = u(0, v, k, j, ngh + n);
+            }
+            if (bc_ox1 == BoundaryFlag::periodic) {
+              u(0, v, k, j, nx - ngh + n) = u(0, v, k, j, ngh + n);
+            } else if (bc_ox1 == BoundaryFlag::mg_zerofixed) {
+              u(0, v, k, j, nx - ngh + n) = -u(0, v, k, j, nx - ngh - 1 - n);
+            } else if (bc_ox1 == BoundaryFlag::mg_zerograd) {
+              u(0, v, k, j, nx - ngh + n) = u(0, v, k, j, nx - ngh - 1 - n);
+            }
+          }
+        }
+      }
+      for (int k = 0; k < nz; ++k) {
+        for (int i = 0; i < nx; ++i) {
+          for (int n = 0; n < ngh; ++n) {
+            if (bc_ix2 == BoundaryFlag::periodic) {
+              u(0, v, k, n, i) = u(0, v, k, ny - 2*ngh + n, i);
+            } else if (bc_ix2 == BoundaryFlag::mg_zerofixed) {
+              u(0, v, k, ngh - 1 - n, i) = -u(0, v, k, ngh + n, i);
+            } else if (bc_ix2 == BoundaryFlag::mg_zerograd) {
+              u(0, v, k, ngh - 1 - n, i) = u(0, v, k, ngh + n, i);
+            }
+            if (bc_ox2 == BoundaryFlag::periodic) {
+              u(0, v, k, ny - ngh + n, i) = u(0, v, k, ngh + n, i);
+            } else if (bc_ox2 == BoundaryFlag::mg_zerofixed) {
+              u(0, v, k, ny - ngh + n, i) = -u(0, v, k, ny - ngh - 1 - n, i);
+            } else if (bc_ox2 == BoundaryFlag::mg_zerograd) {
+              u(0, v, k, ny - ngh + n, i) = u(0, v, k, ny - ngh - 1 - n, i);
+            }
+          }
+        }
+      }
+      for (int j = 0; j < ny; ++j) {
+        for (int i = 0; i < nx; ++i) {
+          for (int n = 0; n < ngh; ++n) {
+            if (bc_ix3 == BoundaryFlag::periodic) {
+              u(0, v, n, j, i) = u(0, v, nz - 2*ngh + n, j, i);
+            } else if (bc_ix3 == BoundaryFlag::mg_zerofixed) {
+              u(0, v, ngh - 1 - n, j, i) = -u(0, v, ngh + n, j, i);
+            } else if (bc_ix3 == BoundaryFlag::mg_zerograd) {
+              u(0, v, ngh - 1 - n, j, i) = u(0, v, ngh + n, j, i);
+            }
+            if (bc_ox3 == BoundaryFlag::periodic) {
+              u(0, v, nz - ngh + n, j, i) = u(0, v, ngh + n, j, i);
+            } else if (bc_ox3 == BoundaryFlag::mg_zerofixed) {
+              u(0, v, nz - ngh + n, j, i) = -u(0, v, nz - ngh - 1 - n, j, i);
+            } else if (bc_ox3 == BoundaryFlag::mg_zerograd) {
+              u(0, v, nz - ngh + n, j, i) = u(0, v, nz - ngh - 1 - n, j, i);
+            }
+          }
+        }
       }
     }
-  }
 
-  // Multipole expansion boundaries (applied after periodic/zerofixed/zerograd)
-  if (mporder_ > 0) {
-    int ncx = (mgroot_->indcs_.nx1 >> ll);
-    int ncy = (mgroot_->indcs_.nx2 >> ll);
-    int ncz = (mgroot_->indcs_.nx3 >> ll);
-    Real x1min = pmy_mesh_->mesh_size.x1min;
-    Real x1max = pmy_mesh_->mesh_size.x1max;
-    Real x2min = pmy_mesh_->mesh_size.x2min;
-    Real x2max = pmy_mesh_->mesh_size.x2max;
-    Real x3min = pmy_mesh_->mesh_size.x3min;
-    Real x3max = pmy_mesh_->mesh_size.x3max;
-    Real dx1 = (x1max - x1min) / static_cast<Real>(ncx);
-    Real dx2 = (x2max - x2min) / static_cast<Real>(ncy);
-    Real dx3 = (x3max - x3min) / static_cast<Real>(ncz);
-    Real xo = mpo_[0], yo = mpo_[1], zo = mpo_[2];
-    int order = mporder_;
+    // Multipole expansion boundaries on host
+    if (mporder_ > 0) {
+      int ncx = (mgroot_->indcs_.nx1 >> ll);
+      int ncy = (mgroot_->indcs_.nx2 >> ll);
+      int ncz = (mgroot_->indcs_.nx3 >> ll);
+      Real x1min_v = pmy_mesh_->mesh_size.x1min;
+      Real x1max_v = pmy_mesh_->mesh_size.x1max;
+      Real x2min_v = pmy_mesh_->mesh_size.x2min;
+      Real x2max_v = pmy_mesh_->mesh_size.x2max;
+      Real x3min_v = pmy_mesh_->mesh_size.x3min;
+      Real x3max_v = pmy_mesh_->mesh_size.x3max;
+      Real dx1 = (x1max_v - x1min_v) / static_cast<Real>(ncx);
+      Real dx2 = (x2max_v - x2min_v) / static_cast<Real>(ncy);
+      Real dx3 = (x3max_v - x3min_v) / static_cast<Real>(ncz);
+      Real xo = mpo_[0], yo_v = mpo_[1], zo_v = mpo_[2];
+      int order = mporder_;
 
-    auto eval_phi = [&](Real x, Real y, Real z) -> Real {
-      Real x2 = x*x, y2 = y*y, z2 = z*z;
-      Real xy = x*y, yz = y*z, zx = z*x;
-      Real r2 = x2 + y2 + z2;
-      Real ir2 = 1.0/r2, ir1 = std::sqrt(ir2);
-      Real ir3 = ir2*ir1, ir5 = ir3*ir2;
-      Real hx2my2 = 0.5*(x2-y2);
-      Real phis = ir1*mpcoeff_[0]
-        + ir3*(mpcoeff_[1]*y + mpcoeff_[2]*z + mpcoeff_[3]*x)
-        + ir5*(mpcoeff_[4]*xy + mpcoeff_[5]*yz + (3.0*z2-r2)*mpcoeff_[6]
-             + mpcoeff_[7]*zx + mpcoeff_[8]*hx2my2);
-      if (order == 4) {
-        Real ir7 = ir5*ir2, ir9 = ir7*ir2;
-        Real x2mty2 = x2-3.0*y2;
-        Real tx2my2 = 3.0*x2-y2;
-        phis += ir7*(y*tx2my2*mpcoeff_[9] + x*x2mty2*mpcoeff_[15]
-                   + xy*z*mpcoeff_[10] + z*hx2my2*mpcoeff_[14]
-                   + (5.0*z2-r2)*(y*mpcoeff_[11] + x*mpcoeff_[13])
-                   + z*(z2-3.0*r2)*mpcoeff_[12])
-             + ir9*(xy*hx2my2*mpcoeff_[16]
-                   + 0.125*(x2*x2mty2-y2*tx2my2)*mpcoeff_[24]
-                   + yz*tx2my2*mpcoeff_[17] + zx*x2mty2*mpcoeff_[23]
-                   + (7.0*z2-r2)*(xy*mpcoeff_[18] + hx2my2*mpcoeff_[22])
-                   + (7.0*z2-3.0*r2)*(yz*mpcoeff_[19] + zx*mpcoeff_[21])
-                   + (35.0*z2*z2-30.0*z2*r2+3.0*r2*r2)*mpcoeff_[20]);
+      auto eval_phi = [&](Real x, Real y, Real z) -> Real {
+        return EvalMultipolePhi(x, y, z, mpcoeff_, order);
+      };
+
+      if (bc_ix1 == BoundaryFlag::mg_multipole) {
+        Real x = x1min_v - xo;
+        for (int k = ngh; k < ngh + ncz; ++k) {
+          Real z = x3min_v + (k - ngh + 0.5)*dx3 - zo_v;
+          for (int j = ngh; j < ngh + ncy; ++j) {
+            Real y = x2min_v + (j - ngh + 0.5)*dx2 - yo_v;
+            Real phis = eval_phi(x, y, z);
+            for (int n = 0; n < ngh; ++n)
+              u(0, 0, k, j, ngh - 1 - n) = 2.0*phis - u(0, 0, k, j, ngh + n);
+          }
+        }
       }
-      return phis;
-    };
-
-    // Inner x1
-    if (bc_ix1 == BoundaryFlag::mg_multipole) {
-      Real x = x1min - xo;
-      for (int k = ngh; k < ngh + ncz; ++k) {
-        Real z = x3min + (k - ngh + 0.5)*dx3 - zo;
+      if (bc_ox1 == BoundaryFlag::mg_multipole) {
+        Real x = x1max_v - xo;
+        for (int k = ngh; k < ngh + ncz; ++k) {
+          Real z = x3min_v + (k - ngh + 0.5)*dx3 - zo_v;
+          for (int j = ngh; j < ngh + ncy; ++j) {
+            Real y = x2min_v + (j - ngh + 0.5)*dx2 - yo_v;
+            Real phis = eval_phi(x, y, z);
+            for (int n = 0; n < ngh; ++n)
+              u(0, 0, k, j, ngh+ncx+n) = 2.0*phis - u(0, 0, k, j, ngh+ncx-1-n);
+          }
+        }
+      }
+      if (bc_ix2 == BoundaryFlag::mg_multipole) {
+        Real y = x2min_v - yo_v;
+        for (int k = ngh; k < ngh + ncz; ++k) {
+          Real z = x3min_v + (k - ngh + 0.5)*dx3 - zo_v;
+          for (int i = ngh; i < ngh + ncx; ++i) {
+            Real x = x1min_v + (i - ngh + 0.5)*dx1 - xo;
+            Real phis = eval_phi(x, y, z);
+            for (int n = 0; n < ngh; ++n)
+              u(0, 0, k, ngh - 1 - n, i) = 2.0*phis - u(0, 0, k, ngh + n, i);
+          }
+        }
+      }
+      if (bc_ox2 == BoundaryFlag::mg_multipole) {
+        Real y = x2max_v - yo_v;
+        for (int k = ngh; k < ngh + ncz; ++k) {
+          Real z = x3min_v + (k - ngh + 0.5)*dx3 - zo_v;
+          for (int i = ngh; i < ngh + ncx; ++i) {
+            Real x = x1min_v + (i - ngh + 0.5)*dx1 - xo;
+            Real phis = eval_phi(x, y, z);
+            for (int n = 0; n < ngh; ++n)
+              u(0, 0, k, ngh+ncy+n, i) = 2.0*phis - u(0, 0, k, ngh+ncy-1-n, i);
+          }
+        }
+      }
+      if (bc_ix3 == BoundaryFlag::mg_multipole) {
+        Real z = x3min_v - zo_v;
         for (int j = ngh; j < ngh + ncy; ++j) {
-          Real y = x2min + (j - ngh + 0.5)*dx2 - yo;
-          Real phis = eval_phi(x, y, z);
-          for (int n = 0; n < ngh; ++n)
-            u(0, 0, k, j, ngh - 1 - n) = 2.0*phis - u(0, 0, k, j, ngh + n);
+          Real y = x2min_v + (j - ngh + 0.5)*dx2 - yo_v;
+          for (int i = ngh; i < ngh + ncx; ++i) {
+            Real x = x1min_v + (i - ngh + 0.5)*dx1 - xo;
+            Real phis = eval_phi(x, y, z);
+            for (int n = 0; n < ngh; ++n)
+              u(0, 0, ngh - 1 - n, j, i) = 2.0*phis - u(0, 0, ngh + n, j, i);
+          }
         }
       }
-    }
-    // Outer x1
-    if (bc_ox1 == BoundaryFlag::mg_multipole) {
-      Real x = x1max - xo;
-      for (int k = ngh; k < ngh + ncz; ++k) {
-        Real z = x3min + (k - ngh + 0.5)*dx3 - zo;
+      if (bc_ox3 == BoundaryFlag::mg_multipole) {
+        Real z = x3max_v - zo_v;
         for (int j = ngh; j < ngh + ncy; ++j) {
-          Real y = x2min + (j - ngh + 0.5)*dx2 - yo;
-          Real phis = eval_phi(x, y, z);
-          for (int n = 0; n < ngh; ++n)
-            u(0, 0, k, j, ngh + ncx + n) = 2.0*phis - u(0, 0, k, j, ngh + ncx - 1 - n);
-        }
-      }
-    }
-    // Inner x2
-    if (bc_ix2 == BoundaryFlag::mg_multipole) {
-      Real y = x2min - yo;
-      for (int k = ngh; k < ngh + ncz; ++k) {
-        Real z = x3min + (k - ngh + 0.5)*dx3 - zo;
-        for (int i = ngh; i < ngh + ncx; ++i) {
-          Real x = x1min + (i - ngh + 0.5)*dx1 - xo;
-          Real phis = eval_phi(x, y, z);
-          for (int n = 0; n < ngh; ++n)
-            u(0, 0, k, ngh - 1 - n, i) = 2.0*phis - u(0, 0, k, ngh + n, i);
-        }
-      }
-    }
-    // Outer x2
-    if (bc_ox2 == BoundaryFlag::mg_multipole) {
-      Real y = x2max - yo;
-      for (int k = ngh; k < ngh + ncz; ++k) {
-        Real z = x3min + (k - ngh + 0.5)*dx3 - zo;
-        for (int i = ngh; i < ngh + ncx; ++i) {
-          Real x = x1min + (i - ngh + 0.5)*dx1 - xo;
-          Real phis = eval_phi(x, y, z);
-          for (int n = 0; n < ngh; ++n)
-            u(0, 0, k, ngh + ncy + n, i) = 2.0*phis - u(0, 0, k, ngh + ncy - 1 - n, i);
-        }
-      }
-    }
-    // Inner x3
-    if (bc_ix3 == BoundaryFlag::mg_multipole) {
-      Real z = x3min - zo;
-      for (int j = ngh; j < ngh + ncy; ++j) {
-        Real y = x2min + (j - ngh + 0.5)*dx2 - yo;
-        for (int i = ngh; i < ngh + ncx; ++i) {
-          Real x = x1min + (i - ngh + 0.5)*dx1 - xo;
-          Real phis = eval_phi(x, y, z);
-          for (int n = 0; n < ngh; ++n)
-            u(0, 0, ngh - 1 - n, j, i) = 2.0*phis - u(0, 0, ngh + n, j, i);
-        }
-      }
-    }
-    // Outer x3
-    if (bc_ox3 == BoundaryFlag::mg_multipole) {
-      Real z = x3max - zo;
-      for (int j = ngh; j < ngh + ncy; ++j) {
-        Real y = x2min + (j - ngh + 0.5)*dx2 - yo;
-        for (int i = ngh; i < ngh + ncx; ++i) {
-          Real x = x1min + (i - ngh + 0.5)*dx1 - xo;
-          Real phis = eval_phi(x, y, z);
-          for (int n = 0; n < ngh; ++n)
-            u(0, 0, ngh + ncz + n, j, i) = 2.0*phis - u(0, 0, ngh + ncz - 1 - n, j, i);
+          Real y = x2min_v + (j - ngh + 0.5)*dx2 - yo_v;
+          for (int i = ngh; i < ngh + ncx; ++i) {
+            Real x = x1min_v + (i - ngh + 0.5)*dx1 - xo;
+            Real phis = eval_phi(x, y, z);
+            for (int n = 0; n < ngh; ++n)
+              u(0, 0, ngh+ncz+n, j, i) = 2.0*phis - u(0, 0, ngh+ncz-1-n, j, i);
+          }
         }
       }
     }
   }
 
   root_flat_buf_stale_ = true;
-  root_sync_state_ = RootSyncState::HOST_MODIFIED;
-  SyncRootToDevice();
 }
 
 

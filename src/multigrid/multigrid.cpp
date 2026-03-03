@@ -75,6 +75,9 @@ Multigrid::Multigrid(MultigridDriver *pmd, MeshBlockPack *pmbp, int nghost,
   rdz_ = (size_.x3max-size_.x3min)/static_cast<Real>(indcs_.nx3);
 
   block_rdx_ = DualArray1D<Real>("block_rdx", nmmb_);
+  Kokkos::realloc(fc_childx_, nmmb_);
+  Kokkos::realloc(fc_childy_, nmmb_);
+  Kokkos::realloc(fc_childz_, nmmb_);
   {
     auto brdx_h = block_rdx_.h_view;
     if (pmy_pack_ != nullptr) {
@@ -202,6 +205,24 @@ void Multigrid::UpdateBlockDx() {
     brdx_h(m) = (mb_size.h_view(m).x1max - mb_size.h_view(m).x1min) / rnx1;
   }
   Kokkos::deep_copy(block_rdx_.d_view, brdx_h);
+
+  // Compute per-block child octant positions for FC ghost fills
+  auto &mbgid = pmy_pack_->pmb->mb_gid;
+  auto *lloc = pmy_mesh_->lloc_eachmb;
+  int root_level = pmy_mesh_->root_level;
+  auto cx_h = Kokkos::create_mirror_view(fc_childx_);
+  auto cy_h = Kokkos::create_mirror_view(fc_childy_);
+  auto cz_h = Kokkos::create_mirror_view(fc_childz_);
+  for (int m = 0; m < nmmb_; ++m) {
+    int gid = mbgid.h_view(m);
+    LogicalLocation &loc = lloc[gid];
+    cx_h(m) = (loc.level > root_level) ? static_cast<int>(loc.lx1 & 1) : 0;
+    cy_h(m) = (loc.level > root_level) ? static_cast<int>(loc.lx2 & 1) : 0;
+    cz_h(m) = (loc.level > root_level) ? static_cast<int>(loc.lx3 & 1) : 0;
+  }
+  Kokkos::deep_copy(fc_childx_, cx_h);
+  Kokkos::deep_copy(fc_childy_, cy_h);
+  Kokkos::deep_copy(fc_childz_, cz_h);
 }
 
 void Multigrid::ReallocateForAMR() {
@@ -211,6 +232,9 @@ void Multigrid::ReallocateForAMR() {
   nmmb_ = new_nmmb;
 
   Kokkos::realloc(block_rdx_, nmmb_);
+  Kokkos::realloc(fc_childx_, nmmb_);
+  Kokkos::realloc(fc_childy_, nmmb_);
+  Kokkos::realloc(fc_childz_, nmmb_);
   UpdateBlockDx();
 
   for (int l = 0; l < nlevel_; l++) {
@@ -1301,289 +1325,286 @@ TaskStatus MultigridBoundaryValues::FillFineCoarseMGGhosts(DvceArray5D<Real> &u)
   int nmb = pmy_pack->nmb_thispack;
   int nnghbr = pmy_pack->pmb->nnghbr;
   int my_rank = global_variable::my_rank;
-  auto &nghbr = pmy_pack->pmb->nghbr;
-  auto &mblev = pmy_pack->pmb->mb_lev;
-  auto &mbgid = pmy_pack->pmb->mb_gid;
-  auto &lloc = pmy_pack->pmesh->lloc_eachmb;
+  auto nghbr_d = pmy_pack->pmb->nghbr.d_view;
+  auto mblev_d = pmy_pack->pmb->mb_lev.d_view;
+  auto mbgid_d = pmy_pack->pmb->mb_gid.d_view;
+  auto fc_cx = pmy_mg->fc_childx_;
+  auto fc_cy = pmy_mg->fc_childy_;
+  auto fc_cz = pmy_mg->fc_childz_;
 
-  auto u_h = Kokkos::create_mirror_view_and_copy(HostMemSpace(), u);
-  bool modified = false;
+  int nmb_l = nmb;
+  int nnghbr_l = nnghbr;
+  int my_rank_l = my_rank;
+  int nvar_l = nvar;
+  int ngh_l = ngh;
+  int ncells_l = ncells;
   constexpr Real ot = 1.0/3.0;
 
-  for (int m = 0; m < nmb; ++m) {
-    int m_lev = mblev.h_view(m);
-    int m_gid = mbgid.h_view(m);
-    LogicalLocation m_loc = lloc[m_gid];
+  Kokkos::parallel_for("FillFCMGGhosts",
+    Kokkos::RangePolicy<DevExeSpace>(0, nmb),
+    KOKKOS_LAMBDA(const int m) {
+      int m_lev = mblev_d(m);
+      int child_x = fc_cx(m);
+      int child_y = fc_cy(m);
+      int child_z = fc_cz(m);
+      int half = ncells_l / 2;
 
-    for (int ox3 = -1; ox3 <= 1; ++ox3) {
-      for (int ox2 = -1; ox2 <= 1; ++ox2) {
-        for (int ox1 = -1; ox1 <= 1; ++ox1) {
-          if (ox1 == 0 && ox2 == 0 && ox3 == 0) continue;
-          int nface = (ox1!=0?1:0) + (ox2!=0?1:0) + (ox3!=0?1:0);
+      for (int ox3 = -1; ox3 <= 1; ++ox3) {
+        for (int ox2 = -1; ox2 <= 1; ++ox2) {
+          for (int ox1 = -1; ox1 <= 1; ++ox1) {
+            if (ox1 == 0 && ox2 == 0 && ox3 == 0) continue;
+            int nface = (ox1!=0?1:0) + (ox2!=0?1:0) + (ox3!=0?1:0);
 
-          for (int f2 = 0; f2 <= 1; ++f2) {
-            for (int f1 = 0; f1 <= 1; ++f1) {
-              int n = NeighborIndex(ox1, ox2, ox3, f1, f2);
-              if (n < 0 || n >= nnghbr) continue;
-              if (nghbr.h_view(m, n).gid < 0) continue;
+            for (int f2 = 0; f2 <= 1; ++f2) {
+              for (int f1 = 0; f1 <= 1; ++f1) {
+                int n = NeighborIndex(ox1, ox2, ox3, f1, f2);
+                if (n < 0 || n >= nnghbr_l) continue;
+                if (nghbr_d(m, n).gid < 0) continue;
 
-              int nlev = nghbr.h_view(m, n).lev;
-              if (nlev == m_lev) continue;
-              if (nghbr.h_view(m, n).rank != my_rank) continue;
+                int nlev = nghbr_d(m, n).lev;
+                if (nlev == m_lev) continue;
+                if (nghbr_d(m, n).rank != my_rank_l) continue;
 
-              int dm = nghbr.h_view(m, n).gid - mbgid.h_view(0);
-              if (dm < 0 || dm >= nmb) continue;
+                int dm = nghbr_d(m, n).gid - mbgid_d(0);
+                if (dm < 0 || dm >= nmb_l) continue;
 
-              int child_x = m_loc.lx1 & 1;
-              int child_y = m_loc.lx2 & 1;
-              int child_z = m_loc.lx3 & 1;
-              int half = ncells / 2;
-
-              if (nlev < m_lev && nface == 1) {
-                if (ox1 != 0) {
-                  int fig = (ox1 < 0) ? ngh - 1 : ngh + ncells;
-                  int fi  = (ox1 < 0) ? ngh : ngh + ncells - 1;
-                  int si  = (ox1 < 0) ? ngh + ncells - 1 : ngh;
-                  int sj0 = ngh + child_y * half;
-                  int sk0 = ngh + child_z * half;
-                  for (int v = 0; v < nvar; ++v) {
-                    for (int sk = sk0; sk < sk0 + half; ++sk) {
+                if (nlev < m_lev && nface == 1) {
+                  // Coarser neighbor, face: flux-conserving prolongation
+                  if (ox1 != 0) {
+                    int fig = (ox1 < 0) ? ngh_l - 1 : ngh_l + ncells_l;
+                    int fi  = (ox1 < 0) ? ngh_l : ngh_l + ncells_l - 1;
+                    int si  = (ox1 < 0) ? ngh_l + ncells_l - 1 : ngh_l;
+                    int sj0 = ngh_l + child_y * half;
+                    int sk0 = ngh_l + child_z * half;
+                    for (int v = 0; v < nvar_l; ++v) {
+                      for (int sk = sk0; sk < sk0 + half; ++sk) {
+                        for (int sj = sj0; sj < sj0 + half; ++sj) {
+                          int fj = ngh_l + 2*(sj - sj0);
+                          int fk = ngh_l + 2*(sk - sk0);
+                          Real cc = u(dm,v,sk,sj,si);
+                          int sjm = (sj > ngh_l) ? sj-1 : sj;
+                          int sjp = (sj < ngh_l+ncells_l-1) ? sj+1 : sj;
+                          int skm = (sk > ngh_l) ? sk-1 : sk;
+                          int skp = (sk < ngh_l+ncells_l-1) ? sk+1 : sk;
+                          Real gy = 0.125*(u(dm,v,sk,sjp,si)-u(dm,v,sk,sjm,si));
+                          Real gz = 0.125*(u(dm,v,skp,sj,si)-u(dm,v,skm,sj,si));
+                          u(m,v,fk  ,fj  ,fig)=ot*(2.0*(cc-gy-gz)+u(m,v,fk  ,fj  ,fi));
+                          u(m,v,fk  ,fj+1,fig)=ot*(2.0*(cc+gy-gz)+u(m,v,fk  ,fj+1,fi));
+                          u(m,v,fk+1,fj  ,fig)=ot*(2.0*(cc-gy+gz)+u(m,v,fk+1,fj  ,fi));
+                          u(m,v,fk+1,fj+1,fig)=ot*(2.0*(cc+gy+gz)+u(m,v,fk+1,fj+1,fi));
+                        }
+                      }
+                    }
+                  } else if (ox2 != 0) {
+                    int fjg = (ox2 < 0) ? ngh_l - 1 : ngh_l + ncells_l;
+                    int fj  = (ox2 < 0) ? ngh_l : ngh_l + ncells_l - 1;
+                    int sj  = (ox2 < 0) ? ngh_l + ncells_l - 1 : ngh_l;
+                    int si0 = ngh_l + child_x * half;
+                    int sk0 = ngh_l + child_z * half;
+                    for (int v = 0; v < nvar_l; ++v) {
+                      for (int sk = sk0; sk < sk0 + half; ++sk) {
+                        for (int si = si0; si < si0 + half; ++si) {
+                          int fi = ngh_l + 2*(si - si0);
+                          int fk = ngh_l + 2*(sk - sk0);
+                          Real cc = u(dm,v,sk,sj,si);
+                          int sim = (si > ngh_l) ? si-1 : si;
+                          int sip = (si < ngh_l+ncells_l-1) ? si+1 : si;
+                          int skm = (sk > ngh_l) ? sk-1 : sk;
+                          int skp = (sk < ngh_l+ncells_l-1) ? sk+1 : sk;
+                          Real gx = 0.125*(u(dm,v,sk,sj,sip)-u(dm,v,sk,sj,sim));
+                          Real gz = 0.125*(u(dm,v,skp,sj,si)-u(dm,v,skm,sj,si));
+                          u(m,v,fk  ,fjg,fi  )=ot*(2.0*(cc-gx-gz)+u(m,v,fk  ,fj,fi  ));
+                          u(m,v,fk  ,fjg,fi+1)=ot*(2.0*(cc+gx-gz)+u(m,v,fk  ,fj,fi+1));
+                          u(m,v,fk+1,fjg,fi  )=ot*(2.0*(cc-gx+gz)+u(m,v,fk+1,fj,fi  ));
+                          u(m,v,fk+1,fjg,fi+1)=ot*(2.0*(cc+gx+gz)+u(m,v,fk+1,fj,fi+1));
+                        }
+                      }
+                    }
+                  } else {
+                    int fkg = (ox3 < 0) ? ngh_l - 1 : ngh_l + ncells_l;
+                    int fk  = (ox3 < 0) ? ngh_l : ngh_l + ncells_l - 1;
+                    int sk  = (ox3 < 0) ? ngh_l + ncells_l - 1 : ngh_l;
+                    int si0 = ngh_l + child_x * half;
+                    int sj0 = ngh_l + child_y * half;
+                    for (int v = 0; v < nvar_l; ++v) {
                       for (int sj = sj0; sj < sj0 + half; ++sj) {
-                        int fj = ngh + 2*(sj - sj0);
-                        int fk = ngh + 2*(sk - sk0);
-                        Real cc = u_h(dm,v,sk,sj,si);
-                        int sjm = (sj > ngh) ? sj-1 : sj;
-                        int sjp = (sj < ngh+ncells-1) ? sj+1 : sj;
-                        int skm = (sk > ngh) ? sk-1 : sk;
-                        int skp = (sk < ngh+ncells-1) ? sk+1 : sk;
-                        Real gy = 0.125*(u_h(dm,v,sk,sjp,si)-u_h(dm,v,sk,sjm,si));
-                        Real gz = 0.125*(u_h(dm,v,skp,sj,si)-u_h(dm,v,skm,sj,si));
-                        u_h(m,v,fk  ,fj  ,fig)=ot*(2.0*(cc-gy-gz)+u_h(m,v,fk  ,fj  ,fi));
-                        u_h(m,v,fk  ,fj+1,fig)=ot*(2.0*(cc+gy-gz)+u_h(m,v,fk  ,fj+1,fi));
-                        u_h(m,v,fk+1,fj  ,fig)=ot*(2.0*(cc-gy+gz)+u_h(m,v,fk+1,fj  ,fi));
-                        u_h(m,v,fk+1,fj+1,fig)=ot*(2.0*(cc+gy+gz)+u_h(m,v,fk+1,fj+1,fi));
+                        for (int si = si0; si < si0 + half; ++si) {
+                          int fi = ngh_l + 2*(si - si0);
+                          int fj = ngh_l + 2*(sj - sj0);
+                          Real cc = u(dm,v,sk,sj,si);
+                          int sim = (si > ngh_l) ? si-1 : si;
+                          int sip = (si < ngh_l+ncells_l-1) ? si+1 : si;
+                          int sjm = (sj > ngh_l) ? sj-1 : sj;
+                          int sjp = (sj < ngh_l+ncells_l-1) ? sj+1 : sj;
+                          Real gx = 0.125*(u(dm,v,sk,sj,sip)-u(dm,v,sk,sj,sim));
+                          Real gy = 0.125*(u(dm,v,sk,sjp,si)-u(dm,v,sk,sjm,si));
+                          u(m,v,fkg,fj  ,fi  )=ot*(2.0*(cc-gx-gy)+u(m,v,fk,fj  ,fi  ));
+                          u(m,v,fkg,fj  ,fi+1)=ot*(2.0*(cc+gx-gy)+u(m,v,fk,fj  ,fi+1));
+                          u(m,v,fkg,fj+1,fi  )=ot*(2.0*(cc-gx+gy)+u(m,v,fk,fj+1,fi  ));
+                          u(m,v,fkg,fj+1,fi+1)=ot*(2.0*(cc+gx+gy)+u(m,v,fk,fj+1,fi+1));
+                        }
                       }
                     }
                   }
-                } else if (ox2 != 0) {
-                  int fjg = (ox2 < 0) ? ngh - 1 : ngh + ncells;
-                  int fj  = (ox2 < 0) ? ngh : ngh + ncells - 1;
-                  int sj  = (ox2 < 0) ? ngh + ncells - 1 : ngh;
-                  int si0 = ngh + child_x * half;
-                  int sk0 = ngh + child_z * half;
-                  for (int v = 0; v < nvar; ++v) {
-                    for (int sk = sk0; sk < sk0 + half; ++sk) {
-                      for (int si = si0; si < si0 + half; ++si) {
-                        int fi = ngh + 2*(si - si0);
-                        int fk = ngh + 2*(sk - sk0);
-                        Real cc = u_h(dm,v,sk,sj,si);
-                        int sim = (si > ngh) ? si-1 : si;
-                        int sip = (si < ngh+ncells-1) ? si+1 : si;
-                        int skm = (sk > ngh) ? sk-1 : sk;
-                        int skp = (sk < ngh+ncells-1) ? sk+1 : sk;
-                        Real gx = 0.125*(u_h(dm,v,sk,sj,sip)-u_h(dm,v,sk,sj,sim));
-                        Real gz = 0.125*(u_h(dm,v,skp,sj,si)-u_h(dm,v,skm,sj,si));
-                        u_h(m,v,fk  ,fjg,fi  )=ot*(2.0*(cc-gx-gz)+u_h(m,v,fk  ,fj,fi  ));
-                        u_h(m,v,fk  ,fjg,fi+1)=ot*(2.0*(cc+gx-gz)+u_h(m,v,fk  ,fj,fi+1));
-                        u_h(m,v,fk+1,fjg,fi  )=ot*(2.0*(cc-gx+gz)+u_h(m,v,fk+1,fj,fi  ));
-                        u_h(m,v,fk+1,fjg,fi+1)=ot*(2.0*(cc+gx+gz)+u_h(m,v,fk+1,fj,fi+1));
+
+                } else if (nlev > m_lev && nface == 1) {
+                  // Finer neighbor, face: flux-conserving restriction
+                  int sub_x = 0, sub_y = 0, sub_z = 0;
+                  if (ox1 != 0) { sub_y = f1; sub_z = f2; }
+                  if (ox2 != 0) { sub_x = f1; sub_z = f2; }
+                  if (ox3 != 0) { sub_x = f1; sub_y = f2; }
+
+                  int gis, gie, gjs, gje, gks, gke;
+                  if (ox1 < 0)      { gis = 0;             gie = ngh_l - 1; }
+                  else if (ox1 > 0) { gis = ngh_l+ncells_l; gie = ngh_l+ncells_l+ngh_l-1; }
+                  else { gis = ngh_l+sub_x*half; gie = ngh_l+sub_x*half+half-1; }
+                  if (ox2 < 0)      { gjs = 0;             gje = ngh_l - 1; }
+                  else if (ox2 > 0) { gjs = ngh_l+ncells_l; gje = ngh_l+ncells_l+ngh_l-1; }
+                  else { gjs = ngh_l+sub_y*half; gje = ngh_l+sub_y*half+half-1; }
+                  if (ox3 < 0)      { gks = 0;             gke = ngh_l - 1; }
+                  else if (ox3 > 0) { gks = ngh_l+ncells_l; gke = ngh_l+ncells_l+ngh_l-1; }
+                  else { gks = ngh_l+sub_z*half; gke = ngh_l+sub_z*half+half-1; }
+
+                  int oi = (ox1 < 0) ? 1 : (ox1 > 0) ? -1 : 0;
+                  int oj = (ox2 < 0) ? 1 : (ox2 > 0) ? -1 : 0;
+                  int ok = (ox3 < 0) ? 1 : (ox3 > 0) ? -1 : 0;
+
+                  if (ox1 != 0) {
+                    int fi = (ox1 > 0) ? ngh_l : ngh_l + ncells_l - 1;
+                    for (int v = 0; v < nvar_l; ++v) {
+                      for (int gk = gks; gk <= gke; ++gk) {
+                        for (int gj = gjs; gj <= gje; ++gj) {
+                          int fj0 = ngh_l + 2*(gj - (ngh_l + sub_y*half));
+                          int fk0 = ngh_l + 2*(gk - (ngh_l + sub_z*half));
+                          Real favg = 0.25*(u(dm,v,fk0,fj0,fi)+u(dm,v,fk0,fj0+1,fi)
+                                           +u(dm,v,fk0+1,fj0,fi)+u(dm,v,fk0+1,fj0+1,fi));
+                          u(m,v,gk,gj,gis) = ot*(4.0*favg - u(m,v,gk+ok,gj+oj,gis+oi));
+                        }
+                      }
+                    }
+                  } else if (ox2 != 0) {
+                    int fj = (ox2 > 0) ? ngh_l : ngh_l + ncells_l - 1;
+                    for (int v = 0; v < nvar_l; ++v) {
+                      for (int gk = gks; gk <= gke; ++gk) {
+                        for (int gi = gis; gi <= gie; ++gi) {
+                          int fi0 = ngh_l + 2*(gi - (ngh_l + sub_x*half));
+                          int fk0 = ngh_l + 2*(gk - (ngh_l + sub_z*half));
+                          Real favg = 0.25*(u(dm,v,fk0,fj,fi0)+u(dm,v,fk0,fj,fi0+1)
+                                           +u(dm,v,fk0+1,fj,fi0)+u(dm,v,fk0+1,fj,fi0+1));
+                          u(m,v,gk,gjs,gi) = ot*(4.0*favg - u(m,v,gk+ok,gjs+oj,gi+oi));
+                        }
+                      }
+                    }
+                  } else {
+                    int fk = (ox3 > 0) ? ngh_l : ngh_l + ncells_l - 1;
+                    for (int v = 0; v < nvar_l; ++v) {
+                      for (int gj = gjs; gj <= gje; ++gj) {
+                        for (int gi = gis; gi <= gie; ++gi) {
+                          int fi0 = ngh_l + 2*(gi - (ngh_l + sub_x*half));
+                          int fj0 = ngh_l + 2*(gj - (ngh_l + sub_y*half));
+                          Real favg = 0.25*(u(dm,v,fk,fj0,fi0)+u(dm,v,fk,fj0,fi0+1)
+                                           +u(dm,v,fk,fj0+1,fi0)+u(dm,v,fk,fj0+1,fi0+1));
+                          u(m,v,gks,gj,gi) = ot*(4.0*favg - u(m,v,gks+ok,gj+oj,gi+oi));
+                        }
                       }
                     }
                   }
-                } else {
-                  int fkg = (ox3 < 0) ? ngh - 1 : ngh + ncells;
-                  int fk  = (ox3 < 0) ? ngh : ngh + ncells - 1;
-                  int sk  = (ox3 < 0) ? ngh + ncells - 1 : ngh;
-                  int si0 = ngh + child_x * half;
-                  int sj0 = ngh + child_y * half;
-                  for (int v = 0; v < nvar; ++v) {
-                    for (int sj = sj0; sj < sj0 + half; ++sj) {
-                      for (int si = si0; si < si0 + half; ++si) {
-                        int fi = ngh + 2*(si - si0);
-                        int fj = ngh + 2*(sj - sj0);
-                        Real cc = u_h(dm,v,sk,sj,si);
-                        int sim = (si > ngh) ? si-1 : si;
-                        int sip = (si < ngh+ncells-1) ? si+1 : si;
-                        int sjm = (sj > ngh) ? sj-1 : sj;
-                        int sjp = (sj < ngh+ncells-1) ? sj+1 : sj;
-                        Real gx = 0.125*(u_h(dm,v,sk,sj,sip)-u_h(dm,v,sk,sj,sim));
-                        Real gy = 0.125*(u_h(dm,v,sk,sjp,si)-u_h(dm,v,sk,sjm,si));
-                        u_h(m,v,fkg,fj  ,fi  )=ot*(2.0*(cc-gx-gy)+u_h(m,v,fk,fj  ,fi  ));
-                        u_h(m,v,fkg,fj  ,fi+1)=ot*(2.0*(cc+gx-gy)+u_h(m,v,fk,fj  ,fi+1));
-                        u_h(m,v,fkg,fj+1,fi  )=ot*(2.0*(cc-gx+gy)+u_h(m,v,fk,fj+1,fi  ));
-                        u_h(m,v,fkg,fj+1,fi+1)=ot*(2.0*(cc+gx+gy)+u_h(m,v,fk,fj+1,fi+1));
-                      }
-                    }
-                  }
-                }
-                modified = true;
 
-              } else if (nlev > m_lev && nface == 1) {
-                // ==== FINER neighbor, FACE: flux-conserving restriction ====
-                // face_avg = area-average of 4 fine cells on the shared face
-                // coarse_ghost = (1/3)*(4*face_avg - coarse_interior)
-                int sub_x = 0, sub_y = 0, sub_z = 0;
-                if (ox1 != 0) { sub_y = f1; sub_z = f2; }
-                if (ox2 != 0) { sub_x = f1; sub_z = f2; }
-                if (ox3 != 0) { sub_x = f1; sub_y = f2; }
+                } else if (nlev < m_lev) {
+                  // Coarser neighbor, edge/corner: simple injection
+                  int gis, gie, gjs, gje, gks, gke;
+                  if (ox1 < 0)      { gis = 0;             gie = ngh_l - 1; }
+                  else if (ox1 > 0) { gis = ngh_l+ncells_l; gie = ngh_l+ncells_l+ngh_l-1; }
+                  else              { gis = ngh_l;           gie = ngh_l + ncells_l - 1; }
+                  if (ox2 < 0)      { gjs = 0;             gje = ngh_l - 1; }
+                  else if (ox2 > 0) { gjs = ngh_l+ncells_l; gje = ngh_l+ncells_l+ngh_l-1; }
+                  else              { gjs = ngh_l;           gje = ngh_l + ncells_l - 1; }
+                  if (ox3 < 0)      { gks = 0;             gke = ngh_l - 1; }
+                  else if (ox3 > 0) { gks = ngh_l+ncells_l; gke = ngh_l+ncells_l+ngh_l-1; }
+                  else              { gks = ngh_l;           gke = ngh_l + ncells_l - 1; }
 
-                int gis, gie, gjs, gje, gks, gke;
-                if (ox1 < 0)      { gis = 0;            gie = ngh - 1; }
-                else if (ox1 > 0) { gis = ngh + ncells;  gie = ngh + ncells + ngh - 1; }
-                else { gis = ngh + sub_x*half; gie = ngh + sub_x*half + half - 1; }
-                if (ox2 < 0)      { gjs = 0;            gje = ngh - 1; }
-                else if (ox2 > 0) { gjs = ngh + ncells;  gje = ngh + ncells + ngh - 1; }
-                else { gjs = ngh + sub_y*half; gje = ngh + sub_y*half + half - 1; }
-                if (ox3 < 0)      { gks = 0;            gke = ngh - 1; }
-                else if (ox3 > 0) { gks = ngh + ncells;  gke = ngh + ncells + ngh - 1; }
-                else { gks = ngh + sub_z*half; gke = ngh + sub_z*half + half - 1; }
-
-                int oi = (ox1 < 0) ? 1 : (ox1 > 0) ? -1 : 0;
-                int oj = (ox2 < 0) ? 1 : (ox2 > 0) ? -1 : 0;
-                int ok = (ox3 < 0) ? 1 : (ox3 > 0) ? -1 : 0;
-
-                if (ox1 != 0) {
-                  int fi = (ox1 > 0) ? ngh : ngh + ncells - 1;
-                  for (int v = 0; v < nvar; ++v) {
+                  for (int v = 0; v < nvar_l; ++v) {
                     for (int gk = gks; gk <= gke; ++gk) {
                       for (int gj = gjs; gj <= gje; ++gj) {
-                        int fj0 = ngh + 2*(gj - (ngh + sub_y*half));
-                        int fk0 = ngh + 2*(gk - (ngh + sub_z*half));
-                        Real favg = 0.25*(u_h(dm,v,fk0,fj0,fi)+u_h(dm,v,fk0,fj0+1,fi)
-                                         +u_h(dm,v,fk0+1,fj0,fi)+u_h(dm,v,fk0+1,fj0+1,fi));
-                        u_h(m,v,gk,gj,gis) = ot*(4.0*favg - u_h(m,v,gk+ok,gj+oj,gis+oi));
+                        for (int gi = gis; gi <= gie; ++gi) {
+                          int si, sj, sk;
+                          if (ox1 < 0)      si = ngh_l + ncells_l - 1;
+                          else if (ox1 > 0) si = ngh_l;
+                          else si = ngh_l + child_x*half + (gi - ngh_l)/2;
+                          if (ox2 < 0)      sj = ngh_l + ncells_l - 1;
+                          else if (ox2 > 0) sj = ngh_l;
+                          else sj = ngh_l + child_y*half + (gj - ngh_l)/2;
+                          if (ox3 < 0)      sk = ngh_l + ncells_l - 1;
+                          else if (ox3 > 0) sk = ngh_l;
+                          else sk = ngh_l + child_z*half + (gk - ngh_l)/2;
+
+                          u(m, v, gk, gj, gi) = u(dm, v, sk, sj, si);
+                        }
                       }
                     }
                   }
-                } else if (ox2 != 0) {
-                  int fj = (ox2 > 0) ? ngh : ngh + ncells - 1;
-                  for (int v = 0; v < nvar; ++v) {
-                    for (int gk = gks; gk <= gke; ++gk) {
-                      for (int gi = gis; gi <= gie; ++gi) {
-                        int fi0 = ngh + 2*(gi - (ngh + sub_x*half));
-                        int fk0 = ngh + 2*(gk - (ngh + sub_z*half));
-                        Real favg = 0.25*(u_h(dm,v,fk0,fj,fi0)+u_h(dm,v,fk0,fj,fi0+1)
-                                         +u_h(dm,v,fk0+1,fj,fi0)+u_h(dm,v,fk0+1,fj,fi0+1));
-                        u_h(m,v,gk,gjs,gi) = ot*(4.0*favg - u_h(m,v,gk+ok,gjs+oj,gi+oi));
-                      }
-                    }
-                  }
+
                 } else {
-                  int fk = (ox3 > 0) ? ngh : ngh + ncells - 1;
-                  for (int v = 0; v < nvar; ++v) {
-                    for (int gj = gjs; gj <= gje; ++gj) {
-                      for (int gi = gis; gi <= gie; ++gi) {
-                        int fi0 = ngh + 2*(gi - (ngh + sub_x*half));
-                        int fj0 = ngh + 2*(gj - (ngh + sub_y*half));
-                        Real favg = 0.25*(u_h(dm,v,fk,fj0,fi0)+u_h(dm,v,fk,fj0,fi0+1)
-                                         +u_h(dm,v,fk,fj0+1,fi0)+u_h(dm,v,fk,fj0+1,fi0+1));
-                        u_h(m,v,gks,gj,gi) = ot*(4.0*favg - u_h(m,v,gks+ok,gj+oj,gi+oi));
+                  // Finer neighbor, edge/corner: simple restriction
+                  int sub_x = 0, sub_y = 0, sub_z = 0;
+                  if (nface == 2) {
+                    if (ox1 == 0) sub_x = f1;
+                    if (ox2 == 0) sub_y = f1;
+                    if (ox3 == 0) sub_z = f1;
+                  }
+                  int gis, gie, gjs, gje, gks, gke;
+                  if (ox1 < 0)      { gis = 0;             gie = ngh_l - 1; }
+                  else if (ox1 > 0) { gis = ngh_l+ncells_l; gie = ngh_l+ncells_l+ngh_l-1; }
+                  else { gis = ngh_l+sub_x*half; gie = ngh_l+sub_x*half+half-1; }
+                  if (ox2 < 0)      { gjs = 0;             gje = ngh_l - 1; }
+                  else if (ox2 > 0) { gjs = ngh_l+ncells_l; gje = ngh_l+ncells_l+ngh_l-1; }
+                  else { gjs = ngh_l+sub_y*half; gje = ngh_l+sub_y*half+half-1; }
+                  if (ox3 < 0)      { gks = 0;             gke = ngh_l - 1; }
+                  else if (ox3 > 0) { gks = ngh_l+ncells_l; gke = ngh_l+ncells_l+ngh_l-1; }
+                  else { gks = ngh_l+sub_z*half; gke = ngh_l+sub_z*half+half-1; }
+
+                  for (int v = 0; v < nvar_l; ++v) {
+                    for (int gk = gks; gk <= gke; ++gk) {
+                      for (int gj = gjs; gj <= gje; ++gj) {
+                        for (int gi = gis; gi <= gie; ++gi) {
+                          int fi0, fi1, fj0, fj1, fk0, fk1;
+                          if (ox1 < 0) {
+                            fi0 = ngh_l+ncells_l-2; fi1 = ngh_l+ncells_l-1;
+                          } else if (ox1 > 0) {
+                            fi0 = ngh_l; fi1 = ngh_l + 1;
+                          } else {
+                            fi0 = ngh_l+2*(gi-(ngh_l+sub_x*half)); fi1 = fi0+1;
+                          }
+                          if (ox2 < 0) {
+                            fj0 = ngh_l+ncells_l-2; fj1 = ngh_l+ncells_l-1;
+                          } else if (ox2 > 0) {
+                            fj0 = ngh_l; fj1 = ngh_l + 1;
+                          } else {
+                            fj0 = ngh_l+2*(gj-(ngh_l+sub_y*half)); fj1 = fj0+1;
+                          }
+                          if (ox3 < 0) {
+                            fk0 = ngh_l+ncells_l-2; fk1 = ngh_l+ncells_l-1;
+                          } else if (ox3 > 0) {
+                            fk0 = ngh_l; fk1 = ngh_l + 1;
+                          } else {
+                            fk0 = ngh_l+2*(gk-(ngh_l+sub_z*half)); fk1 = fk0+1;
+                          }
+                          u(m, v, gk, gj, gi) = 0.125 * (
+                            u(dm,v,fk0,fj0,fi0) + u(dm,v,fk0,fj0,fi1) +
+                            u(dm,v,fk0,fj1,fi0) + u(dm,v,fk0,fj1,fi1) +
+                            u(dm,v,fk1,fj0,fi0) + u(dm,v,fk1,fj0,fi1) +
+                            u(dm,v,fk1,fj1,fi0) + u(dm,v,fk1,fj1,fi1));
+                        }
                       }
                     }
                   }
                 }
-                modified = true;
-
-              } else if (nlev < m_lev) {
-                // ==== COARSER neighbor, EDGE/CORNER: simple injection ====
-                int gis, gie, gjs, gje, gks, gke;
-                if (ox1 < 0)      { gis = 0;            gie = ngh - 1; }
-                else if (ox1 > 0) { gis = ngh + ncells;  gie = ngh + ncells + ngh - 1; }
-                else              { gis = ngh;            gie = ngh + ncells - 1; }
-                if (ox2 < 0)      { gjs = 0;            gje = ngh - 1; }
-                else if (ox2 > 0) { gjs = ngh + ncells;  gje = ngh + ncells + ngh - 1; }
-                else              { gjs = ngh;            gje = ngh + ncells - 1; }
-                if (ox3 < 0)      { gks = 0;            gke = ngh - 1; }
-                else if (ox3 > 0) { gks = ngh + ncells;  gke = ngh + ncells + ngh - 1; }
-                else              { gks = ngh;            gke = ngh + ncells - 1; }
-
-                for (int v = 0; v < nvar; ++v) {
-                  for (int gk = gks; gk <= gke; ++gk) {
-                    for (int gj = gjs; gj <= gje; ++gj) {
-                      for (int gi = gis; gi <= gie; ++gi) {
-                        int si, sj, sk;
-                        if (ox1 < 0)      si = ngh + ncells - 1;
-                        else if (ox1 > 0) si = ngh;
-                        else si = ngh + child_x*(half) + (gi - ngh)/2;
-                        if (ox2 < 0)      sj = ngh + ncells - 1;
-                        else if (ox2 > 0) sj = ngh;
-                        else sj = ngh + child_y*(half) + (gj - ngh)/2;
-                        if (ox3 < 0)      sk = ngh + ncells - 1;
-                        else if (ox3 > 0) sk = ngh;
-                        else sk = ngh + child_z*(half) + (gk - ngh)/2;
-
-                        u_h(m, v, gk, gj, gi) = u_h(dm, v, sk, sj, si);
-                      }
-                    }
-                  }
-                }
-                modified = true;
-
-              } else {
-                int sub_x = 0, sub_y = 0, sub_z = 0;
-                if (nface == 2) {
-                  if (ox1 == 0) sub_x = f1;
-                  if (ox2 == 0) sub_y = f1;
-                  if (ox3 == 0) sub_z = f1;
-                }
-                int gis, gie, gjs, gje, gks, gke;
-                if (ox1 < 0)      { gis = 0;            gie = ngh - 1; }
-                else if (ox1 > 0) { gis = ngh + ncells;  gie = ngh + ncells + ngh - 1; }
-                else { gis = ngh + sub_x*half; gie = ngh + sub_x*half + half - 1; }
-                if (ox2 < 0)      { gjs = 0;            gje = ngh - 1; }
-                else if (ox2 > 0) { gjs = ngh + ncells;  gje = ngh + ncells + ngh - 1; }
-                else { gjs = ngh + sub_y*half; gje = ngh + sub_y*half + half - 1; }
-                if (ox3 < 0)      { gks = 0;            gke = ngh - 1; }
-                else if (ox3 > 0) { gks = ngh + ncells;  gke = ngh + ncells + ngh - 1; }
-                else { gks = ngh + sub_z*half; gke = ngh + sub_z*half + half - 1; }
-
-                for (int v = 0; v < nvar; ++v) {
-                  for (int gk = gks; gk <= gke; ++gk) {
-                    for (int gj = gjs; gj <= gje; ++gj) {
-                      for (int gi = gis; gi <= gie; ++gi) {
-                        int fi0, fi1, fj0, fj1, fk0, fk1;
-                        if (ox1 < 0) {
-                          fi0 = ngh + ncells - 2; fi1 = ngh + ncells - 1;
-                        } else if (ox1 > 0) {
-                          fi0 = ngh; fi1 = ngh + 1;
-                        } else {
-                          fi0 = ngh + 2*(gi - (ngh + sub_x*half)); fi1 = fi0 + 1;
-                        }
-                        if (ox2 < 0) {
-                          fj0 = ngh + ncells - 2; fj1 = ngh + ncells - 1;
-                        } else if (ox2 > 0) {
-                          fj0 = ngh; fj1 = ngh + 1;
-                        } else {
-                          fj0 = ngh + 2*(gj - (ngh + sub_y*half)); fj1 = fj0 + 1;
-                        }
-                        if (ox3 < 0) {
-                          fk0 = ngh + ncells - 2; fk1 = ngh + ncells - 1;
-                        } else if (ox3 > 0) {
-                          fk0 = ngh; fk1 = ngh + 1;
-                        } else {
-                          fk0 = ngh + 2*(gk - (ngh + sub_z*half)); fk1 = fk0 + 1;
-                        }
-                        u_h(m, v, gk, gj, gi) = 0.125 * (
-                          u_h(dm,v,fk0,fj0,fi0) + u_h(dm,v,fk0,fj0,fi1) +
-                          u_h(dm,v,fk0,fj1,fi0) + u_h(dm,v,fk0,fj1,fi1) +
-                          u_h(dm,v,fk1,fj0,fi0) + u_h(dm,v,fk1,fj0,fi1) +
-                          u_h(dm,v,fk1,fj1,fi0) + u_h(dm,v,fk1,fj1,fi1));
-                      }
-                    }
-                  }
-                }
-                modified = true;
               }
             }
           }
         }
       }
-    }
-  }
-
-  if (modified) {
-    Kokkos::deep_copy(u, u_h);
-  }
+  });
 
   return TaskStatus::complete;
 }
