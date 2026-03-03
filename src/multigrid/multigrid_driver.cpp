@@ -25,6 +25,7 @@
 // Athena++ headers
 #include "../athena.hpp"
 #include "../coordinates/coordinates.hpp"
+#include "../driver/driver.hpp"
 #include "../gravity/mg_gravity.hpp"
 #include "../mesh/mesh.hpp"
 #include "../parameter_input.hpp"
@@ -39,11 +40,19 @@ MultigridDriver::MultigridDriver(MeshBlockPack *pmbp, int invar):
     nrbx1_(pmbp->pmesh->nmb_rootx1), nrbx2_(pmbp->pmesh->nmb_rootx2), nrbx3_(pmbp->pmesh->nmb_rootx3),
     pmy_pack_(pmbp),
     pmy_mesh_(pmbp->pmesh),
-    needinit_(true), nreflevel_(0), eps_(-1.0),
+    needinit_(true), amr_seq_(0), nreflevel_(0), eps_(-1.0),
     niter_(-1), npresmooth_(1), npostsmooth_(1), coffset_(0), fprolongation_(0),
     nb_rank_(0), ncoeff_(0),
     octets_(nullptr), octetmap_(nullptr), octetbflag_(nullptr), noctets_(nullptr),
-    root_buf_nc_(0), root_flat_buf_stale_(true) {
+    oct_u_buf_(nullptr), oct_def_buf_(nullptr),
+    oct_src_buf_(nullptr), oct_uold_buf_(nullptr), octet_stride_(0),
+    root_buf_nc_(0), root_flat_buf_stale_(true),
+    root_sync_state_(RootSyncState::SYNCED),
+    mask_radius_(-1.0), autompo_(false), nodipole_(false),
+    mporder_(-1), nmpcoeff_(0) {
+  mask_origin_[0] = mask_origin_[1] = mask_origin_[2] = 0.0;
+  mpo_[0] = mpo_[1] = mpo_[2] = 0.0;
+  std::memset(mpcoeff_, 0, sizeof(mpcoeff_));
   if (pmy_mesh_->mb_indcs.nx2==1 || pmy_mesh_->mb_indcs.nx3==1) {
     std::cout << "### FATAL ERROR in MultigridDriver::MultigridDriver" << std::endl
         << "Currently the Multigrid solver works only in 3D." << std::endl;
@@ -66,12 +75,27 @@ MultigridDriver::MultigridDriver(MeshBlockPack *pmbp, int invar):
     ncslist_ = new int[nranks_];
   }
 
+  // Initialize MG mesh boundary conditions from mesh BCs.
+  // Periodic stays periodic; all other types default to mg_zerofixed (Dirichlet zero).
+  for (int f = 0; f < 6; ++f) {
+    BoundaryFlag mbc = pmy_mesh_->mesh_bcs[f];
+    if (mbc == BoundaryFlag::periodic) {
+      mg_mesh_bcs_[f] = BoundaryFlag::periodic;
+    } else {
+      mg_mesh_bcs_[f] = BoundaryFlag::mg_zerofixed;
+    }
+  }
+
   // Allocate octet arrays for max possible refinement levels
   if (maxreflevel_ > 0) {
     octets_ = new std::vector<MGOctet>[maxreflevel_];
     octetmap_ = new std::unordered_map<LogicalLocation, int, LogicalLocationHash>[maxreflevel_];
     octetbflag_ = new std::vector<bool>[maxreflevel_];
     noctets_ = new int[maxreflevel_]();
+    oct_u_buf_    = new std::vector<Real>[maxreflevel_];
+    oct_def_buf_  = new std::vector<Real>[maxreflevel_];
+    oct_src_buf_  = new std::vector<Real>[maxreflevel_];
+    oct_uold_buf_ = new std::vector<Real>[maxreflevel_];
   }
 }
 
@@ -89,6 +113,10 @@ MultigridDriver::~MultigridDriver() {
   delete [] octetmap_;
   delete [] octetbflag_;
   delete [] noctets_;
+  delete [] oct_u_buf_;
+  delete [] oct_def_buf_;
+  delete [] oct_src_buf_;
+  delete [] oct_uold_buf_;
 }
 
 
@@ -98,10 +126,12 @@ MultigridDriver::~MultigridDriver() {
 
 void MultigridDriver::SyncRootToHost() {
   if (mgroot_->on_host_) return;
+  if (root_sync_state_ != RootSyncState::DEVICE_MODIFIED) return;
   int lev = mgroot_->current_level_;
   Kokkos::deep_copy(mgroot_->u_[lev].h_view, mgroot_->u_[lev].d_view);
   Kokkos::deep_copy(mgroot_->uold_[lev].h_view, mgroot_->uold_[lev].d_view);
   Kokkos::deep_copy(mgroot_->src_[lev].h_view, mgroot_->src_[lev].d_view);
+  root_sync_state_ = RootSyncState::SYNCED;
 }
 
 
@@ -111,9 +141,21 @@ void MultigridDriver::SyncRootToHost() {
 
 void MultigridDriver::SyncRootToDevice() {
   if (mgroot_->on_host_) return;
+  if (root_sync_state_ != RootSyncState::HOST_MODIFIED) return;
   int lev = mgroot_->current_level_;
   Kokkos::deep_copy(mgroot_->u_[lev].d_view, mgroot_->u_[lev].h_view);
   Kokkos::deep_copy(mgroot_->src_[lev].d_view, mgroot_->src_[lev].h_view);
+  root_sync_state_ = RootSyncState::SYNCED;
+}
+
+
+//----------------------------------------------------------------------------------------
+//! \fn void MultigridDriver::MarkRootDeviceModified()
+//! \brief Mark root device data as modified (for sync tracking)
+
+void MultigridDriver::MarkRootDeviceModified() {
+  if (!mgroot_->on_host_)
+    root_sync_state_ = RootSyncState::DEVICE_MODIFIED;
 }
 
 
@@ -134,7 +176,8 @@ void MultigridDriver::SubtractAverage(MGVariable type) {
 void MultigridDriver::PrepareForAMR() {
   locrootlevel_ = pmy_mesh_->root_level;
 
-  // Detect if mesh has changed (AMR)
+  // Detect if mesh has changed (AMR or load balancing).
+  // Athena++ uses pmy_mesh_->amr_updated; AthenaK tracks cumulative AMR events instead.
   int new_nbtotal = pmy_mesh_->nmb_total;
   if (new_nbtotal != nbtotal_) {
     nbtotal_ = new_nbtotal;
@@ -143,6 +186,14 @@ void MultigridDriver::PrepareForAMR() {
     int nv = nvar_*2;
     Kokkos::realloc(rootbuf_, nv, nbtotal_);
     needinit_ = true;
+  }
+
+  if (pmy_mesh_->pmr != nullptr) {
+    int new_seq = pmy_mesh_->pmr->nmb_created + pmy_mesh_->pmr->nmb_deleted;
+    if (new_seq != amr_seq_) {
+      amr_seq_ = new_seq;
+      needinit_ = true;
+    }
   }
 
   // Calculate number of refinement levels present in mesh
@@ -156,7 +207,6 @@ void MultigridDriver::PrepareForAMR() {
     if (nreflevel_ != old_nreflevel) {
       std::cout << "MultigridDriver::SetupMultigrid: Number of refinement levels = "
                 << nreflevel_ << std::endl;
-      needinit_ = true;
     }
   }
 
@@ -176,6 +226,9 @@ void MultigridDriver::PrepareForAMR() {
       InitializeOctets();
     }
     root_flat_buf_stale_ = true;
+    if (pmy_mesh_->multilevel) {
+      mglevels_->UpdateBlockDx();
+    }
   }
   needinit_ = false;
 }
@@ -239,10 +292,31 @@ void MultigridDriver::InitializeOctets() {
 
         if (static_cast<int>(octets_[l].size()) <= oid) {
           octets_[l].resize(oid + 1);
-          octets_[l][oid].Allocate(nvar_, ngh);
+          octets_[l][oid].Init(nvar_, ngh);
         }
         octets_[l][oid].loc = oloc;
         octets_[l][oid].fleaf = false;
+      }
+    }
+  }
+
+  // Allocate contiguous buffers and wire octet pointers
+  {
+    int nc = 2 + 2*ngh;
+    octet_stride_ = nvar_ * nc * nc * nc;
+    for (int l = 0; l < nreflevel_; ++l) {
+      int noct = noctets_[l];
+      std::size_t total = static_cast<std::size_t>(noct) * octet_stride_;
+      oct_u_buf_[l].assign(total, 0.0);
+      oct_def_buf_[l].assign(total, 0.0);
+      oct_src_buf_[l].assign(total, 0.0);
+      oct_uold_buf_[l].assign(total, 0.0);
+      for (int o = 0; o < noct; ++o) {
+        std::size_t off = static_cast<std::size_t>(o) * octet_stride_;
+        octets_[l][o].u    = oct_u_buf_[l].data()    + off;
+        octets_[l][o].def  = oct_def_buf_[l].data()  + off;
+        octets_[l][o].src  = oct_src_buf_[l].data()   + off;
+        octets_[l][o].uold = oct_uold_buf_[l].data() + off;
       }
     }
   }
@@ -260,6 +334,82 @@ void MultigridDriver::InitializeOctets() {
               (floc.lx3>>1) == oct.loc.lx3 && floc.level-1 == oct.loc.level) {
             oct.fleaf = false;
             break;
+          }
+        }
+      }
+    }
+  }
+
+  // Precompute neighbor tables (eliminates hash lookups in SetBoundariesOctets)
+  for (int l = 0; l < nreflevel_; ++l) {
+    int maxlx1 = nrbx1_ << l;
+    int maxlx2 = nrbx2_ << l;
+    int maxlx3 = nrbx3_ << l;
+    for (int o = 0; o < noctets_[l]; ++o) {
+      MGOctet &oct = octets_[l][o];
+      const LogicalLocation &oloc = oct.loc;
+      for (int ox3 = -1; ox3 <= 1; ++ox3) {
+        for (int ox2 = -1; ox2 <= 1; ++ox2) {
+          for (int ox1 = -1; ox1 <= 1; ++ox1) {
+            int dir = (ox3+1)*9 + (ox2+1)*3 + (ox1+1);
+            if (ox1 == 0 && ox2 == 0 && ox3 == 0) {
+              oct.neighbors[dir] = {-1, -1};
+              continue;
+            }
+            LogicalLocation nloc;
+            nloc.level = oloc.level;
+            bool outside = false;
+            nloc.lx1 = oloc.lx1 + ox1;
+            if (nloc.lx1 < 0) {
+              if (mg_mesh_bcs_[BoundaryFace::inner_x1] == BoundaryFlag::periodic)
+                nloc.lx1 = maxlx1 - 1;
+              else outside = true;
+            }
+            if (nloc.lx1 >= maxlx1) {
+              if (mg_mesh_bcs_[BoundaryFace::outer_x1] == BoundaryFlag::periodic)
+                nloc.lx1 = 0;
+              else outside = true;
+            }
+            nloc.lx2 = oloc.lx2 + ox2;
+            if (nloc.lx2 < 0) {
+              if (mg_mesh_bcs_[BoundaryFace::inner_x2] == BoundaryFlag::periodic)
+                nloc.lx2 = maxlx2 - 1;
+              else outside = true;
+            }
+            if (nloc.lx2 >= maxlx2) {
+              if (mg_mesh_bcs_[BoundaryFace::outer_x2] == BoundaryFlag::periodic)
+                nloc.lx2 = 0;
+              else outside = true;
+            }
+            nloc.lx3 = oloc.lx3 + ox3;
+            if (nloc.lx3 < 0) {
+              if (mg_mesh_bcs_[BoundaryFace::inner_x3] == BoundaryFlag::periodic)
+                nloc.lx3 = maxlx3 - 1;
+              else outside = true;
+            }
+            if (nloc.lx3 >= maxlx3) {
+              if (mg_mesh_bcs_[BoundaryFace::outer_x3] == BoundaryFlag::periodic)
+                nloc.lx3 = 0;
+              else outside = true;
+            }
+            if (outside) {
+              oct.neighbors[dir] = {-2, -2};
+              continue;
+            }
+            if (octetmap_[l].count(nloc) == 1) {
+              oct.neighbors[dir] = {octetmap_[l][nloc], -1};
+            } else {
+              int cid = -1;
+              if (l > 0) {
+                LogicalLocation cloc;
+                cloc.lx1 = nloc.lx1 >> 1;
+                cloc.lx2 = nloc.lx2 >> 1;
+                cloc.lx3 = nloc.lx3 >> 1;
+                cloc.level = nloc.level - 1;
+                cid = octetmap_[l-1][cloc];
+              }
+              oct.neighbors[dir] = {-1, cid};
+            }
           }
         }
       }
@@ -293,15 +443,16 @@ void MultigridDriver::BuildRootFlatBuffers() {
   int rny = root_u_h.extent_int(3);
   int rnz = root_u_h.extent_int(2);
   int rnv = root_u_h.extent_int(1);
-  root_buf_nc_ = rnx;
-  int total = rnv*rnz*rny*rnx;
-  root_u_buf_.resize(total);
-  root_uold_buf_.resize(total);
+  int nc = std::max({rnx, rny, rnz});
+  root_buf_nc_ = nc;
+  int total = rnv*nc*nc*nc;
+  root_u_buf_.assign(total, 0.0);
+  root_uold_buf_.assign(total, 0.0);
   for (int v = 0; v < rnv; ++v)
     for (int k = 0; k < rnz; ++k)
       for (int j = 0; j < rny; ++j)
         for (int i = 0; i < rnx; ++i) {
-          int idx = ((v*rnz+k)*rny+j)*rnx+i;
+          int idx = ((v*nc+k)*nc+j)*nc+i;
           root_u_buf_[idx] = root_u_h(0,v,k,j,i);
           root_uold_buf_[idx] = root_uold_h(0,v,k,j,i);
         }
@@ -326,13 +477,15 @@ void MultigridDriver::TransferFromBlocksToRoot(bool initflag) {
   par_for("Multigrid:SaveToRoot", DevExeSpace(), 0, nmmb, KOKKOS_LAMBDA(const int m) {
     for (int v = 0; v < nv; ++v) {
       rootbuf.d_view(v,    m+padding) = src(m, v, ngh_mb, ngh_mb, ngh_mb);
-      rootbuf.d_view(v+nv, m+padding) = u(m, v, ngh_mb, ngh_mb, ngh_mb);
+      if (!initflag)
+        rootbuf.d_view(v+nv, m+padding) = u(m, v, ngh_mb, ngh_mb, ngh_mb);
     }
   });
   rootbuf.template modify<DevExeSpace>();
   rootbuf.template sync<HostExeSpace>();
 #if MPI_PARALLEL_ENABLED
-  for (int v = 0; v < 2*nv; ++v) {
+  int ncomm = initflag ? nv : 2*nv;
+  for (int v = 0; v < ncomm; ++v) {
     MPI_Allgatherv(MPI_IN_PLACE, nblist_[global_variable::my_rank], MPI_ATHENA_REAL,
                    &rootbuf.h_view(v,0), nblist_, nslist_, MPI_ATHENA_REAL, MPI_COMM_WORLD);
   }
@@ -356,7 +509,6 @@ void MultigridDriver::TransferFromBlocksToRoot(bool initflag) {
           root_u_h(0, v, k+ngh, j+ngh, i+ngh) = rootbuf.h_view(v+nv, n);
       }
     } else {
-      // Refined block -> appropriate octet
       LogicalLocation oloc;
       oloc.lx1 = (loc[n].lx1 >> 1);
       oloc.lx2 = (loc[n].lx2 >> 1);
@@ -377,7 +529,8 @@ void MultigridDriver::TransferFromBlocksToRoot(bool initflag) {
   }
   root_flat_buf_stale_ = true;
   mgroot_->current_level_ = nrootlevel_ - 1;
-  SyncRootToDevice();
+  root_sync_state_ = RootSyncState::HOST_MODIFIED;
+  if (nreflevel_ == 0) SyncRootToDevice();
   return;
 }
 
@@ -421,6 +574,7 @@ void MultigridDriver::FMGProlongate(Driver *pdriver) {
   } else { // root grid
     MGRootBoundary();
     mgroot_->FMGProlongatePack();
+    MarkRootDeviceModified();
     current_level_++;
   }
   return;
@@ -448,10 +602,11 @@ void MultigridDriver::OneStepToFiner(Driver *pdriver, int nsmooth) {
     pdriver->ExecuteTaskList(pmy_mesh_, "mg_to_finer", 0);
     current_level_++;
   } else if (current_level_ >= nrootlevel_ - 1) { // octets
-    if (current_level_ == nrootlevel_ - 1)
+    if (current_level_ == nrootlevel_ - 1) {
       MGRootBoundary();
-    else
+    } else {
       SetBoundariesOctets(true, true);
+    }
     ProlongateAndCorrectOctets();
     current_level_++;
     for (int n = 0; n < nsmooth; ++n) {
@@ -463,12 +618,15 @@ void MultigridDriver::OneStepToFiner(Driver *pdriver, int nsmooth) {
   } else { // root grid
     MGRootBoundary();
     mgroot_->ProlongateAndCorrectPack();
+    MarkRootDeviceModified();
     current_level_++;
     for (int n = 0; n < nsmooth; ++n) {
       MGRootBoundary();
       mgroot_->SmoothPack(coffset_);
+      MarkRootDeviceModified();
       MGRootBoundary();
       mgroot_->SmoothPack(1-coffset_);
+      MarkRootDeviceModified();
     }
   }
   return;
@@ -487,6 +645,9 @@ void MultigridDriver::OneStepToCoarser(Driver *pdriver, int nsmooth) {
     pdriver->ExecuteTaskList(pmy_mesh_, "mg_to_coarser", 0);
     if (current_level_ == nrootlevel_ + nreflevel_) {
       TransferFromBlocksToRoot(false);
+      if (nreflevel_ > 0) {
+        PreRestrictOctetU();
+      }
     }
   } else if (current_level_ > nrootlevel_ - 1) { // octets
     SetBoundariesOctets(false, false);
@@ -506,14 +667,18 @@ void MultigridDriver::OneStepToCoarser(Driver *pdriver, int nsmooth) {
     if (current_level_ < fmglevel_) {
       mgroot_->StoreOldData();
       mgroot_->CalculateFASRHSPack();
+      MarkRootDeviceModified();
     }
     for (int n = 0; n < nsmooth; ++n) {
       mgroot_->SmoothPack(coffset_);
+      MarkRootDeviceModified();
       MGRootBoundary();
       mgroot_->SmoothPack(1-coffset_);
+      MarkRootDeviceModified();
       MGRootBoundary();
     }
     mgroot_->RestrictPack();
+    MarkRootDeviceModified();
   }
   current_level_--;
   return;
@@ -591,6 +756,7 @@ void MultigridDriver::SolveFMGCoarser() {
   while (current_level_ > 0) {
     pmg = mgroot_;
     pmg->RestrictSourcePack();
+    MarkRootDeviceModified();
     current_level_--;
   }
   return;
@@ -617,9 +783,9 @@ void MultigridDriver::SolveIterative(Driver *pdriver) {
     for (int v = 0; v < nvar_; ++v) {
       def += CalculateDefectNorm(MGNormType::l2, v);
     }
-    //if (fshowdef_) {
-    //  std::cout << "  MG iteration " << n << ": defect = " << def << std::endl; 
-    //}
+    if (fshowdef_) {
+      std::cout << "  MG iteration " << n << ": defect = " << def << std::endl;
+    }
     if (def/olddef > 0.9) {
       if (eps_ == 0.0) break;
       if (fshowdef_) {
@@ -628,6 +794,13 @@ void MultigridDriver::SolveIterative(Driver *pdriver) {
       }
     }
     ++n;
+    if (n >= 80) {
+      std::cout << "### FATAL ERROR in MultigridDriver::SolveIterative" << std::endl
+                << "Failed to converge after " << n << " iterations (defect = "
+                << def << ", threshold = " << eps_ << ")" << std::endl;
+      pdriver->nlim = pmy_mesh_->ncycle;
+      break;
+    }
   }
   Kokkos::fence();
   return;
@@ -645,10 +818,10 @@ void MultigridDriver::SolveIterativeFixedTimes(Driver *pdriver) {
   }
   for (int n = 0; n < niter_; ++n) {
     SolveVCycle(pdriver, npresmooth_, npostsmooth_);
-    //if (fshowdef_) {
-    //  Real norm = CalculateDefectNorm(MGNormType::l2, 0);
-    //  std::cout << "MG iteration " << n << ": defect = " << norm << std::endl;
-    //}
+    if (fshowdef_) {
+      Real norm = CalculateDefectNorm(MGNormType::l2, 0);
+      std::cout << "MG iteration " << n << ": defect = " << norm << std::endl;
+    }
   }
   Kokkos::fence();
   return;
@@ -667,23 +840,31 @@ void MultigridDriver::SolveCoarsestGrid() {
     MGRootBoundary();
     mgroot_->StoreOldData();
     mgroot_->ZeroClearData();
+    MarkRootDeviceModified();
     return;
   }
-  if (fsubtract_average_)
+  if (fsubtract_average_) {
     SubtractAverage(MGVariable::src);
-  if (fsubtract_average_)
+    MarkRootDeviceModified();
     SubtractAverage(MGVariable::u);
+    MarkRootDeviceModified();
+  }
   MGRootBoundary();
   mgroot_->StoreOldData();
   mgroot_->CalculateFASRHSPack();
+  MarkRootDeviceModified();
   for (int i = 0; i < ni; ++i) {
     mgroot_->SmoothPack(coffset_);
+    MarkRootDeviceModified();
     MGRootBoundary();
     mgroot_->SmoothPack(1-coffset_);
+    MarkRootDeviceModified();
     MGRootBoundary();
   }
-  if (fsubtract_average_)
+  if (fsubtract_average_) {
     SubtractAverage(MGVariable::u);
+    MarkRootDeviceModified();
+  }
   return;
 }
 
@@ -809,6 +990,7 @@ void MultigridDriver::RestrictFMGSourceOctets() {
         RestrictOneSrc(oct, v, ngh, ngh, ngh);
   }
   root_flat_buf_stale_ = true;
+  root_sync_state_ = RootSyncState::HOST_MODIFIED;
   SyncRootToDevice();
 }
 
@@ -860,6 +1042,7 @@ void MultigridDriver::RestrictOctets() {
       }
     }
     root_flat_buf_stale_ = true;
+    root_sync_state_ = RootSyncState::HOST_MODIFIED;
     SyncRootToDevice();
   }
 }
@@ -894,8 +1077,9 @@ void MultigridDriver::ProlongateAndCorrectOctets() {
         for (int kk = -1; kk <= 1; ++kk)
           for (int jj = -1; jj <= 1; ++jj)
             for (int ii = -1; ii <= 1; ++ii)
-              cbuf[kk+1][jj+1][ii+1] = root_u_h(0, v, rk+kk, rj+jj, ri+ii)
-                                      - root_uold_h(0, v, rk+kk, rj+jj, ri+ii);
+              cbuf[kk+1][jj+1][ii+1] =
+                  root_u_h(0, v, rk+kk, rj+jj, ri+ii)
+                  - root_uold_h(0, v, rk+kk, rj+jj, ri+ii);
         for (int dk = 0; dk <= 1; ++dk) {
           const Real *wk = (dk == 0) ? w0 : w1;
           for (int dj = 0; dj <= 1; ++dj) {
@@ -933,8 +1117,9 @@ void MultigridDriver::ProlongateAndCorrectOctets() {
         for (int kk = -1; kk <= 1; ++kk)
           for (int jj = -1; jj <= 1; ++jj)
             for (int ii = -1; ii <= 1; ++ii)
-              cbuf[kk+1][jj+1][ii+1] = coct.U(v, ck+kk, cj+jj, ci+ii)
-                                      - coct.Uold(v, ck+kk, cj+jj, ci+ii);
+              cbuf[kk+1][jj+1][ii+1] =
+                  coct.U(v, ck+kk, cj+jj, ci+ii)
+                  - coct.Uold(v, ck+kk, cj+jj, ci+ii);
         for (int dk = 0; dk <= 1; ++dk) {
           const Real *wk = (dk == 0) ? w0 : w1;
           for (int dj = 0; dj <= 1; ++dj) {
@@ -1051,53 +1236,41 @@ void MultigridDriver::SetBoundariesOctets(bool fprolong, bool folddata) {
     std::fill(cbufold_.begin(), cbufold_.end(), 0.0);
 
     const LogicalLocation &loc = oct.loc;
-    LogicalLocation nloc = loc;
 
     for (int ox3 = -1; ox3 <= 1; ++ox3) {
-      nloc.lx3 = loc.lx3 + ox3;
-      if (nloc.lx3 < 0) {
-        nloc.lx3 = (nrbx3_ << lev) - 1;
-      }
-      if (nloc.lx3 >= (nrbx3_ << lev)) {
-        nloc.lx3 = 0;
-      }
       for (int ox2 = -1; ox2 <= 1; ++ox2) {
-        nloc.lx2 = loc.lx2 + ox2;
-        if (nloc.lx2 < 0) {
-          nloc.lx2 = (nrbx2_ << lev) - 1;
-        }
-        if (nloc.lx2 >= (nrbx2_ << lev)) {
-          nloc.lx2 = 0;
-        }
         for (int ox1 = -1; ox1 <= 1; ++ox1) {
           if (ox1 == 0 && ox2 == 0 && ox3 == 0) continue;
-          nloc.lx1 = loc.lx1 + ox1;
-          if (nloc.lx1 < 0) {
-            nloc.lx1 = (nrbx1_ << lev) - 1;
-          }
-          if (nloc.lx1 >= (nrbx1_ << lev)) {
-            nloc.lx1 = 0;
-          }
-          if (octetmap_[lev].count(nloc) == 1) { // same level neighbor
-            int nid = octetmap_[lev][nloc];
-            MGOctet &noct = octets_[lev][nid];
+          int dir = (ox3+1)*9 + (ox2+1)*3 + (ox1+1);
+          const OctetNeighborInfo &nb = oct.neighbors[dir];
+          if (nb.same_id == -2) {
+            continue;  // physical boundary — handled by ApplyPhysicalBoundariesOctet
+          } else if (nb.same_id >= 0) {
+            MGOctet &noct = octets_[lev][nb.same_id];
             SetOctetBoundarySameLevel(oct, noct, cbuf_, cbufold_,
                                       nvar_, ox1, ox2, ox3, folddata);
-          } else if (!fprolong) { // coarser level
-            ncoarse_[(ox3+1)*9 + (ox2+1)*3 + (ox1+1)] = true;
-            if (lev > 0) { // from octet
-              LogicalLocation cloc;
-              cloc.lx1 = nloc.lx1 >> 1;
-              cloc.lx2 = nloc.lx2 >> 1;
-              cloc.lx3 = nloc.lx3 >> 1;
-              cloc.level = nloc.level - 1;
-              int cid = octetmap_[lev-1][cloc];
-              MGOctet &coct = octets_[lev-1][cid];
+          } else if (!fprolong) {
+            ncoarse_[dir] = true;
+            if (lev > 0 && nb.coarse_id >= 0) {
+              MGOctet &coct = octets_[lev-1][nb.coarse_id];
               SetOctetBoundaryFromCoarser(coct.u, coct.uold, cbuf_, cbufold_,
                                           nvar_, coct.nc, loc, ox1, ox2, ox3, folddata);
-            } else { // from root — sync once on first encounter, then reuse
+            } else if (lev == 0) {
               BuildRootFlatBuffers();
-              SetOctetBoundaryFromCoarser(root_u_buf_, root_uold_buf_, cbuf_, cbufold_,
+              LogicalLocation nloc;
+              nloc.level = loc.level;
+              nloc.lx1 = loc.lx1 + ox1;
+              nloc.lx2 = loc.lx2 + ox2;
+              nloc.lx3 = loc.lx3 + ox3;
+              // periodic wrapping (only reached for periodic BCs)
+              if (nloc.lx1 < 0)       nloc.lx1 = nrbx1_ - 1;
+              if (nloc.lx1 >= nrbx1_)  nloc.lx1 = 0;
+              if (nloc.lx2 < 0)       nloc.lx2 = nrbx2_ - 1;
+              if (nloc.lx2 >= nrbx2_)  nloc.lx2 = 0;
+              if (nloc.lx3 < 0)       nloc.lx3 = nrbx3_ - 1;
+              if (nloc.lx3 >= nrbx3_)  nloc.lx3 = 0;
+              SetOctetBoundaryFromCoarser(root_u_buf_.data(), root_uold_buf_.data(),
+                                          cbuf_, cbufold_,
                                           nvar_, root_buf_nc_, nloc,
                                           ox1, ox2, ox3, folddata);
             }
@@ -1106,10 +1279,11 @@ void MultigridDriver::SetBoundariesOctets(bool fprolong, bool folddata) {
       }
     }
 
-    // Prolongate coarse buffer to fill ghost cells at coarser boundaries
     if (!fprolong) {
-      ProlongateOctetBoundaries(oct, cbuf_, cbufold_, nvar_, ncoarse_, folddata);
+      ApplyPhysicalBoundariesOctet(oct, true);
+      ProlongateOctetBoundariesFluxCons(oct, cbuf_, ncoarse_);
     }
+    ApplyPhysicalBoundariesOctet(oct, false);
   }
 }
 
@@ -1172,8 +1346,8 @@ void MultigridDriver::SetOctetBoundarySameLevel(MGOctet &dst, const MGOctet &src
 //! \fn void MultigridDriver::SetOctetBoundaryFromCoarser(...)
 //! \brief Fill coarse buffer entry from a coarser neighbor (octet or root)
 
-void MultigridDriver::SetOctetBoundaryFromCoarser(const std::vector<Real> &un,
-     const std::vector<Real> &unold,
+void MultigridDriver::SetOctetBoundaryFromCoarser(const Real *un,
+     const Real *unold,
      std::vector<Real> &cbuf, std::vector<Real> &cbufold,
      int nvar, int un_nc, const LogicalLocation &loc,
      int ox1, int ox2, int ox3, bool folddata) {
@@ -1201,6 +1375,18 @@ void MultigridDriver::SetOctetBoundaryFromCoarser(const std::vector<Real> &un,
     for (int v = 0; v < nvar; ++v)
       BufRef(cbufold, 3, v, k, j, i) = unold[((v*un_nc + ck)*un_nc + cj)*un_nc + ci];
   }
+}
+
+
+//----------------------------------------------------------------------------------------
+//! \fn void MultigridDriver::ProlongateOctetBoundariesFluxCons(...)
+//! \brief Base class default: delegates to normal trilinear prolongation.
+//!        Physics-specific drivers (e.g. gravity) override this with the
+//!        conservative formulation from Tomida & Stone (2023) Section 3.3.2.
+
+void MultigridDriver::ProlongateOctetBoundariesFluxCons(MGOctet &oct,
+     std::vector<Real> &cbuf, const std::vector<bool> &ncoarse) {
+  ProlongateOctetBoundaries(oct, cbuf, cbufold_, nvar_, ncoarse, false);
 }
 
 
@@ -1343,6 +1529,36 @@ void MultigridDriver::ProlongateOctetBoundaries(MGOctet &oct,
 
 
 //----------------------------------------------------------------------------------------
+//! \fn void MultigridDriver::PreRestrictOctetU()
+//! \brief After TransferFromBlocksToRoot, restrict u from finer octets to fill parent
+//!        cells at coarser levels. This ensures that within mixed octets (containing both
+//!        parent and leaf cells), the u values are consistent — preventing corrupt
+//!        transverse gradients in ProlongateOctetBoundariesFluxCons during the descent.
+
+void MultigridDriver::PreRestrictOctetU() {
+  const int ngh = mgroot_->ngh_;
+  for (int l = nreflevel_ - 1; l >= 1; --l) {
+    for (int o = 0; o < noctets_[l]; ++o) {
+      MGOctet &foct = octets_[l][o];
+      const LogicalLocation &floc = foct.loc;
+      LogicalLocation cloc;
+      cloc.lx1 = (floc.lx1 >> 1);
+      cloc.lx2 = (floc.lx2 >> 1);
+      cloc.lx3 = (floc.lx3 >> 1);
+      cloc.level = floc.level - 1;
+      int oid = octetmap_[l-1][cloc];
+      MGOctet &coct = octets_[l-1][oid];
+      int oi = (static_cast<int>(floc.lx1) & 1) + ngh;
+      int oj = (static_cast<int>(floc.lx2) & 1) + ngh;
+      int ok = (static_cast<int>(floc.lx3) & 1) + ngh;
+      for (int v = 0; v < nvar_; ++v)
+        coct.U(v, ok, oj, oi) = RestrictOne(foct, v, ngh, ngh, ngh);
+    }
+  }
+}
+
+
+//----------------------------------------------------------------------------------------
 //! \fn void MultigridDriver::RestrictOctetsBeforeTransfer()
 //! \brief Restrict all octets to prepare for root-to-blocks transfer
 
@@ -1376,7 +1592,7 @@ void MultigridDriver::RestrictOctetsBeforeTransfer() {
                      static_cast<int>(oloc.lx1)+ngh) =
           RestrictOne(oct, v, ngh, ngh, ngh);
   }
-  SyncRootToDevice();
+  root_sync_state_ = RootSyncState::HOST_MODIFIED;
 }
 
 
@@ -1414,40 +1630,40 @@ void MultigridDriver::SetOctetBoundariesBeforeTransfer(bool folddata) {
     std::fill(cbuf_.begin(), cbuf_.end(), 0.0);
     std::fill(cbufold_.begin(), cbufold_.end(), 0.0);
 
-    LogicalLocation nloc = oloc;
     for (int ox3 = -1; ox3 <= 1; ++ox3) {
-      nloc.lx3 = oloc.lx3 + ox3;
-      if (nloc.lx3 < 0) nloc.lx3 = (nrbx3_ << lev) - 1;
-      if (nloc.lx3 >= (nrbx3_ << lev)) nloc.lx3 = 0;
       for (int ox2 = -1; ox2 <= 1; ++ox2) {
-        nloc.lx2 = oloc.lx2 + ox2;
-        if (nloc.lx2 < 0) nloc.lx2 = (nrbx2_ << lev) - 1;
-        if (nloc.lx2 >= (nrbx2_ << lev)) nloc.lx2 = 0;
         for (int ox1 = -1; ox1 <= 1; ++ox1) {
           if (ox1 == 0 && ox2 == 0 && ox3 == 0) continue;
-          nloc.lx1 = oloc.lx1 + ox1;
-          if (nloc.lx1 < 0) nloc.lx1 = (nrbx1_ << lev) - 1;
-          if (nloc.lx1 >= (nrbx1_ << lev)) nloc.lx1 = 0;
-          if (octetmap_[lev].count(nloc) == 1) {
-            int nid = octetmap_[lev][nloc];
-            MGOctet &noct = octets_[lev][nid];
+          int dir = (ox3+1)*9 + (ox2+1)*3 + (ox1+1);
+          const OctetNeighborInfo &nb = oct.neighbors[dir];
+          if (nb.same_id == -2) {
+            continue;  // physical boundary — handled by ApplyPhysicalBoundariesOctet
+          } else if (nb.same_id >= 0) {
+            MGOctet &noct = octets_[lev][nb.same_id];
             SetOctetBoundarySameLevel(oct, noct, cbuf_, cbufold_,
                                       nvar_, ox1, ox2, ox3, folddata);
           } else {
-            ncoarse_[(ox3+1)*9 + (ox2+1)*3 + (ox1+1)] = true;
-            if (lev > 0) {
-              LogicalLocation cloc;
-              cloc.lx1 = nloc.lx1 >> 1;
-              cloc.lx2 = nloc.lx2 >> 1;
-              cloc.lx3 = nloc.lx3 >> 1;
-              cloc.level = nloc.level - 1;
-              int cid = octetmap_[lev-1][cloc];
-              MGOctet &coct = octets_[lev-1][cid];
+            ncoarse_[dir] = true;
+            if (lev > 0 && nb.coarse_id >= 0) {
+              MGOctet &coct = octets_[lev-1][nb.coarse_id];
               SetOctetBoundaryFromCoarser(coct.u, coct.uold, cbuf_, cbufold_,
                                           nvar_, coct.nc, oloc, ox1, ox2, ox3, folddata);
-            } else { // from root — sync once on first encounter, then reuse
+            } else if (lev == 0) {
               BuildRootFlatBuffers();
-              SetOctetBoundaryFromCoarser(root_u_buf_, root_uold_buf_, cbuf_, cbufold_,
+              LogicalLocation nloc;
+              nloc.level = oloc.level;
+              nloc.lx1 = oloc.lx1 + ox1;
+              nloc.lx2 = oloc.lx2 + ox2;
+              nloc.lx3 = oloc.lx3 + ox3;
+              // periodic wrapping (only reached for periodic BCs)
+              if (nloc.lx1 < 0)       nloc.lx1 = nrbx1_ - 1;
+              if (nloc.lx1 >= nrbx1_)  nloc.lx1 = 0;
+              if (nloc.lx2 < 0)       nloc.lx2 = nrbx2_ - 1;
+              if (nloc.lx2 >= nrbx2_)  nloc.lx2 = 0;
+              if (nloc.lx3 < 0)       nloc.lx3 = nrbx3_ - 1;
+              if (nloc.lx3 >= nrbx3_)  nloc.lx3 = 0;
+              SetOctetBoundaryFromCoarser(root_u_buf_.data(), root_uold_buf_.data(),
+                                          cbuf_, cbufold_,
                                           nvar_, root_buf_nc_, nloc,
                                           ox1, ox2, ox3, folddata);
             }
@@ -1456,10 +1672,118 @@ void MultigridDriver::SetOctetBoundariesBeforeTransfer(bool folddata) {
       }
     }
 
+    ApplyPhysicalBoundariesOctet(oct, true);
     if (folddata)
       ProlongateOctetBoundaries(oct, cbuf_, cbufold_, nvar_, ncoarse_, folddata);
     else
       ProlongateOctetBoundaries(oct, cbuf_, cbufold_, nvar_, ncoarse_, false);
+    ApplyPhysicalBoundariesOctet(oct, false);
+  }
+}
+
+
+//----------------------------------------------------------------------------------------
+//! \fn void MultigridDriver::ApplyPhysicalBoundariesOctet(...)
+//! \brief Apply physical boundary conditions to an octet at the domain boundary.
+//! fcbuf=true: apply to the coarse buffer (ngh x ngh), fcbuf=false: apply to oct.u
+
+void MultigridDriver::ApplyPhysicalBoundariesOctet(MGOctet &oct, bool fcbuf) {
+  if (pmy_mesh_->strictly_periodic) return;
+  const LogicalLocation &loc = oct.loc;
+  int lev = loc.level - locrootlevel_;
+  int ngh = mgroot_->ngh_;
+  int l = ngh, r = ngh + 1;
+  if (fcbuf) r = ngh;  // coarse buffer has only ngh cells
+
+  // For zerofixed: ghost = -interior (antisymmetric reflection)
+  // For zerograd:  ghost = +interior (symmetric reflection)
+  // For multipole: ghost = 2*phi_mp - interior (linear extrapolation)
+  // We implement zerofixed and zerograd here. Multipole at octet level
+  // uses the same reflection approach (the root-level multipole already
+  // sets the correct values; octets near the boundary inherit from the
+  // root through the coarser-level boundary exchange).
+
+  auto apply_bc = [&](Real *data, int nc) {
+    auto ref = [&](int v, int k, int j, int i) -> Real& {
+      return data[((v*nc + k)*nc + j)*nc + i];
+    };
+
+    // inner x1
+    if (loc.lx1 == 0 && mg_mesh_bcs_[BoundaryFace::inner_x1] != BoundaryFlag::periodic) {
+      Real sign = (mg_mesh_bcs_[BoundaryFace::inner_x1] == BoundaryFlag::mg_zerofixed)
+                  ? -1.0 : 1.0;
+      for (int v = 0; v < nvar_; ++v)
+        for (int k = 0; k < nc; ++k)
+          for (int j = 0; j < nc; ++j)
+            for (int n = 0; n < ngh; ++n)
+              ref(v, k, j, ngh-1-n) = sign * ref(v, k, j, ngh+n);
+    }
+    // outer x1
+    int maxlx1 = nrbx1_ << lev;
+    if (loc.lx1 == maxlx1-1
+        && mg_mesh_bcs_[BoundaryFace::outer_x1] != BoundaryFlag::periodic) {
+      Real sign = (mg_mesh_bcs_[BoundaryFace::outer_x1] == BoundaryFlag::mg_zerofixed)
+                  ? -1.0 : 1.0;
+      int ie = fcbuf ? ngh : ngh + 1;
+      for (int v = 0; v < nvar_; ++v)
+        for (int k = 0; k < nc; ++k)
+          for (int j = 0; j < nc; ++j)
+            for (int n = 0; n < ngh; ++n)
+              ref(v, k, j, ie+n+1) = sign * ref(v, k, j, ie-n);
+    }
+    // inner x2
+    if (loc.lx2 == 0 && mg_mesh_bcs_[BoundaryFace::inner_x2] != BoundaryFlag::periodic) {
+      Real sign = (mg_mesh_bcs_[BoundaryFace::inner_x2] == BoundaryFlag::mg_zerofixed)
+                  ? -1.0 : 1.0;
+      for (int v = 0; v < nvar_; ++v)
+        for (int k = 0; k < nc; ++k)
+          for (int i = 0; i < nc; ++i)
+            for (int n = 0; n < ngh; ++n)
+              ref(v, k, ngh-1-n, i) = sign * ref(v, k, ngh+n, i);
+    }
+    // outer x2
+    int maxlx2 = nrbx2_ << lev;
+    if (loc.lx2 == maxlx2-1
+        && mg_mesh_bcs_[BoundaryFace::outer_x2] != BoundaryFlag::periodic) {
+      Real sign = (mg_mesh_bcs_[BoundaryFace::outer_x2] == BoundaryFlag::mg_zerofixed)
+                  ? -1.0 : 1.0;
+      int je = fcbuf ? ngh : ngh + 1;
+      for (int v = 0; v < nvar_; ++v)
+        for (int k = 0; k < nc; ++k)
+          for (int i = 0; i < nc; ++i)
+            for (int n = 0; n < ngh; ++n)
+              ref(v, k, je+n+1, i) = sign * ref(v, k, je-n, i);
+    }
+    // inner x3
+    if (loc.lx3 == 0 && mg_mesh_bcs_[BoundaryFace::inner_x3] != BoundaryFlag::periodic) {
+      Real sign = (mg_mesh_bcs_[BoundaryFace::inner_x3] == BoundaryFlag::mg_zerofixed)
+                  ? -1.0 : 1.0;
+      for (int v = 0; v < nvar_; ++v)
+        for (int j = 0; j < nc; ++j)
+          for (int i = 0; i < nc; ++i)
+            for (int n = 0; n < ngh; ++n)
+              ref(v, ngh-1-n, j, i) = sign * ref(v, ngh+n, j, i);
+    }
+    // outer x3
+    int maxlx3 = nrbx3_ << lev;
+    if (loc.lx3 == maxlx3-1
+        && mg_mesh_bcs_[BoundaryFace::outer_x3] != BoundaryFlag::periodic) {
+      Real sign = (mg_mesh_bcs_[BoundaryFace::outer_x3] == BoundaryFlag::mg_zerofixed)
+                  ? -1.0 : 1.0;
+      int ke = fcbuf ? ngh : ngh + 1;
+      for (int v = 0; v < nvar_; ++v)
+        for (int j = 0; j < nc; ++j)
+          for (int i = 0; i < nc; ++i)
+            for (int n = 0; n < ngh; ++n)
+              ref(v, ke+n+1, j, i) = sign * ref(v, ke-n, j, i);
+    }
+  };
+
+  if (fcbuf) {
+    int nc_cbuf = 1 + 2*ngh;
+    apply_bc(cbuf_.data(), nc_cbuf);
+  } else {
+    apply_bc(oct.u, oct.nc);
   }
 }
 
@@ -1477,32 +1801,443 @@ void MultigridDriver::MGRootBoundary() {
   int ny = (mgroot_->indcs_.nx2 >> ll) + 2*ngh;
   int nz = (mgroot_->indcs_.nx3 >> ll) + 2*ngh;
 
+  BoundaryFlag bc_ix1 = mg_mesh_bcs_[BoundaryFace::inner_x1];
+  BoundaryFlag bc_ox1 = mg_mesh_bcs_[BoundaryFace::outer_x1];
+  BoundaryFlag bc_ix2 = mg_mesh_bcs_[BoundaryFace::inner_x2];
+  BoundaryFlag bc_ox2 = mg_mesh_bcs_[BoundaryFace::outer_x2];
+  BoundaryFlag bc_ix3 = mg_mesh_bcs_[BoundaryFace::inner_x3];
+  BoundaryFlag bc_ox3 = mg_mesh_bcs_[BoundaryFace::outer_x3];
+
   for (int v = 0; v < nvar; ++v) {
+    // x1 boundaries
     for (int k = 0; k < nz; ++k) {
       for (int j = 0; j < ny; ++j) {
         for (int n = 0; n < ngh; ++n) {
-          u(0, v, k, j, n) = u(0, v, k, j, nx - 2*ngh + n);
-          u(0, v, k, j, nx - ngh + n) = u(0, v, k, j, ngh + n);
+          if (bc_ix1 == BoundaryFlag::periodic) {
+            u(0, v, k, j, n) = u(0, v, k, j, nx - 2*ngh + n);
+          } else if (bc_ix1 == BoundaryFlag::mg_zerofixed) {
+            u(0, v, k, j, ngh - 1 - n) = -u(0, v, k, j, ngh + n);
+          } else if (bc_ix1 == BoundaryFlag::mg_zerograd) {
+            u(0, v, k, j, ngh - 1 - n) = u(0, v, k, j, ngh + n);
+          }
+          if (bc_ox1 == BoundaryFlag::periodic) {
+            u(0, v, k, j, nx - ngh + n) = u(0, v, k, j, ngh + n);
+          } else if (bc_ox1 == BoundaryFlag::mg_zerofixed) {
+            u(0, v, k, j, nx - ngh + n) = -u(0, v, k, j, nx - ngh - 1 - n);
+          } else if (bc_ox1 == BoundaryFlag::mg_zerograd) {
+            u(0, v, k, j, nx - ngh + n) = u(0, v, k, j, nx - ngh - 1 - n);
+          }
         }
       }
     }
+    // x2 boundaries
     for (int k = 0; k < nz; ++k) {
       for (int i = 0; i < nx; ++i) {
         for (int n = 0; n < ngh; ++n) {
-          u(0, v, k, n, i) = u(0, v, k, ny - 2*ngh + n, i);
-          u(0, v, k, ny - ngh + n, i) = u(0, v, k, ngh + n, i);
+          if (bc_ix2 == BoundaryFlag::periodic) {
+            u(0, v, k, n, i) = u(0, v, k, ny - 2*ngh + n, i);
+          } else if (bc_ix2 == BoundaryFlag::mg_zerofixed) {
+            u(0, v, k, ngh - 1 - n, i) = -u(0, v, k, ngh + n, i);
+          } else if (bc_ix2 == BoundaryFlag::mg_zerograd) {
+            u(0, v, k, ngh - 1 - n, i) = u(0, v, k, ngh + n, i);
+          }
+          if (bc_ox2 == BoundaryFlag::periodic) {
+            u(0, v, k, ny - ngh + n, i) = u(0, v, k, ngh + n, i);
+          } else if (bc_ox2 == BoundaryFlag::mg_zerofixed) {
+            u(0, v, k, ny - ngh + n, i) = -u(0, v, k, ny - ngh - 1 - n, i);
+          } else if (bc_ox2 == BoundaryFlag::mg_zerograd) {
+            u(0, v, k, ny - ngh + n, i) = u(0, v, k, ny - ngh - 1 - n, i);
+          }
         }
       }
     }
+    // x3 boundaries
     for (int j = 0; j < ny; ++j) {
       for (int i = 0; i < nx; ++i) {
         for (int n = 0; n < ngh; ++n) {
-          u(0, v, n, j, i) = u(0, v, nz - 2*ngh + n, j, i);
-          u(0, v, nz - ngh + n, j, i) = u(0, v, ngh + n, j, i);
+          if (bc_ix3 == BoundaryFlag::periodic) {
+            u(0, v, n, j, i) = u(0, v, nz - 2*ngh + n, j, i);
+          } else if (bc_ix3 == BoundaryFlag::mg_zerofixed) {
+            u(0, v, ngh - 1 - n, j, i) = -u(0, v, ngh + n, j, i);
+          } else if (bc_ix3 == BoundaryFlag::mg_zerograd) {
+            u(0, v, ngh - 1 - n, j, i) = u(0, v, ngh + n, j, i);
+          }
+          if (bc_ox3 == BoundaryFlag::periodic) {
+            u(0, v, nz - ngh + n, j, i) = u(0, v, ngh + n, j, i);
+          } else if (bc_ox3 == BoundaryFlag::mg_zerofixed) {
+            u(0, v, nz - ngh + n, j, i) = -u(0, v, nz - ngh - 1 - n, j, i);
+          } else if (bc_ox3 == BoundaryFlag::mg_zerograd) {
+            u(0, v, nz - ngh + n, j, i) = u(0, v, nz - ngh - 1 - n, j, i);
+          }
         }
       }
     }
   }
+
+  // Multipole expansion boundaries (applied after periodic/zerofixed/zerograd)
+  if (mporder_ > 0) {
+    int ncx = (mgroot_->indcs_.nx1 >> ll);
+    int ncy = (mgroot_->indcs_.nx2 >> ll);
+    int ncz = (mgroot_->indcs_.nx3 >> ll);
+    Real x1min = pmy_mesh_->mesh_size.x1min;
+    Real x1max = pmy_mesh_->mesh_size.x1max;
+    Real x2min = pmy_mesh_->mesh_size.x2min;
+    Real x2max = pmy_mesh_->mesh_size.x2max;
+    Real x3min = pmy_mesh_->mesh_size.x3min;
+    Real x3max = pmy_mesh_->mesh_size.x3max;
+    Real dx1 = (x1max - x1min) / static_cast<Real>(ncx);
+    Real dx2 = (x2max - x2min) / static_cast<Real>(ncy);
+    Real dx3 = (x3max - x3min) / static_cast<Real>(ncz);
+    Real xo = mpo_[0], yo = mpo_[1], zo = mpo_[2];
+    int order = mporder_;
+
+    auto eval_phi = [&](Real x, Real y, Real z) -> Real {
+      Real x2 = x*x, y2 = y*y, z2 = z*z;
+      Real xy = x*y, yz = y*z, zx = z*x;
+      Real r2 = x2 + y2 + z2;
+      Real ir2 = 1.0/r2, ir1 = std::sqrt(ir2);
+      Real ir3 = ir2*ir1, ir5 = ir3*ir2;
+      Real hx2my2 = 0.5*(x2-y2);
+      Real phis = ir1*mpcoeff_[0]
+        + ir3*(mpcoeff_[1]*y + mpcoeff_[2]*z + mpcoeff_[3]*x)
+        + ir5*(mpcoeff_[4]*xy + mpcoeff_[5]*yz + (3.0*z2-r2)*mpcoeff_[6]
+             + mpcoeff_[7]*zx + mpcoeff_[8]*hx2my2);
+      if (order == 4) {
+        Real ir7 = ir5*ir2, ir9 = ir7*ir2;
+        Real x2mty2 = x2-3.0*y2;
+        Real tx2my2 = 3.0*x2-y2;
+        phis += ir7*(y*tx2my2*mpcoeff_[9] + x*x2mty2*mpcoeff_[15]
+                   + xy*z*mpcoeff_[10] + z*hx2my2*mpcoeff_[14]
+                   + (5.0*z2-r2)*(y*mpcoeff_[11] + x*mpcoeff_[13])
+                   + z*(z2-3.0*r2)*mpcoeff_[12])
+             + ir9*(xy*hx2my2*mpcoeff_[16]
+                   + 0.125*(x2*x2mty2-y2*tx2my2)*mpcoeff_[24]
+                   + yz*tx2my2*mpcoeff_[17] + zx*x2mty2*mpcoeff_[23]
+                   + (7.0*z2-r2)*(xy*mpcoeff_[18] + hx2my2*mpcoeff_[22])
+                   + (7.0*z2-3.0*r2)*(yz*mpcoeff_[19] + zx*mpcoeff_[21])
+                   + (35.0*z2*z2-30.0*z2*r2+3.0*r2*r2)*mpcoeff_[20]);
+      }
+      return phis;
+    };
+
+    // Inner x1
+    if (bc_ix1 == BoundaryFlag::mg_multipole) {
+      Real x = x1min - xo;
+      for (int k = ngh; k < ngh + ncz; ++k) {
+        Real z = x3min + (k - ngh + 0.5)*dx3 - zo;
+        for (int j = ngh; j < ngh + ncy; ++j) {
+          Real y = x2min + (j - ngh + 0.5)*dx2 - yo;
+          Real phis = eval_phi(x, y, z);
+          for (int n = 0; n < ngh; ++n)
+            u(0, 0, k, j, ngh - 1 - n) = 2.0*phis - u(0, 0, k, j, ngh + n);
+        }
+      }
+    }
+    // Outer x1
+    if (bc_ox1 == BoundaryFlag::mg_multipole) {
+      Real x = x1max - xo;
+      for (int k = ngh; k < ngh + ncz; ++k) {
+        Real z = x3min + (k - ngh + 0.5)*dx3 - zo;
+        for (int j = ngh; j < ngh + ncy; ++j) {
+          Real y = x2min + (j - ngh + 0.5)*dx2 - yo;
+          Real phis = eval_phi(x, y, z);
+          for (int n = 0; n < ngh; ++n)
+            u(0, 0, k, j, ngh + ncx + n) = 2.0*phis - u(0, 0, k, j, ngh + ncx - 1 - n);
+        }
+      }
+    }
+    // Inner x2
+    if (bc_ix2 == BoundaryFlag::mg_multipole) {
+      Real y = x2min - yo;
+      for (int k = ngh; k < ngh + ncz; ++k) {
+        Real z = x3min + (k - ngh + 0.5)*dx3 - zo;
+        for (int i = ngh; i < ngh + ncx; ++i) {
+          Real x = x1min + (i - ngh + 0.5)*dx1 - xo;
+          Real phis = eval_phi(x, y, z);
+          for (int n = 0; n < ngh; ++n)
+            u(0, 0, k, ngh - 1 - n, i) = 2.0*phis - u(0, 0, k, ngh + n, i);
+        }
+      }
+    }
+    // Outer x2
+    if (bc_ox2 == BoundaryFlag::mg_multipole) {
+      Real y = x2max - yo;
+      for (int k = ngh; k < ngh + ncz; ++k) {
+        Real z = x3min + (k - ngh + 0.5)*dx3 - zo;
+        for (int i = ngh; i < ngh + ncx; ++i) {
+          Real x = x1min + (i - ngh + 0.5)*dx1 - xo;
+          Real phis = eval_phi(x, y, z);
+          for (int n = 0; n < ngh; ++n)
+            u(0, 0, k, ngh + ncy + n, i) = 2.0*phis - u(0, 0, k, ngh + ncy - 1 - n, i);
+        }
+      }
+    }
+    // Inner x3
+    if (bc_ix3 == BoundaryFlag::mg_multipole) {
+      Real z = x3min - zo;
+      for (int j = ngh; j < ngh + ncy; ++j) {
+        Real y = x2min + (j - ngh + 0.5)*dx2 - yo;
+        for (int i = ngh; i < ngh + ncx; ++i) {
+          Real x = x1min + (i - ngh + 0.5)*dx1 - xo;
+          Real phis = eval_phi(x, y, z);
+          for (int n = 0; n < ngh; ++n)
+            u(0, 0, ngh - 1 - n, j, i) = 2.0*phis - u(0, 0, ngh + n, j, i);
+        }
+      }
+    }
+    // Outer x3
+    if (bc_ox3 == BoundaryFlag::mg_multipole) {
+      Real z = x3max - zo;
+      for (int j = ngh; j < ngh + ncy; ++j) {
+        Real y = x2min + (j - ngh + 0.5)*dx2 - yo;
+        for (int i = ngh; i < ngh + ncx; ++i) {
+          Real x = x1min + (i - ngh + 0.5)*dx1 - xo;
+          Real phis = eval_phi(x, y, z);
+          for (int n = 0; n < ngh; ++n)
+            u(0, 0, ngh + ncz + n, j, i) = 2.0*phis - u(0, 0, ngh + ncz - 1 - n, j, i);
+        }
+      }
+    }
+  }
+
   root_flat_buf_stale_ = true;
+  root_sync_state_ = RootSyncState::HOST_MODIFIED;
   SyncRootToDevice();
+}
+
+
+//----------------------------------------------------------------------------------------
+//! \fn void MultigridDriver::AllocateMultipoleCoefficients()
+//! \brief Set nmpcoeff_ based on mporder_
+
+void MultigridDriver::AllocateMultipoleCoefficients() {
+  nmpcoeff_ = 0;
+  if (mporder_ <= 0) return;
+  for (int l = 0; l <= mporder_; ++l)
+    nmpcoeff_ += 2 * l + 1;
+}
+
+
+//----------------------------------------------------------------------------------------
+//! \fn void MultigridDriver::CalculateMultipoleCoefficients()
+//! \brief Compute multipole moments by integrating source * solid harmonics over all MBs
+
+void MultigridDriver::CalculateMultipoleCoefficients() {
+  if (mporder_ <= 0 || nmpcoeff_ == 0) return;
+  std::memset(mpcoeff_, 0, sizeof(Real) * nmpcoeff_);
+
+  auto src = mglevels_->src_[mglevels_->nlevel_-1].d_view;
+  int nmb = mglevels_->nmmb_;
+  int ngh = mglevels_->ngh_;
+  int nx1 = mglevels_->indcs_.nx1;
+  int nx2 = mglevels_->indcs_.nx2;
+  int nx3 = mglevels_->indcs_.nx3;
+  auto &mb_size = pmy_pack_->pmb->mb_size;
+
+  Real xorigin = mpo_[0], yorigin = mpo_[1], zorigin = mpo_[2];
+  int order = mporder_;
+  bool skip_dipole = nodipole_;
+  int ncoeff = nmpcoeff_;
+
+  DvceArray2D<Real> partial("mp_partial", nmb, nmpcoeff_);
+
+  par_for("MGMultipoleCoeffs", DevExeSpace(), 0, nmb-1,
+  KOKKOS_LAMBDA(const int m) {
+    Real dx1 = (mb_size.d_view(m).x1max - mb_size.d_view(m).x1min)
+               / static_cast<Real>(nx1);
+    Real dx2 = (mb_size.d_view(m).x2max - mb_size.d_view(m).x2min)
+               / static_cast<Real>(nx2);
+    Real dx3 = (mb_size.d_view(m).x3max - mb_size.d_view(m).x3min)
+               / static_cast<Real>(nx3);
+    Real vol = dx1 * dx2 * dx3;
+
+    Real mp[25] = {};
+
+    for (int k = ngh; k < ngh + nx3; ++k) {
+      Real z = mb_size.d_view(m).x3min + (k - ngh + 0.5) * dx3 - zorigin;
+      Real z2 = z * z;
+      for (int j = ngh; j < ngh + nx2; ++j) {
+        Real y = mb_size.d_view(m).x2min + (j - ngh + 0.5) * dx2 - yorigin;
+        Real y2 = y * y;
+        Real yz = y * z;
+        for (int i = ngh; i < ngh + nx1; ++i) {
+          Real x = mb_size.d_view(m).x1min + (i - ngh + 0.5) * dx1 - xorigin;
+          Real x2 = x * x;
+          Real xy = x * y;
+          Real zx = z * x;
+          Real r2 = x2 + y2 + z2;
+          Real s = src(m, 0, k, j, i) * vol;
+
+          mp[0] += s;
+          if (!skip_dipole) {
+            mp[1] += s * y;
+            mp[2] += s * z;
+            mp[3] += s * x;
+          }
+          Real hx2my2 = 0.5 * (x2 - y2);
+          mp[4] += s * xy;
+          mp[5] += s * yz;
+          mp[6] += s * (3.0 * z2 - r2);
+          mp[7] += s * zx;
+          mp[8] += s * hx2my2;
+
+          if (order == 4) {
+            Real tx2my2 = 3.0 * x2 - y2;
+            Real x2mty2 = x2 - 3.0 * y2;
+            Real fz2mr2 = 5.0 * z2 - r2;
+            mp[9]  += s * y * tx2my2;
+            mp[10] += s * xy * z;
+            mp[11] += s * y * fz2mr2;
+            mp[12] += s * z * (z2 - 3.0 * r2);
+            mp[13] += s * x * fz2mr2;
+            mp[14] += s * z * hx2my2;
+            mp[15] += s * x * x2mty2;
+            Real sz2mr2 = 7.0 * z2 - r2;
+            Real sz2mtr2 = 7.0 * z2 - 3.0 * r2;
+            mp[16] += s * xy * hx2my2;
+            mp[17] += s * yz * tx2my2;
+            mp[18] += s * xy * sz2mr2;
+            mp[19] += s * yz * sz2mtr2;
+            mp[20] += s * (35.0 * z2 * z2 - 30.0 * z2 * r2 + 3.0 * r2 * r2);
+            mp[21] += s * zx * sz2mtr2;
+            mp[22] += s * hx2my2 * sz2mr2;
+            mp[23] += s * zx * x2mty2;
+            mp[24] += s * 0.125 * (x2 * x2mty2 - y2 * tx2my2);
+          }
+        }
+      }
+    }
+    for (int c = 0; c < ncoeff; ++c)
+      partial(m, c) = mp[c];
+  });
+
+  auto partial_h = Kokkos::create_mirror_view_and_copy(HostMemSpace(), partial);
+  for (int m = 0; m < nmb; ++m) {
+    for (int c = 0; c < nmpcoeff_; ++c) {
+      mpcoeff_[c] += partial_h(m, c);
+    }
+  }
+
+#ifdef MPI_PARALLEL
+  MPI_Allreduce(MPI_IN_PLACE, mpcoeff_, nmpcoeff_, MPI_ATHENA_REAL,
+                MPI_SUM, MPI_COMM_WORLD);
+#endif
+
+  ScaleMultipoleCoefficients();
+}
+
+
+//----------------------------------------------------------------------------------------
+//! \fn void MultigridDriver::ScaleMultipoleCoefficients()
+//! \brief Apply normalization to raw multipole moments
+
+void MultigridDriver::ScaleMultipoleCoefficients() {
+  constexpr Real c0  = -0.25 / M_PI;
+  constexpr Real c1  = -0.25 / M_PI;
+  constexpr Real c2  = -0.0625 / M_PI;
+  constexpr Real c2a = -0.75 / M_PI;
+  constexpr Real c30 = -0.0625 / M_PI;
+  constexpr Real c31 = -0.0625 * 1.5 / M_PI;
+  constexpr Real c32 = -0.25 * 15.0 / M_PI;
+  constexpr Real c33 = -0.0625 * 2.5 / M_PI;
+  constexpr Real c40 = -0.0625 * 0.0625 / M_PI;
+  constexpr Real c41 = -0.0625 * 2.5 / M_PI;
+  constexpr Real c42 = -0.0625 * 5.0 / M_PI;
+  constexpr Real c43 = -0.0625 * 17.5 / M_PI;
+  constexpr Real c44 = -0.25 * 35.0 / M_PI;
+
+  mpcoeff_[0] *= c0;
+  mpcoeff_[1] *= c1;
+  mpcoeff_[2] *= c1;
+  mpcoeff_[3] *= c1;
+  mpcoeff_[4] *= c2a;
+  mpcoeff_[5] *= c2a;
+  mpcoeff_[6] *= c2;
+  mpcoeff_[7] *= c2a;
+  mpcoeff_[8] *= c2a;
+  if (mporder_ == 4) {
+    mpcoeff_[9]  *= c33;
+    mpcoeff_[10] *= c32;
+    mpcoeff_[11] *= c31;
+    mpcoeff_[12] *= c30;
+    mpcoeff_[13] *= c31;
+    mpcoeff_[14] *= c32;
+    mpcoeff_[15] *= c33;
+    mpcoeff_[16] *= c44;
+    mpcoeff_[17] *= c43;
+    mpcoeff_[18] *= c42;
+    mpcoeff_[19] *= c41;
+    mpcoeff_[20] *= c40;
+    mpcoeff_[21] *= c41;
+    mpcoeff_[22] *= c42;
+    mpcoeff_[23] *= c43;
+    mpcoeff_[24] *= c44;
+  }
+}
+
+
+//----------------------------------------------------------------------------------------
+//! \fn void MultigridDriver::CalculateCenterOfMass()
+//! \brief Compute center of mass from monopole and dipole moments
+
+void MultigridDriver::CalculateCenterOfMass() {
+  if (mporder_ <= 0) return;
+
+  auto src = mglevels_->src_[mglevels_->nlevel_-1].d_view;
+  int nmb = mglevels_->nmmb_;
+  int ngh = mglevels_->ngh_;
+  int nx1 = mglevels_->indcs_.nx1;
+  int nx2 = mglevels_->indcs_.nx2;
+  int nx3 = mglevels_->indcs_.nx3;
+  auto &mb_size = pmy_pack_->pmb->mb_size;
+
+  DvceArray2D<Real> partial("com_partial", nmb, 4);
+
+  par_for("MGCenterOfMass", DevExeSpace(), 0, nmb-1,
+  KOKKOS_LAMBDA(const int m) {
+    Real dx1 = (mb_size.d_view(m).x1max - mb_size.d_view(m).x1min)
+               / static_cast<Real>(nx1);
+    Real dx2 = (mb_size.d_view(m).x2max - mb_size.d_view(m).x2min)
+               / static_cast<Real>(nx2);
+    Real dx3 = (mb_size.d_view(m).x3max - mb_size.d_view(m).x3min)
+               / static_cast<Real>(nx3);
+    Real vol = dx1 * dx2 * dx3;
+    Real m0 = 0.0, m1 = 0.0, m2 = 0.0, m3 = 0.0;
+    for (int k = ngh; k < ngh + nx3; ++k) {
+      Real z = mb_size.d_view(m).x3min + (k - ngh + 0.5) * dx3;
+      for (int j = ngh; j < ngh + nx2; ++j) {
+        Real y = mb_size.d_view(m).x2min + (j - ngh + 0.5) * dx2;
+        for (int i = ngh; i < ngh + nx1; ++i) {
+          Real x = mb_size.d_view(m).x1min + (i - ngh + 0.5) * dx1;
+          Real s = src(m, 0, k, j, i) * vol;
+          m0 += s;
+          m1 += s * y;
+          m2 += s * z;
+          m3 += s * x;
+        }
+      }
+    }
+    partial(m, 0) = m0;
+    partial(m, 1) = m1;
+    partial(m, 2) = m2;
+    partial(m, 3) = m3;
+  });
+
+  auto partial_h = Kokkos::create_mirror_view_and_copy(HostMemSpace(), partial);
+  Real totals[4] = {};
+  for (int m = 0; m < nmb; ++m) {
+    for (int c = 0; c < 4; ++c) {
+      totals[c] += partial_h(m, c);
+    }
+  }
+
+#ifdef MPI_PARALLEL
+  MPI_Allreduce(MPI_IN_PLACE, totals, 4, MPI_ATHENA_REAL,
+                MPI_SUM, MPI_COMM_WORLD);
+#endif
+
+  Real im = 1.0 / totals[0];
+  mpo_[0] = im * totals[3];  // x
+  mpo_[1] = im * totals[1];  // y
+  mpo_[2] = im * totals[2];  // z
 }

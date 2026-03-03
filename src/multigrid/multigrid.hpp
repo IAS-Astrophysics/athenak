@@ -57,6 +57,15 @@ struct LogicalLocationHash {
 };
 
 //----------------------------------------------------------------------------------------
+// Precomputed neighbor info for each of 27 directions (center unused).
+// Indexed by (ox3+1)*9 + (ox2+1)*3 + (ox1+1).
+
+struct OctetNeighborInfo {
+  int same_id;    // same-level neighbor octet ID, or -1 if coarser/absent
+  int coarse_id;  // coarser-level neighbor octet ID, or -1 if from root
+};
+
+//----------------------------------------------------------------------------------------
 //! \class MGOctet
 //  \brief structure containing 2x2x2 interior cells (+ ghost) for mesh refinement
 //  Each octet represents a "parent cell" that has children at a finer level.
@@ -67,46 +76,45 @@ class MGOctet {
   LogicalLocation loc;
   bool fleaf;
   int nc, nvar;  // nc = 2 + 2*ngh
+  OctetNeighborInfo neighbors[27];
 
-  std::vector<Real> u, def, src, uold;
+  // Raw pointers into contiguous per-level buffers managed by MultigridDriver.
+  Real *u, *def, *src, *uold;
 
-  void Allocate(int nv, int ngh) {
+  void Init(int nv, int ngh) {
     nc = 2 + 2*ngh;
     nvar = nv;
-    int sz = nv * nc * nc * nc;
-    u.assign(sz, 0.0);
-    def.assign(sz, 0.0);
-    src.assign(sz, 0.0);
-    uold.assign(sz, 0.0);
+    u = def = src = uold = nullptr;
   }
 
-  void ZeroClearU() { std::fill(u.begin(), u.end(), 0.0); }
-  void ZeroClearSrc() { std::fill(src.begin(), src.end(), 0.0); }
-  void StoreOld() { uold = u; }
+  int size() const { return nvar * nc * nc * nc; }
+  void ZeroClearU() { std::memset(u, 0, size() * sizeof(Real)); }
+  void ZeroClearSrc() { std::memset(src, 0, size() * sizeof(Real)); }
+  void StoreOld() { std::memcpy(uold, u, size() * sizeof(Real)); }
 
   inline Real& U(int v, int k, int j, int i) {
-    return u.at(((v*nc + k)*nc + j)*nc + i);
+    return u[((v*nc + k)*nc + j)*nc + i];
   }
   inline Real& Def(int v, int k, int j, int i) {
-    return def.at(((v*nc + k)*nc + j)*nc + i);
+    return def[((v*nc + k)*nc + j)*nc + i];
   }
   inline Real& Src(int v, int k, int j, int i) {
-    return src.at(((v*nc + k)*nc + j)*nc + i);
+    return src[((v*nc + k)*nc + j)*nc + i];
   }
   inline Real& Uold(int v, int k, int j, int i) {
-    return uold.at(((v*nc + k)*nc + j)*nc + i);
+    return uold[((v*nc + k)*nc + j)*nc + i];
   }
   inline const Real& U(int v, int k, int j, int i) const {
-    return u.at(((v*nc + k)*nc + j)*nc + i);
+    return u[((v*nc + k)*nc + j)*nc + i];
   }
   inline const Real& Def(int v, int k, int j, int i) const {
-    return def.at(((v*nc + k)*nc + j)*nc + i);
+    return def[((v*nc + k)*nc + j)*nc + i];
   }
   inline const Real& Src(int v, int k, int j, int i) const {
-    return src.at(((v*nc + k)*nc + j)*nc + i);
+    return src[((v*nc + k)*nc + j)*nc + i];
   }
   inline const Real& Uold(int v, int k, int j, int i) const {
-    return uold.at(((v*nc + k)*nc + j)*nc + i);
+    return uold[((v*nc + k)*nc + j)*nc + i];
   }
 };
 
@@ -183,6 +191,7 @@ class Multigrid {
   // (not through btype) in MGBoundaryValues() ctor
   MultigridBoundaryValues *pbval = nullptr;
   void ReallocateForAMR();
+  void UpdateBlockDx();
   void LoadFinestData(const DvceArray5D<Real> &src, int ns, int ngh);
   void LoadSource(const DvceArray5D<Real> &src, int ns, int ngh, Real fac);
   void LoadCoefficients(const DvceArray5D<Real> &coeff, int ngh);
@@ -373,23 +382,34 @@ class MultigridDriver {
   void CalculateFASRHSOctets();
   void ZeroClearOctets();
   void RestrictFMGSourceOctets();
+  void PreRestrictOctetU();
   void RestrictOctetsBeforeTransfer();
   void SetOctetBoundariesBeforeTransfer(bool folddata);
   void SetOctetBoundarySameLevel(MGOctet &dst, const MGOctet &src,
        std::vector<Real> &cbuf, std::vector<Real> &cbufold,
        int nvar, int ox1, int ox2, int ox3, bool folddata);
-  void SetOctetBoundaryFromCoarser(const std::vector<Real> &un,
-       const std::vector<Real> &unold,
+  void SetOctetBoundaryFromCoarser(const Real *un,
+       const Real *unold,
        std::vector<Real> &cbuf, std::vector<Real> &cbufold,
        int nvar, int un_nc, const LogicalLocation &loc,
        int ox1, int ox2, int ox3, bool folddata);
+  void ApplyPhysicalBoundariesOctet(MGOctet &oct, bool fcbuf);
 
   // physics-dependent octet operations (virtual, overridden in derived drivers)
   virtual void SmoothOctet(MGOctet &oct, int rlev, int color) = 0;
   virtual void CalculateDefectOctet(MGOctet &oct, int rlev) = 0;
   virtual void CalculateFASRHSOctet(MGOctet &oct, int rlev) = 0;
+  virtual void ProlongateOctetBoundariesFluxCons(MGOctet &oct,
+       std::vector<Real> &cbuf, const std::vector<bool> &ncoarse);
 
   DualArray2D<Real> rootbuf_;
+
+  TaskStatus PhysicalBoundary(Driver *pdrive, int stag);
+
+  void AllocateMultipoleCoefficients();
+  void CalculateMultipoleCoefficients();
+  void ScaleMultipoleCoefficients();
+  void CalculateCenterOfMass();
 
   friend class Multigrid;
 
@@ -421,7 +441,6 @@ class MultigridDriver {
   TaskStatus SmoothRed(Driver *pdrive, int stag);
   TaskStatus SmoothBlack(Driver *pdrive, int stag);
   TaskStatus Smooth(Driver *pdrive, int stag);
-  TaskStatus PhysicalBoundary(Driver *pdrive, int stag);
   TaskStatus Restrict(Driver *pdrive, int stag);
   TaskStatus Prolongate(Driver *pdrive, int stag);
   TaskStatus FMGProlongateTask(Driver *pdrive, int stag);
@@ -460,6 +479,7 @@ class MultigridDriver {
   Multigrid *mglevels_;
   Multigrid *pmg;
   bool fsubtract_average_, needinit_;
+  int amr_seq_;  // tracks cumulative AMR events to detect mesh changes
   Real last_ave_;
   Real eps_;
   int niter_, npresmooth_, npostsmooth_;
@@ -470,6 +490,18 @@ class MultigridDriver {
   bool full_multigrid_;
   int fmg_ncycle_;
 
+  // Source masking (zero source outside mask_radius_)
+  Real mask_radius_;
+  Real mask_origin_[3];
+
+  // Multipole expansion boundary conditions
+  int mporder_;     // -1: disabled, 0: detected but not yet configured, 2 or 4: active
+  int nmpcoeff_;    // number of multipole coefficients
+  Real mpcoeff_[25]; // multipole coefficients (max 25 for l=4)
+  Real mpo_[3];     // multipole expansion origin
+  bool autompo_;    // automatically compute center of mass as origin
+  bool nodipole_;   // suppress dipole moment (assume origin = center of mass)
+
   // per-cell octets (Athena++ style)
   std::vector<MGOctet> *octets_;
   std::unordered_map<LogicalLocation, int, LogicalLocationHash> *octetmap_;
@@ -478,12 +510,21 @@ class MultigridDriver {
   std::vector<Real> cbuf_, cbufold_;  // scratch buffers for boundary exchange
   std::vector<bool> ncoarse_;         // 3x3x3 flags for coarser neighbors
 
+  // Contiguous per-level buffers backing MGOctet raw pointers.
+  // Layout: octet_stride_ consecutive Reals per octet (nvar*nc*nc*nc).
+  std::vector<Real> *oct_u_buf_, *oct_def_buf_, *oct_src_buf_, *oct_uold_buf_;
+  int octet_stride_;  // elements per octet = nvar * nc^3
+
   std::vector<Real> root_u_buf_, root_uold_buf_;
   int root_buf_nc_;
   bool root_flat_buf_stale_;
   void BuildRootFlatBuffers();
   void SyncRootToHost();
   void SyncRootToDevice();
+
+  enum class RootSyncState { SYNCED, HOST_MODIFIED, DEVICE_MODIFIED };
+  RootSyncState root_sync_state_;
+  void MarkRootDeviceModified();
 
  private:
   int nb_rank_;
@@ -503,9 +544,7 @@ class MultigridBoundaryValues : public MeshBoundaryValuesCC {
   TaskStatus FillFineCoarseMGGhosts(DvceArray5D<Real> &u);
 
  private:
-  // data
   Multigrid *pmy_mg;
-  // functions
 };
 
 inline Real RestrictOne(const MGOctet &oct, int v, int fi, int fj, int fk) {
@@ -531,11 +570,11 @@ inline Real RestrictOneDef(const MGOctet &oct, int v, int fi, int fj, int fk) {
 
 // access flat buffer of size (nvar, nc, nc, nc)
 inline Real& BufRef(std::vector<Real> &buf, int nc, int v, int k, int j, int i) {
-  return buf.at(((v*nc + k)*nc + j)*nc + i);
+  return buf[((v*nc + k)*nc + j)*nc + i];
 }
 inline const Real& BufRef(const std::vector<Real> &buf, int nc,
                           int v, int k, int j, int i) {
-  return buf.at(((v*nc + k)*nc + j)*nc + i);
+  return buf[((v*nc + k)*nc + j)*nc + i];
 }
 
 

@@ -23,15 +23,26 @@
 #include <iomanip>
 
 #include "athena.hpp"
+#include "globals.hpp"
 #include "parameter_input.hpp"
 #include "coordinates/cell_locations.hpp"
 #include "mesh/mesh.hpp"
+#include "mesh/mesh_refinement.hpp"
 #include "eos/eos.hpp"
 #include "hydro/hydro.hpp"
 #include "mhd/mhd.hpp"
 #include "gravity/gravity.hpp"
 #include "gravity/mg_gravity.hpp"
 #include "pgen/pgen.hpp"
+
+// File-scope variables for Jeans AMR criterion
+namespace {
+  Real jw_iso_cs = 1.0;
+  Real jw_four_pi_G = 1.0;
+  Real jw_njeans_threshold = 16.0;
+}
+
+void JeansWaveRefinement(MeshBlockPack *pmbp);  // forward declaration
 
 //----------------------------------------------------------------------------------------
 //! \fn void ProblemGenerator::SelfGravity()
@@ -47,17 +58,10 @@
 //  Compare k to k_J = sqrt(4*pi*G*rho0)/cs to predict behavior
 
 void ProblemGenerator::SelfGravity(ParameterInput *pin, const bool restart) {
-  // nothing needs to be done on restarts for this pgen
-  if (restart) return;
-  
-  // Read input parameters
+  // --- AMR Jeans criterion (must be set on both fresh start and restart) ---
   Real four_pi_G = pin->GetOrAddReal("gravity", "four_pi_G", 1.0);
-  // Jeans wave parameters
-  Real rho0 = pin->GetOrAddReal("problem", "rho0", 1.0);              // background density
-  Real amp = pin->GetOrAddReal("problem", "amp", 1.0e-6);             // perturbation amplitude
-  Real n_jeans = pin->GetOrAddReal("problem", "n_jeans", -1.0);        // lambda/lambda_Jeans
-
-  // Determine sound speed from EOS type
+  Real rho0 = pin->GetOrAddReal("problem", "rho0", 1.0);
+  Real n_jeans = pin->GetOrAddReal("problem", "n_jeans", -1.0);
   std::string eos_type = pin->GetString("hydro", "eos");
   Real cs;
   Real gamma = 0.0, gm1 = 0.0, p0 = 0.0;
@@ -70,6 +74,16 @@ void ProblemGenerator::SelfGravity(ParameterInput *pin, const bool restart) {
     p0 = pin->GetOrAddReal("problem", "p0", 1.0);
     cs = std::sqrt(gamma * p0 / rho0);
   }
+
+  jw_four_pi_G = four_pi_G;
+  jw_iso_cs = cs;
+  jw_njeans_threshold = pin->GetOrAddReal("problem", "njeans_amr", 16.0);
+  user_ref_func = JeansWaveRefinement;
+
+  if (restart) return;
+
+  Real amp = pin->GetOrAddReal("problem", "amp", 1.0e-6);
+
   // Get domain size to compute actual wavenumber
   Real Lx1 = pin->GetReal("mesh", "x1max") - pin->GetReal("mesh", "x1min");
   Real Lx2 = pin->GetReal("mesh", "x2max") - pin->GetReal("mesh", "x2min");
@@ -92,7 +106,6 @@ void ProblemGenerator::SelfGravity(ParameterInput *pin, const bool restart) {
   if (n_jeans > 0.0){
     Real G = M_PI * (cs*cs)/(rho0*lambda_jeans*lambda_jeans);
     four_pi_G = 4 * M_PI * G ;
-    // propagate computed four_pi_G to gravity driver (pgen runs after driver init)
     pin->SetReal("gravity", "four_pi_G", four_pi_G);
     if (pmy_mesh_->pmb_pack->pgrav != nullptr) {
       pmy_mesh_->pmb_pack->pgrav->four_pi_G = four_pi_G;
@@ -100,6 +113,7 @@ void ProblemGenerator::SelfGravity(ParameterInput *pin, const bool restart) {
         pmy_mesh_->pmb_pack->pgrav->pmgd->SetFourPiG(four_pi_G);
       }
     }
+    jw_four_pi_G = four_pi_G;
   }
   Real k_wave = 2.0*M_PI/lambda;
   Real k_jeans = 2.0*M_PI/lambda_jeans;
@@ -121,7 +135,7 @@ void ProblemGenerator::SelfGravity(ParameterInput *pin, const bool restart) {
   } else {
     std::cout << "  Stable oscillation. Frequency = " << omega << std::endl;
   }
-  
+
   // capture variables for kernel
   auto &indcs = pmy_mesh_->mb_indcs;
   int &is = indcs.is; int &ie = indcs.ie;
@@ -176,4 +190,60 @@ void ProblemGenerator::SelfGravity(ParameterInput *pin, const bool restart) {
   }  // End initialization of Hydro variables
 
   return;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void JeansWaveRefinement()
+//! \brief Jeans-length AMR criterion for the Jeans wave test.
+//!
+//! Computes the minimum number of cells per Jeans length in each MeshBlock:
+//!   nJ = 2*pi*cs / (dx * sqrt(four_pi_G * rho_max))
+//! Refines if nJ < threshold, derefines if nJ > 2.5*threshold.
+
+void JeansWaveRefinement(MeshBlockPack *pmbp) {
+  auto &refine_flag = pmbp->pmesh->pmr->refine_flag;
+  int nmb = pmbp->nmb_thispack;
+  auto &indcs = pmbp->pmesh->mb_indcs;
+  int &is = indcs.is, nx1 = indcs.nx1;
+  int &js = indcs.js, nx2 = indcs.nx2;
+  int &ks = indcs.ks, nx3 = indcs.nx3;
+  int ng = indcs.ng;
+  const int nkji = (nx3 + 2*ng) * (nx2 + 2*ng) * (nx1 + 2*ng);
+  const int nji  = (nx2 + 2*ng) * (nx1 + 2*ng);
+  const int ni   = (nx1 + 2*ng);
+  int mbs = pmbp->pmesh->gids_eachrank[global_variable::my_rank];
+
+  auto &u0 = pmbp->phydro->u0;
+  auto &size = pmbp->pmb->mb_size;
+  Real cs = jw_iso_cs;
+  Real fpG = jw_four_pi_G;
+  Real njeans = jw_njeans_threshold;
+
+  par_for_outer("JeansWaveAMR", DevExeSpace(), 0, 0, 0, (nmb - 1),
+  KOKKOS_LAMBDA(TeamMember_t tmember, const int m) {
+    Real team_rhomax;
+    Kokkos::parallel_reduce(
+      Kokkos::TeamThreadRange(tmember, nkji),
+      [&](const int idx, Real &rhomax) {
+        int k = idx / nji;
+        int j = (idx - k * nji) / ni;
+        int i = (idx - k * nji - j * ni);
+        rhomax = Kokkos::fmax(u0(m, IDN, k, j, i), rhomax);
+      },
+      Kokkos::Max<Real>(team_rhomax));
+
+    Real dx = size.d_view(m).dx1;
+    Real nj_min = 2.0 * M_PI * cs / (dx * Kokkos::sqrt(fpG * team_rhomax));
+
+    if (nj_min < njeans) {
+      refine_flag.d_view(m + mbs) = 1;
+    } else if (nj_min > njeans * 2.5) {
+      refine_flag.d_view(m + mbs) = -1;
+    } else {
+      refine_flag.d_view(m + mbs) = 0;
+    }
+  });
+
+  refine_flag.template modify<DevExeSpace>();
+  refine_flag.template sync<HostMemSpace>();
 }

@@ -88,7 +88,7 @@ TaskStatus MultigridDriver::FMGProlongateTask(Driver *pdrive, int stage) {
 }
 
 TaskStatus MultigridDriver::CalculateFASRHS(Driver *pdrive, int stage) {
-  if (current_level_ < fmglevel_){
+  if (current_level_ < fmglevel_) {
     pmg->StoreOldData();
     pmg->CalculateFASRHSPack();
   }
@@ -102,7 +102,7 @@ TaskStatus MultigridDriver::ProlongateBoundary(Driver *pdrive, int stage) {
 
 
 TaskStatus MultigridDriver::ProlongateBoundaryForProlongation(Driver *pdrive, int stage) {
-  //pmg->pmgbval->ProlongateMultigridBoundaries(pmg->pmy_driver_->ffas_, false);
+  //pmg->pmgbval->ProlongateMultigridBoundaries(true, false);
   return TaskStatus::complete;
 }
 
@@ -113,9 +113,270 @@ TaskStatus MultigridDriver::FillFCBoundary(Driver *pdrive, int stage) {
   return TaskStatus::complete;
 }
 
+// Device-callable multipole potential evaluation
+KOKKOS_INLINE_FUNCTION
+Real EvalMultipolePhi(Real x, Real y, Real z,
+                      const Real *mpc, int order) {
+  Real x2 = x*x, y2 = y*y, z2 = z*z;
+  Real xy = x*y, yz = y*z, zx = z*x;
+  Real r2 = x2 + y2 + z2;
+  Real ir2 = 1.0/r2, ir1 = Kokkos::sqrt(ir2);
+  Real ir3 = ir2*ir1, ir5 = ir3*ir2;
+  Real hx2my2 = 0.5*(x2-y2);
+  Real phis = ir1*mpc[0]
+    + ir3*(mpc[1]*y + mpc[2]*z + mpc[3]*x)
+    + ir5*(mpc[4]*xy + mpc[5]*yz + (3.0*z2-r2)*mpc[6]
+         + mpc[7]*zx + mpc[8]*hx2my2);
+  if (order == 4) {
+    Real ir7 = ir5*ir2, ir9 = ir7*ir2;
+    Real x2mty2 = x2-3.0*y2;
+    Real tx2my2 = 3.0*x2-y2;
+    phis += ir7*(y*tx2my2*mpc[9] + x*x2mty2*mpc[15]
+               + xy*z*mpc[10] + z*hx2my2*mpc[14]
+               + (5.0*z2-r2)*(y*mpc[11] + x*mpc[13])
+               + z*(z2-3.0*r2)*mpc[12])
+         + ir9*(xy*hx2my2*mpc[16]
+               + 0.125*(x2*x2mty2-y2*tx2my2)*mpc[24]
+               + yz*tx2my2*mpc[17] + zx*x2mty2*mpc[23]
+               + (7.0*z2-r2)*(xy*mpc[18] + hx2my2*mpc[22])
+               + (7.0*z2-3.0*r2)*(yz*mpc[19] + zx*mpc[21])
+               + (35.0*z2*z2-30.0*z2*r2+3.0*r2*r2)*mpc[20]);
+  }
+  return phis;
+}
+
+
 TaskStatus MultigridDriver::PhysicalBoundary(Driver *pdrive, int stage) {
-    // do not apply BCs if domain is strictly periodic
   if (pmy_pack_->pmesh->strictly_periodic) return TaskStatus::complete;
+
+  DvceArray5D<Real> u = pmg->GetCurrentData();
+  int nvar = u.extent_int(1);
+  int shift = pmg->GetLevelShift();
+  int ngh = pmg->GetGhostCells();
+  int ncells = pmg->GetSize() >> shift;
+  if (ncells < 1) return TaskStatus::complete;
+
+  int nmb = pmy_pack_->nmb_thispack;
+  auto &mb_bcs = pmy_pack_->pmb->mb_bcs;
+
+  BoundaryFlag bc_ix1 = mg_mesh_bcs_[BoundaryFace::inner_x1];
+  BoundaryFlag bc_ox1 = mg_mesh_bcs_[BoundaryFace::outer_x1];
+  BoundaryFlag bc_ix2 = mg_mesh_bcs_[BoundaryFace::inner_x2];
+  BoundaryFlag bc_ox2 = mg_mesh_bcs_[BoundaryFace::outer_x2];
+  BoundaryFlag bc_ix3 = mg_mesh_bcs_[BoundaryFace::inner_x3];
+  BoundaryFlag bc_ox3 = mg_mesh_bcs_[BoundaryFace::outer_x3];
+
+  bool has_multipole = (bc_ix1 == BoundaryFlag::mg_multipole ||
+                        bc_ox1 == BoundaryFlag::mg_multipole ||
+                        bc_ix2 == BoundaryFlag::mg_multipole ||
+                        bc_ox2 == BoundaryFlag::mg_multipole ||
+                        bc_ix3 == BoundaryFlag::mg_multipole ||
+                        bc_ox3 == BoundaryFlag::mg_multipole);
+
+  // Copy multipole coefficients to device if needed
+  DvceArray1D<Real> d_mpc;
+  Real d_xo = 0.0, d_yo = 0.0, d_zo = 0.0;
+  int d_order = 0;
+  auto &mb_size = pmy_pack_->pmb->mb_size;
+  if (has_multipole && mporder_ > 0) {
+    Kokkos::realloc(d_mpc, 25);
+    auto h_mpc = Kokkos::create_mirror_view(d_mpc);
+    for (int c = 0; c < 25; ++c) h_mpc(c) = mpcoeff_[c];
+    Kokkos::deep_copy(d_mpc, h_mpc);
+    d_xo = mpo_[0]; d_yo = mpo_[1]; d_zo = mpo_[2];
+    d_order = mporder_;
+  }
+
+  int nx1 = pmg->indcs_.nx1 >> shift;
+  int nx2 = pmg->indcs_.nx2 >> shift;
+  int nx3 = pmg->indcs_.nx3 >> shift;
+
+  Kokkos::parallel_for("MGPhysicalBoundary",
+    Kokkos::RangePolicy<DevExeSpace>(0, nmb),
+    KOKKOS_LAMBDA(const int m) {
+      for (int v = 0; v < nvar; ++v) {
+        // inner x1
+        if (mb_bcs.d_view(m, BoundaryFace::inner_x1) != BoundaryFlag::block &&
+            mb_bcs.d_view(m, BoundaryFace::inner_x1) != BoundaryFlag::periodic) {
+          if (bc_ix1 == BoundaryFlag::mg_multipole && d_mpc.data() != nullptr) {
+            Real dx1 = (mb_size.d_view(m).x1max - mb_size.d_view(m).x1min)
+                       / static_cast<Real>(nx1);
+            Real dx2_l = (mb_size.d_view(m).x2max - mb_size.d_view(m).x2min)
+                       / static_cast<Real>(nx2);
+            Real dx3_l = (mb_size.d_view(m).x3max - mb_size.d_view(m).x3min)
+                       / static_cast<Real>(nx3);
+            Real xf = mb_size.d_view(m).x1min - d_xo;
+            for (int k = ngh; k < ngh + ncells; ++k) {
+              Real zv = mb_size.d_view(m).x3min + (k-ngh+0.5)*dx3_l - d_zo;
+              for (int j = ngh; j < ngh + ncells; ++j) {
+                Real yv = mb_size.d_view(m).x2min + (j-ngh+0.5)*dx2_l - d_yo;
+                Real phis = EvalMultipolePhi(xf, yv, zv, d_mpc.data(), d_order);
+                for (int n = 0; n < ngh; ++n)
+                  u(m,v,k,j,ngh-1-n) = 2.0*phis - u(m,v,k,j,ngh+n);
+              }
+            }
+          } else {
+            for (int k = 0; k < ncells + 2*ngh; ++k) {
+              for (int j = 0; j < ncells + 2*ngh; ++j) {
+                for (int n = 0; n < ngh; ++n) {
+                  Real sign = (bc_ix1 == BoundaryFlag::mg_zerofixed) ? -1.0 : 1.0;
+                  u(m, v, k, j, ngh - 1 - n) = sign * u(m, v, k, j, ngh + n);
+                }
+              }
+            }
+          }
+        }
+        // outer x1
+        if (mb_bcs.d_view(m, BoundaryFace::outer_x1) != BoundaryFlag::block &&
+            mb_bcs.d_view(m, BoundaryFace::outer_x1) != BoundaryFlag::periodic) {
+          if (bc_ox1 == BoundaryFlag::mg_multipole && d_mpc.data() != nullptr) {
+            Real dx2_l = (mb_size.d_view(m).x2max - mb_size.d_view(m).x2min)
+                       / static_cast<Real>(nx2);
+            Real dx3_l = (mb_size.d_view(m).x3max - mb_size.d_view(m).x3min)
+                       / static_cast<Real>(nx3);
+            Real xf = mb_size.d_view(m).x1max - d_xo;
+            for (int k = ngh; k < ngh + ncells; ++k) {
+              Real zv = mb_size.d_view(m).x3min + (k-ngh+0.5)*dx3_l - d_zo;
+              for (int j = ngh; j < ngh + ncells; ++j) {
+                Real yv = mb_size.d_view(m).x2min + (j-ngh+0.5)*dx2_l - d_yo;
+                Real phis = EvalMultipolePhi(xf, yv, zv, d_mpc.data(), d_order);
+                for (int n = 0; n < ngh; ++n)
+                  u(m,v,k,j,ngh+ncells+n) = 2.0*phis - u(m,v,k,j,ngh+ncells-1-n);
+              }
+            }
+          } else {
+            for (int k = 0; k < ncells + 2*ngh; ++k) {
+              for (int j = 0; j < ncells + 2*ngh; ++j) {
+                for (int n = 0; n < ngh; ++n) {
+                  Real sign = (bc_ox1 == BoundaryFlag::mg_zerofixed) ? -1.0 : 1.0;
+                  u(m, v, k, j, ngh + ncells + n) = sign *
+                      u(m, v, k, j, ngh + ncells - 1 - n);
+                }
+              }
+            }
+          }
+        }
+        // inner x2
+        if (mb_bcs.d_view(m, BoundaryFace::inner_x2) != BoundaryFlag::block &&
+            mb_bcs.d_view(m, BoundaryFace::inner_x2) != BoundaryFlag::periodic) {
+          if (bc_ix2 == BoundaryFlag::mg_multipole && d_mpc.data() != nullptr) {
+            Real dx1_l = (mb_size.d_view(m).x1max - mb_size.d_view(m).x1min)
+                       / static_cast<Real>(nx1);
+            Real dx3_l = (mb_size.d_view(m).x3max - mb_size.d_view(m).x3min)
+                       / static_cast<Real>(nx3);
+            Real yf = mb_size.d_view(m).x2min - d_yo;
+            for (int k = ngh; k < ngh + ncells; ++k) {
+              Real zv = mb_size.d_view(m).x3min + (k-ngh+0.5)*dx3_l - d_zo;
+              for (int i = ngh; i < ngh + ncells; ++i) {
+                Real xv = mb_size.d_view(m).x1min + (i-ngh+0.5)*dx1_l - d_xo;
+                Real phis = EvalMultipolePhi(xv, yf, zv, d_mpc.data(), d_order);
+                for (int n = 0; n < ngh; ++n)
+                  u(m,v,k,ngh-1-n,i) = 2.0*phis - u(m,v,k,ngh+n,i);
+              }
+            }
+          } else {
+            for (int k = 0; k < ncells + 2*ngh; ++k) {
+              for (int i = 0; i < ncells + 2*ngh; ++i) {
+                for (int n = 0; n < ngh; ++n) {
+                  Real sign = (bc_ix2 == BoundaryFlag::mg_zerofixed) ? -1.0 : 1.0;
+                  u(m, v, k, ngh - 1 - n, i) = sign * u(m, v, k, ngh + n, i);
+                }
+              }
+            }
+          }
+        }
+        // outer x2
+        if (mb_bcs.d_view(m, BoundaryFace::outer_x2) != BoundaryFlag::block &&
+            mb_bcs.d_view(m, BoundaryFace::outer_x2) != BoundaryFlag::periodic) {
+          if (bc_ox2 == BoundaryFlag::mg_multipole && d_mpc.data() != nullptr) {
+            Real dx1_l = (mb_size.d_view(m).x1max - mb_size.d_view(m).x1min)
+                       / static_cast<Real>(nx1);
+            Real dx3_l = (mb_size.d_view(m).x3max - mb_size.d_view(m).x3min)
+                       / static_cast<Real>(nx3);
+            Real yf = mb_size.d_view(m).x2max - d_yo;
+            for (int k = ngh; k < ngh + ncells; ++k) {
+              Real zv = mb_size.d_view(m).x3min + (k-ngh+0.5)*dx3_l - d_zo;
+              for (int i = ngh; i < ngh + ncells; ++i) {
+                Real xv = mb_size.d_view(m).x1min + (i-ngh+0.5)*dx1_l - d_xo;
+                Real phis = EvalMultipolePhi(xv, yf, zv, d_mpc.data(), d_order);
+                for (int n = 0; n < ngh; ++n)
+                  u(m,v,k,ngh+ncells+n,i) = 2.0*phis - u(m,v,k,ngh+ncells-1-n,i);
+              }
+            }
+          } else {
+            for (int k = 0; k < ncells + 2*ngh; ++k) {
+              for (int i = 0; i < ncells + 2*ngh; ++i) {
+                for (int n = 0; n < ngh; ++n) {
+                  Real sign = (bc_ox2 == BoundaryFlag::mg_zerofixed) ? -1.0 : 1.0;
+                  u(m, v, k, ngh + ncells + n, i) = sign *
+                      u(m, v, k, ngh + ncells - 1 - n, i);
+                }
+              }
+            }
+          }
+        }
+        // inner x3
+        if (mb_bcs.d_view(m, BoundaryFace::inner_x3) != BoundaryFlag::block &&
+            mb_bcs.d_view(m, BoundaryFace::inner_x3) != BoundaryFlag::periodic) {
+          if (bc_ix3 == BoundaryFlag::mg_multipole && d_mpc.data() != nullptr) {
+            Real dx1_l = (mb_size.d_view(m).x1max - mb_size.d_view(m).x1min)
+                       / static_cast<Real>(nx1);
+            Real dx2_l = (mb_size.d_view(m).x2max - mb_size.d_view(m).x2min)
+                       / static_cast<Real>(nx2);
+            Real zf = mb_size.d_view(m).x3min - d_zo;
+            for (int j = ngh; j < ngh + ncells; ++j) {
+              Real yv = mb_size.d_view(m).x2min + (j-ngh+0.5)*dx2_l - d_yo;
+              for (int i = ngh; i < ngh + ncells; ++i) {
+                Real xv = mb_size.d_view(m).x1min + (i-ngh+0.5)*dx1_l - d_xo;
+                Real phis = EvalMultipolePhi(xv, yv, zf, d_mpc.data(), d_order);
+                for (int n = 0; n < ngh; ++n)
+                  u(m,v,ngh-1-n,j,i) = 2.0*phis - u(m,v,ngh+n,j,i);
+              }
+            }
+          } else {
+            for (int j = 0; j < ncells + 2*ngh; ++j) {
+              for (int i = 0; i < ncells + 2*ngh; ++i) {
+                for (int n = 0; n < ngh; ++n) {
+                  Real sign = (bc_ix3 == BoundaryFlag::mg_zerofixed) ? -1.0 : 1.0;
+                  u(m, v, ngh - 1 - n, j, i) = sign * u(m, v, ngh + n, j, i);
+                }
+              }
+            }
+          }
+        }
+        // outer x3
+        if (mb_bcs.d_view(m, BoundaryFace::outer_x3) != BoundaryFlag::block &&
+            mb_bcs.d_view(m, BoundaryFace::outer_x3) != BoundaryFlag::periodic) {
+          if (bc_ox3 == BoundaryFlag::mg_multipole && d_mpc.data() != nullptr) {
+            Real dx1_l = (mb_size.d_view(m).x1max - mb_size.d_view(m).x1min)
+                       / static_cast<Real>(nx1);
+            Real dx2_l = (mb_size.d_view(m).x2max - mb_size.d_view(m).x2min)
+                       / static_cast<Real>(nx2);
+            Real zf = mb_size.d_view(m).x3max - d_zo;
+            for (int j = ngh; j < ngh + ncells; ++j) {
+              Real yv = mb_size.d_view(m).x2min + (j-ngh+0.5)*dx2_l - d_yo;
+              for (int i = ngh; i < ngh + ncells; ++i) {
+                Real xv = mb_size.d_view(m).x1min + (i-ngh+0.5)*dx1_l - d_xo;
+                Real phis = EvalMultipolePhi(xv, yv, zf, d_mpc.data(), d_order);
+                for (int n = 0; n < ngh; ++n)
+                  u(m,v,ngh+ncells+n,j,i) = 2.0*phis - u(m,v,ngh+ncells-1-n,j,i);
+              }
+            }
+          } else {
+            for (int j = 0; j < ncells + 2*ngh; ++j) {
+              for (int i = 0; i < ncells + 2*ngh; ++i) {
+                for (int n = 0; n < ngh; ++n) {
+                  Real sign = (bc_ox3 == BoundaryFlag::mg_zerofixed) ? -1.0 : 1.0;
+                  u(m, v, ngh + ncells + n, j, i) = sign *
+                      u(m, v, ngh + ncells - 1 - n, j, i);
+                }
+              }
+            }
+          }
+        }
+      }
+    });
+
   return TaskStatus::complete;
 }
 

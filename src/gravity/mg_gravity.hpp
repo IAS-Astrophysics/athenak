@@ -64,6 +64,8 @@ class MGGravityDriver : public MultigridDriver {
     void SmoothOctet(MGOctet &oct, int rlev, int color) final;
     void CalculateDefectOctet(MGOctet &oct, int rlev) final;
     void CalculateFASRHSOctet(MGOctet &oct, int rlev) final;
+    void ProlongateOctetBoundariesFluxCons(MGOctet &oct,
+         std::vector<Real> &cbuf, const std::vector<bool> &ncoarse) final;
 
     friend class MGGravity;
   private:

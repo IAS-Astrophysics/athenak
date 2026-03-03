@@ -10,6 +10,7 @@
 
 // C++ headers
 #include <algorithm>
+#include <chrono>
 #include <iostream>
 #include <sstream>    // sstream
 #include <stdexcept>  // runtime_error
@@ -60,6 +61,68 @@ MGGravityDriver::MGGravityDriver(MeshBlockPack *pmbp, ParameterInput *pin)
         << "using the SetGravitationalConstant or SetFourPiG function." << std::endl;
     exit(EXIT_FAILURE);
   }
+  // Override MG boundary conditions if specified in input file.
+  // Options: "zerofixed" (Dirichlet zero), "zerograd" (Neumann zero), "multipole".
+  std::string mg_bc_str = pin->GetOrAddString("gravity", "mg_bc", "none");
+  if (mg_bc_str != "none") {
+    BoundaryFlag mg_bc;
+    if (mg_bc_str == "zerofixed") {
+      mg_bc = BoundaryFlag::mg_zerofixed;
+    } else if (mg_bc_str == "zerograd") {
+      mg_bc = BoundaryFlag::mg_zerograd;
+    } else if (mg_bc_str == "multipole") {
+      mg_bc = BoundaryFlag::mg_multipole;
+    } else {
+      std::cout << "### FATAL ERROR in MGGravityDriver" << std::endl
+                << "Unknown mg_bc type: " << mg_bc_str << std::endl;
+      std::exit(EXIT_FAILURE);
+    }
+    for (int f = 0; f < 6; ++f) {
+      if (mg_mesh_bcs_[f] != BoundaryFlag::periodic) {
+        mg_mesh_bcs_[f] = mg_bc;
+      }
+    }
+  }
+  if (!pmy_mesh_->strictly_periodic) {
+    fsubtract_average_ = false;
+  }
+
+  // Check if multipole BCs are active and configure
+  for (int f = 0; f < 6; ++f) {
+    if (mg_mesh_bcs_[f] == BoundaryFlag::mg_multipole) {
+      mporder_ = 0;  // mark as detected
+      break;
+    }
+  }
+  if (mporder_ >= 0) {
+    mporder_ = pin->GetOrAddInteger("gravity", "mporder", 4);
+    autompo_ = pin->GetOrAddBoolean("gravity", "auto_mporigin", true);
+    nodipole_ = pin->GetOrAddBoolean("gravity", "nodipole", false);
+    if (mporder_ != 2 && mporder_ != 4) {
+      std::cout << "### FATAL ERROR in MGGravityDriver" << std::endl
+                << "mporder must be 2 (quadrupole) or 4 (hexadecapole)." << std::endl;
+      std::exit(EXIT_FAILURE);
+    }
+    if (autompo_ && nodipole_) {
+      std::cout << "### FATAL ERROR in MGGravityDriver" << std::endl
+                << "auto_mporigin and nodipole cannot be used together." << std::endl;
+      std::exit(EXIT_FAILURE);
+    }
+    if (!autompo_) {
+      mpo_[0] = pin->GetReal("gravity", "mporigin_x1");
+      mpo_[1] = pin->GetReal("gravity", "mporigin_x2");
+      mpo_[2] = pin->GetReal("gravity", "mporigin_x3");
+    }
+    AllocateMultipoleCoefficients();
+    fsubtract_average_ = false;
+  }
+
+  // Source masking parameters
+  mask_radius_ = pin->GetOrAddReal("gravity", "mask_radius", -1.0);
+  mask_origin_[0] = pin->GetOrAddReal("gravity", "mask_origin_x1", 0.0);
+  mask_origin_[1] = pin->GetOrAddReal("gravity", "mask_origin_x2", 0.0);
+  mask_origin_[2] = pin->GetOrAddReal("gravity", "mask_origin_x3", 0.0);
+
   // Allocate the root multigrid
   int nghost = pin->GetOrAddInteger("gravity", "mg_nghost", 1);
   bool root_on_host = pin->GetOrAddBoolean("gravity", "root_on_host", false);
@@ -130,18 +193,36 @@ void MGGravityDriver::Solve(Driver *pdriver, int stage, Real dt) {
   // negative sign so that -∇²φ = -4πGρ, i.e. ∇²φ = +4πGρ.
   mglevels_->LoadSource(pmy_pack_->phydro->u0, IDN, indcs_.ng, -four_pi_G_);
 
+  // Apply source mask (zero source outside mask_radius_)
+  mglevels_->ApplyMask();
+
   // iterative mode - load initial guess
   if(!full_multigrid_) 
     mglevels_->LoadFinestData(pmy_pack_->pgrav->phi, 0, indcs_.ng);
-  
+
+  // Finalize setup (SubtractAverage, level counts) after data is loaded
   SetupMultigrid(dt, false);
+
+  // Compute multipole coefficients for isolated boundaries
+  if (mporder_ > 0) {
+    if (autompo_) CalculateCenterOfMass();
+    CalculateMultipoleCoefficients();
+  }
+
+  auto t_start = std::chrono::high_resolution_clock::now();
 
   if (full_multigrid_)
     SolveFMG(pdriver);
   else
     SolveMG(pdriver);
 
+  Kokkos::fence();
+
   if (fshowdef_) {
+    auto t_end = std::chrono::high_resolution_clock::now();
+    double mg_elapsed = std::chrono::duration<double>(t_end - t_start).count();
+    std::cout << "mg_solve_time = " << std::scientific << std::setprecision(6)
+              << mg_elapsed << std::endl;
     Real norm = CalculateDefectNorm(MGNormType::l2, 0);
     std::cout << "MGGravityDriver::Solve: Final defect norm = " << norm << std::endl;
   }
@@ -255,6 +336,76 @@ void MGGravityDriver::CalculateFASRHSOctet(MGOctet &oct, int rlev) {
       for (int i = ngh; i <= ngh+1; ++i) {
         oct.Src(0,k,j,i) += OctLaplacian(oct, 0, k, j, i) * idx2;
       }
+    }
+  }
+}
+
+
+//----------------------------------------------------------------------------------------
+//! \fn void MGGravityDriver::ProlongateOctetBoundariesFluxCons(...)
+//! \brief Conservative prolongation of face ghost cells at fine-coarse level boundaries.
+//!        Implements the "Conservative Formulation" from Tomida & Stone (2023) Eq. 24-27.
+//!        Ghost = (2/3)*coarse_interpolated + (1/3)*fine_active, where transverse
+//!        gradients from the coarse buffer provide sub-cell interpolation.
+//!        Only face neighbors are handled (edges/corners are unused by the 7-point stencil).
+
+void MGGravityDriver::ProlongateOctetBoundariesFluxCons(MGOctet &oct,
+     std::vector<Real> &cbuf, const std::vector<bool> &ncoarse) {
+  constexpr Real ot = 1.0/3.0;
+  const int ngh = mgroot_->GetGhostCells();
+  const int l = ngh, r = ngh + 1;
+
+  // x1 face
+  for (int ox1 = -1; ox1 <= 1; ox1 += 2) {
+    if (ncoarse[1*9 + 1*3 + (ox1+1)]) {
+      int i, fi, fig;
+      if (ox1 > 0) { i = ngh + 1; fi = ngh + 1; fig = ngh + 2; }
+      else         { i = ngh - 1; fi = ngh;     fig = ngh - 1; }
+      Real ccval = BufRef(cbuf, 3, 0, ngh, ngh, i);
+      Real gx2c = 0.125*(BufRef(cbuf, 3, 0, ngh, ngh+1, i)
+                        - BufRef(cbuf, 3, 0, ngh, ngh-1, i));
+      Real gx3c = 0.125*(BufRef(cbuf, 3, 0, ngh+1, ngh, i)
+                        - BufRef(cbuf, 3, 0, ngh-1, ngh, i));
+      oct.U(0, l, l, fig) = ot*(2.0*(ccval - gx2c - gx3c) + oct.U(0, l, l, fi));
+      oct.U(0, l, r, fig) = ot*(2.0*(ccval + gx2c - gx3c) + oct.U(0, l, r, fi));
+      oct.U(0, r, l, fig) = ot*(2.0*(ccval - gx2c + gx3c) + oct.U(0, r, l, fi));
+      oct.U(0, r, r, fig) = ot*(2.0*(ccval + gx2c + gx3c) + oct.U(0, r, r, fi));
+    }
+  }
+
+  // x2 face
+  for (int ox2 = -1; ox2 <= 1; ox2 += 2) {
+    if (ncoarse[1*9 + (ox2+1)*3 + 1]) {
+      int j, fj, fjg;
+      if (ox2 > 0) { j = ngh + 1; fj = ngh + 1; fjg = ngh + 2; }
+      else         { j = ngh - 1; fj = ngh;     fjg = ngh - 1; }
+      Real ccval = BufRef(cbuf, 3, 0, ngh, j, ngh);
+      Real gx1c = 0.125*(BufRef(cbuf, 3, 0, ngh, j, ngh+1)
+                        - BufRef(cbuf, 3, 0, ngh, j, ngh-1));
+      Real gx3c = 0.125*(BufRef(cbuf, 3, 0, ngh+1, j, ngh)
+                        - BufRef(cbuf, 3, 0, ngh-1, j, ngh));
+      oct.U(0, l, fjg, l) = ot*(2.0*(ccval - gx1c - gx3c) + oct.U(0, l, fj, l));
+      oct.U(0, l, fjg, r) = ot*(2.0*(ccval + gx1c - gx3c) + oct.U(0, l, fj, r));
+      oct.U(0, r, fjg, l) = ot*(2.0*(ccval - gx1c + gx3c) + oct.U(0, r, fj, l));
+      oct.U(0, r, fjg, r) = ot*(2.0*(ccval + gx1c + gx3c) + oct.U(0, r, fj, r));
+    }
+  }
+
+  // x3 face
+  for (int ox3 = -1; ox3 <= 1; ox3 += 2) {
+    if (ncoarse[(ox3+1)*9 + 1*3 + 1]) {
+      int k, fk, fkg;
+      if (ox3 > 0) { k = ngh + 1; fk = ngh + 1; fkg = ngh + 2; }
+      else         { k = ngh - 1; fk = ngh;     fkg = ngh - 1; }
+      Real ccval = BufRef(cbuf, 3, 0, k, ngh, ngh);
+      Real gx1c = 0.125*(BufRef(cbuf, 3, 0, k, ngh, ngh+1)
+                        - BufRef(cbuf, 3, 0, k, ngh, ngh-1));
+      Real gx2c = 0.125*(BufRef(cbuf, 3, 0, k, ngh+1, ngh)
+                        - BufRef(cbuf, 3, 0, k, ngh-1, ngh));
+      oct.U(0, fkg, l, l) = ot*(2.0*(ccval - gx1c - gx2c) + oct.U(0, fk, l, l));
+      oct.U(0, fkg, l, r) = ot*(2.0*(ccval + gx1c - gx2c) + oct.U(0, fk, l, r));
+      oct.U(0, fkg, r, l) = ot*(2.0*(ccval - gx1c + gx2c) + oct.U(0, fk, r, l));
+      oct.U(0, fkg, r, r) = ot*(2.0*(ccval + gx1c + gx2c) + oct.U(0, fk, r, r));
     }
   }
 }

@@ -21,6 +21,7 @@
 // Athena++ headers
 #include "../athena.hpp"
 #include "../coordinates/coordinates.hpp"
+#include "../coordinates/cell_locations.hpp"
 #include "../mesh/mesh.hpp"
 #include "../mesh/nghbr_index.hpp"
 #include "../parameter_input.hpp"
@@ -185,6 +186,24 @@ Multigrid::~Multigrid() {
 //! \fn void Multigrid::ReallocateForAMR()
 //! \brief Reallocate MG arrays when the number of MeshBlocks changes (AMR)
 
+void Multigrid::UpdateBlockDx() {
+  if (pmy_pack_ == nullptr) return;
+  auto &mb_size = pmy_pack_->pmb->mb_size;
+  Real rnx1 = static_cast<Real>(indcs_.nx1);
+
+  // Refresh reference block size and cell widths from the first MeshBlock
+  size_ = mb_size.h_view(0);
+  rdx_ = (size_.x1max - size_.x1min) / static_cast<Real>(indcs_.nx1);
+  rdy_ = (size_.x2max - size_.x2min) / static_cast<Real>(indcs_.nx2);
+  rdz_ = (size_.x3max - size_.x3min) / static_cast<Real>(indcs_.nx3);
+
+  auto brdx_h = block_rdx_.h_view;
+  for (int m = 0; m < nmmb_; ++m) {
+    brdx_h(m) = (mb_size.h_view(m).x1max - mb_size.h_view(m).x1min) / rnx1;
+  }
+  Kokkos::deep_copy(block_rdx_.d_view, brdx_h);
+}
+
 void Multigrid::ReallocateForAMR() {
   if (pmy_pack_ == nullptr) return;
   int new_nmmb = pmy_pack_->nmb_thispack;
@@ -192,13 +211,7 @@ void Multigrid::ReallocateForAMR() {
   nmmb_ = new_nmmb;
 
   Kokkos::realloc(block_rdx_, nmmb_);
-  auto brdx_h = block_rdx_.h_view;
-  auto &mb_size = pmy_pack_->pmb->mb_size;
-  Real rnx1 = static_cast<Real>(indcs_.nx1);
-  for (int m = 0; m < nmmb_; ++m) {
-    brdx_h(m) = (mb_size.h_view(m).x1max - mb_size.h_view(m).x1min) / rnx1;
-  }
-  Kokkos::deep_copy(block_rdx_.d_view, brdx_h);
+  UpdateBlockDx();
 
   for (int l = 0; l < nlevel_; l++) {
     int ll = nlevel_ - 1 - l;
@@ -211,6 +224,7 @@ void Multigrid::ReallocateForAMR() {
     if (l != nlevel_ - 1)
       Kokkos::realloc(uold_[l], nmmb_, nvar_, ncz, ncy, ncx);
   }
+
 }
 
 
@@ -316,12 +330,33 @@ void Multigrid::LoadCoefficients(const DvceArray5D<Real> &coeff, int ngh) {
 //  \brief Apply the user-defined source mask function on the finest level
 
 void Multigrid::ApplyMask() {
-  int is, ie, js, je, ks, ke;
-  is = js = ks = ngh_;
-  ie = is + indcs_.nx1;
-  je = js + indcs_.nx2;
-  ke = ks + indcs_.nx3;
-  return;
+  Real mask_r = pmy_driver_->mask_radius_;
+  if (mask_r <= 0.0) return;
+
+  int ngh = ngh_;
+  int nx1 = indcs_.nx1, nx2 = indcs_.nx2, nx3 = indcs_.nx3;
+  int nmb = nmmb_;
+  Real mask_r2 = mask_r * mask_r;
+  Real ox = pmy_driver_->mask_origin_[0];
+  Real oy = pmy_driver_->mask_origin_[1];
+  Real oz = pmy_driver_->mask_origin_[2];
+
+  auto src = src_[nlevel_-1].d_view;
+  auto &mb_size = pmy_pack_->pmb->mb_size;
+  auto &indcs = pmy_pack_->pmesh->mb_indcs;
+  int is = indcs.is, js = indcs.js, ks = indcs.ks;
+
+  par_for("Multigrid::ApplyMask", DevExeSpace(), 0, nmb-1,
+          ngh, ngh+nx3-1, ngh, ngh+nx2-1, ngh, ngh+nx1-1,
+  KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
+    Real x = CellCenterX(i - ngh, nx1, mb_size.d_view(m).x1min, mb_size.d_view(m).x1max);
+    Real y = CellCenterX(j - ngh, nx2, mb_size.d_view(m).x2min, mb_size.d_view(m).x2max);
+    Real z = CellCenterX(k - ngh, nx3, mb_size.d_view(m).x3min, mb_size.d_view(m).x3max);
+    Real r2 = (x-ox)*(x-ox) + (y-oy)*(y-oy) + (z-oz)*(z-oz);
+    if (r2 > mask_r2) {
+      src(m, 0, k, j, i) = 0.0;
+    }
+  });
 }
 
 
@@ -1193,7 +1228,7 @@ void Multigrid::FMGProlongate(ViewType &dst, const ViewType &src,
 
 MultigridBoundaryValues::MultigridBoundaryValues(MeshBlockPack *pmbp, ParameterInput *pin, bool coarse, Multigrid *pmg) 
   :
-   MeshBoundaryValuesCC(pmbp, pin, coarse), pmy_mg(pmg){
+   MeshBoundaryValuesCC(pmbp, pin, coarse), pmy_mg(pmg) {
 }
 
 //----------------------------------------------------------------------------------------
@@ -1305,7 +1340,6 @@ TaskStatus MultigridBoundaryValues::FillFineCoarseMGGhosts(DvceArray5D<Real> &u)
               int half = ncells / 2;
 
               if (nlev < m_lev && nface == 1) {
-                // ==== COARSER neighbor, FACE: flux-conserving prolongation ====
                 if (ox1 != 0) {
                   int fig = (ox1 < 0) ? ngh - 1 : ngh + ncells;
                   int fi  = (ox1 < 0) ? ngh : ngh + ncells - 1;
@@ -1318,8 +1352,12 @@ TaskStatus MultigridBoundaryValues::FillFineCoarseMGGhosts(DvceArray5D<Real> &u)
                         int fj = ngh + 2*(sj - sj0);
                         int fk = ngh + 2*(sk - sk0);
                         Real cc = u_h(dm,v,sk,sj,si);
-                        Real gy = 0.125*(u_h(dm,v,sk,sj+1,si)-u_h(dm,v,sk,sj-1,si));
-                        Real gz = 0.125*(u_h(dm,v,sk+1,sj,si)-u_h(dm,v,sk-1,sj,si));
+                        int sjm = (sj > ngh) ? sj-1 : sj;
+                        int sjp = (sj < ngh+ncells-1) ? sj+1 : sj;
+                        int skm = (sk > ngh) ? sk-1 : sk;
+                        int skp = (sk < ngh+ncells-1) ? sk+1 : sk;
+                        Real gy = 0.125*(u_h(dm,v,sk,sjp,si)-u_h(dm,v,sk,sjm,si));
+                        Real gz = 0.125*(u_h(dm,v,skp,sj,si)-u_h(dm,v,skm,sj,si));
                         u_h(m,v,fk  ,fj  ,fig)=ot*(2.0*(cc-gy-gz)+u_h(m,v,fk  ,fj  ,fi));
                         u_h(m,v,fk  ,fj+1,fig)=ot*(2.0*(cc+gy-gz)+u_h(m,v,fk  ,fj+1,fi));
                         u_h(m,v,fk+1,fj  ,fig)=ot*(2.0*(cc-gy+gz)+u_h(m,v,fk+1,fj  ,fi));
@@ -1339,8 +1377,12 @@ TaskStatus MultigridBoundaryValues::FillFineCoarseMGGhosts(DvceArray5D<Real> &u)
                         int fi = ngh + 2*(si - si0);
                         int fk = ngh + 2*(sk - sk0);
                         Real cc = u_h(dm,v,sk,sj,si);
-                        Real gx = 0.125*(u_h(dm,v,sk,sj,si+1)-u_h(dm,v,sk,sj,si-1));
-                        Real gz = 0.125*(u_h(dm,v,sk+1,sj,si)-u_h(dm,v,sk-1,sj,si));
+                        int sim = (si > ngh) ? si-1 : si;
+                        int sip = (si < ngh+ncells-1) ? si+1 : si;
+                        int skm = (sk > ngh) ? sk-1 : sk;
+                        int skp = (sk < ngh+ncells-1) ? sk+1 : sk;
+                        Real gx = 0.125*(u_h(dm,v,sk,sj,sip)-u_h(dm,v,sk,sj,sim));
+                        Real gz = 0.125*(u_h(dm,v,skp,sj,si)-u_h(dm,v,skm,sj,si));
                         u_h(m,v,fk  ,fjg,fi  )=ot*(2.0*(cc-gx-gz)+u_h(m,v,fk  ,fj,fi  ));
                         u_h(m,v,fk  ,fjg,fi+1)=ot*(2.0*(cc+gx-gz)+u_h(m,v,fk  ,fj,fi+1));
                         u_h(m,v,fk+1,fjg,fi  )=ot*(2.0*(cc-gx+gz)+u_h(m,v,fk+1,fj,fi  ));
@@ -1360,8 +1402,12 @@ TaskStatus MultigridBoundaryValues::FillFineCoarseMGGhosts(DvceArray5D<Real> &u)
                         int fi = ngh + 2*(si - si0);
                         int fj = ngh + 2*(sj - sj0);
                         Real cc = u_h(dm,v,sk,sj,si);
-                        Real gx = 0.125*(u_h(dm,v,sk,sj,si+1)-u_h(dm,v,sk,sj,si-1));
-                        Real gy = 0.125*(u_h(dm,v,sk,sj+1,si)-u_h(dm,v,sk,sj-1,si));
+                        int sim = (si > ngh) ? si-1 : si;
+                        int sip = (si < ngh+ncells-1) ? si+1 : si;
+                        int sjm = (sj > ngh) ? sj-1 : sj;
+                        int sjp = (sj < ngh+ncells-1) ? sj+1 : sj;
+                        Real gx = 0.125*(u_h(dm,v,sk,sj,sip)-u_h(dm,v,sk,sj,sim));
+                        Real gy = 0.125*(u_h(dm,v,sk,sjp,si)-u_h(dm,v,sk,sjm,si));
                         u_h(m,v,fkg,fj  ,fi  )=ot*(2.0*(cc-gx-gy)+u_h(m,v,fk,fj  ,fi  ));
                         u_h(m,v,fkg,fj  ,fi+1)=ot*(2.0*(cc+gx-gy)+u_h(m,v,fk,fj  ,fi+1));
                         u_h(m,v,fkg,fj+1,fi  )=ot*(2.0*(cc-gx+gy)+u_h(m,v,fk,fj+1,fi  ));
@@ -1474,7 +1520,6 @@ TaskStatus MultigridBoundaryValues::FillFineCoarseMGGhosts(DvceArray5D<Real> &u)
                 modified = true;
 
               } else {
-                // ==== FINER neighbor, EDGE/CORNER: simple restriction ====
                 int sub_x = 0, sub_y = 0, sub_z = 0;
                 if (nface == 2) {
                   if (ox1 == 0) sub_x = f1;

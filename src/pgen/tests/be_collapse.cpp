@@ -49,14 +49,26 @@ void JeansRefinement(MeshBlockPack *pmbp);
 //! \brief Sets up a Bonnor-Ebert sphere for gravitational collapse with Jeans AMR.
 
 void ProblemGenerator::BECollapse(ParameterInput *pin, const bool restart) {
+  // --- AMR Jeans criterion (must be set on both fresh start and restart) ---
+  njeans_threshold = pin->GetOrAddReal("problem", "njeans", 16.0);
+
+  MeshBlockPack *pmbp = pmy_mesh_->pmb_pack;
+  if (pmbp->phydro != nullptr) {
+    iso_cs_global = pmbp->phydro->peos->eos_data.iso_cs;
+  } else {
+    iso_cs_global = 1.0;
+  }
+
+  user_ref_func = JeansRefinement;
+
   if (restart) return;
 
   // --- gravity coupling ---
   Real four_pi_G = pin->GetOrAddReal("gravity", "four_pi_G", 1.0);
-  if (pmy_mesh_->pmb_pack->pgrav != nullptr) {
-    pmy_mesh_->pmb_pack->pgrav->four_pi_G = four_pi_G;
-    if (pmy_mesh_->pmb_pack->pgrav->pmgd != nullptr) {
-      pmy_mesh_->pmb_pack->pgrav->pmgd->SetFourPiG(four_pi_G);
+  if (pmbp->pgrav != nullptr) {
+    pmbp->pgrav->four_pi_G = four_pi_G;
+    if (pmbp->pgrav->pmgd != nullptr) {
+      pmbp->pgrav->pmgd->SetFourPiG(four_pi_G);
     }
   }
 
@@ -71,19 +83,10 @@ void ProblemGenerator::BECollapse(ParameterInput *pin, const bool restart) {
   rc = pin->GetOrAddReal("problem", "cloud_radius", rc);
   Real rcsq = SQR(rc) / 3.0; // parameter of the BE profile
 
-  // --- AMR Jeans criterion ---
-  njeans_threshold = pin->GetOrAddReal("problem", "njeans", 16.0);
-
-  // Determine sound speed for Jeans criterion
-  MeshBlockPack *pmbp = pmy_mesh_->pmb_pack;
-  if (pmbp->phydro != nullptr) {
-    iso_cs_global = pmbp->phydro->peos->eos_data.iso_cs;
-  } else {
-    iso_cs_global = 1.0;
-  }
-
-  // Register Jeans refinement condition
-  user_ref_func = JeansRefinement;
+  // Solid-body rotation: omega = omegatff / tff, where tff = pi*sqrt(3/(8f))
+  Real tff = std::sqrt(3.0 / (8.0 * f)) * M_PI;
+  Real omegatff = pin->GetOrAddReal("problem", "omegatff", 0.0);
+  Real omega = omegatff / tff;
 
   // --- initialize density ---
   auto &indcs = pmy_mesh_->mb_indcs;
@@ -120,8 +123,13 @@ void ProblemGenerator::BECollapse(ParameterInput *pin, const bool restart) {
     }
 
     u0(m, IDN, k, j, i) = rho;
-    u0(m, IM1, k, j, i) = 0.0;
-    u0(m, IM2, k, j, i) = 0.0;
+    if (r < rc) {
+      u0(m, IM1, k, j, i) =  rho * omega * (y - y_center);
+      u0(m, IM2, k, j, i) = -rho * omega * (x - x_center);
+    } else {
+      u0(m, IM1, k, j, i) = 0.0;
+      u0(m, IM2, k, j, i) = 0.0;
+    }
     u0(m, IM3, k, j, i) = 0.0;
   });
 
@@ -130,6 +138,9 @@ void ProblemGenerator::BECollapse(ParameterInput *pin, const bool restart) {
       << "--- Bonnor-Ebert Collapse ---" << std::endl
       << "Density enhancement f   = " << f << std::endl
       << "Cloud radius rc         = " << rc << std::endl
+      << "Free-fall time tff      = " << tff << std::endl
+      << "Omega * tff             = " << omegatff << std::endl
+      << "Angular velocity omega  = " << omega << std::endl
       << "Perturbation amplitude  = " << amp << std::endl
       << "Jeans AMR threshold     = " << njeans_threshold << std::endl
       << "Sound speed cs          = " << iso_cs_global << std::endl
