@@ -162,7 +162,8 @@ class CyclicZoom {
 
 //----------------------------------------------------------------------------------------
 //! \class ZoomMesh
-//! \brief Handles Zoom Mesh structures
+//! \brief data/functions associated with zoom mesh
+
 class ZoomMesh {
  public:
   ZoomMesh(CyclicZoom *pz, ParameterInput *pin);
@@ -205,7 +206,8 @@ class ZoomMesh {
 
 //----------------------------------------------------------------------------------------
 //! \class ZoomData
-//! \brief Handles storage of data during cyclic zoom AMR
+//! \brief data/functions associated with zoom data operations
+
 class ZoomData {
   friend class CyclicZoom;
  public:

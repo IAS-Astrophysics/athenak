@@ -113,8 +113,6 @@ ZoomData::ZoomData(CyclicZoom *pz, ParameterInput *pin) :
   // create unique communicators for AMR
   MPI_Comm_dup(MPI_COMM_WORLD, &zoom_comm);
 #endif
-
-  return;
 }
 
 //----------------------------------------------------------------------------------------

@@ -96,8 +96,6 @@ CyclicZoom::CyclicZoom(Mesh *pm, ParameterInput *pin) :
   Initialize(pin);
   // Print diagnostic information
   PrintCyclicZoomDiagnostics();
-
-  return;
 }
 
 //----------------------------------------------------------------------------------------

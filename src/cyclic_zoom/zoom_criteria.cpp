@@ -121,9 +121,8 @@ void CyclicZoom::SetRefinementFlags() {
         x2max = size.h_view(m).x2max;
         x3min = size.h_view(m).x3min;
         x3max = size.h_view(m).x3max;
-      } else  {
+      } else {
         // For coarsening, need to compute the bounds of the parent MeshBlock
-        // if (refine_flag < 0) {
         std::int32_t plev = pmesh->lloc_eachmb[m+mbs].level - 1;
         std::int32_t plx1 = pmesh->lloc_eachmb[m+mbs].lx1 >> 1;
         std::int32_t nmbx1 = pmesh->nmb_rootx1 << (plev - pmesh->root_level);

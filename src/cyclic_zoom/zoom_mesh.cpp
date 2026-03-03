@@ -50,7 +50,6 @@ ZoomMesh::ZoomMesh(CyclicZoom *pz, ParameterInput *pin) :
   mbrank_eachzmb.resize(1);
   mblid_eachzmb.resize(1);
   lloc_eachzmb.resize(1);
-  return;
 }
 
 //----------------------------------------------------------------------------------------

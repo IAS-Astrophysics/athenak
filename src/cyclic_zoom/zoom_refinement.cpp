@@ -57,7 +57,9 @@ void CyclicZoom::ApplyZoomRegion(Driver *pdriver) {
     MaskVariables();
   }
   // Initialize boundary values and primitive variables after reinitialization and masking
-  pdriver->InitBoundaryValuesAndPrimitives(pmesh);
+  if (zamr.zooming_in || zstate.zone > 0) {
+    pdriver->InitBoundaryValuesAndPrimitives(pmesh);
+  }
   if (zamr.zooming_out) {
     // update electric fields after masking
     if (pmesh->pmb_pack->pmhd != nullptr) {
