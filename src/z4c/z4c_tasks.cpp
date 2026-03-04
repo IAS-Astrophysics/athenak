@@ -19,6 +19,7 @@
 #include "mesh/mesh.hpp"
 #include "bvals/bvals.hpp"
 #include "z4c/compact_object_tracker.hpp"
+#include "z4c/ahf.hpp"
 #include "z4c/horizon_dump.hpp"
 #include "z4c/z4c.hpp"
 #include "tasklist/numerical_relativity.hpp"
@@ -97,6 +98,7 @@ void Z4c::QueueZ4cTasks() {
   pnr->QueueTask(&Z4c::CalcWaveForm, this, Z4c_Wave, "Z4c_Wave", Task_End,
                  {Z4c_ClearRW});
   pnr->QueueTask(&Z4c::TrackCompactObjects, this, Z4c_PT, "Z4c_PT", Task_End, {Z4c_Wave});
+  //pnr->QueueTask(&Z4c::FindHorizon, this, Z4c_AHF, "Z4c_AHF", Task_End, {Z4c_PT});
   pnr->QueueTask(&Z4c::CCEDump, this, Z4c_CCE, "CCEDump", Task_End, {Z4c_PT});
   pnr->QueueTask(&Z4c::DumpHorizons, this, Z4c_DumpHorizon, "Z4c_DumpHorizon",
                 Task_End, {Z4c_CCE});
@@ -292,6 +294,24 @@ TaskStatus Z4c::TrackCompactObjects(Driver *pdrive, int stage) {
   }
   return TaskStatus::complete;
 }
+
+/* TaskStatus Z4c::AHF(Driver *pdrive, int stage) {
+  if (stage == pdrive->nexp_stages) {
+    const Real time_end_stage = pmy_pack->pmesh->time + pmy_pack->pmesh->dt;
+    const Real ncycle_end_stage = pmy_pack->pmesh->ncycle + 1;
+    for (auto & pahf : phorizon) {
+      if (pahf->CalculateMetricDerivatives(ncycle_end_stage, time_end_stage)) { break; }
+    }
+    for (auto & pahf : phorizon) {
+      pahf->Find(ncycle_end_stage, time_end_stage);
+      pahf->Write(ncycle_end_stage, time_end_stage);
+    }
+    for (auto & pahf : phorizon) {
+      if (pahf->CalculateMetricDerivatives(ncycle_end_stage, time_end_stage)) { break; }
+    } // (OS): Fix function arguments; see stage in GRA
+  }
+  return TaskStatus::complete;
+} */
 
 //----------------------------------------------------------------------------------------
 // ! \fn TaskList CCEDump

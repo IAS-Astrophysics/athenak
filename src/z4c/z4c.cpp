@@ -20,6 +20,7 @@
 #include "parameter_input.hpp"
 #include "mesh/mesh.hpp"
 #include "bvals/bvals.hpp"
+#include "z4c/ahf.hpp"
 #include "z4c/compact_object_tracker.hpp"
 #include "z4c/horizon_dump.hpp"
 #include "z4c/z4c.hpp"
@@ -209,6 +210,12 @@ Z4c::Z4c(MeshBlockPack *ppack, ParameterInput *pin) :
     } else {
       break;
     }
+  }
+  // Construct the apparent horizon finders
+  n = 0;
+  while (n < pin->GetOrAddInteger("ahf", "num_horizons", 0)) {
+    phorizon.push_back(std::make_unique<AHF>(pmy_pack, pin, n));
+    n++;
   }
   // Construct the Cartesian data grid for dumping horizon data
   n = 0;

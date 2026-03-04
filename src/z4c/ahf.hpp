@@ -13,12 +13,12 @@
 
 #include "athena.hpp"
 #include "athena_tensor.hpp"
-#include "utils/lagrange_interpolator.hpp"
-#include "z4c.hpp"
+#include "geodesic-grid/gauss_legendre.hpp"
+#include "z4c_macros.hpp"
 
 // Forward declaration
 class Mesh;
-class MeshBlock;
+class MeshBlockPack;
 class ParameterInput;
 
 //! \class AHF
@@ -26,7 +26,7 @@ class ParameterInput;
 class AHF {
 public:
   // Constructor for AHF object
-  AHF(Mesh *pmesh, ParameterInput *pin, int n);
+  AHF(MeshBlockPack *pmbp, ParameterInput *pin, int n);
 
   // Default Destructor for AHF object (closes output file)
   ~AHF();
@@ -54,15 +54,16 @@ public:
   Real flow_alpha_beta_const; // alpha & beta constants in the iteration formula
                               // Eqs. (43) & (44) of https://arxiv.org/pdf/gr-qc/9707050
   bool verbose;
+  bool output_ylm;
+  bool output_grid;
 
   // Spherical harmonics & Legendre polynomials
   int lmax; // Multipoles
-  int ntheta, nphi; // Grid points
+  int nangles; // Number of angles on Gauss-Legendre grid
+  int ntheta; // Number of theta points
 
   // Compact Object Tracker variables
   int use_puncture; // n surface follows the puncture tracker if use_puncture[n] > 0
-  bool use_puncture_massweighted_center; // n surface uses the punctures' mass-weighted center
-  int use_extrema; // n surface follows the extrema tracker if use_extrema[n] > 0
   Real merger_distance; // Distance in M at which BHs are considered as merged
 
   // Start and Stop times for each surface
@@ -79,39 +80,31 @@ private:
   int nh; // Counter variable
   bool wait_until_punc_are_close;
   bool use_stored_metric_drvts;
-  int nstart, nhorizon; // Number of horizons
+  int nhorizon; // Number of horizons
   int fastflow_iter = 0;
 
-  // Metric interpolation order
-  metric_interp_order = 2 * NGHOST - 1 // (OS): Use pmesh to access indcs.ng
-
-  // Arrays for the grid and quadrature weights
-  DvceArray1D<Real> th_grid, ph_grid; // (OS): Device or Host? Host
-  DvceArray2D<Real> weights; // (OS): Device or Host?
-
-  // Arrays of Legendre polynomials and derivatives
-  DvceArray2D<Real> P, dPdth, dPdth2; // (OS): Device or Host?
-
+  // Pointer to Gauss-Legendre object
+  GaussLegendreGrid *gl_grid;
+ 
   // Arrays of spherical harmonics and derivatives
-  DvceArray3D<Real> Y0, Yc, Ys; // (OS): Device or Host? Maybe Device if expansion loop parallelized
-  DvceArray3D<Real> dY0dth, dYcdth, dYsdth, dYcdph, dYsdph; // (OS): Device or Host?
-  DvceArray3D<Real> dY0dth2, dYcdth2, dYcdthdph, dYsdth2, dYsdthdph, dYcdph2, dYsdph2; // (OS): Device or Host?
+  DualArray2D<Real> Y0, Yc, Ys; 
+  DualArray2D<Real> dY0dth, dYcdth, dYsdth, dYcdph, dYsdph; 
+  DualArray2D<Real> dY0dth2, dYcdth2, dYcdthdph, dYsdth2, dYsdthdph, dYcdph2, dYsdph2; 
 
   // Arrays for spectral coefficients
-  DvceArray1D<Real> a0; // (OS): Device or Host?
-  DvceArray1D<Real> ac; // (OS): Device or Host?
-  DvceArray1D<Real> as; // (OS): Device or Host?
+  DualArray1D<Real> a0; 
+  DualArray1D<Real> ac; 
+  DualArray1D<Real> as; 
   Real last_a0; // last coefficient a_00
 
   // Arrays used for the fields on the sphere
-  AthenaPointTensor<Real, TensorSymm::SYM2, NDIM, 2> g; // (OS): AthenaPointTensor or AthenaTensor?
-  AthenaPointTensor<Real, TensorSymm::SYM2, NDIM, 2> K; // (OS): AthenaPointTensor or AthenaTensor?
-  AthenaPointTensor<Real, TensorSymm::SYM2, NDIM, 3> dg; // (OS): AthenaPointTensor or AthenaTensor?
-  DvceArray2D<Real> rr, rr_dth, rr_dph; // (OS): Device or Host?
-  // (OS): Fix NDIM & NGHOST
+  AthenaPointTensor<Real, TensorSymm::SYM2, NDIM, 2> g; 
+  AthenaPointTensor<Real, TensorSymm::SYM2, NDIM, 2> K; 
+  AthenaPointTensor<Real, TensorSymm::SYM2, NDIM, 3> dg; 
+  DualArray1D<Real> rr, rr_dth, rr_dph; 
 
   // Array computed in Surface Integrals
-  DvceArray2D<Real> rho;
+  DualArray1D<Real> rho;
 
   // Indexes of surface integrals
   enum {
@@ -139,26 +132,22 @@ private:
   Real ah_prop[hnvar]; // Array of horizon quantities
 
   // Flag points
-  DvceArray2D<int> havepoint; // (OS): Device or Host?
+  DualArray1D<int> havepoint;
 
   // Functions used in the fast-flow algorithm
-  void MetricDerivatives(MeshBlock *pmb); // (OS): MeshBlockPack?
-  void MetricInterp(MeshBlock *pmb); // (OS): MeshBlockPack?
+  void MetricDerivatives(MeshBlockPack *pmbp); // (OS): MeshBlockPack?
+  void MetricInterp(MeshBlockPack *pmbp); // (OS): MeshBlockPack?
   void SurfaceIntegrals();
   void FastFlowLoop();
   void UpdateFlowSpectralComponents();
   void RadiiFromSphericalHarmonics();
   void InitialGuess();
   void ComputeSphericalHarmonics();
-  void ComputeLegendre(const Real theta); 
   int lmindex(const int l, const int m);
   int tpindex(const int i, const int j);
-  void GLQuad_Nodes_Weights(const Real a, const Real b, Real *x, Real *w, const int n);
-  void SetGridWeights(std::string method);
-  void factorial_list(Real *fac, const int maxn);
 
-  // Pointers to Mesh and ParameterInput
-  Mesh const *pmesh;
+  // Pointers to MeshBlockPack and ParameterInput
+  MeshBlockPack *pmbp;
   ParameterInput *pin;
 
   // Control parameters
@@ -167,9 +156,13 @@ private:
   std::string ofname_summary;
   std::string ofname_shape;
   std::string ofname_verbose;
+  std::string ofname_ylm;
+  std::string ofname_grid;
   FILE *pofile_summary;
   FILE *pofile_shape;
   FILE *pofile_verbose;
+  FILE *pofile_ylm;
+  FILE *pofile_grid;
 
   // Functions to interface with puncture tracker
   Real PuncMaxDistance(); 

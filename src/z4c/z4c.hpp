@@ -27,6 +27,7 @@
 class Coordinates;
 class Driver;
 class CompactObjectTracker;
+class AHF;
 class HorizonDump;
 
 namespace z4c {
@@ -230,6 +231,7 @@ class Z4c {
   TaskStatus RestrictWeyl(Driver *d, int stage);
   TaskStatus CCEDump(Driver *pdrive, int stage);
   TaskStatus TrackCompactObjects(Driver *d, int stage);
+  TaskStatus FindHorizon(Driver *d, int stage);
   TaskStatus CalcWeylScalar(Driver *d, int stage);
   TaskStatus CalcWaveForm(Driver *d, int stage);
   TaskStatus DumpHorizons(Driver *d, int stage);
@@ -249,6 +251,7 @@ class Z4c {
 
   Z4c_AMR *pamr;
   std::vector<std::unique_ptr<CompactObjectTracker>> ptracker;
+  std::vector<std::unique_ptr<AHF>> phorizon;
   std::vector<std::unique_ptr<HorizonDump>> phorizon_dump;
 
   /*
