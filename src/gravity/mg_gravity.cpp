@@ -22,6 +22,7 @@
 #include "../coordinates/coordinates.hpp"
 #include "../globals.hpp"
 #include "../hydro/hydro.hpp"
+#include "../mhd/mhd.hpp"
 #include "../mesh/mesh.hpp"
 #include "../multigrid/multigrid.hpp"
 #include "../parameter_input.hpp"
@@ -191,7 +192,9 @@ void MGGravityDriver::Solve(Driver *pdriver, int stage, Real dt) {
   // convention: Laplacian(u) = 6u - neighbors = -dx²∇²u).  To obtain the
   // standard Poisson equation ∇²φ = 4πGρ we must load the source with a
   // negative sign so that -∇²φ = -4πGρ, i.e. ∇²φ = +4πGρ.
-  mglevels_->LoadSource(pmy_pack_->phydro->u0, IDN, indcs_.ng, -four_pi_G_);
+  auto &u0 = (pmy_pack_->pmhd != nullptr) ? pmy_pack_->pmhd->u0
+                                            : pmy_pack_->phydro->u0;
+  mglevels_->LoadSource(u0, IDN, indcs_.ng, -four_pi_G_);
 
   // Apply source mask (zero source outside mask_radius_)
   mglevels_->ApplyMask();

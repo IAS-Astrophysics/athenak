@@ -22,7 +22,7 @@
 #include "hydro/hydro.hpp"
 #include "ismcooling.hpp"
 #include "mesh/mesh.hpp"
-//#include "mhd/mhd.hpp"
+#include "mhd/mhd.hpp"
 #include "parameter_input.hpp"
 #include "radiation/radiation.hpp"
 #include "radiation/radiation_tetrad.hpp"
@@ -246,11 +246,18 @@ void SourceTerms::SelfGravity(const DvceArray5D<Real> &w0, const EOS_Data &eos_d
 
   auto &phi = pmy_pack->pgrav->phi;
 
-  // Get Godunov density fluxes from Hydro Riemann solver
+  // Get Godunov density fluxes from Riemann solver
   // (following Mullen, Hanawa & Gammie 2020 for the energy source term)
-  auto flx1 = pmy_pack->phydro->uflx.x1f;
-  auto flx2 = pmy_pack->phydro->uflx.x2f;
-  auto flx3 = pmy_pack->phydro->uflx.x3f;
+  DvceArray5D<Real> flx1, flx2, flx3;
+  if (pmy_pack->pmhd != nullptr) {
+    flx1 = pmy_pack->pmhd->uflx.x1f;
+    flx2 = pmy_pack->pmhd->uflx.x2f;
+    flx3 = pmy_pack->pmhd->uflx.x3f;
+  } else {
+    flx1 = pmy_pack->phydro->uflx.x1f;
+    flx2 = pmy_pack->phydro->uflx.x2f;
+    flx3 = pmy_pack->phydro->uflx.x3f;
+  }
 
   // x1-direction momentum and energy source terms
   par_for("selfgrav_x1",DevExeSpace(),0,nmb-1,ks,ke,js,je,is,ie,

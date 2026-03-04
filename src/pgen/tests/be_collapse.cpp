@@ -23,6 +23,7 @@
 #include "mesh/mesh.hpp"
 #include "eos/eos.hpp"
 #include "hydro/hydro.hpp"
+#include "mhd/mhd.hpp"
 #include "gravity/gravity.hpp"
 #include "gravity/mg_gravity.hpp"
 #include "pgen/pgen.hpp"
@@ -53,7 +54,9 @@ void ProblemGenerator::BECollapse(ParameterInput *pin, const bool restart) {
   njeans_threshold = pin->GetOrAddReal("problem", "njeans", 16.0);
 
   MeshBlockPack *pmbp = pmy_mesh_->pmb_pack;
-  if (pmbp->phydro != nullptr) {
+  if (pmbp->pmhd != nullptr) {
+    iso_cs_global = pmbp->pmhd->peos->eos_data.iso_cs;
+  } else if (pmbp->phydro != nullptr) {
     iso_cs_global = pmbp->phydro->peos->eos_data.iso_cs;
   } else {
     iso_cs_global = 1.0;
@@ -88,50 +91,105 @@ void ProblemGenerator::BECollapse(ParameterInput *pin, const bool restart) {
   Real omegatff = pin->GetOrAddReal("problem", "omegatff", 0.0);
   Real omega = omegatff / tff;
 
-  // --- initialize density ---
+  // --- magnetic field strength (uniform Bz) ---
+  Real bz = pin->GetOrAddReal("problem", "b0_z", 0.0);
+
+  // --- initialize density and momentum ---
   auto &indcs = pmy_mesh_->mb_indcs;
   int is = indcs.is, ie = indcs.ie;
   int js = indcs.js, je = indcs.je;
   int ks = indcs.ks, ke = indcs.ke;
   auto &size = pmbp->pmb->mb_size;
-
-  if (pmbp->phydro == nullptr) return;
-  auto &u0 = pmbp->phydro->u0;
   int nmb = pmbp->nmb_thispack;
 
-  par_for("be_collapse_init", DevExeSpace(), 0, nmb - 1, ks, ke, js, je, is, ie,
-  KOKKOS_LAMBDA(int m, int k, int j, int i) {
-    Real &x1min = size.d_view(m).x1min;
-    Real &x1max = size.d_view(m).x1max;
-    Real &x2min = size.d_view(m).x2min;
-    Real &x2max = size.d_view(m).x2max;
-    Real &x3min = size.d_view(m).x3min;
-    Real &x3max = size.d_view(m).x3max;
+  if (pmbp->phydro != nullptr) {
+    auto &u0 = pmbp->phydro->u0;
+    par_for("be_collapse_hydro", DevExeSpace(), 0, nmb - 1, ks, ke, js, je, is, ie,
+    KOKKOS_LAMBDA(int m, int k, int j, int i) {
+      Real &x1min = size.d_view(m).x1min;
+      Real &x1max = size.d_view(m).x1max;
+      Real &x2min = size.d_view(m).x2min;
+      Real &x2max = size.d_view(m).x2max;
+      Real &x3min = size.d_view(m).x3min;
+      Real &x3max = size.d_view(m).x3max;
 
-    Real x = CellCenterX(i - is, indcs.nx1, x1min, x1max);
-    Real y = CellCenterX(j - js, indcs.nx2, x2min, x2max);
-    Real z = CellCenterX(k - ks, indcs.nx3, x3min, x3max);
+      Real x = CellCenterX(i - is, indcs.nx1, x1min, x1max);
+      Real y = CellCenterX(j - js, indcs.nx2, x2min, x2max);
+      Real z = CellCenterX(k - ks, indcs.nx3, x3min, x3max);
 
-    Real r = Kokkos::sqrt(SQR(x - x_center) + SQR(y - y_center) + SQR(z - z_center));
-    // Clamp to rc for pressure confinement (constant density beyond cloud)
-    Real r_clamped = Kokkos::fmin(r, rc);
+      Real r = Kokkos::sqrt(SQR(x - x_center) + SQR(y - y_center)
+                           + SQR(z - z_center));
+      Real r_clamped = Kokkos::fmin(r, rc);
 
-    Real rho = f * BEProfile(r_clamped, rcsq);
-    if (amp > 0.0 && r < rc) {
-      rho *= (1.0 + amp * (r * r) / (rc * rc)
-              * Kokkos::cos(2.0 * Kokkos::atan2(y, x)));
-    }
+      Real rho = f * BEProfile(r_clamped, rcsq);
+      if (amp > 0.0 && r < rc) {
+        rho *= (1.0 + amp * (r * r) / (rc * rc)
+                * Kokkos::cos(2.0 * Kokkos::atan2(y, x)));
+      }
 
-    u0(m, IDN, k, j, i) = rho;
-    if (r < rc) {
-      u0(m, IM1, k, j, i) =  rho * omega * (y - y_center);
-      u0(m, IM2, k, j, i) = -rho * omega * (x - x_center);
-    } else {
-      u0(m, IM1, k, j, i) = 0.0;
-      u0(m, IM2, k, j, i) = 0.0;
-    }
-    u0(m, IM3, k, j, i) = 0.0;
-  });
+      u0(m, IDN, k, j, i) = rho;
+      if (r < rc) {
+        u0(m, IM1, k, j, i) =  rho * omega * (y - y_center);
+        u0(m, IM2, k, j, i) = -rho * omega * (x - x_center);
+      } else {
+        u0(m, IM1, k, j, i) = 0.0;
+        u0(m, IM2, k, j, i) = 0.0;
+      }
+      u0(m, IM3, k, j, i) = 0.0;
+    });
+  } else if (pmbp->pmhd != nullptr) {
+    auto &u0 = pmbp->pmhd->u0;
+    par_for("be_collapse_mhd", DevExeSpace(), 0, nmb - 1, ks, ke, js, je, is, ie,
+    KOKKOS_LAMBDA(int m, int k, int j, int i) {
+      Real &x1min = size.d_view(m).x1min;
+      Real &x1max = size.d_view(m).x1max;
+      Real &x2min = size.d_view(m).x2min;
+      Real &x2max = size.d_view(m).x2max;
+      Real &x3min = size.d_view(m).x3min;
+      Real &x3max = size.d_view(m).x3max;
+
+      Real x = CellCenterX(i - is, indcs.nx1, x1min, x1max);
+      Real y = CellCenterX(j - js, indcs.nx2, x2min, x2max);
+      Real z = CellCenterX(k - ks, indcs.nx3, x3min, x3max);
+
+      Real r = Kokkos::sqrt(SQR(x - x_center) + SQR(y - y_center)
+                           + SQR(z - z_center));
+      Real r_clamped = Kokkos::fmin(r, rc);
+
+      Real rho = f * BEProfile(r_clamped, rcsq);
+      if (amp > 0.0 && r < rc) {
+        rho *= (1.0 + amp * (r * r) / (rc * rc)
+                * Kokkos::cos(2.0 * Kokkos::atan2(y, x)));
+      }
+
+      u0(m, IDN, k, j, i) = rho;
+      if (r < rc) {
+        u0(m, IM1, k, j, i) =  rho * omega * (y - y_center);
+        u0(m, IM2, k, j, i) = -rho * omega * (x - x_center);
+      } else {
+        u0(m, IM1, k, j, i) = 0.0;
+        u0(m, IM2, k, j, i) = 0.0;
+      }
+      u0(m, IM3, k, j, i) = 0.0;
+    });
+
+    auto &b0 = pmbp->pmhd->b0;
+    auto &bcc0 = pmbp->pmhd->bcc0;
+    par_for("be_collapse_bfield", DevExeSpace(), 0, nmb - 1, ks, ke, js, je, is, ie,
+    KOKKOS_LAMBDA(int m, int k, int j, int i) {
+      b0.x1f(m,k,j,i) = 0.0;
+      b0.x2f(m,k,j,i) = 0.0;
+      b0.x3f(m,k,j,i) = bz;
+      if (i==ie) b0.x1f(m,k,j,i+1) = 0.0;
+      if (j==je) b0.x2f(m,k,j+1,i) = 0.0;
+      if (k==ke) b0.x3f(m,k+1,j,i) = bz;
+      bcc0(m,IBX,k,j,i) = 0.0;
+      bcc0(m,IBY,k,j,i) = 0.0;
+      bcc0(m,IBZ,k,j,i) = bz;
+    });
+  } else {
+    return;
+  }
 
   if (global_variable::my_rank == 0) {
     std::cout << std::endl
@@ -142,6 +200,7 @@ void ProblemGenerator::BECollapse(ParameterInput *pin, const bool restart) {
       << "Omega * tff             = " << omegatff << std::endl
       << "Angular velocity omega  = " << omega << std::endl
       << "Perturbation amplitude  = " << amp << std::endl
+      << "Magnetic field b0_z     = " << bz << std::endl
       << "Jeans AMR threshold     = " << njeans_threshold << std::endl
       << "Sound speed cs          = " << iso_cs_global << std::endl
       << "four_pi_G               = " << four_pi_G << std::endl
@@ -170,7 +229,12 @@ void JeansRefinement(MeshBlockPack *pmbp) {
   const int ni   = (nx1 + 2 * ng);
   int mbs = pmbp->pmesh->gids_eachrank[global_variable::my_rank];
 
-  auto &u0 = pmbp->phydro->u0;
+  DvceArray5D<Real> u0;
+  if (pmbp->pmhd != nullptr) {
+    u0 = pmbp->pmhd->u0;
+  } else {
+    u0 = pmbp->phydro->u0;
+  }
   auto &size = pmbp->pmb->mb_size;
   Real cs = iso_cs_global;
   Real njeans = njeans_threshold;
