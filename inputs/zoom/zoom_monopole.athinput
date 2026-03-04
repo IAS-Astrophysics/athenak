@@ -1,10 +1,11 @@
-# AthenaK input file for the magnetic monopole problem
+# AthenaK input file for the magnetic monopole problem with cyclic zoom
 
 <comment>
 problem   = GR magnetic monopole
 
 <job>
 basename  = monopole  # problem ID: basename of output filenames
+reference = Guo et al., ApJ 987, 202 (2025)
 
 <mesh>
 nghost    = 4         # Number of ghost cells

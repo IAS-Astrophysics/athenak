@@ -150,7 +150,7 @@ void ZoomData::Initialize() {
   auto &ci0 = coarse_i0;
 
   auto pmbp = pzoom->pmesh->pmb_pack;
-  // initialize primitive and conserved variables
+  // Initialize primitive and conserved variables
   if (pmbp->phydro != nullptr || pmbp->pmhd != nullptr) {
     auto peos = (pmbp->pmhd != nullptr)? pmbp->pmhd->peos : pmbp->phydro->peos;
     const bool &is_ideal = peos->eos_data.is_ideal;
@@ -180,20 +180,11 @@ void ZoomData::Initialize() {
       }
     });
 
-    // convert primitive to conserved variables
-    if (pmbp->phydro != nullptr) {
-      peos->PrimToCons(w0_,u0_,0,n3-1,0,n2-1,0,n1-1);
-      peos->PrimToCons(cw0,cu0,0,nc3-1,0,nc2-1,0,nc1-1);
-    }
-    if (pmbp->pmhd != nullptr) {
-      DvceArray5D<Real> bcc_zero("zbcc_zero",nzmb,3,n3,n2,n1);
-      DvceArray5D<Real> cbcc_zero("zcbcc_zero",nzmb,3,nc3,nc2,nc1);
-      peos->PrimToCons(w0_,bcc_zero,u0_,0,n3-1,0,n2-1,0,n1-1);
-      peos->PrimToCons(cw0,cbcc_zero,cu0,0,nc3-1,0,nc2-1,0,nc1-1);
-    }
+    // Do nothing to conserved variables as they are always overwritten before use
+    // In addition they are already initialized to zero
   }
 
-  // initialize electric fields to zero
+  // Initialize electric fields to zero
   if (pmbp->pmhd != nullptr) {
     par_for("zoom_init_e1",DevExeSpace(),0,nzmb-1,0,nc3,0,nc2,0,nc1-1,
     KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
@@ -218,7 +209,7 @@ void ZoomData::Initialize() {
     });
   }
 
-  // initialize intensity to zero
+  // Initialize intensity to zero
   if (pmbp->prad != nullptr) {
     int &nangles_ = nangles;
     par_for("zoom_init_i0", DevExeSpace(),0,nzmb-1,0,n3-1,0,n2-1,0,n1-1,

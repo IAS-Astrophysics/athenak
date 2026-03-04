@@ -1,10 +1,11 @@
-# AthenaK input file for Bondi accretion
+# AthenaK input file for Bondi accretion with cyclic zoom
 
 <comment>
 problem   = GR hydro accretion in radial direction
 
 <job>
 basename  = bondi      # problem ID: basename of output filenames
+reference = Guo et al., ApJ 987, 202 (2025)
 
 <mesh>
 nghost    = 4          # Number of ghost cells

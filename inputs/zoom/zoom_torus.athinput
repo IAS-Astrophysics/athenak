@@ -1,7 +1,6 @@
-# AthenaK input file for MHD GR torus
-# Initializes Fishbone-Moncrief equilibrium torus used in EHT code comparison with
-# r_in=20 and r_peak=41 and MAD magnetic field configuration.  Uses static mesh refinement
-# with highest resolution 8/M at the horizon and the inner level spanning +/- 4M
+# AthenaK input file for MHD GR torus with cyclic zoom
+# Initializes Fishbone-Moncrief equilibrium torus with
+# r_in=20 and r_peak=41 and MAD magnetic field configuration.
 
 <comment>
 problem   = Fishbone-Moncrief equilibrium torus
@@ -61,11 +60,11 @@ trun_pow    = 1.0           # power for interval (trun = trun_fac * M^trun_pow)
 trun_fac_0  = 500.0         # interval factor for zone 0
 trun_fac_1  = 0.0           # interval factor for zone 1
 trun_fac_2  = 0.0           # interval factor for zone 2
-#max_nzmb_per_dvce = 256    # max allowed number of Zoom MBs per device (memory limit for AMR)
-#max_nzmb_per_host = 512    # max allowed number of Zoom MBs per host (memory limit for AMR)
 
 <cyclic_zoom>
 verbose   = true           # enable verbose output
+#max_nzmb_per_dvce = 256    # max allowed number of Zoom MBs per device (memory limit for AMR)
+#max_nzmb_per_host = 512    # max allowed number of Zoom MBs per host (memory limit for AMR)
 
 <time>
 evolution  = dynamic     # dynamic/kinematic/static
