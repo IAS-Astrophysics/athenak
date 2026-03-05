@@ -26,6 +26,7 @@
 #include "z4c/compact_object_tracker.hpp"
 #include "z4c/z4c.hpp"
 #include "radiation/radiation.hpp"
+#include "radiation_m1/radiation_m1.hpp"
 #include "srcterms/turb_driver.hpp"
 #include "pgen.hpp"
 
@@ -50,72 +51,6 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm) :
 
   // second argument false since this IS NOT a restart
   CallProblemGenerator(pin, false);
-
-#if USER_PROBLEM_ENABLED
-  // call user-defined problem generator
-  UserProblem(pin, false);
-#else
-  // else read name of built-in pgen from <problem> block in input file, and call
-  std::string pgen_fun_name = pin->GetOrAddString("problem", "pgen_name", "none");
-
-  if (pgen_fun_name.compare("advection") == 0) {
-    Advection(pin, false);
-  } else if (pgen_fun_name.compare("cpaw") == 0) {
-    AlfvenWave(pin, false);
-  } else if (pgen_fun_name.compare("gr_bondi") == 0) {
-    BondiAccretion(pin, false);
-  } else if (pgen_fun_name.compare("tetrad") == 0) {
-    CheckOrthonormalTetrad(pin, false);
-  } else if (pgen_fun_name.compare("hohlraum") == 0) {
-    Hohlraum(pin, false);
-  } else if (pgen_fun_name.compare("linear_wave") == 0) {
-    LinearWave(pin, false);
-  } else if (pgen_fun_name.compare("implode") == 0) {
-    LWImplode(pin, false);
-  } else if (pgen_fun_name.compare("gr_monopole") == 0) {
-    Monopole(pin, false);
-  } else if (pgen_fun_name.compare("orszag_tang") == 0) {
-    OrszagTang(pin, false);
-  } else if (pgen_fun_name.compare("rad_linear_wave") == 0) {
-    RadiationLinearWave(pin, false);
-  } else if (pgen_fun_name.compare("shock_tube") == 0) {
-    ShockTube(pin, false);
-  } else if (pgen_fun_name.compare("z4c_linear_wave") == 0) {
-    Z4cLinearWave(pin, false);
-  } else if (pgen_fun_name.compare("spherical_collapse") == 0) {
-    SphericalCollapse(pin, false);
-  } else if (pgen_fun_name.compare("diffusion") == 0) {
-    Diffusion(pin, false);
-  } else if (pgen_fun_name.compare("rad_m1_beamtest") == 0) {
-    RadiationM1BeamTest(pin, false);
-  } else if (pgen_fun_name.compare("rad_m1_latticetest") == 0) {
-    RadiationM1LatticeTest(pin, false);
-  } else if (pgen_fun_name.compare("rad_m1_brenttest") == 0) {
-    RadiationM1BrentTest(pin, false);
-  } else if (pgen_fun_name.compare("rad_m1_hybridsjtest") == 0) {
-    RadiationM1HybridsjTest(pin, false);
-  } else if (pgen_fun_name.compare("rad_m1_spheretest") == 0) {
-    RadiationM1SphereTest(pin, false);
-#if ENABLE_NURATES
-  } else if (pgen_fun_name.compare("rad_m1_singlezonetest") == 0) {
-    RadiationM1SingleZoneTest(pin, false);
-#endif
-  } else if (pgen_fun_name.compare("rad_m1_diffusiontest") == 0) {
-    RadiationM1DiffusionTest(pin, false);
-  } else if (pgen_fun_name.compare("rad_m1_veljumptest") == 0) {
-    RadiationM1VelocityJumpTest(pin, false);
-    // else, name not set on command line or input file, print warning and quit
-  } else {
-    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
-        << "Problem generator name could not be found in <problem> block in input file"
-        << std::endl
-        << "and it was not set by -D PROBLEM option on cmake command line during build"
-        << std::endl
-        << "Rerun cmake with -D PROBLEM=file to specify custom problem generator file"
-        << std::endl;;
-    std::exit(EXIT_FAILURE);
-  }
-#endif
 
   // Check that user defined BCs were enrolled if needed
   if (user_bcs) {
@@ -181,8 +116,9 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resf
   adm::ADM* padm = pm->pmb_pack->padm;
   z4c::Z4c* pz4c = pm->pmb_pack->pz4c;
   radiation::Radiation* prad=pm->pmb_pack->prad;
+  radiationm1::RadiationM1* pradm1=pm->pmb_pack->pradm1;
   TurbulenceDriver* pturb=pm->pmb_pack->pturb;
-  int nrad = 0, nhydro = 0, nmhd = 0, nforce = 3, nadm = 0, nz4c = 0;
+  int nrad = 0, nhydro = 0, nmhd = 0, nforce = 3, nadm = 0, nz4c = 0, nradm1 = 0;
   if (phydro != nullptr) {
     nhydro = phydro->nhydro + phydro->nscalars;
   }
@@ -191,6 +127,9 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resf
   }
   if (prad != nullptr) {
     nrad = prad->prgeo->nangles;
+  }
+  if (pradm1 != nullptr) {
+    nradm1 = pradm1->nvarstot;
   }
   if (pz4c != nullptr) {
     nz4c = pz4c->nz4c;
@@ -303,6 +242,9 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resf
   }
   if (prad != nullptr) {
     data_size_ += nout1*nout2*nout3*nrad*sizeof(Real);   // rad i0
+  }
+  if (pradm1 != nullptr) {
+    data_size_ += nout1*nout2*nout3*nradm1*sizeof(Real);   // radm1 u0
   }
   if (pturb != nullptr) {
     data_size_ += nout1*nout2*nout3*nforce*sizeof(Real); // forcing
@@ -557,6 +499,46 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resf
     Kokkos::deep_copy(Kokkos::subview(prad->i0, std::make_pair(0,nmb), Kokkos::ALL,
                       Kokkos::ALL, Kokkos::ALL, Kokkos::ALL), ccin);
     offset_myrank += nout1*nout2*nout3*nrad*sizeof(Real);   // radiation i0
+    myoffset = offset_myrank;
+  }
+
+  if (pradm1 != nullptr) {
+    Kokkos::realloc(ccin, nmb, nradm1, nout3, nout2, nout1);
+    for (int m=0;  m<noutmbs_max; ++m) {
+      // every rank has a MB to read, so read collectively
+      if (m < noutmbs_min) {
+        // get ptr to cell-centered MeshBlock data
+        auto mbptr = Kokkos::subview(ccin, m, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL,
+                                     Kokkos::ALL);
+        int mbcnt = mbptr.size();
+        if (resfile.Read_Reals_at_all(mbptr.data(), mbcnt, myoffset,
+                                      single_file_per_rank) != mbcnt) {
+          std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                    << std::endl << "CC radm1 data not read correctly from rst file, "
+                    << "restart file is broken." << std::endl;
+          exit(EXIT_FAILURE);
+        }
+        myoffset += data_size;
+
+      // some ranks are finished writing, so use non-collective write
+      } else if (m < pm->nmb_thisrank) {
+        // get ptr to MeshBlock data
+        auto mbptr = Kokkos::subview(ccin, m, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL,
+                                     Kokkos::ALL);
+        int mbcnt = mbptr.size();
+        if (resfile.Read_Reals_at(mbptr.data(), mbcnt, myoffset,
+                                      single_file_per_rank) != mbcnt) {
+          std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                    << std::endl << "CC radm1 data not read correctly from rst file, "
+                    << "restart file is broken." << std::endl;
+          exit(EXIT_FAILURE);
+        }
+        myoffset += data_size;
+      }
+    }
+    Kokkos::deep_copy(Kokkos::subview(pradm1->u0, std::make_pair(0,nmb), Kokkos::ALL,
+                      Kokkos::ALL, Kokkos::ALL, Kokkos::ALL), ccin);
+    offset_myrank += nout1*nout2*nout3*nradm1*sizeof(Real);   // radm1 u0
     myoffset = offset_myrank;
   }
 
@@ -993,6 +975,24 @@ void ProblemGenerator::CallProblemGenerator(ParameterInput *pin, bool is_restart
     SphericalCollapse(pin, is_restart);
   } else if (pgen_fun_name.compare("diffusion") == 0) {
     Diffusion(pin, is_restart);
+  } else if (pgen_fun_name.compare("rad_m1_beamtest") == 0) {
+    RadiationM1BeamTest(pin, is_restart);
+  } else if (pgen_fun_name.compare("rad_m1_latticetest") == 0) {
+    RadiationM1LatticeTest(pin, is_restart);
+  } else if (pgen_fun_name.compare("rad_m1_brenttest") == 0) {
+    RadiationM1BrentTest(pin, is_restart);
+  } else if (pgen_fun_name.compare("rad_m1_hybridsjtest") == 0) {
+    RadiationM1HybridsjTest(pin, is_restart);
+  } else if (pgen_fun_name.compare("rad_m1_spheretest") == 0) {
+    RadiationM1SphereTest(pin, is_restart);
+#if ENABLE_NURATES
+  } else if (pgen_fun_name.compare("rad_m1_singlezonetest") == 0) {
+    RadiationM1SingleZoneTest(pin, is_restart);
+#endif
+  } else if (pgen_fun_name.compare("rad_m1_diffusiontest") == 0) {
+    RadiationM1DiffusionTest(pin, is_restart);
+  } else if (pgen_fun_name.compare("rad_m1_veljumptest") == 0) {
+    RadiationM1VelocityJumpTest(pin, is_restart);
   // else, name not set on command line or input file, print warning and quit
   } else {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
