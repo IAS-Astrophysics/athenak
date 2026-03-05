@@ -584,8 +584,6 @@ void SetEquilibriumState(const DvceArray5D<Real> &u0,
 void UserSource(Mesh* pm, const Real bdt) {
   SNSource(pm, bdt);
   GravitySource(pm, bdt);
-  DensityCeilingSource(pm, bdt);
-
   return;
 }
 
@@ -796,52 +794,6 @@ void SNSource(Mesh* pm, const Real bdt) {
   }
   
   return;
-}
-
-void DensityCeilingSource(Mesh* pm, const Real bdt) {
-  MeshBlockPack *pmbp = pm->pmb_pack;
-  auto &indcs = pm->mb_indcs;
-  int is = indcs.is, ie = indcs.ie;
-  int js = indcs.js, je = indcs.je;
-  int ks = indcs.ks, ke = indcs.ke;
-  int nmb1 = pmbp->nmb_thispack - 1;
-  auto &u0 = pmbp->phydro->u0;
-  auto &w0 = pmbp->phydro->w0;
-  int nscalars = pmbp->phydro->nscalars;
-  int nhydro = pmbp->phydro->nhydro;
-  EOS_Data &eos = pmbp->phydro->peos->eos_data;
-  Real gm1 = eos.gamma - 1.0;
-
-  Real rho_ceil = 1e4;
-
-  par_for("density_ceiling", DevExeSpace(), 0, nmb1, ks, ke, js, je, is, ie,
-  KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
-    Real rho = u0(m, IDN, k, j, i);
-    if (rho > rho_ceil) {
-      Real ratio = rho_ceil / rho;
-
-      // Preserve velocity: scale momentum
-      u0(m, IM1, k, j, i) *= ratio;
-      u0(m, IM2, k, j, i) *= ratio;
-      u0(m, IM3, k, j, i) *= ratio;
-
-      // Preserve pressure and velocity: E = P/gm1 + 0.5*rho*v^2
-      Real press = w0(m, IEN, k, j, i);
-      Real v1 = w0(m, IVX, k, j, i);
-      Real v2 = w0(m, IVY, k, j, i);
-      Real v3 = w0(m, IVZ, k, j, i);
-      u0(m, IEN, k, j, i) = press/gm1
-        + 0.5*rho_ceil*(v1*v1 + v2*v2 + v3*v3);
-
-      // Scale passive scalars (e.g. metallicity tracer)
-      for (int n = nhydro; n < nhydro + nscalars; ++n) {
-        u0(m, n, k, j, i) *= ratio;
-      }
-
-      // Set density
-      u0(m, IDN, k, j, i) = rho_ceil;
-    }
-  });
 }
 
 //===========================================================================//

@@ -4,7 +4,6 @@ module load PrgEnv-cray
 module load craype-accel-amd-gfx90a
 module load cpe/25.09 cray-mpich/9.0.1 rocm/6.4.2
 module load cce/20.0.0
-#module load PrgEnv-amd cpe/24.07 cray-mpich/8.1.30 amd/6.2.0 rocm/6.2.0
 module load cmake
 module unload darshan-runtime
 #module load perftools-base perftools
