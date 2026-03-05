@@ -68,6 +68,8 @@ void Z4c_AMR::Refine(MeshBlockPack *pmy_pack) {
 }
 
 // refine region within a certain distance from each compact object
+// using exact minimum distance via AABB clamping, which correctly handles
+// all cases: tracker nearest to a face, edge, or corner of the block.
 void Z4c_AMR::RefineTracker(MeshBlockPack *pmbp) {
   Mesh *pmesh       = pmbp->pmesh;
   auto &refine_flag = pmesh->pmr->refine_flag;
@@ -91,18 +93,17 @@ void Z4c_AMR::RefineTracker(MeshBlockPack *pmbp) {
     Real &x3max = size.h_view(m).x3max;
 
     flag.clear();
-    for (auto & pt : pmbp->pz4c->ptracker) {
-      Real d2[8] = {
-        SQ(x1min - pt->GetPos(0)) + SQ(x2min - pt->GetPos(1)) + SQ(x3min - pt->GetPos(2)),
-        SQ(x1max - pt->GetPos(0)) + SQ(x2min - pt->GetPos(1)) + SQ(x3min - pt->GetPos(2)),
-        SQ(x1min - pt->GetPos(0)) + SQ(x2max - pt->GetPos(1)) + SQ(x3min - pt->GetPos(2)),
-        SQ(x1max - pt->GetPos(0)) + SQ(x2max - pt->GetPos(1)) + SQ(x3min - pt->GetPos(2)),
-        SQ(x1min - pt->GetPos(0)) + SQ(x2min - pt->GetPos(1)) + SQ(x3max - pt->GetPos(2)),
-        SQ(x1max - pt->GetPos(0)) + SQ(x2min - pt->GetPos(1)) + SQ(x3max - pt->GetPos(2)),
-        SQ(x1min - pt->GetPos(0)) + SQ(x2max - pt->GetPos(1)) + SQ(x3max - pt->GetPos(2)),
-        SQ(x1max - pt->GetPos(0)) + SQ(x2max - pt->GetPos(1)) + SQ(x3max - pt->GetPos(2)),
-      };
-      Real dmin2 = *std::min_element(&d2[0], &d2[8]);
+    for (auto &pt : pmbp->pz4c->ptracker) {
+      // clamp tracker position to box bounds: closest point on the box
+      Real cx = fmax(x1min, fmin(pt->GetPos(0), x1max));
+      Real cy = fmax(x2min, fmin(pt->GetPos(1), x2max));
+      Real cz = fmax(x3min, fmin(pt->GetPos(2), x3max));
+
+      Real dmin2 = SQ(pt->GetPos(0) - cx) \
+                   + SQ(pt->GetPos(1) - cy) \
+                   + SQ(pt->GetPos(2) - cz);
+
+      // safety net for radius = 0: dmin2 = 0 inside the block but 0 < SQ(0) is false
       bool iscontained =
         (pt->GetPos(0) >= x1min && pt->GetPos(0) <= x1max) &&
         (pt->GetPos(1) >= x2min && pt->GetPos(1) <= x2max) &&

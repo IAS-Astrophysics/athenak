@@ -61,7 +61,6 @@ class ProblemGenerator {
   void AlfvenWave(ParameterInput *pin, const bool restart);
   void BondiAccretion(ParameterInput *pin, const bool restart);
   void CShock(ParameterInput *pin, const bool restart);
-  void Diffusion(ParameterInput *pin, const bool restart);
   void LinearWave(ParameterInput *pin, const bool restart);
   void LWImplode(ParameterInput *pin, const bool restart);
   void Monopole(ParameterInput *pin, const bool restart);
@@ -70,20 +69,27 @@ class ProblemGenerator {
   void ShockTube(ParameterInput *pin, const bool restart);
   void Shwave(ParameterInput *pin, const bool restart);
   void SphericalCollapse(ParameterInput *pin, const bool restart);
+  void RadiationLinearWave(ParameterInput *pin, const bool restart);
+  void RadiationBeam(ParameterInput *pin, const bool restart);
+  void Z4cBoostedPuncture(ParameterInput *pin, const bool restart);
+  void Z4cLinearWave(ParameterInput *pin, const bool restart);
   void Diffusion(ParameterInput *pin, const bool restart);
   void RadiationM1BeamTest(ParameterInput *pin, const bool restart);
   void RadiationM1BrentTest(ParameterInput *pin, const bool restart);
   void RadiationM1HybridsjTest(ParameterInput *pin, const bool restart);
   void RadiationM1SphereTest(ParameterInput *pin, const bool restart);
-  // template for user-specified problem generator
-  void UserProblem(ParameterInput *pin, const bool restart);
   void RadiationM1LatticeTest(ParameterInput *pin, const bool restart);
-  void RadiationM1SphereTest(ParameterInput *pin, const bool restart);
   void RadiationM1DiffusionTest(ParameterInput *pin, const bool restart);
   void RadiationM1VelocityJumpTest(ParameterInput *pin, const bool restart);
   void RadiationM1SingleZoneTest(ParameterInput *pin, const bool restart);
   template <class EOSPolicy, class ErrorPolicy>
   void RadiationM1SingleZoneTest_(ParameterInput *pin, const bool restart);
+
+  // Generic error output function (using difference u0-u1)
+  void OutputErrors(ParameterInput *pin, Mesh *pm);
+
+  // template for user-specified problem generator
+  void UserProblem(ParameterInput *pin, const bool restart);
 
  private:
   bool single_file_per_rank; // for restart file naming

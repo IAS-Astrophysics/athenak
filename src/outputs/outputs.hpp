@@ -247,7 +247,7 @@ class BaseTypeOutput {
   // CC output data on host with dims (n,m,k,j,i) except
   // for restarts, where dims are (m,n,k,j,i)
   HostArray5D<Real> outarray;
-  HostArray5D<Real> outarray_hyd, outarray_mhd, outarray_rad,
+  HostArray5D<Real> outarray_hyd, outarray_mhd, outarray_rad, outarray_radm1,
                     outarray_force, outarray_z4c, outarray_adm;
   HostFaceFld4D<Real> outfield;  // FC output field on host
   std::vector<int> noutmbs;   // with MPI, number of output MBs across all ranks

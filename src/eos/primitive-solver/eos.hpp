@@ -401,7 +401,7 @@ class EOS : public EOSPolicy, public ErrorPolicy {
   //  \param[inout] Yl   The total lepton fractions.
   KOKKOS_INLINE_FUNCTION void GetLeptonFractions(Real n, Real *Y, Real n_nu[6], Real *Yl) const {
     for (int i=0; i<3; ++i) {
-      Yl[i] = Y[i] + n_units*(n_nu[2*i] - n_nu[2*i+1])/n;
+      Yl[i] = Y[i] + (n_nu[2*i] - n_nu[2*i+1])/n;
     }
 
     return;
