@@ -28,6 +28,9 @@
 
 namespace {
 
+//----------------------------------------------------------------------------------------
+//! \class StellarProfile
+//  \brief class to read and interpolate 1d stellar profiles
 class StellarProfile {
   public:
     enum vars
@@ -57,10 +60,74 @@ class StellarProfile {
     Real *Phi;
 };
 
+// Rotation laws
+KOKKOS_INLINE_FUNCTION
+Real OmegaLaw(Real rad, Real Omega_0, Real Omega_A);
+
+KOKKOS_INLINE_FUNCTION
+Real OmegaGRB(Real rad, Real Omega_0, Real Omega_A,
+	      Real rfe,Real drtrans, Real dropfac);
+  
+// Vector potential 
+// https://arxiv.org/abs/1004.2896
+// https://arxiv.org/abs/1403.1230
 KOKKOS_INLINE_FUNCTION
 Real VectorPotential(Real xp, Real yp, Real zp,
                      Real B0_amp, Real B0_rad,
                      int component);
+    
+//----------------------------------------------------------------------------------------
+//! \class Deleptonization
+//  \brief class for deleptonization scheme by astro-ph/0504072
+//         Uses updated fits from 1701.02752
+  
+// Conversion mass-density units from geom.solar to CGS 
+#define UDENS (6.1762691458861632e+17)
+
+class Deleptonization {
+  public:
+  Deleptonization(ParameterInput* pin) {
+    // Deleptonization scheme parameters
+    E_nu_avg = pin->GetOrAddReal("deleptonization", "E_nu_avg_MeV", 10.0);
+    rho_trap = pin->GetOrAddReal("deleptonization", "rho_trap_cgs", 1e12) / UDENS;
+
+    // Fit parameters. Default values are SFHo from 1701.02752
+    log10_rho1 = pin->GetOrAddReal("deleptonization", "log10_rho1", 7.795);
+    log10_rho2 = pin->GetOrAddReal("deleptonization", "log10_rho2", 12.816);
+    Ye_2 = pin->GetOrAddReal("deleptonization", "Ye_2", 0.308);
+    Ye_c = pin->GetOrAddReal("deleptonization", "Ye_c", 0.0412);
+    Ye_H = pin->GetOrAddReal("deleptonization", "Ye_H", 0.257);
+  };
+
+  Real E_nu_avg;
+  Real rho_trap;
+  
+  Real Ye_of_rho(Real rho) const {
+    Real const Ye_1 = 0.5;
+    Real const log10_rhoH = 15;
+
+    Real const log10_rho = log10(rho * UDENS);
+    Real const x = max(-1.0, min(1.0, (2 * log10_rho - log10_rho2 - log10_rho1) /
+                                        (log10_rho2 - log10_rho1)));
+    Real const m = (Ye_H - Ye_2) / (log10_rhoH - log10_rho2);
+
+    if (log10_rho > log10_rho2) {
+      return Ye_2 + m * (log10_rho - log10_rho2);
+    } else {
+      return 0.5 * (Ye_2 + Ye_1) + 0.5 * x * (Ye_2 - Ye_1) +
+        Ye_c * (1 - abs(x) + 4 * abs(x) * (abs(x) - 0.5) * (abs(x) - 1));
+    }
+  };
+
+  ~Deleptonization() {};
+  
+  private:
+    Real log10_rho1;
+    Real log10_rho2;
+    Real Ye_2;
+    Real Ye_c;
+    Real Ye_H;
+}
 
 }// namespace
 
@@ -224,6 +291,8 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     adm.vK_dd(m,0,0,k,j,i) = adm.vK_dd(m,0,1,k,j,i) = adm.vK_dd(m,0,2,k,j,i) = 0.0;
     adm.vK_dd(m,1,1,k,j,i) = adm.vK_dd(m,1,2,k,j,i) = adm.vK_dd(m,2,2,k,j,i) = 0.0;
   });
+
+  delete pstar;
   
   // Add magnetic field
     
@@ -447,6 +516,138 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
 }
 
 //----------------------------------------------------------------------------------------
+// \brief Deleptonization scheme
+//
+
+//TODO Here below is the relevant GR-Athena++ code, 
+//     triggered during: GRMHD_Z4c::UserWork
+//     Shall be adapted for the K: embedded in a class/scheduled after the tstep etc etc
+
+/*
+void Mesh::UserWorkInLoop()
+{
+  bool active = pin->GetOrAddBool("deleptonization", "active", false);
+  if (not active) return;
+
+  Deleptonization *pdelept = new Deleptonization(pin);
+
+  const Real E_nu_avg = delept_E_nu_avg;
+  const Real rho_trap = delept_rho_trap;
+
+  MeshBlock * pmb = pblock;
+  Coordinates * pco;
+  EquationOfState * peos = pblock->peos;
+  Hydro *ph;
+  PassiveScalars *ps;
+  Field *pf;
+  Z4c * pz4c;
+
+  const Real mb = peos->GetEOS().GetBaryonMass();
+
+  while (pmb != nullptr)
+  {
+      peos = pmb->peos;
+      ph = pmb->phydro;
+      ps = pmb->pscalars;
+      pf = pmb->pfield;
+      pco = pmb->pcoord;
+
+      AA temperature;
+      temperature.InitWithShallowSlice(ph->derived_ms, IX_T, 1);
+
+      CC_GLOOP3(k, j, i)
+      {
+        const Real rho = ph->w(IDN,k,j,i);
+        Real & Y_e = ps->r(IYE,k,j,i);
+        Real Y[MAX_SPECIES]  { 0 };
+        Y[IYE] = Y_e;
+
+        // 
+        // Electron fraction update
+        //
+        
+        const Real Y_e_bar = pdelept->Ye_of_rho(rho);
+
+        const Real delta_Y_e = std::min( 0.0, (Y_e_bar - Y_e) );
+
+        if (delta_Y_e < 0.0)
+        {
+          Y_e += delta_Y_e;  // N.B: Update directly to state-vector
+
+          //
+          // Entropy update 
+          //
+          
+          const Real n = rho / mb;
+          const Real p = ph->w(IPR,k,j,i);
+          const Real T = peos->GetEOS().GetTemperatureFromP(n, p, Y);
+          Real s = peos->GetEOS().GetEntropyPerBaryon(n, T, Y);
+
+          // Prepare chemical potentials (BD: TODO- check)
+          // mu_nu := mu_e - mu_n + mu_p
+          
+          //const Real mu_b = peos->GetEOS().GetBaryonChemicalPotential(n, T, Y);
+          //const Real mu_q = peos->GetEOS().GetChargeChemicalPotential(n, T, Y);
+          //const Real mu_l = peos->GetEOS().GetElectronLeptonChemicalPotential(n, T, Y);
+          //const Real mu_n = mu_b;
+          //const Real mu_p = mu_b + mu_q;
+          //const Real mu_e = mu_l - mu_q;
+          //const Real mu_nu = mu_e - mu_n + mu_p;
+
+          const Real mu_nu = peos->GetEOS().GetElectronLeptonChemicalPotential(n, T, Y);
+
+          if ((mu_nu > pdelept.E_nu_avg) &&  // MeV units
+              (rho < pdelept.rho_trap))      // code units
+          {
+            s -= delta_Y_e * (mu_nu - E_nu_avg) / T;
+          }
+
+          //
+          // Y_e and s has been updated
+          // Recompute Temperature and pressure
+          //
+
+          Y[IYE] = Y_e;   
+          const Real Tnew = peos->GetEOS().GetTemperatureFromEntropy(n, s, Y);
+          //const Real e = peos->GetEOS().GetEnergy(n, Tnew, Y);
+          const Real pnew = peos->GetEOS().GetPressure(n, Tnew, Y);
+
+          // push back to prim state vector
+          ph->w(IPR,k,j,i) = pnew;
+          temperature(k,j,i) = Tnew;
+
+          //
+          // Update conservatives
+          //
+          
+          peos->PrimitiveToConserved(
+            ph->w,
+            ps->r,
+            pf->bcc,
+            ph->u,
+            ps->s,
+            pco,
+            i, i,
+            j, j,
+            k, k
+          );
+          
+        } // if (delta_Y_e < 0.0)
+        
+      } // CC_GLOOP3(k, j, i)
+
+      pmb = pmb->next;
+      
+    } // while (pmb != nullptr)
+
+    delete pdelept;
+    
+};
+
+*/
+
+
+//----------------------------------------------------------------------------------------
 // \brief History function
 //
 
@@ -663,7 +864,8 @@ Real StellarProfile::Eval(int vi, Real rad) const {
   return pvars[vi][offset] * (1 - lam) + pvars[vi][offset + 1] * lam;
 }
 
-// Rotation law
+// Standard rotation law
+KOKKOS_INLINE_FUNCTION
 Real OmegaLaw(Real rad, Real Omega_0, Real Omega_A)
 {
   return Omega_0/(1.0 + SQR(rad/Omega_A));
@@ -678,6 +880,7 @@ Real OmegaGRB_lam(Real rad, Real drtrans, Real rfe)
   return 0.5*(1.0 + tanh((rad - rfe)/drtrans));
 }
 
+KOKKOS_INLINE_FUNCTION
 Real OmegaGRB(Real rad, Real Omega_0, Real Omega_A,
 	      Real rfe,Real drtrans, Real dropfac)
 { 
@@ -688,7 +891,7 @@ Real OmegaGRB(Real rad, Real Omega_0, Real Omega_A,
   return ( (1.0-lam) * Omega_r + lam* Omega_rfe/fac );
 }
 
-// A_i model used in e.g.
+// Vector potential A_i model used in e.g.
 // https://arxiv.org/abs/1004.2896
 // https://arxiv.org/abs/1403.1230
 KOKKOS_INLINE_FUNCTION
@@ -738,4 +941,4 @@ Real VectorPotential(Real xp, Real yp, Real zp,
     assert(false);
 }
   
-}
+} // namespace
