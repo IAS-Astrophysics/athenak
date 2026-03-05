@@ -43,7 +43,7 @@ KOKKOS_INLINE_FUNCTION
 Real GravPot(Real x1, Real x2, Real x3,
              Real G, Real r_s, Real rho_s, 
              Real M_gal, Real a_gal, Real z_gal,
-             Real R200, Real rho_mean);
+             Real c_outer, Real rho_mean);
 
 void UserSource(Mesh* pm, const Real bdt);
 void GravitySource(Mesh* pm, const Real bdt);
@@ -84,6 +84,7 @@ namespace {
 
   // SN injection persistent buffer
   DvceArray2D<Real> sn_centers_buffer;
+  Kokkos::View<int> sn_counter;
 }
 
 //===========================================================================//
@@ -173,14 +174,9 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
 
   // Read the CGM cooling flow profile file
   std::string profile_file = pin->GetString("problem", "profile_file");
-  try {
-    ProfileReaderHost profile_reader_host;
-    profile_reader_host.ReadProfiles(profile_file);
-    // Create device-accessible reader
-    profile_reader = profile_reader_host.CreateDeviceReader();
-  } catch (const std::exception& e) {
-    std::cerr << "Error loading profiles: " << e.what() << std::endl;
-  }
+  ProfileReaderHost profile_reader_host;
+  profile_reader_host.ReadProfiles(profile_file);
+  profile_reader = profile_reader_host.CreateDeviceReader();
   if (global_variable::my_rank==0) {
     std::cout << "Successfully loaded CGM profiles from " 
               << profile_file << std::endl;
@@ -188,14 +184,9 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
 
   // Read in the disk profile file
   std::string disk_profile_file = pin->GetString("problem", "disk_profile_file");
-  try {
-    ProfileReaderHost disk_profile_reader_host;
-    disk_profile_reader_host.ReadProfiles(disk_profile_file);
-    // Create device-accessible reader
-    disk_profile_reader = disk_profile_reader_host.CreateDeviceReader();
-  } catch (const std::exception& e) {
-    std::cerr << "Error loading disk profiles: " << e.what() << std::endl;
-  }
+  ProfileReaderHost disk_profile_reader_host;
+  disk_profile_reader_host.ReadProfiles(disk_profile_file);
+  disk_profile_reader = disk_profile_reader_host.CreateDeviceReader();
   if (global_variable::my_rank==0) {
     std::cout << "Successfully loaded disk profiles from " 
 	      << disk_profile_file << std::endl;
@@ -204,6 +195,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   // Count total particles and initialize SN centers buffer
   pmy_mesh_->CountParticles();
   sn_centers_buffer = DvceArray2D<Real>("sn_centers_buffer", 3, pmy_mesh_->nprtcl_total);
+  sn_counter = Kokkos::View<int>("sn_counter");
   if (global_variable::my_rank==0) {
     std::cout << "Successfully initialized " << pmy_mesh_->nprtcl_total
               << " particles!" << std::endl;
@@ -307,7 +299,6 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   int &js = indcs.js; int &je = indcs.je;
   int &ks = indcs.ks; int &ke = indcs.ke;
   auto &size = pmbp->pmb->mb_size;
-  int nscalars = pmbp->phydro->nscalars;
   int nhydro = pmbp->phydro->nhydro;
 
   auto &u0 = pmbp->phydro->u0;
@@ -457,7 +448,7 @@ void SetRotation(const DvceArray5D<Real> &u0,
   // Calculate azimuthal velocity
   Real vx = 0.0, vy = 0.0, vz = 0.0;
   constexpr Real tiny = 1.0e-20;
-  if (r > tiny and R > tiny) {  // Avoid division by zero
+  if (r > tiny && R > tiny) {  // Avoid division by zero
     Real v_phi = 0.0;
     Real sin_theta = R / r;
 
@@ -471,7 +462,6 @@ void SetRotation(const DvceArray5D<Real> &u0,
     // Calculate azimuthal velocity components
     vx = -v_phi * x2v / R;
     vy = v_phi * x1v / R;
-    vz = 0.0;
   }
   
   // Set state variables
@@ -505,18 +495,20 @@ void SetEquilibriumState(const DvceArray5D<Real> &u0,
     // Don't extrapolate past the last entry in the table
     if (R > disk_profile.GetRmax()) return;
 
-    // Calculate Gravitational Potentials
-    Real phi0    = GravPot(x1v, x2v, 0.0, G, r_s, rho_s, m_g, a_g, z_g, r_m, rho_m);
-    Real phi0_1l = GravPot(x1l, x2v, 0.0, G, r_s, rho_s, m_g, a_g, z_g, r_m, rho_m);
-    Real phi0_1r = GravPot(x1r, x2v, 0.0, G, r_s, rho_s, m_g, a_g, z_g, r_m, rho_m);
-    Real phi0_2l = GravPot(x1v, x2l, 0.0, G, r_s, rho_s, m_g, a_g, z_g, r_m, rho_m);
-    Real phi0_2r = GravPot(x1v, x2r, 0.0, G, r_s, rho_s, m_g, a_g, z_g, r_m, rho_m);
+    // Calculate Gravitational Potentialsi
+    Real c_out = (4.0/3.0) * pow(5 * r_m, 1.5);
+    
+    Real phi0    = GravPot(x1v, x2v, 0.0, G, r_s, rho_s, m_g, a_g, z_g, c_out, rho_m);
+    Real phi0_1l = GravPot(x1l, x2v, 0.0, G, r_s, rho_s, m_g, a_g, z_g, c_out, rho_m);
+    Real phi0_1r = GravPot(x1r, x2v, 0.0, G, r_s, rho_s, m_g, a_g, z_g, c_out, rho_m);
+    Real phi0_2l = GravPot(x1v, x2l, 0.0, G, r_s, rho_s, m_g, a_g, z_g, c_out, rho_m);
+    Real phi0_2r = GravPot(x1v, x2r, 0.0, G, r_s, rho_s, m_g, a_g, z_g, c_out, rho_m);
 
-    Real phi   = GravPot(x1v, x2v, x3v, G, r_s, rho_s, m_g, a_g, z_g, r_m, rho_m);
-    Real phi1r = GravPot(x1r, x2v, x3v, G, r_s, rho_s, m_g, a_g, z_g, r_m, rho_m);
-    Real phi2l = GravPot(x1v, x2l, x3v, G, r_s, rho_s, m_g, a_g, z_g, r_m, rho_m);
-    Real phi2r = GravPot(x1v, x2r, x3v, G, r_s, rho_s, m_g, a_g, z_g, r_m, rho_m);
-    Real phi1l = GravPot(x1l, x2v, x3v, G, r_s, rho_s, m_g, a_g, z_g, r_m, rho_m);
+    Real phi   = GravPot(x1v, x2v, x3v, G, r_s, rho_s, m_g, a_g, z_g, c_out, rho_m);
+    Real phi1r = GravPot(x1r, x2v, x3v, G, r_s, rho_s, m_g, a_g, z_g, c_out, rho_m);
+    Real phi2l = GravPot(x1v, x2l, x3v, G, r_s, rho_s, m_g, a_g, z_g, c_out, rho_m);
+    Real phi2r = GravPot(x1v, x2r, x3v, G, r_s, rho_s, m_g, a_g, z_g, c_out, rho_m);
+    Real phi1l = GravPot(x1l, x2v, x3v, G, r_s, rho_s, m_g, a_g, z_g, c_out, rho_m);
 
     Real f_x1_ = -(phi1r - phi1l) / (x1r - x1l);
     Real f_x2_ = -(phi2r - phi2l) / (x2r - x2l);
@@ -605,8 +597,8 @@ void GravitySource(Mesh* pm, const Real bdt) {
   Real m_g = m_gal;
   Real a_g = a_gal;
   Real z_g = z_gal;
-  Real r_m = r_200;
   Real rho_m = rho_mean;
+  Real c_out = (4.0/3.0) * pow(5 * r_200, 1.5);
 
   par_for("gravity_source", DevExeSpace(), 0, nmb1, ks, ke, js, je, is, ie,
   KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
@@ -626,14 +618,14 @@ void GravitySource(Mesh* pm, const Real bdt) {
     const Real x3l = LeftEdgeX(k-ks,   nx3, x3min, x3max);
     const Real x3r = LeftEdgeX(k+1-ks, nx3, x3min, x3max);
 
-    Real phi1l = GravPot(x1l,x2v,x3v,G,r_s,rho_s,m_g,a_g,z_g,r_m,rho_m);
-    Real phi1r = GravPot(x1r,x2v,x3v,G,r_s,rho_s,m_g,a_g,z_g,r_m,rho_m);
+    Real phi1l = GravPot(x1l,x2v,x3v,G,r_s,rho_s,m_g,a_g,z_g,c_out,rho_m);
+    Real phi1r = GravPot(x1r,x2v,x3v,G,r_s,rho_s,m_g,a_g,z_g,c_out,rho_m);
 
-    Real phi2l = GravPot(x1v,x2l,x3v,G,r_s,rho_s,m_g,a_g,z_g,r_m,rho_m);
-    Real phi2r = GravPot(x1v,x2r,x3v,G,r_s,rho_s,m_g,a_g,z_g,r_m,rho_m);
+    Real phi2l = GravPot(x1v,x2l,x3v,G,r_s,rho_s,m_g,a_g,z_g,c_out,rho_m);
+    Real phi2r = GravPot(x1v,x2r,x3v,G,r_s,rho_s,m_g,a_g,z_g,c_out,rho_m);
 
-    Real phi3l = GravPot(x1v,x2v,x3l,G,r_s,rho_s,m_g,a_g,z_g,r_m,rho_m);
-    Real phi3r = GravPot(x1v,x2v,x3r,G,r_s,rho_s,m_g,a_g,z_g,r_m,rho_m);
+    Real phi3l = GravPot(x1v,x2v,x3l,G,r_s,rho_s,m_g,a_g,z_g,c_out,rho_m);
+    Real phi3r = GravPot(x1v,x2v,x3r,G,r_s,rho_s,m_g,a_g,z_g,c_out,rho_m);
 
     constexpr Real tiny = 1e-20;
     Real f_x1_ = -(phi1r - phi1l) / fmax(x1r - x1l, tiny);
@@ -661,7 +653,7 @@ KOKKOS_INLINE_FUNCTION
 Real GravPot(Real x1, Real x2, Real x3,
              Real G, Real r_s, Real rho_s, 
              Real M_gal, Real a_gal, Real z_gal,
-             Real R200, Real rho_mean) {
+             Real c_outer, Real rho_mean) {
   const Real R2 = fma(x1, x1 , x2*x2);
   const Real R  = sqrt(R2);
   const Real r2 = fma(x3 , x3 , R2);
@@ -675,7 +667,6 @@ Real GravPot(Real x1, Real x2, Real x3,
   Real phi_MN = -G * M_gal / sqrt(R2 + SQR(sqrt(fma(x3 , x3 , z_gal*z_gal)) + a_gal));
   
   // Outer component
-  Real c_outer = (4.0/3.0) * pow(5 * R200, 1.5);
   Real phi_Outer = 4 * M_PI * G * rho_mean * (c_outer * sqrt(r) + (1.0/6.0) * r2);
   
   // Total potential
@@ -691,8 +682,6 @@ void SNSource(Mesh* pm, const Real bdt) {
   int nx1 = indcs.nx1, nx2 = indcs.nx2, nx3 = indcs.nx3;
   int nmb1 = pmbp->nmb_thispack - 1;
   auto &size = pmbp->pmb->mb_size;
-  
-  int nscalars = pmbp->phydro->nscalars;
   int nhydro = pmbp->phydro->nhydro;
 
   auto &u0 = pmbp->phydro->u0;
@@ -712,7 +701,8 @@ void SNSource(Mesh* pm, const Real bdt) {
 
   // Array of positions where SNs go off at this timestep
   auto &sn_centers = sn_centers_buffer;
-  Kokkos::View<int> d_counter("sn_counter");
+  Kokkos::deep_copy(sn_counter, 0);
+  auto d_counter = sn_counter;
 
   par_for("sn_source", DevExeSpace(), 0, npart-1, KOKKOS_LAMBDA(const int p) {
     
@@ -751,8 +741,6 @@ void SNSource(Mesh* pm, const Real bdt) {
   Kokkos::deep_copy(num_sn, d_counter);
   
   if (num_sn > 0) {
-    // std::cout << num_sn << " SN went off" << std::endl;
-    
     Real e_sn_ = e_sn;
     Real m_ej_ = m_ej;
     Real Z_ej_ = 0.1;
@@ -814,8 +802,6 @@ void UserBoundary(Mesh* pm) {
   int nmb1 = pmbp->nmb_thispack - 1;
   auto &size = pmbp->pmb->mb_size;
   auto &mb_bcs = pm->pmb_pack->pmb->mb_bcs;
-
-  int nscalars = pmbp->phydro->nscalars;
   int nhydro = pmbp->phydro->nhydro;
 
   auto &u0 = pmbp->phydro->u0;
@@ -941,8 +927,6 @@ void RefinementCondition(MeshBlockPack* pmbp) {
   int nmb           = pmbp->nmb_thispack;
   int mbs           = pmesh->gids_eachrank[global_variable::my_rank];
   auto &refine_flag = pmesh->pmr->refine_flag;
-  auto &multi_d     = pmesh->multi_d;
-  auto &three_d     = pmesh->three_d;
   auto &indcs       = pmesh->mb_indcs;
   int &is = indcs.is, nx1 = indcs.nx1;
   int &js = indcs.js, nx2 = indcs.nx2;
@@ -995,7 +979,8 @@ void RefinementCondition(MeshBlockPack* pmbp) {
 
 void FreeProfile(ParameterInput *pin, Mesh *pm) {
   // Free Kokkos views before Kokkos::finalize is called
-  profile_reader.~ProfileReader();
-  disk_profile_reader.~ProfileReader();
+  profile_reader = ProfileReader();
+  disk_profile_reader = ProfileReader();
   sn_centers_buffer = DvceArray2D<Real>();
+  sn_counter = Kokkos::View<int>();
 }
