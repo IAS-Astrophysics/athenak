@@ -171,11 +171,13 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     if (pmbp->phydro != nullptr) {
         EOS_Data &eos = pmbp->phydro->peos->eos_data;
         mp.is_ideal = eos.is_ideal;
+        mp.dfloor = eos.dfloor;
     } 
 
     if (pmbp->pmhd != nullptr) {
         EOS_Data &eos = pmbp->pmhd->peos->eos_data;
         mp.is_ideal = eos.is_ideal;
+        mp.dfloor = eos.dfloor;
     }
 
     mp.thetaw = pin->GetOrAddReal("problem","thetaw",0.0);
@@ -616,7 +618,6 @@ namespace {
     static void VelDiscCyl(struct my_params mp, const Real rad, const Real phi, const Real z, Real &v1, Real &v2, Real &v3) {
         
         Real r = fmax(rad, mp.rs);
-        Real rc = sqrt(r*r+z*z);
 
         // Old method for power law
         Real p_over_r = PoverR(mp, r);
@@ -624,6 +625,7 @@ namespace {
         vel = sqrt(mp.gm0/r)*sqrt(vel);
 
         // Testing new method for balance with pressure gradients
+        // Real rc = sqrt(r*r+z*z);
         // Real dR = fmin(mp.rad_in_smooth, mp.rad_out_smooth)/100;
         // Real dPdr = (PoverR(mp, r+dR) * DenDiscCyl(mp, r+dR,phi,z) - PoverR(mp, r-dR) * DenDiscCyl(mp, r - dR,phi,z))/(2 * dR);
         // Real vel = sqrt(fmax(mp.gm0*r*r/rc/rc/rc+r/DenDiscCyl(mp, r, phi, z)*dPdr,0.0));
@@ -846,7 +848,7 @@ Real rho_floor(struct my_params mp, Real rc) {
     if (mp.mm != 0. && rc > mp.rs) rhofloor += mp.rho_floor2*pow(rc/mp.r0,mp.rho_floor_slope2);
     return fmax(rhofloor,mp.dfloor);
 }
-        
+
 //----------------------------------------------------------------------------------------
 //! Below we will define the custom user defined source terms and boundary conditions.
 //----------------------------------------------------------------------------------------
