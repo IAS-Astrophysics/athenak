@@ -30,6 +30,8 @@
 #include "particles/particles.hpp"
 #include "outputs.hpp"
 #include "utils/current.hpp"
+#include "utils/finite_diff.hpp"
+#include "athena_tensor.hpp"
 
 //----------------------------------------------------------------------------------------
 // BaseTypeOutput::ComputeDerivedVariable()
@@ -1213,12 +1215,8 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
   // Z4c Diagnostics: Kretschmann Scalar, Electric/Magnetic Weyl tensors, Super-Poynting Flux
   if (name.compare("z4c_diag") == 0) {
     constexpr int n_z4c_vars = 16;
-    const int need_nvar = i_dv + n_z4c_vars;
-
-    // Check the correct dimension (extent_int(1)) and use resize to preserve existing data
-    if (derived_var.extent_int(1) < need_nvar) {
-      Kokkos::resize(derived_var, nmb, need_nvar, n3, n2, n1);
-    }
+    
+    Kokkos::realloc(derived_var, nmb, n_z4c_vars, n3, n2, n1);
     auto dv = derived_var;
     auto &adm = pm->pmb_pack->padm->adm;
 
@@ -1285,7 +1283,7 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
       // Guard the inverse metric properly. If degenerate, set to NAN and return.
       if (detg <= 1e-10) {
         for(int var_idx = 0; var_idx < n_z4c_vars; ++var_idx) {
-            dv(m, i_dv + var_idx, k, j, i) = NAN;
+            dv(m, var_idx, k, j, i) = NAN;
         }
         return;
       }
@@ -1485,22 +1483,22 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
       // ---------------------------------------------------------------------------------
       // Storing Output
       // ---------------------------------------------------------------------------------
-      dv(m, i_dv + 0, k, j, i) = Kretschmann;
-      dv(m, i_dv + 1, k, j, i) = E_dd(0,0);
-      dv(m, i_dv + 2, k, j, i) = E_dd(0,1);
-      dv(m, i_dv + 3, k, j, i) = E_dd(0,2);
-      dv(m, i_dv + 4, k, j, i) = E_dd(1,1);
-      dv(m, i_dv + 5, k, j, i) = E_dd(1,2);
-      dv(m, i_dv + 6, k, j, i) = E_dd(2,2);
-      dv(m, i_dv + 7, k, j, i) = B_dd(0,0);
-      dv(m, i_dv + 8, k, j, i) = B_dd(0,1);
-      dv(m, i_dv + 9, k, j, i) = B_dd(0,2);
-      dv(m, i_dv + 10, k, j, i) = B_dd(1,1);
-      dv(m, i_dv + 11, k, j, i) = B_dd(1,2);
-      dv(m, i_dv + 12, k, j, i) = B_dd(2,2);
-      dv(m, i_dv + 13, k, j, i) = P_u(0);
-      dv(m, i_dv + 14, k, j, i) = P_u(1);
-      dv(m, i_dv + 15, k, j, i) = P_u(2);
+      dv(m, 0, k, j, i) = Kretschmann;
+      dv(m, 1, k, j, i) = E_dd(0,0);
+      dv(m, 2, k, j, i) = E_dd(0,1);
+      dv(m, 3, k, j, i) = E_dd(0,2);
+      dv(m, 4, k, j, i) = E_dd(1,1);
+      dv(m, 5, k, j, i) = E_dd(1,2);
+      dv(m, 6, k, j, i) = E_dd(2,2);
+      dv(m, 7, k, j, i) = B_dd(0,0);
+      dv(m, 8, k, j, i) = B_dd(0,1);
+      dv(m, 9, k, j, i) = B_dd(0,2);
+      dv(m, 10, k, j, i) = B_dd(1,1);
+      dv(m, 11, k, j, i) = B_dd(1,2);
+      dv(m, 12, k, j, i) = B_dd(2,2);
+      dv(m, 13, k, j, i) = P_u(0);
+      dv(m, 14, k, j, i) = P_u(1);
+      dv(m, 15, k, j, i) = P_u(2);
     });
     i_dv += n_z4c_vars;
   }
