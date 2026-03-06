@@ -206,7 +206,7 @@ TaskStatus MHD::Fluxes(Driver *pdrive, int stage) {
     CalcCurrentDensity(b0);
   }
   if ((presist != nullptr) && (peos->eos_data.is_ideal)) {
-    presist->AddResistiveFluxes(jedge, b0, uflx);
+    presist->AddResistiveFluxes(jedge, bcc0, uflx);
   }
   if ((pambi != nullptr) && (peos->eos_data.is_ideal)) {
     pambi->AddAmbipolarFluxes(b0, bcc0, uflx);

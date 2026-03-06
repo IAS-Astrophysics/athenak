@@ -30,10 +30,10 @@ class Resistivity {
   // functions to add resistive E-Field and energy flux
   void AddResistiveEMFs(const DvceEdgeFld4D<Real> &jedge, DvceEdgeFld4D<Real> &efld);
   void AddResistiveFluxes(const DvceEdgeFld4D<Real> &jedge,
-                          const DvceFaceFld4D<Real> &b0, DvceFaceFld5D<Real> &flx);
+                          const DvceArray5D<Real> &bcc0, DvceFaceFld5D<Real> &flx);
   void AddEMFConstantResist(const DvceEdgeFld4D<Real> &jedge, DvceEdgeFld4D<Real> &efld);
   void AddFluxConstantResist(const DvceEdgeFld4D<Real> &jedge,
-                             const DvceFaceFld4D<Real> &b, DvceFaceFld5D<Real> &flx);
+                             const DvceArray5D<Real> &bcc0, DvceFaceFld5D<Real> &flx);
   void NewTimeStep(const DvceArray5D<Real> &w, const EOS_Data &eos_data);
 
  private:

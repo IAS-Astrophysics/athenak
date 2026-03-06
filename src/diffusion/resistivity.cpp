@@ -61,8 +61,8 @@ void Resistivity::AddResistiveEMFs(const DvceEdgeFld4D<Real> &jedge,
 //! Currently only Ohmic resistivity with constant coefficient is implemented.
 
 void Resistivity::AddResistiveFluxes(const DvceEdgeFld4D<Real> &jedge,
-    const DvceFaceFld4D<Real> &b0, DvceFaceFld5D<Real> &flx) {
-  AddFluxConstantResist(jedge, b0, flx);
+    const DvceArray5D<Real> &bcc0, DvceFaceFld5D<Real> &flx) {
+  AddFluxConstantResist(jedge, bcc0, flx);
   return;
 }
 
@@ -127,71 +127,68 @@ void Resistivity::AddEMFConstantResist(const DvceEdgeFld4D<Real> &jedge,
 
 //----------------------------------------------------------------------------------------
 //! \fn AddResistiveFluxConstantResist()
-//  \brief Adds Poynting flux from Ohmic resistivity to energy flux
-//  Total energy equation is dE/dt = - Div(F) where F = (E X B) = \eta (J X B)
+//  \brief Adds Poynting flux from Ohmic resistivity to energy flux.
+//  Computes S = E x B_cc at each face, where E = eta*J is the resistive electric field
+//  and B_cc is the cell-centered magnetic field. Both E (from edge) and B_cc are averaged
+//  to the face independently before multiplying ("average then multiply").
+//  This directly mirrors the Athena++ PoyntingFlux(e, bc) stencil.
 
 void Resistivity::AddFluxConstantResist(const DvceEdgeFld4D<Real> &jedge,
-                                        const DvceFaceFld4D<Real> &b,
+                                        const DvceArray5D<Real> &bcc,
                                         DvceFaceFld5D<Real> &flx) {
   auto &indcs = pmy_pack->pmesh->mb_indcs;
   int is = indcs.is, ie = indcs.ie;
   int js = indcs.js, je = indcs.je;
   int ks = indcs.ks, ke = indcs.ke;
   int nmb1 = pmy_pack->nmb_thispack - 1;
-  Real qa = 0.25*eta_ohm;
+  auto eta_o = eta_ohm;
 
   auto je1 = jedge.x1e;
   auto je2 = jedge.x2e;
   auto je3 = jedge.x3e;
 
   //------------------------------
-  // energy fluxes in x1-direction: S_1 = eta*(J2*B3 - J3*B2)
+  // energy fluxes in x1-direction: S_1 = E2*B3_cc - E3*B2_cc  (at x1-face)
   auto &flx1 = flx.x1f;
   par_for("ohm_heat1", DevExeSpace(), 0, nmb1, ks, ke, js, je, is, ie+1,
   KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
-    Real j2k   = je2(m,k,j,i);
-    Real j2kp1 = je2(m,k+1,j,i);
-    Real j3j   = je3(m,k,j,i);
-    Real j3jp1 = je3(m,k,j+1,i);
+    Real e2_fc = 0.5*eta_o*(je2(m,k,j,i) + je2(m,k+1,j,i));
+    Real e3_fc = 0.5*eta_o*(je3(m,k,j,i) + je3(m,k,j+1,i));
 
-    flx1(m,IEN,k,j,i) += qa*(j2k  *(b.x3f(m,k  ,j  ,i) + b.x3f(m,k  ,j  ,i-1)) +
-                             j2kp1*(b.x3f(m,k+1,j  ,i) + b.x3f(m,k+1,j  ,i-1)) -
-                             j3j  *(b.x2f(m,k  ,j  ,i) + b.x2f(m,k  ,j  ,i-1)) -
-                             j3jp1*(b.x2f(m,k  ,j+1,i) + b.x2f(m,k  ,j+1,i-1)));
+    Real b2_fc = 0.5*(bcc(m,IBY,k,j,i-1) + bcc(m,IBY,k,j,i));
+    Real b3_fc = 0.5*(bcc(m,IBZ,k,j,i-1) + bcc(m,IBZ,k,j,i));
+
+    flx1(m,IEN,k,j,i) += e2_fc*b3_fc - e3_fc*b2_fc;
   });
   if (pmy_pack->pmesh->one_d) {return;}
 
   //------------------------------
-  // energy fluxes in x2-direction: S_2 = eta*(J3*B1 - J1*B3)
+  // energy fluxes in x2-direction: S_2 = E3*B1_cc - E1*B3_cc  (at x2-face)
   auto &flx2 = flx.x2f;
   par_for("ohm_heat2", DevExeSpace(), 0, nmb1, ks, ke, js, je+1, is, ie,
   KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
-    Real j1k   = je1(m,k,j,i);
-    Real j1kp1 = je1(m,k+1,j,i);
-    Real j3i   = je3(m,k,j,i);
-    Real j3ip1 = je3(m,k,j,i+1);
+    Real e3_fc = 0.5*eta_o*(je3(m,k,j,i) + je3(m,k,j,i+1));
+    Real e1_fc = 0.5*eta_o*(je1(m,k,j,i) + je1(m,k+1,j,i));
 
-    flx2(m,IEN,k,j,i) += qa*(j3i  *(b.x1f(m,k  ,j,i  ) + b.x1f(m,k  ,j-1,i  )) +
-                             j3ip1*(b.x1f(m,k  ,j,i+1) + b.x1f(m,k  ,j-1,i+1)) -
-                             j1k  *(b.x3f(m,k  ,j,i  ) + b.x3f(m,k  ,j-1,i  )) -
-                             j1kp1*(b.x3f(m,k+1,j,i  ) + b.x3f(m,k+1,j-1,i  )));
+    Real b3_fc = 0.5*(bcc(m,IBZ,k,j-1,i) + bcc(m,IBZ,k,j,i));
+    Real b1_fc = 0.5*(bcc(m,IBX,k,j-1,i) + bcc(m,IBX,k,j,i));
+
+    flx2(m,IEN,k,j,i) += e3_fc*b1_fc - e1_fc*b3_fc;
   });
   if (pmy_pack->pmesh->two_d) {return;}
 
   //------------------------------
-  // energy fluxes in x3-direction: S_3 = eta*(J1*B2 - J2*B1)
+  // energy fluxes in x3-direction: S_3 = E1*B2_cc - E2*B1_cc  (at x3-face)
   auto &flx3 = flx.x3f;
   par_for("ohm_heat3", DevExeSpace(), 0, nmb1, ks, ke+1, js, je, is, ie,
   KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
-    Real j1j   = je1(m,k,j,i);
-    Real j1jp1 = je1(m,k,j+1,i);
-    Real j2i   = je2(m,k,j,i);
-    Real j2ip1 = je2(m,k,j,i+1);
+    Real e1_fc = 0.5*eta_o*(je1(m,k,j,i) + je1(m,k,j+1,i));
+    Real e2_fc = 0.5*eta_o*(je2(m,k,j,i) + je2(m,k,j,i+1));
 
-    flx3(m,IEN,k,j,i) += qa*(j1j  *(b.x2f(m,k,j  ,i  ) + b.x2f(m,k-1,j  ,i  )) +
-                             j1jp1*(b.x2f(m,k,j+1,i  ) + b.x2f(m,k-1,j+1,i  )) -
-                             j2i  *(b.x1f(m,k,j  ,i  ) + b.x1f(m,k-1,j  ,i  )) -
-                             j2ip1*(b.x1f(m,k,j  ,i+1) + b.x1f(m,k-1,j  ,i+1)));
+    Real b2_fc = 0.5*(bcc(m,IBY,k-1,j,i) + bcc(m,IBY,k,j,i));
+    Real b1_fc = 0.5*(bcc(m,IBX,k-1,j,i) + bcc(m,IBX,k,j,i));
+
+    flx3(m,IEN,k,j,i) += e1_fc*b2_fc - e2_fc*b1_fc;
   });
 
   return;
