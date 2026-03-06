@@ -1209,5 +1209,300 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
       pdens(m,0,kp,jp,ip) += 1.0;
     });
   }
+
+  // Z4c Diagnostics: Kretschmann Scalar, Electric/Magnetic Weyl tensors, Super-Poynting Flux
+  if (name.compare("z4c_diag") == 0) {
+    constexpr int n_z4c_vars = 16;
+    const int need_nvar = i_dv + n_z4c_vars;
+
+    // Check the correct dimension (extent_int(1)) and use resize to preserve existing data
+    if (derived_var.extent_int(1) < need_nvar) {
+      Kokkos::resize(derived_var, nmb, need_nvar, n3, n2, n1);
+    }
+    auto dv = derived_var;
+    auto &adm = pm->pmb_pack->padm->adm;
+
+    par_for("z4c_diag", DevExeSpace(), 0, (nmb-1), ks, ke, js, je, is, ie,
+    KOKKOS_LAMBDA(int m, int k, int j, int i) {
+      const int NGHOST = 4;
+
+      Real idx[] = {1.0 / size.d_view(m).dx1, 
+                    1.0 / size.d_view(m).dx2, 
+                    1.0 / size.d_view(m).dx3};
+
+      // Scalars
+      Real detg = 0.0;
+      Real K = 0.0;
+
+      // Symmetric tensors
+      AthenaPointTensor<Real, TensorSymm::SYM2, 3, 2> g_uu;
+      AthenaPointTensor<Real, TensorSymm::SYM2, 3, 2> R_dd;
+      AthenaPointTensor<Real, TensorSymm::NONE, 3, 2> K_ud;
+      
+      AthenaPointTensor<Real, TensorSymm::SYM2, 3, 3> dg_ddd;
+      AthenaPointTensor<Real, TensorSymm::SYM2, 3, 3> dK_ddd;
+      AthenaPointTensor<Real, TensorSymm::SYM2, 3, 3> Gamma_ddd;
+      AthenaPointTensor<Real, TensorSymm::SYM2, 3, 3> Gamma_udd;
+      AthenaPointTensor<Real, TensorSymm::SYM2, 3, 3> DK_ddd;
+      
+      AthenaPointTensor<Real, TensorSymm::SYM22, 3, 4> ddg_dddd;
+
+      // Weyl and Output Tensors
+      AthenaPointTensor<Real, TensorSymm::SYM2, 3, 2> E_dd;
+      AthenaPointTensor<Real, TensorSymm::SYM2, 3, 2> B_dd;
+      AthenaPointTensor<Real, TensorSymm::NONE, 3, 1> P_u;
+
+      // Initialize tensors
+      for (int a = 0; a < 3; ++a) {
+        P_u(a) = 0.0;
+        for (int b = 0; b < 3; ++b) {
+          K_ud(a,b) = 0.0;
+          for (int c = 0; c < 3; ++c) {
+            dg_ddd(c,a,b) = 0.0;
+            dK_ddd(c,a,b) = 0.0;
+            Gamma_ddd(c,a,b) = 0.0;
+            Gamma_udd(c,a,b) = 0.0;
+            DK_ddd(c,a,b) = 0.0;
+            for (int d = c; d < 3; ++d) {
+              ddg_dddd(c,d,a,b) = 0.0;
+            }
+          }
+        }
+        for (int b = a; b < 3; ++b) {
+          g_uu(a,b) = 0.0;
+          R_dd(a,b) = 0.0;
+          E_dd(a,b) = 0.0;
+          B_dd(a,b) = 0.0;
+        }
+      }
+
+      // ---------------------------------------------------------------------------------
+      // Inverse metric and Guard
+      // ---------------------------------------------------------------------------------
+      detg = adm::SpatialDet(adm.g_dd(m,0,0,k,j,i), adm.g_dd(m,0,1,k,j,i), adm.g_dd(m,0,2,k,j,i),
+                             adm.g_dd(m,1,1,k,j,i), adm.g_dd(m,1,2,k,j,i), adm.g_dd(m,2,2,k,j,i));
+      
+      // Guard the inverse metric properly. If degenerate, set to NAN and return.
+      if (detg <= 1e-10) {
+        for(int var_idx = 0; var_idx < n_z4c_vars; ++var_idx) {
+            dv(m, i_dv + var_idx, k, j, i) = NAN;
+        }
+        return;
+      }
+
+      adm::SpatialInv(1.0/detg,
+                      adm.g_dd(m,0,0,k,j,i), adm.g_dd(m,0,1,k,j,i), adm.g_dd(m,0,2,k,j,i),
+                      adm.g_dd(m,1,1,k,j,i), adm.g_dd(m,1,2,k,j,i), adm.g_dd(m,2,2,k,j,i),
+                      &g_uu(0,0), &g_uu(0,1), &g_uu(0,2),
+                      &g_uu(1,1), &g_uu(1,2), &g_uu(2,2));
+
+      // ---------------------------------------------------------------------------------
+      // Derivatives of g and K
+      // ---------------------------------------------------------------------------------
+      for(int c = 0; c < 3; ++c) {
+        for(int a = 0; a < 3; ++a) {
+          for(int b = 0; b < 3; ++b) {
+            dg_ddd(c,a,b) = Dx<NGHOST>(c, idx, adm.g_dd, m,a,b,k,j,i);
+            dK_ddd(c,a,b) = Dx<NGHOST>(c, idx, adm.vK_dd, m,a,b,k,j,i);
+          }
+        }
+      }
+
+      for(int a = 0; a < 3; ++a) {
+        for(int b = a; b < 3; ++b) {
+          for(int c = 0; c < 3; ++c) {
+            for(int d = c; d < 3; ++d) {
+              if(a == b) {
+                ddg_dddd(a,b,c,d) = Dxx<NGHOST>(a, idx, adm.g_dd, m,c,d,k,j,i);
+              } else {
+                ddg_dddd(a,b,c,d) = Dxy<NGHOST>(a, b, idx, adm.g_dd, m,c,d,k,j,i);
+              }
+            }
+          }
+        }
+      }
+
+      // ---------------------------------------------------------------------------------
+      // Christoffel symbols
+      // ---------------------------------------------------------------------------------
+      for(int c = 0; c < 3; ++c) {
+        for(int a = 0; a < 3; ++a) {
+          for(int b = a; b < 3; ++b) {
+            Gamma_ddd(c,a,b) = 0.5 * (dg_ddd(a,b,c) + dg_ddd(b,a,c) - dg_ddd(c,a,b));
+          }
+        }
+      }
+
+      for(int c = 0; c < 3; ++c) {
+        for(int a = 0; a < 3; ++a) {
+          for(int b = a; b < 3; ++b) {
+            for(int d = 0; d < 3; ++d) {
+              Gamma_udd(c,a,b) += g_uu(c,d) * Gamma_ddd(d,a,b);
+            }
+          }
+        }
+      }
+
+      // ---------------------------------------------------------------------------------
+      // Ricci tensor
+      // ---------------------------------------------------------------------------------
+      for(int a = 0; a < 3; ++a) {
+        for(int b = a; b < 3; ++b) {
+          for(int c = 0; c < 3; ++c) {
+            for(int d = 0; d < 3; ++d) {
+              for(int e = 0; e < 3; ++e) {
+                R_dd(a,b) += g_uu(c,d) * Gamma_udd(e,a,c) * Gamma_ddd(e,b,d);
+                R_dd(a,b) -= g_uu(c,d) * Gamma_udd(e,a,b) * Gamma_ddd(e,c,d);
+              }
+              R_dd(a,b) += 0.5 * g_uu(c,d) * (
+                  - ddg_dddd(c,d,a,b) - ddg_dddd(a,b,c,d) +
+                    ddg_dddd(a,c,b,d) + ddg_dddd(b,c,a,d));
+            }
+          }
+        }
+      }
+
+      // ---------------------------------------------------------------------------------
+      // Extrinsic curvature traces & Covariant Derivative
+      // ---------------------------------------------------------------------------------
+      for(int a = 0; a < 3; ++a) {
+        for(int b = 0; b < 3; ++b) {
+          for(int c = 0; c < 3; ++c) {
+            K_ud(a,b) += g_uu(a,c) * adm.vK_dd(m,c,b,k,j,i);
+          }
+        }
+        K += K_ud(a,a);
+      }
+      
+      for(int a = 0; a < 3; ++a) {
+        for(int b = 0; b < 3; ++b) {
+          for(int c = 0; c < 3; ++c) {
+            DK_ddd(a,b,c) = dK_ddd(a,b,c);
+            for(int d = 0; d < 3; ++d) {
+              DK_ddd(a,b,c) -= Gamma_udd(d,a,b) * adm.vK_dd(m,d,c,k,j,i);
+              DK_ddd(a,b,c) -= Gamma_udd(d,a,c) * adm.vK_dd(m,b,d,k,j,i);
+            }
+          }
+        }
+      }
+
+      // ---------------------------------------------------------------------------------
+      // Electric and Magnetic Weyl, Kretschmann, and Super-Poynting Flux
+      // ---------------------------------------------------------------------------------
+      
+      // E_ij
+      for(int a = 0; a < 3; ++a) {
+        for(int b = a; b < 3; ++b) {
+          E_dd(a,b) = R_dd(a,b) + K * adm.vK_dd(m,a,b,k,j,i);
+          for(int c = 0; c < 3; ++c) {
+            E_dd(a,b) -= adm.vK_dd(m,a,c,k,j,i) * K_ud(c,b);
+          }
+        }
+      }
+
+      // Levi-Civita Construction
+      Real sqrt_g = std::sqrt(detg);
+      Real LC[3][3][3] = {{{0}}};
+      LC[0][1][2] = LC[1][2][0] = LC[2][0][1] = 1.0;
+      LC[0][2][1] = LC[2][1][0] = LC[1][0][2] = -1.0;
+
+      Real eps_duu[3][3][3] = {{{0}}};
+      for(int i1=0; i1<3; ++i1) {
+        for(int k1=0; k1<3; ++k1) {
+          for(int l1=0; l1<3; ++l1) {
+            for(int m1=0; m1<3; ++m1) {
+              for(int n1=0; n1<3; ++n1) {
+                eps_duu[i1][k1][l1] += g_uu(k1,m1) * g_uu(l1,n1) * LC[i1][m1][n1] * sqrt_g;
+              }
+            }
+          }
+        }
+      }
+
+      // B_ij
+      Real B_tmp[3][3] = {{0}};
+      for(int a = 0; a < 3; ++a) {
+        for(int b = 0; b < 3; ++b) {
+          for(int c = 0; c < 3; ++c) {
+            for(int d = 0; d < 3; ++d) {
+              B_tmp[a][b] += eps_duu[a][c][d] * DK_ddd(c,d,b);
+            }
+          }
+        }
+      }
+
+      for(int a = 0; a < 3; ++a) {
+        for(int b = a; b < 3; ++b) {
+          B_dd(a,b) = 0.5 * (B_tmp[a][b] + B_tmp[b][a]);
+        }
+      }
+
+      // Kretschmann Scalar
+      Real Kretschmann = 0.0;
+      Real E_uu[3][3] = {{0}};
+      Real B_uu[3][3] = {{0}};
+      for(int a = 0; a < 3; ++a) {
+        for(int b = 0; b < 3; ++b) {
+          for(int c = 0; c < 3; ++c) {
+            for(int d = 0; d < 3; ++d) {
+              E_uu[a][b] += g_uu(a,c) * g_uu(b,d) * E_dd(std::min(c,d), std::max(c,d));
+              B_uu[a][b] += g_uu(a,c) * g_uu(b,d) * B_dd(std::min(c,d), std::max(c,d));
+            }
+          }
+        }
+      }
+      for(int a = 0; a < 3; ++a) {
+        for(int b = 0; b < 3; ++b) {
+          Kretschmann += 8.0 * (E_dd(std::min(a,b), std::max(a,b)) * E_uu[a][b] - 
+                                B_dd(std::min(a,b), std::max(a,b)) * B_uu[a][b]);
+        }
+      }
+
+      // Bel-Robinson / Super-Poynting Flux
+      Real eps_uuu[3][3][3] = {{{0}}};
+      for(int a = 0; a < 3; ++a) {
+        for(int b = 0; b < 3; ++b) {
+          for(int c = 0; c < 3; ++c) {
+            for(int m1 = 0; m1 < 3; ++m1) {
+              eps_uuu[a][b][c] += g_uu(a,m1) * eps_duu[m1][b][c];
+            }
+          }
+        }
+      }
+
+      for(int a = 0; a < 3; ++a) {
+        for(int b = 0; b < 3; ++b) {
+          for(int c = 0; c < 3; ++c) {
+            for(int m1 = 0; m1 < 3; ++m1) {
+              for(int l1 = 0; l1 < 3; ++l1) {
+                P_u(a) -= eps_uuu[a][b][c] * E_dd(std::min(b,m1), std::max(b,m1)) * g_uu(m1,l1) * B_dd(std::min(c,l1), std::max(c,l1));
+              }
+            }
+          }
+        }
+      }
+
+      // ---------------------------------------------------------------------------------
+      // Storing Output
+      // ---------------------------------------------------------------------------------
+      dv(m, i_dv + 0, k, j, i) = Kretschmann;
+      dv(m, i_dv + 1, k, j, i) = E_dd(0,0);
+      dv(m, i_dv + 2, k, j, i) = E_dd(0,1);
+      dv(m, i_dv + 3, k, j, i) = E_dd(0,2);
+      dv(m, i_dv + 4, k, j, i) = E_dd(1,1);
+      dv(m, i_dv + 5, k, j, i) = E_dd(1,2);
+      dv(m, i_dv + 6, k, j, i) = E_dd(2,2);
+      dv(m, i_dv + 7, k, j, i) = B_dd(0,0);
+      dv(m, i_dv + 8, k, j, i) = B_dd(0,1);
+      dv(m, i_dv + 9, k, j, i) = B_dd(0,2);
+      dv(m, i_dv + 10, k, j, i) = B_dd(1,1);
+      dv(m, i_dv + 11, k, j, i) = B_dd(1,2);
+      dv(m, i_dv + 12, k, j, i) = B_dd(2,2);
+      dv(m, i_dv + 13, k, j, i) = P_u(0);
+      dv(m, i_dv + 14, k, j, i) = P_u(1);
+      dv(m, i_dv + 15, k, j, i) = P_u(2);
+    });
+    i_dv += n_z4c_vars;
+  }
   i_dv = i_dv % n_dv; // reset derived variable index
 }
