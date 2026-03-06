@@ -171,8 +171,8 @@ TaskStatus MHD::NewTimeStep(Driver *pdriver, int stage) {
   if (presist != nullptr) {
     presist->NewTimeStep(w0, peos->eos_data);
   }
-  if (pambipolar != nullptr) {
-    pambipolar->NewTimeStep(w0, peos->eos_data);
+  if (pambi != nullptr) {
+    pambi->NewTimeStep(w0, peos->eos_data);
   }
   // compute source terms timestep
   if (psrc != nullptr) {

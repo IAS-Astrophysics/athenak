@@ -17,6 +17,7 @@
 #include "diffusion/viscosity.hpp"
 #include "diffusion/resistivity.hpp"
 #include "diffusion/ambipolar_diffusion.hpp"
+#include "diffusion/current_density.hpp"
 #include "diffusion/conduction.hpp"
 #include "srcterms/srcterms.hpp"
 #include "shearing_box/shearing_box.hpp"
@@ -41,6 +42,7 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
     b1("B_fc1",1,1,1,1),
     uflx("uflx",1,1,1,1,1),
     efld("efld",1,1,1,1),
+    jedge("jedge",1,1,1,1),
     wsaved("wsaved",1,1,1,1,1),
     bccsaved("bccsaved",1,1,1,1,1),
     e3x1("e3x1",1,1,1,1),
@@ -109,9 +111,9 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
 
   // Ambipolar diffusion (only constructed if needed)
   if (pin->DoesParameterExist("mhd","eta_ad")) {
-    pambipolar = new AmbipolarDiffusion(ppack, pin);
+    pambi = new AmbipolarDiffusion(ppack, pin);
   } else {
-    pambipolar = nullptr;
+    pambi = nullptr;
   }
 
   // Thermal conduction (only constructed if needed)
@@ -333,6 +335,12 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
       Kokkos::realloc(efld.x2e, nmb, ncells3+1, ncells2, ncells1+1);
       Kokkos::realloc(efld.x3e, nmb, ncells3, ncells2+1, ncells1+1);
 
+      if (presist != nullptr || pambi != nullptr) {
+        Kokkos::realloc(jedge.x1e, nmb, ncells3+1, ncells2+1, ncells1);
+        Kokkos::realloc(jedge.x2e, nmb, ncells3+1, ncells2, ncells1+1);
+        Kokkos::realloc(jedge.x3e, nmb, ncells3, ncells2+1, ncells1+1);
+      }
+
       // allocate scratch arrays for face- and cell-centered E used in CornerE
       Kokkos::realloc(e3x1, nmb, ncells3, ncells2, ncells1);
       Kokkos::realloc(e2x1, nmb, ncells3, ncells2, ncells1);
@@ -365,7 +373,7 @@ MHD::~MHD() {
   delete pbval_b;
   if (pvisc != nullptr) {delete pvisc;}
   if (presist!= nullptr) {delete presist;}
-  if (pambipolar != nullptr) {delete pambipolar;}
+  if (pambi != nullptr) {delete pambi;}
   if (pcond != nullptr) {delete pcond;}
   if (psrc!= nullptr) {delete psrc;}
 }
@@ -385,6 +393,97 @@ void MHD::SetSaveWBcc() {
   Kokkos::realloc(bccsaved, nmb, 3,               ncells3, ncells2, ncells1);
 
   wbcc_saved = true;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void MHD::CalcCurrentDensity()
+//! \brief Precomputes edge-centered current density J = curl(B) and stores in jedge.
+//! Called once per stage when any non-ideal MHD term is active. Both Ohmic and ambipolar
+//! EMF kernels then read from jedge, avoiding redundant J computation.
+
+void MHD::CalcCurrentDensity(const DvceFaceFld4D<Real> &b) {
+  auto &indcs = pmy_pack->pmesh->mb_indcs;
+  int is = indcs.is, ie = indcs.ie;
+  int js = indcs.js, je = indcs.je;
+  int ks = indcs.ks, ke = indcs.ke;
+  int ncells1 = indcs.nx1 + 2*(indcs.ng);
+  int nmb1 = pmy_pack->nmb_thispack - 1;
+  auto &mbsize = pmy_pack->pmb->mb_size;
+
+  auto je1 = jedge.x1e;
+  auto je2 = jedge.x2e;
+  auto je3 = jedge.x3e;
+
+  //---- 1-D problem:
+  if (pmy_pack->pmesh->one_d) {
+    int scr_level = 0;
+    size_t scr_size = ScrArray1D<Real>::shmem_size(ncells1) * 3;
+
+    par_for_outer("calc_j1d", DevExeSpace(), scr_size, scr_level, 0, nmb1,
+    KOKKOS_LAMBDA(TeamMember_t member, const int m) {
+      ScrArray1D<Real> j1(member.team_scratch(scr_level), ncells1);
+      ScrArray1D<Real> j2(member.team_scratch(scr_level), ncells1);
+      ScrArray1D<Real> j3(member.team_scratch(scr_level), ncells1);
+
+      CurrentDensity(member, m, ks, js, is, ie+1, b, mbsize.d_view(m), j1, j2, j3);
+      member.team_barrier();
+
+      par_for_inner(member, is, ie+1, [&](const int i) {
+        je2(m,ks,  js,i)   = j2(i);
+        je2(m,ke+1,js,i)   = j2(i);
+        je3(m,ks,  js,i)   = j3(i);
+        je3(m,ks,  je+1,i) = j3(i);
+      });
+    });
+    return;
+  }
+
+  //---- 2-D problem:
+  if (pmy_pack->pmesh->two_d) {
+    int scr_level = 0;
+    size_t scr_size = ScrArray1D<Real>::shmem_size(ncells1) * 3;
+
+    par_for_outer("calc_j2d", DevExeSpace(), scr_size, scr_level, 0, nmb1, js, je+1,
+    KOKKOS_LAMBDA(TeamMember_t member, const int m, const int j) {
+      ScrArray1D<Real> j1(member.team_scratch(scr_level), ncells1);
+      ScrArray1D<Real> j2(member.team_scratch(scr_level), ncells1);
+      ScrArray1D<Real> j3(member.team_scratch(scr_level), ncells1);
+
+      CurrentDensity(member, m, ks, j, is, ie+1, b, mbsize.d_view(m), j1, j2, j3);
+      member.team_barrier();
+
+      par_for_inner(member, is, ie+1, [&](const int i) {
+        je1(m,ks,  j,i) = j1(i);
+        je1(m,ke+1,j,i) = j1(i);
+        je2(m,ks,  j,i) = j2(i);
+        je2(m,ke+1,j,i) = j2(i);
+        je3(m,ks,  j,i) = j3(i);
+      });
+    });
+    return;
+  }
+
+  //---- 3-D problem:
+  int scr_level = 0;
+  size_t scr_size = ScrArray1D<Real>::shmem_size(ncells1) * 3;
+
+  par_for_outer("calc_j3d", DevExeSpace(), scr_size, scr_level, 0, nmb1, ks, ke+1, js, je+1,
+  KOKKOS_LAMBDA(TeamMember_t member, const int m, const int k, const int j) {
+    ScrArray1D<Real> j1(member.team_scratch(scr_level), ncells1);
+    ScrArray1D<Real> j2(member.team_scratch(scr_level), ncells1);
+    ScrArray1D<Real> j3(member.team_scratch(scr_level), ncells1);
+
+    CurrentDensity(member, m, k, j, is, ie+1, b, mbsize.d_view(m), j1, j2, j3);
+    member.team_barrier();
+
+    par_for_inner(member, is, ie+1, [&](const int i) {
+      je1(m,k,j,i) = j1(i);
+      je2(m,k,j,i) = j2(i);
+      je3(m,k,j,i) = j3(i);
+    });
+  });
+
+  return;
 }
 
 } // namespace mhd

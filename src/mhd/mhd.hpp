@@ -120,7 +120,7 @@ class MHD {
   // Object(s) for extra physics (viscosity, resistivity, thermal conduction, srcterms)
   Viscosity *pvisc = nullptr;
   Resistivity *presist = nullptr;
-  AmbipolarDiffusion *pambipolar = nullptr;
+  AmbipolarDiffusion *pambi = nullptr;
   Conduction *pcond = nullptr;
   SourceTerms *psrc = nullptr;
 
@@ -129,6 +129,7 @@ class MHD {
   DvceFaceFld4D<Real> b1;     // face-centered magnetic fields, second register
   DvceFaceFld5D<Real> uflx;   // fluxes of conserved quantities on cell faces
   DvceEdgeFld4D<Real> efld;   // edge-centered electric fields (fluxes of B)
+  DvceEdgeFld4D<Real> jedge;  // edge-centered current density (shared by Ohmic + ambipolar)
   // temporary variables used to store face-centered electric fields returned by RS
   DvceArray4D<Real> e3x1, e2x1;
   DvceArray4D<Real> e1x2, e3x2;
@@ -168,6 +169,7 @@ class MHD {
   TaskStatus RecvU(Driver *d, int stage);
   TaskStatus SendU_Shr(Driver *d, int stage);
   TaskStatus RecvU_Shr(Driver *d, int stage);
+  void CalcCurrentDensity(const DvceFaceFld4D<Real> &b0);
   TaskStatus CornerE(Driver *d, int stage);
   TaskStatus EField(Driver *d, int stage);
   TaskStatus SendE(Driver *d, int stage);

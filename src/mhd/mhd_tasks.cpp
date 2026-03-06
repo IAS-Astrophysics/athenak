@@ -202,11 +202,14 @@ TaskStatus MHD::Fluxes(Driver *pdrive, int stage) {
   if (pvisc != nullptr) {
     pvisc->AddViscousFluxes(w0, peos->eos_data, uflx);
   }
-  if ((presist != nullptr) && (peos->eos_data.is_ideal)) {
-    presist->AddResistiveFluxes(b0, uflx);
+  if (presist != nullptr || pambi != nullptr) {
+    CalcCurrentDensity(b0);
   }
-  if ((pambipolar != nullptr) && (peos->eos_data.is_ideal)) {
-    pambipolar->AddAmbipolarFluxes(b0, bcc0, uflx);
+  if ((presist != nullptr) && (peos->eos_data.is_ideal)) {
+    presist->AddResistiveFluxes(jedge, b0, uflx);
+  }
+  if ((pambi != nullptr) && (peos->eos_data.is_ideal)) {
+    pambi->AddAmbipolarFluxes(b0, bcc0, uflx);
   }
 
   // call FOFC if necessary
@@ -381,13 +384,15 @@ TaskStatus MHD::EField(Driver *pdrive, int stage) {
   // Use CT to compute corner E
   CornerE(pdrive, stage);
 
+  // jedge already populated in Fluxes() via CalcCurrentDensity(b0)
+
   // Add resistive electric field (if needed)
   if (presist != nullptr) {
-    presist->AddResistiveEMFs(b0, efld);
+    presist->AddResistiveEMFs(jedge, efld);
   }
   // Add ambipolar electric field (if needed)
-  if (pambipolar != nullptr) {
-    pambipolar->AddAmbipolarEMFs(b0, bcc0, efld);
+  if (pambi != nullptr) {
+    pambi->AddAmbipolarEMFs(jedge, b0, bcc0, efld);
   }
 
   if (psbox_b != nullptr) {

@@ -28,7 +28,8 @@ class AmbipolarDiffusion {
   Real eta_ad;           // ambipolar diffusion coefficient
 
   // wrapper functions (dispatch to type-specific implementations)
-  void AddAmbipolarEMFs(const DvceFaceFld4D<Real> &b0,
+  void AddAmbipolarEMFs(const DvceEdgeFld4D<Real> &jedge,
+                        const DvceFaceFld4D<Real> &b0,
                         const DvceArray5D<Real> &bcc0,
                         DvceEdgeFld4D<Real> &efld);
   void AddAmbipolarFluxes(const DvceFaceFld4D<Real> &b0,
@@ -36,7 +37,8 @@ class AmbipolarDiffusion {
                           DvceFaceFld5D<Real> &flx);
 
   // type-specific implementations (constant coefficient)
-  void AddEMFConstantAmbipolar(const DvceFaceFld4D<Real> &b0,
+  void AddEMFConstantAmbipolar(const DvceEdgeFld4D<Real> &jedge,
+                               const DvceFaceFld4D<Real> &b0,
                                const DvceArray5D<Real> &bcc0,
                                DvceEdgeFld4D<Real> &efld);
   void AddFluxConstantAmbipolar(const DvceFaceFld4D<Real> &b0,
