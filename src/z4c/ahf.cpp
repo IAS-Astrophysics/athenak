@@ -21,7 +21,6 @@
 #include "globals.hpp"
 #include "parameter_input.hpp"
 #include "mesh/mesh.hpp"
-#include "coordinates/adm.hpp"
 #include "coordinates/coordinates.hpp"
 #include "compact_object_tracker.hpp"
 #include "geodesic-grid/spherical_grid.hpp" 
@@ -43,7 +42,7 @@ AHF::AHF(MeshBlockPack *pmbp, ParameterInput *pin, int n):
   dYcdph2("dYcdph2",1,1), dYsdph2("dYsdph2",1,1),
   a0("a0",1), ac("ac",1), as("as",1), 
   rr("rr",1), rr_dth("rr_dth",1), rr_dph("rr_dph",1), 
-  rho("rho",1)
+  rho("rho",1), dg("dg",1,1,1,1,1)
 {
   nh = n; // The n-th horizon
   std::string n_str = std::to_string(nh);
@@ -83,8 +82,6 @@ AHF::AHF(MeshBlockPack *pmbp, ParameterInput *pin, int n):
   center[1] = pin->GetOrAddReal("ahf", "center_y_" + n_str, 0.0);
   center[2] = pin->GetOrAddReal("ahf", "center_z_" + n_str, 0.0);
 
-  compute_every_iter = 1; // (OS): Is this covered by the task triggers?
-
   // Punctures
   npunct = pin->GetOrAddInteger("ahf", "npunct", 0); // Number of punctures
   use_puncture = pin->GetOrAddInteger("ahf", "use_puncture_" + n_str, -1);
@@ -102,8 +99,8 @@ AHF::AHF(MeshBlockPack *pmbp, ParameterInput *pin, int n):
   wait_until_punc_are_close = pin->GetOrAddBoolean("ahf", "wait_until_punc_are_close_" + n_str, 0);
 
   // Timer
-  start_time = pin->GetOrAddReal("ahf", "start_time_" + n_str, std::numeric_limits<double>::max());
-  stop_time = pin->GetOrAddReal("ahf", "stop_time_" + n_str, -1.0);
+  start_time = pin->GetOrAddReal("ahf", "start_time_" + n_str, -1.0);
+  stop_time = pin->GetOrAddReal("ahf", "stop_time_" + n_str, std::numeric_limits<double>::max());
 
   // Grid and quadrature weights
   gl_grid = new GaussLegendreGrid(pmbp, ntheta, initial_radius);
@@ -136,7 +133,7 @@ AHF::AHF(MeshBlockPack *pmbp, ParameterInput *pin, int n):
   Kokkos::realloc(dYsdthdph, nangles, lmpoints);
   Kokkos::realloc(dYcdph2, nangles, lmpoints);
   Kokkos::realloc(dYsdph2, nangles, lmpoints);
- 
+  
   ComputeSphericalHarmonics();
 
   // Fields on the sphere
@@ -144,6 +141,27 @@ AHF::AHF(MeshBlockPack *pmbp, ParameterInput *pin, int n):
   Kokkos::realloc(rr_dth, nangles);
   Kokkos::realloc(rr_dph, nangles);
 
+  // Allocate the vectors holding the interpolated values
+  g_interp.resize(6);
+  K_interp.resize(6);
+  for (int d = 0; d < g_interp.size(); ++d) {
+    Kokkos::realloc(g_interp[d], nangles);
+    Kokkos::realloc(K_interp[d], nangles);
+  }
+
+  dg_interp.resize(18);
+  for (int d = 0; d < dg_interp.size(); ++d) {
+    Kokkos::realloc(dg_interp[d], nangles);
+  }
+
+  // Allocate memory for the array holding the metric derivatives
+  auto &indcs = pmbp->pmesh->mb_indcs;
+  int nmb = pmbp->nmb_thispack;
+  int ncells1 = indcs.nx1 + 2 * (indcs.ng);
+  int ncells2 = indcs.nx2 + 2 * (indcs.ng);
+  int ncells3 = indcs.nx3 + 2 * (indcs.ng);
+  Kokkos::realloc(dg, nmb, 18, ncells3, ncells2, ncells1);
+  
   // Array computed in surface integrals
   Kokkos::realloc(rho, nangles);
 
@@ -249,13 +267,13 @@ AHF::AHF(MeshBlockPack *pmbp, ParameterInput *pin, int n):
             const Real phi   = gl_grid->polar_pos.h_view(p,1);
 
             if (m == 0){
-              fprintf(pofile_ylm, "%e %e %d %d %e %e %e %e %e %e %e %e %e %e %e %e %e %e %e\n",
+              fprintf(pofile_ylm, "%.15e %.15e %d %d %.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e\n",
                       theta, phi, l, m, Y0.h_view(p,l), 0.0, 0.0,
                       dY0dth.h_view(p,l), 0.0, 0.0, 0.0, 0.0,
                       dY0dth2.h_view(p,l), 0.0, 0.0, 0.0, 0.0, 0.0, 0.0);
             } else {
               const int l1 = lmindex(l,m);
-              fprintf(pofile_ylm, "%e %e %d %d %e %e %e %e %e %e %e %e %e %e %e %e %e %e %e\n",
+              fprintf(pofile_ylm, "%.15e %.15e %d %d %.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e\n",
                       theta, phi, l, m,
                       0.0,
                       Yc.h_view(p,l1),
@@ -290,7 +308,7 @@ AHF::AHF(MeshBlockPack *pmbp, ParameterInput *pin, int n):
       }
     }
   }
-} // (DONE)
+}
 
 //----------------------------------------------------------------------------------------
 //! \fn void AHF::AHF()
@@ -307,6 +325,823 @@ AHF::~AHF() {
     }
   }
 }
+
+/* //----------------------------------------------------------------------------------------
+//! \fn void AHF::Write(int iter, Real time)
+//! \brief Output summary and shape file, for each horizon
+void AHF::Write(int iter, Real time)
+{
+  if (ioproc) {
+    std::string i_str = std::to_string(iter);
+    if((time < start_time) || (time > stop_time)) return;
+    if (wait_until_punc_are_close && !(PuncAreClose())) return;
+    if (iter % compute_every_iter != 0) return;
+
+    // Summary file
+    fprintf(pofile_summary, "%d %g ", iter, time);
+    fprintf(pofile_summary, "%.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e",
+        ah_prop[hmass],
+        ah_prop[hSx],
+        ah_prop[hSy],
+        ah_prop[hSz],
+        ah_prop[hS],
+        ah_prop[harea],
+        ah_prop[hhrms],
+        ah_prop[hhmean],
+        ah_prop[hmeanradius],
+        ah_prop[hminradius]);
+    fprintf(pofile_summary, "\n");
+    fflush(pofile_summary);
+
+    if (ah_found)
+    {
+      // Shape file (coefficients)
+      pofile_shape = fopen(ofname_shape.c_str(), "a");
+      if (NULL == pofile_shape)
+      {
+        std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+            << std::endl
+            << "Could not open file '" << pofile_shape << "' for writing!" << std::endl;
+        exit(EXIT_FAILURE);
+      }
+      fprintf(pofile_shape, "# iter = %d, Time = %g\n",iter,time);
+      for(int l = 0; l <= lmax; l++)
+        fprintf(pofile_shape,"%e ", a0.h_view(l));
+      
+      for(int l = 1; l <= lmax; l++){
+        for(int m = 1; m <= l; m++){
+          int l1 = lmindex(l,m);
+          fprintf(pofile_shape,"%e ",ac.h_view(l1));
+          fprintf(pofile_shape,"%e ",as.h_view(l1));
+        }
+      }
+      fprintf(pofile_shape,"\n");
+      fclose(pofile_shape);
+    }
+  }
+
+  // This is needed on all ranks.
+  if (ah_found && (time_first_found < 0))
+  {
+    std::string parname {"time_first_found_" + std::to_string(nh)};
+    time_first_found = time;
+    pin->SetReal("ahf", parname, time_first_found);
+  }
+} // (DONE)
+
+//----------------------------------------------------------------------------------------
+//! \fn void AHF::Find(int iter, Real time)
+//! \brief Search for the horizons
+void AHF::Find(int iter, Real time)
+{
+  if((time < start_time) || (time > stop_time)) return;
+  if (wait_until_punc_are_close && !(PuncAreClose())) return;
+  if (iter % compute_every_iter != 0) return;
+  if (verbose && ioproc) {
+    fprintf(pofile_verbose, "time=%.4f, cycle=%d\n", time, iter);
+  }
+  InitialGuess();
+  FastFlowLoop();
+
+  // Retain `last_a0` in restart: this serves as primary ini. guess.
+  if (ah_found)
+  {
+    std::string parname;
+    parname = "last_a0_" + std::to_string(nh); // nh: horizon index
+
+    pin->SetReal("ahf", parname, last_a0);
+
+    parname = "ah_found_a0_" + std::to_string(nh);
+    pin->SetBoolean("ahf", parname, ah_found);
+  }
+}  // (DONE)
+
+//----------------------------------------------------------------------------------------
+//! \fn void AHF::InitialGuess()
+//! \brief Initial guess for spectral coefs of horizon n
+void AHF::InitialGuess()
+{  
+  // Reset Coefficients to Zero
+  Kokkos::deep_copy(a0.h_view, 0.0); 
+  Kokkos::deep_copy(ac.h_view, 0.0);
+  Kokkos::deep_copy(as.h_view, 0.0);
+  
+  if (use_puncture >= 0) {
+    // Update the center to the puncture position
+    center[0] = pmbp->pz4c->ptracker[use_puncture]->GetPos(0);
+    center[1] = pmbp->pz4c->ptracker[use_puncture]->GetPos(1);
+    center[2] = pmbp->pz4c->ptracker[use_puncture]->GetPos(2);
+
+    // Update a0
+    // Use the radius from the compact object tracker and expand guess
+    // to fit sphere around the object
+    Real radius = pmbp->pz4c->ptracker[use_puncture]->GetRadius();
+    if (ah_found && last_a0 > 0) {
+      a0.h_view(0) = last_a0 * expand_guess;
+    } else {
+      a0.h_view(0) = std::sqrt(4.0*PI) * radius * expand_guess;
+    }
+    return;
+  }
+
+  // Take a0 either from previous or from input value
+  if (ah_found && last_a0>0) {
+    a0.h_view(0) = last_a0 * expand_guess;
+  } else {
+    a0.h_view(0) = std::sqrt(4.0*PI) * initial_radius;
+  }
+} // (NOT DONE) - Think about ordering for BHNS */
+
+//----------------------------------------------------------------------------------------
+//! \fn bool AHF::MetricDerivatives(Real time)
+//! \brief compute drvts of ADM metric at MB level
+template <int NGHOST>
+bool AHF::MetricDerivatives(Real time)
+{ 
+  // Check whether derivatives have to be computed
+  if (use_stored_metric_drvts) return false;
+  if((time < start_time) || (time > stop_time)) return false;
+  //if (wait_until_punc_are_close && !(PuncAreClose())) return false;
+
+  AthenaTensor<Real, TensorSymm::SYM2, NDIM, 2> adm_g_dd; // 3-metric
+  adm_g_dd.InitWithShallowSlice(pmbp->padm->u_adm, adm::ADM::I_ADM_GXX, adm::ADM::I_ADM_GZZ);
+
+  // MeshBlock variables
+  auto &indcs = pmbp->pmesh->mb_indcs;
+  auto &size = pmbp->pmb->mb_size;
+  int nmb = pmbp->nmb_thispack;
+  int &is = indcs.is; int &ie = indcs.ie;
+  int &js = indcs.js; int &je = indcs.je;
+  int &ks = indcs.ks; int &ke = indcs.ke;
+
+  par_for("AHF_metric_derivatives",DevExeSpace(),0,nmb-1,ks,ke+1,js,je+1,is,ie+1, 
+  KOKKOS_LAMBDA(int m, int k, int j, int i) {
+    // Grid spacing
+    Real idx[] = {1.0 / size.d_view(m).dx1, 1.0 / size.d_view(m).dx2, 1.0 / size.d_view(m).dx3};
+
+    // x-derivative
+    dg(m,DX_GXX,k,j,i) = Dx<NGHOST>(0, idx, adm_g_dd, m, 0, 0, k, j, i);
+    dg(m,DX_GXY,k,j,i) = Dx<NGHOST>(0, idx, adm_g_dd, m, 0, 1, k, j, i);
+    dg(m,DX_GXZ,k,j,i) = Dx<NGHOST>(0, idx, adm_g_dd, m, 0, 2, k, j, i);
+    dg(m,DX_GYY,k,j,i) = Dx<NGHOST>(0, idx, adm_g_dd, m, 1, 1, k, j, i);
+    dg(m,DX_GYZ,k,j,i) = Dx<NGHOST>(0, idx, adm_g_dd, m, 1, 2, k, j, i);
+    dg(m,DX_GZZ,k,j,i) = Dx<NGHOST>(0, idx, adm_g_dd, m, 2, 2, k, j, i);
+    
+    // y-derivative
+    dg(m,DY_GXX,k,j,i) = Dx<NGHOST>(1, idx, adm_g_dd, m, 0, 0, k, j, i);
+    dg(m,DY_GXY,k,j,i) = Dx<NGHOST>(1, idx, adm_g_dd, m, 0, 1, k, j, i);
+    dg(m,DY_GXZ,k,j,i) = Dx<NGHOST>(1, idx, adm_g_dd, m, 0, 2, k, j, i);
+    dg(m,DY_GYY,k,j,i) = Dx<NGHOST>(1, idx, adm_g_dd, m, 1, 1, k, j, i);
+    dg(m,DY_GYZ,k,j,i) = Dx<NGHOST>(1, idx, adm_g_dd, m, 1, 2, k, j, i);
+    dg(m,DY_GZZ,k,j,i) = Dx<NGHOST>(1, idx, adm_g_dd, m, 2, 2, k, j, i);
+    
+    // z-derivative
+    dg(m,DZ_GXX,k,j,i) = Dx<NGHOST>(2, idx, adm_g_dd, m, 0, 0, k, j, i);
+    dg(m,DZ_GXY,k,j,i) = Dx<NGHOST>(2, idx, adm_g_dd, m, 0, 1, k, j, i);
+    dg(m,DZ_GXZ,k,j,i) = Dx<NGHOST>(2, idx, adm_g_dd, m, 0, 2, k, j, i);
+    dg(m,DZ_GYY,k,j,i) = Dx<NGHOST>(2, idx, adm_g_dd, m, 1, 1, k, j, i);
+    dg(m,DZ_GYZ,k,j,i) = Dx<NGHOST>(2, idx, adm_g_dd, m, 1, 2, k, j, i);
+    dg(m,DZ_GZZ,k,j,i) = Dx<NGHOST>(2, idx, adm_g_dd, m, 2, 2, k, j, i);
+  });
+
+  return true;
+}
+template bool AHF::MetricDerivatives<2>(Real time);
+template bool AHF::MetricDerivatives<3>(Real time);
+template bool AHF::MetricDerivatives<4>(Real time);
+
+//----------------------------------------------------------------------------------------
+//! \fn void AHF::MetricInterp(MeshBlock *pmb)
+//! \brief Interpolate metric on the surface n
+//!        Flag here the surface points contained (on this rank)
+void AHF::MetricInterp()
+{ 
+  // Interpolate metric and extrinsic curvature to sphere
+  for (int c = 0; c < g_interp.size(); ++c) {
+    gl_grid->InterpolateToSphere(g_idx[c], pmbp->padm->u_adm);
+    Kokkos::deep_copy(g_interp[c], gl_grid->interp_vals);
+    
+    gl_grid->InterpolateToSphere(K_idx[c], pmbp->padm->u_adm);
+    Kokkos::deep_copy(K_interp[c], gl_grid->interp_vals);
+  }
+
+  // Interpolate metric derivatives to sphere
+  for (int c = 0; c < dg_interp.size(); ++c) {
+    gl_grid->InterpolateToSphere(c, dg);
+    Kokkos::deep_copy(dg_interp[c], gl_grid->interp_vals);
+  }
+} // (OS): Sync DualArray? or change to Host
+
+//----------------------------------------------------------------------------------------
+//! \fn void AHF::FastFlowLoop()
+//! \brief Fast Flow loop for horizon n
+/* void AHF::FastFlowLoop()
+{
+  ah_found = false;
+
+  Real meanradius = a0.h_view(0) / std::sqrt(4.0*PI);
+  Real mass = 0;
+  Real mass_prev = 0;
+  Real area = 0;
+  Real hrms = 0;
+  Real hmean = 0;
+  Real Sx = 0;
+  Real Sy = 0;
+  Real Sz = 0;
+  Real S = 0;
+  bool failed = false;
+
+  if (verbose && ioproc) {
+    fprintf(pofile_verbose, "\nSearching for horizon %d\n", nh);
+    fprintf(pofile_verbose, "center = (%f, %f, %f)\n", center[0], center[1], center[2]);
+    fprintf(pofile_verbose, "r_mean = %f\n", meanradius);
+    fprintf(pofile_verbose, " iter      area            mass         meanradius       minradius        hmean            Sx              Sy              Sz             S\n");
+  }
+
+  for(int k = 0; k < flow_iterations; k++){
+    fastflow_iter = k;
+
+    // Compute radius r = a_lm Y_lm
+    RadiiFromSphericalHarmonics();
+
+    // In MetricInterp() we'll flag the surface points on this mesh
+    // default to 0 (no points)
+    // havepoint.ZeroClear();
+
+    // Metric interpolated on the surface
+    //g.ZeroClear();
+    //dg.ZeroClear();
+    //K.ZeroClear();
+
+    // Interpolate metric on surface
+    MetricInterp();
+
+    SurfaceIntegrals();
+
+    area  = integrals[iarea];
+    hrms  = integrals[ihrms]/area;
+    hmean = integrals[ihmean];
+    Sx = integrals[iSx] / (8 * PI);
+    Sy = integrals[iSy] / (8 * PI);
+    Sz = integrals[iSz] / (8 * PI);
+    S  = std::sqrt(SQR(Sx) + SQR(Sy) + SQR(Sz));
+
+    meanradius = a0.h_view(0) / std::sqrt(4.0 * PI);
+
+    // Check we get a finite result
+    if (!(std::isfinite(area))) {
+      if (verbose && ioproc) {
+        fprintf(pofile_verbose, "Failed, Area not finite\n");
+        fflush(pofile_verbose);
+      }
+      failed = true;
+      break;
+    }
+ 
+    if (!(std::isfinite(hmean))) {
+      if (verbose && ioproc) {
+        fprintf(pofile_verbose, "Failed, hmean not finite\n");
+        fflush(pofile_verbose);
+      }
+      failed = true;
+      break;
+    }
+    
+    // Irreducible mass
+    mass_prev = mass;
+    mass = std::sqrt(area / (16.0 * PI));
+
+    if (verbose && ioproc) {
+      fprintf(pofile_verbose, "%3d %15.7e %15.7e %15.7e %15.7e %15.7e %15.7e %15.7e %15.7e %15.7e\n",
+              k, area, mass, meanradius, rr_min, hmean, Sx, Sy, Sz, S);
+      fflush(pofile_verbose);
+    }
+
+    if (std::fabs(hmean) > hmean_tol) {
+      if (verbose && ioproc) {
+        fprintf(pofile_verbose, "Failed, hmean > %f\n", hmean_tol);
+        fflush(pofile_verbose);
+      }
+      failed = true;
+      break;
+     }
+
+    if (meanradius < 0.) {
+      if (verbose && ioproc) {
+        fprintf(pofile_verbose, "Failed, meanradius < 0\n");
+        fflush(pofile_verbose);
+      }
+      failed = true;
+      break;
+    }
+
+    // Check to prevent horizon radius blow up and mass = 0
+    if (mass < 1.0e-10) {
+      if (verbose && ioproc) {
+        fprintf(pofile_verbose, "Failed mass < 1e-10\n");
+        fflush(pofile_verbose);
+      }
+      failed = true;
+      break;
+    }
+
+    // End flow when mass difference is small
+    if (std::fabs(mass_prev-mass) < mass_tol) {
+      ah_found = true;
+      break;
+    }
+
+    // Find new spectral components
+    UpdateFlowSpectralComponents();
+  }
+
+  if (ah_found) {
+    last_a0 = a0.h_view(0);
+
+    ah_prop[harea] = area;
+    ah_prop[hcoarea] = integrals[icoarea];
+    ah_prop[hhrms] = hrms;
+    ah_prop[hhmean] = hmean;
+    ah_prop[hmeanradius] = meanradius;
+    ah_prop[hminradius] = rr_min;
+    ah_prop[hSx] = Sx;
+    ah_prop[hSy] = Sy;
+    ah_prop[hSz] = Sz;
+    ah_prop[hS]  = S;
+    ah_prop[hmass] = std::sqrt( SQR(mass) + 0.25*SQR(S/mass) ); // Christodoulu mass
+  }
+
+  if (verbose && ioproc) {
+    if (ah_found) {
+      fprintf(pofile_verbose, "Found horizon %d\n", nh);
+      fprintf(pofile_verbose, " mass_irr = %f\n", mass);
+      fprintf(pofile_verbose, " meanradius = %f\n", meanradius);
+      fprintf(pofile_verbose, " minradius = %f\n", rr_min);
+      fprintf(pofile_verbose, " hrms = %f\n", hrms);
+      fprintf(pofile_verbose, " hmean = %f\n", hmean);
+      fprintf(pofile_verbose, " Sx = %f\n", Sx);
+      fprintf(pofile_verbose, " Sy = %f\n", Sy);
+      fprintf(pofile_verbose, " Sz = %f\n", Sz);
+      fprintf(pofile_verbose, " S  = %f\n", S);
+    } 
+    else if (!failed && !ah_found) {
+      fprintf(pofile_verbose, "Failed, reached max iterations %d\n", flow_iterations);
+    }
+    fflush(pofile_verbose);
+  }
+} // (OS): Do we need havepoint? and zeroclear Arrays */
+
+//----------------------------------------------------------------------------------------
+//! \fn void AHF::UpdateFlowSpectralComponents()
+//! \brief Find new spectral components with fast flow
+/* void AHF::UpdateFlowSpectralComponents()
+{
+  const Real alpha = flow_alpha_beta_const;
+  const Real beta = 0.5 * flow_alpha_beta_const;
+  const Real A = alpha / (lmax * lmax1) + beta;
+  const Real B = beta / alpha;
+  
+  Real *ABfac = new Real[lmax1];
+  Real *spec0 = new Real[lmax1];
+  Real *specc = new Real[lmpoints];
+  Real *specs = new Real[lmpoints];
+  
+  // Initialize coefficients to zero
+  for(int l = 0; l <= lmax; l++) {
+    spec0[l] = 0;
+    ABfac[l] = A / (1.0 + B * l * (l + 1));
+    
+    for(int m = 1; m <= l; m++) {
+      int l1 = lmindex(l,m);
+      specc[l1] = 0;
+      specs[l1] = 0;
+    }
+  }
+
+  // Local sums
+  for(int p = 0; p < nangles; p++){
+    if (!havepoint.h_view(p)) continue;
+    const Real drho = gl_grid->int_weights.h_view(p) * rho.h_view(p);
+    
+    for(int l = 0; l <= lmax; l++) {
+      spec0[l] += drho * Y0.h_view(p,l);
+    
+      for(int m = 1; m <= l; m++) { 
+        int l1 = lmindex(l,m);
+        specc[l1] += drho * Yc.h_view(p,l1);
+        specs[l1] += drho * Ys.h_view(p,l1);
+      }
+    }
+  }
+   
+  // MPI reduce
+  #if MPI_PARALLEL_ENABLED
+    MPI_Allreduce(MPI_IN_PLACE, spec0, lmax1,    MPI_ATHENA_REAL, MPI_SUM, MPI_COMM_WORLD);
+    MPI_Allreduce(MPI_IN_PLACE, specc, lmpoints, MPI_ATHENA_REAL, MPI_SUM, MPI_COMM_WORLD);
+    MPI_Allreduce(MPI_IN_PLACE, specs, lmpoints, MPI_ATHENA_REAL, MPI_SUM, MPI_COMM_WORLD);
+  #endif
+
+  // Update the coefficients
+  for(int l = 0; l <= lmax; l++) {
+    a0.h_view(l) -= ABfac[l] * spec0[l];
+
+    for(int m = 1; m <= l; m++){
+      int l1 = lmindex(l,m);
+      ac.h_view(l1) -= ABfac[l] * specc[l1];
+      as.h_view(l1) -= ABfac[l] * specs[l1];
+    }
+  }
+
+  delete[] ABfac;
+  delete[] spec0;
+  delete[] specc;
+  delete[] specs;
+} // (OS): Sync DualArray? or change to Host */
+
+//----------------------------------------------------------------------------------------
+//! \fn void AHF::RadiiFromSphericalHarmonics()
+//! \brief Compute the radius of the surface
+/* void AHF::RadiiFromSphericalHarmonics()
+{
+  Kokkos::deep_copy(rr.h_view, 0.0);
+  Kokkos::deep_copy(rr_dth.h_view, 0.0);
+  Kokkos::deep_copy(rr_dph.h_view, 0.0);
+  
+  rr_min = std::numeric_limits<Real>::infinity();
+  for(int p = 0; p < nangles; p++){
+    for(int l = 0; l <= lmax; l++){
+      rr.h_view(p) += a0.h_view(l) * Y0.h_view(p,l);
+      rr_dth.h_view(p) += a0.h_view(l) * dY0dth.h_view(p,l);
+    
+      for(int m = 1; m <= l; m++){
+        int l1 = lmindex(l,m);
+        rr.h_view(p) += ac.h_view(l1) * Yc.h_view(p,l1) + as.h_view(l1) * Ys.h_view(p,l1);
+        rr_dth.h_view(p) += ac.h_view(l1) * dYcdth.h_view(p,l1) + as.h_view(l1) * dYsdth.h_view(p,l1);
+        rr_dph.h_view(p) += ac.h_view(l1) * dYcdph.h_view(p,l1) + as.h_view(l1) * dYsdph.h_view(p,l1);
+      }
+    }
+    rr_min = std::min(rr_min, rr.h_view(p));
+  } 
+} // (OS): Sync DualArray? or change to Host */
+
+//----------------------------------------------------------------------------------------
+//! \fn void AHF::SurfaceIntegrals()
+//! \brief Compute expansion, surface element and spin integrand on surface n
+//!        Needs metric and extr. curv. interpolated on the surface
+//!        Performs local sums and MPI reduce
+void AHF::SurfaceIntegrals()
+{
+  const Real min_rp = 1e-10;
+
+  // Derivatives of (r,theta,phi) w.r.t (x,y,z)
+  AthenaPointTensor<Real, TensorSymm::NONE, NDIM, 1> drdi;
+  AthenaPointTensor<Real, TensorSymm::NONE, NDIM, 1> dthetadi;
+  AthenaPointTensor<Real, TensorSymm::NONE, NDIM, 1> dphidi;
+
+  AthenaPointTensor<Real, TensorSymm::SYM2, NDIM, 2> drdidj;
+  AthenaPointTensor<Real, TensorSymm::SYM2, NDIM, 2> dthetadidj;
+  AthenaPointTensor<Real, TensorSymm::SYM2, NDIM, 2> dphididj;
+
+  // Derivatives of F
+  AthenaPointTensor<Real, TensorSymm::NONE, NDIM, 1> dFdi;
+  AthenaPointTensor<Real, TensorSymm::NONE, NDIM, 1> dFdi_u; // upper index
+  AthenaPointTensor<Real, TensorSymm::SYM2, NDIM, 2> dFdidj;
+
+  // Inverse metric
+  AthenaPointTensor<Real, TensorSymm::SYM2, NDIM, 2> ginv;
+
+  // Normal
+  AthenaPointTensor<Real, TensorSymm::NONE, NDIM, 1> R;
+
+  // dx^adth , dx^a/dph
+  AthenaPointTensor<Real, TensorSymm::NONE, NDIM, 1> dXdth;
+  AthenaPointTensor<Real, TensorSymm::NONE, NDIM, 1> dXdph;
+
+  // Flat-space coordinate rotational KV
+  AthenaPointTensor<Real, TensorSymm::NONE, NDIM, 1> phix;
+  AthenaPointTensor<Real, TensorSymm::NONE, NDIM, 1> phiy;
+  AthenaPointTensor<Real, TensorSymm::NONE, NDIM, 1> phiz;
+
+  AthenaPointTensor<Real, TensorSymm::SYM2, NDIM, 2> nnF;
+
+  // Initialize integrals
+  for(int v = 0; v < invar; v++){
+    integrals[v] = 0.0;
+  }
+
+  Kokkos::deep_copy(rho.h_view, 0.0); // Initialize rho
+
+  // Loop over surface points
+  for(int p = 0; p < nangles; p++){
+    Real const theta = gl_grid->polar_pos(p,0);
+    Real const sinth = std::sin(theta);
+    Real const costh = std::cos(theta);
+
+    if (!havepoint.h_view(p)) continue;
+
+    Real const phi = gl_grid->polar_pos(p,1);
+    Real const sinph = std::sin(phi);
+    Real const cosph = std::cos(phi);
+
+    // -----------------------
+    // Calculate the expansion
+    // -----------------------
+
+    // Determinant of 3-metric
+    Real detg = adm::SpatialDet(
+      g_interp[GXX].h_view(p), g_interp[GXY].h_view(p), g_interp[GXZ].h_view(p),
+      g_interp[GYY].h_view(p), g_interp[GYZ].h_view(p), g_interp[GZZ].h_view(p)
+    );
+
+    // Inverse metric
+    adm::SpatialInv(
+      1.0/detg,
+      g_interp[GXX].h_view(p), g_interp[GXY].h_view(p), g_interp[GXZ].h_view(p),
+      g_interp[GYY].h_view(p), g_interp[GYZ].h_view(p), g_interp[GZZ].h_view(p),
+      &ginv(0,0), &ginv(0,1),  &ginv(0,2),
+      &ginv(1,1), &ginv(1,2) , &ginv(2,2)
+    );
+
+    // Trace of K
+    Real TrK = adm::Trace(1.0/detg,
+          g_interp[GXX].h_view(p), g_interp[GXY].h_view(p), g_interp[GXZ].h_view(p),
+          g_interp[GYY].h_view(p), g_interp[GYZ].h_view(p), g_interp[GZZ].h_view(p)
+          K_interp[KXX].h_view(p), K_interp[KXY].h_view(p), K_interp[KXZ].h_view(p),
+          K_interp[KYY].h_view(p), K_interp[KYZ].h_view(p), K_interp[KZZ].h_view(p));
+
+    // Local coordinates of the surface (re-used below)
+    Real const xp = rr.h_view(p) * sinth * cosph;
+    Real const yp = rr.h_view(p) * sinth * sinph;
+    Real const zp = rr.h_view(p) * costh;
+
+    Real const rp   = std::sqrt(xp * xp + yp * yp + zp * zp);
+    Real const rhop = std::sqrt(xp * xp + yp * yp);
+
+    if (rp < min_rp) {
+      // Do not stop the code, just AHF failing
+      // break the loop and catch the nans in AHF later.
+      break;
+    }
+
+    Real const _divrp = 1.0 / rp;
+    Real const _divrp3 = SQR(_divrp) * _divrp;
+    Real const _divrhop = 1.0 / rhop;
+
+    // First derivatives of (r,theta,phi) with respect to (x,y,z)
+    drdi(0) = xp * _divrp;
+    drdi(1) = yp * _divrp;
+    drdi(2) = zp * _divrp;
+
+    dthetadi(0) = zp * xp * (SQR(_divrp) * _divrhop);
+    dthetadi(1) = zp * yp * (SQR(_divrp) * _divrhop);
+    dthetadi(2) = -rhop * SQR(_divrp);
+
+    dphidi(0) = -yp * SQR(_divrhop);
+    dphidi(1) = xp * SQR(_divrhop);
+    dphidi(2) = 0.0;
+
+    // Second derivatives of (r,theta,phi) with respect to (x,y,z)
+    drdidj(0,0) = _divrp - xp * xp * _divrp3;
+    drdidj(0,1) = - xp * yp * _divrp3;
+    drdidj(0,2) = - xp * zp * _divrp3;
+    drdidj(1,1) = _divrp - yp * yp * _divrp3;
+    drdidj(1,2) = - yp * zp * _divrp3;
+    drdidj(2,2) = _divrp - zp * zp * _divrp3;
+
+    dthetadidj(0,0) = zp*(-2.0*xp*xp*xp*xp-xp*xp*yp*yp+yp*yp*yp*yp+zp*zp*yp*yp)*(SQR(_divrp)*SQR(_divrp)*SQR(_divrhop)*_divrhop);
+    dthetadidj(0,1) = -xp*yp*zp*(3.0*xp*xp+3.0*yp*yp+zp*zp)*(SQR(_divrp)*SQR(_divrp)*SQR(_divrhop)*_divrhop);
+    dthetadidj(0,2) = xp*(xp*xp+yp*yp-zp*zp)*(SQR(_divrp)*(SQR(_divrp)*_divrhop));
+    dthetadidj(1,1) = zp*(-2.0*yp*yp*yp*yp-yp*yp*xp*xp+xp*xp*xp*xp+zp*zp*xp*xp)*(SQR(_divrp)*SQR(_divrp)*SQR(_divrhop)*_divrhop);
+    dthetadidj(1,2) = yp*(xp*xp+yp*yp-zp*zp)*(SQR(_divrp)*(SQR(_divrp)*_divrhop));
+    dthetadidj(2,2) = 2.0*zp*rhop/(rp*rp*rp*rp);
+
+    dphididj(0,0) = 2.0 * yp * xp * (SQR(_divrhop) * SQR(_divrhop));
+    dphididj(0,1) = (yp * yp - xp * xp) * (SQR(_divrhop) * SQR(_divrhop));
+    dphididj(0,2) = 0.0;
+    dphididj(1,1) = - 2.0 * yp * xp * (SQR(_divrhop) * SQR(_divrhop));
+    dphididj(1,2) = 0.0;
+    dphididj(2,2) = 0.0;
+
+    // Compute first derivatives of F
+    for (int a = 0; a < NDIM; ++a) {
+      dFdi(a) = drdi(a);
+
+      for(int l = 0; l <= lmax; l++){
+        dFdi(a) -= a0.h_view(l) * dthetadi(a) * dY0dth.h_view(p,l);
+        
+        for(int m = 1; m <= l; m++){
+          const int l1 = lmindex(l,m);
+          dFdi(a) -=
+            ac.h_view(l1) * (dthetadi(a) * dYcdth.h_view(p,l1) + dphidi(a) * dYcdph.h_view(p,l1)) +
+            as.h_view(l1) * (dthetadi(a) * dYsdth.h_view(p,l1) + dphidi(a) * dYsdph.h_view(p,l1));
+        }
+      }
+    }
+
+    // Compute second derivatives of F
+    for (int a = 0; a < NDIM; ++a) {
+      for (int b = 0; b < NDIM; ++b) {
+        dFdidj(a,b) = drdidj(a,b);
+
+        for(int l = 0;l <= lmax; l++){
+          dFdidj(a,b) -= a0.h_view(l)*(dthetadidj(a,b)*dY0dth.h_view(p,l) + dthetadi(a)*dthetadi(b)*dY0dth2.h_view(p,l));
+          
+          for(int m = 1; m <= l; m++){
+            int l1 = lmindex(l,m);
+            dFdidj(a,b) -= ac.h_view(l1)*(dthetadidj(a,b)*dYcdth.h_view(p,l1)
+              + dthetadi(a)*(dthetadi(b)*dYcdth2.h_view(p,l1) + dphidi(b)*dYcdthdph.h_view(p,l1))
+              + dphididj(a,b)*dYcdph.h_view(p,l1)
+              + dphidi(a)*(dthetadi(b)*dYcdthdph.h_view(p,l1) + dphidi(b)*dYcdph2.h_view(p,l1)))
+              + as.h_view(l1)*(dthetadidj(a,b)*dYsdth.h_view(p,l1)
+              + dthetadi(a)*(dthetadi(b)*dYsdth2.h_view(p,l1) + dphidi(b)*dYsdthdph.h_view(p,l1))
+              + dphididj(a,b)*dYsdph.h_view(p,l1)
+              + dphidi(a)*(dthetadi(b)*dYsdthdph.h_view(p,l1) + dphidi(b)*dYsdph2.h_view(p,l1)));
+          }
+        }
+      }
+    }
+
+    Real norm = 0;
+    for (int a = 0; a < NDIM; ++a) {
+      dFdi_u(a) = 0;
+      norm += dFdi_u(a) * dFdi(a); // Compute norm of dFdi
+      
+      for (int b = 0; b < NDIM; ++b) {
+        dFdi_u(a) += ginv(a,b) * dFdi(b); // Compute dFdi with the index up
+        nnF(a,b) = dFdidj(a,b); // Compute nabla_a nabla_b F
+      }
+    }
+
+    Real u = (norm > 0) ? std::sqrt(norm) : 0.0;
+
+    nnF(0,0) -= 0.5*(dFdi_u(0)*dg_interp[DX_GXX].h_view(p) + dFdi_u(1)*(2.0*dg_interp[DX_GXY].h_view(p)-dg_interp[DY_GXX].h_view(p)) 
+                + dFdi_u(2)*(2.0*dg_interp[DX_GXZ].h_view(p)-dg_interp[DZ_GXX].h_view(p)));
+    nnF(0,1) -= 0.5*(dFdi_u(0)*dg_interp[DY_GXX].h_view(p) + dFdi_u(1)*dg_interp[DX_GYY].h_view(p) 
+                + dFdi_u(2)*(dg_interp[DX_GYZ].h_view(p)+dg_interp[DY_GXZ].h_view(p)-dg_interp[DZ_GXY].h_view(p)));
+    nnF(0,2) -= 0.5*(dFdi_u(0)*dg_interp[DZ_GXX].h_view(p) + dFdi_u(1)*(dg_interp[DX_GYZ].h_view(p)
+                +dg_interp[DZ_GXY].h_view(p)-dg_interp[DY_GXZ].h_view(p)) + dFdi_u(2)*dg_interp[DX_GZZ].h_view(p));
+    nnF(1,1) -= 0.5*(dFdi_u(0)*(2.0*dg_interp[DY_GXY].h_view(p)-dg_interp[DX_GYY].h_view(p)) + dFdi_u(1)*dg_interp[DY_GYY].h_view(p) 
+                + dFdi_u(2)*(2.0*dg_interp[DY_GYZ].h_view(p)-dg_interp[DZ_GYY].h_view(p)));
+    nnF(1,2) -= 0.5*(dFdi_u(0)*(2.0*dg_interp[DY_GXZ].h_view(p)+dg_interp[DZ_GXY].h_view(p)-dg_interp[DX_GYZ].h_view(p)) 
+                + dFdi_u(1)*dg_interp[DZ_GYY].h_view(p) + dFdi_u(2)*dg_interp[DY_GZZ].h_view(p));
+    nnF(2,2) -= 0.5*(dFdi_u(0)*(2.0*dg_interp[DZ_GXZ].h_view(p)-dg_interp[DX_GZZ].h_view(p)) + dFdi_u(1)*(2.0*dg_interp[DZ_GYZ].h_view(p)
+                -dg_interp[DY_GZZ].h_view(p)) + dFdi_u(2)*dg_interp[DZ_GZZ].h_view(p));
+
+    Real d2F = 0.; // Compute d2F = g^{ab} nabla_a nabla_b F
+    Real dFdadFdbKab = 0.; // Compute dFd^a dFd^b Kab
+    Real dFdadFdbFdadb = 0.; // Compute dFd^a dFd^b Fdadb
+    for (int a = 0; a < NDIM; ++a) {
+      for (int b = 0; b < NDIM; ++b) {
+        d2F += ginv(a,b)*nnF(a,b);
+        dFdadFdbFdadb += dFdi_u(a) * dFdi_u(b) * nnF(a,b);
+      }
+    }
+    dFdadFdbKab += dFdi_u(0) * dFdi_u(0) * K_interp[KXX].h_view(p);
+    dFdadFdbKab += dFdi_u(0) * dFdi_u(1) * K_interp[KXY].h_view(p);
+    dFdadFdbKab += dFdi_u(0) * dFdi_u(2) * K_interp[KXZ].h_view(p);
+    dFdadFdbKab += dFdi_u(1) * dFdi_u(0) * K_interp[KXY].h_view(p);
+    dFdadFdbKab += dFdi_u(1) * dFdi_u(1) * K_interp[KYY].h_view(p);
+    dFdadFdbKab += dFdi_u(1) * dFdi_u(2) * K_interp[KYZ].h_view(p);
+    dFdadFdbKab += dFdi_u(2) * dFdi_u(0) * K_interp[KXZ].h_view(p);
+    dFdadFdbKab += dFdi_u(2) * dFdi_u(1) * K_interp[KYZ].h_view(p);
+    dFdadFdbKab += dFdi_u(2) * dFdi_u(2) * K_interp[KZZ].h_view(p);
+    
+    // Expansion & rho = H * u * sigma (sigma=1)
+    Real divu = (norm > 0) ? 1.0 / u : 0.0;
+    Real H = d2F * divu + dFdadFdbKab * (divu * divu) - dFdadFdbFdadb * (divu * divu * divu) - TrK;
+
+    rho.h_view(p) = H * u; 
+
+    // Normal vector
+    for (int a = 0; a < NDIM; ++a) {
+      R(a) = dFdi_u(a) * divu;
+    }
+    
+    // ---------------
+    // Surface Element
+    // ---------------
+
+    // Derivatives of (x,y,z) vs (thetas, phi)
+
+    // dr/dtheta, dr/dphi
+    Real const drdt = rr_dth.h_view(p);
+    Real const drdp = rr_dph.h_view(p);
+    
+    // Derivatives of (x,y,z) with respect to theta
+    dXdth(0) = (drdt * sinth + rr.h_view(p) * costh) * cosph;
+    dXdth(1) = (drdt * sinth + rr.h_view(p) * costh) * sinph;
+    dXdth(2) = drdt * costh - rr.h_view(p) * sinth;
+
+    // Derivatives of (x,y,z) with respect to phi
+    dXdph(0) = (drdp * cosph - rr.h_view(p) * sinph) * sinth;
+    dXdph(1) = (drdp * sinph + rr.h_view(p) * cosph) * sinth;
+    dXdph(2) = drdp * costh;
+
+    // Induced metric on the horizon
+    Real h11 = 0.;
+    Real h12 = 0.; 
+    Real h22 = 0.;
+    h11 += dXdth(0) * dXdth(0) * g_interp[GXX].h_view(p);
+    h11 += dXdth(0) * dXdth(1) * g_interp[GXY].h_view(p);
+    h11 += dXdth(0) * dXdth(2) * g_interp[GXZ].h_view(p);
+    h11 += dXdth(1) * dXdth(0) * g_interp[GXY].h_view(p);
+    h11 += dXdth(1) * dXdth(1) * g_interp[GYY].h_view(p);
+    h11 += dXdth(1) * dXdth(2) * g_interp[GYZ].h_view(p);
+    h11 += dXdth(2) * dXdth(0) * g_interp[GXZ].h_view(p);
+    h11 += dXdth(2) * dXdth(1) * g_interp[GYZ].h_view(p);
+    h11 += dXdth(2) * dXdth(2) * g_interp[GZZ].h_view(p);
+    
+    h12 += dXdth(0) * dXdph(0) * g_interp[GXX].h_view(p);
+    h12 += dXdth(0) * dXdph(1) * g_interp[GXY].h_view(p);
+    h12 += dXdth(0) * dXdph(2) * g_interp[GXZ].h_view(p);
+    h12 += dXdth(1) * dXdph(0) * g_interp[GXY].h_view(p);
+    h12 += dXdth(1) * dXdph(1) * g_interp[GYY].h_view(p);
+    h12 += dXdth(1) * dXdph(2) * g_interp[GYZ].h_view(p);
+    h12 += dXdth(2) * dXdph(0) * g_interp[GXZ].h_view(p);
+    h12 += dXdth(2) * dXdph(1) * g_interp[GYZ].h_view(p);
+    h12 += dXdth(2) * dXdph(2) * g_interp[GZZ].h_view(p);
+    
+    h22 += dXdph(0) * dXdph(0) * g_interp[GXX].h_view(p);
+    h22 += dXdph(0) * dXdph(1) * g_interp[GXY].h_view(p);
+    h22 += dXdph(0) * dXdph(2) * g_interp[GXZ].h_view(p);
+    h22 += dXdph(1) * dXdph(0) * g_interp[GXY].h_view(p);
+    h22 += dXdph(1) * dXdph(1) * g_interp[GYY].h_view(p);
+    h22 += dXdph(1) * dXdph(2) * g_interp[GYZ].h_view(p);
+    h22 += dXdph(2) * dXdph(0) * g_interp[GXZ].h_view(p);
+    h22 += dXdph(2) * dXdph(1) * g_interp[GYZ].h_view(p);
+    h22 += dXdph(2) * dXdph(2) * g_interp[GZZ].h_view(p);
+
+    // Determinant of the induced metric
+    Real deth = h11 * h22 - h12 * h12;
+    if (deth < 0.) deth = 0.0;
+    
+    // --------------
+    // Spin integrand
+    // --------------
+
+    // Flat-space coordinate rotational KV
+    phix(0) =  0;
+    phix(1) = -zp; // -(z-zc);
+    phix(2) =  yp; // (y-yc);
+    phiy(0) =  zp; // (z-zc);
+    phiy(1) =  0;
+    phiy(2) = -xp; // -(x-xc);
+    phiz(0) = -yp; // -(y-yc);
+    phiz(1) =  xp; // (x-xc);
+    phiz(2) =  0;
+
+    // Integrand of spin
+    Real intSx = 0;
+    Real intSy = 0;
+    Real intSz = 0;
+    intSx += phix(0) * R(0) * K_interp[KXX].h_view(p);
+    intSx += phix(0) * R(1) * K_interp[KXY].h_view(p);
+    intSx += phix(0) * R(2) * K_interp[KXZ].h_view(p);
+    intSx += phix(1) * R(0) * K_interp[KXY].h_view(p);
+    intSx += phix(1) * R(1) * K_interp[KYY].h_view(p);
+    intSx += phix(1) * R(2) * K_interp[KYZ].h_view(p);
+    intSx += phix(2) * R(0) * K_interp[KXZ].h_view(p);
+    intSx += phix(2) * R(1) * K_interp[KYZ].h_view(p);
+    intSx += phix(2) * R(2) * K_interp[KZZ].h_view(p);
+    
+    intSy += phiy(0) * R(0) * K_interp[KXX].h_view(p);
+    intSy += phiy(0) * R(1) * K_interp[KXY].h_view(p);
+    intSy += phiy(0) * R(2) * K_interp[KXZ].h_view(p);
+    intSy += phiy(1) * R(0) * K_interp[KXY].h_view(p);
+    intSy += phiy(1) * R(1) * K_interp[KYY].h_view(p);
+    intSy += phiy(1) * R(2) * K_interp[KYZ].h_view(p);
+    intSy += phiy(2) * R(0) * K_interp[KXZ].h_view(p);
+    intSy += phiy(2) * R(1) * K_interp[KYZ].h_view(p);
+    intSy += phiy(2) * R(2) * K_interp[KZZ].h_view(p);
+    
+    intSz += phiz(0) * R(0) * K_interp[KXX].h_view(p);
+    intSz += phiz(0) * R(1) * K_interp[KXY].h_view(p);
+    intSz += phiz(0) * R(2) * K_interp[KXZ].h_view(p);
+    intSz += phiz(1) * R(0) * K_interp[KXY].h_view(p);
+    intSz += phiz(1) * R(1) * K_interp[KYY].h_view(p);
+    intSz += phiz(1) * R(2) * K_interp[KYZ].h_view(p);
+    intSz += phiz(2) * R(0) * K_interp[KXZ].h_view(p);
+    intSz += phiz(2) * R(1) * K_interp[KYZ].h_view(p);
+    intSz += phiz(2) * R(2) * K_interp[KZZ].h_view(p);
+
+    // Local sums
+    // ----------
+    const Real wght = gl_grid->int_weights(p);
+    const Real da = wght * std::sqrt(deth) / sinth;
+
+    integrals[iarea]   += da;
+    integrals[icoarea] += wght * SQR(rr.h_view(p));
+    integrals[ihrms]   += da * SQR(H);
+    integrals[ihmean]  += da * H;
+    integrals[iSx]     += da * intSx;
+    integrals[iSy]     += da * intSy;
+    integrals[iSz]     += da * intSz;
+  }
+
+  #if MPI_PARALLEL_ENABLED
+    MPI_Allreduce(MPI_IN_PLACE, integrals, invar, MPI_ATHENA_REAL, MPI_SUM, MPI_COMM_WORLD);
+  #endif
+} // (OS): havepoint? and check indices
 
 //----------------------------------------------------------------------------------------
 //! \fn void AHF::ComputeSphericalHarmonics()
@@ -376,7 +1211,42 @@ void AHF::ComputeSphericalHarmonics()
       }
     }
   }
-}
+
+  // Sync to the GPU
+  /* Y0.template modify<HostMemSpace>();
+  Y0.template sync<DevExeSpace>();
+  Yc.template modify<HostMemSpace>();
+  Yc.template sync<DevExeSpace>();
+  Ys.template modify<HostMemSpace>();
+  Ys.template sync<DevExeSpace>();
+
+  dY0dth.template modify<HostMemSpace>();
+  dY0dth.template sync<DevExeSpace>();
+  dYcdth.template modify<HostMemSpace>();
+  dYcdth.template sync<DevExeSpace>();
+  dYsdth.template modify<HostMemSpace>();
+  dYsdth.template sync<DevExeSpace>();
+  dYcdph.template modify<HostMemSpace>();
+  dYcdph.template sync<DevExeSpace>();
+  dYsdph.template modify<HostMemSpace>();
+  dYsdph.template sync<DevExeSpace>();
+
+  dY0dth2.template modify<HostMemSpace>();
+  dY0dth2.template sync<DevExeSpace>();
+  dYcdth2.template modify<HostMemSpace>();
+  dYcdth2.template sync<DevExeSpace>();
+  dYcdthdph.template modify<HostMemSpace>();
+  dYcdthdph.template sync<DevExeSpace>();
+  dYsdth2.template modify<HostMemSpace>();
+  dYsdth2.template sync<DevExeSpace>();
+  dYsdthdph.template modify<HostMemSpace>();
+  dYsdthdph.template sync<DevExeSpace>();
+  dYcdph2.template modify<HostMemSpace>();
+  dYcdph2.template sync<DevExeSpace>();
+  dYsdph2.template modify<HostMemSpace>();
+  dYsdph2.template sync<DevExeSpace>(); */
+} // (OS): if spherical harmonics not used in Kokkos loop, then delete syncing, change to host
+
 
 //----------------------------------------------------------------------------------------
 //! \fn int AHF::lmindex(const int l, const int m)
@@ -384,5 +1254,5 @@ void AHF::ComputeSphericalHarmonics()
 int AHF::lmindex(const int l, const int m)
 {
   return l * lmax1 + m;
-} // (DONE)
+}
 

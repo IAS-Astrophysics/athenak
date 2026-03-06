@@ -10,14 +10,17 @@
 #define AHF_HPP
 
 #include <string>
+#include <vector>
 
 #include "athena.hpp"
 #include "athena_tensor.hpp"
+#include "coordinates/adm.hpp"
 #include "geodesic-grid/gauss_legendre.hpp"
 #include "z4c_macros.hpp"
 
 // Forward declaration
 class Mesh;
+class MeshBlock;
 class MeshBlockPack;
 class ParameterInput;
 
@@ -31,11 +34,10 @@ public:
   // Default Destructor for AHF object (closes output file)
   ~AHF();
 
-  void Find(int iter, Real time); // main functionality for finding AH
-  void Write(int iter, Real time); // function for result writing
-
-  bool CalculateMetricDerivatives(int iter, Real time);
-  bool DeleteMetricDerivatives(int iter, Real time);
+  void Find(); // main functionality for finding AH
+  void Write(); // function for result writing
+  template <int NGHOST>
+  bool MetricDerivatives(Real time); // compute the metric derivatives
 
   Real GetHorizonRadius() const { return ah_prop[hmeanradius]; }
 
@@ -70,9 +72,6 @@ public:
   Real start_time;
   Real stop_time;
 
-  // Compute every n iterations
-  int compute_every_iter;
-
 private:
   int npunct; // Number of punctures
   int lmax1; // lmax + 1
@@ -98,9 +97,6 @@ private:
   Real last_a0; // last coefficient a_00
 
   // Arrays used for the fields on the sphere
-  AthenaPointTensor<Real, TensorSymm::SYM2, NDIM, 2> g; 
-  AthenaPointTensor<Real, TensorSymm::SYM2, NDIM, 2> K; 
-  AthenaPointTensor<Real, TensorSymm::SYM2, NDIM, 3> dg; 
   DualArray1D<Real> rr, rr_dth, rr_dph; 
 
   // Array computed in Surface Integrals
@@ -131,12 +127,51 @@ private:
   };
   Real ah_prop[hnvar]; // Array of horizon quantities
 
+  // Indices to interpolate over
+  int g_idx[6] = {
+    pmbp->padm->I_ADM_GXX,
+    pmbp->padm->I_ADM_GXY,
+    pmbp->padm->I_ADM_GXZ,
+    pmbp->padm->I_ADM_GYY,
+    pmbp->padm->I_ADM_GYZ,
+    pmbp->padm->I_ADM_GZZ
+  };
+  
+  int K_idx[6] = {
+    pmbp->padm->I_ADM_KXX,
+    pmbp->padm->I_ADM_KXY,
+    pmbp->padm->I_ADM_KXZ,
+    pmbp->padm->I_ADM_KYY,
+    pmbp->padm->I_ADM_KYZ,
+    pmbp->padm->I_ADM_KZZ
+  };
+
+  // Enumerators for readability when calling interpolated arrays
+  enum {
+    DX_GXX, DX_GXY, DX_GXZ, DX_GYY, DX_GYZ, DX_GZZ,
+    DY_GXX, DY_GXY, DY_GXZ, DY_GYY, DY_GYZ, DY_GZZ,
+    DZ_GXX, DZ_GXY, DZ_GXZ, DZ_GYY, DZ_GYZ, DZ_GZZ
+  };
+
+  enum {GXX, GXY, GXZ, GYY, GYZ, GZZ};
+  enum {KXX, KXY, KXZ, KYY, KYZ, KZZ};
+
+  // 5D Device array for the metric derivatives
+  // (OS): this is a bad workaround, since we cannot use rank-3 tensors
+  //       and the InterpolateToSphere function in GaussLegendreGrid expects
+  //       this type
+  DvceArray5D<Real> dg;
+
+  // Vectors to hold the DualArray1D interpolated values of GaussLegendreGrid
+  std::vector<DualArray1D<Real>> g_interp; 
+  std::vector<DualArray1D<Real>> K_interp; 
+  std::vector<DualArray1D<Real>> dg_interp;
+
   // Flag points
   DualArray1D<int> havepoint;
 
   // Functions used in the fast-flow algorithm
-  void MetricDerivatives(MeshBlockPack *pmbp); // (OS): MeshBlockPack?
-  void MetricInterp(MeshBlockPack *pmbp); // (OS): MeshBlockPack?
+  void MetricInterp();
   void SurfaceIntegrals();
   void FastFlowLoop();
   void UpdateFlowSpectralComponents();
@@ -144,7 +179,6 @@ private:
   void InitialGuess();
   void ComputeSphericalHarmonics();
   int lmindex(const int l, const int m);
-  int tpindex(const int i, const int j);
 
   // Pointers to MeshBlockPack and ParameterInput
   MeshBlockPack *pmbp;
