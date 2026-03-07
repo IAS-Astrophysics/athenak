@@ -1,0 +1,93 @@
+# Test: aligned static dipole with vector-potential E-field masking.
+# Compact domain (0.3^3), 120^3 cells, single meshblock.
+# Runs 10 time steps; B in mask should remain exactly at initial value.
+
+<comment>
+problem   = vecpot esrc test (aligned)
+
+<job>
+basename  = vecpot_aligned
+
+<output1>
+file_type   = bin
+variable    = mhd_u_bcc
+dt          = 100.0
+
+<time>
+evolution   = dynamic
+cfl_number  = 0.3
+nlim        = 10
+tlim        = 100.0
+integrator  = rk2
+
+<mesh>
+nghost      = 4
+
+nx1         = 120
+x1min       = -0.15
+x1max       = 0.15
+ix1_bc      = outflow
+ox1_bc      = outflow
+
+nx2         = 120
+x2min       = -0.15
+x2max       = 0.15
+ix2_bc      = outflow
+ox2_bc      = outflow
+
+nx3         = 120
+x3min       = -0.15
+x3max       = 0.15
+ix3_bc      = outflow
+ox3_bc      = outflow
+
+<meshblock>
+nx1       = 120
+nx2       = 120
+nx3       = 120
+
+<mhd>
+eos         = ideal
+reconstruct = wenoz
+gamma       = 1.4
+dfloor      = 1.e-9
+pfloor      = 1.e-12
+rsolver     = hlld
+fofc        = true
+nscalars    = 1
+
+<problem>
+pgen_name = magsph
+user_srcs = true
+user_constraint = true
+user_esrcs = true
+esrc_method = vecpot
+fofc_scalar_tau = 1.0
+user_hist = false
+
+thetaw = 0.0
+thetab = 0.0
+origid = 0.0
+denstar = 1e5
+dslope = -2.25
+gm0 = 1.0
+mm = -0.0089
+h_over_r0 = 0.1
+qslope = -0.5
+r0 = 1
+rho0 = 1.0
+rmagsph = 0.5
+sig_star_disc = 0.01
+rfix = 0.16
+rad_in_cutoff = 0.5
+rad_in_smooth = 0.1
+rad_out_cutoff = 3.5
+rad_out_smooth = 0.5
+rho_floor1 = 1e-6
+rho_floor2 = 1.6e-6
+rho_floor_slope1 = -2.25
+rho_floor_slope2 = -5.5
+rstar = 0.1
+gravsmooth = 0.1
+tcool = 1e-5
+avg_grid_bfields = false

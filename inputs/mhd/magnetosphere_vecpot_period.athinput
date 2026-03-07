@@ -1,0 +1,94 @@
+# Test: tilted rotating dipole over one full orbital period.
+# After T = 2*pi/origid the dipole returns to its initial orientation,
+# so B must match the initial condition exactly in the mask interior.
+# Low-res (20^3), compact domain (0.16^3) fully inside rfix=0.16, origid=1.
+
+<comment>
+problem   = vecpot esrc full-period test
+
+<job>
+basename  = vecpot_period
+
+<output1>
+file_type   = bin
+variable    = mhd_u_bcc
+dt          = 6.283185307179586e+00
+
+<time>
+evolution   = dynamic
+cfl_number  = 0.3
+nlim        = -1
+tlim        = 6.283185307179586e+00
+integrator  = rk2
+
+<mesh>
+nghost      = 4
+
+nx1         = 20
+x1min       = -0.08
+x1max       = 0.08
+ix1_bc      = outflow
+ox1_bc      = outflow
+
+nx2         = 20
+x2min       = -0.08
+x2max       = 0.08
+ix2_bc      = outflow
+ox2_bc      = outflow
+
+nx3         = 20
+x3min       = -0.08
+x3max       = 0.08
+ix3_bc      = outflow
+ox3_bc      = outflow
+
+<meshblock>
+nx1       = 20
+nx2       = 20
+nx3       = 20
+
+<mhd>
+eos         = ideal
+reconstruct = wenoz
+gamma       = 1.4
+dfloor      = 1.e-9
+pfloor      = 1.e-12
+rsolver     = hlld
+fofc        = true
+nscalars    = 1
+
+<problem>
+pgen_name = magsph
+user_srcs = true
+user_constraint = true
+user_esrcs = true
+esrc_method = vecpot
+fofc_scalar_tau = 1.0
+user_hist = false
+
+thetaw = 0.0
+thetab = 0.5
+origid = 1.0
+denstar = 1e5
+dslope = -2.25
+gm0 = 1.0
+mm = -0.0089
+h_over_r0 = 0.1
+qslope = -0.5
+r0 = 1
+rho0 = 1.0
+rmagsph = 0.5
+sig_star_disc = 0.01
+rfix = 0.16
+rad_in_cutoff = 0.5
+rad_in_smooth = 0.1
+rad_out_cutoff = 3.5
+rad_out_smooth = 0.5
+rho_floor1 = 1e-6
+rho_floor2 = 1.6e-6
+rho_floor_slope1 = -2.25
+rho_floor_slope2 = -5.5
+rstar = 0.1
+gravsmooth = 0.1
+tcool = 1e-5
+avg_grid_bfields = false

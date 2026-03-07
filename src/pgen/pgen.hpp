@@ -64,6 +64,11 @@ class ProblemGenerator {
   UserESrctermFnPtr user_esrcs_func=nullptr;
   UserConstraintFnPtr user_constraint_func=nullptr;
 
+  // RK stage weight for E-field source terms: gam1[stage]/beta[stage].
+  // Set by MHD::EFieldSrc before calling user_esrcs_func.
+  // Equals 1.0 for all SSPRK(2,2) stages; varies for higher-order integrators.
+  Real esrc_stage_wgt = 1.0;
+
   // predefined problem generator functions (default test suite)
   void CallProblemGenerator(ParameterInput *pin, bool is_restart);
   void Advection(ParameterInput *pin, const bool restart);

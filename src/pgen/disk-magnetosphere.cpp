@@ -85,6 +85,26 @@ namespace {
     KOKKOS_INLINE_FUNCTION
     static void Bfield(struct my_params mp, const Real x1, const Real x2, const Real x3, const Real mmx, const Real mmy, const Real mmz, Real &bx, Real &by,  Real &bz);
 
+    // Moment-parameterised vector potential: A = (m x r) * f(r)
+    // These accept an arbitrary dipole moment vector (mx, my, mz) and are used
+    // by the vector-potential E-field masking method.  The original A1/A2/A3
+    // (thetab-parameterised) are retained unchanged for initialization and the
+    // classic v x B masking path.
+    KOKKOS_INLINE_FUNCTION
+    static Real A1_m(struct my_params mp, const Real mx, const Real my, const Real mz,
+                     const Real x1, const Real x2, const Real x3);
+
+    KOKKOS_INLINE_FUNCTION
+    static Real A2_m(struct my_params mp, const Real mx, const Real my, const Real mz,
+                     const Real x1, const Real x2, const Real x3);
+
+    KOKKOS_INLINE_FUNCTION
+    static Real A3_m(struct my_params mp, const Real mx, const Real my, const Real mz,
+                     const Real x1, const Real x2, const Real x3);
+
+    static void DipoleMoment(struct my_params mp, Real time,
+                             Real &mmx, Real &mmy, Real &mmz);
+
     // Initialize global instance of the parameter structure
     // pgen_struct disc_params;
 
@@ -122,6 +142,7 @@ void StarGravSourceTerm(Mesh* pm, const Real bdt);
 void CoolingSourceTerms(Mesh* pm, const Real bdt);
 void MySourceTerms(Mesh* pm, const Real bdt);
 void MyEfieldMask(Mesh* pm);
+void MyEfieldMask_VecPot(Mesh* pm);
 void MyHistFunc(HistoryData *pdata, Mesh *pm);
 
 void StarMask(Mesh* pm, const Real bdt);
@@ -150,7 +171,12 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     }
 
     if (user_esrcs && (pmbp->pmhd != nullptr)) {
-        user_esrcs_func = MyEfieldMask;
+        std::string esrc_method = pin->GetOrAddString("problem","esrc_method","vxb");
+        if (esrc_method == "vecpot") {
+            user_esrcs_func = MyEfieldMask_VecPot;
+        } else {
+            user_esrcs_func = MyEfieldMask;
+        }
     }
 
     if (user_constraint) {
@@ -839,6 +865,76 @@ namespace {
 
     } // end B field 
 
+    //----------------------------------------------------------------------------------------
+    // Moment-parameterised vector potential components.
+    // For a magnetic dipole with moment m = (mx, my, mz), the vector potential is
+    //   A = (m x r) * f(r)
+    // where f(r) depends on mag_option.  Rotating m is exactly equivalent to
+    // rotating the entire A field, so no coordinate rotation is needed.
+    //----------------------------------------------------------------------------------------
+    KOKKOS_INLINE_FUNCTION
+    static Real A1_m(struct my_params mp, const Real mx, const Real my, const Real mz,
+                     const Real x1, const Real x2, const Real x3) {
+        // A1 = (my*x3 - mz*x2) * f(r)
+        Real rc = sqrt(x1*x1 + x2*x2 + x3*x3);
+        Real cross = my*x3 - mz*x2;
+        if (mp.mag_option == 1) {
+            Real rs = fmax(rc, mp.rs/2.0);
+            return cross / (rs*rs*rs);
+        } else if (mp.mag_option == 2) {
+            Real f = pow(mp.rb,-3)*pow(pow(rc/mp.rb, 3*mp.delta) + 1, -1.0/mp.delta);
+            return cross * f;
+        }
+        return 0.0;
+    }
+
+    KOKKOS_INLINE_FUNCTION
+    static Real A2_m(struct my_params mp, const Real mx, const Real my, const Real mz,
+                     const Real x1, const Real x2, const Real x3) {
+        // A2 = (mz*x1 - mx*x3) * f(r)
+        Real rc = sqrt(x1*x1 + x2*x2 + x3*x3);
+        Real cross = mz*x1 - mx*x3;
+        if (mp.mag_option == 1) {
+            Real rs = fmax(rc, mp.rs/2.0);
+            return cross / (rs*rs*rs);
+        } else if (mp.mag_option == 2) {
+            Real f = pow(mp.rb,-3)*pow(pow(rc/mp.rb, 3*mp.delta) + 1, -1.0/mp.delta);
+            return cross * f;
+        }
+        return 0.0;
+    }
+
+    KOKKOS_INLINE_FUNCTION
+    static Real A3_m(struct my_params mp, const Real mx, const Real my, const Real mz,
+                     const Real x1, const Real x2, const Real x3) {
+        // A3 = (mx*x2 - my*x1) * f(r)
+        Real rc = sqrt(x1*x1 + x2*x2 + x3*x3);
+        Real cross = mx*x2 - my*x1;
+        if (mp.mag_option == 1) {
+            Real rs = fmax(rc, mp.rs/2.0);
+            return cross / (rs*rs*rs);
+        } else if (mp.mag_option == 2) {
+            Real f = pow(mp.rb,-3)*pow(pow(rc/mp.rb, 3*mp.delta) + 1, -1.0/mp.delta);
+            return cross * f;
+        }
+        return 0.0;
+    }
+
+    //----------------------------------------------------------------------------------------
+    // Compute the lab-frame dipole moment at an arbitrary time.
+    // Encapsulates the rotation logic: dipole precesses about the stellar spin
+    // axis (tilted by thetaw from z) with angular velocity origid.
+    //----------------------------------------------------------------------------------------
+    static void DipoleMoment(struct my_params mp, Real time,
+                             Real &mmx, Real &mmy, Real &mmz) {
+        // Moment in the stellar spin frame (spin axis = z')
+        Real mmxw = mp.mm * sin(mp.thetaw - mp.thetab) * cos(mp.origid * time);
+        Real mmyw = mp.mm * sin(mp.thetaw - mp.thetab) * sin(mp.origid * time);
+        Real mmzw = mp.mm * cos(mp.thetaw - mp.thetab);
+        // Rotate from spin frame to lab frame
+        RotateCart(mp, mmx, mmy, mmz, mmxw, mmyw, mmzw, -mp.thetaw);
+    }
+
 } // End of namespace functions
 
 KOKKOS_INLINE_FUNCTION
@@ -1281,6 +1377,120 @@ void MyEfieldMask(Mesh* pm) { //CF:CHECKED
     return;
 
 } // end E field mask   
+
+//----------------------------------------------------------------------------------------
+// Vector-potential E-field masking.
+// Sets E = -wgt * (A(t+dt) - A(t)) / dt  on masked edges, where wgt is the
+// RK stage weight gam1/beta (= 1 for all SSPRK(2,2) stages).  The CT update
+// then produces B = curl(A(t+dt)) exactly on the discrete mesh.
+//----------------------------------------------------------------------------------------
+void MyEfieldMask_VecPot(Mesh* pm) {
+
+    auto &indcs = pm->mb_indcs;
+    int &is = indcs.is; int &ie = indcs.ie;
+    int &js = indcs.js; int &je = indcs.je;
+    int &ks = indcs.ks; int &ke = indcs.ke;
+    MeshBlockPack *pmbp = pm->pmb_pack;
+    auto &size = pmbp->pmb->mb_size;
+
+    DvceArray4D<Real> e1_,e2_,e3_;
+    if (pmbp->pmhd != nullptr) {
+        e1_ = pmbp->pmhd->efld.x1e;
+        e2_ = pmbp->pmhd->efld.x2e;
+        e3_ = pmbp->pmhd->efld.x3e;
+    }
+
+    auto mp_ = mp;
+    Real dt = pm->dt;
+
+    // RK stage weight (gam1/beta): 1.0 for all RK2 stages, varies for RK3
+    Real wgt = pm->pgen->esrc_stage_wgt;
+
+    // Compute dipole moment at t and t+dt
+    Real mx_t(0.0), my_t(0.0), mz_t(0.0);
+    Real mx_new(0.0), my_new(0.0), mz_new(0.0);
+    DipoleMoment(mp_, pm->time, mx_t, my_t, mz_t);
+    DipoleMoment(mp_, pm->time + dt, mx_new, my_new, mz_new);
+
+    Real inv_dt = 1.0 / dt;
+
+    // --- E1 at edges (x1_center, x2_face, x3_face) ---
+    par_for("pgen_e1mask_vecpot", DevExeSpace(), 0,(pmbp->nmb_thispack-1),
+            ks,ke+1,js,je+1,is,ie,
+    KOKKOS_LAMBDA(int m, int k, int j, int i) {
+        Real &x1min = size.d_view(m).x1min;
+        Real &x1max = size.d_view(m).x1max;
+        Real x1v    = CellCenterX(i-is, indcs.nx1, x1min, x1max);
+
+        Real &x2min = size.d_view(m).x2min;
+        Real &x2max = size.d_view(m).x2max;
+        Real x2f    = LeftEdgeX(j-js, indcs.nx2, x2min, x2max);
+
+        Real &x3min = size.d_view(m).x3min;
+        Real &x3max = size.d_view(m).x3max;
+        Real x3f    = LeftEdgeX(k-ks, indcs.nx3, x3min, x3max);
+
+        Real rc = sqrt(x1v*x1v + x2f*x2f + x3f*x3f);
+
+        if (rc < mp_.rfix) {
+            Real a_old = A1_m(mp_, mx_t,   my_t,   mz_t,   x1v, x2f, x3f);
+            Real a_new = A1_m(mp_, mx_new, my_new, mz_new, x1v, x2f, x3f);
+            e1_(m,k,j,i) = -wgt * (a_new - a_old) * inv_dt;
+        }
+    });
+
+    // --- E2 at edges (x1_face, x2_center, x3_face) ---
+    par_for("pgen_e2mask_vecpot", DevExeSpace(), 0,(pmbp->nmb_thispack-1),
+            ks,ke+1,js,je,is,ie+1,
+    KOKKOS_LAMBDA(int m, int k, int j, int i) {
+        Real &x1min = size.d_view(m).x1min;
+        Real &x1max = size.d_view(m).x1max;
+        Real x1f    = LeftEdgeX(i-is, indcs.nx1, x1min, x1max);
+
+        Real &x2min = size.d_view(m).x2min;
+        Real &x2max = size.d_view(m).x2max;
+        Real x2v    = CellCenterX(j-js, indcs.nx2, x2min, x2max);
+
+        Real &x3min = size.d_view(m).x3min;
+        Real &x3max = size.d_view(m).x3max;
+        Real x3f    = LeftEdgeX(k-ks, indcs.nx3, x3min, x3max);
+
+        Real rc = sqrt(x1f*x1f + x2v*x2v + x3f*x3f);
+
+        if (rc < mp_.rfix) {
+            Real a_old = A2_m(mp_, mx_t,   my_t,   mz_t,   x1f, x2v, x3f);
+            Real a_new = A2_m(mp_, mx_new, my_new, mz_new, x1f, x2v, x3f);
+            e2_(m,k,j,i) = -wgt * (a_new - a_old) * inv_dt;
+        }
+    });
+
+    // --- E3 at edges (x1_face, x2_face, x3_center) ---
+    par_for("pgen_e3mask_vecpot", DevExeSpace(), 0,(pmbp->nmb_thispack-1),
+            ks,ke,js,je+1,is,ie+1,
+    KOKKOS_LAMBDA(int m, int k, int j, int i) {
+        Real &x1min = size.d_view(m).x1min;
+        Real &x1max = size.d_view(m).x1max;
+        Real x1f    = LeftEdgeX(i-is, indcs.nx1, x1min, x1max);
+
+        Real &x2min = size.d_view(m).x2min;
+        Real &x2max = size.d_view(m).x2max;
+        Real x2f    = LeftEdgeX(j-js, indcs.nx2, x2min, x2max);
+
+        Real &x3min = size.d_view(m).x3min;
+        Real &x3max = size.d_view(m).x3max;
+        Real x3v    = CellCenterX(k-ks, indcs.nx3, x3min, x3max);
+
+        Real rc = sqrt(x1f*x1f + x2f*x2f + x3v*x3v);
+
+        if (rc < mp_.rfix) {
+            Real a_old = A3_m(mp_, mx_t,   my_t,   mz_t,   x1f, x2f, x3v);
+            Real a_new = A3_m(mp_, mx_new, my_new, mz_new, x1f, x2f, x3v);
+            e3_(m,k,j,i) = -wgt * (a_new - a_old) * inv_dt;
+        }
+    });
+
+    return;
+}
 
 //----------------------------------------------------------------------------------------
 void CoolingSourceTerms(Mesh* pm, const Real bdt) { //CF:CHECKED

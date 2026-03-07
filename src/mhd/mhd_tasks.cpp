@@ -26,6 +26,7 @@
 #include "shearing_box/shearing_box.hpp"
 #include "shearing_box/orbital_advection.hpp"
 #include "mhd/mhd.hpp"
+#include "driver/driver.hpp"
 #include "dyn_grmhd/dyn_grmhd.hpp"
 
 namespace mhd {
@@ -401,6 +402,8 @@ TaskStatus MHD::EFieldSrc(Driver *pdrive, int stage) {
 
   // Add user Efield source terms
   if (pmy_pack->pmesh->pgen->user_esrcs) {
+    pmy_pack->pmesh->pgen->esrc_stage_wgt =
+        pdrive->gam1[stage-1] / pdrive->beta[stage-1];
     (pmy_pack->pmesh->pgen->user_esrcs_func)(pmy_pack->pmesh);
   }
 
