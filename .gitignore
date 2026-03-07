@@ -9,6 +9,9 @@ CMakeCache.txt
 # analysis cache directories
 vis/python/__pycache__/
 
+# test-only input files (not for version control)
+inputs/mhd/magnetosphere_*.athinput
+
 # Athena output files
 *.tab
 *.vtk
