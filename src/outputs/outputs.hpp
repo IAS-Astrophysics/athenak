@@ -99,7 +99,7 @@ static const char *var_choice[NOUTPUT_CHOICES] = {
   "tmunu",
 
   // Particles (154-155)
-  "prtcl_all", "prtcl_d"
+  "prtcl_all", "prtcl_d",
 
   // Z4c Diagnostics (156-172)
   "z4c_Kretschmann",
