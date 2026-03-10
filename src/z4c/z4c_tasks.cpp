@@ -308,10 +308,10 @@ TaskStatus Z4c::FindHorizon(Driver *pdrive, int stage) {
       }
       if (done) break; // break the for-loop
     }
-    /* for (auto & pahf : phorizon) {
-      pahf->Find(ncycle_end_stage, time_end_stage);
-      pahf->Write(ncycle_end_stage, time_end_stage);
-    } */
+    for (auto & pahf : phorizon) {
+      pahf->Find(stage, time);
+      pahf->Write(stage, time);
+    }
   }
   return TaskStatus::complete;
 }

@@ -25,7 +25,10 @@
 #include "compact_object_tracker.hpp"
 #include "geodesic-grid/spherical_grid.hpp" 
 #include "utils/spherical_harm.hpp"
+#include "utils/lagrange_interpolator.hpp"
 #include "z4c.hpp"
+
+#include <chrono>
 
 //----------------------------------------------------------------------------------------
 //! \fn AHF::AHF(MeshBlockPack *pmbp, ParameterInput * pin, int n)
@@ -42,7 +45,8 @@ AHF::AHF(MeshBlockPack *pmbp, ParameterInput *pin, int n):
   dYcdph2("dYcdph2",1,1), dYsdph2("dYsdph2",1,1),
   a0("a0",1), ac("ac",1), as("as",1), 
   rr("rr",1), rr_dth("rr_dth",1), rr_dph("rr_dph",1), 
-  rho("rho",1), dg("dg",1,1,1,1,1)
+  rho("rho",1), dg("dg",1,1,1,1,1), g_interp("g_interp",1,1),
+  K_interp("K_interp",1,1), dg_interp("dg_interp",1,1)
 {
   nh = n; // The n-th horizon
   std::string n_str = std::to_string(nh);
@@ -97,13 +101,14 @@ AHF::AHF(MeshBlockPack *pmbp, ParameterInput *pin, int n):
     }
   }
   wait_until_punc_are_close = pin->GetOrAddBoolean("ahf", "wait_until_punc_are_close_" + n_str, 0);
+  use_puncture_massweighted_center = pin->GetOrAddBoolean("ahf", "use_puncture_massweighted_center_" + n_str, 0);
 
   // Timer
-  start_time = pin->GetOrAddReal("ahf", "start_time_" + n_str, -1.0);
-  stop_time = pin->GetOrAddReal("ahf", "stop_time_" + n_str, std::numeric_limits<double>::max());
+  start_time = pin->GetOrAddReal("ahf", "start_time_" + n_str, std::numeric_limits<double>::max());
+  stop_time = pin->GetOrAddReal("ahf", "stop_time_" + n_str, -1.0);
 
   // Grid and quadrature weights
-  gl_grid = new GaussLegendreGrid(pmbp, ntheta, initial_radius);
+  gl_grid = new GaussLegendreGrid(pmbp, ntheta, 1.0); // unit-sphere
   nangles = gl_grid->nangles;
 
   // Points for spherical harmonics l >= 1
@@ -141,8 +146,8 @@ AHF::AHF(MeshBlockPack *pmbp, ParameterInput *pin, int n):
   Kokkos::realloc(rr_dth, nangles);
   Kokkos::realloc(rr_dph, nangles);
 
-  // Allocate the vectors holding the interpolated values
-  g_interp.resize(6);
+  // Allocate the arrays holding the interpolated values
+  /* g_interp.resize(6);
   K_interp.resize(6);
   for (int d = 0; d < g_interp.size(); ++d) {
     Kokkos::realloc(g_interp[d], nangles);
@@ -152,7 +157,10 @@ AHF::AHF(MeshBlockPack *pmbp, ParameterInput *pin, int n):
   dg_interp.resize(18);
   for (int d = 0; d < dg_interp.size(); ++d) {
     Kokkos::realloc(dg_interp[d], nangles);
-  }
+  } */
+  Kokkos::realloc(g_interp, 6, nangles);
+  Kokkos::realloc(K_interp, 6, nangles);
+  Kokkos::realloc(dg_interp, 18, nangles);
 
   // Allocate memory for the array holding the metric derivatives
   auto &indcs = pmbp->pmesh->mb_indcs;
@@ -326,17 +334,15 @@ AHF::~AHF() {
   }
 }
 
-/* //----------------------------------------------------------------------------------------
+//----------------------------------------------------------------------------------------
 //! \fn void AHF::Write(int iter, Real time)
 //! \brief Output summary and shape file, for each horizon
 void AHF::Write(int iter, Real time)
 {
   if (ioproc) {
-    std::string i_str = std::to_string(iter);
     if((time < start_time) || (time > stop_time)) return;
     if (wait_until_punc_are_close && !(PuncAreClose())) return;
-    if (iter % compute_every_iter != 0) return;
-
+    
     // Summary file
     fprintf(pofile_summary, "%d %g ", iter, time);
     fprintf(pofile_summary, "%.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e",
@@ -365,10 +371,9 @@ void AHF::Write(int iter, Real time)
         exit(EXIT_FAILURE);
       }
       fprintf(pofile_shape, "# iter = %d, Time = %g\n",iter,time);
-      for(int l = 0; l <= lmax; l++)
+      for(int l = 0; l <= lmax; l++) {
         fprintf(pofile_shape,"%e ", a0.h_view(l));
-      
-      for(int l = 1; l <= lmax; l++){
+    
         for(int m = 1; m <= l; m++){
           int l1 = lmindex(l,m);
           fprintf(pofile_shape,"%e ",ac.h_view(l1));
@@ -396,10 +401,10 @@ void AHF::Find(int iter, Real time)
 {
   if((time < start_time) || (time > stop_time)) return;
   if (wait_until_punc_are_close && !(PuncAreClose())) return;
-  if (iter % compute_every_iter != 0) return;
   if (verbose && ioproc) {
     fprintf(pofile_verbose, "time=%.4f, cycle=%d\n", time, iter);
   }
+
   InitialGuess();
   FastFlowLoop();
 
@@ -414,7 +419,7 @@ void AHF::Find(int iter, Real time)
     parname = "ah_found_a0_" + std::to_string(nh);
     pin->SetBoolean("ahf", parname, ah_found);
   }
-}  // (DONE)
+}
 
 //----------------------------------------------------------------------------------------
 //! \fn void AHF::InitialGuess()
@@ -431,26 +436,39 @@ void AHF::InitialGuess()
     center[0] = pmbp->pz4c->ptracker[use_puncture]->GetPos(0);
     center[1] = pmbp->pz4c->ptracker[use_puncture]->GetPos(1);
     center[2] = pmbp->pz4c->ptracker[use_puncture]->GetPos(2);
-
+    
     // Update a0
-    // Use the radius from the compact object tracker and expand guess
-    // to fit sphere around the object
-    Real radius = pmbp->pz4c->ptracker[use_puncture]->GetRadius();
+    // For single BH in isotropic coordinates: horizon radius=m/2
+    // but make sure it can surround all punctures comfortably, i.e.
+    // make radius a bit larger than half the distance between any of the punctures
+    Real largedist = PuncMaxDistance(use_puncture);
+    Real mass = pmbp->pz4c->ptracker[use_puncture]->GetMass();
     if (ah_found && last_a0 > 0) {
       a0.h_view(0) = last_a0 * expand_guess;
     } else {
-      a0.h_view(0) = std::sqrt(4.0*PI) * radius * expand_guess;
+      a0.h_view(0) = std::max(0.5 * mass, std::min(mass, 0.5 * largedist));
+      a0.h_view(0) *= std::sqrt(4.0*M_PI);
+      std::cout << "a0 = " << a0.h_view(0) << std::endl;
     }
     return;
   }
 
+  if (use_puncture_massweighted_center) {
+    // Update the center based on the mass-weighted distance
+    Real pos[3];
+    PuncWeightedMassCentralPoint(&pos[0], &pos[1], &pos[2]);
+    center[0] = pos[0];
+    center[1] = pos[1];
+    center[2] = pos[2];
+  }
+
   // Take a0 either from previous or from input value
-  if (ah_found && last_a0>0) {
+  if (ah_found && last_a0 > 0) {
     a0.h_view(0) = last_a0 * expand_guess;
   } else {
-    a0.h_view(0) = std::sqrt(4.0*PI) * initial_radius;
+    a0.h_view(0) = std::sqrt(4.0*M_PI) * initial_radius;
   }
-} // (NOT DONE) - Think about ordering for BHNS */
+} // (NOT DONE) - Think about ordering for BHNS
 
 //----------------------------------------------------------------------------------------
 //! \fn bool AHF::MetricDerivatives(Real time)
@@ -461,7 +479,7 @@ bool AHF::MetricDerivatives(Real time)
   // Check whether derivatives have to be computed
   if (use_stored_metric_drvts) return false;
   if((time < start_time) || (time > stop_time)) return false;
-  //if (wait_until_punc_are_close && !(PuncAreClose())) return false;
+  if (wait_until_punc_are_close && !(PuncAreClose())) return false;
 
   AthenaTensor<Real, TensorSymm::SYM2, NDIM, 2> adm_g_dd; // 3-metric
   adm_g_dd.InitWithShallowSlice(pmbp->padm->u_adm, adm::ADM::I_ADM_GXX, adm::ADM::I_ADM_GZZ);
@@ -517,7 +535,7 @@ template bool AHF::MetricDerivatives<4>(Real time);
 void AHF::MetricInterp()
 { 
   // Interpolate metric and extrinsic curvature to sphere
-  for (int c = 0; c < g_interp.size(); ++c) {
+  /* for (int c = 0; c < g_interp.size(); ++c) {
     gl_grid->InterpolateToSphere(g_idx[c], pmbp->padm->u_adm);
     Kokkos::deep_copy(g_interp[c], gl_grid->interp_vals);
     
@@ -529,17 +547,88 @@ void AHF::MetricInterp()
   for (int c = 0; c < dg_interp.size(); ++c) {
     gl_grid->InterpolateToSphere(c, dg);
     Kokkos::deep_copy(dg_interp[c], gl_grid->interp_vals);
+  } */
+  
+  // Set havepoint flag
+  int nmb = pmbp->nmb_thispack;
+  auto &size = pmbp->pmb->mb_size;
+  const Real xc = center[0];
+  const Real yc = center[1];
+  const Real zc = center[2];
+  Real pos[3];
+  
+  for (int p = 0; p < nangles; ++p) {
+    Real theta = gl_grid->polar_pos.h_view(p,0);
+    Real phi = gl_grid->polar_pos.h_view(p,1);
+
+    // Global coordinates of the surface
+    Real x = xc + rr.h_view(p) * Kokkos::sin(theta) * Kokkos::cos(phi);
+    Real y = yc + rr.h_view(p) * Kokkos::sin(theta) * Kokkos::sin(phi);
+    Real z = zc + rr.h_view(p) * Kokkos::cos(theta);
+    pos[0] = x;
+    pos[1] = y;
+    pos[2] = z;
+    
+    // Set havepoint flag
+    for (int m = 0; m < nmb; ++m) {
+      if ((size.h_view(m).x1min <= x) && (x <= size.h_view(m).x1max) &&
+          (size.h_view(m).x2min <= y) && (y <= size.h_view(m).x2max) &&
+          (size.h_view(m).x3min <= z) && (z <= size.h_view(m).x3max)) {
+            havepoint.h_view(p) += 1;
+      }
+    }
+
+    // Initialize interpolator at point
+    auto *S = new LagrangeInterpolator(pmbp, pos);
+    if (S->point_exist) {
+      g_interp(GXX,p) = S->Interpolate(pmbp->padm->u_adm, pmbp->padm->I_ADM_GXX);
+      g_interp(GXY,p) = S->Interpolate(pmbp->padm->u_adm, pmbp->padm->I_ADM_GXY);
+      g_interp(GXZ,p) = S->Interpolate(pmbp->padm->u_adm, pmbp->padm->I_ADM_GXZ);
+      g_interp(GYY,p) = S->Interpolate(pmbp->padm->u_adm, pmbp->padm->I_ADM_GYY);
+      g_interp(GYZ,p) = S->Interpolate(pmbp->padm->u_adm, pmbp->padm->I_ADM_GYZ);
+      g_interp(GZZ,p) = S->Interpolate(pmbp->padm->u_adm, pmbp->padm->I_ADM_GZZ);
+
+      K_interp(KXX,p) = S->Interpolate(pmbp->padm->u_adm, pmbp->padm->I_ADM_KXX);
+      K_interp(KXY,p) = S->Interpolate(pmbp->padm->u_adm, pmbp->padm->I_ADM_KXY);
+      K_interp(KXZ,p) = S->Interpolate(pmbp->padm->u_adm, pmbp->padm->I_ADM_KXZ);
+      K_interp(KYY,p) = S->Interpolate(pmbp->padm->u_adm, pmbp->padm->I_ADM_KYY);
+      K_interp(KYZ,p) = S->Interpolate(pmbp->padm->u_adm, pmbp->padm->I_ADM_KYZ);
+      K_interp(KZZ,p) = S->Interpolate(pmbp->padm->u_adm, pmbp->padm->I_ADM_KZZ);
+
+      dg_interp(DX_GXX,p) = S->Interpolate(dg, DX_GXX);
+      dg_interp(DX_GXY,p) = S->Interpolate(dg, DX_GXY);
+      dg_interp(DX_GXZ,p) = S->Interpolate(dg, DX_GXZ);
+      dg_interp(DX_GYY,p) = S->Interpolate(dg, DX_GYY);
+      dg_interp(DX_GYZ,p) = S->Interpolate(dg, DX_GYZ);
+      dg_interp(DX_GZZ,p) = S->Interpolate(dg, DX_GZZ);
+
+      dg_interp(DY_GXX,p) = S->Interpolate(dg, DY_GXX);
+      dg_interp(DY_GXY,p) = S->Interpolate(dg, DY_GXY);
+      dg_interp(DY_GXZ,p) = S->Interpolate(dg, DY_GXZ);
+      dg_interp(DY_GYY,p) = S->Interpolate(dg, DY_GYY);
+      dg_interp(DY_GYZ,p) = S->Interpolate(dg, DY_GYZ);
+      dg_interp(DY_GZZ,p) = S->Interpolate(dg, DY_GZZ);
+
+      dg_interp(DZ_GXX,p) = S->Interpolate(dg, DZ_GXX);
+      dg_interp(DZ_GXY,p) = S->Interpolate(dg, DZ_GXY);
+      dg_interp(DZ_GXZ,p) = S->Interpolate(dg, DZ_GXZ);
+      dg_interp(DZ_GYY,p) = S->Interpolate(dg, DZ_GYY);
+      dg_interp(DZ_GYZ,p) = S->Interpolate(dg, DZ_GYZ);
+      dg_interp(DZ_GZZ,p) = S->Interpolate(dg, DZ_GZZ);
+    }
+
+    delete S;
   }
 } // (OS): Sync DualArray? or change to Host
 
 //----------------------------------------------------------------------------------------
 //! \fn void AHF::FastFlowLoop()
 //! \brief Fast Flow loop for horizon n
-/* void AHF::FastFlowLoop()
+void AHF::FastFlowLoop()
 {
   ah_found = false;
 
-  Real meanradius = a0.h_view(0) / std::sqrt(4.0*PI);
+  Real meanradius = a0.h_view(0) / Kokkos::sqrt(4.0*M_PI);
   Real mass = 0;
   Real mass_prev = 0;
   Real area = 0;
@@ -566,27 +655,26 @@ void AHF::MetricInterp()
 
     // In MetricInterp() we'll flag the surface points on this mesh
     // default to 0 (no points)
-    // havepoint.ZeroClear();
+    Kokkos::deep_copy(havepoint.h_view, 0.0);
 
-    // Metric interpolated on the surface
-    //g.ZeroClear();
-    //dg.ZeroClear();
-    //K.ZeroClear();
+    // Set metric interpolated on the surface to 0.0
+    Kokkos::deep_copy(g_interp, 0.0);
+    Kokkos::deep_copy(K_interp, 0.0);
+    Kokkos::deep_copy(dg_interp, 0.0);
 
     // Interpolate metric on surface
     MetricInterp();
-
     SurfaceIntegrals();
 
     area  = integrals[iarea];
     hrms  = integrals[ihrms]/area;
     hmean = integrals[ihmean];
-    Sx = integrals[iSx] / (8 * PI);
-    Sy = integrals[iSy] / (8 * PI);
-    Sz = integrals[iSz] / (8 * PI);
-    S  = std::sqrt(SQR(Sx) + SQR(Sy) + SQR(Sz));
+    Sx = integrals[iSx] / (8 * M_PI);
+    Sy = integrals[iSy] / (8 * M_PI);
+    Sz = integrals[iSz] / (8 * M_PI);
+    S  = Kokkos::sqrt(SQR(Sx) + SQR(Sy) + SQR(Sz));
 
-    meanradius = a0.h_view(0) / std::sqrt(4.0 * PI);
+    meanradius = a0.h_view(0) / Kokkos::sqrt(4.0 * M_PI);
 
     // Check we get a finite result
     if (!(std::isfinite(area))) {
@@ -609,7 +697,7 @@ void AHF::MetricInterp()
     
     // Irreducible mass
     mass_prev = mass;
-    mass = std::sqrt(area / (16.0 * PI));
+    mass = Kokkos::sqrt(area / (16.0 * M_PI));
 
     if (verbose && ioproc) {
       fprintf(pofile_verbose, "%3d %15.7e %15.7e %15.7e %15.7e %15.7e %15.7e %15.7e %15.7e %15.7e\n",
@@ -689,12 +777,12 @@ void AHF::MetricInterp()
     }
     fflush(pofile_verbose);
   }
-} // (OS): Do we need havepoint? and zeroclear Arrays */
+} // (OS): zeroclear Arrays
 
 //----------------------------------------------------------------------------------------
 //! \fn void AHF::UpdateFlowSpectralComponents()
 //! \brief Find new spectral components with fast flow
-/* void AHF::UpdateFlowSpectralComponents()
+void AHF::UpdateFlowSpectralComponents()
 {
   const Real alpha = flow_alpha_beta_const;
   const Real beta = 0.5 * flow_alpha_beta_const;
@@ -721,6 +809,7 @@ void AHF::MetricInterp()
   // Local sums
   for(int p = 0; p < nangles; p++){
     if (!havepoint.h_view(p)) continue;
+
     const Real drho = gl_grid->int_weights.h_view(p) * rho.h_view(p);
     
     for(int l = 0; l <= lmax; l++) {
@@ -756,12 +845,12 @@ void AHF::MetricInterp()
   delete[] spec0;
   delete[] specc;
   delete[] specs;
-} // (OS): Sync DualArray? or change to Host */
+} // (OS): Sync DualArray? or change to Host
 
 //----------------------------------------------------------------------------------------
 //! \fn void AHF::RadiiFromSphericalHarmonics()
 //! \brief Compute the radius of the surface
-/* void AHF::RadiiFromSphericalHarmonics()
+void AHF::RadiiFromSphericalHarmonics()
 {
   Kokkos::deep_copy(rr.h_view, 0.0);
   Kokkos::deep_copy(rr_dth.h_view, 0.0);
@@ -781,8 +870,8 @@ void AHF::MetricInterp()
       }
     }
     rr_min = std::min(rr_min, rr.h_view(p));
-  } 
-} // (OS): Sync DualArray? or change to Host */
+  }
+} // (OS): Sync DualArray? or change to Host
 
 //----------------------------------------------------------------------------------------
 //! \fn void AHF::SurfaceIntegrals()
@@ -830,18 +919,18 @@ void AHF::SurfaceIntegrals()
   }
 
   Kokkos::deep_copy(rho.h_view, 0.0); // Initialize rho
-
+  
   // Loop over surface points
   for(int p = 0; p < nangles; p++){
-    Real const theta = gl_grid->polar_pos(p,0);
-    Real const sinth = std::sin(theta);
-    Real const costh = std::cos(theta);
+    Real const theta = gl_grid->polar_pos.h_view(p,0);
+    Real const sinth = Kokkos::sin(theta);
+    Real const costh = Kokkos::cos(theta);
 
     if (!havepoint.h_view(p)) continue;
-
-    Real const phi = gl_grid->polar_pos(p,1);
-    Real const sinph = std::sin(phi);
-    Real const cosph = std::cos(phi);
+    
+    Real const phi = gl_grid->polar_pos.h_view(p,1);
+    Real const sinph = Kokkos::sin(phi);
+    Real const cosph = Kokkos::cos(phi);
 
     // -----------------------
     // Calculate the expansion
@@ -849,33 +938,33 @@ void AHF::SurfaceIntegrals()
 
     // Determinant of 3-metric
     Real detg = adm::SpatialDet(
-      g_interp[GXX].h_view(p), g_interp[GXY].h_view(p), g_interp[GXZ].h_view(p),
-      g_interp[GYY].h_view(p), g_interp[GYZ].h_view(p), g_interp[GZZ].h_view(p)
+      g_interp(GXX,p), g_interp(GXY,p), g_interp(GXZ,p),
+      g_interp(GYY,p), g_interp(GYZ,p), g_interp(GZZ,p)
     );
 
     // Inverse metric
     adm::SpatialInv(
       1.0/detg,
-      g_interp[GXX].h_view(p), g_interp[GXY].h_view(p), g_interp[GXZ].h_view(p),
-      g_interp[GYY].h_view(p), g_interp[GYZ].h_view(p), g_interp[GZZ].h_view(p),
+      g_interp(GXX,p), g_interp(GXY,p), g_interp(GXZ,p),
+      g_interp(GYY,p), g_interp(GYZ,p), g_interp(GZZ,p),
       &ginv(0,0), &ginv(0,1),  &ginv(0,2),
       &ginv(1,1), &ginv(1,2) , &ginv(2,2)
     );
 
     // Trace of K
     Real TrK = adm::Trace(1.0/detg,
-          g_interp[GXX].h_view(p), g_interp[GXY].h_view(p), g_interp[GXZ].h_view(p),
-          g_interp[GYY].h_view(p), g_interp[GYZ].h_view(p), g_interp[GZZ].h_view(p)
-          K_interp[KXX].h_view(p), K_interp[KXY].h_view(p), K_interp[KXZ].h_view(p),
-          K_interp[KYY].h_view(p), K_interp[KYZ].h_view(p), K_interp[KZZ].h_view(p));
+          g_interp(GXX,p), g_interp(GXY,p), g_interp(GXZ,p),
+          g_interp(GYY,p), g_interp(GYZ,p), g_interp(GZZ,p),
+          K_interp(KXX,p), K_interp(KXY,p), K_interp(KXZ,p),
+          K_interp(KYY,p), K_interp(KYZ,p), K_interp(KZZ,p));
 
     // Local coordinates of the surface (re-used below)
     Real const xp = rr.h_view(p) * sinth * cosph;
     Real const yp = rr.h_view(p) * sinth * sinph;
     Real const zp = rr.h_view(p) * costh;
 
-    Real const rp   = std::sqrt(xp * xp + yp * yp + zp * zp);
-    Real const rhop = std::sqrt(xp * xp + yp * yp);
+    Real const rp   = Kokkos::sqrt(xp * xp + yp * yp + zp * zp);
+    Real const rhop = Kokkos::sqrt(xp * xp + yp * yp);
 
     if (rp < min_rp) {
       // Do not stop the code, just AHF failing
@@ -961,10 +1050,8 @@ void AHF::SurfaceIntegrals()
       }
     }
 
-    Real norm = 0;
     for (int a = 0; a < NDIM; ++a) {
       dFdi_u(a) = 0;
-      norm += dFdi_u(a) * dFdi(a); // Compute norm of dFdi
       
       for (int b = 0; b < NDIM; ++b) {
         dFdi_u(a) += ginv(a,b) * dFdi(b); // Compute dFdi with the index up
@@ -972,20 +1059,25 @@ void AHF::SurfaceIntegrals()
       }
     }
 
+    Real norm = 0;
+    for (int a = 0; a < NDIM; ++a){
+       norm += dFdi_u(a) * dFdi(a); // Compute norm of dFdi
+    }
+
     Real u = (norm > 0) ? std::sqrt(norm) : 0.0;
 
-    nnF(0,0) -= 0.5*(dFdi_u(0)*dg_interp[DX_GXX].h_view(p) + dFdi_u(1)*(2.0*dg_interp[DX_GXY].h_view(p)-dg_interp[DY_GXX].h_view(p)) 
-                + dFdi_u(2)*(2.0*dg_interp[DX_GXZ].h_view(p)-dg_interp[DZ_GXX].h_view(p)));
-    nnF(0,1) -= 0.5*(dFdi_u(0)*dg_interp[DY_GXX].h_view(p) + dFdi_u(1)*dg_interp[DX_GYY].h_view(p) 
-                + dFdi_u(2)*(dg_interp[DX_GYZ].h_view(p)+dg_interp[DY_GXZ].h_view(p)-dg_interp[DZ_GXY].h_view(p)));
-    nnF(0,2) -= 0.5*(dFdi_u(0)*dg_interp[DZ_GXX].h_view(p) + dFdi_u(1)*(dg_interp[DX_GYZ].h_view(p)
-                +dg_interp[DZ_GXY].h_view(p)-dg_interp[DY_GXZ].h_view(p)) + dFdi_u(2)*dg_interp[DX_GZZ].h_view(p));
-    nnF(1,1) -= 0.5*(dFdi_u(0)*(2.0*dg_interp[DY_GXY].h_view(p)-dg_interp[DX_GYY].h_view(p)) + dFdi_u(1)*dg_interp[DY_GYY].h_view(p) 
-                + dFdi_u(2)*(2.0*dg_interp[DY_GYZ].h_view(p)-dg_interp[DZ_GYY].h_view(p)));
-    nnF(1,2) -= 0.5*(dFdi_u(0)*(2.0*dg_interp[DY_GXZ].h_view(p)+dg_interp[DZ_GXY].h_view(p)-dg_interp[DX_GYZ].h_view(p)) 
-                + dFdi_u(1)*dg_interp[DZ_GYY].h_view(p) + dFdi_u(2)*dg_interp[DY_GZZ].h_view(p));
-    nnF(2,2) -= 0.5*(dFdi_u(0)*(2.0*dg_interp[DZ_GXZ].h_view(p)-dg_interp[DX_GZZ].h_view(p)) + dFdi_u(1)*(2.0*dg_interp[DZ_GYZ].h_view(p)
-                -dg_interp[DY_GZZ].h_view(p)) + dFdi_u(2)*dg_interp[DZ_GZZ].h_view(p));
+    nnF(0,0) -= 0.5*(dFdi_u(0)*dg_interp(DX_GXX,p) + dFdi_u(1)*(2.0*dg_interp(DX_GXY,p)-dg_interp(DY_GXX,p)) 
+                + dFdi_u(2)*(2.0*dg_interp(DX_GXZ,p)-dg_interp(DZ_GXX,p)));
+    nnF(0,1) -= 0.5*(dFdi_u(0)*dg_interp(DY_GXX,p) + dFdi_u(1)*dg_interp(DX_GYY,p) 
+                + dFdi_u(2)*(dg_interp(DX_GYZ,p)+dg_interp(DY_GXZ,p)-dg_interp(DZ_GXY,p)));
+    nnF(0,2) -= 0.5*(dFdi_u(0)*dg_interp(DZ_GXX,p) + dFdi_u(1)*(dg_interp(DX_GYZ,p)
+                +dg_interp(DZ_GXY,p)-dg_interp(DY_GXZ,p)) + dFdi_u(2)*dg_interp(DX_GZZ,p));
+    nnF(1,1) -= 0.5*(dFdi_u(0)*(2.0*dg_interp(DY_GXY,p)-dg_interp(DX_GYY,p)) + dFdi_u(1)*dg_interp(DY_GYY,p) 
+                + dFdi_u(2)*(2.0*dg_interp(DY_GYZ,p)-dg_interp(DZ_GYY,p)));
+    nnF(1,2) -= 0.5*(dFdi_u(0)*(2.0*dg_interp(DY_GXZ,p)+dg_interp(DZ_GXY,p)-dg_interp(DX_GYZ,p)) 
+                + dFdi_u(1)*dg_interp(DZ_GYY,p) + dFdi_u(2)*dg_interp(DY_GZZ,p));
+    nnF(2,2) -= 0.5*(dFdi_u(0)*(2.0*dg_interp(DZ_GXZ,p)-dg_interp(DX_GZZ,p)) + dFdi_u(1)*(2.0*dg_interp(DZ_GYZ,p)
+                -dg_interp(DY_GZZ,p)) + dFdi_u(2)*dg_interp(DZ_GZZ,p));
 
     Real d2F = 0.; // Compute d2F = g^{ab} nabla_a nabla_b F
     Real dFdadFdbKab = 0.; // Compute dFd^a dFd^b Kab
@@ -996,21 +1088,22 @@ void AHF::SurfaceIntegrals()
         dFdadFdbFdadb += dFdi_u(a) * dFdi_u(b) * nnF(a,b);
       }
     }
-    dFdadFdbKab += dFdi_u(0) * dFdi_u(0) * K_interp[KXX].h_view(p);
-    dFdadFdbKab += dFdi_u(0) * dFdi_u(1) * K_interp[KXY].h_view(p);
-    dFdadFdbKab += dFdi_u(0) * dFdi_u(2) * K_interp[KXZ].h_view(p);
-    dFdadFdbKab += dFdi_u(1) * dFdi_u(0) * K_interp[KXY].h_view(p);
-    dFdadFdbKab += dFdi_u(1) * dFdi_u(1) * K_interp[KYY].h_view(p);
-    dFdadFdbKab += dFdi_u(1) * dFdi_u(2) * K_interp[KYZ].h_view(p);
-    dFdadFdbKab += dFdi_u(2) * dFdi_u(0) * K_interp[KXZ].h_view(p);
-    dFdadFdbKab += dFdi_u(2) * dFdi_u(1) * K_interp[KYZ].h_view(p);
-    dFdadFdbKab += dFdi_u(2) * dFdi_u(2) * K_interp[KZZ].h_view(p);
+
+    dFdadFdbKab += dFdi_u(0) * dFdi_u(0) * K_interp(KXX,p);
+    dFdadFdbKab += dFdi_u(0) * dFdi_u(1) * K_interp(KXY,p);
+    dFdadFdbKab += dFdi_u(0) * dFdi_u(2) * K_interp(KXZ,p);
+    dFdadFdbKab += dFdi_u(1) * dFdi_u(0) * K_interp(KXY,p);
+    dFdadFdbKab += dFdi_u(1) * dFdi_u(1) * K_interp(KYY,p);
+    dFdadFdbKab += dFdi_u(1) * dFdi_u(2) * K_interp(KYZ,p);
+    dFdadFdbKab += dFdi_u(2) * dFdi_u(0) * K_interp(KXZ,p);
+    dFdadFdbKab += dFdi_u(2) * dFdi_u(1) * K_interp(KYZ,p);
+    dFdadFdbKab += dFdi_u(2) * dFdi_u(2) * K_interp(KZZ,p);
     
     // Expansion & rho = H * u * sigma (sigma=1)
     Real divu = (norm > 0) ? 1.0 / u : 0.0;
     Real H = d2F * divu + dFdadFdbKab * (divu * divu) - dFdadFdbFdadb * (divu * divu * divu) - TrK;
 
-    rho.h_view(p) = H * u; 
+    rho.h_view(p) = H * u;
 
     // Normal vector
     for (int a = 0; a < NDIM; ++a) {
@@ -1041,35 +1134,35 @@ void AHF::SurfaceIntegrals()
     Real h11 = 0.;
     Real h12 = 0.; 
     Real h22 = 0.;
-    h11 += dXdth(0) * dXdth(0) * g_interp[GXX].h_view(p);
-    h11 += dXdth(0) * dXdth(1) * g_interp[GXY].h_view(p);
-    h11 += dXdth(0) * dXdth(2) * g_interp[GXZ].h_view(p);
-    h11 += dXdth(1) * dXdth(0) * g_interp[GXY].h_view(p);
-    h11 += dXdth(1) * dXdth(1) * g_interp[GYY].h_view(p);
-    h11 += dXdth(1) * dXdth(2) * g_interp[GYZ].h_view(p);
-    h11 += dXdth(2) * dXdth(0) * g_interp[GXZ].h_view(p);
-    h11 += dXdth(2) * dXdth(1) * g_interp[GYZ].h_view(p);
-    h11 += dXdth(2) * dXdth(2) * g_interp[GZZ].h_view(p);
+    h11 += dXdth(0) * dXdth(0) * g_interp(GXX,p);
+    h11 += dXdth(0) * dXdth(1) * g_interp(GXY,p);
+    h11 += dXdth(0) * dXdth(2) * g_interp(GXZ,p);
+    h11 += dXdth(1) * dXdth(0) * g_interp(GXY,p);
+    h11 += dXdth(1) * dXdth(1) * g_interp(GYY,p);
+    h11 += dXdth(1) * dXdth(2) * g_interp(GYZ,p);
+    h11 += dXdth(2) * dXdth(0) * g_interp(GXZ,p);
+    h11 += dXdth(2) * dXdth(1) * g_interp(GYZ,p);
+    h11 += dXdth(2) * dXdth(2) * g_interp(GZZ,p);
     
-    h12 += dXdth(0) * dXdph(0) * g_interp[GXX].h_view(p);
-    h12 += dXdth(0) * dXdph(1) * g_interp[GXY].h_view(p);
-    h12 += dXdth(0) * dXdph(2) * g_interp[GXZ].h_view(p);
-    h12 += dXdth(1) * dXdph(0) * g_interp[GXY].h_view(p);
-    h12 += dXdth(1) * dXdph(1) * g_interp[GYY].h_view(p);
-    h12 += dXdth(1) * dXdph(2) * g_interp[GYZ].h_view(p);
-    h12 += dXdth(2) * dXdph(0) * g_interp[GXZ].h_view(p);
-    h12 += dXdth(2) * dXdph(1) * g_interp[GYZ].h_view(p);
-    h12 += dXdth(2) * dXdph(2) * g_interp[GZZ].h_view(p);
+    h12 += dXdth(0) * dXdph(0) * g_interp(GXX,p);
+    h12 += dXdth(0) * dXdph(1) * g_interp(GXY,p);
+    h12 += dXdth(0) * dXdph(2) * g_interp(GXZ,p);
+    h12 += dXdth(1) * dXdph(0) * g_interp(GXY,p);
+    h12 += dXdth(1) * dXdph(1) * g_interp(GYY,p);
+    h12 += dXdth(1) * dXdph(2) * g_interp(GYZ,p);
+    h12 += dXdth(2) * dXdph(0) * g_interp(GXZ,p);
+    h12 += dXdth(2) * dXdph(1) * g_interp(GYZ,p);
+    h12 += dXdth(2) * dXdph(2) * g_interp(GZZ,p);
     
-    h22 += dXdph(0) * dXdph(0) * g_interp[GXX].h_view(p);
-    h22 += dXdph(0) * dXdph(1) * g_interp[GXY].h_view(p);
-    h22 += dXdph(0) * dXdph(2) * g_interp[GXZ].h_view(p);
-    h22 += dXdph(1) * dXdph(0) * g_interp[GXY].h_view(p);
-    h22 += dXdph(1) * dXdph(1) * g_interp[GYY].h_view(p);
-    h22 += dXdph(1) * dXdph(2) * g_interp[GYZ].h_view(p);
-    h22 += dXdph(2) * dXdph(0) * g_interp[GXZ].h_view(p);
-    h22 += dXdph(2) * dXdph(1) * g_interp[GYZ].h_view(p);
-    h22 += dXdph(2) * dXdph(2) * g_interp[GZZ].h_view(p);
+    h22 += dXdph(0) * dXdph(0) * g_interp(GXX,p);
+    h22 += dXdph(0) * dXdph(1) * g_interp(GXY,p);
+    h22 += dXdph(0) * dXdph(2) * g_interp(GXZ,p);
+    h22 += dXdph(1) * dXdph(0) * g_interp(GXY,p);
+    h22 += dXdph(1) * dXdph(1) * g_interp(GYY,p);
+    h22 += dXdph(1) * dXdph(2) * g_interp(GYZ,p);
+    h22 += dXdph(2) * dXdph(0) * g_interp(GXZ,p);
+    h22 += dXdph(2) * dXdph(1) * g_interp(GYZ,p);
+    h22 += dXdph(2) * dXdph(2) * g_interp(GZZ,p);
 
     // Determinant of the induced metric
     Real deth = h11 * h22 - h12 * h12;
@@ -1094,39 +1187,39 @@ void AHF::SurfaceIntegrals()
     Real intSx = 0;
     Real intSy = 0;
     Real intSz = 0;
-    intSx += phix(0) * R(0) * K_interp[KXX].h_view(p);
-    intSx += phix(0) * R(1) * K_interp[KXY].h_view(p);
-    intSx += phix(0) * R(2) * K_interp[KXZ].h_view(p);
-    intSx += phix(1) * R(0) * K_interp[KXY].h_view(p);
-    intSx += phix(1) * R(1) * K_interp[KYY].h_view(p);
-    intSx += phix(1) * R(2) * K_interp[KYZ].h_view(p);
-    intSx += phix(2) * R(0) * K_interp[KXZ].h_view(p);
-    intSx += phix(2) * R(1) * K_interp[KYZ].h_view(p);
-    intSx += phix(2) * R(2) * K_interp[KZZ].h_view(p);
+    intSx += phix(0) * R(0) * K_interp(KXX,p);
+    intSx += phix(0) * R(1) * K_interp(KXY,p);
+    intSx += phix(0) * R(2) * K_interp(KXZ,p);
+    intSx += phix(1) * R(0) * K_interp(KXY,p);
+    intSx += phix(1) * R(1) * K_interp(KYY,p);
+    intSx += phix(1) * R(2) * K_interp(KYZ,p);
+    intSx += phix(2) * R(0) * K_interp(KXZ,p);
+    intSx += phix(2) * R(1) * K_interp(KYZ,p);
+    intSx += phix(2) * R(2) * K_interp(KZZ,p);
     
-    intSy += phiy(0) * R(0) * K_interp[KXX].h_view(p);
-    intSy += phiy(0) * R(1) * K_interp[KXY].h_view(p);
-    intSy += phiy(0) * R(2) * K_interp[KXZ].h_view(p);
-    intSy += phiy(1) * R(0) * K_interp[KXY].h_view(p);
-    intSy += phiy(1) * R(1) * K_interp[KYY].h_view(p);
-    intSy += phiy(1) * R(2) * K_interp[KYZ].h_view(p);
-    intSy += phiy(2) * R(0) * K_interp[KXZ].h_view(p);
-    intSy += phiy(2) * R(1) * K_interp[KYZ].h_view(p);
-    intSy += phiy(2) * R(2) * K_interp[KZZ].h_view(p);
+    intSy += phiy(0) * R(0) * K_interp(KXX,p);
+    intSy += phiy(0) * R(1) * K_interp(KXY,p);
+    intSy += phiy(0) * R(2) * K_interp(KXZ,p);
+    intSy += phiy(1) * R(0) * K_interp(KXY,p);
+    intSy += phiy(1) * R(1) * K_interp(KYY,p);
+    intSy += phiy(1) * R(2) * K_interp(KYZ,p);
+    intSy += phiy(2) * R(0) * K_interp(KXZ,p);
+    intSy += phiy(2) * R(1) * K_interp(KYZ,p);
+    intSy += phiy(2) * R(2) * K_interp(KZZ,p);
     
-    intSz += phiz(0) * R(0) * K_interp[KXX].h_view(p);
-    intSz += phiz(0) * R(1) * K_interp[KXY].h_view(p);
-    intSz += phiz(0) * R(2) * K_interp[KXZ].h_view(p);
-    intSz += phiz(1) * R(0) * K_interp[KXY].h_view(p);
-    intSz += phiz(1) * R(1) * K_interp[KYY].h_view(p);
-    intSz += phiz(1) * R(2) * K_interp[KYZ].h_view(p);
-    intSz += phiz(2) * R(0) * K_interp[KXZ].h_view(p);
-    intSz += phiz(2) * R(1) * K_interp[KYZ].h_view(p);
-    intSz += phiz(2) * R(2) * K_interp[KZZ].h_view(p);
+    intSz += phiz(0) * R(0) * K_interp(KXX,p);
+    intSz += phiz(0) * R(1) * K_interp(KXY,p);
+    intSz += phiz(0) * R(2) * K_interp(KXZ,p);
+    intSz += phiz(1) * R(0) * K_interp(KXY,p);
+    intSz += phiz(1) * R(1) * K_interp(KYY,p);
+    intSz += phiz(1) * R(2) * K_interp(KYZ,p);
+    intSz += phiz(2) * R(0) * K_interp(KXZ,p);
+    intSz += phiz(2) * R(1) * K_interp(KYZ,p);
+    intSz += phiz(2) * R(2) * K_interp(KZZ,p);
 
     // Local sums
     // ----------
-    const Real wght = gl_grid->int_weights(p);
+    const Real wght = gl_grid->int_weights.h_view(p);
     const Real da = wght * std::sqrt(deth) / sinth;
 
     integrals[iarea]   += da;
@@ -1137,11 +1230,11 @@ void AHF::SurfaceIntegrals()
     integrals[iSy]     += da * intSy;
     integrals[iSz]     += da * intSz;
   }
-
+  
   #if MPI_PARALLEL_ENABLED
     MPI_Allreduce(MPI_IN_PLACE, integrals, invar, MPI_ATHENA_REAL, MPI_SUM, MPI_COMM_WORLD);
   #endif
-} // (OS): havepoint? and check indices
+} // (OS): parallelize loop?
 
 //----------------------------------------------------------------------------------------
 //! \fn void AHF::ComputeSphericalHarmonics()
@@ -1247,7 +1340,6 @@ void AHF::ComputeSphericalHarmonics()
   dYsdph2.template sync<DevExeSpace>(); */
 } // (OS): if spherical harmonics not used in Kokkos loop, then delete syncing, change to host
 
-
 //----------------------------------------------------------------------------------------
 //! \fn int AHF::lmindex(const int l, const int m)
 //! \brief Multipolar single index (l,m) -> index
@@ -1256,3 +1348,86 @@ int AHF::lmindex(const int l, const int m)
   return l * lmax1 + m;
 }
 
+//----------------------------------------------------------------------------------------
+//! \fn Real AHF::PuncMaxDistance()
+//! \brief Max Euclidean distance between punctures
+Real AHF::PuncMaxDistance() {
+  Real maxdist = 0.0;
+  for (int pix = 0; pix < npunct; ++pix) {
+    Real xp = pmbp->pz4c->ptracker[pix]->GetPos(0);
+    Real yp = pmbp->pz4c->ptracker[pix]->GetPos(1);
+    Real zp = pmbp->pz4c->ptracker[pix]->GetPos(2);
+
+    for (int p = pix+1; p < npunct; ++p) {
+      Real x = pmbp->pz4c->ptracker[p]->GetPos(0);
+      Real y = pmbp->pz4c->ptracker[p]->GetPos(1);
+      Real z = pmbp->pz4c->ptracker[p]->GetPos(2);
+      maxdist = std::max(maxdist, std::sqrt(SQR(x - xp) + SQR(y - yp) + SQR(z - zp)));
+    }
+  }
+  return maxdist;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn Real AHF::PuncMaxDistance(const int pix)
+//! \brief Max Euclidean distance from puncture pix to other punctures
+Real AHF::PuncMaxDistance(const int pix) {
+  Real xp = pmbp->pz4c->ptracker[pix]->GetPos(0);
+  Real yp = pmbp->pz4c->ptracker[pix]->GetPos(1);
+  Real zp = pmbp->pz4c->ptracker[pix]->GetPos(2);
+  Real maxdist = 0.0;
+
+  for (int p = 0; p < npunct; ++p) {
+    if (p==pix) continue;
+    Real x = pmbp->pz4c->ptracker[p]->GetPos(0);
+    Real y = pmbp->pz4c->ptracker[p]->GetPos(1);
+    Real z = pmbp->pz4c->ptracker[p]->GetPos(2);
+    maxdist = std::max(maxdist, std::sqrt(SQR(x - xp) + SQR(y - yp) + SQR(z - zp)));
+  }
+
+  return maxdist;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn Real AHF::PuncSumMasses()
+//! \brief Return sum of puncture's intial masses
+Real AHF::PuncSumMasses() {
+  Real mass = 0.0;
+  for (int p = 0; p < npunct; ++p) {
+    mass += pmbp->pz4c->ptracker[p]->GetMass();
+  }
+  return mass;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void AHF::PuncWeightedMassCentralPoint(Real *xc, Real *yc, Real *zc)
+//! \brief Return mss-weighted center of puncture positions
+void AHF::PuncWeightedMassCentralPoint(Real *xc, Real *yc, Real *zc) {
+  Real sumx = 0.0; // sum of m_i*x_i
+  Real sumy = 0.0;
+  Real sumz = 0.0;
+  Real divsum = 0.0; // sum of m_i to later divide by
+  for (int p = 0; p < npunct; p++) {
+    Real x = pmbp->pz4c->ptracker[p]->GetPos(0);
+    Real y = pmbp->pz4c->ptracker[p]->GetPos(1);
+    Real z = pmbp->pz4c->ptracker[p]->GetPos(2);
+    Real m = pmbp->pz4c->ptracker[p]->GetMass();
+    sumx += m*x;
+    sumy += m*y;
+    sumz += m*z;
+    divsum += m;
+  }
+  divsum = 1.0/divsum;
+  *xc = sumx * divsum;
+  *yc = sumy * divsum;
+  *zc = sumz * divsum;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn int AHF::PuncAreClose()
+//! \brief Check when the maximal distance between all punctures is below threshold
+bool AHF::PuncAreClose() {
+  Real const mass = PuncSumMasses();
+  Real const maxdist = PuncMaxDistance();
+  return (maxdist < merger_distance * mass);
+}

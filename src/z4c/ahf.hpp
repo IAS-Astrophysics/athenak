@@ -34,8 +34,8 @@ public:
   // Default Destructor for AHF object (closes output file)
   ~AHF();
 
-  void Find(); // main functionality for finding AH
-  void Write(); // function for result writing
+  void Find(int iter, Real time); // main functionality for finding AH
+  void Write(int iter, Real time); // function for result writing
   template <int NGHOST>
   bool MetricDerivatives(Real time); // compute the metric derivatives
 
@@ -67,11 +67,12 @@ public:
   // Compact Object Tracker variables
   int use_puncture; // n surface follows the puncture tracker if use_puncture[n] > 0
   Real merger_distance; // Distance in M at which BHs are considered as merged
+  bool use_puncture_massweighted_center;
 
   // Start and Stop times for each surface
   Real start_time;
   Real stop_time;
-
+  
 private:
   int npunct; // Number of punctures
   int lmax1; // lmax + 1
@@ -128,7 +129,7 @@ private:
   Real ah_prop[hnvar]; // Array of horizon quantities
 
   // Indices to interpolate over
-  int g_idx[6] = {
+  /* int g_idx[6] = {
     pmbp->padm->I_ADM_GXX,
     pmbp->padm->I_ADM_GXY,
     pmbp->padm->I_ADM_GXZ,
@@ -144,7 +145,7 @@ private:
     pmbp->padm->I_ADM_KYY,
     pmbp->padm->I_ADM_KYZ,
     pmbp->padm->I_ADM_KZZ
-  };
+  }; */
 
   // Enumerators for readability when calling interpolated arrays
   enum {
@@ -163,9 +164,10 @@ private:
   DvceArray5D<Real> dg;
 
   // Vectors to hold the DualArray1D interpolated values of GaussLegendreGrid
-  std::vector<DualArray1D<Real>> g_interp; 
+  /* std::vector<DualArray1D<Real>> g_interp; 
   std::vector<DualArray1D<Real>> K_interp; 
-  std::vector<DualArray1D<Real>> dg_interp;
+  std::vector<DualArray1D<Real>> dg_interp; */
+  DvceArray2D<Real> g_interp, K_interp, dg_interp;
 
   // Flag points
   DualArray1D<int> havepoint;
@@ -198,8 +200,8 @@ private:
   FILE *pofile_ylm;
   FILE *pofile_grid;
 
-  // Functions to interface with puncture tracker
-  Real PuncMaxDistance(); 
+  // Functions to interface with puncture tracker 
+  Real PuncMaxDistance();
   Real PuncMaxDistance(const int pix);
   Real PuncSumMasses();
   void PuncWeightedMassCentralPoint(Real *xc, Real *yc, Real *zc);

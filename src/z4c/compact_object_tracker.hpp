@@ -56,6 +56,10 @@ class CompactObjectTracker {
   inline Real GetRadius() const {
     return radius;
   }
+  //! Get initial mass
+  inline Real GetMass() {
+    return initial_mass;
+  }
 
  private:
   bool owns_compact_object;
@@ -64,6 +68,7 @@ class CompactObjectTracker {
   Real vel[NDIM];
   int reflevel;         // requested minimum refinement level (-1 for infinity)
   Real radius;          // nominal radius of the object (for the AMR driver)
+  Real initial_mass;    // initial mass needed for AHF
   Mesh const *pmesh;
   int out_every;
   std::ofstream ofile;
