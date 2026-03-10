@@ -170,3 +170,39 @@ def test_ambipolar_linwave(wave_flag, dim):
                 )
     finally:
         testutils.cleanup()
+
+
+@pytest.mark.parametrize("dim", [2, 3])
+def test_ambipolar_linwave_multiblock(dim):
+    """Test ambipolar damping with 2 meshblocks in x1.
+
+    Exercises the cross-J 4-point averaging at internal meshblock boundaries,
+    which requires CalcCurrentDensity to populate jedge in the ghost zones.
+    Only 2D/3D are tested because 1D has no cross-component J averaging.
+    Uses the fast wave (wave_flag=0) at a single resolution.
+    """
+    wave_flag = "0"
+    analytic_rate = ANALYTIC_RATES[wave_flag]
+    res = 64
+
+    try:
+        basename = f"AmbLW_mb_w{wave_flag}_{dim}d_{res}"
+        args = build_arguments(wave_flag, dim, res, basename)
+
+        mb_nx1 = str(res // 2)
+        args = [a for a in args if not a.startswith("meshblock/nx1=")]
+        args.append(f"meshblock/nx1={mb_nx1}")
+
+        testutils.run("inputs/lwave_ambipolar.athinput", args)
+
+        hst_file = f"{basename}.mhd.hst"
+        measured_rate = fit_decay_rate_from_ke(hst_file)
+        error_rel = abs(analytic_rate / measured_rate - 1.0)
+
+        if error_rel > REL_TOL:
+            pytest.fail(
+                f"fast {dim}D multiblock: decay rate relative error "
+                f"{error_rel:.3f} exceeds tolerance {REL_TOL}"
+            )
+    finally:
+        testutils.cleanup()

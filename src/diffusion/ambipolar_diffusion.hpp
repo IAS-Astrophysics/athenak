@@ -32,7 +32,8 @@ class AmbipolarDiffusion {
                         const DvceFaceFld4D<Real> &b0,
                         const DvceArray5D<Real> &bcc0,
                         DvceEdgeFld4D<Real> &efld);
-  void AddAmbipolarFluxes(const DvceFaceFld4D<Real> &b0,
+  void AddAmbipolarFluxes(const DvceEdgeFld4D<Real> &jedge,
+                          const DvceFaceFld4D<Real> &b0,
                           const DvceArray5D<Real> &bcc0,
                           DvceFaceFld5D<Real> &flx);
 
@@ -41,7 +42,8 @@ class AmbipolarDiffusion {
                                const DvceFaceFld4D<Real> &b0,
                                const DvceArray5D<Real> &bcc0,
                                DvceEdgeFld4D<Real> &efld);
-  void AddFluxConstantAmbipolar(const DvceFaceFld4D<Real> &b0,
+  void AddFluxConstantAmbipolar(const DvceEdgeFld4D<Real> &jedge,
+                                const DvceFaceFld4D<Real> &b0,
                                 const DvceArray5D<Real> &bcc0,
                                 DvceFaceFld5D<Real> &flx);
 

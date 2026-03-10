@@ -47,9 +47,10 @@ void AmbipolarDiffusion::AddAmbipolarEMFs(const DvceEdgeFld4D<Real> &jedge,
 //! \fn void AmbipolarDiffusion::AddAmbipolarFluxes()
 //! \brief Wrapper function that dispatches to type-specific ambipolar energy flux.
 
-void AmbipolarDiffusion::AddAmbipolarFluxes(const DvceFaceFld4D<Real> &b0,
-    const DvceArray5D<Real> &bcc0, DvceFaceFld5D<Real> &flx) {
-  AddFluxConstantAmbipolar(b0, bcc0, flx);
+void AmbipolarDiffusion::AddAmbipolarFluxes(const DvceEdgeFld4D<Real> &jedge,
+    const DvceFaceFld4D<Real> &b0, const DvceArray5D<Real> &bcc0,
+    DvceFaceFld5D<Real> &flx) {
+  AddFluxConstantAmbipolar(jedge, b0, bcc0, flx);
   return;
 }
 
@@ -221,163 +222,239 @@ void AmbipolarDiffusion::AddEMFConstantAmbipolar(const DvceEdgeFld4D<Real> &jedg
 //----------------------------------------------------------------------------------------
 //! \fn void AmbipolarDiffusion::AddFluxConstantAmbipolar()
 //  \brief Adds Poynting flux from ambipolar diffusion to energy flux.
-//  The energy flux is S = E_amb x B, where E_amb = eta_ad * [B^2*J - (J.B)*B].
-//  Following the structure of Resistivity::AddFluxConstantResist but with
-//  the ambipolar EMF replacing eta*J.
+//  Since S_AD = E_AD x B and E_AD = eta_ad*(B^2*J - (J.B)*B), the parallel component
+//  vanishes identically in the cross product (B x B = 0), giving S = eta_ad*B^2*(J x B).
+//  The simplified edge EMF e = eta_ad*B^2*J is computed at each edge using the same B
+//  interpolation stencils as AddEMFConstantAmbipolar, then averaged to the face and
+//  crossed with B_cc (from bcc0), following the same "average then multiply" pattern
+//  as the Ohmic Poynting flux.
 
-void AmbipolarDiffusion::AddFluxConstantAmbipolar(const DvceFaceFld4D<Real> &b,
-    const DvceArray5D<Real> &bcc0, DvceFaceFld5D<Real> &flx) {
+void AmbipolarDiffusion::AddFluxConstantAmbipolar(const DvceEdgeFld4D<Real> &jedge,
+    const DvceFaceFld4D<Real> &b0, const DvceArray5D<Real> &bcc,
+    DvceFaceFld5D<Real> &flx) {
   auto &indcs = pmy_pack->pmesh->mb_indcs;
   int is = indcs.is, ie = indcs.ie;
   int js = indcs.js, je = indcs.je;
   int ks = indcs.ks, ke = indcs.ke;
   int nmb1 = pmy_pack->nmb_thispack - 1;
-  auto size = pmy_pack->pmb->mb_size;
-  bool &multi_d = pmy_pack->pmesh->multi_d;
-  bool &three_d = pmy_pack->pmesh->three_d;
   auto eta = eta_ad;
 
-  //------------------------------
-  // energy fluxes in x1-direction: S_1 = E2_amb*B3 - E3_amb*B2
-  // Compute J and B at x1-face, then compute ambipolar EMF components E2, E3
+  auto je1 = jedge.x1e;
+  auto je2 = jedge.x2e;
+  auto je3 = jedge.x3e;
+
+  //---- 1-D problem:
+  // All edges coincide with x1-faces. B^2 is the same at all edge positions.
+  if (pmy_pack->pmesh->one_d) {
+    auto &flx1 = flx.x1f;
+    par_for("amb_heat1d", DevExeSpace(), 0, nmb1, is, ie+1,
+    KOKKOS_LAMBDA(const int m, const int i) {
+      Real Bx = b0.x1f(m,ks,js,i);
+      Real By = 0.5*(bcc(m,IBY,ks,js,i-1) + bcc(m,IBY,ks,js,i));
+      Real Bz = 0.5*(bcc(m,IBZ,ks,js,i-1) + bcc(m,IBZ,ks,js,i));
+      Real Bsq = SQR(Bx) + SQR(By) + SQR(Bz);
+
+      Real e2_fc = eta * Bsq * je2(m,ks,js,i);
+      Real e3_fc = eta * Bsq * je3(m,ks,js,i);
+
+      flx1(m,IEN,ks,js,i) += e2_fc*Bz - e3_fc*By;
+    });
+    return;
+  }
+
+  //---- 2-D problem:
+  if (pmy_pack->pmesh->two_d) {
+    // x1-flux: e2 at x2-edge (no k-avg), e3 at x3-edges (j) and (j+1)
+    auto &flx1 = flx.x1f;
+    par_for("amb_heat1_2d", DevExeSpace(), 0, nmb1, js, je, is, ie+1,
+    KOKKOS_LAMBDA(const int m, const int j, const int i) {
+      // e2 at x2-edge (ks)
+      Real Bx = b0.x1f(m,ks,j,i);
+      Real By = 0.5*(bcc(m,IBY,ks,j,i-1) + bcc(m,IBY,ks,j,i));
+      Real Bz = 0.5*(bcc(m,IBZ,ks,j,i-1) + bcc(m,IBZ,ks,j,i));
+      Real e2_fc = eta * (SQR(Bx) + SQR(By) + SQR(Bz)) * je2(m,ks,j,i);
+
+      // e3 at x3-edge (j)
+      Bx = 0.5*(b0.x1f(m,ks,j,i) + b0.x1f(m,ks,j-1,i));
+      By = 0.5*(b0.x2f(m,ks,j,i) + b0.x2f(m,ks,j,i-1));
+      Bz = 0.25*(bcc(m,IBZ,ks,j,i) + bcc(m,IBZ,ks,j-1,i)
+                + bcc(m,IBZ,ks,j,i-1) + bcc(m,IBZ,ks,j-1,i-1));
+      Real e3_j = eta * (SQR(Bx) + SQR(By) + SQR(Bz)) * je3(m,ks,j,i);
+
+      // e3 at x3-edge (j+1)
+      Bx = 0.5*(b0.x1f(m,ks,j+1,i) + b0.x1f(m,ks,j,i));
+      By = 0.5*(b0.x2f(m,ks,j+1,i) + b0.x2f(m,ks,j+1,i-1));
+      Bz = 0.25*(bcc(m,IBZ,ks,j+1,i) + bcc(m,IBZ,ks,j,i)
+                + bcc(m,IBZ,ks,j+1,i-1) + bcc(m,IBZ,ks,j,i-1));
+      Real e3_jp1 = eta * (SQR(Bx) + SQR(By) + SQR(Bz)) * je3(m,ks,j+1,i);
+
+      Real e3_fc = 0.5*(e3_j + e3_jp1);
+
+      Real b2_fc = 0.5*(bcc(m,IBY,ks,j,i-1) + bcc(m,IBY,ks,j,i));
+      Real b3_fc = 0.5*(bcc(m,IBZ,ks,j,i-1) + bcc(m,IBZ,ks,j,i));
+
+      flx1(m,IEN,ks,j,i) += e2_fc*b3_fc - e3_fc*b2_fc;
+    });
+
+    // x2-flux: e3 at x3-edges (i) and (i+1), e1 at x1-edge (no k-avg)
+    auto &flx2 = flx.x2f;
+    par_for("amb_heat2_2d", DevExeSpace(), 0, nmb1, js, je+1, is, ie,
+    KOKKOS_LAMBDA(const int m, const int j, const int i) {
+      // e3 at x3-edge (i)
+      Real Bx = 0.5*(b0.x1f(m,ks,j,i) + b0.x1f(m,ks,j-1,i));
+      Real By = 0.5*(b0.x2f(m,ks,j,i) + b0.x2f(m,ks,j,i-1));
+      Real Bz = 0.25*(bcc(m,IBZ,ks,j,i) + bcc(m,IBZ,ks,j-1,i)
+                     + bcc(m,IBZ,ks,j,i-1) + bcc(m,IBZ,ks,j-1,i-1));
+      Real e3_i = eta * (SQR(Bx) + SQR(By) + SQR(Bz)) * je3(m,ks,j,i);
+
+      // e3 at x3-edge (i+1)
+      Bx = 0.5*(b0.x1f(m,ks,j,i+1) + b0.x1f(m,ks,j-1,i+1));
+      By = 0.5*(b0.x2f(m,ks,j,i+1) + b0.x2f(m,ks,j,i));
+      Bz = 0.25*(bcc(m,IBZ,ks,j,i+1) + bcc(m,IBZ,ks,j-1,i+1)
+                + bcc(m,IBZ,ks,j,i) + bcc(m,IBZ,ks,j-1,i));
+      Real e3_ip1 = eta * (SQR(Bx) + SQR(By) + SQR(Bz)) * je3(m,ks,j,i+1);
+
+      Real e3_fc = 0.5*(e3_i + e3_ip1);
+
+      // e1 at x1-edge (ks)
+      Bx = 0.5*(bcc(m,IBX,ks,j,i) + bcc(m,IBX,ks,j-1,i));
+      By = b0.x2f(m,ks,j,i);
+      Bz = 0.5*(bcc(m,IBZ,ks,j,i) + bcc(m,IBZ,ks,j-1,i));
+      Real e1_fc = eta * (SQR(Bx) + SQR(By) + SQR(Bz)) * je1(m,ks,j,i);
+
+      Real b1_fc = 0.5*(bcc(m,IBX,ks,j-1,i) + bcc(m,IBX,ks,j,i));
+      Real b3_fc = 0.5*(bcc(m,IBZ,ks,j-1,i) + bcc(m,IBZ,ks,j,i));
+
+      flx2(m,IEN,ks,j,i) += e3_fc*b1_fc - e1_fc*b3_fc;
+    });
+    return;
+  }
+
+  //---- 3-D problem:
+  // x1-flux: e2 at x2-edges (k,k+1), e3 at x3-edges (j,j+1)
   auto &flx1 = flx.x1f;
-  par_for("amb_heat1", DevExeSpace(), 0, nmb1, ks, ke, js, je, is, ie+1,
+  par_for("amb_heat1_3d", DevExeSpace(), 0, nmb1, ks, ke, js, je, is, ie+1,
   KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
-    // J at x1 face: compute from finite differences (same as Ohmic energy flux)
-    Real j2k   = -(b.x3f(m,k  ,j,i) - b.x3f(m,k  ,j,i-1))/size.d_view(m).dx1;
-    Real j2kp1 = -(b.x3f(m,k+1,j,i) - b.x3f(m,k+1,j,i-1))/size.d_view(m).dx1;
+    // e2 at x2-edge (k)
+    Real Bx = 0.5*(b0.x1f(m,k,j,i) + b0.x1f(m,k-1,j,i));
+    Real By = 0.25*(bcc(m,IBY,k,j,i) + bcc(m,IBY,k-1,j,i)
+                   + bcc(m,IBY,k,j,i-1) + bcc(m,IBY,k-1,j,i-1));
+    Real Bz = 0.5*(b0.x3f(m,k,j,i) + b0.x3f(m,k,j,i-1));
+    Real e2_k = eta * (SQR(Bx) + SQR(By) + SQR(Bz)) * je2(m,k,j,i);
 
-    Real j3j   = (b.x2f(m,k,j  ,i) - b.x2f(m,k,j  ,i-1))/size.d_view(m).dx1;
-    Real j3jp1 = (b.x2f(m,k,j+1,i) - b.x2f(m,k,j+1,i-1))/size.d_view(m).dx1;
+    // e2 at x2-edge (k+1)
+    Bx = 0.5*(b0.x1f(m,k+1,j,i) + b0.x1f(m,k,j,i));
+    By = 0.25*(bcc(m,IBY,k+1,j,i) + bcc(m,IBY,k,j,i)
+              + bcc(m,IBY,k+1,j,i-1) + bcc(m,IBY,k,j,i-1));
+    Bz = 0.5*(b0.x3f(m,k+1,j,i) + b0.x3f(m,k+1,j,i-1));
+    Real e2_kp1 = eta * (SQR(Bx) + SQR(By) + SQR(Bz)) * je2(m,k+1,j,i);
 
-    if (multi_d) {
-      j3j   -= (b.x1f(m,k,j  ,i) - b.x1f(m,k,j-1,i))/size.d_view(m).dx2;
-      j3jp1 -= (b.x1f(m,k,j+1,i) - b.x1f(m,k,j  ,i))/size.d_view(m).dx2;
-    }
-    if (three_d) {
-      j2k   += (b.x1f(m,k  ,j,i) - b.x1f(m,k-1,j,i))/size.d_view(m).dx3;
-      j2kp1 += (b.x1f(m,k+1,j,i) - b.x1f(m,k  ,j,i))/size.d_view(m).dx3;
-    }
+    Real e2_fc = 0.5*(e2_k + e2_kp1);
 
-    // Average J to face center
-    Real j2_fc = 0.5*(j2k + j2kp1);
-    Real j3_fc = 0.5*(j3j + j3jp1);
-    // j1 at x1-face is not needed for the Poynting flux in x1 direction,
-    // but is needed for the J.B projection
-    // j1 = dB3/dx2 - dB2/dx3
-    Real j1_fc = 0.0;
-    if (multi_d) {
-      j1_fc += 0.5*((b.x3f(m,k,j  ,i) - b.x3f(m,k,j-1  ,i))/size.d_view(m).dx2
-                   + (b.x3f(m,k,j+1,i) - b.x3f(m,k,j    ,i))/size.d_view(m).dx2);
-    }
-    if (three_d) {
-      j1_fc -= 0.5*((b.x2f(m,k  ,j,i) - b.x2f(m,k-1,j,i))/size.d_view(m).dx3
-                   + (b.x2f(m,k+1,j,i) - b.x2f(m,k  ,j,i))/size.d_view(m).dx3);
-    }
+    // e3 at x3-edge (j)
+    Bx = 0.5*(b0.x1f(m,k,j,i) + b0.x1f(m,k,j-1,i));
+    By = 0.5*(b0.x2f(m,k,j,i) + b0.x2f(m,k,j,i-1));
+    Bz = 0.25*(bcc(m,IBZ,k,j,i) + bcc(m,IBZ,k,j-1,i)
+              + bcc(m,IBZ,k,j,i-1) + bcc(m,IBZ,k,j-1,i-1));
+    Real e3_j = eta * (SQR(Bx) + SQR(By) + SQR(Bz)) * je3(m,k,j,i);
 
-    // B at face center
-    Real Bx_fc = b.x1f(m,k,j,i);
-    Real By_fc = 0.5*(bcc0(m,IBY,k,j,i) + bcc0(m,IBY,k,j,i-1));
-    Real Bz_fc = 0.5*(bcc0(m,IBZ,k,j,i) + bcc0(m,IBZ,k,j,i-1));
+    // e3 at x3-edge (j+1)
+    Bx = 0.5*(b0.x1f(m,k,j+1,i) + b0.x1f(m,k,j,i));
+    By = 0.5*(b0.x2f(m,k,j+1,i) + b0.x2f(m,k,j+1,i-1));
+    Bz = 0.25*(bcc(m,IBZ,k,j+1,i) + bcc(m,IBZ,k,j,i)
+              + bcc(m,IBZ,k,j+1,i-1) + bcc(m,IBZ,k,j,i-1));
+    Real e3_jp1 = eta * (SQR(Bx) + SQR(By) + SQR(Bz)) * je3(m,k,j+1,i);
 
-    Real Bsq = SQR(Bx_fc) + SQR(By_fc) + SQR(Bz_fc);
-    Real JdotB = j1_fc*Bx_fc + j2_fc*By_fc + j3_fc*Bz_fc;
+    Real e3_fc = 0.5*(e3_j + e3_jp1);
 
-    // E_amb components perpendicular to x1
-    Real E2_amb = eta * (Bsq*j2_fc - JdotB*By_fc);
-    Real E3_amb = eta * (Bsq*j3_fc - JdotB*Bz_fc);
+    Real b2_fc = 0.5*(bcc(m,IBY,k,j,i-1) + bcc(m,IBY,k,j,i));
+    Real b3_fc = 0.5*(bcc(m,IBZ,k,j,i-1) + bcc(m,IBZ,k,j,i));
 
-    // S_1 = E2*B3 - E3*B2
-    flx1(m,IEN,k,j,i) += E2_amb*Bz_fc - E3_amb*By_fc;
+    flx1(m,IEN,k,j,i) += e2_fc*b3_fc - e3_fc*b2_fc;
   });
-  if (pmy_pack->pmesh->one_d) {return;}
 
-  //------------------------------
-  // energy fluxes in x2-direction: S_2 = E3_amb*B1 - E1_amb*B3
+  // x2-flux: e3 at x3-edges (i,i+1), e1 at x1-edges (k,k+1)
   auto &flx2 = flx.x2f;
-  par_for("amb_heat2", DevExeSpace(), 0, nmb1, ks, ke, js, je+1, is, ie,
+  par_for("amb_heat2_3d", DevExeSpace(), 0, nmb1, ks, ke, js, je+1, is, ie,
   KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
-    // J at x2 face
-    Real j1k   = (b.x3f(m,k  ,j,i) - b.x3f(m,k  ,j-1,i))/size.d_view(m).dx2;
-    Real j1kp1 = (b.x3f(m,k+1,j,i) - b.x3f(m,k+1,j-1,i))/size.d_view(m).dx2;
+    // e3 at x3-edge (i)
+    Real Bx = 0.5*(b0.x1f(m,k,j,i) + b0.x1f(m,k,j-1,i));
+    Real By = 0.5*(b0.x2f(m,k,j,i) + b0.x2f(m,k,j,i-1));
+    Real Bz = 0.25*(bcc(m,IBZ,k,j,i) + bcc(m,IBZ,k,j-1,i)
+                   + bcc(m,IBZ,k,j,i-1) + bcc(m,IBZ,k,j-1,i-1));
+    Real e3_i = eta * (SQR(Bx) + SQR(By) + SQR(Bz)) * je3(m,k,j,i);
 
-    Real j3i   = (b.x2f(m,k,j,i  ) - b.x2f(m,k,j  ,i-1))/size.d_view(m).dx1
-               - (b.x1f(m,k,j,i  ) - b.x1f(m,k,j-1,i  ))/size.d_view(m).dx2;
-    Real j3ip1 = (b.x2f(m,k,j,i+1) - b.x2f(m,k,j  ,i  ))/size.d_view(m).dx1
-               - (b.x1f(m,k,j,i+1) - b.x1f(m,k,j-1,i+1))/size.d_view(m).dx2;
+    // e3 at x3-edge (i+1)
+    Bx = 0.5*(b0.x1f(m,k,j,i+1) + b0.x1f(m,k,j-1,i+1));
+    By = 0.5*(b0.x2f(m,k,j,i+1) + b0.x2f(m,k,j,i));
+    Bz = 0.25*(bcc(m,IBZ,k,j,i+1) + bcc(m,IBZ,k,j-1,i+1)
+              + bcc(m,IBZ,k,j,i) + bcc(m,IBZ,k,j-1,i));
+    Real e3_ip1 = eta * (SQR(Bx) + SQR(By) + SQR(Bz)) * je3(m,k,j,i+1);
 
-    if (three_d) {
-      j1k   -= (b.x2f(m,k  ,j,i) - b.x2f(m,k-1,j,i))/size.d_view(m).dx3;
-      j1kp1 -= (b.x2f(m,k+1,j,i) - b.x2f(m,k  ,j,i))/size.d_view(m).dx3;
-    }
+    Real e3_fc = 0.5*(e3_i + e3_ip1);
 
-    Real j1_fc = 0.5*(j1k + j1kp1);
-    Real j3_fc = 0.5*(j3i + j3ip1);
-    // j2 at x2-face for J.B
-    Real j2_fc = 0.0;
-    // j2 = dB1/dx3 - dB3/dx1
-    j2_fc -= 0.5*((b.x3f(m,k,j,i  ) - b.x3f(m,k,j,i-1))/size.d_view(m).dx1
-                 + (b.x3f(m,k,j,i+1) - b.x3f(m,k,j,i  ))/size.d_view(m).dx1);
-    if (three_d) {
-      j2_fc += 0.5*((b.x1f(m,k  ,j,i) - b.x1f(m,k-1,j,i))/size.d_view(m).dx3
-                   + (b.x1f(m,k+1,j,i) - b.x1f(m,k  ,j,i))/size.d_view(m).dx3);
-    }
+    // e1 at x1-edge (k)
+    Bx = 0.25*(bcc(m,IBX,k,j,i) + bcc(m,IBX,k-1,j,i)
+              + bcc(m,IBX,k,j-1,i) + bcc(m,IBX,k-1,j-1,i));
+    By = 0.5*(b0.x2f(m,k,j,i) + b0.x2f(m,k-1,j,i));
+    Bz = 0.5*(b0.x3f(m,k,j,i) + b0.x3f(m,k,j-1,i));
+    Real e1_k = eta * (SQR(Bx) + SQR(By) + SQR(Bz)) * je1(m,k,j,i);
 
-    // B at face center
-    Real Bx_fc = 0.5*(bcc0(m,IBX,k,j,i) + bcc0(m,IBX,k,j-1,i));
-    Real By_fc = b.x2f(m,k,j,i);
-    Real Bz_fc = 0.5*(bcc0(m,IBZ,k,j,i) + bcc0(m,IBZ,k,j-1,i));
+    // e1 at x1-edge (k+1)
+    Bx = 0.25*(bcc(m,IBX,k+1,j,i) + bcc(m,IBX,k,j,i)
+              + bcc(m,IBX,k+1,j-1,i) + bcc(m,IBX,k,j-1,i));
+    By = 0.5*(b0.x2f(m,k+1,j,i) + b0.x2f(m,k,j,i));
+    Bz = 0.5*(b0.x3f(m,k+1,j,i) + b0.x3f(m,k+1,j-1,i));
+    Real e1_kp1 = eta * (SQR(Bx) + SQR(By) + SQR(Bz)) * je1(m,k+1,j,i);
 
-    Real Bsq = SQR(Bx_fc) + SQR(By_fc) + SQR(Bz_fc);
-    Real JdotB = j1_fc*Bx_fc + j2_fc*By_fc + j3_fc*Bz_fc;
+    Real e1_fc = 0.5*(e1_k + e1_kp1);
 
-    Real E1_amb = eta * (Bsq*j1_fc - JdotB*Bx_fc);
-    Real E3_amb = eta * (Bsq*j3_fc - JdotB*Bz_fc);
+    Real b1_fc = 0.5*(bcc(m,IBX,k,j-1,i) + bcc(m,IBX,k,j,i));
+    Real b3_fc = 0.5*(bcc(m,IBZ,k,j-1,i) + bcc(m,IBZ,k,j,i));
 
-    // S_2 = E3*B1 - E1*B3
-    flx2(m,IEN,k,j,i) += E3_amb*Bx_fc - E1_amb*Bz_fc;
+    flx2(m,IEN,k,j,i) += e3_fc*b1_fc - e1_fc*b3_fc;
   });
-  if (pmy_pack->pmesh->two_d) {return;}
 
-  //------------------------------
-  // energy fluxes in x3-direction: S_3 = E1_amb*B2 - E2_amb*B1
+  // x3-flux: e1 at x1-edges (j,j+1), e2 at x2-edges (i,i+1)
   auto &flx3 = flx.x3f;
-  par_for("amb_heat3", DevExeSpace(), 0, nmb1, ks, ke+1, js, je, is, ie,
+  par_for("amb_heat3_3d", DevExeSpace(), 0, nmb1, ks, ke+1, js, je, is, ie,
   KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
-    // J at x3 face
-    Real j1j   = (b.x3f(m,k,j  ,i) - b.x3f(m,k  ,j-1,i))/size.d_view(m).dx2
-               - (b.x2f(m,k,j  ,i) - b.x2f(m,k-1,j  ,i))/size.d_view(m).dx3;
-    Real j1jp1 = (b.x3f(m,k,j+1,i) - b.x3f(m,k  ,j  ,i))/size.d_view(m).dx2
-               - (b.x2f(m,k,j+1,i) - b.x2f(m,k-1,j+1,i))/size.d_view(m).dx3;
+    // e1 at x1-edge (j)
+    Real Bx = 0.25*(bcc(m,IBX,k,j,i) + bcc(m,IBX,k-1,j,i)
+                   + bcc(m,IBX,k,j-1,i) + bcc(m,IBX,k-1,j-1,i));
+    Real By = 0.5*(b0.x2f(m,k,j,i) + b0.x2f(m,k-1,j,i));
+    Real Bz = 0.5*(b0.x3f(m,k,j,i) + b0.x3f(m,k,j-1,i));
+    Real e1_j = eta * (SQR(Bx) + SQR(By) + SQR(Bz)) * je1(m,k,j,i);
 
-    Real j2i   = -(b.x3f(m,k,j,i  ) - b.x3f(m,k  ,j,i-1))/size.d_view(m).dx1
-                + (b.x1f(m,k,j,i  ) - b.x1f(m,k-1,j,i  ))/size.d_view(m).dx3;
-    Real j2ip1 = -(b.x3f(m,k,j,i+1) - b.x3f(m,k  ,j,i  ))/size.d_view(m).dx1
-                + (b.x1f(m,k,j,i+1) - b.x1f(m,k-1,j,i+1))/size.d_view(m).dx3;
+    // e1 at x1-edge (j+1)
+    Bx = 0.25*(bcc(m,IBX,k,j+1,i) + bcc(m,IBX,k-1,j+1,i)
+              + bcc(m,IBX,k,j,i) + bcc(m,IBX,k-1,j,i));
+    By = 0.5*(b0.x2f(m,k,j+1,i) + b0.x2f(m,k-1,j+1,i));
+    Bz = 0.5*(b0.x3f(m,k,j+1,i) + b0.x3f(m,k,j,i));
+    Real e1_jp1 = eta * (SQR(Bx) + SQR(By) + SQR(Bz)) * je1(m,k,j+1,i);
 
-    Real j1_fc = 0.5*(j1j + j1jp1);
-    Real j2_fc = 0.5*(j2i + j2ip1);
-    // j3 at x3-face for J.B
-    Real j3_fc = 0.0;
-    // j3 = dB2/dx1 - dB1/dx2
-    j3_fc += 0.5*((b.x2f(m,k,j,i  ) - b.x2f(m,k,j,i-1))/size.d_view(m).dx1
-                 + (b.x2f(m,k,j,i+1) - b.x2f(m,k,j,i  ))/size.d_view(m).dx1);
-    j3_fc -= 0.5*((b.x1f(m,k,j  ,i) - b.x1f(m,k,j-1,i))/size.d_view(m).dx2
-                 + (b.x1f(m,k,j+1,i) - b.x1f(m,k,j  ,i))/size.d_view(m).dx2);
+    Real e1_fc = 0.5*(e1_j + e1_jp1);
 
-    // B at face center
-    Real Bx_fc = 0.5*(bcc0(m,IBX,k,j,i) + bcc0(m,IBX,k-1,j,i));
-    Real By_fc = 0.5*(bcc0(m,IBY,k,j,i) + bcc0(m,IBY,k-1,j,i));
-    Real Bz_fc = b.x3f(m,k,j,i);
+    // e2 at x2-edge (i)
+    Bx = 0.5*(b0.x1f(m,k,j,i) + b0.x1f(m,k-1,j,i));
+    By = 0.25*(bcc(m,IBY,k,j,i) + bcc(m,IBY,k-1,j,i)
+              + bcc(m,IBY,k,j,i-1) + bcc(m,IBY,k-1,j,i-1));
+    Bz = 0.5*(b0.x3f(m,k,j,i) + b0.x3f(m,k,j,i-1));
+    Real e2_i = eta * (SQR(Bx) + SQR(By) + SQR(Bz)) * je2(m,k,j,i);
 
-    Real Bsq = SQR(Bx_fc) + SQR(By_fc) + SQR(Bz_fc);
-    Real JdotB = j1_fc*Bx_fc + j2_fc*By_fc + j3_fc*Bz_fc;
+    // e2 at x2-edge (i+1)
+    Bx = 0.5*(b0.x1f(m,k,j,i+1) + b0.x1f(m,k-1,j,i+1));
+    By = 0.25*(bcc(m,IBY,k,j,i+1) + bcc(m,IBY,k-1,j,i+1)
+              + bcc(m,IBY,k,j,i) + bcc(m,IBY,k-1,j,i));
+    Bz = 0.5*(b0.x3f(m,k,j,i+1) + b0.x3f(m,k,j,i));
+    Real e2_ip1 = eta * (SQR(Bx) + SQR(By) + SQR(Bz)) * je2(m,k,j,i+1);
 
-    Real E1_amb = eta * (Bsq*j1_fc - JdotB*Bx_fc);
-    Real E2_amb = eta * (Bsq*j2_fc - JdotB*By_fc);
+    Real e2_fc = 0.5*(e2_i + e2_ip1);
 
-    // S_3 = E1*B2 - E2*B1
-    flx3(m,IEN,k,j,i) += E1_amb*By_fc - E2_amb*Bx_fc;
+    Real b1_fc = 0.5*(bcc(m,IBX,k-1,j,i) + bcc(m,IBX,k,j,i));
+    Real b2_fc = 0.5*(bcc(m,IBY,k-1,j,i) + bcc(m,IBY,k,j,i));
+
+    flx3(m,IEN,k,j,i) += e1_fc*b2_fc - e2_fc*b1_fc;
   });
 
   return;

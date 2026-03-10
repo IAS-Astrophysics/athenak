@@ -425,10 +425,10 @@ void MHD::CalcCurrentDensity(const DvceFaceFld4D<Real> &b) {
       ScrArray1D<Real> j2(member.team_scratch(scr_level), ncells1);
       ScrArray1D<Real> j3(member.team_scratch(scr_level), ncells1);
 
-      CurrentDensity(member, m, ks, js, is, ie+1, b, mbsize.d_view(m), j1, j2, j3);
+      CurrentDensity(member, m, ks, js, is-1, ie+2, b, mbsize.d_view(m), j1, j2, j3);
       member.team_barrier();
 
-      par_for_inner(member, is, ie+1, [&](const int i) {
+      par_for_inner(member, is-1, ie+2, [&](const int i) {
         je2(m,ks,  js,i)   = j2(i);
         je2(m,ke+1,js,i)   = j2(i);
         je3(m,ks,  js,i)   = j3(i);
@@ -443,16 +443,16 @@ void MHD::CalcCurrentDensity(const DvceFaceFld4D<Real> &b) {
     int scr_level = 0;
     size_t scr_size = ScrArray1D<Real>::shmem_size(ncells1) * 3;
 
-    par_for_outer("calc_j2d", DevExeSpace(), scr_size, scr_level, 0, nmb1, js, je+1,
+    par_for_outer("calc_j2d", DevExeSpace(), scr_size, scr_level, 0, nmb1, js-1, je+2,
     KOKKOS_LAMBDA(TeamMember_t member, const int m, const int j) {
       ScrArray1D<Real> j1(member.team_scratch(scr_level), ncells1);
       ScrArray1D<Real> j2(member.team_scratch(scr_level), ncells1);
       ScrArray1D<Real> j3(member.team_scratch(scr_level), ncells1);
 
-      CurrentDensity(member, m, ks, j, is, ie+1, b, mbsize.d_view(m), j1, j2, j3);
+      CurrentDensity(member, m, ks, j, is-1, ie+2, b, mbsize.d_view(m), j1, j2, j3);
       member.team_barrier();
 
-      par_for_inner(member, is, ie+1, [&](const int i) {
+      par_for_inner(member, is-1, ie+2, [&](const int i) {
         je1(m,ks,  j,i) = j1(i);
         je1(m,ke+1,j,i) = j1(i);
         je2(m,ks,  j,i) = j2(i);
@@ -467,16 +467,16 @@ void MHD::CalcCurrentDensity(const DvceFaceFld4D<Real> &b) {
   int scr_level = 0;
   size_t scr_size = ScrArray1D<Real>::shmem_size(ncells1) * 3;
 
-  par_for_outer("calc_j3d", DevExeSpace(), scr_size, scr_level, 0, nmb1, ks, ke+1, js, je+1,
+  par_for_outer("calc_j3d", DevExeSpace(), scr_size, scr_level, 0, nmb1, ks-1, ke+2, js-1, je+2,
   KOKKOS_LAMBDA(TeamMember_t member, const int m, const int k, const int j) {
     ScrArray1D<Real> j1(member.team_scratch(scr_level), ncells1);
     ScrArray1D<Real> j2(member.team_scratch(scr_level), ncells1);
     ScrArray1D<Real> j3(member.team_scratch(scr_level), ncells1);
 
-    CurrentDensity(member, m, k, j, is, ie+1, b, mbsize.d_view(m), j1, j2, j3);
+    CurrentDensity(member, m, k, j, is-1, ie+2, b, mbsize.d_view(m), j1, j2, j3);
     member.team_barrier();
 
-    par_for_inner(member, is, ie+1, [&](const int i) {
+    par_for_inner(member, is-1, ie+2, [&](const int i) {
       je1(m,k,j,i) = j1(i);
       je2(m,k,j,i) = j2(i);
       je3(m,k,j,i) = j3(i);
