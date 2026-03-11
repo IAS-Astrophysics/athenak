@@ -1781,36 +1781,31 @@ def write_athdf(filename, fdata, varsize_bytes=4, locsize_bytes=8):
         LogicalLocations[mb] = logical[:3]
         Levels[mb] = logical[-1]
         geometry = fdata["mb_geometry"][mb]
-        mb_x1f = np.linspace(geometry[0], geometry[1], nx1 + 1)
-        mb_x1v = 0.5 * (mb_x1f[1:] + mb_x1f[:-1])
-        mb_x2f = np.linspace(geometry[2], geometry[3], nx2 + 1)
-        mb_x2v = 0.5 * (mb_x2f[1:] + mb_x2f[:-1])
-        mb_x3f = np.linspace(geometry[4], geometry[5], nx3 + 1)
-        mb_x3v = 0.5 * (mb_x3f[1:] + mb_x3f[:-1])
-        if x1slice:
-            x1f[mb] = np.array(
-                mb_x1f[(fdata["mb_index"][mb][0]): (fdata["mb_index"][mb][0] + 2)]
-            )
-            x1v[mb] = np.array([np.average(mb_x1f)])
-        else:
-            x1f[mb] = mb_x1f
-            x1v[mb] = mb_x1v
-        if x2slice:
-            x2f[mb] = np.array(
-                mb_x2f[(fdata["mb_index"][mb][2]): (fdata["mb_index"][mb][2] + 2)]
-            )
-            x2v[mb] = np.array([np.average(x2f[mb])])
-        else:
-            x2f[mb] = mb_x2f
-            x2v[mb] = mb_x2v
-        if x3slice:
-            x3f[mb] = np.array(
-                mb_x3f[(fdata["mb_index"][mb][4]): (fdata["mb_index"][mb][4] + 2)]
-            )
-            x3v[mb] = np.array([np.average(x3f[mb])])
-        else:
-            x3f[mb] = mb_x3f
-            x3v[mb] = mb_x3v
+
+        # 1. Calculate the cell width for this MeshBlock
+        dx1 = (geometry[1] - geometry[0]) / nx1 if nx1 > 0 else 0.0
+        dx2 = (geometry[3] - geometry[2]) / nx2 if nx2 > 0 else 0.0
+        dx3 = (geometry[5] - geometry[4]) / nx3 if nx3 > 0 else 0.0
+
+        # 2. Extract index offsets. 
+        # AthenaK does not pad singleton dimensions with ghost zones. 
+        # read_binary unconditionally subtracts nghost, so we override it to 0 if nx == 1.
+        offset1 = fdata["mb_index"][mb][0] if nx1 > 1 else 0
+        offset2 = fdata["mb_index"][mb][2] if nx2 > 1 else 0
+        offset3 = fdata["mb_index"][mb][4] if nx3 > 1 else 0
+
+        # 3. Dynamically calculate the output coordinates
+        start_x1 = geometry[0] + offset1 * dx1
+        x1f[mb]  = np.linspace(start_x1, start_x1 + nx1_out * dx1, nx1_out + 1)
+        x1v[mb]  = 0.5 * (x1f[mb][1:] + x1f[mb][:-1])
+
+        start_x2 = geometry[2] + offset2 * dx2
+        x2f[mb]  = np.linspace(start_x2, start_x2 + nx2_out * dx2, nx2_out + 1)
+        x2v[mb]  = 0.5 * (x2f[mb][1:] + x2f[mb][:-1])
+
+        start_x3 = geometry[4] + offset3 * dx3
+        x3f[mb]  = np.linspace(start_x3, start_x3 + nx3_out * dx3, nx3_out + 1)
+        x3v[mb]  = 0.5 * (x3f[mb][1:] + x3f[mb][:-1])
 
     # set dataset names and number of variables
     dataset_names = [np.array("uov", dtype="|S21")]
