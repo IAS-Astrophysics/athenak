@@ -43,14 +43,14 @@ TurbulenceDriver::TurbulenceDriver(MeshBlockPack *pp, ParameterInput *pin) :
   xcos("xcos",1,1,1),xsin("xsin",1,1,1),ycos("ycos",1,1,1),
   ysin("ysin",1,1,1),zcos("zcos",1,1,1),zsin("zsin",1,1,1) {
   // allocate memory for force registers
-  int nmb = pmy_pack->nmb_thispack;
+  int nmb = pmy_pack->pmesh->nmb_maxperrank;
   auto &indcs = pmy_pack->pmesh->mb_indcs;
   int ncells1 = indcs.nx1 + 2*(indcs.ng);
   int ncells2 = (indcs.nx2 > 1)? (indcs.nx2 + 2*(indcs.ng)) : 1;
   int ncells3 = (indcs.nx3 > 1)? (indcs.nx3 + 2*(indcs.ng)) : 1;
 
   // Initialize AMR tracking variables
-  current_nmb_ = nmb;
+  current_nmb_ = pmy_pack->nmb_thispack;
   Mesh *pm = pmy_pack->pmesh;
   if (pm->adaptive && pm->pmr != nullptr) {
     last_nmb_created_ = pm->pmr->nmb_created;
@@ -1333,6 +1333,7 @@ TaskStatus TurbulenceDriver::EnsureBasisSize(Driver *pdrive, int stage) {
 
   // --- change detection (idempotent) ---
   int nmb = pmy_pack->nmb_thispack;
+  int nmb_alloc = pmy_pack->pmesh->nmb_maxperrank;
   bool needs_resize = false;
   if (nmb != current_nmb_) needs_resize = true;
   if (pm->adaptive && pm->pmr != nullptr) {
@@ -1362,7 +1363,7 @@ TaskStatus TurbulenceDriver::EnsureBasisSize(Driver *pdrive, int stage) {
   const int m_start = 0;
 
   // Reallocate arrays only if MeshBlock count changed
-  if (force.extent(0) != nmb) {
+  if (force.extent(0) < nmb_alloc) {
 
     auto force_old = force;
     auto force_tmp1_old = force_tmp1;
@@ -1374,15 +1375,15 @@ TaskStatus TurbulenceDriver::EnsureBasisSize(Driver *pdrive, int stage) {
     auto zcos_old = zcos;
     auto zsin_old = zsin;
 
-    Kokkos::realloc(force, nmb, 3, ncells3, ncells2, ncells1);
-    Kokkos::realloc(force_tmp1, nmb, 3, ncells3, ncells2, ncells1);
-    Kokkos::realloc(force_tmp2, nmb, 3, ncells3, ncells2, ncells1);
-    Kokkos::realloc(xcos, nmb, mode_count, ncells1);
-    Kokkos::realloc(xsin, nmb, mode_count, ncells1);
-    Kokkos::realloc(ycos, nmb, mode_count, ncells2);
-    Kokkos::realloc(ysin, nmb, mode_count, ncells2);
-    Kokkos::realloc(zcos, nmb, mode_count, ncells3);
-    Kokkos::realloc(zsin, nmb, mode_count, ncells3);
+    Kokkos::realloc(force, nmb_alloc, 3, ncells3, ncells2, ncells1);
+    Kokkos::realloc(force_tmp1, nmb_alloc, 3, ncells3, ncells2, ncells1);
+    Kokkos::realloc(force_tmp2, nmb_alloc, 3, ncells3, ncells2, ncells1);
+    Kokkos::realloc(xcos, nmb_alloc, mode_count, ncells1);
+    Kokkos::realloc(xsin, nmb_alloc, mode_count, ncells1);
+    Kokkos::realloc(ycos, nmb_alloc, mode_count, ncells2);
+    Kokkos::realloc(ysin, nmb_alloc, mode_count, ncells2);
+    Kokkos::realloc(zcos, nmb_alloc, mode_count, ncells3);
+    Kokkos::realloc(zsin, nmb_alloc, mode_count, ncells3);
 
     int copy_n = std::min(old_nmb, nmb);
 
