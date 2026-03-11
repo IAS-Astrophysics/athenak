@@ -128,6 +128,7 @@ namespace {
     Real disc_mask_rin;   // inner disc-only mask radius (negative = off)
     Real disc_mask_rout;  // outer disc-only mask radius (negative = off)
     bool cooling_direct_set;      // if true, set temperature to desired profile; else relax toward target
+    Real esrc_blend_width;  // E-field blend width inside rfix (0 = hard boundary)
     };
 
     my_params mp;
@@ -244,6 +245,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     mp.disc_mask_rin  = pin->GetOrAddReal("problem", "disc_mask_rin",  -1.0);
     mp.disc_mask_rout = pin->GetOrAddReal("problem", "disc_mask_rout", -1.0);
     mp.cooling_direct_set = pin->GetOrAddBoolean("problem", "cooling_direct_set", false);
+    mp.esrc_blend_width = pin->GetOrAddReal("problem", "esrc_blend_width", 0.0);
 
     // Capture variables for kernel - e.g. indices for looping over the meshblocks and the size of the meshblocks.
     auto &indcs = pmy_mesh_->mb_indcs;
@@ -1273,8 +1275,11 @@ void MyEfieldMask(Mesh* pm) { //CF:CHECKED
                 Bfield(mp_, x1v, x2f, x3f, mmx, mmy, mmz, Bx, By, Bz);
             }
 
-            // E1=-(v X B)=VzBy-VyBz
-            e1_(m,k,j,i) = vz*By - vy*Bz;
+            // E1=-(v X B)=VzBy-VyBz (blended with CT E near rfix)
+            Real blend_w1 = (mp_.esrc_blend_width > 0.0) ?
+                fmin(1.0, (mp_.rfix - rc) / mp_.esrc_blend_width) : 1.0;
+            e1_(m,k,j,i) = blend_w1*(vz*By - vy*Bz)
+                           + (1.0 - blend_w1)*e1_(m,k,j,i);
 
         }
             
@@ -1320,8 +1325,11 @@ void MyEfieldMask(Mesh* pm) { //CF:CHECKED
                 Bfield(mp_, x1f, x2v, x3f, mmx, mmy, mmz, Bx, By, Bz);
             }
 
-            // E2=-(v X B)=VxBz-VzBx
-            e2_(m,k,j,i) = vx*Bz - vz*Bx;
+            // E2=-(v X B)=VxBz-VzBx (blended with CT E near rfix)
+            Real blend_w2 = (mp_.esrc_blend_width > 0.0) ?
+                fmin(1.0, (mp_.rfix - rc) / mp_.esrc_blend_width) : 1.0;
+            e2_(m,k,j,i) = blend_w2*(vx*Bz - vz*Bx)
+                           + (1.0 - blend_w2)*e2_(m,k,j,i);
 
         }
             
@@ -1367,8 +1375,11 @@ void MyEfieldMask(Mesh* pm) { //CF:CHECKED
                 Bfield(mp_, x1f, x2f, x3v, mmx, mmy, mmz, Bx, By, Bz);
             }
 
-            // E3=-(v X B)=VyBx-VxBy
-            e3_(m,k,j,i) = vy*Bx - vx*By;
+            // E3=-(v X B)=VyBx-VxBy (blended with CT E near rfix)
+            Real blend_w3 = (mp_.esrc_blend_width > 0.0) ?
+                fmin(1.0, (mp_.rfix - rc) / mp_.esrc_blend_width) : 1.0;
+            e3_(m,k,j,i) = blend_w3*(vy*Bx - vx*By)
+                           + (1.0 - blend_w3)*e3_(m,k,j,i);
 
         }
             
@@ -1435,7 +1446,10 @@ void MyEfieldMask_VecPot(Mesh* pm) {
         if (rc < mp_.rfix) {
             Real a_old = A1_m(mp_, mx_t,   my_t,   mz_t,   x1v, x2f, x3f);
             Real a_new = A1_m(mp_, mx_new, my_new, mz_new, x1v, x2f, x3f);
-            e1_(m,k,j,i) = -wgt * (a_new - a_old) * inv_dt;
+            Real blend_w1 = (mp_.esrc_blend_width > 0.0) ?
+                fmin(1.0, (mp_.rfix - rc) / mp_.esrc_blend_width) : 1.0;
+            e1_(m,k,j,i) = blend_w1 * (-wgt * (a_new - a_old) * inv_dt)
+                           + (1.0 - blend_w1) * e1_(m,k,j,i);
         }
     });
 
@@ -1460,7 +1474,10 @@ void MyEfieldMask_VecPot(Mesh* pm) {
         if (rc < mp_.rfix) {
             Real a_old = A2_m(mp_, mx_t,   my_t,   mz_t,   x1f, x2v, x3f);
             Real a_new = A2_m(mp_, mx_new, my_new, mz_new, x1f, x2v, x3f);
-            e2_(m,k,j,i) = -wgt * (a_new - a_old) * inv_dt;
+            Real blend_w2 = (mp_.esrc_blend_width > 0.0) ?
+                fmin(1.0, (mp_.rfix - rc) / mp_.esrc_blend_width) : 1.0;
+            e2_(m,k,j,i) = blend_w2 * (-wgt * (a_new - a_old) * inv_dt)
+                           + (1.0 - blend_w2) * e2_(m,k,j,i);
         }
     });
 
@@ -1485,7 +1502,10 @@ void MyEfieldMask_VecPot(Mesh* pm) {
         if (rc < mp_.rfix) {
             Real a_old = A3_m(mp_, mx_t,   my_t,   mz_t,   x1f, x2f, x3v);
             Real a_new = A3_m(mp_, mx_new, my_new, mz_new, x1f, x2f, x3v);
-            e3_(m,k,j,i) = -wgt * (a_new - a_old) * inv_dt;
+            Real blend_w3 = (mp_.esrc_blend_width > 0.0) ?
+                fmin(1.0, (mp_.rfix - rc) / mp_.esrc_blend_width) : 1.0;
+            e3_(m,k,j,i) = blend_w3 * (-wgt * (a_new - a_old) * inv_dt)
+                           + (1.0 - blend_w3) * e3_(m,k,j,i);
         }
     });
 

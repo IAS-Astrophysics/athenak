@@ -53,7 +53,7 @@ nlev        = 10            # Geodesic grid refinement (3-6 typical)
 <time>
 evolution   = dynamic
 cfl_number  = 0.3        # The Courant, Friedrichs, & Lewy (CFL) Number
-nlim        = 1          # cycle limit
+nlim        = -1          # cycle limit
 tlim        = 188.49     # 12.56  #31.4  #6.28 # time limit
 integrator  = rk2        # time integration algorithm
 
@@ -84,7 +84,7 @@ nx2       = 40      # Number of cells in each MeshBlock, X2-dir
 nx3       = 20      # Number of cells in each MeshBlock, X3-dir
 
 <mesh_refinement>
-refinement = none  # type of refinement
+refinement = static  # type of refinement
 
 <refined_region1>
 x1min=-7.9
@@ -153,10 +153,11 @@ pgen_name = magsph      # problem generator name
 user_srcs = true        # Switch the user source terms on
 user_constraint = true  # Cooling applied in separate MHD stage (after RecvB_Shr)
 user_esrcs = true       # Switch the user e field mask on
+esrc_method = vecpot    # analytically advance the esrc to match the desired field
 fofc_scalar_tau = 1.0   # Damping timescale for FOFC diagnostic scalar (0 = off)
 user_hist = false       # Switch the user history function on
 
-mag_option = 2          # Zhaohuan's field definition [1] or my smoothed definition [2]
+mag_option = 1          # Zhaohuan's field definition [1] or my smoothed definition [2]
 thetaw = 0.0            # tilt of stellar rotation axis (counterclockwise rot about y-axis)
 thetab = 0.0            # 0.785 # tilt of stellar dipole axis (counterclockwise rot about y-axis)
 origid = 2.8            # 2.8   # angular velocity of star
@@ -183,7 +184,7 @@ rstar = 0.1               # radius of the star
 gravsmooth = 0.1          # smoothing of stellar gravity
 tcool = 1e-2              # characteristic cooling timescale [local orbital time]
 cooling_direct_set = true  # if true, set T to desired profile; else relax toward target over tcool
-avg_grid_bfields = false  # when masking the induction eqn use the grid avg of face centred B 
+avg_grid_bfields = false   # when masking the induction eqn use the grid avg of face centred B 
 
 disc_mask_rin = -1        # inner disc-only mask radius (negative = off)
 disc_mask_rout = -1       # outer disc-only mask radius (negative = off) 
