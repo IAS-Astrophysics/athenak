@@ -527,8 +527,6 @@ TaskStatus TurbulenceDriver::InitializeModes(Driver *pdrive, int stage) {
   if ((t_since_start < tdriv_duration) || turb_flag != 1){ // Update forcing if continuous or t<tdriv_duration
 
     for(int i_turb_update = n_turb_updates_yet; i_turb_update < n_turb_updates_reqd; i_turb_update++){
-      if (global_variable::my_rank == 0) std::cout << "i_turb_update = " << i_turb_update << std::endl;
-
       auto force_tmp2_ = force_tmp2;
       const int nmb = pmy_pack->nmb_thispack;
 
@@ -537,8 +535,6 @@ TaskStatus TurbulenceDriver::InitializeModes(Driver *pdrive, int stage) {
       KOKKOS_LAMBDA(int m, int n, int k, int j, int i) {
         force_tmp2_(m,n,k,j,i) = 0.0;
       });
-
-      // if (global_variable::my_rank == 0) std::cout << "force_tmp2_ zeroed." << std::endl;
 
       int no_dir=3;
       int nmode = 0;
@@ -644,7 +640,6 @@ TaskStatus TurbulenceDriver::InitializeModes(Driver *pdrive, int stage) {
       akb_.template modify<HostMemSpace>();
       akb_.template sync<DevExeSpace>();
 
-      // if (global_variable::my_rank == 0) std::cout << "Sines and cosines updated on device" << std::endl;
       auto xcos_ = xcos;
       auto xsin_ = xsin;
       auto ycos_ = ycos;
@@ -669,7 +664,6 @@ TaskStatus TurbulenceDriver::InitializeModes(Driver *pdrive, int stage) {
           }
         }
       });
-      // if (global_variable::my_rank == 0) std::cout << "force_tmp2_ computed." << std::endl;
       // Let's skip the momentum subtraction during restarts -- or alternatively move this to add force
       Real fcorr, gcorr;
       if ((tcorr <= 1e-6) || (i_turb_update==0)) {  // use whitenoise
@@ -777,8 +771,6 @@ TaskStatus TurbulenceDriver::UpdateForcing(Driver *pdrive, int stage) {
   // Copy values of force_tmp1 into force array
   // perform operations such as normalisation,
   // momentum subtraction directly on the force array
-
-  // if (global_variable::my_rank == 0) std::cout << " norm_factor = " << norm_factor << std::endl;
 
   if ((pm->ncycle >=1) && (current_time >= tdriv_start) &&
       ((t_since_start < tdriv_duration) || turb_flag != 1))

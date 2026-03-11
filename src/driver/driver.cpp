@@ -325,9 +325,19 @@ void Driver::Initialize(Mesh *pmesh, ParameterInput *pin, Outputs *pout, bool re
 
   //---- Step 3.  Cycle through output Types and load data / write files.
   if (!res_flag) { // only write outputs at the beginning of the run
+    Kokkos::fence();
+    Kokkos::Timer out_timer;
+
     for (auto &out : pout->pout_list) {
       out->LoadOutputData(pmesh);
       out->WriteOutputFile(pmesh, pin);
+    }
+  
+    Kokkos::fence();
+    float out_time = out_timer.seconds();
+    if (global_variable::my_rank == 0) {
+      std::cout << "Total Outputs Time: "
+                << out_time << " s" << std::endl;
     }
   }
 
@@ -419,8 +429,17 @@ void Driver::Execute(Mesh *pmesh, ParameterInput *pin, Outputs *pout) {
 
         if (((out->out_params.dt > 0.0) && ((time_32 >= next_32) && (time_32<tlim_32))) ||
             ((dcycle_ > 0) && ((pmesh->ncycle)%(dcycle_) == 0)) ) {
+          Kokkos::fence();
+          Kokkos::Timer out_timer;
           out->LoadOutputData(pmesh);
           out->WriteOutputFile(pmesh, pin);
+	  Kokkos::fence();
+	  float out_time = out_timer.seconds();
+          if (global_variable::my_rank == 0) {
+            std::cout << out->out_params.block_name
+                      << " (" << out->out_params.file_type << "): "
+                      << out_time << " s" << std::endl;
+	  }
         }
       }
 
@@ -447,9 +466,19 @@ void Driver::Execute(Mesh *pmesh, ParameterInput *pin, Outputs *pout) {
 void Driver::Finalize(Mesh *pmesh, ParameterInput *pin, Outputs *pout) {
   // cycle through output Types and load data / write files
   //  This design allows for asynchronous outputs to implemented in the future.
+  Kokkos::fence();
+  Kokkos::Timer out_timer;
+
   for (auto &out : pout->pout_list) {
     out->LoadOutputData(pmesh);
     out->WriteOutputFile(pmesh, pin);
+  }
+
+  Kokkos::fence();
+  float out_time = out_timer.seconds();
+  if (global_variable::my_rank == 0) {
+    std::cout << "Total Outputs Time: " 
+              << out_time << " s" << std::endl;
   }
 
   // call any problem specific functions to do work after main loop
