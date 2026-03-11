@@ -22,6 +22,7 @@ using UserRefinementFnPtr = void (*)(MeshBlockPack* pmbp);
 using UserHistoryFnPtr = void (*)(HistoryData *pdata, Mesh *pm);
 using UserESrctermFnPtr = void (*)(Mesh* pm);
 using UserConstraintFnPtr = void (*)(Mesh* pm, const Real bdt);
+using UserFluxmaskFnPtr = void (*)(Mesh* pm);
 
 //----------------------------------------------------------------------------------------
 //! \class ProblemGenerator
@@ -50,6 +51,9 @@ class ProblemGenerator {
   // true if user constraint (e.g. cooling) is specified
   bool user_constraint;
 
+  // true if user flux mask (diode BC) is specified
+  bool user_fluxmask;
+
   // vector of SphericalGrid objects for analysis
   std::vector<std::unique_ptr<SphericalGrid>> spherical_grids;
 
@@ -63,6 +67,7 @@ class ProblemGenerator {
   UserHistoryFnPtr user_hist_func=nullptr;
   UserESrctermFnPtr user_esrcs_func=nullptr;
   UserConstraintFnPtr user_constraint_func=nullptr;
+  UserFluxmaskFnPtr user_fluxmask_func=nullptr;
 
   // RK stage weight for E-field source terms: gam1[stage]/beta[stage].
   // Set by MHD::EFieldSrc before calling user_esrcs_func.
