@@ -323,7 +323,8 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
     bool &flat = coord.is_minkowski;
     auto &spin = coord.bh_spin;
 
-    auto &dtold = pm->dtold;
+    const Real dt_last = pm->dt_last_completed;
+    const bool have_prior = (pm->pmb_pack->pmhd->wbcc_saved && dt_last > 0.);
     auto w0_ = pm->pmb_pack->pmhd->w0;
     auto bcc_ = pm->pmb_pack->pmhd->bcc0;
     auto wsaved_ = pm->pmb_pack->pmhd->wsaved;
@@ -352,6 +353,13 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
       // Extract components of metric
       Real glower[4][4], gupper[4][4];
       ComputeMetricAndInverse(x1v, x2v, x3v, flat, spin, glower, gupper);
+
+      if (!have_prior) {
+        for (int mu=0; mu<4; ++mu) {
+          jcon(m,mu,k,j,i) = 0.;
+        }
+        return;
+      }
 
       // Get 4-velocity for current step
       const Real &uu1 = w0_(m,IVX,k,j,i);
@@ -430,27 +438,22 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
 
       // Compute current
       for (int mu=0; mu<4; ++mu) {
-        if (dtold > 0) {
-          const Real gF0p = get_detg_Fcon(0, mu, ucov, bcov);
-          const Real gF0m = get_detg_Fcon(0, mu, ucovsaved, bcovsaved);
-          const Real gF1p = get_detg_Fcon(1, mu, ucov, bcov);
-          const Real gF1m = get_detg_Fcon(1, mu, ucovsaved, bcovsaved);
-          const Real gF2p = (multi_d) ? get_detg_Fcon(2, mu, ucov, bcov) : 0.;
-          const Real gF2m = (multi_d) ? get_detg_Fcon(2, mu, ucovsaved, bcovsaved) : 0.;
-          const Real gF3p = (three_d) ? get_detg_Fcon(3, mu, ucov, bcov) : 0.;
-          const Real gF3m = (three_d) ? get_detg_Fcon(3, mu, ucovsaved, bcovsaved) : 0.;
+        const Real gF0p = get_detg_Fcon(0, mu, ucov, bcov);
+        const Real gF0m = get_detg_Fcon(0, mu, ucovsaved, bcovsaved);
+        const Real gF1p = get_detg_Fcon(1, mu, ucov, bcov);
+        const Real gF1m = get_detg_Fcon(1, mu, ucovsaved, bcovsaved);
+        const Real gF2p = (multi_d) ? get_detg_Fcon(2, mu, ucov, bcov) : 0.;
+        const Real gF2m = (multi_d) ? get_detg_Fcon(2, mu, ucovsaved, bcovsaved) : 0.;
+        const Real gF3p = (three_d) ? get_detg_Fcon(3, mu, ucov, bcov) : 0.;
+        const Real gF3m = (three_d) ? get_detg_Fcon(3, mu, ucovsaved, bcovsaved) : 0.;
 
-          const Real dgF0 = (gF0p - gF0m) / dtold;
-          const Real dgF1 = (gF1p - gF1m) / (2 * size.d_view(m).dx1);
-          const Real dgF2 = (multi_d) ? (gF2p - gF2m) / (2 * size.d_view(m).dx2) : 0.;
-          const Real dgF3 = (three_d) ? (gF3p - gF3m) / (2 * size.d_view(m).dx3) : 0.;
+        const Real dgF0 = (gF0p - gF0m) / dt_last;
+        const Real dgF1 = (gF1p - gF1m) / (2 * size.d_view(m).dx1);
+        const Real dgF2 = (multi_d) ? (gF2p - gF2m) / (2 * size.d_view(m).dx2) : 0.;
+        const Real dgF3 = (three_d) ? (gF3p - gF3m) / (2 * size.d_view(m).dx3) : 0.;
 
-          const Real detg = 1.;
-          jcon(m,mu,k,j,i) = 1. / (detg * sqrt(4. * M_PI)) * (dgF0 + dgF1 + dgF2 + dgF3);
-        } else {
-          // zero current if dtold == 0 (e.g., when we don't have a previous step)
-          jcon(m,mu,k,j,i) = 0.;
-        }
+        const Real detg = 1.;
+        jcon(m,mu,k,j,i) = 1. / (detg * sqrt(4. * M_PI)) * (dgF0 + dgF1 + dgF2 + dgF3);
       }
     });
   }
