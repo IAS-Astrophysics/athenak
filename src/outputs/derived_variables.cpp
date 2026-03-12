@@ -31,6 +31,45 @@
 #include "outputs.hpp"
 #include "utils/current.hpp"
 
+KOKKOS_INLINE_FUNCTION
+void ComputeUcBcFromPrimitive(const Real uu1, const Real uu2, const Real uu3,
+                              const Real bb1, const Real bb2, const Real bb3,
+                              const Real glower[4][4], const Real gupper[4][4],
+                              Real ucov[4], Real bcov[4]) {
+  const Real uu_sq = glower[1][1]*uu1*uu1 + 2.0*glower[1][2]*uu1*uu2
+                   + 2.0*glower[1][3]*uu1*uu3
+                   + glower[2][2]*uu2*uu2 + 2.0*glower[2][3]*uu2*uu3
+                   + glower[3][3]*uu3*uu3;
+  const Real alpha = sqrt(-1.0/gupper[0][0]);
+  const Real gamma = sqrt(1.0 + uu_sq);
+
+  Real ucon[4];
+  ucon[0] = gamma / alpha;
+  ucon[1] = uu1 - alpha * gamma * gupper[0][1];
+  ucon[2] = uu2 - alpha * gamma * gupper[0][2];
+  ucon[3] = uu3 - alpha * gamma * gupper[0][3];
+
+  for (int mu=0; mu<4; ++mu) {
+    ucov[mu] = 0.0;
+    for (int nu=0; nu<4; ++nu) {
+      ucov[mu] += glower[mu][nu]*ucon[nu];
+    }
+  }
+
+  Real bcon[4];
+  bcon[0] = bb1 * ucov[1] + bb2 * ucov[2] + bb3 * ucov[3];
+  bcon[1] = (bb1 + bcon[0] * ucon[1]) / ucon[0];
+  bcon[2] = (bb2 + bcon[0] * ucon[2]) / ucon[0];
+  bcon[3] = (bb3 + bcon[0] * ucon[3]) / ucon[0];
+
+  for (int mu=0; mu<4; ++mu) {
+    bcov[mu] = 0.0;
+    for (int nu=0; nu<4; ++nu) {
+      bcov[mu] += glower[mu][nu]*bcon[nu];
+    }
+  }
+}
+
 //----------------------------------------------------------------------------------------
 // BaseTypeOutput::ComputeDerivedVariable()
 
@@ -338,22 +377,6 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
 
     par_for("jcon", DevExeSpace(), 0, (nmb-1), ks, ke, js, je, is, ie,
     KOKKOS_LAMBDA(int m, int k, int j, int i) {
-      Real &x1min = size.d_view(m).x1min;
-      Real &x1max = size.d_view(m).x1max;
-      Real x1v = CellCenterX(i-is, indcs.nx1, x1min, x1max);
-
-      Real &x2min = size.d_view(m).x2min;
-      Real &x2max = size.d_view(m).x2max;
-      Real x2v = CellCenterX(j-js, indcs.nx2, x2min, x2max);
-
-      Real &x3min = size.d_view(m).x3min;
-      Real &x3max = size.d_view(m).x3max;
-      Real x3v = CellCenterX(k-ks, indcs.nx3, x3min, x3max);
-
-      // Extract components of metric
-      Real glower[4][4], gupper[4][4];
-      ComputeMetricAndInverse(x1v, x2v, x3v, flat, spin, glower, gupper);
-
       if (!have_prior) {
         for (int mu=0; mu<4; ++mu) {
           jcon(m,mu,k,j,i) = 0.;
@@ -361,91 +384,125 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
         return;
       }
 
-      // Get 4-velocity for current step
-      const Real &uu1 = w0_(m,IVX,k,j,i);
-      const Real &uu2 = w0_(m,IVY,k,j,i);
-      const Real &uu3 = w0_(m,IVZ,k,j,i);
+      Real &x1min = size.d_view(m).x1min;
+      Real &x1max = size.d_view(m).x1max;
+      Real x1v = CellCenterX(i-is, indcs.nx1, x1min, x1max);
+      Real x1v_ip1 = CellCenterX(i+1-is, indcs.nx1, x1min, x1max);
+      Real x1v_im1 = CellCenterX(i-1-is, indcs.nx1, x1min, x1max);
 
-      Real uu_sq = glower[1][1]*uu1*uu1 + 2.0*glower[1][2]*uu1*uu2
-                 + 2.0*glower[1][3]*uu1*uu3
-                 + glower[2][2]*uu2*uu2 + 2.0*glower[2][3]*uu2*uu3
-                 + glower[3][3]*uu3*uu3;
-      Real alpha = sqrt(-1.0/gupper[0][0]);
-      Real gamma = sqrt(1.0 + uu_sq);
+      Real &x2min = size.d_view(m).x2min;
+      Real &x2max = size.d_view(m).x2max;
+      Real x2v = CellCenterX(j-js, indcs.nx2, x2min, x2max);
+      Real x2v_jp1 = CellCenterX(j+1-js, indcs.nx2, x2min, x2max);
+      Real x2v_jm1 = CellCenterX(j-1-js, indcs.nx2, x2min, x2max);
 
-      Real ucon[4];
-      ucon[0] = gamma / alpha;
-      ucon[1] = uu1 - alpha * gamma * gupper[0][1];
-      ucon[2] = uu2 - alpha * gamma * gupper[0][2];
-      ucon[3] = uu3 - alpha * gamma * gupper[0][3];
+      Real &x3min = size.d_view(m).x3min;
+      Real &x3max = size.d_view(m).x3max;
+      Real x3v = CellCenterX(k-ks, indcs.nx3, x3min, x3max);
+      Real x3v_kp1 = CellCenterX(k+1-ks, indcs.nx3, x3min, x3max);
+      Real x3v_km1 = CellCenterX(k-1-ks, indcs.nx3, x3min, x3max);
 
-      // Get 4-velocity for last step
-      const Real &uu1saved = wsaved_(m,IVX,k,j,i);
-      const Real &uu2saved = wsaved_(m,IVY,k,j,i);
-      const Real &uu3saved = wsaved_(m,IVZ,k,j,i);
-
-      uu_sq = glower[1][1]*uu1saved*uu1saved + 2.0*glower[1][2]*uu1saved*uu2saved
-            + 2.0*glower[1][3]*uu1saved*uu3saved
-            + glower[2][2]*uu2saved*uu2saved + 2.0*glower[2][3]*uu2saved*uu3saved
-            + glower[3][3]*uu3saved*uu3saved;
-      gamma = sqrt(1.0 + uu_sq);
-
-      Real uconsaved[4];
-      uconsaved[0] = gamma / alpha;
-      uconsaved[1] = uu1saved - alpha * gamma * gupper[0][1];
-      uconsaved[2] = uu2saved - alpha * gamma * gupper[0][2];
-      uconsaved[3] = uu3saved - alpha * gamma * gupper[0][3];
-
-      // Lower 4-velocities
-      Real ucov[4], ucovsaved[4];
-      for (int mu=0; mu<4; ++mu) {
-        ucov[mu] = 0.0;
-        ucovsaved[mu] = 0.0;
-        for (int nu=0; nu<4; ++nu) {
-          ucov[mu] += glower[mu][nu]*ucon[nu];
-          ucovsaved[mu] += glower[mu][nu]*uconsaved[nu];
-        }
+      // Metric at center and neighbors
+      Real glower_c[4][4], gupper_c[4][4];
+      Real glower_ip1[4][4], gupper_ip1[4][4];
+      Real glower_im1[4][4], gupper_im1[4][4];
+      Real glower_jp1[4][4], gupper_jp1[4][4];
+      Real glower_jm1[4][4], gupper_jm1[4][4];
+      Real glower_kp1[4][4], gupper_kp1[4][4];
+      Real glower_km1[4][4], gupper_km1[4][4];
+      ComputeMetricAndInverse(x1v, x2v, x3v, flat, spin, glower_c, gupper_c);
+      ComputeMetricAndInverse(x1v_ip1, x2v, x3v, flat, spin, glower_ip1, gupper_ip1);
+      ComputeMetricAndInverse(x1v_im1, x2v, x3v, flat, spin, glower_im1, gupper_im1);
+      if (multi_d) {
+        ComputeMetricAndInverse(x1v, x2v_jp1, x3v, flat, spin, glower_jp1, gupper_jp1);
+        ComputeMetricAndInverse(x1v, x2v_jm1, x3v, flat, spin, glower_jm1, gupper_jm1);
+      }
+      if (three_d) {
+        ComputeMetricAndInverse(x1v, x2v, x3v_kp1, flat, spin, glower_kp1, gupper_kp1);
+        ComputeMetricAndInverse(x1v, x2v, x3v_km1, flat, spin, glower_km1, gupper_km1);
       }
 
-      // Get bcon and bconsaved
-      Real bcon[4];
-      Real bconsaved[4];
+      // Center (new/old) for temporal term
+      Real ucov_new[4], bcov_new[4];
+      Real ucov_old[4], bcov_old[4];
+      ComputeUcBcFromPrimitive(w0_(m,IVX,k,j,i), w0_(m,IVY,k,j,i), w0_(m,IVZ,k,j,i),
+                               bcc_(m,IBX,k,j,i), bcc_(m,IBY,k,j,i), bcc_(m,IBZ,k,j,i),
+                               glower_c, gupper_c, ucov_new, bcov_new);
+      ComputeUcBcFromPrimitive(wsaved_(m,IVX,k,j,i), wsaved_(m,IVY,k,j,i),
+                               wsaved_(m,IVZ,k,j,i), bccsaved_(m,IBX,k,j,i),
+                               bccsaved_(m,IBY,k,j,i), bccsaved_(m,IBZ,k,j,i),
+                               glower_c, gupper_c, ucov_old, bcov_old);
 
-      bcon[0] = bcc_(m,IBX,k,j,i) * ucov[1] + bcc_(m,IBY,k,j,i) * ucov[2]
-              + bcc_(m,IBZ,k,j,i) * ucov[3];
-      bcon[1] = (bcc_(m,IBX,k,j,i) + bcon[0] * ucon[1]) / ucon[0];
-      bcon[2] = (bcc_(m,IBY,k,j,i) + bcon[0] * ucon[2]) / ucon[0];
-      bcon[3] = (bcc_(m,IBZ,k,j,i) + bcon[0] * ucon[3]) / ucon[0];
+      // Time-centered neighbors for spatial terms
+      Real ucov_ip1[4], bcov_ip1[4], ucov_im1[4], bcov_im1[4];
+      Real ucov_jp1[4], bcov_jp1[4], ucov_jm1[4], bcov_jm1[4];
+      Real ucov_kp1[4], bcov_kp1[4], ucov_km1[4], bcov_km1[4];
 
-      bconsaved[0] = bccsaved_(m,IBX,k,j,i) * ucovsaved[1]
-                   + bccsaved_(m,IBY,k,j,i) * ucovsaved[2]
-                   + bccsaved_(m,IBZ,k,j,i) * ucovsaved[3];
-      bconsaved[1] = (bccsaved_(m,IBX,k,j,i) + bconsaved[0]*uconsaved[1]) / uconsaved[0];
-      bconsaved[2] = (bccsaved_(m,IBY,k,j,i) + bconsaved[0]*uconsaved[2]) / uconsaved[0];
-      bconsaved[3] = (bccsaved_(m,IBZ,k,j,i) + bconsaved[0]*uconsaved[3]) / uconsaved[0];
+      ComputeUcBcFromPrimitive(
+          0.5*(w0_(m,IVX,k,j,i+1) + wsaved_(m,IVX,k,j,i+1)),
+          0.5*(w0_(m,IVY,k,j,i+1) + wsaved_(m,IVY,k,j,i+1)),
+          0.5*(w0_(m,IVZ,k,j,i+1) + wsaved_(m,IVZ,k,j,i+1)),
+          0.5*(bcc_(m,IBX,k,j,i+1) + bccsaved_(m,IBX,k,j,i+1)),
+          0.5*(bcc_(m,IBY,k,j,i+1) + bccsaved_(m,IBY,k,j,i+1)),
+          0.5*(bcc_(m,IBZ,k,j,i+1) + bccsaved_(m,IBZ,k,j,i+1)),
+          glower_ip1, gupper_ip1, ucov_ip1, bcov_ip1);
+      ComputeUcBcFromPrimitive(
+          0.5*(w0_(m,IVX,k,j,i-1) + wsaved_(m,IVX,k,j,i-1)),
+          0.5*(w0_(m,IVY,k,j,i-1) + wsaved_(m,IVY,k,j,i-1)),
+          0.5*(w0_(m,IVZ,k,j,i-1) + wsaved_(m,IVZ,k,j,i-1)),
+          0.5*(bcc_(m,IBX,k,j,i-1) + bccsaved_(m,IBX,k,j,i-1)),
+          0.5*(bcc_(m,IBY,k,j,i-1) + bccsaved_(m,IBY,k,j,i-1)),
+          0.5*(bcc_(m,IBZ,k,j,i-1) + bccsaved_(m,IBZ,k,j,i-1)),
+          glower_im1, gupper_im1, ucov_im1, bcov_im1);
 
-      // Lower bcon and bconsaved
-      Real bcov[4], bcovsaved[4];
+      if (multi_d) {
+        ComputeUcBcFromPrimitive(
+            0.5*(w0_(m,IVX,k,j+1,i) + wsaved_(m,IVX,k,j+1,i)),
+            0.5*(w0_(m,IVY,k,j+1,i) + wsaved_(m,IVY,k,j+1,i)),
+            0.5*(w0_(m,IVZ,k,j+1,i) + wsaved_(m,IVZ,k,j+1,i)),
+            0.5*(bcc_(m,IBX,k,j+1,i) + bccsaved_(m,IBX,k,j+1,i)),
+            0.5*(bcc_(m,IBY,k,j+1,i) + bccsaved_(m,IBY,k,j+1,i)),
+            0.5*(bcc_(m,IBZ,k,j+1,i) + bccsaved_(m,IBZ,k,j+1,i)),
+            glower_jp1, gupper_jp1, ucov_jp1, bcov_jp1);
+        ComputeUcBcFromPrimitive(
+            0.5*(w0_(m,IVX,k,j-1,i) + wsaved_(m,IVX,k,j-1,i)),
+            0.5*(w0_(m,IVY,k,j-1,i) + wsaved_(m,IVY,k,j-1,i)),
+            0.5*(w0_(m,IVZ,k,j-1,i) + wsaved_(m,IVZ,k,j-1,i)),
+            0.5*(bcc_(m,IBX,k,j-1,i) + bccsaved_(m,IBX,k,j-1,i)),
+            0.5*(bcc_(m,IBY,k,j-1,i) + bccsaved_(m,IBY,k,j-1,i)),
+            0.5*(bcc_(m,IBZ,k,j-1,i) + bccsaved_(m,IBZ,k,j-1,i)),
+            glower_jm1, gupper_jm1, ucov_jm1, bcov_jm1);
+      }
 
-      for (int mu=0; mu<4; ++mu) {
-        bcov[mu] = 0.0;
-        bcovsaved[mu] = 0.0;
-        for (int nu=0; nu<4; ++nu) {
-          bcov[mu] += glower[mu][nu]*bcon[nu];
-          bcovsaved[mu] += glower[mu][nu]*bconsaved[nu];
-        }
+      if (three_d) {
+        ComputeUcBcFromPrimitive(
+            0.5*(w0_(m,IVX,k+1,j,i) + wsaved_(m,IVX,k+1,j,i)),
+            0.5*(w0_(m,IVY,k+1,j,i) + wsaved_(m,IVY,k+1,j,i)),
+            0.5*(w0_(m,IVZ,k+1,j,i) + wsaved_(m,IVZ,k+1,j,i)),
+            0.5*(bcc_(m,IBX,k+1,j,i) + bccsaved_(m,IBX,k+1,j,i)),
+            0.5*(bcc_(m,IBY,k+1,j,i) + bccsaved_(m,IBY,k+1,j,i)),
+            0.5*(bcc_(m,IBZ,k+1,j,i) + bccsaved_(m,IBZ,k+1,j,i)),
+            glower_kp1, gupper_kp1, ucov_kp1, bcov_kp1);
+        ComputeUcBcFromPrimitive(
+            0.5*(w0_(m,IVX,k-1,j,i) + wsaved_(m,IVX,k-1,j,i)),
+            0.5*(w0_(m,IVY,k-1,j,i) + wsaved_(m,IVY,k-1,j,i)),
+            0.5*(w0_(m,IVZ,k-1,j,i) + wsaved_(m,IVZ,k-1,j,i)),
+            0.5*(bcc_(m,IBX,k-1,j,i) + bccsaved_(m,IBX,k-1,j,i)),
+            0.5*(bcc_(m,IBY,k-1,j,i) + bccsaved_(m,IBY,k-1,j,i)),
+            0.5*(bcc_(m,IBZ,k-1,j,i) + bccsaved_(m,IBZ,k-1,j,i)),
+            glower_km1, gupper_km1, ucov_km1, bcov_km1);
       }
 
       // Compute current
       for (int mu=0; mu<4; ++mu) {
-        const Real gF0p = get_detg_Fcon(0, mu, ucov, bcov);
-        const Real gF0m = get_detg_Fcon(0, mu, ucovsaved, bcovsaved);
-        const Real gF1p = get_detg_Fcon(1, mu, ucov, bcov);
-        const Real gF1m = get_detg_Fcon(1, mu, ucovsaved, bcovsaved);
-        const Real gF2p = (multi_d) ? get_detg_Fcon(2, mu, ucov, bcov) : 0.;
-        const Real gF2m = (multi_d) ? get_detg_Fcon(2, mu, ucovsaved, bcovsaved) : 0.;
-        const Real gF3p = (three_d) ? get_detg_Fcon(3, mu, ucov, bcov) : 0.;
-        const Real gF3m = (three_d) ? get_detg_Fcon(3, mu, ucovsaved, bcovsaved) : 0.;
+        const Real gF0p = get_detg_Fcon(0, mu, ucov_new, bcov_new);
+        const Real gF0m = get_detg_Fcon(0, mu, ucov_old, bcov_old);
+        const Real gF1p = get_detg_Fcon(1, mu, ucov_ip1, bcov_ip1);
+        const Real gF1m = get_detg_Fcon(1, mu, ucov_im1, bcov_im1);
+        const Real gF2p = (multi_d) ? get_detg_Fcon(2, mu, ucov_jp1, bcov_jp1) : 0.;
+        const Real gF2m = (multi_d) ? get_detg_Fcon(2, mu, ucov_jm1, bcov_jm1) : 0.;
+        const Real gF3p = (three_d) ? get_detg_Fcon(3, mu, ucov_kp1, bcov_kp1) : 0.;
+        const Real gF3m = (three_d) ? get_detg_Fcon(3, mu, ucov_km1, bcov_km1) : 0.;
 
         const Real dgF0 = (gF0p - gF0m) / dt_last;
         const Real dgF1 = (gF1p - gF1m) / (2 * size.d_view(m).dx1);
