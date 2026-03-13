@@ -129,6 +129,8 @@ namespace {
     Real disc_mask_rout;  // outer disc-only mask radius (negative = off)
     bool cooling_direct_set;      // if true, set temperature to desired profile; else relax toward target
     Real esrc_blend_width;  // E-field blend width inside rfix (0 = hard boundary)
+    Real sponge_width;    // thickness of sponge zone outside rfix (0 = disabled)
+    Real sponge_tau;      // sponge relaxation timescale in units of local orbital periods
     };
 
     my_params mp;
@@ -147,6 +149,7 @@ void MyEfieldMask_VecPot(Mesh* pm);
 void MyHistFunc(HistoryData *pdata, Mesh *pm);
 
 void StarMask(Mesh* pm, const Real bdt);
+void BoundarySpongeMask(Mesh* pm, const Real bdt);
 void DiscOnlyMask(Mesh* pm, const Real bdt);
 void MyFluxDiode(Mesh* pm);
 void FixedHydroBC(Mesh *pm);
@@ -251,6 +254,8 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     mp.disc_mask_rout = pin->GetOrAddReal("problem", "disc_mask_rout", -1.0);
     mp.cooling_direct_set = pin->GetOrAddBoolean("problem", "cooling_direct_set", false);
     mp.esrc_blend_width = pin->GetOrAddReal("problem", "esrc_blend_width", 0.0);
+    mp.sponge_width = pin->GetOrAddReal("problem", "sponge_width", 0.0);
+    mp.sponge_tau   = pin->GetOrAddReal("problem", "sponge_tau",   1.0);
 
     // Capture variables for kernel - e.g. indices for looping over the meshblocks and the size of the meshblocks.
     auto &indcs = pmy_mesh_->mb_indcs;
@@ -963,6 +968,7 @@ void MySourceTerms(Mesh* pm, const Real bdt) { //CF:CHECKED
 
     StarGravSourceTerm(pm, bdt);
     if (mp.denstar > 0.0) StarMask(pm, bdt);
+    BoundarySpongeMask(pm, bdt);
     if (mp.disc_mask_rin >= 0.0 || mp.disc_mask_rout >= 0.0) DiscOnlyMask(pm, bdt);
     // if(mp.is_ideal && mp.tcool>0.0) CoolingSourceTerms(pm, bdt);
 
@@ -1242,6 +1248,96 @@ void StarMask(Mesh* pm, const Real bdt) { //CF:CHECKED
     }); // end par_for
 
 } // end stellar mask  
+
+//----------------------------------------------------------------------------------------
+// Sponge / damping layer applied in the thin shell rfix < rc < rfix + sponge_width.
+// At each timestep, conserved fluid variables (density, momenta, energy) are relaxed
+// exponentially toward the unperturbed disc initial-condition profile.  The relaxation
+// strength is weighted linearly from 1 at rc = rfix down to 0 at rc = rfix + sponge_width,
+// and the timescale is sponge_tau * local_orbital_period.
+// The magnetic field is left untouched; the current bcc0 magnetic energy is included in
+// the energy target so only the fluid thermal/kinetic energy is damped.
+// Disabled (no-op) when sponge_width = 0.
+void BoundarySpongeMask(Mesh* pm, const Real bdt) {
+
+    if (mp.sponge_width <= 0.0) return;
+
+    auto &indcs = pm->mb_indcs;
+    int &is = indcs.is; int &ie = indcs.ie;
+    int &js = indcs.js; int &je = indcs.je;
+    int &ks = indcs.ks; int &ke = indcs.ke;
+    MeshBlockPack *pmbp = pm->pmb_pack;
+    auto &size = pmbp->pmb->mb_size;
+
+    auto mp_ = mp;
+
+    DvceArray5D<Real> u0_, bcc0_;
+    if (pmbp->phydro != nullptr) {
+        u0_ = pmbp->phydro->u0;
+    } else if (pmbp->pmhd != nullptr) {
+        u0_ = pmbp->pmhd->u0;
+        bcc0_ = pmbp->pmhd->bcc0;
+    }
+
+    par_for("boundary_sponge", DevExeSpace(), 0, (pmbp->nmb_thispack-1), ks, ke, js, je, is, ie,
+    KOKKOS_LAMBDA(int m, int k, int j, int i) {
+
+        Real &x1min = size.d_view(m).x1min;
+        Real &x1max = size.d_view(m).x1max;
+        Real x1v = CellCenterX(i-is, indcs.nx1, x1min, x1max);
+
+        Real &x2min = size.d_view(m).x2min;
+        Real &x2max = size.d_view(m).x2max;
+        Real x2v = CellCenterX(j-js, indcs.nx2, x2min, x2max);
+
+        Real &x3min = size.d_view(m).x3min;
+        Real &x3max = size.d_view(m).x3max;
+        Real x3v = CellCenterX(k-ks, indcs.nx3, x3min, x3max);
+
+        Real rad = sqrt(x1v*x1v + x2v*x2v);
+        Real rc  = sqrt(rad*rad + x3v*x3v);
+
+        // only act inside the sponge shell
+        if (rc <= mp_.rfix || rc >= mp_.rfix + mp_.sponge_width) return;
+
+        // linear weight: 1 at the mask surface, 0 at the outer sponge edge
+        Real wgt = (mp_.rfix + mp_.sponge_width - rc) / mp_.sponge_width;
+
+        // relaxation fraction: wgt * dt / tau
+        // tau = sponge_tau * reference orbital period at r=1 (T_orb,ref = 2*pi for gm0=1)
+        Real tau_ref = mp_.sponge_tau * 2.0*M_PI;
+        Real dfrac   = fmin(wgt * bdt / tau_ref, 1.0);  // clamp to avoid overshoot
+
+        // target: unperturbed disc profile at this location
+        Real phi   = atan2(x2v, x1v);
+        Real z     = x3v;
+        Real den_t = DenDiscCyl(mp_, rad, phi, z);
+        den_t = fmax(den_t, rho_floor(mp_, rc));
+        Real v1_t(0.0), v2_t(0.0), v3_t(0.0);
+        VelDiscCyl(mp_, rad, phi, z, v1_t, v2_t, v3_t);
+
+        // relax density and momenta
+        u0_(m,IDN,k,j,i) += dfrac * (den_t         - u0_(m,IDN,k,j,i));
+        u0_(m,IM1,k,j,i) += dfrac * (den_t * v1_t  - u0_(m,IM1,k,j,i));
+        u0_(m,IM2,k,j,i) += dfrac * (den_t * v2_t  - u0_(m,IM2,k,j,i));
+        u0_(m,IM3,k,j,i) += dfrac * (den_t * v3_t  - u0_(m,IM3,k,j,i));
+
+        // relax total energy (keep current magnetic energy, damp thermal + kinetic)
+        if (mp_.is_ideal) {
+            Real e_int_t = PoverR(mp_, rad) * den_t / (mp_.gamma_gas - 1.0);
+            Real e_kin_t = 0.5 * den_t * (v1_t*v1_t + v2_t*v2_t + v3_t*v3_t);
+            Real e_mag   = 0.0;
+            if (mp_.magnetic_fields_enabled) {
+                e_mag = 0.5*(SQR(bcc0_(m,IBX,k,j,i)) +
+                             SQR(bcc0_(m,IBY,k,j,i)) +
+                             SQR(bcc0_(m,IBZ,k,j,i)));
+            }
+            Real ien_t = e_int_t + e_kin_t + e_mag;
+            u0_(m,IEN,k,j,i) += dfrac * (ien_t - u0_(m,IEN,k,j,i));
+        }
+    }); // end par_for
+
+} // end BoundarySpongeMask
 
 //----------------------------------------------------------------------------------------
 void DiscOnlyMask(Mesh* pm, const Real bdt) {
