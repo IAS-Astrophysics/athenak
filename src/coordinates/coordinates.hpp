@@ -21,7 +21,8 @@ struct EOS_Data;
 // Enumerator for the excision method
 enum class ExcisionScheme {
   fixed,
-  lapse
+  lapse,
+  horizon
 };
 
 //----------------------------------------------------------------------------------------

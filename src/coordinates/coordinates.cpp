@@ -70,6 +70,15 @@ Coordinates::Coordinates(ParameterInput *pin, MeshBlockPack *ppack) :
         } else if (emethod.compare("lapse") == 0) {
           coord_data.excision_scheme = ExcisionScheme::lapse;
           coord_data.excise_lapse = pin->GetOrAddReal("coord","excise_lapse", 0.25);
+        } else if (emethod.compare("horizon") == 0) {
+          if (pin->DoesBlockExist("ahf")) {
+            coord_data.excision_scheme = ExcisionScheme::horizon;
+          } else {
+            std::cout << "### FATAL ERROR in " << __FILE__ << " at line "
+                    << __LINE__ << std::endl
+                    << "Horizon excision needs <ahf> block!" << std::endl;
+            std::exit(EXIT_FAILURE);
+          }
         } else {
           std::cout << "### FATAL ERROR in " << __FILE__ << " at line "
                     << __LINE__ << std::endl

@@ -87,21 +87,21 @@ private:
   GaussLegendreGrid *gl_grid;
  
   // Arrays of spherical harmonics and derivatives
-  DualArray2D<Real> Y0, Yc, Ys; 
-  DualArray2D<Real> dY0dth, dYcdth, dYsdth, dYcdph, dYsdph; 
-  DualArray2D<Real> dY0dth2, dYcdth2, dYcdthdph, dYsdth2, dYsdthdph, dYcdph2, dYsdph2; 
+  HostArray2D<Real> Y0, Yc, Ys; 
+  HostArray2D<Real> dY0dth, dYcdth, dYsdth, dYcdph, dYsdph; 
+  HostArray2D<Real> dY0dth2, dYcdth2, dYcdthdph, dYsdth2, dYsdthdph, dYcdph2, dYsdph2; 
 
   // Arrays for spectral coefficients
-  DualArray1D<Real> a0; 
-  DualArray1D<Real> ac; 
-  DualArray1D<Real> as; 
+  HostArray1D<Real> a0; 
+  HostArray1D<Real> ac; 
+  HostArray1D<Real> as; 
   Real last_a0; // last coefficient a_00
 
   // Arrays used for the fields on the sphere
-  DualArray1D<Real> rr, rr_dth, rr_dph; 
+  HostArray1D<Real> rr, rr_dth, rr_dph; 
 
   // Array computed in Surface Integrals
-  DualArray1D<Real> rho;
+  HostArray1D<Real> rho;
 
   // Indexes of surface integrals
   enum {
@@ -167,10 +167,10 @@ private:
   /* std::vector<DualArray1D<Real>> g_interp; 
   std::vector<DualArray1D<Real>> K_interp; 
   std::vector<DualArray1D<Real>> dg_interp; */
-  DvceArray2D<Real> g_interp, K_interp, dg_interp;
+  HostArray2D<Real> g_interp, K_interp, dg_interp;
 
   // Flag points
-  DualArray1D<int> havepoint;
+  HostArray1D<int> havepoint;
 
   // Functions used in the fast-flow algorithm
   void MetricInterp();

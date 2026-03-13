@@ -13,6 +13,8 @@
 #include "coordinates.hpp"
 #include "cell_locations.hpp"
 #include "coordinates/adm.hpp"
+#include "z4c/z4c.hpp"
+#include "z4c/ahf.hpp"
 
 // inlined spherical Kerr-Schild r evaluated at CKS x1, x2, x3
 KOKKOS_INLINE_FUNCTION
@@ -186,6 +188,67 @@ void Coordinates::UpdateExcisionMasks() {
       bool excise = (adm.alpha(m,k,j,i) < excise_lapse);
       floor(m,k,j,i) = excise;
       flux(m,k,j,i) = excise;
+    });
+  }
+
+  if (coord_data.excision_scheme == ExcisionScheme::horizon) {
+    // capture variables for kernel
+    auto &indcs = pmy_pack->pmesh->mb_indcs;
+    auto &size = pmy_pack->pmb->mb_size;
+    int &ng = indcs.ng;
+    int is = indcs.is; int js = indcs.js; int ks = indcs.ks;
+    int n1 = indcs.nx1 + 2 * ng;
+    int n2 = (indcs.nx2 > 1) ? (indcs.nx2 + 2 * ng) : 1;
+    int n3 = (indcs.nx3 > 1) ? (indcs.nx3 + 2 * ng) : 1;
+    int nmb1 = pmy_pack->nmb_thispack - 1;
+    auto &floor = excision_floor;
+    auto &flux = excision_flux;
+
+    // set up arrays to hold horizon information
+    int hsize = pmy_pack->pz4c->phorizon.size();
+    DvceArray2D<Real> hcenter("hcenter", hsize, 3);
+    DvceArray2D<Real> hradius("hradius", hsize, 1);
+    DvceArray2D<bool> hfound("hfound", hsize, 1);
+
+    // fill horizon arrays
+    for (int h = 0; h < hsize; ++h) {
+      hcenter(h,0) = pmy_pack->pz4c->phorizon[h]->center[0];
+      hcenter(h,1) = pmy_pack->pz4c->phorizon[h]->center[1];
+      hcenter(h,2) = pmy_pack->pz4c->phorizon[h]->center[2];
+      hradius(h,0) = pmy_pack->pz4c->phorizon[h]->rr_min;
+      hfound(h,0) = pmy_pack->pz4c->phorizon[h]->ah_found;
+    }
+    
+    par_for("set_excision_horizon", DevExeSpace(), 0, nmb1, 0, (n3-1), 0, (n2-1), 0, (n1-1),
+    KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
+      // Set MB specifics
+      Real &x1min = size.d_view(m).x1min;
+      Real &x1max = size.d_view(m).x1max;
+      Real &x2min = size.d_view(m).x2min;
+      Real &x2max = size.d_view(m).x2max;
+      Real &x3min = size.d_view(m).x3min;
+      Real &x3max = size.d_view(m).x3max;
+
+      Real x1 = CellCenterX(i - is, indcs.nx1, x1min, x1max);
+      Real x2 = CellCenterX(j - js, indcs.nx2, x2min, x2max);
+      Real x3 = CellCenterX(k - ks, indcs.nx3, x3min, x3max);
+
+      bool excise = false;
+      for (int h = 0; h < hsize; ++h) {
+        if (not hfound(h,0)) continue;
+
+        const Real r2 = SQR(x1 - hcenter(h,0)) +
+                        SQR(x2 - hcenter(h,1)) +
+                        SQR(x3 - hcenter(h,2));
+
+        if (r2 < SQR(hradius(h,0))) {
+          excise = true;
+          break;
+        }
+      }
+
+      floor(m,k,j,i) = excise;
+      flux(m,k,j,i) = excise; 
     });
   }
 }
