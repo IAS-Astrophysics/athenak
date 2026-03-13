@@ -218,7 +218,7 @@ void Coordinates::UpdateExcisionMasks() {
       hradius(h,0) = pmy_pack->pz4c->phorizon[h]->rr_min;
       hfound(h,0) = pmy_pack->pz4c->phorizon[h]->ah_found;
     }
-    
+
     par_for("set_excision_horizon", DevExeSpace(), 0, nmb1, 0, (n3-1), 0, (n2-1), 0, (n1-1),
     KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
       // Set MB specifics

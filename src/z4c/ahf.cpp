@@ -614,19 +614,7 @@ void AHF::MetricInterp()
       dg_interp(DZ_GYZ,p) = S->Interpolate(dg, DZ_GYZ);
       dg_interp(DZ_GZZ,p) = S->Interpolate(dg, DZ_GZZ);
     }
-    fprintf(fgi, "%.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e\n", theta, phi,
-              g_interp(GXX,p),g_interp(GXY,p),g_interp(GXZ,p),
-              g_interp(GYY,p),g_interp(GYZ,p),g_interp(GZZ,p));
-    fprintf(fKi, "%.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e\n", theta, phi,
-              K_interp(GXX,p),K_interp(GXY,p),K_interp(GXZ,p),
-              K_interp(GYY,p),K_interp(GYZ,p),K_interp(GZZ,p));
-    fprintf(fdgi, "%.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e\n", theta, phi,
-              dg_interp(DX_GXX,p),dg_interp(DX_GXY,p),dg_interp(DX_GXZ,p),
-              dg_interp(DX_GYY,p),dg_interp(DX_GYZ,p),dg_interp(DX_GZZ,p),
-              dg_interp(DY_GXX,p),dg_interp(DY_GXY,p),dg_interp(DY_GXZ,p),
-              dg_interp(DY_GYY,p),dg_interp(DY_GYZ,p),dg_interp(DY_GZZ,p),
-              dg_interp(DZ_GXX,p),dg_interp(DZ_GXY,p),dg_interp(DZ_GXZ,p),
-              dg_interp(DZ_GYY,p),dg_interp(DZ_GYZ,p),dg_interp(DZ_GZZ,p));
+
     delete S;
   }
 }
