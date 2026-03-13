@@ -495,14 +495,14 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
 
       // Compute current
       for (int mu=0; mu<4; ++mu) {
-        const Real gF0p = get_detg_Fcon(0, mu, ucov_new, bcov_new);
-        const Real gF0m = get_detg_Fcon(0, mu, ucov_old, bcov_old);
-        const Real gF1p = get_detg_Fcon(1, mu, ucov_ip1, bcov_ip1);
-        const Real gF1m = get_detg_Fcon(1, mu, ucov_im1, bcov_im1);
-        const Real gF2p = (multi_d) ? get_detg_Fcon(2, mu, ucov_jp1, bcov_jp1) : 0.;
-        const Real gF2m = (multi_d) ? get_detg_Fcon(2, mu, ucov_jm1, bcov_jm1) : 0.;
-        const Real gF3p = (three_d) ? get_detg_Fcon(3, mu, ucov_kp1, bcov_kp1) : 0.;
-        const Real gF3m = (three_d) ? get_detg_Fcon(3, mu, ucov_km1, bcov_km1) : 0.;
+        const Real gF0p = get_detg_Fcon(mu, 0, ucov_new, bcov_new);
+        const Real gF0m = get_detg_Fcon(mu, 0, ucov_old, bcov_old);
+        const Real gF1p = get_detg_Fcon(mu, 1, ucov_ip1, bcov_ip1);
+        const Real gF1m = get_detg_Fcon(mu, 1, ucov_im1, bcov_im1);
+        const Real gF2p = (multi_d) ? get_detg_Fcon(mu, 2, ucov_jp1, bcov_jp1) : 0.;
+        const Real gF2m = (multi_d) ? get_detg_Fcon(mu, 2, ucov_jm1, bcov_jm1) : 0.;
+        const Real gF3p = (three_d) ? get_detg_Fcon(mu, 3, ucov_kp1, bcov_kp1) : 0.;
+        const Real gF3m = (three_d) ? get_detg_Fcon(mu, 3, ucov_km1, bcov_km1) : 0.;
 
         const Real dgF0 = (gF0p - gF0m) / dt_last;
         const Real dgF1 = (gF1p - gF1m) / (2 * size.d_view(m).dx1);
