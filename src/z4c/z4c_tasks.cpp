@@ -72,10 +72,12 @@ void Z4c::QueueZ4cTasks() {
                  Task_Run, {Z4c_AlgC});
   if (pmy_pack->pdyngr != nullptr) {
     pnr->QueueTask(&Z4c::UpdateExcisionMasks, this, Z4c_Excise, "Z4c_Excise", Task_Run,
-                   {Z4c_Z4c2ADM});
+                   {Z4c_Z4c2ADM}, {Z4c_AHF});
   }
   pnr->QueueTask(&Z4c::NewTimeStep, this, Z4c_Newdt, "Z4c_Newdt", Task_Run,
                  {Z4c_Z4c2ADM});
+  pnr->QueueTask(&Z4c::TrackCompactObjects, this, Z4c_PT, "Z4c_PT", Task_Run, {Z4c_Z4c2ADM});
+  pnr->QueueTask(&Z4c::FindHorizon, this, Z4c_AHF, "Z4c_AHF", Task_Run, {Z4c_PT});
 
   // End task list
   pnr->QueueTask(&Z4c::ClearSend, this, Z4c_ClearS, "Z4c_ClearS", Task_End);
@@ -97,9 +99,7 @@ void Z4c::QueueZ4cTasks() {
                  {Z4c_ClearSW});
   pnr->QueueTask(&Z4c::CalcWaveForm, this, Z4c_Wave, "Z4c_Wave", Task_End,
                  {Z4c_ClearRW});
-  pnr->QueueTask(&Z4c::TrackCompactObjects, this, Z4c_PT, "Z4c_PT", Task_End, {Z4c_Wave});
-  pnr->QueueTask(&Z4c::FindHorizon, this, Z4c_AHF, "Z4c_AHF", Task_End, {Z4c_PT});
-  pnr->QueueTask(&Z4c::CCEDump, this, Z4c_CCE, "CCEDump", Task_End, {Z4c_AHF});
+  pnr->QueueTask(&Z4c::CCEDump, this, Z4c_CCE, "CCEDump", Task_End, {Z4c_Wave});
   pnr->QueueTask(&Z4c::DumpHorizons, this, Z4c_DumpHorizon, "Z4c_DumpHorizon",
                 Task_End, {Z4c_CCE});
 }
