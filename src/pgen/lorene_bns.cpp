@@ -194,9 +194,9 @@ void SetupBNS(ParameterInput *pin, Mesh* pmy_mesh_) {
         for (int i = 0; i < ncells1; i++) {
           // Extract metric quantities
           host_adm.alpha(m, k, j, i) = bns->nnn[idx];
-          host_adm.beta_u(m, 0, k, j, i) = bns->beta_x[idx];
-          host_adm.beta_u(m, 1, k, j, i) = bns->beta_y[idx];
-          host_adm.beta_u(m, 2, k, j, i) = bns->beta_z[idx];
+          host_adm.beta_u(m, 0, k, j, i) = -bns->beta_x[idx];
+          host_adm.beta_u(m, 1, k, j, i) = -bns->beta_y[idx];
+          host_adm.beta_u(m, 2, k, j, i) = -bns->beta_z[idx];
 
           Real g3d[NSPMETRIC];
           host_adm.g_dd(m, 0, 0, k, j, i) = g3d[S11] = bns->g_xx[idx];
