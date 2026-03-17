@@ -1,4 +1,4 @@
-# Athena++ (Kokkos version) input file for the magnetic monopole problem
+# AthenaK input file for the magnetic monopole problem
 
 <comment>
 problem   = GR magnetic monopole
