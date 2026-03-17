@@ -52,7 +52,8 @@ Mesh::Mesh(ParameterInput *pin) :
   nmb_packs_thisrank(1),
   nprtcl_thisrank(0),
   nprtcl_total(0),
-  dtold(0.) {
+  dtold(0.),
+  dt_last_completed(0.) {
   // Set physical size and number of cells in mesh (root level)
   mesh_size.x1min = pin->GetReal("mesh", "x1min");
   mesh_size.x1max = pin->GetReal("mesh", "x1max");
