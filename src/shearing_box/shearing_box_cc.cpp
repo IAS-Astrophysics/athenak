@@ -100,6 +100,7 @@ TaskStatus ShearingBoxCC::PackAndSendCC(DvceArray5D<Real> &a, ReconstructionMeth
         case ReconstructionMethod::ppm4:
         case ReconstructionMethod::ppmx:
         case ReconstructionMethod::wenoz:
+        case ReconstructionMethod::wenomz:
           PPMX_RemapFlx(member, js, (je+1), eps, a_, flx);
           break;
         default:
