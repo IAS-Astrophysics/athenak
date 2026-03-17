@@ -37,7 +37,7 @@ public:
   void Find(int iter, Real time); // main functionality for finding AH
   void Write(int iter, Real time); // function for result writing
   template <int NGHOST>
-  bool MetricDerivatives(Real time); // compute the metric derivatives
+  void MetricDerivatives(Real time); // compute the metric derivatives
 
   Real GetHorizonRadius() const { return ah_prop[hmeanradius]; }
 

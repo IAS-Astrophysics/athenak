@@ -300,13 +300,11 @@ TaskStatus Z4c::FindHorizon(Driver *pdrive, int stage) {
   auto &indcs = pmy_pack->pmesh->mb_indcs;
   if (stage == pdrive->nexp_stages) {
     for (auto & pahf : phorizon) {
-      bool done = false;
       switch (indcs.ng) {
-        case 2: done = pahf->MetricDerivatives<2>(time); break;
-        case 3: done = pahf->MetricDerivatives<3>(time); break;
-        case 4: done = pahf->MetricDerivatives<4>(time); break;
+        case 2: pahf->MetricDerivatives<2>(time); break;
+        case 3: pahf->MetricDerivatives<3>(time); break;
+        case 4: pahf->MetricDerivatives<4>(time); break;
       }
-      if (done) break; // break the for-loop
     }
     for (auto & pahf : phorizon) {
       pahf->Find(stage, time);

@@ -471,12 +471,12 @@ void AHF::InitialGuess()
 //! \fn bool AHF::MetricDerivatives(Real time)
 //! \brief compute drvts of ADM metric at MB level
 template <int NGHOST>
-bool AHF::MetricDerivatives(Real time)
+void AHF::MetricDerivatives(Real time)
 { 
   // Check whether derivatives have to be computed
-  if (use_stored_metric_drvts) return false;
-  if((time < start_time) || (time > stop_time)) return false;
-  if (wait_until_punc_are_close && !(PuncAreClose())) return false;
+  if (use_stored_metric_drvts) return;
+  if((time < start_time) || (time > stop_time)) return;
+  if (wait_until_punc_are_close && !(PuncAreClose())) return;
 
   AthenaTensor<Real, TensorSymm::SYM2, NDIM, 2> adm_g_dd; // 3-metric
   adm_g_dd.InitWithShallowSlice(pmbp->padm->u_adm, adm::ADM::I_ADM_GXX, adm::ADM::I_ADM_GZZ);
@@ -519,11 +519,11 @@ bool AHF::MetricDerivatives(Real time)
     dg(m,DZ_GZZ,k,j,i) = Dx<NGHOST>(2, idx, adm_g_dd, m, 2, 2, k, j, i);
   });
 
-  return true;
+  return;
 }
-template bool AHF::MetricDerivatives<2>(Real time);
-template bool AHF::MetricDerivatives<3>(Real time);
-template bool AHF::MetricDerivatives<4>(Real time);
+template void AHF::MetricDerivatives<2>(Real time);
+template void AHF::MetricDerivatives<3>(Real time);
+template void AHF::MetricDerivatives<4>(Real time);
 
 //----------------------------------------------------------------------------------------
 //! \fn void AHF::MetricInterp(MeshBlock *pmb)
