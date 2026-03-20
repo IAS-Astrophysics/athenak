@@ -187,6 +187,34 @@ if (${PROBLEM} STREQUAL "sgrid_bns")
       ${CMAKE_SOURCE_DIR}/sgrid/lib/libsgrid.a)
 endif()
 
+if (${PROBLEM} STREQUAL "kadath_bns")
+  # Kadath (FUKa) BNS initial data reader.
+  # Expects Kadath to be linked at ${CMAKE_SOURCE_DIR}/kadath
+  # with libkadath.a in its lib/ directory.
+  target_link_libraries(athena PUBLIC
+      ${CMAKE_SOURCE_DIR}/kadath/lib/libkadath.a)
+  # Kadath depends on FFTW3 (spectral transforms) and LAPACK (linear algebra)
+  find_package(PkgConfig QUIET)
+  if (PKG_CONFIG_FOUND)
+    pkg_check_modules(FFTW3 fftw3)
+  endif()
+  if (FFTW3_FOUND)
+    target_link_libraries(athena PUBLIC ${FFTW3_LIBRARIES})
+  else()
+    find_library(FFTW3_LIB NAMES fftw3)
+    target_link_libraries(athena PUBLIC ${FFTW3_LIB})
+  endif()
+  find_package(LAPACK REQUIRED)
+  target_link_libraries(athena PUBLIC ${LAPACK_LIBRARIES})
+  find_package(GSL REQUIRED)
+  target_link_libraries(athena PUBLIC GSL::gsl GSL::gslcblas)
+  if (Athena_ENABLE_OPENMP)
+  else ()
+    find_package(OpenMP COMPONENTS CXX)
+    target_link_libraries(athena PUBLIC OpenMP::OpenMP_CXX)
+  endif()
+endif()
+
 if (${PROBLEM} STREQUAL "lorene_bns")
   # FIXME(user): The way the Fortran libraries here are linked is not great. Because these
   # are implicit libraries, we shouldn't have to add them manually, but at least on some
