@@ -38,6 +38,10 @@
 #include "parameter_input.hpp"
 #include "z4c/z4c.hpp"
 #include "z4c/z4c_amr.hpp"
+#include "utils/tov/tov_utils.hpp"
+#include "utils/tov/tov_polytrope.hpp"
+#include "utils/tov/tov_piecewise_poly.hpp"
+#include "utils/tov/tov_tabulated.hpp"
 
 // ---------------------------------------------------------------------------
 // Output index enumeration for KadathExportBNS.
@@ -85,12 +89,8 @@ void KadathBNSRefinementCondition(MeshBlockPack *pmbp);
 //----------------------------------------------------------------------------------------
 //! \fn ProblemGenerator::UserProblem()
 //! \brief Problem generator for BNS with Kadath_AEI (FUKa)
-void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
-  user_hist_func = &KadathBNSHistory;
-  user_ref_func  = &KadathBNSRefinementCondition;
-
-  if (restart) return;
-
+template<class TOVEOS>
+void SetupBNS(ParameterInput *pin, Mesh* pmy_mesh_) {
   MeshBlockPack *pmbp = pmy_mesh_->pmb_pack;
   auto &indcs         = pmy_mesh_->mb_indcs;
   auto &size          = pmbp->pmb->mb_size;
@@ -101,18 +101,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   int &ks             = indcs.ks;
   int &ke             = indcs.ke;
 
-  if (pmbp->pdyngr == nullptr || pmbp->pz4c == nullptr) {
-    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-              << std::endl
-              << "BNS data requires <mhd> and <z4c> blocks." << std::endl;
-    exit(EXIT_FAILURE);
-  }
-
   std::string fname = pin->GetString("problem", "initial_data_file");
-
-  // Atmosphere floor values (must be consistent with <mhd> block settings).
-  Real dfloor = pin->GetReal("mhd", "dfloor");
-  Real tfloor = pin->GetReal("mhd", "tfloor");
 
   int ncells1 = indcs.nx1 + 2 * (indcs.ng);
   int ncells2 = indcs.nx2 + 2 * (indcs.ng);
@@ -125,7 +114,15 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   std::vector<double> y_coords(width);
   std::vector<double> z_coords(width);
 
-  std::cout << "Allocated coordinate arrays of size " << width << std::endl;
+  // Set up the 1D EOS
+  TOVEOS eos{pin};
+
+  // Enable ye if the EOS supports it.
+  constexpr bool use_ye = tov::UsesYe<TOVEOS>;
+
+  if (global_variable::my_rank == 0) {
+    std::cout << "Allocated coordinate arrays of size " << width << std::endl;
+  }
 
   // Populate cell-center coordinates for all mesh blocks.
   // TODO(user): Replace with a Kokkos loop on DefaultHostExecutionSpace for
@@ -161,7 +158,9 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     }
   }
 
-  std::cout << "Coordinates assigned. Calling KadathExportBNS..." << std::endl;
+  if (global_variable::my_rank == 0) {
+    std::cout << "Coordinates assigned. Calling KadathExportBNS..." << std::endl;
+  }
 
   // Call the Kadath spectral exporter.  This opens the .info config file and
   // the associated .dat space file, sets up the EOS from the config, and
@@ -169,7 +168,10 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   auto out = KadathExportBNS(width, x_coords.data(), y_coords.data(),
                               z_coords.data(), fname.c_str());
 
-  std::cout << "KadathExportBNS complete." << std::endl;
+
+  if (global_variable::my_rank == 0) {
+    std::cout << "KadathExportBNS complete." << std::endl;
+  }
 
   // Capture device-side views.
   // When Z4c is enabled, gauge variables live in u_z4c; metric/curvature
@@ -193,7 +195,9 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   host_adm.vK_dd.InitWithShallowSlice(host_u_adm, adm::ADM::I_ADM_KXX,
                                        adm::ADM::I_ADM_KZZ);
 
-  std::cout << "Host mirrors created." << std::endl;
+  if (global_variable::my_rank == 0) {
+    std::cout << "Host mirrors created." << std::endl;
+  }
 
   // Fill ADM metric and hydrodynamic primitives from Kadath output.
   idx = 0;
@@ -231,6 +235,13 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
           // ----- Hydro primitives -----
           host_w0(m, IDN, k, j, i) = out[RHO][idx];
           host_w0(m, IPR, k, j, i) = out[PRESS][idx];
+
+          if constexpr (use_ye) {
+            Real& rho = host_w0(m, IDN, k, j, i);
+            host_w0(m, IYF, k, j, i) = eos.template
+                                       GetYeFromRho<tov::LocationTag::Host>(rho);
+          }
+
           Real vu[3] = {
             out[VELX][idx],
             out[VELY][idx],
@@ -260,14 +271,18 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     }
   }
 
-  std::cout << "Host mirrors filled." << std::endl;
+  if (global_variable::my_rank == 0) {
+    std::cout << "Host mirrors filled." << std::endl;
+  }
 
   // Copy data from host mirrors to the device.
   Kokkos::deep_copy(u_adm, host_u_adm);
   Kokkos::deep_copy(w0, host_w0);
   Kokkos::deep_copy(u_z4c, host_u_z4c);
 
-  std::cout << "Data copied to device." << std::endl;
+  if (global_variable::my_rank == 0) {
+    std::cout << "Data copied to device." << std::endl;
+  }
 
   // TODO(user): Add magnetic field initialization (e.g., current-loop model).
   // For now, initialize face-centered and cell-centered B fields to zero.
@@ -296,7 +311,9 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
             0.5 * (b0.x3f(m, k, j, i) + b0.x3f(m, k + 1, j, i));
       });
 
-  std::cout << "Magnetic fields initialized to zero." << std::endl;
+  if (global_variable::my_rank == 0) {
+    std::cout << "Magnetic fields initialized to zero." << std::endl;
+  }
 
   // Convert primitive hydro variables to conserved.
   pmbp->pdyngr->PrimToConInit(0, (ncells1 - 1), 0, (ncells2 - 1),
@@ -313,6 +330,59 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     case 4:
       pmbp->pz4c->ADMToZ4c<4>(pmbp, pin);
       break;
+  }
+
+  return;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn ProblemGenerator::UserProblem_()
+//! \brief Problem Generator for BNS with Kadath FUKa
+void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
+  MeshBlockPack *pmbp = pmy_mesh_->pmb_pack;
+  if (!pmbp->pcoord->is_dynamical_relativistic) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+              << "Kadath BNS problem must have <adm> block to run"
+              << std::endl;
+    exit(EXIT_FAILURE);
+  }
+  user_hist_func = &KadathBNSHistory;
+  user_ref_func = &KadathBNSRefinementCondition;
+
+  if (restart) return;
+
+  // Select the correct EOS template based on the EOS we need.
+  if (pmbp->pdyngr->eos_policy == DynGRMHD_EOS::eos_ideal) {
+    SetupBNS<tov::PolytropeEOS>(pin, pmy_mesh_);
+  } else if (pmbp->pdyngr->eos_policy == DynGRMHD_EOS::eos_compose) {
+    SetupBNS<tov::TabulatedEOS>(pin, pmy_mesh_);
+  } else if (pmbp->pdyngr->eos_policy == DynGRMHD_EOS::eos_hybrid) {
+    SetupBNS<tov::TabulatedEOS>(pin, pmy_mesh_);
+  } else if (pmbp->pdyngr->eos_policy == DynGRMHD_EOS::eos_piecewise_poly) {
+    SetupBNS<tov::PiecewisePolytropeEOS>(pin, pmy_mesh_);
+  } else {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+              << "Unknown EOS requested for Lorene BNS problem" << std::endl;
+    exit(EXIT_FAILURE);
+  }
+
+  auto &indcs = pmy_mesh_->mb_indcs;
+  auto &size = pmbp->pmb->mb_size;
+  int &ng = indcs.ng;
+  int ncells1 = indcs.nx1 + 2*ng;
+  int ncells2 = (indcs.nx2 > 1) ? (indcs.nx2 + 2*ng) : 1;
+  int ncells3 = (indcs.nx3 > 1) ? (indcs.nx3 + 2*ng) : 1;
+
+  pmbp->pdyngr->PrimToConInit(0, (ncells1-1), 0, (ncells2-1), 0, (ncells3-1));
+  if (pmbp->pz4c != nullptr) {
+    switch (indcs.ng) {
+      case 2: pmbp->pz4c->ADMToZ4c<2>(pmbp, pin);
+              break;
+      case 3: pmbp->pz4c->ADMToZ4c<3>(pmbp, pin);
+              break;
+      case 4: pmbp->pz4c->ADMToZ4c<4>(pmbp, pin);
+              break;
+    }
   }
 
   return;
