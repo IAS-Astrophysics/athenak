@@ -85,6 +85,10 @@ namespace {
   // SN injection persistent buffer
   DvceArray2D<Real> sn_centers_buffer;
   Kokkos::View<int> sn_counter;
+
+  // SN injection flags
+  int last_sn_detect_cycle = -1;
+  int num_sn_this_cycle;
 }
 
 //===========================================================================//
@@ -687,63 +691,70 @@ void SNSource(Mesh* pm, const Real bdt) {
   auto &u0 = pmbp->phydro->u0;
   auto &w0 = pmbp->phydro->w0;
 
-  auto &pr = pmbp->ppart->prtcl_rdata;
-  auto &pi = pmbp->ppart->prtcl_idata;
-  int npart = pmbp->ppart->nprtcl_thispack;
-
-  auto gids = pmbp->gids;
-
-  Real time = pm->time;
-  int nrdata = pmbp->ppart->nrdata;
-  Real unit_time = pmbp->punit->time_cgs();
-
   Real dr = r_inj;
 
-  // Array of positions where SNs go off at this timestep
-  auto &sn_centers = sn_centers_buffer;
-  Kokkos::deep_copy(sn_counter, 0);
-  auto d_counter = sn_counter;
+  if (pm->ncycle != last_sn_detect_cycle) {
+    last_sn_detect_cycle = pm->ncycle;
 
-  par_for("sn_source", DevExeSpace(), 0, npart-1, KOKKOS_LAMBDA(const int p) {
-    
-    Real next_sn_time = pr(nrdata-1, p);
-    
-    if (time > next_sn_time) {
-      // Update particle sn tracking
-      pi(2, p) += 1;
-      int sn_idx = pi(2, p);
-      Real par_t_create = pr(nrdata-3, p);
-      Real cluster_mass = pr(nrdata-2, p);
-      pr(nrdata-1, p) = GetNthSNTime(cluster_mass, par_t_create, unit_time, sn_idx);
+    auto &pr = pmbp->ppart->prtcl_rdata;
+    auto &pi = pmbp->ppart->prtcl_idata;
+    int npart = pmbp->ppart->nprtcl_thispack;
 
-      // Register SN center location and adjust for boundaries
-      // Warning : if r_inj is large this will lead to unexpected behavior at the start
-      int idx = Kokkos::atomic_fetch_add(&d_counter(), 1);
-      int m = pi(PGID, p) - gids;
+    auto gids = pmbp->gids;
+
+    Real time = pm->time;
+    int nrdata = pmbp->ppart->nrdata;
+    Real unit_time = pmbp->punit->time_cgs();
+
+    // Array of positions where SNs go off at this timestep
+    auto &sn_centers = sn_centers_buffer;
+    Kokkos::deep_copy(sn_counter, 0);
+    auto d_counter = sn_counter;
+
+    par_for("sn_source", DevExeSpace(), 0, npart-1, KOKKOS_LAMBDA(const int p) {
+    
+      Real next_sn_time = pr(nrdata-1, p);
+    
+      if (time > next_sn_time) {
+        // Update particle sn tracking
+        pi(2, p) += 1;
+        int sn_idx = pi(2, p);
+        Real par_t_create = pr(nrdata-3, p);
+        Real cluster_mass = pr(nrdata-2, p);
+        pr(nrdata-1, p) = GetNthSNTime(cluster_mass, par_t_create, unit_time, sn_idx);
+
+        // Register SN center location and adjust for boundaries
+        // Warning : if r_inj is large this will lead to unexpected behavior at the start
+        int idx = Kokkos::atomic_fetch_add(&d_counter(), 1);
+        int m = pi(PGID, p) - gids;
       
-      Real x1min = size.d_view(m).x1min;
-      Real x1max = size.d_view(m).x1max;
-      Real x2min = size.d_view(m).x2min;
-      Real x2max = size.d_view(m).x2max;
-      Real x3min = size.d_view(m).x3min;
-      Real x3max = size.d_view(m).x3max;
+        Real x1min = size.d_view(m).x1min;
+        Real x1max = size.d_view(m).x1max;
+        Real x2min = size.d_view(m).x2min;
+        Real x2max = size.d_view(m).x2max;
+        Real x3min = size.d_view(m).x3min;
+        Real x3max = size.d_view(m).x3max;
 
-      sn_centers(0, idx) = min(max(pr(IPX,p), x1min+dr), x1max-dr);
-      sn_centers(1, idx) = min(max(pr(IPY,p), x2min+dr), x2max-dr);
-      sn_centers(2, idx) = min(max(pr(IPZ,p), x3min+dr), x3max-dr);
-    }
-  });
+        sn_centers(0, idx) = min(max(pr(IPX,p), x1min+dr), x1max-dr);
+        sn_centers(1, idx) = min(max(pr(IPY,p), x2min+dr), x2max-dr);
+        sn_centers(2, idx) = min(max(pr(IPZ,p), x3min+dr), x3max-dr);
+      }
+    });
 
-  DevExeSpace().fence();
+    DevExeSpace().fence();
 
-  // Get number of SNe on host
-  int num_sn;
-  Kokkos::deep_copy(num_sn, d_counter);
-  
-  if (num_sn > 0) {
-    Real e_sn_ = e_sn;
-    Real m_ej_ = m_ej;
+    // Get number of SNe on host
+    Kokkos::deep_copy(num_sn_this_cycle, d_counter);
+  }
+
+  if (num_sn_this_cycle > 0) {
+    Real beta = bdt / pm->dt;
+    Real e_sn_ = e_sn * beta;
+    Real m_ej_ = m_ej * beta;
     Real Z_ej_ = 0.1;
+
+    auto &sn_centers = sn_centers_buffer;
+    int num_sn = num_sn_this_cycle;
 
     par_for("sn_injection", DevExeSpace(), 0, nmb1, ks, ke, js, je, is, ie,
     KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
