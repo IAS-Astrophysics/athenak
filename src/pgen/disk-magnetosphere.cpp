@@ -102,6 +102,10 @@ namespace {
     static Real A3_m(struct my_params mp, const Real mx, const Real my, const Real mz,
                      const Real x1, const Real x2, const Real x3);
 
+    KOKKOS_INLINE_FUNCTION
+    static Real PhiGJ_m(struct my_params mp, const Real mx, const Real my, const Real mz,
+                        const Real x1, const Real x2, const Real x3);
+
     static void DipoleMoment(struct my_params mp, Real time,
                              Real &mmx, Real &mmy, Real &mmz);
 
@@ -110,9 +114,9 @@ namespace {
 
     struct my_params {
     Real thetaw, thetab;
-    Real gm0, r0, rho0, dslope, p0_over_r0, qslope, tcool, gamma_gas;
+    Real gm0, r0, rho0, dslope, p0_over_r0, qslope, gamma_gas;
     Real dfloor, rho_floor1, rho_floor_slope1, rho_floor2, rho_floor_slope2;
-    Real rfix, rad_in_cutoff, rad_in_smooth, rad_out_cutoff, rad_out_smooth;
+    Real rfix, efix, rad_in_cutoff, rad_in_smooth, rad_out_cutoff, rad_out_smooth;
     Real sig_star_disc;
     Real Omega0;
     Real rs, smoothin, gravsmooth;
@@ -127,13 +131,20 @@ namespace {
     int mag_option;
     Real disc_mask_rin;   // inner disc-only mask radius (negative = off)
     Real disc_mask_rout;  // outer disc-only mask radius (negative = off)
-    bool cooling_direct_set;      // if true, set temperature to desired profile; else relax toward target
     Real esrc_blend_width;  // E-field blend width inside rfix (0 = hard boundary)
     Real sponge_width;    // thickness of sponge zone outside rfix (0 = disabled)
     Real sponge_tau;      // sponge relaxation timescale in units of local orbital periods
+    int inflow_bc_depth;  // number of ghost layers inside mask for inflow BC (0 = disabled)
+    Real ghost_vr_frac;   // minimum inward radial velocity in ghost cells as fraction of local free-fall (0 = off)
     };
 
     my_params mp;
+
+    // Pre-computed arrays for inflow ghost-zone BC (allocated once in UserProblem)
+    // ghost_depth: 0=outside mask, 1=layer-1, 2=layer-2, -1=deep interior
+    DvceArray4D<int> ghost_depth;
+    // donor_idx(m, 0/1/2, k,j,i) = i/j/k index of exterior donor cell
+    DvceArray5D<int> donor_idx;
 
 } // End of namespace
 
@@ -233,6 +244,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     mp.qslope = pin->GetOrAddReal("problem","qslope",0.0);
     mp.r0 = pin->GetOrAddReal("problem","r0",1.0);
     mp.rfix = pin->GetOrAddReal("problem", "rfix",0.1);
+    mp.efix = pin->GetOrAddReal("problem", "efix", mp.rfix);
     mp.rad_in_cutoff = pin->GetOrAddReal("problem","rad_in_cutoff",0.0);
     mp.rad_in_smooth = pin->GetOrAddReal("problem","rad_in_smooth",0.1);
     mp.rad_out_cutoff = pin->GetOrAddReal("problem","rad_out_cutoff",0.0);
@@ -245,17 +257,17 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     mp.rmagsph = pin->GetOrAddReal("problem","rmagsph",0.0);
     mp.rs = pin->GetOrAddReal("problem", "rstar",0.1);
     mp.gravsmooth = pin->GetOrAddReal("problem","gravsmooth",0.1);
-    mp.tcool = pin->GetOrAddReal("problem","tcool",0.0);
     mp.fofc_scalar_tau = pin->GetOrAddReal("problem","fofc_scalar_tau",0.0);
     mp.sig_star_disc = pin->GetOrAddReal("problem","sig_star_disc",0.1);
     mp.avg_grid_bfields = pin->GetOrAddBoolean("problem","avg_grid_bfields",false);
     mp.mag_option = pin->GetOrAddInteger("problem","mag_option",1);
     mp.disc_mask_rin  = pin->GetOrAddReal("problem", "disc_mask_rin",  -1.0);
     mp.disc_mask_rout = pin->GetOrAddReal("problem", "disc_mask_rout", -1.0);
-    mp.cooling_direct_set = pin->GetOrAddBoolean("problem", "cooling_direct_set", false);
     mp.esrc_blend_width = pin->GetOrAddReal("problem", "esrc_blend_width", 0.0);
     mp.sponge_width = pin->GetOrAddReal("problem", "sponge_width", 0.0);
     mp.sponge_tau   = pin->GetOrAddReal("problem", "sponge_tau",   1.0);
+    mp.inflow_bc_depth = pin->GetOrAddInteger("problem", "inflow_bc_depth", 0);
+    mp.ghost_vr_frac   = pin->GetOrAddReal("problem", "ghost_vr_frac", 0.0);
 
     // Capture variables for kernel - e.g. indices for looping over the meshblocks and the size of the meshblocks.
     auto &indcs = pmy_mesh_->mb_indcs;
@@ -267,6 +279,150 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
 
     // Initialise a pointer to the disc parameter structure   
     auto mp_ = mp;
+
+    // Pre-compute ghost-depth and donor index arrays for inflow BC
+    // (must run before restart guard so it works for both new and restarted runs)
+    if (mp.inflow_bc_depth > 0) {
+        int &ng = indcs.ng;
+        int n1 = indcs.nx1 + 2*ng;
+        int n2 = indcs.nx2 + 2*ng;
+        int n3 = indcs.nx3 + 2*ng;
+
+        ghost_depth = DvceArray4D<int>("ghost_depth", nmb, n3, n2, n1);
+        donor_idx   = DvceArray5D<int>("donor_idx",   nmb, 3,  n3, n2, n1);
+
+        auto ghost_depth_ = ghost_depth;
+        auto donor_idx_   = donor_idx;
+        auto size_        = size;
+
+        // Pass 1: mark layer-1 cells (interior cells with an exterior face-neighbour)
+        par_for("ghost_depth_pass1", DevExeSpace(), 0, (nmb-1), ks, ke, js, je, is, ie,
+        KOKKOS_LAMBDA(int m, int k, int j, int i) {
+            Real &x1min = size_.d_view(m).x1min;
+            Real &x1max = size_.d_view(m).x1max;
+            Real &x2min = size_.d_view(m).x2min;
+            Real &x2max = size_.d_view(m).x2max;
+            Real &x3min = size_.d_view(m).x3min;
+            Real &x3max = size_.d_view(m).x3max;
+
+            Real x1v = CellCenterX(i-is, indcs.nx1, x1min, x1max);
+            Real x2v = CellCenterX(j-js, indcs.nx2, x2min, x2max);
+            Real x3v = CellCenterX(k-ks, indcs.nx3, x3min, x3max);
+            Real rc  = sqrt(x1v*x1v + x2v*x2v + x3v*x3v);
+
+            if (rc >= mp_.rfix) {
+                ghost_depth_(m,k,j,i) = 0;
+                return;
+            }
+
+            // Check 6 face-neighbours for any exterior cell
+            int di[6] = {1,-1,0, 0,0, 0};
+            int dj[6] = {0, 0,1,-1,0, 0};
+            int dk[6] = {0, 0,0, 0,1,-1};
+            bool has_ext = false;
+            for (int n = 0; n < 6; ++n) {
+                Real x1n = CellCenterX(i+di[n]-is, indcs.nx1, x1min, x1max);
+                Real x2n = CellCenterX(j+dj[n]-js, indcs.nx2, x2min, x2max);
+                Real x3n = CellCenterX(k+dk[n]-ks, indcs.nx3, x3min, x3max);
+                Real rcn = sqrt(x1n*x1n + x2n*x2n + x3n*x3n);
+                if (rcn >= mp_.rfix) { has_ext = true; break; }
+            }
+            ghost_depth_(m,k,j,i) = has_ext ? 1 : -1;
+        });
+
+        // Pass 2: mark layer-2 cells (interior cells with a layer-1 face-neighbour)
+        // Only needed if inflow_bc_depth >= 2
+        if (mp.inflow_bc_depth >= 2) {
+            par_for("ghost_depth_pass2", DevExeSpace(), 0, (nmb-1), ks, ke, js, je, is, ie,
+            KOKKOS_LAMBDA(int m, int k, int j, int i) {
+                if (ghost_depth_(m,k,j,i) != -1) return;
+                int di[6] = {1,-1,0, 0,0, 0};
+                int dj[6] = {0, 0,1,-1,0, 0};
+                int dk[6] = {0, 0,0, 0,1,-1};
+                for (int n = 0; n < 6; ++n) {
+                    if (ghost_depth_(m, k+dk[n], j+dj[n], i+di[n]) == 1) {
+                        ghost_depth_(m,k,j,i) = 2;
+                        return;
+                    }
+                }
+                // stays at -1 => deep interior
+            });
+        }
+
+        // Pass 3a: compute donor indices for layer-1 ghost cells
+        // Donor = nearest exterior face-neighbour (smallest rc among those with rc >= rfix)
+        par_for("ghost_donor_layer1", DevExeSpace(), 0, (nmb-1), ks, ke, js, je, is, ie,
+        KOKKOS_LAMBDA(int m, int k, int j, int i) {
+            if (ghost_depth_(m,k,j,i) != 1) return;
+
+            Real &x1min = size_.d_view(m).x1min;
+            Real &x1max = size_.d_view(m).x1max;
+            Real &x2min = size_.d_view(m).x2min;
+            Real &x2max = size_.d_view(m).x2max;
+            Real &x3min = size_.d_view(m).x3min;
+            Real &x3max = size_.d_view(m).x3max;
+
+            int di[6] = {1,-1,0, 0,0, 0};
+            int dj[6] = {0, 0,1,-1,0, 0};
+            int dk[6] = {0, 0,0, 0,1,-1};
+
+            Real best_rc = 1.0e20;
+            int ib = i, jb = j, kb = k;
+            for (int n = 0; n < 6; ++n) {
+                int in = i+di[n], jn = j+dj[n], kn = k+dk[n];
+                Real x1n = CellCenterX(in-is, indcs.nx1, x1min, x1max);
+                Real x2n = CellCenterX(jn-js, indcs.nx2, x2min, x2max);
+                Real x3n = CellCenterX(kn-ks, indcs.nx3, x3min, x3max);
+                Real rcn = sqrt(x1n*x1n + x2n*x2n + x3n*x3n);
+                if (rcn >= mp_.rfix && rcn < best_rc) {
+                    best_rc = rcn;
+                    ib = in; jb = jn; kb = kn;
+                }
+            }
+            donor_idx_(m, 0, k, j, i) = ib;
+            donor_idx_(m, 1, k, j, i) = jb;
+            donor_idx_(m, 2, k, j, i) = kb;
+        });
+
+        // Pass 3b: compute donor indices for layer-2 ghost cells
+        // Donor = the donor of the nearest layer-1 face-neighbour
+        if (mp.inflow_bc_depth >= 2) {
+            par_for("ghost_donor_layer2", DevExeSpace(), 0, (nmb-1), ks, ke, js, je, is, ie,
+            KOKKOS_LAMBDA(int m, int k, int j, int i) {
+                if (ghost_depth_(m,k,j,i) != 2) return;
+
+                Real &x1min = size_.d_view(m).x1min;
+                Real &x1max = size_.d_view(m).x1max;
+                Real &x2min = size_.d_view(m).x2min;
+                Real &x2max = size_.d_view(m).x2max;
+                Real &x3min = size_.d_view(m).x3min;
+                Real &x3max = size_.d_view(m).x3max;
+
+                int di[6] = {1,-1,0, 0,0, 0};
+                int dj[6] = {0, 0,1,-1,0, 0};
+                int dk[6] = {0, 0,0, 0,1,-1};
+
+                Real best_rc = 1.0e20;
+                int ib1 = i, jb1 = j, kb1 = k;
+                for (int n = 0; n < 6; ++n) {
+                    int in = i+di[n], jn = j+dj[n], kn = k+dk[n];
+                    if (ghost_depth_(m, kn, jn, in) == 1) {
+                        Real x1n = CellCenterX(in-is, indcs.nx1, x1min, x1max);
+                        Real x2n = CellCenterX(jn-js, indcs.nx2, x2min, x2max);
+                        Real x3n = CellCenterX(kn-ks, indcs.nx3, x3min, x3max);
+                        Real rcn = sqrt(x1n*x1n + x2n*x2n + x3n*x3n);
+                        if (rcn < best_rc) {
+                            best_rc = rcn;
+                            ib1 = in; jb1 = jn; kb1 = kn;
+                        }
+                    }
+                }
+                donor_idx_(m, 0, k, j, i) = donor_idx_(m, 0, kb1, jb1, ib1);
+                donor_idx_(m, 1, k, j, i) = donor_idx_(m, 1, kb1, jb1, ib1);
+                donor_idx_(m, 2, k, j, i) = donor_idx_(m, 2, kb1, jb1, ib1);
+            });
+        }
+    } // end inflow BC pre-computation
 
     // If restarting then end initialisation here
     if (restart) return;
@@ -932,6 +1088,20 @@ namespace {
         return 0.0;
     }
 
+    // Goldreich-Julian scalar potential: φ_GJ = v·A = v1*A1 + v2*A2 + v3*A3.
+    // Its nodal gradient gives the capacitive E-field: E_cap = -∇φ_GJ.
+    // By construction curl(-∇φ_GJ) = 0 exactly, so this term contributes nothing
+    // to the CT update of B, eliminating capacitive truncation error within the mask.
+    KOKKOS_INLINE_FUNCTION
+    static Real PhiGJ_m(struct my_params mp, const Real mx, const Real my, const Real mz,
+                        const Real x1, const Real x2, const Real x3) {
+        Real v1, v2, v3;
+        VelStar(mp, x1, x2, x3, v1, v2, v3);
+        return v1 * A1_m(mp, mx, my, mz, x1, x2, x3)
+             + v2 * A2_m(mp, mx, my, mz, x1, x2, x3)
+             + v3 * A3_m(mp, mx, my, mz, x1, x2, x3);
+    }
+
     //----------------------------------------------------------------------------------------
     // Compute the lab-frame dipole moment at an arbitrary time.
     // Encapsulates the rotation logic: dipole precesses about the stellar spin
@@ -967,10 +1137,11 @@ Real rho_floor(struct my_params mp, Real rc) {
 void MySourceTerms(Mesh* pm, const Real bdt) { //CF:CHECKED
 
     StarGravSourceTerm(pm, bdt);
-    if (mp.denstar > 0.0) StarMask(pm, bdt);
+    // Exterior sponge before stellar mask: donors (r >= rfix) see damped u0 first;
+    // StarMask/inflow is the last mask-style overwrite in this block.
     BoundarySpongeMask(pm, bdt);
+    if (mp.denstar > 0.0) StarMask(pm, bdt);
     if (mp.disc_mask_rin >= 0.0 || mp.disc_mask_rout >= 0.0) DiscOnlyMask(pm, bdt);
-    // if(mp.is_ideal && mp.tcool>0.0) CoolingSourceTerms(pm, bdt);
 
     // FOFC diagnostic: damp conserved scalar (rho*s) with source -bdt*dens*s/tau
     MeshBlockPack *pmbp = pm->pmb_pack;
@@ -1188,23 +1359,21 @@ void StarMask(Mesh* pm, const Real bdt) { //CF:CHECKED
 
     // Now set a local parameter struct for lambda capturing
     auto mp_ = mp;
+    auto ghost_depth_ = ghost_depth;
+    auto donor_idx_   = donor_idx;
 
-    // Select either Hydro or MHD
-    DvceArray5D<Real> u0_, w0_, bcc0_;
+    // Select either Hydro or MHD (inflow donors use u0 only, not w0)
+    DvceArray5D<Real> u0_, bcc0_;
     if (pm->pmb_pack->phydro != nullptr) {
         u0_ = pm->pmb_pack->phydro->u0;
-        w0_ = pm->pmb_pack->phydro->w0;
     } else if (pm->pmb_pack->pmhd != nullptr) {
         u0_ = pm->pmb_pack->pmhd->u0;
-        w0_ = pm->pmb_pack->pmhd->w0;
         bcc0_ = pmbp->pmhd->bcc0;
     }
 
-    // Could be more efficient with the masking function...see GRMHD for boolean masking array
     par_for("pgen_starmask",DevExeSpace(),0,(pmbp->nmb_thispack-1),ks,ke,js,je,is,ie,
     KOKKOS_LAMBDA(int m,int k,int j,int i) {
 
-        // Extract the cell center coordinates
         Real &x1min = size.d_view(m).x1min;
         Real &x1max = size.d_view(m).x1max;
         Real x1v = CellCenterX(i-is, indcs.nx1, x1min, x1max);
@@ -1216,35 +1385,101 @@ void StarMask(Mesh* pm, const Real bdt) { //CF:CHECKED
         Real &x3min = size.d_view(m).x3min;
         Real &x3max = size.d_view(m).x3max;
         Real x3v = CellCenterX(k-ks, indcs.nx3, x3min, x3max);
-        
-        Real rad=sqrt(x1v*x1v+x2v*x2v);
-        Real rc=sqrt(rad*rad+x3v*x3v);
-        
-        if (rc<mp_.rfix) {
 
+        Real rad = sqrt(x1v*x1v + x2v*x2v);
+        Real rc  = sqrt(rad*rad + x3v*x3v);
+
+        // Determine cell type using pre-computed ghost_depth array
+        // (if inflow_bc_depth == 0, ghost_depth is unallocated and we use the
+        //  original logic: all cells with rc < rfix get hard reset)
+        int depth = 0;
+        if (mp_.inflow_bc_depth > 0) {
+            depth = ghost_depth_(m,k,j,i);
+        } else {
+            depth = (rc < mp_.rfix) ? -1 : 0;
+        }
+
+        if (depth > 0) {
+            // Ghost-zone inflow BC: donor velocity from conserved u0 (m/rho) at donor
+            // cell — matches state after RKUpdate and after BoundarySpongeMask in the
+            // same source pass. Filter to inward radial + stellar corotation.
+
+            // Look up pre-computed donor cell indices
+            int id = donor_idx_(m, 0, k, j, i);
+            int jd = donor_idx_(m, 1, k, j, i);
+            int kd = donor_idx_(m, 2, k, j, i);
+
+            Real rho_d = u0_(m, IDN, kd, jd, id);
+            Real inv_rho = 1.0 / fmax(rho_d, mp_.dfloor);
+            Real vx = u0_(m, IM1, kd, jd, id) * inv_rho;
+            Real vy = u0_(m, IM2, kd, jd, id) * inv_rho;
+            Real vz = u0_(m, IM3, kd, jd, id) * inv_rho;
+
+            // Radial unit vector at this ghost cell
+            Real inv_rc = 1.0 / fmax(rc, 1.0e-20);
+            Real rhat_x = x1v * inv_rc;
+            Real rhat_y = x2v * inv_rc;
+            Real rhat_z = x3v * inv_rc;
+
+            // Decompose donor velocity into radial component
+            Real vr = vx*rhat_x + vy*rhat_y + vz*rhat_z;
+
+            // Inflow-only filter: keep inward radial velocity, zero outward.
+            // If ghost_vr_frac > 0, impose a minimum inward speed as a fraction
+            // of the local free-fall velocity to actively sink material.
+            Real vr_floor = -mp_.ghost_vr_frac * sqrt(2.0 * mp_.gm0 / fmax(rc, 1.0e-20));
+            Real vr_set = fmin(vr, vr_floor);
+
+            // Stellar corotation velocity (purely tangential by construction)
+            Real vs_x(0.0), vs_y(0.0), vs_z(0.0);
+            VelStar(mp_, x1v, x2v, x3v, vs_x, vs_y, vs_z);
+
+            // Final velocity: filtered inward radial + stellar corotation
+            Real ux = vr_set * rhat_x + vs_x;
+            Real uy = vr_set * rhat_y + vs_y;
+            Real uz = vr_set * rhat_z + vs_z;
+
+            // Density from analytic profile (not sampled, to avoid feeding back pileup)
+            Real den(0.0);
+            DenDiscPlusStar(mp_, x1v, x2v, x3v, den);
+
+            u0_(m,IDN,k,j,i) = den;
+            u0_(m,IM1,k,j,i) = den * ux;
+            u0_(m,IM2,k,j,i) = den * uy;
+            u0_(m,IM3,k,j,i) = den * uz;
+
+            if (mp_.is_ideal) {
+                u0_(m,IEN,k,j,i) = PoverR(mp_,rad)*den/(mp_.gamma_gas - 1.0)
+                    + 0.5*den*(ux*ux + uy*uy + uz*uz);
+                if (mp_.magnetic_fields_enabled) {
+                    u0_(m,IEN,k,j,i) += 0.5*(SQR(bcc0_(m,IBX,k,j,i))
+                        + SQR(bcc0_(m,IBY,k,j,i)) + SQR(bcc0_(m,IBZ,k,j,i)));
+                }
+            }
+
+        } else if (depth == -1) {
+            // Deep interior: original hard reset
             Real den(0.0), ux(0.0), uy(0.0), uz(0.0);
 
-            // Get the combined density and velocity at this location
             DenDiscPlusStar(mp_, x1v, x2v, x3v, den);
             VelStar(mp_, x1v, x2v, x3v, ux, uy, uz);
 
-            // Assign to conserved varaibles
-            u0_(m,IDN,k,j,i) = den;            
-            u0_(m,IM1,k,j,i) = u0_(m,IDN,k,j,i)*ux;
-            u0_(m,IM2,k,j,i) = u0_(m,IDN,k,j,i)*uy;
-            u0_(m,IM3,k,j,i) = u0_(m,IDN,k,j,i)*uz;
-            
+            u0_(m,IDN,k,j,i) = den;
+            u0_(m,IM1,k,j,i) = den*ux;
+            u0_(m,IM2,k,j,i) = den*uy;
+            u0_(m,IM3,k,j,i) = den*uz;
+
             if (mp_.is_ideal) {
-                u0_(m,IEN,k,j,i) = PoverR(mp_,rad)*u0_(m,IDN,k,j,i)/(mp_.gamma_gas - 1.0)+
-                                0.5*(SQR(u0_(m,IM1,k,j,i))+SQR(u0_(m,IM2,k,j,i))+SQR(u0_(m,IM3,k,j,i)))/u0_(m,IDN,k,j,i);
-            
+                u0_(m,IEN,k,j,i) = PoverR(mp_,rad)*den/(mp_.gamma_gas - 1.0)
+                    + 0.5*(SQR(den*ux)+SQR(den*uy)+SQR(den*uz))/den;
                 if (mp_.magnetic_fields_enabled) {
-                    u0_(m,IEN,k,j,i) = u0_(m,IEN,k,j,i)+0.5*(SQR(bcc0_(m,IBX,k,j,i))+
-                                    SQR(bcc0_(m,IBY,k,j,i))+SQR(bcc0_(m,IBZ,k,j,i)));
+                    u0_(m,IEN,k,j,i) += 0.5*(SQR(bcc0_(m,IBX,k,j,i))
+                        + SQR(bcc0_(m,IBY,k,j,i)) + SQR(bcc0_(m,IBZ,k,j,i)));
                 }
             }
         }
-            
+        // depth == 0: outside mask, do nothing
+
     }); // end par_for
 
 } // end stellar mask  
@@ -1465,7 +1700,7 @@ void MyEfieldMask(Mesh* pm) { //CF:CHECKED
 
         Real rc = sqrt(x1v*x1v+x2f*x2f+x3f*x3f);
 
-        if (rc<mp_.rfix) {
+        if (rc<mp_.efix) {
 
             Real vx(0.0),vy(0.0),vz(0.0);
             Real Bx(0.0),By(0.0),Bz(0.0);
@@ -1488,9 +1723,9 @@ void MyEfieldMask(Mesh* pm) { //CF:CHECKED
                 Bfield(mp_, x1v, x2f, x3f, mmx, mmy, mmz, Bx, By, Bz);
             }
 
-            // E1=-(v X B)=VzBy-VyBz (blended with CT E near rfix)
+            // E1=-(v X B)=VzBy-VyBz (blended with CT E near efix)
             Real blend_w1 = (mp_.esrc_blend_width > 0.0) ?
-                fmin(1.0, (mp_.rfix - rc) / mp_.esrc_blend_width) : 1.0;
+                fmin(1.0, (mp_.efix - rc) / mp_.esrc_blend_width) : 1.0;
             e1_(m,k,j,i) = blend_w1*(vz*By - vy*Bz)
                            + (1.0 - blend_w1)*e1_(m,k,j,i);
 
@@ -1515,7 +1750,7 @@ void MyEfieldMask(Mesh* pm) { //CF:CHECKED
 
         Real rc = sqrt(x1f*x1f+x2v*x2v+x3f*x3f);
 
-        if (rc<mp_.rfix) {
+        if (rc<mp_.efix) {
 
             Real vx(0.0),vy(0.0),vz(0.0);
             Real Bx(0.0),By(0.0),Bz(0.0);
@@ -1538,9 +1773,9 @@ void MyEfieldMask(Mesh* pm) { //CF:CHECKED
                 Bfield(mp_, x1f, x2v, x3f, mmx, mmy, mmz, Bx, By, Bz);
             }
 
-            // E2=-(v X B)=VxBz-VzBx (blended with CT E near rfix)
+            // E2=-(v X B)=VxBz-VzBx (blended with CT E near efix)
             Real blend_w2 = (mp_.esrc_blend_width > 0.0) ?
-                fmin(1.0, (mp_.rfix - rc) / mp_.esrc_blend_width) : 1.0;
+                fmin(1.0, (mp_.efix - rc) / mp_.esrc_blend_width) : 1.0;
             e2_(m,k,j,i) = blend_w2*(vx*Bz - vz*Bx)
                            + (1.0 - blend_w2)*e2_(m,k,j,i);
 
@@ -1565,7 +1800,7 @@ void MyEfieldMask(Mesh* pm) { //CF:CHECKED
 
         Real rc = sqrt(x1f*x1f+x2f*x2f+x3v*x3v);
 
-        if (rc<mp_.rfix) {
+        if (rc<mp_.efix) {
 
             Real vx(0.0),vy(0.0),vz(0.0);
             Real Bx(0.0),By(0.0),Bz(0.0);
@@ -1588,9 +1823,9 @@ void MyEfieldMask(Mesh* pm) { //CF:CHECKED
                 Bfield(mp_, x1f, x2f, x3v, mmx, mmy, mmz, Bx, By, Bz);
             }
 
-            // E3=-(v X B)=VyBx-VxBy (blended with CT E near rfix)
+            // E3=-(v X B)=VyBx-VxBy (blended with CT E near efix)
             Real blend_w3 = (mp_.esrc_blend_width > 0.0) ?
-                fmin(1.0, (mp_.rfix - rc) / mp_.esrc_blend_width) : 1.0;
+                fmin(1.0, (mp_.efix - rc) / mp_.esrc_blend_width) : 1.0;
             e3_(m,k,j,i) = blend_w3*(vy*Bx - vx*By)
                            + (1.0 - blend_w3)*e3_(m,k,j,i);
 
@@ -1656,12 +1891,20 @@ void MyEfieldMask_VecPot(Mesh* pm) {
 
         Real rc = sqrt(x1v*x1v + x2f*x2f + x3f*x3f);
 
-        if (rc < mp_.rfix) {
+        if (rc < mp_.efix) {
             Real a_old = A1_m(mp_, mx_t,   my_t,   mz_t,   x1v, x2f, x3f);
             Real a_new = A1_m(mp_, mx_new, my_new, mz_new, x1v, x2f, x3f);
+            // Nodal GJ gradient: φ_GJ differenced between adjacent x1-faces of cell i.
+            // Evaluated at m_t (current stage time), no RK weight — capacitive term is
+            // a spatial field, not a temporal increment.
+            Real x1n_p = LeftEdgeX(i-is+1, indcs.nx1, x1min, x1max);
+            Real x1n_m = LeftEdgeX(i-is,   indcs.nx1, x1min, x1max);
+            Real e1_GJ = -(PhiGJ_m(mp_, mx_t, my_t, mz_t, x1n_p, x2f, x3f)
+                         - PhiGJ_m(mp_, mx_t, my_t, mz_t, x1n_m, x2f, x3f))
+                         / (x1n_p - x1n_m);
             Real blend_w1 = (mp_.esrc_blend_width > 0.0) ?
-                fmin(1.0, (mp_.rfix - rc) / mp_.esrc_blend_width) : 1.0;
-            e1_(m,k,j,i) = blend_w1 * (-wgt * (a_new - a_old) * inv_dt)
+                fmin(1.0, (mp_.efix - rc) / mp_.esrc_blend_width) : 1.0;
+            e1_(m,k,j,i) = blend_w1 * (-wgt * (a_new - a_old) * inv_dt + e1_GJ)
                            + (1.0 - blend_w1) * e1_(m,k,j,i);
         }
     });
@@ -1684,12 +1927,18 @@ void MyEfieldMask_VecPot(Mesh* pm) {
 
         Real rc = sqrt(x1f*x1f + x2v*x2v + x3f*x3f);
 
-        if (rc < mp_.rfix) {
+        if (rc < mp_.efix) {
             Real a_old = A2_m(mp_, mx_t,   my_t,   mz_t,   x1f, x2v, x3f);
             Real a_new = A2_m(mp_, mx_new, my_new, mz_new, x1f, x2v, x3f);
+            // Nodal GJ gradient: φ_GJ differenced between adjacent x2-faces of cell j.
+            Real x2n_p = LeftEdgeX(j-js+1, indcs.nx2, x2min, x2max);
+            Real x2n_m = LeftEdgeX(j-js,   indcs.nx2, x2min, x2max);
+            Real e2_GJ = -(PhiGJ_m(mp_, mx_t, my_t, mz_t, x1f, x2n_p, x3f)
+                         - PhiGJ_m(mp_, mx_t, my_t, mz_t, x1f, x2n_m, x3f))
+                         / (x2n_p - x2n_m);
             Real blend_w2 = (mp_.esrc_blend_width > 0.0) ?
-                fmin(1.0, (mp_.rfix - rc) / mp_.esrc_blend_width) : 1.0;
-            e2_(m,k,j,i) = blend_w2 * (-wgt * (a_new - a_old) * inv_dt)
+                fmin(1.0, (mp_.efix - rc) / mp_.esrc_blend_width) : 1.0;
+            e2_(m,k,j,i) = blend_w2 * (-wgt * (a_new - a_old) * inv_dt + e2_GJ)
                            + (1.0 - blend_w2) * e2_(m,k,j,i);
         }
     });
@@ -1712,12 +1961,18 @@ void MyEfieldMask_VecPot(Mesh* pm) {
 
         Real rc = sqrt(x1f*x1f + x2f*x2f + x3v*x3v);
 
-        if (rc < mp_.rfix) {
+        if (rc < mp_.efix) {
             Real a_old = A3_m(mp_, mx_t,   my_t,   mz_t,   x1f, x2f, x3v);
             Real a_new = A3_m(mp_, mx_new, my_new, mz_new, x1f, x2f, x3v);
+            // Nodal GJ gradient: φ_GJ differenced between adjacent x3-faces of cell k.
+            Real x3n_p = LeftEdgeX(k-ks+1, indcs.nx3, x3min, x3max);
+            Real x3n_m = LeftEdgeX(k-ks,   indcs.nx3, x3min, x3max);
+            Real e3_GJ = -(PhiGJ_m(mp_, mx_t, my_t, mz_t, x1f, x2f, x3n_p)
+                         - PhiGJ_m(mp_, mx_t, my_t, mz_t, x1f, x2f, x3n_m))
+                         / (x3n_p - x3n_m);
             Real blend_w3 = (mp_.esrc_blend_width > 0.0) ?
-                fmin(1.0, (mp_.rfix - rc) / mp_.esrc_blend_width) : 1.0;
-            e3_(m,k,j,i) = blend_w3 * (-wgt * (a_new - a_old) * inv_dt)
+                fmin(1.0, (mp_.efix - rc) / mp_.esrc_blend_width) : 1.0;
+            e3_(m,k,j,i) = blend_w3 * (-wgt * (a_new - a_old) * inv_dt + e3_GJ)
                            + (1.0 - blend_w3) * e3_(m,k,j,i);
         }
     });
@@ -1792,22 +2047,10 @@ void CoolingSourceTerms(Mesh* pm, const Real bdt) { //CF:CHECKED
         GetCylCoord(mp_,rad,phi,z,x1v,x2v,x3v);
         p_over_r = PoverR(mp_,rad);
 
-        if (mp_.cooling_direct_set) {
-            // Set total energy so temperature matches desired profile directly (no relaxation)
-            Real eint_set = p_over_r*dens_u0/(mp_.gamma_gas - 1.0);
-            u0_(m,IEN,k,j,i) = e_k_u0 + e_m + eint_set;
-        } else {
-            // Relax toward target over cooling timescale (eint and eint_desired_vol both per unit volume)
-            Real dens(0.0), eint(0.0);
-            dens = w0_(m,IDN,k,j,i);
-            eint = w0_(m,IEN,k,j,i);
-            Real eint_target_vol = p_over_r*dens/(mp_.gamma_gas - 1.0);
-            Real rad_safe = fmax(rad, mp_.rfix);
-            Real dtr = fmax(mp_.tcool*2.*M_PI/sqrt(mp_.gm0/rad_safe/rad_safe/rad_safe),bdt);
-            Real dfrac = bdt/dtr;
-            Real dE = eint - eint_target_vol;  // per unit volume
-            u0_(m,IEN,k,j,i) -= dE*dfrac;
-        }
+        // Set total energy so temperature matches desired profile directly (no relaxation)
+        Real eint_set = p_over_r*dens_u0/(mp_.gamma_gas - 1.0);
+        u0_(m,IEN,k,j,i) = e_k_u0 + e_m + eint_set;
+        
     }); // end par_for
 
 }// end cooling source terms 
