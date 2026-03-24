@@ -243,11 +243,19 @@ void SourceTerms::CGMCooling(const DvceArray5D<Real> &w0, const EOS_Data &eos_da
   int nx2 = indcs.nx2;
   int nx3 = indcs.nx3;
   auto &size = pmy_pack->pmb->mb_size;
-  int nscalars = pmy_pack->phydro->nscalars;
-  int nhydro = pmy_pack->phydro->nhydro;
   int nmb1 = pmy_pack->nmb_thispack - 1;
   Real gamma = eos_data.gamma;
   Real gm1 = gamma - 1.0;
+
+  int nscalars = 0;
+  int nhydro = 0;
+  if (pmy_pack->phydro != nullptr) {
+    nscalars = pmy_pack->phydro->nscalars;
+    nhydro = pmy_pack->phydro->nhydro;
+  } else if (pmy_pack->pmhd != nullptr) {
+    nscalars = pmy_pack->pmhd->nscalars;
+    nhydro = pmy_pack->pmhd->nmhd;
+  }
 
   auto &units = pmy_pack->punit; 
   Real temp_unit = units->temperature_cgs();

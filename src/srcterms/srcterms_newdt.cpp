@@ -119,10 +119,10 @@ void SourceTerms::NewTimeStep(const DvceArray5D<Real> &w0, const EOS_Data &eos_d
     auto Metal_Cooling_CIE_ = Metal_Cooling_CIE.d_view;
     auto H_He_Cooling_CIE_ = H_He_Cooling_CIE.d_view;
 
-    auto Tfloor  = Tbins_ARR[0];
-    auto Tceil   = Tbins_ARR[Tbins_DIM_0 - 1];
-    auto nHfloor = nHbins_ARR[0];
-    auto nHceil  = nHbins_ARR[nHbins_DIM_0 - 1];
+    auto Tfloor  = std::pow(10, Tbins_ARR[0]);
+    auto Tceil   = std::pow(10, Tbins_ARR[Tbins_DIM_0 - 1]);
+    auto nHfloor = std::pow(10, nHbins_ARR[0]);
+    auto nHceil  = std::pow(10, nHbins_ARR[nHbins_DIM_0 - 1]);
 
     Real X = 0.75; // Hydrogen mass fraction
     Real Zsol = 0.02; // Solar metallicity
