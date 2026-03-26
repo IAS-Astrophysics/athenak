@@ -1,0 +1,186 @@
+# Athena++ (Kokkos version) input file for twopunctures problem with AHF
+
+<comment>
+problem   = two punctures run with AHF
+
+<job>
+basename  = bbh      # problem ID: basename of output filenames
+
+<mesh>
+nghost    = 4         # Number of ghost cells
+nx1       = 128       # Number of zones in X1-direction
+x1min     = -15.0     # minimum value of X1
+x1max     = 15.0      # maximum value of X1
+ix1_bc    = outflow   # inner-X1 boundary flag
+ox1_bc    = outflow   # outer-X1 boundary flag
+
+nx2       = 128       # Number of zones in X2-direction
+x2min     = -15.0     # minimum value of X2
+x2max     = 15.0      # maximum value of X2
+ix2_bc    = outflow   # inner-X2 boundary flag
+ox2_bc    = outflow   # outer-X2 boundary flag
+
+nx3       = 128       # Number of zones in X3-direction
+x3min     = -15.0     # minimum value of X3
+x3max     = 15.0      # maximum value of X3
+ix3_bc    = outflow   # inner-X3 boundary flag
+ox3_bc    = outflow   # outer-X3 boundary flag
+
+<meshblock>
+nx1       = 32        # Number of cells in each MeshBlock, X1-dir
+nx2       = 32        # Number of cells in each MeshBlock, X2-dir
+nx3       = 32        # Number of cells in each MeshBlock, X3-dir
+
+<time>
+evolution  = dynamic  # dynamic/kinematic/static
+integrator = rk3      # time integration algorithm
+cfl_number = 0.25     # The Courant, Friedrichs, & Lewy (CFL) Number
+tlim       = 1.0      # time limit
+
+<mesh_refinement>
+refinement = adaptive
+max_nmb_per_rank = 512
+num_levels = 5
+refinement_interval = 1
+
+<z4c_amr>
+method = tracker
+
+<amr_criterion0>
+method = user
+
+<refined_region1>
+level = 4
+x1min = 4.2
+x1max = 5.8
+x2min = -0.8
+x2max = 0.8
+x3min = -0.8
+x3max = 0.8
+
+<refined_region2>
+level = 4
+x1min = -5.8
+x1max = -4.2
+x2min = -0.8
+x2max = 0.8
+x3min = -0.8
+x3max = 0.8
+
+<z4c>
+# Gauge parameters
+lapse_oplog     = 2.0
+lapse_harmonic  = 0.0
+shift_eta       = 2.0
+shift_Gamma	= 0.5
+
+# Dissipation parameters
+diss            = 0.1
+chi_div_floor   = 1e-05
+
+# Constraint damping
+damp_kappa1     = 0.02
+damp_kappa2     = 0.0
+
+# Slow start lapse
+ssl_damping_time = 20
+ssl_damping_amp = 0.6
+store_metric_drvts = false
+
+# Compact object tracker
+nco = 2
+co_0_type = BH
+co_0_x = 5.0
+co_0_radius = 0.8
+co_1_type = BH
+co_1_x = -5.0
+co_1_radius = 0.8
+tracker_mode = ode
+
+<ahf>
+# Number of punctures and horizons
+npunct = 2
+num_horizons = 2
+
+# Grid points
+ntheta = 10	# nphi = 2*ntheta
+lmax = 6
+
+# Puncture 0
+use_puncture_0 = 0
+center_x_0 = 5.0
+center_y_0 = 0.0
+center_z_0 = 0.0
+
+# Puncture 1
+use_puncture_1 = 1
+center_x_1 = -5.0
+center_y_1 = 0.0
+center_z_1 = 0.0
+
+start_time_0 = 0.0
+stop_time_0 = 100.0
+start_time_1 = 0.0
+stop_time_1 = 100.0
+
+# AHF output
+output_ylm = false	# output spherical harmonics
+output_grid = false	# output grid
+verbose = true
+
+<problem>
+pgen_name = z4c_two_puncture
+# the following are defaults and descriptions
+verbose = false
+par_b            = 5.000000000000000              # 1/2 separation
+par_m_plus       = 0.269484567475738              # mass of the m+ puncture
+par_m_minus      = 0.269484567475738              # mass of the m- puncture
+target_M_plus    = 0.538969134951477              # target ADM mass for m+
+target_M_minus   = 0.538969134951477              # target ADM mass for m-
+par_P_plus1      = -0.000910914521289             # momentum of the m+ puncture
+par_P_plus2      = 0.093615949019968
+par_P_plus3      = 0.000000000000000
+par_P_minus1     = 0.000910914521289              # momentum of the m- puncture
+par_P_minus2     = -0.093615949019968
+par_P_minus3     = 0.000000000000000
+par_S_plus1      = -0.194426746452653             # spin of the m+ puncture
+par_S_plus2      = -0.122647458220544
+par_S_plus3      = -0.013305724330153
+par_S_minus1     = -0.194426746452653             # spin of the m- puncture
+par_S_minus2     = -0.122647458220544
+par_S_minus3     = -0.013305724330153
+give_bare_mass   = False
+    
+npoints_A = 40                         # No. coeff in the compactified radial dir.
+npoints_B = 40                         # No. coeff in the angular dir.
+npoints_phi = 20                       # no. coeff in the phi dir.
+Newton_tol = 1e-10                     # Tolerance for Newton solver
+Newton_maxit = 5                       # Maximum number of Newton iterations
+# A small number to smooth out singularities at the puncture locations
+TP_epsilon = 0.0
+# Tiny number to avoid nans near or at the pucture locations
+TP_Tiny = 0.0
+# Radius of an extended spacetime instead of the puncture
+TP_Extend_Radius = 0
+# Tolerance of ADM masses when give_bare_mass=no
+adm_tol = 1e-4
+# Output debug information about the residuum
+do_residuum_debug_output = false
+# Output debug information about initial guess
+do_initial_debug_output = false
+# Solve for momentum constraint?
+solve_momentum_constraint = false
+# Interpolation
+# Exponent n for psi^-n initial lapse profile (<0)
+initial_lapse_psi_exponent = -2.0
+# Swap x and z coordinates when interpolating,
+# so that the black holes are separated in the z direction
+swap_xz = false
+# taylor expansion (0, fast, inaccurate) or evaluation of spectral coefficients (1, slow, robust)
+grid_setup_method = 1
+
+<output1>
+file_type = bin
+variable = z4c
+slice_x3  = 0
+dt = 1

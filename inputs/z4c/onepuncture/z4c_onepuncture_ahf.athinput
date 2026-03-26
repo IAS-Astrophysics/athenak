@@ -1,0 +1,130 @@
+# Athena++ (Kokkos version) input file for onepuncture problem with AHF
+
+<comment>
+problem   = z4c one puncture
+
+<job>
+basename  = z4c      # problem ID: basename of output filenames
+
+<mesh>
+nghost    = 2         # Number of ghost cells
+nx1       = 32        # Number of zones in X1-direction
+x1min     = -10.0     # minimum value of X1
+x1max     = 10.0      # maximum value of X1
+ix1_bc    = outflow   # inner-X1 boundary flag
+ox1_bc    = outflow   # outer-X1 boundary flag
+
+nx2       = 32        # Number of zones in X2-direction
+x2min     = -10.0     # minimum value of X2
+x2max     = 10.0      # maximum value of X2
+ix2_bc    = outflow   # inner-X2 boundary flag
+ox2_bc    = outflow   # outer-X2 boundary flag
+
+nx3       = 32        # Number of zones in X3-direction
+x3min     = -10.0     # minimum value of X3
+x3max     = 10.0      # maximum value of X3
+ix3_bc    = outflow   # inner-X3 boundary flag
+ox3_bc    = outflow   # outer-X3 boundary flag
+
+<meshblock>
+nx1       = 8         # Number of cells in each MeshBlock, X1-dir
+nx2       = 8         # Number of cells in each MeshBlock, X2-dir
+nx3       = 8         # Number of cells in each MeshBlock, X3-dir
+
+<time>
+evolution  = dynamic    # dynamic/kinematic/static
+integrator = rk4        # time integration algorithm
+cfl_number = 0.1        # The Courant, Friedrichs, & Lewy (CFL) Number
+tlim       = 1.0        # time limit
+
+<mesh_refinement>
+refinement = adaptive
+max_nmb_per_rank = 256
+num_levels = 4
+refinement_interval = 1
+
+<z4c_amr>
+method =tracker
+
+<amr_criterion0>
+method = user
+
+<refined_region1>
+level = 3
+x1min = -0.6
+x1max = 0.6
+x2min = -0.6
+x2max = 0.6
+x3min = -0.6
+x3max = 0.6
+
+<z4c>
+# Gauge parameters
+lapse_oplog     = 2.0
+lapse_harmonicf = 1.0
+lapse_harmonic  = 0.0
+lapse_advect    = 1.0
+shift_eta       = 2.0
+shift_advect    = 1.0
+
+# Dissipation parameters
+diss            = 0.02
+chi_div_floor   = 1e-05
+
+# Constraint damping
+damp_kappa1     = 0.02
+damp_kappa2     = 0.0
+
+store_metric_drvts = false
+
+# Compact object tracker
+nco = 1
+co_0_type = BH
+co_0_x = 0.0
+co_0_y = 0.0
+co_0_z = 0.0
+tracker_mode = ode
+
+<ahf>
+# Number of punctures and horizons
+npunct = 1
+num_horizons = 1
+
+# Grid points
+ntheta = 10	# nphi = 2*ntheta 
+lmax = 6	
+
+# Puncture 0
+use_puncture_0 = 0
+initial_radius_0 = 1.0
+center_x_0 = 0.0
+center_y_0 = 0.0
+center_z_0 = 0.0
+
+# Flow parameters puncture 0
+flow_iterations_0 = 100
+flow_alpha_beta_const_0 = 1.0
+hmean_tol_0 = 100.0
+mass_tol_0 = 1e-2
+
+start_time_0 = 0.0
+stop_time_0 = 1.0
+
+# AHF output
+output_ylm = false	# output spherical harmonics
+output_grid = false	# output grid
+verbose = true
+
+<problem>
+pgen_name = z4c_one_puncture
+punc_ADM_mass = 1.	# puncture mass
+target_M_minus = 1.	# needs to be equal to puncture mass to get a good initial guess for AHF
+target_M_plus = 1.	# needs to be equal to puncture mass to get a good initial guess for AHF
+
+<output1>
+file_type = bin
+variable = z4c
+dt = 0.1
+slice_x3 = 0.0
+
+

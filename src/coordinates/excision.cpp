@@ -212,11 +212,11 @@ void Coordinates::UpdateExcisionMasks() {
 
     // fill horizon arrays
     for (int h = 0; h < hsize; ++h) {
-      hcenter(h,0) = pmy_pack->pz4c->phorizon[h]->center[0];
-      hcenter(h,1) = pmy_pack->pz4c->phorizon[h]->center[1];
-      hcenter(h,2) = pmy_pack->pz4c->phorizon[h]->center[2];
-      hradius(h,0) = pmy_pack->pz4c->phorizon[h]->rr_min;
-      hfound(h,0) = pmy_pack->pz4c->phorizon[h]->ah_found;
+      hcenter(h,0) = pmy_pack->pz4c->phorizon[h]->center[0];       // center x-coord.
+      hcenter(h,1) = pmy_pack->pz4c->phorizon[h]->center[1];       // center y-coord.
+      hcenter(h,2) = pmy_pack->pz4c->phorizon[h]->center[2];       // center z-coord.
+      hradius(h,0) = pmy_pack->pz4c->phorizon[h]->rr_min;          // minimum radius
+      hfound(h,0) = pmy_pack->pz4c->phorizon[h]->ah_found;         // found/not found horizon
     }
 
     par_for("set_excision_horizon", DevExeSpace(), 0, nmb1, 0, (n3-1), 0, (n2-1), 0, (n1-1),
@@ -235,7 +235,7 @@ void Coordinates::UpdateExcisionMasks() {
 
       bool excise = false;
       for (int h = 0; h < hsize; ++h) {
-        if (not hfound(h,0)) continue;
+        if (!hfound(h,0)) continue;
 
         const Real r2 = SQR(x1 - hcenter(h,0)) +
                         SQR(x2 - hcenter(h,1)) +
