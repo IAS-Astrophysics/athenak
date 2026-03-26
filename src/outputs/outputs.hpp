@@ -21,7 +21,7 @@
     #error NHISTORY > NREDUCTION in outputs.hpp
 #endif
 
-#define NOUTPUT_CHOICES 195
+#define NOUTPUT_CHOICES 196
 // choices for output variables used in <ouput> blocks in input file
 // TO ADD MORE CHOICES:
 //   - add more strings to array below, change NOUTPUT_CHOICES above appropriately
@@ -116,7 +116,10 @@ static const char *var_choice[NOUTPUT_CHOICES] = {
   // Spherical/cylindrical velocity components and energy flux components (187-194)
   "vel_sph_r", "vel_sph_theta", "vel_sph_phi",
   "vel_cyl_R", "vel_cyl_phi",
-  "edot_sph_kin", "edot_sph_th", "edot_sph_mag"
+  "edot_sph_kin", "edot_sph_th", "edot_sph_mag",
+
+  // Cooling time (195)
+  "cooling_time",
 };
 
 

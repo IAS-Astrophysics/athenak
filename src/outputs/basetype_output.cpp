@@ -92,7 +92,8 @@ BaseTypeOutput::BaseTypeOutput(ParameterInput *pin, Mesh *pm, OutputParameters o
     const bool needs_prtcl = starts_with(variable, "prtcl_");
     const bool needs_turb = (variable == "turb_force");
     const bool needs_hydro_or_mhd =
-        (variable == "temperature" || starts_with(variable, "mdot_") ||
+        (variable == "temperature" || variable == "cooling_time" || 
+	 starts_with(variable, "mdot_") ||
          starts_with(variable, "edot_") || starts_with(variable, "vel_"));
     const bool needs_mhd_only = (variable == "edot_sph_mag");
 
@@ -339,6 +340,14 @@ BaseTypeOutput::BaseTypeOutput(ParameterInput *pin, Mesh *pm, OutputParameters o
       out_params.n_derived += 1;
       int i_derived = out_params.n_derived - 1;
       outvars.emplace_back("temperature",i_derived,&(derived_var));
+    }
+
+    // cooling time (CGM cooling)
+    if (variable.compare("cooling_time") == 0) {
+      out_params.contains_derived = true;
+      out_params.n_derived += 1;
+      int i_derived = out_params.n_derived - 1;
+      outvars.emplace_back("cooling_time", i_derived, &(derived_var));
     }
 
     // hydro v moments

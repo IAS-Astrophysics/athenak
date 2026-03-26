@@ -95,6 +95,7 @@ void SourceTerms::NewTimeStep(const DvceArray5D<Real> &w0, const EOS_Data &eos_d
     }, Kokkos::Min<Real>(dtnew));
   }
  
+  /*
   if (cgm_cooling) {
     auto &size = pmy_pack->pmb->mb_size;
     int nmb1 = pmy_pack->nmb_thispack - 1;
@@ -252,11 +253,12 @@ void SourceTerms::NewTimeStep(const DvceArray5D<Real> &w0, const EOS_Data &eos_d
         FLT_MIN + (X * rho * ( X * rho * (lambda_cooling / cooling_unit)
                                        - (gamma_heating / heating_unit)));
       if (cooling_heating > 0) {
-        min_dt = fmin(0.25 * (egy/cooling_heating), min_dt);
+	min_dt = fmin(0.5 * (egy/cooling_heating), min_dt);
       }
     }, Kokkos::Min<Real>(dtnew));
     
   }
+  */
 
   if (rel_cooling) {
     Real use_e = eos_data.use_e;

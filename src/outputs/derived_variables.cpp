@@ -30,6 +30,9 @@
 #include "particles/particles.hpp"
 #include "outputs.hpp"
 #include "utils/current.hpp"
+#include "srcterms/srcterms.hpp"
+#include "srcterms/cooling_tables.hpp"
+#include "units/units.hpp"
 
 //----------------------------------------------------------------------------------------
 // BaseTypeOutput::ComputeDerivedVariable()
@@ -2502,4 +2505,178 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
     i_dv += 1;
   }
   i_dv = i_dv % n_dv; // reset derived variable index
+
+  if (name.compare("cooling_time") == 0) {
+    auto dv = derived_var;
+
+    // Get source terms pointer
+    SourceTerms *psrc = nullptr;
+    DvceArray5D<Real> w0_;
+    EOS_Data eos_data;
+    int nhydro_vars = 0;
+    if (pm->pmb_pack->phydro != nullptr) {
+      psrc = pm->pmb_pack->phydro->psrc;
+      w0_ = pm->pmb_pack->phydro->w0;
+      eos_data = pm->pmb_pack->phydro->peos->eos_data;
+      nhydro_vars = pm->pmb_pack->phydro->nhydro;
+    } else if (pm->pmb_pack->pmhd != nullptr) {
+      psrc = pm->pmb_pack->pmhd->psrc;
+      w0_ = pm->pmb_pack->pmhd->w0;
+      eos_data = pm->pmb_pack->pmhd->peos->eos_data;
+      nhydro_vars = pm->pmb_pack->pmhd->nmhd;
+    }
+
+    if (psrc == nullptr || !psrc->cgm_cooling) {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                << std::endl << "cooling_time output requires cgm_cooling enabled"
+                << std::endl;
+      exit(EXIT_FAILURE);
+    }
+
+    // Copy all the same unit conversions and table references
+    // from srcterms_newdt.cpp lines 105-135
+    auto &size = pm->pmb_pack->pmb->mb_size;
+    auto &units = pm->pmb_pack->punit;
+    Real gamma = eos_data.gamma;
+    Real gm1 = gamma - 1.0;
+    Real temp_unit = units->temperature_cgs();
+    Real nH_unit = units->density_cgs() / units->atomic_mass_unit_cgs;
+    Real cooling_unit = units->pressure_cgs() / units->time_cgs() / nH_unit / nH_unit;
+    Real heating_unit = units->pressure_cgs() / units->time_cgs() / nH_unit;
+    Real length_unit = units->length_cgs();
+    Real X = 0.75;
+    Real Zsol = 0.02;
+    Real h_rate = psrc->hrate;
+    Real h_norm = psrc->hscale_norm;
+    Real h_height = psrc->hscale_height;
+    Real h_radius = psrc->hscale_radius;
+
+    auto Tbins_ = psrc->Tbins.d_view;
+    auto nHbins_ = psrc->nHbins.d_view;
+    auto Metal_Cooling_ = psrc->Metal_Cooling.d_view;
+    auto H_He_Cooling_ = psrc->H_He_Cooling.d_view;
+    auto Metal_Cooling_CIE_ = psrc->Metal_Cooling_CIE.d_view;
+    auto H_He_Cooling_CIE_ = psrc->H_He_Cooling_CIE.d_view;
+
+    auto Tfloor  = std::pow(10, Tbins_ARR[0]);
+    auto Tceil   = std::pow(10, Tbins_ARR[Tbins_DIM_0 - 1]);
+    auto nHfloor = std::pow(10, nHbins_ARR[0]);
+    auto nHceil  = std::pow(10, nHbins_ARR[nHbins_DIM_0 - 1]);
+
+    int nhydro = nhydro_vars;
+    int nx1 = indcs.nx1;
+    int nx2 = indcs.nx2;
+    int nx3 = indcs.nx3;
+
+    par_for("cooling_time", DevExeSpace(), 0, (nmb-1), ks, ke, js, je, is, ie,
+    KOKKOS_LAMBDA(int m, int k, int j, int i) {
+      const Real rho = w0_(m,IDN,k,j,i);
+      const Real egy = w0_(m,IEN,k,j,i);
+      const Real temp = temp_unit * egy / rho * gm1;
+
+      const Real m_lowT = (temp <  Tfloor) ? 1.0 : 0.0;
+      const Real m_Tin  = (temp >= Tfloor && temp <= Tceil) ? 1.0 : 0.0;
+
+      const Real nH = X * nH_unit * rho; // density in cgs units
+      const Real Z = w0_(m,nhydro,k,j,i) / Zsol; // Assumes Z is the first passive scalar
+      const Real log_temp = log10(temp);
+      const Real log_nH = log10(nH);
+
+      const Real m_Nin  = (nH >= nHfloor && nH <= nHceil) ? 1.0 : 0.0;
+      const Real m_PIE  = m_Tin * m_Nin;   // 1 only if both in-range
+      const Real m_CIE  = m_Tin;           // 1 if T in-range
+
+      // Indices
+      int iT = 0, jN = 0;
+      while (iT < Tbins_DIM_0 - 2 && Tbins_(iT + 1) < log_temp) ++iT;
+      while (jN < nHbins_DIM_0 - 2 && nHbins_(jN + 1) < log_nH) ++jN;
+
+      // --- Weights (well-defined even if masks are 0)
+      const Real log_T0 = Tbins_(iT);
+      const Real log_T1 = Tbins_(iT + 1);
+      const Real inv_dT = 1.0 / (log_T1 - log_T0);
+      const Real t      = (log_temp - log_T0) * inv_dT;
+      const Real omt    = 1.0 - t;
+
+      const Real log_n0 = nHbins_(jN);
+      const Real log_n1 = nHbins_(jN + 1);
+      const Real inv_dn = 1.0 / (log_n1 - log_n0);
+      const Real u      = (log_nH - log_n0) * inv_dn;
+      const Real omu    = 1.0 - u;
+
+      // PIE bilinear interpolation
+      const Real prim_PIE =
+          omt*omu*H_He_Cooling_(iT,   jN  ) +
+          t  *omu*H_He_Cooling_(iT+1, jN  ) +
+          omt*u  *H_He_Cooling_(iT,   jN+1) +
+          t  *u  *H_He_Cooling_(iT+1, jN+1);
+
+      const Real metal_PIE =
+          omt*omu*Metal_Cooling_(iT,   jN  ) +
+          t  *omu*Metal_Cooling_(iT+1, jN  ) +
+          omt*u  *Metal_Cooling_(iT,   jN+1) +
+          t  *u  *Metal_Cooling_(iT+1, jN+1);
+
+      const Real lambda_PIE = m_PIE * fma(Z, metal_PIE, prim_PIE);
+
+      // CIE linear interpolation
+      const Real C0 = H_He_Cooling_CIE_(iT);
+      const Real M0 = Metal_Cooling_CIE_(iT);
+      const Real prim_CIE  = fma(t, H_He_Cooling_CIE_(iT+1) - C0, C0);
+      const Real metal_CIE = fma(t, Metal_Cooling_CIE_(iT+1) - M0, M0);
+      const Real lambda_CIE_tab = fma(Z, metal_CIE, prim_CIE);
+
+      // Low-T analytic fit (Koyama & Inutsuka 2002)
+      const Real e1 = exp(-1.184e5 / (temp + 1.0e3));
+      const Real e2 = exp(-92.0 / temp);
+      const Real lambda_lowT = Z * (2.0e-19 * e1 + 2.8e-28 * sqrt(temp) * e2);
+
+      // Blend CIE regimes
+      const Real lambda_CIE = m_CIE * lambda_CIE_tab
+                            + (1.0 - m_CIE) * (m_lowT * lambda_lowT);
+
+      // Heating profile
+      const Real x1min = size.d_view(m).x1min, x1max = size.d_view(m).x1max;
+      const Real x2min = size.d_view(m).x2min, x2max = size.d_view(m).x2max;
+      const Real x3min = size.d_view(m).x3min, x3max = size.d_view(m).x3max;
+
+      const Real x1v = CellCenterX(i - is, nx1, x1min, x1max);
+      const Real x2v = CellCenterX(j - js, nx2, x2min, x2max);
+      const Real x3v = CellCenterX(k - ks, nx3, x3min, x3max);
+
+      const Real R2 = fma(x1v, x1v, x2v*x2v);
+      const Real R  = sqrt(R2);
+
+      const Real horz_falloff = exp(-R / h_radius);
+      const Real vert_scale2  = h_height*h_height*(1 + R2 / (h_radius*h_radius));
+      const Real vert_falloff = exp(-(x3v*x3v) / vert_scale2);
+
+      Real gamma_heating = h_rate * h_norm * X * nH_unit * horz_falloff * vert_falloff;
+
+      // Power cutoff above 10kK
+      const Real m_hot = (temp > 1.0e4) ? 1.0 : 0.0;
+      const Real inv_ratio = 1.0e4 / temp;
+      const Real damp_factor =
+          m_hot * inv_ratio*inv_ratio*inv_ratio*inv_ratio *
+                  inv_ratio*inv_ratio*inv_ratio*inv_ratio
+        + (1.0 - m_hot);
+      gamma_heating *= damp_factor;
+
+      // Shielding mix
+      const Real dx_cgs = size.d_view(m).dx1 * length_unit;
+      const Real neutral_frac = 1.0 - 0.5 * (1.0 + tanh((temp - 8e3) / 1.5e3));
+      const Real tau  = neutral_frac * nH * 1.0e-17 * dx_cgs;
+      const Real frac = exp(-tau);
+      const Real lambda_cooling = (1.0 - frac) * lambda_CIE + frac * lambda_PIE;
+
+      // Cooling time = internal energy / net cooling rate
+      Real cooling_heating =
+        FLT_MIN + (X * rho * ( X * rho * (lambda_cooling / cooling_unit)
+                                       - (gamma_heating / heating_unit)));
+
+      Real tcool = egy / cooling_heating;
+      dv(m, i_dv, k, j, i) = tcool;
+    });
+    i_dv += 1;
+  }
 }
