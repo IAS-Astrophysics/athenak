@@ -1,4 +1,4 @@
-# Athena++ (Kokkos version) input file for onepuncture problem with AHF
+# Athena++ (Kokkos version) input file for onepuncture problem with fastflow
 
 <comment>
 problem   = z4c one puncture
@@ -83,10 +83,10 @@ co_0_type = BH
 co_0_x = 0.0
 co_0_y = 0.0
 co_0_z = 0.0
-co_0_mass = 1.0		# needs to equal punc_ADM_mass for AHF initial guess
+co_0_mass = 1.0		# needs to equal punc_ADM_mass for fastflow initial guess
 tracker_mode = ode
 
-<ahf>
+<fastflow>
 # Number of punctures and horizons
 npunct = 1
 num_horizons = 1

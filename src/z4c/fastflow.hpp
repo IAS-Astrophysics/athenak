@@ -3,11 +3,11 @@
 // Copyright(C) 2020 James M. Stone <jmstone@ias.edu> and the Athena code team
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
-//! \file ahf.hpp
-//! \brief Basic functionality for the AHF class.
+//! \file fastflow.hpp
+//! \brief Basic functionality for the FastFlow class.
 
-#ifndef AHF_HPP
-#define AHF_HPP
+#ifndef FASTFLOW_HPP
+#define FASTFLOW_HPP
 
 #include <string>
 #include <vector>
@@ -24,15 +24,15 @@ class MeshBlock;
 class MeshBlockPack;
 class ParameterInput;
 
-//! \class AHF
-//! \brief Apparent Horizon Finder class
-class AHF {
+//! \class FastFlow
+//! \brief Apparent Horizon Finder class based on fast-flow algorithm
+class FastFlow {
 public:
-  // Constructor for AHF object
-  AHF(MeshBlockPack *pmbp, ParameterInput *pin, int n);
+  // Constructor for FastFlow object
+  FastFlow(MeshBlockPack *pmbp, ParameterInput *pin, int n);
 
-  // Default Destructor for AHF object (closes output file)
-  ~AHF();
+  // Default Destructor for FastFlow object (closes output file)
+  ~FastFlow();
 
   void Find(int iter, Real time); // main functionality for finding AH
   void Write(int iter, Real time); // function for result writing

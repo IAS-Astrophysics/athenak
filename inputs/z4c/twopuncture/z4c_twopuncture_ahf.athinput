@@ -1,7 +1,7 @@
-# Athena++ (Kokkos version) input file for twopunctures problem with AHF
+# Athena++ (Kokkos version) input file for twopunctures problem with fastflow
 
 <comment>
-problem   = two punctures run with AHF
+problem   = two punctures run with fastflow
 
 <job>
 basename  = bbh      # problem ID: basename of output filenames
@@ -99,7 +99,7 @@ co_1_radius = 0.8
 co_1_mass = 0.538969134951477	# needs to match target_M_minus
 tracker_mode = ode
 
-<ahf>
+<fastflow>
 # Number of punctures and horizons
 npunct = 2
 num_horizons = 2

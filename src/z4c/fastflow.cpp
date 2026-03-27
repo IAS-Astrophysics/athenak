@@ -3,7 +3,7 @@
 // Copyright(C) 2020 James M. Stone <jmstone@ias.edu> and the Athena code team
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
-//! \file ahf.cpp
+//! \file fastflow.cpp
 //! \brief Implementation of the apparent horizon finder class
 //!        based on the fast-flow algorithm of Gundlach:1997us and Alcubierre:1998rq
 
@@ -17,7 +17,7 @@
 #include <mpi.h>
 #endif
 
-#include "ahf.hpp"
+#include "fastflow.hpp"
 #include "globals.hpp"
 #include "parameter_input.hpp"
 #include "mesh/mesh.hpp"
@@ -29,9 +29,9 @@
 #include "z4c.hpp"
 #include "coordinates/cell_locations.hpp"
 //----------------------------------------------------------------------------------------
-//! \fn AHF::AHF(MeshBlockPack *pmbp, ParameterInput * pin, int n)
-//! \brief Constructor for AHF class
-AHF::AHF(MeshBlockPack *pmbp, ParameterInput *pin, int n):
+//! \fn FastFlow::FastFlow(MeshBlockPack *pmbp, ParameterInput * pin, int n)
+//! \brief Constructor for FastFlow class
+FastFlow::FastFlow(MeshBlockPack *pmbp, ParameterInput *pin, int n):
   pmbp(pmbp),
   pin(pin),
   Y0("Y0",1,1), Ys("Ys",1,1), Yc("Yc",1,1),
@@ -50,43 +50,43 @@ AHF::AHF(MeshBlockPack *pmbp, ParameterInput *pin, int n):
   std::string n_str = std::to_string(nh);
 
   // Read parameter input variables
-  nhorizon = pin->GetOrAddInteger("ahf", "num_horizons", 1); // Number of horizons
-  ntheta = pin->GetOrAddInteger("ahf", "ntheta", 5); // Number of points theta
+  nhorizon = pin->GetOrAddInteger("fastflow", "num_horizons", 1); // Number of horizons
+  ntheta = pin->GetOrAddInteger("fastflow", "ntheta", 5); // Number of points theta
 
-  lmax = pin->GetOrAddInteger("ahf", "lmax", 4);
+  lmax = pin->GetOrAddInteger("fastflow", "lmax", 4);
   lmax1 = lmax + 1;
 
   // Flow parameters
-  flow_iterations = pin->GetOrAddInteger("ahf", "flow_iterations_" + n_str, 100);
-  flow_alpha_beta_const = pin->GetOrAddReal("ahf", "flow_alpha_beta_const_" + n_str, 1.0);
+  flow_iterations = pin->GetOrAddInteger("fastflow", "flow_iterations_" + n_str, 100);
+  flow_alpha_beta_const = pin->GetOrAddReal("fastflow", "flow_alpha_beta_const_" + n_str, 1.0);
 
   // Convergence parameters
-  hmean_tol = pin->GetOrAddReal("ahf", "hmean_tol_" + n_str, 100.);
-  mass_tol = pin->GetOrAddReal("ahf", "mass_tol_" + n_str, 1e-2);
+  hmean_tol = pin->GetOrAddReal("fastflow", "hmean_tol_" + n_str, 100.);
+  mass_tol = pin->GetOrAddReal("fastflow", "mass_tol_" + n_str, 1e-2);
 
   // Output booleans
-  verbose = pin->GetOrAddBoolean("ahf", "verbose", false);
-  output_ylm = pin->GetOrAddBoolean("ahf", "output_ylm", false);
-  output_grid = pin->GetOrAddBoolean("ahf", "output_grid", false);
+  verbose = pin->GetOrAddBoolean("fastflow", "verbose", false);
+  output_ylm = pin->GetOrAddBoolean("fastflow", "output_ylm", false);
+  output_grid = pin->GetOrAddBoolean("fastflow", "output_grid", false);
 
-  root = pin->GetOrAddInteger("ahf", "mpi_root", 0);
-  merger_distance = pin->GetOrAddReal("ahf", "merger_distance", 0.1);
+  root = pin->GetOrAddInteger("fastflow", "mpi_root", 0);
+  merger_distance = pin->GetOrAddReal("fastflow", "merger_distance", 0.1);
   use_stored_metric_drvts = pin->GetBoolean("z4c", "store_metric_drvts");
 
   // Initial guess
-  initial_radius = pin->GetOrAddReal("ahf", "initial_radius_" + n_str, 1.0);
+  initial_radius = pin->GetOrAddReal("fastflow", "initial_radius_" + n_str, 1.0);
   rr_min = -1.0;
 
-  expand_guess = pin->GetOrAddReal("ahf", "expand_guess", 1.0);
+  expand_guess = pin->GetOrAddReal("fastflow", "expand_guess", 1.0);
 
   // Center
-  center[0] = pin->GetOrAddReal("ahf", "center_x_" + n_str, 0.0);
-  center[1] = pin->GetOrAddReal("ahf", "center_y_" + n_str, 0.0);
-  center[2] = pin->GetOrAddReal("ahf", "center_z_" + n_str, 0.0);
+  center[0] = pin->GetOrAddReal("fastflow", "center_x_" + n_str, 0.0);
+  center[1] = pin->GetOrAddReal("fastflow", "center_y_" + n_str, 0.0);
+  center[2] = pin->GetOrAddReal("fastflow", "center_z_" + n_str, 0.0);
 
   // Punctures
-  npunct = pin->GetOrAddInteger("ahf", "npunct", 0); // Number of punctures
-  use_puncture = pin->GetOrAddInteger("ahf", "use_puncture_" + n_str, -1);
+  npunct = pin->GetOrAddInteger("fastflow", "npunct", 0); // Number of punctures
+  use_puncture = pin->GetOrAddInteger("fastflow", "use_puncture_" + n_str, -1);
 
   if (use_puncture >= 0) {
     // Center is determined on the fly during the initial guess
@@ -98,12 +98,12 @@ AHF::AHF(MeshBlockPack *pmbp, ParameterInput *pin, int n):
       exit(EXIT_FAILURE);
     }
   }
-  wait_until_punc_are_close = pin->GetOrAddBoolean("ahf", "wait_until_punc_are_close_" + n_str, 0);
-  use_puncture_massweighted_center = pin->GetOrAddBoolean("ahf", "use_puncture_massweighted_center_" + n_str, 0);
+  wait_until_punc_are_close = pin->GetOrAddBoolean("fastflow", "wait_until_punc_are_close_" + n_str, 0);
+  use_puncture_massweighted_center = pin->GetOrAddBoolean("fastflow", "use_puncture_massweighted_center_" + n_str, 0);
 
   // Timer
-  start_time = pin->GetOrAddReal("ahf", "start_time_" + n_str, std::numeric_limits<double>::max());
-  stop_time = pin->GetOrAddReal("ahf", "stop_time_" + n_str, -1.0);
+  start_time = pin->GetOrAddReal("fastflow", "start_time_" + n_str, std::numeric_limits<double>::max());
+  stop_time = pin->GetOrAddReal("fastflow", "stop_time_" + n_str, -1.0);
 
   // Grid and quadrature weights
   gl_grid = new GaussLegendreGrid(pmbp, ntheta, 1.0); // unit-sphere
@@ -181,28 +181,28 @@ AHF::AHF(MeshBlockPack *pmbp, ParameterInput *pin, int n):
 
   // Prepare output
   ofname_summary = pin->GetString("job", "basename") + ".";
-  ofname_summary += pin->GetOrAddString("ahf", "horizon_file_summary_" + n_str, "horizon_summary_" + n_str);
+  ofname_summary += pin->GetOrAddString("fastflow", "horizon_file_summary_" + n_str, "horizon_summary_" + n_str);
   ofname_summary += ".txt";
 
   ofname_shape = pin->GetString("job", "basename") + ".";
-  ofname_shape += pin->GetOrAddString("ahf", "horizon_file_shape_" + n_str, "horizon_shape_" + n_str);
+  ofname_shape += pin->GetOrAddString("fastflow", "horizon_file_shape_" + n_str, "horizon_shape_" + n_str);
   ofname_shape += ".txt";
 
   if (verbose) {
     ofname_verbose = pin->GetString("job", "basename") + ".";
-    ofname_verbose += pin->GetOrAddString("ahf", "horizon_verbose_" + n_str, "horizon_verbose_" + n_str);
+    ofname_verbose += pin->GetOrAddString("fastflow", "horizon_verbose_" + n_str, "horizon_verbose_" + n_str);
     ofname_verbose += ".txt";
   }
 
   if (output_ylm) {
     ofname_ylm = pin->GetString("job", "basename") + ".";
-    ofname_ylm += pin->GetOrAddString("ahf", "horizon_ylm_" + n_str, "horizon_ylm_" + n_str);
+    ofname_ylm += pin->GetOrAddString("fastflow", "horizon_ylm_" + n_str, "horizon_ylm_" + n_str);
     ofname_ylm += ".txt";
   }
 
   if (output_grid) {
     ofname_grid = pin->GetString("job", "basename") + ".";
-    ofname_grid += pin->GetOrAddString("ahf", "horizon_grid_" + n_str, "horizon_grid_" + n_str);
+    ofname_grid += pin->GetOrAddString("fastflow", "horizon_grid_" + n_str, "horizon_grid_" + n_str);
     ofname_grid += ".txt";
   }
 
@@ -317,9 +317,9 @@ AHF::AHF(MeshBlockPack *pmbp, ParameterInput *pin, int n):
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn void AHF::AHF()
-//! \brief Destructor for AHF class
-AHF::~AHF() {
+//! \fn void FastFlow::FastFlow()
+//! \brief Destructor for FastFlow class
+FastFlow::~FastFlow() {
   // Delete Gauss-Legendre grid
   delete gl_grid;
 
@@ -333,9 +333,9 @@ AHF::~AHF() {
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn void AHF::Write(int iter, Real time)
+//! \fn void FastFlow::Write(int iter, Real time)
 //! \brief Output summary and shape file, for each horizon
-void AHF::Write(int iter, Real time)
+void FastFlow::Write(int iter, Real time)
 {
   if (ioproc) {
     if((time < start_time) || (time > stop_time)) return;
@@ -388,14 +388,14 @@ void AHF::Write(int iter, Real time)
   {
     std::string parname {"time_first_found_" + std::to_string(nh)};
     time_first_found = time;
-    pin->SetReal("ahf", parname, time_first_found);
+    pin->SetReal("fastflow", parname, time_first_found);
   }
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn void AHF::Find(int iter, Real time)
+//! \fn void FastFlow::Find(int iter, Real time)
 //! \brief Search for the horizons
-void AHF::Find(int iter, Real time)
+void FastFlow::Find(int iter, Real time)
 {
   if((time < start_time) || (time > stop_time)) return;
   if (wait_until_punc_are_close && !(PuncAreClose())) return;
@@ -412,17 +412,17 @@ void AHF::Find(int iter, Real time)
     std::string parname;
     parname = "last_a0_" + std::to_string(nh); // nh: horizon index
 
-    pin->SetReal("ahf", parname, last_a0);
+    pin->SetReal("fastflow", parname, last_a0);
 
     parname = "ah_found_a0_" + std::to_string(nh);
-    pin->SetBoolean("ahf", parname, ah_found);
+    pin->SetBoolean("fastflow", parname, ah_found);
   }
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn void AHF::InitialGuess()
+//! \fn void FastFlow::InitialGuess()
 //! \brief Initial guess for spectral coefs of horizon n
-void AHF::InitialGuess()
+void FastFlow::InitialGuess()
 {  
   // Reset Coefficients to Zero
   Kokkos::deep_copy(a0, 0.0); 
@@ -468,10 +468,10 @@ void AHF::InitialGuess()
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn bool AHF::MetricDerivatives(Real time)
+//! \fn bool FastFlow::MetricDerivatives(Real time)
 //! \brief compute drvts of ADM metric at MB level
 template <int NGHOST>
-void AHF::MetricDerivatives(Real time)
+void FastFlow::MetricDerivatives(Real time)
 { 
   // Check whether derivatives have to be computed
   if (use_stored_metric_drvts) return;
@@ -489,7 +489,7 @@ void AHF::MetricDerivatives(Real time)
   int &js = indcs.js; int &je = indcs.je;
   int &ks = indcs.ks; int &ke = indcs.ke;
 
-  par_for("AHF_metric_derivatives",DevExeSpace(),0,nmb-1,ks,ke+1,js,je+1,is,ie+1, 
+  par_for("FastFlow_metric_derivatives",DevExeSpace(),0,nmb-1,ks,ke+1,js,je+1,is,ie+1, 
   KOKKOS_LAMBDA(int m, int k, int j, int i) {
     // Grid spacing
     Real idx[] = {1.0 / size.d_view(m).dx1, 1.0 / size.d_view(m).dx2, 1.0 / size.d_view(m).dx3};
@@ -521,15 +521,15 @@ void AHF::MetricDerivatives(Real time)
 
   return;
 }
-template void AHF::MetricDerivatives<2>(Real time);
-template void AHF::MetricDerivatives<3>(Real time);
-template void AHF::MetricDerivatives<4>(Real time);
+template void FastFlow::MetricDerivatives<2>(Real time);
+template void FastFlow::MetricDerivatives<3>(Real time);
+template void FastFlow::MetricDerivatives<4>(Real time);
 
 //----------------------------------------------------------------------------------------
-//! \fn void AHF::MetricInterp(MeshBlock *pmb)
+//! \fn void FastFlow::MetricInterp(MeshBlock *pmb)
 //! \brief Interpolate metric on the surface n
 //!        Flag here the surface points contained (on this rank)
-void AHF::MetricInterp()
+void FastFlow::MetricInterp()
 { 
   // Interpolate metric and extrinsic curvature to sphere
   /* for (int c = 0; c < g_interp.size(); ++c) {
@@ -620,9 +620,9 @@ void AHF::MetricInterp()
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn void AHF::FastFlowLoop()
+//! \fn void FastFlow::FastFlowLoop()
 //! \brief Fast Flow loop for horizon n
-void AHF::FastFlowLoop()
+void FastFlow::FastFlowLoop()
 {
   ah_found = false;
 
@@ -778,9 +778,9 @@ void AHF::FastFlowLoop()
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn void AHF::UpdateFlowSpectralComponents()
+//! \fn void FastFlow::UpdateFlowSpectralComponents()
 //! \brief Find new spectral components with fast flow
-void AHF::UpdateFlowSpectralComponents()
+void FastFlow::UpdateFlowSpectralComponents()
 {
   const Real alpha = flow_alpha_beta_const;
   const Real beta = 0.5 * flow_alpha_beta_const;
@@ -846,9 +846,9 @@ void AHF::UpdateFlowSpectralComponents()
 } // (OS): Sync DualArray? or change to Host
 
 //----------------------------------------------------------------------------------------
-//! \fn void AHF::RadiiFromSphericalHarmonics()
+//! \fn void FastFlow::RadiiFromSphericalHarmonics()
 //! \brief Compute the radius of the surface
-void AHF::RadiiFromSphericalHarmonics()
+void FastFlow::RadiiFromSphericalHarmonics()
 {
   Kokkos::deep_copy(rr, 0.0);
   Kokkos::deep_copy(rr_dth, 0.0);
@@ -872,11 +872,11 @@ void AHF::RadiiFromSphericalHarmonics()
 } // (OS): Sync DualArray? or change to Host
 
 //----------------------------------------------------------------------------------------
-//! \fn void AHF::SurfaceIntegrals()
+//! \fn void FastFlow::SurfaceIntegrals()
 //! \brief Compute expansion, surface element and spin integrand on surface n
 //!        Needs metric and extr. curv. interpolated on the surface
 //!        Performs local sums and MPI reduce
-void AHF::SurfaceIntegrals()
+void FastFlow::SurfaceIntegrals()
 {
   const Real min_rp = 1e-10;
 
@@ -965,8 +965,8 @@ void AHF::SurfaceIntegrals()
     Real const rhop = Kokkos::sqrt(xp * xp + yp * yp);
 
     if (rp < min_rp) {
-      // Do not stop the code, just AHF failing
-      // break the loop and catch the nans in AHF later.
+      // Do not stop the code, just FastFlow failing
+      // break the loop and catch the nans in FastFlow later.
       break;
     }
 
@@ -1235,10 +1235,10 @@ void AHF::SurfaceIntegrals()
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn void AHF::ComputeSphericalHarmonics()
+//! \fn void FastFlow::ComputeSphericalHarmonics()
 //! \brief Compute spherical harmonics for grid of size ntheta*nphi.
 //!        Results are used for all horizons.
-void AHF::ComputeSphericalHarmonics()
+void FastFlow::ComputeSphericalHarmonics()
 {
   const Real sqrt2 = Kokkos::sqrt(2.0);
 
@@ -1305,17 +1305,17 @@ void AHF::ComputeSphericalHarmonics()
 } 
 
 //----------------------------------------------------------------------------------------
-//! \fn int AHF::lmindex(const int l, const int m)
+//! \fn int FastFlow::lmindex(const int l, const int m)
 //! \brief Multipolar single index (l,m) -> index
-int AHF::lmindex(const int l, const int m)
+int FastFlow::lmindex(const int l, const int m)
 {
   return l * lmax1 + m;
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn Real AHF::PuncMaxDistance()
+//! \fn Real FastFlow::PuncMaxDistance()
 //! \brief Max Euclidean distance between punctures
-Real AHF::PuncMaxDistance() {
+Real FastFlow::PuncMaxDistance() {
   Real maxdist = 0.0;
   for (int pix = 0; pix < npunct; ++pix) {
     Real xp = pmbp->pz4c->ptracker[pix]->GetPos(0);
@@ -1333,9 +1333,9 @@ Real AHF::PuncMaxDistance() {
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn Real AHF::PuncMaxDistance(const int pix)
+//! \fn Real FastFlow::PuncMaxDistance(const int pix)
 //! \brief Max Euclidean distance from puncture pix to other punctures
-Real AHF::PuncMaxDistance(const int pix) {
+Real FastFlow::PuncMaxDistance(const int pix) {
   Real xp = pmbp->pz4c->ptracker[pix]->GetPos(0);
   Real yp = pmbp->pz4c->ptracker[pix]->GetPos(1);
   Real zp = pmbp->pz4c->ptracker[pix]->GetPos(2);
@@ -1353,9 +1353,9 @@ Real AHF::PuncMaxDistance(const int pix) {
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn Real AHF::PuncSumMasses()
+//! \fn Real FastFlow::PuncSumMasses()
 //! \brief Return sum of puncture's intial masses
-Real AHF::PuncSumMasses() {
+Real FastFlow::PuncSumMasses() {
   Real mass = 0.0;
   for (int p = 0; p < npunct; ++p) {
     mass += pmbp->pz4c->ptracker[p]->GetMass();
@@ -1364,9 +1364,9 @@ Real AHF::PuncSumMasses() {
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn void AHF::PuncWeightedMassCentralPoint(Real *xc, Real *yc, Real *zc)
+//! \fn void FastFlow::PuncWeightedMassCentralPoint(Real *xc, Real *yc, Real *zc)
 //! \brief Return mss-weighted center of puncture positions
-void AHF::PuncWeightedMassCentralPoint(Real *xc, Real *yc, Real *zc) {
+void FastFlow::PuncWeightedMassCentralPoint(Real *xc, Real *yc, Real *zc) {
   Real sumx = 0.0; // sum of m_i*x_i
   Real sumy = 0.0;
   Real sumz = 0.0;
@@ -1388,9 +1388,9 @@ void AHF::PuncWeightedMassCentralPoint(Real *xc, Real *yc, Real *zc) {
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn int AHF::PuncAreClose()
+//! \fn int FastFlow::PuncAreClose()
 //! \brief Check when the maximal distance between all punctures is below threshold
-bool AHF::PuncAreClose() {
+bool FastFlow::PuncAreClose() {
   Real const mass = PuncSumMasses();
   Real const maxdist = PuncMaxDistance();
   return (maxdist < merger_distance * mass);

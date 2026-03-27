@@ -163,7 +163,7 @@ add_executable(
         utils/spherical_surface.cpp
 
         z4c/compact_object_tracker.cpp
-        z4c/ahf.cpp
+        z4c/fastflow.cpp
 	z4c/horizon_dump.cpp
         z4c/tmunu.cpp
         z4c/z4c.cpp

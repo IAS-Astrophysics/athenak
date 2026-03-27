@@ -72,7 +72,7 @@ class CompactObjectTracker {
   Real vel[NDIM];
   int reflevel;         // requested minimum refinement level (-1 for infinity)
   Real radius;          // nominal radius of the object (for the AMR driver)
-  Real mass;            // mass needed for AHF
+  Real mass;            // mass needed for FastFlow
   Mesh const *pmesh;
   int out_every;
   std::ofstream ofile;

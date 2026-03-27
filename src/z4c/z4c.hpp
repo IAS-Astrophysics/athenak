@@ -27,7 +27,7 @@
 class Coordinates;
 class Driver;
 class CompactObjectTracker;
-class AHF;
+class FastFlow;
 class HorizonDump;
 
 namespace z4c {
@@ -251,7 +251,7 @@ class Z4c {
 
   Z4c_AMR *pamr;
   std::vector<std::unique_ptr<CompactObjectTracker>> ptracker;
-  std::vector<std::unique_ptr<AHF>> phorizon;
+  std::vector<std::unique_ptr<FastFlow>> pfastflow;
   std::vector<std::unique_ptr<HorizonDump>> phorizon_dump;
 
   /*

@@ -14,7 +14,7 @@
 #include "cell_locations.hpp"
 #include "coordinates/adm.hpp"
 #include "z4c/z4c.hpp"
-#include "z4c/ahf.hpp"
+#include "z4c/fastflow.hpp"
 
 // inlined spherical Kerr-Schild r evaluated at CKS x1, x2, x3
 KOKKOS_INLINE_FUNCTION
@@ -205,18 +205,18 @@ void Coordinates::UpdateExcisionMasks() {
     auto &flux = excision_flux;
 
     // set up arrays to hold horizon information
-    int hsize = pmy_pack->pz4c->phorizon.size();
+    int hsize = pmy_pack->pz4c->pfastflow.size();
     DvceArray2D<Real> hcenter("hcenter", hsize, 3);
     DvceArray2D<Real> hradius("hradius", hsize, 1);
     DvceArray2D<bool> hfound("hfound", hsize, 1);
 
     // fill horizon arrays
     for (int h = 0; h < hsize; ++h) {
-      hcenter(h,0) = pmy_pack->pz4c->phorizon[h]->center[0];       // center x-coord.
-      hcenter(h,1) = pmy_pack->pz4c->phorizon[h]->center[1];       // center y-coord.
-      hcenter(h,2) = pmy_pack->pz4c->phorizon[h]->center[2];       // center z-coord.
-      hradius(h,0) = pmy_pack->pz4c->phorizon[h]->rr_min;          // minimum radius
-      hfound(h,0) = pmy_pack->pz4c->phorizon[h]->ah_found;         // found/not found horizon
+      hcenter(h,0) = pmy_pack->pz4c->pfastflow[h]->center[0];       // center x-coord.
+      hcenter(h,1) = pmy_pack->pz4c->pfastflow[h]->center[1];       // center y-coord.
+      hcenter(h,2) = pmy_pack->pz4c->pfastflow[h]->center[2];       // center z-coord.
+      hradius(h,0) = pmy_pack->pz4c->pfastflow[h]->rr_min;          // minimum radius
+      hfound(h,0) = pmy_pack->pz4c->pfastflow[h]->ah_found;         // found/not found horizon
     }
 
     par_for("set_excision_horizon", DevExeSpace(), 0, nmb1, 0, (n3-1), 0, (n2-1), 0, (n1-1),

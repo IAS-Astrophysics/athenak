@@ -1,4 +1,4 @@
-# Athena++ (Kokkos version) input file for spinning puncture problem with AHF
+# Athena++ (Kokkos version) input file for spinning puncture problem with fastflow
 
 <comment>
 problem   = z4c spinning puncture
@@ -62,10 +62,10 @@ co_0_type = BH
 co_0_x = 0.0
 co_0_y = 0.0
 co_0_z = 0.0
-co_0_mass = 0.505*2	# this is twice target_M_plus/target_M_minus used as initial guess for AHF
+co_0_mass = 0.505*2	# this is twice target_M_plus/target_M_minus used as initial guess for fastflow
 tracker_mode = ode
 
-<ahf>
+<fastflow>
 # Number of punctures and horizons
 npunct = 1
 num_horizons = 1
