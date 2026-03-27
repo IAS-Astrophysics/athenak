@@ -92,9 +92,11 @@ nco = 2
 co_0_type = BH
 co_0_x = 5.0
 co_0_radius = 0.8
+co_0_mass = 0.538969134951477	# needs to match target_M_plus
 co_1_type = BH
 co_1_x = -5.0
 co_1_radius = 0.8
+co_1_mass = 0.538969134951477	# needs to match target_M_minus
 tracker_mode = ode
 
 <ahf>

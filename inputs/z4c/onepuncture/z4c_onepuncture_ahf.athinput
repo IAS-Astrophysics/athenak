@@ -83,6 +83,7 @@ co_0_type = BH
 co_0_x = 0.0
 co_0_y = 0.0
 co_0_z = 0.0
+co_0_mass = 1.0		# needs to equal punc_ADM_mass for AHF initial guess
 tracker_mode = ode
 
 <ahf>
@@ -118,8 +119,6 @@ verbose = true
 <problem>
 pgen_name = z4c_one_puncture
 punc_ADM_mass = 1.	# puncture mass
-target_M_minus = 1.	# needs to be equal to puncture mass to get a good initial guess for AHF
-target_M_plus = 1.	# needs to be equal to puncture mass to get a good initial guess for AHF
 
 <output1>
 file_type = bin
