@@ -1543,32 +1543,39 @@ void BoundarySpongeMask(Mesh* pm, const Real bdt) {
         Real tau_ref = mp_.sponge_tau * 2.0*M_PI;
         Real dfrac   = fmin(wgt * bdt / tau_ref, 1.0);  // clamp to avoid overshoot
 
-        // target: unperturbed disc profile at this location
-        Real phi   = atan2(x2v, x1v);
-        Real z     = x3v;
-        Real den_t = DenDiscCyl(mp_, rad, phi, z);
-        den_t = fmax(den_t, rho_floor(mp_, rc));
-        Real v1_t(0.0), v2_t(0.0), v3_t(0.0);
-        VelDiscCyl(mp_, rad, phi, z, v1_t, v2_t, v3_t);
+        // target density: full initial-condition profile (disc + stellar contribution + floor)
+        Real den_t(0.0);
+        DenDiscPlusStar(mp_, x1v, x2v, x3v, den_t);
 
-        // relax density and momenta
-        u0_(m,IDN,k,j,i) += dfrac * (den_t         - u0_(m,IDN,k,j,i));
-        u0_(m,IM1,k,j,i) += dfrac * (den_t * v1_t  - u0_(m,IM1,k,j,i));
-        u0_(m,IM2,k,j,i) += dfrac * (den_t * v2_t  - u0_(m,IM2,k,j,i));
-        u0_(m,IM3,k,j,i) += dfrac * (den_t * v3_t  - u0_(m,IM3,k,j,i));
+        // Relax density toward IC target, then scale momenta to preserve velocity.
+        // Momentum change comes only from the density change; the flow pattern is
+        // left intact. KE scales proportionally; thermal (pressure) is unchanged.
+        Real rho_cur  = u0_(m,IDN,k,j,i);
+        Real mom1_cur = u0_(m,IM1,k,j,i);
+        Real mom2_cur = u0_(m,IM2,k,j,i);
+        Real mom3_cur = u0_(m,IM3,k,j,i);
 
-        // relax total energy (keep current magnetic energy, damp thermal + kinetic)
+        Real rho_new   = rho_cur + dfrac * (den_t - rho_cur);
+        Real rho_scale = rho_new / fmax(rho_cur, mp_.dfloor);
+
+        u0_(m,IDN,k,j,i) = rho_new;
+        u0_(m,IM1,k,j,i) = mom1_cur * rho_scale;
+        u0_(m,IM2,k,j,i) = mom2_cur * rho_scale;
+        u0_(m,IM3,k,j,i) = mom3_cur * rho_scale;
+
+        // Scale all non-magnetic energy by rho_scale.
+        // This preserves both velocity (v = mom/rho unchanged) and temperature
+        // (e_int/rho = specific internal energy unchanged). The sponge acts as a
+        // pure density sink/source with no direct effect on the fluid state per unit mass.
         if (mp_.is_ideal) {
-            Real e_int_t = PoverR(mp_, rad) * den_t / (mp_.gamma_gas - 1.0);
-            Real e_kin_t = 0.5 * den_t * (v1_t*v1_t + v2_t*v2_t + v3_t*v3_t);
-            Real e_mag   = 0.0;
+            Real e_mag(0.0);
             if (mp_.magnetic_fields_enabled) {
                 e_mag = 0.5*(SQR(bcc0_(m,IBX,k,j,i)) +
                              SQR(bcc0_(m,IBY,k,j,i)) +
                              SQR(bcc0_(m,IBZ,k,j,i)));
             }
-            Real ien_t = e_int_t + e_kin_t + e_mag;
-            u0_(m,IEN,k,j,i) += dfrac * (ien_t - u0_(m,IEN,k,j,i));
+            Real e_non_mag = u0_(m,IEN,k,j,i) - e_mag;
+            u0_(m,IEN,k,j,i) = e_mag + e_non_mag * rho_scale;
         }
     }); // end par_for
 
