@@ -64,8 +64,10 @@ void CyclicZoom::UpdateState() {
     std::cout << "CyclicZoom AMR: old region radius = " << old_zregion.radius
               << std::endl;
     std::cout << "CyclicZoom AMR: new region radius = " << zregion.radius
-              << " r_in = " << zregion.r_in
-              << " r_in_flux = " << zregion.r_in_flux
+              << std::endl
+              << " r_exc = " << zregion.exc.r
+              << " r_cut = " << zregion.cut.r
+              << " r_flx = " << zregion.flx.r
               << std::endl;
     std::cout << "CyclicZoom AMR: time = " << pmesh->time << " runtime = " << zint.runtime
               << " next time = " << zstate.next_time << std::endl;
@@ -80,7 +82,9 @@ void CyclicZoom::SetRegionAndInterval() {
   // TODO(@mhguo): may add more flexible and robust region settings later
   old_zregion.radius = zregion.r_0 * std::pow(2.0,static_cast<Real>(zstate.last_zone));
   zregion.radius = zregion.r_0 * std::pow(2.0,static_cast<Real>(zstate.zone));
-  zregion.r_in = std::min(zregion.f_in * zregion.radius, zregion.r_in_max);
+  zregion.exc.r = std::min(zregion.exc.f * zregion.radius, zregion.exc.r_max);
+  zregion.cut.r = std::min(zregion.cut.f * zregion.radius, zregion.cut.r_max);
+  zregion.flx.r = std::min(zregion.flx.f * zregion.radius, zregion.flx.r_max);
   Real timescale = pow(zregion.radius,zint.trun_pow);
   zint.runtime = zint.trun_facs[zstate.zone]*timescale;
   if (zint.runtime > zint.trun_max) {zint.runtime = zint.trun_max;}

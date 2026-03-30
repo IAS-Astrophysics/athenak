@@ -53,8 +53,8 @@ x3max = 1.0
 
 <amr_criterion1>
 method      = cyclic_zoom   # refinement criterion
-r_0         = 1.0           # radius of zoom region at zone 0
 nlevels     = 6             # number of levels for zoom data
+r_0         = 1.0           # radius of zoom region at zone 0
 trun_fac    = 100.0          # default interval factor (trun = trun_fac * M^trun_pow)
 trun_pow    = 1.0           # power for interval (trun = trun_fac * M^trun_pow)
 trun_fac_0  = 500.0         # interval factor for zone 0

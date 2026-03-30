@@ -156,8 +156,8 @@ void CyclicZoom::AdjustExcisionForZoom() {
   auto pcoord = pmesh->pmb_pack->pcoord;
   auto &coord = pcoord->coord_data;
   if (coord.bh_excise) {
-    coord.flux_excise_r = std::max(coord.flux_excise_r, zregion.r_in);
-    coord.rexcise = std::max(coord.rexcise, zregion.r_in);
+    coord.flux_excise_r = std::max(coord.flux_excise_r, zregion.exc.r);
+    coord.rexcise = std::max(coord.rexcise, zregion.exc.r);
     if (coord.excision_scheme == ExcisionScheme::fixed) {
       pcoord->SetExcisionMasks(pcoord->excision_floor, pcoord->excision_flux);
     }

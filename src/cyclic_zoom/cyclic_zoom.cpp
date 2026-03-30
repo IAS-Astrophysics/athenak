@@ -59,9 +59,14 @@ CyclicZoom::CyclicZoom(Mesh *pm, ParameterInput *pin) :
   zregion.x3c = pin->GetOrAddReal(block_name,"x3c",0.0);
   zregion.r_0 = pin->GetOrAddReal(block_name,"r_0",1.0);
   // default 0.4 based on monopole test
-  zregion.f_in = pin->GetOrAddReal(block_name,"f_in",0.4);
-  zregion.r_in_flux = pin->GetOrAddReal(block_name,"r_in_flux",0.0);
-  zregion.r_in_max = pin->GetOrAddReal(block_name,"r_in_max",8.0);
+  zregion.exc.f = pin->GetOrAddReal(block_name,"f_exc",0.4);
+  zregion.exc.r_max = pin->GetOrAddReal(block_name,"r_exc_max",8.0);
+  // default 0.0
+  zregion.cut.f = pin->GetOrAddReal(block_name,"f_cut",0.0);
+  zregion.cut.r_max = pin->GetOrAddReal(block_name,"r_cut_max",0.0);
+  // default 0.0
+  zregion.flx.f = pin->GetOrAddReal(block_name,"f_flx",0.0);
+  zregion.flx.r_max = pin->GetOrAddReal(block_name,"r_flx_max",0.0);
 
   // Set zoom interval parameters
   zint.trun_fac = pin->GetOrAddReal(block_name,"trun_fac",1.0);
@@ -149,10 +154,11 @@ void CyclicZoom::PrintCyclicZoomDiagnostics() {
     std::cout << "Region: x1c = " << zregion.x1c << " x2c = " << zregion.x2c
               << " x3c = " << zregion.x3c << " r_0 = " << zregion.r_0
               << " radius = " << zregion.radius << std::endl
-              << " f_in = " << zregion.f_in
-              << " r_in = " << zregion.r_in
-              << " r_in_flux = " << zregion.r_in_flux
-              << " r_in_max = " << zregion.r_in_max
+              << " f_exc = " << zregion.exc.f << " r_exc_max = " << zregion.exc.r_max
+              << std::endl
+              << " f_cut = " << zregion.cut.f << " r_cut_max = " << zregion.cut.r_max
+              << std::endl
+              << " f_flx = " << zregion.flx.f << " r_flx_max = " << zregion.flx.r_max
               << std::endl;
     // print interval parameters
     std::cout << "Interval: trun_fac = " << zint.trun_fac

@@ -68,16 +68,12 @@ ZoomMesh::~ZoomMesh() {
 //! \brief Gather number of zoom MeshBlocks across all ranks
 
 void ZoomMesh::GatherNZMB(int zm_count, int zone) {
-  // Get total number across all ranks (inclusive scan or Allreduce)
-  // int zm_total = zm_count;
+  // Get total number across all ranks
   nzmb_thisdvce = zm_count;
   nzmb_eachdvce[global_variable::my_rank] = nzmb_thisdvce;
 #if MPI_PARALLEL_ENABLED
   // Gather counts and displacements
   MPI_Allgather(&nzmb_thisdvce, 1, MPI_INT, nzmb_eachdvce, 1, MPI_INT, MPI_COMM_WORLD);
-  // MPI_Exscan(&zm, &zm_offset, 1, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
-  // sum up number of stored MeshBlocks over all ranks
-  // MPI_Allreduce(MPI_IN_PLACE, &zm_total, 1, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
 #endif
   // assign starting global ID for each rank/device
   gzms_eachdvce[0] = gzms_eachlevel[zone];
@@ -93,9 +89,7 @@ void ZoomMesh::GatherNZMB(int zm_count, int zone) {
 //!          ZMBs to ranks using round-robin distribution for the current zone.
 
 void ZoomMesh::UpdateMeshStructure() {
-  // Get starting global index for this rank (exclusive scan)
-  // int zm_offset = 0;
-  // Get total number across all ranks (inclusive scan or Allreduce)
+  // Get total number across all ranks
   int nzmb_thislevel = 0;
   for (int i = 0; i < global_variable::nranks; ++i) {
     nzmb_thislevel += nzmb_eachdvce[i];
@@ -110,7 +104,6 @@ void ZoomMesh::UpdateMeshStructure() {
   }
   nzmb_eachlevel[pzoom->zstate.zone-1] = nzmb_thislevel;
   gzms_eachlevel[pzoom->zstate.zone] = nzmb_total;
-  // gzms_eachdvce[global_variable::my_rank] = gzms_eachlevel[zstate.zone-1] + zm_offset;
   // resize arrays to hold all zoom MeshBlocks across all levels/ranks
   rank_eachzmb.resize(nzmb_total);
   lid_eachzmb.resize(nzmb_total);

@@ -137,7 +137,7 @@ void ZoomData::CorrectEFieldsFromFiner(int zm, int m, int zmf, DvceEdgeFld4D<Rea
       int fk = 2*(ck - ccks) + cks;
       e1(zm,ck,cj,ci) = 0.5*(ef1(zmf,fk,fj,fi) + ef1(zmf,fk,fj,fi+1));
     }
-    if (zregion.IsInRegion(x1v, x2f, x3f, zregion.r_in_flux)) {
+    if (zregion.IsInRegion(x1v, x2f, x3f, zregion.flx.r)) {
       e1(zm,ck,cj,ci) = 0.0;
     }
   });
@@ -152,7 +152,7 @@ void ZoomData::CorrectEFieldsFromFiner(int zm, int m, int zmf, DvceEdgeFld4D<Rea
       int fk = 2*(ck - ccks) + cks;
       e2(zm,ck,cj,ci) = 0.5*(ef2(zmf,fk,fj,fi) + ef2(zmf,fk,fj+1,fi));
     }
-    if (zregion.IsInRegion(x1f, x2v, x3f, zregion.r_in_flux)) {
+    if (zregion.IsInRegion(x1f, x2v, x3f, zregion.flx.r)) {
       e2(zm,ck,cj,ci) = 0.0;
     }
   });
@@ -167,7 +167,7 @@ void ZoomData::CorrectEFieldsFromFiner(int zm, int m, int zmf, DvceEdgeFld4D<Rea
       int fk = 2*(ck - ccks) + cks;
       e3(zm,ck,cj,ci) = 0.5*(ef3(zmf,fk,fj,fi) + ef3(zmf,fk+1,fj,fi));
     }
-    if (zregion.IsInRegion(x1f, x2f, x3v, zregion.r_in_flux)) {
+    if (zregion.IsInRegion(x1f, x2f, x3v, zregion.flx.r)) {
       e3(zm,ck,cj,ci) = 0.0;
     }
   });

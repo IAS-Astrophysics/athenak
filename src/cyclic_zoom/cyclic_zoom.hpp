@@ -48,10 +48,16 @@ typedef struct ZoomRegion {
   Real x1c, x2c, x3c;           // center of zoom region
   Real r_0;                     // radius of zoom region at zone 0
   Real radius;                  // radius of zoom region
-  Real f_in;                    // factor for inner radius
-  Real r_in;                    // inner radius of zoom region
-  Real r_in_flux;               // inner radius zoom region for flux
-  Real r_in_max;                // maximum inner radius of zoom region
+
+  // boundary parameters
+  struct ZoomBoundary {
+    Real f;
+    Real r;
+    Real r_max;
+  };
+  ZoomBoundary exc;             // excision boundary parameters
+  ZoomBoundary cut;             // cut-off boundary parameters
+  ZoomBoundary flx;             // flux limiting boundary parameters
 
   // Kokkos inline function to check if a location is within the zoom region
   KOKKOS_INLINE_FUNCTION

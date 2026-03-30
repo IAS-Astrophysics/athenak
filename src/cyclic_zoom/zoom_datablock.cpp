@@ -131,12 +131,6 @@ void ZoomData::StoreCoarsePrimData(int zm, DvceArray5D<Real> cw,
   // DvceArray5D<Real> u0_, w0_;
   bool is_gr = pmbp->pcoord->is_general_relativistic;
   auto eos = pmbp->pmhd->peos->eos_data;
-  Real &x1min = size.h_view(m).x1min;
-  Real &x1max = size.h_view(m).x1max;
-  Real &x2min = size.h_view(m).x2min;
-  Real &x2max = size.h_view(m).x2max;
-  Real &x3min = size.h_view(m).x3min;
-  Real &x3max = size.h_view(m).x3max;
   bool flat = true;
   Real spin = 0.0;
   if (is_gr) {
@@ -147,6 +141,12 @@ void ZoomData::StoreCoarsePrimData(int zm, DvceArray5D<Real> cw,
   int hg = indcs.ng / 2;
   par_for("zoom-store-cw",DevExeSpace(), cks-hg, cke+hg, cjs-hg, cje+hg, cis-hg, cie+hg,
   KOKKOS_LAMBDA(const int ck, const int cj, const int ci) {
+    Real &x1min = size.d_view(m).x1min;
+    Real &x1max = size.d_view(m).x1max;
+    Real &x2min = size.d_view(m).x2min;
+    Real &x2max = size.d_view(m).x2max;
+    Real &x3min = size.d_view(m).x3min;
+    Real &x3max = size.d_view(m).x3max;
     int fi = 2*ci - cis;  // correct when cis=is
     int fj = 2*cj - cjs;  // correct when cjs=js
     int fk = 2*ck - cks;  // correct when cks=ks
@@ -308,16 +308,16 @@ void ZoomData::ApplyCCDataSameLevel(int m, DvceArray5D<Real> a,
   int &js = indcs.js;  int &je  = indcs.je;
   int &ks = indcs.ks;  int &ke  = indcs.ke;
   int nx1 = indcs.nx1, nx2 = indcs.nx2, nx3 = indcs.nx3;
-  Real &x1min = size.h_view(m).x1min;
-  Real &x1max = size.h_view(m).x1max;
-  Real &x2min = size.h_view(m).x2min;
-  Real &x2max = size.h_view(m).x2max;
-  Real &x3min = size.h_view(m).x3min;
-  Real &x3max = size.h_view(m).x3max;
   int nvar = a.extent_int(1);
   // par_for("zoom_reinit", DevExeSpace(),ks-ng,ke+ng,js-ng,je+ng,is-ng,ie+ng,
   par_for("zoom_apply", DevExeSpace(),ks,ke,js,je,is,ie,
   KOKKOS_LAMBDA(int k, int j, int i) {
+    Real &x1min = size.d_view(m).x1min;
+    Real &x1max = size.d_view(m).x1max;
+    Real &x2min = size.d_view(m).x2min;
+    Real &x2max = size.d_view(m).x2max;
+    Real &x3min = size.d_view(m).x3min;
+    Real &x3max = size.d_view(m).x3max;
     Real x1v = CellCenterX(i-is, nx1, x1min, x1max);
     Real x2v = CellCenterX(j-js, nx2, x2min, x2max);
     Real x3v = CellCenterX(k-ks, nx3, x3min, x3max);
@@ -405,35 +405,33 @@ void ZoomData::ApplyPrimSameLevel(int m, int zm, const ZoomRegion &zregion) {
     flat = coord.is_minkowski;
     spin = coord.bh_spin;
   }
-  Real &x1min = size.h_view(m).x1min;
-  Real &x1max = size.h_view(m).x1max;
-  Real &x2min = size.h_view(m).x2min;
-  Real &x2max = size.h_view(m).x2max;
-  Real &x3min = size.h_view(m).x3min;
-  Real &x3max = size.h_view(m).x3max;
   auto u_ = pmbp->pmhd->u0, w_ = pmbp->pmhd->w0;
   auto u0_ = u0, w0_ = w0;
   auto b = pmbp->pmhd->b0;
   // par_for("zoom_reinit", DevExeSpace(),ks-ng,ke+ng,js-ng,je+ng,is-ng,ie+ng,
   par_for("zoom_reinit", DevExeSpace(),ks,ke,js,je,is,ie,
   KOKKOS_LAMBDA(int k, int j, int i) {
+    Real &x1min = size.d_view(m).x1min;
+    Real &x1max = size.d_view(m).x1max;
+    Real &x2min = size.d_view(m).x2min;
+    Real &x2max = size.d_view(m).x2max;
+    Real &x3min = size.d_view(m).x3min;
+    Real &x3max = size.d_view(m).x3max;
     Real x1v = CellCenterX(i-is, nx1, x1min, x1max);
     Real x2v = CellCenterX(j-js, nx2, x2min, x2max);
     Real x3v = CellCenterX(k-ks, nx3, x3min, x3max);
     if (zregion.IsInRegion(x1v, x2v, x3v)) { // apply to zoom region
       // convert primitive variables to conserved variables
-      if (is_gr && coord.bh_excise && zregion.IsInRegion(x1v, x2v, x3v, zregion.r_in)) {
-        w_(m,IDN,k,j,i) = coord.dexcise;
+      w_(m,IDN,k,j,i) = w0_(zm,IDN,k,j,i);
+      w_(m,IVX,k,j,i) = w0_(zm,IVX,k,j,i);
+      w_(m,IVY,k,j,i) = w0_(zm,IVY,k,j,i);
+      w_(m,IVZ,k,j,i) = w0_(zm,IVZ,k,j,i);
+      w_(m,IEN,k,j,i) = w0_(zm,IEN,k,j,i);
+      // zero out velocity if inside cut-off boundary
+      if (zregion.IsInRegion(x1v, x2v, x3v, zregion.cut.r)) {
         w_(m,IVX,k,j,i) = 0.0;
         w_(m,IVY,k,j,i) = 0.0;
         w_(m,IVZ,k,j,i) = 0.0;
-        w_(m,IEN,k,j,i) = coord.pexcise/(gamma-1.0);
-      } else {
-        w_(m,IDN,k,j,i) = w0_(zm,IDN,k,j,i);
-        w_(m,IVX,k,j,i) = w0_(zm,IVX,k,j,i);
-        w_(m,IVY,k,j,i) = w0_(zm,IVY,k,j,i);
-        w_(m,IVZ,k,j,i) = w0_(zm,IVZ,k,j,i);
-        w_(m,IEN,k,j,i) = w0_(zm,IEN,k,j,i);
       }
       // Load single state of primitive variables
       MHDPrim1D w;
@@ -506,12 +504,6 @@ void ZoomData::ApplyPrimFromFiner(int m, int zm, const ZoomRegion &zregion) {
     flat = pmbp->pcoord->coord_data.is_minkowski;
     spin = pmbp->pcoord->coord_data.bh_spin;
   }
-  Real &x1min = size.h_view(m).x1min;
-  Real &x1max = size.h_view(m).x1max;
-  Real &x2min = size.h_view(m).x2min;
-  Real &x2max = size.h_view(m).x2max;
-  Real &x3min = size.h_view(m).x3min;
-  Real &x3max = size.h_view(m).x3max;
   // eachlevel[pzoom->zstate.zone-1]; // starting gid of zoom MBs on previous level
   int zmbs = pzmesh->gzms_eachdvce[global_variable::my_rank]; // global id start of dvce
   auto &zlloc = pzmesh->lloc_eachzmb[zm+zmbs];
@@ -526,23 +518,27 @@ void ZoomData::ApplyPrimFromFiner(int m, int zm, const ZoomRegion &zregion) {
     int i = ci + ox1 * cnx1;
     int j = cj + ox2 * cnx2;
     int k = ck + ox3 * cnx3;
+    Real &x1min = size.d_view(m).x1min;
+    Real &x1max = size.d_view(m).x1max;
+    Real &x2min = size.d_view(m).x2min;
+    Real &x2max = size.d_view(m).x2max;
+    Real &x3min = size.d_view(m).x3min;
+    Real &x3max = size.d_view(m).x3max;
     Real x1v = CellCenterX(i-is, nx1, x1min, x1max);
     Real x2v = CellCenterX(j-js, nx2, x2min, x2max);
     Real x3v = CellCenterX(k-ks, nx3, x3min, x3max);
     if (zregion.IsInRegion(x1v, x2v, x3v)) { // apply to zoom region
       // convert primitive variables to conserved variables
-      if (is_gr && coord.bh_excise && zregion.IsInRegion(x1v, x2v, x3v, zregion.r_in)) {
-        w_(m,IDN,k,j,i) = coord.dexcise;
+      w_(m,IDN,k,j,i) = cw0(zm,IDN,ck,cj,ci);
+      w_(m,IVX,k,j,i) = cw0(zm,IVX,ck,cj,ci);
+      w_(m,IVY,k,j,i) = cw0(zm,IVY,ck,cj,ci);
+      w_(m,IVZ,k,j,i) = cw0(zm,IVZ,ck,cj,ci);
+      w_(m,IEN,k,j,i) = cw0(zm,IEN,ck,cj,ci);
+      // zero out velocity if inside cut-off boundary
+      if (zregion.IsInRegion(x1v, x2v, x3v, zregion.cut.r)) {
         w_(m,IVX,k,j,i) = 0.0;
         w_(m,IVY,k,j,i) = 0.0;
         w_(m,IVZ,k,j,i) = 0.0;
-        w_(m,IEN,k,j,i) = coord.pexcise/(gamma-1.0);
-      } else {
-        w_(m,IDN,k,j,i) = cw0(zm,IDN,ck,cj,ci);
-        w_(m,IVX,k,j,i) = cw0(zm,IVX,ck,cj,ci);
-        w_(m,IVY,k,j,i) = cw0(zm,IVY,ck,cj,ci);
-        w_(m,IVZ,k,j,i) = cw0(zm,IVZ,ck,cj,ci);
-        w_(m,IEN,k,j,i) = cw0(zm,IEN,ck,cj,ci);
       }
 
       // Load single state of primitive variables
