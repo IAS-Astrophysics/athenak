@@ -211,7 +211,7 @@ namespace roe {
 //
 // OUTPUT:
 //   flx: final Roe flux
-//   ev: vector of eingenvalues
+//   ev: vector of eigenvalues
 //   llf_flag: flag set to 1 if d<0 in any intermediate state
 //
 //  The order of the components in the input vectors should be:
