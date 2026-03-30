@@ -619,6 +619,13 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resf
   // second argument true since this IS a restart
   CallProblemGenerator(pin, true);
 
+  // Read cyclic zoom restart data if enabled
+  if (pm->pzoom != nullptr && pm->pzoom->read_rst) {
+    // calculate offset of zoom data, i.e., after all previous data
+    IOWrapperSizeT zoom_offset = headeroffset + data_size * pm->nmb_total;
+    pm->pzoom->ReadRestartFile(resfile, zoom_offset, single_file_per_rank);
+  }
+
   // Check that user defined BCs were enrolled if needed
   if (user_bcs) {
     if (user_bcs_func == nullptr) {

@@ -31,6 +31,18 @@ add_executable(
         coordinates/coordinates.cpp
         coordinates/excision.cpp
 
+        cyclic_zoom/cyclic_zoom.cpp
+        cyclic_zoom/zoom_criteria.cpp
+        cyclic_zoom/zoom_data.cpp
+        cyclic_zoom/zoom_datablock.cpp
+        cyclic_zoom/zoom_fluxes.cpp
+        cyclic_zoom/zoom_loadbalance.cpp
+        cyclic_zoom/zoom_mesh.cpp
+        cyclic_zoom/zoom_refinement.cpp
+        cyclic_zoom/zoom_region.cpp
+        cyclic_zoom/zoom_restart.cpp
+        cyclic_zoom/zoom_srcterms.cpp
+
         diffusion/conduction.cpp
         diffusion/resistivity.cpp
         diffusion/viscosity.cpp
@@ -58,7 +70,7 @@ add_executable(
 
         geodesic-grid/geodesic_grid.cpp
         geodesic-grid/spherical_grid.cpp
-	geodesic-grid/gauss_legendre.cpp
+        geodesic-grid/gauss_legendre.cpp
 
         hydro/hydro.cpp
         hydro/hydro_fluxes.cpp
