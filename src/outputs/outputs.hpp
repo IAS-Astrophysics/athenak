@@ -24,7 +24,7 @@
     #error NHISTORY > NREDUCTION in outputs.hpp
 #endif
 
-#define NOUTPUT_CHOICES 155
+#define NOUTPUT_CHOICES 156
 // choices for output variables used in <ouput> blocks in input file
 // TO ADD MORE CHOICES:
 //   - add more strings to array below, change NOUTPUT_CHOICES above appropriately
@@ -101,7 +101,9 @@ static const char *var_choice[NOUTPUT_CHOICES] = {
   "tmunu",
 
   // Particles (153-154)
-  "prtcl_all", "prtcl_d"
+  "prtcl_all", "prtcl_d",
+  // Diagnostics (155): constant 1.0 on mesh (for surface/volume integral checks)
+  "unity"
 };
 
 
@@ -451,6 +453,7 @@ class SphericalShellsOutput : public BaseTypeOutput {
   int nr;                                           // number of radial shells
   Real rmin, rmax;                                  // min and max radii
   bool log_spacing;                                 // use logarithmic spacing
+  bool surface_integral;                            // if true, r0^2 dOmega; else shell volume weight
   std::vector<Real> radii;                          // array of shell center radii
   std::vector<Real> radii_faces;                    // array of shell face radii (nr+1 values)
   std::vector<std::unique_ptr<SphericalGrid>> spheres;  // grid for each shell

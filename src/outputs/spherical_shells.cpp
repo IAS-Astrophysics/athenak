@@ -34,6 +34,9 @@ SphericalShellsOutput::SphericalShellsOutput(ParameterInput *pin, Mesh *pm,
   
   // Optional logarithmic spacing
   log_spacing = pin->GetOrAddBoolean(op.block_name, "log_spacing", false);
+
+  // Surface integral on sphere at shell center r0 (r0^2 dOmega) vs shell volume weighting
+  surface_integral = pin->GetOrAddBoolean(op.block_name, "surface_integral", false);
   
   // Note: Spheres are always centered at the origin (0,0,0)
   
@@ -109,26 +112,25 @@ void SphericalShellsOutput::LoadOutputData(Mesh *pm) {
     Real r1 = radii_faces[ir];     // Inner face
     Real r2 = radii_faces[ir + 1]; // Outer face
     
-    // Compute radial volume factor: integral of r^2 dr from r1 to r2
-    // = (r2^3 - r1^3) / 3
-    Real radial_factor = (r2 * r2 * r2 - r1 * r1 * r1) / 3.0;
-    
+    // Radial weight: shell volume int r^2 dr = (r2^3-r1^3)/3, or surface r0^2 for dA = r0^2 dOmega
+    Real radial_weight = surface_integral
+        ? (r0 * r0)
+        : ((r2 * r2 * r2 - r1 * r1 * r1) / 3.0);
+
     for (int n = 0; n < nout_vars; ++n) {
       // Interpolate data to this spherical surface at radius r0
       // Note the geodesic spherical grid uses an inclusive range for the variables
       // so we pass the same index for vs and ve (start and end).
       // This is unlike in the SphericalSurface class.
       sphere->InterpolateToSphere(outvars[n].data_index, outvars[n].data_index, *(outvars[n].data_ptr));
-      
-      // Integrate over the shell using proper volume element
-      // dV = r^2 * dOmega * dr
-      // For shell: integral = solid_angle * radial_factor * value(r0)
+
+      // Sum value * dOmega * radial_weight (volume element or sphere-area element at r0)
       Real integrated_value = 0.0;
-      
+
       for (int iang = 0; iang < sphere->nangles; ++iang) {
         Real solid_angle = sphere->solid_angles.h_view(iang);
         Real value = sphere->interp_vals.h_view(iang, 0);
-        integrated_value += value * solid_angle * radial_factor;
+        integrated_value += value * solid_angle * radial_weight;
       }
       
       outarray(n, 0, 0, ir, 0) = integrated_value;
@@ -163,7 +165,13 @@ void SphericalShellsOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
     std::ofstream ofile(fname);
     
     // Write header
-    ofile << "# Spherically integrated data over radial shells" << std::endl;
+    if (surface_integral) {
+      ofile << "# Spherically surface-integrated data (sum over solid_angle * r_center^2 "
+            << "at each shell center radius)" << std::endl;
+    } else {
+      ofile << "# Spherically integrated data over radial shells (volume weight "
+            << "(r_outer^3-r_inner^3)/3 per shell)" << std::endl;
+    }
     ofile << "# Time = " << pm->time << std::endl;
     ofile << "# Cycle = " << pm->ncycle << std::endl;
     ofile << "# Center: origin (0, 0, 0)" << std::endl;

@@ -715,6 +715,12 @@ BaseTypeOutput::BaseTypeOutput(ParameterInput *pin, Mesh *pm, OutputParameters o
     outvars.emplace_back("pdens",0,&(derived_var));
   }
 
+  // constant unity field — filled each output in ComputeDerivedVariable (AMR-safe sizing)
+  if (out_params.variable.compare("unity") == 0) {
+    out_params.contains_derived = true;
+    outvars.emplace_back("unity", 0, &(derived_var));
+  }
+
   // initialize vector containing number of output MBs per rank
   noutmbs.assign(global_variable::nranks, 0);
 }
