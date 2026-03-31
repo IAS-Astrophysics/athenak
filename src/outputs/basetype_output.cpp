@@ -721,6 +721,27 @@ BaseTypeOutput::BaseTypeOutput(ParameterInput *pin, Mesh *pm, OutputParameters o
     outvars.emplace_back("unity", 0, &(derived_var));
   }
 
+  // Cartesian-to-spherical MHD diagnostics (13 channels):
+  //   spherical v and B components, mass flux, Maxwell/Reynolds stresses, energetics
+  if (out_params.variable.compare("mhd_cart_to_sph") == 0) {
+    out_params.contains_derived = true;
+    out_params.n_derived += 14;
+    outvars.emplace_back("rho",      0,  &(derived_var));
+    outvars.emplace_back("vr",       1,  &(derived_var));
+    outvars.emplace_back("vtheta",   2,  &(derived_var));
+    outvars.emplace_back("vphi",     3,  &(derived_var));
+    outvars.emplace_back("Br",       4,  &(derived_var));
+    outvars.emplace_back("Btheta",   5,  &(derived_var));
+    outvars.emplace_back("Bphi",     6,  &(derived_var));
+    outvars.emplace_back("rho_vr",   7,  &(derived_var));
+    outvars.emplace_back("max_rphi", 8,  &(derived_var));
+    outvars.emplace_back("max_tphi", 9,  &(derived_var));
+    outvars.emplace_back("rey_rphi", 10, &(derived_var));
+    outvars.emplace_back("press",    11, &(derived_var));
+    outvars.emplace_back("Bmag2",    12, &(derived_var));
+    outvars.emplace_back("Ekin",     13, &(derived_var));
+  }
+
   // initialize vector containing number of output MBs per rank
   noutmbs.assign(global_variable::nranks, 0);
 }

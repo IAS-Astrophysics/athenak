@@ -24,7 +24,7 @@
     #error NHISTORY > NREDUCTION in outputs.hpp
 #endif
 
-#define NOUTPUT_CHOICES 156
+#define NOUTPUT_CHOICES 157
 // choices for output variables used in <ouput> blocks in input file
 // TO ADD MORE CHOICES:
 //   - add more strings to array below, change NOUTPUT_CHOICES above appropriately
@@ -103,7 +103,9 @@ static const char *var_choice[NOUTPUT_CHOICES] = {
   // Particles (153-154)
   "prtcl_all", "prtcl_d",
   // Diagnostics (155): constant 1.0 on mesh (for surface/volume integral checks)
-  "unity"
+  "unity",
+  // Magnetospheric Cartesian-to-spherical diagnostics (156)
+  "mhd_cart_to_sph"
 };
 
 
@@ -474,7 +476,19 @@ class AzimuthalAverageOutput : public BaseTypeOutput {
   bool log_spacing;
   std::vector<Real> radii;
   std::vector<Real> theta_grid;
+  // SphericalSurface objects are kept only when adaptive=true; otherwise freed
+  // after their interpolation tables are copied into the fused arrays below.
   std::vector<std::unique_ptr<SphericalSurface>> surfaces;
+
+  // Fused interpolation tables (all radii concatenated).
+  // Layout: flat index = ir * nphi * ntheta + ip * ntheta + it
+  // Reduces nr*nout_vars Kokkos kernel launches to nout_vars launches.
+  DualArray2D<int>  fused_indcs;   // (total_angles, 4)
+  DualArray3D<Real> fused_wghts;   // (total_angles, 2*ng, 3)
+  int ng_, is_, js_, ks_;          // ghost-zone depth and start indices
+  bool adaptive_;                  // true when AMR is active
+
+  void BuildFusedArrays();          // copy surface tables → fused arrays
 };
 
 //----------------------------------------------------------------------------------------

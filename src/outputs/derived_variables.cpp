@@ -1238,6 +1238,92 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
     return;
   }
 
+  // Cartesian-to-spherical MHD diagnostics.
+  // Computes 14 scalar channels at every cell centre using the transformation:
+  //   r = sqrt(x^2+y^2+z^2),  R = sqrt(x^2+y^2)
+  //   vr     = (x*vx + y*vy + z*vz) / r
+  //   vtheta = (x*z*vx + y*z*vy - R^2*vz) / (r*R)
+  //   vphi   = (-y*vx + x*vy) / R
+  //   Br, Btheta, Bphi: same rotation on (Bx,By,Bz)
+  //   Polar-axis fallback (R < 1e-12): vtheta=vz, vphi=0, Btheta=Bz, Bphi=0
+  // Channel 0 is density; channels 1-6 are spherical v and B components;
+  // channels 7-10 are flux/stress products; channels 11-13 are energetics.
+  if (name.compare("mhd_cart_to_sph") == 0) {
+    Kokkos::realloc(derived_var, nmb, 14, n3, n2, n1);
+    auto dv = derived_var;
+    auto &w0_  = pm->pmb_pack->pmhd->w0;
+    auto &bcc_ = pm->pmb_pack->pmhd->bcc0;
+    Real gam = pm->pmb_pack->pmhd->peos->eos_data.gamma;
+    par_for("cart_to_sph", DevExeSpace(), 0, (nmb-1), ks, ke, js, je, is, ie,
+    KOKKOS_LAMBDA(int m, int k, int j, int i) {
+      // cell-centre coordinates (Cartesian)
+      Real x1min = size.d_view(m).x1min;
+      Real x1max = size.d_view(m).x1max;
+      Real x2min = size.d_view(m).x2min;
+      Real x2max = size.d_view(m).x2max;
+      Real x3min = size.d_view(m).x3min;
+      Real x3max = size.d_view(m).x3max;
+      Real x = CellCenterX(i - is, indcs.nx1, x1min, x1max);
+      Real y = CellCenterX(j - js, indcs.nx2, x2min, x2max);
+      Real z = CellCenterX(k - ks, indcs.nx3, x3min, x3max);
+
+      Real r  = sqrt(x*x + y*y + z*z);
+      Real R  = sqrt(x*x + y*y);
+
+      // primitives
+      Real rho  = w0_(m, IDN, k, j, i);
+      Real vx   = w0_(m, IVX, k, j, i);
+      Real vy   = w0_(m, IVY, k, j, i);
+      Real vz_  = w0_(m, IVZ, k, j, i);
+      Real eint = w0_(m, IEN, k, j, i);
+      Real Bx   = bcc_(m, IBX, k, j, i);
+      Real By   = bcc_(m, IBY, k, j, i);
+      Real Bz_  = bcc_(m, IBZ, k, j, i);
+
+      // spherical components
+      Real vr_, vt_, vp_, Br_, Bt_, Bp_;
+      if (R > 1.0e-12) {
+        Real inv_r  = 1.0 / r;
+        Real inv_rR = 1.0 / (r * R);
+        vr_ = (x*vx  + y*vy  + z*vz_ ) * inv_r;
+        vt_ = (x*z*vx + y*z*vy  - R*R*vz_ ) * inv_rR;
+        vp_ = (-y*vx + x*vy ) / R;
+        Br_ = (x*Bx  + y*By  + z*Bz_ ) * inv_r;
+        Bt_ = (x*z*Bx + y*z*By  - R*R*Bz_ ) * inv_rR;
+        Bp_ = (-y*Bx + x*By ) / R;
+      } else {
+        vr_ = vz_;   vt_ = vz_;  vp_ = 0.0;
+        Br_ = Bz_;   Bt_ = Bz_;  Bp_ = 0.0;
+      }
+
+      // [0] density
+      dv(m,  0, k, j, i) = rho;
+
+      // [1-6] spherical velocity and field components
+      dv(m,  1, k, j, i) = vr_;
+      dv(m,  2, k, j, i) = vt_;
+      dv(m,  3, k, j, i) = vp_;
+      dv(m,  4, k, j, i) = Br_;
+      dv(m,  5, k, j, i) = Bt_;
+      dv(m,  6, k, j, i) = Bp_;
+
+      // [7-10] mass flux + Maxwell/Reynolds stress scalars
+      dv(m,  7, k, j, i) = rho * vr_;           // radial mass flux density
+      dv(m,  8, k, j, i) = -Br_ * Bp_;          // r-phi Maxwell stress
+      dv(m,  9, k, j, i) = -Bt_ * Bp_;          // theta-phi Maxwell stress
+      dv(m, 10, k, j, i) = rho * vr_ * vp_;     // total r-phi Reynolds stress
+
+      // [11-13] energetics
+      Real press = (gam - 1.0) * eint;
+      Real Bmag2 = Bx*Bx + By*By + Bz_*Bz_;
+      Real Ekin  = 0.5 * rho * (vx*vx + vy*vy + vz_*vz_);
+      dv(m, 11, k, j, i) = press;
+      dv(m, 12, k, j, i) = Bmag2;
+      dv(m, 13, k, j, i) = Ekin;
+    });
+    return;
+  }
+
   // Particle density binned to mesh.
   if (name.compare("prtcl_d") == 0) {
     Kokkos::realloc(derived_var, nmb, 1, n3, n2, n1);
