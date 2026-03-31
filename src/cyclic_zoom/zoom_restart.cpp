@@ -155,6 +155,15 @@ void CyclicZoom::ReadRestartFile(IOWrapper &resfile, IOWrapperSizeT offset_zoom,
   MPI_Bcast(pzmesh->nzmb_eachlevel, pzmesh->nlevels, MPI_INT, 0, MPI_COMM_WORLD);
 #endif
 
+  if (nzmb_total_read <= 0) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+              << "CyclicZoom restart: zstate.zone = " << zstate.zone
+              << " but nzmb_total_read = " << nzmb_total_read << std::endl
+              << "Expected stored zoom MeshBlock data; checkpoint is inconsistent or "
+              << "truncated." << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+
   // Resize arrays and read lloc data
   pzmesh->nzmb_total = nzmb_total_read;
   // Rebuild derived mesh structure arrays
@@ -194,6 +203,11 @@ void CyclicZoom::ReadRestartFile(IOWrapper &resfile, IOWrapperSizeT offset_zoom,
       // Read this ZMB's data from file
       resfile.Read_Reals_at(pzdata->zdata.data() + data_offset, zmb_size, file_offset);
     }
+  }
+
+  // STEP 5: Load zoom data from host storage to device if needed
+  if (zstate.zone > 0) {
+    LoadZoomData(zstate.zone-1);
   }
 
   PrintCyclicZoomDiagnostics();

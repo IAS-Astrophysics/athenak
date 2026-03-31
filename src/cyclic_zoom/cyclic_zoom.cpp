@@ -154,12 +154,12 @@ void CyclicZoom::PrintCyclicZoomDiagnostics() {
     std::cout << "Region: x1c = " << zregion.x1c << " x2c = " << zregion.x2c
               << " x3c = " << zregion.x3c << " r_0 = " << zregion.r_0
               << " radius = " << zregion.radius << std::endl
-              << " f_exc = " << zregion.exc.f << " r_exc_max = " << zregion.exc.r_max
-              << std::endl
-              << " f_cut = " << zregion.cut.f << " r_cut_max = " << zregion.cut.r_max
-              << std::endl
-              << " f_flx = " << zregion.flx.f << " r_flx_max = " << zregion.flx.r_max
-              << std::endl;
+              << " f_exc = " << zregion.exc.f << " r_exc = " << zregion.exc.r
+              << " r_exc_max = " << zregion.exc.r_max << std::endl
+              << " f_cut = " << zregion.cut.f << " r_cut = " << zregion.cut.r
+              << " r_cut_max = " << zregion.cut.r_max << std::endl
+              << " f_flx = " << zregion.flx.f << " r_flx = " << zregion.flx.r
+              << " r_flx_max = " << zregion.flx.r_max << std::endl;
     // print interval parameters
     std::cout << "Interval: trun_fac = " << zint.trun_fac
               << " trun_pow = " << zint.trun_pow

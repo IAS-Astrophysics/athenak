@@ -15,6 +15,18 @@
 #include "cyclic_zoom/cyclic_zoom.hpp"
 
 //----------------------------------------------------------------------------------------
+//! \fn void CyclicZoom::LoadZoomData()
+//! \brief Load zoom data from host storage to device for a given zone
+
+void CyclicZoom::LoadZoomData(int zone) {
+  pzmesh->FindRegion(zone);
+  pzmesh->SyncMBLists();
+  pzdata->LoadFromStorage(zone);
+  pzdata->UnpackBuffer();
+  return;
+}
+
+//----------------------------------------------------------------------------------------
 //! \fn void CyclicZoom::StoreVariables()
 //! \brief Store variables before zooming (out)
 

@@ -79,15 +79,3 @@ void CyclicZoom::ApplyZoomRegion(Driver *pdriver) {
   }
   return;
 }
-
-//----------------------------------------------------------------------------------------
-//! \fn void CyclicZoom::LoadZoomData()
-//! \brief Load zoom data from storage for a given zone
-
-void CyclicZoom::LoadZoomData(int zone) {
-  pzmesh->FindRegion(zone);
-  pzmesh->SyncMBLists();
-  pzdata->LoadFromStorage(zone);
-  pzdata->UnpackBuffer();
-  return;
-}
