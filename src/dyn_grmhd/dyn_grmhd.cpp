@@ -604,6 +604,11 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::AddCoordTermsEOS(const DvceArray5D<Real
     Real E = (H*Wsq + Bsq) - prim_pt[PPR] - 0.5*bsq;
     //Real E = tmunu.E(m,k,j,i);
 
+    // D = rho*W and tau = E-D are needed for the smooth damping terms
+    // inside excised regions, if existing.
+    /* Real D = prim(m, IDN, k, j, i) * W;
+    Real tau = E - D; */
+
     Real S_d[3] = {0.0};
     for (int a = 0; a < 3; a++) {
       //S_d[a] = tmunu.S_d(m,a,k,j,i);
