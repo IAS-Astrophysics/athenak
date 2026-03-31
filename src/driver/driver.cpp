@@ -409,6 +409,7 @@ void Driver::Execute(Mesh *pmesh, ParameterInput *pin, Outputs *pout) {
       // increment time, ncycle, etc.
       pmesh->time = pmesh->time + pmesh->dt;
       pmesh->ncycle++;
+      pmesh->dt_last_completed = pmesh->dt;
       nmb_updated_ += pmesh->nmb_total;
       npart_updated_ += pmesh->nprtcl_total;
       // load balancing efficiency
