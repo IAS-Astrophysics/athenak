@@ -159,10 +159,12 @@ void SphericalSurface::SetInterpolationIndices() {
 //! \fn void SphericalSurface::SetInterpolationWeights
 //! \brief set weights used by Lagrangian interpolation
 
-void SphericalSurface::SetInterpolationWeights() {
+void SphericalSurface::SetInterpolationWeights(int ng_interp) {
   auto &indcs = pmy_pack->pmesh->mb_indcs;
   auto &size = pmy_pack->pmb->mb_size;
-  int &ng = indcs.ng;
+  // Use the requested stencil half-width; fall back to the mesh ghost-zone
+  // depth when the caller passes the default value of -1.
+  int ng = (ng_interp > 0) ? ng_interp : indcs.ng;
 
   auto &iindcs = interp_indcs;
   auto &iwghts = interp_wghts;
@@ -193,7 +195,9 @@ void SphericalSurface::SetInterpolationWeights() {
       Real &x3min = size.h_view(ii0).x3min;
       Real &x3max = size.h_view(ii0).x3max;
 
-      // set interpolation weights
+      // set interpolation weights using (2*ng)-point Lagrange stencil.
+      // The stencil spans cell-centres ii{1,2,3} - ng + 1 .. ii{1,2,3} + ng,
+      // which always brackets the target point for any ng <= indcs.ng.
       for (int i = 0; i < 2 * ng; ++i) {
         iwghts.h_view(n, i, 0) = 1.;
         iwghts.h_view(n, i, 1) = 1.;

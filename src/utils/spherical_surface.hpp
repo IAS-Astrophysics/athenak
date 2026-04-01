@@ -44,7 +44,8 @@ class SphericalSurface {
 
   void SetInterpolationCoordinates();  // set indexing for interpolation
   void SetInterpolationIndices();      // set indexing for interpolation
-  void SetInterpolationWeights();      // set weights for interpolation
+  // ng_interp: stencil half-width; -1 uses the mesh ghost-zone depth (ng).
+  void SetInterpolationWeights(int ng_interp = -1);
 
  private:
   MeshBlockPack *pmy_pack;  // ptr to MeshBlockPack containing this Hydro

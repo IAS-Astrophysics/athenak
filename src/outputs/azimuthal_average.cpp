@@ -5,19 +5,6 @@
 //========================================================================================
 //! \file azimuthal_average.cpp
 //! \brief writes azimuthally averaged data on an (r, theta) grid in binary VTK format.
-//!
-//! Performance optimisation (fused interpolation)
-//! -----------------------------------------------
-//! The original implementation called InterpolateToSphere() in a double loop
-//! (nr radii x nout_vars variables), producing nr*nout_vars separate Kokkos kernel
-//! launches each followed by a device->host sync.  For typical parameters
-//! (nr=128, nout_vars=14) that is 1792 launches/syncs per output step.
-//!
-//! This version fuses the per-radius interpolation tables (interp_indcs and
-//! interp_wghts) from all SphericalSurface objects into two flat Kokkos arrays at
-//! construction time.  LoadOutputData then runs ONE Kokkos kernel per output
-//! variable over all nr*nphi*ntheta sample points simultaneously, reducing kernel
-//! launches from nr*nout_vars to nout_vars and eliminating per-radius syncs.
 
 #include "utils/spherical_surface.hpp"
 
@@ -50,6 +37,13 @@ AzimuthalAverageOutput::AzimuthalAverageOutput(ParameterInput *pin, Mesh *pm,
   js_ = indcs.js;
   ks_ = indcs.ks;
   adaptive_ = pm->adaptive;
+
+  // Allow a smaller Lagrange stencil than the full ghost-zone depth.
+  // Default ng_interp=2 gives a 4-point stencil per axis (64 ops vs 512 for ng=4).
+  // Any value in [1, ng_] is valid; larger values give higher-order interpolation.
+  ng_interp_ = pin->GetOrAddInteger(op.block_name, "ng_interp", 2);
+  if (ng_interp_ < 1)   ng_interp_ = 1;
+  if (ng_interp_ > ng_) ng_interp_ = ng_;
 
   nr = pin->GetInteger(op.block_name, "nr");
   ntheta = pin->GetOrAddInteger(op.block_name, "ntheta", 32);
@@ -87,6 +81,13 @@ AzimuthalAverageOutput::AzimuthalAverageOutput(ParameterInput *pin, Mesh *pm,
   for (int j = 0; j < ntheta; ++j)
     theta_grid[j] = surfaces[0]->polar_pos.h_view(j, 0);
 
+  // If a reduced stencil is requested, recompute weights with ng_interp_ so
+  // that fused_wghts is filled with the correct (smaller) Lagrange coefficients.
+  if (ng_interp_ < ng_) {
+    for (auto &surf : surfaces)
+      surf->SetInterpolationWeights(ng_interp_);
+  }
+
   // Flatten per-radius tables into fused arrays.  For non-AMR runs the
   // SphericalSurface objects are then freed to recover ~1 MB/surface.
   BuildFusedArrays();
@@ -110,7 +111,7 @@ void AzimuthalAverageOutput::BuildFusedArrays() {
   int total_angles = nr * nang_per_r;
 
   Kokkos::realloc(fused_indcs, total_angles, 4);
-  Kokkos::realloc(fused_wghts, total_angles, 2 * ng_, 3);
+  Kokkos::realloc(fused_wghts, total_angles, 2 * ng_interp_, 3);
 
   for (int ir = 0; ir < nr; ++ir) {
     int offset = ir * nang_per_r;
@@ -118,7 +119,7 @@ void AzimuthalAverageOutput::BuildFusedArrays() {
     for (int n = 0; n < nang_per_r; ++n) {
       for (int k = 0; k < 4; ++k)
         fused_indcs.h_view(offset + n, k) = surf->interp_indcs.h_view(n, k);
-      for (int i = 0; i < 2 * ng_; ++i)
+      for (int i = 0; i < 2 * ng_interp_; ++i)
         for (int k = 0; k < 3; ++k)
           fused_wghts.h_view(offset + n, i, k) =
               surf->interp_wghts.h_view(n, i, k);
@@ -138,7 +139,7 @@ void AzimuthalAverageOutput::LoadOutputData(Mesh *pm) {
   if (adaptive_) {
     for (auto &surf : surfaces) {
       surf->SetInterpolationIndices();
-      surf->SetInterpolationWeights();
+      surf->SetInterpolationWeights(ng_interp_);
     }
     BuildFusedArrays();
   }
@@ -158,7 +159,11 @@ void AzimuthalAverageOutput::LoadOutputData(Mesh *pm) {
   auto f_indcs = fused_indcs.d_view;
   auto f_wghts = fused_wghts.d_view;
   auto f_vals  = fused_vals.d_view;
-  int ng = ng_, is = is_, js = js_, ks = ks_;
+  // ngi: stencil half-width; is/js/ks: active-zone starts (= ng_).
+  // The index formula ii1 - (ngi - i - is) + 1 maps stencil point i to the
+  // correct array index regardless of ngi, because is = ng_ offsets into the
+  // ghost zone correctly even when ngi < ng_.
+  int ngi = ng_interp_, is = is_, js = js_, ks = ks_;
 
   for (int n = 0; n < nout_vars; ++n) {
     int  v   = outvars[n].data_index;
@@ -175,15 +180,15 @@ void AzimuthalAverageOutput::LoadOutputData(Mesh *pm) {
             f_vals(idx) = 0.0;
           } else {
             Real sum = 0.0;
-            for (int i = 0; i < 2 * ng; ++i)
-              for (int j = 0; j < 2 * ng; ++j)
-                for (int k = 0; k < 2 * ng; ++k)
+            for (int i = 0; i < 2 * ngi; ++i)
+              for (int j = 0; j < 2 * ngi; ++j)
+                for (int k = 0; k < 2 * ngi; ++k)
                   sum += f_wghts(idx, i, 0) * f_wghts(idx, j, 1) *
                          f_wghts(idx, k, 2) *
                          val(ii0, v,
-                             ii3 - (ng - k - ks) + 1,
-                             ii2 - (ng - j - js) + 1,
-                             ii1 - (ng - i - is) + 1);
+                             ii3 - (ngi - k - ks) + 1,
+                             ii2 - (ngi - j - js) + 1,
+                             ii1 - (ngi - i - is) + 1);
             f_vals(idx) = sum;
           }
         });

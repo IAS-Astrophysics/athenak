@@ -484,8 +484,9 @@ class AzimuthalAverageOutput : public BaseTypeOutput {
   // Layout: flat index = ir * nphi * ntheta + ip * ntheta + it
   // Reduces nr*nout_vars Kokkos kernel launches to nout_vars launches.
   DualArray2D<int>  fused_indcs;   // (total_angles, 4)
-  DualArray3D<Real> fused_wghts;   // (total_angles, 2*ng, 3)
-  int ng_, is_, js_, ks_;          // ghost-zone depth and start indices
+  DualArray3D<Real> fused_wghts;   // (total_angles, 2*ng_interp, 3)
+  int ng_, ng_interp_;             // mesh ghost-zone depth; stencil half-width
+  int is_, js_, ks_;               // active-zone start indices (= ng_)
   bool adaptive_;                  // true when AMR is active
 
   void BuildFusedArrays();          // copy surface tables → fused arrays
