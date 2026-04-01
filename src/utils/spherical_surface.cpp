@@ -127,10 +127,16 @@ void SphericalSurface::SetInterpolationIndices() {
       Real &dx3 = size.h_view(m).dx3;
 
       // save MeshBlock and zone indicies for nearest position to spherical
-      // patch center if this angle position resides in this MeshBlock
-      if ((rcoord.h_view(n, 0) >= x1min && rcoord.h_view(n, 0) <= x1max) &&
-          (rcoord.h_view(n, 1) >= x2min && rcoord.h_view(n, 1) <= x2max) &&
-          (rcoord.h_view(n, 2) >= x3min && rcoord.h_view(n, 2) <= x3max)) {
+      // patch center if this angle position resides in this MeshBlock.
+      // Use half-open intervals [xmin, xmax) so that points exactly on an
+      // internal meshblock boundary are claimed by exactly one block, preventing
+      // double-counting when different MPI ranks own adjacent meshblocks.
+      // Points at the outer domain boundary are never interpolated (the sphere
+      // radii are always strictly inside the domain), so the open upper bound
+      // is safe for all intended uses.
+      if ((rcoord.h_view(n, 0) >= x1min && rcoord.h_view(n, 0) < x1max) &&
+          (rcoord.h_view(n, 1) >= x2min && rcoord.h_view(n, 1) < x2max) &&
+          (rcoord.h_view(n, 2) >= x3min && rcoord.h_view(n, 2) < x3max)) {
         iindcs.h_view(n, 0) = m;
         iindcs.h_view(n, 1) = static_cast<int>(
             std::floor((rcoord.h_view(n, 0) - (x1min + dx1 / 2.0)) / dx1));

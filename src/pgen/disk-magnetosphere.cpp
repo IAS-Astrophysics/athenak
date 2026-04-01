@@ -268,7 +268,6 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     mp.sponge_tau   = pin->GetOrAddReal("problem", "sponge_tau",   1.0);
     mp.inflow_bc_depth = pin->GetOrAddInteger("problem", "inflow_bc_depth", 0);
     mp.ghost_vr_frac   = pin->GetOrAddReal("problem", "ghost_vr_frac", 0.0);
-
     // Capture variables for kernel - e.g. indices for looping over the meshblocks and the size of the meshblocks.
     auto &indcs = pmy_mesh_->mb_indcs;
     int &is = indcs.is; int &ie = indcs.ie;
@@ -472,7 +471,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
             // Compute cylindrical radius
             Real rad=sqrt(x1*x1 + x2*x2);
             Real p_over_r = PoverR(mp_, rad);
-            u0_(m,IEN,k,j,i) = p_over_r*den/(mp_.gamma_gas - 1.0)
+            u0_(m,IEN,k,j,i) = p_over_r*u0_(m,IDN,k,j,i)/(mp_.gamma_gas - 1.0)
                                +0.5*(SQR(u0_(m,IM1,k,j,i))
                                +SQR(u0_(m,IM2,k,j,i))
                                +SQR(u0_(m,IM3,k,j,i)))/u0_(m,IDN,k,j,i) ;
