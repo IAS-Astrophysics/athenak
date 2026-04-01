@@ -268,7 +268,7 @@ void SetupBinary(ParameterInput *pin, Mesh* pmy_mesh_) {
                           idr->field[i_vz][idx]};
 
           // Check for garbage values thrown in by Elliptica.
-          if (idr->field[i_rho][idx] <= rho_cut || 
+          if (idr->field[i_rho][idx] <= rho_cut ||
               !Kokkos::isfinite(idr->field[i_rho][idx])) {
             rho = 0.0;
             host_w0(m, IPR, k, j, i) = 0.0;
