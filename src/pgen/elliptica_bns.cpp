@@ -108,7 +108,7 @@ void SetupBinary(ParameterInput *pin, Mesh* pmy_mesh_) {
 
   // Enable electron fraction if the EOS supports it.
   constexpr bool use_ye = tov::UsesYe<TOVEOS>;
-  
+
   if (global_variable::my_rank == 0) {
     std::cout << "Allocated coordinates of size " << width << std::endl;
   }
@@ -263,10 +263,10 @@ void SetupBinary(ParameterInput *pin, Mesh* pmy_mesh_) {
           // energy density, which is invariant, and use that with the 1D EOS.
           Real egas = idr->field[i_rho][idx] * (1.0 + idr->field[i_eps][idx]);
           Real &rho = host_w0(m, IDN, k, j, i);
-          Real vu[3] = {idr->field[i_vx][idx], 
+          Real vu[3] = {idr->field[i_vx][idx],
                           idr->field[i_vy][idx],
                           idr->field[i_vz][idx]};
-          
+
           // Check for garbage values thrown in by Elliptica.
           if (idr->field[i_rho][idx] <= rho_cut || !Kokkos::isfinite(idr->field[i_rho][idx])) {
             rho = 0.0;
@@ -311,7 +311,7 @@ void SetupBinary(ParameterInput *pin, Mesh* pmy_mesh_) {
       }
     }
   }
-  
+
   if (global_variable::my_rank == 0) {
     std::cout << "Host mirrors filled." << std::endl;
   }
@@ -333,7 +333,7 @@ void SetupBinary(ParameterInput *pin, Mesh* pmy_mesh_) {
   }
 
   // NS position for the computation of vector potential for BHNS.
-  // grid_set_NS = left means that the NS is at -y and 
+  // grid_set_NS = left means that the NS is at -y and
   // grid_set_NS = right means that the NS is at +y.
   // Also, the binary is shifted so that the center of mass
   // is at the center of the grid. We need to adjust this, such that
@@ -420,10 +420,10 @@ void SetupBinary(ParameterInput *pin, Mesh* pmy_mesh_) {
                 << ", cz = " << pmbp->pz4c->ptracker[1]->GetPos(2) << std::endl;
     }
   }
-  
+
   // Cleanup
   elliptica_id_reader_free(idr);
-  
+
   if (global_variable::my_rank == 0) {
     std::cout << "Elliptica freed." << std::endl;
   }
@@ -478,7 +478,7 @@ void SetupBinary(ParameterInput *pin, Mesh* pmy_mesh_) {
                     A2(x1f, x2v + 0.5 * sep + CM_y_corr, x3f, I_0, r_0);
       a3(m,k,j,i) = 0.0;
     } else if (BHNS) {
-      if (NS_y > 0.0){
+      if (NS_y > 0.0) {
         a1(m,k,j,i) = A1(x1v, x2f - 0.5 * sep + CM_y_corr, x3f, I_0, r_0);
         a2(m,k,j,i) = A2(x1f, x2v - 0.5 * sep + CM_y_corr, x3f, I_0, r_0);
         a3(m,k,j,i) = 0.0;
