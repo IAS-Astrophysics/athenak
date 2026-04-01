@@ -39,10 +39,11 @@ AzimuthalAverageOutput::AzimuthalAverageOutput(ParameterInput *pin, Mesh *pm,
   adaptive_ = pm->adaptive;
 
   // Allow a smaller Lagrange stencil than the full ghost-zone depth.
-  // Default ng_interp=2 gives a 4-point stencil per axis (64 ops vs 512 for ng=4).
-  // Any value in [1, ng_] is valid; larger values give higher-order interpolation.
+  // ng_interp=0 : nearest-cell (single read, no weights, strictly monotone).
+  // ng_interp=1 : trilinear (2-point per axis, monotone).
+  // ng_interp=2 : default cubic Lagrange (4-point per axis).
   ng_interp_ = pin->GetOrAddInteger(op.block_name, "ng_interp", 2);
-  if (ng_interp_ < 1)   ng_interp_ = 1;
+  if (ng_interp_ < 0)   ng_interp_ = 0;   // 0 = nearest-cell
   if (ng_interp_ > ng_) ng_interp_ = ng_;
 
   nr = pin->GetInteger(op.block_name, "nr");
@@ -81,9 +82,9 @@ AzimuthalAverageOutput::AzimuthalAverageOutput(ParameterInput *pin, Mesh *pm,
   for (int j = 0; j < ntheta; ++j)
     theta_grid[j] = surfaces[0]->polar_pos.h_view(j, 0);
 
-  // If a reduced stencil is requested, recompute weights with ng_interp_ so
-  // that fused_wghts is filled with the correct (smaller) Lagrange coefficients.
-  if (ng_interp_ < ng_) {
+  // If a reduced or standard Lagrange stencil is requested, recompute weights.
+  // ng_interp_=0 (nearest-cell) skips weight computation entirely.
+  if (ng_interp_ > 0 && ng_interp_ < ng_) {
     for (auto &surf : surfaces)
       surf->SetInterpolationWeights(ng_interp_);
   }
@@ -111,25 +112,33 @@ void AzimuthalAverageOutput::BuildFusedArrays() {
   int total_angles = nr * nang_per_r;
 
   Kokkos::realloc(fused_indcs, total_angles, 4);
-  Kokkos::realloc(fused_wghts, total_angles, 2 * ng_interp_, 3);
 
+  // fused_indcs is always populated (block/cell indices needed for nearest-cell too).
   for (int ir = 0; ir < nr; ++ir) {
     int offset = ir * nang_per_r;
     auto &surf = surfaces[ir];
-    for (int n = 0; n < nang_per_r; ++n) {
+    for (int n = 0; n < nang_per_r; ++n)
       for (int k = 0; k < 4; ++k)
         fused_indcs.h_view(offset + n, k) = surf->interp_indcs.h_view(n, k);
-      for (int i = 0; i < 2 * ng_interp_; ++i)
-        for (int k = 0; k < 3; ++k)
-          fused_wghts.h_view(offset + n, i, k) =
-              surf->interp_wghts.h_view(n, i, k);
-    }
   }
-
   fused_indcs.template modify<HostMemSpace>();
   fused_indcs.template sync<DevExeSpace>();
-  fused_wghts.template modify<HostMemSpace>();
-  fused_wghts.template sync<DevExeSpace>();
+
+  // fused_wghts is only needed for Lagrange interpolation (ng_interp_ > 0).
+  if (ng_interp_ > 0) {
+    Kokkos::realloc(fused_wghts, total_angles, 2 * ng_interp_, 3);
+    for (int ir = 0; ir < nr; ++ir) {
+      int offset = ir * nang_per_r;
+      auto &surf = surfaces[ir];
+      for (int n = 0; n < nang_per_r; ++n)
+        for (int i = 0; i < 2 * ng_interp_; ++i)
+          for (int k = 0; k < 3; ++k)
+            fused_wghts.h_view(offset + n, i, k) =
+                surf->interp_wghts.h_view(n, i, k);
+    }
+    fused_wghts.template modify<HostMemSpace>();
+    fused_wghts.template sync<DevExeSpace>();
+  }
 }
 
 // ── LoadOutputData ────────────────────────────────────────────────────────────
@@ -139,7 +148,8 @@ void AzimuthalAverageOutput::LoadOutputData(Mesh *pm) {
   if (adaptive_) {
     for (auto &surf : surfaces) {
       surf->SetInterpolationIndices();
-      surf->SetInterpolationWeights(ng_interp_);
+      if (ng_interp_ > 0)
+        surf->SetInterpolationWeights(ng_interp_);
     }
     BuildFusedArrays();
   }
@@ -157,47 +167,11 @@ void AzimuthalAverageOutput::LoadOutputData(Mesh *pm) {
   DualArray1D<Real> fused_vals("fused_vals", total_angles);
 
   auto f_indcs = fused_indcs.d_view;
-  auto f_wghts = fused_wghts.d_view;
   auto f_vals  = fused_vals.d_view;
-  // ngi: stencil half-width; is/js/ks: active-zone starts (= ng_).
-  // The index formula ii1 - (ngi - i - is) + 1 maps stencil point i to the
-  // correct array index regardless of ngi, because is = ng_ offsets into the
-  // ghost zone correctly even when ngi < ng_.
-  int ngi = ng_interp_, is = is_, js = js_, ks = ks_;
+  int  is = is_, js = js_, ks = ks_;
 
-  for (int n = 0; n < nout_vars; ++n) {
-    int  v   = outvars[n].data_index;
-    auto val = *(outvars[n].data_ptr);   // Kokkos View — safe to capture
-
-    // Single kernel over ALL nr*nphi*ntheta angles (was nr separate kernels).
-    par_for("azavg_interp", DevExeSpace(), 0, total_angles - 1,
-        KOKKOS_LAMBDA(int idx) {
-          int ii0 = f_indcs(idx, 0);
-          int ii1 = f_indcs(idx, 1);
-          int ii2 = f_indcs(idx, 2);
-          int ii3 = f_indcs(idx, 3);
-          if (ii0 == -1) {
-            f_vals(idx) = 0.0;
-          } else {
-            Real sum = 0.0;
-            for (int i = 0; i < 2 * ngi; ++i)
-              for (int j = 0; j < 2 * ngi; ++j)
-                for (int k = 0; k < 2 * ngi; ++k)
-                  sum += f_wghts(idx, i, 0) * f_wghts(idx, j, 1) *
-                         f_wghts(idx, k, 2) *
-                         val(ii0, v,
-                             ii3 - (ngi - k - ks) + 1,
-                             ii2 - (ngi - j - js) + 1,
-                             ii1 - (ngi - i - is) + 1);
-            f_vals(idx) = sum;
-          }
-        });
-
-    // One device->host sync per variable (was one per radius per variable).
-    fused_vals.template modify<DevExeSpace>();
-    fused_vals.template sync<HostMemSpace>();
-
-    // Phi average into outarray.
+  // Lambda shared by both paths to phi-average one variable's fused_vals into outarray.
+  auto phi_average = [&](int n) {
     for (int ir = 0; ir < nr; ++ir) {
       int r_offset = ir * nang_per_r;
       for (int jt = 0; jt < ntheta; ++jt) {
@@ -206,6 +180,69 @@ void AzimuthalAverageOutput::LoadOutputData(Mesh *pm) {
           sum += fused_vals.h_view(r_offset + ip * ntheta + jt);
         outarray(n, 0, 0, ir, jt) = sum;
       }
+    }
+  };
+
+  if (ng_interp_ == 0) {
+    // Nearest-cell path: single cell read per angle, no weights.
+    for (int n = 0; n < nout_vars; ++n) {
+      int  v   = outvars[n].data_index;
+      auto val = *(outvars[n].data_ptr);
+
+      par_for("azavg_nearest", DevExeSpace(), 0, total_angles - 1,
+          KOKKOS_LAMBDA(int idx) {
+            int ii0 = f_indcs(idx, 0);
+            f_vals(idx) = (ii0 == -1) ? 0.0
+                : val(ii0, v, f_indcs(idx, 3) + ks,
+                              f_indcs(idx, 2) + js,
+                              f_indcs(idx, 1) + is);
+          });
+
+      fused_vals.template modify<DevExeSpace>();
+      fused_vals.template sync<HostMemSpace>();
+      phi_average(n);
+    }
+  } else {
+    // Lagrange interpolation path (ng_interp_ >= 1).
+    auto f_wghts = fused_wghts.d_view;
+    // ngi: stencil half-width; is/js/ks: active-zone starts (= ng_).
+    // The index formula ii1 - (ngi - i - is) + 1 maps stencil point i to the
+    // correct array index regardless of ngi, because is = ng_ offsets into the
+    // ghost zone correctly even when ngi < ng_.
+    int ngi = ng_interp_;
+
+    for (int n = 0; n < nout_vars; ++n) {
+      int  v   = outvars[n].data_index;
+      auto val = *(outvars[n].data_ptr);
+
+      // Single kernel over ALL nr*nphi*ntheta angles (was nr separate kernels).
+      par_for("azavg_interp", DevExeSpace(), 0, total_angles - 1,
+          KOKKOS_LAMBDA(int idx) {
+            int ii0 = f_indcs(idx, 0);
+            int ii1 = f_indcs(idx, 1);
+            int ii2 = f_indcs(idx, 2);
+            int ii3 = f_indcs(idx, 3);
+            if (ii0 == -1) {
+              f_vals(idx) = 0.0;
+            } else {
+              Real sum = 0.0;
+              for (int i = 0; i < 2 * ngi; ++i)
+                for (int j = 0; j < 2 * ngi; ++j)
+                  for (int k = 0; k < 2 * ngi; ++k)
+                    sum += f_wghts(idx, i, 0) * f_wghts(idx, j, 1) *
+                           f_wghts(idx, k, 2) *
+                           val(ii0, v,
+                               ii3 - (ngi - k - ks) + 1,
+                               ii2 - (ngi - j - js) + 1,
+                               ii1 - (ngi - i - is) + 1);
+              f_vals(idx) = sum;
+            }
+          });
+
+      // One device->host sync per variable (was one per radius per variable).
+      fused_vals.template modify<DevExeSpace>();
+      fused_vals.template sync<HostMemSpace>();
+      phi_average(n);
     }
   }
 
