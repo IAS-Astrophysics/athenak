@@ -191,9 +191,15 @@ if (${PROBLEM} STREQUAL "kadath_bns")
   # Kadath (FUKa) BNS initial data reader.
   # Expects Kadath to be linked at ${CMAKE_SOURCE_DIR}/kadath
   # with libkadath.a in its lib/ directory.
+  find_package(Boost REQUIRED)
+  target_include_directories(athena PRIVATE
+      ${CMAKE_SOURCE_DIR}/kadath/include/for_Kadath
+      ${CMAKE_SOURCE_DIR}/kadath/include/for_Kadath/Kadath_point_h
+      #${CMAKE_SOURCE_DIR}/kadath/include/Solvers
+      ${Boost_INCLUDE_DIRS})
   target_link_libraries(athena PUBLIC
       ${CMAKE_SOURCE_DIR}/kadath/lib/libkadath.a)
-  # Kadath depends on FFTW3 (spectral transforms) and LAPACK (linear algebra)
+  # Kadath depends on Boost, FFTW3 (spectral transforms) and LAPACK (linear algebra)
   find_package(PkgConfig QUIET)
   if (PKG_CONFIG_FOUND)
     pkg_check_modules(FFTW3 fftw3)
