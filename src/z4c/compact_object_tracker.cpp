@@ -67,6 +67,8 @@ CompactObjectTracker::CompactObjectTracker(Mesh *pmesh, ParameterInput *pin, int
   pos[1] = pin->GetOrAddReal("z4c", "co_" + nstr + "_y", 0.0);
   pos[2] = pin->GetOrAddReal("z4c", "co_" + nstr + "_z", 0.0);
 
+  mass = pin->GetOrAddReal("z4c", "co_" + nstr + "_mass", 0.0);
+
   reflevel = pin->GetOrAddInteger("z4c", "co_" + nstr + "_reflevel", -1);
   radius = pin->GetOrAddReal("z4c", "co_" + nstr + "_radius", 0.0);
 

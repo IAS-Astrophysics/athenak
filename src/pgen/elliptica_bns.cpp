@@ -340,6 +340,8 @@ void SetupBinary(ParameterInput *pin, Mesh* pmy_mesh_) {
   // the seed of the magnetic field is at the right position.
   Real NS_x = 0.0, NS_y = 0.0, NS_z = 0.0;
   Real BH_x = 0.0, BH_y = 0.0, BH_z = 0.0;
+  Real NS1_x = 0.0, NS1_y = 0.0, NS1_z = 0.0;
+  Real NS2_x = 0.0, NS2_y = 0.0, NS2_z = 0.0;
   Real CM_x_corr = 0.0;
   Real CM_y_corr = 0.0;
   Real CM_z_corr = 0.0;
@@ -353,6 +355,18 @@ void SetupBinary(ParameterInput *pin, Mesh* pmy_mesh_) {
     CM_x_corr = idr->get_param_dbl("BHNS_x_CM",idr);
     CM_y_corr = idr->get_param_dbl("BHNS_y_CM",idr);
     CM_z_corr = idr->get_param_dbl("BHNS_z_CM",idr);
+  }
+
+  if (BNS) {
+    NS1_x = idr->get_param_dbl("NS1_center_x",idr);
+    NS1_y = idr->get_param_dbl("NS1_center_y",idr);
+    NS1_z = idr->get_param_dbl("NS1_center_z",idr);
+    NS2_x = idr->get_param_dbl("NS2_center_x",idr);
+    NS2_y = idr->get_param_dbl("NS2_center_y",idr);
+    NS2_z = idr->get_param_dbl("NS2_center_z",idr);
+    CM_x_corr = idr->get_param_dbl("NSNS_x_CM",idr);
+    CM_y_corr = idr->get_param_dbl("NSNS_y_CM",idr);
+    CM_z_corr = idr->get_param_dbl("NSNS_z_CM",idr);
   }
 
   // The center of mass shift also needs to be adjusted within
@@ -387,6 +401,23 @@ void SetupBinary(ParameterInput *pin, Mesh* pmy_mesh_) {
                   << ", cy = " << pmbp->pz4c->ptracker[0]->GetPos(1)
                   << ", cz = " << pmbp->pz4c->ptracker[0]->GetPos(2) << std::endl;
       }
+    }
+  }
+
+  if (BNS) {
+    Real COM_corr_NS1[3] = {NS1_x - CM_x_corr, NS1_y - CM_y_corr, NS1_z - CM_z_corr};
+    Real COM_corr_NS2[3] = {NS2_x - CM_x_corr, NS2_y - CM_y_corr, NS2_z - CM_z_corr};
+    pmbp->pz4c->ptracker[0]->SetPos(COM_corr_NS1);
+    pmbp->pz4c->ptracker[1]->SetPos(COM_corr_NS2);
+
+    if (global_variable::my_rank == 0) {
+      std::cout << "Adjusted CompactObjectTracker position by COM." << std::endl;
+      std::cout << "NS1: cx = " << pmbp->pz4c->ptracker[0]->GetPos(0)
+                << ", cy = " << pmbp->pz4c->ptracker[0]->GetPos(1)
+                << ", cz = " << pmbp->pz4c->ptracker[0]->GetPos(2) << std::endl;
+      std::cout << "NS2: cx = " << pmbp->pz4c->ptracker[1]->GetPos(0)
+                << ", cy = " << pmbp->pz4c->ptracker[1]->GetPos(1)
+                << ", cz = " << pmbp->pz4c->ptracker[1]->GetPos(2) << std::endl;
     }
   }
   
@@ -441,10 +472,10 @@ void SetupBinary(ParameterInput *pin, Mesh* pmy_mesh_) {
 
     // Distinguish between BNS and BHNS
     if (BNS) {
-      a1(m,k,j,i) = A1(x1v - 0.5 * sep, x2f, x3f, I_0, r_0) +
-                    A1(x1v + 0.5 * sep, x2f, x3f, I_0, r_0);
-      a2(m,k,j,i) = A2(x1f - 0.5 * sep, x2v, x3f, I_0, r_0) +
-                    A2(x1f + 0.5 * sep, x2v, x3f, I_0, r_0);
+      a1(m,k,j,i) = A1(x1v, x2f - 0.5 * sep + CM_y_corr, x3f, I_0, r_0) +
+                    A1(x1v, x2f + 0.5 * sep + CM_y_corr, x3f, I_0, r_0);
+      a2(m,k,j,i) = A2(x1f, x2v - 0.5 * sep + CM_y_corr, x3f, I_0, r_0) +
+                    A2(x1f, x2v + 0.5 * sep + CM_y_corr, x3f, I_0, r_0);
       a3(m,k,j,i) = 0.0;
     } else if (BHNS) {
       if (NS_y > 0.0){
@@ -495,10 +526,10 @@ void SetupBinary(ParameterInput *pin, Mesh* pmy_mesh_) {
       Real xr = x1v - 0.25 * dx1;
 
       if (BNS) {
-        a1(m,k,j,i) = 0.5*((A1(xl - 0.5 * sep, x2f, x3f, I_0, r_0) +
-                         A1(xl + 0.5 * sep, x2f, x3f, I_0, r_0)) +
-                         (A1(xr - 0.5 * sep, x2f, x3f, I_0, r_0) +
-                         A1(xr + 0.5 * sep, x2f, x3f, I_0, r_0)));
+        a1(m,k,j,i) = 0.5*((A1(xl, x2f - 0.5 * sep + CM_y_corr, x3f, I_0, r_0) +
+                            A1(xl, x2f + 0.5 * sep + CM_y_corr, x3f, I_0, r_0)) +
+                           (A1(xr, x2f - 0.5 * sep + CM_y_corr, x3f, I_0, r_0) +
+                            A1(xr, x2f + 0.5 * sep + CM_y_corr, x3f, I_0, r_0)));
       } else if (BHNS) {
         if (NS_y > 0.0) {
           a1(m,k,j,i) = 0.5*(A1(xl, x2f - 0.5 * sep + CM_y_corr, x3f, I_0, r_0) +
@@ -541,10 +572,10 @@ void SetupBinary(ParameterInput *pin, Mesh* pmy_mesh_) {
       Real xr = x2v - 0.25 * dx2;
 
       if (BNS) {
-        a2(m,k,j,i) = 0.5*((A2(x1f - 0.5 * sep, xl, x3f, I_0, r_0) +
-                         A2(x1f + 0.5 * sep, xl, x3f, I_0, r_0)) +
-                         (A2(x1f - 0.5 * sep, xr, x3f, I_0, r_0) +
-                         A2(x1f + 0.5 * sep, xr, x3f, I_0, r_0)));
+        a2(m,k,j,i) = 0.5*((A2(x1f, xl - 0.5 * sep + CM_y_corr, x3f, I_0, r_0) +
+                            A2(x1f, xl + 0.5 * sep + CM_y_corr, x3f, I_0, r_0)) +
+                           (A2(x1f, xr - 0.5 * sep + CM_y_corr, x3f, I_0, r_0) +
+                            A2(x1f, xr + 0.5 * sep + CM_y_corr, x3f, I_0, r_0)));
       } else if (BHNS) {
         if (NS_y > 0.0) {
           a2(m,k,j,i) = 0.5*(A2(x1f, xl - 0.5 * sep + CM_y_corr, x3f, I_0, r_0) +
