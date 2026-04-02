@@ -133,7 +133,7 @@ namespace {
     Real disc_mask_rout;  // outer disc-only mask radius (negative = off)
     Real esrc_blend_width;  // E-field blend width inside rfix (0 = hard boundary)
     Real sponge_width;    // thickness of sponge zone outside rfix (0 = disabled)
-    Real sponge_tau;      // sponge relaxation timescale in units of local orbital periods
+    Real sponge_tau;      // sponge relaxation timescale in units of the free-fall time at rfix
     int inflow_bc_depth;  // number of ghost layers inside mask for inflow BC (0 = disabled)
     Real ghost_vr_frac;   // minimum inward radial velocity in ghost cells as fraction of local free-fall (0 = off)
     };
@@ -1488,7 +1488,8 @@ void StarMask(Mesh* pm, const Real bdt) { //CF:CHECKED
 // At each timestep, conserved fluid variables (density, momenta, energy) are relaxed
 // exponentially toward the unperturbed disc initial-condition profile.  The relaxation
 // strength is weighted linearly from 1 at rc = rfix down to 0 at rc = rfix + sponge_width,
-// and the timescale is sponge_tau * local_orbital_period.
+// and the timescale is sponge_tau * t_ff(rfix), where t_ff = (pi/2)*sqrt(rfix^3/(2*gm0))
+// is the free-fall time from rfix to the origin.
 // The magnetic field is left untouched; the current bcc0 magnetic energy is included in
 // the energy target so only the fluid thermal/kinetic energy is damped.
 // Disabled (no-op) when sponge_width = 0.
@@ -1538,8 +1539,9 @@ void BoundarySpongeMask(Mesh* pm, const Real bdt) {
         Real wgt = (mp_.rfix + mp_.sponge_width - rc) / mp_.sponge_width;
 
         // relaxation fraction: wgt * dt / tau
-        // tau = sponge_tau * reference orbital period at r=1 (T_orb,ref = 2*pi for gm0=1)
-        Real tau_ref = mp_.sponge_tau * 2.0*M_PI;
+        // tau = sponge_tau * t_ff(rfix),  t_ff = (pi/2) * sqrt(rfix^3 / (2*gm0))
+        Real tau_ref = mp_.sponge_tau *
+                       (0.5*M_PI * sqrt(mp_.rfix*mp_.rfix*mp_.rfix / (2.0*mp_.gm0)));
         Real dfrac   = fmin(wgt * bdt / tau_ref, 1.0);  // clamp to avoid overshoot
 
         // target density: full initial-condition profile (disc + stellar contribution + floor)
