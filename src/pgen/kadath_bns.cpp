@@ -93,8 +93,9 @@ void SetupBNS(ParameterInput *pin, Mesh* pmy_mesh_) {
   // Set up the 1D EOS
   TOVEOS eos{pin};
 
-  // Enable ye if the EOS supports it.
-  constexpr bool use_ye = tov::UsesYe<TOVEOS>;
+  // Enable ye only if the EOS supports it AND nscalars > 0 (IYF slot exists).
+  const bool use_ye = tov::UsesYe<TOVEOS>;
+  const bool read_ye = pin->GetOrAddInteger("mhd", "nscalars", 0) > 0;
 
   // =========================================================================
   // Kadath BNS setup (inlined from export_bns.cpp / KadathExportBNS)
@@ -106,7 +107,7 @@ void SetupBNS(ParameterInput *pin, Mesh* pmy_mesh_) {
 
   kadath_config_boost<BIN_INFO> bconfig(fname);
 
-  const double h_cut      = bconfig.eos<double>(HC, BCO1);
+  const double h_cut      = bconfig.eos<double>(HCUT, BCO1);
   const std::string eos_file = bconfig.eos<std::string>(EOSFILE, BCO1);
   const std::string eos_type = bconfig.eos<std::string>(EOSTYPE, BCO1);
 
@@ -230,13 +231,19 @@ void SetupBNS(ParameterInput *pin, Mesh* pmy_mesh_) {
   // Evaluate derived tensor fields (A and U).
   Tensor A_tens(syst.give_val_def("A"));
   Index  ind(A_tens);
-  quants[AXX] = std::cref(A_tens(ind)); ind.inc();
-  quants[AXY] = std::cref(A_tens(ind)); ind.inc();
-  quants[AXZ] = std::cref(A_tens(ind)); ind.inc();
+  quants[AXX] = std::cref(A_tens(ind));
   ind.inc();
-  quants[AYY] = std::cref(A_tens(ind)); ind.inc();
-  quants[AYZ] = std::cref(A_tens(ind)); ind.inc();
-  ind.inc(); ind.inc();
+  quants[AXY] = std::cref(A_tens(ind));
+  ind.inc();
+  quants[AXZ] = std::cref(A_tens(ind));
+  ind.inc();
+  ind.inc();
+  quants[AYY] = std::cref(A_tens(ind));
+  ind.inc();
+  quants[AYZ] = std::cref(A_tens(ind));
+  ind.inc();
+  ind.inc();
+  ind.inc();
   quants[AZZ] = std::cref(A_tens(ind));
 
   quants[H] = std::cref(logh);
@@ -300,7 +307,7 @@ void SetupBNS(ParameterInput *pin, Mesh* pmy_mesh_) {
     pt_warm.set(1) = xc1;
     pt_warm.set(2) = 0.0;
     pt_warm.set(3) = 0.0;
-    (void)quants[PSI].get().val_point_zeronotdef(pt_warm);
+    (void)quants[PSI].get().val_point(pt_warm);
   }
 
   Kokkos::parallel_for("kadath_fill",
@@ -328,10 +335,10 @@ void SetupBNS(ParameterInput *pin, Mesh* pmy_mesh_) {
     pt.set(3) = static_cast<double>(z);
 
     // Evaluate all spectral quantities at this point.
-    // val_point() aborts if the point is outside the Kadath spectral domain.
     double qv[NUM_QUANTS];
-    for (int kq = 0; kq < NUM_QUANTS; ++kq)
+    for (int kq = 0; kq < NUM_QUANTS; ++kq) {
       qv[kq] = quants[kq].get().val_point(pt);
+    }
 
     // Conformal factor and derived powers.
     const double psi  = qv[PSI];
@@ -378,9 +385,11 @@ void SetupBNS(ParameterInput *pin, Mesh* pmy_mesh_) {
     }
 
     if constexpr (use_ye) {
-      Real& rho = host_w0(m, IDN, k, j, i);
-      host_w0(m, IYF, k, j, i) = eos.template
-                                 GetYeFromRho<tov::LocationTag::Host>(rho);
+      if (read_ye) {
+        Real& rho = host_w0(m, IDN, k, j, i);
+        host_w0(m, IYF, k, j, i) = eos.template
+                                   GetYeFromRho<tov::LocationTag::Host>(rho);
+      }
     }
 
     // Velocity U^i (three-velocity in the fluid frame).
