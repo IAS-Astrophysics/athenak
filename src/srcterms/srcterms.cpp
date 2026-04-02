@@ -140,7 +140,6 @@ void SourceTerms::ISMCooling(const DvceArray5D<Real> &w0, const EOS_Data &eos_da
   int js = indcs.js, je = indcs.je;
   int ks = indcs.ks, ke = indcs.ke;
   int nmb1 = pmy_pack->nmb_thispack - 1;
-  Real use_e = eos_data.use_e;
   Real gamma = eos_data.gamma;
   Real gm1 = gamma - 1.0;
   Real heating_rate = hrate;
@@ -154,13 +153,7 @@ void SourceTerms::ISMCooling(const DvceArray5D<Real> &w0, const EOS_Data &eos_da
   par_for("cooling", DevExeSpace(), 0, nmb1, ks, ke, js, je, is, ie,
   KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
     // temperature in cgs unit
-    Real temp = 1.0;
-    if (use_e) {
-      temp = temp_unit*w0(m,IEN,k,j,i)/w0(m,IDN,k,j,i)*gm1;
-    } else {
-      temp = temp_unit*w0(m,ITM,k,j,i);
-    }
-
+    Real temp = temp_unit*w0(m,IEN,k,j,i)/w0(m,IDN,k,j,i)*gm1;
     Real lambda_cooling = ISMCoolFn(temp)/cooling_unit;
     Real gamma_heating = heating_rate/heating_unit;
 
@@ -183,7 +176,6 @@ void SourceTerms::RelCooling(const DvceArray5D<Real> &w0, const EOS_Data &eos_da
   int js = indcs.js, je = indcs.je;
   int ks = indcs.ks, ke = indcs.ke;
   int nmb1 = pmy_pack->nmb_thispack - 1;
-  Real use_e = eos_data.use_e;
   Real gamma = eos_data.gamma;
   Real gm1 = gamma - 1.0;
   Real cooling_rate = crate_rel;
@@ -192,19 +184,12 @@ void SourceTerms::RelCooling(const DvceArray5D<Real> &w0, const EOS_Data &eos_da
   par_for("cooling", DevExeSpace(), 0, nmb1, ks, ke, js, je, is, ie,
   KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
     // temperature in cgs unit
-    Real temp = 1.0;
-    if (use_e) {
-      temp = w0(m,IEN,k,j,i)/w0(m,IDN,k,j,i)*gm1;
-    } else {
-      temp = w0(m,ITM,k,j,i);
-    }
+    Real temp = w0(m,IEN,k,j,i)/w0(m,IDN,k,j,i)*gm1;
 
     auto &ux = w0(m,IVX,k,j,i);
     auto &uy = w0(m,IVY,k,j,i);
     auto &uz = w0(m,IVZ,k,j,i);
-
-    auto ut = 1.0 + ux*ux + uy*uy + uz*uz;
-    ut = sqrt(ut);
+    Real ut = sqrt(1.0 + ux*ux + uy*uy + uz*uz);
 
     u0(m,IEN,k,j,i) -= bdt*w0(m,IDN,k,j,i)*ut*pow((temp*cooling_rate), cooling_power);
     u0(m,IM1,k,j,i) -= bdt*w0(m,IDN,k,j,i)*ux*pow((temp*cooling_rate), cooling_power);

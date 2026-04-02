@@ -25,18 +25,17 @@ class Conduction {
 
   // data
   Real dtnew;
-  Real kappa;         // thermal conductivity
-  bool tdep_kappa;    // temperature-dependent conductivity
-  Real kappa_ceiling; // ceiling of thermal conductivity
-  bool sat_hflux;     // saturtion of heat flux
+  std::string iso_cond_type; // "constant", "spitzer", or "spitzer_limited"
+  Real kappa_iso;            // isotropic thermal conductivity
+  Real kappa_iso_limit;      // limit to isotropic thermal conductivity
 
-  // function to add heat fluxes to Hydro and/or MHD fluxes
-  void AddHeatFlux(const DvceArray5D<Real> &w, const EOS_Data &eos,
-                   DvceFaceFld5D<Real> &f);
-  void IsotropicHeatFlux(const DvceArray5D<Real> &w, const EOS_Data &eos,
-                         DvceFaceFld5D<Real> &f);
-  void TempDependentHeatFlux(const DvceArray5D<Real> &w, const EOS_Data &eos,
-                             DvceFaceFld5D<Real> &f);
+  // functions
+  void AddHeatFluxes(const DvceArray5D<Real> &w, const EOS_Data &eos,
+                     DvceFaceFld5D<Real> &f);
+  void AddIsotropicHeatFluxConstCond(const DvceArray5D<Real> &w, const EOS_Data &eos,
+                                     DvceFaceFld5D<Real> &f);
+  void AddIsotropicHeatFluxSpitzerCond(const DvceArray5D<Real> &w, const EOS_Data &eos,
+                                       DvceFaceFld5D<Real> &f);
   void NewTimeStep(const DvceArray5D<Real> &w, const EOS_Data &eos_data);
 
  private:

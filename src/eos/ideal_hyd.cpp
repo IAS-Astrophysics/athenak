@@ -21,8 +21,6 @@ IdealHydro::IdealHydro(MeshBlockPack *pp, ParameterInput *pin) :
   eos_data.coll = false;
   eos_data.gamma = pin->GetReal("hydro","gamma");
   eos_data.iso_cs = 0.0;
-  eos_data.use_e = true;  // ideal gas EOS always uses internal energy
-  eos_data.use_t = false;
 }
 
 //----------------------------------------------------------------------------------------

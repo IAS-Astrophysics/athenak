@@ -69,9 +69,7 @@ CGLMHD::CGLMHD(MeshBlockPack *pp, ParameterInput *pin) :
     std::cout << "Background collisions turned on" << std::endl;
     eos_data.coll = true;
   }
-  
-  eos_data.use_e = true;  // ideal gas EOS always uses internal energy
-  eos_data.use_t = false;
+
 }
 
 //----------------------------------------------------------------------------------------

@@ -36,7 +36,6 @@ struct EOS_Data {
   bool mlim;         // flag for mirror limiter
   bool coll;         // flag for overall collisions
   bool backup_lim;   // flag for backup limiters
-  bool use_e, use_t; // use internal energy density (e) or temperature (t) as primitive
   Real dfloor, pfloor, tfloor, sfloor, bfloor;  // density, pressure, temperature, entropy floors
   Real gamma_max;    // ceiling on Lorentz factor in SR/GR
   Real sigma_max;    // ceiling on magnetization in MHD

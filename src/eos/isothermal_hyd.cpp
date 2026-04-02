@@ -22,8 +22,6 @@ IsothermalHydro::IsothermalHydro(MeshBlockPack *pp, ParameterInput *pin) :
   eos_data.coll = false;
   eos_data.iso_cs = pin->GetReal("hydro","iso_sound_speed");
   eos_data.gamma = 0.0;
-  eos_data.use_e = false;
-  eos_data.use_t = false;
 }
 
 //----------------------------------------------------------------------------------------

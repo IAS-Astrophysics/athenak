@@ -180,12 +180,12 @@ TaskStatus Hydro::Fluxes(Driver *pdrive, int stage) {
     CalculateFluxes<Hydro_RSolver::hlle_gr>(pdrive, stage);
   }
 
-  // Add viscous, heat-flux, etc fluxes
-  if (pvisc != nullptr) {
-    pvisc->IsotropicViscousFlux(w0, pvisc->nu_iso, peos->eos_data, uflx);
-  }
+  // Add diffusion fluxes
   if (pcond != nullptr) {
-    pcond->AddHeatFlux(w0, peos->eos_data, uflx);
+    pcond->AddHeatFluxes(w0, peos->eos_data, uflx);
+  }
+  if (pvisc != nullptr) {
+    pvisc->AddViscousFluxes(w0, peos->eos_data, uflx);
   }
 
   // call FOFC if necessary

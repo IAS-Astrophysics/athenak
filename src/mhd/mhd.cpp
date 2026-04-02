@@ -109,7 +109,7 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
   nscalars = pin->GetOrAddInteger("mhd","nscalars",0);
 
   // Viscosity (only constructed if needed)
-  if (pin->DoesParameterExist("mhd","viscosity")) {
+  if (pin->DoesParameterExist("mhd","isotropic_viscosity")) {
     pvisc = new Viscosity("mhd", ppack, pin);
   } else {
     pvisc = nullptr;
@@ -123,9 +123,14 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
   }
 
   // Thermal conduction (only constructed if needed)
-  if (pin->DoesParameterExist("mhd","conductivity") ||
-      pin->DoesParameterExist("mhd","tdep_conductivity")) {
-    pcond = new Conduction("mhd", ppack, pin);
+  if (pin->DoesParameterExist("mhd","isotropic_conduction")) {
+    if (peos->eos_data.is_ideal) {
+      pcond = new Conduction("mhd", ppack, pin);
+    } else {
+      std::cout << "### FATAL ERROR in "<< __FILE__ <<" at line " << __LINE__ << std::endl
+                << "Thermal conduction in MHD requires ideal gas EOS" << std::endl;
+      std::exit(EXIT_FAILURE);
+    }
   } else {
     pcond = nullptr;
   }
