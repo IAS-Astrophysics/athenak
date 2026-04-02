@@ -32,6 +32,16 @@ MeshBoundaryValues::MeshBoundaryValues(MeshBlockPack *pp, ParameterInput *pin, b
   // allocate vector of status flags and MPI requests (if needed)
   int nnghbr = pmy_pack->pmb->nnghbr;
 
+#if MPI_PARALLEL_ENABLED
+  // Initialize all 56 MPI request pointers to nullptr first
+  for (int n=0; n<56; ++n) {
+    sendbuf[n].vars_req = nullptr;
+    sendbuf[n].flux_req = nullptr;
+    recvbuf[n].vars_req = nullptr;
+    recvbuf[n].flux_req = nullptr;
+  }
+#endif
+
   // sendbuf and recvbuf are fixed-length [56-element] arrays
   // Initialize some of the data in appropriate elements based on dimensionality of
   // problem (indicated by value of nnghbr)

@@ -138,6 +138,11 @@ TaskStatus MHD::NewTimeStep(Driver *pdriver, int stage) {
           }
         } else if (eos.is_ideal) {
           cf = eos.IdealMHDFastSpeed(w_d, p, w_bx, w_by, w_bz);
+          max_dv1 = fabs(w0_(m,IVX,k,j,i)) + cf;
+          cf = eos.IdealMHDFastSpeed(w_d, p, w_by, w_bz, w_bx);
+          max_dv2 = fabs(w0_(m,IVY,k,j,i)) + cf;
+          cf = eos.IdealMHDFastSpeed(w_d, p, w_bz, w_bx, w_by);
+          max_dv3 = fabs(w0_(m,IVZ,k,j,i)) + cf;
         } else {
           cf = eos.IdealMHDFastSpeed(w_d, w_bx, w_by, w_bz);
         }
@@ -166,8 +171,8 @@ TaskStatus MHD::NewTimeStep(Driver *pdriver, int stage) {
           cf = eos.IdealMHDFastSpeed(w_d, p, w_bz, w_bx, w_by);
         } else {
           cf = eos.IdealMHDFastSpeed(w_d, w_bz, w_bx, w_by);
+          max_dv3 = fabs(w0_(m,IVZ,k,j,i)) + cf;
         }
-        max_dv3 = fabs(w0_(m,IVZ,k,j,i)) + cf;
       }
 
       min_dt1 = fmin((mbsize.d_view(m).dx1/max_dv1), min_dt1);

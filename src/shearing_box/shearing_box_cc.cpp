@@ -75,11 +75,11 @@ TaskStatus ShearingBoxCC::PackAndSendCC(DvceArray5D<Real> &a, ReconstructionMeth
 
       // Load scratch array
       if (n==0) {
-        par_for_inner(member, 0, nj, [&](const int j) {
+        par_for_inner(member, 0, nj-1, [&](const int j) {
           a_(j) = a(mm,v,k,j,i);
         });
       } else {
-        par_for_inner(member, 0, nj, [&](const int j) {
+        par_for_inner(member, 0, nj-1, [&](const int j) {
           a_(j) = a(mm,v,k,j,(ie+1)+i);
         });
       }
@@ -372,12 +372,12 @@ TaskStatus ShearingBoxCC::RecvAndUnpackCC(DvceArray5D<Real> &a) {
     KOKKOS_LAMBDA(TeamMember_t member,const int m,const int v,const int k,const int i) {
       int mm = x1bndry_mbgid_.d_view(n,m) - gids_;
       if (n==0) {
-        par_for_inner(member, 0, nj, [&](const int j) {
+        par_for_inner(member, 0, nj-1, [&](const int j) {
           a(mm,v,k,j,i) = rbuf[n].vars(m,j,v,k,i);
         });
         member.team_barrier();
       } else {
-        par_for_inner(member, 0, nj, [&](const int j) {
+        par_for_inner(member, 0, nj-1, [&](const int j) {
           a(mm,v,k,j,(ie+1)+i) = rbuf[n].vars(m,j,v,k,i);
         });
         member.team_barrier();

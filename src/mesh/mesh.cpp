@@ -52,7 +52,8 @@ Mesh::Mesh(ParameterInput *pin) :
   nmb_packs_thisrank(1),
   nprtcl_thisrank(0),
   nprtcl_total(0),
-  dtold(0.) {
+  dtold(0.),
+  dt_last_completed(0.) {
   // Set physical size and number of cells in mesh (root level)
   mesh_size.x1min = pin->GetReal("mesh", "x1min");
   mesh_size.x1max = pin->GetReal("mesh", "x1max");
@@ -336,15 +337,16 @@ Mesh::Mesh(ParameterInput *pin) :
 // destructor
 
 Mesh::~Mesh() {
-  delete [] cost_eachmb;
-  delete [] rank_eachmb;
-  delete [] lloc_eachmb;
-  delete [] gids_eachrank;
-  delete [] nmb_eachrank;
-  delete pmb_pack;
+  if (pmb_pack->ppart != nullptr) {delete [] nprtcl_eachrank;}
   if (multilevel) {
     delete pmr;
   }
+  delete pmb_pack;
+  delete [] nmb_eachrank;
+  delete [] gids_eachrank;
+  delete [] lloc_eachmb;
+  delete [] rank_eachmb;
+  delete [] cost_eachmb;
 }
 
 //----------------------------------------------------------------------------------------
