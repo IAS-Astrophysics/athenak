@@ -17,3 +17,6 @@ build*/
 *~
 *.swp
 Lorene
+
+__pycache__
+tst/test_log.txt

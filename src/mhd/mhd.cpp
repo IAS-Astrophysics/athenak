@@ -122,6 +122,12 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
     psrc = new SourceTerms("mhd_srcterms", ppack, pin);
   }
 
+  // Create chemistry module. Note that internally this will add additional
+  // tasks and increase the value of nscalars
+  if (pin->DoesBlockExist("chemistry")) {
+    pchemistry = new chemistry::Chemistry(ppack, pin, nscalars, nmhd);
+  }
+
   // (3) read time-evolution option [already error checked in driver constructor]
   // Then initialize memory and algorithms for reconstruction and Riemann solvers
   std::string evolution_t = pin->GetString("time","evolution");
@@ -361,6 +367,7 @@ MHD::~MHD() {
   if (presist!= nullptr) {delete presist;}
   if (pvisc != nullptr) {delete pvisc;}
   delete peos;
+  if (pchemistry  != nullptr) {delete pchemistry;}
 }
 
 //----------------------------------------------------------------------------------------
