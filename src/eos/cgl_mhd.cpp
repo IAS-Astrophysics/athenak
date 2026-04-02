@@ -26,6 +26,7 @@ CGLMHD::CGLMHD(MeshBlockPack *pp, ParameterInput *pin) :
   eos_data.gamma = 1.6666667;
   eos_data.nu_coll = 0.0; //so they can be passed later, in case only one is initialized
   eos_data.lim_coll = 0.0;
+  eos_data.sigma_max = pin->GetOrAddReal("mhd","sigma_max",(FLT_MAX));  // sigma ceiling
   
   //check for passive flag
   std::string passive_flag = pin->GetString("mhd","passive");  // passive evolution for CGL
