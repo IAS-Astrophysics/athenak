@@ -16,7 +16,6 @@
 #include "parameter_input.hpp"
 #include "tasklist/task_list.hpp"
 #include "bvals/bvals.hpp"
-#include "chemistry/chemistry.hpp"
 
 // forward declarations
 class EquationOfState;
@@ -94,7 +93,6 @@ class Hydro {
   Viscosity *pvisc = nullptr;
   Conduction *pcond = nullptr;
   SourceTerms *psrc = nullptr;
-  chemistry::Chemistry *pchemistry=nullptr;
 
   // following only used for time-evolving flow
   DvceArray5D<Real> u1;       // conserved variables at intermediate step

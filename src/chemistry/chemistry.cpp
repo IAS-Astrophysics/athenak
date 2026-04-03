@@ -19,18 +19,12 @@ namespace chemistry {
 //----------------------------------------------------------------------------------------
 // Constructor, initializes data structures and parameters
 //----------------------------------------------------------------------------------------
-Chemistry::Chemistry(MeshBlockPack* ppack, ParameterInput* pin, int& nscalars,
-                     int const nconserved)
+Chemistry::Chemistry(MeshBlockPack* ppack, ParameterInput* pin)
     : pmy_pack(ppack),
-      chemistry_scalars_start_idx(nconserved + nscalars),
       is_hydro_enabled(pin->DoesBlockExist("hydro")),
-      is_mhd_enabled(pin->DoesBlockExist("mhd")) {
-  // Update nscalars in the parent object
-  nscalars += nscalars_chemistry;
-
-  // Create the chemistry tasks
-  AssembleChemistryTasks(pmy_pack->tl_map);
-
+      is_mhd_enabled(pin->DoesBlockExist("mhd")),
+      nscalars_chemistry(SetupGetNumChemistryScalars(ppack, pin, -1, false)),
+      chemistry_scalars_start_idx(ComputeChemistryScalarsStartIndex()) {
   // print a message telling users that this module isn't ready yet
   std::string const red = "\033[31m";
   std::string const reset = "\033[0m";
@@ -83,6 +77,18 @@ DvceArray5D<Real> Chemistry::GetU0() {
     return pmy_pack->phydro->u0;
   } else {  // if (is_mhd_enabled) {
     return pmy_pack->pmhd->u0;
+  }
+}
+
+int Chemistry::ComputeChemistryScalarsStartIndex() {
+  if (is_hydro_enabled) {
+    return pmy_pack->phydro->nhydro + nscalars_pre_chemistry;
+  } else if (is_mhd_enabled) {
+    return pmy_pack->pmhd->nmhd + nscalars_pre_chemistry;
+  } else {
+    throw std::runtime_error(
+        "The chemistry module requires that either the hydro or MHD "
+        "integrators be used and neither was requested in the input file.");
   }
 }
 
