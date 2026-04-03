@@ -7,6 +7,7 @@
 //  \brief Initializes a spherical grid to interpolate data onto
 
 // C/C++ headers
+#include <algorithm>
 #include <cmath>
 #include <iostream>
 #include <list>
@@ -23,24 +24,30 @@
 //----------------------------------------------------------------------------------------
 // constructor, initializes data structures and parameters
 
-SphericalGrid::SphericalGrid(MeshBlockPack *ppack, int nlev, Real rad):
+SphericalGrid::SphericalGrid(MeshBlockPack *ppack, int nlev, Real rad, int ng_interp):
     GeodesicGrid(nlev,true,false),
     pmy_pack(ppack),
     radius(rad),
+    ng_interp_(ng_interp),
     interp_coord("interp_coord",1,1),
     interp_indcs("interp_indcs",1,1),
     interp_wghts("interp_wghts",1,1,1),
     interp_vals("interp_vals",1,1) {
-  // reallocate and set interpolation coordinates, indices, and weights
-  int &ng = pmy_pack->pmesh->mb_indcs.ng;
+  // reallocate and set interpolation coordinates and indices
+  int &ng_mesh = pmy_pack->pmesh->mb_indcs.ng;
+  if (ng_interp_ < 0)       ng_interp_ = ng_mesh; // -1 → default (full mesh stencil)
+  if (ng_interp_ > ng_mesh) ng_interp_ = ng_mesh; // clamp above ghost depth
+  // Allocate weight array: 2*ng_interp_ slots per axis for Lagrange,
+  // or 1 dummy slot for nearest-cell (ng_interp_=0, weights unused).
+  int wgt_slots = (ng_interp_ > 0) ? ng_interp_ : 1;
   Kokkos::realloc(interp_coord,nangles,3);
   Kokkos::realloc(interp_indcs,nangles,4);
-  Kokkos::realloc(interp_wghts,nangles,2*ng,3);
+  Kokkos::realloc(interp_wghts,nangles,2*wgt_slots,3);
 
-  // Call functions to prepare SphericalGrid object for interpolation
   SetInterpolationCoordinates();
   SetInterpolationIndices();
-  SetInterpolationWeights();
+  if (ng_interp_ > 0)
+    SetInterpolationWeights(ng_interp_);
 
   return;
 }
@@ -146,10 +153,13 @@ void SphericalGrid::SetInterpolationIndices() {
 //! \fn void SphericalGrid::SetInterpolationWeights
 //! \brief set weights used by Lagrangian interpolation
 
-void SphericalGrid::SetInterpolationWeights() {
+void SphericalGrid::SetInterpolationWeights(int ng_interp) {
   auto &indcs = pmy_pack->pmesh->mb_indcs;
   auto &size = pmy_pack->pmb->mb_size;
-  int &ng = indcs.ng;
+  // If called with default (-1), fall back to the stored ng_interp_.
+  // Clamp to ng_interp_ so we never index beyond the allocated interp_wghts size.
+  int ng = (ng_interp >= 0) ? std::min(ng_interp, ng_interp_) : ng_interp_;
+  if (ng == 0) return;                   // nearest-cell: no weights to compute
 
   auto &iindcs = interp_indcs;
   auto &iwghts = interp_wghts;
@@ -180,7 +190,7 @@ void SphericalGrid::SetInterpolationWeights() {
       Real &x3min = size.h_view(ii0).x3min;
       Real &x3max = size.h_view(ii0).x3max;
 
-      // set interpolation weights
+      // set Lagrange interpolation weights for stencil of width 2*ng per axis
       for (int i=0; i<2*ng; ++i) {
         iwghts.h_view(n,i,0) = 1.;
         iwghts.h_view(n,i,1) = 1.;
@@ -225,16 +235,16 @@ void SphericalGrid::InterpolateToSphere(int vs, int ve, DvceArray5D<Real>& val) 
   // reinitialize interpolation indices and weights if AMR
   if (pmy_pack->pmesh->adaptive) {
     SetInterpolationIndices();
-    SetInterpolationWeights();
+    if (ng_interp_ > 0) SetInterpolationWeights(ng_interp_);
   }
 
   // capturing variables for kernel
   auto &indcs = pmy_pack->pmesh->mb_indcs;
   int &is = indcs.is; int &js = indcs.js; int &ks = indcs.ks;
-  int &ng = indcs.ng;
   int nang1 = nangles - 1;
   int nvars = ve - vs + 1;
   int nvar1 = nvars - 1;
+  int ngi = ng_interp_;   // capture stencil half-width for lambda
 
   // reallocate container
   Kokkos::realloc(interp_vals,nangles,nvars);
@@ -242,29 +252,47 @@ void SphericalGrid::InterpolateToSphere(int vs, int ve, DvceArray5D<Real>& val) 
   auto &iindcs = interp_indcs;
   auto &iwghts = interp_wghts;
   auto &ivals = interp_vals;
-  par_for("int2sph",DevExeSpace(),0,nang1,0,nvar1,
-  KOKKOS_LAMBDA(int n, int v) {
-    int ii0 = iindcs.d_view(n,0);
-    int ii1 = iindcs.d_view(n,1);
-    int ii2 = iindcs.d_view(n,2);
-    int ii3 = iindcs.d_view(n,3);
 
-    if (ii0==-1) {  // angle not on this rank
-      ivals.d_view(n,v) = 0.0;
-    } else {
-      Real int_value = 0.0;
-      for (int i=0; i<2*ng; i++) {
-        for (int j=0; j<2*ng; j++) {
-          for (int k=0; k<2*ng; k++) {
-            Real iwght = iwghts.d_view(n,i,0)*iwghts.d_view(n,j,1)*iwghts.d_view(n,k,2);
-            int_value += iwght*val(ii0,v+vs,ii3-(ng-k-ks)+1,
-                                   ii2-(ng-j-js)+1,ii1-(ng-i-is)+1);
+  if (ngi == 0) {
+    // Nearest-cell path: single array read per angle, no weight loops.
+    par_for("int2sph_nearest",DevExeSpace(),0,nang1,0,nvar1,
+    KOKKOS_LAMBDA(int n, int v) {
+      int ii0 = iindcs.d_view(n,0);
+      if (ii0==-1) {
+        ivals.d_view(n,v) = 0.0;
+      } else {
+        ivals.d_view(n,v) = val(ii0, v+vs,
+                                iindcs.d_view(n,3)+ks,
+                                iindcs.d_view(n,2)+js,
+                                iindcs.d_view(n,1)+is);
+      }
+    });
+  } else {
+    // Lagrange interpolation with stencil half-width ngi.
+    par_for("int2sph",DevExeSpace(),0,nang1,0,nvar1,
+    KOKKOS_LAMBDA(int n, int v) {
+      int ii0 = iindcs.d_view(n,0);
+      int ii1 = iindcs.d_view(n,1);
+      int ii2 = iindcs.d_view(n,2);
+      int ii3 = iindcs.d_view(n,3);
+
+      if (ii0==-1) {  // angle not on this rank
+        ivals.d_view(n,v) = 0.0;
+      } else {
+        Real int_value = 0.0;
+        for (int i=0; i<2*ngi; i++) {
+          for (int j=0; j<2*ngi; j++) {
+            for (int k=0; k<2*ngi; k++) {
+              Real iwght = iwghts.d_view(n,i,0)*iwghts.d_view(n,j,1)*iwghts.d_view(n,k,2);
+              int_value += iwght*val(ii0,v+vs,ii3-(ngi-k-ks)+1,
+                                     ii2-(ngi-j-js)+1,ii1-(ngi-i-is)+1);
+            }
           }
         }
+        ivals.d_view(n,v) = int_value;
       }
-      ivals.d_view(n,v) = int_value;
-    }
-  });
+    });
+  }
 
   // sync dual arrays
   interp_vals.template modify<DevExeSpace>();

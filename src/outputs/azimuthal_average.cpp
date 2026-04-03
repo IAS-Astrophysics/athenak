@@ -39,11 +39,14 @@ AzimuthalAverageOutput::AzimuthalAverageOutput(ParameterInput *pin, Mesh *pm,
   adaptive_ = pm->adaptive;
 
   // Allow a smaller Lagrange stencil than the full ghost-zone depth.
-  // ng_interp=0 : nearest-cell (single read, no weights, strictly monotone).
-  // ng_interp=1 : trilinear (2-point per axis, monotone).
-  // ng_interp=2 : default cubic Lagrange (4-point per axis).
-  ng_interp_ = pin->GetOrAddInteger(op.block_name, "ng_interp", 2);
-  if (ng_interp_ < 0)   ng_interp_ = 0;   // 0 = nearest-cell
+  // ng_interp controls the half-stencil width per axis (full stencil = 2×ng_interp points):
+  //   ng_interp < 0 : default — full mesh stencil (original behaviour, ng=4 → 8-point, 7th-order)
+  //   ng_interp = 0 : nearest-cell (single read, no weights, strictly monotone)
+  //   ng_interp = 1 : trilinear (2-point per axis, monotone)
+  //   ng_interp = 2 : cubic Lagrange (4-point per axis)
+  //   ng_interp = 4 : 7th-order Lagrange (8-point, same as original ng=4 default)
+  ng_interp_ = pin->GetOrAddInteger(op.block_name, "ng_interp", -1);
+  if (ng_interp_ < 0)   ng_interp_ = ng_;  // negative → full mesh stencil
   if (ng_interp_ > ng_) ng_interp_ = ng_;
 
   nr = pin->GetInteger(op.block_name, "nr");
@@ -82,8 +85,10 @@ AzimuthalAverageOutput::AzimuthalAverageOutput(ParameterInput *pin, Mesh *pm,
   for (int j = 0; j < ntheta; ++j)
     theta_grid[j] = surfaces[0]->polar_pos.h_view(j, 0);
 
-  // If a reduced or standard Lagrange stencil is requested, recompute weights.
-  // ng_interp_=0 (nearest-cell) skips weight computation entirely.
+  // If a reduced stencil is requested, recompute weights with smaller width.
+  // When ng_interp_ == ng_ (full stencil), SphericalSurface already has default
+  // full-width weights from its constructor — no recomputation needed.
+  // When ng_interp_ == 0 (nearest-cell), weights are unused — skip entirely.
   if (ng_interp_ > 0 && ng_interp_ < ng_) {
     for (auto &surf : surfaces)
       surf->SetInterpolationWeights(ng_interp_);

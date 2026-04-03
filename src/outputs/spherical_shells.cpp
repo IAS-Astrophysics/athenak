@@ -72,11 +72,22 @@ SphericalShellsOutput::SphericalShellsOutput(ParameterInput *pin, Mesh *pm,
     }
   }
 
+  // Read ng_interp: controls Lagrange stencil half-width per axis (full stencil = 2×ng_interp points).
+  //   ng_interp < 0 : default — full mesh stencil (original behaviour, ng=4 → 8-point, 7th-order)
+  //   ng_interp = 0 : nearest-cell (fastest, strictly monotone)
+  //   ng_interp = 1 : trilinear (2-point per axis, monotone)
+  //   ng_interp = 2 : cubic Lagrange (4-point per axis)
+  //   ng_interp = 4 : 7th-order Lagrange (8-point, same as original ng=4 default)
+  int ng_mesh = pm->pmb_pack->pmesh->mb_indcs.ng;
+  ng_interp_ = pin->GetOrAddInteger(op.block_name, "ng_interp", -1);
+  if (ng_interp_ < 0)       ng_interp_ = ng_mesh; // negative → full mesh stencil
+  if (ng_interp_ > ng_mesh) ng_interp_ = ng_mesh;
+
   // Create SphericalGrid objects for each radius
   for (int i = 0; i < nr; ++i) {
-    // Adjust center for each sphere
     Real rad_adj = radii[i];
-    spheres.push_back(std::make_unique<SphericalGrid>(pm->pmb_pack, nlev, rad_adj));
+    spheres.push_back(
+        std::make_unique<SphericalGrid>(pm->pmb_pack, nlev, rad_adj, ng_interp_));
   }
 }
 
