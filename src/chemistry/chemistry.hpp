@@ -32,8 +32,7 @@ class Chemistry {
   // ==========================
   // Constructor and Destructor
   // ==========================
-  Chemistry(MeshBlockPack* ppack, ParameterInput* pin, int& nscalars,
-            int const nconserved);
+  Chemistry(MeshBlockPack* ppack, ParameterInput* pin);
   ~Chemistry();
 
   // ================
@@ -42,19 +41,47 @@ class Chemistry {
   // Container to hold names of TaskIDs
   ChemistryTaskIDs id;
 
+  // The number of passive scalars used in the chemistry module
+  int const nscalars_chemistry;
+
   // ================
   // Member Functions
   // ================
   void AssembleChemistryTasks(
       std::map<std::string, std::shared_ptr<TaskList>> tl);
 
-  TaskStatus HelloWorld(Driver* d, int stage);
   TaskStatus TestKernel(Driver* d, int stage);
+
+  /*!
+   * \brief Compute the number of required passive scalars that the chemistry
+   * module will use
+   *
+   * \param ppack The MeshBlockPack instance in use
+   * \param pin The ParameterInput instance in use
+   * \param nscalars The current number of nscalars
+   * \param chemistry_constructor Whether or not this is being called within the
+   * Chemistry constructor. This should be left to its default value otherwise.
+   * \return int The number of passive scalars that the chemistry module
+   * requires
+   */
+  static int SetupGetNumChemistryScalars(
+      MeshBlockPack* ppack, ParameterInput* pin, int const& nscalars,
+      bool const not_in_chemistry_constructor = true) {
+    // Capture the pre-chemistry number of passive scalars so that the Chemistry
+    // constructor later knows where to start the indexing for Chemistry passive
+    // scalars
+    if (not_in_chemistry_constructor) {
+      nscalars_pre_chemistry = nscalars;
+    }
+
+    // This is temporary, eventually it will return a value dependent on the
+    // chemistry module specified
+    return 3;
+  }
 
   // ===================
   // Getters and Setters
   // ===================
-  int get_nscalars_chemistry() const { return nscalars_chemistry; }
   int get_chemistry_scalars_start_idx() const {
     return chemistry_scalars_start_idx;
   }
@@ -72,14 +99,17 @@ class Chemistry {
   bool const is_hydro_enabled;
   bool const is_mhd_enabled;
 
-  // The number of passive scalars used in the chemistry module
-  int nscalars_chemistry = 3;
+  // The number of regular passive scalars created before the chemistry scalars
+  int inline static nscalars_pre_chemistry;
 
   // The beginning index of passive scalars reserved for chemisty
   int const chemistry_scalars_start_idx;
 
   // Get the correct u0 array
   DvceArray5D<Real> GetU0();
+
+  // Functions for setting up
+  int ComputeChemistryScalarsStartIndex();
 };
 }  // namespace chemistry
 
