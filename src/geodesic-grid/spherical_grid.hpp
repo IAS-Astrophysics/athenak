@@ -24,9 +24,7 @@ class SphericalGrid: public GeodesicGrid {
     // ng_interp controls the Lagrange stencil half-width per axis (full stencil = 2×ng_interp points):
     //   ng_interp < 0 : default — use full mesh ghost-zone depth (original behaviour, e.g. ng=4 → 8-point, 7th-order)
     //   ng_interp = 0 : nearest-cell (1 point, fastest, strictly monotone)
-    //   ng_interp = 1 : trilinear (2 points per axis, monotone)
-    //   ng_interp = 2 : cubic Lagrange (4 points per axis)
-    //   ng_interp = 4 : 7th-order Lagrange (8 points per axis, same as original ng=4 default)
+    //   ng_interp > 0 : Lagrange stencil half-width (2×ng_interp points)
     SphericalGrid(MeshBlockPack *pmy_pack, int nlev, Real rad, int ng_interp = -1);
     ~SphericalGrid();
 
