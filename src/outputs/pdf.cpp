@@ -55,6 +55,14 @@ PDFOutput::PDFOutput(ParameterInput *pin, Mesh *pm, OutputParameters op) :
     dir_name += "_" + op.pdf_variables[d];
   }
   mkdir(dir_name.c_str(), 0775);
+  if (op.single_file_per_rank) {
+    std::string rank_subdir = dir_name + "/rank_";
+    char rank_suffix[12];
+    std::snprintf(rank_suffix, sizeof(rank_suffix), "%08d",
+                  global_variable::my_rank);
+    rank_subdir += rank_suffix;
+    mkdir(rank_subdir.c_str(), 0775);
+  }    
 
   // Initialize PDFData with N-D parameters
   pdf_data.Initialize(op.pdf_ndim, op.pdf_nbin, op.pdf_bin_min,
@@ -252,16 +260,19 @@ void PDFOutput::LoadOutputData(Mesh *pm) {
   Kokkos::Experimental::contribute(result, scatter);
   Kokkos::fence();
 
-  // MPI reduce across ranks
+  // MPI reduce across ranks (skip when each rank writes its own file)
 #if MPI_PARALLEL_ENABLED
-  if (global_variable::my_rank == 0) {
-    MPI_Reduce(MPI_IN_PLACE, result.data(), total_bins,
-               MPI_ATHENA_REAL, MPI_SUM, 0, MPI_COMM_WORLD);
-  } else {
-    MPI_Reduce(result.data(), result.data(), total_bins,
-               MPI_ATHENA_REAL, MPI_SUM, 0, MPI_COMM_WORLD);
+  if (!out_params.single_file_per_rank) {
+    if (global_variable::my_rank == 0) {
+      MPI_Reduce(MPI_IN_PLACE, result.data(), total_bins,
+                 MPI_ATHENA_REAL, MPI_SUM, 0, MPI_COMM_WORLD);
+    } else {
+      MPI_Reduce(result.data(), result.data(), total_bins,
+                 MPI_ATHENA_REAL, MPI_SUM, 0, MPI_COMM_WORLD);
+    }
   }
 #endif
+
 }
 
 
@@ -270,99 +281,121 @@ void PDFOutput::LoadOutputData(Mesh *pm) {
 //  \brief Writes N-D PDF to binary file with ASCII header
 
 void PDFOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
-  // Only master rank writes files
-  if (global_variable::my_rank == 0) {
-    // Construct directory name
-    std::string dir_name = "pdf_" + out_params.file_id;
-    for (int d = 1; d < out_params.pdf_ndim; ++d) {
-      dir_name += "_" + out_params.pdf_variables[d];
+  bool sfpr = out_params.single_file_per_rank;
+  
+  // Only master rank writes when NOT in single_file_per_rank mode
+  if (!sfpr && global_variable::my_rank != 0) {
+    // Still need to update counters on all ranks
+    out_params.file_number++;
+    if (out_params.last_time < 0.0) {
+      out_params.last_time = pm->time;
+    } else {
+      out_params.last_time += out_params.dt;
     }
+    pin->SetInteger(out_params.block_name, "file_number", out_params.file_number);
+    pin->SetReal(out_params.block_name, "last_time", out_params.last_time);
+    return;
+  }
 
-    // Write ASCII header file (once)
-    if (!(pdf_data.bins_written)) {
-      std::string header_fname = dir_name + "/" + out_params.file_basename + ".header.pdf";
+  // Construct directory name
+  std::string dir_name = "pdf_" + out_params.file_id;
+  for (int d = 1; d < out_params.pdf_ndim; ++d) {
+    dir_name += "_" + out_params.pdf_variables[d];
+  }
 
-      FILE *hfile;
-      if ((hfile = std::fopen(header_fname.c_str(), "w")) == nullptr) {
-        std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-            << std::endl << "Header file '" << header_fname << "' could not be opened"
-            << std::endl;
-        exit(EXIT_FAILURE);
-      }
+  // Build rank-specific prefix if needed
+  std::string path_prefix = dir_name + "/";
+  if (sfpr) {
+    char rank_dir[32];
+    std::snprintf(rank_dir, sizeof(rank_dir), "rank_%08d/",
+                  global_variable::my_rank);
+    path_prefix = dir_name + "/" + std::string(rank_dir);
+  }
 
-      // Write header metadata
-      std::fprintf(hfile, "# AthenaK N-D PDF Output\n");
-      std::fprintf(hfile, "ndim = %d\n", pdf_data.ndim);
-      std::fprintf(hfile, "weight = %s\n", out_params.pdf_weight.c_str());
-      if (out_params.pdf_weight.compare("variable") == 0) {
-        std::fprintf(hfile, "weight_variable = %s\n",
-                     out_params.pdf_weight_variable.c_str());
-      }
-      std::fprintf(hfile, "total_bins = %d\n", pdf_data.total_bins);
-      std::fprintf(hfile, "\n");
-
-      // Write dimension info
-      for (int d = 0; d < pdf_data.ndim; ++d) {
-        std::fprintf(hfile, "# Dimension %d\n", d + 1);
-        std::fprintf(hfile, "variable_%d = %s\n", d + 1, out_params.pdf_variables[d].c_str());
-        std::fprintf(hfile, "nbin%d = %d\n", d + 1, pdf_data.nbin[d]);
-        std::fprintf(hfile, "bin%d_min = %.15e\n", d + 1, pdf_data.bin_min[d]);
-        std::fprintf(hfile, "bin%d_max = %.15e\n", d + 1, pdf_data.bin_max[d]);
-        std::fprintf(hfile, "logscale%d = %s\n", d + 1, pdf_data.logscale[d] ? "true" : "false");
-        std::fprintf(hfile, "stride%d = %d\n", d + 1, pdf_data.stride[d]);
-        std::fprintf(hfile, "\n");
-      }
-
-      // Write bin edges for each dimension
-      std::fprintf(hfile, "# Bin edges (nbin+1 values per dimension)\n");
-      for (int d = 0; d < pdf_data.ndim; ++d) {
-        auto bins_host = Kokkos::create_mirror_view(pdf_data.bin_edges[d]);
-        Kokkos::deep_copy(bins_host, pdf_data.bin_edges[d]);
-        Kokkos::fence();
-
-        std::fprintf(hfile, "bin_edges_%d =", d + 1);
-        for (int n = 0; n <= pdf_data.nbin[d]; ++n) {
-          std::fprintf(hfile, " %.15e", bins_host(n));
-        }
-        std::fprintf(hfile, "\n");
-      }
-
-      std::fclose(hfile);
-      pdf_data.bins_written = true;
-    }
-
-    // Write binary data file
-    char number[6];
-    std::snprintf(number, sizeof(number), "%05d", out_params.file_number);
-    std::string data_fname = dir_name + "/" + out_params.file_basename + "."
-                           + std::string(number) + ".pdf";
-
-    FILE *pfile;
-    if ((pfile = std::fopen(data_fname.c_str(), "wb")) == nullptr) {
+  // Write ASCII header file (once)
+  if (!(pdf_data.bins_written)) {
+    std::string header_fname = path_prefix + out_params.file_basename
+                             + ".header.pdf";
+    FILE *hfile;
+    if ((hfile = std::fopen(header_fname.c_str(), "w")) == nullptr) {
       std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-          << std::endl << "Data file '" << data_fname << "' could not be opened"
+          << std::endl << "Header file '" << header_fname << "' could not be opened"
           << std::endl;
       exit(EXIT_FAILURE);
     }
 
-    // Write time as first 8 bytes (double)
-    double time_val = static_cast<double>(pm->time);
-    std::fwrite(&time_val, sizeof(double), 1, pfile);
+    // Write header metadata
+    std::fprintf(hfile, "# AthenaK N-D PDF Output\n");
+    std::fprintf(hfile, "ndim = %d\n", pdf_data.ndim);
+    std::fprintf(hfile, "weight = %s\n", out_params.pdf_weight.c_str());
+    if (out_params.pdf_weight.compare("variable") == 0) {
+      std::fprintf(hfile, "weight_variable = %s\n",
+                   out_params.pdf_weight_variable.c_str());
+    }
+    std::fprintf(hfile, "total_bins = %d\n", pdf_data.total_bins);
+    std::fprintf(hfile, "\n");
 
-    // Copy result to host and write
-    auto result_host = Kokkos::create_mirror_view(pdf_data.result_);
-    Kokkos::deep_copy(result_host, pdf_data.result_);
-    Kokkos::fence();
-
-    // Write histogram data as doubles
-    for (int n = 0; n < pdf_data.total_bins; ++n) {
-      double val = static_cast<double>(result_host(n));
-      std::fwrite(&val, sizeof(double), 1, pfile);
+    // Write dimension info
+    for (int d = 0; d < pdf_data.ndim; ++d) {
+      std::fprintf(hfile, "# Dimension %d\n", d + 1);
+      std::fprintf(hfile, "variable_%d = %s\n", d + 1, out_params.pdf_variables[d].c_str());
+      std::fprintf(hfile, "nbin%d = %d\n", d + 1, pdf_data.nbin[d]);
+      std::fprintf(hfile, "bin%d_min = %.15e\n", d + 1, pdf_data.bin_min[d]);
+      std::fprintf(hfile, "bin%d_max = %.15e\n", d + 1, pdf_data.bin_max[d]);
+      std::fprintf(hfile, "logscale%d = %s\n", d + 1, pdf_data.logscale[d] ? "true" : "false");
+      std::fprintf(hfile, "stride%d = %d\n", d + 1, pdf_data.stride[d]);
+      std::fprintf(hfile, "\n");
     }
 
-    std::fclose(pfile);
+    // Write bin edges for each dimension
+    std::fprintf(hfile, "# Bin edges (nbin+1 values per dimension)\n");
+    for (int d = 0; d < pdf_data.ndim; ++d) {
+      auto bins_host = Kokkos::create_mirror_view(pdf_data.bin_edges[d]);
+      Kokkos::deep_copy(bins_host, pdf_data.bin_edges[d]);
+      Kokkos::fence();
+
+      std::fprintf(hfile, "bin_edges_%d =", d + 1);
+      for (int n = 0; n <= pdf_data.nbin[d]; ++n) {
+        std::fprintf(hfile, " %.15e", bins_host(n));
+      }
+      std::fprintf(hfile, "\n");
+    }
+
+    std::fclose(hfile);
+    pdf_data.bins_written = true;
   }
 
+  // Write binary data file
+  char number[6];
+  std::snprintf(number, sizeof(number), "%05d", out_params.file_number);
+  std::string data_fname = path_prefix + out_params.file_basename + "."
+                         + std::string(number) + ".pdf";
+
+  FILE *pfile;
+  if ((pfile = std::fopen(data_fname.c_str(), "wb")) == nullptr) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+        << std::endl << "Data file '" << data_fname << "' could not be opened"
+        << std::endl;
+    exit(EXIT_FAILURE);
+  }
+
+  // Write time as first 8 bytes (double)
+  double time_val = static_cast<double>(pm->time);
+  std::fwrite(&time_val, sizeof(double), 1, pfile);
+
+  // Copy result to host and write
+  auto result_host = Kokkos::create_mirror_view(pdf_data.result_);
+  Kokkos::deep_copy(result_host, pdf_data.result_);
+  Kokkos::fence();
+
+  // Write histogram data as doubles
+  for (int n = 0; n < pdf_data.total_bins; ++n) {
+    double val = static_cast<double>(result_host(n));
+    std::fwrite(&val, sizeof(double), 1, pfile);
+  }
+
+  std::fclose(pfile);
+  
   // Update counters
   out_params.file_number++;
   if (out_params.last_time < 0.0) {
