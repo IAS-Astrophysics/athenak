@@ -9,7 +9,6 @@
 // C/C++ headers
 #include <algorithm>
 #include <cmath>
-#include <iostream>
 #include <list>
 
 // AthenaK headers

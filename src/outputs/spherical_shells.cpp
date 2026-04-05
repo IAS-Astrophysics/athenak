@@ -10,9 +10,9 @@
 
 #include <cstdio>  // snprintf
 #include <fstream>
+#include <iomanip>
 #include <sstream>
 #include <string>
-#include <iomanip>
 
 #include "athena.hpp"
 #include "globals.hpp"
@@ -83,9 +83,8 @@ SphericalShellsOutput::SphericalShellsOutput(ParameterInput *pin, Mesh *pm,
 
   // Create SphericalGrid objects for each radius
   for (int i = 0; i < nr; ++i) {
-    Real rad_adj = radii[i];
     spheres.push_back(
-        std::make_unique<SphericalGrid>(pm->pmb_pack, nlev, rad_adj, ng_interp_));
+        std::make_unique<SphericalGrid>(pm->pmb_pack, nlev, radii[i], ng_interp_));
   }
 }
 
@@ -103,7 +102,7 @@ void SphericalShellsOutput::LoadOutputData(Mesh *pm) {
   }
 
   int nout_vars = outvars.size();
-  
+
   // Allocate output array: (nradii, nvars)
   Kokkos::realloc(outarray, nout_vars, 1, 1, nr, 1);
 
@@ -115,12 +114,12 @@ void SphericalShellsOutput::LoadOutputData(Mesh *pm) {
   // For each radius, interpolate and integrate over the shell
   for (int ir = 0; ir < nr; ++ir) {
     auto& sphere = spheres[ir];
-    
+
     // Get precomputed radial cell center and faces
     Real r0 = radii[ir];           // Cell center radius
     Real r1 = radii_faces[ir];     // Inner face
     Real r2 = radii_faces[ir + 1]; // Outer face
-    
+
     // Radial weight: shell volume int r^2 dr = (r2^3-r1^3)/3, or surface r0^2 for dA = r0^2 dOmega
     Real radial_weight = surface_integral
         ? (r0 * r0)
@@ -135,13 +134,12 @@ void SphericalShellsOutput::LoadOutputData(Mesh *pm) {
 
       // Sum value * dOmega * radial_weight (volume element or sphere-area element at r0)
       Real integrated_value = 0.0;
-
       for (int iang = 0; iang < sphere->nangles; ++iang) {
         Real solid_angle = sphere->solid_angles.h_view(iang);
         Real value = sphere->interp_vals.h_view(iang, 0);
         integrated_value += value * solid_angle * radial_weight;
       }
-      
+
       outarray(n, 0, 0, ir, 0) = integrated_value;
     }
   }

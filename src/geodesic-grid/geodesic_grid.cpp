@@ -9,6 +9,8 @@
 // C/C++ headers
 #include <float.h>
 #include <iostream>
+#include <map>
+#include <utility>
 
 // AthenaK headers
 #include "athena.hpp"
@@ -229,10 +231,22 @@ GeodesicGrid::GeodesicGrid(int nlev, bool rotate, bool fluxes) :
       }
     }
 
-    // rotate geodesic mesh
+    // rotate geodesic mesh — OptimalAngles is expensive O(nzeta*npsi*nangles).
+    // Cache result per nlev: the unrotated geometry is deterministic for a given nlev,
+    // so every SphericalGrid at the same nlev gets the same optimal angles.
     if (rotate_geo) {
+      // file-scoped cache: nlev → (zeta, psi)
+      static std::map<int, std::pair<Real,Real>> angle_cache;
+
       Real rotangles[2];
-      OptimalAngles(rotangles);
+      auto it = angle_cache.find(nlevel);
+      if (it == angle_cache.end()) {
+        OptimalAngles(rotangles);
+        angle_cache[nlevel] = {rotangles[0], rotangles[1]};
+      } else {
+        rotangles[0] = it->second.first;
+        rotangles[1] = it->second.second;
+      }
       RotateGrid(rotangles[0],rotangles[1]);
     }
 
