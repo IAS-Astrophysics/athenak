@@ -181,14 +181,13 @@ class TabulatedEOS {
     if (le < le_min) {
       return 0.0;
     }
-    Real rho = GetRhoFromVar<loc>(le, m_log_e);
 
-    // for negative densities, return the
+    // for negative total energy densities, return the
     // minimum density in the table
-    if (rho < 0.0) {
+    if (e < 0.0) {
       return exp(lrho_min);
     }
-    return rho;
+    return GetRhoFromVar<loc>(le, m_log_e);
   }
 
   template<LocationTag loc>
