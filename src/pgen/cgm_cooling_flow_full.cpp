@@ -358,6 +358,11 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     // uniformly set metallicity
     u0(m, nhydro, k, j, i) = Z_ * Zsol * u0(m, IDN, k, j, i);
 
+    // uniformly set dust
+    u0(m, nhydro+1, k, j, i) = 0.5 * u0(m, IDN, k, j, i);
+    u0(m, nhydro+2, k, j, i) = 0.5 * u0(m, IDN, k, j, i);
+    u0(m, nhydro+3, k, j, i) = 0.5 * u0(m, IDN, k, j, i);
+
     // Compute turbulent velocities by summing Fourier modes
     Real vx = 0.0, vy = 0.0, vz = 0.0;
     for (int n = 0; n < nmodes; n++) {

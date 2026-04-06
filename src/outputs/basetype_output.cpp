@@ -317,6 +317,20 @@ BaseTypeOutput::BaseTypeOutput(ParameterInput *pin, Mesh *pm, OutputParameters o
       }
     }
 
+    // individual hydro passive scalar mass densities (s*d)
+    for (int si = 0; si < 5; ++si) {
+      char si_str[3];
+      std::snprintf(si_str, sizeof(si_str), "%02d", si);
+      std::string match = std::string("hydro_u_s_") + si_str;
+      if (variable.compare(match) == 0) {
+        int nhyd = pm->pmb_pack->phydro->nhydro;
+        if (si < pm->pmb_pack->phydro->nscalars) {
+          std::string vname = std::string("r_") + si_str;
+          outvars.emplace_back(vname, nhyd + si, &(pm->pmb_pack->phydro->u0));
+        }
+      }
+    }
+
     // hydro passive scalars (s)
     if (variable.compare("hydro_w_s") == 0 ||
         variable.compare("hydro_w") == 0 ||
@@ -331,6 +345,20 @@ BaseTypeOutput::BaseTypeOutput(ParameterInput *pin, Mesh *pm, OutputParameters o
         vname.assign("s_");
         vname.append(number);
         outvars.emplace_back(vname,n,&(pm->pmb_pack->phydro->w0));
+      }
+    }
+
+    // individual hydro passive scalars (s)
+    for (int si = 0; si < 5; ++si) {
+      char si_str[3];
+      std::snprintf(si_str, sizeof(si_str), "%02d", si);
+      std::string match = std::string("hydro_w_s_") + si_str;
+      if (variable.compare(match) == 0) {
+        int nhyd = pm->pmb_pack->phydro->nhydro;
+        if (si < pm->pmb_pack->phydro->nscalars) {
+          std::string vname = std::string("s_") + si_str;
+          outvars.emplace_back(vname, nhyd + si, &(pm->pmb_pack->phydro->w0));
+        }
       }
     }
 
@@ -489,6 +517,20 @@ BaseTypeOutput::BaseTypeOutput(ParameterInput *pin, Mesh *pm, OutputParameters o
       }
     }
 
+    // individual mhd passive scalar mass densities (s*d)
+    for (int si = 0; si < 5; ++si) {
+      char si_str[3];
+      std::snprintf(si_str, sizeof(si_str), "%02d", si);
+      std::string match = std::string("mhd_u_s_") + si_str;
+      if (variable.compare(match) == 0) {
+        int nmhd = pm->pmb_pack->pmhd->nmhd;
+        if (si < pm->pmb_pack->pmhd->nscalars) {
+          std::string vname = std::string("r_") + si_str;
+          outvars.emplace_back(vname, nmhd + si, &(pm->pmb_pack->pmhd->u0));
+        }
+      }
+    }
+
     // mhd passive scalars (s)
     if (variable.compare("mhd_w_s") == 0 ||
         variable.compare("mhd_w") == 0 ||
@@ -505,6 +547,20 @@ BaseTypeOutput::BaseTypeOutput(ParameterInput *pin, Mesh *pm, OutputParameters o
         vname.assign("s_");
         vname.append(number);
         outvars.emplace_back(vname,n,&(pm->pmb_pack->pmhd->w0));
+      }
+    }
+
+    // individual mhd passive scalars (s)
+    for (int si = 0; si < 5; ++si) {
+      char si_str[3];
+      std::snprintf(si_str, sizeof(si_str), "%02d", si);
+      std::string match = std::string("mhd_w_s_") + si_str;
+      if (variable.compare(match) == 0) {
+        int nmhd = pm->pmb_pack->pmhd->nmhd;
+        if (si < pm->pmb_pack->pmhd->nscalars) {
+          std::string vname = std::string("s_") + si_str;
+          outvars.emplace_back(vname, nmhd + si, &(pm->pmb_pack->pmhd->w0));
+        }
       }
     }
 

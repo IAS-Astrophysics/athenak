@@ -21,7 +21,7 @@
     #error NHISTORY > NREDUCTION in outputs.hpp
 #endif
 
-#define NOUTPUT_CHOICES 196
+#define NOUTPUT_CHOICES 216
 // choices for output variables used in <ouput> blocks in input file
 // TO ADD MORE CHOICES:
 //   - add more strings to array below, change NOUTPUT_CHOICES above appropriately
@@ -120,6 +120,13 @@ static const char *var_choice[NOUTPUT_CHOICES] = {
 
   // Cooling time (195)
   "cooling_time",
+
+  // Individual hydro passive scalars (196-205)
+  "hydro_u_s_00", "hydro_u_s_01", "hydro_u_s_02", "hydro_u_s_03", "hydro_u_s_04",
+  "hydro_w_s_00", "hydro_w_s_01", "hydro_w_s_02", "hydro_w_s_03", "hydro_w_s_04",
+  // Individual mhd passive scalars (206-215)
+  "mhd_u_s_00", "mhd_u_s_01", "mhd_u_s_02", "mhd_u_s_03", "mhd_u_s_04",
+  "mhd_w_s_00", "mhd_w_s_01", "mhd_w_s_02", "mhd_w_s_03", "mhd_w_s_04",
 };
 
 
