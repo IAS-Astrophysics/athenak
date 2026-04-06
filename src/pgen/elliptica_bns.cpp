@@ -87,8 +87,9 @@ void SetupBinary(ParameterInput *pin, Mesh* pmy_mesh_) {
     "grhd_rho,grhd_p,grhd_epsl,grhd_vx,grhd_vy,grhd_vz";
 
   // MHD parameters
+  Real gauss_cgs_to_geo = 8.3519664583273e+19
   Real rho_cut = pin->GetOrAddReal("problem", "rho_cut", 1e-5);
-  Real b_max   = pin->GetOrAddReal("problem", "b_max", 1e12) / 8.3519664583273e+19;
+  Real b_max   = pin->GetOrAddReal("problem", "b_max", 1e12) / gauss_cgs_to_geo;
   Real r_0     = pin->GetOrAddReal("problem", "r_0_current", 5.0);
   Real I_0     = 4 * r_0 * b_max / (23.0 * M_PI);
 
@@ -263,23 +264,22 @@ void SetupBinary(ParameterInput *pin, Mesh* pmy_mesh_) {
           // energy density, which is invariant, and use that with the 1D EOS.
           Real egas = idr->field[i_rho][idx] * (1.0 + idr->field[i_eps][idx]);
           Real &rho = host_w0(m, IDN, k, j, i);
+          rho = eos.template GetRhoFromE<tov::LocationTag::Host>(egas);
           Real vu[3] = {idr->field[i_vx][idx],
-                          idr->field[i_vy][idx],
-                          idr->field[i_vz][idx]};
+                        idr->field[i_vy][idx],
+                        idr->field[i_vz][idx]};
 
           // Check for garbage values thrown in by Elliptica.
-          if (idr->field[i_rho][idx] <= rho_cut ||
-              !Kokkos::isfinite(idr->field[i_rho][idx])) {
+          if (rho <= rho_cut || !Kokkos::isfinite(rho)) {
             rho = 0.0;
             host_w0(m, IPR, k, j, i) = 0.0;
             vu[0] = 0.0;
             vu[1] = 0.0;
             vu[2] = 0.0;
-          } else {
-            rho = eos.template GetRhoFromE<tov::LocationTag::Host>(egas);
-            host_w0(m, IPR, k, j, i) = eos.template
-                                      GetPFromRho<tov::LocationTag::Host>(rho);
           }
+
+          host_w0(m, IPR, k, j, i) = eos.template
+                                      GetPFromRho<tov::LocationTag::Host>(rho);
 
           // If the electron fraction is available, find it in the 1D EOS.
           if constexpr (use_ye) {
