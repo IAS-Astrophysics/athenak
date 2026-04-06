@@ -254,8 +254,6 @@ void SetupBNS(ParameterInput *pin, Mesh* pmy_mesh_) {
   quants[UZ] = std::cref(vel_kad(3));
 
   // Force spectral-coefficient transform for every field once (serial, one-time).
-  // After this, the coef() call inside val_point() returns immediately (no-op),
-  // and summation() reads only pre-computed, immutable coefficient arrays.
   for (int kq = 0; kq < NUM_QUANTS; ++kq)
     quants[kq].get().coef();
 
@@ -287,21 +285,7 @@ void SetupBNS(ParameterInput *pin, Mesh* pmy_mesh_) {
   host_adm.vK_dd.InitWithShallowSlice(host_u_adm, adm::ADM::I_ADM_KXX,
                                        adm::ADM::I_ADM_KZZ);
 
-  // =========================================================================
-  // Single-pass parallel loop: compute coordinates, evaluate Kadath spectral
-  // fields, and write directly to host mirrors.
-  //
-  // Thread safety: Kadath's MemoryMapper static members (mem_map, ptr_list)
-  // and coef_mem static members (mem_ptrs, lengths) have been changed to
-  // thread_local in memory.hpp/.cpp and coef_1d.cpp.  Every thread now owns
-  // its own independent scratch pool; val_point() and Point() are safe to
-  // call concurrently.  The spectral coefficient arrays (cf) are read-only
-  // after the coef() pre-call above, so base.summation() is also safe.
-  // =========================================================================
-  // Warm up the summation_1d static dispatch table on the main thread before
-  // the parallel loop.  summation_1d() has a static (non-thread_local)
-  // premier_appel guard; without this call, OMP threads would race on first
-  // initialisation inside the loop.
+  // Warm up the summation_1d static dispatch table on the main thread before the parallel loop.
   {
     Point pt_warm(3);
     pt_warm.set(1) = xc1;
@@ -350,7 +334,7 @@ void SetupBNS(ParameterInput *pin, Mesh* pmy_mesh_) {
     host_adm.beta_u(m, 1, k, j, i) = qv[BETY];
     host_adm.beta_u(m, 2, k, j, i) = qv[BETZ];
 
-    // Spatial metric: g_ij = psi^4 * delta_ij (conformal flatness).
+    // Spatial metric: g_ij = psi^4 * delta_ij
     Real g3d[NSPMETRIC];
     host_adm.g_dd(m, 0, 0, k, j, i) = g3d[S11] = static_cast<Real>(psi4);
     host_adm.g_dd(m, 0, 1, k, j, i) = g3d[S12] = 0.0;
@@ -359,7 +343,7 @@ void SetupBNS(ParameterInput *pin, Mesh* pmy_mesh_) {
     host_adm.g_dd(m, 1, 2, k, j, i) = g3d[S23] = 0.0;
     host_adm.g_dd(m, 2, 2, k, j, i) = g3d[S33] = static_cast<Real>(psi4);
 
-    // Extrinsic curvature: K_ij = psi^4 * A_ij (maximal slicing: TrK = 0).
+    // Extrinsic curvature: K_ij = psi^4 * A_ij
     host_adm.vK_dd(m, 0, 0, k, j, i) = qv[AXX] * psi4;
     host_adm.vK_dd(m, 0, 1, k, j, i) = qv[AXY] * psi4;
     host_adm.vK_dd(m, 0, 2, k, j, i) = qv[AXZ] * psi4;
@@ -392,7 +376,7 @@ void SetupBNS(ParameterInput *pin, Mesh* pmy_mesh_) {
       }
     }
 
-    // Velocity U^i (three-velocity in the fluid frame).
+    // Velocity gamma^ij U_j
     Real vu[3] = {static_cast<Real>(qv[UX]),
                   static_cast<Real>(qv[UY]),
                   static_cast<Real>(qv[UZ])};
