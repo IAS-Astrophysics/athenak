@@ -79,6 +79,14 @@ class Chemistry {
     return 3;
   }
 
+  /*!
+   * \brief Return the name of the chemical species at the grid field index provided
+   *
+   * \param scalar_idx The index in the grid to the passive scalar in question
+   * \return std::string The name of the chemical species
+   */
+  std::string GetSpeciesNames(int const &scalar_idx);
+
   // ===================
   // Getters and Setters
   // ===================
