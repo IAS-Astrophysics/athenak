@@ -325,7 +325,7 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::FOFC(Driver *pdriver, int stage) {
         SingleStateLLF_DYNGR<IVX>(eos_, wli, wri, bli, bri, nmhd_, nscal_,
                              g3d, beta_u, alpha, flux, bflux);
       } else if (rsolver_method_ == DynGRMHD_RSolver::hlle_dyngr) {
-        SingleStateLLF_DYNGR<IVX>(eos_, wli, wri, bli, bri, nmhd_, nscal_,
+        SingleStateHLLE_DYNGR<IVX>(eos_, wli, wri, bli, bri, nmhd_, nscal_,
                              g3d, beta_u, alpha, flux, bflux);
       }
 
