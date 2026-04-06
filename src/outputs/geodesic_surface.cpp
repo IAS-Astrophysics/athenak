@@ -25,9 +25,19 @@ GeodesicSurfaceOutput::GeodesicSurfaceOutput(ParameterInput *pin, Mesh *pm,
     : BaseTypeOutput(pin, pm, op) {
   mkdir("geosph", 0755);
 
-  Real rad = pin->GetReal(op.block_name, "radius");
-  int nlev = pin->GetOrAddInteger(op.block_name, "nlev", 4);
-  pgrid = new SphericalGrid(pm->pmb_pack, nlev, rad);
+  Real rad  = pin->GetReal(op.block_name, "radius");
+  int  nlev = pin->GetOrAddInteger(op.block_name, "nlev", 4);
+
+  // Read ng_interp: controls Lagrange stencil half-width per axis.
+  //   ng_interp < 0 : default — full mesh stencil (original behaviour)
+  //   ng_interp = 0 : nearest-cell (fastest, strictly monotone — no Runge overshoot)
+  //   ng_interp > 0 : Lagrange stencil half-width (2×ng_interp points per axis)
+  int ng_mesh = pm->pmb_pack->pmesh->mb_indcs.ng;
+  ng_interp_  = pin->GetOrAddInteger(op.block_name, "ng_interp", -1);
+  if (ng_interp_ < 0)       ng_interp_ = ng_mesh;
+  if (ng_interp_ > ng_mesh) ng_interp_ = ng_mesh;
+
+  pgrid = new SphericalGrid(pm->pmb_pack, nlev, rad, ng_interp_);
 }
 
 GeodesicSurfaceOutput::~GeodesicSurfaceOutput() { delete pgrid; }

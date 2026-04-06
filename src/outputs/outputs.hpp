@@ -504,6 +504,7 @@ class GeodesicSurfaceOutput : public BaseTypeOutput {
   void WriteOutputFile(Mesh *pm, ParameterInput *pin) override;
  private:
   SphericalGrid *pgrid;
+  int ng_interp_;   // Lagrange stencil half-width (0=nearest-cell, -1=full mesh default)
 };
 
 //----------------------------------------------------------------------------------------
