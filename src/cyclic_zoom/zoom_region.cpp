@@ -93,6 +93,11 @@ void CyclicZoom::CorrectVariables() {
 //! \brief Reinitialize variables after zooming (in)
 
 void CyclicZoom::ReinitVariables() {
+  // if zoom mesh missing (e.g. first zoom-in), apply uniform state to the zoom region
+  if (pzmesh->nzmb_eachlevel[zstate.zone] == 0) {
+    pzdata->ApplyUniformFill(old_zregion);
+    return;
+  }
   int zmbs = pzmesh->gzms_eachdvce[global_variable::my_rank];
   int mbs = pmesh->gids_eachrank[global_variable::my_rank];
   if (verbose && global_variable::my_rank == 0) {
@@ -127,6 +132,11 @@ void CyclicZoom::ReinitVariables() {
 //! \brief Mask variables in the zoom region
 
 void CyclicZoom::MaskVariables() {
+  // if zoom mesh missing (e.g. first zoom-in), apply uniform state to the zoom region
+  if (pzmesh->nzmb_eachlevel[zstate.zone - 1] == 0) {
+    pzdata->ApplyUniformFill(zregion);
+    return;
+  }
   int zmbs = pzmesh->gzms_eachdvce[global_variable::my_rank];
   int mbs = pmesh->gids_eachrank[global_variable::my_rank];
   for (int zm = 0; zm < pzmesh->nzmb_thisdvce; ++zm) {

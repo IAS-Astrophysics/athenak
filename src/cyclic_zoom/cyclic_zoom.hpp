@@ -272,6 +272,7 @@ class ZoomData {
                             const ZoomRegion &zregion);
   void ApplyPrimSameLevel(int m, int zm, const ZoomRegion &zregion);
   void ApplyPrimFromFiner(int m, int zm, const ZoomRegion &zregion);
+  void ApplyUniformFill(const ZoomRegion &zregion);
   // functions for storing/applying electric fields during zoom
   void StoreEFieldsBeforeAMR(int zm, int m, DvceEdgeFld4D<Real> efld);
   void CorrectEFieldsFromFiner(int zmc, int m, int zmf, DvceEdgeFld4D<Real> efld);

@@ -107,8 +107,8 @@ void ZoomData::StoreCCData(int zm, DvceArray5D<Real> a0, DvceArray5D<Real> ca,
 
 //----------------------------------------------------------------------------------------
 //! \fn void ZoomData::StoreCoarsePrimData()
-//! \brief Store coarse-grained hydro conserved variables from mb m to zoom mb zm
-//! only for mhd case
+//! \brief Store coarse-grained hydro primitives from meshblock m to zoom block zm
+//!        by averaging conserved variables. MHD only.
 
 void ZoomData::StoreCoarsePrimData(int zm, DvceArray5D<Real> cw,
                                     int m, DvceArray5D<Real> w_) {
@@ -137,6 +137,8 @@ void ZoomData::StoreCoarsePrimData(int zm, DvceArray5D<Real> cw,
     flat = pmbp->pcoord->coord_data.is_minkowski;
     spin = pmbp->pcoord->coord_data.bh_spin;
   }
+  const int nmhd = pmbp->pmhd->nmhd;
+  const int nscal = pmbp->pmhd->nscalars;
   // TODO(@mhguo): may include 1D and 2D cases
   int hg = indcs.ng / 2;
   par_for("zoom-store-cw",DevExeSpace(), cks-hg, cke+hg, cjs-hg, cje+hg, cis-hg, cie+hg,
@@ -155,6 +157,9 @@ void ZoomData::StoreCoarsePrimData(int zm, DvceArray5D<Real> cw,
     cw(zm,IM2,ck,cj,ci) = 0.0;
     cw(zm,IM3,ck,cj,ci) = 0.0;
     cw(zm,IEN,ck,cj,ci) = 0.0;
+    for (int n=nmhd; n<(nmhd+nscal); ++n) {
+      cw(zm,n,ck,cj,ci) = 0.0;
+    }
     Real glower[4][4], gupper[4][4];
     // Step 1: compute coarse-grained hydro conserved variables
     for (int ii=0; ii<2; ++ii) {
@@ -186,6 +191,10 @@ void ZoomData::StoreCoarsePrimData(int zm, DvceArray5D<Real> cw,
           cw(zm,IM2,ck,cj,ci) += 0.125*u.my;
           cw(zm,IM3,ck,cj,ci) += 0.125*u.mz;
           cw(zm,IEN,ck,cj,ci) += 0.125*u.e;
+          // store passive scalars (if any)
+          for (int n=nmhd; n<(nmhd+nscal); ++n) {
+            cw(zm,n,ck,cj,ci) += 0.125*u.d*w_(m,n,fk+kk,fj+jj,fi+ii);
+          }
         }
       }
     }
@@ -237,6 +246,10 @@ void ZoomData::StoreCoarsePrimData(int zm, DvceArray5D<Real> cw,
     cw(zm,IVY,ck,cj,ci) = w.vy;
     cw(zm,IVZ,ck,cj,ci) = w.vz;
     cw(zm,IEN,ck,cj,ci) = w.e;
+    // store passive scalars (if any)
+    for (int n=nmhd; n<(nmhd+nscal); ++n) {
+      cw(zm,n,ck,cj,ci) = cw(zm,n,ck,cj,ci)/u.d;
+    }
   });
 
   return;
@@ -405,6 +418,8 @@ void ZoomData::ApplyPrimSameLevel(int m, int zm, const ZoomRegion &zregion) {
     flat = coord.is_minkowski;
     spin = coord.bh_spin;
   }
+  const int nmhd = pmbp->pmhd->nmhd;
+  const int nscal = pmbp->pmhd->nscalars;
   auto u_ = pmbp->pmhd->u0, w_ = pmbp->pmhd->w0;
   auto u0_ = u0, w0_ = w0;
   auto b = pmbp->pmhd->b0;
@@ -427,6 +442,9 @@ void ZoomData::ApplyPrimSameLevel(int m, int zm, const ZoomRegion &zregion) {
       w_(m,IVY,k,j,i) = w0_(zm,IVY,k,j,i);
       w_(m,IVZ,k,j,i) = w0_(zm,IVZ,k,j,i);
       w_(m,IEN,k,j,i) = w0_(zm,IEN,k,j,i);
+      for (int n=nmhd; n<(nmhd+nscal); ++n) {
+        w_(m,n,k,j,i) = w0_(zm,n,k,j,i);
+      }
       // zero out velocity if inside cut-off boundary
       if (zregion.IsInRegion(x1v, x2v, x3v, zregion.cut.r)) {
         w_(m,IVX,k,j,i) = 0.0;
@@ -463,6 +481,9 @@ void ZoomData::ApplyPrimSameLevel(int m, int zm, const ZoomRegion &zregion) {
       u_(m,IM2,k,j,i) = u.my;
       u_(m,IM3,k,j,i) = u.mz;
       u_(m,IEN,k,j,i) = u.e;
+      for (int n=nmhd; n<(nmhd+nscal); ++n) {
+        u_(m,n,k,j,i) = u.d * w_(m,n,k,j,i);
+      }
     }
   });
   if (pzoom->verbose) {
@@ -504,6 +525,8 @@ void ZoomData::ApplyPrimFromFiner(int m, int zm, const ZoomRegion &zregion) {
     flat = pmbp->pcoord->coord_data.is_minkowski;
     spin = pmbp->pcoord->coord_data.bh_spin;
   }
+  const int nmhd = pmbp->pmhd->nmhd;
+  const int nscal = pmbp->pmhd->nscalars;
   // eachlevel[pzoom->zstate.zone-1]; // starting gid of zoom MBs on previous level
   int zmbs = pzmesh->gzms_eachdvce[global_variable::my_rank]; // global id start of dvce
   auto &zlloc = pzmesh->lloc_eachzmb[zm+zmbs];
@@ -534,6 +557,9 @@ void ZoomData::ApplyPrimFromFiner(int m, int zm, const ZoomRegion &zregion) {
       w_(m,IVY,k,j,i) = cw0(zm,IVY,ck,cj,ci);
       w_(m,IVZ,k,j,i) = cw0(zm,IVZ,ck,cj,ci);
       w_(m,IEN,k,j,i) = cw0(zm,IEN,ck,cj,ci);
+      for (int n=nmhd; n<(nmhd+nscal); ++n) {
+        w_(m,n,k,j,i) = cw0(zm,n,ck,cj,ci);
+      }
       // zero out velocity if inside cut-off boundary
       if (zregion.IsInRegion(x1v, x2v, x3v, zregion.cut.r)) {
         w_(m,IVX,k,j,i) = 0.0;
@@ -565,13 +591,242 @@ void ZoomData::ApplyPrimFromFiner(int m, int zm, const ZoomRegion &zregion) {
         SingleP2C_IdealMHD(w, u);
       }
 
-      // store conserved quantities in 3D array
+      // apply to conserved variables
       u_(m,IDN,k,j,i) = u.d;
       u_(m,IM1,k,j,i) = u.mx;
       u_(m,IM2,k,j,i) = u.my;
       u_(m,IM3,k,j,i) = u.mz;
       u_(m,IEN,k,j,i) = u.e;
+      // apply to passive scalars (if any)
+      for (int n=nmhd; n<(nmhd+nscal); ++n) {
+        u_(m,n,k,j,i) = u.d * w_(m,n,k,j,i);
+      }
     }
   });
+  return;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn ZoomData::ApplyUniformFill()
+//! \brief Set uniform density, pressure, and zero velocity in zoom region
+
+void ZoomData::ApplyUniformFill(const ZoomRegion &zregion) {
+  auto pmbp = pzoom->pmesh->pmb_pack;
+  auto pmesh = pzoom->pmesh;
+  int nmb = pmbp->nmb_thispack;
+  Real d0 = d_zoom;
+  Real p0 = p_zoom;
+
+  if (pmbp->phydro == nullptr && pmbp->pmhd == nullptr && pmbp->prad == nullptr) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+              << "No physics module enabled, nothing to load" <<std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+
+  if (pmbp->phydro != nullptr) {
+    auto peos = pmbp->phydro->peos;
+    const bool is_ideal = peos->eos_data.is_ideal;
+    Real gm1 = peos->eos_data.gamma - 1.0;
+    Real e_int = (is_ideal) ? (p0 / gm1) : 0.0;
+    int nhyd = pmbp->phydro->nhydro;
+    int nscal = pmbp->phydro->nscalars;
+    bool is_gr = pmbp->pcoord->is_general_relativistic;
+    bool is_sr = pmbp->pcoord->is_special_relativistic;
+    Real gamma = peos->eos_data.gamma;
+    auto &coord = pmbp->pcoord->coord_data;
+    bool flat = true;
+    Real spin = 0.0;
+    if (is_gr) {
+      flat = coord.is_minkowski;
+      spin = coord.bh_spin;
+    }
+    auto u_ = pmbp->phydro->u0;
+    auto w_ = pmbp->phydro->w0;
+    auto &indcs = pmesh->mb_indcs;
+    auto &size = pmbp->pmb->mb_size;
+    int &is = indcs.is;  int &ie  = indcs.ie;
+    int &js = indcs.js;  int &je  = indcs.je;
+    int &ks = indcs.ks;  int &ke  = indcs.ke;
+    int nx1 = indcs.nx1, nx2 = indcs.nx2, nx3 = indcs.nx3;
+
+    par_for("zoom_uniform_hyd", DevExeSpace(),0,nmb-1,ks,ke,js,je,is,ie,
+    KOKKOS_LAMBDA(int m, int k, int j, int i) {
+      Real &x1min = size.d_view(m).x1min;
+      Real &x1max = size.d_view(m).x1max;
+      Real &x2min = size.d_view(m).x2min;
+      Real &x2max = size.d_view(m).x2max;
+      Real &x3min = size.d_view(m).x3min;
+      Real &x3max = size.d_view(m).x3max;
+      Real x1v = CellCenterX(i-is, nx1, x1min, x1max);
+      Real x2v = CellCenterX(j-js, nx2, x2min, x2max);
+      Real x3v = CellCenterX(k-ks, nx3, x3min, x3max);
+      if (zregion.IsInRegion(x1v, x2v, x3v)) { // apply to zoom region
+        w_(m,IDN,k,j,i) = d0;
+        w_(m,IVX,k,j,i) = 0.0;
+        w_(m,IVY,k,j,i) = 0.0;
+        w_(m,IVZ,k,j,i) = 0.0;
+        if (is_ideal) {
+          w_(m,IEN,k,j,i) = e_int;
+        }
+        for (int n=nhyd; n<(nhyd+nscal); ++n) {
+          w_(m,n,k,j,i) = 0.0;
+        }
+
+        HydPrim1D w;
+        w.d  = d0;
+        w.vx = 0.0;
+        w.vy = 0.0;
+        w.vz = 0.0;
+        w.e  = e_int;
+        HydCons1D u;
+        if (is_gr) {
+          Real glower[4][4], gupper[4][4];
+          ComputeMetricAndInverse(x1v, x2v, x3v, flat, spin, glower, gupper);
+          SingleP2C_IdealGRHyd(glower, gupper, w, gamma, u);
+        } else if (is_sr) {
+          SingleP2C_IdealSRHyd(w, gamma, u);
+        } else if (is_ideal) {
+          SingleP2C_IdealHyd(w, u);
+        } else {
+          u.d  = d0;
+          u.mx = 0.0;
+          u.my = 0.0;
+          u.mz = 0.0;
+        }
+
+        u_(m,IDN,k,j,i) = u.d;
+        u_(m,IM1,k,j,i) = u.mx;
+        u_(m,IM2,k,j,i) = u.my;
+        u_(m,IM3,k,j,i) = u.mz;
+        if (is_ideal) {
+          u_(m,IEN,k,j,i) = u.e;
+        }
+        for (int n=nhyd; n<(nhyd+nscal); ++n) {
+          u_(m,n,k,j,i) = u.d*w_(m,n,k,j,i);
+        }
+      }
+    });
+  }
+
+  if (pmbp->pmhd != nullptr) {
+    auto peos = pmbp->pmhd->peos;
+    const bool is_ideal = peos->eos_data.is_ideal;
+    Real gm1 = peos->eos_data.gamma - 1.0;
+    Real e_int = (is_ideal) ? (p0 / gm1) : 0.0;
+    int nmhd = pmbp->pmhd->nmhd;
+    int nscal = pmbp->pmhd->nscalars;
+    bool is_gr = pmbp->pcoord->is_general_relativistic;
+    bool is_sr = pmbp->pcoord->is_special_relativistic;
+    Real gamma = peos->eos_data.gamma;
+    auto &coord = pmbp->pcoord->coord_data;
+    bool flat = true;
+    Real spin = 0.0;
+    if (is_gr) {
+      flat = coord.is_minkowski;
+      spin = coord.bh_spin;
+    }
+    auto u_ = pmbp->pmhd->u0;
+    auto w_ = pmbp->pmhd->w0;
+    auto b = pmbp->pmhd->b0;
+    auto &indcs = pmesh->mb_indcs;
+    auto &size = pmbp->pmb->mb_size;
+    int &is = indcs.is;  int &ie  = indcs.ie;
+    int &js = indcs.js;  int &je  = indcs.je;
+    int &ks = indcs.ks;  int &ke  = indcs.ke;
+    int nx1 = indcs.nx1, nx2 = indcs.nx2, nx3 = indcs.nx3;
+
+    par_for("zoom_uniform_mhd", DevExeSpace(),0,nmb-1,ks,ke,js,je,is,ie,
+    KOKKOS_LAMBDA(int m, int k, int j, int i) {
+      Real &x1min = size.d_view(m).x1min;
+      Real &x1max = size.d_view(m).x1max;
+      Real &x2min = size.d_view(m).x2min;
+      Real &x2max = size.d_view(m).x2max;
+      Real &x3min = size.d_view(m).x3min;
+      Real &x3max = size.d_view(m).x3max;
+      Real x1v = CellCenterX(i-is, nx1, x1min, x1max);
+      Real x2v = CellCenterX(j-js, nx2, x2min, x2max);
+      Real x3v = CellCenterX(k-ks, nx3, x3min, x3max);
+      if (zregion.IsInRegion(x1v, x2v, x3v)) { // apply to zoom region
+        w_(m,IDN,k,j,i) = d0;
+        w_(m,IVX,k,j,i) = 0.0;
+        w_(m,IVY,k,j,i) = 0.0;
+        w_(m,IVZ,k,j,i) = 0.0;
+        if (is_ideal) {
+          w_(m,IEN,k,j,i) = e_int;
+        }
+        for (int n=nmhd; n<(nmhd+nscal); ++n) {
+          w_(m,n,k,j,i) = 0.0;
+        }
+
+        Real bx = 0.5*(b.x1f(m,k,j,i) + b.x1f(m,k,j,i+1));
+        Real by = 0.5*(b.x2f(m,k,j,i) + b.x2f(m,k,j+1,i));
+        Real bz = 0.5*(b.x3f(m,k,j,i) + b.x3f(m,k+1,j,i));
+
+        if (is_ideal) {
+          MHDPrim1D w;
+          w.d  = d0;
+          w.vx = 0.0;
+          w.vy = 0.0;
+          w.vz = 0.0;
+          w.e  = e_int;
+          w.bx = bx;
+          w.by = by;
+          w.bz = bz;
+          HydCons1D u;
+          if (is_gr) {
+            Real glower[4][4], gupper[4][4];
+            ComputeMetricAndInverse(x1v, x2v, x3v, flat, spin, glower, gupper);
+            SingleP2C_IdealGRMHD(glower, gupper, w, gamma, u);
+          } else if (is_sr) {
+            SingleP2C_IdealSRMHD(w, gamma, u);
+          } else {
+            SingleP2C_IdealMHD(w, u);
+          }
+          u_(m,IDN,k,j,i) = u.d;
+          u_(m,IM1,k,j,i) = u.mx;
+          u_(m,IM2,k,j,i) = u.my;
+          u_(m,IM3,k,j,i) = u.mz;
+          u_(m,IEN,k,j,i) = u.e;
+        } else {
+          u_(m,IDN,k,j,i) = d0;
+          u_(m,IM1,k,j,i) = 0.0;
+          u_(m,IM2,k,j,i) = 0.0;
+          u_(m,IM3,k,j,i) = 0.0;
+        }
+        for (int n=nmhd; n<(nmhd+nscal); ++n) {
+          u_(m,n,k,j,i) = u_(m,IDN,k,j,i)*w_(m,n,k,j,i);
+        }
+      }
+    });
+  }
+
+  if (pmbp->prad != nullptr) {
+    auto i_ = pmbp->prad->i0;
+    auto &indcs = pmesh->mb_indcs;
+    auto &size = pmbp->pmb->mb_size;
+    int &is = indcs.is;  int &ie  = indcs.ie;
+    int &js = indcs.js;  int &je  = indcs.je;
+    int &ks = indcs.ks;  int &ke  = indcs.ke;
+    int nx1 = indcs.nx1, nx2 = indcs.nx2, nx3 = indcs.nx3;
+    int nang = nangles;
+
+    par_for("zoom_uniform_rad", DevExeSpace(),0,nmb-1,ks,ke,js,je,is,ie,
+    KOKKOS_LAMBDA(int m, int k, int j, int i) {
+      Real &x1min = size.d_view(m).x1min;
+      Real &x1max = size.d_view(m).x1max;
+      Real &x2min = size.d_view(m).x2min;
+      Real &x2max = size.d_view(m).x2max;
+      Real &x3min = size.d_view(m).x3min;
+      Real &x3max = size.d_view(m).x3max;
+      Real x1v = CellCenterX(i-is, nx1, x1min, x1max);
+      Real x2v = CellCenterX(j-js, nx2, x2min, x2max);
+      Real x3v = CellCenterX(k-ks, nx3, x3min, x3max);
+      if (zregion.IsInRegion(x1v, x2v, x3v)) { // apply to zoom region
+        for (int n=0; n<nang; ++n) {
+          i_(m,n,k,j,i) = 0.0;
+        }
+      }
+    });
+  }
   return;
 }

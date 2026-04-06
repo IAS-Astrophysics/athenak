@@ -170,10 +170,13 @@ void CyclicZoom::PrintCyclicZoomDiagnostics() {
       std::cout << " trun_fac_" << i << " = " << zint.trun_facs[i]
                 << std::endl;
     }
-    // print level structure
-    std::cout << "Level: zone = " << zstate.zone << " direction = " << zstate.direction
-              << " level = " << zamr.level << " max_level = " << zamr.max_level
+    // print AMR level structure
+    std::cout << "AMR: level = " << zamr.level << " max_level = " << zamr.max_level
               << " min_level = " << zamr.min_level << std::endl;
+    // print zoom state information
+    std::cout << "State: id = " << zstate.id << " zone = " << zstate.zone
+              << " last_zone = " << zstate.last_zone
+              << " direction = " << zstate.direction << std::endl;
     // print runtime information
     std::cout << "Time: runtime = " << zint.runtime << " next time = "
               << zstate.next_time << std::endl;
