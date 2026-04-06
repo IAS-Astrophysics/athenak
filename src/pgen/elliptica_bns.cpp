@@ -87,7 +87,7 @@ void SetupBinary(ParameterInput *pin, Mesh* pmy_mesh_) {
     "grhd_rho,grhd_p,grhd_epsl,grhd_vx,grhd_vy,grhd_vz";
 
   // MHD parameters
-  Real gauss_cgs_to_geo = 8.3519664583273e+19
+  Real gauss_cgs_to_geo = 8.3519664583273e+19;
   Real rho_cut = pin->GetOrAddReal("problem", "rho_cut", 1e-5);
   Real b_max   = pin->GetOrAddReal("problem", "b_max", 1e12) / gauss_cgs_to_geo;
   Real r_0     = pin->GetOrAddReal("problem", "r_0_current", 5.0);
