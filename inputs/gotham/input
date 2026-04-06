@@ -1,0 +1,365 @@
+<comment>
+problem = GOTHAM
+
+<job>
+basename = gotham  # problem ID: basename of output filenames
+
+<mesh>
+nghost = 4         # Number of ghost cells
+
+nx1    = 384       # Number of zones in X1-direction
+x1min  = -200.0    # minimum value of X1
+x1max  = 200.0     # maximum value of X1
+ix1_bc = user      # Inner-X1 boundary condition flag
+ox1_bc = user      # Outer-X1 boundary condition flag
+
+nx2    = 384       # Number of zones in X2-direction
+x2min  = -200.0    # minimum value of X2
+x2max  = 200.0     # maximum value of X2
+ix2_bc = user      # Inner-X2 boundary condition flag
+ox2_bc = user      # Outer-X2 boundary condition flag
+
+nx3    = 384       # Number of zones in X3-direction
+x3min  = -200.0    # minimum value of X3
+x3max  = 200.0     # maximum value of X3
+ix3_bc = user      # Inner-X3 boundary condition flag
+ox3_bc = user      # Outer-X3 boundary condition flag
+
+<mesh_refinement>
+refinement          = adaptive
+num_levels          = 9
+refinement_interval = 10
+ncycle_check        = 10
+max_nmb_per_rank    = 384
+
+<refinement1>
+level =  8
+x1min = -10.0
+x1max =  10.0
+x2min = -10.0
+x2max =  10.0
+x3min = -2.5
+x3max =  2.5
+
+<meshblock>
+nx1 = 32  # Number of cells in each MeshBlock, X1-dir
+nx2 = 32  # Number of cells in each MeshBlock, X2-dir
+nx3 = 32  # Number of cells in each MeshBlock, X3-dir
+
+<time>
+evolution  = dynamic  # dynamic/kinematic/static
+integrator = rk2      # time integration algorithm
+cfl_number = 0.3      # The Courant, Friedrichs, & Lewy (CFL) Number
+nlim       = -1       # cycle limit
+tlim       = 10.0     # time limit
+ndiag      = 100      # cycles between diagostic output
+
+<hydro>
+eos           = ideal      # EOS type
+reconstruct   = plm        # spatial reconstruction method
+rsolver       = hllc       # Riemann-solver to be used
+gamma         = 1.66666667 # gamma = C_p/C_v
+
+cgm_cooling   = true
+hrate         = 2e-26
+hscale_norm   = 1347.6541799847946
+hscale_radius = 0.9402361259893334
+hscale_height = 0.04950000000848683
+
+pfloor        = 1e-15
+dfloor        = 1e-15
+sfloor        = 1e-15
+tfloor        = 0.0013925 # 10 K
+T_max         = 5e8 # K
+fofc          = true
+nscalars      = 1 # number of passive scalars : metallicity
+ 
+<problem>
+user_srcs         = true
+profile_file      = tables/cgm_profiles_rsonic_0.7.txt
+disk_profile_file = tables/disk_profiles.txt
+
+r_circ      = 10.0
+v_circ      = 9.54085191986995
+ddens_max   = 2.0
+metallicity = 0.333333333333333333333333333333333333333333
+
+cgm_turb_nlow   = 16   # quarter virial radius
+cgm_turb_nhigh  = 64
+cgm_turb_rms    = 1.0
+cgm_turb_xscale = 10.0 
+cgm_turb_yscale = 10.0 
+cgm_turb_zscale = 10.0 
+
+<potential>
+r_scale   = 11.605294024177795
+rho_scale = 2.1743800601559324
+mass_gal  = 6547.387043624801
+scale_gal = 1.4691189466064514
+z_gal     = 0.15
+r_200     = 144.76736317842207
+rho_mean  = 2.5759499304527406e-05
+
+<particles>
+particle_type       = star
+star_prtcl_rst_flag = 0 # only modify in jobscript for restart
+star_particle_file  = tables/clusters_central.txt
+pusher              = rk4_gravity
+
+<SN>
+r_inj = 0.008 # 8 pc (set injection radius to 2*dx_finest)
+delay = 10.0
+
+<turb_driving>
+type                = hydro
+turb_flag           = 2 # driven
+dt_turb_update      = 0.001
+tcorr               = 0.02
+dedt                = 2500
+x_turb_scale_height = 1.0
+y_turb_scale_height = 1.0
+z_turb_scale_height = 0.1
+nlow                = 8
+nhigh               = 10
+spect_form          = 1 # parabolic
+npeak               = 9
+sol_fraction        = 0.5
+tile_driving        = true
+tile_factor         = 384 # 1.25 kpc tile size
+
+<units>
+length_cgs  = 3.0856775809623245e+21 # kpc
+mass_cgs    = 3.036951775493658e+39  # n = 0.1 cm^-3
+time_cgs    = 3.15576e+15            # 100 Myr
+mu          = 0.62                   # mean molecular weight
+
+<output1>
+file_type = hst
+dt        = 0.01
+
+<output2>
+file_type = bin
+variable  = hydro_w
+dt        = 5.0
+single_file_per_rank = true
+
+<output3>
+file_type = bin
+variable  = hydro_w
+dt        = 0.1
+slice_x1  = 0.0
+id        = slice_x1
+single_file_per_rank = true
+
+<output4>
+file_type = bin
+variable  = hydro_w
+dt        = 0.1
+slice_x2  = 0.0
+id        = slice_x2
+single_file_per_rank = true
+
+<output5>
+file_type = bin
+variable  = hydro_w
+dt        = 0.1
+slice_x3  = 0.0
+id        = slice_x3
+single_file_per_rank = true
+
+<output6>
+file_type = bin
+variable = cooling_time
+dt = 0.1
+slice_x2 = 0.0
+id = cooling_time_slice_x2
+single_file_per_rank = true
+
+<output7>
+file_type = bin
+variable = cooling_time
+dt = 0.1
+slice_x3 = 0.0
+id = cooling_time_slice_x3
+single_file_per_rank = true
+
+#<output6>
+#file_type = bin
+#variable  = hydro_w
+#dt        = 0.1
+#slice_x3  = 1.0
+#id        = slice_x3_2
+
+#<output7>
+#file_type = bin
+#variable  = hydro_w
+#dt        = 0.1
+#slice_x3  = 2.0
+#id        = slice_x3_3
+
+#<output8>
+#file_type = bin
+#variable  = hydro_w
+#dt        = 0.1
+#slice_x3  = 4.0
+#id        = slice_x3_4
+
+#<output9>
+#file_type = bin
+#variable  = hydro_w
+#dt        = 0.1
+#slice_x3  = 8.0
+#id        = slice_x3_5
+
+<output10>
+file_type  = trk
+variable   = prtcl_all
+nparticles = 100
+dt         = 0.01
+
+<output11>
+file_type  = rst
+dt         = 5.0
+single_file_per_rank = true
+
+<output12>
+file_type  = rst_prtcl
+dt         = 5.0
+
+<output13>
+file_type  = pdf
+dt         = 1.0
+single_file_per_rank = true
+
+variable_1 = coord_r
+bin1_min   = 1e-1
+bin1_max   = 190.0
+nbin1      = 32
+logscale1  = true
+
+variable_2 = coord_costheta
+bin2_min   = -1.0
+bin2_max   = 1.0
+nbin2      = 32
+
+variable_3 = temperature
+bin3_min   = 1e-3 # 10 K
+bin3_max   = 1e4  # 1e8 K
+nbin3      = 128
+logscale3  = true
+
+variable_4 = hydro_w_d
+bin4_min   = 1e-5
+bin4_max   = 1e4
+nbin4      = 128
+logscale4  = true
+
+weight     = mass
+
+<output14>
+file_type  = pdf
+dt         = 1.0
+single_file_per_rank = true
+
+variable_1 = coord_r
+bin1_min   = 1e-1
+bin1_max   = 190.0
+nbin1      = 128
+logscale1  = true
+
+variable_2 = coord_costheta
+bin2_min   = -1.0
+bin2_max   = 1.0
+nbin2      = 128
+
+variable_3 = hydro_w_e
+bin3_min   = 1e-4
+bin3_max   = 1e4
+nbin3      = 128
+logscale3  = true
+
+weight     = volume
+
+<output15>
+file_type  = pdf
+dt         = 1.0
+single_file_per_rank = true
+
+variable_1 = coord_r
+bin1_min   = 1e-1
+bin1_max   = 190.0
+nbin1      = 128
+logscale1  = true
+
+variable_2 = coord_costheta
+bin2_min   = -1.0
+bin2_max   = 1.0
+nbin2      = 128
+
+variable_3 = vel_sph_r
+bin3_min   = -25.0
+bin3_max   = 25.0
+nbin3      = 128
+
+weight     = mass
+
+<output16>
+file_type  = pdf
+dt         = 1.0
+single_file_per_rank = true
+
+variable_1 = coord_r
+bin1_min   = 1e-1
+bin1_max   = 190.0
+nbin1      = 128
+logscale1  = true
+
+variable_2 = coord_costheta
+bin2_min   = -1.0
+bin2_max   = 1.0
+nbin2      = 128
+
+variable_3 = vel_sph_phi
+bin3_min   = -25.0
+bin3_max   = 25.0
+nbin3      = 128
+
+weight     = mass
+
+<output17>
+file_type  = pdf
+dt         = 1.0
+single_file_per_rank = true
+
+variable_1 = coord_r
+bin1_min   = 1e-1
+bin1_max   = 190.0
+nbin1      = 128
+logscale1  = true
+
+variable_2 = coord_costheta
+bin2_min   = -1.0
+bin2_max   = 1.0
+nbin2      = 128
+
+weight     = variable
+weight_variable = mdot_sph
+
+<output18>
+file_type  = pdf
+dt         = 1.0
+single_file_per_rank = true
+
+variable_1 = coord_costheta
+bin1_min   = -1.0
+bin1_max   = 1.0
+nbin1      = 128
+
+variable_2 = coord_r
+bin2_min   = 1e-1
+bin2_max   = 190.0
+nbin2      = 128
+logscale2  = true
+
+weight     = variable
+weight_variable = edot_sph
