@@ -10,6 +10,8 @@
 
 #include <iostream>
 #include <string>
+#include <map>
+#include <vector>
 
 #include "athena.hpp"
 #include "hydro/hydro.hpp"
@@ -70,6 +72,38 @@ TaskStatus Chemistry::TestKernel(Driver* d, int stage) {
       });
 
   return TaskStatus::complete;
+}
+
+std::string Chemistry::GetSpeciesNames(int const& scalar_idx) {
+  // Only the first time this is called create the mapping between species names
+  // and grid index
+  static std::map<int, std::string> species_names_map;
+  if (species_names_map.size() == 0) {
+    // std::vector of scalar names
+    std::vector<std::string> species_names = {
+        "chem_species_1", "chem_species_2", "chem_species_3"};
+
+    // Create the mapping
+    int name_idx = 0;
+    for (size_t i = get_chemistry_scalars_start_idx();
+         i < get_chemistry_scalars_stop_idx() + 1; i++) {
+      species_names_map[i] = species_names[name_idx];
+      name_idx++;
+    }
+  }
+
+  // Verify that this is a chemistry scalar
+  if (scalar_idx < get_chemistry_scalars_start_idx() ||
+      scalar_idx > get_chemistry_scalars_stop_idx()) {
+    std::stringstream msg;
+    msg << "Attempted to output the field at index " << scalar_idx
+        << " as a passive scalar for the chemistry module but it is not one of "
+           "the scalars managed by the chemistry module.";
+    throw std::runtime_error(msg.str());
+  }
+
+  // Return the proper name
+  return species_names_map[scalar_idx];
 }
 
 DvceArray5D<Real> Chemistry::GetU0() {
