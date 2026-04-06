@@ -182,7 +182,7 @@ class TabulatedEOS {
       return 0.0;
     }
     Real rho = GetRhoFromVar<loc>(le, m_log_e);
-
+    
     // for negative densities, return the 
     // minimum density in the table
     if (rho < 0.0) {
