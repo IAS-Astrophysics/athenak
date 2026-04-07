@@ -178,15 +178,13 @@ class TabulatedEOS {
   KOKKOS_INLINE_FUNCTION
   Real GetRhoFromE(Real e) const {
     Real le = log(e);
-    if (le < le_min) {
+
+    // Guard against negative total energy
+    // densities and garbage values.
+    if (le < le_min || e < 0.0) {
       return 0.0;
     }
 
-    // for negative total energy densities, return the
-    // minimum density in the table
-    if (e < 0.0) {
-      return exp(lrho_min);
-    }
     return GetRhoFromVar<loc>(le, m_log_e);
   }
 
