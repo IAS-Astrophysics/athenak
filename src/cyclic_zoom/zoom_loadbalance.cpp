@@ -477,13 +477,13 @@ void ZoomData::RedistZMBs(int nlmb, int lmbs,
   if (pzoom->verbose) {
 #if MPI_PARALLEL_ENABLED
     if (nsend > 0 || nrecv > 0 || ncopy > 0) {
-      std::cout << " RedistZMBs: Rank " << global_variable::my_rank << " completed"
+      std::cout << " Rank " << global_variable::my_rank << " RedistZMBs completed"
                 << " sends: " << nsend << ", recvs: " << nrecv
                 << ", copies: " << ncopy << std::endl;
     }
 #else
     if (ncopy > 0) {
-      std::cout << " RedistZMBs: Rank " << global_variable::my_rank << " completed"
+      std::cout << " Rank " << global_variable::my_rank << " RedistZMBs completed"
                 << " copies: " << ncopy << std::endl;
     }
 #endif
@@ -509,7 +509,7 @@ void ZoomData::SaveToStorage(int zone) {
              pzmesh->mbrank_eachzmb, pzmesh->rank_eachzmb,
              nullptr, &pzmesh->lid_eachzmb);
   if (pzoom->verbose && global_variable::my_rank == 0) {
-    std::cout << "ZoomData: saved " << nlmb
+    std::cout << "CyclicZoom: saved " << nlmb
               << " zoom MeshBlocks to storage for zone " << zone << std::endl;
   }
   return;
@@ -533,7 +533,7 @@ void ZoomData::LoadFromStorage(int zone) {
              pzmesh->rank_eachzmb, pzmesh->mbrank_eachzmb,
              &pzmesh->lid_eachzmb, nullptr);
   if (pzoom->verbose && global_variable::my_rank == 0) {
-    std::cout << "ZoomData: loaded " << nlmb
+    std::cout << "CyclicZoom: loaded " << nlmb
               << " zoom MeshBlocks from storage for zone " << zone << std::endl;
   }
   return;

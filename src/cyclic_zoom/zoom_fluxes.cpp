@@ -260,14 +260,14 @@ void ZoomData::LimitEFields() {
   MPI_Allreduce(MPI_IN_PLACE, &emax3, 1, MPI_ATHENA_REAL, MPI_MAX, MPI_COMM_WORLD);
 #endif
   if (pzoom->verbose && global_variable::my_rank == 0) {
-    std::cout << "ZoomData::LimitEFields: emax1=" << emax1
+    std::cout << "CyclicZoom: LimitEFields: emax1=" << emax1
               << ", emax2=" << emax2
               << ", emax3=" << emax3 << std::endl;
   }
   Real emax = fmax(fmax(emax1, emax2), emax3);
   emax *= pzoom->zemf.emf_fmax; // limiting factor
   if (pzoom->verbose && global_variable::my_rank == 0) {
-    std::cout << "ZoomData::LimitEFields: emax for limiting = " << emax << std::endl;
+    std::cout << "CyclicZoom: LimitEFields: emax for limiting = " << emax << std::endl;
   }
   auto de1 = delta_efld.x1e;
   auto de2 = delta_efld.x2e;

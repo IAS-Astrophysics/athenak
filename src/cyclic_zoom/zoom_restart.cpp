@@ -50,7 +50,7 @@ void CyclicZoom::WriteRestartFile(IOWrapper &resfile, IOWrapperSizeT offset_zoom
 
   if (verbose && my_rank == 0) {
     std::cout << "CyclicZoom: Writing cyclic zoom restart data at offset "
-              << offset_zoom << " from rank " << my_rank << std::endl;
+              << offset_zoom << std::endl;
   }
 
   // STEP 1: Use the passed offset_zoom which points to start of cyclic zoom data

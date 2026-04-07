@@ -488,8 +488,8 @@ void ZoomData::ApplyPrimSameLevel(int m, int zm, const ZoomRegion &zregion) {
   });
   if (pzoom->verbose) {
     std::cout << " Rank " << global_variable::my_rank
-              << " applied primitive variables in meshblock " << m
-              << " using zoom meshblock " << zm << std::endl;
+              << " applied same-level prims to local mb m=" << m
+              << " with zm=" << zm << std::endl;
   }
   return;
 }

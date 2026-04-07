@@ -89,52 +89,13 @@ void CyclicZoom::CorrectVariables() {
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn void CyclicZoom::ReinitVariables()
-//! \brief Reinitialize variables after zooming (in)
-
-void CyclicZoom::ReinitVariables() {
-  // if zoom mesh missing (e.g. first zoom-in), apply uniform state to the zoom region
-  if (pzmesh->nzmb_eachlevel[zstate.zone] == 0) {
-    pzdata->ApplyUniformFill(old_zregion);
-    return;
-  }
-  int zmbs = pzmesh->gzms_eachdvce[global_variable::my_rank];
-  int mbs = pmesh->gids_eachrank[global_variable::my_rank];
-  if (verbose && global_variable::my_rank == 0) {
-    std::cout << " Apply zoom region radius: " << old_zregion.radius << std::endl;
-  }
-  for (int zm = 0; zm < pzmesh->nzmb_thisdvce; ++zm) {
-    auto &zlloc = pzmesh->lloc_eachzmb[zm+zmbs];
-    int m = pzmesh->mblid_eachzmb[zm+zmbs];
-    auto &lloc = pmesh->lloc_eachmb[m+mbs];
-    if (verbose) {
-      std::cout << " Rank " << global_variable::my_rank
-                << " Reinitializing MeshBlock " << m + mbs
-                << " using zoom MeshBlock " << zm + zmbs
-                << std::endl;
-    }
-    // Reinitialize variables in the zoom region using the same level zoom data
-    if (zlloc.level == lloc.level) {
-      pzdata->ApplyDataSameLevel(m, zm, old_zregion);
-    } else {
-      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-                << std::endl << "zoom meshblock level " << zlloc.level
-                << " is different from MeshBlock level " << lloc.level
-                << std::endl;
-      std::exit(EXIT_FAILURE);
-    }
-  }
-  return;
-}
-
-//----------------------------------------------------------------------------------------
 //! \fn void CyclicZoom::MaskVariables()
 //! \brief Mask variables in the zoom region
 
-void CyclicZoom::MaskVariables() {
+void CyclicZoom::MaskVariables(int zone, const ZoomRegion &zreg) {
   // if zoom mesh missing (e.g. first zoom-in), apply uniform state to the zoom region
-  if (pzmesh->nzmb_eachlevel[zstate.zone - 1] == 0) {
-    pzdata->ApplyUniformFill(zregion);
+  if (pzmesh->nzmb_eachlevel[zone] == 0) {
+    pzdata->ApplyUniformFill(zreg);
     return;
   }
   int zmbs = pzmesh->gzms_eachdvce[global_variable::my_rank];
@@ -144,9 +105,9 @@ void CyclicZoom::MaskVariables() {
     int m = pzmesh->mblid_eachzmb[zm+zmbs];
     auto &lloc = pmesh->lloc_eachmb[m+mbs];
     if (zlloc.level == lloc.level) {
-      pzdata->ApplyDataSameLevel(m, zm, zregion);
+      pzdata->ApplyDataSameLevel(m, zm, zreg);
     } else if (zlloc.level - lloc.level == 1) {
-      pzdata->ApplyDataFromFiner(m, zm, zregion);
+      pzdata->ApplyDataFromFiner(m, zm, zreg);
     } else {
       std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                 << std::endl << "zoom MeshBlock level " << zlloc.level
@@ -164,7 +125,7 @@ void CyclicZoom::MaskVariables() {
 
 void CyclicZoom::ApplyMask() {
   if (zstate.zone > 0 && !zamr.zooming_out && !zamr.zooming_in) {
-    MaskVariables();
+    MaskVariables(zstate.zone-1, zregion);
   }
   return;
 }

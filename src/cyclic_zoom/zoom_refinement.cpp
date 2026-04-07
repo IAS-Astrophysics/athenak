@@ -45,16 +45,21 @@ void CyclicZoom::StoreZoomRegion() {
 void CyclicZoom::ApplyZoomRegion(Driver *pdriver) {
   if (zamr.zooming_in) {
     LoadZoomData(zstate.zone);
-    ReinitVariables();
+    MaskVariables(zstate.zone, old_zregion);
     if (verbose && global_variable::my_rank == 0) {
-      std::cout << "CyclicZoom: Apply variables after zooming" << std::endl;
+      std::cout << "CyclicZoom: Reinitialize variables for old zoom radius: "
+                << old_zregion.radius << std::endl;
     }
   }
   // Set up mask region
   if (zstate.zone > 0) {
     AdjustExcisionForZoom();
     LoadZoomData(zstate.zone-1);
-    MaskVariables();
+    MaskVariables(zstate.zone-1, zregion);
+    if (verbose && global_variable::my_rank == 0) {
+      std::cout << "CyclicZoom: Mask variables for new zoom radius: "
+                << zregion.radius << std::endl;
+    }
   }
   // Initialize boundary values and primitive variables after reinitialization and masking
   if (zamr.zooming_in || zstate.zone > 0) {

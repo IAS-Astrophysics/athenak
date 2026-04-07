@@ -147,8 +147,7 @@ class CyclicZoom {
   void StoreVariables();
   bool CheckStoreFlag(int m);
   void CorrectVariables();
-  void ReinitVariables();
-  void MaskVariables();
+  void MaskVariables(int zone, const ZoomRegion &zreg);
   void ApplyMask();
   void AdjustExcisionForZoom();
   void UpdateFluxes(Driver *pdriver);

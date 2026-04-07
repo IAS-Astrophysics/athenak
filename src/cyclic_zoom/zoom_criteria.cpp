@@ -22,7 +22,7 @@
 void CyclicZoom::CheckRefinement() {
   if (pmesh->time >= zstate.next_time) {
     if (verbose && global_variable::my_rank == 0) {
-      std::cout << "CyclicZoom AMR: old level = " << zamr.level << std::endl;
+      std::cout << "CyclicZoom: old level = " << zamr.level << std::endl;
     }
     SetRefinementFlags();
     UpdateState();
@@ -39,7 +39,7 @@ void CyclicZoom::UpdateState() {
   if (zstate.direction < 0) {zamr.zooming_in = true;}
   if (zamr.zooming_out && zamr.zooming_in) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
-              << "CyclicZoom AMR: zooming_in and zooming_out both true!" << std::endl;
+              << "CyclicZoom: zooming_in and zooming_out both true!" << std::endl;
     std::exit(EXIT_FAILURE);
   }
   // update zoom state
@@ -56,21 +56,20 @@ void CyclicZoom::UpdateState() {
   zstate.next_time = pmesh->time + zint.runtime;
   // print verbose output
   if (verbose && global_variable::my_rank == 0) {
-    std::cout << "CyclicZoom AMR:"
-              << " new id = " << zstate.id
+    std::cout << "CyclicZoom: new id = " << zstate.id
               << " zone = " << zstate.zone
               << " level = " << zamr.level
               << std::endl;
-    std::cout << "CyclicZoom AMR: old region radius = " << old_zregion.radius
-              << std::endl;
-    std::cout << "CyclicZoom AMR: new region radius = " << zregion.radius
-              << std::endl
-              << " r_exc = " << zregion.exc.r
+    std::cout << "CyclicZoom: old region radius = " << old_zregion.radius << std::endl;
+    std::cout << "CyclicZoom: new region radius = " << zregion.radius << std::endl;
+    std::cout << "CyclicZoom: r_exc = " << zregion.exc.r
               << " r_cut = " << zregion.cut.r
               << " r_flx = " << zregion.flx.r
               << std::endl;
-    std::cout << "CyclicZoom AMR: time = " << pmesh->time << " runtime = " << zint.runtime
-              << " next time = " << zstate.next_time << std::endl;
+    std::cout << "CyclicZoom: time = " << pmesh->time
+              << " runtime = " << zint.runtime
+              << " next time = " << zstate.next_time
+              << std::endl;
   }
 }
 
@@ -108,7 +107,7 @@ void CyclicZoom::SetRefinementFlags() {
   Real r_zoom = zregion.radius;
   Real x1c = zregion.x1c, x2c = zregion.x2c, x3c = zregion.x3c;
   if(verbose && global_variable::my_rank == 0) {
-    std::cout << "ZoomCriteria: " << (ref_flag > 0 ? "Refines" : "Derefines")
+    std::cout << "CyclicZoom: " << (ref_flag > 0 ? "refines" : "derefines")
               << " to level " << old_level + ref_flag
               << " (refine_flag=" << ref_flag << ")" << std::endl;
   }
