@@ -350,6 +350,12 @@ Outputs::Outputs(ParameterInput *pin, Mesh *pm) {
           "single_file_per_rank", false);
         pnode = new MeshBinaryOutput(pin,pm,opar);
         pout_list.insert(pout_list.begin(),pnode);
+      } else if (opar.file_type.compare("sphslice") == 0) {
+        // spherical slice output: validation of radius/ntheta/nphi happens in ctor
+        opar.single_file_per_rank = pin->GetOrAddBoolean(opar.block_name,
+          "single_file_per_rank", false);
+        pnode = new SphericalSliceOutput(pin,pm,opar);
+        pout_list.insert(pout_list.begin(),pnode);
       } else if (opar.file_type.compare("rst_prtcl") == 0) {
       // Add particle restarts - can coexist with regular restarts
         pnode = new ParticleRestartOutput(pin,pm,opar);

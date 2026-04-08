@@ -494,6 +494,24 @@ class MeshBinaryOutput : public BaseTypeOutput {
 };
 
 //----------------------------------------------------------------------------------------
+//! \class SphericalSliceOutput
+//  \brief derived BaseTypeOutput class that writes a 2D spherical slice at radius r
+//  (origin-centered) in binary format.  Interpolates all requested variables onto a
+//  uniform (cos(theta), phi) grid via trilinear interpolation.
+
+class SphericalSlice;  // forward decl
+
+class SphericalSliceOutput : public BaseTypeOutput {
+ public:
+  SphericalSliceOutput(ParameterInput *pin, Mesh *pm, OutputParameters oparams);
+  ~SphericalSliceOutput() override;
+  void LoadOutputData(Mesh *pm) override;
+  void WriteOutputFile(Mesh *pm, ParameterInput *pin) override;
+ private:
+  SphericalSlice *psph;
+};
+
+//----------------------------------------------------------------------------------------
 //! \class RestartOutput
 //  \brief derived BaseTypeOutput class for restarts
 
