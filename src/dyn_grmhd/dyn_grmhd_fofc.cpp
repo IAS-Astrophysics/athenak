@@ -209,7 +209,7 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::FOFC(Driver *pdriver, int stage) {
 
       // Calculate fluxes of scalars
       for (int n = 0; n < nscal_; n++) {
-        if (flx1(m, nmhd_ + n, k, j, i) >= 0.0) {
+        if (flx1(m, IDN, k, j, i) >= 0.0) {
           flx1(m, nmhd_ + n, k, j, i) = flx1(m,IDN,k,j,i)*wli[PYF + n];
         } else {
           flx1(m, nmhd_ + n, k, j, i) = flx1(m,IDN,k,j,i)*wri[PYF + n];
@@ -245,7 +245,7 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::FOFC(Driver *pdriver, int stage) {
 
         // Calculate fluxes of scalars
         for (int n = 0; n < nscal_; n++) {
-          if (flx2(m, nmhd_ + n, k, j, i) >= 0.0) {
+          if (flx2(m, IDN, k, j, i) >= 0.0) {
             flx2(m, nmhd_ + n, k, j, i) = flx2(m,IDN,k,j,i)*wlj[PYF + n];
           } else {
             flx2(m, nmhd_ + n, k, j, i) = flx2(m,IDN,k,j,i)*wrj[PYF + n];
@@ -282,7 +282,7 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::FOFC(Driver *pdriver, int stage) {
 
         // Calculate fluxes of scalars
         for (int n = 0; n < nscal_; n++) {
-          if (flx3(m, nmhd_ + n, k, j, i) >= 0.0) {
+          if (flx3(m, IDN, k, j, i) >= 0.0) {
             flx3(m, nmhd_ + n, k, j, i) = flx3(m,IDN,k,j,i)*wmk[PYF + n];
           } else {
             flx3(m, nmhd_ + n, k, j, i) = flx3(m,IDN,k,j,i)*wpk[PYF + n];
@@ -325,7 +325,7 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::FOFC(Driver *pdriver, int stage) {
         SingleStateLLF_DYNGR<IVX>(eos_, wli, wri, bli, bri, nmhd_, nscal_,
                              g3d, beta_u, alpha, flux, bflux);
       } else if (rsolver_method_ == DynGRMHD_RSolver::hlle_dyngr) {
-        SingleStateHLLE_DYNGR<IVX>(eos_, wli, wri, bli, bri, nmhd_, nscal_,
+        SingleStateLLF_DYNGR<IVX>(eos_, wli, wri, bli, bri, nmhd_, nscal_,
                              g3d, beta_u, alpha, flux, bflux);
       }
 
@@ -336,7 +336,7 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::FOFC(Driver *pdriver, int stage) {
 
       // Calculate fluxes of scalars
       for (int n = 0; n < nscal_; n++) {
-        if (flx1(m, nmhd_ + n, k, j, i+1) >= 0.0) {
+        if (flx1(m, IDN, k, j, i+1) >= 0.0) {
           flx1(m, nmhd_ + n, k, j, i+1) = flx1(m,IDN,k,j,i+1)*wli[PYF + n];
         } else {
           flx1(m, nmhd_ + n, k, j, i+1) = flx1(m,IDN,k,j,i+1)*wri[PYF + n];
@@ -373,7 +373,7 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::FOFC(Driver *pdriver, int stage) {
 
         // Calculate fluxes of scalars
         for (int n = 0; n < nscal_; n++) {
-          if (flx2(m, nmhd_ + n, k, j+1, i) >= 0.0) {
+          if (flx2(m, IDN, k, j+1, i) >= 0.0) {
             flx2(m, nmhd_ + n, k, j+1, i) = flx2(m,IDN,k,j+1,i)*wlj[PYF + n];
           } else {
             flx2(m, nmhd_ + n, k, j+1, i) = flx2(m,IDN,k,j+1,i)*wrj[PYF + n];
@@ -411,7 +411,7 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::FOFC(Driver *pdriver, int stage) {
 
         // Calculate fluxes of scalars
         for (int n = 0; n < nscal_; n++) {
-          if (flx3(m, nmhd_ + n, k+1, j, i) >= 0.0) {
+          if (flx3(m, IDN, k+1, j, i) >= 0.0) {
             flx3(m, nmhd_ + n, k+1, j, i) = flx3(m,IDN,k+1,j,i)*wmk[PYF + n];
           } else {
             flx3(m, nmhd_ + n, k+1, j, i) = flx3(m,IDN,k+1,j,i)*wpk[PYF + n];
