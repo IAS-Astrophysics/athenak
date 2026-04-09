@@ -452,7 +452,7 @@ void MeshBoundaryValuesFC::SumBoundaryFluxes(DvceEdgeFld4D<Real> &flx,
   auto &mblev = pmy_pack->pmb->mb_lev;
   auto &mbbcs = pmy_pack->pmb->mb_bcs;
 
-  // Sum recieve buffers into EMFs stored on MeshBlocks
+  // Sum receive buffers into EMFs stored on MeshBlocks
   // Outer loop over (# of MeshBlocks)*(3 field components)
   Kokkos::TeamPolicy<> policy(DevExeSpace(), (3*nmb), Kokkos::AUTO);
   Kokkos::parallel_for("RecvBuff", policy, KOKKOS_LAMBDA(TeamMember_t tmember) {

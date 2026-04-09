@@ -4,7 +4,7 @@
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
 //! \file rt.cpp
-//! \brief Problem generator for RT instabilty.
+//! \brief Problem generator for RT instability.
 //!
 //! Note the gravitational acceleration is hardwired to be 0.1. Density difference is
 //! hardwired to be 3.0 and is set by the input parameter `problem/drat`.

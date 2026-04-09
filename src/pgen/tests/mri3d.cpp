@@ -88,7 +88,7 @@ void ProblemGenerator::MRI3d(ParameterInput *pin, const bool restart) {
   Real gm1 = eos.gamma - 1.0;
   if (eos.is_ideal && (is_strat)) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
-              << "Stratified shearing box only works with isothernal EOS" << std::endl;
+              << "Stratified shearing box only works with isothermal EOS" << std::endl;
     exit(EXIT_FAILURE);
   }
 

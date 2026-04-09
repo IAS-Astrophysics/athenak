@@ -99,7 +99,7 @@ class Radiation {
   bool fixed_fluid;         // flag to enable/disable fluid integration
   bool affect_fluid;        // flag to enable/disable feedback of rad field on fluid
   Real arad;                // radiation constant
-  Real kappa_a;             // constant Rosseland mean absoprtion coefficient
+  Real kappa_a;             // constant Rosseland mean absorption coefficient
   Real kappa_s;             // constant scattering coefficient
   Real kappa_p;             // Planck - Rosseland mean coefficient
   bool power_opacity;       // flag to enable Kramer's law opacity for kappa_a
