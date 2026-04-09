@@ -21,7 +21,7 @@
     #error NHISTORY > NREDUCTION in outputs.hpp
 #endif
 
-#define NOUTPUT_CHOICES 216
+#define NOUTPUT_CHOICES 217
 // choices for output variables used in <ouput> blocks in input file
 // TO ADD MORE CHOICES:
 //   - add more strings to array below, change NOUTPUT_CHOICES above appropriately
@@ -101,30 +101,30 @@ static const char *var_choice[NOUTPUT_CHOICES] = {
   // Particles (163-164)
   "prtcl_all", "prtcl_d",
 
-  // Coordinate variables for PDF binning (165-174)
+  // Coordinate variables for PDF binning (165-175)
   "coord_x", "coord_y", "coord_z",
   "coord_r", "coord_theta", "coord_phi",
   "coord_cyl_R", "coord_cyl_phi", "coord_cyl_z",
-  "coord_costheta",
+  "coord_costheta", "coord_abscostheta",
 
-  // Mass and energy flux derived variables (175-186)
+  // Mass and energy flux derived variables (176-187)
   "mdot_sph", "mdot_sph_out", "mdot_sph_in",
   "edot_sph", "edot_sph_out", "edot_sph_in",
   "mdot_vert", "mdot_vert_out", "mdot_vert_in",
   "edot_vert", "edot_vert_out", "edot_vert_in",
 
-  // Spherical/cylindrical velocity components and energy flux components (187-194)
+  // Spherical/cylindrical velocity components and energy flux components (188-195)
   "vel_sph_r", "vel_sph_theta", "vel_sph_phi",
   "vel_cyl_R", "vel_cyl_phi",
   "edot_sph_kin", "edot_sph_th", "edot_sph_mag",
 
-  // Cooling time (195)
+  // Cooling time (196)
   "cooling_time",
 
-  // Individual hydro passive scalars (196-205)
+  // Individual hydro passive scalars (197-206)
   "hydro_u_s_00", "hydro_u_s_01", "hydro_u_s_02", "hydro_u_s_03", "hydro_u_s_04",
   "hydro_w_s_00", "hydro_w_s_01", "hydro_w_s_02", "hydro_w_s_03", "hydro_w_s_04",
-  // Individual mhd passive scalars (206-215)
+  // Individual mhd passive scalars (207-216)
   "mhd_u_s_00", "mhd_u_s_01", "mhd_u_s_02", "mhd_u_s_03", "mhd_u_s_04",
   "mhd_w_s_00", "mhd_w_s_01", "mhd_w_s_02", "mhd_w_s_03", "mhd_w_s_04",
 };

@@ -956,6 +956,12 @@ BaseTypeOutput::BaseTypeOutput(ParameterInput *pin, Mesh *pm, OutputParameters o
     int i_derived = out_params.n_derived - 1;
     outvars.emplace_back("coord_costheta", i_derived, &derived_var);
   }
+  if (variable.compare("coord_abscostheta") == 0) {
+      out_params.contains_derived = true;
+      out_params.n_derived += 1;
+      int i_derived = out_params.n_derived - 1;
+      outvars.emplace_back("coord_abscostheta", i_derived, &derived_var);
+  }
   if (variable.compare("coord_phi") == 0) {
     out_params.contains_derived = true;
     out_params.n_derived += 1;

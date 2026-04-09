@@ -1615,6 +1615,25 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
     i_dv += 1;
   }
 
+  // Spherical coordinate |cos(theta)| = |z|/r, range [0, 1]
+  if (name.compare("coord_abscostheta") == 0) {
+    if (derived_var.extent(4) <= 1)
+      Kokkos::realloc(derived_var, nmb, n_dv, n3, n2, n1);
+    auto dv = derived_var;
+    int nx1 = indcs.nx1;
+    int nx2 = indcs.nx2;
+    int nx3 = indcs.nx3;
+    par_for("coord_abscostheta", DevExeSpace(), 0, (nmb-1), ks, ke, js, je, is, ie,
+    KOKKOS_LAMBDA(int m, int k, int j, int i) {
+      Real x = CellCenterX(i-is, nx1, size.d_view(m).x1min, size.d_view(m).x1max);
+      Real y = CellCenterX(j-js, nx2, size.d_view(m).x2min, size.d_view(m).x2max);
+      Real z = CellCenterX(k-ks, nx3, size.d_view(m).x3min, size.d_view(m).x3max);
+      Real r = sqrt(x*x + y*y + z*z);
+      dv(m, i_dv, k, j, i) = (r > 0.0) ? fabs(z / r) : 1.0;
+    });
+    i_dv += 1;
+  }
+
   // Spherical coordinate phi = atan2(y, x), range [0, 2π]
   if (name.compare("coord_phi") == 0) {
     auto dv = derived_var;
