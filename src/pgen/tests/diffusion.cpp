@@ -44,7 +44,7 @@ bool set_initial_conditions = true;
 struct DiffusionVariables {
   int prob_dir;
   bool conduction_test, viscosity_test, resistivity_test;
-  Real amp, t0, x10;
+  Real amp, x10;
 };
 
 DiffusionVariables diffvars;
@@ -71,7 +71,6 @@ void ProblemGenerator::Diffusion(ParameterInput *pin, const bool restart) {
   // Read problem parameters
   diffvars.prob_dir = pin->GetOrAddInteger("problem","direction",1);
   diffvars.amp = pin->GetOrAddReal("problem", "amp", 1.e-6);
-  diffvars.t0 = pin->GetOrAddReal("problem", "t0", 0.5);
   diffvars.x10 = pin->GetOrAddReal("problem", "x10", 0.0);
   diffvars.conduction_test = pin->GetBoolean("problem", "conduction_test");
   diffvars.viscosity_test = pin->GetBoolean("problem", "viscosity_test");
@@ -94,13 +93,11 @@ void ProblemGenerator::Diffusion(ParameterInput *pin, const bool restart) {
   auto &time = pmbp->pmesh->time;
 
   // capture variables for the kernel
-  Real amp_ = diffvars.amp;
   bool ctest = diffvars.conduction_test;
   bool vtest = diffvars.viscosity_test;
   Real x10_ = diffvars.x10;
-  // add stopping time when called at end of run
-  Real t1 = diffvars.t0;
-  if (!(set_initial_conditions)) {t1 += time;}
+  // compute amplitude when called at end of run
+  Real amp_ = diffvars.amp;
 
   // Initialize Hydro variables -------------------------------
   if (pmbp->phydro != nullptr) {
@@ -139,17 +136,19 @@ void ProblemGenerator::Diffusion(ParameterInput *pin, const bool restart) {
 
       Real vperp = 0.0;
       if (vtest) {
-        vperp = amp_*exp(SQR(x1v-x10_)/(-4.0*nu_iso*t1))/sqrt(4.*M_PI*nu_iso*t1);
+        vperp = (amp_/sqrt(1.0 + 4.0*nu_iso*time))*
+                exp(-1.0*SQR(x1v-x10_)/(1.0 + 4.0*nu_iso*time));
       }
       Real p0 = 1.0/eos.gamma;
       if (ctest) {
-        p0 = amp_*exp(SQR(x1v-x10_)/(-4.0*kappa_iso*t1))/sqrt(4.*M_PI*kappa_iso*t1);
+        p0 = (amp_/sqrt(1.0 + 4.0*kappa_iso*time))*
+              exp(-1.0*SQR(x1v-x10_)/(1.0 + 4.0*kappa_iso*time));
       }
       u1(m,IDN,k,j,i) = 1,0;
       u1(m,IM1,k,j,i) = 0.0;
       u1(m,IM2,k,j,i) = vperp;
       u1(m,IM3,k,j,i) = vperp;
-      u1(m,IEN,k,j,i) = p0/gm1 + 0.5*(SQR(u1(m,IM2,k,j,i)) + SQR(u1(m,IM3,k,j,i)));
+      u1(m,IEN,k,j,i) = p0/gm1 + 0.5*(SQR(vperp) + SQR(vperp));
     });
   } // End initialization of Hydro variables
   return;
@@ -195,7 +194,7 @@ void GaussianProfileBCs(Mesh *pm) {
   // capture variables for the kernel
   //auto dv_=dv;
   auto amp_ = diffvars.amp, x10_ = diffvars.x10;
-  Real t1 = diffvars.t0 + pm->time;
+  Real time = pm->time;
   bool ctest = diffvars.conduction_test;
   bool vtest = diffvars.viscosity_test;
 
@@ -209,31 +208,36 @@ void GaussianProfileBCs(Mesh *pm) {
         Real x1v = CellCenterX(-1-i, indcs.nx1, x1min, x1max);
         Real vperp = 0.0;
         if (vtest) {
-          vperp = amp_*exp(SQR(x1v-x10_)/(-4.0*nu_iso*t1))/sqrt(4.*M_PI*nu_iso*t1);
+          vperp = (amp_/sqrt(1.0 + 4.0*nu_iso*time))*
+                  exp(-1.0*SQR(x1v-x10_)/(1.0 + 4.0*nu_iso*time));
         }
         Real p0 = 1.0/eos.gamma;
         if (ctest) {
-          p0 = amp_*exp(SQR(x1v-x10_)/(-4.0*kappa_iso*t1))/sqrt(4.*M_PI*kappa_iso*t1);
+          p0 = (amp_/sqrt(1.0 + 4.0*kappa_iso*time))*
+                exp(-1.0*SQR(x1v-x10_)/(1.0 + 4.0*kappa_iso*time));
         }
         u0(m,IDN,k,j,is-i-1) = 1,0;
         u0(m,IM1,k,j,is-i-1) = 0.0;
         u0(m,IM2,k,j,is-i-1) = vperp;
         u0(m,IM3,k,j,is-i-1) = vperp;
-        u0(m,IEN,k,j,is-i-1) = p0/gm1 + 0.5*(SQR(u0(m,IM2,k,j,i)) + SQR(u0(m,IM3,k,j,i)));
+        u0(m,IEN,k,j,is-i-1) = p0/gm1 + 0.5*(SQR(vperp) + SQR(vperp));
 
         // Outer X1-boundary
         x1v = CellCenterX(ie-is+1+i, indcs.nx1, x1min, x1max);
         if (vtest) {
-          vperp = amp_*exp(SQR(x1v-x10_)/(-4.0*nu_iso*t1))/sqrt(4.*M_PI*nu_iso*t1);
+          vperp = (amp_/sqrt(1.0 + 4.0*nu_iso*time))*
+                  exp(-1.0*SQR(x1v-x10_)/(1.0 + 4.0*nu_iso*time));
         }
+        p0 = 1.0/eos.gamma;
         if (ctest) {
-          p0 = amp_*exp(SQR(x1v-x10_)/(-4.0*kappa_iso*t1))/sqrt(4.*M_PI*kappa_iso*t1);
+          p0 = (amp_/sqrt(1.0 + 4.0*kappa_iso*time))*
+                exp(-1.0*SQR(x1v-x10_)/(1.0 + 4.0*kappa_iso*time));
         }
         u0(m,IDN,k,j,ie+i+1) = 1,0;
         u0(m,IM1,k,j,ie+i+1) = 0.0;
         u0(m,IM2,k,j,ie+i+1) = vperp;
         u0(m,IM3,k,j,ie+i+1) = vperp;
-        u0(m,IEN,k,j,ie+i+1) = p0/gm1 + 0.5*(SQR(u0(m,IM2,k,j,i)) + SQR(u0(m,IM3,k,j,i)));
+        u0(m,IEN,k,j,ie+i+1) = p0/gm1 + 0.5*(SQR(vperp) + SQR(vperp));
       }
     });
   }
