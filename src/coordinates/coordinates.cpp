@@ -162,7 +162,7 @@ void Coordinates::CoordSrcTerms(const DvceArray5D<Real> &prim, const EOS_Data &e
     tt[2][3] = wtot * u2 * u3 + ptot * gupper[2][3];
     tt[3][3] = wtot * u3 * u3 + ptot * gupper[3][3];
 
-    // compute derivates of metric.
+    // compute derivatives of metric.
     Real dg_dx1[4][4], dg_dx2[4][4], dg_dx3[4][4];
     ComputeMetricDerivatives(x1v, x2v, x3v, flat, spin, dg_dx1, dg_dx2, dg_dx3);
 
@@ -306,7 +306,7 @@ void Coordinates::CoordSrcTerms(const DvceArray5D<Real> &prim,
     tt[2][3] = wtot * u2 * u3 + ptot * gupper[2][3] - b2 * b3;
     tt[3][3] = wtot * u3 * u3 + ptot * gupper[3][3] - b3 * b3;
 
-    // compute derivates of metric.
+    // compute derivatives of metric.
     Real dg_dx1[4][4], dg_dx2[4][4], dg_dx3[4][4];
     ComputeMetricDerivatives(x1v, x2v, x3v, flat, spin, dg_dx1, dg_dx2, dg_dx3);
 

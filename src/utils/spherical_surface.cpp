@@ -4,7 +4,7 @@
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
 //! \file gauss_legendre.cpp
-//  \brief Initializes a Gauss-Legendra grid to interpolate data onto
+//  \brief Initializes a Gauss-Legendre grid to interpolate data onto
 
 #include "spherical_surface.hpp"
 

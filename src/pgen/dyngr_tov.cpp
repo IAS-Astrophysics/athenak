@@ -618,7 +618,7 @@ void TOVHistory(HistoryData *pdata, Mesh *pm) {
   Real alpha_min = -rho_max;
   Kokkos::parallel_reduce("TOVHistSums",Kokkos::RangePolicy<>(DevExeSpace(), 0, nmkji),
   KOKKOS_LAMBDA(const int &idx, Real &mb_max, Real &mb_alp_min) {
-    // coompute n,k,j,i indices of thread
+    // compute n,k,j,i indices of thread
     int m = (idx)/nkji;
     int k = (idx - m*nkji)/nji;
     int j = (idx - m*nkji - k*nji)/nx1;

@@ -486,7 +486,7 @@ class EOS : public EOSPolicy, public ErrorPolicy {
     T_atm = (floor >= min_T) ? floor : min_T;
   }
 
-  //! \fn void SetSpeciesAtmospher(Real atmo, int i)
+  //! \fn void SetSpeciesAtmosphere(Real atmo, int i)
   //  \brief Set the atmosphere abundance used by the EOS ErrorPolicy for species i.
   KOKKOS_INLINE_FUNCTION void SetSpeciesAtmosphere(Real atmo, int i) {
     assert((i < n_species) && "Not enough species");

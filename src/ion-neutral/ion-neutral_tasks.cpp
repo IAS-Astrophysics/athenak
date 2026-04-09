@@ -130,7 +130,7 @@ TaskStatus IonNeutral::FirstTwoImpRK(Driver *pdrive, int stage) {
 //  \brief Implicit RK update of ion-neutral drag term. Used as part of ImEx RK integrator
 //  This function should be added AFTER the explicit updates in the task list, so that
 //  source terms are evaluated using partially updated values (including explicit terms
-//  such as flux divergence).  This means soure terms must only be evaluated using
+//  such as flux divergence).  This means source terms must only be evaluated using
 //  conserved variables (u0), as primitives (w0) are not updated until end of TaskList.
 //
 //  Note indices of source term array correspond to:

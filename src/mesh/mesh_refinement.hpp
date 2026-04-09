@@ -68,7 +68,7 @@ class MeshRefinement {
   int *newtoold;          // mapping of new gid (index n) to old gid
   int *oldtonew;          // mapping of old gid (index n) to new gid
 
-  // arrays in Mesh class created for new MB hieararchy with AMR
+  // arrays in Mesh class created for new MB heirarchy with AMR
   // following 3x arrays allocated with length [new_nmb_total]
   float *new_cost_eachmb;            // cost of each MeshBlock
   int *new_rank_eachmb;              // rank of each MeshBlock
