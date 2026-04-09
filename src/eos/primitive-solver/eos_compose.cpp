@@ -193,6 +193,9 @@ void EOSCompOSE<LogPolicy>::ReadTableFromFile(std::string fname) {
     m_initialized = true;
 
     m_min_h = std::numeric_limits<Real>::max();
+    int in_min;
+    int iy_min;
+    int it_min;
     // Compute minimum enthalpy
     for (int in = 0; in < m_nn; ++in) {
       Real const nb = exp2_(host_log_nb(in));
@@ -203,10 +206,48 @@ void EOSCompOSE<LogPolicy>::ReadTableFromFile(std::string fname) {
           Real e = exp2_(host_table(ECLOGE,in,iy,it));
           Real p = exp2_(host_table(ECLOGP,in,iy,it));
           Real h = (e + p) / nb;
-          m_min_h = fmin(m_min_h, h);
+          if (h < m_min_h) {
+            m_min_h = h;
+            in_min = in;
+            iy_min = iy;
+            it_min = it;
+          }
         }
       }
     }
+    // Because the enthalpy is (e + P)/n (i.e., nonlinear), we cannot guarantee that the
+    // minimum at table points is actually the minimum allowed by the EOS once we
+    // interpolate between points. Finding the true minimum would require some sort of
+    // optimization algorithm, which is difficult because all the interpolation operations
+    // are on the GPU. However, we can compute a conservative lower bound on min_h by
+    // computing the derivative at the estimated minimum. It should have O(dlog n)
+    // behavior, so it should also be a conservative bound for the NQTs, which will have
+    // O((dlog n)^2) behavior.
+    //
+    // We estimate the minimum as h(n_k) - dlog n |dh/dn|_{n_k}, where we take the
+    // maximum of |dh/dn| using the left and right estimates.
+    Real loge = host_table(ECLOGE,in_min,iy_min,it_min);
+    Real logp = host_table(ECLOGP,in_min,iy_min,it_min);
+    Real nb = exp2_(host_log_nb(in_min));
+    Real e = exp2_(loge);
+    Real p = exp2_(logp);
+    Real loge_left = loge;
+    Real logp_left = logp;
+    if (in_min > 0) {
+      loge_left = host_table(ECLOGE,in_min-1,iy_min,it_min);
+      logp_left = host_table(ECLOGP,in_min-1,iy_min,it_min);
+    }
+    Real dhdn = Kokkos::fabs(((loge - loge_left)*m_id_log_nb - 1.0)*e +
+                             ((logp - logp_left)*m_id_log_nb - 1.0)*p)/nb;
+    Real loge_right = loge;
+    Real logp_right = logp;
+    if (in_min < m_nn-1) {
+      loge_right = host_table(ECLOGE,in_min+1,iy_min,it_min);
+      logp_right = host_table(ECLOGP,in_min+1,iy_min,it_min);
+    }
+    dhdn = Kokkos::fmax(Kokkos::fabs(((loge_right - loge)*m_id_log_nb - 1.0)*e +
+                        ((logp_right - logp)*m_id_log_nb - 1.0)*p)/nb, dhdn);
+    m_min_h -= dhdn/m_id_log_nb;
   } // if (m_initialized==false)
 }
 
