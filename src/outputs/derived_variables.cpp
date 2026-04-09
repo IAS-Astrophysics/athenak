@@ -1268,5 +1268,28 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
       pdens(m,0,kp,jp,ip) += 1.0;
     });
   }
+
+  // spherical coordinate radius r = sqrt(x^2 + y^2 + z^2) from cell centers
+  if (name.compare("r_sph") == 0) {
+    if (derived_var.extent(4) <= 1)
+      Kokkos::realloc(derived_var, nmb, n_dv, n3, n2, n1);
+    auto dv = derived_var;
+    int nx1_ = indcs.nx1;
+    int nx2_ = indcs.nx2;
+    int nx3_ = indcs.nx3;
+    int idv_local = i_dv;
+    int nmb_valid = pm->pmb_pack->nmb_thispack;
+    par_for("r_sph", DevExeSpace(), 0, (nmb_valid-1), ks, ke, js, je, is, ie,
+    KOKKOS_LAMBDA(int m, int k, int j, int i) {
+      Real x1v = CellCenterX(i-is, nx1_, size.d_view(m).x1min,
+                                         size.d_view(m).x1max);
+      Real x2v = CellCenterX(j-js, nx2_, size.d_view(m).x2min,
+                                         size.d_view(m).x2max);
+      Real x3v = CellCenterX(k-ks, nx3_, size.d_view(m).x3min,
+                                         size.d_view(m).x3max);
+      dv(m,idv_local,k,j,i) = sqrt(x1v*x1v + x2v*x2v + x3v*x3v);
+    });
+    i_dv += 1; // increment derived variable index
+  }
   i_dv = i_dv % n_dv; // reset derived variable index
 }

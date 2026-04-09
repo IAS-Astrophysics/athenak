@@ -202,7 +202,8 @@ void PDFOutput::LoadOutputData(Mesh *pm) {
   auto result  = pdf_data.result_;
   auto scatter = pdf_data.scatter_result;
 
-  int nmb = pm->pmb_pack->nmb_thispack;
+  int nmb = std::max((pm->pmb_pack->nmb_thispack), (pm->pmb_pack->pmesh->nmb_maxperrank));
+  int nmb_valid = pm->pmb_pack->nmb_thispack;
   int nx1 = indcs.nx1 + 2*indcs.ng;
   int nx2 = indcs.nx2 + 2*indcs.ng;
   int nx3 = indcs.nx3 + 2*indcs.ng;
@@ -240,7 +241,7 @@ void PDFOutput::LoadOutputData(Mesh *pm) {
   bool logscale2 = pdf_data.logscale2;
   bool mass_weighted = pdf_data.mass_weighted;
 
-  par_for("pdf", DevExeSpace(),0,nmb-1,ks,ke,js,je,is,ie,
+  par_for("pdf", DevExeSpace(),0,nmb_valid-1,ks,ke,js,je,is,ie,
   KOKKOS_LAMBDA(int m, int k, int j, int i) {
     auto &x_val = outvars_device(0, m, k, j, i);
     int x_bin = -1;
