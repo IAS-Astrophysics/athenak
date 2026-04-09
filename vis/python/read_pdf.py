@@ -2,14 +2,25 @@
 
 """Read AthenaK N-D PDF output files.
 
-Binary layout:
-  - First 8 bytes: time (float64)
-  - Next: flattened histogram values (float64), length = total_bins
+Two on-disk formats (selected by the header 'format' field):
 
-Header layout (ASCII):
-  - <basename>.header.pdf produced once per output stream.
+  dense (used when ranks are globally reduced to rank 0):
+    - float64 time
+    - float64 values[total_bins]
+
+  sparse_coo (used when single_file_per_rank is enabled; one file per rank):
+    - float64 time
+    - uint32  nnz
+    - uint32  idx[nnz]   (flat bin indices)
+    - float64 val[nnz]
+
+Header layout (ASCII): <basename>.header.pdf, written once per stream.
+
+For sparse_coo, point read_pdf() at the rank_00000000 file and all rank
+files are discovered automatically and summed into a dense histogram.
 """
 
+import glob as _glob
 import os
 import re
 
@@ -38,6 +49,16 @@ def _get_dim_index(key):
     return int(match.group(1))
 
 
+def _glob_rank_files(rank0_path):
+    """Given a rank_00000000 path, find all matching rank files."""
+    pattern = rank0_path.replace('rank_00000000', 'rank_*')
+    files = sorted(_glob.glob(pattern))
+    if not files:
+        raise RuntimeError(
+            'No rank files found matching {}'.format(pattern))
+    return files
+
+
 def _infer_header_path(data_path):
     match = _PDF_DATA_RE.match(os.path.basename(data_path))
     if match is None:
@@ -61,7 +82,9 @@ def read_pdf_header(header_path):
                 continue
             key, value = match.group(1), match.group(2).strip()
 
-            if key == 'ndim':
+            if key == 'format':
+                header['format'] = value
+            elif key == 'ndim':
                 header['ndim'] = int(value)
             elif key == 'weight':
                 header['weight'] = value
@@ -132,24 +155,73 @@ def read_pdf_header(header_path):
     return header
 
 
+def _read_sparse_rank_file(path):
+    """Read one sparse_coo rank file. Returns (time, idx, val)."""
+    with open(path, 'rb') as handle:
+        tv = np.fromfile(handle, dtype=np.float64, count=1)
+        if tv.size == 0:
+            return None, None, None
+        nnz_arr = np.fromfile(handle, dtype=np.uint32, count=1)
+        if nnz_arr.size == 0:
+            raise RuntimeError(
+                'Truncated sparse PDF file {}: missing nnz header'.format(path))
+        nnz = int(nnz_arr[0])
+        if nnz == 0:
+            return float(tv[0]), None, None
+        idx = np.fromfile(handle, dtype=np.uint32, count=nnz)
+        val = np.fromfile(handle, dtype=np.float64, count=nnz)
+        if idx.size != nnz or val.size != nnz:
+            raise RuntimeError(
+                'Truncated sparse PDF file {}: expected nnz={}'.format(path, nnz))
+    return float(tv[0]), idx, val
+
+
 def read_pdf(data_path, header_path=None, reshape=True):
-    """Read a PDF data file and return a dict with time, data, and header."""
+    """Read a PDF data file and return a dict with time, data, and header.
+
+    For sparse_coo output (single_file_per_rank), pass any rank file (or the
+    rank_00000000 file) and all matching rank files are discovered, decoded,
+    and summed into a dense histogram.
+    """
     if header_path is None:
         header_path = _infer_header_path(data_path)
 
     header = read_pdf_header(header_path)
-    raw = np.fromfile(data_path, dtype=np.float64)
+    fmt = header.get('format', 'dense')
+    total_bins = header.get('total_bins')
 
-    if raw.size == 0:
-        raise RuntimeError('No data found in {}'.format(data_path))
+    if fmt == 'sparse_coo':
+        if total_bins is None:
+            raise RuntimeError(
+                'Sparse PDF header missing total_bins: {}'.format(header_path))
+        rank_files = _glob_rank_files(data_path)
+        data = np.zeros(total_bins, dtype=np.float64)
+        time_val = None
+        for rf in rank_files:
+            tv, idx, val = _read_sparse_rank_file(rf)
+            if tv is None:
+                continue
+            if time_val is None:
+                time_val = tv
+            if idx is None:
+                continue
+            data[idx] += val
+    elif fmt == 'dense':
+        raw = np.fromfile(data_path, dtype=np.float64)
+        if raw.size == 0:
+            raise RuntimeError('No data found in {}'.format(data_path))
+        if total_bins is not None and raw.size != total_bins + 1:
+            raise RuntimeError(
+                'Unexpected data size in {} (expected {}, got {})'.format(
+                    data_path, total_bins + 1, raw.size))
+        time_val = float(raw[0])
+        data = raw[1:]
+    else:
+        raise RuntimeError('Unknown PDF format {!r} in {}'.format(fmt, header_path))
 
-    expected = header.get('total_bins')
-    if expected is not None and raw.size != expected + 1:
-        raise RuntimeError('Unexpected data size in {} (expected {}, got {})'.format(
-            data_path, expected + 1, raw.size))
+    if time_val is None:
+        raise RuntimeError('No data found for {}'.format(data_path))
 
-    time_val = float(raw[0])
-    data = raw[1:]
     if reshape:
         data = data.reshape(header['shape'], order='C')
 

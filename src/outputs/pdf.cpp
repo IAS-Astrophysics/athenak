@@ -22,6 +22,7 @@
 
 #include <sys/stat.h>  // mkdir
 
+#include <cstdint>
 #include <cstdio>
 #include <cstdlib>
 #include <cmath>
@@ -326,6 +327,7 @@ void PDFOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
 
     // Write header metadata
     std::fprintf(hfile, "# AthenaK N-D PDF Output\n");
+    std::fprintf(hfile, "format = %s\n", sfpr ? "sparse_coo" : "dense");
     std::fprintf(hfile, "ndim = %d\n", pdf_data.ndim);
     std::fprintf(hfile, "weight = %s\n", out_params.pdf_weight.c_str());
     if (out_params.pdf_weight.compare("variable") == 0) {
@@ -388,10 +390,31 @@ void PDFOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
   Kokkos::deep_copy(result_host, pdf_data.result_);
   Kokkos::fence();
 
-  // Write histogram data as doubles
-  for (int n = 0; n < pdf_data.total_bins; ++n) {
-    double val = static_cast<double>(result_host(n));
-    std::fwrite(&val, sizeof(double), 1, pfile);
+  if (sfpr) {
+    // Sparse COO: compact nonzero bins into (idx, val) pairs.
+    // Layout after the leading time: uint32 nnz | uint32 idx[nnz] | double val[nnz]
+    std::vector<uint32_t> idx_buf;
+    std::vector<double> val_buf;
+    for (int n = 0; n < pdf_data.total_bins; ++n) {
+      double v = static_cast<double>(result_host(n));
+      if (v != 0.0) {
+        idx_buf.push_back(static_cast<uint32_t>(n));
+        val_buf.push_back(v);
+      }
+    }
+    uint32_t nnz = static_cast<uint32_t>(idx_buf.size());
+    std::fwrite(&nnz, sizeof(uint32_t), 1, pfile);
+    if (nnz > 0) {
+      std::fwrite(idx_buf.data(), sizeof(uint32_t), nnz, pfile);
+      std::fwrite(val_buf.data(), sizeof(double), nnz, pfile);
+    }
+  } else {
+    // Dense write (only reached on rank 0 after global reduction).
+    std::vector<double> write_buf(pdf_data.total_bins);
+    for (int n = 0; n < pdf_data.total_bins; ++n) {
+      write_buf[n] = static_cast<double>(result_host(n));
+    }
+    std::fwrite(write_buf.data(), sizeof(double), pdf_data.total_bins, pfile);
   }
 
   std::fclose(pfile);
