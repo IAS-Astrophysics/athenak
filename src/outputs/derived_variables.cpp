@@ -1040,8 +1040,9 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
     int jl = js, ju = je, kl = ks, ku = ke;
     if (multi_d) {
       jl = js-ng, ju = je+ng;
-    } else if (three_d) {
-      jl = js-ng, ju = je+ng, kl = ks-ng, ku = ke+ng;
+    }
+    if (three_d) {
+      kl = ks-ng, ku = ke+ng;
     }
 
     auto dv = derived_var;
