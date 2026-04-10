@@ -24,6 +24,7 @@
 #include "coordinates/adm.hpp"
 #include "z4c/z4c.hpp"
 #include "z4c/z4c_amr.hpp"
+#include "z4c/compact_object_tracker.hpp"
 #include "coordinates/coordinates.hpp"
 #include "coordinates/cell_locations.hpp"
 #include "eos/eos.hpp"
@@ -277,6 +278,31 @@ void SetupBNS(ParameterInput *pin, Mesh* pmy_mesh_) {
     std::cout << "sep = " << sep << std::endl;
   }
 
+  // For unequal-mass binaries, the COM is shifted, such that it
+  // lies at the grid origin. To get the correct positions for the
+  // CO tracker and the magnetic field seed, we need to specify the
+  // component gravitational masses (where M2 is the heavier star as
+  // in Lorene).
+  double M1 = pin->GetReal("problem", "M1");
+  double M2 = pin->GetReal("problem", "M2");
+  double center_m = - (M2 / (M1 + M2)) * sep;
+  double center_p = + (M1 / (M1 + M2)) * sep;
+
+  Real NS1_COM_pos[3] = {center_m, 0.0, 0.0};
+  Real NS2_COM_pos[3] = {center_p, 0.0, 0.0};
+  pmbp->pz4c->ptracker[0]->SetPos(NS1_COM_pos);
+  pmbp->pz4c->ptracker[1]->SetPos(NS2_COM_pos);
+
+  if (global_variable::my_rank == 0) {
+    std::cout << "Adjusted CompactObjectTracker position by COM." << std::endl;
+    std::cout << "NS1: cx = " << pmbp->pz4c->ptracker[0]->GetPos(0)
+              << ", cy = " << pmbp->pz4c->ptracker[0]->GetPos(1)
+              << ", cz = " << pmbp->pz4c->ptracker[0]->GetPos(2) << std::endl;
+    std::cout << "NS2: cx = " << pmbp->pz4c->ptracker[1]->GetPos(0)
+              << ", cy = " << pmbp->pz4c->ptracker[1]->GetPos(1)
+              << ", cz = " << pmbp->pz4c->ptracker[1]->GetPos(2) << std::endl;
+  }
+
   // Cleanup
   delete bns;
 
@@ -328,10 +354,10 @@ void SetupBNS(ParameterInput *pin, Mesh* pmy_mesh_) {
     Real dx2 = size.d_view(m).dx2;
     Real dx3 = size.d_view(m).dx3;
 
-    a1(m,k,j,i) = A1(x1v - 0.5*sep, x2f, x3f, I_0, r_0) +
-                  A1(x1v + 0.5*sep, x2f, x3f, I_0, r_0);
-    a2(m,k,j,i) = A2(x1f - 0.5*sep, x2v, x3f, I_0, r_0) +
-                  A2(x1f + 0.5*sep, x2v, x3f, I_0, r_0);
+    a1(m,k,j,i) = A1(x1v - center_m, x2f, x3f, I_0, r_0) +
+                  A1(x1v - center_p, x2f, x3f, I_0, r_0);
+    a2(m,k,j,i) = A2(x1f - center_m, x2v, x3f, I_0, r_0) +
+                  A2(x1f - center_p, x2v, x3f, I_0, r_0);
     a3(m,k,j,i) = 0.0;
 
     // When neighboring MeshBock is at finer level, compute vector potential as sum of
@@ -365,10 +391,10 @@ void SetupBNS(ParameterInput *pin, Mesh* pmy_mesh_) {
         (nghbr.d_view(m,47).lev > mblev.d_view(m) && j==je+1 && k==ke+1)) {
       Real xl = x1v + 0.25*dx1;
       Real xr = x1v - 0.25*dx1;
-      a1(m,k,j,i) = 0.5*((A1(xl-0.5*sep, x2f, x3f, I_0, r_0) +
-                         A1(xl+0.5*sep, x2f, x3f, I_0, r_0)) +
-                         (A1(xr-0.5*sep, x2f, x3f, I_0, r_0) +
-                         A1(xr+0.5*sep, x2f, x3f, I_0, r_0)));
+      a1(m,k,j,i) = 0.5*((A1(xl - center_m, x2f, x3f, I_0, r_0) +
+                          A1(xl - center_p, x2f, x3f, I_0, r_0)) +
+                         (A1(xr - center_m, x2f, x3f, I_0, r_0) +
+                          A1(xr - center_p, x2f, x3f, I_0, r_0)));
     }
 
     // Correct A2 at x1-faces, x3-faces, and x1x3-edges
@@ -398,10 +424,10 @@ void SetupBNS(ParameterInput *pin, Mesh* pmy_mesh_) {
         (nghbr.d_view(m,39).lev > mblev.d_view(m) && i==ie+1 && k==ke+1)) {
       Real xl = x2v + 0.25*dx2;
       Real xr = x2v - 0.25*dx2;
-      a2(m,k,j,i) = 0.5*((A2(x1f-0.5*sep, xl, x3f, I_0, r_0) +
-                         A2(x1f+0.5*sep, xl, x3f, I_0, r_0)) +
-                         (A2(x1f-0.5*sep, xr, x3f, I_0, r_0) +
-                         A2(x1f+0.5*sep, xr, x3f, I_0, r_0)));
+      a2(m,k,j,i) = 0.5*((A2(x1f - center_m, xl, x3f, I_0, r_0) +
+                          A2(x1f - center_p, xl, x3f, I_0, r_0)) +
+                         (A2(x1f - center_m, xr, x3f, I_0, r_0) +
+                          A2(x1f - center_p, xr, x3f, I_0, r_0)));
     }
   });
 
