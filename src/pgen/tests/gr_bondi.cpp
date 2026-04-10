@@ -128,7 +128,7 @@ void ProblemGenerator::BondiAccretion(ParameterInput *pin, const bool restart) {
   }
 
   // Parameters
-  bondi.temp_min = 1.0e-2;  // lesser temperature root must be greater than this
+  bondi.temp_min = 1.0e-10; // lesser temperature root must be greater than this
   bondi.temp_max = 1.0e1;   // greater temperature root must be less than this
 
   // Get spin of black hole
