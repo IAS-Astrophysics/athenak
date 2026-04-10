@@ -137,7 +137,7 @@ void HLLD(TeamMember_t const &member, const EOS_Data &eos,
       Real sdml_inv = 1.0/sdml;
       Real sdmr_inv = 1.0/sdmr;
 
-      MHDCons1D ulst,uldst,urdst,urst;   // intermadiate states for conserved variables
+      MHDCons1D ulst,uldst,urdst,urst;   // intermediate states for conserved variables
       // eqn (43) of Miyoshi & Kusano
       ulst.d = ul.d * sdl * sdml_inv;
       urst.d = ur.d * sdr * sdmr_inv;
