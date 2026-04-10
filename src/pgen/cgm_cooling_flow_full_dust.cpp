@@ -112,9 +112,8 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   if (pmbp->phydro->nscalars != 3) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
               << std::endl
-              << "Problem generator 'cgm_cooling_flow_full_dust' requires "
-              << "<hydro>/nscalars = 3, but got " << pmbp->phydro->nscalars
-              << std::endl;
+              << "Dust requires <hydro>/nscalars = 3, but got " 
+	      << pmbp->phydro->nscalars << std::endl;
     std::exit(EXIT_FAILURE);
   }
 
@@ -124,7 +123,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   pgen_final_func = FreeProfile;
   user_ref_func   = RefinementCondition;
 
-  if (global_variable::my_rank==0) {
+  if (global_variable::my_rank == 0) {
     std::cout << std::endl;
     std::cout << "==============================================" << std::endl;
     std::cout << "Units                                         " << std::endl;

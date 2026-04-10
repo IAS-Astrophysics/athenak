@@ -48,7 +48,6 @@ Real GravPot(Real x1, Real x2, Real x3,
 void UserSource(Mesh* pm, const Real bdt);
 void GravitySource(Mesh* pm, const Real bdt);
 void SNSource(Mesh* pm, const Real bdt);
-void DensityCeilingSource(Mesh* pm, const Real bdt);
 void UserBoundary(Mesh* pm);
 void FreeProfile(ParameterInput *pin, Mesh *pm);
 void RefinementCondition(MeshBlockPack* pmbp);
@@ -105,7 +104,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   pgen_final_func = FreeProfile;
   user_ref_func   = RefinementCondition;
 
-  if (global_variable::my_rank==0) {
+  if (global_variable::my_rank == 0) {
     std::cout << std::endl;
     std::cout << "==============================================" << std::endl;
     std::cout << "Units                                         " << std::endl;
