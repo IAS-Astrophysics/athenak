@@ -145,14 +145,17 @@ TaskStatus Z4c::Z4cBoundaryRHS(Driver *pdriver, int stage) {
   // We only need to apply this condition for outflow boundaries
   if (pm->mesh_bcs[BoundaryFace::inner_x1] == BoundaryFlag::outflow
       || pm->mesh_bcs[BoundaryFace::inner_x1] == BoundaryFlag::diode
+      || pm->mesh_bcs[BoundaryFace::inner_x1] == BoundaryFlag::vacuum
       || pm->mesh_bcs[BoundaryFace::inner_x1] == BoundaryFlag::user
       || pm->mesh_bcs[BoundaryFace::outer_x1] == BoundaryFlag::outflow
       || pm->mesh_bcs[BoundaryFace::outer_x1] == BoundaryFlag::diode
+      || pm->mesh_bcs[BoundaryFace::outer_x1] == BoundaryFlag::vacuum
       || pm->mesh_bcs[BoundaryFace::outer_x1] == BoundaryFlag::user) {
     par_for("z4crhs_bc_x1", DevExeSpace(), 0, (nmb-1), ks, ke, js, je,
     KOKKOS_LAMBDA(int m, int k, int j) {
       // Inner boundary
       switch(mb_bcs.d_view(m,BoundaryFace::inner_x1)) {
+        case BoundaryFlag::vacuum:
         case BoundaryFlag::diode:
         case BoundaryFlag::outflow:
             Z4cSommerfeld(z4c_, rhs_, indcs, size, m, k, j, is);
@@ -167,6 +170,7 @@ TaskStatus Z4c::Z4cBoundaryRHS(Driver *pdriver, int stage) {
       }
       // Outer boundary
       switch (mb_bcs.d_view(m,BoundaryFace::outer_x1)) {
+        case BoundaryFlag::vacuum:
         case BoundaryFlag::diode:
         case BoundaryFlag::outflow:
             Z4cSommerfeld(z4c_, rhs_, indcs, size, m, k, j, ie);
@@ -183,14 +187,17 @@ TaskStatus Z4c::Z4cBoundaryRHS(Driver *pdriver, int stage) {
   }
   if (pm->mesh_bcs[BoundaryFace::inner_x2] == BoundaryFlag::outflow
       || pm->mesh_bcs[BoundaryFace::inner_x2] == BoundaryFlag::diode
+      || pm->mesh_bcs[BoundaryFace::inner_x2] == BoundaryFlag::vacuum
       || pm->mesh_bcs[BoundaryFace::inner_x2] == BoundaryFlag::user
       || pm->mesh_bcs[BoundaryFace::outer_x2] == BoundaryFlag::outflow
       || pm->mesh_bcs[BoundaryFace::outer_x2] == BoundaryFlag::diode
+      || pm->mesh_bcs[BoundaryFace::outer_x2] == BoundaryFlag::vacuum
       || pm->mesh_bcs[BoundaryFace::outer_x2] == BoundaryFlag::user) {
     par_for("z4crhs_bc_x2", DevExeSpace(), 0, (nmb-1), ks, ke, is, ie,
     KOKKOS_LAMBDA(int m, int k, int i) {
       // Inner boundary
       switch(mb_bcs.d_view(m,BoundaryFace::inner_x2)) {
+        case BoundaryFlag::vacuum:
         case BoundaryFlag::diode:
         case BoundaryFlag::outflow:
             Z4cSommerfeld(z4c_, rhs_, indcs, size, m, k, js, i);
@@ -205,6 +212,7 @@ TaskStatus Z4c::Z4cBoundaryRHS(Driver *pdriver, int stage) {
       }
       // Outer boundary
       switch (mb_bcs.d_view(m,BoundaryFace::outer_x2)) {
+        case BoundaryFlag::vacuum:
         case BoundaryFlag::diode:
         case BoundaryFlag::outflow:
             Z4cSommerfeld(z4c_, rhs_, indcs, size, m, k, je, i);
@@ -221,14 +229,17 @@ TaskStatus Z4c::Z4cBoundaryRHS(Driver *pdriver, int stage) {
   }
   if (pm->mesh_bcs[BoundaryFace::inner_x3] == BoundaryFlag::outflow
       || pm->mesh_bcs[BoundaryFace::inner_x3] == BoundaryFlag::diode
+      || pm->mesh_bcs[BoundaryFace::inner_x3] == BoundaryFlag::vacuum
       || pm->mesh_bcs[BoundaryFace::inner_x3] == BoundaryFlag::user
       || pm->mesh_bcs[BoundaryFace::outer_x3] == BoundaryFlag::outflow
       || pm->mesh_bcs[BoundaryFace::outer_x3] == BoundaryFlag::diode
+      || pm->mesh_bcs[BoundaryFace::outer_x3] == BoundaryFlag::vacuum
       || pm->mesh_bcs[BoundaryFace::outer_x3] == BoundaryFlag::user) {
     par_for("z4crhs_bc_x3", DevExeSpace(), 0, (nmb-1), js, je, is, ie,
     KOKKOS_LAMBDA(int m, int j, int i) {
       // Inner boundary
       switch(mb_bcs.d_view(m,BoundaryFace::inner_x3)) {
+        case BoundaryFlag::vacuum:
         case BoundaryFlag::diode:
         case BoundaryFlag::outflow:
             Z4cSommerfeld(z4c_, rhs_, indcs, size, m, ks, j, i);
@@ -243,6 +254,7 @@ TaskStatus Z4c::Z4cBoundaryRHS(Driver *pdriver, int stage) {
       }
       // Outer boundary
       switch (mb_bcs.d_view(m,BoundaryFace::outer_x3)) {
+        case BoundaryFlag::vacuum:
         case BoundaryFlag::diode:
         case BoundaryFlag::outflow:
             Z4cSommerfeld(z4c_, rhs_, indcs, size, m, ke, j, i);
