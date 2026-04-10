@@ -620,8 +620,8 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::AddCoordTermsEOS(const DvceArray5D<Real
     Real tau = E - D;
 
     // Compute the excised value for the energy.
-    Real tau_ex = (dexcise*eos_.GetEnthalpy(dexcise/mb, texcise, &prim_pt[PYF])*Wsq)
-                  + Bsq - pexcise - 0.5*bsq - dexcise*W;
+    Real tau_ex = (dexcise*eos_.GetEnthalpy(dexcise/mb, texcise, &prim_pt[PYF]))
+                  + Bsq - pexcise - 0.5*bsq - dexcise;
 
     Real S_d[3] = {0.0};
     for (int a = 0; a < 3; a++) {
