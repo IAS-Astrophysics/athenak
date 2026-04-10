@@ -900,16 +900,20 @@ void DustSource(Mesh* pm, const Real bdt) {
 
     temp *= KELVIN; // convert to K
 
+
     // current metallicity
-    Real Zloc = Kokkos::max(Z_tol, w0(m,IZS,k,j,i));
+    // Real Zloc = Kokkos::max(Z_tol, w0(m,IZS,k,j,i));
+    Real Zloc = w0(m,IZS,k,j,i);
 
     // current dust amount in the bin
-    Real d_s = Kokkos::max(0.5 * Z_tol, w0(m,IDS,k,j,i));
-    Real d_l = Kokkos::max(0.5 * Z_tol, w0(m,IDL,k,j,i));
+    // Real D_s = Kokkos::max(0.5 * Z_tol, w0(m,IDS,k,j,i));
+    // Real D_l = Kokkos::max(0.5 * Z_tol, w0(m,IDL,k,j,i));
+    Real D_s = w0(m,IDS,k,j,i);
+    Real D_l = w0(m,IDL,k,j,i);
 
-    Real d_tot = d_s + d_l;
-    d_s *= dens;
-    d_l *= dens;
+    Real D_tot = D_s + D_l;
+    Real d_s = D_s * dens;
+    Real d_l = D_l * dens;
     
     Real rate_s = 0.0, rate_l = 0.0, rate_z = 0.0;
     Real tmp_rate_s = 0.0, tmp_rate_l = 0.0;
@@ -920,12 +924,16 @@ void DustSource(Mesh* pm, const Real bdt) {
     t_sp *= (1.e-3/dens);
     t_sp *= 1. + pow((temp/2.0e6), -2.5);
 
-    tmp_rate_s = -3. * d_s / (t_sp * a_s);
-    tmp_rate_l = -3. * d_l / (t_sp * a_l);
+    if (D_s>0.5*Z_tol) tmp_rate_s = -3. * d_s / (t_sp * a_s);
+    if (D_l>0.5*Z_tol) tmp_rate_l = -3. * d_l / (t_sp * a_l);
+
     rate_z += -tmp_rate_s - tmp_rate_l;
 
     rate_s += tmp_rate_s;
     rate_l += tmp_rate_l;
+
+    tmp_rate_s = 0.0; 
+    tmp_rate_l = 0.0;
 
     //* Accretion
     // Popping 2017
@@ -933,40 +941,46 @@ void DustSource(Mesh* pm, const Real bdt) {
     t_ac *= (20.0/dens);
     t_ac *= pow((50.0/temp), 0.5);
     t_ac *= Zsol/Zloc; // in Z_sol 
-    t_ac /= 1.-(d_tot/Zloc);
 
-    tmp_rate_s = d_s / (t_ac * a_s);
-    tmp_rate_l = d_l / (t_ac * a_l);
+    t_ac /= 1.-(D_tot/Zloc);
+
+    if (D_s>0.5*Z_tol) tmp_rate_s = (Zloc>Z_tol) ? d_s / (t_ac * a_s): 0.0;
+    if (D_l>0.5*Z_tol) tmp_rate_l = (Zloc>Z_tol) ? d_l / (t_ac * a_l): 0.0;
+
     rate_z += -tmp_rate_s - tmp_rate_l;
-
     rate_s += tmp_rate_s;
     rate_l += tmp_rate_l;
+
 
     // Convert rate_z to metal mass
     rate_z *= 1.0;  //! Assuming Z_dust ~ 1
 
+    tmp_rate_s = 0.0; 
+    tmp_rate_l = 0.0;
     //* Shattering large grains, into small ones
     // From Dubois 2024
     Real t_shatt = 54.0; // in Myr
     t_shatt *= (1.0/dens); // in cm^-3
     t_shatt *= (rhog/3.0);  // in cm^-3
-    t_shatt *= (0.01/d_l); 
+    t_shatt *= (0.01/D_l); 
     t_shatt *= (10/cs_g);  // in km/s
 
-    tmp_rate_s = d_l / (t_shatt * a_l);
+    if (D_l>0.5*Z_tol) tmp_rate_s = d_l / (t_shatt * a_l);
     rate_l += -tmp_rate_s;
     rate_s += tmp_rate_s;
 
+    tmp_rate_s = 0.0; 
+    tmp_rate_l = 0.0;
     // * Coagulation of small grains, into large ones
     // From Dubois 2024
     Real t_coag = 0.27; // in Myr
     t_coag *= (rhog/3.0);  // in g/cc
     t_coag *= (1.0e3/dens); // in cm^-3
-    t_coag *= (0.01/d_s); 
+    t_coag *= (0.01/D_s); 
     t_coag *= (0.1/v_co);  // in km/s
     t_coag *= F_coag;
 
-    tmp_rate_l = d_s / (t_coag * a_s / 0.05);
+    if (D_s>0.5*Z_tol) tmp_rate_l = d_s / (t_coag * a_s / 0.05);
     rate_s += -tmp_rate_l;
     rate_l += tmp_rate_l;
 
@@ -976,11 +990,6 @@ void DustSource(Mesh* pm, const Real bdt) {
     u0(m, IDS, k, j, i) += bdt * rate_s;
     u0(m, IDL, k, j, i) += bdt * rate_l;
 
-    // Check the tolerance to prevent NaNs and negative values
-    u0(m, IZS, k, j, i) = Kokkos::max(Z_tol * dens, u0(m, IZS, k, j, i));
-    u0(m, IDS, k, j, i) = Kokkos::max(0.5 * Z_tol * dens, u0(m, IDS, k, j, i));
-    u0(m, IDL, k, j, i) = Kokkos::max(0.5 * Z_tol * dens, u0(m, IDL, k, j, i));
-
     Real d_mass = u0(m, IDS, k, j, i) + u0(m, IDL, k, j, i); // for later
 
     // We check that scalars are guaranteed to be in [0,1] after all source terms are added.
@@ -989,7 +998,7 @@ void DustSource(Mesh* pm, const Real bdt) {
     // Clamp total dust-to-gas ratio to [0,1]
     // Dust to metal ratio is not clamped, as all of gas metals can be locked in dust
     // Also dust might have been created in a metal-rich area and moved...
-    Real clamp_d_mass = Kokkos::clamp(d_mass, 0.0, dens) / d_mass;
+    Real clamp_d_mass = (d_mass>0.0) ? Kokkos::clamp(d_mass, 0.0, dens) / d_mass : 0.0;
 
     // Scaled to sum to clamp_dust_tot 
     u0(m, IDS, k, j, i) *= clamp_d_mass;
