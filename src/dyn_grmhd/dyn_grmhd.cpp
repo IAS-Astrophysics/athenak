@@ -681,7 +681,9 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::AddCoordTermsEOS(const DvceArray5D<Real
 
     // Assemble electron fraction RHS
     if (smoothing) {
-      rhs(m, IYF, k, j, i) -= (dt*vol*floor(m,k,j,i)*(D-dexcise)*prim_pt[PYF])/tdamp;
+      for (int s = 0; s < nscal; s++) {
+        rhs(m, IYF+s, k, j, i) -= (dt*vol*floor(m,k,j,i)*(D-dexcise)*prim_pt[PYF+s])/tdamp;
+      }
     }
   });
 }
