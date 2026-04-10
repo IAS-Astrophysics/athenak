@@ -199,8 +199,8 @@ class HybridsjFunctor {
     Real m_qstar[4] = {src_params.Estar, src_params.Fstar_d(1), src_params.Fstar_d(2),
                       src_params.Fstar_d(3)};
 
-    source_jacobian(m_q, src_params.F_u, m_F2, src_params.chi, src_params.kscat,
-                    src_params.kabs, src_params.v_u, src_params.v_d, m_v2, src_params.W,
+    source_jacobian(m_q, src_params.F_u, m_F2, src_params.chi, src_params.kabs,
+                    src_params.kscat, src_params.v_u, src_params.v_d, m_v2, src_params.W,
                     src_params.alp, src_params.cdt, m_qstar, J);
   }
 };
