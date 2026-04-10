@@ -205,6 +205,7 @@ void Coordinates::UpdateExcisionMasks() {
     auto &flux = excision_flux;
 
     // set up arrays to hold horizon information
+    Real &horizon_factor = coord_data.horizon_factor; 
     int hsize = pmy_pack->pz4c->pfastflow.size();
     DvceArray2D<Real> hcenter("hcenter", hsize, 3);
     DvceArray2D<Real> hradius("hradius", hsize, 1);
@@ -241,7 +242,7 @@ void Coordinates::UpdateExcisionMasks() {
                         SQR(x2 - hcenter(h,1)) +
                         SQR(x3 - hcenter(h,2));
 
-        if (r2 < SQR(hradius(h,0))) {
+        if (r2 < SQR(hradius(h,0) * horizon_factor)) {
           excise = true;
           break;
         }
