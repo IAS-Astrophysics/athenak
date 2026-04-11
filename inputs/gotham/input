@@ -110,6 +110,14 @@ pusher              = rk4_gravity
 r_inj = 0.008 # 8 pc (set injection radius to 2*dx_finest)
 delay = 10.0
 
+<dust>
+d_z_init = 0.2     # Initial dust-to-metal ratio
+d_z_sn   = 0.2     # SN dust-to-metal ratio
+a_gr_s   = 0.0003  # Min dust size
+a_gr_l   = 3       # Max dust size
+rho_gr   = 3       # Dust grain density in g/cc
+D_floor  = 1e-7
+
 <turb_driving>
 type                = hydro
 turb_flag           = 2 # driven
