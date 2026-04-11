@@ -39,6 +39,12 @@ void SetRotation(const DvceArray5D<Real> &u0,
                  Real x1v, Real x2v, Real x3v, 
                  Real r_circ, Real v_circ);
 
+KOKKOS_INLINE_FUNCTION
+void SetDustScalars(const DvceArray5D<Real> &u0,
+                    int m, int k, int j, int i,
+                    int IZS, int IDS, int IDL,
+                    Real dz, Real Z, Real Zsol);
+
 KOKKOS_INLINE_FUNCTION 
 Real GravPot(Real x1, Real x2, Real x3,
              Real G, Real r_s, Real rho_s, 
@@ -48,6 +54,7 @@ Real GravPot(Real x1, Real x2, Real x3,
 void UserSource(Mesh* pm, const Real bdt);
 void GravitySource(Mesh* pm, const Real bdt);
 void SNSource(Mesh* pm, const Real bdt);
+void DustSource(Mesh* pm, const Real bdt);
 void UserBoundary(Mesh* pm);
 void FreeProfile(ParameterInput *pin, Mesh *pm);
 void RefinementCondition(MeshBlockPack* pmbp);
@@ -68,11 +75,21 @@ namespace {
 
   // Constant for metallicity
   Real Z;
+  Real Z_sol = 0.02;
 
   // Constants for SN
   Real r_inj;
   Real e_sn;
   Real m_ej;
+  Real Z_ej;
+
+  // Constants for dust
+  Real d_z_init;
+  Real d_z_sn;
+  Real rho_gr;
+  Real a_gr_s;
+  Real a_gr_l;
+  Real min_dust_frac;
 
   // Profiles
   ProfileReader profile_reader;                
@@ -88,6 +105,11 @@ namespace {
   // SN injection flags
   int last_sn_detect_cycle = -1;
   int num_sn_this_cycle;
+
+  // Passive scalar index offsets
+  int scalar_IZS;  // metallicity
+  int scalar_IDS;  // small dust
+  int scalar_IDL;  // large dust
 }
 
 //===========================================================================//
@@ -110,7 +132,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     std::cout << "Units                                         " << std::endl;
     std::cout << "==============================================" << std::endl;
     std::cout << "Unit Length         : " << 1.0/pmbp->punit->kpc() 
-                                          << " kpc"    << std::endl;
+                                          << " kpc"   << std::endl;
     std::cout << "Unit Temperature    : " << 1.0/pmbp->punit->kelvin()
                                           << " K"     << std::endl;     
     std::cout << "Unit Number Density : " << std::pow(pmbp->punit->cm(),3) 
@@ -141,37 +163,68 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   const Real M_def = 8.4;  // Default 8.4 solar masses
   e_sn  = pin->GetOrAddReal("SN","E_sn",E_def)*pmbp->punit->erg()/sphere_vol;
   m_ej  = pin->GetOrAddReal("SN","M_ej",M_def)*pmbp->punit->msun()/sphere_vol;
+  Z_ej  = pin->GetOrAddReal("SN","Z_ej",0.1);
+
+  // Set passive scalar indices
+  if (pmbp->phydro->nscalars != 3) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+              << std::endl
+              << "Dust requires <hydro>/nscalars = 3, but got "
+              << pmbp->phydro->nscalars << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+  scalar_IZS = pmbp->phydro->nhydro;
+  scalar_IDS = pmbp->phydro->nhydro + 1;
+  scalar_IDL = pmbp->phydro->nhydro + 2;
+
+  // Read in dust model parameters
+  d_z_init = pin->GetReal("dust","d_z_init");
+  d_z_sn   = pin->GetReal("dust","d_z_sn");
+  rho_gr   = pin->GetReal("dust", "rho_gr");
+  a_gr_s   = pin->GetReal("dust", "a_gr_s");
+  a_gr_l   = pin->GetReal("dust", "a_gr_l");
+  min_dust_frac = pin->GetOrAddReal("dust", "D_floor", 1.0e-20);
 
   // Read the density gradient threshold for refinement
   ddens_threshold = pin->GetReal("problem", "ddens_max");
-  
+
   // Output parameter information
   if (global_variable::my_rank == 0) {
     std::cout << "==============================================" << std::endl;
     std::cout << "Potential Parameters                          " << std::endl;
     std::cout << "==============================================" << std::endl;
-    std::cout << "r_scale             : " << r_scale    << std::endl;
-    std::cout << "rho_scale           : " << rho_scale  << std::endl;
-    std::cout << "m_gal               : " << m_gal      << std::endl;
-    std::cout << "a_gal               : " << a_gal      << std::endl;
-    std::cout << "z_gal               : " << z_gal      << std::endl;
-    std::cout << "r_200               : " << r_200      << std::endl;
-    std::cout << "rho_mean            : " << rho_mean   << std::endl;
+    std::cout << "r_scale             : " << r_scale              << std::endl;
+    std::cout << "rho_scale           : " << rho_scale            << std::endl;
+    std::cout << "m_gal               : " << m_gal                << std::endl;
+    std::cout << "a_gal               : " << a_gal                << std::endl;
+    std::cout << "z_gal               : " << z_gal                << std::endl;
+    std::cout << "r_200               : " << r_200                << std::endl;
+    std::cout << "rho_mean            : " << rho_mean             << std::endl;
     std::cout << std::endl;
     std::cout << "==============================================" << std::endl;
     std::cout << "Other Parameters                              " << std::endl;
     std::cout << "==============================================" << std::endl;
-    std::cout << "r_circ              : " << r_circ     << std::endl;
-    std::cout << "v_circ              : " << v_circ     << std::endl;
-    std::cout << "metallicity         : " << Z          << std::endl;
-    std::cout << "ddens_threshold     : " << ddens_threshold << std::endl;
+    std::cout << "r_circ              : " << r_circ               << std::endl;
+    std::cout << "v_circ              : " << v_circ               << std::endl;
+    std::cout << "metallicity         : " << Z                    << std::endl;
+    std::cout << "ddens_threshold     : " << ddens_threshold      << std::endl;
     std::cout << std::endl;
     std::cout << "==============================================" << std::endl;
     std::cout << "Supernova Parameters                          " << std::endl;
     std::cout << "==============================================" << std::endl;
-    std::cout << "r_inj               : " << r_inj      << std::endl;
-    std::cout << "e_sn                : " << e_sn       << std::endl;
-    std::cout << "m_ej                : " << m_ej       << std::endl;
+    std::cout << "r_inj               : " << r_inj                << std::endl;
+    std::cout << "e_sn                : " << e_sn                 << std::endl;
+    std::cout << "m_ej                : " << m_ej                 << std::endl;
+    std::cout << "Z_ej                : " << Z_ej                 << std::endl;
+    std::cout << std::endl;
+    std::cout << "==============================================" << std::endl;
+    std::cout << "Dust Parameters                               " << std::endl;
+    std::cout << "==============================================" << std::endl;
+    std::cout << "d_z_init            : " << d_z_init             << std::endl;
+    std::cout << "d_z_sn              : " << d_z_sn               << std::endl;
+    std::cout << "rho_gr              : " << rho_gr               << std::endl;
+    std::cout << "a_gr_s              : " << a_gr_s               << std::endl;
+    std::cout << "a_gr_l              : " << a_gr_l               << std::endl;
     std::cout << std::endl;
   }
 
@@ -304,6 +357,10 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   auto &size = pmbp->pmb->mb_size;
   int nhydro = pmbp->phydro->nhydro;
 
+  int IZS = scalar_IZS;
+  int IDS = scalar_IDS;
+  int IDL = scalar_IDL;
+
   auto &u0 = pmbp->phydro->u0;
   EOS_Data &eos = pmbp->phydro->peos->eos_data;
   Real gm1 = eos.gamma - 1.0;
@@ -323,8 +380,9 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   Real r_c = r_circ;
   Real v_c = v_circ;
 
-  Real Zsol = 0.02;
+  Real Zsol = Z_sol;
   Real Z_ = Z;
+  Real dz_init = d_z_init;
 
   // Use loaded profiles
   par_for("pgen_ic", DevExeSpace(), 0, (pmbp->nmb_thispack-1), ks, ke, js, je, is, ie,
@@ -353,9 +411,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     SetEquilibriumState(u0, m, k, j, i, x1v, x2v, x3v, 
                         x1l, x1r, x2l, x2r, G, r_s, rho_s, 
                         m_g, a_g, z_g, r_m, rho_m, gm1, disk_profile);
-    
-    // uniformly set metallicity
-    u0(m, nhydro, k, j, i) = Z_ * Zsol * u0(m, IDN, k, j, i);
+    SetDustScalars(u0, m, k, j, i, IZS, IDS, IDL, dz_init, Z_, Zsol);
 
     // Compute turbulent velocities by summing Fourier modes
     Real vx = 0.0, vy = 0.0, vz = 0.0;
@@ -392,7 +448,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     u0(m,IM3,k,j,i) += rho * vz;
   });
 
-  if (global_variable::my_rank==0) {
+  if (global_variable::my_rank == 0) {
     std::cout << "Successfully initialized grid!" << std::endl;
   }
 
@@ -478,6 +534,18 @@ void SetRotation(const DvceArray5D<Real> &u0,
   u0(m,IM1,k,j,i) += rho * vx;
   u0(m,IM2,k,j,i) += rho * vy;
   u0(m,IM3,k,j,i) += rho * vz;
+}
+
+KOKKOS_INLINE_FUNCTION
+void SetDustScalars(const DvceArray5D<Real> &u0,
+                    int m, int k, int j, int i,
+                    int IZS, int IDS, int IDL,
+                    Real dz, Real Z, Real Zsol) {
+  Real rho = u0(m, IDN, k, j, i);
+  Real Z_total = Z * Zsol * rho;
+  u0(m, IZS, k, j, i) = (1.0 - dz) * Z_total;
+  u0(m, IDS, k, j, i) = 0.5 * dz * Z_total;
+  u0(m, IDL, k, j, i) = 0.5 * dz * Z_total;
 }
 
 KOKKOS_INLINE_FUNCTION
@@ -579,6 +647,7 @@ void SetEquilibriumState(const DvceArray5D<Real> &u0,
 void UserSource(Mesh* pm, const Real bdt) {
   SNSource(pm, bdt);
   GravitySource(pm, bdt);
+  DustSource(pm, bdt);
   return;
 }
 
@@ -687,10 +756,15 @@ void SNSource(Mesh* pm, const Real bdt) {
   auto &size = pmbp->pmb->mb_size;
   int nhydro = pmbp->phydro->nhydro;
 
+  int IZS = scalar_IZS;
+  int IDS = scalar_IDS;
+  int IDL = scalar_IDL;
+
   auto &u0 = pmbp->phydro->u0;
   auto &w0 = pmbp->phydro->w0;
 
   Real dr = r_inj;
+  Real dz_sn = d_z_sn;
 
   if (pm->ncycle != last_sn_detect_cycle) {
     last_sn_detect_cycle = pm->ncycle;
@@ -750,7 +824,7 @@ void SNSource(Mesh* pm, const Real bdt) {
     Real beta = bdt / pm->dt;
     Real e_sn_ = e_sn * beta;
     Real m_ej_ = m_ej * beta;
-    Real Z_ej_ = 0.1;
+    Real Z_ej_ = Z_ej;
 
     auto &sn_centers = sn_centers_buffer;
     int num_sn = num_sn_this_cycle;
@@ -780,17 +854,163 @@ void SNSource(Mesh* pm, const Real bdt) {
         Real dz = x3v - sn_z;
         Real r = sqrt(dx*dx + dy*dy + dz*dz);
               
-        // Inject energy if within injection radius
+        // Inject if within injection radius
         if (r <= dr) {
 	  u0(m,IDN,k,j,i) += m_ej_;
           u0(m,IEN,k,j,i) += e_sn_;
-	  u0(m, nhydro, k, j, i) += Z_ej_ * m_ej_;
+	  u0(m, IZS, k, j, i) += (1.-dz_sn) * Z_ej_ * m_ej_;
+          u0(m, IDS, k, j, i) += 0.5 * dz_sn * Z_ej_ * m_ej_;
+          u0(m, IDL, k, j, i) += 0.5 * dz_sn * Z_ej_ * m_ej_;
 	}
       }
 
     });
   }
   
+  return;
+}
+
+void DustSource(Mesh* pm, const Real bdt) {
+  MeshBlockPack *pmbp = pm->pmb_pack;
+  auto &indcs = pm->mb_indcs;
+  int is = indcs.is, ie = indcs.ie;
+  int js = indcs.js, je = indcs.je;
+  int ks = indcs.ks, ke = indcs.ke;
+  int nx1 = indcs.nx1, nx2 = indcs.nx2, nx3 = indcs.nx3;
+  int nmb1 = pmbp->nmb_thispack - 1;
+  auto &size = pmbp->pmb->mb_size;
+  int nhydro = pmbp->phydro->nhydro;
+
+  EOS_Data &eos = pmbp->phydro->peos->eos_data;
+  Real gamma = eos.gamma;
+  Real gm1 = gamma - 1.0;
+
+  int IZS = scalar_IZS;
+  int IDS = scalar_IDS;
+  int IDL = scalar_IDL;
+
+  auto &u0 = pmbp->phydro->u0;
+  auto &w0 = pmbp->phydro->w0;
+
+  Real rhog = rho_gr;
+  Real a_s = a_gr_s;
+  Real a_l = a_gr_l;
+
+  Real Zsol = Z_sol;
+  Real F_coag = 0.5;
+  Real v_co = 0.1; // km/s, relative velocity for coagulation timescale
+
+  Real D_tol = min_dust_frac;
+
+  Real cs_unit = 1. / pmbp->punit->km_s();
+  Real temp_unit = pmbp->punit->temperature_cgs();
+
+  par_for("dust_source", DevExeSpace(), 0, nmb1, ks, ke, js, je, is, ie,
+  KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
+
+    Real dens = w0(m, IDN, k, j, i);
+    Real temp = w0(m, IEN, k, j, i) * gm1 / dens;
+    Real cs_g = sqrt(gamma*temp);
+
+    cs_g *= cs_unit;
+    temp *= temp_unit;
+
+    Real Zloc = w0(m,IZS,k,j,i);
+    Real D_s  = w0(m,IDS,k,j,i);
+    Real D_l  = w0(m,IDL,k,j,i);
+
+    Real D_tot = D_s + D_l;
+    Real d_s = D_s * dens;
+    Real d_l = D_l * dens;
+
+    Real rate_s = 0.0, rate_l = 0.0, rate_z = 0.0;
+    
+    //* Thermal sputtering
+    // Tsai & Mathews 1995, McKinnon et al 2017
+    Real t_sp = 102.0; // in Myr
+    t_sp *= (1.e-3/dens);
+    Real t_ratio = temp / 2.0e6;
+    Real t_inv = 1.0 / (t_ratio * t_ratio * sqrt(t_ratio));  // t_ratio^(-2.5)
+    t_sp *= 1.0 + t_inv;
+
+    Real tmp_rate_s = 0.0, tmp_rate_l = 0.0;
+
+    if (D_s > D_tol) tmp_rate_s = -3. * d_s / (t_sp * a_s);
+    if (D_l > D_tol) tmp_rate_l = -3. * d_l / (t_sp * a_l);
+
+    rate_z += -tmp_rate_s - tmp_rate_l;
+    rate_s += tmp_rate_s;
+    rate_l += tmp_rate_l;
+
+    //* Accretion
+    // Popping 2017
+    Real t_ac = 75.0; // in Myr
+    t_ac *= (20.0/dens);
+    t_ac *= sqrt(50.0/temp);
+    t_ac *= Zsol/Zloc; // in Z_sol
+    t_ac /= Kokkos::max(1.0e-10, 1.0 - (D_tot / Zloc));
+
+    tmp_rate_s = 0.0; tmp_rate_l = 0.0;
+
+    if (Zloc > D_tol) {
+      if (D_s > D_tol) tmp_rate_s = d_s / (t_ac * a_s);
+      if (D_l > D_tol) tmp_rate_l = d_l / (t_ac * a_l);
+    }
+
+    rate_z += -tmp_rate_s - tmp_rate_l;
+    rate_s += tmp_rate_s;
+    rate_l += tmp_rate_l;
+
+    //* Shattering large grains, into small ones
+    // From Dubois 2024
+    Real t_shatt = 54.0; // in Myr
+    t_shatt *= (1.0/dens); // in cm^-3
+    t_shatt *= (rhog/3.0);  // in cm^-3
+    t_shatt *= (0.01/D_l);
+    t_shatt *= (10/cs_g);  // in km/s
+
+    tmp_rate_s = 0.0; tmp_rate_l = 0.0;
+
+    if (D_l > D_tol) tmp_rate_s = d_l / (t_shatt * a_l);
+
+    rate_l += -tmp_rate_s;
+    rate_s += tmp_rate_s;
+
+    // * Coagulation of small grains, into large ones
+    // From Dubois 2024
+    Real t_coag = 0.27; // in Myr
+    t_coag *= (rhog/3.0);  // in g/cc
+    t_coag *= (1.0e3/dens); // in cm^-3
+    t_coag *= (0.01/D_s);
+    t_coag *= (0.1/v_co);  // in km/s
+    t_coag *= F_coag;
+
+    tmp_rate_s = 0.0; tmp_rate_l = 0.0;
+
+    if (D_s > D_tol) tmp_rate_l = d_s / (t_coag * a_s / 0.05);
+
+    rate_s += -tmp_rate_l;
+    rate_l += tmp_rate_l;
+
+    //* Update metallicity and dust scalars with source terms
+    //! These are w0 * dens
+    u0(m, IZS, k, j, i) += bdt * rate_z;
+    u0(m, IDS, k, j, i) += bdt * rate_s;
+    u0(m, IDL, k, j, i) += bdt * rate_l;
+
+    // We check that scalars are guaranteed to be in [0,1] after all source terms are added.
+    // Clamp metallicity
+    u0(m, IZS, k, j, i) = Kokkos::clamp(u0(m, IZS, k, j, i), 0.0, dens);
+    // Clamp total dust-to-gas ratio to [0,1]
+    Real d_mass = u0(m, IDS, k, j, i) + u0(m, IDL, k, j, i);
+    Real clamp_d_mass = (d_mass > 0.0) ? Kokkos::min(1.0, dens / d_mass) : 0.0;
+    u0(m, IDS, k, j, i) *= clamp_d_mass;
+    u0(m, IDL, k, j, i) *= clamp_d_mass;
+    // Floor dust values
+    u0(m, IDS, k, j, i) = Kokkos::max(D_tol * dens, u0(m, IDS, k, j, i));
+    u0(m, IDL, k, j, i) = Kokkos::max(D_tol * dens, u0(m, IDL, k, j, i));
+  });
+
   return;
 }
 
@@ -814,6 +1034,10 @@ void UserBoundary(Mesh* pm) {
   auto &mb_bcs = pm->pmb_pack->pmb->mb_bcs;
   int nhydro = pmbp->phydro->nhydro;
 
+  int IZS = scalar_IZS;
+  int IDS = scalar_IDS;
+  int IDL = scalar_IDL;
+
   auto &u0 = pmbp->phydro->u0;
   auto &eos = pmbp->phydro->peos->eos_data;
   Real gm1 = eos.gamma - 1.0;
@@ -823,8 +1047,9 @@ void UserBoundary(Mesh* pm) {
   Real r_c = r_circ;
   Real v_c = v_circ;
 
-  Real Zsol = 0.02;
+  Real Zsol = Z_sol;
   Real Z_ = Z;
+  Real dz_init = d_z_init;
 
   // Handle X1 boundaries
   par_for("static_x1", DevExeSpace(), 0, nmb1, 0, (n3-1), 0, (n2-1), 0, (ng-1),
@@ -845,7 +1070,7 @@ void UserBoundary(Mesh* pm) {
       
       SetCoolingFlowState(u0, m, k, j, i, x1v, x2v, x3v, gm1, profile);
       SetRotation(u0, m, k, j, i, x1v, x2v, x3v, r_c, v_c);
-      u0(m, nhydro, k, j, i) = Z_ * Zsol * u0(m, IDN, k, j, i);
+      SetDustScalars(u0, m, k, j, i, IZS, IDS, IDL, dz_init, Z_, Zsol);
     }
   
     // Outer X1 boundary
@@ -855,7 +1080,7 @@ void UserBoundary(Mesh* pm) {
       
       SetCoolingFlowState(u0, m, k, j, i_out, x1v, x2v, x3v, gm1, profile);
       SetRotation(u0, m, k, j, i_out, x1v, x2v, x3v, r_c, v_c);
-      u0(m, nhydro, k, j, i_out) = Z_ * Zsol * u0(m, IDN, k, j, i_out);
+      SetDustScalars(u0, m, k, j, i_out, IZS, IDS, IDL, dz_init, Z_, Zsol);
     }
   });
   
@@ -878,7 +1103,7 @@ void UserBoundary(Mesh* pm) {
       
       SetCoolingFlowState(u0, m, k, j, i, x1v, x2v, x3v, gm1, profile);
       SetRotation(u0, m, k, j, i, x1v, x2v, x3v, r_c, v_c);
-      u0(m, nhydro, k, j, i) = Z_ * Zsol * u0(m, IDN, k, j, i);
+      SetDustScalars(u0, m, k, j, i, IZS, IDS, IDL, dz_init, Z_, Zsol);
     }
   
     // Outer X2 boundary
@@ -888,7 +1113,7 @@ void UserBoundary(Mesh* pm) {
       
       SetCoolingFlowState(u0, m, k, j_out, i, x1v, x2v, x3v, gm1, profile);
       SetRotation(u0, m, k, j_out, i, x1v, x2v, x3v, r_c, v_c);
-      u0(m, nhydro, k, j_out, i) = Z_ * Zsol * u0(m, IDN, k, j_out, i);
+      SetDustScalars(u0, m, k, j_out, i, IZS, IDS, IDL, dz_init, Z_, Zsol);
     }
   });
   
@@ -911,7 +1136,7 @@ void UserBoundary(Mesh* pm) {
       
       SetCoolingFlowState(u0, m, k, j, i, x1v, x2v, x3v, gm1, profile);
       SetRotation(u0, m, k, j, i, x1v, x2v, x3v, r_c, v_c);
-      u0(m, nhydro, k, j, i) = Z_ * Zsol * u0(m, IDN, k, j, i);
+      SetDustScalars(u0, m, k, j, i, IZS, IDS, IDL, dz_init, Z_, Zsol);
     }
     
     // Outer X3 boundary
@@ -921,7 +1146,7 @@ void UserBoundary(Mesh* pm) {
       
       SetCoolingFlowState(u0, m, k_out, j, i, x1v, x2v, x3v, gm1, profile);
       SetRotation(u0, m, k_out, j, i, x1v, x2v, x3v, r_c, v_c);
-      u0(m, nhydro, k_out, j, i) = Z_ * Zsol * u0(m, IDN, k_out, j, i);
+      SetDustScalars(u0, m, k_out, j, i, IZS, IDS, IDL, dz_init, Z_, Zsol);
     }
   });
   
