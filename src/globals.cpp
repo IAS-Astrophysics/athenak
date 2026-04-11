@@ -13,7 +13,17 @@
 #include "athena.hpp"
 #include "globals.hpp"
 
+#include <vector>
+
 namespace global_variable {
 int my_rank;   // MPI rank of this process; set at start of main();
 int nranks;    // total number of MPI ranks; set at start of main();
+int node_id;   // dense node id derived from shared-memory MPI communicator
+int rank_in_node;    // MPI rank index within node_comm
+int ranks_per_node;  // number of MPI ranks in node_comm
+int nnodes;          // number of shared-memory MPI domains in the run
+std::vector<int> rank_to_node;  // dense node id for every world rank
+#if MPI_PARALLEL_ENABLED
+MPI_Comm node_comm = MPI_COMM_NULL;
+#endif
 }

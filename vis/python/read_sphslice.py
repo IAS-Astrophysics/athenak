@@ -5,10 +5,10 @@
 A sphslice file has an ASCII preheader, followed by an input parameter dump,
 followed by a binary payload.  Two payload layouts:
 
-  * shared mode (single_file_per_rank=0):
+  * shared mode (`distribution=shared` or legacy `single_file_per_rank=0`):
         <nvars * ntheta * nphi  float32>, ordering (var, itheta, iphi)
 
-  * per-rank mode (single_file_per_rank=1):
+  * partitioned mode (`distribution=rank|node`, or legacy per-rank files):
         <npoints  int32 angle indices a>
         <nvars * npoints  float32 values>, var-major
     where the global angle index a = itheta*nphi + iphi.
@@ -16,9 +16,9 @@ followed by a binary payload.  Two payload layouts:
 Sample points are placed on a uniform-in-cos(theta), uniform-in-phi grid (the
 equal-area cells produced by the C++ writer).
 
-If pointed at a single_file_per_rank rank_00000000 file, this reader discovers
-all sibling rank files automatically and reassembles the full surface.  This
-matches the convention used by read_pdf.py in this directory.
+If pointed at any `rank_*` or `node_*` shard file, this reader discovers all
+matching sibling shard files automatically and reassembles the full surface.
+This matches the convention used by read_pdf.py in this directory.
 """
 
 import glob as _glob
@@ -37,17 +37,29 @@ _INT_KEYS = frozenset({
 _FLOAT_KEYS = frozenset({'time', 'radius'})
 
 
-def _is_single_file_per_rank(path):
-    """True iff `path` lives under a rank_00000000 directory."""
-    return 'rank_00000000' in path
+def _is_partitioned_path(path):
+    """True iff `path` lives under a rank_* or node_* shard directory."""
+    shard_dir = os.path.basename(os.path.dirname(path))
+    return shard_dir.startswith('rank_') or shard_dir.startswith('node_')
 
 
-def _glob_rank_files(rank0_path):
-    """Given a rank_00000000 path, list every matching rank_* sibling."""
-    pattern = rank0_path.replace('rank_00000000', 'rank_*')
+def _glob_partition_files(path):
+    """Given a rank/node shard path, list every matching sibling shard."""
+    shard_dir = os.path.dirname(path)
+    shard_base = os.path.basename(shard_dir)
+    parent_dir = os.path.dirname(shard_dir)
+    file_base = os.path.basename(path)
+
+    if shard_base.startswith('rank_'):
+        pattern = os.path.join(parent_dir, 'rank_*', file_base)
+    elif shard_base.startswith('node_'):
+        pattern = os.path.join(parent_dir, 'node_*', file_base)
+    else:
+        return [path]
+
     files = sorted(_glob.glob(pattern))
     if not files:
-        raise RuntimeError('No rank files found matching {}'.format(pattern))
+        raise RuntimeError('No partition files found matching {}'.format(pattern))
     return files
 
 
@@ -101,12 +113,17 @@ def _read_payload(f, header):
 
     Returns (idxs, vals):
       * shared mode: idxs is None and vals has length nvars*ntheta*nphi
-      * per-rank mode: idxs is an int32 array of length npoints,
+      * partitioned mode: idxs is an int32 array of length npoints,
         vals has length nvars*npoints (var-major)
     """
     f.seek(header['header_offset'], os.SEEK_CUR)
     nvars = header['nvars']
-    if header.get('single_file_per_rank', 0):
+    distribution = header.get('distribution')
+    partitioned = distribution in ('rank', 'node')
+    if distribution is None:
+        partitioned = bool(header.get('single_file_per_rank', 0))
+
+    if partitioned:
         npoints = header['npoints']
         idxs = np.fromfile(f, dtype=np.int32, count=npoints)
         if idxs.size != npoints:
@@ -133,7 +150,7 @@ def read_sphslice_header(path):
 def read_sphslice(path):
     """Read a sphslice binary file and reassemble its (theta, phi) surface.
 
-    If `path` lives under a rank_00000000 directory, all sibling rank files are
+    If `path` lives under a `rank_*` or `node_*` directory, all sibling shard files are
     read and stitched into a single global surface.
 
     Returns a dict with keys:
@@ -148,8 +165,8 @@ def read_sphslice(path):
         'radius'    -- sphere radius
         'variables' -- list of variable name strings (length nvars)
     """
-    if _is_single_file_per_rank(path):
-        files = _glob_rank_files(path)
+    if _is_partitioned_path(path):
+        files = _glob_partition_files(path)
     else:
         files = [path]
 

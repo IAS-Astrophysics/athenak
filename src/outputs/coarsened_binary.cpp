@@ -21,6 +21,7 @@
 #include <algorithm>
 
 #include "athena.hpp"
+#include "file_sharding.hpp"
 #include "globals.hpp"
 #include "coordinates/cell_locations.hpp"
 #include "mesh/mesh.hpp"
@@ -42,12 +43,9 @@ CoarsenedBinaryOutput::CoarsenedBinaryOutput(ParameterInput *pin, Mesh *pm,
   dir_name.append("_");
   dir_name.append(std::to_string(out_params.coarsen_factor));
   mkdir(dir_name.c_str(),0775);
-  bool single_file_per_rank = op.single_file_per_rank;
-  if (single_file_per_rank) {
-    char rank_dir[20];
-    std::snprintf(rank_dir, sizeof(rank_dir), "rank_%08d/", global_variable::my_rank);
+  if (op.file_shard_mode != FileShardMode::shared) {
     dir_name.append("/");
-    dir_name.append(rank_dir);
+    dir_name.append(ShardDirectoryName(op.file_shard_mode));
     mkdir(dir_name.c_str(), 0775);
   }
 }
@@ -306,7 +304,7 @@ void CoarsenedBinaryOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
   // create filename: "cbin_"+"file_id"+"_"+"coarsening_factor"+"/file_basename"
   // + "." + "file_id" + "." + XXXXX + ".cbin"
   // where XXXXX = 5-digit file_number
-  bool single_file_per_rank = out_params.single_file_per_rank;
+  FileShardMode shard_mode = out_params.file_shard_mode;
 
   std::string fname;
   char number[6];
@@ -316,11 +314,9 @@ void CoarsenedBinaryOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
   fname.append(out_params.file_id);
   fname.append("_");
   fname.append(std::to_string(out_params.coarsen_factor));
-  if (single_file_per_rank) {
-    char rank_dir[20];
-    std::snprintf(rank_dir, sizeof(rank_dir), "rank_%08d/", global_variable::my_rank);
+  if (shard_mode != FileShardMode::shared) {
     fname.append("/");
-    fname.append(rank_dir);
+    fname.append(ShardDirectoryName(shard_mode));
   }
   fname.append(out_params.file_basename);
   fname.append(".");
@@ -331,7 +327,13 @@ void CoarsenedBinaryOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
 
   IOWrapper cbinfile;
   std::size_t header_offset=0;
-  cbinfile.Open(fname.c_str(), IOWrapper::FileMode::write, single_file_per_rank);
+#if MPI_PARALLEL_ENABLED
+  if (shard_mode == FileShardMode::per_node) {
+    cbinfile.SetCommunicator(global_variable::node_comm);
+  }
+#endif
+  bool use_serial_io = UsesSerialIO(shard_mode);
+  cbinfile.Open(fname.c_str(), IOWrapper::FileMode::write, use_serial_io);
 
   int number_of_moments = 1;
   if (out_params.compute_moments) {
@@ -369,9 +371,9 @@ void CoarsenedBinaryOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
     }
   }
   msg << std::endl;
-  if (global_variable::my_rank == 0 || single_file_per_rank) {
+  if (IsShardWriter(shard_mode)) {
     cbinfile.Write_any_type(msg.str().c_str(),msg.str().size(), "byte",
-                            single_file_per_rank);
+                            use_serial_io);
   }
   header_offset += msg.str().size();}
   {std::stringstream msg;
@@ -380,10 +382,10 @@ void CoarsenedBinaryOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
   pin->ParameterDump(ost);
   std::string sbuf=ost.str();
   msg << "  header offset=" << sbuf.size()*sizeof(char)  << std::endl;
-  if (global_variable::my_rank == 0 || single_file_per_rank) {
+  if (IsShardWriter(shard_mode)) {
     cbinfile.Write_any_type(msg.str().c_str(),msg.str().size(), "byte",
-                            single_file_per_rank);
-    cbinfile.Write_any_type(sbuf.c_str(),sbuf.size(), "byte", single_file_per_rank);
+                            use_serial_io);
+    cbinfile.Write_any_type(sbuf.c_str(),sbuf.size(), "byte", use_serial_io);
   }
   header_offset += sbuf.size()*sizeof(char);
   header_offset += msg.str().size();}
@@ -410,7 +412,6 @@ void CoarsenedBinaryOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
   std::size_t data_size = 10*sizeof(int32_t) + 6*sizeof(Real)
                         + (cells*nout_vars)*sizeof(float);
 
-  int ns_mbs = pm->gids_eachrank[global_variable::my_rank];
   int nb_mbs = pm->nmb_eachrank[global_variable::my_rank];
 
   // allocate 1D vector of floats used to convert and output data
@@ -510,77 +511,54 @@ void CoarsenedBinaryOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
 
   // now write Coarsenedbinary data
   if (bin_slice) {
-    std::vector<int> rank_offset(global_variable::nranks, 0);
-    std::partial_sum(noutmbs.begin(), std::prev(noutmbs.end()),
-                     std::next(rank_offset.begin()));
-    std::size_t myoffset = header_offset + data_size*rank_offset[global_variable::my_rank];
+    std::vector<int> shard_counts = GatherShardCounts(nout_mbs, shard_mode);
+    int shard_prefix = PrefixCountBeforeMe(shard_counts, shard_mode);
+    int shard_min = *std::min_element(shard_counts.begin(), shard_counts.end());
+    std::size_t myoffset = header_offset + data_size*shard_prefix;
 
-    if (single_file_per_rank) {
-      myoffset = header_offset;  // Reset offset for individual files
-    }
-
-    if (noutmbs_min > 0) {
+    if (shard_min > 0) {
       cbinfile.Write_any_type_at_all(data,(data_size*nout_mbs),myoffset,"byte",
-                                      single_file_per_rank);
+                                     use_serial_io);
     } else {
       if (nout_mbs > 0) {
         cbinfile.Write_any_type_at(data,(data_size*nout_mbs),myoffset,"byte",
-                                    single_file_per_rank);
+                                   use_serial_io);
       }
     }
   } else {
+    std::vector<int> shard_counts = GatherShardCounts(nb_mbs, shard_mode);
+    int shard_prefix = PrefixCountBeforeMe(shard_counts, shard_mode);
+    int shard_min = *std::min_element(shard_counts.begin(), shard_counts.end());
+    int shard_max = *std::max_element(shard_counts.begin(), shard_counts.end());
     // check if elements larger than 2^31
     if (data_size*nb_mbs<=2147483648) {
       // now write Coarsenedbinary data in parallel
-      std::size_t myoffset=header_offset;
-      if (!single_file_per_rank) {
-        myoffset += data_size*ns_mbs;
-      }
+      std::size_t myoffset = header_offset + data_size*shard_prefix;
       cbinfile.Write_any_type_at_all(data,(data_size*nb_mbs),myoffset,"byte",
-                                      single_file_per_rank);
+                                     use_serial_io);
     } else {
-      // check if elements larger than 2^31
-      if (data_size*nb_mbs<=2147483648) {
-        // now write binary data in parallel
-        std::size_t myoffset=header_offset;
-        if (!single_file_per_rank) {
-          myoffset += data_size*ns_mbs;
-        }
-        cbinfile.Write_any_type_at_all(data,(data_size*nb_mbs),myoffset,"byte",
-                                        single_file_per_rank);
-      } else {
-        // write data over each MeshBlock sequentially and in parallel
-        // calculate max/min number of MeshBlocks across all ranks
-        noutmbs_max = pm->nmb_eachrank[0];
-        noutmbs_min = pm->nmb_eachrank[0];
-        for (int i=0; i<(global_variable::nranks); ++i) {
-          noutmbs_max = std::max(noutmbs_max,pm->nmb_eachrank[i]);
-          noutmbs_min = std::min(noutmbs_min,pm->nmb_eachrank[i]);
-        }
-        for (int m=0;  m<noutmbs_max; ++m) {
-          char *pdata=&(data[m*data_size]);
-          std::size_t myoffset=header_offset + data_size*m;
-          if (!single_file_per_rank) {
-            myoffset += data_size*ns_mbs;
+      // write data over each MeshBlock sequentially and in parallel
+      for (int m=0;  m<shard_max; ++m) {
+        std::size_t myoffset = header_offset + data_size*(shard_prefix + m);
+        // every rank has a MB to write, so write collectively
+        if (m < shard_min) {
+          char *pdata = &(data[m*data_size]);
+          if (cbinfile.Write_any_type_at_all(pdata,(data_size),myoffset,"byte",
+                                             use_serial_io) != data_size) {
+            std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                << std::endl << "binary data not written correctly to binary file, "
+                << "binary file is broken." << std::endl;
+            exit(EXIT_FAILURE);
           }
-          // every rank has a MB to write, so write collectively
-          if (m < noutmbs_min) {
-            if (cbinfile.Write_any_type_at_all(pdata,(data_size),myoffset,"byte",
-                                                single_file_per_rank) != data_size) {
-              std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-                  << std::endl << "binary data not written correctly to binary file, "
-                  << "binary file is broken." << std::endl;
-              exit(EXIT_FAILURE);
-            }
-          // some ranks are finished writing, so use non-collective write
-          } else if (m < pm->nmb_thisrank) {
-            if (cbinfile.Write_any_type_at(pdata,(data_size),myoffset,"byte",
-                                            single_file_per_rank) != data_size) {
-              std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-                   << std::endl << "binary data not written correctly to binary file, "
-                   << "binary file is broken." << std::endl;
-              exit(EXIT_FAILURE);
-            }
+        // some ranks are finished writing, so use non-collective write
+        } else if (m < pm->nmb_thisrank) {
+          char *pdata = &(data[m*data_size]);
+          if (cbinfile.Write_any_type_at(pdata,(data_size),myoffset,"byte",
+                                         use_serial_io) != data_size) {
+            std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                 << std::endl << "binary data not written correctly to binary file, "
+                 << "binary file is broken." << std::endl;
+            exit(EXIT_FAILURE);
           }
         }
       }
@@ -588,7 +566,7 @@ void CoarsenedBinaryOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
   }
 
   // close the output file and clean up ptrs to data
-  cbinfile.Close(single_file_per_rank);
+  cbinfile.Close(use_serial_io);
   delete [] data;
   delete [] single_data;
 

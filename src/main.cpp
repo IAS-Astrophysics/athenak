@@ -30,9 +30,11 @@
 #include <memory>
 #include <cstdio> // sscanf
 #include <fstream>  // Include this for std::ifstream
+#include <unordered_map>
 
 // Athena headers
 #include "athena.hpp"
+#include "file_sharding.hpp"
 #include "globals.hpp"
 #include "utils/utils.hpp"
 #include "parameter_input.hpp"
@@ -114,12 +116,54 @@ int main(int argc, char *argv[]) {
     MPI_Finalize();
     return(0);
   }
+
+  if (MPI_SUCCESS != MPI_Comm_split_type(MPI_COMM_WORLD, MPI_COMM_TYPE_SHARED,
+                                         global_variable::my_rank, MPI_INFO_NULL,
+                                         &global_variable::node_comm)) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+              << "MPI_Comm_split_type(MPI_COMM_TYPE_SHARED) failed." << std::endl;
+    MPI_Finalize();
+    return(0);
+  }
+  MPI_Comm_rank(global_variable::node_comm, &global_variable::rank_in_node);
+  MPI_Comm_size(global_variable::node_comm, &global_variable::ranks_per_node);
+
+  int node_leader_world_rank = global_variable::my_rank;
+  MPI_Bcast(&node_leader_world_rank, 1, MPI_INT, 0, global_variable::node_comm);
+  std::vector<int> node_leader_for_rank(global_variable::nranks, 0);
+  MPI_Allgather(&node_leader_world_rank, 1, MPI_INT, node_leader_for_rank.data(), 1,
+                MPI_INT, MPI_COMM_WORLD);
+
+  std::unordered_map<int, int> leader_to_node;
+  global_variable::rank_to_node.assign(global_variable::nranks, 0);
+  for (int r = 0; r < global_variable::nranks; ++r) {
+    auto [it, inserted] = leader_to_node.emplace(node_leader_for_rank[r],
+                                                 static_cast<int>(leader_to_node.size()));
+    global_variable::rank_to_node[r] = it->second;
+  }
+  global_variable::node_id = global_variable::rank_to_node[global_variable::my_rank];
+  global_variable::nnodes = leader_to_node.size();
 #else  // no MPI
   global_variable::my_rank = 0;
   global_variable::nranks  = 1;
+  global_variable::node_id = 0;
+  global_variable::rank_in_node = 0;
+  global_variable::ranks_per_node = 1;
+  global_variable::nnodes = 1;
+  global_variable::rank_to_node.assign(1, 0);
 #endif  // MPI_PARALLEL_ENABLED
 
   Kokkos::initialize(argc, argv);
+
+  auto FinalizeMpi = []() {
+#if MPI_PARALLEL_ENABLED
+    if (global_variable::node_comm != MPI_COMM_NULL) {
+      MPI_Comm_free(&global_variable::node_comm);
+      global_variable::node_comm = MPI_COMM_NULL;
+    }
+    MPI_Finalize();
+#endif
+  };
 
   //--- Step 2. --------------------------------------------------------------------------
   // Check for command line options and respond.
@@ -144,7 +188,7 @@ int main(int argc, char *argv[]) {
                         << " must be followed by a valid argument" << std::endl;
               Kokkos::finalize();
 #if MPI_PARALLEL_ENABLED
-              MPI_Finalize();
+              FinalizeMpi();
 #endif
               return(0);
             }
@@ -179,7 +223,7 @@ int main(int argc, char *argv[]) {
           if (global_variable::my_rank == 0) ShowConfig();
           Kokkos::finalize();
 #if MPI_PARALLEL_ENABLED
-          MPI_Finalize();
+          FinalizeMpi();
 #endif
           return(0);
           break;
@@ -234,28 +278,31 @@ int main(int argc, char *argv[]) {
   ParameterInput* pinput = new ParameterInput;
   IOWrapper infile, restartfile;
   // read parameters from restart file
-  bool single_file_per_rank = false; // DBF: flag for single_file_per_rank for rst files
+  FileShardMode restart_shard_mode = FileShardMode::shared;
   if (res_flag) {
-    // Check if the path contains "rank_" directory
-    size_t rank_pos = restart_file.find("/rank_");
-    single_file_per_rank = (rank_pos != std::string::npos);
+    size_t shard_pos = restart_file.find("/rank_");
+    if (shard_pos != std::string::npos) {
+      restart_shard_mode = FileShardMode::per_rank;
+    } else {
+      shard_pos = restart_file.find("/node_");
+      if (shard_pos != std::string::npos) {
+        restart_shard_mode = FileShardMode::per_node;
+      }
+    }
 
-    // If single_file_per_rank is true, modify the path for the current rank
-    if (single_file_per_rank) {
+    if (restart_shard_mode != FileShardMode::shared) {
       size_t last_slash = restart_file.rfind('/');
-      restart_base_dir = restart_file.substr(0, rank_pos);
+      restart_base_dir = restart_file.substr(0, shard_pos);
       if (last_slash != std::string::npos && last_slash + 1 < restart_file.size()) {
         restart_file_name = restart_file.substr(last_slash + 1);
       } else {
-        restart_file_name = restart_file.substr(rank_pos);
+        restart_file_name = restart_file.substr(shard_pos + 1);
       }
-
-      char rank_dir[20];
-      std::snprintf(rank_dir, sizeof(rank_dir), "rank_%08d", 0);
       if (!restart_base_dir.empty()) {
-        restart_file = restart_base_dir + "/" + rank_dir + "/" + restart_file_name;
+        restart_file = restart_base_dir + "/" + CanonicalShardDirectoryName(restart_shard_mode)
+                     + restart_file_name;
       } else {
-        restart_file = std::string(rank_dir) + "/" + restart_file_name;
+        restart_file = CanonicalShardDirectoryName(restart_shard_mode) + restart_file_name;
       }
     } else {
       restart_base_dir.clear();
@@ -270,9 +317,10 @@ int main(int argc, char *argv[]) {
     }
 
     // read parameters from restart file
-    restartfile.Open(restart_file.c_str(),IOWrapper::FileMode::read,single_file_per_rank);
-    pinput->LoadFromFile(restartfile, single_file_per_rank);
-    IOWrapperSizeT headeroffset = restartfile.GetPosition(single_file_per_rank);
+    restartfile.Open(restart_file.c_str(), IOWrapper::FileMode::read,
+                     UsesSerialIO(restart_shard_mode));
+    pinput->LoadFromFile(restartfile, restart_shard_mode);
+    IOWrapperSizeT headeroffset = restartfile.GetPosition(UsesSerialIO(restart_shard_mode));
   }
 
   // read parameters from input file.  If both -r and -i are specified, this will
@@ -287,11 +335,11 @@ int main(int argc, char *argv[]) {
   // Dump input parameters and quit if code was run with -n option.
   if (narg_flag) {
     if (global_variable::my_rank == 0) pinput->ParameterDump(std::cout);
-    if (res_flag) restartfile.Close(single_file_per_rank);
+    if (res_flag) restartfile.Close(UsesSerialIO(restart_shard_mode));
     delete pinput;
     Kokkos::finalize();
 #if MPI_PARALLEL_ENABLED
-    MPI_Finalize();
+    FinalizeMpi();
 #endif
     return(0);
   }
@@ -303,23 +351,23 @@ int main(int argc, char *argv[]) {
 
   Mesh* pmesh = new Mesh(pinput);
   if (res_flag) {
-    pmesh->SetRestartFileInfo(restart_base_dir, restart_file_name, single_file_per_rank);
+    pmesh->SetRestartFileInfo(restart_base_dir, restart_file_name, restart_shard_mode);
   }
   if (!res_flag) {
     pmesh->BuildTreeFromScratch(pinput);
   } else {
-    pmesh->BuildTreeFromRestart(pinput, restartfile, single_file_per_rank);
+    pmesh->BuildTreeFromRestart(pinput, restartfile, restart_shard_mode);
   }
 
   //  If code was run with -m option, write mesh structure to file and quit.
   if (marg_flag) {
     if (global_variable::my_rank == 0) {pmesh->WriteMeshStructure();}
-    if (res_flag) {restartfile.Close(single_file_per_rank);}
+    if (res_flag) {restartfile.Close(UsesSerialIO(restart_shard_mode));}
     delete pmesh;
     delete pinput;
     Kokkos::finalize();
 #if MPI_PARALLEL_ENABLED
-    MPI_Finalize();
+    FinalizeMpi();
 #endif
     return(0);
   }
@@ -341,8 +389,8 @@ int main(int argc, char *argv[]) {
     pmesh->pgen = std::make_unique<ProblemGenerator>(pinput,
                                                      pmesh,
                                                      restartfile,
-                                                     single_file_per_rank);
-    restartfile.Close(single_file_per_rank);
+                                                     restart_shard_mode);
+    restartfile.Close(UsesSerialIO(restart_shard_mode));
   }
   //--- Step 6. --------------------------------------------------------------------------
   // Construct Driver and Outputs. Actual outputs (including initial conditions) are made
@@ -374,7 +422,7 @@ int main(int argc, char *argv[]) {
   delete pinput;
   Kokkos::finalize();
 #if MPI_PARALLEL_ENABLED
-  MPI_Finalize();
+  FinalizeMpi();
 #endif
   return(0);
 }

@@ -89,6 +89,22 @@ import h5py
 import os
 import glob
 
+def _glob_partition_files(shard_filename):
+    """Return all sibling shard files for either rank- or node-sharded output."""
+    shard_dir = os.path.dirname(shard_filename)
+    parent_dir = os.path.dirname(shard_dir)
+    shard_leaf = os.path.basename(shard_dir)
+    base_name = os.path.basename(shard_filename)
+
+    if shard_leaf.startswith("rank_"):
+        pattern = os.path.join(parent_dir, "rank_*", base_name)
+    elif shard_leaf.startswith("node_"):
+        pattern = os.path.join(parent_dir, "node_*", base_name)
+    else:
+        return [shard_filename]
+
+    return sorted(glob.glob(pattern))
+
 def read_binary(filename):
     """
     Reads a bin file from filename to dictionary.
@@ -432,7 +448,7 @@ def read_all_ranks_binary(rank0_filename):
     # rank0_base = os.path.basename(rank0_filename).replace("rank_00000000", "rank_*")
 
     # Find all rank files
-    rank_files = sorted(glob.glob(os.path.dirname(rank0_filename).replace("rank_00000000", "rank_*") + "/" + os.path.basename(rank0_filename)))
+    rank_files = _glob_partition_files(rank0_filename)
     # print(rank_files)
 
     file_sizes = np.array([os.path.getsize(file) for file in rank_files])
@@ -513,7 +529,7 @@ def read_all_ranks_coarsened_binary(rank0_filename):
     # rank0_base = os.path.basename(rank0_filename).replace("rank_00000000", "rank_*")
 
     # Find all rank files
-    rank_files = sorted(glob.glob(os.path.dirname(rank0_filename).replace("rank_00000000", "rank_*") + "/" + os.path.basename(rank0_filename)))
+    rank_files = _glob_partition_files(rank0_filename)
     # print(rank_files)
 
     # Read the rank 0 file to get the metadata

@@ -170,20 +170,21 @@ void ParameterInput::LoadFromStream(std::istream &is) {
 //! \fn  void ParameterInput::LoadFromFile(IOWrapper &input)
 //  \brief Read the parameters from an input or restart file.
 
-void ParameterInput::LoadFromFile(IOWrapper &input, bool single_file_per_rank) {
+void ParameterInput::LoadFromFile(IOWrapper &input, FileShardMode shard_mode) {
   std::stringstream par;
   constexpr int kBufSize = 4096;
   char buf[kBufSize];
   IOWrapperSizeT header = 0, ret, loc;
+  bool use_serial_io = UsesSerialIO(shard_mode);
 
   // search for <par_end> (reading from restart files) or EOF (reading from input file).
   do {
-    if (global_variable::my_rank == 0 || single_file_per_rank) {
-      ret = input.Read_bytes(buf, sizeof(char), kBufSize, single_file_per_rank);
+    if (global_variable::my_rank == 0 || use_serial_io) {
+      ret = input.Read_bytes(buf, sizeof(char), kBufSize, use_serial_io);
     }
 #if MPI_PARALLEL_ENABLED
     // then broadcasts it
-  if (!single_file_per_rank) {
+  if (!use_serial_io) {
     MPI_Bcast(&ret, sizeof(IOWrapperSizeT), MPI_BYTE, 0, MPI_COMM_WORLD);
     if (ret == 0) {
       break;
@@ -212,7 +213,7 @@ void ParameterInput::LoadFromFile(IOWrapper &input, bool single_file_per_rank) {
   // Read the stream and load the parameters
   LoadFromStream(par);
   // Seek the file to the end of the header
-  input.Seek(header, single_file_per_rank);
+  input.Seek(header, use_serial_io);
 
   return;
 }

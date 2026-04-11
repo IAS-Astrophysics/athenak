@@ -22,7 +22,7 @@
 //! \brief wrapper for {MPI_File_open} versus {std::fopen} including error check
 //! This function must not be called by multiple threads in shared memory parallel regions
 
-int IOWrapper::Open(const char* fname, FileMode rw, bool single_file_per_rank) {
+int IOWrapper::Open(const char* fname, FileMode rw, bool use_serial_io) {
   const char* mode;
   switch (rw) {
     case FileMode::read:
@@ -39,7 +39,7 @@ int IOWrapper::Open(const char* fname, FileMode rw, bool single_file_per_rank) {
   }
 
 #if MPI_PARALLEL_ENABLED
-  if (!single_file_per_rank) {
+  if (!use_serial_io) {
     int mpi_mode;
     switch (rw) {
       case FileMode::read:
@@ -101,9 +101,9 @@ int IOWrapper::Open(const char* fname, FileMode rw, bool single_file_per_rank) {
 //! of given "size" actually read.
 
 std::size_t IOWrapper::Read_bytes(void *buf, IOWrapperSizeT size, IOWrapperSizeT cnt,
-                                  bool single_file_per_rank) {
+                                  bool use_serial_io) {
 #if MPI_PARALLEL_ENABLED
-  if (!single_file_per_rank) {
+  if (!use_serial_io) {
     MPI_Status status;
     int errcode = MPI_File_read(fh_, buf, cnt*size, MPI_BYTE, &status);
     if (errcode != MPI_SUCCESS) {
@@ -133,9 +133,9 @@ std::size_t IOWrapper::Read_bytes(void *buf, IOWrapperSizeT size, IOWrapperSizeT
 
 std::size_t IOWrapper::Read_bytes_at(void *buf, IOWrapperSizeT size,
                                      IOWrapperSizeT cnt, IOWrapperSizeT offset,
-                                     bool single_file_per_rank) {
+                                     bool use_serial_io) {
 #if MPI_PARALLEL_ENABLED
-  if (!single_file_per_rank) {
+  if (!use_serial_io) {
     MPI_Status status;
     int errcode = MPI_File_read_at(fh_, offset, buf, cnt*size, MPI_BYTE, &status);
     if (errcode != MPI_SUCCESS) {
@@ -167,9 +167,9 @@ std::size_t IOWrapper::Read_bytes_at(void *buf, IOWrapperSizeT size,
 
 std::size_t IOWrapper::Read_bytes_at_all(void *buf, IOWrapperSizeT size,
                                          IOWrapperSizeT cnt, IOWrapperSizeT offset,
-                                         bool single_file_per_rank) {
+                                         bool use_serial_io) {
 #if MPI_PARALLEL_ENABLED
-  if (!single_file_per_rank) {
+  if (!use_serial_io) {
     MPI_Status status;
     int errcode = MPI_File_read_at_all(fh_, offset, buf, cnt*size, MPI_BYTE, &status);
     if (errcode != MPI_SUCCESS) {
@@ -199,9 +199,9 @@ std::size_t IOWrapper::Read_bytes_at_all(void *buf, IOWrapperSizeT size,
 //! Returns number of Reals actually read.
 
 std::size_t IOWrapper::Read_Reals(void *buf, IOWrapperSizeT cnt,
-                                  bool single_file_per_rank) {
+                                  bool use_serial_io) {
 #if MPI_PARALLEL_ENABLED
-  if (!single_file_per_rank) {
+  if (!use_serial_io) {
     MPI_Status status;
     int errcode = MPI_File_read(fh_, buf, cnt, MPI_ATHENA_REAL, &status);
     if (errcode != MPI_SUCCESS) {
@@ -229,9 +229,9 @@ std::size_t IOWrapper::Read_Reals(void *buf, IOWrapperSizeT cnt,
 //!  Athena Reals in parallel.  Returns number of Reals actually read.
 
 std::size_t IOWrapper::Read_Reals_at(void *buf, IOWrapperSizeT cnt,
-                                     IOWrapperSizeT offset, bool single_file_per_rank) {
+                                     IOWrapperSizeT offset, bool use_serial_io) {
 #if MPI_PARALLEL_ENABLED
-  if (!single_file_per_rank) {
+  if (!use_serial_io) {
     MPI_Status status;
     int errcode = MPI_File_read_at(fh_, offset, buf, cnt, MPI_ATHENA_REAL, &status);
     if (errcode != MPI_SUCCESS) {
@@ -262,9 +262,9 @@ std::size_t IOWrapper::Read_Reals_at(void *buf, IOWrapperSizeT cnt,
 
 std::size_t IOWrapper::Read_Reals_at_all(void *buf, IOWrapperSizeT cnt,
                                          IOWrapperSizeT offset,
-                                         bool single_file_per_rank) {
+                                         bool use_serial_io) {
 #if MPI_PARALLEL_ENABLED
-  if (!single_file_per_rank) {
+  if (!use_serial_io) {
     MPI_Status status;
     int errcode = MPI_File_read_at_all(fh_, offset, buf, cnt, MPI_ATHENA_REAL, &status);
     if (errcode != MPI_SUCCESS) {
@@ -294,9 +294,9 @@ std::size_t IOWrapper::Read_Reals_at_all(void *buf, IOWrapperSizeT cnt,
 //! "type" actually written.
 
 std::size_t IOWrapper::Write_any_type(const void *buf, IOWrapperSizeT cnt,
-                                      std::string datatype, bool single_file_per_rank) {
+                                      std::string datatype, bool use_serial_io) {
 #if MPI_PARALLEL_ENABLED
-  if (single_file_per_rank) {
+  if (use_serial_io) {
     // Use standard C file handling
     std::size_t datasize;
     if (datatype == "byte") {
@@ -389,9 +389,9 @@ std::size_t IOWrapper::Write_any_type(const void *buf, IOWrapperSizeT cnt,
 
 std::size_t IOWrapper::Write_any_type_at(const void *buf, IOWrapperSizeT cnt,
                                          IOWrapperSizeT offset, std::string datatype,
-                                         bool single_file_per_rank) {
+                                         bool use_serial_io) {
 #if MPI_PARALLEL_ENABLED
-  if (single_file_per_rank) {
+  if (use_serial_io) {
     // set appropriate datasize
     std::size_t datasize;
     if (datatype.compare("byte") == 0) {
@@ -487,9 +487,9 @@ std::size_t IOWrapper::Write_any_type_at(const void *buf, IOWrapperSizeT cnt,
 
 std::size_t IOWrapper::Write_any_type_at_all(const void *buf, IOWrapperSizeT cnt,
                                             IOWrapperSizeT offset, std::string datatype,
-                                            bool single_file_per_rank) {
+                                            bool use_serial_io) {
 #if MPI_PARALLEL_ENABLED
-  if (single_file_per_rank) {
+  if (use_serial_io) {
     // set appropriate datasize
     std::size_t datasize;
     if (datatype.compare("byte") == 0) {
@@ -578,12 +578,12 @@ std::size_t IOWrapper::Write_any_type_at_all(const void *buf, IOWrapperSizeT cnt
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn void IOWrapper::Close(bool single_file_per_rank)
+//! \fn void IOWrapper::Close(bool use_serial_io)
 //  \brief wrapper for {MPI_File_close} versus {std::fclose}
 
-int IOWrapper::Close(bool single_file_per_rank) {
+int IOWrapper::Close(bool use_serial_io) {
 #if MPI_PARALLEL_ENABLED
-  if (!single_file_per_rank) {
+  if (!use_serial_io) {
     return MPI_File_close(&fh_);
   } else {
     return std::fclose(reinterpret_cast<FILE*>(fh_));
@@ -594,12 +594,12 @@ int IOWrapper::Close(bool single_file_per_rank) {
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn int IOWrapper::Seek(IOWrapperSizeT offset, bool single_file_per_rank)
+//! \fn int IOWrapper::Seek(IOWrapperSizeT offset, bool use_serial_io)
 //  \brief wrapper for {MPI_File_seek} versus {std::fseek}
 
-int IOWrapper::Seek(IOWrapperSizeT offset, bool single_file_per_rank) {
+int IOWrapper::Seek(IOWrapperSizeT offset, bool use_serial_io) {
 #if MPI_PARALLEL_ENABLED
-  if (!single_file_per_rank) {
+  if (!use_serial_io) {
     return MPI_File_seek(fh_, offset, MPI_SEEK_SET);
   } else {
     return std::fseek(reinterpret_cast<FILE*>(fh_), offset, SEEK_SET);
@@ -610,12 +610,12 @@ int IOWrapper::Seek(IOWrapperSizeT offset, bool single_file_per_rank) {
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn IOWrapperSizeT IOWrapper::GetPosition(bool single_file_per_rank)
+//! \fn IOWrapperSizeT IOWrapper::GetPosition(bool use_serial_io)
 //  \brief wrapper for {MPI_File_get_position} versus {ftell}
 
-IOWrapperSizeT IOWrapper::GetPosition(bool single_file_per_rank) {
+IOWrapperSizeT IOWrapper::GetPosition(bool use_serial_io) {
 #if MPI_PARALLEL_ENABLED
-  if (!single_file_per_rank) {
+  if (!use_serial_io) {
     MPI_Offset position;
     MPI_File_get_position(fh_, &position);
     return position;

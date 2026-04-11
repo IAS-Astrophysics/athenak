@@ -317,21 +317,26 @@ void Mesh::BuildTreeFromScratch(ParameterInput *pin) {
 //! restart file.
 
 void Mesh::BuildTreeFromRestart(ParameterInput *pin, IOWrapper &resfile,
-                                                     bool single_file_per_rank) {
+                                                     FileShardMode shard_mode) {
   // At this point, the restartfile is already open and the ParameterInput (input file)
   // data has already been read in main(). Thus the file pointer is set to after <par_end>
-  IOWrapperSizeT headeroffset = resfile.GetPosition();
+  bool use_serial_io = UsesSerialIO(shard_mode);
+  restart_meta.file_shard_mode = shard_mode;
+  IOWrapperSizeT headeroffset = resfile.GetPosition(use_serial_io);
 
   // following must be identical to calculation of headeroffset (excluding size of
   // ParameterInput data) in restart.cpp
   IOWrapperSizeT headersize = 4*sizeof(int) + 2*sizeof(Real)
     + sizeof(RegionSize) + 2*sizeof(RegionIndcs);
+  if (shard_mode == FileShardMode::per_node) {
+    headersize += sizeof(int);
+  }
   char *headerdata = new char[headersize];
 
-  // the master process reads the header data if single_file_per_rank is false
-  if (global_variable::my_rank == 0 || single_file_per_rank) {
+  // The master process reads the header data unless each rank owns its own file.
+  if (global_variable::my_rank == 0 || use_serial_io) {
     IOWrapperSizeT read_size = resfile.Read_bytes(headerdata, 1, headersize,
-                                                  single_file_per_rank);
+                                                  use_serial_io);
     if (read_size != headersize) {
       std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                 << std::endl << "Header size read from restart file is incorrect, "
@@ -342,7 +347,7 @@ void Mesh::BuildTreeFromRestart(ParameterInput *pin, IOWrapper &resfile,
 
 #if MPI_PARALLEL_ENABLED
   // then broadcast the header data
-  if (!single_file_per_rank) {
+  if (!use_serial_io) {
     int mpi_err = MPI_Bcast(headerdata, headersize, MPI_CHAR, 0, MPI_COMM_WORLD);
     if (mpi_err != MPI_SUCCESS) {
       char error_string[1024];
@@ -375,6 +380,11 @@ void Mesh::BuildTreeFromRestart(ParameterInput *pin, IOWrapper &resfile,
   std::memcpy(&ncycle, &(headerdata[hdos]), sizeof(int));
   hdos += sizeof(int);
   std::memcpy(&(restart_meta.original_nranks), &(headerdata[hdos]), sizeof(int));
+  hdos += sizeof(int);
+  restart_meta.original_nnodes = 1;
+  if (shard_mode == FileShardMode::per_node) {
+    std::memcpy(&(restart_meta.original_nnodes), &(headerdata[hdos]), sizeof(int));
+  }
   delete [] headerdata;
 
   if (restart_meta.original_nranks < 0) {
@@ -413,8 +423,8 @@ void Mesh::BuildTreeFromRestart(ParameterInput *pin, IOWrapper &resfile,
   IOWrapperSizeT listsize = sizeof(LogicalLocation) + sizeof(float);
   char *idlist = new char[listsize*nmb_total];
   // only the master process reads the ID list
-  if (global_variable::my_rank == 0 || single_file_per_rank) {
-    if (resfile.Read_bytes(idlist,listsize,nmb_total,single_file_per_rank) !=
+  if (global_variable::my_rank == 0 || use_serial_io) {
+    if (resfile.Read_bytes(idlist,listsize,nmb_total,use_serial_io) !=
         static_cast<unsigned int>(nmb_total)) {
       std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                 << std::endl << "Incorrect number of MeshBlocks in restart file; "
@@ -424,7 +434,7 @@ void Mesh::BuildTreeFromRestart(ParameterInput *pin, IOWrapper &resfile,
   }
 #if MPI_PARALLEL_ENABLED
   // then broadcast the ID list
-  if (!single_file_per_rank) {
+  if (!use_serial_io) {
     MPI_Bcast(idlist, listsize*nmb_total, MPI_CHAR, 0, MPI_COMM_WORLD);
   }
 #endif
@@ -447,14 +457,16 @@ void Mesh::BuildTreeFromRestart(ParameterInput *pin, IOWrapper &resfile,
   if (restart_meta.original_nranks > 0) {
     restart_meta.gids_eachrank.assign(restart_meta.original_nranks, 0);
     restart_meta.nmb_eachrank.assign(restart_meta.original_nranks, 0);
+    restart_meta.rank_to_node.assign(restart_meta.original_nranks, 0);
   } else {
     restart_meta.gids_eachrank.clear();
     restart_meta.nmb_eachrank.clear();
+    restart_meta.rank_to_node.clear();
   }
 
-  if (global_variable::my_rank == 0 || single_file_per_rank) {
+  if (global_variable::my_rank == 0 || use_serial_io) {
     if (resfile.Read_bytes(restart_meta.rank_eachmb.data(), sizeof(int), nmb_total,
-                           single_file_per_rank)
+                           use_serial_io)
         != static_cast<unsigned int>(nmb_total)) {
       std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                 << std::endl << "MeshBlock rank list read from restart file is incorrect,"
@@ -463,16 +475,16 @@ void Mesh::BuildTreeFromRestart(ParameterInput *pin, IOWrapper &resfile,
     }
   }
 #if MPI_PARALLEL_ENABLED
-  if (!single_file_per_rank) {
+  if (!use_serial_io) {
     MPI_Bcast(restart_meta.rank_eachmb.data(), nmb_total*sizeof(int), MPI_CHAR, 0,
               MPI_COMM_WORLD);
   }
 #endif
 
   if (restart_meta.original_nranks > 0) {
-    if (global_variable::my_rank == 0 || single_file_per_rank) {
+    if (global_variable::my_rank == 0 || use_serial_io) {
       if (resfile.Read_bytes(restart_meta.gids_eachrank.data(), sizeof(int),
-                             restart_meta.original_nranks, single_file_per_rank)
+                             restart_meta.original_nranks, use_serial_io)
           != static_cast<unsigned int>(restart_meta.original_nranks)) {
         std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                   << std::endl << "Rank gid table read from restart file is incorrect,"
@@ -481,15 +493,15 @@ void Mesh::BuildTreeFromRestart(ParameterInput *pin, IOWrapper &resfile,
       }
     }
 #if MPI_PARALLEL_ENABLED
-    if (!single_file_per_rank) {
+    if (!use_serial_io) {
       MPI_Bcast(restart_meta.gids_eachrank.data(),
                 restart_meta.original_nranks*sizeof(int), MPI_CHAR, 0, MPI_COMM_WORLD);
     }
 #endif
 
-    if (global_variable::my_rank == 0 || single_file_per_rank) {
+    if (global_variable::my_rank == 0 || use_serial_io) {
       if (resfile.Read_bytes(restart_meta.nmb_eachrank.data(), sizeof(int),
-                             restart_meta.original_nranks, single_file_per_rank)
+                             restart_meta.original_nranks, use_serial_io)
           != static_cast<unsigned int>(restart_meta.original_nranks)) {
         std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                   << std::endl << "Rank MeshBlock count read from restart file is incorrect,"
@@ -498,11 +510,35 @@ void Mesh::BuildTreeFromRestart(ParameterInput *pin, IOWrapper &resfile,
       }
     }
 #if MPI_PARALLEL_ENABLED
-    if (!single_file_per_rank) {
+    if (!use_serial_io) {
       MPI_Bcast(restart_meta.nmb_eachrank.data(),
                 restart_meta.original_nranks*sizeof(int), MPI_CHAR, 0, MPI_COMM_WORLD);
     }
 #endif
+
+    if (shard_mode == FileShardMode::per_node) {
+      if (global_variable::my_rank == 0 || use_serial_io) {
+        if (resfile.Read_bytes(restart_meta.rank_to_node.data(), sizeof(int),
+                               restart_meta.original_nranks, use_serial_io)
+            != static_cast<unsigned int>(restart_meta.original_nranks)) {
+          std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                    << std::endl << "Rank-to-node table read from restart file is "
+                    << "incorrect, restart file is broken." << std::endl;
+          std::exit(EXIT_FAILURE);
+        }
+      }
+#if MPI_PARALLEL_ENABLED
+      if (!use_serial_io) {
+        MPI_Bcast(restart_meta.rank_to_node.data(),
+                  restart_meta.original_nranks*sizeof(int), MPI_CHAR, 0, MPI_COMM_WORLD);
+      }
+#endif
+    } else {
+      restart_meta.original_nnodes = restart_meta.original_nranks;
+      for (int r = 0; r < restart_meta.original_nranks; ++r) {
+        restart_meta.rank_to_node[r] = r;
+      }
+    }
   }
 
   // rebuild the MeshBlockTree
@@ -525,7 +561,7 @@ void Mesh::BuildTreeFromRestart(ParameterInput *pin, IOWrapper &resfile,
 
 #ifdef MPI_PARALLEL_ENABLED
   // check there is at least one MeshBlock per MPI rank
-  if (!single_file_per_rank) {
+  if (!use_serial_io) {
     if (nmb_total < global_variable::nranks) {
       std::cout << "### FATAL ERROR in " << __FILE__ << " at line "
         << __LINE__ << std::endl

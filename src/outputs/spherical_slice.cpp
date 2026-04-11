@@ -10,8 +10,8 @@
 //! grid onto the sphere.  Two output modes:
 //!   * default: ranks MPI_Reduce-sum into rank 0 which writes one file with the full
 //!     (ntheta, nphi) surface.
-//!   * single_file_per_rank=true: each rank writes only its locally-owned sample points
-//!     to bin/rank_XXXXXXXX/... -- no MPI reduction.
+//!   * partitioned modes: each rank or node writes only its locally-owned sample points
+//!     to bin/rank_XXXXXXXX/... or bin/node_XXXXXXXX/... without a global reduction.
 
 #include <sys/stat.h>  // mkdir
 
@@ -26,6 +26,7 @@
 #include <vector>
 
 #include "athena.hpp"
+#include "file_sharding.hpp"
 #include "globals.hpp"
 #include "coordinates/cell_locations.hpp"
 #include "mesh/mesh.hpp"
@@ -185,10 +186,9 @@ SphericalSliceOutput::SphericalSliceOutput(ParameterInput *pin, Mesh *pm,
                                            OutputParameters op)
     : BaseTypeOutput(pin, pm, op), psph(nullptr) {
   mkdir("bin", 0775);
-  if (op.single_file_per_rank) {
-    char rank_dir[20];
-    std::snprintf(rank_dir, sizeof(rank_dir), "bin/rank_%08d/", global_variable::my_rank);
-    mkdir(rank_dir, 0775);
+  if (op.file_shard_mode != FileShardMode::shared) {
+    std::string shard_dir = std::string("bin/") + ShardDirectoryName(op.file_shard_mode);
+    mkdir(shard_dir.c_str(), 0775);
   }
 
   Real r = pin->GetReal(op.block_name, "slice_r");
@@ -255,9 +255,10 @@ void SphericalSliceOutput::LoadOutputData(Mesh *pm) {
     }
   }
 
+  shard_owned_angles = psph->owned_angles;
+
 #if MPI_PARALLEL_ENABLED
-  // Per-rank mode skips the reduce: each rank writes only its owned points.
-  if (!out_params.single_file_per_rank) {
+  if (out_params.file_shard_mode == FileShardMode::shared) {
     int count = nout_vars*ntheta*nphi;
     if (global_variable::my_rank == 0) {
       MPI_Reduce(MPI_IN_PLACE, outarray.data(), count, MPI_ATHENA_REAL,
@@ -265,6 +266,34 @@ void SphericalSliceOutput::LoadOutputData(Mesh *pm) {
     } else {
       MPI_Reduce(outarray.data(), outarray.data(), count, MPI_ATHENA_REAL,
                  MPI_SUM, 0, MPI_COMM_WORLD);
+    }
+  } else if (out_params.file_shard_mode == FileShardMode::per_node) {
+    int count = nout_vars*ntheta*nphi;
+    if (global_variable::rank_in_node == 0) {
+      MPI_Reduce(MPI_IN_PLACE, outarray.data(), count, MPI_ATHENA_REAL,
+                 MPI_SUM, 0, global_variable::node_comm);
+    } else {
+      MPI_Reduce(outarray.data(), outarray.data(), count, MPI_ATHENA_REAL,
+                 MPI_SUM, 0, global_variable::node_comm);
+    }
+
+    std::vector<int> local_mask(psph->nangles, 0);
+    for (int32_t angle : psph->owned_angles) {
+      local_mask[angle] = 1;
+    }
+    std::vector<int> node_mask(psph->nangles, 0);
+    MPI_Reduce(local_mask.data(), node_mask.data(), psph->nangles, MPI_INT, MPI_MAX, 0,
+               global_variable::node_comm);
+    if (global_variable::rank_in_node == 0) {
+      shard_owned_angles.clear();
+      shard_owned_angles.reserve(psph->nangles);
+      for (int a = 0; a < psph->nangles; ++a) {
+        if (node_mask[a] != 0) {
+          shard_owned_angles.push_back(static_cast<int32_t>(a));
+        }
+      }
+    } else {
+      shard_owned_angles.clear();
     }
   }
 #endif
@@ -296,11 +325,11 @@ void SphericalSliceOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
   int ntheta = psph->ntheta;
   int nphi = psph->nphi;
   Real radius = psph->radius;
-  bool per_rank = out_params.single_file_per_rank;
+  FileShardMode shard_mode = out_params.file_shard_mode;
+  bool partitioned = (shard_mode != FileShardMode::shared);
   int nout_vars = outvars.size();
 
-  // In shared mode only rank 0 writes; in per-rank mode every rank writes its own file.
-  bool i_write = per_rank || (global_variable::my_rank == 0);
+  bool i_write = IsShardWriter(shard_mode);
 
   if (i_write) {
     char number[7];
@@ -309,11 +338,8 @@ void SphericalSliceOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
     std::snprintf(rstr, sizeof(rstr), "r=%g", static_cast<double>(radius));
 
     std::string dir = "bin/";
-    if (per_rank) {
-      char rank_dir[20];
-      std::snprintf(rank_dir, sizeof(rank_dir), "rank_%08d/",
-                    global_variable::my_rank);
-      dir += rank_dir;
+    if (partitioned) {
+      dir += ShardDirectoryName(shard_mode);
     }
     std::string fname = dir + out_params.file_basename
                       + "." + out_params.file_id + "." + rstr + number + ".sph.bin";
@@ -326,12 +352,14 @@ void SphericalSliceOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
       std::exit(EXIT_FAILURE);
     }
 
-    int npoints = per_rank ? static_cast<int>(psph->owned_angles.size())
-                            : ntheta*nphi;
+    int npoints = partitioned ? static_cast<int>(shard_owned_angles.size())
+                              : ntheta*nphi;
 
     std::stringstream hdr;
     hdr << "Athena spherical slice version=1.0" << std::endl
-        << "  single_file_per_rank=" << (per_rank ? 1 : 0) << std::endl
+        << "  distribution=" << ShardDistributionName(shard_mode) << std::endl
+        << "  single_file_per_rank=" << (shard_mode == FileShardMode::per_rank ? 1 : 0)
+        << std::endl
         << "  rank=" << global_variable::my_rank << std::endl
         << "  time=" << pm->time << std::endl
         << "  cycle=" << pm->ncycle << std::endl
@@ -353,8 +381,8 @@ void SphericalSliceOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
     std::fwrite(h.c_str(), 1, h.size(), pfile);
     std::fwrite(sbuf.c_str(), 1, sbuf.size(), pfile);
 
-    if (per_rank) {
-      const auto &owned = psph->owned_angles;
+    if (partitioned) {
+      const auto &owned = shard_owned_angles;
       std::fwrite(owned.data(), sizeof(int32_t), owned.size(), pfile);
 
       std::vector<float> data(static_cast<size_t>(npoints)*nout_vars);

@@ -11,8 +11,10 @@
 //  Variables can be any from var_choice[] in outputs.hpp, including coordinate variables.
 //
 //  Input format (new N-D):
-//    variable_1 = <var>   bin1_min = <min>   bin1_max = <max>   nbin1 = <n>   logscale1 = <bool>
-//    variable_2 = <var>   bin2_min = <min>   bin2_max = <max>   nbin2 = <n>   logscale2 = <bool>
+//    variable_1 = <var>   bin1_min = <min>   bin1_max = <max>   nbin1 = <n>
+//    scale1 = linear|log|symlog   linthresh1 = <value> (symlog only)
+//    variable_2 = <var>   bin2_min = <min>   bin2_max = <max>   nbin2 = <n>
+//    scale2 = linear|log|symlog   linthresh2 = <value> (symlog only)
 //    ...
 //    weight = volume|mass|variable   weight_variable = <var>  (optional)
 //
@@ -32,6 +34,7 @@
 #include <string>
 
 #include "athena.hpp"
+#include "file_sharding.hpp"
 #include "globals.hpp"
 #include "mesh/mesh.hpp"
 #include "eos/eos.hpp"
@@ -56,18 +59,14 @@ PDFOutput::PDFOutput(ParameterInput *pin, Mesh *pm, OutputParameters op) :
     dir_name += "_" + op.pdf_variables[d];
   }
   mkdir(dir_name.c_str(), 0775);
-  if (op.single_file_per_rank) {
-    std::string rank_subdir = dir_name + "/rank_";
-    char rank_suffix[12];
-    std::snprintf(rank_suffix, sizeof(rank_suffix), "%08d",
-                  global_variable::my_rank);
-    rank_subdir += rank_suffix;
-    mkdir(rank_subdir.c_str(), 0775);
-  }    
+  if (op.file_shard_mode != FileShardMode::shared) {
+    std::string shard_subdir = dir_name + "/" + ShardDirectoryName(op.file_shard_mode);
+    mkdir(shard_subdir.c_str(), 0775);
+  }
 
   // Initialize PDFData with N-D parameters
   pdf_data.Initialize(op.pdf_ndim, op.pdf_nbin, op.pdf_bin_min,
-                      op.pdf_bin_max, op.pdf_logscale);
+                      op.pdf_bin_max, op.pdf_scale, op.pdf_linthresh);
   pdf_data.PopulateBinEdges();
 
   int expected_vars = out_params.pdf_ndim;
@@ -172,34 +171,42 @@ void PDFOutput::LoadOutputData(Mesh *pm) {
 
   // Create device-accessible copies of PDF parameters
   Kokkos::View<int[PDFData::MAX_DIM]> d_nbin("d_nbin");
-  Kokkos::View<int[PDFData::MAX_DIM]> d_nbin_with_overflow("d_nbin_with_overflow");
   Kokkos::View<int[PDFData::MAX_DIM]> d_stride("d_stride");
+  Kokkos::View<int[PDFData::MAX_DIM]> d_scale("d_scale");
   Kokkos::View<Real[PDFData::MAX_DIM]> d_step_size("d_step_size");
   Kokkos::View<Real[PDFData::MAX_DIM]> d_bin_min("d_bin_min");
-  Kokkos::View<bool[PDFData::MAX_DIM]> d_logscale("d_logscale");
+  Kokkos::View<Real[PDFData::MAX_DIM]> d_bin_max("d_bin_max");
+  Kokkos::View<Real[PDFData::MAX_DIM]> d_transformed_min("d_transformed_min");
+  Kokkos::View<Real[PDFData::MAX_DIM]> d_linthresh("d_linthresh");
 
   auto h_nbin = Kokkos::create_mirror_view(d_nbin);
-  auto h_nbin_with_overflow = Kokkos::create_mirror_view(d_nbin_with_overflow);
   auto h_stride = Kokkos::create_mirror_view(d_stride);
+  auto h_scale = Kokkos::create_mirror_view(d_scale);
   auto h_step_size = Kokkos::create_mirror_view(d_step_size);
   auto h_bin_min = Kokkos::create_mirror_view(d_bin_min);
-  auto h_logscale = Kokkos::create_mirror_view(d_logscale);
+  auto h_bin_max = Kokkos::create_mirror_view(d_bin_max);
+  auto h_transformed_min = Kokkos::create_mirror_view(d_transformed_min);
+  auto h_linthresh = Kokkos::create_mirror_view(d_linthresh);
 
   for (int d = 0; d < PDFData::MAX_DIM; ++d) {
     h_nbin(d) = pdf_data.nbin[d];
-    h_nbin_with_overflow(d) = pdf_data.nbin_with_overflow[d];
     h_stride(d) = pdf_data.stride[d];
+    h_scale(d) = pdf_data.scale[d];
     h_step_size(d) = pdf_data.step_size[d];
     h_bin_min(d) = pdf_data.bin_min[d];
-    h_logscale(d) = pdf_data.logscale[d];
+    h_bin_max(d) = pdf_data.bin_max[d];
+    h_transformed_min(d) = pdf_data.transformed_min[d];
+    h_linthresh(d) = pdf_data.linthresh[d];
   }
 
   Kokkos::deep_copy(d_nbin, h_nbin);
-  Kokkos::deep_copy(d_nbin_with_overflow, h_nbin_with_overflow);
   Kokkos::deep_copy(d_stride, h_stride);
+  Kokkos::deep_copy(d_scale, h_scale);
   Kokkos::deep_copy(d_step_size, h_step_size);
   Kokkos::deep_copy(d_bin_min, h_bin_min);
-  Kokkos::deep_copy(d_logscale, h_logscale);
+  Kokkos::deep_copy(d_bin_max, h_bin_max);
+  Kokkos::deep_copy(d_transformed_min, h_transformed_min);
+  Kokkos::deep_copy(d_linthresh, h_linthresh);
   Kokkos::fence();
 
   // Reset ScatterView and result array
@@ -217,23 +224,19 @@ void PDFOutput::LoadOutputData(Mesh *pm) {
       int bin_idx;
 
       // Determine bin index for this dimension
-      if (d_logscale(d)) {
-        if (val <= 0.0 || val < d_bin_min(d)) {
-          bin_idx = 0;  // underflow
-        } else if (val >= d_bin_min(d) * Kokkos::pow(10.0,
-                                                     d_nbin(d) * d_step_size(d))) {
-          bin_idx = d_nbin(d) + 1;  // overflow
-        } else {
-          bin_idx = static_cast<int>(Kokkos::log10(val / d_bin_min(d))
-                                     / d_step_size(d)) + 1;
-        }
+      if (val < d_bin_min(d)) {
+        bin_idx = 0;  // underflow
+      } else if (!(val < d_bin_max(d))) {
+        bin_idx = d_nbin(d) + 1;  // overflow
       } else {
-        if (val < d_bin_min(d)) {
-          bin_idx = 0;  // underflow
-        } else if (val >= d_bin_min(d) + d_nbin(d) * d_step_size(d)) {
-          bin_idx = d_nbin(d) + 1;  // overflow
+        Real transformed = PDFTransformValue(val, d_scale(d), d_linthresh(d));
+        Real bin_pos = (transformed - d_transformed_min(d)) / d_step_size(d);
+        if (bin_pos < 0.0) {
+          bin_idx = 0;
+        } else if (bin_pos >= static_cast<Real>(d_nbin(d))) {
+          bin_idx = d_nbin(d);
         } else {
-          bin_idx = static_cast<int>((val - d_bin_min(d)) / d_step_size(d)) + 1;
+          bin_idx = static_cast<int>(bin_pos) + 1;
         }
       }
 
@@ -261,15 +264,23 @@ void PDFOutput::LoadOutputData(Mesh *pm) {
   Kokkos::Experimental::contribute(result, scatter);
   Kokkos::fence();
 
-  // MPI reduce across ranks (skip when each rank writes its own file)
+  // Reduce within the shard communicator for shared and per-node modes.
 #if MPI_PARALLEL_ENABLED
-  if (!out_params.single_file_per_rank) {
+  if (out_params.file_shard_mode == FileShardMode::shared) {
     if (global_variable::my_rank == 0) {
       MPI_Reduce(MPI_IN_PLACE, result.data(), total_bins,
                  MPI_ATHENA_REAL, MPI_SUM, 0, MPI_COMM_WORLD);
     } else {
       MPI_Reduce(result.data(), result.data(), total_bins,
                  MPI_ATHENA_REAL, MPI_SUM, 0, MPI_COMM_WORLD);
+    }
+  } else if (out_params.file_shard_mode == FileShardMode::per_node) {
+    if (global_variable::rank_in_node == 0) {
+      MPI_Reduce(MPI_IN_PLACE, result.data(), total_bins,
+                 MPI_ATHENA_REAL, MPI_SUM, 0, global_variable::node_comm);
+    } else {
+      MPI_Reduce(result.data(), result.data(), total_bins,
+                 MPI_ATHENA_REAL, MPI_SUM, 0, global_variable::node_comm);
     }
   }
 #endif
@@ -282,10 +293,9 @@ void PDFOutput::LoadOutputData(Mesh *pm) {
 //  \brief Writes N-D PDF to binary file with ASCII header
 
 void PDFOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
-  bool sfpr = out_params.single_file_per_rank;
-  
-  // Only master rank writes when NOT in single_file_per_rank mode
-  if (!sfpr && global_variable::my_rank != 0) {
+  FileShardMode shard_mode = out_params.file_shard_mode;
+
+  if (!IsShardWriter(shard_mode)) {
     // Still need to update counters on all ranks
     out_params.file_number++;
     if (out_params.last_time < 0.0) {
@@ -306,11 +316,8 @@ void PDFOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
 
   // Build rank-specific prefix if needed
   std::string path_prefix = dir_name + "/";
-  if (sfpr) {
-    char rank_dir[32];
-    std::snprintf(rank_dir, sizeof(rank_dir), "rank_%08d/",
-                  global_variable::my_rank);
-    path_prefix = dir_name + "/" + std::string(rank_dir);
+  if (shard_mode != FileShardMode::shared) {
+    path_prefix = dir_name + "/" + ShardDirectoryName(shard_mode);
   }
 
   // Write ASCII header file (once)
@@ -327,7 +334,9 @@ void PDFOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
 
     // Write header metadata
     std::fprintf(hfile, "# AthenaK N-D PDF Output\n");
-    std::fprintf(hfile, "format = %s\n", sfpr ? "sparse_coo" : "dense");
+    std::fprintf(hfile, "format = %s\n",
+                 shard_mode == FileShardMode::shared ? "dense" : "sparse_coo");
+    std::fprintf(hfile, "distribution = %s\n", ShardDistributionName(shard_mode));
     std::fprintf(hfile, "ndim = %d\n", pdf_data.ndim);
     std::fprintf(hfile, "weight = %s\n", out_params.pdf_weight.c_str());
     if (out_params.pdf_weight.compare("variable") == 0) {
@@ -344,6 +353,10 @@ void PDFOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
       std::fprintf(hfile, "nbin%d = %d\n", d + 1, pdf_data.nbin[d]);
       std::fprintf(hfile, "bin%d_min = %.15e\n", d + 1, pdf_data.bin_min[d]);
       std::fprintf(hfile, "bin%d_max = %.15e\n", d + 1, pdf_data.bin_max[d]);
+      std::fprintf(hfile, "scale%d = %s\n", d + 1, PDFScaleName(pdf_data.scale[d]));
+      if (pdf_data.scale[d] == PDF_SCALE_SYMLOG) {
+        std::fprintf(hfile, "linthresh%d = %.15e\n", d + 1, pdf_data.linthresh[d]);
+      }
       std::fprintf(hfile, "logscale%d = %s\n", d + 1, pdf_data.logscale[d] ? "true" : "false");
       std::fprintf(hfile, "stride%d = %d\n", d + 1, pdf_data.stride[d]);
       std::fprintf(hfile, "\n");
@@ -390,7 +403,7 @@ void PDFOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
   Kokkos::deep_copy(result_host, pdf_data.result_);
   Kokkos::fence();
 
-  if (sfpr) {
+  if (shard_mode != FileShardMode::shared) {
     // Sparse COO: compact nonzero bins into (idx, val) pairs.
     // Layout after the leading time: uint32 nnz | uint32 idx[nnz] | double val[nnz]
     std::vector<uint32_t> idx_buf;

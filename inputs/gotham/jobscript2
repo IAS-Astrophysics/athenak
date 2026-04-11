@@ -28,7 +28,7 @@ export HSA_XNACK=1
 
 srun -N 512 -n 4096 -c 7 --gpus-per-node=8 --gpu-bind=closest \
 	/ccs/home/zunyibrent/Work/athenak/build/src/athena \
-	-r phase1/rst/rank_00000000/gotham.00002.rst \
+	-r phase1/rst/node_00000000/gotham.00002.rst \
 	particles/star_prtcl_rst_flag=1 \
 	particles/star_particle_file=phase1/rst_prtcl/gotham.00002.rst_prtcl \
 	time/tlim=10.4 \

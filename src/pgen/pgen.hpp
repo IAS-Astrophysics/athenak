@@ -12,6 +12,7 @@
 #include <memory>
 #include <vector>
 
+#include "file_sharding.hpp"
 #include "geodesic-grid/spherical_grid.hpp"
 #include "parameter_input.hpp"
 
@@ -30,7 +31,7 @@ class ProblemGenerator {
   ProblemGenerator(ParameterInput *pin, Mesh *pmesh);
   // constructor for restarts
   ProblemGenerator(ParameterInput *pin, Mesh *pmesh, IOWrapper resfile,
-                   bool single_file_per_rank=false);
+                   FileShardMode shard_mode=FileShardMode::shared);
   ~ProblemGenerator() = default;
 
   // true if user BCs are specified on any face
@@ -74,7 +75,7 @@ class ProblemGenerator {
   void UserProblem(ParameterInput *pin, const bool restart);
 
  private:
-  bool single_file_per_rank; // for restart file naming
+  FileShardMode restart_file_shard_mode = FileShardMode::shared;
   Mesh* pmy_mesh_;
 };
 

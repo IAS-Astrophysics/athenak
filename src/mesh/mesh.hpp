@@ -18,6 +18,7 @@
 #include <vector>
 
 #include "athena.hpp"
+#include "file_sharding.hpp"
 
 // Define following structure before other "include" files to resolve declarations
 //----------------------------------------------------------------------------------------
@@ -80,13 +81,15 @@ struct LogicalLocationHash {
 };
 
 struct RestartMetaData {
-  bool single_file_per_rank = false;
+  FileShardMode file_shard_mode = FileShardMode::shared;
   std::string base_dir;
   std::string file_name;
   int original_nranks = 0;
+  int original_nnodes = 1;
   std::vector<int> gids_eachrank;
   std::vector<int> nmb_eachrank;
   std::vector<int> rank_eachmb;
+  std::vector<int> rank_to_node;
 };
 
 // Equality operator for LogicalLocation (needed for unordered_map)
@@ -181,10 +184,10 @@ class Mesh {
   // functions
   void BuildTreeFromScratch(ParameterInput *pin);
   void BuildTreeFromRestart(ParameterInput *pin, IOWrapper &resfile,
-                            bool single_file_per_rank=false);
+                            FileShardMode shard_mode=FileShardMode::shared);
   void SetRestartFileInfo(const std::string &base_dir,
                           const std::string &file_name,
-                          bool single_file_per_rank);
+                          FileShardMode shard_mode);
   void PrintMeshDiagnostics();
   void WriteMeshStructure();
   void NewTimeStep(const Real tlim);

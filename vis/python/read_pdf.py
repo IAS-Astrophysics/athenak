@@ -8,7 +8,7 @@ Two on-disk formats (selected by the header 'format' field):
     - float64 time
     - float64 values[total_bins]
 
-  sparse_coo (used when single_file_per_rank is enabled; one file per rank):
+  sparse_coo (used for partitioned rank- or node-sharded output):
     - float64 time
     - uint32  nnz
     - uint32  idx[nnz]   (flat bin indices)
@@ -16,8 +16,9 @@ Two on-disk formats (selected by the header 'format' field):
 
 Header layout (ASCII): <basename>.header.pdf, written once per stream.
 
-For sparse_coo, point read_pdf() at the rank_00000000 file and all rank
-files are discovered automatically and summed into a dense histogram.
+For sparse_coo, point read_pdf() at any `rank_*` or `node_*` file and all
+matching shard files are discovered automatically and summed into a dense
+histogram.
 """
 
 import glob as _glob
@@ -49,13 +50,55 @@ def _get_dim_index(key):
     return int(match.group(1))
 
 
-def _glob_rank_files(rank0_path):
-    """Given a rank_00000000 path, find all matching rank files."""
-    pattern = rank0_path.replace('rank_00000000', 'rank_*')
+def _symlog_forward(values, linthresh):
+    values = np.asarray(values, dtype=np.float64)
+    sign = np.sign(values)
+    abs_values = np.abs(values)
+    transformed = np.empty_like(abs_values)
+    linear_mask = abs_values <= linthresh
+    transformed[linear_mask] = abs_values[linear_mask] / linthresh
+    transformed[~linear_mask] = 1.0 + np.log10(abs_values[~linear_mask] / linthresh)
+    return sign * transformed
+
+
+def _symlog_inverse(values, linthresh):
+    values = np.asarray(values, dtype=np.float64)
+    sign = np.sign(values)
+    abs_values = np.abs(values)
+    physical = np.empty_like(abs_values)
+    linear_mask = abs_values <= 1.0
+    physical[linear_mask] = abs_values[linear_mask] * linthresh
+    physical[~linear_mask] = linthresh * np.power(10.0, abs_values[~linear_mask] - 1.0)
+    return sign * physical
+
+
+def _bin_centers_from_edges(edges, scale, linthresh):
+    if scale == 'log':
+        return np.sqrt(edges[:-1] * edges[1:])
+    if scale == 'symlog':
+        transformed = _symlog_forward(edges, linthresh)
+        return _symlog_inverse(0.5 * (transformed[:-1] + transformed[1:]), linthresh)
+    return 0.5 * (edges[:-1] + edges[1:])
+
+
+def _glob_partition_files(path):
+    """Given a node/rank shard path, find all matching sibling shard files."""
+    shard_dir = os.path.dirname(path)
+    shard_base = os.path.basename(shard_dir)
+    parent_dir = os.path.dirname(shard_dir)
+    file_base = os.path.basename(path)
+
+    if shard_base.startswith('rank_'):
+        pattern = os.path.join(parent_dir, 'rank_*', file_base)
+    elif shard_base.startswith('node_'):
+        pattern = os.path.join(parent_dir, 'node_*', file_base)
+    else:
+      return [path]
+
     files = sorted(_glob.glob(pattern))
     if not files:
         raise RuntimeError(
-            'No rank files found matching {}'.format(pattern))
+            'No partition files found matching {}'.format(pattern))
     return files
 
 
@@ -84,6 +127,8 @@ def read_pdf_header(header_path):
 
             if key == 'format':
                 header['format'] = value
+            elif key == 'distribution':
+                header['distribution'] = value
             elif key == 'ndim':
                 header['ndim'] = int(value)
             elif key == 'weight':
@@ -115,6 +160,10 @@ def read_pdf_header(header_path):
                     dims[dim]['bin_min'] = float(value)
                 elif key.startswith('bin') and key.endswith('_max'):
                     dims[dim]['bin_max'] = float(value)
+                elif key.startswith('scale'):
+                    dims[dim]['scale'] = value
+                elif key.startswith('linthresh'):
+                    dims[dim]['linthresh'] = float(value)
                 elif key.startswith('logscale'):
                     dims[dim]['logscale'] = _parse_bool(value)
                 elif key.startswith('stride'):
@@ -132,13 +181,19 @@ def read_pdf_header(header_path):
         if 'nbin' not in info:
             raise RuntimeError('Missing nbin{} in {}'.format(dim, header_path))
         info['nbin_with_overflow'] = info['nbin'] + 2
+        if 'scale' not in info:
+            info['scale'] = 'log' if info.get('logscale', False) else 'linear'
+        if info['scale'] == 'symlog':
+            if 'linthresh' not in info:
+                raise RuntimeError('Missing linthresh{} in {}'.format(dim, header_path))
+        else:
+            info.setdefault('linthresh', 1.0)
         if 'bin_edges' in info:
             edges = info['bin_edges']
             if edges.size == info['nbin'] + 1:
-                if info.get('logscale', False):
-                    info['bin_centers'] = np.sqrt(edges[:-1] * edges[1:])
-                else:
-                    info['bin_centers'] = 0.5 * (edges[:-1] + edges[1:])
+                info['bin_centers'] = _bin_centers_from_edges(
+                    edges, info['scale'], info['linthresh']
+                )
         dimensions.append(info)
 
     header['dimensions'] = dimensions
@@ -179,9 +234,8 @@ def _read_sparse_rank_file(path):
 def read_pdf(data_path, header_path=None, reshape=True):
     """Read a PDF data file and return a dict with time, data, and header.
 
-    For sparse_coo output (single_file_per_rank), pass any rank file (or the
-    rank_00000000 file) and all matching rank files are discovered, decoded,
-    and summed into a dense histogram.
+    For sparse_coo output, pass any node/rank shard file and all matching
+    partition files are discovered, decoded, and summed into a dense histogram.
     """
     if header_path is None:
         header_path = _infer_header_path(data_path)
@@ -194,7 +248,7 @@ def read_pdf(data_path, header_path=None, reshape=True):
         if total_bins is None:
             raise RuntimeError(
                 'Sparse PDF header missing total_bins: {}'.format(header_path))
-        rank_files = _glob_rank_files(data_path)
+        rank_files = _glob_partition_files(data_path)
         data = np.zeros(total_bins, dtype=np.float64)
         time_val = None
         for rf in rank_files:

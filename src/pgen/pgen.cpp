@@ -34,16 +34,17 @@ namespace {
 struct RestartBlockRequest {
   int local_index;
   int global_id;
+  int src_rank;
 };
 
-void LoadSingleFileRestartData(Mesh *pm,
-                               IOWrapperSizeT headeroffset,
-                               IOWrapperSizeT data_stride,
-                               int nout1, int nout2, int nout3,
-                               int nhydro, int nmhd, int nrad,
-                               int nforce, int nz4c, int nadm,
-                               HostArray5D<Real> &ccin,
-                               HostFaceFld4D<Real> &fcin) {
+void LoadPartitionedRestartData(Mesh *pm,
+                                IOWrapperSizeT headeroffset,
+                                IOWrapperSizeT data_stride,
+                                int nout1, int nout2, int nout3,
+                                int nhydro, int nmhd, int nrad,
+                                int nforce, int nz4c, int nadm,
+                                HostArray5D<Real> &ccin,
+                                HostFaceFld4D<Real> &fcin) {
   MeshBlockPack *pack = pm->pmb_pack;
   int nmb = pack->nmb_thispack;
   hydro::Hydro* phydro = pack->phydro;
@@ -74,8 +75,20 @@ void LoadSingleFileRestartData(Mesh *pm,
               << std::endl;
     std::exit(EXIT_FAILURE);
   }
+  if (meta.file_shard_mode == FileShardMode::per_node &&
+      (meta.original_nnodes <= 0 ||
+       meta.rank_to_node.size() != static_cast<std::size_t>(meta.original_nranks))) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+              << std::endl << "Restart metadata missing original node layout."
+              << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
 
-  std::vector<std::vector<RestartBlockRequest>> requests(meta.original_nranks);
+  int nshards = meta.original_nranks;
+  if (meta.file_shard_mode == FileShardMode::per_node) {
+    nshards = meta.original_nnodes;
+  }
+  std::vector<std::vector<RestartBlockRequest>> requests(nshards);
   for (int m=0; m<nmb; ++m) {
     int gid = pack->pmb->mb_gid.h_view(m);
     if (gid < 0 || gid >= pm->nmb_total) {
@@ -91,17 +104,30 @@ void LoadSingleFileRestartData(Mesh *pm,
                 << std::endl;
       std::exit(EXIT_FAILURE);
     }
-    requests[src_rank].push_back({m, gid});
+    int src_shard = src_rank;
+    if (meta.file_shard_mode == FileShardMode::per_node) {
+      src_shard = meta.rank_to_node[src_rank];
+      if (src_shard < 0 || src_shard >= meta.original_nnodes) {
+        std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                  << std::endl << "Restart metadata contains invalid node assignments."
+                  << std::endl;
+        std::exit(EXIT_FAILURE);
+      }
+    }
+    requests[src_shard].push_back({m, gid, src_rank});
   }
 
-  std::vector<std::string> rank_paths(meta.original_nranks);
-  for (int r=0; r<meta.original_nranks; ++r) {
-    char rank_dir[20];
-    std::snprintf(rank_dir, sizeof(rank_dir), "rank_%08d", r);
+  std::vector<std::string> shard_paths(nshards);
+  for (int s=0; s<nshards; ++s) {
+    char shard_dir[20];
+    std::snprintf(shard_dir, sizeof(shard_dir),
+                  meta.file_shard_mode == FileShardMode::per_node ? "node_%08d"
+                                                                  : "rank_%08d",
+                  s);
     if (!meta.base_dir.empty()) {
-      rank_paths[r] = meta.base_dir + "/" + rank_dir + "/" + meta.file_name;
+      shard_paths[s] = meta.base_dir + "/" + shard_dir + "/" + meta.file_name;
     } else {
-      rank_paths[r] = std::string(rank_dir) + "/" + meta.file_name;
+      shard_paths[s] = std::string(shard_dir) + "/" + meta.file_name;
     }
   }
 
@@ -146,22 +172,30 @@ void LoadSingleFileRestartData(Mesh *pm,
                 << std::endl;
       std::exit(EXIT_FAILURE);
     }
+    if (meta.file_shard_mode == FileShardMode::per_node) {
+      int src_node = meta.rank_to_node[src_rank];
+      for (int r=0; r<src_rank; ++r) {
+        if (meta.rank_to_node[r] == src_node) {
+          local_index += meta.nmb_eachrank[r];
+        }
+      }
+    }
     return headeroffset + chunk_stride * static_cast<IOWrapperSizeT>(local_index);
   };
 
   if (phydro != nullptr && nhydro > 0) {
     Kokkos::realloc(ccin, nmb, nhydro, nout3, nout2, nout1);
-    for (int r=0; r<meta.original_nranks; ++r) {
-      auto &reqs = requests[r];
+    for (int s=0; s<nshards; ++s) {
+      auto &reqs = requests[s];
       if (reqs.empty()) continue;
       IOWrapper srcfile;
-      srcfile.Open(rank_paths[r].c_str(), IOWrapper::FileMode::read, true);
+      srcfile.Open(shard_paths[s].c_str(), IOWrapper::FileMode::read, true);
       for (const auto &req : reqs) {
         auto mbptr = Kokkos::subview(ccin, req.local_index, Kokkos::ALL, Kokkos::ALL,
                                      Kokkos::ALL, Kokkos::ALL);
         int mbcnt = mbptr.size();
         if (mbcnt > 0) {
-          IOWrapperSizeT base = chunk_base(r, req.global_id);
+          IOWrapperSizeT base = chunk_base(req.src_rank, req.global_id);
           if (srcfile.Read_Reals_at(mbptr.data(), mbcnt, base + hydro_offset, true)
               != mbcnt) {
             std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
@@ -182,13 +216,13 @@ void LoadSingleFileRestartData(Mesh *pm,
     Kokkos::realloc(fcin.x1f, nmb, nout3, nout2, nout1+1);
     Kokkos::realloc(fcin.x2f, nmb, nout3, nout2+1, nout1);
     Kokkos::realloc(fcin.x3f, nmb, nout3+1, nout2, nout1);
-    for (int r=0; r<meta.original_nranks; ++r) {
-      auto &reqs = requests[r];
+    for (int s=0; s<nshards; ++s) {
+      auto &reqs = requests[s];
       if (reqs.empty()) continue;
       IOWrapper srcfile;
-      srcfile.Open(rank_paths[r].c_str(), IOWrapper::FileMode::read, true);
+      srcfile.Open(shard_paths[s].c_str(), IOWrapper::FileMode::read, true);
       for (const auto &req : reqs) {
-        IOWrapperSizeT base = chunk_base(r, req.global_id);
+        IOWrapperSizeT base = chunk_base(req.src_rank, req.global_id);
         auto mbptr = Kokkos::subview(ccin, req.local_index, Kokkos::ALL, Kokkos::ALL,
                                      Kokkos::ALL, Kokkos::ALL);
         int mbcnt = mbptr.size();
@@ -255,17 +289,17 @@ void LoadSingleFileRestartData(Mesh *pm,
 
   if (prad != nullptr && nrad > 0) {
     Kokkos::realloc(ccin, nmb, nrad, nout3, nout2, nout1);
-    for (int r=0; r<meta.original_nranks; ++r) {
-      auto &reqs = requests[r];
+    for (int s=0; s<nshards; ++s) {
+      auto &reqs = requests[s];
       if (reqs.empty()) continue;
       IOWrapper srcfile;
-      srcfile.Open(rank_paths[r].c_str(), IOWrapper::FileMode::read, true);
+      srcfile.Open(shard_paths[s].c_str(), IOWrapper::FileMode::read, true);
       for (const auto &req : reqs) {
         auto mbptr = Kokkos::subview(ccin, req.local_index, Kokkos::ALL, Kokkos::ALL,
                                      Kokkos::ALL, Kokkos::ALL);
         int mbcnt = mbptr.size();
         if (mbcnt > 0) {
-          IOWrapperSizeT base = chunk_base(r, req.global_id);
+          IOWrapperSizeT base = chunk_base(req.src_rank, req.global_id);
           if (srcfile.Read_Reals_at(mbptr.data(), mbcnt, base + rad_offset, true)
               != mbcnt) {
             std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
@@ -283,17 +317,17 @@ void LoadSingleFileRestartData(Mesh *pm,
 
   if (pturb != nullptr && nforce > 0) {
     Kokkos::realloc(ccin, nmb, nforce, nout3, nout2, nout1);
-    for (int r=0; r<meta.original_nranks; ++r) {
-      auto &reqs = requests[r];
+    for (int s=0; s<nshards; ++s) {
+      auto &reqs = requests[s];
       if (reqs.empty()) continue;
       IOWrapper srcfile;
-      srcfile.Open(rank_paths[r].c_str(), IOWrapper::FileMode::read, true);
+      srcfile.Open(shard_paths[s].c_str(), IOWrapper::FileMode::read, true);
       for (const auto &req : reqs) {
         auto mbptr = Kokkos::subview(ccin, req.local_index, Kokkos::ALL, Kokkos::ALL,
                                      Kokkos::ALL, Kokkos::ALL);
         int mbcnt = mbptr.size();
         if (mbcnt > 0) {
-          IOWrapperSizeT base = chunk_base(r, req.global_id);
+          IOWrapperSizeT base = chunk_base(req.src_rank, req.global_id);
           if (srcfile.Read_Reals_at(mbptr.data(), mbcnt, base + turb_offset, true)
               != mbcnt) {
             std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
@@ -311,17 +345,17 @@ void LoadSingleFileRestartData(Mesh *pm,
 
   if (pz4c != nullptr && nz4c > 0) {
     Kokkos::realloc(ccin, nmb, nz4c, nout3, nout2, nout1);
-    for (int r=0; r<meta.original_nranks; ++r) {
-      auto &reqs = requests[r];
+    for (int s=0; s<nshards; ++s) {
+      auto &reqs = requests[s];
       if (reqs.empty()) continue;
       IOWrapper srcfile;
-      srcfile.Open(rank_paths[r].c_str(), IOWrapper::FileMode::read, true);
+      srcfile.Open(shard_paths[s].c_str(), IOWrapper::FileMode::read, true);
       for (const auto &req : reqs) {
         auto mbptr = Kokkos::subview(ccin, req.local_index, Kokkos::ALL, Kokkos::ALL,
                                      Kokkos::ALL, Kokkos::ALL);
         int mbcnt = mbptr.size();
         if (mbcnt > 0) {
-          IOWrapperSizeT base = chunk_base(r, req.global_id);
+          IOWrapperSizeT base = chunk_base(req.src_rank, req.global_id);
           if (srcfile.Read_Reals_at(mbptr.data(), mbcnt, base + z4c_adm_offset, true)
               != mbcnt) {
             std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
@@ -338,17 +372,17 @@ void LoadSingleFileRestartData(Mesh *pm,
     pz4c->Z4cToADM(pm->pmb_pack);
   } else if (padm != nullptr && nadm > 0) {
     Kokkos::realloc(ccin, nmb, nadm, nout3, nout2, nout1);
-    for (int r=0; r<meta.original_nranks; ++r) {
-      auto &reqs = requests[r];
+    for (int s=0; s<nshards; ++s) {
+      auto &reqs = requests[s];
       if (reqs.empty()) continue;
       IOWrapper srcfile;
-      srcfile.Open(rank_paths[r].c_str(), IOWrapper::FileMode::read, true);
+      srcfile.Open(shard_paths[s].c_str(), IOWrapper::FileMode::read, true);
       for (const auto &req : reqs) {
         auto mbptr = Kokkos::subview(ccin, req.local_index, Kokkos::ALL, Kokkos::ALL,
                                      Kokkos::ALL, Kokkos::ALL);
         int mbcnt = mbptr.size();
         if (mbcnt > 0) {
-          IOWrapperSizeT base = chunk_base(r, req.global_id);
+          IOWrapperSizeT base = chunk_base(req.src_rank, req.global_id);
           if (srcfile.Read_Reals_at(mbptr.data(), mbcnt, base + z4c_adm_offset, true)
               != mbcnt) {
             std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
@@ -471,10 +505,11 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm) :
 // and any data necessary for restart runs to continue correctly.
 
 ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resfile,
-                                   bool single_file_per_rank) :
+                                   FileShardMode shard_mode) :
     user_bcs(false),
     user_srcs(false),
     user_hist(false),
+    restart_file_shard_mode(shard_mode),
     pmy_mesh_(pm) {
   // check for user-defined boundary conditions
   for (int dir=0; dir<6; ++dir) {
@@ -484,6 +519,7 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resf
   }
   user_srcs = pin->GetOrAddBoolean("problem","user_srcs",false);
   user_hist = pin->GetOrAddBoolean("problem","user_hist",false);
+  bool use_serial_io = UsesSerialIO(shard_mode);
 
   // get spatial dimensions of arrays, including ghost zones
   auto &indcs = pm->pmb_pack->pmesh->mb_indcs;
@@ -517,8 +553,8 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resf
   // root process reads z4c last_output_time and tracker data
   if (pz4c != nullptr) {
     Real last_output_time;
-    if (global_variable::my_rank == 0 || single_file_per_rank) {
-      if (resfile.Read_Reals(&last_output_time, 1,single_file_per_rank) != 1) {
+    if (global_variable::my_rank == 0 || use_serial_io) {
+      if (resfile.Read_Reals(&last_output_time, 1, use_serial_io) != 1) {
         std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                   << std::endl << "z4c::last_output_time data size read from restart "
                   << "file is incorrect, restart file is broken." << std::endl;
@@ -526,7 +562,7 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resf
       }
     }
 #if MPI_PARALLEL_ENABLED
-    if (!single_file_per_rank) {
+    if (!use_serial_io) {
       MPI_Bcast(&last_output_time, sizeof(Real), MPI_CHAR, 0, MPI_COMM_WORLD);
     }
 #endif
@@ -534,8 +570,8 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resf
 
     for (auto &pt : pz4c->ptracker) {
       Real pos[3];
-      if (global_variable::my_rank == 0 || single_file_per_rank) {
-        if (resfile.Read_Reals(&pos[0], 3, single_file_per_rank) != 3) {
+      if (global_variable::my_rank == 0 || use_serial_io) {
+        if (resfile.Read_Reals(&pos[0], 3, use_serial_io) != 3) {
           std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                     << std::endl << "compact object tracker data size read from restart "
                     << "file is incorrect, restart file is broken." << std::endl;
@@ -543,7 +579,7 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resf
         }
       }
 #if MPI_PARALLEL_ENABLED
-      if (!single_file_per_rank) {
+      if (!use_serial_io) {
         MPI_Bcast(&pos[0], 3*sizeof(Real), MPI_CHAR, 0, MPI_COMM_WORLD);
       }
 #endif
@@ -555,8 +591,8 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resf
     // root process reads size the random seed
     char *rng_data = new char[sizeof(RNG_State)];
     // the master process reads the variables data
-    if (global_variable::my_rank == 0 || single_file_per_rank) {
-      if (resfile.Read_bytes(rng_data, 1, sizeof(RNG_State), single_file_per_rank)
+    if (global_variable::my_rank == 0 || use_serial_io) {
+      if (resfile.Read_bytes(rng_data, 1, sizeof(RNG_State), use_serial_io)
           != sizeof(RNG_State)) {
         std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                   << std::endl << "RNG data size read from restart file is incorrect, "
@@ -565,7 +601,7 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resf
       }
     }
 #if MPI_PARALLEL_ENABLED
-    if (!single_file_per_rank) {
+    if (!use_serial_io) {
       // then broadcast the RNG information
       MPI_Bcast(rng_data, sizeof(RNG_State), MPI_CHAR, 0, MPI_COMM_WORLD);
     }
@@ -576,8 +612,8 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resf
   // root process reads size of CC and FC data arrays from restart file
   IOWrapperSizeT variablesize = sizeof(IOWrapperSizeT);
   char *variabledata = new char[variablesize];
-  if (global_variable::my_rank == 0 || single_file_per_rank) {
-    if (resfile.Read_bytes(variabledata, 1, variablesize, single_file_per_rank)
+  if (global_variable::my_rank == 0 || use_serial_io) {
+    if (resfile.Read_bytes(variabledata, 1, variablesize, use_serial_io)
         != variablesize) {
       std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                 << std::endl << "Variable data size read from restart file is incorrect, "
@@ -587,7 +623,7 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resf
   }
 #if MPI_PARALLEL_ENABLED
   // then broadcast the datasize information
-  if (!single_file_per_rank) {
+  if (!use_serial_io) {
     MPI_Bcast(variabledata, variablesize, MPI_CHAR, 0, MPI_COMM_WORLD);
   }
 #endif
@@ -597,12 +633,12 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resf
   // calculate total number of CC variables
   IOWrapperSizeT headeroffset;
   // master process gets file offset
-  if (global_variable::my_rank == 0 || single_file_per_rank) {
-    headeroffset = resfile.GetPosition(single_file_per_rank);
+  if (global_variable::my_rank == 0 || use_serial_io) {
+    headeroffset = resfile.GetPosition(use_serial_io);
   }
 #if MPI_PARALLEL_ENABLED
   // then broadcasts it
-  if (!single_file_per_rank) {
+  if (!use_serial_io) {
     MPI_Bcast(&headeroffset, sizeof(IOWrapperSizeT), MPI_CHAR, 0, MPI_COMM_WORLD);
   }
 #endif
@@ -640,17 +676,15 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resf
   HostArray5D<Real> ccin("rst-cc-in", 1, 1, 1, 1, 1);
   HostFaceFld4D<Real> fcin("rst-fc-in", 1, 1, 1, 1);
 
-  if (single_file_per_rank) {
-    LoadSingleFileRestartData(pm, headeroffset, data_size_, nout1, nout2, nout3,
-                              nhydro, nmhd, nrad, nforce, nz4c, nadm,
-                              ccin, fcin);
+  if (shard_mode != FileShardMode::shared) {
+    LoadPartitionedRestartData(pm, headeroffset, data_size_, nout1, nout2, nout3,
+                               nhydro, nmhd, nrad, nforce, nz4c, nadm,
+                               ccin, fcin);
   } else {
     // read CC data into host array
     int mygids = pm->gids_eachrank[global_variable::my_rank];
     IOWrapperSizeT offset_myrank = headeroffset;
-    if (!single_file_per_rank) {
-      offset_myrank += data_size_ * pm->gids_eachrank[global_variable::my_rank];
-    }
+    offset_myrank += data_size_ * pm->gids_eachrank[global_variable::my_rank];
     IOWrapperSizeT myoffset = offset_myrank;
 
     // calculate max/min number of MeshBlocks across all ranks
@@ -670,7 +704,7 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resf
         auto mbptr = Kokkos::subview(ccin, m, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL,
                                      Kokkos::ALL);
         int mbcnt = mbptr.size();
-        if (resfile.Read_Reals_at_all(mbptr.data(), mbcnt, myoffset, single_file_per_rank)
+        if (resfile.Read_Reals_at_all(mbptr.data(), mbcnt, myoffset, use_serial_io)
             != mbcnt) {
           std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                     << std::endl << "CC hydro data not read correctly from rst file, "
@@ -685,7 +719,7 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resf
         auto mbptr = Kokkos::subview(ccin, m, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL,
                                      Kokkos::ALL);
         int mbcnt = mbptr.size();
-        if (resfile.Read_Reals_at(mbptr.data(), mbcnt, myoffset, single_file_per_rank)
+        if (resfile.Read_Reals_at(mbptr.data(), mbcnt, myoffset, use_serial_io)
             != mbcnt) {
           std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                     << std::endl << "CC hydro data not read correctly from rst file, "
@@ -710,7 +744,7 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resf
         auto mbptr = Kokkos::subview(ccin, m, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL,
                                    Kokkos::ALL);
         int mbcnt = mbptr.size();
-        if (resfile.Read_Reals_at_all(mbptr.data(), mbcnt, myoffset, single_file_per_rank)
+        if (resfile.Read_Reals_at_all(mbptr.data(), mbcnt, myoffset, use_serial_io)
             != mbcnt) {
           std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                     << std::endl << "CC mhd data not read correctly from rst file, "
@@ -724,7 +758,7 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resf
         auto mbptr = Kokkos::subview(ccin, m, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL,
                                      Kokkos::ALL);
         int mbcnt = mbptr.size();
-        if (resfile.Read_Reals_at(mbptr.data(), mbcnt, myoffset, single_file_per_rank)
+        if (resfile.Read_Reals_at(mbptr.data(), mbcnt, myoffset, use_serial_io)
             != mbcnt) {
           std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                     << std::endl << "CC mhd data not read correctly from rst file, "
@@ -751,7 +785,7 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resf
         int fldcnt = x1fptr.size();
 
         if (resfile.Read_Reals_at_all(x1fptr.data(), fldcnt, myoffset,
-                                      single_file_per_rank) != fldcnt) {
+                                      use_serial_io) != fldcnt) {
           std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                 << std::endl << "Input b0.x1f field not read correctly from rst file, "
                 << "restart file is broken." << std::endl;
@@ -764,7 +798,7 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resf
         fldcnt = x2fptr.size();
 
         if (resfile.Read_Reals_at_all(x2fptr.data(), fldcnt, myoffset,
-                                      single_file_per_rank) != fldcnt) {
+                                      use_serial_io) != fldcnt) {
           std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                 << std::endl << "Input b0.x2f field not read correctly from rst file, "
                 << "restart file is broken." << std::endl;
@@ -777,7 +811,7 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resf
         fldcnt = x3fptr.size();
 
         if (resfile.Read_Reals_at_all(x3fptr.data(), fldcnt, myoffset,
-                                      single_file_per_rank) != fldcnt) {
+                                      use_serial_io) != fldcnt) {
           std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                 << std::endl << "Input b0.x3f field not read correctly from rst file, "
                 << "restart file is broken." << std::endl;
@@ -792,7 +826,7 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resf
         int fldcnt = x1fptr.size();
 
         if (resfile.Read_Reals_at(x1fptr.data(), fldcnt, myoffset,
-                                      single_file_per_rank) != fldcnt) {
+                                  use_serial_io) != fldcnt) {
           std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                 << std::endl << "Input b0.x1f field not read correctly from rst file, "
                 << "restart file is broken." << std::endl;
@@ -805,7 +839,7 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resf
         fldcnt = x2fptr.size();
 
         if (resfile.Read_Reals_at(x2fptr.data(), fldcnt, myoffset,
-                                      single_file_per_rank) != fldcnt) {
+                                  use_serial_io) != fldcnt) {
           std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                 << std::endl << "Input b0.x2f field not read correctly from rst file, "
                 << "restart file is broken." << std::endl;
@@ -818,7 +852,7 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resf
         fldcnt = x3fptr.size();
 
         if (resfile.Read_Reals_at(x3fptr.data(), fldcnt, myoffset,
-                                      single_file_per_rank) != fldcnt) {
+                                  use_serial_io) != fldcnt) {
           std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                 << std::endl << "Input b0.x3f field not read correctly from rst file, "
                 << "restart file is broken." << std::endl;
@@ -851,7 +885,7 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resf
                                      Kokkos::ALL);
         int mbcnt = mbptr.size();
         if (resfile.Read_Reals_at_all(mbptr.data(), mbcnt, myoffset,
-                                      single_file_per_rank) != mbcnt) {
+                                      use_serial_io) != mbcnt) {
           std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                     << std::endl << "CC rad data not read correctly from rst file, "
                     << "restart file is broken." << std::endl;
@@ -866,7 +900,7 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resf
                                      Kokkos::ALL);
         int mbcnt = mbptr.size();
         if (resfile.Read_Reals_at(mbptr.data(), mbcnt, myoffset,
-                                      single_file_per_rank) != mbcnt) {
+                                  use_serial_io) != mbcnt) {
           std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                     << std::endl << "CC rad data not read correctly from rst file, "
                     << "restart file is broken." << std::endl;
@@ -891,7 +925,7 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resf
                                      Kokkos::ALL);
         int mbcnt = mbptr.size();
         if (resfile.Read_Reals_at_all(mbptr.data(), mbcnt, myoffset,
-                                      single_file_per_rank) != mbcnt) {
+                                      use_serial_io) != mbcnt) {
           std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                     << std::endl << "CC turb data not read correctly from rst file, "
                     << "restart file is broken." << std::endl;
@@ -906,7 +940,7 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resf
                                      Kokkos::ALL);
         int mbcnt = mbptr.size();
         if (resfile.Read_Reals_at(mbptr.data(), mbcnt, myoffset,
-                                      single_file_per_rank) != mbcnt) {
+                                  use_serial_io) != mbcnt) {
           std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                     << std::endl << "CC turb data not read correctly from rst file, "
                     << "restart file is broken." << std::endl;
@@ -931,7 +965,7 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resf
                                      Kokkos::ALL);
         int mbcnt = mbptr.size();
         if (resfile.Read_Reals_at_all(mbptr.data(), mbcnt, myoffset,
-                                      single_file_per_rank) != mbcnt) {
+                                      use_serial_io) != mbcnt) {
           std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                     << std::endl << "CC z4c data not read correctly from rst file, "
                     << "restart file is broken." << std::endl;
@@ -946,7 +980,7 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resf
                                      Kokkos::ALL);
         int mbcnt = mbptr.size();
         if (resfile.Read_Reals_at(mbptr.data(), mbcnt, myoffset,
-                                      single_file_per_rank) != mbcnt) {
+                                  use_serial_io) != mbcnt) {
           std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                     << std::endl << "CC z4c data not read correctly from rst file, "
                     << "restart file is broken." << std::endl;
@@ -972,7 +1006,7 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resf
                                      Kokkos::ALL);
         int mbcnt = mbptr.size();
         if (resfile.Read_Reals_at_all(mbptr.data(), mbcnt, myoffset,
-                                      single_file_per_rank) != mbcnt) {
+                                      use_serial_io) != mbcnt) {
           std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                     << std::endl << "CC adm data not read correctly from rst file, "
                     << "restart file is broken." << std::endl;
@@ -987,7 +1021,7 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resf
                                      Kokkos::ALL);
         int mbcnt = mbptr.size();
         if (resfile.Read_Reals_at(mbptr.data(), mbcnt, myoffset,
-                                      single_file_per_rank) != mbcnt) {
+                                  use_serial_io) != mbcnt) {
           std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                     << std::endl << "CC adm data not read correctly from rst file, "
                     << "restart file is broken." << std::endl;

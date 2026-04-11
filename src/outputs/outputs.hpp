@@ -8,12 +8,15 @@
 //! \file outputs.hpp
 //  \brief provides classes to handle ALL types of data output
 
+#include <cmath>
+#include <cstdint>
 #include <string>
 #include <vector>
 
 #include "Kokkos_ScatterView.hpp"
 
 #include "athena.hpp"
+#include "file_sharding.hpp"
 #include "io_wrapper.hpp"
 
 #define NHISTORY_VARIABLES 12
@@ -134,6 +137,59 @@ static const char *var_choice[NOUTPUT_CHOICES] = {
 class Mesh;
 class ParameterInput;
 
+enum PDFScaleMode {
+  PDF_SCALE_LINEAR = 0,
+  PDF_SCALE_LOG = 1,
+  PDF_SCALE_SYMLOG = 2
+};
+
+KOKKOS_INLINE_FUNCTION
+Real PDFAbs(Real value) {
+  return (value < 0.0) ? -value : value;
+}
+
+KOKKOS_INLINE_FUNCTION
+Real PDFTransformValue(Real value, int scale, Real linthresh) {
+  if (scale == PDF_SCALE_LOG) {
+    return Kokkos::log10(value);
+  }
+  if (scale == PDF_SCALE_SYMLOG) {
+    Real sign = (value < 0.0) ? -1.0 : 1.0;
+    Real abs_value = PDFAbs(value);
+    if (abs_value <= linthresh) {
+      return sign * (abs_value / linthresh);
+    }
+    return sign * (1.0 + Kokkos::log10(abs_value / linthresh));
+  }
+  return value;
+}
+
+KOKKOS_INLINE_FUNCTION
+Real PDFInverseTransformValue(Real value, int scale, Real linthresh) {
+  if (scale == PDF_SCALE_LOG) {
+    return Kokkos::pow(10.0, value);
+  }
+  if (scale == PDF_SCALE_SYMLOG) {
+    Real sign = (value < 0.0) ? -1.0 : 1.0;
+    Real abs_value = PDFAbs(value);
+    if (abs_value <= 1.0) {
+      return sign * abs_value * linthresh;
+    }
+    return sign * linthresh * Kokkos::pow(10.0, abs_value - 1.0);
+  }
+  return value;
+}
+
+inline const char *PDFScaleName(int scale) {
+  if (scale == PDF_SCALE_LOG) {
+    return "log";
+  }
+  if (scale == PDF_SCALE_SYMLOG) {
+    return "symlog";
+  }
+  return "linear";
+}
+
 //----------------------------------------------------------------------------------------
 //! \struct OutputParameters
 //  \brief container for parameters read from <output> block in the input file by the
@@ -170,7 +226,7 @@ struct OutputParameters {
   Real bin2_min, bin2_max;
   int nbin=0, nbin2=0;
   bool logscale=true, logscale2=true;
-  bool single_file_per_rank=false; // DBF: parameter for single file per rank
+  FileShardMode file_shard_mode = FileShardMode::shared;
 
   // N-D PDF parameters (max 4 dimensions)
   static constexpr int PDF_MAX_DIM = 4;
@@ -179,7 +235,10 @@ struct OutputParameters {
   int pdf_nbin[PDF_MAX_DIM] = {0, 0, 0, 0};      // number of bins for each dimension
   Real pdf_bin_min[PDF_MAX_DIM] = {0, 0, 0, 0};  // bin minimum for each dimension
   Real pdf_bin_max[PDF_MAX_DIM] = {1, 1, 1, 1};  // bin maximum for each dimension
-  bool pdf_logscale[PDF_MAX_DIM] = {false, false, false, false};  // log scale flag
+  int pdf_scale[PDF_MAX_DIM] = {PDF_SCALE_LINEAR, PDF_SCALE_LINEAR,
+                                PDF_SCALE_LINEAR, PDF_SCALE_LINEAR};
+  Real pdf_linthresh[PDF_MAX_DIM] = {1.0, 1.0, 1.0, 1.0};
+  bool pdf_logscale[PDF_MAX_DIM] = {false, false, false, false};  // legacy log flag
   std::string pdf_weight = "volume";            // volume, mass, or variable
   std::string pdf_weight_variable;              // weight variable when pdf_weight=variable
 };
@@ -355,6 +414,10 @@ struct PDFData {
 
   Kokkos::View<Real*> bin_edges[MAX_DIM];  // bin edges for each dimension
   Real step_size[MAX_DIM];                  // step size (or log step size)
+  Real transformed_min[MAX_DIM];            // minimum in transformed coordinates
+  Real transformed_max[MAX_DIM];            // maximum in transformed coordinates
+  int scale[MAX_DIM];                       // scale mode per dimension
+  Real linthresh[MAX_DIM];                  // symlog linear threshold per dimension
   bool logscale[MAX_DIM];                   // log scale flag per dimension
   Real bin_min[MAX_DIM];                    // minimum bin value per dimension
   Real bin_max[MAX_DIM];                    // maximum bin value per dimension
@@ -371,6 +434,10 @@ struct PDFData {
       nbin_with_overflow[d] = 0;
       stride[d] = 0;
       step_size[d] = 0.0;
+      transformed_min[d] = 0.0;
+      transformed_max[d] = 0.0;
+      scale[d] = PDF_SCALE_LINEAR;
+      linthresh[d] = 1.0;
       logscale[d] = false;
       bin_min[d] = 0.0;
       bin_max[d] = 1.0;
@@ -379,7 +446,8 @@ struct PDFData {
 
   // Constructor for N-D PDF
   void Initialize(int ndim_in, const int* nbin_in, const Real* bin_min_in,
-                  const Real* bin_max_in, const bool* logscale_in) {
+                  const Real* bin_max_in, const int* scale_in,
+                  const Real* linthresh_in) {
     ndim = ndim_in;
     total_bins = 1;
 
@@ -389,17 +457,16 @@ struct PDFData {
       nbin_with_overflow[d] = nbin[d] + 2;  // +2 for underflow/overflow
       bin_min[d] = bin_min_in[d];
       bin_max[d] = bin_max_in[d];
-      logscale[d] = logscale_in[d];
+      scale[d] = scale_in[d];
+      linthresh[d] = linthresh_in[d];
+      logscale[d] = (scale[d] == PDF_SCALE_LOG);
 
       // Allocate bin edges
       bin_edges[d] = Kokkos::View<Real*>("bin_edges_" + std::to_string(d), nbin[d] + 1);
 
-      // Compute step size
-      if (logscale[d]) {
-        step_size[d] = (std::log10(bin_max[d]) - std::log10(bin_min[d])) / nbin[d];
-      } else {
-        step_size[d] = (bin_max[d] - bin_min[d]) / nbin[d];
-      }
+      transformed_min[d] = PDFTransformValue(bin_min[d], scale[d], linthresh[d]);
+      transformed_max[d] = PDFTransformValue(bin_max[d], scale[d], linthresh[d]);
+      step_size[d] = (transformed_max[d] - transformed_min[d]) / nbin[d];
 
       total_bins *= nbin_with_overflow[d];
     }
@@ -415,6 +482,14 @@ struct PDFData {
       nbin[d] = 0;
       nbin_with_overflow[d] = 0;
       stride[d] = 0;
+      step_size[d] = 0.0;
+      transformed_min[d] = 0.0;
+      transformed_max[d] = 0.0;
+      scale[d] = PDF_SCALE_LINEAR;
+      linthresh[d] = 1.0;
+      logscale[d] = false;
+      bin_min[d] = 0.0;
+      bin_max[d] = 1.0;
     }
 
     // Allocate result array
@@ -426,17 +501,9 @@ struct PDFData {
   void PopulateBinEdges() {
     for (int d = 0; d < ndim; ++d) {
       auto bins_host = Kokkos::create_mirror_view(bin_edges[d]);
-      if (logscale[d]) {
-        Real log_min = std::log10(bin_min[d]);
-        Real log_max = std::log10(bin_max[d]);
-        for (int i = 0; i <= nbin[d]; ++i) {
-          bins_host(i) = std::pow(10.0, log_min + i * (log_max - log_min) / nbin[d]);
-        }
-      } else {
-        Real bstep = (bin_max[d] - bin_min[d]) / nbin[d];
-        for (int i = 0; i <= nbin[d]; ++i) {
-          bins_host(i) = bin_min[d] + i * bstep;
-        }
+      for (int i = 0; i <= nbin[d]; ++i) {
+        Real transformed = transformed_min[d] + i * step_size[d];
+        bins_host(i) = PDFInverseTransformValue(transformed, scale[d], linthresh[d]);
       }
       Kokkos::deep_copy(bin_edges[d], bins_host);
     }
@@ -509,6 +576,7 @@ class SphericalSliceOutput : public BaseTypeOutput {
   void WriteOutputFile(Mesh *pm, ParameterInput *pin) override;
  private:
   SphericalSlice *psph;
+  std::vector<int32_t> shard_owned_angles;
 };
 
 //----------------------------------------------------------------------------------------
