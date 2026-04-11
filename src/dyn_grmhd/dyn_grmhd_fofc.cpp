@@ -71,6 +71,7 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::FOFC(Driver *pdriver, int stage) {
     auto &bcctest_ = pmy_pack->pmhd->bcctest;
     auto &b1_ = pmy_pack->pmhd->b1;
     auto fofc_ = pmy_pack->pmhd->fofc;
+    auto fofc_scal_ = pmy_pack->pmhd->fofc_scal;
 
     bool &max_ = enforce_maximum;
     Real Rmax = std::numeric_limits<Real>::max();
@@ -121,6 +122,25 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::FOFC(Driver *pdriver, int stage) {
             fofc_(m,k,j,i) = true;
           }
         }
+        // Enforce maximum principle for scalar
+        if (nscal_ > 0) {
+          for (int n = 0; n < nscal_; ++n) {
+            Real varmax = eos.ps.GetEOS().GetMinimumSpeciesFraction(n);
+            Real varmin = eos.ps.GetEOS().GetMaximumSpeciesFraction(n);
+            for (int kt = k - kadd; kt <= k + kadd; kt++) {
+              for (int jt = j - jadd; jt <= j + jadd; jt++) {
+                for (int it = i-1; it <= i+1; it++) {
+                  varmax = fmax(varmax, u1_(m,nmhd_+n,kt,jt,it));
+                  varmin = fmin(varmin, u1_(m,nmhd_+n,kt,jt,it));
+                }
+              }
+            }
+            if (utest_(m,nmhd_+n,k,j,i) > dmp_M_*varmax ||
+                utest_(m,nmhd_+n,k,j,i) < varmin/dmp_M_) {
+              fofc_scal_(m,k,j,i) = true;
+            }
+          }
+        }
       }
 
       // Estimate updated cell-centered fields
@@ -153,6 +173,7 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::FOFC(Driver *pdriver, int stage) {
 
   auto &use_fofc_ = pmy_pack->pmhd->use_fofc;
   auto fofc_ = pmy_pack->pmhd->fofc;
+  auto fofc_scal_ = pmy_pack->pmhd->fofc_scal;
   auto &eos_ = eos;
   auto &use_excise_ = pmy_pack->pcoord->coord_data.bh_excise;
   auto &excision_flux_ = pmy_pack->pcoord->excision_flux;
@@ -173,39 +194,44 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::FOFC(Driver *pdriver, int stage) {
     bool fofc_flag = false;
     if (use_fofc_) { fofc_flag = fofc_(m,k,j,i); }
 
+    bool fofc_scalar = false;
+    if (use_fofc_ && nscal_ > 0) { fofc_scalar = fofc_scal_(m,k,j,i); }
+
     // Check for GR + excision
     bool fofc_excision = false;
     if (use_excise_) { fofc_excision = excision_flux_(m,k,j,i); }
 
     // Apply FOFC
-    if (fofc_flag || fofc_excision) {
+    if (fofc_flag || fofc_excision || fofc_scalar) {
       // Reconstruct states
       Real wli[NPRIM], wri[NPRIM];
       Real bli[NMAG], bri[NMAG];
       ExtractPrimitives(wli, w0_,eos_, nmhd_, nscal_, m, k, j, i-1);
       ExtractPrimitives(wri, w0_, eos_, nmhd_, nscal_, m, k, j, i);
-      ExtractBField(bli, bcc0_, IBX, IBY, IBZ, m, k, j, i-1);
-      ExtractBField(bri, bcc0_, IBX, IBY, IBZ, m, k, j, i);
-      bli[IBX] = bri[IBX] = b0_.x1f(m, k, j, i);
-
-      // Compute the metric terms at i-1/2
       Real g3d[NSPMETRIC], beta_u[3], alpha;
-      adm::Face1Metric(m, k, j, i, adm.g_dd, adm.beta_u, adm.alpha, g3d, beta_u, alpha);
-
-      // compute new 1st-order LLF flux at i-face
       Real flux[NCONS], bflux[NMAG];
-      if constexpr (rsolver_method_ == DynGRMHD_RSolver::llf_dyngr) {
-        SingleStateLLF_DYNGR<IVX>(eos_, wli, wri, bli, bri, nmhd_, nscal_,
-                                  g3d, beta_u, alpha, flux, bflux);
-      } else if (rsolver_method_ == DynGRMHD_RSolver::hlle_dyngr) {
-        SingleStateHLLE_DYNGR<IVX>(eos_, wli, wri, bli, bri, nmhd_, nscal_,
-                                  g3d, beta_u, alpha, flux, bflux);
-      }
+      if (fofc_flag || fofc_excision) {
+        ExtractBField(bli, bcc0_, IBX, IBY, IBZ, m, k, j, i-1);
+        ExtractBField(bri, bcc0_, IBX, IBY, IBZ, m, k, j, i);
+        bli[IBX] = bri[IBX] = b0_.x1f(m, k, j, i);
 
-      // Store 1st-order fluxes at i-1/2
-      InsertFluxes(flux, flx1, m, k, j, i);
-      e3x1_(m, k, j, i) = bflux[IBY];
-      e2x1_(m, k, j, i) = bflux[IBZ];
+        // Compute the metric terms at i-1/2
+        adm::Face1Metric(m, k, j, i, adm.g_dd, adm.beta_u, adm.alpha, g3d, beta_u, alpha);
+
+        // compute new 1st-order LLF flux at i-face
+        if constexpr (rsolver_method_ == DynGRMHD_RSolver::llf_dyngr) {
+          SingleStateLLF_DYNGR<IVX>(eos_, wli, wri, bli, bri, nmhd_, nscal_,
+                                    g3d, beta_u, alpha, flux, bflux);
+        } else if (rsolver_method_ == DynGRMHD_RSolver::hlle_dyngr) {
+          SingleStateHLLE_DYNGR<IVX>(eos_, wli, wri, bli, bri, nmhd_, nscal_,
+                                    g3d, beta_u, alpha, flux, bflux);
+        }
+
+        // Store 1st-order fluxes at i-1/2
+        InsertFluxes(flux, flx1, m, k, j, i);
+        e3x1_(m, k, j, i) = bflux[IBY];
+        e2x1_(m, k, j, i) = bflux[IBZ];
+      }
 
       // Calculate fluxes of scalars
       for (int n = 0; n < nscal_; n++) {
@@ -222,26 +248,28 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::FOFC(Driver *pdriver, int stage) {
         // Reconstruct states
         ExtractPrimitives(wlj, w0_, eos_, nmhd_, nscal_, m, k, j-1, i);
         wrj = &wri[0];
-        ExtractBField(blj, bcc0_, IBY, IBZ, IBX, m, k, j-1, i);
-        ExtractBField(brj, bcc0_, IBY, IBZ, IBX, m, k, j, i);
-        blj[IBY] = brj[IBY] = b0_.x2f(m, k, j, i);
+        if (fofc_flag || fofc_excision) {
+          ExtractBField(blj, bcc0_, IBY, IBZ, IBX, m, k, j-1, i);
+          ExtractBField(brj, bcc0_, IBY, IBZ, IBX, m, k, j, i);
+          blj[IBY] = brj[IBY] = b0_.x2f(m, k, j, i);
 
-        // Compute the metric terms at j-1/2
-        adm::Face2Metric(m, k, j, i, adm.g_dd, adm.beta_u, adm.alpha, g3d, beta_u, alpha);
+          // Compute the metric terms at j-1/2
+          adm::Face2Metric(m, k, j, i, adm.g_dd, adm.beta_u, adm.alpha, g3d, beta_u, alpha);
 
-        // Compute new 1st-order LLF flux at j-face
-        if constexpr (rsolver_method_ == DynGRMHD_RSolver::llf_dyngr) {
-          SingleStateLLF_DYNGR<IVY>(eos_, wlj, wrj, blj, brj, nmhd_, nscal_,
-                                    g3d, beta_u, alpha, flux, bflux);
-        } else if (rsolver_method_ == DynGRMHD_RSolver::hlle_dyngr) {
-          SingleStateHLLE_DYNGR<IVY>(eos_, wlj, wrj, blj, brj, nmhd_, nscal_,
-                                    g3d, beta_u, alpha, flux, bflux);
+          // Compute new 1st-order LLF flux at j-face
+          if constexpr (rsolver_method_ == DynGRMHD_RSolver::llf_dyngr) {
+            SingleStateLLF_DYNGR<IVY>(eos_, wlj, wrj, blj, brj, nmhd_, nscal_,
+                                      g3d, beta_u, alpha, flux, bflux);
+          } else if (rsolver_method_ == DynGRMHD_RSolver::hlle_dyngr) {
+            SingleStateHLLE_DYNGR<IVY>(eos_, wlj, wrj, blj, brj, nmhd_, nscal_,
+                                      g3d, beta_u, alpha, flux, bflux);
+          }
+
+          // Store 1st-order fluxes at j-1/2
+          InsertFluxes(flux, flx2, m, k, j, i);
+          e1x2_(m,k,j,i) = bflux[IBY];
+          e3x2_(m,k,j,i) = bflux[IBZ];
         }
-
-        // Store 1st-order fluxes at j-1/2
-        InsertFluxes(flux, flx2, m, k, j, i);
-        e1x2_(m,k,j,i) = bflux[IBY];
-        e3x2_(m,k,j,i) = bflux[IBZ];
 
         // Calculate fluxes of scalars
         for (int n = 0; n < nscal_; n++) {
@@ -259,26 +287,28 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::FOFC(Driver *pdriver, int stage) {
         // Reconstruct states
         ExtractPrimitives(wmk, w0_, eos_, nmhd_, nscal_, m, k-1, j, i);
         wpk = &wri[0];
-        ExtractBField(bmk, bcc0_, IBZ, IBX, IBY, m, k-1, j, i);
-        ExtractBField(bpk, bcc0_, IBZ, IBX, IBY, m, k, j, i);
-        bmk[IBZ] = bpk[IBZ] = b0_.x3f(m, k, j, i);
+        if (fofc_flag || fofc_excision) {
+          ExtractBField(bmk, bcc0_, IBZ, IBX, IBY, m, k-1, j, i);
+          ExtractBField(bpk, bcc0_, IBZ, IBX, IBY, m, k, j, i);
+          bmk[IBZ] = bpk[IBZ] = b0_.x3f(m, k, j, i);
 
-        // Compute the metric terms at k-1/2
-        adm::Face3Metric(m, k, j, i, adm.g_dd, adm.beta_u, adm.alpha, g3d, beta_u, alpha);
+          // Compute the metric terms at k-1/2
+          adm::Face3Metric(m, k, j, i, adm.g_dd, adm.beta_u, adm.alpha, g3d, beta_u, alpha);
 
-        // Compute new 1st-order LLF flux at k-face
-        if constexpr (rsolver_method_ == DynGRMHD_RSolver::llf_dyngr) {
-          SingleStateLLF_DYNGR<IVZ>(eos_, wmk, wpk, bmk, bpk, nmhd_, nscal_,
-                                    g3d, beta_u, alpha, flux, bflux);
-        } else if (rsolver_method_ == DynGRMHD_RSolver::hlle_dyngr) {
-          SingleStateHLLE_DYNGR<IVZ>(eos_, wmk, wpk, bmk, bpk, nmhd_, nscal_,
-                                    g3d, beta_u, alpha, flux, bflux);
+          // Compute new 1st-order LLF flux at k-face
+          if constexpr (rsolver_method_ == DynGRMHD_RSolver::llf_dyngr) {
+            SingleStateLLF_DYNGR<IVZ>(eos_, wmk, wpk, bmk, bpk, nmhd_, nscal_,
+                                      g3d, beta_u, alpha, flux, bflux);
+          } else if (rsolver_method_ == DynGRMHD_RSolver::hlle_dyngr) {
+            SingleStateHLLE_DYNGR<IVZ>(eos_, wmk, wpk, bmk, bpk, nmhd_, nscal_,
+                                      g3d, beta_u, alpha, flux, bflux);
+          }
+
+          // Store 1st-order fluxes at k-1/2
+          InsertFluxes(flux, flx3, m, k, j, i);
+          e2x3_(m,k,j,i) = bflux[IBY];
+          e1x3_(m,k,j,i) = bflux[IBZ];
         }
-
-        // Store 1st-order fluxes at k-1/2
-        InsertFluxes(flux, flx3, m, k, j, i);
-        e2x3_(m,k,j,i) = bflux[IBY];
-        e1x3_(m,k,j,i) = bflux[IBZ];
 
         // Calculate fluxes of scalars
         for (int n = 0; n < nscal_; n++) {
@@ -300,39 +330,44 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::FOFC(Driver *pdriver, int stage) {
     bool fofc_flag = false;
     if (use_fofc_) { fofc_flag = fofc_(m,k,j,i); }
 
+    bool fofc_scalar = false;
+    if (use_fofc_ && nscal_ > 0) { fofc_scalar = fofc_scal_(m,k,j,i); }
+
     // Check for GR + excision
     bool fofc_excision = false;
     if (use_excise_) { fofc_excision = excision_flux_(m,k,j,i); }
 
     // Apply FOFC
-    if (fofc_flag || fofc_excision) {
+    if (fofc_flag || fofc_excision || fofc_scalar) {
       // Reconstruct states
       Real wli[NPRIM], wri[NPRIM];
       Real bli[NMAG], bri[NMAG];
       ExtractPrimitives(wli, w0_,eos_, nmhd_, nscal_, m, k, j, i);
       ExtractPrimitives(wri, w0_, eos_, nmhd_, nscal_, m, k, j, i+1);
-      ExtractBField(bli, bcc0_, IBX, IBY, IBZ, m, k, j, i);
-      ExtractBField(bri, bcc0_, IBX, IBY, IBZ, m, k, j, i+1);
-      bli[IBX] = bri[IBX] = b0_.x1f(m, k, j, i+1);
-
-      // Compute the metric terms at i+1/2
       Real g3d[NSPMETRIC], beta_u[3], alpha;
-      adm::Face1Metric(m, k, j, i+1, adm.g_dd, adm.beta_u, adm.alpha, g3d, beta_u, alpha);
-
-      // compute new 1st-order LLF flux at (i+1)-face
       Real flux[NCONS], bflux[NMAG];
-      if constexpr (rsolver_method_ == DynGRMHD_RSolver::llf_dyngr) {
-        SingleStateLLF_DYNGR<IVX>(eos_, wli, wri, bli, bri, nmhd_, nscal_,
-                             g3d, beta_u, alpha, flux, bflux);
-      } else if (rsolver_method_ == DynGRMHD_RSolver::hlle_dyngr) {
-        SingleStateLLF_DYNGR<IVX>(eos_, wli, wri, bli, bri, nmhd_, nscal_,
-                             g3d, beta_u, alpha, flux, bflux);
-      }
+      if (fofc_flag || fofc_excision) {
+        ExtractBField(bli, bcc0_, IBX, IBY, IBZ, m, k, j, i);
+        ExtractBField(bri, bcc0_, IBX, IBY, IBZ, m, k, j, i+1);
+        bli[IBX] = bri[IBX] = b0_.x1f(m, k, j, i+1);
 
-      // Store 1st-order fluxes at i+1/2
-      InsertFluxes(flux, flx1, m, k, j, i+1);
-      e3x1_(m, k, j, i+1) = bflux[IBY];
-      e2x1_(m, k, j, i+1) = bflux[IBZ];
+        // Compute the metric terms at i+1/2
+        adm::Face1Metric(m, k, j, i+1, adm.g_dd, adm.beta_u, adm.alpha, g3d, beta_u, alpha);
+
+        // compute new 1st-order LLF flux at (i+1)-face
+        if constexpr (rsolver_method_ == DynGRMHD_RSolver::llf_dyngr) {
+          SingleStateLLF_DYNGR<IVX>(eos_, wli, wri, bli, bri, nmhd_, nscal_,
+                               g3d, beta_u, alpha, flux, bflux);
+        } else if (rsolver_method_ == DynGRMHD_RSolver::hlle_dyngr) {
+          SingleStateLLF_DYNGR<IVX>(eos_, wli, wri, bli, bri, nmhd_, nscal_,
+                               g3d, beta_u, alpha, flux, bflux);
+        }
+
+        // Store 1st-order fluxes at i+1/2
+        InsertFluxes(flux, flx1, m, k, j, i+1);
+        e3x1_(m, k, j, i+1) = bflux[IBY];
+        e2x1_(m, k, j, i+1) = bflux[IBZ];
+      }
 
       // Calculate fluxes of scalars
       for (int n = 0; n < nscal_; n++) {
@@ -349,27 +384,29 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::FOFC(Driver *pdriver, int stage) {
         // Reconstruct states
         wlj = &wli[0];
         ExtractPrimitives(wrj, w0_, eos_, nmhd_, nscal_, m, k, j+1, i);
-        ExtractBField(blj, bcc0_, IBY, IBZ, IBX, m, k, j, i);
-        ExtractBField(brj, bcc0_, IBY, IBZ, IBX, m, k, j+1, i);
-        blj[IBY] = brj[IBY] = b0_.x2f(m, k, j+1, i);
+        if (fofc_flag || fofc_excision) {
+          ExtractBField(blj, bcc0_, IBY, IBZ, IBX, m, k, j, i);
+          ExtractBField(brj, bcc0_, IBY, IBZ, IBX, m, k, j+1, i);
+          blj[IBY] = brj[IBY] = b0_.x2f(m, k, j+1, i);
 
-        // Compute the metric terms at j+1/2
-        adm::Face2Metric(m, k, j+1, i, adm.g_dd, adm.beta_u, adm.alpha,
-                         g3d, beta_u, alpha);
+          // Compute the metric terms at j+1/2
+          adm::Face2Metric(m, k, j+1, i, adm.g_dd, adm.beta_u, adm.alpha,
+                           g3d, beta_u, alpha);
 
-        // Compute new 1st-order LLF flux at j-face
-        if constexpr (rsolver_method_ == DynGRMHD_RSolver::llf_dyngr) {
-          SingleStateLLF_DYNGR<IVY>(eos_, wlj, wrj, blj, brj, nmhd_, nscal_,
-                                    g3d, beta_u, alpha, flux, bflux);
-        } else if (rsolver_method_ == DynGRMHD_RSolver::hlle_dyngr) {
-          SingleStateHLLE_DYNGR<IVY>(eos_, wlj, wrj, blj, brj, nmhd_, nscal_,
-                                    g3d, beta_u, alpha, flux, bflux);
+          // Compute new 1st-order LLF flux at j-face
+          if constexpr (rsolver_method_ == DynGRMHD_RSolver::llf_dyngr) {
+            SingleStateLLF_DYNGR<IVY>(eos_, wlj, wrj, blj, brj, nmhd_, nscal_,
+                                      g3d, beta_u, alpha, flux, bflux);
+          } else if (rsolver_method_ == DynGRMHD_RSolver::hlle_dyngr) {
+            SingleStateHLLE_DYNGR<IVY>(eos_, wlj, wrj, blj, brj, nmhd_, nscal_,
+                                      g3d, beta_u, alpha, flux, bflux);
+          }
+
+          // Store 1st-order fluxes at j+1/2
+          InsertFluxes(flux, flx2, m, k, j+1, i);
+          e1x2_(m,k,j+1,i) = bflux[IBY];
+          e3x2_(m,k,j+1,i) = bflux[IBZ];
         }
-
-        // Store 1st-order fluxes at j+1/2
-        InsertFluxes(flux, flx2, m, k, j+1, i);
-        e1x2_(m,k,j+1,i) = bflux[IBY];
-        e3x2_(m,k,j+1,i) = bflux[IBZ];
 
         // Calculate fluxes of scalars
         for (int n = 0; n < nscal_; n++) {
@@ -387,27 +424,29 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::FOFC(Driver *pdriver, int stage) {
         // Reconstruct states
         wmk = &wli[0];
         ExtractPrimitives(wpk, w0_, eos_, nmhd_, nscal_, m, k+1, j, i);
-        ExtractBField(bmk, bcc0_, IBZ, IBX, IBY, m, k, j, i);
-        ExtractBField(bpk, bcc0_, IBZ, IBX, IBY, m, k+1, j, i);
-        bmk[IBZ] = bpk[IBZ] = b0_.x3f(m, k+1, j, i);
+        if (fofc_flag || fofc_excision) {
+          ExtractBField(bmk, bcc0_, IBZ, IBX, IBY, m, k, j, i);
+          ExtractBField(bpk, bcc0_, IBZ, IBX, IBY, m, k+1, j, i);
+          bmk[IBZ] = bpk[IBZ] = b0_.x3f(m, k+1, j, i);
 
-        // Compute the metric terms at k+1/2
-        adm::Face3Metric(m, k+1, j, i, adm.g_dd, adm.beta_u, adm.alpha,
-                         g3d, beta_u, alpha);
+          // Compute the metric terms at k+1/2
+          adm::Face3Metric(m, k+1, j, i, adm.g_dd, adm.beta_u, adm.alpha,
+                           g3d, beta_u, alpha);
 
-        // Compute new 1st-order LLF flux at k-face
-        if constexpr (rsolver_method_ == DynGRMHD_RSolver::llf_dyngr) {
-          SingleStateLLF_DYNGR<IVZ>(eos_, wmk, wpk, bmk, bpk, nmhd_, nscal_,
-                                    g3d, beta_u, alpha, flux, bflux);
-        } else if (rsolver_method_ == DynGRMHD_RSolver::hlle_dyngr) {
-          SingleStateHLLE_DYNGR<IVZ>(eos_, wmk, wpk, bmk, bpk, nmhd_, nscal_,
-                                    g3d, beta_u, alpha, flux, bflux);
+          // Compute new 1st-order LLF flux at k-face
+          if constexpr (rsolver_method_ == DynGRMHD_RSolver::llf_dyngr) {
+            SingleStateLLF_DYNGR<IVZ>(eos_, wmk, wpk, bmk, bpk, nmhd_, nscal_,
+                                      g3d, beta_u, alpha, flux, bflux);
+          } else if (rsolver_method_ == DynGRMHD_RSolver::hlle_dyngr) {
+            SingleStateHLLE_DYNGR<IVZ>(eos_, wmk, wpk, bmk, bpk, nmhd_, nscal_,
+                                      g3d, beta_u, alpha, flux, bflux);
+          }
+
+          // Store 1st-order fluxes at k+1/2
+          InsertFluxes(flux, flx3, m, k+1, j, i);
+          e2x3_(m,k+1,j,i) = bflux[IBY];
+          e1x3_(m,k+1,j,i) = bflux[IBZ];
         }
-
-        // Store 1st-order fluxes at k+1/2
-        InsertFluxes(flux, flx3, m, k+1, j, i);
-        e2x3_(m,k+1,j,i) = bflux[IBY];
-        e1x3_(m,k+1,j,i) = bflux[IBZ];
 
         // Calculate fluxes of scalars
         for (int n = 0; n < nscal_; n++) {
@@ -421,10 +460,10 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::FOFC(Driver *pdriver, int stage) {
     }
   });
 
-
   // reset FOFC flag (do not reset excision flag)
   if (use_fofc_) {
     Kokkos::deep_copy(fofc_, false);
+    Kokkos::deep_copy(fofc_scal_, false);
   }
 
   return;

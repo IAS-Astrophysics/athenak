@@ -20,6 +20,7 @@ enum struct Error {
   CONS_FLOOR,
   PRIM_FLOOR,
   CONS_ADJUSTED,
+  Y_ADJUSTED, 
 };
 
 struct SolverResult {
@@ -28,6 +29,7 @@ struct SolverResult {
   bool cons_floor;
   bool prim_floor;
   bool cons_adjusted;
+  bool y_adjusted;
 };
 
 } // namespace Primitive
