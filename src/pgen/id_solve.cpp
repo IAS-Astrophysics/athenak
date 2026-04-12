@@ -178,7 +178,7 @@ void LoadIDSolveData(MeshBlockPack *pmbp, ParameterInput *pin, const std::string
   int ksg = ks-indcs.ng; int keg = ke+indcs.ng; 
   int nmb = pmbp->nmb_thispack; 
 
-  Real r_fill = pin->GetOrAddReal("z4c", "r_fill", 0.5); 
+  Real r_fill = pin->GetOrAddReal("z4c", "r_fill", 0.0); 
   const bool apply_puncture_fill = (r_fill > 0.0); 
   Real c0_x = pin->GetOrAddReal("z4c", "co_0_x", 0.0), c0_y = pin->GetOrAddReal("z4c", "co_0_y", 0.0), c0_z = pin->GetOrAddReal("z4c", "co_0_z", 0.0); 
   Real M_0 = pin->GetOrAddReal("z4c", "M_fill_0", 0.5); 
