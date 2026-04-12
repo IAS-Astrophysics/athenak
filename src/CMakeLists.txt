@@ -27,6 +27,9 @@ add_executable(
         bvals/physics/radiation_bcs.cpp
         bvals/physics/z4c_bcs.cpp
 
+        chemistry/chemistry_tasks.cpp
+        chemistry/chemistry.cpp
+
         coordinates/adm.cpp
         coordinates/coordinates.cpp
         coordinates/excision.cpp

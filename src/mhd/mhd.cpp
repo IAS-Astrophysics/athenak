@@ -22,6 +22,7 @@
 #include "shearing_box/orbital_advection.hpp"
 #include "bvals/bvals.hpp"
 #include "mhd/mhd.hpp"
+#include "chemistry/chemistry.hpp"
 
 namespace mhd {
 //----------------------------------------------------------------------------------------
@@ -94,6 +95,11 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
 
   // (2) Initialize scalars, diffusion, source terms
   nscalars = pin->GetOrAddInteger("mhd","nscalars",0);
+
+  // Add more passive scalars to be used for chemistry
+  if (pin->DoesBlockExist("chemistry")) {
+    nscalars += chemistry::Chemistry::SetupGetNumChemistryScalars(ppack, pin, nscalars);
+  }
 
   // Viscosity (only constructed if needed)
   if (pin->DoesParameterExist("mhd","viscosity")) {
