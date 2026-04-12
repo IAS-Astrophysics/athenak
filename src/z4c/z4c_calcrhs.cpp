@@ -32,6 +32,9 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage) {
   int &js = indcs.js; int &je = indcs.je;
   int &ks = indcs.ks; int &ke = indcs.ke;
   int nmb = pmy_pack->nmb_thispack;
+  int nx1 = indcs.nx1;
+  int nx2 = indcs.nx2;
+  int nx3 = indcs.nx3;
 
   auto &z4c = pmy_pack->pz4c->z4c;
   auto &rhs = pmy_pack->pz4c->rhs;
@@ -55,6 +58,34 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage) {
                       + (opt.damp_kappa1 - opt.target_kappa1) * S;
   }
   const Real kappa1_eff = kappa1_effective;
+
+  Real telegraph_eta = 1.0/opt.telegraph_tau;
+  if (opt.telegraph_lapse && opt.telegraph_max_K) {
+    const int nmkji = nmb*nx3*nx2*nx1;
+    const int nkji = nx3*nx2*nx1;
+    const int nji = nx2*nx1;
+    Real max_abs_K = 0.0;
+
+    Kokkos::parallel_reduce("z4c telegraph max abs K",
+    Kokkos::RangePolicy<>(DevExeSpace(), 0, nmkji),
+    KOKKOS_LAMBDA(const int &idx, Real &mb_max_abs_K) {
+      int m = idx/nkji;
+      int k = (idx - m*nkji)/nji;
+      int j = (idx - m*nkji - k*nji)/nx1;
+      int i = (idx - m*nkji - k*nji - j*nx1) + is;
+      k += ks;
+      j += js;
+
+      Real K = z4c.vKhat(m,k,j,i) + 2.0*z4c.vTheta(m,k,j,i);
+      mb_max_abs_K = fmax(mb_max_abs_K, fabs(K));
+    }, Kokkos::Max<Real>(max_abs_K));
+
+#if MPI_PARALLEL_ENABLED
+    MPI_Allreduce(MPI_IN_PLACE, &max_abs_K, 1, MPI_ATHENA_REAL, MPI_MAX, MPI_COMM_WORLD);
+#endif
+    telegraph_eta *= max_abs_K;
+  }
+  const Real telegraph_eta_eff = telegraph_eta;
 
   // ===================================================================================
   // Main RHS calculation
@@ -579,7 +610,8 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage) {
               ? z4c.chi(m,k,j,i) : 0;
       rhs.alpha(m,k,j,i) += W*dB;
       for(int a = 0; a < 3; ++a) {
-        rhs.vB_d(m,a,k,j,i) = opt.lapse_advect * LB_d(a) + (1.0/opt.telegraph_tau) * ( - z4c.vB_d(m,a,k,j,i) + opt.telegraph_kappa*dalpha_d(a));
+        rhs.vB_d(m,a,k,j,i) = opt.lapse_advect * LB_d(a) + telegraph_eta_eff *
+          (-z4c.vB_d(m,a,k,j,i) + opt.telegraph_kappa*dalpha_d(a));
       }
     }
     // shift vector

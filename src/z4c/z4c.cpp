@@ -137,6 +137,7 @@ Z4c::Z4c(MeshBlockPack *ppack, ParameterInput *pin) :
   opt.sss_damping_amp = pin->GetOrAddReal("z4c", "sss_damping_amp", 0.);
   opt.sss_damping_time = pin->GetOrAddReal("z4c", "sss_damping_time", 10.0);
   opt.telegraph_lapse = pin->GetOrAddBoolean("z4c", "telegraph_lapse", false);
+  opt.telegraph_max_K = pin->GetOrAddBoolean("z4c", "telegraph_max_K", false);
   opt.telegraph_tau = pin->GetOrAddReal("z4c", "telegraph_tau", 0.1);
   opt.telegraph_kappa = pin->GetOrAddReal("z4c", "telegraph_kappa", 0.1);
 

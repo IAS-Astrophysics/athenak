@@ -164,6 +164,7 @@ class Z4c {
     Real ssl_damping_index;
     // telegrapher lapse condition
     bool telegraph_lapse;
+    bool telegraph_max_K;
     Real telegraph_tau;
     Real telegraph_kappa;
 
