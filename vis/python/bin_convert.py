@@ -256,9 +256,9 @@ def read_binary(filename):
     filedata["nx1_mb"] = nx1
     filedata["nx2_mb"] = nx2
     filedata["nx3_mb"] = nx3
-    filedata["nx1_out_mb"] = (mb_index[0][1] - mb_index[0][0]) + 1
-    filedata["nx2_out_mb"] = (mb_index[0][3] - mb_index[0][2]) + 1
-    filedata["nx3_out_mb"] = (mb_index[0][5] - mb_index[0][4]) + 1
+    filedata["nx1_out_mb"] = (mb_index[0][1] - mb_index[0][0]) + 1 if mb_index else 0
+    filedata["nx2_out_mb"] = (mb_index[0][3] - mb_index[0][2]) + 1 if mb_index else 0
+    filedata["nx3_out_mb"] = (mb_index[0][5] - mb_index[0][4]) + 1 if mb_index else 0
 
     filedata["mb_index"] = np.array(mb_index)
     filedata["mb_logical"] = np.array(mb_logical)
@@ -420,9 +420,9 @@ def read_coarsened_binary(filename):
     filedata["nx1_mb"] = nx1 // coarsen_factor
     filedata["nx2_mb"] = nx2 // coarsen_factor
     filedata["nx3_mb"] = nx3 // coarsen_factor
-    filedata["nx1_out_mb"] = (mb_index[0][1] - mb_index[0][0]) + 1
-    filedata["nx2_out_mb"] = (mb_index[0][3] - mb_index[0][2]) + 1
-    filedata["nx3_out_mb"] = (mb_index[0][5] - mb_index[0][4]) + 1
+    filedata["nx1_out_mb"] = (mb_index[0][1] - mb_index[0][0]) + 1 if mb_index else 0
+    filedata["nx2_out_mb"] = (mb_index[0][3] - mb_index[0][2]) + 1 if mb_index else 0
+    filedata["nx3_out_mb"] = (mb_index[0][5] - mb_index[0][4]) + 1 if mb_index else 0
 
     filedata["mb_index"] = np.array(mb_index)
     filedata["mb_logical"] = np.array(mb_logical)
@@ -449,14 +449,6 @@ def read_all_ranks_binary(rank0_filename):
 
     # Find all rank files
     rank_files = _glob_partition_files(rank0_filename)
-    # print(rank_files)
-
-    file_sizes = np.array([os.path.getsize(file) for file in rank_files])
-    if len(np.unique(file_sizes)) > 1:
-        print("Files are not the same size! you are probably trying to read a slice written with single_file_per_rank=True")
-        unique_file_sizes = np.unique(file_sizes)
-        larger_file_size = max(unique_file_sizes)
-        rank_files = [file for file, size in zip(rank_files, file_sizes) if size == larger_file_size]
 
     # Read the rank 0 file to get the metadata
     rank0_filedata = read_binary(rank_files[0])

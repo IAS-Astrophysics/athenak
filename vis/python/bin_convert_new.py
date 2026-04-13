@@ -116,16 +116,8 @@ def read_all_ranks_binary(rank0_filename: str) -> Dict[str, Any]:
     # rank0_dir = os.path.dirname(rank0_filename)
     # rank0_base = os.path.basename(rank0_filename).replace("rank_00000000", "rank_*")
 
-    # Find all rank files
+    # Find all shard files (rank_* or node_* directories)
     rank_files = _glob_partition_files(rank0_filename)
-    # print(rank_files)
-
-    file_sizes = np.array([os.path.getsize(file) for file in rank_files])
-    if len(np.unique(file_sizes)) > 1:
-        # print("Files are not the same size! you are probably trying to read a slice written with single_file_per_rank=True")
-        unique_file_sizes = np.unique(file_sizes)
-        larger_file_size = max(unique_file_sizes)
-        rank_files = [file for file, size in zip(rank_files, file_sizes) if size == larger_file_size]
 
     # Read the rank 0 file to get the metadata
     rank0_filedata = read_binary(rank_files[0])
@@ -1514,9 +1506,9 @@ def _read_binary_impl(filename: str, *, coarsened: bool = False) -> Dict[str, An
         "nx1_mb": nx1 // factor,
         "nx2_mb": nx2 // factor,
         "nx3_mb": nx3 // factor,
-        "nx1_out_mb": (mb_index[0][1] - mb_index[0][0]) + 1,
-        "nx2_out_mb": (mb_index[0][3] - mb_index[0][2]) + 1,
-        "nx3_out_mb": (mb_index[0][5] - mb_index[0][4]) + 1,
+        "nx1_out_mb": (mb_index[0][1] - mb_index[0][0]) + 1 if mb_index else 0,
+        "nx2_out_mb": (mb_index[0][3] - mb_index[0][2]) + 1 if mb_index else 0,
+        "nx3_out_mb": (mb_index[0][5] - mb_index[0][4]) + 1 if mb_index else 0,
         "mb_index": np.array(mb_index),
         "mb_logical": np.array(mb_logical),
         "mb_geometry": np.array(mb_geometry),
