@@ -24,7 +24,7 @@
 
 SphericalSurface::SphericalSurface(MeshBlockPack *pmy_pack, int ntheta,
                                    Real rad, Real xc, Real yc, Real zc,
-                                   int nphi_in)
+                                   int nphi_in, bool uniform_theta)
     : pmy_pack(pmy_pack),
       radius(rad),
       xc(xc),
@@ -32,6 +32,7 @@ SphericalSurface::SphericalSurface(MeshBlockPack *pmy_pack, int ntheta,
       zc(zc),
       ntheta(ntheta),
       nphi(nphi_in > 0 ? nphi_in : 2 * ntheta),
+      uniform_theta_(uniform_theta),
       int_weights("int_weights", 1),
       polar_pos("polar_pos", 1, 1),
       cart_pos("cart_pos", 1, 1),
@@ -62,14 +63,34 @@ SphericalSurface::~SphericalSurface() {}
 
 void SphericalSurface::InitializeAngleAndWeights() {
   int n = 0;
-  for (int i = 0; i < nphi; ++i) {
-    Real phi = 2.0 * M_PI / nphi * i;
-    for (int j = 0; j < ntheta; ++j) {
-      Real mu = -1.0 + 2.0 / (ntheta - 1) * j;
-      int_weights.h_view(n) = (2.0 * M_PI / nphi) * (2.0 / ntheta);
-      polar_pos.h_view(n, 0) = acos(mu);
-      polar_pos.h_view(n, 1) = phi;
-      n++;
+  if (uniform_theta_) {
+    // Uniform spacing in θ: θ_j = j * π / (ntheta - 1)
+    // Integration weights use the trapezoidal solid-angle element:
+    //   w = (2π/nphi) * sin(θ) * dθ
+    Real dphi   = 2.0 * M_PI / nphi;
+    Real dtheta = M_PI / (ntheta - 1);
+    for (int i = 0; i < nphi; ++i) {
+      Real phi = dphi * i;
+      for (int j = 0; j < ntheta; ++j) {
+        Real theta = dtheta * j;
+        int_weights.h_view(n) = dphi * std::sin(theta) * dtheta;
+        polar_pos.h_view(n, 0) = theta;
+        polar_pos.h_view(n, 1) = phi;
+        n++;
+      }
+    }
+  } else {
+    // Uniform spacing in cos(θ) (default): μ_j = -1 + 2j/(ntheta-1)
+    // All solid-angle weights are equal: w = (2π/nphi) * (2/ntheta)
+    for (int i = 0; i < nphi; ++i) {
+      Real phi = 2.0 * M_PI / nphi * i;
+      for (int j = 0; j < ntheta; ++j) {
+        Real mu = -1.0 + 2.0 / (ntheta - 1) * j;
+        int_weights.h_view(n) = (2.0 * M_PI / nphi) * (2.0 / ntheta);
+        polar_pos.h_view(n, 0) = acos(mu);
+        polar_pos.h_view(n, 1) = phi;
+        n++;
+      }
     }
   }
 

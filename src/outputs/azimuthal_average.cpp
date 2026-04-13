@@ -52,7 +52,8 @@ AzimuthalAverageOutput::AzimuthalAverageOutput(ParameterInput *pin, Mesh *pm,
   nphi = pin->GetOrAddInteger(op.block_name, "nphi", 2 * ntheta);
   rmin = pin->GetReal(op.block_name, "rmin");
   rmax = pin->GetReal(op.block_name, "rmax");
-  log_spacing = pin->GetOrAddBoolean(op.block_name, "log_spacing", false);
+  log_spacing    = pin->GetOrAddBoolean(op.block_name, "log_spacing",    false);
+  uniform_theta_ = pin->GetOrAddBoolean(op.block_name, "uniform_theta", false);
 
   // Build radial grid
   radii.resize(nr);
@@ -75,7 +76,7 @@ AzimuthalAverageOutput::AzimuthalAverageOutput(ParameterInput *pin, Mesh *pm,
   for (int i = 0; i < nr; ++i) {
     surfaces.push_back(
         std::make_unique<SphericalSurface>(pm->pmb_pack, ntheta, radii[i],
-                                           0.0, 0.0, 0.0, nphi));
+                                           0.0, 0.0, 0.0, nphi, uniform_theta_));
   }
 
   // Extract theta grid from the first surface (identical for all radii).

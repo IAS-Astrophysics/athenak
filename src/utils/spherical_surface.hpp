@@ -20,7 +20,8 @@ class MeshBlockPack;
 class SphericalSurface {
  public:
   SphericalSurface(MeshBlockPack *pmy_pack, int ntheta, Real rad, Real xc = 0.0,
-                   Real yc = 0.0, Real zc = 0.0, int nphi = -1);
+                   Real yc = 0.0, Real zc = 0.0, int nphi = -1,
+                   bool uniform_theta = false);
   ~SphericalSurface();
   int nangles;  // total number of gridpoints (= nphi * ntheta)
   int ntheta;   // number of gridpoints along theta direction
@@ -49,5 +50,6 @@ class SphericalSurface {
 
  private:
   MeshBlockPack *pmy_pack;  // ptr to MeshBlockPack containing this Hydro
+  bool uniform_theta_;      // true → uniform θ spacing; false → uniform cos(θ)
 };
 #endif  // UTILS_SPHERICAL_SURFACE_HPP_

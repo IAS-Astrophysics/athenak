@@ -475,6 +475,7 @@ class AzimuthalAverageOutput : public BaseTypeOutput {
   int nr, ntheta, nphi;
   Real rmin, rmax;
   bool log_spacing;
+  bool uniform_theta_;  // true → uniform θ spacing; false → uniform cos(θ)
   std::vector<Real> radii;
   std::vector<Real> theta_grid;
   // SphericalSurface objects are kept only when adaptive=true; otherwise freed
