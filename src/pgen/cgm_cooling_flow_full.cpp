@@ -51,6 +51,11 @@ Real GravPot(Real x1, Real x2, Real x3,
              Real M_gal, Real a_gal, Real z_gal,
              Real c_outer, Real rho_mean);
 
+KOKKOS_INLINE_FUNCTION
+Real LimitDustTransfer(const Real requested,
+                       const Real donor_mass,
+                       const Real dust_donor_cap_frac);
+
 void UserSource(Mesh* pm, const Real bdt);
 void GravitySource(Mesh* pm, const Real bdt);
 void SNSource(Mesh* pm, const Real bdt);
@@ -90,6 +95,7 @@ namespace {
   Real a_gr_s;
   Real a_gr_l;
   Real min_dust_frac;
+  Real dust_donor_cap_frac;
 
   // Profiles
   ProfileReader profile_reader;                
@@ -184,6 +190,8 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   a_gr_s   = pin->GetReal("dust", "a_gr_s");
   a_gr_l   = pin->GetReal("dust", "a_gr_l");
   min_dust_frac = pin->GetOrAddReal("dust", "D_floor", 1.0e-20);
+  dust_donor_cap_frac = pin->GetOrAddReal("dust", "dust_donor_cap_frac", 
+		                          1.0 - min_dust_frac);
 
   // Read the density gradient threshold for refinement
   ddens_threshold = pin->GetReal("problem", "ddens_max");
@@ -870,6 +878,16 @@ void SNSource(Mesh* pm, const Real bdt) {
   return;
 }
 
+KOKKOS_INLINE_FUNCTION
+Real LimitDustTransfer(const Real requested, 
+		       const Real donor_mass, 
+		       const Real dust_donor_cap_frac) {
+  if (!(requested > 0.0) || !(donor_mass > 0.0)) {
+    return 0.0;
+  }
+  return fmin(requested, donor_mass * dust_donor_cap_frac);
+}
+
 void DustSource(Mesh* pm, const Real bdt) {
   MeshBlockPack *pmbp = pm->pmb_pack;
   auto &indcs = pm->mb_indcs;
@@ -896,47 +914,55 @@ void DustSource(Mesh* pm, const Real bdt) {
   Real a_s = a_gr_s;
   Real a_l = a_gr_l;
 
+  Real X = 0.75; // hydrogen fraction
   Real Zsol = Z_sol;
   Real F_coag = 0.5;
   Real v_co = 0.1; // km/s, relative velocity for coagulation timescale
 
   Real D_tol = min_dust_frac;
+  Real dd_cap = dust_donor_cap_frac;
 
   Real cs_unit = 1. / pmbp->punit->km_s();
   Real temp_unit = pmbp->punit->temperature_cgs();
+  Real nH_unit = pmbp->punit->density_cgs() / pmbp->punit->atomic_mass_unit_cgs;  
+  Real bdt_myr = bdt / pmbp->punit->myr();
 
   par_for("dust_source", DevExeSpace(), 0, nmb1, ks, ke, js, je, is, ie,
   KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
 
-    Real dens = w0(m, IDN, k, j, i);
-    Real temp = w0(m, IEN, k, j, i) * gm1 / dens;
-    Real cs_g = sqrt(gamma*temp);
-
-    cs_g *= cs_unit;
-    temp *= temp_unit;
+    Real dens =  nH_unit * w0(m, IDN, k, j, i);
+    Real nH   = X * nH_unit * w0(m, IDN, k, j, i);
+    Real temp = temp_unit * gm1 * w0(m, IEN, k, j, i) / w0(m, IDN, k, j, i);
+    Real cs_g = cs_unit * sqrt(gamma*temp);
 
     Real Zloc = w0(m,IZS,k,j,i);
     Real D_s  = w0(m,IDS,k,j,i);
     Real D_l  = w0(m,IDL,k,j,i);
 
     Real D_tot = D_s + D_l;
-    Real d_s = D_s * dens;
-    Real d_l = D_l * dens;
+    Real d_s = D_s * nH;
+    Real d_l = D_l * nH;
 
     Real rate_s = 0.0, rate_l = 0.0, rate_z = 0.0;
     
     //* Thermal sputtering
     // Tsai & Mathews 1995, McKinnon et al 2017
     Real t_sp = 102.0; // in Myr
-    t_sp *= (1.e-3/dens);
+    t_sp *= (1.e-3/nH);
     Real t_ratio = temp / 2.0e6;
     Real t_inv = 1.0 / (t_ratio * t_ratio * sqrt(t_ratio));  // t_ratio^(-2.5)
     t_sp *= 1.0 + t_inv;
 
     Real tmp_rate_s = 0.0, tmp_rate_l = 0.0;
 
-    if (D_s > D_tol) tmp_rate_s = -3. * d_s / (t_sp * a_s);
-    if (D_l > D_tol) tmp_rate_l = -3. * d_l / (t_sp * a_l);
+    if (D_s > D_tol) {
+      const Real requested = bdt_myr * -3. * d_s / (t_sp * a_s);
+      tmp_rate_s = LimitDustTransfer(requested, d_s, dd_cap);
+    }
+    if (D_l > D_tol) {
+      const Real requested = -3. * d_l / (t_sp * a_l);
+      tmp_rate_l = LimitDustTransfer(requested, d_l, dd_cap);
+    }
 
     rate_z += -tmp_rate_s - tmp_rate_l;
     rate_s += tmp_rate_s;
@@ -945,16 +971,26 @@ void DustSource(Mesh* pm, const Real bdt) {
     //* Accretion
     // Popping 2017
     Real t_ac = 75.0; // in Myr
-    t_ac *= (20.0/dens);
+    t_ac *= (20.0/nH);
     t_ac *= sqrt(50.0/temp);
     t_ac *= Zsol/Zloc; // in Z_sol
-    t_ac /= Kokkos::max(1.0e-10, 1.0 - (D_tot / Zloc));
+    t_ac *= 1 + (Zloc / D_tot);
 
     tmp_rate_s = 0.0; tmp_rate_l = 0.0;
 
     if (Zloc > D_tol) {
       if (D_s > D_tol) tmp_rate_s = d_s / (t_ac * a_s);
       if (D_l > D_tol) tmp_rate_l = d_l / (t_ac * a_l);
+    }
+
+    const Real requested_accretion = tmp_rate_s + tmp_rate_l;
+    if (requested_accretion > 0.0) {
+      const Real max_accretion = Zloc * dens * dd_cap;
+      if (requested_accretion > max_accretion) {
+        const Real scale = max_accretion / requested_accretion;
+        tmp_rate_s *= scale;
+        tmp_rate_l *= scale;
+      }
     }
 
     rate_z += -tmp_rate_s - tmp_rate_l;
@@ -964,51 +1000,57 @@ void DustSource(Mesh* pm, const Real bdt) {
     //* Shattering large grains, into small ones
     // From Dubois 2024
     Real t_shatt = 54.0; // in Myr
-    t_shatt *= (1.0/dens); // in cm^-3
+    t_shatt *= (1.0/nH); // in cm^-3
     t_shatt *= (rhog/3.0);  // in cm^-3
     t_shatt *= (0.01/D_l);
     t_shatt *= (10/cs_g);  // in km/s
 
     tmp_rate_s = 0.0; tmp_rate_l = 0.0;
 
-    if (D_l > D_tol) tmp_rate_s = d_l / (t_shatt * a_l);
+    if (D_l > D_tol) {
+      const Real requested = bdt_myr * d_l / (t_shatt * a_l);
+      tmp_rate_l = LimitDustTransfer(requested, d_l, dd_cap); 
+    }
 
-    rate_l += -tmp_rate_s;
-    rate_s += tmp_rate_s;
+    rate_l += -tmp_rate_l;
+    rate_s += tmp_rate_l;
 
     // * Coagulation of small grains, into large ones
     // From Dubois 2024
     Real t_coag = 0.27; // in Myr
     t_coag *= (rhog/3.0);  // in g/cc
-    t_coag *= (1.0e3/dens); // in cm^-3
+    t_coag *= (1.0e3/nH); // in cm^-3
     t_coag *= (0.01/D_s);
     t_coag *= (0.1/v_co);  // in km/s
     t_coag *= F_coag;
 
     tmp_rate_s = 0.0; tmp_rate_l = 0.0;
 
-    if (D_s > D_tol) tmp_rate_l = d_s / (t_coag * a_s / 0.05);
+    if (D_s > D_tol) {
+      const Real requested = bdt_myr * d_s / (t_coag * a_s / 0.05);
+      tmp_rate_s = LimitDustTransfer(requested, d_s, dd_cap);
+    }
 
-    rate_s += -tmp_rate_l;
-    rate_l += tmp_rate_l;
+    rate_s += -tmp_rate_s;
+    rate_l += tmp_rate_s;
 
     //* Update metallicity and dust scalars with source terms
     //! These are w0 * dens
-    u0(m, IZS, k, j, i) += bdt * rate_z;
-    u0(m, IDS, k, j, i) += bdt * rate_s;
-    u0(m, IDL, k, j, i) += bdt * rate_l;
+    u0(m, IZS, k, j, i) += rate_z;
+    u0(m, IDS, k, j, i) += rate_s;
+    u0(m, IDL, k, j, i) += rate_l;
 
     // We check that scalars are guaranteed to be in [0,1] after all source terms are added.
     // Clamp metallicity
-    u0(m, IZS, k, j, i) = Kokkos::clamp(u0(m, IZS, k, j, i), 0.0, dens);
+    //u0(m, IZS, k, j, i) = Kokkos::clamp(u0(m, IZS, k, j, i), 0.0, dens);
     // Clamp total dust-to-gas ratio to [0,1]
-    Real d_mass = u0(m, IDS, k, j, i) + u0(m, IDL, k, j, i);
-    Real clamp_d_mass = (d_mass > 0.0) ? Kokkos::min(1.0, dens / d_mass) : 0.0;
-    u0(m, IDS, k, j, i) *= clamp_d_mass;
-    u0(m, IDL, k, j, i) *= clamp_d_mass;
+    //Real d_mass = u0(m, IDS, k, j, i) + u0(m, IDL, k, j, i);
+    //Real clamp_d_mass = (d_mass > 0.0) ? Kokkos::min(1.0, dens / d_mass) : 0.0;
+    //u0(m, IDS, k, j, i) *= clamp_d_mass;
+    //u0(m, IDL, k, j, i) *= clamp_d_mass;
     // Floor dust values
-    u0(m, IDS, k, j, i) = Kokkos::max(D_tol * dens, u0(m, IDS, k, j, i));
-    u0(m, IDL, k, j, i) = Kokkos::max(D_tol * dens, u0(m, IDL, k, j, i));
+    //u0(m, IDS, k, j, i) = Kokkos::max(D_tol * nH, u0(m, IDS, k, j, i));
+    //u0(m, IDL, k, j, i) = Kokkos::max(D_tol * nH, u0(m, IDL, k, j, i));
   });
 
   return;
