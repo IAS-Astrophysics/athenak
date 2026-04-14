@@ -89,6 +89,7 @@ namespace {
   Real e_sn;
   Real m_ej;
   Real Z_ej;
+  Real sn_delay;
 
   // Constants for dust
   Real d_z_init;
@@ -172,6 +173,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   e_sn  = pin->GetOrAddReal("SN","E_sn",E_def)*pmbp->punit->erg()/sphere_vol;
   m_ej  = pin->GetOrAddReal("SN","M_ej",M_def)*pmbp->punit->msun()/sphere_vol;
   Z_ej  = pin->GetOrAddReal("SN","Z_ej",0.1);
+  sn_delay = pin->GetOrAddReal("SN","delay",0.0);  
 
   // Set passive scalar indices
   if (pmbp->phydro->nscalars != 3) {
@@ -423,8 +425,8 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     SetEquilibriumState(u0, m, k, j, i, x1v, x2v, x3v, 
                         x1l, x1r, x2l, x2r, G, r_s, rho_s, 
                         m_g, a_g, z_g, r_m, rho_m, gm1, 
-			IZS, IDS, IDL, dz_init, Z_, Zsol,
-			disk_profile);
+                        IZS, IDS, IDL, dz_init, Z_, Zsol,
+                        disk_profile);
 
     // Compute turbulent velocities by summing Fourier modes
     Real vx = 0.0, vy = 0.0, vz = 0.0;
@@ -568,9 +570,9 @@ void SetEquilibriumState(const DvceArray5D<Real> &u0,
                          Real x1l, Real x1r, Real x2l, Real x2r, 
                          Real G, Real r_s, Real rho_s, Real m_g, 
                          Real a_g, Real z_g, Real r_m, Real rho_m,
-                         Real gm1, int IZS, int IDS, int IDL,
-                         Real dz, Real Z, Real Zsol,
-		         const ProfileReader &disk_profile) {
+			 Real gm1, int IZS, int IDS, int IDL,
+			 Real dz, Real Z, Real Zsol,
+			 const ProfileReader &disk_profile) {
     // Calculate radius
     Real R = sqrt(x1v * x1v + x2v * x2v);
     Real R1l = sqrt(x1l * x1l + x2v * x2v);
@@ -899,6 +901,9 @@ Real LimitDustTransfer(const Real requested,
 }
 
 void DustSource(Mesh* pm, const Real bdt) {
+  
+  if (pm->time < sn_delay) return;
+
   MeshBlockPack *pmbp = pm->pmb_pack;
   auto &indcs = pm->mb_indcs;
   int is = indcs.is, ie = indcs.ie;
