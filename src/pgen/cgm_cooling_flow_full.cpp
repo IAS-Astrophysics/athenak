@@ -879,13 +879,11 @@ void SNSource(Mesh* pm, const Real bdt) {
 }
 
 KOKKOS_INLINE_FUNCTION
-Real LimitDustTransfer(const Real requested, 
-		       const Real donor_mass, 
-		       const Real dust_donor_cap_frac) {
-  if (!(requested > 0.0) || !(donor_mass > 0.0)) {
-    return 0.0;
-  }
-  return fmin(requested, donor_mass * dust_donor_cap_frac);
+Real LimitDustTransfer(const Real requested,
+                       const Real donor_mass,
+                       const Real max_drain_frac) {
+  if (!(requested > 0.0) || !(donor_mass > 0.0)) return 0.0;
+  return fmin(requested, donor_mass * max_drain_frac);
 }
 
 void DustSource(Mesh* pm, const Real bdt) {
@@ -894,10 +892,7 @@ void DustSource(Mesh* pm, const Real bdt) {
   int is = indcs.is, ie = indcs.ie;
   int js = indcs.js, je = indcs.je;
   int ks = indcs.ks, ke = indcs.ke;
-  int nx1 = indcs.nx1, nx2 = indcs.nx2, nx3 = indcs.nx3;
   int nmb1 = pmbp->nmb_thispack - 1;
-  auto &size = pmbp->pmb->mb_size;
-  int nhydro = pmbp->phydro->nhydro;
 
   EOS_Data &eos = pmbp->phydro->peos->eos_data;
   Real gamma = eos.gamma;
@@ -910,145 +905,208 @@ void DustSource(Mesh* pm, const Real bdt) {
   auto &u0 = pmbp->phydro->u0;
   auto &w0 = pmbp->phydro->w0;
 
-  Real rhog = rho_gr;
-  Real a_s = a_gr_s;
-  Real a_l = a_gr_l;
+  // --- grain parameters (from input deck) --------------------------------
+  Real rho_grain_cgs    = rho_gr;    // internal grain density [g cm^-3]
+  Real a_small          = a_gr_s;    // small-grain radius [μm]
+  Real a_large          = a_gr_l;    // large-grain radius [μm]
 
-  Real X = 0.75; // hydrogen fraction
-  Real Zsol = Z_sol;
-  Real F_coag = 0.5;
-  Real v_co = 0.1; // km/s, relative velocity for coagulation timescale
+  // --- physical constants ------------------------------------------------
+  const Real X_H              = 0.75;      // hydrogen mass fraction
+  const Real Z_solar          = Z_sol;     // solar metallicity
+  const Real f_coag           = 0.5;       // coagulation efficiency
+  const Real v_coag_ref_kms   = 0.1;       // coag. reference velocity [km/s]
 
-  Real D_tol = min_dust_frac;
-  Real dd_cap = dust_donor_cap_frac;
+  // --- safety parameters -------------------------------------------------
+  const Real D_floor          = min_dust_frac;
+  const Real max_drain_frac   = dust_donor_cap_frac;
 
-  Real cs_unit = 1. / pmbp->punit->km_s();
-  Real temp_unit = pmbp->punit->temperature_cgs();
-  Real nH_unit = pmbp->punit->density_cgs() / pmbp->punit->atomic_mass_unit_cgs;  
-  Real bdt_myr = bdt / pmbp->punit->myr();
+  // --- unit conversions --------------------------------------------------
+  //  temp_to_K      : code temperature → Kelvin
+  //  rho_to_nH      : code density → hydrogen number density [cm^-3]
+  //  vel_to_kms     : code velocity → km/s
+  //  dt_Myr         : sub-step duration in Myr
+  const Real temp_to_K  = pmbp->punit->temperature_cgs();
+  const Real rho_to_nH  = X_H * pmbp->punit->density_cgs()
+                              / pmbp->punit->atomic_mass_unit_cgs;
+  const Real vel_to_kms = 1.0 / pmbp->punit->km_s();
+  const Real dt_Myr     = bdt / pmbp->punit->myr();
 
   par_for("dust_source", DevExeSpace(), 0, nmb1, ks, ke, js, je, is, ie,
   KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
+    const Real rho_gas = w0(m, IDN, k, j, i);                 // code units
+    const Real nH      = rho_to_nH * rho_gas;                 // cm^-3
+    const Real T_K     = temp_to_K * gm1 * w0(m, IEN, k, j, i) / rho_gas; // K
+    const Real cs_kms  = vel_to_kms // Sound speed in km/s (used by shattering timescale)
+                       * sqrt(gamma * gm1 * w0(m, IEN, k, j, i) / rho_gas); 
 
-    Real dens =  nH_unit * w0(m, IDN, k, j, i);
-    Real nH   = X * nH_unit * w0(m, IDN, k, j, i);
-    Real temp = temp_unit * gm1 * w0(m, IEN, k, j, i) / w0(m, IDN, k, j, i);
-    Real cs_g = cs_unit * sqrt(gamma*temp);
+    const Real Z_gas   = w0(m, IZS, k, j, i);   // gas-phase metal fraction
+    const Real D_small = w0(m, IDS, k, j, i);   // small-grain dust fraction
+    const Real D_large = w0(m, IDL, k, j, i);   // large-grain dust fraction
+    const Real D_total = D_small + D_large;
 
-    Real Zloc = w0(m,IZS,k,j,i);
-    Real D_s  = w0(m,IDS,k,j,i);
-    Real D_l  = w0(m,IDL,k,j,i);
+    // Dust *mass densities* in code units (what the conserved scalars store).
+    const Real rho_Ds = D_small * rho_gas;
+    const Real rho_Dl = D_large * rho_gas;
 
-    Real D_tot = D_s + D_l;
-    Real d_s = D_s * nH;
-    Real d_l = D_l * nH;
+    // Accumulators for net conserved-density changes (code units).
+    Real delta_gas_metal = 0.0;   // Δ(ρ * Z_gas)
+    Real delta_small     = 0.0;   // Δ(ρ * D_small)
+    Real delta_large     = 0.0;   // Δ(ρ * D_large)
 
-    Real rate_s = 0.0, rate_l = 0.0, rate_z = 0.0;
-    
-    //* Thermal sputtering
-    // Tsai & Mathews 1995, McKinnon et al 2017
-    Real t_sp = 102.0; // in Myr
-    t_sp *= (1.e-3/nH);
-    Real t_ratio = temp / 2.0e6;
-    Real t_inv = 1.0 / (t_ratio * t_ratio * sqrt(t_ratio));  // t_ratio^(-2.5)
-    t_sp *= 1.0 + t_inv;
+    // =================================================================
+    //  1.  THERMAL SPUTTERING  (dust → gas-phase metals)
+    //      Tsai & Mathews (1995), McKinnon et al. (2017)
+    //
+    //      Note : τ_sp = t_sp / a where [a] = μm
+    //      τ_sp = 1657 Myr × (10^-3 / nH) × [1 + (T / 2×10^6)^{-5/2}]
+    //
+    //      Δρ_D = -dt × (3 / a) × ρ_D / τ_sp
+    //
+    //      The factor 3/a arises because grain mass ∝ a³ and the
+    //      absolute erosion rate da/dt is size-independent, so
+    //      d(ln M)/dt = 3 (da/dt)/a = 3 / (a τ_sp).
+    // =================================================================
+    {
+      Real tau_sput_Myr = 1657.0 * (1.0e-3 / nH);
+      const Real T_ratio = T_K / 2.0e6;
+      tau_sput_Myr *= 1.0 + 1.0 / (T_ratio * T_ratio * sqrt(T_ratio));
 
-    Real tmp_rate_s = 0.0, tmp_rate_l = 0.0;
-
-    if (D_s > D_tol) {
-      const Real requested = bdt_myr * 3. * d_s / (t_sp * a_s);
-      tmp_rate_s = LimitDustTransfer(requested, d_s, dd_cap);
-    }
-    if (D_l > D_tol) {
-      const Real requested = bdt_myr * 3. * d_l / (t_sp * a_l);
-      tmp_rate_l = LimitDustTransfer(requested, d_l, dd_cap);
-    }
-
-    rate_z += tmp_rate_s + tmp_rate_l;
-    rate_s += -tmp_rate_s;
-    rate_l += -tmp_rate_l;
-
-    //* Accretion
-    // Popping 2017
-    Real t_ac = 75.0; // in Myr
-    t_ac *= (20.0/nH);
-    t_ac *= sqrt(50.0/temp);
-    t_ac *= Zsol/Zloc; // in Z_sol
-    t_ac *= 1 + (Zloc / D_tot);
-
-    tmp_rate_s = 0.0; tmp_rate_l = 0.0;
-
-    if (Zloc > D_tol) {
-      if (D_s > D_tol) tmp_rate_s = bdt_myr * d_s / (t_ac * a_s);
-      if (D_l > D_tol) tmp_rate_l = bdt_myr * d_l / (t_ac * a_l);
-    }
-
-    const Real requested_accretion = tmp_rate_s + tmp_rate_l;
-    if (requested_accretion > 0.0) {
-      const Real max_accretion = Zloc * dens * dd_cap;
-      if (requested_accretion > max_accretion) {
-        const Real scale = max_accretion / requested_accretion;
-        tmp_rate_s *= scale;
-        tmp_rate_l *= scale;
+      Real sput_small = 0.0, sput_large = 0.0;
+      if (D_small > D_floor) {
+        const Real req = dt_Myr * 3.0 * rho_Ds / (tau_sput_Myr * a_small);
+        sput_small = LimitDustTransfer(req, rho_Ds, max_drain_frac);
       }
+      if (D_large > D_floor) {
+        const Real req = dt_Myr * 3.0 * rho_Dl / (tau_sput_Myr * a_large);
+        sput_large = LimitDustTransfer(req, rho_Dl, max_drain_frac);
+      }
+
+      delta_gas_metal += sput_small + sput_large;
+      delta_small     -= sput_small;
+      delta_large     -= sput_large;
+    }
+ 
+    // =================================================================
+    //  2.  GAS-PHASE ACCRETION  (gas-phase metals → dust)
+    //      Popping (2017); Asano et al. (2013)
+    //
+    //      τ_acc = 150 Myr × (100 / n_H) × √(50 K / T)
+    //                      × (Z_sol / Z_gas) 
+    //                      × [1 - Z_gas / (Z_gas + D_total)]
+    //
+    //      Δρ_D = +dt × ρ_D / (τ_acc × a)
+    // =================================================================
+    {
+      Real tau_acc_Myr = 150.0;
+      tau_acc_Myr *= (100.0 / nH);
+      tau_acc_Myr *= sqrt(50.0 / T_K);
+      tau_acc_Myr *= (Z_solar / Z_gas);
+      tau_acc_Myr *= 1.0 - (Z_gas / (Z_gas + D_total));
+
+      Real accr_small = 0.0, accr_large = 0.0;
+      if (Z_gas > D_floor) {
+        if (D_small > D_floor)
+          accr_small = dt_Myr * rho_Ds / (tau_acc_Myr * a_small);
+        if (D_large > D_floor)
+          accr_large = dt_Myr * rho_Dl / (tau_acc_Myr * a_large);
+      }
+
+      // Cap total accretion so it cannot drain more than max_drain_frac
+      // of the available gas-phase metal reservoir.
+      const Real accr_total = accr_small + accr_large;
+      if (accr_total > 0.0) {
+        const Real max_accretion = Z_gas * rho_gas * max_drain_frac;
+        if (accr_total > max_accretion) {
+          const Real scale = max_accretion / accr_total;
+          accr_small *= scale;
+          accr_large *= scale;
+        }
+      }
+
+      delta_gas_metal -= (accr_small + accr_large);   // removed from gas
+      delta_small     += accr_small;
+      delta_large     += accr_large;
     }
 
-    rate_z += -tmp_rate_s - tmp_rate_l;
-    rate_s += tmp_rate_s;
-    rate_l += tmp_rate_l;
+    // =================================================================
+    //  3.  SHATTERING  (large grains → small grains)
+    //      Dubois et al. (2024)
+    //
+    //      τ_shatt = 540 Myr × (1 / n_H) × (ρ_gr / 3 g cm^-3)
+    //                        × (0.01 / D_large) × (10 km/s / c_s)
+    //
+    //      Δρ_Dl = -dt × ρ_Dl / (τ_shatt × a_large)
+    // =================================================================
+    {
+      Real tau_shatt_Myr = 540.0;
+      tau_shatt_Myr *= (1.0 / nH);
+      tau_shatt_Myr *= (rho_grain_cgs / 3.0);
+      tau_shatt_Myr *= (0.01 / D_large);
+      tau_shatt_Myr *= (10.0 / cs_kms);
 
-    //* Shattering large grains, into small ones
-    // From Dubois 2024
-    Real t_shatt = 54.0; // in Myr
-    t_shatt *= (1.0/nH); // in cm^-3
-    t_shatt *= (rhog/3.0);  // in cm^-3
-    t_shatt *= (0.01/D_l);
-    t_shatt *= (10/cs_g);  // in km/s
+      Real shatt = 0.0;
+      if (D_large > D_floor) {
+        const Real req = dt_Myr * rho_Dl / (tau_shatt_Myr * a_large);
+        shatt = LimitDustTransfer(req, rho_Dl, max_drain_frac);
+      }
 
-    tmp_rate_s = 0.0; tmp_rate_l = 0.0;
-
-    if (D_l > D_tol) {
-      const Real requested = bdt_myr * d_l / (t_shatt * a_l);
-      tmp_rate_l = LimitDustTransfer(requested, d_l, dd_cap); 
+      delta_large -= shatt;
+      delta_small += shatt;
     }
 
-    rate_l += -tmp_rate_l;
-    rate_s += tmp_rate_l;
+    // =================================================================
+    //  4.  COAGULATION  (small grains → large grains)
+    //      Dubois et al. (2024)
+    //
+    //      τ_coag = 2.7 Myr × (ρ_gr / 3 g cm^-3) × (10^3 / n_H)
+    //                        × (0.01 / D_small) × (0.1 km/s / v_coag)
+    //                        × f_coag
+    //
+    //      Δρ_Ds = -dt × ρ_Ds / (τ_coag × a_small / 0.05)
+    // =================================================================
+    {
+      Real tau_coag_Myr = 2.7;
+      tau_coag_Myr *= (rho_grain_cgs / 3.0);
+      tau_coag_Myr *= (1.0e3 / nH);
+      tau_coag_Myr *= (0.01 / D_small);
+      tau_coag_Myr *= (0.1 / v_coag_ref_kms);
+      tau_coag_Myr /= f_coag;
 
-    // * Coagulation of small grains, into large ones
-    // From Dubois 2024
-    Real t_coag = 0.27; // in Myr
-    t_coag *= (rhog/3.0);  // in g/cc
-    t_coag *= (1.0e3/nH); // in cm^-3
-    t_coag *= (0.01/D_s);
-    t_coag *= (0.1/v_co);  // in km/s
-    t_coag *= F_coag;
+      Real coag = 0.0;
+      if (D_small > D_floor) {
+        const Real req = dt_Myr * rho_Ds / (tau_coag_Myr * (a_small / 0.005));
+        coag = LimitDustTransfer(req, rho_Ds, max_drain_frac);
+      }
 
-    tmp_rate_s = 0.0; tmp_rate_l = 0.0;
-
-    if (D_s > D_tol) {
-      const Real requested = bdt_myr * d_s / (t_coag * a_s / 0.05);
-      tmp_rate_s = LimitDustTransfer(requested, d_s, dd_cap);
+      delta_small -= coag;
+      delta_large += coag;
     }
 
-    rate_s += -tmp_rate_s;
-    rate_l += tmp_rate_s;
+    // =====================================================================
+    //  Apply accumulated changes to conserved scalar densities
+    // =====================================================================
+    u0(m, IZS, k, j, i) += delta_gas_metal;
+    u0(m, IDS, k, j, i) += delta_small;
+    u0(m, IDL, k, j, i) += delta_large;
 
-    //* Update metallicity and dust scalars with source terms
-    u0(m, IZS, k, j, i) += rate_z;
-    u0(m, IDS, k, j, i) += rate_s;
-    u0(m, IDL, k, j, i) += rate_l;
+    // =====================================================================
+    //  Safety clamps
+    // =====================================================================
 
-    // Clamp metallicity
-    u0(m, IZS, k, j, i) = Kokkos::clamp(u0(m, IZS, k, j, i), 0.0, dens);
-    // Clamp total dust-to-gas ratio to [0,1]
-    Real d_mass = u0(m, IDS, k, j, i) + u0(m, IDL, k, j, i);
-    Real clamp_d_mass = (d_mass > 0.0) ? Kokkos::min(1.0, dens / d_mass) : 0.0;
-    u0(m, IDS, k, j, i) *= clamp_d_mass;
-    u0(m, IDL, k, j, i) *= clamp_d_mass;
-    // Floor dust values
-    u0(m, IDS, k, j, i) = Kokkos::max(D_tol * nH, u0(m, IDS, k, j, i));
-    u0(m, IDL, k, j, i) = Kokkos::max(D_tol * nH, u0(m, IDL, k, j, i));
+    // Gas-phase metallicity: clamp to [0, ρ_gas].
+    u0(m, IZS, k, j, i) = Kokkos::clamp(u0(m, IZS, k, j, i), 0.0, rho_gas);
+
+    // Total dust: clamp so D_total ≤ ρ_gas  (dust fraction ≤ 1).
+    const Real rho_dust_total = u0(m, IDS, k, j, i) + u0(m, IDL, k, j, i);
+    const Real rescale = (rho_dust_total > 0.0)
+                       ? Kokkos::min(1.0, rho_gas / rho_dust_total)
+                       : 0.0;
+    u0(m, IDS, k, j, i) *= rescale;
+    u0(m, IDL, k, j, i) *= rescale;
+
+    // Floor: ensure dust densities never drop below D_floor × ρ_gas.
+    u0(m, IDS, k, j, i) = Kokkos::max(D_floor * rho_gas, u0(m, IDS, k, j, i));
+    u0(m, IDL, k, j, i) = Kokkos::max(D_floor * rho_gas, u0(m, IDL, k, j, i));
   });
 
   return;
