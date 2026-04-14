@@ -54,15 +54,17 @@ struct TOVParams {
   Real omega;
   Real q;
   Real A;
+  Real tau;
 
   TOVParams(tov::TOVStar& tov_star, bool isotropic_, bool minkowski_,
-            Real omega_, Real q_, Real A_) :
+            Real omega_, Real q_, Real A_, Real tau_) :
       my_tov(std::move(tov_star)) {
     isotropic = isotropic_;
     minkowski = minkowski_;
     omega = omega_;
     q = q_;
     A = A_;
+    tau = tau_;
   }
 };
 
@@ -79,9 +81,14 @@ void SolveTOV(ParameterInput *pin, Mesh* pmy_mesh_) {
 
   constexpr Real freq_to_geo = 4.925794970773136e-06;
 
+  // Orbital frequency in Hz, converted to angular frequency in geometrized
   Real omega = 2.0*M_PI*pin->GetOrAddReal("problem", "freq", 200.0)*freq_to_geo;
+  // Mass ratio
   Real q = pin->GetOrAddReal("problem", "q", 1.0);
+  // Amplitude scaling (1.0 => physical amplitude)
   Real A = pin->GetOrAddReal("problem", "amp", 1.0);
+  // Amplitude ramping timescale in ms
+  Real tau = pin->GetOrAddReal("problem", "tau", 1.0)/freq_to_geo;
 
   MeshBlockPack *pmbp = pmy_mesh_->pmb_pack;
 
@@ -90,7 +97,7 @@ void SolveTOV(ParameterInput *pin, Mesh* pmy_mesh_) {
   if (pmbp->padm->is_dynamic || pmy_mesh_->adaptive) {
     TOVEOS eos{pin};
     auto my_tov = tov::TOVStar::ConstructTOV(pin, eos, false);
-    ptov_params = new TOVParams(my_tov, isotropic, minkowski, omega, q, A);
+    ptov_params = new TOVParams(my_tov, isotropic, minkowski, omega, q, A, tau);
   }
 }
 
@@ -107,6 +114,7 @@ void SetupTOV(ParameterInput *pin, Mesh* pmy_mesh_) {
   Real omega = 2.0*M_PI*pin->GetOrAddReal("problem", "freq", 200.0)*freq_to_geo;
   Real q = pin->GetOrAddReal("problem", "q", 1.0);
   Real A = pin->GetOrAddReal("problem", "amp", 1.0);
+  Real tau = pin->GetOrAddReal("problem", "tau", 1.0)/freq_to_geo;
 
   MeshBlockPack *pmbp = pmy_mesh_->pmb_pack;
 
@@ -414,7 +422,7 @@ void SetupTOV(ParameterInput *pin, Mesh* pmy_mesh_) {
 
   // Copy the TOV to another object for storage if needed.
   if (pmbp->padm->is_dynamic || pmy_mesh_->adaptive == true) {
-    ptov_params = new TOVParams(my_tov, isotropic, minkowski, omega, q, A);
+    ptov_params = new TOVParams(my_tov, isotropic, minkowski, omega, q, A, tau);
   }
 }
 
@@ -540,7 +548,15 @@ void SetADMVariablesToTOV(MeshBlockPack *pmbp) {
   Real omega = ptov_params->omega;
   Real q = ptov_params->q;
   Real A = ptov_params->A;
+  Real tau = ptov_params->tau;
   Real t = pmbp->pmesh->time;
+
+  // Weight the amplitude by the ramping function. The ramping function is chosen so that
+  // dA/dt = 0 at t=0 and t=tau.
+  if (t < tau) {
+    Real x = t/tau;
+    A *= (x*x*(3. - 2.*x));
+  }
 
   Real m2 = tov_.M_edge*q;
   Real Mtot = tov_.M_edge + m2;
@@ -631,22 +647,73 @@ void FinalizeTOV(ParameterInput *pin, Mesh *pm) {
   }
 }
 
+// Custom reduction class for a spherical harmonic mode
+template<class ScalarType, int nl>
+struct ModeArray {
+  static constexpr int size = (nl+1)*(nl+1) - 4;
+  ScalarType arr[(nl+1)*(nl+1) - 4];
+
+  // Default constructor: initialize to zero
+  KOKKOS_INLINE_FUNCTION
+  ModeArray() {
+    for (int i = 0; i < size; i++) {
+      arr[i] = 0;
+    }
+  }
+
+  // Copy constructor
+  KOKKOS_INLINE_FUNCTION
+  ModeArray(const ModeArray& rhs) {
+    for (int i = 0; i < size; i++) {
+      arr[i] = rhs.arr[i];
+    }
+  }
+
+  // Addition operator
+  KOKKOS_INLINE_FUNCTION
+  ModeArray& operator += (const ModeArray& src) {
+    for (int i = 0; i < size; i++) {
+      arr[i] += src.arr[i];
+    }
+
+    return *this;
+  }
+
+  // Easy access operator
+  KOKKOS_INLINE_FUNCTION
+  ScalarType& operator () (int l, int m) {
+    return arr[l*l - 4 + (m + l)];
+  }
+};
+
+namespace Kokkos {
+
+template<>
+struct reduction_identity<ModeArray<Real, 3> > {
+  KOKKOS_FORCEINLINE_FUNCTION static ModeArray<Real, 3> sum() {
+    return ModeArray<Real, 3>();
+  }
+};
+
+} // namespace Kokkos
+
 // History function
 void TOVHistory(HistoryData *pdata, Mesh *pm) {
   // Select the number of outputs and create labels for them.
-  pdata->nhist = 12;
+  pdata->nhist = 2 + 2*ModeArray<Real, 3>::size;
   pdata->label[0] = "rho-max";
   pdata->label[1] = "alpha-min";
-  pdata->label[2] = "ReI2,-2";
-  pdata->label[3] = "ReI2,-1";
-  pdata->label[4] = "ReI2,0";
-  pdata->label[5] = "ReI2,1";
-  pdata->label[6] = "ReI2,2";
-  pdata->label[7] = "ImI2,-2";
-  pdata->label[8] = "ImI2,-1";
-  pdata->label[9] = "ImI2,0";
-  pdata->label[10] = "ImI2,1";
-  pdata->label[11] = "ImI2,2";
+  int count = 0;
+  for (int ell = 2; ell <= 3; ell++) {
+    for (int em = -ell; em <= ell; em++) {
+      std::stringstream ss;
+      ss << ell << "," << em;
+      std::string mode_str = ss.str();
+      pdata->label[2+count] = "Re" + mode_str;
+      pdata->label[2+count+ModeArray<Real, 3>::size] = "Im" + mode_str;
+      count++;
+    }
+  }
 
   // capture class variables for kernel
   auto &w0_ = pm->pmb_pack->pmhd->w0;
@@ -663,12 +730,11 @@ void TOVHistory(HistoryData *pdata, Mesh *pm) {
   const int nji = nx2*nx1;
   Real rho_max = std::numeric_limits<Real>::max();
   Real alpha_min = -rho_max;
-  Real ReI2m2, ReI2m1, ReI20, ReI2p1, ReI2p2;
-  Real ImI2m2, ImI2m1, ImI20, ImI2p1, ImI2p2;
+  ModeArray<Real, 3> modes_re;
+  ModeArray<Real, 3> modes_im;
   Kokkos::parallel_reduce("TOVHistSums",Kokkos::RangePolicy<>(DevExeSpace(), 0, nmkji),
-  KOKKOS_LAMBDA(const int &idx, Real &mb_max, Real &mb_alp_min, Real &mb_ReI2m2,
-      Real &mb_ReI2m1, Real &mb_ReI20, Real &mb_ReI2p1, Real &mb_ReI2p2, Real &mb_ImI2m2,
-      Real &mb_ImI2m1, Real &mb_ImI20, Real &mb_ImI2p1, Real &mb_ImI2p2) {
+  KOKKOS_LAMBDA(const int &idx, Real &mb_max, Real &mb_alp_min, ModeArray<Real, 3> &mb_re,
+      ModeArray<Real, 3> &mb_im) {
     // coompute n,k,j,i indices of thread
     int m = (idx)/nkji;
     int k = (idx - m*nkji)/nji;
@@ -697,29 +763,29 @@ void TOVHistory(HistoryData *pdata, Mesh *pm) {
     mb_max = fmax(mb_max, w0_(m,IDN,k,j,i));
     mb_alp_min = fmin(mb_alp_min, adm.alpha(m, k, j, i));
 
+    //ModeArray<Real, 3> local_re;
+    //ModeArray<Real, 3> local_im;
     // Compute multipole modes for $\ell=2$.
-    Real modes_re[5];
-    Real modes_im[5];
-    for (int em = -2; em <= 2; em++) {
-      Real ylmR, ylmI;
-      SWSphericalHarm(&ylmR, &ylmI, 2, em, 0, theta, phi);
-      modes_re[em+2] = w0_(m,IDN,k,j,i)*r*r*ylmR;
-      modes_im[em+2] = w0_(m,IDN,k,j,i)*r*r*ylmI;
+    Real moment = r;
+    for (int ell = 2; ell <= 3; ell++) {
+      moment *= r;
+      for (int em = -ell; em <= ell; em++) {
+        Real ylmR, ylmI;
+        SWSphericalHarm(&ylmR, &ylmI, ell, em, 0, theta, phi);
+        mb_re(ell, em) += vol*w0_(m,IDN,k,j,i)*moment*ylmR;
+        mb_im(ell, em) += vol*w0_(m,IDN,k,j,i)*moment*ylmI;
+        //local_re(ell, em) = vol*w0_(m,IDN,k,j,i)*moment*ylmR;
+        //local_im(ell, em) = vol*w0_(m,IDN,k,j,i)*moment*ylmI;
+      }
     }
-    mb_ReI2m2 += modes_re[0]*vol;
-    mb_ReI2m1 += modes_re[1]*vol;
-    mb_ReI20 += modes_re[2]*vol;
-    mb_ReI2p1 += modes_re[3]*vol;
-    mb_ReI2p2 += modes_re[4]*vol;
-    mb_ImI2m2 += modes_im[0]*vol;
-    mb_ImI2m1 += modes_im[1]*vol;
-    mb_ImI20 += modes_im[2]*vol;
-    mb_ImI2p1 += modes_im[3]*vol;
-    mb_ImI2p2 += modes_im[4]*vol;
-  }, Kokkos::Max<Real>(rho_max), Kokkos::Min<Real>(alpha_min), Kokkos::Sum<Real>(ReI2m2),
-  Kokkos::Sum<Real>(ReI2m1), Kokkos::Sum<Real>(ReI20), Kokkos::Sum<Real>(ReI2p1),
-  Kokkos::Sum<Real>(ReI2p2), Kokkos::Sum<Real>(ImI2m2), Kokkos::Sum<Real>(ImI2m1),
-  Kokkos::Sum<Real>(ImI20), Kokkos::Sum<Real>(ImI2p1), Kokkos::Sum<Real>(ImI2p2));
+    /*for (int ell = 2; ell <= 3; ell++) {
+      for (int em = -ell; em <= ell; em++) {
+        mb_re(ell, em) += local_re(ell, em);
+        mb_im(ell, em) += local_im(ell, em);
+      }
+    }*/
+  }, Kokkos::Max<Real>(rho_max), Kokkos::Min<Real>(alpha_min),
+  Kokkos::Sum<ModeArray<Real ,3> >(modes_re), Kokkos::Sum<ModeArray<Real, 3> >(modes_im));
 
   // Currently AthenaK only supports MPI_SUM operations between ranks, but we need MPI_MAX
   // and MPI_MIN operations instead. This is a cheap hack to make it work as intended.
@@ -738,14 +804,8 @@ void TOVHistory(HistoryData *pdata, Mesh *pm) {
   // store data in hdata array
   pdata->hdata[0] = rho_max;
   pdata->hdata[1] = alpha_min;
-  pdata->hdata[2] = ReI2m2;
-  pdata->hdata[3] = ReI2m1;
-  pdata->hdata[4] = ReI20;
-  pdata->hdata[5] = ReI2p1;
-  pdata->hdata[6] = ReI2p2;
-  pdata->hdata[7] = ImI2m2;
-  pdata->hdata[8] = ImI2m1;
-  pdata->hdata[9] = ImI20;
-  pdata->hdata[10] = ImI2p1;
-  pdata->hdata[11] = ImI2p2;
+  for (int s = 0; s < ModeArray<Real, 3>::size; s++) {
+    pdata->hdata[2+s] = modes_re.arr[s];
+    pdata->hdata[2+ModeArray<Real, 3>::size+s] = modes_im.arr[s];
+  }
 }
