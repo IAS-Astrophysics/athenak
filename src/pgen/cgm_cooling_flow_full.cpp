@@ -956,17 +956,17 @@ void DustSource(Mesh* pm, const Real bdt) {
     Real tmp_rate_s = 0.0, tmp_rate_l = 0.0;
 
     if (D_s > D_tol) {
-      const Real requested = bdt_myr * -3. * d_s / (t_sp * a_s);
+      const Real requested = bdt_myr * 3. * d_s / (t_sp * a_s);
       tmp_rate_s = LimitDustTransfer(requested, d_s, dd_cap);
     }
     if (D_l > D_tol) {
-      const Real requested = -3. * d_l / (t_sp * a_l);
+      const Real requested = bdt_myr * 3. * d_l / (t_sp * a_l);
       tmp_rate_l = LimitDustTransfer(requested, d_l, dd_cap);
     }
 
-    rate_z += -tmp_rate_s - tmp_rate_l;
-    rate_s += tmp_rate_s;
-    rate_l += tmp_rate_l;
+    rate_z += tmp_rate_s + tmp_rate_l;
+    rate_s += -tmp_rate_s;
+    rate_l += -tmp_rate_l;
 
     //* Accretion
     // Popping 2017
@@ -979,8 +979,8 @@ void DustSource(Mesh* pm, const Real bdt) {
     tmp_rate_s = 0.0; tmp_rate_l = 0.0;
 
     if (Zloc > D_tol) {
-      if (D_s > D_tol) tmp_rate_s = d_s / (t_ac * a_s);
-      if (D_l > D_tol) tmp_rate_l = d_l / (t_ac * a_l);
+      if (D_s > D_tol) tmp_rate_s = bdt_myr * d_s / (t_ac * a_s);
+      if (D_l > D_tol) tmp_rate_l = bdt_myr * d_l / (t_ac * a_l);
     }
 
     const Real requested_accretion = tmp_rate_s + tmp_rate_l;
@@ -1035,22 +1035,20 @@ void DustSource(Mesh* pm, const Real bdt) {
     rate_l += tmp_rate_s;
 
     //* Update metallicity and dust scalars with source terms
-    //! These are w0 * dens
     u0(m, IZS, k, j, i) += rate_z;
     u0(m, IDS, k, j, i) += rate_s;
     u0(m, IDL, k, j, i) += rate_l;
 
-    // We check that scalars are guaranteed to be in [0,1] after all source terms are added.
     // Clamp metallicity
-    //u0(m, IZS, k, j, i) = Kokkos::clamp(u0(m, IZS, k, j, i), 0.0, dens);
+    u0(m, IZS, k, j, i) = Kokkos::clamp(u0(m, IZS, k, j, i), 0.0, dens);
     // Clamp total dust-to-gas ratio to [0,1]
-    //Real d_mass = u0(m, IDS, k, j, i) + u0(m, IDL, k, j, i);
-    //Real clamp_d_mass = (d_mass > 0.0) ? Kokkos::min(1.0, dens / d_mass) : 0.0;
-    //u0(m, IDS, k, j, i) *= clamp_d_mass;
-    //u0(m, IDL, k, j, i) *= clamp_d_mass;
+    Real d_mass = u0(m, IDS, k, j, i) + u0(m, IDL, k, j, i);
+    Real clamp_d_mass = (d_mass > 0.0) ? Kokkos::min(1.0, dens / d_mass) : 0.0;
+    u0(m, IDS, k, j, i) *= clamp_d_mass;
+    u0(m, IDL, k, j, i) *= clamp_d_mass;
     // Floor dust values
-    //u0(m, IDS, k, j, i) = Kokkos::max(D_tol * nH, u0(m, IDS, k, j, i));
-    //u0(m, IDL, k, j, i) = Kokkos::max(D_tol * nH, u0(m, IDL, k, j, i));
+    u0(m, IDS, k, j, i) = Kokkos::max(D_tol * nH, u0(m, IDS, k, j, i));
+    u0(m, IDL, k, j, i) = Kokkos::max(D_tol * nH, u0(m, IDL, k, j, i));
   });
 
   return;
