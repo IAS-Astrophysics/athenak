@@ -149,11 +149,13 @@ TaskStatus DynGRMHDPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int s
     // Calculate fluxes of scalars (if any)
     if (nvars > nhyd) {
       for (int n=nhyd; n<nvars; ++n) {
+        Real min_Y_ = dyn_eos.ps.GetEOS().GetMinimumSpeciesFraction(n-nhyd);
+        Real max_Y_ = dyn_eos.ps.GetEOS().GetMaximumSpeciesFraction(n-nhyd);
         par_for_inner(member, il, iu, [&](const int i) {
           if (flx1(m,IDN,k,j,i) >= 0.0) {
-            flx1(m,n,k,j,i) = flx1(m,IDN,k,j,i)*wl(n,i);
+            flx1(m,n,k,j,i) = flx1(m,IDN,k,j,i)*fmin(max_Y_, fmax(min_Y_, wl(n,i)));
           } else {
-            flx1(m,n,k,j,i) = flx1(m,IDN,k,j,i)*wr(n,i);
+            flx1(m,n,k,j,i) = flx1(m,IDN,k,j,i)*fmin(max_Y_, fmax(min_Y_, wr(n,i)));
           }
         });
       }
@@ -261,11 +263,13 @@ TaskStatus DynGRMHDPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int s
         // Calculate fluxes of scalars (if any)
         if (nvars > nhyd) {
           for (int n=nhyd; n<nvars; ++n) {
+            Real min_Y_ = dyn_eos.ps.GetEOS().GetMinimumSpeciesFraction(n-nhyd);
+            Real max_Y_ = dyn_eos.ps.GetEOS().GetMaximumSpeciesFraction(n-nhyd);
             par_for_inner(member, is-1, ie+1, [&](const int i) {
               if (flx2(m,IDN,k,j,i) >= 0.0) {
-                flx2(m,n,k,j,i) = flx2(m,IDN,k,j,i)*wl(n,i);
+                flx2(m,n,k,j,i) = flx2(m,IDN,k,j,i)*fmin(max_Y_, fmax(min_Y_, wl(n,i)));
               } else {
-                flx2(m,n,k,j,i) = flx2(m,IDN,k,j,i)*wr(n,i);
+                flx2(m,n,k,j,i) = flx2(m,IDN,k,j,i)*fmin(max_Y_, fmax(min_Y_, wr(n,i)));
               }
             });
           }
@@ -369,11 +373,13 @@ TaskStatus DynGRMHDPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int s
         // Calculate fluxes of scalars (if any)
         if (nvars > nhyd) {
           for (int n=nhyd; n<nvars; ++n) {
+            Real min_Y_ = dyn_eos.ps.GetEOS().GetMinimumSpeciesFraction(n-nhyd);
+            Real max_Y_ = dyn_eos.ps.GetEOS().GetMaximumSpeciesFraction(n-nhyd);
             par_for_inner(member, is-1, ie+1, [&](const int i) {
               if (flx3(m,IDN,k,j,i) >= 0.0) {
-                flx3(m,n,k,j,i) = flx3(m,IDN,k,j,i)*wl(n,i);
+                flx3(m,n,k,j,i) = flx3(m,IDN,k,j,i)*fmin(max_Y_, fmax(min_Y_, wl(n,i)));
               } else {
-                flx3(m,n,k,j,i) = flx3(m,IDN,k,j,i)*wr(n,i);
+                flx3(m,n,k,j,i) = flx3(m,IDN,k,j,i)*fmin(max_Y_, fmax(min_Y_, wr(n,i)));
               }
             });
           }
