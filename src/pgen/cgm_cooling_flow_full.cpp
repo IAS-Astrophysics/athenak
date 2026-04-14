@@ -1009,7 +1009,7 @@ void DustSource(Mesh* pm, const Real bdt) {
     //
     //      τ_acc = 150 Myr × (100 / n_H) × √(50 K / T)
     //                      × (Z_sol / Z_gas) 
-    //                      × [1 - Z_gas / (Z_gas + D_total)]
+    //                      / [1 - Z_gas / (Z_gas + D_total)]
     //
     //      Δρ_D = +dt × ρ_D / (τ_acc × a)
     // =================================================================
@@ -1018,7 +1018,7 @@ void DustSource(Mesh* pm, const Real bdt) {
       tau_acc_Myr *= (100.0 / nH);
       tau_acc_Myr *= sqrt(50.0 / T_K);
       tau_acc_Myr *= (Z_solar / Z_gas);
-      tau_acc_Myr *= 1.0 - (Z_gas / (Z_gas + D_total));
+      tau_acc_Myr /= 1.0 - (Z_gas / (Z_gas + D_total));
 
       Real accr_small = 0.0, accr_large = 0.0;
       if (Z_gas > D_floor) {
