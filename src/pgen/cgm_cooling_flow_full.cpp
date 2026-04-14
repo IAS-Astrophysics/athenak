@@ -25,7 +25,9 @@ void SetEquilibriumState(const DvceArray5D<Real> &u0,
   Real x1l, Real x1r, Real x2l, Real x2r, 
   Real G, Real r_s, Real rho_s, Real m_g, 
   Real a_g, Real z_g, Real r_m, Real rho_m,
-  Real gm1, const ProfileReader &disk_profile);
+  Real gm1, int IZS, int IDS, int IDL,
+  Real dz, Real Z, Real Zsol,
+  const ProfileReader &disk_profile);
     
 KOKKOS_INLINE_FUNCTION
 void SetCoolingFlowState(const DvceArray5D<Real> &u0, 
@@ -391,6 +393,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   Real Zsol = Z_sol;
   Real Z_ = Z;
   Real dz_init = d_z_init;
+  Real min_df = min_dust_frac;
 
   // Use loaded profiles
   par_for("pgen_ic", DevExeSpace(), 0, (pmbp->nmb_thispack-1), ks, ke, js, je, is, ie,
@@ -416,10 +419,12 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
 
     SetCoolingFlowState(u0, m, k, j, i, x1v, x2v, x3v, gm1, profile);
     SetRotation(u0, m, k, j, i, x1v, x2v, x3v, r_c, v_c);
+    SetDustScalars(u0, m, k, j, i, IZS, IDS, IDL, min_df, Z_, Zsol);
     SetEquilibriumState(u0, m, k, j, i, x1v, x2v, x3v, 
                         x1l, x1r, x2l, x2r, G, r_s, rho_s, 
-                        m_g, a_g, z_g, r_m, rho_m, gm1, disk_profile);
-    SetDustScalars(u0, m, k, j, i, IZS, IDS, IDL, dz_init, Z_, Zsol);
+                        m_g, a_g, z_g, r_m, rho_m, gm1, 
+			IZS, IDS, IDL, dz_init, Z_, Zsol,
+			disk_profile);
 
     // Compute turbulent velocities by summing Fourier modes
     Real vx = 0.0, vy = 0.0, vz = 0.0;
@@ -563,7 +568,9 @@ void SetEquilibriumState(const DvceArray5D<Real> &u0,
                          Real x1l, Real x1r, Real x2l, Real x2r, 
                          Real G, Real r_s, Real rho_s, Real m_g, 
                          Real a_g, Real z_g, Real r_m, Real rho_m,
-                         Real gm1, const ProfileReader &disk_profile) {
+                         Real gm1, int IZS, int IDS, int IDL,
+                         Real dz, Real Z, Real Zsol,
+		         const ProfileReader &disk_profile) {
     // Calculate radius
     Real R = sqrt(x1v * x1v + x2v * x2v);
     Real R1l = sqrt(x1l * x1l + x2v * x2v);
@@ -646,6 +653,11 @@ void SetEquilibriumState(const DvceArray5D<Real> &u0,
     u0(m, IM2, k, j, i) = mom2_tot;
     u0(m, IM3, k, j, i) = mom3_tot;
     u0(m, IEN, k, j, i) = Eth_cgm + (rho * temp)/gm1 + KE_tot;
+
+    // Update dust only with disk material
+    u0(m, IZS, k, j, i) += (1.0 - dz) * Z * Zsol * rho;
+    u0(m, IDS, k, j, i) += 0.5 * dz * Z * Zsol * rho;
+    u0(m, IDL, k, j, i) += 0.5 * dz * Z * Zsol * rho;
 }
 
 //===========================================================================//
@@ -1148,6 +1160,7 @@ void UserBoundary(Mesh* pm) {
   Real Zsol = Z_sol;
   Real Z_ = Z;
   Real dz_init = d_z_init;
+  Real min_df = min_dust_frac;
 
   // Handle X1 boundaries
   par_for("static_x1", DevExeSpace(), 0, nmb1, 0, (n3-1), 0, (n2-1), 0, (ng-1),
@@ -1168,7 +1181,7 @@ void UserBoundary(Mesh* pm) {
       
       SetCoolingFlowState(u0, m, k, j, i, x1v, x2v, x3v, gm1, profile);
       SetRotation(u0, m, k, j, i, x1v, x2v, x3v, r_c, v_c);
-      SetDustScalars(u0, m, k, j, i, IZS, IDS, IDL, dz_init, Z_, Zsol);
+      SetDustScalars(u0, m, k, j, i, IZS, IDS, IDL, min_df, Z_, Zsol);
     }
   
     // Outer X1 boundary
@@ -1178,7 +1191,7 @@ void UserBoundary(Mesh* pm) {
       
       SetCoolingFlowState(u0, m, k, j, i_out, x1v, x2v, x3v, gm1, profile);
       SetRotation(u0, m, k, j, i_out, x1v, x2v, x3v, r_c, v_c);
-      SetDustScalars(u0, m, k, j, i_out, IZS, IDS, IDL, dz_init, Z_, Zsol);
+      SetDustScalars(u0, m, k, j, i_out, IZS, IDS, IDL, min_df, Z_, Zsol);
     }
   });
   
@@ -1201,7 +1214,7 @@ void UserBoundary(Mesh* pm) {
       
       SetCoolingFlowState(u0, m, k, j, i, x1v, x2v, x3v, gm1, profile);
       SetRotation(u0, m, k, j, i, x1v, x2v, x3v, r_c, v_c);
-      SetDustScalars(u0, m, k, j, i, IZS, IDS, IDL, dz_init, Z_, Zsol);
+      SetDustScalars(u0, m, k, j, i, IZS, IDS, IDL, min_df, Z_, Zsol);
     }
   
     // Outer X2 boundary
@@ -1211,7 +1224,7 @@ void UserBoundary(Mesh* pm) {
       
       SetCoolingFlowState(u0, m, k, j_out, i, x1v, x2v, x3v, gm1, profile);
       SetRotation(u0, m, k, j_out, i, x1v, x2v, x3v, r_c, v_c);
-      SetDustScalars(u0, m, k, j_out, i, IZS, IDS, IDL, dz_init, Z_, Zsol);
+      SetDustScalars(u0, m, k, j_out, i, IZS, IDS, IDL, min_df, Z_, Zsol);
     }
   });
   
@@ -1234,7 +1247,7 @@ void UserBoundary(Mesh* pm) {
       
       SetCoolingFlowState(u0, m, k, j, i, x1v, x2v, x3v, gm1, profile);
       SetRotation(u0, m, k, j, i, x1v, x2v, x3v, r_c, v_c);
-      SetDustScalars(u0, m, k, j, i, IZS, IDS, IDL, dz_init, Z_, Zsol);
+      SetDustScalars(u0, m, k, j, i, IZS, IDS, IDL, min_df, Z_, Zsol);
     }
     
     // Outer X3 boundary
@@ -1244,7 +1257,7 @@ void UserBoundary(Mesh* pm) {
       
       SetCoolingFlowState(u0, m, k_out, j, i, x1v, x2v, x3v, gm1, profile);
       SetRotation(u0, m, k_out, j, i, x1v, x2v, x3v, r_c, v_c);
-      SetDustScalars(u0, m, k_out, j, i, IZS, IDS, IDL, dz_init, Z_, Zsol);
+      SetDustScalars(u0, m, k_out, j, i, IZS, IDS, IDL, min_df, Z_, Zsol);
     }
   });
   
