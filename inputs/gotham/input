@@ -111,12 +111,16 @@ r_inj = 0.008 # 8 pc (set injection radius to 2*dx_finest)
 delay = 10.0
 
 <dust>
-d_z_init = 0.2     # Initial dust-to-metal ratio
-d_z_sn   = 0.2     # SN dust-to-metal ratio
-a_gr_s   = 0.0003  # Min dust size
-a_gr_l   = 3       # Max dust size
-rho_gr   = 3       # Dust grain density in g/cc
-D_floor  = 1e-7
+d_z_init                  = 0.2    # Initial dust-to-metal ratio
+d_z_sn                    = 0.2    # SN dust-to-metal ratio
+a_gr_s                    = 0.003  # Small-bin radius [um], PAH-like / ultrasmall carbonaceous
+a_gr_l                    = 0.1    # Large-bin radius [um]
+rho_gr                    = 3      # Dust grain density in g/cc
+D_floor                   = 1e-7
+accretion_nH_min          = 0.1    # Min n_H [cm^-3] for accretion
+accretion_nH_max          = 1.0e3  # Max n_H [cm^-3] for accretion
+accretion_T_max           = 1.0e4  # Max temperature [K] for accretion
+accretion_refractory_frac = 0.1    # Fraction of gas-phase metals available to accrete
 
 <turb_driving>
 type                = hydro

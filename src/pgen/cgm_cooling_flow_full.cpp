@@ -18,27 +18,27 @@
 //                               Globals                                     //
 //===========================================================================//
 
-KOKKOS_INLINE_FUNCTION 
-void SetEquilibriumState(const DvceArray5D<Real> &u0, 
-  int m, int k, int j, int i, 
-  Real x1v, Real x2v, Real x3v, 
-  Real x1l, Real x1r, Real x2l, Real x2r, 
-  Real G, Real r_s, Real rho_s, Real m_g, 
+KOKKOS_INLINE_FUNCTION
+void SetEquilibriumState(const DvceArray5D<Real> &u0,
+  int m, int k, int j, int i,
+  Real x1v, Real x2v, Real x3v,
+  Real x1l, Real x1r, Real x2l, Real x2r,
+  Real G, Real r_s, Real rho_s, Real m_g,
   Real a_g, Real z_g, Real r_m, Real rho_m,
   Real gm1, int IZS, int IDS, int IDL,
   Real dz, Real Z, Real Zsol,
   const ProfileReader &disk_profile);
-    
+
 KOKKOS_INLINE_FUNCTION
-void SetCoolingFlowState(const DvceArray5D<Real> &u0, 
-                         int m, int k, int j, int i, 
-                         Real x1v, Real x2v, Real x3v, 
+void SetCoolingFlowState(const DvceArray5D<Real> &u0,
+                         int m, int k, int j, int i,
+                         Real x1v, Real x2v, Real x3v,
                          Real gm1, const ProfileReader &profile);
 
 KOKKOS_INLINE_FUNCTION
-void SetRotation(const DvceArray5D<Real> &u0, 
-                 int m, int k, int j, int i, 
-                 Real x1v, Real x2v, Real x3v, 
+void SetRotation(const DvceArray5D<Real> &u0,
+                 int m, int k, int j, int i,
+                 Real x1v, Real x2v, Real x3v,
                  Real r_circ, Real v_circ);
 
 KOKKOS_INLINE_FUNCTION
@@ -47,9 +47,9 @@ void SetDustScalars(const DvceArray5D<Real> &u0,
                     int IZS, int IDS, int IDL,
                     Real dz, Real Z, Real Zsol);
 
-KOKKOS_INLINE_FUNCTION 
+KOKKOS_INLINE_FUNCTION
 Real GravPot(Real x1, Real x2, Real x3,
-             Real G, Real r_s, Real rho_s, 
+             Real G, Real r_s, Real rho_s,
              Real M_gal, Real a_gal, Real z_gal,
              Real c_outer, Real rho_mean);
 
@@ -99,11 +99,15 @@ namespace {
   Real a_gr_l;
   Real min_dust_frac;
   Real dust_donor_cap_frac;
+  Real accretion_nH_min;
+  Real accretion_nH_max;
+  Real accretion_T_max;
+  Real accretion_refractory_frac;
 
   // Profiles
-  ProfileReader profile_reader;                
-  ProfileReader disk_profile_reader;           
-  
+  ProfileReader profile_reader;
+  ProfileReader disk_profile_reader;
+
   // Refinment condition threshold
   Real ddens_threshold;
 
@@ -129,7 +133,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   MeshBlockPack *pmbp = pmy_mesh_->pmb_pack;
   auto &indcs = pmy_mesh_->mb_indcs;
 
-  // Enroll user functions 
+  // Enroll user functions
   user_srcs_func  = UserSource;
   user_bcs_func   = UserBoundary;
   pgen_final_func = FreeProfile;
@@ -140,15 +144,15 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     std::cout << "==============================================" << std::endl;
     std::cout << "Units                                         " << std::endl;
     std::cout << "==============================================" << std::endl;
-    std::cout << "Unit Length         : " << 1.0/pmbp->punit->kpc() 
+    std::cout << "Unit Length         : " << 1.0/pmbp->punit->kpc()
                                           << " kpc"   << std::endl;
     std::cout << "Unit Temperature    : " << 1.0/pmbp->punit->kelvin()
-                                          << " K"     << std::endl;     
-    std::cout << "Unit Number Density : " << std::pow(pmbp->punit->cm(),3) 
-                                          << " cm^-3" << std::endl;        
-    std::cout << "Unit Velocity       : " << 1.0/pmbp->punit->km_s() 
+                                          << " K"     << std::endl;
+    std::cout << "Unit Number Density : " << std::pow(pmbp->punit->cm(),3)
+                                          << " cm^-3" << std::endl;
+    std::cout << "Unit Velocity       : " << 1.0/pmbp->punit->km_s()
                                           << " km/s"  << std::endl;
-    std::cout << "Unit Time           : " << 1.0/pmbp->punit->myr() 
+    std::cout << "Unit Time           : " << 1.0/pmbp->punit->myr()
                                           << " Myr"   << std::endl;
     std::cout << std::endl;
   }
@@ -173,7 +177,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   e_sn  = pin->GetOrAddReal("SN","E_sn",E_def)*pmbp->punit->erg()/sphere_vol;
   m_ej  = pin->GetOrAddReal("SN","M_ej",M_def)*pmbp->punit->msun()/sphere_vol;
   Z_ej  = pin->GetOrAddReal("SN","Z_ej",0.1);
-  sn_delay = pin->GetOrAddReal("SN","delay",0.0);  
+  sn_delay = pin->GetOrAddReal("SN","delay",0.0);
 
   // Set passive scalar indices
   if (pmbp->phydro->nscalars != 3) {
@@ -194,8 +198,34 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   a_gr_s   = pin->GetReal("dust", "a_gr_s");
   a_gr_l   = pin->GetReal("dust", "a_gr_l");
   min_dust_frac = pin->GetOrAddReal("dust", "D_floor", 1.0e-20);
-  dust_donor_cap_frac = pin->GetOrAddReal("dust", "dust_donor_cap_frac", 
+  dust_donor_cap_frac = pin->GetOrAddReal("dust", "dust_donor_cap_frac",
 		                          1.0 - min_dust_frac);
+  accretion_nH_min = pin->GetOrAddReal("dust", "accretion_nH_min", 0.1);
+  accretion_nH_max = pin->GetOrAddReal("dust", "accretion_nH_max", 1.0e3);
+  accretion_T_max = pin->GetOrAddReal("dust", "accretion_T_max", 1.0e4);
+  accretion_refractory_frac = pin->GetOrAddReal("dust",
+                                                "accretion_refractory_frac",
+                                                0.1);
+
+  auto FatalDustInput = [&](const char *msg) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+              << std::endl << msg << std::endl;
+    std::exit(EXIT_FAILURE);
+  };
+  if (a_gr_s <= 0.0) FatalDustInput("<dust>/a_gr_s must be > 0.");
+  if (a_gr_l <= 0.0) FatalDustInput("<dust>/a_gr_l must be > 0.");
+  if (accretion_refractory_frac <= 0.0 || accretion_refractory_frac > 1.0) {
+    FatalDustInput("<dust>/accretion_refractory_frac must satisfy 0 < f <= 1.");
+  }
+  if (accretion_nH_min <= 0.0) {
+    FatalDustInput("<dust>/accretion_nH_min must be > 0.");
+  }
+  if (accretion_nH_max < accretion_nH_min) {
+    FatalDustInput("<dust>/accretion_nH_max must be >= <dust>/accretion_nH_min.");
+  }
+  if (accretion_T_max <= 0.0) {
+    FatalDustInput("<dust>/accretion_T_max must be > 0.");
+  }
 
   // Read the density gradient threshold for refinement
   ddens_threshold = pin->GetReal("problem", "ddens_max");
@@ -237,6 +267,13 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     std::cout << "rho_gr              : " << rho_gr               << std::endl;
     std::cout << "a_gr_s              : " << a_gr_s               << std::endl;
     std::cout << "a_gr_l              : " << a_gr_l               << std::endl;
+    std::cout << "D_floor             : " << min_dust_frac        << std::endl;
+    std::cout << "dust_donor_cap_frac : " << dust_donor_cap_frac  << std::endl;
+    std::cout << "accretion_nH_min    : " << accretion_nH_min     << std::endl;
+    std::cout << "accretion_nH_max    : " << accretion_nH_max     << std::endl;
+    std::cout << "accretion_T_max     : " << accretion_T_max      << std::endl;
+    std::cout << "accretion_f_ref     : " << accretion_refractory_frac
+              << std::endl;
     std::cout << std::endl;
   }
 
@@ -246,7 +283,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   profile_reader_host.ReadProfiles(profile_file);
   profile_reader = profile_reader_host.CreateDeviceReader();
   if (global_variable::my_rank==0) {
-    std::cout << "Successfully loaded CGM profiles from " 
+    std::cout << "Successfully loaded CGM profiles from "
               << profile_file << std::endl;
   }
 
@@ -256,7 +293,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   disk_profile_reader_host.ReadProfiles(disk_profile_file);
   disk_profile_reader = disk_profile_reader_host.CreateDeviceReader();
   if (global_variable::my_rank==0) {
-    std::cout << "Successfully loaded disk profiles from " 
+    std::cout << "Successfully loaded disk profiles from "
 	      << disk_profile_file << std::endl;
   }
 
@@ -422,17 +459,17 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     SetCoolingFlowState(u0, m, k, j, i, x1v, x2v, x3v, gm1, profile);
     SetRotation(u0, m, k, j, i, x1v, x2v, x3v, r_c, v_c);
     SetDustScalars(u0, m, k, j, i, IZS, IDS, IDL, min_df, Z_, Zsol);
-    SetEquilibriumState(u0, m, k, j, i, x1v, x2v, x3v, 
-                        x1l, x1r, x2l, x2r, G, r_s, rho_s, 
-                        m_g, a_g, z_g, r_m, rho_m, gm1, 
+    SetEquilibriumState(u0, m, k, j, i, x1v, x2v, x3v,
+                        x1l, x1r, x2l, x2r, G, r_s, rho_s,
+                        m_g, a_g, z_g, r_m, rho_m, gm1,
                         IZS, IDS, IDL, dz_init, Z_, Zsol,
                         disk_profile);
 
     // Compute turbulent velocities by summing Fourier modes
     Real vx = 0.0, vy = 0.0, vz = 0.0;
     for (int n = 0; n < nmodes; n++) {
-      Real phase = k_modes.d_view(0,n)*x1v 
-	         + k_modes.d_view(1,n)*x2v 
+      Real phase = k_modes.d_view(0,n)*x1v
+	         + k_modes.d_view(1,n)*x2v
 	         + k_modes.d_view(2,n)*x3v;
       Real cos_phase = cos(phase);
       Real sin_phase = sin(phase);
@@ -471,13 +508,13 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
 }
 
 KOKKOS_INLINE_FUNCTION
-void SetCoolingFlowState(const DvceArray5D<Real> &u0, 
-                         int m, int k, int j, int i, 
-                         Real x1v, Real x2v, Real x3v, 
+void SetCoolingFlowState(const DvceArray5D<Real> &u0,
+                         int m, int k, int j, int i,
+                         Real x1v, Real x2v, Real x3v,
                          Real gm1, const ProfileReader &profile) {
     // Calculate radius
     Real r = sqrt(x1v*x1v + x2v*x2v + x3v*x3v);
-      
+
     // Get values from profiles via interpolation
     Real rho  = profile.GetDensity(r);
     Real temp = profile.GetTemperature(r);
@@ -488,10 +525,10 @@ void SetCoolingFlowState(const DvceArray5D<Real> &u0,
     if (r < rmin) {
       vr *= (r / rmin);
     }
-    
+
     // Calculate pressure from temperature
     Real press = rho * temp;
-    
+
     // Set radial velocity components based on position
     Real v1 = 0.0, v2 = 0.0, v3 = 0.0;
     constexpr Real tiny = 1.0e-20;
@@ -511,14 +548,14 @@ void SetCoolingFlowState(const DvceArray5D<Real> &u0,
 }
 
 KOKKOS_INLINE_FUNCTION
-void SetRotation(const DvceArray5D<Real> &u0, 
-                 int m, int k, int j, int i, 
-                 Real x1v, Real x2v, Real x3v, 
+void SetRotation(const DvceArray5D<Real> &u0,
+                 int m, int k, int j, int i,
+                 Real x1v, Real x2v, Real x3v,
                  Real r_circ, Real v_circ) {
   // Calculate radius
   Real r = sqrt(x1v*x1v + x2v*x2v + x3v*x3v);
   Real R = sqrt(x1v*x1v + x2v*x2v);
-  
+
   // Calculate azimuthal velocity
   Real vx = 0.0, vy = 0.0, vz = 0.0;
   constexpr Real tiny = 1.0e-20;
@@ -532,12 +569,12 @@ void SetRotation(const DvceArray5D<Real> &u0,
     if (r > r_circ) {
       v_phi = v_circ * sin_theta * r_circ / r;
     }
-    
+
     // Calculate azimuthal velocity components
     vx = -v_phi * x2v / R;
     vy = v_phi * x1v / R;
   }
-  
+
   // Set state variables
   Real rho = u0(m,IDN,k,j,i);
   Real rho_v1 = u0(m,IM1,k,j,i);
@@ -564,11 +601,11 @@ void SetDustScalars(const DvceArray5D<Real> &u0,
 }
 
 KOKKOS_INLINE_FUNCTION
-void SetEquilibriumState(const DvceArray5D<Real> &u0, 
-                         int m, int k, int j, int i, 
-                         Real x1v, Real x2v, Real x3v, 
-                         Real x1l, Real x1r, Real x2l, Real x2r, 
-                         Real G, Real r_s, Real rho_s, Real m_g, 
+void SetEquilibriumState(const DvceArray5D<Real> &u0,
+                         int m, int k, int j, int i,
+                         Real x1v, Real x2v, Real x3v,
+                         Real x1l, Real x1r, Real x2l, Real x2r,
+                         Real G, Real r_s, Real rho_s, Real m_g,
                          Real a_g, Real z_g, Real r_m, Real rho_m,
 			 Real gm1, int IZS, int IDS, int IDL,
 			 Real dz, Real Z, Real Zsol,
@@ -585,7 +622,7 @@ void SetEquilibriumState(const DvceArray5D<Real> &u0,
 
     // Calculate Gravitational Potentialsi
     Real c_out = (4.0/3.0) * pow(5 * r_m, 1.5);
-    
+
     Real phi0    = GravPot(x1v, x2v, 0.0, G, r_s, rho_s, m_g, a_g, z_g, c_out, rho_m);
     Real phi0_1l = GravPot(x1l, x2v, 0.0, G, r_s, rho_s, m_g, a_g, z_g, c_out, rho_m);
     Real phi0_1r = GravPot(x1r, x2v, 0.0, G, r_s, rho_s, m_g, a_g, z_g, c_out, rho_m);
@@ -611,7 +648,7 @@ void SetEquilibriumState(const DvceArray5D<Real> &u0,
     Real rho_1l = disk_profile.GetDensity(R1l) * exp(-(phi1l - phi0_1l) / cs2);
     Real rho_1r = disk_profile.GetDensity(R1r) * exp(-(phi1r - phi0_1r) / cs2);
     Real rho_2l = disk_profile.GetDensity(R2l) * exp(-(phi2l - phi0_2l) / cs2);
-    Real rho_2r = disk_profile.GetDensity(R2r) * exp(-(phi2r - phi0_2r) / cs2); 
+    Real rho_2r = disk_profile.GetDensity(R2r) * exp(-(phi2r - phi0_2r) / cs2);
     Real p_x1_ = temp*(rho_1r - rho_1l) / (x1r - x1l);
     Real p_x2_ = temp*(rho_2r - rho_2l) / (x2r - x2l);
 
@@ -620,13 +657,13 @@ void SetEquilibriumState(const DvceArray5D<Real> &u0,
     if (rho > tiny) {
       dP_dR_over_rho = (p_x1_ * x1v  + p_x2_ * x2v) / (R * rho);
     }
-                      
+
     // Calculate circular velocity
     Real v_phi = sqrt(R*fmax(dP_dR_over_rho - dPhi_dR, 0.0));
-    
+
     // Calculate azimuthal velocity
     Real v1 = 0.0, v2 = 0.0;
-    if (R > tiny) {  // Avoid division by zero     
+    if (R > tiny) {  // Avoid division by zero
       // Calculate azimuthal velocity components
       v1 = -v_phi * x2v / R;
       v2 =  v_phi * x1v / R;
@@ -684,7 +721,7 @@ void GravitySource(Mesh* pm, const Real bdt) {
   auto &size = pmbp->pmb->mb_size;
   auto &u0 = pmbp->phydro->u0;
   auto &w0 = pmbp->phydro->w0;
-  
+
   Real G = pmbp->punit->grav_constant();
   Real r_s = r_scale;
   Real rho_s = rho_scale;
@@ -731,13 +768,13 @@ void GravitySource(Mesh* pm, const Real bdt) {
     Real src_x2 = bdt * density * f_x2_;
     Real src_x3 = bdt * density * f_x3_;
 
-    u0(m,IM1,k,j,i) += src_x1;	
+    u0(m,IM1,k,j,i) += src_x1;
     u0(m,IM2,k,j,i) += src_x2;
     u0(m,IM3,k,j,i) += src_x3;
     u0(m,IEN,k,j,i) += (src_x1 * w0(m,IVX,k,j,i) +
                         src_x2 * w0(m,IVY,k,j,i) +
                         src_x3 * w0(m,IVZ,k,j,i));
-    
+
   });
 
   return;
@@ -745,7 +782,7 @@ void GravitySource(Mesh* pm, const Real bdt) {
 
 KOKKOS_INLINE_FUNCTION
 Real GravPot(Real x1, Real x2, Real x3,
-             Real G, Real r_s, Real rho_s, 
+             Real G, Real r_s, Real rho_s,
              Real M_gal, Real a_gal, Real z_gal,
              Real c_outer, Real rho_mean) {
   const Real R2 = fma(x1, x1 , x2*x2);
@@ -756,13 +793,13 @@ Real GravPot(Real x1, Real x2, Real x3,
   // NFW component
   Real x = r / r_s;
   Real phi_NFW = -4 * M_PI * G * rho_s * SQR(r_s) * log1p(x) / x;
-  
+
   // Miyamoto-Nagai model
   Real phi_MN = -G * M_gal / sqrt(R2 + SQR(sqrt(fma(x3 , x3 , z_gal*z_gal)) + a_gal));
-  
+
   // Outer component
   Real phi_Outer = 4 * M_PI * G * rho_mean * (c_outer * sqrt(r) + (1.0/6.0) * r2);
-  
+
   // Total potential
   return phi_NFW + phi_MN + phi_Outer;
 }
@@ -807,9 +844,9 @@ void SNSource(Mesh* pm, const Real bdt) {
     auto d_counter = sn_counter;
 
     par_for("sn_source", DevExeSpace(), 0, npart-1, KOKKOS_LAMBDA(const int p) {
-    
+
       Real next_sn_time = pr(nrdata-1, p);
-    
+
       if (time > next_sn_time) {
         // Update particle sn tracking
         pi(2, p) += 1;
@@ -822,7 +859,7 @@ void SNSource(Mesh* pm, const Real bdt) {
         // Warning : if r_inj is large this will lead to unexpected behavior at the start
         int idx = Kokkos::atomic_fetch_add(&d_counter(), 1);
         int m = pi(PGID, p) - gids;
-      
+
         Real x1min = size.d_view(m).x1min;
         Real x1max = size.d_view(m).x1max;
         Real x2min = size.d_view(m).x2min;
@@ -830,9 +867,9 @@ void SNSource(Mesh* pm, const Real bdt) {
         Real x3min = size.d_view(m).x3min;
         Real x3max = size.d_view(m).x3max;
 
-        sn_centers(0, idx) = min(max(pr(IPX,p), x1min+dr), x1max-dr);
-        sn_centers(1, idx) = min(max(pr(IPY,p), x2min+dr), x2max-dr);
-        sn_centers(2, idx) = min(max(pr(IPZ,p), x3min+dr), x3max-dr);
+        sn_centers(0, idx) = fmin(fmax(pr(IPX,p), x1min+dr), x1max-dr);
+        sn_centers(1, idx) = fmin(fmax(pr(IPY,p), x2min+dr), x2max-dr);
+        sn_centers(2, idx) = fmin(fmax(pr(IPZ,p), x3min+dr), x3max-dr);
       }
     });
 
@@ -869,13 +906,13 @@ void SNSource(Mesh* pm, const Real bdt) {
         Real sn_x = sn_centers(0, sn);
         Real sn_y = sn_centers(1, sn);
         Real sn_z = sn_centers(2, sn);
-              
+
         // Calculate distance from SN center
         Real dx = x1v - sn_x;
         Real dy = x2v - sn_y;
         Real dz = x3v - sn_z;
         Real r = sqrt(dx*dx + dy*dy + dz*dz);
-              
+
         // Inject if within injection radius
         if (r <= dr) {
 	  u0(m,IDN,k,j,i) += m_ej_;
@@ -888,7 +925,7 @@ void SNSource(Mesh* pm, const Real bdt) {
 
     });
   }
-  
+
   return;
 }
 
@@ -901,7 +938,7 @@ Real LimitDustTransfer(const Real requested,
 }
 
 void DustSource(Mesh* pm, const Real bdt) {
-  
+
   if (pm->time < sn_delay) return;
 
   MeshBlockPack *pmbp = pm->pmb_pack;
@@ -923,9 +960,10 @@ void DustSource(Mesh* pm, const Real bdt) {
   auto &w0 = pmbp->phydro->w0;
 
   // --- grain parameters (from input deck) --------------------------------
+  // Representative bin radii used by all dust processes.
   Real rho_grain_cgs    = rho_gr;    // internal grain density [g cm^-3]
-  Real a_small          = a_gr_s;    // small-grain radius [μm]
-  Real a_large          = a_gr_l;    // large-grain radius [μm]
+  Real a_small          = a_gr_s;    // PAH-like / ultrasmall carbonaceous [μm]
+  Real a_large          = a_gr_l;    // representative large-grain radius [μm]
 
   // --- physical constants ------------------------------------------------
   const Real X_H              = 0.75;      // hydrogen mass fraction
@@ -954,12 +992,11 @@ void DustSource(Mesh* pm, const Real bdt) {
     const Real nH      = rho_to_nH * rho_gas;                 // cm^-3
     const Real T_K     = temp_to_K * gm1 * w0(m, IEN, k, j, i) / rho_gas; // K
     const Real cs_kms  = vel_to_kms // Sound speed in km/s (used by shattering timescale)
-                       * sqrt(gamma * gm1 * w0(m, IEN, k, j, i) / rho_gas); 
+                       * sqrt(gamma * gm1 * w0(m, IEN, k, j, i) / rho_gas);
 
     const Real Z_gas   = w0(m, IZS, k, j, i);   // gas-phase metal fraction
     const Real D_small = w0(m, IDS, k, j, i);   // small-grain dust fraction
     const Real D_large = w0(m, IDL, k, j, i);   // large-grain dust fraction
-    const Real D_total = D_small + D_large;
 
     // Dust *mass densities* in code units (what the conserved scalars store).
     const Real rho_Ds = D_small * rho_gas;
@@ -1002,26 +1039,34 @@ void DustSource(Mesh* pm, const Real bdt) {
       delta_small     -= sput_small;
       delta_large     -= sput_large;
     }
- 
+
     // =================================================================
-    //  2.  GAS-PHASE ACCRETION  (gas-phase metals → dust)
-    //      Popping (2017); Asano et al. (2013)
+    //  2.  GAS-PHASE ACCRETION  (refractory gas-phase metals → dust)
+    //      Conservative revised t_grow model with Le Bourlot sticking
     //
+    //      Z_acc = f_ref × Z_gas
+    //      α_LB(T) = [1 + 10^-4 T^(3/2)]^-1
     //      τ_acc = 150 Myr × (100 / n_H) × √(50 K / T)
-    //                      × (Z_sol / Z_gas) 
-    //                      / [1 - Z_gas / (Z_gas + D_total)]
+    //                      × (Z_sol / Z_acc) / α_LB(T)
     //
     //      Δρ_D = +dt × ρ_D / (τ_acc × a)
     // =================================================================
     {
+      const Real Z_acc = accretion_refractory_frac * Z_gas;
       Real tau_acc_Myr = 150.0;
-      tau_acc_Myr *= (100.0 / nH);
-      tau_acc_Myr *= sqrt(50.0 / T_K);
-      tau_acc_Myr *= (Z_solar / Z_gas);
-      tau_acc_Myr /= 1.0 - (Z_gas / (Z_gas + D_total));
-
       Real accr_small = 0.0, accr_large = 0.0;
-      if (Z_gas > D_floor) {
+      const bool accretion_active = (T_K > 0.0) &&
+                                    (T_K < accretion_T_max) &&
+                                    (nH >= accretion_nH_min) &&
+                                    (nH <= accretion_nH_max) &&
+                                    (Z_acc > D_floor);
+      if (accretion_active) {
+        const Real alpha_LB = 1.0 / (1.0 + 1.0e-4 * T_K * sqrt(T_K));
+        tau_acc_Myr *= (100.0 / nH);
+        tau_acc_Myr *= sqrt(50.0 / T_K);
+        tau_acc_Myr *= (Z_solar / Z_acc);
+        tau_acc_Myr /= alpha_LB;
+
         if (D_small > D_floor)
           accr_small = dt_Myr * rho_Ds / (tau_acc_Myr * a_small);
         if (D_large > D_floor)
@@ -1029,10 +1074,10 @@ void DustSource(Mesh* pm, const Real bdt) {
       }
 
       // Cap total accretion so it cannot drain more than max_drain_frac
-      // of the available gas-phase metal reservoir.
+      // of the available refractory gas-phase metal reservoir.
       const Real accr_total = accr_small + accr_large;
       if (accr_total > 0.0) {
-        const Real max_accretion = Z_gas * rho_gas * max_drain_frac;
+        const Real max_accretion = Z_acc * rho_gas * max_drain_frac;
         if (accr_total > max_accretion) {
           const Real scale = max_accretion / accr_total;
           accr_small *= scale;
@@ -1111,19 +1156,19 @@ void DustSource(Mesh* pm, const Real bdt) {
     // =====================================================================
 
     // Gas-phase metallicity: clamp to [0, ρ_gas].
-    u0(m, IZS, k, j, i) = Kokkos::clamp(u0(m, IZS, k, j, i), 0.0, rho_gas);
+    u0(m, IZS, k, j, i) = fmin(fmax(u0(m, IZS, k, j, i), 0.0), rho_gas);
 
     // Total dust: clamp so D_total ≤ ρ_gas  (dust fraction ≤ 1).
     const Real rho_dust_total = u0(m, IDS, k, j, i) + u0(m, IDL, k, j, i);
     const Real rescale = (rho_dust_total > 0.0)
-                       ? Kokkos::min(1.0, rho_gas / rho_dust_total)
+                       ? fmin(1.0, rho_gas / rho_dust_total)
                        : 0.0;
     u0(m, IDS, k, j, i) *= rescale;
     u0(m, IDL, k, j, i) *= rescale;
 
     // Floor: ensure dust densities never drop below D_floor × ρ_gas.
-    u0(m, IDS, k, j, i) = Kokkos::max(D_floor * rho_gas, u0(m, IDS, k, j, i));
-    u0(m, IDL, k, j, i) = Kokkos::max(D_floor * rho_gas, u0(m, IDL, k, j, i));
+    u0(m, IDS, k, j, i) = fmax(D_floor * rho_gas, u0(m, IDS, k, j, i));
+    u0(m, IDL, k, j, i) = fmax(D_floor * rho_gas, u0(m, IDL, k, j, i));
   });
 
   return;
@@ -1143,7 +1188,7 @@ void UserBoundary(Mesh* pm) {
   int &is = indcs.is;  int &ie  = indcs.ie;
   int &js = indcs.js;  int &je  = indcs.je;
   int &ks = indcs.ks;  int &ke  = indcs.ke;
-  
+
   int nmb1 = pmbp->nmb_thispack - 1;
   auto &size = pmbp->pmb->mb_size;
   auto &mb_bcs = pm->pmb_pack->pmb->mb_bcs;
@@ -1179,27 +1224,27 @@ void UserBoundary(Mesh* pm) {
 
     Real x2v = CellCenterX(j-js, indcs.nx2, x2min, x2max);
     Real x3v = CellCenterX(k-ks, indcs.nx3, x3min, x3max);
-    
+
     // Inner X1 boundary
     if (mb_bcs.d_view(m, BoundaryFace::inner_x1) == BoundaryFlag::user) {
       Real x1v = CellCenterX(i-is, indcs.nx1, x1min, x1max);
-      
+
       SetCoolingFlowState(u0, m, k, j, i, x1v, x2v, x3v, gm1, profile);
       SetRotation(u0, m, k, j, i, x1v, x2v, x3v, r_c, v_c);
       SetDustScalars(u0, m, k, j, i, IZS, IDS, IDL, min_df, Z_, Zsol);
     }
-  
+
     // Outer X1 boundary
     if (mb_bcs.d_view(m, BoundaryFace::outer_x1) == BoundaryFlag::user) {
       int i_out = ie + i + 1;
       Real x1v = CellCenterX(i_out-is, indcs.nx1, x1min, x1max);
-      
+
       SetCoolingFlowState(u0, m, k, j, i_out, x1v, x2v, x3v, gm1, profile);
       SetRotation(u0, m, k, j, i_out, x1v, x2v, x3v, r_c, v_c);
       SetDustScalars(u0, m, k, j, i_out, IZS, IDS, IDL, min_df, Z_, Zsol);
     }
   });
-  
+
   // Handle X2 boundaries
   par_for("static_x2", DevExeSpace(), 0, nmb1, 0, (n3-1), 0, (ng-1), 0, (n1-1),
   KOKKOS_LAMBDA(int m, int k, int j, int i) {
@@ -1212,27 +1257,27 @@ void UserBoundary(Mesh* pm) {
 
     Real x1v = CellCenterX(i-is, indcs.nx1, x1min, x1max);
     Real x3v = CellCenterX(k-ks, indcs.nx3, x3min, x3max);
-    
+
     // Inner X2 boundary
     if (mb_bcs.d_view(m, BoundaryFace::inner_x2) == BoundaryFlag::user) {
       Real x2v = CellCenterX(j-js, indcs.nx2, x2min, x2max);
-      
+
       SetCoolingFlowState(u0, m, k, j, i, x1v, x2v, x3v, gm1, profile);
       SetRotation(u0, m, k, j, i, x1v, x2v, x3v, r_c, v_c);
       SetDustScalars(u0, m, k, j, i, IZS, IDS, IDL, min_df, Z_, Zsol);
     }
-  
+
     // Outer X2 boundary
     if (mb_bcs.d_view(m, BoundaryFace::outer_x2) == BoundaryFlag::user) {
       int j_out = je + j + 1;
       Real x2v = CellCenterX(j_out-js, indcs.nx2, x2min, x2max);
-      
+
       SetCoolingFlowState(u0, m, k, j_out, i, x1v, x2v, x3v, gm1, profile);
       SetRotation(u0, m, k, j_out, i, x1v, x2v, x3v, r_c, v_c);
       SetDustScalars(u0, m, k, j_out, i, IZS, IDS, IDL, min_df, Z_, Zsol);
     }
   });
-  
+
   // Handle X3 boundaries
   par_for("static_x3", DevExeSpace(), 0, nmb1, 0, (ng-1), 0, (n2-1), 0, (n1-1),
   KOKKOS_LAMBDA(int m, int k, int j, int i) {
@@ -1242,30 +1287,30 @@ void UserBoundary(Mesh* pm) {
     Real &x2max = size.d_view(m).x2max;
     Real &x3min = size.d_view(m).x3min;
     Real &x3max = size.d_view(m).x3max;
-    
+
     Real x1v = CellCenterX(i-is, indcs.nx1, x1min, x1max);
     Real x2v = CellCenterX(j-js, indcs.nx2, x2min, x2max);
 
     // Inner X3 boundary
     if (mb_bcs.d_view(m, BoundaryFace::inner_x3) == BoundaryFlag::user) {
       Real x3v = CellCenterX(k-ks, indcs.nx3, x3min, x3max);
-      
+
       SetCoolingFlowState(u0, m, k, j, i, x1v, x2v, x3v, gm1, profile);
       SetRotation(u0, m, k, j, i, x1v, x2v, x3v, r_c, v_c);
       SetDustScalars(u0, m, k, j, i, IZS, IDS, IDL, min_df, Z_, Zsol);
     }
-    
+
     // Outer X3 boundary
     if (mb_bcs.d_view(m, BoundaryFace::outer_x3) == BoundaryFlag::user) {
       int k_out = ke + k + 1;
       Real x3v = CellCenterX(k_out-ks, indcs.nx3, x3min, x3max);
-      
+
       SetCoolingFlowState(u0, m, k_out, j, i, x1v, x2v, x3v, gm1, profile);
       SetRotation(u0, m, k_out, j, i, x1v, x2v, x3v, r_c, v_c);
       SetDustScalars(u0, m, k_out, j, i, IZS, IDS, IDL, min_df, Z_, Zsol);
     }
   });
-  
+
 }
 
 //===========================================================================//
