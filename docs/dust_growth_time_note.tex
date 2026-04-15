@@ -95,6 +95,30 @@ s_{3,i}
 \left(\frac{T}{50\,{\rm K}}\right)^{-1/2}.
 \label{eq:dubois_tacc}
 \end{equation}
+If we translate equation~(\ref{eq:dubois_rate}) into the present 3-scalar notation, the key point is that Dubois write the depletion factor in terms of the \emph{total} reservoir of the relevant accreting element. In the present simplified closure we use the total dust fraction,
+\begin{equation}
+D_{\rm tot}=D_s+D_l,
+\label{eq:dtot}
+\end{equation}
+as the proxy for the refractory material that has already been locked into dust, and let
+\begin{equation}
+Z_{{\rm tot},\rm acc}=Z_{\rm acc}+D_{\rm tot}
+\label{eq:ztotacc}
+\end{equation}
+denote the corresponding total refractory-element pool. Then the Dubois prefactor becomes
+\begin{equation}
+1-\frac{D_{\rm tot}}{Z_{{\rm tot},\rm acc}}
+=\frac{Z_{\rm acc}}{Z_{\rm acc}+D_{\rm tot}},
+\label{eq:dubois_prefactor_proxy}
+\end{equation}
+so the equivalent growth time acquires the multiplicative factor
+\begin{equation}
+\left(1-\frac{D_{\rm tot}}{Z_{{\rm tot},\rm acc}}\right)^{-1}
+=1+\frac{D_{\rm tot}}{Z_{\rm acc}}.
+\label{eq:dubois_tgrow_proxy}
+\end{equation}
+This is the correct way to fold the Dubois depletion term into a model written in terms of the \emph{gas-phase} accretable reservoir $Z_{\rm acc}$. Writing the factor as $1/(1-D/Z_{\rm acc})$ would instead treat $Z_{\rm acc}$ as a total element reservoir and can become negative once $D>Z_{\rm acc}$. In the adopted form, accretion naturally shuts off as the gas-phase refractory pool is exhausted: $Z_{\rm acc}\rightarrow 0$ implies $t_{\rm grow}\rightarrow \infty$ and hence $\dot{M}_{\rm acc}\rightarrow 0$.
+
 Several differences from the current AthenaK implementation matter:
 \begin{enumerate}
 \item Dubois do not accrete from a generic ``all metals'' pool. They accrete from the \emph{limiting element} of the grain species, with explicit key-element limitation for silicates.
@@ -118,6 +142,27 @@ The same basic physical objection appears in standard interstellar-dust treatmen
 
 That point motivates the main structural change below: use a refractory subset of \texttt{scalar00} as the growth reservoir, rather than the full gas-phase metallicity tracer.
 
+\subsection{Motivation for \texorpdfstring{$f_{\rm ref}=0.1$}{fref = 0.1}}
+
+The default choice $f_{\rm ref}=0.1$ should not be interpreted as a claim that a universal $10\%$ of all metals are refractory. It is instead a collapsed 3-scalar proxy for the species-specific, key-element-limited reservoirs used by Dubois et al.\ and by Draine-style dust models. In the arXiv source of Dubois et al.\ \cite{Dubois2024}, \texttt{article.tex} lines 427--444 write the accretion rate in terms of $M_{Z,i}$ and $Z_X$, i.e.\ the mass of metals of the key element and the mass fraction of the limiting element, rather than the total metallicity. The same source makes the silicate limitation explicit twice: lines 436--439 define the relevant limiting element for silicates as the minimum over Mg, Fe, Si, and O, and lines 292--306 tie both silicate production and silicate ISM growth to the least abundant element entering the grain composition. Dubois also further suppress the carbonaceous channel in dense gas by assuming that gas-phase carbon is locked in CO for $n>10^3\,{\rm H\,cm^{-3}}$ (their lines 477--478).
+
+The Draine--Li dust models provide a practical abundance scale for collapsing those species-specific reservoirs into one number. In the arXiv source of Draine \& Li \cite{DraineLi2007}, \texttt{ms\_v7.1.tex} lines 2777--2781 state that the Milky Way dust model has $q_{\rm PAH}\approx4.6\%$ of the dust mass in PAHs with $N_{\rm C}<10^3$ C atoms, and that the carbonaceous grains with $a<50\,\text{\AA}$ contain $52\,{\rm ppm}$ of C per H nucleon. This is the cleanest paper-backed estimate for the PAH-like / ultrasmall carbonaceous reservoir used to motivate the small bin. In the arXiv source of Li \& Draine \cite{LiDraine2001}, \texttt{ms.tex} lines 2346--2347 state that their dust model requires $254\,{\rm ppm}$ of C and $48\,{\rm ppm}$ of Si in grains. For a Dubois-style silicate accretion model, the relevant quantity is the Si \emph{key-element} reservoir, not the full silicate mass. The same paper also supports the PAH-like interpretation of the small bin: \texttt{ms.tex} lines 2498--2502 state that carbonaceous grains are graphitic for $a\gtrsim50\,\text{\AA}$ and PAH-like at very small sizes.
+
+Taken together, those numbers motivate the following back-of-the-envelope estimate for a 1-metal-tracer model:
+\begin{equation}
+f_{\rm ref}\approx
+\frac{12\times52\,{\rm ppm}+28\times48\,{\rm ppm}}{Z_\odot},
+\label{eq:fref_motivation}
+\end{equation}
+where the factors $12$ and $28$ are the atomic weights of C and Si, respectively. Using the code normalization $Z_\odot=0.02$ gives
+\begin{equation}
+f_{\rm ref}\approx
+\frac{12\cdot52+28\cdot48}{10^6\cdot0.02}
+=0.0984\approx0.1.
+\label{eq:fref_numeric}
+\end{equation}
+This is the sense in which the adopted value should be understood: $f_{\rm ref}=0.1$ approximates the sum of the PAH-like / ultrasmall carbonaceous carbon reservoir ($52\,{\rm ppm}$ C/H) and the silicate key-element reservoir ($48\,{\rm ppm}$ Si/H), rather than treating all gas-phase metals as accretable. It is therefore a collapsed proxy for Dubois-style key-element-limited accretion in the current 3-scalar framework, not a statement that exactly $10\%$ of metals are always available for grain growth.
+
 \section{Proposed Revised \texorpdfstring{$t_{\rm grow}$}{t grow} Model}
 
 Within the existing 3-scalar framework, a conservative revised growth time can be written as
@@ -131,6 +176,7 @@ t_{{\rm grow},j}^{\rm new} =
 \left(\dfrac{Z_\odot}{Z_{\rm acc}}\right)\\
 &\times
 \left(\dfrac{a_{{\rm eff},j}}{1\,\mu{\rm m}}\right)
+\left(1+\dfrac{D_{\rm tot}}{Z_{\rm acc}}\right)
 \alpha_{\rm LB}(T)^{-1},
 \end{aligned}
 & T<10^4\,{\rm K},\ 0.1\le n_{\rm H}\le 10^3\,{\rm cm^{-3}},\\[1.2em]
@@ -143,6 +189,8 @@ with
 Z_{\rm acc}=f_{\rm ref}\,Z_{\rm gas},
 \label{eq:zacc}
 \end{equation}
+where $D_{\rm tot}=D_s+D_l$ is the total dust fraction used as the 3-scalar proxy for the refractory material that has already condensed out of the gas phase.
+
 and effective accretion sizes
 \begin{equation}
 a_{{\rm eff},s}=3\,{\rm nm}=0.003\,\mu{\rm m},
@@ -156,6 +204,7 @@ The reasoning behind each new choice is direct.
 \item \textbf{Use $a_{{\rm eff},s}=3\,{\rm nm}$.} Dubois normalize their resolved accretion law to $a/5\,{\rm nm}$ in equation~(\ref{eq:dubois_tacc}), but for the present note we shift the effective small-grain size slightly downward so the small bin remains in a more clearly PAH-like / ultrasmall-carbonaceous regime. This is still far less aggressive than $0.3\,{\rm nm}$ while staying close to the Dubois small-grain normalization.
 \item \textbf{Use $a_{{\rm eff},l}=0.1\,\mu{\rm m}$.} Dubois explicitly discuss $0.1\,\mu{\rm m}$ large carbonaceous grains in the cold neutral medium. It is the natural representative size for the large bin.
 \item \textbf{Use $\alpha_{\rm LB}(T)$.} Dubois use a constant $\alpha=1/3$ only in their unresolved turbulence model. Otherwise they revert to the Le Bourlot temperature-dependent sticking coefficient. In a simplified 3-scalar model without the Dubois turbulence PDF machinery, the resolved-regime sticking law is the cleaner default choice.
+\item \textbf{Use the Dubois depletion factor in gas-phase form.} Because the present note defines $Z_{\rm acc}$ as the \emph{gas-phase} accretable refractory reservoir, the Dubois depletion term must enter as the equivalent factor $(1+D_{\rm tot}/Z_{\rm acc})$ from equation~(\ref{eq:dubois_tgrow_proxy}), not as $1/(1-D/Z_{\rm acc})$. The latter would only be correct if $Z_{\rm acc}$ meant the total refractory-element pool rather than the gas-phase reservoir. In this form $t_{\rm grow}$ diverges as the gas-phase refractory reservoir is exhausted, so accretion vanishes smoothly rather than continuing to drain an already depleted pool.
 \item \textbf{Restrict growth to $T<10^4\,{\rm K}$ and $0.1\le n_{\rm H}\le10^3\,{\rm cm^{-3}}$.} The lower-density and temperature thresholds come directly from the activation conditions of the Dubois unresolved model. The upper-density cutoff is chosen more conservatively than their formal $n_{\max}=10^4\,{\rm cm^{-3}}$ because Dubois already note that ice-mantle and CO effects become important around $10^3\,{\rm cm^{-3}}$, and the present 3-scalar model does not track those dense-gas chemical restrictions.
 \item \textbf{Use $Z_{\rm acc}=f_{\rm ref}Z_{\rm gas}$ rather than $Z_{\rm gas}$.} This is the 3-scalar proxy for the key-element limitation in Dubois and for the carbonaceous/silicate picture used by Draine-style dust models. It is not a claim that the current model has species-level fidelity; it is an explicit acknowledgement that only a subset of \texttt{scalar00} should be considered refractory and accretable.
 \end{enumerate}
@@ -164,13 +213,13 @@ For the numerical examples below, we adopt
 \begin{equation*}
 f_{\rm ref}=0.1,
 \end{equation*}
-as a deliberately conservative proxy for the unresolved refractory subset of the gas-phase metal tracer.
+as the default 3-scalar proxy motivated by equations~(\ref{eq:fref_motivation})--(\ref{eq:fref_numeric}).
 
 \section{Representative Gas Conditions}
 
 Table~\ref{tab:comparison} compares the current small-grain growth time, the Dubois reference behaviour, and the proposed revised model for a few representative conditions. For the numerical examples we use
 \begin{equation*}
-Z_{\rm gas}=0.02,\qquad D_{\rm tot}=0.004,\qquad a_{\rm gr,s}=3\times10^{-4}\,\mu{\rm m},\qquad f_{\rm ref}=0.1.
+Z_{\rm gas}=0.02,\qquad Z_{\rm acc}=0.002,\qquad D_{\rm tot}=0.004,\qquad a_{\rm gr,s}=3\times10^{-4}\,\mu{\rm m},\qquad f_{\rm ref}=0.1.
 \end{equation*}
 
 \begin{table}[t]
@@ -181,8 +230,8 @@ Z_{\rm gas}=0.02,\qquad D_{\rm tot}=0.004,\qquad a_{\rm gr,s}=3\times10^{-4}\,\m
 Condition & Current $t_{{\rm grow},s}$ & Dubois et al.\ (2024) & Proposed $t_{{\rm grow},s}^{\rm new}$ \\
 \midrule
 $T=100\,{\rm K}$, \\ $P/k_{\rm B}=10^6$ & $1.9\times10^{-3}\,{\rm Myr}$ & Dense-gas growth is curtailed: $n_{\max}=10^4\,{\rm cm^{-3}}$, while ice-mantle and CO arguments already matter near $10^3\,{\rm cm^{-3}}$ & off ($n_{\rm H}>10^3$) \\
-$T=100\,{\rm K}$, \\$n_{\rm H}=30\,{\rm cm^{-3}}$ & $0.64\,{\rm Myr}$ & Dubois quote $t_{\rm acc,Sil}\simeq1.8\,{\rm Myr}$ and $t_{\rm acc,C}\simeq9.5\,{\rm Myr}$ at solar abundance for their fiducial turbulent ISM case & $11.7\,{\rm Myr}$ \\
-$T=8000\,{\rm K}$, \\$n_{\rm H}=0.1\,{\rm cm^{-3}}$ & $21.3\,{\rm Myr}$ & Resolved accretion only, with $\alpha_{\rm LB}\ll1$; growth is far slower than in the CNM and not turbulence-boosted & $2.6\times10^4\,{\rm Myr}$ \\
+$T=100\,{\rm K}$, \\$n_{\rm H}=30\,{\rm cm^{-3}}$ & $0.64\,{\rm Myr}$ & Dubois quote $t_{\rm acc,Sil}\simeq1.8\,{\rm Myr}$ and $t_{\rm acc,C}\simeq9.5\,{\rm Myr}$ at solar abundance for their fiducial turbulent ISM case & $35.1\,{\rm Myr}$ \\
+$T=8000\,{\rm K}$, \\$n_{\rm H}=0.1\,{\rm cm^{-3}}$ & $21.3\,{\rm Myr}$ & Resolved accretion only, with $\alpha_{\rm LB}\ll1$; growth is far slower than in the CNM and not turbulence-boosted & $7.8\times10^4\,{\rm Myr}$ \\
 $T=10^6\,{\rm K}$, \\$n_{\rm H}=10^{-3}\,{\rm cm^{-3}}$ & $191\,{\rm Myr}$ & Not a practical dust-growth regime in the Dubois framework & off ($T>10^4$) \\
 \bottomrule
 \end{tabularx}
@@ -210,6 +259,11 @@ Weingartner, J. C., \& Draine, B. T. 2001,
 Draine, B. T., \& Li, A. 2007,
 \newblock ``Infrared Emission from Interstellar Dust. IV. The Silicate-Graphite-PAH Model in the Post-Spitzer Era,''
 \newblock \emph{Astrophysical Journal}, 657, 810.
+
+\bibitem{LiDraine2001}
+Li, A., \& Draine, B. T. 2001,
+\newblock ``Infrared Emission from Interstellar Dust. II. The Diffuse Interstellar Medium,''
+\newblock \emph{Astrophysical Journal}, 554, 778.
 
 \end{thebibliography}
 

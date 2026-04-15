@@ -997,6 +997,7 @@ void DustSource(Mesh* pm, const Real bdt) {
     const Real Z_gas   = w0(m, IZS, k, j, i);   // gas-phase metal fraction
     const Real D_small = w0(m, IDS, k, j, i);   // small-grain dust fraction
     const Real D_large = w0(m, IDL, k, j, i);   // large-grain dust fraction
+    const Real D_total = D_small + D_large;     // total dust fraction
 
     // Dust *mass densities* in code units (what the conserved scalars store).
     const Real rho_Ds = D_small * rho_gas;
@@ -1047,7 +1048,8 @@ void DustSource(Mesh* pm, const Real bdt) {
     //      Z_acc = f_ref × Z_gas
     //      α_LB(T) = [1 + 10^-4 T^(3/2)]^-1
     //      τ_acc = 150 Myr × (100 / n_H) × √(50 K / T)
-    //                      × (Z_sol / Z_acc) / α_LB(T)
+    //                      × (Z_sol / Z_acc) × (1 + D_tot / Z_acc)
+    //                      / α_LB(T)
     //
     //      Δρ_D = +dt × ρ_D / (τ_acc × a)
     // =================================================================
@@ -1065,6 +1067,7 @@ void DustSource(Mesh* pm, const Real bdt) {
         tau_acc_Myr *= (100.0 / nH);
         tau_acc_Myr *= sqrt(50.0 / T_K);
         tau_acc_Myr *= (Z_solar / Z_acc);
+        tau_acc_Myr *= (1.0 + D_total / Z_acc);
         tau_acc_Myr /= alpha_LB;
 
         if (D_small > D_floor)
