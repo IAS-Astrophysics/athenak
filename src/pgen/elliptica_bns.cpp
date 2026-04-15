@@ -74,9 +74,33 @@ void SetupBinary(ParameterInput *pin, Mesh* pmy_mesh_) {
   Elliptica_ID_Reader_T *idr =
     elliptica_id_reader_init(fname.c_str(), "generic");
 
+  // Determine binary type and read 
+  // binary separation for different systems
+  Real sep;
+  bool BHNS, BNS;
+  if (std::strcmp(idr->system,"BH_NS_binary_initial_data") == 0) {
+    sep = idr->get_param_dbl("BHNS_separation",idr);
+    BNS = false; BHNS = true;
+  } else if (std::strcmp(idr->system,"NS_NS_binary_initial_data") == 0) {
+    sep = idr->get_param_dbl("NSNS_separation",idr);
+    BNS = true; BHNS = false;
+  } else {
+    sep = 0.0; BNS = false; BHNS = false;
+  }
+  if (global_variable::my_rank == 0) {
+    std::cout << "Separation = " << sep << std::endl;
+  }
+
+  // Set initial data table if used
   if (tab_path != "__na__") {
-    idr->set_param("NS1_EoS_table_path", tab_path.c_str(), idr);
-    idr->set_param("NS2_EoS_table_path", tab_path.c_str(), idr);
+    if (BNS) {
+      idr->set_param("NS1_EoS_table_path", tab_path.c_str(), idr);
+      idr->set_param("NS2_EoS_table_path", tab_path.c_str(), idr);
+    } else if (BHNS) {
+      idr->set_param("NS_EoS_table_path", tab_path.c_str(), idr);
+    } else {
+      idr->set_param("NS_EoS_table_path", "", idr);
+    }
   }
 
   // Fields to interpolate
@@ -315,22 +339,6 @@ void SetupBinary(ParameterInput *pin, Mesh* pmy_mesh_) {
 
   if (global_variable::my_rank == 0) {
     std::cout << "Host mirrors filled." << std::endl;
-  }
-
-  // Binary separation for different systems
-  Real sep;
-  bool BHNS, BNS;
-  if (std::strcmp(idr->system,"BH_NS_binary_initial_data") == 0) {
-    sep = idr->get_param_dbl("BHNS_separation",idr);
-    BNS = false; BHNS = true;
-  } else if (std::strcmp(idr->system,"NS_NS_binary_initial_data") == 0) {
-    sep = idr->get_param_dbl("NSNS_separation",idr);
-    BNS = true; BHNS = false;
-  } else {
-    sep = 0.0; BNS = false; BHNS = false;
-  }
-  if (global_variable::my_rank == 0) {
-    std::cout << "Separation = " << sep << std::endl;
   }
 
   // NS position for the computation of vector potential for BHNS.
