@@ -329,7 +329,7 @@ void Mesh::BuildTreeFromRestart(ParameterInput *pin, IOWrapper &resfile,
   IOWrapperSizeT headersize = 4*sizeof(int) + 2*sizeof(Real)
     + sizeof(RegionSize) + 2*sizeof(RegionIndcs);
   if (shard_mode == FileShardMode::per_node) {
-    headersize += sizeof(int);
+    headersize += 2*sizeof(int);
   }
   char *headerdata = new char[headersize];
 
@@ -348,14 +348,7 @@ void Mesh::BuildTreeFromRestart(ParameterInput *pin, IOWrapper &resfile,
 #if MPI_PARALLEL_ENABLED
   // then broadcast the header data
   if (!use_serial_io) {
-    int mpi_err = MPI_Bcast(headerdata, headersize, MPI_CHAR, 0, MPI_COMM_WORLD);
-    if (mpi_err != MPI_SUCCESS) {
-      char error_string[1024];
-      int length_of_error_string;
-      MPI_Error_string(mpi_err, error_string, &length_of_error_string);
-      std::cout << "MPI_Bcast failed with error: " << error_string << std::endl;
-      exit(EXIT_FAILURE);
-    }
+    io_wrapper::BroadcastBytes(headerdata, headersize, 0, MPI_COMM_WORLD);
   }
 #endif
 
@@ -384,6 +377,17 @@ void Mesh::BuildTreeFromRestart(ParameterInput *pin, IOWrapper &resfile,
   restart_meta.original_nnodes = 1;
   if (shard_mode == FileShardMode::per_node) {
     std::memcpy(&(restart_meta.original_nnodes), &(headerdata[hdos]), sizeof(int));
+    hdos += sizeof(int);
+    int manifest_version = 0;
+    std::memcpy(&manifest_version, &(headerdata[hdos]), sizeof(int));
+    hdos += sizeof(int);
+    if (manifest_version != kPerNodeManifestVersion) {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                << std::endl << "Unsupported per-node restart manifest version "
+                << manifest_version << ". Expected " << kPerNodeManifestVersion
+                << "." << std::endl;
+      std::exit(EXIT_FAILURE);
+    }
   }
   delete [] headerdata;
 
@@ -435,7 +439,7 @@ void Mesh::BuildTreeFromRestart(ParameterInput *pin, IOWrapper &resfile,
 #if MPI_PARALLEL_ENABLED
   // then broadcast the ID list
   if (!use_serial_io) {
-    MPI_Bcast(idlist, listsize*nmb_total, MPI_CHAR, 0, MPI_COMM_WORLD);
+    io_wrapper::BroadcastBytes(idlist, listsize*nmb_total, 0, MPI_COMM_WORLD);
   }
 #endif
 
@@ -476,8 +480,8 @@ void Mesh::BuildTreeFromRestart(ParameterInput *pin, IOWrapper &resfile,
   }
 #if MPI_PARALLEL_ENABLED
   if (!use_serial_io) {
-    MPI_Bcast(restart_meta.rank_eachmb.data(), nmb_total*sizeof(int), MPI_CHAR, 0,
-              MPI_COMM_WORLD);
+    io_wrapper::BroadcastBytes(restart_meta.rank_eachmb.data(),
+                               nmb_total*sizeof(int), 0, MPI_COMM_WORLD);
   }
 #endif
 
@@ -494,8 +498,9 @@ void Mesh::BuildTreeFromRestart(ParameterInput *pin, IOWrapper &resfile,
     }
 #if MPI_PARALLEL_ENABLED
     if (!use_serial_io) {
-      MPI_Bcast(restart_meta.gids_eachrank.data(),
-                restart_meta.original_nranks*sizeof(int), MPI_CHAR, 0, MPI_COMM_WORLD);
+      io_wrapper::BroadcastBytes(restart_meta.gids_eachrank.data(),
+                                 restart_meta.original_nranks*sizeof(int), 0,
+                                 MPI_COMM_WORLD);
     }
 #endif
 
@@ -511,8 +516,9 @@ void Mesh::BuildTreeFromRestart(ParameterInput *pin, IOWrapper &resfile,
     }
 #if MPI_PARALLEL_ENABLED
     if (!use_serial_io) {
-      MPI_Bcast(restart_meta.nmb_eachrank.data(),
-                restart_meta.original_nranks*sizeof(int), MPI_CHAR, 0, MPI_COMM_WORLD);
+      io_wrapper::BroadcastBytes(restart_meta.nmb_eachrank.data(),
+                                 restart_meta.original_nranks*sizeof(int), 0,
+                                 MPI_COMM_WORLD);
     }
 #endif
 
@@ -529,8 +535,9 @@ void Mesh::BuildTreeFromRestart(ParameterInput *pin, IOWrapper &resfile,
       }
 #if MPI_PARALLEL_ENABLED
       if (!use_serial_io) {
-        MPI_Bcast(restart_meta.rank_to_node.data(),
-                  restart_meta.original_nranks*sizeof(int), MPI_CHAR, 0, MPI_COMM_WORLD);
+        io_wrapper::BroadcastBytes(restart_meta.rank_to_node.data(),
+                                   restart_meta.original_nranks*sizeof(int), 0,
+                                   MPI_COMM_WORLD);
       }
 #endif
     } else {

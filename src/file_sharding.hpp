@@ -20,6 +20,8 @@ enum class FileShardMode {
   per_rank
 };
 
+constexpr int kPerNodeManifestVersion = 1;
+
 inline bool UsesSerialIO(FileShardMode mode) {
   return (mode == FileShardMode::per_rank);
 }

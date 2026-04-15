@@ -9,6 +9,8 @@
 //! reads data from restart file, as well as re-initializing problem-specific data.
 
 #include <cstdio>
+#include <cstdlib>
+#include <cstring>
 #include <iostream>
 #include <string>
 #include <utility>
@@ -36,6 +38,443 @@ struct RestartBlockRequest {
   int global_id;
   int src_rank;
 };
+
+struct PerNodeRestartRequest {
+  int local_index;
+  IOWrapperSizeT file_offset;
+};
+
+struct PerNodeRestartSpan {
+  IOWrapperSizeT file_offset;
+  int first_request;
+  int request_count;
+  IOWrapperSizeT byte_count;
+};
+
+struct RestartChunkLayout {
+  IOWrapperSizeT chunk_stride = 0;
+  IOWrapperSizeT hydro_offset = 0;
+  IOWrapperSizeT hydro_bytes = 0;
+  IOWrapperSizeT mhd_cc_offset = 0;
+  IOWrapperSizeT mhd_cc_bytes = 0;
+  IOWrapperSizeT mhd_x1f_offset = 0;
+  IOWrapperSizeT mhd_x1f_bytes = 0;
+  IOWrapperSizeT mhd_x2f_offset = 0;
+  IOWrapperSizeT mhd_x2f_bytes = 0;
+  IOWrapperSizeT mhd_x3f_offset = 0;
+  IOWrapperSizeT mhd_x3f_bytes = 0;
+  IOWrapperSizeT rad_offset = 0;
+  IOWrapperSizeT rad_bytes = 0;
+  IOWrapperSizeT turb_offset = 0;
+  IOWrapperSizeT turb_bytes = 0;
+  IOWrapperSizeT grav_offset = 0;
+  IOWrapperSizeT grav_bytes = 0;
+};
+
+bool RestartIoStatsEnabled() {
+  static const bool enabled = []() {
+    const char *env = std::getenv("ATHENAK_RESTART_IO_STATS");
+    return (env != nullptr && env[0] != '\0' && env[0] != '0');
+  }();
+  return enabled;
+}
+
+RestartChunkLayout BuildRestartChunkLayout(const RestartMetaData &meta,
+                                           IOWrapperSizeT data_stride,
+                                           int nout1, int nout2, int nout3,
+                                           int nhydro, int nmhd, int nrad,
+                                           int nforce, int nz4c, int nadm,
+                                           const char *context) {
+  RestartChunkLayout layout;
+  layout.chunk_stride = (meta.payload_stride != 0)
+      ? static_cast<IOWrapperSizeT>(meta.payload_stride)
+      : data_stride;
+  if (meta.file_shard_mode == FileShardMode::per_node && layout.chunk_stride != data_stride) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+              << std::endl << "Per-node restart payload stride does not match local "
+              << "physics payload size." << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+
+  IOWrapperSizeT offset = 0;
+  layout.hydro_offset = offset;
+  layout.hydro_bytes = static_cast<IOWrapperSizeT>(nout1)*nout2*nout3*nhydro*sizeof(Real);
+  offset += layout.hydro_bytes;
+  layout.mhd_cc_offset = offset;
+  layout.mhd_cc_bytes = static_cast<IOWrapperSizeT>(nout1)*nout2*nout3*nmhd*sizeof(Real);
+  offset += layout.mhd_cc_bytes;
+  layout.mhd_x1f_offset = offset;
+  layout.mhd_x1f_bytes = static_cast<IOWrapperSizeT>(nout1 + 1)*nout2*nout3*sizeof(Real);
+  if (nmhd > 0) offset += layout.mhd_x1f_bytes;
+  layout.mhd_x2f_offset = offset;
+  layout.mhd_x2f_bytes = static_cast<IOWrapperSizeT>(nout1)*(nout2 + 1)*nout3*sizeof(Real);
+  if (nmhd > 0) offset += layout.mhd_x2f_bytes;
+  layout.mhd_x3f_offset = offset;
+  layout.mhd_x3f_bytes = static_cast<IOWrapperSizeT>(nout1)*nout2*(nout3 + 1)*sizeof(Real);
+  if (nmhd > 0) offset += layout.mhd_x3f_bytes;
+  layout.rad_offset = offset;
+  layout.rad_bytes = static_cast<IOWrapperSizeT>(nout1)*nout2*nout3*nrad*sizeof(Real);
+  offset += layout.rad_bytes;
+  layout.turb_offset = offset;
+  layout.turb_bytes = static_cast<IOWrapperSizeT>(nout1)*nout2*nout3*nforce*sizeof(Real);
+  if (nforce > 0) offset += layout.turb_bytes;
+  layout.grav_offset = offset;
+  layout.grav_bytes = static_cast<IOWrapperSizeT>(nout1)*nout2*nout3*
+                      ((nz4c > 0) ? nz4c : nadm)*sizeof(Real);
+  if ((nz4c > 0) || (nadm > 0)) offset += layout.grav_bytes;
+
+  if (offset != layout.chunk_stride) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+              << std::endl << context << " chunk size mismatch, restart file is broken."
+              << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+  return layout;
+}
+
+std::vector<int> BuildPerNodeRankChunkPrefix(const RestartMetaData &meta) {
+  std::vector<int> prefix(meta.original_nranks, 0);
+  std::vector<int> node_counts(meta.original_nnodes, 0);
+  for (int r=0; r<meta.original_nranks; ++r) {
+    int node = meta.rank_to_node[r];
+    if (node < 0 || node >= meta.original_nnodes) {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                << std::endl << "Restart metadata contains invalid node assignments."
+                << std::endl;
+      std::exit(EXIT_FAILURE);
+    }
+    prefix[r] = node_counts[node];
+    node_counts[node] += meta.nmb_eachrank[r];
+  }
+  return prefix;
+}
+
+std::vector<std::vector<PerNodeRestartRequest>> BuildPerNodeRestartRequests(
+    Mesh *pm, const RestartMetaData &meta, const std::vector<int> &rank_chunk_prefix,
+    IOWrapperSizeT chunk_stride) {
+  auto *pack = pm->pmb_pack;
+  int nmb = pack->nmb_thispack;
+  std::vector<std::vector<PerNodeRestartRequest>> requests(meta.original_nnodes);
+  for (int m=0; m<nmb; ++m) {
+    int gid = pack->pmb->mb_gid.h_view(m);
+    if (gid < 0 || gid >= pm->nmb_total) {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                << std::endl << "Invalid MeshBlock gid encountered during restart."
+                << std::endl;
+      std::exit(EXIT_FAILURE);
+    }
+    int src_rank = meta.rank_eachmb[gid];
+    if (src_rank < 0 || src_rank >= meta.original_nranks) {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                << std::endl << "Restart metadata contains invalid rank assignments."
+                << std::endl;
+      std::exit(EXIT_FAILURE);
+    }
+    int local_chunk_index = gid - meta.gids_eachrank[src_rank];
+    if (local_chunk_index < 0 || local_chunk_index >= meta.nmb_eachrank[src_rank]) {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                << std::endl << "Restart metadata inconsistent with MeshBlock ids."
+                << std::endl;
+      std::exit(EXIT_FAILURE);
+    }
+    int src_node = meta.rank_to_node[src_rank];
+    IOWrapperSizeT chunk_index = static_cast<IOWrapperSizeT>(rank_chunk_prefix[src_rank])
+                               + static_cast<IOWrapperSizeT>(local_chunk_index);
+    requests[src_node].push_back({m, chunk_stride*chunk_index});
+  }
+  return requests;
+}
+
+std::vector<PerNodeRestartSpan> BuildPerNodeRestartSpans(
+    std::vector<PerNodeRestartRequest> &requests, IOWrapperSizeT chunk_stride) {
+  std::sort(requests.begin(), requests.end(),
+            [](const PerNodeRestartRequest &lhs, const PerNodeRestartRequest &rhs) {
+              return lhs.file_offset < rhs.file_offset;
+            });
+
+  std::vector<PerNodeRestartSpan> spans;
+  if (requests.empty()) {
+    return spans;
+  }
+
+  int first_request = 0;
+  IOWrapperSizeT span_offset = requests[0].file_offset;
+  IOWrapperSizeT span_bytes = chunk_stride;
+  for (std::size_t i = 1; i < requests.size(); ++i) {
+    IOWrapperSizeT expected_offset = requests[i-1].file_offset + chunk_stride;
+    if (requests[i].file_offset == expected_offset) {
+      span_bytes += chunk_stride;
+      continue;
+    }
+    spans.push_back({span_offset, first_request, static_cast<int>(i) - first_request,
+                     span_bytes});
+    first_request = static_cast<int>(i);
+    span_offset = requests[i].file_offset;
+    span_bytes = chunk_stride;
+  }
+  spans.push_back({span_offset, first_request,
+                   static_cast<int>(requests.size()) - first_request, span_bytes});
+  return spans;
+}
+
+void PrintPerNodeRestartStats(int shard_id, int raw_requests, int merged_spans,
+                              int collective_reads) {
+  if (!RestartIoStatsEnabled()) {
+    return;
+  }
+#if MPI_PARALLEL_ENABLED
+  int node_raw_requests = 0;
+  int node_merged_spans = 0;
+  MPI_Reduce(&raw_requests, &node_raw_requests, 1, MPI_INT, MPI_SUM, 0,
+             global_variable::node_comm);
+  MPI_Reduce(&merged_spans, &node_merged_spans, 1, MPI_INT, MPI_SUM, 0,
+             global_variable::node_comm);
+  if (global_variable::rank_in_node == 0) {
+    std::cout << "[restart-io] node=" << global_variable::node_id
+              << " shard=" << shard_id
+              << " shard_opens=1 shard_closes=1"
+              << " raw_requests=" << node_raw_requests
+              << " merged_spans=" << node_merged_spans
+              << " collective_reads=" << collective_reads
+              << std::endl;
+  }
+#else
+  std::cout << "[restart-io] node=0"
+            << " shard=" << shard_id
+            << " shard_opens=1 shard_closes=1"
+            << " raw_requests=" << raw_requests
+            << " merged_spans=" << merged_spans
+            << " collective_reads=" << collective_reads
+            << std::endl;
+#endif
+}
+
+void UnpackPerNodePayloadChunk(const char *chunk_ptr, int local_index,
+                               const RestartChunkLayout &layout,
+                               hydro::Hydro *phydro, mhd::MHD *pmhd,
+                               radiation::Radiation *prad, TurbulenceDriver *pturb,
+                               z4c::Z4c *pz4c, adm::ADM *padm,
+                               HostArray5D<Real> &hyd_scratch,
+                               HostArray5D<Real> &mhd_cc_scratch,
+                               HostFaceFld4D<Real> &mhd_fc_scratch,
+                               HostArray5D<Real> &rad_scratch,
+                               HostArray5D<Real> &turb_scratch,
+                               HostArray5D<Real> &grav_scratch) {
+  if (phydro != nullptr && layout.hydro_bytes > 0) {
+    auto hyd_ptr = Kokkos::subview(hyd_scratch, 0, Kokkos::ALL, Kokkos::ALL,
+                                   Kokkos::ALL, Kokkos::ALL);
+    std::memcpy(hyd_ptr.data(), chunk_ptr + layout.hydro_offset, layout.hydro_bytes);
+    Kokkos::deep_copy(Kokkos::subview(phydro->u0, local_index, Kokkos::ALL, Kokkos::ALL,
+                                      Kokkos::ALL, Kokkos::ALL), hyd_ptr);
+  }
+
+  if (pmhd != nullptr && layout.mhd_cc_bytes > 0) {
+    auto mhd_ptr = Kokkos::subview(mhd_cc_scratch, 0, Kokkos::ALL, Kokkos::ALL,
+                                   Kokkos::ALL, Kokkos::ALL);
+    std::memcpy(mhd_ptr.data(), chunk_ptr + layout.mhd_cc_offset, layout.mhd_cc_bytes);
+    Kokkos::deep_copy(Kokkos::subview(pmhd->u0, local_index, Kokkos::ALL, Kokkos::ALL,
+                                      Kokkos::ALL, Kokkos::ALL), mhd_ptr);
+
+    auto x1f_ptr = Kokkos::subview(mhd_fc_scratch.x1f, 0, Kokkos::ALL, Kokkos::ALL,
+                                   Kokkos::ALL);
+    std::memcpy(x1f_ptr.data(), chunk_ptr + layout.mhd_x1f_offset, layout.mhd_x1f_bytes);
+    Kokkos::deep_copy(Kokkos::subview(pmhd->b0.x1f, local_index, Kokkos::ALL,
+                                      Kokkos::ALL, Kokkos::ALL), x1f_ptr);
+
+    auto x2f_ptr = Kokkos::subview(mhd_fc_scratch.x2f, 0, Kokkos::ALL, Kokkos::ALL,
+                                   Kokkos::ALL);
+    std::memcpy(x2f_ptr.data(), chunk_ptr + layout.mhd_x2f_offset, layout.mhd_x2f_bytes);
+    Kokkos::deep_copy(Kokkos::subview(pmhd->b0.x2f, local_index, Kokkos::ALL,
+                                      Kokkos::ALL, Kokkos::ALL), x2f_ptr);
+
+    auto x3f_ptr = Kokkos::subview(mhd_fc_scratch.x3f, 0, Kokkos::ALL, Kokkos::ALL,
+                                   Kokkos::ALL);
+    std::memcpy(x3f_ptr.data(), chunk_ptr + layout.mhd_x3f_offset, layout.mhd_x3f_bytes);
+    Kokkos::deep_copy(Kokkos::subview(pmhd->b0.x3f, local_index, Kokkos::ALL,
+                                      Kokkos::ALL, Kokkos::ALL), x3f_ptr);
+  }
+
+  if (prad != nullptr && layout.rad_bytes > 0) {
+    auto rad_ptr = Kokkos::subview(rad_scratch, 0, Kokkos::ALL, Kokkos::ALL,
+                                   Kokkos::ALL, Kokkos::ALL);
+    std::memcpy(rad_ptr.data(), chunk_ptr + layout.rad_offset, layout.rad_bytes);
+    Kokkos::deep_copy(Kokkos::subview(prad->i0, local_index, Kokkos::ALL, Kokkos::ALL,
+                                      Kokkos::ALL, Kokkos::ALL), rad_ptr);
+  }
+
+  if (pturb != nullptr && layout.turb_bytes > 0) {
+    auto turb_ptr = Kokkos::subview(turb_scratch, 0, Kokkos::ALL, Kokkos::ALL,
+                                    Kokkos::ALL, Kokkos::ALL);
+    std::memcpy(turb_ptr.data(), chunk_ptr + layout.turb_offset, layout.turb_bytes);
+    Kokkos::deep_copy(Kokkos::subview(pturb->force, local_index, Kokkos::ALL, Kokkos::ALL,
+                                      Kokkos::ALL, Kokkos::ALL), turb_ptr);
+  }
+
+  if (pz4c != nullptr && layout.grav_bytes > 0) {
+    auto grav_ptr = Kokkos::subview(grav_scratch, 0, Kokkos::ALL, Kokkos::ALL,
+                                    Kokkos::ALL, Kokkos::ALL);
+    std::memcpy(grav_ptr.data(), chunk_ptr + layout.grav_offset, layout.grav_bytes);
+    Kokkos::deep_copy(Kokkos::subview(pz4c->u0, local_index, Kokkos::ALL, Kokkos::ALL,
+                                      Kokkos::ALL, Kokkos::ALL), grav_ptr);
+  } else if (padm != nullptr && layout.grav_bytes > 0) {
+    auto grav_ptr = Kokkos::subview(grav_scratch, 0, Kokkos::ALL, Kokkos::ALL,
+                                    Kokkos::ALL, Kokkos::ALL);
+    std::memcpy(grav_ptr.data(), chunk_ptr + layout.grav_offset, layout.grav_bytes);
+    Kokkos::deep_copy(Kokkos::subview(padm->u_adm, local_index, Kokkos::ALL, Kokkos::ALL,
+                                      Kokkos::ALL, Kokkos::ALL), grav_ptr);
+  }
+}
+
+void LoadPerNodeRestartData(Mesh *pm, IOWrapperSizeT data_stride,
+                            int nout1, int nout2, int nout3,
+                            int nhydro, int nmhd, int nrad,
+                            int nforce, int nz4c, int nadm) {
+  MeshBlockPack *pack = pm->pmb_pack;
+  hydro::Hydro *phydro = pack->phydro;
+  mhd::MHD *pmhd = pack->pmhd;
+  adm::ADM *padm = pack->padm;
+  z4c::Z4c *pz4c = pack->pz4c;
+  radiation::Radiation *prad = pack->prad;
+  TurbulenceDriver *pturb = pack->pturb;
+  const RestartMetaData &meta = pm->restart_meta;
+
+  RestartChunkLayout layout = BuildRestartChunkLayout(meta, data_stride, nout1, nout2, nout3,
+                                                      nhydro, nmhd, nrad,
+                                                      (pturb != nullptr) ? nforce : 0,
+                                                      nz4c, nadm,
+                                                      "Per-node restart data");
+  std::vector<int> rank_chunk_prefix = BuildPerNodeRankChunkPrefix(meta);
+  auto requests = BuildPerNodeRestartRequests(pm, meta, rank_chunk_prefix,
+                                              layout.chunk_stride);
+
+  HostArray5D<Real> hyd_scratch("rst-hyd-scratch", 1, 1, 1, 1, 1);
+  HostArray5D<Real> mhd_cc_scratch("rst-mhd-cc-scratch", 1, 1, 1, 1, 1);
+  HostFaceFld4D<Real> mhd_fc_scratch("rst-mhd-fc-scratch", 1, 1, 1, 1);
+  HostArray5D<Real> rad_scratch("rst-rad-scratch", 1, 1, 1, 1, 1);
+  HostArray5D<Real> turb_scratch("rst-turb-scratch", 1, 1, 1, 1, 1);
+  HostArray5D<Real> grav_scratch("rst-grav-scratch", 1, 1, 1, 1, 1);
+
+  if (phydro != nullptr && nhydro > 0) {
+    Kokkos::realloc(hyd_scratch, 1, nhydro, nout3, nout2, nout1);
+  }
+  if (pmhd != nullptr && nmhd > 0) {
+    Kokkos::realloc(mhd_cc_scratch, 1, nmhd, nout3, nout2, nout1);
+    Kokkos::realloc(mhd_fc_scratch.x1f, 1, nout3, nout2, nout1 + 1);
+    Kokkos::realloc(mhd_fc_scratch.x2f, 1, nout3, nout2 + 1, nout1);
+    Kokkos::realloc(mhd_fc_scratch.x3f, 1, nout3 + 1, nout2, nout1);
+  }
+  if (prad != nullptr && nrad > 0) {
+    Kokkos::realloc(rad_scratch, 1, nrad, nout3, nout2, nout1);
+  }
+  if (pturb != nullptr && nforce > 0) {
+    Kokkos::realloc(turb_scratch, 1, nforce, nout3, nout2, nout1);
+  }
+  if (pz4c != nullptr && nz4c > 0) {
+    Kokkos::realloc(grav_scratch, 1, nz4c, nout3, nout2, nout1);
+  } else if (padm != nullptr && nadm > 0) {
+    Kokkos::realloc(grav_scratch, 1, nadm, nout3, nout2, nout1);
+  }
+
+  std::vector<std::string> shard_paths(meta.original_nnodes);
+  for (int shard = 0; shard < meta.original_nnodes; ++shard) {
+    char shard_dir[20];
+    std::snprintf(shard_dir, sizeof(shard_dir), "node_%08d", shard);
+    if (!meta.base_dir.empty()) {
+      shard_paths[shard] = meta.base_dir + "/" + shard_dir + "/" + meta.file_name;
+    } else {
+      shard_paths[shard] = std::string(shard_dir) + "/" + meta.file_name;
+    }
+  }
+
+  for (int shard = 0; shard < meta.original_nnodes; ++shard) {
+    auto &shard_requests = requests[shard];
+    int local_has_requests = shard_requests.empty() ? 0 : 1;
+#if MPI_PARALLEL_ENABLED
+    int node_has_requests = local_has_requests;
+    MPI_Allreduce(MPI_IN_PLACE, &node_has_requests, 1, MPI_INT, MPI_MAX,
+                  global_variable::node_comm);
+    if (node_has_requests == 0) {
+      continue;
+    }
+#else
+    if (!local_has_requests) {
+      continue;
+    }
+#endif
+
+    auto spans = BuildPerNodeRestartSpans(shard_requests, layout.chunk_stride);
+    int collective_reads = static_cast<int>(spans.size());
+#if MPI_PARALLEL_ENABLED
+    MPI_Allreduce(MPI_IN_PLACE, &collective_reads, 1, MPI_INT, MPI_MAX,
+                  global_variable::node_comm);
+#endif
+
+    IOWrapper srcfile;
+#if MPI_PARALLEL_ENABLED
+    srcfile.SetCommunicator(global_variable::node_comm);
+    srcfile.Open(shard_paths[shard].c_str(), IOWrapper::FileMode::read, false);
+#else
+    srcfile.Open(shard_paths[shard].c_str(), IOWrapper::FileMode::read, true);
+#endif
+
+    char dummy = '\0';
+    for (int span_idx = 0; span_idx < collective_reads; ++span_idx) {
+      const PerNodeRestartSpan *span = (span_idx < static_cast<int>(spans.size()))
+          ? &spans[span_idx] : nullptr;
+      IOWrapperSizeT local_bytes = (span == nullptr) ? 0 : span->byte_count;
+      std::vector<char> span_buffer;
+      char *span_data = &dummy;
+      if (local_bytes > 0) {
+        span_buffer.resize(static_cast<std::size_t>(local_bytes));
+        span_data = span_buffer.data();
+      }
+
+#if MPI_PARALLEL_ENABLED
+      std::size_t bytes_read = srcfile.Read_bytes_at_all(span_data, 1, local_bytes,
+                                                         (span == nullptr) ? 0
+                                                                           : span->file_offset,
+                                                         false);
+#else
+      std::size_t bytes_read = srcfile.Read_bytes_at(span_data, 1, local_bytes,
+                                                     (span == nullptr) ? 0
+                                                                       : span->file_offset,
+                                                     true);
+#endif
+      if (bytes_read != local_bytes) {
+        std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                  << std::endl << "Per-node restart payload not read correctly from shard "
+                  << shard_paths[shard] << ", restart file is broken." << std::endl;
+        std::exit(EXIT_FAILURE);
+      }
+
+      if (span == nullptr) {
+        continue;
+      }
+
+      for (int req_idx = 0; req_idx < span->request_count; ++req_idx) {
+        const auto &request = shard_requests[span->first_request + req_idx];
+        const char *chunk_ptr = span_data
+                              + static_cast<IOWrapperSizeT>(req_idx)*layout.chunk_stride;
+        UnpackPerNodePayloadChunk(chunk_ptr, request.local_index, layout, phydro, pmhd,
+                                  prad, pturb, pz4c, padm, hyd_scratch, mhd_cc_scratch,
+                                  mhd_fc_scratch, rad_scratch, turb_scratch, grav_scratch);
+      }
+    }
+
+#if MPI_PARALLEL_ENABLED
+    srcfile.Close(false);
+#else
+    srcfile.Close(true);
+#endif
+
+    PrintPerNodeRestartStats(shard, static_cast<int>(shard_requests.size()),
+                             static_cast<int>(spans.size()), collective_reads);
+  }
+
+  if (pz4c != nullptr) {
+    pz4c->Z4cToADM(pm->pmb_pack);
+  }
+}
 
 void LoadPartitionedRestartData(Mesh *pm,
                                 IOWrapperSizeT headeroffset,
@@ -82,6 +521,12 @@ void LoadPartitionedRestartData(Mesh *pm,
               << std::endl << "Restart metadata missing original node layout."
               << std::endl;
     std::exit(EXIT_FAILURE);
+  }
+
+  if (meta.file_shard_mode == FileShardMode::per_node) {
+    LoadPerNodeRestartData(pm, data_stride, nout1, nout2, nout3, nhydro, nmhd, nrad,
+                           nforce, nz4c, nadm);
+    return;
   }
 
   int nshards = meta.original_nranks;
@@ -131,7 +576,18 @@ void LoadPartitionedRestartData(Mesh *pm,
     }
   }
 
-  const IOWrapperSizeT chunk_stride = data_stride;
+  IOWrapperSizeT chunk_stride = data_stride;
+  if (meta.payload_stride != 0) {
+    chunk_stride = static_cast<IOWrapperSizeT>(meta.payload_stride);
+  }
+  if (meta.file_shard_mode == FileShardMode::per_node && chunk_stride != data_stride) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+              << std::endl << "Per-node restart payload stride does not match local "
+              << "physics payload size." << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+  const IOWrapperSizeT shard_payload_offset =
+      (meta.file_shard_mode == FileShardMode::per_node) ? 0 : headeroffset;
   IOWrapperSizeT chunk_offset = 0;
   const IOWrapperSizeT hydro_offset = chunk_offset;
   chunk_offset += nout1*nout2*nout3*nhydro*sizeof(Real);
@@ -180,7 +636,7 @@ void LoadPartitionedRestartData(Mesh *pm,
         }
       }
     }
-    return headeroffset + chunk_stride * static_cast<IOWrapperSizeT>(local_index);
+    return shard_payload_offset + chunk_stride * static_cast<IOWrapperSizeT>(local_index);
   };
 
   if (phydro != nullptr && nhydro > 0) {
@@ -563,7 +1019,7 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resf
     }
 #if MPI_PARALLEL_ENABLED
     if (!use_serial_io) {
-      MPI_Bcast(&last_output_time, sizeof(Real), MPI_CHAR, 0, MPI_COMM_WORLD);
+      io_wrapper::BroadcastBytes(&last_output_time, sizeof(Real), 0, MPI_COMM_WORLD);
     }
 #endif
     pz4c->last_output_time = last_output_time;
@@ -580,7 +1036,7 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resf
       }
 #if MPI_PARALLEL_ENABLED
       if (!use_serial_io) {
-        MPI_Bcast(&pos[0], 3*sizeof(Real), MPI_CHAR, 0, MPI_COMM_WORLD);
+        io_wrapper::BroadcastBytes(&pos[0], 3*sizeof(Real), 0, MPI_COMM_WORLD);
       }
 #endif
       pt.SetPos(&pos[0]);
@@ -603,7 +1059,7 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resf
 #if MPI_PARALLEL_ENABLED
     if (!use_serial_io) {
       // then broadcast the RNG information
-      MPI_Bcast(rng_data, sizeof(RNG_State), MPI_CHAR, 0, MPI_COMM_WORLD);
+      io_wrapper::BroadcastBytes(rng_data, sizeof(RNG_State), 0, MPI_COMM_WORLD);
     }
 #endif
     std::memcpy(&(pturb->rstate), &(rng_data[0]), sizeof(RNG_State));
@@ -624,11 +1080,12 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resf
 #if MPI_PARALLEL_ENABLED
   // then broadcast the datasize information
   if (!use_serial_io) {
-    MPI_Bcast(variabledata, variablesize, MPI_CHAR, 0, MPI_COMM_WORLD);
+    io_wrapper::BroadcastBytes(variabledata, variablesize, 0, MPI_COMM_WORLD);
   }
 #endif
   IOWrapperSizeT data_size;
   std::memcpy(&data_size, &(variabledata[0]), sizeof(IOWrapperSizeT));
+  pm->restart_meta.payload_stride = static_cast<std::uint64_t>(data_size);
 
   // calculate total number of CC variables
   IOWrapperSizeT headeroffset;
@@ -639,7 +1096,7 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resf
 #if MPI_PARALLEL_ENABLED
   // then broadcasts it
   if (!use_serial_io) {
-    MPI_Bcast(&headeroffset, sizeof(IOWrapperSizeT), MPI_CHAR, 0, MPI_COMM_WORLD);
+    io_wrapper::BroadcastBytes(&headeroffset, sizeof(IOWrapperSizeT), 0, MPI_COMM_WORLD);
   }
 #endif
 

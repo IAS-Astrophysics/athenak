@@ -21,6 +21,13 @@ using  IOWrapperFile = FILE*;
 
 using IOWrapperSizeT = std::uint64_t;
 
+namespace io_wrapper {
+IOWrapperSizeT GetMaxChunkedByteCount();
+#if MPI_PARALLEL_ENABLED
+void BroadcastBytes(void *buf, IOWrapperSizeT count, int root, MPI_Comm comm);
+#endif
+}  // namespace io_wrapper
+
 class IOWrapper {
  public:
 #if MPI_PARALLEL_ENABLED

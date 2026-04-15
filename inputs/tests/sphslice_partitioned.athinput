@@ -1,0 +1,65 @@
+# AthenaXXX input file for partitioned spherical-slice regression tests
+
+<comment>
+problem   = partitioned spherical-slice regression
+
+<job>
+basename  = SphSlice
+
+<mesh>
+nghost    = 2
+nx1       = 32
+x1min     = -1.5
+x1max     = 1.5
+ix1_bc    = periodic
+ox1_bc    = periodic
+
+nx2       = 16
+x2min     = -0.75
+x2max     = 0.75
+ix2_bc    = periodic
+ox2_bc    = periodic
+
+nx3       = 8
+x3min     = -0.75
+x3max     = 0.75
+ix3_bc    = periodic
+ox3_bc    = periodic
+
+<meshblock>
+nx1       = 8
+nx2       = 8
+nx3       = 8
+
+<time>
+evolution  = dynamic
+integrator = rk2
+cfl_number = 0.3
+nlim       = 0
+tlim       = 0.0
+ndiag      = 1
+
+<hydro>
+eos         = ideal
+reconstruct = plm
+rsolver     = llf
+gamma       = 1.66666666667
+
+<problem>
+pgen_name = linear_wave
+wave_flag = 0
+amp       = 1.0e-3
+vflow     = 0.0
+along_x1  = false
+along_x2  = false
+along_x3  = false
+
+<output1>
+file_type            = sphslice
+variable             = hydro_w
+dt                   = 1.0
+slice_r              = 0.6
+ntheta               = 96
+nphi                 = 192
+single_file_per_rank = false
+single_file_per_node = false

@@ -165,10 +165,16 @@ void RestartOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
   }
   FileShardMode shard_mode = out_params.file_shard_mode;
   bool use_serial_io = UsesSerialIO(shard_mode);
+  bool split_per_node_manifest = (shard_mode == FileShardMode::per_node);
   std::string fname;
+  std::string manifest_fname;
   char number[7];
   std::snprintf(number, sizeof(number), ".%05d", out_params.file_number);
-  if (shard_mode != FileShardMode::shared) {
+  if (split_per_node_manifest) {
+    manifest_fname = std::string("rst/") + out_params.file_basename + number + ".rst";
+    fname = std::string("rst/") + ShardDirectoryName(shard_mode) + out_params.file_basename
+      + number + ".rst";
+  } else if (shard_mode != FileShardMode::shared) {
     fname = std::string("rst/") + ShardDirectoryName(shard_mode) + out_params.file_basename
       + number + ".rst";
   } else {
@@ -198,81 +204,87 @@ void RestartOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
 
   // open file and  write the header; this part is serial
   IOWrapper resfile;
+  IOWrapper manifestfile;
 #if MPI_PARALLEL_ENABLED
   if (shard_mode == FileShardMode::per_node) {
     resfile.SetCommunicator(global_variable::node_comm);
   }
 #endif
-  resfile.Open(fname.c_str(), IOWrapper::FileMode::write, use_serial_io);
-  if (IsShardWriter(shard_mode)) {
+  if (split_per_node_manifest) {
+    resfile.Open(fname.c_str(), IOWrapper::FileMode::write, false);
+    if (global_variable::my_rank == 0) {
+      manifestfile.Open(manifest_fname.c_str(), IOWrapper::FileMode::write, true);
+    }
+  } else {
+    resfile.Open(fname.c_str(), IOWrapper::FileMode::write, use_serial_io);
+  }
+
+  bool write_manifest = split_per_node_manifest ? (global_variable::my_rank == 0)
+                                                : IsShardWriter(shard_mode);
+  auto WriteMetadata = [&](const void *buf, IOWrapperSizeT count,
+                           const std::string &datatype) {
+    if (!write_manifest) {
+      return;
+    }
+    if (split_per_node_manifest) {
+      manifestfile.Write_any_type(buf, count, datatype, true);
+    } else {
+      resfile.Write_any_type(buf, count, datatype, use_serial_io);
+    }
+  };
+
+  if (write_manifest) {
     // output the input parameters (input file)
-    resfile.Write_any_type(sbuf.c_str(), sbuf.size(), "byte", use_serial_io);
+    WriteMetadata(sbuf.c_str(), sbuf.size(), "byte");
 
     // output Mesh information
-    resfile.Write_any_type(&(pm->nmb_total), (sizeof(int)), "byte",
-                            use_serial_io);
-    resfile.Write_any_type(&(pm->root_level), (sizeof(int)), "byte",
-                            use_serial_io);
-    resfile.Write_any_type(&(pm->mesh_size), (sizeof(RegionSize)), "byte",
-                            use_serial_io);
-    resfile.Write_any_type(&(pm->mesh_indcs), (sizeof(RegionIndcs)), "byte",
-                            use_serial_io);
-    resfile.Write_any_type(&(pm->mb_indcs), (sizeof(RegionIndcs)), "byte",
-                            use_serial_io);
-    resfile.Write_any_type(&(pm->time), (sizeof(Real)), "byte",
-                            use_serial_io);
-    resfile.Write_any_type(&(pm->dt), (sizeof(Real)), "byte",
-                            use_serial_io);
-    resfile.Write_any_type(&(pm->ncycle), (sizeof(int)), "byte",
-                            use_serial_io);
-    resfile.Write_any_type(&(global_variable::nranks), (sizeof(int)), "byte",
-                            use_serial_io);
-    if (shard_mode == FileShardMode::per_node) {
-      resfile.Write_any_type(&(global_variable::nnodes), (sizeof(int)), "byte",
-                              use_serial_io);
+    WriteMetadata(&(pm->nmb_total), sizeof(int), "byte");
+    WriteMetadata(&(pm->root_level), sizeof(int), "byte");
+    WriteMetadata(&(pm->mesh_size), sizeof(RegionSize), "byte");
+    WriteMetadata(&(pm->mesh_indcs), sizeof(RegionIndcs), "byte");
+    WriteMetadata(&(pm->mb_indcs), sizeof(RegionIndcs), "byte");
+    WriteMetadata(&(pm->time), sizeof(Real), "byte");
+    WriteMetadata(&(pm->dt), sizeof(Real), "byte");
+    WriteMetadata(&(pm->ncycle), sizeof(int), "byte");
+    WriteMetadata(&(global_variable::nranks), sizeof(int), "byte");
+    if (split_per_node_manifest) {
+      int manifest_version = kPerNodeManifestVersion;
+      WriteMetadata(&(global_variable::nnodes), sizeof(int), "byte");
+      WriteMetadata(&manifest_version, sizeof(int), "byte");
     }
   }
   //--- STEP 2.  Root process writes list of logical locations and cost of MeshBlocks
   // This data read in Mesh::BuildTreeFromRestart()
 
-  if (IsShardWriter(shard_mode)) {
-    resfile.Write_any_type(&(pm->lloc_eachmb[0]),(pm->nmb_total)*sizeof(LogicalLocation),
-                           "byte", use_serial_io);
-    resfile.Write_any_type(&(pm->cost_eachmb[0]), (pm->nmb_total)*sizeof(float),
-                           "byte", use_serial_io);
-    resfile.Write_any_type(&(pm->rank_eachmb[0]), (pm->nmb_total)*sizeof(int),
-                           "byte", use_serial_io);
+  if (write_manifest) {
+    WriteMetadata(&(pm->lloc_eachmb[0]), (pm->nmb_total)*sizeof(LogicalLocation), "byte");
+    WriteMetadata(&(pm->cost_eachmb[0]), (pm->nmb_total)*sizeof(float), "byte");
+    WriteMetadata(&(pm->rank_eachmb[0]), (pm->nmb_total)*sizeof(int), "byte");
     if (global_variable::nranks > 0) {
-      resfile.Write_any_type(&(pm->gids_eachrank[0]), (global_variable::nranks)*sizeof(int),
-                             "byte", use_serial_io);
-      resfile.Write_any_type(&(pm->nmb_eachrank[0]), (global_variable::nranks)*sizeof(int),
-                             "byte", use_serial_io);
-      if (shard_mode == FileShardMode::per_node) {
-        resfile.Write_any_type(global_variable::rank_to_node.data(),
-                               (global_variable::nranks)*sizeof(int), "byte",
-                               use_serial_io);
+      WriteMetadata(&(pm->gids_eachrank[0]), (global_variable::nranks)*sizeof(int), "byte");
+      WriteMetadata(&(pm->nmb_eachrank[0]), (global_variable::nranks)*sizeof(int), "byte");
+      if (split_per_node_manifest) {
+        WriteMetadata(global_variable::rank_to_node.data(),
+                      (global_variable::nranks)*sizeof(int), "byte");
       }
     }
   }
 
   //--- STEP 3.  Root process writes internal state of objects that require it
-  if (IsShardWriter(shard_mode)) {
+  if (write_manifest) {
     // store z4c information
     if (pz4c != nullptr) {
-      resfile.Write_any_type(&(pz4c->last_output_time), sizeof(Real), "byte",
-                             use_serial_io);
+      WriteMetadata(&(pz4c->last_output_time), sizeof(Real), "byte");
     }
     // output puncture tracker data
     if (nco > 0) {
       for (auto & pt : pz4c->ptracker) {
-        resfile.Write_any_type(pt.GetPos(), 3*sizeof(Real), "byte",
-                               use_serial_io);
+        WriteMetadata(pt.GetPos(), 3*sizeof(Real), "byte");
       }
     }
     // turbulence driver internal RNG
     if (pturb != nullptr) {
-      resfile.Write_any_type(&(pturb->rstate), sizeof(RNG_State), "byte",
-                             use_serial_io);
+      WriteMetadata(&(pturb->rstate), sizeof(RNG_State), "byte");
     }
   }
 
@@ -302,21 +314,23 @@ void RestartOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
   } else if (padm != nullptr) {
     data_size += nout1*nout2*nout3*nadm*sizeof(Real);   // adm u_adm
   }
-  if (IsShardWriter(shard_mode)) {
-    resfile.Write_any_type(&(data_size), sizeof(IOWrapperSizeT), "byte",
-                           use_serial_io);
+  if (write_manifest) {
+    WriteMetadata(&(data_size), sizeof(IOWrapperSizeT), "byte");
+    if (split_per_node_manifest) {
+      manifestfile.Close(true);
+    }
   }
 
   // calculate size of data written in Steps 1-2 above
   IOWrapperSizeT step1size = sbuf.size()*sizeof(char) + 4*sizeof(int) + 2*sizeof(Real) +
                              sizeof(RegionSize) + 2*sizeof(RegionIndcs);
-  if (shard_mode == FileShardMode::per_node) {
-    step1size += sizeof(int);
+  if (split_per_node_manifest) {
+    step1size += 2*sizeof(int);
   }
   IOWrapperSizeT step2size = (pm->nmb_total)*(sizeof(LogicalLocation) + sizeof(float)
                            + sizeof(int))
                            + (global_variable::nranks)*2*sizeof(int);
-  if (shard_mode == FileShardMode::per_node) {
+  if (split_per_node_manifest) {
     step2size += (global_variable::nranks)*sizeof(int);
   }
 
@@ -325,12 +339,14 @@ void RestartOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
   if (pturb != nullptr) step3size += sizeof(RNG_State);
 
   // write cell-centered variables in parallel
-  IOWrapperSizeT offset_myrank = (step1size + step2size + step3size
-                                  + sizeof(IOWrapperSizeT));
+  IOWrapperSizeT offset_myrank = 0;
   std::vector<int> shard_counts = GatherShardCounts(pm->nmb_thisrank, shard_mode);
   int shard_prefix = PrefixCountBeforeMe(shard_counts, shard_mode);
   int shard_min = *std::min_element(shard_counts.begin(), shard_counts.end());
   int shard_max = *std::max_element(shard_counts.begin(), shard_counts.end());
+  if (!split_per_node_manifest) {
+    offset_myrank = (step1size + step2size + step3size + sizeof(IOWrapperSizeT));
+  }
   offset_myrank += data_size*shard_prefix;
 
   IOWrapperSizeT myoffset = offset_myrank;

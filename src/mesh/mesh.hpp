@@ -84,6 +84,7 @@ struct RestartMetaData {
   FileShardMode file_shard_mode = FileShardMode::shared;
   std::string base_dir;
   std::string file_name;
+  std::uint64_t payload_stride = 0;
   int original_nranks = 0;
   int original_nnodes = 1;
   std::vector<int> gids_eachrank;

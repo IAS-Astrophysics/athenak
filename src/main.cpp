@@ -24,12 +24,15 @@
 //========================================================================================
 
 // C/C++ headers
+#include <cctype>
 #include <cstdlib>
-#include <iostream>
-#include <string>
-#include <memory>
 #include <cstdio> // sscanf
-#include <fstream>  // Include this for std::ifstream
+#include <filesystem>
+#include <iostream>
+#include <memory>
+#include <stdexcept>
+#include <string>
+#include <system_error>
 #include <unordered_map>
 
 // Athena headers
@@ -55,6 +58,163 @@
 #if defined(KOKKOS_ENABLE_HIP)
 #include <hip/hip_runtime.h>
 #endif
+
+namespace {
+
+namespace fs = std::filesystem;
+
+struct RestartPathInfo {
+  FileShardMode shard_mode = FileShardMode::shared;
+  std::string normalized_open_path;
+  std::string base_dir;
+  std::string file_name;
+};
+
+bool HasShardPrefix(const std::string &name, const char *prefix) {
+  return name.rfind(prefix, 0) == 0;
+}
+
+bool IsExactShardDirectoryName(const std::string &name, const char *prefix) {
+  constexpr int kShardIdDigits = 8;
+  std::size_t prefix_len = std::char_traits<char>::length(prefix);
+  if (!HasShardPrefix(name, prefix) || name.size() != prefix_len + kShardIdDigits) {
+    return false;
+  }
+  for (std::size_t i = prefix_len; i < name.size(); ++i) {
+    if (!std::isdigit(static_cast<unsigned char>(name[i]))) {
+      return false;
+    }
+  }
+  return true;
+}
+
+std::string PathToString(const fs::path &path) {
+  return path.empty() ? std::string() : path.generic_string();
+}
+
+RestartPathInfo NormalizeRestartPath(const std::string &restart_arg) {
+  if (restart_arg.empty()) {
+    throw std::runtime_error("Restart path is empty.");
+  }
+
+  fs::path normalized = fs::path(restart_arg).lexically_normal();
+  if (normalized.filename().empty()) {
+    throw std::runtime_error("Restart path must include a file name.");
+  }
+
+  FileShardMode embedded_mode = FileShardMode::shared;
+  std::string embedded_name;
+  for (const auto &part : normalized.parent_path()) {
+    std::string name = part.string();
+    if (name.empty() || name == "." || name == ".." || name == "/") {
+      continue;
+    }
+
+    bool looks_like_node = HasShardPrefix(name, "node_");
+    bool looks_like_rank = HasShardPrefix(name, "rank_");
+    if (!looks_like_node && !looks_like_rank) {
+      continue;
+    }
+
+    bool exact_node = IsExactShardDirectoryName(name, "node_");
+    bool exact_rank = IsExactShardDirectoryName(name, "rank_");
+    if (!exact_node && !exact_rank) {
+      throw std::runtime_error("Malformed restart shard directory '" + name
+                               + "'. Expected node_######## or rank_########.");
+    }
+
+    FileShardMode part_mode = exact_node ? FileShardMode::per_node : FileShardMode::per_rank;
+    if (embedded_mode != FileShardMode::shared) {
+      throw std::runtime_error("Restart path may contain only one shard directory.");
+    }
+    embedded_mode = part_mode;
+    embedded_name = name;
+  }
+
+  RestartPathInfo info;
+  info.shard_mode = embedded_mode;
+  info.file_name = normalized.filename().string();
+
+  std::error_code ec;
+  if (embedded_mode != FileShardMode::shared) {
+    std::string parent_name = normalized.parent_path().filename().string();
+    if (parent_name != embedded_name) {
+      throw std::runtime_error("Restart shard directory must be the direct parent of the "
+                               "restart file.");
+    }
+
+    fs::path base_dir = normalized.parent_path().parent_path();
+    info.base_dir = PathToString(base_dir);
+
+    if (!fs::exists(normalized, ec) || ec) {
+      throw std::runtime_error("Restart shard file '" + PathToString(normalized)
+                               + "' does not exist.");
+    }
+
+    if (embedded_mode == FileShardMode::per_node) {
+      fs::path manifest_path = base_dir / info.file_name;
+      info.normalized_open_path = PathToString(manifest_path);
+      ec.clear();
+      if (!fs::exists(manifest_path, ec) || ec) {
+        throw std::runtime_error("Per-node restart manifest '" + info.normalized_open_path
+                                 + "' does not exist.");
+      }
+    } else {
+      info.normalized_open_path = PathToString(normalized);
+    }
+    return info;
+  }
+
+  fs::path base_dir = normalized.parent_path();
+  info.base_dir = PathToString(base_dir);
+  info.normalized_open_path = PathToString(normalized);
+
+  fs::path search_dir = base_dir.empty() ? fs::path(".") : base_dir;
+  bool found_payload = false;
+  ec.clear();
+  if (fs::exists(search_dir, ec) && !ec && fs::is_directory(search_dir, ec)) {
+    for (fs::directory_iterator it(search_dir, ec); !ec && it != fs::directory_iterator();
+         it.increment(ec)) {
+      if (ec) break;
+      if (!it->is_directory(ec) || ec) {
+        ec.clear();
+        continue;
+      }
+
+      std::string name = it->path().filename().string();
+      if (!IsExactShardDirectoryName(name, "node_")) {
+        continue;
+      }
+
+      fs::path payload_path = it->path() / info.file_name;
+      std::error_code exists_ec;
+      if (fs::exists(payload_path, exists_ec) && !exists_ec) {
+        found_payload = true;
+        break;
+      }
+    }
+  }
+
+  if (found_payload) {
+    info.shard_mode = FileShardMode::per_node;
+    ec.clear();
+    if (!fs::exists(normalized, ec) || ec) {
+      throw std::runtime_error("Per-node restart manifest '" + info.normalized_open_path
+                               + "' does not exist.");
+    }
+    return info;
+  }
+
+  ec.clear();
+  if (!fs::exists(normalized, ec) || ec) {
+    throw std::runtime_error("Restart file '" + info.normalized_open_path
+                             + "' does not exist.");
+  }
+
+  return info;
+}
+
+}  // namespace
 
 //----------------------------------------------------------------------------------------
 //! \fn int main(int argc, char *argv[])
@@ -280,41 +440,23 @@ int main(int argc, char *argv[]) {
   // read parameters from restart file
   FileShardMode restart_shard_mode = FileShardMode::shared;
   if (res_flag) {
-    size_t shard_pos = restart_file.find("/rank_");
-    if (shard_pos != std::string::npos) {
-      restart_shard_mode = FileShardMode::per_rank;
-    } else {
-      shard_pos = restart_file.find("/node_");
-      if (shard_pos != std::string::npos) {
-        restart_shard_mode = FileShardMode::per_node;
-      }
+    RestartPathInfo restart_path;
+    try {
+      restart_path = NormalizeRestartPath(restart_file);
+    } catch (const std::runtime_error &err) {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                << std::endl << err.what() << std::endl;
+      Kokkos::finalize();
+#if MPI_PARALLEL_ENABLED
+      FinalizeMpi();
+#endif
+      return(0);
     }
 
-    if (restart_shard_mode != FileShardMode::shared) {
-      size_t last_slash = restart_file.rfind('/');
-      restart_base_dir = restart_file.substr(0, shard_pos);
-      if (last_slash != std::string::npos && last_slash + 1 < restart_file.size()) {
-        restart_file_name = restart_file.substr(last_slash + 1);
-      } else {
-        restart_file_name = restart_file.substr(shard_pos + 1);
-      }
-      if (!restart_base_dir.empty()) {
-        restart_file = restart_base_dir + "/" + CanonicalShardDirectoryName(restart_shard_mode)
-                     + restart_file_name;
-      } else {
-        restart_file = CanonicalShardDirectoryName(restart_shard_mode) + restart_file_name;
-      }
-    } else {
-      restart_base_dir.clear();
-      restart_file_name = restart_file;
-    }
-
-    // Now use restart_file for opening the file
-    std::ifstream file_check(restart_file);
-    if (!file_check.good()) {
-        std::cerr << "Error: Unable to open restart file: " << restart_file << std::endl;
-        // Handle the error (e.g., exit the program or use a default configuration)
-    }
+    restart_shard_mode = restart_path.shard_mode;
+    restart_base_dir = restart_path.base_dir;
+    restart_file_name = restart_path.file_name;
+    restart_file = restart_path.normalized_open_path;
 
     // read parameters from restart file
     restartfile.Open(restart_file.c_str(), IOWrapper::FileMode::read,

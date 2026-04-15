@@ -21,6 +21,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <iostream>
+#include <queue>
 #include <sstream>
 #include <string>
 #include <vector>
@@ -36,6 +37,46 @@
 #if MPI_PARALLEL_ENABLED
 #include <mpi.h>
 #endif
+
+namespace {
+
+bool SphsliceOutputStatsEnabled() {
+  const char *env = std::getenv("ATHENAK_OUTPUT_IO_STATS");
+  return (env != nullptr && env[0] != '\0' && env[0] != '0');
+}
+
+void PrintSphsliceStats(FileShardMode mode, int local_points, int node_points,
+                        std::size_t sparse_payload_bytes,
+                        std::size_t dense_baseline_bytes) {
+  if (!SphsliceOutputStatsEnabled()) {
+    return;
+  }
+  std::cout << "[output-io] type=sphslice"
+            << " mode=" << ShardDistributionName(mode)
+            << " writer=" << ShardWriterId(mode)
+            << " local_points=" << local_points
+            << " node_points=" << node_points
+            << " sparse_payload_bytes=" << sparse_payload_bytes
+            << " dense_baseline_bytes=" << dense_baseline_bytes
+            << std::endl;
+}
+
+#if MPI_PARALLEL_ENABLED
+struct SphsliceMergeCursor {
+  int rank = 0;
+  int offset = 0;
+  int32_t angle = 0;
+};
+
+struct SphsliceMergeCursorCompare {
+  bool operator()(const SphsliceMergeCursor &lhs,
+                  const SphsliceMergeCursor &rhs) const {
+    return lhs.angle > rhs.angle;
+  }
+};
+#endif
+
+}  // namespace
 
 //========================================================================================
 //! \class SphericalSlice
@@ -238,27 +279,29 @@ void SphericalSliceOutput::LoadOutputData(Mesh *pm) {
   int nout_vars = outvars.size();
   int ntheta = psph->ntheta;
   int nphi = psph->nphi;
-  Kokkos::realloc(outarray, nout_vars, 1, 1, ntheta, nphi);
+  int nangles = psph->nangles;
+  shard_owned_angles.clear();
+  shard_values.clear();
 
   if (out_params.contains_derived) {
     out_params.i_derived = 0;
     ComputeDerivedVariable(out_params.variable, pm);
   }
 
-  for (int n = 0; n < nout_vars; ++n) {
-    psph->Interpolate(outvars[n].data_index, *(outvars[n].data_ptr));
-    auto h_vals = psph->interp_vals.h_view;
-    for (int it = 0; it < ntheta; ++it) {
-      for (int ip = 0; ip < nphi; ++ip) {
-        outarray(n, 0, 0, it, ip) = h_vals(it*nphi + ip);
+  if (out_params.file_shard_mode == FileShardMode::shared) {
+    Kokkos::realloc(outarray, nout_vars, 1, 1, ntheta, nphi);
+    for (int n = 0; n < nout_vars; ++n) {
+      psph->Interpolate(outvars[n].data_index, *(outvars[n].data_ptr));
+      auto h_vals = psph->interp_vals.h_view;
+      for (int it = 0; it < ntheta; ++it) {
+        for (int ip = 0; ip < nphi; ++ip) {
+          outarray(n, 0, 0, it, ip) = h_vals(it*nphi + ip);
+        }
       }
     }
-  }
-
-  shard_owned_angles = psph->owned_angles;
+    shard_owned_angles = psph->owned_angles;
 
 #if MPI_PARALLEL_ENABLED
-  if (out_params.file_shard_mode == FileShardMode::shared) {
     int count = nout_vars*ntheta*nphi;
     if (global_variable::my_rank == 0) {
       MPI_Reduce(MPI_IN_PLACE, outarray.data(), count, MPI_ATHENA_REAL,
@@ -267,36 +310,151 @@ void SphericalSliceOutput::LoadOutputData(Mesh *pm) {
       MPI_Reduce(outarray.data(), outarray.data(), count, MPI_ATHENA_REAL,
                  MPI_SUM, 0, MPI_COMM_WORLD);
     }
-  } else if (out_params.file_shard_mode == FileShardMode::per_node) {
-    int count = nout_vars*ntheta*nphi;
-    if (global_variable::rank_in_node == 0) {
-      MPI_Reduce(MPI_IN_PLACE, outarray.data(), count, MPI_ATHENA_REAL,
-                 MPI_SUM, 0, global_variable::node_comm);
-    } else {
-      MPI_Reduce(outarray.data(), outarray.data(), count, MPI_ATHENA_REAL,
-                 MPI_SUM, 0, global_variable::node_comm);
-    }
+#endif
+    return;
+  }
 
-    std::vector<int> local_mask(psph->nangles, 0);
-    for (int32_t angle : psph->owned_angles) {
-      local_mask[angle] = 1;
-    }
-    std::vector<int> node_mask(psph->nangles, 0);
-    MPI_Reduce(local_mask.data(), node_mask.data(), psph->nangles, MPI_INT, MPI_MAX, 0,
-               global_variable::node_comm);
-    if (global_variable::rank_in_node == 0) {
-      shard_owned_angles.clear();
-      shard_owned_angles.reserve(psph->nangles);
-      for (int a = 0; a < psph->nangles; ++a) {
-        if (node_mask[a] != 0) {
-          shard_owned_angles.push_back(static_cast<int32_t>(a));
-        }
-      }
-    } else {
-      shard_owned_angles.clear();
+  shard_owned_angles = psph->owned_angles;
+  int local_points = static_cast<int>(shard_owned_angles.size());
+  std::vector<float> local_values(static_cast<std::size_t>(nout_vars)*local_points);
+
+  for (int n = 0; n < nout_vars; ++n) {
+    psph->Interpolate(outvars[n].data_index, *(outvars[n].data_ptr));
+    auto h_vals = psph->interp_vals.h_view;
+    for (int q = 0; q < local_points; ++q) {
+      local_values[static_cast<std::size_t>(n)*local_points + q] =
+          static_cast<float>(h_vals(shard_owned_angles[q]));
     }
   }
+
+#if MPI_PARALLEL_ENABLED
+  if (out_params.file_shard_mode == FileShardMode::per_node) {
+    int nranks_in_node = global_variable::ranks_per_node;
+    std::vector<int> point_counts;
+    if (global_variable::rank_in_node == 0) {
+      point_counts.resize(nranks_in_node, 0);
+    }
+    MPI_Gather(&local_points, 1, MPI_INT,
+               point_counts.empty() ? nullptr : point_counts.data(), 1, MPI_INT, 0,
+               global_variable::node_comm);
+
+    std::vector<int> point_displs;
+    std::vector<int> value_counts;
+    std::vector<int> value_displs;
+    std::vector<int32_t> gathered_angles;
+    std::vector<float> gathered_values;
+    int node_points = local_points;
+    if (global_variable::rank_in_node == 0) {
+      point_displs.resize(nranks_in_node, 0);
+      value_counts.resize(nranks_in_node, 0);
+      value_displs.resize(nranks_in_node, 0);
+      node_points = 0;
+      int running_points = 0;
+      int running_values = 0;
+      for (int r = 0; r < nranks_in_node; ++r) {
+        point_displs[r] = running_points;
+        value_displs[r] = running_values;
+        running_points += point_counts[r];
+        value_counts[r] = nout_vars*point_counts[r];
+        running_values += value_counts[r];
+      }
+      node_points = running_points;
+      gathered_angles.resize(node_points);
+      gathered_values.resize(static_cast<std::size_t>(nout_vars)*node_points);
+    }
+
+    MPI_Gatherv(shard_owned_angles.data(), local_points, MPI_INT32_T,
+                gathered_angles.data(),
+                point_counts.empty() ? nullptr : point_counts.data(),
+                point_displs.empty() ? nullptr : point_displs.data(),
+                MPI_INT32_T, 0, global_variable::node_comm);
+    MPI_Gatherv(local_values.data(), nout_vars*local_points, MPI_FLOAT,
+                gathered_values.data(),
+                value_counts.empty() ? nullptr : value_counts.data(),
+                value_displs.empty() ? nullptr : value_displs.data(),
+                MPI_FLOAT, 0, global_variable::node_comm);
+
+    if (global_variable::rank_in_node == 0) {
+      shard_owned_angles.assign(node_points, 0);
+      shard_values.assign(static_cast<std::size_t>(nout_vars)*node_points, 0.0f);
+
+      std::priority_queue<SphsliceMergeCursor, std::vector<SphsliceMergeCursor>,
+                          SphsliceMergeCursorCompare> merge_heap;
+      for (int r = 0; r < nranks_in_node; ++r) {
+        if (point_counts[r] > 0) {
+          merge_heap.push({r, 0, gathered_angles[point_displs[r]]});
+        }
+      }
+
+      int merged_points = 0;
+      int32_t prev_angle = -1;
+      while (!merge_heap.empty()) {
+        SphsliceMergeCursor cursor = merge_heap.top();
+        merge_heap.pop();
+
+        int angle_offset = point_displs[cursor.rank] + cursor.offset;
+        int32_t angle = gathered_angles[angle_offset];
+        if (angle < 0 || angle >= nangles) {
+          std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                    << std::endl << "sphslice node shard contains out-of-range angle "
+                    << angle << std::endl;
+          std::exit(EXIT_FAILURE);
+        }
+        if (merged_points > 0 && angle == prev_angle) {
+          std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                    << std::endl << "sphslice node shard has duplicate angle index "
+                    << angle << std::endl;
+          std::exit(EXIT_FAILURE);
+        }
+
+        shard_owned_angles[merged_points] = angle;
+        int rank_points = point_counts[cursor.rank];
+        int value_base = value_displs[cursor.rank];
+        for (int n = 0; n < nout_vars; ++n) {
+          shard_values[static_cast<std::size_t>(n)*node_points + merged_points] =
+              gathered_values[value_base + n*rank_points + cursor.offset];
+        }
+        prev_angle = angle;
+        merged_points++;
+
+        cursor.offset++;
+        if (cursor.offset < rank_points) {
+          cursor.angle = gathered_angles[point_displs[cursor.rank] + cursor.offset];
+          merge_heap.push(cursor);
+        }
+      }
+
+      if (merged_points != node_points) {
+        std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                  << std::endl << "sphslice node merge lost points: merged="
+                  << merged_points << " expected=" << node_points << std::endl;
+        std::exit(EXIT_FAILURE);
+      }
+
+      std::size_t sparse_payload_bytes =
+          static_cast<std::size_t>(node_points) *
+          (sizeof(int32_t) + static_cast<std::size_t>(nout_vars)*sizeof(float));
+      std::size_t dense_baseline_bytes =
+          static_cast<std::size_t>(nout_vars)*nangles*sizeof(Real) +
+          static_cast<std::size_t>(nangles)*sizeof(int);
+      PrintSphsliceStats(out_params.file_shard_mode, local_points, node_points,
+                         sparse_payload_bytes, dense_baseline_bytes);
+    } else {
+      shard_owned_angles.clear();
+      shard_values.clear();
+    }
+    return;
+  }
 #endif
+
+  shard_values.swap(local_values);
+  std::size_t sparse_payload_bytes =
+      static_cast<std::size_t>(local_points) *
+      (sizeof(int32_t) + static_cast<std::size_t>(nout_vars)*sizeof(float));
+  std::size_t dense_baseline_bytes =
+      static_cast<std::size_t>(nout_vars)*nangles*sizeof(Real);
+  PrintSphsliceStats(out_params.file_shard_mode, local_points, local_points,
+                     sparse_payload_bytes, dense_baseline_bytes);
 }
 
 //----------------------------------------------------------------------------------------
@@ -384,18 +542,13 @@ void SphericalSliceOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
     if (partitioned) {
       const auto &owned = shard_owned_angles;
       std::fwrite(owned.data(), sizeof(int32_t), owned.size(), pfile);
-
-      std::vector<float> data(static_cast<size_t>(npoints)*nout_vars);
-      size_t k = 0;
-      for (int n = 0; n < nout_vars; ++n) {
-        for (int q = 0; q < npoints; ++q) {
-          int a = owned[q];
-          int it = a/nphi;
-          int ip = a%nphi;
-          data[k++] = static_cast<float>(outarray(n, 0, 0, it, ip));
-        }
+      if (shard_values.size() != static_cast<size_t>(npoints)*nout_vars) {
+        std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                  << std::endl << "sphslice sparse payload has incorrect size"
+                  << std::endl;
+        std::exit(EXIT_FAILURE);
       }
-      std::fwrite(data.data(), sizeof(float), data.size(), pfile);
+      std::fwrite(shard_values.data(), sizeof(float), shard_values.size(), pfile);
     } else {
       std::vector<float> data(static_cast<size_t>(nout_vars)*ntheta*nphi);
       size_t k = 0;

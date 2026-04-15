@@ -24,7 +24,7 @@
     #error NHISTORY > NREDUCTION in outputs.hpp
 #endif
 
-#define NOUTPUT_CHOICES 217
+#define NOUTPUT_CHOICES 218
 // choices for output variables used in <ouput> blocks in input file
 // TO ADD MORE CHOICES:
 //   - add more strings to array below, change NOUTPUT_CHOICES above appropriately
@@ -130,6 +130,8 @@ static const char *var_choice[NOUTPUT_CHOICES] = {
   // Individual mhd passive scalars (207-216)
   "mhd_u_s_00", "mhd_u_s_01", "mhd_u_s_02", "mhd_u_s_03", "mhd_u_s_04",
   "mhd_w_s_00", "mhd_w_s_01", "mhd_w_s_02", "mhd_w_s_03", "mhd_w_s_04",
+  // Hydro-only derived variables (217)
+  "hydro_visc_heat",
 };
 
 
@@ -577,6 +579,7 @@ class SphericalSliceOutput : public BaseTypeOutput {
  private:
   SphericalSlice *psph;
   std::vector<int32_t> shard_owned_angles;
+  std::vector<float> shard_values;
 };
 
 //----------------------------------------------------------------------------------------
