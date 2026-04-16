@@ -73,7 +73,7 @@ tfloor        = 0.0013925 # 10 K
 T_max         = 5e8 # K
 fofc          = true
 nscalars      = 3 # passive scalars : metallicity, dust_small, dust_big
- 
+
 <problem>
 user_srcs         = true
 profile_file      = tables/cgm_profiles_rsonic_0.7.txt
@@ -87,9 +87,9 @@ metallicity = 0.333333333333333333333333333333
 cgm_turb_nlow   = 16   # quarter virial radius
 cgm_turb_nhigh  = 64
 cgm_turb_rms    = 1.0
-cgm_turb_xscale = 10.0 
-cgm_turb_yscale = 10.0 
-cgm_turb_zscale = 10.0 
+cgm_turb_xscale = 10.0
+cgm_turb_yscale = 10.0
+cgm_turb_zscale = 10.0
 
 <potential>
 r_scale   = 11.605294024177795
@@ -113,14 +113,14 @@ delay = 10.0
 <dust>
 d_z_init                  = 0.2    # Initial dust-to-metal ratio
 d_z_sn                    = 0.2    # SN dust-to-metal ratio
-a_gr_s                    = 0.003  # Small-bin radius [um], PAH-like / ultrasmall carbonaceous
-a_gr_l                    = 0.1    # Large-bin radius [um]
+a_gr_s                    = 0.003  # Representative small-bin radius [um], PAH-like / ultrasmall carbonaceous
+a_gr_l                    = 0.1    # Representative large-bin radius [um]
 rho_gr                    = 3      # Dust grain density in g/cc
 D_floor                   = 1e-7
 accretion_nH_min          = 0.1    # Min n_H [cm^-3] for accretion
 accretion_nH_max          = 1.0e3  # Max n_H [cm^-3] for accretion
 accretion_T_max           = 1.0e4  # Max temperature [K] for accretion
-accretion_refractory_frac = 0.1    # Fraction of gas-phase metals available to accrete
+accretion_refractory_frac = 0.1    # Z_acc = f_ref * Z_gas; t_grow also scales as (1 + D_tot / Z_acc)
 
 <turb_driving>
 type                = hydro
@@ -145,15 +145,28 @@ mass_cgs    = 3.036951775493658e+39  # n = 0.1 cm^-3
 time_cgs    = 3.15576e+15            # 100 Myr
 mu          = 0.62                   # mean molecular weight
 
+
+##-------##
+# history #
+##-------##
+
 <output1>
 file_type = hst
 dt        = 0.01
+
+##---------##
+# full cube #
+##---------##
 
 <output2>
 file_type = bin
 variable  = hydro_w
 dt        = 5.0
 single_file_per_rank = true
+
+##------##
+# slices #
+##------##
 
 <output3>
 file_type = bin
@@ -259,6 +272,10 @@ slice_x3 = 0.0
 id = cooling_time_slice_x3
 single_file_per_rank = true
 
+##---------##
+# sphslice #
+##---------##
+
 <output16>
 file_type = sphslice
 dt        = 0.1
@@ -305,6 +322,10 @@ variable   = prtcl_all
 nparticles = 100
 dt         = 0.01
 
+##-------##
+# restart #
+##-------##
+
 <output21>
 file_type  = rst
 dt         = 5.0
@@ -313,6 +334,11 @@ single_file_per_node = true
 <output22>
 file_type  = rst_prtcl
 dt         = 5.0
+
+##----##
+# PDFS #
+##----##
+# state variable profiles
 
 <output23>
 file_type  = pdf
@@ -430,10 +456,39 @@ bin2_min   = 0
 bin2_max   = 1.0
 nbin2      = 16
 
+variable_3 = vel_sph_theta
+bin3_min   = -25.0
+bin3_max   = 25.0
+nbin3      = 128
+
+weight     = mass
+
+##----##
+# PDFS #
+##----##
+
+#####<------- Fluxes ------->#####
+
+<output28>
+file_type  = pdf
+dt         = 1.0
+single_file_per_rank = true
+
+variable_1 = coord_r
+bin1_min   = 1e-1
+bin1_max   = 190.0
+nbin1      = 128
+logscale1  = true
+
+variable_2 = coord_abscostheta
+bin2_min   = 0
+bin2_max   = 1.0
+nbin2      = 16
+
 weight     = variable
 weight_variable = mdot_sph
 
-<output28>
+<output29>
 file_type  = pdf
 dt         = 1.0
 single_file_per_rank = true
@@ -452,7 +507,7 @@ logscale2  = true
 weight     = variable
 weight_variable = edot_sph
 
-<output29>
+<output30>
 file_type  = pdf
 dt         = 1.0
 single_file_per_rank = true
@@ -464,7 +519,7 @@ nbin1      = 32
 logscale1  = true
 
 variable_2 = coord_abscostheta
-bin2_min   = 0.7071
+bin2_min   = 0.0
 bin2_max   = 1.0
 nbin2      = 8
 
@@ -483,7 +538,7 @@ logscale4  = true
 weight     = variable
 weight_variable = mdot_sph
 
-<output30>
+<output31>
 file_type  = pdf
 dt         = 1.0
 single_file_per_rank = true
@@ -495,7 +550,7 @@ nbin2      = 32
 logscale2  = true
 
 variable_1 = coord_costheta
-bin1_min   = 0.7071
+bin1_min   = 0.0
 bin1_max   = 1.0
 nbin1      = 8
 
@@ -514,7 +569,14 @@ logscale4  = true
 weight     = variable
 weight_variable = edot_sph
 
-<output31>
+
+##----##
+# PDFS #
+##----##
+
+#####<------- Scalars ------->#####
+
+<output32>
 file_type  = pdf
 dt         = 1.0
 single_file_per_rank = true
@@ -544,7 +606,7 @@ logscale4  = true
 
 weight     = mass
 
-<output32>
+<output33>
 file_type  = pdf
 dt         = 1.0
 single_file_per_rank = true
@@ -568,7 +630,7 @@ logscale3  = true
 
 weight     = mass
 
-<output33>
+<output34>
 file_type  = pdf
 dt         = 1.0
 single_file_per_rank = true
