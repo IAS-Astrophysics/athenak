@@ -20,9 +20,28 @@
 #include "eos/eos.hpp"
 #include "viscosity.hpp"
 
+namespace {
+
+parabolic::ParabolicIntegratorMode ParseViscosityIntegratorMode(
+    ParameterInput *pin, const std::string &block) {
+  std::string integrator = pin->GetOrAddString(block, "viscosity_integrator", "explicit");
+  if (integrator == "explicit") {
+    return parabolic::ParabolicIntegratorMode::explicit_mode;
+  } else if (integrator == "sts") {
+    return parabolic::ParabolicIntegratorMode::sts;
+  }
+
+  std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+            << "<" << block << ">/viscosity_integrator = '" << integrator
+            << "' must be 'explicit' or 'sts'" << std::endl;
+  std::exit(EXIT_FAILURE);
+}
+
+} // namespace
+
 //----------------------------------------------------------------------------------------
 // ctor:
-// Note first argument passes string ("hydro" or "mhd") denoting in wihch class this
+// Note first argument passes string ("hydro" or "mhd") denoting in which class this
 // object is being constructed, and therefore which <block> in the input file from which
 // the parameters are read.
 
@@ -31,6 +50,7 @@ Viscosity::Viscosity(std::string block, MeshBlockPack *pp,
   pmy_pack(pp) {
   // Read coefficient of isotropic kinematic shear viscosity (must be present)
   nu_iso = pin->GetReal(block,"viscosity");
+  mode = ParseViscosityIntegratorMode(pin, block);
 
   // viscous timestep on MeshBlock(s) in this pack
   dtnew = std::numeric_limits<float>::max();

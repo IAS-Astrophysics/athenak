@@ -10,6 +10,7 @@
 //  processes, such as Ohmic diffusion. TODO(@user): add ambipolar diffusion, Hall effect
 
 #include "athena.hpp"
+#include "diffusion/sts_types.hpp"
 #include "parameter_input.hpp"
 #include "mesh/meshblock.hpp"
 
@@ -25,6 +26,7 @@ class Resistivity {
   // data
   Real dtnew;
   Real eta_ohm;
+  parabolic::ParabolicIntegratorMode mode;
 
   // functions to add resistive E-Field and energy flux
   void OhmicEField(const DvceFaceFld4D<Real> &b0, DvceEdgeFld4D<Real> &efld);

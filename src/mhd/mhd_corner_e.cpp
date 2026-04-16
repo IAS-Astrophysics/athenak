@@ -414,13 +414,7 @@ TaskStatus MHD::CornerE(Driver *pdriver, int stage) {
     });
   }
 
-  // Add resistive electric field (if needed)
-  if (presist != nullptr) {
-    if (presist->eta_ohm > 0.0) {
-      presist->OhmicEField(b0, efld);
-    }
-    // TODO(@user): Add more resistive effects here
-  }
+  AddSelectedDiffusionEMF(DiffusionSelection::explicit_only);
 
   return TaskStatus::complete;
 }

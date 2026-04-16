@@ -13,6 +13,7 @@
 
 void ShowConfig();
 void ChangeRunDir(const std::string dir);
-int CreateMPITag(int lid, int buff_id, int phys_id);
+void ComputeDerivedVariable(std::string name, int index, MeshBlockPack* pmbp,
+                            DvceArray5D<Real> dvars);
 
 #endif // UTILS_UTILS_HPP_

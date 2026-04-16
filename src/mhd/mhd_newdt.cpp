@@ -31,6 +31,17 @@ TaskStatus MHD::NewTimeStep(Driver *pdriver, int stage) {
     return TaskStatus::complete; // only execute last stage
   }
 
+  RecomputeTimeStepFromCurrentState(pdriver);
+  return TaskStatus::complete;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void MHD::RecomputeTimeStepFromCurrentState()
+//! \brief recompute MHD and conduction timestep limits from the current live state
+
+void MHD::RecomputeTimeStepFromCurrentState(Driver *pdriver) {
+  dtnew = std::numeric_limits<float>::max();
+
   auto &indcs = pmy_pack->pmesh->mb_indcs;
   int is = indcs.is, nx1 = indcs.nx1;
   int js = indcs.js, nx2 = indcs.nx2;
@@ -124,27 +135,22 @@ TaskStatus MHD::NewTimeStep(Driver *pdriver, int stage) {
         Real &w_by = bcc0_(m,IBY,k,j,i);
         Real &w_bz = bcc0_(m,IBZ,k,j,i);
         Real cf;
-        Real p = eos.IdealGasPressure(w0_(m,IEN,k,j,i));
         if (eos.is_ideal) {
+          Real p = eos.IdealGasPressure(w0_(m,IEN,k,j,i));
           cf = eos.IdealMHDFastSpeed(w_d, p, w_bx, w_by, w_bz);
+          max_dv1 = fabs(w0_(m,IVX,k,j,i)) + cf;
+          cf = eos.IdealMHDFastSpeed(w_d, p, w_by, w_bz, w_bx);
+          max_dv2 = fabs(w0_(m,IVY,k,j,i)) + cf;
+          cf = eos.IdealMHDFastSpeed(w_d, p, w_bz, w_bx, w_by);
+          max_dv3 = fabs(w0_(m,IVZ,k,j,i)) + cf;
         } else {
           cf = eos.IdealMHDFastSpeed(w_d, w_bx, w_by, w_bz);
-        }
-        max_dv1 = fabs(w0_(m,IVX,k,j,i)) + cf;
-
-        if (eos.is_ideal) {
-          cf = eos.IdealMHDFastSpeed(w_d, p, w_by, w_bz, w_bx);
-        } else {
+          max_dv1 = fabs(w0_(m,IVX,k,j,i)) + cf;
           cf = eos.IdealMHDFastSpeed(w_d, w_by, w_bz, w_bx);
-        }
-        max_dv2 = fabs(w0_(m,IVY,k,j,i)) + cf;
-
-        if (eos.is_ideal) {
-          cf = eos.IdealMHDFastSpeed(w_d, p, w_bz, w_bx, w_by);
-        } else {
+          max_dv2 = fabs(w0_(m,IVY,k,j,i)) + cf;
           cf = eos.IdealMHDFastSpeed(w_d, w_bz, w_bx, w_by);
+          max_dv3 = fabs(w0_(m,IVZ,k,j,i)) + cf;
         }
-        max_dv3 = fabs(w0_(m,IVZ,k,j,i)) + cf;
       }
 
       min_dt1 = fmin((mbsize.d_view(m).dx1/max_dv1), min_dt1);
@@ -166,7 +172,5 @@ TaskStatus MHD::NewTimeStep(Driver *pdriver, int stage) {
   if (psrc != nullptr) {
     psrc->NewTimeStep(w0, peos->eos_data);
   }
-
-  return TaskStatus::complete;
 }
 } // namespace mhd

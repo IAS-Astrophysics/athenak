@@ -33,7 +33,7 @@ void MeshBoundaryValues::HydroBCs(MeshBlockPack *ppack, DualArray2D<Real> u_in,
   int nvar = u0.extent_int(1);  // TODO(@user): 2nd index from L of in array must be NVAR
   int nmb = ppack->nmb_thispack;
 
-  // only apply BCs unless periodic or shear_periodic
+  // only apply BCs if not (periodic) or (shear_periodic)
   if (pm->mesh_bcs[BoundaryFace::inner_x1] != BoundaryFlag::periodic &&
       pm->mesh_bcs[BoundaryFace::inner_x1] != BoundaryFlag::shear_periodic) {
     int &is = indcs.is;

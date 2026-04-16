@@ -24,6 +24,25 @@
 #include "conduction.hpp"
 #include "units/units.hpp"
 
+namespace {
+
+parabolic::ParabolicIntegratorMode ParseConductionIntegratorMode(
+    ParameterInput *pin, const std::string &block) {
+  std::string integrator = pin->GetOrAddString(block, "conductivity_integrator", "explicit");
+  if (integrator == "explicit") {
+    return parabolic::ParabolicIntegratorMode::explicit_mode;
+  } else if (integrator == "sts") {
+    return parabolic::ParabolicIntegratorMode::sts;
+  }
+
+  std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+            << "<" << block << ">/conductivity_integrator = '" << integrator
+            << "' must be 'explicit' or 'sts'" << std::endl;
+  std::exit(EXIT_FAILURE);
+}
+
+} // namespace
+
 KOKKOS_INLINE_FUNCTION
 Real VanLeerLimiter(const Real a, const Real b) {
   if (a*b > 0) {
@@ -81,6 +100,7 @@ Conduction::Conduction(std::string block, MeshBlockPack *pp, ParameterInput *pin
   kappa_ceiling = pin->GetOrAddReal(block,"cond_ceiling",
                   static_cast<Real>(std::numeric_limits<float>::max()));
   sat_hflux = pin->GetOrAddBoolean(block,"sat_hflux",false);
+  mode = ParseConductionIntegratorMode(pin, block);
 }
 
 //----------------------------------------------------------------------------------------
@@ -433,9 +453,13 @@ void Conduction::NewTimeStep(const DvceArray5D<Real> &w0, const EOS_Data &eos_da
     fac = 0.5;
   }
 
-  Real temp_unit = pmy_pack->punit->temperature_cgs();
-  Real kappa_unit = pmy_pack->punit->pressure_cgs()*pmy_pack->punit->velocity_cgs()*
-                    pmy_pack->punit->length_cgs()/pmy_pack->punit->temperature_cgs();
+  Real temp_unit = 1.0;
+  Real kappa_unit = 1.0;
+  if (tdepkappa) {
+    temp_unit = pmy_pack->punit->temperature_cgs();
+    kappa_unit = pmy_pack->punit->pressure_cgs()*pmy_pack->punit->velocity_cgs()*
+                 pmy_pack->punit->length_cgs()/pmy_pack->punit->temperature_cgs();
+  }
 
   dtnew = static_cast<Real>(std::numeric_limits<float>::max());
 

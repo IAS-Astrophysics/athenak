@@ -31,6 +31,7 @@ struct EOS_Data {
   bool use_e, use_t; // use internal energy density (e) or temperature (t) as primitive
   Real dfloor, pfloor, tfloor, sfloor;  // density, pressure, temperature, entropy floors
   Real gamma_max;    // ceiling on Lorentz factor in SR/GR
+  Real sigma_max;    // ceiling on magnetization in MHD
 
   // IDEAL GAS PRESSURE: converts primitive variable (either internal energy density e
   // or temperature e/d) into pressure.
@@ -387,6 +388,19 @@ class IdealGRMHD : public EquationOfState {
   void PrimToCons(const DvceArray5D<Real> &prim, const DvceArray5D<Real> &bcc,
                   DvceArray5D<Real> &cons, const int il, const int iu,
                   const int jl, const int ju, const int kl, const int ku) override;
+};
+
+//----------------------------------------------------------------------------------------
+//! \class NoOpDynGRMHD
+//! \brief Derived class for no-op EOS in dynamical GRMHD
+
+class NoOpDynGRMHD : public EquationOfState {
+ public:
+  // Following suppress warnings that MHD versions are not over-ridden
+  using EquationOfState::ConsToPrim;
+  using EquationOfState::PrimToCons;
+
+  NoOpDynGRMHD(MeshBlockPack *pp, ParameterInput *pin);
 };
 
 #endif // EOS_EOS_HPP_

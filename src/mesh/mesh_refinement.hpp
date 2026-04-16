@@ -8,8 +8,6 @@
 //! \file mesh_refinement.hpp
 //! \brief defines MeshRefinement class containing data and functions controlling SMR/AMR
 
-#include "particles/particles_data_structs.hpp"
-
 //----------------------------------------------------------------------------------------
 //! \fn int CreateAMR_MPI_Tag(int lid, int ox1, int ox2, int ox3)
 //! \brief calculate an MPI tag for AMR communications.  Note maximum size of
@@ -36,6 +34,9 @@ struct AMRBuffer {
 };
 #endif
 
+// Forward declaration
+class RefinementCriteria;
+
 //----------------------------------------------------------------------------------------
 //! \class MeshRefinement
 //! \brief data/functions associated with SMR/AMR
@@ -52,6 +53,7 @@ class MeshRefinement {
   int ncyc_check_amr;        // # of cycles between checking mesh for ref/derefinement
   int refinement_interval;   // # of cycles between allowing successive ref/derefinement
   bool prolong_prims;        // flag to enable prolongation of primitive vars
+  RefinementCriteria* pmrc=nullptr;   // object to control various refinement criteria
 
   // following 2x Views are dimensioned [nmb_total]
   DualArray1D<int> refine_flag;    // refinement flag for each MeshBlock
@@ -66,7 +68,7 @@ class MeshRefinement {
   int *newtoold;          // mapping of new gid (index n) to old gid
   int *oldtonew;          // mapping of old gid (index n) to new gid
 
-  // arrays in Mesh class created for new MB hieararchy with AMR
+  // arrays in Mesh class created for new MB heirarchy with AMR
   // following 3x arrays allocated with length [new_nmb_total]
   float *new_cost_eachmb;            // cost of each MeshBlock
   int *new_rank_eachmb;              // rank of each MeshBlock
@@ -89,25 +91,9 @@ class MeshRefinement {
 #if MPI_PARALLEL_ENABLED
   int nmb_send, nmb_recv;
   MPI_Comm amr_comm;                         // unique communicator for AMR
-  MPI_Comm par_comm;                         // seperate communicator for particles
-  DualArray1D<AMRBuffer> sendbuf, recvbuf;   // send/recv buffers
+  DualArray1D<AMRBuffer> sendbuf, recvbuf; // send/recv buffers
   MPI_Request *send_req, *recv_req;
   DvceArray1D<Real> send_data, recv_data;    // send/recv device data
-					     
-  // particle communication buffers
-  DvceArray1D<Real> prtcl_rsendbuf, prtcl_rrecvbuf;  // particle real data buffers
-  DvceArray1D<int> prtcl_isendbuf, prtcl_irecvbuf;   // particle integer data buffers
-  // particle MPI management
-  int nprtcl_send, nprtcl_recv;
-  DualArray1D<ParticleLocationData> prtcl_sendlist;
-  std::vector<MPI_Request> prtcl_rsend_req, prtcl_isend_req;
-  std::vector<MPI_Request> prtcl_rrecv_req, prtcl_irecv_req;
-  // particle message data for count exchange
-  int prtcl_nsends; // number of MPI sends to neighboring ranks on this rank
-  int prtcl_nrecvs; // number of MPI recvs from neighboring ranks on this rank
-  std::vector<int> prtcl_nsends_eachrank; // length nranks
-  std::vector<ParticleMessageData> prtcl_sends_thisrank, prtcl_recvs_thisrank;
-  std::vector<ParticleMessageData> prtcl_sends_allranks;
 #endif
 
   // functions
@@ -143,21 +129,11 @@ class MeshRefinement {
   void UnpackAMRBuffersFC(DvceFaceFld4D<Real> &b,DvceFaceFld4D<Real> &cb,int ncc,int nfc);
   void ClearSendAMR();
 
-  // particle functions
-  void CreateParticleLists();
-  void CountParticleSendsAndRecvs(); 
-  void PackAMRBuffersParticles();
-  void UnpackAMRBuffersParticles();
-  void InitPartRecv();
-  void RefineParticles();
-
   // initialize interpolation weights
   void InitInterpWghts();
 
  private:
   // data
   Mesh *pmy_mesh;
-  Real d_threshold_, dd_threshold_, dp_threshold_, dv_threshold_, chi_threshold_;
-  bool check_cons_;
 };
 #endif // MESH_MESH_REFINEMENT_HPP_

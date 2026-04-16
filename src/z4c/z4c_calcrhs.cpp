@@ -353,19 +353,9 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage) {
       }
     }
 
-    // TODO(JMF): Update with Tmunu terms.
     // -----------------------------------------------------------------------------------
     // Trace of the matter stress tensor
     //
-    // Matter commented out
-    //S.ZeroClear();
-    //member.team_barrier();
-    //for(int a = 0; a < 3; ++a)
-    //for(int b = 0; b < 3; ++b) {
-    //  ILOOP1(1) {
-    //    S(1) += oopsi4(1) * g_uu(a,b,i) * mat.S_dd(m,a,b,k,j,i);
-    //  }
-    //}
     if(!is_vacuum) {
       for (int a = 0; a < 3; ++a)
       for (int b = 0; b < 3; ++b) {
@@ -437,6 +427,8 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage) {
     // -----------------------------------------------------------------------------------
     // Hamiltonian constraint
     //
+    // Note that the matter term is *not* included here; this is included explicitly when
+    // calculating d_t \Theta.
     Ht = R + (2./3.)*SQR(K) - AA;// - 16.*M_PI*tmunu.E(m,k,j,i);
 
     // -----------------------------------------------------------------------------------

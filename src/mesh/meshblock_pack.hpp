@@ -16,6 +16,7 @@
 #include "parameter_input.hpp"
 #include "coordinates/coordinates.hpp"
 #include "driver/driver.hpp"
+#include "diffusion/parabolic_process.hpp"
 #include "tasklist/task_list.hpp"
 
 // Forward declarations
@@ -31,6 +32,7 @@ namespace numrel {class NumericalRelativity;}
 class TurbulenceDriver;
 namespace radiation {class Radiation;}
 namespace z4c {class Z4c;}
+namespace z4c {class CCE;}
 namespace adm {class ADM;}
 namespace particles {class Particles;}
 namespace units {class Units;}
@@ -71,6 +73,7 @@ class MeshBlockPack {
   ion_neutral::IonNeutral *pionn=nullptr;
   TurbulenceDriver *pturb=nullptr;
   radiation::Radiation *prad=nullptr;
+  std::vector<z4c::CCE *> pz4c_cce;
   particles::Particles *ppart=nullptr;
 
   // units (needed to convert code units to cgs for, e.g., cooling or radiation)
@@ -78,11 +81,15 @@ class MeshBlockPack {
 
   // map for task lists which operate over all MeshBlocks in this MeshBlockPack
   std::map<std::string, std::shared_ptr<TaskList>> tl_map;
+  std::vector<parabolic::ParabolicProcessDescriptor> parabolic_processes;
 
   // functions
   void AddPhysics(ParameterInput *pin);
   void AddMeshBlocks(ParameterInput *pin);
   void AddCoordinates(ParameterInput *pin);
+  void RegisterParabolicProcess(const parabolic::ParabolicProcessDescriptor &process) {
+    parabolic_processes.push_back(process);
+  }
 
  private:
   // data

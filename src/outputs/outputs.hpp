@@ -8,23 +8,20 @@
 //! \file outputs.hpp
 //  \brief provides classes to handle ALL types of data output
 
-#include <cmath>
-#include <cstdint>
 #include <string>
 #include <vector>
 
 #include "Kokkos_ScatterView.hpp"
 
 #include "athena.hpp"
-#include "file_sharding.hpp"
 #include "io_wrapper.hpp"
 
-#define NHISTORY_VARIABLES 12
+#define NHISTORY_VARIABLES 20
 #if NHISTORY_VARIABLES > NREDUCTION_VARIABLES
     #error NHISTORY > NREDUCTION in outputs.hpp
 #endif
 
-#define NOUTPUT_CHOICES 218
+#define NOUTPUT_CHOICES 153
 // choices for output variables used in <ouput> blocks in input file
 // TO ADD MORE CHOICES:
 //   - add more strings to array below, change NOUTPUT_CHOICES above appropriately
@@ -36,26 +33,25 @@ static const char *var_choice[NOUTPUT_CHOICES] = {
   "hydro_u_d", "hydro_u_m1", "hydro_u_m2", "hydro_u_m3", "hydro_u_e",     "hydro_u",
   "hydro_w_d", "hydro_w_vx", "hydro_w_vy", "hydro_w_vz", "hydro_w_e",     "hydro_w",
   "hydro_u_s", "hydro_w_s",
-  // hydro derived variables (14-18)
-  "hydro_wz",   "hydro_w2",  "temperature", "hydro_v_moments", "hydro_vi_moments",
-  // MHD variables (19-40)
+  // hydro derived variables (14-15)
+  "hydro_wz",   "hydro_w2",
+  // MHD variables (16-37)
   "mhd_u_d",   "mhd_u_m1",   "mhd_u_m2",   "mhd_u_m3",   "mhd_u_e",       "mhd_u",
   "mhd_w_d",   "mhd_w_vx",   "mhd_w_vy",   "mhd_w_vz",   "mhd_w_e",       "mhd_w",
   "mhd_u_s",   "mhd_w_s",    "mhd_wz",     "mhd_w2",
   "mhd_bcc1",  "mhd_bcc2",   "mhd_bcc3",   "mhd_bcc",    "mhd_u_bcc",     "mhd_w_bcc",
-  // MHD derived variables (41-58)
+  // DynGRMHD variables (38)
+  "mhd_t",
+  // MHD derived variables (39-46)
   "mhd_jz",    "mhd_j2",     "mhd_curv",   "mhd_k_jxb",  "mhd_curv_perp", "mhd_bmag",
-  "mhd_divb", "mhd_jcon",   "mhd_curv_alt", "mhd_v_B_moments", "mhd_vi_Bi_moments",
-  "mhd_vA_mag", "mhd_curv_B_ratio",
-  "mhd_theta_jb", "mhd_theta_vb", "mhd_theta_jdrho", "mhd_theta_bdrho",
-  "mhd_visc_heat",
-  // useful for coarsened binary output (59-60)
+  "mhd_divb", "mhd_jcon",
+  // useful for coarsened binary output (47-48)
   "hydro_sgs", "mhd_sgs",
-  // dynamo wavenumber scales (61)
+  // dynamo wavenumber scales (49)
   "mhd_dynamo_ks",
-  // turbulence (62)
+  // turbulence (50)
   "turb_force",
-  // radiation (63-65 coord, 66-79 hydro, 80-99 mhd)
+  // radiation (51-67, 68-87)
   "rad_coord",     "rad_fluid",      "rad_coord_fluid",
   "rad_hydro_u_d", "rad_hydro_u_m1", "rad_hydro_u_m2", "rad_hydro_u_m3", "rad_hydro_u_e",
   "rad_hydro_u",   "rad_hydro_w_d",  "rad_hydro_w_vx", "rad_hydro_w_vy", "rad_hydro_w_vz",
@@ -65,14 +61,14 @@ static const char *var_choice[NOUTPUT_CHOICES] = {
   "rad_mhd_w_e",   "rad_mhd_w",      "rad_mhd_u_s",    "rad_mhd_w_s",    "rad_mhd_bcc1",
   "rad_mhd_bcc2",  "rad_mhd_bcc3",   "rad_mhd_bcc",    "rad_mhd_u_bcc",  "rad_mhd_w_bcc",
 
-  // ADM (100-117)
+  // ADM (88-105)
   "adm_gxx", "adm_gxy", "adm_gxz", "adm_gyy", "adm_gyz", "adm_gzz",
   "adm_Kxx", "adm_Kxy", "adm_Kxz", "adm_Kyy", "adm_Kyz", "adm_Kzz",
   "adm_psi4",
   "adm_alpha", "adm_betax", "adm_betay", "adm_betaz",
   "adm",
 
-  // Z4c (118-140)
+  // Z4c (106-128)
   "z4c_chi",
   "z4c_gxx", "z4c_gxy", "z4c_gxz", "z4c_gyy", "z4c_gyz", "z4c_gzz",
   "z4c_Khat",
@@ -83,11 +79,11 @@ static const char *var_choice[NOUTPUT_CHOICES] = {
   "z4c_betax", "z4c_betay", "z4c_betaz",
   "z4c",
 
-  // Weyl (141-143)
+  // Weyl (129-131)
   "weyl_rpsi4", "weyl_ipsi4",
   "weyl",
 
-  // ADM constraints (144-151)
+  // ADM constraints (132-139)
   "con_C",
   "con_H",
   "con_M",
@@ -95,102 +91,20 @@ static const char *var_choice[NOUTPUT_CHOICES] = {
   "con_Mx", "con_My", "con_Mz",
   "con",
 
-  // Tmunu (152-162)
+  // Tmunu (140-150)
   "tmunu_Sxx", "tmunu_Sxy", "tmunu_Sxz", "tmunu_Syy", "tmunu_Syz", "tmunu_Szz",
   "tmunu_E",
   "tmunu_Sx", "tmunu_Sy", "tmunu_Sz",
   "tmunu",
 
-  // Particles (163-164)
-  "prtcl_all", "prtcl_d",
-
-  // Coordinate variables for PDF binning (165-175)
-  "coord_x", "coord_y", "coord_z",
-  "coord_r", "coord_theta", "coord_phi",
-  "coord_cyl_R", "coord_cyl_phi", "coord_cyl_z",
-  "coord_costheta", "coord_abscostheta",
-
-  // Mass and energy flux derived variables (176-187)
-  "mdot_sph", "mdot_sph_out", "mdot_sph_in",
-  "edot_sph", "edot_sph_out", "edot_sph_in",
-  "mdot_vert", "mdot_vert_out", "mdot_vert_in",
-  "edot_vert", "edot_vert_out", "edot_vert_in",
-
-  // Spherical/cylindrical velocity components and energy flux components (188-195)
-  "vel_sph_r", "vel_sph_theta", "vel_sph_phi",
-  "vel_cyl_R", "vel_cyl_phi",
-  "edot_sph_kin", "edot_sph_th", "edot_sph_mag",
-
-  // Cooling time (196)
-  "cooling_time",
-
-  // Individual hydro passive scalars (197-206)
-  "hydro_u_s_00", "hydro_u_s_01", "hydro_u_s_02", "hydro_u_s_03", "hydro_u_s_04",
-  "hydro_w_s_00", "hydro_w_s_01", "hydro_w_s_02", "hydro_w_s_03", "hydro_w_s_04",
-  // Individual mhd passive scalars (207-216)
-  "mhd_u_s_00", "mhd_u_s_01", "mhd_u_s_02", "mhd_u_s_03", "mhd_u_s_04",
-  "mhd_w_s_00", "mhd_w_s_01", "mhd_w_s_02", "mhd_w_s_03", "mhd_w_s_04",
-  // Hydro-only derived variables (217)
-  "hydro_visc_heat",
+  // Particles (151-152)
+  "prtcl_all", "prtcl_d"
 };
 
 
 // forward declarations
 class Mesh;
 class ParameterInput;
-
-enum PDFScaleMode {
-  PDF_SCALE_LINEAR = 0,
-  PDF_SCALE_LOG = 1,
-  PDF_SCALE_SYMLOG = 2
-};
-
-KOKKOS_INLINE_FUNCTION
-Real PDFAbs(Real value) {
-  return (value < 0.0) ? -value : value;
-}
-
-KOKKOS_INLINE_FUNCTION
-Real PDFTransformValue(Real value, int scale, Real linthresh) {
-  if (scale == PDF_SCALE_LOG) {
-    return Kokkos::log10(value);
-  }
-  if (scale == PDF_SCALE_SYMLOG) {
-    Real sign = (value < 0.0) ? -1.0 : 1.0;
-    Real abs_value = PDFAbs(value);
-    if (abs_value <= linthresh) {
-      return sign * (abs_value / linthresh);
-    }
-    return sign * (1.0 + Kokkos::log10(abs_value / linthresh));
-  }
-  return value;
-}
-
-KOKKOS_INLINE_FUNCTION
-Real PDFInverseTransformValue(Real value, int scale, Real linthresh) {
-  if (scale == PDF_SCALE_LOG) {
-    return Kokkos::pow(10.0, value);
-  }
-  if (scale == PDF_SCALE_SYMLOG) {
-    Real sign = (value < 0.0) ? -1.0 : 1.0;
-    Real abs_value = PDFAbs(value);
-    if (abs_value <= 1.0) {
-      return sign * abs_value * linthresh;
-    }
-    return sign * linthresh * Kokkos::pow(10.0, abs_value - 1.0);
-  }
-  return value;
-}
-
-inline const char *PDFScaleName(int scale) {
-  if (scale == PDF_SCALE_LOG) {
-    return "log";
-  }
-  if (scale == PDF_SCALE_SYMLOG) {
-    return "symlog";
-  }
-  return "linear";
-}
 
 //----------------------------------------------------------------------------------------
 //! \struct OutputParameters
@@ -223,26 +137,13 @@ struct OutputParameters {
   // DBF parameters for PDF:
   // number of derived variables, index of current derived variable
   int n_derived=0, i_derived=0;
-  std::string variable_2; // DBF: for 2d PDFs (legacy)
+  std::string variable_2; // DBF: for 2d PDFs
   Real bin_min, bin_max;
   Real bin2_min, bin2_max;
   int nbin=0, nbin2=0;
   bool logscale=true, logscale2=true;
-  FileShardMode file_shard_mode = FileShardMode::shared;
-
-  // N-D PDF parameters (max 4 dimensions)
-  static constexpr int PDF_MAX_DIM = 4;
-  int pdf_ndim = 0;                              // number of PDF dimensions
-  std::string pdf_variables[PDF_MAX_DIM];        // variable names for each dimension
-  int pdf_nbin[PDF_MAX_DIM] = {0, 0, 0, 0};      // number of bins for each dimension
-  Real pdf_bin_min[PDF_MAX_DIM] = {0, 0, 0, 0};  // bin minimum for each dimension
-  Real pdf_bin_max[PDF_MAX_DIM] = {1, 1, 1, 1};  // bin maximum for each dimension
-  int pdf_scale[PDF_MAX_DIM] = {PDF_SCALE_LINEAR, PDF_SCALE_LINEAR,
-                                PDF_SCALE_LINEAR, PDF_SCALE_LINEAR};
-  Real pdf_linthresh[PDF_MAX_DIM] = {1.0, 1.0, 1.0, 1.0};
-  bool pdf_logscale[PDF_MAX_DIM] = {false, false, false, false};  // legacy log flag
-  std::string pdf_weight = "volume";            // volume, mass, or variable
-  std::string pdf_weight_variable;              // weight variable when pdf_weight=variable
+  bool mass_weighted=false;
+  bool single_file_per_rank=false; // DBF: parameter for single file per rank
 };
 
 //----------------------------------------------------------------------------------------
@@ -403,113 +304,26 @@ class CoarsenedBinaryOutput : public BaseTypeOutput {
 
 //----------------------------------------------------------------------------------------
 //! \struct PDFData
-//  \brief  container for N-D PDF data
+//  \brief  container for PDF data
 
 struct PDFData {
-  static constexpr int MAX_DIM = 4;
-
-  int ndim;                            // number of dimensions (1 to MAX_DIM)
-  int nbin[MAX_DIM];                   // number of bins per dimension
-  int nbin_with_overflow[MAX_DIM];     // nbin + 2 (includes overflow bins)
-  int stride[MAX_DIM];                 // strides for flattened indexing (row-major)
-  int total_bins;                      // total number of bins including overflow
-
-  Kokkos::View<Real*> bin_edges[MAX_DIM];  // bin edges for each dimension
-  Real step_size[MAX_DIM];                  // step size (or log step size)
-  Real transformed_min[MAX_DIM];            // minimum in transformed coordinates
-  Real transformed_max[MAX_DIM];            // maximum in transformed coordinates
-  int scale[MAX_DIM];                       // scale mode per dimension
-  Real linthresh[MAX_DIM];                  // symlog linear threshold per dimension
-  bool logscale[MAX_DIM];                   // log scale flag per dimension
-  Real bin_min[MAX_DIM];                    // minimum bin value per dimension
-  Real bin_max[MAX_DIM];                    // maximum bin value per dimension
-
+  int pdf_dimension;
+  int nbin, nbin2;
+  Kokkos::View<Real*> bins;
+  Kokkos::View<Real*> bins2;
   bool bins_written;
+  // if logscale is true then this step is the log10 of the step size
+  Real step_size, step_size2;
+  bool mass_weighted;
+  bool logscale, logscale2;
 
-  DvceArray1D<Real> result_;  // flattened N-D histogram
-  Kokkos::Experimental::ScatterView<Real*, LayoutWrapper> scatter_result;
+  DvceArray2D<Real> result_; // resulting histogram
+  Kokkos::Experimental::ScatterView<Real **, LayoutWrapper> scatter_result;
 
-  // Default constructor
-  PDFData() : ndim(0), total_bins(0), bins_written(false) {
-    for (int d = 0; d < MAX_DIM; ++d) {
-      nbin[d] = 0;
-      nbin_with_overflow[d] = 0;
-      stride[d] = 0;
-      step_size[d] = 0.0;
-      transformed_min[d] = 0.0;
-      transformed_max[d] = 0.0;
-      scale[d] = PDF_SCALE_LINEAR;
-      linthresh[d] = 1.0;
-      logscale[d] = false;
-      bin_min[d] = 0.0;
-      bin_max[d] = 1.0;
-    }
-  }
-
-  // Constructor for N-D PDF
-  void Initialize(int ndim_in, const int* nbin_in, const Real* bin_min_in,
-                  const Real* bin_max_in, const int* scale_in,
-                  const Real* linthresh_in) {
-    ndim = ndim_in;
-    total_bins = 1;
-
-    // Set up bins and compute strides (C-style row-major: last dim varies fastest)
-    for (int d = 0; d < ndim; ++d) {
-      nbin[d] = nbin_in[d];
-      nbin_with_overflow[d] = nbin[d] + 2;  // +2 for underflow/overflow
-      bin_min[d] = bin_min_in[d];
-      bin_max[d] = bin_max_in[d];
-      scale[d] = scale_in[d];
-      linthresh[d] = linthresh_in[d];
-      logscale[d] = (scale[d] == PDF_SCALE_LOG);
-
-      // Allocate bin edges
-      bin_edges[d] = Kokkos::View<Real*>("bin_edges_" + std::to_string(d), nbin[d] + 1);
-
-      transformed_min[d] = PDFTransformValue(bin_min[d], scale[d], linthresh[d]);
-      transformed_max[d] = PDFTransformValue(bin_max[d], scale[d], linthresh[d]);
-      step_size[d] = (transformed_max[d] - transformed_min[d]) / nbin[d];
-
-      total_bins *= nbin_with_overflow[d];
-    }
-
-    // Compute strides (C-style row-major)
-    stride[ndim - 1] = 1;
-    for (int d = ndim - 2; d >= 0; --d) {
-      stride[d] = stride[d + 1] * nbin_with_overflow[d + 1];
-    }
-
-    // Zero out unused dimensions
-    for (int d = ndim; d < MAX_DIM; ++d) {
-      nbin[d] = 0;
-      nbin_with_overflow[d] = 0;
-      stride[d] = 0;
-      step_size[d] = 0.0;
-      transformed_min[d] = 0.0;
-      transformed_max[d] = 0.0;
-      scale[d] = PDF_SCALE_LINEAR;
-      linthresh[d] = 1.0;
-      logscale[d] = false;
-      bin_min[d] = 0.0;
-      bin_max[d] = 1.0;
-    }
-
-    // Allocate result array
-    result_ = DvceArray1D<Real>("pdf_result", total_bins);
-    scatter_result = Kokkos::Experimental::ScatterView<Real*, LayoutWrapper>(result_);
-  }
-
-  // Populate bin edges on host, then copy to device
-  void PopulateBinEdges() {
-    for (int d = 0; d < ndim; ++d) {
-      auto bins_host = Kokkos::create_mirror_view(bin_edges[d]);
-      for (int i = 0; i <= nbin[d]; ++i) {
-        Real transformed = transformed_min[d] + i * step_size[d];
-        bins_host(i) = PDFInverseTransformValue(transformed, scale[d], linthresh[d]);
-      }
-      Kokkos::deep_copy(bin_edges[d], bins_host);
-    }
-    Kokkos::fence();
+  PDFData(int dim, int nbinVal, int nbin2Val)
+    : pdf_dimension(dim), nbin(nbinVal), nbin2(nbin2Val),
+      bins("bins", nbin + 1), bins2("bins2", nbin2 + 1),
+      bins_written(false), mass_weighted(false), logscale(false), logscale2(false) {
   }
 };
 
@@ -563,26 +377,6 @@ class MeshBinaryOutput : public BaseTypeOutput {
 };
 
 //----------------------------------------------------------------------------------------
-//! \class SphericalSliceOutput
-//  \brief derived BaseTypeOutput class that writes a 2D spherical slice at radius r
-//  (origin-centered) in binary format.  Interpolates all requested variables onto a
-//  uniform (cos(theta), phi) grid via trilinear interpolation.
-
-class SphericalSlice;  // forward decl
-
-class SphericalSliceOutput : public BaseTypeOutput {
- public:
-  SphericalSliceOutput(ParameterInput *pin, Mesh *pm, OutputParameters oparams);
-  ~SphericalSliceOutput() override;
-  void LoadOutputData(Mesh *pm) override;
-  void WriteOutputFile(Mesh *pm, ParameterInput *pin) override;
- private:
-  SphericalSlice *psph;
-  std::vector<int32_t> shard_owned_angles;
-  std::vector<float> shard_values;
-};
-
-//----------------------------------------------------------------------------------------
 //! \class RestartOutput
 //  \brief derived BaseTypeOutput class for restarts
 
@@ -593,6 +387,51 @@ class RestartOutput : public BaseTypeOutput {
   void WriteOutputFile(Mesh *pm, ParameterInput *pin) override;
 };
 
+// Forward declaration
+class CartesianGrid;
+
+//----------------------------------------------------------------------------------------
+//! \class CartesianGridOutput
+//  \brief derived BaseTypeOutput class for output on a Cartesian grid
+class CartesianGridOutput : public BaseTypeOutput {
+  struct MetaData {
+    int cycle;
+    float time;
+    float center[3];
+    float extent[3];
+    int numpoints[3];
+    bool is_cheb;
+    int noutvars;
+  };
+ public:
+  CartesianGridOutput(ParameterInput *pin, Mesh *pm, OutputParameters oparams);
+  ~CartesianGridOutput();
+  //! Interpolate the data on the Cartesian grid and handle MPI communication
+  void LoadOutputData(Mesh *pm) override;
+  //! Write the data to file
+  void WriteOutputFile(Mesh *pm, ParameterInput *pin) override;
+ private:
+  CartesianGrid *pcart;
+  MetaData md;
+};
+
+// Forward declaration
+class SphericalSurface;
+
+//----------------------------------------------------------------------------------------
+//! \class SphericalGridOutput
+//  \brief derived BaseTypeOutput class for output on a Cartesian grid
+class SphericalSurfaceOutput : public BaseTypeOutput {
+ public:
+  SphericalSurfaceOutput(ParameterInput *pin, Mesh *pm, OutputParameters oparams);
+  ~SphericalSurfaceOutput();
+  //! Interpolate the data on the Cartesian grid and handle MPI communication
+  void LoadOutputData(Mesh *pm) override;
+  //! Write the data to file
+  void WriteOutputFile(Mesh *pm, ParameterInput *pin) override;
+ private:
+  SphericalSurface *psurf;
+};
 //----------------------------------------------------------------------------------------
 //! \class EventLogOutput
 //  \brief derived BaseTypeOutput class for event counter data
@@ -625,22 +464,6 @@ class TrackedParticleOutput : public BaseTypeOutput {
   bool header_written;
   std::vector<int> npout_eachrank;
   HostArray1D<TrackedParticleData> outpart;
-};
-
-//----------------------------------------------------------------------------------------
-//! \class ParticleRestartOutput
-//  \brief derived BaseTypeOutput class for particle restart files
-
-class ParticleRestartOutput : public BaseTypeOutput {
- public:
-  ParticleRestartOutput(ParameterInput *pin, Mesh *pm, OutputParameters oparams);
-  void LoadOutputData(Mesh *pm) override;
-  void WriteOutputFile(Mesh *pm, ParameterInput *pin) override;
- protected:
-  int nprtcl_thisrank;  // number of particles this rank
-  int nrdata, nidata;   // dimensions of particle data arrays
-  HostArray2D<Real> outpart_rdata;  // particle real data on host
-  HostArray2D<int>  outpart_idata;  // particle integer data on host
 };
 
 //----------------------------------------------------------------------------------------

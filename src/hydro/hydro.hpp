@@ -24,7 +24,7 @@ class Viscosity;
 class Conduction;
 class SourceTerms;
 class OrbitalAdvectionCC;
-class ShearingBoxBoundaryCC;
+class ShearingBoxCC;
 class Driver;
 
 // constants that enumerate Hydro Riemann Solver options
@@ -61,6 +61,8 @@ struct HydroTaskIDs {
 
 namespace hydro {
 
+enum class DiffusionSelection {explicit_only, sts_only};
+
 //----------------------------------------------------------------------------------------
 //! \class Hydro
 
@@ -87,7 +89,7 @@ class Hydro {
 
   // Orbital advection and shearing box BCs
   OrbitalAdvectionCC *porb_u = nullptr;
-  ShearingBoxBoundaryCC *psbox_u = nullptr;
+  ShearingBoxCC *psbox_u = nullptr;
 
   // Object(s) for extra physics (viscosity, thermal conduction, srcterms)
   Viscosity *pvisc = nullptr;
@@ -96,8 +98,18 @@ class Hydro {
 
   // following only used for time-evolving flow
   DvceArray5D<Real> u1;       // conserved variables at intermediate step
+  DvceArray5D<Real> u_sts0;   // conserved variables at start of STS sweep
+  DvceArray5D<Real> u_sts1;   // previous STS stage state
+  DvceArray5D<Real> u_sts2;   // second previous STS stage state
+  DvceArray5D<Real> u_sts_rhs;  // cached stage-1 RKL2 operator contribution
   DvceFaceFld5D<Real> uflx;   // fluxes of conserved quantities on cell faces
   Real dtnew;
+
+  bool has_explicit_viscosity = false;
+  bool has_explicit_conduction = false;
+  bool has_sts_viscosity = false;
+  bool has_sts_conduction = false;
+  bool has_any_sts_diffusion = false;
 
   // following used for FOFC
   DvceArray4D<bool> fofc;  // flag for each cell to indicate if FOFC is needed
@@ -111,6 +123,7 @@ class Hydro {
   void AssembleHydroTasks(std::map<std::string, std::shared_ptr<TaskList>> tl);
   // ...in "before_stagen_tl" list
   TaskStatus InitRecv(Driver *d, int stage);
+  TaskStatus InitRecvParabolic(Driver *d, int stage);
   // ...in "stagen_tl" list
   TaskStatus CopyCons(Driver *d, int stage);
   TaskStatus Fluxes(Driver *d, int stage);
@@ -120,18 +133,28 @@ class Hydro {
   TaskStatus HydroSrcTerms(Driver *d, int stage);
   TaskStatus SendU_OA(Driver *d, int stage);
   TaskStatus RecvU_OA(Driver *d, int stage);
+  TaskStatus SendU_OA_Parabolic(Driver *d, int stage);
+  TaskStatus RecvU_OA_Parabolic(Driver *d, int stage);
   TaskStatus RestrictU(Driver *d, int stage);
   TaskStatus SendU(Driver *d, int stage);
   TaskStatus RecvU(Driver *d, int stage);
   TaskStatus SendU_Shr(Driver *d, int stage);
   TaskStatus RecvU_Shr(Driver *d, int stage);
+  TaskStatus SendU_Shr_Parabolic(Driver *d, int stage);
+  TaskStatus RecvU_Shr_Parabolic(Driver *d, int stage);
   TaskStatus ApplyPhysicalBCs(Driver* pdrive, int stage);
   TaskStatus Prolongate(Driver* pdrive, int stage);
   TaskStatus ConToPrim(Driver *d, int stage);
   TaskStatus NewTimeStep(Driver *d, int stage);
+  TaskStatus ClearSTSFlux(Driver *d, int stage);
+  TaskStatus STSFluxes(Driver *d, int stage);
+  TaskStatus STSUpdate(Driver *d, int stage);
+  TaskStatus STSRefreshTimeStep(Driver *d, int stage);
   // ...in "after_stagen_tl" list
   TaskStatus ClearSend(Driver *d, int stage);
   TaskStatus ClearRecv(Driver *d, int stage);  // also in Driver::Initialize
+  TaskStatus ClearSendParabolic(Driver *d, int stage);
+  TaskStatus ClearRecvParabolic(Driver *d, int stage);
 
   // CalculateFluxes function templated over Riemann Solvers
   template <Hydro_RSolver T>
@@ -141,6 +164,8 @@ class Hydro {
   void FOFC(Driver *d, int stage);
 
  private:
+  void AddSelectedDiffusionFluxes(DiffusionSelection selection);
+  void RecomputeTimeStepFromCurrentState(Driver *pdrive);
   MeshBlockPack* pmy_pack;  // ptr to MeshBlockPack containing this Hydro
 };
 

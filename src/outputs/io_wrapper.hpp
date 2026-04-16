@@ -21,13 +21,6 @@ using  IOWrapperFile = FILE*;
 
 using IOWrapperSizeT = std::uint64_t;
 
-namespace io_wrapper {
-IOWrapperSizeT GetMaxChunkedByteCount();
-#if MPI_PARALLEL_ENABLED
-void BroadcastBytes(void *buf, IOWrapperSizeT count, int root, MPI_Comm comm);
-#endif
-}  // namespace io_wrapper
-
 class IOWrapper {
  public:
 #if MPI_PARALLEL_ENABLED
@@ -41,29 +34,29 @@ class IOWrapper {
   enum class FileMode {read, write, append};
 
   // wrapper functions for basic I/O tasks
-  int Open(const char* fname, FileMode rw, bool use_serial_io = false);
+  int Open(const char* fname, FileMode rw, bool single_file_per_rank = false);
   std::size_t Read_bytes(void *buf, IOWrapperSizeT size, IOWrapperSizeT count,
-                         bool use_serial_io = false);
+                         bool single_file_per_rank = false);
   std::size_t Read_bytes_at(void *buf, IOWrapperSizeT size, IOWrapperSizeT count,
-                            IOWrapperSizeT offset, bool use_serial_io = false);
+                            IOWrapperSizeT offset, bool single_file_per_rank = false);
   std::size_t Read_bytes_at_all(void *buf, IOWrapperSizeT size, IOWrapperSizeT count,
-                                IOWrapperSizeT offset, bool use_serial_io = false);
+                                IOWrapperSizeT offset, bool single_file_per_rank = false);
   std::size_t Write_any_type(const void *buf, IOWrapperSizeT count, std::string type,
-                             bool use_serial_io = false);
+                             bool single_file_per_rank = false);
   std::size_t Write_any_type_at(const void *buf, IOWrapperSizeT cnt,IOWrapperSizeT offset,
-                                std::string datatype, bool use_serial_io = false);
+                                std::string datatype, bool single_file_per_rank = false);
   std::size_t Write_any_type_at_all(const void *buf, IOWrapperSizeT cnt,
                                     IOWrapperSizeT offset, std::string datatype,
-                                    bool use_serial_io = false);
+                                    bool single_file_per_rank = false);
   std::size_t Read_Reals(void *buf, IOWrapperSizeT count,
-                         bool use_serial_io = false);
+                         bool single_file_per_rank = false);
   std::size_t Read_Reals_at(void *buf, IOWrapperSizeT count, IOWrapperSizeT offset,
-                            bool use_serial_io = false);
+                            bool single_file_per_rank = false);
   std::size_t Read_Reals_at_all(void *buf, IOWrapperSizeT count, IOWrapperSizeT offset,
-                                bool use_serial_io = false);
-  int Close(bool use_serial_io = false);
-  int Seek(IOWrapperSizeT offset, bool use_serial_io = false);
-  IOWrapperSizeT GetPosition(bool use_serial_io = false);
+                                bool single_file_per_rank = false);
+  int Close(bool single_file_per_rank = false);
+  int Seek(IOWrapperSizeT offset, bool single_file_per_rank = false);
+  IOWrapperSizeT GetPosition(bool single_file_per_rank = false);
 
  private:
   IOWrapperFile fh_;

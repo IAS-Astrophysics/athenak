@@ -26,8 +26,8 @@ class Conduction;
 class SourceTerms;
 class OrbitalAdvectionCC;
 class OrbitalAdvectionFC;
-class ShearingBoxBoundaryCC;
-class ShearingBoxBoundaryFC;
+class ShearingBoxCC;
+class ShearingBoxFC;
 class Driver;
 
 // function ptr for user-defined MHD boundary functions enrolled in problem generator
@@ -82,6 +82,8 @@ struct MHDTaskIDs {
 
 namespace mhd {
 
+enum class DiffusionSelection {explicit_only, sts_only};
+
 //----------------------------------------------------------------------------------------
 //! \class MHD
 
@@ -114,8 +116,8 @@ class MHD {
   // Orbital advection and shearing box BCs
   OrbitalAdvectionCC *porb_u = nullptr;
   OrbitalAdvectionFC *porb_b = nullptr;
-  ShearingBoxBoundaryCC *psbox_u = nullptr;
-  ShearingBoxBoundaryFC *psbox_b = nullptr;
+  ShearingBoxCC *psbox_u = nullptr;
+  ShearingBoxFC *psbox_b = nullptr;
 
   // Object(s) for extra physics (viscosity, resistivity, thermal conduction, srcterms)
   Viscosity *pvisc = nullptr;
@@ -125,7 +127,15 @@ class MHD {
 
   // following only used for time-evolving flow
   DvceArray5D<Real> u1;       // conserved variables, second register
+  DvceArray5D<Real> u_sts0;   // conserved variables at start of STS sweep
+  DvceArray5D<Real> u_sts1;   // previous STS stage state
+  DvceArray5D<Real> u_sts2;   // second previous STS stage state
+  DvceArray5D<Real> u_sts_rhs;  // cached stage-1 RKL2 operator contribution
   DvceFaceFld4D<Real> b1;     // face-centered magnetic fields, second register
+  DvceFaceFld4D<Real> b_sts0;   // face-centered magnetic fields at start of STS sweep
+  DvceFaceFld4D<Real> b_sts1;   // previous STS stage magnetic state
+  DvceFaceFld4D<Real> b_sts2;   // second previous STS stage magnetic state
+  DvceFaceFld4D<Real> b_sts_rhs;  // cached stage-1 RKL2 magnetic operator contribution
   DvceFaceFld5D<Real> uflx;   // fluxes of conserved quantities on cell faces
   DvceEdgeFld4D<Real> efld;   // edge-centered electric fields (fluxes of B)
   // temporary variables used to store face-centered electric fields returned by RS
@@ -143,6 +153,16 @@ class MHD {
   DvceArray4D<bool> fofc;  // flag for each cell to indicate if FOFC is needed
   bool use_fofc = false;   // flag to enable FOFC
 
+  bool has_explicit_viscosity = false;
+  bool has_explicit_conduction = false;
+  bool has_explicit_resistivity = false;
+  bool has_sts_viscosity = false;
+  bool has_sts_conduction = false;
+  bool has_sts_resistivity = false;
+  bool has_any_sts_diffusion = false;
+  bool has_any_sts_cell_update = false;
+  bool has_any_sts_field_update = false;
+
   // container to hold names of TaskIDs
   MHDTaskIDs id;
 
@@ -153,6 +173,7 @@ class MHD {
   TaskStatus SaveMHDState(Driver *d, int stage);
   // ...in "before_stagen_tl" task list
   TaskStatus InitRecv(Driver *d, int stage);
+  TaskStatus InitRecvParabolic(Driver *d, int stage);
   // ...in "stagen_tl" task list
   TaskStatus CopyCons(Driver *d, int stage);
   TaskStatus Fluxes(Driver *d, int stage);
@@ -162,11 +183,15 @@ class MHD {
   TaskStatus MHDSrcTerms(Driver *d, int stage);
   TaskStatus SendU_OA(Driver *d, int stage);
   TaskStatus RecvU_OA(Driver *d, int stage);
+  TaskStatus SendU_OA_Parabolic(Driver *d, int stage);
+  TaskStatus RecvU_OA_Parabolic(Driver *d, int stage);
   TaskStatus RestrictU(Driver *d, int stage);
   TaskStatus SendU(Driver *d, int stage);
   TaskStatus RecvU(Driver *d, int stage);
   TaskStatus SendU_Shr(Driver *d, int stage);
   TaskStatus RecvU_Shr(Driver *d, int stage);
+  TaskStatus SendU_Shr_Parabolic(Driver *d, int stage);
+  TaskStatus RecvU_Shr_Parabolic(Driver *d, int stage);
   TaskStatus CornerE(Driver *d, int stage);
   TaskStatus EFieldSrc(Driver *d, int stage);
   TaskStatus SendE(Driver *d, int stage);
@@ -174,18 +199,31 @@ class MHD {
   TaskStatus CT(Driver *d, int stage);
   TaskStatus SendB_OA(Driver *d, int stage);
   TaskStatus RecvB_OA(Driver *d, int stage);
+  TaskStatus SendB_OA_Parabolic(Driver *d, int stage);
+  TaskStatus RecvB_OA_Parabolic(Driver *d, int stage);
   TaskStatus RestrictB(Driver *d, int stage);
   TaskStatus SendB(Driver *d, int stage);
   TaskStatus RecvB(Driver *d, int stage);
   TaskStatus SendB_Shr(Driver *d, int stage);
   TaskStatus RecvB_Shr(Driver *d, int stage);
+  TaskStatus SendB_Shr_Parabolic(Driver *d, int stage);
+  TaskStatus RecvB_Shr_Parabolic(Driver *d, int stage);
   TaskStatus ApplyPhysicalBCs(Driver* pdrive, int stage);
   TaskStatus Prolongate(Driver* pdrive, int stage);
   TaskStatus ConToPrim(Driver *d, int stage);
   TaskStatus NewTimeStep(Driver *d, int stage);
+  TaskStatus ClearSTSFlux(Driver *d, int stage);
+  TaskStatus ClearSTSEField(Driver *d, int stage);
+  TaskStatus STSFluxes(Driver *d, int stage);
+  TaskStatus STSEField(Driver *d, int stage);
+  TaskStatus STSUpdateU(Driver *d, int stage);
+  TaskStatus STSUpdateB(Driver *d, int stage);
+  TaskStatus STSRefreshTimeStep(Driver *d, int stage);
   // ...in "after_stagen_tl" task list
   TaskStatus ClearSend(Driver *d, int stage);
   TaskStatus ClearRecv(Driver *d, int stage);  // also in Driver::Initialize
+  TaskStatus ClearSendParabolic(Driver *d, int stage);
+  TaskStatus ClearRecvParabolic(Driver *d, int stage);
 
   // CalculateFluxes function templated over Riemann Solvers
   template <MHD_RSolver T>
@@ -197,6 +235,9 @@ class MHD {
   DvceArray5D<Real> utest, bcctest;  // scratch arrays for FOFC
 
  private:
+  void AddSelectedDiffusionFluxes(DiffusionSelection selection);
+  void AddSelectedDiffusionEMF(DiffusionSelection selection);
+  void RecomputeTimeStepFromCurrentState(Driver *pdrive);
   MeshBlockPack* pmy_pack;   // ptr to MeshBlockPack containing this MHD
   // temporary variables used to store face-centered electric fields returned by RS
   DvceArray4D<Real> e1_cc, e2_cc, e3_cc;

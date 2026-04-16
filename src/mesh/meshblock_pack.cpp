@@ -23,6 +23,7 @@
 #include "tasklist/numerical_relativity.hpp"
 #include "z4c/z4c.hpp"
 #include "dyn_grmhd/dyn_grmhd.hpp"
+#include "z4c/cce/cce.hpp"
 #include "diffusion/viscosity.hpp"
 #include "diffusion/resistivity.hpp"
 #include "radiation/radiation.hpp"
@@ -45,6 +46,9 @@ MeshBlockPack::MeshBlockPack(Mesh *pm, int igids, int igide) :
   tl_map.insert(std::make_pair("before_stagen",std::make_shared<TaskList>()));
   tl_map.insert(std::make_pair("stagen",std::make_shared<TaskList>()));
   tl_map.insert(std::make_pair("after_stagen",std::make_shared<TaskList>()));
+  tl_map.insert(std::make_pair("before_parabolic_stagen",std::make_shared<TaskList>()));
+  tl_map.insert(std::make_pair("parabolic_stagen",std::make_shared<TaskList>()));
+  tl_map.insert(std::make_pair("after_parabolic_stagen",std::make_shared<TaskList>()));
 }
 
 //----------------------------------------------------------------------------------------
@@ -56,14 +60,20 @@ MeshBlockPack::~MeshBlockPack() {
   if (pdyngr != nullptr) {delete pdyngr;}
   if (ptmunu != nullptr) {delete ptmunu;}
   if (padm   != nullptr) {delete padm;}
-  if (pz4c   != nullptr) {delete pz4c;}
+  if (pz4c   != nullptr) {
+    delete pz4c;
+    // cce dump
+    for (auto cce : pz4c_cce) {
+      delete cce;
+    }
+    pz4c_cce.resize(0);
+  }
   if (pturb  != nullptr) {delete pturb;}
   if (prad   != nullptr) {delete prad;}
   if (pmhd   != nullptr) {delete pmhd;}
   if (phydro != nullptr) {delete phydro;}
   if (punit  != nullptr) {delete punit;}
   delete pcoord;
-  // must be last, since it calls ~BoundaryValues() which (MPI) uses pmy_pack->pmb->nnghbr
   delete pmb;
 }
 
@@ -174,15 +184,8 @@ void MeshBlockPack::AddPhysics(ParameterInput *pin) {
   // task lists respectively.
   if (pin->DoesBlockExist("turb_driving")) {
     pturb = new TurbulenceDriver(this, pin);
-    
-    // Check if task lists exist before using them
-    if (tl_map.find("before_timeintegrator") != tl_map.end()) {
-      pturb->IncludeInitializeModesTask(tl_map["before_timeintegrator"], none);
-    }
-    
-    if (tl_map.find("stagen") != tl_map.end()) {
-      pturb->IncludeAddForcingTask(tl_map["stagen"], none);
-    }
+    pturb->IncludeInitializeModesTask(tl_map["before_timeintegrator"], none);
+    pturb->IncludeAddForcingTask(tl_map["stagen"], none);
   } else {
     pturb = nullptr;
   }
@@ -193,6 +196,14 @@ void MeshBlockPack::AddPhysics(ParameterInput *pin) {
     pz4c = new z4c::Z4c(this, pin);
     padm = new adm::ADM(this, pin);
     ptmunu = nullptr;
+    // init cce dump
+    pz4c_cce.reserve(0);
+    int ncce = pin->GetOrAddInteger("cce", "num_radii", 0);
+    pz4c_cce.reserve(ncce);// 10 different components for each radius
+    for(int n = 0; n < ncce; ++n) {
+      // NOTE: these names are used for pittnull code, so DON'T change the convention
+      pz4c_cce.push_back(new z4c::CCE(pmesh, pin,n));
+    }
     nphysics++;
   } else {
     pz4c = nullptr;

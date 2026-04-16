@@ -1,0 +1,79 @@
+# AthenaK input file for mixed explicit/STS MHD diffusion smoke coverage
+
+<comment>
+problem  = mixed explicit viscosity and STS resistivity
+
+<job>
+basename = STSMixedMHD
+
+<mesh>
+nghost    = 3
+nx1       = 128
+x1min     = -5.0
+x1max     = 5.0
+ix1_bc    = outflow
+ox1_bc    = outflow
+
+nx2       = 1
+x2min     = -0.5
+x2max     = 0.5
+ix2_bc    = periodic
+ox2_bc    = periodic
+
+nx3       = 1
+x3min     = -0.5
+x3max     = 0.5
+ix3_bc    = periodic
+ox3_bc    = periodic
+
+<meshblock>
+nx1       = 32
+nx2       = 1
+nx3       = 1
+
+<time>
+evolution  = dynamic
+integrator = rk2
+cfl_number = 0.4
+nlim       = 4
+tlim       = 0.02
+ndiag      = 1
+sts_integrator = none
+sts_max_dt_ratio = -1.0
+
+<mhd>
+eos               = ideal
+reconstruct       = plm
+rsolver           = hlld
+gamma             = 1.4
+viscosity         = 0.5
+viscosity_integrator = explicit
+ohmic_resistivity = 1.0
+ohmic_resistivity_integrator = explicit
+
+<problem>
+pgen_name = shock_tube
+shock_dir = 1
+xshock    = 0.0
+
+dl = 1.0
+pl = 1.0
+ul = 0.0
+vl = 1.0
+wl = 1.0
+bxl = 0.0
+byl = 1.0
+bzl = 1.0
+
+dr = 1.0
+pr = 1.0
+ur = 0.0
+vr = -1.0
+wr = -1.0
+bxr = 0.0
+byr = -1.0
+bzr = -1.0
+
+<output1>
+file_type = hst
+dt        = 0.01

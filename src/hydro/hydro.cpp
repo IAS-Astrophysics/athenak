@@ -18,6 +18,7 @@
 #include "diffusion/conduction.hpp"
 #include "srcterms/srcterms.hpp"
 #include "shearing_box/shearing_box.hpp"
+#include "shearing_box/orbital_advection.hpp"
 #include "bvals/bvals.hpp"
 #include "hydro/hydro.hpp"
 
@@ -74,6 +75,15 @@ Hydro::Hydro(MeshBlockPack *ppack, ParameterInput *pin) :
   // Viscosity (if requested in input file)
   if (pin->DoesParameterExist("hydro","viscosity")) {
     pvisc = new Viscosity("hydro", ppack, pin);
+    has_sts_viscosity =
+        (pvisc->mode == parabolic::ParabolicIntegratorMode::sts);
+    has_explicit_viscosity =
+        (pvisc->mode == parabolic::ParabolicIntegratorMode::explicit_mode);
+    ppack->RegisterParabolicProcess({"hydro/viscosity",
+                                     parabolic::ParabolicProcessOwner::hydro,
+                                     pvisc->mode,
+                                     parabolic::ParabolicUpdateShape::cell_centered,
+                                     &(pvisc->dtnew)});
   } else {
     pvisc = nullptr;
   }
@@ -82,12 +92,25 @@ Hydro::Hydro(MeshBlockPack *ppack, ParameterInput *pin) :
   if (pin->DoesParameterExist("hydro","conductivity") ||
       pin->DoesParameterExist("hydro","tdep_conductivity")) {
     pcond = new Conduction("hydro", ppack, pin);
+    has_sts_conduction =
+        (pcond->mode == parabolic::ParabolicIntegratorMode::sts);
+    has_explicit_conduction =
+        (pcond->mode == parabolic::ParabolicIntegratorMode::explicit_mode);
+    ppack->RegisterParabolicProcess({"hydro/conductivity",
+                                     parabolic::ParabolicProcessOwner::hydro,
+                                     pcond->mode,
+                                     parabolic::ParabolicUpdateShape::cell_centered,
+                                     &(pcond->dtnew)});
   } else {
     pcond = nullptr;
   }
 
-  // Source terms (constructor parses input file to initialize only srcterms needed)
-  psrc = new SourceTerms("hydro", ppack, pin);
+  // Source terms (if needed)
+  if (pin->DoesBlockExist("hydro_srcterms")) {
+    psrc = new SourceTerms("hydro_srcterms", ppack, pin);
+  }
+
+  has_any_sts_diffusion = (has_sts_viscosity || has_sts_conduction);
 
   // (3) read time-evolution option [already error checked in driver constructor]
   // Then initialize memory and algorithms for reconstruction and Riemann solvers
@@ -122,7 +145,7 @@ Hydro::Hydro(MeshBlockPack *ppack, ParameterInput *pin) :
   // Orbital advection and shearing box BCs (if requested in input file)
   if (pin->DoesBlockExist("shearing_box")) {
     porb_u = new OrbitalAdvectionCC(ppack, pin, (nhydro+nscalars));
-    psbox_u = new ShearingBoxBoundaryCC(ppack, pin, (nhydro+nscalars));
+    psbox_u = new ShearingBoxCC(ppack, pin, (nhydro+nscalars));
   } else {
     porb_u = nullptr;
     psbox_u = nullptr;
@@ -273,6 +296,12 @@ Hydro::Hydro(MeshBlockPack *ppack, ParameterInput *pin) :
       int ncells2 = (indcs.nx2 > 1)? (indcs.nx2 + 2*(indcs.ng)) : 1;
       int ncells3 = (indcs.nx3 > 1)? (indcs.nx3 + 2*(indcs.ng)) : 1;
       Kokkos::realloc(u1,       nmb, (nhydro+nscalars), ncells3, ncells2, ncells1);
+      if (has_any_sts_diffusion) {
+        Kokkos::realloc(u_sts0,   nmb, (nhydro+nscalars), ncells3, ncells2, ncells1);
+        Kokkos::realloc(u_sts1,   nmb, (nhydro+nscalars), ncells3, ncells2, ncells1);
+        Kokkos::realloc(u_sts2,   nmb, (nhydro+nscalars), ncells3, ncells2, ncells1);
+        Kokkos::realloc(u_sts_rhs,nmb, (nhydro+nscalars), ncells3, ncells2, ncells1);
+      }
       Kokkos::realloc(uflx.x1f, nmb, (nhydro+nscalars), ncells3, ncells2, ncells1);
       Kokkos::realloc(uflx.x2f, nmb, (nhydro+nscalars), ncells3, ncells2, ncells1);
       Kokkos::realloc(uflx.x3f, nmb, (nhydro+nscalars), ncells3, ncells2, ncells1);

@@ -68,12 +68,6 @@ class IdealGas : public EOSPolicyInterface {
     return n*T;
   }
 
-  /// Calculate the entropy per baryon using the ideal gas law.
-  KOKKOS_INLINE_FUNCTION Real Entropy(Real n, Real T, Real *Y) const {
-    // FIXME: implement or force to abort
-    return 0;
-  }
-
   /// Calculate the enthalpy per baryon using the ideal gas law.
   KOKKOS_INLINE_FUNCTION Real Enthalpy(Real n, Real T, Real *Y) const {
     return mb + gamma/gammam1*T;

@@ -38,6 +38,8 @@ cfl_number = 0.4       # The Courant, Friedrichs, & Lewy (CFL) Number
 nlim       = -1        # cycle limit
 tlim       = 4.0      # time limit
 ndiag      = 1         # cycles between diagostic output
+sts_integrator = none  # super-time-stepping method
+sts_max_dt_ratio = -1.0
 
 <hydro>
 eos         = ideal    # EOS type
@@ -45,9 +47,11 @@ reconstruct = wenoz    # spatial reconstruction method
 rsolver     = hllc     # Riemann-solver to be used
 gamma       = 1.66667  # gamma = C_p/C_v
 viscosity   = 1.0     # coefficient of isotropic kinematic viscosity
+viscosity_integrator = explicit
 
 <problem>
 pgen_name = diffusion  # problem generator name
+diffusion_test = hydro_viscosity
 amp    = 1.e-6         # amplitude of Gaussian velocity distr
 t0     = 0.5           # intial time for Gaussian distr
 x10    = 0.0           # center of Gaussian distr in x1
@@ -63,4 +67,3 @@ data_format = %24.16e  # output precision
 dt          = 0.1     # time increment between outputs
 slice_x2    = 0.0       # slice in x2
 slice_x3    = 0.0       # slice in x3
-

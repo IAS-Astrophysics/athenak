@@ -29,6 +29,16 @@
 #include <mpi.h>
 #endif
 
+namespace {
+
+[[noreturn]] void DriverFatalError(const char *file, int line, const std::string &msg) {
+  std::cout << "### FATAL ERROR in " << file << " at line " << line << std::endl
+            << msg << std::endl;
+  std::exit(EXIT_FAILURE);
+}
+
+} // namespace
+
 //----------------------------------------------------------------------------------------
 // constructor, initializes data structures and parameters
 //
@@ -165,8 +175,8 @@ Driver::Driver(ParameterInput *pin, Mesh *pmesh, Real wtlim, Kokkos::Timer* ptim
       nimp_stages = 3;
       nexp_stages = 2;
       cfl_limit = 1.0;
-      gam0[0] = 0.0;
-      gam1[0] = 1.0;
+      gam0[0] = 1.0;
+      gam1[0] = 0.0;
       beta[0] = 1.0;
 
       gam0[1] = 0.5;
@@ -185,6 +195,48 @@ Driver::Driver(ParameterInput *pin, Mesh *pmesh, Real wtlim, Kokkos::Timer* ptim
       a_twid[2][1] = 0.25;
       a_twid[2][2] = 0.25;
       a_impl = 0.5;
+    } else if (integrator == "imex2+") {
+      // IMEX(4,3,2): Krapp et al. (2024, arXiv:2310.04435), Eq.30.
+      // three-stage explicit, four-stage implicit, second-order ImEx
+      // two implicit stages added, adapting Athenak's overall architecture
+      // Note explicit steps may not reduce to RK2 based on the parameters chosen
+      nimp_stages = 4;
+      nexp_stages = 3;
+      cfl_limit = 1.0;
+      gamma = 1.707106781186547;   //1+1/sqrt(2)
+      gam0[0] = 1.0;
+      gam1[0] = 0.0;
+      beta[0] = gamma;
+
+      gam0[1] = (2.0*gamma-1.0)/(2.0*gamma*gamma);
+      gam1[1] = (1.0-(2.0*gamma-1.0)/(2.0*gamma*gamma));
+      beta[1] = 1.0/(2.0*gamma);
+
+      gam0[2] = 1.0;
+      gam1[2] = 0.0;
+      beta[2] = 0.0;
+
+      a_twid[0][0] = 0.0;
+      a_twid[0][1] = 0.0;
+      a_twid[0][2] = 0.0;
+      a_twid[0][3] = 0.0;
+
+      a_twid[1][0] = 0.0;
+      a_twid[1][1] = 0.0;
+      a_twid[1][2] = 0.0;
+      a_twid[1][3] = 0.0;
+
+      a_twid[2][0] = 0.0;
+      a_twid[2][1] = 0.0;
+      a_twid[2][2] = (1.0-2.0*gamma*gamma)/2.0/gamma;
+      a_twid[2][3] = 0.0;
+
+      a_twid[3][0] = 0.0;
+      a_twid[3][1] = 0.0;
+      a_twid[3][2] = 0.0;
+      a_twid[3][3] = 0.0;
+
+      a_impl = gamma;
     } else if (integrator == "imex3") {
       // IMEX-SSP3(4,3,3): Pareschi & Russo (2005) Table VI.
       // three-stage explicit, four-stage implicit, third-order ImEx
@@ -227,41 +279,152 @@ Driver::Driver(ParameterInput *pin, Mesh *pmesh, Real wtlim, Kokkos::Timer* ptim
       a_twid[3][2] = (4.0*(b + e + a) - 1.0)/6.0;
       a_twid[3][3] = 2.0*(1.0 - a)/3.0;
       a_impl = a;
-    } else if (integrator == "imex+") {
-      // IMEX(2,3,2): Krapp et al. (2024, arXiv:2310.04435), Eq.30.
-      // three-stage explicit, two-stage implicit, second-order ImEx
-      // Note explicit steps may not reduce to RK2 based on the parameters chosen
-      nimp_stages = 2;
-      nexp_stages = 3;
-      cfl_limit = 1.0;
-      Real gamma = 1.7071067811865475;   // 1 + 1/sqrt(2)
-      gam0[0] = 0.0;
-      gam1[0] = 1.0;
-      beta[0] = gamma;
-
-      gam0[1] = (2.0*gamma-1.0)/(2.0*gamma*gamma);
-      gam1[1] = 1.0-(2.0*gamma-1.0)/(2.0*gamma*gamma);
-      beta[1] = 1.0/(2.0*gamma);
-
-      gam0[2] = 1.0;
-      gam1[2] = 0.0;
-      beta[2] = 0.0;
-
-      a_twid[0][0] = (1.0-2*gamma*gamma)/(2.0*gamma);
-      a_twid[0][1] = 0.0;
-
-      a_twid[1][0] = 0.0;
-      a_twid[1][1] = 0.0;
-
-      a_impl = gamma;
     // Error, unrecognized integrator name.
     } else {
       std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
          << std::endl << "integrator=" << integrator << " not implemented. "
-         << "Valid choices are [rk1,rk2,rk3,imex2,imex3]." << std::endl;
+         << "Valid choices are [rk1,rk2,rk3,rk4,imex2,imex3]." << std::endl;
       exit(EXIT_FAILURE);
     }
+
+    ValidateSTSConfiguration(pmesh);
   }
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn Driver::ResetSTSController()
+//! \brief Clears the cycle-local STS controller state.
+
+void Driver::ResetSTSController() {
+  sts.enabled = false;
+  sts.integrator = parabolic::STSIntegrator::none;
+  sts.sweep = STSSweep::none;
+  sts.dt_cycle = 0.0;
+  sts.dt_sweep = 0.0;
+  sts.dt_parabolic_min = std::numeric_limits<float>::max();
+  sts.nstages = 0;
+  sts.current_stage = 0;
+  sts.coeffs = parabolic::RKL2Coefficients{};
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn Driver::ValidateSTSConfiguration()
+//! \brief Validates the global STS configuration against the registered parabolic
+//! processes. Hydro and single-fluid MHD STS now support shearing-box/orbital-advection
+//! runs; all ion-neutral STS remains fenced.
+
+void Driver::ValidateSTSConfiguration(Mesh *pm) {
+  int nsts_processes = 0;
+  const parabolic::ParabolicProcessDescriptor *first_sts_process = nullptr;
+  bool has_hydro_sts = false;
+  bool has_mhd_sts = false;
+
+  for (const auto &process : pm->pmb_pack->parabolic_processes) {
+    if (process.UsesSTS()) {
+      ++nsts_processes;
+      if (first_sts_process == nullptr) {
+        first_sts_process = &process;
+      }
+      if (process.owner == parabolic::ParabolicProcessOwner::hydro) {
+        has_hydro_sts = true;
+      } else if (process.owner == parabolic::ParabolicProcessOwner::mhd) {
+        has_mhd_sts = true;
+      }
+    }
+  }
+
+  if (pm->sts_integrator == parabolic::STSIntegrator::none) {
+    if (nsts_processes > 0) {
+      DriverFatalError(__FILE__, __LINE__,
+                       "Parabolic process '" + first_sts_process->name +
+                       "' selects STS, but <time>/sts_integrator = none");
+    }
+    return;
+  }
+
+  if (nsts_processes == 0) {
+    DriverFatalError(__FILE__, __LINE__,
+                     "<time>/sts_integrator = rkl2 requires at least one active "
+                     "parabolic process with *_integrator = sts");
+  }
+
+  if (pm->pmb_pack->pionn != nullptr) {
+    DriverFatalError(__FILE__, __LINE__,
+                     "STS is not yet supported for <ion-neutral> runs. Disable STS for "
+                     "Hydro/MHD or remove the two-fluid ion-neutral configuration.");
+  }
+
+  if (has_hydro_sts) {
+    hydro::Hydro *phydro = pm->pmb_pack->phydro;
+    if (phydro == nullptr) {
+      DriverFatalError(__FILE__, __LINE__,
+                       "Hydro STS was requested, but no Hydro module is active.");
+    }
+  }
+
+  if (has_mhd_sts) {
+    mhd::MHD *pmhd = pm->pmb_pack->pmhd;
+    if (pmhd == nullptr) {
+      DriverFatalError(__FILE__, __LINE__,
+                       "MHD STS was requested, but no MHD module is active.");
+    }
+  }
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn Driver::RefreshSTSCycleState()
+//! \brief Refreshes cycle-local STS controller data from the Mesh timestep budget.
+
+void Driver::RefreshSTSCycleState(Mesh *pm) {
+  ResetSTSController();
+  sts.integrator = pm->sts_integrator;
+  sts.dt_cycle = pm->dt;
+  sts.dt_parabolic_min = pm->dt_parabolic_sts;
+
+  if (sts.integrator == parabolic::STSIntegrator::none ||
+      sts.dt_cycle <= 0.0 ||
+      sts.dt_parabolic_min >= std::numeric_limits<float>::max()) {
+    return;
+  }
+
+  sts.dt_sweep = 0.5*sts.dt_cycle;
+  if (sts.integrator == parabolic::STSIntegrator::rkl2) {
+    sts.nstages = parabolic::ComputeRKL2StageCount(sts.dt_sweep, sts.dt_parabolic_min);
+  }
+  sts.enabled = (sts.nstages > 0);
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn Driver::BeginSTSSweep()
+//! \brief Initializes the controller for one pre/post parabolic sweep.
+
+void Driver::BeginSTSSweep(Mesh *pm, STSSweep sweep) {
+  RefreshSTSCycleState(pm);
+  if (sts.enabled) {
+    sts.sweep = sweep;
+  }
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn Driver::SetSTSStage()
+//! \brief Advances the driver-owned STS controller to the requested RKL2 stage.
+
+void Driver::SetSTSStage(int stage) {
+  sts.current_stage = stage;
+  sts.coeffs = parabolic::RKL2Coefficients{};
+  if (sts.enabled && sts.integrator == parabolic::STSIntegrator::rkl2) {
+    sts.coeffs = parabolic::ComputeRKL2Coefficients(stage, sts.nstages);
+  }
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn Driver::EndSTSSweep()
+//! \brief Clears sweep-local state after a pre/post STS pass.
+
+void Driver::EndSTSSweep() {
+  sts.sweep = STSSweep::none;
+  sts.current_stage = 0;
+  sts.coeffs = parabolic::RKL2Coefficients{};
 }
 
 //----------------------------------------------------------------------------------------
@@ -299,9 +462,6 @@ void Driver::Initialize(Mesh *pmesh, ParameterInput *pin, Outputs *pout, bool re
   InitBoundaryValuesAndPrimitives(pmesh);
 
   //---- Step 2.  Compute time step (if problem involves time evolution)
-  // NOTE: For new simulations (!res_flag), the initial conditions haven't been set yet
-  // by the ProblemGenerator, so we can't compute a proper timestep for MHD here.
-  // The timestep will be computed properly on the first cycle.
   hydro::Hydro *phydro = pmesh->pmb_pack->phydro;
   mhd::MHD *pmhd = pmesh->pmb_pack->pmhd;
   radiation::Radiation *prad = pmesh->pmb_pack->prad;
@@ -321,23 +481,14 @@ void Driver::Initialize(Mesh *pmesh, ParameterInput *pin, Outputs *pout, bool re
     }
 
     pmesh->NewTimeStep(tlim);
+    RefreshSTSCycleState(pmesh);
   }
 
   //---- Step 3.  Cycle through output Types and load data / write files.
   if (!res_flag) { // only write outputs at the beginning of the run
-    Kokkos::fence();
-    Kokkos::Timer out_timer;
-
     for (auto &out : pout->pout_list) {
       out->LoadOutputData(pmesh);
       out->WriteOutputFile(pmesh, pin);
-    }
-  
-    Kokkos::fence();
-    float out_time = out_timer.seconds();
-    if (global_variable::my_rank == 0) {
-      std::cout << "Total Outputs Time: "
-                << out_time << " s" << std::endl;
     }
   }
 
@@ -351,7 +502,7 @@ void Driver::Initialize(Mesh *pmesh, ParameterInput *pin, Outputs *pout, bool re
   if (pionn != nullptr) {
     if (nimp_stages == 0) {
       std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-          << std::endl << "IonNetral MHD can only be run with ImEx integrators."
+          << std::endl << "IonNeutral MHD can only be run with ImEx integrators."
           << std::endl;
       std::exit(EXIT_FAILURE);
     }
@@ -389,6 +540,17 @@ void Driver::Execute(Mesh *pmesh, ParameterInput *pin, Outputs *pout) {
            (elapsed_time < wall_time)) {
       if (global_variable::my_rank == 0) {OutputCycleDiagnostics(pmesh);}
 
+      if (sts.enabled) {
+        BeginSTSSweep(pmesh, STSSweep::pre);
+        for (int sts_stage = 1; sts_stage <= sts.nstages; ++sts_stage) {
+          SetSTSStage(sts_stage);
+          ExecuteTaskList(pmesh, "before_parabolic_stagen", sts_stage);
+          ExecuteTaskList(pmesh, "parabolic_stagen", sts_stage);
+          ExecuteTaskList(pmesh, "after_parabolic_stagen", sts_stage);
+        }
+        EndSTSSweep();
+      }
+
       // Execute TaskLists
       // Work before time integrator indicated by "0" in stage
       ExecuteTaskList(pmesh, "before_timeintegrator", 0);
@@ -403,10 +565,22 @@ void Driver::Execute(Mesh *pmesh, ParameterInput *pin, Outputs *pout) {
       // Work after time integrator indicated by "1" in stage
       ExecuteTaskList(pmesh, "after_timeintegrator", 1);
 
+      if (sts.enabled) {
+        BeginSTSSweep(pmesh, STSSweep::post);
+        for (int sts_stage = 1; sts_stage <= sts.nstages; ++sts_stage) {
+          SetSTSStage(sts_stage);
+          ExecuteTaskList(pmesh, "before_parabolic_stagen", sts_stage);
+          ExecuteTaskList(pmesh, "parabolic_stagen", sts_stage);
+          ExecuteTaskList(pmesh, "after_parabolic_stagen", sts_stage);
+        }
+        EndSTSSweep();
+      }
+
       // Work outside of TaskLists:
       // increment time, ncycle, etc.
       pmesh->time = pmesh->time + pmesh->dt;
       pmesh->ncycle++;
+      pmesh->dt_last_completed = pmesh->dt;
       nmb_updated_ += pmesh->nmb_total;
       npart_updated_ += pmesh->nprtcl_total;
       // load balancing efficiency
@@ -429,17 +603,8 @@ void Driver::Execute(Mesh *pmesh, ParameterInput *pin, Outputs *pout) {
 
         if (((out->out_params.dt > 0.0) && ((time_32 >= next_32) && (time_32<tlim_32))) ||
             ((dcycle_ > 0) && ((pmesh->ncycle)%(dcycle_) == 0)) ) {
-          Kokkos::fence();
-          Kokkos::Timer out_timer;
           out->LoadOutputData(pmesh);
           out->WriteOutputFile(pmesh, pin);
-	  Kokkos::fence();
-	  float out_time = out_timer.seconds();
-          if (global_variable::my_rank == 0) {
-            std::cout << out->out_params.block_name
-                      << " (" << out->out_params.file_type << "): "
-                      << out_time << " s" << std::endl;
-	  }
         }
       }
 
@@ -447,12 +612,12 @@ void Driver::Execute(Mesh *pmesh, ParameterInput *pin, Outputs *pout) {
       if (pmesh->adaptive) {pmesh->pmr->AdaptiveMeshRefinement(this, pin);}
       // compute new timestep AFTER all Meshblocks refined/derefined
       pmesh->NewTimeStep(tlim);
+      RefreshSTSCycleState(pmesh);
 
       // Update wall clock time if needed.
       if (wall_time > 0.) {
         elapsed_time = UpdateWallClock();
       }
-
     }  // end while
   }    // end of (time_evolution != tstatic) clause
   return;
@@ -466,19 +631,9 @@ void Driver::Execute(Mesh *pmesh, ParameterInput *pin, Outputs *pout) {
 void Driver::Finalize(Mesh *pmesh, ParameterInput *pin, Outputs *pout) {
   // cycle through output Types and load data / write files
   //  This design allows for asynchronous outputs to implemented in the future.
-  Kokkos::fence();
-  Kokkos::Timer out_timer;
-
   for (auto &out : pout->pout_list) {
     out->LoadOutputData(pmesh);
     out->WriteOutputFile(pmesh, pin);
-  }
-
-  Kokkos::fence();
-  float out_time = out_timer.seconds();
-  if (global_variable::my_rank == 0) {
-    std::cout << "Total Outputs Time: " 
-              << out_time << " s" << std::endl;
   }
 
   // call any problem specific functions to do work after main loop
@@ -547,8 +702,7 @@ void Driver::OutputCycleDiagnostics(Mesh *pm) {
     Real elapsed = pwall_clock_->seconds();
     std::cout << "elapsed=" << std::scientific << std::setprecision(dtprcsn) << elapsed
               << " cycle=" << pm->ncycle
-              << " time=" << pm->time << " dt=" << pm->dt
-              << " nmb=" << pm->nmb_total << std::endl;
+              << " time=" << pm->time << " dt=" << pm->dt << std::endl;
   }
   return;
 }

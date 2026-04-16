@@ -48,14 +48,11 @@ void TrackedParticleOutput::LoadOutputData(Mesh *pm) {
   int npart = pm->nprtcl_thisrank;
   auto &pr = pm->pmb_pack->ppart->prtcl_rdata;
   auto &pi = pm->pmb_pack->ppart->prtcl_idata;
-  int ntrack_ = ntrack;
-
-  // Create device-side counter
-  Kokkos::View<int> d_counter("counter");
-
+  int counter=0;
+  int *pcounter = &counter;
   par_for("part_update",DevExeSpace(),0,(npart-1), KOKKOS_LAMBDA(const int p) {
-    if (pi(PTAG,p) < ntrack_) {
-      int index = Kokkos::atomic_fetch_add(&d_counter(),1);
+    if (pi(PTAG,p) < ntrack) {
+      int index = Kokkos::atomic_fetch_add(pcounter,1);
       tracked_prtcl.d_view(index).tag = pi(PTAG,p);
       tracked_prtcl.d_view(index).x   = pr(IPX,p);
       tracked_prtcl.d_view(index).y   = pr(IPY,p);
@@ -65,27 +62,20 @@ void TrackedParticleOutput::LoadOutputData(Mesh *pm) {
       tracked_prtcl.d_view(index).vz  = pr(IPVZ,p);
     }
   });
-  
-  Kokkos::fence();
-  Kokkos::deep_copy(npout, d_counter);
-  
+  npout = counter;
   // share number of tracked particles to be output across all ranks
   npout_eachrank[global_variable::my_rank] = npout;
 #if MPI_PARALLEL_ENABLED
   MPI_Allgather(&npout, 1, MPI_INT, npout_eachrank.data(), 1, MPI_INT, MPI_COMM_WORLD);
 #endif
-
+  tracked_prtcl.resize(npout);
   // sync tracked particle device array with host
   tracked_prtcl.template modify<DevExeSpace>();
   tracked_prtcl.template sync<HostMemSpace>();
 
   // copy host view into host outpart array
   Kokkos::realloc(outpart, npout);
-  if (npout > 0) {
-    auto tracked_slice = Kokkos::subview(tracked_prtcl.h_view, std::make_pair(0, npout));
-    Kokkos::deep_copy(outpart, tracked_slice);
-  }
-
+  Kokkos::deep_copy(outpart, tracked_prtcl.h_view);
 }
 
 //----------------------------------------------------------------------------------------
@@ -123,13 +113,12 @@ void TrackedParticleOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
   IOWrapper partfile;
   partfile.Open(fname.c_str(), IOWrapper::FileMode::append);
   std::size_t header_offset = partfile.GetPosition();
+//  std::size_t header_offset = 0;
 
-  // allocate arrays for tags (ints) and position/velocity data (floats)
-  int *tags = new int[npout];
+  // allocate 1D vector of floats used to convert and output particle data
   float *data = new float[6*npout];
-  // Loop over particles, load tag and positions into arrays
+  // Loop over particles, load positions into data[]
   for (int p=0; p<npout; ++p) {
-    tags[p] = outpart(p).tag;
     data[ 6*p   ] = static_cast<float>(outpart(p).x);
     data[(6*p)+1] = static_cast<float>(outpart(p).y);
     data[(6*p)+2] = static_cast<float>(outpart(p).z);
@@ -137,56 +126,32 @@ void TrackedParticleOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
     data[(6*p)+4] = static_cast<float>(outpart(p).vy);
     data[(6*p)+5] = static_cast<float>(outpart(p).vz);
   }
-
   // calculate local data offset
   std::vector<int> rank_offset(global_variable::nranks, 0);
-  int npout_min = npout_eachrank[0];
+  int npout_min = pm->nprtcl_eachrank[0];
   for (int n=1; n<global_variable::nranks; ++n) {
     rank_offset[n] = rank_offset[n-1] + npout_eachrank[n-1];
     npout_min = std::min(npout_min, npout_eachrank[n]);
   }
 
-  // Write particle tags and position/velocity data
-  // First write tags for particles collectively over minimum shared number of prtcls
+  // Write tracked particle data collectively over minimum shared number of prtcls
   for (int p=0; p<npout_min; ++p) {
-    // tag offset: each tag is an int at position based on particle tag
-    std::size_t tag_offset = header_offset + outpart(p).tag * sizeof(int);
-    if (partfile.Write_any_type_at_all(&(tags[p]),1,tag_offset,"int") != 1) {
-      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-          << std::endl << "particle tag not written correctly to tracked particle file"
-          << std::endl;
-      exit(EXIT_FAILURE);
-    }
-  }
-  // Write tags individually for remaining particles on each rank
-  for (int p=npout_min; p<npout; ++p) {
-    std::size_t tag_offset = header_offset + outpart(p).tag * sizeof(int);
-    if (partfile.Write_any_type_at(&(tags[p]),1,tag_offset,"int") != 1) {
-      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-          << std::endl << "particle tag not written correctly to tracked particle file"
-          << std::endl;
-      exit(EXIT_FAILURE);
-    }
-  }
-
-  // Calculate offset for position/velocity data (after all tags)
-  std::size_t data_section_offset = header_offset + ntrack * sizeof(int);
-
-  // Write position/velocity data collectively over minimum shared number of prtcls
-  for (int p=0; p<npout_min; ++p) {
-    // data offset: 6 floats per particle, positioned by particle tag
-    std::size_t data_offset = data_section_offset + 6 * outpart(p).tag * sizeof(float);
-    if (partfile.Write_any_type_at_all(&(data[6*p]),6,data_offset,"float") != 6) {
+    // offset computed assuming tags run 0...(ntrack-1) sequentially
+    std::size_t myoffset = header_offset + 6*outpart(p).tag;
+    // Write particle positions collectively for minimum number of particles across ranks
+    if (partfile.Write_any_type_at_all(&(data[0]),6,myoffset,"float") != 6) {
       std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
           << std::endl << "particle data not written correctly to tracked particle file"
           << std::endl;
       exit(EXIT_FAILURE);
     }
   }
-  // Write position/velocity data individually for remaining particles on each rank
+  // Write particle positions individually for remaining particles on each rank
   for (int p=npout_min; p<npout; ++p) {
-    std::size_t data_offset = data_section_offset + 6 * outpart(p).tag * sizeof(float);
-    if (partfile.Write_any_type_at(&(data[6*p]),6,data_offset,"float") != 6) {
+    // offset computed assuming tags run 0...(ntrack-1) sequentially
+    std::size_t myoffset = header_offset + 6*outpart(p).tag;
+    // Write particle positions collectively for minimum number of particles across ranks
+    if (partfile.Write_any_type_at(&(data[0]),6,myoffset,"float") != 6) {
       std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
           << std::endl << "particle data not written correctly to tracked particle file"
           << std::endl;
@@ -196,7 +161,6 @@ void TrackedParticleOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
 
   // close the output file and clean up
   partfile.Close();
-  delete[] tags;
   delete[] data;
 
   // increment counters

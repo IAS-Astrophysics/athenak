@@ -18,12 +18,10 @@
 #include "parameter_input.hpp"
 #include "mesh.hpp"
 #include "coordinates/cell_locations.hpp"
+#include "refinement_criteria.hpp"
 #include "hydro/hydro.hpp"
 #include "mhd/mhd.hpp"
 #include "z4c/z4c.hpp"
-#include "diffusion/viscosity.hpp"
-#include "diffusion/resistivity.hpp"
-#include "diffusion/conduction.hpp"
 #include "radiation/radiation.hpp"
 #include "particles/particles.hpp"
 #include "srcterms/srcterms.hpp"
@@ -51,7 +49,11 @@ Mesh::Mesh(ParameterInput *pin) :
   nmb_packs_thisrank(1),
   nprtcl_thisrank(0),
   nprtcl_total(0),
-  dtold(0.) {
+  dtold(0.),
+  dt_last_completed(0.),
+  dt_parabolic_sts(std::numeric_limits<float>::max()),
+  sts_max_dt_ratio(-1.0),
+  sts_integrator(parabolic::STSIntegrator::none) {
   // Set physical size and number of cells in mesh (root level)
   mesh_size.x1min = pin->GetReal("mesh", "x1min");
   mesh_size.x1max = pin->GetReal("mesh", "x1max");
@@ -347,15 +349,6 @@ Mesh::~Mesh() {
   delete [] cost_eachmb;
 }
 
-void Mesh::SetRestartFileInfo(const std::string &base_dir,
-                              const std::string &file_name,
-                              FileShardMode shard_mode) {
-  restart_meta.base_dir = base_dir;
-  restart_meta.file_name = file_name;
-  restart_meta.payload_stride = 0;
-  restart_meta.file_shard_mode = shard_mode;
-}
-
 //----------------------------------------------------------------------------------------
 //! \fn void Mesh::PrintMeshDiagnostics()
 //  \brief prints information about mesh structure, always called at start of every
@@ -373,8 +366,8 @@ void Mesh::PrintMeshDiagnostics() {
 
   // if more than one physical level: compute/output # of blocks and cost per level
   if ((max_level - root_level) > 1) {
-    int *nb_per_plevel = new int[max_level];
-    float *cost_per_plevel = new float[max_level];
+    int nb_per_plevel[max_level];      // NOLINT(runtime/arrays)
+    float cost_per_plevel[max_level];  // NOLINT(runtime/arrays)
     for (int i=0; i<max_level; ++i) {
       nb_per_plevel[i] = 0;
       cost_per_plevel[i] = 0.0;
@@ -390,15 +383,13 @@ void Mesh::PrintMeshDiagnostics() {
                   << cost_per_plevel[i-root_level] <<  std::endl;
       }
     }
-    delete[] nb_per_plevel;
-    delete[] cost_per_plevel;
   }
 
   std::cout << "Number of parallel ranks = " << global_variable::nranks << std::endl;
   // if more than one rank: compute/output # of blocks and cost per rank
   if (global_variable::nranks > 1) {
-    int *nb_per_rank = new int[global_variable::nranks];
-    float *cost_per_rank = new float[global_variable::nranks];
+    int nb_per_rank[global_variable::nranks];    // NOLINT(runtime/arrays)
+    int cost_per_rank[global_variable::nranks];  // NOLINT(runtime/arrays)
     for (int i=0; i<global_variable::nranks; ++i) {
       nb_per_rank[i] = 0;
       cost_per_rank[i] = 0;
@@ -407,8 +398,8 @@ void Mesh::PrintMeshDiagnostics() {
       nb_per_rank[rank_eachmb[i]]++;
       cost_per_rank[rank_eachmb[i]] += cost_eachmb[i];
     }
-    float mincost = std::numeric_limits<float>::max();
-    float maxcost = 0, totalcost = 0;
+    int mincost = std::numeric_limits<int>::max();
+    int maxcost = 0, totalcost = 0;
     for (int i=0; i<global_variable::nranks; ++i) {
       std::cout << "  Rank = " << i << ": " << nb_per_rank[i] <<" MeshBlocks, cost = "
                 << cost_per_rank[i] << std::endl;
@@ -420,12 +411,9 @@ void Mesh::PrintMeshDiagnostics() {
     // output normalized costs per rank
     std::cout << "Load Balancing:" << std::endl;
     std::cout << "  Maximum normalized cost = "
-      << maxcost/mincost << ", Average = "
-      << totalcost/(global_variable::nranks*mincost)
+      << static_cast<float>(maxcost)/static_cast<float>(mincost) << ", Average = "
+      << static_cast<float>(totalcost)/static_cast<float>(global_variable::nranks*mincost)
       << std::endl;
-
-    delete[] nb_per_rank;
-    delete[] cost_per_rank;
   }
 }
 
@@ -589,57 +577,77 @@ void Mesh::NewTimeStep(const Real tlim) {
   // cycle over all MeshBlocks on this rank and find minimum dt
   // Requires at least ONE of the physics modules to be defined.
   // limit increase in timestep to 2x old value
-  dt = 2.0*dt;
+  Real dt_legacy = 2.0*dt;
+  Real dt_cycle_candidate = dt_legacy;
+  dt_parabolic_sts = std::numeric_limits<float>::max();
 
   // Hydro timestep
   if (pmb_pack->phydro != nullptr) {
-    dt = std::min(dt, (cfl_no)*(pmb_pack->phydro->dtnew) );
-    // viscosity timestep
-    if (pmb_pack->phydro->pvisc != nullptr) {
-      dt = std::min(dt, (cfl_no)*(pmb_pack->phydro->pvisc->dtnew) );
-    }
-    // thermal conduction timestep
-    if (pmb_pack->phydro->pcond != nullptr) {
-      dt = std::min(dt, (cfl_no)*(pmb_pack->phydro->pcond->dtnew) );
-    }
+    dt_legacy = std::min(dt_legacy, (cfl_no)*(pmb_pack->phydro->dtnew) );
+    dt_cycle_candidate = std::min(dt_cycle_candidate, (cfl_no)*(pmb_pack->phydro->dtnew) );
     // source terms timestep
-    dt = std::min(dt, (cfl_no)*(pmb_pack->phydro->psrc->dtnew) );
+    if (pmb_pack->phydro->psrc != nullptr) {
+      dt_legacy = std::min(dt_legacy, (cfl_no)*(pmb_pack->phydro->psrc->dtnew) );
+      dt_cycle_candidate = std::min(dt_cycle_candidate, (cfl_no)*(pmb_pack->phydro->psrc->dtnew) );
+    }
   }
   // MHD timestep
   if (pmb_pack->pmhd != nullptr) {
-    dt = std::min(dt, (cfl_no)*(pmb_pack->pmhd->dtnew) );
-    // viscosity timestep
-    if (pmb_pack->pmhd->pvisc != nullptr) {
-      dt = std::min(dt, (cfl_no)*(pmb_pack->pmhd->pvisc->dtnew) );
-    }
-    // resistivity timestep
-    if (pmb_pack->pmhd->presist != nullptr) {
-      dt = std::min(dt, (cfl_no)*(pmb_pack->pmhd->presist->dtnew) );
-    }
-    // thermal conduction timestep
-    if (pmb_pack->pmhd->pcond != nullptr) {
-      dt = std::min(dt, (cfl_no)*(pmb_pack->pmhd->pcond->dtnew) );
-    }
+    dt_legacy = std::min(dt_legacy, (cfl_no)*(pmb_pack->pmhd->dtnew) );
+    dt_cycle_candidate = std::min(dt_cycle_candidate, (cfl_no)*(pmb_pack->pmhd->dtnew) );
     // source terms timestep
-    dt = std::min(dt, (cfl_no)*(pmb_pack->pmhd->psrc->dtnew) );
+    if (pmb_pack->pmhd->psrc != nullptr) {
+      dt_legacy = std::min(dt_legacy, (cfl_no)*(pmb_pack->pmhd->psrc->dtnew) );
+      dt_cycle_candidate = std::min(dt_cycle_candidate, (cfl_no)*(pmb_pack->pmhd->psrc->dtnew) );
+    }
+  }
+
+  // Parabolic-process timestep budgets
+  for (const auto &process : pmb_pack->parabolic_processes) {
+    Real process_dt = (cfl_no)*(process.ExplicitDt());
+    dt_legacy = std::min(dt_legacy, process_dt);
+    if (process.UsesSTS()) {
+      dt_parabolic_sts = std::min(dt_parabolic_sts, process_dt);
+    } else {
+      dt_cycle_candidate = std::min(dt_cycle_candidate, process_dt);
+    }
   }
   // z4c timestep
   if (pmb_pack->pz4c != nullptr) {
-    dt = std::min(dt, (cfl_no)*(pmb_pack->pz4c->dtnew) );
+    dt_legacy = std::min(dt_legacy, (cfl_no)*(pmb_pack->pz4c->dtnew) );
+    dt_cycle_candidate = std::min(dt_cycle_candidate, (cfl_no)*(pmb_pack->pz4c->dtnew) );
   }
   // Radiation timestep
   if (pmb_pack->prad != nullptr) {
-    dt = std::min(dt, (cfl_no)*(pmb_pack->prad->dtnew) );
+    dt_legacy = std::min(dt_legacy, (cfl_no)*(pmb_pack->prad->dtnew) );
+    dt_cycle_candidate = std::min(dt_cycle_candidate, (cfl_no)*(pmb_pack->prad->dtnew) );
   }
   // Particles timestep
   if (pmb_pack->ppart != nullptr) {
-    dt = std::min(dt, (cfl_no)*(pmb_pack->ppart->dtnew) );
+    dt_legacy = std::min(dt_legacy, (pmb_pack->ppart->dtnew) );
+    dt_cycle_candidate = std::min(dt_cycle_candidate, (pmb_pack->ppart->dtnew) );
   }
 
 #if MPI_PARALLEL_ENABLED
-  // get minimum dt over all MPI ranks
-  MPI_Allreduce(MPI_IN_PLACE, &dt, 1, MPI_ATHENA_REAL, MPI_MIN, MPI_COMM_WORLD);
+  // get minimum timestep budgets over all MPI ranks
+  Real dt_reduction[3] = {dt_legacy, dt_cycle_candidate, dt_parabolic_sts};
+  MPI_Allreduce(MPI_IN_PLACE, dt_reduction, 3, MPI_ATHENA_REAL, MPI_MIN, MPI_COMM_WORLD);
+  dt_legacy = dt_reduction[0];
+  dt_cycle_candidate = dt_reduction[1];
+  dt_parabolic_sts = dt_reduction[2];
 #endif
+
+  if (sts_integrator != parabolic::STSIntegrator::none &&
+      sts_max_dt_ratio > 0.0 &&
+      dt_parabolic_sts < std::numeric_limits<float>::max()) {
+    dt_cycle_candidate = std::min(dt_cycle_candidate, sts_max_dt_ratio*dt_parabolic_sts);
+  }
+
+  if (sts_integrator == parabolic::STSIntegrator::none) {
+    dt = dt_legacy;
+  } else {
+    dt = dt_cycle_candidate;
+  }
 
   // limit last time step to stop at tlim *exactly*
   if ( (time < tlim) && ((time + dt) > tlim) ) {dt = tlim - time;}
@@ -657,31 +665,31 @@ void Mesh::AddCoordinatesAndPhysics(ParameterInput *pinput) {
     pmb_pack->AddPhysics(pinput);
   }
 
-  particles::Particles *ppart = pmb_pack->ppart;
-  if (ppart != nullptr) {
-    // Determine total number of particles across all ranks
-    CountParticles();
-  }
-}
-
-//----------------------------------------------------------------------------------------
-// \fn Mesh::CountParticles
-
-void Mesh::CountParticles() {
   // Determine total number of particles across all ranks
   particles::Particles *ppart = pmb_pack->ppart;
-  nprtcl_thisrank = 0.0;
-  for (int n=0; n<nmb_packs_thisrank; ++n) {
-    nprtcl_thisrank += pmb_pack->ppart->nprtcl_thispack;
-  }
-  nprtcl_eachrank = new int[global_variable::nranks];
-  nprtcl_eachrank[global_variable::my_rank] = nprtcl_thisrank;
+  if (ppart != nullptr) {
+    nprtcl_thisrank = 0;
+    for (int n=0; n<nmb_packs_thisrank; ++n) {
+      nprtcl_thisrank += pmb_pack->ppart->nprtcl_thispack;
+    }
+    nprtcl_eachrank = new int[global_variable::nranks];
+    nprtcl_eachrank[global_variable::my_rank] = nprtcl_thisrank;
 #if MPI_PARALLEL_ENABLED
-  // Share number of particles on each rank with all ranks
-  MPI_Allgather(&nprtcl_thisrank,1,MPI_INT,nprtcl_eachrank,1,MPI_INT,MPI_COMM_WORLD);
+    // Share number of particles on each rank with all ranks
+    MPI_Allgather(&nprtcl_thisrank,1,MPI_INT,nprtcl_eachrank,1,MPI_INT,MPI_COMM_WORLD);
 #endif
-  nprtcl_total = 0;
-  for (int n=0; n<global_variable::nranks; ++n) {
-    nprtcl_total += nprtcl_eachrank[n];
+    for (int n=0; n<global_variable::nranks; ++n) {
+      nprtcl_total += nprtcl_eachrank[n];
+    }
+    // Assign particle IDs
+    if (pmb_pack->ppart != nullptr) {
+      pmb_pack->ppart->CreateParticleTags(pinput);
+    }
+  }
+
+  // Call RefinementCriteria constructor to enroll various criteria
+  // can only be done after the physics modules have been constructed
+  if (adaptive) {
+    pmr->pmrc = new RefinementCriteria(this, pinput);
   }
 }

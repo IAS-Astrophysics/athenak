@@ -1,0 +1,45 @@
+# AthenaK input file for unit testing RKL2 STS helper math
+
+<comment>
+problem   = sts rkl2 helper unit test
+
+<job>
+basename  = sts_rkl2_test
+
+<mesh>
+nghost    = 2
+nx1       = 4
+x1min     = -1.0
+x1max     = 1.0
+ix1_bc    = outflow
+ox1_bc    = outflow
+
+nx2       = 4
+x2min     = -1.0
+x2max     = 1.0
+ix2_bc    = outflow
+ox2_bc    = outflow
+
+nx3       = 4
+x3min     = -1.0
+x3max     = 1.0
+ix3_bc    = outflow
+ox3_bc    = outflow
+
+<meshblock>
+nx1       = 4
+nx2       = 4
+nx3       = 4
+
+<time>
+evolution  = dynamic
+integrator = rk2
+cfl_number = 0.1
+nlim       = 0
+tlim       = 0.0
+ndiag      = 1
+
+<z4c>
+
+<problem>
+pgen_name = sts_rkl2_test

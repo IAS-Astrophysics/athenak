@@ -12,6 +12,7 @@
 #include <iostream>
 #include <string>
 #include <vector>
+#include <algorithm>
 
 #include "athena.hpp"
 #include "globals.hpp"
@@ -29,6 +30,8 @@
 
 #include "eos/primitive_solver_hyd.hpp"
 #include "eos/primitive-solver/idealgas.hpp"
+#include "eos/primitive-solver/eos_compose.hpp"
+#include "eos/primitive-solver/eos_hybrid.hpp"
 #include "eos/primitive-solver/piecewise_polytrope.hpp"
 #include "eos/primitive-solver/reset_floor.hpp"
 
@@ -39,6 +42,7 @@ template<class ErrorPolicy>
 DynGRMHD* SelectDynGRMHDEOS(MeshBlockPack *ppack, ParameterInput *pin,
                             DynGRMHD_EOS eos_policy) {
   DynGRMHD* dyn_gr = nullptr;
+  bool use_NQT = false;
   switch(eos_policy) {
     case DynGRMHD_EOS::eos_ideal:
       dyn_gr = new DynGRMHDPS<Primitive::IdealGas, ErrorPolicy>(ppack, pin);
@@ -47,7 +51,24 @@ DynGRMHD* SelectDynGRMHDEOS(MeshBlockPack *ppack, ParameterInput *pin,
       dyn_gr = new DynGRMHDPS<Primitive::PiecewisePolytrope, ErrorPolicy>(ppack, pin);
       break;
     case DynGRMHD_EOS::eos_compose:
-      dyn_gr = new DynGRMHDPS<Primitive::EOSCompOSE, ErrorPolicy>(ppack, pin);
+      use_NQT = pin->GetOrAddBoolean("mhd", "use_NQT",false);
+      if (use_NQT) {
+        dyn_gr = new DynGRMHDPS<Primitive::EOSCompOSE<Primitive::NQTLogs>,
+                                ErrorPolicy>(ppack, pin);
+      } else {
+        dyn_gr = new DynGRMHDPS<Primitive::EOSCompOSE<Primitive::NormalLogs>,
+                                ErrorPolicy>(ppack, pin);
+      }
+      break;
+    case DynGRMHD_EOS::eos_hybrid:
+      use_NQT = pin->GetOrAddBoolean("mhd", "use_NQT",false);
+      if (use_NQT) {
+        dyn_gr = new DynGRMHDPS<Primitive::EOSHybrid<Primitive::NQTLogs>,
+                                ErrorPolicy>(ppack, pin);
+      } else {
+        dyn_gr = new DynGRMHDPS<Primitive::EOSHybrid<Primitive::NormalLogs>,
+                                ErrorPolicy>(ppack, pin);
+      }
       break;
   }
   return dyn_gr;
@@ -65,6 +86,8 @@ DynGRMHD* BuildDynGRMHD(MeshBlockPack *ppack, ParameterInput *pin) {
     eos_policy = DynGRMHD_EOS::eos_piecewise_poly;
   } else if (eos_string.compare("compose") == 0) {
     eos_policy = DynGRMHD_EOS::eos_compose;
+  } else if (eos_string.compare("hybrid") == 0) {
+    eos_policy = DynGRMHD_EOS::eos_hybrid;
   } else {
     std::cout << "### FATAL ERROR in " <<__FILE__ << " at line " << __LINE__
               << std::endl << "<mhd> dyn_eos = '" << eos_string
@@ -94,7 +117,9 @@ DynGRMHD* BuildDynGRMHD(MeshBlockPack *ppack, ParameterInput *pin) {
   return dyn_gr;
 }
 
-DynGRMHD::DynGRMHD(MeshBlockPack *pp, ParameterInput *pin) : pmy_pack(pp) {
+DynGRMHD::DynGRMHD(MeshBlockPack *pp, ParameterInput *pin) :
+    pmy_pack(pp),
+    temperature("temperature",1,1,1,1,1) {
   std::string rsolver = pin->GetString("mhd", "rsolver");
   if (rsolver.compare("llf") == 0) {
     rsolver_method = DynGRMHD_RSolver::llf_dyngr;
@@ -122,6 +147,16 @@ DynGRMHD::DynGRMHD(MeshBlockPack *pp, ParameterInput *pin) : pmy_pack(pp) {
   dmp_M = pin->GetOrAddReal("mhd", "dmp_M", 1.2);
 
   fixed_evolution = pin->GetOrAddBoolean("mhd", "fixed", false);
+
+  // allocate memory for temperature
+  {
+    int nmb = std::max((pmy_pack->nmb_thispack), (pmy_pack->pmesh->nmb_maxperrank));
+    auto &indcs = pmy_pack->pmesh->mb_indcs;
+    int ncells1 = indcs.nx1 + 2*(indcs.ng);
+    int ncells2 = (indcs.nx2 > 1)? (indcs.nx2 + 2*(indcs.ng)) : 1;
+    int ncells3 = (indcs.nx3 > 1)? (indcs.nx3 + 2*(indcs.ng)) : 1;
+    Kokkos::realloc(temperature, nmb, 1, ncells3, ncells2, ncells1);
+  }
 }
 
 DynGRMHD::~DynGRMHD() {
@@ -131,8 +166,9 @@ template<class EOSPolicy, class ErrorPolicy>
 void DynGRMHDPS<EOSPolicy, ErrorPolicy>::QueueDynGRMHDTasks() {
   using namespace mhd;  // NOLINT(build/namespaces)
   using namespace z4c;  // NOLINT(build/namespaces)
-  using namespace numrel; // NOLINT(build/namespaces)
+  using namespace numrel; // NOLINT(build/namespaces))
   Z4c *pz4c = pmy_pack->pz4c;
+  adm::ADM *padm = pmy_pack->padm;
   MHD *pmhd = pmy_pack->pmhd;
   NumericalRelativity *pnr = pmy_pack->pnr;
 
@@ -188,8 +224,17 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::QueueDynGRMHDTasks() {
   //pnr->QueueTask(&DynGRMHD::ApplyPhysicalBCs, this, MHD_BCS, "MHD_BCS", Task_Run,
   //                 {MHD_RecvB});
   pnr->QueueTask(&MHD::Prolongate, pmhd, MHD_Prolong, "MHD_Prolong", Task_Run, {MHD_BCS});
-  pnr->QueueTask(&DynGRMHDPS<EOSPolicy, ErrorPolicy>::ConToPrim, this, MHD_C2P, "MHD_C2P",
-                 Task_Run, {MHD_Prolong}, {Z4c_Excise});
+  if (pz4c == nullptr && padm->is_dynamic == true) {
+    pnr->QueueTask(&DynGRMHD::SetADMVariables, this, MHD_SetADM, "MHD_SetADM", Task_Run,
+                    {MHD_ExplRK});
+    pnr->QueueTask(&DynGRMHDPS<EOSPolicy, ErrorPolicy>::ConToPrim, this, MHD_C2P,
+                   "MHD_C2P", Task_Run, {MHD_Prolong, MHD_SetADM}, {Z4c_Excise});
+    pnr->QueueTask(&DynGRMHD::UpdateExcisionMasks, this, MHD_Excise, "MHD_Excise",
+                   Task_Run, {MHD_SetADM});
+  } else {
+    pnr->QueueTask(&DynGRMHDPS<EOSPolicy, ErrorPolicy>::ConToPrim, this, MHD_C2P,
+                   "MHD_C2P", Task_Run, {MHD_Prolong}, {Z4c_Excise});
+  }
   pnr->QueueTask(&MHD::NewTimeStep, pmhd, MHD_Newdt, "MHD_Newdt", Task_Run, {MHD_C2P});
 
   // End task list
@@ -235,7 +280,16 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::ConvertInternalEnergyToPressure(int is,
     for (int s = 0; s < nscal; s++) {
       Y[s] = prim(m, nmhd + s, k, j, i);
     }
-    Real T = eos_.GetTemperatureFromE(n, egas, Y);
+    Real T;
+    // Note that this is done explicitly rather than with a flooring policy because we
+    // don't have the temperature yet, and it's probable that the energy is bunk if the
+    // density is. There may be a cleaner way to do this elsewhere.
+    if (n < eos_.GetMinimumDensity()) {
+      n = eos_.GetMinimumDensity();
+      T = eos_.GetMinimumTemperature();
+    } else {
+      T = eos_.GetTemperatureFromE(n, egas, Y);
+    }
     prim(m, IPR, k, j, i) = eos_.GetPressure(n, T, Y);
   });
 }
@@ -256,7 +310,7 @@ TaskStatus DynGRMHDPS<EOSPolicy, ErrorPolicy>::ConToPrim(Driver *pdrive, int sta
   int n2m1 = (indcs.nx2 > 1)? (indcs.nx2 + 2*ng - 1) : 0;
   int n3m1 = (indcs.nx3 > 1)? (indcs.nx3 + 2*ng - 1) : 0;
   eos.ConsToPrim(pmy_pack->pmhd->u0, pmy_pack->pmhd->b0, pmy_pack->pmhd->bcc0,
-                 pmy_pack->pmhd->w0, 0, n1m1, 0, n2m1, 0, n3m1, false);
+                 pmy_pack->pmhd->w0, temperature, 0, n1m1, 0, n2m1, 0, n3m1, false);
   return TaskStatus::complete;
 }
 
@@ -270,7 +324,7 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::ConToPrimBC(int is, int ie, int js, int
     return;
   }
   eos.ConsToPrim(pmy_pack->pmhd->u0, pmy_pack->pmhd->b0, pmy_pack->pmhd->bcc0,
-                 pmy_pack->pmhd->w0, is, ie, js, je, ks, ke, false);
+                 pmy_pack->pmhd->w0, temperature, is, ie, js, je, ks, ke, false);
 }
 
 //----------------------------------------------------------------------------------------
@@ -415,6 +469,26 @@ TaskStatus DynGRMHD::SetTmunu(Driver *pdrive, int stage) {
       }
     }
   });
+  return TaskStatus::complete;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void DynGRMHD::SetADMVariables
+//! \brief
+
+TaskStatus DynGRMHD::SetADMVariables(Driver *pdrive, int stage) {
+  pmy_pack->padm->SetADMVariables(pmy_pack);
+  return TaskStatus::complete;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void Z4c::UpdateExcisionMasks
+//! \brief
+
+TaskStatus DynGRMHD::UpdateExcisionMasks(Driver *pdrive, int stage) {
+  if (pmy_pack->pcoord->coord_data.bh_excise && stage == pdrive->nexp_stages) {
+    pmy_pack->pcoord->UpdateExcisionMasks();
+  }
   return TaskStatus::complete;
 }
 
@@ -579,7 +653,14 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::AddCoordTermsEOS(const DvceArray5D<Real
 // Instantiated templates
 template class DynGRMHDPS<Primitive::IdealGas, Primitive::ResetFloor>;
 template class DynGRMHDPS<Primitive::PiecewisePolytrope, Primitive::ResetFloor>;
-template class DynGRMHDPS<Primitive::EOSCompOSE, Primitive::ResetFloor>;
+template class DynGRMHDPS<Primitive::EOSCompOSE<Primitive::NormalLogs>,
+                          Primitive::ResetFloor>;
+template class DynGRMHDPS<Primitive::EOSCompOSE<Primitive::NQTLogs>,
+                          Primitive::ResetFloor>;
+template class DynGRMHDPS<Primitive::EOSHybrid<Primitive::NormalLogs>,
+                          Primitive::ResetFloor>;
+template class DynGRMHDPS<Primitive::EOSHybrid<Primitive::NQTLogs>,
+                          Primitive::ResetFloor>;
 
 // Macro for defining CoordTerms templates
 #define INSTANTIATE_COORD_TERMS(EOSPolicy, ErrorPolicy) \
@@ -598,7 +679,12 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::AddCoordTermsEOS<4>( \
 
 INSTANTIATE_COORD_TERMS(Primitive::IdealGas, Primitive::ResetFloor);
 INSTANTIATE_COORD_TERMS(Primitive::PiecewisePolytrope, Primitive::ResetFloor);
-INSTANTIATE_COORD_TERMS(Primitive::EOSCompOSE, Primitive::ResetFloor);
+INSTANTIATE_COORD_TERMS(Primitive::EOSCompOSE<Primitive::NormalLogs>,
+                        Primitive::ResetFloor);
+INSTANTIATE_COORD_TERMS(Primitive::EOSCompOSE<Primitive::NQTLogs>, Primitive::ResetFloor);
+INSTANTIATE_COORD_TERMS(Primitive::EOSHybrid<Primitive::NormalLogs>,
+                        Primitive::ResetFloor);
+INSTANTIATE_COORD_TERMS(Primitive::EOSHybrid<Primitive::NQTLogs>, Primitive::ResetFloor);
 
 #undef INSTANTIATE_COORD_TERMS
 

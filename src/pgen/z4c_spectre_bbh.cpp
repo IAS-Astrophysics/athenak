@@ -13,6 +13,7 @@
 #include <sstream>
 #include <string>
 #include <vector>
+#include <Kokkos_Timer.hpp>
 
 #include "athena.hpp"
 #include "coordinates/cell_locations.hpp"
@@ -22,7 +23,6 @@
 #include "parameter_input.hpp"
 #include "z4c/z4c.hpp"
 #include "z4c/z4c_amr.hpp"
-#include "z4c/z4c_puncture_tracker.hpp"
 
 #include <spectre/Exporter.hpp>
 
@@ -136,6 +136,7 @@ void LoadSpectreInitialData(MeshBlockPack *pmbp, const std::string &filename_glo
   x[2].resize(sz);
 
   int nmb = pmbp->nmb_thispack;
+  Kokkos::Timer timer{};
   for (int m = 0; m < nmb; ++m) {
     // Get the coordinates for this meshblock
     Real &x1min = size.h_view(m).x1min;
@@ -156,8 +157,9 @@ void LoadSpectreInitialData(MeshBlockPack *pmbp, const std::string &filename_glo
     }
 
     // Interpolate data to the coordinates
+    timer.reset();
     std::cout << "Interpolating initial data for meshblock " << m << "/"
-              << nmb - 1 << " with " << sz << " points " << std::endl;
+              << nmb - 1 << " with " << sz << " points..." << std::endl;
     const auto data = spectre::Exporter::interpolate_to_points<3>(
         filename_glob, subfile_name, spectre::Exporter::ObservationStep{observation_step},
         {"SpatialMetric_xx", "SpatialMetric_yx", "SpatialMetric_yy",
@@ -166,6 +168,8 @@ void LoadSpectreInitialData(MeshBlockPack *pmbp, const std::string &filename_glo
          "ExtrinsicCurvature_zx", "ExtrinsicCurvature_zy", "ExtrinsicCurvature_zz"},
         /* target_points */ x,
         /* extrapolate_into_excisions */ true);
+    std::cout << "  done in " << timer.seconds() << " seconds." << std::endl;
+
     const auto &gxx = data[0];
     const auto &gyx = data[1];
     const auto &gyy = data[2];
@@ -218,5 +222,5 @@ void LoadSpectreInitialData(MeshBlockPack *pmbp, const std::string &filename_glo
 }
 
 void RefinementCondition(MeshBlockPack *pmbp) {
-  pmbp->pz4c->pz4c_amr->Refine(pmbp);
+  pmbp->pz4c->pamr->Refine(pmbp);
 }

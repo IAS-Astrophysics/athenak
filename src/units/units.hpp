@@ -26,21 +26,21 @@ class Units {
 
   // data
   // CGS unit per X
-  static constexpr Real cm_cgs = 1.0;                             // cm
-  static constexpr Real pc_cgs = 3.0856775809623245e+18;          // cm
-  static constexpr Real kpc_cgs = 3.0856775809623245e+21;         // cm
-  static constexpr Real g_cgs = 1.0;                              // g
-  static constexpr Real msun_cgs = 1.98841586e+33;                // g
-  static constexpr Real atomic_mass_unit_cgs = 1.67262192369e-24; // g 1.660538921
-  static constexpr Real s_cgs = 1.0;                              // s
-  static constexpr Real yr_cgs = 3.15576e+7;                      // s
-  static constexpr Real myr_cgs = 3.15576e+13;                    // s
-  static constexpr Real cm_s_cgs = 1.0;                           // cm/s
-  static constexpr Real km_s_cgs = 1.0e5;                         // cm/s
-  static constexpr Real g_cm3_cgs = 1.0;                          // g/cm^3
-  static constexpr Real erg_cgs = 1.0;                            // erg
-  static constexpr Real dyne_cm2_cgs = 1.0;                       // dyne/cm^2
-  static constexpr Real kelvin_cgs = 1.0;                         // k
+  static constexpr Real cm_cgs = 1.0;                           // cm
+  static constexpr Real pc_cgs = 3.0856775809623245e+18;        // cm
+  static constexpr Real kpc_cgs = 3.0856775809623245e+21;       // cm
+  static constexpr Real g_cgs = 1.0;                            // g
+  static constexpr Real msun_cgs = 1.98841586e+33;              // g
+  static constexpr Real atomic_mass_unit_cgs = 1.660538921e-24; // g
+  static constexpr Real s_cgs = 1.0;                            // s
+  static constexpr Real yr_cgs = 3.15576e+7;                    // s
+  static constexpr Real myr_cgs = 3.15576e+13;                  // s
+  static constexpr Real cm_s_cgs = 1.0;                         // cm/s
+  static constexpr Real km_s_cgs = 1.0e5;                       // cm/s
+  static constexpr Real g_cm3_cgs = 1.0;                        // g/cm^3
+  static constexpr Real erg_cgs = 1.0;                          // erg
+  static constexpr Real dyne_cm2_cgs = 1.0;                     // dyne/cm^2
+  static constexpr Real kelvin_cgs = 1.0;                       // k
 
   // PHYSICAL CONSTANTS
   static constexpr Real k_boltzmann_cgs = 1.3806488e-16;          // erg/k

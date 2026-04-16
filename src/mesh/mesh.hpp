@@ -14,11 +14,8 @@
 #include <cstdint>  // int32_t
 #include <memory>
 #include <string>
-#include <unordered_map>
-#include <vector>
 
 #include "athena.hpp"
-#include "file_sharding.hpp"
 
 // Define following structure before other "include" files to resolve declarations
 //----------------------------------------------------------------------------------------
@@ -67,39 +64,6 @@ struct LogicalLocation {
 };
 
 //----------------------------------------------------------------------------------------
-//! \struct LogicalLocationHash
-//! \brief Hash functor for LogicalLocation to enable use in unordered_map
-
-struct LogicalLocationHash {
-  std::size_t operator()(const LogicalLocation& loc) const noexcept {
-    // Combine level and indices into hash using prime numbers for good distribution
-    return (static_cast<std::size_t>(loc.lx1) * 1315423911ULL) ^
-           (static_cast<std::size_t>(loc.lx2) * 2654435761ULL) ^
-           (static_cast<std::size_t>(loc.lx3) * 97531ULL) ^
-           (static_cast<std::size_t>(loc.level) << 1);
-  }
-};
-
-struct RestartMetaData {
-  FileShardMode file_shard_mode = FileShardMode::shared;
-  std::string base_dir;
-  std::string file_name;
-  std::uint64_t payload_stride = 0;
-  int original_nranks = 0;
-  int original_nnodes = 1;
-  std::vector<int> gids_eachrank;
-  std::vector<int> nmb_eachrank;
-  std::vector<int> rank_eachmb;
-  std::vector<int> rank_to_node;
-};
-
-// Equality operator for LogicalLocation (needed for unordered_map)
-inline bool operator==(const LogicalLocation& a, const LogicalLocation& b) noexcept {
-  return (a.level == b.level && a.lx1 == b.lx1 && 
-          a.lx2 == b.lx2 && a.lx3 == b.lx3);
-}
-
-//----------------------------------------------------------------------------------------
 //! \struct EventCounters
 //! \brief stores various counters used as diagnostics throughout the code
 
@@ -133,7 +97,7 @@ class Mesh {
   friend class MeshBlockTree;
   friend class MeshRefinement;
   // needs to access tree to find target MB offset by shear
-  friend class ShearingBoxBoundary;
+  friend class ShearingBox;
 
  public:
   explicit Mesh(ParameterInput *pin);
@@ -173,7 +137,8 @@ class Mesh {
   // following 1x arrays allocated with length [nranks] in AddCoordinatesAndPhysics()
   int *nprtcl_eachrank;    // number of particles on each rank
 
-  Real time, dt, dtold, cfl_no;
+  Real time, dt, dtold, dt_last_completed, cfl_no, dt_parabolic_sts, sts_max_dt_ratio;
+  parabolic::STSIntegrator sts_integrator;
   int ncycle;
   EventCounters ecounter;
 
@@ -185,19 +150,13 @@ class Mesh {
   // functions
   void BuildTreeFromScratch(ParameterInput *pin);
   void BuildTreeFromRestart(ParameterInput *pin, IOWrapper &resfile,
-                            FileShardMode shard_mode=FileShardMode::shared);
-  void SetRestartFileInfo(const std::string &base_dir,
-                          const std::string &file_name,
-                          FileShardMode shard_mode);
+                            bool single_file_per_rank=false);
   void PrintMeshDiagnostics();
   void WriteMeshStructure();
   void NewTimeStep(const Real tlim);
   void AddCoordinatesAndPhysics(ParameterInput *pinput);
-  void CountParticles();
   BoundaryFlag GetBoundaryFlag(const std::string& input_string);
   std::string GetBoundaryString(BoundaryFlag input_flag);
-
-  RestartMetaData restart_meta;
 
   // comparison function for sorting LogicalLocations based on level
   static bool GreaterLevel(const LogicalLocation & left, const LogicalLocation &right) {
@@ -215,10 +174,8 @@ class Mesh {
     return (mb_indcs.nx1)*(mb_indcs.nx2)*(mb_indcs.nx3);
   }
 
-
  private:
   std::unique_ptr<MeshBlockTree> ptree;  // pointer to root node in binary/quad/oct-tree
-  
   void LoadBalance(float *clist, int *rlist, int *slist, int *nlist, int nb);
 };
 #endif  // MESH_MESH_HPP_

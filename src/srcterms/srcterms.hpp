@@ -19,10 +19,6 @@
 #include "mesh/mesh.hpp"
 #include "parameter_input.hpp"
 
-// forward declarations
-class TurbulenceDriver;
-class Driver;
-
 //----------------------------------------------------------------------------------------
 //! \class SourceTerms
 //! \brief data and functions for physical source terms
@@ -36,59 +32,41 @@ class SourceTerms {
   // flags for various source terms
   bool const_accel;
   bool ism_cooling;
-  bool cgm_cooling;
   bool rel_cooling;
-  bool beam;
-  bool shearing_box, shearing_box_r_phi;
+  bool rad_beam;
 
   // new timestep
   Real dtnew;
 
-  // magnitude and direction of constant accel
-  Real const_accel_val;
-  int const_accel_dir;
+  // data for constant accel
+  Real const_accel_val;   // magnitude of accn
+  int const_accel_dir;    // direction of accn
 
-  // heating rate used with ISM/CGM cooling
+  // data for ISM cooling
   Real hrate;
-  Real hscale_norm;
-  Real hscale_height; // Gaussian Scale Height
-  Real hscale_radius; // Exponential Scale Radius
 
-  // CGM cooling tables
-  DualArray1D<Real> Tbins, nHbins;
-  DualArray2D<Real> Metal_Cooling, H_He_Cooling;
-  DualArray1D<Real> Metal_Cooling_CIE, H_He_Cooling_CIE;
-  Real T_max;
-
-  // cooling rate used with relativistic cooling
+  // data for relativistic cooling
   Real crate_rel;
   Real cpower_rel;
 
-  // beam source
-  Real dii_dt;
-
-  // shearing box
-  Real qshear, omega0;
+  // data for radiation beam source
+  Real dii_dt;            // injection rate
+  Real pos1, pos2, pos3;  // position of source
+  Real dir1, dir2, dir3;  // direction of source
+  Real width, spread;     // spatial width of source region, spread in angles
 
   // functions
+  void ApplySrcTerms(const DvceArray5D<Real> &w0, const EOS_Data &eos,
+                     const Real bdt, DvceArray5D<Real> &u0);
+  void ApplySrcTerms(DvceArray5D<Real> &i0, const Real bdt);
   void ConstantAccel(const DvceArray5D<Real> &w0, const EOS_Data &eos,
-                     const Real dt, DvceArray5D<Real> &u0);
+                     const Real bdt, DvceArray5D<Real> &u0);
   void ISMCooling(const DvceArray5D<Real> &w0, const EOS_Data &eos,
-                  const Real dt, DvceArray5D<Real> &u0);
-  void CGMCooling(const DvceArray5D<Real> &w0, const EOS_Data &eos,
-                  const Real dt, DvceArray5D<Real> &u0);
+                  const Real bdt, DvceArray5D<Real> &u0);
   void RelCooling(const DvceArray5D<Real> &w0, const EOS_Data &eos,
-                  const Real dt, DvceArray5D<Real> &u0);
-  void BeamSource(DvceArray5D<Real> &i0, const Real dt);
-  void ShearingBox(const DvceArray5D<Real> &w0, const EOS_Data &eos_data, const Real bdt,
-                   DvceArray5D<Real> &u0);
-  void ShearingBox(const DvceArray5D<Real> &w0, const DvceArray5D<Real> &bcc0,
-                   const EOS_Data &eos_data, const Real bdt, DvceArray5D<Real> &u0);
-  // in 2D shearing box there is a source term for Ex and Ey
-  void SBoxEField(const DvceFaceFld4D<Real> &b0, DvceEdgeFld4D<Real> &efld);
-
+                  const Real bdt, DvceArray5D<Real> &u0);
+  void BeamSource(DvceArray5D<Real> &i0, const Real bdt);
   void NewTimeStep(const DvceArray5D<Real> &w0, const EOS_Data &eos);
-  void Initialize();
 
  private:
   MeshBlockPack *pmy_pack;

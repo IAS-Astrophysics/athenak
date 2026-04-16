@@ -24,7 +24,8 @@ Primitive::UnitSystem Primitive::MakeCGS() {
     1.0, // mass, g
     1.0, // energy, erg
     1.0, // pressure, erg/cm^3
-    1.0  // temperature, K
+    1.0, // temperature, K
+    1.0, // chemical potential, erg
   };
 }
 
@@ -43,6 +44,7 @@ Primitive::UnitSystem Primitive::MakeGeometricKilometer() {
     CGS.G/(CGS.c*CGS.c*CGS.c*CGS.c)*1e-5, // energy, km
     CGS.G/(CGS.c*CGS.c*CGS.c*CGS.c)*1e10, // pressure, km^-2
     CGS.kb*CGS.G/(CGS.c*CGS.c*CGS.c*CGS.c)*1e-5, // temperature, km
+    CGS.kb/CGS.MeV, // chemical potential, MeV
   };
 }
 
@@ -62,6 +64,7 @@ Primitive::UnitSystem Primitive::MakeGeometricSolar() {
     PS_CUBE( CGS.G/(CGS.c*CGS.c) ) * PS_SQR( CGS.Msun/(CGS.c) ), // pressure, Msun^-2
 //     CGS.kb / (CGS.Msun * CGS.c*CGS.c), // temperature, Msun
     CGS.kb/CGS.MeV, // temperature, MeV
+    CGS.kb/CGS.MeV, // chemical potential, MeV
   };
 }
 
@@ -80,6 +83,7 @@ Primitive::UnitSystem Primitive::MakeNuclear() {
     1.0/CGS.MeV, // energy, MeV
     1e-39/CGS.MeV, // pressure, MeV/fm^3
     CGS.kb/CGS.MeV, // temperature, MeV
+    CGS.kb/CGS.MeV, // chemical potential, MeV
   };
 }
 
@@ -98,6 +102,7 @@ Primitive::UnitSystem Primitive::MakeMKS() {
     1e-7,             // 1 erg in J
     0.1,              // 1 dyne/cm in Pa
     1.0,              // 1 K in K
+    1e-7,             // 1 erg in J
   };
 }
 

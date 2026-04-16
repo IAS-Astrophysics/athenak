@@ -17,6 +17,25 @@
 #include "resistivity.hpp"
 #include "current_density.hpp"
 
+namespace {
+
+parabolic::ParabolicIntegratorMode ParseResistivityIntegratorMode(ParameterInput *pin) {
+  std::string integrator = pin->GetOrAddString("mhd", "ohmic_resistivity_integrator",
+                                               "explicit");
+  if (integrator == "explicit") {
+    return parabolic::ParabolicIntegratorMode::explicit_mode;
+  } else if (integrator == "sts") {
+    return parabolic::ParabolicIntegratorMode::sts;
+  }
+
+  std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+            << "<mhd>/ohmic_resistivity_integrator = '" << integrator
+            << "' must be 'explicit' or 'sts'" << std::endl;
+  std::exit(EXIT_FAILURE);
+}
+
+} // namespace
+
 //----------------------------------------------------------------------------------------
 // ctor: also calls Resistivity base class constructor
 
@@ -24,6 +43,7 @@ Resistivity::Resistivity(MeshBlockPack *pp, ParameterInput *pin) :
   pmy_pack(pp) {
   // Read parameters for Ohmic diffusion (if any)
   eta_ohm = pin->GetReal("mhd","ohmic_resistivity");
+  mode = ParseResistivityIntegratorMode(pin);
 
   // resistive timestep on MeshBlock(s) in this pack
   dtnew = std::numeric_limits<float>::max();

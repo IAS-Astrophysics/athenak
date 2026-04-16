@@ -81,18 +81,13 @@ TaskStatus Radiation::RKUpdate(Driver *pdriver, int stage) {
     i0_(m,n,k,j,i) = n0*n_0*fmax((i0_(m,n,k,j,i)/(n0*n_0)), 0.0);
 
     // handle excision
-    // NOTE(@pdmullen): exicision criterion are not finalized.  The below zeroes all
+    // NOTE(@pdmullen): excision criterion are not finalized.  The below zeroes all
     // intensities within rks <= 1.0 and zeroes intensities within angles where n_0
     // is about zero.  This needs future attention.
     if (excise) {
       if (rad_mask_(m,k,j,i) || fabs(n_0) < n_0_floor_) { i0_(m,n,k,j,i) = 0.0; }
     }
   });
-
-  // add beam source term, if any
-  if (psrc->beam)  psrc->BeamSource(i0_, beta_dt);
-
   return TaskStatus::complete;
 }
-
 } // namespace radiation

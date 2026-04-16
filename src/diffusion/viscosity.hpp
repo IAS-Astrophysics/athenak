@@ -13,6 +13,7 @@
 #include <string>
 
 #include "athena.hpp"
+#include "diffusion/sts_types.hpp"
 #include "parameter_input.hpp"
 #include "mesh/mesh.hpp"
 
@@ -28,6 +29,7 @@ class Viscosity {
   // data
   Real dtnew;
   Real nu_iso;     // coefficient of isotropic kinematic shear viscosity
+  parabolic::ParabolicIntegratorMode mode;
 
   // function to add viscous fluxes to Hydro and/or MHD fluxes
   void IsotropicViscousFlux(const DvceArray5D<Real> &w, const Real nu,

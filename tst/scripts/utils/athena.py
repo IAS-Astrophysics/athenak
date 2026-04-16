@@ -69,7 +69,7 @@ def mpirun(nproc, input_filename, arguments):
     try:
         input_filename_full = '../../' + athena_rel_path + \
                               'inputs/' + input_filename
-        run_command = ['mpiexec', '-n', str(nproc), './athena', '-i',
+        run_command = ['mpiexec -n', str(nproc), './athena', '-i',
                        input_filename_full]
         try:
             cmd = run_command + arguments

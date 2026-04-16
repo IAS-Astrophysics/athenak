@@ -11,16 +11,14 @@
 #include <limits> // numeric_limits<>
 #include <algorithm> // max
 #include <utility> // make_pair
-#include <Kokkos_Core.hpp>
-#include <Kokkos_StdAlgorithms.hpp>
 
 #include "athena.hpp"
 #include "globals.hpp"
 #include "mesh.hpp"
 #include "hydro/hydro.hpp"
 #include "mhd/mhd.hpp"
+#include "radiation/radiation.hpp"
 #include "z4c/z4c.hpp"
-#include "particles/particles.hpp" 
 
 #if MPI_PARALLEL_ENABLED
 #include <mpi.h>
@@ -98,9 +96,6 @@ void Mesh::LoadBalance(float *clist, int *rlist, int *slist, int *nlist, int nb)
 
 void MeshRefinement::InitRecvAMR(int nleaf) {
 #if MPI_PARALLEL_ENABLED
-
-  InitPartRecv();
-
   // Step 1. (InitRecvAMR)
   // loop over new MBs on this rank, count number of MeshBlocks received by this rank
   nmb_recv = 0;
@@ -133,10 +128,7 @@ void MeshRefinement::InitRecvAMR(int nleaf) {
   if (nmb_recv == 0) return;  // nothing to do
 
   // allocate array of recv buffers
-  //Kokkos::realloc(recvbuf, nmb_recv);
-  if ((int)recvbuf.h_view.extent(0) < nmb_recv) {
-    Kokkos::realloc(recvbuf, nmb_recv);
-  }
+  Kokkos::realloc(recvbuf, nmb_recv);
   recv_req = new MPI_Request[nmb_recv];
   for (int n=0; n<nmb_recv; ++n) {
     recv_req[n] = MPI_REQUEST_NULL;
@@ -149,9 +141,12 @@ void MeshRefinement::InitRecvAMR(int nleaf) {
                    pmy_mesh->pmb_pack->phydro->nscalars);
   }
   if (pmy_mesh->pmb_pack->pmhd != nullptr) {
-    ncc_tosend += (pmy_mesh->pmb_pack->pmhd->nmhd  +
+    ncc_tosend += (pmy_mesh->pmb_pack->pmhd->nmhd +
                    pmy_mesh->pmb_pack->pmhd->nscalars);
     nfc_tosend += 1;
+  }
+  if (pmy_mesh->pmb_pack->prad != nullptr) {
+    ncc_tosend += (pmy_mesh->pmb_pack->prad->prgeo->nangles);
   }
   if (pmy_mesh->pmb_pack->pz4c != nullptr) {
     ncc_tosend += (pmy_mesh->pmb_pack->pz4c->nz4c);
@@ -269,10 +264,7 @@ void MeshRefinement::InitRecvAMR(int nleaf) {
   recvbuf.template sync<DevExeSpace>();
   {
     int ndata = recvbuf.h_view((nmb_recv-1)).offset + recvbuf.h_view((nmb_recv-1)).cnt;
-    //Kokkos::realloc(recv_data, ndata);
-    if ((int)recv_data.extent(0) < ndata) {
-      Kokkos::realloc(recv_data, ndata);
-    }
+    Kokkos::realloc(recv_data, ndata);
   }
 
   // Step 3. (InitRecvAMR)
@@ -345,9 +337,7 @@ void MeshRefinement::InitRecvAMR(int nleaf) {
        << std::endl << "MPI error in posting non-blocking receives with AMR" << std::endl;
     std::exit(EXIT_FAILURE);
   }
-
 #endif
-
   return;
 }
 
@@ -360,10 +350,6 @@ void MeshRefinement::InitRecvAMR(int nleaf) {
 
 void MeshRefinement::PackAndSendAMR(int nleaf) {
 #if MPI_PARALLEL_ENABLED
-  if (pmy_mesh->pmb_pack->ppart != nullptr) {
-    PackAMRBuffersParticles();
-  }
-
   // Step 1. (PackAndSendAMR)
   // loop over old MBs on this rank, count number of MeshBlocks to send on this rank
   nmb_send = 0;
@@ -397,10 +383,7 @@ void MeshRefinement::PackAndSendAMR(int nleaf) {
   if (nmb_send == 0) return;  // nothing to do
 
   // allocate array of send buffers
-  //Kokkos::realloc(sendbuf, nmb_send);
-  if ((int)sendbuf.h_view.extent(0) < nmb_send) {
-    Kokkos::realloc(sendbuf, nmb_send);
-  }
+  Kokkos::realloc(sendbuf, nmb_send);
   send_req = new MPI_Request[nmb_send];
   for (int n=0; n<nmb_send; ++n) {
     send_req[n] = MPI_REQUEST_NULL;
@@ -409,13 +392,16 @@ void MeshRefinement::PackAndSendAMR(int nleaf) {
   // count number of cell- and face-centered variables communicated depending on physics
   int ncc_tosend=0, nfc_tosend=0;
   if (pmy_mesh->pmb_pack->phydro != nullptr) {
-    ncc_tosend += (pmy_mesh->pmb_pack->phydro->nhydro  +
+    ncc_tosend += (pmy_mesh->pmb_pack->phydro->nhydro +
                    pmy_mesh->pmb_pack->phydro->nscalars);
   }
   if (pmy_mesh->pmb_pack->pmhd != nullptr) {
-    ncc_tosend += (pmy_mesh->pmb_pack->pmhd->nmhd  +
+    ncc_tosend += (pmy_mesh->pmb_pack->pmhd->nmhd +
                    pmy_mesh->pmb_pack->pmhd->nscalars);
     nfc_tosend += 1;
+  }
+  if (pmy_mesh->pmb_pack->prad != nullptr) {
+    ncc_tosend += (pmy_mesh->pmb_pack->prad->prgeo->nangles);
   }
   if (pmy_mesh->pmb_pack->pz4c != nullptr) {
     ncc_tosend += (pmy_mesh->pmb_pack->pz4c->nz4c);
@@ -535,16 +521,14 @@ void MeshRefinement::PackAndSendAMR(int nleaf) {
   sendbuf.template sync<DevExeSpace>();
   {
     int ndata = sendbuf.h_view((nmb_send-1)).offset + sendbuf.h_view((nmb_send-1)).cnt;
-    //Kokkos::realloc(send_data, ndata);
-    if ((int)send_data.extent(0) < ndata) {
-      Kokkos::realloc(send_data, ndata);
-    }
+    Kokkos::realloc(send_data, ndata);
   }
 
   // Step 3. (PackAndSendAMR)
   // Pack data into send buffers in parallel
   hydro::Hydro* phydro = pmy_mesh->pmb_pack->phydro;
   mhd::MHD* pmhd = pmy_mesh->pmb_pack->pmhd;
+  radiation::Radiation* prad = pmy_mesh->pmb_pack->prad;
   z4c::Z4c* pz4c = pmy_mesh->pmb_pack->pz4c;
 
   int ncc_sent = 0, nfc_sent = 0;
@@ -557,6 +541,10 @@ void MeshRefinement::PackAndSendAMR(int nleaf) {
     ncc_sent += pmhd->nmhd + pmhd->nscalars;
     PackAMRBuffersFC(pmhd->b0, pmhd->coarse_b0, ncc_sent, nfc_sent);
     nfc_sent += 1;
+  }
+  if (prad != nullptr) {
+    PackAMRBuffersCC(prad->i0, prad->coarse_i0, ncc_sent, nfc_sent);
+    ncc_sent += prad->prgeo->nangles;
   }
   if (pz4c != nullptr) {
     PackAMRBuffersCC(pz4c->u0, pz4c->coarse_u0, ncc_sent, nfc_sent);
@@ -811,50 +799,25 @@ void MeshRefinement::PackAMRBuffersFC(DvceFaceFld4D<Real> &b, DvceFaceFld4D<Real
 
 void MeshRefinement::ClearRecvAndUnpackAMR() {
 #if MPI_PARALLEL_ENABLED
-  if (pmy_mesh->pmb_pack->ppart != nullptr) {
-    // Wait for particle receives to finish
-    bool no_errors=true;
-    for (int n=0; n<prtcl_nrecvs; ++n) {
-      int ierr = MPI_Wait(&(prtcl_rrecv_req[n]), MPI_STATUS_IGNORE);
-      if (ierr != MPI_SUCCESS) no_errors=false;
-      ierr = MPI_Wait(&(prtcl_irecv_req[n]), MPI_STATUS_IGNORE);
-      if (ierr != MPI_SUCCESS) no_errors = false;
-    }
-    // Quit if MPI error detected
-    if (!(no_errors)) {
-      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-                << std::endl << "MPI error in particle communication with AMR"
-                << std::endl;
-      std::exit(EXIT_FAILURE);
-    }
+  // Wait for all receives to finish
+  bool no_errors=true;
+  for (int n=0; n<nmb_recv; ++n) {
+    int ierr = MPI_Wait(&(recv_req[n]), MPI_STATUS_IGNORE);
+    if (ierr != MPI_SUCCESS) {no_errors=false;}
   }
-
-  if (nmb_recv != 0) {
-    // Wait for all receives to finish
-    bool no_errors=true;
-    for (int n=0; n<nmb_recv; ++n) {
-      int ierr = MPI_Wait(&(recv_req[n]), MPI_STATUS_IGNORE);
-      if (ierr != MPI_SUCCESS) {no_errors=false;}
-    }
-    // Quit if MPI error detected
-    if (!(no_errors)) {
-      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-                << std::endl << "MPI error in posting non-blocking receives with AMR"
-                << std::endl;
-      std::exit(EXIT_FAILURE);
-    }
-    delete [] recv_req;
+  // Quit if MPI error detected
+  if (!(no_errors)) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+              << std::endl << "MPI error in posting non-blocking receives with AMR"
+              << std::endl;
+    std::exit(EXIT_FAILURE);
   }
-
-  if (pmy_mesh->pmb_pack->ppart != nullptr) {
-    UnpackAMRBuffersParticles();
-  }
-
-  if (nmb_recv == 0) return;
+  delete [] recv_req;
 
   // Unpack data
   hydro::Hydro* phydro = pmy_mesh->pmb_pack->phydro;
   mhd::MHD* pmhd = pmy_mesh->pmb_pack->pmhd;
+  radiation::Radiation* prad = pmy_mesh->pmb_pack->prad;
   z4c::Z4c* pz4c = pmy_mesh->pmb_pack->pz4c;
 
   int ncc_recv=0, nfc_recv=0;
@@ -868,6 +831,10 @@ void MeshRefinement::ClearRecvAndUnpackAMR() {
     ncc_recv += pmhd->nmhd + pmhd->nscalars;
     UnpackAMRBuffersFC(pmhd->b0, pmhd->coarse_b0, ncc_recv, nfc_recv);
     nfc_recv += 1;
+  }
+  if (prad != nullptr) {
+    UnpackAMRBuffersCC(prad->i0, prad->coarse_i0, ncc_recv, nfc_recv);
+    ncc_recv += prad->prgeo->nangles;
   }
   if (pz4c != nullptr) {
     UnpackAMRBuffersCC(pz4c->u0, pz4c->coarse_u0, ncc_recv, nfc_recv);
@@ -1045,31 +1012,11 @@ void MeshRefinement::UnpackAMRBuffersFC(DvceFaceFld4D<Real> &b, DvceFaceFld4D<Re
 
 void MeshRefinement::ClearSendAMR() {
 #if MPI_PARALLEL_ENABLED
-  bool no_errors = true; 
-  if (pmy_mesh->pmb_pack->ppart != nullptr) {
-    for (int n = 0; n < prtcl_nsends; ++n) {
-      if (prtcl_rsend_req[n] != MPI_REQUEST_NULL) {
-        int ierr = MPI_Wait(&(prtcl_rsend_req[n]), MPI_STATUS_IGNORE);
-        if (ierr != MPI_SUCCESS) no_errors = false;
-      }
-      if (prtcl_isend_req[n] != MPI_REQUEST_NULL) {
-        int ierr = MPI_Wait(&(prtcl_isend_req[n]), MPI_STATUS_IGNORE);
-        if (ierr != MPI_SUCCESS) no_errors = false;
-      }
-    }
-    // Clear particle request vectors
-    prtcl_rsend_req.clear();
-    prtcl_isend_req.clear();
-    prtcl_nsends = 0;
-  }
-
-  if (nmb_send == 0) return;
-
+  bool no_errors=true;
   for (int n=0; n<nmb_send; ++n) {
     int ierr = MPI_Wait(&(send_req[n]), MPI_STATUS_IGNORE);
     if (ierr != MPI_SUCCESS) {no_errors=false;}
   }
-  
   // Quit if MPI error detected
   if (!(no_errors)) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
@@ -1079,440 +1026,5 @@ void MeshRefinement::ClearSendAMR() {
   }
   delete [] send_req;
 #endif
-  return;
-}
-
-//----------------------------------------------------------------------------------------
-//! \fn void MeshRefinement::PackAMRBuffersParticles()
-//! \brief Packs particle data into AMR communication buffers for all MBs being sent
-
-void MeshRefinement::PackAMRBuffersParticles() {
-#if MPI_PARALLEL_ENABLED
-  // Figure out how many particles will be sent from this ranks
-  nprtcl_send = 0;
-  for (int n=0; n<prtcl_nsends; ++n) {
-    nprtcl_send += prtcl_sends_thisrank[n].nprtcls;
-  }
-  if (nprtcl_send == 0) return;
-
-  auto *ppart = pmy_mesh->pmb_pack->ppart;
-  int nrdata = ppart->nrdata;
-  int nidata = ppart->nidata;
-  auto &pr = ppart->prtcl_rdata;
-  auto &pi = ppart->prtcl_idata;
-  auto &rsendbuf = prtcl_rsendbuf;
-  auto &isendbuf = prtcl_isendbuf;
-  auto &sendlist_ = prtcl_sendlist;
-  bool no_errors = true;
-
-  // Allocate send buffer
-  if ((int)prtcl_rsendbuf.extent(0) < nrdata*nprtcl_send)
-    Kokkos::realloc(prtcl_rsendbuf, nrdata*nprtcl_send);
-  if ((int)prtcl_isendbuf.extent(0) < nidata*nprtcl_send)
-    Kokkos::realloc(prtcl_isendbuf, nidata*nprtcl_send);
-
-
-  // sendlist on device is already sorted by destrank in CountSendAndRecvs()
-  // Use sendlist on device to load particles into send buffer ordered by dest_rank
-  par_for("amr_ppack",DevExeSpace(),0,(nprtcl_send-1), KOKKOS_LAMBDA(const int n) {
-    int p = sendlist_.d_view(n).prtcl_indx;
-    for (int i=0; i<nidata; ++i) {
-      isendbuf(nidata*n + i) = pi(i,p);
-    }
-    for (int i=0; i<nrdata; ++i) {
-      rsendbuf(nrdata*n + i) = pr(i,p);
-    }
-  });
-
-  // Ensure all packing is complete before MPI sends
-  Kokkos::fence();
-
-  // Initialize MPI request vectors
-  prtcl_rsend_req.clear();
-  prtcl_isend_req.clear();
-  for (int n = 0; n < prtcl_nsends; ++n) {
-    prtcl_rsend_req.emplace_back(MPI_REQUEST_NULL);
-    prtcl_isend_req.emplace_back(MPI_REQUEST_NULL);
-  }
-
-  // Send Real particle data
-  int data_start = 0;
-  for (int n = 0; n < prtcl_nsends; ++n) {
-    // calculate amount of data to be passed, get pointer to variables
-    int data_size = nrdata*(prtcl_sends_thisrank[n].nprtcls);
-    int data_end = data_start + data_size;
-    auto send_ptr = Kokkos::subview(prtcl_rsendbuf,std::make_pair(data_start,data_end));
-    int drank = prtcl_sends_thisrank[n].recvrank;
-    int tag = 0; // 0 for Reals, 1 for ints
-
-    // Post non-blocking sends
-    int ierr = MPI_Isend(send_ptr.data(), data_size, MPI_ATHENA_REAL, drank, tag,
-                         par_comm, &(prtcl_rsend_req[n]));
-    if (ierr != MPI_SUCCESS) {no_errors=false;}
-    data_start += data_size;
-  }
-
-  // Send int particle data
-  data_start = 0;
-  for (int n = 0; n < prtcl_nsends; ++n) {
-    // calculate amount of data to be passed, get pointer to variables
-    int data_size = nidata*(prtcl_sends_thisrank[n].nprtcls);
-    int data_end = data_start + data_size;
-    auto send_ptr = Kokkos::subview(prtcl_isendbuf,std::make_pair(data_start,data_end));
-    int drank = prtcl_sends_thisrank[n].recvrank;
-    int tag = 1; // 0 for Reals, 1 for ints
-
-    // Post non-blocking sends
-    int ierr = MPI_Isend(send_ptr.data(), data_size, MPI_INT, drank, tag,
-                         par_comm, &(prtcl_isend_req[n]));
-    if (ierr != MPI_SUCCESS) {no_errors=false;}
-    data_start += data_size;
-  }
-
-  // Quit if MPI error detected
-  if (!(no_errors)) {
-    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-              << std::endl << "MPI error in posting non-blocking sends" << std::endl;
-    std::exit(EXIT_FAILURE);
-  }
-#endif
-
-  return;
-}
-
-//----------------------------------------------------------------------------------------
-//! \fn void MeshRefinement::UnpackAMRBuffersParticles()
-//! \brief Unpacks particle data from AMR communication buffers
-
-void MeshRefinement::UnpackAMRBuffersParticles() {
-#if MPI_PARALLEL_ENABLED
-  auto *ppart = pmy_mesh->pmb_pack->ppart;
-
-  namespace KE = Kokkos::Experimental;
-
-  int &npart = ppart->nprtcl_thispack;
-  int new_npart = npart + (nprtcl_recv - nprtcl_send);
-  int nremain = 0;
-
-  // Sort particle sendlist by index for hole-filling (already done in CountParticlesPerMeshBlock)
-  std::sort(KE::begin(prtcl_sendlist.h_view), KE::end(prtcl_sendlist.h_view), SortByIndex);
-  // sync sendlist host array with device.  This results in sorted array on device
-  prtcl_sendlist.template modify<HostMemSpace>();
-  prtcl_sendlist.template sync<DevExeSpace>();
-
-  // increase size of particle arrays if needed
-  if (nprtcl_recv > nprtcl_send) {
-    Kokkos::resize(ppart->prtcl_idata, ppart->nidata, new_npart);
-    Kokkos::resize(ppart->prtcl_rdata, ppart->nrdata, new_npart);
-  }
-
-  // unpack particles into positions of sent particles or at end of arrays
-  if (nprtcl_recv > 0) {
-    int nrdata = ppart->nrdata;
-    int nidata = ppart->nidata;
-    auto &pr = ppart->prtcl_rdata;
-    auto &pi = ppart->prtcl_idata;
-    auto &rrecvbuf = prtcl_rrecvbuf;
-    auto &irecvbuf = prtcl_irecvbuf;
-    int nprtcl_send_ = nprtcl_send;
-    auto &sendlist_ = prtcl_sendlist;
-    auto &gid_start = pmy_mesh->pmb_pack->gids;
-
-    par_for("amr_punpack",DevExeSpace(),0,(nprtcl_recv-1), KOKKOS_LAMBDA(const int n) {
-      int p;
-      if (n < nprtcl_send_) {
-        p = sendlist_.d_view(n).prtcl_indx; // place particles in holes created by sends
-      } else {
-        p = npart + (n - nprtcl_send_);     // place particle at end of arrays
-      }
-      for (int i=0; i<nidata; ++i) {
-        pi(i,p) = irecvbuf(nidata*n + i);
-      }
-      for (int i=0; i<nrdata; ++i) {
-        pr(i,p) = rrecvbuf(nrdata*n + i);
-      }
-    });
-  }
-
-  // At this point have filled nprtcl_recv holes in particle arrays from sends
-  // If (nprtcl_recv < nprtcl_send), have to move particles from end of arrays to fill
-  // remaining holes
-  nremain = nprtcl_send - nprtcl_recv;
-  if (nremain > 0) {
-    int i_last_hole = nprtcl_send-1;
-    int i_next_hole = nprtcl_recv;
-    for (int n=1; n<=nremain; ++n) {
-      int nend = npart-n;
-      if (nend > prtcl_sendlist.h_view(i_last_hole).prtcl_indx) {
-        // copy particle from end into hole
-        int next_hole = prtcl_sendlist.h_view(i_next_hole).prtcl_indx;
-        auto rdest = Kokkos::subview(ppart->prtcl_rdata, Kokkos::ALL, next_hole);
-        auto rsrc  = Kokkos::subview(ppart->prtcl_rdata, Kokkos::ALL, nend);
-        Kokkos::deep_copy(rdest, rsrc);
-        auto idest = Kokkos::subview(ppart->prtcl_idata, Kokkos::ALL, next_hole);
-        auto isrc  = Kokkos::subview(ppart->prtcl_idata, Kokkos::ALL, nend);
-        Kokkos::deep_copy(idest, isrc);
-        i_next_hole += 1;
-      } else {
-        // this index contains a hole, so do nothing except find new index of last hole
-        i_last_hole -= 1;
-      }
-    }
-  }
-
-  // Update nparticles_thisrank.  Update cost array (use npart_thismb[nmb]?)
-  MPI_Allgather(&new_npart,1,MPI_INT,(pmy_mesh->nprtcl_eachrank),1,
-                  MPI_INT,MPI_COMM_WORLD);
-
-  // shrink size of particle data arrays if needed
-  if (nprtcl_send - nprtcl_recv > 0) {
-    Kokkos::resize(ppart->prtcl_idata, ppart->nidata, new_npart);
-    Kokkos::resize(ppart->prtcl_rdata, ppart->nrdata, new_npart);
-  }
-  
-  // Update particle counts
-  ppart->nprtcl_thispack = new_npart;
-  pmy_mesh->pmb_pack->pmesh->nprtcl_thisrank = new_npart;
-
-  // Update global particle count across all ranks
-  pmy_mesh->CountParticles();
-
-  prtcl_rrecv_req.clear();
-  prtcl_irecv_req.clear();
-  prtcl_nrecvs = 0;
-#endif  
-
-  return;
-}
-
-//----------------------------------------------------------------------------------------
-//! \fn void MeshRefinement::CountParticleSendsAndRecvs()
-//! \brief
-
-void MeshRefinement::CountParticleSendsAndRecvs() {
-#if MPI_PARALLEL_ENABLED
-  // Sort sendlist on host by destrank.
-  namespace KE = Kokkos::Experimental;
-  std::sort(KE::begin(prtcl_sendlist.h_view), KE::end(prtcl_sendlist.h_view), SortByRank);
-  // sync sendlist host array with device.  This results in sorted array on device
-  prtcl_sendlist.template modify<HostMemSpace>();
-  prtcl_sendlist.template sync<DevExeSpace>();
-
-  prtcl_sends_thisrank.clear();
-  if (nprtcl_send > 0) {
-    int &myrank = global_variable::my_rank;
-    int rank = prtcl_sendlist.h_view(0).dest_rank;
-    int nprtcl = 1;
-
-    for (int n=1; n<nprtcl_send; ++n) {
-      if (prtcl_sendlist.h_view(n).dest_rank == rank) {
-        ++nprtcl;
-      } else {
-        prtcl_sends_thisrank.emplace_back(ParticleMessageData(myrank,rank,nprtcl));
-        rank = prtcl_sendlist.h_view(n).dest_rank;
-        nprtcl = 1;
-      }
-    }
-    prtcl_sends_thisrank.emplace_back(ParticleMessageData(myrank,rank,nprtcl));
-  }
-  prtcl_nsends = prtcl_sends_thisrank.size();
-
-  // Share number of ranks to send to amongst all ranks
-  prtcl_nsends_eachrank[global_variable::my_rank] = prtcl_nsends;
-  MPI_Allgather(&prtcl_nsends, 1, MPI_INT, prtcl_nsends_eachrank.data(), 
-		1, MPI_INT, par_comm);
-
-  // Now share ParticleMessageData amongst all ranks
-  // First create vector of starting indices in full vector
-  std::vector<int> nsends_displ;
-  nsends_displ.resize(global_variable::nranks);
-  nsends_displ[0] = 0;
-  for (int n=1; n<(global_variable::nranks); ++n) {
-    nsends_displ[n] = nsends_displ[n-1] + prtcl_nsends_eachrank[n-1];
-  }
-  int nsends_allranks = nsends_displ[global_variable::nranks - 1] +
-                        prtcl_nsends_eachrank[global_variable::nranks - 1];
-  // Load ParticleMessageData on this rank into full vector
-  prtcl_sends_allranks.resize(nsends_allranks, ParticleMessageData(0,0,0));
-  for (int n=0; n<prtcl_nsends_eachrank[global_variable::my_rank]; ++n) {
-    prtcl_sends_allranks[n + nsends_displ[global_variable::my_rank]] = prtcl_sends_thisrank[n];
-  }
-
-  // Share tuples using MPI derived data type for tuple of 3*int
-  MPI_Datatype mpi_ituple;
-  MPI_Type_contiguous(3, MPI_INT, &mpi_ituple);
-  MPI_Type_commit(&mpi_ituple);
-  MPI_Allgatherv(MPI_IN_PLACE, prtcl_nsends_eachrank[global_variable::my_rank],
-                   mpi_ituple, prtcl_sends_allranks.data(), prtcl_nsends_eachrank.data(),
-                   nsends_displ.data(), mpi_ituple, par_comm);
-  MPI_Type_free(&mpi_ituple);
-
-#endif
-
-  return;
-}
-
-//----------------------------------------------------------------------------------------
-//! \fn void MeshRefinement::CreateParticleLists()
-//! \brief
-
-void MeshRefinement::CreateParticleLists() {
-#if MPI_PARALLEL_ENABLED
-  auto *ppart = pmy_mesh->pmb_pack->ppart;
-
-  nprtcl_send = 0;
-
-  auto &pr = ppart->prtcl_rdata;
-  auto &pi = ppart->prtcl_idata;
-  int npart = ppart->nprtcl_thispack;
-  int myrank = global_variable::my_rank;
-
-  // Create device copy of arrays needed for mapping
-  int old_nmb = pmy_mesh->nmb_total; 
-  
-  // Calculate total number of new MeshBlocks from the new arrays
-  int new_nmb = 0;
-  for (int n = 0; n < global_variable::nranks; n++) {
-    new_nmb += new_nmb_eachrank[n];
-  }
-  
-  DualArray1D<int> old_to_new("oldtonew_device", old_nmb);
-  for (int i = 0; i < old_nmb; i++) {
-    old_to_new.h_view(i) = oldtonew[i];
-  }
-  old_to_new.template modify<HostMemSpace>();
-  old_to_new.template sync<DevExeSpace>();
-
-  DualArray1D<int> new_rank("new_rank_device", new_nmb);
-  for (int i = 0; i < new_nmb; i++) {
-    new_rank.h_view(i) = new_rank_eachmb[i];
-  }
-  new_rank.template modify<HostMemSpace>();
-  new_rank.template sync<DevExeSpace>();
- 
-  // Set particle sendlist to maximum length first
-  Kokkos::realloc(prtcl_sendlist, npart);
-  auto sendlist_d = prtcl_sendlist.d_view;
-
-  int counter = 0;
-  Kokkos::View<int> atom_count("atom_count");
-  Kokkos::deep_copy(atom_count, counter);
-
-  par_for("create_part_list", DevExeSpace(), 0, (npart-1),
-          KOKKOS_LAMBDA(const int p) {
-    
-    int old_gid  = pi(PGID, p); 
-    int new_gid  = old_to_new.d_view(old_gid);
-    int dest_rank = new_rank.d_view(new_gid);
-
-    // Update particle's GID to new value
-    pi(PGID, p) = new_gid;
-
-    // If particle needs to move to different rank, add to send list
-    if (dest_rank != myrank) {
-      int index = Kokkos::atomic_fetch_add(&atom_count(), 1);
-      sendlist_d(index).prtcl_indx = p;
-      sendlist_d(index).dest_gid   = new_gid; 
-      sendlist_d(index).dest_rank  = dest_rank;
-    }
-  });
-
-  Kokkos::deep_copy(counter, atom_count);
-  nprtcl_send = counter;
-  Kokkos::resize(prtcl_sendlist, nprtcl_send);
-
-  prtcl_sendlist.template modify<DevExeSpace>();
-  prtcl_sendlist.template sync<HostMemSpace>();
-#endif
-  return;
-}
-
-//----------------------------------------------------------------------------------------
-//! \fn void MeshRefinement::InitPartRecv()
-//! \brief
-
-void MeshRefinement::InitPartRecv() {
-#if MPI_PARALLEL_ENABLED
-  // Post particle receives 
-  auto *ppart = pmy_mesh->pmb_pack->ppart;
-  bool no_errors = true;
-  if (ppart != nullptr) {
-    CreateParticleLists();
-    CountParticleSendsAndRecvs();
-    
-    prtcl_recvs_thisrank.clear();
-    int nsends_allranks = prtcl_sends_allranks.size();
-    for (int n=0; n<nsends_allranks; ++n) {
-      if (prtcl_sends_allranks[n].recvrank == global_variable::my_rank) {
-        prtcl_recvs_thisrank.emplace_back(prtcl_sends_allranks[n]);
-      }
-    }
-    prtcl_nrecvs = prtcl_recvs_thisrank.size();
-
-    nprtcl_recv = 0;
-    for (int n=0; n<prtcl_nrecvs; ++n) {
-      nprtcl_recv += prtcl_recvs_thisrank[n].nprtcls;
-    }
-
-    if (nprtcl_recv > 0) {
-      // Allocate particle receive buffers
-      if ((int)prtcl_rrecvbuf.extent(0) < ppart->nrdata * nprtcl_recv)
-        Kokkos::realloc(prtcl_rrecvbuf, ppart->nrdata * nprtcl_recv);
-      if ((int)prtcl_irecvbuf.extent(0) < ppart->nidata * nprtcl_recv)
-        Kokkos::realloc(prtcl_irecvbuf, ppart->nidata * nprtcl_recv);
-
-      // Initialize MPI request vectors
-      prtcl_rrecv_req.clear();
-      prtcl_irecv_req.clear();
-      for (int n = 0; n < prtcl_nrecvs; ++n) {
-        prtcl_rrecv_req.emplace_back(MPI_REQUEST_NULL);
-        prtcl_irecv_req.emplace_back(MPI_REQUEST_NULL);
-      }
-
-      // Post non-blocking receives for Real data
-      int data_start = 0;
-      for (int n = 0; n < prtcl_nrecvs; ++n) {
-        // calculate amount of data to be passed, get pointer to variables
-        int data_size = (ppart->nrdata)*(prtcl_recvs_thisrank[n].nprtcls);
-        int data_end = data_start + data_size;
-        auto recv_ptr = Kokkos::subview(prtcl_rrecvbuf,
-                                        std::make_pair(data_start, data_end));
-        int drank = prtcl_recvs_thisrank[n].sendrank;
-        int tag = 0; // 0 for Reals, 1 for ints
-
-        int ierr = MPI_Irecv(recv_ptr.data(), data_size, MPI_ATHENA_REAL, drank, tag,
-                             par_comm, &(prtcl_rrecv_req[n]));
-        if (ierr != MPI_SUCCESS) no_errors = false;
-        data_start += data_size;
-      }
-
-      // Post non-blocking receives for int data  
-      data_start = 0;
-      for (int n = 0; n < prtcl_nrecvs; ++n) {
-        // calculate amount of data to be passed, get pointer to variables
-        int data_size = (ppart->nidata)*(prtcl_recvs_thisrank[n].nprtcls);
-        int data_end = data_start + data_size;
-        auto recv_ptr = Kokkos::subview(prtcl_irecvbuf,
-                                        std::make_pair(data_start, data_end));
-        int drank = prtcl_recvs_thisrank[n].sendrank;
-        int tag = 1; // 0 for Reals, 1 for ints
-
-        int ierr = MPI_Irecv(recv_ptr.data(), data_size, MPI_INT, drank, tag,
-                             par_comm, &(prtcl_irecv_req[n]));
-        if (ierr != MPI_SUCCESS) no_errors = false;
-
-        data_start += data_size;
-      }
-    }
-  }
-
-  // Check for particle MPI errors
-  if (!no_errors) {
-    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-              << std::endl << "MPI error in posting particle receives with AMR" << std::endl;
-    std::exit(EXIT_FAILURE);
-  }
-#endif
-
   return;
 }

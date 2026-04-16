@@ -1,0 +1,71 @@
+# AthenaK input file for hydro incompressible shwave test
+# Use with shwave.cpp problem generator
+
+<comment>
+problem   = incompressible (vortical) hydro shwave of JG05
+reference = 
+
+<job>
+basename  = shwave    # problem ID: basename of output filenames
+
+<mesh>
+nghost    = 3         # Number of ghost cells
+nx1       = 64        # Number of zones in X1-direction
+x1min     = -0.25     # minimum value of X1
+x1max     = 0.25      # maximum value of X1
+ix1_bc    = shear_periodic  # Inner-X1 boundary condition flag
+ox1_bc    = shear_periodic  # Outer-X1 boundary condition flag
+
+nx2       = 64        # Number of zones in X2-direction
+x2min     = -0.25     # minimum value of X2
+x2max     = 0.25      # maximum value of X2
+ix2_bc    = periodic  # Inner-X2 boundary condition flag
+ox2_bc    = periodic  # Outer-X2 boundary condition flag
+
+nx3       = 4         # Number of zones in X3-direction
+x3min     = -0.25     # minimum value of X3
+x3max     = 0.25      # maximum value of X3
+ix3_bc    = periodic  # Inner-X3 boundary condition flag
+ox3_bc    = periodic  # Outer-X3 boundary condition flag
+
+<meshblock>
+nx1       = 32        # Number of cells in each MeshBlock, X1-dir
+nx2       = 32        # Number of cells in each MeshBlock, X2-dir
+nx3       = 4         # Number of cells in each MeshBlock, X3-dir
+
+<time>
+evolution  = dynamic  # dynamic/kinematic/static
+integrator = rk2      # time integration algorithm
+cfl_number = 0.3      # The Courant, Friedrichs, & Lewy (CFL) Number
+nlim       = -1       # cycle limit
+tlim       = 5.0      # time limit
+ndiag      = 1        # cycles between diagostic output
+
+<shearing_box>
+qshear = 1.5 
+omega0 = 1.0 
+
+<hydro>
+eos             = isothermal   # EOS type
+reconstruct     = ppmx        # spatial reconstruction method
+rsolver         = hlle         # Riemann-solver to be used
+iso_sound_speed = 1.0         # isothermal sound speed
+
+<problem>
+pgen_name = shwave  # problem generator name
+ipert     = 2       # incompressible shwave test
+d0        = 1.0     # background density
+amp       = 1.0e-4  # amplitude of wave in units of sound speed
+nwx       = -8      # number of wavelengths in x-direction
+nwy       = 2       # number of wavelengths in y-direction
+nwz       = 0       # number of wavelengths in z-direction
+
+<output1>
+file_type   = hst      # History data dump
+dt          = 0.1      # time increment between outputs
+data_format = %12.5e   # Optional data format string
+
+<output2>
+file_type   = vtk        # Binary data dump
+variable    = hydro_w    # variables to be output
+dt          = 0.1        # time increment between outputs

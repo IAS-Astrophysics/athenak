@@ -1,0 +1,70 @@
+# AthenaK input file for 3D MRI
+
+<comment>
+problem   = 3D MRI
+reference = Hawley, J. F., Gammie, C.F. & Balbus, S. A., ApJ 440, 742-763 (1995) 
+
+<job>
+basename  = HGB       # problem ID: basename of output filenames
+
+<mesh>
+nghost    = 2         # Number of ghost cells
+nx1       = 64        # Number of zones in X1-direction
+x1min     = -0.5      # minimum value of X1
+x1max     = 0.5       # maximum value of X1
+ix1_bc    = shear_periodic  # Inner-X1 boundary condition flag
+ox1_bc    = shear_periodic  # Outer-X1 boundary condition flag
+
+nx2       = 128       # Number of zones in X2-direction
+x2min     = -2.0      # minimum value of X2
+x2max     = 2.0       # maximum value of X2
+ix2_bc    = periodic  # Inner-X2 boundary condition flag
+ox2_bc    = periodic  # Outer-X2 boundary condition flag
+
+nx3       = 64        # Number of zones in X3-direction
+x3min     = -0.5      # minimum value of X3
+x3max     = 0.5       # maximum value of X3
+ix3_bc    = periodic  # Inner-X3 boundary condition flag
+ox3_bc    = periodic  # Outer-X3 boundary condition flag
+
+<meshblock>
+nx1       = 32        # Number of cells in each MeshBlock, X1-dir
+nx2       = 32        # Number of cells in each MeshBlock, X2-dir
+nx3       = 32        # Number of cells in each MeshBlock, X3-dir
+
+<time>
+evolution  = dynamic   # dynamic/kinematic/static
+integrator = rk2       # time integration algorithm
+cfl_number = 0.3       # The Courant, Friedrichs, & Lewy (CFL) Number
+nlim       = -1        # cycle limit
+tlim       = 62.831854      # time limit (about 8 orbits = 16\pi)
+ndiag      = 1         # cycles between diagostic output
+
+<shearing_box>
+qshear = 1.5 
+omega0 = 1.0 
+
+<mhd>
+eos          = isothermal   # EOS type
+reconstruct  = plm        # spatial reconstruction method
+rsolver      = hlle         # Riemann-solver to be used
+iso_sound_speed = 1.0
+
+<problem>
+pgen_name = mri3d
+beta      = 400       # Plasma beta
+amp       = 0.01      # dP/P <= amp
+ifield    = 2         # 1 for zero-net-flux Bz, 2 for constant Bz
+nwx       = 1         # wavenumber in x1
+user_hist = true
+
+<output1>
+file_type   = hst      # History data dump
+dt          = 0.1      # time increment between outputs
+data_format = %12.5e   # Optional data format string
+user_hist_only = true
+
+<output2>
+file_type   = vtk        # VTK data dump
+variable    = mhd_w_bcc  # variables to be output
+dt          = 0.62831853 # time increment between outputs

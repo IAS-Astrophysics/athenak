@@ -1,0 +1,145 @@
+# Athena++ (Kokkos version) input file for spherical blast problem
+
+<comment>
+problem   = z4c one puncture
+reference = e.g. Cook. Living Rev. Relativ. 3, 5 (2000)
+
+<job>
+basename  = z4c      # problem ID: basename of output filenames
+
+<mesh>
+nghost    = 4          # Number of ghost cells
+nx1       = 128        # Number of zones in X1-direction
+x1min     = -16       # minimum value of X1
+x1max     = 16        # maximum value of X1
+ix1_bc    = outflow   # inner-X1 boundary flag
+ox1_bc    = outflow   # outer-X1 boundary flag
+
+nx2       = 128        # Number of zones in X2-direction
+x2min     = -16      # minimum value of X2
+x2max     = 16       # maximum value of X2
+ix2_bc    = outflow   # inner-X2 boundary flag
+ox2_bc    = outflow   # outer-X2 boundary flag
+
+nx3       = 128        # Number of zones in X3-direction
+x3min     = -16       # minimum value of X3
+x3max     = 16        # maximum value of X3
+ix3_bc    = outflow   # inner-X3 boundary flag
+ox3_bc    = outflow   # outer-X3 boundary flag
+
+<meshblock>
+nx1       = 32         # Number of cells in each MeshBlock, X1-dir
+nx2       = 32         # Number of cells in each MeshBlock, X2-dir
+nx3       = 32         # Number of cells in each MeshBlock, X3-dir
+
+<time>
+evolution  = dynamic    # dynamic/kinematic/static
+integrator = rk4        # time integration algorithm
+cfl_number = 0.4        # The Courant, Friedrichs, & Lewy (CFL) Number
+nlim       = 200         # cycle limit
+tlim       = 200        # time limit
+ndiag      = 1          # cycles between diagostic output
+
+<z4c>
+# Puncture Gauge
+lapse_harmonic  = 0.0                 # Harmonic lapse parameter mu_L
+lapse_oplog     = 2.0                 # 1+log lapse parameter
+shift_eta       = 2.0                 # Shift damping term
+diss            = 0.1                 # Kreiss-Oliger dissipation parameter
+chi_div_floor   = 0.00001
+#chi_min_floor   = 0.00001
+damp_kappa1     = 0.02      # Constraint damping factor 1
+damp_kappa2     = 0.00
+
+# SSL Gauge Params
+slow_start_lapse = true
+ssl_damping_time = 20
+ssl_damping_amp = 0.6
+
+# Puncture Tracker
+nco             = 1
+co_0_x          = 0.
+co_0_type = BH
+
+# Horizon Finder
+#dump_horizon_0  = true
+#co_0_dump_radius = 2
+#horizon_0_Nx     = 100
+#horizon_dt = 1
+
+# Waveform and ADM quantities
+nrad_wave_extraction = 4
+extraction_radius_1 = 100 
+extraction_radius_2 = 200
+extraction_radius_3 = 300
+extraction_radius_4 = 400
+extraction_nlev = 80
+waveform_dt     = 5
+
+<mesh_refinement>
+refinement       = adaptive    # type of refinement
+max_nmb_per_rank = 250
+num_levels       = 4
+refinement_interval   = 1
+
+<amr_criterion0>
+method = user
+
+<z4c_amr>
+method = chi 
+chi_min = 0.01
+#method = dchi # use gradient of chi to specify regions of refinement
+#dchi_max = 0.05
+# set to 0.25 * desired resolution at horizon
+# ranging from 0.05 (low) to 0.005 (high)
+
+<problem>
+pgen_name = z4c_one_puncture
+punc_ADM_mass = 1.
+punc_velocity_x1 = 0.8660254
+
+<refined_region1>
+level = 3
+x1min = -1
+x1max = 0
+x2min = -1
+x2max = 1
+x3min = -1
+x3max = 1
+
+<output1>
+file_type  = hst        # History data dump
+dt         = 1       # time increment between outputs
+
+<output2>
+file_type  = tab        # Binary data dump
+variable   = adm    # variables to be output
+dt         = 1       # time increment between outputs
+slice_x2    = 0
+slice_x3    = 0
+
+<output3>
+file_type  = tab        # Binary data dump
+variable   = z4c    # variables to be output
+dt         = 1      # time increment between outputs
+slice_x2    = 0
+slice_x3    = 0
+
+<output4>
+file_type  = tab        # Binary data dump
+variable   = con    # variables to be output
+dt         = 1      # time increment between outputs
+slice_x2    = 0
+slice_x3    = 0
+
+<output5>
+file_type  = rst
+dt         = 10
+#variable   = con
+#dt         = 1
+#slice_x3   = 0
+
+#<output6>
+#file_type  = bin
+#variable   = z4c
+#dt         = 10

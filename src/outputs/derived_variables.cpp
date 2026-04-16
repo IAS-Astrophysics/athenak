@@ -30,16 +30,51 @@
 #include "particles/particles.hpp"
 #include "outputs.hpp"
 #include "utils/current.hpp"
-#include "srcterms/srcterms.hpp"
-#include "srcterms/cooling_tables.hpp"
-#include "units/units.hpp"
+
+KOKKOS_INLINE_FUNCTION
+void ComputeUcBcFromPrimitive(const Real uu1, const Real uu2, const Real uu3,
+                              const Real bb1, const Real bb2, const Real bb3,
+                              const Real glower[4][4], const Real gupper[4][4],
+                              Real ucov[4], Real bcov[4]) {
+  const Real uu_sq = glower[1][1]*uu1*uu1 + 2.0*glower[1][2]*uu1*uu2
+                   + 2.0*glower[1][3]*uu1*uu3
+                   + glower[2][2]*uu2*uu2 + 2.0*glower[2][3]*uu2*uu3
+                   + glower[3][3]*uu3*uu3;
+  const Real alpha = sqrt(-1.0/gupper[0][0]);
+  const Real gamma = sqrt(1.0 + uu_sq);
+
+  Real ucon[4];
+  ucon[0] = gamma / alpha;
+  ucon[1] = uu1 - alpha * gamma * gupper[0][1];
+  ucon[2] = uu2 - alpha * gamma * gupper[0][2];
+  ucon[3] = uu3 - alpha * gamma * gupper[0][3];
+
+  for (int mu=0; mu<4; ++mu) {
+    ucov[mu] = 0.0;
+    for (int nu=0; nu<4; ++nu) {
+      ucov[mu] += glower[mu][nu]*ucon[nu];
+    }
+  }
+
+  Real bcon[4];
+  bcon[0] = bb1 * ucov[1] + bb2 * ucov[2] + bb3 * ucov[3];
+  bcon[1] = (bb1 + bcon[0] * ucon[1]) / ucon[0];
+  bcon[2] = (bb2 + bcon[0] * ucon[2]) / ucon[0];
+  bcon[3] = (bb3 + bcon[0] * ucon[3]) / ucon[0];
+
+  for (int mu=0; mu<4; ++mu) {
+    bcov[mu] = 0.0;
+    for (int nu=0; nu<4; ++nu) {
+      bcov[mu] += glower[mu][nu]*bcon[nu];
+    }
+  }
+}
 
 //----------------------------------------------------------------------------------------
 // BaseTypeOutput::ComputeDerivedVariable()
 
 void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
   int nmb = pm->pmb_pack->nmb_thispack;
-  int nmb_max = pm->pmb_pack->pmesh->nmb_maxperrank;
   auto &indcs = pm->mb_indcs;
   int &ng = indcs.ng;
   int n1 = indcs.nx1 + 2*ng;
@@ -57,27 +92,16 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
   int &i_dv = out_params.i_derived;
   int &n_dv = out_params.n_derived;
 
-  // ensure derived_var has sufficient capacity for current mesh state
-  if (derived_var.extent(0) < nmb_max || derived_var.extent(1) < n_dv ||
-      derived_var.extent(2) < n3  || derived_var.extent(3) < n2 ||
-      derived_var.extent(4) < n1) {
-    Kokkos::realloc(derived_var, nmb_max, n_dv, n3, n2, n1);
-  }
-
   // temperature = pressure / density
   if (name.compare("temperature") == 0) {
+    if (derived_var.extent(4) <= 1)
+      Kokkos::realloc(derived_var, nmb, n_dv, n3, n2, n1);
     auto dv = derived_var;
-    if (pm->pmb_pack->phydro == nullptr && pm->pmb_pack->pmhd == nullptr) {
-      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-                << std::endl << "Temperature output requested but no hydro or MHD "
-                << "module constructed." << std::endl;
-      exit(EXIT_FAILURE);
-    }
-    auto &w0_ = (pm->pmb_pack->phydro != nullptr) ?
+    auto &w0_ = (name.compare("hydro_wz") == 0)?
       pm->pmb_pack->phydro->w0 : pm->pmb_pack->pmhd->w0;
     par_for("temperature", DevExeSpace(), 0, (nmb-1), ks, ke, js, je, is, ie,
     KOKKOS_LAMBDA(int m, int k, int j, int i) {
-      dv(m,i_dv,k,j,i) = (w0_(m,IEN,k,j,i) / w0_(m,IDN,k,j,i));
+      dv(m,i_dv,k,j,i) = (w0_(m,IEN,k,j,i+1) / w0_(m,IDN,k,j,i-1));
     });
     i_dv += 1; // increment derived variable index
   }
@@ -86,14 +110,16 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
   // Not computed in ghost zones since requires derivative
   if (name.compare("hydro_wz") == 0 ||
       name.compare("mhd_wz") == 0) {
+    if (derived_var.extent(4) <= 1)
+      Kokkos::realloc(derived_var, nmb, n_dv, n3, n2, n1);
     auto dv = derived_var;
     auto &w0_ = (name.compare("hydro_wz") == 0)?
       pm->pmb_pack->phydro->w0 : pm->pmb_pack->pmhd->w0;
     par_for("vorz", DevExeSpace(), 0, (nmb-1), ks, ke, js, je, is, ie,
     KOKKOS_LAMBDA(int m, int k, int j, int i) {
-      dv(m,i_dv,k,j,i) = (w0_(m,IVY,k,j,i+1) - w0_(m,IVY,k,j,i-1))/(2.0*size.d_view(m).dx1);
+      dv(m,i_dv,k,j,i) = (w0_(m,IVY,k,j,i+1) - w0_(m,IVY,k,j,i-1))/size.d_view(m).dx1;
       if (multi_d) {
-        dv(m,i_dv,k,j,i) -=(w0_(m,IVX,k,j+1,i) - w0_(m,IVX,k,j-1,i))/(2.0*size.d_view(m).dx2);
+        dv(m,i_dv,k,j,i) -=(w0_(m,IVX,k,j+1,i) - w0_(m,IVX,k,j-1,i))/size.d_view(m).dx2;
       }
     });
     i_dv += 1; // increment derived variable index
@@ -103,21 +129,23 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
   // Not computed in ghost zones since requires derivative
   if (name.compare("hydro_w2") == 0 ||
       name.compare("mhd_w2") == 0) {
+    if (derived_var.extent(4) <= 1)
+      Kokkos::realloc(derived_var, nmb, n_dv, n3, n2, n1);
     auto dv = derived_var;
     auto &w0_ = (name.compare("hydro_w2") == 0)?
       pm->pmb_pack->phydro->w0 : pm->pmb_pack->pmhd->w0;
     par_for("vor2", DevExeSpace(), 0, (nmb-1), ks, ke, js, je, is, ie,
     KOKKOS_LAMBDA(int m, int k, int j, int i) {
       Real w1 = 0.0;
-      Real w2 = -(w0_(m,IVZ,k,j,i+1) - w0_(m,IVZ,k,j,i-1))/(2.0*size.d_view(m).dx1);
-      Real w3 =  (w0_(m,IVY,k,j,i+1) - w0_(m,IVY,k,j,i-1))/(2.0*size.d_view(m).dx1);
+      Real w2 = -(w0_(m,IVZ,k,j,i+1) - w0_(m,IVZ,k,j,i-1))/size.d_view(m).dx1;
+      Real w3 =  (w0_(m,IVY,k,j,i+1) - w0_(m,IVY,k,j,i-1))/size.d_view(m).dx1;
       if (multi_d) {
-        w1 += (w0_(m,IVZ,k,j+1,i) - w0_(m,IVZ,k,j-1,i))/(2.0*size.d_view(m).dx2);
-        w3 -= (w0_(m,IVX,k,j+1,i) - w0_(m,IVX,k,j-1,i))/(2.0*size.d_view(m).dx2);
+        w1 += (w0_(m,IVZ,k,j+1,i) - w0_(m,IVZ,k,j-1,i))/size.d_view(m).dx2;
+        w3 -= (w0_(m,IVX,k,j+1,i) - w0_(m,IVX,k,j-1,i))/size.d_view(m).dx2;
       }
       if (three_d) {
-        w1 -= (w0_(m,IVY,k+1,j,i) - w0_(m,IVY,k-1,j,i))/(2.0*size.d_view(m).dx3);
-        w2 += (w0_(m,IVX,k+1,j,i) - w0_(m,IVX,k-1,j,i))/(2.0*size.d_view(m).dx3);
+        w1 -= (w0_(m,IVY,k+1,j,i) - w0_(m,IVY,k-1,j,i))/size.d_view(m).dx3;
+        w2 += (w0_(m,IVX,k+1,j,i) - w0_(m,IVX,k-1,j,i))/size.d_view(m).dx3;
       }
       dv(m,i_dv,k,j,i) = w1*w1 + w2*w2 + w3*w3;
     });
@@ -128,13 +156,15 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
   // This makes for a large stencil, but approximates volume-averaged value within cell.
   // Not computed in ghost zones since requires derivative
   if (name.compare("mhd_jz") == 0) {
+    if (derived_var.extent(4) <= 1)
+      Kokkos::realloc(derived_var, nmb, n_dv, n3, n2, n1);
     auto dv = derived_var;
     auto &bcc = pm->pmb_pack->pmhd->bcc0;
     par_for("jz", DevExeSpace(), 0, (nmb-1), ks, ke, js, je, is, ie,
     KOKKOS_LAMBDA(int m, int k, int j, int i) {
-      dv(m,i_dv,k,j,i) = (bcc(m,IBY,k,j,i+1) - bcc(m,IBY,k,j,i-1))/(2.0*size.d_view(m).dx1);
+      dv(m,i_dv,k,j,i) = (bcc(m,IBY,k,j,i+1) - bcc(m,IBY,k,j,i-1))/size.d_view(m).dx1;
       if (multi_d) {
-        dv(m,i_dv,k,j,i) -=(bcc(m,IBX,k,j+1,i) - bcc(m,IBX,k,j-1,i))/(2.0*size.d_view(m).dx2);
+        dv(m,i_dv,k,j,i) -=(bcc(m,IBX,k,j+1,i) - bcc(m,IBX,k,j-1,i))/size.d_view(m).dx2;
       }
     });
     i_dv += 1; // increment derived variable index
@@ -143,20 +173,22 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
   // magnitude of current density.  Calculated from cell-centered fields.
   // Not computed in ghost zones since requires derivative
   if (name.compare("mhd_j2") == 0) {
+    if (derived_var.extent(4) <= 1)
+      Kokkos::realloc(derived_var, nmb, n_dv, n3, n2, n1);
     auto dv = derived_var;
     auto &bcc = pm->pmb_pack->pmhd->bcc0;
     par_for("j2", DevExeSpace(), 0, (nmb-1), ks, ke, js, je, is, ie,
     KOKKOS_LAMBDA(int m, int k, int j, int i) {
       Real j1 = 0.0;
-      Real j2 = -(bcc(m,IBZ,k,j,i+1) - bcc(m,IBZ,k,j,i-1))/(2.0*size.d_view(m).dx1);
-      Real j3 =  (bcc(m,IBY,k,j,i+1) - bcc(m,IBY,k,j,i-1))/(2.0*size.d_view(m).dx1);
+      Real j2 = -(bcc(m,IBZ,k,j,i+1) - bcc(m,IBZ,k,j,i-1))/size.d_view(m).dx1;
+      Real j3 =  (bcc(m,IBY,k,j,i+1) - bcc(m,IBY,k,j,i-1))/size.d_view(m).dx1;
       if (multi_d) {
-        j1 += (bcc(m,IBZ,k,j+1,i) - bcc(m,IBZ,k,j-1,i))/(2.0*size.d_view(m).dx2);
-        j3 -= (bcc(m,IBX,k,j+1,i) - bcc(m,IBX,k,j-1,i))/(2.0*size.d_view(m).dx2);
+        j1 += (bcc(m,IBZ,k,j+1,i) - bcc(m,IBZ,k,j-1,i))/size.d_view(m).dx2;
+        j3 -= (bcc(m,IBX,k,j+1,i) - bcc(m,IBX,k,j-1,i))/size.d_view(m).dx2;
       }
       if (three_d) {
-        j1 -= (bcc(m,IBY,k+1,j,i) - bcc(m,IBY,k-1,j,i))/(2.0*size.d_view(m).dx3);
-        j2 += (bcc(m,IBX,k+1,j,i) - bcc(m,IBX,k-1,j,i))/(2.0*size.d_view(m).dx3);
+        j1 -= (bcc(m,IBY,k+1,j,i) - bcc(m,IBY,k-1,j,i))/size.d_view(m).dx3;
+        j2 += (bcc(m,IBX,k+1,j,i) - bcc(m,IBX,k-1,j,i))/size.d_view(m).dx3;
       }
       dv(m,i_dv,k,j,i) = j1*j1 + j2*j2 + j3*j3;
     });
@@ -168,6 +200,8 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
   // Calculated from cell-centered fields.
   // Not computed in ghost zones since requires derivative
   if (name.compare("mhd_curv") == 0) {
+    if (derived_var.extent(4) <= 1)
+      Kokkos::realloc(derived_var, nmb, n_dv, n3, n2, n1);
     auto dv = derived_var;
     auto &bcc = pm->pmb_pack->pmhd->bcc0;
     par_for("curv", DevExeSpace(), 0, (nmb-1), ks, ke, js, je, is, ie,
@@ -178,11 +212,6 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
       Real &Bz = bcc(m,IBZ,k,j,i);
 
       Real B_mag_squared = ( Bx*Bx + By*By + Bz*Bz);
-      Real inv_B_mag_squared = (B_mag_squared > 0.0) ? (1.0 / B_mag_squared) : 0.0;
-      if (B_mag_squared <= 0.0) {
-        dv(m,i_dv,k,j,i) = 0.0;
-        return;
-      }
 
       // Calculate gradB tensor
       Real dBx_dx = (bcc(m,IBX,k,j,i+1) - bcc(m,IBX,k,j,i-1))/(2.0*size.d_view(m).dx1);
@@ -201,17 +230,17 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
       Real BdotGradB_y = (Bx * dBy_dx + By * dBy_dy + Bz * dBy_dz);
       Real BdotGradB_z = (Bx * dBz_dx + By * dBz_dy + Bz * dBz_dz);
 
-      Real Identity_minus_bhat_bhat_xx = 1.0 - Bx*Bx*inv_B_mag_squared;
-      Real Identity_minus_bhat_bhat_xy = 0.0 - Bx*By*inv_B_mag_squared;
-      Real Identity_minus_bhat_bhat_xz = 0.0 - Bx*Bz*inv_B_mag_squared;
+      Real Identity_minus_bhat_bhat_xx = 1.0 - Bx*Bx/B_mag_squared;
+      Real Identity_minus_bhat_bhat_xy = 0.0 - Bx*By/B_mag_squared;
+      Real Identity_minus_bhat_bhat_xz = 0.0 - Bx*Bz/B_mag_squared;
 
-      Real Identity_minus_bhat_bhat_yx = 0.0 - By*Bx*inv_B_mag_squared;
-      Real Identity_minus_bhat_bhat_yy = 1.0 - By*By*inv_B_mag_squared;
-      Real Identity_minus_bhat_bhat_yz = 0.0 - By*Bz*inv_B_mag_squared;
+      Real Identity_minus_bhat_bhat_yx = 0.0 - By*Bx/B_mag_squared;
+      Real Identity_minus_bhat_bhat_yy = 1.0 - By*By/B_mag_squared;
+      Real Identity_minus_bhat_bhat_yz = 0.0 - By*Bz/B_mag_squared;
 
-      Real Identity_minus_bhat_bhat_zx = 0.0 - Bz*Bx*inv_B_mag_squared;
-      Real Identity_minus_bhat_bhat_zy = 0.0 - Bz*By*inv_B_mag_squared;
-      Real Identity_minus_bhat_bhat_zz = 1.0 - Bz*Bz*inv_B_mag_squared;
+      Real Identity_minus_bhat_bhat_zx = 0.0 - Bz*Bx/B_mag_squared;
+      Real Identity_minus_bhat_bhat_zy = 0.0 - Bz*By/B_mag_squared;
+      Real Identity_minus_bhat_bhat_zz = 1.0 - Bz*Bz/B_mag_squared;
 
       // Calculate curvature which is |(B.gradB).(I - bhat bhat)/B^2|
       Real curv1 = (
@@ -230,7 +259,7 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
           + BdotGradB_z * Identity_minus_bhat_bhat_zz
         );
 
-      dv(m,i_dv,k,j,i) = sqrt(curv1*curv1 + curv2*curv2 + curv3*curv3)*inv_B_mag_squared;
+      dv(m,i_dv,k,j,i) = sqrt(curv1*curv1 + curv2*curv2 + curv3*curv3)/B_mag_squared;
     });
     i_dv += 1; // increment derived variable index
   }
@@ -239,6 +268,8 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
   // Calculated from cell-centered fields.
   // Not computed in ghost zones since requires derivative
   if (name.compare("mhd_curv_alt") == 0) {
+    if (derived_var.extent(4) <= 1)
+      Kokkos::realloc(derived_var, nmb, n_dv, n3, n2, n1);
     auto dv = derived_var;
     auto &bcc = pm->pmb_pack->pmhd->bcc0;
     par_for("curv_alt", DevExeSpace(), 0, (nmb-1), ks, ke, js, je, is, ie,
@@ -247,62 +278,55 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
       Real B_mag = sqrt( bcc(m,IBX,k,j,i)*bcc(m,IBX,k,j,i)
                        + bcc(m,IBY,k,j,i)*bcc(m,IBY,k,j,i)
                        + bcc(m,IBZ,k,j,i)*bcc(m,IBZ,k,j,i));
-      Real inv_B_mag = (B_mag > 0.0) ? 1.0/B_mag : 0.0;
       // Calculate b_hat vector
-      Real b1 = bcc(m,IBX,k,j,i)*inv_B_mag;
-      Real b2 = bcc(m,IBY,k,j,i)*inv_B_mag;
-      Real b3 = bcc(m,IBZ,k,j,i)*inv_B_mag;
+      Real b1 = bcc(m,IBX,k,j,i)/B_mag;
+      Real b2 = bcc(m,IBY,k,j,i)/B_mag;
+      Real b3 = bcc(m,IBZ,k,j,i)/B_mag;
 
       // calculate b_hat vector at i +/- 1
       Real B_mag_ip1 = sqrt( bcc(m,IBX,k,j,i+1)*bcc(m,IBX,k,j,i+1)
                            + bcc(m,IBY,k,j,i+1)*bcc(m,IBY,k,j,i+1)
                            + bcc(m,IBZ,k,j,i+1)*bcc(m,IBZ,k,j,i+1));
-      Real inv_B_mag_ip1 = (B_mag_ip1 > 0.0) ? 1.0/B_mag_ip1 : 0.0;
-      Real b1_ip1 = bcc(m,IBX,k,j,i+1)*inv_B_mag_ip1;
-      Real b2_ip1 = bcc(m,IBY,k,j,i+1)*inv_B_mag_ip1;
-      Real b3_ip1 = bcc(m,IBZ,k,j,i+1)*inv_B_mag_ip1;
+      Real b1_ip1 = bcc(m,IBX,k,j,i+1)/B_mag_ip1;
+      Real b2_ip1 = bcc(m,IBY,k,j,i+1)/B_mag_ip1;
+      Real b3_ip1 = bcc(m,IBZ,k,j,i+1)/B_mag_ip1;
 
       Real B_mag_im1 = sqrt( bcc(m,IBX,k,j,i-1)*bcc(m,IBX,k,j,i-1)
                            + bcc(m,IBY,k,j,i-1)*bcc(m,IBY,k,j,i-1)
                            + bcc(m,IBZ,k,j,i-1)*bcc(m,IBZ,k,j,i-1));
-      Real inv_B_mag_im1 = (B_mag_im1 > 0.0) ? 1.0/B_mag_im1 : 0.0;
-      Real b1_im1 = bcc(m,IBX,k,j,i-1)*inv_B_mag_im1;
-      Real b2_im1 = bcc(m,IBY,k,j,i-1)*inv_B_mag_im1;
-      Real b3_im1 = bcc(m,IBZ,k,j,i-1)*inv_B_mag_im1;
+      Real b1_im1 = bcc(m,IBX,k,j,i-1)/B_mag_im1;
+      Real b2_im1 = bcc(m,IBY,k,j,i-1)/B_mag_im1;
+      Real b3_im1 = bcc(m,IBZ,k,j,i-1)/B_mag_im1;
 
       // calculate b_hat vector at j +/- 1
       Real B_mag_jp1 = sqrt( bcc(m,IBX,k,j+1,i)*bcc(m,IBX,k,j+1,i)
                            + bcc(m,IBY,k,j+1,i)*bcc(m,IBY,k,j+1,i)
                            + bcc(m,IBZ,k,j+1,i)*bcc(m,IBZ,k,j+1,i));
-      Real inv_B_mag_jp1 = (B_mag_jp1 > 0.0) ? 1.0/B_mag_jp1 : 0.0;
-      Real b1_jp1 = bcc(m,IBX,k,j+1,i)*inv_B_mag_jp1;
-      Real b2_jp1 = bcc(m,IBY,k,j+1,i)*inv_B_mag_jp1;
-      Real b3_jp1 = bcc(m,IBZ,k,j+1,i)*inv_B_mag_jp1;
+      Real b1_jp1 = bcc(m,IBX,k,j+1,i)/B_mag_jp1;
+      Real b2_jp1 = bcc(m,IBY,k,j+1,i)/B_mag_jp1;
+      Real b3_jp1 = bcc(m,IBZ,k,j+1,i)/B_mag_jp1;
 
       Real B_mag_jm1 = sqrt( bcc(m,IBX,k,j-1,i)*bcc(m,IBX,k,j-1,i)
                            + bcc(m,IBY,k,j-1,i)*bcc(m,IBY,k,j-1,i)
                            + bcc(m,IBZ,k,j-1,i)*bcc(m,IBZ,k,j-1,i));
-      Real inv_B_mag_jm1 = (B_mag_jm1 > 0.0) ? 1.0/B_mag_jm1 : 0.0;
-      Real b1_jm1 = bcc(m,IBX,k,j-1,i)*inv_B_mag_jm1;
-      Real b2_jm1 = bcc(m,IBY,k,j-1,i)*inv_B_mag_jm1;
-      Real b3_jm1 = bcc(m,IBZ,k,j-1,i)*inv_B_mag_jm1;
+      Real b1_jm1 = bcc(m,IBX,k,j-1,i)/B_mag_jm1;
+      Real b2_jm1 = bcc(m,IBY,k,j-1,i)/B_mag_jm1;
+      Real b3_jm1 = bcc(m,IBZ,k,j-1,i)/B_mag_jm1;
 
       // calculate b_hat vector at k +/- 1
       Real B_mag_kp1 = sqrt( bcc(m,IBX,k+1,j,i)*bcc(m,IBX,k+1,j,i)
                            + bcc(m,IBY,k+1,j,i)*bcc(m,IBY,k+1,j,i)
                            + bcc(m,IBZ,k+1,j,i)*bcc(m,IBZ,k+1,j,i));
-      Real inv_B_mag_kp1 = (B_mag_kp1 > 0.0) ? 1.0/B_mag_kp1 : 0.0;
-      Real b1_kp1 = bcc(m,IBX,k+1,j,i)*inv_B_mag_kp1;
-      Real b2_kp1 = bcc(m,IBY,k+1,j,i)*inv_B_mag_kp1;
-      Real b3_kp1 = bcc(m,IBZ,k+1,j,i)*inv_B_mag_kp1;
+      Real b1_kp1 = bcc(m,IBX,k+1,j,i)/B_mag_kp1;
+      Real b2_kp1 = bcc(m,IBY,k+1,j,i)/B_mag_kp1;
+      Real b3_kp1 = bcc(m,IBZ,k+1,j,i)/B_mag_kp1;
 
       Real B_mag_km1 = sqrt( bcc(m,IBX,k-1,j,i)*bcc(m,IBX,k-1,j,i)
                            + bcc(m,IBY,k-1,j,i)*bcc(m,IBY,k-1,j,i)
                            + bcc(m,IBZ,k-1,j,i)*bcc(m,IBZ,k-1,j,i));
-      Real inv_B_mag_km1 = (B_mag_km1 > 0.0) ? 1.0/B_mag_km1 : 0.0;
-      Real b1_km1 = bcc(m,IBX,k-1,j,i)*inv_B_mag_km1;
-      Real b2_km1 = bcc(m,IBY,k-1,j,i)*inv_B_mag_km1;
-      Real b3_km1 = bcc(m,IBZ,k-1,j,i)*inv_B_mag_km1;
+      Real b1_km1 = bcc(m,IBX,k-1,j,i)/B_mag_km1;
+      Real b2_km1 = bcc(m,IBY,k-1,j,i)/B_mag_km1;
+      Real b3_km1 = bcc(m,IBZ,k-1,j,i)/B_mag_km1;
 
       // Central differencing of b_hat vector
       Real db1_dx1 = (b1_ip1 - b1_im1)/(2.0*size.d_view(m).dx1);
@@ -338,7 +362,8 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
     bool &flat = coord.is_minkowski;
     auto &spin = coord.bh_spin;
 
-    auto &dtold = pm->dtold;
+    const Real dt_last = pm->dt_last_completed;
+    const bool have_prior = (pm->pmb_pack->pmhd->wbcc_saved && dt_last > 0.);
     auto w0_ = pm->pmb_pack->pmhd->w0;
     auto bcc_ = pm->pmb_pack->pmhd->bcc0;
     auto wsaved_ = pm->pmb_pack->pmhd->wsaved;
@@ -352,259 +377,161 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
 
     par_for("jcon", DevExeSpace(), 0, (nmb-1), ks, ke, js, je, is, ie,
     KOKKOS_LAMBDA(int m, int k, int j, int i) {
+      if (!have_prior) {
+        for (int mu=0; mu<4; ++mu) {
+          jcon(m,mu,k,j,i) = 0.;
+        }
+        return;
+      }
+
       Real &x1min = size.d_view(m).x1min;
       Real &x1max = size.d_view(m).x1max;
       Real x1v = CellCenterX(i-is, indcs.nx1, x1min, x1max);
+      Real x1v_ip1 = CellCenterX(i+1-is, indcs.nx1, x1min, x1max);
+      Real x1v_im1 = CellCenterX(i-1-is, indcs.nx1, x1min, x1max);
 
       Real &x2min = size.d_view(m).x2min;
       Real &x2max = size.d_view(m).x2max;
       Real x2v = CellCenterX(j-js, indcs.nx2, x2min, x2max);
+      Real x2v_jp1 = CellCenterX(j+1-js, indcs.nx2, x2min, x2max);
+      Real x2v_jm1 = CellCenterX(j-1-js, indcs.nx2, x2min, x2max);
 
       Real &x3min = size.d_view(m).x3min;
       Real &x3max = size.d_view(m).x3max;
       Real x3v = CellCenterX(k-ks, indcs.nx3, x3min, x3max);
+      Real x3v_kp1 = CellCenterX(k+1-ks, indcs.nx3, x3min, x3max);
+      Real x3v_km1 = CellCenterX(k-1-ks, indcs.nx3, x3min, x3max);
 
-      // Extract components of metric
-      Real glower[4][4], gupper[4][4];
-      ComputeMetricAndInverse(x1v, x2v, x3v, flat, spin, glower, gupper);
-
-      // Get 4-velocity for current step
-      const Real &uu1 = w0_(m,IVX,k,j,i);
-      const Real &uu2 = w0_(m,IVY,k,j,i);
-      const Real &uu3 = w0_(m,IVZ,k,j,i);
-
-      Real uu_sq = glower[1][1]*uu1*uu1 + 2.0*glower[1][2]*uu1*uu2
-                 + 2.0*glower[1][3]*uu1*uu3
-                 + glower[2][2]*uu2*uu2 + 2.0*glower[2][3]*uu2*uu3
-                 + glower[3][3]*uu3*uu3;
-      Real alpha = sqrt(-1.0/gupper[0][0]);
-      Real gamma = sqrt(1.0 + uu_sq);
-
-      Real ucon[4];
-      ucon[0] = gamma / alpha;
-      ucon[1] = uu1 - alpha * gamma * gupper[0][1];
-      ucon[2] = uu2 - alpha * gamma * gupper[0][2];
-      ucon[3] = uu3 - alpha * gamma * gupper[0][3];
-
-      // Get 4-velocity for last step
-      const Real &uu1saved = wsaved_(m,IVX,k,j,i);
-      const Real &uu2saved = wsaved_(m,IVY,k,j,i);
-      const Real &uu3saved = wsaved_(m,IVZ,k,j,i);
-
-      uu_sq = glower[1][1]*uu1saved*uu1saved + 2.0*glower[1][2]*uu1saved*uu2saved
-            + 2.0*glower[1][3]*uu1saved*uu3saved
-            + glower[2][2]*uu2saved*uu2saved + 2.0*glower[2][3]*uu2saved*uu3saved
-            + glower[3][3]*uu3saved*uu3saved;
-      gamma = sqrt(1.0 + uu_sq);
-
-      Real uconsaved[4];
-      uconsaved[0] = gamma / alpha;
-      uconsaved[1] = uu1saved - alpha * gamma * gupper[0][1];
-      uconsaved[2] = uu2saved - alpha * gamma * gupper[0][2];
-      uconsaved[3] = uu3saved - alpha * gamma * gupper[0][3];
-
-      // Lower 4-velocities
-      Real ucov[4], ucovsaved[4];
-      for (int mu=0; mu<4; ++mu) {
-        ucov[mu] = 0.0;
-        ucovsaved[mu] = 0.0;
-        for (int nu=0; nu<4; ++nu) {
-          ucov[mu] += glower[mu][nu]*ucon[nu];
-          ucovsaved[mu] += glower[mu][nu]*uconsaved[nu];
-        }
+      // Metric at center and neighbors
+      Real glower_c[4][4], gupper_c[4][4];
+      Real glower_ip1[4][4], gupper_ip1[4][4];
+      Real glower_im1[4][4], gupper_im1[4][4];
+      Real glower_jp1[4][4], gupper_jp1[4][4];
+      Real glower_jm1[4][4], gupper_jm1[4][4];
+      Real glower_kp1[4][4], gupper_kp1[4][4];
+      Real glower_km1[4][4], gupper_km1[4][4];
+      ComputeMetricAndInverse(x1v, x2v, x3v, flat, spin, glower_c, gupper_c);
+      ComputeMetricAndInverse(x1v_ip1, x2v, x3v, flat, spin, glower_ip1, gupper_ip1);
+      ComputeMetricAndInverse(x1v_im1, x2v, x3v, flat, spin, glower_im1, gupper_im1);
+      if (multi_d) {
+        ComputeMetricAndInverse(x1v, x2v_jp1, x3v, flat, spin, glower_jp1, gupper_jp1);
+        ComputeMetricAndInverse(x1v, x2v_jm1, x3v, flat, spin, glower_jm1, gupper_jm1);
+      }
+      if (three_d) {
+        ComputeMetricAndInverse(x1v, x2v, x3v_kp1, flat, spin, glower_kp1, gupper_kp1);
+        ComputeMetricAndInverse(x1v, x2v, x3v_km1, flat, spin, glower_km1, gupper_km1);
       }
 
-      // Get bcon and bconsaved
-      Real bcon[4];
-      Real bconsaved[4];
+      // Center (new/old) for temporal term
+      Real ucov_new[4], bcov_new[4];
+      Real ucov_old[4], bcov_old[4];
+      ComputeUcBcFromPrimitive(w0_(m,IVX,k,j,i), w0_(m,IVY,k,j,i), w0_(m,IVZ,k,j,i),
+                               bcc_(m,IBX,k,j,i), bcc_(m,IBY,k,j,i), bcc_(m,IBZ,k,j,i),
+                               glower_c, gupper_c, ucov_new, bcov_new);
+      ComputeUcBcFromPrimitive(wsaved_(m,IVX,k,j,i), wsaved_(m,IVY,k,j,i),
+                               wsaved_(m,IVZ,k,j,i), bccsaved_(m,IBX,k,j,i),
+                               bccsaved_(m,IBY,k,j,i), bccsaved_(m,IBZ,k,j,i),
+                               glower_c, gupper_c, ucov_old, bcov_old);
 
-      bcon[0] = bcc_(m,IBX,k,j,i) * ucov[1] + bcc_(m,IBY,k,j,i) * ucov[2]
-              + bcc_(m,IBZ,k,j,i) * ucov[3];
-      bcon[1] = (bcc_(m,IBX,k,j,i) + bcon[0] * ucon[1]) / ucon[0];
-      bcon[2] = (bcc_(m,IBY,k,j,i) + bcon[0] * ucon[2]) / ucon[0];
-      bcon[3] = (bcc_(m,IBZ,k,j,i) + bcon[0] * ucon[3]) / ucon[0];
+      // Time-centered neighbors for spatial terms
+      Real ucov_ip1[4], bcov_ip1[4], ucov_im1[4], bcov_im1[4];
+      Real ucov_jp1[4], bcov_jp1[4], ucov_jm1[4], bcov_jm1[4];
+      Real ucov_kp1[4], bcov_kp1[4], ucov_km1[4], bcov_km1[4];
 
-      bconsaved[0] = bccsaved_(m,IBX,k,j,i) * ucovsaved[1]
-                   + bccsaved_(m,IBY,k,j,i) * ucovsaved[2]
-                   + bccsaved_(m,IBZ,k,j,i) * ucovsaved[3];
-      bconsaved[1] = (bccsaved_(m,IBX,k,j,i) + bconsaved[0]*uconsaved[1]) / uconsaved[0];
-      bconsaved[2] = (bccsaved_(m,IBY,k,j,i) + bconsaved[0]*uconsaved[2]) / uconsaved[0];
-      bconsaved[3] = (bccsaved_(m,IBZ,k,j,i) + bconsaved[0]*uconsaved[3]) / uconsaved[0];
+      ComputeUcBcFromPrimitive(
+          0.5*(w0_(m,IVX,k,j,i+1) + wsaved_(m,IVX,k,j,i+1)),
+          0.5*(w0_(m,IVY,k,j,i+1) + wsaved_(m,IVY,k,j,i+1)),
+          0.5*(w0_(m,IVZ,k,j,i+1) + wsaved_(m,IVZ,k,j,i+1)),
+          0.5*(bcc_(m,IBX,k,j,i+1) + bccsaved_(m,IBX,k,j,i+1)),
+          0.5*(bcc_(m,IBY,k,j,i+1) + bccsaved_(m,IBY,k,j,i+1)),
+          0.5*(bcc_(m,IBZ,k,j,i+1) + bccsaved_(m,IBZ,k,j,i+1)),
+          glower_ip1, gupper_ip1, ucov_ip1, bcov_ip1);
+      ComputeUcBcFromPrimitive(
+          0.5*(w0_(m,IVX,k,j,i-1) + wsaved_(m,IVX,k,j,i-1)),
+          0.5*(w0_(m,IVY,k,j,i-1) + wsaved_(m,IVY,k,j,i-1)),
+          0.5*(w0_(m,IVZ,k,j,i-1) + wsaved_(m,IVZ,k,j,i-1)),
+          0.5*(bcc_(m,IBX,k,j,i-1) + bccsaved_(m,IBX,k,j,i-1)),
+          0.5*(bcc_(m,IBY,k,j,i-1) + bccsaved_(m,IBY,k,j,i-1)),
+          0.5*(bcc_(m,IBZ,k,j,i-1) + bccsaved_(m,IBZ,k,j,i-1)),
+          glower_im1, gupper_im1, ucov_im1, bcov_im1);
 
-      // Lower bcon and bconsaved
-      Real bcov[4], bcovsaved[4];
+      if (multi_d) {
+        ComputeUcBcFromPrimitive(
+            0.5*(w0_(m,IVX,k,j+1,i) + wsaved_(m,IVX,k,j+1,i)),
+            0.5*(w0_(m,IVY,k,j+1,i) + wsaved_(m,IVY,k,j+1,i)),
+            0.5*(w0_(m,IVZ,k,j+1,i) + wsaved_(m,IVZ,k,j+1,i)),
+            0.5*(bcc_(m,IBX,k,j+1,i) + bccsaved_(m,IBX,k,j+1,i)),
+            0.5*(bcc_(m,IBY,k,j+1,i) + bccsaved_(m,IBY,k,j+1,i)),
+            0.5*(bcc_(m,IBZ,k,j+1,i) + bccsaved_(m,IBZ,k,j+1,i)),
+            glower_jp1, gupper_jp1, ucov_jp1, bcov_jp1);
+        ComputeUcBcFromPrimitive(
+            0.5*(w0_(m,IVX,k,j-1,i) + wsaved_(m,IVX,k,j-1,i)),
+            0.5*(w0_(m,IVY,k,j-1,i) + wsaved_(m,IVY,k,j-1,i)),
+            0.5*(w0_(m,IVZ,k,j-1,i) + wsaved_(m,IVZ,k,j-1,i)),
+            0.5*(bcc_(m,IBX,k,j-1,i) + bccsaved_(m,IBX,k,j-1,i)),
+            0.5*(bcc_(m,IBY,k,j-1,i) + bccsaved_(m,IBY,k,j-1,i)),
+            0.5*(bcc_(m,IBZ,k,j-1,i) + bccsaved_(m,IBZ,k,j-1,i)),
+            glower_jm1, gupper_jm1, ucov_jm1, bcov_jm1);
+      }
 
-      for (int mu=0; mu<4; ++mu) {
-        bcov[mu] = 0.0;
-        bcovsaved[mu] = 0.0;
-        for (int nu=0; nu<4; ++nu) {
-          bcov[mu] += glower[mu][nu]*bcon[nu];
-          bcovsaved[mu] += glower[mu][nu]*bconsaved[nu];
-        }
+      if (three_d) {
+        ComputeUcBcFromPrimitive(
+            0.5*(w0_(m,IVX,k+1,j,i) + wsaved_(m,IVX,k+1,j,i)),
+            0.5*(w0_(m,IVY,k+1,j,i) + wsaved_(m,IVY,k+1,j,i)),
+            0.5*(w0_(m,IVZ,k+1,j,i) + wsaved_(m,IVZ,k+1,j,i)),
+            0.5*(bcc_(m,IBX,k+1,j,i) + bccsaved_(m,IBX,k+1,j,i)),
+            0.5*(bcc_(m,IBY,k+1,j,i) + bccsaved_(m,IBY,k+1,j,i)),
+            0.5*(bcc_(m,IBZ,k+1,j,i) + bccsaved_(m,IBZ,k+1,j,i)),
+            glower_kp1, gupper_kp1, ucov_kp1, bcov_kp1);
+        ComputeUcBcFromPrimitive(
+            0.5*(w0_(m,IVX,k-1,j,i) + wsaved_(m,IVX,k-1,j,i)),
+            0.5*(w0_(m,IVY,k-1,j,i) + wsaved_(m,IVY,k-1,j,i)),
+            0.5*(w0_(m,IVZ,k-1,j,i) + wsaved_(m,IVZ,k-1,j,i)),
+            0.5*(bcc_(m,IBX,k-1,j,i) + bccsaved_(m,IBX,k-1,j,i)),
+            0.5*(bcc_(m,IBY,k-1,j,i) + bccsaved_(m,IBY,k-1,j,i)),
+            0.5*(bcc_(m,IBZ,k-1,j,i) + bccsaved_(m,IBZ,k-1,j,i)),
+            glower_km1, gupper_km1, ucov_km1, bcov_km1);
       }
 
       // Compute current
       for (int mu=0; mu<4; ++mu) {
-        if (dtold > 0) {
-          const Real gF0p = get_detg_Fcon(0, mu, ucov, bcov);
-          const Real gF0m = get_detg_Fcon(0, mu, ucovsaved, bcovsaved);
-          const Real gF1p = get_detg_Fcon(1, mu, ucov, bcov);
-          const Real gF1m = get_detg_Fcon(1, mu, ucovsaved, bcovsaved);
-          const Real gF2p = (multi_d) ? get_detg_Fcon(2, mu, ucov, bcov) : 0.;
-          const Real gF2m = (multi_d) ? get_detg_Fcon(2, mu, ucovsaved, bcovsaved) : 0.;
-          const Real gF3p = (three_d) ? get_detg_Fcon(3, mu, ucov, bcov) : 0.;
-          const Real gF3m = (three_d) ? get_detg_Fcon(3, mu, ucovsaved, bcovsaved) : 0.;
+        const Real gF0p = get_detg_Fcon(mu, 0, ucov_new, bcov_new);
+        const Real gF0m = get_detg_Fcon(mu, 0, ucov_old, bcov_old);
+        const Real gF1p = get_detg_Fcon(mu, 1, ucov_ip1, bcov_ip1);
+        const Real gF1m = get_detg_Fcon(mu, 1, ucov_im1, bcov_im1);
+        const Real gF2p = (multi_d) ? get_detg_Fcon(mu, 2, ucov_jp1, bcov_jp1) : 0.;
+        const Real gF2m = (multi_d) ? get_detg_Fcon(mu, 2, ucov_jm1, bcov_jm1) : 0.;
+        const Real gF3p = (three_d) ? get_detg_Fcon(mu, 3, ucov_kp1, bcov_kp1) : 0.;
+        const Real gF3m = (three_d) ? get_detg_Fcon(mu, 3, ucov_km1, bcov_km1) : 0.;
 
-          const Real dgF0 = (gF0p - gF0m) / dtold;
-          const Real dgF1 = (gF1p - gF1m) / (2 * size.d_view(m).dx1);
-          const Real dgF2 = (multi_d) ? (gF2p - gF2m) / (2 * size.d_view(m).dx2) : 0.;
-          const Real dgF3 = (three_d) ? (gF3p - gF3m) / (2 * size.d_view(m).dx3) : 0.;
+        const Real dgF0 = (gF0p - gF0m) / dt_last;
+        const Real dgF1 = (gF1p - gF1m) / (2 * size.d_view(m).dx1);
+        const Real dgF2 = (multi_d) ? (gF2p - gF2m) / (2 * size.d_view(m).dx2) : 0.;
+        const Real dgF3 = (three_d) ? (gF3p - gF3m) / (2 * size.d_view(m).dx3) : 0.;
 
-          const Real detg = 1.;
-          jcon(m,mu,k,j,i) = 1. / (detg * sqrt(4. * M_PI)) * (dgF0 + dgF1 + dgF2 + dgF3);
-        } else {
-          // zero current if dtold == 0 (e.g., when we don't have a previous step)
-          jcon(m,mu,k,j,i) = 0.;
-        }
+        const Real detg = 1.;
+        jcon(m,mu,k,j,i) = 1. / (detg * sqrt(4. * M_PI)) * (dgF0 + dgF1 + dgF2 + dgF3);
       }
     });
   }
 
-
-// ==========================================================================================
-// SUB-GRID SCALE (SGS) RECONSTRUCTION GUIDE
-// ==========================================================================================
-//
-// NOTATION:
-//   Let an overbar (e.g., <f>) denote the volume average (the value saved in this file).
-//   Let a tilde (e.g., {f}) denote the density-weighted Favre average: {f} = <rho * f> / <rho>.
-//
-//   Variables available in standard 'cons' output (Coarse Grid):
-//     <rho>  : Density
-//     <m>    : Momentum density (<rho*v>) -> implies {v} = <m> / <rho>
-//     <B>    : Magnetic field
-//     <E>    : Total energy density
-//     P_bar  : Pressure derived from (<E>, <m>, <B>) using the EOS on coarse variables.
-//
-// ==========================================================================================
-// 1. MHD SGS RECONSTRUCTION
-// ==========================================================================================
-//
-// A. MOMENTUM EQUATION (SGS Stress Tensor)
-//    The SGS stress tensor tau_ij accounts for unresolved momentum transport.
-//    Formula: tau_ij = ( <rho*v_i*v_j> - <rho>*{v_i}*{v_j} ) - ( <B_i*B_j> - <B_i>*<B_j> )
-//
-//    Reconstruction steps:
-//      1. Hydro Stress (Reynolds):
-//         Term <rho*v_i*v_j> is read directly from indices 8-13.
-//         Subtract <rho> * ({v_i} from <m>) * ({v_j} from <m>).
-//      2. Magnetic Stress (Maxwell):
-//         Term <B_i*B_j> is read directly from indices 14-19.
-//         Subtract <B_i> * <B_j> (from standard coarse output).
-//
-//    Index Map (derived_var indices):
-//      8:  <rho*vx*vx>   11: <rho*vy*vy>   13: <rho*vz*vz>
-//      9:  <rho*vx*vy>   12: <rho*vy*vz>
-//      10: <rho*vx*vz>
-//      14: <Bx*Bx>       17: <By*By>       19: <Bz*Bz>
-//      15: <Bx*By>       18: <By*Bz>
-//      16: <Bx*Bz>
-//
-// B. INDUCTION EQUATION (SGS Electromotive Force)
-//    The SGS EMF (E_sgs) accounts for unresolved dynamo action.
-//    Formula: E_sgs = < v x B > - ( {v} x <B> )
-//
-//    Reconstruction steps:
-//      1. Construct the averaged cross product <v x B> using the full tensor terms (indices 20-28).
-//         Example (x-component): <(v x B)_x> = <vy*Bz> (idx 25) - <vz*By> (idx 27).
-//      2. Calculate the mean field cross product: ({v} x <B>).
-//      3. Subtract: E_sgs_x = (dv[25] - dv[27]) - ({vy}*<Bz> - {vz}*<By>).
-//
-//    Index Map (Tensor <v_i * B_j>):
-//      20: <vx*Bx>   23: <vy*Bx>   26: <vz*Bx>
-//      21: <vx*By>   24: <vy*By>   27: <vz*By>
-//      22: <vx*Bz>   25: <vy*Bz>   28: <vz*Bz>
-//
-// C. ENERGY EQUATION (SGS Energy Flux)
-//    The SGS energy flux Q_sgs accounts for unresolved heat and Poynting flux.
-//    Formula: Q_sgs_i = <F_total_i> - F_total_i( <rho>, {v}, <B>, P_bar )
-//
-//    Reconstruction steps:
-//      1. Read the Total Averaged Flux <F_total> from indices 32-34.
-//      2. Calculate Resolved Flux (F_res) using coarse variables:
-//         v_sq_bar = {vx}^2 + {vy}^2 + {vz}^2
-//         B_sq_bar = <Bx>^2 + <By>^2 + <Bz>^2
-//         v_dot_B  = {vx}*<Bx> + {vy}*<By> + {vz}*<Bz>
-//         enthalpy_plus_ke = 0.5*<rho>*v_sq_bar + gamma * P_bar / (gamma-1)
-//                  = 0.5*<rho>*v_sq_bar + gamma * P_bar
-//         F_res_i  = (enthalpy_plus_ke + B_sq_bar) * {v_i} - (v_dot_B) * <B_i>
-//      3. Subtract: Q_sgs_i = dv[32+i] - F_res_i
-//
-//    Index Map:
-//      32: <F_total_x>
-//      33: <F_total_y>
-//      34: <F_total_z>
-//
-// ==========================================================================================
-// 2. HYDRO SGS RECONSTRUCTION
-// ==========================================================================================
-//
-// A. MOMENTUM EQUATION (Reynolds Stress Only)
-//    Formula: tau_ij = <rho*v_i*v_j> - <rho>*{v_i}*{v_j}
-//
-//    Index Map:
-//      5: <rho*vx*vx>    8: <rho*vy*vy>    10: <rho*vz*vz>
-//      6: <rho*vx*vy>    9: <rho*vy*vz>
-//      7: <rho*vx*vz>
-//
-// B. ENERGY EQUATION
-//    Formula: Q_sgs_i = <F_total_i> - F_total_i( <rho>, {v}, P_bar )
-//
-//    Reconstruction steps:
-//      1. Read Total Averaged Flux <F_total> from indices 11-13.
-//      2. Calculate Resolved Flux:
-//         F_res_i = ( 0.5*<rho>*{v}^2 + gamma*P_bar ) * {v_i}
-//      3. Subtract: Q_sgs_i = dv[11+(i-x)] - F_res_i
-//
-//    Index Map:
-//      11: <F_total_x>
-//      12: <F_total_y>
-//      13: <F_total_z>
-//
-// ==========================================================================================
-// get all sgs terms for the MHD equations
+  // get all sgs terms for the MHD equations
   if (name.compare("mhd_sgs") == 0) {
-    int n_sgs = 35;
+    int n_sgs = 59;
     Kokkos::realloc(derived_var, nmb, n_sgs, n3, n2, n1);
     auto dv = derived_var;
     auto u0_ = pm->pmb_pack->pmhd->u0;
     auto &bcc = pm->pmb_pack->pmhd->bcc0;
-
-    // Ensure gamma is captured. Assuming it is available in this scope.
-    Real gamma = pm->pmb_pack->pmhd->peos->eos_data.gamma;
-
     par_for("mhd_sgs", DevExeSpace(), 0, (nmb-1), ks, ke, js, je, is, ie,
     KOKKOS_LAMBDA(int m, int k, int j, int i) {
       Real rho = u0_(m,IDN,k,j,i);
-      Real inv_rho = 1.0/rho; // Optimization: pre-compute inverse
       Real mx = u0_(m,IVX,k,j,i);
       Real my = u0_(m,IVY,k,j,i);
       Real mz = u0_(m,IVZ,k,j,i);
-      Real E_total = u0_(m,IEN,k,j,i);
+      Real eint = u0_(m,IEN,k,j,i); // eint = P/(gamma-1)
       Real Bx = bcc(m,IBX,k,j,i);
       Real By = bcc(m,IBY,k,j,i);
       Real Bz = bcc(m,IBZ,k,j,i);
-
-      Real vx = mx * inv_rho;
-      Real vy = my * inv_rho;
-      Real vz = mz * inv_rho;
-
-      Real v_dot_B = (mx*Bx + my*By + mz*Bz) * inv_rho;
-      Real B_sq    = Bx*Bx + By*By + Bz*Bz;
-      Real v_sq    = (mx*mx + my*my + mz*mz) * (inv_rho*inv_rho);
-      // Extract internal energy: eint = E_total - KE - ME = P/(gamma-1)
-      Real eint = E_total - 0.5*rho*v_sq - 0.5*B_sq;
-
       // state variables
       dv(m,0,k,j,i) = rho;
       dv(m,1,k,j,i) = mx;
@@ -614,13 +541,13 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
       dv(m,5,k,j,i) = Bx;
       dv(m,6,k,j,i) = By;
       dv(m,7,k,j,i) = Bz;
-      // rho * v_i * v_j = m_i * v_j
-      dv(m,8,k,j,i) = mx*vx;
-      dv(m,9,k,j,i) = mx*vy;
-      dv(m,10,k,j,i) = mx*vz;
-      dv(m,11,k,j,i) = my*vy;
-      dv(m,12,k,j,i) = my*vz;
-      dv(m,13,k,j,i) = mz*vz;
+      // rho * v_i * v_j = m_i * m_j / rho
+      dv(m,8,k,j,i) = mx*mx/rho;
+      dv(m,9,k,j,i) = mx*my/rho;
+      dv(m,10,k,j,i) = mx*mz/rho;
+      dv(m,11,k,j,i) = my*my/rho;
+      dv(m,12,k,j,i) = my*mz/rho;
+      dv(m,13,k,j,i) = mz*mz/rho;
       // B_i * B_j
       dv(m,14,k,j,i) = Bx*Bx;
       dv(m,15,k,j,i) = Bx*By;
@@ -629,91 +556,99 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
       dv(m,18,k,j,i) = By*Bz;
       dv(m,19,k,j,i) = Bz*Bz;
       // v_i * B_j
-      dv(m,20,k,j,i) = vx*Bx;
-      dv(m,21,k,j,i) = vx*By;
-      dv(m,22,k,j,i) = vx*Bz;
-      dv(m,23,k,j,i) = vy*Bx;
-      dv(m,24,k,j,i) = vy*By;
-      dv(m,25,k,j,i) = vy*Bz;
-      dv(m,26,k,j,i) = vz*Bx;
-      dv(m,27,k,j,i) = vz*By;
-      dv(m,28,k,j,i) = vz*Bz;
-      // rho * v_i * e = m_i * eint / rho
-      dv(m,29,k,j,i) = vx*eint;
-      dv(m,30,k,j,i) = vy*eint;
-      dv(m,31,k,j,i) = vz*eint;
-
-      // Hydro enthalpy density: h = u + P. For ideal gas P = (γ-1)*u, so h = γ*u.
-      // Total hydro energy flux term = KE + enthalpy = 0.5*ρ*v² + γ*eint
-      Real enthalpy_plus_ke = 0.5*rho*v_sq + gamma*eint;
-
-      // F_x = (enthalpy_plus_ke + B²)*v_x - (v·B)*B_x
-      dv(m,32,k,j,i) = (enthalpy_plus_ke + B_sq)*vx - v_dot_B*Bx;
-
-      // F_y = (enthalpy_plus_ke + B²)*v_y - (v·B)*B_y
-      dv(m,33,k,j,i) = (enthalpy_plus_ke + B_sq)*vy - v_dot_B*By;
-
-      // F_z = (enthalpy_plus_ke + B²)*v_z - (v·B)*B_z
-      dv(m,34,k,j,i) = (enthalpy_plus_ke + B_sq)*vz - v_dot_B*Bz;
+      dv(m,20,k,j,i) = mx*Bx/rho;
+      dv(m,21,k,j,i) = mx*By/rho;
+      dv(m,22,k,j,i) = mx*Bz/rho;
+      dv(m,23,k,j,i) = my*Bx/rho;
+      dv(m,24,k,j,i) = my*By/rho;
+      dv(m,25,k,j,i) = my*Bz/rho;
+      dv(m,26,k,j,i) = mz*Bx/rho;
+      dv(m,27,k,j,i) = mz*By/rho;
+      dv(m,28,k,j,i) = mz*Bz/rho;
+      // rho * v_i * T = m_i * P / rho = m_i * P/rho / (gamma-1)
+      dv(m,29,k,j,i) = mx*eint/rho;
+      dv(m,30,k,j,i) = my*eint/rho;
+      dv(m,31,k,j,i) = mz*eint/rho;
+      // rho * v_i * v_j**2 = m_i * m_j**2 / rho**2
+      dv(m,32,k,j,i) = mx*mx*mx/rho/rho;
+      dv(m,33,k,j,i) = mx*my*my/rho/rho;
+      dv(m,34,k,j,i) = mx*mz*mz/rho/rho;
+      dv(m,35,k,j,i) = my*mx*mx/rho/rho;
+      dv(m,36,k,j,i) = my*my*my/rho/rho;
+      dv(m,37,k,j,i) = my*mz*mz/rho/rho;
+      dv(m,38,k,j,i) = mz*mx*mx/rho/rho;
+      dv(m,39,k,j,i) = mz*my*my/rho/rho;
+      dv(m,40,k,j,i) = mz*mz*mz/rho/rho;
+      // v_i * B_j**2 = m_i * B_j**2 / rho
+      dv(m,41,k,j,i) = mx*Bx*Bx/rho;
+      dv(m,42,k,j,i) = mx*By*By/rho;
+      dv(m,43,k,j,i) = mx*Bz*Bz/rho;
+      dv(m,44,k,j,i) = my*Bx*Bx/rho;
+      dv(m,45,k,j,i) = my*By*By/rho;
+      dv(m,46,k,j,i) = my*Bz*Bz/rho;
+      dv(m,47,k,j,i) = mz*Bx*Bx/rho;
+      dv(m,48,k,j,i) = mz*By*By/rho;
+      dv(m,49,k,j,i) = mz*Bz*Bz/rho;
+      // v_i * B_i * B_j = m_i * B_i * B_j / rho
+      dv(m,50,k,j,i) = mx*Bx*Bx/rho;
+      dv(m,51,k,j,i) = mx*Bx*By/rho;
+      dv(m,52,k,j,i) = mx*Bx*Bz/rho;
+      dv(m,53,k,j,i) = my*By*Bx/rho;
+      dv(m,54,k,j,i) = my*By*By/rho;
+      dv(m,55,k,j,i) = my*By*Bz/rho;
+      dv(m,56,k,j,i) = mz*Bz*Bx/rho;
+      dv(m,57,k,j,i) = mz*Bz*By/rho;
+      dv(m,58,k,j,i) = mz*Bz*Bz/rho;
     });
   }
 
-// get all sgs terms for the Hydro equations
+// get all sgs terms for the MHD equations
   if (name.compare("hydro_sgs") == 0) {
-    // Reduced from 23 to 14 variables
-    int n_sgs = 14;
+    int n_sgs = 23;
     Kokkos::realloc(derived_var, nmb, n_sgs, n3, n2, n1);
     auto dv = derived_var;
     auto u0_ = pm->pmb_pack->phydro->u0;
-
-    // Ensure gamma is captured
-    Real gamma = pm->pmb_pack->phydro->peos->eos_data.gamma;
-
     par_for("hydro_sgs", DevExeSpace(), 0, (nmb-1), ks, ke, js, je, is, ie,
     KOKKOS_LAMBDA(int m, int k, int j, int i) {
       Real rho = u0_(m,IDN,k,j,i);
-      Real inv_rho = 1.0/rho;
       Real mx = u0_(m,IVX,k,j,i);
       Real my = u0_(m,IVY,k,j,i);
       Real mz = u0_(m,IVZ,k,j,i);
-      Real E_total = u0_(m,IEN,k,j,i);
-
-      Real vx = mx * inv_rho;
-      Real vy = my * inv_rho;
-      Real vz = mz * inv_rho;
-      Real v_sq = vx*vx + vy*vy + vz*vz;
-      // Extract internal energy: eint = E_total - KE = P/(gamma-1)
-      Real eint = E_total - 0.5*rho*v_sq;
-
+      Real eint = u0_(m,IEN,k,j,i); // eint = P/(gamma-1)
       // state variables
       dv(m,0,k,j,i) = rho;
       dv(m,1,k,j,i) = mx;
       dv(m,2,k,j,i) = my;
       dv(m,3,k,j,i) = mz;
       dv(m,4,k,j,i) = eint;
-
-      // rho * v_i * v_j = m_i * v_j
-      dv(m,5,k,j,i) = mx*vx;
-      dv(m,6,k,j,i) = mx*vy;
-      dv(m,7,k,j,i) = mx*vz;
-      dv(m,8,k,j,i) = my*vy;
-      dv(m,9,k,j,i) = my*vz;
-      dv(m,10,k,j,i) = mz*vz;
-
-      // Total Hydro Energy Flux: F_E = (KE + enthalpy) * v
-      // Enthalpy h = u + P = γ*u for ideal gas, so KE + h = 0.5*ρ*v² + γ*eint
-      Real enthalpy_plus_ke = 0.5*rho*v_sq + gamma*eint;
-
-      dv(m,11,k,j,i) = enthalpy_plus_ke * vx;
-      dv(m,12,k,j,i) = enthalpy_plus_ke * vy;
-      dv(m,13,k,j,i) = enthalpy_plus_ke * vz;
+      // rho * v_i * v_j = m_i * m_j / rho
+      dv(m,5,k,j,i) = mx*mx/rho;
+      dv(m,6,k,j,i) = mx*my/rho;
+      dv(m,7,k,j,i) = mx*mz/rho;
+      dv(m,8,k,j,i) = my*my/rho;
+      dv(m,9,k,j,i) = my*mz/rho;
+      dv(m,10,k,j,i) = mz*mz/rho;
+      // rho * v_i * T = m_i * P / rho = m_i * P/rho / (gamma-1)
+      dv(m,11,k,j,i) = mx*eint/rho;
+      dv(m,12,k,j,i) = my*eint/rho;
+      dv(m,13,k,j,i) = mz*eint/rho;
+      // rho * v_i * v_j**2 = m_i * m_j**2 / rho**2
+      dv(m,14,k,j,i) = mx*mx*mx/rho/rho;
+      dv(m,15,k,j,i) = mx*my*my/rho/rho;
+      dv(m,16,k,j,i) = mx*mz*mz/rho/rho;
+      dv(m,17,k,j,i) = my*mx*mx/rho/rho;
+      dv(m,18,k,j,i) = my*my*my/rho/rho;
+      dv(m,19,k,j,i) = my*mz*mz/rho/rho;
+      dv(m,20,k,j,i) = mz*mx*mx/rho/rho;
+      dv(m,21,k,j,i) = mz*my*my/rho/rho;
+      dv(m,22,k,j,i) = mz*mz*mz/rho/rho;
     });
   }
 
 // get all moments terms for |v| and |B|
   if (name.compare("mhd_v_B_moments") == 0) {
     int n_moments = 8;
-    Kokkos::realloc(derived_var, nmb, n_moments, n3, n2, n1);
+    Kokkos::realloc(derived_var, n_moments, 1, n3, n2, n1);
     auto dv = derived_var;
     auto &w0_ = pm->pmb_pack->pmhd->w0;
     auto &bcc = pm->pmb_pack->pmhd->bcc0;
@@ -741,7 +676,7 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
 // get all moments terms for v_i and B_i
   if (name.compare("mhd_vi_Bi_moments") == 0) {
     int n_moments = 24;
-    Kokkos::realloc(derived_var, nmb, n_moments, n3, n2, n1);
+    Kokkos::realloc(derived_var, n_moments, 1, n3, n2, n1);
     auto dv = derived_var;
     auto &w0_ = pm->pmb_pack->pmhd->w0;
     auto &bcc = pm->pmb_pack->pmhd->bcc0;
@@ -785,7 +720,7 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
 // get all moments terms for |v|
   if (name.compare("hydro_v_moments") == 0) {
     int n_moments = 4;
-    Kokkos::realloc(derived_var, nmb, n_moments, n3, n2, n1);
+    Kokkos::realloc(derived_var, n_moments, 1, n3, n2, n1);
     auto dv = derived_var;
     auto &w0_ = pm->pmb_pack->phydro->w0;
     par_for("hydro_v_moments", DevExeSpace(), 0, (nmb-1), ks, ke, js, je, is, ie,
@@ -804,7 +739,7 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
 // get all moments terms for v_i and B_i
   if (name.compare("hydro_vi_moments") == 0) {
     int n_moments = 12;
-    Kokkos::realloc(derived_var, nmb, n_moments, n3, n2, n1);
+    Kokkos::realloc(derived_var, n_moments, 1, n3, n2, n1);
     auto dv = derived_var;
     auto &w0_ = pm->pmb_pack->phydro->w0;
     par_for("hydro_moments", DevExeSpace(), 0, (nmb-1), ks, ke, js, je, is, ie,
@@ -834,21 +769,23 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
   // Calculated from cell-centered fields.
   // Not computed in ghost zones since requires derivative
   if (name.compare("mhd_k_jxb") == 0) {
+    if (derived_var.extent(4) <= 1)
+      Kokkos::realloc(derived_var, nmb, n_dv, n3, n2, n1);
     auto dv = derived_var;
     auto &bcc = pm->pmb_pack->pmhd->bcc0;
     par_for("mhd_k_jxb", DevExeSpace(), 0, (nmb-1), ks, ke, js, je, is, ie,
     KOKKOS_LAMBDA(int m, int k, int j, int i) {
       // calculate j
       Real j1 = 0.0;
-      Real j2 = -(bcc(m,IBZ,k,j,i+1) - bcc(m,IBZ,k,j,i-1))/(2.0*size.d_view(m).dx1);
-      Real j3 =  (bcc(m,IBY,k,j,i+1) - bcc(m,IBY,k,j,i-1))/(2.0*size.d_view(m).dx1);
+      Real j2 = -(bcc(m,IBZ,k,j,i+1) - bcc(m,IBZ,k,j,i-1))/size.d_view(m).dx1;
+      Real j3 =  (bcc(m,IBY,k,j,i+1) - bcc(m,IBY,k,j,i-1))/size.d_view(m).dx1;
       if (multi_d) {
-        j1 += (bcc(m,IBZ,k,j+1,i) - bcc(m,IBZ,k,j-1,i))/(2.0*size.d_view(m).dx2);
-        j3 -= (bcc(m,IBX,k,j+1,i) - bcc(m,IBX,k,j-1,i))/(2.0*size.d_view(m).dx2);
+        j1 += (bcc(m,IBZ,k,j+1,i) - bcc(m,IBZ,k,j-1,i))/size.d_view(m).dx2;
+        j3 -= (bcc(m,IBX,k,j+1,i) - bcc(m,IBX,k,j-1,i))/size.d_view(m).dx2;
       }
       if (three_d) {
-        j1 -= (bcc(m,IBY,k+1,j,i) - bcc(m,IBY,k-1,j,i))/(2.0*size.d_view(m).dx3);
-        j2 += (bcc(m,IBX,k+1,j,i) - bcc(m,IBX,k-1,j,i))/(2.0*size.d_view(m).dx3);
+        j1 -= (bcc(m,IBY,k+1,j,i) - bcc(m,IBY,k-1,j,i))/size.d_view(m).dx3;
+        j2 += (bcc(m,IBX,k+1,j,i) - bcc(m,IBX,k-1,j,i))/size.d_view(m).dx3;
       }
       // calculate B
       Real B_mag_sq =    bcc(m,IBX,k,j,i)*bcc(m,IBX,k,j,i)
@@ -861,44 +798,36 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
       Real jxB3 = j1*bcc(m,IBY,k,j,i) - j2*bcc(m,IBX,k,j,i);
 
       // calculate | j x B | / B^2
-      if (B_mag_sq > 0.0) {
-        dv(m,i_dv,k,j,i) = sqrt(jxB1*jxB1 + jxB2*jxB2 + jxB3*jxB3) / B_mag_sq;
-      } else {
-        dv(m,i_dv,k,j,i) = 0.0;
-      }
+      dv(m,i_dv,k,j,i) = sqrt(jxB1*jxB1 + jxB2*jxB2 + jxB3*jxB3) / B_mag_sq;
     });
-    i_dv += 1; // increment derived variable index
   }
 
   // magnitude of curv_perp = |(j x B / B^2) - b_hat dot nabla b_hat|
   // Calculated from cell-centered fields.
   // Not computed in ghost zones since requires derivative
   if (name.compare("mhd_curv_perp") == 0) {
+    if (derived_var.extent(4) <= 1)
+      Kokkos::realloc(derived_var, nmb, n_dv, n3, n2, n1);
     auto dv = derived_var;
     auto &bcc = pm->pmb_pack->pmhd->bcc0;
     par_for("curv_perp", DevExeSpace(), 0, (nmb-1), ks, ke, js, je, is, ie,
     KOKKOS_LAMBDA(int m, int k, int j, int i) {
       // calculate j
       Real j1 = 0.0;
-      Real j2 = -(bcc(m,IBZ,k,j,i+1) - bcc(m,IBZ,k,j,i-1))/(2.0*size.d_view(m).dx1);
-      Real j3 =  (bcc(m,IBY,k,j,i+1) - bcc(m,IBY,k,j,i-1))/(2.0*size.d_view(m).dx1);
+      Real j2 = -(bcc(m,IBZ,k,j,i+1) - bcc(m,IBZ,k,j,i-1))/size.d_view(m).dx1;
+      Real j3 =  (bcc(m,IBY,k,j,i+1) - bcc(m,IBY,k,j,i-1))/size.d_view(m).dx1;
       if (multi_d) {
-        j1 += (bcc(m,IBZ,k,j+1,i) - bcc(m,IBZ,k,j-1,i))/(2.0*size.d_view(m).dx2);
-        j3 -= (bcc(m,IBX,k,j+1,i) - bcc(m,IBX,k,j-1,i))/(2.0*size.d_view(m).dx2);
+        j1 += (bcc(m,IBZ,k,j+1,i) - bcc(m,IBZ,k,j-1,i))/size.d_view(m).dx2;
+        j3 -= (bcc(m,IBX,k,j+1,i) - bcc(m,IBX,k,j-1,i))/size.d_view(m).dx2;
       }
       if (three_d) {
-        j1 -= (bcc(m,IBY,k+1,j,i) - bcc(m,IBY,k-1,j,i))/(2.0*size.d_view(m).dx3);
-        j2 += (bcc(m,IBX,k+1,j,i) - bcc(m,IBX,k-1,j,i))/(2.0*size.d_view(m).dx3);
+        j1 -= (bcc(m,IBY,k+1,j,i) - bcc(m,IBY,k-1,j,i))/size.d_view(m).dx3;
+        j2 += (bcc(m,IBX,k+1,j,i) - bcc(m,IBX,k-1,j,i))/size.d_view(m).dx3;
       }
       // calculate B
       Real B_mag_sq =    bcc(m,IBX,k,j,i)*bcc(m,IBX,k,j,i)
                        + bcc(m,IBY,k,j,i)*bcc(m,IBY,k,j,i)
                        + bcc(m,IBZ,k,j,i)*bcc(m,IBZ,k,j,i);
-
-      if (B_mag_sq <= 0.0) {
-        dv(m,i_dv,k,j,i) = 0.0;
-        return;
-      }
 
       // calculate j x B
       Real jxB1_Bsq = (j2*bcc(m,IBZ,k,j,i) - j3*bcc(m,IBY,k,j,i))/(B_mag_sq);
@@ -987,6 +916,8 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
   // Calculated from cell-centered fields.
   // Not computed in ghost zones since requires derivative
   if (name.compare("mhd_bmag") == 0) {
+    if (derived_var.extent(4) <= 1)
+      Kokkos::realloc(derived_var, nmb, n_dv, n3, n2, n1);
     auto dv = derived_var;
     auto &bcc = pm->pmb_pack->pmhd->bcc0;
     par_for("bmag", DevExeSpace(), 0, (nmb-1), ks, ke, js, je, is, ie,
@@ -996,241 +927,6 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
                           + bcc(m,IBZ,k,j,i)*bcc(m,IBZ,k,j,i));
     });
     i_dv += 1; // increment derived variable index
-  }
-
-  // magnitude of vA_mag = |vA| = |B| / sqrt(rho)
-  if (name.compare("mhd_vA_mag") == 0) {
-    auto dv = derived_var;
-    auto &bcc = pm->pmb_pack->pmhd->bcc0;
-    auto &w0_ = pm->pmb_pack->pmhd->w0;
-    par_for("vA_mag", DevExeSpace(), 0, (nmb-1), ks, ke, js, je, is, ie,
-    KOKKOS_LAMBDA(int m, int k, int j, int i) {
-      dv(m,i_dv,k,j,i) = sqrt( bcc(m,IBX,k,j,i)*bcc(m,IBX,k,j,i)
-                             + bcc(m,IBY,k,j,i)*bcc(m,IBY,k,j,i)
-                             + bcc(m,IBZ,k,j,i)*bcc(m,IBZ,k,j,i))
-                             / sqrt(w0_(m,IDN,k,j,i));
-    });
-    i_dv += 1;
-  }
-
-  // magnitude of curvature over the magnitude of B
-  if (name.compare("mhd_curv_B_ratio") == 0) {
-    auto dv = derived_var;
-    auto &bcc = pm->pmb_pack->pmhd->bcc0;
-    par_for("curv_B_ratio", DevExeSpace(), 0, (nmb-1), ks, ke, js, je, is, ie,
-    KOKKOS_LAMBDA(int m, int k, int j, int i) {
-      Real &Bx = bcc(m,IBX,k,j,i);
-      Real &By = bcc(m,IBY,k,j,i);
-      Real &Bz = bcc(m,IBZ,k,j,i);
-
-      Real B_mag_squared = (Bx*Bx + By*By + Bz*Bz);
-      Real B_mag = sqrt(B_mag_squared);
-
-      // Calculate gradB tensor
-      Real dBx_dx = (bcc(m,IBX,k,j,i+1) - bcc(m,IBX,k,j,i-1))/(2.0*size.d_view(m).dx1);
-      Real dBx_dy = (bcc(m,IBX,k,j+1,i) - bcc(m,IBX,k,j-1,i))/(2.0*size.d_view(m).dx2);
-      Real dBx_dz = (bcc(m,IBX,k+1,j,i) - bcc(m,IBX,k-1,j,i))/(2.0*size.d_view(m).dx3);
-
-      Real dBy_dx = (bcc(m,IBY,k,j,i+1) - bcc(m,IBY,k,j,i-1))/(2.0*size.d_view(m).dx1);
-      Real dBy_dy = (bcc(m,IBY,k,j+1,i) - bcc(m,IBY,k,j-1,i))/(2.0*size.d_view(m).dx2);
-      Real dBy_dz = (bcc(m,IBY,k+1,j,i) - bcc(m,IBY,k-1,j,i))/(2.0*size.d_view(m).dx3);
-
-      Real dBz_dx = (bcc(m,IBZ,k,j,i+1) - bcc(m,IBZ,k,j,i-1))/(2.0*size.d_view(m).dx1);
-      Real dBz_dy = (bcc(m,IBZ,k,j+1,i) - bcc(m,IBZ,k,j-1,i))/(2.0*size.d_view(m).dx2);
-      Real dBz_dz = (bcc(m,IBZ,k+1,j,i) - bcc(m,IBZ,k-1,j,i))/(2.0*size.d_view(m).dx3);
-
-      Real BdotGradB_x = (Bx * dBx_dx + By * dBx_dy + Bz * dBx_dz);
-      Real BdotGradB_y = (Bx * dBy_dx + By * dBy_dy + Bz * dBy_dz);
-      Real BdotGradB_z = (Bx * dBz_dx + By * dBz_dy + Bz * dBz_dz);
-
-      Real Identity_minus_bhat_bhat_xx = 1.0 - Bx*Bx/B_mag_squared;
-      Real Identity_minus_bhat_bhat_xy = 0.0 - Bx*By/B_mag_squared;
-      Real Identity_minus_bhat_bhat_xz = 0.0 - Bx*Bz/B_mag_squared;
-
-      Real Identity_minus_bhat_bhat_yx = 0.0 - By*Bx/B_mag_squared;
-      Real Identity_minus_bhat_bhat_yy = 1.0 - By*By/B_mag_squared;
-      Real Identity_minus_bhat_bhat_yz = 0.0 - By*Bz/B_mag_squared;
-
-      Real Identity_minus_bhat_bhat_zx = 0.0 - Bz*Bx/B_mag_squared;
-      Real Identity_minus_bhat_bhat_zy = 0.0 - Bz*By/B_mag_squared;
-      Real Identity_minus_bhat_bhat_zz = 1.0 - Bz*Bz/B_mag_squared;
-
-      // Calculate curvature which is |(B.gradB).(I - bhat bhat)/B^2|
-      Real curv1 = (
-            BdotGradB_x * Identity_minus_bhat_bhat_xx
-          + BdotGradB_y * Identity_minus_bhat_bhat_yx
-          + BdotGradB_z * Identity_minus_bhat_bhat_zx
-        );
-      Real curv2 = (
-            BdotGradB_x * Identity_minus_bhat_bhat_xy
-          + BdotGradB_y * Identity_minus_bhat_bhat_yy
-          + BdotGradB_z * Identity_minus_bhat_bhat_zy
-        );
-      Real curv3 = (
-            BdotGradB_x * Identity_minus_bhat_bhat_xz
-          + BdotGradB_y * Identity_minus_bhat_bhat_yz
-          + BdotGradB_z * Identity_minus_bhat_bhat_zz
-        );
-
-      dv(m,i_dv,k,j,i) = sqrt(curv1*curv1+curv2*curv2+curv3*curv3)/B_mag_squared/B_mag;
-    });
-    i_dv += 1;
-  }
-
-  // cos of the angle between the current and the magnetic field vector
-  if (name.compare("mhd_theta_jb") == 0) {
-    auto dv = derived_var;
-    auto &bcc = pm->pmb_pack->pmhd->bcc0;
-    par_for("theta_jb", DevExeSpace(), 0, (nmb-1), ks, ke, js, je, is, ie,
-    KOKKOS_LAMBDA(int m, int k, int j, int i) {
-      // calculate current
-      Real j1 = 0.0;
-      Real j2 = -(bcc(m,IBZ,k,j,i+1) - bcc(m,IBZ,k,j,i-1))/(2.0*size.d_view(m).dx1);
-      Real j3 =  (bcc(m,IBY,k,j,i+1) - bcc(m,IBY,k,j,i-1))/(2.0*size.d_view(m).dx1);
-      if (multi_d) {
-        j1 += (bcc(m,IBZ,k,j+1,i) - bcc(m,IBZ,k,j-1,i))/(2.0*size.d_view(m).dx2);
-        j3 -= (bcc(m,IBX,k,j+1,i) - bcc(m,IBX,k,j-1,i))/(2.0*size.d_view(m).dx2);
-      }
-      if (three_d) {
-        j1 -= (bcc(m,IBY,k+1,j,i) - bcc(m,IBY,k-1,j,i))/(2.0*size.d_view(m).dx3);
-        j2 += (bcc(m,IBX,k+1,j,i) - bcc(m,IBX,k-1,j,i))/(2.0*size.d_view(m).dx3);
-      }
-      Real J_mag = sqrt(j1*j1 + j2*j2 + j3*j3);
-
-      Real B_mag = sqrt( bcc(m,IBX,k,j,i)*bcc(m,IBX,k,j,i)
-                       + bcc(m,IBY,k,j,i)*bcc(m,IBY,k,j,i)
-                       + bcc(m,IBZ,k,j,i)*bcc(m,IBZ,k,j,i));
-
-      Real jdotB = j1*bcc(m,IBX,k,j,i) + j2*bcc(m,IBY,k,j,i) + j3*bcc(m,IBZ,k,j,i);
-
-      dv(m,i_dv,k,j,i) = jdotB / (J_mag * B_mag);
-    });
-    i_dv += 1;
-  }
-
-  // cos of the angle between the velocity and the magnetic field vector
-  if (name.compare("mhd_theta_vb") == 0) {
-    auto dv = derived_var;
-    auto &w0_ = pm->pmb_pack->pmhd->w0;
-    auto &bcc = pm->pmb_pack->pmhd->bcc0;
-    par_for("theta_vb", DevExeSpace(), 0, (nmb-1), ks, ke, js, je, is, ie,
-    KOKKOS_LAMBDA(int m, int k, int j, int i) {
-      Real v_mag = sqrt( w0_(m,IVX,k,j,i)*w0_(m,IVX,k,j,i)
-                       + w0_(m,IVY,k,j,i)*w0_(m,IVY,k,j,i)
-                       + w0_(m,IVZ,k,j,i)*w0_(m,IVZ,k,j,i));
-
-      Real B_mag = sqrt( bcc(m,IBX,k,j,i)*bcc(m,IBX,k,j,i)
-                       + bcc(m,IBY,k,j,i)*bcc(m,IBY,k,j,i)
-                       + bcc(m,IBZ,k,j,i)*bcc(m,IBZ,k,j,i));
-
-      Real vdotB = w0_(m,IVX,k,j,i)*bcc(m,IBX,k,j,i)
-                 + w0_(m,IVY,k,j,i)*bcc(m,IBY,k,j,i)
-                 + w0_(m,IVZ,k,j,i)*bcc(m,IBZ,k,j,i);
-
-      dv(m,i_dv,k,j,i) = vdotB / (v_mag * B_mag);
-    });
-    i_dv += 1;
-  }
-
-  // cos of the angle between the current and the density gradient vector
-  if (name.compare("mhd_theta_jdrho") == 0) {
-    auto dv = derived_var;
-    auto &bcc = pm->pmb_pack->pmhd->bcc0;
-    auto &u0 = pm->pmb_pack->pmhd->u0;
-    par_for("theta_jdrho", DevExeSpace(), 0, (nmb-1), ks, ke, js, je, is, ie,
-    KOKKOS_LAMBDA(int m, int k, int j, int i) {
-      // calculate current
-      Real j1 = 0.0;
-      Real j2 = -(bcc(m,IBZ,k,j,i+1) - bcc(m,IBZ,k,j,i-1))/(2.0*size.d_view(m).dx1);
-      Real j3 =  (bcc(m,IBY,k,j,i+1) - bcc(m,IBY,k,j,i-1))/(2.0*size.d_view(m).dx1);
-      if (multi_d) {
-        j1 += (bcc(m,IBZ,k,j+1,i) - bcc(m,IBZ,k,j-1,i))/(2.0*size.d_view(m).dx2);
-        j3 -= (bcc(m,IBX,k,j+1,i) - bcc(m,IBX,k,j-1,i))/(2.0*size.d_view(m).dx2);
-      }
-      if (three_d) {
-        j1 -= (bcc(m,IBY,k+1,j,i) - bcc(m,IBY,k-1,j,i))/(2.0*size.d_view(m).dx3);
-        j2 += (bcc(m,IBX,k+1,j,i) - bcc(m,IBX,k-1,j,i))/(2.0*size.d_view(m).dx3);
-      }
-      Real J_mag = sqrt(j1*j1 + j2*j2 + j3*j3);
-
-      // Calculate drho
-      Real drho_dx1 = (u0(m,IDN,k,j,i+1) - u0(m,IDN,k,j,i-1))/(2.0*size.d_view(m).dx1);
-      Real drho_dx2 = (multi_d) ?
-        (u0(m,IDN,k,j+1,i) - u0(m,IDN,k,j-1,i))/(2.0*size.d_view(m).dx2) : 0.0;
-      Real drho_dx3 = (three_d) ?
-        (u0(m,IDN,k+1,j,i) - u0(m,IDN,k-1,j,i))/(2.0*size.d_view(m).dx3) : 0.0;
-
-      Real drho_mag = sqrt(drho_dx1*drho_dx1 + drho_dx2*drho_dx2 + drho_dx3*drho_dx3);
-      Real jdotdrho = j1*drho_dx1 + j2*drho_dx2 + j3*drho_dx3;
-
-      dv(m,i_dv,k,j,i) = jdotdrho / (J_mag * drho_mag);
-    });
-    i_dv += 1;
-  }
-
-  // cos of the angle between the magnetic field and the density gradient vector
-  if (name.compare("mhd_theta_bdrho") == 0) {
-    auto dv = derived_var;
-    auto &bcc = pm->pmb_pack->pmhd->bcc0;
-    auto &u0 = pm->pmb_pack->pmhd->u0;
-    par_for("theta_bdrho", DevExeSpace(), 0, (nmb-1), ks, ke, js, je, is, ie,
-    KOKKOS_LAMBDA(int m, int k, int j, int i) {
-      Real B_mag = sqrt( bcc(m,IBX,k,j,i)*bcc(m,IBX,k,j,i)
-                       + bcc(m,IBY,k,j,i)*bcc(m,IBY,k,j,i)
-                       + bcc(m,IBZ,k,j,i)*bcc(m,IBZ,k,j,i));
-
-      // Calculate drho
-      Real drho_dx1 = (u0(m,IDN,k,j,i+1) - u0(m,IDN,k,j,i-1))/(2.0*size.d_view(m).dx1);
-      Real drho_dx2 = (multi_d) ?
-        (u0(m,IDN,k,j+1,i) - u0(m,IDN,k,j-1,i))/(2.0*size.d_view(m).dx2) : 0.0;
-      Real drho_dx3 = (three_d) ?
-        (u0(m,IDN,k+1,j,i) - u0(m,IDN,k-1,j,i))/(2.0*size.d_view(m).dx3) : 0.0;
-
-      Real drho_mag = sqrt(drho_dx1*drho_dx1 + drho_dx2*drho_dx2 + drho_dx3*drho_dx3);
-      Real Bdotdrho = bcc(m,IBX,k,j,i)*drho_dx1
-                    + bcc(m,IBY,k,j,i)*drho_dx2
-                    + bcc(m,IBZ,k,j,i)*drho_dx3;
-
-      dv(m,i_dv,k,j,i) = Bdotdrho / (B_mag * drho_mag);
-    });
-    i_dv += 1;
-  }
-
-  // Viscous heating rate -- < Pi:dv > needs to be multiplied by nu
-  if (name.compare("hydro_visc_heat") == 0 || name.compare("mhd_visc_heat") == 0) {
-    auto dv = derived_var;
-    auto &w0_ = (name.compare("hydro_visc_heat") == 0) ?
-      pm->pmb_pack->phydro->w0 : pm->pmb_pack->pmhd->w0;
-    par_for("Pi:dv", DevExeSpace(), 0, (nmb-1), ks, ke, js, je, is, ie,
-    KOKKOS_LAMBDA(int m, int k, int j, int i) {
-      Real dx1_inv = 1.0/size.d_view(m).dx1;
-      Real dx2_inv = 1.0/size.d_view(m).dx2;
-      Real dx3_inv = 1.0/size.d_view(m).dx3;
-
-      Real dvx_dx1 = (w0_(m,IVX,k,j,i+1)-w0_(m,IVX,k,j,i-1))*0.5*dx1_inv;
-      Real dvx_dx2 = (w0_(m,IVX,k,j+1,i)-w0_(m,IVX,k,j-1,i))*0.5*dx2_inv;
-      Real dvx_dx3 = (w0_(m,IVX,k+1,j,i)-w0_(m,IVX,k-1,j,i))*0.5*dx3_inv;
-      Real dvy_dx1 = (w0_(m,IVY,k,j,i+1)-w0_(m,IVY,k,j,i-1))*0.5*dx1_inv;
-      Real dvy_dx2 = (w0_(m,IVY,k,j+1,i)-w0_(m,IVY,k,j-1,i))*0.5*dx2_inv;
-      Real dvy_dx3 = (w0_(m,IVY,k+1,j,i)-w0_(m,IVY,k-1,j,i))*0.5*dx3_inv;
-      Real dvz_dx1 = (w0_(m,IVZ,k,j,i+1)-w0_(m,IVZ,k,j,i-1))*0.5*dx1_inv;
-      Real dvz_dx2 = (w0_(m,IVZ,k,j+1,i)-w0_(m,IVZ,k,j-1,i))*0.5*dx2_inv;
-      Real dvz_dx3 = (w0_(m,IVZ,k+1,j,i)-w0_(m,IVZ,k-1,j,i))*0.5*dx3_inv;
-
-      Real div_v = dvx_dx1 + dvy_dx2 + dvz_dx3;
-      Real Pi_xx = (2.0*dvx_dx1 - (2.0/3.0)*div_v);
-      Real Pi_yy = (2.0*dvy_dx2 - (2.0/3.0)*div_v);
-      Real Pi_zz = (2.0*dvz_dx3 - (2.0/3.0)*div_v);
-      Real Pi_xy = (dvx_dx2 + dvy_dx1);
-      Real Pi_xz = (dvx_dx3 + dvz_dx1);
-      Real Pi_yz = (dvy_dx3 + dvz_dx2);
-
-      dv(m,i_dv,k,j,i) = (Pi_xx*dvx_dx1 + Pi_yy*dvy_dx2 + Pi_zz*dvz_dx3
-                        + Pi_xy*(dvx_dx2 + dvy_dx1)
-                        + Pi_xz*(dvx_dx3 + dvz_dx1)
-                        + Pi_yz*(dvy_dx3 + dvz_dx2))*w0_(m,IDN,k,j,i);
-    });
-    i_dv += 1;
   }
 
   // Calculated from cell-centered fields.
@@ -1251,12 +947,7 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
     auto &w0_ = pm->pmb_pack->pmhd->w0;
     par_for("bmag", DevExeSpace(), 0, (nmb-1), ks, ke, js, je, is, ie,
     KOKKOS_LAMBDA(int m, int k, int j, int i) {
-      Real dx1 = size.d_view(m).dx1;
-      Real dx2 = size.d_view(m).dx2;
-      Real dx3 = size.d_view(m).dx3;
-      Real dx1_sq = dx1*dx1;
-      Real dx2_sq = dx2*dx2;
-      Real dx3_sq = dx3*dx3;
+      Real dx_squared = size.d_view(m).dx1 * size.d_view(m).dx1;
       // 0 = < B^4 >
       Real B_mag_sq = bcc(m,IBX,k,j,i)*bcc(m,IBX,k,j,i)
                     + bcc(m,IBY,k,j,i)*bcc(m,IBY,k,j,i)
@@ -1265,62 +956,85 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
       Real B_fourth = B_mag_sq*B_mag_sq;
       dv(m,1,k,j,i) = B_fourth;
       // 1 = < (d_j B_i)(d_j B_i) >
-      Real dBx_dx = (b.x1f(m,k,j,i+1)-b.x1f(m,k,j,i)) / dx1;
-      Real dBy_dy = (b.x2f(m,k,j+1,i)-b.x2f(m,k,j,i)) / dx2;
-      Real dBz_dz = (b.x3f(m,k+1,j,i)-b.x3f(m,k,j,i)) / dx3;
-      Real dBx_dy = 0.5*(bcc(m,IBX,k,j+1,i)-bcc(m,IBX,k,j-1,i)) / dx2;
-      Real dBx_dz = 0.5*(bcc(m,IBX,k+1,j,i)-bcc(m,IBX,k-1,j,i)) / dx3;
-      Real dBy_dx = 0.5*(bcc(m,IBY,k,j,i+1)-bcc(m,IBY,k,j,i-1)) / dx1;
-      Real dBy_dz = 0.5*(bcc(m,IBY,k+1,j,i)-bcc(m,IBY,k-1,j,i)) / dx3;
-      Real dBz_dx = 0.5*(bcc(m,IBZ,k,j,i+1)-bcc(m,IBZ,k,j,i-1)) / dx1;
-      Real dBz_dy = 0.5*(bcc(m,IBZ,k,j+1,i)-bcc(m,IBZ,k,j-1,i)) / dx2;
-      dv(m,2,k,j,i) = dBx_dx*dBx_dx + dBy_dy*dBy_dy + dBz_dz*dBz_dz
-                    + dBx_dy*dBx_dy + dBx_dz*dBx_dz
-                    + dBy_dx*dBy_dx + dBy_dz*dBy_dz
-                    + dBz_dx*dBz_dx + dBz_dy*dBz_dy;
+      dv(m,2,k,j,i) =(  (b.x1f(m,k,j,i+1)-b.x1f(m,k,j,i))
+                       *(b.x1f(m,k,j,i+1)-b.x1f(m,k,j,i))
+                      + (b.x2f(m,k,j+1,i)-b.x2f(m,k,j,i))
+                       *(b.x2f(m,k,j+1,i)-b.x2f(m,k,j,i))
+                      + (b.x3f(m,k+1,j,i)-b.x3f(m,k,j,i))
+                       *(b.x3f(m,k+1,j,i)-b.x3f(m,k,j,i))
+                      + 0.25*(bcc(m,IBX,k,j+1,i)-bcc(m,IBX,k,j-1,i))
+                            *(bcc(m,IBX,k,j+1,i)-bcc(m,IBX,k,j-1,i))
+                      + 0.25*(bcc(m,IBX,k+1,j,i)-bcc(m,IBX,k-1,j,i))
+                            *(bcc(m,IBX,k+1,j,i)-bcc(m,IBX,k-1,j,i))
+                      + 0.25*(bcc(m,IBY,k,j,i+1)-bcc(m,IBY,k,j,i-1))
+                            *(bcc(m,IBY,k,j,i+1)-bcc(m,IBY,k,j,i-1))
+                      + 0.25*(bcc(m,IBY,k+1,j,i)-bcc(m,IBY,k-1,j,i))
+                            *(bcc(m,IBY,k+1,j,i)-bcc(m,IBY,k-1,j,i))
+                      + 0.25*(bcc(m,IBZ,k,j,i+1)-bcc(m,IBZ,k,j,i-1))
+                            *(bcc(m,IBZ,k,j,i+1)-bcc(m,IBZ,k,j,i-1))
+                      + 0.25*(bcc(m,IBZ,k,j+1,i)-bcc(m,IBZ,i,j-1,i))
+                            *(bcc(m,IBZ,k,j+1,i)-bcc(m,IBZ,i,j-1,i)))
+                      / dx_squared;
       // 2 = < (B_j d_j B_i)(B_k d_k B_i) >
-      Real bdb1 = bcc(m,IBX,k,j,i)*dBx_dx + bcc(m,IBY,k,j,i)*dBx_dy
-                + bcc(m,IBZ,k,j,i)*dBx_dz;
-      Real bdb2 = bcc(m,IBY,k,j,i)*dBy_dy + bcc(m,IBZ,k,j,i)*dBy_dz
-                + bcc(m,IBX,k,j,i)*dBy_dx;
-      Real bdb3 = bcc(m,IBZ,k,j,i)*dBz_dz + bcc(m,IBX,k,j,i)*dBz_dx
-                + bcc(m,IBY,k,j,i)*dBz_dy;
-      dv(m,3,k,j,i) = (bdb1*bdb1 + bdb2*bdb2 + bdb3*bdb3);
+      Real bdb1 = bcc(m,IBX,k,j,i)*(b.x1f(m,k,j,i+1)-b.x1f(m,k,j,i))
+                  +0.5*bcc(m,IBY,k,j,i)*(bcc(m,IBX,k,j+1,i)-bcc(m,IBX,k,j-1,i))
+                  +0.5*bcc(m,IBZ,k,j,i)*(bcc(m,IBX,k+1,j,i)-bcc(m,IBX,k-1,j,i));
+      Real bdb2 = bcc(m,IBY,k,j,i)*(b.x2f(m,k,j+1,i)-b.x2f(m,k,j,i))
+                  +0.5*bcc(m,IBZ,k,j,i)*(bcc(m,IBY,k+1,j,i)-bcc(m,IBY,k-1,j,i))
+                  +0.5*bcc(m,IBX,k,j,i)*(bcc(m,IBY,k,j,i+1)-bcc(m,IBY,k,j,i-1));
+      Real bdb3 = bcc(m,IBZ,k,j,i)*(b.x3f(m,k+1,j,i)-b.x3f(m,k,j,i))
+                  +0.5*bcc(m,IBX,k,j,i)*(bcc(m,IBZ,k,j,i+1)-bcc(m,IBZ,k,j,i-1))
+                  +0.5*bcc(m,IBY,k,j,i)*(bcc(m,IBZ,k,j+1,i)-bcc(m,IBZ,k,j-1,i));
+      dv(m,3,k,j,i) = (bdb1*bdb1 + bdb2*bdb2 + bdb3*bdb3) / dx_squared;
       // 3 = < |BxJ|^2 >
-      Real Jx = dBz_dy - dBy_dz;
-      Real Jy = dBx_dz - dBz_dx;
-      Real Jz = dBy_dx - dBx_dy;
-      dv(m,4,k,j,i) = ( (bcc(m,IBY,k,j,i)*Jz - bcc(m,IBZ,k,j,i)*Jy)
-                       *(bcc(m,IBY,k,j,i)*Jz - bcc(m,IBZ,k,j,i)*Jy)
-                      + (bcc(m,IBZ,k,j,i)*Jx - bcc(m,IBX,k,j,i)*Jz)
-                       *(bcc(m,IBZ,k,j,i)*Jx - bcc(m,IBX,k,j,i)*Jz)
-                      + (bcc(m,IBX,k,j,i)*Jy - bcc(m,IBY,k,j,i)*Jx)
-                       *(bcc(m,IBX,k,j,i)*Jy - bcc(m,IBY,k,j,i)*Jx));
+      Real Jx = 0.5*(bcc(m,IBZ,k,j+1,i)-bcc(m,IBZ,k,j-1,i))
+              - 0.5*(bcc(m,IBY,k+1,j,i)-bcc(m,IBY,k-1,j,i));
+      Real Jy = 0.5*(bcc(m,IBX,k+1,j,i)-bcc(m,IBX,k-1,j,i))
+              - 0.5*(bcc(m,IBZ,k,j,i+1)-bcc(m,IBZ,k,j,i-1));
+      Real Jz = 0.5*(bcc(m,IBY,k,j,i+1)-bcc(m,IBY,k,j,i-1))
+              - 0.5*(bcc(m,IBX,k,j+1,i)-bcc(m,IBX,k,j-1,i));
+      dv(m,4,k,j,i) =( (bcc(m,IBY,k,j,i)*Jz - bcc(m,IBZ,k,j,i)*Jy)
+                      *(bcc(m,IBY,k,j,i)*Jz - bcc(m,IBZ,k,j,i)*Jy)
+                     + (bcc(m,IBZ,k,j,i)*Jx - bcc(m,IBX,k,j,i)*Jz)
+                      *(bcc(m,IBZ,k,j,i)*Jx - bcc(m,IBX,k,j,i)*Jz)
+                     + (bcc(m,IBX,k,j,i)*Jy - bcc(m,IBY,k,j,i)*Jx)
+                      *(bcc(m,IBX,k,j,i)*Jy - bcc(m,IBY,k,j,i)*Jx))
+                     / dx_squared;
       // 4 = < |B.J|^2 >
-      dv(m,5,k,j,i) = (bcc(m,IBX,k,j,i)*Jx + bcc(m,IBY,k,j,i)*Jy + bcc(m,IBZ,k,j,i)*Jz)
-                    * (bcc(m,IBX,k,j,i)*Jx + bcc(m,IBY,k,j,i)*Jy + bcc(m,IBZ,k,j,i)*Jz);
+      dv(m,5,k,j,i) = ((bcc(m,IBX,k,j,i)*Jx + bcc(m,IBY,k,j,i)*Jy + bcc(m,IBZ,k,j,i)*Jz)
+                      *(bcc(m,IBX,k,j,i)*Jx + bcc(m,IBY,k,j,i)*Jy + bcc(m,IBZ,k,j,i)*Jz))
+                      /dx_squared;
       // 5 = < U^2 >
       dv(m,6,k,j,i) += (w0_(m,IVX,k,j,i)*w0_(m,IVX,k,j,i))
                      + (w0_(m,IVY,k,j,i)*w0_(m,IVY,k,j,i))
                      + (w0_(m,IVZ,k,j,i)*w0_(m,IVZ,k,j,i));
       // 6 = < (d_j U_i)(d_j U_i) >
-      Real dVx_dx = 0.5*(w0_(m,IVX,k,j,i+1)-w0_(m,IVX,k,j,i-1)) / dx1;
-      Real dVx_dy = 0.5*(w0_(m,IVX,k,j+1,i)-w0_(m,IVX,k,j-1,i)) / dx2;
-      Real dVx_dz = 0.5*(w0_(m,IVX,k+1,j,i)-w0_(m,IVX,k-1,j,i)) / dx3;
-      Real dVy_dx = 0.5*(w0_(m,IVY,k,j,i+1)-w0_(m,IVY,k,j,i-1)) / dx1;
-      Real dVy_dy = 0.5*(w0_(m,IVY,k,j+1,i)-w0_(m,IVY,k,j-1,i)) / dx2;
-      Real dVy_dz = 0.5*(w0_(m,IVY,k+1,j,i)-w0_(m,IVY,k-1,j,i)) / dx3;
-      Real dVz_dx = 0.5*(w0_(m,IVZ,k,j,i+1)-w0_(m,IVZ,k,j,i-1)) / dx1;
-      Real dVz_dy = 0.5*(w0_(m,IVZ,k,j+1,i)-w0_(m,IVZ,k,j-1,i)) / dx2;
-      Real dVz_dz = 0.5*(w0_(m,IVZ,k+1,j,i)-w0_(m,IVZ,k-1,j,i)) / dx3;
-      dv(m,7,k,j,i) += (dVx_dx*dVx_dx + dVx_dy*dVx_dy + dVx_dz*dVx_dz
-                     +  dVy_dx*dVy_dx + dVy_dy*dVy_dy + dVy_dz*dVy_dz
-                     +  dVz_dx*dVz_dx + dVz_dy*dVz_dy + dVz_dz*dVz_dz);
+      dv(m,7,k,j,i) +=((0.25*(w0_(m,IVX,k,j,i+1)-w0_(m,IVX,k,j,i-1))
+                            *(w0_(m,IVX,k,j,i+1)-w0_(m,IVX,k,j,i-1))
+                      + 0.25*(w0_(m,IVY,k,j+1,i)-w0_(m,IVY,k,j-1,i))
+                            *(w0_(m,IVY,k,j+1,i)-w0_(m,IVY,k,j-1,i))
+                      + 0.25*(w0_(m,IVZ,k+1,j,i)-w0_(m,IVZ,k-1,j,i))
+                            *(w0_(m,IVZ,k+1,j,i)-w0_(m,IVZ,k-1,j,i))
+                      + 0.25*(w0_(m,IVX,k,j+1,i)-w0_(m,IVX,k,j-1,i))
+                            *(w0_(m,IVX,k,j+1,i)-w0_(m,IVX,k,j-1,i))
+                      + 0.25*(w0_(m,IVX,k+1,j,i)-w0_(m,IVX,k-1,j,i))
+                            *(w0_(m,IVX,k+1,j,i)-w0_(m,IVX,k-1,j,i))
+                      + 0.25*(w0_(m,IVY,k,j,i+1)-w0_(m,IVY,k,j,i-1))
+                            *(w0_(m,IVY,k,j,i+1)-w0_(m,IVY,k,j,i-1))
+                      + 0.25*(w0_(m,IVY,k+1,j,i)-w0_(m,IVY,k-1,j,i))
+                            *(w0_(m,IVY,k+1,j,i)-w0_(m,IVY,k-1,j,i))
+                      + 0.25*(w0_(m,IVZ,k,j,i+1)-w0_(m,IVZ,k,j,i-1))
+                            *(w0_(m,IVZ,k,j,i+1)-w0_(m,IVZ,k,j,i-1))
+                      + 0.25*(w0_(m,IVZ,k,j+1,i)-w0_(m,IVZ,k,j-1,i))
+                            *(w0_(m,IVZ,k,j+1,i)-w0_(m,IVZ,k,j-1,i))))
+                      / dx_squared;
     });
   }
 
   // divergence of B, including ghost zones
   if (name.compare("mhd_divb") == 0) {
+    if (derived_var.extent(4) <= 1)
+      Kokkos::realloc(derived_var, nmb, n_dv, n3, n2, n1);
 
     // set the loop limits for 1D/2D/3D problems
     int jl = js, ju = je, kl = ks, ku = ke;
@@ -1528,977 +1242,9 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
     });
   }
 
-  // Cartesian coordinate x
-  if (name.compare("coord_x") == 0) {
-    auto dv = derived_var;
-    int nx1 = indcs.nx1;
-    par_for("coord_x", DevExeSpace(), 0, (nmb-1), ks, ke, js, je, is, ie,
-    KOKKOS_LAMBDA(int m, int k, int j, int i) {
-      dv(m, i_dv, k, j, i) = CellCenterX(i-is, nx1,
-                                         size.d_view(m).x1min, size.d_view(m).x1max);
-    });
-    i_dv += 1;
-  }
-
-  // Cartesian coordinate y
-  if (name.compare("coord_y") == 0) {
-    auto dv = derived_var;
-    int nx2 = indcs.nx2;
-    par_for("coord_y", DevExeSpace(), 0, (nmb-1), ks, ke, js, je, is, ie,
-    KOKKOS_LAMBDA(int m, int k, int j, int i) {
-      dv(m, i_dv, k, j, i) = CellCenterX(j-js, nx2,
-                                         size.d_view(m).x2min, size.d_view(m).x2max);
-    });
-    i_dv += 1;
-  }
-
-  // Cartesian coordinate z
-  if (name.compare("coord_z") == 0) {
-    auto dv = derived_var;
-    int nx3 = indcs.nx3;
-    par_for("coord_z", DevExeSpace(), 0, (nmb-1), ks, ke, js, je, is, ie,
-    KOKKOS_LAMBDA(int m, int k, int j, int i) {
-      dv(m, i_dv, k, j, i) = CellCenterX(k-ks, nx3,
-                                         size.d_view(m).x3min, size.d_view(m).x3max);
-    });
-    i_dv += 1;
-  }
-
-  // Spherical coordinate r = sqrt(x² + y² + z²)
-  if (name.compare("coord_r") == 0) {
-    auto dv = derived_var;
-    int nx1 = indcs.nx1;
-    int nx2 = indcs.nx2;
-    int nx3 = indcs.nx3;
-    par_for("coord_r", DevExeSpace(), 0, (nmb-1), ks, ke, js, je, is, ie,
-    KOKKOS_LAMBDA(int m, int k, int j, int i) {
-      Real x = CellCenterX(i-is, nx1, size.d_view(m).x1min, size.d_view(m).x1max);
-      Real y = CellCenterX(j-js, nx2, size.d_view(m).x2min, size.d_view(m).x2max);
-      Real z = CellCenterX(k-ks, nx3, size.d_view(m).x3min, size.d_view(m).x3max);
-      dv(m, i_dv, k, j, i) = sqrt(x*x + y*y + z*z);
-    });
-    i_dv += 1;
-  }
-
-  // Spherical coordinate theta = acos(z/r), range [0, π]
-  if (name.compare("coord_theta") == 0) {
-    auto dv = derived_var;
-    int nx1 = indcs.nx1;
-    int nx2 = indcs.nx2;
-    int nx3 = indcs.nx3;
-    par_for("coord_theta", DevExeSpace(), 0, (nmb-1), ks, ke, js, je, is, ie,
-    KOKKOS_LAMBDA(int m, int k, int j, int i) {
-      Real x = CellCenterX(i-is, nx1, size.d_view(m).x1min, size.d_view(m).x1max);
-      Real y = CellCenterX(j-js, nx2, size.d_view(m).x2min, size.d_view(m).x2max);
-      Real z = CellCenterX(k-ks, nx3, size.d_view(m).x3min, size.d_view(m).x3max);
-      Real r = sqrt(x*x + y*y + z*z);
-      // Handle r=0 case: theta = 0 (arbitrary but well-defined)
-      dv(m, i_dv, k, j, i) = (r > 0.0) ? acos(z / r) : 0.0;
-    });
-    i_dv += 1;
-  }
-
-  // Spherical coordinate cos(theta) = z/r, range [-1, 1]
-  if (name.compare("coord_costheta") == 0) {
-    auto dv = derived_var;
-    int nx1 = indcs.nx1;
-    int nx2 = indcs.nx2;
-    int nx3 = indcs.nx3;
-    par_for("coord_costheta", DevExeSpace(), 0, (nmb-1), ks, ke, js, je, is, ie,
-    KOKKOS_LAMBDA(int m, int k, int j, int i) {
-      Real x = CellCenterX(i-is, nx1, size.d_view(m).x1min, size.d_view(m).x1max);
-      Real y = CellCenterX(j-js, nx2, size.d_view(m).x2min, size.d_view(m).x2max);
-      Real z = CellCenterX(k-ks, nx3, size.d_view(m).x3min, size.d_view(m).x3max);
-      Real r = sqrt(x*x + y*y + z*z);
-      dv(m, i_dv, k, j, i) = (r > 0.0) ? (z / r) : 1.0;
-    });
-    i_dv += 1;
-  }
-
-  // Spherical coordinate |cos(theta)| = |z|/r, range [0, 1]
-  if (name.compare("coord_abscostheta") == 0) {
-    if (derived_var.extent(4) <= 1)
-      Kokkos::realloc(derived_var, nmb, n_dv, n3, n2, n1);
-    auto dv = derived_var;
-    int nx1 = indcs.nx1;
-    int nx2 = indcs.nx2;
-    int nx3 = indcs.nx3;
-    par_for("coord_abscostheta", DevExeSpace(), 0, (nmb-1), ks, ke, js, je, is, ie,
-    KOKKOS_LAMBDA(int m, int k, int j, int i) {
-      Real x = CellCenterX(i-is, nx1, size.d_view(m).x1min, size.d_view(m).x1max);
-      Real y = CellCenterX(j-js, nx2, size.d_view(m).x2min, size.d_view(m).x2max);
-      Real z = CellCenterX(k-ks, nx3, size.d_view(m).x3min, size.d_view(m).x3max);
-      Real r = sqrt(x*x + y*y + z*z);
-      dv(m, i_dv, k, j, i) = (r > 0.0) ? fabs(z / r) : 1.0;
-    });
-    i_dv += 1;
-  }
-
-  // Spherical coordinate phi = atan2(y, x), range [0, 2π]
-  if (name.compare("coord_phi") == 0) {
-    auto dv = derived_var;
-    int nx1 = indcs.nx1;
-    int nx2 = indcs.nx2;
-    Real two_pi = 2.0 * M_PI;
-    par_for("coord_phi", DevExeSpace(), 0, (nmb-1), ks, ke, js, je, is, ie,
-    KOKKOS_LAMBDA(int m, int k, int j, int i) {
-      Real x = CellCenterX(i-is, nx1, size.d_view(m).x1min, size.d_view(m).x1max);
-      Real y = CellCenterX(j-js, nx2, size.d_view(m).x2min, size.d_view(m).x2max);
-      Real phi = atan2(y, x);
-      // Shift from [-π, π] to [0, 2π]
-      if (phi < 0.0) phi += two_pi;
-      dv(m, i_dv, k, j, i) = phi;
-    });
-    i_dv += 1;
-  }
-
-  // Cylindrical coordinate R = sqrt(x² + y²)
-  if (name.compare("coord_cyl_R") == 0) {
-    auto dv = derived_var;
-    int nx1 = indcs.nx1;
-    int nx2 = indcs.nx2;
-    par_for("coord_cyl_R", DevExeSpace(), 0, (nmb-1), ks, ke, js, je, is, ie,
-    KOKKOS_LAMBDA(int m, int k, int j, int i) {
-      Real x = CellCenterX(i-is, nx1, size.d_view(m).x1min, size.d_view(m).x1max);
-      Real y = CellCenterX(j-js, nx2, size.d_view(m).x2min, size.d_view(m).x2max);
-      dv(m, i_dv, k, j, i) = sqrt(x*x + y*y);
-    });
-    i_dv += 1;
-  }
-
-  // Cylindrical coordinate phi = atan2(y, x), range [0, 2π]
-  if (name.compare("coord_cyl_phi") == 0) {
-    auto dv = derived_var;
-    int nx1 = indcs.nx1;
-    int nx2 = indcs.nx2;
-    Real two_pi = 2.0 * M_PI;
-    par_for("coord_cyl_phi", DevExeSpace(), 0, (nmb-1), ks, ke, js, je, is, ie,
-    KOKKOS_LAMBDA(int m, int k, int j, int i) {
-      Real x = CellCenterX(i-is, nx1, size.d_view(m).x1min, size.d_view(m).x1max);
-      Real y = CellCenterX(j-js, nx2, size.d_view(m).x2min, size.d_view(m).x2max);
-      Real phi = atan2(y, x);
-      // Shift from [-π, π] to [0, 2π]
-      if (phi < 0.0) phi += two_pi;
-      dv(m, i_dv, k, j, i) = phi;
-    });
-    i_dv += 1;
-  }
-
-  // Cylindrical coordinate z (same as Cartesian z)
-  if (name.compare("coord_cyl_z") == 0) {
-    auto dv = derived_var;
-    int nx3 = indcs.nx3;
-    par_for("coord_cyl_z", DevExeSpace(), 0, (nmb-1), ks, ke, js, je, is, ie,
-    KOKKOS_LAMBDA(int m, int k, int j, int i) {
-      dv(m, i_dv, k, j, i) = CellCenterX(k-ks, nx3,
-                                         size.d_view(m).x3min, size.d_view(m).x3max);
-    });
-    i_dv += 1;
-  }
-
-  // Spherical radial velocity
-  if (name.compare("vel_sph_r") == 0) {
-    if (pm->pmb_pack->phydro == nullptr && pm->pmb_pack->pmhd == nullptr) {
-      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-                << std::endl << "vel_sph_r requires a hydro or MHD module" << std::endl;
-      std::exit(EXIT_FAILURE);
-    }
-    auto dv = derived_var;
-    DvceArray5D<Real> u0_;
-    if (pm->pmb_pack->phydro != nullptr) {
-      u0_ = pm->pmb_pack->phydro->u0;
-    } else if (pm->pmb_pack->pmhd != nullptr) {
-      u0_ = pm->pmb_pack->pmhd->u0;
-    }
-    int nx1 = indcs.nx1;
-    int nx2 = indcs.nx2;
-    int nx3 = indcs.nx3;
-    par_for("vel_sph_r", DevExeSpace(), 0, (nmb-1), ks, ke, js, je, is, ie,
-    KOKKOS_LAMBDA(int m, int k, int j, int i) {
-      Real x = CellCenterX(i-is, nx1, size.d_view(m).x1min, size.d_view(m).x1max);
-      Real y = CellCenterX(j-js, nx2, size.d_view(m).x2min, size.d_view(m).x2max);
-      Real z = CellCenterX(k-ks, nx3, size.d_view(m).x3min, size.d_view(m).x3max);
-      Real r = sqrt(x*x + y*y + z*z);
-      Real rho = u0_(m, IDN, k, j, i);
-      Real vx = u0_(m, IM1, k, j, i) / rho;
-      Real vy = u0_(m, IM2, k, j, i) / rho;
-      Real vz = u0_(m, IM3, k, j, i) / rho;
-      dv(m, i_dv, k, j, i) = (r > 0.0) ? (vx*x + vy*y + vz*z) / r : 0.0;
-    });
-    i_dv += 1;
-  }
-
-  // Spherical polar velocity (theta)
-  if (name.compare("vel_sph_theta") == 0) {
-    if (pm->pmb_pack->phydro == nullptr && pm->pmb_pack->pmhd == nullptr) {
-      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-                << std::endl << "vel_sph_theta requires a hydro or MHD module" << std::endl;
-      std::exit(EXIT_FAILURE);
-    }
-    auto dv = derived_var;
-    DvceArray5D<Real> u0_;
-    if (pm->pmb_pack->phydro != nullptr) {
-      u0_ = pm->pmb_pack->phydro->u0;
-    } else if (pm->pmb_pack->pmhd != nullptr) {
-      u0_ = pm->pmb_pack->pmhd->u0;
-    }
-    int nx1 = indcs.nx1;
-    int nx2 = indcs.nx2;
-    int nx3 = indcs.nx3;
-    par_for("vel_sph_theta", DevExeSpace(), 0, (nmb-1), ks, ke, js, je, is, ie,
-    KOKKOS_LAMBDA(int m, int k, int j, int i) {
-      Real x = CellCenterX(i-is, nx1, size.d_view(m).x1min, size.d_view(m).x1max);
-      Real y = CellCenterX(j-js, nx2, size.d_view(m).x2min, size.d_view(m).x2max);
-      Real z = CellCenterX(k-ks, nx3, size.d_view(m).x3min, size.d_view(m).x3max);
-      Real R = sqrt(x*x + y*y);
-      Real r = sqrt(R*R + z*z);
-      Real rho = u0_(m, IDN, k, j, i);
-      Real vx = u0_(m, IM1, k, j, i) / rho;
-      Real vy = u0_(m, IM2, k, j, i) / rho;
-      Real vz = u0_(m, IM3, k, j, i) / rho;
-      if (r > 0.0 && R > 0.0) {
-        dv(m, i_dv, k, j, i) = (z * (vx*x + vy*y) / (r * R)) - vz * (R / r);
-      } else {
-        dv(m, i_dv, k, j, i) = 0.0;
-      }
-    });
-    i_dv += 1;
-  }
-
-  // Spherical azimuthal velocity (phi)
-  if (name.compare("vel_sph_phi") == 0) {
-    if (pm->pmb_pack->phydro == nullptr && pm->pmb_pack->pmhd == nullptr) {
-      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-                << std::endl << "vel_sph_phi requires a hydro or MHD module" << std::endl;
-      std::exit(EXIT_FAILURE);
-    }
-    auto dv = derived_var;
-    DvceArray5D<Real> u0_;
-    if (pm->pmb_pack->phydro != nullptr) {
-      u0_ = pm->pmb_pack->phydro->u0;
-    } else if (pm->pmb_pack->pmhd != nullptr) {
-      u0_ = pm->pmb_pack->pmhd->u0;
-    }
-    int nx1 = indcs.nx1;
-    int nx2 = indcs.nx2;
-    par_for("vel_sph_phi", DevExeSpace(), 0, (nmb-1), ks, ke, js, je, is, ie,
-    KOKKOS_LAMBDA(int m, int k, int j, int i) {
-      Real x = CellCenterX(i-is, nx1, size.d_view(m).x1min, size.d_view(m).x1max);
-      Real y = CellCenterX(j-js, nx2, size.d_view(m).x2min, size.d_view(m).x2max);
-      Real R = sqrt(x*x + y*y);
-      Real rho = u0_(m, IDN, k, j, i);
-      Real vx = u0_(m, IM1, k, j, i) / rho;
-      Real vy = u0_(m, IM2, k, j, i) / rho;
-      dv(m, i_dv, k, j, i) = (R > 0.0) ? (-vx*y + vy*x) / R : 0.0;
-    });
-    i_dv += 1;
-  }
-
-  // Cylindrical radial velocity
-  if (name.compare("vel_cyl_R") == 0) {
-    if (pm->pmb_pack->phydro == nullptr && pm->pmb_pack->pmhd == nullptr) {
-      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-                << std::endl << "vel_cyl_R requires a hydro or MHD module" << std::endl;
-      std::exit(EXIT_FAILURE);
-    }
-    auto dv = derived_var;
-    DvceArray5D<Real> u0_;
-    if (pm->pmb_pack->phydro != nullptr) {
-      u0_ = pm->pmb_pack->phydro->u0;
-    } else if (pm->pmb_pack->pmhd != nullptr) {
-      u0_ = pm->pmb_pack->pmhd->u0;
-    }
-    int nx1 = indcs.nx1;
-    int nx2 = indcs.nx2;
-    par_for("vel_cyl_R", DevExeSpace(), 0, (nmb-1), ks, ke, js, je, is, ie,
-    KOKKOS_LAMBDA(int m, int k, int j, int i) {
-      Real x = CellCenterX(i-is, nx1, size.d_view(m).x1min, size.d_view(m).x1max);
-      Real y = CellCenterX(j-js, nx2, size.d_view(m).x2min, size.d_view(m).x2max);
-      Real R = sqrt(x*x + y*y);
-      Real rho = u0_(m, IDN, k, j, i);
-      Real vx = u0_(m, IM1, k, j, i) / rho;
-      Real vy = u0_(m, IM2, k, j, i) / rho;
-      dv(m, i_dv, k, j, i) = (R > 0.0) ? (vx*x + vy*y) / R : 0.0;
-    });
-    i_dv += 1;
-  }
-
-  // Cylindrical azimuthal velocity (phi)
-  if (name.compare("vel_cyl_phi") == 0) {
-    if (pm->pmb_pack->phydro == nullptr && pm->pmb_pack->pmhd == nullptr) {
-      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-                << std::endl << "vel_cyl_phi requires a hydro or MHD module" << std::endl;
-      std::exit(EXIT_FAILURE);
-    }
-    auto dv = derived_var;
-    DvceArray5D<Real> u0_;
-    if (pm->pmb_pack->phydro != nullptr) {
-      u0_ = pm->pmb_pack->phydro->u0;
-    } else if (pm->pmb_pack->pmhd != nullptr) {
-      u0_ = pm->pmb_pack->pmhd->u0;
-    }
-    int nx1 = indcs.nx1;
-    int nx2 = indcs.nx2;
-    par_for("vel_cyl_phi", DevExeSpace(), 0, (nmb-1), ks, ke, js, je, is, ie,
-    KOKKOS_LAMBDA(int m, int k, int j, int i) {
-      Real x = CellCenterX(i-is, nx1, size.d_view(m).x1min, size.d_view(m).x1max);
-      Real y = CellCenterX(j-js, nx2, size.d_view(m).x2min, size.d_view(m).x2max);
-      Real R = sqrt(x*x + y*y);
-      Real rho = u0_(m, IDN, k, j, i);
-      Real vx = u0_(m, IM1, k, j, i) / rho;
-      Real vy = u0_(m, IM2, k, j, i) / rho;
-      dv(m, i_dv, k, j, i) = (R > 0.0) ? (-vx*y + vy*x) / R : 0.0;
-    });
-    i_dv += 1;
-  }
-
-  // ==========================================================================================
-  // Mass and energy flux derived variables for radial/vertical profile analysis
-  // Spherical: v_r = (vx*x + vy*y + vz*z) / r, B_r = (Bx*x + By*y + Bz*z) / r
-  // Vertical: outward direction = v_z * sign(z)
-  // Energy flux: F_E,r = (enthalpy_plus_ke + B²) * v_r - (v·B) * B_r
-  //   where enthalpy_plus_ke = 0.5*ρ*v² + γ*eint (KE + enthalpy), eint = E - 0.5*ρ*v² - 0.5*B²
-  // ==========================================================================================
-
-  // Spherical radial mass flux: ρ * v_r
-  if (name.compare("mdot_sph") == 0) {
-    if (pm->pmb_pack->phydro == nullptr && pm->pmb_pack->pmhd == nullptr) {
-      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-                << std::endl << "mdot_sph requires a hydro or MHD module" << std::endl;
-      std::exit(EXIT_FAILURE);
-    }
-    auto dv = derived_var;
-    DvceArray5D<Real> u0_;
-    if (pm->pmb_pack->phydro != nullptr) {
-      u0_ = pm->pmb_pack->phydro->u0;
-    } else if (pm->pmb_pack->pmhd != nullptr) {
-      u0_ = pm->pmb_pack->pmhd->u0;
-    }
-    int nx1 = indcs.nx1;
-    int nx2 = indcs.nx2;
-    int nx3 = indcs.nx3;
-    par_for("mdot_sph", DevExeSpace(), 0, (nmb-1), ks, ke, js, je, is, ie,
-    KOKKOS_LAMBDA(int m, int k, int j, int i) {
-      Real x = CellCenterX(i-is, nx1, size.d_view(m).x1min, size.d_view(m).x1max);
-      Real y = CellCenterX(j-js, nx2, size.d_view(m).x2min, size.d_view(m).x2max);
-      Real z = CellCenterX(k-ks, nx3, size.d_view(m).x3min, size.d_view(m).x3max);
-      Real r = sqrt(x*x + y*y + z*z);
-      Real rho = u0_(m, IDN, k, j, i);
-      Real vx = u0_(m, IM1, k, j, i) / rho;
-      Real vy = u0_(m, IM2, k, j, i) / rho;
-      Real vz = u0_(m, IM3, k, j, i) / rho;
-      Real v_r = (r > 0.0) ? (vx*x + vy*y + vz*z) / r : 0.0;
-      dv(m, i_dv, k, j, i) = rho * v_r;
-    });
-    i_dv += 1;
-  }
-
-  // Spherical radial mass flux (outward only): ρ * max(v_r, 0)
-  if (name.compare("mdot_sph_out") == 0) {
-    if (pm->pmb_pack->phydro == nullptr && pm->pmb_pack->pmhd == nullptr) {
-      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-                << std::endl << "mdot_sph_out requires a hydro or MHD module" << std::endl;
-      std::exit(EXIT_FAILURE);
-    }
-    auto dv = derived_var;
-    DvceArray5D<Real> u0_;
-    if (pm->pmb_pack->phydro != nullptr) {
-      u0_ = pm->pmb_pack->phydro->u0;
-    } else if (pm->pmb_pack->pmhd != nullptr) {
-      u0_ = pm->pmb_pack->pmhd->u0;
-    }
-    int nx1 = indcs.nx1;
-    int nx2 = indcs.nx2;
-    int nx3 = indcs.nx3;
-    par_for("mdot_sph_out", DevExeSpace(), 0, (nmb-1), ks, ke, js, je, is, ie,
-    KOKKOS_LAMBDA(int m, int k, int j, int i) {
-      Real x = CellCenterX(i-is, nx1, size.d_view(m).x1min, size.d_view(m).x1max);
-      Real y = CellCenterX(j-js, nx2, size.d_view(m).x2min, size.d_view(m).x2max);
-      Real z = CellCenterX(k-ks, nx3, size.d_view(m).x3min, size.d_view(m).x3max);
-      Real r = sqrt(x*x + y*y + z*z);
-      Real rho = u0_(m, IDN, k, j, i);
-      Real vx = u0_(m, IM1, k, j, i) / rho;
-      Real vy = u0_(m, IM2, k, j, i) / rho;
-      Real vz = u0_(m, IM3, k, j, i) / rho;
-      Real v_r = (r > 0.0) ? (vx*x + vy*y + vz*z) / r : 0.0;
-      dv(m, i_dv, k, j, i) = rho * fmax(v_r, 0.0);
-    });
-    i_dv += 1;
-  }
-
-  // Spherical radial mass flux (inward only): ρ * min(v_r, 0)
-  if (name.compare("mdot_sph_in") == 0) {
-    if (pm->pmb_pack->phydro == nullptr && pm->pmb_pack->pmhd == nullptr) {
-      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-                << std::endl << "mdot_sph_in requires a hydro or MHD module" << std::endl;
-      std::exit(EXIT_FAILURE);
-    }
-    auto dv = derived_var;
-    DvceArray5D<Real> u0_;
-    if (pm->pmb_pack->phydro != nullptr) {
-      u0_ = pm->pmb_pack->phydro->u0;
-    } else if (pm->pmb_pack->pmhd != nullptr) {
-      u0_ = pm->pmb_pack->pmhd->u0;
-    }
-    int nx1 = indcs.nx1;
-    int nx2 = indcs.nx2;
-    int nx3 = indcs.nx3;
-    par_for("mdot_sph_in", DevExeSpace(), 0, (nmb-1), ks, ke, js, je, is, ie,
-    KOKKOS_LAMBDA(int m, int k, int j, int i) {
-      Real x = CellCenterX(i-is, nx1, size.d_view(m).x1min, size.d_view(m).x1max);
-      Real y = CellCenterX(j-js, nx2, size.d_view(m).x2min, size.d_view(m).x2max);
-      Real z = CellCenterX(k-ks, nx3, size.d_view(m).x3min, size.d_view(m).x3max);
-      Real r = sqrt(x*x + y*y + z*z);
-      Real rho = u0_(m, IDN, k, j, i);
-      Real vx = u0_(m, IM1, k, j, i) / rho;
-      Real vy = u0_(m, IM2, k, j, i) / rho;
-      Real vz = u0_(m, IM3, k, j, i) / rho;
-      Real v_r = (r > 0.0) ? (vx*x + vy*y + vz*z) / r : 0.0;
-      dv(m, i_dv, k, j, i) = rho * fmin(v_r, 0.0);
-    });
-    i_dv += 1;
-  }
-
-  // Spherical radial energy flux: F_E,r = (enthalpy_plus_ke + B²) * v_r - (v·B) * B_r
-  if (name.compare("edot_sph") == 0) {
-    if (pm->pmb_pack->phydro == nullptr && pm->pmb_pack->pmhd == nullptr) {
-      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-                << std::endl << "edot_sph requires a hydro or MHD module" << std::endl;
-      std::exit(EXIT_FAILURE);
-    }
-    auto dv = derived_var;
-    bool is_mhd = (pm->pmb_pack->pmhd != nullptr);
-    DvceArray5D<Real> u0_;
-    DvceArray5D<Real> bcc_;
-    Real gamma;
-    if (is_mhd) {
-      u0_ = pm->pmb_pack->pmhd->u0;
-      bcc_ = pm->pmb_pack->pmhd->bcc0;
-      gamma = pm->pmb_pack->pmhd->peos->eos_data.gamma;
-    } else if (pm->pmb_pack->phydro != nullptr) {
-      u0_ = pm->pmb_pack->phydro->u0;
-      gamma = pm->pmb_pack->phydro->peos->eos_data.gamma;
-    }
-    int nx1 = indcs.nx1;
-    int nx2 = indcs.nx2;
-    int nx3 = indcs.nx3;
-    par_for("edot_sph", DevExeSpace(), 0, (nmb-1), ks, ke, js, je, is, ie,
-    KOKKOS_LAMBDA(int m, int k, int j, int i) {
-      Real x = CellCenterX(i-is, nx1, size.d_view(m).x1min, size.d_view(m).x1max);
-      Real y = CellCenterX(j-js, nx2, size.d_view(m).x2min, size.d_view(m).x2max);
-      Real z = CellCenterX(k-ks, nx3, size.d_view(m).x3min, size.d_view(m).x3max);
-      Real r = sqrt(x*x + y*y + z*z);
-      Real rho = u0_(m, IDN, k, j, i);
-      Real inv_rho = 1.0 / rho;
-      Real vx = u0_(m, IM1, k, j, i) * inv_rho;
-      Real vy = u0_(m, IM2, k, j, i) * inv_rho;
-      Real vz = u0_(m, IM3, k, j, i) * inv_rho;
-      Real E_total = u0_(m, IEN, k, j, i);
-      Real v_sq = vx*vx + vy*vy + vz*vz;
-
-      Real B_sq = 0.0, Bx = 0.0, By = 0.0, Bz = 0.0, v_dot_B = 0.0;
-      if (is_mhd) {
-        Bx = bcc_(m, IBX, k, j, i);
-        By = bcc_(m, IBY, k, j, i);
-        Bz = bcc_(m, IBZ, k, j, i);
-        B_sq = Bx*Bx + By*By + Bz*Bz;
-        v_dot_B = vx*Bx + vy*By + vz*Bz;
-      }
-
-      // Internal energy: eint = E - 0.5*ρ*v² - 0.5*B²
-      Real eint = E_total - 0.5*rho*v_sq - 0.5*B_sq;
-      // Enthalpy h = u + P = γ*u for ideal gas. KE + h = 0.5*ρ*v² + γ*eint
-      Real enthalpy_plus_ke = 0.5*rho*v_sq + gamma*eint;
-
-      Real v_r = (r > 0.0) ? (vx*x + vy*y + vz*z) / r : 0.0;
-      Real B_r = (r > 0.0) ? (Bx*x + By*y + Bz*z) / r : 0.0;
-
-      // Energy flux: F_E,r = (enthalpy_plus_ke + B²) * v_r - (v·B) * B_r
-      dv(m, i_dv, k, j, i) = (enthalpy_plus_ke + B_sq) * v_r - v_dot_B * B_r;
-    });
-    i_dv += 1;
-  }
-
-  // Spherical radial energy flux (outward only)
-  if (name.compare("edot_sph_out") == 0) {
-    if (pm->pmb_pack->phydro == nullptr && pm->pmb_pack->pmhd == nullptr) {
-      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-                << std::endl << "edot_sph_out requires a hydro or MHD module" << std::endl;
-      std::exit(EXIT_FAILURE);
-    }
-    auto dv = derived_var;
-    bool is_mhd = (pm->pmb_pack->pmhd != nullptr);
-    DvceArray5D<Real> u0_;
-    DvceArray5D<Real> bcc_;
-    Real gamma;
-    if (is_mhd) {
-      u0_ = pm->pmb_pack->pmhd->u0;
-      bcc_ = pm->pmb_pack->pmhd->bcc0;
-      gamma = pm->pmb_pack->pmhd->peos->eos_data.gamma;
-    } else if (pm->pmb_pack->phydro != nullptr) {
-      u0_ = pm->pmb_pack->phydro->u0;
-      gamma = pm->pmb_pack->phydro->peos->eos_data.gamma;
-    }
-    int nx1 = indcs.nx1;
-    int nx2 = indcs.nx2;
-    int nx3 = indcs.nx3;
-    par_for("edot_sph_out", DevExeSpace(), 0, (nmb-1), ks, ke, js, je, is, ie,
-    KOKKOS_LAMBDA(int m, int k, int j, int i) {
-      Real x = CellCenterX(i-is, nx1, size.d_view(m).x1min, size.d_view(m).x1max);
-      Real y = CellCenterX(j-js, nx2, size.d_view(m).x2min, size.d_view(m).x2max);
-      Real z = CellCenterX(k-ks, nx3, size.d_view(m).x3min, size.d_view(m).x3max);
-      Real r = sqrt(x*x + y*y + z*z);
-      Real rho = u0_(m, IDN, k, j, i);
-      Real inv_rho = 1.0 / rho;
-      Real vx = u0_(m, IM1, k, j, i) * inv_rho;
-      Real vy = u0_(m, IM2, k, j, i) * inv_rho;
-      Real vz = u0_(m, IM3, k, j, i) * inv_rho;
-      Real E_total = u0_(m, IEN, k, j, i);
-      Real v_sq = vx*vx + vy*vy + vz*vz;
-
-      Real B_sq = 0.0, Bx = 0.0, By = 0.0, Bz = 0.0, v_dot_B = 0.0;
-      if (is_mhd) {
-        Bx = bcc_(m, IBX, k, j, i);
-        By = bcc_(m, IBY, k, j, i);
-        Bz = bcc_(m, IBZ, k, j, i);
-        B_sq = Bx*Bx + By*By + Bz*Bz;
-        v_dot_B = vx*Bx + vy*By + vz*Bz;
-      }
-
-      Real eint = E_total - 0.5*rho*v_sq - 0.5*B_sq;
-      Real enthalpy_plus_ke = 0.5*rho*v_sq + gamma*eint;
-
-      Real v_r = (r > 0.0) ? (vx*x + vy*y + vz*z) / r : 0.0;
-      Real B_r = (r > 0.0) ? (Bx*x + By*y + Bz*z) / r : 0.0;
-
-      Real F_E_r = (enthalpy_plus_ke + B_sq) * v_r - v_dot_B * B_r;
-      dv(m, i_dv, k, j, i) = (v_r > 0.0) ? F_E_r : 0.0;
-    });
-    i_dv += 1;
-  }
-
-  // Spherical radial energy flux (inward only)
-  if (name.compare("edot_sph_in") == 0) {
-    if (pm->pmb_pack->phydro == nullptr && pm->pmb_pack->pmhd == nullptr) {
-      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-                << std::endl << "edot_sph_in requires a hydro or MHD module" << std::endl;
-      std::exit(EXIT_FAILURE);
-    }
-    auto dv = derived_var;
-    bool is_mhd = (pm->pmb_pack->pmhd != nullptr);
-    DvceArray5D<Real> u0_;
-    DvceArray5D<Real> bcc_;
-    Real gamma;
-    if (is_mhd) {
-      u0_ = pm->pmb_pack->pmhd->u0;
-      bcc_ = pm->pmb_pack->pmhd->bcc0;
-      gamma = pm->pmb_pack->pmhd->peos->eos_data.gamma;
-    } else if (pm->pmb_pack->phydro != nullptr) {
-      u0_ = pm->pmb_pack->phydro->u0;
-      gamma = pm->pmb_pack->phydro->peos->eos_data.gamma;
-    }
-    int nx1 = indcs.nx1;
-    int nx2 = indcs.nx2;
-    int nx3 = indcs.nx3;
-    par_for("edot_sph_in", DevExeSpace(), 0, (nmb-1), ks, ke, js, je, is, ie,
-    KOKKOS_LAMBDA(int m, int k, int j, int i) {
-      Real x = CellCenterX(i-is, nx1, size.d_view(m).x1min, size.d_view(m).x1max);
-      Real y = CellCenterX(j-js, nx2, size.d_view(m).x2min, size.d_view(m).x2max);
-      Real z = CellCenterX(k-ks, nx3, size.d_view(m).x3min, size.d_view(m).x3max);
-      Real r = sqrt(x*x + y*y + z*z);
-      Real rho = u0_(m, IDN, k, j, i);
-      Real inv_rho = 1.0 / rho;
-      Real vx = u0_(m, IM1, k, j, i) * inv_rho;
-      Real vy = u0_(m, IM2, k, j, i) * inv_rho;
-      Real vz = u0_(m, IM3, k, j, i) * inv_rho;
-      Real E_total = u0_(m, IEN, k, j, i);
-      Real v_sq = vx*vx + vy*vy + vz*vz;
-
-      Real B_sq = 0.0, Bx = 0.0, By = 0.0, Bz = 0.0, v_dot_B = 0.0;
-      if (is_mhd) {
-        Bx = bcc_(m, IBX, k, j, i);
-        By = bcc_(m, IBY, k, j, i);
-        Bz = bcc_(m, IBZ, k, j, i);
-        B_sq = Bx*Bx + By*By + Bz*Bz;
-        v_dot_B = vx*Bx + vy*By + vz*Bz;
-      }
-
-      Real eint = E_total - 0.5*rho*v_sq - 0.5*B_sq;
-      Real enthalpy_plus_ke = 0.5*rho*v_sq + gamma*eint;
-
-      Real v_r = (r > 0.0) ? (vx*x + vy*y + vz*z) / r : 0.0;
-      Real B_r = (r > 0.0) ? (Bx*x + By*y + Bz*z) / r : 0.0;
-
-      Real F_E_r = (enthalpy_plus_ke + B_sq) * v_r - v_dot_B * B_r;
-      dv(m, i_dv, k, j, i) = (v_r < 0.0) ? F_E_r : 0.0;
-    });
-    i_dv += 1;
-  }
-
-  // Spherical radial kinetic energy flux: F_kin,r = 0.5 * rho * v^2 * v_r
-  if (name.compare("edot_sph_kin") == 0) {
-    if (pm->pmb_pack->phydro == nullptr && pm->pmb_pack->pmhd == nullptr) {
-      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-                << std::endl << "edot_sph_kin requires a hydro or MHD module" << std::endl;
-      std::exit(EXIT_FAILURE);
-    }
-    auto dv = derived_var;
-    DvceArray5D<Real> u0_;
-    if (pm->pmb_pack->phydro != nullptr) {
-      u0_ = pm->pmb_pack->phydro->u0;
-    } else if (pm->pmb_pack->pmhd != nullptr) {
-      u0_ = pm->pmb_pack->pmhd->u0;
-    }
-    int nx1 = indcs.nx1;
-    int nx2 = indcs.nx2;
-    int nx3 = indcs.nx3;
-    par_for("edot_sph_kin", DevExeSpace(), 0, (nmb-1), ks, ke, js, je, is, ie,
-    KOKKOS_LAMBDA(int m, int k, int j, int i) {
-      Real x = CellCenterX(i-is, nx1, size.d_view(m).x1min, size.d_view(m).x1max);
-      Real y = CellCenterX(j-js, nx2, size.d_view(m).x2min, size.d_view(m).x2max);
-      Real z = CellCenterX(k-ks, nx3, size.d_view(m).x3min, size.d_view(m).x3max);
-      Real r = sqrt(x*x + y*y + z*z);
-      Real rho = u0_(m, IDN, k, j, i);
-      Real inv_rho = 1.0 / rho;
-      Real vx = u0_(m, IM1, k, j, i) * inv_rho;
-      Real vy = u0_(m, IM2, k, j, i) * inv_rho;
-      Real vz = u0_(m, IM3, k, j, i) * inv_rho;
-      Real v_sq = vx*vx + vy*vy + vz*vz;
-      Real v_r = (r > 0.0) ? (vx*x + vy*y + vz*z) / r : 0.0;
-      dv(m, i_dv, k, j, i) = 0.5 * rho * v_sq * v_r;
-    });
-    i_dv += 1;
-  }
-
-  // Spherical radial thermal (enthalpy) energy flux: F_th,r = gamma * e_int * v_r
-  if (name.compare("edot_sph_th") == 0) {
-    if (pm->pmb_pack->phydro == nullptr && pm->pmb_pack->pmhd == nullptr) {
-      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-                << std::endl << "edot_sph_th requires a hydro or MHD module" << std::endl;
-      std::exit(EXIT_FAILURE);
-    }
-    auto dv = derived_var;
-    bool is_mhd = (pm->pmb_pack->pmhd != nullptr);
-    DvceArray5D<Real> u0_;
-    DvceArray5D<Real> bcc_;
-    Real gamma;
-    if (is_mhd) {
-      u0_ = pm->pmb_pack->pmhd->u0;
-      bcc_ = pm->pmb_pack->pmhd->bcc0;
-      gamma = pm->pmb_pack->pmhd->peos->eos_data.gamma;
-    } else if (pm->pmb_pack->phydro != nullptr) {
-      u0_ = pm->pmb_pack->phydro->u0;
-      gamma = pm->pmb_pack->phydro->peos->eos_data.gamma;
-    }
-    int nx1 = indcs.nx1;
-    int nx2 = indcs.nx2;
-    int nx3 = indcs.nx3;
-    par_for("edot_sph_th", DevExeSpace(), 0, (nmb-1), ks, ke, js, je, is, ie,
-    KOKKOS_LAMBDA(int m, int k, int j, int i) {
-      Real x = CellCenterX(i-is, nx1, size.d_view(m).x1min, size.d_view(m).x1max);
-      Real y = CellCenterX(j-js, nx2, size.d_view(m).x2min, size.d_view(m).x2max);
-      Real z = CellCenterX(k-ks, nx3, size.d_view(m).x3min, size.d_view(m).x3max);
-      Real r = sqrt(x*x + y*y + z*z);
-      Real rho = u0_(m, IDN, k, j, i);
-      Real inv_rho = 1.0 / rho;
-      Real vx = u0_(m, IM1, k, j, i) * inv_rho;
-      Real vy = u0_(m, IM2, k, j, i) * inv_rho;
-      Real vz = u0_(m, IM3, k, j, i) * inv_rho;
-      Real v_sq = vx*vx + vy*vy + vz*vz;
-
-      Real B_sq = 0.0;
-      if (is_mhd) {
-        Real Bx = bcc_(m, IBX, k, j, i);
-        Real By = bcc_(m, IBY, k, j, i);
-        Real Bz = bcc_(m, IBZ, k, j, i);
-        B_sq = Bx*Bx + By*By + Bz*Bz;
-      }
-      Real E_total = u0_(m, IEN, k, j, i);
-      Real eint = E_total - 0.5*rho*v_sq - 0.5*B_sq;
-
-      Real v_r = (r > 0.0) ? (vx*x + vy*y + vz*z) / r : 0.0;
-      dv(m, i_dv, k, j, i) = gamma * eint * v_r;
-    });
-    i_dv += 1;
-  }
-
-  // Spherical radial magnetic energy flux: F_mag,r = B^2 * v_r - (v·B) * B_r
-  if (name.compare("edot_sph_mag") == 0) {
-    if (pm->pmb_pack->pmhd == nullptr) {
-      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-                << std::endl << "edot_sph_mag requires an MHD module" << std::endl;
-      std::exit(EXIT_FAILURE);
-    }
-    auto dv = derived_var;
-    auto &u0_ = pm->pmb_pack->pmhd->u0;
-    auto &bcc_ = pm->pmb_pack->pmhd->bcc0;
-    int nx1 = indcs.nx1;
-    int nx2 = indcs.nx2;
-    int nx3 = indcs.nx3;
-    par_for("edot_sph_mag", DevExeSpace(), 0, (nmb-1), ks, ke, js, je, is, ie,
-    KOKKOS_LAMBDA(int m, int k, int j, int i) {
-      Real x = CellCenterX(i-is, nx1, size.d_view(m).x1min, size.d_view(m).x1max);
-      Real y = CellCenterX(j-js, nx2, size.d_view(m).x2min, size.d_view(m).x2max);
-      Real z = CellCenterX(k-ks, nx3, size.d_view(m).x3min, size.d_view(m).x3max);
-      Real r = sqrt(x*x + y*y + z*z);
-      Real rho = u0_(m, IDN, k, j, i);
-      Real inv_rho = 1.0 / rho;
-      Real vx = u0_(m, IM1, k, j, i) * inv_rho;
-      Real vy = u0_(m, IM2, k, j, i) * inv_rho;
-      Real vz = u0_(m, IM3, k, j, i) * inv_rho;
-
-      Real Bx = bcc_(m, IBX, k, j, i);
-      Real By = bcc_(m, IBY, k, j, i);
-      Real Bz = bcc_(m, IBZ, k, j, i);
-      Real B_sq = Bx*Bx + By*By + Bz*Bz;
-      Real v_dot_B = vx*Bx + vy*By + vz*Bz;
-
-      Real v_r = (r > 0.0) ? (vx*x + vy*y + vz*z) / r : 0.0;
-      Real B_r = (r > 0.0) ? (Bx*x + By*y + Bz*z) / r : 0.0;
-
-      dv(m, i_dv, k, j, i) = B_sq * v_r - v_dot_B * B_r;
-    });
-    i_dv += 1;
-  }
-
-  // Vertical mass flux: ρ * v_z * sign(z) (outward = away from midplane)
-  if (name.compare("mdot_vert") == 0) {
-    if (pm->pmb_pack->phydro == nullptr && pm->pmb_pack->pmhd == nullptr) {
-      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-                << std::endl << "mdot_vert requires a hydro or MHD module" << std::endl;
-      std::exit(EXIT_FAILURE);
-    }
-    auto dv = derived_var;
-    DvceArray5D<Real> u0_;
-    if (pm->pmb_pack->phydro != nullptr) {
-      u0_ = pm->pmb_pack->phydro->u0;
-    } else if (pm->pmb_pack->pmhd != nullptr) {
-      u0_ = pm->pmb_pack->pmhd->u0;
-    }
-    int nx3 = indcs.nx3;
-    par_for("mdot_vert", DevExeSpace(), 0, (nmb-1), ks, ke, js, je, is, ie,
-    KOKKOS_LAMBDA(int m, int k, int j, int i) {
-      Real z = CellCenterX(k-ks, nx3, size.d_view(m).x3min, size.d_view(m).x3max);
-      Real sign_z = (z >= 0.0) ? 1.0 : -1.0;
-      Real rho = u0_(m, IDN, k, j, i);
-      Real vz = u0_(m, IM3, k, j, i) / rho;
-      dv(m, i_dv, k, j, i) = rho * vz * sign_z;
-    });
-    i_dv += 1;
-  }
-
-  // Vertical mass flux (outward only): ρ * max(v_z * sign(z), 0)
-  if (name.compare("mdot_vert_out") == 0) {
-    if (pm->pmb_pack->phydro == nullptr && pm->pmb_pack->pmhd == nullptr) {
-      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-                << std::endl << "mdot_vert_out requires a hydro or MHD module" << std::endl;
-      std::exit(EXIT_FAILURE);
-    }
-    auto dv = derived_var;
-    DvceArray5D<Real> u0_;
-    if (pm->pmb_pack->phydro != nullptr) {
-      u0_ = pm->pmb_pack->phydro->u0;
-    } else if (pm->pmb_pack->pmhd != nullptr) {
-      u0_ = pm->pmb_pack->pmhd->u0;
-    }
-    int nx3 = indcs.nx3;
-    par_for("mdot_vert_out", DevExeSpace(), 0, (nmb-1), ks, ke, js, je, is, ie,
-    KOKKOS_LAMBDA(int m, int k, int j, int i) {
-      Real z = CellCenterX(k-ks, nx3, size.d_view(m).x3min, size.d_view(m).x3max);
-      Real sign_z = (z >= 0.0) ? 1.0 : -1.0;
-      Real rho = u0_(m, IDN, k, j, i);
-      Real vz = u0_(m, IM3, k, j, i) / rho;
-      Real v_out = vz * sign_z;
-      dv(m, i_dv, k, j, i) = rho * fmax(v_out, 0.0);
-    });
-    i_dv += 1;
-  }
-
-  // Vertical mass flux (inward only): ρ * min(v_z * sign(z), 0)
-  if (name.compare("mdot_vert_in") == 0) {
-    if (pm->pmb_pack->phydro == nullptr && pm->pmb_pack->pmhd == nullptr) {
-      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-                << std::endl << "mdot_vert_in requires a hydro or MHD module" << std::endl;
-      std::exit(EXIT_FAILURE);
-    }
-    auto dv = derived_var;
-    DvceArray5D<Real> u0_;
-    if (pm->pmb_pack->phydro != nullptr) {
-      u0_ = pm->pmb_pack->phydro->u0;
-    } else if (pm->pmb_pack->pmhd != nullptr) {
-      u0_ = pm->pmb_pack->pmhd->u0;
-    }
-    int nx3 = indcs.nx3;
-    par_for("mdot_vert_in", DevExeSpace(), 0, (nmb-1), ks, ke, js, je, is, ie,
-    KOKKOS_LAMBDA(int m, int k, int j, int i) {
-      Real z = CellCenterX(k-ks, nx3, size.d_view(m).x3min, size.d_view(m).x3max);
-      Real sign_z = (z >= 0.0) ? 1.0 : -1.0;
-      Real rho = u0_(m, IDN, k, j, i);
-      Real vz = u0_(m, IM3, k, j, i) / rho;
-      Real v_out = vz * sign_z;
-      dv(m, i_dv, k, j, i) = rho * fmin(v_out, 0.0);
-    });
-    i_dv += 1;
-  }
-
-  // Vertical energy flux: F_E,z * sign(z)
-  if (name.compare("edot_vert") == 0) {
-    if (pm->pmb_pack->phydro == nullptr && pm->pmb_pack->pmhd == nullptr) {
-      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-                << std::endl << "edot_vert requires a hydro or MHD module" << std::endl;
-      std::exit(EXIT_FAILURE);
-    }
-    auto dv = derived_var;
-    bool is_mhd = (pm->pmb_pack->pmhd != nullptr);
-    DvceArray5D<Real> u0_;
-    DvceArray5D<Real> bcc_;
-    Real gamma;
-    if (is_mhd) {
-      u0_ = pm->pmb_pack->pmhd->u0;
-      bcc_ = pm->pmb_pack->pmhd->bcc0;
-      gamma = pm->pmb_pack->pmhd->peos->eos_data.gamma;
-    } else if (pm->pmb_pack->phydro != nullptr) {
-      u0_ = pm->pmb_pack->phydro->u0;
-      gamma = pm->pmb_pack->phydro->peos->eos_data.gamma;
-    }
-    int nx3 = indcs.nx3;
-    par_for("edot_vert", DevExeSpace(), 0, (nmb-1), ks, ke, js, je, is, ie,
-    KOKKOS_LAMBDA(int m, int k, int j, int i) {
-      Real z = CellCenterX(k-ks, nx3, size.d_view(m).x3min, size.d_view(m).x3max);
-      Real sign_z = (z >= 0.0) ? 1.0 : -1.0;
-      Real rho = u0_(m, IDN, k, j, i);
-      Real inv_rho = 1.0 / rho;
-      Real vx = u0_(m, IM1, k, j, i) * inv_rho;
-      Real vy = u0_(m, IM2, k, j, i) * inv_rho;
-      Real vz = u0_(m, IM3, k, j, i) * inv_rho;
-      Real E_total = u0_(m, IEN, k, j, i);
-      Real v_sq = vx*vx + vy*vy + vz*vz;
-
-      Real B_sq = 0.0, Bz = 0.0, v_dot_B = 0.0;
-      if (is_mhd) {
-        Real Bx = bcc_(m, IBX, k, j, i);
-        Real By = bcc_(m, IBY, k, j, i);
-        Bz = bcc_(m, IBZ, k, j, i);
-        B_sq = Bx*Bx + By*By + Bz*Bz;
-        v_dot_B = vx*Bx + vy*By + vz*Bz;
-      }
-
-      Real eint = E_total - 0.5*rho*v_sq - 0.5*B_sq;
-      Real enthalpy_plus_ke = 0.5*rho*v_sq + gamma*eint;
-
-      // F_E,z = (enthalpy_plus_ke + B²) * v_z - (v·B) * B_z
-      Real F_E_z = (enthalpy_plus_ke + B_sq) * vz - v_dot_B * Bz;
-      dv(m, i_dv, k, j, i) = F_E_z * sign_z;
-    });
-    i_dv += 1;
-  }
-
-  // Vertical energy flux (outward only)
-  if (name.compare("edot_vert_out") == 0) {
-    if (pm->pmb_pack->phydro == nullptr && pm->pmb_pack->pmhd == nullptr) {
-      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-                << std::endl << "edot_vert_out requires a hydro or MHD module" << std::endl;
-      std::exit(EXIT_FAILURE);
-    }
-    auto dv = derived_var;
-    bool is_mhd = (pm->pmb_pack->pmhd != nullptr);
-    DvceArray5D<Real> u0_;
-    DvceArray5D<Real> bcc_;
-    Real gamma;
-    if (is_mhd) {
-      u0_ = pm->pmb_pack->pmhd->u0;
-      bcc_ = pm->pmb_pack->pmhd->bcc0;
-      gamma = pm->pmb_pack->pmhd->peos->eos_data.gamma;
-    } else if (pm->pmb_pack->phydro != nullptr) {
-      u0_ = pm->pmb_pack->phydro->u0;
-      gamma = pm->pmb_pack->phydro->peos->eos_data.gamma;
-    }
-    int nx3 = indcs.nx3;
-    par_for("edot_vert_out", DevExeSpace(), 0, (nmb-1), ks, ke, js, je, is, ie,
-    KOKKOS_LAMBDA(int m, int k, int j, int i) {
-      Real z = CellCenterX(k-ks, nx3, size.d_view(m).x3min, size.d_view(m).x3max);
-      Real sign_z = (z >= 0.0) ? 1.0 : -1.0;
-      Real rho = u0_(m, IDN, k, j, i);
-      Real inv_rho = 1.0 / rho;
-      Real vx = u0_(m, IM1, k, j, i) * inv_rho;
-      Real vy = u0_(m, IM2, k, j, i) * inv_rho;
-      Real vz = u0_(m, IM3, k, j, i) * inv_rho;
-      Real E_total = u0_(m, IEN, k, j, i);
-      Real v_sq = vx*vx + vy*vy + vz*vz;
-
-      Real B_sq = 0.0, Bz = 0.0, v_dot_B = 0.0;
-      if (is_mhd) {
-        Real Bx = bcc_(m, IBX, k, j, i);
-        Real By = bcc_(m, IBY, k, j, i);
-        Bz = bcc_(m, IBZ, k, j, i);
-        B_sq = Bx*Bx + By*By + Bz*Bz;
-        v_dot_B = vx*Bx + vy*By + vz*Bz;
-      }
-
-      Real eint = E_total - 0.5*rho*v_sq - 0.5*B_sq;
-      Real enthalpy_plus_ke = 0.5*rho*v_sq + gamma*eint;
-
-      Real F_E_z = (enthalpy_plus_ke + B_sq) * vz - v_dot_B * Bz;
-      Real v_out = vz * sign_z;
-      dv(m, i_dv, k, j, i) = (v_out > 0.0) ? F_E_z * sign_z : 0.0;
-    });
-    i_dv += 1;
-  }
-
-  // Vertical energy flux (inward only)
-  if (name.compare("edot_vert_in") == 0) {
-    if (pm->pmb_pack->phydro == nullptr && pm->pmb_pack->pmhd == nullptr) {
-      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-                << std::endl << "edot_vert_in requires a hydro or MHD module" << std::endl;
-      std::exit(EXIT_FAILURE);
-    }
-    auto dv = derived_var;
-    bool is_mhd = (pm->pmb_pack->pmhd != nullptr);
-    DvceArray5D<Real> u0_;
-    DvceArray5D<Real> bcc_;
-    Real gamma;
-    if (is_mhd) {
-      u0_ = pm->pmb_pack->pmhd->u0;
-      bcc_ = pm->pmb_pack->pmhd->bcc0;
-      gamma = pm->pmb_pack->pmhd->peos->eos_data.gamma;
-    } else if (pm->pmb_pack->phydro != nullptr) {
-      u0_ = pm->pmb_pack->phydro->u0;
-      gamma = pm->pmb_pack->phydro->peos->eos_data.gamma;
-    }
-    int nx3 = indcs.nx3;
-    par_for("edot_vert_in", DevExeSpace(), 0, (nmb-1), ks, ke, js, je, is, ie,
-    KOKKOS_LAMBDA(int m, int k, int j, int i) {
-      Real z = CellCenterX(k-ks, nx3, size.d_view(m).x3min, size.d_view(m).x3max);
-      Real sign_z = (z >= 0.0) ? 1.0 : -1.0;
-      Real rho = u0_(m, IDN, k, j, i);
-      Real inv_rho = 1.0 / rho;
-      Real vx = u0_(m, IM1, k, j, i) * inv_rho;
-      Real vy = u0_(m, IM2, k, j, i) * inv_rho;
-      Real vz = u0_(m, IM3, k, j, i) * inv_rho;
-      Real E_total = u0_(m, IEN, k, j, i);
-      Real v_sq = vx*vx + vy*vy + vz*vz;
-
-      Real B_sq = 0.0, Bz = 0.0, v_dot_B = 0.0;
-      if (is_mhd) {
-        Real Bx = bcc_(m, IBX, k, j, i);
-        Real By = bcc_(m, IBY, k, j, i);
-        Bz = bcc_(m, IBZ, k, j, i);
-        B_sq = Bx*Bx + By*By + Bz*Bz;
-        v_dot_B = vx*Bx + vy*By + vz*Bz;
-      }
-
-      Real eint = E_total - 0.5*rho*v_sq - 0.5*B_sq;
-      Real enthalpy_plus_ke = 0.5*rho*v_sq + gamma*eint;
-
-      Real F_E_z = (enthalpy_plus_ke + B_sq) * vz - v_dot_B * Bz;
-      Real v_out = vz * sign_z;
-      dv(m, i_dv, k, j, i) = (v_out < 0.0) ? F_E_z * sign_z : 0.0;
-    });
-    i_dv += 1;
-  }
-
   // Particle density binned to mesh.
   if (name.compare("prtcl_d") == 0) {
+    Kokkos::realloc(derived_var, nmb, 1, n3, n2, n1);
     auto pdens = derived_var;
     auto pr = pm->pmb_pack->ppart->prtcl_rdata;
     auto pi = pm->pmb_pack->ppart->prtcl_idata;
@@ -2507,7 +1253,7 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
 
     par_for("pdens0", DevExeSpace(), 0, (nmb-1), ks, ke, js, je, is, ie,
     KOKKOS_LAMBDA(int m, int k, int j, int i) {
-      pdens(m,i_dv,k,j,i) = 0.0;
+      pdens(m,0,k,j,i) = 0.0;
     });
 
     par_for("pdens", DevExeSpace(), 0, (npart-1),
@@ -2519,183 +1265,8 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
       if (three_d) {
         kp = (pr(IPZ,p) - size.d_view(m).x3min)/size.d_view(m).dx3 + ks;
       }
-      Kokkos::atomic_add(&pdens(m,i_dv,kp,jp,ip), 1.0);
+      pdens(m,0,kp,jp,ip) += 1.0;
     });
-    i_dv += 1;
   }
   i_dv = i_dv % n_dv; // reset derived variable index
-
-  if (name.compare("cooling_time") == 0) {
-    auto dv = derived_var;
-
-    // Get source terms pointer
-    SourceTerms *psrc = nullptr;
-    DvceArray5D<Real> w0_;
-    EOS_Data eos_data;
-    int nhydro_vars = 0;
-    if (pm->pmb_pack->phydro != nullptr) {
-      psrc = pm->pmb_pack->phydro->psrc;
-      w0_ = pm->pmb_pack->phydro->w0;
-      eos_data = pm->pmb_pack->phydro->peos->eos_data;
-      nhydro_vars = pm->pmb_pack->phydro->nhydro;
-    } else if (pm->pmb_pack->pmhd != nullptr) {
-      psrc = pm->pmb_pack->pmhd->psrc;
-      w0_ = pm->pmb_pack->pmhd->w0;
-      eos_data = pm->pmb_pack->pmhd->peos->eos_data;
-      nhydro_vars = pm->pmb_pack->pmhd->nmhd;
-    }
-
-    if (psrc == nullptr || !psrc->cgm_cooling) {
-      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-                << std::endl << "cooling_time output requires cgm_cooling enabled"
-                << std::endl;
-      exit(EXIT_FAILURE);
-    }
-
-    // Copy all the same unit conversions and table references
-    // from srcterms_newdt.cpp lines 105-135
-    auto &size = pm->pmb_pack->pmb->mb_size;
-    auto &units = pm->pmb_pack->punit;
-    Real gamma = eos_data.gamma;
-    Real gm1 = gamma - 1.0;
-    Real temp_unit = units->temperature_cgs();
-    Real nH_unit = units->density_cgs() / units->atomic_mass_unit_cgs;
-    Real cooling_unit = units->pressure_cgs() / units->time_cgs() / nH_unit / nH_unit;
-    Real heating_unit = units->pressure_cgs() / units->time_cgs() / nH_unit;
-    Real length_unit = units->length_cgs();
-    Real X = 0.75;
-    Real Zsol = 0.02;
-    Real h_rate = psrc->hrate;
-    Real h_norm = psrc->hscale_norm;
-    Real h_height = psrc->hscale_height;
-    Real h_radius = psrc->hscale_radius;
-
-    auto Tbins_ = psrc->Tbins.d_view;
-    auto nHbins_ = psrc->nHbins.d_view;
-    auto Metal_Cooling_ = psrc->Metal_Cooling.d_view;
-    auto H_He_Cooling_ = psrc->H_He_Cooling.d_view;
-    auto Metal_Cooling_CIE_ = psrc->Metal_Cooling_CIE.d_view;
-    auto H_He_Cooling_CIE_ = psrc->H_He_Cooling_CIE.d_view;
-
-    auto Tfloor  = std::pow(10, Tbins_ARR[0]);
-    auto Tceil   = std::pow(10, Tbins_ARR[Tbins_DIM_0 - 1]);
-    auto nHfloor = std::pow(10, nHbins_ARR[0]);
-    auto nHceil  = std::pow(10, nHbins_ARR[nHbins_DIM_0 - 1]);
-
-    int nhydro = nhydro_vars;
-    int nx1 = indcs.nx1;
-    int nx2 = indcs.nx2;
-    int nx3 = indcs.nx3;
-
-    par_for("cooling_time", DevExeSpace(), 0, (nmb-1), ks, ke, js, je, is, ie,
-    KOKKOS_LAMBDA(int m, int k, int j, int i) {
-      const Real rho = w0_(m,IDN,k,j,i);
-      const Real egy = w0_(m,IEN,k,j,i);
-      const Real temp = temp_unit * egy / rho * gm1;
-
-      const Real m_lowT = (temp <  Tfloor) ? 1.0 : 0.0;
-      const Real m_Tin  = (temp >= Tfloor && temp <= Tceil) ? 1.0 : 0.0;
-
-      const Real nH = X * nH_unit * rho; // density in cgs units
-      const Real Z = w0_(m,nhydro,k,j,i) / Zsol; // Assumes Z is the first passive scalar
-      const Real log_temp = log10(temp);
-      const Real log_nH = log10(nH);
-
-      const Real m_Nin  = (nH >= nHfloor && nH <= nHceil) ? 1.0 : 0.0;
-      const Real m_PIE  = m_Tin * m_Nin;   // 1 only if both in-range
-      const Real m_CIE  = m_Tin;           // 1 if T in-range
-
-      // Indices
-      int iT = 0, jN = 0;
-      while (iT < Tbins_DIM_0 - 2 && Tbins_(iT + 1) < log_temp) ++iT;
-      while (jN < nHbins_DIM_0 - 2 && nHbins_(jN + 1) < log_nH) ++jN;
-
-      // --- Weights (well-defined even if masks are 0)
-      const Real log_T0 = Tbins_(iT);
-      const Real log_T1 = Tbins_(iT + 1);
-      const Real inv_dT = 1.0 / (log_T1 - log_T0);
-      const Real t      = (log_temp - log_T0) * inv_dT;
-      const Real omt    = 1.0 - t;
-
-      const Real log_n0 = nHbins_(jN);
-      const Real log_n1 = nHbins_(jN + 1);
-      const Real inv_dn = 1.0 / (log_n1 - log_n0);
-      const Real u      = (log_nH - log_n0) * inv_dn;
-      const Real omu    = 1.0 - u;
-
-      // PIE bilinear interpolation
-      const Real prim_PIE =
-          omt*omu*H_He_Cooling_(iT,   jN  ) +
-          t  *omu*H_He_Cooling_(iT+1, jN  ) +
-          omt*u  *H_He_Cooling_(iT,   jN+1) +
-          t  *u  *H_He_Cooling_(iT+1, jN+1);
-
-      const Real metal_PIE =
-          omt*omu*Metal_Cooling_(iT,   jN  ) +
-          t  *omu*Metal_Cooling_(iT+1, jN  ) +
-          omt*u  *Metal_Cooling_(iT,   jN+1) +
-          t  *u  *Metal_Cooling_(iT+1, jN+1);
-
-      const Real lambda_PIE = m_PIE * fma(Z, metal_PIE, prim_PIE);
-
-      // CIE linear interpolation
-      const Real C0 = H_He_Cooling_CIE_(iT);
-      const Real M0 = Metal_Cooling_CIE_(iT);
-      const Real prim_CIE  = fma(t, H_He_Cooling_CIE_(iT+1) - C0, C0);
-      const Real metal_CIE = fma(t, Metal_Cooling_CIE_(iT+1) - M0, M0);
-      const Real lambda_CIE_tab = fma(Z, metal_CIE, prim_CIE);
-
-      // Low-T analytic fit (Koyama & Inutsuka 2002)
-      const Real e1 = exp(-1.184e5 / (temp + 1.0e3));
-      const Real e2 = exp(-92.0 / temp);
-      const Real lambda_lowT = Z * (2.0e-19 * e1 + 2.8e-28 * sqrt(temp) * e2);
-
-      // Blend CIE regimes
-      const Real lambda_CIE = m_CIE * lambda_CIE_tab
-                            + (1.0 - m_CIE) * (m_lowT * lambda_lowT);
-
-      // Heating profile
-      const Real x1min = size.d_view(m).x1min, x1max = size.d_view(m).x1max;
-      const Real x2min = size.d_view(m).x2min, x2max = size.d_view(m).x2max;
-      const Real x3min = size.d_view(m).x3min, x3max = size.d_view(m).x3max;
-
-      const Real x1v = CellCenterX(i - is, nx1, x1min, x1max);
-      const Real x2v = CellCenterX(j - js, nx2, x2min, x2max);
-      const Real x3v = CellCenterX(k - ks, nx3, x3min, x3max);
-
-      const Real R2 = fma(x1v, x1v, x2v*x2v);
-      const Real R  = sqrt(R2);
-
-      const Real horz_falloff = exp(-R / h_radius);
-      const Real vert_scale2  = h_height*h_height*(1 + R2 / (h_radius*h_radius));
-      const Real vert_falloff = exp(-(x3v*x3v) / vert_scale2);
-
-      Real gamma_heating = h_rate * h_norm * X * nH_unit * horz_falloff * vert_falloff;
-
-      // Power cutoff above 10kK
-      const Real m_hot = (temp > 1.0e4) ? 1.0 : 0.0;
-      const Real inv_ratio = 1.0e4 / temp;
-      const Real damp_factor =
-          m_hot * inv_ratio*inv_ratio*inv_ratio*inv_ratio *
-                  inv_ratio*inv_ratio*inv_ratio*inv_ratio
-        + (1.0 - m_hot);
-      gamma_heating *= damp_factor;
-
-      // Shielding mix
-      const Real dx_cgs = size.d_view(m).dx1 * length_unit;
-      const Real neutral_frac = 1.0 - 0.5 * (1.0 + tanh((temp - 8e3) / 1.5e3));
-      const Real tau  = neutral_frac * nH * 1.0e-17 * dx_cgs;
-      const Real frac = exp(-tau);
-      const Real lambda_cooling = (1.0 - frac) * lambda_CIE + frac * lambda_PIE;
-
-      // Cooling time = internal energy / net cooling rate
-      Real cooling_heating =
-        FLT_MIN + (X * rho * ( X * rho * (lambda_cooling / cooling_unit)
-                                       - (gamma_heating / heating_unit)));
-
-      Real tcool = egy / cooling_heating;
-      dv(m, i_dv, k, j, i) = tcool;
-    });
-    i_dv += 1;
-  }
 }

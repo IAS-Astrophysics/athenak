@@ -8,6 +8,8 @@
 //  Sets up different initial conditions selected by flag "iprob"
 //    - iprob=1 : tanh profile with a single mode perturbation
 //    - iprob=2 : double tanh profile with a single mode perturbation
+//    - iprob=3 : sinusoidal velocity with random perturbations
+//    - iprob=4 : Lecoanet test problem ICs
 
 #include <iostream>
 #include <sstream>
@@ -23,6 +25,8 @@
 #include "coordinates/adm.hpp"
 #include "pgen.hpp"
 
+#include <Kokkos_Random.hpp>
+
 //----------------------------------------------------------------------------------------
 //! \fn
 //  \brief Problem Generator for KHI tests
@@ -32,7 +36,10 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   // read problem parameters from input file
   int iprob  = pin->GetReal("problem","iprob");
   Real amp   = pin->GetReal("problem","amp");
-  Real sigma = pin->GetReal("problem","sigma");
+  Real sigma=0.0;
+  if (iprob != 3) {
+    sigma = pin->GetReal("problem","sigma");
+  }
   Real vshear= pin->GetReal("problem","vshear");
   Real a_char = pin->GetOrAddReal("problem","a_char", 0.01);
   Real rho0  = pin->GetOrAddReal("problem","rho0",1.0);
@@ -83,6 +90,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   }
 
   // initialize primitive variables
+  Kokkos::Random_XorShift64_Pool<> rand_pool64(pmbp->gids);
   par_for("pgen_kh1", DevExeSpace(), 0,(pmbp->nmb_thispack-1),ks,ke,js,je,is,ie,
   KOKKOS_LAMBDA(int m, int k, int j, int i) {
     Real &x1min = size.d_view(m).x1min;
@@ -95,10 +103,13 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     int nx2 = indcs.nx2;
     Real x2v = CellCenterX(j-js, nx2, x2min, x2max);
 
+    auto rand_gen = rand_pool64.get_state();  // get random number state this thread
+    Real rval;
+
     w0_(m,IEN,k,j,i) = 20.0/gm1;
     w0_(m,IVZ,k,j,i) = 0.0;
 
-    // Lorentz factor (needed to initializve 4-velocity in SR)
+    // Lorentz factor (needed to initialize 4-velocity in SR)
     Real u00 = 1.0;
 
     Real dens,pres,vx,vy,vz,scal;
@@ -136,6 +147,13 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
         // if (x2v > 0.5) scal = 1.0;
         scal = y0 + y1*tanh((x2v-0.5)/a_char);
       }
+    } else if (iprob == 3) {
+      // sinusoidal velocity with random perts (geometry of turbulence test)
+      rval = amp*2.0*(rand_gen.frand() - 0.5);
+      dens = 1.0;
+      pres = 1.0;
+      vx = rval;
+      vy = vshear*sin(2.*M_PI*x1v);
     // Lecoanet test ICs
     } else if (iprob == 4) {
       pres = 10.0;
@@ -168,6 +186,8 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     for (int n=nfluid; n<(nfluid+nscalars); ++n) {
       w0_(m,n,k,j,i) = scal;
     }
+    // free state for use by other threads
+    rand_pool64.free_state(rand_gen);
   });
 
   // initialize magnetic fields if MHD
@@ -192,38 +212,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
 
   // Initialize the ADM variables if enabled
   if (pmbp->padm != nullptr) {
-    // Assume Minkowski space
-    auto &adm = pmbp->padm->adm;
-    int nmb1 = pmbp->nmb_thispack - 1;
-    int ng = indcs.ng;
-    int n1 = indcs.nx1 + 2*ng;
-    int n2 = (indcs.nx2 > 1) ? (indcs.nx2 + 2*ng) : 1;
-    int n3 = (indcs.nx3 > 1) ? (indcs.nx3 + 2*ng) : 1;
-
-    par_for("pgen_adm_vars", DevExeSpace(), 0,nmb1,0,(n3-1),0,(n2-1),0,(n1-1),
-    KOKKOS_LAMBDA(int m, int k, int j, int i) {
-      adm.alpha(m, k, j, i) = 1.0;
-      adm.beta_u(m, 0, k, j, i) = 0.0;
-      adm.beta_u(m, 1, k, j, i) = 0.0;
-      adm.beta_u(m, 2, k, j, i) = 0.0;
-
-      adm.psi4(m, k, j, i) = 1.0;
-
-      adm.g_dd(m, 0, 0, k, j, i) = 1.0;
-      adm.g_dd(m, 0, 1, k, j, i) = 0.0;
-      adm.g_dd(m, 0, 2, k, j, i) = 0.0;
-      adm.g_dd(m, 1, 1, k, j, i) = 1.0;
-      adm.g_dd(m, 1, 2, k, j, i) = 0.0;
-      adm.g_dd(m, 2, 2, k, j, i) = 1.0;
-
-      adm.vK_dd(m, 0, 0, k, j, i) = 0.0;
-      adm.vK_dd(m, 0, 1, k, j, i) = 0.0;
-      adm.vK_dd(m, 0, 2, k, j, i) = 0.0;
-      adm.vK_dd(m, 1, 1, k, j, i) = 0.0;
-      adm.vK_dd(m, 1, 2, k, j, i) = 0.0;
-      adm.vK_dd(m, 2, 2, k, j, i) = 0.0;
-    });
-
+    pmbp->padm->SetADMVariables(pmbp);
     pmbp->pdyngr->PrimToConInit(is, ie, js, je, ks, ke);
   }
 

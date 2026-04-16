@@ -8,21 +8,8 @@
 //! \file globals.hpp
 //  \brief namespace containing external global variables
 
-#include <vector>
-
-#include "config.hpp"
-
-#if MPI_PARALLEL_ENABLED
-#include <mpi.h>
-#endif
-
 namespace global_variable {
 extern int my_rank, nranks;
-extern int node_id, rank_in_node, ranks_per_node, nnodes;
-extern std::vector<int> rank_to_node;
-#if MPI_PARALLEL_ENABLED
-extern MPI_Comm node_comm;
-#endif
 }
 
 #endif // GLOBALS_HPP_

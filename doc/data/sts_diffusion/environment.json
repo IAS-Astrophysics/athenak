@@ -1,0 +1,25 @@
+{
+  "benchmark_mode": "CPU release build via tst/build",
+  "build_rebuilt": true,
+  "build_threads": 8,
+  "cpu_model": "Apple M4 Max",
+  "git_commit": "10efc59d7c3de92b6c6d2f1c6889536cec624d9d-dirty",
+  "git_worktree_dirty": true,
+  "hostname": "AS-AST-530-dbf75",
+  "measured_runs": 5,
+  "python_version": "3.13.5",
+  "resolutions": [
+    64,
+    128,
+    256
+  ],
+  "thread_env": {
+    "KOKKOS_NUM_THREADS": "1",
+    "MKL_NUM_THREADS": "1",
+    "NUMEXPR_NUM_THREADS": "1",
+    "OMP_NUM_THREADS": "1",
+    "OPENBLAS_NUM_THREADS": "1",
+    "VECLIB_MAXIMUM_THREADS": "1"
+  },
+  "warmup_runs": 1
+}

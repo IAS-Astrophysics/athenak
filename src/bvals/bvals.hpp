@@ -10,7 +10,7 @@
 //! types of Mesh variables. For Mesh variables, methods for cell-centered and
 //! face-centered fields are currently implemented, based on derived classes from the
 //! generic MeshBoundaryValue class.  A separate ParticlesBoundaryValues class is
-//! implemented for partciles.
+//! implemented for particles.
 
 // identifiers for all 6 faces of a MeshBlock
 enum BoundaryFace {undef=-1, inner_x1, outer_x1, inner_x2, outer_x2, inner_x3, outer_x3};
@@ -26,7 +26,7 @@ enum class BoundaryFlag {undef=-1,block, reflect, inflow, outflow, diode, user, 
 #include "mesh/mesh.hpp"
 #include "coordinates/coordinates.hpp"
 #include "tasklist/task_list.hpp"
-#include "particles/particles_data_structs.hpp"
+//#include "particles/particles.hpp"
 
 // Forward declarations
 class MeshBlockPack;
@@ -37,9 +37,8 @@ class Particles;
 //----------------------------------------------------------------------------------------
 //! \fn int CreateBvals_MPI_Tag(int lid, int bufid)
 //! \brief calculate an MPI tag for boundary buffer communications.  Note maximum size of
-//! lid that can be encoded is set by (NUM_BITS_LID) macro.
-//! The convention in Athena++ is lid and bufid are both for the *receiving* process.
-//! The MPI standard requires signed int tag, with MPI_TAG_UB>=2^15-1 = 32,767 (inclusive)
+//! lid that can be encoded is set by (NUM_BITS_LID) macro defined in athena.hpp.
+//! The convention in AthenaK is lid and bufid are both for the *receiving* process.
 static int CreateBvals_MPI_Tag(int lid, int bufid) {
   return (bufid << (NUM_BITS_LID)) | lid;
 }
@@ -210,6 +209,38 @@ class MeshBoundaryValuesFC : public MeshBoundaryValues {
 };
 
 //----------------------------------------------------------------------------------------
+//! \struct ParticleLocationData
+//! \brief data describing location of data for particles communicated with MPI
+
+struct ParticleLocationData {
+  int prtcl_indx;   // index in particle array
+  int dest_gid;     // GID of target MeshBlock
+  int dest_rank;    // rank of target MeshBlock
+};
+
+// Custom operators to sort ParticleLocationData array by dest_rank or prtcl_indx
+struct {
+  bool operator()(ParticleLocationData a, ParticleLocationData b)
+    const { return a.dest_rank < b.dest_rank; }
+} SortByRank;
+struct {
+  bool operator()(ParticleLocationData a, ParticleLocationData b)
+    const { return a.prtcl_indx < b.prtcl_indx; }
+} SortByIndex;
+
+//----------------------------------------------------------------------------------------
+//! \struct ParticleMessageData
+//! \brief Data describing MPI messages containing particles
+
+struct ParticleMessageData {
+  int sendrank;  // rank of sender
+  int recvrank;  // rank of receiver
+  int nprtcls;   // number of particles in message
+  ParticleMessageData(int a, int b, int c) :
+    sendrank(a), recvrank(b), nprtcls(c) {}
+};
+
+//----------------------------------------------------------------------------------------
 //! \class ParticlesBoundaryValues
 //  \brief Defines boundary values class for particles
 
@@ -219,9 +250,8 @@ class ParticlesBoundaryValues {
   ParticlesBoundaryValues(particles::Particles *ppart, ParameterInput *pin);
   ~ParticlesBoundaryValues();
 
-  int nprtcl_send, nprtcl_recv, nprtcl_destroy;
+  int nprtcl_send, nprtcl_recv;
   DualArray1D<ParticleLocationData> sendlist;
-  DualArray1D<ParticleLocationData> destroylist;
 
   // Data needed to count number of messages and particles to send between ranks
   int nsends; // number of MPI sends to neighboring ranks on this rank

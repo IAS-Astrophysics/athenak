@@ -16,7 +16,7 @@
 
 enum class DynGRMHD_RSolver {llf_dyngr, hlle_dyngr};   // Riemann solvers for dynamical GR
 enum class DynGRMHD_EOS {eos_ideal, eos_piecewise_poly,
-                      eos_compose};                    // EOS policies for dynamical GR
+                      eos_compose, eos_hybrid};        // EOS policies for dynamical GR
 enum class DynGRMHD_Error {reset_floor};               // Error policies for dynamical GR
 
 //----------------------------------------------------------------------------------------
@@ -77,6 +77,8 @@ class DynGRMHD {
   DynGRMHDTaskIDs id;
 
   TaskStatus SetTmunu(Driver *d, int stage);
+  TaskStatus SetADMVariables(Driver *d, int stage);
+  TaskStatus UpdateExcisionMasks(Driver *d, int stage);
   TaskStatus ApplyPhysicalBCs(Driver *d, int stage);
 
   // functions
@@ -97,6 +99,9 @@ class DynGRMHD {
   DynGRMHD_RSolver fofc_method;
   DynGRMHD_EOS eos_policy;
   DynGRMHD_Error error_policy;
+
+  // Storage for temperature
+  DvceArray5D<Real> temperature;
 
  protected:
   MeshBlockPack *pmy_pack;  // ptr to MeshBlockPack containing this Hydro

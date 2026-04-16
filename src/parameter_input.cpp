@@ -41,6 +41,7 @@
 #include <iostream>
 #include <sstream>
 #include <string>
+#include <vector>
 
 #include "athena.hpp"
 #include "globals.hpp"
@@ -68,6 +69,7 @@ ParameterInput::ParameterInput(std::string input_filename) : last_filename{} {
   infile.Open(input_filename.c_str(), IOWrapper::FileMode::read);
   LoadFromFile(infile);
   infile.Close();
+  CheckBlockNames();
 }
 
 //----------------------------------------------------------------------------------------
@@ -88,6 +90,43 @@ InputLine* InputBlock::GetPtrToLine(std::string name) {
     if (name.compare(it->param_name) == 0) return &*it;
   }
   return nullptr;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void ParameterInput::CheckBlockNames()
+//  \brief Checks that all <input_block> names in the input file are valid
+//! To add new names, add more strings to the valid_name list
+
+void ParameterInput::CheckBlockNames() {
+  // Following are currently recognized <input_block> names. New ones can be added to end
+  std::vector<std::string> valid_name = {
+    "comment", "job",
+    "mesh", "meshblock", "mesh_refinement", "refined_region", "amr_criterion",
+    "coord", "adm", "shearing_box",
+    "time", "problem", "output", "units",
+    "hydro", "mhd", "ion-neutral", "radiation", "z4c", "z4c_amr", "cce",
+    "rad_srcterms", "hydro_srcterms", "mhd_srcterms", "particles", "turb_driving"
+    };
+
+  for (auto it1 = block.begin(); it1 != block.end(); ++it1) {
+    bool found = false;
+    for (auto it2 = valid_name.begin(); it2 != valid_name.end(); ++it2) {
+      if (it1->block_name.compare(0, it2->length(), (*it2)) == 0) {
+        found = true;
+        break;
+      }
+    }
+    if (!(found)) {
+      if (global_variable::my_rank == 0) {
+        std::cout<<"### FATAL ERROR in "<<__FILE__<<" at line "<<__LINE__<< std::endl;
+        std::cout<<"Allowed <input_block> names in input file are:" << std::endl;
+        for (auto it2 = valid_name.begin(); it2 != valid_name.end(); ++it2) {
+          std::cout<< (*it2) << std::endl;
+        }
+      }
+      Kokkos::abort("Invalid <block_name> in input file");
+    }
+  }
 }
 
 //----------------------------------------------------------------------------------------
@@ -170,26 +209,25 @@ void ParameterInput::LoadFromStream(std::istream &is) {
 //! \fn  void ParameterInput::LoadFromFile(IOWrapper &input)
 //  \brief Read the parameters from an input or restart file.
 
-void ParameterInput::LoadFromFile(IOWrapper &input, FileShardMode shard_mode) {
+void ParameterInput::LoadFromFile(IOWrapper &input, bool single_file_per_rank) {
   std::stringstream par;
   constexpr int kBufSize = 4096;
   char buf[kBufSize];
   IOWrapperSizeT header = 0, ret, loc;
-  bool use_serial_io = UsesSerialIO(shard_mode);
 
   // search for <par_end> (reading from restart files) or EOF (reading from input file).
   do {
-    if (global_variable::my_rank == 0 || use_serial_io) {
-      ret = input.Read_bytes(buf, sizeof(char), kBufSize, use_serial_io);
+    if (global_variable::my_rank == 0 || single_file_per_rank) {
+      ret = input.Read_bytes(buf, sizeof(char), kBufSize, single_file_per_rank);
     }
 #if MPI_PARALLEL_ENABLED
     // then broadcasts it
-  if (!use_serial_io) {
-    io_wrapper::BroadcastBytes(&ret, sizeof(IOWrapperSizeT), 0, MPI_COMM_WORLD);
+  if (!single_file_per_rank) {
+    MPI_Bcast(&ret, sizeof(IOWrapperSizeT), MPI_BYTE, 0, MPI_COMM_WORLD);
     if (ret == 0) {
       break;
     }
-    io_wrapper::BroadcastBytes(buf, ret, 0, MPI_COMM_WORLD);
+    MPI_Bcast(buf, ret, MPI_BYTE, 0, MPI_COMM_WORLD);
   }
 #endif
     par.write(buf, ret); // add the buffer into the stream
@@ -200,9 +238,9 @@ void ParameterInput::LoadFromFile(IOWrapper &input, FileShardMode shard_mode) {
       header = loc + 10; // store the header length
       break;
     }
-    if (header > kBufSize*40) {
+    if (header > kBufSize*10) {
       std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-                << std::endl << "<par_end> is not found in the first 160KBytes."
+                << std::endl << "<par_end> is not found in the first 40KBytes."
                 << std::endl << "Probably the file is broken or the wrong file is "
                 << "specified" << std::endl;
       std::exit(EXIT_FAILURE);
@@ -213,7 +251,7 @@ void ParameterInput::LoadFromFile(IOWrapper &input, FileShardMode shard_mode) {
   // Read the stream and load the parameters
   LoadFromStream(par);
   // Seek the file to the end of the header
-  input.Seek(header, use_serial_io);
+  input.Seek(header, single_file_per_rank);
 
   return;
 }
@@ -299,7 +337,7 @@ void ParameterInput::AddParameter(InputBlock *pb, std::string name, std::string 
     for (auto it = pb->line.begin(); it != pb->line.end(); ++it) {
       if (name.compare(it->param_name) == 0) {   // param name already exists
         it->param_value.assign(value);           // replace existing param value
-        it->param_comment.assign(comment);       // replace exisiting param comment
+        it->param_comment.assign(comment);       // replace existing param comment
         if (value.length() > pb->max_len_parvalue) pb->max_len_parvalue = value.length();
         return;
       }

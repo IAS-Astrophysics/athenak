@@ -1,0 +1,70 @@
+# Athena++ (Kokkos version) input file for Bondi accretion
+
+<comment>
+problem   = GR hydro accretion in radial direction
+
+<job>
+basename  = gr_bondi  # problem ID: basename of output filenames
+
+<mesh>
+nghost    = 2      # Number of ghost cells
+nx1       = 32     # Number of zones in X1-direction
+x1min     = -10.0  # minimum value of X1
+x1max     = 10.0   # maximum value of X1
+ix1_bc    = user   # inner-X1 boundary flag
+ox1_bc    = user   # outer-X1 boundary flag
+
+nx2       = 32     # Number of zones in X2-direction
+x2min     = -10.0  # minimum value of X2
+x2max     = 10.0   # maximum value of X2
+ix2_bc    = user   # inner-X2 boundary flag
+ox2_bc    = user   # outer-X2 boundary flag
+
+nx3       = 32     # Number of zones in X3-direction
+x3min     = -10.0  # minimum value of X3
+x3max     = 10.0   # maximum value of X3
+ix3_bc    = user   # inner-X3 boundary flag
+ox3_bc    = user   # outer-X3 boundary flag
+
+<meshblock>
+nx1 = 8
+nx2 = 8
+nx3 = 8
+
+<mesh_refinement>
+refinement = static    # type of refinement
+
+<refined_region1>
+level = 1
+x1min = -4.0
+x1max = 4.0
+x2min = -4.0
+x2max = 4.0
+x3min = -4.0
+x3max = 4.0
+
+<coord>
+general_rel = true       # general relativity
+a           = 0.0        # black hole spin a (0 <= a/M < 1)
+excise      = true       # excise r_ks <= 1.0
+dexcise     = 1.0e-8     # density inside excision
+pexcise     = 0.333e-12  # pressure inside excision
+
+<time>
+evolution  = dynamic  # dynamic/kinematic/static
+integrator = rk2      # time integration algorithm
+cfl_number = 0.3      # The Courant, Friedrichs, & Lewy (CFL) Number
+nlim       = -1       # cycle limit
+tlim       = 100.0    # time limit
+ndiag      = 1        # cycles between diagostic output
+
+<hydro>
+eos         = ideal  # EOS type
+reconstruct = plm    # spatial reconstruction method
+rsolver     = hlle   # Riemann-solver to be used
+gamma       = 1.3333333333333  # gamma = C_p/C_v
+
+<problem>
+pgen_name  = gr_bondi
+k_adi      = 1.0       # adiabat K, p_gas = K rho^Gamma
+r_crit     = 8.0       # sonic point radius, in units of mass

@@ -20,7 +20,6 @@
 #include "athena.hpp"
 #include "coordinates/cell_locations.hpp"
 #include "geodesic-grid/geodesic_grid.hpp"
-#include "file_sharding.hpp"
 #include "globals.hpp"
 #include "mesh/mesh.hpp"
 #include "hydro/hydro.hpp"
@@ -39,9 +38,11 @@ RestartOutput::RestartOutput(ParameterInput *pin, Mesh *pm, OutputParameters op)
   BaseTypeOutput(pin, pm, op) {
   // create directories for outputs. Comments in binary.cpp constructor explain why
   mkdir("rst",0775);
-  if (op.file_shard_mode != FileShardMode::shared) {
-    std::string shard_dir = std::string("rst/") + ShardDirectoryName(op.file_shard_mode);
-    mkdir(shard_dir.c_str(), 0775);
+  bool single_file_per_rank = op.single_file_per_rank;
+  if (single_file_per_rank) {
+    char rank_dir[20];
+    std::snprintf(rank_dir, sizeof(rank_dir), "rst/rank_%08d/", global_variable::my_rank);
+    mkdir(rank_dir, 0775);
   }
 }
 
@@ -163,24 +164,29 @@ void RestartOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
   } else if (padm != nullptr) {
     nadm = padm->nadm;
   }
-  FileShardMode shard_mode = out_params.file_shard_mode;
-  bool use_serial_io = UsesSerialIO(shard_mode);
-  bool split_per_node_manifest = (shard_mode == FileShardMode::per_node);
+  bool single_file_per_rank = out_params.single_file_per_rank;
   std::string fname;
-  std::string manifest_fname;
-  char number[7];
-  std::snprintf(number, sizeof(number), ".%05d", out_params.file_number);
-  if (split_per_node_manifest) {
-    manifest_fname = std::string("rst/") + out_params.file_basename + number + ".rst";
-    fname = std::string("rst/") + ShardDirectoryName(shard_mode) + out_params.file_basename
+  if (single_file_per_rank) {
+    // Generate a directory and filename for each rank
+    // create filename: "rst/rank_YYYYYYY/file_basename" + "." + XXXXX + ".rst"
+    // where YYYYYYY = 8-digit rank number
+    // where XXXXX = 5-digit file_number
+    char rank_dir[20];
+    char number[7];
+    std::snprintf(number, sizeof(number), ".%05d", out_params.file_number);
+    std::snprintf(rank_dir, sizeof(rank_dir), "rank_%08d/", global_variable::my_rank);
+    fname = std::string("rst/") + std::string(rank_dir) + out_params.file_basename
       + number + ".rst";
-  } else if (shard_mode != FileShardMode::shared) {
-    fname = std::string("rst/") + ShardDirectoryName(shard_mode) + out_params.file_basename
-      + number + ".rst";
+
+    // Debugging output to check directory and filename
+    // std::cout << "Rank " << global_variable::my_rank << " generated filename: "
+    //           << fname << std::endl;
   } else {
     // Existing behavior: single restart file
     // create filename: "rst/file_basename" + "." + XXXXX + ".rst"
     // where XXXXX = 5-digit file_number
+    char number[7];
+    std::snprintf(number, sizeof(number), ".%05d", out_params.file_number);
     fname = std::string("rst/") + out_params.file_basename + number + ".rst";
   }
   // increment counters now so values for *next* dump are stored in restart file
@@ -204,87 +210,57 @@ void RestartOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
 
   // open file and  write the header; this part is serial
   IOWrapper resfile;
-  IOWrapper manifestfile;
-#if MPI_PARALLEL_ENABLED
-  if (shard_mode == FileShardMode::per_node) {
-    resfile.SetCommunicator(global_variable::node_comm);
-  }
-#endif
-  if (split_per_node_manifest) {
-    resfile.Open(fname.c_str(), IOWrapper::FileMode::write, false);
-    if (global_variable::my_rank == 0) {
-      manifestfile.Open(manifest_fname.c_str(), IOWrapper::FileMode::write, true);
-    }
-  } else {
-    resfile.Open(fname.c_str(), IOWrapper::FileMode::write, use_serial_io);
-  }
-
-  bool write_manifest = split_per_node_manifest ? (global_variable::my_rank == 0)
-                                                : IsShardWriter(shard_mode);
-  auto WriteMetadata = [&](const void *buf, IOWrapperSizeT count,
-                           const std::string &datatype) {
-    if (!write_manifest) {
-      return;
-    }
-    if (split_per_node_manifest) {
-      manifestfile.Write_any_type(buf, count, datatype, true);
-    } else {
-      resfile.Write_any_type(buf, count, datatype, use_serial_io);
-    }
-  };
-
-  if (write_manifest) {
+  resfile.Open(fname.c_str(), IOWrapper::FileMode::write, single_file_per_rank);
+  if (global_variable::my_rank == 0 || single_file_per_rank) {
     // output the input parameters (input file)
-    WriteMetadata(sbuf.c_str(), sbuf.size(), "byte");
+    resfile.Write_any_type(sbuf.c_str(), sbuf.size(), "byte", single_file_per_rank);
 
     // output Mesh information
-    WriteMetadata(&(pm->nmb_total), sizeof(int), "byte");
-    WriteMetadata(&(pm->root_level), sizeof(int), "byte");
-    WriteMetadata(&(pm->mesh_size), sizeof(RegionSize), "byte");
-    WriteMetadata(&(pm->mesh_indcs), sizeof(RegionIndcs), "byte");
-    WriteMetadata(&(pm->mb_indcs), sizeof(RegionIndcs), "byte");
-    WriteMetadata(&(pm->time), sizeof(Real), "byte");
-    WriteMetadata(&(pm->dt), sizeof(Real), "byte");
-    WriteMetadata(&(pm->ncycle), sizeof(int), "byte");
-    WriteMetadata(&(global_variable::nranks), sizeof(int), "byte");
-    if (split_per_node_manifest) {
-      int manifest_version = kPerNodeManifestVersion;
-      WriteMetadata(&(global_variable::nnodes), sizeof(int), "byte");
-      WriteMetadata(&manifest_version, sizeof(int), "byte");
-    }
+    resfile.Write_any_type(&(pm->nmb_total), (sizeof(int)), "byte",
+                            single_file_per_rank);
+    resfile.Write_any_type(&(pm->root_level), (sizeof(int)), "byte",
+                            single_file_per_rank);
+    resfile.Write_any_type(&(pm->mesh_size), (sizeof(RegionSize)), "byte",
+                            single_file_per_rank);
+    resfile.Write_any_type(&(pm->mesh_indcs), (sizeof(RegionIndcs)), "byte",
+                            single_file_per_rank);
+    resfile.Write_any_type(&(pm->mb_indcs), (sizeof(RegionIndcs)), "byte",
+                            single_file_per_rank);
+    resfile.Write_any_type(&(pm->time), (sizeof(Real)), "byte",
+                            single_file_per_rank);
+    resfile.Write_any_type(&(pm->dt), (sizeof(Real)), "byte",
+                            single_file_per_rank);
+    resfile.Write_any_type(&(pm->ncycle), (sizeof(int)), "byte",
+                            single_file_per_rank);
   }
   //--- STEP 2.  Root process writes list of logical locations and cost of MeshBlocks
   // This data read in Mesh::BuildTreeFromRestart()
 
-  if (write_manifest) {
-    WriteMetadata(&(pm->lloc_eachmb[0]), (pm->nmb_total)*sizeof(LogicalLocation), "byte");
-    WriteMetadata(&(pm->cost_eachmb[0]), (pm->nmb_total)*sizeof(float), "byte");
-    WriteMetadata(&(pm->rank_eachmb[0]), (pm->nmb_total)*sizeof(int), "byte");
-    if (global_variable::nranks > 0) {
-      WriteMetadata(&(pm->gids_eachrank[0]), (global_variable::nranks)*sizeof(int), "byte");
-      WriteMetadata(&(pm->nmb_eachrank[0]), (global_variable::nranks)*sizeof(int), "byte");
-      if (split_per_node_manifest) {
-        WriteMetadata(global_variable::rank_to_node.data(),
-                      (global_variable::nranks)*sizeof(int), "byte");
-      }
-    }
+  if (global_variable::my_rank == 0 || single_file_per_rank) {
+    resfile.Write_any_type(&(pm->lloc_eachmb[0]),(pm->nmb_total)*sizeof(LogicalLocation),
+                           "byte", single_file_per_rank);
+    resfile.Write_any_type(&(pm->cost_eachmb[0]), (pm->nmb_total)*sizeof(float),
+                           "byte", single_file_per_rank);
   }
 
   //--- STEP 3.  Root process writes internal state of objects that require it
-  if (write_manifest) {
+  if (global_variable::my_rank == 0 || single_file_per_rank) {
     // store z4c information
     if (pz4c != nullptr) {
-      WriteMetadata(&(pz4c->last_output_time), sizeof(Real), "byte");
+      resfile.Write_any_type(&(pz4c->last_output_time), sizeof(Real), "byte",
+                             single_file_per_rank);
     }
     // output puncture tracker data
     if (nco > 0) {
       for (auto & pt : pz4c->ptracker) {
-        WriteMetadata(pt.GetPos(), 3*sizeof(Real), "byte");
+        resfile.Write_any_type(pt->GetPos(), 3*sizeof(Real), "byte",
+                               single_file_per_rank);
       }
     }
     // turbulence driver internal RNG
     if (pturb != nullptr) {
-      WriteMetadata(&(pturb->rstate), sizeof(RNG_State), "byte");
+      resfile.Write_any_type(&(pturb->rstate), sizeof(RNG_State), "byte",
+                             single_file_per_rank);
     }
   }
 
@@ -314,40 +290,27 @@ void RestartOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
   } else if (padm != nullptr) {
     data_size += nout1*nout2*nout3*nadm*sizeof(Real);   // adm u_adm
   }
-  if (write_manifest) {
-    WriteMetadata(&(data_size), sizeof(IOWrapperSizeT), "byte");
-    if (split_per_node_manifest) {
-      manifestfile.Close(true);
-    }
+  if (global_variable::my_rank == 0 || single_file_per_rank) {
+    resfile.Write_any_type(&(data_size), sizeof(IOWrapperSizeT), "byte",
+                            single_file_per_rank);
   }
 
   // calculate size of data written in Steps 1-2 above
-  IOWrapperSizeT step1size = sbuf.size()*sizeof(char) + 4*sizeof(int) + 2*sizeof(Real) +
+  IOWrapperSizeT step1size = sbuf.size()*sizeof(char) + 3*sizeof(int) + 2*sizeof(Real) +
                              sizeof(RegionSize) + 2*sizeof(RegionIndcs);
-  if (split_per_node_manifest) {
-    step1size += 2*sizeof(int);
-  }
-  IOWrapperSizeT step2size = (pm->nmb_total)*(sizeof(LogicalLocation) + sizeof(float)
-                           + sizeof(int))
-                           + (global_variable::nranks)*2*sizeof(int);
-  if (split_per_node_manifest) {
-    step2size += (global_variable::nranks)*sizeof(int);
-  }
+  IOWrapperSizeT step2size = (pm->nmb_total)*(sizeof(LogicalLocation) + sizeof(float));
 
   IOWrapperSizeT step3size = 3*nco*sizeof(Real);
   if (pz4c != nullptr) step3size += sizeof(Real);
   if (pturb != nullptr) step3size += sizeof(RNG_State);
 
   // write cell-centered variables in parallel
-  IOWrapperSizeT offset_myrank = 0;
-  std::vector<int> shard_counts = GatherShardCounts(pm->nmb_thisrank, shard_mode);
-  int shard_prefix = PrefixCountBeforeMe(shard_counts, shard_mode);
-  int shard_min = *std::min_element(shard_counts.begin(), shard_counts.end());
-  int shard_max = *std::max_element(shard_counts.begin(), shard_counts.end());
-  if (!split_per_node_manifest) {
-    offset_myrank = (step1size + step2size + step3size + sizeof(IOWrapperSizeT));
+  IOWrapperSizeT offset_myrank = (step1size + step2size + step3size
+                                  + sizeof(IOWrapperSizeT));
+
+  if (!single_file_per_rank) {
+    offset_myrank += data_size*(pm->gids_eachrank[global_variable::my_rank]);
   }
-  offset_myrank += data_size*shard_prefix;
 
   IOWrapperSizeT myoffset = offset_myrank;
 
@@ -355,15 +318,15 @@ void RestartOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
   // ranks). MeshBlocks are written seperately to reduce number of data elements per write
   // call, to avoid exceeding 2^31 limit for very large grids per MPI rank.
   if (phydro != nullptr) {
-    for (int m=0;  m<shard_max; ++m) {
+    for (int m=0;  m<noutmbs_max; ++m) {
       // every rank has a MB to write, so write collectively
-      if (m < shard_min) {
+      if (m < noutmbs_min) {
         // get ptr to cell-centered MeshBlock data
         auto mbptr = Kokkos::subview(outarray_hyd, m, Kokkos::ALL, Kokkos::ALL,
                                      Kokkos::ALL, Kokkos::ALL);
         int mbcnt = mbptr.size();
         if (resfile.Write_any_type_at_all(mbptr.data(),mbcnt,myoffset,"Real",
-                                          use_serial_io) != mbcnt) {
+                                          single_file_per_rank) != mbcnt) {
           std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
           << std::endl << "cell-centered hydro data not written correctly to rst file, "
           << "restart file is broken." << std::endl;
@@ -378,7 +341,7 @@ void RestartOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
                                      Kokkos::ALL, Kokkos::ALL);
         int mbcnt = mbptr.size();
         if (resfile.Write_any_type_at(mbptr.data(), mbcnt, myoffset,"Real",
-                                      use_serial_io) != mbcnt) {
+                                          single_file_per_rank) != mbcnt) {
           std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
           << std::endl << "cell-centered hydro data not written correctly to rst file, "
           << "restart file is broken." << std::endl;
@@ -391,15 +354,15 @@ void RestartOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
     myoffset = offset_myrank;
   }
   if (pmhd != nullptr) {
-    for (int m=0;  m<shard_max; ++m) {
+    for (int m=0;  m<noutmbs_max; ++m) {
       // every rank has a MB to write, so write collectively
-      if (m < shard_min) {
+      if (m < noutmbs_min) {
         // get ptr to cell-centered MeshBlock data
         auto mbptr = Kokkos::subview(outarray_mhd, m, Kokkos::ALL, Kokkos::ALL,
                                      Kokkos::ALL, Kokkos::ALL);
         int mbcnt = mbptr.size();
         if (resfile.Write_any_type_at_all(mbptr.data(),mbcnt,myoffset,"Real",
-                                          use_serial_io) != mbcnt) {
+                                          single_file_per_rank) != mbcnt) {
           std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
           << std::endl << "cell-centered mhd data not written correctly to rst file, "
           << "restart file is broken." << std::endl;
@@ -414,7 +377,7 @@ void RestartOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
                                      Kokkos::ALL, Kokkos::ALL);
         int mbcnt = mbptr.size();
         if (resfile.Write_any_type_at(mbptr.data(), mbcnt, myoffset,"Real",
-                                      use_serial_io) != mbcnt) {
+                                      single_file_per_rank) != mbcnt) {
           std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
           << std::endl << "cell-centered mhd data not written correctly to rst file, "
           << "restart file is broken." << std::endl;
@@ -426,14 +389,14 @@ void RestartOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
     offset_myrank += nout1*nout2*nout3*nmhd*sizeof(Real);   // mhd u0
     myoffset = offset_myrank;
 
-    for (int m=0;  m<shard_max; ++m) {
+    for (int m=0;  m<noutmbs_max; ++m) {
       // every rank has a MB to write, so write collectively
-      if (m < shard_min) {
+      if (m < noutmbs_min) {
         // get ptr to x1-face field
         auto x1fptr = Kokkos::subview(outfield.x1f,m,Kokkos::ALL,Kokkos::ALL,Kokkos::ALL);
         int fldcnt = x1fptr.size();
         if (resfile.Write_any_type_at_all(x1fptr.data(),fldcnt,myoffset,"Real",
-                                          use_serial_io) != fldcnt) {
+                                          single_file_per_rank) != fldcnt) {
           std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                     << std::endl << "b0.x1f data not written correctly to rst file, "
                     << "restart file is broken." << std::endl;
@@ -445,7 +408,7 @@ void RestartOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
         auto x2fptr = Kokkos::subview(outfield.x2f,m,Kokkos::ALL,Kokkos::ALL,Kokkos::ALL);
         fldcnt = x2fptr.size();
         if (resfile.Write_any_type_at_all(x2fptr.data(),fldcnt,myoffset,"Real",
-                                          use_serial_io) != fldcnt) {
+                                          single_file_per_rank) != fldcnt) {
           std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                     << std::endl << "b0.x2f data not written correctly to rst file, "
                     << "restart file is broken." << std::endl;
@@ -457,7 +420,7 @@ void RestartOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
         auto x3fptr = Kokkos::subview(outfield.x3f,m,Kokkos::ALL,Kokkos::ALL,Kokkos::ALL);
         fldcnt = x3fptr.size();
         if (resfile.Write_any_type_at_all(x3fptr.data(),fldcnt,myoffset,"Real",
-                                          use_serial_io) != fldcnt) {
+                                          single_file_per_rank) != fldcnt) {
           std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                     << std::endl << "b0.x3f data not written correctly to rst file, "
                     << "restart file is broken." << std::endl;
@@ -473,7 +436,7 @@ void RestartOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
         auto x1fptr = Kokkos::subview(outfield.x1f,m,Kokkos::ALL,Kokkos::ALL,Kokkos::ALL);
         int fldcnt = x1fptr.size();
         if (resfile.Write_any_type_at(x1fptr.data(),fldcnt,myoffset,"Real",
-                                      use_serial_io) != fldcnt) {
+                                      single_file_per_rank) != fldcnt) {
           std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                     << std::endl << "b0.x1f data not written correctly to rst file, "
                     << "restart file is broken." << std::endl;
@@ -485,7 +448,7 @@ void RestartOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
         auto x2fptr = Kokkos::subview(outfield.x2f,m,Kokkos::ALL,Kokkos::ALL,Kokkos::ALL);
         fldcnt = x2fptr.size();
         if (resfile.Write_any_type_at(x2fptr.data(),fldcnt,myoffset,"Real",
-                                      use_serial_io) != fldcnt) {
+                                      single_file_per_rank) != fldcnt) {
           std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                     << std::endl << "b0.x2f data not written correctly to rst file, "
                     << "restart file is broken." << std::endl;
@@ -497,7 +460,7 @@ void RestartOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
         auto x3fptr = Kokkos::subview(outfield.x3f,m,Kokkos::ALL,Kokkos::ALL,Kokkos::ALL);
         fldcnt = x3fptr.size();
         if (resfile.Write_any_type_at(x3fptr.data(),fldcnt,myoffset,"Real",
-                                      use_serial_io) != fldcnt) {
+                                      single_file_per_rank) != fldcnt) {
           std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                     << std::endl << "b0.x3f data not written correctly to rst file, "
                     << "restart file is broken." << std::endl;
@@ -515,15 +478,15 @@ void RestartOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
   }
 
   if (prad != nullptr) {
-    for (int m=0;  m<shard_max; ++m) {
+    for (int m=0;  m<noutmbs_max; ++m) {
       // every rank has a MB to write, so write collectively
-      if (m < shard_min) {
+      if (m < noutmbs_min) {
         // get ptr to cell-centered MeshBlock data
         auto mbptr = Kokkos::subview(outarray_rad, m, Kokkos::ALL, Kokkos::ALL,
                                      Kokkos::ALL, Kokkos::ALL);
         int mbcnt = mbptr.size();
         if (resfile.Write_any_type_at_all(mbptr.data(),mbcnt,myoffset,"Real",
-                                          use_serial_io) != mbcnt) {
+                                          single_file_per_rank) != mbcnt) {
           std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
           << std::endl << "cell-centered rad data not written correctly to rst file, "
           << "restart file is broken." << std::endl;
@@ -538,7 +501,7 @@ void RestartOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
                                      Kokkos::ALL, Kokkos::ALL);
         int mbcnt = mbptr.size();
         if (resfile.Write_any_type_at(mbptr.data(),mbcnt,myoffset,"Real",
-                                      use_serial_io) != mbcnt) {
+                                      single_file_per_rank) != mbcnt) {
           std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                     << std::endl << "cell-centered rad data not written correctly"
                     << " to rst file, restart file is broken." << std::endl;
@@ -552,15 +515,15 @@ void RestartOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
   }
 
   if (pturb != nullptr) {
-    for (int m=0;  m<shard_max; ++m) {
+    for (int m=0;  m<noutmbs_max; ++m) {
       // every rank has a MB to write, so write collectively
-      if (m < shard_min) {
+      if (m < noutmbs_min) {
         // get ptr to cell-centered MeshBlock data
         auto mbptr = Kokkos::subview(outarray_force, m, Kokkos::ALL, Kokkos::ALL,
                                      Kokkos::ALL, Kokkos::ALL);
         int mbcnt = mbptr.size();
         if (resfile.Write_any_type_at_all(mbptr.data(),mbcnt,myoffset,"Real",
-                                          use_serial_io) != mbcnt) {
+                                          single_file_per_rank) != mbcnt) {
           std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
           << std::endl << "cell-centered turb data not written correctly to rst file, "
           << "restart file is broken." << std::endl;
@@ -575,7 +538,7 @@ void RestartOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
                                      Kokkos::ALL, Kokkos::ALL);
         int mbcnt = mbptr.size();
         if (resfile.Write_any_type_at(mbptr.data(), mbcnt, myoffset,"Real",
-                                      use_serial_io) != mbcnt) {
+                                      single_file_per_rank) != mbcnt) {
           std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                     << std::endl << "cell-centered turb data not written correctly"
                     << " to rst file, restart file is broken." << std::endl;
@@ -589,15 +552,15 @@ void RestartOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
   }
 
   if (pz4c != nullptr) {
-    for (int m=0;  m<shard_max; ++m) {
+    for (int m=0;  m<noutmbs_max; ++m) {
       // every rank has a MB to write, so write collectively
-      if (m < shard_min) {
+      if (m < noutmbs_min) {
         // get ptr to cell-centered MeshBlock data
         auto mbptr = Kokkos::subview(outarray_z4c, m, Kokkos::ALL, Kokkos::ALL,
                                      Kokkos::ALL, Kokkos::ALL);
         int mbcnt = mbptr.size();
         if (resfile.Write_any_type_at_all(mbptr.data(),mbcnt,myoffset,"Real",
-                                          use_serial_io) != mbcnt) {
+                                          single_file_per_rank) != mbcnt) {
           std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                     << std::endl << "cell-centered z4c data not written correctly"
                     << " to rst file, restart file is broken." << std::endl;
@@ -612,7 +575,7 @@ void RestartOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
                                      Kokkos::ALL, Kokkos::ALL);
         int mbcnt = mbptr.size();
         if (resfile.Write_any_type_at(mbptr.data(), mbcnt, myoffset,"Real",
-                                      use_serial_io) != mbcnt) {
+                                      single_file_per_rank) != mbcnt) {
           std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                     << std::endl << "cell-centered z4c data not written correctly"
                     << " to rst file, restart file is broken." << std::endl;
@@ -624,15 +587,15 @@ void RestartOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
     offset_myrank += nout1*nout2*nout3*nz4c*sizeof(Real); // z4c u0
     myoffset = offset_myrank;
   } else if (padm != nullptr) {
-    for (int m=0;  m<shard_max; ++m) {
+    for (int m=0;  m<noutmbs_max; ++m) {
       // every rank has a MB to write, so write collectively
-      if (m < shard_min) {
+      if (m < noutmbs_min) {
         // get ptr to cell-centered MeshBlock data
         auto mbptr = Kokkos::subview(outarray_adm, m, Kokkos::ALL, Kokkos::ALL,
                                      Kokkos::ALL, Kokkos::ALL);
         int mbcnt = mbptr.size();
         if (resfile.Write_any_type_at_all(mbptr.data(),mbcnt,myoffset,"Real",
-                                          use_serial_io) != mbcnt) {
+                                          single_file_per_rank) != mbcnt) {
           std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                     << std::endl << "cell-centered adm data not written correctly"
                     << " to rst file, restart file is broken." << std::endl;
@@ -647,7 +610,7 @@ void RestartOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
                                      Kokkos::ALL, Kokkos::ALL);
         int mbcnt = mbptr.size();
         if (resfile.Write_any_type_at(mbptr.data(), mbcnt, myoffset,"Real",
-                                      use_serial_io) != mbcnt) {
+                                      single_file_per_rank) != mbcnt) {
           std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                     << std::endl << "cell-centered adm data not written correctly"
                     << " to rst file, restart file is broken." << std::endl;
@@ -661,7 +624,7 @@ void RestartOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
   }
 
   // close file, clean up
-  resfile.Close(use_serial_io);
+  resfile.Close(single_file_per_rank);
 
   return;
 }

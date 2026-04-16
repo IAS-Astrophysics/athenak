@@ -24,27 +24,21 @@
 //========================================================================================
 
 // C/C++ headers
-#include <cctype>
 #include <cstdlib>
-#include <cstdio> // sscanf
-#include <filesystem>
 #include <iostream>
-#include <memory>
-#include <stdexcept>
 #include <string>
-#include <system_error>
-#include <unordered_map>
+#include <memory>
+#include <cstdio> // sscanf
+#include <fstream>  // Include this for std::ifstream
 
 // Athena headers
 #include "athena.hpp"
-#include "file_sharding.hpp"
 #include "globals.hpp"
-#include "utils/utils.hpp"
 #include "parameter_input.hpp"
 #include "mesh/mesh.hpp"
 #include "outputs/outputs.hpp"
 #include "driver/driver.hpp"
-#include "particles/particles.hpp"
+#include "utils/utils.hpp"
 
 // MPI/OpenMP headers
 #if MPI_PARALLEL_ENABLED
@@ -59,170 +53,12 @@
 #include <hip/hip_runtime.h>
 #endif
 
-namespace {
-
-namespace fs = std::filesystem;
-
-struct RestartPathInfo {
-  FileShardMode shard_mode = FileShardMode::shared;
-  std::string normalized_open_path;
-  std::string base_dir;
-  std::string file_name;
-};
-
-bool HasShardPrefix(const std::string &name, const char *prefix) {
-  return name.rfind(prefix, 0) == 0;
-}
-
-bool IsExactShardDirectoryName(const std::string &name, const char *prefix) {
-  constexpr int kShardIdDigits = 8;
-  std::size_t prefix_len = std::char_traits<char>::length(prefix);
-  if (!HasShardPrefix(name, prefix) || name.size() != prefix_len + kShardIdDigits) {
-    return false;
-  }
-  for (std::size_t i = prefix_len; i < name.size(); ++i) {
-    if (!std::isdigit(static_cast<unsigned char>(name[i]))) {
-      return false;
-    }
-  }
-  return true;
-}
-
-std::string PathToString(const fs::path &path) {
-  return path.empty() ? std::string() : path.generic_string();
-}
-
-RestartPathInfo NormalizeRestartPath(const std::string &restart_arg) {
-  if (restart_arg.empty()) {
-    throw std::runtime_error("Restart path is empty.");
-  }
-
-  fs::path normalized = fs::path(restart_arg).lexically_normal();
-  if (normalized.filename().empty()) {
-    throw std::runtime_error("Restart path must include a file name.");
-  }
-
-  FileShardMode embedded_mode = FileShardMode::shared;
-  std::string embedded_name;
-  for (const auto &part : normalized.parent_path()) {
-    std::string name = part.string();
-    if (name.empty() || name == "." || name == ".." || name == "/") {
-      continue;
-    }
-
-    bool looks_like_node = HasShardPrefix(name, "node_");
-    bool looks_like_rank = HasShardPrefix(name, "rank_");
-    if (!looks_like_node && !looks_like_rank) {
-      continue;
-    }
-
-    bool exact_node = IsExactShardDirectoryName(name, "node_");
-    bool exact_rank = IsExactShardDirectoryName(name, "rank_");
-    if (!exact_node && !exact_rank) {
-      throw std::runtime_error("Malformed restart shard directory '" + name
-                               + "'. Expected node_######## or rank_########.");
-    }
-
-    FileShardMode part_mode = exact_node ? FileShardMode::per_node : FileShardMode::per_rank;
-    if (embedded_mode != FileShardMode::shared) {
-      throw std::runtime_error("Restart path may contain only one shard directory.");
-    }
-    embedded_mode = part_mode;
-    embedded_name = name;
-  }
-
-  RestartPathInfo info;
-  info.shard_mode = embedded_mode;
-  info.file_name = normalized.filename().string();
-
-  std::error_code ec;
-  if (embedded_mode != FileShardMode::shared) {
-    std::string parent_name = normalized.parent_path().filename().string();
-    if (parent_name != embedded_name) {
-      throw std::runtime_error("Restart shard directory must be the direct parent of the "
-                               "restart file.");
-    }
-
-    fs::path base_dir = normalized.parent_path().parent_path();
-    info.base_dir = PathToString(base_dir);
-
-    if (!fs::exists(normalized, ec) || ec) {
-      throw std::runtime_error("Restart shard file '" + PathToString(normalized)
-                               + "' does not exist.");
-    }
-
-    if (embedded_mode == FileShardMode::per_node) {
-      fs::path manifest_path = base_dir / info.file_name;
-      info.normalized_open_path = PathToString(manifest_path);
-      ec.clear();
-      if (!fs::exists(manifest_path, ec) || ec) {
-        throw std::runtime_error("Per-node restart manifest '" + info.normalized_open_path
-                                 + "' does not exist.");
-      }
-    } else {
-      info.normalized_open_path = PathToString(normalized);
-    }
-    return info;
-  }
-
-  fs::path base_dir = normalized.parent_path();
-  info.base_dir = PathToString(base_dir);
-  info.normalized_open_path = PathToString(normalized);
-
-  fs::path search_dir = base_dir.empty() ? fs::path(".") : base_dir;
-  bool found_payload = false;
-  ec.clear();
-  if (fs::exists(search_dir, ec) && !ec && fs::is_directory(search_dir, ec)) {
-    for (fs::directory_iterator it(search_dir, ec); !ec && it != fs::directory_iterator();
-         it.increment(ec)) {
-      if (ec) break;
-      if (!it->is_directory(ec) || ec) {
-        ec.clear();
-        continue;
-      }
-
-      std::string name = it->path().filename().string();
-      if (!IsExactShardDirectoryName(name, "node_")) {
-        continue;
-      }
-
-      fs::path payload_path = it->path() / info.file_name;
-      std::error_code exists_ec;
-      if (fs::exists(payload_path, exists_ec) && !exists_ec) {
-        found_payload = true;
-        break;
-      }
-    }
-  }
-
-  if (found_payload) {
-    info.shard_mode = FileShardMode::per_node;
-    ec.clear();
-    if (!fs::exists(normalized, ec) || ec) {
-      throw std::runtime_error("Per-node restart manifest '" + info.normalized_open_path
-                               + "' does not exist.");
-    }
-    return info;
-  }
-
-  ec.clear();
-  if (!fs::exists(normalized, ec) || ec) {
-    throw std::runtime_error("Restart file '" + info.normalized_open_path
-                             + "' does not exist.");
-  }
-
-  return info;
-}
-
-}  // namespace
-
 //----------------------------------------------------------------------------------------
 //! \fn int main(int argc, char *argv[])
 //! \brief Athena main program
 
 int main(int argc, char *argv[]) {
   std::string input_file, restart_file, run_dir;
-  std::string restart_base_dir, restart_file_name;
   bool iarg_flag = false;  // set to true if -i <file> argument is on cmdline
   bool marg_flag = false;  // set to true if -m        argument is on cmdline
   bool narg_flag = false;  // set to true if -n        argument is on cmdline
@@ -248,7 +84,7 @@ int main(int argc, char *argv[]) {
   }
   if (mpiprv != MPI_THREAD_MULTIPLE) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
-              << "MPI_THREAD_MULTIPLE must be supported for hybrid parallelzation. "
+              << "MPI_THREAD_MULTIPLE must be supported for hybrid parallelization. "
               << MPI_THREAD_MULTIPLE << " : " << mpiprv
               << std::endl;
     MPI_Finalize();
@@ -276,54 +112,12 @@ int main(int argc, char *argv[]) {
     MPI_Finalize();
     return(0);
   }
-
-  if (MPI_SUCCESS != MPI_Comm_split_type(MPI_COMM_WORLD, MPI_COMM_TYPE_SHARED,
-                                         global_variable::my_rank, MPI_INFO_NULL,
-                                         &global_variable::node_comm)) {
-    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
-              << "MPI_Comm_split_type(MPI_COMM_TYPE_SHARED) failed." << std::endl;
-    MPI_Finalize();
-    return(0);
-  }
-  MPI_Comm_rank(global_variable::node_comm, &global_variable::rank_in_node);
-  MPI_Comm_size(global_variable::node_comm, &global_variable::ranks_per_node);
-
-  int node_leader_world_rank = global_variable::my_rank;
-  MPI_Bcast(&node_leader_world_rank, 1, MPI_INT, 0, global_variable::node_comm);
-  std::vector<int> node_leader_for_rank(global_variable::nranks, 0);
-  MPI_Allgather(&node_leader_world_rank, 1, MPI_INT, node_leader_for_rank.data(), 1,
-                MPI_INT, MPI_COMM_WORLD);
-
-  std::unordered_map<int, int> leader_to_node;
-  global_variable::rank_to_node.assign(global_variable::nranks, 0);
-  for (int r = 0; r < global_variable::nranks; ++r) {
-    auto [it, inserted] = leader_to_node.emplace(node_leader_for_rank[r],
-                                                 static_cast<int>(leader_to_node.size()));
-    global_variable::rank_to_node[r] = it->second;
-  }
-  global_variable::node_id = global_variable::rank_to_node[global_variable::my_rank];
-  global_variable::nnodes = leader_to_node.size();
 #else  // no MPI
   global_variable::my_rank = 0;
   global_variable::nranks  = 1;
-  global_variable::node_id = 0;
-  global_variable::rank_in_node = 0;
-  global_variable::ranks_per_node = 1;
-  global_variable::nnodes = 1;
-  global_variable::rank_to_node.assign(1, 0);
 #endif  // MPI_PARALLEL_ENABLED
 
   Kokkos::initialize(argc, argv);
-
-  auto FinalizeMpi = []() {
-#if MPI_PARALLEL_ENABLED
-    if (global_variable::node_comm != MPI_COMM_NULL) {
-      MPI_Comm_free(&global_variable::node_comm);
-      global_variable::node_comm = MPI_COMM_NULL;
-    }
-    MPI_Finalize();
-#endif
-  };
 
   //--- Step 2. --------------------------------------------------------------------------
   // Check for command line options and respond.
@@ -348,7 +142,7 @@ int main(int argc, char *argv[]) {
                         << " must be followed by a valid argument" << std::endl;
               Kokkos::finalize();
 #if MPI_PARALLEL_ENABLED
-              FinalizeMpi();
+              MPI_Finalize();
 #endif
               return(0);
             }
@@ -383,7 +177,7 @@ int main(int argc, char *argv[]) {
           if (global_variable::my_rank == 0) ShowConfig();
           Kokkos::finalize();
 #if MPI_PARALLEL_ENABLED
-          FinalizeMpi();
+          MPI_Finalize();
 #endif
           return(0);
           break;
@@ -438,31 +232,36 @@ int main(int argc, char *argv[]) {
   ParameterInput* pinput = new ParameterInput;
   IOWrapper infile, restartfile;
   // read parameters from restart file
-  FileShardMode restart_shard_mode = FileShardMode::shared;
+  bool single_file_per_rank = false; // DBF: flag for single_file_per_rank for rst files
   if (res_flag) {
-    RestartPathInfo restart_path;
-    try {
-      restart_path = NormalizeRestartPath(restart_file);
-    } catch (const std::runtime_error &err) {
-      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-                << std::endl << err.what() << std::endl;
-      Kokkos::finalize();
-#if MPI_PARALLEL_ENABLED
-      FinalizeMpi();
-#endif
-      return(0);
+    // Check if the path contains "rank_" directory
+    size_t rank_pos = restart_file.find("/rank_");
+    single_file_per_rank = (rank_pos != std::string::npos);
+
+    // If single_file_per_rank is true, modify the path for the current rank
+    if (single_file_per_rank) {
+        // Extract the base directory and file name
+        size_t last_slash = restart_file.rfind('/');
+        std::string base_dir = restart_file.substr(0, rank_pos);
+        std::string file_name = restart_file.substr(last_slash + 1);
+
+        // Construct the path for the current rank
+        char rank_dir[20];
+        std::snprintf(rank_dir, sizeof(rank_dir), "rank_%08d", global_variable::my_rank);
+        restart_file = base_dir + "/" + rank_dir + "/" + file_name;
     }
 
-    restart_shard_mode = restart_path.shard_mode;
-    restart_base_dir = restart_path.base_dir;
-    restart_file_name = restart_path.file_name;
-    restart_file = restart_path.normalized_open_path;
+    // Now use restart_file for opening the file
+    std::ifstream file_check(restart_file);
+    if (!file_check.good()) {
+        std::cerr << "Error: Unable to open restart file: " << restart_file << std::endl;
+        // Handle the error (e.g., exit the program or use a default configuration)
+    }
 
     // read parameters from restart file
-    restartfile.Open(restart_file.c_str(), IOWrapper::FileMode::read,
-                     UsesSerialIO(restart_shard_mode));
-    pinput->LoadFromFile(restartfile, restart_shard_mode);
-    IOWrapperSizeT headeroffset = restartfile.GetPosition(UsesSerialIO(restart_shard_mode));
+    restartfile.Open(restart_file.c_str(),IOWrapper::FileMode::read,single_file_per_rank);
+    pinput->LoadFromFile(restartfile, single_file_per_rank);
+    IOWrapperSizeT headeroffset = restartfile.GetPosition(single_file_per_rank);
   }
 
   // read parameters from input file.  If both -r and -i are specified, this will
@@ -471,17 +270,18 @@ int main(int argc, char *argv[]) {
     infile.Open(input_file.c_str(), IOWrapper::FileMode::read);
     pinput->LoadFromFile(infile);
     infile.Close();
+    pinput->CheckBlockNames();
   }
   pinput->ModifyFromCmdline(argc, argv);
 
   // Dump input parameters and quit if code was run with -n option.
   if (narg_flag) {
     if (global_variable::my_rank == 0) pinput->ParameterDump(std::cout);
-    if (res_flag) restartfile.Close(UsesSerialIO(restart_shard_mode));
+    if (res_flag) restartfile.Close(single_file_per_rank);
     delete pinput;
     Kokkos::finalize();
 #if MPI_PARALLEL_ENABLED
-    FinalizeMpi();
+    MPI_Finalize();
 #endif
     return(0);
   }
@@ -492,24 +292,21 @@ int main(int argc, char *argv[]) {
   // pointer to Mesh.
 
   Mesh* pmesh = new Mesh(pinput);
-  if (res_flag) {
-    pmesh->SetRestartFileInfo(restart_base_dir, restart_file_name, restart_shard_mode);
-  }
   if (!res_flag) {
     pmesh->BuildTreeFromScratch(pinput);
   } else {
-    pmesh->BuildTreeFromRestart(pinput, restartfile, restart_shard_mode);
+    pmesh->BuildTreeFromRestart(pinput, restartfile, single_file_per_rank);
   }
 
   //  If code was run with -m option, write mesh structure to file and quit.
   if (marg_flag) {
     if (global_variable::my_rank == 0) {pmesh->WriteMeshStructure();}
-    if (res_flag) {restartfile.Close(UsesSerialIO(restart_shard_mode));}
+    if (res_flag) {restartfile.Close(single_file_per_rank);}
     delete pmesh;
     delete pinput;
     Kokkos::finalize();
 #if MPI_PARALLEL_ENABLED
-    FinalizeMpi();
+    MPI_Finalize();
 #endif
     return(0);
   }
@@ -523,16 +320,13 @@ int main(int argc, char *argv[]) {
   if (!res_flag) {
     // set ICs using ProblemGenerator constructor for new runs
     pmesh->pgen = std::make_unique<ProblemGenerator>(pinput, pmesh);
-    if (pmesh->pmb_pack->ppart != nullptr) {
-      pmesh->pmb_pack->ppart->CreateParticleTags(pinput);
-    }
   } else {
     // read ICs from restart file using ProblemGenerator constructor for restarts
     pmesh->pgen = std::make_unique<ProblemGenerator>(pinput,
                                                      pmesh,
                                                      restartfile,
-                                                     restart_shard_mode);
-    restartfile.Close(UsesSerialIO(restart_shard_mode));
+                                                     single_file_per_rank);
+    restartfile.Close(single_file_per_rank);
   }
   //--- Step 6. --------------------------------------------------------------------------
   // Construct Driver and Outputs. Actual outputs (including initial conditions) are made
@@ -564,7 +358,7 @@ int main(int argc, char *argv[]) {
   delete pinput;
   Kokkos::finalize();
 #if MPI_PARALLEL_ENABLED
-  FinalizeMpi();
+  MPI_Finalize();
 #endif
   return(0);
 }

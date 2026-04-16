@@ -32,7 +32,7 @@ MeshBoundaryValues::MeshBoundaryValues(MeshBlockPack *pp, ParameterInput *pin, b
   // allocate vector of status flags and MPI requests (if needed)
   int nnghbr = pmy_pack->pmb->nnghbr;
 
-  #if MPI_PARALLEL_ENABLED
+#if MPI_PARALLEL_ENABLED
   // Initialize all 56 MPI request pointers to nullptr first
   for (int n=0; n<56; ++n) {
     sendbuf[n].vars_req = nullptr;
@@ -40,7 +40,7 @@ MeshBoundaryValues::MeshBoundaryValues(MeshBlockPack *pp, ParameterInput *pin, b
     recvbuf[n].vars_req = nullptr;
     recvbuf[n].flux_req = nullptr;
   }
-  #endif
+#endif
 
   // sendbuf and recvbuf are fixed-length [56-element] arrays
   // Initialize some of the data in appropriate elements based on dimensionality of
@@ -94,8 +94,6 @@ MeshBoundaryValues::~MeshBoundaryValues() {
     delete [] recvbuf[n].vars_req;
     delete [] recvbuf[n].flux_req;
   }
-  MPI_Comm_free(&comm_vars);
-  MPI_Comm_free(&comm_flux);
 #endif
 }
 
@@ -239,7 +237,6 @@ void MeshBoundaryValues::InitializeBuffers(const int nvar) {
 particles::ParticlesBoundaryValues::ParticlesBoundaryValues(
   particles::Particles *pp, ParameterInput *pin) :
     sendlist("sendlist",1),
-    destroylist("destroylist",1),
 #if MPI_PARALLEL_ENABLED
     prtcl_rsendbuf("rsend",1),
     prtcl_rrecvbuf("rrecv",1),
@@ -248,7 +245,7 @@ particles::ParticlesBoundaryValues::ParticlesBoundaryValues(
 #endif
     pmy_part(pp) {
 #if MPI_PARALLEL_ENABLED
-  
+  // Guess that no more than 10% of particles will be communicated to set size of buffer
   int npart = pmy_part->nprtcl_thispack;
 
   //resize vectors over number of ranks
@@ -263,8 +260,4 @@ particles::ParticlesBoundaryValues::ParticlesBoundaryValues(
 // destructor
 
 particles::ParticlesBoundaryValues::~ParticlesBoundaryValues() {
-  // Free MPI communicator if it was allocated
-#if MPI_PARALLEL_ENABLED
-  MPI_Comm_free(&mpi_comm_part);
-#endif
 }
