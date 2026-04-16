@@ -134,17 +134,20 @@ TaskStatus DynGRMHDPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int s
         DonorCellX1(member, m, k, j, il-1, iu, b0_, bl, br);
         if (well_balanced_) {
           par_for_inner(member, il-1, iu, [&](const int i) {
-            wl(IPR, i) = pl(i);
-            wr(IPR, i) = pr(i);
+            wl(IPR, i) = (pl(i) > 0.0) ? pl(i) : wl(IPR, i);
+            wr(IPR, i) = (pr(i) > 0.0) ? pr(i) : wr(IPR, i);
           });
         }
         break;
       case ReconstructionMethod::plm:
-        if (well_balanced_) {
-          PiecewiseLinearWBX1(member, m, k, j, il-1, iu, w0_, wl, wr, pl, pr);
-        } else {
+        /*if (well_balanced_) {
+          //::PiecewiseLinearWBX1(member, m, k, j, il-1, iu, w0_, wl, wr, pl, pr);
+          PiecewiseLinearWBX1(member, dyn_eos_, nvars - nhyd, m, k, j, il-1, iu, w0_, adm,
+                              temp_, wl, wr);
+          //PiecewiseLinearX1(member, m, k, j, il-1, iu, w0_, wl, wr);
+        } else {*/
           PiecewiseLinearX1(member, m, k, j, il-1, iu, w0_, wl, wr);
-        }
+        //}
         PiecewiseLinearX1(member, m, k, j, il-1, iu, b0_, bl, br);
         break;
       // JF: These higher-order reconstruction methods all need EOS_Data to calculate a
@@ -164,6 +167,10 @@ TaskStatus DynGRMHDPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int s
         break;
       default:
         break;
+    }
+    if (well_balanced_ && recon_method_ != ReconstructionMethod::dc) {
+      BalancePressureX1(member, dyn_eos_, nvars - nhyd, m, k, j, il-1, iu, w0_, adm,
+                        temp_, wl, wr);
     }
     // Sync all threads in the team so that scratch memory is consistent
     member.team_barrier();
@@ -285,17 +292,20 @@ TaskStatus DynGRMHDPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int s
             DonorCellX2(member, m, k, j, is-1, ie+1, b0_, bl_jp1, br);
             if (well_balanced_) {
               par_for_inner(member, is-1, ie+1, [&](const int i) {
-                wl_jp1(IPR, i) = pl_jp1(i);
-                wr(IPR, i) = pr(i);
+                wl_jp1(IPR, i) = (pl_jp1(i) > 0) ? pl_jp1(i) : wl_jp1(IPR, i);
+                wr(IPR, i) = (pr(i) > 0) ? pr(i) : wr(IPR, i);
               });
             }
             break;
           case ReconstructionMethod::plm:
-            if (well_balanced_) {
-              PiecewiseLinearWBX2(member, m, k, j, is-1, ie+1, w0_, wl_jp1, wr, pl_jp1, pr);
-            } else {
+            /*if (well_balanced_) {
+              //::PiecewiseLinearWBX2(member, m, k, j, is-1, ie+1, w0_, wl_jp1, wr, pl_jp1, pr);
+              PiecewiseLinearWBX2(member, dyn_eos_, nvars - nhyd, m, k, j, is-1, ie+1, w0_, adm,
+                                  temp_, wl_jp1, wr);
+              //PiecewiseLinearX2(member, m, k, j, is-1, ie+1, w0_, wl_jp1, wr);
+            } else {*/
               PiecewiseLinearX2(member, m, k, j, is-1, ie+1, w0_, wl_jp1, wr);
-            }
+            //}
             PiecewiseLinearX2(member, m, k, j, is-1, ie+1, b0_, bl_jp1, br);
             break;
           // JF: These higher-order reconstruction methods all need EOS_Data to calculate
@@ -313,6 +323,10 @@ TaskStatus DynGRMHDPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int s
             break;
           default:
             break;
+        }
+        if (well_balanced_ && recon_method_ != ReconstructionMethod::dc) {
+          BalancePressureX2(member, dyn_eos_, nvars - nhyd, m, k, j, is-1, ie+1, w0_, adm,
+                            temp_, wl_jp1, wr);
         }
         // Sync all threads in the team so that scratch memory is consistent
         member.team_barrier();
@@ -428,17 +442,20 @@ TaskStatus DynGRMHDPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int s
             DonorCellX3(member, m, k, j, is-1, ie+1, b0_, bl_kp1, br);
             if (well_balanced_) {
               par_for_inner(member, is-1, ie+1, [&](const int i) {
-                wl_kp1(IPR, i) = pl_kp1(i);
-                wr(IPR, i) = pr(i);
+                wl_kp1(IPR, i) = (pl_kp1(i) > 0) ? pl_kp1(i) : wl_kp1(IPR, i);
+                wr(IPR, i) = (pr(i) > 0) ? pr(i) : wr(IPR, i);
               });
             }
             break;
           case ReconstructionMethod::plm:
-            if (well_balanced_) {
-              PiecewiseLinearWBX3(member, m, k, j, is-1, ie+1, w0_, wl_kp1, wr, pl_kp1, pr);
-            } else {
+            /*if (well_balanced_) {
+              //::PiecewiseLinearWBX3(member, m, k, j, is-1, ie+1, w0_, wl_kp1, wr, pl_kp1, pr);
+              PiecewiseLinearWBX3(member, dyn_eos_, nvars - nhyd, m, k, j, is-1, ie+1, w0_, adm,
+                                  temp_, wl_kp1, wr);
+              //PiecewiseLinearX3(member, m, k, j, is-1, ie+1, w0_, wl_kp1, wr);
+            } else {*/
               PiecewiseLinearX3(member, m, k, j, is-1, ie+1, w0_, wl_kp1, wr);
-            }
+            //}
             PiecewiseLinearX3(member, m, k, j, is-1, ie+1, b0_, bl_kp1, br);
             break;
           // JF: These higher-order reconstruction methods all need EOS_Data to calculate
@@ -456,6 +473,10 @@ TaskStatus DynGRMHDPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int s
             break;
           default:
             break;
+        }
+        if (well_balanced_ && recon_method_ != ReconstructionMethod::dc) {
+          BalancePressureX3(member, dyn_eos_, nvars - nhyd, m, k, j, is-1, ie+1, w0_, adm,
+                            temp_, wl_kp1, wr);
         }
         // Sync all threads in the team so that scratch memory is consistent
         member.team_barrier();
