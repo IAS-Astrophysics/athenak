@@ -44,7 +44,8 @@ FastFlow::FastFlow(MeshBlockPack *pmbp, ParameterInput *pin, int n):
   a0("a0",1), ac("ac",1), as("as",1), 
   rr("rr",1), rr_dth("rr_dth",1), rr_dph("rr_dph",1), 
   rho("rho",1), dg("dg",1,1,1,1,1), g_interp("g_interp",1,1),
-  K_interp("K_interp",1,1), dg_interp("dg_interp",1,1)
+  K_interp("K_interp",1,1), dg_interp("dg_interp",1,1),
+  havepoint("have_point",1)
 {
   nh = n; // The n-th horizon
   std::string n_str = std::to_string(nh);
@@ -477,11 +478,10 @@ void FastFlow::MetricDerivatives(Real time)
   if (use_stored_metric_drvts) return;
   if((time < start_time) || (time > stop_time)) return;
   if (wait_until_punc_are_close && !(PuncAreClose())) return;
-
-  AthenaTensor<Real, TensorSymm::SYM2, NDIM, 2> adm_g_dd; // 3-metric
-  adm_g_dd.InitWithShallowSlice(pmbp->padm->u_adm, adm::ADM::I_ADM_GXX, adm::ADM::I_ADM_GZZ);
   
   // MeshBlock variables
+  auto &adm = pmbp->padm->adm;
+  auto &dg_ = dg;
   auto &indcs = pmbp->pmesh->mb_indcs;
   auto &size = pmbp->pmb->mb_size;
   int nmb = pmbp->nmb_thispack;
@@ -495,28 +495,28 @@ void FastFlow::MetricDerivatives(Real time)
     Real idx[] = {1.0 / size.d_view(m).dx1, 1.0 / size.d_view(m).dx2, 1.0 / size.d_view(m).dx3};
 
     // x-derivative
-    dg(m,DX_GXX,k,j,i) = Dx<NGHOST>(0, idx, adm_g_dd, m, 0, 0, k, j, i);
-    dg(m,DX_GXY,k,j,i) = Dx<NGHOST>(0, idx, adm_g_dd, m, 0, 1, k, j, i);
-    dg(m,DX_GXZ,k,j,i) = Dx<NGHOST>(0, idx, adm_g_dd, m, 0, 2, k, j, i);
-    dg(m,DX_GYY,k,j,i) = Dx<NGHOST>(0, idx, adm_g_dd, m, 1, 1, k, j, i);
-    dg(m,DX_GYZ,k,j,i) = Dx<NGHOST>(0, idx, adm_g_dd, m, 1, 2, k, j, i);
-    dg(m,DX_GZZ,k,j,i) = Dx<NGHOST>(0, idx, adm_g_dd, m, 2, 2, k, j, i);
+    dg_(m,DX_GXX,k,j,i) = Dx<NGHOST>(0, idx, adm.g_dd, m, 0, 0, k, j, i);
+    dg_(m,DX_GXY,k,j,i) = Dx<NGHOST>(0, idx, adm.g_dd, m, 0, 1, k, j, i);
+    dg_(m,DX_GXZ,k,j,i) = Dx<NGHOST>(0, idx, adm.g_dd, m, 0, 2, k, j, i);
+    dg_(m,DX_GYY,k,j,i) = Dx<NGHOST>(0, idx, adm.g_dd, m, 1, 1, k, j, i);
+    dg_(m,DX_GYZ,k,j,i) = Dx<NGHOST>(0, idx, adm.g_dd, m, 1, 2, k, j, i);
+    dg_(m,DX_GZZ,k,j,i) = Dx<NGHOST>(0, idx, adm.g_dd, m, 2, 2, k, j, i);
     
     // y-derivative
-    dg(m,DY_GXX,k,j,i) = Dx<NGHOST>(1, idx, adm_g_dd, m, 0, 0, k, j, i);
-    dg(m,DY_GXY,k,j,i) = Dx<NGHOST>(1, idx, adm_g_dd, m, 0, 1, k, j, i);
-    dg(m,DY_GXZ,k,j,i) = Dx<NGHOST>(1, idx, adm_g_dd, m, 0, 2, k, j, i);
-    dg(m,DY_GYY,k,j,i) = Dx<NGHOST>(1, idx, adm_g_dd, m, 1, 1, k, j, i);
-    dg(m,DY_GYZ,k,j,i) = Dx<NGHOST>(1, idx, adm_g_dd, m, 1, 2, k, j, i);
-    dg(m,DY_GZZ,k,j,i) = Dx<NGHOST>(1, idx, adm_g_dd, m, 2, 2, k, j, i);
+    dg_(m,DY_GXX,k,j,i) = Dx<NGHOST>(1, idx, adm.g_dd, m, 0, 0, k, j, i);
+    dg_(m,DY_GXY,k,j,i) = Dx<NGHOST>(1, idx, adm.g_dd, m, 0, 1, k, j, i);
+    dg_(m,DY_GXZ,k,j,i) = Dx<NGHOST>(1, idx, adm.g_dd, m, 0, 2, k, j, i);
+    dg_(m,DY_GYY,k,j,i) = Dx<NGHOST>(1, idx, adm.g_dd, m, 1, 1, k, j, i);
+    dg_(m,DY_GYZ,k,j,i) = Dx<NGHOST>(1, idx, adm.g_dd, m, 1, 2, k, j, i);
+    dg_(m,DY_GZZ,k,j,i) = Dx<NGHOST>(1, idx, adm.g_dd, m, 2, 2, k, j, i);
     
     // z-derivative
-    dg(m,DZ_GXX,k,j,i) = Dx<NGHOST>(2, idx, adm_g_dd, m, 0, 0, k, j, i);
-    dg(m,DZ_GXY,k,j,i) = Dx<NGHOST>(2, idx, adm_g_dd, m, 0, 1, k, j, i);
-    dg(m,DZ_GXZ,k,j,i) = Dx<NGHOST>(2, idx, adm_g_dd, m, 0, 2, k, j, i);
-    dg(m,DZ_GYY,k,j,i) = Dx<NGHOST>(2, idx, adm_g_dd, m, 1, 1, k, j, i);
-    dg(m,DZ_GYZ,k,j,i) = Dx<NGHOST>(2, idx, adm_g_dd, m, 1, 2, k, j, i);
-    dg(m,DZ_GZZ,k,j,i) = Dx<NGHOST>(2, idx, adm_g_dd, m, 2, 2, k, j, i);
+    dg_(m,DZ_GXX,k,j,i) = Dx<NGHOST>(2, idx, adm.g_dd, m, 0, 0, k, j, i);
+    dg_(m,DZ_GXY,k,j,i) = Dx<NGHOST>(2, idx, adm.g_dd, m, 0, 1, k, j, i);
+    dg_(m,DZ_GXZ,k,j,i) = Dx<NGHOST>(2, idx, adm.g_dd, m, 0, 2, k, j, i);
+    dg_(m,DZ_GYY,k,j,i) = Dx<NGHOST>(2, idx, adm.g_dd, m, 1, 1, k, j, i);
+    dg_(m,DZ_GYZ,k,j,i) = Dx<NGHOST>(2, idx, adm.g_dd, m, 1, 2, k, j, i);
+    dg_(m,DZ_GZZ,k,j,i) = Dx<NGHOST>(2, idx, adm.g_dd, m, 2, 2, k, j, i);
   });
 
   return;

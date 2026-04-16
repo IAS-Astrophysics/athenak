@@ -92,9 +92,7 @@ private:
   HostArray2D<Real> dY0dth2, dYcdth2, dYcdthdph, dYsdth2, dYsdthdph, dYcdph2, dYsdph2; 
 
   // Arrays for spectral coefficients
-  HostArray1D<Real> a0; 
-  HostArray1D<Real> ac; 
-  HostArray1D<Real> as; 
+  HostArray1D<Real> a0, ac, as;
   Real last_a0; // last coefficient a_00
 
   // Arrays used for the fields on the sphere
