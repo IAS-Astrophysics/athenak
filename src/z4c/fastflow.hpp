@@ -50,7 +50,7 @@ public:
   Real center[3]; // Center around which the horizon is searched
 
   // Fast-Flow parameters
-  Real hmean_tol; // for convergence 
+  Real hmean_tol; // for convergence
   Real mass_tol; // for convergence
   int flow_iterations; // number of flow iterations
   Real flow_alpha_beta_const; // alpha & beta constants in the iteration formula
@@ -72,7 +72,7 @@ public:
   // Start and Stop times for each surface
   Real start_time;
   Real stop_time;
-  
+
 private:
   int npunct; // Number of punctures
   int lmax1; // lmax + 1
@@ -85,18 +85,18 @@ private:
 
   // Pointer to Gauss-Legendre object
   GaussLegendreGrid *gl_grid;
- 
+
   // Arrays of spherical harmonics and derivatives
-  HostArray2D<Real> Y0, Yc, Ys; 
-  HostArray2D<Real> dY0dth, dYcdth, dYsdth, dYcdph, dYsdph; 
-  HostArray2D<Real> dY0dth2, dYcdth2, dYcdthdph, dYsdth2, dYsdthdph, dYcdph2, dYsdph2; 
+  HostArray2D<Real> Y0, Yc, Ys;
+  HostArray2D<Real> dY0dth, dYcdth, dYsdth, dYcdph, dYsdph;
+  HostArray2D<Real> dY0dth2, dYcdth2, dYcdthdph, dYsdth2, dYsdthdph, dYcdph2, dYsdph2;
 
   // Arrays for spectral coefficients
   HostArray1D<Real> a0, ac, as;
   Real last_a0; // last coefficient a_00
 
   // Arrays used for the fields on the sphere
-  HostArray1D<Real> rr, rr_dth, rr_dph; 
+  HostArray1D<Real> rr, rr_dth, rr_dph;
 
   // Array computed in Surface Integrals
   HostArray1D<Real> rho;
@@ -135,7 +135,7 @@ private:
     pmbp->padm->I_ADM_GYZ,
     pmbp->padm->I_ADM_GZZ
   };
-  
+
   int K_idx[6] = {
     pmbp->padm->I_ADM_KXX,
     pmbp->padm->I_ADM_KXY,
@@ -149,7 +149,7 @@ private:
   enum {
     DX_GXX, DX_GXY, DX_GXZ, DX_GYY, DX_GYZ, DX_GZZ,
     DY_GXX, DY_GXY, DY_GXZ, DY_GYY, DY_GYZ, DY_GZZ,
-    DZ_GXX, DZ_GXY, DZ_GXZ, DZ_GYY, DZ_GYZ, DZ_GZZ
+    DZ_GXX, DZ_GXY, DZ_GXZ, DZ_GYY, DZ_GYZ, DZ_GZZ, NDRVS
   };
 
   enum {GXX, GXY, GXZ, GYY, GYZ, GZZ};
@@ -162,8 +162,8 @@ private:
   DvceArray5D<Real> dg;
 
   // Vectors to hold the DualArray1D interpolated values of GaussLegendreGrid
-  /* std::vector<DualArray1D<Real>> g_interp; 
-  std::vector<DualArray1D<Real>> K_interp; 
+  /* std::vector<DualArray1D<Real>> g_interp;
+  std::vector<DualArray1D<Real>> K_interp;
   std::vector<DualArray1D<Real>> dg_interp; */
   HostArray2D<Real> g_interp, K_interp, dg_interp;
 
@@ -198,7 +198,7 @@ private:
   FILE *pofile_ylm;
   FILE *pofile_grid;
 
-  // Functions to interface with puncture tracker 
+  // Functions to interface with puncture tracker
   Real PuncMaxDistance();
   Real PuncMaxDistance(const int pix);
   Real PuncSumMasses();
