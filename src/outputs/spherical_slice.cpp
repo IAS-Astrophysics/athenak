@@ -493,7 +493,7 @@ void SphericalSliceOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
     char number[7];
     std::snprintf(number, sizeof(number), ".%05d", out_params.file_number);
     char rstr[32];
-    std::snprintf(rstr, sizeof(rstr), "r=%g", static_cast<double>(radius));
+    std::snprintf(rstr, sizeof(rstr), "r_%g", static_cast<double>(radius));
 
     std::string dir = "bin/";
     if (partitioned) {
