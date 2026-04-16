@@ -974,6 +974,10 @@ void DustSource(Mesh* pm, const Real bdt) {
   // --- safety parameters -------------------------------------------------
   const Real D_floor          = min_dust_frac;
   const Real max_drain_frac   = dust_donor_cap_frac;
+  const Real acc_nH_min       = accretion_nH_min;
+  const Real acc_nH_max       = accretion_nH_max;
+  const Real acc_T_max        = accretion_T_max;
+  const Real acc_f_ref        = accretion_refractory_frac;
 
   // --- unit conversions --------------------------------------------------
   //  temp_to_K      : code temperature → Kelvin
@@ -1054,13 +1058,13 @@ void DustSource(Mesh* pm, const Real bdt) {
     //      Δρ_D = +dt × ρ_D / (τ_acc × a)
     // =================================================================
     {
-      const Real Z_acc = accretion_refractory_frac * Z_gas;
+      const Real Z_acc = acc_f_ref * Z_gas;
       Real tau_acc_Myr = 150.0;
       Real accr_small = 0.0, accr_large = 0.0;
       const bool accretion_active = (T_K > 0.0) &&
-                                    (T_K < accretion_T_max) &&
-                                    (nH >= accretion_nH_min) &&
-                                    (nH <= accretion_nH_max) &&
+                                    (T_K < acc_T_max) &&
+                                    (nH >= acc_nH_min) &&
+                                    (nH <= acc_nH_max) &&
                                     (Z_acc > D_floor);
       if (accretion_active) {
         const Real alpha_LB = 1.0 / (1.0 + 1.0e-4 * T_K * sqrt(T_K));
