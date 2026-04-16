@@ -198,7 +198,6 @@ void SetupBinary(ParameterInput *pin, Mesh* pmy_mesh_) {
   // Capture variables for kernel; note that when Z4c is enabled, the gauge
   // variables are part of the Z4c class.
   auto &u_adm = pmbp->padm->u_adm;
-  auto &adm   = pmbp->padm->adm;
   auto &w0    = pmbp->pmhd->w0;
   auto &u_z4c = pmbp->pz4c->u0;
   // Because Elliptica only operates on the CPU, we can't construct the data on
@@ -682,7 +681,6 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   }
 
   auto &indcs = pmy_mesh_->mb_indcs;
-  auto &size = pmbp->pmb->mb_size;
   int &ng = indcs.ng;
   int ncells1 = indcs.nx1 + 2*ng;
   int ncells2 = (indcs.nx2 > 1) ? (indcs.nx2 + 2*ng) : 1;
@@ -708,7 +706,6 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
 // History function
 void EllipticaBinaryHistory(HistoryData *pdata, Mesh *pm) {
   // Select the number of outputs and create labels for them.
-  int &nmhd       = pm->pmb_pack->pmhd->nmhd;
   pdata->nhist    = 2;
   pdata->label[0] = "rho-max";
   pdata->label[1] = "alpha-min";
